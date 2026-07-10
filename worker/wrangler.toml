@@ -1,0 +1,10 @@
+name = "test-0703"
+main = "src/index.js"
+compatibility_date = "2025-07-18"
+
+[vars]
+LB_USER = "yudaotor"
+WEB_CARD_URL = "https://yudaotor.github.io/nowplaying/?user=yudaotor"
+
+# FEISHU_APP_ID/FEISHU_APP_SECRET/FEISHU_VERIFY_TOKEN 不再被代码引用(见 src/index.js
+# 顶部说明);Cloudflare 上的 secret 值本身还没删,留给一次性清理时手动 revoke。

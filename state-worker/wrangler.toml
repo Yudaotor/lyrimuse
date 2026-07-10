@@ -1,0 +1,18 @@
+name = "nowplaying-state"
+main = "src/index.js"
+compatibility_date = "2025-07-18"
+workers_dev = true
+
+# 自定义域名(国内可达):zone yudaotor.me 已托管在本 CF 账号。
+[[routes]]
+pattern = "np.yudaotor.me"
+custom_domain = true
+
+[vars]
+LB_USER = "yudaotor"
+
+# PUSH_TOKEN 是 secret,用 `wrangler secret put PUSH_TOKEN` 设置,不写这里。
+
+[[kv_namespaces]]
+binding = "NP_STATE"
+id = "89f5b07ec01b404498f92629354549dd"

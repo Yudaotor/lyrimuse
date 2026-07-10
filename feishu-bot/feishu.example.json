@@ -1,0 +1,8 @@
+{
+  "feishu_app_id": "飞书开放平台应用的 App ID，如 cli_xxxxxxxx",
+  "feishu_app_secret": "对应的 App Secret",
+  "listenbrainz_user": "你的 ListenBrainz 用户名（应与 collector 配置里的一致）",
+
+  "lb_api": "https://api.listenbrainz.org",
+  "upload_art": true
+}

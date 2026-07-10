@@ -1,0 +1,5 @@
+/web/
+/bin/
+.wrangler/
+node_modules/
+.DS_Store
