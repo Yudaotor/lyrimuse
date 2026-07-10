@@ -2,7 +2,9 @@
 
 在飞书签名（或任何地方）放一个固定链接，动态展示这台 Mac 上 Apple Music 正在播放的歌。
 
-线上页：https://yudaotor.github.io/nowplaying/?user=yudaotor （仓库 github.com/Yudaotor/nowplaying，web/index.html 的独立 git 仓）
+线上页：https://yudaotor.github.io/nowplaying/?user=yudaotor （仓库 github.com/Yudaotor/nowplaying，web/index.html 的独立 git 仓，公开）
+
+本目录其余部分(collector/feishu-bot/state-worker/badge-worker/worker/launchd)另在私有仓库 github.com/Yudaotor/nowplaying-backend 版本控制；`web/` 已加进 `.gitignore`，两个仓库互不影响。
 
 ```
 Mac 采集器(Go, launchd 常驻)
