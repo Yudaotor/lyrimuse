@@ -112,6 +112,22 @@ launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.chenyuhao.applemusic
 
 飞书应用需开启「链接预览」能力并配置长连接，踩坑细节见上文与记忆笔记 `feishu-dynamic-signature-via-link-preview-longconn`。
 
+## 部署 Worker（state-worker / badge-worker / worker）
+
+三个 Cloudflare Worker，部署命令已统一成同一句 `npm run deploy`（各自 `package.json` 里都是这一条脚本，具体实现细节不强求一致——`worker/` 本来就有锁定版本的 `node_modules`，就沿用它自己那份；`state-worker/`/`badge-worker/` 没有锁定版本，走 `npx wrangler deploy` 拉当前可用版本）：
+
+| 目录 | Worker 名 / 域名 | 职责 |
+|---|---|---|
+| `state-worker/` | `nowplaying-state`，`np.yudaotor.me` | 网页主数据源：`/now`/`/history`/`/cover`/`/share` |
+| `badge-worker/` | `nowplaying-badge` | GitHub README 动态 SVG 徽章 |
+| `worker/` | `test-0703.cyh-937ae0.workers.dev` | 飞书签名链接被真人点开时的 302 跳转 |
+
+```bash
+cd state-worker && npm run deploy   # 或 badge-worker / worker，命令一样
+```
+
+首次在新机器上部署，`state-worker`/`badge-worker` 用不到 `wrangler secret put`(`PUSH_TOKEN` 等)之外的额外步骤；`wrangler.toml` 里的 `[vars]`/`[[kv_namespaces]]` 已经提交，不含密钥。
+
 ## 展示页
 
 纯静态、零后端（ListenBrainz 与 iTunes Search 均允许浏览器跨域直读）。

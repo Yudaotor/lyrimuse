@@ -22,6 +22,11 @@ type playSession struct {
 	lastPN      time.Time
 	lastPlaying bool // last observed play/pause state, to detect transitions
 	pnPending   bool // 首条 playing_now 因歌词还在异步解析而挂起(LB 只认换曲那条,故首条必须带歌词)
+	// submitting/announcing:见 submitSingleAsync/announce 顶部的设计说明——LB 提交
+	// 挪到后台 goroutine 跑之后,这两个标记防止同一个 session 在上一次提交结果还没
+	// 返回时(LB 慢时 single 类型最长可达约 24s)被下一轮 5s poll 重复触发一次提交。
+	submitting bool
+	announcing bool
 }
 
 func listenThreshold(duration float64) float64 {
@@ -118,6 +123,13 @@ type poller struct {
 	weeklyLastCheckedAt time.Time
 
 	nullStreak int
+
+	// LB 提交(single/playing_now)改到后台 goroutine 跑，结果经这两个 channel 送回单一
+	// 的 poll 主循环处理——goroutine 本身只做网络 I/O,不直接碰 session/poller 字段，
+	// 所有状态变更仍然只发生在 poll 主循环里，不引入并发读写。见 submitSingleAsync/
+	// announce 顶部注释、run() 里的 drain 分支。
+	submitDoneCh   chan submitOutcome
+	announceDoneCh chan announceOutcome
 }
 
 const lastfmPollInterval = 15 * time.Second
@@ -357,6 +369,66 @@ func (p *poller) pushScrobble(s snapshot, listenedAt int64, device string) {
 	p.lastListen, p.lastListenAt, p.lastListenDev = s, listenedAt, device
 }
 
+// submitOutcome/announceOutcome 是后台 goroutine 提交完成后、经 channel 送回单一
+// poll 主循环处理的结果。goroutine 本身只做网络 I/O,不直接改 session/poller 字段。
+type submitOutcome struct {
+	sess      *playSession
+	meta      snapshot
+	startedAt int64
+	err       error
+}
+
+type announceOutcome struct {
+	sess *playSession
+	at   time.Time
+	ok   bool
+}
+
+// submitSingleAsync 在后台 goroutine 提交一条"完成收听"(single)，不阻塞 poll 主循环——
+// LB(文档已知间歇性慢)的 single 类型带重试，最长可达约 24s，堵在主循环里会连带拖住
+// pushRelayState(网页展示更新全靠 poll() 按时跑),十几到三十秒展示就会跟着冻结。
+// 调用前调用方必须已把 sess.submitting 置 true(防止同一个 session 在结果返回前被
+// 下一轮 poll 重复触发提交、造成同一次收听被提交两次)；结果由 applySubmitOutcome
+// 统一清除。goroutine 退出时机受 p.ctx 控制,进程退出不会泄漏。
+func (p *poller) submitSingleAsync(sess *playSession, meta snapshot, startedAt int64) {
+	lm := lbMeta(meta)
+	go func() {
+		err := p.lb.submit(p.ctx, "single", startedAt, lm)
+		select {
+		case p.submitDoneCh <- submitOutcome{sess: sess, meta: meta, startedAt: startedAt, err: err}:
+		case <-p.ctx.Done():
+		}
+	}()
+}
+
+// applySubmitOutcome 在 poll 主循环里处理 submitSingleAsync 的结果——不管此时 p.sess
+// 是否还指向同一个 session(很可能早已因为换曲被 finalize 分离走了)，这里的字段变更和
+// 收听记录都只作用于结果自带的 sess/meta，不依赖 p.sess 当前值，所以时序上没有问题。
+func (p *poller) applySubmitOutcome(r submitOutcome) {
+	r.sess.submitting = false
+	if r.err != nil {
+		log.Printf("submit listen failed: %v", r.err)
+		return
+	}
+	r.sess.listenSent = true
+	log.Printf("listen recorded: %s - %s", r.meta.Artist, r.meta.Title)
+	p.pushScrobble(r.meta, r.startedAt, "mac")
+	p.mirrorScrobbleTracked(r.meta.Artist, r.meta.Title, r.meta.Album, r.startedAt)
+	p.recordRecentMacListen(r.meta.Artist, r.meta.Title, r.startedAt)
+	p.pushRelayState(time.Now(), false) // 立刻把刚确认的收听/上次播放状态推给网页,不必等下一轮 5s 心跳
+}
+
+// applyAnnounceOutcome 在 poll 主循环里处理 announce() 的异步结果。
+func (p *poller) applyAnnounceOutcome(r announceOutcome) {
+	r.sess.announcing = false
+	if !r.ok {
+		return
+	}
+	r.sess.lastPN = r.at
+	r.sess.pnPending = false
+	p.pushRelayState(time.Now(), false)
+}
+
 func (p *poller) finalize(now time.Time) {
 	if p.sess == nil {
 		return
@@ -364,35 +436,43 @@ func (p *poller) finalize(now time.Time) {
 	s := p.sess
 	p.sess = nil
 	p.recentFinalized, p.recentFinalizedAt = s, now
-	if s.listenSent || s.meta.Duration > 0 && s.meta.Duration < minTrackSecs {
+	if s.listenSent || s.submitting || s.meta.Duration > 0 && s.meta.Duration < minTrackSecs {
 		return
 	}
 	if s.playedSecs < listenThreshold(s.meta.Duration) {
 		return
 	}
-	if err := p.lb.submit(p.ctx, "single", s.startedAt.Unix(), lbMeta(s.meta)); err != nil {
-		log.Printf("submit listen failed for %q: %v", s.key, err)
-		return
-	}
-	p.mirrorScrobbleTracked(s.meta.Artist, s.meta.Title, s.meta.Album, s.startedAt.Unix())
-	p.recordRecentMacListen(s.meta.Artist, s.meta.Title, s.startedAt.Unix())
-	log.Printf("listen recorded: %s - %s (played %.0fs)", s.meta.Artist, s.meta.Title, s.playedSecs)
-	p.pushScrobble(s.meta, s.startedAt.Unix(), "mac")
+	s.submitting = true
+	p.submitSingleAsync(s, s.meta, s.startedAt.Unix())
 }
 
-// announce 提交一条 playing_now 并记录锚点。歌词/封面是开播后异步解析的;LB 只认
-// "换曲那条"、同曲存活期内拒覆盖,故首条须带歌词,未就绪时挂起等 enrich(见 handle)。
-func (p *poller) announce(now time.Time, why string) bool {
-	m := lbMeta(p.cur)
-	if err := p.lb.submit(p.ctx, "playing_now", 0, m); err != nil {
-		log.Printf("submit playing_now (%s) failed: %v", why, err)
-		return false
+// announce 异步提交一条 playing_now，不阻塞 poll 主循环(理由同 submitSingleAsync)。
+// 歌词/封面是开播后异步解析的;LB 只认"换曲那条"、同曲存活期内拒覆盖,故首条须带
+// 歌词,未就绪时挂起等 enrich(见 handle)。同一个 session 在结果返回前重复调用会被
+// 去重(sess.announcing)；lastPN/pnPending 的变更挪到 applyAnnounceOutcome,调用方
+// 不再能同步拿到"是否成功"。
+func (p *poller) announce(now time.Time, why string) {
+	if p.sess.announcing {
+		return
 	}
-	p.sess.lastPN = now
-	mirrorAsync(p.lfm, "now-playing", func(ctx context.Context) error {
-		return p.lfm.updateNowPlaying(ctx, p.cur.Artist, p.cur.Title, p.cur.Album)
-	})
-	return true
+	p.sess.announcing = true
+	sess := p.sess
+	m := lbMeta(p.cur)
+	artist, title, album := p.cur.Artist, p.cur.Title, p.cur.Album
+	go func() {
+		err := p.lb.submit(p.ctx, "playing_now", 0, m)
+		if err != nil {
+			log.Printf("submit playing_now (%s) failed: %v", why, err)
+		} else {
+			mirrorAsync(p.lfm, "now-playing", func(ctx context.Context) error {
+				return p.lfm.updateNowPlaying(ctx, artist, title, album)
+			})
+		}
+		select {
+		case p.announceDoneCh <- announceOutcome{sess: sess, at: now, ok: err == nil}:
+		case <-p.ctx.Done():
+		}
+	}()
 }
 
 func (p *poller) handle(now time.Time, reanchored, loopRestart bool) {
@@ -467,9 +547,7 @@ func (p *poller) handle(now time.Time, reanchored, loopRestart bool) {
 	if p.sess.pnPending {
 		resolved := len(trackEnrichment(p.cur.Artist, p.cur.Title, p.cur.Album)) > 0
 		if resolved || now.Sub(p.sess.startedAt) >= pnPendingMax {
-			if p.announce(now, "first") {
-				p.sess.pnPending = false
-			}
+			p.announce(now, "first") // pnPending 在结果异步返回后由 applyAnnounceOutcome 清除
 		}
 		submitted = true
 	}
@@ -503,17 +581,10 @@ func (p *poller) handle(now time.Time, reanchored, loopRestart bool) {
 	if !submitted && (reanchored || now.Sub(p.sess.lastPN) >= playingNowRefresh) {
 		p.announce(now, "refresh")
 	}
-	if !p.sess.listenSent && p.sess.playedSecs >= listenThreshold(p.sess.meta.Duration) &&
+	if !p.sess.listenSent && !p.sess.submitting && p.sess.playedSecs >= listenThreshold(p.sess.meta.Duration) &&
 		(p.sess.meta.Duration <= 0 || p.sess.meta.Duration >= minTrackSecs) {
-		if err := p.lb.submit(p.ctx, "single", p.sess.startedAt.Unix(), lbMeta(p.sess.meta)); err != nil {
-			log.Printf("submit listen failed: %v", err)
-		} else {
-			p.sess.listenSent = true
-			log.Printf("listen recorded: %s - %s", p.sess.meta.Artist, p.sess.meta.Title)
-			p.pushScrobble(p.sess.meta, p.sess.startedAt.Unix(), "mac")
-			p.mirrorScrobbleTracked(p.sess.meta.Artist, p.sess.meta.Title, p.sess.meta.Album, p.sess.startedAt.Unix())
-			p.recordRecentMacListen(p.sess.meta.Artist, p.sess.meta.Title, p.sess.startedAt.Unix())
-		}
+		p.sess.submitting = true
+		p.submitSingleAsync(p.sess, p.sess.meta, p.sess.startedAt.Unix())
 	}
 }
 
@@ -569,6 +640,13 @@ func (p *poller) bridge(now time.Time) {
 			}
 			m := lbMeta(snapshot{Title: s.Title, Artist: s.Artist, Album: s.Album})
 			m.AdditionalInfo["source"] = "iphone" // 来源:iPhone(经 Last.fm 桥接)
+			// 这条特意保留同步:失败要 break(停在这个点,下次从同一条重试)、成功要继续
+			// 处理 done 里剩下的旧记录——这个"按顺序处理、失败即停"的语义依赖同步调用,
+			// 改成 submitSingleAsync 那种即发即走会打乱这个顺序保证。且这里处理的是
+			// iPhone 那边已经完成的历史收听(不是当下的实时展示),没有 announce()/
+			// 内联 single 提交那样"卡住会冻结网页展示"的紧迫性(bridge 本身也只有每
+			// lastfmPollInterval=15s 才跑一次,不是每 5s 的 poll 主循环),所以这条暂不
+			// 纳入本轮"poll() 提交异步化"的范围。
 			if err := p.lb.submit(p.ctx, "single", s.UTS, m); err != nil {
 				if errors.Is(err, errListenRejected) {
 					// 永久性 4xx:LB 不会收这条,记入集合避免反复重试。
@@ -624,11 +702,17 @@ func (p *poller) bridge(now time.Time) {
 	p.remoteKey, p.remotePN = key, now
 	meta := lbMeta(snapshot{Title: np.Title, Artist: np.Artist, Album: np.Album, Playing: true})
 	meta.AdditionalInfo["source"] = "iphone" // 来源:iPhone(经 Last.fm 桥接)
-	if err := p.lb.submit(p.ctx, "playing_now", 0, meta); err != nil {
-		log.Printf("bridge: submit lastfm playing_now failed: %v", err)
-	} else {
-		log.Printf("bridge: now playing (iPhone via Last.fm): %s - %s", np.Artist, np.Title)
-	}
+	artist, title := np.Artist, np.Title
+	// 异步提交,不阻塞 bridge()/poll() 主循环(理由同 submitSingleAsync)——这条提交没有
+	// 任何后续状态要维护(不像 Mac 侧的 lastPN/pnPending),失败只需要记日志,fire-and-forget
+	// 即可,不需要像 single 提交那样经 channel 回主循环。
+	go func() {
+		if err := p.lb.submit(p.ctx, "playing_now", 0, meta); err != nil {
+			log.Printf("bridge: submit lastfm playing_now failed: %v", err)
+		} else {
+			log.Printf("bridge: now playing (iPhone via Last.fm): %s - %s", artist, title)
+		}
+	}()
 }
 
 // poll polls ground truth via `media-control get`. The stream subscription
@@ -688,6 +772,8 @@ func run(ctx context.Context, cfg *config, lb *lbClient) error {
 		forwarded:      forwarded,
 		fwdSeeded:      fwdSeeded,
 		weeklyState:    weeklyDigestState{path: weeklyDigestPath},
+		submitDoneCh:   make(chan submitOutcome, 8),
+		announceDoneCh: make(chan announceOutcome, 8),
 	}
 	enrichNotify = make(chan struct{}, 1) // 后台 enrich 完成后触发一次重推
 	p.poll()                              // render immediately, don't wait a full interval on startup
@@ -716,6 +802,10 @@ func run(ctx context.Context, cfg *config, lb *lbClient) error {
 			p.poll() // 后台 enrichment 完成,立刻带完整封面/歌词重推一轮
 		case <-ticker.C:
 			p.poll()
+		case r := <-p.submitDoneCh:
+			p.applySubmitOutcome(r)
+		case r := <-p.announceDoneCh:
+			p.applyAnnounceOutcome(r)
 		}
 	}
 }

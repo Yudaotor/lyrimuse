@@ -19,7 +19,9 @@ type config struct {
 	MediaControlPath string   `json:"media_control_path,omitempty"`
 	BundleIDs        []string `json:"bundle_ids,omitempty"`
 	// 自建状态中继(Cloudflare Worker+KV,取代 LB 作网页主数据源)。留空则不推。
-	// StateRelayURL 形如 https://np.yudaotor.me;/push 写当前状态,/scrobble 追加历史。
+	// StateRelayURL 形如 https://np.yudaotor.me;/push 写当前状态。历史现在完全走
+	// state-worker 的 /history 端点读 LB 合并,采集器不再往这里写 /scrobble(旧端点
+	// 早已下线,见 state-worker/src/index.js 顶部注释)。
 	StateRelayURL   string `json:"state_relay_url,omitempty"`
 	StateRelayToken string `json:"state_relay_token,omitempty"`
 	// Last.fm 桥接：Mac 本地没在放时，把 iPhone(经 FastScrobbler→Last.fm)的

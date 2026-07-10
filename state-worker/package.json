@@ -1,0 +1,7 @@
+{
+  "name": "nowplaying-state-worker",
+  "private": true,
+  "scripts": {
+    "deploy": "npx wrangler deploy"
+  }
+}
