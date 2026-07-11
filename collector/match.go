@@ -34,6 +34,37 @@ func isTimedLRC(s string) bool {
 	return timedLines >= 3 && timedLines*2 >= len(lines)
 }
 
+// cjkRatio 是去掉时间戳标签后,歌词正文里中日韩表意文字(\p{Han})占非空白字符的比例。
+func cjkRatio(s string) float64 {
+	stripped := lrcTimestampRe.ReplaceAllString(s, "")
+	total, cjk := 0, 0
+	for _, r := range stripped {
+		if unicode.IsSpace(r) {
+			continue
+		}
+		total++
+		if unicode.Is(unicode.Han, r) {
+			cjk++
+		}
+	}
+	if total == 0 {
+		return 0
+	}
+	return float64(cjk) / float64(total)
+}
+
+// isProbablyWrongLanguageLyrics 判断"本地标签明明是非中文(歌手名+歌名都不含中文),
+// 但解析出来的'原文'歌词却大半是中文"这种明显文不对题的情况——实测坐实:Musiq
+// Soulchild《Bestfriend》网易云的 lrc(原文)字段本身 71% 是中文、tlyric(翻译)也是
+// 中文,应该是上传者把翻译当原文传错了。本地标签本身就是中文时不适用这条判断(中文
+// 歌配中文"原文"歌词完全正常，不该被当成异常拦下来)。
+func isProbablyWrongLanguageLyrics(localArtist, localTitle, lyrics string) bool {
+	if cjkRatio(localArtist) > 0 || cjkRatio(localTitle) > 0 {
+		return false
+	}
+	return cjkRatio(lyrics) > 0.5
+}
+
 // normLoose lowercases and drops everything but letters/digits (keeps CJK), so
 // "BLOOD ON THE DANCE FLOOR/ HIStory In The Mix" and "Blood On the Dance Floor:
 // HIStory In the Mix" compare equal when matching albums across services.

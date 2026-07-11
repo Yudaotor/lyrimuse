@@ -201,18 +201,21 @@ func resolveTrackEnrichment(artist, title, album string) enrichEntry {
 	}
 	// 歌词:网易云优先(连带翻译/罗马音/逐字)，没有则用已解析出的 QQ songmid 兜底
 	// (两家曲库不同；QQ 只给逐行原文，无翻译/罗马音/逐字)。两家都没有才试 LRCLIB
-	// (见 lrclib.go 顶部注释)——三档都拿不到才是真的没有。
-	if ne.Lyrics != "" {
+	// (见 lrclib.go 顶部注释)——三档都拿不到才是真的没有。每一档都要过一遍语言合理性
+	// 检查(isProbablyWrongLanguageLyrics):本地标签明明不含中文,曲库给的"原文"却大半
+	// 是中文,说明这条数据本身就标错了(实测坐实:Musiq Soulchild《Bestfriend》网易云
+	// 把中文翻译误标成了原文),不能直接采信,要退到下一档再试。
+	if ne.Lyrics != "" && !isProbablyWrongLanguageLyrics(artist, title, ne.Lyrics) {
 		e.Lyrics, e.LyricsTr, e.LyricsRoma, e.LyricsYRC = ne.Lyrics, ne.Trans, ne.Roma, ne.YRC
 		e.LyricsSource = "netease"
 	} else if mid := qqMidFromURL(e.QQURL); mid != "" {
-		if l := qqLyric(mid); l != "" {
+		if l := qqLyric(mid); l != "" && !isProbablyWrongLanguageLyrics(artist, title, l) {
 			e.Lyrics = l
 			e.LyricsSource = "qq"
 		}
 	}
 	if e.Lyrics == "" {
-		if l := lrclibLyric(artist, title, album); l != "" {
+		if l := lrclibLyric(artist, title, album); l != "" && !isProbablyWrongLanguageLyrics(artist, title, l) {
 			e.Lyrics = l
 			e.LyricsSource = "lrclib"
 		}
