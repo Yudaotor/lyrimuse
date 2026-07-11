@@ -112,13 +112,53 @@ type lyricCandidate struct {
 	lyrics string
 }
 
+// lyricEndingCorroborationToleranceSecs 是判定"多个独立源的歌词末尾时间戳互相印证"的
+// 容差。实测标定:宇多田ヒカル《気分じゃないの》(真实数据,只是尾奏长)三源末尾互相只差
+// 0.2~1.5s;Something 那次网易云被 George Harrison 内容污染的候选,跟酷狗真实 Musiq
+// 版本的末尾相差约 19.6s——两者差出一个数量级,5s 足够宽容跨源转写的细微时间差,又足够
+// 严格不会让内容对不上的候选蒙混过关。
+const lyricEndingCorroborationToleranceSecs = 5.0
+
+// corroboratedEndings 返回"末尾时间戳被至少一个别的源印证"的来源集合。多个互相独立的
+// 歌词源末尾落在几乎同一个时间点,是"这些内容描述的是同一份真实歌词"的强证据——比单纯
+// "跟完整曲目时长差多少"更可靠:有些歌曲本身带很长的纯音乐尾奏,没有任何源把它转写进
+// 歌词也完全正常(気分じゃないの 实测坐实:真实时长 448s,网易云/酷狗/LRCLIB 三源全部
+// 独立在 305~307s 处结束,却因为跟完整时长差了 32% 被旧的纯时长阈值误杀);而内容确实
+// 被串到别的曲目/版本的候选,不会凑巧跟别的源落在同一个时间点上。
+func corroboratedEndings(candidates []lyricCandidate) map[string]bool {
+	type ending struct {
+		source string
+		secs   float64
+	}
+	var endings []ending
+	for _, c := range candidates {
+		if secs, ok := lastLRCTimestampSecs(c.lyrics); ok {
+			endings = append(endings, ending{c.source, secs})
+		}
+	}
+	corroborated := map[string]bool{}
+	for i := range endings {
+		for j := range endings {
+			if i == j || endings[i].source == endings[j].source {
+				continue
+			}
+			if math.Abs(endings[i].secs-endings[j].secs) <= lyricEndingCorroborationToleranceSecs {
+				corroborated[endings[i].source] = true
+			}
+		}
+	}
+	return corroborated
+}
+
 // scoreLyricCandidate 给一份候选歌词打分,越高越可信;返回负数表示直接判定无效——不管
 // 别的候选分数多低,都不能选一份未通过基本校验的候选。三层基本校验(时间戳密度/语言/
 // 是否只有credit)都通过后,依次看:
 //  1. 歌词末尾时间戳跟真实曲目时长是否吻合——最能识破同名曲被误关联成另一版本/另一首
 //     歌(实测坐实:Something 那次,网易云给的内容末尾时间戳跟真实时长差了近 29%,内容
-//     被串了)。差超过 20% 直接判定无效,不是扣分——时长对不上通常就是串了别的曲目/
-//     版本，留着只会增加"矮子里拔将军选中一个不确定对不对的候选"的风险。
+//     被串了)。差超过 25% 且没有别的源印证,直接判定无效,不是扣分——时长对不上通常
+//     就是串了别的曲目/版本，留着只会增加"矮子里拔将军选中一个不确定对不对的候选"的
+//     风险。但如果 corroborated 为真(见 corroboratedEndings),说明别的独立源也在同一
+//     时间点结束,这是比"跟完整时长差多少"更直接的正确性证据,不再判定无效。
 //  2. 来源优先级:网易云能带翻译/罗马音/逐字这类其它源没有的增值内容,同等时长可信度下
 //     优先选它，其次QQ,再其次酷狗/LRCLIB——避免"纯按行数比大小"让内容切分方式恰好更
 //     碎的源意外挤掉本来完全合格、还带增值内容的网易云结果(实测坐实:Darling Nikki
@@ -126,7 +166,7 @@ type lyricCandidate struct {
 //     顶替掉)。
 //  3. 内容行数只做非常次要的参考(封顶,避免行数虚高的候选靠行数堆分反超时长/来源都更
 //     可信的候选)。
-func scoreLyricCandidate(localArtist, localTitle string, durationSecs float64, c lyricCandidate) int {
+func scoreLyricCandidate(localArtist, localTitle string, durationSecs float64, c lyricCandidate, corroborated bool) int {
 	if !isTimedLRC(c.lyrics) {
 		return -1
 	}
@@ -155,8 +195,10 @@ func scoreLyricCandidate(localArtist, localTitle string, durationSecs float64, c
 			score += 600
 		case ratio <= 0.25:
 			score += 200
+		case corroborated:
+			score += 100 // 时长差超阈值,但有别的独立源印证末尾时间点,信任交叉印证而非时长
 		default:
-			return -1 // 时长明显对不上,大概率串了别的曲目/版本
+			return -1 // 时长明显对不上,又没有别的源印证,大概率串了别的曲目/版本
 		}
 	}
 	switch c.source {

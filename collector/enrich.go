@@ -242,9 +242,10 @@ func resolveTrackEnrichment(artist, title, album string, durationSecs float64) e
 	if lrclibLyr != "" {
 		candidates = append(candidates, lyricCandidate{source: "lrclib", lyrics: lrclibLyr})
 	}
+	corroborated := corroboratedEndings(candidates)
 	bestScore := -1
 	for _, c := range candidates {
-		sc := scoreLyricCandidate(artist, title, durationSecs, c)
+		sc := scoreLyricCandidate(artist, title, durationSecs, c, corroborated[c.source])
 		if sc < 0 || sc <= bestScore {
 			continue
 		}
