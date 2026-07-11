@@ -99,7 +99,19 @@ func resolveNeteaseInfo(artist, title, album string) neteaseInfo {
 	// NetEase 搜索对词序/括号噪声敏感:带一堆 (feat.)/(with) 的完整标题常搜不到真曲、
 	// 只回一堆热门歌兜底。用去括号标题查,不中再换一个词序(实测 "标题 歌手" 召回更好)。
 	ct := stripParens(title)
-	queries := []string{artist + " " + ct}
+	var queries []string
+	// 老歌撞新翻唱/新演出版本同名时,纯"歌手+标题"召回率不够——王力宏《落叶归根》实测
+	// 坐实:2007原专辑《改变自己》里的录音室版跟2025年《歌手》综艺里王力宏+单依纯合唱的
+	// 同名新版本标题、歌手都能各自精确匹配,但 2007 原版在 NetEase 搜索排名极靠后(实测
+	// offset 60~90 才出现,远超 pick() 能看到的候选窗口),pick() 只看到综艺合唱版这一条
+	// "唯一候选"、没有察觉真正的原版根本不在候选集合里,选错了封面。带上本地专辑名一起
+	// 查能大幅提升召回排名(实测同一首歌加上专辑名后原版直接排到第一位)——只在本地专辑名
+	// 非空时才加这条查询、且放在最前面优先尝试,不影响本来就没有专辑信息的情形(如"大鱼"
+	// 那种本地专辑名对不上/为空的正常单曲，见 pick 注释)。
+	if album != "" {
+		queries = append(queries, artist+" "+ct+" "+album)
+	}
+	queries = append(queries, artist+" "+ct)
 	if ct != title {
 		queries = append(queries, artist+" "+title) // 保留原始作为补充
 	}
