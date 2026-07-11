@@ -323,6 +323,25 @@ func knownArtistAlias(artist string) string {
 	return artistAliasTable[strings.ToLower(strings.TrimSpace(artist))]
 }
 
+// neteaseImpersonatorRiddenArtists 是版权已从网易云整体下架、曲库里只剩仿冒号的艺人
+// 名单(实测坐实,2026-07-11):这类艺人任何"标题+专辑名精确匹配"的候选，先天就该是
+// 仿冒号——真人官方版本根本不在库里，不存在"两者都对上但恰好不是官方"的中间地带。
+// nameOnlyMatch()"歌手名字面对不上也认"这条规则的前提是"信任跨服务强匹配大概率可信"，
+// 对这类艺人不成立,会直接把仿冒号的署名当成核实过的官方名(实测:周杰伦《爱在西元前》
+// 网易云唯一一条标题+专辑名精确匹配的候选，署名是自建小号"Jinhua Jue"，头像还是默认图)。
+// 只需要极少数确凿知名的名字,新的按实际踩坑追加即可。
+var neteaseImpersonatorRiddenArtists = map[string]bool{
+	"周杰伦": true,
+	"周杰倫": true,
+}
+
+// isNeteaseImpersonatorRidden reports whether artist is a known "copyright
+// pulled from NetEase entirely, catalog is 100% impersonators" case — see
+// neteaseImpersonatorRiddenArtists 注释。
+func isNeteaseImpersonatorRidden(artist string) bool {
+	return neteaseImpersonatorRiddenArtists[strings.TrimSpace(artist)]
+}
+
 // toSimplified 把繁体字逐字转成对应简体字(表里没有的字原样保留,不认识就不动,绝不出错)。
 // 只给 resolveNeteaseInfo 里的 nameOnlyMatch(统一歌手名用)本地比较前调用,不改
 // normLoose/albumScore/pick() 本身——那条判定链路管封面/歌词选谁,已经为防仿冒号反复

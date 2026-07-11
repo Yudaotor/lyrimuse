@@ -265,7 +265,10 @@ func resolveNeteaseInfo(artist, title, album string) neteaseInfo {
 		}
 		// 跟 chosen 分支同样的道理(见下方注释):本地标签本来就是多人合credit时不用这条
 		// 兜底,避免用只记了其中一位的 NetEase 单曲数据悄悄丢掉本地已经写全的合作者。
-		if nameOnlyArtist == "" && len(artistCreditParts(artist)) < 2 {
+		// isNeteaseImpersonatorRidden(artist) 时也跳过——见该函数注释,这类艺人网易云
+		// 官方曲库整体缺失,任何"标题+专辑名精确匹配"的候选先天就是仿冒号,nameOnlyMatch
+		// 的"歌手名字面对不上也认"这条规则对他们而言等于直接采信仿冒号的署名。
+		if nameOnlyArtist == "" && len(artistCreditParts(artist)) < 2 && !isNeteaseImpersonatorRidden(artist) {
 			nameOnlyArtist = nameOnlyMatch(r.Result.Songs)
 		}
 	}
