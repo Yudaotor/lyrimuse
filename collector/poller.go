@@ -112,6 +112,7 @@ type poller struct {
 	forwardedSet     persistedTTLSet
 	lfmMirroredSet   persistedTTLSet
 	lastfmCheckedAt  time.Time
+	bridgeFetching   bool // 见 bridge()/applyBridgeResult 顶部注释,防止同时起两个 lastfmRecent 请求
 	remoteKey        string
 	remotePN         time.Time
 	forwarded        map[int64]bool
@@ -130,6 +131,24 @@ type poller struct {
 	// announce 顶部注释、run() 里的 drain 分支。
 	submitDoneCh   chan submitOutcome
 	announceDoneCh chan announceOutcome
+	// bridge() 里读 Last.fm(lastfmRecent,8s 超时)改到后台 goroutine 跑,结果经这个
+	// channel 送回单一 poll 主循环处理——理由同 submitDoneCh/announceDoneCh:Last.fm
+	// 一慢,原来同步调用会连带堵住 poll() 后面紧接着的 pushRelayState,让网页刷新(包括
+	// enrichNotify 刚解析出的封面/歌词)也跟着冻结最长 8 秒(实测坐实:2026-07-11,一次
+	// Last.fm 侧网络抖动期间,某首歌的封面/歌词其实几秒内就解析好了,但因为 bridge()
+	// 卡在 lastfmRecent 上迟迟没轮到 poll() 里紧跟其后的 pushRelayState,用户看到的
+	// 是"迟迟没有歌词"，实际是显示被连带延误了)。
+	bridgeDoneCh chan bridgeFetchResult
+}
+
+// bridgeFetchResult 是后台 goroutine 拉取 Last.fm 数据(lastfmRecent)的结果，经
+// bridgeDoneCh 送回 poll 主循环，由 applyBridgeResult 处理(转发/镜像 iPhone 状态等
+// 有状态副作用的逻辑，仍只在主循环里跑，不引入并发读写)。
+type bridgeFetchResult struct {
+	now  time.Time
+	np   *lastfmTrack
+	done []lastfmTrack
+	ok   bool
 }
 
 const lastfmPollInterval = 15 * time.Second
@@ -611,23 +630,48 @@ func (p *poller) handle(now time.Time, reanchored, loopRestart bool) {
 	}
 }
 
-// bridge polls Last.fm (iPhone via FastScrobbler→Last.fm) gently every
-// lastfmPollInterval: (1) forward completed scrobbles into LB as listens so
-// "last played"/history are cross-device; (2) when the Mac isn't playing
-// locally, mirror the phone's now-playing. Mac local playback wins the live
-// view (it has the progress bar); iPhone plays carry no progress.
+// bridge kicks off a background fetch of Last.fm (iPhone via FastScrobbler→
+// Last.fm) gently every lastfmPollInterval — 见 bridgeDoneCh 顶部注释,
+// lastfmRecent 本身(8s 超时)挪到 goroutine 跑,不阻塞 poll() 后面紧跟的
+// pushRelayState。实际的转发/镜像逻辑(有状态副作用)在 applyBridgeResult 里、
+// 结果送回主循环后才跑。
 func (p *poller) bridge(now time.Time) {
 	if p.cfg.LastfmUser == "" || p.cfg.LastfmAPIKey == "" {
 		return
 	}
-	if now.Sub(p.lastfmCheckedAt) < lastfmPollInterval {
+	if p.bridgeFetching || now.Sub(p.lastfmCheckedAt) < lastfmPollInterval {
 		return
 	}
 	p.lastfmCheckedAt = now
-	np, done, ok := lastfmRecent(p.ctx, p.cfg.LastfmUser, p.cfg.LastfmAPIKey)
-	if !ok {
+	p.bridgeFetching = true
+	user, apiKey := p.cfg.LastfmUser, p.cfg.LastfmAPIKey
+	go func() {
+		np, done, ok := lastfmRecent(p.ctx, user, apiKey)
+		select {
+		case p.bridgeDoneCh <- bridgeFetchResult{now: now, np: np, done: done, ok: ok}:
+		case <-p.ctx.Done():
+		}
+	}()
+}
+
+// applyBridgeResult 在 poll 主循环里处理 bridge() 后台拉取的 Last.fm 结果——转发/
+// 镜像 iPhone 状态等有状态副作用的逻辑,原样保留在这里同步跑(不引入并发读写)。
+// (1) forward completed scrobbles into LB as listens so "last played"/history
+// are cross-device; (2) when the Mac isn't playing locally, mirror the
+// phone's now-playing. Mac local playback wins the live view (it has the
+// progress bar); iPhone plays carry no progress.
+func (p *poller) applyBridgeResult(r bridgeFetchResult) {
+	p.bridgeFetching = false
+	if !r.ok {
 		return
 	}
+	// 异步化之后,这次处理结果不再必然发生在 poll() 里紧跟 pushRelayState 那次调用之内
+	// (可能在两次 poll tick 之间才到达),所以这里补一次推送——沿用
+	// applySubmitOutcome/applyAnnounceOutcome 同款"处理完就主动推一次、内部去重兜底"
+	// 的模式。用 defer 而不是在每个 return 分支前手动加一遍,保证不管走哪条分支
+	// (Mac 抢占/iPhone 停播/判定为自己的回声/正常记录 iPhone 在播)都会触发。
+	defer p.pushRelayState(time.Now(), false)
+	now, np, done := r.now, r.np, r.done
 
 	// 把 Last.fm 上"没转发过"的完成收听转成 LB listen(集合去重,天然兼容乱序/迟到:
 	// Marvis 后台漏了、之后补同步的旧时间戳记录,只要不在集合里就会被补上)。首次(无持久化
@@ -797,6 +841,7 @@ func run(ctx context.Context, cfg *config, lb *lbClient) error {
 		weeklyState:    weeklyDigestState{path: weeklyDigestPath},
 		submitDoneCh:   make(chan submitOutcome, 8),
 		announceDoneCh: make(chan announceOutcome, 8),
+		bridgeDoneCh:   make(chan bridgeFetchResult, 1),
 	}
 	enrichNotify = make(chan struct{}, 1) // 后台 enrich 完成后触发一次重推
 	p.poll()                              // render immediately, don't wait a full interval on startup
@@ -829,6 +874,8 @@ func run(ctx context.Context, cfg *config, lb *lbClient) error {
 			p.applySubmitOutcome(r)
 		case r := <-p.announceDoneCh:
 			p.applyAnnounceOutcome(r)
+		case r := <-p.bridgeDoneCh:
+			p.applyBridgeResult(r)
 		}
 	}
 }
