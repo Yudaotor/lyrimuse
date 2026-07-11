@@ -41,6 +41,8 @@ func relayState(s snapshot, playing bool, device string, listenedAt int64, curre
 		"title": meta.TrackName, "artist": meta.ArtistName, "album": meta.ReleaseName,
 		"artwork": ai["cover_url"], "accent": ai["accent_color"], "device": device,
 		"lyrics": ai["lyrics"], "lyricsTr": ai["lyrics_tr"], "lyricsRoma": ai["lyrics_roma"], "lyricsYRC": ai["lyrics_yrc"],
+		// 封面/歌词实际来自哪个平台("netease"/"qq"/"lrclib"),供网页页脚如实展示。
+		"coverSource": ai["cover_source"], "lyricsSource": ai["lyrics_source"],
 		"links":      map[string]any{"apple": ai["apple_music_url"], "qq": ai["qq_music_url"], "netease": ai["netease_url"], "spotify": ai["spotify_url"]},
 		"durationMs": ai["duration_ms"], "progressMs": ai["progress_ms"], "progressTs": ai["progress_ts"], "rate": ai["playback_rate"],
 	}

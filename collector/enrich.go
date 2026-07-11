@@ -34,7 +34,12 @@ type enrichEntry struct {
 	// 就是这么标的，天然贴合"能识别就用中文名"的诉求，不需要额外维护中英文对照表)。
 	// 识别不出时留空，lbMeta 原样使用本地(Apple Music)标签，不瞎猜。
 	CanonicalArtist string `json:"canonical_artist,omitempty"`
-	TS              int64  `json:"ts"`
+	// CoverSource/LyricsSource 记录封面/歌词实际来自哪个平台("netease"/"qq"/"lrclib"),
+	// 供网页页脚如实展示(而不是写死"来自网易云"——封面/歌词各自可能来自不同平台,或者
+	// 干脆哪个平台都没有)。
+	CoverSource  string `json:"cover_source,omitempty"`
+	LyricsSource string `json:"lyrics_source,omitempty"`
+	TS           int64  `json:"ts"`
 }
 
 func (e enrichEntry) fields() map[string]string {
@@ -55,6 +60,8 @@ func (e enrichEntry) fields() map[string]string {
 	put("lyrics_roma", e.LyricsRoma)
 	put("lyrics_yrc", e.LyricsYRC)
 	put("canonical_artist", e.CanonicalArtist)
+	put("cover_source", e.CoverSource)
+	put("lyrics_source", e.LyricsSource)
 	return m
 }
 
@@ -158,6 +165,9 @@ func resolveTrackEnrichment(artist, title, album string) enrichEntry {
 	// 网易云:封面(国内可加载,苹果 mzstatic 国内已无 CDN)+ 单曲链接 + 带轴歌词,一次搜索出。
 	ne := neteaseLookup(artist, title, album)
 	e.CoverURL = ne.Cover
+	if e.CoverURL != "" {
+		e.CoverSource = "netease"
+	}
 	e.NeteaseURL = ne.SongURL
 	e.CanonicalArtist = ne.Artist
 	if e.CoverURL == "" {
@@ -167,6 +177,9 @@ func resolveTrackEnrichment(artist, title, album string) enrichEntry {
 		// 号也蒙混过关。
 		qqCover, qqArtist := qqCoverFallback(artist, title)
 		e.CoverURL = qqCover
+		if e.CoverURL != "" {
+			e.CoverSource = "qq"
+		}
 		if e.CanonicalArtist == "" {
 			e.CanonicalArtist = qqArtist
 		}
@@ -191,11 +204,18 @@ func resolveTrackEnrichment(artist, title, album string) enrichEntry {
 	// (见 lrclib.go 顶部注释)——三档都拿不到才是真的没有。
 	if ne.Lyrics != "" {
 		e.Lyrics, e.LyricsTr, e.LyricsRoma, e.LyricsYRC = ne.Lyrics, ne.Trans, ne.Roma, ne.YRC
+		e.LyricsSource = "netease"
 	} else if mid := qqMidFromURL(e.QQURL); mid != "" {
-		e.Lyrics = qqLyric(mid)
+		if l := qqLyric(mid); l != "" {
+			e.Lyrics = l
+			e.LyricsSource = "qq"
+		}
 	}
 	if e.Lyrics == "" {
-		e.Lyrics = lrclibLyric(artist, title, album)
+		if l := lrclibLyric(artist, title, album); l != "" {
+			e.Lyrics = l
+			e.LyricsSource = "lrclib"
+		}
 	}
 	return e
 }

@@ -208,6 +208,7 @@ function fromLB(l, playing, listenedAt) {
     title: m.track_name, artist: m.artist_name, album: m.release_name, playing, listenedAt,
     artwork: ai.cover_url || "", accent: ai.accent_color || "", device: ai.source || "",
     lyrics: ai.lyrics || "", lyricsTr: ai.lyrics_tr || "", lyricsRoma: ai.lyrics_roma || "", lyricsYRC: ai.lyrics_yrc || "",
+    coverSource: ai.cover_source || "", lyricsSource: ai.lyrics_source || "",
     links: { apple: ai.apple_music_url, qq: ai.qq_music_url, netease: ai.netease_url, spotify: ai.spotify_url },
     durationMs: num(ai.duration_ms), progressMs: num(ai.progress_ms), progressTs: num(ai.progress_ts), rate: num(ai.playback_rate),
   };
