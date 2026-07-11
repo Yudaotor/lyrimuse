@@ -4,5 +4,7 @@
   "listenbrainz_user": "你的 ListenBrainz 用户名（应与 collector 配置里的一致）",
 
   "lb_api": "https://api.listenbrainz.org",
-  "upload_art": true
+  "upload_art": true,
+
+  "state_relay_url": "(可选，留空则直连 LB+iTunes) 自建 Cloudflare Worker 状态中继地址，如 https://np.yudaotor.me——配置后优先读它的 /now，国内可达且自带封面，失败才退回直连"
 }

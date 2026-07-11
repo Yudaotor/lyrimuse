@@ -38,7 +38,7 @@ Worker(test-0703.cyh-937ae0.workers.dev) 只负责：人点链接时 302 跳转�
 | `collector/` | 这台 Mac，launchd 常驻(Go) | 唯一的数据源头：读 media-control，提交 playing_now/listen 给 LB，同时把富状态(封面/主色/歌词/进度/链接)推进 `state-worker` 的 KV | 只写不读 |
 | `state-worker/` | Cloudflare Worker（`np.yudaotor.me`） | 网页的主数据源：`/now`(读KV,过期/为空则兜底直连LB)、`/history`(直接读LB)、`/cover`+`/share`(社交解链用) | ✅ `fromLB()`/`lbHistory()` |
 | `web/index.html` | GitHub Pages（独立仓 `Yudaotor/nowplaying`） | 展示页；主读 `state-worker`，`state-worker`本身也连不上时才直连 LB 兜底 | ✅ 自己的 `fromLB`/历史映射(见下) |
-| `feishu-bot/` | 这台 Mac，launchd 常驻(Go) | 飞书长连接，应答 `url.preview.get` 拼预览卡片；直连 LB，自己独立解析(只取title/artist/album三个字段，逻辑比上面两处简单得多) | ✅ `nowPlaying()` |
+| `feishu-bot/` | 这台 Mac，launchd 常驻(Go) | 飞书长连接，应答 `url.preview.get` 拼预览卡片；配置了 `state_relay_url` 就优先读 state-worker 的 `/now`(国内可达、自带封面)，失败/未配置才退回直连 LB+iTunes | ✅ `nowPlaying()`（relay 命中时不读 LB，直连兜底才读） |
 | `worker/`（`test-0703`） | Cloudflare Worker | 飞书签名里粘的链接被真人点开时的 302 跳转；**不再**处理 Feishu 回调、不解析 LB，纯静态跳转 | 否（已在 2026-07-08 简化掉） |
 | `badge-worker/` | Cloudflare Worker | GitHub README 里的动态 SVG 徽章；读 `state-worker` 的 `/now`(已归一化好的数据)，不直连 LB | 否，依赖 state-worker 的契约 |
 
@@ -104,6 +104,8 @@ mkdir -p ~/.config/applemusic-nowplaying
 cp feishu.example.json ~/.config/applemusic-nowplaying/feishu.json
 chmod 600 ~/.config/applemusic-nowplaying/feishu.json
 # 编辑 feishu.json：feishu_app_id/feishu_app_secret/listenbrainz_user 必填
+# state_relay_url 可选但建议填(如 https://np.yudaotor.me)：配置后优先读 state-worker 的
+# /now(国内可达、自带封面)，不配就退回直连 LB+iTunes(见"内部子系统"表格)
 
 cp launchd/com.chenyuhao.applemusic-feishu-bot.plist ~/Library/LaunchAgents/
 launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.chenyuhao.applemusic-feishu-bot.plist

@@ -18,6 +18,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -35,6 +36,11 @@ type config struct {
 	LBUser    string `json:"listenbrainz_user"`
 	LBAPI     string `json:"lb_api,omitempty"`
 	UploadArt *bool  `json:"upload_art,omitempty"` // set false to force text-only
+	// RelayURL(可选)：自建 state-worker 地址(如 https://np.yudaotor.me)。配置后优先读它的
+	// /now(已经是国内可达、带封面的归一化数据),失败才退回直连 LB+iTunes(旧行为)。留空
+	// 就是旧行为——这个 bot 之前完全绕开 state-worker,独立直连 LB 和 iTunes,等于把
+	// "国内访问加速"这个 state-worker 存在的意义又重新踩了一遍坑。
+	RelayURL string `json:"state_relay_url,omitempty"`
 }
 
 func loadConfig(path string) (*config, error) {
@@ -64,11 +70,12 @@ type snapshot struct {
 }
 
 type nowPlayingBot struct {
-	cfg    *config
-	lark   *lark.Client
-	hc     *http.Client
-	mu     sync.Mutex
-	artKey map[string]string // "artist|title" -> feishu image_key
+	cfg      *config
+	lark     *lark.Client
+	hc       *http.Client
+	mu       sync.Mutex
+	artKey   map[string]string        // "artist|title" -> feishu image_key
+	inflight map[string]chan struct{} // 正在解析中的 "artist|title" -> 完成时关闭通知等待者;见 imageKey
 }
 
 func (b *nowPlayingBot) handleURLPreview(ctx context.Context, ev *callback.URLPreviewGetEvent) (*callback.URLPreviewGetResponse, error) {
@@ -79,16 +86,18 @@ func (b *nowPlayingBot) handleURLPreview(ctx context.Context, ev *callback.URLPr
 			url = ev.Event.Context.URL
 		}
 	}
-	snap, err := b.nowPlaying(ctx)
+	snap, artworkURL, err := b.nowPlaying(ctx)
 	if err != nil {
 		log.Printf("nowPlaying error: %v", err)
 	}
-	inline := b.buildInline(ctx, snap)
+	inline := b.buildInline(ctx, snap, artworkURL)
 	log.Printf("callback url.preview.get host=%q url=%q -> title=%q", host, url, inline.I18nTitle["zh_cn"])
 	return &callback.URLPreviewGetResponse{Inline: inline}, nil
 }
 
-func (b *nowPlayingBot) buildInline(ctx context.Context, snap *snapshot) *callback.Inline {
+// buildInline 拼预览卡片。artworkURL 是 nowPlaying() 已经拿到的封面(relay 命中时才有,
+// 否则是空串)，传给 imageKey() 省一次 iTunes 兜底查询。
+func (b *nowPlayingBot) buildInline(ctx context.Context, snap *snapshot, artworkURL string) *callback.Inline {
 	if snap == nil || snap.Title == "" {
 		return &callback.Inline{I18nTitle: map[string]string{"zh_cn": "🎧 这会儿没在听歌"}}
 	}
@@ -99,7 +108,7 @@ func (b *nowPlayingBot) buildInline(ctx context.Context, snap *snapshot) *callba
 	title := fmt.Sprintf("%s｜%s — %s", prefix, snap.Title, snap.Artist)
 	inline := &callback.Inline{I18nTitle: map[string]string{"zh_cn": title}}
 	if b.cfg.UploadArt == nil || *b.cfg.UploadArt {
-		if key := b.imageKey(ctx, snap); key != "" {
+		if key := b.imageKey(ctx, snap, artworkURL); key != "" {
 			inline.ImageKey = key
 		}
 	}
@@ -124,7 +133,37 @@ type lbListensResponse struct {
 	} `json:"payload"`
 }
 
-func (b *nowPlayingBot) nowPlaying(ctx context.Context) (*snapshot, error) {
+// relayNowResponse 是 state-worker /now 的响应形状(见 state-worker/src/index.js
+// fromLB()/relayState()),这里只取用得到的字段。
+type relayNowResponse struct {
+	OK      bool   `json:"ok"`
+	Empty   bool   `json:"empty"`
+	Title   string `json:"title"`
+	Artist  string `json:"artist"`
+	Album   string `json:"album"`
+	Playing bool   `json:"playing"`
+	Artwork string `json:"artwork"`
+}
+
+// nowPlaying 返回当前(或最近一次)播放快照，以及一个可能为空的封面 URL(relay 命中时
+// 才有)。优先读自建 state-worker 的 /now(国内可达、已经归一化好),失败才退回直连
+// LB+iTunes(nowPlayingDirect,旧行为)——没配 RelayURL 就直接走旧行为。
+func (b *nowPlayingBot) nowPlaying(ctx context.Context) (*snapshot, string, error) {
+	if b.cfg.RelayURL != "" {
+		var r relayNowResponse
+		if err := b.getJSON(ctx, strings.TrimRight(b.cfg.RelayURL, "/")+"/now", &r); err != nil {
+			log.Printf("relay /now failed, falling back to direct LB: %v", err)
+		} else if r.Empty || r.Title == "" {
+			return nil, "", nil // 真的没在听,不是错误,不用退回直连
+		} else {
+			return &snapshot{Title: r.Title, Artist: r.Artist, Album: r.Album, Playing: r.Playing}, r.Artwork, nil
+		}
+	}
+	snap, err := b.nowPlayingDirect(ctx)
+	return snap, "", err
+}
+
+func (b *nowPlayingBot) nowPlayingDirect(ctx context.Context) (*snapshot, error) {
 	base := b.cfg.LBAPI + "/1/user/" + b.cfg.LBUser
 	var pn lbListensResponse
 	if err := b.getJSON(ctx, base+"/playing-now", &pn); err != nil {
@@ -147,20 +186,59 @@ func (b *nowPlayingBot) nowPlaying(ctx context.Context) (*snapshot, error) {
 
 // ---- album art -> feishu image_key ----------------------------------------
 
-func (b *nowPlayingBot) imageKey(ctx context.Context, snap *snapshot) string {
+// imageKey 返回歌曲封面对应的飞书 image_key，命中缓存直接返回。同一首"还没解析过"的
+// 新歌被多个并发请求同时命中时，只有一个真正去下载+上传，其余排队等它做完直接复用
+// 结果——修复之前完全没有并发去重、同一首新歌被多人几乎同时预览就各自触发一遍下载/
+// 上传的问题。artworkURL 是调用方(nowPlaying 经 relay)已经拿到的封面，非空时跳过
+// iTunes 兜底查询。
+func (b *nowPlayingBot) imageKey(ctx context.Context, snap *snapshot, artworkURL string) string {
 	cacheKey := snap.Artist + "|" + snap.Title
 	b.mu.Lock()
 	if k, ok := b.artKey[cacheKey]; ok {
 		b.mu.Unlock()
 		return k
 	}
+	if ch, ok := b.inflight[cacheKey]; ok {
+		b.mu.Unlock()
+		select {
+		case <-ch:
+		case <-ctx.Done():
+			return ""
+		}
+		// 醒来后只再查一次缓存:那一轮解析成功才会有值,失败就跟它一样返回空——不在
+		// 这里重新发起一次新的解析。否则解析失败时,所有等待者会各自重试一遍下载/
+		// 上传,完全抵消掉这个函数本来要去掉的重复请求(下次独立的 imageKey 调用仍会
+		// 正常重试,不受影响)。
+		b.mu.Lock()
+		k := b.artKey[cacheKey]
+		b.mu.Unlock()
+		return k
+	}
+	ch := make(chan struct{})
+	b.inflight[cacheKey] = ch
 	b.mu.Unlock()
 
-	artURL := b.artworkURL(ctx, snap)
-	if artURL == "" {
+	key := b.resolveImageKey(ctx, snap, artworkURL)
+	if key != "" {
+		b.mu.Lock()
+		b.artKey[cacheKey] = key
+		b.mu.Unlock()
+	}
+	b.mu.Lock()
+	delete(b.inflight, cacheKey)
+	b.mu.Unlock()
+	close(ch)
+	return key
+}
+
+func (b *nowPlayingBot) resolveImageKey(ctx context.Context, snap *snapshot, artworkURL string) string {
+	if artworkURL == "" {
+		artworkURL = b.artworkURL(ctx, snap) // relay 没给封面(或没配置 relay)时退回 iTunes 直连兜底
+	}
+	if artworkURL == "" {
 		return ""
 	}
-	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, artURL, nil)
+	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, artworkURL, nil)
 	resp, err := b.hc.Do(req)
 	if err != nil {
 		log.Printf("download art: %v", err)
@@ -187,16 +265,10 @@ func (b *nowPlayingBot) imageKey(ctx context.Context, snap *snapshot) string {
 		log.Printf("upload image failed: code=%d msg=%s", createResp.Code, createResp.Msg)
 		return ""
 	}
-	key := ""
 	if createResp.Data != nil && createResp.Data.ImageKey != nil {
-		key = *createResp.Data.ImageKey
+		return *createResp.Data.ImageKey
 	}
-	if key != "" {
-		b.mu.Lock()
-		b.artKey[cacheKey] = key
-		b.mu.Unlock()
-	}
-	return key
+	return ""
 }
 
 func (b *nowPlayingBot) artworkURL(ctx context.Context, snap *snapshot) string {
@@ -286,10 +358,11 @@ func main() {
 	}
 
 	bot := &nowPlayingBot{
-		cfg:    cfg,
-		lark:   lark.NewClient(cfg.AppID, cfg.AppSecret),
-		hc:     &http.Client{Timeout: 4 * time.Second},
-		artKey: map[string]string{},
+		cfg:      cfg,
+		lark:     lark.NewClient(cfg.AppID, cfg.AppSecret),
+		hc:       &http.Client{Timeout: 4 * time.Second},
+		artKey:   map[string]string{},
+		inflight: map[string]chan struct{}{},
 	}
 
 	handler := dispatcher.NewEventDispatcher("", "").
