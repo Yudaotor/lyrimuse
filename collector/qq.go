@@ -362,7 +362,7 @@ func resolveQQLyric(mid string) string {
 	if err := json.Unmarshal([]byte(s[i:j+1]), &out); err != nil {
 		return ""
 	}
-	if l := out.Lyric; strings.Contains(l, "[") && len(l) < 20000 {
+	if l := out.Lyric; isTimedLRC(l) {
 		return l
 	}
 	return ""

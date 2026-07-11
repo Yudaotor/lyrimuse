@@ -328,13 +328,12 @@ func resolveNeteaseInfo(artist, title, album string) neteaseInfo {
 		}
 		return ""
 	}
-	timed := func(s string) bool { return strings.Contains(s, "[") && len(s) < 20000 }
-	if lrc, tr, roma := fetchBundle(id); timed(lrc) {
+	if lrc, tr, roma := fetchBundle(id); isTimedLRC(lrc) {
 		info.Lyrics = lrc
-		if timed(tr) {
+		if isTimedLRC(tr) {
 			info.Trans = tr
 		}
-		if timed(roma) {
+		if isTimedLRC(roma) {
 			info.Roma = roma
 		}
 		info.YRC = fetchYRC(id) // 逐字，无则空串，前端退回行级

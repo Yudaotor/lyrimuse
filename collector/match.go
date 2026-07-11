@@ -5,9 +5,34 @@ package main
 import (
 	_ "image/jpeg" // 注册 JPEG 解码器
 	_ "image/png"  // 网易云取色缩略图有时是 PNG(content-type 却谎报 jpg)
+	"regexp"
 	"strings"
 	"unicode"
 )
+
+var lrcTimestampRe = regexp.MustCompile(`\[\d{1,2}:\d{2}[.:]\d{1,3}\]`)
+
+// isTimedLRC reports whether s is genuinely逐行加了时间戳的 LRC 歌词，而不是网易云/
+// QQ 音乐偶尔返回的"纯文本歌词"——后者可能带 [Verse 1]/[Chorus] 这类段落标签,或者只有
+// 开头一行作词/作曲 credit 信息被打了个孤立时间戳,其余全是无时间戳纯文本(实测坐实:
+// Musiq Soulchild《Babygirl》/《Religious》都是这种情况——前者只有 [Verse 1] 这类
+// 段落标签、后者只有开头 credit 行带一个孤立的 [00:00.00-1]时间戳,单看"字符串里有没有
+// 方括号"完全区分不出来这两种和真正的逐行 LRC,导致这两首歌被当成"有歌词"缓存进去,
+// 但网页侧解析不出任何一行真正带时间戳的歌词,歌词区域自然什么都不显示)。要求至少
+// 3 行、且过半的行真的带 [mm:ss.xx] 格式时间戳,才认为是可用的逐行 LRC。
+func isTimedLRC(s string) bool {
+	if s == "" || len(s) >= 20000 {
+		return false
+	}
+	lines := strings.Split(s, "\n")
+	timedLines := 0
+	for _, l := range lines {
+		if lrcTimestampRe.MatchString(l) {
+			timedLines++
+		}
+	}
+	return timedLines >= 3 && timedLines*2 >= len(lines)
+}
 
 // normLoose lowercases and drops everything but letters/digits (keeps CJK), so
 // "BLOOD ON THE DANCE FLOOR/ HIStory In The Mix" and "Blood On the Dance Floor:
