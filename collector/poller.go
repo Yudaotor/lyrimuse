@@ -136,8 +136,25 @@ const lastfmPollInterval = 15 * time.Second
 
 // nearDuplicateWindow：见 recordRecentMacListen 注释。实测同一首歌从 Mac 完成收听到
 // 在 Last.fm 上冒出一条"独立"的第二条(带 (Remaster) 等标题后缀、uts 也对不上我方镜像
-// 写入值)之间，观察到 4~19 分钟不等的间隔，取 30 分钟留足余量。
+// 写入值)之间，观察到 4~19 分钟不等的间隔，取 30 分钟留足余量。这个窗口只用来判断
+// "两条记录的 listened_at 是否足够接近、代表同一次物理收听"，不是缓冲区保留多久
+// （见 recentMacListenRetention）。
 const nearDuplicateWindow = 30 * time.Minute
+
+// recentMacListenRetention：recentMacListens 缓冲区实际保留多久(实测坐实
+// 2026-07-11)。最初把这个也设成 nearDuplicateWindow，误以为"FastScrobbler 的跨设备
+// 回声出现在 Last.fm 上"跟"两条 listened_at 数值相差多少"这两件事时间尺度一致——但
+// 实测坐实 FastScrobbler 自己把 scrobble 提交到 Last.fm 服务器这一步可以顺延几个
+// 小时甚至跨夜(日志显示当天 09:08 和 13:57 两次各转发一整批之前排队攒下来的旧
+// scrobble，时间横跨从前一天傍晚到当天上午)，而旧实现的 cutoff 是"每次新记一条 Mac
+// 收听、就把 30 分钟之前的全部裁掉"——早的那条 Mac 记录早被后面几十条新记录顺带裁掉，
+// 等 bridge() 终于看到延迟的回声时缓冲区里已经找不到匹配项，判定失败、被当"iPhone
+// 新收听"转发，造成同一首歌历史里一条 mac 一条 iphone 的重复(实测同一天分别复现在
+// Prince & The Revolution/Michael Jackson/Musiq Soulchild/宇多田ヒカル 共 11 首歌
+// 上)。修法:缓冲区保留时长跟"两条记录够不够近"这个匹配阈值彻底解耦，前者给足够长
+// (24 小时，覆盖观察到的最长延迟)，后者仍是 30 分钟——缓冲区里存的 (artist,title,uts)
+// 三元组一天顶多几百条，保留 24 小时内存开销可以忽略。
+const recentMacListenRetention = 24 * time.Hour
 
 // recentListen 是最近一条已确认的 Mac 完成收听(artist/title/uts)，只用于
 // recentlyPlayedOnMac 的窗口去重检查。
@@ -156,7 +173,7 @@ type recentListen struct {
 // 够像+时间够近"的兜底检查，不影响精确匹配那条已验证工作正常的路径。
 func (p *poller) recordRecentMacListen(artist, title string, uts int64) {
 	p.recentMacListens = append(p.recentMacListens, recentListen{artist: artist, title: title, uts: uts})
-	cutoff := uts - int64(nearDuplicateWindow/time.Second)
+	cutoff := uts - int64(recentMacListenRetention/time.Second)
 	kept := p.recentMacListens[:0]
 	for _, r := range p.recentMacListens {
 		if r.uts >= cutoff {
@@ -168,9 +185,15 @@ func (p *poller) recordRecentMacListen(artist, title string, uts int64) {
 
 // recentlyPlayedOnMac reports whether artist/title matches a Mac listen
 // recorded within nearDuplicateWindow of uts — see recordRecentMacListen。
+// 艺人名允许"精确匹配 或 宽松互相包含"(而不是只认 artistMatches 那种更严格的精确/
+// 逗号分割式匹配)——实测坐实 2026-07-11:FastScrobbler 侧把 Musiq Soulchild 报成艺名
+// "Musiq"(不带 Soulchild)，artistMatches 判定不通过，导致 4 首歌漏判。这里放宽风险
+// 可控:判重失败最多是漏转发一条真实 iPhone 收听(少记，不是错记成别人的封面/歌词那种
+// 会显示错误信息的场景，跟 artistMatches 本来要防的仿冒号场景完全不是一个量级)。
 func (p *poller) recentlyPlayedOnMac(artist, title string, uts int64) bool {
 	for _, r := range p.recentMacListens {
-		if !artistMatches(r.artist, artist) || !looseContains(r.title, title) {
+		artistOK := artistMatches(r.artist, artist) || looseContains(r.artist, artist)
+		if !artistOK || !looseContains(r.title, title) {
 			continue
 		}
 		d := uts - r.uts
