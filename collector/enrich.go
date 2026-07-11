@@ -187,11 +187,15 @@ func resolveTrackEnrichment(artist, title, album string) enrichEntry {
 		e.SpotifyURL = "https://open.spotify.com/search/" + neturl.QueryEscape(artist+" "+title)
 	}
 	// 歌词:网易云优先(连带翻译/罗马音/逐字)，没有则用已解析出的 QQ songmid 兜底
-	// (两家曲库不同；QQ 只给逐行原文，无翻译/罗马音/逐字)。
+	// (两家曲库不同；QQ 只给逐行原文，无翻译/罗马音/逐字)。两家都没有才试 LRCLIB
+	// (见 lrclib.go 顶部注释)——三档都拿不到才是真的没有。
 	if ne.Lyrics != "" {
 		e.Lyrics, e.LyricsTr, e.LyricsRoma, e.LyricsYRC = ne.Lyrics, ne.Trans, ne.Roma, ne.YRC
 	} else if mid := qqMidFromURL(e.QQURL); mid != "" {
 		e.Lyrics = qqLyric(mid)
+	}
+	if e.Lyrics == "" {
+		e.Lyrics = lrclibLyric(artist, title, album)
 	}
 	return e
 }
