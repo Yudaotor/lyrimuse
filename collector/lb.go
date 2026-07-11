@@ -60,7 +60,7 @@ func lbMeta(s snapshot) lbTrackMeta {
 	}
 	// 封面/主色/各平台链接/歌词只跟 歌手|歌名|专辑 有关、且稳定不变，解析代价不小
 	// (多次外部搜索 + 封面主色解码)。统一缓存并落盘，同一首歌重播/重启后都不再重解析。
-	enr := trackEnrichment(s.Artist, s.Title, s.Album)
+	enr := trackEnrichment(s.Artist, s.Title, s.Album, s.Duration)
 	for _, k := range []string{"cover_url", "accent_color", "netease_url", "apple_music_url", "qq_music_url", "spotify_url", "cover_source", "lyrics_source"} {
 		if v := enr[k]; v != "" {
 			info[k] = v

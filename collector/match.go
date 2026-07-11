@@ -5,12 +5,15 @@ package main
 import (
 	_ "image/jpeg" // 注册 JPEG 解码器
 	_ "image/png"  // 网易云取色缩略图有时是 PNG(content-type 却谎报 jpg)
+	"math"
 	"regexp"
+	"strconv"
 	"strings"
 	"unicode"
 )
 
 var lrcTimestampRe = regexp.MustCompile(`\[\d{1,2}:\d{2}[.:]\d{1,3}\]`)
+var lrcTimestampCaptureRe = regexp.MustCompile(`\[(\d{1,2}):(\d{2})[.:](\d{1,3})\]`)
 
 // isTimedLRC reports whether s is genuinely逐行加了时间戳的 LRC 歌词，而不是网易云/
 // QQ 音乐偶尔返回的"纯文本歌词"——后者可能带 [Verse 1]/[Chorus] 这类段落标签,或者只有
@@ -63,6 +66,115 @@ func isProbablyWrongLanguageLyrics(localArtist, localTitle, lyrics string) bool 
 		return false
 	}
 	return cjkRatio(lyrics) > 0.5
+}
+
+// creditLineRe 匹配"作词/作曲/编曲/制作人/演唱/混音/录音: xxx"或英文对应写法开头的行——
+// 要求出现在行首(去掉时间戳、trim 空白之后),不匹配"作词"这类词恰好出现在正文歌词句子
+// 中间的情况(那种情况极罕见,但宁可放过也不误杀真歌词)。
+var creditLineRe = regexp.MustCompile(`(?i)^(作词|作曲|编曲|制作人|演唱|混音|录音|lyrics by|composed by|written by|produced by|arranged by)\s*[:：]`)
+
+// isCreditOnlyLRC 判断这份"通过了 isTimedLRC"的歌词是不是只有作词/作曲等 credit 信息、
+// 没有真正的歌词正文——实测坐实:网易云有时把整首歌的"歌词"就只填了几行 credit,每行都
+// 单独带时间戳(能通过 isTimedLRC 那条"过半行数带时间戳"的检测),但去掉 credit 行之后
+// 剩不下几行真正在唱的词(Religious 那次就是这种情况)。去掉时间戳和 credit 行之后,
+// 剩余非空行少于 3 行就判定为"只有 credit,没有正文"。
+func isCreditOnlyLRC(lrc string) bool {
+	lines := strings.Split(lrc, "\n")
+	nonCredit := 0
+	for _, l := range lines {
+		text := strings.TrimSpace(lrcTimestampRe.ReplaceAllString(l, ""))
+		if text == "" || creditLineRe.MatchString(text) {
+			continue
+		}
+		nonCredit++
+	}
+	return nonCredit < 3
+}
+
+// lastLRCTimestampSecs 取 LRC 里最后一个 [mm:ss.xx] 时间戳、换算成秒。frac 部分可能是
+// 两位(百分之几秒)或三位(毫秒),按其实际代表的小数位数换算,不假设固定是哪一种。
+func lastLRCTimestampSecs(lrc string) (float64, bool) {
+	matches := lrcTimestampCaptureRe.FindAllStringSubmatch(lrc, -1)
+	if len(matches) == 0 {
+		return 0, false
+	}
+	m := matches[len(matches)-1]
+	mm, _ := strconv.Atoi(m[1])
+	ss, _ := strconv.Atoi(m[2])
+	frac, _ := strconv.Atoi(m[3])
+	fracSecs := float64(frac) / math.Pow(10, float64(len(m[3])))
+	return float64(mm*60+ss) + fracSecs, true
+}
+
+// lyricCandidate 是某个歌词源解析出的一份候选结果,连同来源标记。
+type lyricCandidate struct {
+	source string // "netease" | "qq" | "kugou" | "lrclib"
+	lyrics string
+}
+
+// scoreLyricCandidate 给一份候选歌词打分,越高越可信;返回负数表示直接判定无效——不管
+// 别的候选分数多低,都不能选一份未通过基本校验的候选。三层基本校验(时间戳密度/语言/
+// 是否只有credit)都通过后,依次看:
+//  1. 歌词末尾时间戳跟真实曲目时长是否吻合——最能识破同名曲被误关联成另一版本/另一首
+//     歌(实测坐实:Something 那次,网易云给的内容末尾时间戳跟真实时长差了近 29%,内容
+//     被串了)。差超过 20% 直接判定无效,不是扣分——时长对不上通常就是串了别的曲目/
+//     版本，留着只会增加"矮子里拔将军选中一个不确定对不对的候选"的风险。
+//  2. 来源优先级:网易云能带翻译/罗马音/逐字这类其它源没有的增值内容,同等时长可信度下
+//     优先选它，其次QQ,再其次酷狗/LRCLIB——避免"纯按行数比大小"让内容切分方式恰好更
+//     碎的源意外挤掉本来完全合格、还带增值内容的网易云结果(实测坐实:Darling Nikki
+//     网易云版本本来自带翻译/逐字,如果单纯比行数会被行数更多但没有增值内容的 LRCLIB
+//     顶替掉)。
+//  3. 内容行数只做非常次要的参考(封顶,避免行数虚高的候选靠行数堆分反超时长/来源都更
+//     可信的候选)。
+func scoreLyricCandidate(localArtist, localTitle string, durationSecs float64, c lyricCandidate) int {
+	if !isTimedLRC(c.lyrics) {
+		return -1
+	}
+	if isProbablyWrongLanguageLyrics(localArtist, localTitle, c.lyrics) {
+		return -1
+	}
+	if isCreditOnlyLRC(c.lyrics) {
+		return -1
+	}
+	score := 0
+	if durationSecs > 0 {
+		last, ok := lastLRCTimestampSecs(c.lyrics)
+		if !ok {
+			return -1 // 通过了 isTimedLRC 却提不出最后一个时间戳,理论上不该发生,保守判定无效
+		}
+		// 阈值实测坐实(Something 那次):网易云被 George Harrison credit 污染的错误内容,
+		// 末尾时间戳跟真实时长差了 28.7%;而酷狗那份验证过是真正 Musiq Soulchild 原文
+		// 内容(不提 George Harrison)的候选,只是因为歌曲本身前奏/尾奏较长导致差了
+		// 22.3%——两者差距只有 6 个百分点,卡在 0.25 才能两边都分对(既拦住确凿污染的
+		// 网易云候选,又不错杀真实但有较长纯音乐尾奏的酷狗候选)。
+		ratio := math.Abs(last-durationSecs) / durationSecs
+		switch {
+		case ratio <= 0.03:
+			score += 1000
+		case ratio <= 0.08:
+			score += 600
+		case ratio <= 0.25:
+			score += 200
+		default:
+			return -1 // 时长明显对不上,大概率串了别的曲目/版本
+		}
+	}
+	switch c.source {
+	case "netease":
+		score += 50
+	case "qq":
+		score += 30
+	case "kugou":
+		score += 20
+	case "lrclib":
+		score += 10
+	}
+	lines := len(strings.Split(c.lyrics, "\n"))
+	if lines > 200 {
+		lines = 200
+	}
+	score += lines
+	return score
 }
 
 // normLoose lowercases and drops everything but letters/digits (keeps CJK), so

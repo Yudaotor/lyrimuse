@@ -84,7 +84,9 @@ var (
 
 // trackEnrichment returns the cached per-track fields, resolving (and persisting)
 // them on a miss or once past the TTL. Safe for concurrent callers (poll+bridge).
-func trackEnrichment(artist, title, album string) map[string]string {
+// durationSecs(曲目真实时长,秒)只作为解析时的校验输入,不参与缓存 key——同一首歌哪怕
+// 每次报的时长有几百毫秒抖动也应该命中同一份缓存。
+func trackEnrichment(artist, title, album string, durationSecs float64) map[string]string {
 	if title == "" {
 		return nil
 	}
@@ -109,7 +111,7 @@ func trackEnrichment(artist, title, album string) map[string]string {
 	// 解析完写缓存并经 enrichNotify 触发一次重推,封面/歌词随后补上(见 resolveEnrichAsync)。
 	if !enrichInflight[key] {
 		enrichInflight[key] = true
-		go resolveEnrichAsync(key, artist, title, album)
+		go resolveEnrichAsync(key, artist, title, album, durationSecs)
 	}
 	var stale map[string]string
 	if ok {
@@ -121,14 +123,14 @@ func trackEnrichment(artist, title, album string) map[string]string {
 
 // resolveEnrichAsync 在后台解析一首歌的富信息(封面/主色/链接/歌词),写入缓存并通知
 // poll 循环重推。由 trackEnrichment 在缓存未命中时启动;同一 key 同时只有一个在跑
-// (enrichInflight 去重)。各外部请求自带 4~6s 超时,故本 goroutine 有界、进程退出即止。
-func resolveEnrichAsync(key, artist, title, album string) {
+// (enrichInflight 去重)。各外部请求自带 4~10s 超时,故本 goroutine 有界、进程退出即止。
+func resolveEnrichAsync(key, artist, title, album string, durationSecs float64) {
 	defer func() {
 		enrichMu.Lock()
 		delete(enrichInflight, key)
 		enrichMu.Unlock()
 	}()
-	e := resolveTrackEnrichment(artist, title, album)
+	e := resolveTrackEnrichment(artist, title, album, durationSecs)
 	e.TS = time.Now().Unix()
 	// 只缓存"解析到东西"的结果;全空(可能网络抽风)不缓存,下次再试,别把偶发失败钉死。
 	if e.CoverURL == "" && e.Lyrics == "" && e.AppleURL == "" && e.QQURL == "" && e.NeteaseURL == "" {
@@ -160,7 +162,7 @@ func resolveEnrichAsync(key, artist, title, album string) {
 	}
 }
 
-func resolveTrackEnrichment(artist, title, album string) enrichEntry {
+func resolveTrackEnrichment(artist, title, album string, durationSecs float64) enrichEntry {
 	var e enrichEntry
 	// 网易云:封面(国内可加载,苹果 mzstatic 国内已无 CDN)+ 单曲链接 + 带轴歌词,一次搜索出。
 	ne := neteaseLookup(artist, title, album)
@@ -199,26 +201,39 @@ func resolveTrackEnrichment(artist, title, album string) enrichEntry {
 	if title != "" {
 		e.SpotifyURL = "https://open.spotify.com/search/" + neturl.QueryEscape(artist+" "+title)
 	}
-	// 歌词:网易云优先(连带翻译/罗马音/逐字)，没有则用已解析出的 QQ songmid 兜底
-	// (两家曲库不同；QQ 只给逐行原文，无翻译/罗马音/逐字)。两家都没有才试 LRCLIB
-	// (见 lrclib.go 顶部注释)——三档都拿不到才是真的没有。每一档都要过一遍语言合理性
-	// 检查(isProbablyWrongLanguageLyrics):本地标签明明不含中文,曲库给的"原文"却大半
-	// 是中文,说明这条数据本身就标错了(实测坐实:Musiq Soulchild《Bestfriend》网易云
-	// 把中文翻译误标成了原文),不能直接采信,要退到下一档再试。
-	if ne.Lyrics != "" && !isProbablyWrongLanguageLyrics(artist, title, ne.Lyrics) {
-		e.Lyrics, e.LyricsTr, e.LyricsRoma, e.LyricsYRC = ne.Lyrics, ne.Trans, ne.Roma, ne.YRC
-		e.LyricsSource = "netease"
-	} else if mid := qqMidFromURL(e.QQURL); mid != "" {
-		if l := qqLyric(mid); l != "" && !isProbablyWrongLanguageLyrics(artist, title, l) {
-			e.Lyrics = l
-			e.LyricsSource = "qq"
+	// 歌词:网易云/QQ音乐/酷狗/LRCLIB 四个源全部查一遍,不是查到第一个能用的就停——一首歌
+	// 只在缓存未命中时解析一次,后续都直接读缓存,四个源都查一遍换来更可信的结果性价比
+	// 很高(用户拍板:反正只查一次、存下来，没问题)。每个候选都过 scoreLyricCandidate
+	// 统一打分(时间戳密度/语言合理性/是否只有credit信息/跟真实时长是否吻合),取最高分
+	// 的候选;所有候选都不合格就是真的没有。网易云额外带翻译/罗马音/逐字,只有网易云
+	// 胜出时才会一并采用。
+	var candidates []lyricCandidate
+	if ne.Lyrics != "" {
+		candidates = append(candidates, lyricCandidate{source: "netease", lyrics: ne.Lyrics})
+	}
+	if mid := qqMidFromURL(e.QQURL); mid != "" {
+		if l := qqLyric(mid); l != "" {
+			candidates = append(candidates, lyricCandidate{source: "qq", lyrics: l})
 		}
 	}
-	if e.Lyrics == "" {
-		if l := lrclibLyric(artist, title, album); l != "" && !isProbablyWrongLanguageLyrics(artist, title, l) {
-			e.Lyrics = l
-			e.LyricsSource = "lrclib"
+	if l := kugouLyric(artist, title, durationSecs); l != "" {
+		candidates = append(candidates, lyricCandidate{source: "kugou", lyrics: l})
+	}
+	if l := lrclibLyric(artist, title, album); l != "" {
+		candidates = append(candidates, lyricCandidate{source: "lrclib", lyrics: l})
+	}
+	bestScore := -1
+	for _, c := range candidates {
+		sc := scoreLyricCandidate(artist, title, durationSecs, c)
+		if sc < 0 || sc <= bestScore {
+			continue
 		}
+		bestScore = sc
+		e.Lyrics = c.lyrics
+		e.LyricsSource = c.source
+	}
+	if e.LyricsSource == "netease" {
+		e.LyricsTr, e.LyricsRoma, e.LyricsYRC = ne.Trans, ne.Roma, ne.YRC
 	}
 	return e
 }

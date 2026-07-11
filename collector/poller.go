@@ -509,7 +509,7 @@ func (p *poller) handle(now time.Time, reanchored, loopRestart bool) {
 		// 故首条须在 enrich 解析完后再发(那时才知有无歌词、有则带上)。已解析(缓存命中,无论
 		// 有无歌词)立即发;仅首次解析中(缓存未命中)才挂起,由下方处理器等 enrich 完成
 		// (enrichNotify 触发)或超时再发。仅影响 KV 兜底路径,KV 主路径不受此延迟。
-		if len(trackEnrichment(p.cur.Artist, p.cur.Title, p.cur.Album)) > 0 {
+		if len(trackEnrichment(p.cur.Artist, p.cur.Title, p.cur.Album, p.cur.Duration)) > 0 {
 			p.announce(now, "new")
 		} else {
 			p.sess.pnPending = true
@@ -530,7 +530,7 @@ func (p *poller) handle(now time.Time, reanchored, loopRestart bool) {
 			p.sess.lastSeen = now
 		}
 		log.Printf("loop restart: %s - %s", p.cur.Artist, p.cur.Title)
-		if len(trackEnrichment(p.cur.Artist, p.cur.Title, p.cur.Album)) > 0 {
+		if len(trackEnrichment(p.cur.Artist, p.cur.Title, p.cur.Album, p.cur.Duration)) > 0 {
 			p.announce(now, "loop restart")
 		} else {
 			p.sess.pnPending = true
@@ -545,7 +545,7 @@ func (p *poller) handle(now time.Time, reanchored, loopRestart bool) {
 	// 挂起的首条:等 enrich 解析完(enrichNotify 会触发一轮 poll,那时才知有无歌词)或超过
 	// pnPendingMax 再作为"换曲那条"发出。挂起期间不发状态切换/刷新提交(会锁死无歌词的换曲那条)。
 	if p.sess.pnPending {
-		resolved := len(trackEnrichment(p.cur.Artist, p.cur.Title, p.cur.Album)) > 0
+		resolved := len(trackEnrichment(p.cur.Artist, p.cur.Title, p.cur.Album, p.cur.Duration)) > 0
 		if resolved || now.Sub(p.sess.startedAt) >= pnPendingMax {
 			p.announce(now, "first") // pnPending 在结果异步返回后由 applyAnnounceOutcome 清除
 		}
