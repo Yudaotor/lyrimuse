@@ -22,6 +22,10 @@ final class AppSettings: ObservableObject {
         static let launchAtLoginEnabled = "np:launchAtLoginEnabled"
         static let dataSourceMode = "np:dataSourceMode"
         static let showNextLinePreview = "np:showNextLinePreview"
+        static let fontFamilyName = "np:fontFamilyName"
+        static let fontSize = "np:fontSize"
+        static let foregroundColorHex = "np:foregroundColorHex"
+        static let backgroundColorHex = "np:backgroundColorHex"
     }
 
     private let defaults = UserDefaults.standard
@@ -55,6 +59,25 @@ final class AppSettings: ObservableObject {
     @Published var showNextLinePreview: Bool {
         didSet { defaults.set(showNextLinePreview, forKey: Keys.showNextLinePreview) }
     }
+    // 字体族名——空字符串表示"跟随系统",对应悬浮窗原来硬编码的系统字体,不用额外
+    // enum/Optional 表达"未设置",跟 relayBaseURL 的空字符串兜底是同一种写法。
+    @Published var fontFamilyName: String {
+        didSet { defaults.set(fontFamilyName, forKey: Keys.fontFamilyName) }
+    }
+    // 主歌词行字号(pt)。罗马音/译文/下一句预览三行的字号从这个值按比例换算,
+    // 见 AppearanceHelpers.swift 的 romanizationFontSize/secondaryFontSize。
+    @Published var fontSize: Double {
+        didSet { defaults.set(fontSize, forKey: Keys.fontSize) }
+    }
+    // #RRGGBBAA。默认不透明白色,跟悬浮窗原来硬编码的 .white 视觉完全一致。
+    @Published var foregroundColorHex: String {
+        didSet { defaults.set(foregroundColorHex, forKey: Keys.foregroundColorHex) }
+    }
+    // #RRGGBBAA。默认 alpha=0(全透明),保留"没有背景、文字直接浮在桌面上"的原有观感——
+    // 没主动去设置面板改过的人,悬浮窗外观应该跟改动前逐像素一致。
+    @Published var backgroundColorHex: String {
+        didSet { defaults.set(backgroundColorHex, forKey: Keys.backgroundColorHex) }
+    }
 
     private init() {
         relayBaseURL = defaults.string(forKey: Keys.relayBaseURL) ?? Self.defaultRelayBaseURL
@@ -64,5 +87,9 @@ final class AppSettings: ObservableObject {
         launchAtLoginEnabled = (defaults.object(forKey: Keys.launchAtLoginEnabled) as? Bool) ?? false
         dataSourceMode = PlaybackSourceMode(rawValue: defaults.string(forKey: Keys.dataSourceMode) ?? "") ?? .relay
         showNextLinePreview = (defaults.object(forKey: Keys.showNextLinePreview) as? Bool) ?? false
+        fontFamilyName = defaults.string(forKey: Keys.fontFamilyName) ?? ""
+        fontSize = (defaults.object(forKey: Keys.fontSize) as? Double) ?? 20
+        foregroundColorHex = defaults.string(forKey: Keys.foregroundColorHex) ?? "#FFFFFFFF"
+        backgroundColorHex = defaults.string(forKey: Keys.backgroundColorHex) ?? "#00000000"
     }
 }

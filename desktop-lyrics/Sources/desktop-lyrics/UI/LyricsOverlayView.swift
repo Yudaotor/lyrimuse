@@ -33,12 +33,16 @@ struct LyricsOverlayView: View {
     @ObservedObject private var poller = PlaybackCoordinator.shared
     @ObservedObject private var settings = AppSettings.shared
 
+    // 固定值,不是设置项——加一个圆角纯粹是给"背景颜色"这个设置配套的实现细节,免得
+    // 用户一开背景色看到的是个生硬的直角矩形;两个参考的开源实现里圆角都不是用户可调项。
+    private let overlayBackgroundCornerRadius: CGFloat = 16
+
     var body: some View {
         VStack(spacing: 4) {
             if settings.showRomanization, let roma = poller.currentLine?.romanization {
                 Text(roma)
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.6))
+                    .font(.overlayFont(familyName: settings.fontFamilyName, size: settings.romanizationFontSize, weight: .medium))
+                    .foregroundStyle(settings.foregroundColor.opacity(0.6))
                     .transition(.opacity)
             }
             mainLine
@@ -51,14 +55,14 @@ struct LyricsOverlayView: View {
                 )
             if settings.showTranslation, let tr = poller.currentLine?.translation {
                 Text(tr)
-                    .font(.system(size: 14, weight: .regular))
-                    .foregroundStyle(.white.opacity(0.75))
+                    .font(.overlayFont(familyName: settings.fontFamilyName, size: settings.secondaryFontSize, weight: .regular))
+                    .foregroundStyle(settings.foregroundColor.opacity(0.75))
                     .transition(.opacity)
             }
             if settings.showNextLinePreview, let next = poller.nextLineText {
                 Text(next)
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.4))
+                    .font(.overlayFont(familyName: settings.fontFamilyName, size: settings.secondaryFontSize, weight: .medium))
+                    .foregroundStyle(settings.foregroundColor.opacity(0.4))
                     .transition(.opacity)
             }
         }
@@ -68,10 +72,21 @@ struct LyricsOverlayView: View {
         .padding(.horizontal, 20)
         .padding(.vertical, 14)
         .frame(maxWidth: .infinity)
-        // 近乎透明但不是纯 .clear——纯透明区域有时候完全接不到拖拽手势,这里给个极淡的
-        // 背景让 isMovableByWindowBackground 在整块区域都能生效。
-        .background(Color.black.opacity(0.001))
+        .background(overlayBackground)
         .multilineTextAlignment(.center)
+    }
+
+    @ViewBuilder
+    private var overlayBackground: some View {
+        if settings.backgroundIsVisible {
+            RoundedRectangle(cornerRadius: overlayBackgroundCornerRadius, style: .continuous)
+                .fill(settings.backgroundColor)
+        } else {
+            // 未开启背景色(默认状态)时保留原来近乎透明的拖拽捕获层——纯透明区域有时候
+            // 完全接不到拖拽手势,这里给个极淡的背景让 isMovableByWindowBackground 在
+            // 整块区域都能生效。
+            Color.black.opacity(0.001)
+        }
     }
 
     // 只用歌词的文本内容算身份,不掺 fillFraction——同一行歌词逐字填色推进时这个值
@@ -91,31 +106,34 @@ struct LyricsOverlayView: View {
                     wordText(w)
                 }
             }
-            .font(.system(size: 20, weight: .bold))
+            .font(.overlayFont(familyName: settings.fontFamilyName, size: settings.fontSize, weight: .bold))
         } else if let text = poller.currentLine?.mainText {
             Text(text)
-                .font(.system(size: 20, weight: .bold))
-                .foregroundStyle(.white)
+                .font(.overlayFont(familyName: settings.fontFamilyName, size: settings.fontSize, weight: .bold))
+                .foregroundStyle(settings.foregroundColor)
         } else {
             Text("♪")
-                .font(.system(size: 20, weight: .bold))
-                .foregroundStyle(.white.opacity(0.3))
+                .font(.overlayFont(familyName: settings.fontFamilyName, size: settings.fontSize, weight: .bold))
+                .foregroundStyle(settings.foregroundColor.opacity(0.3))
         }
     }
 
     // 用渐变整体当文字颜色,而不是叠两层 Text + GeometryReader 手算裁剪宽度——渐变的
     // stop 位置能被 SwiftUI 直接插值,20Hz 的离散更新之间会自动补间成平滑的扫过效果,
     // 不再是一格一格跳。中间留一小段过渡带(而不是硬边界)让扫过的感觉更柔和,同时也
-    // 掩盖每次 tick 之间fillFraction 步进本身的粗糙感。
+    // 掩盖每次 tick 之间fillFraction 步进本身的粗糙感。渐变的两个颜色改用可配置的
+    // foregroundColor 而不是硬编码 .white——已唱过的部分永远是用户选的前景色全强度,
+    // 未唱到的部分是同一颜色的 35% 透明度,没有单独的"进度色"设置项。
     private func wordText(_ w: SyncedLyricWord) -> some View {
-        Text(w.text)
+        let fg = settings.foregroundColor
+        return Text(w.text)
             .foregroundStyle(
                 LinearGradient(
                     stops: [
-                        .init(color: .white, location: 0),
-                        .init(color: .white, location: max(0, w.fillFraction - 0.08)),
-                        .init(color: .white.opacity(0.35), location: min(1, w.fillFraction + 0.08)),
-                        .init(color: .white.opacity(0.35), location: 1),
+                        .init(color: fg, location: 0),
+                        .init(color: fg, location: max(0, w.fillFraction - 0.08)),
+                        .init(color: fg.opacity(0.35), location: min(1, w.fillFraction + 0.08)),
+                        .init(color: fg.opacity(0.35), location: 1),
                     ],
                     startPoint: .leading,
                     endPoint: .trailing
