@@ -398,16 +398,54 @@ var albumStop = map[string]bool{
 	"i": true, "ii": true, "iii": true, "iv": true,
 }
 
+// albumTokens 除了在非字母数字处断词,还在"数字→字母"/"字母→数字"的交界处断词——中文
+// 演唱会专辑名常见"2011Live"/"2020巡演"这种年份和后缀之间不留空格的写法,原来整段被
+// strings.FieldsFunc 当成一个词,导致跟本地(通常是英文、年份和单词之间有空格)标签的
+// "2011"+"live"两个独立词对不上、白白丢掉本该有的匹配分。实测坐实:方大同《四人游
+// (Live)》——网易云正确候选专辑"15 香港演唱会(2011Live)"因为"2011Live"没拆开,跟本地
+// 专辑"15 (Live in Hong Kong 2011)"只对上"15"这一个词(分数1),跟另一个同名但错误专辑
+// 的候选"This Love Live 2007"(只对上"live"这一个词,分数同样是1)打成平手,选谁全看
+// 网易云搜索接口自己的排序、选错了封面。拆开后正确候选能对上"15"+"2011"+"live"三个词、
+// 分数明显领先,不再靠运气打平。
 func albumTokens(s string) map[string]bool {
 	out := map[string]bool{}
-	for _, t := range strings.FieldsFunc(strings.ToLower(s), func(r rune) bool {
-		return !unicode.IsLetter(r) && !unicode.IsDigit(r)
-	}) {
-		if len([]rune(t)) <= 1 || albumStop[t] {
-			continue
+	s = strings.ToLower(s)
+	var cur []rune
+	const (
+		kindNone = iota
+		kindDigit
+		kindLetter
+	)
+	prevKind := kindNone
+	flush := func() {
+		if len(cur) > 1 {
+			t := string(cur)
+			if !albumStop[t] {
+				out[t] = true
+			}
 		}
-		out[t] = true
+		cur = cur[:0]
 	}
+	for _, r := range s {
+		switch {
+		case unicode.IsDigit(r):
+			if prevKind == kindLetter {
+				flush()
+			}
+			cur = append(cur, r)
+			prevKind = kindDigit
+		case unicode.IsLetter(r):
+			if prevKind == kindDigit {
+				flush()
+			}
+			cur = append(cur, r)
+			prevKind = kindLetter
+		default:
+			flush()
+			prevKind = kindNone
+		}
+	}
+	flush()
 	return out
 }
 
