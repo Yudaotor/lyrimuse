@@ -17,6 +17,7 @@ public final class RelayPoller: ObservableObject {
     @Published public private(set) var artworkURLString: String?
     @Published public private(set) var isPlayingNow: Bool = false
     @Published public private(set) var currentLine: SyncedLyricLine?
+    @Published public private(set) var nextLineText: String?
 
     // 是否优先用逐字(yrc)高亮——由设置面板控制(desktop-lyrics 应用层的 AppSettings),
     // 关掉后只用整行高亮。改这个值会用最近一次拿到的状态立刻重新加载,不用等下一首歌。
@@ -47,6 +48,12 @@ public final class RelayPoller: ObservableObject {
         reschedulePollTimer()
         startFastTimer()
         poll()
+    }
+
+    // 切到本地数据源时调用,让这个源彻底停下来,不在后台空转白耗网络/KV配额。
+    public func stop() {
+        pollTimer?.invalidate(); pollTimer = nil
+        fastTimer?.invalidate(); fastTimer = nil
     }
 
     // 悬浮窗隐藏时不需要20Hz的逐字同步(没人看),网络轮询也退到60s只保活菜单里的
@@ -86,9 +93,10 @@ public final class RelayPoller: ObservableObject {
     }
 
     private func fastTick() {
-        guard let anchor else { currentLine = nil; return }
+        guard let anchor else { currentLine = nil; nextLineText = nil; return }
         let pos = anchor.extrapolatedPositionMs()
         currentLine = syncEngine.activeLine(atMs: pos)
+        nextLineText = syncEngine.upcomingLineText(afterMs: pos)
     }
 
     private func poll() {
@@ -130,7 +138,7 @@ public final class RelayPoller: ObservableObject {
             reloadCurrentLyrics()
         }
         anchor = ProgressAnchor.from(state, fetchedAt: fetchedAt)
-        if anchor == nil { currentLine = nil }
+        if anchor == nil { currentLine = nil; nextLineText = nil }
     }
 
     private func reloadCurrentLyrics() {

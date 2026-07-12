@@ -4,7 +4,7 @@ import DesktopLyricsCore
 // 悬浮窗内容:逐字高亮时用渐变扫过效果(近似网页版 CSS 渐变裁字的视觉,不追求逐像素
 // 还原),否则整行高亮;罗马音在上、译文在下,都是可选的小字。
 struct LyricsOverlayView: View {
-    @ObservedObject private var poller = RelayPoller.shared
+    @ObservedObject private var poller = PlaybackCoordinator.shared
     @ObservedObject private var settings = AppSettings.shared
 
     var body: some View {
@@ -19,6 +19,11 @@ struct LyricsOverlayView: View {
                 Text(tr)
                     .font(.system(size: 14, weight: .regular))
                     .foregroundStyle(.white.opacity(0.75))
+            }
+            if settings.showNextLinePreview, let next = poller.nextLineText {
+                Text(next)
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.4))
             }
         }
         .padding(.horizontal, 20)

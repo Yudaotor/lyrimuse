@@ -74,4 +74,18 @@ public final class LyricsSyncEngine {
             words: nil
         )
     }
+
+    // 双行显示用:当前行的下一行纯文本预览,不需要逐字高亮细节(还没轮到它,不用算填色)。
+    public func upcomingLineText(afterMs posMs: Int) -> String? {
+        if usingWords {
+            var idx = -1
+            for (i, ln) in wordLines.enumerated() where ln.timeMs <= posMs { idx = i }
+            guard idx >= 0, idx + 1 < wordLines.count else { return nil }
+            return wordLines[idx + 1].words.map(\.text).joined()
+        }
+        var idx = -1
+        for (i, ln) in baseLines.enumerated() where ln.timeMs <= posMs { idx = i }
+        guard idx >= 0, idx + 1 < baseLines.count else { return nil }
+        return baseLines[idx + 1].text
+    }
 }

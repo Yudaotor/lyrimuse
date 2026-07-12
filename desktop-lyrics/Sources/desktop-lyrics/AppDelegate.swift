@@ -11,10 +11,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let settings = AppSettings.shared
         RelayPoller.shared.updateBaseURL(settings.relayBaseURL)
         RelayPoller.shared.preferWordLevelKaraoke = settings.preferWordLevelKaraoke
+        LocalPlaybackSource.shared.preferWordLevelKaraoke = settings.preferWordLevelKaraoke
 
         LyricsOverlayWindowController.shared.setVisible(true)
         LyricsOverlayWindowController.shared.setClickThrough(false)
 
-        RelayPoller.shared.start()
+        // 按设置里选的数据源启动对应的那一个(默认远程,保持原有行为);PlaybackCoordinator
+        // 负责真正调 start()/stop(),这里不用再单独调 RelayPoller.shared.start()。
+        PlaybackCoordinator.shared.applyMode(settings.dataSourceMode)
     }
 }
