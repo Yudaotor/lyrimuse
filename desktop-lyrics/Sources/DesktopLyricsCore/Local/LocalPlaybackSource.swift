@@ -74,20 +74,22 @@ public final class LocalPlaybackSource: ObservableObject {
     }
 
     private func poll() {
-        // MediaControlClient.fetchSnapshot() 是同步阻塞调用(内部 fork 子进程等待退出),
-        // 挪到后台线程跑,避免卡住主线程/UI。
+        // 两个都是同步阻塞调用(内部各自 fork 子进程等待退出),一起挪到后台线程跑,
+        // 避免卡住主线程/UI。
         Task {
-            let snapshot = await Task.detached { MediaControlClient.fetchSnapshot() }.value
+            let (snapshot, livePosition) = await Task.detached {
+                (MediaControlClient.fetchSnapshot(), AppleMusicPositionClient.fetchPositionSeconds())
+            }.value
             guard let snapshot else {
                 logger.error("snapshot failed (media-control 不可用或解析失败)")
                 return
             }
-            logger.debug("snapshot ok: playing=\(snapshot.playing == true)")
-            self.apply(snapshot)
+            logger.debug("snapshot ok: playing=\(snapshot.playing == true) livePos=\(livePosition != nil)")
+            self.apply(snapshot, livePositionSeconds: livePosition)
         }
     }
 
-    private func apply(_ snapshot: MediaControlSnapshot) {
+    private func apply(_ snapshot: MediaControlSnapshot, livePositionSeconds: Double?) {
         lastSnapshot = snapshot
         title = snapshot.title ?? ""
         artist = snapshot.artist ?? ""
@@ -103,10 +105,17 @@ public final class LocalPlaybackSource: ObservableObject {
             reloadCurrentLyrics()
         }
 
-        if snapshot.playing == true, let duration = snapshot.duration, duration > 0, let elapsed = snapshot.elapsedTime {
+        // media-control 的 elapsedTime 在稳定播放期间会整段冻结不动(实测坐实:同一个值
+        // 连续多次轮询、跨越十几秒真实时间也不变),如果直接拿它当"这一刻的准确位置"、
+        // 每次轮询都重新锚定,外推出来的进度会一直卡在轨道刚开始播放的那个点附近,歌词
+        // 表现为"卡死在最前面不动、好像没有歌词"。改用 AppleMusicPositionClient(问
+        // Music.app 本身要实时位置,精确到 ~0.1s,不会冻结)优先,media-control 的
+        // elapsedTime 只在拿不到(比如没在放 Apple Music)时兜底。
+        if snapshot.playing == true, let duration = snapshot.duration, duration > 0 {
+            let positionSeconds = livePositionSeconds ?? snapshot.elapsedTime ?? 0
             anchor = ProgressAnchor(
                 durationMs: Int(duration * 1000),
-                progressMs: Int(elapsed * 1000),
+                progressMs: Int(positionSeconds * 1000),
                 rate: snapshot.playbackRate ?? 1,
                 progressTs: nil,
                 baseAgeMs: 0, // 本机直接读取,没有网络延迟需要外推的锚点年龄
