@@ -17,6 +17,18 @@ import DesktopLyricsCore
 // 2) 逐字填色改成 LinearGradient 直接当 foregroundStyle,渐变的 stop 位置本身能被
 //    SwiftUI 平滑插值(.animation(.linear, value: fillFraction)),不用 GeometryReader
 //    手算像素宽度,离散更新之间会自己补间,不再是"跳变"。
+//
+// 上面两点做完之后用户反馈换行瞬间有"残影"——这是 SwiftUI .transition() 的既有机制:
+// .id() 一变,旧那份视图和新那份视图会在整个动画时长内同时留在渲染树里、在同一块屏幕
+// 位置上分别做透明度渐变(旧的淡出、新的淡入)。背景色/图片这样叠化没问题,但两份不同
+// 的文字字形在同一个位置同时半透明,视觉上就是重影。查过 LyricsX(NSStackView 里旧行
+// remove、新行 add,两行永远不共享同一个 frame,配合 removeProgressAnimation() 显式清
+// 掉上一行残留的填色动画状态)和 LyricFever(现有代码里主歌词行干脆完全不加
+// .transition(),整行硬切,只有背景专辑图层才淡入淡出)两个真实开源实现:两者的共同点
+// 是"换行时旧的和新的绝不同时以部分透明度占据同一块屏幕"。这里采用二者之间、改动最小
+// 的办法——asymmetric transition,旧行 removal 用 .identity(瞬间消失,不参与任何淡出
+// 动画),只有新行的 insertion 继续保留原来的淡入+缩小放大效果,这样任意时刻屏幕上只
+// 会有一份主歌词文字在渐变,不会重叠。
 struct LyricsOverlayView: View {
     @ObservedObject private var poller = PlaybackCoordinator.shared
     @ObservedObject private var settings = AppSettings.shared
@@ -31,7 +43,12 @@ struct LyricsOverlayView: View {
             }
             mainLine
                 .id(lineIdentity)
-                .transition(.opacity.combined(with: .scale(scale: 0.94, anchor: .center)))
+                .transition(
+                    .asymmetric(
+                        insertion: .opacity.combined(with: .scale(scale: 0.94, anchor: .center)),
+                        removal: .identity // 旧行瞬间消失,不参与淡出——避免跟新行同时半透明造成重影
+                    )
+                )
             if settings.showTranslation, let tr = poller.currentLine?.translation {
                 Text(tr)
                     .font(.system(size: 14, weight: .regular))
@@ -45,7 +62,9 @@ struct LyricsOverlayView: View {
                     .transition(.opacity)
             }
         }
-        .animation(.easeInOut(duration: 0.28), value: lineIdentity)
+        // 旧行不再有淡出阶段(见上面的 asymmetric removal),动画时长现在只花在新行的
+        // 淡入上,改用 easeOut(先快后慢定住)比原来的 easeInOut 更贴合"只做入场"这件事。
+        .animation(.easeOut(duration: 0.24), value: lineIdentity)
         .padding(.horizontal, 20)
         .padding(.vertical, 14)
         .frame(maxWidth: .infinity)
