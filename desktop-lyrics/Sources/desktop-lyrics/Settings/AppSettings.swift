@@ -1,4 +1,6 @@
 import Foundation
+import SwiftUI
+import AppKit
 
 // 数据源:远程(跟网页版同一个 state-worker /now)或本地(这台 Mac 上直接读
 // media-control + collector 的磁盘缓存,零网络)。新增选项,默认保持原有的远程行为。
@@ -62,21 +64,52 @@ final class AppSettings: ObservableObject {
     // 字体族名——空字符串表示"跟随系统",对应悬浮窗原来硬编码的系统字体,不用额外
     // enum/Optional 表达"未设置",跟 relayBaseURL 的空字符串兜底是同一种写法。
     @Published var fontFamilyName: String {
-        didSet { defaults.set(fontFamilyName, forKey: Keys.fontFamilyName) }
+        didSet {
+            defaults.set(fontFamilyName, forKey: Keys.fontFamilyName)
+            recomputeFonts()
+        }
     }
-    // 主歌词行字号(pt)。罗马音/译文/下一句预览三行的字号从这个值按比例换算,
-    // 见 AppearanceHelpers.swift 的 romanizationFontSize/secondaryFontSize。
+    // 主歌词行字号(pt)。罗马音/译文/下一句预览三行的字号从这个值按比例换算(0.65x/0.7x)。
     @Published var fontSize: Double {
-        didSet { defaults.set(fontSize, forKey: Keys.fontSize) }
+        didSet {
+            defaults.set(fontSize, forKey: Keys.fontSize)
+            recomputeFonts()
+        }
     }
     // #RRGGBBAA。默认不透明白色,跟悬浮窗原来硬编码的 .white 视觉完全一致。
     @Published var foregroundColorHex: String {
-        didSet { defaults.set(foregroundColorHex, forKey: Keys.foregroundColorHex) }
+        didSet {
+            defaults.set(foregroundColorHex, forKey: Keys.foregroundColorHex)
+            foregroundColor = Color(hexWithAlpha: foregroundColorHex, fallback: .white)
+        }
     }
     // #RRGGBBAA。默认 alpha=0(全透明),保留"没有背景、文字直接浮在桌面上"的原有观感——
     // 没主动去设置面板改过的人,悬浮窗外观应该跟改动前逐像素一致。
     @Published var backgroundColorHex: String {
-        didSet { defaults.set(backgroundColorHex, forKey: Keys.backgroundColorHex) }
+        didSet {
+            defaults.set(backgroundColorHex, forKey: Keys.backgroundColorHex)
+            backgroundColor = Color(hexWithAlpha: backgroundColorHex, fallback: .clear)
+            backgroundIsVisible = (NSColor(hexStringWithAlpha: backgroundColorHex)?.alphaComponent ?? 0) > 0.02
+        }
+    }
+
+    // 缓存值——LyricsOverlayView.body 随 poller.currentLine 每 50ms 重跑一次(逐字填色
+    // 需要),不应该每次渲染都重新解析 hex 字符串/重新查 NSFontManager(会在换行瞬间跟
+    // 换行动画的重新挂载撞在同一帧、造成卡顿感)。只在真正的输入(字体/字号/颜色四个
+    // 字段)变化时的 didSet 里重算一次,渲染路径只读这些已经算好的值。
+    @Published private(set) var foregroundColor: Color = .white
+    @Published private(set) var backgroundColor: Color = .clear
+    @Published private(set) var backgroundIsVisible: Bool = false
+    @Published private(set) var mainFont: Font = .system(size: 20, weight: .bold)
+    @Published private(set) var romanizationFont: Font = .system(size: 13, weight: .medium)
+    @Published private(set) var translationFont: Font = .system(size: 14, weight: .regular)
+    @Published private(set) var previewFont: Font = .system(size: 14, weight: .medium)
+
+    private func recomputeFonts() {
+        mainFont = .overlayFont(familyName: fontFamilyName, size: CGFloat(fontSize), weight: .bold)
+        romanizationFont = .overlayFont(familyName: fontFamilyName, size: CGFloat(fontSize) * 0.65, weight: .medium)
+        translationFont = .overlayFont(familyName: fontFamilyName, size: CGFloat(fontSize) * 0.7, weight: .regular)
+        previewFont = .overlayFont(familyName: fontFamilyName, size: CGFloat(fontSize) * 0.7, weight: .medium)
     }
 
     private init() {
@@ -91,5 +124,12 @@ final class AppSettings: ObservableObject {
         fontSize = (defaults.object(forKey: Keys.fontSize) as? Double) ?? 20
         foregroundColorHex = defaults.string(forKey: Keys.foregroundColorHex) ?? "#FFFFFFFF"
         backgroundColorHex = defaults.string(forKey: Keys.backgroundColorHex) ?? "#00000000"
+        // didSet 对属性在自己 init() 里的这次赋值不会触发(Swift 语义:属性观察者不响应
+        // "首次赋初值"这一步),不能赌它会连带把上面 7 个缓存值填对——显式调一次,幂等、
+        // 无副作用。
+        recomputeFonts()
+        foregroundColor = Color(hexWithAlpha: foregroundColorHex, fallback: .white)
+        backgroundColor = Color(hexWithAlpha: backgroundColorHex, fallback: .clear)
+        backgroundIsVisible = (NSColor(hexStringWithAlpha: backgroundColorHex)?.alphaComponent ?? 0) > 0.02
     }
 }

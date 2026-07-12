@@ -41,7 +41,7 @@ struct LyricsOverlayView: View {
         VStack(spacing: 4) {
             if settings.showRomanization, let roma = poller.currentLine?.romanization {
                 Text(roma)
-                    .font(.overlayFont(familyName: settings.fontFamilyName, size: settings.romanizationFontSize, weight: .medium))
+                    .font(settings.romanizationFont)
                     .foregroundStyle(settings.foregroundColor.opacity(0.6))
                     .transition(.opacity)
             }
@@ -55,13 +55,13 @@ struct LyricsOverlayView: View {
                 )
             if settings.showTranslation, let tr = poller.currentLine?.translation {
                 Text(tr)
-                    .font(.overlayFont(familyName: settings.fontFamilyName, size: settings.secondaryFontSize, weight: .regular))
+                    .font(settings.translationFont)
                     .foregroundStyle(settings.foregroundColor.opacity(0.75))
                     .transition(.opacity)
             }
             if settings.showNextLinePreview, let next = poller.nextLineText {
                 Text(next)
-                    .font(.overlayFont(familyName: settings.fontFamilyName, size: settings.secondaryFontSize, weight: .medium))
+                    .font(settings.previewFont)
                     .foregroundStyle(settings.foregroundColor.opacity(0.4))
                     .transition(.opacity)
             }
@@ -106,14 +106,14 @@ struct LyricsOverlayView: View {
                     wordText(w)
                 }
             }
-            .font(.overlayFont(familyName: settings.fontFamilyName, size: settings.fontSize, weight: .bold))
+            .font(settings.mainFont)
         } else if let text = poller.currentLine?.mainText {
             Text(text)
-                .font(.overlayFont(familyName: settings.fontFamilyName, size: settings.fontSize, weight: .bold))
+                .font(settings.mainFont)
                 .foregroundStyle(settings.foregroundColor)
         } else {
             Text("♪")
-                .font(.overlayFont(familyName: settings.fontFamilyName, size: settings.fontSize, weight: .bold))
+                .font(settings.mainFont)
                 .foregroundStyle(settings.foregroundColor.opacity(0.3))
         }
     }

@@ -84,23 +84,3 @@ extension Font {
         return Font(nsFont as CTFont)
     }
 }
-
-// 派生便捷属性——都读同一批 @Published hex 字符串,SwiftUI 已经会在这些字符串变化时
-// 重新算,不需要单独再标 @Published。
-extension AppSettings {
-    var foregroundColor: Color { Color(hexWithAlpha: foregroundColorHex, fallback: .white) }
-    var backgroundColor: Color { Color(hexWithAlpha: backgroundColorHex, fallback: .clear) }
-
-    /// 阈值给点余量而不是判断 == 0——ColorPicker 拖 alpha 滑杆拖到接近全透明但不是恰好
-    /// 整数 0 很常见;只有超过这条线才值得画一块圆角卡片背景,避免几乎看不见的颜色也
-    /// 硬要画一块方形背景挡住桌面。
-    var backgroundIsVisible: Bool {
-        (NSColor(hexStringWithAlpha: backgroundColorHex)?.alphaComponent ?? 0) > 0.02
-    }
-
-    // 罗马音(原硬编码 13pt)、译文/下一句预览(原硬编码 14pt)相对主歌词行(原硬编码
-    // 20pt)的比例——借用类似软件里"根字号 * 固定倍率"的缩放思路,但不做成通用基础
-    // 设施,这个 App 只有 4 个固定文字角色,两个算好的比例就够。
-    var romanizationFontSize: CGFloat { CGFloat(fontSize) * 0.65 } // 原 13/20
-    var secondaryFontSize: CGFloat { CGFloat(fontSize) * 0.7 } // 原 14/20,译文+预览共用
-}
