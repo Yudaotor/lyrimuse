@@ -1,6 +1,9 @@
 import Foundation
 import Combine
 import DesktopLyricsCore
+import os
+
+private let logger = Logger(subsystem: "com.chenyuhao.applemusic-desktop-lyrics", category: "coordinator")
 
 // 按设置里选的数据源(远程 relay / 本地 media-control),二选一持有 RelayPoller 或
 // LocalPlaybackSource,把激活中的那个源转发到自己的 @Published 属性上——UI 层只认
@@ -59,7 +62,10 @@ final class PlaybackCoordinator: ObservableObject {
             source.$artist.assign(to: \.artist, on: self),
             source.$album.assign(to: \.album, on: self),
             source.$isPlayingNow.assign(to: \.isPlayingNow, on: self),
-            source.$currentLine.assign(to: \.currentLine, on: self),
+            source.$currentLine.sink { [weak self] line in
+                logger.debug("coordinator currentLine updated: hasLine=\(line != nil) hasWords=\(line?.words != nil) hasMainText=\(line?.mainText != nil)")
+                self?.currentLine = line
+            },
             source.$nextLineText.assign(to: \.nextLineText, on: self),
         ]
     }
