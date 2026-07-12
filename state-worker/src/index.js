@@ -33,10 +33,10 @@
 //   POST /comments/delete {id}      → 需 x-admin-token == ADMIN_TOKEN(区别于 /push 用的
 //                                      PUSH_TOKEN——那个给采集器机器用,这个只给站长本人手动
 //                                      curl 删违规留言用),无 UI。
-//   GET  /reactions?key=<artist|title>  → 读某首歌的表情计数 {counts:{emoji:n,...}}
-//   POST /reactions {key, emoji}    → 给某首歌的某个表情 +1;emoji 必须在服务端固定白名单
-//                                      里;计数按歌曲全局累计、不随重播重置(这个后端本来就
-//                                      没有"这一次播放"的会话边界概念,做不到更细)。
+//   GET  /reactions                 → 读全站统一的表情计数 {counts:{emoji:n,...}}——最初
+//                                      设计成按"当前播放的歌曲"分开计数,上线当天用户反馈
+//                                      预期跟留言墙一样是全站统一一份,改成单一 key。
+//   POST /reactions {emoji}         → 给某个表情 +1;emoji 必须在服务端固定白名单里。
 //
 // Env 新增: ADMIN_TOKEN(secret,仅站长本人用于删除留言)。
 const LB_API = "https://api.listenbrainz.org";
@@ -47,6 +47,7 @@ const HIST_MAX = 200;
 const VISITS_KEY = "visits:total";
 const COMMENTS_KEY = "comments:list";
 const COMMENTS_MAX = 50;
+const REACTIONS_KEY = "reactions:global"; // 全站统一一份,不跟哪首歌绑定(跟留言墙一样)
 const REACTION_EMOJI = ["❤️", "🔥", "👍", "🎉", "😮", "😢"];
 const WRITE_BUDGET_CAP = 400; // 每日"新写"接口(访客计数/留言/表情)预算上限,留够 /push 的额度
 const RL_TTL = { visit: 3600, comment: 20, react: 3 }; // 各接口按 IP 的冷却期(秒)
@@ -196,20 +197,21 @@ export default {
       return json({ ok: true, items });
     }
 
+    // 表情反应是全局的(跟留言墙一样,不跟哪首歌绑定)——2026-07-12 上线时最初设计成按
+    // "当前播放的歌曲"分开计数,用户反馈预期跟留言一样是全站统一一份,当天改成单一
+    // REACTIONS_KEY,不再要 key 参数。
     if (url.pathname === "/reactions" && request.method !== "POST") {
-      if (!kv) return json({ ok: true, key: url.searchParams.get("key") || "", counts: {} });
-      const key = url.searchParams.get("key") || "";
-      const counts = (await kv.get(`react:${key}`, { type: "json" })) || {};
-      return json({ ok: true, key, counts });
+      if (!kv) return json({ ok: true, counts: {} });
+      const counts = (await kv.get(REACTIONS_KEY, { type: "json" })) || {};
+      return json({ ok: true, counts });
     }
 
     if (url.pathname === "/reactions" && request.method === "POST") {
       if (!kv) return json({ ok: false, error: "no kv" }, 500);
       let body;
       try { body = await request.json(); } catch { return json({ ok: false, error: "bad json" }, 400); }
-      const key = sanitizeText(body.key, 300);
       const emoji = body.emoji;
-      if (!key || !REACTION_EMOJI.includes(emoji)) return json({ ok: false, error: "bad key/emoji" }, 400);
+      if (!REACTION_EMOJI.includes(emoji)) return json({ ok: false, error: "bad emoji" }, 400);
 
       const hash = await ipHash(request);
       if (!(await checkRateLimit(kv, "react", hash, RL_TTL.react))) {
@@ -218,12 +220,11 @@ export default {
       if (!(await checkWriteBudget(kv))) {
         return json({ ok: false, error: "今日写入配额已用完,请明天再来" }, 503);
       }
-      const rkey = `react:${key}`;
-      const counts = (await kv.get(rkey, { type: "json" })) || {};
+      const counts = (await kv.get(REACTIONS_KEY, { type: "json" })) || {};
       counts[emoji] = (counts[emoji] || 0) + 1;
-      try { await kv.put(rkey, JSON.stringify(counts)); }
+      try { await kv.put(REACTIONS_KEY, JSON.stringify(counts)); }
       catch (e) { return json({ ok: false, error: "kv write failed", detail: String(e) }, 503); }
-      return json({ ok: true, key, counts });
+      return json({ ok: true, counts });
     }
 
     // ---- 社交解链:把固定链接粘到 Slack/Discord/微信/X 等,不点也能看到当前在听 ----
