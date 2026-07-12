@@ -23,15 +23,24 @@ if [ "${1:-}" = "--no-restart" ]; then
   exit 0
 fi
 
-if pid=$(pgrep -f "$BIN" 2>/dev/null); then
-  echo "==> stopping running instance (pid $pid)"
-  kill "$pid"
-  sleep 1
+LABEL="com.chenyuhao.applemusic-desktop-lyrics"
+if launchctl list "$LABEL" >/dev/null 2>&1; then
+  # 开机启动开关已经在菜单里打开过、这份 job 归 launchd 管——用 kickstart 让 launchd
+  # 用新构建的二进制重启同一个受管进程,不要另外手动 kill+起一个游离进程,否则会变成
+  # "launchd 记录里的进程死了、外面又跑着一个 launchd 不认识的新进程"这种双实例混乱
+  # (实测踩过这个坑)。
+  echo "==> restarting via launchd (kickstart)"
+  launchctl kickstart -k "gui/$(id -u)/$LABEL"
+else
+  if pid=$(pgrep -f "$BIN" 2>/dev/null); then
+    echo "==> stopping running instance (pid $pid)"
+    kill "$pid"
+    sleep 1
+  fi
+  echo "==> launching"
+  "$BIN" &
+  disown
 fi
-
-echo "==> launching"
-"$BIN" &
-disown
 sleep 2
 if pid=$(pgrep -f "$BIN"); then
   echo "==> desktop-lyrics running, pid $pid"

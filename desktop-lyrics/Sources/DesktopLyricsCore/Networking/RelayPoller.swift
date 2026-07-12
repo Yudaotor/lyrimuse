@@ -115,10 +115,18 @@ public final class RelayPoller: ObservableObject {
         artworkURLString = state.artwork
         isPlayingNow = state.playing == true
 
+        // 换歌就重载;没换歌但目前还没解析出任何歌词内容也要重载——采集器换歌那一刻的
+        // enrich(网易云/QQ 解析)经常还没跑完,第一次轮询可能拿到空歌词字段,如果只在
+        // "换歌"那一次机会重载,后面同一首歌永远不会再重试,会卡死在"这首歌没歌词"的
+        // 误判上(实测坐实:方大同《玩乐 (Live)》——网页版 10s 后再轮询就补上了,这个 App
+        // 15s 轮询间隔一样的接口却一直显示空,因为只在换歌那一次调用重载)。跟网页版
+        // setLyrics() 的 `!sameTrack || !lrcLines.length` 判据是同一个逻辑。
         let key = state.trackKey
-        if key != lastKey {
+        if key != lastKey || !syncEngine.hasContent {
+            if key != lastKey {
+                logger.info("track changed: \(state.artist ?? "", privacy: .public) - \(state.title ?? "", privacy: .public)")
+            }
             lastKey = key
-            logger.info("track changed: \(state.artist ?? "", privacy: .public) - \(state.title ?? "", privacy: .public)")
             reloadCurrentLyrics()
         }
         anchor = ProgressAnchor.from(state, fetchedAt: fetchedAt)
