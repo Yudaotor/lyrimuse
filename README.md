@@ -41,6 +41,7 @@ Worker(test-0703.cyh-937ae0.workers.dev) 只负责：人点链接时 302 跳转�
 | `feishu-bot/` | 这台 Mac，launchd 常驻(Go) | 飞书长连接，应答 `url.preview.get` 拼预览卡片；配置了 `state_relay_url` 就优先读 state-worker 的 `/now`(国内可达、自带封面)，失败/未配置才退回直连 LB+iTunes | ✅ `nowPlaying()`（relay 命中时不读 LB，直连兜底才读） |
 | `worker/`（`test-0703`） | Cloudflare Worker | 飞书签名里粘的链接被真人点开时的 302 跳转；**不再**处理 Feishu 回调、不解析 LB，纯静态跳转 | 否（已在 2026-07-08 简化掉） |
 | `badge-worker/` | Cloudflare Worker | GitHub README 里的动态 SVG 徽章；读 `state-worker` 的 `/now`(已归一化好的数据)，不直连 LB | 否，依赖 state-worker 的契约 |
+| `desktop-lyrics/` | 这台 Mac，用户手动/开机启动的前台 GUI(Swift) | 菜单栏 + 悬浮歌词窗口；轮询 `state-worker` 的 `/now`，跟网页版同一份契约 | 否，依赖 state-worker 的契约 |
 
 **LB 原始数据(`track_metadata`/`additional_info`)的解析目前分散在两处、无法真正合一**：`state-worker/src/index.js` 的 `fromLB()`/`lbHistory()` 与 `web/index.html` 的同名函数几乎逐字段相同，只是命名/返回形状因各自消费端要求略有出入（前者是要公开的 API 响应契约、后者是给 `paint()` 直接吃的内部变量）。两处分别部署在 Cloudflare Workers 和 GitHub Pages 两个不相关平台，中间没有共用的构建/打包步骤，做不到导入同一份源码——两处函数体里都留了互相指向对方文件的注释，**改一处务必去对面照样改一遍**，否则两边会悄悄漂移不一致。`feishu-bot` 也独立解析了一份 LB 数据，但只取 3 个字段（不含 `additional_info`），复杂度和上面两处不是一个量级，暂不纳入同步范围。
 

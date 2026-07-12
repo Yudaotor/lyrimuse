@@ -12,15 +12,49 @@
 // 历史上还有一个 POST /scrobble(把完成收听追加进 KV "history"),但采集器早已改为完成
 // 收听只双写 LB(不耗 KV 写额度)、/history 也只读 LB 合并——/scrobble 从未再被调用、是
 // 死代码,且仍会接受认证写入,已删除。
+//
+// ---- 访客互动(2026-07-12 新增)----
+// 这是本项目第一批"匿名公开写"接口(此前唯一的写接口 /push 靠机器对机器的共享密钥保护,
+// 浏览器没法安全持有那种密钥)。防刷用两层:①按 hash 过的访客 IP 做每接口独立的冷却期
+// (POST /visit 1h、/comments 20s、/reactions 3s,命中冷却期直接 429);②一个全局每日写入
+// 预算护栏(budget:writes:<日期>,上限 400/天),专门保护本来就紧张的 KV 免费写额度不被
+// 这三个新接口挤占,一旦超限新接口 503,不影响 /push 和只读接口。两层都是 KV 上的"尽力
+// 而为"计数(KV 没有原子自增),失败方向是安全的(宁可提前拒绝,不会放过量)。
+//
+//   POST /visit                     → visits:total 计数 +1,返回 {total}(前端靠 localStorage
+//                                      去重,同一浏览器只在"从未访问过"时才发这个 POST)
+//   GET  /visit                     → 只读 visits:total,不占预算/不触发限流
+//   GET  /comments                  → 读 comments:list(最新在前,最多 50 条)
+//   POST /comments {name?, text}    → 追加一条留言,超 50 条丢最旧;text 必填 1-200 字,
+//                                      name 选填 0-20 字(默认"匿名")。存储时只做控制字符
+//                                      清理,不做 HTML 转义——前端全程用 textContent 渲染,
+//                                      转义后再 textContent 反而会把 &lt; 这类符号原样显示
+//                                      给所有人看,是错的;textContent 本身就是 XSS 防线。
+//   POST /comments/delete {id}      → 需 x-admin-token == ADMIN_TOKEN(区别于 /push 用的
+//                                      PUSH_TOKEN——那个给采集器机器用,这个只给站长本人手动
+//                                      curl 删违规留言用),无 UI。
+//   GET  /reactions?key=<artist|title>  → 读某首歌的表情计数 {counts:{emoji:n,...}}
+//   POST /reactions {key, emoji}    → 给某首歌的某个表情 +1;emoji 必须在服务端固定白名单
+//                                      里;计数按歌曲全局累计、不随重播重置(这个后端本来就
+//                                      没有"这一次播放"的会话边界概念,做不到更细)。
+//
+// Env 新增: ADMIN_TOKEN(secret,仅站长本人用于删除留言)。
 const LB_API = "https://api.listenbrainz.org";
 const CUR_KEY = "current";
 const STALE_MS = 5 * 60 * 1000; // current 超过 5 分钟没更新 → 视为过期,转 LB 兜底。调短:KV 写配额爆时(采集器 /push 全 503、心跳也写不进)冻结的 KV 能更快退回 LB 显示当前在放,而非卡到 20 分钟。代价:正常期长歌/长暂停(> 5min 无 KV 更新)也会更早退 LB(LB 有同曲 playing_now、略糙)。彻底解法是 KV 别再爆(减写/付费)。
 const HIST_MAX = 200;
 
+const VISITS_KEY = "visits:total";
+const COMMENTS_KEY = "comments:list";
+const COMMENTS_MAX = 50;
+const REACTION_EMOJI = ["❤️", "🔥", "👍", "🎉", "😮", "😢"];
+const WRITE_BUDGET_CAP = 400; // 每日"新写"接口(访客计数/留言/表情)预算上限,留够 /push 的额度
+const RL_TTL = { visit: 3600, comment: 20, react: 3 }; // 各接口按 IP 的冷却期(秒)
+
 const CORS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, x-token",
+  "Access-Control-Allow-Headers": "Content-Type, x-token, x-admin-token",
 };
 
 export default {
@@ -94,6 +128,102 @@ export default {
       const resp = { ok: true, items: merged.slice(0, HIST_MAX), source: "lb" };
       if (histErr) resp.error = histErr;
       return json(resp);
+    }
+
+    // ---- 访客互动:计数/留言/表情反应(见文件头注释)----
+    if (url.pathname === "/visit") {
+      if (!kv) return json({ ok: false, error: "no kv" }, 500);
+      if (request.method === "POST") {
+        const hash = await ipHash(request);
+        if (!(await checkRateLimit(kv, "visit", hash, RL_TTL.visit))) {
+          return json({ ok: false, error: "too many requests" }, 429);
+        }
+        if (!(await checkWriteBudget(kv))) {
+          return json({ ok: false, error: "今日写入配额已用完,请明天再来" }, 503);
+        }
+        const cur = parseInt((await kv.get(VISITS_KEY)) || "0", 10);
+        const total = cur + 1;
+        try { await kv.put(VISITS_KEY, String(total)); }
+        catch (e) { return json({ ok: false, error: "kv write failed", detail: String(e) }, 503); }
+        return json({ ok: true, total });
+      }
+      const total = parseInt((await kv.get(VISITS_KEY)) || "0", 10);
+      return json({ ok: true, total });
+    }
+
+    if (url.pathname === "/comments" && request.method !== "POST") {
+      if (!kv) return json({ ok: true, items: [] });
+      const items = (await kv.get(COMMENTS_KEY, { type: "json" })) || [];
+      return json({ ok: true, items });
+    }
+
+    if (url.pathname === "/comments" && request.method === "POST") {
+      if (!kv) return json({ ok: false, error: "no kv" }, 500);
+      let body;
+      try { body = await request.json(); } catch { return json({ ok: false, error: "bad json" }, 400); }
+      const text = sanitizeText(body.text, 200);
+      const name = sanitizeText(body.name, 20) || "匿名";
+      if (!text) return json({ ok: false, error: "text required" }, 400);
+
+      const hash = await ipHash(request);
+      if (!(await checkRateLimit(kv, "comment", hash, RL_TTL.comment))) {
+        return json({ ok: false, error: "too many requests" }, 429);
+      }
+      if (!(await checkWriteBudget(kv))) {
+        return json({ ok: false, error: "今日写入配额已用完,请明天再来" }, 503);
+      }
+      const items = (await kv.get(COMMENTS_KEY, { type: "json" })) || [];
+      items.unshift({ id: crypto.randomUUID(), name, text, at: Date.now() });
+      const trimmed = items.slice(0, COMMENTS_MAX);
+      try { await kv.put(COMMENTS_KEY, JSON.stringify(trimmed)); }
+      catch (e) { return json({ ok: false, error: "kv write failed", detail: String(e) }, 503); }
+      return json({ ok: true, items: trimmed });
+    }
+
+    if (url.pathname === "/comments/delete" && request.method === "POST") {
+      if (!env.ADMIN_TOKEN || request.headers.get("x-admin-token") !== env.ADMIN_TOKEN) {
+        return json({ ok: false, error: "unauthorized" }, 401);
+      }
+      if (!kv) return json({ ok: false, error: "no kv" }, 500);
+      let body;
+      try { body = await request.json(); } catch { return json({ ok: false, error: "bad json" }, 400); }
+      const items = (await kv.get(COMMENTS_KEY, { type: "json" })) || [];
+      const idx = items.findIndex((c) => c.id === body.id);
+      if (idx === -1) return json({ ok: false, error: "not found" }, 404);
+      items.splice(idx, 1);
+      try { await kv.put(COMMENTS_KEY, JSON.stringify(items)); }
+      catch (e) { return json({ ok: false, error: "kv write failed", detail: String(e) }, 503); }
+      return json({ ok: true, items });
+    }
+
+    if (url.pathname === "/reactions" && request.method !== "POST") {
+      if (!kv) return json({ ok: true, key: url.searchParams.get("key") || "", counts: {} });
+      const key = url.searchParams.get("key") || "";
+      const counts = (await kv.get(`react:${key}`, { type: "json" })) || {};
+      return json({ ok: true, key, counts });
+    }
+
+    if (url.pathname === "/reactions" && request.method === "POST") {
+      if (!kv) return json({ ok: false, error: "no kv" }, 500);
+      let body;
+      try { body = await request.json(); } catch { return json({ ok: false, error: "bad json" }, 400); }
+      const key = sanitizeText(body.key, 300);
+      const emoji = body.emoji;
+      if (!key || !REACTION_EMOJI.includes(emoji)) return json({ ok: false, error: "bad key/emoji" }, 400);
+
+      const hash = await ipHash(request);
+      if (!(await checkRateLimit(kv, "react", hash, RL_TTL.react))) {
+        return json({ ok: false, error: "too many requests" }, 429);
+      }
+      if (!(await checkWriteBudget(kv))) {
+        return json({ ok: false, error: "今日写入配额已用完,请明天再来" }, 503);
+      }
+      const rkey = `react:${key}`;
+      const counts = (await kv.get(rkey, { type: "json" })) || {};
+      counts[emoji] = (counts[emoji] || 0) + 1;
+      try { await kv.put(rkey, JSON.stringify(counts)); }
+      catch (e) { return json({ ok: false, error: "kv write failed", detail: String(e) }, 503); }
+      return json({ ok: true, key, counts });
     }
 
     // ---- 社交解链:把固定链接粘到 Slack/Discord/微信/X 等,不点也能看到当前在听 ----
@@ -222,4 +352,40 @@ function json(obj, status = 200) {
   return new Response(JSON.stringify(obj), {
     status, headers: { ...CORS, "content-type": "application/json; charset=UTF-8", "cache-control": "no-store" },
   });
+}
+
+// ---- 访客互动用的小 helper(见文件头注释)----
+// 按访客 IP 算 hash 当 KV key 用,不存明文 IP。
+async function ipHash(request) {
+  const ip = request.headers.get("cf-connecting-ip") || "0.0.0.0";
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(ip));
+  return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("").slice(0, 16);
+}
+// 冷却期限流:存的是上次放行的时间戳,按实际经过时间比较是否还在冷却期内——不能靠"key
+// 是否存在"判断,因为 KV 的 expirationTtl 有 60 秒下限,而 comment/react 的冷却期(20s/3s)
+// 比这个下限还短;TTL 单独取 max(冷却期,60) 只是为了满足 KV 自身限制,不代表真实冷却时长。
+async function checkRateLimit(kv, prefix, hash, cooldownSec) {
+  const key = `rl:${prefix}:${hash}`;
+  const last = parseInt((await kv.get(key)) || "0", 10);
+  const now = Date.now();
+  if (now - last < cooldownSec * 1000) return false;
+  await kv.put(key, String(now), { expirationTtl: Math.max(cooldownSec, 60) });
+  return true;
+}
+// 每日写入预算护栏,key 按 UTC 日期分桶,2 天后自然过期不用手动清。
+async function checkWriteBudget(kv) {
+  const key = `budget:writes:${todayKey()}`;
+  const cur = parseInt((await kv.get(key)) || "0", 10);
+  if (cur >= WRITE_BUDGET_CAP) return false;
+  await kv.put(key, String(cur + 1), { expirationTtl: 172800 });
+  return true;
+}
+function todayKey() {
+  const d = new Date();
+  return `${d.getUTCFullYear()}${String(d.getUTCMonth() + 1).padStart(2, "0")}${String(d.getUTCDate()).padStart(2, "0")}`;
+}
+// 留言/昵称清理:只去控制字符 + 收边 + 截断,不做 HTML 转义(见文件头注释——前端用
+// textContent 渲染,转义是前端的事,这里转义反而会显示成乱码给所有人看)。
+function sanitizeText(s, maxLen) {
+  return String(s || "").replace(/[\x00-\x1F\x7F]/g, "").trim().slice(0, maxLen);
 }

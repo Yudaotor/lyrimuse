@@ -1,0 +1,50 @@
+import Foundation
+
+public struct LyricLine: Equatable {
+    public let timeMs: Int
+    public let text: String
+    public init(timeMs: Int, text: String) {
+        self.timeMs = timeMs
+        self.text = text
+    }
+}
+
+// 逐行 LRC 解析,算法照抄 web/index.html 的 parseLRC():一行可能带多个时间戳(副歌重复出现),
+// 每个时间戳各生成一条;跳过纯标签/元信息行([ti:]、[by:] 等,去掉所有 [...] 后文本为空)。
+public enum LRCParser {
+    private static let tagRegex = try! NSRegularExpression(pattern: #"\[(\d{1,2}):(\d{2})(?:[.:](\d{1,3}))?\]"#)
+    private static let bracketRegex = try! NSRegularExpression(pattern: #"\[[^\]]*\]"#)
+
+    public static func parse(_ text: String) -> [LyricLine] {
+        var out: [LyricLine] = []
+        for rawLine in text.split(separator: "\n", omittingEmptySubsequences: false) {
+            let line = rawLine.trimmingCharacters(in: .whitespaces)
+            guard !line.isEmpty else { continue }
+            let nsLine = line as NSString
+            let fullRange = NSRange(location: 0, length: nsLine.length)
+            let matches = tagRegex.matches(in: line, range: fullRange)
+            if matches.isEmpty { continue }
+            let stripped = bracketRegex
+                .stringByReplacingMatches(in: line, range: fullRange, withTemplate: "")
+                .trimmingCharacters(in: .whitespaces)
+            if stripped.isEmpty { continue }
+            for m in matches {
+                let minutes = Int(nsLine.substring(with: m.range(at: 1))) ?? 0
+                let seconds = Int(nsLine.substring(with: m.range(at: 2))) ?? 0
+                var fracMs = 0
+                let fracRange = m.range(at: 3)
+                if fracRange.location != NSNotFound {
+                    // 小数位可能是 1~3 位(.5/.50/.500 都代表 500ms):右补两个0再截前3位,
+                    // 跟 JS 版 (m[3]+'00').slice(0,3) 是同一个归一化写法。
+                    var frac = nsLine.substring(with: fracRange)
+                    frac += "00"
+                    frac = String(frac.prefix(3))
+                    fracMs = Int(frac) ?? 0
+                }
+                let t = (minutes * 60 + seconds) * 1000 + fracMs
+                out.append(LyricLine(timeMs: t, text: stripped))
+            }
+        }
+        return out.sorted { $0.timeMs < $1.timeMs }
+    }
+}
