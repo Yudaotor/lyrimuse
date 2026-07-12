@@ -2,7 +2,15 @@ import Foundation
 
 public struct SyncedLyricWord: Equatable {
     public let text: String
-    public let fillFraction: Double // 0...1,驱动逐字渐变填色
+    // 真实起止时间戳(绝对播放位置,毫秒)——填色进度不在这里预烤成一个数字,改由 View 层
+    // 用 TimelineView 按渲染帧频、从连续时钟直接现算 fillFraction。原来在这里预算好
+    // fillFraction 再靠 20Hz tick 塞进 @Published 结构体、View 端用
+    // .animation(.linear(duration:), value:) 补一段小动画的做法,在补间时长(60ms)比
+    // tick 间隔(50ms)长时几乎总在上一段没放完就被重新触发——SwiftUI 对 .linear 这类
+    // "不可合并"的曲线动画是把新旧两段位移矢量相加而不是从当前值接续,这正是逐字流转
+    // 卡顿的结构性根源,不是调个补间时长能治本的。
+    public let startMs: Int
+    public let durationMs: Int
 }
 
 public struct SyncedLyricLine: Equatable {
@@ -51,10 +59,8 @@ public final class LyricsSyncEngine {
             for (i, ln) in wordLines.enumerated() where ln.timeMs <= posMs { idx = i }
             guard idx >= 0 else { return nil }
             let ln = wordLines[idx]
-            let words = ln.words.map { w -> SyncedLyricWord in
-                var f = w.durationMs > 0 ? Double(posMs - w.startMs) / Double(w.durationMs) : (posMs >= w.startMs ? 1 : 0)
-                f = min(1, max(0, f))
-                return SyncedLyricWord(text: w.text, fillFraction: f)
+            let words = ln.words.map { w in
+                SyncedLyricWord(text: w.text, startMs: w.startMs, durationMs: w.durationMs)
             }
             return SyncedLyricLine(
                 romanization: nearestText(romaLines, ln.timeMs),

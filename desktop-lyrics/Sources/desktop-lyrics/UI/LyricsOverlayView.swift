@@ -29,6 +29,19 @@ import DesktopLyricsCore
 // 的办法——asymmetric transition,旧行 removal 用 .identity(瞬间消失,不参与任何淡出
 // 动画),只有新行的 insertion 继续保留原来的淡入+缩小放大效果,这样任意时刻屏幕上只
 // 会有一份主歌词文字在渐变,不会重叠。
+//
+// 换行流畅之后用户又反馈"字与字之间的流转效果还是有点卡顿"——查了 LyricsX 的
+// KaraokeLabel.swift 才发现根本差异:LyricsX 是整行一次性建一个 CAKeyframeAnimation
+// (keyTimes/values 覆盖全行每个字的真实时间戳),交给 Core Animation 的渲染服务端按
+// 屏幕刷新率自主推进,跟应用主线程/轮询完全解耦;而这里原来是 20Hz Timer 采样一次位置、
+// 算好 fillFraction 塞进 @Published 结构体,View 端再用 .animation(.linear(duration:
+// 0.06), value:) 去补一小段间——60ms 的补间比 50ms 的采样间隔长,新一次几乎总在上一次
+// 没放完时就被重新触发,SwiftUI 对 .linear 这类曲线动画重新定目标时是矢量相加而不是
+// 从当前值接续,这就是逐字流转卡顿的根源。改法见 mainLine/wordText:不再预算
+// fillFraction、不再用 .animation() 补间,而是用 TimelineView(.animation) 按渲染帧频
+// 直接从连续的位置锚点(poller.anchor)现算每个字的真实进度——本质上是把"用一个真实
+// 时钟驱动纯函数"这件事从 CAKeyframeAnimation 换成了 SwiftUI 原生等价物,不用引入
+// AppKit/CALayer。
 struct LyricsOverlayView: View {
     @ObservedObject private var poller = PlaybackCoordinator.shared
     @ObservedObject private var settings = AppSettings.shared
@@ -101,9 +114,22 @@ struct LyricsOverlayView: View {
     @ViewBuilder
     private var mainLine: some View {
         if let words = poller.currentLine?.words {
-            HStack(spacing: 0) {
-                ForEach(Array(words.enumerated()), id: \.offset) { _, w in
-                    wordText(w)
+            // 逐字填色改成:只在这一小块子树里挂 TimelineView(.animation),按渲染帧频
+            // (最高到屏幕刷新率)直接从 poller.anchor 连续外推播放位置、现算每个字的
+            // fillFraction——不再靠 20Hz tick 把预算好的值塞进 @Published 结构体、
+            // 每次都用 .animation(.linear(duration:0.06), value:) 补一小段间。60ms 的
+            // 补间比 50ms 的 tick 间隔长,新一次几乎总在上一次没放完时就被重新触发;
+            // SwiftUI 对 .linear 这类"不可合并"(shouldMerge==false)的曲线动画,重新
+            // 定目标时是把新旧两段位移矢量相加而不是从当前值接续,这正是"字与字之间流转
+            // 卡顿"的结构性根源,换补间时长治标不治本。改成每帧直接算真值、完全不挂
+            // Animation 才是能根治的办法——暂停时 anchor 会变 nil(见 fastTick 守卫),
+            // TimelineView 的 paused 参数顺带把这个子树的刷新也停下来,不用额外处理。
+            TimelineView(.animation(paused: !poller.isPlayingNow)) { context in
+                let currentMs = poller.anchor?.extrapolatedPositionMs(now: context.date) ?? 0
+                HStack(spacing: 0) {
+                    ForEach(Array(words.enumerated()), id: \.offset) { _, w in
+                        wordText(w, atMs: currentMs)
+                    }
                 }
             }
             .font(settings.mainFont)
@@ -118,27 +144,34 @@ struct LyricsOverlayView: View {
         }
     }
 
+    private func fillFraction(for w: SyncedLyricWord, atMs ms: Int) -> Double {
+        guard w.durationMs > 0 else { return ms >= w.startMs ? 1 : 0 }
+        return min(1, max(0, Double(ms - w.startMs) / Double(w.durationMs)))
+    }
+
     // 用渐变整体当文字颜色,而不是叠两层 Text + GeometryReader 手算裁剪宽度——渐变的
-    // stop 位置能被 SwiftUI 直接插值,20Hz 的离散更新之间会自动补间成平滑的扫过效果,
-    // 不再是一格一格跳。中间留一小段过渡带(而不是硬边界)让扫过的感觉更柔和,同时也
-    // 掩盖每次 tick 之间fillFraction 步进本身的粗糙感。渐变的两个颜色改用可配置的
+    // stop 位置直接由 TimelineView 每帧算出的真实进度决定,不再需要额外插值。中间留一
+    // 小段过渡带(而不是硬边界)让扫过的感觉更柔和。渐变的两个颜色用可配置的
     // foregroundColor 而不是硬编码 .white——已唱过的部分永远是用户选的前景色全强度,
     // 未唱到的部分是同一颜色的 35% 透明度,没有单独的"进度色"设置项。
-    private func wordText(_ w: SyncedLyricWord) -> some View {
+    private func wordText(_ w: SyncedLyricWord, atMs currentMs: Int) -> some View {
         let fg = settings.foregroundColor
+        let fraction = fillFraction(for: w, atMs: currentMs)
         return Text(w.text)
             .foregroundStyle(
                 LinearGradient(
                     stops: [
                         .init(color: fg, location: 0),
-                        .init(color: fg, location: max(0, w.fillFraction - 0.08)),
-                        .init(color: fg.opacity(0.35), location: min(1, w.fillFraction + 0.08)),
+                        .init(color: fg, location: max(0, fraction - 0.08)),
+                        .init(color: fg.opacity(0.35), location: min(1, fraction + 0.08)),
                         .init(color: fg.opacity(0.35), location: 1),
                     ],
                     startPoint: .leading,
                     endPoint: .trailing
                 )
             )
-            .animation(.linear(duration: 0.06), value: w.fillFraction)
+            // 故意不再包 .animation(...)——TimelineView(.animation) 已经在按渲染帧频
+            // 重算真值,这里再叠一层 SwiftUI Animation 补间只会重新引入上面注释里那套
+            // 矢量叠加问题。
     }
 }

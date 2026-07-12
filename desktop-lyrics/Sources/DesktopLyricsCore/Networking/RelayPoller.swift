@@ -27,7 +27,9 @@ public final class RelayPoller: ObservableObject {
 
     private var client: NowPlayingClient
     private let syncEngine = LyricsSyncEngine()
-    private var anchor: ProgressAnchor?
+    // 公开给 View 层——逐字填色现在按渲染帧频(TimelineView)从这个锚点直接外推真实
+    // 播放位置现算,不再靠这里的 20Hz tick 把预算好的 fillFraction 塞进 currentLine。
+    @Published public private(set) var anchor: ProgressAnchor?
     private var lastKey = ""
     private var lastState: NowPlayingState?
 

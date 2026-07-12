@@ -19,6 +19,7 @@ final class PlaybackCoordinator: ObservableObject {
     @Published private(set) var isPlayingNow: Bool = false
     @Published private(set) var currentLine: SyncedLyricLine?
     @Published private(set) var nextLineText: String?
+    @Published private(set) var anchor: ProgressAnchor?
 
     private var cancellables: [AnyCancellable] = []
     private var activeMode: PlaybackSourceMode?
@@ -53,6 +54,7 @@ final class PlaybackCoordinator: ObservableObject {
             source.$isPlayingNow.assign(to: \.isPlayingNow, on: self),
             source.$currentLine.assign(to: \.currentLine, on: self),
             source.$nextLineText.assign(to: \.nextLineText, on: self),
+            source.$anchor.assign(to: \.anchor, on: self),
         ]
     }
 
@@ -67,6 +69,7 @@ final class PlaybackCoordinator: ObservableObject {
                 self?.currentLine = line
             },
             source.$nextLineText.assign(to: \.nextLineText, on: self),
+            source.$anchor.assign(to: \.anchor, on: self),
         ]
     }
 }
