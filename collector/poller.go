@@ -547,6 +547,9 @@ func (p *poller) handle(now time.Time, reanchored, loopRestart bool) {
 		}
 		p.recentFinalized = nil
 		log.Printf("now playing: %s - %s", p.cur.Artist, p.cur.Title)
+		// 顺手把同一张专辑里其它还没解析过的曲目也丢到后台解析——用户按专辑顺序一首首听,
+		// 提前解析好等真播到那首歌时大概率不用现等。见 albumprefetch.go。
+		prefetchAlbumSiblings(p.cur.Artist, p.cur.Title, p.cur.Album)
 		// LB 的 playing_now 只在"换曲"时更新、同曲存活期内拒绝覆盖,迟到的歌词再也进不去。
 		// 故首条须在 enrich 解析完后再发(那时才知有无歌词、有则带上)。已解析(缓存命中,无论
 		// 有无歌词)立即发;仅首次解析中(缓存未命中)才挂起,由下方处理器等 enrich 完成
