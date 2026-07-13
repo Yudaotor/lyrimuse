@@ -3,12 +3,19 @@
 package main
 
 import (
+	"bytes"
+	"compress/zlib"
+	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
+	"fmt"
+	"html"
 	_ "image/jpeg" // 注册 JPEG 解码器
 	_ "image/png"  // 网易云取色缩略图有时是 PNG(content-type 却谎报 jpg)
 	"io"
 	"net/http"
 	neturl "net/url"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -366,4 +373,310 @@ func resolveQQLyric(mid string) string {
 		return l
 	}
 	return ""
+}
+
+// ---- QQ音乐逐字(QRC)歌词 ----
+//
+// resolveQQLyric 用的旧接口(fcg_query_lyric_new.fcg)只有整行歌词。QQ 音乐真正的逐字
+// 接口是 musicu.fcg 的 GetPlayLyricInfo,跟上面这套 c.y.qq.com REST 接口是完全不同的
+// 一套 API 家族(JSON-RPC 风格,comm+request 外壳),需要:①先建一个匿名 session(不需要
+// 登录);②数字型 songID(不是到处传的 mid 字符串,复用 fcg_play_single_song.fcg 这个
+// 已经在用的单曲详情接口额外取一下);③响应内容是 3DES 加密+zlib压缩的 XML,解出来的
+// LyricContent 属性里才是真正的逐字歌词正文。密钥/算法已用真实歌曲验证解密成功(含
+// 用户反馈"没有逐字"的方大同《GF》)。
+
+type qqSessionInfo struct {
+	uid    string
+	sid    string
+	userip string
+}
+
+var (
+	qqSessionMu   sync.Mutex
+	qqSessionInit bool
+	qqSessionVal  qqSessionInfo
+)
+
+var qqCommBase = map[string]any{
+	"ct": 11, "cv": "1003006", "v": "1003006",
+	"os_ver":   "15",
+	"phonetype": "24122RKC7C",
+	"rom":      "Redmi/miro/miro:15/AE3A.240806.005/OS2.0.105.0.VOMCNXM:user/release-keys",
+	"tmeAppID": "qqmusiclight",
+	"nettype":  "NETWORK_WIFI",
+	"udid":     "0",
+}
+
+func qqComm(sess qqSessionInfo) map[string]any {
+	comm := make(map[string]any, len(qqCommBase)+3)
+	for k, v := range qqCommBase {
+		comm[k] = v
+	}
+	comm["uid"], comm["sid"], comm["userip"] = sess.uid, sess.sid, sess.userip
+	return comm
+}
+
+// qqMusicuPost POSTs a JSON-RPC-style request to musicu.fcg (QQ 音乐 App 内部接口,
+// 跟 c.y.qq.com 那套完全独立)。返回 request.data 的原始 JSON,调用方各自解码成自己
+// 关心的形状,不用一个万能 map 应付所有响应。
+func qqMusicuPost(method, module string, param any, comm map[string]any) (json.RawMessage, error) {
+	reqBody := struct {
+		Comm    map[string]any `json:"comm"`
+		Request struct {
+			Method string `json:"method"`
+			Module string `json:"module"`
+			Param  any    `json:"param"`
+		} `json:"request"`
+	}{Comm: comm}
+	reqBody.Request.Method = method
+	reqBody.Request.Module = module
+	reqBody.Request.Param = param
+	raw, err := json.Marshal(reqBody)
+	if err != nil {
+		return nil, err
+	}
+	req, err := http.NewRequest(http.MethodPost, "https://u.y.qq.com/cgi-bin/musicu.fcg", bytes.NewReader(raw))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Cookie", "tmeLoginType=-1;")
+	req.Header.Set("User-Agent", "okhttp/3.14.9")
+	resp, err := (&http.Client{Timeout: 8 * time.Second}).Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("status %d", resp.StatusCode)
+	}
+	var out struct {
+		Code    int `json:"code"`
+		Request struct {
+			Code int             `json:"code"`
+			Data json.RawMessage `json:"data"`
+		} `json:"request"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return nil, err
+	}
+	if out.Code != 0 || out.Request.Code != 0 {
+		return nil, fmt.Errorf("qq musicu api error: code=%d request.code=%d", out.Code, out.Request.Code)
+	}
+	return out.Request.Data, nil
+}
+
+// qqEnsureSession 懒加载一个匿名 session,失败就返回零值(调用方据此放弃这次 QRC
+// 尝试)。只真正尝试一次(用 qqSessionInit 卡住,不管成不成功),不做主动刷新/重试——
+// 跟 lrclib/kugou 现有代码同等的"失败就放弃、下次进程重启再试"哲学一致。
+func qqEnsureSession() qqSessionInfo {
+	qqSessionMu.Lock()
+	defer qqSessionMu.Unlock()
+	if qqSessionInit {
+		return qqSessionVal
+	}
+	qqSessionInit = true
+	data, err := qqMusicuPost("GetSession", "music.getSession.session", map[string]any{
+		"caller": 0, "uid": "0", "vkey": 0,
+	}, qqCommBase)
+	if err != nil {
+		return qqSessionInfo{}
+	}
+	var out struct {
+		Session struct {
+			UID    json.Number `json:"uid"`
+			SID    string      `json:"sid"`
+			UserIP string      `json:"userip"`
+		} `json:"session"`
+	}
+	if err := json.Unmarshal(data, &out); err != nil || out.Session.SID == "" {
+		return qqSessionInfo{}
+	}
+	qqSessionVal = qqSessionInfo{uid: out.Session.UID.String(), sid: out.Session.SID, userip: out.Session.UserIP}
+	return qqSessionVal
+}
+
+type qqSongMeta struct {
+	id       int64
+	interval float64 // 秒,QQ 音乐官方时长
+}
+
+var (
+	qqSongMetaMu    sync.Mutex
+	qqSongMetaCache = map[string]qqSongMeta{}
+)
+
+// qqSongMetaByMid 取 GetPlayLyricInfo 要用的数字型 songID + 官方时长,复用
+// qqSongAlbum/qqSongCoverAndSinger 已经在用的同一个单曲详情接口
+// (fcg_play_single_song.fcg),按 mid 单独缓存(这两个现有函数各自只取自己关心的
+// 字段,没有把 id 传出来)。
+func qqSongMetaByMid(mid string) qqSongMeta {
+	if mid == "" {
+		return qqSongMeta{}
+	}
+	qqSongMetaMu.Lock()
+	if v, ok := qqSongMetaCache[mid]; ok {
+		qqSongMetaMu.Unlock()
+		return v
+	}
+	qqSongMetaMu.Unlock()
+
+	u := "https://c.y.qq.com/v8/fcg-bin/fcg_play_single_song.fcg?format=json&platform=yqq&inCharset=utf8&outCharset=utf-8&songmid=" + neturl.QueryEscape(mid)
+	req, err := http.NewRequest(http.MethodGet, u, nil)
+	if err != nil {
+		return qqSongMeta{}
+	}
+	req.Header.Set("Referer", "https://y.qq.com/")
+	req.Header.Set("User-Agent", qqUA)
+	resp, err := (&http.Client{Timeout: 6 * time.Second}).Do(req)
+	if err != nil {
+		return qqSongMeta{}
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return qqSongMeta{}
+	}
+	var out struct {
+		Data []struct {
+			ID       int64   `json:"id"`
+			Interval float64 `json:"interval"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil || len(out.Data) == 0 || out.Data[0].ID == 0 {
+		return qqSongMeta{}
+	}
+	m := qqSongMeta{id: out.Data[0].ID, interval: out.Data[0].Interval}
+	qqSongMetaMu.Lock()
+	qqSongMetaCache[mid] = m
+	qqSongMetaMu.Unlock()
+	return m
+}
+
+// qrcDESKey 是 QQ 音乐 GetPlayLyricInfo 响应里 lyric 字段(逐字内容)加密用的固定 24
+// 字节 3DES 密钥——公开算法(社区已逆向),已用真实歌曲验证解密成功。标准 3DES-EDE3-ECB,
+// Go 标准库 crypto/des 直接支持,不用手写 DES。
+var qrcDESKey = []byte("!@#)(*$%123ZXC!@!@#)(NHL")
+
+// decryptQRC 对 GetPlayLyricInfo 返回的 hex 编码密文做 3DES-ECB 解密(8 字节一块、块间
+// 互不链接) + zlib 解压,得到内层 XML
+// (<QrcInfos>...<Lyric_N LyricType="..." LyricContent="...">...)。**不能用 Go 标准库
+// crypto/des**——实测坐实标准 FIPS-46 DES 解不出合法 zlib 流(先报 zlib: invalid
+// header),QQ 音乐这份密文匹配的是社区逆向出的那个特定位运算实现(见 des3_qmusic.go
+// 顶部注释),必须用 qm3DESDecrypt。
+func decryptQRC(hexStr string) string {
+	raw, err := hex.DecodeString(hexStr)
+	if err != nil || len(raw) == 0 || len(raw)%8 != 0 {
+		return ""
+	}
+	dec := qm3DESDecrypt(qrcDESKey, raw)
+	if dec == nil {
+		return ""
+	}
+	zr, err := zlib.NewReader(bytes.NewReader(dec))
+	if err != nil {
+		return ""
+	}
+	defer zr.Close()
+	out, err := io.ReadAll(zr)
+	if err != nil {
+		return ""
+	}
+	return string(out)
+}
+
+// (?s) 让 . 匹配换行——LyricContent 属性值本身是多行文本(内嵌真实的 \n),Go 的 RE2
+// 默认 . 不跨行,不加这个前缀只会匹配到第一行就提前收尾,后面整段内容会被截断丢失。
+var qrcContentRegex = regexp.MustCompile(`(?s)LyricContent="(.*?)"`)
+
+// extractQRCLyricContent 从解密后的 XML 里取出 LyricContent 属性值——用正则而非完整
+// XML 解析,因为外层 Lyric_N 标签名是动态的(N=LyricCount,实测目前只见过 1,但不想依赖
+// 这个假设),只关心这一个属性。XML 属性值里的字面 " 按规范必须转义成 &quot;,所以
+// (.*?) 非贪婪匹配到下一个 " 是安全的;再用 html.UnescapeString 反转义 &lt;/&gt;/
+// &amp; 等 XML 预定义实体,还原成真正的歌词正文。
+func extractQRCLyricContent(xmlText string) string {
+	m := qrcContentRegex.FindStringSubmatch(xmlText)
+	if m == nil {
+		return ""
+	}
+	return html.UnescapeString(m[1])
+}
+
+var qqWordRegex = regexp.MustCompile(`([^\[\]()\n]+)\((\d+),(\d+)\)`)
+
+// qrcToYRC 把 QQ QRC 正文转换成 YRCParser(desktop-lyrics)认识的语法。QQ 原生写法是
+// "词(词始ms,词长ms)"——词在括号前、只有两个数字;YRC 是"(词始ms,词长ms,flag)词"——
+// 标记在前、词紧跟其后、3个数字。这里做的是重排+补一个恒为 0 的 flag,行头
+// [行始,行长] 本身两边格式一致不用动。
+func qrcToYRC(qrc string) string {
+	if qrc == "" {
+		return ""
+	}
+	return qqWordRegex.ReplaceAllString(qrc, "($2,$3,0)$1")
+}
+
+// qqQRCLyric 是 qqLyric 的逐字版本——独立发起、独立判定成败,不影响 qqLyric(mid)
+// 现有的整行歌词路径;哪一步失败都直接返回空串,不重试(下次 enrich 短 TTL 到期或
+// 进程重启自然再试)。
+func qqQRCLyric(mid, artist, title, album string, durationSecs float64) string {
+	if mid == "" {
+		return ""
+	}
+	sess := qqEnsureSession()
+	if sess.sid == "" {
+		return ""
+	}
+	meta := qqSongMetaByMid(mid)
+	if meta.id == 0 {
+		return ""
+	}
+	interval := meta.interval
+	if interval <= 0 {
+		interval = durationSecs
+	}
+	param := map[string]any{
+		"albumName":  base64.StdEncoding.EncodeToString([]byte(album)),
+		"crypt":      1,
+		"ct":         19,
+		"cv":         2111,
+		"interval":   int(interval),
+		"lrc_t":      0,
+		"qrc":        1,
+		"qrc_t":      0,
+		"roma":       1,
+		"roma_t":     0,
+		"singerName": base64.StdEncoding.EncodeToString([]byte(artist)),
+		"songID":     meta.id,
+		"songName":   base64.StdEncoding.EncodeToString([]byte(title)),
+		"trans":      1,
+		"trans_t":    0,
+		"type":       0,
+	}
+	data, err := qqMusicuPost("GetPlayLyricInfo", "music.musichallSong.PlayLyricInfo", param, qqComm(sess))
+	if err != nil {
+		return ""
+	}
+	var out struct {
+		Lyric string      `json:"lyric"`
+		QrcT  json.Number `json:"qrc_t"`
+		LrcT  json.Number `json:"lrc_t"`
+	}
+	if err := json.Unmarshal(data, &out); err != nil || out.Lyric == "" {
+		return ""
+	}
+	t := out.QrcT.String()
+	if t == "" || t == "0" {
+		t = out.LrcT.String()
+	}
+	if t == "" || t == "0" {
+		return ""
+	}
+	decrypted := decryptQRC(out.Lyric)
+	if decrypted == "" {
+		return ""
+	}
+	content := extractQRCLyricContent(decrypted)
+	if content == "" {
+		return ""
+	}
+	return qrcToYRC(content)
 }

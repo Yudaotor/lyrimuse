@@ -251,18 +251,23 @@ type scoredLyricCandidateResult struct {
 // of "how do we rank lyric sources" in the whole project.
 func scoredLyricCandidates(ne neteaseInfo, artist, title, album string, durationSecs float64) []scoredLyricCandidateResult {
 	qqURL := qqMusicURL(artist, title, album)
-	var qqLyr, kugouLyr, lrclibLyr string
+	qqMid := qqMidFromURL(qqURL)
+	var qqLyr, qqYRC, kugouLyr, kugouYRC, lrclibLyr string
 	var wg sync.WaitGroup
 	wg.Add(3)
 	go func() {
 		defer wg.Done()
-		if mid := qqMidFromURL(qqURL); mid != "" {
-			qqLyr = qqLyric(mid)
+		if qqMid != "" {
+			qqLyr = qqLyric(qqMid)
+			// 逐字(QRC)是完全独立的一套接口/密钥,自己失败不影响上面整行歌词——
+			// 见 qq.go 顶部注释。
+			qqYRC = qqQRCLyric(qqMid, artist, title, album, durationSecs)
 		}
 	}()
 	go func() {
 		defer wg.Done()
-		kugouLyr = kugouLyric(artist, title, durationSecs)
+		r := kugouLyric(artist, title, durationSecs)
+		kugouLyr, kugouYRC = r.lrc, r.yrc
 	}()
 	go func() {
 		defer wg.Done()
@@ -272,15 +277,13 @@ func scoredLyricCandidates(ne neteaseInfo, artist, title, album string, duration
 
 	var candidates []lyricCandidate
 	if ne.Lyrics != "" {
-		// hasWordTiming 只标记"这份候选本身带不带得到逐字时间轴",目前只有网易云可能有——
-		// 见 scoreLyricCandidate 注释第2点,这项会拿到明显的加分。
-		candidates = append(candidates, lyricCandidate{source: "netease", lyrics: ne.Lyrics, hasWordTiming: ne.YRC != ""})
+		candidates = append(candidates, lyricCandidate{source: "netease", lyrics: ne.Lyrics, wordTimingYRC: ne.YRC, hasWordTiming: ne.YRC != ""})
 	}
 	if qqLyr != "" {
-		candidates = append(candidates, lyricCandidate{source: "qq", lyrics: qqLyr})
+		candidates = append(candidates, lyricCandidate{source: "qq", lyrics: qqLyr, wordTimingYRC: qqYRC, hasWordTiming: qqYRC != ""})
 	}
 	if kugouLyr != "" {
-		candidates = append(candidates, lyricCandidate{source: "kugou", lyrics: kugouLyr})
+		candidates = append(candidates, lyricCandidate{source: "kugou", lyrics: kugouLyr, wordTimingYRC: kugouYRC, hasWordTiming: kugouYRC != ""})
 	}
 	if lrclibLyr != "" {
 		candidates = append(candidates, lyricCandidate{source: "lrclib", lyrics: lrclibLyr})
@@ -292,11 +295,14 @@ func scoredLyricCandidates(ne neteaseInfo, artist, title, album string, duration
 		r := scoredLyricCandidateResult{
 			Source:        c.source,
 			Lyrics:        c.lyrics,
+			LyricsYRC:     c.wordTimingYRC,
 			HasWordTiming: c.hasWordTiming,
 			Score:         scoreLyricCandidate(artist, title, durationSecs, c, corroborated[c.source]),
 		}
 		if c.source == "netease" {
-			r.LyricsTr, r.LyricsRoma, r.LyricsYRC = ne.Trans, ne.Roma, ne.YRC
+			// 翻译/罗马音目前只有网易云会给(QQ/酷狗这次只接了逐字,不接翻译/罗马音,
+			// 见计划"刻意不做的")。
+			r.LyricsTr, r.LyricsRoma = ne.Trans, ne.Roma
 		}
 		results = append(results, r)
 	}

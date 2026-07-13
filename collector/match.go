@@ -110,7 +110,8 @@ func lastLRCTimestampSecs(lrc string) (float64, bool) {
 type lyricCandidate struct {
 	source        string // "netease" | "qq" | "kugou" | "lrclib"
 	lyrics        string
-	hasWordTiming bool // 是否带逐字(yrc)时间轴——目前只有网易云会有,见 enrich.go 构造候选那处
+	wordTimingYRC string // 该候选归一化成 YRCParser 语法后的逐字数据,没有则空串(netease/qq/kugou 都可能有,lrclib 恒无)
+	hasWordTiming bool   // = wordTimingYRC != "",构造候选时直接算好,见 enrich.go
 }
 
 // lyricEndingCorroborationToleranceSecs 是判定"多个独立源的歌词末尾时间戳互相印证"的
