@@ -231,7 +231,9 @@ func resolveTrackEnrichment(artist, title, album string, durationSecs float64) e
 
 	var candidates []lyricCandidate
 	if ne.Lyrics != "" {
-		candidates = append(candidates, lyricCandidate{source: "netease", lyrics: ne.Lyrics})
+		// hasWordTiming 只标记"这份候选本身带不带得到逐字时间轴",目前只有网易云可能有——
+		// 见 scoreLyricCandidate 注释第2点,这项会拿到明显的加分。
+		candidates = append(candidates, lyricCandidate{source: "netease", lyrics: ne.Lyrics, hasWordTiming: ne.YRC != ""})
 	}
 	if qqLyr != "" {
 		candidates = append(candidates, lyricCandidate{source: "qq", lyrics: qqLyr})

@@ -108,8 +108,9 @@ func lastLRCTimestampSecs(lrc string) (float64, bool) {
 
 // lyricCandidate 是某个歌词源解析出的一份候选结果,连同来源标记。
 type lyricCandidate struct {
-	source string // "netease" | "qq" | "kugou" | "lrclib"
-	lyrics string
+	source        string // "netease" | "qq" | "kugou" | "lrclib"
+	lyrics        string
+	hasWordTiming bool // 是否带逐字(yrc)时间轴——目前只有网易云会有,见 enrich.go 构造候选那处
 }
 
 // lyricEndingCorroborationToleranceSecs 是判定"多个独立源的歌词末尾时间戳互相印证"的
@@ -159,12 +160,20 @@ func corroboratedEndings(candidates []lyricCandidate) map[string]bool {
 //     就是串了别的曲目/版本，留着只会增加"矮子里拔将军选中一个不确定对不对的候选"的
 //     风险。但如果 corroborated 为真(见 corroboratedEndings),说明别的独立源也在同一
 //     时间点结束,这是比"跟完整时长差多少"更直接的正确性证据,不再判定无效。
-//  2. 来源优先级:网易云能带翻译/罗马音/逐字这类其它源没有的增值内容,同等时长可信度下
-//     优先选它，其次QQ,再其次酷狗/LRCLIB——避免"纯按行数比大小"让内容切分方式恰好更
-//     碎的源意外挤掉本来完全合格、还带增值内容的网易云结果(实测坐实:Darling Nikki
-//     网易云版本本来自带翻译/逐字,如果单纯比行数会被行数更多但没有增值内容的 LRCLIB
-//     顶替掉)。
-//  3. 内容行数只做非常次要的参考(封顶,避免行数虚高的候选靠行数堆分反超时长/来源都更
+//  2. 是否带逐字(yrc)时间轴:用户明确要求提升这项权重——没有逐字时间轴的话,悬浮窗/
+//     网页只能整行高亮,观感明显不如逐字扫过。目前只有网易云会带 yrc,而网易云在时长
+//     匹配上偶尔会比 QQ/酷狗差半档(时间戳切分方式不同导致末尾差几个百分点),原来
+//     "只差 50/30/20/10 的来源优先级"根本扛不住整整一档(200~400分)的时长分差距,
+//     经常导致带逐字的网易云候选被"时长吻合度恰好精确一点点、但没有逐字"的竞争者
+//     反超。这个奖励分刻意定得跟"一档时长差距"同量级(400)——足够让网易云在"只差
+//     一档"的常见场景里逆转取胜,但一份逐字数据本身撬不动两档以上的时长证据(比如
+//     netease 卡在最低档 100 分那种勉强及格,面对别的源干净利落地命中 1000 分档),
+//     不会让"有逐字但内容对不上"反而压过"内容明显更吻合"的候选。
+//  3. 来源优先级:网易云能带翻译/罗马音这类其它源没有的增值内容,同等时长可信度下优先
+//     选它，其次QQ,再其次酷狗/LRCLIB——避免"纯按行数比大小"让内容切分方式恰好更碎的
+//     源意外挤掉本来完全合格、还带增值内容的网易云结果(实测坐实:Darling Nikki 网易云
+//     版本本来自带翻译/逐字,如果单纯比行数会被行数更多但没有增值内容的 LRCLIB 顶替掉)。
+//  4. 内容行数只做非常次要的参考(封顶,避免行数虚高的候选靠行数堆分反超时长/来源都更
 //     可信的候选)。
 func scoreLyricCandidate(localArtist, localTitle string, durationSecs float64, c lyricCandidate, corroborated bool) int {
 	if !isTimedLRC(c.lyrics) {
@@ -200,6 +209,10 @@ func scoreLyricCandidate(localArtist, localTitle string, durationSecs float64, c
 		default:
 			return -1 // 时长明显对不上,又没有别的源印证,大概率串了别的曲目/版本
 		}
+	}
+	if c.hasWordTiming {
+		score += 400 // 见函数注释第2点:跟"一档时长差距"同量级,让带逐字时间轴的候选在
+		// "只差一档时长吻合度"的常见场景里能逆转,但撬不动两档以上的时长证据差距。
 	}
 	switch c.source {
 	case "netease":
