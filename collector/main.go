@@ -49,6 +49,13 @@ const (
 
 func main() {
 	log.SetFlags(log.LstdFlags)
+	// `collector search-lyrics ...`:一次性子命令,desktop-lyrics 的"歌词管理"窗口靠
+	// Process 调用它来手动重新搜索候选歌词(见 searchcli.go)——检查放在 flag.Parse()
+	// 之前,不然位置参数 "search-lyrics" 会被当成未知 flag 报错。
+	if len(os.Args) > 1 && os.Args[1] == "search-lyrics" {
+		runSearchLyricsCLI(os.Args[2:])
+		return
+	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		log.Fatalf("resolve home dir: %v", err)

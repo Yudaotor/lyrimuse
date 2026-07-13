@@ -9,6 +9,7 @@ import (
 	"log"
 	neturl "net/url"
 	"os"
+	"sort"
 	"sync"
 	"time"
 )
@@ -210,19 +211,52 @@ func resolveTrackEnrichment(artist, title, album string, durationSecs float64) e
 	}
 	// 歌词:网易云/QQ音乐/酷狗/LRCLIB 四个源全部查一遍,不是查到第一个能用的就停——一首歌
 	// 只在缓存未命中时解析一次,后续都直接读缓存,四个源都查一遍换来更可信的结果性价比
-	// 很高(用户拍板:反正只查一次、存下来，没问题)。网易云的 ne.Lyrics 前面已经同步
-	// 拿到了,另外三个源各自独立请求(尤其 LRCLIB 实测比网易云/QQ 慢不少,见 lrclib.go),
-	// 并发查、不要串行等——串行的话总耗时是四家相加,新歌首次解析要等好几秒才出歌词;
-	// 并发的话总耗时约等于最慢那家,不会比原来"只查一家"慢太多。每个候选都过
-	// scoreLyricCandidate 统一打分(时间戳密度/语言合理性/是否只有credit信息/跟真实
-	// 时长是否吻合),取最高分的候选;所有候选都不合格就是真的没有。网易云额外带翻译/
-	// 罗马音/逐字,只有网易云胜出时才会一并采用。
+	// 很高(用户拍板:反正只查一次、存下来，没问题)。取分数最高的候选;所有候选都不合格
+	// 就是真的没有。取分/并发细节见 scoredLyricCandidates(同一份逻辑也供 desktop-lyrics
+	// 的"重新搜索候选歌词"手动纠正功能复用,搜索用的 CLI 子命令见 searchcli.go)。
+	scored := scoredLyricCandidates(ne, artist, title, album, durationSecs)
+	bestScore := -1
+	for _, r := range scored {
+		if r.Score < 0 || r.Score <= bestScore {
+			continue
+		}
+		bestScore = r.Score
+		e.Lyrics = r.Lyrics
+		e.LyricsSource = r.Source
+		e.LyricsTr, e.LyricsRoma, e.LyricsYRC = r.LyricsTr, r.LyricsRoma, r.LyricsYRC
+	}
+	return e
+}
+
+// scoredLyricCandidateResult is one scored lyric candidate — exported shape (JSON
+// tags) so it doubles as the `collector search-lyrics` CLI subcommand's stdout
+// format for desktop-lyrics's manual "重新搜索候选歌词" picker.
+type scoredLyricCandidateResult struct {
+	Source        string `json:"source"`
+	Lyrics        string `json:"lyrics"`
+	LyricsTr      string `json:"lyrics_tr,omitempty"`
+	LyricsRoma    string `json:"lyrics_roma,omitempty"`
+	LyricsYRC     string `json:"lyrics_yrc,omitempty"`
+	HasWordTiming bool   `json:"has_word_timing"`
+	Score         int    `json:"score"`
+}
+
+// scoredLyricCandidates fetches qq/kugou/lrclib concurrently (netease's ne is
+// passed in already-resolved — resolveTrackEnrichment fetched it for cover/URL
+// purposes anyway, so this never issues a second netease request), scores every
+// candidate via scoreLyricCandidate, and returns all of them sorted best-first
+// (not just the winner) — this is the one place both the auto-resolve path
+// (resolveTrackEnrichment, above) and the on-demand `search-lyrics` CLI subcommand
+// (searchcli.go) gather/score candidates, so there is exactly one implementation
+// of "how do we rank lyric sources" in the whole project.
+func scoredLyricCandidates(ne neteaseInfo, artist, title, album string, durationSecs float64) []scoredLyricCandidateResult {
+	qqURL := qqMusicURL(artist, title, album)
 	var qqLyr, kugouLyr, lrclibLyr string
 	var wg sync.WaitGroup
 	wg.Add(3)
 	go func() {
 		defer wg.Done()
-		if mid := qqMidFromURL(e.QQURL); mid != "" {
+		if mid := qqMidFromURL(qqURL); mid != "" {
 			qqLyr = qqLyric(mid)
 		}
 	}()
@@ -252,20 +286,22 @@ func resolveTrackEnrichment(artist, title, album string, durationSecs float64) e
 		candidates = append(candidates, lyricCandidate{source: "lrclib", lyrics: lrclibLyr})
 	}
 	corroborated := corroboratedEndings(candidates)
-	bestScore := -1
+
+	results := make([]scoredLyricCandidateResult, 0, len(candidates))
 	for _, c := range candidates {
-		sc := scoreLyricCandidate(artist, title, durationSecs, c, corroborated[c.source])
-		if sc < 0 || sc <= bestScore {
-			continue
+		r := scoredLyricCandidateResult{
+			Source:        c.source,
+			Lyrics:        c.lyrics,
+			HasWordTiming: c.hasWordTiming,
+			Score:         scoreLyricCandidate(artist, title, durationSecs, c, corroborated[c.source]),
 		}
-		bestScore = sc
-		e.Lyrics = c.lyrics
-		e.LyricsSource = c.source
+		if c.source == "netease" {
+			r.LyricsTr, r.LyricsRoma, r.LyricsYRC = ne.Trans, ne.Roma, ne.YRC
+		}
+		results = append(results, r)
 	}
-	if e.LyricsSource == "netease" {
-		e.LyricsTr, e.LyricsRoma, e.LyricsYRC = ne.Trans, ne.Roma, ne.YRC
-	}
-	return e
+	sort.Slice(results, func(i, j int) bool { return results[i].Score > results[j].Score })
+	return results
 }
 
 // loadEnrichCache reads the persisted enrichment cache (best-effort) and sets the

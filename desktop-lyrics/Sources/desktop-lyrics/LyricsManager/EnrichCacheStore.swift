@@ -101,12 +101,24 @@ public final class EnrichCacheStore: ObservableObject {
         )
     }
 
-    public func saveEdit(key: String, lyrics: String, tr: String, roma: String) {
+    // yrc 默认 nil:纯手改文本框的普通保存路径不传它,完全不碰 lyrics_yrc 字段——这是
+    // 有意的("歌词管理"从不提供逐字时间轴的自由文本编辑,格式是嵌套时间戳,手改错了代价
+    // 大,见 removeWordTiming)。只有"联网搜索候选歌词"整条采纳某个候选时才会传非 nil:
+    // 采纳意味着连同逐字时间轴一起换成这个候选的版本(有就设、没有就清空)——否则旧
+    // lyrics_yrc 会继续绑定已经被替换掉的旧文本,播放时逐字时间戳和新歌词对不上。
+    public func saveEdit(key: String, lyrics: String, tr: String, roma: String, yrc: String? = nil) {
         var entry = raw[key] ?? [:]
         entry["lyrics"] = lyrics
         entry["lyrics_tr"] = tr
         entry["lyrics_roma"] = roma
         entry["manual_lyrics"] = true
+        if let yrc {
+            if yrc.isEmpty {
+                entry.removeValue(forKey: "lyrics_yrc")
+            } else {
+                entry["lyrics_yrc"] = yrc
+            }
+        }
         raw[key] = entry
         persistAndRestart()
         rebuildSummaries()
