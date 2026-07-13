@@ -106,7 +106,15 @@ public final class EnrichCacheStore: ObservableObject {
     // 大,见 removeWordTiming)。只有"联网搜索候选歌词"整条采纳某个候选时才会传非 nil:
     // 采纳意味着连同逐字时间轴一起换成这个候选的版本(有就设、没有就清空)——否则旧
     // lyrics_yrc 会继续绑定已经被替换掉的旧文本,播放时逐字时间戳和新歌词对不上。
-    public func saveEdit(key: String, lyrics: String, tr: String, roma: String, yrc: String? = nil) {
+    //
+    // source 同理默认 nil——实测坐实的真 bug:之前这个函数完全不碰 lyrics_source 字段,
+    // 导致"联网搜索候选歌词"采纳了 QQ/酷狗候选之后,来源徽章还停留在采纳前的旧值(常年
+    // 显示网易云,因为大多数缓存条目最初就是网易云胜出的),用户反馈"明明有些是QQ的源,
+    // 列表里却全显示网易"。现在采纳候选时把 source 显式设成 candidate.source(见
+    // LyricsManagerView 的 onApply),准确反映刚采纳的这份内容真实来自哪个平台;纯手改
+    // 文本框(source 留 nil)则清空这个字段——手改之后已经不再是任何平台的原文,继续挂着
+    // 旧的平台徽章比"无来源"更容易误导人,跟"人工修正"徽章(isManual)搭配显示才诚实。
+    public func saveEdit(key: String, lyrics: String, tr: String, roma: String, yrc: String? = nil, source: String? = nil) {
         var entry = raw[key] ?? [:]
         entry["lyrics"] = lyrics
         entry["lyrics_tr"] = tr
@@ -118,6 +126,11 @@ public final class EnrichCacheStore: ObservableObject {
             } else {
                 entry["lyrics_yrc"] = yrc
             }
+        }
+        if let source, !source.isEmpty {
+            entry["lyrics_source"] = source
+        } else {
+            entry.removeValue(forKey: "lyrics_source")
         }
         raw[key] = entry
         persistAndRestart()
