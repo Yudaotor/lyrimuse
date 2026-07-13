@@ -26,6 +26,25 @@ final class PlaybackCoordinator: ObservableObject {
 
     private init() {}
 
+    // 供 EnrichCacheStore 保存/删除/移除逐字后调用——两个数据源默认都只在"换歌"那一刻
+    // 才重新读歌词,同一首歌播放中途改了缓存内容不会自动生效(这正是"改完歌词、悬浮窗
+    // 还是旧版本"这个反馈的根因)。本地模式直接读磁盘,写完盘立刻调用就行;relay 模式
+    // 靠网络轮询,内容来自 collector 的 /now 接口,得等 launchctl kickstart 真的把
+    // collector 重启完(异步、没有完成回调)才能拿到新内容,所以延迟一下再强制轮询,
+    // 避免打到正在退出的旧进程。
+    func refreshLyricsForCurrentTrack() {
+        switch activeMode {
+        case .relay:
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                RelayPoller.shared.forceRefetchNow()
+            }
+        case .local:
+            LocalPlaybackSource.shared.forceReloadLyricsForCurrentTrack()
+        case nil:
+            break
+        }
+    }
+
     func applyMode(_ mode: PlaybackSourceMode) {
         guard mode != activeMode else { return }
         activeMode = mode

@@ -143,6 +143,15 @@ public final class RelayPoller: ObservableObject {
         if anchor == nil { currentLine = nil; nextLineText = nil }
     }
 
+    // 供外部(EnrichCacheStore 保存/删除歌词后)强制立刻重新轮询一次——跟
+    // LocalPlaybackSource.forceReloadLyricsForCurrentTrack() 同样的诉求,但 relay 模式
+    // 靠网络轮询、内容缓存在 lastState 里,得真的发一次新请求才能拿到 collector 重启后
+    // 的最新内容,不能只是重跑 reloadCurrentLyrics()(那只会用旧的 lastState 再解析
+    // 一遍,等于没变)。
+    public func forceRefetchNow() {
+        poll()
+    }
+
     private func reloadCurrentLyrics() {
         guard let state = lastState else { return }
         syncEngine.load(

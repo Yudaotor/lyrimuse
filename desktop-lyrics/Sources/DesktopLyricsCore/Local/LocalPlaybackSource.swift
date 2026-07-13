@@ -146,6 +146,14 @@ public final class LocalPlaybackSource: ObservableObject {
         }
     }
 
+    // 供外部(EnrichCacheStore 保存/删除歌词后)强制重新读取当前曲目的歌词——正常情况
+    // apply() 只在换歌那一刻才 reloadCurrentLyrics(),同一首歌播放中途改了缓存内容
+    // 不会自动重新读。本地模式的 EnrichCacheReader 每次都是直接读磁盘文件,写完盘立刻
+    // 调用这个就能拿到最新内容,不需要等 collector 重启。
+    public func forceReloadLyricsForCurrentTrack() {
+        reloadCurrentLyrics()
+    }
+
     private func reloadCurrentLyrics() {
         guard let snapshot = lastSnapshot else { return }
         let found = EnrichCacheReader.lookup(
