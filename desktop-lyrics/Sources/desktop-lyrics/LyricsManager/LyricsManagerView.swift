@@ -60,11 +60,6 @@ struct LyricsManagerView: View {
     @State private var editedRoma = ""
     @State private var showDeleteConfirm = false
     @State private var showSearchSheet = false
-    // 只有从"联网搜索候选"整条采纳时才非空/置真——保存时据此决定要不要连
-    // lyrics_yrc 一起换掉(见 EnrichCacheStore.saveEdit 注释)。纯手改文本框走
-    // 默认的 4 参数 saveEdit,永远不碰这两个状态。
-    @State private var pendingYRC = ""
-    @State private var appliedFromSearch = false
     @State private var sourceFilter: SourceFilter = .all
     @State private var timingFilter: TimingFilter = .all
     @State private var manualOnly = false
@@ -241,12 +236,13 @@ struct LyricsManagerView: View {
             Text("下次播放这首歌会重新走一遍匹配解析,不保证一定能找到一样的歌词。")
         }
         .sheet(isPresented: $showSearchSheet) {
+            // 采纳候选直接保存,不需要再手动点"保存修改"——用户反馈选了以为就存上了,
+            // 结果只是填进了编辑框,得再点一下保存才真正落盘,体验上是个多余的确认步骤。
             LyricsSearchSheet(artist: summary.artist, title: summary.title, album: summary.album) { candidate in
                 editedLyrics = candidate.lyrics
                 editedTr = candidate.lyricsTr
                 editedRoma = candidate.lyricsRoma
-                pendingYRC = candidate.lyricsYRC
-                appliedFromSearch = true
+                store.saveEdit(key: key, lyrics: candidate.lyrics, tr: candidate.lyricsTr, roma: candidate.lyricsRoma, yrc: candidate.lyricsYRC)
             }
         }
     }
@@ -320,8 +316,7 @@ struct LyricsManagerView: View {
     private func actionsRow(key: String, summary: EnrichCacheStore.Summary) -> some View {
         HStack(spacing: 10) {
             Button("保存修改") {
-                store.saveEdit(key: key, lyrics: editedLyrics, tr: editedTr, roma: editedRoma, yrc: appliedFromSearch ? pendingYRC : nil)
-                appliedFromSearch = false
+                store.saveEdit(key: key, lyrics: editedLyrics, tr: editedTr, roma: editedRoma)
             }
             .buttonStyle(.borderedProminent)
             .keyboardShortcut("s", modifiers: .command)
@@ -345,8 +340,6 @@ struct LyricsManagerView: View {
         editedLyrics = d.lyrics
         editedTr = d.tr
         editedRoma = d.roma
-        pendingYRC = ""
-        appliedFromSearch = false
     }
 }
 
