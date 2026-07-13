@@ -141,10 +141,19 @@ struct LyricsManagerView: View {
             VStack(spacing: 0) {
                 filterBar
                 Divider()
-                List(filtered, selection: $selectedKey) { summary in
-                    LyricsManagerRow(summary: summary)
+                ScrollViewReader { scrollProxy in
+                    List(filtered, selection: $selectedKey) { summary in
+                        LyricsManagerRow(summary: summary)
+                    }
+                    .listStyle(.inset(alternatesRowBackgrounds: true))
+                    .onAppear {
+                        // reload 必须先于定位——刚打开窗口时 summaries 可能还是上次
+                        // 关闭时的旧内容(或空的),定位逻辑要按最新磁盘内容匹配当前
+                        // 播放的这首歌。
+                        store.reload()
+                        focusCurrentlyPlaying(scrollProxy: scrollProxy)
+                    }
                 }
-                .listStyle(.inset(alternatesRowBackgrounds: true))
             }
             .searchable(text: $searchText, prompt: "搜索歌手/歌名")
             .navigationTitle("歌词管理")
@@ -165,8 +174,30 @@ struct LyricsManagerView: View {
                 ContentUnavailableView("选择左侧一首歌", systemImage: "text.quote")
             }
         }
-        .onAppear { store.reload() }
         .frame(minWidth: 780, minHeight: 540)
+    }
+
+    // 打开窗口时自动定位到当前正在播放的这首歌(如果它已经被缓存过)——跟
+    // EnrichCacheStore.splitKey 用的是同一套 "歌手|歌名|专辑" 拼法,PlaybackCoordinator
+    // 转发的 artist/title/album 本来就来自 media-control/relay,跟 collector 当初写入
+    // 缓存时用的是同一份数据,能精确对上。selectedKey == nil 这个门槛只是防御性的——
+    // Window scene 每次重新打开都是全新的 @State,首次 onAppear 时必然是 nil。
+    //
+    // 只在这里读一次 PlaybackCoordinator.shared 的当前值,不声明成 @ObservedObject——
+    // 那个单例还同时发布 currentLine/anchor,播放中每秒 20 次刷新(本地模式的快速
+    // 计时器),整个窗口订阅它会导致 body 跟着每秒重算 20 次,把手动点选/刷新按钮的
+    // 交互直接闷在这阵持续重渲染里,表现成"点了跟没点一样"(实测坐实的真 bug,不是
+    // 自动化环境的假象)。这里只需要开窗那一刻的快照,普通函数内直接访问单例属性即可,
+    // 不用建立订阅。
+    private func focusCurrentlyPlaying(scrollProxy: ScrollViewProxy) {
+        guard selectedKey == nil else { return }
+        let playback = PlaybackCoordinator.shared
+        let key = "\(playback.artist)|\(playback.title)|\(playback.album)"
+        guard store.summaries.contains(where: { $0.key == key }) else { return }
+        selectedKey = key
+        DispatchQueue.main.async {
+            withAnimation { scrollProxy.scrollTo(key, anchor: .center) }
+        }
     }
 
     @ViewBuilder
@@ -221,11 +252,20 @@ struct LyricsManagerView: View {
     }
 
     private func header(_ summary: EnrichCacheStore.Summary) -> some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Text(summary.title).font(.title2.weight(.bold))
-            Text(summary.artist).font(.title3).foregroundStyle(.secondary)
-            if !summary.album.isEmpty {
-                Text(summary.album).font(.callout).foregroundStyle(.tertiary)
+        HStack(alignment: .top) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(summary.title).font(.title2.weight(.bold))
+                Text(summary.artist).font(.title3).foregroundStyle(.secondary)
+                if !summary.album.isEmpty {
+                    Text(summary.album).font(.callout).foregroundStyle(.tertiary)
+                }
+            }
+            Spacer()
+            // 挪到顶部——常用操作,原来放在底部操作栏每次都要翻到页面最下面才能点。
+            Button {
+                showSearchSheet = true
+            } label: {
+                Label("联网搜索候选歌词", systemImage: "magnifyingglass")
             }
         }
     }
@@ -285,12 +325,6 @@ struct LyricsManagerView: View {
             }
             .buttonStyle(.borderedProminent)
             .keyboardShortcut("s", modifiers: .command)
-
-            Button {
-                showSearchSheet = true
-            } label: {
-                Label("联网搜索候选歌词", systemImage: "magnifyingglass")
-            }
 
             if summary.hasWordTiming {
                 Button("移除逐字时间轴") {
