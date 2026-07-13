@@ -16,6 +16,7 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject 
 
     @Published private(set) var isVisible: Bool = true
     @Published private(set) var isClickThrough: Bool = false
+    @Published private(set) var isPositionLocked: Bool = false
 
     private var moveObserver: NSObjectProtocol?
     private var moveDebounceTimer: Timer?
@@ -53,6 +54,13 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject 
         // 这是预期取舍,想拖拽就得先关掉点击穿透。
         isClickThrough = on
         window?.ignoresMouseEvents = on
+    }
+
+    // 锁定位置:关掉"点背景拖拽移动"这个能力,跟点击穿透是两回事——点击穿透关着的时候
+    // 也可能想固定住悬浮窗不被误拖(比如旁边还有别的窗口要拖),这里单独给一个开关。
+    func setLocked(_ locked: Bool) {
+        isPositionLocked = locked
+        window?.isMovableByWindowBackground = !locked
     }
 
     private func scheduleSavePosition() {

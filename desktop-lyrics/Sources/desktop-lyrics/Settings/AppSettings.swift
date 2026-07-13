@@ -28,6 +28,7 @@ final class AppSettings: ObservableObject {
         static let fontSize = "np:fontSize"
         static let foregroundColorHex = "np:foregroundColorHex"
         static let backgroundColorHex = "np:backgroundColorHex"
+        static let lockPosition = "np:lockPosition"
     }
 
     private let defaults = UserDefaults.standard
@@ -60,6 +61,13 @@ final class AppSettings: ObservableObject {
     }
     @Published var showNextLinePreview: Bool {
         didSet { defaults.set(showNextLinePreview, forKey: Keys.showNextLinePreview) }
+    }
+    // 只负责持久化,原因跟 dataSourceMode 一样——不在这里连带调
+    // LyricsOverlayWindowController.shared.setLocked(_:),那样会在 AppSettings 自己的
+    // init() 里触发 didSet、顺带在其它单例还没构造完成时去访问它,有循环初始化风险。
+    // "生效"这一步挪到 SettingsView.swift 的 Toggle Binding 里手动分两步调用。
+    @Published var lockPosition: Bool {
+        didSet { defaults.set(lockPosition, forKey: Keys.lockPosition) }
     }
     // 字体族名——空字符串表示"跟随系统",对应悬浮窗原来硬编码的系统字体,不用额外
     // enum/Optional 表达"未设置",跟 relayBaseURL 的空字符串兜底是同一种写法。
@@ -120,6 +128,7 @@ final class AppSettings: ObservableObject {
         launchAtLoginEnabled = (defaults.object(forKey: Keys.launchAtLoginEnabled) as? Bool) ?? false
         dataSourceMode = PlaybackSourceMode(rawValue: defaults.string(forKey: Keys.dataSourceMode) ?? "") ?? .relay
         showNextLinePreview = (defaults.object(forKey: Keys.showNextLinePreview) as? Bool) ?? false
+        lockPosition = (defaults.object(forKey: Keys.lockPosition) as? Bool) ?? false
         fontFamilyName = defaults.string(forKey: Keys.fontFamilyName) ?? ""
         fontSize = (defaults.object(forKey: Keys.fontSize) as? Double) ?? 20
         foregroundColorHex = defaults.string(forKey: Keys.foregroundColorHex) ?? "#FFFFFFFF"

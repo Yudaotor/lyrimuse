@@ -37,13 +37,14 @@ public final class LocalPlaybackSource: ObservableObject {
 
     public func start() {
         reschedulePollTimer()
-        startFastTimer()
+        // 快速 tick 不在这里无条件启动——是否需要它取决于第一次 poll() 拿到的播放
+        // 状态,交给 apply() 里的 ensureFastTimerRunning()/stopFastTimer() 决定。
         poll()
     }
 
     public func stop() {
         pollTimer?.invalidate(); pollTimer = nil
-        fastTimer?.invalidate(); fastTimer = nil
+        stopFastTimer()
     }
 
     private func reschedulePollTimer() {
@@ -57,8 +58,12 @@ public final class LocalPlaybackSource: ObservableObject {
         pollTimer = t
     }
 
-    private func startFastTimer() {
-        fastTimer?.invalidate()
+    // 只在真的需要时(anchor 非 nil,即正在播放)才保持 20Hz 快速 tick 运行——暂停/
+    // 长时间挂起时没有锚点可外推,tick 只会一遍遍把 currentLine/nextLineText 置 nil,
+    // 没必要让计时器继续空转。用 fastTimer == nil 判断"已经在跑了"而不是每次 apply()
+    // 都无条件重建,避免播放中每 2 秒(poll 周期)就重开一次计时器。
+    private func ensureFastTimerRunning() {
+        guard fastTimer == nil else { return }
         // 20Hz;必须挂 .common mode,理由跟 RelayPoller 一致(菜单打开/拖拽悬浮窗时
         // 不能停摆)。
         let t = Timer(timeInterval: 1.0 / 20.0, repeats: true) { [weak self] _ in
@@ -66,6 +71,11 @@ public final class LocalPlaybackSource: ObservableObject {
         }
         RunLoop.main.add(t, forMode: .common)
         fastTimer = t
+    }
+
+    private func stopFastTimer() {
+        fastTimer?.invalidate()
+        fastTimer = nil
     }
 
     private func fastTick() {
@@ -127,7 +137,13 @@ public final class LocalPlaybackSource: ObservableObject {
         } else {
             anchor = nil
         }
-        if anchor == nil { currentLine = nil; nextLineText = nil }
+        if anchor == nil {
+            currentLine = nil
+            nextLineText = nil
+            stopFastTimer()
+        } else {
+            ensureFastTimerRunning()
+        }
     }
 
     private func reloadCurrentLyrics() {

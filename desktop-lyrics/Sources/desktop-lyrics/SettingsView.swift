@@ -95,6 +95,15 @@ struct SettingsView: View {
                 }
                 .buttonStyle(.link)
             }
+            Section("窗口") {
+                Toggle("锁定位置(不可拖拽移动)", isOn: Binding(
+                    get: { settings.lockPosition },
+                    set: { newValue in
+                        settings.lockPosition = newValue
+                        LyricsOverlayWindowController.shared.setLocked(newValue)
+                    }
+                ))
+            }
             Section("启动") {
                 Toggle("开机启动", isOn: $settings.launchAtLoginEnabled)
             }
