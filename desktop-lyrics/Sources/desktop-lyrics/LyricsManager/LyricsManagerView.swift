@@ -64,9 +64,23 @@ struct LyricsManagerView: View {
     @State private var timingFilter: TimingFilter = .all
     @State private var manualOnly = false
     @State private var missingLyricsOnly = false
+    // nil = 全部歌手/专辑。跟 SourceFilter/TimingFilter 不同,歌手/专辑的候选值不是固定
+    // 的几种,是从当前缓存数据里现算出来的(见 distinctArtists/distinctAlbums),所以
+    // 这两个直接用 String? 而不是另建一个枚举。
+    @State private var artistFilter: String?
+    @State private var albumFilter: String?
 
     private var hasActiveFilters: Bool {
         sourceFilter != .all || timingFilter != .all || manualOnly || missingLyricsOnly
+            || artistFilter != nil || albumFilter != nil
+    }
+
+    private var distinctArtists: [String] {
+        Array(Set(store.summaries.map(\.artist))).sorted()
+    }
+
+    private var distinctAlbums: [String] {
+        Array(Set(store.summaries.map(\.album).filter { !$0.isEmpty })).sorted()
     }
 
     private var filtered: [EnrichCacheStore.Summary] {
@@ -75,6 +89,8 @@ struct LyricsManagerView: View {
                 let q = searchText.lowercased()
                 guard s.artist.lowercased().contains(q) || s.title.lowercased().contains(q) else { return false }
             }
+            if let artistFilter, s.artist != artistFilter { return false }
+            if let albumFilter, s.album != albumFilter { return false }
             guard sourceFilter.matches(s.lyricsSource) else { return false }
             switch timingFilter {
             case .all: break
@@ -92,35 +108,57 @@ struct LyricsManagerView: View {
         timingFilter = .all
         manualOnly = false
         missingLyricsOnly = false
+        artistFilter = nil
+        albumFilter = nil
     }
 
     private var filterBar: some View {
-        HStack(spacing: 12) {
-            Image(systemName: "line.3.horizontal.decrease.circle")
-                .foregroundStyle(.secondary)
-
-            Picker("来源", selection: $sourceFilter) {
-                ForEach(SourceFilter.all_) { f in Text(f.label).tag(f) }
-            }
-            .pickerStyle(.menu)
-            .frame(maxWidth: 130)
-
-            Picker("时间轴", selection: $timingFilter) {
-                ForEach(TimingFilter.allCases) { f in Text(f.rawValue).tag(f) }
-            }
-            .pickerStyle(.menu)
-            .frame(maxWidth: 100)
-
-            Divider().frame(height: 14)
-
-            Toggle("仅人工修正", isOn: $manualOnly)
-            Toggle("仅无歌词", isOn: $missingLyricsOnly)
-
-            Spacer()
-
-            if hasActiveFilters {
-                Button("清除筛选", action: resetFilters)
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 12) {
+                Image(systemName: "line.3.horizontal.decrease.circle")
                     .foregroundStyle(.secondary)
+
+                Picker("歌手", selection: $artistFilter) {
+                    Text("全部歌手").tag(String?.none)
+                    ForEach(distinctArtists, id: \.self) { a in Text(a).tag(String?.some(a)) }
+                }
+                .pickerStyle(.menu)
+                .frame(maxWidth: 140)
+
+                Picker("专辑", selection: $albumFilter) {
+                    Text("全部专辑").tag(String?.none)
+                    ForEach(distinctAlbums, id: \.self) { a in Text(a).tag(String?.some(a)) }
+                }
+                .pickerStyle(.menu)
+                .frame(maxWidth: 140)
+
+                Spacer()
+            }
+
+            HStack(spacing: 12) {
+                Picker("来源", selection: $sourceFilter) {
+                    ForEach(SourceFilter.all_) { f in Text(f.label).tag(f) }
+                }
+                .pickerStyle(.menu)
+                .frame(maxWidth: 130)
+
+                Picker("时间轴", selection: $timingFilter) {
+                    ForEach(TimingFilter.allCases) { f in Text(f.rawValue).tag(f) }
+                }
+                .pickerStyle(.menu)
+                .frame(maxWidth: 100)
+
+                Divider().frame(height: 14)
+
+                Toggle("仅人工修正", isOn: $manualOnly)
+                Toggle("仅无歌词", isOn: $missingLyricsOnly)
+
+                Spacer()
+
+                if hasActiveFilters {
+                    Button("清除筛选", action: resetFilters)
+                        .foregroundStyle(.secondary)
+                }
             }
         }
         .toggleStyle(.button)
