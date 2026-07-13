@@ -222,9 +222,17 @@ func scoreLyricCandidate(localArtist, localTitle string, durationSecs float64, c
 // normLoose lowercases and drops everything but letters/digits (keeps CJK), so
 // "BLOOD ON THE DANCE FLOOR/ HIStory In The Mix" and "Blood On the Dance Floor:
 // HIStory In the Mix" compare equal when matching albums across services.
+// 顺带先过一遍 toSimplified——实测坐实:方大同《殭尸》(繁体,本地 Apple Music 标签原样)
+// 网易云搜索本身能查到这首歌(候选就在结果里),但候选的歌名字段存的是简体"僵尸",逐字符
+// 比较判定成两首不相关的歌,标题匹配这步就把本该采信的候选剔除了,QQ 音乐那边同款逐字符
+// 比较也会同样落空。这里没有像 nameOnlyMatch 当初那样只在窄范围手动转,而是直接下沉到
+// normLoose 本身——titleMatches/albumScore/两处直接 normLoose(a)==normLoose(b) 的
+// 精确匹配全部靠这一个改动统一受益,不用在每个调用点各自补一遍 toSimplified。toSimplified
+// 认不出的字符原样保留,不会让两个本来不相关的名字被错误判定成相关,不会削弱下游的防仿冒号
+// 判定(那部分靠歌手名/专辑名核实,繁简转换只影响字符形式,不影响身份判定的输入本身)。
 func normLoose(s string) string {
 	var b strings.Builder
-	for _, r := range strings.ToLower(s) {
+	for _, r := range strings.ToLower(toSimplified(s)) {
 		if unicode.IsLetter(r) || unicode.IsDigit(r) {
 			b.WriteRune(r)
 		}

@@ -221,16 +221,14 @@ func resolveNeteaseInfo(artist, title, album string) neteaseInfo {
 	// 版权下架的艺人满屏都是仿冒号,专辑名可以被仿冒号随意抄成目标专辑名蒙混过关)。这里放宽
 	// 的代价只是"历史列表偶尔显示错一个名字"这种低风险的展示问题,跟"封面选错"完全不是一个
 	// 量级,所以能接受;但仍要求"唯一候选"防止同名同专辑撞车时瞎选一个。
-	// 繁简先归一化再比,不然「太美麗」/「太美丽」这种只差一个字的写法会被判定成完全不
-	// 相关的两个专辑(见 toSimplified 注释)。只在这条兜底路径里转,不碰 normLoose/albumScore
-	// 本身,封面/歌词那条判定链路的输入原样不变。
-	simTitle, simAlbum := toSimplified(title), toSimplified(album)
+	// 繁简转换现在下沉到 normLoose/albumScore 本身(见 match.go 的 normLoose 注释),这里
+	// 不用再手动转一遍——保留这条判据本身(歌名+专辑名都精确对上、且候选唯一才采信歌手名)。
 	nameOnlyMatch := func(songs []neSong) string {
 		var found string
 		n := 0
 		for i := range songs {
 			s := &songs[i]
-			if normLoose(toSimplified(s.Name)) != normLoose(simTitle) || albumScore(toSimplified(s.Album.Name), simAlbum) < 200 || len(s.Artists) != 1 {
+			if normLoose(s.Name) != normLoose(title) || albumScore(s.Album.Name, album) < 200 || len(s.Artists) != 1 {
 				continue
 			}
 			n++
