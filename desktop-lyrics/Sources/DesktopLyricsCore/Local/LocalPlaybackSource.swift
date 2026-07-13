@@ -79,10 +79,22 @@ public final class LocalPlaybackSource: ObservableObject {
     }
 
     private func fastTick() {
-        guard let anchor else { currentLine = nil; nextLineText = nil; return }
+        guard let anchor else {
+            if currentLine != nil { currentLine = nil }
+            if nextLineText != nil { nextLineText = nil }
+            return
+        }
         let pos = anchor.extrapolatedPositionMs()
-        currentLine = syncEngine.activeLine(atMs: pos)
-        nextLineText = syncEngine.upcomingLineText(afterMs: pos)
+        // 只在真的换了行/换了下一句预览时才赋值——这两个是 @Published,SwiftUI 不管
+        // 新旧值是否相等,只要赋值就会通知订阅者重新渲染。逐字填色早已经交给
+        // TimelineView 按渲染帧频现算(不经过这两个属性),这里 20Hz 只是为了"判断当前
+        // 该显示哪一行",绝大多数 tick 其实还是同一行——之前无条件赋值导致悬浮窗所在的
+        // LyricsOverlayView(以及任何订阅 PlaybackCoordinator 的其它 View,比如"歌词
+        // 管理"窗口)整个 body 跟着每秒重算 20 次,是播放期间持续感觉卡顿的根因之一。
+        let newLine = syncEngine.activeLine(atMs: pos)
+        if newLine != currentLine { currentLine = newLine }
+        let newNext = syncEngine.upcomingLineText(afterMs: pos)
+        if newNext != nextLineText { nextLineText = newNext }
     }
 
     private func poll() {

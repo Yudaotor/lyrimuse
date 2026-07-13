@@ -95,10 +95,20 @@ public final class RelayPoller: ObservableObject {
     }
 
     private func fastTick() {
-        guard let anchor else { currentLine = nil; nextLineText = nil; return }
+        guard let anchor else {
+            if currentLine != nil { currentLine = nil }
+            if nextLineText != nil { nextLineText = nil }
+            return
+        }
         let pos = anchor.extrapolatedPositionMs()
-        currentLine = syncEngine.activeLine(atMs: pos)
-        nextLineText = syncEngine.upcomingLineText(afterMs: pos)
+        // 只在真的换行/换下一句预览时才赋值,同 LocalPlaybackSource.fastTick() 的
+        // 注释——@Published 赋值不管新旧值是否相等都会通知订阅者重渲染,20Hz 无条件
+        // 赋值等于让悬浮窗(及任何订阅 PlaybackCoordinator 的 View)body 跟着每秒重算
+        // 20 次,是持续感觉卡顿的根因之一。
+        let newLine = syncEngine.activeLine(atMs: pos)
+        if newLine != currentLine { currentLine = newLine }
+        let newNext = syncEngine.upcomingLineText(afterMs: pos)
+        if newNext != nextLineText { nextLineText = newNext }
     }
 
     private func poll() {
