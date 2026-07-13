@@ -64,6 +64,10 @@ struct LyricsOverlayView: View {
     @ObservedObject private var poller = PlaybackCoordinator.shared
     @ObservedObject private var settings = AppSettings.shared
 
+    // 悬浮窗高度跟着内容动态变化(见 LyricsOverlayWindowController.updateHeight)——这里
+    // 汇报"这次渲染实际需要多高",不需要就什么都不做(默认空闭包,方便预览/测试构造)。
+    var onContentHeightChange: (CGFloat) -> Void = { _ in }
+
     // 固定值,不是设置项——加一个圆角纯粹是给"背景颜色"这个设置配套的实现细节,免得
     // 用户一开背景色看到的是个生硬的直角矩形;两个参考的开源实现里圆角都不是用户可调项。
     private let overlayBackgroundCornerRadius: CGFloat = 16
@@ -74,6 +78,7 @@ struct LyricsOverlayView: View {
                 Text(roma)
                     .font(settings.romanizationFont)
                     .foregroundStyle(settings.foregroundColor.opacity(0.6))
+                    .fixedSize(horizontal: false, vertical: true) // 允许换行时如实撑高,不被裁掉
                     .transition(.opacity)
             }
             mainLine
@@ -81,12 +86,14 @@ struct LyricsOverlayView: View {
                 Text(tr)
                     .font(settings.translationFont)
                     .foregroundStyle(settings.foregroundColor.opacity(0.75))
+                    .fixedSize(horizontal: false, vertical: true)
                     .transition(.opacity)
             }
             if settings.showNextLinePreview, let next = poller.nextLineText {
                 Text(next)
                     .font(settings.previewFont)
                     .foregroundStyle(settings.foregroundColor.opacity(0.4))
+                    .fixedSize(horizontal: false, vertical: true)
                     .transition(.opacity)
             }
         }
@@ -98,6 +105,14 @@ struct LyricsOverlayView: View {
         .frame(maxWidth: .infinity)
         .background(overlayBackground)
         .multilineTextAlignment(.center)
+        // 纯测量用,不影响视觉——把这次渲染真正需要的高度报给窗口控制器去调整窗口高度,
+        // 长歌词换行到第二行时窗口跟着变高,而不是被原来写死的高度裁掉。
+        .background(
+            GeometryReader { proxy in
+                Color.clear.preference(key: ContentHeightPreferenceKey.self, value: proxy.size.height)
+            }
+        )
+        .onPreferenceChange(ContentHeightPreferenceKey.self) { onContentHeightChange($0) }
     }
 
     @ViewBuilder
@@ -139,7 +154,10 @@ struct LyricsOverlayView: View {
             // TimelineView 的 paused 参数顺带把这个子树的刷新也停下来,不用额外处理。
             TimelineView(.animation(paused: !poller.isPlayingNow)) { context in
                 let currentMs = poller.anchor?.extrapolatedPositionMs(now: context.date) ?? 0
-                HStack(spacing: 0) {
+                // 换成会自动换行的 WrapLayout——原来的 HStack(spacing: 0) 从不换行,一行
+                // 装不下所有字时会把每个 Text 压缩到自己出省略号,长的逐字歌词行会直接
+                // "消失"变成一串"…"。见文件底部 WrapLayout 定义。
+                WrapLayout {
                     ForEach(Array(words.enumerated()), id: \.offset) { _, w in
                         wordText(w, atMs: currentMs)
                     }
@@ -150,6 +168,7 @@ struct LyricsOverlayView: View {
             Text(text)
                 .font(settings.mainFont)
                 .foregroundStyle(settings.foregroundColor)
+                .fixedSize(horizontal: false, vertical: true)
         } else {
             Text("♪")
                 .font(settings.mainFont)
@@ -192,5 +211,82 @@ struct LyricsOverlayView: View {
             // 故意不再包 .animation(...)——TimelineView(.animation) 已经在按渲染帧频
             // 重算真值,这里再叠一层 SwiftUI Animation 补间只会重新引入上面注释里那套
             // 矢量叠加问题。
+    }
+}
+
+private struct ContentHeightPreferenceKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
+    }
+}
+
+// 自动换行布局(SwiftUI Layout 协议,macOS 14+起支持,项目 Package.swift 的最低部署目标
+// 早就是 macOS 14,不用额外提版本)。逐字歌词一个字一个 Text 排成一排,原来的
+// HStack(spacing: 0) 从不换行,遇到宽度不够时会把每个子 Text 压缩到自己装不下、表现成
+// 省略号。这个布局改成:一行装不下下一个字就自动另起一行;并且把每一行整体居中(先按
+// "这一行能不能再塞下一个字"分组算出每行,再在摆放时把整行按 (可用宽度-这一行实际宽度)/2
+// 整体右移),跟这个界面其它文字元素统一的居中风格保持一致。刻意不处理"单个字本身就比
+// 一整行还宽"这种极端情况——真实歌词数据里几乎不会出现,出现了也就是这一"行"单独超宽,
+// 不做防御性拆分。
+private struct WrapLayout: Layout {
+    var horizontalSpacing: CGFloat = 0
+    var verticalSpacing: CGFloat = 2
+
+    private func computeRows(sizes: [CGSize], maxWidth: CGFloat) -> [(indices: [Int], width: CGFloat, height: CGFloat)] {
+        var rows: [(indices: [Int], width: CGFloat, height: CGFloat)] = []
+        var indices: [Int] = []
+        var width: CGFloat = 0
+        var height: CGFloat = 0
+        for (i, size) in sizes.enumerated() {
+            let spacingIfContinuing = indices.isEmpty ? 0 : horizontalSpacing
+            if !indices.isEmpty && width + spacingIfContinuing + size.width > maxWidth {
+                rows.append((indices, width, height))
+                indices = []
+                width = 0
+                height = 0
+            }
+            let spacing = indices.isEmpty ? 0 : horizontalSpacing
+            width += spacing + size.width
+            height = max(height, size.height)
+            indices.append(i)
+        }
+        if !indices.isEmpty {
+            rows.append((indices, width, height))
+        }
+        return rows
+    }
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let sizes = subviews.map { $0.sizeThatFits(.unspecified) }
+        guard let maxWidth = proposal.width, maxWidth.isFinite else {
+            // 没有宽度限制:理论上不会走到——调用方(mainLine)所在的 VStack 总会有一个
+            // 有限宽度的提案(悬浮窗宽度固定)。兜底铺成一行,不换行。
+            let totalWidth = sizes.reduce(0) { $0 + $1.width } + CGFloat(max(0, sizes.count - 1)) * horizontalSpacing
+            let maxHeight = sizes.map(\.height).max() ?? 0
+            return CGSize(width: totalWidth, height: maxHeight)
+        }
+        let rows = computeRows(sizes: sizes, maxWidth: maxWidth)
+        let totalHeight = rows.reduce(0) { $0 + $1.height } + CGFloat(max(0, rows.count - 1)) * verticalSpacing
+        return CGSize(width: maxWidth, height: totalHeight)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let sizes = subviews.map { $0.sizeThatFits(.unspecified) }
+        let rows = computeRows(sizes: sizes, maxWidth: bounds.width)
+        var y = bounds.minY
+        for row in rows {
+            var x = bounds.minX + max(0, (bounds.width - row.width) / 2) // 整行居中
+            for i in row.indices {
+                let size = sizes[i]
+                subviews[i].place(
+                    at: CGPoint(x: x, y: y + (row.height - size.height) / 2),
+                    anchor: .topLeading,
+                    proposal: ProposedViewSize(size)
+                )
+                x += size.width + horizontalSpacing
+            }
+            y += row.height + verticalSpacing
+        }
     }
 }

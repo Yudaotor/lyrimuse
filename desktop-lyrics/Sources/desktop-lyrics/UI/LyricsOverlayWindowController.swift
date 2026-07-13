@@ -5,7 +5,10 @@ import DesktopLyricsCore
 // 文件级常量(不挂在 @MainActor 类上),避免 Timer 的 @Sendable 闭包里引用
 // MainActor-isolated static let 触发并发检查警告。
 private let overlayPositionKey = "np:overlayPositionOrigin" // "x,y" 字符串
-private let overlayDefaultSize = NSSize(width: 480, height: 120)
+// 宽度比原来(480)加宽,减少偏长的歌词行触发换行的概率;真正装不下的极端长行交给
+// WrapLayout(LyricsOverlayView.swift)自动换行,不再单靠"更宽"兜底。高度是初始/最小值,
+// 换行需要更多行时由 updateHeight 动态调整,不会比这个更矮。
+private let overlayDefaultSize = NSSize(width: 640, height: 120)
 
 // 拥有悬浮窗面板 + SwiftUI 内容 + 拖拽位置持久化。位置存 UserDefaults(裸可执行文件也能
 // 跨进程重启正确持久化,已实测确认,不需要 .app 包)。ObservableObject 让菜单栏菜单
@@ -26,7 +29,9 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject 
         let panel = LyricsOverlayWindow(contentRect: rect)
         self.init(window: panel)
 
-        let hosting = NSHostingView(rootView: LyricsOverlayView())
+        let hosting = NSHostingView(rootView: LyricsOverlayView(onContentHeightChange: { [weak self] height in
+            self?.updateHeight(height)
+        }))
         hosting.frame = NSRect(origin: .zero, size: size)
         hosting.autoresizingMask = [.width, .height]
         panel.contentView = hosting
@@ -57,6 +62,22 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject 
         isPositionLocked = locked
         window?.isMovableByWindowBackground = !locked
         window?.ignoresMouseEvents = locked
+    }
+
+    // 长歌词换行到第二行(或罗马音/译文/下一句预览同时都开着)时,内容比默认高度(120pt)
+    // 需要更多空间——LyricsOverlayView 通过 GeometryReader 把实际渲染高度报上来,这里
+    // 调整窗口高度去匹配,顶边固定、向下增高(用户拖到的位置是窗口顶部这块区域,不能让
+    // 已经放好的位置跳动),下限钉在 overlayDefaultSize.height,不会比默认更矮。不持久化
+    // 这个高度——跟位置不是一回事,每次内容变化重新算,窗口重启后从默认高度开始正常
+    // 动态调整。
+    private func updateHeight(_ contentHeight: CGFloat) {
+        guard let window else { return }
+        let newHeight = max(overlayDefaultSize.height, ceil(contentHeight))
+        let current = window.frame
+        guard abs(newHeight - current.height) >= 0.5 else { return } // 避免亚像素抖动反复触发
+        let top = current.origin.y + current.height
+        let newFrame = NSRect(x: current.origin.x, y: top - newHeight, width: current.width, height: newHeight)
+        window.setFrame(newFrame, display: true, animate: true)
     }
 
     private func scheduleSavePosition() {
