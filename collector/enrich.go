@@ -161,6 +161,7 @@ func resolveEnrichAsync(key, artist, title, album string, durationSecs float64) 
 	enrichDirty = true
 	enrichMu.Unlock()
 	saveEnrichCache()
+	exportLyricsFiles() // 见 lyricsexport.go——刚解析出的新歌词额外导出成独立文件
 	// 非阻塞通知 poll 立刻重推(带上刚解析好的封面/歌词);没人在听就跳过。
 	if enrichNotify != nil {
 		select {

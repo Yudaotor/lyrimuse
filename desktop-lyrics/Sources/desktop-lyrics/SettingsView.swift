@@ -107,6 +107,20 @@ struct SettingsView: View {
             Section("启动") {
                 Toggle("开机启动", isOn: $settings.launchAtLoginEnabled)
             }
+            Section("存储") {
+                Button("打开歌词文件夹") {
+                    let url = FileManager.default.homeDirectoryForCurrentUser
+                        .appendingPathComponent(".config/applemusic-nowplaying/lyrics")
+                    // collector 那边(见 collector/lyricsexport.go)只在真正解析/导出过至少
+                    // 一首歌之后才会建这个目录,这里先兜底建一下,避免文件夹还不存在时
+                    // NSWorkspace 打不开、又没有任何提示。
+                    try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+                    NSWorkspace.shared.open(url)
+                }
+                Text("每首歌的歌词会额外导出成独立的 .lrc 文件,不受缓存清理/过期影响。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
         }
         .padding(20)
         .frame(width: 360)
