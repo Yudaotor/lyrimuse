@@ -83,32 +83,27 @@ struct LyricsSearchSheet: View {
 
     private func candidateRow(_ c: LyricsSearchService.Candidate) -> some View {
         HStack {
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: 4) {
                 Text(c.source).font(.body.weight(.medium))
-                HStack(spacing: 6) {
-                    if c.hasWordTiming {
-                        Label("逐字", systemImage: "text.word.spacing")
-                            .foregroundStyle(.blue)
-                    }
-                    Text("分数 \(c.score)")
-                        .foregroundStyle(.secondary)
-                }
-                .font(.caption2)
+                Text("分数 \(c.score) · \(c.lineCount) 行")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                characteristicBadges(c)
             }
             Spacer()
         }
         .tag(c.source)
-        .padding(.vertical, 2)
+        .padding(.vertical, 3)
     }
 
     private func previewPane(_ c: LyricsSearchService.Candidate) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text(c.source).font(.headline)
-                if c.hasWordTiming {
-                    Label("含逐字时间轴", systemImage: "text.word.spacing")
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(c.source).font(.headline)
+                    Text("分数 \(c.score) · \(c.lineCount) 行")
                         .font(.caption)
-                        .foregroundStyle(.blue)
+                        .foregroundStyle(.secondary)
                 }
                 Spacer()
                 Button("采用此候选") {
@@ -117,6 +112,7 @@ struct LyricsSearchSheet: View {
                 }
                 .buttonStyle(.borderedProminent)
             }
+            characteristicBadges(c)
             ScrollView {
                 Text(c.lyrics)
                     .font(.system(.callout, design: .monospaced))
@@ -127,6 +123,33 @@ struct LyricsSearchSheet: View {
         }
         .padding(16)
         .frame(minWidth: 380)
+    }
+
+    // 逐字/译文/罗马音——分别对应"是否有逐字时间戳""是否带翻译""是否带罗马音标注",
+    // 跟 LyricsManagerView 详情页三个编辑区(歌词/译文/罗马音)用同一组图标,方便用户
+    // 把候选列表里的图标和保存后详情页里的字段对上号。
+    @ViewBuilder
+    private func characteristicBadges(_ c: LyricsSearchService.Candidate) -> some View {
+        HStack(spacing: 5) {
+            if c.hasWordTiming {
+                characteristicBadge("逐字时间戳", "text.word.spacing", .blue)
+            }
+            if c.hasTranslation {
+                characteristicBadge("译文", "character.book.closed", .green)
+            }
+            if c.hasRomanization {
+                characteristicBadge("罗马音", "textformat.abc", .purple)
+            }
+        }
+        .font(.caption2)
+    }
+
+    private func characteristicBadge(_ text: String, _ icon: String, _ tint: Color) -> some View {
+        Label(text, systemImage: icon)
+            .foregroundStyle(tint)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(tint.opacity(0.12), in: Capsule())
     }
 
     private func load() async {

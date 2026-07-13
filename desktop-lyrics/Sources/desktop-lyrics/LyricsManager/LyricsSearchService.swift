@@ -22,6 +22,12 @@ final class LyricsSearchService {
         let lyricsYRC: String
         let hasWordTiming: Bool
         let score: Int
+
+        // 给候选选择界面展示的补充特性——是否逐字这一项 collector 已经算好(hasWordTiming),
+        // 译文/罗马音/行数纯粹是本地字段是否非空/切行数,不需要 collector 额外计算。
+        var hasTranslation: Bool { !lyricsTr.isEmpty }
+        var hasRomanization: Bool { !lyricsRoma.isEmpty }
+        var lineCount: Int { lyrics.split(separator: "\n", omittingEmptySubsequences: false).count }
     }
 
     enum SearchError: LocalizedError {
