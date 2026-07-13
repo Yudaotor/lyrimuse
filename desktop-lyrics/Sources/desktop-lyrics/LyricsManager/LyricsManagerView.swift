@@ -425,6 +425,13 @@ private struct InfoChip: View {
 private struct LyricsManagerRow: View {
     let summary: EnrichCacheStore.Summary
 
+    // 每行的图标/来源列宽度固定——之前"人工修正"图标只在有的行才占位,导致有些行少一个
+    // 图标,后面的内容整体往左挪一截,几行错落对不齐看着乱。改成图标槽位固定宽度(没有
+    // 就用透明占位撑住位置,而不是整个不渲染),来源文字槽位也给个统一最小宽度,这样不管
+    // 具体哪行有没有人工修正、是逐字还是整行,几行的图标和文字起始位置都对得齐。
+    private static let badgeIconWidth: CGFloat = 14
+    private static let sourceTextMinWidth: CGFloat = 46
+
     var body: some View {
         HStack(alignment: .center, spacing: 8) {
             VStack(alignment: .leading, spacing: 3) {
@@ -437,14 +444,16 @@ private struct LyricsManagerRow: View {
             }
             Spacer(minLength: 8)
             HStack(spacing: 5) {
-                if summary.isManual {
-                    Image(systemName: "pencil.circle.fill").foregroundStyle(.orange)
-                }
-                if summary.hasWordTiming {
-                    Image(systemName: "text.word.spacing").foregroundStyle(.blue)
-                }
+                Image(systemName: "pencil.circle.fill")
+                    .foregroundStyle(.orange)
+                    .opacity(summary.isManual ? 1 : 0)
+                    .frame(width: Self.badgeIconWidth)
+                Image(systemName: summary.hasWordTiming ? "text.word.spacing" : "text.alignleft")
+                    .foregroundStyle(summary.hasWordTiming ? .blue : .secondary)
+                    .frame(width: Self.badgeIconWidth)
                 Text(summary.lyricsSource.isEmpty ? "?" : summary.lyricsSource)
                     .foregroundStyle(sourceColor(summary.lyricsSource))
+                    .frame(minWidth: Self.sourceTextMinWidth, alignment: .leading)
             }
             .font(.caption2)
         }
