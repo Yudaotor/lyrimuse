@@ -60,6 +60,13 @@ import DesktopLyricsCore
 //    给填色计算用的有效时长设一个下限(minWordDurationMs),短词/零时长词也能有一段
 //    看得见的扫过而不是瞬间跳变——只影响这一个词自己的视觉呈现,不改 startMs、不影响
 //    整体歌词对齐/下一个词何时开始。
+//
+// 用户进一步要求"去掉歌词切换的动效,尽可能保证流畅度"——原来只剩罗马音/译文/下一句
+// 预览这三行还挂着 .animation(value: lineIdentity) 的淡入淡出(mainLine 本身在上一轮
+// 就已经是硬切了)。这次连这最后一点动效也整个去掉:body 上的 .animation(value:) 和
+// 这三行各自的 .transition(.opacity) 一并删除,lineIdentity 这个专门为它算的属性也
+// 跟着删(没有别的地方用)。现在换到新的一行是纯粹的属性跳变,不经过任何 SwiftUI
+// 动画事务,零额外开销。
 struct LyricsOverlayView: View {
     @ObservedObject private var poller = PlaybackCoordinator.shared
     @ObservedObject private var settings = AppSettings.shared
@@ -79,7 +86,6 @@ struct LyricsOverlayView: View {
                     .font(settings.romanizationFont)
                     .foregroundStyle(settings.foregroundColor.opacity(0.6))
                     .fixedSize(horizontal: false, vertical: true) // 允许换行时如实撑高,不被裁掉
-                    .transition(.opacity)
             }
             mainLine
             if settings.showTranslation, let tr = poller.currentLine?.translation {
@@ -87,19 +93,14 @@ struct LyricsOverlayView: View {
                     .font(settings.translationFont)
                     .foregroundStyle(settings.foregroundColor.opacity(0.75))
                     .fixedSize(horizontal: false, vertical: true)
-                    .transition(.opacity)
             }
             if settings.showNextLinePreview, let next = poller.nextLineText {
                 Text(next)
                     .font(settings.previewFont)
                     .foregroundStyle(settings.foregroundColor.opacity(0.4))
                     .fixedSize(horizontal: false, vertical: true)
-                    .transition(.opacity)
             }
         }
-        // 旧行不再有淡出阶段(见上面的 asymmetric removal),动画时长现在只花在新行的
-        // 淡入上,改用 easeOut(先快后慢定住)比原来的 easeInOut 更贴合"只做入场"这件事。
-        .animation(.easeOut(duration: 0.24), value: lineIdentity)
         .padding(.horizontal, 20)
         .padding(.vertical, 14)
         .frame(maxWidth: .infinity)
@@ -126,17 +127,6 @@ struct LyricsOverlayView: View {
             // 整块区域都能生效。
             Color.black.opacity(0.001)
         }
-    }
-
-    // 只用歌词的文本内容算身份,不掺 fillFraction——同一行歌词逐字填色推进时这个值
-    // 不变,只有真的翻到下一行歌词才会变。mainLine 本身已经不挂 .transition() 了(硬切),
-    // 这个值现在只喂给外层 .animation(value:),给罗马音/译文/下一句预览这几行的淡入
-    // 淡出提供触发时机。
-    private var lineIdentity: String {
-        if let words = poller.currentLine?.words {
-            return words.map(\.text).joined()
-        }
-        return poller.currentLine?.mainText ?? "·"
     }
 
     @ViewBuilder
