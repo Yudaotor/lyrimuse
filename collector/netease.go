@@ -22,10 +22,13 @@ type neteaseInfo struct {
 	Artist string
 }
 
-// neteaseCache 的 TTL 分级,呼应 enrichCache(enrich.go)的同一套设计:封面拿到了才算
-// "拿全了"，给长 TTL；只拿到 SongURL+Lyrics 但 Cover 仍是空(多半是取封面那次请求单独
-// 限流/超时)用短 TTL,让它有机会自愈——否则会永久遮蔽 enrichCache 自己的短 TTL 重试
-// (enrichCache 过期后重新调这里,却直接命中这份"缺封面"的旧缓存,永远补不回封面)。
+// neteaseCache 是这个文件自己内部的网络请求结果缓存(避免短时间内重复打网易云的接口),
+// 跟 enrichCache(enrich.go)是两回事、各自独立——enrichCache 里一条歌只要解析出结果就
+// 永久生效,不再有整体过期这回事;这里的 TTL 分级只管"多久内不用重新问网易云要一次数据"。
+// 封面拿到了才算"拿全了"，给长 TTL；只拿到 SongURL+Lyrics 但 Cover 仍是空(多半是取封面
+// 那次请求单独限流/超时)用短 TTL,让它有机会自愈——否则会永久遮蔽 enrich.go 那边
+// backfillPeripheralFields 的外围字段重试(重试时调到这里,却直接命中这份"缺封面"的
+// 旧缓存,永远补不回封面)。
 const (
 	neteaseCacheTTL        = 30 * 24 * time.Hour
 	neteaseCacheTTLNoCover = 10 * time.Minute

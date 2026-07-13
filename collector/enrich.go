@@ -14,10 +14,14 @@ import (
 	"time"
 )
 
-// enrichEntry is the cached, per-track resolved metadata (all fields stable for
-// a given 歌手|歌名|专辑). Persisted to disk so a song isn't re-resolved on every
-// play or after a collector restart. TS (unix秒) drives a TTL re-resolve so
-// transient failures self-heal and later-added lyrics get picked up.
+// enrichEntry is a track's resolved metadata, persisted permanently once
+// resolved (歌手|歌名|专辑 key) — there is no cache/TTL concept for the
+// identity fields (Lyrics/CoverURL/CanonicalArtist/等): once a song is
+// listened to and resolved, its data lives on local disk until the user
+// explicitly deletes it via desktop-lyrics 的"歌词管理"窗口 (which clears the
+// whole entry, letting the next play resolve fresh). TS is only used to
+// throttle the one thing that still self-heals automatically — see
+// needsPeripheralBackfill.
 type enrichEntry struct {
 	CoverURL    string `json:"cover_url,omitempty"`
 	AccentColor string `json:"accent_color,omitempty"`
@@ -40,12 +44,13 @@ type enrichEntry struct {
 	// 干脆哪个平台都没有)。
 	CoverSource  string `json:"cover_source,omitempty"`
 	LyricsSource string `json:"lyrics_source,omitempty"`
-	// ManualLyrics 标记这条歌词是用户在 desktop-lyrics 的"歌词管理"窗口里手动纠正过的——
-	// 一旦置真,trackEnrichment 的 TTL 自动刷新永久跳过这一条,防止 30 天后被后台自动
-	// 重新解析悄悄冲掉手动编辑的内容。只有用户在管理窗口里显式"删除此缓存"才会连同这个
-	// 标记一起清掉,重新进入正常的自动解析流程。
-	ManualLyrics bool  `json:"manual_lyrics,omitempty"`
-	TS           int64 `json:"ts"`
+	// ManualLyrics 标记这条歌词是用户在 desktop-lyrics 的"歌词管理"窗口里手动纠正/采纳
+	// 过的——纯粹是给 UI 显示"人工修正"徽章用的溯源标记,不再影响任何自动刷新逻辑(已经
+	// 没有自动刷新了,所有条目都是解析一次永久生效)。
+	ManualLyrics bool `json:"manual_lyrics,omitempty"`
+	// TS 只用来给"外围字段缺失时的短时重试"计时(见 needsPeripheralBackfill),不再是
+	// "多久没刷新就整条过期重新解析"的依据、也不再驱动任何淘汰逻辑。
+	TS int64 `json:"ts"`
 }
 
 func (e enrichEntry) fields() map[string]string {
@@ -71,13 +76,11 @@ func (e enrichEntry) fields() map[string]string {
 	return m
 }
 
-const (
-	enrichCacheMax = 3000
-	enrichCacheTTL = 30 * 24 * time.Hour
-	// 任一关键字段(封面主色/Apple/QQ 链接)缺失(多为对应平台限流/抽风导致的临时失败)时
-	// 用很短的 TTL,让下次播放几分钟内就重试补上,而不是把残缺条目钉死 30 天。
-	enrichCacheTTLNoCover = 10 * time.Minute
-)
+// enrichPeripheralRetryInterval 是唯一还保留的自动重试节流——网易云(封面/主色)、
+// Apple Music、QQ 音乐三路外围链接各自独立请求,可能因限流/超时单独失败;只要有一路
+// "该有却没拿到"就每隔这么久重试补一次,而不是永久卡在残缺状态。不影响歌词/封面来源
+// 等身份字段——那些一旦解析出结果就不再自动变动,见 backfillPeripheralFields。
+const enrichPeripheralRetryInterval = 10 * time.Minute
 
 var (
 	enrichMu       sync.Mutex
@@ -88,50 +91,51 @@ var (
 	enrichNotify   chan struct{}       // 后台解析完成→通知 poll 立刻重推;run() 里初始化
 )
 
-// trackEnrichment returns the cached per-track fields, resolving (and persisting)
-// them on a miss or once past the TTL. Safe for concurrent callers (poll+bridge).
+// trackEnrichment returns a track's resolved fields, resolving (and persisting
+// permanently) them on first sight. Safe for concurrent callers (poll+bridge).
 // durationSecs(曲目真实时长,秒)只作为解析时的校验输入,不参与缓存 key——同一首歌哪怕
-// 每次报的时长有几百毫秒抖动也应该命中同一份缓存。ManualLyrics 的条目永远视为新鲜、
-// 永不触发后台重新解析——否则 resolveEnrichAsync 会用一份全新 enrichEntry 整条替换掉
-// enrichCache[key],连同用户手动纠正的歌词和 ManualLyrics 标记本身一起悄悄冲掉。
+// 每次报的时长有几百毫秒抖动也应该命中同一份记录。已经解析过的条目永远直接返回,不会
+// 自动整条重新解析——只有 needsPeripheralBackfill 命中时,会在后台补一次缺失的外围
+// 字段(不碰歌词/封面来源等身份字段)。
 func trackEnrichment(artist, title, album string, durationSecs float64) map[string]string {
 	if title == "" {
 		return nil
 	}
 	key := artist + "|" + title + "|" + album
-	now := time.Now().Unix()
 	enrichMu.Lock()
 	e, ok := enrichCache[key]
 	if ok {
-		ttl := int64(enrichCacheTTL / time.Second)
-		// 网易云(封面/主色)、Apple Music、QQ 音乐三路解析各自独立请求、可能各自单独因
-		// 限流/超时失败;只要有一路"该有却没拿到"就用短 TTL 尽快重试,而不是被主色这一路
-		// 的成败代表全部,把另外两路的残缺结果也钉死 30 天。
-		if e.AccentColor == "" || e.AppleURL == "" || e.QQURL == "" || e.NeteaseURL == "" {
-			ttl = int64(enrichCacheTTLNoCover / time.Second)
+		if needsPeripheralBackfill(e) && !enrichInflight[key] {
+			enrichInflight[key] = true
+			go backfillPeripheralFields(key, artist, title, album, durationSecs)
 		}
-		if e.ManualLyrics || now-e.TS < ttl {
-			enrichMu.Unlock()
-			return e.fields() // 新鲜命中(或手动修正过、永久视为新鲜),直接返回
-		}
+		enrichMu.Unlock()
+		return e.fields()
 	}
-	// 未命中或已过期:后台解析(按 key 去重),不阻塞 poll 循环。有旧值先返回旧值、无则空;
-	// 解析完写缓存并经 enrichNotify 触发一次重推,封面/歌词随后补上(见 resolveEnrichAsync)。
+	// 从没见过这首歌:首次解析(按 key 去重),不阻塞 poll 循环。
 	if !enrichInflight[key] {
 		enrichInflight[key] = true
 		go resolveEnrichAsync(key, artist, title, album, durationSecs)
 	}
-	var stale map[string]string
-	if ok {
-		stale = e.fields()
-	}
 	enrichMu.Unlock()
-	return stale
+	return nil
 }
 
-// resolveEnrichAsync 在后台解析一首歌的富信息(封面/主色/链接/歌词),写入缓存并通知
-// poll 循环重推。由 trackEnrichment 在缓存未命中时启动;同一 key 同时只有一个在跑
-// (enrichInflight 去重)。各外部请求自带 4~10s 超时,故本 goroutine 有界、进程退出即止。
+// needsPeripheralBackfill 判断是否要补一次外围字段(主色/Apple/QQ/网易云链接)——这几路
+// 各自独立请求,可能因限流/超时单独失败,漏了哪个就该重试哪个,不代表歌词/封面本身有问题。
+// 用 TS 节流,避免同一首歌每次 poll(几秒一次)都重新发一遍网络请求。
+func needsPeripheralBackfill(e enrichEntry) bool {
+	missing := e.AccentColor == "" || e.AppleURL == "" || e.QQURL == "" || e.NeteaseURL == ""
+	if !missing {
+		return false
+	}
+	return time.Now().Unix()-e.TS >= int64(enrichPeripheralRetryInterval/time.Second)
+}
+
+// resolveEnrichAsync 首次解析一首歌的完整信息(封面/主色/链接/歌词),写入并永久保留,
+// 直到用户在"歌词管理"里显式删除这条。由 trackEnrichment 在从没见过这个 key 时启动;
+// 同一 key 同时只有一个在跑(enrichInflight 去重)。各外部请求自带 4~10s 超时,故本
+// goroutine 有界、进程退出即止。
 func resolveEnrichAsync(key, artist, title, album string, durationSecs float64) {
 	defer func() {
 		enrichMu.Lock()
@@ -140,29 +144,51 @@ func resolveEnrichAsync(key, artist, title, album string, durationSecs float64) 
 	}()
 	e := resolveTrackEnrichment(artist, title, album, durationSecs)
 	e.TS = time.Now().Unix()
-	// 只缓存"解析到东西"的结果;全空(可能网络抽风)不缓存,下次再试,别把偶发失败钉死。
+	// 只保留"解析到东西"的结果;全空(可能网络抽风)不写入,下次再试,别把偶发失败钉死。
 	if e.CoverURL == "" && e.Lyrics == "" && e.AppleURL == "" && e.QQURL == "" && e.NeteaseURL == "" {
 		return
 	}
 	enrichMu.Lock()
-	if _, exists := enrichCache[key]; !exists && len(enrichCache) >= enrichCacheMax {
-		// 满了:淘汰 TS 最旧的一条,腾位给新歌(否则装满后新歌永不缓存、每次重解析)。
-		oldestKey, oldestTS, first := "", int64(0), true
-		for k, v := range enrichCache {
-			if first || v.TS < oldestTS {
-				oldestKey, oldestTS, first = k, v.TS, false
-			}
-		}
-		if oldestKey != "" {
-			delete(enrichCache, oldestKey)
-		}
-	}
 	enrichCache[key] = e
 	enrichDirty = true
 	enrichMu.Unlock()
 	saveEnrichCache()
 	exportLyricsFiles() // 见 lyricsexport.go——刚解析出的新歌词额外导出成独立文件
 	// 非阻塞通知 poll 立刻重推(带上刚解析好的封面/歌词);没人在听就跳过。
+	if enrichNotify != nil {
+		select {
+		case enrichNotify <- struct{}{}:
+		default:
+		}
+	}
+}
+
+// backfillPeripheralFields 只补外围链接(Apple/QQ/网易云/主色),绝不动歌词/封面来源/
+// 人工修正标记等身份字段——这些一旦解析出结果就永久生效,不该被这条自愈路径悄悄改掉。
+func backfillPeripheralFields(key, artist, title, album string, durationSecs float64) {
+	defer func() {
+		enrichMu.Lock()
+		delete(enrichInflight, key)
+		enrichMu.Unlock()
+	}()
+	fresh := resolveTrackEnrichment(artist, title, album, durationSecs)
+	enrichMu.Lock()
+	e, ok := enrichCache[key]
+	if !ok {
+		// 补的这段时间里,这条被用户在"歌词管理"里删掉了——不要把它复活回去。
+		enrichMu.Unlock()
+		return
+	}
+	e.CoverURL, e.CoverSource, e.AccentColor = fresh.CoverURL, fresh.CoverSource, fresh.AccentColor
+	e.AppleURL, e.QQURL, e.SpotifyURL, e.NeteaseURL = fresh.AppleURL, fresh.QQURL, fresh.SpotifyURL, fresh.NeteaseURL
+	if e.CanonicalArtist == "" {
+		e.CanonicalArtist = fresh.CanonicalArtist
+	}
+	e.TS = time.Now().Unix() // 推进节流时间戳,不管这次补没补全,10 分钟内不再重试
+	enrichCache[key] = e
+	enrichDirty = true
+	enrichMu.Unlock()
+	saveEnrichCache()
 	if enrichNotify != nil {
 		select {
 		case enrichNotify <- struct{}{}:

@@ -12,17 +12,17 @@ import (
 // are disabled (e.g. flag not initialized yet, or path resolution failed).
 var lyricsDir string
 
-// exportLyricsFiles writes/updates a standalone .lrc file per cached song that
-// currently has lyrics, one level outside enrichCache's own lifecycle — the
-// 30-day TTL refresh, the 3000-entry eviction, and manual deletes in
-// desktop-lyrics's 歌词管理 all only ever touch enrichCache/enrich-cache.json,
-// never these exported files. Only ever writes/updates, never deletes: even
-// if a cache entry is later evicted, re-resolved differently, or explicitly
-// deleted by the user, whatever was exported here stays on disk untouched,
-// which is the entire point — a durable local archive the user can browse in
-// Finder, independent of the cache's own churn. Content-identical files are
-// skipped (read-then-compare) so a full sweep on every save doesn't needlessly
-// touch mtimes for the vast majority of unchanged entries.
+// exportLyricsFiles writes/updates a standalone .lrc file per entry that
+// currently has lyrics, one level outside enrichCache — deletes from
+// desktop-lyrics's 歌词管理 window only ever touch enrichCache/
+// enrich-cache.json, never these exported files. Only ever writes/updates,
+// never deletes: even if the user explicitly deletes a cache entry (forcing
+// a fresh re-resolve on next play), whatever was exported here for the OLD
+// content stays on disk untouched, which is the entire point — a durable
+// local archive the user can browse in Finder, independent of whatever
+// happens to the cache entry itself. Content-identical files are skipped
+// (read-then-compare) so a full sweep on every save doesn't needlessly touch
+// mtimes for the vast majority of unchanged entries.
 func exportLyricsFiles() {
 	if lyricsDir == "" {
 		return

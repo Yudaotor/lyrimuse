@@ -73,10 +73,11 @@ func main() {
 	}
 	// 曲目元信息缓存落盘在 config 同目录，重启后不重解析同一首歌。
 	loadEnrichCache(filepath.Join(filepath.Dir(*cfgPath), clientName+"-enrich-cache.json"))
-	// 每首歌的歌词额外导出成独立 .lrc 文件,跟 enrichCache 自己的生命周期(TTL/淘汰/手动
-	// 删除)脱钩——见 lyricsexport.go。在 loadEnrichCache 之后跑一次,这样 desktop-lyrics
-	// 那边"歌词管理"手动编辑/删除后 kickstart 重启 collector 的这个时机,也能被这次启动时
-	// 的全量导出扫描覆盖到,不用在 Swift 侧另外实现一遍。
+	// 每首歌的歌词额外导出成独立 .lrc 文件,跟 enrichCache 条目本身脱钩(即便用户在
+	// "歌词管理"里删除某条缓存,导出过的文件依然保留)——见 lyricsexport.go。在
+	// loadEnrichCache 之后跑一次,这样 desktop-lyrics 那边"歌词管理"手动编辑/删除后
+	// kickstart 重启 collector 的这个时机,也能被这次启动时的全量导出扫描覆盖到,不用
+	// 在 Swift 侧另外实现一遍。
 	lyricsDir = filepath.Join(filepath.Dir(*cfgPath), "lyrics")
 	exportLyricsFiles()
 	forwardedPath = filepath.Join(filepath.Dir(*cfgPath), clientName+"-lastfm-forwarded.json")

@@ -117,7 +117,7 @@ struct SettingsView: View {
                     try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
                     NSWorkspace.shared.open(url)
                 }
-                Text("每首歌的歌词会额外导出成独立的 .lrc 文件,不受缓存清理/过期影响。")
+                Text("每首歌听过一次,歌词就会永久保存在本地——即使之后在「歌词管理」里删除也不影响这里已导出的文件。")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
