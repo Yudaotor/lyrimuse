@@ -51,13 +51,13 @@ public final class EnrichCacheStore: ObservableObject {
         guard let data = try? Data(contentsOf: Self.cacheURL) else {
             raw = [:]
             summaries = []
-            lastError = "读取缓存文件失败"
+            lastError = "读取本地记录文件失败"
             return
         }
         guard let obj = try? JSONSerialization.jsonObject(with: data) as? [String: [String: Any]] else {
             raw = [:]
             summaries = []
-            lastError = "解析缓存文件失败"
+            lastError = "解析本地记录文件失败"
             return
         }
         raw = obj
@@ -163,7 +163,7 @@ public final class EnrichCacheStore: ObservableObject {
             let data = try JSONSerialization.data(withJSONObject: raw)
             try data.write(to: Self.cacheURL, options: .atomic)
         } catch {
-            lastError = "写入缓存文件失败: \(error.localizedDescription)"
+            lastError = "写入本地记录文件失败: \(error.localizedDescription)"
             logger.error("write failed: \(String(describing: error), privacy: .public)")
             return
         }

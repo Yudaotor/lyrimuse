@@ -284,7 +284,7 @@ struct LyricsManagerView: View {
         .onAppear { loadDetail(key: key) }
         .onChange(of: key) { _, newKey in loadDetail(key: newKey) }
         .confirmationDialog(
-            "确定要删除「\(summary.artist) - \(summary.title)」的缓存吗?",
+            "确定要删除「\(summary.artist) - \(summary.title)」的本地记录吗?",
             isPresented: $showDeleteConfirm,
             titleVisibility: .visible
         ) {
@@ -328,7 +328,7 @@ struct LyricsManagerView: View {
                 Button(role: .destructive) {
                     showDeleteConfirm = true
                 } label: {
-                    Label("删除此缓存", systemImage: "trash")
+                    Label("删除本地记录", systemImage: "trash")
                 }
             }
         }

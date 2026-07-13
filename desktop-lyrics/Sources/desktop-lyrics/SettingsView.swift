@@ -120,6 +120,8 @@ struct SettingsView: View {
                 Text("每首歌听过一次,歌词就会永久保存在本地——即使之后在「歌词管理」里删除也不影响这里已导出的文件。")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true) // Form 里的 Text 默认按单行截断,
+                    // 不加这个即使文字很长也会显示成"…"结尾的一行,而不是自动换行。
             }
         }
         .padding(20)
