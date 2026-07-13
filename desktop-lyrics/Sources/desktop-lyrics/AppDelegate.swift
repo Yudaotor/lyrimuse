@@ -14,7 +14,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         LocalPlaybackSource.shared.preferWordLevelKaraoke = settings.preferWordLevelKaraoke
 
         LyricsOverlayWindowController.shared.setVisible(true)
-        LyricsOverlayWindowController.shared.setClickThrough(false)
         LyricsOverlayWindowController.shared.setLocked(settings.lockPosition)
 
         // 按设置里选的数据源启动对应的那一个(默认远程,保持原有行为);PlaybackCoordinator

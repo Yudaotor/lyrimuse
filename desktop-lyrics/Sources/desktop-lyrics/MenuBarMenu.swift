@@ -10,9 +10,12 @@ struct MenuBarMenu: View {
             get: { overlay.isVisible },
             set: { overlay.setVisible($0) }
         ))
-        Toggle("点击穿透(不拦截下层点击)", isOn: Binding(
-            get: { overlay.isClickThrough },
-            set: { overlay.setClickThrough($0) }
+        Toggle("锁定位置(不可拖拽+点击穿透)", isOn: Binding(
+            get: { overlay.isPositionLocked },
+            set: { newValue in
+                settings.lockPosition = newValue
+                overlay.setLocked(newValue)
+            }
         ))
         Divider()
         Toggle("开机启动", isOn: $settings.launchAtLoginEnabled)

@@ -96,7 +96,7 @@ struct SettingsView: View {
                 .buttonStyle(.link)
             }
             Section("窗口") {
-                Toggle("锁定位置(不可拖拽移动)", isOn: Binding(
+                Toggle("锁定位置(不可拖拽+点击穿透)", isOn: Binding(
                     get: { settings.lockPosition },
                     set: { newValue in
                         settings.lockPosition = newValue

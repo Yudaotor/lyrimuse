@@ -9,13 +9,12 @@ private let overlayDefaultSize = NSSize(width: 480, height: 120)
 
 // 拥有悬浮窗面板 + SwiftUI 内容 + 拖拽位置持久化。位置存 UserDefaults(裸可执行文件也能
 // 跨进程重启正确持久化,已实测确认,不需要 .app 包)。ObservableObject 让菜单栏菜单
-// 直接观察 .shared 就能反映"是否显示/是否点击穿透"这两个状态,不用绕经 AppDelegate。
+// 直接观察 .shared 就能反映"是否显示/是否锁定位置"这两个状态,不用绕经 AppDelegate。
 @MainActor
 final class LyricsOverlayWindowController: NSWindowController, ObservableObject {
     static let shared = LyricsOverlayWindowController()
 
     @Published private(set) var isVisible: Bool = true
-    @Published private(set) var isClickThrough: Bool = false
     @Published private(set) var isPositionLocked: Bool = false
 
     private var moveObserver: NSObjectProtocol?
@@ -49,18 +48,15 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject 
         RelayPoller.shared.setOverlayVisible(visible)
     }
 
-    func setClickThrough(_ on: Bool) {
-        // 点击穿透打开时 isMovableByWindowBackground 天然失效(鼠标事件根本传不到窗口)——
-        // 这是预期取舍,想拖拽就得先关掉点击穿透。
-        isClickThrough = on
-        window?.ignoresMouseEvents = on
-    }
-
-    // 锁定位置:关掉"点背景拖拽移动"这个能力,跟点击穿透是两回事——点击穿透关着的时候
-    // 也可能想固定住悬浮窗不被误拖(比如旁边还有别的窗口要拖),这里单独给一个开关。
+    // 锁定位置:关掉"点背景拖拽移动"的能力,顺带打开点击穿透(ignoresMouseEvents)——
+    // 这个窗口除了拖拽移动之外没有任何其它可交互内容,原来把"点击穿透"设成独立开关,
+    // 实际效果几乎跟"锁定位置"完全重叠(开着点击穿透自然也拖不动),用户反馈这两个
+    // 开关是冗余的,合并成一个:锁定 = 不能拖 + 点击穿透到下层;解锁 = 能拖 + 正常
+    // 拦截点击。
     func setLocked(_ locked: Bool) {
         isPositionLocked = locked
         window?.isMovableByWindowBackground = !locked
+        window?.ignoresMouseEvents = locked
     }
 
     private func scheduleSavePosition() {
