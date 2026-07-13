@@ -42,6 +42,24 @@ import DesktopLyricsCore
 // 直接从连续的位置锚点(poller.anchor)现算每个字的真实进度——本质上是把"用一个真实
 // 时钟驱动纯函数"这件事从 CAKeyframeAnimation 换成了 SwiftUI 原生等价物,不用引入
 // AppKit/CALayer。
+//
+// 逐字流转顺滑之后用户又反馈两点:
+// 1) 换行那个 asymmetric transition(缩放+淡入)"感觉没啥用,反而会变卡"——逐字填色改
+//    成 TimelineView 驱动之后,换行瞬间除了缩放/淡入动画本身,还叠加了 TimelineView
+//    子树整个被 .id() 强制重新挂载的开销(旧的整个拆掉、新的从头建),这两件事撞在同一
+//    帧里,在填色已经很顺滑的衬托下这个开销反而显得更突兀。查过的 LyricFever 真实生产
+//    实现本来就是"主歌词行干脆不加 transition,硬切"——这次直接采纳,把 mainLine 的
+//    .id()/.transition() 整个去掉,换行就是普通的属性更新(SwiftUI 按分支自然 diff,
+//    不强制重新挂载),外层 .animation(value: lineIdentity) 留着只给罗马音/译文/下一句
+//    预览这几行做淡入淡出(它们只是普通 Text,没有 TimelineView 那份挂载成本)。
+// 2) 英文歌词感觉不够顺滑——查了本地缓存里真实的 YRC 数据坐实:同一批歌曲里,英文
+//    (Michael Jackson 几首)的逐字时长里有 durationMs==0 的词条(短介词/冠词等,网易云
+//    /QQ/酷狗给英文曲目算的逐字对齐精度明显不如中文,中文样本里一个==0都没有),
+//    <100ms 的短词占比也明显更高。fillFraction 原来对 durationMs<=0 是硬边界瞬间
+//    0→1,短词越多这种"瞬间跳"就越密集,读起来比中文更"跳"。改法见 fillFraction:
+//    给填色计算用的有效时长设一个下限(minWordDurationMs),短词/零时长词也能有一段
+//    看得见的扫过而不是瞬间跳变——只影响这一个词自己的视觉呈现,不改 startMs、不影响
+//    整体歌词对齐/下一个词何时开始。
 struct LyricsOverlayView: View {
     @ObservedObject private var poller = PlaybackCoordinator.shared
     @ObservedObject private var settings = AppSettings.shared
@@ -59,13 +77,6 @@ struct LyricsOverlayView: View {
                     .transition(.opacity)
             }
             mainLine
-                .id(lineIdentity)
-                .transition(
-                    .asymmetric(
-                        insertion: .opacity.combined(with: .scale(scale: 0.94, anchor: .center)),
-                        removal: .identity // 旧行瞬间消失,不参与淡出——避免跟新行同时半透明造成重影
-                    )
-                )
             if settings.showTranslation, let tr = poller.currentLine?.translation {
                 Text(tr)
                     .font(settings.translationFont)
@@ -103,7 +114,9 @@ struct LyricsOverlayView: View {
     }
 
     // 只用歌词的文本内容算身份,不掺 fillFraction——同一行歌词逐字填色推进时这个值
-    // 不变,只有真的翻到下一行歌词才会变,换行动画才准确只在"换行"这一刻触发一次。
+    // 不变,只有真的翻到下一行歌词才会变。mainLine 本身已经不挂 .transition() 了(硬切),
+    // 这个值现在只喂给外层 .animation(value:),给罗马音/译文/下一句预览这几行的淡入
+    // 淡出提供触发时机。
     private var lineIdentity: String {
         if let words = poller.currentLine?.words {
             return words.map(\.text).joined()
@@ -144,9 +157,15 @@ struct LyricsOverlayView: View {
         }
     }
 
+    // 逐字时长下限——只影响这一个词自己的填色速度,不改 startMs、不影响下一个词何时
+    // 开始,纯粹是"这个词的扫过动画至少要花多久"。实测坐实英文歌词(NetEase/QQ/酷狗给
+    // 的逐字对齐)比中文更容易出现 durationMs==0 或几十毫秒的极短词(介词/冠词一类),
+    // 原来的硬边界瞬间 0→1 在这种词密集的英文句子里显得比中文更"跳"。
+    private static let minWordDurationMs = 80
+
     private func fillFraction(for w: SyncedLyricWord, atMs ms: Int) -> Double {
-        guard w.durationMs > 0 else { return ms >= w.startMs ? 1 : 0 }
-        return min(1, max(0, Double(ms - w.startMs) / Double(w.durationMs)))
+        let effectiveDuration = max(w.durationMs, Self.minWordDurationMs)
+        return min(1, max(0, Double(ms - w.startMs) / Double(effectiveDuration)))
     }
 
     // 用渐变整体当文字颜色,而不是叠两层 Text + GeometryReader 手算裁剪宽度——渐变的
