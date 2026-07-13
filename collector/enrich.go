@@ -39,7 +39,12 @@ type enrichEntry struct {
 	// 干脆哪个平台都没有)。
 	CoverSource  string `json:"cover_source,omitempty"`
 	LyricsSource string `json:"lyrics_source,omitempty"`
-	TS           int64  `json:"ts"`
+	// ManualLyrics 标记这条歌词是用户在 desktop-lyrics 的"歌词管理"窗口里手动纠正过的——
+	// 一旦置真,trackEnrichment 的 TTL 自动刷新永久跳过这一条,防止 30 天后被后台自动
+	// 重新解析悄悄冲掉手动编辑的内容。只有用户在管理窗口里显式"删除此缓存"才会连同这个
+	// 标记一起清掉,重新进入正常的自动解析流程。
+	ManualLyrics bool  `json:"manual_lyrics,omitempty"`
+	TS           int64 `json:"ts"`
 }
 
 func (e enrichEntry) fields() map[string]string {
@@ -85,7 +90,9 @@ var (
 // trackEnrichment returns the cached per-track fields, resolving (and persisting)
 // them on a miss or once past the TTL. Safe for concurrent callers (poll+bridge).
 // durationSecs(曲目真实时长,秒)只作为解析时的校验输入,不参与缓存 key——同一首歌哪怕
-// 每次报的时长有几百毫秒抖动也应该命中同一份缓存。
+// 每次报的时长有几百毫秒抖动也应该命中同一份缓存。ManualLyrics 的条目永远视为新鲜、
+// 永不触发后台重新解析——否则 resolveEnrichAsync 会用一份全新 enrichEntry 整条替换掉
+// enrichCache[key],连同用户手动纠正的歌词和 ManualLyrics 标记本身一起悄悄冲掉。
 func trackEnrichment(artist, title, album string, durationSecs float64) map[string]string {
 	if title == "" {
 		return nil
@@ -102,9 +109,9 @@ func trackEnrichment(artist, title, album string, durationSecs float64) map[stri
 		if e.AccentColor == "" || e.AppleURL == "" || e.QQURL == "" || e.NeteaseURL == "" {
 			ttl = int64(enrichCacheTTLNoCover / time.Second)
 		}
-		if now-e.TS < ttl {
+		if e.ManualLyrics || now-e.TS < ttl {
 			enrichMu.Unlock()
-			return e.fields() // 新鲜命中,直接返回
+			return e.fields() // 新鲜命中(或手动修正过、永久视为新鲜),直接返回
 		}
 	}
 	// 未命中或已过期:后台解析(按 key 去重),不阻塞 poll 循环。有旧值先返回旧值、无则空;

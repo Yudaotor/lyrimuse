@@ -4,6 +4,7 @@ struct MenuBarMenu: View {
     @ObservedObject private var overlay = LyricsOverlayWindowController.shared
     @ObservedObject private var settings = AppSettings.shared
     @Environment(\.openSettings) private var openSettings
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         Toggle("显示悬浮歌词", isOn: Binding(
@@ -26,6 +27,12 @@ struct MenuBarMenu: View {
         Button("设置…") {
             NSApp.activate(ignoringOtherApps: true)
             openSettings()
+        }
+        // 跟"设置…"同一个坑:accessory 策略(没有 Dock 图标)下打开任何新窗口都得先
+        // 手动激活 App,不然 openWindow 调了也没反应。
+        Button("歌词管理…") {
+            NSApp.activate(ignoringOtherApps: true)
+            openWindow(id: "lyrics-manager")
         }
         Divider()
         Button("退出") { NSApplication.shared.terminate(nil) }
