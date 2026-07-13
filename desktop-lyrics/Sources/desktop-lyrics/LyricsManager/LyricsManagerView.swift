@@ -35,6 +35,18 @@ private enum TimingFilter: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 }
 
+// 歌手筛选下拉按"主歌手"合并——同一位歌手的合唱曲目(如"宇多田ヒカル & Skrillex")
+// 不应该在下拉里单独占一行,应该并进"宇多田ヒカル"那一项里;选中某位歌手后,连同他/她
+// 参与的合唱曲目也一起展示出来,不是只看完全同名的条目。分隔符跟 collector/match.go 的
+// artistCreditParts 用同一套(/、&,，),取分割后的第一段作为归并键,大小写/首尾空白
+// 不影响判定,但下拉里展示、真正拿去比较分组的是原始未分割的 artist 全文里截出来的
+// 第一段(保留原始大小写/写法,不额外转小写)。
+private func primaryArtist(_ full: String) -> String {
+    let seps = CharacterSet(charactersIn: "/、&,，")
+    let first = full.components(separatedBy: seps).first ?? full
+    return first.trimmingCharacters(in: .whitespaces)
+}
+
 // 每个歌词源一个固定色,列表/详情页共用,方便肉眼快速扫源(不是随手配的——网易云红、
 // QQ音乐绿、酷狗蓝、LRCLIB紫,分别贴近各自品牌主色,"无来源"用中性灰)。
 private func sourceColor(_ source: String) -> Color {
@@ -69,6 +81,9 @@ struct LyricsManagerView: View {
     // 这两个直接用 String? 而不是另建一个枚举。
     @State private var artistFilter: String?
     @State private var albumFilter: String?
+    // 点了"刷新"却没有任何肉眼可见的变化时(比如内容根本没变),用户很容易以为按钮没
+    // 反应——短暂切换成"已刷新"+对勾图标给个明确反馈,1秒后自动变回去。
+    @State private var showRefreshedFeedback = false
 
     private var hasActiveFilters: Bool {
         sourceFilter != .all || timingFilter != .all || manualOnly || missingLyricsOnly
@@ -76,7 +91,7 @@ struct LyricsManagerView: View {
     }
 
     private var distinctArtists: [String] {
-        Array(Set(store.summaries.map(\.artist))).sorted()
+        Array(Set(store.summaries.map { primaryArtist($0.artist) })).sorted()
     }
 
     private var distinctAlbums: [String] {
@@ -89,7 +104,7 @@ struct LyricsManagerView: View {
                 let q = searchText.lowercased()
                 guard s.artist.lowercased().contains(q) || s.title.lowercased().contains(q) else { return false }
             }
-            if let artistFilter, s.artist != artistFilter { return false }
+            if let artistFilter, primaryArtist(s.artist) != artistFilter { return false }
             if let albumFilter, s.album != albumFilter { return false }
             guard sourceFilter.matches(s.lyricsSource) else { return false }
             switch timingFilter {
@@ -193,10 +208,9 @@ struct LyricsManagerView: View {
             .navigationSubtitle("\(filtered.count) / \(store.summaries.count) 首")
             .toolbar {
                 ToolbarItem {
-                    Button {
-                        store.reload()
-                    } label: {
-                        Label("刷新", systemImage: "arrow.clockwise")
+                    Button(action: refreshWithFeedback) {
+                        Label(showRefreshedFeedback ? "已刷新" : "刷新",
+                              systemImage: showRefreshedFeedback ? "checkmark" : "arrow.clockwise")
                     }
                 }
             }
@@ -222,6 +236,15 @@ struct LyricsManagerView: View {
     // 交互直接闷在这阵持续重渲染里,表现成"点了跟没点一样"(实测坐实的真 bug,不是
     // 自动化环境的假象)。这里只需要开窗那一刻的快照,普通函数内直接访问单例属性即可,
     // 不用建立订阅。
+    private func refreshWithFeedback() {
+        store.reload()
+        withAnimation { showRefreshedFeedback = true }
+        Task {
+            try? await Task.sleep(for: .seconds(1))
+            withAnimation { showRefreshedFeedback = false }
+        }
+    }
+
     private func focusCurrentlyPlaying(scrollProxy: ScrollViewProxy) {
         guard selectedKey == nil else { return }
         let playback = PlaybackCoordinator.shared
@@ -295,11 +318,18 @@ struct LyricsManagerView: View {
                 }
             }
             Spacer()
-            // 挪到顶部——常用操作,原来放在底部操作栏每次都要翻到页面最下面才能点。
-            Button {
-                showSearchSheet = true
-            } label: {
-                Label("联网搜索候选歌词", systemImage: "magnifyingglass")
+            // 都挪到顶部——常用操作,原来放在底部操作栏每次都要翻到页面最下面才能点。
+            HStack(spacing: 8) {
+                Button {
+                    showSearchSheet = true
+                } label: {
+                    Label("联网搜索候选歌词", systemImage: "magnifyingglass")
+                }
+                Button(role: .destructive) {
+                    showDeleteConfirm = true
+                } label: {
+                    Label("删除此缓存", systemImage: "trash")
+                }
             }
         }
     }
@@ -366,10 +396,6 @@ struct LyricsManagerView: View {
             }
 
             Spacer()
-
-            Button("删除此缓存", role: .destructive) {
-                showDeleteConfirm = true
-            }
         }
     }
 
