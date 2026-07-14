@@ -34,13 +34,24 @@ func relayState(s snapshot, playing bool, device string, listenedAt int64, curre
 			device = v
 		}
 	}
+	// 歌词字段不能从 ai(=lbMeta 的 AdditionalInfo)里取——那份是按 ListenBrainz
+	// 单条 listen ≤10240 字节的硬上限裁过的(lb.go 的 budget 循环,按 原文>翻译>罗马音>
+	// 逐字 优先级加,超预算的字段整个丢掉、逐字数据体积最大最先被丢)。这个预算完全是
+	// LB 自己 API 的限制,状态中继/网页没有这个约束,却因为 relayState 复用同一份
+	// AdditionalInfo 被连带裁掉了逐字数据——实测坐实:一首歌光是整行歌词就已经吃掉大半
+	// 预算时,逐字(yrc)数据经常被整个丢弃,网页因此显示"没有逐字效果",而本地
+	// (LocalPlaybackSource)直接读缓存文件完全不经过这个预算、看到的是完整数据,两边
+	// 就这样对不上。这里改成直接从 trackEnrichment 现拿一份未裁剪的完整歌词字段——
+	// enrichCache 在 lbMeta 内部已经解析过一次,这里只是再查一次内存缓存,没有额外
+	// 网络开销。
+	enr := trackEnrichment(s.Artist, s.Title, s.Album, s.Duration)
 	st := map[string]any{
 		"ok": true, "playing": playing, "current": current,
 		// artist 用 meta.ArtistName(可能已被网易云/QQ 音乐核实的官方写法覆盖,统一大小写/
 		// 中英文——见 lbMeta),不用 s.Artist 原始标签,让"正在播放"卡片和历史列表用同一版本。
 		"title": meta.TrackName, "artist": meta.ArtistName, "album": meta.ReleaseName,
 		"artwork": ai["cover_url"], "accent": ai["accent_color"], "device": device,
-		"lyrics": ai["lyrics"], "lyricsTr": ai["lyrics_tr"], "lyricsRoma": ai["lyrics_roma"], "lyricsYRC": ai["lyrics_yrc"],
+		"lyrics": enr["lyrics"], "lyricsTr": enr["lyrics_tr"], "lyricsRoma": enr["lyrics_roma"], "lyricsYRC": enr["lyrics_yrc"],
 		// 封面/歌词实际来自哪个平台("netease"/"qq"/"lrclib"),供网页页脚如实展示。
 		"coverSource": ai["cover_source"], "lyricsSource": ai["lyrics_source"],
 		"links":      map[string]any{"apple": ai["apple_music_url"], "qq": ai["qq_music_url"], "netease": ai["netease_url"], "spotify": ai["spotify_url"]},
