@@ -39,7 +39,13 @@ if ! pgrep -f bin/collector >/dev/null 2>&1; then
   echo "==> kickstart produced no running process, retrying via bootout+bootstrap"
   PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
   launchctl bootout "gui/$(id -u)" "$PLIST" 2>/dev/null || true
+  # bootout 是异步的,launchd 需要一点时间才会真正把这个 job 卸载干净——紧接着就
+  # bootstrap 同一个 label 有时会因为卸载还没完成而失败/静默无效(desktop-lyrics/
+  # build.sh 实测坐实过:不加这个间隔,这条自愈分支本身也会偶尔失败,需要手动再重试
+  # 一遍才行)。
+  sleep 1
   launchctl bootstrap "gui/$(id -u)" "$PLIST"
+  sleep 1
   launchctl kickstart -k "gui/$(id -u)/$LABEL"
   sleep 2
 fi

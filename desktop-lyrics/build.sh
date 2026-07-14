@@ -41,7 +41,12 @@ if launchctl list "$LABEL" >/dev/null 2>&1; then
     # 丢掉旧约束、重新从 plist/二进制读起(实测坐实过这个失败模式和这个修法)。
     echo "==> kickstart produced no running process, retrying via bootout+bootstrap"
     launchctl bootout "gui/$(id -u)" "$PLIST" 2>/dev/null || true
+    # bootout 是异步的,launchd 需要一点时间才会真正把这个 job 卸载干净——紧接着就
+    # bootstrap 同一个 label 有时会因为卸载还没完成而失败/静默无效(实测坐实:不加
+    # 这个间隔时,这条自愈分支本身也会偶尔失败,需要手动再重试一遍才行)。
+    sleep 1
     launchctl bootstrap "gui/$(id -u)" "$PLIST"
+    sleep 1
     launchctl kickstart -k "gui/$(id -u)/$LABEL"
   fi
 else
