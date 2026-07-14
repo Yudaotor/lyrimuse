@@ -171,36 +171,70 @@ struct LyricsOverlayView: View {
     // 的逐字对齐)比中文更容易出现 durationMs==0 或几十毫秒的极短词(介词/冠词一类),
     // 原来的硬边界瞬间 0→1 在这种词密集的英文句子里显得比中文更"跳"。
     private static let minWordDurationMs = 80
+    // 过渡带半宽(fraction 单位)——真正需要柔化的只是"刚好唱到/刚好唱完"这个边界附近
+    // 一小段,不是整个 [0,1] 区间。
+    private static let wordEdgeSoftenBand = 0.08
 
+    // 故意不夹到 [0,1]——早年版本在这里用 min(1,max(0,...)) 夹过,副作用是"还没轮到、
+    // 离真正唱到还有好几个字/好几句"的词全都被夹成跟"刚好唱到这个词的最前一刻"完全
+    // 相同的 0,wordText 里的过渡带因此在每一个尚未唱到的词开头都会误算出一小截"已经
+    // 唱过"的高亮——英文按整词(而非整字)分词,这一小截过渡带宽度恰好接近首字母的宽度,
+    // 表现成"还没唱到的英文词首字母却先带了点颜色"(中文逐字分词单位更小、同样的绝对
+    // 误差在视觉上没那么显眼,但机制其实是共通的)。真正需要的裁剪挪到 wordGradient 里,
+    // 按"过渡带跟 [0,1] 是否有交集"分情况处理,离得够远的词直接算纯色、不构造多余的
+    // 渐变过渡。
     private func fillFraction(for w: SyncedLyricWord, atMs ms: Int) -> Double {
         let effectiveDuration = max(w.durationMs, Self.minWordDurationMs)
-        return min(1, max(0, Double(ms - w.startMs) / Double(effectiveDuration)))
+        return Double(ms - w.startMs) / Double(effectiveDuration)
     }
 
     // 用渐变整体当文字颜色,而不是叠两层 Text + GeometryReader 手算裁剪宽度——渐变的
-    // stop 位置直接由 TimelineView 每帧算出的真实进度决定,不再需要额外插值。中间留一
-    // 小段过渡带(而不是硬边界)让扫过的感觉更柔和。渐变的两个颜色用可配置的
-    // foregroundColor 而不是硬编码 .white——已唱过的部分永远是用户选的前景色全强度,
-    // 未唱到的部分是同一颜色的 35% 透明度,没有单独的"进度色"设置项。
+    // stop 位置直接由 TimelineView 每帧算出的真实进度决定,不再需要额外插值。渐变的两个
+    // 颜色用可配置的 foregroundColor 而不是硬编码 .white——已唱过的部分永远是用户选的
+    // 前景色全强度,未唱到的部分是同一颜色的 35% 透明度,没有单独的"进度色"设置项。
     private func wordText(_ w: SyncedLyricWord, atMs currentMs: Int) -> some View {
         let fg = settings.foregroundColor
         let fraction = fillFraction(for: w, atMs: currentMs)
+        let band = Self.wordEdgeSoftenBand
         return Text(w.text)
-            .foregroundStyle(
-                LinearGradient(
-                    stops: [
-                        .init(color: fg, location: 0),
-                        .init(color: fg, location: max(0, fraction - 0.08)),
-                        .init(color: fg.opacity(0.35), location: min(1, fraction + 0.08)),
-                        .init(color: fg.opacity(0.35), location: 1),
-                    ],
-                    startPoint: .leading,
-                    endPoint: .trailing
-                )
-            )
+            .foregroundStyle(wordGradient(fg: fg, left: fraction - band, right: fraction + band))
             // 故意不再包 .animation(...)——TimelineView(.animation) 已经在按渲染帧频
             // 重算真值,这里再叠一层 SwiftUI Animation 补间只会重新引入上面注释里那套
             // 矢量叠加问题。
+    }
+
+    // 过渡带 [left, right] 以这个字真实的(未夹到 [0,1] 的)进度为中心,可能整段落在
+    // [0,1] 之外——离真正唱到还很远的字(right<=0)、或者早就唱完很久的字(left>=1),
+    // 两种都不需要渐变,直接整字纯色,不构造多余的 stop、也不会在边界凭空冒出一截
+    // 不该有的高亮/暗淡。只有过渡带真正跟 [0,1] 有交集时才需要在夹住的那一端现算准确
+    // 的混合色(而不是硬编码"已唱"/"未唱"两个端值),避免同一位置出现两个不同颜色的
+    // stop 时被其中一个"抢占"。
+    private func wordGradient(fg: Color, left: Double, right: Double) -> LinearGradient {
+        let dim = fg.opacity(0.35)
+        if right <= 0 {
+            return LinearGradient(colors: [dim, dim], startPoint: .leading, endPoint: .trailing)
+        }
+        if left >= 1 {
+            return LinearGradient(colors: [fg, fg], startPoint: .leading, endPoint: .trailing)
+        }
+        func blended(at x: Double) -> Color {
+            let t = min(1, max(0, (x - left) / (right - left)))
+            return fg.opacity(1 - t * 0.65) // 0.65 = 1 - 0.35,在 full 和 dim(0.35)之间线性混
+        }
+        var stops: [Gradient.Stop] = []
+        if left > 0 {
+            stops.append(.init(color: fg, location: 0))
+            stops.append(.init(color: fg, location: left))
+        } else {
+            stops.append(.init(color: blended(at: 0), location: 0))
+        }
+        if right < 1 {
+            stops.append(.init(color: dim, location: right))
+            stops.append(.init(color: dim, location: 1))
+        } else {
+            stops.append(.init(color: blended(at: 1), location: 1))
+        }
+        return LinearGradient(stops: stops, startPoint: .leading, endPoint: .trailing)
     }
 }
 
