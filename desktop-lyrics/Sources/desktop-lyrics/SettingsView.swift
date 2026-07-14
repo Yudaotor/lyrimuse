@@ -12,6 +12,12 @@ struct SettingsView: View {
     private static let availableFontFamilies = NSFontManager.shared.availableFontFamilies.sorted()
 
     var body: some View {
+        // .formStyle(.grouped) 是 macOS 13+ 原生"系统设置"式外观(圆角分组卡片+
+        // 灰色小标题+尾注),换掉原来 Form 默认的纯列表样式——原来的问题:每个 Section
+        // 的标题只是一行普通粗体文字、跟内容之间没有视觉分组;ColorPicker/字体 Picker
+        // 在默认样式下会被拉伸成贯穿整行的长条,不像系统里那种紧凑的小色块/下拉按钮;
+        // 说明性文字(截屏隐藏/歌词存储那两句)夹在控件中间当成普通一行,读起来像是漏了
+        // 什么而不是备注。分组样式换来的排版全部是 SwiftUI 原生处理,不用手工调间距。
         Form {
             Section("数据源") {
                 Picker("来源", selection: Binding(
@@ -37,6 +43,7 @@ struct SettingsView: View {
                     .textFieldStyle(.roundedBorder)
                 }
             }
+
             Section("歌词展示") {
                 Toggle("优先逐字高亮(有的话)", isOn: Binding(
                     get: { settings.preferWordLevelKaraoke },
@@ -50,6 +57,7 @@ struct SettingsView: View {
                 Toggle("显示译文", isOn: $settings.showTranslation)
                 Toggle("双行显示(预览下一句歌词)", isOn: $settings.showNextLinePreview)
             }
+
             Section("外观") {
                 Picker("字体", selection: $settings.fontFamilyName) {
                     Text("跟随系统").tag("")
@@ -59,12 +67,17 @@ struct SettingsView: View {
                 }
                 .pickerStyle(.menu) // 字体族列表常有一两百项,显式用菜单样式,不依赖 Form 自动推断
 
-                HStack {
-                    Text("字号")
-                    Slider(value: $settings.fontSize, in: 14...36, step: 1)
-                    Text("\(Int(settings.fontSize))pt")
-                        .foregroundStyle(.secondary)
-                        .frame(width: 36, alignment: .trailing)
+                // LabeledContent 而不是裸 HStack——分组样式下 Toggle/Picker/ColorPicker
+                // 这些自带标签的控件,标签会自动对齐成同一条竖线;裸 HStack 的"字号"只是
+                // 行内第一个 Text,对不上那条对齐线。LabeledContent 让它享受同一套对齐。
+                LabeledContent("字号") {
+                    HStack(spacing: 8) {
+                        Slider(value: $settings.fontSize, in: 14...36, step: 1)
+                        Text("\(Int(settings.fontSize))pt")
+                            .foregroundStyle(.secondary)
+                            .monospacedDigit()
+                            .frame(width: 32, alignment: .trailing)
+                    }
                 }
 
                 ColorPicker(
@@ -111,7 +124,8 @@ struct SettingsView: View {
                 }
                 .buttonStyle(.link)
             }
-            Section("窗口") {
+
+            Section {
                 Toggle("锁定位置(不可拖拽+点击穿透)", isOn: Binding(
                     get: { settings.lockPosition },
                     set: { newValue in
@@ -126,15 +140,20 @@ struct SettingsView: View {
                         LyricsOverlayWindowController.shared.setHiddenFromCapture(newValue)
                     }
                 ))
-                Text("开启后,截图、录屏、视频会议共享屏幕都不会拍到悬浮歌词——但你自己在这台 Mac 上仍然正常看得见。")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+            } header: {
+                Text("窗口")
+            } footer: {
+                // footer 挂在整个 Section 上(而不是紧跟某个 Toggle 下面的裸 Text)——
+                // 分组样式里这是原生"注脚"位置,明确点名是哪个开关的说明,避免视觉上跟
+                // "锁定位置"混在一起。
+                Text("开启「截屏/录屏时隐藏」后,截图、录屏、视频会议共享屏幕都不会拍到悬浮歌词——但你自己在这台 Mac 上仍然正常看得见。")
             }
+
             Section("启动") {
                 Toggle("开机启动", isOn: $settings.launchAtLoginEnabled)
             }
-            Section("存储") {
+
+            Section {
                 Button("打开歌词文件夹") {
                     let url = FileManager.default.homeDirectoryForCurrentUser
                         .appendingPathComponent(".config/applemusic-nowplaying/lyrics")
@@ -144,14 +163,13 @@ struct SettingsView: View {
                     try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
                     NSWorkspace.shared.open(url)
                 }
+            } header: {
+                Text("存储")
+            } footer: {
                 Text("每首歌听过一次,歌词就会永久保存在本地——即使之后在「歌词管理」里删除也不影响这里已导出的文件。")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true) // Form 里的 Text 默认按单行截断,
-                    // 不加这个即使文字很长也会显示成"…"结尾的一行,而不是自动换行。
             }
         }
-        .padding(20)
-        .frame(width: 360)
+        .formStyle(.grouped)
+        .frame(width: 420)
     }
 }
