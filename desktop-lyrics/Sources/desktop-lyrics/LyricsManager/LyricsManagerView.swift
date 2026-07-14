@@ -94,8 +94,21 @@ struct LyricsManagerView: View {
         Array(Set(store.summaries.map { primaryArtist($0.artist) })).sorted()
     }
 
+    // 专辑筛选下拉按大小写不敏感合并——同一张专辑在不同缓存条目里,专辑名偶尔因为各自
+    // 歌词源的候选写法大小写不一致(实测坐实:"BLOOD ON THE DANCE FLOOR/ HIStory In The
+    // Mix" vs "Blood on the Dance Floor/ HIStory in the Mix"、"HIStory Continues" vs
+    // "History Continues"),导致下拉列表出现两条本该合并的重复项,选中其中一种大小写
+    // 还看不到另一种写法归属的曲目。归并键统一转小写比较,下拉里展示、真正拿去比较的
+    // 是第一次遇到(按 summaries 已有的 artist/title 排序)那条的原始写法,不额外转小写
+    // 显示——跟 primaryArtist 合并合唱曲目是同一个"归并键跟展示值分开"的思路,只是这里
+    // 归并键是转小写而不是按分隔符取第一段。
     private var distinctAlbums: [String] {
-        Array(Set(store.summaries.map(\.album).filter { !$0.isEmpty })).sorted()
+        var seen: [String: String] = [:] // 小写归并键 -> 第一次出现时的原始写法
+        for s in store.summaries where !s.album.isEmpty {
+            let key = s.album.lowercased()
+            if seen[key] == nil { seen[key] = s.album }
+        }
+        return seen.values.sorted()
     }
 
     private var filtered: [EnrichCacheStore.Summary] {
@@ -105,7 +118,9 @@ struct LyricsManagerView: View {
                 guard s.artist.lowercased().contains(q) || s.title.lowercased().contains(q) else { return false }
             }
             if let artistFilter, primaryArtist(s.artist) != artistFilter { return false }
-            if let albumFilter, s.album != albumFilter { return false }
+            // 大小写不敏感比较——albumFilter 存的是 distinctAlbums 归并后选中的那个
+            // 展示写法,同一张专辑大小写不同的条目(s.album)也要匹配上,不能要求逐字相等。
+            if let albumFilter, s.album.lowercased() != albumFilter.lowercased() { return false }
             guard sourceFilter.matches(s.lyricsSource) else { return false }
             switch timingFilter {
             case .all: break
