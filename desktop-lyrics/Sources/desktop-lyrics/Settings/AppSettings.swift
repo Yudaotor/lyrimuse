@@ -29,6 +29,7 @@ final class AppSettings: ObservableObject {
         static let foregroundColorHex = "np:foregroundColorHex"
         static let backgroundColorHex = "np:backgroundColorHex"
         static let lockPosition = "np:lockPosition"
+        static let hideDuringScreenCapture = "np:hideDuringScreenCapture"
     }
 
     private let defaults = UserDefaults.standard
@@ -68,6 +69,14 @@ final class AppSettings: ObservableObject {
     // "生效"这一步挪到 SettingsView.swift 的 Toggle Binding 里手动分两步调用。
     @Published var lockPosition: Bool {
         didSet { defaults.set(lockPosition, forKey: Keys.lockPosition) }
+    }
+    // sharingType 是 AppKit 官方支持的"截屏/录屏时隐藏这个窗口,但用户自己在物理屏幕上
+    // 仍然看得见"的唯一机制(ScreenCaptureKit/QuickTime 录屏/视频会议共享屏幕/screencapture
+    // 截图统统拿不到内容)。只负责持久化,原因跟 lockPosition 一样——"生效"这一步挪到
+    // AppDelegate(启动时)和 SettingsView.swift 的 Toggle Binding(运行时切换)里手动调用
+    // LyricsOverlayWindowController.shared.setHiddenFromCapture(_:)。
+    @Published var hideDuringScreenCapture: Bool {
+        didSet { defaults.set(hideDuringScreenCapture, forKey: Keys.hideDuringScreenCapture) }
     }
     // 字体族名——空字符串表示"跟随系统",对应悬浮窗原来硬编码的系统字体,不用额外
     // enum/Optional 表达"未设置",跟 relayBaseURL 的空字符串兜底是同一种写法。
@@ -129,6 +138,7 @@ final class AppSettings: ObservableObject {
         dataSourceMode = PlaybackSourceMode(rawValue: defaults.string(forKey: Keys.dataSourceMode) ?? "") ?? .relay
         showNextLinePreview = (defaults.object(forKey: Keys.showNextLinePreview) as? Bool) ?? false
         lockPosition = (defaults.object(forKey: Keys.lockPosition) as? Bool) ?? false
+        hideDuringScreenCapture = (defaults.object(forKey: Keys.hideDuringScreenCapture) as? Bool) ?? false
         fontFamilyName = defaults.string(forKey: Keys.fontFamilyName) ?? ""
         fontSize = (defaults.object(forKey: Keys.fontSize) as? Double) ?? 20
         foregroundColorHex = defaults.string(forKey: Keys.foregroundColorHex) ?? "#FFFFFFFF"

@@ -103,6 +103,17 @@ struct SettingsView: View {
                         LyricsOverlayWindowController.shared.setLocked(newValue)
                     }
                 ))
+                Toggle("截屏/录屏时隐藏", isOn: Binding(
+                    get: { settings.hideDuringScreenCapture },
+                    set: { newValue in
+                        settings.hideDuringScreenCapture = newValue
+                        LyricsOverlayWindowController.shared.setHiddenFromCapture(newValue)
+                    }
+                ))
+                Text("开启后,截图、录屏、视频会议共享屏幕都不会拍到悬浮歌词——但你自己在这台 Mac 上仍然正常看得见。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             Section("启动") {
                 Toggle("开机启动", isOn: $settings.launchAtLoginEnabled)

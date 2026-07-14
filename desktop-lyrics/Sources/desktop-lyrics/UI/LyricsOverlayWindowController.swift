@@ -64,6 +64,14 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject 
         window?.ignoresMouseEvents = locked
     }
 
+    // sharingType = .none 让这个窗口对截图/录屏/视频会议共享屏幕统统读不到内容——跟
+    // isVisible/orderOut 不是一回事,orderOut 连用户自己都看不见了,这里要的是"用户自己
+    // 仍然看得见,只是截不到"。默认 .readWrite(跟窗口原本行为完全一致,不设置这个开关的
+    // 人截图/录屏观感不变)。
+    func setHiddenFromCapture(_ hidden: Bool) {
+        window?.sharingType = hidden ? .none : .readWrite
+    }
+
     // 长歌词换行到第二行(或罗马音/译文/下一句预览同时都开着)时,内容比默认高度(120pt)
     // 需要更多空间——LyricsOverlayView 通过 GeometryReader 把实际渲染高度报上来,这里
     // 调整窗口高度去匹配,顶边固定、向下增高(用户拖到的位置是窗口顶部这块区域,不能让
