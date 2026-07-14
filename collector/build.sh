@@ -29,6 +29,20 @@ fi
 echo "==> restarting via launchd"
 launchctl kickstart -k "gui/$(id -u)/$LABEL"
 sleep 3
+if ! pgrep -f bin/collector >/dev/null 2>&1; then
+  # kickstart 有时会静默失败——launchd 给这个 job 缓存了上一次运行遗留的 LWCR
+  # (Lightweight Code Requirement)codesigning 约束,绑定的是旧二进制的 cdhash;
+  # 每次重建都是新的 codesign,cdhash 必然变化,kickstart 本身不会刷新这个约束,
+  # 新二进制会被 OS 直接拒绝启动。只有完整卸载再重新加载这个 job,才会让 launchd
+  # 丢掉旧约束、重新从 plist/二进制读起(desktop-lyrics/build.sh 实测坐实过这个
+  # 失败模式和这个修法)。
+  echo "==> kickstart produced no running process, retrying via bootout+bootstrap"
+  PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
+  launchctl bootout "gui/$(id -u)" "$PLIST" 2>/dev/null || true
+  launchctl bootstrap "gui/$(id -u)" "$PLIST"
+  launchctl kickstart -k "gui/$(id -u)/$LABEL"
+  sleep 2
+fi
 if pid=$(pgrep -f bin/collector); then
   echo "==> collector running, pid $pid"
 else
