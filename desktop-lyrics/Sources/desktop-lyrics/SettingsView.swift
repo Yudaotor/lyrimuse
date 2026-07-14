@@ -140,6 +140,13 @@ struct SettingsView: View {
                         LyricsOverlayWindowController.shared.setHiddenFromCapture(newValue)
                     }
                 ))
+                Toggle("暂停/无播放时隐藏", isOn: Binding(
+                    get: { settings.hideWhenNotPlaying },
+                    set: { newValue in
+                        settings.hideWhenNotPlaying = newValue
+                        LyricsOverlayWindowController.shared.setHideWhenNotPlaying(newValue)
+                    }
+                ))
             } header: {
                 Text("窗口")
             } footer: {

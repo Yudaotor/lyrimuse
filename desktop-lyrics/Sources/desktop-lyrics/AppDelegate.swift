@@ -16,6 +16,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         LyricsOverlayWindowController.shared.setVisible(true)
         LyricsOverlayWindowController.shared.setLocked(settings.lockPosition)
         LyricsOverlayWindowController.shared.setHiddenFromCapture(settings.hideDuringScreenCapture)
+        LyricsOverlayWindowController.shared.setHideWhenNotPlaying(settings.hideWhenNotPlaying)
 
         // 按设置里选的数据源启动对应的那一个(默认远程,保持原有行为);PlaybackCoordinator
         // 负责真正调 start()/stop(),这里不用再单独调 RelayPoller.shared.start()。

@@ -32,6 +32,7 @@ final class AppSettings: ObservableObject {
         static let backgroundColorHex = "np:backgroundColorHex"
         static let lockPosition = "np:lockPosition"
         static let hideDuringScreenCapture = "np:hideDuringScreenCapture"
+        static let hideWhenNotPlaying = "np:hideWhenNotPlaying"
     }
 
     private let defaults = UserDefaults.standard
@@ -98,6 +99,13 @@ final class AppSettings: ObservableObject {
     @Published var hideDuringScreenCapture: Bool {
         didSet { defaults.set(hideDuringScreenCapture, forKey: Keys.hideDuringScreenCapture) }
     }
+    // 暂停/没有任何曲目在播放时自动隐藏悬浮窗,恢复播放自动重新显示——跟 hideDuringScreenCapture
+    // 一样只负责持久化,"生效"这一步挪到 AppDelegate(启动时)和 SettingsView.swift 的
+    // Toggle Binding(运行时切换)里手动调用 LyricsOverlayWindowController.shared.
+    // setHideWhenNotPlaying(_:)。默认 false,保留"不管播不播放悬浮窗都一直显示"的原有行为。
+    @Published var hideWhenNotPlaying: Bool {
+        didSet { defaults.set(hideWhenNotPlaying, forKey: Keys.hideWhenNotPlaying) }
+    }
     // 字体族名——空字符串表示"跟随系统",对应悬浮窗原来硬编码的系统字体,不用额外
     // enum/Optional 表达"未设置",跟 relayBaseURL 的空字符串兜底是同一种写法。
     @Published var fontFamilyName: String {
@@ -162,6 +170,7 @@ final class AppSettings: ObservableObject {
         textShadowColorHex = defaults.string(forKey: Keys.textShadowColorHex) ?? "#000000A6"
         lockPosition = (defaults.object(forKey: Keys.lockPosition) as? Bool) ?? false
         hideDuringScreenCapture = (defaults.object(forKey: Keys.hideDuringScreenCapture) as? Bool) ?? false
+        hideWhenNotPlaying = (defaults.object(forKey: Keys.hideWhenNotPlaying) as? Bool) ?? false
         fontFamilyName = defaults.string(forKey: Keys.fontFamilyName) ?? ""
         fontSize = (defaults.object(forKey: Keys.fontSize) as? Double) ?? 20
         foregroundColorHex = defaults.string(forKey: Keys.foregroundColorHex) ?? "#FFFFFFFF"
