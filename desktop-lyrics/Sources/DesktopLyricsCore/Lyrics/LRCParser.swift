@@ -17,7 +17,15 @@ public enum LRCParser {
 
     public static func parse(_ text: String) -> [LyricLine] {
         var out: [LyricLine] = []
-        for rawLine in text.split(separator: "\n", omittingEmptySubsequences: false) {
+        // 见 YRCParser.parse 同一处注释:CRLF 换行的社区上传内容(酷狗尤其常见)会让
+        // split(separator:"\n") 按 Character 比较时把整份文本当一整行切不开。这里的
+        // 后果比 YRCParser 更隐蔽也更严重——tagRegex(找 [mm:ss.xx])没有 `^` 锚点,会在
+        // 这"一整行"里到处找到多个时间戳,但 stripped(去掉所有方括号标签后的正文)是
+        // 对整份文本只算了一次,于是每个时间戳都各自生成一条 LyricLine、但 text 字段
+        // 全部是同一份"整首歌歌词拼在一起"的巨大字符串——播放到任意一个时间戳都会把
+        // 全曲歌词当成"这一行"整个显示出来,表现正是"整个桌面都是歌词"。
+        let normalized = text.replacingOccurrences(of: "\r\n", with: "\n").replacingOccurrences(of: "\r", with: "\n")
+        for rawLine in normalized.split(separator: "\n", omittingEmptySubsequences: false) {
             let line = rawLine.trimmingCharacters(in: .whitespaces)
             guard !line.isEmpty else { continue }
             let nsLine = line as NSString

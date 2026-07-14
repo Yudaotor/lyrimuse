@@ -27,7 +27,14 @@ final class LyricsSearchService {
         // 译文/罗马音/行数纯粹是本地字段是否非空/切行数,不需要 collector 额外计算。
         var hasTranslation: Bool { !lyricsTr.isEmpty }
         var hasRomanization: Bool { !lyricsRoma.isEmpty }
-        var lineCount: Int { lyrics.split(separator: "\n", omittingEmptySubsequences: false).count }
+        // CRLF 换行(酷狗候选常见)会让 split(separator:"\n") 按 Character 比较时把整份
+        // 文本当一整行切不开——见 YRCParser/LRCParser.parse 同一处注释,这里先归一化成
+        // 纯 "\n" 再切,否则这类候选会显示成"1 行"这种明显错误的行数。
+        var lineCount: Int {
+            lyrics.replacingOccurrences(of: "\r\n", with: "\n")
+                .replacingOccurrences(of: "\r", with: "\n")
+                .split(separator: "\n", omittingEmptySubsequences: false).count
+        }
     }
 
     enum SearchError: LocalizedError {

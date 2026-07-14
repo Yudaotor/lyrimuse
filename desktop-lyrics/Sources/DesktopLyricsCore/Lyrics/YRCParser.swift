@@ -28,7 +28,15 @@ public enum YRCParser {
 
     public static func parse(_ text: String) -> [LyricLineWords] {
         var out: [LyricLineWords] = []
-        for rawLine in text.split(separator: "\n", omittingEmptySubsequences: false) {
+        // 酷狗(KRC)歌词库是社区上传内容,不同贡献者的原始文件用 Windows 风格 CRLF("\r\n")
+        // 换行的情况很常见——实测坐实约一半缓存里的酷狗 yrc 数据是 CRLF。Swift 的
+        // String 把 "\r\n" 当成*一个*扩展字形簇(grapheme cluster),`split(separator:
+        // "\n")` 按 Character 比较,单独的 "\n" 匹配不上这个复合字符,导致整份文本一条
+        // 都切不开、原样当一整行——这一整"行"的开头是 [id:...]/[ar:...] 这类元信息标签
+        // 而不是 [数字,数字],headRegex 的 `^` 锚点匹配不上,直接整份歌词解析结果为空。
+        // 归一化成纯 "\n" 后再切,才能正确按行处理。
+        let normalized = text.replacingOccurrences(of: "\r\n", with: "\n").replacingOccurrences(of: "\r", with: "\n")
+        for rawLine in normalized.split(separator: "\n", omittingEmptySubsequences: false) {
             let line = String(rawLine)
             let nsLine = line as NSString
             let fullRange = NSRange(location: 0, length: nsLine.length)
