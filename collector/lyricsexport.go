@@ -13,16 +13,24 @@ import (
 var lyricsDir string
 
 // exportLyricsFiles writes/updates a standalone .lrc file per entry that
-// currently has lyrics, one level outside enrichCache — deletes from
-// desktop-lyrics's 歌词管理 window only ever touch enrichCache/
-// enrich-cache.json, never these exported files. Only ever writes/updates,
-// never deletes: even if the user explicitly deletes a cache entry (forcing
-// a fresh re-resolve on next play), whatever was exported here for the OLD
-// content stays on disk untouched, which is the entire point — a durable
-// local archive the user can browse in Finder, independent of whatever
-// happens to the cache entry itself. Content-identical files are skipped
-// (read-then-compare) so a full sweep on every save doesn't needlessly touch
-// mtimes for the vast majority of unchanged entries.
+// currently has lyrics, one level outside enrichCache. This function itself
+// only ever writes/updates, never deletes — it's a full sweep over whatever
+// is currently in enrichCache, so an entry that's gone (deleted) from the
+// cache is simply absent from this sweep, not actively cleaned up here.
+//
+// 2026-07-14: deleting an entry via desktop-lyrics's 歌词管理 window USED TO
+// leave the already-exported file untouched on disk (deliberately, at the
+// time — the whole point was a durable archive independent of the cache
+// entry's lifecycle). The user later found that reversal counterintuitive:
+// deleting in 歌词管理 should really delete, not leave a copy the user
+// doesn't know still exists. So EnrichCacheStore.delete() (Swift side) now
+// separately removes the corresponding .lrc file itself, right after
+// removing the cache entry — this Go-side sweep function was NOT changed to
+// do that (it has no concept of "this key was just explicitly deleted" vs.
+// "this key never existed"), the deletion-cleanup responsibility lives
+// entirely in Swift. Content-identical files are skipped here (read-then-
+// compare) so a full sweep on every save doesn't needlessly touch mtimes for
+// the vast majority of unchanged entries.
 func exportLyricsFiles() {
 	if lyricsDir == "" {
 		return

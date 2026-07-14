@@ -294,7 +294,7 @@ struct LyricsManagerView: View {
             }
             Button("取消", role: .cancel) {}
         } message: {
-            Text("下次播放这首歌会重新走一遍匹配解析,不保证一定能找到一样的歌词。")
+            Text("已导出到本地的歌词文件也会一并删除,下次播放这首歌会重新走一遍匹配解析,不保证一定能找到一样的歌词。")
         }
         .sheet(isPresented: $showSearchSheet) {
             // 采纳候选直接保存,不需要再手动点"保存修改"——用户反馈选了以为就存上了,

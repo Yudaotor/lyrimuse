@@ -173,7 +173,7 @@ struct SettingsView: View {
             } header: {
                 Text("存储")
             } footer: {
-                Text("每首歌听过一次,歌词就会永久保存在本地——即使之后在「歌词管理」里删除也不影响这里已导出的文件。")
+                Text("每首歌听过一次,歌词就会永久保存在本地;在「歌词管理」里删除会同时删掉这里已导出的文件。")
             }
         }
         .formStyle(.grouped)

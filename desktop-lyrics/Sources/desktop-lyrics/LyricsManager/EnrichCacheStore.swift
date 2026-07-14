@@ -41,6 +41,8 @@ public final class EnrichCacheStore: ObservableObject {
 
     private static let cacheURL = FileManager.default.homeDirectoryForCurrentUser
         .appendingPathComponent(".config/applemusic-nowplaying/applemusic-nowplaying-enrich-cache.json")
+    private static let lyricsDir = FileManager.default.homeDirectoryForCurrentUser
+        .appendingPathComponent(".config/applemusic-nowplaying/lyrics")
     private static let collectorLabel = "com.chenyuhao.applemusic-nowplaying"
 
     private var raw: [String: [String: Any]] = [:]
@@ -147,10 +149,38 @@ public final class EnrichCacheStore: ObservableObject {
         rebuildSummaries()
     }
 
+    // 2026-07-14 之前这里"只删缓存条目、不动已导出的 .lrc 文件"是刻意设计(见
+    // collector/lyricsexport.go 的 exportLyricsFiles 注释)——当时的诉求是"存一份不受
+    // 缓存生命周期影响的归档"。用户后来反馈这个语义反直觉:「歌词管理」里点删除,预期
+    // 是真的删掉,不是留一份用户自己都不知道还在的文件。这里改成删缓存条目的同时,
+    // 一并删掉对应的已导出文件——"删除"从此在两边都是真删除,不再存在"表面删了、
+    // 磁盘上其实还留着"的分歧语义。
     public func delete(key: String) {
         raw.removeValue(forKey: key)
         persistAndRestart()
         rebuildSummaries()
+        deleteExportedLyricsFile(forKey: key)
+    }
+
+    // 跟 collector/lyricsexport.go 的 sanitizeLyricsFilename 逐字对应的 Swift 版本——
+    // 两边各自维护而不是让 Swift 调 Go 子进程,是因为这纯粹是确定性的字符替换("|"换成
+    // " - "+转义文件系统不安全字符),没有会随时间演进的业务判断,不属于"两份实现容易
+    // 走样"必须收敛成一份的那类逻辑(跟 search-lyrics 复用 scoredLyricCandidates 的
+    // 场景不同,那边是真的检索/打分逻辑)。
+    private static func sanitizeLyricsFilename(_ key: String) -> String {
+        var name = key.replacingOccurrences(of: "|", with: " - ")
+        for c in ["/", ":", "*", "?", "\"", "<", ">", "\\"] {
+            name = name.replacingOccurrences(of: c, with: "_")
+        }
+        return name.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    // 找不到文件(从没导出过,比如这条从来没有歌词)是正常情况,静默忽略——这只是清理
+    // 一份可能存在的归档副本,不是这次删除操作的主体,不值得为"文件本来就不存在"这种
+    // 预期内的情况去污染 lastError(那个留给 persistAndRestart 里真正的主体操作失败用)。
+    private func deleteExportedLyricsFile(forKey key: String) {
+        let url = Self.lyricsDir.appendingPathComponent(Self.sanitizeLyricsFilename(key) + ".lrc")
+        try? FileManager.default.removeItem(at: url)
     }
 
     private func persistAndRestart() {
