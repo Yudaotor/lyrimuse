@@ -43,8 +43,18 @@ public final class LyricsSyncEngine {
     // "明明设置了带逐字的歌词,却没看到逐字效果"——不是同步没生效,是当前播的这一行内容
     // 本来就是署名行,不是真歌词,单字缩写又没被过滤掉。这是接入酷狗/QQ逐字源(2026-07-13
     // 同一天新增)之前从未出现过的新缺口——网易云的逐字数据里署名行一直是写全称的。
+    //
+    // "关键词 by：" 这种英文写法另加一档(可选的 `by`)——实测坐实:Michael Jackson 某些
+    // 混音版(如 Earth Song (Hani's Club Experience))的酷狗 KRC 数据里,"Arranged by："
+    // 后面跟着十来个混音/编曲人名(Michael Jackson/R.Kelly/Bruce Swedien/...),被当成
+    // 逐字歌词的一整"行"时能拆出 30+ 个词——原来的正则要求关键词后紧跟冒号,"Arranged"
+    // 和"："中间夹着"by"这个词直接把匹配打断,这类署名行完全没被过滤掉,当成正常歌词行
+    // 展示,词数远超真实歌词的一行,表现成用户反馈的"整个桌面都是歌词"(WrapLayout 把
+    // 三十多个词按正常字号自动换行,行数暴增,悬浮窗的动态高度——见
+    // LyricsOverlayWindowController.updateHeight——被这一行硬撑到远超正常高度)。
+    // 顺带补了"written"(Written by：)这个原来没在关键词表里的常见署名前缀。
     private static let creditLinePattern = try! NSRegularExpression(
-        pattern: #"^(作词|作曲|编曲|制作人|监制|混音|录音|和声|吉他|贝斯|鼓|键盘|弦乐|词|曲|编|唱|录|混|监|OP|SP|lyrics|music|composed|produced|arranged|mixed|mastered)\s*[:：]"#,
+        pattern: #"^(作词|作曲|编曲|制作人|监制|混音|录音|和声|吉他|贝斯|鼓|键盘|弦乐|词|曲|编|唱|录|混|监|OP|SP|lyrics|music|composed|produced|arranged|mixed|mastered|written)\s*(by\s*)?[:：]"#,
         options: [.caseInsensitive]
     )
 
