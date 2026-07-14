@@ -87,11 +87,14 @@ struct SettingsView: View {
                                           // 不另加一根 opacity 滑杆
                 )
 
+                Toggle("文字阴影(与桌面背景区分)", isOn: $settings.textShadowEnabled)
+
                 Button("恢复默认外观") {
                     settings.fontFamilyName = ""
                     settings.fontSize = 20
                     settings.foregroundColorHex = "#FFFFFFFF"
                     settings.backgroundColorHex = "#00000000"
+                    settings.textShadowEnabled = true
                 }
                 .buttonStyle(.link)
             }

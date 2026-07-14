@@ -24,6 +24,7 @@ final class AppSettings: ObservableObject {
         static let launchAtLoginEnabled = "np:launchAtLoginEnabled"
         static let dataSourceMode = "np:dataSourceMode"
         static let showNextLinePreview = "np:showNextLinePreview"
+        static let textShadowEnabled = "np:textShadowEnabled"
         static let fontFamilyName = "np:fontFamilyName"
         static let fontSize = "np:fontSize"
         static let foregroundColorHex = "np:foregroundColorHex"
@@ -62,6 +63,12 @@ final class AppSettings: ObservableObject {
     }
     @Published var showNextLinePreview: Bool {
         didSet { defaults.set(showNextLinePreview, forKey: Keys.showNextLinePreview) }
+    }
+    // 悬浮窗背景透明,文字直接叠在桌面内容上——桌面壁纸/其它窗口文字撞色时容易糊在一起,
+    // 加个阴影提高辨识度。纯展示开关,LyricsOverlayView 每次渲染都直接读这个值,不需要
+    // 像 lockPosition/hideDuringScreenCapture 那样额外调用某个单例的方法"生效"。
+    @Published var textShadowEnabled: Bool {
+        didSet { defaults.set(textShadowEnabled, forKey: Keys.textShadowEnabled) }
     }
     // 只负责持久化,原因跟 dataSourceMode 一样——不在这里连带调
     // LyricsOverlayWindowController.shared.setLocked(_:),那样会在 AppSettings 自己的
@@ -137,6 +144,7 @@ final class AppSettings: ObservableObject {
         launchAtLoginEnabled = (defaults.object(forKey: Keys.launchAtLoginEnabled) as? Bool) ?? false
         dataSourceMode = PlaybackSourceMode(rawValue: defaults.string(forKey: Keys.dataSourceMode) ?? "") ?? .relay
         showNextLinePreview = (defaults.object(forKey: Keys.showNextLinePreview) as? Bool) ?? false
+        textShadowEnabled = (defaults.object(forKey: Keys.textShadowEnabled) as? Bool) ?? true
         lockPosition = (defaults.object(forKey: Keys.lockPosition) as? Bool) ?? false
         hideDuringScreenCapture = (defaults.object(forKey: Keys.hideDuringScreenCapture) as? Bool) ?? false
         fontFamilyName = defaults.string(forKey: Keys.fontFamilyName) ?? ""
