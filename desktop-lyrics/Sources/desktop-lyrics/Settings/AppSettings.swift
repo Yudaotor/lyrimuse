@@ -25,6 +25,7 @@ final class AppSettings: ObservableObject {
         static let dataSourceMode = "np:dataSourceMode"
         static let showNextLinePreview = "np:showNextLinePreview"
         static let textShadowEnabled = "np:textShadowEnabled"
+        static let textShadowColorHex = "np:textShadowColorHex"
         static let fontFamilyName = "np:fontFamilyName"
         static let fontSize = "np:fontSize"
         static let foregroundColorHex = "np:foregroundColorHex"
@@ -69,6 +70,18 @@ final class AppSettings: ObservableObject {
     // 像 lockPosition/hideDuringScreenCapture 那样额外调用某个单例的方法"生效"。
     @Published var textShadowEnabled: Bool {
         didSet { defaults.set(textShadowEnabled, forKey: Keys.textShadowEnabled) }
+    }
+    // #RRGGBBAA。参考 LyricsX(Controller/Preferences/PreferenceDisplayViewController.swift
+    // 的 AlphaColorWell + View/KaraokeLyricsView.swift 的 shadowColor)——那边阴影只让用户
+    // 调"颜色"(含 alpha),模糊半径/偏移量是代码里的固定常量(shadowBlurRadius=3,
+    // shadowOffset=.zero),没有做成单独的滑杆。这里跟随同一个克制的取舍:只加颜色选择器,
+    // 不加半径/偏移这类额外调节项。默认 #000000A6(黑色、alpha≈0.65)跟这个功能刚上线时
+    // 硬编码的 .black.opacity(0.65) 逐像素一致,没碰过这个新设置的人观感不变。
+    @Published var textShadowColorHex: String {
+        didSet {
+            defaults.set(textShadowColorHex, forKey: Keys.textShadowColorHex)
+            textShadowColor = Color(hexWithAlpha: textShadowColorHex, fallback: .black.opacity(0.65))
+        }
     }
     // 只负责持久化,原因跟 dataSourceMode 一样——不在这里连带调
     // LyricsOverlayWindowController.shared.setLocked(_:),那样会在 AppSettings 自己的
@@ -124,6 +137,7 @@ final class AppSettings: ObservableObject {
     @Published private(set) var foregroundColor: Color = .white
     @Published private(set) var backgroundColor: Color = .clear
     @Published private(set) var backgroundIsVisible: Bool = false
+    @Published private(set) var textShadowColor: Color = .black.opacity(0.65)
     @Published private(set) var mainFont: Font = .system(size: 20, weight: .bold)
     @Published private(set) var romanizationFont: Font = .system(size: 13, weight: .medium)
     @Published private(set) var translationFont: Font = .system(size: 14, weight: .regular)
@@ -145,6 +159,7 @@ final class AppSettings: ObservableObject {
         dataSourceMode = PlaybackSourceMode(rawValue: defaults.string(forKey: Keys.dataSourceMode) ?? "") ?? .relay
         showNextLinePreview = (defaults.object(forKey: Keys.showNextLinePreview) as? Bool) ?? false
         textShadowEnabled = (defaults.object(forKey: Keys.textShadowEnabled) as? Bool) ?? true
+        textShadowColorHex = defaults.string(forKey: Keys.textShadowColorHex) ?? "#000000A6"
         lockPosition = (defaults.object(forKey: Keys.lockPosition) as? Bool) ?? false
         hideDuringScreenCapture = (defaults.object(forKey: Keys.hideDuringScreenCapture) as? Bool) ?? false
         fontFamilyName = defaults.string(forKey: Keys.fontFamilyName) ?? ""
@@ -158,5 +173,6 @@ final class AppSettings: ObservableObject {
         foregroundColor = Color(hexWithAlpha: foregroundColorHex, fallback: .white)
         backgroundColor = Color(hexWithAlpha: backgroundColorHex, fallback: .clear)
         backgroundIsVisible = (NSColor(hexStringWithAlpha: backgroundColorHex)?.alphaComponent ?? 0) > 0.02
+        textShadowColor = Color(hexWithAlpha: textShadowColorHex, fallback: .black.opacity(0.65))
     }
 }

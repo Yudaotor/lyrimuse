@@ -89,12 +89,25 @@ struct SettingsView: View {
 
                 Toggle("文字阴影(与桌面背景区分)", isOn: $settings.textShadowEnabled)
 
+                if settings.textShadowEnabled {
+                    ColorPicker(
+                        "阴影颜色",
+                        selection: Binding(
+                            get: { settings.textShadowColor },
+                            set: { settings.textShadowColorHex = $0.hexStringWithAlpha }
+                        ),
+                        supportsOpacity: true // 参考 LyricsX:阴影只让选颜色(含 alpha),
+                                              // 模糊半径/偏移是固定常量,不额外加调节项
+                    )
+                }
+
                 Button("恢复默认外观") {
                     settings.fontFamilyName = ""
                     settings.fontSize = 20
                     settings.foregroundColorHex = "#FFFFFFFF"
                     settings.backgroundColorHex = "#00000000"
                     settings.textShadowEnabled = true
+                    settings.textShadowColorHex = "#000000A6"
                 }
                 .buttonStyle(.link)
             }

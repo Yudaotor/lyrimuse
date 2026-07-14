@@ -86,7 +86,7 @@ struct LyricsOverlayView: View {
                     .font(settings.romanizationFont)
                     .foregroundStyle(settings.foregroundColor.opacity(0.6))
                     .fixedSize(horizontal: false, vertical: true) // 允许换行时如实撑高,不被裁掉
-                    .lyricsTextShadow(settings.textShadowEnabled)
+                    .lyricsTextShadow(settings.textShadowEnabled, color: settings.textShadowColor)
             }
             mainLine
             if settings.showTranslation, let tr = poller.currentLine?.translation {
@@ -94,14 +94,14 @@ struct LyricsOverlayView: View {
                     .font(settings.translationFont)
                     .foregroundStyle(settings.foregroundColor.opacity(0.75))
                     .fixedSize(horizontal: false, vertical: true)
-                    .lyricsTextShadow(settings.textShadowEnabled)
+                    .lyricsTextShadow(settings.textShadowEnabled, color: settings.textShadowColor)
             }
             if settings.showNextLinePreview, let next = poller.nextLineText {
                 Text(next)
                     .font(settings.previewFont)
                     .foregroundStyle(settings.foregroundColor.opacity(0.4))
                     .fixedSize(horizontal: false, vertical: true)
-                    .lyricsTextShadow(settings.textShadowEnabled)
+                    .lyricsTextShadow(settings.textShadowEnabled, color: settings.textShadowColor)
             }
         }
         .padding(.horizontal, 20)
@@ -162,12 +162,12 @@ struct LyricsOverlayView: View {
                 .font(settings.mainFont)
                 .foregroundStyle(settings.foregroundColor)
                 .fixedSize(horizontal: false, vertical: true)
-                .lyricsTextShadow(settings.textShadowEnabled)
+                .lyricsTextShadow(settings.textShadowEnabled, color: settings.textShadowColor)
         } else {
             Text("♪")
                 .font(settings.mainFont)
                 .foregroundStyle(settings.foregroundColor.opacity(0.3))
-                .lyricsTextShadow(settings.textShadowEnabled)
+                .lyricsTextShadow(settings.textShadowEnabled, color: settings.textShadowColor)
         }
     }
 
@@ -206,7 +206,7 @@ struct LyricsOverlayView: View {
             // 故意不再包 .animation(...)——TimelineView(.animation) 已经在按渲染帧频
             // 重算真值,这里再叠一层 SwiftUI Animation 补间只会重新引入上面注释里那套
             // 矢量叠加问题。
-            .lyricsTextShadow(settings.textShadowEnabled)
+            .lyricsTextShadow(settings.textShadowEnabled, color: settings.textShadowColor)
     }
 
     // 过渡带 [left, right] 以这个字真实的(未夹到 [0,1] 的)进度为中心,可能整段落在
@@ -244,16 +244,17 @@ struct LyricsOverlayView: View {
     }
 }
 
-// 悬浮窗背景透明、文字直接叠在桌面内容上,颜色/内容对不上时容易糊在一起——加一圈黑色阴影
-// 提高辨识度,是字幕类悬浮显示的常见做法。固定用黑色而不是跟着 foregroundColor 走:这个
-// 效果是为了对抗"任意桌面内容"的对比度,不是配合用户选的文字颜色本身,而且默认文字色是
-// 白色,黑色阴影是最常见、最不容易出岔子的组合。没有做成可调的强度/颜色——用户只要"能不能
-// 加个阴影",不需要额外的调节项。
+// 悬浮窗背景透明、文字直接叠在桌面内容上,颜色/内容对不上时容易糊在一起——加一圈阴影
+// 提高辨识度,是字幕类悬浮显示的常见做法。颜色可配置(参考 LyricsX 的
+// PreferenceDisplayViewController+KaraokeLyricsView.swift:阴影只让用户调"颜色"含 alpha,
+// 模糊半径/偏移量是代码里的固定常量,没有做成单独的滑杆)——这里同样只把颜色开放成设置项
+// (AppSettings.textShadowColor),半径(3)和偏移(x:0,y:1)继续留作固定常量。
 private struct OptionalTextShadow: ViewModifier {
     let enabled: Bool
+    let color: Color
     func body(content: Content) -> some View {
         if enabled {
-            content.shadow(color: .black.opacity(0.65), radius: 3, x: 0, y: 1)
+            content.shadow(color: color, radius: 3, x: 0, y: 1)
         } else {
             content
         }
@@ -261,8 +262,8 @@ private struct OptionalTextShadow: ViewModifier {
 }
 
 private extension View {
-    func lyricsTextShadow(_ enabled: Bool) -> some View {
-        modifier(OptionalTextShadow(enabled: enabled))
+    func lyricsTextShadow(_ enabled: Bool, color: Color) -> some View {
+        modifier(OptionalTextShadow(enabled: enabled, color: color))
     }
 }
 
