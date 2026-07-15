@@ -1,4 +1,5 @@
 /web/
+/feishu-bot/
 /bin/
 .wrangler/
 node_modules/

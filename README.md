@@ -4,7 +4,30 @@
 
 线上页：https://yudaotor.github.io/nowplaying/?user=yudaotor （仓库 github.com/Yudaotor/nowplaying，web/index.html 的独立 git 仓，公开）
 
-本目录其余部分(collector/feishu-bot/state-worker/badge-worker/worker/launchd)另在私有仓库 github.com/Yudaotor/nowplaying-backend 版本控制；`web/` 已加进 `.gitignore`，两个仓库互不影响。
+本目录其余部分(collector/state-worker/badge-worker/worker/launchd)另在私有仓库 github.com/Yudaotor/nowplaying-backend 版本控制；`web/` 已加进 `.gitignore`，两个仓库互不影响。飞书动态签名卡片(`feishu-bot`)是完全独立的小工具，跟 collector 没有代码耦合，已拆成单独的私有仓库 github.com/Yudaotor/feishu-bot，同样加进了 `.gitignore`。
+
+## 功能一览
+
+作为一个整体的 Apple Music 配套软件，这些是它目前支持的能力。除了核心追踪/提交（存在的根本意义，不可关）和三个常驻部署的 Cloudflare Worker（跟本机进程无关，本机没有开关能控制它们本身），其余都能在 desktop-lyrics 的「设置」窗口按开关单独打开/关闭（改完自动写共享文件+重启 collector，见 `collector/features.go`/`desktop-lyrics/Sources/desktop-lyrics/Settings/FeatureSettingsStore.swift`）。
+
+| 功能 | 一句话说明 | 实现子系统 | 怎么开关 |
+|---|---|---|---|
+| ListenBrainz 提交 | 提交 playing_now/listen，是整个项目存在的根本意义 | `collector/` | 始终开启；要关掉就是卸载/停用整个 collector |
+| 展示页「正在播放」 | 网页显示当前/历史播放 | `collector/` + `state-worker/` + `web/` | 展示页本身常驻部署，不经本机控制 |
+| 状态中继(国内加速) | 采集器把当前状态推进 KV，网页优先读它、拿不到才回退直连 LB | `collector/` + `state-worker/` | 设置里「推送状态到网页/徽章」开关 + `config.json` 填 `state_relay_url` |
+| GitHub 动态徽章 | README 里的实时 SVG 徽章 | `badge-worker/`(读 state-worker) | 常驻部署，本机不可控；依赖上面「状态中继」有没有新鲜数据 |
+| 飞书动态签名卡片 | 飞书个性签名/消息粘链接时显示当前歌 | 独立仓库 [`Yudaotor/feishu-bot`](https://github.com/Yudaotor/feishu-bot)(私有) + `worker/`(302 跳转) | 设置里「飞书动态签名卡片」开关(直接装/卸这个独立守护进程) |
+| 悬浮歌词窗口 | 桌面浮层实时显示当前歌词，支持逐字高亮 | `desktop-lyrics/` | 菜单栏「显示悬浮歌词」 |
+| 歌词管理窗口 | 查看/手改/删除/重新搜索候选每首歌的歌词 | `desktop-lyrics/` | 菜单栏「歌词管理…」 |
+| 封面/主色/平台跳转链接 | 抓封面(网易云/QQ 兜底)、算主色、拼 Apple/QQ/Spotify 跳转链接 | `collector/enrich.go` | 设置里「封面/主色/平台跳转链接」开关 |
+| 歌词多源解析 | 网易云/QQ音乐/酷狗/LRCLIB 四源都查一遍、取打分最高的 | `collector/enrich.go` | 设置里「歌词解析」开关 |
+| 歌词文件夹作为权威源 | `~/.config/applemusic-nowplaying/lyrics/` 下的纯文本文件可以直接手改，collector 重启时导入生效 | `collector/lyricsimport.go`/`lyricsexport.go` | 设置里「歌词文件夹作为权威源」开关 |
+| 专辑预取 | 换歌时顺手把同专辑其它还没解析过的曲目丢到后台解析 | `collector/albumprefetch.go` | 设置里「换歌时预取同专辑其它曲目」开关 |
+| iPhone 播放桥接 | 把 iPhone 上经 Last.fm(FastScrobbler)记录的播放转发进 ListenBrainz | `collector/poller.go`(`bridge`) | 设置里开关 + `config.json` 填 `lastfm_user`/`lastfm_api_key` |
+| Mac 播放同步进 Last.fm | 反向把 Mac 播放也镜像写进 Last.fm，让 Last.fm 上有完整历史 | `collector/lastfm.go` | 设置里开关 + `config.json` 填 `lastfm_scrobble_*` 三项 |
+| 每周听歌小结 | 每周 Last.fm 图表收官时推一条 Bark 通知 | `collector/weekly.go` | 设置里开关 + 依赖 Last.fm 凭据 + `bark_url` |
+| 历史 Top10 歌手统计 | 一天算一次，推给网页展示 | `collector/topartists.go` | 设置里开关 + 依赖 Last.fm 凭据 + `state_relay_url` |
+| 故障告警 | media-control/状态中继连续失败时推 Bark 通知 | `collector/alerter.go` | 设置里开关 + `config.json` 填 `bark_url` |
 
 ```
 Mac 采集器(Go, launchd 常驻)
@@ -19,17 +42,15 @@ Mac 采集器(Go, launchd 常驻)
 
 （曾尝试用腾讯云 EdgeOne Pages 做同样的中转，边缘函数已写好也验证过能跑，但免备案部署的默认域名对中国大陆访问一律 401（这是产品限制，不是慢，见记忆笔记 `edgeone-pages-china-acceleration-proxy`），要大陆能访问必须 ICP 备案自定义域，权衡后放弃，相关代码/部署已于 2026-07-08 下线。）
 
-飞书个性签名 / 消息里动态卡片（不点链接就显示当前歌）：
+飞书个性签名 / 消息里动态卡片（不点链接就显示当前歌）——`feishu-bot` 已拆成独立仓库 [`Yudaotor/feishu-bot`](https://github.com/Yudaotor/feishu-bot)（部署方式见那边的 README），这里只保留跟本仓库 `worker/` 有关的那部分架构：
 
 ```
 飞书客户端粘贴链接 test-0703.cyh-937ae0.workers.dev/np
   └─ 命中「链接预览」应用(cli_aacda2c62bf7dcff) URL 规则
-       └─ 飞书经【长连接】回调 feishu-bot(Go, launchd 常驻)
+       └─ 飞书经【长连接】回调 feishu-bot(独立仓库，Go, launchd 常驻)
             └─ 读 ListenBrainz playing-now → 返回 Inline{i18n_title[, image_key]}
 Worker(test-0703.cyh-937ae0.workers.dev) 只负责：人点链接时 302 跳转到展示页；URL 规则字符串匹配（飞书不回源抓它）
 ```
-
-为什么用长连接而非公网回调：飞书国内服务器访问 Cloudflare workers.dev 回调 3 秒超时，长连接由 bot 主动外连、无需公网 inbound。踩坑细节见记忆笔记 `feishu-dynamic-signature-via-link-preview-longconn`。
 
 ## 内部子系统与密钥用途一览
 
@@ -38,7 +59,7 @@ Worker(test-0703.cyh-937ae0.workers.dev) 只负责：人点链接时 302 跳转�
 | `collector/` | 这台 Mac，launchd 常驻(Go) | 唯一的数据源头：读 media-control，提交 playing_now/listen 给 LB，同时把富状态(封面/主色/歌词/进度/链接)推进 `state-worker` 的 KV | 只写不读 |
 | `state-worker/` | Cloudflare Worker（`np.yudaotor.me`） | 网页的主数据源：`/now`(读KV,过期/为空则兜底直连LB)、`/history`(直接读LB)、`/cover`+`/share`(社交解链用) | ✅ `fromLB()`/`lbHistory()` |
 | `web/index.html` | GitHub Pages（独立仓 `Yudaotor/nowplaying`） | 展示页；主读 `state-worker`，`state-worker`本身也连不上时才直连 LB 兜底 | ✅ 自己的 `fromLB`/历史映射(见下) |
-| `feishu-bot/` | 这台 Mac，launchd 常驻(Go) | 飞书长连接，应答 `url.preview.get` 拼预览卡片；配置了 `state_relay_url` 就优先读 state-worker 的 `/now`(国内可达、自带封面)，失败/未配置才退回直连 LB+iTunes | ✅ `nowPlaying()`（relay 命中时不读 LB，直连兜底才读） |
+| `feishu-bot` | 独立仓库 [`Yudaotor/feishu-bot`](https://github.com/Yudaotor/feishu-bot)（私有），这台 Mac 上 launchd 常驻(Go) | 飞书长连接，应答 `url.preview.get` 拼预览卡片；配置了 `state_relay_url` 就优先读 state-worker 的 `/now`(国内可达、自带封面)，失败/未配置才退回直连 LB+iTunes | ✅ `nowPlaying()`（relay 命中时不读 LB，直连兜底才读） |
 | `worker/`（`test-0703`） | Cloudflare Worker | 飞书签名里粘的链接被真人点开时的 302 跳转；**不再**处理 Feishu 回调、不解析 LB，纯静态跳转 | 否（已在 2026-07-08 简化掉） |
 | `badge-worker/` | Cloudflare Worker | GitHub README 里的动态 SVG 徽章；读 `state-worker` 的 `/now`(已归一化好的数据)，不直连 LB | 否，依赖 state-worker 的契约 |
 | `desktop-lyrics/` | 这台 Mac，用户手动/开机启动的前台 GUI(Swift) | 菜单栏 + 悬浮歌词窗口；轮询 `state-worker` 的 `/now`，跟网页版同一份契约 | 否，依赖 state-worker 的契约 |
@@ -97,23 +118,9 @@ launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.chenyuhao.applemusic
 
 ## 部署飞书 bot（可选）
 
-只用来在飞书个性签名/消息里显示动态卡片，跳过不影响采集器和展示页。
-
-```bash
-cd feishu-bot && go build -o ../bin/feishu-bot .
-mkdir -p ~/.config/applemusic-nowplaying
-cp feishu.example.json ~/.config/applemusic-nowplaying/feishu.json
-chmod 600 ~/.config/applemusic-nowplaying/feishu.json
-# 编辑 feishu.json：feishu_app_id/feishu_app_secret/listenbrainz_user 必填
-# state_relay_url 可选但建议填(如 https://np.yudaotor.me)：配置后优先读 state-worker 的
-# /now(国内可达、自带封面)，不配就退回直连 LB+iTunes(见"内部子系统"表格)
-
-cp launchd/com.chenyuhao.applemusic-feishu-bot.plist ~/Library/LaunchAgents/
-launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.chenyuhao.applemusic-feishu-bot.plist
-# 日志: ~/Library/Logs/applemusic-feishu-bot.log
-```
-
-飞书应用需开启「链接预览」能力并配置长连接，踩坑细节见上文与记忆笔记 `feishu-dynamic-signature-via-link-preview-longconn`。
+只用来在飞书个性签名/消息里显示动态卡片，跳过不影响采集器和展示页。这部分已拆到独立仓库
+[`Yudaotor/feishu-bot`](https://github.com/Yudaotor/feishu-bot)（私有），部署方式、配置说明、
+长连接原理见那边的 README，不在这里重复一遍。
 
 ## 部署 Worker（state-worker / badge-worker / worker）
 
