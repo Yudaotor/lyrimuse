@@ -16,7 +16,6 @@
 | 展示页「正在播放」 | 网页显示当前/历史播放 | `collector/` + `state-worker/` + `web/` | 展示页本身常驻部署，不经本机控制 |
 | 状态中继(国内加速) | 采集器把当前状态推进 KV，网页优先读它、拿不到才回退直连 LB | `collector/` + `state-worker/` | 设置里「推送状态到网页/徽章」开关 + `config.json` 填 `state_relay_url` |
 | GitHub 动态徽章 | README 里的实时 SVG 徽章 | `badge-worker/`(读 state-worker) | 常驻部署，本机不可控；依赖上面「状态中继」有没有新鲜数据 |
-| 飞书动态签名卡片 | 飞书个性签名/消息粘链接时显示当前歌 | 独立仓库 [`Yudaotor/feishu-bot`](https://github.com/Yudaotor/feishu-bot)(私有) + `worker/`(302 跳转) | 设置里「飞书动态签名卡片」开关(直接装/卸这个独立守护进程) |
 | 悬浮歌词窗口 | 桌面浮层实时显示当前歌词，支持逐字高亮 | `desktop-lyrics/` | 菜单栏「显示悬浮歌词」 |
 | 歌词管理窗口 | 查看/手改/删除/重新搜索候选每首歌的歌词 | `desktop-lyrics/` | 菜单栏「歌词管理…」 |
 | 封面/主色/平台跳转链接 | 抓封面(网易云/QQ 兜底)、算主色、拼 Apple/QQ/Spotify 跳转链接 | `collector/enrich.go` | 设置里「封面/主色/平台跳转链接」开关 |
@@ -136,7 +135,30 @@ launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.chenyuhao.applemusic
 cd state-worker && npm run deploy   # 或 badge-worker / worker，命令一样
 ```
 
-首次在新机器上部署，`state-worker`/`badge-worker` 用不到 `wrangler secret put`(`PUSH_TOKEN` 等)之外的额外步骤；`wrangler.toml` 里的 `[vars]`/`[[kv_namespaces]]` 已经提交，不含密钥。
+在已经搭好的 Cloudflare 账号上重新发布代码改动，`state-worker`/`badge-worker` 用不到 `wrangler secret put`(`PUSH_TOKEN` 等)之外的额外步骤；`wrangler.toml` 里的 `[vars]`/`[[kv_namespaces]]` 已经提交，不含密钥。
+
+### 从零搭建 state-worker（新 Cloudflare 账号/新机器）
+
+上面这条 `npm run deploy` 假设 Cloudflare 账号、KV 命名空间、自定义域名路由都已经配好——`wrangler.toml` 里提交的 `[[kv_namespaces]]` 的 `id`、`[[routes]]` 的 `np.yudaotor.me` 都是这次一次性搭建的产物。真要在一个全新的 Cloudflare 账号上从零搭一遍，完整步骤：
+
+1. 注册 Cloudflare 账号（免费额度足够：KV 每天 1000 次写/10 万次读）。
+2. 把要用的域名（如这里的 `yudaotor.me`）的 DNS 托管迁移到这个 Cloudflare 账号——`[[routes]]` 的自定义域名路由要求域名的 zone 已经在同一账号下，否则这一步会失败。
+3. `npx wrangler login` 授权 CLI 登录这个账号。
+4. 建 KV 命名空间：`npx wrangler kv namespace create NP_STATE`，把返回的 `id` 填进 `state-worker/wrangler.toml` 的 `[[kv_namespaces]]`（现在提交的这份 id 就是这一步的产物，换账号需要生成一个新的）。
+5. 确认/改 `wrangler.toml` 的 `[[routes]]` 域名为你自己的域名（不需要额外操作，`custom_domain = true` 首次 `deploy` 时会自动在 Cloudflare 里建好这条自定义域名绑定，前提是第 2 步的 DNS 托管已经生效）。
+6. 设置两个 secret（`wrangler.toml` 里只留了变量名的注释，值不提交进仓库）：
+   ```bash
+   cd state-worker
+   npx wrangler secret put PUSH_TOKEN   # 采集器 POST /push、/top-artists 用的鉴权 token，随机生成一串即可
+   npx wrangler secret put ADMIN_TOKEN  # 站长手动 POST /comments/delete 删留言用，跟 PUSH_TOKEN 不是同一个
+   ```
+7. `npm run deploy`。
+8. 采集器这边 `~/.config/applemusic-nowplaying/config.json` 填两项，跟第 6 步的 `PUSH_TOKEN` 对上：
+   ```json
+   "state_relay_url": "https://np.yudaotor.me",
+   "state_relay_token": "跟 PUSH_TOKEN 相同的值"
+   ```
+   填完后设置里打开「推送状态到网页/徽章」开关（或重启 collector 让 `config.json` 生效），采集器就会开始往这个 KV 推状态，网页/徽章会自动读到。
 
 ## 展示页
 
