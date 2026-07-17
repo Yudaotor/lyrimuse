@@ -105,7 +105,24 @@ public final class LocalPlaybackSource: ObservableObject {
                 (MediaControlClient.fetchSnapshot(), AppleMusicPositionClient.fetchPositionSeconds())
             }.value
             guard let snapshot else {
-                logger.error("snapshot failed (media-control 不可用或解析失败)")
+                // media-control 返回 nil 不只是"调用失败",更常见的是真的没有任何曲目在
+                // 加载(比如 Music.app 处于 stopped 而不是 paused——paused 时 media-control
+                // 仍会给一个 playing=false 的正常快照,只有"压根没曲目"才会是 nil)。这里
+                // 之前只打日志就直接 return,不碰任何 @Published 状态——一旦从"正在播放"
+                // 变成这种 nil 快照,isPlayingNow/currentLine 全部卡在停播前那一刻,状态栏
+                // /悬浮窗会一直显示"还在播"的样子,不会自己恢复(2026-07-18 真机实测坐实:
+                // 完全停止播放后状态栏歌词卡死不消失)。现在补上跟 apply() 里"暂停"分支
+                // 完全一致的清理(anchor=nil 时清 currentLine/nextLineText+停快速计时器),
+                // 只是多加了 isPlayingNow=false——title/artist/album 不清空,跟"暂停"时
+                // 保留最近播放信息的既有行为保持一致。
+                logger.error("snapshot failed (media-control 不可用或解析失败,或者没有曲目在播放)")
+                if isPlayingNow {
+                    isPlayingNow = false
+                    anchor = nil
+                    currentLine = nil
+                    nextLineText = nil
+                    stopFastTimer()
+                }
                 return
             }
             logger.debug("snapshot ok: playing=\(snapshot.playing == true) livePos=\(livePosition != nil)")
