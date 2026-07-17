@@ -106,6 +106,7 @@ struct SettingsView: View {
             List(selection: $selection) {
                 sidebarLabel(.lyrics)
                 sidebarLabel(.appearance)
+                sidebarLabel(.general)
 
                 Section("账号连接") {
                     ForEach(AccountDestination.allCases) { destination in
@@ -113,8 +114,6 @@ struct SettingsView: View {
                             .tag(SettingsSidebarItem.account(destination))
                     }
                 }
-
-                sidebarLabel(.general)
             }
             .listStyle(.sidebar)
             .navigationSplitViewColumnWidth(min: 170, ideal: 190, max: 220)
