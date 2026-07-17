@@ -11,6 +11,7 @@ set -euo pipefail
 
 cd "$(dirname "$0")" # desktop-lyrics/
 BIN="$(cd .. && pwd)/bin/desktop-lyrics"
+LABEL="com.chenyuhao.applemusic-desktop-lyrics"
 
 echo "==> building (release)"
 swift build -c release
@@ -23,7 +24,16 @@ cp ".build/release/desktop-lyrics" "$BIN"
 # `swift build --arch x86_64` 产物直接验证过:codesign -v 确实报
 # "code object is not signed at all",补签 `codesign -s - --force` 后签名有效,
 # 用 Rosetta 也能正常跑起来——不是纯理论推测,不管哪种架构都能过关)。
-codesign -s - --force "$BIN"
+#
+# --identifier 固定成这个 launchd label 同款字符串,不让 codesign 自己按内容生成
+# identifier——2026-07-18 加自动化权限(Automation)功能时实测坐实:不传 --identifier,
+# codesign 会按二进制编译出的内容自动生成一串"desktop-lyrics-<hash>"式 identifier,
+# 内容真的变了(哪怕只是加一行代码)hash 就跟着变,而 TCC 的自动化权限授权记录是按
+# 这个 identifier 认的——意味着不固定的话,每次有实质代码改动的正式发布都会让系统
+# 认成一个"新 App",之前用户点过的"允许"授权会失效、下次用到时又要重新弹一次系统
+# 授权对话框。显式传 --identifier 之后实测验证过:哪怕改代码重新构建,identifier 也
+# 保持不变(只跟这个参数本身有关,不再按内容重算)。
+codesign -s - --force --identifier "$LABEL" "$BIN"
 codesign -v "$BIN" && echo "    signature valid"
 
 if [ "${1:-}" = "--no-restart" ]; then
@@ -31,7 +41,6 @@ if [ "${1:-}" = "--no-restart" ]; then
   exit 0
 fi
 
-LABEL="com.chenyuhao.applemusic-desktop-lyrics"
 PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
 if launchctl list "$LABEL" >/dev/null 2>&1; then
   # 开机启动开关已经在菜单里打开过、这份 job 归 launchd 管——用 kickstart 让 launchd

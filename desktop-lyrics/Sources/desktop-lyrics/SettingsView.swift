@@ -170,6 +170,7 @@ private struct LyricsSettingsTab: View {
     @ObservedObject private var local = LocalPlaybackSource.shared
     @ObservedObject private var features = FeatureSettingsStore.shared
     @Environment(\.openWindow) private var openWindow
+    @State private var showAutomationDeniedAlert = false
 
     var body: some View {
         Form {
@@ -200,7 +201,24 @@ private struct LyricsSettingsTab: View {
                         }
                     ))
                     .textFieldStyle(.roundedBorder)
+                } else if settings.dataSourceMode == .local {
+                    Toggle(L10n.t("精确追踪 Apple Music 播放进度"), isOn: Binding(
+                        get: { settings.preciseAppleMusicPosition },
+                        set: setPrecisePosition
+                    ))
+                    Text(L10n.t("需要系统「自动化」权限允许控制 Music.app；没有这个权限也能正常使用，播放进度会改用估算值，可能有 1-2 秒误差。"))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
+            }
+            .alert(
+                L10n.t("还没有自动化权限"),
+                isPresented: $showAutomationDeniedAlert
+            ) {
+                Button(L10n.t("打开系统设置")) { NSWorkspace.shared.open(MusicAutomationPermission.systemSettingsURL) }
+                Button(L10n.t("取消"), role: .cancel) {}
+            } message: {
+                Text(L10n.t("请先在系统设置的「自动化」里允许 desktop-lyrics 控制 Music.app，再回来打开这个开关。"))
             }
 
             Section(L10n.t("解析")) {
@@ -438,6 +456,23 @@ private struct LyricsSettingsTab: View {
         features.lyricsSourceOrder.swapAt(i, j)
         Task { await features.save() }
     }
+
+    // 打开时才校验权限、没通过就弹窗提示——跟 AccountLinkingTab 里账号前置条件校验
+    // 同一种"点了才校验"的语言,不做静态常驻的 disabled/hint。关闭这个开关不需要任何
+    // 权限,始终允许。
+    private func setPrecisePosition(_ enabled: Bool) {
+        guard enabled else {
+            settings.preciseAppleMusicPosition = false
+            local.preciseAppleMusicPosition = false
+            return
+        }
+        guard MusicAutomationPermission.check(askIfNeeded: true).isAuthorized else {
+            showAutomationDeniedAlert = true
+            return
+        }
+        settings.preciseAppleMusicPosition = true
+        local.preciseAppleMusicPosition = true
+    }
 }
 
 private struct AppearanceSettingsTab: View {
@@ -592,9 +627,35 @@ private struct AppearanceSettingsTab: View {
 
 private struct GeneralSettingsTab: View {
     @ObservedObject private var settings = AppSettings.shared
+    // 只在 .onAppear 和每次操作后重新查一次(askIfNeeded: false,不会弹窗,纯读状态)——
+    // 不是 @Published,系统层面的权限变化(比如用户自己去系统设置里手动改)不会主动
+    // 推送通知回来,只能在这个页面被看到的时候被动刷新一次。
+    @State private var automationStatus: MusicAutomationPermissionStatus = .notDetermined
 
     var body: some View {
         Form {
+            Section(L10n.t("权限")) {
+                HStack {
+                    Label {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(L10n.t("Apple Music 自动化"))
+                            Text(automationStatusCaption)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    } icon: {
+                        Image(systemName: automationStatusIconName)
+                            .foregroundStyle(automationStatusIconColor)
+                    }
+                    Spacer()
+                    Button(automationActionTitle) { handleAutomationAction() }
+                }
+                Text(L10n.t("采集器（collector）在「专辑预取」等功能里会单独用到自己的一份自动化权限，是完全独立的系统授权，跟上面这一项是两次不同的系统弹窗；如果专辑预取没有生效，可以去系统设置里检查一下。"))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .onAppear { automationStatus = MusicAutomationPermission.check(askIfNeeded: false) }
+
             Section(L10n.t("语言")) {
                 // 下拉菜单而不是分段控件——分段控件的宽度会随选项数线性变宽,以后再加
                 // 语言(繁体中文/日语等)容易挤爆这一行;下拉菜单不管加多少个选项,这一行
@@ -611,5 +672,43 @@ private struct GeneralSettingsTab: View {
             }
         }
         .formStyle(.grouped)
+    }
+
+    private var automationStatusCaption: String {
+        switch automationStatus {
+        case .authorized: return L10n.t("已授权")
+        case .denied: return L10n.t("已拒绝")
+        case .notDetermined: return L10n.t("未授权")
+        }
+    }
+
+    private var automationStatusIconName: String {
+        switch automationStatus {
+        case .authorized: return "checkmark.circle.fill"
+        case .denied: return "xmark.circle.fill"
+        case .notDetermined: return "questionmark.circle.fill"
+        }
+    }
+
+    private var automationStatusIconColor: Color {
+        switch automationStatus {
+        case .authorized: return .green
+        case .denied: return .red
+        case .notDetermined: return .orange
+        }
+    }
+
+    // 还没问过才提供"请求权限"(会真的弹系统对话框);已经有结果(不管授权还是拒绝)
+    // 系统不会重复弹窗,只能引导去系统设置——两种情况下按钮都跳转同一个面板。
+    private var automationActionTitle: String {
+        automationStatus == .notDetermined ? L10n.t("请求权限") : L10n.t("打开系统设置")
+    }
+
+    private func handleAutomationAction() {
+        if automationStatus == .notDetermined {
+            automationStatus = MusicAutomationPermission.check(askIfNeeded: true)
+        } else {
+            NSWorkspace.shared.open(MusicAutomationPermission.systemSettingsURL)
+        }
     }
 }

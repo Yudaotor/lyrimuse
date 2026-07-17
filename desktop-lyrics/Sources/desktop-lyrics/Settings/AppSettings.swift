@@ -41,6 +41,8 @@ final class AppSettings: ObservableObject {
         // 只写(负责持久化+驱动"通用"tab 的语言 Picker),两处各自独立实现,不要互相
         // import,理由见 L10n.swift 顶部注释(L10n 不依赖 @MainActor 的 AppSettings)。
         static let appLanguage = "np:appLanguage"
+        static let preciseAppleMusicPosition = "np:preciseAppleMusicPosition"
+        static let hasShownAutomationOnboarding = "np:hasShownAutomationOnboarding"
     }
 
     private let defaults = UserDefaults.standard
@@ -131,6 +133,20 @@ final class AppSettings: ObservableObject {
     @Published var appLanguage: String {
         didSet { defaults.set(appLanguage, forKey: Keys.appLanguage) }
     }
+    // 是否尝试用"自动化"权限问 Music.app 要精确到 ~0.1s 的播放位置(见
+    // AppleMusicPositionClient)——默认开(保持这个功能上线以来一直无条件尝试的行为
+    // 不变),关掉就直接跳过这次尝试、退回 media-control 的估算进度(等同于"这次调用
+    // 失败了"的既有回退路径,不需要改那条路径本身)。这个开关本身不受权限状态影响、
+    // 随时能切;真正会不会成功仍然取决于 MusicAutomationPermission 那份系统授权。
+    @Published var preciseAppleMusicPosition: Bool {
+        didSet { defaults.set(preciseAppleMusicPosition, forKey: Keys.preciseAppleMusicPosition) }
+    }
+    // 首次启动的自动化权限引导框只弹一次——不管用户当时选的是"请求权限"还是"以后
+    // 再说",都会置为 true,之后随时能在设置里的"权限"分区自己再看/再请求,不会被
+    // 这个启动引导反复打扰。
+    @Published var hasShownAutomationOnboarding: Bool {
+        didSet { defaults.set(hasShownAutomationOnboarding, forKey: Keys.hasShownAutomationOnboarding) }
+    }
     // 字体族名——空字符串表示"跟随系统",对应悬浮窗原来硬编码的系统字体,不用额外
     // enum/Optional 表达"未设置",跟 relayBaseURL 的空字符串兜底是同一种写法。
     @Published var fontFamilyName: String {
@@ -209,6 +225,8 @@ final class AppSettings: ObservableObject {
         hideDuringScreenCapture = (defaults.object(forKey: Keys.hideDuringScreenCapture) as? Bool) ?? false
         hideWhenNotPlaying = (defaults.object(forKey: Keys.hideWhenNotPlaying) as? Bool) ?? false
         appLanguage = defaults.string(forKey: Keys.appLanguage) ?? "system"
+        preciseAppleMusicPosition = (defaults.object(forKey: Keys.preciseAppleMusicPosition) as? Bool) ?? true
+        hasShownAutomationOnboarding = (defaults.object(forKey: Keys.hasShownAutomationOnboarding) as? Bool) ?? false
         fontFamilyName = defaults.string(forKey: Keys.fontFamilyName) ?? ""
         fontSize = (defaults.object(forKey: Keys.fontSize) as? Double) ?? 20
         overlayWidth = (defaults.object(forKey: Keys.overlayWidth) as? Double) ?? 640

@@ -22,6 +22,12 @@ public final class LocalPlaybackSource: ObservableObject {
     @Published public var preferWordLevelKaraoke: Bool = true {
         didSet { reloadCurrentLyrics() }
     }
+    // 是否尝试用 AppleMusicPositionClient(需要"自动化"系统权限)问 Music.app 要精确
+    // 播放位置——App 层(AppSettings.preciseAppleMusicPosition)推值进来,这里不直接
+    // 依赖 AppSettings(DesktopLyricsCore 是纯逻辑 library,不该反过来依赖 App target),
+    // 照抄 preferWordLevelKaraoke 同一个"App 层推值"的既有模式。关掉时直接跳过这次
+    // 尝试,等同于"这次调用失败了",走 poll() 里现成的 media-control 估算进度回退。
+    public var preciseAppleMusicPosition: Bool = true
 
     private let syncEngine = LyricsSyncEngine()
     // 公开给 View 层——逐字填色现在按渲染帧频(TimelineView)从这个锚点直接外推真实
@@ -100,9 +106,10 @@ public final class LocalPlaybackSource: ObservableObject {
     private func poll() {
         // 两个都是同步阻塞调用(内部各自 fork 子进程等待退出),一起挪到后台线程跑,
         // 避免卡住主线程/UI。
+        let wantsPrecisePosition = preciseAppleMusicPosition
         Task {
             let (snapshot, livePosition) = await Task.detached {
-                (MediaControlClient.fetchSnapshot(), AppleMusicPositionClient.fetchPositionSeconds())
+                (MediaControlClient.fetchSnapshot(), wantsPrecisePosition ? AppleMusicPositionClient.fetchPositionSeconds() : nil)
             }.value
             guard let snapshot else {
                 // media-control 返回 nil 不只是"调用失败",更常见的是真的没有任何曲目在
