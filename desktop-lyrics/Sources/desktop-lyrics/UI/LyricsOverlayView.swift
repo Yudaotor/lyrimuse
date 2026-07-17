@@ -155,6 +155,19 @@ struct LyricsOverlayView: View {
                         wordText(w, atMs: currentMs)
                     }
                 }
+                // compositingGroup 把这一整行字先合成成一张位图,再统一套一次阴影——
+                // 之前是每个字的 Text 各自单独 .shadow(),SwiftUI 会把它们当成互相独立的
+                // 半透明图层分别渲染,相邻字之间阴影重叠的区域会叠加变暗,一整行看起来
+                // 深浅不均、糊成一片(这正是这次"感觉不好看"的根因)。查了 LyricsX 真实
+                // 实现(KaraokeLabel.swift)确认它是整行一次性 CTFrameDraw 之后,阴影
+                // (NSShadow)只套在这一整个 NSTextField 上、只算一次——不是逐字符各自
+                // 描边。这里用 .compositingGroup() 达到同样效果:阴影只按合成后的最终
+                // 轮廓统一算一次,顺带把 O(字数) 次阴影合成降到 O(1)(早前
+                // project_nowplaying_desktop_lyrics_text_shadow 那条记录里把这个优化项
+                // 标成"纯性能、视觉不变"是判断错了——分层阴影跟合并阴影视觉上确实不同,
+                // 这次一并订正)。
+                .compositingGroup()
+                .lyricsTextShadow(settings.textShadowEnabled, color: settings.textShadowColor)
             }
             .font(settings.mainFont)
         } else if let text = poller.currentLine?.mainText {
@@ -205,8 +218,8 @@ struct LyricsOverlayView: View {
             .foregroundStyle(wordGradient(fg: fg, left: fraction - band, right: fraction + band))
             // 故意不再包 .animation(...)——TimelineView(.animation) 已经在按渲染帧频
             // 重算真值,这里再叠一层 SwiftUI Animation 补间只会重新引入上面注释里那套
-            // 矢量叠加问题。
-            .lyricsTextShadow(settings.textShadowEnabled, color: settings.textShadowColor)
+            // 矢量叠加问题。也故意不在这里单独套阴影——阴影统一挪到 mainLine 里
+            // WrapLayout 外层的 .compositingGroup()+.lyricsTextShadow(),见那边注释。
     }
 
     // 过渡带 [left, right] 以这个字真实的(未夹到 [0,1] 的)进度为中心,可能整段落在
@@ -248,13 +261,25 @@ struct LyricsOverlayView: View {
 // 提高辨识度,是字幕类悬浮显示的常见做法。颜色可配置(参考 LyricsX 的
 // PreferenceDisplayViewController+KaraokeLyricsView.swift:阴影只让用户调"颜色"含 alpha,
 // 模糊半径/偏移量是代码里的固定常量,没有做成单独的滑杆)——这里同样只把颜色开放成设置项
-// (AppSettings.textShadowColor),半径(3)和偏移(x:0,y:1)继续留作固定常量。
+// (AppSettings.textShadowColor),半径(3)继续留作固定常量。
+//
+// 2026-07-14 追加:用户反馈"文字阴影看起来不好看",重新逐字核对了 LyricsX 真实源码里
+// NSShadow 的具体取值(NSTextField._shadowColor setter),发现两处偏差:
+// 1) 偏移量——LyricsX 是 shadowOffset = .zero(阴影往四面八方均匀发散的"光晕"效果),
+//    这里当时(上线时)写的是 x:0,y:1(带一点方向性的"投影"效果)。这两种效果观感差别
+//    不小:偏移越大,阴影只在文字一侧加深,另一侧仍然直接暴露在桌面任意背景色前;这个
+//    功能本来就是为了不管背景是什么颜色都能撑起辨识度,偏移为零、四面都糊一层的做法
+//    更贴合这个目的,也是当时研究 LyricsX 时就已经查到、但没有同步改过来的遗留偏差,
+//    这次一并订正为 .zero。
+// 2) 逐字歌词那一行阴影是"每个字各自单独套一次"而不是"整行只套一次"——见 mainLine 里
+//    WrapLayout 外层新加的 .compositingGroup() 那段注释,这是这次"不好看"反馈里更主要
+//    的根因。
 private struct OptionalTextShadow: ViewModifier {
     let enabled: Bool
     let color: Color
     func body(content: Content) -> some View {
         if enabled {
-            content.shadow(color: color, radius: 3, x: 0, y: 1)
+            content.shadow(color: color, radius: 3, x: 0, y: 0)
         } else {
             content
         }

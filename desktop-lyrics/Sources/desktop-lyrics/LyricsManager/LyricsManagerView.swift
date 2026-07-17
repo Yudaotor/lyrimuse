@@ -15,7 +15,7 @@ private enum SourceFilter: Hashable, Identifiable {
         switch self {
         case .all: return "全部来源"
         case .none: return "无来源"
-        case .named(let s): return s
+        case .named(let s): return sourceDisplayName(s) // 展示用中文名,matches(_:) 仍按原始的 s 比较
         }
     }
 
@@ -41,7 +41,7 @@ private enum TimingFilter: String, CaseIterable, Identifiable {
 // artistCreditParts 用同一套(/、&,，),取分割后的第一段作为归并键,大小写/首尾空白
 // 不影响判定,但下拉里展示、真正拿去比较分组的是原始未分割的 artist 全文里截出来的
 // 第一段(保留原始大小写/写法,不额外转小写)。
-private func primaryArtist(_ full: String) -> String {
+func primaryArtist(_ full: String) -> String {
     let seps = CharacterSet(charactersIn: "/、&,，")
     let first = full.components(separatedBy: seps).first ?? full
     return first.trimmingCharacters(in: .whitespaces)
@@ -49,7 +49,11 @@ private func primaryArtist(_ full: String) -> String {
 
 // 每个歌词源一个固定色,列表/详情页共用,方便肉眼快速扫源(不是随手配的——网易云红、
 // QQ音乐绿、酷狗蓝、LRCLIB紫,分别贴近各自品牌主色,"无来源"用中性灰)。
-private func sourceColor(_ source: String) -> Color {
+//
+// 2026-07-16:从 private 改成 internal——"歌词"设置分类里新增的来源启用/优先级排序
+// UI(FeatureSettingsStore.swift 的 LyricsSource 枚举)要复用同一套名字/颜色,不想在
+// 第二个地方再维护一份一模一样的 switch,两边一旦某天改了色值/译名容易漂移。
+func sourceColor(_ source: String) -> Color {
     switch source {
     case "netease": return .red
     case "qq": return .green
@@ -57,6 +61,28 @@ private func sourceColor(_ source: String) -> Color {
     case "lrclib": return .purple
     default: return .secondary
     }
+}
+
+// 歌词来源展示名——网易云音乐/QQ音乐/酷狗音乐是国内用户认得出的中文写法;LRCLIB 是纯
+// 西方的开源歌词库,没有约定俗成的中文名,保留英文原名(用户明确要求"只有英文的就用英文",
+// 不强行硬翻一个不存在的中文名)。
+func sourceDisplayName(_ source: String) -> String {
+    switch source {
+    case "netease": return "网易云音乐"
+    case "qq": return "QQ音乐"
+    case "kugou": return "酷狗音乐"
+    case "lrclib": return "LRCLIB"
+    case "": return "无来源"
+    default: return source
+    }
+}
+
+// 歌名/歌手/专辑/来源四列表头和每一行列表项共用同一组列宽——歌名是主列、拿剩余空间,
+// 后三列固定宽度+单行截断,这样表头文字和每行内容的起始位置对得上。
+private enum LyricsListColumns {
+    static let artistWidth: CGFloat = 96
+    static let albumWidth: CGFloat = 110
+    static let sourceWidth: CGFloat = 68
 }
 
 // 歌词管理窗口:浏览目前 collector 缓存了哪些歌的歌词、来源是什么,支持手动纠正内容、
@@ -94,21 +120,29 @@ struct LyricsManagerView: View {
         Array(Set(store.summaries.map { primaryArtist($0.artist) })).sorted()
     }
 
-    // 专辑筛选下拉按大小写不敏感合并——同一张专辑在不同缓存条目里,专辑名偶尔因为各自
-    // 歌词源的候选写法大小写不一致(实测坐实:"BLOOD ON THE DANCE FLOOR/ HIStory In The
-    // Mix" vs "Blood on the Dance Floor/ HIStory in the Mix"、"HIStory Continues" vs
-    // "History Continues"),导致下拉列表出现两条本该合并的重复项,选中其中一种大小写
-    // 还看不到另一种写法归属的曲目。归并键统一转小写比较,下拉里展示、真正拿去比较的
-    // 是第一次遇到(按 summaries 已有的 artist/title 排序)那条的原始写法,不额外转小写
-    // 显示——跟 primaryArtist 合并合唱曲目是同一个"归并键跟展示值分开"的思路,只是这里
-    // 归并键是转小写而不是按分隔符取第一段。
-    private var distinctAlbums: [String] {
+    // 同一张专辑在不同缓存条目里,专辑名偶尔因为各自歌词源的候选写法大小写不一致
+    // (实测坐实:"BLOOD ON THE DANCE FLOOR/ HIStory In The Mix" vs "Blood on the Dance
+    // Floor/ HIStory in the Mix"、"HIStory Continues" vs "History Continues")而长得不
+    // 一样。归并键统一转小写比较,取第一次遇到(按 summaries 已有的排序)那条的原始写法
+    // 当这一组的统一展示文案——不只是筛选下拉要合并,列表每一行、详情页头部凡是要展示
+    // 专辑名的地方都用这份映射,同一张专辑不管底层哪条记录的原始大小写是什么,肉眼看到
+    // 的都是同一种写法。跟 primaryArtist 合并合唱曲目是同一个"归并键跟展示值分开"的
+    // 思路,只是这里归并键是转小写而不是按分隔符取第一段。
+    private var albumDisplayNames: [String: String] {
         var seen: [String: String] = [:] // 小写归并键 -> 第一次出现时的原始写法
         for s in store.summaries where !s.album.isEmpty {
             let key = s.album.lowercased()
             if seen[key] == nil { seen[key] = s.album }
         }
-        return seen.values.sorted()
+        return seen
+    }
+
+    private var distinctAlbums: [String] {
+        Array(Set(albumDisplayNames.values)).sorted()
+    }
+
+    private func albumDisplay(_ album: String) -> String {
+        albumDisplayNames[album.lowercased()] ?? album
     }
 
     private var filtered: [EnrichCacheStore.Summary] {
@@ -199,35 +233,78 @@ struct LyricsManagerView: View {
         .background(.thinMaterial)
     }
 
+    // 列名表头——歌名/歌手/专辑/来源,跟 LyricsManagerRow 共用 LyricsListColumns 的列宽
+    // 常量,保证表头文字跟每行对应列对得齐。水平内边距(12pt)特意跟 List(.inset 样式)
+    // 默认给每行内容的左右留白对齐,不然表头会跟下面的行错位。
+    private var listColumnHeader: some View {
+        HStack(spacing: 8) {
+            Text("歌名").frame(maxWidth: .infinity, alignment: .leading)
+            Text("歌手").frame(width: LyricsListColumns.artistWidth, alignment: .leading)
+            Text("专辑").frame(width: LyricsListColumns.albumWidth, alignment: .leading)
+            Text("来源").frame(width: LyricsListColumns.sourceWidth, alignment: .leading)
+        }
+        .font(.caption2.weight(.semibold))
+        .foregroundStyle(.secondary)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 5)
+    }
+
     var body: some View {
         NavigationSplitView {
-            VStack(spacing: 0) {
-                filterBar
-                Divider()
-                ScrollViewReader { scrollProxy in
+            // ScrollViewReader 挪到包住整个侧栏(而不是只包 List)——工具栏的"回到当前播放"
+            // 按钮跟 List 是 VStack 里的兄弟节点、跟 .toolbar 修饰符也不在同一层,要拿到
+            // scrollProxy 就必须让它在这两者共同的外层作用域里可见,所以让 ScrollViewReader
+            // 的闭包整个包住 VStack+.toolbar,而不是像原来那样只包 List 本身。ScrollViewReader
+            // 只是个透明包装,不影响布局,包多包少视觉上没有区别。
+            ScrollViewReader { scrollProxy in
+                VStack(spacing: 0) {
+                    filterBar
+                    Divider()
+                    listColumnHeader
+                    Divider()
                     List(filtered, selection: $selectedKey) { summary in
-                        LyricsManagerRow(summary: summary)
+                        LyricsManagerRow(summary: summary, albumDisplayName: albumDisplay(summary.album))
                     }
                     .listStyle(.inset(alternatesRowBackgrounds: true))
                     .onAppear {
                         // reload 必须先于定位——刚打开窗口时 summaries 可能还是上次
                         // 关闭时的旧内容(或空的),定位逻辑要按最新磁盘内容匹配当前
-                        // 播放的这首歌。
-                        store.reload()
-                        focusCurrentlyPlaying(scrollProxy: scrollProxy)
+                        // 播放的这首歌。reload() 2026-07-17 起改成 async(读文件+解析
+                        // 挪到后台线程,避免缓存文件变大之后开窗卡一下),这里用 Task
+                        // 包一层、await 完了再定位,保持"先 reload 再定位"这个顺序不变。
+                        Task {
+                            await store.reload()
+                            focusCurrentlyPlaying(scrollProxy: scrollProxy)
+                        }
                     }
                 }
-            }
-            .searchable(text: $searchText, prompt: "搜索歌手/歌名")
-            .navigationTitle("歌词管理")
-            .navigationSubtitle("\(filtered.count) / \(store.summaries.count) 首")
-            .toolbar {
-                ToolbarItem {
-                    Button(action: refreshWithFeedback) {
-                        Label(showRefreshedFeedback ? "已刷新" : "刷新",
-                              systemImage: showRefreshedFeedback ? "checkmark" : "arrow.clockwise")
+                .searchable(text: $searchText, prompt: "搜索歌手/歌名")
+                .navigationTitle("歌词管理")
+                .navigationSubtitle("\(filtered.count) / \(store.summaries.count) 首")
+                .toolbar {
+                    ToolbarItem {
+                        Button(action: refreshWithFeedback) {
+                            Label(showRefreshedFeedback ? "已刷新" : "刷新",
+                                  systemImage: showRefreshedFeedback ? "checkmark" : "arrow.clockwise")
+                        }
+                    }
+                    ToolbarItem {
+                        // 跟开窗时自动定位复用同一个 focusCurrentlyPlaying,但 force:true——
+                        // 那个 selectedKey==nil 的门槛是给"刚开窗别覆盖用户已经选中的行"这个
+                        // 场景挡的,手动点这个按钮时用户往往正选着别的歌、就是想跳回来,不能
+                        // 被同一个门槛拦住。
+                        Button {
+                            focusCurrentlyPlaying(scrollProxy: scrollProxy, force: true)
+                        } label: {
+                            Label("回到当前播放", systemImage: "location.fill")
+                        }
                     }
                 }
+                // 列表这一栏(歌名/歌手/专辑/来源四列)给个够宽的默认/理想宽度——不然
+                // NavigationSplitView 默认分给侧栏的宽度偏窄,歌名(尤其是带 feat./remix
+                // 后缀的长标题)会被裁成省略号。630pt 是用户截图里实际截到的、歌名基本能
+                // 完整露出来的比例,拿来当 ideal 默认值。
+                .navigationSplitViewColumnWidth(min: 480, ideal: 630, max: 900)
             }
         } detail: {
             if let key = selectedKey, let summary = store.summaries.first(where: { $0.key == key }) {
@@ -236,7 +313,7 @@ struct LyricsManagerView: View {
                 ContentUnavailableView("选择左侧一首歌", systemImage: "text.quote")
             }
         }
-        .frame(minWidth: 780, minHeight: 540)
+        .frame(minWidth: 780, idealWidth: 1040, minHeight: 540, idealHeight: 640)
     }
 
     // 打开窗口时自动定位到当前正在播放的这首歌(如果它已经被缓存过)——跟
@@ -252,16 +329,20 @@ struct LyricsManagerView: View {
     // 自动化环境的假象)。这里只需要开窗那一刻的快照,普通函数内直接访问单例属性即可,
     // 不用建立订阅。
     private func refreshWithFeedback() {
-        store.reload()
-        withAnimation { showRefreshedFeedback = true }
         Task {
+            await store.reload()
+            withAnimation { showRefreshedFeedback = true }
             try? await Task.sleep(for: .seconds(1))
             withAnimation { showRefreshedFeedback = false }
         }
     }
 
-    private func focusCurrentlyPlaying(scrollProxy: ScrollViewProxy) {
-        guard selectedKey == nil else { return }
+    // force:true 是给工具栏"回到当前播放"按钮用的——绕开"已经选中别的行就不动"这道
+    // 只为"开窗自动定位"场景设的门槛(见调用点注释)。找不到当前播放曲目的缓存条目时
+    // 两种调用方式都一样静默不做任何事,不额外弹提示——开窗自动定位场景本来就不该弹,
+    // 手动点按钮那次不做区分只是图简单,真找不到时用户自己也看得出列表没跳。
+    private func focusCurrentlyPlaying(scrollProxy: ScrollViewProxy, force: Bool = false) {
+        guard force || selectedKey == nil else { return }
         let playback = PlaybackCoordinator.shared
         let key = "\(playback.artist)|\(playback.title)|\(playback.album)"
         guard store.summaries.contains(where: { $0.key == key }) else { return }
@@ -304,7 +385,7 @@ struct LyricsManagerView: View {
             titleVisibility: .visible
         ) {
             Button("删除", role: .destructive) {
-                store.delete(key: key)
+                Task { await store.delete(key: key) }
                 selectedKey = nil
             }
             Button("取消", role: .cancel) {}
@@ -318,7 +399,9 @@ struct LyricsManagerView: View {
                 editedLyrics = candidate.lyrics
                 editedTr = candidate.lyricsTr
                 editedRoma = candidate.lyricsRoma
-                store.saveEdit(key: key, lyrics: candidate.lyrics, tr: candidate.lyricsTr, roma: candidate.lyricsRoma, yrc: candidate.lyricsYRC, source: candidate.source)
+                Task {
+                    await store.saveEdit(key: key, lyrics: candidate.lyrics, tr: candidate.lyricsTr, roma: candidate.lyricsRoma, yrc: candidate.lyricsYRC, source: candidate.source)
+                }
             }
         }
     }
@@ -329,11 +412,16 @@ struct LyricsManagerView: View {
                 Text(summary.title).font(.title2.weight(.bold))
                 Text(summary.artist).font(.title3).foregroundStyle(.secondary)
                 if !summary.album.isEmpty {
-                    Text(summary.album).font(.callout).foregroundStyle(.tertiary)
+                    Text(albumDisplay(summary.album)).font(.callout).foregroundStyle(.tertiary)
                 }
             }
-            Spacer()
+            Spacer(minLength: 12)
             // 都挪到顶部——常用操作,原来放在底部操作栏每次都要翻到页面最下面才能点。
+            // .fixedSize() 强制这一组按钮永远按自己的完整期望宽度渲染,不参与跟左边
+            // 歌名/歌手/专辑那个 VStack 的空间压缩——之前歌名一长(比如带 feat./罗马数字
+            // 后缀),会连带把这两个按钮的文字挤到只剩省略号("联网搜..."/"删除本...")。
+            // 现在反过来:空间不够时,先紧着按钮拿够它们要的全部宽度,歌名那边(本来就
+            // 没有单行限制,靠 Text 自然换行)让出空间。
             HStack(spacing: 8) {
                 Button {
                     showSearchSheet = true
@@ -346,6 +434,7 @@ struct LyricsManagerView: View {
                     Label("删除本地记录", systemImage: "trash")
                 }
             }
+            .fixedSize()
         }
     }
 
@@ -353,7 +442,7 @@ struct LyricsManagerView: View {
         HStack(spacing: 8) {
             InfoChip(
                 icon: "arrow.down.circle",
-                text: summary.lyricsSource.isEmpty ? "无来源" : summary.lyricsSource,
+                text: sourceDisplayName(summary.lyricsSource),
                 tint: sourceColor(summary.lyricsSource)
             )
             InfoChip(
@@ -399,14 +488,14 @@ struct LyricsManagerView: View {
     private func actionsRow(key: String, summary: EnrichCacheStore.Summary) -> some View {
         HStack(spacing: 10) {
             Button("保存修改") {
-                store.saveEdit(key: key, lyrics: editedLyrics, tr: editedTr, roma: editedRoma)
+                Task { await store.saveEdit(key: key, lyrics: editedLyrics, tr: editedTr, roma: editedRoma) }
             }
             .buttonStyle(.borderedProminent)
             .keyboardShortcut("s", modifiers: .command)
 
             if summary.hasWordTiming {
                 Button("移除逐字时间轴") {
-                    store.removeWordTiming(key: key)
+                    Task { await store.removeWordTiming(key: key) }
                 }
             }
 
@@ -439,38 +528,58 @@ private struct InfoChip: View {
 
 private struct LyricsManagerRow: View {
     let summary: EnrichCacheStore.Summary
+    // 同一张专辑在不同条目里原始大小写可能不一致(见 LyricsManagerView.albumDisplayNames
+    // 的注释),这里传入调用方算好的统一展示文案,而不是自己再拿 summary.album 原样显示。
+    let albumDisplayName: String
 
-    // 每行的图标/来源列宽度固定——之前"人工修正"图标只在有的行才占位,导致有些行少一个
+    // 每行的图标槽位固定宽度——之前"人工修正"图标只在有的行才占位,导致有些行少一个
     // 图标,后面的内容整体往左挪一截,几行错落对不齐看着乱。改成图标槽位固定宽度(没有
-    // 就用透明占位撑住位置,而不是整个不渲染),来源文字槽位也给个统一最小宽度,这样不管
-    // 具体哪行有没有人工修正、是逐字还是整行,几行的图标和文字起始位置都对得齐。
+    // 就用透明占位撑住位置,而不是整个不渲染),这样不管具体哪行有没有人工修正、是逐字
+    // 还是整行,几行的图标起始位置都对得齐。这两个图标算是"歌名"这一列的附加信息(是否
+    // 手工修正过/是逐字还是整行),跟着歌名走,不单独占一列——歌手/专辑/来源三列见
+    // LyricsListColumns。
     private static let badgeIconWidth: CGFloat = 14
-    private static let sourceTextMinWidth: CGFloat = 46
 
     var body: some View {
         HStack(alignment: .center, spacing: 8) {
             VStack(alignment: .leading, spacing: 3) {
-                Text("\(summary.artist) - \(summary.title)")
-                    .font(.body.weight(.medium))
-                    .lineLimit(1)
+                HStack(spacing: 4) {
+                    Text(summary.title)
+                        .font(.body.weight(.medium))
+                        .lineLimit(1)
+                    Image(systemName: "pencil.circle.fill")
+                        .foregroundStyle(.orange)
+                        .opacity(summary.isManual ? 1 : 0)
+                        .font(.caption2)
+                        .frame(width: Self.badgeIconWidth)
+                    Image(systemName: summary.hasWordTiming ? "text.word.spacing" : "text.alignleft")
+                        .foregroundStyle(summary.hasWordTiming ? .blue : .secondary)
+                        .font(.caption2)
+                        .frame(width: Self.badgeIconWidth)
+                }
                 if !summary.hasLyrics {
                     Text("无歌词").font(.caption2).foregroundStyle(.red)
                 }
             }
-            Spacer(minLength: 8)
-            HStack(spacing: 5) {
-                Image(systemName: "pencil.circle.fill")
-                    .foregroundStyle(.orange)
-                    .opacity(summary.isManual ? 1 : 0)
-                    .frame(width: Self.badgeIconWidth)
-                Image(systemName: summary.hasWordTiming ? "text.word.spacing" : "text.alignleft")
-                    .foregroundStyle(summary.hasWordTiming ? .blue : .secondary)
-                    .frame(width: Self.badgeIconWidth)
-                Text(summary.lyricsSource.isEmpty ? "?" : summary.lyricsSource)
-                    .foregroundStyle(sourceColor(summary.lyricsSource))
-                    .frame(minWidth: Self.sourceTextMinWidth, alignment: .leading)
-            }
-            .font(.caption2)
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            Text(summary.artist)
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .frame(width: LyricsListColumns.artistWidth, alignment: .leading)
+
+            Text(albumDisplayName)
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .frame(width: LyricsListColumns.albumWidth, alignment: .leading)
+
+            Text(sourceDisplayName(summary.lyricsSource))
+                .font(.caption)
+                .foregroundStyle(sourceColor(summary.lyricsSource))
+                .lineLimit(1)
+                .frame(width: LyricsListColumns.sourceWidth, alignment: .leading)
         }
         .padding(.vertical, 3)
     }

@@ -76,9 +76,41 @@ final class LyricsSearchService {
             process.standardOutput = stdoutPipe
             process.standardError = stderrPipe
 
+            // 2026-07-17 真机实测坐实的死锁:内核管道缓冲区只有 64KB,四源都命中+带逐字
+            // YRC 数据的候选(比如 Michael Jackson - You Rock My World,合计输出 65KB+)
+            // 一旦超过这个缓冲区,子进程的 write() 就会阻塞、等父进程腾出空间——但父进程
+            // 原来只在下面 terminationHandler 里才 readDataToEndOfFile(),而子进程卡在
+            // write() 上永远不会退出、terminationHandler 也就永远不会触发,两边互相等
+            // 对方先动,desktop-lyrics 的"搜索候选歌词"弹窗因此转圈转到天荒地老。修法:
+            // 在子进程运行期间就在后台队列持续把 stdout/stderr 读走(不等进程退出),
+            // 管道缓冲区就不会被灌满,子进程的 write() 也就不会阻塞。
+            // DispatchGroup.wait() 已经确保下面两条后台读取线程写完 box.value 之后、
+            // terminationHandler 才会往下读它们——这个 happens-before 关系是靠 group
+            // 保证的,不是靠 Swift 并发检查器认识的机制,所以用 @unchecked Sendable 包一层
+            // 声明"这里的跨线程访问我自己保证过安全了",避免 Swift 6 严格并发模式下把
+            // 这种直接捕获 var 的写法当成数据竞争报错。
+            final class Box: @unchecked Sendable { var value = Data() }
+            let outBox = Box()
+            let errBox = Box()
+            let pipeReadGroup = DispatchGroup()
+            pipeReadGroup.enter()
+            DispatchQueue.global(qos: .utility).async {
+                outBox.value = stdoutPipe.fileHandleForReading.readDataToEndOfFile()
+                pipeReadGroup.leave()
+            }
+            pipeReadGroup.enter()
+            DispatchQueue.global(qos: .utility).async {
+                errBox.value = stderrPipe.fileHandleForReading.readDataToEndOfFile()
+                pipeReadGroup.leave()
+            }
+
             process.terminationHandler = { proc in
-                let outData = stdoutPipe.fileHandleForReading.readDataToEndOfFile()
-                let errData = stderrPipe.fileHandleForReading.readDataToEndOfFile()
+                // 进程已退出,两条后台读取线程读到 EOF 会自然返回;等它们真正写完
+                // outBox/errBox 再继续,避免极端情况下读线程还没来得及把最后一批数据
+                // 落进变量就被下面读到半份数据。
+                pipeReadGroup.wait()
+                let outData = outBox.value
+                let errData = errBox.value
                 guard proc.terminationStatus == 0 else {
                     let msg = String(data: errData, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
                     logger.error("search-lyrics exited \(proc.terminationStatus): \(msg ?? "", privacy: .public)")

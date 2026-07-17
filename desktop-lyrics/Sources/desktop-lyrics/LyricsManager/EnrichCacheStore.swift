@@ -20,6 +20,14 @@ private let logger = Logger(subsystem: "com.chenyuhao.applemusic-desktop-lyrics"
 // 悄悄丢掉它没声明的字段——这是会破坏其它上百条数据的严重 bug,而且 Go 那边字段以后
 // 还可能再加。改用 [String: [String: Any]] 原始字典,只对被编辑/删除的那一条 key 做
 // 字典级别的增删改,其它条目、以及被编辑条目里没碰过的字段,原样保留、逐字节不变。
+//
+// 2026-07-15:歌词部分(lyrics/lyrics_tr/lyrics_roma/lyrics_yrc/lyrics_source/
+// manual_lyrics 这 6 个字段)现在额外以 ~/.config/applemusic-nowplaying/lyrics/ 下的
+// 纯文本文件族为权威源(collector 启动时会读这个文件夹、覆盖对应字段,见
+// collector/lyricsimport.go)——这里的 saveEdit/removeWordTiming/delete 因此在原有的
+// raw[key] 字典操作之外,新增调用 writeLyricsFiles 同步写/删对应文件,两边(JSON 字典 +
+// 文件族)由同一次用户操作一起改,不是文件单方面派生自 JSON、也不是反过来,靠"改完
+// 立刻重启 collector"这个本来就有的机制保持最终一致。
 @MainActor
 public final class EnrichCacheStore: ObservableObject {
     public static let shared = EnrichCacheStore()
@@ -41,29 +49,49 @@ public final class EnrichCacheStore: ObservableObject {
 
     private static let cacheURL = FileManager.default.homeDirectoryForCurrentUser
         .appendingPathComponent(".config/applemusic-nowplaying/applemusic-nowplaying-enrich-cache.json")
-    private static let lyricsDir = FileManager.default.homeDirectoryForCurrentUser
-        .appendingPathComponent(".config/applemusic-nowplaying/lyrics")
-    private static let collectorLabel = "com.chenyuhao.applemusic-nowplaying"
+    // 2026-07-16:文件夹位置在"歌词"设置分类里可以自定义了——不能再是编译期定死的
+    // static let,改成每次都读 FeatureSettingsStore 当前值的计算属性,跟 collector 那边
+    // (main.go 读 features.LyricsDir)认的是同一个位置,不然用户改了位置之后,这里
+    // 存/删歌词文件还是写去旧文件夹,collector 却只认新文件夹,两边对不上。
+    private static var lyricsDir: URL { FeatureSettingsStore.shared.effectiveLyricsDir }
 
     private var raw: [String: [String: Any]] = [:]
 
     private init() {}
 
-    public func reload() {
-        guard let data = try? Data(contentsOf: Self.cacheURL) else {
+    // 2026-07-17 真机实测坐实:这个缓存文件设计上永久不清理("解析一次永久保留"),
+    // 现在已经攒到几百条、几 MB——JSONSerialization 解析整份文件实测要 30ms 以上,
+    // 原来直接在 MainActor 上同步做,开窗那一刻/点"刷新"那一下都会卡一下,而且只会
+    // 随着缓存变大越来越慢。这里把读文件+解析挪到后台线程,只在算完之后回 MainActor
+    // 赋值——box 用 @unchecked Sendable 包一层,是因为 JSONSerialization 解出来的
+    // [String: [String: Any]] 含 Any,编译器没法证明它是 Sendable,但这里的跨线程访问
+    // 本来就有明确的先后顺序(detached task 算完、await 完了才读 box),不是真的并发写。
+    public func reload() async {
+        final class ResultBox: @unchecked Sendable {
+            var obj: [String: [String: Any]]?
+            var errorMessage: String?
+        }
+        let box = ResultBox()
+        let cacheURL = Self.cacheURL
+        await Task.detached(priority: .userInitiated) {
+            guard let data = try? Data(contentsOf: cacheURL) else {
+                box.errorMessage = "读取本地记录文件失败"
+                return
+            }
+            guard let obj = try? JSONSerialization.jsonObject(with: data) as? [String: [String: Any]] else {
+                box.errorMessage = "解析本地记录文件失败"
+                return
+            }
+            box.obj = obj
+        }.value
+        if let obj = box.obj {
+            raw = obj
+            lastError = nil
+        } else {
             raw = [:]
             summaries = []
-            lastError = "读取本地记录文件失败"
-            return
+            lastError = box.errorMessage ?? "读取本地记录文件失败"
         }
-        guard let obj = try? JSONSerialization.jsonObject(with: data) as? [String: [String: Any]] else {
-            raw = [:]
-            summaries = []
-            lastError = "解析本地记录文件失败"
-            return
-        }
-        raw = obj
-        lastError = nil
         rebuildSummaries()
     }
 
@@ -91,7 +119,17 @@ public final class EnrichCacheStore: ObservableObject {
                 isManual: entry["manual_lyrics"] as? Bool ?? false,
                 hasLyrics: !lyrics.isEmpty
             )
-        }.sorted { ($0.artist, $0.title) < ($1.artist, $1.title) }
+        // 专辑归并键跟展示值分开(同上面 distinctAlbums 那条注释一样的理由:同一张专辑
+        // 偶尔因歌词源候选写法大小写不一致而在 s.album 里长得不一样,排序按小写归并键
+        // 走,才能让同一张专辑的曲目真正排在一起,而不是被大小写拆成两组)。歌手同理用
+        // primaryArtist(跟艺人筛选下拉复用同一个函数)归并——"Scream"这类跟其他人合唱
+        // 的曲目,artist 字段整段写的是"Michael Jackson & JANET JACKSON",原始字符串
+        // 排序会单独归成一组、跟同一张专辑里其余单独署名"Michael Jackson"的曲目拆开,
+        // 不符合"同专辑排一起"的预期。
+        }.sorted {
+            (primaryArtist($0.artist), $0.album.lowercased(), $0.title)
+                < (primaryArtist($1.artist), $1.album.lowercased(), $1.title)
+        }
     }
 
     public func detail(for key: String) -> (lyrics: String, tr: String, roma: String) {
@@ -116,7 +154,7 @@ public final class EnrichCacheStore: ObservableObject {
     // LyricsManagerView 的 onApply),准确反映刚采纳的这份内容真实来自哪个平台;纯手改
     // 文本框(source 留 nil)则清空这个字段——手改之后已经不再是任何平台的原文,继续挂着
     // 旧的平台徽章比"无来源"更容易误导人,跟"人工修正"徽章(isManual)搭配显示才诚实。
-    public func saveEdit(key: String, lyrics: String, tr: String, roma: String, yrc: String? = nil, source: String? = nil) {
+    public func saveEdit(key: String, lyrics: String, tr: String, roma: String, yrc: String? = nil, source: String? = nil) async {
         var entry = raw[key] ?? [:]
         entry["lyrics"] = lyrics
         entry["lyrics_tr"] = tr
@@ -135,17 +173,25 @@ public final class EnrichCacheStore: ObservableObject {
             entry.removeValue(forKey: "lyrics_source")
         }
         raw[key] = entry
-        persistAndRestart()
+        writeLyricsFiles(
+            key: key, lyrics: lyrics, tr: tr, roma: roma,
+            yrc: entry["lyrics_yrc"] as? String ?? "",
+            source: entry["lyrics_source"] as? String ?? "",
+            manual: true
+        )
+        await persistAndRestart()
         rebuildSummaries()
     }
 
     // 只清掉逐字时间轴,保留整行歌词——用户发现某首歌的逐字对不上、想退回整行显示,
     // 不用整条删掉重新解析(重新解析很可能又抓到同一份不准的 yrc)。
-    public func removeWordTiming(key: String) {
+    public func removeWordTiming(key: String) async {
         var entry = raw[key] ?? [:]
         entry.removeValue(forKey: "lyrics_yrc")
         raw[key] = entry
-        persistAndRestart()
+        // 只删 .yrc 文件,其它变体文件不动——跟上面 JSON 侧"只清掉这一个字段"的语义对应。
+        try? FileManager.default.removeItem(at: Self.lyricsDir.appendingPathComponent(Self.sanitizeLyricsFilename(key) + ".yrc"))
+        await persistAndRestart()
         rebuildSummaries()
     }
 
@@ -155,9 +201,9 @@ public final class EnrichCacheStore: ObservableObject {
     // 是真的删掉,不是留一份用户自己都不知道还在的文件。这里改成删缓存条目的同时,
     // 一并删掉对应的已导出文件——"删除"从此在两边都是真删除,不再存在"表面删了、
     // 磁盘上其实还留着"的分歧语义。
-    public func delete(key: String) {
+    public func delete(key: String) async {
         raw.removeValue(forKey: key)
-        persistAndRestart()
+        await persistAndRestart()
         rebuildSummaries()
         deleteExportedLyricsFile(forKey: key)
     }
@@ -175,15 +221,64 @@ public final class EnrichCacheStore: ObservableObject {
         return name.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    // 找不到文件(从没导出过,比如这条从来没有歌词)是正常情况,静默忽略——这只是清理
-    // 一份可能存在的归档副本,不是这次删除操作的主体,不值得为"文件本来就不存在"这种
+    // 找不到文件(比如这条从来没有译文/罗马音/逐字时间轴)是正常情况,静默忽略——这只是
+    // 清理可能存在的归档副本,不是这次删除操作的主体,不值得为"文件本来就不存在"这种
     // 预期内的情况去污染 lastError(那个留给 persistAndRestart 里真正的主体操作失败用)。
+    // 2026-07-15:从只删 .lrc 一个文件,扩成 lyricsFileSuffixes 全部 4 个后缀都试一遍——
+    // 见 writeLyricsFiles 注释,"删除"现在要对称地清掉整个歌词文件族,不只是最初上线时
+    // 唯一存在的纯歌词那一份。
     private func deleteExportedLyricsFile(forKey key: String) {
-        let url = Self.lyricsDir.appendingPathComponent(Self.sanitizeLyricsFilename(key) + ".lrc")
-        try? FileManager.default.removeItem(at: url)
+        let base = Self.sanitizeLyricsFilename(key)
+        for suffix in Self.lyricsFileSuffixes {
+            try? FileManager.default.removeItem(at: Self.lyricsDir.appendingPathComponent(base + suffix))
+        }
     }
 
-    private func persistAndRestart() {
+    // lyricsFileSuffixes 跟 collector/lyricsexport.go 的同名变量逐一对应。
+    private static let lyricsFileSuffixes = [".lrc", ".tr.lrc", ".roma.lrc", ".yrc"]
+
+    // writeLyricsFiles 把 saveEdit 对 raw[key] 做的改动,同步写成 lyrics/ 文件夹下对应的
+    // 文件——2026-07-15"歌词部分以 lyrics/ 文件夹为权威源"改造的 Swift 侧配合:跟
+    // collector/lyricsexport.go 的 exportLyricsFiles/lyricsFileHeader 是同一份头部格式
+    // 的两处独立实现(Go/Swift 各自维护一份,理由跟 sanitizeLyricsFilename 已经写过的
+    // 一样——纯粹是确定性的字符串拼接,没有随时间演进的业务判断,不属于必须收敛成一份
+    // 的那类逻辑)。每个变体单独判断:有内容就写,没内容就删除对应文件——跟 Go 那边
+    // "该有就写、不该有就删"的逻辑对应。这里不处理 Go 那边"批量检测大小写文件名碰撞、
+    // 加哈希后缀消歧"那一步(真机实测坐实这个项目会反复出现专辑名大小写不一致导致的
+    // 撞车,见 lyricsexport.go 的相关注释)——这个函数每次被调用之后紧跟着的
+    // persistAndRestart() 都会踢一脚重启 collector,它启动时会重新跑一遍全量
+    // exportLyricsFiles(),那一步本来就会处理好任何残留的文件名碰撞,不需要在 Swift
+    // 这边重复实现一遍同一份消歧逻辑。
+    private func writeLyricsFiles(key: String, lyrics: String, tr: String, roma: String, yrc: String, source: String, manual: Bool) {
+        guard let parts = Self.splitKey(key) else { return }
+        let base = Self.sanitizeLyricsFilename(key)
+        var header = "[ar:\(parts.artist)]\n[ti:\(parts.title)]\n[al:\(parts.album)]\n"
+        if !source.isEmpty { header += "[source:\(source)]\n" }
+        if manual { header += "[manual:1]\n" }
+        header += "\n"
+
+        let variants: [(suffix: String, content: String)] = [
+            (".lrc", lyrics), (".tr.lrc", tr), (".roma.lrc", roma), (".yrc", yrc),
+        ]
+        try? FileManager.default.createDirectory(at: Self.lyricsDir, withIntermediateDirectories: true)
+        for v in variants {
+            let url = Self.lyricsDir.appendingPathComponent(base + v.suffix)
+            if v.content.isEmpty {
+                try? FileManager.default.removeItem(at: url)
+                continue
+            }
+            try? (header + v.content).write(to: url, atomically: true, encoding: .utf8)
+        }
+    }
+
+    // 2026-07-17 真机实测坐实的死锁级 bug:这里以前直接调同步版 restartAndWait(),
+    // 在 MainActor 上跑 Process.waitUntilExit()——launchd 给这个 LaunchAgent 配了
+    // `minimum runtime = 10`,两次重启间隔太近时 kickstart 会原地等满 10 秒才返回,
+    // 期间整个 app(窗口、菜单栏)彻底冻住不响应。ConfigStore/FeatureSettingsStore 早就
+    // 改用 restartAndWaitAsync() 避开这个问题(见 CollectorControl.swift 注释),这里是
+    // 唯一还没跟上的调用点——补齐,改成 async,三个公开入口(saveEdit/removeWordTiming/
+    // delete)跟着一起变 async。
+    private func persistAndRestart() async {
         guard JSONSerialization.isValidJSONObject(raw) else {
             lastError = "内部数据不是合法 JSON,已放弃保存"
             logger.error("raw dict is not valid JSON, aborting save")
@@ -197,25 +292,12 @@ public final class EnrichCacheStore: ObservableObject {
             logger.error("write failed: \(String(describing: error), privacy: .public)")
             return
         }
-        restartCollector()
+        if await !CollectorControl.restartAndWaitAsync() {
+            lastError = "重启 collector 失败"
+        }
         // 磁盘已经是最新内容——不管当前悬浮窗显示的是不是被改的这首歌,让播放数据源
         // 强制重新读一次都无害(不是这首歌的话 key 对不上,syncEngine 内容不变),换来
         // 的是"改完歌词、悬浮窗还停在旧版本"这个问题被修掉,不用等下一次换歌才生效。
         PlaybackCoordinator.shared.refreshLyricsForCurrentTrack()
-    }
-
-    // 跟 collector/build.sh 重启自己用的是同一条命令——collector 启动时会完整重新读盘,
-    // 这一脚踢下去就能保证它的内存状态跟磁盘上刚写的内容一致,不会有竞态。
-    private func restartCollector() {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/bin/launchctl")
-        process.arguments = ["kickstart", "-k", "gui/\(getuid())/\(Self.collectorLabel)"]
-        do {
-            try process.run()
-            logger.info("restarted collector via launchctl kickstart")
-        } catch {
-            lastError = "重启 collector 失败: \(error.localizedDescription)"
-            logger.error("launchctl kickstart failed: \(String(describing: error), privacy: .public)")
-        }
     }
 }
