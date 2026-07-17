@@ -31,6 +31,7 @@ final class AppSettings: ObservableObject {
         static let textShadowColorHex = "np:textShadowColorHex"
         static let fontFamilyName = "np:fontFamilyName"
         static let fontSize = "np:fontSize"
+        static let overlayWidth = "np:overlayWidth"
         static let foregroundColorHex = "np:foregroundColorHex"
         static let backgroundColorHex = "np:backgroundColorHex"
         static let lockPosition = "np:lockPosition"
@@ -134,6 +135,13 @@ final class AppSettings: ObservableObject {
             recomputeFonts()
         }
     }
+    // 悬浮窗宽度(pt)。字号已经能调到 36pt,宽度却一直写死 640——字号调大后长歌词行
+    // 很快就得换行,这里加个滑块让宽度也能跟着字号/个人喜好调。只在 didSet 里通知
+    // WindowController 实时应用,不在这个 model 层直接碰 NSWindow(跟 lockPosition 等
+    // 既有窗口相关设置同一个模式,由 SettingsView 里的 Binding.set 显式调用)。
+    @Published var overlayWidth: Double {
+        didSet { defaults.set(overlayWidth, forKey: Keys.overlayWidth) }
+    }
     // #RRGGBBAA。默认不透明白色,跟悬浮窗原来硬编码的 .white 视觉完全一致。
     @Published var foregroundColorHex: String {
         didSet {
@@ -191,6 +199,7 @@ final class AppSettings: ObservableObject {
         hideWhenNotPlaying = (defaults.object(forKey: Keys.hideWhenNotPlaying) as? Bool) ?? false
         fontFamilyName = defaults.string(forKey: Keys.fontFamilyName) ?? ""
         fontSize = (defaults.object(forKey: Keys.fontSize) as? Double) ?? 20
+        overlayWidth = (defaults.object(forKey: Keys.overlayWidth) as? Double) ?? 640
         foregroundColorHex = defaults.string(forKey: Keys.foregroundColorHex) ?? "#FFFFFFFF"
         backgroundColorHex = defaults.string(forKey: Keys.backgroundColorHex) ?? "#00000000"
         // didSet 对属性在自己 init() 里的这次赋值不会触发(Swift 语义:属性观察者不响应

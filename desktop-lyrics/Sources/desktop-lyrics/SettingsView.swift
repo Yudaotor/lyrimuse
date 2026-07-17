@@ -536,6 +536,21 @@ private struct AppearanceSettingsTab: View {
             }
 
             Section {
+                LabeledContent("宽度") {
+                    HStack(spacing: 8) {
+                        Slider(value: Binding(
+                            get: { settings.overlayWidth },
+                            set: { newValue in
+                                settings.overlayWidth = newValue
+                                LyricsOverlayWindowController.shared.setWidth(newValue)
+                            }
+                        ), in: 420...1000, step: 10)
+                        Text("\(Int(settings.overlayWidth))pt")
+                            .foregroundStyle(.secondary)
+                            .monospacedDigit()
+                            .frame(width: 40, alignment: .trailing)
+                    }
+                }
                 Toggle("锁定位置(不可拖拽+点击穿透)", isOn: Binding(
                     get: { settings.lockPosition },
                     set: { newValue in

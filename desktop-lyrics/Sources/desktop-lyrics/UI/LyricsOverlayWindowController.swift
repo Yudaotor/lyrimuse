@@ -6,10 +6,11 @@ import DesktopLyricsCore
 // 文件级常量(不挂在 @MainActor 类上),避免 Timer 的 @Sendable 闭包里引用
 // MainActor-isolated static let 触发并发检查警告。
 private let overlayPositionKey = "np:overlayPositionOrigin" // "x,y" 字符串
-// 宽度比原来(480)加宽,减少偏长的歌词行触发换行的概率;真正装不下的极端长行交给
-// WrapLayout(LyricsOverlayView.swift)自动换行,不再单靠"更宽"兜底。高度是初始/最小值,
-// 换行需要更多行时由 updateHeight 动态调整,不会比这个更矮。
-private let overlayDefaultSize = NSSize(width: 640, height: 120)
+// 高度是初始/最小值,换行需要更多行时由 updateHeight 动态调整,不会比这个更矮。宽度
+// 2026-07-18 起从这里的写死常量搬进 AppSettings.overlayWidth(可在设置里调,默认值
+// 仍是这个 640——原来的选择是"比旧版 480 加宽,减少偏长歌词行触发换行的概率";真正
+// 装不下的极端长行交给 WrapLayout(LyricsOverlayView.swift)自动换行,不再单靠"更宽"兜底)。
+private let overlayDefaultHeight: CGFloat = 120
 
 // 拥有悬浮窗面板 + SwiftUI 内容 + 拖拽位置持久化。位置存 UserDefaults(裸可执行文件也能
 // 跨进程重启正确持久化,已实测确认,不需要 .app 包)。ObservableObject 让菜单栏菜单
@@ -29,7 +30,7 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject 
     private var isPlayingObserver: AnyCancellable?
 
     convenience init() {
-        let size = overlayDefaultSize
+        let size = NSSize(width: AppSettings.shared.overlayWidth, height: overlayDefaultHeight)
         let rect = NSRect(origin: Self.restoredOrigin(size: size), size: size)
         let panel = LyricsOverlayWindow(contentRect: rect)
         self.init(window: panel)
@@ -131,11 +132,22 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject 
     // 动态调整。
     private func updateHeight(_ contentHeight: CGFloat) {
         guard let window else { return }
-        let newHeight = max(overlayDefaultSize.height, ceil(contentHeight))
+        let newHeight = max(overlayDefaultHeight, ceil(contentHeight))
         let current = window.frame
         guard abs(newHeight - current.height) >= 0.5 else { return } // 避免亚像素抖动反复触发
         let top = current.origin.y + current.height
         let newFrame = NSRect(x: current.origin.x, y: top - newHeight, width: current.width, height: newHeight)
+        window.setFrame(newFrame, display: true, animate: true)
+    }
+
+    // 设置里的宽度滑块调用——保持窗口中心点不变(左右对称伸缩),而不是像 updateHeight
+    // 那样固定顶边只往下长:宽度是用户主动在设置里调的偏好变化,不是内容溢出触发的被动
+    // 适应,固定左边界的话,拖到屏幕右侧的窗口调宽后容易被推出屏幕外。
+    func setWidth(_ width: CGFloat) {
+        guard let window else { return }
+        let current = window.frame
+        let centerX = current.origin.x + current.width / 2
+        let newFrame = NSRect(x: centerX - width / 2, y: current.origin.y, width: width, height: current.height)
         window.setFrame(newFrame, display: true, animate: true)
     }
 
