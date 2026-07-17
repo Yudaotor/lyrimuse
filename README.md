@@ -205,12 +205,13 @@ Worker(test-0703) 只负责：人点链接时 302 跳转到展示页；URL 规�
 
 ## 已知限制 / 尚待完善
 
-这个仓库目前是从个人单机项目转出来的，以下这些还比较粗糙，欢迎 PR：
+这个仓库目前是从个人单机项目转出来的，以下这条还比较粗糙，欢迎 PR：
 
-- desktop-lyrics 的「开机启动」假设仓库固定 clone 在 `~/applemusic-nowplaying`（`LoginItemManager.swift` 里硬编码），clone 到别处这个开关会静默失效。
-- desktop-lyrics 的 `build.sh` 只验证签名（`codesign -v`），没有主动签名；在 Apple Silicon 上因为系统强制签名没问题，Intel Mac 上未实测，理论上可能因为二进制完全没签名而构建脚本报错退出。
-- `collector/config.go` 里还有几个更冷门的可选字段目前没写进 `config.example.json`：`media_control_path`（默认按 `PATH`/`/opt/homebrew/bin/media-control` 查找，Intel Mac 或非默认 Homebrew 路径可能需要手动指定）、`api_root`（自建 ListenBrainz 兼容 API 时用）、`notification_platform`+`dingtalk_sign_secret`/`feishu_sign_secret`（默认 Bark，也支持钉钉/企业微信/Discord/Server 酱等）。想用这几个字段的话直接看 `collector/config.go`/`collector/notify.go` 源码，字段名和 JSON tag 一致。
 - album-prefetch（专辑预取）和精确播放进度这两个功能实际会用 `osascript` 操作 Music.app，需要一次性的自动化/Apple Events 授权（不像核心的 media-control 读取路径那样完全免授权）；在无 GUI 会话的场景下授权弹窗弹不出来，会静默降级为不可用，不影响核心功能。
+
+以下几条已经修复，但受限于这台机器只有 Apple Silicon，没有真机验证过：
+
+- desktop-lyrics 的 `build.sh` 在拷贝完二进制后先主动 `codesign -s - --force` 再验证，而不是只验证——之前只验证的写法在 Apple Silicon 上因为系统强制签名没问题，但理论上在 Intel Mac 上可能因为工具链没有自动签名而直接报错退出整个脚本。现在无论哪种架构都会重新 ad-hoc 签一遍，Apple Silicon 上是无副作用的重复操作。
 
 ## 已知环境坑（作者自己的 Mac, macOS 27 beta）
 

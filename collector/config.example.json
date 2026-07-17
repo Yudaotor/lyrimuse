@@ -3,6 +3,9 @@
   "listenbrainz_user": "你的 ListenBrainz 用户名",
   "bundle_ids": ["com.apple.Music"],
 
+  "api_root": "(可选，默认 https://api.listenbrainz.org，自建 ListenBrainz 兼容 API 时才需要改)",
+  "media_control_path": "(可选，默认按 PATH 自动查找 media-control、找不到则退回 /opt/homebrew/bin/media-control；Intel Mac 或非默认 Homebrew 安装路径下，把 `which media-control` 的结果填这里)",
+
   "state_relay_url": "(可选，留空则不推，网页直连 LB) 自建 Cloudflare Worker 状态中继地址，如 https://np.yudaotor.me",
   "state_relay_token": "(可选) state_relay_url 的鉴权 token",
 
@@ -13,5 +16,8 @@
   "lastfm_scrobble_secret": "(可选) 对应的 API Secret",
   "lastfm_scrobble_session_key": "(可选) 一次性网页授权换取，永久有效",
 
-  "bark_url": "(可选，留空则不告警) Bark 推送端点，如 https://api.day.app/<你的key>"
+  "notification_platform": "(可选，默认 bark，也可填 dingtalk/wecom/discord/feishu/serverchan) 决定下面 bark_url 这个字段被当成哪个平台的 webhook 地址解析——字段名叫 bark_url 是历史遗留，换平台也是填这一个字段",
+  "bark_url": "(可选，留空则不告警) 对应 notification_platform 平台的 webhook/推送端点，默认(bark)形如 https://api.day.app/<你的key>",
+  "dingtalk_sign_secret": "(可选，仅 notification_platform=dingtalk 且机器人开了加签校验时需要)",
+  "feishu_sign_secret": "(可选，仅 notification_platform=feishu 且机器人开了签名校验时需要)"
 }
