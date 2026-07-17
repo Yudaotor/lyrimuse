@@ -43,8 +43,8 @@ final class LyricsSearchService {
 
         var errorDescription: String? {
             switch self {
-            case .processFailed(let msg): return "搜索失败: \(msg)"
-            case .decodeFailed: return "解析搜索结果失败"
+            case .processFailed(let msg): return String(format: L10n.t("搜索失败: %@"), msg)
+            case .decodeFailed: return L10n.t("解析搜索结果失败")
             }
         }
     }
@@ -114,7 +114,7 @@ final class LyricsSearchService {
                 guard proc.terminationStatus == 0 else {
                     let msg = String(data: errData, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
                     logger.error("search-lyrics exited \(proc.terminationStatus): \(msg ?? "", privacy: .public)")
-                    continuation.resume(throwing: SearchError.processFailed(msg?.isEmpty == false ? msg! : "退出码 \(proc.terminationStatus)"))
+                    continuation.resume(throwing: SearchError.processFailed(msg?.isEmpty == false ? msg! : String(format: L10n.t("退出码 %@"), "\(proc.terminationStatus)")))
                     return
                 }
                 guard let raw = try? JSONDecoder().decode([RawCandidate].self, from: outData) else {

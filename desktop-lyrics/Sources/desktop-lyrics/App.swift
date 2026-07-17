@@ -15,7 +15,7 @@ struct DesktopLyricsApp: App {
         Settings {
             SettingsView()
         }
-        Window("歌词管理", id: "lyrics-manager") {
+        Window(L10n.t("歌词管理"), id: "lyrics-manager") {
             LyricsManagerView()
         }
     }

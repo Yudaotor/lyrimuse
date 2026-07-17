@@ -29,12 +29,12 @@ private struct DestinationStatusLabel: View {
     var body: some View {
         switch status {
         case .disabled:
-            Label("未启用", systemImage: "circle").foregroundStyle(.secondary)
+            Label(L10n.t("未启用"), systemImage: "circle").foregroundStyle(.secondary)
         case .missingCreds(let hint):
             Label(hint, systemImage: "exclamationmark.triangle.fill")
                 .foregroundStyle(dimmed ? Color.primary : Color.orange)
         case .active(let detail):
-            Label(detail ?? "正在生效", systemImage: "checkmark.circle.fill")
+            Label(detail ?? L10n.t("正在生效"), systemImage: "checkmark.circle.fill")
                 .foregroundStyle(dimmed ? Color.primary : Color.green)
         case .error(let msg):
             Label(msg, systemImage: "exclamationmark.triangle.fill")
@@ -68,7 +68,7 @@ private struct SecretFieldRow: View {
             HStack {
                 SecureField(label, text: $value, prompt: prompt.map(Text.init))
                 if !value.isEmpty {
-                    Button("完成") { isEditing = false }
+                    Button(L10n.t("完成")) { isEditing = false }
                         .buttonStyle(.link)
                 }
             }
@@ -76,9 +76,9 @@ private struct SecretFieldRow: View {
             HStack {
                 Text(label)
                 Spacer()
-                Label("已设置", systemImage: "checkmark.circle.fill")
+                Label(L10n.t("已设置"), systemImage: "checkmark.circle.fill")
                     .font(.caption).foregroundStyle(.green)
-                Button("更改") { isEditing = true }
+                Button(L10n.t("更改")) { isEditing = true }
                     .buttonStyle(.link)
             }
         }
@@ -98,8 +98,8 @@ enum AccountDestination: Hashable, CaseIterable, Identifiable {
         switch self {
         case .listenBrainz: return "ListenBrainz"
         case .lastfm: return "Last.fm"
-        case .stateRelay: return "网页推送"
-        case .bark: return "推送提醒"
+        case .stateRelay: return L10n.t("网页推送")
+        case .bark: return L10n.t("推送提醒")
         }
     }
 
@@ -124,8 +124,8 @@ func destinationStatus(for destination: AccountDestination, config: ConfigStore,
         // 2026-07-17 起 collector 不再强制要求这个账号(只想用悬浮歌词可以完全不配)，
         // 未配置不再是"硬性错误"，改用跟其它卡片一致的橙色"缺凭据"提示。
         return config.isListenBrainzConfigured
-            ? .active(config.listenbrainzUser.isEmpty ? nil : "已连接为 @\(config.listenbrainzUser)")
-            : .missingCreds("未配置（可选）")
+            ? .active(config.listenbrainzUser.isEmpty ? nil : String(format: L10n.t("已连接为 @%@"), config.listenbrainzUser))
+            : .missingCreds(L10n.t("未配置（可选）"))
     case .stateRelay:
         if let hint = config.stateRelayMissingHint() { return .missingCreds(hint) }
         return .active()
@@ -134,10 +134,10 @@ func destinationStatus(for destination: AccountDestination, config: ConfigStore,
         let bridgeOK = config.lastfmBridgeMissingHint() == nil
         let mirrorOK = config.lastfmMirrorMissingHint() == nil
         switch (bridgeOK, mirrorOK) {
-        case (true, true): return .active("桥接+镜像已配置")
-        case (true, false): return .active("桥接已配置")
-        case (false, true): return .active("镜像已配置")
-        case (false, false): return .missingCreds("未配置")
+        case (true, true): return .active(L10n.t("桥接+镜像已配置"))
+        case (true, false): return .active(L10n.t("桥接已配置"))
+        case (false, true): return .active(L10n.t("镜像已配置"))
+        case (false, false): return .missingCreds(L10n.t("未配置"))
         }
     case .bark:
         if let hint = config.pushMissingHint() { return .missingCreds(hint) }
@@ -242,7 +242,7 @@ struct AccountLinkingTab: View {
             saveBar
         }
         .alert(
-            "还差一步",
+            L10n.t("还差一步"),
             isPresented: Binding(
                 get: { missingPrereqAlert != nil },
                 set: { if !$0 { missingPrereqAlert = nil } }
@@ -250,10 +250,10 @@ struct AccountLinkingTab: View {
             presenting: missingPrereqAlert
         ) { alert in
             if let target = alert.jumpTarget {
-                Button("去配置「\(target.title)」") { onJumpToAccount(target) }
-                Button("取消", role: .cancel) {}
+                Button(String(format: L10n.t("去配置「%@」"), target.title)) { onJumpToAccount(target) }
+                Button(L10n.t("取消"), role: .cancel) {}
             } else {
-                Button("好的", role: .cancel) {}
+                Button(L10n.t("好的"), role: .cancel) {}
             }
         } message: { alert in
             Text(alert.message)
@@ -271,11 +271,11 @@ struct AccountLinkingTab: View {
     ) {
         guard newValue else { apply(false); return }
         if let sameCardHint {
-            missingPrereqAlert = MissingPrereqAlert(message: "请先在这张卡上填好：\(sameCardHint)。", jumpTarget: nil)
+            missingPrereqAlert = MissingPrereqAlert(message: String(format: L10n.t("请先在这张卡上填好：%@。"), sameCardHint), jumpTarget: nil)
             return
         }
         if let crossCard, let hint = crossCard.hint {
-            missingPrereqAlert = MissingPrereqAlert(message: "需要先配置「\(crossCard.target.title)」（\(hint)）。", jumpTarget: crossCard.target)
+            missingPrereqAlert = MissingPrereqAlert(message: String(format: L10n.t("需要先配置「%@」（%@）。"), crossCard.target.title, hint), jumpTarget: crossCard.target)
             return
         }
         apply(true)
@@ -296,13 +296,13 @@ struct AccountLinkingTab: View {
         case .listenBrainz:
             EmptyView()
         case .stateRelay:
-            Text("用来把当前播放状态推送到网页小组件和状态徽章。")
+            Text(L10n.t("用来把当前播放状态推送到网页小组件和状态徽章。"))
                 .font(.caption).foregroundStyle(.secondary)
         case .lastfm:
-            Text("这台 Mac 用同一个 Last.fm 账号做两件事：读取 iPhone 上的播放记录、把 Mac 上的播放写回 Last.fm。")
+            Text(L10n.t("这台 Mac 用同一个 Last.fm 账号做两件事：读取 iPhone 上的播放记录、把 Mac 上的播放写回 Last.fm。"))
                 .font(.caption).foregroundStyle(.secondary)
         case .bark:
-            Text("用来接收两类推送：「故障告警」和「每周听歌小结」。")
+            Text(L10n.t("用来接收两类推送：「故障告警」和「每周听歌小结」。"))
                 .font(.caption).foregroundStyle(.secondary)
         }
     }
@@ -332,14 +332,14 @@ struct AccountLinkingTab: View {
 
     private var listenBrainzFields: some View {
         Section {
-            SecretFieldRow("账户 Token", value: $config.listenbrainzToken)
-            Link("在 ListenBrainz 网站获取 Token →", destination: URL(string: "https://listenbrainz.org/settings/")!)
+            SecretFieldRow(L10n.t("账户 Token"), value: $config.listenbrainzToken)
+            Link(L10n.t("在 ListenBrainz 网站获取 Token →"), destination: URL(string: "https://listenbrainz.org/settings/")!)
                 .font(.caption)
-            TextField("用户名（选填，用于界面显示）", text: $config.listenbrainzUser)
+            TextField(L10n.t("用户名（选填，用于界面显示）"), text: $config.listenbrainzUser)
         } header: {
-            Text("账户信息")
+            Text(L10n.t("账户信息"))
         } footer: {
-            Text("可选，不填不影响悬浮歌词。")
+            Text(L10n.t("可选，不填不影响悬浮歌词。"))
         }
     }
 
@@ -348,12 +348,12 @@ struct AccountLinkingTab: View {
     @ViewBuilder
     private var stateRelayFields: some View {
         Section {
-            TextField(text: $config.stateRelayURL, prompt: Text("例如 https://yourdomain.com/api/state")) {
+            TextField(text: $config.stateRelayURL, prompt: Text(L10n.t("例如 https://yourdomain.com/api/state"))) {
                 HStack(spacing: 4) {
-                    Text("同步服务地址")
+                    Text(L10n.t("同步服务地址"))
                     HelpButton(
-                        text: "自己用 Cloudflare Worker + KV 搭建的 state-worker 服务（项目里的 state-worker/ 目录）。不想自建也行：配好「ListenBrainz」也能让网页兜底显示「正在播放」，两者配一个就够。完整从零搭建步骤见 README「从零搭建 state-worker」一节。",
-                        docTitle: "打开 README →",
+                        text: L10n.t("自己用 Cloudflare Worker + KV 搭建的 state-worker 服务（项目里的 state-worker/ 目录）。不想自建也行：配好「ListenBrainz」也能让网页兜底显示「正在播放」，两者配一个就够。完整从零搭建步骤见 README「从零搭建 state-worker」一节。"),
+                        docTitle: L10n.t("打开 README →"),
                         // 私有仓库 desktop-lyrics-suite(2026-07-17 起改名,原 nowplaying-backend)
                         // 的 GitHub 网页版(排版好,不是本地 IDE 打开的原始文本)——用行号锚点而不是
                         // 标题锚点,不用去猜 GitHub 对中文/括号标题的 slug 生成规则;这份 README
@@ -362,13 +362,13 @@ struct AccountLinkingTab: View {
                     )
                 }
             }
-            SecretFieldRow("访问令牌", value: $config.stateRelayToken)
+            SecretFieldRow(L10n.t("访问令牌"), value: $config.stateRelayToken)
         } header: {
-            Text("连接信息")
+            Text(L10n.t("连接信息"))
         }
 
         Section {
-            Toggle("推送状态到网页/徽章", isOn: Binding(
+            Toggle(L10n.t("推送状态到网页/徽章"), isOn: Binding(
                 get: { features.stateRelay },
                 set: { newValue in
                     toggleGuarded(newValue, sameCardHint: config.stateRelayMissingHint()) { v in
@@ -377,15 +377,15 @@ struct AccountLinkingTab: View {
                 }
             ))
 
-            Toggle("最近播放历史", isOn: webModuleBinding(\.webShowHistory))
-            Toggle("留言墙", isOn: webModuleBinding(\.webShowComments))
-            Toggle("点赞", isOn: webModuleBinding(\.webShowReactions))
-            Toggle("访客计数", isOn: webModuleBinding(\.webShowVisitorCount))
-            Toggle("历史 Top10 歌手", isOn: webModuleBinding(\.webShowTopArtists))
+            Toggle(L10n.t("最近播放历史"), isOn: webModuleBinding(\.webShowHistory))
+            Toggle(L10n.t("留言墙"), isOn: webModuleBinding(\.webShowComments))
+            Toggle(L10n.t("点赞"), isOn: webModuleBinding(\.webShowReactions))
+            Toggle(L10n.t("访客计数"), isOn: webModuleBinding(\.webShowVisitorCount))
+            Toggle(L10n.t("历史 Top10 歌手"), isOn: webModuleBinding(\.webShowTopArtists))
         } header: {
-            Text("网页展示模块")
+            Text(L10n.t("网页展示模块"))
         } footer: {
-            Text("默认全部开启，跟着上面的推送开关走；「最近播放历史」需要「ListenBrainz」配好才有数据，「历史 Top10 歌手」需要「Last.fm」卡片配好。")
+            Text(L10n.t("默认全部开启，跟着上面的推送开关走；「最近播放历史」需要「ListenBrainz」配好才有数据，「历史 Top10 歌手」需要「Last.fm」卡片配好。"))
         }
     }
 
@@ -395,7 +395,7 @@ struct AccountLinkingTab: View {
         Binding(
             get: { features[keyPath: keyPath] },
             set: { newValue in
-                toggleGuarded(newValue, sameCardHint: features.stateRelay ? nil : "先打开「推送状态到网页/徽章」") { v in
+                toggleGuarded(newValue, sameCardHint: features.stateRelay ? nil : L10n.t("先打开「推送状态到网页/徽章」")) { v in
                     features[keyPath: keyPath] = v; Task { await features.save() }
                 }
             }
@@ -408,46 +408,46 @@ struct AccountLinkingTab: View {
     private var lastfmFields: some View {
         Section {
             HStack(spacing: 4) {
-                Text("在 Last.fm 官网申请一个 API Key 就够用（这是只读场景，不需要 Secret）。")
+                Text(L10n.t("在 Last.fm 官网申请一个 API Key 就够用（这是只读场景，不需要 Secret）。"))
                     .font(.caption2).foregroundStyle(.secondary)
                 HelpButton(
-                    text: "在 Last.fm 官网申请一个 API Key 就够用（这是只读场景，不需要 Secret）。",
-                    docTitle: "前往 Last.fm 申请 →",
+                    text: L10n.t("在 Last.fm 官网申请一个 API Key 就够用（这是只读场景，不需要 Secret）。"),
+                    docTitle: L10n.t("前往 Last.fm 申请 →"),
                     docURL: URL(string: "https://www.last.fm/api/account/create")!
                 )
             }
-            TextField("Last.fm 用户名", text: $config.lastfmUser)
-            SecretFieldRow("API Key", value: $config.lastfmAPIKey, prompt: "在 last.fm/api/account/create 申请")
-            Toggle("桥接回 ListenBrainz", isOn: Binding(
+            TextField(L10n.t("Last.fm 用户名"), text: $config.lastfmUser)
+            SecretFieldRow("API Key", value: $config.lastfmAPIKey, prompt: L10n.t("在 last.fm/api/account/create 申请"))
+            Toggle(L10n.t("桥接回 ListenBrainz"), isOn: Binding(
                 get: { features.lastfmBridge },
                 set: { newValue in
                     toggleGuarded(newValue,
                         sameCardHint: config.lastfmBridgeMissingHint(),
-                        crossCard: (hint: config.isListenBrainzConfigured ? nil : "未配置", target: .listenBrainz)
+                        crossCard: (hint: config.isListenBrainzConfigured ? nil : L10n.t("未配置"), target: .listenBrainz)
                     ) { v in features.lastfmBridge = v; Task { await features.save() } }
                 }
             ))
         } header: {
-            Text("iPhone 播放桥接")
+            Text(L10n.t("iPhone 播放桥接"))
         } footer: {
-            Text("转发进 ListenBrainz，也需要那张卡配好。")
+            Text(L10n.t("转发进 ListenBrainz，也需要那张卡配好。"))
         }
 
         Section {
             // 原来这里有两句几乎重复的话(HelpButton 文案 vs 单独一行 caption,说的是同一件
             // 事:跟上面桥接用的不是同一个 API Key),精简合并成一句,不是简单挪位置。
             HStack(spacing: 4) {
-                Text("跟上面桥接用的不是同一个 API Key，需要单独申请。")
+                Text(L10n.t("跟上面桥接用的不是同一个 API Key，需要单独申请。"))
                     .font(.caption2).foregroundStyle(.secondary)
                 HelpButton(
-                    text: "需要单独申请一个有写入权限的 API Key + Secret，跟上面桥接用的不是同一个——在 Last.fm 后台创建应用时会同时给你这两项。",
-                    docTitle: "前往 Last.fm 申请 →",
+                    text: L10n.t("需要单独申请一个有写入权限的 API Key + Secret，跟上面桥接用的不是同一个——在 Last.fm 后台创建应用时会同时给你这两项。"),
+                    docTitle: L10n.t("前往 Last.fm 申请 →"),
                     docURL: URL(string: "https://www.last.fm/api/account/create")!
                 )
             }
             SecretFieldRow("Scrobble API Key", value: $config.lastfmScrobbleAPIKey)
-            SecretFieldRow("Scrobble Secret", value: $config.lastfmScrobbleSecret, prompt: "在 last.fm/api/account/create 创建应用后可见")
-            Toggle("同步进 Last.fm", isOn: Binding(
+            SecretFieldRow("Scrobble Secret", value: $config.lastfmScrobbleSecret, prompt: L10n.t("在 last.fm/api/account/create 创建应用后可见"))
+            Toggle(L10n.t("同步进 Last.fm"), isOn: Binding(
                 get: { features.lastfmMirrorScrobble },
                 set: { newValue in
                     toggleGuarded(newValue, sameCardHint: config.lastfmMirrorMissingHint()) { v in
@@ -456,7 +456,7 @@ struct AccountLinkingTab: View {
                 }
             ))
         } header: {
-            Text("Mac 播放镜像")
+            Text(L10n.t("Mac 播放镜像"))
         }
 
         // 原来外面套了一层 GroupBox("账号授权")——现在 Section 标题本身已经是"账号授权",
@@ -464,11 +464,11 @@ struct AccountLinkingTab: View {
         Section {
             lastfmConnectArea
         } header: {
-            Text("账号授权")
+            Text(L10n.t("账号授权"))
         }
 
         Section {
-            Toggle("历史 Top10 歌手统计", isOn: Binding(
+            Toggle(L10n.t("历史 Top10 歌手统计"), isOn: Binding(
                 get: { features.topArtistsDigest },
                 set: { newValue in
                     toggleGuarded(newValue,
@@ -478,9 +478,9 @@ struct AccountLinkingTab: View {
                 }
             ))
         } header: {
-            Text("历史统计")
+            Text(L10n.t("历史统计"))
         } footer: {
-            Text("推给网页展示，还需要「网页推送」配好。")
+            Text(L10n.t("推给网页展示，还需要「网页推送」配好。"))
         }
     }
 
@@ -492,16 +492,16 @@ struct AccountLinkingTab: View {
         case .idle:
             if config.lastfmScrobbleSessionKey.isEmpty {
                 stepDots(current: 0)
-                Button("连接 Last.fm 账号") { lastfmConnect.start(apiKey: config.lastfmScrobbleAPIKey) }
+                Button(L10n.t("连接 Last.fm 账号")) { lastfmConnect.start(apiKey: config.lastfmScrobbleAPIKey) }
                     .buttonStyle(.borderedProminent)
             } else {
                 HStack {
                     Label(
-                        config.lastfmScrobbleUsername.isEmpty ? "已连接 Last.fm 账号" : "已连接：\(config.lastfmScrobbleUsername)",
+                        config.lastfmScrobbleUsername.isEmpty ? L10n.t("已连接 Last.fm 账号") : String(format: L10n.t("已连接：%@"), config.lastfmScrobbleUsername),
                         systemImage: "checkmark.seal.fill"
                     ).foregroundStyle(.green)
                     Spacer()
-                    Button("断开") {
+                    Button(L10n.t("断开")) {
                         config.lastfmScrobbleSessionKey = ""
                         config.lastfmScrobbleUsername = ""
                         Task { await config.save() }
@@ -513,21 +513,21 @@ struct AccountLinkingTab: View {
             stepDots(current: 1)
             HStack(spacing: 6) {
                 ProgressView().controlSize(.small)
-                Text("正在获取授权令牌…").font(.caption)
+                Text(L10n.t("正在获取授权令牌…")).font(.caption)
             }
         case .waitingForBrowserAuth:
             stepDots(current: 2)
             VStack(alignment: .leading, spacing: 6) {
-                Text("已在浏览器打开 Last.fm 授权页面。请在浏览器里点击「Yes, allow access」完成授权，然后回来点下面的按钮。")
+                Text(L10n.t("已在浏览器打开 Last.fm 授权页面。请在浏览器里点击「Yes, allow access」完成授权，然后回来点下面的按钮。"))
                     .font(.caption).foregroundStyle(.secondary)
-                Button("我已完成授权，继续") {
+                Button(L10n.t("我已完成授权，继续")) {
                     lastfmConnect.confirmBrowserAuth(apiKey: config.lastfmScrobbleAPIKey, secret: config.lastfmScrobbleSecret)
                 }
                 .buttonStyle(.borderedProminent)
                 HStack(spacing: 12) {
-                    Button("重新打开授权页面") { lastfmConnect.reopenBrowserAuth(apiKey: config.lastfmScrobbleAPIKey) }
+                    Button(L10n.t("重新打开授权页面")) { lastfmConnect.reopenBrowserAuth(apiKey: config.lastfmScrobbleAPIKey) }
                         .buttonStyle(.link)
-                    Button("取消") { lastfmConnect.reset() }
+                    Button(L10n.t("取消")) { lastfmConnect.reset() }
                         .buttonStyle(.link).foregroundStyle(.secondary)
                 }
             }
@@ -535,15 +535,15 @@ struct AccountLinkingTab: View {
             stepDots(current: 3)
             HStack(spacing: 6) {
                 ProgressView().controlSize(.small)
-                Text("正在确认授权，即将完成…").font(.caption)
+                Text(L10n.t("正在确认授权，即将完成…")).font(.caption)
             }
         case .success(let username):
-            Label("已连接：\(username)", systemImage: "checkmark.seal.fill").foregroundStyle(.green)
+            Label(String(format: L10n.t("已连接：%@"), username), systemImage: "checkmark.seal.fill").foregroundStyle(.green)
         case .failed(let message):
             VStack(alignment: .leading, spacing: 6) {
                 Label(message, systemImage: "exclamationmark.triangle.fill")
                     .font(.caption).foregroundStyle(.red)
-                Button("重试") { lastfmConnect.reset() }
+                Button(L10n.t("重试")) { lastfmConnect.reset() }
                     .buttonStyle(.link)
             }
         }
@@ -551,11 +551,11 @@ struct AccountLinkingTab: View {
 
     private func stepDots(current: Int) -> some View {
         HStack(spacing: 4) {
-            stepDot(filled: current >= 1, label: "① 填写密钥")
+            stepDot(filled: current >= 1, label: L10n.t("① 填写密钥"))
             stepLine(active: current >= 2)
-            stepDot(filled: current >= 2, label: "② 浏览器授权")
+            stepDot(filled: current >= 2, label: L10n.t("② 浏览器授权"))
             stepLine(active: current >= 3)
-            stepDot(filled: current >= 3, label: "③ 完成连接")
+            stepDot(filled: current >= 3, label: L10n.t("③ 完成连接"))
         }
     }
 
@@ -604,10 +604,10 @@ struct AccountLinkingTab: View {
                 }
             } label: {
                 HStack(spacing: 4) {
-                    Text("通知平台")
+                    Text(L10n.t("通知平台"))
                     HelpButton(
                         text: config.notificationPlatform.setupGuide,
-                        docTitle: "查看官方文档 →",
+                        docTitle: L10n.t("查看官方文档 →"),
                         docURL: config.notificationPlatform.setupDocURL
                     )
                 }
@@ -615,25 +615,25 @@ struct AccountLinkingTab: View {
             .pickerStyle(.menu)
 
             TextField(
-                "Webhook 地址", text: $config.notificationWebhookURL,
+                L10n.t("Webhook 地址"), text: $config.notificationWebhookURL,
                 prompt: Text(config.notificationPlatform.urlPlaceholder)
             )
 
             if config.notificationPlatform == .dingtalk {
-                SecretFieldRow("加签密钥（可选）", value: $config.dingtalkSignSecret)
-                Text("机器人安全设置选了「加签」才需要填，留空按未加签处理。")
+                SecretFieldRow(L10n.t("加签密钥（可选）"), value: $config.dingtalkSignSecret)
+                Text(L10n.t("机器人安全设置选了「加签」才需要填，留空按未加签处理。"))
                     .font(.caption2).foregroundStyle(.secondary)
             } else if config.notificationPlatform == .feishu {
-                SecretFieldRow("签名密钥（可选）", value: $config.feishuSignSecret)
-                Text("机器人安全设置开了「签名校验」才需要填，不开也能收到消息。")
+                SecretFieldRow(L10n.t("签名密钥（可选）"), value: $config.feishuSignSecret)
+                Text(L10n.t("机器人安全设置开了「签名校验」才需要填，不开也能收到消息。"))
                     .font(.caption2).foregroundStyle(.secondary)
             }
         } header: {
-            Text("推送设置")
+            Text(L10n.t("推送设置"))
         }
 
         Section {
-            Toggle("故障告警", isOn: Binding(
+            Toggle(L10n.t("故障告警"), isOn: Binding(
                 get: { features.barkAlerts },
                 set: { newValue in
                     toggleGuarded(newValue, sameCardHint: config.pushMissingHint()) { v in
@@ -642,7 +642,7 @@ struct AccountLinkingTab: View {
                 }
             ))
 
-            Toggle("每周听歌小结", isOn: Binding(
+            Toggle(L10n.t("每周听歌小结"), isOn: Binding(
                 get: { features.weeklyDigest },
                 set: { newValue in
                     toggleGuarded(newValue,
@@ -652,7 +652,7 @@ struct AccountLinkingTab: View {
                 }
             ))
         } header: {
-            Text("提醒开关")
+            Text(L10n.t("提醒开关"))
         }
     }
 
@@ -662,7 +662,7 @@ struct AccountLinkingTab: View {
         HStack {
             saveStatusText
             Spacer()
-            Button(isSaving ? "" : (config.isDirty ? "保存并应用" : "已全部保存")) {
+            Button(isSaving ? "" : (config.isDirty ? L10n.t("保存并应用") : L10n.t("已全部保存"))) {
                 Task { await performSave() }
             }
             .buttonStyle(.borderedProminent)
@@ -672,7 +672,7 @@ struct AccountLinkingTab: View {
                 if isSaving {
                     HStack(spacing: 6) {
                         ProgressView().controlSize(.small)
-                        Text("正在保存并应用…")
+                        Text(L10n.t("正在保存并应用…"))
                     }
                     .font(.callout)
                 }
@@ -687,7 +687,7 @@ struct AccountLinkingTab: View {
             Label(error, systemImage: "exclamationmark.triangle.fill")
                 .font(.caption).foregroundStyle(.red)
         } else if let lastSavedAt {
-            Text("上次保存：\(lastSavedAt.formatted(date: .omitted, time: .shortened)) · 采集器已重启")
+            Text(String(format: L10n.t("上次保存：%@ · 采集器已重启"), lastSavedAt.formatted(date: .omitted, time: .shortened)))
                 .font(.caption).foregroundStyle(.secondary)
         }
     }

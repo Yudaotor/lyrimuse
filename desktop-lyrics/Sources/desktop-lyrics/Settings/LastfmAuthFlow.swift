@@ -21,8 +21,8 @@ enum LastfmAuthError: Error, LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .api(let msg): return "Last.fm 返回错误: \(msg)"
-        case .parse: return "解析 Last.fm 响应失败"
+        case .api(let msg): return String(format: L10n.t("Last.fm 返回错误: %@"), msg)
+        case .parse: return L10n.t("解析 Last.fm 响应失败")
         }
     }
 }
@@ -60,7 +60,7 @@ enum LastfmAuthFlow {
         struct Resp: Decodable { let token: String?; let message: String? }
         guard let decoded = try? JSONDecoder().decode(Resp.self, from: data) else { throw LastfmAuthError.parse }
         if let token = decoded.token, !token.isEmpty { return token }
-        throw LastfmAuthError.api(decoded.message ?? "未知错误")
+        throw LastfmAuthError.api(decoded.message ?? L10n.t("未知错误"))
     }
 
     static func authorizeURL(apiKey: String, token: String) -> URL {
@@ -86,7 +86,7 @@ enum LastfmAuthFlow {
         }
         guard let decoded = try? JSONDecoder().decode(Resp.self, from: data) else { throw LastfmAuthError.parse }
         if let session = decoded.session { return (session.key, session.name) }
-        throw LastfmAuthError.api(decoded.message ?? "未知错误")
+        throw LastfmAuthError.api(decoded.message ?? L10n.t("未知错误"))
     }
 }
 
@@ -106,7 +106,7 @@ final class LastfmConnectController: ObservableObject {
 
     func start(apiKey: String) {
         guard !apiKey.isEmpty else {
-            state = .failed("请先填写 API Key")
+            state = .failed(L10n.t("请先填写 API Key"))
             return
         }
         state = .requestingToken
@@ -124,7 +124,7 @@ final class LastfmConnectController: ObservableObject {
     func confirmBrowserAuth(apiKey: String, secret: String) {
         guard case .waitingForBrowserAuth(let token) = state else { return }
         guard !secret.isEmpty else {
-            state = .failed("请先填写 Secret")
+            state = .failed(L10n.t("请先填写 Secret"))
             return
         }
         state = .exchanging

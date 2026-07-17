@@ -16,11 +16,11 @@ public enum NotificationPlatform: String, CaseIterable, Identifiable, Codable {
     public var displayName: String {
         switch self {
         case .bark: return "Bark"
-        case .dingtalk: return "钉钉"
-        case .wecom: return "企业微信"
+        case .dingtalk: return L10n.t("钉钉")
+        case .wecom: return L10n.t("企业微信")
         case .discord: return "Discord"
-        case .feishu: return "飞书"
-        case .serverchan: return "Server酱"
+        case .feishu: return L10n.t("飞书")
+        case .serverchan: return L10n.t("Server酱")
         }
     }
 
@@ -28,12 +28,12 @@ public enum NotificationPlatform: String, CaseIterable, Identifiable, Codable {
     // 光看"webhook 地址"这四个字不够,给个例子避免用户填错格式。
     public var urlPlaceholder: String {
         switch self {
-        case .bark: return "https://api.day.app/你的Key"
+        case .bark: return L10n.t("https://api.day.app/你的Key")
         case .dingtalk: return "https://oapi.dingtalk.com/robot/send?access_token=..."
         case .wecom: return "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=..."
         case .discord: return "https://discord.com/api/webhooks/..."
         case .feishu: return "https://open.feishu.cn/open-apis/bot/v2/hook/..."
-        case .serverchan: return "https://sctapi.ftqq.com/你的SendKey.send"
+        case .serverchan: return L10n.t("https://sctapi.ftqq.com/你的SendKey.send")
         }
     }
 
@@ -42,17 +42,17 @@ public enum NotificationPlatform: String, CaseIterable, Identifiable, Codable {
     public var setupGuide: String {
         switch self {
         case .bark:
-            return "在 iPhone 上安装 Bark App，首页显示的就是你的专属推送地址，复制粘贴过来即可，不需要额外设置。"
+            return L10n.t("在 iPhone 上安装 Bark App，首页显示的就是你的专属推送地址，复制粘贴过来即可，不需要额外设置。")
         case .dingtalk:
-            return "在钉钉群里：群设置 → 智能群助手 → 添加机器人 → 自定义，创建后复制 Webhook 地址。安全设置建议选「加签」，把生成的密钥填进下面的「加签密钥」。"
+            return L10n.t("在钉钉群里：群设置 → 智能群助手 → 添加机器人 → 自定义，创建后复制 Webhook 地址。安全设置建议选「加签」，把生成的密钥填进下面的「加签密钥」。")
         case .wecom:
-            return "在企业微信群里：群设置 → 群机器人 → 添加机器人，创建后复制 Webhook 地址，不需要额外的签名设置。"
+            return L10n.t("在企业微信群里：群设置 → 群机器人 → 添加机器人，创建后复制 Webhook 地址，不需要额外的签名设置。")
         case .discord:
-            return "服务器设置 → 整合(Integrations) → Webhook → 新建 Webhook，选好要发到的频道后复制 Webhook URL。"
+            return L10n.t("服务器设置 → 整合(Integrations) → Webhook → 新建 Webhook，选好要发到的频道后复制 Webhook URL。")
         case .feishu:
-            return "在飞书群里：设置 → 群机器人 → 添加机器人 → 自定义机器人，创建后复制 Webhook 地址。想加一层校验可以开启「签名校验」，把密钥填进下面的「签名密钥」。"
+            return L10n.t("在飞书群里：设置 → 群机器人 → 添加机器人 → 自定义机器人，创建后复制 Webhook 地址。想加一层校验可以开启「签名校验」，把密钥填进下面的「签名密钥」。")
         case .serverchan:
-            return "打开 sct.ftqq.com，用微信扫码登录，首页会显示你的 SendKey——完整地址是 https://sctapi.ftqq.com/你的SendKey.send，把这一整串填进上面。"
+            return L10n.t("打开 sct.ftqq.com，用微信扫码登录，首页会显示你的 SendKey——完整地址是 https://sctapi.ftqq.com/你的SendKey.send，把这一整串填进上面。")
         }
     }
 
@@ -149,28 +149,28 @@ public final class ConfigStore: ObservableObject {
     public var isListenBrainzConfigured: Bool { !savedSnapshot.listenbrainzToken.isEmpty }
 
     public func stateRelayMissingHint() -> String? {
-        if savedSnapshot.stateRelayURL.isEmpty { return "还没填服务地址" }
-        if savedSnapshot.stateRelayToken.isEmpty { return "还没填访问令牌" }
+        if savedSnapshot.stateRelayURL.isEmpty { return L10n.t("还没填服务地址") }
+        if savedSnapshot.stateRelayToken.isEmpty { return L10n.t("还没填访问令牌") }
         return nil
     }
 
     public func lastfmBridgeMissingHint() -> String? {
-        if savedSnapshot.lastfmUser.isEmpty { return "还没填用户名" }
-        if savedSnapshot.lastfmAPIKey.isEmpty { return "还没填 API Key" }
+        if savedSnapshot.lastfmUser.isEmpty { return L10n.t("还没填用户名") }
+        if savedSnapshot.lastfmAPIKey.isEmpty { return L10n.t("还没填 API Key") }
         return nil
     }
 
     public func lastfmMirrorMissingHint() -> String? {
-        if savedSnapshot.lastfmScrobbleAPIKey.isEmpty { return "还没填 Scrobble API Key" }
-        if savedSnapshot.lastfmScrobbleSecret.isEmpty { return "还没填 Scrobble Secret" }
-        if savedSnapshot.lastfmScrobbleSessionKey.isEmpty { return "还没完成账号授权" }
+        if savedSnapshot.lastfmScrobbleAPIKey.isEmpty { return L10n.t("还没填 Scrobble API Key") }
+        if savedSnapshot.lastfmScrobbleSecret.isEmpty { return L10n.t("还没填 Scrobble Secret") }
+        if savedSnapshot.lastfmScrobbleSessionKey.isEmpty { return L10n.t("还没完成账号授权") }
         return nil
     }
 
     // 改名自 barkMissingHint——推送提醒现在不止 Bark 一个平台,这个判断跟平台无关,
     // 只看 webhook 地址填没填(平台本身有默认值 .bark,不会缺失)。
     public func pushMissingHint() -> String? {
-        savedSnapshot.notificationWebhookURL.isEmpty ? "还没填 webhook 地址" : nil
+        savedSnapshot.notificationWebhookURL.isEmpty ? L10n.t("还没填 webhook 地址") : nil
     }
 
     private init() {
@@ -229,7 +229,7 @@ public final class ConfigStore: ObservableObject {
         raw["feishu_sign_secret"] = feishuSignSecret
 
         guard JSONSerialization.isValidJSONObject(raw) else {
-            throw NSError(domain: "ConfigStore", code: 1, userInfo: [NSLocalizedDescriptionKey: "内部数据不是合法 JSON,已放弃保存"])
+            throw NSError(domain: "ConfigStore", code: 1, userInfo: [NSLocalizedDescriptionKey: L10n.t("内部数据不是合法 JSON,已放弃保存")])
         }
         let data = try JSONSerialization.data(withJSONObject: raw, options: [.prettyPrinted])
         try data.write(to: Self.configURL, options: .atomic)
@@ -249,7 +249,7 @@ public final class ConfigStore: ObservableObject {
         do {
             try persistFile()
         } catch {
-            lastError = "写入 config.json 失败: \(error.localizedDescription)"
+            lastError = String(format: L10n.t("写入 config.json 失败: %@"), error.localizedDescription)
             logger.error("write failed: \(String(describing: error), privacy: .public)")
             return false
         }
@@ -258,7 +258,7 @@ public final class ConfigStore: ObservableObject {
             commitSnapshot()
             return true
         } else {
-            lastError = "重启 collector 失败"
+            lastError = L10n.t("重启 collector 失败")
             return false
         }
     }

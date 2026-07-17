@@ -23,11 +23,11 @@ struct LyricsSearchSheet: View {
         VStack(spacing: 0) {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("搜索候选歌词").font(.title3.weight(.semibold))
+                    Text(L10n.t("搜索候选歌词")).font(.title3.weight(.semibold))
                     Text("\(artist) - \(title)").font(.caption).foregroundStyle(.secondary)
                 }
                 Spacer()
-                Button("关闭") { dismiss() }
+                Button(L10n.t("关闭")) { dismiss() }
                     .keyboardShortcut(.cancelAction)
             }
             .padding(16)
@@ -46,7 +46,7 @@ struct LyricsSearchSheet: View {
         case .loading:
             VStack(spacing: 12) {
                 ProgressView()
-                Text("正在查询网易云 / QQ音乐 / 酷狗 / LRCLIB…")
+                Text(L10n.t("正在查询网易云 / QQ音乐 / 酷狗 / LRCLIB…"))
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }
@@ -58,13 +58,13 @@ struct LyricsSearchSheet: View {
                     .font(.system(size: 32))
                     .foregroundStyle(.orange)
                 Text(msg).font(.callout).multilineTextAlignment(.center).padding(.horizontal, 40)
-                Button("重试") { Task { await load() } }
+                Button(L10n.t("重试")) { Task { await load() } }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
 
         case .loaded(let candidates):
             if candidates.isEmpty {
-                ContentUnavailableView("四个源都没找到可用的候选", systemImage: "text.badge.xmark")
+                ContentUnavailableView(L10n.t("四个源都没找到可用的候选"), systemImage: "text.badge.xmark")
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 HSplitView {
@@ -85,7 +85,7 @@ struct LyricsSearchSheet: View {
         HStack {
             VStack(alignment: .leading, spacing: 4) {
                 Text(c.source).font(.body.weight(.medium))
-                Text("分数 \(c.score) · \(c.lineCount) 行")
+                Text(String(format: L10n.t("分数 %@ · %@ 行"), "\(c.score)", "\(c.lineCount)"))
                     .font(.caption2)
                     .foregroundStyle(.secondary)
                 characteristicBadges(c)
@@ -101,12 +101,12 @@ struct LyricsSearchSheet: View {
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(c.source).font(.headline)
-                    Text("分数 \(c.score) · \(c.lineCount) 行")
+                    Text(String(format: L10n.t("分数 %@ · %@ 行"), "\(c.score)", "\(c.lineCount)"))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
-                Button("采用此候选") {
+                Button(L10n.t("采用此候选")) {
                     onApply(c)
                     dismiss()
                 }
@@ -132,13 +132,13 @@ struct LyricsSearchSheet: View {
     private func characteristicBadges(_ c: LyricsSearchService.Candidate) -> some View {
         HStack(spacing: 5) {
             if c.hasWordTiming {
-                characteristicBadge("逐字时间戳", "text.word.spacing", .blue)
+                characteristicBadge(L10n.t("逐字时间戳"), "text.word.spacing", .blue)
             }
             if c.hasTranslation {
-                characteristicBadge("译文", "character.book.closed", .green)
+                characteristicBadge(L10n.t("译文"), "character.book.closed", .green)
             }
             if c.hasRomanization {
-                characteristicBadge("罗马音", "textformat.abc", .purple)
+                characteristicBadge(L10n.t("罗马音"), "textformat.abc", .purple)
             }
         }
         .font(.caption2)

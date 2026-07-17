@@ -75,11 +75,11 @@ public final class EnrichCacheStore: ObservableObject {
         let cacheURL = Self.cacheURL
         await Task.detached(priority: .userInitiated) {
             guard let data = try? Data(contentsOf: cacheURL) else {
-                box.errorMessage = "读取本地记录文件失败"
+                box.errorMessage = L10n.t("读取本地记录文件失败")
                 return
             }
             guard let obj = try? JSONSerialization.jsonObject(with: data) as? [String: [String: Any]] else {
-                box.errorMessage = "解析本地记录文件失败"
+                box.errorMessage = L10n.t("解析本地记录文件失败")
                 return
             }
             box.obj = obj
@@ -90,7 +90,7 @@ public final class EnrichCacheStore: ObservableObject {
         } else {
             raw = [:]
             summaries = []
-            lastError = box.errorMessage ?? "读取本地记录文件失败"
+            lastError = box.errorMessage ?? L10n.t("读取本地记录文件失败")
         }
         rebuildSummaries()
     }
@@ -280,7 +280,7 @@ public final class EnrichCacheStore: ObservableObject {
     // delete)跟着一起变 async。
     private func persistAndRestart() async {
         guard JSONSerialization.isValidJSONObject(raw) else {
-            lastError = "内部数据不是合法 JSON,已放弃保存"
+            lastError = L10n.t("内部数据不是合法 JSON,已放弃保存")
             logger.error("raw dict is not valid JSON, aborting save")
             return
         }
@@ -288,12 +288,12 @@ public final class EnrichCacheStore: ObservableObject {
             let data = try JSONSerialization.data(withJSONObject: raw)
             try data.write(to: Self.cacheURL, options: .atomic)
         } catch {
-            lastError = "写入本地记录文件失败: \(error.localizedDescription)"
+            lastError = String(format: L10n.t("写入本地记录文件失败: %@"), error.localizedDescription)
             logger.error("write failed: \(String(describing: error), privacy: .public)")
             return
         }
         if await !CollectorControl.restartAndWaitAsync() {
-            lastError = "重启 collector 失败"
+            lastError = L10n.t("重启 collector 失败")
         }
         // 磁盘已经是最新内容——不管当前悬浮窗显示的是不是被改的这首歌,让播放数据源
         // 强制重新读一次都无害(不是这首歌的话 key 对不上,syncEngine 内容不变),换来

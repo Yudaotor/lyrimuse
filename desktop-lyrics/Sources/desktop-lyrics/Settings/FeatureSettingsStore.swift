@@ -23,8 +23,8 @@ public enum LyricsSourceMode: String, CaseIterable, Identifiable, Codable {
     public var id: Self { self }
     public var displayName: String {
         switch self {
-        case .smart: return "智能算法"
-        case .priority: return "顺序优先"
+        case .smart: return L10n.t("智能算法")
+        case .priority: return L10n.t("顺序优先")
         }
     }
 }
@@ -211,7 +211,7 @@ public final class FeatureSettingsStore: ObservableObject {
         do {
             try persistFile()
         } catch {
-            lastError = "写入功能开关文件失败: \(error.localizedDescription)"
+            lastError = String(format: L10n.t("写入功能开关文件失败: %@"), error.localizedDescription)
             logger.error("write failed: \(String(describing: error), privacy: .public)")
             return false
         }
@@ -220,7 +220,7 @@ public final class FeatureSettingsStore: ObservableObject {
             commitSnapshot()
             return true
         } else {
-            lastError = "重启 collector 失败"
+            lastError = L10n.t("重启 collector 失败")
             return false
         }
     }

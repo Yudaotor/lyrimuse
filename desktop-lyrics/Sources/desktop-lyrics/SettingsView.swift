@@ -50,9 +50,9 @@ enum SettingsTab: Hashable, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .lyrics: return "歌词"
-        case .appearance: return "外观"
-        case .general: return "通用"
+        case .lyrics: return L10n.t("歌词")
+        case .appearance: return L10n.t("外观")
+        case .general: return L10n.t("通用")
         }
     }
 
@@ -108,7 +108,7 @@ struct SettingsView: View {
                 sidebarLabel(.appearance)
                 sidebarLabel(.general)
 
-                Section("账号连接") {
+                Section(L10n.t("账号连接")) {
                     ForEach(AccountDestination.allCases) { destination in
                         AccountSidebarRow(destination: destination)
                             .tag(SettingsSidebarItem.account(destination))
@@ -125,7 +125,7 @@ struct SettingsView: View {
                 case .tab(.general): GeneralSettingsTab()
                 case .account(let destination):
                     AccountLinkingTab(destination: destination, onJumpToAccount: { selection = .account($0) })
-                case nil: ContentUnavailableView("选择左侧的设置分类", systemImage: "gearshape")
+                case nil: ContentUnavailableView(L10n.t("选择左侧的设置分类"), systemImage: "gearshape")
                 }
             }
             .navigationTitle(navigationTitle)
@@ -151,7 +151,7 @@ struct SettingsView: View {
         switch selection {
         case .tab(let tab): return tab.title
         case .account(let destination): return destination.title
-        case nil: return "设置"
+        case nil: return L10n.t("设置")
         }
     }
 }
@@ -168,7 +168,7 @@ private struct LyricsSettingsTab: View {
 
     var body: some View {
         Form {
-            Section("播放状态来源") {
+            Section(L10n.t("播放状态来源")) {
                 Picker(selection: Binding(
                     get: { settings.dataSourceMode },
                     set: { newValue in
@@ -176,18 +176,18 @@ private struct LyricsSettingsTab: View {
                         PlaybackCoordinator.shared.applyMode(newValue)
                     }
                 )) {
-                    Text("远程(网页同源)").tag(PlaybackSourceMode.relay)
-                    Text("本地播放(这台 Mac)").tag(PlaybackSourceMode.local)
+                    Text(L10n.t("远程(网页同源)")).tag(PlaybackSourceMode.relay)
+                    Text(L10n.t("本地播放(这台 Mac)")).tag(PlaybackSourceMode.local)
                 } label: {
                     HStack(spacing: 4) {
-                        Text("来源")
-                        HelpButton(text: "远程(网页同源)：跟网页版读同一份数据，来自你自己部署的状态中继服务，适合想跟网页显示保持完全一致的场景。本地播放(这台 Mac)：直接读这台 Mac 上系统正在播放的内容，不经过网络，更实时。")
+                        Text(L10n.t("来源"))
+                        HelpButton(text: L10n.t("远程(网页同源)：跟网页版读同一份数据，来自你自己部署的状态中继服务，适合想跟网页显示保持完全一致的场景。本地播放(这台 Mac)：直接读这台 Mac 上系统正在播放的内容，不经过网络，更实时。"))
                     }
                 }
                 .pickerStyle(.segmented)
 
                 if settings.dataSourceMode == .relay {
-                    TextField("Relay 地址", text: Binding(
+                    TextField(L10n.t("Relay 地址"), text: Binding(
                         get: { settings.relayBaseURL },
                         set: { newValue in
                             settings.relayBaseURL = newValue
@@ -198,14 +198,14 @@ private struct LyricsSettingsTab: View {
                 }
             }
 
-            Section("解析") {
+            Section(L10n.t("解析")) {
                 Toggle(isOn: Binding(
                     get: { features.lyrics },
                     set: { features.lyrics = $0; Task { await features.save() } }
                 )) {
                     HStack(spacing: 4) {
-                        Text("歌词在线匹配")
-                        HelpButton(text: "控制要不要在线解析歌词——关闭后，第一次播放的新歌不会再去查下面「歌词来源」里的这些平台，只用本地已经缓存过的结果（如果有）。「歌词来源」「匹配算法」这两组设置都只在这个开关开启时才有意义。")
+                        Text(L10n.t("歌词在线匹配"))
+                        HelpButton(text: L10n.t("控制要不要在线解析歌词——关闭后，第一次播放的新歌不会再去查下面「歌词来源」里的这些平台，只用本地已经缓存过的结果（如果有）。「歌词来源」「匹配算法」这两组设置都只在这个开关开启时才有意义。"))
                     }
                 }
                 // 2026-07-16:改名自"换歌时预取同专辑其它曲目"——原文案没提到它其实也会
@@ -218,8 +218,8 @@ private struct LyricsSettingsTab: View {
                     set: { features.albumPrefetch = $0; Task { await features.save() } }
                 )) {
                     HStack(spacing: 4) {
-                        Text("提前解析同专辑其它曲目（封面+歌词）")
-                        HelpButton(text: "换到一首歌时，如果它属于某张专辑，会顺带在后台把同专辑里还没解析过的其它曲目也提前解析——封面无条件都会解析，歌词是否被预取取决于上面的「歌词在线匹配」开关是否开启。")
+                        Text(L10n.t("提前解析同专辑其它曲目（封面+歌词）"))
+                        HelpButton(text: L10n.t("换到一首歌时，如果它属于某张专辑，会顺带在后台把同专辑里还没解析过的其它曲目也提前解析——封面无条件都会解析，歌词是否被预取取决于上面的「歌词在线匹配」开关是否开启。"))
                     }
                 }
                 Toggle(isOn: Binding(
@@ -227,8 +227,8 @@ private struct LyricsSettingsTab: View {
                     set: { features.lyricsFiles = $0; Task { await features.save() } }
                 )) {
                     HStack(spacing: 4) {
-                        Text("歌词文件夹作为权威源")
-                        HelpButton(text: "开启后，如果「歌词管理」窗口里已经手动导入/编辑过某首歌的歌词文件，播放这首歌时优先用那份文件，不会被联网解析的结果覆盖。")
+                        Text(L10n.t("歌词文件夹作为权威源"))
+                        HelpButton(text: L10n.t("开启后，如果「歌词管理」窗口里已经手动导入/编辑过某首歌的歌词文件，播放这首歌时优先用那份文件，不会被联网解析的结果覆盖。"))
                     }
                 }
             }
@@ -260,9 +260,9 @@ private struct LyricsSettingsTab: View {
                     }
                 }
             } header: {
-                Text("歌词来源")
+                Text(L10n.t("歌词来源"))
             } footer: {
-                Text("至少需要保留一个歌词来源。")
+                Text(L10n.t("至少需要保留一个歌词来源。"))
             }
 
             // 实测坐实:Section 的 header/footer 只要塞进去的不是纯 Text(哪怕只是
@@ -271,7 +271,7 @@ private struct LyricsSettingsTab: View {
             // 之前在 accountHintRow 上踩过的那个坑(footer 里嵌 Button 拿不到)是同一类
             // 限制,只是这次连 header、连纯 Text 都受影响。说明/操作一律放回 Section
             // 正文,header/footer 只留死板的字符串字面量。
-            Section("匹配算法") {
+            Section(L10n.t("匹配算法")) {
                 // .labelsHidden()——Picker 自带的标签文字会跟上面 header 逐字重复
                 // (两行同一句话叠在一起),这里隐藏掉,下面单独一行放简短说明+"?"。
                 Picker(selection: Binding(
@@ -282,15 +282,15 @@ private struct LyricsSettingsTab: View {
                         Text(mode.displayName).tag(mode)
                     }
                 } label: {
-                    Text("匹配算法")
+                    Text(L10n.t("匹配算法"))
                 }
                 .labelsHidden()
                 .pickerStyle(.segmented)
 
                 HStack(spacing: 4) {
-                    Text("智能算法自动打分选最高分，顺序优先按你排的顺序来。")
+                    Text(L10n.t("智能算法自动打分选最高分，顺序优先按你排的顺序来。"))
                         .font(.caption2).foregroundStyle(.secondary)
-                    HelpButton(text: "智能算法：查到的每个来源都打分（逐字时间轴、语言是否匹配等维度），自动挑分数最高的一条。顺序优先：按下面排的顺序，用第一个查到有效结果的来源，不比较分数。")
+                    HelpButton(text: L10n.t("智能算法：查到的每个来源都打分（逐字时间轴、语言是否匹配等维度），自动挑分数最高的一条。顺序优先：按下面排的顺序，用第一个查到有效结果的来源，不比较分数。"))
                 }
 
                 if features.lyricsSourceMode == .priority {
@@ -322,7 +322,7 @@ private struct LyricsSettingsTab: View {
             }
 
             Section("展示") {
-                Toggle("优先逐字高亮(有的话)", isOn: Binding(
+                Toggle(L10n.t("优先逐字高亮(有的话)"), isOn: Binding(
                     get: { settings.preferWordLevelKaraoke },
                     set: { newValue in
                         settings.preferWordLevelKaraoke = newValue
@@ -330,24 +330,24 @@ private struct LyricsSettingsTab: View {
                         local.preferWordLevelKaraoke = newValue
                     }
                 ))
-                Toggle("显示罗马音", isOn: $settings.showRomanization)
-                Toggle("显示译文", isOn: $settings.showTranslation)
-                Toggle("双行显示(预览下一句歌词)", isOn: $settings.showNextLinePreview)
-                Toggle("在状态栏显示当前歌词", isOn: $settings.showLyricsInMenuBar)
+                Toggle(L10n.t("显示罗马音"), isOn: $settings.showRomanization)
+                Toggle(L10n.t("显示译文"), isOn: $settings.showTranslation)
+                Toggle(L10n.t("双行显示(预览下一句歌词)"), isOn: $settings.showNextLinePreview)
+                Toggle(L10n.t("在状态栏显示当前歌词"), isOn: $settings.showLyricsInMenuBar)
                 if settings.showLyricsInMenuBar {
-                    LabeledContent("超过就截断") {
+                    LabeledContent(L10n.t("超过就截断")) {
                         HStack(spacing: 8) {
                             Slider(value: Binding(
                                 get: { Double(settings.menuBarLyricsMaxChars) },
                                 set: { settings.menuBarLyricsMaxChars = Int($0) }
                             ), in: 20...120, step: 5)
-                            Text("\(settings.menuBarLyricsMaxChars) 字")
+                            Text(String(format: L10n.t("%@ 字"), "\(settings.menuBarLyricsMaxChars)"))
                                 .foregroundStyle(.secondary)
                                 .monospacedDigit()
                                 .frame(width: 40, alignment: .trailing)
                         }
                     }
-                    Text("没超过就整行显示；超过这个长度会截断，鼠标悬停在状态栏上能看到完整这一行。")
+                    Text(L10n.t("没超过就整行显示；超过这个长度会截断，鼠标悬停在状态栏上能看到完整这一行。"))
                         .font(.caption).foregroundStyle(.secondary)
                 }
             }
@@ -356,7 +356,7 @@ private struct LyricsSettingsTab: View {
                 // accessory 策略下打开新窗口得先手动激活 App,不然 openWindow 调了也
                 // 没反应——跟 MenuBarMenu.swift 里"歌词管理…"菜单项同一个坑、同一个
                 // 修法,这里复用一模一样的写法。
-                Button("打开歌词管理…") {
+                Button(L10n.t("打开歌词管理…")) {
                     NSApp.activate(ignoringOtherApps: true)
                     openWindow(id: "lyrics-manager")
                 }
@@ -368,18 +368,18 @@ private struct LyricsSettingsTab: View {
                         .truncationMode(.middle)
                 } label: {
                     HStack(spacing: 4) {
-                        Text("歌词文件夹")
-                        HelpButton(text: "歌词默认就以这个文件夹为准维护——联网匹配到的结果会导出成文件存在这里，「歌词管理」里手动导入/编辑的文件也在这里。换成新文件夹后，旧文件夹里已有的文件不会自动搬过去，需要自己手动移动。")
+                        Text(L10n.t("歌词文件夹"))
+                        HelpButton(text: L10n.t("歌词默认就以这个文件夹为准维护——联网匹配到的结果会导出成文件存在这里，「歌词管理」里手动导入/编辑的文件也在这里。换成新文件夹后，旧文件夹里已有的文件不会自动搬过去，需要自己手动移动。"))
                     }
                 }
 
                 HStack {
-                    Button("选择文件夹…") {
+                    Button(L10n.t("选择文件夹…")) {
                         let panel = NSOpenPanel()
                         panel.canChooseDirectories = true
                         panel.canChooseFiles = false
                         panel.allowsMultipleSelection = false
-                        panel.prompt = "选择"
+                        panel.prompt = L10n.t("选择")
                         panel.directoryURL = features.effectiveLyricsDir
                         if panel.runModal() == .OK, let url = panel.url {
                             features.lyricsDir = url.path
@@ -387,14 +387,14 @@ private struct LyricsSettingsTab: View {
                         }
                     }
                     if !features.lyricsDir.isEmpty {
-                        Button("恢复默认位置") {
+                        Button(L10n.t("恢复默认位置")) {
                             features.lyricsDir = ""
                             Task { await features.save() }
                         }
                         .buttonStyle(.link)
                     }
                     Spacer()
-                    Button("打开歌词文件夹") {
+                    Button(L10n.t("打开歌词文件夹")) {
                         let url = features.effectiveLyricsDir
                         // collector 那边(见 collector/lyricsexport.go)只在真正解析/导出过至少
                         // 一首歌之后才会建这个目录,这里先兜底建一下,避免文件夹还不存在时
@@ -404,9 +404,9 @@ private struct LyricsSettingsTab: View {
                     }
                 }
             } header: {
-                Text("管理")
+                Text(L10n.t("管理"))
             } footer: {
-                Text("每首歌听过一次,歌词就会永久保存在这个文件夹里;在「歌词管理」里删除会同时删掉这里已导出的文件。")
+                Text(L10n.t("每首歌听过一次,歌词就会永久保存在这个文件夹里;在「歌词管理」里删除会同时删掉这里已导出的文件。"))
             }
         }
         .formStyle(.grouped)
@@ -468,9 +468,9 @@ private struct AppearanceSettingsTab: View {
         // 说明性文字(截屏隐藏/歌词存储那两句)夹在控件中间当成普通一行,读起来像是漏了
         // 什么而不是备注。分组样式换来的排版全部是 SwiftUI 原生处理,不用手工调间距。
         Form {
-            Section("外观") {
-                Picker("字体", selection: $settings.fontFamilyName) {
-                    Text("跟随系统").tag("")
+            Section(L10n.t("外观")) {
+                Picker(L10n.t("字体"), selection: $settings.fontFamilyName) {
+                    Text(L10n.t("跟随系统")).tag("")
                     ForEach(Self.curatedFontFamilies, id: \.self) { family in
                         Text(family).tag(family)
                     }
@@ -480,10 +480,10 @@ private struct AppearanceSettingsTab: View {
                 // LabeledContent 而不是裸 HStack——分组样式下 Toggle/Picker/ColorPicker
                 // 这些自带标签的控件,标签会自动对齐成同一条竖线;裸 HStack 的"字号"只是
                 // 行内第一个 Text,对不上那条对齐线。LabeledContent 让它享受同一套对齐。
-                LabeledContent("字号") {
+                LabeledContent(L10n.t("字号")) {
                     HStack(spacing: 8) {
                         Slider(value: $settings.fontSize, in: 14...36, step: 1)
-                        Text("\(Int(settings.fontSize))pt")
+                        Text(String(format: L10n.t("%@pt"), "\(Int(settings.fontSize))"))
                             .foregroundStyle(.secondary)
                             .monospacedDigit()
                             .frame(width: 32, alignment: .trailing)
@@ -491,7 +491,7 @@ private struct AppearanceSettingsTab: View {
                 }
 
                 ColorPicker(
-                    "文字颜色",
+                    L10n.t("文字颜色"),
                     selection: Binding(
                         get: { settings.foregroundColor },
                         set: { settings.foregroundColorHex = $0.hexStringWithAlpha }
@@ -501,7 +501,7 @@ private struct AppearanceSettingsTab: View {
                 )
 
                 ColorPicker(
-                    "背景颜色",
+                    L10n.t("背景颜色"),
                     selection: Binding(
                         get: { settings.backgroundColor },
                         set: { settings.backgroundColorHex = $0.hexStringWithAlpha }
@@ -510,11 +510,11 @@ private struct AppearanceSettingsTab: View {
                                           // 不另加一根 opacity 滑杆
                 )
 
-                Toggle("文字阴影(与桌面背景区分)", isOn: $settings.textShadowEnabled)
+                Toggle(L10n.t("文字阴影(与桌面背景区分)"), isOn: $settings.textShadowEnabled)
 
                 if settings.textShadowEnabled {
                     ColorPicker(
-                        "阴影颜色",
+                        L10n.t("阴影颜色"),
                         selection: Binding(
                             get: { settings.textShadowColor },
                             set: { settings.textShadowColorHex = $0.hexStringWithAlpha }
@@ -524,7 +524,7 @@ private struct AppearanceSettingsTab: View {
                     )
                 }
 
-                Button("恢复默认外观") {
+                Button(L10n.t("恢复默认外观")) {
                     settings.fontFamilyName = ""
                     settings.fontSize = 20
                     settings.foregroundColorHex = "#FFFFFFFF"
@@ -536,7 +536,7 @@ private struct AppearanceSettingsTab: View {
             }
 
             Section {
-                LabeledContent("宽度") {
+                LabeledContent(L10n.t("宽度")) {
                     HStack(spacing: 8) {
                         Slider(value: Binding(
                             get: { settings.overlayWidth },
@@ -545,27 +545,27 @@ private struct AppearanceSettingsTab: View {
                                 LyricsOverlayWindowController.shared.setWidth(newValue)
                             }
                         ), in: 420...1000, step: 10)
-                        Text("\(Int(settings.overlayWidth))pt")
+                        Text(String(format: L10n.t("%@pt"), "\(Int(settings.overlayWidth))"))
                             .foregroundStyle(.secondary)
                             .monospacedDigit()
                             .frame(width: 40, alignment: .trailing)
                     }
                 }
-                Toggle("锁定位置(不可拖拽+点击穿透)", isOn: Binding(
+                Toggle(L10n.t("锁定位置(不可拖拽+点击穿透)"), isOn: Binding(
                     get: { settings.lockPosition },
                     set: { newValue in
                         settings.lockPosition = newValue
                         LyricsOverlayWindowController.shared.setLocked(newValue)
                     }
                 ))
-                Toggle("截屏/录屏时隐藏", isOn: Binding(
+                Toggle(L10n.t("截屏/录屏时隐藏"), isOn: Binding(
                     get: { settings.hideDuringScreenCapture },
                     set: { newValue in
                         settings.hideDuringScreenCapture = newValue
                         LyricsOverlayWindowController.shared.setHiddenFromCapture(newValue)
                     }
                 ))
-                Toggle("暂停/无播放时隐藏", isOn: Binding(
+                Toggle(L10n.t("暂停/无播放时隐藏"), isOn: Binding(
                     get: { settings.hideWhenNotPlaying },
                     set: { newValue in
                         settings.hideWhenNotPlaying = newValue
@@ -573,12 +573,12 @@ private struct AppearanceSettingsTab: View {
                     }
                 ))
             } header: {
-                Text("窗口")
+                Text(L10n.t("窗口"))
             } footer: {
                 // footer 挂在整个 Section 上(而不是紧跟某个 Toggle 下面的裸 Text)——
                 // 分组样式里这是原生"注脚"位置,明确点名是哪个开关的说明,避免视觉上跟
                 // "锁定位置"混在一起。
-                Text("开启「截屏/录屏时隐藏」后,截图、录屏、视频会议共享屏幕都不会拍到悬浮歌词——但你自己在这台 Mac 上仍然正常看得见。")
+                Text(L10n.t("开启「截屏/录屏时隐藏」后,截图、录屏、视频会议共享屏幕都不会拍到悬浮歌词——但你自己在这台 Mac 上仍然正常看得见。"))
             }
         }
         .formStyle(.grouped)
@@ -590,8 +590,8 @@ private struct GeneralSettingsTab: View {
 
     var body: some View {
         Form {
-            Section("启动") {
-                Toggle("开机启动", isOn: $settings.launchAtLoginEnabled)
+            Section(L10n.t("启动")) {
+                Toggle(L10n.t("开机启动"), isOn: $settings.launchAtLoginEnabled)
             }
         }
         .formStyle(.grouped)
