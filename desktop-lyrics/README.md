@@ -1,16 +1,25 @@
 # desktop-lyrics
 
-原生 macOS 菜单栏 + 悬浮歌词窗口，把 `state-worker` 的 `/now` 接口（跟网页版同一个数据源）
-拿到的实时播放状态 + 同步歌词，显示成一个常驻置顶、跨 Space 的小悬浮窗——类似网易云/QQ音乐
-桌面客户端的"桌面歌词"。跟 `collector`（Go）完全独立，不改动、不依赖它的任何本地文件，
-纯粹作为 `/now` 的又一个消费者。
+原生 macOS 菜单栏 + 悬浮歌词窗口，跟着 Apple Music 播放实时显示逐字同步歌词，显示成一个
+常驻置顶、跨 Space 的小悬浮窗——类似网易云/QQ音乐桌面客户端的"桌面歌词"。另外还有一个
+"歌词管理"窗口，可以查看/手改/删除/重新搜索每首歌的歌词候选。
+
+两种数据源（菜单栏"设置…"里切换）：
+
+- **本地模式（默认）**：零网络，直接读这台 Mac 本地的 media-control（当前播放）+
+  `../collector/` 采集器写在磁盘上的歌词/封面缓存。要让悬浮窗真的显示出歌词，需要先把
+  仓库根目录的 `collector/` 采集器跑起来（见根 [README.md](../README.md)）——它负责联网
+  查歌词/封面并写进这份本地缓存，desktop-lyrics 自己不联网找歌词。没有缓存时会正常显示
+  "暂无歌词"，不会报错。
+- **中继模式（relay）**：跟网页版一样读某个 `state-worker` 的 `/now` 接口，用于跨设备/
+  跨房间同步（比如手机上也能看）。需要在设置里自己填 `state-worker` 的地址，不填会用一个
+  默认示例地址（这个项目作者自己部署的 `np.yudaotor.me`，仅供体验效果，不代表你自己的
+  播放数据）。
 
 ## 依赖与运行方式
 
 - 只需要 Swift 工具链（Command Line Tools 自带即可，不需要装完整 Xcode——已实测确认，
   `Package.swift` 用的是纯 SwiftPM 可执行 target，不是 `.xcodeproj`）。
-- 零配置默认可跑：relay 地址写死指向这个项目自己的 `https://np.yudaotor.me`，`/now` 本身
-  不需要 `?user=` 参数（用户名早写死在 Worker 环境变量里）。想改地址在菜单栏"设置…"里改。
 - 不打包成 `.app`：裸可执行文件靠运行时 `NSApp.setActivationPolicy(.accessory)` 就能表现成
   菜单栏专属应用（不占 Dock/Cmd-Tab），`UserDefaults`/`swift build` 的 ad-hoc 签名对裸可执行
   文件也都工作正常，都已实测确认。

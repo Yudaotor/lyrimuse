@@ -312,11 +312,11 @@ struct AccountLinkingTab: View {
                     HelpButton(
                         text: "这是你自己用 Cloudflare Worker + KV 搭建的 state-worker 服务（项目里的 state-worker/ 目录），不是第三方产品——网页版靠它读取实时播放状态。完整从零搭建步骤（建 Cloudflare 账号/KV/自定义域名/secret）见 README「从零搭建 state-worker」一节。",
                         docTitle: "打开 README →",
-                        // 私有仓库 nowplaying-backend 的 GitHub 网页版(排版好,不是本地 IDE 打开的
-                        // 原始文本)——用行号锚点而不是标题锚点,不用去猜 GitHub 对中文/括号标题的
-                        // slug 生成规则;这份 README 改动已提交推送,行号跟远端一致。以后这一节
-                        // 挪动过要跟着改这两个行号。
-                        docURL: URL(string: "https://github.com/Yudaotor/nowplaying-backend/blob/main/README.md#L140-L162")!
+                        // 私有仓库 desktop-lyrics-suite(2026-07-17 起改名,原 nowplaying-backend)
+                        // 的 GitHub 网页版(排版好,不是本地 IDE 打开的原始文本)——用行号锚点而不是
+                        // 标题锚点,不用去猜 GitHub 对中文/括号标题的 slug 生成规则;这份 README
+                        // 改动已提交推送,行号跟远端一致。以后这一节挪动过要跟着改这两个行号。
+                        docURL: URL(string: "https://github.com/Yudaotor/desktop-lyrics-suite/blob/main/README.md#L146-L168")!
                     )
                 }
             }

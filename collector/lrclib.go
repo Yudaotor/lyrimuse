@@ -54,7 +54,7 @@ func resolveLRCLIBLyric(artist, title, album string) string {
 		return ""
 	}
 	// LRCLIB 的使用规范要求带上能标识调用方的 User-Agent。
-	req.Header.Set("User-Agent", clientName+"/"+clientVersion+" (+https://github.com/Yudaotor/nowplaying-backend)")
+	req.Header.Set("User-Agent", clientName+"/"+clientVersion+" (+https://github.com/Yudaotor/desktop-lyrics-suite)")
 	// 实测坐实 lrclib.net 比网易云/QQ 音乐慢不少(观测 3.6~6.9s 不等),给足余量避免临界超时。
 	resp, err := (&http.Client{Timeout: 10 * time.Second}).Do(req)
 	if err != nil {

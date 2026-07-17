@@ -1,26 +1,26 @@
-# applemusic-nowplaying
+# desktop-lyrics-suite
 
-在飞书签名（或任何地方）放一个固定链接，动态展示这台 Mac 上 Apple Music 正在播放的歌；也可以选配一个悬浮歌词窗口、README 动态徽章、Last.fm/iPhone 播放桥接等。
+Mac 菜单栏悬浮歌词窗口——跟着 Apple Music 播放实时显示逐字同步歌词，另外还有一个「歌词管理」窗口可以查看/手改/删除/重新搜索每首歌的歌词候选。
 
-作者本人的线上示例：https://yudaotor.github.io/nowplaying/?user=yudaotor
+这个仓库的主角是 `desktop-lyrics/`；`collector/` 是让它能显示出歌词的常驻引擎（读播放状态、联网查歌词/封面、写本地缓存）；`state-worker/`/`badge-worker/`/`worker/`（可选的 Cloudflare Worker）和另一个独立仓库 [`Yudaotor/nowplaying`](https://github.com/Yudaotor/nowplaying)（网页展示页，`.gitignore` 里排除了 `/web/`，两边互不影响，各自 `git clone`）则是这套引擎顺带解锁的其他玩法——不是必需品。
 
-本仓库（`collector/`/`state-worker/`/`badge-worker/`/`worker/`/`desktop-lyrics/`/`launchd/`）只负责采集/中继/展示逻辑。展示页 `web/index.html` 是另一个独立公开仓库 [`Yudaotor/nowplaying`](https://github.com/Yudaotor/nowplaying)（`.gitignore` 里排除了 `/web/`，两边互不影响，各自 `git clone`）。
+## 桌面歌词悬浮窗（desktop-lyrics）
 
-## 这是什么，需要什么
+这是这个项目真正要给你用的东西。构建/运行/开机启动的完整步骤见 [`desktop-lyrics/README.md`](desktop-lyrics/README.md)——不需要任何 Apple 开发者账号/证书，ad-hoc 签名即可跑。
 
-核心链路只有三部分，其余都是可选功能：
+默认走**本地模式**：零网络，直接读这台 Mac 本地的 media-control（当前播放）+ 下面 `collector/` 写在磁盘上的歌词/封面缓存；没有缓存时显示「暂无歌词」，不会报错或显示别人的数据。也可以在设置里切到「中继模式」，跟手机/其它设备同步（见下面「顺带解锁的其他玩法」）。
 
-1. **一台常年开机、装了 Apple Music 的 Mac**（运行 `collector/`，Go 编译，launchd 常驻）。
-2. **一个 [ListenBrainz](https://listenbrainz.org) 账号**（免费注册，公开 API，采集器把播放记录提交给它）。
-3. **一个静态页面**（`web/index.html`，纯前端零后端，浏览器直接读 ListenBrainz 的公开 API）。
+## 让悬浮窗有歌词可看：collector 引擎
 
-在此基础上，以下都是独立可关的可选功能，装了核心链路之后随时可以再加：自建 Cloudflare Worker 中继（国内访问加速 + 更丰富的展示数据）、desktop-lyrics 悬浮歌词窗口（Mac 菜单栏 App）、Last.fm 桥接/镜像、Bark/DingTalk/企业微信等故障告警、GitHub README 动态徽章。详见下面「功能一览」表格。
+collector 是一个 Go 编写、launchd 常驻的采集器，负责联网查歌词/封面（网易云/QQ音乐/酷狗/LRCLIB 四源都查一遍、取打分最高的）并写进 desktop-lyrics 读的本地缓存文件；顺手也会把播放记录提交给 [ListenBrainz](https://listenbrainz.org)。
 
-## 快速开始：部署采集器
+⚠️ 当前架构的一个粗糙点：collector 启动时强制要求填 `listenbrainz_token`，哪怕你完全不关心播放记录追踪、只想用悬浮歌词，也得先注册一个 ListenBrainz 账号拿到 token 才能把 collector 跑起来——这不是有意为之，只是还没花时间把这个依赖摘掉，欢迎 PR。
+
+### 快速开始
 
 ```bash
-git clone git@github.com:Yudaotor/nowplaying-backend.git
-cd nowplaying-backend
+git clone git@github.com:Yudaotor/desktop-lyrics-suite.git
+cd desktop-lyrics-suite
 
 # 依赖：brew install media-control（读系统正在播放，免 Apple Events/自动化授权）
 brew install media-control
@@ -30,9 +30,10 @@ go build -o ../bin/collector .
 mkdir -p ~/.config/applemusic-nowplaying
 cp config.example.json ~/.config/applemusic-nowplaying/config.json
 chmod 600 ~/.config/applemusic-nowplaying/config.json
-# 编辑 config.json：listenbrainz_token 必填(在 https://listenbrainz.org/settings/ 拿)；
-# listenbrainz_user 采集器本身不读，但网页/state-worker 的 URL 都要用到，建议一并填好；
-# 其余字段(state_relay_*/lastfm_*/bark_url/notification_platform 等)都是可选功能，留空即关闭。
+# 编辑 config.json：listenbrainz_token 必填(在 https://listenbrainz.org/settings/ 拿，
+# collector 启动的硬性要求，见上面的说明)；listenbrainz_user 采集器本身不读，但网页/
+# state-worker 的 URL 都要用到，建议一并填好；其余字段(state_relay_*/lastfm_*/bark_url/
+# notification_platform 等)都是可选功能，留空即关闭。
 
 # 先前台试跑（回到仓库根目录；--dry-run 只打日志不真提交）
 cd .. && ./bin/collector -dry-run
@@ -47,15 +48,7 @@ launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.chenyuhao.applemusic
 # 日志路径已经在上面的 sed 里换成你自己的了：~/Library/Logs/applemusic-nowplaying.log
 ```
 
-到这一步，ListenBrainz 上就已经能看到播放记录了。接一个展示页：
-
-```bash
-git clone git@github.com:Yudaotor/nowplaying.git web-page
-# 托管到任意静态站（GitHub Pages / Cloudflare Pages），访问：
-# https://<你的域名>/index.html?user=<你的 ListenBrainz 用户名>
-```
-
-纯静态零后端（ListenBrainz 与 iTunes Search API 均允许浏览器跨域直读），把这个链接放进飞书个性签名或任何地方即可。国内访问 ListenBrainz 直连可能不稳定/较慢——这也是下面「部署 Worker」这个可选功能存在的原因。
+collector 跑起来、解析过至少一次当前这首歌之后，desktop-lyrics 的悬浮窗（本地模式，零额外配置）就能显示出歌词了。
 
 ### 获取 `lastfm_scrobble_session_key`（Last.fm 镜像写入用，可选）
 
@@ -82,26 +75,42 @@ git clone git@github.com:Yudaotor/nowplaying.git web-page
    ```
    `session.key` 就是永久 `lastfm_scrobble_session_key`，填进 `config.json` 即可。
 
-## 桌面歌词悬浮窗（desktop-lyrics，可选）
+## 顺带解锁的其他玩法
 
-Mac 菜单栏 App，悬浮歌词窗口 + 歌词管理窗口，复用同一份 `state-worker` 数据契约。不需要任何 Apple 开发者账号/证书——ad-hoc 签名即可运行。构建/运行步骤、目录结构、开机启动见 [`desktop-lyrics/README.md`](desktop-lyrics/README.md)，这里不重复。
+因为 collector 本来就要常驻采集「正在播放」状态、也会往 ListenBrainz 提交播放记录，这套引擎装上之后还能免费解锁这些——都是独立可选，跟悬浮歌词窗口本身没有强依赖：
+
+- **网页展示页**：把当前/历史播放做成一个可以到处分享的固定链接。
+- **desktop-lyrics 的「中继模式」**：切换后悬浮窗改读某个 `state-worker` 的 `/now`，可以跨设备/跨房间同步（比如手机上也能看同一份数据）。
+- **国内加速中继**（`state-worker/`）：采集器把当前状态推进 KV，网页/中继模式优先读它、拿不到才回退直连 LB，国内访问更稳。
+- **GitHub README 动态徽章**（`badge-worker/`）：读 state-worker 的数据渲染成一张实时 SVG。
+- **iPhone 播放桥接 / Mac 播放同步进 Last.fm / 每周听歌小结 / 历史 Top10 歌手统计**：都依赖 Last.fm 凭据，详见下面功能表。
+
+### 网页展示页
+
+```bash
+git clone git@github.com:Yudaotor/nowplaying.git web-page
+# 托管到任意静态站（GitHub Pages / Cloudflare Pages），访问：
+# https://<你的域名>/index.html?user=<你的 ListenBrainz 用户名>
+```
+
+纯静态零后端（ListenBrainz 与 iTunes Search API 均允许浏览器跨域直读），把这个链接放进飞书个性签名或任何地方即可。国内访问 ListenBrainz 直连可能不稳定/较慢——这也是下面「部署 Worker」这个可选功能存在的原因。
 
 ## 功能一览
 
-作为一个整体的 Apple Music 配套软件，这些是它目前支持的能力。除了核心追踪/提交（存在的根本意义，不可关）、封面/主色/平台跳转链接（基础展示信息，2026-07-17 起改成无条件执行，不再是可关闭的设置项）和三个常驻部署的 Cloudflare Worker（跟本机进程无关，本机没有开关能控制它们本身），其余都能在 desktop-lyrics 的「设置」窗口按开关单独打开/关闭（改完自动写共享文件+重启 collector，见 `collector/features.go`/`desktop-lyrics/Sources/desktop-lyrics/Settings/FeatureSettingsStore.swift`）。
+除了核心的歌词/封面解析（desktop-lyrics 存在的根本意义，不可关）、ListenBrainz 提交（collector 启动的硬性依赖）、封面/主色/平台跳转链接（基础展示信息，2026-07-17 起改成无条件执行，不再是可关闭的设置项）和三个常驻部署的 Cloudflare Worker（跟本机进程无关，本机没有开关能控制它们本身），其余都能在 desktop-lyrics 的「设置」窗口按开关单独打开/关闭（改完自动写共享文件+重启 collector，见 `collector/features.go`/`desktop-lyrics/Sources/desktop-lyrics/Settings/FeatureSettingsStore.swift`）。
 
 | 功能 | 一句话说明 | 实现子系统 | 怎么开关 |
 |---|---|---|---|
-| ListenBrainz 提交 | 提交 playing_now/listen，是整个项目存在的根本意义 | `collector/` | 始终开启；要关掉就是卸载/停用整个 collector |
-| 展示页「正在播放」 | 网页显示当前/历史播放 | `collector/` + `state-worker/` + `web/` | 展示页本身常驻部署，不经本机控制 |
-| 状态中继(国内加速，可选) | 采集器把当前状态推进 KV，网页优先读它、拿不到才回退直连 LB | `collector/` + `state-worker/` | 设置里「推送状态到网页/徽章」开关 + `config.json` 填 `state_relay_url` |
-| GitHub 动态徽章(可选) | README 里的实时 SVG 徽章 | `badge-worker/`(读 state-worker) | 常驻部署，本机不可控；依赖上面「状态中继」有没有新鲜数据 |
 | 悬浮歌词窗口 | 桌面浮层实时显示当前歌词，支持逐字高亮 | `desktop-lyrics/` | 菜单栏「显示悬浮歌词」 |
 | 歌词管理窗口 | 查看/手改/删除/重新搜索候选每首歌的歌词 | `desktop-lyrics/` | 菜单栏「歌词管理…」 |
-| 封面/主色/平台跳转链接 | 抓封面(网易云/QQ 兜底)、算主色、拼 Apple/QQ/Spotify 跳转链接 | `collector/enrich.go` | 始终开启；不再是可关闭的设置项(2026-07-17 起) |
 | 歌词多源解析 | 网易云/QQ音乐/酷狗/LRCLIB 四源都查一遍、取打分最高的 | `collector/enrich.go` | 设置里「歌词在线匹配」开关 |
 | 歌词文件夹作为权威源 | `~/.config/applemusic-nowplaying/lyrics/` 下的纯文本文件可以直接手改，collector 重启时导入生效 | `collector/lyricsimport.go`/`lyricsexport.go` | 设置里「歌词文件夹作为权威源」开关 |
 | 专辑预取 | 换歌时顺手把同专辑其它还没解析过的曲目(封面+歌词)丢到后台解析 | `collector/albumprefetch.go` | 设置里「提前解析同专辑其它曲目（封面+歌词）」开关 |
+| 封面/主色/平台跳转链接 | 抓封面(网易云/QQ 兜底)、算主色、拼 Apple/QQ/Spotify 跳转链接 | `collector/enrich.go` | 始终开启；不再是可关闭的设置项(2026-07-17 起) |
+| ListenBrainz 提交 | 提交 playing_now/listen；collector 启动的硬性依赖，也是网页展示/其它玩法的数据源头 | `collector/` | 始终开启；要关掉就是卸载/停用整个 collector |
+| 展示页「正在播放」 | 网页显示当前/历史播放 | `collector/` + `state-worker/` + `web/` | 展示页本身常驻部署，不经本机控制 |
+| 状态中继(国内加速，可选) | 采集器把当前状态推进 KV，网页/desktop-lyrics「中继模式」优先读它、拿不到才回退直连 LB | `collector/` + `state-worker/` | 设置里「推送状态到网页/徽章」开关 + `config.json` 填 `state_relay_url` |
+| GitHub 动态徽章(可选) | README 里的实时 SVG 徽章 | `badge-worker/`(读 state-worker) | 常驻部署，本机不可控；依赖上面「状态中继」有没有新鲜数据 |
 | iPhone 播放桥接 | 把 iPhone 上经 Last.fm(FastScrobbler)记录的播放转发进 ListenBrainz | `collector/poller.go`(`bridge`) | 设置里开关 + `config.json` 填 `lastfm_user`/`lastfm_api_key` |
 | Mac 播放同步进 Last.fm | 反向把 Mac 播放也镜像写进 Last.fm，让 Last.fm 上有完整历史 | `collector/lastfm.go` | 设置里开关 + `config.json` 填 `lastfm_scrobble_*` 三项 |
 | 每周听歌小结 | 每周 Last.fm 图表收官时推一条通知 | `collector/weekly.go` | 设置里开关 + 依赖 Last.fm 凭据 + `bark_url`(或其它 `notification_platform`) |
@@ -112,19 +121,17 @@ Mac 菜单栏 App，悬浮歌词窗口 + 歌词管理窗口，复用同一份 `s
 ```
 Mac 采集器(Go, launchd 常驻)
   └─ media-control stream (MediaRemote, 免授权、事件驱动)
-       └─ 提交 playing_now / listen ──> ListenBrainz
-                                            ↑ 公开 API（读取免 key）
-展示页 web/index.html?user=<LB用户名> ──浏览器轮询──┘
-  封面图：iTunes Search API（浏览器端直连，带 localStorage 缓存）
+       ├─ 提交 playing_now / listen ──> ListenBrainz ──> 展示页 web/index.html?user=<LB用户名>
+       └─ 联网查歌词/封面 ──> 写本地磁盘缓存 ──> desktop-lyrics 悬浮窗(本地模式,零网络读取)
 ```
 
 ## 部署 Worker（可选：国内加速 / 徽章 / 飞书场景）
 
-这三个都是可选的 Cloudflare Worker，核心链路（采集器 + ListenBrainz + 展示页）不依赖它们也能完整工作。彼此也有依赖顺序：`badge-worker` 需要读一个已经在跑的 `state-worker`；`worker/` 只服务于作者本人的飞书个性签名场景（需要你自己注册一个飞书应用），不打算做这件事的话可以完全跳过。
+这三个都是可选的 Cloudflare Worker，desktop-lyrics 本地模式 + collector 不依赖它们也能完整工作。彼此也有依赖顺序：`badge-worker` 需要读一个已经在跑的 `state-worker`；`worker/` 只服务于作者本人的飞书个性签名场景（需要你自己注册一个飞书应用），不打算做这件事的话可以完全跳过。
 
 | 目录 | Worker 名 / 域名 | 职责 | 依赖 |
 |---|---|---|---|
-| `state-worker/` | `nowplaying-state`，示例域名 `np.yudaotor.me` | 网页主数据源：`/now`/`/history`/`/cover`/`/share` | 无（独立可部署） |
+| `state-worker/` | `nowplaying-state`，示例域名 `np.yudaotor.me` | 网页/desktop-lyrics 中继模式的主数据源：`/now`/`/history`/`/cover`/`/share` | 无（独立可部署） |
 | `badge-worker/` | `nowplaying-badge` | GitHub README 动态 SVG 徽章 | 需要一个已部署的 `state-worker` |
 | `worker/` | 示例域名 `test-0703.cyh-937ae0.workers.dev` | 飞书签名链接被真人点开时的 302 跳转，纯静态跳转 | 仅飞书个性签名场景需要，可跳过 |
 
@@ -158,7 +165,7 @@ cd state-worker && npm run deploy   # 或 badge-worker / worker，命令一样
    "state_relay_url": "https://np.yudaotor.me",
    "state_relay_token": "跟 PUSH_TOKEN 相同的值"
    ```
-   填完后设置里打开「推送状态到网页/徽章」开关（或重启 collector 让 `config.json` 生效），采集器就会开始往这个 KV 推状态，网页/徽章会自动读到。
+   填完后设置里打开「推送状态到网页/徽章」开关（或重启 collector 让 `config.json` 生效），采集器就会开始往这个 KV 推状态，网页/徽章会自动读到；desktop-lyrics 想切「中继模式」跟这个地址同步，在菜单栏「设置…」里填一样的 `state_relay_url`。
 
 ### 从零搭建 badge-worker（可选）
 
@@ -172,7 +179,7 @@ cd state-worker && npm run deploy   # 或 badge-worker / worker，命令一样
 
 跳过条件：不打算在飞书个性签名/消息里显示动态卡片，就完全不需要这个 Worker。
 
-要用的话：这只是"人点开链接时 302 跳转到展示页"这一环，飞书回调本身由完全独立的私有仓库 [`Yudaotor/feishu-bot`](https://github.com/Yudaotor/feishu-bot) 处理（需要你自己注册一个飞书应用，部署方式见那边的 README）。把 `worker/wrangler.toml` 的 `LB_USER`/`WEB_CARD_URL` 改成你自己的值，`cd worker && npm run deploy`，再把这个 Worker 的地址配进你自己的飞书应用 URL 规则里。
+要用的话：这只是「人点开链接时 302 跳转到展示页」这一环，飞书回调本身由完全独立的私有仓库 [`Yudaotor/feishu-bot`](https://github.com/Yudaotor/feishu-bot) 处理（需要你自己注册一个飞书应用，部署方式见那边的 README）。把 `worker/wrangler.toml` 的 `LB_USER`/`WEB_CARD_URL` 改成你自己的值，`cd worker && npm run deploy`，再把这个 Worker 的地址配进你自己的飞书应用 URL 规则里。
 
 ## 架构与密钥用途一览
 
@@ -186,12 +193,12 @@ Worker(test-0703) 只负责：人点链接时 302 跳转到展示页；URL 规�
 
 | 子系统 | 部署位置 | 职责 | 是否读/解析 LB 原始数据 |
 |---|---|---|---|
-| `collector/` | 一台 Mac，launchd 常驻(Go) | 唯一的数据源头：读 media-control，提交 playing_now/listen 给 LB，同时把富状态(封面/主色/歌词/进度/链接)推进 `state-worker` 的 KV | 只写不读 |
-| `state-worker/` | Cloudflare Worker（可选） | 网页的主数据源：`/now`(读KV,过期/为空则兜底直连LB)、`/history`(直接读LB)、`/cover`+`/share`(社交解链用) | ✅ `fromLB()`/`lbHistory()` |
+| `desktop-lyrics/` | 一台 Mac，用户手动/开机启动的前台 GUI(Swift) | 菜单栏 + 悬浮歌词窗口，这个仓库的主角；默认本地模式零网络读 media-control + collector 的磁盘缓存，也可切「中继模式」轮询 state-worker 的 `/now` | 否 |
+| `collector/` | 一台 Mac，launchd 常驻(Go) | 唯一的数据源头：读 media-control，解析歌词/封面写本地缓存给 desktop-lyrics 用，同时提交 playing_now/listen 给 LB、把富状态推进 `state-worker` 的 KV | 只写不读 |
+| `state-worker/` | Cloudflare Worker（可选） | 网页/desktop-lyrics 中继模式的主数据源：`/now`(读KV,过期/为空则兜底直连LB)、`/history`(直接读LB)、`/cover`+`/share`(社交解链用) | ✅ `fromLB()`/`lbHistory()` |
 | `web/index.html` | 静态托管（GitHub Pages / Cloudflare Pages，独立仓库） | 展示页；主读 `state-worker`（如果部署了的话），`state-worker`本身也连不上时才直连 LB 兜底 | ✅ 自己的 `fromLB`/历史映射(见下) |
 | `worker/`（可选） | Cloudflare Worker | 飞书签名里粘的链接被真人点开时的 302 跳转，纯静态跳转 | 否 |
 | `badge-worker/`（可选） | Cloudflare Worker | GitHub README 里的动态 SVG 徽章；读 `state-worker` 的 `/now`(已归一化好的数据)，不直连 LB | 否，依赖 state-worker 的契约 |
-| `desktop-lyrics/`（可选） | 一台 Mac，用户手动/开机启动的前台 GUI(Swift) | 菜单栏 + 悬浮歌词窗口；轮询 `state-worker` 的 `/now`，跟网页版同一份契约 | 否，依赖 state-worker 的契约 |
 
 **LB 原始数据(`track_metadata`/`additional_info`)的解析目前分散在两处、无法真正合一**：`state-worker/src/index.js` 的 `fromLB()`/`lbHistory()` 与 `web/index.html` 的同名函数几乎逐字段相同，只是命名/返回形状因各自消费端要求略有出入（前者是要公开的 API 响应契约、后者是给 `paint()` 直接吃的内部变量）。两处分别部署在 Cloudflare Workers 和 GitHub Pages 两个不相关平台，中间没有共用的构建/打包步骤，做不到导入同一份源码——两处函数体里都留了互相指向对方文件的注释，**改一处务必去对面照样改一遍**，否则两边会悄悄漂移不一致。
 
