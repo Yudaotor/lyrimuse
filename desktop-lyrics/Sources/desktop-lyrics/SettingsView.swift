@@ -99,6 +99,11 @@ enum SettingsSidebarItem: Hashable {
 }
 
 struct SettingsView: View {
+    // 只用来在语言手动切换时让侧边栏/详情页的整棵子树重新渲染(sidebarLabel/
+    // navigationTitle 这些顶层 chrome 文字不属于任何一个具体 tab,原来没有任何一处
+    // @ObservedObject,加了才会响应 AppSettings.appLanguage 的变化)——本身不在 body
+    // 里读它的其它字段。
+    @ObservedObject private var languageSettings = AppSettings.shared
     @State private var selection: SettingsSidebarItem? = .tab(.lyrics)
 
     var body: some View {
@@ -590,6 +595,15 @@ private struct GeneralSettingsTab: View {
 
     var body: some View {
         Form {
+            Section(L10n.t("语言")) {
+                Picker(L10n.t("语言"), selection: $settings.appLanguage) {
+                    Text(L10n.t("跟随系统")).tag("system")
+                    Text(L10n.t("简体中文")).tag("zh-hans")
+                    Text("English").tag("en")
+                }
+                .labelsHidden()
+                .pickerStyle(.segmented)
+            }
             Section(L10n.t("启动")) {
                 Toggle(L10n.t("开机启动"), isOn: $settings.launchAtLoginEnabled)
             }

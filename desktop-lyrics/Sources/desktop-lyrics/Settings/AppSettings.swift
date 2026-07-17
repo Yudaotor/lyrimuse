@@ -37,6 +37,10 @@ final class AppSettings: ObservableObject {
         static let lockPosition = "np:lockPosition"
         static let hideDuringScreenCapture = "np:hideDuringScreenCapture"
         static let hideWhenNotPlaying = "np:hideWhenNotPlaying"
+        // 跟 L10n.swift 里的 languageOverrideKey 必须是同一个字符串——那边只读、这里
+        // 只写(负责持久化+驱动"通用"tab 的语言 Picker),两处各自独立实现,不要互相
+        // import,理由见 L10n.swift 顶部注释(L10n 不依赖 @MainActor 的 AppSettings)。
+        static let appLanguage = "np:appLanguage"
     }
 
     private let defaults = UserDefaults.standard
@@ -120,6 +124,13 @@ final class AppSettings: ObservableObject {
     @Published var hideWhenNotPlaying: Bool {
         didSet { defaults.set(hideWhenNotPlaying, forKey: Keys.hideWhenNotPlaying) }
     }
+    // "system"(跟随系统语言,默认)/"zh-hans"/"en"——手动覆盖 L10n 的语言解析。这是个
+    // @Published 属性而不是简单写完 UserDefaults 就完事,是因为要让所有观察
+    // AppSettings.shared 的界面在切换的一瞬间就重新渲染成新语言,不用重启 App
+    // (哪些界面需要额外补一份 @ObservedObject 才能吃到这次刷新,见各文件里的改动说明)。
+    @Published var appLanguage: String {
+        didSet { defaults.set(appLanguage, forKey: Keys.appLanguage) }
+    }
     // 字体族名——空字符串表示"跟随系统",对应悬浮窗原来硬编码的系统字体,不用额外
     // enum/Optional 表达"未设置",跟 relayBaseURL 的空字符串兜底是同一种写法。
     @Published var fontFamilyName: String {
@@ -197,6 +208,7 @@ final class AppSettings: ObservableObject {
         lockPosition = (defaults.object(forKey: Keys.lockPosition) as? Bool) ?? false
         hideDuringScreenCapture = (defaults.object(forKey: Keys.hideDuringScreenCapture) as? Bool) ?? false
         hideWhenNotPlaying = (defaults.object(forKey: Keys.hideWhenNotPlaying) as? Bool) ?? false
+        appLanguage = defaults.string(forKey: Keys.appLanguage) ?? "system"
         fontFamilyName = defaults.string(forKey: Keys.fontFamilyName) ?? ""
         fontSize = (defaults.object(forKey: Keys.fontSize) as? Double) ?? 20
         overlayWidth = (defaults.object(forKey: Keys.overlayWidth) as? Double) ?? 640

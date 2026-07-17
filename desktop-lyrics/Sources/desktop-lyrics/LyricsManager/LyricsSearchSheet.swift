@@ -10,6 +10,8 @@ struct LyricsSearchSheet: View {
     let onApply: (LyricsSearchService.Candidate) -> Void
 
     @Environment(\.dismiss) private var dismiss
+    // 只为了让这个弹窗在手动切换语言时重新渲染,同 LyricsManagerView 的理由。
+    @ObservedObject private var languageSettings = AppSettings.shared
     @State private var state: LoadState = .loading
     @State private var selectedSource: String?
 

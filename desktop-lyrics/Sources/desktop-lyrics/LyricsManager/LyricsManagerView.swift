@@ -91,6 +91,9 @@ private enum LyricsListColumns {
 // collector 生效(见该文件顶部注释,解释为什么必须这么做而不是直接改内存)。
 struct LyricsManagerView: View {
     @ObservedObject private var store = EnrichCacheStore.shared
+    // 只为了让这个独立窗口(跟 SettingsView 不在同一棵视图树里)在手动切换语言时
+    // 重新渲染——这个窗口原来不观察 AppSettings,加了才会响应 appLanguage 的变化。
+    @ObservedObject private var languageSettings = AppSettings.shared
     @State private var searchText = ""
     @State private var selectedKey: String?
     @State private var editedLyrics = ""

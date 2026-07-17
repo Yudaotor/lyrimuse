@@ -167,6 +167,10 @@ struct AccountSidebarRow: View {
 
     @ObservedObject private var config = ConfigStore.shared
     @ObservedObject private var lastfmConnect = LastfmConnectController.shared
+    // 只为了让这一行在手动切换语言时重新渲染——这个 View 本身已经嵌在 SettingsView
+    // 的 List 里,父视图理论上会因为语言变化重新构造子行,这里独立再观察一份是保险,
+    // 不依赖 ForEach 复用行为的具体细节。
+    @ObservedObject private var languageSettings = AppSettings.shared
 
     var body: some View {
         let iconInfo = destination.icon
@@ -206,6 +210,8 @@ struct AccountLinkingTab: View {
     @ObservedObject private var config = ConfigStore.shared
     @ObservedObject private var features = FeatureSettingsStore.shared
     @ObservedObject private var lastfmConnect = LastfmConnectController.shared
+    // 只为了让手动切换语言时这块详情页重新渲染,同 AccountSidebarRow 的理由。
+    @ObservedObject private var languageSettings = AppSettings.shared
 
     @State private var isSaving = false
     @State private var lastSavedAt: Date?
