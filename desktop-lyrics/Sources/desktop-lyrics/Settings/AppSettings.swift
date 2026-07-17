@@ -3,14 +3,15 @@ import SwiftUI
 import AppKit
 
 // 数据源:远程(跟网页版同一个 state-worker /now)或本地(这台 Mac 上直接读
-// media-control + collector 的磁盘缓存,零网络)。新增选项,默认保持原有的远程行为。
+// media-control + collector 的磁盘缓存,零网络)。
 enum PlaybackSourceMode: String, Codable, Hashable {
     case relay
     case local
 }
 
-// UserDefaults 支撑的设置存储。relay 域名默认写死成这个项目自己的地址(个人工具、
-// 不打算分发给别人用,零配置优先),其余是歌词展示偏好 + 开机启动开关。
+// UserDefaults 支撑的设置存储。relay 域名的默认值是这个项目作者自己的地址,仅供切换
+// 到 relay 模式又没填自己地址时有个能跑的示例——2026-07-17 起默认数据源已经改成
+// local(见 dataSourceMode 的默认值),不会再有人零配置就悄悄连到作者自己的 Worker。
 @MainActor
 final class AppSettings: ObservableObject {
     static let shared = AppSettings()
@@ -164,7 +165,10 @@ final class AppSettings: ObservableObject {
         showRomanization = (defaults.object(forKey: Keys.showRomanization) as? Bool) ?? true
         showTranslation = (defaults.object(forKey: Keys.showTranslation) as? Bool) ?? true
         launchAtLoginEnabled = (defaults.object(forKey: Keys.launchAtLoginEnabled) as? Bool) ?? false
-        dataSourceMode = PlaybackSourceMode(rawValue: defaults.string(forKey: Keys.dataSourceMode) ?? "") ?? .relay
+        // 2026-07-17 前默认是 .relay,零配置就会连到作者自己的 Worker、显示作者本人的
+        // 播放——这台工具现在要给别人用,默认改成 .local(零网络、读本机 media-control +
+        // collector 的磁盘缓存,没有缓存就是"暂无歌词"而不是"看到别人的数据")。
+        dataSourceMode = PlaybackSourceMode(rawValue: defaults.string(forKey: Keys.dataSourceMode) ?? "") ?? .local
         showNextLinePreview = (defaults.object(forKey: Keys.showNextLinePreview) as? Bool) ?? false
         textShadowEnabled = (defaults.object(forKey: Keys.textShadowEnabled) as? Bool) ?? true
         textShadowColorHex = defaults.string(forKey: Keys.textShadowColorHex) ?? "#000000A6"
