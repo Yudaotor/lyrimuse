@@ -166,8 +166,12 @@ struct SettingsView: View {
 // 也持有 PlaybackSettingsTab 原来那几个单例(settings/poller/local)。
 private struct LyricsSettingsTab: View {
     @ObservedObject private var settings = AppSettings.shared
-    @ObservedObject private var poller = RelayPoller.shared
-    @ObservedObject private var local = LocalPlaybackSource.shared
+    // poller/local 在这个页面里只当"写目标"用(切换开关时顺手同步给它们),这个 View
+    // 的 body 从来不读它们的 @Published 数据渲染任何东西——声明成 @ObservedObject
+    // 会让这个页面在本地播放每次轮询(~2秒一次)更新歌曲信息时跟着白白重渲染一次。
+    // 用普通引用(class 本身是引用类型,let 一样能改它们的属性),不订阅。
+    private let poller = RelayPoller.shared
+    private let local = LocalPlaybackSource.shared
     @ObservedObject private var features = FeatureSettingsStore.shared
     @Environment(\.openWindow) private var openWindow
     @State private var showAutomationDeniedAlert = false
