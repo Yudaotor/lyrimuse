@@ -12,11 +12,21 @@ final class LoginItemManager {
     static let shared = LoginItemManager()
 
     private let label = "com.chenyuhao.applemusic-desktop-lyrics"
-    // 硬编码安装路径(跟 collector 的 bin/collector 同一个约定),不用当前运行进程的
-    // 路径——开发时用 swift run/直接跑 .build/debug 的那次,进程路径是临时调试目录,
-    // LaunchAgent 应该始终指向 build.sh 真正安装的位置。
+    // LaunchAgent 应该始终指向 build.sh 真正安装的位置(跟 collector 的 bin/collector
+    // 同一个约定),不是当前运行进程的路径——开发时用 swift run/直接跑 .build/debug 的
+    // 那次,进程路径是临时调试目录,不该拿来当"以后开机启动"的目标。
+    //
+    // 2026-07-17 修复:之前这里整个硬编码成 ~/applemusic-nowplaying/bin/desktop-lyrics,
+    // 假设仓库固定 clone 在这个路径——clone 到别处这个开关会静默装出一个指向不存在
+    // 位置的 LaunchAgent。现在优先信任当前正在运行的可执行文件自己的路径:只要它就是
+    // build.sh 真正安装的那份(路径以 /bin/desktop-lyrics 结尾),说明它自己就在正确的
+    // 安装位置上,不管仓库实际 clone 到哪里都对;只有路径不匹配(说明这次是 swift run/
+    // .build/debug 的临时调试二进制,此时也没有真正"已安装"的位置可言)才退回默认假设。
     private var installedExecutablePath: String {
-        FileManager.default.homeDirectoryForCurrentUser
+        if let running = Bundle.main.executablePath, running.hasSuffix("/bin/desktop-lyrics") {
+            return running
+        }
+        return FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent("applemusic-nowplaying/bin/desktop-lyrics").path
     }
     private var plistURL: URL {
