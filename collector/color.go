@@ -101,85 +101,9 @@ func resolveDominantColor(coverURL string) string {
 	} else {
 		r, g, bl = ar/n, ag/n, ab/n
 	}
-	// 保证强调色在深色卡片上清晰:转 HSL、强制最低饱和度 + 合适亮度。灰调封面(如 Parade
-	// 的老照片)原本算出浑浊灰(#5a5b52),在深底上进度条/歌词看不清;提饱和+提亮后变成
-	// 一个可辨的、贴合封面色调的鲜亮色。
-	r, g, bl = ensureVivid(r, g, bl)
+	// 2026-07-18 前这里会强制转 HSL、拉到最低饱和度 50%+亮度 [0.55,0.66] 区间,让灰调
+	// 封面(如 Parade 的老照片,原本算出浑浊灰 #5a5b52)在深色卡片上更醒目——用户反馈
+	// 不要这个强制鲜艳化,直接用取色算出来的原值,哪怕某些灰调封面的强调色因此显得不够
+	// 醒目也接受,优先忠于封面本身的色调。
 	return fmt.Sprintf("#%02x%02x%02x", int(r+0.5), int(g+0.5), int(bl+0.5))
-}
-
-// ensureVivid raises a muddy/dark color to a saturated, mid-light one (via HSL:
-// s≥0.5, l∈[0.55,0.66]) so it stands out on the dark card. Inputs/outputs 0–255.
-func ensureVivid(r, g, bl float64) (float64, float64, float64) {
-	h, s, l := rgbToHSL(r/255, g/255, bl/255)
-	if s < 0.5 {
-		s = 0.5
-	}
-	if l < 0.55 {
-		l = 0.55
-	} else if l > 0.66 {
-		l = 0.66
-	}
-	nr, ng, nb := hslToRGB(h, s, l)
-	return nr * 255, ng * 255, nb * 255
-}
-
-func rgbToHSL(r, g, b float64) (h, s, l float64) {
-	mx := math.Max(r, math.Max(g, b))
-	mn := math.Min(r, math.Min(g, b))
-	l = (mx + mn) / 2
-	d := mx - mn
-	if d == 0 {
-		return 0, 0, l // 纯灰:色相未定义,记 0(红),后续会被强制饱和成可辨色
-	}
-	if l > 0.5 {
-		s = d / (2 - mx - mn)
-	} else {
-		s = d / (mx + mn)
-	}
-	switch mx {
-	case r:
-		h = (g - b) / d
-		if g < b {
-			h += 6
-		}
-	case g:
-		h = (b-r)/d + 2
-	default:
-		h = (r-g)/d + 4
-	}
-	h /= 6
-	return h, s, l
-}
-
-func hslToRGB(h, s, l float64) (r, g, b float64) {
-	if s == 0 {
-		return l, l, l
-	}
-	var q float64
-	if l < 0.5 {
-		q = l * (1 + s)
-	} else {
-		q = l + s - l*s
-	}
-	p := 2*l - q
-	hue := func(t float64) float64 {
-		if t < 0 {
-			t += 1
-		}
-		if t > 1 {
-			t -= 1
-		}
-		switch {
-		case t < 1.0/6:
-			return p + (q-p)*6*t
-		case t < 1.0/2:
-			return q
-		case t < 2.0/3:
-			return p + (q-p)*(2.0/3-t)*6
-		default:
-			return p
-		}
-	}
-	return hue(h + 1.0/3), hue(h), hue(h - 1.0/3)
 }
