@@ -10,6 +10,8 @@ import (
 	"strconv"
 	"strings"
 	"unicode"
+
+	"github.com/liuzl/gocc"
 )
 
 var lrcTimestampRe = regexp.MustCompile(`\[\d{1,2}:\d{2}[.:]\d{1,3}\]`)
@@ -271,14 +273,40 @@ func looseContains(a, b string) bool {
 // 本身就是可疑的仿冒特征(实测坐实:网易云真实返回过艺人字段就是独立一条"周杰伦、"的
 // 仿冒条目),调用方按"len<2 就当成单一人名"处理,不能被这种情况悄悄吃掉。
 func artistCreditParts(s string) []string {
-	isSep := func(r rune) bool { return r == '/' || r == '、' || r == '&' || r == ',' || r == '，' }
 	var parts []string
-	for _, p := range strings.FieldsFunc(strings.TrimSpace(strings.ToLower(s)), isSep) {
+	for _, p := range strings.FieldsFunc(strings.TrimSpace(strings.ToLower(s)), isArtistCreditSep) {
 		if p = strings.TrimSpace(p); p != "" {
 			parts = append(parts, p)
 		}
 	}
 	return parts
+}
+
+// isArtistCreditSep 是"多人合credit"字符串的分隔符集合,artistCreditParts/
+// firstCreditedArtist 共用同一份,避免两处各自维护一份分隔符列表、以后加分隔符漏改一处。
+func isArtistCreditSep(r rune) bool {
+	return r == '/' || r == '、' || r == '&' || r == ',' || r == '，'
+}
+
+// firstCreditedArtist 把"多人合credit"字符串(如"Prince & The Revolution"、
+// "陶喆、卢广仲")按 artistCreditParts 同一套分隔符拆开,取第一位——歌手统计类场景(见
+// topartists.go 的 mergeAliasedArtists)要求这类合唱/feat.credit 全部算到"第一个人"
+// 头上,不单独占一个歌手名额。只有真正切出 ≥2 段才当作合唱处理(跟 artistCreditParts
+// 同一个理由:防止"周杰伦、"这种只有一个人、结尾恰好带分隔符的写法被误判成合唱、错误
+// 砍掉后半段——这种写法切完只剩 1 段)。返回原始大小写/原始文字(不像 artistCreditParts
+// 那样统一转小写——那是给"判断是否同一个人"这一步比较用的,这里要的是展示用的原始名字)。
+func firstCreditedArtist(s string) string {
+	trimmed := strings.TrimSpace(s)
+	var parts []string
+	for _, p := range strings.FieldsFunc(trimmed, isArtistCreditSep) {
+		if p = strings.TrimSpace(p); p != "" {
+			parts = append(parts, p)
+		}
+	}
+	if len(parts) >= 2 {
+		return parts[0]
+	}
+	return trimmed
 }
 
 // artistMatches reports whether two artist names refer to the same person/act.
@@ -364,51 +392,39 @@ func isNeteaseImpersonatorRidden(artist string) bool {
 	return neteaseImpersonatorRiddenArtists[strings.TrimSpace(artist)]
 }
 
-// toSimplified 把繁体字逐字转成对应简体字(表里没有的字原样保留,不认识就不动,绝不出错)。
-// 只给 resolveNeteaseInfo 里的 nameOnlyMatch(统一歌手名用)本地比较前调用,不改
-// normLoose/albumScore/pick() 本身——那条判定链路管封面/歌词选谁,已经为防仿冒号反复
-// 加固过,不该因为繁简这个不相关的问题被牵动。
-// 实测坐实:同一张专辑,本地(Apple Music)标签里繁简写法都出现过(如「太美麗」/「太美丽」、
-// 「危險世界」/「危险世界」)，哪怕只差一个字，字符级比较也会判定成两个完全不相关的专辑名，
-// 沿用 normLoose 的英文字符集思路(逐字符规整)覆盖不到这个场景。这张表只覆盖歌名/专辑名/
-// 歌手名常见字，不追求覆盖全部生僻字——识别不出的字原样保留是安全的(退回到"跟没转换一样"，
-// 不会比现状更差)。
-// 每个 key/value 都必须是恰好一个字符的 rune 字面量(Go 语法限制),所以表里只放单字,
-// 靠 toSimplified 逐字符扫描来拼出整词的效果——不需要、也不能放多字词条。
-var t2sTable = map[rune]rune{
-	'愛': '爱', '樂': '乐', '國': '国', '們': '们', '時': '时', '間': '间', '這': '这', '說': '说',
-	'話': '话', '誰': '谁', '個': '个', '為': '为', '讓': '让', '過': '过', '沒': '没', '從': '从',
-	'對': '对', '還': '还', '覺': '觉', '幾': '几', '開': '开', '關': '关', '樣': '样', '麼': '么',
-	'現': '现', '見': '见', '聽': '听', '買': '买', '賣': '卖', '車': '车', '馬': '马', '鳥': '鸟',
-	'魚': '鱼', '飯': '饭', '錢': '钱', '醜': '丑', '麗': '丽', '憂': '忧', '鬱': '郁', '龍': '龙',
-	'風': '风', '島': '岛', '導': '导', '劇': '剧', '藝': '艺', '術': '术', '樹': '树', '葉': '叶',
-	'陽': '阳', '陰': '阴', '電': '电', '語': '语', '詞': '词', '記': '记', '憶': '忆', '戀': '恋',
-	'傷': '伤', '溫': '温', '淚': '泪', '夢': '梦', '別': '别', '離': '离', '遠': '远', '傳': '传',
-	'統': '统', '藍': '蓝', '紅': '红', '綠': '绿', '黃': '黄', '顏': '颜', '禮': '礼', '歷': '历',
-	'曆': '历', '陸': '陆', '亂': '乱', '滿': '满', '謎': '谜', '悶': '闷', '寧': '宁', '寫': '写',
-	'讀': '读', '飛': '飞', '進': '进', '輕': '轻', '長': '长', '興': '兴', '雲': '云', '學': '学',
-	'區': '区', '團': '团', '應': '应', '願': '愿', '寶': '宝', '寵': '宠', '獨': '独', '單': '单',
-	'難': '难', '謝': '谢', '慣': '惯', '確': '确', '認': '认', '識': '识', '險': '险', '謊': '谎',
-	'騙': '骗', '約': '约', '擁': '拥', '燦': '灿', '爛': '烂', '經': '经', '腦': '脑', '頭': '头',
-	'臉': '脸', '髮': '发', '發': '发', '聲': '声', '響': '响', '選': '选', '決': '决', '堅': '坚',
-	'強': '强', '軟': '软', '氣': '气', '圍': '围', '圓': '圆', '點': '点', '優': '优', '總': '总',
-	'雖': '虽', '卻': '却', '實': '实', '絕': '绝', '掙': '挣', '奮': '奋', '鬥': '斗', '執': '执',
-	'著': '着', '結': '结', '續': '续', '複': '复', '純': '纯', '虛': '虚', '裝': '装', '偽': '伪',
-	'謹': '谨', '裡': '里', '裏': '里', '妳': '你', '牠': '它', '贊': '赞', '讚': '赞', '鍾': '钟',
-	'鐘': '钟', '韓': '韩', '灣': '湾', '臺': '台', '織': '织', '殭': '僵',
-}
-
-// toSimplified 逐字符查表转换,表外字符原样保留(见上方注释:安全默认,查不到就不变)。
-func toSimplified(s string) string {
-	var b strings.Builder
-	for _, r := range s {
-		if v, ok := t2sTable[r]; ok {
-			b.WriteRune(v)
-		} else {
-			b.WriteRune(r)
-		}
+// t2sConverter 是 OpenCC(经 gocc 移植)的繁转简转换器,进程启动时初始化一次——词典数据
+// 通过 gocc 包自己的 go:embed 编译进二进制,不依赖运行时外部文件,这台机器/任何机器上
+// 跑起来行为都一样。
+//
+// 2026-07-15:toSimplified 原来是一张手工维护的单字对照表(约 160 字,不认识的字原样
+// 保留,查不到就不转换),覆盖不全的代价这天暴露过两次:「太美麗」这类专辑名比较偶尔漏转,
+// 更严重的一次是"周杰倫"(繁体"倫")因为表里根本没这个字,导致发给网易云/QQ/酷狗/LRCLIB
+// 的搜索关键词转换等于没转换,四个源全部搜不到候选(这个具体案例见
+// project_nowplaying_traditional_artist_search_query_bug 这条记忆)。换成 gocc 之后
+// 拿的是 OpenCC 官方词库(单字+多字词组两级),覆盖面不再依赖"撞见一个字才补一个字"这种
+// 被动积累,一次性解决这整类问题。换依赖的代价(collector 从零第三方依赖变成有 3 个间接
+// 依赖、多约 1MB 内嵌词典体积)权衡过后用户主动选择了接受。
+var t2sConverter = func() *gocc.OpenCC {
+	cc, err := gocc.New("t2s")
+	if err != nil {
+		return nil
 	}
-	return b.String()
+	return cc
+}()
+
+// toSimplified 把繁体字/词转成简体——用于统一搜索关键词/本地比较字符串的书写形式,不是
+// 唯一权威判定(繁简本身不影响身份判定,查不到就原样返回,是安全默认)。转换失败(理论上
+// 只有词典数据本身损坏才会发生,几乎不可能)时原样返回输入,维持"识别不出/出错就不改动"
+// 这个一贯设计。
+func toSimplified(s string) string {
+	if t2sConverter == nil {
+		return s
+	}
+	out, err := t2sConverter.Convert(s)
+	if err != nil {
+		return s
+	}
+	return out
 }
 
 // albumStop are filler words ignored when comparing album names by shared tokens.
