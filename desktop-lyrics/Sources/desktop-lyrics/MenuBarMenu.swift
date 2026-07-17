@@ -1,15 +1,11 @@
 import SwiftUI
 
 // 状态栏图标本体(MenuBarExtra 的 label)——设置里关掉、没在播放、或者还没解析出这一句
-// 歌词时,退回固定的图标+文字;都满足时直接显示当前这一行。用户反馈"不拦截,有多长
-// 展示多少,合理范围内就好"——正常长度的歌词行(不管中英文)基本都在这个上限内能完整
-// 显示,只是留一个安全上限,防止极少数异常长的行(比如错误合并、署名行混进来这类
-// 历史上真出现过的坏数据)把状态栏撑得太离谱。
+// 歌词时,退回固定的图标+文字;都满足时直接显示当前这一行,上限可以在设置里调
+// (settings.menuBarLyricsMaxChars,见「歌词」tab「展示」分组)。
 struct MenuBarLabel: View {
     @ObservedObject private var settings = AppSettings.shared
     @ObservedObject private var coordinator = PlaybackCoordinator.shared
-
-    private static let maxChars = 60
 
     var body: some View {
         if settings.showLyricsInMenuBar,
@@ -25,8 +21,9 @@ struct MenuBarLabel: View {
     }
 
     private func truncated(_ text: String) -> String {
-        guard text.count > Self.maxChars else { return text }
-        return String(text.prefix(Self.maxChars)) + "…"
+        let maxChars = settings.menuBarLyricsMaxChars
+        guard text.count > maxChars else { return text }
+        return String(text.prefix(maxChars)) + "…"
     }
 }
 

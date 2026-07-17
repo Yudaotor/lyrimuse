@@ -334,6 +334,22 @@ private struct LyricsSettingsTab: View {
                 Toggle("显示译文", isOn: $settings.showTranslation)
                 Toggle("双行显示(预览下一句歌词)", isOn: $settings.showNextLinePreview)
                 Toggle("在状态栏显示当前歌词", isOn: $settings.showLyricsInMenuBar)
+                if settings.showLyricsInMenuBar {
+                    LabeledContent("超过就截断") {
+                        HStack(spacing: 8) {
+                            Slider(value: Binding(
+                                get: { Double(settings.menuBarLyricsMaxChars) },
+                                set: { settings.menuBarLyricsMaxChars = Int($0) }
+                            ), in: 20...120, step: 5)
+                            Text("\(settings.menuBarLyricsMaxChars) 字")
+                                .foregroundStyle(.secondary)
+                                .monospacedDigit()
+                                .frame(width: 40, alignment: .trailing)
+                        }
+                    }
+                    Text("没超过就整行显示；超过这个长度会截断，鼠标悬停在状态栏上能看到完整这一行。")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
             }
 
             Section {

@@ -26,6 +26,7 @@ final class AppSettings: ObservableObject {
         static let dataSourceMode = "np:dataSourceMode"
         static let showNextLinePreview = "np:showNextLinePreview"
         static let showLyricsInMenuBar = "np:showLyricsInMenuBar"
+        static let menuBarLyricsMaxChars = "np:menuBarLyricsMaxChars"
         static let textShadowEnabled = "np:textShadowEnabled"
         static let textShadowColorHex = "np:textShadowColorHex"
         static let fontFamilyName = "np:fontFamilyName"
@@ -72,6 +73,11 @@ final class AppSettings: ObservableObject {
     // 面积明显变大——不应该在谁都没主动选择的情况下就改变状态栏原有的观感。
     @Published var showLyricsInMenuBar: Bool {
         didSet { defaults.set(showLyricsInMenuBar, forKey: Keys.showLyricsInMenuBar) }
+    }
+    // 状态栏歌词行超过这个字数就截断+悬停 tooltip 补全,不超过就整行显示——用户反馈
+    // "不拦截,有多长展示多少,合理范围内就好",做成可调的上限而不是写死一个数字。
+    @Published var menuBarLyricsMaxChars: Int {
+        didSet { defaults.set(menuBarLyricsMaxChars, forKey: Keys.menuBarLyricsMaxChars) }
     }
     // 悬浮窗背景透明,文字直接叠在桌面内容上——桌面壁纸/其它窗口文字撞色时容易糊在一起,
     // 加个阴影提高辨识度。纯展示开关,LyricsOverlayView 每次渲染都直接读这个值,不需要
@@ -177,6 +183,7 @@ final class AppSettings: ObservableObject {
         dataSourceMode = PlaybackSourceMode(rawValue: defaults.string(forKey: Keys.dataSourceMode) ?? "") ?? .local
         showNextLinePreview = (defaults.object(forKey: Keys.showNextLinePreview) as? Bool) ?? false
         showLyricsInMenuBar = (defaults.object(forKey: Keys.showLyricsInMenuBar) as? Bool) ?? false
+        menuBarLyricsMaxChars = (defaults.object(forKey: Keys.menuBarLyricsMaxChars) as? Int) ?? 60
         textShadowEnabled = (defaults.object(forKey: Keys.textShadowEnabled) as? Bool) ?? true
         textShadowColorHex = defaults.string(forKey: Keys.textShadowColorHex) ?? "#000000A6"
         lockPosition = (defaults.object(forKey: Keys.lockPosition) as? Bool) ?? false
