@@ -25,6 +25,7 @@ final class AppSettings: ObservableObject {
         static let launchAtLoginEnabled = "np:launchAtLoginEnabled"
         static let dataSourceMode = "np:dataSourceMode"
         static let showNextLinePreview = "np:showNextLinePreview"
+        static let showLyricsInMenuBar = "np:showLyricsInMenuBar"
         static let textShadowEnabled = "np:textShadowEnabled"
         static let textShadowColorHex = "np:textShadowColorHex"
         static let fontFamilyName = "np:fontFamilyName"
@@ -66,6 +67,11 @@ final class AppSettings: ObservableObject {
     }
     @Published var showNextLinePreview: Bool {
         didSet { defaults.set(showNextLinePreview, forKey: Keys.showNextLinePreview) }
+    }
+    // 默认关闭:状态栏平时只是个不起眼的小图标,打开后会换成当前歌词行的文字,占用
+    // 面积明显变大——不应该在谁都没主动选择的情况下就改变状态栏原有的观感。
+    @Published var showLyricsInMenuBar: Bool {
+        didSet { defaults.set(showLyricsInMenuBar, forKey: Keys.showLyricsInMenuBar) }
     }
     // 悬浮窗背景透明,文字直接叠在桌面内容上——桌面壁纸/其它窗口文字撞色时容易糊在一起,
     // 加个阴影提高辨识度。纯展示开关,LyricsOverlayView 每次渲染都直接读这个值,不需要
@@ -170,6 +176,7 @@ final class AppSettings: ObservableObject {
         // collector 的磁盘缓存,没有缓存就是"暂无歌词"而不是"看到别人的数据")。
         dataSourceMode = PlaybackSourceMode(rawValue: defaults.string(forKey: Keys.dataSourceMode) ?? "") ?? .local
         showNextLinePreview = (defaults.object(forKey: Keys.showNextLinePreview) as? Bool) ?? false
+        showLyricsInMenuBar = (defaults.object(forKey: Keys.showLyricsInMenuBar) as? Bool) ?? false
         textShadowEnabled = (defaults.object(forKey: Keys.textShadowEnabled) as? Bool) ?? true
         textShadowColorHex = defaults.string(forKey: Keys.textShadowColorHex) ?? "#000000A6"
         lockPosition = (defaults.object(forKey: Keys.lockPosition) as? Bool) ?? false

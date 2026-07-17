@@ -18,6 +18,14 @@ public struct SyncedLyricLine: Equatable {
     public let translation: String?
     public let mainText: String?         // 整行高亮时用(没有逐字数据)
     public let words: [SyncedLyricWord]? // 逐字高亮时用(有 yrc 数据)
+
+    // 不关心逐字填色进度、只要这一行的纯文本时用(比如状态栏显示)——mainText/words
+    // 两种形态只会有一个非空,按现有的判断顺序(有逐字数据优先逐字)取值。
+    public var plainText: String? {
+        if let mainText { return mainText }
+        if let words, !words.isEmpty { return words.map(\.text).joined() }
+        return nil
+    }
 }
 
 // 按当前歌曲的四个歌词字段选基准 + 按外推位置算当前应该展示哪一行,算法照抄

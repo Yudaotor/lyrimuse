@@ -1,5 +1,31 @@
 import SwiftUI
 
+// 状态栏图标本体(MenuBarExtra 的 label)——设置里关掉、没在播放、或者还没解析出这一句
+// 歌词时,退回固定的图标+文字;都满足时直接显示当前这一行,单行截断到一个字数上限,
+// 避免长歌词行把状态栏其它 App 的图标挤没了。
+struct MenuBarLabel: View {
+    @ObservedObject private var settings = AppSettings.shared
+    @ObservedObject private var coordinator = PlaybackCoordinator.shared
+
+    private static let maxChars = 28
+
+    var body: some View {
+        if settings.showLyricsInMenuBar,
+           coordinator.isPlayingNow,
+           let text = coordinator.currentLine?.plainText,
+           !text.isEmpty {
+            Text(truncated(text))
+        } else {
+            Label("桌面歌词", systemImage: "text.quote")
+        }
+    }
+
+    private func truncated(_ text: String) -> String {
+        guard text.count > Self.maxChars else { return text }
+        return String(text.prefix(Self.maxChars)) + "…"
+    }
+}
+
 struct MenuBarMenu: View {
     @ObservedObject private var overlay = LyricsOverlayWindowController.shared
     @ObservedObject private var settings = AppSettings.shared

@@ -333,6 +333,7 @@ private struct LyricsSettingsTab: View {
                 Toggle("显示罗马音", isOn: $settings.showRomanization)
                 Toggle("显示译文", isOn: $settings.showTranslation)
                 Toggle("双行显示(预览下一句歌词)", isOn: $settings.showNextLinePreview)
+                Toggle("在状态栏显示当前歌词", isOn: $settings.showLyricsInMenuBar)
             }
 
             Section {
