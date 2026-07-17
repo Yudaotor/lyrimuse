@@ -9,7 +9,11 @@ pattern = "np.yudaotor.me"
 custom_domain = true
 
 [vars]
+# 下面两个是本项目作者自己的部署值——自建时必须换成你自己的,否则 /history、以及
+# /now·/cover 的 LB 兜底路径会展示作者本人的 ListenBrainz 数据,/share 卡片会跳转
+# 到作者本人的展示页(见 README「从零搭建 state-worker」)。
 LB_USER = "yudaotor"
+WEB_PAGE_URL = "https://yudaotor.github.io/nowplaying/?user=yudaotor"
 
 # PUSH_TOKEN 是 secret,用 `wrangler secret put PUSH_TOKEN` 设置,不写这里。
 

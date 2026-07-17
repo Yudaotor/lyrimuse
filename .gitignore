@@ -1,6 +1,7 @@
 /web/
 /feishu-bot/
 /bin/
+/collector/collector
 .wrangler/
 node_modules/
 .DS_Store

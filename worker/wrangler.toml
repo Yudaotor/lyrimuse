@@ -3,6 +3,9 @@ main = "src/index.js"
 compatibility_date = "2025-07-18"
 
 [vars]
+# 下面两个是本项目作者自己的部署值——这个 worker 本身只服务于作者自己的飞书个性签
+# 名场景(见 README,需要你自己注册一个飞书应用才用得上),如果要复用必须换成你自己
+# 的 ListenBrainz 用户名和展示页链接,否则访客点开链接会跳转到作者本人的展示页。
 LB_USER = "yudaotor"
 WEB_CARD_URL = "https://yudaotor.github.io/nowplaying/?user=yudaotor"
 

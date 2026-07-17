@@ -10,7 +10,8 @@
 //   GET  /top-artists  → 读 "top-artists"(采集器一天推一次,见 collector/topartists.go;
 //                        没有兜底源——KV 为空就返回空数组,等采集器下一次推送)
 //
-// Env: PUSH_TOKEN(secret,采集器共享)、LB_USER(兜底用)。KV 绑定名 NP_STATE。
+// Env: PUSH_TOKEN(secret,采集器共享)、LB_USER(兜底用)、WEB_PAGE_URL(/share 跳转目标)。
+// KV 绑定名 NP_STATE。
 //
 // 历史上还有一个 POST /scrobble(把完成收听追加进 KV "history"),但采集器早已改为完成
 // 收听只双写 LB(不耗 KV 写额度)、/history 也只读 LB 合并——/scrobble 从未再被调用、是
@@ -324,7 +325,9 @@ export default {
       const album = has ? (rec.album || "") : "";
       const ogTitle = has ? `${playing ? "♪ 正在听" : "🎧 最近在听"}：${title}${artist ? " — " + artist : ""}` : "正在听什么 ♪";
       const ogDesc = has ? (album ? `专辑《${album}》 · via Apple Music` : "via Apple Music") : "看看我此刻在听的歌";
-      const page = "https://yudaotor.github.io/nowplaying/?user=yudaotor";
+      // WEB_PAGE_URL 是 wrangler.toml [vars] 里的值——自建者部署自己的 state-worker
+      // 时必须换成自己的展示页链接,否则 /share 卡片点开会跳到本项目作者自己的页面。
+      const page = env.WEB_PAGE_URL || "https://yudaotor.github.io/nowplaying/?user=yudaotor";
       const img = `${url.origin}/cover`;
       const h = (v) => String(v || "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
       const html = `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8">
