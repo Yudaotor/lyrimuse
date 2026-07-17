@@ -19,7 +19,10 @@ cp ".build/release/desktop-lyrics" "$BIN"
 # 主动 ad-hoc 签名(而不是只验证):Apple Silicon 上 AMFI 强制签名,工具链链接时已经
 # 自动盖过章,这一步是幂等的空操作;Intel Mac 上没有这层强制,工具链历史上不会自动
 # 签,若只做 `codesign -v` 验证会在这里直接报"未签名"、被 set -e 拦腰打断整个脚本
-# (2026-07-17 审计发现,未在真机验证过,先用主动签名兜底,不管哪种架构都能过关)。
+# (2026-07-17 审计发现。这台机器没有物理 Intel Mac,但 2026-07-18 交叉编译了一份
+# `swift build --arch x86_64` 产物直接验证过:codesign -v 确实报
+# "code object is not signed at all",补签 `codesign -s - --force` 后签名有效,
+# 用 Rosetta 也能正常跑起来——不是纯理论推测,不管哪种架构都能过关)。
 codesign -s - --force "$BIN"
 codesign -v "$BIN" && echo "    signature valid"
 
