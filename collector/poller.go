@@ -123,6 +123,10 @@ type poller struct {
 	weeklyState         weeklyDigestState
 	weeklyLastCheckedAt time.Time
 
+	// 历史播放 Top10 歌手,一天算一次推给状态中继(见 topartists.go)。
+	topArtistsState         topArtistsState
+	topArtistsLastCheckedAt time.Time
+
 	nullStreak int
 
 	// LB 提交(single/playing_now)改到后台 goroutine 跑，结果经这两个 channel 送回单一
@@ -328,7 +332,7 @@ func (p *poller) updatePosition(now time.Time) (reanchor bool, loopRestart bool)
 }
 
 func (p *poller) pushRelayState(now time.Time, reanchored bool) {
-	if p.cfg.StateRelayURL == "" {
+	if !features.StateRelay || p.cfg.StateRelayURL == "" {
 		return
 	}
 	var payload map[string]any
@@ -355,6 +359,10 @@ func (p *poller) pushRelayState(now time.Time, reanchored bool) {
 		payload = map[string]any{"ok": true, "empty": true, "playing": false}
 		key = "empty"
 	}
+	// 这五个"网页可选模块"开关跟上面 switch 走哪个分支无关——不管当前展示的是
+	// Mac 在播/iPhone 在播/暂停/上次播放/空闲兜底,网页都要知道要不要渲染这五个
+	// 模块,所以放在 switch 外面统一附加一次,不在每个分支各写一遍。
+	payload["modules"] = features.webModules()
 	// 省 KV 写额度(免费仅 1000 写/天):进度由网页从锚点外推,连播中途无需重写。
 	// 只在①状态变化(切歌/暂停/切设备)、②重锚(拖动/唤醒)、③兜底每 4 分钟刷一次
 	// 时才写(须 < worker STALE_MS=5min,否则 KV 会被判过期而误退 LB——这俩常数曾经
@@ -392,7 +400,7 @@ func (p *poller) pushRelayState(now time.Time, reanchored bool) {
 		} else if p.relayBackoff < 10*time.Minute {
 			p.relayBackoff *= 2
 		}
-		if !errors.Is(err, context.Canceled) {
+		if !errors.Is(err, context.Canceled) && features.BarkAlerts {
 			p.lb.alerter.fail("relay", "自建中继 /push 失败，网页可能停更")
 		}
 		return // 去重锚点不更新;按退避在后续 poll 重试
@@ -401,7 +409,9 @@ func (p *poller) pushRelayState(now time.Time, reanchored bool) {
 	p.relayLastState, p.relayLastAt = key, now
 	p.relayWrites++
 	log.Printf("relay write #%d [%s] key=%q", p.relayWrites, writeReason, key) // 埋点:实测每日 KV 写量与来源
-	p.lb.alerter.ok("relay")
+	if features.BarkAlerts {
+		p.lb.alerter.ok("relay")
+	}
 }
 
 // pushScrobble 记一条完成收听。历史/今日统计现改由网页从 LB 合并(每条完成收听已双写 LB,
@@ -549,7 +559,9 @@ func (p *poller) handle(now time.Time, reanchored, loopRestart bool) {
 		log.Printf("now playing: %s - %s", p.cur.Artist, p.cur.Title)
 		// 顺手把同一张专辑里其它还没解析过的曲目也丢到后台解析——用户按专辑顺序一首首听,
 		// 提前解析好等真播到那首歌时大概率不用现等。见 albumprefetch.go。
-		prefetchAlbumSiblings(p.cur.Artist, p.cur.Title, p.cur.Album)
+		if features.AlbumPrefetch {
+			prefetchAlbumSiblings(p.cur.Artist, p.cur.Title, p.cur.Album)
+		}
 		// LB 的 playing_now 只在"换曲"时更新、同曲存活期内拒绝覆盖,迟到的歌词再也进不去。
 		// 故首条须在 enrich 解析完后再发(那时才知有无歌词、有则带上)。已解析(缓存命中,无论
 		// 有无歌词)立即发;仅首次解析中(缓存未命中)才挂起,由下方处理器等 enrich 完成
@@ -639,7 +651,7 @@ func (p *poller) handle(now time.Time, reanchored, loopRestart bool) {
 // pushRelayState。实际的转发/镜像逻辑(有状态副作用)在 applyBridgeResult 里、
 // 结果送回主循环后才跑。
 func (p *poller) bridge(now time.Time) {
-	if p.cfg.LastfmUser == "" || p.cfg.LastfmAPIKey == "" {
+	if !features.LastfmBridge || p.cfg.LastfmUser == "" || p.cfg.LastfmAPIKey == "" {
 		return
 	}
 	if p.bridgeFetching || now.Sub(p.lastfmCheckedAt) < lastfmPollInterval {
@@ -793,7 +805,9 @@ func (p *poller) applyBridgeResult(r bridgeFetchResult) {
 // only declare playback stopped after a few consecutive nulls.
 func (p *poller) poll() {
 	if state, ok := getState(p.ctx, p.cfg.MediaControlPath); ok {
-		p.lb.alerter.ok("media-control")
+		if features.BarkAlerts {
+			p.lb.alerter.ok("media-control")
+		}
 		if len(state) == 0 { // "null" — nothing playing, or a transient read glitch
 			p.nullStreak++
 			if p.nullStreak >= 3 {
@@ -803,7 +817,7 @@ func (p *poller) poll() {
 			p.nullStreak = 0
 			p.cur = extract(state)
 		}
-	} else {
+	} else if features.BarkAlerts {
 		p.lb.alerter.fail("media-control", "读不到系统播放状态（media-control 异常）")
 	}
 	now := time.Now()
@@ -823,6 +837,7 @@ func (p *poller) poll() {
 	p.bridge(now)
 	p.pushRelayState(now, reanchored)
 	p.weeklyDigest(now)
+	p.topArtistsDigest(now)
 }
 
 func run(ctx context.Context, cfg *config, lb *lbClient) error {
@@ -834,17 +849,20 @@ func run(ctx context.Context, cfg *config, lb *lbClient) error {
 		ctx: ctx,
 		cfg: cfg,
 		lb:  lb,
-		// Last.fm 镜像写入(可选,三个凭证字段都配置才启用)。
-		lfm:            newLastfmScrobbler(cfg.LastfmScrobbleAPIKey, cfg.LastfmScrobbleSecret, cfg.LastfmScrobbleSessionKey),
-		lfmMirrored:    lfmMirrored,
-		forwardedSet:   forwardedSet,
-		lfmMirroredSet: lfmMirroredSet,
-		forwarded:      forwarded,
-		fwdSeeded:      fwdSeeded,
-		weeklyState:    weeklyDigestState{path: weeklyDigestPath},
-		submitDoneCh:   make(chan submitOutcome, 8),
-		announceDoneCh: make(chan announceOutcome, 8),
-		bridgeDoneCh:   make(chan bridgeFetchResult, 1),
+		// Last.fm 镜像写入(可选,三个凭证字段都配置且 lastfm_mirror_scrobble 开关打开才
+		// 启用)。这里是唯一的构造点,p.lfm==nil 天然让 mirrorScrobbleTracked/mirrorAsync
+		// 两处调用(now-playing 镜像 + scrobble 镜像)都跳过,不需要在两处各自判断开关。
+		lfm:             lastfmScrobblerIfEnabled(cfg),
+		lfmMirrored:     lfmMirrored,
+		forwardedSet:    forwardedSet,
+		lfmMirroredSet:  lfmMirroredSet,
+		forwarded:       forwarded,
+		fwdSeeded:       fwdSeeded,
+		weeklyState:     weeklyDigestState{path: weeklyDigestPath},
+		topArtistsState: topArtistsState{path: topArtistsStatePath},
+		submitDoneCh:    make(chan submitOutcome, 8),
+		announceDoneCh:  make(chan announceOutcome, 8),
+		bridgeDoneCh:    make(chan bridgeFetchResult, 1),
 	}
 	enrichNotify = make(chan struct{}, 1) // 后台 enrich 完成后触发一次重推
 	p.poll()                              // render immediately, don't wait a full interval on startup

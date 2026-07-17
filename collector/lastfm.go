@@ -37,6 +37,15 @@ func newLastfmScrobbler(apiKey, secret, sk string) *lastfmScrobbler {
 	return &lastfmScrobbler{apiKey: apiKey, secret: secret, sk: sk, hc: &http.Client{Timeout: 8 * time.Second}}
 }
 
+// lastfmScrobblerIfEnabled 是 newLastfmScrobbler 的唯一调用点(run() 里)，多包一层
+// features.LastfmMirrorScrobble 开关——跟凭据判断是 AND 关系,任一为否都返回 nil。
+func lastfmScrobblerIfEnabled(cfg *config) *lastfmScrobbler {
+	if !features.LastfmMirrorScrobble {
+		return nil
+	}
+	return newLastfmScrobbler(cfg.LastfmScrobbleAPIKey, cfg.LastfmScrobbleSecret, cfg.LastfmScrobbleSessionKey)
+}
+
 // sign 实现 Last.fm 签名算法:参数(不含 format/callback)按 key 字母序拼接、末尾接
 // shared secret,取 MD5 十六进制。
 func (s *lastfmScrobbler) sign(params map[string]string) string {

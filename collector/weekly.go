@@ -61,9 +61,13 @@ var weeklyDigestPath string
 type lastfmChartWeek struct{ From, To int64 }
 
 // lastfmChartEntry 是某一周里的一条排行(歌曲或歌手)，只留展示要用的字段。
+// Mbid(MusicBrainz ID)只有 topartists.go 的 lastfmTopArtists 会填,weekly.go 这边的
+// 两个 lastfmWeeklyTop* 不需要、留空——供 topartists.go 的 mergeAliasedArtists 拿来做
+// 除名字之外的第二个"是否同一个人"信号。
 type lastfmChartEntry struct {
 	Name, Artist string // Artist 对歌手榜自身为空
 	PlayCount    int
+	Mbid         string
 }
 
 func lastfmAPIGet(ctx context.Context, params neturl.Values, out any) error {
@@ -193,11 +197,12 @@ func weeklyDigestPush(a *alerter, from, to int64, tracks, artists []lastfmChartE
 }
 
 // weeklyDigest 检查(至多每 weeklyDigestCheckInterval 一次)Last.fm 有没有收官一个还
-// 没推送过的新周，有就拉排行推一条 Bark。复用桥接(bridge)已有的 lastfm_user/
-// lastfm_api_key——同一个 Last.fm 账号，没必要为这个功能再加一套凭证；bark_url 未配
-// 则整体跳过(alerter.push 本身也会在 url 为空时忽略,这里提前判断纯粹省一次网络请求)。
+// 没推送过的新周，有就拉排行推一条通知。复用桥接(bridge)已有的 lastfm_user/
+// lastfm_api_key——同一个 Last.fm 账号，没必要为这个功能再加一套凭证；推送目的地
+// (NotificationWebhookURL)未配则整体跳过(alerter.push 本身也会在 url 为空时忽略,
+// 这里提前判断纯粹省一次网络请求)。
 func (p *poller) weeklyDigest(now time.Time) {
-	if p.cfg.LastfmUser == "" || p.cfg.LastfmAPIKey == "" || p.lb.alerter == nil || p.lb.alerter.url == "" {
+	if !features.WeeklyDigest || p.cfg.LastfmUser == "" || p.cfg.LastfmAPIKey == "" || p.lb.alerter == nil || p.lb.alerter.url == "" {
 		return
 	}
 	if !p.weeklyLastCheckedAt.IsZero() && now.Sub(p.weeklyLastCheckedAt) < weeklyDigestCheckInterval {

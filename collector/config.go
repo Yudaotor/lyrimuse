@@ -34,9 +34,24 @@ type config struct {
 	LastfmScrobbleAPIKey     string `json:"lastfm_scrobble_api_key,omitempty"`
 	LastfmScrobbleSecret     string `json:"lastfm_scrobble_secret,omitempty"`
 	LastfmScrobbleSessionKey string `json:"lastfm_scrobble_session_key,omitempty"`
-	// Bark 推送端点(base URL, https://api.day.app/<key>)：LB 连不上或读不到播放
-	// 状态持续异常时推手机告警。留空则不告警。
-	BarkURL string `json:"bark_url,omitempty"`
+	// 推送提醒目的地：LB 连不上或读不到播放状态持续异常时推一条告警,每周听歌小结也走
+	// 这个通道。NotificationPlatform 选平台("bark"默认/"dingtalk"/"wecom"/"discord"/
+	// "feishu"/"serverchan"),NotificationWebhookURL 是对应平台的 webhook 地址,留空
+	// 则不推。
+	//
+	// 这个字段最早只支持 Bark、就叫 BarkURL,JSON key 也是 bark_url——加了平台选择
+	// 之后没有把 on-disk key 一起改名(改 key 要处理旧配置迁移,这里 Go 字段名换成
+	// 通用的 NotificationWebhookURL 就已经足够反映"不只是 Bark 专属"这件事,JSON tag
+	// 留着旧名字不影响任何人,还省了一次没必要的迁移)。
+	NotificationPlatform   string `json:"notification_platform,omitempty"`
+	NotificationWebhookURL string `json:"bark_url,omitempty"`
+	// DingtalkSignSecret/FeishuSignSecret 只有对应平台的机器人开了"加签"安全设置时
+	// 才需要填;留空则按未加签处理(钉钉要求机器人安全设置改成"自定义关键词"或不做
+	// 校验;飞书不加签也能收到消息,只是少一层来源校验)。两个平台的签名算法本身不同
+	// (细节见 notify.go 的 dingtalkSignedURL/feishuSign 注释),分开两个字段存,切换
+	// 平台时不会互相污染。
+	DingtalkSignSecret string `json:"dingtalk_sign_secret,omitempty"`
+	FeishuSignSecret   string `json:"feishu_sign_secret,omitempty"`
 }
 
 func loadConfig(path string) (*config, error) {
@@ -64,6 +79,11 @@ func loadConfig(path string) (*config, error) {
 		} else {
 			cfg.MediaControlPath = "/opt/homebrew/bin/media-control"
 		}
+	}
+	if cfg.NotificationPlatform == "" {
+		// 旧配置文件没有这个字段(是这次新加的),默认按最早唯一支持过的 Bark 处理,
+		// 不需要用户重新选一遍。
+		cfg.NotificationPlatform = "bark"
 	}
 	return cfg, nil
 }

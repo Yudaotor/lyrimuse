@@ -5,7 +5,6 @@ package main
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	_ "image/jpeg" // 注册 JPEG 解码器
 	_ "image/png"  // 网易云取色缩略图有时是 PNG(content-type 却谎报 jpg)
 	"log"
@@ -14,20 +13,28 @@ import (
 	"time"
 )
 
-// alerter pushes a Bark notification when a component (media-control /
+// alerter pushes a push-notification when a component (media-control /
 // relay) fails alertThreshold times in a row, and once more when it
-// recovers. No-op when url is empty.
+// recovers. No-op when url is empty. platform 决定 push() 怎么拼 body/URL——
+// 见 notify.go 的 buildNotifyPayload/dingtalkSignedURL/feishuSign。
 type alerter struct {
-	url    string
-	mu     sync.Mutex
-	fails  map[string]int
-	firing map[string]bool
+	platform       string
+	url            string
+	dingtalkSecret string
+	feishuSecret   string
+	mu             sync.Mutex
+	fails          map[string]int
+	firing         map[string]bool
 }
 
 const alertThreshold = 4
 
-func newAlerter(url string) *alerter {
-	return &alerter{url: url, fails: map[string]int{}, firing: map[string]bool{}}
+func newAlerter(platform, url, dingtalkSecret, feishuSecret string) *alerter {
+	return &alerter{
+		platform: platform, url: url,
+		dingtalkSecret: dingtalkSecret, feishuSecret: feishuSecret,
+		fails: map[string]int{}, firing: map[string]bool{},
+	}
 }
 
 func (a *alerter) ok(component string) {
@@ -61,22 +68,24 @@ func (a *alerter) fail(component, detail string) {
 }
 
 func (a *alerter) push(title, body string) {
-	payload, err := json.Marshal(map[string]any{
-		"title": title, "body": body, "group": "nowplaying", "level": "active",
-	})
+	payload, contentType, err := buildNotifyPayload(a.platform, title, body, a.feishuSecret)
 	if err != nil {
 		return
+	}
+	target := a.url
+	if a.platform == platformDingtalk {
+		target = dingtalkSignedURL(a.url, a.dingtalkSecret)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
 	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, a.url, bytes.NewReader(payload))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, target, bytes.NewReader(payload))
 	if err != nil {
 		return
 	}
-	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Content-Type", contentType)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		log.Printf("bark push failed: %v", err)
+		log.Printf("notify push failed (platform=%s): %v", a.platform, err)
 		return
 	}
 	resp.Body.Close()

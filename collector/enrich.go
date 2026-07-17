@@ -153,7 +153,9 @@ func resolveEnrichAsync(key, artist, title, album string, durationSecs float64) 
 	enrichDirty = true
 	enrichMu.Unlock()
 	saveEnrichCache()
-	exportLyricsFiles() // 见 lyricsexport.go——刚解析出的新歌词额外导出成独立文件
+	if features.LyricsFiles {
+		exportLyricsFiles() // 见 lyricsexport.go——刚解析出的新歌词额外导出成独立文件
+	}
 	// 非阻塞通知 poll 立刻重推(带上刚解析好的封面/歌词);没人在听就跳过。
 	if enrichNotify != nil {
 		select {
@@ -198,9 +200,27 @@ func backfillPeripheralFields(key, artist, title, album string, durationSecs flo
 }
 
 func resolveTrackEnrichment(artist, title, album string, durationSecs float64) enrichEntry {
+	// 2026-07-15 真机实测坐实:统一转成简体再往下传给 NetEase/QQ/酷狗/LRCLIB 的搜索
+	// 接口——这几个平台的曲库/搜索索引都是简体中文,本地 Apple Music 标签如果是繁体
+	// (比如"周杰倫"),拿繁体原文直接发起搜索请求,这几个平台的服务端全文检索匹配不上
+	// 任何东西、直接返回空结果(不是"匹配质量差",是完全查不到候选)——实测:用"周杰倫"
+	// 搜《跨时代》四个源全部返回空候选,只把艺人名换成简体"周杰伦"、其它都不变,立刻能
+	// 搜到网易云正版候选。match.go 的 normLoose 里已经有一处 toSimplified,但那处解决的
+	// 是"拿到候选之后,比较候选自己的标题/专辑字符串是否跟本地一致"这一步——是两个不同
+	// 阶段:必须先发对了搜索关键词才有候选可比较,那处修复解决不了这里"关键词本身发送前
+	// 就没转换"的问题,两处不能互相替代。这里只转换本函数内部用来发起搜索请求的局部变量,
+	// 不改 enrichCache 的 key(那个在更上层的 trackEnrichment 里用原始、未转换的
+	// artist/title/album 构造,必须跟 Apple Music 原始标签保持逐字节一致,否则同一首歌
+	// 反复播放会对不上同一条缓存记录)。
+	artist, title, album = toSimplified(artist), toSimplified(title), toSimplified(album)
 	var e enrichEntry
 	// 网易云:封面(国内可加载,苹果 mzstatic 国内已无 CDN)+ 单曲链接 + 带轴歌词,一次搜索出。
+	// 无条件查一次——scoredLyricCandidates 需要这份已解析好的候选(ne)算网易云歌词分。
 	ne := neteaseLookup(artist, title, album)
+	// 2026-07-17:封面/主色/平台跳转链接不再是可关闭的开关——这几样都是基础展示信息,
+	// 没有理由让用户关掉,用户反馈"这个不需要设置吧,默认就是支持的"。之前叫
+	// cover_and_links 的这个开关(及其在 desktop-lyrics「功能开关」tab 里唯一的
+	// 那个 Toggle)已经整个删除,以下逻辑无条件执行。
 	e.CoverURL = ne.Cover
 	if e.CoverURL != "" {
 		e.CoverSource = "netease"
@@ -236,23 +256,57 @@ func resolveTrackEnrichment(artist, title, album string, durationSecs float64) e
 	if title != "" {
 		e.SpotifyURL = "https://open.spotify.com/search/" + neturl.QueryEscape(artist+" "+title)
 	}
-	// 歌词:网易云/QQ音乐/酷狗/LRCLIB 四个源全部查一遍,不是查到第一个能用的就停——一首歌
-	// 只在缓存未命中时解析一次,后续都直接读缓存,四个源都查一遍换来更可信的结果性价比
-	// 很高(用户拍板:反正只查一次、存下来，没问题)。取分数最高的候选;所有候选都不合格
-	// 就是真的没有。取分/并发细节见 scoredLyricCandidates(同一份逻辑也供 desktop-lyrics
-	// 的"重新搜索候选歌词"手动纠正功能复用,搜索用的 CLI 子命令见 searchcli.go)。
-	scored := scoredLyricCandidates(ne, artist, title, album, durationSecs)
-	bestScore := -1
-	for _, r := range scored {
-		if r.Score < 0 || r.Score <= bestScore {
-			continue
+	if features.Lyrics {
+		// 歌词:网易云/QQ音乐/酷狗/LRCLIB 四个源全部查一遍,不是查到第一个能用的就停——一首歌
+		// 只在缓存未命中时解析一次,后续都直接读缓存,四个源都查一遍换来更可信的结果性价比
+		// 很高(用户拍板:反正只查一次、存下来，没问题)。取分/并发细节见
+		// scoredLyricCandidates(同一份逻辑也供 desktop-lyrics 的"重新搜索候选歌词"手动
+		// 纠正功能复用,搜索用的 CLI 子命令见 searchcli.go)——那条手动路径故意不受下面
+		// pickLyricCandidate 的"启用哪些源"过滤,理由见它的注释。
+		scored := scoredLyricCandidates(ne, artist, title, album, durationSecs)
+		if picked := pickLyricCandidate(scored); picked != nil {
+			e.Lyrics = picked.Lyrics
+			e.LyricsSource = picked.Source
+			e.LyricsTr, e.LyricsRoma, e.LyricsYRC = picked.LyricsTr, picked.LyricsRoma, picked.LyricsYRC
 		}
-		bestScore = r.Score
-		e.Lyrics = r.Lyrics
-		e.LyricsSource = r.Source
-		e.LyricsTr, e.LyricsRoma, e.LyricsYRC = r.LyricsTr, r.LyricsRoma, r.LyricsYRC
 	}
 	return e
+}
+
+// pickLyricCandidate 从 scoredLyricCandidates 返回的全量候选里,按用户在"歌词"设置
+// 分类里配置的"启用哪些源"+"挑选算法"选出最终采用的一条——只用于自动解析路径
+// (resolveTrackEnrichment,上面)。手动的 `collector search-lyrics` CLI 子命令("歌词
+// 管理"窗口的"重新搜索候选歌词"功能)故意不经过这层过滤,让用户手动纠正某一首歌时
+// 仍能看到/选择全部四个源的候选,不受"自动解析平时该信谁"这个设置的限制——两者是不同
+// 的关注点:一个是"日常自动解析该用哪些源",一个是"这一首歌具体查一遍、我自己挑,不管
+// 平时开没开"。
+func pickLyricCandidate(scored []scoredLyricCandidateResult) *scoredLyricCandidateResult {
+	if features.LyricsSourceMode == lyricsModePriority {
+		for _, source := range features.LyricsSourceOrder {
+			if !features.LyricsSources[source] {
+				continue
+			}
+			for i := range scored {
+				if scored[i].Source == source && scored[i].Score >= 0 {
+					return &scored[i]
+				}
+			}
+		}
+		return nil
+	}
+	var picked *scoredLyricCandidateResult
+	bestScore := -1
+	for i := range scored {
+		if !features.LyricsSources[scored[i].Source] {
+			continue
+		}
+		if scored[i].Score < 0 || scored[i].Score <= bestScore {
+			continue
+		}
+		bestScore = scored[i].Score
+		picked = &scored[i]
+	}
+	return picked
 }
 
 // scoredLyricCandidateResult is one scored lyric candidate — exported shape (JSON
@@ -276,7 +330,39 @@ type scoredLyricCandidateResult struct {
 // (resolveTrackEnrichment, above) and the on-demand `search-lyrics` CLI subcommand
 // (searchcli.go) gather/score candidates, so there is exactly one implementation
 // of "how do we rank lyric sources" in the whole project.
+//
+// 2026-07-16 真机实测坐实:Apple Music 有时把歌手标签写成该歌手的英文/罗马化艺名
+// (如"Jason Chan"/"Kun"),但网易云/QQ/酷狗/LRCLIB 这四个源都是按歌手的中文舞台名
+// 索引/检索的——拿英文艺名去查这四个源,返回的候选是彻底的空(不是排序/打分选不出
+// 好结果,是检索关键词本身就没命中任何东西:"Jason Chan"+《你瞒我瞒》四源全空,换成
+// "陈柏宇"立刻能查到 QQ 音乐带轴正版;"Kun"+《Jasmine》四源全空,换成"蔡徐坤"四个源
+// 都有候选)。四个源全空(len(results)==0,不是"候选都被判负分")才触发兜底:用
+// artistAliasTable 里已经手工登记过的别名换关键词、原样重新查一遍——没有登记别名、
+// 或别名跟原名相同,就不重试;只重试这一次,不做别名的别名(表里也没有这种链式登记),
+// 换别名查到的结果为空就仍然如实返回原来那份空结果,不伪造候选。
 func scoredLyricCandidates(ne neteaseInfo, artist, title, album string, durationSecs float64) []scoredLyricCandidateResult {
+	results := fetchScoredLyricCandidates(ne, artist, title, album, durationSecs)
+	if len(results) > 0 {
+		return results
+	}
+	alias := knownArtistAlias(artist)
+	if alias == "" || alias == artist {
+		return results
+	}
+	aliasNe := neteaseLookup(alias, title, album)
+	aliasResults := fetchScoredLyricCandidates(aliasNe, alias, title, album, durationSecs)
+	if len(aliasResults) > 0 {
+		log.Printf("lyrics: artist alias fallback succeeded: original_artist=%q alias=%q title=%q candidates=%d", artist, alias, title, len(aliasResults))
+		return aliasResults
+	}
+	return results
+}
+
+// fetchScoredLyricCandidates 是真正"拿这一个具体的歌手名字符串,去查网易云/QQ/酷狗/
+// LRCLIB 四个源、给查到的候选打分"的实现——从 scoredLyricCandidates 里拆出来,是
+// 为了在第一次用原始歌手名查询彻底查无候选时,能原封不动地对已知别名再调用一遍
+// (见 scoredLyricCandidates 上面的注释),而不必把并发抓取/打分这套逻辑抄第二遍。
+func fetchScoredLyricCandidates(ne neteaseInfo, artist, title, album string, durationSecs float64) []scoredLyricCandidateResult {
 	qqURL := qqMusicURL(artist, title, album)
 	qqMid := qqMidFromURL(qqURL)
 	var qqLyr, qqYRC, kugouLyr, kugouYRC, lrclibLyr string
