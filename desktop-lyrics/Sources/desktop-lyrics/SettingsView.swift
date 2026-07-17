@@ -596,13 +596,15 @@ private struct GeneralSettingsTab: View {
     var body: some View {
         Form {
             Section(L10n.t("语言")) {
+                // 下拉菜单而不是分段控件——分段控件的宽度会随选项数线性变宽,以后再加
+                // 语言(繁体中文/日语等)容易挤爆这一行;下拉菜单不管加多少个选项,这一行
+                // 的宽度都不变。
                 Picker(L10n.t("语言"), selection: $settings.appLanguage) {
                     Text(L10n.t("跟随系统")).tag("system")
                     Text(L10n.t("简体中文")).tag("zh-hans")
                     Text("English").tag("en")
                 }
-                .labelsHidden()
-                .pickerStyle(.segmented)
+                .pickerStyle(.menu)
             }
             Section(L10n.t("启动")) {
                 Toggle(L10n.t("开机启动"), isOn: $settings.launchAtLoginEnabled)
