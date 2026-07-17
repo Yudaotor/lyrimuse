@@ -94,12 +94,15 @@ public final class FeatureSettingsStore: ObservableObject {
     @Published public var lyrics = true
     @Published public var lyricsFiles = true
     @Published public var albumPrefetch = true
-    @Published public var stateRelay = true
-    @Published public var lastfmBridge = true
-    @Published public var lastfmMirrorScrobble = true
-    @Published public var weeklyDigest = true
-    @Published public var topArtistsDigest = true
-    @Published public var barkAlerts = true
+    // 2026-07-18:这 6 个都要连一个外部账号才有意义,改成默认关闭——用户反馈"非必需的
+    // 都设置为默认不开启"。collector/features.go 的 boolOr 默认值要跟着一起改,否则
+    // 全新安装时 Swift 这边显示关、Go 那边却按"缺字段=开启"实际执行,两边会对不上。
+    @Published public var stateRelay = false
+    @Published public var lastfmBridge = false
+    @Published public var lastfmMirrorScrobble = false
+    @Published public var weeklyDigest = false
+    @Published public var topArtistsDigest = false
+    @Published public var barkAlerts = false
     // 跟 collector/features.go 新增的 WebShowXxx 字段对应,控制公开网页展示哪些模块
     // (不是 collector 侧行为开关),默认全部开启,跟本文件其余开关的 fail-open 约定一致。
     @Published public var webShowHistory = true
@@ -157,20 +160,21 @@ public final class FeatureSettingsStore: ObservableObject {
     public func load() {
         guard let data = try? Data(contentsOf: Self.featuresURL),
               let f = try? JSONDecoder().decode(FeatureFlagsFile.self, from: data) else {
-            // 文件不存在/解析失败——维持属性的默认值 true,跟 collector 侧
-            // loadFeatureFlags 的"文件/字段缺失都当作已开启"约定完全一致。
+            // 文件不存在/解析失败——维持属性的默认值,跟 collector 侧 loadFeatureFlags
+            // 的默认值约定完全一致(核心行为开关 fail-open=true;需要外部账号的 6 个
+            // 2026-07-18 起改成 fail-closed=false，见上面属性声明处的改动说明)。
             savedSnapshot = currentSnapshot
             return
         }
         lyrics = f.lyrics ?? true
         lyricsFiles = f.lyricsFiles ?? true
         albumPrefetch = f.albumPrefetch ?? true
-        stateRelay = f.stateRelay ?? true
-        lastfmBridge = f.lastfmBridge ?? true
-        lastfmMirrorScrobble = f.lastfmMirrorScrobble ?? true
-        weeklyDigest = f.weeklyDigest ?? true
-        topArtistsDigest = f.topArtistsDigest ?? true
-        barkAlerts = f.barkAlerts ?? true
+        stateRelay = f.stateRelay ?? false
+        lastfmBridge = f.lastfmBridge ?? false
+        lastfmMirrorScrobble = f.lastfmMirrorScrobble ?? false
+        weeklyDigest = f.weeklyDigest ?? false
+        topArtistsDigest = f.topArtistsDigest ?? false
+        barkAlerts = f.barkAlerts ?? false
         webShowHistory = f.webShowHistory ?? true
         webShowComments = f.webShowComments ?? true
         webShowReactions = f.webShowReactions ?? true

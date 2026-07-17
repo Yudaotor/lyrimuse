@@ -117,28 +117,33 @@ func boolOr(p *bool, def bool) bool {
 }
 
 // loadFeatureFlags reads the shared feature-toggle file (best-effort — missing
-// file / unparseable content / missing individual fields all resolve to
-// "true",即今天的既有行为,这是一次纯增量的能力,不会在任何人还没打开过新设置
-// 分组之前静默改变行为)。
+// file / unparseable content all resolve to defaults below). Core behavior
+// toggles (lyrics/lyricsFiles/albumPrefetch) miss-field-defaults to true — a
+// pure increment that never silently changes existing behavior. The 6 toggles
+// that each require an external account (state relay / Last.fm bridge+mirror /
+// weekly digest / top-artists digest / push alerts) default to false instead
+// (2026-07-18): turning them on by default for a stranger who never opened
+// Settings would silently start network calls to services they never
+// configured.
 func loadFeatureFlags(path string) featureFlags {
 	var f featureFlagsFile
 	if data, err := os.ReadFile(path); err == nil {
 		if jerr := json.Unmarshal(data, &f); jerr != nil {
-			log.Printf("parse feature flags %s: %v (使用默认全开)", path, jerr)
+			log.Printf("parse feature flags %s: %v (使用默认值)", path, jerr)
 		}
 	} else if !errors.Is(err, os.ErrNotExist) {
-		log.Printf("read feature flags %s: %v (使用默认全开)", path, err)
+		log.Printf("read feature flags %s: %v (使用默认值)", path, err)
 	}
 	return featureFlags{
 		Lyrics:               boolOr(f.Lyrics, true),
 		LyricsFiles:          boolOr(f.LyricsFiles, true),
 		AlbumPrefetch:        boolOr(f.AlbumPrefetch, true),
-		StateRelay:           boolOr(f.StateRelay, true),
-		LastfmBridge:         boolOr(f.LastfmBridge, true),
-		LastfmMirrorScrobble: boolOr(f.LastfmMirrorScrobble, true),
-		WeeklyDigest:         boolOr(f.WeeklyDigest, true),
-		TopArtistsDigest:     boolOr(f.TopArtistsDigest, true),
-		BarkAlerts:           boolOr(f.BarkAlerts, true),
+		StateRelay:           boolOr(f.StateRelay, false),
+		LastfmBridge:         boolOr(f.LastfmBridge, false),
+		LastfmMirrorScrobble: boolOr(f.LastfmMirrorScrobble, false),
+		WeeklyDigest:         boolOr(f.WeeklyDigest, false),
+		TopArtistsDigest:     boolOr(f.TopArtistsDigest, false),
+		BarkAlerts:           boolOr(f.BarkAlerts, false),
 		LyricsSources:        resolveLyricsSources(f.LyricsSources),
 		LyricsSourceMode:     resolveLyricsSourceMode(f.LyricsSourceMode),
 		LyricsSourceOrder:    resolveLyricsSourceOrder(f.LyricsSourceOrder),
