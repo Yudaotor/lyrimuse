@@ -121,9 +121,11 @@ enum AccountDestination: Hashable, CaseIterable, Identifiable {
 func destinationStatus(for destination: AccountDestination, config: ConfigStore, lastfmConnect: LastfmConnectController) -> DestinationStatus {
     switch destination {
     case .listenBrainz:
+        // 2026-07-17 起 collector 不再强制要求这个账号(只想用悬浮歌词可以完全不配)，
+        // 未配置不再是"硬性错误"，改用跟其它卡片一致的橙色"缺凭据"提示。
         return config.isListenBrainzConfigured
             ? .active(config.listenbrainzUser.isEmpty ? nil : "已连接为 @\(config.listenbrainzUser)")
-            : .error("未配置")
+            : .missingCreds("未配置（可选）")
     case .stateRelay:
         if let hint = config.stateRelayMissingHint() { return .missingCreds(hint) }
         return .active()
@@ -265,14 +267,6 @@ struct AccountLinkingTab: View {
                 Text(destination.title).font(.title3.weight(.semibold))
                 status.label.font(.caption)
             }
-            Spacer()
-            if destination == .listenBrainz {
-                Text("必需")
-                    .font(.caption2.weight(.semibold))
-                    .padding(.horizontal, 8).padding(.vertical, 2)
-                    .background(Color.secondary.opacity(0.15), in: Capsule())
-                    .foregroundStyle(.secondary)
-            }
         }
     }
 
@@ -297,7 +291,7 @@ struct AccountLinkingTab: View {
         } header: {
             Text("账户信息")
         } footer: {
-            Text("这是采集器提交播放记录的唯一账号，必须填写才能启动。")
+            Text("可选：不填也能正常使用悬浮歌词，采集器照常启动。想要网页「历史播放记录」（唯一途径，「网页推送」那张卡的自建中继替代不了）、或者想让 iPhone 播放也桥接进来，才需要填这个。")
         }
     }
 
@@ -310,13 +304,13 @@ struct AccountLinkingTab: View {
                 HStack(spacing: 4) {
                     Text("同步服务地址")
                     HelpButton(
-                        text: "这是你自己用 Cloudflare Worker + KV 搭建的 state-worker 服务（项目里的 state-worker/ 目录），不是第三方产品——网页版靠它读取实时播放状态。完整从零搭建步骤（建 Cloudflare 账号/KV/自定义域名/secret）见 README「从零搭建 state-worker」一节。",
+                        text: "这是你自己用 Cloudflare Worker + KV 搭建的 state-worker 服务（项目里的 state-worker/ 目录），不是第三方产品——网页版靠它读取实时播放状态。不想自建也可以：只要「ListenBrainz」卡片配好了，网页会直连 ListenBrainz 兜底显示「正在播放」（国内访问可能较慢），两者配一个就够，都配是互为兜底。完整从零搭建步骤（建 Cloudflare 账号/KV/自定义域名/secret）见 README「从零搭建 state-worker」一节。",
                         docTitle: "打开 README →",
                         // 私有仓库 desktop-lyrics-suite(2026-07-17 起改名,原 nowplaying-backend)
                         // 的 GitHub 网页版(排版好,不是本地 IDE 打开的原始文本)——用行号锚点而不是
                         // 标题锚点,不用去猜 GitHub 对中文/括号标题的 slug 生成规则;这份 README
                         // 改动已提交推送,行号跟远端一致。以后这一节挪动过要跟着改这两个行号。
-                        docURL: URL(string: "https://github.com/Yudaotor/desktop-lyrics-suite/blob/main/README.md#L144-L166")!
+                        docURL: URL(string: "https://github.com/Yudaotor/desktop-lyrics-suite/blob/main/README.md#L155-L177")!
                     )
                 }
             }
@@ -346,6 +340,11 @@ struct AccountLinkingTab: View {
                 set: { features.webShowHistory = $0; Task { await features.save() } }
             ))
             .disabled(!features.stateRelay)
+            Text("这个模块的数据来自 ListenBrainz，不是这里的中继服务——开着但没配「ListenBrainz」的话，网页上这一块会一直是空的。")
+                .font(.caption2).foregroundStyle(.secondary)
+            if features.stateRelay {
+                accountHintRow(config.isListenBrainzConfigured ? nil : "未配置", target: .listenBrainz)
+            }
 
             Toggle("留言墙", isOn: Binding(
                 get: { features.webShowComments },
@@ -402,9 +401,14 @@ struct AccountLinkingTab: View {
                 get: { features.lastfmBridge },
                 set: { features.lastfmBridge = $0; Task { await features.save() } }
             ))
-            .disabled(config.lastfmBridgeMissingHint() != nil)
+            .disabled(config.lastfmBridgeMissingHint() != nil || !config.isListenBrainzConfigured)
+            if config.lastfmBridgeMissingHint() == nil {
+                accountHintRow(config.isListenBrainzConfigured ? nil : "未配置", target: .listenBrainz)
+            }
         } header: {
             Text("iPhone 播放桥接")
+        } footer: {
+            Text("这个桥接的作用是把 Last.fm 上读到的 iPhone 播放转发进 ListenBrainz——没配置「ListenBrainz」的话，转发了也没地方存，所以这个开关也需要那张卡配好才能打开。")
         }
 
         Section {

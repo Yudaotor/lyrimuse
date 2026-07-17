@@ -14,6 +14,17 @@ Mac 菜单栏悬浮歌词窗口——跟着 Apple Music 播放实时显示逐字
 
 collector 是一个 Go 编写、launchd 常驻的采集器，负责联网查歌词/封面（网易云/QQ音乐/酷狗/LRCLIB 四源都查一遍、取打分最高的）并写进 desktop-lyrics 读的本地缓存文件；如果配了 ListenBrainz token，顺手也会把播放记录提交给 [ListenBrainz](https://listenbrainz.org)——这一步完全可选，只想用悬浮歌词、不关心播放记录追踪的话，`listenbrainz_token` 留空即可，collector 照常启动，media-control 采集和歌词/封面解析不受影响。
 
+### 按你想要的功能，看需要配置什么
+
+| 想要什么 | 需要配置 |
+|---|---|
+| 只要 Mac 悬浮歌词 | 不需要任何账号 |
+| 网页/徽章/desktop-lyrics「中继模式」能看「正在播放」 | `listenbrainz_token` 或自建 `state-worker`，二选一（配一个够用，两个都配是互为兜底） |
+| 网页能看「历史播放记录」 | `listenbrainz_token`（唯一途径，`state-worker` 替代不了，原因见下方「架构与密钥用途一览」） |
+| 手机也算进「正在听」/历史 | `listenbrainz_token` + Last.fm 只读凭据（`lastfm_user`+`lastfm_api_key`） |
+| Last.fm 账号也想有完整历史 | Last.fm 写凭据（`lastfm_scrobble_*`），跟 ListenBrainz 完全独立、互不影响 |
+| 每周听歌小结 / 网页历史 Top10 歌手 | Last.fm 只读凭据；Top10 还要额外配 `state-worker` |
+
 ### 快速开始
 
 ```bash
