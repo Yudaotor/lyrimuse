@@ -1,8 +1,38 @@
+<div align="center">
+
 # desktop-lyrics-suite
 
-Mac 菜单栏悬浮歌词窗口——跟着 Apple Music 播放实时显示逐字同步歌词，另外还有一个「歌词管理」窗口可以查看/手改/删除/重新搜索每首歌的歌词候选。
+**Mac 菜单栏悬浮歌词** —— 跟着 Apple Music 播放，实时显示逐字同步歌词
 
-这个仓库的主角是 `desktop-lyrics/`；`collector/` 是让它能显示出歌词的常驻引擎（读播放状态、联网查歌词/封面、写本地缓存）；`state-worker/`/`badge-worker/`/`worker/`（可选的 Cloudflare Worker）和另一个独立仓库 [`Yudaotor/nowplaying`](https://github.com/Yudaotor/nowplaying)（网页展示页，`.gitignore` 里排除了 `/web/`，两边互不影响，各自 `git clone`）则是这套引擎顺带解锁的其他玩法——不是必需品。
+本地零网络 · 四源歌词自动择优 · 外观全可配置 · 中英文界面
+
+</div>
+
+这个仓库的主角是 [`desktop-lyrics/`](desktop-lyrics)：一个常驻置顶、跨 Space 的小悬浮窗，类似网易云/QQ音乐桌面客户端的"桌面歌词"，另外还有一个「歌词管理」窗口可以查看/手改/删除/重新搜索每首歌的歌词候选。[`collector/`](collector) 是让它能显示出歌词的常驻引擎（读播放状态、联网查歌词/封面、写本地缓存）；`state-worker/`/`badge-worker/`/`worker/`（可选的 Cloudflare Worker）和另一个独立仓库 [`Yudaotor/nowplaying`](https://github.com/Yudaotor/nowplaying)（网页展示页，`.gitignore` 里排除了 `/web/`，两边互不影响，各自 `git clone`）则是这套引擎顺带解锁的其他玩法——不是必需品。
+
+## 目录
+
+- [功能亮点](#功能亮点)
+- [桌面歌词悬浮窗（desktop-lyrics）](#桌面歌词悬浮窗desktop-lyrics)
+- [让悬浮窗有歌词可看：collector 引擎](#让悬浮窗有歌词可看collector-引擎)
+- [快速开始](#快速开始)
+- [顺带解锁的其他玩法](#顺带解锁的其他玩法)
+- [功能一览](#功能一览)
+- [部署 Worker（可选）](#部署-worker可选国内加速--徽章--飞书场景)
+- [架构与密钥用途一览](#架构与密钥用途一览)
+- [行为说明](#行为说明)
+- [已知限制 / 尚待完善](#已知限制--尚待完善)
+
+## 功能亮点
+
+- **本地模式零网络**：直接读这台 Mac 本地的 media-control（当前播放）+ collector 写在磁盘上的缓存，没有联网找歌词这一环；也可以切到「中继模式」跨设备/跨房间同步。
+- **逐字同步高亮**：网易云/QQ音乐/酷狗/LRCLIB 四源都查一遍、按打分自动择优（时间轴精度、语言是否匹配等维度），酷狗/QQ 的逐字数据也会归一化成同一套逐字渲染逻辑。
+- **歌词管理窗口**：查看/手改/删除/联网重新搜索每首歌的歌词候选，改完的内容会独立导出成 `.lrc` 文件，`~/.config/applemusic-nowplaying/lyrics/` 下的文件也可以直接手改、当作权威源导入。
+- **悬浮窗外观全可配置**：字体（含跟随系统）、字号、文字/背景/阴影颜色、悬浮窗宽度、位置锁定、截屏/录屏时隐藏、暂停/无播放时自动隐藏——一项都不用改也能直接用，默认观感就是精心调过的。
+- **状态栏文字模式**：菜单栏图标可以切换成直接显示当前歌词这一行文字（可调最大长度，超长悬停查看完整内容），不想看的话保持默认图标即可。
+- **中英文界面，实时切换**：设置里「跟随系统 / 简体中文 / English」三选一，切换立即生效，不需要重启；架构上预留了继续加语言的扩展点。
+- **账号功能默认关闭、按需校验**：ListenBrainz/Last.fm/网页展示/推送提醒这些依赖外部账号的功能一律默认不开——打开时才校验前置配置是否齐全，缺什么就弹窗提示、一键跳转到对应配置页，不会在没人碰过的情况下偷偷联网。
+- **可选解锁一整套"顺带玩法"**：网页展示页、跨设备中继同步、GitHub README 动态徽章、iPhone 播放桥接进 ListenBrainz、Mac 播放镜像进 Last.fm、每周听歌小结、历史 Top10 歌手统计——见下方[顺带解锁的其他玩法](#顺带解锁的其他玩法)，全部独立可选，不装不影响悬浮歌词本体。
 
 ## 桌面歌词悬浮窗（desktop-lyrics）
 
@@ -57,7 +87,7 @@ launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.chenyuhao.applemusic
 # 日志路径已经在上面的 sed 里换成你自己的了：~/Library/Logs/applemusic-nowplaying.log
 ```
 
-collector 跑起来、解析过至少一次当前这首歌之后，desktop-lyrics 的悬浮窗（本地模式，零额外配置）就能显示出歌词了。
+collector 跑起来、解析过至少一次当前这首歌之后，desktop-lyrics 的悬浮窗（本地模式，零额外配置）就能显示出歌词了。悬浮窗本体的构建方式见 [`desktop-lyrics/README.md`](desktop-lyrics/README.md)。
 
 ### 获取 `lastfm_scrobble_session_key`（Last.fm 镜像写入用，可选）
 
@@ -111,11 +141,14 @@ git clone git@github.com:Yudaotor/nowplaying.git web-page
 | 功能 | 一句话说明 | 实现子系统 | 怎么开关 |
 |---|---|---|---|
 | 悬浮歌词窗口 | 桌面浮层实时显示当前歌词，支持逐字高亮 | `desktop-lyrics/` | 菜单栏「显示悬浮歌词」 |
-| 歌词管理窗口 | 查看/手改/删除/重新搜索候选每首歌的歌词 | `desktop-lyrics/` | 菜单栏「歌词管理…」 |
-| 歌词多源解析 | 网易云/QQ音乐/酷狗/LRCLIB 四源都查一遍、取打分最高的 | `collector/enrich.go` | 设置里「歌词在线匹配」开关 |
+| 悬浮窗外观自定义 | 字体/字号/文字与背景颜色/阴影/宽度/位置锁定/截屏时隐藏/暂停时隐藏 | `desktop-lyrics/` | 设置「歌词」「外观」「通用」tab |
+| 状态栏显示当前歌词 | 菜单栏图标切换成直接显示歌词文字，可调最大长度+悬停查看完整内容 | `desktop-lyrics/MenuBarMenu.swift` | 设置里「在状态栏显示当前歌词」开关 |
+| 界面本地化 | 简体中文/English，可跟随系统或手动切换，切换立即生效不用重启 | `desktop-lyrics/L10n.swift` | 设置「通用」tab「语言」下拉菜单 |
+| 歌词管理窗口 | 查看/手改/删除/重新搜索候选每首歌的歌词，改动会导出成独立 `.lrc` 文件 | `desktop-lyrics/` | 菜单栏「歌词管理…」 |
+| 歌词多源解析 | 网易云/QQ音乐/酷狗/LRCLIB 四源都查一遍、取打分最高的（含逐字时间轴权重） | `collector/enrich.go` | 设置里「歌词在线匹配」开关；「歌词来源」可单独勾选启用哪几个源 |
 | 歌词文件夹作为权威源 | `~/.config/applemusic-nowplaying/lyrics/` 下的纯文本文件可以直接手改，collector 重启时导入生效 | `collector/lyricsimport.go`/`lyricsexport.go` | 设置里「歌词文件夹作为权威源」开关 |
 | 专辑预取 | 换歌时顺手把同专辑其它还没解析过的曲目(封面+歌词)丢到后台解析 | `collector/albumprefetch.go` | 设置里「提前解析同专辑其它曲目（封面+歌词）」开关 |
-| 封面/主色/平台跳转链接 | 抓封面(网易云/QQ 兜底)、算主色、拼 Apple/QQ/Spotify 跳转链接 | `collector/enrich.go` | 始终开启；不再是可关闭的设置项(2026-07-17 起) |
+| 封面/主色/平台跳转链接 | 抓封面(网易云/QQ 兜底)、取封面原色作为强调色、拼 Apple/QQ/Spotify 跳转链接 | `collector/enrich.go`/`collector/color.go` | 始终开启；不再是可关闭的设置项(2026-07-17 起) |
 | ListenBrainz 提交 | 提交 playing_now/listen，是网页展示/其它玩法的数据源头；只想用悬浮歌词、不关心播放记录追踪可以完全不配 | `collector/` | `config.json` 的 `listenbrainz_token` 留空即关闭，collector 正常启动、悬浮歌词不受影响 |
 | 展示页「正在播放」 | 网页显示当前/历史播放 | `collector/` + `state-worker/` + `web/` | 展示页本身常驻部署，不经本机控制 |
 | 状态中继(国内加速，可选) | 采集器把当前状态推进 KV，网页/desktop-lyrics「中继模式」优先读它、拿不到才回退直连 LB | `collector/` + `state-worker/` | 设置里「推送状态到网页/徽章」开关 + `config.json` 填 `state_relay_url` |
@@ -126,6 +159,8 @@ git clone git@github.com:Yudaotor/nowplaying.git web-page
 | 历史 Top10 歌手统计 | 一天算一次，推给网页展示 | `collector/topartists.go` | 设置里开关 + 依赖 Last.fm 凭据 + `state_relay_url` |
 | 网页模块可见性 | 单独控制展示页要不要显示历史/评论/表情反应/访客数/Top10 歌手 | `collector/features.go` + `state-worker/` + `web/` | 设置里「网页推送」卡片「网页展示模块」5 个开关 |
 | 故障告警 | media-control/状态中继连续失败时推通知 | `collector/alerter.go` | 设置里开关 + `config.json` 填 `bark_url`(或其它 `notification_platform`) |
+
+账号相关的这些功能（网页展示相关三项、iPhone 播放桥接、Mac 播放同步进 Last.fm、每周听歌小结、历史 Top10、故障告警）默认全部关闭：打开时才校验对应账号是否已配置，没配好会弹窗提示缺什么、并提供一键跳转到对应配置页，不会在没人碰过的情况下偷偷联网提交数据。
 
 ```
 Mac 采集器(Go, launchd 常驻)
