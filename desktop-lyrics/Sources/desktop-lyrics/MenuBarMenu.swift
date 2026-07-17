@@ -14,7 +14,9 @@ struct MenuBarLabel: View {
            coordinator.isPlayingNow,
            let text = coordinator.currentLine?.plainText,
            !text.isEmpty {
-            Text(truncated(text))
+            // 状态栏空间有限,截断是必须的,不能像悬浮窗那样直接自动换行——但截断不该等于
+            // "看不到剩下的部分",鼠标悬停时用系统原生 tooltip 把完整这一行显示出来。
+            Text(truncated(text)).help(text)
         } else {
             Label("桌面歌词", systemImage: "text.quote")
         }
