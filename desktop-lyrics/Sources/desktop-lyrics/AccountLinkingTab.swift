@@ -210,6 +210,16 @@ struct AccountLinkingTab: View {
     @State private var isSaving = false
     @State private var lastSavedAt: Date?
 
+    // 2026-07-18:开关校验从"预先灰置+旁边常驻小字"改成"打开时才校验,没满足就弹窗"——
+    // 用户反馈静态提示文字太多、想要的是"点了才提醒缺什么+能直接跳转"。missingPrereqAlert
+    // 非 nil 就弹一次;body 上只挂一个 .alert,所有开关共用同一套。
+    private struct MissingPrereqAlert: Identifiable {
+        let id = UUID()
+        let message: String
+        let jumpTarget: AccountDestination?
+    }
+    @State private var missingPrereqAlert: MissingPrereqAlert?
+
     private var status: DestinationStatus {
         destinationStatus(for: destination, config: config, lastfmConnect: lastfmConnect)
     }
@@ -231,6 +241,44 @@ struct AccountLinkingTab: View {
             Divider()
             saveBar
         }
+        .alert(
+            "还差一步",
+            isPresented: Binding(
+                get: { missingPrereqAlert != nil },
+                set: { if !$0 { missingPrereqAlert = nil } }
+            ),
+            presenting: missingPrereqAlert
+        ) { alert in
+            if let target = alert.jumpTarget {
+                Button("去配置「\(target.title)」") { onJumpToAccount(target) }
+                Button("取消", role: .cancel) {}
+            } else {
+                Button("好的", role: .cancel) {}
+            }
+        } message: { alert in
+            Text(alert.message)
+        }
+    }
+
+    // 关闭永远放行;打开前先查前置条件——sameCardHint 非 nil 就是"这张卡自己的字段
+    // 还没填好"(没有跳转,弹完窗留在原地填);crossCard 非 nil 才检查另一张卡,同样
+    // 缺了就弹窗+带跳转按钮。两层都过了才真的调用 apply(true)。
+    private func toggleGuarded(
+        _ newValue: Bool,
+        sameCardHint: String?,
+        crossCard: (hint: String?, target: AccountDestination)? = nil,
+        apply: (Bool) -> Void
+    ) {
+        guard newValue else { apply(false); return }
+        if let sameCardHint {
+            missingPrereqAlert = MissingPrereqAlert(message: "请先在这张卡上填好：\(sameCardHint)。", jumpTarget: nil)
+            return
+        }
+        if let crossCard, let hint = crossCard.hint {
+            missingPrereqAlert = MissingPrereqAlert(message: "需要先配置「\(crossCard.target.title)」（\(hint)）。", jumpTarget: crossCard.target)
+            return
+        }
+        apply(true)
     }
 
     // 2026-07-17:视觉重设计——原来每张卡片手工用 Divider() 分割一整块 Form/Section,
@@ -291,7 +339,7 @@ struct AccountLinkingTab: View {
         } header: {
             Text("账户信息")
         } footer: {
-            Text("可选：不填也能正常使用悬浮歌词，采集器照常启动。想要网页「历史播放记录」（唯一途径，「网页推送」那张卡的自建中继替代不了）、或者想让 iPhone 播放也桥接进来，才需要填这个。")
+            Text("可选，不填不影响悬浮歌词。")
         }
     }
 
@@ -304,7 +352,7 @@ struct AccountLinkingTab: View {
                 HStack(spacing: 4) {
                     Text("同步服务地址")
                     HelpButton(
-                        text: "这是你自己用 Cloudflare Worker + KV 搭建的 state-worker 服务（项目里的 state-worker/ 目录），不是第三方产品——网页版靠它读取实时播放状态。不想自建也可以：只要「ListenBrainz」卡片配好了，网页会直连 ListenBrainz 兜底显示「正在播放」（国内访问可能较慢），两者配一个就够，都配是互为兜底。完整从零搭建步骤（建 Cloudflare 账号/KV/自定义域名/secret）见 README「从零搭建 state-worker」一节。",
+                        text: "自己用 Cloudflare Worker + KV 搭建的 state-worker 服务（项目里的 state-worker/ 目录）。不想自建也行：配好「ListenBrainz」也能让网页兜底显示「正在播放」，两者配一个就够。完整从零搭建步骤见 README「从零搭建 state-worker」一节。",
                         docTitle: "打开 README →",
                         // 私有仓库 desktop-lyrics-suite(2026-07-17 起改名,原 nowplaying-backend)
                         // 的 GitHub 网页版(排版好,不是本地 IDE 打开的原始文本)——用行号锚点而不是
@@ -320,65 +368,38 @@ struct AccountLinkingTab: View {
         }
 
         Section {
-            HStack(spacing: 4) {
-                Text("默认全部开启。").font(.caption2).foregroundStyle(.secondary)
-                HelpButton(text: "控制网页上显示哪些模块，默认全部开启。")
-            }
-
             Toggle("推送状态到网页/徽章", isOn: Binding(
                 get: { features.stateRelay },
-                set: { features.stateRelay = $0; Task { await features.save() } }
+                set: { newValue in
+                    toggleGuarded(newValue, sameCardHint: config.stateRelayMissingHint()) { v in
+                        features.stateRelay = v; Task { await features.save() }
+                    }
+                }
             ))
-            .disabled(config.stateRelayMissingHint() != nil)
-            if config.stateRelayMissingHint() != nil {
-                Text("填好上面的地址和令牌、点下面「保存并应用」后才能开启。")
-                    .font(.caption2).foregroundStyle(.secondary)
-            }
 
-            Toggle("最近播放历史", isOn: Binding(
-                get: { features.webShowHistory },
-                set: { features.webShowHistory = $0; Task { await features.save() } }
-            ))
-            .disabled(!features.stateRelay)
-            Text("这个模块的数据来自 ListenBrainz，不是这里的中继服务——开着但没配「ListenBrainz」的话，网页上这一块会一直是空的。")
-                .font(.caption2).foregroundStyle(.secondary)
-            if features.stateRelay {
-                accountHintRow(config.isListenBrainzConfigured ? nil : "未配置", target: .listenBrainz)
-            }
-
-            Toggle("留言墙", isOn: Binding(
-                get: { features.webShowComments },
-                set: { features.webShowComments = $0; Task { await features.save() } }
-            ))
-            .disabled(!features.stateRelay)
-
-            Toggle("点赞", isOn: Binding(
-                get: { features.webShowReactions },
-                set: { features.webShowReactions = $0; Task { await features.save() } }
-            ))
-            .disabled(!features.stateRelay)
-
-            Toggle("访客计数", isOn: Binding(
-                get: { features.webShowVisitorCount },
-                set: { features.webShowVisitorCount = $0; Task { await features.save() } }
-            ))
-            .disabled(!features.stateRelay)
-
-            Toggle("历史 Top10 歌手", isOn: Binding(
-                get: { features.webShowTopArtists },
-                set: { features.webShowTopArtists = $0; Task { await features.save() } }
-            ))
-            .disabled(!features.stateRelay)
-            Text("展示效果还依赖「Last.fm」卡片「历史统计」小节里的「历史 Top10 歌手统计」已开启且有数据，这里只是单独控制网页上要不要显示这个模块。")
-                .font(.caption2).foregroundStyle(.secondary)
-
-            if !features.stateRelay {
-                Text("先开启上面的「推送状态到网页/徽章」才能设置这些模块。")
-                    .font(.caption2).foregroundStyle(.secondary)
-            }
+            Toggle("最近播放历史", isOn: webModuleBinding(\.webShowHistory))
+            Toggle("留言墙", isOn: webModuleBinding(\.webShowComments))
+            Toggle("点赞", isOn: webModuleBinding(\.webShowReactions))
+            Toggle("访客计数", isOn: webModuleBinding(\.webShowVisitorCount))
+            Toggle("历史 Top10 歌手", isOn: webModuleBinding(\.webShowTopArtists))
         } header: {
             Text("网页展示模块")
+        } footer: {
+            Text("默认全部开启，跟着上面的推送开关走；「最近播放历史」需要「ListenBrainz」配好才有数据，「历史 Top10 歌手」需要「Last.fm」卡片配好。")
         }
+    }
+
+    // 5 个网页模块开关共用同一套校验:自己不能单独打开,得先打开这张卡的
+    // "推送状态到网页/徽章"。用 KeyPath 而不是把 5 段几乎一样的 Binding 各写一遍。
+    private func webModuleBinding(_ keyPath: ReferenceWritableKeyPath<FeatureSettingsStore, Bool>) -> Binding<Bool> {
+        Binding(
+            get: { features[keyPath: keyPath] },
+            set: { newValue in
+                toggleGuarded(newValue, sameCardHint: features.stateRelay ? nil : "先打开「推送状态到网页/徽章」") { v in
+                    features[keyPath: keyPath] = v; Task { await features.save() }
+                }
+            }
+        )
     }
 
     // MARK: - Last.fm(合并 iPhone 桥接 + Mac 镜像——都是同一个 Last.fm 账号)
@@ -399,16 +420,17 @@ struct AccountLinkingTab: View {
             SecretFieldRow("API Key", value: $config.lastfmAPIKey, prompt: "在 last.fm/api/account/create 申请")
             Toggle("桥接回 ListenBrainz", isOn: Binding(
                 get: { features.lastfmBridge },
-                set: { features.lastfmBridge = $0; Task { await features.save() } }
+                set: { newValue in
+                    toggleGuarded(newValue,
+                        sameCardHint: config.lastfmBridgeMissingHint(),
+                        crossCard: (hint: config.isListenBrainzConfigured ? nil : "未配置", target: .listenBrainz)
+                    ) { v in features.lastfmBridge = v; Task { await features.save() } }
+                }
             ))
-            .disabled(config.lastfmBridgeMissingHint() != nil || !config.isListenBrainzConfigured)
-            if config.lastfmBridgeMissingHint() == nil {
-                accountHintRow(config.isListenBrainzConfigured ? nil : "未配置", target: .listenBrainz)
-            }
         } header: {
             Text("iPhone 播放桥接")
         } footer: {
-            Text("这个桥接的作用是把 Last.fm 上读到的 iPhone 播放转发进 ListenBrainz——没配置「ListenBrainz」的话，转发了也没地方存，所以这个开关也需要那张卡配好才能打开。")
+            Text("转发进 ListenBrainz，也需要那张卡配好。")
         }
 
         Section {
@@ -427,9 +449,12 @@ struct AccountLinkingTab: View {
             SecretFieldRow("Scrobble Secret", value: $config.lastfmScrobbleSecret, prompt: "在 last.fm/api/account/create 创建应用后可见")
             Toggle("同步进 Last.fm", isOn: Binding(
                 get: { features.lastfmMirrorScrobble },
-                set: { features.lastfmMirrorScrobble = $0; Task { await features.save() } }
+                set: { newValue in
+                    toggleGuarded(newValue, sameCardHint: config.lastfmMirrorMissingHint()) { v in
+                        features.lastfmMirrorScrobble = v; Task { await features.save() }
+                    }
+                }
             ))
-            .disabled(config.lastfmMirrorMissingHint() != nil)
         } header: {
             Text("Mac 播放镜像")
         }
@@ -445,32 +470,17 @@ struct AccountLinkingTab: View {
         Section {
             Toggle("历史 Top10 歌手统计", isOn: Binding(
                 get: { features.topArtistsDigest },
-                set: { features.topArtistsDigest = $0; Task { await features.save() } }
+                set: { newValue in
+                    toggleGuarded(newValue,
+                        sameCardHint: config.lastfmBridgeMissingHint(),
+                        crossCard: (hint: config.stateRelayMissingHint(), target: .stateRelay)
+                    ) { v in features.topArtistsDigest = v; Task { await features.save() } }
+                }
             ))
-            .disabled(config.lastfmBridgeMissingHint() != nil || config.stateRelayMissingHint() != nil)
-            if config.lastfmBridgeMissingHint() == nil {
-                accountHintRow(config.stateRelayMissingHint(), target: .stateRelay)
-            }
         } header: {
             Text("历史统计")
         } footer: {
-            Text("基于 iPhone 桥接读到的播放记录，展示在网页上，还需要「网页推送」配好。")
-        }
-    }
-
-    // 有 hint 就说明依赖的另一个账号还没配好,点击直接跳到那个账号。账号名字直接读
-    // target.title,不再单独传一份字符串——
-    // 避免以后账号改名时这里的硬编码文案忘了跟着改(名字只有一个来源)。
-    @ViewBuilder
-    private func accountHintRow(_ hint: String?, target: AccountDestination) -> some View {
-        if let hint {
-            Button {
-                onJumpToAccount(target)
-            } label: {
-                Label("还需要配置「\(target.title)」（\(hint)）→", systemImage: "arrow.right.circle")
-            }
-            .buttonStyle(.link)
-            .font(.caption2)
+            Text("推给网页展示，还需要「网页推送」配好。")
         }
     }
 
@@ -625,18 +635,22 @@ struct AccountLinkingTab: View {
         Section {
             Toggle("故障告警", isOn: Binding(
                 get: { features.barkAlerts },
-                set: { features.barkAlerts = $0; Task { await features.save() } }
+                set: { newValue in
+                    toggleGuarded(newValue, sameCardHint: config.pushMissingHint()) { v in
+                        features.barkAlerts = v; Task { await features.save() }
+                    }
+                }
             ))
-            .disabled(config.pushMissingHint() != nil)
 
             Toggle("每周听歌小结", isOn: Binding(
                 get: { features.weeklyDigest },
-                set: { features.weeklyDigest = $0; Task { await features.save() } }
+                set: { newValue in
+                    toggleGuarded(newValue,
+                        sameCardHint: config.pushMissingHint(),
+                        crossCard: (hint: config.lastfmBridgeMissingHint(), target: .lastfm)
+                    ) { v in features.weeklyDigest = v; Task { await features.save() } }
+                }
             ))
-            .disabled(config.pushMissingHint() != nil || config.lastfmBridgeMissingHint() != nil)
-            if config.pushMissingHint() == nil {
-                accountHintRow(config.lastfmBridgeMissingHint(), target: .lastfm)
-            }
         } header: {
             Text("提醒开关")
         }
