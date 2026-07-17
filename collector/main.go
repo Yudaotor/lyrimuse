@@ -68,8 +68,13 @@ func main() {
 	if err != nil {
 		log.Fatalf("load config: %v", err)
 	}
-	if cfg.Token == "" && !*dryRun {
-		log.Fatalf("missing ListenBrainz token: set listenbrainz_token in %s or LISTENBRAINZ_TOKEN env", *cfgPath)
+	// listenbrainz_token 是可选的:没填也能正常启动,只是不会提交到 ListenBrainz(见
+	// lbClient.submit 里的空 token 直接跳过网络调用)——media-control 采集、歌词/封面
+	// 解析、写本地缓存(desktop-lyrics 悬浮窗要用的那份)全都照常工作,不依赖这个 token。
+	// 2026-07-17 前这里是 log.Fatalf 强制要求,哪怕只想用悬浮歌词也得先注册一个
+	// ListenBrainz 账号——现在只提醒一下,不再拦启动。
+	if cfg.Token == "" {
+		log.Printf("no listenbrainz_token configured: ListenBrainz submission disabled, running locally only (media-control + lyrics/cover enrichment still work)")
 	}
 	// 2026-07-15:desktop-lyrics"设置"窗口的"功能开关"分组写这份共享文件,collector
 	// 启动时读一次(没有文件监听,改了要重启才生效,跟 config.json/enrichCache 同一套

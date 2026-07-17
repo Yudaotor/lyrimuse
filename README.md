@@ -12,9 +12,7 @@ Mac 菜单栏悬浮歌词窗口——跟着 Apple Music 播放实时显示逐字
 
 ## 让悬浮窗有歌词可看：collector 引擎
 
-collector 是一个 Go 编写、launchd 常驻的采集器，负责联网查歌词/封面（网易云/QQ音乐/酷狗/LRCLIB 四源都查一遍、取打分最高的）并写进 desktop-lyrics 读的本地缓存文件；顺手也会把播放记录提交给 [ListenBrainz](https://listenbrainz.org)。
-
-⚠️ 当前架构的一个粗糙点：collector 启动时强制要求填 `listenbrainz_token`，哪怕你完全不关心播放记录追踪、只想用悬浮歌词，也得先注册一个 ListenBrainz 账号拿到 token 才能把 collector 跑起来——这不是有意为之，只是还没花时间把这个依赖摘掉，欢迎 PR。
+collector 是一个 Go 编写、launchd 常驻的采集器，负责联网查歌词/封面（网易云/QQ音乐/酷狗/LRCLIB 四源都查一遍、取打分最高的）并写进 desktop-lyrics 读的本地缓存文件；如果配了 ListenBrainz token，顺手也会把播放记录提交给 [ListenBrainz](https://listenbrainz.org)——这一步完全可选，只想用悬浮歌词、不关心播放记录追踪的话，`listenbrainz_token` 留空即可，collector 照常启动，media-control 采集和歌词/封面解析不受影响。
 
 ### 快速开始
 
@@ -30,10 +28,10 @@ go build -o ../bin/collector .
 mkdir -p ~/.config/applemusic-nowplaying
 cp config.example.json ~/.config/applemusic-nowplaying/config.json
 chmod 600 ~/.config/applemusic-nowplaying/config.json
-# 编辑 config.json：listenbrainz_token 必填(在 https://listenbrainz.org/settings/ 拿，
-# collector 启动的硬性要求，见上面的说明)；listenbrainz_user 采集器本身不读，但网页/
-# state-worker 的 URL 都要用到，建议一并填好；其余字段(state_relay_*/lastfm_*/bark_url/
-# notification_platform 等)都是可选功能，留空即关闭。
+# 编辑 config.json：只想要悬浮歌词的话，config.json 甚至可以只留 bundle_ids 不动，其余
+# 全部留空。想同时把播放记录提交给 ListenBrainz(解锁网页展示页等其它玩法)才需要填
+# listenbrainz_token(在 https://listenbrainz.org/settings/ 拿)+ listenbrainz_user；
+# 其余字段(state_relay_*/lastfm_*/bark_url/notification_platform 等)都是可选功能，留空即关闭。
 
 # 先前台试跑（回到仓库根目录；--dry-run 只打日志不真提交）
 cd .. && ./bin/collector -dry-run
@@ -97,7 +95,7 @@ git clone git@github.com:Yudaotor/nowplaying.git web-page
 
 ## 功能一览
 
-除了核心的歌词/封面解析（desktop-lyrics 存在的根本意义，不可关）、ListenBrainz 提交（collector 启动的硬性依赖）、封面/主色/平台跳转链接（基础展示信息，2026-07-17 起改成无条件执行，不再是可关闭的设置项）和三个常驻部署的 Cloudflare Worker（跟本机进程无关，本机没有开关能控制它们本身），其余都能在 desktop-lyrics 的「设置」窗口按开关单独打开/关闭（改完自动写共享文件+重启 collector，见 `collector/features.go`/`desktop-lyrics/Sources/desktop-lyrics/Settings/FeatureSettingsStore.swift`）。
+除了核心的歌词/封面解析（desktop-lyrics 存在的根本意义，不可关）、封面/主色/平台跳转链接（基础展示信息，2026-07-17 起改成无条件执行，不再是可关闭的设置项）和三个常驻部署的 Cloudflare Worker（跟本机进程无关，本机没有开关能控制它们本身），其余都能在 desktop-lyrics 的「设置」窗口按开关单独打开/关闭，或者靠 `config.json` 里对应字段留空/填写来开关（见 `collector/features.go`/`desktop-lyrics/Sources/desktop-lyrics/Settings/FeatureSettingsStore.swift`）。
 
 | 功能 | 一句话说明 | 实现子系统 | 怎么开关 |
 |---|---|---|---|
@@ -107,7 +105,7 @@ git clone git@github.com:Yudaotor/nowplaying.git web-page
 | 歌词文件夹作为权威源 | `~/.config/applemusic-nowplaying/lyrics/` 下的纯文本文件可以直接手改，collector 重启时导入生效 | `collector/lyricsimport.go`/`lyricsexport.go` | 设置里「歌词文件夹作为权威源」开关 |
 | 专辑预取 | 换歌时顺手把同专辑其它还没解析过的曲目(封面+歌词)丢到后台解析 | `collector/albumprefetch.go` | 设置里「提前解析同专辑其它曲目（封面+歌词）」开关 |
 | 封面/主色/平台跳转链接 | 抓封面(网易云/QQ 兜底)、算主色、拼 Apple/QQ/Spotify 跳转链接 | `collector/enrich.go` | 始终开启；不再是可关闭的设置项(2026-07-17 起) |
-| ListenBrainz 提交 | 提交 playing_now/listen；collector 启动的硬性依赖，也是网页展示/其它玩法的数据源头 | `collector/` | 始终开启；要关掉就是卸载/停用整个 collector |
+| ListenBrainz 提交 | 提交 playing_now/listen，是网页展示/其它玩法的数据源头；只想用悬浮歌词、不关心播放记录追踪可以完全不配 | `collector/` | `config.json` 的 `listenbrainz_token` 留空即关闭，collector 正常启动、悬浮歌词不受影响 |
 | 展示页「正在播放」 | 网页显示当前/历史播放 | `collector/` + `state-worker/` + `web/` | 展示页本身常驻部署，不经本机控制 |
 | 状态中继(国内加速，可选) | 采集器把当前状态推进 KV，网页/desktop-lyrics「中继模式」优先读它、拿不到才回退直连 LB | `collector/` + `state-worker/` | 设置里「推送状态到网页/徽章」开关 + `config.json` 填 `state_relay_url` |
 | GitHub 动态徽章(可选) | README 里的实时 SVG 徽章 | `badge-worker/`(读 state-worker) | 常驻部署，本机不可控；依赖上面「状态中继」有没有新鲜数据 |

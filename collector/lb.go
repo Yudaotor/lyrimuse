@@ -122,6 +122,10 @@ func (c *lbClient) submit(ctx context.Context, listenType string, listenedAt int
 		log.Printf("[dry-run] would POST %s: %s", listenType, body)
 		return nil
 	}
+	if c.token == "" {
+		// 没配置 token——main.go 启动时已经打过一次提示,这里静默跳过,不逐条打日志刷屏。
+		return nil
+	}
 
 	tries, perTry := 1, playingNowTimeout
 	if listenType == "single" {

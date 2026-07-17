@@ -1,6 +1,6 @@
 {
-  "listenbrainz_token": "在 https://listenbrainz.org/settings/ 获取",
-  "listenbrainz_user": "你的 ListenBrainz 用户名",
+  "listenbrainz_token": "(可选，留空则不提交到 ListenBrainz，只用本地悬浮歌词不受影响) 在 https://listenbrainz.org/settings/ 获取",
+  "listenbrainz_user": "(可选，仅在你也填了 listenbrainz_token 时才有意义) 你的 ListenBrainz 用户名",
   "bundle_ids": ["com.apple.Music"],
 
   "api_root": "(可选，默认 https://api.listenbrainz.org，自建 ListenBrainz 兼容 API 时才需要改)",

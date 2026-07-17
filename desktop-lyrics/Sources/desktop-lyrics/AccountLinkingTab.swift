@@ -316,7 +316,7 @@ struct AccountLinkingTab: View {
                         // 的 GitHub 网页版(排版好,不是本地 IDE 打开的原始文本)——用行号锚点而不是
                         // 标题锚点,不用去猜 GitHub 对中文/括号标题的 slug 生成规则;这份 README
                         // 改动已提交推送,行号跟远端一致。以后这一节挪动过要跟着改这两个行号。
-                        docURL: URL(string: "https://github.com/Yudaotor/desktop-lyrics-suite/blob/main/README.md#L146-L168")!
+                        docURL: URL(string: "https://github.com/Yudaotor/desktop-lyrics-suite/blob/main/README.md#L144-L166")!
                     )
                 }
             }
