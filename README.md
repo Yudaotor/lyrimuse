@@ -264,9 +264,7 @@ Worker(test-0703) 只负责：人点链接时 302 跳转到展示页；URL 规�
 
 - album-prefetch（专辑预取）和精确播放进度这两个功能实际会用 `osascript` 操作 Music.app，需要一次性的自动化/Apple Events 授权（不像核心的 media-control 读取路径那样完全免授权）；在无 GUI 会话的场景下授权弹窗弹不出来，会静默降级为不可用，不影响核心功能。
 
-以下几条已经修复，但受限于这台机器只有 Apple Silicon，没有真机验证过：
-
-- desktop-lyrics 的 `build.sh` 在拷贝完二进制后先主动 `codesign -s - --force` 再验证，而不是只验证——之前只验证的写法在 Apple Silicon 上因为系统强制签名没问题，但理论上在 Intel Mac 上可能因为工具链没有自动签名而直接报错退出整个脚本。现在无论哪种架构都会重新 ad-hoc 签一遍，Apple Silicon 上是无副作用的重复操作。
+`build.sh` 在拷贝完二进制后先主动 `codesign -s - --force` 再验证，而不是只验证——这台机器只有 Apple Silicon，没有物理 Intel Mac，但交叉编译一份 x86_64 版本 + 用 Rosetta 实际跑起来验证过这条修复的必要性：`swift build --arch x86_64` 产物默认确实是**完全未签名**的（`codesign -v` 报 "code object is not signed at all"，之前只验证不主动签的写法在这种产物上会直接报错退出整个脚本），执行 `codesign -s - --force` 补签之后签名有效、Rosetta 下也能正常启动跑起来。Apple Silicon 上因为链接器本来就会自动签一份 ad-hoc 签名，这步是无副作用的重复操作。
 
 ## 已知环境坑（作者自己的 Mac, macOS 27 beta）
 
