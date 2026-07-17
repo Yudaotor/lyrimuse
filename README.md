@@ -146,6 +146,7 @@ git clone git@github.com:Yudaotor/nowplaying.git web-page
 | 悬浮窗外观自定义 | 字体/字号/文字与背景颜色/阴影/宽度/位置锁定/截屏时隐藏/暂停时隐藏 | `desktop-lyrics/` | 设置「歌词」「外观」「通用」tab |
 | 状态栏显示当前歌词 | 菜单栏图标切换成直接显示歌词文字，可调最大长度+悬停查看完整内容 | `desktop-lyrics/MenuBarMenu.swift` | 设置里「在状态栏显示当前歌词」开关 |
 | 界面本地化 | 简体中文/English，可跟随系统或手动切换，切换立即生效不用重启 | `desktop-lyrics/L10n.swift` | 设置「通用」tab「语言」下拉菜单 |
+| 自动化权限引导 | 首次启动引导获取"自动化"权限(读 Apple Music 精确播放进度用)，设置里能看到当前授权状态、重新请求或跳转系统设置；没有这个权限也能正常使用，播放进度改用估算值 | `desktop-lyrics/Settings/MusicAutomationPermission.swift` | 设置「歌词」tab「精确追踪 Apple Music 播放进度」开关 + 「通用」tab「权限」分区 |
 | 歌词管理窗口 | 查看/手改/删除/重新搜索候选每首歌的歌词，改动会导出成独立 `.lrc` 文件 | `desktop-lyrics/` | 菜单栏「歌词管理…」 |
 | 歌词多源解析 | 网易云/QQ音乐/酷狗/LRCLIB 四源都查一遍、取打分最高的（含逐字时间轴权重） | `collector/enrich.go` | 设置里「歌词在线匹配」开关；「歌词来源」可单独勾选启用哪几个源 |
 | 歌词文件夹作为权威源 | `~/.config/applemusic-nowplaying/lyrics/` 下的纯文本文件可以直接手改，collector 重启时导入生效 | `collector/lyricsimport.go`/`lyricsexport.go` | 设置里「歌词文件夹作为权威源」开关 |
