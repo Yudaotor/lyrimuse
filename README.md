@@ -13,15 +13,15 @@
 ## 目录
 
 - [功能亮点](#功能亮点)
-- [桌面歌词悬浮窗（desktop-lyrics）](#桌面歌词悬浮窗desktop-lyrics)
-- [让悬浮窗有歌词可看：collector 引擎](#让悬浮窗有歌词可看collector-引擎)
+- [桌面歌词悬浮窗（desktop-lyrics）](#toc-desktop-lyrics)
+- [让悬浮窗有歌词可看：collector 引擎](#toc-collector)
 - [快速开始](#快速开始)
 - [顺带解锁的其他玩法](#顺带解锁的其他玩法)
 - [功能一览](#功能一览)
-- [部署 Worker（可选）](#部署-worker可选国内加速--徽章--飞书场景)
+- [部署 Worker（可选）](#toc-deploy-worker)
 - [架构与密钥用途一览](#架构与密钥用途一览)
 - [行为说明](#行为说明)
-- [已知限制 / 尚待完善](#已知限制--尚待完善)
+- [已知限制 / 尚待完善](#toc-known-issues)
 
 ## 功能亮点
 
@@ -34,12 +34,14 @@
 - **账号功能默认关闭、按需校验**：ListenBrainz/Last.fm/网页展示/推送提醒这些依赖外部账号的功能一律默认不开——打开时才校验前置配置是否齐全，缺什么就弹窗提示、一键跳转到对应配置页，不会在没人碰过的情况下偷偷联网。
 - **可选解锁一整套"顺带玩法"**：网页展示页、跨设备中继同步、GitHub README 动态徽章、iPhone 播放桥接进 ListenBrainz、Mac 播放镜像进 Last.fm、每周听歌小结、历史 Top10 歌手统计——见下方[顺带解锁的其他玩法](#顺带解锁的其他玩法)，全部独立可选，不装不影响悬浮歌词本体。
 
+<a id="toc-desktop-lyrics"></a>
 ## 桌面歌词悬浮窗（desktop-lyrics）
 
 这是这个项目真正要给你用的东西。构建/运行/开机启动的完整步骤见 [`desktop-lyrics/README.md`](desktop-lyrics/README.md)——不需要任何 Apple 开发者账号/证书，ad-hoc 签名即可跑。
 
 默认走**本地模式**：零网络，直接读这台 Mac 本地的 media-control（当前播放）+ 下面 `collector/` 写在磁盘上的歌词/封面缓存；没有缓存时显示「暂无歌词」，不会报错或显示别人的数据。也可以在设置里切到「中继模式」，跟手机/其它设备同步（见下面「顺带解锁的其他玩法」）。
 
+<a id="toc-collector"></a>
 ## 让悬浮窗有歌词可看：collector 引擎
 
 collector 是一个 Go 编写、launchd 常驻的采集器，负责联网查歌词/封面（网易云/QQ音乐/酷狗/LRCLIB 四源都查一遍、取打分最高的）并写进 desktop-lyrics 读的本地缓存文件；如果配了 ListenBrainz token，顺手也会把播放记录提交给 [ListenBrainz](https://listenbrainz.org)——这一步完全可选，只想用悬浮歌词、不关心播放记录追踪的话，`listenbrainz_token` 留空即可，collector 照常启动，media-control 采集和歌词/封面解析不受影响。
@@ -169,6 +171,7 @@ Mac 采集器(Go, launchd 常驻)
        └─ 联网查歌词/封面 ──> 写本地磁盘缓存 ──> desktop-lyrics 悬浮窗(本地模式,零网络读取)
 ```
 
+<a id="toc-deploy-worker"></a>
 ## 部署 Worker（可选：国内加速 / 徽章 / 飞书场景）
 
 这三个都是可选的 Cloudflare Worker，desktop-lyrics 本地模式 + collector 不依赖它们也能完整工作。彼此也有依赖顺序：`badge-worker` 需要读一个已经在跑的 `state-worker`；`worker/` 只服务于作者本人的飞书个性签名场景（需要你自己注册一个飞书应用），不打算做这件事的话可以完全跳过。
@@ -254,6 +257,7 @@ Worker(test-0703) 只负责：人点链接时 302 跳转到展示页；URL 规�
 - 单曲循环重复播放同一首也会分别计入收听：检测到播放位置从接近末尾（≥90% 时长）跳回接近开头（≤10 秒）时，判定为新一轮播放，重新计时。
 - 页面在无播放时回退显示「上次播放 · N 分钟前」。
 
+<a id="toc-known-issues"></a>
 ## 已知限制 / 尚待完善
 
 这个仓库目前是从个人单机项目转出来的，以下这条还比较粗糙，欢迎 PR：
