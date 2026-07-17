@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 )
 
 // runSearchLyricsCLI implements `collector search-lyrics -artist ... -title ...
@@ -32,6 +33,19 @@ func runSearchLyricsCLI(args []string) {
 		os.Exit(2)
 	}
 
+	// main() 的正常启动流程会在这之后才 loadFeatureFlags(...),但这条 CLI 子命令走的是
+	// os.Args[1]=="search-lyrics" 的提前分支、马上 return,永远不会执行到那一行——
+	// features 这个包级变量在这里还是零值(LyricsSources 是 nil map)。2026-07-18 起
+	// 手动搜索改成遵循"歌词"设置里的"歌词来源"开关(此前故意不遵循,让手动搜索总能看到
+	// 全部四个源——用户反馈这个不一致该消除,手动搜索也只看你在设置里开着的那几个源),
+	// 所以这里必须按跟 main() 完全一致的默认路径规则自己加载一遍,不然下面过滤时 nil map
+	// 对任何 key 取值都是 false,会把四个源全部误判成"没启用"、直接返回空列表。
+	home, err := os.UserHomeDir()
+	if err == nil {
+		cfgPath := filepath.Join(home, ".config", clientName, "config.json")
+		features = loadFeatureFlags(filepath.Join(filepath.Dir(cfgPath), clientName+"-features.json"))
+	}
+
 	// 跟 enrich.go 的 resolveTrackEnrichment 同一个理由(2026-07-15 真机实测坐实):
 	// NetEase/QQ/酷狗/LRCLIB 的搜索索引是简体中文,本地 Apple Music 标签若是繁体
 	// (比如"周杰倫"),繁体原文直接发起搜索请求会查不到任何候选——这个 CLI 子命令是
@@ -40,7 +54,29 @@ func runSearchLyricsCLI(args []string) {
 	sArtist, sTitle, sAlbum := toSimplified(*artist), toSimplified(*title), toSimplified(*album)
 	ne := neteaseLookup(sArtist, sTitle, sAlbum)
 	results := scoredLyricCandidates(ne, sArtist, sTitle, sAlbum, *duration)
+	results = filterEnabledLyricSources(results)
 	if err := json.NewEncoder(os.Stdout).Encode(results); err != nil {
 		log.Fatalf("search-lyrics: encode results: %v", err)
 	}
+}
+
+// filterEnabledLyricSources drops candidates from sources the user disabled via
+// the "歌词"设置's "歌词来源" toggles (features.LyricsSources) — mirrors
+// pickLyricCandidate's filtering for the automatic resolve path, so manual search
+// and automatic resolve now agree on which sources are in play. Falls back to
+// returning everything unfiltered only if features.LyricsSources somehow ended up
+// empty (should not happen in practice — loadFeatureFlags always resolves it to
+// all-four-enabled when unset, see resolveLyricsSources — this is just a safety
+// net against showing zero candidates instead of trusting a genuinely-empty map).
+func filterEnabledLyricSources(results []scoredLyricCandidateResult) []scoredLyricCandidateResult {
+	if len(features.LyricsSources) == 0 {
+		return results
+	}
+	filtered := make([]scoredLyricCandidateResult, 0, len(results))
+	for _, r := range results {
+		if features.LyricsSources[r.Source] {
+			filtered = append(filtered, r)
+		}
+	}
+	return filtered
 }

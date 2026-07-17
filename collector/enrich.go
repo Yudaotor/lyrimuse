@@ -276,10 +276,11 @@ func resolveTrackEnrichment(artist, title, album string, durationSecs float64) e
 // pickLyricCandidate 从 scoredLyricCandidates 返回的全量候选里,按用户在"歌词"设置
 // 分类里配置的"启用哪些源"+"挑选算法"选出最终采用的一条——只用于自动解析路径
 // (resolveTrackEnrichment,上面)。手动的 `collector search-lyrics` CLI 子命令("歌词
-// 管理"窗口的"重新搜索候选歌词"功能)故意不经过这层过滤,让用户手动纠正某一首歌时
-// 仍能看到/选择全部四个源的候选,不受"自动解析平时该信谁"这个设置的限制——两者是不同
-// 的关注点:一个是"日常自动解析该用哪些源",一个是"这一首歌具体查一遍、我自己挑,不管
-// 平时开没开"。
+// 管理"窗口的"重新搜索候选歌词"功能)不复用这个函数(它需要保留完整排序列表给用户挑,
+// 不是只要一个赢家),但从 2026-07-18 起改成对"启用哪些源"这条设置口径一致——之前
+// 故意不过滤、让手动搜索总能看到全部四源候选,用户反馈这个不一致该消除,现在两条路径
+// 都只看你在设置里开着的那几个源,只是手动搜索用的是 searchcli.go 里单独的
+// filterEnabledLyricSources,不是直接调这个函数。
 func pickLyricCandidate(scored []scoredLyricCandidateResult) *scoredLyricCandidateResult {
 	if features.LyricsSourceMode == lyricsModePriority {
 		for _, source := range features.LyricsSourceOrder {
