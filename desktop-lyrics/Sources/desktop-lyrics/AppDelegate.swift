@@ -24,6 +24,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         PlaybackCoordinator.shared.applyMode(settings.dataSourceMode)
 
         showAutomationOnboardingIfNeeded(settings: settings)
+        GlobalHotkeys.registerAll()
     }
 
     // 首次启动主动引导一次"自动化"权限(控制 Music.app,给精确播放进度用)——只弹这

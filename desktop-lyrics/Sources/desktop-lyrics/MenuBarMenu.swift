@@ -6,17 +6,37 @@ import SwiftUI
 struct MenuBarLabel: View {
     @ObservedObject private var settings = AppSettings.shared
     @ObservedObject private var coordinator = PlaybackCoordinator.shared
+    @Environment(\.openSettings) private var openSettingsAction
+    @Environment(\.openWindow) private var openWindowAction
 
     var body: some View {
-        if settings.showLyricsInMenuBar,
-           coordinator.isPlayingNow,
-           let text = coordinator.currentLine?.plainText,
-           !text.isEmpty {
-            // 状态栏空间有限,截断是必须的,不能像悬浮窗那样直接自动换行——但截断不该等于
-            // "看不到剩下的部分",鼠标悬停时用系统原生 tooltip 把完整这一行显示出来。
-            Text(truncated(text)).help(text)
-        } else {
-            Label(L10n.t("桌面歌词"), systemImage: "text.quote")
+        Group {
+            if settings.showLyricsInMenuBar,
+               coordinator.isPlayingNow,
+               let text = coordinator.currentLine?.plainText,
+               !text.isEmpty {
+                // 状态栏空间有限,截断是必须的,不能像悬浮窗那样直接自动换行——但截断不该等于
+                // "看不到剩下的部分",鼠标悬停时用系统原生 tooltip 把完整这一行显示出来。
+                Text(truncated(text)).help(text)
+            } else {
+                Label(L10n.t("桌面歌词"), systemImage: "text.quote")
+            }
+        }
+        // label: 是 MenuBarExtra 真正常驻状态栏的那部分,整个 App 运行期间只挂载一次
+        // (不像 content: 那样只在点开菜单时才有内容)——这里是"从非 View 上下文触发
+        // SwiftUI 环境 action"这个问题(见 AppActions.swift)里,唯一确定只会跑一次的
+        // 挂载点。跟 MenuBarMenu 里"设置…"按钮已经验证过的写法一致:accessory 策略
+        // (没有 Dock 图标)下,不先手动激活 App,openSettings()/openWindow(id:) 都会
+        // 静默没反应。
+        .onAppear {
+            AppActions.shared.openSettings = {
+                NSApp.activate(ignoringOtherApps: true)
+                openSettingsAction()
+            }
+            AppActions.shared.openLyricsManager = {
+                NSApp.activate(ignoringOtherApps: true)
+                openWindowAction(id: "lyrics-manager")
+            }
         }
     }
 

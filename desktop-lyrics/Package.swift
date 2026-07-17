@@ -19,6 +19,26 @@ let package = Package(
     // "打开设置窗口"写法,不用 sendAction(Selector(...)) 那种旧写法)——这台机器的真实
     // 系统版本远新于14,不构成实际限制。
     platforms: [.macOS(.v14)],
+    // 2026-07-18 加全局快捷键功能引入的第一个外部依赖——之前一直零依赖(唯一先例是
+    // gocc/OpenCC,也是用户明确点头才加)。全局热键注册涉及 Carbon RegisterEventHotKey
+    // 这类底层 API,冲突检测/持久化/录制 UI 手写工程量和出错空间都远大于直接用这个
+    // 业界公认的标准库——调研过的同类项目里,能确认具体实现的全都在用这个库或它的
+    // Objective-C 前身(MASShortcut)。
+    //
+    // 钉死 1.15.0,不是最新版:实测坐实——3.0.x 用了 SwiftUI 的 @Entry 宏
+    // (`ConflictPolicy.swift` 的 environment key),2.2.4/2.4.0 都在 `Recorder.swift`
+    // 末尾预览代码块里用了 #Preview 宏,这两个宏各自的 plugin(`SwiftUIMacros.
+    // EntryMacro`/`PreviewsMacros.SwiftUIView`)在这台只装 Command Line Tools、没有
+    // 完整 Xcode 的机器上都解析不到,`swift build` 会直接报错退出(这个项目其它地方
+    // 也反复踩过同一类"没有完整 Xcode 就是不行"的坑,比如 XCTest/Testing 两个框架都
+    // 用不了)。用 GitHub API 逐版本核对源码树第一次判断错了(`gh api .../contents`
+    // 对个别文件静默返回空内容,被 `2>/dev/null` 吞掉、误判成"没用到")——改成把仓库
+    // 真正 clone 到本地、逐个 tag 实际 checkout 后 grep,这才是可信的核对方式。
+    // 1.15.0(2023-09 发布,`swift-tools-version:5.7`)是两个宏都确认没用到的最新版,
+    // `swift build` 在这台机器上跑通了整个 build 过程验证过(不只是 resolve 成功)。
+    dependencies: [
+        .package(url: "https://github.com/sindresorhus/KeyboardShortcuts", exact: "1.15.0"),
+    ],
     targets: [
         .target(
             name: "DesktopLyricsCore",
@@ -26,7 +46,7 @@ let package = Package(
         ),
         .executableTarget(
             name: "desktop-lyrics",
-            dependencies: ["DesktopLyricsCore"],
+            dependencies: ["DesktopLyricsCore", "KeyboardShortcuts"],
             path: "Sources/desktop-lyrics",
             resources: [.process("Resources")]
         ),
