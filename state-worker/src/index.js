@@ -3,9 +3,12 @@
 // 采集器把富数据(封面/主色/歌词/进度/链接/设备/时长)推到这里,网页只读这里。
 // LB 只在 KV 为空时兜底(比如采集器刚启动还没推),不再是主依赖。
 //
-//   POST /push       body=完整状态 JSON,需 x-token == PUSH_TOKEN → 写 KV "current"
-//   GET  /now        → 读 "current"(空/过期则兜底 LB playing-now)
-//   GET  /history    → 读 "history"(空则兜底 LB listens)
+//   POST /push         body=完整状态 JSON,需 x-token == PUSH_TOKEN → 写 KV "current"
+//   GET  /now          → 读 "current"(空/过期则兜底 LB playing-now)
+//   GET  /history      → 读 "history"(空则兜底 LB listens)
+//   POST /top-artists  body={artists,updatedAt},需 x-token == PUSH_TOKEN → 写 KV "top-artists"
+//   GET  /top-artists  → 读 "top-artists"(采集器一天推一次,见 collector/topartists.go;
+//                        没有兜底源——KV 为空就返回空数组,等采集器下一次推送)
 //
 // Env: PUSH_TOKEN(secret,采集器共享)、LB_USER(兜底用)。KV 绑定名 NP_STATE。
 //
@@ -39,10 +42,21 @@
 //   POST /reactions {emoji}         → 给某个表情 +1;emoji 必须在服务端固定白名单里。
 //
 // Env 新增: ADMIN_TOKEN(secret,仅站长本人用于删除留言)。
+//
+// ---- 网页模块可见性配置(2026-07-16 新增)----
+// 采集器在既有的 POST /push 里附带一个可选 modules 字段(history/comments/reactions/
+// visitorCount/topArtists 等开关),表示站长对"要不要显示这些可选板块"的一次性配置——
+// 跟每次心跳都在变的播放态不是一回事,所以单独存一个 KV key(WEB_CONFIG_KEY),不掺进
+// CUR_KEY:CUR_KEY 会在采集器掉线时过期、被 LB 兜底顶替,但这份配置要在那种情况下依然
+// 原样透传给网页,不能跟着播放态一起失效。写入前先读旧值比较,没变就不写,避免这个几乎
+// 不变的配置跟着高频 /push(播放中每几秒一次、空闲也有心跳)一起吃写额度。GET /now
+// 无条件读一次合并进响应,KV 新鲜分支、LB 兜底分支都带上。
 const LB_API = "https://api.listenbrainz.org";
 const CUR_KEY = "current";
 const STALE_MS = 5 * 60 * 1000; // current 超过 5 分钟没更新 → 视为过期,转 LB 兜底。调短:KV 写配额爆时(采集器 /push 全 503、心跳也写不进)冻结的 KV 能更快退回 LB 显示当前在放,而非卡到 20 分钟。代价:正常期长歌/长暂停(> 5min 无 KV 更新)也会更早退 LB(LB 有同曲 playing_now、略糙)。彻底解法是 KV 别再爆(减写/付费)。
 const HIST_MAX = 200;
+const TOP_ARTISTS_KEY = "top-artists"; // 历史播放 Top10 歌手,采集器一天推一次(见文件头注释)
+const WEB_CONFIG_KEY = "web-config"; // 网页模块可见性配置,单独于 CUR_KEY 的 durable key(见上方文件头注释)
 
 const VISITS_KEY = "visits:total";
 const COMMENTS_KEY = "comments:list";
@@ -81,6 +95,19 @@ export default {
       } catch (e) {
         return json({ ok: false, error: "kv write failed (quota?)", detail: String(e) }, 503);
       }
+
+      // 网页模块可见性配置(见 WEB_CONFIG_KEY 定义处注释):modules 是站长的一次性开关,
+      // 几乎不变,但这个 /push 播放中每几秒一次、空闲也有心跳——先读旧值比较,真的变了
+      // 才写,不然这个几乎不变的配置会白白吃掉本来就紧张的 KV 写额度。
+      if (body.modules) {
+        try {
+          const oldModules = await kv.get(WEB_CONFIG_KEY, { type: "json" });
+          if (JSON.stringify(oldModules) !== JSON.stringify(body.modules)) {
+            await kv.put(WEB_CONFIG_KEY, JSON.stringify(body.modules));
+          }
+        } catch (e) { /* 配置同步失败不影响主推送,下次 push 再试 */ }
+      }
+
       return json({ ok: true });
     }
 
@@ -89,16 +116,23 @@ export default {
       // 加 ageMs = 服务器侧算出的锚点真实年龄(Cloudflare 时钟,NTP 准)。网页据此 +
       // 本设备时钟相对差外推,不依赖查看设备的绝对时钟,消除跨设备时钟偏差导致的进度错位。
       const stamp = (o) => { if (o && typeof o.progressTs === "number") o.ageMs = Date.now() - o.progressTs; return o; };
+      // 网页模块可见性配置是独立于 CUR_KEY 的 durable key(见 WEB_CONFIG_KEY 定义处注释),
+      // 跟下面走 KV 新鲜分支还是 LB 兜底分支无关——无条件读一次(便宜),两个分支都带上,
+      // 保证采集器掉线时配置依然透传给网页。
+      let modules = null;
+      if (kv) {
+        try { modules = await kv.get(WEB_CONFIG_KEY, { type: "json" }); } catch (e) { /* 忽略,不影响主流程 */ }
+      }
       if (kv) {
         try {
           const rec = await kv.get(CUR_KEY, { type: "json" });
           if (rec && rec.at && Date.now() - rec.at < STALE_MS && (rec.title || rec.empty)) {
-            return json(stamp({ ...rec, source: "kv" }));
+            return json(stamp({ ...rec, source: "kv", modules }));
           }
         } catch (e) { /* 转兜底 */ }
       }
-      try { return json(stamp({ ...(await lbNow(env)), source: "lb" })); }
-      catch (e) { return json({ ok: false, empty: true, source: "lb", error: String(e) }); }
+      try { return json(stamp({ ...(await lbNow(env)), source: "lb", modules })); }
+      catch (e) { return json({ ok: false, empty: true, source: "lb", error: String(e), modules }); }
     }
 
     if (url.pathname === "/history") {
@@ -129,6 +163,28 @@ export default {
       const resp = { ok: true, items: merged.slice(0, HIST_MAX), source: "lb" };
       if (histErr) resp.error = histErr;
       return json(resp);
+    }
+
+    // ---- 历史播放 Top10 歌手(采集器一天推一次,见文件头注释)----
+    if (request.method === "POST" && url.pathname === "/top-artists") {
+      if (!env.PUSH_TOKEN || request.headers.get("x-token") !== env.PUSH_TOKEN) {
+        return json({ ok: false, error: "unauthorized" }, 401);
+      }
+      if (!kv) return json({ ok: false, error: "no kv" }, 500);
+      let body;
+      try { body = await request.json(); } catch { return json({ ok: false, error: "bad json" }, 400); }
+      try {
+        await kv.put(TOP_ARTISTS_KEY, JSON.stringify(body));
+      } catch (e) {
+        return json({ ok: false, error: "kv write failed (quota?)", detail: String(e) }, 503);
+      }
+      return json({ ok: true });
+    }
+
+    if (url.pathname === "/top-artists" && request.method !== "POST") {
+      if (!kv) return json({ ok: true, artists: [] });
+      const rec = (await kv.get(TOP_ARTISTS_KEY, { type: "json" })) || { artists: [] };
+      return json({ ok: true, ...rec });
     }
 
     // ---- 访客互动:计数/留言/表情反应(见文件头注释)----
