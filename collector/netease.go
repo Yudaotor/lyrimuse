@@ -53,6 +53,16 @@ func neteaseLookup(artist, title, album string) neteaseInfo {
 	if title == "" {
 		return neteaseInfo{}
 	}
+	// 版权已从网易云整体下架、曲库里只剩仿冒号的艺人(见 isNeteaseImpersonatorRidden 注释)——
+	// 这个门槛原来只挡在 nameOnlyMatch 那条歌手名兜底通道,resolveNeteaseInfo 里 pick() 选
+	// 封面/歌词的主路径完全没挡:这类艺人的搜索结果哪怕标题、歌手名(字面)都"匹配"上了,
+	// 也必然是仿冒号(真人官方版本根本不在库里,不存在侥幸对上的可能),pick() 却会照单全收。
+	// 实测坐实:周杰伦《Medley: 星晴/回到过去/最后的战役/爱我别走 (Live)》被仿冒号一条
+	// 不相关的候选顶了封面。这里直接整个跳过网易云、不发任何请求,让上层 enrich.go 退到
+	// QQ 音乐兜底(QQ 侧要求歌手名双重精确匹配,不受这个问题影响)。
+	if isNeteaseImpersonatorRidden(artist) {
+		return neteaseInfo{}
+	}
 	key := artist + "|" + title + "|" + album
 	now := time.Now().Unix()
 	neteaseMu.Lock()
