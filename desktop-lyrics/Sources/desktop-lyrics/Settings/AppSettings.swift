@@ -9,6 +9,16 @@ enum PlaybackSourceMode: String, Codable, Hashable {
     case local
 }
 
+// 灵动岛卡片的三种视觉风格——UI 预览阶段给用户看过三个方向(纯黑/磨砂玻璃/深色渐变),
+// 当时选了磨砂玻璃直接实现,用户后来反馈"另外两个也做一下,做成可配置的"。displayName/
+// fill(alpha 相关的具体 ShapeStyle)定义在 NotchLyricsView.swift(跟灵动岛卡片本身的
+// UI 强相关,不适合放在这个纯设置文件里),这里只负责持久化用的 rawValue。
+enum NotchCardStyle: String, Codable, Hashable, CaseIterable {
+    case solidBlack
+    case frostedGlass
+    case darkGradient
+}
+
 // UserDefaults 支撑的设置存储。relay 域名的默认值是这个项目作者自己的地址,仅供切换
 // 到 relay 模式又没填自己地址时有个能跑的示例——2026-07-17 起默认数据源已经改成
 // local(见 dataSourceMode 的默认值),不会再有人零配置就悄悄连到作者自己的 Worker。
@@ -46,6 +56,7 @@ final class AppSettings: ObservableObject {
         static let overlayStyle = "np:overlayStyle" // 已废弃,只在 init() 里读一次做迁移
         static let classicOverlayEnabled = "np:classicOverlayEnabled"
         static let notchOverlayEnabled = "np:notchOverlayEnabled"
+        static let notchCardStyle = "np:notchCardStyle"
     }
 
     private let defaults = UserDefaults.standard
@@ -164,6 +175,12 @@ final class AppSettings: ObservableObject {
     @Published var notchOverlayEnabled: Bool {
         didSet { defaults.set(notchOverlayEnabled, forKey: Keys.notchOverlayEnabled) }
     }
+    // 灵动岛卡片的视觉风格——默认磨砂玻璃(第一版直接实现、真机验证过的那个方向),
+    // 只负责持久化,纯展示用的设置,NotchLyricsView 每次渲染直接读这个值,不需要像
+    // classicOverlayEnabled 那样在 didSet 里连带调用某个单例的方法。
+    @Published var notchCardStyle: NotchCardStyle {
+        didSet { defaults.set(notchCardStyle.rawValue, forKey: Keys.notchCardStyle) }
+    }
     // 字体族名——空字符串表示"跟随系统",对应悬浮窗原来硬编码的系统字体,不用额外
     // enum/Optional 表达"未设置",跟 relayBaseURL 的空字符串兜底是同一种写法。
     @Published var fontFamilyName: String {
@@ -254,6 +271,7 @@ final class AppSettings: ObservableObject {
             classicOverlayEnabled = (defaults.object(forKey: Keys.classicOverlayEnabled) as? Bool) ?? true
             notchOverlayEnabled = (defaults.object(forKey: Keys.notchOverlayEnabled) as? Bool) ?? false
         }
+        notchCardStyle = defaults.string(forKey: Keys.notchCardStyle).flatMap(NotchCardStyle.init(rawValue:)) ?? .frostedGlass
         fontFamilyName = defaults.string(forKey: Keys.fontFamilyName) ?? ""
         fontSize = (defaults.object(forKey: Keys.fontSize) as? Double) ?? 20
         overlayWidth = (defaults.object(forKey: Keys.overlayWidth) as? Double) ?? 640

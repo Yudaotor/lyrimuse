@@ -1,6 +1,44 @@
 import SwiftUI
 import DesktopLyricsCore
 
+// UI 预览阶段给用户看过三个背景风格方向,当时选了磨砂玻璃直接实现;用户后来反馈"另外
+// 两个也做一下,做成可配置的",这里把三种都补全。用 AnyShapeStyle 抹掉三种截然不同的
+// ShapeStyle 具体类型(纯色/材质/渐变),让 NotchHangingShape.fill(_:) 能用同一个属性
+// 统一接收,不需要写三份 if/switch 分支各自调用不同重载的 .fill()。
+extension NotchCardStyle {
+    var displayName: String {
+        switch self {
+        case .solidBlack: return L10n.t("纯黑")
+        case .frostedGlass: return L10n.t("磨砂玻璃")
+        case .darkGradient: return L10n.t("深色渐变")
+        }
+    }
+
+    var fill: AnyShapeStyle {
+        switch self {
+        case .solidBlack:
+            return AnyShapeStyle(Color.black)
+        case .frostedGlass:
+            return AnyShapeStyle(.thickMaterial)
+        case .darkGradient:
+            // 跟当初 UI 预览里"深色渐变"选项同一组色值(#1c1a24/#14212a/#10161c),
+            // 从左上到右下过渡,比纯黑多一点点冷色调层次感,又不像磨砂玻璃那样会透出
+            // 桌面背景色。
+            return AnyShapeStyle(
+                LinearGradient(
+                    colors: [
+                        Color(hexWithAlpha: "#1C1A24FF", fallback: .black),
+                        Color(hexWithAlpha: "#14212AFF", fallback: .black),
+                        Color(hexWithAlpha: "#10161CFF", fallback: .black),
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            )
+        }
+    }
+}
+
 // 灵动岛样式的内容视图。稳态(不 hover)常显"歌名+播放控制+当前歌词逐字高亮"这一整套,
 // 不需要 hover 才能用;hover 时在下面多展开一块"下一句歌词预览+迷你进度条"作为锦上
 // 添花的补充信息——调研过 boring.notch 等真实参考实现后确定这个分层思路(稳态给
@@ -31,6 +69,7 @@ import DesktopLyricsCore
 struct NotchLyricsView: View {
     @ObservedObject var controller: NotchLyricsWindowController
     @ObservedObject private var poller = PlaybackCoordinator.shared
+    @ObservedObject private var settings = AppSettings.shared
 
     // 稳态歌词行的固定高度——跟 NotchLyricsWindowController.contentSize.height 保持
     // 一致(两个文件都描述同一个窗口的几何,这点数值耦合是设计使然,不值得为两个常量
@@ -52,7 +91,7 @@ struct NotchLyricsView: View {
             let earWidth = max(0, (proxy.size.width - controller.notchWidth - 20) / 2)
             ZStack(alignment: .top) {
                 NotchHangingShape(bottomCornerRadius: 20)
-                    .fill(.thickMaterial)
+                    .fill(settings.notchCardStyle.fill)
                 VStack(spacing: 0) {
                     topRow(earWidth: earWidth)
                         .frame(height: controller.contentTopInset)
@@ -287,6 +326,9 @@ private struct MarqueeText<Content: View>: View {
                     }
                 )
                 .offset(x: -offset)
+                // 垂直居中——GeometryReader 默认把内容摆在自己左上角,歌名那里真机
+                // 反馈"名字有点过于靠上",不居中的话文字会紧贴着这一整行的顶边。
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
                 .onPreferenceChange(MarqueeWidthKey.self) { width in
                     contentWidth = width
                     restart(containerWidth: outerProxy.size.width)

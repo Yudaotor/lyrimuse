@@ -62,17 +62,30 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject {
 
     // 没有真刘海的屏幕(比如 MacBook Air 全系不带刘海,只有 14"/16" MacBook Pro
     // 2021 起才有)退到的固定兜底高度:不是"关掉整个功能",是换一套不依赖真刘海几何
-    // 形状的兜底样式,宽度沿用下面 contentSize 统一给的常显宽度。
+    // 形状的兜底样式,宽度沿用下面 contentWidth 算出来的常显宽度。
     private static let fallbackNotchHeight: CGFloat = 32
-    // 常显内容行(一行歌词 + 3 个播放控制按钮)的宽度/高度经验取值——窗口总高度 =
-    // 刘海本身高度(或兜底高度)+ 这一行高度,让内容行完整落在刘海下方。
-    private static let contentSize = NSSize(width: 360, height: 44)
+    // 常显内容行的固定高度(一行歌词 + 3 个播放控制按钮那一行的高度经验取值)——窗口
+    // 总高度 = 刘海本身高度(或兜底高度)+ 这一行高度,让内容行完整落在刘海下方。宽度
+    // 不再是固定常量,见 contentWidth(for:)。
+    private static let contentHeight: CGFloat = 44
+    // 宽度改成按当前这一句歌词的真实文字宽度动态算,不再固定 360——真机反馈"歌词大部分
+    // 时候没这么长,固定宽度显得空着一大截"。上限、下限见 contentWidth(for:) 的注释。
+    private static let minContentWidth: CGFloat = 260
+    private static let maxContentWidth: CGFloat = 400
+    // 顶行左右两只"耳朵"各自的最低可用宽度(歌名文字 + 3 个播放控制按钮都要放得下,
+    // 不能比这更窄)——算 minContentWidth 时要把这两只耳朵 + 刘海本身宽度 + 左右
+    // padding 都算进去,不能让总宽度小到连按钮都摆不下(真机踩过这个坑,按钮被裁一截)。
+    private static let minEarWidth: CGFloat = 70
+    // 歌词行左右各自的水平留白(NotchLyricsView.lyricRow 的 .padding(.horizontal, 16)),
+    // 算文字所需总宽度时要把这一圈也算进去。
+    private static let lyricHorizontalPadding: CGFloat = 32
     // hover 展开时在 contentSize 之外额外撑出的高度,放下一句歌词预览 + 迷你进度条
     // 这两样调研后确定值得加的补充信息(调研结论:封面/更多控制按钮都不如这两样贴合
     // "歌词类产品"的定位,专辑封面另外还受限于本地播放源目前没有转发 artwork 数据)。
     private static let expandedExtraHeight: CGFloat = 40
 
     private var isPlayingObserver: AnyCancellable?
+    private var currentLineObserver: AnyCancellable?
     private var screenParamsObserver: NSObjectProtocol?
     // 真机实测坐实的一个坑:窗口 hover 展开/收起时靠 autoresizingMask 让 NSHostingView
     // 跟着 window.setFrame 自动同步尺寸——AppKit 层面这个同步是真的发生了(window.frame/
@@ -86,7 +99,7 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject {
     convenience init() {
         // 初始 contentRect 只是占位——真正的尺寸/位置由下面 recomputeGeometry() 按
         // 当前屏幕几何重新算一遍并 setFrame,这里传什么都会被立刻覆盖掉。
-        let placeholder = NSSize(width: Self.contentSize.width, height: Self.fallbackNotchHeight + Self.contentSize.height)
+        let placeholder = NSSize(width: Self.minContentWidth, height: Self.fallbackNotchHeight + Self.contentHeight)
         let panel = NotchLyricsWindow(contentRect: NSRect(origin: .zero, size: placeholder))
         self.init(window: panel)
 
@@ -115,6 +128,15 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject {
         // LyricsOverlayWindowController.swift 同一处注释,不重复展开。
         isPlayingObserver = PlaybackCoordinator.shared.$isPlayingNow.sink { [weak self] isPlaying in
             self?.updateActualVisibility(isPlayingNow: isPlaying)
+        }
+
+        // 宽度跟着当前这一句歌词的真实文字宽度走(见 contentWidth(for:))——换到新的
+        // 一句才需要重新算一次宽度,不是每帧都重算,这里订阅的是 currentLine 本身(整句
+        // 歌词切换),不是逐字填色进度那种高频刷新。用动画过渡("展开态"改宽/改高已经
+        // 验证过这条路径真的会重新触发 SwiftUI 布局,见 recomputeGeometry 里
+        // hostingView?.frame 那行的注释),不是硬切换,换歌词时不会有突兀的跳变感。
+        currentLineObserver = PlaybackCoordinator.shared.$currentLine.sink { [weak self] _ in
+            self?.recomputeGeometry(animate: true)
         }
     }
 
@@ -186,18 +208,46 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject {
         return NotchGeometry(notchHeight: fallbackNotchHeight, centerX: screen.frame.midX, notchWidth: 0)
     }
 
-    // 顶边固定贴在屏幕最顶端(screen.frame.maxY)、水平居中对齐刘海中心点、宽度固定
-    // 为 contentSize.width、总高度 = 刘海高度 + 内容行高度(+ hover 展开时再加
-    // expandedExtraHeight)。用 NSScreen.main(当前有键盘焦点/菜单栏所在的那块屏幕)
-    // 而不是记忆某一块固定屏幕——多屏环境下,这跟"灵动岛只应该出现在当前主屏"这个
-    // 直觉一致。
+    // 用 AppKit 的 NSString 文字测量(不是 SwiftUI 那套量出来再回传给控制器的写法)——
+    // 直接在这里(AppKit 侧)按当前这一句歌词的纯文本、跟 NotchLyricsView.lyricRow 完全
+    // 一致的字体(13pt semibold)量出真实宽度,窗口一开始就用算好的目标宽度 setFrame,
+    // 不存在"SwiftUI 那边量完再回调回来改宽度"这种时序上的先后依赖,也就不会重新踩到
+    // hover 展开那次已经实测坐实过的"AppKit 层尺寸变了但 SwiftUI 没跟着重新布局"的坑。
+    private static let lyricMeasureFont = NSFont.systemFont(ofSize: 13, weight: .semibold)
+
+    private func estimatedLyricTextWidth() -> CGFloat {
+        guard let text = PlaybackCoordinator.shared.currentLine?.plainText, !text.isEmpty else { return 0 }
+        let size = (text as NSString).size(withAttributes: [.font: Self.lyricMeasureFont])
+        return size.width
+    }
+
+    // 宽度不再固定 360——真机反馈"歌词大部分时候没这么长,固定宽度显得空着一大截"。
+    // 下限有两层:minContentWidth 是绝对下限(主要给无真刘海的兜底场景用);另一层是
+    // "刘海本身宽度 + 左右两只耳朵各自的最低可用宽度(按钮/歌名都要放得下)+ 顶行左右
+    // padding"算出来的下限——真刘海本身可能相当宽(这台机器实测约 179pt),这层下限
+    // 通常比 minContentWidth 更紧,取两者较大值才不会让耳朵窄到按钮被裁一截。上限
+    // maxContentWidth 封顶,超过这个宽度还装不下的歌词交给 NotchLyricsView 的
+    // MarqueeText 来回滚动展示,不再靠继续加宽解决。
+    private static func contentWidth(lyricTextWidth: CGFloat, notchWidth: CGFloat) -> CGFloat {
+        let earBasedFloor = notchWidth + minEarWidth * 2 + 20
+        let floor = max(minContentWidth, earBasedFloor)
+        let desired = lyricTextWidth + lyricHorizontalPadding
+        return min(maxContentWidth, max(floor, desired))
+    }
+
+    // 顶边固定贴在屏幕最顶端(screen.frame.maxY)、水平居中对齐刘海中心点、总高度 =
+    // 刘海高度 + 内容行高度(+ hover 展开时再加 expandedExtraHeight)、宽度按当前歌词
+    // 动态算(见 contentWidth(lyricTextWidth:notchWidth:))。用 NSScreen.main(当前有
+    // 键盘焦点/菜单栏所在的那块屏幕)而不是记忆某一块固定屏幕——多屏环境下,这跟"灵动岛
+    // 只应该出现在当前主屏"这个直觉一致。
     private func recomputeGeometry(animate: Bool) {
         guard let window, let screen = NSScreen.main else { return }
         let geo = Self.geometry(for: screen)
         contentTopInset = geo.notchHeight
         notchWidth = geo.notchWidth
         let extra = isExpanded ? Self.expandedExtraHeight : 0
-        let size = NSSize(width: Self.contentSize.width, height: geo.notchHeight + Self.contentSize.height + extra)
+        let width = Self.contentWidth(lyricTextWidth: estimatedLyricTextWidth(), notchWidth: geo.notchWidth)
+        let size = NSSize(width: width, height: geo.notchHeight + Self.contentHeight + extra)
         let frame = NSRect(
             x: geo.centerX - size.width / 2,
             y: screen.frame.maxY - size.height,

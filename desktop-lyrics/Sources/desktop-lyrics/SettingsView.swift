@@ -517,6 +517,17 @@ private struct AppearanceSettingsTab: View {
                         }
                     }
                 ))
+                // UI 预览阶段给用户看过三个背景风格方向,当时选了磨砂玻璃直接实现;
+                // 用户后来反馈"另外两个也做一下,做成可配置的"。只负责持久化,
+                // NotchLyricsView 每次渲染直接读 settings.notchCardStyle,不需要像
+                // classicOverlayEnabled/notchOverlayEnabled 那样在这里连带调用某个
+                // 窗口控制器的方法"生效"。
+                Picker(L10n.t("灵动岛风格"), selection: $settings.notchCardStyle) {
+                    ForEach(NotchCardStyle.allCases, id: \.self) { style in
+                        Text(style.displayName).tag(style)
+                    }
+                }
+                .pickerStyle(.menu)
                 // 从"歌词"tab 的"展示"分组搬过来——用户反馈"状态栏歌词也是个歌词展示
                 // 位置,应该跟桌面悬浮歌词/灵动岛歌词放一起",三个开关概念上都是"歌词
                 // 显示在哪"，不是三件互不相关的事。
