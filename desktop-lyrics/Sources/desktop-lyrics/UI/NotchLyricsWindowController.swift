@@ -128,6 +128,11 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject {
         // LyricsOverlayWindowController.swift 同一处注释,不重复展开。
         isPlayingObserver = PlaybackCoordinator.shared.$isPlayingNow.sink { [weak self] isPlaying in
             self?.updateActualVisibility(isPlayingNow: isPlaying)
+            // 当前没有在播放时宽度缩回最小值(不再按歌词文字宽度撑开)——同一个坑同一个
+            // 修法,必须把 sink 参数里的 isPlaying 显式传下去,不能让 recomputeGeometry
+            // 内部再去读 PlaybackCoordinator.shared.isPlayingNow 这个存储属性本身
+            // (这一刻读到的还是切换前的旧值,原因见上面 isPlayingObserver 声明处注释)。
+            self?.recomputeGeometry(animate: true, isPlayingOverride: isPlaying)
         }
 
         // 宽度跟着当前这一句歌词的真实文字宽度走(见 contentWidth(for:))——换到新的
@@ -215,8 +220,14 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject {
     // hover 展开那次已经实测坐实过的"AppKit 层尺寸变了但 SwiftUI 没跟着重新布局"的坑。
     private static let lyricMeasureFont = NSFont.systemFont(ofSize: 13, weight: .semibold)
 
-    private func estimatedLyricTextWidth() -> CGFloat {
-        guard let text = PlaybackCoordinator.shared.currentLine?.plainText, !text.isEmpty else { return 0 }
+    // 没有在播放时直接当成"没有歌词文字"处理,宽度退回 contentWidth 的下限——用户
+    // 明确要求"当前歌曲没有在播放的时候自动缩回去,不要占着空间",跟已有的
+    // hideWhenNotPlaying(整个窗口隐藏)是两回事:这里即便暂停也还显示歌名+控制按钮,
+    // 只是不再为了迁就(可能是暂停前最后一句、此刻已经不会继续滚动的)歌词文字而占用
+    // 额外宽度。
+    private func estimatedLyricTextWidth(isPlayingNow: Bool) -> CGFloat {
+        guard isPlayingNow,
+              let text = PlaybackCoordinator.shared.currentLine?.plainText, !text.isEmpty else { return 0 }
         let size = (text as NSString).size(withAttributes: [.font: Self.lyricMeasureFont])
         return size.width
     }
@@ -240,13 +251,18 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject {
     // 动态算(见 contentWidth(lyricTextWidth:notchWidth:))。用 NSScreen.main(当前有
     // 键盘焦点/菜单栏所在的那块屏幕)而不是记忆某一块固定屏幕——多屏环境下,这跟"灵动岛
     // 只应该出现在当前主屏"这个直觉一致。
-    private func recomputeGeometry(animate: Bool) {
+    // isPlayingOverride 只在 isPlayingObserver 的 sink 闭包里传——那个时间点闭包参数
+    // 才是真正的新值,读存储属性本身拿到的还是旧值(见 init() 里那处注释)。其余调用
+    // 场景(currentLineObserver/screenParamsObserver/setExpanded/init 本身)都不在那个
+    // 时序陷阱里,直接读 PlaybackCoordinator.shared.isPlayingNow 就是准确的当前值。
+    private func recomputeGeometry(animate: Bool, isPlayingOverride: Bool? = nil) {
         guard let window, let screen = NSScreen.main else { return }
         let geo = Self.geometry(for: screen)
         contentTopInset = geo.notchHeight
         notchWidth = geo.notchWidth
         let extra = isExpanded ? Self.expandedExtraHeight : 0
-        let width = Self.contentWidth(lyricTextWidth: estimatedLyricTextWidth(), notchWidth: geo.notchWidth)
+        let isPlayingNow = isPlayingOverride ?? PlaybackCoordinator.shared.isPlayingNow
+        let width = Self.contentWidth(lyricTextWidth: estimatedLyricTextWidth(isPlayingNow: isPlayingNow), notchWidth: geo.notchWidth)
         let size = NSSize(width: width, height: geo.notchHeight + Self.contentHeight + extra)
         let frame = NSRect(
             x: geo.centerX - size.width / 2,
