@@ -113,6 +113,7 @@ struct LyricsManagerView: View {
     // 点了"刷新"却没有任何肉眼可见的变化时(比如内容根本没变),用户很容易以为按钮没
     // 反应——短暂切换成"已刷新"+对勾图标给个明确反馈,1秒后自动变回去。
     @State private var showRefreshedFeedback = false
+    @State private var showClearAllConfirm = false
 
     private var hasActiveFilters: Bool {
         sourceFilter != .all || timingFilter != .all || manualOnly || missingLyricsOnly
@@ -302,12 +303,42 @@ struct LyricsManagerView: View {
                             Label(L10n.t("回到当前播放"), systemImage: "location.fill")
                         }
                     }
+                    ToolbarItem {
+                        // 缓存占用查看 + 一键清空——这份缓存设计上"解析一次永久保留",
+                        // 之前只能在下面列表里逐条删,没有总大小展示、也没有批量清空的
+                        // 入口。菜单本身的标题就是总大小(ByteCountFormatter 格式化),
+                        // 不需要另外找地方展示这个数字。
+                        Menu {
+                            Button(role: .destructive) {
+                                showClearAllConfirm = true
+                            } label: {
+                                Label(L10n.t("清空全部缓存"), systemImage: "trash")
+                            }
+                        } label: {
+                            Label(cacheSizeText, systemImage: "internaldrive")
+                        }
+                    }
                 }
                 // 列表这一栏(歌名/歌手/专辑/来源四列)给个够宽的默认/理想宽度——不然
                 // NavigationSplitView 默认分给侧栏的宽度偏窄,歌名(尤其是带 feat./remix
                 // 后缀的长标题)会被裁成省略号。630pt 是用户截图里实际截到的、歌名基本能
                 // 完整露出来的比例,拿来当 ideal 默认值。
                 .navigationSplitViewColumnWidth(min: 480, ideal: 630, max: 900)
+                .confirmationDialog(
+                    L10n.t("确定要清空全部歌词缓存吗?"),
+                    isPresented: $showClearAllConfirm,
+                    titleVisibility: .visible
+                ) {
+                    Button(L10n.t("清空全部缓存"), role: .destructive) {
+                        Task {
+                            await store.clearAll()
+                            selectedKey = nil
+                        }
+                    }
+                    Button(L10n.t("取消"), role: .cancel) {}
+                } message: {
+                    Text(String(format: L10n.t("这会删除当前全部 %d 条本地记录,包括你手动编辑、联网搜索采纳过的内容,已导出到本地的歌词文件也会一并删除,且无法撤销。下次播放会重新走一遍匹配解析。"), store.summaries.count))
+                }
             }
         } detail: {
             if let key = selectedKey, let summary = store.summaries.first(where: { $0.key == key }) {
@@ -338,6 +369,14 @@ struct LyricsManagerView: View {
             try? await Task.sleep(for: .seconds(1))
             withAnimation { showRefreshedFeedback = false }
         }
+    }
+
+    // .useAll 而不是限定 .useMB——总大小从几百 KB(刚起步)到几十 MB(用了很久)跨度
+    // 很大,让系统自己选最合适的单位,不用手动判断该显示 KB 还是 MB。
+    private var cacheSizeText: String {
+        let formatter = ByteCountFormatter()
+        formatter.countStyle = .file
+        return formatter.string(fromByteCount: store.totalSizeBytes)
     }
 
     // force:true 是给工具栏"回到当前播放"按钮用的——绕开"已经选中别的行就不动"这道

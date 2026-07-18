@@ -35,36 +35,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // 负责真正调 start()/stop(),这里不用再单独调 RelayPoller.shared.start()。
         PlaybackCoordinator.shared.applyMode(settings.dataSourceMode)
 
-        showAutomationOnboardingIfNeeded(settings: settings)
+        // 首次启动的完整引导向导(欢迎/数据源模式/自动化权限/语言/完成)——触发点在
+        // MenuBarLabel.onAppear,不在这里:openWindow(id:) 这个 SwiftUI 环境 action
+        // 只有挂载的 View 才能拿到,这个时机(AppDelegate.applicationDidFinishLaunching)
+        // 早于 MenuBarExtra 的 label 真正挂载,这里调用会静默没反应。旧版单独的"自动化
+        // 权限"NSAlert(曾经放在这里)正是为了绕开这个时序问题才用 NSAlert 而不是
+        // SwiftUI 窗口,现在整段引导折进新向导后,连带这个绕开时序问题的写法一起废弃。
         GlobalHotkeys.registerAll()
-    }
-
-    // 首次启动主动引导一次"自动化"权限(控制 Music.app,给精确播放进度用)——只弹这
-    // 一次,不管用户选哪个按钮都会把 hasShownAutomationOnboarding 置 true。用 NSAlert
-    // 而不是 SwiftUI 的 .alert(...)(这个项目其它地方一律用后者):这一步发生在这里,
-    // 这时候不一定已经有任何 SwiftUI 窗口打开着,没有地方可以挂 .alert 修饰符,NSAlert
-    // 自带一个隐式窗口、不需要依赖任何已存在的视图,是这一个特殊时机下刻意的例外。
-    //
-    // 只在当前状态是"还没问过"时才弹——已经是已授权/已拒绝,说明用户之前已经有过
-    // 明确结果(不管是通过这个引导框还是直接用到功能触发的系统弹窗),没有必要重复
-    // 打扰,直接标记成"已展示过"。
-    private func showAutomationOnboardingIfNeeded(settings: AppSettings) {
-        guard !settings.hasShownAutomationOnboarding else { return }
-        guard MusicAutomationPermission.check(askIfNeeded: false) == .notDetermined else {
-            settings.hasShownAutomationOnboarding = true
-            return
-        }
-
-        let alert = NSAlert()
-        alert.messageText = L10n.t("开启 Apple Music 自动化权限？")
-        alert.informativeText = L10n.t("desktop-lyrics 可以在本地模式下读取 Apple Music 的精确播放进度(误差 <0.1 秒)，需要系统「自动化」权限允许控制 Music.app。不授权也能正常使用——播放进度会改用估算值，可能有 1-2 秒误差。可以随时在设置里再次开启。")
-        alert.addButton(withTitle: L10n.t("请求权限"))
-        alert.addButton(withTitle: L10n.t("以后再说"))
-        NSApp.activate(ignoringOtherApps: true)
-        let response = alert.runModal()
-        if response == .alertFirstButtonReturn {
-            MusicAutomationPermission.check(askIfNeeded: true)
-        }
-        settings.hasShownAutomationOnboarding = true
     }
 }

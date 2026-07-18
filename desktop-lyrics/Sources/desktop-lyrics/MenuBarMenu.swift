@@ -37,6 +37,20 @@ struct MenuBarLabel: View {
                 NSApp.activate(ignoringOtherApps: true)
                 openWindowAction(id: "lyrics-manager")
             }
+            AppActions.shared.openOnboarding = {
+                NSApp.activate(ignoringOtherApps: true)
+                openWindowAction(id: "onboarding")
+            }
+            // 首次启动的完整引导向导——放在这里而不是 AppDelegate.
+            // applicationDidFinishLaunching 里直接调用,是因为 openWindow(id:) 这个
+            // SwiftUI 环境 action 只有在某个 View 的挂载点才能拿到;AppDelegate 那个
+            // 时机早于 MenuBarExtra 的 label 真正挂载,这时候调用会静默没反应(旧版
+            // 用 NSAlert 走 AppDelegate 正是为了绕开这个时序问题,见 hasCompletedOnboarding
+            // 迁移注释)。这个 onAppear 本身就是"整个 App 生命周期内确定只跑一次"的
+            // 挂载点,直接在这里判断+打开,不需要再绕一层。
+            if !settings.hasCompletedOnboarding {
+                AppActions.shared.openOnboarding?()
+            }
         }
     }
 
@@ -83,6 +97,12 @@ struct MenuBarMenu: View {
         Button(L10n.t("歌词管理…")) {
             NSApp.activate(ignoringOtherApps: true)
             openWindow(id: "lyrics-manager")
+        }
+        // 首次启动那次自动展示的完整引导向导,这里是唯一的手动重新入口——想再看一遍
+        // (或者当时随手关掉了)不用去改设置/清缓存,直接点这个。
+        Button(L10n.t("重新查看引导向导…")) {
+            NSApp.activate(ignoringOtherApps: true)
+            openWindow(id: "onboarding")
         }
         Divider()
         Button(L10n.t("退出")) { NSApplication.shared.terminate(nil) }

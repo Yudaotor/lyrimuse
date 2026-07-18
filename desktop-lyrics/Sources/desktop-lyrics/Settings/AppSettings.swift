@@ -52,7 +52,8 @@ final class AppSettings: ObservableObject {
         // import,理由见 L10n.swift 顶部注释(L10n 不依赖 @MainActor 的 AppSettings)。
         static let appLanguage = "np:appLanguage"
         static let preciseAppleMusicPosition = "np:preciseAppleMusicPosition"
-        static let hasShownAutomationOnboarding = "np:hasShownAutomationOnboarding"
+        static let hasShownAutomationOnboarding = "np:hasShownAutomationOnboarding" // 已废弃,只在 init() 里读一次做迁移
+        static let hasCompletedOnboarding = "np:hasCompletedOnboarding"
         static let overlayStyle = "np:overlayStyle" // 已废弃,只在 init() 里读一次做迁移
         static let classicOverlayEnabled = "np:classicOverlayEnabled"
         static let notchOverlayEnabled = "np:notchOverlayEnabled"
@@ -155,11 +156,14 @@ final class AppSettings: ObservableObject {
     @Published var preciseAppleMusicPosition: Bool {
         didSet { defaults.set(preciseAppleMusicPosition, forKey: Keys.preciseAppleMusicPosition) }
     }
-    // 首次启动的自动化权限引导框只弹一次——不管用户当时选的是"请求权限"还是"以后
-    // 再说",都会置为 true,之后随时能在设置里的"权限"分区自己再看/再请求,不会被
-    // 这个启动引导反复打扰。
-    @Published var hasShownAutomationOnboarding: Bool {
-        didSet { defaults.set(hasShownAutomationOnboarding, forKey: Keys.hasShownAutomationOnboarding) }
+    // 首次启动的完整引导向导(欢迎/数据源模式/自动化权限/语言/完成)只走一次——不管
+    // 从哪一步关掉窗口都会置为 true(见 OnboardingView 的 .onDisappear),之后随时能
+    // 在菜单栏"重新查看引导向导"手动再打开一次,不会被启动流程反复打扰。这个向导
+    // 上线前的老版本只有"自动化权限"这一步单独的 NSAlert(hasShownAutomationOnboarding,
+    // 现已废弃),init() 里做一次性迁移:老版本已经弹过那一步的,直接视为"已经引导过"，
+    // 不会突然对已经用过这个 App 的人强插一整套全新的多步向导。
+    @Published var hasCompletedOnboarding: Bool {
+        didSet { defaults.set(hasCompletedOnboarding, forKey: Keys.hasCompletedOnboarding) }
     }
     // 桌面悬浮歌词(经典悬浮窗)、灵动岛歌词各自独立开关,互不排斥——两者对应完全独立的
     // 窗口控制器(LyricsOverlayWindowController/NotchLyricsWindowController),可以
@@ -260,7 +264,8 @@ final class AppSettings: ObservableObject {
         hideWhenNotPlaying = (defaults.object(forKey: Keys.hideWhenNotPlaying) as? Bool) ?? false
         appLanguage = defaults.string(forKey: Keys.appLanguage) ?? "system"
         preciseAppleMusicPosition = (defaults.object(forKey: Keys.preciseAppleMusicPosition) as? Bool) ?? true
-        hasShownAutomationOnboarding = (defaults.object(forKey: Keys.hasShownAutomationOnboarding) as? Bool) ?? false
+        hasCompletedOnboarding = (defaults.object(forKey: Keys.hasCompletedOnboarding) as? Bool)
+            ?? (defaults.object(forKey: Keys.hasShownAutomationOnboarding) as? Bool) ?? false
         // 一次性迁移:互斥的"悬浮窗样式"拆成两个独立开关之前,只可能同时生效一个——
         // 用旧值原样映射过来,保留用户当下已经在看的那个,不强行帮用户多打开另一个
         // (想同时开两个,拆开之后自己在设置里再手动开)。旧 key 只读不删,留着无害。

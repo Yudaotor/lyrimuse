@@ -46,6 +46,10 @@ public final class EnrichCacheStore: ObservableObject {
 
     @Published public private(set) var summaries: [Summary] = []
     @Published public private(set) var lastError: String?
+    // 缓存 JSON 文件本身 + lyrics/ 权威源文件夹里所有文件的总大小——"歌词管理"工具栏
+    // 展示用,让用户知道这个"解析一次永久保留"的缓存实际占了多少磁盘空间。跟 reload()
+    // 同一次磁盘扫描顺带算出来,不为这一个数字单独再打开一轮文件 I/O。
+    @Published public private(set) var totalSizeBytes: Int64 = 0
 
     private static let cacheURL = FileManager.default.homeDirectoryForCurrentUser
         .appendingPathComponent(".config/applemusic-nowplaying/applemusic-nowplaying-enrich-cache.json")
@@ -70,10 +74,13 @@ public final class EnrichCacheStore: ObservableObject {
         final class ResultBox: @unchecked Sendable {
             var obj: [String: [String: Any]]?
             var errorMessage: String?
+            var sizeBytes: Int64 = 0
         }
         let box = ResultBox()
         let cacheURL = Self.cacheURL
+        let lyricsDir = Self.lyricsDir
         await Task.detached(priority: .userInitiated) {
+            box.sizeBytes = Self.directorySizeBytes(lyricsDir) + Self.fileSizeBytes(cacheURL)
             guard let data = try? Data(contentsOf: cacheURL) else {
                 box.errorMessage = L10n.t("读取本地记录文件失败")
                 return
@@ -84,6 +91,7 @@ public final class EnrichCacheStore: ObservableObject {
             }
             box.obj = obj
         }.value
+        totalSizeBytes = box.sizeBytes
         if let obj = box.obj {
             raw = obj
             lastError = nil
@@ -93,6 +101,24 @@ public final class EnrichCacheStore: ObservableObject {
             lastError = box.errorMessage ?? L10n.t("读取本地记录文件失败")
         }
         rebuildSummaries()
+    }
+
+    // nonisolated——从 reload() 里的 Task.detached 闭包(非 MainActor 上下文)调用,
+    // 这两个纯函数只碰 FileManager/URL,不touch 任何 actor 隔离状态,标 nonisolated
+    // 避免编译器在严格并发检查下要求这里额外 await。
+    private nonisolated static func fileSizeBytes(_ url: URL) -> Int64 {
+        guard let attrs = try? FileManager.default.attributesOfItem(atPath: url.path) else { return 0 }
+        return (attrs[.size] as? NSNumber)?.int64Value ?? 0
+    }
+
+    private nonisolated static func directorySizeBytes(_ dir: URL) -> Int64 {
+        guard let urls = try? FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: [.fileSizeKey]) else {
+            return 0
+        }
+        return urls.reduce(Int64(0)) { total, url in
+            let size = (try? url.resourceValues(forKeys: [.fileSizeKey]))?.fileSize ?? 0
+            return total + Int64(size)
+        }
     }
 
     // key 的拼法是 collector 那边的 "歌手|歌名|专辑"(见 collector/enrich.go:93)。
@@ -206,6 +232,20 @@ public final class EnrichCacheStore: ObservableObject {
         await persistAndRestart()
         rebuildSummaries()
         deleteExportedLyricsFile(forKey: key)
+    }
+
+    // "缓存占用查看 + 一键清空"里的清空动作——真删除,不是软标记:清空 JSON 侧的 raw
+    // 字典、删掉 lyrics/ 权威源文件夹下的每一个文件(包括手动编辑/联网搜索采纳过的
+    // 内容,这份缓存设计上没有"哪些是临时的、哪些是用户产出"的区分,清空就是全清)。
+    // destructive 程度需要在 UI 侧用强提示词说清楚,这里只负责真正执行。
+    public func clearAll() async {
+        raw = [:]
+        if let urls = try? FileManager.default.contentsOfDirectory(at: Self.lyricsDir, includingPropertiesForKeys: nil) {
+            for url in urls { try? FileManager.default.removeItem(at: url) }
+        }
+        await persistAndRestart()
+        rebuildSummaries()
+        totalSizeBytes = 0
     }
 
     // 跟 collector/lyricsexport.go 的 sanitizeLyricsFilename 逐字对应的 Swift 版本——

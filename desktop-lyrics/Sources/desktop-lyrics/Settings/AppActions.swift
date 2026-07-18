@@ -11,6 +11,7 @@ final class AppActions {
 
     var openSettings: (() -> Void)?
     var openLyricsManager: (() -> Void)?
+    var openOnboarding: (() -> Void)?
 
     private init() {}
 }
