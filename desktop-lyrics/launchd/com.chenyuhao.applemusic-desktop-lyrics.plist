@@ -6,7 +6,7 @@
     <string>com.chenyuhao.applemusic-desktop-lyrics</string>
     <key>ProgramArguments</key>
     <array>
-        <string>/Users/chenyuhao/applemusic-nowplaying/bin/desktop-lyrics</string>
+        <string>/Users/chenyuhao/applemusic-nowplaying/bin/DesktopLyrics.app/Contents/MacOS/desktop-lyrics</string>
     </array>
     <key>RunAtLoad</key>
     <true/>

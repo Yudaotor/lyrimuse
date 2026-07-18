@@ -20,9 +20,12 @@
 
 - 只需要 Swift 工具链（Command Line Tools 自带即可，不需要装完整 Xcode——已实测确认，
   `Package.swift` 用的是纯 SwiftPM 可执行 target，不是 `.xcodeproj`）。
-- 不打包成 `.app`：裸可执行文件靠运行时 `NSApp.setActivationPolicy(.accessory)` 就能表现成
-  菜单栏专属应用（不占 Dock/Cmd-Tab），`UserDefaults`/`swift build` 的 ad-hoc 签名对裸可执行
-  文件也都工作正常，都已实测确认。
+- 打包成正经的 `.app`（2026-07-18 起）：`build.sh` 把 release 构建的可执行文件+图标+
+  `Info.plist` 组装进 `bin/DesktopLyrics.app`，可以拖进 Dock 当启动器双击打开。`Info.plist`
+  里仍然设 `LSUIElement`，运行期间照旧不占 Dock/Cmd-Tab（跟改造前的 `NSApp.
+  setActivationPolicy(.accessory)` 运行时调用双保险）。SwiftPM 给每个声明了 `resources`
+  的 target 生成的 `Bundle.module` 资源包（本地化文案等）按访问器的固定查找路径搬到了
+  `.app` 包根目录，不是常见的 `Contents/Resources/`，细节见 `build.sh` 里的注释。
 
 ## 目录结构
 
@@ -36,7 +39,7 @@
 ## 构建 / 运行
 
 ```bash
-./build.sh              # release 构建 + 装到 ../bin/desktop-lyrics + 重启(如果当前有实例在跑)
+./build.sh              # release 构建 + 打包成 ../bin/DesktopLyrics.app + 重启(如果当前有实例在跑)
 ./build.sh --no-restart  # 只构建
 swift run desktop-lyrics-selftest   # 跑歌词解析器的合成字符串测试
 ```
@@ -46,5 +49,6 @@ swift run desktop-lyrics-selftest   # 跑歌词解析器的合成字符串测试
 菜单栏里的"开机启动"开关会把一份 LaunchAgent plist 装到 `~/Library/LaunchAgents/` 并
 `launchctl bootstrap`（`launchd/` 目录下那份是留档参考，不是给人手动 `cp` 过去用的）。
 故意不用 `KeepAlive`——这是用户会主动 Cmd-Q 退出的前台 GUI 工具，不是无人值守后台服务，
-`KeepAlive=true` 会导致退出后立刻被拉起，体验是错的。也不用 `SMAppService`，那个要求
-plist 必须放进 `.app` 包内部，跟"不打包"的决定冲突。
+`KeepAlive=true` 会导致退出后立刻被拉起，体验是错的。打包成 `.app` 之后其实已经满足
+`SMAppService` 的前提（plist 放 `Contents/Library/LaunchAgents/`），但沿用已经跑得好好
+的经典 LaunchAgent 方案，没有顺带迁移。
