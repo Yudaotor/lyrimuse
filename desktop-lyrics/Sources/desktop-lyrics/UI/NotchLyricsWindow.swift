@@ -17,7 +17,18 @@ final class NotchLyricsWindow: NSPanel {
         isOpaque = false
         backgroundColor = .clear
         hasShadow = true
-        level = .floating
+        // 经典悬浮窗用 .floating 就够了,因为它平时待在屏幕中段,从没需要跟系统菜单栏
+        // 抢那一条像素。这个新样式恰恰要贴到菜单栏/刘海所在的那一整条——真机实测坐实两轮:
+        // .floating(3)和 .statusBar(25,仅比 .mainMenu=24 高一级)都不够,frame 就算
+        // 顶到了 y=0、CGWindowListCopyWindowInfo 也报告 isOnscreen/alpha 都正常,肉眼
+        // 看真机依然"什么也不显示"——CGWindowListCopyWindowInfo 的 layer 只反映请求的
+        // window level,不代表真的绕过了系统菜单栏/刘海自己那条专属渲染层,同 level 或
+        // 更低的东西会被那条专属层直接盖住,截图工具目前也测不出这层遮挡关系(截图能看到
+        // 但肉眼看不到)。对照三个真实开源"贴刘海"实现(boring.notch/NotchDrop/
+        // DynamicNotchKit)交叉验证:跟这里同样是 NSPanel+.nonactivatingPanel 技术方案
+        // 的 DynamicNotchKit,用的是 .screenSaver(比 .statusBar 还高好几级),不用任何
+        // 私有 API 就能正常贴刘海——换成这个级别。
+        level = .screenSaver
         // 跟 LyricsOverlayWindow 同一套 flag,含义见那个文件的注释:.fullScreenAuxiliary
         // 让它能显示在"某个 App 已全屏"那个 Space 上面,.canJoinAllSpaces 跟着切 Space
         // 走不用每次重新显示。
@@ -26,9 +37,25 @@ final class NotchLyricsWindow: NSPanel {
         isReleasedWhenClosed = false
     }
 
-    // .nonactivatingPanel 已经不会主动抢焦点,这里再显式挡掉 key/main——保证鼠标 hover
-    // 展开/播放控制按钮的点击永远不会打断用户正在操作的其它 App,跟 LyricsOverlayWindow
-    // 的取舍完全一致。
-    override var canBecomeKey: Bool { false }
+    // 经典悬浮窗(LyricsOverlayWindow)把这两个都锁 false,因为它没有必要跟系统菜单栏
+    // 抢渲染层级。这个新样式对照的三个真实开源实现里,唯二两个"不用私有 API 就能贴到
+    // 刘海"的(NotchDrop 用真正的 NSWindow 且两个都是 true,DynamicNotchKit 跟这里一样
+    // 是 .nonactivatingPanel 但 canBecomeKey 也是 true)都让 canBecomeKey 返回 true——
+    // 只有依赖私有 CGS Space 技巧的 boring.notch 才继续锁 false。.nonactivatingPanel
+    // 本身已经保证"能变成 key 窗口"这件事不会连带激活/抢占整个 App(不会有 Dock 图标
+    // 跳动、不会切菜单栏),所以放开 canBecomeKey 不等于开始抢别的 App 的焦点。
+    override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { false }
+
+    // 真机(有物理刘海的 MacBook)实测坐实的一个坑:AppKit 默认会把窗口的 setFrame
+    // 请求"夹"回 visibleFrame 以内,不让普通窗口盖住菜单栏那一条——哪怕这个窗口的
+    // level 是 .floating、哪怕算出来的目标位置正是刘海本身的真实坐标。不覆盖这个
+    // 方法的话,NotchLyricsWindowController.recomputeGeometry() 算出来"贴着刘海"的
+    // frame 会被系统悄悄下移一整个菜单栏高度,实际效果是胶囊浮在刘海下方一小段
+    // 距离、跟真刘海视觉上明显脱节(不是"看起来像从刘海里长出来",而是"刘海下面
+    // 多了一个不知道哪来的黑胶囊")。返回传入的 frameRect 本身、不做任何调整,这个
+    // 窗口就能真正贴到 recomputeGeometry() 算出来的坐标,包括刘海所在的那一整条。
+    override func constrainFrameRect(_ frameRect: NSRect, to screen: NSScreen?) -> NSRect {
+        frameRect
+    }
 }
