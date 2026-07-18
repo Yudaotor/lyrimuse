@@ -39,6 +39,14 @@ import DesktopLyricsCore
 // 最初是"不 hover 就什么都没有",现在是"稳态本来就已经完整可用,hover 只是在下面
 // 多展开一块补充信息(下一句歌词预览 + 迷你进度条)",调研过 boring.notch 等真实
 // 参考实现后确认这个补充思路是合理的,详见 isExpanded/expandedExtraHeight。
+//
+// 2026-07-19 再次调整:上面这条"稳态永远显示完整内容"只在播放中才成立——用户明确
+// 要求"当前歌曲没有在播放的时候自动缩回去,不要占着空间",不是"缩到常显内容的下限
+// 宽度"那种程度,而是真的缩到跟物理刘海本身(或无刘海屏幕的兜底胶囊)一样大,常显
+// 内容整套不渲染。跟已有的 hideWhenNotPlaying(整个窗口隐藏)是两个独立机制,不冲突:
+// 那个开关关闭时窗口本身还在(用户能看到"这里有个东西"),只是不常显内容、缩到最小,
+// hover 到这一小块区域上依然能重新展开出完整内容(包括播放按钮,可以用来重新播放)。
+// 见 isCollapsed/collapsedFallbackWidth。
 @MainActor
 final class NotchLyricsWindowController: NSWindowController, ObservableObject {
     static let shared = NotchLyricsWindowController()
@@ -59,11 +67,22 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject {
     // 迷你进度条这部分补充内容。稳态(false)本身已经是"歌名+控制+当前歌词"完整可用的
     // 一套,这个状态只影响"要不要在下面多展开一块",不影响稳态内容本身是否显示。
     @Published private(set) var isExpanded: Bool = false
+    // 当前没有在播放、也没有 hover 展开时为 true——这时窗口收缩到真实刘海本身的大小
+    // (无真刘海屏幕退到 collapsedFallbackWidth 那个兜底胶囊宽度),歌名/控制按钮/歌词
+    // 这一整套常显内容完全不渲染,单纯是一小块跟屏幕硬件本身融为一体的黑色区域。
+    // NotchLyricsView 读这个属性决定要不要渲染 topRow/lyricRow,跟窗口本身的尺寸
+    // (recomputeGeometry 里同一份 collapsed 判断)保持单一数据源,不在两处各自算一遍
+    // 容易失焦。
+    @Published private(set) var isCollapsed: Bool = false
 
     // 没有真刘海的屏幕(比如 MacBook Air 全系不带刘海,只有 14"/16" MacBook Pro
     // 2021 起才有)退到的固定兜底高度:不是"关掉整个功能",是换一套不依赖真刘海几何
     // 形状的兜底样式,宽度沿用下面 contentWidth 算出来的常显宽度。
     private static let fallbackNotchHeight: CGFloat = 32
+    // 收起态(没在播放、没 hover)在无真刘海屏幕上退到的兜底宽度——真刘海屏幕收起态
+    // 直接用 notchWidth 本身(跟硬件刘海严丝合缝),这个值只在没有真刘海可以贴的场景
+    // 才用得到,给一个能装得下一小块胶囊、不会小到近乎看不见的经验值。
+    private static let collapsedFallbackWidth: CGFloat = 120
     // 常显内容行的固定高度(一行歌词 + 3 个播放控制按钮那一行的高度经验取值)——窗口
     // 总高度 = 刘海本身高度(或兜底高度)+ 这一行高度,让内容行完整落在刘海下方。宽度
     // 不再是固定常量,见 contentWidth(for:)。
@@ -260,10 +279,22 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject {
         let geo = Self.geometry(for: screen)
         contentTopInset = geo.notchHeight
         notchWidth = geo.notchWidth
-        let extra = isExpanded ? Self.expandedExtraHeight : 0
         let isPlayingNow = isPlayingOverride ?? PlaybackCoordinator.shared.isPlayingNow
-        let width = Self.contentWidth(lyricTextWidth: estimatedLyricTextWidth(isPlayingNow: isPlayingNow), notchWidth: geo.notchWidth)
-        let size = NSSize(width: width, height: geo.notchHeight + Self.contentHeight + extra)
+        // 没在播放、也没 hover 展开——收缩到刘海本身大小,常显内容整套不渲染(见
+        // NotchLyricsView 里对 controller.isCollapsed 的判断)。用户明确要求"缩到正常
+        // 机器刘海的大小",不是简单地把常显内容那份宽度缩到下限——下限本身仍然要给
+        // 两只耳朵留够按钮/歌名的空间,不是"刘海大小"。
+        let collapsed = !isPlayingNow && !isExpanded
+        isCollapsed = collapsed
+        let size: NSSize
+        if collapsed {
+            let collapsedWidth = geo.notchWidth > 0 ? geo.notchWidth : Self.collapsedFallbackWidth
+            size = NSSize(width: collapsedWidth, height: geo.notchHeight)
+        } else {
+            let extra = isExpanded ? Self.expandedExtraHeight : 0
+            let width = Self.contentWidth(lyricTextWidth: estimatedLyricTextWidth(isPlayingNow: isPlayingNow), notchWidth: geo.notchWidth)
+            size = NSSize(width: width, height: geo.notchHeight + Self.contentHeight + extra)
+        }
         let frame = NSRect(
             x: geo.centerX - size.width / 2,
             y: screen.frame.maxY - size.height,

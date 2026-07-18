@@ -92,13 +92,18 @@ struct NotchLyricsView: View {
             ZStack(alignment: .top) {
                 NotchHangingShape(bottomCornerRadius: 20)
                     .fill(settings.notchCardStyle.fill)
-                VStack(spacing: 0) {
-                    topRow(earWidth: earWidth)
-                        .frame(height: controller.contentTopInset)
-                    lyricRow
-                        .frame(height: Self.compactRowHeight)
-                    if controller.isExpanded {
-                        expandedContent
+                // 收起态(没在播放、没 hover)窗口本身已经缩到刘海大小,这里额外把常显
+                // 内容整套摘掉而不是指望窗口太小自然裁掉——避免文字/按钮在收缩动画过程中
+                // 短暂挤压变形的观感,收起就是纯粹的一块背景,跟真实刘海融为一体。
+                if !controller.isCollapsed {
+                    VStack(spacing: 0) {
+                        topRow(earWidth: earWidth)
+                            .frame(height: controller.contentTopInset)
+                        lyricRow
+                            .frame(height: Self.compactRowHeight)
+                        if controller.isExpanded {
+                            expandedContent
+                        }
                     }
                 }
             }
