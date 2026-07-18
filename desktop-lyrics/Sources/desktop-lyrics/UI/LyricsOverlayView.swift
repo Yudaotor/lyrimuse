@@ -79,6 +79,14 @@ struct LyricsOverlayView: View {
     // 用户一开背景色看到的是个生硬的直角矩形;两个参考的开源实现里圆角都不是用户可调项。
     private let overlayBackgroundCornerRadius: CGFloat = 16
 
+    // 2026-07-18 加播放控制:鼠标悬停才浮现一排按钮,不用一直占地方,平时观感跟改动前
+    // 逐像素一致。只在"锁定位置"关闭时生效——锁定后 LyricsOverlayWindowController.
+    // setLocked 会把 window.ignoresMouseEvents 设成 true,窗口整个不再接收任何鼠标事件
+    // (点击穿透到下层),.onHover 在那种状态下本来就永远不会被调用;这里用户明确要求
+    // "仅在没开启不可移动时才生效",在 View 这一层也显式判断一遍,不单纯依赖那个
+    // 窗口级副作用——同一个条件两处各自成立,不是互相依赖的隐式耦合。
+    @State private var isHoveringForControls = false
+
     var body: some View {
         VStack(spacing: 4) {
             if settings.showRomanization, let roma = poller.currentLine?.romanization {
@@ -103,6 +111,10 @@ struct LyricsOverlayView: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .lyricsTextShadow(settings.textShadowEnabled, color: settings.textShadowColor)
             }
+            if isHoveringForControls && !settings.lockPosition {
+                playbackControls
+                    .transition(.opacity.combined(with: .scale(scale: 0.97, anchor: .top)))
+            }
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 14)
@@ -117,6 +129,41 @@ struct LyricsOverlayView: View {
             }
         )
         .onPreferenceChange(ContentHeightPreferenceKey.self) { onContentHeightChange($0) }
+        .onHover { hovering in
+            guard !settings.lockPosition else { return }
+            withAnimation(.easeOut(duration: 0.16)) { isHoveringForControls = hovering }
+        }
+    }
+
+    private var playbackControls: some View {
+        HStack(spacing: 18) {
+            controlButton("backward.fill") { MusicPlaybackController.previousTrack() }
+            controlButton(poller.isPlayingNow ? "pause.fill" : "play.fill", primary: true) {
+                MusicPlaybackController.playPause()
+            }
+            controlButton("forward.fill") { MusicPlaybackController.nextTrack() }
+        }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 7)
+        .background(.black.opacity(0.55), in: Capsule())
+        .padding(.top, 4)
+    }
+
+    // 跟 GlobalHotkeys.swift 里播放控制三个动作同一套"点了才校验权限"逻辑——没问过就
+    // 顺手弹一次系统授权对话框,已经拒绝过就静默不做,不需要在悬浮窗里再单独设计一套
+    // 提示 UI。
+    private func controlButton(_ systemName: String, primary: Bool = false, action: @escaping () -> Void) -> some View {
+        Button {
+            guard MusicAutomationPermission.check(askIfNeeded: true).isAuthorized else { return }
+            action()
+        } label: {
+            Image(systemName: systemName)
+                .font(.system(size: primary ? 15 : 13, weight: .semibold))
+                .foregroundStyle(.white)
+                .frame(width: primary ? 30 : 26, height: primary ? 30 : 26)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
     @ViewBuilder
