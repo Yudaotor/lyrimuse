@@ -14,7 +14,12 @@ set -euo pipefail
 
 cd "$(dirname "$0")" # desktop-lyrics/
 APP_NAME="DesktopLyrics"
-APP_DIR="$(cd .. && pwd)/bin/${APP_NAME}.app"
+# 装到 /Applications/ 而不是仓库自己的 bin/ 里(2026-07-18 当天改的——一开始装在 bin/
+# 下,用户把它拖/拷到了 /Applications/ 自己启动,导致真正在跑的是一份没同步过后续几次
+# 修复的旧拷贝,重新构建/重启了好几次都没反映到用户实际在看的那个进程上,排查了很久才
+# 发现。/Applications/ 才是这个 App 实际使用的位置,以后 build.sh 直接装到这里，不再
+# 留一份 bin/ 下的拷贝，避免"到底哪份是真的在跑"这种混乱再发生一次)。
+APP_DIR="/Applications/${APP_NAME}.app"
 BIN="$APP_DIR/Contents/MacOS/desktop-lyrics"
 LABEL="com.chenyuhao.applemusic-desktop-lyrics"
 RELEASE_DIR=".build/release"

@@ -35,8 +35,11 @@ final class LoginItemManager {
         if let running = Bundle.main.executablePath, running.hasSuffix("/Contents/MacOS/desktop-lyrics") {
             return running
         }
-        return FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent("applemusic-nowplaying/bin/DesktopLyrics.app/Contents/MacOS/desktop-lyrics").path
+        // 2026-07-18 再次更新:build.sh 改成直接装到 /Applications/DesktopLyrics.app
+        // (不再留 bin/ 下的拷贝——同一天早些时候用户把 bin/ 下那份自己拷到了
+        // /Applications/ 手动启动,导致重新构建/重启了好几次都反映不到用户实际在跑的
+        // 那个进程上,排查了很久,详见 build.sh 里的注释)。
+        return URL(fileURLWithPath: "/Applications/DesktopLyrics.app/Contents/MacOS/desktop-lyrics").path
     }
     private var plistURL: URL {
         FileManager.default.homeDirectoryForCurrentUser

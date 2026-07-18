@@ -28,7 +28,15 @@ struct NotchLyricsView: View {
 
     var body: some View {
         GeometryReader { proxy in
-            let earWidth = max(0, (proxy.size.width - controller.notchWidth) / 2)
+            // topRow 外层还有 .padding(.horizontal, 10)(左右各 10pt),这里要把这 20pt
+            // 也算进去,否则「两只耳朵 + 刘海空当」正好等于 proxy.size.width 之后再叠加
+            // padding,会让 topRow 的实际宽度比 GeometryReader 分配的宽度多出整整 20pt——
+            // 真机实测坐实过这个 bug:ZStack 会跟着这个更宽的子视图一起变宽,导致背景
+            // 形状 NotchHangingShape 收到的 rect 比窗口真实宽度多 20pt,只有当这多出来的
+            // 20pt 沿某一侧溢出时,那一侧的底部圆角看起来才会显示为直角(圆角计算完全正确,
+            // 但整个形状的宽度本身就比窗口本身多算了一截，超出窗口边界的部分被窗口硬裁掉，
+            // 裁到的正好是圆弧那一小段)。
+            let earWidth = max(0, (proxy.size.width - controller.notchWidth - 20) / 2)
             ZStack(alignment: .top) {
                 NotchHangingShape(bottomCornerRadius: 20)
                     .fill(.black)
