@@ -43,6 +43,7 @@ final class AppSettings: ObservableObject {
         static let appLanguage = "np:appLanguage"
         static let preciseAppleMusicPosition = "np:preciseAppleMusicPosition"
         static let hasShownAutomationOnboarding = "np:hasShownAutomationOnboarding"
+        static let overlayStyle = "np:overlayStyle"
     }
 
     private let defaults = UserDefaults.standard
@@ -147,6 +148,16 @@ final class AppSettings: ObservableObject {
     @Published var hasShownAutomationOnboarding: Bool {
         didSet { defaults.set(hasShownAutomationOnboarding, forKey: Keys.hasShownAutomationOnboarding) }
     }
+    // "classic"(经典悬浮窗,默认,不影响现有用户)/"notch"(灵动岛/刘海样式)——两种
+    // 样式各自对应一个完全独立的窗口控制器(LyricsOverlayWindowController/
+    // NotchLyricsWindowController)。只负责持久化,原因跟 lockPosition 等既有窗口
+    // 相关设置一样——"生效"这一步(把旧样式的控制器 setVisible(false)、新样式的
+    // setVisible(true))挪到 SettingsView.swift 的 Picker Binding.set 里手动调用,
+    // 不在这里的 didSet 里连带触发,避免在 AppSettings.init() 给这个属性赋初值时
+    // 就去访问两个窗口控制器单例、有循环初始化风险。
+    @Published var overlayStyle: String {
+        didSet { defaults.set(overlayStyle, forKey: Keys.overlayStyle) }
+    }
     // 字体族名——空字符串表示"跟随系统",对应悬浮窗原来硬编码的系统字体,不用额外
     // enum/Optional 表达"未设置",跟 relayBaseURL 的空字符串兜底是同一种写法。
     @Published var fontFamilyName: String {
@@ -227,6 +238,7 @@ final class AppSettings: ObservableObject {
         appLanguage = defaults.string(forKey: Keys.appLanguage) ?? "system"
         preciseAppleMusicPosition = (defaults.object(forKey: Keys.preciseAppleMusicPosition) as? Bool) ?? true
         hasShownAutomationOnboarding = (defaults.object(forKey: Keys.hasShownAutomationOnboarding) as? Bool) ?? false
+        overlayStyle = defaults.string(forKey: Keys.overlayStyle) ?? "classic"
         fontFamilyName = defaults.string(forKey: Keys.fontFamilyName) ?? ""
         fontSize = (defaults.object(forKey: Keys.fontSize) as? Double) ?? 20
         overlayWidth = (defaults.object(forKey: Keys.overlayWidth) as? Double) ?? 640

@@ -48,23 +48,26 @@ struct MenuBarLabel: View {
 }
 
 struct MenuBarMenu: View {
-    @ObservedObject private var overlay = LyricsOverlayWindowController.shared
     @ObservedObject private var settings = AppSettings.shared
     @Environment(\.openSettings) private var openSettings
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
-        Toggle(L10n.t("显示悬浮歌词"), isOn: Binding(
-            get: { overlay.isVisible },
-            set: { overlay.setVisible($0) }
-        ))
-        Toggle(L10n.t("锁定位置(不可拖拽+点击穿透)"), isOn: Binding(
-            get: { overlay.isPositionLocked },
-            set: { newValue in
-                settings.lockPosition = newValue
-                overlay.setLocked(newValue)
-            }
-        ))
+        // "显示悬浮歌词"/"锁定位置"这两个 Toggle 具体读/写哪个控制器,取决于
+        // settings.overlayStyle 当下的值——用 if/else 各自拆成独立的小 View,而不是
+        // 在这里直接同时持有两个控制器的 @ObservedObject:两个控制器各自都是
+        // `static let shared`,真正引用到才会执行 init() 建窗口,而 init() 里订阅
+        // PlaybackCoordinator 的 Combine sink 在订阅的一瞬间就会用当下的 isVisible
+        // (默认 true)触发一次 orderFront——如果不管当前样式是哪个都无条件持有两份
+        // @ObservedObject,只是点开一次菜单就会把没在用的那个控制器也构造出来、连带
+        // 把它的窗口显示到屏幕上。SwiftUI 的 if/else 只会真正构建被选中的那个分支
+        // 对应的 View,没被选中的分支连初始化都不会跑,借这个机制保证永远不会误碰
+        // 不该碰的那个控制器(这条不变量详见 NotchLyricsWindowController 顶部注释)。
+        if settings.overlayStyle == "notch" {
+            NotchOverlayMenuSection()
+        } else {
+            ClassicOverlayMenuSection()
+        }
         Divider()
         Toggle(L10n.t("开机启动"), isOn: $settings.launchAtLoginEnabled)
         // 不用 SettingsLink——这个 App 是 .accessory 策略(没有 Dock 图标/常规激活),
@@ -83,5 +86,43 @@ struct MenuBarMenu: View {
         }
         Divider()
         Button(L10n.t("退出")) { NSApplication.shared.terminate(nil) }
+    }
+}
+
+// 经典悬浮窗样式生效时的菜单项——"显示悬浮歌词"+"锁定位置"。只在这个子 View 里持有
+// LyricsOverlayWindowController.shared,不放在 MenuBarMenu 本体上:MenuBarMenu.body
+// 的 if/else 只会构建被选中分支对应的 View,把控制器引用限制在这个分支专属的小
+// View 里,才能保证灵动岛样式生效时永远不会误触构造经典控制器。
+private struct ClassicOverlayMenuSection: View {
+    @ObservedObject private var overlay = LyricsOverlayWindowController.shared
+    @ObservedObject private var settings = AppSettings.shared
+
+    var body: some View {
+        Toggle(L10n.t("显示悬浮歌词"), isOn: Binding(
+            get: { overlay.isVisible },
+            set: { overlay.setVisible($0) }
+        ))
+        Toggle(L10n.t("锁定位置(不可拖拽+点击穿透)"), isOn: Binding(
+            get: { overlay.isPositionLocked },
+            set: { newValue in
+                settings.lockPosition = newValue
+                overlay.setLocked(newValue)
+            }
+        ))
+    }
+}
+
+// 灵动岛样式生效时的菜单项——只有"显示悬浮歌词"一项:灵动岛的位置是算出来的、贴死
+// 在屏幕顶部,没有"锁定位置"这个概念(见 NotchLyricsWindow 里
+// isMovableByWindowBackground = false 那段注释)。同理只在这个子 View 里持有
+// NotchLyricsWindowController.shared,理由跟 ClassicOverlayMenuSection 对称。
+private struct NotchOverlayMenuSection: View {
+    @ObservedObject private var overlay = NotchLyricsWindowController.shared
+
+    var body: some View {
+        Toggle(L10n.t("显示悬浮歌词"), isOn: Binding(
+            get: { overlay.isVisible },
+            set: { overlay.setVisible($0) }
+        ))
     }
 }

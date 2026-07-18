@@ -14,10 +14,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         LocalPlaybackSource.shared.preferWordLevelKaraoke = settings.preferWordLevelKaraoke
         LocalPlaybackSource.shared.preciseAppleMusicPosition = settings.preciseAppleMusicPosition
 
-        LyricsOverlayWindowController.shared.setVisible(true)
-        LyricsOverlayWindowController.shared.setLocked(settings.lockPosition)
-        LyricsOverlayWindowController.shared.setHiddenFromCapture(settings.hideDuringScreenCapture)
-        LyricsOverlayWindowController.shared.setHideWhenNotPlaying(settings.hideWhenNotPlaying)
+        // 两种悬浮窗样式互斥——只对 settings.overlayStyle 当下选中的那一个控制器调
+        // setVisible(true),另一个保持完全不碰:两个控制器各自都是 static let
+        // shared,真正引用到 .shared 才会执行 init() 建窗口,这里不主动碰未启用的
+        // 那个,它就不会凭空建一个不需要的窗口(见 NotchLyricsWindowController 顶部
+        // 注释里这条不变量的详细说明)。
+        switch settings.overlayStyle {
+        case "notch":
+            NotchLyricsWindowController.shared.setVisible(true)
+            NotchLyricsWindowController.shared.setHiddenFromCapture(settings.hideDuringScreenCapture)
+            NotchLyricsWindowController.shared.setHideWhenNotPlaying(settings.hideWhenNotPlaying)
+        default:
+            LyricsOverlayWindowController.shared.setVisible(true)
+            LyricsOverlayWindowController.shared.setLocked(settings.lockPosition)
+            LyricsOverlayWindowController.shared.setHiddenFromCapture(settings.hideDuringScreenCapture)
+            LyricsOverlayWindowController.shared.setHideWhenNotPlaying(settings.hideWhenNotPlaying)
+        }
 
         // 按设置里选的数据源启动对应的那一个(默认远程,保持原有行为);PlaybackCoordinator
         // 负责真正调 start()/stop(),这里不用再单独调 RelayPoller.shared.start()。
