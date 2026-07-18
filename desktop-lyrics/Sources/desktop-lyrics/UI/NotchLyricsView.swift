@@ -77,15 +77,12 @@ struct NotchLyricsView: View {
 
     private func topRow(earWidth: CGFloat) -> some View {
         HStack(spacing: 0) {
-            // 左耳:歌名(真机反馈"应该放歌名",不再是固定的音符图标)。超长截断,
-            // 紧贴刘海这一侧(trailing)。
-            HStack {
-                Spacer(minLength: 0)
+            // 左耳:歌名(真机反馈"应该放歌名",不再是固定的音符图标)。超长滚动展示
+            // (真机反馈"歌词和歌名一样,太长要滚动"),不再是硬截断省略号。
+            MarqueeText(id: poller.title) {
                 Text(poller.title.isEmpty ? "♪" : poller.title)
                     .font(.system(size: 11.5, weight: .semibold))
                     .foregroundStyle(.white.opacity(0.85))
-                    .lineLimit(1)
-                    .truncationMode(.tail)
             }
             .frame(width: earWidth)
 
@@ -94,21 +91,34 @@ struct NotchLyricsView: View {
                 .frame(width: controller.notchWidth)
 
             // 右耳:3 个播放控制按钮放在一起——真机反馈按钮偏大、贴边有裁切感,这一版
-            // 整体缩小一号(controlButton 的尺寸参数)。紧贴刘海这一侧(leading)。
+            // 整体缩小一号(controlButton 的尺寸参数)。Spacer 放在最前面把按钮簇推到
+            // 这只耳朵的最右侧(真机反馈"整体还是往左挤了,应该往右移")。
             HStack(spacing: 8) {
+                Spacer(minLength: 0)
                 controlButton("backward.fill") { MusicPlaybackController.previousTrack() }
                 controlButton(poller.isPlayingNow ? "pause.fill" : "play.fill", primary: true) {
                     MusicPlaybackController.playPause()
                 }
                 controlButton("forward.fill") { MusicPlaybackController.nextTrack() }
-                Spacer(minLength: 0)
             }
             .frame(width: earWidth)
         }
         .padding(.horizontal, 10)
     }
 
+    // 用歌词这一行纯文本(不含逐字填色进度)当 MarqueeText 的 id——换到新的一句歌词才
+    // 重新测量/重新开始滚动,同一句歌词内部逐字变色的高频刷新(TimelineView 那部分)
+    // 不应该打断正在进行的滚动。
     private var lyricRow: some View {
+        MarqueeText(id: poller.currentLine?.plainText ?? "") {
+            lyricContent
+        }
+        .font(.system(size: 13, weight: .semibold))
+        .frame(maxHeight: .infinity)
+        .padding(.horizontal, 16)
+    }
+
+    private var lyricContent: some View {
         Group {
             if let words = poller.currentLine?.words, !words.isEmpty {
                 TimelineView(.animation(paused: !poller.isPlayingNow)) { context in
@@ -127,12 +137,7 @@ struct NotchLyricsView: View {
                     .shadow(color: .black.opacity(0.45), radius: 2, y: 1)
             }
         }
-        .font(.system(size: 13, weight: .semibold))
         .lineLimit(1)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .frame(maxHeight: .infinity)
-        .clipped()
-        .padding(.horizontal, 16)
     }
 
     // 逐字时长下限/过渡带宽度跟 LyricsOverlayView 用同一组经验取值(80ms/0.08),这两个
@@ -226,9 +231,9 @@ struct NotchLyricsView: View {
         .frame(height: Self.expandedExtraHeight, alignment: .top)
     }
 
+    // 真机反馈"去掉'下一句'这个字眼,直接显示下一句歌词内容就好"——不再加任何前缀标签。
     private var nextLineDisplayText: String {
-        guard let next = poller.nextLineText, !next.isEmpty else { return "" }
-        return L10n.t("下一句") + " · " + next
+        poller.nextLineText ?? ""
     }
 
     private static func timeString(ms: Int) -> String {
@@ -248,6 +253,76 @@ struct NotchLyricsView: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+    }
+}
+
+// 超长文字(歌名/歌词)靠自动来回滚动展示全部内容,而不是硬截断/省略号——真机反馈
+// "歌词和歌名一样,遇到太长的情况有滚动的方式来显示"。测量内容真实宽度 vs 容器宽度,
+// 只有真的溢出容器时才滚动,没溢出的短文字保持静止不动、不产生任何动画。滚动方式是
+// "停顿→滚到底→停顿→滚回起点"来回滚动,不是无限单向卷动,不需要为了卷动无缝衔接去
+// 复制一份内容拼接。
+//
+// id 参数控制"什么时候该重新测量、重新从头开始滚动"——歌词行内部逐字变色(由外面
+// TimelineView 驱动)不应该打断/重置正在进行的滚动,那只是同一句歌词内部的高亮进度
+// 在变,不是这一行内容本身换了;只有真的换了一句歌词、换了一首歌才应该重新开始。
+// Swift 不支持泛型类型里放 static stored property,这两个纯常量挪到文件作用域。
+private let marqueePixelsPerSecond: Double = 24
+private let marqueeHoldDuration: Double = 1.1
+
+private struct MarqueeText<Content: View>: View {
+    let id: AnyHashable
+    @ViewBuilder let content: () -> Content
+
+    @State private var contentWidth: CGFloat = 0
+    @State private var offset: CGFloat = 0
+    @State private var scrollTask: Task<Void, Never>?
+
+    var body: some View {
+        GeometryReader { outerProxy in
+            content()
+                .fixedSize(horizontal: true, vertical: false)
+                .background(
+                    GeometryReader { innerProxy in
+                        Color.clear.preference(key: MarqueeWidthKey.self, value: innerProxy.size.width)
+                    }
+                )
+                .offset(x: -offset)
+                .onPreferenceChange(MarqueeWidthKey.self) { width in
+                    contentWidth = width
+                    restart(containerWidth: outerProxy.size.width)
+                }
+                .onChange(of: id) {
+                    restart(containerWidth: outerProxy.size.width)
+                }
+        }
+        .clipped()
+        .onDisappear { scrollTask?.cancel() }
+    }
+
+    private func restart(containerWidth: CGFloat) {
+        scrollTask?.cancel()
+        offset = 0
+        let distance = contentWidth - containerWidth
+        guard distance > 4, containerWidth > 0 else { return }
+        let travelDuration = Double(distance) / marqueePixelsPerSecond
+        scrollTask = Task { @MainActor in
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: UInt64(marqueeHoldDuration * 1_000_000_000))
+                if Task.isCancelled { return }
+                withAnimation(.linear(duration: travelDuration)) { offset = distance }
+                try? await Task.sleep(nanoseconds: UInt64(travelDuration * 1_000_000_000) + UInt64(marqueeHoldDuration * 1_000_000_000))
+                if Task.isCancelled { return }
+                withAnimation(.linear(duration: travelDuration)) { offset = 0 }
+                try? await Task.sleep(nanoseconds: UInt64(travelDuration * 1_000_000_000))
+            }
+        }
+    }
+}
+
+private struct MarqueeWidthKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
     }
 }
 
