@@ -513,39 +513,36 @@ private struct AppearanceSettingsTab: View {
         // 说明性文字(截屏隐藏/歌词存储那两句)夹在控件中间当成普通一行,读起来像是漏了
         // 什么而不是备注。分组样式换来的排版全部是 SwiftUI 原生处理,不用手工调间距。
         Form {
-            Section(L10n.t("悬浮窗样式")) {
-                // 两种样式各自是完全独立的窗口控制器(经典/灵动岛),互斥显隐——切换
-                // 时把旧样式的控制器 setVisible(false)、新样式的 setVisible(true),
-                // 同时持久化 settings.overlayStyle。持久化在前、生效调用在后,跟这个
-                // 文件里锁定位置/数据源模式等既有 Picker/Toggle 的 Binding.set 写法
-                // 是同一个既有模式,不重新发明。
-                Picker(L10n.t("悬浮窗样式"), selection: Binding(
-                    get: { settings.overlayStyle },
+            Section(L10n.t("悬浮窗")) {
+                // 桌面悬浮歌词(经典悬浮窗)、灵动岛歌词是两个完全独立的展示位置,各自
+                // 独立开关,不互斥——可以同时开、只开一个、或都不开。最初做成互斥的单选
+                // "悬浮窗样式",用户反馈这两个应该分开,改成这样。每个开关只负责"生效"
+                // 这一个控制器自己的 setVisible,不碰另一个;首次打开某个样式时顺手把
+                // "截屏/录屏时隐藏"“暂停/无播放时隐藏"这两个已经配置好的偏好也应用上去——
+                // 否则那个控制器还停留在 init() 里的硬编码默认值,要等下次重启 App 走
+                // AppDelegate 那条初始化路径才会生效,期间会悄悄违背用户已经勾选的偏好。
+                Toggle(L10n.t("桌面悬浮歌词"), isOn: Binding(
+                    get: { settings.classicOverlayEnabled },
                     set: { newValue in
-                        settings.overlayStyle = newValue
-                        // 切换时不仅要互斥显隐,还要把"截屏/录屏时隐藏"“暂停/无播放时
-                        // 隐藏"这两个已经配置好的偏好重新应用到刚激活的那个控制器上——
-                        // 否则中途第一次切到某个样式时,那个控制器还停留在 init() 里的
-                        // 硬编码默认值(未隐藏/不跟随播放状态隐藏),要等下次重启 App 走
-                        // AppDelegate 那条初始化路径才会生效,期间会悄悄违背用户已经勾
-                        // 选的偏好。
-                        if newValue == "notch" {
-                            LyricsOverlayWindowController.shared.setVisible(false)
-                            NotchLyricsWindowController.shared.setVisible(true)
-                            NotchLyricsWindowController.shared.setHiddenFromCapture(settings.hideDuringScreenCapture)
-                            NotchLyricsWindowController.shared.setHideWhenNotPlaying(settings.hideWhenNotPlaying)
-                        } else {
-                            NotchLyricsWindowController.shared.setVisible(false)
-                            LyricsOverlayWindowController.shared.setVisible(true)
+                        settings.classicOverlayEnabled = newValue
+                        LyricsOverlayWindowController.shared.setVisible(newValue)
+                        if newValue {
                             LyricsOverlayWindowController.shared.setHiddenFromCapture(settings.hideDuringScreenCapture)
                             LyricsOverlayWindowController.shared.setHideWhenNotPlaying(settings.hideWhenNotPlaying)
                         }
                     }
-                )) {
-                    Text(L10n.t("经典")).tag("classic")
-                    Text(L10n.t("灵动岛")).tag("notch")
-                }
-                .pickerStyle(.menu)
+                ))
+                Toggle(L10n.t("灵动岛歌词"), isOn: Binding(
+                    get: { settings.notchOverlayEnabled },
+                    set: { newValue in
+                        settings.notchOverlayEnabled = newValue
+                        NotchLyricsWindowController.shared.setVisible(newValue)
+                        if newValue {
+                            NotchLyricsWindowController.shared.setHiddenFromCapture(settings.hideDuringScreenCapture)
+                            NotchLyricsWindowController.shared.setHideWhenNotPlaying(settings.hideWhenNotPlaying)
+                        }
+                    }
+                ))
             }
 
             Section(L10n.t("外观")) {
@@ -642,13 +639,14 @@ private struct AppearanceSettingsTab: View {
                     get: { settings.hideDuringScreenCapture },
                     set: { newValue in
                         settings.hideDuringScreenCapture = newValue
-                        // 应用到当前实际生效的那个控制器,不是永远写死经典那个——不然
-                        // 灵动岛样式下点这个开关,悄悄改的是没人在看的经典控制器,当前
-                        // 屏幕上的灵动岛胶囊完全不受影响。
-                        if settings.overlayStyle == "notch" {
-                            NotchLyricsWindowController.shared.setHiddenFromCapture(newValue)
-                        } else {
+                        // 两个悬浮窗现在互不排斥,可能同时开着——应用到当前每一个确实
+                        // 启用了的控制器,关闭的那个不碰(避免凭空构造出一个没人要的
+                        // 窗口,见 NotchLyricsWindowController 顶部注释的那条不变量)。
+                        if settings.classicOverlayEnabled {
                             LyricsOverlayWindowController.shared.setHiddenFromCapture(newValue)
+                        }
+                        if settings.notchOverlayEnabled {
+                            NotchLyricsWindowController.shared.setHiddenFromCapture(newValue)
                         }
                     }
                 ))
@@ -656,10 +654,11 @@ private struct AppearanceSettingsTab: View {
                     get: { settings.hideWhenNotPlaying },
                     set: { newValue in
                         settings.hideWhenNotPlaying = newValue
-                        if settings.overlayStyle == "notch" {
-                            NotchLyricsWindowController.shared.setHideWhenNotPlaying(newValue)
-                        } else {
+                        if settings.classicOverlayEnabled {
                             LyricsOverlayWindowController.shared.setHideWhenNotPlaying(newValue)
+                        }
+                        if settings.notchOverlayEnabled {
+                            NotchLyricsWindowController.shared.setHideWhenNotPlaying(newValue)
                         }
                     }
                 ))

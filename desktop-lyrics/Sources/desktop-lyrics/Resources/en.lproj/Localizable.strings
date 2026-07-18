@@ -93,9 +93,11 @@
 "在钉钉群里：群设置 → 智能群助手 → 添加机器人 → 自定义，创建后复制 Webhook 地址。安全设置建议选「加签」，把生成的密钥填进下面的「加签密钥」。" = "In your DingTalk group: Group Settings → Group Assistant → Add Robot → Custom, then copy the webhook URL after creating it. For security, we recommend choosing “Signature” and entering the generated secret in the “Signing Secret” field below.";
 "在飞书群里：设置 → 群机器人 → 添加机器人 → 自定义机器人，创建后复制 Webhook 地址。想加一层校验可以开启「签名校验」，把密钥填进下面的「签名密钥」。" = "In your Feishu group: Settings → Group Bots → Add Bot → Custom Bot, then copy the webhook URL after creating it. For an extra layer of verification, enable “Signature Verification” and enter the secret in the “Signing Secret” field below.";
 "外观" = "Appearance";
-"悬浮窗样式" = "Overlay Style";
-"经典" = "Classic";
-"灵动岛" = "Dynamic Island";
+"悬浮窗" = "Floating Overlay";
+"桌面悬浮歌词" = "Desktop Floating Lyrics";
+"灵动岛歌词" = "Dynamic Island Lyrics";
+"显示桌面悬浮歌词" = "Show Desktop Floating Lyrics";
+"显示灵动岛歌词" = "Show Dynamic Island Lyrics";
 "好的" = "OK";
 "字体" = "Font";
 "字号" = "Font Size";
@@ -140,7 +142,6 @@
 "无来源" = "No Source";
 "无歌词" = "No Lyrics";
 "时间轴" = "Timing";
-"显示悬浮歌词" = "Show Floating Lyrics";
 "显示罗马音" = "Show Romanization";
 "显示译文" = "Show Translation";
 "智能算法" = "Smart Matching";

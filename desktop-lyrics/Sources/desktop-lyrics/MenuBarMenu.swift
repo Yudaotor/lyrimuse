@@ -53,20 +53,20 @@ struct MenuBarMenu: View {
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
-        // "显示悬浮歌词"/"锁定位置"这两个 Toggle 具体读/写哪个控制器,取决于
-        // settings.overlayStyle 当下的值——用 if/else 各自拆成独立的小 View,而不是
-        // 在这里直接同时持有两个控制器的 @ObservedObject:两个控制器各自都是
+        // 桌面悬浮歌词、灵动岛歌词现在互不排斥,菜单里各自的开关也就都独立显示——只在
+        // settings 里对应那个开关确实开着时才显示/构造那个控制器:两个控制器各自都是
         // `static let shared`,真正引用到才会执行 init() 建窗口,而 init() 里订阅
         // PlaybackCoordinator 的 Combine sink 在订阅的一瞬间就会用当下的 isVisible
-        // (默认 true)触发一次 orderFront——如果不管当前样式是哪个都无条件持有两份
-        // @ObservedObject,只是点开一次菜单就会把没在用的那个控制器也构造出来、连带
-        // 把它的窗口显示到屏幕上。SwiftUI 的 if/else 只会真正构建被选中的那个分支
-        // 对应的 View,没被选中的分支连初始化都不会跑,借这个机制保证永远不会误碰
-        // 不该碰的那个控制器(这条不变量详见 NotchLyricsWindowController 顶部注释)。
-        if settings.overlayStyle == "notch" {
-            NotchOverlayMenuSection()
-        } else {
+        // (默认 true)触发一次 orderFront——如果不管设置里开没开都无条件持有两份
+        // @ObservedObject,只是点开一次菜单就会把没启用的那个控制器也构造出来、连带
+        // 把它的窗口显示到屏幕上。SwiftUI 的 if 只会真正构建条件为真的那个分支对应的
+        // View,条件为假的分支连初始化都不会跑,借这个机制保证永远不会误碰不该碰的
+        // 那个控制器(这条不变量详见 NotchLyricsWindowController 顶部注释)。
+        if settings.classicOverlayEnabled {
             ClassicOverlayMenuSection()
+        }
+        if settings.notchOverlayEnabled {
+            NotchOverlayMenuSection()
         }
         Divider()
         Toggle(L10n.t("开机启动"), isOn: $settings.launchAtLoginEnabled)
@@ -98,7 +98,7 @@ private struct ClassicOverlayMenuSection: View {
     @ObservedObject private var settings = AppSettings.shared
 
     var body: some View {
-        Toggle(L10n.t("显示悬浮歌词"), isOn: Binding(
+        Toggle(L10n.t("显示桌面悬浮歌词"), isOn: Binding(
             get: { overlay.isVisible },
             set: { overlay.setVisible($0) }
         ))
@@ -120,7 +120,7 @@ private struct NotchOverlayMenuSection: View {
     @ObservedObject private var overlay = NotchLyricsWindowController.shared
 
     var body: some View {
-        Toggle(L10n.t("显示悬浮歌词"), isOn: Binding(
+        Toggle(L10n.t("显示灵动岛歌词"), isOn: Binding(
             get: { overlay.isVisible },
             set: { overlay.setVisible($0) }
         ))
