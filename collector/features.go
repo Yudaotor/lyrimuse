@@ -42,7 +42,6 @@ var lyricsSourceDefaultOrder = []string{lyricSourceNetease, lyricSourceQQ, lyric
 
 type featureFlagsFile struct {
 	Lyrics               *bool `json:"lyrics,omitempty"`
-	LyricsFiles          *bool `json:"lyrics_files,omitempty"`
 	AlbumPrefetch        *bool `json:"album_prefetch,omitempty"`
 	StateRelay           *bool `json:"state_relay,omitempty"`
 	LastfmBridge         *bool `json:"lastfm_bridge,omitempty"`
@@ -78,7 +77,6 @@ type featureFlagsFile struct {
 // featureFlags is the resolved (never-nil) form consulted at every gate site.
 type featureFlags struct {
 	Lyrics               bool
-	LyricsFiles          bool
 	AlbumPrefetch        bool
 	StateRelay           bool
 	LastfmBridge         bool
@@ -118,7 +116,7 @@ func boolOr(p *bool, def bool) bool {
 
 // loadFeatureFlags reads the shared feature-toggle file (best-effort — missing
 // file / unparseable content all resolve to defaults below). Core behavior
-// toggles (lyrics/lyricsFiles/albumPrefetch) miss-field-defaults to true — a
+// toggles (lyrics/albumPrefetch) miss-field-defaults to true — a
 // pure increment that never silently changes existing behavior. The 6 toggles
 // that each require an external account (state relay / Last.fm bridge+mirror /
 // weekly digest / top-artists digest / push alerts) default to false instead
@@ -136,7 +134,6 @@ func loadFeatureFlags(path string) featureFlags {
 	}
 	return featureFlags{
 		Lyrics:               boolOr(f.Lyrics, true),
-		LyricsFiles:          boolOr(f.LyricsFiles, true),
 		AlbumPrefetch:        boolOr(f.AlbumPrefetch, true),
 		StateRelay:           boolOr(f.StateRelay, false),
 		LastfmBridge:         boolOr(f.LastfmBridge, false),

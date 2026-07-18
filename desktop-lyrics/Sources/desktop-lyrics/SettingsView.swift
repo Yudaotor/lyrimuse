@@ -250,15 +250,6 @@ private struct LyricsSettingsTab: View {
                         HelpButton(text: L10n.t("换到一首歌时，如果它属于某张专辑，会顺带在后台把同专辑里还没解析过的其它曲目也提前解析——封面无条件都会解析，歌词是否被预取取决于上面的「歌词在线匹配」开关是否开启。"))
                     }
                 }
-                Toggle(isOn: Binding(
-                    get: { features.lyricsFiles },
-                    set: { features.lyricsFiles = $0; Task { await features.save() } }
-                )) {
-                    HStack(spacing: 4) {
-                        Text(L10n.t("歌词文件夹作为权威源"))
-                        HelpButton(text: L10n.t("开启后，如果「歌词管理」窗口里已经手动导入/编辑过某首歌的歌词文件，播放这首歌时优先用那份文件，不会被联网解析的结果覆盖。"))
-                    }
-                }
             }
 
             // 2026-07-16:用户反馈"应该做到配置化，可以选择使用哪些源，然后还可以选择
@@ -361,23 +352,6 @@ private struct LyricsSettingsTab: View {
                 Toggle(L10n.t("显示罗马音"), isOn: $settings.showRomanization)
                 Toggle(L10n.t("显示译文"), isOn: $settings.showTranslation)
                 Toggle(L10n.t("双行显示(预览下一句歌词)"), isOn: $settings.showNextLinePreview)
-                Toggle(L10n.t("在状态栏显示当前歌词"), isOn: $settings.showLyricsInMenuBar)
-                if settings.showLyricsInMenuBar {
-                    LabeledContent(L10n.t("超过就截断")) {
-                        HStack(spacing: 8) {
-                            Slider(value: Binding(
-                                get: { Double(settings.menuBarLyricsMaxChars) },
-                                set: { settings.menuBarLyricsMaxChars = Int($0) }
-                            ), in: 20...120, step: 5)
-                            Text(String(format: L10n.t("%@ 字"), "\(settings.menuBarLyricsMaxChars)"))
-                                .foregroundStyle(.secondary)
-                                .monospacedDigit()
-                                .frame(width: 40, alignment: .trailing)
-                        }
-                    }
-                    Text(L10n.t("没超过就整行显示；超过这个长度会截断，鼠标悬停在状态栏上能看到完整这一行。"))
-                        .font(.caption).foregroundStyle(.secondary)
-                }
             }
 
             Section {
@@ -543,6 +517,26 @@ private struct AppearanceSettingsTab: View {
                         }
                     }
                 ))
+                // 从"歌词"tab 的"展示"分组搬过来——用户反馈"状态栏歌词也是个歌词展示
+                // 位置,应该跟桌面悬浮歌词/灵动岛歌词放一起",三个开关概念上都是"歌词
+                // 显示在哪"，不是三件互不相关的事。
+                Toggle(L10n.t("在状态栏显示当前歌词"), isOn: $settings.showLyricsInMenuBar)
+                if settings.showLyricsInMenuBar {
+                    LabeledContent(L10n.t("超过就截断")) {
+                        HStack(spacing: 8) {
+                            Slider(value: Binding(
+                                get: { Double(settings.menuBarLyricsMaxChars) },
+                                set: { settings.menuBarLyricsMaxChars = Int($0) }
+                            ), in: 20...120, step: 5)
+                            Text(String(format: L10n.t("%@ 字"), "\(settings.menuBarLyricsMaxChars)"))
+                                .foregroundStyle(.secondary)
+                                .monospacedDigit()
+                                .frame(width: 40, alignment: .trailing)
+                        }
+                    }
+                    Text(L10n.t("没超过就整行显示；超过这个长度会截断，鼠标悬停在状态栏上能看到完整这一行。"))
+                        .font(.caption).foregroundStyle(.secondary)
+                }
             }
 
             Section(L10n.t("外观")) {

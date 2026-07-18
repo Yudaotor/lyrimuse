@@ -112,7 +112,6 @@
 "已连接为 @%@" = "Connected as @%@";
 "已连接：%@" = "Connected: %@";
 "开启「截屏/录屏时隐藏」后,截图、录屏、视频会议共享屏幕都不会拍到悬浮歌词——但你自己在这台 Mac 上仍然正常看得见。" = "With \"Hide During Screenshots/Recording\" on, screenshots, screen recordings, and video call screen sharing won't capture the floating lyrics — but you'll still see them normally on this Mac.";
-"开启后，如果「歌词管理」窗口里已经手动导入/编辑过某首歌的歌词文件，播放这首歌时优先用那份文件，不会被联网解析的结果覆盖。" = "When enabled, if a song's lyrics file has already been manually imported or edited in the \"Lyrics Manager\" window, that file takes priority during playback and won't be overwritten by results fetched online.";
 "开机启动" = "Launch at Login";
 "恢复默认位置" = "Restore Default Location";
 "恢复默认外观" = "Restore Default Appearance";
@@ -170,7 +169,6 @@
 "歌词(LRC)" = "Lyrics (LRC)";
 "歌词在线匹配" = "Online Lyrics Matching";
 "歌词文件夹" = "Lyrics Folder";
-"歌词文件夹作为权威源" = "Use Lyrics Folder as Source of Truth";
 "歌词来源" = "Lyrics Sources";
 "歌词管理" = "Lyrics Manager";
 "歌词管理…" = "Lyrics Manager…";

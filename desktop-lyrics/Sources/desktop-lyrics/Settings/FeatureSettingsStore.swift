@@ -34,7 +34,6 @@ public enum LyricsSourceMode: String, CaseIterable, Identifiable, Codable {
 // 这里存的是 desktop-lyrics 这台机器上用户明确设置过的值。
 struct FeatureFlagsFile: Codable, Equatable {
     var lyrics: Bool?
-    var lyricsFiles: Bool?
     var albumPrefetch: Bool?
     var stateRelay: Bool?
     var lastfmBridge: Bool?
@@ -56,7 +55,6 @@ struct FeatureFlagsFile: Codable, Equatable {
 
     enum CodingKeys: String, CodingKey {
         case lyrics
-        case lyricsFiles = "lyrics_files"
         case albumPrefetch = "album_prefetch"
         case stateRelay = "state_relay"
         case lastfmBridge = "lastfm_bridge"
@@ -76,7 +74,7 @@ struct FeatureFlagsFile: Codable, Equatable {
     }
 }
 
-// "歌词"tab 的纯行为开关(lyrics/lyricsFiles/albumPrefetch 等)和"账号连接"tab 里各张
+// "歌词"tab 的纯行为开关(lyrics/albumPrefetch 等)和"账号连接"tab 里各张
 // 账号卡片的开关(stateRelay/lastfmBridge/lastfmMirrorScrobble/weeklyDigest/
 // topArtistsDigest/barkAlerts/webShowXxx)共用同一份数据层——读写
 // ~/.config/applemusic-nowplaying/applemusic-nowplaying-features.json,跟
@@ -92,7 +90,6 @@ public final class FeatureSettingsStore: ObservableObject {
     public static let shared = FeatureSettingsStore()
 
     @Published public var lyrics = true
-    @Published public var lyricsFiles = true
     @Published public var albumPrefetch = true
     // 2026-07-18:这 6 个都要连一个外部账号才有意义,改成默认关闭——用户反馈"非必需的
     // 都设置为默认不开启"。collector/features.go 的 boolOr 默认值要跟着一起改,否则
@@ -128,7 +125,7 @@ public final class FeatureSettingsStore: ObservableObject {
     private var savedSnapshot = FeatureFlagsFile()
     private var currentSnapshot: FeatureFlagsFile {
         FeatureFlagsFile(
-            lyrics: lyrics, lyricsFiles: lyricsFiles,
+            lyrics: lyrics,
             albumPrefetch: albumPrefetch, stateRelay: stateRelay, lastfmBridge: lastfmBridge,
             lastfmMirrorScrobble: lastfmMirrorScrobble, weeklyDigest: weeklyDigest,
             topArtistsDigest: topArtistsDigest, barkAlerts: barkAlerts,
@@ -167,7 +164,6 @@ public final class FeatureSettingsStore: ObservableObject {
             return
         }
         lyrics = f.lyrics ?? true
-        lyricsFiles = f.lyricsFiles ?? true
         albumPrefetch = f.albumPrefetch ?? true
         stateRelay = f.stateRelay ?? false
         lastfmBridge = f.lastfmBridge ?? false
