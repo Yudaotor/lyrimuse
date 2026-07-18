@@ -27,13 +27,18 @@ import DesktopLyricsCore
 //
 // 真机(有物理刘海)实测坐实两个问题、这里改成常显、内容整体下移:
 // 1) 最初"收起态空胶囊+hover 展开"的设计,真机上悬停才会显示,用户明确反馈"预期是
-//    常显"——歌词类信息本来就需要随时可见,不该藏在 hover 后面,砍掉 hover 触发的
-//    展开/收起这一层状态,永远渲染同一套内容。
+//    常显"——歌词类信息本来就需要随时可见,不该藏在 hover 后面,砍掉了 hover 才显示
+//    任何东西这层门槛,稳态(不 hover)永远显示"歌名+控制按钮+当前歌词"这一整套。
 // 2) 歌词文字这一行如果跟物理刘海本身占同一条 y 范围,会被刘海真实挡住一部分——物理
 //    刘海是屏幕硬件层面真实不发光的区域,不是"渲染层级"问题,任何 App 都不可能把内容
 //    "显示"在那个区域本身。真正可行的做法(参考 boring.notch/DynamicNotchKit 等真实
 //    刘海companion 应用的通用做法):可读内容整体让到刘海下方那一条,刘海本身所在的
 //    高度只留纯黑背景(视觉上跟物理刘海融为一体),不放任何文字/图标。
+//
+// 2026-07-18 再次调整:hover 展开这个状态又加回来了,但跟最初那版语义完全不同——
+// 最初是"不 hover 就什么都没有",现在是"稳态本来就已经完整可用,hover 只是在下面
+// 多展开一块补充信息(下一句歌词预览 + 迷你进度条)",调研过 boring.notch 等真实
+// 参考实现后确认这个补充思路是合理的,详见 isExpanded/expandedExtraHeight。
 @MainActor
 final class NotchLyricsWindowController: NSWindowController, ObservableObject {
     static let shared = NotchLyricsWindowController()
@@ -49,6 +54,11 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject {
     // 不发光的区域,横向也会跟纵向一样把落在这个范围内的内容整个挡掉。NotchLyricsView
     // 读这个属性把顶部这一行让出中间 notchWidth 宽度的空当,按钮只放在左右两侧。
     @Published private(set) var notchWidth: CGFloat = 0
+    // 鼠标是否悬停在这个悬浮窗上——由 NotchLyricsView 的 .onHover 驱动,决定窗口要不要
+    // 多撑出 expandedExtraHeight 那一块、以及 NotchLyricsView 要不要渲染下一句预览+
+    // 迷你进度条这部分补充内容。稳态(false)本身已经是"歌名+控制+当前歌词"完整可用的
+    // 一套,这个状态只影响"要不要在下面多展开一块",不影响稳态内容本身是否显示。
+    @Published private(set) var isExpanded: Bool = false
 
     // 没有真刘海的屏幕(比如 MacBook Air 全系不带刘海,只有 14"/16" MacBook Pro
     // 2021 起才有)退到的固定兜底高度:不是"关掉整个功能",是换一套不依赖真刘海几何
@@ -57,9 +67,21 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject {
     // 常显内容行(一行歌词 + 3 个播放控制按钮)的宽度/高度经验取值——窗口总高度 =
     // 刘海本身高度(或兜底高度)+ 这一行高度,让内容行完整落在刘海下方。
     private static let contentSize = NSSize(width: 360, height: 44)
+    // hover 展开时在 contentSize 之外额外撑出的高度,放下一句歌词预览 + 迷你进度条
+    // 这两样调研后确定值得加的补充信息(调研结论:封面/更多控制按钮都不如这两样贴合
+    // "歌词类产品"的定位,专辑封面另外还受限于本地播放源目前没有转发 artwork 数据)。
+    private static let expandedExtraHeight: CGFloat = 40
 
     private var isPlayingObserver: AnyCancellable?
     private var screenParamsObserver: NSObjectProtocol?
+    // 真机实测坐实的一个坑:窗口 hover 展开/收起时靠 autoresizingMask 让 NSHostingView
+    // 跟着 window.setFrame 自动同步尺寸——AppKit 层面这个同步是真的发生了(window.frame/
+    // contentView.frame 都能读到新的高度),但 NSHostingView 内部的 SwiftUI 布局树没有
+    // 跟着重新走一遍布局,导致新撑出来的那一段区域(展开态多出来的 40pt)在屏幕上什么都
+    // 不画,肉眼看起来完全没有展开。直接持有这个引用、在 recomputeGeometry 里手动把它的
+    // frame 也显式设一遍(而不是只信任 autoresizingMask 那条隐式路径),能让 SwiftUI 真正
+    // 重新布局这一块。
+    private var hostingView: NSHostingView<NotchLyricsView>?
 
     convenience init() {
         // 初始 contentRect 只是占位——真正的尺寸/位置由下面 recomputeGeometry() 按
@@ -72,6 +94,7 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject {
         hosting.frame = NSRect(origin: .zero, size: placeholder)
         hosting.autoresizingMask = [.width, .height]
         panel.contentView = hosting
+        hostingView = hosting
 
         recomputeGeometry(animate: false)
 
@@ -117,6 +140,16 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject {
         window?.sharingType = hidden ? .none : .readWrite
     }
 
+    // NotchLyricsView 的 .onHover 调这个。用 AppKit 原生的 NSWindow.setFrame(animate:)
+    // 而不是 SwiftUI 的 withAnimation 包一层——跟经典悬浮窗
+    // LyricsOverlayWindowController.updateHeight() 同一个既有模式,窗口级尺寸变化交给
+    // AppKit 自己的动画,不叠加两套动画系统。
+    func setExpanded(_ expanded: Bool) {
+        guard expanded != isExpanded else { return }
+        isExpanded = expanded
+        recomputeGeometry(animate: false)
+    }
+
     private func updateActualVisibility(isPlayingNow: Bool) {
         let shouldShow = isVisible && (!hideWhenNotPlaying || isPlayingNow)
         // orderFrontRegardless(),不是 orderFront(nil)——这个 App 是 .accessory 策略、
@@ -154,17 +187,17 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject {
     }
 
     // 顶边固定贴在屏幕最顶端(screen.frame.maxY)、水平居中对齐刘海中心点、宽度固定
-    // 为 contentSize.width、总高度 = 刘海高度 + 内容行高度——常显,不再有收起/展开
-    // 两态,真机实测反馈"预期是常显"之后砍掉了 hover 触发的尺寸变化,这里也就不再
-    // 需要 animate 参数所服务的那次过渡动画,只在外接显示器插拔等屏幕配置变化时重新
-    // 算一遍。用 NSScreen.main(当前有键盘焦点/菜单栏所在的那块屏幕)而不是记忆某一块
-    // 固定屏幕——多屏环境下,这跟"灵动岛只应该出现在当前主屏"这个直觉一致。
+    // 为 contentSize.width、总高度 = 刘海高度 + 内容行高度(+ hover 展开时再加
+    // expandedExtraHeight)。用 NSScreen.main(当前有键盘焦点/菜单栏所在的那块屏幕)
+    // 而不是记忆某一块固定屏幕——多屏环境下,这跟"灵动岛只应该出现在当前主屏"这个
+    // 直觉一致。
     private func recomputeGeometry(animate: Bool) {
         guard let window, let screen = NSScreen.main else { return }
         let geo = Self.geometry(for: screen)
         contentTopInset = geo.notchHeight
         notchWidth = geo.notchWidth
-        let size = NSSize(width: Self.contentSize.width, height: geo.notchHeight + Self.contentSize.height)
+        let extra = isExpanded ? Self.expandedExtraHeight : 0
+        let size = NSSize(width: Self.contentSize.width, height: geo.notchHeight + Self.contentSize.height + extra)
         let frame = NSRect(
             x: geo.centerX - size.width / 2,
             y: screen.frame.maxY - size.height,
@@ -172,5 +205,6 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject {
             height: size.height
         )
         window.setFrame(frame, display: true, animate: animate)
+        hostingView?.frame = NSRect(origin: .zero, size: size)
     }
 }

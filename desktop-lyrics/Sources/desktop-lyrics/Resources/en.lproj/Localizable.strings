@@ -10,6 +10,7 @@
 "打开设置" = "Open Settings";
 "播放/暂停" = "Play/Pause";
 "下一首" = "Next Track";
+"下一句" = "Next Line";
 "上一首" = "Previous Track";
 "开启 Apple Music 自动化权限？" = "Enable Apple Music Automation Access?";
 "desktop-lyrics 可以在本地模式下读取 Apple Music 的精确播放进度(误差 <0.1 秒)，需要系统「自动化」权限允许控制 Music.app。不授权也能正常使用——播放进度会改用估算值，可能有 1-2 秒误差。可以随时在设置里再次开启。" = "In local mode, desktop-lyrics can read Apple Music's precise playback position (accurate to <0.1s), which needs system \"Automation\" access to control Music.app. It works fine without it too — playback position falls back to an estimate that may drift 1-2 seconds. You can turn this on anytime later in Settings.";
