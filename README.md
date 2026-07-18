@@ -149,6 +149,7 @@ git clone git@github.com:Yudaotor/nowplaying.git web-page
 | 自动化权限引导 | 首次启动引导获取"自动化"权限(读 Apple Music 精确播放进度用)，设置里能看到当前授权状态、重新请求或跳转系统设置；没有这个权限也能正常使用，播放进度改用估算值 | `desktop-lyrics/Settings/MusicAutomationPermission.swift` | 设置「歌词」tab「精确追踪 Apple Music 播放进度」开关 + 「通用」tab「权限」分区 |
 | 全局快捷键 | 显示/隐藏悬浮歌词、锁定/解锁位置、打开歌词管理、打开设置、播放/暂停、上一首/下一首，共 7 个动作，默认不绑定任何按键 | `desktop-lyrics/Settings/GlobalHotkeys.swift` | 设置「通用」tab「快捷键」分区，逐项自己录制 |
 | 悬浮窗播放控制 | 鼠标悬停在悬浮窗上浮现播放/暂停、上一首、下一首三个按钮；位置锁定时不生效（锁定本身就会让窗口点击穿透） | `desktop-lyrics/UI/LyricsOverlayView.swift` | 无需开关，未锁定位置时自动可用 |
+| 灵动岛/刘海样式悬浮歌词 | 贴着刘海（或无刘海机型的居中兜底胶囊）的小窗，平时收起，鼠标悬停展开显示一行歌词+播放控制；与经典悬浮窗完全独立、互斥显隐 | `desktop-lyrics/UI/NotchLyrics*.swift` | 设置「外观」tab「悬浮窗样式」选「灵动岛」 |
 | 歌词管理窗口 | 查看/手改/删除/重新搜索候选每首歌的歌词，改动会导出成独立 `.lrc` 文件 | `desktop-lyrics/` | 菜单栏「歌词管理…」 |
 | 歌词多源解析 | 网易云/QQ音乐/酷狗/LRCLIB 四源都查一遍、取打分最高的（含逐字时间轴权重） | `collector/enrich.go` | 设置里「歌词在线匹配」开关；「歌词来源」可单独勾选启用哪几个源 |
 | 歌词文件夹作为权威源 | `~/.config/applemusic-nowplaying/lyrics/` 下的纯文本文件可以直接手改，collector 重启时导入生效 | `collector/lyricsimport.go`/`lyricsexport.go` | 设置里「歌词文件夹作为权威源」开关 |
