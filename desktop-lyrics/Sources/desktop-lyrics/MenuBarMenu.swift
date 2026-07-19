@@ -48,8 +48,18 @@ struct MenuBarLabel: View {
             // 用 NSAlert 走 AppDelegate 正是为了绕开这个时序问题,见 hasCompletedOnboarding
             // 迁移注释)。这个 onAppear 本身就是"整个 App 生命周期内确定只跑一次"的
             // 挂载点,直接在这里判断+打开,不需要再绕一层。
+            //
+            // 真机实测坐实的坑:直接在这个 onAppear 里同步调 NSApp.activate+openWindow
+            // 完全不生效——这一刻是整个 App 启动过程里最早的时间点之一,系统这时候还没
+            // 走完把这个 accessory 策略 App 真正"启动完成"的那套流程,activate()/
+            // openWindow() 这两个调用本身不报错,但窗口要么根本没建出来、要么建出来立刻
+            // 被吞掉,肉眼完全看不到。"设置…"/"歌词管理…"这两个菜单按钮之所以没踩到
+            // 这个坑,是因为它们永远是用户手动点出来的、那时候 App 早已经完全启动稳定。
+            // 加一个不长的延迟,让启动流程先跑完再发起,实测坐实这样就能稳定弹出来。
             if !settings.hasCompletedOnboarding {
-                AppActions.shared.openOnboarding?()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    AppActions.shared.openOnboarding?()
+                }
             }
         }
     }
@@ -97,12 +107,6 @@ struct MenuBarMenu: View {
         Button(L10n.t("歌词管理…")) {
             NSApp.activate(ignoringOtherApps: true)
             openWindow(id: "lyrics-manager")
-        }
-        // 首次启动那次自动展示的完整引导向导,这里是唯一的手动重新入口——想再看一遍
-        // (或者当时随手关掉了)不用去改设置/清缓存,直接点这个。
-        Button(L10n.t("重新查看引导向导…")) {
-            NSApp.activate(ignoringOtherApps: true)
-            openWindow(id: "onboarding")
         }
         Divider()
         Button(L10n.t("退出")) { NSApplication.shared.terminate(nil) }
