@@ -488,6 +488,21 @@ private struct AppearanceSettingsTab: View {
         settings.textShadowColorHex = theme.textShadowColorHex
     }
 
+    // 当前四个配色字段正好等于哪个内置预设/自定义主题就显示它的名字,谁都不等于
+    // (比如套用之后又手动微调过某个颜色)就显示"自定义"——这是"使用内置预设"这个
+    // Menu 唯一的选中反馈来源,见调用点注释。
+    private var currentColorThemeLabel: String {
+        let current = ColorTheme(
+            name: "",
+            foregroundColorHex: settings.foregroundColorHex,
+            backgroundColorHex: settings.backgroundColorHex,
+            textShadowEnabled: settings.textShadowEnabled,
+            textShadowColorHex: settings.textShadowColorHex
+        )
+        let all = ColorTheme.builtInPresets + settings.customColorThemes
+        return all.first { $0.hasSameColors(as: current) }?.name ?? L10n.t("自定义")
+    }
+
     var body: some View {
         // .formStyle(.grouped) 是 macOS 13+ 原生"系统设置"式外观(圆角分组卡片+
         // 灰色小标题+尾注),换掉原来 Form 默认的纯列表样式——原来的问题:每个 Section
@@ -565,9 +580,19 @@ private struct AppearanceSettingsTab: View {
                 // 相关的四个字段(文字/背景/阴影颜色+阴影开关),不含字体/字号——那是排版,
                 // 跟配色是两回事,不该被同一个"主题"捆在一起改(见 ColorTheme.swift)。
                 // 套用即时生效,跟下面手动挪动色板是同一套 Binding,没有额外的"应用"步骤。
-                Menu(L10n.t("使用内置预设")) {
+                // Menu 的标签本身显示"当前配色正好等于哪个主题"(不等于任何一个就显示
+                // "自定义")——真机反馈"选了别的也看不出变化",根因是 Menu 标签原来固定
+                // 写死"使用内置预设"这几个字,不管点了哪个都不会变,虽然颜色其实已经真的
+                // 套用上了,但用户完全看不出来。现在标签本身就是最直接的反馈。
+                Menu(currentColorThemeLabel) {
                     ForEach(ColorTheme.builtInPresets) { theme in
                         Button(theme.name) { applyColorTheme(theme) }
+                    }
+                    if !settings.customColorThemes.isEmpty {
+                        Divider()
+                        ForEach(settings.customColorThemes) { theme in
+                            Button(theme.name) { applyColorTheme(theme) }
+                        }
                     }
                 }
                 ForEach(settings.customColorThemes) { theme in
