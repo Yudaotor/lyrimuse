@@ -166,25 +166,22 @@ struct LyricsOverlayView: View {
         .buttonStyle(.plain)
     }
 
-    // 没有在播放时(currentLine 必为 nil,见 LocalPlaybackSource.apply()/clearIfWasPlaying())
-    // 不该渲染背景卡片/"♪"占位符——真机反馈"没有在播放但悬浮歌词还在":配色主题加了
-    // 深色卡片/浅色卡片这类不透明背景之后,原来"没歌词就显示一个淡淡的♪"这条兜底分支
-    // 变成一块明显的空卡片持续挂在屏幕上,不像以前默认全透明背景时那样几乎看不出来。
-    // 这里不影响"暂停"场景——暂停时 currentLine 同样会被清空(paused 分支 anchor=nil
-    // 连带清 currentLine,见 apply()),没有单独区分"暂停"和"彻底没在放"两种状态,统一
-    // 按"当前没有可展示的歌词内容"处理,跟 hideWhenNotPlaying(整个窗口隐藏)是两回事——
-    // 那个开关默认关着,这里改的是"窗口还在,但没内容时不画多余的卡片/占位符"。
-    private var hasContentToShow: Bool { poller.isPlayingNow }
-
+    // 2026-07-19 再次调整:曾经在这里加过"没在播放就不画背景卡片/占位符"的判断,用户
+    // 反馈这跟"暂停/无播放时隐藏"(hideWhenNotPlaying,见 LyricsOverlayWindowController)
+    // 职责重叠了——那个开关本来就是给"没播放时要不要隐藏"这件事准备的入口,这里另开一条
+    // 隐藏逻辑,两条路径都在做同一件事,视觉上完全分不出这个开关到底有没有开,反而让人
+    // 以为开关失效了。撤回,把"没播放时要不要隐藏"这个决定权完整交还给那一个开关:关闭时
+    // (默认)窗口还在、内容也照常画(哪怕只是这个"♪"占位符),想要没播放时不显示,就该去
+    // 设置里打开那个开关,而不是指望内容这一层自己偷偷判断。
     @ViewBuilder
     private var overlayBackground: some View {
-        if settings.backgroundIsVisible && hasContentToShow {
+        if settings.backgroundIsVisible {
             RoundedRectangle(cornerRadius: overlayBackgroundCornerRadius, style: .continuous)
                 .fill(settings.backgroundColor)
         } else {
-            // 未开启背景色、或者当前没有可展示内容时,都保留原来近乎透明的拖拽捕获层——
-            // 纯透明区域有时候完全接不到拖拽手势,这里给个极淡的背景让
-            // isMovableByWindowBackground 在整块区域都能生效。
+            // 未开启背景色(默认状态)时保留原来近乎透明的拖拽捕获层——纯透明区域有时候
+            // 完全接不到拖拽手势,这里给个极淡的背景让 isMovableByWindowBackground 在
+            // 整块区域都能生效。
             Color.black.opacity(0.001)
         }
     }
@@ -233,10 +230,7 @@ struct LyricsOverlayView: View {
                 .foregroundStyle(settings.foregroundColor)
                 .fixedSize(horizontal: false, vertical: true)
                 .lyricsTextShadow(settings.textShadowEnabled, color: settings.textShadowColor)
-        } else if hasContentToShow {
-            // 正在播放、但这首歌还没解析出歌词(纯音乐/刚换歌解析还没完成)才显示这个
-            // 占位符——真的没在播放时(hasContentToShow==false)不画,见 overlayBackground
-            // 同一处注释。
+        } else {
             Text("♪")
                 .font(settings.mainFont)
                 .foregroundStyle(settings.foregroundColor.opacity(0.3))
