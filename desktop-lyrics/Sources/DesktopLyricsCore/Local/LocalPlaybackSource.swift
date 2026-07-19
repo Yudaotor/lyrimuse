@@ -103,6 +103,19 @@ public final class LocalPlaybackSource: ObservableObject {
         if newNext != nextLineText { nextLineText = newNext }
     }
 
+    // nil 快照(真的没有任何曲目在加载)和"有曲目但不是 Apple Music"共用同一套清理——
+    // title/artist/album 故意不清空,保留"最近一次 Apple Music 播放"这份信息,跟原有
+    // "暂停"分支的既有行为一致,见两处调用点各自的注释。
+    private func clearIfWasPlaying() {
+        if isPlayingNow {
+            isPlayingNow = false
+            anchor = nil
+            currentLine = nil
+            nextLineText = nil
+            stopFastTimer()
+        }
+    }
+
     private func poll() {
         // 两个都是同步阻塞调用(内部各自 fork 子进程等待退出),一起挪到后台线程跑,
         // 避免卡住主线程/UI。
@@ -123,13 +136,18 @@ public final class LocalPlaybackSource: ObservableObject {
                 // 只是多加了 isPlayingNow=false——title/artist/album 不清空,跟"暂停"时
                 // 保留最近播放信息的既有行为保持一致。
                 logger.error("snapshot failed (media-control 不可用或解析失败,或者没有曲目在播放)")
-                if isPlayingNow {
-                    isPlayingNow = false
-                    anchor = nil
-                    currentLine = nil
-                    nextLineText = nil
-                    stopFastTimer()
-                }
+                clearIfWasPlaying()
+                return
+            }
+            // 系统级 Now Playing 会话不只 Apple Music 会占——网页视频(Safari/Chrome 里
+            // 放的 bilibili 等)、Podcasts 等任何注册了 MPNowPlayingInfoCenter 的 App 都能
+            // 抢占这个焦点,用户反馈"只有 Apple Music 才该算"。isMusicApp 非 true 时按
+            // "没有 Apple Music 在播"处理,跟上面 nil 快照走同一套清理逻辑——不清空
+            // title/artist/album(保留"最近播放的 Apple Music 曲目"这份信息,不被网页
+            // 视频的标题覆盖显示)。
+            guard snapshot.isMusicApp == true else {
+                logger.debug("snapshot ignored: not Apple Music (isMusicApp=\(String(describing: snapshot.isMusicApp)))")
+                clearIfWasPlaying()
                 return
             }
             logger.debug("snapshot ok: playing=\(snapshot.playing == true) livePos=\(livePosition != nil)")
