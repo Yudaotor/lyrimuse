@@ -807,13 +807,13 @@ private struct GeneralSettingsTab: View {
                 Toggle(L10n.t("开机启动"), isOn: $settings.launchAtLoginEnabled)
             }
             Section(L10n.t("快捷键")) {
-                KeyboardShortcuts.Recorder(L10n.t("显示/隐藏悬浮歌词"), name: .toggleOverlay)
-                KeyboardShortcuts.Recorder(L10n.t("锁定/解锁位置"), name: .toggleLockPosition)
-                KeyboardShortcuts.Recorder(L10n.t("打开歌词管理"), name: .openLyricsManagerHotkey)
-                KeyboardShortcuts.Recorder(L10n.t("打开设置"), name: .openSettingsHotkey)
-                KeyboardShortcuts.Recorder(L10n.t("播放/暂停"), name: .playPauseHotkey)
-                KeyboardShortcuts.Recorder(L10n.t("下一首"), name: .nextTrackHotkey)
-                KeyboardShortcuts.Recorder(L10n.t("上一首"), name: .previousTrackHotkey)
+                ShortcutRecorder(L10n.t("显示/隐藏悬浮歌词"), name: .toggleOverlay)
+                ShortcutRecorder(L10n.t("锁定/解锁位置"), name: .toggleLockPosition)
+                ShortcutRecorder(L10n.t("打开歌词管理"), name: .openLyricsManagerHotkey)
+                ShortcutRecorder(L10n.t("打开设置"), name: .openSettingsHotkey)
+                ShortcutRecorder(L10n.t("播放/暂停"), name: .playPauseHotkey)
+                ShortcutRecorder(L10n.t("下一首"), name: .nextTrackHotkey)
+                ShortcutRecorder(L10n.t("上一首"), name: .previousTrackHotkey)
             }
         }
         .formStyle(.grouped)
