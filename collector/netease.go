@@ -189,8 +189,12 @@ func resolveNeteaseInfo(artist, title, album string) neteaseInfo {
 				looseCands = append(looseCands, cand{s, sc})
 			}
 		}
-		bestOf := func(cands []cand) *neSong {
-			if len(cands) == 1 {
+		// strict:looseCands 传 true——这批候选标题本身就带着"(Extended)"/"(Live)"/
+		// "(Instrumental)"这类版本限定词,天然就是"另一个版本",唯一候选也不能免检直接信,
+		// 见下面调用点分别传参处的实测坐实案例。exactCands 传 false,保留原有"唯一精确
+		// 同名候选、专辑名对不上也认"的既有行为(大鱼/陶喆等场景已经验证过,不能收紧)。
+		bestOf := func(cands []cand, strict bool) *neSong {
+			if len(cands) == 1 && !(strict && album != "" && cands[0].sc == 0) {
 				return cands[0].s // 唯一候选,没有歧义,直接信
 			}
 			// 多条候选(有歧义)→ 要求专辑分>0 才采信,选分最高的;都是0就整体放弃。
@@ -218,12 +222,25 @@ func resolveNeteaseInfo(artist, title, album string) neteaseInfo {
 		// 里等着,却因为上面这条直接 return 被拦在门外,导致这首歌的网易云链接/封面都解析
 		// 不出来。
 		if len(exactCands) > 0 {
-			if c := bestOf(exactCands); c != nil {
+			if c := bestOf(exactCands, false); c != nil {
 				return c
 			}
 		}
+		// 2026-07-19 真机实测坐实:looseCands 的"唯一候选直接信"曾经也是无条件生效,
+		// 结果被"查询词带上本地专辑名"这条既有优化(见上面 queries 构造处注释,王力宏
+		// 《落叶归根》案例)反噬——迈克尔杰克逊《Billie Jean》(本地专辑"HIStory - PAST,
+		// PRESENT AND FUTURE - BOOK I")查询词带上这个很长的专辑名之后,网易云自己的
+		// 全文搜索排序把其它一堆同名候选(Thriller/Ultimate Collection/Live 等等,
+		// 用不带专辑名的更简单查询词能查到一大批)全部挤出了 limit=15 的结果窗口,只剩
+		// "Billie Jean (Extended)"(专辑"Billie Jean / Instrumental",跟目标专辑毫无
+		// 关系、其实是1983年原始单曲版本)这一条恰好通过标题/歌手校验——"唯一候选"这个
+		// 免检条件被这个查询词副作用意外触发,选出了错误版本的封面。looseCands 天然都是
+		// "标题带版本限定词"的候选(不然早被分进 exactCands 了),比 exactCands 更容易
+		// 出现这种"看似唯一、其实只是被这一次查询词意外筛剩下"的假象,收紧成"本地有专辑名
+		// 时,唯一候选也必须专辑分>0 才采信",专辑分对不上就整体放弃、交给 QQ 音乐兜底
+		// (宁可没有,也不要错,跟这个函数其它几处判断同一个原则)。
 		if len(looseCands) > 0 {
-			return bestOf(looseCands)
+			return bestOf(looseCands, true)
 		}
 		return nil
 	}
