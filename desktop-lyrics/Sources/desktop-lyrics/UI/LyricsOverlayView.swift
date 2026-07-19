@@ -166,15 +166,25 @@ struct LyricsOverlayView: View {
         .buttonStyle(.plain)
     }
 
+    // 没有在播放时(currentLine 必为 nil,见 LocalPlaybackSource.apply()/clearIfWasPlaying())
+    // 不该渲染背景卡片/"♪"占位符——真机反馈"没有在播放但悬浮歌词还在":配色主题加了
+    // 深色卡片/浅色卡片这类不透明背景之后,原来"没歌词就显示一个淡淡的♪"这条兜底分支
+    // 变成一块明显的空卡片持续挂在屏幕上,不像以前默认全透明背景时那样几乎看不出来。
+    // 这里不影响"暂停"场景——暂停时 currentLine 同样会被清空(paused 分支 anchor=nil
+    // 连带清 currentLine,见 apply()),没有单独区分"暂停"和"彻底没在放"两种状态,统一
+    // 按"当前没有可展示的歌词内容"处理,跟 hideWhenNotPlaying(整个窗口隐藏)是两回事——
+    // 那个开关默认关着,这里改的是"窗口还在,但没内容时不画多余的卡片/占位符"。
+    private var hasContentToShow: Bool { poller.isPlayingNow }
+
     @ViewBuilder
     private var overlayBackground: some View {
-        if settings.backgroundIsVisible {
+        if settings.backgroundIsVisible && hasContentToShow {
             RoundedRectangle(cornerRadius: overlayBackgroundCornerRadius, style: .continuous)
                 .fill(settings.backgroundColor)
         } else {
-            // 未开启背景色(默认状态)时保留原来近乎透明的拖拽捕获层——纯透明区域有时候
-            // 完全接不到拖拽手势,这里给个极淡的背景让 isMovableByWindowBackground 在
-            // 整块区域都能生效。
+            // 未开启背景色、或者当前没有可展示内容时,都保留原来近乎透明的拖拽捕获层——
+            // 纯透明区域有时候完全接不到拖拽手势,这里给个极淡的背景让
+            // isMovableByWindowBackground 在整块区域都能生效。
             Color.black.opacity(0.001)
         }
     }
@@ -223,7 +233,10 @@ struct LyricsOverlayView: View {
                 .foregroundStyle(settings.foregroundColor)
                 .fixedSize(horizontal: false, vertical: true)
                 .lyricsTextShadow(settings.textShadowEnabled, color: settings.textShadowColor)
-        } else {
+        } else if hasContentToShow {
+            // 正在播放、但这首歌还没解析出歌词(纯音乐/刚换歌解析还没完成)才显示这个
+            // 占位符——真的没在播放时(hasContentToShow==false)不画,见 overlayBackground
+            // 同一处注释。
             Text("♪")
                 .font(settings.mainFont)
                 .foregroundStyle(settings.foregroundColor.opacity(0.3))
