@@ -270,6 +270,17 @@ func resolveNeteaseInfo(artist, title, album string) neteaseInfo {
 		return ""
 	}
 
+	// limit=30(原来是15)——2026-07-19 真机实测坐实:紧接上面 looseCands 收紧那次改动
+	// 之后,《Billie Jean》这首歌的正确候选(网易云上真实存在,专辑名跟本地"HIStory..."
+	// 完全对得上、albumScore=200)压根没有出现在带专辑名那条查询词(queries 里第一条,
+	// 王力宏《落叶归根》案例引入的优化)的前 15 条结果里——直接实测过把这条查询词的
+	// limit 提到 60 依然找不到,说明"带专辑名"这个查询词本身对这首歌的检索排序是有害的,
+	// 不是"结果窗口不够大"能解的;但去掉专辑名的那条兜底查询词(queries 第二条)在
+	// limit=30 时就能在第 21 位命中这条正确候选。把所有查询词统一加大 limit 到 30,
+	// 让"不带专辑名"这条兜底查询词有机会捞到这条本来就存在、只是排得靠后的正确候选,
+	// 不需要为"带专辑名"那条查询词单独排除/回退(它对这首歌找不到东西时不会返回任何
+	// 可用候选,自然会让后续查询词的结果生效,见下面 chosen 只在 albumScore 更高时才
+	// 覆盖的逻辑)。
 	var chosen *neSong
 	var nameOnlyArtist string
 	for _, q := range queries {
@@ -278,7 +289,7 @@ func resolveNeteaseInfo(artist, title, album string) neteaseInfo {
 				Songs []neSong `json:"songs"`
 			} `json:"result"`
 		}
-		if err := get("https://music.163.com/api/search/get/web?type=1&limit=15&s="+neturl.QueryEscape(q), &r); err != nil {
+		if err := get("https://music.163.com/api/search/get/web?type=1&limit=30&s="+neturl.QueryEscape(q), &r); err != nil {
 			continue
 		}
 		if c := pick(r.Result.Songs); c != nil {
