@@ -456,6 +456,8 @@ private struct LyricsSettingsTab: View {
 
 private struct AppearanceSettingsTab: View {
     @ObservedObject private var settings = AppSettings.shared
+    @State private var showSaveThemeAlert = false
+    @State private var newThemeName = ""
 
     // 精选常用字体,而不是列出这台机器上全部两百多个已安装字体族(选不过来是用户
     // 2026-07-14 的原话反馈)。清单来源是真实调研,不是凭印象挑的:
@@ -478,6 +480,13 @@ private struct AppearanceSettingsTab: View {
         let installed = Set(NSFontManager.shared.availableFontFamilies)
         return candidates.filter { installed.contains($0) }
     }()
+
+    private func applyColorTheme(_ theme: ColorTheme) {
+        settings.foregroundColorHex = theme.foregroundColorHex
+        settings.backgroundColorHex = theme.backgroundColorHex
+        settings.textShadowEnabled = theme.textShadowEnabled
+        settings.textShadowColorHex = theme.textShadowColorHex
+    }
 
     var body: some View {
         // .formStyle(.grouped) 是 macOS 13+ 原生"系统设置"式外观(圆角分组卡片+
@@ -551,6 +560,36 @@ private struct AppearanceSettingsTab: View {
             }
 
             Section(L10n.t("外观")) {
+                // 配色主题——内置预设一键套用+把当前调好的配色另存复用,对标 PlayStatus/
+                // Lyricify/AlgerMusicPlayer/HotLyric/VutronMusic 都有的这层。只打包"配色"
+                // 相关的四个字段(文字/背景/阴影颜色+阴影开关),不含字体/字号——那是排版,
+                // 跟配色是两回事,不该被同一个"主题"捆在一起改(见 ColorTheme.swift)。
+                // 套用即时生效,跟下面手动挪动色板是同一套 Binding,没有额外的"应用"步骤。
+                Menu(L10n.t("使用内置预设")) {
+                    ForEach(ColorTheme.builtInPresets) { theme in
+                        Button(theme.name) { applyColorTheme(theme) }
+                    }
+                }
+                ForEach(settings.customColorThemes) { theme in
+                    HStack {
+                        Button(theme.name) { applyColorTheme(theme) }
+                            .buttonStyle(.plain)
+                        Spacer()
+                        Button {
+                            settings.customColorThemes.removeAll { $0.id == theme.id }
+                        } label: {
+                            Image(systemName: "trash")
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(.secondary)
+                    }
+                }
+                Button(L10n.t("将当前配色存为新主题…")) {
+                    newThemeName = ""
+                    showSaveThemeAlert = true
+                }
+                .buttonStyle(.link)
+
                 Picker(L10n.t("字体"), selection: $settings.fontFamilyName) {
                     Text(L10n.t("跟随系统")).tag("")
                     ForEach(Self.curatedFontFamilies, id: \.self) { family in
@@ -615,6 +654,23 @@ private struct AppearanceSettingsTab: View {
                     settings.textShadowColorHex = "#000000A6"
                 }
                 .buttonStyle(.link)
+            }
+            .alert(L10n.t("存为新配色主题"), isPresented: $showSaveThemeAlert) {
+                TextField(L10n.t("主题名称"), text: $newThemeName)
+                Button(L10n.t("保存")) {
+                    let name = newThemeName.trimmingCharacters(in: .whitespacesAndNewlines)
+                    guard !name.isEmpty else { return }
+                    settings.customColorThemes.append(ColorTheme(
+                        name: name,
+                        foregroundColorHex: settings.foregroundColorHex,
+                        backgroundColorHex: settings.backgroundColorHex,
+                        textShadowEnabled: settings.textShadowEnabled,
+                        textShadowColorHex: settings.textShadowColorHex
+                    ))
+                }
+                Button(L10n.t("取消"), role: .cancel) {}
+            } message: {
+                Text(L10n.t("会把当前的文字颜色、背景颜色、阴影颜色存成一个可以随时再套用的主题。"))
             }
 
             Section {

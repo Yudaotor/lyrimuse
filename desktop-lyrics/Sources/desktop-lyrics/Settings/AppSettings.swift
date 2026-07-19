@@ -58,6 +58,11 @@ final class AppSettings: ObservableObject {
         static let classicOverlayEnabled = "np:classicOverlayEnabled"
         static let notchOverlayEnabled = "np:notchOverlayEnabled"
         static let notchCardStyle = "np:notchCardStyle"
+        // 存的是 JSON 字符串,不是 Data——这个文件里所有持久化字段一直是纯 String/Bool/
+        // enum 原语(见 AppearanceHelpers.swift 顶部注释:图的是 `defaults read` 能直接
+        // 看懂),自定义配色主题数组是个例外,但用 JSON 编码成字符串(不是 Data blob)
+        // 存,`defaults read` 好歹还能读出一段可辨认的 JSON 文本,不是不可读的乱码。
+        static let customColorThemesJSON = "np:customColorThemesJSON"
     }
 
     private let defaults = UserDefaults.standard
@@ -156,12 +161,12 @@ final class AppSettings: ObservableObject {
     @Published var preciseAppleMusicPosition: Bool {
         didSet { defaults.set(preciseAppleMusicPosition, forKey: Keys.preciseAppleMusicPosition) }
     }
-    // 首次启动的完整引导向导(欢迎/数据源模式/自动化权限/语言/完成)只走一次——不管
-    // 从哪一步关掉窗口都会置为 true(见 OnboardingView 的 .onDisappear),之后随时能
-    // 在菜单栏"重新查看引导向导"手动再打开一次,不会被启动流程反复打扰。这个向导
-    // 上线前的老版本只有"自动化权限"这一步单独的 NSAlert(hasShownAutomationOnboarding,
-    // 现已废弃),init() 里做一次性迁移:老版本已经弹过那一步的,直接视为"已经引导过"，
-    // 不会突然对已经用过这个 App 的人强插一整套全新的多步向导。
+    // 首次启动的完整引导向导(欢迎/自动化权限/语言/完成)只走一次——不管从哪一步
+    // 关掉窗口都会置为 true(见 OnboardingView 的 .onDisappear),没有任何重新打开的
+    // 入口(不留菜单项),关掉就是关掉了。这个向导上线前的老版本只有"自动化权限"
+    // 这一步单独的 NSAlert(hasShownAutomationOnboarding,现已废弃),init() 里做
+    // 一次性迁移:老版本已经弹过那一步的,直接视为"已经引导过"，不会突然对已经
+    // 用过这个 App 的人强插一整套全新的多步向导。
     @Published var hasCompletedOnboarding: Bool {
         didSet { defaults.set(hasCompletedOnboarding, forKey: Keys.hasCompletedOnboarding) }
     }
@@ -223,6 +228,16 @@ final class AppSettings: ObservableObject {
             backgroundIsVisible = (NSColor(hexStringWithAlpha: backgroundColorHex)?.alphaComponent ?? 0) > 0.02
         }
     }
+    // 用户在"外观"设置里"把当前配色存为新主题"存下的自定义配色主题列表(ColorTheme.swift)——
+    // 跟内置预设(ColorTheme.builtInPresets,不持久化、每次都是同一份字面量)分开存放,
+    // 这里只放用户自己存的那些。JSON 编码成字符串持久化的理由见 Keys.customColorThemesJSON
+    // 注释。
+    @Published var customColorThemes: [ColorTheme] {
+        didSet {
+            let json = (try? JSONEncoder().encode(customColorThemes)).flatMap { String(data: $0, encoding: .utf8) } ?? "[]"
+            defaults.set(json, forKey: Keys.customColorThemesJSON)
+        }
+    }
 
     // 缓存值——LyricsOverlayView.body 随 poller.currentLine 每 50ms 重跑一次(逐字填色
     // 需要),不应该每次渲染都重新解析 hex 字符串/重新查 NSFontManager(会在换行瞬间跟
@@ -282,6 +297,13 @@ final class AppSettings: ObservableObject {
         overlayWidth = (defaults.object(forKey: Keys.overlayWidth) as? Double) ?? 640
         foregroundColorHex = defaults.string(forKey: Keys.foregroundColorHex) ?? "#FFFFFFFF"
         backgroundColorHex = defaults.string(forKey: Keys.backgroundColorHex) ?? "#00000000"
+        if let json = defaults.string(forKey: Keys.customColorThemesJSON),
+           let data = json.data(using: .utf8),
+           let themes = try? JSONDecoder().decode([ColorTheme].self, from: data) {
+            customColorThemes = themes
+        } else {
+            customColorThemes = []
+        }
         // didSet 对属性在自己 init() 里的这次赋值不会触发(Swift 语义:属性观察者不响应
         // "首次赋初值"这一步),不能赌它会连带把上面 7 个缓存值填对——显式调一次,幂等、
         // 无副作用。
