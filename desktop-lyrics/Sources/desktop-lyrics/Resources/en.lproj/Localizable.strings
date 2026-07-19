@@ -65,6 +65,7 @@
 "存为新配色主题" = "Save as New Theme";
 "将当前配色存为新主题…" = "Save Current Colors as New Theme…";
 "深色卡片" = "Dark Card";
+"浅色卡片" = "Light Card";
 "暖黄" = "Warm Yellow";
 "自定义" = "Custom";
 "会把当前的文字颜色、背景颜色、阴影颜色存成一个可以随时再套用的主题。" = "Saves the current text, background, and shadow colors as a theme you can reapply anytime.";

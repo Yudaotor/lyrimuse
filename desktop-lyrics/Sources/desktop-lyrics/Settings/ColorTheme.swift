@@ -49,6 +49,12 @@ extension ColorTheme {
             foregroundColorHex: "#FFFFFFFF", backgroundColorHex: "#000000B3",
             textShadowEnabled: false, textShadowColorHex: "#000000A6"
         ),
+        // 跟"深色卡片"对称的浅色版本——同样的卡片不透明度(0xB3),前景/背景黑白对调。
+        ColorTheme(
+            id: "builtin-light-card", name: L10n.t("浅色卡片"),
+            foregroundColorHex: "#000000FF", backgroundColorHex: "#FFFFFFB3",
+            textShadowEnabled: false, textShadowColorHex: "#FFFFFFA6"
+        ),
         ColorTheme(
             id: "builtin-cyan", name: L10n.t("赛博青"),
             foregroundColorHex: "#7DF9FFFF", backgroundColorHex: "#00000000",
