@@ -44,6 +44,18 @@ import KeyboardShortcuts
 // 参数——唯一的例外是"功能开关"分类里某个开关因为对应账号没连好被禁用时,旁边会有个
 // "前往「账号连接」"的跳转按钮,直接跳到侧边栏里对应的那一个账号行(而不是笼统跳到
 // "账号连接"这个不再存在的单一分类),这就需要 SettingsView 把跳转能力下传给它。
+//
+// 2026-07-20:上面提到的"账号连接"这个 Section 标题改名成"附加功能"了——用户反馈
+// "设置里很多非歌词本身相关的功能配置很混乱,分不清哪些是歌词软件需要的、哪些是
+// 另外功能需要的"。原来前四项(歌词/外观/通用/关于)没有 Section 包裹、只有账号那
+// 四项包在一个 Section 里,这条边界其实一直都在,只是没有显式标出来,看起来像是
+// 漏加了标题而不是刻意的分类。现在两组都显式给了 Section 标题(前四项包进"核心
+// 设置",账号四项的标题从"账号连接"改成"附加功能"、并加了一行 footer 说明"这些
+// 是可选的、不装不影响歌词正常使用"),对称摆出来,不用再靠"有没有 Section"这种
+// 隐晦信号猜。同时把"通用"tab 里"播放/暂停、上一首、下一首"这三个快捷键(远程控制
+// Apple Music 播放,不是歌词功能)从主"快捷键" Section 里拆出来,单独放进一个标题
+// 写明"（附加功能）"的 Section,理由是同一件事:这三个混在歌词软件自己的快捷键里,
+// 容易让人误以为是必需项。
 enum SettingsTab: Hashable, CaseIterable, Identifiable {
     case lyrics, appearance, general, about
 
@@ -114,17 +126,30 @@ struct SettingsView: View {
 
     var body: some View {
         NavigationSplitView {
+            // 2026-07-20:侧边栏拆成两个显式带标题的 Section——用户反馈"设置里很多非
+            // 歌词本身相关的功能配置很混乱,分不清哪些是歌词软件需要的、哪些是另外功能
+            // 需要的"。原来的结构其实已经隐含了这条边界(前四项没有 Section 包裹、账号
+            // 那四项包在一个 Section 里),但"没有标题的一组"看起来像是随手漏加了标题,
+            // 不像是刻意的分类,读不出"这是核心、那是附加"的意图。两组都显式给标题,
+            // 对称摆出来,意图才是一目了然的,不用靠"有没有 Section"这种隐晦信号猜。
+            // "附加功能"四个字直接引用用户自己的原话,不再另造一个说法。
             List(selection: $selection) {
-                sidebarLabel(.lyrics)
-                sidebarLabel(.appearance)
-                sidebarLabel(.general)
-                sidebarLabel(.about)
+                Section(L10n.t("核心设置")) {
+                    sidebarLabel(.lyrics)
+                    sidebarLabel(.appearance)
+                    sidebarLabel(.general)
+                    sidebarLabel(.about)
+                }
 
-                Section(L10n.t("账号连接")) {
+                Section {
                     ForEach(AccountDestination.allCases) { destination in
                         AccountSidebarRow(destination: destination)
                             .tag(SettingsSidebarItem.account(destination))
                     }
+                } header: {
+                    Text(L10n.t("附加功能"))
+                } footer: {
+                    Text(L10n.t("以下都是可选的账号与推送服务，跟显示歌词本身无关；不配置也完全不影响悬浮歌词正常使用。"))
                 }
             }
             .listStyle(.sidebar)
@@ -814,14 +839,18 @@ private struct GeneralSettingsTab: View {
                 Toggle(L10n.t("开机启动"), isOn: $settings.launchAtLoginEnabled)
                 Toggle(L10n.t("在 Dock 中显示"), isOn: $settings.showInDock)
             }
+            // 2026-07-20:原来这 9 个快捷键挤在同一个"快捷键" Section 里——用户反馈
+            // 设置里"非歌词本身相关的功能配置很混乱",这里正是一处典型:后三个(播放/
+            // 暂停、上一首、下一首)其实是"远程控制 Apple Music 播放"这个附加能力,
+            // 跟悬浮歌词本身没关系,混在一起容易让人以为这是个必需项。拆成两个
+            // Section:前六个(显示/隐藏悬浮歌词/锁定位置/打开歌词管理/打开设置+歌词
+            // 时间轴微调两个)是歌词软件自己的操作,继续叫"快捷键";后三个单独一组,
+            // 标题+footer 直接点明"这是附加功能,不是歌词显示的一部分"。
             Section(L10n.t("快捷键")) {
                 ShortcutRecorder(L10n.t("显示/隐藏悬浮歌词"), name: .toggleOverlay)
                 ShortcutRecorder(L10n.t("锁定/解锁位置"), name: .toggleLockPosition)
                 ShortcutRecorder(L10n.t("打开歌词管理"), name: .openLyricsManagerHotkey)
                 ShortcutRecorder(L10n.t("打开设置"), name: .openSettingsHotkey)
-                ShortcutRecorder(L10n.t("播放/暂停"), name: .playPauseHotkey)
-                ShortcutRecorder(L10n.t("下一首"), name: .nextTrackHotkey)
-                ShortcutRecorder(L10n.t("上一首"), name: .previousTrackHotkey)
                 ShortcutRecorder(L10n.t("歌词提前"), name: .lyricsAdvanceHotkey)
                 ShortcutRecorder(L10n.t("歌词延后"), name: .lyricsDelayHotkey)
                 // 每次调整的步长——跟菜单栏"歌词时间轴"共用同一个值,这里改了菜单里的
@@ -833,6 +862,16 @@ private struct GeneralSettingsTab: View {
                 ), in: 0.05...2.0, step: 0.05) {
                     Text("\(L10n.t("歌词时间轴步长"))：\(AppSettings.formattedSeconds(ms: settings.lyricsOffsetStepMs))\(L10n.t("秒"))")
                 }
+            }
+
+            Section {
+                ShortcutRecorder(L10n.t("播放/暂停"), name: .playPauseHotkey)
+                ShortcutRecorder(L10n.t("下一首"), name: .nextTrackHotkey)
+                ShortcutRecorder(L10n.t("上一首"), name: .previousTrackHotkey)
+            } header: {
+                Text(L10n.t("播放控制（附加功能）"))
+            } footer: {
+                Text(L10n.t("用于远程控制 Apple Music 播放，不是歌词显示的一部分；同样需要上方的「Apple Music 自动化」权限。"))
             }
         }
         .formStyle(.grouped)

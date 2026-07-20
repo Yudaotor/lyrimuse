@@ -8,6 +8,11 @@
 "链接" = "Links";
 "GitHub 仓库" = "GitHub Repository";
 "反馈问题" = "Report an Issue";
+"核心设置" = "Core Settings";
+"附加功能" = "Add-on Features";
+"以下都是可选的账号与推送服务，跟显示歌词本身无关；不配置也完全不影响悬浮歌词正常使用。" = "These are optional accounts and push services unrelated to displaying lyrics — leaving them unconfigured doesn't affect the floating lyrics at all.";
+"播放控制（附加功能）" = "Playback Control (Add-on)";
+"用于远程控制 Apple Music 播放，不是歌词显示的一部分；同样需要上方的「Apple Music 自动化」权限。" = "Remote-controls Apple Music playback — not part of lyrics display; also needs the \"Apple Music Automation\" permission above.";
 "%@ 字" = "%@ characters";
 "%@pt" = "%@pt";
 "快捷键" = "Keyboard Shortcuts";
@@ -257,7 +262,6 @@
 "请先填写 Secret" = "Please enter a Secret first";
 "读取本地记录文件失败" = "Failed to Read Local Record File";
 "账号授权" = "Account Authorization";
-"账号连接" = "Accounts";
 "账户 Token" = "Account Token";
 "账户信息" = "Account Info";
 "超过就截断" = "Truncate If Too Long";
