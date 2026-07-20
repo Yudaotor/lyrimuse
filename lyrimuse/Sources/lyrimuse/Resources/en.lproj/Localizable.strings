@@ -249,7 +249,7 @@
 "超过就截断" = "Truncate If Too Long";
 "跟上面桥接用的不是同一个 API Key，需要单独申请。" = "Not the same API Key used for bridging above — needs to be applied for separately.";
 "跟随系统" = "System Default";
-"转发进 ListenBrainz，也需要那张卡配好。" = "Also forwards to ListenBrainz — that card needs to be configured too.";
+"转发进 ListenBrainz，也需要「ListenBrainz」账号绑定好。" = "Also forwards to ListenBrainz — the \"ListenBrainz\" account needs to be connected too.";
 "还差一步" = "One More Step";
 "还没填 API Key" = "API Key not set yet";
 "还没填 Scrobble API Key" = "Scrobble API Key not set yet";

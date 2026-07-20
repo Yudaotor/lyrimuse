@@ -249,7 +249,7 @@
 "超过就截断" = "超过就截断";
 "跟上面桥接用的不是同一个 API Key，需要单独申请。" = "跟上面桥接用的不是同一个 API Key，需要单独申请。";
 "跟随系统" = "跟随系统";
-"转发进 ListenBrainz，也需要那张卡配好。" = "转发进 ListenBrainz，也需要那张卡配好。";
+"转发进 ListenBrainz，也需要「ListenBrainz」账号绑定好。" = "转发进 ListenBrainz，也需要「ListenBrainz」账号绑定好。";
 "还差一步" = "还差一步";
 "还没填 API Key" = "还没填 API Key";
 "还没填 Scrobble API Key" = "还没填 Scrobble API Key";

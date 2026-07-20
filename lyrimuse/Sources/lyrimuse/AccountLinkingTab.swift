@@ -399,6 +399,24 @@ struct AccountLinkingTab: View {
 
     @ViewBuilder
     private var lastfmFields: some View {
+        // 原来外面套了一层 GroupBox("账号授权")——现在 Section 标题本身已经是"账号授权",
+        // 再套一层同名 GroupBox 是双重装饰,直接删掉、内容平移进 Section 正文。
+        //
+        // 2026-07-20:这张卡原来在这下面还有一个"历史统计"Section,专门说明"配好这张卡
+        // +「网页推送」会自动统计 Top10 歌手推送到网页"——用户反馈"这一块全部去掉",
+        // 删掉了(连同上一轮把手动开关换成的这句纯说明文字一起删,不留任何痕迹)。
+        //
+        // 同一天:这个 Section 从原来排在最后挪到了整个 tab 最顶端——用户反馈应该放在
+        // 最前面。这也更贴近实际依赖关系:下面"Mac 播放镜像"的"同步进 Last.fm"真正
+        // 生效靠的是这里连接得到的 session key,不是"Scrobble API Key/Secret"这两个
+        // 字段本身(那两个字段只是发起授权流程需要的参数,填好不代表已经走完授权),放在
+        // 最前面更能体现"这是基础前提"而不是排在最后的一个附属细节。
+        Section {
+            lastfmConnectArea
+        } header: {
+            Text(L10n.t("账号授权"))
+        }
+
         Section {
             HStack(spacing: 4) {
                 Text(L10n.t("在 Last.fm 官网申请一个 API Key 就够用（这是只读场景，不需要 Secret）。"))
@@ -423,7 +441,9 @@ struct AccountLinkingTab: View {
         } header: {
             Text(L10n.t("iPhone 播放桥接"))
         } footer: {
-            Text(L10n.t("转发进 ListenBrainz，也需要那张卡配好。"))
+            // 2026-07-20:原文案"转发进 ListenBrainz，也需要那张卡配好。"用户反馈调整——
+            // 明确点名是「ListenBrainz」这个账号、并且改成"绑定好"而不是含糊的"配好"。
+            Text(L10n.t("转发进 ListenBrainz，也需要「ListenBrainz」账号绑定好。"))
         }
 
         Section {
@@ -450,18 +470,6 @@ struct AccountLinkingTab: View {
             ))
         } header: {
             Text(L10n.t("Mac 播放镜像"))
-        }
-
-        // 原来外面套了一层 GroupBox("账号授权")——现在 Section 标题本身已经是"账号授权",
-        // 再套一层同名 GroupBox 是双重装饰,直接删掉、内容平移进 Section 正文。
-        //
-        // 2026-07-20:这张卡原来在这下面还有一个"历史统计"Section,专门说明"配好这张卡
-        // +「网页推送」会自动统计 Top10 歌手推送到网页"——用户反馈"这一块全部去掉",
-        // 删掉了(连同上一轮把手动开关换成的这句纯说明文字一起删,不留任何痕迹)。
-        Section {
-            lastfmConnectArea
-        } header: {
-            Text(L10n.t("账号授权"))
         }
     }
 
