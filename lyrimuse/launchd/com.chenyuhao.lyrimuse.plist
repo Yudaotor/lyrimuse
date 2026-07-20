@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.chenyuhao.lyrimuse</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Applications/Lyrimuse.app/Contents/MacOS/lyrimuse</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <!-- 故意不写 KeepAlive:这是用户会主动 Cmd-Q 退出的前台 GUI 工具,不是无人值守后台
+         服务——KeepAlive=true 会导致退出后立刻被拉起,体验是错的。这份 plist 平时不需要
+         手动装,由 App 菜单里的"开机启动"开关通过 Settings/LoginItemManager.swift 自动
+         装到 ~/Library/LaunchAgents/ 并 launchctl bootstrap;这份仓库里的版本只是留档
+         参考,不是给人手动 cp 过去用的。 -->
+    <key>StandardOutPath</key>
+    <string>/Users/chenyuhao/Library/Logs/lyrimuse.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/chenyuhao/Library/Logs/lyrimuse.log</string>
+</dict>
+</plist>

@@ -1,9 +1,9 @@
 /web/
 /feishu-bot/
 /bin/
-/collector/collector
+/lyrimuse-collector/collector
 .wrangler/
 node_modules/
 .DS_Store
 .dev.vars
-desktop-lyrics/.build/
+lyrimuse/.build/

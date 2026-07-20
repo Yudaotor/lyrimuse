@@ -8,12 +8,12 @@
 
 </div>
 
-这个仓库的主角是 [`desktop-lyrics/`](desktop-lyrics)：一个常驻置顶、跨 Space 的小悬浮窗，类似网易云/QQ音乐桌面客户端的"桌面歌词"，另外还有一个「歌词管理」窗口可以查看/手改/删除/重新搜索每首歌的歌词候选。[`collector/`](collector) 是让它能显示出歌词的常驻引擎（读播放状态、联网查歌词/封面、写本地缓存）；`state-worker/`/`badge-worker/`/`worker/`（可选的 Cloudflare Worker）和另一个独立仓库 [`Yudaotor/nowplaying`](https://github.com/Yudaotor/nowplaying)（网页展示页，`.gitignore` 里排除了 `/web/`，两边互不影响，各自 `git clone`）则是这套引擎顺带解锁的其他玩法——不是必需品。
+这个仓库的主角是 [`lyrimuse/`](lyrimuse)：一个常驻置顶、跨 Space 的小悬浮窗，类似网易云/QQ音乐桌面客户端的"桌面歌词"，另外还有一个「歌词管理」窗口可以查看/手改/删除/重新搜索每首歌的歌词候选。[`lyrimuse-collector/`](lyrimuse-collector) 是让它能显示出歌词的常驻引擎（读播放状态、联网查歌词/封面、写本地缓存）；`state-worker/`/`badge-worker/`/`worker/`（可选的 Cloudflare Worker）和另一个独立仓库 [`Yudaotor/nowplaying`](https://github.com/Yudaotor/nowplaying)（网页展示页，`.gitignore` 里排除了 `/web/`，两边互不影响，各自 `git clone`）则是这套引擎顺带解锁的其他玩法——不是必需品。
 
 ## 目录
 
 - [功能亮点](#功能亮点)
-- [桌面歌词悬浮窗（desktop-lyrics）](#toc-desktop-lyrics)
+- [桌面歌词悬浮窗（Lyrimuse）](#toc-Lyrimuse)
 - [让悬浮窗有歌词可看：collector 引擎](#toc-collector)
 - [快速开始](#快速开始)
 - [顺带解锁的其他玩法](#顺带解锁的其他玩法)
@@ -34,24 +34,24 @@
 - **账号功能默认关闭、按需校验**：ListenBrainz/Last.fm/网页展示/推送提醒这些依赖外部账号的功能一律默认不开——打开时才校验前置配置是否齐全，缺什么就弹窗提示、一键跳转到对应配置页，不会在没人碰过的情况下偷偷联网。
 - **可选解锁一整套"顺带玩法"**：网页展示页、跨设备中继同步、GitHub README 动态徽章、iPhone 播放桥接进 ListenBrainz、Mac 播放镜像进 Last.fm、每周听歌小结、历史 Top10 歌手统计——见下方[顺带解锁的其他玩法](#顺带解锁的其他玩法)，全部独立可选，不装不影响悬浮歌词本体。
 
-<a id="toc-desktop-lyrics"></a>
-## 桌面歌词悬浮窗（desktop-lyrics）
+<a id="toc-Lyrimuse"></a>
+## 桌面歌词悬浮窗（Lyrimuse）
 
-这是这个项目真正要给你用的东西。构建/运行/开机启动的完整步骤见 [`desktop-lyrics/README.md`](desktop-lyrics/README.md)——不需要任何 Apple 开发者账号/证书，ad-hoc 签名即可跑。
+这是这个项目真正要给你用的东西。构建/运行/开机启动的完整步骤见 [`lyrimuse/README.md`](lyrimuse/README.md)——不需要任何 Apple 开发者账号/证书，ad-hoc 签名即可跑。
 
-默认走**本地模式**：零网络，直接读这台 Mac 本地的 media-control（当前播放）+ 下面 `collector/` 写在磁盘上的歌词/封面缓存；没有缓存时显示「暂无歌词」，不会报错或显示别人的数据。也可以在设置里切到「中继模式」，跟手机/其它设备同步（见下面「顺带解锁的其他玩法」）。
+默认走**本地模式**：零网络，直接读这台 Mac 本地的 media-control（当前播放）+ 下面 `lyrimuse-collector/` 写在磁盘上的歌词/封面缓存；没有缓存时显示「暂无歌词」，不会报错或显示别人的数据。也可以在设置里切到「中继模式」，跟手机/其它设备同步（见下面「顺带解锁的其他玩法」）。
 
 <a id="toc-collector"></a>
 ## 让悬浮窗有歌词可看：collector 引擎
 
-collector 是一个 Go 编写、launchd 常驻的采集器，负责联网查歌词/封面（网易云/QQ音乐/酷狗/LRCLIB 四源都查一遍、取打分最高的）并写进 desktop-lyrics 读的本地缓存文件；如果配了 ListenBrainz token，顺手也会把播放记录提交给 [ListenBrainz](https://listenbrainz.org)——这一步完全可选，只想用悬浮歌词、不关心播放记录追踪的话，`listenbrainz_token` 留空即可，collector 照常启动，media-control 采集和歌词/封面解析不受影响。
+collector 是一个 Go 编写、launchd 常驻的采集器，负责联网查歌词/封面（网易云/QQ音乐/酷狗/LRCLIB 四源都查一遍、取打分最高的）并写进 Lyrimuse 读的本地缓存文件；如果配了 ListenBrainz token，顺手也会把播放记录提交给 [ListenBrainz](https://listenbrainz.org)——这一步完全可选，只想用悬浮歌词、不关心播放记录追踪的话，`listenbrainz_token` 留空即可，collector 照常启动，media-control 采集和歌词/封面解析不受影响。
 
 ### 按你想要的功能，看需要配置什么
 
 | 想要什么 | 需要配置 |
 |---|---|
 | 只要 Mac 悬浮歌词 | 不需要任何账号 |
-| 网页/徽章/desktop-lyrics「中继模式」能看「正在播放」 | `listenbrainz_token` 或自建 `state-worker`，二选一（配一个够用，两个都配是互为兜底） |
+| 网页/徽章/Lyrimuse「中继模式」能看「正在播放」 | `listenbrainz_token` 或自建 `state-worker`，二选一（配一个够用，两个都配是互为兜底） |
 | 网页能看「历史播放记录」 | `listenbrainz_token`（唯一途径，`state-worker` 替代不了，原因见下方「架构与密钥用途一览」） |
 | 手机也算进「正在听」/历史 | `listenbrainz_token` + Last.fm 只读凭据（`lastfm_user`+`lastfm_api_key`） |
 | Last.fm 账号也想有完整历史 | Last.fm 写凭据（`lastfm_scrobble_*`），跟 ListenBrainz 完全独立、互不影响 |
@@ -66,7 +66,7 @@ cd lyrimuse
 # 依赖：brew install media-control（读系统正在播放，免 Apple Events/自动化授权）
 brew install media-control
 
-cd collector
+cd lyrimuse-collector
 go build -o ../bin/collector .
 mkdir -p ~/.config/applemusic-nowplaying
 cp config.example.json ~/.config/applemusic-nowplaying/config.json
@@ -89,11 +89,11 @@ launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.chenyuhao.applemusic
 # 日志路径已经在上面的 sed 里换成你自己的了：~/Library/Logs/applemusic-nowplaying.log
 ```
 
-collector 跑起来、解析过至少一次当前这首歌之后，desktop-lyrics 的悬浮窗（本地模式，零额外配置）就能显示出歌词了。悬浮窗本体的构建方式见 [`desktop-lyrics/README.md`](desktop-lyrics/README.md)。
+collector 跑起来、解析过至少一次当前这首歌之后，Lyrimuse 的悬浮窗（本地模式，零额外配置）就能显示出歌词了。悬浮窗本体的构建方式见 [`lyrimuse/README.md`](lyrimuse/README.md)。
 
 ### 获取 `lastfm_scrobble_session_key`（Last.fm 镜像写入用，可选）
 
-这是把 Mac 播放镜像写进 Last.fm(`lastfmScrobbler`，见 `collector/lastfm.go`)要用的凭证，跟桥接 iPhone 播放用的 `lastfm_user`/`lastfm_api_key` 是两回事。session key 永久有效，正常只需申请一次。
+这是把 Mac 播放镜像写进 Last.fm(`lastfmScrobbler`，见 `lyrimuse-collector/lastfm.go`)要用的凭证，跟桥接 iPhone 播放用的 `lastfm_user`/`lastfm_api_key` 是两回事。session key 永久有效，正常只需申请一次。
 
 1. 申请一次 API application（如果还没有）：打开 https://www.last.fm/api/account/create ，随便填名字/描述提交，拿到一对 **API Key** 和 **Shared Secret**——这两个值就是 `lastfm_scrobble_api_key`/`lastfm_scrobble_secret`。
 2. 用这两个值换一次性 token：
@@ -108,7 +108,7 @@ collector 跑起来、解析过至少一次当前这首歌之后，desktop-lyric
    ```
    https://www.last.fm/api/auth/?api_key=${API_KEY}&token=${TOKEN}
    ```
-4. 授权完成后，用同一个 token 换永久 session key。签名算法是 Last.fm 官方规范(参数按 key 字母序拼接 key+value，末尾接 secret，取 MD5)，跟 `collector/lastfm.go` 里 `sign()` 用的算法完全一致：
+4. 授权完成后，用同一个 token 换永久 session key。签名算法是 Last.fm 官方规范(参数按 key 字母序拼接 key+value，末尾接 secret，取 MD5)，跟 `lyrimuse-collector/lastfm.go` 里 `sign()` 用的算法完全一致：
    ```bash
    SIG=$(printf '%s' "api_key${API_KEY}methodauth.getsessiontoken${TOKEN}${SECRET}" | md5 -q)
    curl -s "https://ws.audioscrobbler.com/2.0/?method=auth.getsession&api_key=${API_KEY}&token=${TOKEN}&api_sig=${SIG}&format=json"
@@ -121,7 +121,7 @@ collector 跑起来、解析过至少一次当前这首歌之后，desktop-lyric
 因为 collector 本来就要常驻采集「正在播放」状态、也会往 ListenBrainz 提交播放记录，这套引擎装上之后还能免费解锁这些——都是独立可选，跟悬浮歌词窗口本身没有强依赖：
 
 - **网页展示页**：把当前/历史播放做成一个可以到处分享的固定链接。
-- **desktop-lyrics 的「中继模式」**：切换后悬浮窗改读某个 `state-worker` 的 `/now`，可以跨设备/跨房间同步（比如手机上也能看同一份数据）。
+- **Lyrimuse 的「中继模式」**：切换后悬浮窗改读某个 `state-worker` 的 `/now`，可以跨设备/跨房间同步（比如手机上也能看同一份数据）。
 - **国内加速中继**（`state-worker/`）：采集器把当前状态推进 KV，网页/中继模式优先读它、拿不到才回退直连 LB，国内访问更稳。
 - **GitHub README 动态徽章**（`badge-worker/`）：读 state-worker 的数据渲染成一张实时 SVG。
 - **iPhone 播放桥接 / Mac 播放同步进 Last.fm / 每周听歌小结 / 历史 Top10 歌手统计**：都依赖 Last.fm 凭据，详见下面功能表。
@@ -138,34 +138,34 @@ git clone git@github.com:Yudaotor/nowplaying.git web-page
 
 ## 功能一览
 
-除了核心的歌词/封面解析（desktop-lyrics 存在的根本意义，不可关）、封面/主色/平台跳转链接（基础展示信息，2026-07-17 起改成无条件执行，不再是可关闭的设置项）和三个常驻部署的 Cloudflare Worker（跟本机进程无关，本机没有开关能控制它们本身），其余都能在 desktop-lyrics 的「设置」窗口按开关单独打开/关闭，或者靠 `config.json` 里对应字段留空/填写来开关（见 `collector/features.go`/`desktop-lyrics/Sources/desktop-lyrics/Settings/FeatureSettingsStore.swift`）。
+除了核心的歌词/封面解析（Lyrimuse 存在的根本意义，不可关）、封面/主色/平台跳转链接（基础展示信息，2026-07-17 起改成无条件执行，不再是可关闭的设置项）和三个常驻部署的 Cloudflare Worker（跟本机进程无关，本机没有开关能控制它们本身），其余都能在 Lyrimuse 的「设置」窗口按开关单独打开/关闭，或者靠 `config.json` 里对应字段留空/填写来开关（见 `lyrimuse-collector/features.go`/`lyrimuse/Sources/lyrimuse/Settings/FeatureSettingsStore.swift`）。
 
 | 功能 | 一句话说明 | 实现子系统 | 怎么开关 |
 |---|---|---|---|
-| 悬浮歌词窗口 | 桌面浮层实时显示当前歌词，支持逐字高亮 | `desktop-lyrics/` | 菜单栏「显示悬浮歌词」 |
-| 悬浮窗外观自定义 | 字体/字号/文字与背景颜色/阴影/宽度/位置锁定/截屏时隐藏/暂停时隐藏 | `desktop-lyrics/` | 设置「歌词」「外观」「通用」tab |
-| 状态栏显示当前歌词 | 菜单栏图标切换成直接显示歌词文字，可调最大长度+悬停查看完整内容 | `desktop-lyrics/MenuBarMenu.swift` | 设置里「在状态栏显示当前歌词」开关 |
-| 界面本地化 | 简体中文/English，可跟随系统或手动切换，切换立即生效不用重启 | `desktop-lyrics/L10n.swift` | 设置「通用」tab「语言」下拉菜单 |
-| 自动化权限引导 | 首次启动引导获取"自动化"权限(读 Apple Music 精确播放进度用)，设置里能看到当前授权状态、重新请求或跳转系统设置；没有这个权限也能正常使用，播放进度改用估算值 | `desktop-lyrics/Settings/MusicAutomationPermission.swift` | 设置「歌词」tab「精确追踪 Apple Music 播放进度」开关 + 「通用」tab「权限」分区 |
-| 全局快捷键 | 显示/隐藏悬浮歌词、锁定/解锁位置、打开歌词管理、打开设置、播放/暂停、上一首/下一首，共 7 个动作，默认不绑定任何按键 | `desktop-lyrics/Settings/GlobalHotkeys.swift` | 设置「通用」tab「快捷键」分区，逐项自己录制 |
-| 悬浮窗播放控制 | 鼠标悬停在悬浮窗上浮现播放/暂停、上一首、下一首三个按钮；位置锁定时不生效（锁定本身就会让窗口点击穿透） | `desktop-lyrics/UI/LyricsOverlayView.swift` | 无需开关，未锁定位置时自动可用 |
-| 灵动岛/刘海样式悬浮歌词 | 贴着刘海（或无刘海机型的居中兜底胶囊）的小窗，播放中宽度跟着当前歌词行动态调整；左侧歌名、右侧播放控制（超长都会滚动展示），逐字高亮歌词常显；当前没有在播放且鼠标未悬停时整体收缩到跟物理刘海本身一样大，常显内容完全不渲染，鼠标悬停到这一小块区域上会重新展开完整内容（可以直接点播放恢复播放）；鼠标悬停展开显示下一句预览+迷你进度条；背景纯黑/磨砂玻璃/深色渐变三选一；与经典桌面悬浮窗各自独立开关，可以同时开 | `desktop-lyrics/UI/NotchLyrics*.swift` | 设置「外观」tab「悬浮窗」分区，「桌面悬浮歌词」「灵动岛歌词」开关 + 「灵动岛风格」 |
-| 打包成 .app | 从裸可执行文件改成真正的 `.app`，可以拖进 Dock/用 Finder 双击启动；运行期间仍不占 Dock/Cmd-Tab | `desktop-lyrics/build.sh` | `./build.sh` 自动打包安装到 `/Applications/Lyrimuse.app` |
-| 歌词管理窗口 | 查看/手改/删除/重新搜索候选每首歌的歌词，改动会导出成独立 `.lrc` 文件 | `desktop-lyrics/` | 菜单栏「歌词管理…」 |
-| 歌词多源解析 | 网易云/QQ音乐/酷狗/LRCLIB 四源都查一遍、取打分最高的（含逐字时间轴权重） | `collector/enrich.go` | 设置里「歌词在线匹配」开关；「歌词来源」可单独勾选启用哪几个源 |
-| 歌词文件夹作为权威源 | `~/.config/applemusic-nowplaying/lyrics/` 下的纯文本文件可以直接手改，collector 重启时导入生效 | `collector/lyricsimport.go`/`lyricsexport.go` | 设置里「歌词文件夹作为权威源」开关 |
-| 专辑预取 | 换歌时顺手把同专辑其它还没解析过的曲目(封面+歌词)丢到后台解析 | `collector/albumprefetch.go` | 设置里「提前解析同专辑其它曲目（封面+歌词）」开关 |
-| 封面/主色/平台跳转链接 | 抓封面(网易云/QQ 兜底)、取封面原色作为强调色、拼 Apple/QQ/Spotify 跳转链接 | `collector/enrich.go`/`collector/color.go` | 始终开启；不再是可关闭的设置项(2026-07-17 起) |
-| ListenBrainz 提交 | 提交 playing_now/listen，是网页展示/其它玩法的数据源头；只想用悬浮歌词、不关心播放记录追踪可以完全不配 | `collector/` | `config.json` 的 `listenbrainz_token` 留空即关闭，collector 正常启动、悬浮歌词不受影响 |
-| 展示页「正在播放」 | 网页显示当前/历史播放 | `collector/` + `state-worker/` + `web/` | 展示页本身常驻部署，不经本机控制 |
-| 状态中继(国内加速，可选) | 采集器把当前状态推进 KV，网页/desktop-lyrics「中继模式」优先读它、拿不到才回退直连 LB | `collector/` + `state-worker/` | 设置里「推送状态到网页/徽章」开关 + `config.json` 填 `state_relay_url` |
+| 悬浮歌词窗口 | 桌面浮层实时显示当前歌词，支持逐字高亮 | `lyrimuse/` | 菜单栏「显示悬浮歌词」 |
+| 悬浮窗外观自定义 | 字体/字号/文字与背景颜色/阴影/宽度/位置锁定/截屏时隐藏/暂停时隐藏 | `lyrimuse/` | 设置「歌词」「外观」「通用」tab |
+| 状态栏显示当前歌词 | 菜单栏图标切换成直接显示歌词文字，可调最大长度+悬停查看完整内容 | `lyrimuse/MenuBarMenu.swift` | 设置里「在状态栏显示当前歌词」开关 |
+| 界面本地化 | 简体中文/English，可跟随系统或手动切换，切换立即生效不用重启 | `lyrimuse/L10n.swift` | 设置「通用」tab「语言」下拉菜单 |
+| 自动化权限引导 | 首次启动引导获取"自动化"权限(读 Apple Music 精确播放进度用)，设置里能看到当前授权状态、重新请求或跳转系统设置；没有这个权限也能正常使用，播放进度改用估算值 | `lyrimuse/Settings/MusicAutomationPermission.swift` | 设置「歌词」tab「精确追踪 Apple Music 播放进度」开关 + 「通用」tab「权限」分区 |
+| 全局快捷键 | 显示/隐藏悬浮歌词、锁定/解锁位置、打开歌词管理、打开设置、播放/暂停、上一首/下一首，共 7 个动作，默认不绑定任何按键 | `lyrimuse/Settings/GlobalHotkeys.swift` | 设置「通用」tab「快捷键」分区，逐项自己录制 |
+| 悬浮窗播放控制 | 鼠标悬停在悬浮窗上浮现播放/暂停、上一首、下一首三个按钮；位置锁定时不生效（锁定本身就会让窗口点击穿透） | `lyrimuse/UI/LyricsOverlayView.swift` | 无需开关，未锁定位置时自动可用 |
+| 灵动岛/刘海样式悬浮歌词 | 贴着刘海（或无刘海机型的居中兜底胶囊）的小窗，播放中宽度跟着当前歌词行动态调整；左侧歌名、右侧播放控制（超长都会滚动展示），逐字高亮歌词常显；当前没有在播放且鼠标未悬停时整体收缩到跟物理刘海本身一样大，常显内容完全不渲染，鼠标悬停到这一小块区域上会重新展开完整内容（可以直接点播放恢复播放）；鼠标悬停展开显示下一句预览+迷你进度条；背景纯黑/磨砂玻璃/深色渐变三选一；与经典桌面悬浮窗各自独立开关，可以同时开 | `lyrimuse/UI/NotchLyrics*.swift` | 设置「外观」tab「悬浮窗」分区，「桌面悬浮歌词」「灵动岛歌词」开关 + 「灵动岛风格」 |
+| 打包成 .app | 从裸可执行文件改成真正的 `.app`，可以拖进 Dock/用 Finder 双击启动；运行期间仍不占 Dock/Cmd-Tab | `lyrimuse/build.sh` | `./build.sh` 自动打包安装到 `/Applications/Lyrimuse.app` |
+| 歌词管理窗口 | 查看/手改/删除/重新搜索候选每首歌的歌词，改动会导出成独立 `.lrc` 文件 | `lyrimuse/` | 菜单栏「歌词管理…」 |
+| 歌词多源解析 | 网易云/QQ音乐/酷狗/LRCLIB 四源都查一遍、取打分最高的（含逐字时间轴权重） | `lyrimuse-collector/enrich.go` | 设置里「歌词在线匹配」开关；「歌词来源」可单独勾选启用哪几个源 |
+| 歌词文件夹作为权威源 | `~/.config/applemusic-nowplaying/lyrics/` 下的纯文本文件可以直接手改，collector 重启时导入生效 | `lyrimuse-collector/lyricsimport.go`/`lyricsexport.go` | 设置里「歌词文件夹作为权威源」开关 |
+| 专辑预取 | 换歌时顺手把同专辑其它还没解析过的曲目(封面+歌词)丢到后台解析 | `lyrimuse-collector/albumprefetch.go` | 设置里「提前解析同专辑其它曲目（封面+歌词）」开关 |
+| 封面/主色/平台跳转链接 | 抓封面(网易云/QQ 兜底)、取封面原色作为强调色、拼 Apple/QQ/Spotify 跳转链接 | `lyrimuse-collector/enrich.go`/`lyrimuse-collector/color.go` | 始终开启；不再是可关闭的设置项(2026-07-17 起) |
+| ListenBrainz 提交 | 提交 playing_now/listen，是网页展示/其它玩法的数据源头；只想用悬浮歌词、不关心播放记录追踪可以完全不配 | `lyrimuse-collector/` | `config.json` 的 `listenbrainz_token` 留空即关闭，collector 正常启动、悬浮歌词不受影响 |
+| 展示页「正在播放」 | 网页显示当前/历史播放 | `lyrimuse-collector/` + `state-worker/` + `web/` | 展示页本身常驻部署，不经本机控制 |
+| 状态中继(国内加速，可选) | 采集器把当前状态推进 KV，网页/Lyrimuse「中继模式」优先读它、拿不到才回退直连 LB | `lyrimuse-collector/` + `state-worker/` | 设置里「推送状态到网页/徽章」开关 + `config.json` 填 `state_relay_url` |
 | GitHub 动态徽章(可选) | README 里的实时 SVG 徽章 | `badge-worker/`(读 state-worker) | 常驻部署，本机不可控；依赖上面「状态中继」有没有新鲜数据 |
-| iPhone 播放桥接 | 把 iPhone 上经 Last.fm(FastScrobbler)记录的播放转发进 ListenBrainz | `collector/poller.go`(`bridge`) | 设置里开关 + `config.json` 填 `lastfm_user`/`lastfm_api_key` |
-| Mac 播放同步进 Last.fm | 反向把 Mac 播放也镜像写进 Last.fm，让 Last.fm 上有完整历史 | `collector/lastfm.go` | 设置里开关 + `config.json` 填 `lastfm_scrobble_*` 三项 |
-| 每周听歌小结 | 每周 Last.fm 图表收官时推一条通知 | `collector/weekly.go` | 设置里开关 + 依赖 Last.fm 凭据 + `bark_url`(或其它 `notification_platform`) |
-| 历史 Top10 歌手统计 | 一天算一次，推给网页展示 | `collector/topartists.go` | 设置里开关 + 依赖 Last.fm 凭据 + `state_relay_url` |
-| 网页模块可见性 | 单独控制展示页要不要显示历史/评论/表情反应/访客数/Top10 歌手 | `collector/features.go` + `state-worker/` + `web/` | 设置里「网页推送」卡片「网页展示模块」5 个开关 |
-| 故障告警 | media-control/状态中继连续失败时推通知 | `collector/alerter.go` | 设置里开关 + `config.json` 填 `bark_url`(或其它 `notification_platform`) |
+| iPhone 播放桥接 | 把 iPhone 上经 Last.fm(FastScrobbler)记录的播放转发进 ListenBrainz | `lyrimuse-collector/poller.go`(`bridge`) | 设置里开关 + `config.json` 填 `lastfm_user`/`lastfm_api_key` |
+| Mac 播放同步进 Last.fm | 反向把 Mac 播放也镜像写进 Last.fm，让 Last.fm 上有完整历史 | `lyrimuse-collector/lastfm.go` | 设置里开关 + `config.json` 填 `lastfm_scrobble_*` 三项 |
+| 每周听歌小结 | 每周 Last.fm 图表收官时推一条通知 | `lyrimuse-collector/weekly.go` | 设置里开关 + 依赖 Last.fm 凭据 + `bark_url`(或其它 `notification_platform`) |
+| 历史 Top10 歌手统计 | 一天算一次，推给网页展示 | `lyrimuse-collector/topartists.go` | 设置里开关 + 依赖 Last.fm 凭据 + `state_relay_url` |
+| 网页模块可见性 | 单独控制展示页要不要显示历史/评论/表情反应/访客数/Top10 歌手 | `lyrimuse-collector/features.go` + `state-worker/` + `web/` | 设置里「网页推送」卡片「网页展示模块」5 个开关 |
+| 故障告警 | media-control/状态中继连续失败时推通知 | `lyrimuse-collector/alerter.go` | 设置里开关 + `config.json` 填 `bark_url`(或其它 `notification_platform`) |
 
 账号相关的这些功能（网页展示相关三项、iPhone 播放桥接、Mac 播放同步进 Last.fm、每周听歌小结、历史 Top10、故障告警）默认全部关闭：打开时才校验对应账号是否已配置，没配好会弹窗提示缺什么、并提供一键跳转到对应配置页，不会在没人碰过的情况下偷偷联网提交数据。
 
@@ -173,17 +173,17 @@ git clone git@github.com:Yudaotor/nowplaying.git web-page
 Mac 采集器(Go, launchd 常驻)
   └─ media-control stream (MediaRemote, 免授权、事件驱动)
        ├─ 提交 playing_now / listen ──> ListenBrainz ──> 展示页 web/index.html?user=<LB用户名>
-       └─ 联网查歌词/封面 ──> 写本地磁盘缓存 ──> desktop-lyrics 悬浮窗(本地模式,零网络读取)
+       └─ 联网查歌词/封面 ──> 写本地磁盘缓存 ──> Lyrimuse 悬浮窗(本地模式,零网络读取)
 ```
 
 <a id="toc-deploy-worker"></a>
 ## 部署 Worker（可选：国内加速 / 徽章 / 飞书场景）
 
-这三个都是可选的 Cloudflare Worker，desktop-lyrics 本地模式 + collector 不依赖它们也能完整工作。彼此也有依赖顺序：`badge-worker` 需要读一个已经在跑的 `state-worker`；`worker/` 只服务于作者本人的飞书个性签名场景（需要你自己注册一个飞书应用），不打算做这件事的话可以完全跳过。
+这三个都是可选的 Cloudflare Worker，Lyrimuse 本地模式 + collector 不依赖它们也能完整工作。彼此也有依赖顺序：`badge-worker` 需要读一个已经在跑的 `state-worker`；`worker/` 只服务于作者本人的飞书个性签名场景（需要你自己注册一个飞书应用），不打算做这件事的话可以完全跳过。
 
 | 目录 | Worker 名 / 域名 | 职责 | 依赖 |
 |---|---|---|---|
-| `state-worker/` | `nowplaying-state`，示例域名 `np.yudaotor.me` | 网页/desktop-lyrics 中继模式的主数据源：`/now`/`/history`/`/cover`/`/share` | 无（独立可部署） |
+| `state-worker/` | `nowplaying-state`，示例域名 `np.yudaotor.me` | 网页/Lyrimuse 中继模式的主数据源：`/now`/`/history`/`/cover`/`/share` | 无（独立可部署） |
 | `badge-worker/` | `nowplaying-badge` | GitHub README 动态 SVG 徽章 | 需要一个已部署的 `state-worker` |
 | `worker/` | 示例域名 `test-0703.cyh-937ae0.workers.dev` | 飞书签名链接被真人点开时的 302 跳转，纯静态跳转 | 仅飞书个性签名场景需要，可跳过 |
 
@@ -217,7 +217,7 @@ cd state-worker && npm run deploy   # 或 badge-worker / worker，命令一样
    "state_relay_url": "https://np.yudaotor.me",
    "state_relay_token": "跟 PUSH_TOKEN 相同的值"
    ```
-   填完后设置里打开「推送状态到网页/徽章」开关（或重启 collector 让 `config.json` 生效），采集器就会开始往这个 KV 推状态，网页/徽章会自动读到；desktop-lyrics 想切「中继模式」跟这个地址同步，在菜单栏「设置…」里填一样的 `state_relay_url`。
+   填完后设置里打开「推送状态到网页/徽章」开关（或重启 collector 让 `config.json` 生效），采集器就会开始往这个 KV 推状态，网页/徽章会自动读到；Lyrimuse 想切「中继模式」跟这个地址同步，在菜单栏「设置…」里填一样的 `state_relay_url`。
 
 ### 从零搭建 badge-worker（可选）
 
@@ -245,9 +245,9 @@ Worker(test-0703) 只负责：人点链接时 302 跳转到展示页；URL 规�
 
 | 子系统 | 部署位置 | 职责 | 是否读/解析 LB 原始数据 |
 |---|---|---|---|
-| `desktop-lyrics/` | 一台 Mac，用户手动/开机启动的前台 GUI(Swift) | 菜单栏 + 悬浮歌词窗口，这个仓库的主角；默认本地模式零网络读 media-control + collector 的磁盘缓存，也可切「中继模式」轮询 state-worker 的 `/now` | 否 |
-| `collector/` | 一台 Mac，launchd 常驻(Go) | 唯一的数据源头：读 media-control，解析歌词/封面写本地缓存给 desktop-lyrics 用，同时提交 playing_now/listen 给 LB、把富状态推进 `state-worker` 的 KV | 只写不读 |
-| `state-worker/` | Cloudflare Worker（可选） | 网页/desktop-lyrics 中继模式的主数据源：`/now`(读KV,过期/为空则兜底直连LB)、`/history`(直接读LB)、`/cover`+`/share`(社交解链用) | ✅ `fromLB()`/`lbHistory()` |
+| `lyrimuse/` | 一台 Mac，用户手动/开机启动的前台 GUI(Swift) | 菜单栏 + 悬浮歌词窗口，这个仓库的主角；默认本地模式零网络读 media-control + collector 的磁盘缓存，也可切「中继模式」轮询 state-worker 的 `/now` | 否 |
+| `lyrimuse-collector/` | 一台 Mac，launchd 常驻(Go) | 唯一的数据源头：读 media-control，解析歌词/封面写本地缓存给 Lyrimuse 用，同时提交 playing_now/listen 给 LB、把富状态推进 `state-worker` 的 KV | 只写不读 |
+| `state-worker/` | Cloudflare Worker（可选） | 网页/Lyrimuse 中继模式的主数据源：`/now`(读KV,过期/为空则兜底直连LB)、`/history`(直接读LB)、`/cover`+`/share`(社交解链用) | ✅ `fromLB()`/`lbHistory()` |
 | `web/index.html` | 静态托管（GitHub Pages / Cloudflare Pages，独立仓库） | 展示页；主读 `state-worker`（如果部署了的话），`state-worker`本身也连不上时才直连 LB 兜底 | ✅ 自己的 `fromLB`/历史映射(见下) |
 | `worker/`（可选） | Cloudflare Worker | 飞书签名里粘的链接被真人点开时的 302 跳转，纯静态跳转 | 否 |
 | `badge-worker/`（可选） | Cloudflare Worker | GitHub README 里的动态 SVG 徽章；读 `state-worker` 的 `/now`(已归一化好的数据)，不直连 LB | 否，依赖 state-worker 的契约 |
