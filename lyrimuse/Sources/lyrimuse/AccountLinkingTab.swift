@@ -27,19 +27,32 @@ private struct DestinationStatusLabel: View {
     private var dimmed: Bool { backgroundProminence == .increased }
 
     var body: some View {
-        switch status {
-        case .disabled:
-            Label(L10n.t("未启用"), systemImage: "circle").foregroundStyle(.secondary)
-        case .missingCreds(let hint):
-            Label(hint, systemImage: "exclamationmark.triangle.fill")
-                .foregroundStyle(dimmed ? Color.primary : Color.orange)
-        case .active(let detail):
-            Label(detail ?? L10n.t("正在生效"), systemImage: "checkmark.circle.fill")
-                .foregroundStyle(dimmed ? Color.primary : Color.green)
-        case .error(let msg):
-            Label(msg, systemImage: "exclamationmark.triangle.fill")
-                .foregroundStyle(dimmed ? Color.primary : Color.red)
+        // 真机实测坐实的 bug:这个 Label 嵌在 SettingsView 那层真侧边栏 List 里
+        // (AccountSidebarRow 用到它),手动切换语言后,"歌手/歌名"这类直接
+        // Text(destination.title) 的内容会立刻跟着换,但这个由自由函数
+        // (destinationStatus(for:))层层包出来的状态文字却停留在切换前的语言、
+        // 点进详情页(AccountLinkingTab,选中态变化触发这块内容整体重新构造)才会
+        // 变过来——这是 SwiftUI List 在 macOS(NSTableView 桥接)下已知的一类行复用/
+        // 局部刷新缺陷,不是这里的业务逻辑读错了值(L10n.t 本身每次都读的是当下最新的
+        // 语言)。用 .id(L10n.current) 把这块内容的"身份"跟当前实际生效的语言绑死——
+        // 语言一变,SwiftUI 就把它当成一个全新的 View 整个重新构造,而不是尝试局部
+        // 复用/diff 出了问题的那份内容,绕开这个复用缺陷而不是指望"修" List 内部实现。
+        Group {
+            switch status {
+            case .disabled:
+                Label(L10n.t("未启用"), systemImage: "circle").foregroundStyle(.secondary)
+            case .missingCreds(let hint):
+                Label(hint, systemImage: "exclamationmark.triangle.fill")
+                    .foregroundStyle(dimmed ? Color.primary : Color.orange)
+            case .active(let detail):
+                Label(detail ?? L10n.t("正在生效"), systemImage: "checkmark.circle.fill")
+                    .foregroundStyle(dimmed ? Color.primary : Color.green)
+            case .error(let msg):
+                Label(msg, systemImage: "exclamationmark.triangle.fill")
+                    .foregroundStyle(dimmed ? Color.primary : Color.red)
+            }
         }
+        .id(L10n.current)
     }
 }
 

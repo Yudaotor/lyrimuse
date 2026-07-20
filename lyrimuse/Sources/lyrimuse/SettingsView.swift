@@ -878,8 +878,9 @@ private struct GeneralSettingsTab: View {
 }
 
 // "关于"分类——参考常见 macOS App 的"关于本 App"面板(图标+名称+版本居中,下面分组
-// 罗列简介/仓库链接/使用的开源库/歌词数据来源/版权)。这几项都是静态文本/链接,不需要
-// 任何 @Published 状态或单例,是这几个 tab 里最简单的一个。
+// 罗列简介/仓库链接/版权)。这几项都是静态文本/链接,不需要任何 @Published 状态或
+// 单例,是这几个 tab 里最简单的一个。"歌词数据来源"/"使用的开源库"两块用户反馈不需要
+// 写,已经去掉——只留最基本的身份信息+反馈入口。
 private struct AboutSettingsTab: View {
     // CFBundleIconFile 指向的就是新换的那份 AppIcon.icns(build.sh 里 CFBundleName
     // 生成的 .app 包本身自带),直接读系统认的这份"当前 App 图标",不用再手动拼一遍
@@ -918,19 +919,6 @@ private struct AboutSettingsTab: View {
                 .buttonStyle(.link)
                 Button(L10n.t("反馈问题")) {
                     NSWorkspace.shared.open(URL(string: "https://github.com/Yudaotor/lyrimuse/issues")!)
-                }
-                .buttonStyle(.link)
-            }
-
-            Section(L10n.t("歌词数据来源")) {
-                Text("网易云音乐 · QQ音乐 · 酷狗音乐 · LRCLIB")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-            }
-
-            Section(L10n.t("使用的开源库")) {
-                Button("KeyboardShortcuts (Sindre Sorhus)") {
-                    NSWorkspace.shared.open(URL(string: "https://github.com/sindresorhus/KeyboardShortcuts")!)
                 }
                 .buttonStyle(.link)
             }
