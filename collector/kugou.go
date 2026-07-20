@@ -14,6 +14,7 @@ import (
 	"net/http"
 	neturl "net/url"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -81,20 +82,56 @@ func decryptKRC(b64 string) string {
 	return string(out)
 }
 
-var krcWordRegex = regexp.MustCompile(`<(\d+),(\d+),(\d+)>`)
+var (
+	krcLineRegex = regexp.MustCompile(`^(\[(\d+),\d+\])(.*)$`)
+	krcWordRegex = regexp.MustCompile(`<(\d+),(\d+),(\d+)>`)
+)
 
-// krcToYRC 把解密后的酷狗 KRC 正文转换成 YRCParser(desktop-lyrics)认识的语法。酷狗
-// 原生就是"[行始ms,行长ms]<词始ms,词长ms,flag>词"这种尖括号写法,跟网易云 YRC 的圆括号
-// 写法结构完全一样(同样 3 个数字、词紧跟在标记后面),只需把尖括号换成圆括号,不用重排
-// 词序、不用补数字。用正则精确匹配 <数字,数字,数字> 再替换,而不是裸字符 Replace 全局
-// 换 </>,避免歌词正文里偶然出现的尖括号被误伤(虽然实测目前没见过这种情况,但更安全)。
-// 行头 [行始,行长] 和 LRC 署名头([ti:]/[ar:] 等)本来就跟 YRC 兼容/会被 YRCParser 自然
-// 跳过,不用额外处理。
+// krcToYRC 把解密后的酷狗 KRC 正文转换成 YRCParser(desktop-lyrics)认识的语法。
+//
+// 酷狗原生:"[行始ms,行长ms]<词始ms,词长ms,flag>词"——这里的"词始ms"是相对这一行
+// 行始的偏移量,从 0 开始逐词累加,加到最后一个词正好等于这一行的行长(真机实测坐实,
+// 见下面第二段)。网易云原生 YRC:"[行始ms,行长ms](词始ms,词长ms,flag)词"——这里的
+// "词始ms"是从整首歌开头算起的绝对时间戳,第一个词的值就等于行始ms。两种格式外形都是
+// "三个数字加一对括号",实际语义完全不是一回事。
+//
+// 这个函数原来只做尖括号→圆括号的语法转换,没有把每个词的相对偏移量换算成绝对时间戳——
+// Swift 端(YRCParser 解析完直接把这三个数字原样交给 View 层 fillFraction,当初只对接过
+// 网易云一种来源,是按"词始时间戳等于绝对播放位置"这个假设写的)读到的词始时间戳因此
+// 远小于这一行实际播放时的真实位置,这一行一开始播放,行内所有词的 fillFraction 立刻
+// 远超过 1(已经"填满"),整行观感上是瞬间全部点亮,没有任何逐字推进的效果——这正是
+// "很多酷狗歌词标着逐字时间轴、播放时却没有逐字效果"这个反馈的真根因,不是 Swift 渲染端
+// 的 bug,是这里漏了"相对转绝对"这一步换算。
+//
+// 修法:按行处理,每行先读出行始时间戳,再把这一行内每个词的相对偏移量都加上行始时间戳、
+// 换算成绝对时间戳,才落成 YRCParser 认的语法。跟原来一样,只对精确匹配 <数字,数字,数字>
+// 的片段动手,不做裸字符 Replace,避免歌词正文里偶然出现的尖括号被误伤。行头
+// [行始,行长] 和 LRC 署名头([ti:]/[ar:] 等)本来就跟 YRC 兼容/会被 YRCParser 自然跳过,
+// 原样保留、不做任何改动。
 func krcToYRC(krc string) string {
 	if krc == "" {
 		return ""
 	}
-	return krcWordRegex.ReplaceAllString(krc, "($1,$2,$3)")
+	normalized := strings.ReplaceAll(krc, "\r\n", "\n")
+	normalized = strings.ReplaceAll(normalized, "\r", "\n")
+	lines := strings.Split(normalized, "\n")
+	for i, line := range lines {
+		m := krcLineRegex.FindStringSubmatch(line)
+		if m == nil {
+			continue // 署名头/其它不含 [行始,行长] 前缀的行,原样保留
+		}
+		lineStart, err := strconv.Atoi(m[2])
+		if err != nil {
+			continue
+		}
+		body := krcWordRegex.ReplaceAllStringFunc(m[3], func(match string) string {
+			wm := krcWordRegex.FindStringSubmatch(match)
+			wordStart, _ := strconv.Atoi(wm[1]) // 已经过 \d+ 校验,不会解析失败
+			return fmt.Sprintf("(%d,%s,%s)", lineStart+wordStart, wm[2], wm[3])
+		})
+		lines[i] = m[1] + body
+	}
+	return strings.Join(lines, "\n")
 }
 
 type kugouSong struct {
