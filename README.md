@@ -118,7 +118,7 @@ collector 跑起来、解析过至少一次当前这首歌之后，Lyrimuse 的�
 
 ## 顺带解锁的其他玩法
 
-因为 collector 本来就要常驻采集「正在播放」状态、也会往 ListenBrainz 提交播放记录，这套引擎装上之后还能免费解锁这些——都是独立可选，跟悬浮歌词窗口本身没有强依赖。带效果截图 + 分步教程的完整版见 [`docs/web-features.md`](docs/web-features.md)，这里只是速览：
+因为 collector 本来就要常驻采集「正在播放」状态、也会往 ListenBrainz 提交播放记录，这套引擎装上之后还能免费解锁这些——都是独立可选，跟悬浮歌词窗口本身没有强依赖。带效果截图 + 分步教程的完整版见 [`docs/web-features.zh-CN.md`](docs/web-features.zh-CN.md)（[English](docs/web-features.md)），这里只是速览：
 
 - **网页展示页**：把当前/历史播放做成一个可以到处分享的固定链接。
 - **Lyrimuse 的「中继模式」**：切换后悬浮窗改读某个 `state-worker` 的 `/now`，可以跨设备/跨房间同步（比如手机上也能看同一份数据）。
@@ -216,7 +216,7 @@ cd state-worker && npm run deploy   # 或 badge-worker / worker，命令一样
    "state_relay_url": "https://np.yudaotor.me",
    "state_relay_token": "跟 PUSH_TOKEN 相同的值"
    ```
-   填完后重启 collector（让 `config.json` 生效，或在 Lyrimuse 设置「网页推送」卡片里填好同样这两项——填好就自动推送，不需要额外开关），采集器就会开始往这个 KV 推状态，网页/徽章会自动读到；Lyrimuse 想切「中继模式」跟这个地址同步，在菜单栏「设置…」里填一样的 `state_relay_url`。完整的效果展示 + 更友好的分步教程见 [`docs/web-features.md`](docs/web-features.md)。
+   填完后重启 collector（让 `config.json` 生效，或在 Lyrimuse 设置「网页推送」卡片里填好同样这两项——填好就自动推送，不需要额外开关），采集器就会开始往这个 KV 推状态，网页/徽章会自动读到；Lyrimuse 想切「中继模式」跟这个地址同步，在菜单栏「设置…」里填一样的 `state_relay_url`。完整的效果展示 + 更友好的分步教程见 [`docs/web-features.zh-CN.md`](docs/web-features.zh-CN.md)（[English](docs/web-features.md)）。
 
 ### 从零搭建 badge-worker（可选）
 

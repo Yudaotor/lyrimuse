@@ -1,111 +1,113 @@
-# 网页玩法：把"正在听什么"做成一个能分享的网页
+# Web Features: Turn "What's Playing" Into a Page You Can Share
 
-这篇文档只讲一件事：**collector 顺带解锁的网页展示页**——效果长什么样、数据怎么流动、怎么从零搭一套自己的。
+**Language / 语言：** **English** | [简体中文](web-features.zh-CN.md)
 
-跟 Lyrimuse 悬浮歌词本体完全独立、完全可选：不搭这一套，悬浮歌词照常显示逐字歌词，不受任何影响。这套东西的意义是——你已经在跑 collector 采集"正在播放"状态了，顺手就能把它做成一个可以到处分享的固定链接，比如放进飞书个性签名、Twitter/X 简介，或者干脆自己留着当一个"我的音乐主页"。
+This document covers one thing: **the public now-playing web page that collector unlocks as a bonus** — what it actually looks like, how data flows, and how to stand up your own copy from scratch.
 
-## 效果展示
+It's completely independent of, and optional alongside, the Lyrimuse floating lyrics app itself: skip this entirely and the floating lyrics keep showing word-synced lyrics exactly the same, unaffected. The point of this piece is — since collector is already running and capturing "now playing" state anyway, you get a shareable, permanent link almost for free. Drop it into a Feishu signature, a Twitter/X bio, or just keep it around as your own "now playing" homepage.
 
-### 桌面端（≥820px 宽屏铺两栏）
+## What It Looks Like
 
-浅色氛围主题，暂停态：
+### Desktop (≥820px lays out as two columns)
 
-![浅色主题，暂停态，两栏布局](images/web-preview-light.png)
+Light ambient theme, paused:
 
-深色氛围主题 + 黑胶模式（暂停态时唱臂会抬起，播放中会匀速旋转，这张截图拍到的正是暂停这一刻）：
+![Light theme, paused, two-column layout](images/web-preview-light.png)
 
-![深色主题 + 黑胶模式，暂停态](images/web-preview-vinyl-dark.png)
+Dark ambient theme + vinyl mode (the tonearm lifts when paused and spins at a steady rate while playing — this screenshot happens to catch the paused moment):
 
-这两张是这个项目作者自己在跑的真实页面（<https://yudaotor.github.io/nowplaying/?user=yudaotor>），不是摆拍的示例数据。
+![Dark theme + vinyl mode, paused](images/web-preview-vinyl-dark.png)
 
-### 每个模块具体是什么
+Both of these are the actual live page the author runs (<https://yudaotor.github.io/nowplaying/?user=yudaotor>) — not staged sample data.
 
-- **正在播放卡片**：封面（带呼吸缩放动效）、歌名/歌手/专辑、进度条（外推实时位置，不用每秒轮询）、播放状态胶囊（"他正在播放" / "已暂停" / "上次播放 · N 分钟前"）、设备图标（Mac / iPhone 线描图标）。封面取不到时客户端会用 iTunes 搜索兜底占位，服务端解析出真封面后再无缝替换。
-- **黑胶模式**（右上角 💿）：封面缩成黑胶唱片中心的"标签"，播放时匀速旋转、暂停时唱臂抬起——纯 CSS + Web Animations API，不额外耗电。跟"方形封面"模式二选一，记在浏览器本地，不影响其他访客看到的样式。
-- **同步歌词**：只在"当前正在播放、有精确进度"时显示（iPhone 经 Last.fm 桥接来的播放没有进度数据，这时不显示歌词，只显示歌名）。支持逐字高亮（网易云 yrc 格式）、整行高亮两种，罗马音/翻译各自一行。手动滑动歌词面板会暂停自动跟随，停手几秒后自动滚回当前行。
-- **最近播放历史**：今天/更早分割线，每行标注 Mac/iPhone 设备图标 + 近 30 天播放次数（≥2 次才显示，避免满屏都是"×1"没有信息量）。今日统计单独一行"今日 · N 首 · 约 X 小时 Y 分"。
-- **留言墙**：匿名（或填昵称）留一句话，全站共享，最多保留最新 50 条。纯 `textContent` 渲染，天然防 XSS。
-- **表情反应**：一个 ❤️ 按钮，全站累计点赞数（不跟哪首歌绑定）。
-- **访客计数**：同一浏览器只计一次（`localStorage` 去重），清缓存/换浏览器/无痕模式会被重新计入一次。
-- **历史播放 Top10 歌手**：按全时段总播放次数排的常驻榜单，一天更新一次（不用实时）。前三名有名次角标，头像取自 Deezer，取不到就退化成圆形首字母占位。
-- **主题/沉浸模式**：右上角 🌗 在"氛围"（模糊封面做背景）和"浅色"之间切换；⛶ 进入沉浸/全屏模式，隐藏次要信息、放大封面和歌词，适合当平板/副屏常驻显示。
-- **社交分享**：链接被粘到微信/Slack/Discord 等聊天工具时，会自动展开当前在听的歌名+封面预览卡片（不用真的点开）。
+### What Each Module Actually Does
 
-## 数据怎么流动
+- **Now-playing card**: cover art (with a gentle breathing zoom), title/artist/album, a progress bar (extrapolated in real time client-side, not polled every second), a playback-state pill ("Now Playing" / "Paused" / "Last played · N minutes ago"), and a device icon (Mac / iPhone line icons). If the cover art isn't available yet, the client falls back to an iTunes Search placeholder and swaps in the real cover seamlessly once the server resolves it.
+- **Vinyl mode** (💿 top right): shrinks the cover art down to the "label" at the center of a vinyl record, spinning at a steady rate while playing and lifting the tonearm when paused — pure CSS + the Web Animations API, no extra battery cost. It's a toggle against "square cover" mode, remembered per browser via local storage, and doesn't affect what other visitors see.
+- **Synced lyrics**: only shown when something is actually playing with a precise progress position (plays mirrored from iPhone via the Last.fm bridge carry no progress data, so only the title shows in that case, no lyrics). Supports both word-by-word highlighting (NetEase's yrc format) and whole-line highlighting, with romanization/translation each on their own line. Manually scrolling the lyrics panel pauses auto-follow; it resumes tracking the current line automatically a few seconds after you stop touching it.
+- **Recent playback history**: split into "today" and "earlier," each row tagged with a Mac/iPhone device icon plus a play count for the last 30 days (only shown once it's ≥2, so the list isn't cluttered with uninformative "×1" badges). Today's stats get their own summary line, "Today · N songs · about X hr Y min."
+- **Guestbook**: leave a message anonymously (or with a nickname), shared site-wide, capped at the latest 50 entries. Rendered purely via `textContent`, which naturally rules out XSS.
+- **Reactions**: a single ❤️ button with a site-wide cumulative like count (not tied to any particular song).
+- **Visitor counter**: counted once per browser (deduplicated via `localStorage`) — clearing your cache, switching browsers, or using a private/incognito window will count as a new visit.
+- **Top 10 artists (all-time)**: a standing leaderboard ranked by total play count across all history, recomputed once a day (not real-time). The top three get rank badges; avatars come from Deezer, falling back to a circular initial placeholder when unavailable.
+- **Theme / immersive mode**: 🌗 (top right) toggles between "ambient" (a blurred version of the cover art as the background) and "light"; ⛶ enters an immersive/fullscreen mode that hides secondary information and enlarges the cover art and lyrics — a good fit for leaving it running on a tablet or a second monitor.
+- **Social sharing**: when the link is pasted into WeChat, Slack, Discord, and similar chat tools, it automatically unfurls into a preview card showing the currently-playing title + cover art (without anyone needing to actually click through).
+
+## How Data Flows
 
 ```
-Mac 采集器(collector, 已经在跑)
-  └─ POST /push(每次换歌/暂停/定期心跳) ──> 你自己的 state-worker(Cloudflare Worker + KV)
-                                                  │
-                                                  ├─ GET /now、/history、/top-artists 等只读接口
-                                                  │        ↓
-                                                  └──> 你自己部署的网页(web/index.html)
+Mac collector (already running)
+  └─ POST /push (on every track change / pause / periodic heartbeat) ──> your own state-worker (Cloudflare Worker + KV)
+                                                                                │
+                                                                                ├─ GET /now, /history, /top-artists, and other read-only endpoints
+                                                                                │        ↓
+                                                                                └──> your own deployed web page (web/index.html)
 ```
 
-- collector 完全不知道网页/Worker 存不存在——它只是无条件往配置好的地址推一份状态，State-worker 挂了/没部署，collector 该干嘛还干嘛，不影响本机悬浮歌词。
-- 网页优先读你自己的 state-worker；State-worker 本身连不上（或你压根没部署），网页会自动回退直连 ListenBrainz——这时能看到"正在播放"和历史，但留言墙/表情反应/访客计数/Top10 歌手这几个需要写 KV 的模块不会出现（它们没有 ListenBrainz 兜底路径）。
-- collector 侧只有一份配置：`state_relay_url` + `state_relay_token`（对应 Lyrimuse 设置里"网页推送"卡片的"同步服务地址"+"访问令牌"）。**这两项填好，上面这一整条链路就自动跑起来了，不需要在设置里另外打开任何开关**——这是 2026-07-20 起的行为，之前版本这里还有一个额外的"推送状态到网页/徽章"开关，已经去掉了。
+- collector has no idea whether the web page or the Worker even exist — it just unconditionally pushes state to whatever address is configured. If state-worker is down or was never deployed, collector carries on exactly as before; the local floating lyrics are unaffected.
+- The web page prefers reading from your own state-worker; if state-worker itself is unreachable (or you simply never deployed one), the page automatically falls back to reading straight from ListenBrainz — in that mode you still get "now playing" and history, but the guestbook, reactions, visitor counter, and top-10-artists modules (all of which need to write to KV) won't appear, since they have no ListenBrainz fallback path.
+- collector only needs one piece of configuration: `state_relay_url` + `state_relay_token` (matching the "Sync Server URL" + "Access Token" fields on the "Web Push" card in Lyrimuse's Settings). **Fill in both and the whole chain above starts running automatically — there's no separate switch to flip in Settings.** That's the behavior as of 2026-07-20; an earlier version of Settings had an extra "Push status to web widget/badge" toggle here, which has since been removed.
 
-## 从零搭一套自己的
+## Building Your Own From Scratch
 
-### 前提
+### Prerequisite
 
-已经按主 [README](../README.md#toc-collector) 把 collector 跑起来了（哪怕只是最基础的 `-dry-run` 试跑）。不需要配置 ListenBrainz 才能往下走——网页也可以完全靠 state-worker 自己的 KV 工作，不依赖 ListenBrainz（除了「历史播放」这一项，只有 ListenBrainz 能提供，state-worker 没有自己的历史存储，见下方「有什么做不到」）。
+You already have collector running per the main [README](../README.md#toc-collector) (even just a basic `-dry-run` trial run is enough). You don't need ListenBrainz configured to continue — the web page can run entirely on state-worker's own KV storage without depending on ListenBrainz (with one exception: "recent playback history" is only available via ListenBrainz, since state-worker doesn't keep its own history store — see "What This Can't Do" below).
 
-### 第一步：部署自己的 state-worker
+### Step 1: Deploy your own state-worker
 
-这一步的完整版步骤（Cloudflare 账号、KV 命名空间、自定义域名、两个 secret）已经写在主 README 里，这里不重复第二份、避免以后两边改漂移——跳转过去照着走一遍：[README「从零搭建 state-worker」](../README.md#L197-L220)（GitHub 网页版用行号锚点定位，不依赖它对中文/括号标题的 slug 生成规则；这一节挪动过的话，这个行号也要跟着改）。
+The full version of this step (Cloudflare account, KV namespace, custom domain, two secrets) is already written up in the main README — it isn't duplicated here a second time, to avoid the two copies drifting apart over time. Follow it there: [README, "Building state-worker From Scratch"](../README.md#L197-L220) (this section of the README is in Chinese; the GitHub web view link uses a line-number anchor rather than a heading anchor, since it doesn't depend on GitHub's slug-generation rules for headings with Chinese text/parentheses — if that section ever moves, these line numbers need updating to match).
 
-走完这一步，你会拿到：
-- 一个能访问的 state-worker 地址（自定义域名或 `*.workers.dev` 子域名）
-- 一个你自己生成的 `PUSH_TOKEN`（collector 认证用）
+By the end of this step, you'll have:
+- A reachable state-worker address (a custom domain or a `*.workers.dev` subdomain)
+- A `PUSH_TOKEN` you generated yourself (used to authenticate collector)
 
-### 第二步：部署自己的网页
+### Step 2: Deploy your own web page
 
 ```bash
 git clone git@github.com:Yudaotor/nowplaying.git web-page
-# 托管到任意静态站(GitHub Pages / Cloudflare Pages 都行),访问:
-# https://<你的域名>/index.html?user=<你的 ListenBrainz 用户名>
+# Host it on any static site (GitHub Pages / Cloudflare Pages both work). Visit it at:
+# https://<your-domain>/index.html?user=<your ListenBrainz username>
 ```
 
-网页本体的 `RELAY` 常量默认指向作者自己的 `https://np.yudaotor.me`——部署你自己的网页前，把 `web/index.html` 里这一行改成你自己 state-worker 的地址：
+The web page's `RELAY` constant defaults to the author's own `https://np.yudaotor.me` — before deploying your own copy, change this line in `web/index.html` to your own state-worker's address:
 
 ```js
 const RELAY = (() => { const r = params.get('relay'); if (r === 'off') return ''; return r || 'https://np.yudaotor.me'; })();
 ```
 
-不想改源码也行，访问时带上 `?relay=你的地址` 覆盖（比如分享链接时用 `?user=xxx&relay=https://your-worker.workers.dev`）。想完全不用 state-worker、只靠 ListenBrainz 兜底，带 `?relay=off`。
+You don't have to edit the source at all, either — pass `?relay=your-address` on the URL to override it at visit time (for example, `?user=xxx&relay=https://your-worker.workers.dev` when sharing a link). If you want to skip state-worker entirely and rely purely on the ListenBrainz fallback, pass `?relay=off`.
 
-### 第三步：把 Lyrimuse 和 state-worker 串起来
+### Step 3: Connect Lyrimuse to state-worker
 
-打开 Lyrimuse 菜单栏「设置…」→ 侧边栏「附加功能」→「网页推送」，填两项：
+Open Lyrimuse's menu bar "Settings…" → sidebar "Add-on Features" → "Web Push," and fill in two fields:
 
-- **同步服务地址**：第一步拿到的 state-worker 地址
-- **访问令牌**：跟第一步 `PUSH_TOKEN` 完全相同的字符串
+- **Sync Server URL**: the state-worker address from step 1
+- **Access Token**: the exact same string as the `PUSH_TOKEN` from step 1
 
-填完就结束了——不需要再找一个开关打开。collector 下次重启（改完设置会自动触发）就会开始往这个地址推状态。
+That's it — there's no separate switch to go find and turn on. The next time collector restarts (which happens automatically after saving settings), it starts pushing state to this address.
 
-### 第四步：验证
+### Step 4: Verify it
 
-1. 直接访问你自己的网页地址，看能不能看到"正在播放"或"上次播放"（不是卡在"连接中…"）。
-2. 换一首歌，等几秒钟刷新，确认标题/封面跟着变了——说明 collector → state-worker → 网页这条链路真的通了，不是网页在读 ListenBrainz 兜底（兜底模式下换歌到网页看到之间通常要慢不少，且没有留言墙等模块）。
-3. 试着在网页上留一句言/点个赞，刷新页面看看还在不在。
+1. Visit your own web page address directly and check whether you can see "now playing" or "last played" (rather than getting stuck on "connecting…").
+2. Switch tracks, wait a few seconds, and refresh — confirm the title/cover art actually changed. That confirms the collector → state-worker → web page chain is genuinely connected, rather than the page silently reading the ListenBrainz fallback (in fallback mode, there's usually a much longer delay between switching tracks on your Mac and seeing it reflected on the page, and modules like the guestbook won't show up at all).
+3. Try leaving a message or clicking the like button on the page, then refresh and confirm it's still there.
 
-## 有什么做不到 / 目前的限制
+## What This Can't Do / Current Limitations
 
-- **五个可选展示模块（历史/留言墙/表情反应/访客计数/Top10 歌手）现在没有逐项开关**：只要「网页推送」的地址+令牌配好，五个一起出现；不填就五个都不出现（此前有过一版本 5 个独立开关，2026-07-20 起去掉了，理由是"网页推送本身就是附加功能，配了就该全推，不需要逐项配置"）。真只想要其中几个，目前唯一的办法是自己改 `web/index.html`，把不想要的模块的 DOM/初始化函数删掉。
-- **「历史播放」这个模块只有 ListenBrainz 才能提供**：state-worker 本身不单独存历史（KV 只存"当前状态"和这几个访客互动模块），所以哪怕你完全不想要 ListenBrainz、只用 state-worker 推"正在播放"，网页上的历史列表依然是回退直连 ListenBrainz 读出来的。
-- **国内访问 ListenBrainz 直连可能不稳定**，这也是 state-worker 这个"国内加速中继"存在的原因——不部署它也能用，只是网页在国内访问时可能偶尔转圈。
-- **`web/index.html` 和 `state-worker/src/index.js` 各有一份几乎相同的"解析 ListenBrainz 原始数据"函数**（`fromLB`/`lbHistory`），两处代码里都有互相指向对方的注释——这是因为它们分别部署在 GitHub Pages 和 Cloudflare Workers 两个不相关平台，没有共用构建步骤做不到真正共享同一份源码。如果你要改这部分解析逻辑，两处都要照着改一遍，不然会悄悄不一致。
+- **The five optional display modules (history / guestbook / reactions / visitor counter / top-10-artists) don't have per-module toggles anymore**: as soon as "Web Push"'s address + token are configured, all five appear together; leave them blank and none of the five appear. (An earlier version had 5 independent toggles for these; they were removed starting 2026-07-20, on the reasoning that "Web Push is an add-on feature to begin with — once it's configured it should push everything, without needing per-item configuration.") If you genuinely only want some of these modules, the only way to do that right now is to edit `web/index.html` yourself and delete the DOM/initialization code for the ones you don't want.
+- **The "recent playback history" module is only available through ListenBrainz**: state-worker doesn't maintain its own history store (its KV only holds "current state" and the handful of visitor-interaction modules), so even if you want nothing to do with ListenBrainz and only use state-worker to push "now playing," the history list on the web page still comes from falling back to ListenBrainz directly.
+- **Connecting to ListenBrainz directly from within China can be unreliable.** That's the whole reason state-worker (a "China-accelerated relay") exists in the first place — you don't have to deploy it, but without it the page may occasionally spin/stall when accessed from within China.
+- **`web/index.html` and `state-worker/src/index.js` each maintain their own, nearly-identical copy of the "parse raw ListenBrainz data" logic** (`fromLB`/`lbHistory`), and both have comments pointing at the other file. This is because they're deployed on two unrelated platforms — GitHub Pages and Cloudflare Workers — with no shared build step that would let them actually share source code. If you need to change this parsing logic, you have to change it in both places, or the two will silently drift out of sync.
 
-## 常见问题
+## Troubleshooting
 
-**网页一直显示"连接中…稍后自动重试"** — 检查 URL 有没有带对 `?user=` 参数（ListenBrainz 用户名），以及浏览器能不能访问到你的 state-worker 地址（或者 ListenBrainz 本身是否可达）。
+**The page is stuck on "Connecting… will retry automatically"** — Check whether the URL has the right `?user=` parameter (your ListenBrainz username), and whether your browser can actually reach your state-worker address (or whether ListenBrainz itself is reachable).
 
-**换了歌，网页半天才更新，而且看不到留言墙/Top10 歌手这些模块** — 说明网页目前走的是 ListenBrainz 兜底路径，没有真正连上你的 state-worker。检查：Lyrimuse 设置里「网页推送」地址+令牌是否已经填好并保存（保存后 collector 会自动重启生效）；网页访问的地址有没有被 `?relay=off` 意外关掉；直接用浏览器访问 `https://<你的state-worker地址>/now` 看返回的是不是正常 JSON（不是 401/500）。
+**Track changes take forever to show up, and modules like the guestbook / top-10-artists are missing** — This means the page is currently running on the ListenBrainz fallback path, not genuinely connected to your state-worker. Check: whether Lyrimuse Settings' "Web Push" address + token are filled in and saved (saving triggers an automatic collector restart to pick it up); whether the page's URL accidentally has `?relay=off` on it; and try visiting `https://<your-state-worker-address>/now` directly in a browser to confirm it returns normal JSON (not a 401 or 500).
 
-**`/push` 一直 401** — `state_relay_token`（Lyrimuse 设置里填的）跟 state-worker 的 `PUSH_TOKEN`（`wrangler secret put` 设置的那个）必须是完全相同的字符串，改了一头忘了改另一头是最常见的原因。
+**`/push` keeps returning 401** — `state_relay_token` (the one you entered in Lyrimuse's settings) and state-worker's `PUSH_TOKEN` (the one set via `wrangler secret put`) must be the exact same string. The most common cause is changing one side and forgetting the other.
 
-**封面/歌手头像加载不出来** — 封面走网易云图床、Top10 歌手头像走 Deezer，都没有国内 CDN 加速，偶尔会因为网络问题加载失败；网页对这两种情况都有兜底（封面退到纯色背景，头像退到圆形首字母占位），不影响其它内容正常显示。
+**Cover art / artist avatars won't load** — Cover art comes from NetEase's image hosting, and top-10-artist avatars come from Deezer; neither has CDN acceleration aimed at China, so they'll occasionally fail to load due to network issues. The page has a fallback for both cases (cover art falls back to a solid-color background, avatars fall back to a circular-initial placeholder), and nothing else on the page is affected.
 
-**只想要网页展示当前播放，不想要留言墙这些互动功能** — 目前做不到"部分开启"，见上面「有什么做不到」——需要自己改 `web/index.html` 删掉不想要的模块。
+**I only want the "now playing" display, not the guestbook and other interactive features** — There's currently no way to enable "some but not all" of these — see "What This Can't Do" above. You'd need to edit `web/index.html` yourself and remove the modules you don't want.
