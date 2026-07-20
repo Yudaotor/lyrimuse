@@ -19,7 +19,7 @@ struct MenuBarLabel: View {
                 // "看不到剩下的部分",鼠标悬停时用系统原生 tooltip 把完整这一行显示出来。
                 Text(truncated(text)).help(text)
             } else {
-                Label(L10n.t("桌面歌词"), systemImage: "text.quote")
+                Label(L10n.t("Lyrimuse"), systemImage: "text.quote")
             }
         }
         // label: 是 MenuBarExtra 真正常驻状态栏的那部分,整个 App 运行期间只挂载一次

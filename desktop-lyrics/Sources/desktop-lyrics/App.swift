@@ -23,7 +23,7 @@ struct DesktopLyricsApp: App {
         }
         // 固定尺寸的一次性向导,不需要用户手动拖拽调整——.windowResizability(.contentSize)
         // 让窗口尺寸完全跟着 OnboardingView 自己声明的 .frame(width:height:) 走。
-        Window(L10n.t("欢迎使用 desktop-lyrics"), id: "onboarding") {
+        Window(L10n.t("欢迎使用 Lyrimuse"), id: "onboarding") {
             OnboardingView()
         }
         .windowResizability(.contentSize)

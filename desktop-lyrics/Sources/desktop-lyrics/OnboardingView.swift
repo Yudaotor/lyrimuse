@@ -75,7 +75,7 @@ struct OnboardingView: View {
             Image(systemName: "text.quote")
                 .font(.system(size: 44))
                 .foregroundStyle(Color.accentColor)
-            Text(L10n.t("欢迎使用 desktop-lyrics"))
+            Text(L10n.t("欢迎使用 Lyrimuse"))
                 .font(.title.bold())
             Text(L10n.t("一个贴心的桌面悬浮歌词小工具。接下来用几步简单设置，帮你把它调整成合适的样子——这些选项以后随时可以在设置里再调整。"))
                 .foregroundStyle(.secondary)

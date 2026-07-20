@@ -1,4 +1,4 @@
-# desktop-lyrics
+# Lyrimuse（desktop-lyrics）
 
 原生 macOS 菜单栏 + 悬浮歌词窗口，跟着 Apple Music 播放实时显示逐字同步歌词，显示成一个
 常驻置顶、跨 Space 的小悬浮窗——类似网易云/QQ音乐桌面客户端的"桌面歌词"。另外还有一个
@@ -21,7 +21,7 @@
 - 只需要 Swift 工具链（Command Line Tools 自带即可，不需要装完整 Xcode——已实测确认，
   `Package.swift` 用的是纯 SwiftPM 可执行 target，不是 `.xcodeproj`）。
 - 打包成正经的 `.app`（2026-07-18 起）：`build.sh` 把 release 构建的可执行文件+图标+
-  `Info.plist` 组装进 `bin/DesktopLyrics.app`，可以拖进 Dock 当启动器双击打开。`Info.plist`
+  `Info.plist` 组装安装到 `/Applications/Lyrimuse.app`，可以拖进 Dock 当启动器双击打开。`Info.plist`
   里仍然设 `LSUIElement`，运行期间照旧不占 Dock/Cmd-Tab（跟改造前的 `NSApp.
   setActivationPolicy(.accessory)` 运行时调用双保险）。SwiftPM 给每个声明了 `resources`
   的 target 生成的 `Bundle.module` 资源包（本地化文案等）按访问器的固定查找路径搬到了
@@ -39,7 +39,7 @@
 ## 构建 / 运行
 
 ```bash
-./build.sh              # release 构建 + 打包成 ../bin/DesktopLyrics.app + 重启(如果当前有实例在跑)
+./build.sh              # release 构建 + 打包安装到 /Applications/Lyrimuse.app + 重启(如果当前有实例在跑)
 ./build.sh --no-restart  # 只构建
 swift run desktop-lyrics-selftest   # 跑歌词解析器的合成字符串测试
 ```

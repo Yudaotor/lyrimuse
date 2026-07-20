@@ -39,7 +39,12 @@ final class LoginItemManager {
         // (不再留 bin/ 下的拷贝——同一天早些时候用户把 bin/ 下那份自己拷到了
         // /Applications/ 手动启动,导致重新构建/重启了好几次都反映不到用户实际在跑的
         // 那个进程上,排查了很久,详见 build.sh 里的注释)。
-        return URL(fileURLWithPath: "/Applications/DesktopLyrics.app/Contents/MacOS/desktop-lyrics").path
+        //
+        // 2026-07-20:App 正式改名 Lyrimuse,build.sh 的 APP_NAME 跟着变,.app 包路径
+        // 也从 DesktopLyrics.app 换成 Lyrimuse.app——这个兜底路径字符串同步更新,
+        // 不然极端情况下(installedExecutablePath 判断落到这条兜底分支)会装出一个指向
+        // 已经不存在的旧路径的 LaunchAgent。
+        return URL(fileURLWithPath: "/Applications/Lyrimuse.app/Contents/MacOS/desktop-lyrics").path
     }
     private var plistURL: URL {
         FileManager.default.homeDirectoryForCurrentUser

@@ -39,7 +39,7 @@
 "一个贴心的桌面悬浮歌词小工具。接下来用几步简单设置，帮你把它调整成合适的样子——这些选项以后随时可以在设置里再调整。" = "A friendly floating lyrics widget for your desktop. Let's walk through a few quick steps to set it up — you can always change these later in Settings.";
 "下一步" = "Next";
 "上一步" = "Back";
-"欢迎使用 desktop-lyrics" = "Welcome to desktop-lyrics";
+"欢迎使用 Lyrimuse" = "Welcome to Lyrimuse";
 "desktop-lyrics 可以在本地模式下读取 Apple Music 的精确播放进度(误差 <0.1 秒)，需要系统「自动化」权限允许控制 Music.app。不授权也能正常使用——播放进度会改用估算值，可能有 1-2 秒误差。" = "In local mode, desktop-lyrics can read Apple Music's precise playback position (accurate to <0.1s), which needs system \"Automation\" access to control Music.app. It works fine without it too — playback position falls back to an estimate that may drift 1-2 seconds.";
 "开始使用" = "Get Started";
 "可以随时在设置里调整这些选项。" = "You can always adjust these later in Settings.";
@@ -193,7 +193,7 @@
 "机器人安全设置选了「加签」才需要填，留空按未加签处理。" = "Only needed if the bot's security settings have \"Signing\" enabled; leave it blank to treat it as unsigned.";
 "来源" = "Source";
 "查看官方文档 →" = "View Official Docs →";
-"桌面歌词" = "Desktop Lyrics";
+"Lyrimuse" = "Lyrimuse";
 "桥接+镜像已配置" = "Bridge + Mirror Configured";
 "桥接回 ListenBrainz" = "Bridge to ListenBrainz";
 "桥接已配置" = "Bridge Configured";

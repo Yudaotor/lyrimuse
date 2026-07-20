@@ -13,7 +13,14 @@
 set -euo pipefail
 
 cd "$(dirname "$0")" # desktop-lyrics/
-APP_NAME="DesktopLyrics"
+# 2026-07-20:App 的正式名字定为 Lyrimuse(lyric + muse)——这个字符串只驱动
+# /Applications/ 下 .app 包的文件夹名 + CFBundleName/CFBundleDisplayName(Finder/
+# Dock 上看到的名字)。故意不碰下面的 LABEL(codesign --identifier / launchd
+# Label,TCC 自动化权限按这个认)和 Info.plist 里的 CFBundleIdentifier(UserDefaults
+# 偏好域按这个认,改了会让已有的语言/字体/颜色/快捷键绑定等设置全部读不到)——这两个
+# 是内部身份标识,不需要跟对外的品牌名保持一致,保持不变才能让这次改名对已有安装
+# 无缝升级,不产生权限/设置的一次性代价。
+APP_NAME="Lyrimuse"
 # 装到 /Applications/ 而不是仓库自己的 bin/ 里(2026-07-18 当天改的——一开始装在 bin/
 # 下,用户把它拖/拷到了 /Applications/ 自己启动,导致真正在跑的是一份没同步过后续几次
 # 修复的旧拷贝,重新构建/重启了好几次都没反映到用户实际在看的那个进程上,排查了很久才
@@ -60,7 +67,7 @@ cat > "$APP_DIR/Contents/Info.plist" <<PLIST
     <key>CFBundleName</key>
     <string>${APP_NAME}</string>
     <key>CFBundleDisplayName</key>
-    <string>桌面歌词</string>
+    <string>Lyrimuse</string>
     <key>CFBundleVersion</key>
     <string>1.0</string>
     <key>CFBundleShortVersionString</key>

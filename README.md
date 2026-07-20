@@ -1,6 +1,6 @@
 <div align="center">
 
-# desktop-lyrics-suite
+# Lyrimuse
 
 **Mac 菜单栏悬浮歌词** —— 跟着 Apple Music 播放，实时显示逐字同步歌词
 
@@ -60,8 +60,8 @@ collector 是一个 Go 编写、launchd 常驻的采集器，负责联网查歌�
 ### 快速开始
 
 ```bash
-git clone git@github.com:Yudaotor/desktop-lyrics-suite.git
-cd desktop-lyrics-suite
+git clone git@github.com:Yudaotor/lyrimuse.git
+cd lyrimuse
 
 # 依赖：brew install media-control（读系统正在播放，免 Apple Events/自动化授权）
 brew install media-control
@@ -150,7 +150,7 @@ git clone git@github.com:Yudaotor/nowplaying.git web-page
 | 全局快捷键 | 显示/隐藏悬浮歌词、锁定/解锁位置、打开歌词管理、打开设置、播放/暂停、上一首/下一首，共 7 个动作，默认不绑定任何按键 | `desktop-lyrics/Settings/GlobalHotkeys.swift` | 设置「通用」tab「快捷键」分区，逐项自己录制 |
 | 悬浮窗播放控制 | 鼠标悬停在悬浮窗上浮现播放/暂停、上一首、下一首三个按钮；位置锁定时不生效（锁定本身就会让窗口点击穿透） | `desktop-lyrics/UI/LyricsOverlayView.swift` | 无需开关，未锁定位置时自动可用 |
 | 灵动岛/刘海样式悬浮歌词 | 贴着刘海（或无刘海机型的居中兜底胶囊）的小窗，播放中宽度跟着当前歌词行动态调整；左侧歌名、右侧播放控制（超长都会滚动展示），逐字高亮歌词常显；当前没有在播放且鼠标未悬停时整体收缩到跟物理刘海本身一样大，常显内容完全不渲染，鼠标悬停到这一小块区域上会重新展开完整内容（可以直接点播放恢复播放）；鼠标悬停展开显示下一句预览+迷你进度条；背景纯黑/磨砂玻璃/深色渐变三选一；与经典桌面悬浮窗各自独立开关，可以同时开 | `desktop-lyrics/UI/NotchLyrics*.swift` | 设置「外观」tab「悬浮窗」分区，「桌面悬浮歌词」「灵动岛歌词」开关 + 「灵动岛风格」 |
-| 打包成 .app | 从裸可执行文件改成真正的 `.app`，可以拖进 Dock/用 Finder 双击启动；运行期间仍不占 Dock/Cmd-Tab | `desktop-lyrics/build.sh` | `./build.sh` 自动打包到 `bin/DesktopLyrics.app` |
+| 打包成 .app | 从裸可执行文件改成真正的 `.app`，可以拖进 Dock/用 Finder 双击启动；运行期间仍不占 Dock/Cmd-Tab | `desktop-lyrics/build.sh` | `./build.sh` 自动打包安装到 `/Applications/Lyrimuse.app` |
 | 歌词管理窗口 | 查看/手改/删除/重新搜索候选每首歌的歌词，改动会导出成独立 `.lrc` 文件 | `desktop-lyrics/` | 菜单栏「歌词管理…」 |
 | 歌词多源解析 | 网易云/QQ音乐/酷狗/LRCLIB 四源都查一遍、取打分最高的（含逐字时间轴权重） | `collector/enrich.go` | 设置里「歌词在线匹配」开关；「歌词来源」可单独勾选启用哪几个源 |
 | 歌词文件夹作为权威源 | `~/.config/applemusic-nowplaying/lyrics/` 下的纯文本文件可以直接手改，collector 重启时导入生效 | `collector/lyricsimport.go`/`lyricsexport.go` | 设置里「歌词文件夹作为权威源」开关 |
