@@ -517,7 +517,11 @@ private struct AppearanceSettingsTab: View {
         // 说明性文字(截屏隐藏/歌词存储那两句)夹在控件中间当成普通一行,读起来像是漏了
         // 什么而不是备注。分组样式换来的排版全部是 SwiftUI 原生处理,不用手工调间距。
         Form {
-            Section(L10n.t("悬浮窗")) {
+            // 2026-07-20:Section 标题"悬浮窗"改成"歌词展示"——用户反馈调整,这个
+            // Section 本来就是三个"歌词显示在哪"的开关放在一起(见下面各处已有的改动
+            // 说明),"悬浮窗"这个名字只描述了其中两个、还漏了菜单栏歌词那个,不如
+            // "歌词展示"准确。
+            Section(L10n.t("歌词展示")) {
                 // 桌面悬浮歌词(经典悬浮窗)、灵动岛歌词是两个完全独立的展示位置,各自
                 // 独立开关,不互斥——可以同时开、只开一个、或都不开。最初做成互斥的单选
                 // "悬浮窗样式",用户反馈这两个应该分开,改成这样。每个开关只负责"生效"
@@ -552,16 +556,26 @@ private struct AppearanceSettingsTab: View {
                 // NotchLyricsView 每次渲染直接读 settings.notchCardStyle,不需要像
                 // classicOverlayEnabled/notchOverlayEnabled 那样在这里连带调用某个
                 // 窗口控制器的方法"生效"。
-                Picker(L10n.t("灵动岛风格"), selection: $settings.notchCardStyle) {
-                    ForEach(NotchCardStyle.allCases, id: \.self) { style in
-                        Text(style.displayName).tag(style)
+                //
+                // 2026-07-20:包进 `if settings.notchOverlayEnabled` 了——用户反馈
+                // "灵动岛风格配置只有打开了灵动岛才显示出来，联动一下"。灵动岛没开时
+                // 这个风格选项对用户毫无意义(没有窗口在用它),之前一直摆着容易让人
+                // 误以为跟"灵动岛歌词"开关的开关状态没关系。跟下面"超过就截断"那组
+                // 只在 showLyricsInMenuBar 开着时才出现是同一个既有模式。
+                if settings.notchOverlayEnabled {
+                    Picker(L10n.t("灵动岛风格"), selection: $settings.notchCardStyle) {
+                        ForEach(NotchCardStyle.allCases, id: \.self) { style in
+                            Text(style.displayName).tag(style)
+                        }
                     }
+                    .pickerStyle(.menu)
                 }
-                .pickerStyle(.menu)
                 // 从"歌词"tab 的"展示"分组搬过来——用户反馈"状态栏歌词也是个歌词展示
                 // 位置,应该跟桌面悬浮歌词/灵动岛歌词放一起",三个开关概念上都是"歌词
-                // 显示在哪"，不是三件互不相关的事。
-                Toggle(L10n.t("在状态栏显示当前歌词"), isOn: $settings.showLyricsInMenuBar)
+                // 显示在哪"，不是三件互不相关的事。2026-07-20:文案改成"菜单栏歌词"，
+                // 跟"桌面悬浮歌词"/"灵动岛歌词"这两个"XX歌词"的命名方式统一——原来的
+                // "在状态栏显示当前歌词"是一整句描述,风格上跟另外两个不一致。
+                Toggle(L10n.t("菜单栏歌词"), isOn: $settings.showLyricsInMenuBar)
                 if settings.showLyricsInMenuBar {
                     LabeledContent(L10n.t("超过就截断")) {
                         HStack(spacing: 8) {
