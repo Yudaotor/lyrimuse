@@ -62,6 +62,12 @@ public final class LyricsOffsetStore {
         set(0, forKey: key)
     }
 
+    // 直接赋一个绝对值——供"歌词管理"里那个输入框用(用户自己敲一个具体的秒数),跟
+    // nudge() 的"在现有值上累加"是两种不同的调用方式,内部走的还是同一个 set()。
+    public func setOffset(_ ms: Int, forKey key: String) {
+        set(ms, forKey: key)
+    }
+
     // key 是 "歌手|歌名|内容指纹" 拼出来的,三段都是空字符串时(还没拿到过任何曲目信息)
     // 这个 key 毫无意义,不该被当成一个真实的"歌曲"持久化下去。
     private func isValid(_ key: String) -> Bool {

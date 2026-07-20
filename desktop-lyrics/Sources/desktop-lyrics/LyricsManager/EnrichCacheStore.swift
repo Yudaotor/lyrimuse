@@ -158,12 +158,16 @@ public final class EnrichCacheStore: ObservableObject {
         }
     }
 
-    public func detail(for key: String) -> (lyrics: String, tr: String, roma: String) {
+    // 2026-07-20 加了 yrc 这个返回值——「歌词管理」新增的单曲歌词时间轴偏移输入框
+    // 需要跟 LocalPlaybackSource/RelayPoller 用同一份内容(lyrics+lyricsYRC)算出来的
+    // 指纹去查/存 LyricsOffsetStore,不然算出来的 key 对不上真正播放时用的那个 key。
+    public func detail(for key: String) -> (lyrics: String, tr: String, roma: String, yrc: String) {
         let entry = raw[key] ?? [:]
         return (
             entry["lyrics"] as? String ?? "",
             entry["lyrics_tr"] as? String ?? "",
-            entry["lyrics_roma"] as? String ?? ""
+            entry["lyrics_roma"] as? String ?? "",
+            entry["lyrics_yrc"] as? String ?? ""
         )
     }
 

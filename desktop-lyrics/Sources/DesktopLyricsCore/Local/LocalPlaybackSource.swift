@@ -225,6 +225,16 @@ public final class LocalPlaybackSource: ObservableObject {
         syncEngine.offsetMs = 0
     }
 
+    // 供"歌词管理"窗口的偏移输入框用——那边直接写 LyricsOffsetStore(不经过
+    // nudge/reset,是敲一个具体数值),写完之后调这个让当前正在播的这首歌(如果编辑的
+    // 恰好就是它)立刻用上新值,不用等下次换歌。跟别的歌词内容(key 对不上当前曲目)
+    // 无关时,这里只是把 currentOffsetKey 对应的值重新读一遍、原样赋回去,是个安全的
+    // 空操作。
+    public func refreshOffsetFromStore() {
+        guard lastSnapshot != nil else { return }
+        syncEngine.offsetMs = LyricsOffsetStore.shared.offset(forKey: currentOffsetKey)
+    }
+
     // 跟 syncEngine 实际加载的歌词内容(lyrics+lyricsYRC)绑在一起算出来的 key——见
     // reloadCurrentLyrics() 里怎么算的。只在换歌词内容那一刻更新一次,nudge/reset 直接
     // 复用,不用每次都重新拼一遍(也保证跟当初读校正值时用的是同一个 key)。

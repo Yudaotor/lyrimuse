@@ -178,6 +178,13 @@ public final class RelayPoller: ObservableObject {
         syncEngine.offsetMs = 0
     }
 
+    // 见 LocalPlaybackSource.refreshOffsetFromStore() 的注释——供"歌词管理"窗口的
+    // 偏移输入框用。
+    public func refreshOffsetFromStore() {
+        guard lastState != nil else { return }
+        syncEngine.offsetMs = LyricsOffsetStore.shared.offset(forKey: currentOffsetKey)
+    }
+
     // 见 LocalPlaybackSource 里同名属性的注释——跟 syncEngine 实际加载的歌词内容绑在
     // 一起,只在换歌词内容那一刻更新。
     private var currentOffsetKey = ""

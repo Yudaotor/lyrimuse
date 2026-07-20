@@ -21,6 +21,9 @@
 "延后" = "Delay";
 "秒" = "s";
 "重置" = "Reset";
+"歌词时间轴偏移" = "Lyrics Timing Offset";
+"应用" = "Apply";
+"正数=提前显示,负数=延后显示" = "Positive = show earlier, negative = show later";
 "请求权限" = "Request Access";
 "精确追踪 Apple Music 播放进度" = "Precisely Track Apple Music Playback Position";
 "需要系统「自动化」权限允许控制 Music.app；没有这个权限也能正常使用，播放进度会改用估算值，可能有 1-2 秒误差。" = "Requires system \"Automation\" access to control Music.app; it still works fine without it — playback position falls back to an estimate that may drift 1-2 seconds.";

@@ -64,6 +64,17 @@ final class PlaybackCoordinator: ObservableObject {
         }
     }
 
+    // 供"歌词管理"窗口的偏移输入框用——那边直接写 LyricsOffsetStore(敲一个具体数值,
+    // 不是靠 nudge 累加),写完调这个让当前生效的数据源重新读一遍,如果编辑的恰好是
+    // 正在播的这首歌,立刻就能看到效果,不用等下次换歌。
+    func refreshLyricsOffsetForCurrentTrack() {
+        switch activeMode {
+        case .relay: RelayPoller.shared.refreshOffsetFromStore()
+        case .local: LocalPlaybackSource.shared.refreshOffsetFromStore()
+        case nil: break
+        }
+    }
+
     // 当前曲目已经校准过的时间偏移——读 LyricsOffsetStore,key 跟 trackKey 拼法完全
     // 一致(artist/title 都是空字符串时 LyricsOffsetStore 自己会判定 key 无效返回 0,
     // 不需要在这里额外判断"还没拿到任何曲目信息"这种情况)。

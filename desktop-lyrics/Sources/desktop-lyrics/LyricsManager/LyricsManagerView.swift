@@ -1,4 +1,5 @@
 import SwiftUI
+import DesktopLyricsCore
 
 // 歌词来源筛选——collector 只会写入这四种(见 collector/enrich.go 的 lyricCandidate
 // source 取值),"无来源"对应老缓存(lyrics_source 字段是 07-11 才加的,更早解析的
@@ -99,6 +100,13 @@ struct LyricsManagerView: View {
     @State private var editedLyrics = ""
     @State private var editedTr = ""
     @State private var editedRoma = ""
+    // 单曲歌词时间轴偏移——输入框显示/编辑的秒数字符串。跟下面两个"persisted"字段
+    // 分开存,是因为算 LyricsOffsetStore 的 key 必须用磁盘上实际持久化的歌词内容,不能
+    // 用 editedLyrics(用户可能正在编辑框里改还没点"保存修改",这时候的文本还没生效到
+    // 播放端,拿它算出来的 key 会跟真正播放时用的 key 对不上)。
+    @State private var editedOffsetSeconds = ""
+    @State private var persistedLyricsForOffset = ""
+    @State private var persistedYRCForOffset = ""
     @State private var showDeleteConfirm = false
     @State private var showSearchSheet = false
     @State private var sourceFilter: SourceFilter = .all
@@ -400,6 +408,7 @@ struct LyricsManagerView: View {
             VStack(alignment: .leading, spacing: 16) {
                 header(summary)
                 infoStrip(summary)
+                offsetSection(summary)
 
                 if summary.hasWordTiming {
                     wordTimingHint
@@ -443,6 +452,9 @@ struct LyricsManagerView: View {
                 editedRoma = candidate.lyricsRoma
                 Task {
                     await store.saveEdit(key: key, lyrics: candidate.lyrics, tr: candidate.lyricsTr, roma: candidate.lyricsRoma, yrc: candidate.lyricsYRC, source: candidate.source)
+                    // 采纳的候选歌词内容跟原来不一样,offset 的 key(内容指纹)也跟着变——
+                    // 输入框要显示"新内容对应的偏移值",不能继续显示采纳前那份内容的值。
+                    refreshOffsetState(artist: summary.artist, title: summary.title, lyrics: candidate.lyrics, yrc: candidate.lyricsYRC)
                 }
             }
         }
@@ -502,6 +514,34 @@ struct LyricsManagerView: View {
         }
     }
 
+    // 单曲歌词时间轴偏移——跟菜单栏"歌词时间轴"(边听边点着调)是同一份数据
+    // (LyricsOffsetStore),这里是给想直接敲一个精确数值的场景用的输入框,不用先听
+    // 一遍再一点点试。回车或点"应用"才真正写入+让当前播放立刻生效,不是敲一个字符
+    // 就实时应用(半个数字、负号打到一半时不该被当成有效值提交)。
+    private func offsetSection(_ summary: EnrichCacheStore.Summary) -> some View {
+        HStack(spacing: 8) {
+            Label(L10n.t("歌词时间轴偏移"), systemImage: "timer")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.secondary)
+            TextField("0.0", text: $editedOffsetSeconds)
+                .textFieldStyle(.roundedBorder)
+                .frame(width: 64)
+                .multilineTextAlignment(.trailing)
+                .onSubmit { applyOffsetEdit(summary) }
+            Text(L10n.t("秒"))
+                .font(.callout)
+                .foregroundStyle(.secondary)
+            Button(L10n.t("应用")) { applyOffsetEdit(summary) }
+            if LyricsOffsetStore.shared.offset(forKey: currentOffsetKey(summary)) != 0 {
+                Button(L10n.t("重置")) { resetOffsetEdit(summary) }
+            }
+            Spacer()
+            Text(L10n.t("正数=提前显示,负数=延后显示"))
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+        }
+    }
+
     private var wordTimingHint: some View {
         Label(
             L10n.t("这首歌带逐字时间轴,播放时优先用它渲染——下面直接改「歌词(LRC)」文本框不会生效。如需手改主歌词,请先点「移除逐字时间轴」。译文/罗马音编辑不受影响,随时生效。"),
@@ -530,14 +570,26 @@ struct LyricsManagerView: View {
     private func actionsRow(key: String, summary: EnrichCacheStore.Summary) -> some View {
         HStack(spacing: 10) {
             Button(L10n.t("保存修改")) {
-                Task { await store.saveEdit(key: key, lyrics: editedLyrics, tr: editedTr, roma: editedRoma) }
+                Task {
+                    await store.saveEdit(key: key, lyrics: editedLyrics, tr: editedTr, roma: editedRoma)
+                    // 歌词(LRC)内容可能改了,offset 的 key(内容指纹)也跟着变——重新
+                    // 从磁盘读一遍权威内容(而不是假设"这条路径不碰 yrc 所以沿用旧值"),
+                    // 保证跟真正持久化下来的内容一致。
+                    let d = store.detail(for: key)
+                    refreshOffsetState(artist: summary.artist, title: summary.title, lyrics: d.lyrics, yrc: d.yrc)
+                }
             }
             .buttonStyle(.borderedProminent)
             .keyboardShortcut("s", modifiers: .command)
 
             if summary.hasWordTiming {
                 Button(L10n.t("移除逐字时间轴")) {
-                    Task { await store.removeWordTiming(key: key) }
+                    Task {
+                        await store.removeWordTiming(key: key)
+                        // 逐字时间轴被清空了,内容指纹跟着变——同上,重新读一遍权威内容。
+                        let d = store.detail(for: key)
+                        refreshOffsetState(artist: summary.artist, title: summary.title, lyrics: d.lyrics, yrc: d.yrc)
+                    }
                 }
             }
 
@@ -550,6 +602,38 @@ struct LyricsManagerView: View {
         editedLyrics = d.lyrics
         editedTr = d.tr
         editedRoma = d.roma
+        if let summary = store.summaries.first(where: { $0.key == key }) {
+            refreshOffsetState(artist: summary.artist, title: summary.title, lyrics: d.lyrics, yrc: d.yrc)
+        }
+    }
+
+    // 跟 loadDetail 共用——"保存修改"/采纳联网候选歌词之后也要重新调这个:磁盘上的
+    // 歌词内容变了,LyricsOffsetStore 的 key(内容指纹的一部分)跟着变,输入框要显示
+    // "新内容对应的偏移值"(通常是 0,内容变了旧的校正值自然对不上、查不到),而不是
+    // 继续显示改之前那份内容的偏移值。
+    private func refreshOffsetState(artist: String, title: String, lyrics: String, yrc: String) {
+        persistedLyricsForOffset = lyrics
+        persistedYRCForOffset = yrc
+        let key = LyricsOffsetStore.trackKey(artist: artist, title: title, lyrics: lyrics, lyricsYRC: yrc)
+        editedOffsetSeconds = AppSettings.formattedSeconds(ms: LyricsOffsetStore.shared.offset(forKey: key))
+    }
+
+    private func currentOffsetKey(_ summary: EnrichCacheStore.Summary) -> String {
+        LyricsOffsetStore.trackKey(artist: summary.artist, title: summary.title, lyrics: persistedLyricsForOffset, lyricsYRC: persistedYRCForOffset)
+    }
+
+    private func applyOffsetEdit(_ summary: EnrichCacheStore.Summary) {
+        let seconds = Double(editedOffsetSeconds.trimmingCharacters(in: .whitespaces)) ?? 0
+        let ms = Int((seconds * 1000).rounded())
+        LyricsOffsetStore.shared.setOffset(ms, forKey: currentOffsetKey(summary))
+        editedOffsetSeconds = AppSettings.formattedSeconds(ms: ms)
+        PlaybackCoordinator.shared.refreshLyricsOffsetForCurrentTrack()
+    }
+
+    private func resetOffsetEdit(_ summary: EnrichCacheStore.Summary) {
+        LyricsOffsetStore.shared.reset(forKey: currentOffsetKey(summary))
+        editedOffsetSeconds = AppSettings.formattedSeconds(ms: 0)
+        PlaybackCoordinator.shared.refreshLyricsOffsetForCurrentTrack()
     }
 }
 
