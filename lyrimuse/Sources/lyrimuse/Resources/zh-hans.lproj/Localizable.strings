@@ -249,7 +249,8 @@
 "超过就截断" = "超过就截断";
 "跟上面桥接用的不是同一个 API Key，需要单独申请。" = "跟上面桥接用的不是同一个 API Key，需要单独申请。";
 "跟随系统" = "跟随系统";
-"转发进 ListenBrainz，也需要「ListenBrainz」账号绑定好。" = "转发进 ListenBrainz，也需要「ListenBrainz」账号绑定好。";
+"读取 iPhone 上已经报给 Last.fm 的播放记录：Mac 没有播放时用来显示「iPhone 正在播」；打开下面的开关还会把这些记录转发进 ListenBrainz、统一两台设备的播放历史，这也需要「ListenBrainz」账号绑定好。" = "读取 iPhone 上已经报给 Last.fm 的播放记录：Mac 没有播放时用来显示「iPhone 正在播」；打开下面的开关还会把这些记录转发进 ListenBrainz、统一两台设备的播放历史，这也需要「ListenBrainz」账号绑定好。";
+"把这台 Mac 上的播放同步写回 Last.fm——Apple Music 本身不会自动同步，需要这个开关补上这份记录，Last.fm 个人主页才能看到用 Mac 听的这部分。" = "把这台 Mac 上的播放同步写回 Last.fm——Apple Music 本身不会自动同步，需要这个开关补上这份记录，Last.fm 个人主页才能看到用 Mac 听的这部分。";
 "还差一步" = "还差一步";
 "还没填 API Key" = "还没填 API Key";
 "还没填 Scrobble API Key" = "还没填 Scrobble API Key";

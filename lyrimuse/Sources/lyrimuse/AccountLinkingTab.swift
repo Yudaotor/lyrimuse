@@ -441,9 +441,14 @@ struct AccountLinkingTab: View {
         } header: {
             Text(L10n.t("iPhone 播放桥接"))
         } footer: {
-            // 2026-07-20:原文案"转发进 ListenBrainz，也需要那张卡配好。"用户反馈调整——
-            // 明确点名是「ListenBrainz」这个账号、并且改成"绑定好"而不是含糊的"配好"。
-            Text(L10n.t("转发进 ListenBrainz，也需要「ListenBrainz」账号绑定好。"))
+            // 2026-07-20:用户反馈"'iPhone 播放桥接'这个词含义不明确，加一个说明是具体
+            // 干什么事情的"——补一句说清楚具体在干什么(读 iPhone 已经报给 Last.fm 的
+            // 播放记录、没在 Mac 播放时拿来当"正在播放"显示),再接上一轮已经改过的那句
+            // "转发进 ListenBrainz 需要账号绑定好"。这个开关实际上是整条"读 iPhone
+            // 播放"链路唯一的总开关(collector 侧 bridge() 只看 features.LastfmBridge
+            // 这一个字段),关掉不只是不转发进 ListenBrainz,连"显示 iPhone 正在播放"
+            // 这部分也会一起关掉——这里如实写清楚,不能让人以为只影响 ListenBrainz 那半句。
+            Text(L10n.t("读取 iPhone 上已经报给 Last.fm 的播放记录：Mac 没有播放时用来显示「iPhone 正在播」；打开下面的开关还会把这些记录转发进 ListenBrainz、统一两台设备的播放历史，这也需要「ListenBrainz」账号绑定好。"))
         }
 
         Section {
@@ -470,6 +475,12 @@ struct AccountLinkingTab: View {
             ))
         } header: {
             Text(L10n.t("Mac 播放镜像"))
+        } footer: {
+            // 2026-07-20:同上一条,"Mac 播放镜像"也补一句说清楚具体在干什么——
+            // Apple Music 本身不会自动同步到 Last.fm,这个开关是把这台 Mac 上的播放
+            // 单独写回 Last.fm,补上这一份原本没有的记录,跟上面"读 iPhone"方向正好
+            // 相反(这里是"写")。
+            Text(L10n.t("把这台 Mac 上的播放同步写回 Last.fm——Apple Music 本身不会自动同步，需要这个开关补上这份记录，Last.fm 个人主页才能看到用 Mac 听的这部分。"))
         }
     }
 
