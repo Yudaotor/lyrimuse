@@ -43,7 +43,6 @@ var lyricsSourceDefaultOrder = []string{lyricSourceNetease, lyricSourceQQ, lyric
 type featureFlagsFile struct {
 	Lyrics               *bool `json:"lyrics,omitempty"`
 	AlbumPrefetch        *bool `json:"album_prefetch,omitempty"`
-	StateRelay           *bool `json:"state_relay,omitempty"`
 	LastfmBridge         *bool `json:"lastfm_bridge,omitempty"`
 	LastfmMirrorScrobble *bool `json:"lastfm_mirror_scrobble,omitempty"`
 	WeeklyDigest         *bool `json:"weekly_digest,omitempty"`
@@ -62,23 +61,20 @@ type featureFlagsFile struct {
 	// LyricsDir：歌词文件夹("歌词文件夹作为权威源"读写的那个文件夹)的自定义位置。
 	// 留空则用默认位置(config.json 同目录下的 lyrics/,main.go 里兜底)。
 	LyricsDir string `json:"lyrics_dir,omitempty"`
-	// WebShowXxx 这五个跟上面所有字段都不一样:collector 自己的行为完全不受它们影响,
-	// 纯粹是"路过"——collector 只负责把值原样透传进 pushRelayState 的 payload,真正
-	// 消费方是网页前端的 JS,由它决定要不要渲染/请求"历史播放"“留言墙”“表情反应”
-	// “访客数”“Top 艺人”这五个可选内容模块。跟这五个模块相对的"正在播放"核心区和
-	// 歌词面板不是可选项,不受这组开关覆盖。
-	WebShowHistory      *bool `json:"web_show_history,omitempty"`
-	WebShowComments     *bool `json:"web_show_comments,omitempty"`
-	WebShowReactions    *bool `json:"web_show_reactions,omitempty"`
-	WebShowVisitorCount *bool `json:"web_show_visitor_count,omitempty"`
-	WebShowTopArtists   *bool `json:"web_show_top_artists,omitempty"`
 }
 
 // featureFlags is the resolved (never-nil) form consulted at every gate site.
+//
+// 2026-07-20:StateRelay 总开关 + 5 个 WebShowXxx 网页展示模块开关已删掉——用户
+// 反馈"网页推送是附加功能，配好 state-relay 地址+令牌就该默认全推，不用逐项配置"。
+// pushRelayState 现在只看 cfg.StateRelayURL 是否非空(config.go)来决定推不推；
+// webModules()/payload["modules"] 也一并删掉——网页前端(web/index.html
+// normalizeModules)本来就把 modules 字段缺失当"全部启用"处理,不推这个字段跟
+// 推一份全 true 的字段，网页那边看到的效果完全一样，没有必要维护一份形同虚设的
+// 可配置项。
 type featureFlags struct {
 	Lyrics               bool
 	AlbumPrefetch        bool
-	StateRelay           bool
 	LastfmBridge         bool
 	LastfmMirrorScrobble bool
 	WeeklyDigest         bool
@@ -94,13 +90,6 @@ type featureFlags struct {
 	// LyricsDir 空字符串表示"用默认位置",由 main.go 里设置包级变量 lyricsDir 时兜底,
 	// 不在这里(loadFeatureFlags)展开成绝对路径——那时候 *cfgPath 还没解析完。
 	LyricsDir string
-	// WebShowXxx：见 featureFlagsFile 同名字段注释——只透传给网页,不影响 collector
-	// 自身任何逻辑分支。
-	WebShowHistory      bool
-	WebShowComments     bool
-	WebShowReactions    bool
-	WebShowVisitorCount bool
-	WebShowTopArtists   bool
 }
 
 // features is set once in main() before run() starts; every gate site reads
@@ -117,9 +106,9 @@ func boolOr(p *bool, def bool) bool {
 // loadFeatureFlags reads the shared feature-toggle file (best-effort — missing
 // file / unparseable content all resolve to defaults below). Core behavior
 // toggles (lyrics/albumPrefetch) miss-field-defaults to true — a
-// pure increment that never silently changes existing behavior. The 6 toggles
-// that each require an external account (state relay / Last.fm bridge+mirror /
-// weekly digest / top-artists digest / push alerts) default to false instead
+// pure increment that never silently changes existing behavior. The 5 toggles
+// that each require an external account (Last.fm bridge+mirror / weekly
+// digest / top-artists digest / push alerts) default to false instead
 // (2026-07-18): turning them on by default for a stranger who never opened
 // Settings would silently start network calls to services they never
 // configured.
@@ -135,7 +124,6 @@ func loadFeatureFlags(path string) featureFlags {
 	return featureFlags{
 		Lyrics:               boolOr(f.Lyrics, true),
 		AlbumPrefetch:        boolOr(f.AlbumPrefetch, true),
-		StateRelay:           boolOr(f.StateRelay, false),
 		LastfmBridge:         boolOr(f.LastfmBridge, false),
 		LastfmMirrorScrobble: boolOr(f.LastfmMirrorScrobble, false),
 		WeeklyDigest:         boolOr(f.WeeklyDigest, false),
@@ -145,26 +133,6 @@ func loadFeatureFlags(path string) featureFlags {
 		LyricsSourceMode:     resolveLyricsSourceMode(f.LyricsSourceMode),
 		LyricsSourceOrder:    resolveLyricsSourceOrder(f.LyricsSourceOrder),
 		LyricsDir:            f.LyricsDir,
-		WebShowHistory:       boolOr(f.WebShowHistory, true),
-		WebShowComments:      boolOr(f.WebShowComments, true),
-		WebShowReactions:     boolOr(f.WebShowReactions, true),
-		WebShowVisitorCount:  boolOr(f.WebShowVisitorCount, true),
-		WebShowTopArtists:    boolOr(f.WebShowTopArtists, true),
-	}
-}
-
-// webModules 把五个"网页可选模块"开关整理成网页前端消费的 map——键名故意用
-// camelCase(跟 relayState 里 progressMs/lyricsTr 等既有 /push /now 载荷字段的
-// 大小写惯例一致),跟本文件其余部分、以及磁盘上 features.json 用的 snake_case
-// 是两套不同约定,分别对应两个不同的消费方(前者是 Cloudflare Worker/网页 JS,
-// 后者是 desktop-lyrics 的设置界面写盘格式)。
-func (f featureFlags) webModules() map[string]bool {
-	return map[string]bool{
-		"history":      f.WebShowHistory,
-		"comments":     f.WebShowComments,
-		"reactions":    f.WebShowReactions,
-		"visitorCount": f.WebShowVisitorCount,
-		"topArtists":   f.WebShowTopArtists,
 	}
 }
 

@@ -94,7 +94,6 @@
 "会把当前的文字颜色、背景颜色、阴影颜色存成一个可以随时再套用的主题。" = "Saves the current text, background, and shadow colors as a theme you can reapply anytime.";
 "赛博青" = "Cyber Cyan";
 "主题名称" = "Theme Name";
-"先打开「推送状态到网页/徽章」" = "Turn on \"Push status to web widget/badge\" first";
 "全部" = "All";
 "全部专辑" = "All Albums";
 "全部来源" = "All Sources";
@@ -111,7 +110,6 @@
 "前往 Last.fm 申请 →" = "Apply at Last.fm →";
 "加签密钥（可选）" = "Signing Secret (Optional)";
 "匹配算法" = "Matching Algorithm";
-"历史 Top10 歌手" = "Top 10 Artists";
 "历史 Top10 歌手统计" = "Top 10 Artists History";
 "历史统计" = "History Stats";
 "去配置「%@」" = "Configure \"%@\"";
@@ -169,7 +167,6 @@
 "控制要不要在线解析歌词——关闭后，第一次播放的新歌不会再去查下面「歌词来源」里的这些平台，只用本地已经缓存过的结果（如果有）。「歌词来源」「匹配算法」这两组设置都只在这个开关开启时才有意义。" = "Controls whether lyrics are looked up online. When off, newly played songs won't be checked against the platforms listed under \"Lyrics Sources\" below — only locally cached results (if any) will be used. The \"Lyrics Sources\" and \"Matching Algorithm\" settings only matter while this is on.";
 "推给网页展示，还需要「网页推送」配好。" = "Pushed to the web display — also requires \"Web Push\" to be configured.";
 "推送提醒" = "Push Alerts";
-"推送状态到网页/徽章" = "Push status to web widget/badge";
 "推送设置" = "Push Settings";
 "提前解析同专辑其它曲目（封面+歌词）" = "Prefetch Other Tracks in the Same Album (Cover + Lyrics)";
 "提醒开关" = "Alert Toggles";
@@ -192,7 +189,6 @@
 "智能算法：查到的每个来源都打分（逐字时间轴、语言是否匹配等维度），自动挑分数最高的一条。顺序优先：按下面排的顺序，用第一个查到有效结果的来源，不比较分数。" = "Smart: Every source found is scored (based on factors like word-level timing and language match), and the highest-scoring result is picked automatically. Priority: Uses the first source (in the order listed below) that returns a valid result, without comparing scores.";
 "暂停/无播放时隐藏" = "Hide When Paused or Not Playing";
 "更改" = "Change";
-"最近播放历史" = "Recently Played History";
 "服务器设置 → 整合(Integrations) → Webhook → 新建 Webhook，选好要发到的频道后复制 Webhook URL。" = "Server Settings → Integrations → Webhooks → New Webhook. Pick the channel to post to, then copy the Webhook URL.";
 "未启用" = "Not Enabled";
 "未知错误" = "Unknown error";
@@ -227,11 +223,9 @@
 "没超过就整行显示；超过这个长度会截断，鼠标悬停在状态栏上能看到完整这一行。" = "Shows the full line when it fits; when it's longer than this, it gets truncated — hover over the menu bar to see the complete line.";
 "清除筛选" = "Clear Filters";
 "清空全部缓存" = "Clear All Cache";
-"点赞" = "Reactions";
 "用户名（选填，用于界面显示）" = "Username (optional, for display only)";
 "用来把当前播放状态推送到网页小组件和状态徽章。" = "Pushes the current playback status to the web widget and status badge.";
 "用来接收两类推送：「故障告警」和「每周听歌小结」。" = "Used to receive two kinds of notifications: \"Failure Alerts\" and \"Weekly Listening Digest.\"";
-"留言墙" = "Guestbook";
 "确定要删除「%@ - %@」的本地记录吗?" = "Delete the local record for \"%@ - %@\"?";
 "确定要清空全部歌词缓存吗?" = "Clear all cached lyrics?";
 "移除逐字时间轴" = "Remove Word Timing";
@@ -239,7 +233,6 @@
 "签名密钥（可选）" = "Signature Secret (Optional)";
 "管理" = "Management";
 "网易云音乐" = "NetEase Cloud Music";
-"网页展示模块" = "Web Display Modules";
 "网页推送" = "Web Push";
 "罗马音" = "Romanization";
 "联网搜索候选歌词" = "Search Online for Lyrics";
@@ -252,7 +245,6 @@
 "解析本地记录文件失败" = "Failed to Parse Local Record File";
 "设置" = "Settings";
 "设置…" = "Settings…";
-"访客计数" = "Visitor Count";
 "访问令牌" = "Access Token";
 "译文" = "Translation";
 "请先在这张卡上填好：%@。" = "Please fill in %@ on this card first.";
@@ -305,4 +297,4 @@
 "需要单独申请一个有写入权限的 API Key + Secret，跟上面桥接用的不是同一个——在 Last.fm 后台创建应用时会同时给你这两项。" = "You'll need a separate API Key + Secret with write access — not the same one used for bridging above. Creating an app in the Last.fm dashboard gives you both at once.";
 "顺序优先" = "Priority Order";
 "飞书" = "Feishu";
-"默认全部开启，跟着上面的推送开关走；「最近播放历史」需要「ListenBrainz」配好才有数据，「历史 Top10 歌手」需要「Last.fm」卡片配好。" = "All enabled by default and follow the push toggle above; \"Recently Played History\" needs \"ListenBrainz\" configured to have data, and \"Top 10 Artists\" needs the \"Last.fm\" card configured.";
+"填好这两项就会自动推送到网页，历史播放、留言墙等展示模块默认全部开启。" = "Fill in both fields and pushing to the web starts automatically — history, guestbook, and other display modules are all enabled by default.";

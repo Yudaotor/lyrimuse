@@ -32,22 +32,19 @@ public enum LyricsSourceMode: String, CaseIterable, Identifiable, Codable {
 // 跟 collector/features.go 的 featureFlagsFile 逐字段对应的 on-disk 形状——所有字段
 // 可选(nil = 沿用默认开启),跟 collector 侧"文件缺失/字段缺失都当作 true"的约定一致,
 // 这里存的是 Lyrimuse 这台机器上用户明确设置过的值。
+// 2026-07-20:StateRelay 总开关 + 5 个 WebShowXxx 展示模块开关已从这份文件里删掉——
+// 用户反馈"网页推送是附加功能，填了地址就该默认全推，不用逐项配置"。collector/
+// features.go 那侧同步删掉了同名字段(不是各自独立决定的,两侧本来就是同一份共享
+// JSON 文件的镜像);旧配置文件里如果还留着这几个 key,JSONDecoder/Go 的
+// encoding/json 都会静默忽略未知字段,不需要额外的迁移代码。
 struct FeatureFlagsFile: Codable, Equatable {
     var lyrics: Bool?
     var albumPrefetch: Bool?
-    var stateRelay: Bool?
     var lastfmBridge: Bool?
     var lastfmMirrorScrobble: Bool?
     var weeklyDigest: Bool?
     var topArtistsDigest: Bool?
     var barkAlerts: Bool?
-    // 以下 5 个跟 collector/features.go 新增的 WebShowXxx 字段逐一对应——控制公开网页
-    // 上展示哪些模块,跟 collector 侧采集/处理行为无关,纯前端展示开关。
-    var webShowHistory: Bool?
-    var webShowComments: Bool?
-    var webShowReactions: Bool?
-    var webShowVisitorCount: Bool?
-    var webShowTopArtists: Bool?
     var lyricsSources: [String]?
     var lyricsSourceMode: String?
     var lyricsSourceOrder: [String]?
@@ -56,17 +53,11 @@ struct FeatureFlagsFile: Codable, Equatable {
     enum CodingKeys: String, CodingKey {
         case lyrics
         case albumPrefetch = "album_prefetch"
-        case stateRelay = "state_relay"
         case lastfmBridge = "lastfm_bridge"
         case lastfmMirrorScrobble = "lastfm_mirror_scrobble"
         case weeklyDigest = "weekly_digest"
         case topArtistsDigest = "top_artists_digest"
         case barkAlerts = "bark_alerts"
-        case webShowHistory = "web_show_history"
-        case webShowComments = "web_show_comments"
-        case webShowReactions = "web_show_reactions"
-        case webShowVisitorCount = "web_show_visitor_count"
-        case webShowTopArtists = "web_show_top_artists"
         case lyricsSources = "lyrics_sources"
         case lyricsSourceMode = "lyrics_source_mode"
         case lyricsSourceOrder = "lyrics_source_order"
@@ -75,8 +66,8 @@ struct FeatureFlagsFile: Codable, Equatable {
 }
 
 // "歌词"tab 的纯行为开关(lyrics/albumPrefetch 等)和"账号连接"tab 里各张
-// 账号卡片的开关(stateRelay/lastfmBridge/lastfmMirrorScrobble/weeklyDigest/
-// topArtistsDigest/barkAlerts/webShowXxx)共用同一份数据层——读写
+// 账号卡片的开关(lastfmBridge/lastfmMirrorScrobble/weeklyDigest/
+// topArtistsDigest/barkAlerts)共用同一份数据层——读写
 // ~/.config/applemusic-nowplaying/applemusic-nowplaying-features.json,跟
 // collector/features.go 是同一份共享文件的两侧独立实现。
 //
@@ -91,22 +82,14 @@ public final class FeatureSettingsStore: ObservableObject {
 
     @Published public var lyrics = true
     @Published public var albumPrefetch = true
-    // 2026-07-18:这 6 个都要连一个外部账号才有意义,改成默认关闭——用户反馈"非必需的
+    // 2026-07-18:这 5 个都要连一个外部账号才有意义,改成默认关闭——用户反馈"非必需的
     // 都设置为默认不开启"。collector/features.go 的 boolOr 默认值要跟着一起改,否则
     // 全新安装时 Swift 这边显示关、Go 那边却按"缺字段=开启"实际执行,两边会对不上。
-    @Published public var stateRelay = false
     @Published public var lastfmBridge = false
     @Published public var lastfmMirrorScrobble = false
     @Published public var weeklyDigest = false
     @Published public var topArtistsDigest = false
     @Published public var barkAlerts = false
-    // 跟 collector/features.go 新增的 WebShowXxx 字段对应,控制公开网页展示哪些模块
-    // (不是 collector 侧行为开关),默认全部开启,跟本文件其余开关的 fail-open 约定一致。
-    @Published public var webShowHistory = true
-    @Published public var webShowComments = true
-    @Published public var webShowReactions = true
-    @Published public var webShowVisitorCount = true
-    @Published public var webShowTopArtists = true
     @Published public var lyricsSources: Set<LyricsSource> = Set(LyricsSource.allCases)
     @Published public var lyricsSourceMode: LyricsSourceMode = .smart
     // 始终是全部 4 个源的一个排列(不是"只放启用的那几个")——启用/禁用状态单独由
@@ -126,12 +109,9 @@ public final class FeatureSettingsStore: ObservableObject {
     private var currentSnapshot: FeatureFlagsFile {
         FeatureFlagsFile(
             lyrics: lyrics,
-            albumPrefetch: albumPrefetch, stateRelay: stateRelay, lastfmBridge: lastfmBridge,
+            albumPrefetch: albumPrefetch, lastfmBridge: lastfmBridge,
             lastfmMirrorScrobble: lastfmMirrorScrobble, weeklyDigest: weeklyDigest,
             topArtistsDigest: topArtistsDigest, barkAlerts: barkAlerts,
-            webShowHistory: webShowHistory, webShowComments: webShowComments,
-            webShowReactions: webShowReactions, webShowVisitorCount: webShowVisitorCount,
-            webShowTopArtists: webShowTopArtists,
             lyricsSources: lyricsSources.map(\.rawValue).sorted(),
             lyricsSourceMode: lyricsSourceMode.rawValue,
             lyricsSourceOrder: lyricsSourceOrder.map(\.rawValue),
@@ -165,17 +145,11 @@ public final class FeatureSettingsStore: ObservableObject {
         }
         lyrics = f.lyrics ?? true
         albumPrefetch = f.albumPrefetch ?? true
-        stateRelay = f.stateRelay ?? false
         lastfmBridge = f.lastfmBridge ?? false
         lastfmMirrorScrobble = f.lastfmMirrorScrobble ?? false
         weeklyDigest = f.weeklyDigest ?? false
         topArtistsDigest = f.topArtistsDigest ?? false
         barkAlerts = f.barkAlerts ?? false
-        webShowHistory = f.webShowHistory ?? true
-        webShowComments = f.webShowComments ?? true
-        webShowReactions = f.webShowReactions ?? true
-        webShowVisitorCount = f.webShowVisitorCount ?? true
-        webShowTopArtists = f.webShowTopArtists ?? true
         // 缺失/空数组(旧配置文件没这个字段,或者曾经被清空过)都按"全部启用"处理,跟
         // collector 侧 resolveLyricsSources 的兜底规则一致。
         let decodedSources = (f.lyricsSources ?? []).compactMap(LyricsSource.init(rawValue:))

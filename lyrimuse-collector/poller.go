@@ -331,8 +331,12 @@ func (p *poller) updatePosition(now time.Time) (reanchor bool, loopRestart bool)
 	return reanchor, loopRestart
 }
 
+// 2026-07-20:门槛只看 StateRelayURL 是否配置——原来还要求 features.StateRelay
+// 这个独立总开关先手动打开,但用户反馈"网页推送是附加功能，填了地址就该默认全推，
+// 不用再多一层开关",删掉后地址+令牌本身就是唯一的"要不要推"开关(见 desktop-lyrics
+// 侧 AccountLinkingTab.swift 的对应改动)。
 func (p *poller) pushRelayState(now time.Time, reanchored bool) {
-	if !features.StateRelay || p.cfg.StateRelayURL == "" {
+	if p.cfg.StateRelayURL == "" {
 		return
 	}
 	var payload map[string]any
@@ -359,10 +363,6 @@ func (p *poller) pushRelayState(now time.Time, reanchored bool) {
 		payload = map[string]any{"ok": true, "empty": true, "playing": false}
 		key = "empty"
 	}
-	// 这五个"网页可选模块"开关跟上面 switch 走哪个分支无关——不管当前展示的是
-	// Mac 在播/iPhone 在播/暂停/上次播放/空闲兜底,网页都要知道要不要渲染这五个
-	// 模块,所以放在 switch 外面统一附加一次,不在每个分支各写一遍。
-	payload["modules"] = features.webModules()
 	// 省 KV 写额度(免费仅 1000 写/天):进度由网页从锚点外推,连播中途无需重写。
 	// 只在①状态变化(切歌/暂停/切设备)、②重锚(拖动/唤醒)、③兜底每 4 分钟刷一次
 	// 时才写(须 < worker STALE_MS=5min,否则 KV 会被判过期而误退 LB——这俩常数曾经

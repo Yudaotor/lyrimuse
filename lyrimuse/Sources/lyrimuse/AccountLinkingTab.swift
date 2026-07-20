@@ -385,41 +385,14 @@ struct AccountLinkingTab: View {
             SecretFieldRow(L10n.t("访问令牌"), value: $config.stateRelayToken)
         } header: {
             Text(L10n.t("连接信息"))
-        }
-
-        Section {
-            Toggle(L10n.t("推送状态到网页/徽章"), isOn: Binding(
-                get: { features.stateRelay },
-                set: { newValue in
-                    toggleGuarded(newValue, sameCardHint: config.stateRelayMissingHint()) { v in
-                        features.stateRelay = v; Task { await features.save() }
-                    }
-                }
-            ))
-
-            Toggle(L10n.t("最近播放历史"), isOn: webModuleBinding(\.webShowHistory))
-            Toggle(L10n.t("留言墙"), isOn: webModuleBinding(\.webShowComments))
-            Toggle(L10n.t("点赞"), isOn: webModuleBinding(\.webShowReactions))
-            Toggle(L10n.t("访客计数"), isOn: webModuleBinding(\.webShowVisitorCount))
-            Toggle(L10n.t("历史 Top10 歌手"), isOn: webModuleBinding(\.webShowTopArtists))
-        } header: {
-            Text(L10n.t("网页展示模块"))
         } footer: {
-            Text(L10n.t("默认全部开启，跟着上面的推送开关走；「最近播放历史」需要「ListenBrainz」配好才有数据，「历史 Top10 歌手」需要「Last.fm」卡片配好。"))
+            // 2026-07-20:去掉"推送状态到网页/徽章"总开关 + 5 个网页模块子开关——
+            // 用户反馈"网页推送本来就是附加功能，只要填了地址就该默认全推，不需要
+            // 逐项配置"。这两个字段填好本身就是"要不要推"这件事唯一的开关，不再需要
+            // 额外一层可以打开也可以关闭的开关摞在上面；网页那边(state-worker/网页
+            // 前端)看到 modules 配置缺失本来就按"全部启用"兜底，语义完全对得上。
+            Text(L10n.t("填好这两项就会自动推送到网页，历史播放、留言墙等展示模块默认全部开启。"))
         }
-    }
-
-    // 5 个网页模块开关共用同一套校验:自己不能单独打开,得先打开这张卡的
-    // "推送状态到网页/徽章"。用 KeyPath 而不是把 5 段几乎一样的 Binding 各写一遍。
-    private func webModuleBinding(_ keyPath: ReferenceWritableKeyPath<FeatureSettingsStore, Bool>) -> Binding<Bool> {
-        Binding(
-            get: { features[keyPath: keyPath] },
-            set: { newValue in
-                toggleGuarded(newValue, sameCardHint: features.stateRelay ? nil : L10n.t("先打开「推送状态到网页/徽章」")) { v in
-                    features[keyPath: keyPath] = v; Task { await features.save() }
-                }
-            }
-        )
     }
 
     // MARK: - Last.fm(合并 iPhone 桥接 + Mac 镜像——都是同一个 Last.fm 账号)
