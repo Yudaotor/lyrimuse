@@ -12,9 +12,9 @@
 
 ![浅色主题，暂停态，两栏布局](images/web-preview-light.png)
 
-深色氛围主题 + 黑胶模式，播放中：
+深色氛围主题 + 黑胶模式（暂停态时唱臂会抬起，播放中会匀速旋转，这张截图拍到的正是暂停这一刻）：
 
-![深色主题 + 黑胶模式，播放中](images/web-preview-vinyl-dark.png)
+![深色主题 + 黑胶模式，暂停态](images/web-preview-vinyl-dark.png)
 
 这两张是这个项目作者自己在跑的真实页面（<https://yudaotor.github.io/nowplaying/?user=yudaotor>），不是摆拍的示例数据。
 
