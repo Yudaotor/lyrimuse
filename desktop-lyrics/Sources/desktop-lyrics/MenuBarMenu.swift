@@ -92,6 +92,9 @@ struct MenuBarMenu: View {
         if settings.notchOverlayEnabled {
             NotchOverlayMenuSection()
         }
+        // 跟悬浮窗样式(经典/灵动岛)正交——校准的是"当前这首歌的歌词该提前/延后多少",
+        // 不管哪种样式在显示都适用,所以不放进上面两个按样式互斥的 Section 里,单独一份。
+        LyricsOffsetMenuSection()
         Divider()
         Toggle(L10n.t("开机启动"), isOn: $settings.launchAtLoginEnabled)
         // 不用 SettingsLink——这个 App 是 .accessory 策略(没有 Dock 图标/常规激活),
@@ -148,5 +151,43 @@ private struct NotchOverlayMenuSection: View {
             get: { overlay.isVisible },
             set: { overlay.setVisible($0) }
         ))
+    }
+}
+
+// 单曲歌词时间轴微调——针对"当前正在播的这首歌",往前/往后校准歌词跟人声的对齐,
+// 校准值按歌曲记忆(LyricsOffsetStore),下次再放这首歌自动生效。没有任何曲目信息
+// (title 是空字符串,从未播过任何 Apple Music 曲目)时整个 Section 不显示,不留一个
+// 点了也没意义的死菜单项。
+private struct LyricsOffsetMenuSection: View {
+    @ObservedObject private var coordinator = PlaybackCoordinator.shared
+
+    var body: some View {
+        if !coordinator.title.isEmpty {
+            Menu(menuTitle) {
+                Button(L10n.t("提前 0.2 秒")) {
+                    coordinator.nudgeLyricsOffset(by: lyricsOffsetStepMs)
+                }
+                Button(L10n.t("延后 0.2 秒")) {
+                    coordinator.nudgeLyricsOffset(by: -lyricsOffsetStepMs)
+                }
+                if coordinator.currentLyricsOffsetMs != 0 {
+                    Divider()
+                    Button(L10n.t("重置")) {
+                        coordinator.resetLyricsOffset()
+                    }
+                }
+            }
+        }
+    }
+
+    // 菜单标题里直接带上当前校准值(比如"歌词时间轴(+0.6s)"),不用另开一个 HUD 或者
+    // 禁用态文字行专门显示这个数字——这个菜单本来就是"想调的时候才点开看"的入口,标题
+    // 本身就是最省事的展示位置。
+    private var menuTitle: String {
+        let ms = coordinator.currentLyricsOffsetMs
+        guard ms != 0 else { return L10n.t("歌词时间轴") }
+        let seconds = Double(ms) / 1000
+        let sign = seconds > 0 ? "+" : ""
+        return "\(L10n.t("歌词时间轴"))(\(sign)\(String(format: "%.1f", seconds))s)"
     }
 }

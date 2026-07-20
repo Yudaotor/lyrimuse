@@ -162,6 +162,22 @@ public final class RelayPoller: ObservableObject {
         poll()
     }
 
+    // 单曲歌词时间轴微调——跟 LocalPlaybackSource.nudgeLyricsOffset() 同样的诉求,
+    // 只是曲目信息来自 lastState(relay 轮询拿到的)而不是本地快照。
+    @discardableResult
+    public func nudgeLyricsOffset(by deltaMs: Int) -> Int {
+        guard let state = lastState else { return syncEngine.offsetMs }
+        let newValue = LyricsOffsetStore.shared.nudge(by: deltaMs, forKey: state.trackKey)
+        syncEngine.offsetMs = newValue
+        return newValue
+    }
+
+    public func resetLyricsOffset() {
+        guard let state = lastState else { return }
+        LyricsOffsetStore.shared.reset(forKey: state.trackKey)
+        syncEngine.offsetMs = 0
+    }
+
     private func reloadCurrentLyrics() {
         guard let state = lastState else { return }
         syncEngine.load(
@@ -171,6 +187,7 @@ public final class RelayPoller: ObservableObject {
             lyricsYRC: state.lyricsYRC ?? "",
             preferWordLevel: preferWordLevelKaraoke
         )
+        syncEngine.offsetMs = LyricsOffsetStore.shared.offset(forKey: state.trackKey)
         // 只记字符数,不记歌词原文——校验解析是否真的产出了内容,不泄露歌词文本。
         logger.debug("lyrics reloaded: hasContent=\(self.syncEngine.hasContent) lyricsLen=\((state.lyrics ?? "").count) yrcLen=\((state.lyricsYRC ?? "").count)")
     }

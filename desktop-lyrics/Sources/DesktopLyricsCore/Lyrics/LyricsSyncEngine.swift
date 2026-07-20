@@ -38,6 +38,13 @@ public final class LyricsSyncEngine {
     private var trLines: [LyricLine] = []
     private var usingWords = false
 
+    // 单曲歌词时间轴微调——毫秒,由 LyricsOffsetStore 按当前曲目 key 灌进来(见
+    // LocalPlaybackSource/RelayPoller 的 reloadCurrentLyrics())。正数=歌词整体提前
+    // (显示得比原始时间戳更早),负数=延后,0=不校正。只在这里(匹配的最后一步)统一加
+    // 到查询位置上,activeLine/upcomingLineText 的调用方(20Hz fastTick)完全不用关心
+    // 这件事,换歌时只要换一次 offsetMs 就对新歌词生效。
+    public var offsetMs: Int = 0
+
     // 署名/制作人员这类噪声行(作词/作曲/编曲/制作人等,常见于 LRC 开头几秒),实测坐实:
     // 陶喆《上爱唱的歌》真实歌词从 00:26.74 才开始唱,前面 4 行是 [00:00~00:03] 这种挤在
     // 同一秒内的署名行——歌曲刚开始播放的头几秒,悬浮窗会显示"制作人：陶喆"这种字幕,
@@ -94,7 +101,8 @@ public final class LyricsSyncEngine {
         return best
     }
 
-    public func activeLine(atMs posMs: Int) -> SyncedLyricLine? {
+    public func activeLine(atMs rawPosMs: Int) -> SyncedLyricLine? {
+        let posMs = rawPosMs + offsetMs
         if usingWords {
             var idx = -1
             for (i, ln) in wordLines.enumerated() where ln.timeMs <= posMs { idx = i }
@@ -127,7 +135,8 @@ public final class LyricsSyncEngine {
     // 第一句真歌词当预览提前露出来。署名行过滤上线后这个"还没到第一句"的窗口会变得
     // 更常见(署名行被剔除、真歌词往往要再等几十秒才开始),这时候提前露出第一句歌词
     // 比干等着更有用。
-    public func upcomingLineText(afterMs posMs: Int) -> String? {
+    public func upcomingLineText(afterMs rawPosMs: Int) -> String? {
+        let posMs = rawPosMs + offsetMs
         if usingWords {
             var idx = -1
             for (i, ln) in wordLines.enumerated() where ln.timeMs <= posMs { idx = i }

@@ -45,6 +45,32 @@ final class PlaybackCoordinator: ObservableObject {
         }
     }
 
+    // 单曲歌词时间轴微调——转发给当前生效的那个数据源(跟 refreshLyricsForCurrentTrack()
+    // 同一个"按 activeMode 分发"模式),UI 层(菜单/快捷键)只认 PlaybackCoordinator,
+    // 不用关心当前到底是本地模式还是 relay 模式在跑。
+    func nudgeLyricsOffset(by deltaMs: Int) {
+        switch activeMode {
+        case .relay: RelayPoller.shared.nudgeLyricsOffset(by: deltaMs)
+        case .local: LocalPlaybackSource.shared.nudgeLyricsOffset(by: deltaMs)
+        case nil: break
+        }
+    }
+
+    func resetLyricsOffset() {
+        switch activeMode {
+        case .relay: RelayPoller.shared.resetLyricsOffset()
+        case .local: LocalPlaybackSource.shared.resetLyricsOffset()
+        case nil: break
+        }
+    }
+
+    // 当前曲目已经校准过的时间偏移——读 LyricsOffsetStore,key 跟 trackKey 拼法完全
+    // 一致(artist/title 都是空字符串时 LyricsOffsetStore 自己会判定 key 无效返回 0,
+    // 不需要在这里额外判断"还没拿到任何曲目信息"这种情况)。
+    var currentLyricsOffsetMs: Int {
+        LyricsOffsetStore.shared.offset(forKey: "\(artist)|\(title)")
+    }
+
     func applyMode(_ mode: PlaybackSourceMode) {
         guard mode != activeMode else { return }
         activeMode = mode

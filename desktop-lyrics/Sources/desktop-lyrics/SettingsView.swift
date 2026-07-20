@@ -814,6 +814,8 @@ private struct GeneralSettingsTab: View {
                 ShortcutRecorder(L10n.t("播放/暂停"), name: .playPauseHotkey)
                 ShortcutRecorder(L10n.t("下一首"), name: .nextTrackHotkey)
                 ShortcutRecorder(L10n.t("上一首"), name: .previousTrackHotkey)
+                ShortcutRecorder(L10n.t("歌词提前 0.2 秒"), name: .lyricsAdvanceHotkey)
+                ShortcutRecorder(L10n.t("歌词延后 0.2 秒"), name: .lyricsDelayHotkey)
             }
         }
         .formStyle(.grouped)

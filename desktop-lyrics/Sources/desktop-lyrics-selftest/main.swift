@@ -131,6 +131,19 @@ do {
     expectEqual(engine.activeLine(atMs: 27000)?.words?.map(\.text), ["la ", "la "], "SyncEngine(YRC): 真歌词行不受影响")
 }
 
+// ---- LyricsSyncEngine: 单曲歌词时间轴微调(offsetMs) ----
+
+do {
+    let engine = LyricsSyncEngine()
+    let lrc = "[00:10.00]第一句\n[00:20.00]第二句\n"
+    engine.load(lyrics: lrc, lyricsTr: "", lyricsRoma: "", lyricsYRC: "", preferWordLevel: true)
+    expectEqual(engine.activeLine(atMs: 15000)?.mainText, "第一句", "SyncEngine(offset): 校正前 15s 还是第一句")
+    engine.offsetMs = 6000 // 提前 6 秒
+    expectEqual(engine.activeLine(atMs: 15000)?.mainText, "第二句", "SyncEngine(offset): 提前 6s 后 15s 已经算第二句")
+    engine.offsetMs = -6000 // 延后 6 秒
+    expectEqual(engine.activeLine(atMs: 15000)?.mainText, nil, "SyncEngine(offset): 延后 6s 后 15s 还没到第一句")
+}
+
 // ---- 汇总 ----
 
 if failures == 0 {

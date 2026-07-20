@@ -208,6 +208,23 @@ public final class LocalPlaybackSource: ObservableObject {
         reloadCurrentLyrics()
     }
 
+    // 单曲歌词时间轴微调——只对"当前正在播的这首歌"生效,立即体现在下一次 fastTick()
+    // 里(不等换歌/下次轮询)。没有任何曲目信息(lastSnapshot 为 nil)时静默什么都不做,
+    // 不会把校正值存进一个毫无意义的空 key 下面。
+    @discardableResult
+    public func nudgeLyricsOffset(by deltaMs: Int) -> Int {
+        guard let snapshot = lastSnapshot else { return syncEngine.offsetMs }
+        let newValue = LyricsOffsetStore.shared.nudge(by: deltaMs, forKey: snapshot.trackKey)
+        syncEngine.offsetMs = newValue
+        return newValue
+    }
+
+    public func resetLyricsOffset() {
+        guard let snapshot = lastSnapshot else { return }
+        LyricsOffsetStore.shared.reset(forKey: snapshot.trackKey)
+        syncEngine.offsetMs = 0
+    }
+
     private func reloadCurrentLyrics() {
         guard let snapshot = lastSnapshot else { return }
         let found = EnrichCacheReader.lookup(
@@ -222,6 +239,7 @@ public final class LocalPlaybackSource: ObservableObject {
             lyricsYRC: found?.lyricsYRC ?? "",
             preferWordLevel: preferWordLevelKaraoke
         )
+        syncEngine.offsetMs = LyricsOffsetStore.shared.offset(forKey: snapshot.trackKey)
         logger.debug("lyrics reloaded: hasContent=\(self.syncEngine.hasContent) found=\(found != nil)")
     }
 }
