@@ -13,11 +13,13 @@
 "上一首" = "Previous Track";
 "点击录制" = "Record Shortcut";
 "请按下快捷键…" = "Type Shortcut…";
-"歌词提前 0.2 秒" = "Advance Lyrics 0.2s";
-"歌词延后 0.2 秒" = "Delay Lyrics 0.2s";
+"歌词提前" = "Advance Lyrics";
+"歌词延后" = "Delay Lyrics";
 "歌词时间轴" = "Lyrics Timing";
-"提前 0.2 秒" = "Advance 0.2s";
-"延后 0.2 秒" = "Delay 0.2s";
+"歌词时间轴步长" = "Lyrics Timing Step";
+"提前" = "Advance";
+"延后" = "Delay";
+"秒" = "s";
 "重置" = "Reset";
 "请求权限" = "Request Access";
 "精确追踪 Apple Music 播放进度" = "Precisely Track Apple Music Playback Position";

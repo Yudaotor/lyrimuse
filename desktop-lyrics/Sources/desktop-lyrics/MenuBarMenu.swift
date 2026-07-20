@@ -160,15 +160,18 @@ private struct NotchOverlayMenuSection: View {
 // 点了也没意义的死菜单项。
 private struct LyricsOffsetMenuSection: View {
     @ObservedObject private var coordinator = PlaybackCoordinator.shared
+    // 步长现在是用户在设置里可调的值(AppSettings.lyricsOffsetStepMs),不是写死的
+    // 常量——两个按钮的文案跟着这个值动态拼,不能再用一句固定的本地化字符串。
+    @ObservedObject private var settings = AppSettings.shared
 
     var body: some View {
         if !coordinator.title.isEmpty {
             Menu(menuTitle) {
-                Button(L10n.t("提前 0.2 秒")) {
-                    coordinator.nudgeLyricsOffset(by: lyricsOffsetStepMs)
+                Button(nudgeLabel(L10n.t("提前"))) {
+                    coordinator.nudgeLyricsOffset(by: settings.lyricsOffsetStepMs)
                 }
-                Button(L10n.t("延后 0.2 秒")) {
-                    coordinator.nudgeLyricsOffset(by: -lyricsOffsetStepMs)
+                Button(nudgeLabel(L10n.t("延后"))) {
+                    coordinator.nudgeLyricsOffset(by: -settings.lyricsOffsetStepMs)
                 }
                 if coordinator.currentLyricsOffsetMs != 0 {
                     Divider()
@@ -180,14 +183,20 @@ private struct LyricsOffsetMenuSection: View {
         }
     }
 
+    private func nudgeLabel(_ verb: String) -> String {
+        "\(verb) \(AppSettings.formattedSeconds(ms: settings.lyricsOffsetStepMs))\(L10n.t("秒"))"
+    }
+
     // 菜单标题里直接带上当前校准值(比如"歌词时间轴(+0.6s)"),不用另开一个 HUD 或者
     // 禁用态文字行专门显示这个数字——这个菜单本来就是"想调的时候才点开看"的入口,标题
     // 本身就是最省事的展示位置。
     private var menuTitle: String {
         let ms = coordinator.currentLyricsOffsetMs
         guard ms != 0 else { return L10n.t("歌词时间轴") }
-        let seconds = Double(ms) / 1000
-        let sign = seconds > 0 ? "+" : ""
-        return "\(L10n.t("歌词时间轴"))(\(sign)\(String(format: "%.1f", seconds))s)"
+        // 跟两个按钮共用同一份格式化(AppSettings.formattedSeconds)——不然步长设成
+        // 比如 0.15s 时,按钮显示"0.15"、这里的累计值却按 %.1f 四舍五入成"0.2",两处
+        // 数字风格对不上。
+        let sign = ms > 0 ? "+" : ""
+        return "\(L10n.t("歌词时间轴"))(\(sign)\(AppSettings.formattedSeconds(ms: ms))s)"
     }
 }

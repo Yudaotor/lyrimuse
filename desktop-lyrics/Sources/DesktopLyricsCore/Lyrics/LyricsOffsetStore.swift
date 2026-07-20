@@ -1,8 +1,15 @@
 import Foundation
+import CryptoKit
 
-// 单曲歌词时间轴微调——记住"这首歌的歌词该提前/延后多少毫秒",按 trackKey("歌手|歌名",
-// 跟 MediaControlSnapshot/NowPlayingState.trackKey 完全一致)持久化,下次播放同一首歌
-// 自动生效,不用每次重新调。
+// 单曲歌词时间轴微调——记住"这首歌的这份歌词该提前/延后多少毫秒",按 trackKey 持久化,
+// 下次播放同一首歌、同一份歌词内容时自动生效,不用每次重新调。
+//
+// key 故意不是单纯的"歌手|歌名"(那样同一首歌换了一份歌词内容——重新匹配到别的源、
+// 手动在「歌词管理」编辑过、酷狗/QQ/网易云来回切换——校正值会被错误地继续套用在新歌词
+// 上,新歌词的时间轴基准很可能完全不一样)。key 额外拼上这份歌词内容(lyrics+逐字 yrc
+// 两个字段一起)算出来的一段短哈希,内容变了 key 自然跟着变,旧的校正值不会被误用到新
+// 内容上——不需要显式失效旧记录,只是查不到而已(旧记录留在字典里不清,量很小,
+// 跟 EnrichCacheReader 那份"设计上永久不清理"的既有取舍一致)。
 //
 // 故意跟 EnrichCacheStore(歌词内容缓存)彻底分开存——那份缓存的"清空全部缓存"清的是
 // 解析出来的歌词内容,这里存的是用户自己手动校准出来的时间校正值,是更宝贵的个人偏好,
@@ -22,6 +29,23 @@ public final class LyricsOffsetStore {
         offsets = Self.load()
     }
 
+    // 统一在这里拼 key,调用方(LocalPlaybackSource/RelayPoller)不用各自实现一遍哈希
+    // 逻辑。歌词内容(lyrics/lyricsYRC)都还没解析出来时——新歌/纯音乐/还没轮到 enrich——
+    // 指纹段留空,key 退化成"歌手|歌名|",不影响生成一个可用但"内容未知"的 key。
+    // 故意标 nonisolated——纯函数,不碰 offsets 这份实例状态,不需要 MainActor 隔离,
+    // 也方便 selftest(跑在 main.swift 顶层、非 async 上下文)直接调用。
+    public nonisolated static func trackKey(artist: String, title: String, lyrics: String, lyricsYRC: String) -> String {
+        "\(artist)|\(title)|\(contentFingerprint(lyrics: lyrics, lyricsYRC: lyricsYRC))"
+    }
+
+    private nonisolated static func contentFingerprint(lyrics: String, lyricsYRC: String) -> String {
+        let combined = lyrics + "\u{1}" + lyricsYRC
+        guard combined != "\u{1}" else { return "" }
+        let digest = SHA256.hash(data: Data(combined.utf8))
+        let hex = digest.map { String(format: "%02x", $0) }.joined()
+        return String(hex.prefix(12))
+    }
+
     public func offset(forKey key: String) -> Int {
         guard isValid(key) else { return 0 }
         return offsets[key] ?? 0
@@ -38,10 +62,10 @@ public final class LyricsOffsetStore {
         set(0, forKey: key)
     }
 
-    // trackKey 是 "歌手|歌名" 拼出来的,两边都是空字符串时(还没拿到过任何曲目信息)
+    // key 是 "歌手|歌名|内容指纹" 拼出来的,三段都是空字符串时(还没拿到过任何曲目信息)
     // 这个 key 毫无意义,不该被当成一个真实的"歌曲"持久化下去。
     private func isValid(_ key: String) -> Bool {
-        !key.isEmpty && key != "|"
+        !key.replacingOccurrences(of: "|", with: "").isEmpty
     }
 
     private func set(_ ms: Int, forKey key: String) {

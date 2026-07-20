@@ -37,6 +37,7 @@ final class AppSettings: ObservableObject {
         static let showNextLinePreview = "np:showNextLinePreview"
         static let showLyricsInMenuBar = "np:showLyricsInMenuBar"
         static let menuBarLyricsMaxChars = "np:menuBarLyricsMaxChars"
+        static let lyricsOffsetStepMs = "np:lyricsOffsetStepMs"
         static let textShadowEnabled = "np:textShadowEnabled"
         static let textShadowColorHex = "np:textShadowColorHex"
         static let fontFamilyName = "np:fontFamilyName"
@@ -161,6 +162,12 @@ final class AppSettings: ObservableObject {
     @Published var preciseAppleMusicPosition: Bool {
         didSet { defaults.set(preciseAppleMusicPosition, forKey: Keys.preciseAppleMusicPosition) }
     }
+    // 单曲歌词时间轴微调(菜单里的"歌词时间轴"/两个可选快捷键)每点一次调整多少——用户
+    // 反馈"不要写死 0.2 秒",做成可调的步长而不是代码里的固定常量,跟 menuBarLyricsMaxChars
+    // 同样的取舍。范围 50~2000ms 在 SettingsView 的 Stepper 里约束,这里不重复校验。
+    @Published var lyricsOffsetStepMs: Int {
+        didSet { defaults.set(lyricsOffsetStepMs, forKey: Keys.lyricsOffsetStepMs) }
+    }
     // 首次启动的完整引导向导(欢迎/自动化权限/语言/完成)只走一次——不管从哪一步
     // 关掉窗口都会置为 true(见 OnboardingView 的 .onDisappear),没有任何重新打开的
     // 入口(不留菜单项),关掉就是关掉了。这个向导上线前的老版本只有"自动化权限"
@@ -272,6 +279,7 @@ final class AppSettings: ObservableObject {
         showNextLinePreview = (defaults.object(forKey: Keys.showNextLinePreview) as? Bool) ?? false
         showLyricsInMenuBar = (defaults.object(forKey: Keys.showLyricsInMenuBar) as? Bool) ?? false
         menuBarLyricsMaxChars = (defaults.object(forKey: Keys.menuBarLyricsMaxChars) as? Int) ?? 60
+        lyricsOffsetStepMs = (defaults.object(forKey: Keys.lyricsOffsetStepMs) as? Int) ?? 200
         textShadowEnabled = (defaults.object(forKey: Keys.textShadowEnabled) as? Bool) ?? true
         textShadowColorHex = defaults.string(forKey: Keys.textShadowColorHex) ?? "#000000A6"
         lockPosition = (defaults.object(forKey: Keys.lockPosition) as? Bool) ?? false
@@ -312,5 +320,16 @@ final class AppSettings: ObservableObject {
         backgroundColor = Color(hexWithAlpha: backgroundColorHex, fallback: .clear)
         backgroundIsVisible = (NSColor(hexStringWithAlpha: backgroundColorHex)?.alphaComponent ?? 0) > 0.02
         textShadowColor = Color(hexWithAlpha: textShadowColorHex, fallback: .black.opacity(0.65))
+    }
+
+    // 把 lyricsOffsetStepMs(毫秒)格式成"0.2"/"0.05"/"1.0"这种干净的秒数文案——
+    // %.2f 统一先出两位小数,再把没意义的尾随 0 收掉,但至少留一位小数(不退化成"1"这种
+    // 看着像别的数字类型的裸整数)。设置面板的 Stepper 标题、菜单里的"提前/延后 X 秒"
+    // 共用这一份格式化,两处数字风格保持一致。
+    static func formattedSeconds(ms: Int) -> String {
+        var text = String(format: "%.2f", Double(ms) / 1000)
+        while text.hasSuffix("0") { text.removeLast() }
+        if text.hasSuffix(".") { text += "0" }
+        return text
     }
 }

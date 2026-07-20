@@ -814,8 +814,17 @@ private struct GeneralSettingsTab: View {
                 ShortcutRecorder(L10n.t("播放/暂停"), name: .playPauseHotkey)
                 ShortcutRecorder(L10n.t("下一首"), name: .nextTrackHotkey)
                 ShortcutRecorder(L10n.t("上一首"), name: .previousTrackHotkey)
-                ShortcutRecorder(L10n.t("歌词提前 0.2 秒"), name: .lyricsAdvanceHotkey)
-                ShortcutRecorder(L10n.t("歌词延后 0.2 秒"), name: .lyricsDelayHotkey)
+                ShortcutRecorder(L10n.t("歌词提前"), name: .lyricsAdvanceHotkey)
+                ShortcutRecorder(L10n.t("歌词延后"), name: .lyricsDelayHotkey)
+                // 每次调整的步长——跟菜单栏"歌词时间轴"共用同一个值,这里改了菜单里的
+                // 按钮文案/快捷键的实际调整量会一起变。0.05~2s 区间对"手动校准"这个场景
+                // 够用,不需要再大或者再细。
+                Stepper(value: Binding(
+                    get: { Double(settings.lyricsOffsetStepMs) / 1000 },
+                    set: { settings.lyricsOffsetStepMs = Int(($0 * 1000).rounded()) }
+                ), in: 0.05...2.0, step: 0.05) {
+                    Text("\(L10n.t("歌词时间轴步长"))：\(AppSettings.formattedSeconds(ms: settings.lyricsOffsetStepMs))\(L10n.t("秒"))")
+                }
             }
         }
         .formStyle(.grouped)

@@ -20,10 +20,6 @@ extension KeyboardShortcuts.Name {
     static let lyricsDelayHotkey = Self("lyricsDelayHotkey")
 }
 
-// 每次按键调整的步长——跟 MenuBarMenu.swift 里"歌词时间轴"菜单的两个按钮共用同一个
-// 数值,菜单/快捷键两条路径调出来的手感一致。
-let lyricsOffsetStepMs = 200
-
 @MainActor
 enum GlobalHotkeys {
     static func registerAll() {
@@ -60,12 +56,14 @@ enum GlobalHotkeys {
             MusicPlaybackController.previousTrack()
         }
         // 单曲歌词时间轴微调——不需要自动化权限(不碰 Music.app,只改本地/relay 数据源
-        // 里 LyricsSyncEngine 的匹配位置),随时可用。
+        // 里 LyricsSyncEngine 的匹配位置),随时可用。步长现读 AppSettings(用户在设置里
+        // 可调,不是写死的常量),跟 MenuBarMenu.swift 里"歌词时间轴"菜单的两个按钮共用
+        // 同一个值,菜单/快捷键两条路径调出来的手感一致。
         KeyboardShortcuts.onKeyUp(for: .lyricsAdvanceHotkey) {
-            PlaybackCoordinator.shared.nudgeLyricsOffset(by: lyricsOffsetStepMs)
+            PlaybackCoordinator.shared.nudgeLyricsOffset(by: AppSettings.shared.lyricsOffsetStepMs)
         }
         KeyboardShortcuts.onKeyUp(for: .lyricsDelayHotkey) {
-            PlaybackCoordinator.shared.nudgeLyricsOffset(by: -lyricsOffsetStepMs)
+            PlaybackCoordinator.shared.nudgeLyricsOffset(by: -AppSettings.shared.lyricsOffsetStepMs)
         }
     }
 }

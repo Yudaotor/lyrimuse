@@ -209,21 +209,26 @@ public final class LocalPlaybackSource: ObservableObject {
     }
 
     // 单曲歌词时间轴微调——只对"当前正在播的这首歌"生效,立即体现在下一次 fastTick()
-    // 里(不等换歌/下次轮询)。没有任何曲目信息(lastSnapshot 为 nil)时静默什么都不做,
-    // 不会把校正值存进一个毫无意义的空 key 下面。
+    // 里(不等换歌/下次轮询)。没有任何曲目信息(currentOffsetKey 还是空)时静默什么都
+    // 不做,不会把校正值存进一个毫无意义的空 key 下面。
     @discardableResult
     public func nudgeLyricsOffset(by deltaMs: Int) -> Int {
-        guard let snapshot = lastSnapshot else { return syncEngine.offsetMs }
-        let newValue = LyricsOffsetStore.shared.nudge(by: deltaMs, forKey: snapshot.trackKey)
+        guard lastSnapshot != nil else { return syncEngine.offsetMs }
+        let newValue = LyricsOffsetStore.shared.nudge(by: deltaMs, forKey: currentOffsetKey)
         syncEngine.offsetMs = newValue
         return newValue
     }
 
     public func resetLyricsOffset() {
-        guard let snapshot = lastSnapshot else { return }
-        LyricsOffsetStore.shared.reset(forKey: snapshot.trackKey)
+        guard lastSnapshot != nil else { return }
+        LyricsOffsetStore.shared.reset(forKey: currentOffsetKey)
         syncEngine.offsetMs = 0
     }
+
+    // 跟 syncEngine 实际加载的歌词内容(lyrics+lyricsYRC)绑在一起算出来的 key——见
+    // reloadCurrentLyrics() 里怎么算的。只在换歌词内容那一刻更新一次,nudge/reset 直接
+    // 复用,不用每次都重新拼一遍(也保证跟当初读校正值时用的是同一个 key)。
+    private var currentOffsetKey = ""
 
     private func reloadCurrentLyrics() {
         guard let snapshot = lastSnapshot else { return }
@@ -239,7 +244,13 @@ public final class LocalPlaybackSource: ObservableObject {
             lyricsYRC: found?.lyricsYRC ?? "",
             preferWordLevel: preferWordLevelKaraoke
         )
-        syncEngine.offsetMs = LyricsOffsetStore.shared.offset(forKey: snapshot.trackKey)
+        currentOffsetKey = LyricsOffsetStore.trackKey(
+            artist: snapshot.artist ?? "",
+            title: snapshot.title ?? "",
+            lyrics: found?.lyrics ?? "",
+            lyricsYRC: found?.lyricsYRC ?? ""
+        )
+        syncEngine.offsetMs = LyricsOffsetStore.shared.offset(forKey: currentOffsetKey)
         logger.debug("lyrics reloaded: hasContent=\(self.syncEngine.hasContent) found=\(found != nil)")
     }
 }

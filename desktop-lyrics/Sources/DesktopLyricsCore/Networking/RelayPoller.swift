@@ -166,17 +166,21 @@ public final class RelayPoller: ObservableObject {
     // 只是曲目信息来自 lastState(relay 轮询拿到的)而不是本地快照。
     @discardableResult
     public func nudgeLyricsOffset(by deltaMs: Int) -> Int {
-        guard let state = lastState else { return syncEngine.offsetMs }
-        let newValue = LyricsOffsetStore.shared.nudge(by: deltaMs, forKey: state.trackKey)
+        guard lastState != nil else { return syncEngine.offsetMs }
+        let newValue = LyricsOffsetStore.shared.nudge(by: deltaMs, forKey: currentOffsetKey)
         syncEngine.offsetMs = newValue
         return newValue
     }
 
     public func resetLyricsOffset() {
-        guard let state = lastState else { return }
-        LyricsOffsetStore.shared.reset(forKey: state.trackKey)
+        guard lastState != nil else { return }
+        LyricsOffsetStore.shared.reset(forKey: currentOffsetKey)
         syncEngine.offsetMs = 0
     }
+
+    // 见 LocalPlaybackSource 里同名属性的注释——跟 syncEngine 实际加载的歌词内容绑在
+    // 一起,只在换歌词内容那一刻更新。
+    private var currentOffsetKey = ""
 
     private func reloadCurrentLyrics() {
         guard let state = lastState else { return }
@@ -187,7 +191,13 @@ public final class RelayPoller: ObservableObject {
             lyricsYRC: state.lyricsYRC ?? "",
             preferWordLevel: preferWordLevelKaraoke
         )
-        syncEngine.offsetMs = LyricsOffsetStore.shared.offset(forKey: state.trackKey)
+        currentOffsetKey = LyricsOffsetStore.trackKey(
+            artist: state.artist ?? "",
+            title: state.title ?? "",
+            lyrics: state.lyrics ?? "",
+            lyricsYRC: state.lyricsYRC ?? ""
+        )
+        syncEngine.offsetMs = LyricsOffsetStore.shared.offset(forKey: currentOffsetKey)
         // 只记字符数,不记歌词原文——校验解析是否真的产出了内容,不泄露歌词文本。
         logger.debug("lyrics reloaded: hasContent=\(self.syncEngine.hasContent) lyricsLen=\((state.lyrics ?? "").count) yrcLen=\((state.lyricsYRC ?? "").count)")
     }
