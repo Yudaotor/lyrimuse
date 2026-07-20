@@ -73,11 +73,6 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject 
     func setVisible(_ visible: Bool) {
         isVisible = visible
         updateActualVisibility(isPlayingNow: PlaybackCoordinator.shared.isPlayingNow)
-        // 这里刻意继续只跟 isVisible(用户手动的显示/隐藏)挂钩,不跟着 hideWhenNotPlaying
-        // 的自动隐藏状态走——网络轮询(relay 模式)隐藏时会退到 60s 一次,如果自动隐藏也
-        // 触发这个,暂停时轮询变慢,恢复播放要等下一次轮询才能被发现,自动隐藏的"暂停后
-        // 立刻隐藏、恢复播放立刻重新显示"这个及时性反而会变差。
-        RelayPoller.shared.setOverlayVisible(visible)
     }
 
     // 暂停/没有任何曲目在播放时,可选让悬浮窗自动隐藏(不是用户手动关掉,窗口重新开始

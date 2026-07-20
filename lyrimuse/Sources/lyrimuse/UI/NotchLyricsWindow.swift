@@ -46,6 +46,16 @@ final class NotchLyricsWindow: NSPanel {
         // 走不用每次重新显示。
         collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]
         isMovableByWindowBackground = false
+        // 2026-07-20:真机反馈"拖动设置窗口时灵动岛会发蓝光"——这是 macOS(Sequoia
+        // 起)窗口平铺(Window Tiling)拖拽时的"可平铺目标"高亮提示:拖动任意窗口经过
+        // 屏幕顶部时,系统会判断这个位置上是否有"可以平铺"的窗口、给它蒙一层蓝色高亮,
+        // 这份判断依据之一是 NSWindow.isMovable。这个窗口本来就不允许用户以任何方式
+        // 移动(位置永远是 recomputeGeometry() 算出来贴死在刘海上的,连
+        // isMovableByWindowBackground 都是 false),显式把 isMovable 也关掉——
+        // 只影响"用户能不能移动这个窗口"(拖标题栏/Option-拖/窗口菜单的"移动"命令),
+        // 不影响 recomputeGeometry() 里用的 setFrame(_:display:animate:) 这类程序化
+        // 定位,把它标成"不可移动"让系统平铺功能的高亮探测跳过它。
+        isMovable = false
         isReleasedWhenClosed = false
     }
 

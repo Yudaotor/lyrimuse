@@ -199,11 +199,10 @@ struct SettingsView: View {
 // 也持有 PlaybackSettingsTab 原来那几个单例(settings/poller/local)。
 private struct LyricsSettingsTab: View {
     @ObservedObject private var settings = AppSettings.shared
-    // poller/local 在这个页面里只当"写目标"用(切换开关时顺手同步给它们),这个 View
-    // 的 body 从来不读它们的 @Published 数据渲染任何东西——声明成 @ObservedObject
-    // 会让这个页面在本地播放每次轮询(~2秒一次)更新歌曲信息时跟着白白重渲染一次。
-    // 用普通引用(class 本身是引用类型,let 一样能改它们的属性),不订阅。
-    private let poller = RelayPoller.shared
+    // local 在这个页面里只当"写目标"用(切换开关时顺手同步给它),这个 View 的 body
+    // 从来不读它的 @Published 数据渲染任何东西——声明成 @ObservedObject 会让这个页面
+    // 在本地播放每次轮询(~2秒一次)更新歌曲信息时跟着白白重渲染一次。用普通引用
+    // (class 本身是引用类型,let 一样能改它的属性),不订阅。
     private let local = LocalPlaybackSource.shared
     @ObservedObject private var features = FeatureSettingsStore.shared
     @Environment(\.openWindow) private var openWindow
@@ -211,42 +210,18 @@ private struct LyricsSettingsTab: View {
 
     var body: some View {
         Form {
-            Section(L10n.t("播放状态来源")) {
-                Picker(selection: Binding(
-                    get: { settings.dataSourceMode },
-                    set: { newValue in
-                        settings.dataSourceMode = newValue
-                        PlaybackCoordinator.shared.applyMode(newValue)
-                    }
-                )) {
-                    Text(L10n.t("远程(网页同源)")).tag(PlaybackSourceMode.relay)
-                    Text(L10n.t("本地播放(这台 Mac)")).tag(PlaybackSourceMode.local)
-                } label: {
-                    HStack(spacing: 4) {
-                        Text(L10n.t("来源"))
-                        HelpButton(text: L10n.t("远程(网页同源)：跟网页版读同一份数据，来自你自己部署的状态中继服务，适合想跟网页显示保持完全一致的场景。本地播放(这台 Mac)：直接读这台 Mac 上系统正在播放的内容，不经过网络，更实时。"))
-                    }
-                }
-                .pickerStyle(.segmented)
-
-                if settings.dataSourceMode == .relay {
-                    TextField(L10n.t("Relay 地址"), text: Binding(
-                        get: { settings.relayBaseURL },
-                        set: { newValue in
-                            settings.relayBaseURL = newValue
-                            poller.updateBaseURL(newValue)
-                        }
-                    ))
-                    .textFieldStyle(.roundedBorder)
-                } else if settings.dataSourceMode == .local {
-                    Toggle(L10n.t("精确追踪 Apple Music 播放进度"), isOn: Binding(
-                        get: { settings.preciseAppleMusicPosition },
-                        set: setPrecisePosition
-                    ))
-                    Text(L10n.t("需要系统「自动化」权限允许控制 Music.app；没有这个权限也能正常使用，播放进度会改用估算值，可能有 1-2 秒误差。"))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
+            // 2026-07-20:去掉了"远程(网页同源)/本地播放"这个二选一——用户反馈"这个
+            // 可配置项没必要，全部默认本地就好"。本地 media-control 现在是唯一的数据源
+            // (见 PlaybackCoordinator.start()),这个 Section 只剩下本地模式本来就有的
+            // 这一项精确度调节,不再需要"只在 .local 分支才显示"这层判断。
+            Section(L10n.t("播放进度")) {
+                Toggle(L10n.t("精确追踪 Apple Music 播放进度"), isOn: Binding(
+                    get: { settings.preciseAppleMusicPosition },
+                    set: setPrecisePosition
+                ))
+                Text(L10n.t("需要系统「自动化」权限允许控制 Music.app；没有这个权限也能正常使用，播放进度会改用估算值，可能有 1-2 秒误差。"))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
             .alert(
                 L10n.t("还没有自动化权限"),
@@ -377,7 +352,6 @@ private struct LyricsSettingsTab: View {
                     get: { settings.preferWordLevelKaraoke },
                     set: { newValue in
                         settings.preferWordLevelKaraoke = newValue
-                        poller.preferWordLevelKaraoke = newValue
                         local.preferWordLevelKaraoke = newValue
                     }
                 ))

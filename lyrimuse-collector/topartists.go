@@ -258,8 +258,12 @@ func deezerArtistAvatar(ctx context.Context, name string) string {
 // weeklyDigest 同样的 poll() 尾部、但用一个大得多的检查间隔,不会增加正常轮询的开销。
 // 复用跟 weeklyDigest 同一套 Last.fm 凭证,没配置就整体跳过;还要求 StateRelayURL 已配置
 // (数据要推给网页读的中继,没配这个推了也没地方读)。
+//
+// 2026-07-20:去掉了 features.TopArtistsDigest 这个额外开关——这三个凭据/地址字段
+// 本来就是这个功能唯一需要的前置条件,那个开关只是叠加在上面的一层多余手动确认
+// (desktop-lyrics 侧同步删掉了对应的手动 Toggle,见 AccountLinkingTab.swift)。
 func (p *poller) topArtistsDigest(now time.Time) {
-	if !features.TopArtistsDigest || p.cfg.LastfmUser == "" || p.cfg.LastfmAPIKey == "" || p.cfg.StateRelayURL == "" {
+	if p.cfg.LastfmUser == "" || p.cfg.LastfmAPIKey == "" || p.cfg.StateRelayURL == "" {
 		return
 	}
 	if !p.topArtistsLastCheckedAt.IsZero() && now.Sub(p.topArtistsLastCheckedAt) < topArtistsCheckInterval {

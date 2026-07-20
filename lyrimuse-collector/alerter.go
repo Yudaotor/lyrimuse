@@ -9,61 +9,26 @@ import (
 	_ "image/png"  // 网易云取色缩略图有时是 PNG(content-type 却谎报 jpg)
 	"log"
 	"net/http"
-	"sync"
 	"time"
 )
 
-// alerter pushes a push-notification when a component (media-control /
-// relay) fails alertThreshold times in a row, and once more when it
-// recovers. No-op when url is empty. platform 决定 push() 怎么拼 body/URL——
-// 见 notify.go 的 buildNotifyPayload/dingtalkSignedURL/feishuSign。
+// alerter 推送一条通知。platform 决定 push() 怎么拼 body/URL——见 notify.go 的
+// buildNotifyPayload/dingtalkSignedURL/feishuSign。
+//
+// 2026-07-20:去掉了 ok()/fail() 这套"故障告警"(连续失败 N 次才推、恢复时再推一次)——
+// 用户反馈"压根不需要告警故障了",这是彻底删掉这个能力,不是简化成默认开启(跟同一天
+// 删掉的其它几个开关不一样)。weeklyDigestPush 还在用这个类型的 push(),那部分保留。
 type alerter struct {
 	platform       string
 	url            string
 	dingtalkSecret string
 	feishuSecret   string
-	mu             sync.Mutex
-	fails          map[string]int
-	firing         map[string]bool
 }
-
-const alertThreshold = 4
 
 func newAlerter(platform, url, dingtalkSecret, feishuSecret string) *alerter {
 	return &alerter{
 		platform: platform, url: url,
 		dingtalkSecret: dingtalkSecret, feishuSecret: feishuSecret,
-		fails: map[string]int{}, firing: map[string]bool{},
-	}
-}
-
-func (a *alerter) ok(component string) {
-	if a == nil || a.url == "" {
-		return
-	}
-	a.mu.Lock()
-	recovered := a.firing[component]
-	a.firing[component] = false
-	a.fails[component] = 0
-	a.mu.Unlock()
-	if recovered {
-		a.push("采集器已恢复", component+" 恢复正常，显示已回到实时")
-	}
-}
-
-func (a *alerter) fail(component, detail string) {
-	if a == nil || a.url == "" {
-		return
-	}
-	a.mu.Lock()
-	a.fails[component]++
-	fire := a.fails[component] == alertThreshold && !a.firing[component]
-	if fire {
-		a.firing[component] = true
-	}
-	a.mu.Unlock()
-	if fire {
-		a.push("采集器异常", detail)
 	}
 }
 

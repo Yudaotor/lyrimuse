@@ -29,7 +29,7 @@ public final class LyricsOffsetStore {
         offsets = Self.load()
     }
 
-    // 统一在这里拼 key,调用方(LocalPlaybackSource/RelayPoller)不用各自实现一遍哈希
+    // 统一在这里拼 key,调用方(LocalPlaybackSource)不用各自实现一遍哈希
     // 逻辑。歌词内容(lyrics/lyricsYRC)都还没解析出来时——新歌/纯音乐/还没轮到 enrich——
     // 指纹段留空,key 退化成"歌手|歌名|",不影响生成一个可用但"内容未知"的 key。
     // 故意标 nonisolated——纯函数,不碰 offsets 这份实例状态,不需要 MainActor 隔离,

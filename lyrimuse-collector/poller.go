@@ -390,8 +390,6 @@ func (p *poller) pushRelayState(now time.Time, reanchored bool) {
 	if !p.relayFailAt.IsZero() && now.Sub(p.relayFailAt) < p.relayBackoff {
 		return
 	}
-	// relay /push 是网页当前状态的唯一写入端:挂了网页会停更,所以这里驱动告警
-	// (连续 alertThreshold 次失败才推)。ctx canceled(采集器关闭)不算故障。
 	if err := postRelay(p.ctx, p.cfg, "/push", payload); err != nil {
 		log.Printf("relay push failed: %v", err)
 		p.relayFailKey, p.relayFailAt = key, now
@@ -400,18 +398,12 @@ func (p *poller) pushRelayState(now time.Time, reanchored bool) {
 		} else if p.relayBackoff < 10*time.Minute {
 			p.relayBackoff *= 2
 		}
-		if !errors.Is(err, context.Canceled) && features.BarkAlerts {
-			p.lb.alerter.fail("relay", "自建中继 /push 失败，网页可能停更")
-		}
 		return // 去重锚点不更新;按退避在后续 poll 重试
 	}
 	p.relayFailAt, p.relayBackoff, p.relayFailKey = time.Time{}, 0, ""
 	p.relayLastState, p.relayLastAt = key, now
 	p.relayWrites++
 	log.Printf("relay write #%d [%s] key=%q", p.relayWrites, writeReason, key) // 埋点:实测每日 KV 写量与来源
-	if features.BarkAlerts {
-		p.lb.alerter.ok("relay")
-	}
 }
 
 // pushScrobble 记一条完成收听。历史/今日统计现改由网页从 LB 合并(每条完成收听已双写 LB,
@@ -805,9 +797,6 @@ func (p *poller) applyBridgeResult(r bridgeFetchResult) {
 // only declare playback stopped after a few consecutive nulls.
 func (p *poller) poll() {
 	if state, ok := getState(p.ctx, p.cfg.MediaControlPath); ok {
-		if features.BarkAlerts {
-			p.lb.alerter.ok("media-control")
-		}
 		if len(state) == 0 { // "null" — nothing playing, or a transient read glitch
 			p.nullStreak++
 			if p.nullStreak >= 3 {
@@ -817,8 +806,6 @@ func (p *poller) poll() {
 			p.nullStreak = 0
 			p.cur = extract(state)
 		}
-	} else if features.BarkAlerts {
-		p.lb.alerter.fail("media-control", "读不到系统播放状态（media-control 异常）")
 	}
 	now := time.Now()
 	reanchored, loopRestart := p.updatePosition(now)

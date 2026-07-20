@@ -46,8 +46,6 @@ type featureFlagsFile struct {
 	LastfmBridge         *bool `json:"lastfm_bridge,omitempty"`
 	LastfmMirrorScrobble *bool `json:"lastfm_mirror_scrobble,omitempty"`
 	WeeklyDigest         *bool `json:"weekly_digest,omitempty"`
-	TopArtistsDigest     *bool `json:"top_artists_digest,omitempty"`
-	BarkAlerts           *bool `json:"bark_alerts,omitempty"`
 	// LyricsSources：启用的歌词源集合(lyricSourceXxx 常量的子集)。nil/缺失 = 全部
 	// 启用,维持这个字段加之前的既有行为不变。
 	LyricsSources []string `json:"lyrics_sources,omitempty"`
@@ -71,15 +69,15 @@ type featureFlagsFile struct {
 // webModules()/payload["modules"] 也一并删掉——网页前端(web/index.html
 // normalizeModules)本来就把 modules 字段缺失当"全部启用"处理,不推这个字段跟
 // 推一份全 true 的字段，网页那边看到的效果完全一样，没有必要维护一份形同虚设的
-// 可配置项。
+// 可配置项。同一天还删掉了 TopArtistsDigest(同样改成"三个真实前置条件满足就自动
+// 跑",见 topArtistsDigest())和 BarkAlerts(故障告警——用户反馈"压根不需要告警
+// 故障了",这个是彻底删掉能力,见 alerter.go)。
 type featureFlags struct {
 	Lyrics               bool
 	AlbumPrefetch        bool
 	LastfmBridge         bool
 	LastfmMirrorScrobble bool
 	WeeklyDigest         bool
-	TopArtistsDigest     bool
-	BarkAlerts           bool
 	// 只被 pickLyricCandidate(enrich.go)读取,自动解析路径专用——手动的
 	// `collector search-lyrics` CLI 子命令故意不看这三个字段(见 pickLyricCandidate
 	// 注释),该子命令的 main() 分支也从不调用 loadFeatureFlags,这三个字段在那条
@@ -106,12 +104,11 @@ func boolOr(p *bool, def bool) bool {
 // loadFeatureFlags reads the shared feature-toggle file (best-effort — missing
 // file / unparseable content all resolve to defaults below). Core behavior
 // toggles (lyrics/albumPrefetch) miss-field-defaults to true — a
-// pure increment that never silently changes existing behavior. The 5 toggles
+// pure increment that never silently changes existing behavior. The 3 toggles
 // that each require an external account (Last.fm bridge+mirror / weekly
-// digest / top-artists digest / push alerts) default to false instead
-// (2026-07-18): turning them on by default for a stranger who never opened
-// Settings would silently start network calls to services they never
-// configured.
+// digest) default to false instead (2026-07-18): turning them on by default
+// for a stranger who never opened Settings would silently start network
+// calls to services they never configured.
 func loadFeatureFlags(path string) featureFlags {
 	var f featureFlagsFile
 	if data, err := os.ReadFile(path); err == nil {
@@ -127,8 +124,6 @@ func loadFeatureFlags(path string) featureFlags {
 		LastfmBridge:         boolOr(f.LastfmBridge, false),
 		LastfmMirrorScrobble: boolOr(f.LastfmMirrorScrobble, false),
 		WeeklyDigest:         boolOr(f.WeeklyDigest, false),
-		TopArtistsDigest:     boolOr(f.TopArtistsDigest, false),
-		BarkAlerts:           boolOr(f.BarkAlerts, false),
 		LyricsSources:        resolveLyricsSources(f.LyricsSources),
 		LyricsSourceMode:     resolveLyricsSourceMode(f.LyricsSourceMode),
 		LyricsSourceOrder:    resolveLyricsSourceOrder(f.LyricsSourceOrder),

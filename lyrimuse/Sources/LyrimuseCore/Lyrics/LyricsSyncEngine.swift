@@ -39,7 +39,7 @@ public final class LyricsSyncEngine {
     private var usingWords = false
 
     // 单曲歌词时间轴微调——毫秒,由 LyricsOffsetStore 按当前曲目 key 灌进来(见
-    // LocalPlaybackSource/RelayPoller 的 reloadCurrentLyrics())。正数=歌词整体提前
+    // LocalPlaybackSource 的 reloadCurrentLyrics())。正数=歌词整体提前
     // (显示得比原始时间戳更早),负数=延后,0=不校正。只在这里(匹配的最后一步)统一加
     // 到查询位置上,activeLine/upcomingLineText 的调用方(20Hz fastTick)完全不用关心
     // 这件事,换歌时只要换一次 offsetMs 就对新歌词生效。

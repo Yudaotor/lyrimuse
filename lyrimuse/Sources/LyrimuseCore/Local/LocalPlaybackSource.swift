@@ -6,8 +6,8 @@ private let logger = Logger(subsystem: "com.chenyuhao.lyrimuse", category: "loca
 
 // 本地播放数据源:音乐本来就在这台 Mac 上放,没道理还要绕一圈公网——播放位置/进度靠
 // `media-control get` 本地轮询拿(零网络、零延迟),歌词靠读 collector 已经解析好、
-// 写在磁盘上的那份缓存(同样零网络)。形状照抄 RelayPoller,好让 PlaybackCoordinator
-// 能用同一套 Combine 转发逻辑对接两个源。
+// 写在磁盘上的那份缓存(同样零网络)。2026-07-20 起是唯一的数据源(原本还有一个
+// 远程 relay 数据源、跟这个二选一,已删除——见 PlaybackCoordinator.start())。
 @MainActor
 public final class LocalPlaybackSource: ObservableObject {
     public static let shared = LocalPlaybackSource()
@@ -70,8 +70,7 @@ public final class LocalPlaybackSource: ObservableObject {
     // 都无条件重建,避免播放中每 2 秒(poll 周期)就重开一次计时器。
     private func ensureFastTimerRunning() {
         guard fastTimer == nil else { return }
-        // 20Hz;必须挂 .common mode,理由跟 RelayPoller 一致(菜单打开/拖拽悬浮窗时
-        // 不能停摆)。
+        // 20Hz;必须挂 .common mode,否则菜单打开/拖拽悬浮窗时会停摆。
         let t = Timer(timeInterval: 1.0 / 20.0, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.fastTick() }
         }

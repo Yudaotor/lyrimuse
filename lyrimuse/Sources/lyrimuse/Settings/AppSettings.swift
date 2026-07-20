@@ -2,13 +2,6 @@ import Foundation
 import SwiftUI
 import AppKit
 
-// 数据源:远程(跟网页版同一个 state-worker /now)或本地(这台 Mac 上直接读
-// media-control + collector 的磁盘缓存,零网络)。
-enum PlaybackSourceMode: String, Codable, Hashable {
-    case relay
-    case local
-}
-
 // 灵动岛卡片的三种视觉风格——UI 预览阶段给用户看过三个方向(纯黑/磨砂玻璃/深色渐变),
 // 当时选了磨砂玻璃直接实现,用户后来反馈"另外两个也做一下,做成可配置的"。displayName/
 // fill(alpha 相关的具体 ShapeStyle)定义在 NotchLyricsView.swift(跟灵动岛卡片本身的
@@ -19,22 +12,17 @@ enum NotchCardStyle: String, Codable, Hashable, CaseIterable {
     case darkGradient
 }
 
-// UserDefaults 支撑的设置存储。relay 域名的默认值是这个项目作者自己的地址,仅供切换
-// 到 relay 模式又没填自己地址时有个能跑的示例——2026-07-17 起默认数据源已经改成
-// local(见 dataSourceMode 的默认值),不会再有人零配置就悄悄连到作者自己的 Worker。
+// UserDefaults 支撑的设置存储。
 @MainActor
 final class AppSettings: ObservableObject {
     static let shared = AppSettings()
-    static let defaultRelayBaseURL = "https://np.yudaotor.me"
 
     private enum Keys {
-        static let relayBaseURL = "np:relayBaseURL"
         static let preferWordLevelKaraoke = "np:preferWordLevelKaraoke"
         static let showRomanization = "np:showRomanization"
         static let showTranslation = "np:showTranslation"
         static let launchAtLoginEnabled = "np:launchAtLoginEnabled"
         static let showInDock = "np:showInDock"
-        static let dataSourceMode = "np:dataSourceMode"
         static let showNextLinePreview = "np:showNextLinePreview"
         static let showLyricsInMenuBar = "np:showLyricsInMenuBar"
         static let menuBarLyricsMaxChars = "np:menuBarLyricsMaxChars"
@@ -69,9 +57,6 @@ final class AppSettings: ObservableObject {
 
     private let defaults = UserDefaults.standard
 
-    @Published var relayBaseURL: String {
-        didSet { defaults.set(relayBaseURL, forKey: Keys.relayBaseURL) }
-    }
     @Published var preferWordLevelKaraoke: Bool {
         didSet { defaults.set(preferWordLevelKaraoke, forKey: Keys.preferWordLevelKaraoke) }
     }
@@ -90,7 +75,7 @@ final class AppSettings: ObservableObject {
     // 是否在 Dock 里显示图标(以及连带出现在 Cmd-Tab 里)——用户反馈默认就应该开启,
     // 所以这里默认 true(见下面 init() 的兜底值),不是原来"跟裸可执行文件时代保持一致"
     // 那版的默认关闭。跟 launchAtLoginEnabled 同样的写法,直接在 didSet 里调用生效
-    // (而不是像 dataSourceMode/classicOverlayEnabled 那样只负责持久化、把"生效"这
+    // (而不是像 classicOverlayEnabled 那样只负责持久化、把"生效"这
     // 一步挪到 View 层)——NSApp.setActivationPolicy 是纯 AppKit 调用,不依赖任何其它
     // 单例,不存在"AppSettings.init() 时那个单例还没构造好"的循环初始化风险,可以放心
     // 直接在这里调用。
@@ -99,14 +84,6 @@ final class AppSettings: ObservableObject {
             defaults.set(showInDock, forKey: Keys.showInDock)
             NSApp.setActivationPolicy(showInDock ? .regular : .accessory)
         }
-    }
-    // 只负责持久化——不在这里连带调 PlaybackCoordinator.applyMode(),那样会在
-    // AppSettings 自己的 init() 里(设置 dataSourceMode 初始值那行)触发 didSet,
-    // 顺带在 AppSettings.shared 还没构造完成时就去访问 PlaybackCoordinator.shared,
-    // 有循环初始化的风险。改成跟 relayBaseURL/preferWordLevelKaraoke 一样的既有写法:
-    // 设置面板的 Picker 里手动分两步调用(见 SettingsView.swift)。
-    @Published var dataSourceMode: PlaybackSourceMode {
-        didSet { defaults.set(dataSourceMode.rawValue, forKey: Keys.dataSourceMode) }
     }
     @Published var showNextLinePreview: Bool {
         didSet { defaults.set(showNextLinePreview, forKey: Keys.showNextLinePreview) }
@@ -139,10 +116,10 @@ final class AppSettings: ObservableObject {
             textShadowColor = Color(hexWithAlpha: textShadowColorHex, fallback: .black.opacity(0.65))
         }
     }
-    // 只负责持久化,原因跟 dataSourceMode 一样——不在这里连带调
-    // LyricsOverlayWindowController.shared.setLocked(_:),那样会在 AppSettings 自己的
-    // init() 里触发 didSet、顺带在其它单例还没构造完成时去访问它,有循环初始化风险。
-    // "生效"这一步挪到 SettingsView.swift 的 Toggle Binding 里手动分两步调用。
+    // 只负责持久化——不在这里连带调 LyricsOverlayWindowController.shared.setLocked(_:),
+    // 那样会在 AppSettings 自己的 init() 里触发 didSet、顺带在其它单例还没构造完成时
+    // 去访问它,有循环初始化风险。"生效"这一步挪到 SettingsView.swift 的 Toggle
+    // Binding 里手动分两步调用。
     @Published var lockPosition: Bool {
         didSet { defaults.set(lockPosition, forKey: Keys.lockPosition) }
     }
@@ -212,7 +189,7 @@ final class AppSettings: ObservableObject {
         didSet { defaults.set(notchCardStyle.rawValue, forKey: Keys.notchCardStyle) }
     }
     // 字体族名——空字符串表示"跟随系统",对应悬浮窗原来硬编码的系统字体,不用额外
-    // enum/Optional 表达"未设置",跟 relayBaseURL 的空字符串兜底是同一种写法。
+    // enum/Optional 表达"未设置"。
     @Published var fontFamilyName: String {
         didSet {
             defaults.set(fontFamilyName, forKey: Keys.fontFamilyName)
@@ -281,16 +258,11 @@ final class AppSettings: ObservableObject {
     }
 
     private init() {
-        relayBaseURL = defaults.string(forKey: Keys.relayBaseURL) ?? Self.defaultRelayBaseURL
         preferWordLevelKaraoke = (defaults.object(forKey: Keys.preferWordLevelKaraoke) as? Bool) ?? true
         showRomanization = (defaults.object(forKey: Keys.showRomanization) as? Bool) ?? true
         showTranslation = (defaults.object(forKey: Keys.showTranslation) as? Bool) ?? true
         launchAtLoginEnabled = (defaults.object(forKey: Keys.launchAtLoginEnabled) as? Bool) ?? false
         showInDock = (defaults.object(forKey: Keys.showInDock) as? Bool) ?? true
-        // 2026-07-17 前默认是 .relay,零配置就会连到作者自己的 Worker、显示作者本人的
-        // 播放——这台工具现在要给别人用,默认改成 .local(零网络、读本机 media-control +
-        // collector 的磁盘缓存,没有缓存就是"暂无歌词"而不是"看到别人的数据")。
-        dataSourceMode = PlaybackSourceMode(rawValue: defaults.string(forKey: Keys.dataSourceMode) ?? "") ?? .local
         showNextLinePreview = (defaults.object(forKey: Keys.showNextLinePreview) as? Bool) ?? false
         showLyricsInMenuBar = (defaults.object(forKey: Keys.showLyricsInMenuBar) as? Bool) ?? false
         menuBarLyricsMaxChars = (defaults.object(forKey: Keys.menuBarLyricsMaxChars) as? Int) ?? 60

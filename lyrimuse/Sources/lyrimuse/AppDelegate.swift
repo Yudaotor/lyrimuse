@@ -12,8 +12,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // showInDock 的 didSet 不会在它自己 init() 赋初值这一步触发(Swift 语义),
         // 所以这里必须显式按持久化的值应用一次,不能指望 didSet 帮忙补上这一步。
         NSApp.setActivationPolicy(settings.showInDock ? .regular : .accessory)
-        RelayPoller.shared.updateBaseURL(settings.relayBaseURL)
-        RelayPoller.shared.preferWordLevelKaraoke = settings.preferWordLevelKaraoke
         LocalPlaybackSource.shared.preferWordLevelKaraoke = settings.preferWordLevelKaraoke
         LocalPlaybackSource.shared.preciseAppleMusicPosition = settings.preciseAppleMusicPosition
 
@@ -34,9 +32,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             NotchLyricsWindowController.shared.setHideWhenNotPlaying(settings.hideWhenNotPlaying)
         }
 
-        // 按设置里选的数据源启动对应的那一个(默认远程,保持原有行为);PlaybackCoordinator
-        // 负责真正调 start()/stop(),这里不用再单独调 RelayPoller.shared.start()。
-        PlaybackCoordinator.shared.applyMode(settings.dataSourceMode)
+        PlaybackCoordinator.shared.start()
 
         // 首次启动的完整引导向导(欢迎/数据源模式/自动化权限/语言/完成)——触发点在
         // MenuBarLabel.onAppear,不在这里:openWindow(id:) 这个 SwiftUI 环境 action

@@ -62,7 +62,6 @@
 "Last.fm 返回错误: %@" = "Last.fm returned an error: %@";
 "Mac 播放镜像" = "Mac Playback Mirror";
 "QQ音乐" = "QQ Music";
-"Relay 地址" = "Relay URL";
 "Server酱" = "ServerChan";
 "Webhook 地址" = "Webhook URL";
 "https://api.day.app/你的Key" = "https://api.day.app/YourKey";
@@ -110,7 +109,6 @@
 "前往 Last.fm 申请 →" = "Apply at Last.fm →";
 "加签密钥（可选）" = "Signing Secret (Optional)";
 "匹配算法" = "Matching Algorithm";
-"历史 Top10 歌手统计" = "Top 10 Artists History";
 "历史统计" = "History Stats";
 "去配置「%@」" = "Configure \"%@\"";
 "双行显示(预览下一句歌词)" = "Two-Line Display (Preview Next Lyric)";
@@ -165,7 +163,6 @@
 "打开歌词管理…" = "Open Lyrics Manager…";
 "换到一首歌时，如果它属于某张专辑，会顺带在后台把同专辑里还没解析过的其它曲目也提前解析——封面无条件都会解析，歌词是否被预取取决于上面的「歌词在线匹配」开关是否开启。" = "When you switch to a song that belongs to an album, other not-yet-resolved tracks from the same album are also resolved in the background ahead of time. Covers are always resolved regardless; whether lyrics are prefetched depends on whether \"Online Lyrics Matching\" above is enabled.";
 "控制要不要在线解析歌词——关闭后，第一次播放的新歌不会再去查下面「歌词来源」里的这些平台，只用本地已经缓存过的结果（如果有）。「歌词来源」「匹配算法」这两组设置都只在这个开关开启时才有意义。" = "Controls whether lyrics are looked up online. When off, newly played songs won't be checked against the platforms listed under \"Lyrics Sources\" below — only locally cached results (if any) will be used. The \"Lyrics Sources\" and \"Matching Algorithm\" settings only matter while this is on.";
-"推给网页展示，还需要「网页推送」配好。" = "Pushed to the web display — also requires \"Web Push\" to be configured.";
 "推送提醒" = "Push Alerts";
 "推送设置" = "Push Settings";
 "提前解析同专辑其它曲目（封面+歌词）" = "Prefetch Other Tracks in the Same Album (Cover + Lyrics)";
@@ -173,8 +170,6 @@
 "搜索候选歌词" = "Search for Lyrics";
 "搜索失败: %@" = "Search failed: %@";
 "搜索歌手/歌名" = "Search Artist/Title";
-"播放状态来源" = "Playback Source";
-"故障告警" = "Failure Alerts";
 "整行歌词" = "Line Lyrics";
 "文字阴影(与桌面背景区分)" = "Text Shadow (Distinguish from Desktop Background)";
 "文字颜色" = "Text Color";
@@ -194,7 +189,6 @@
 "未知错误" = "Unknown error";
 "未配置" = "Not Configured";
 "未配置（可选）" = "Not configured (optional)";
-"本地播放(这台 Mac)" = "Local Playback (This Mac)";
 "机器人安全设置开了「签名校验」才需要填，不开也能收到消息。" = "Only needed if the bot's security settings have \"Signature Verification\" enabled — messages still arrive without it.";
 "机器人安全设置选了「加签」才需要填，留空按未加签处理。" = "Only needed if the bot's security settings have \"Signing\" enabled; leave it blank to treat it as unsigned.";
 "来源" = "Source";
@@ -225,7 +219,6 @@
 "清空全部缓存" = "Clear All Cache";
 "用户名（选填，用于界面显示）" = "Username (optional, for display only)";
 "用来把当前播放状态推送到网页小组件和状态徽章。" = "Pushes the current playback status to the web widget and status badge.";
-"用来接收两类推送：「故障告警」和「每周听歌小结」。" = "Used to receive two kinds of notifications: \"Failure Alerts\" and \"Weekly Listening Digest.\"";
 "确定要删除「%@ - %@」的本地记录吗?" = "Delete the local record for \"%@ - %@\"?";
 "确定要清空全部歌词缓存吗?" = "Clear all cached lyrics?";
 "移除逐字时间轴" = "Remove Word Timing";
@@ -270,8 +263,6 @@
 "这台 Mac 用同一个 Last.fm 账号做两件事：读取 iPhone 上的播放记录、把 Mac 上的播放写回 Last.fm。" = "This Mac uses the same Last.fm account for two things: reading playback history from your iPhone, and writing Mac playback back to Last.fm.";
 "这会删除当前全部 %d 条本地记录,包括你手动编辑、联网搜索采纳过的内容,已导出到本地的歌词文件也会一并删除,且无法撤销。下次播放会重新走一遍匹配解析。" = "This deletes all %d cached records, including anything you've hand-edited or adopted from an online search. Any lyrics files already exported locally will also be deleted, and this can't be undone. The next playback will re-run matching from scratch.";
 "这首歌带逐字时间轴,播放时优先用它渲染——下面直接改「歌词(LRC)」文本框不会生效。如需手改主歌词,请先点「移除逐字时间轴」。译文/罗马音编辑不受影响,随时生效。" = "This song has word-by-word timing, which takes priority during playback — editing the \"Lyrics (LRC)\" text box below won't take effect. To hand-edit the main lyrics, first click \"Remove Word Timing\". Editing the translation or romanization isn't affected and takes effect right away.";
-"远程(网页同源)" = "Remote (Web-Synced)";
-"远程(网页同源)：跟网页版读同一份数据，来自你自己部署的状态中继服务，适合想跟网页显示保持完全一致的场景。本地播放(这台 Mac)：直接读这台 Mac 上系统正在播放的内容，不经过网络，更实时。" = "Remote (Web-Synced): Reads the same data as the web app, sourced from your own deployed relay service — best if you want it to always match what the website shows. Local Playback (This Mac): Reads what's currently playing on this Mac directly, with no network involved, for more real-time updates.";
 "连接 Last.fm 账号" = "Connect Last.fm Account";
 "连接信息" = "Connection Info";
 "退出" = "Quit";
@@ -298,3 +289,6 @@
 "顺序优先" = "Priority Order";
 "飞书" = "Feishu";
 "填好这两项就会自动推送到网页，历史播放、留言墙等展示模块默认全部开启。" = "Fill in both fields and pushing to the web starts automatically — history, guestbook, and other display modules are all enabled by default.";
+"播放进度" = "Playback Progress";
+"用来接收「每周听歌小结」推送。" = "Used to receive \"Weekly Listening Digest\" notifications.";
+"上面这张卡和「网页推送」都配好后，会自动统计历史 Top10 歌手并推送到网页，不需要单独开启。" = "Once this card and \"Web Push\" are both configured, Top 10 Artists history is calculated and pushed to the web automatically — no separate switch needed.";

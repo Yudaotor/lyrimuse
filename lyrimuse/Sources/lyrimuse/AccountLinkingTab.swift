@@ -321,7 +321,7 @@ struct AccountLinkingTab: View {
             Text(L10n.t("这台 Mac 用同一个 Last.fm 账号做两件事：读取 iPhone 上的播放记录、把 Mac 上的播放写回 Last.fm。"))
                 .font(.caption).foregroundStyle(.secondary)
         case .bark:
-            Text(L10n.t("用来接收两类推送：「故障告警」和「每周听歌小结」。"))
+            Text(L10n.t("用来接收「每周听歌小结」推送。"))
                 .font(.caption).foregroundStyle(.secondary)
         }
     }
@@ -460,20 +460,16 @@ struct AccountLinkingTab: View {
             Text(L10n.t("账号授权"))
         }
 
+        // 2026-07-20:去掉了"历史 Top10 歌手统计"这个手动开关——用户反馈"这个也不要
+        // 配置，配了就默认开启"。collector 侧(topartists.go)本来就已经在按
+        // LastfmUser/LastfmAPIKey/StateRelayURL 是否配置来决定要不要跑,这个开关只是
+        // 叠加在这些真实前置条件之上的一层多余手动确认,删掉后即改成"上面这张卡 +
+        // 「网页推送」都配好就自动生效",这里只留一句纯说明,不再是可交互控件。
         Section {
-            Toggle(L10n.t("历史 Top10 歌手统计"), isOn: Binding(
-                get: { features.topArtistsDigest },
-                set: { newValue in
-                    toggleGuarded(newValue,
-                        sameCardHint: config.lastfmBridgeMissingHint(),
-                        crossCard: (hint: config.stateRelayMissingHint(), target: .stateRelay)
-                    ) { v in features.topArtistsDigest = v; Task { await features.save() } }
-                }
-            ))
+            Text(L10n.t("上面这张卡和「网页推送」都配好后，会自动统计历史 Top10 歌手并推送到网页，不需要单独开启。"))
+                .font(.caption).foregroundStyle(.secondary)
         } header: {
             Text(L10n.t("历史统计"))
-        } footer: {
-            Text(L10n.t("推给网页展示，还需要「网页推送」配好。"))
         }
     }
 
@@ -578,16 +574,18 @@ struct AccountLinkingTab: View {
     // SecretFieldRow 收起来,不占地方——其余平台(Bark/企业微信/Discord/Server酱)都
     // 不需要。
     //
-    // 顺带把"故障告警"和"每周听歌小结"这两个开关从别处搬了过来(用户反馈"既然现在都是
-    // 模块了，那把这个以及推送每周音乐报告的开关放到推送提醒里面"):这两个开关的共同点
-    // 是"通知最终从这里推出去",放在推送提醒卡片里,跟"网页推送"卡片里的开关道理一样——
-    // 开关跟着它依赖的账号模块走,而不是攒在"功能开关"tab 里让人猜"这个开关归哪个账号管"。
-    // 每周听歌小结还依赖 Last.fm 桥接(数据来源),缺了给一个跳转提示。
-    // 原来写的是"「后台出故障了」和「本周最常听的十首歌」",后半句不准确:每周听歌小结
+    // 顺带把"每周听歌小结"这个开关从别处搬了过来(用户反馈"既然现在都是模块了，那把
+    // 推送每周音乐报告的开关放到推送提醒里面"):这个开关的特点是"通知最终从这里推出去",
+    // 放在推送提醒卡片里,跟"网页推送"卡片里的开关道理一样——开关跟着它依赖的账号模块走,
+    // 而不是攒在"功能开关"tab 里让人猜"这个开关归哪个账号管"。还依赖 Last.fm 桥接
+    // (数据来源),缺了给一个跳转提示。
+    // 2026-07-20:"故障告警"整个开关连同底层告警机制一起删掉了——用户反馈"压根不需要
+    // 告警故障了"。这不是"默认打开、去掉可配置项"那种简化(跟"网页推送"/"历史 Top10
+    // 歌手统计"两处不一样),是彻底不需要这个能力,所以 collector 侧 alerter.ok/fail
+    // 这两个方法本身也一并删掉(alerter.push 还留着,weeklyDigestPush 在用)。
     // 实际推的是 Top 歌手+Top 歌曲各三条+总播放次数(见 collector/weekly.go 的
     // weeklyDigestPush),不是十首歌,也别跟另一个不相关的功能"历史 Top10 歌手统计"
-    // 搞混——那是网页上的常驻榜单,数据来源不同。这里直接用下面两个开关的原名,不重新
-    // 描述内容,避免复述跟实际不一致。这句是整张卡的介绍,在 cardIntro 里。
+    // 搞混——那是网页上的常驻榜单,数据来源不同。这句是整张卡的介绍,在 cardIntro 里。
     @ViewBuilder
     private var barkFields: some View {
         Section {
@@ -626,15 +624,6 @@ struct AccountLinkingTab: View {
         }
 
         Section {
-            Toggle(L10n.t("故障告警"), isOn: Binding(
-                get: { features.barkAlerts },
-                set: { newValue in
-                    toggleGuarded(newValue, sameCardHint: config.pushMissingHint()) { v in
-                        features.barkAlerts = v; Task { await features.save() }
-                    }
-                }
-            ))
-
             Toggle(L10n.t("每周听歌小结"), isOn: Binding(
                 get: { features.weeklyDigest },
                 set: { newValue in
