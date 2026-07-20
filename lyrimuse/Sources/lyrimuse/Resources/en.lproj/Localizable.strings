@@ -1,6 +1,15 @@
 /* English */
 
 "%@ / %@ 首" = "%@ / %@ songs";
+"在 Dock 中显示" = "Show in Dock";
+"关于" = "About";
+"版本 %@" = "Version %@";
+"跟着 Apple Music 播放，实时显示逐字同步歌词" = "Real-time synced lyrics that follow Apple Music playback";
+"链接" = "Links";
+"GitHub 仓库" = "GitHub Repository";
+"反馈问题" = "Report an Issue";
+"歌词数据来源" = "Lyrics Data Sources";
+"使用的开源库" = "Open Source Libraries";
 "%@ 字" = "%@ characters";
 "%@pt" = "%@pt";
 "快捷键" = "Keyboard Shortcuts";

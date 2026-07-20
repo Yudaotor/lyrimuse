@@ -4,11 +4,14 @@ import LyrimuseCore
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
-        // 裸可执行文件(没打成 .app 包)也能表现成菜单栏专属应用,不占 Dock/Cmd-Tab——
-        // 已实测确认,不需要 Info.plist 的 LSUIElement。
-        NSApp.setActivationPolicy(.accessory)
-
         let settings = AppSettings.shared
+
+        // 裸可执行文件(没打成 .app 包)也能表现成菜单栏专属应用,不占 Dock/Cmd-Tab——
+        // 已实测确认,不需要 Info.plist 的 LSUIElement。默认(没碰过"在 Dock 中显示"这个
+        // 设置的人)是 .accessory,保持这个 App 一直以来的既有体验；AppSettings.
+        // showInDock 的 didSet 不会在它自己 init() 赋初值这一步触发(Swift 语义),
+        // 所以这里必须显式按持久化的值应用一次,不能指望 didSet 帮忙补上这一步。
+        NSApp.setActivationPolicy(settings.showInDock ? .regular : .accessory)
         RelayPoller.shared.updateBaseURL(settings.relayBaseURL)
         RelayPoller.shared.preferWordLevelKaraoke = settings.preferWordLevelKaraoke
         LocalPlaybackSource.shared.preferWordLevelKaraoke = settings.preferWordLevelKaraoke

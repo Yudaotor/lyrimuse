@@ -33,6 +33,7 @@ final class AppSettings: ObservableObject {
         static let showRomanization = "np:showRomanization"
         static let showTranslation = "np:showTranslation"
         static let launchAtLoginEnabled = "np:launchAtLoginEnabled"
+        static let showInDock = "np:showInDock"
         static let dataSourceMode = "np:dataSourceMode"
         static let showNextLinePreview = "np:showNextLinePreview"
         static let showLyricsInMenuBar = "np:showLyricsInMenuBar"
@@ -84,6 +85,19 @@ final class AppSettings: ObservableObject {
         didSet {
             defaults.set(launchAtLoginEnabled, forKey: Keys.launchAtLoginEnabled)
             LoginItemManager.shared.setEnabled(launchAtLoginEnabled)
+        }
+    }
+    // 是否在 Dock 里显示图标(以及连带出现在 Cmd-Tab 里)——默认关闭,跟这个 App 从
+    // 裸可执行文件时代就一直是的"菜单栏专属工具"定位保持一致,不会因为加了这个开关就
+    // 悄悄改变没碰过这个设置的人的既有体验。跟 launchAtLoginEnabled 同样的写法,直接在
+    // didSet 里调用生效(而不是像 dataSourceMode/classicOverlayEnabled 那样只负责
+    // 持久化、把"生效"这一步挪到 View 层)——NSApp.setActivationPolicy 是纯 AppKit
+    // 调用,不依赖任何其它单例,不存在"AppSettings.init() 时那个单例还没构造好"的循环
+    // 初始化风险,可以放心直接在这里调用。
+    @Published var showInDock: Bool {
+        didSet {
+            defaults.set(showInDock, forKey: Keys.showInDock)
+            NSApp.setActivationPolicy(showInDock ? .regular : .accessory)
         }
     }
     // 只负责持久化——不在这里连带调 PlaybackCoordinator.applyMode(),那样会在
@@ -272,6 +286,7 @@ final class AppSettings: ObservableObject {
         showRomanization = (defaults.object(forKey: Keys.showRomanization) as? Bool) ?? true
         showTranslation = (defaults.object(forKey: Keys.showTranslation) as? Bool) ?? true
         launchAtLoginEnabled = (defaults.object(forKey: Keys.launchAtLoginEnabled) as? Bool) ?? false
+        showInDock = (defaults.object(forKey: Keys.showInDock) as? Bool) ?? false
         // 2026-07-17 前默认是 .relay,零配置就会连到作者自己的 Worker、显示作者本人的
         // 播放——这台工具现在要给别人用,默认改成 .local(零网络、读本机 media-control +
         // collector 的磁盘缓存,没有缓存就是"暂无歌词"而不是"看到别人的数据")。

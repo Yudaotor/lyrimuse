@@ -45,7 +45,7 @@ import KeyboardShortcuts
 // "前往「账号连接」"的跳转按钮,直接跳到侧边栏里对应的那一个账号行(而不是笼统跳到
 // "账号连接"这个不再存在的单一分类),这就需要 SettingsView 把跳转能力下传给它。
 enum SettingsTab: Hashable, CaseIterable, Identifiable {
-    case lyrics, appearance, general
+    case lyrics, appearance, general, about
 
     var id: Self { self }
 
@@ -54,6 +54,7 @@ enum SettingsTab: Hashable, CaseIterable, Identifiable {
         case .lyrics: return L10n.t("歌词")
         case .appearance: return L10n.t("外观")
         case .general: return L10n.t("通用")
+        case .about: return L10n.t("关于")
         }
     }
 
@@ -62,6 +63,7 @@ enum SettingsTab: Hashable, CaseIterable, Identifiable {
         case .lyrics: return "text.quote"
         case .appearance: return "paintbrush"
         case .general: return "gearshape"
+        case .about: return "info.circle"
         }
     }
 
@@ -78,6 +80,9 @@ enum SettingsTab: Hashable, CaseIterable, Identifiable {
         case .lyrics: return .indigo
         case .appearance: return .yellow
         case .general: return .gray
+        // 蓝色是"关于/信息"这类内容在 macOS 上最约定俗成的配色(系统"关于本机"/大多数
+        // App 的 info.circle 图标都是蓝色),不跟其余三个分类的既有配色规避逻辑冲突。
+        case .about: return .blue
         }
     }
 }
@@ -113,6 +118,7 @@ struct SettingsView: View {
                 sidebarLabel(.lyrics)
                 sidebarLabel(.appearance)
                 sidebarLabel(.general)
+                sidebarLabel(.about)
 
                 Section(L10n.t("账号连接")) {
                     ForEach(AccountDestination.allCases) { destination in
@@ -129,6 +135,7 @@ struct SettingsView: View {
                 case .tab(.lyrics): LyricsSettingsTab()
                 case .tab(.appearance): AppearanceSettingsTab()
                 case .tab(.general): GeneralSettingsTab()
+                case .tab(.about): AboutSettingsTab()
                 case .account(let destination):
                     AccountLinkingTab(destination: destination, onJumpToAccount: { selection = .account($0) })
                 case nil: ContentUnavailableView(L10n.t("选择左侧的设置分类"), systemImage: "gearshape")
@@ -805,6 +812,7 @@ private struct GeneralSettingsTab: View {
             }
             Section(L10n.t("启动")) {
                 Toggle(L10n.t("开机启动"), isOn: $settings.launchAtLoginEnabled)
+                Toggle(L10n.t("在 Dock 中显示"), isOn: $settings.showInDock)
             }
             Section(L10n.t("快捷键")) {
                 ShortcutRecorder(L10n.t("显示/隐藏悬浮歌词"), name: .toggleOverlay)
@@ -866,5 +874,73 @@ private struct GeneralSettingsTab: View {
         } else {
             NSWorkspace.shared.open(MusicAutomationPermission.systemSettingsURL)
         }
+    }
+}
+
+// "关于"分类——参考常见 macOS App 的"关于本 App"面板(图标+名称+版本居中,下面分组
+// 罗列简介/仓库链接/使用的开源库/歌词数据来源/版权)。这几项都是静态文本/链接,不需要
+// 任何 @Published 状态或单例,是这几个 tab 里最简单的一个。
+private struct AboutSettingsTab: View {
+    // CFBundleIconFile 指向的就是新换的那份 AppIcon.icns(build.sh 里 CFBundleName
+    // 生成的 .app 包本身自带),直接读系统认的这份"当前 App 图标",不用再手动拼一遍
+    // Bundle 里的文件路径。
+    private var appIcon: NSImage { NSApplication.shared.applicationIconImage }
+
+    private var versionString: String {
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
+    }
+
+    var body: some View {
+        Form {
+            Section {
+                VStack(spacing: 10) {
+                    Image(nsImage: appIcon)
+                        .resizable()
+                        .frame(width: 96, height: 96)
+                    Text("Lyrimuse")
+                        .font(.title2.weight(.semibold))
+                    Text(String(format: L10n.t("版本 %@"), versionString))
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                    Text(L10n.t("跟着 Apple Music 播放，实时显示逐字同步歌词"))
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 8)
+            }
+
+            Section(L10n.t("链接")) {
+                Button(L10n.t("GitHub 仓库")) {
+                    NSWorkspace.shared.open(URL(string: "https://github.com/Yudaotor/lyrimuse")!)
+                }
+                .buttonStyle(.link)
+                Button(L10n.t("反馈问题")) {
+                    NSWorkspace.shared.open(URL(string: "https://github.com/Yudaotor/lyrimuse/issues")!)
+                }
+                .buttonStyle(.link)
+            }
+
+            Section(L10n.t("歌词数据来源")) {
+                Text("网易云音乐 · QQ音乐 · 酷狗音乐 · LRCLIB")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section(L10n.t("使用的开源库")) {
+                Button("KeyboardShortcuts (Sindre Sorhus)") {
+                    NSWorkspace.shared.open(URL(string: "https://github.com/sindresorhus/KeyboardShortcuts")!)
+                }
+                .buttonStyle(.link)
+            }
+
+            Section {
+                Text("© 2026 Yudaotor")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+            }
+        }
+        .formStyle(.grouped)
     }
 }
