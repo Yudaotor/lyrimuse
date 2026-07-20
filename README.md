@@ -46,6 +46,8 @@ Everything below is opt-in and off by default — turn on only what you want, ri
 - **A shareable public "now playing" page** — live playback, history, a guestbook, reactions, a visitor counter, a Top-10-artists leaderboard, a vinyl-record visual, light/dark themes, and rich link previews when shared in chat apps. See the **[Web Features Guide](docs/web-features.md)** for a full walkthrough with screenshots.
 - **A weekly listening digest**, delivered as a push notification (Bark, DingTalk, WeCom, Discord, Feishu, or ServerChan)
 
+Every extra above lives under Settings → **Add-on Features**, and each account card has its own step-by-step setup guide built right in — where to grab an API key or token, how to connect an account, how to get a webhook URL for whichever push platform you pick. The one exception is the web page, which needs its own Cloudflare Worker deployed first — that's why it gets a dedicated guide instead of an in-app popover.
+
 ## Getting Started
 
 Lyrimuse isn't notarized or distributed as a signed release yet — you build it yourself, and no Apple Developer account is required (an ad-hoc signature is enough).
