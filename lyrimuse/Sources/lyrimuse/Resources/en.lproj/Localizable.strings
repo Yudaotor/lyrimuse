@@ -109,7 +109,6 @@
 "前往 Last.fm 申请 →" = "Apply at Last.fm →";
 "加签密钥（可选）" = "Signing Secret (Optional)";
 "匹配算法" = "Matching Algorithm";
-"历史统计" = "History Stats";
 "去配置「%@」" = "Configure \"%@\"";
 "双行显示(预览下一句歌词)" = "Two-Line Display (Preview Next Lyric)";
 "取消" = "Cancel";
@@ -291,4 +290,3 @@
 "填好这两项就会自动推送到网页，历史播放、留言墙等展示模块默认全部开启。" = "Fill in both fields and pushing to the web starts automatically — history, guestbook, and other display modules are all enabled by default.";
 "播放进度" = "Playback Progress";
 "用来接收「每周听歌小结」推送。" = "Used to receive \"Weekly Listening Digest\" notifications.";
-"上面这张卡和「网页推送」都配好后，会自动统计历史 Top10 歌手并推送到网页，不需要单独开启。" = "Once this card and \"Web Push\" are both configured, Top 10 Artists history is calculated and pushed to the web automatically — no separate switch needed.";

@@ -454,22 +454,14 @@ struct AccountLinkingTab: View {
 
         // 原来外面套了一层 GroupBox("账号授权")——现在 Section 标题本身已经是"账号授权",
         // 再套一层同名 GroupBox 是双重装饰,直接删掉、内容平移进 Section 正文。
+        //
+        // 2026-07-20:这张卡原来在这下面还有一个"历史统计"Section,专门说明"配好这张卡
+        // +「网页推送」会自动统计 Top10 歌手推送到网页"——用户反馈"这一块全部去掉",
+        // 删掉了(连同上一轮把手动开关换成的这句纯说明文字一起删,不留任何痕迹)。
         Section {
             lastfmConnectArea
         } header: {
             Text(L10n.t("账号授权"))
-        }
-
-        // 2026-07-20:去掉了"历史 Top10 歌手统计"这个手动开关——用户反馈"这个也不要
-        // 配置，配了就默认开启"。collector 侧(topartists.go)本来就已经在按
-        // LastfmUser/LastfmAPIKey/StateRelayURL 是否配置来决定要不要跑,这个开关只是
-        // 叠加在这些真实前置条件之上的一层多余手动确认,删掉后即改成"上面这张卡 +
-        // 「网页推送」都配好就自动生效",这里只留一句纯说明,不再是可交互控件。
-        Section {
-            Text(L10n.t("上面这张卡和「网页推送」都配好后，会自动统计历史 Top10 歌手并推送到网页，不需要单独开启。"))
-                .font(.caption).foregroundStyle(.secondary)
-        } header: {
-            Text(L10n.t("历史统计"))
         }
     }
 
