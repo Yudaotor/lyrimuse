@@ -16,6 +16,16 @@
 
 Lyrimuse sits quietly in your menu bar and shows a floating lyrics window that follows whatever's playing in Apple Music — word by word, in sync, always on top, across every Space. Think of the "desktop lyrics" experience from NetEase Cloud Music or QQ Music, but native to macOS.
 
+<div align="center">
+
+<img src="docs/images/app-desktop-lyrics.png" width="420" alt="Classic desktop lyrics overlay"><br>
+<sub>Classic floating overlay</sub>
+
+<img src="docs/images/app-dynamic-island.png" width="420" alt="Dynamic-Island-style lyrics"><br>
+<sub>Dynamic-Island-style capsule (no physical notch required)</sub>
+
+</div>
+
 ## Features
 
 ### Lyrics that just work

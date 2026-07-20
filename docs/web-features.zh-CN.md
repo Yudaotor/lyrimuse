@@ -18,7 +18,11 @@
 
 ![深色主题 + 黑胶模式，暂停态](images/web-preview-vinyl-dark.png)
 
-这两张是这个项目作者自己在跑的真实页面（<https://yudaotor.github.io/nowplaying/?user=yudaotor>），不是摆拍的示例数据。
+播放中——进度条走动、歌词逐字高亮，背景色也会跟着当前封面走：
+
+![播放中，背景色随封面自动变化，进度条+歌词逐字高亮](images/web-preview-playing.png)
+
+这三张都是这个项目作者自己在跑的真实页面（<https://yudaotor.github.io/nowplaying/?user=yudaotor>），不是摆拍的示例数据。
 
 ### 每个模块具体是什么
 

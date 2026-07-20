@@ -18,7 +18,11 @@ Dark ambient theme + vinyl mode (the tonearm lifts when paused and spins at a st
 
 ![Dark theme + vinyl mode, paused](images/web-preview-vinyl-dark.png)
 
-Both of these are the actual live page the author runs (<https://yudaotor.github.io/nowplaying/?user=yudaotor>) — not staged sample data.
+Playing — the progress bar moves, lyrics highlight word by word, and the background tint shifts to match the current cover art:
+
+![Playing, background tint follows the cover art, progress bar + word-by-word lyric highlighting](images/web-preview-playing.png)
+
+All three of these are the actual live page the author runs (<https://yudaotor.github.io/nowplaying/?user=yudaotor>) — not staged sample data.
 
 ### What Each Module Actually Does
 

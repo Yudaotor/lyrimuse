@@ -16,6 +16,16 @@
 
 Lyrimuse 常驻在菜单栏里，跟着 Apple Music 播放弹出一个悬浮歌词窗口——逐字同步、常驻置顶、跨 Space 显示。就是网易云音乐、QQ 音乐桌面客户端那种"桌面歌词"体验，只不过是原生 macOS 版本。
 
+<div align="center">
+
+<img src="docs/images/app-desktop-lyrics.png" width="420" alt="经典桌面悬浮歌词"><br>
+<sub>经典悬浮窗</sub>
+
+<img src="docs/images/app-dynamic-island.png" width="420" alt="灵动岛样式歌词"><br>
+<sub>灵动岛样式胶囊（没有物理刘海也能用）</sub>
+
+</div>
+
 ## 功能特性
 
 ### 歌词，做到位
