@@ -52,11 +52,25 @@ Mac 采集器(collector, 已经在跑)
 
 ### 前提
 
-已经按主 [README](../README.md#toc-collector) 把 collector 跑起来了（哪怕只是最基础的 `-dry-run` 试跑）。不需要配置 ListenBrainz 才能往下走——网页也可以完全靠 state-worker 自己的 KV 工作，不依赖 ListenBrainz（除了「历史播放」这一项，只有 ListenBrainz 能提供，state-worker 没有自己的历史存储，见下方「有什么做不到」）。
+已经按主 [README](../README.zh-CN.md) 把 collector 跑起来了（哪怕只是最基础的 `-dry-run` 试跑）。不需要配置 ListenBrainz 才能往下走——网页也可以完全靠 state-worker 自己的 KV 工作，不依赖 ListenBrainz（除了「历史播放」这一项，只有 ListenBrainz 能提供，state-worker 没有自己的历史存储，见下方「有什么做不到」）。
 
 ### 第一步：部署自己的 state-worker
 
-这一步的完整版步骤（Cloudflare 账号、KV 命名空间、自定义域名、两个 secret）已经写在主 README 里，这里不重复第二份、避免以后两边改漂移——跳转过去照着走一遍：[README「从零搭建 state-worker」](../README.md#L197-L220)（GitHub 网页版用行号锚点定位，不依赖它对中文/括号标题的 slug 生成规则；这一节挪动过的话，这个行号也要跟着改）。
+`state-worker/` 是一个可选的 Cloudflare Worker（免费额度足够：KV 每天 1000 次写/10 万次读），采集器把当前状态推给它、网页从它这里读。已经搭好的话可以跳过这一节，直接 `cd state-worker && npm run deploy` 重新发布代码改动。从零搭一遍：
+
+1. 注册 Cloudflare 账号。
+2. （可选）把要用的域名的 DNS 托管迁移到这个 Cloudflare 账号——想用自定义域名才需要这一步；没有自己的域名也可以先用 Cloudflare 分配的 `*.workers.dev` 子域名，跳过这一步和第 5 步。
+3. `npx wrangler login` 授权 CLI 登录这个账号。
+4. 建 KV 命名空间：`npx wrangler kv namespace create NP_STATE`，把返回的 `id` 填进 `state-worker/wrangler.toml` 的 `[[kv_namespaces]]`。
+5. 把 `wrangler.toml` 的 `[[routes]]` 域名改成你自己的域名（`custom_domain = true`，首次 `deploy` 时会自动绑定，前提是第 2 步的 DNS 托管已经生效）。
+6. 改 `[vars]` 的 `LB_USER` 和 `WEB_PAGE_URL`，分别改成你自己的 ListenBrainz 用户名、你自己部署的网页链接（第二步会拿到）。
+7. 设置两个 secret（值不提交进仓库）：
+   ```bash
+   cd state-worker
+   npx wrangler secret put PUSH_TOKEN   # 采集器认证用，随机生成一串即可
+   npx wrangler secret put ADMIN_TOKEN  # 站长手动删留言用，跟 PUSH_TOKEN 不是同一个
+   ```
+8. `npm run deploy`。
 
 走完这一步，你会拿到：
 - 一个能访问的 state-worker 地址（自定义域名或 `*.workers.dev` 子域名）
@@ -92,6 +106,14 @@ const RELAY = (() => { const r = params.get('relay'); if (r === 'off') return ''
 1. 直接访问你自己的网页地址，看能不能看到"正在播放"或"上次播放"（不是卡在"连接中…"）。
 2. 换一首歌，等几秒钟刷新，确认标题/封面跟着变了——说明 collector → state-worker → 网页这条链路真的通了，不是网页在读 ListenBrainz 兜底（兜底模式下换歌到网页看到之间通常要慢不少，且没有留言墙等模块）。
 3. 试着在网页上留一句言/点个赞，刷新页面看看还在不在。
+
+### 可选：GitHub README 动态徽章（badge-worker）
+
+前提是上面的 state-worker 已经跑起来了。`badge-worker/` 是另一个可选的 Cloudflare Worker，读 state-worker 的数据渲染成一张实时更新的 SVG 徽章：
+
+1. 把 `badge-worker/wrangler.toml` 的 `[vars]` 里 `RELAY_URL` 改成你自己 state-worker 的地址。
+2. `cd badge-worker && npm run deploy`。
+3. 嵌进任意 README：`![now playing](https://<你的badge-worker地址>.workers.dev/badge)`。
 
 ## 有什么做不到 / 目前的限制
 

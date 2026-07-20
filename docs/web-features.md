@@ -52,11 +52,25 @@ Mac collector (already running)
 
 ### Prerequisite
 
-You already have collector running per the main [README](../README.md#toc-collector) (even just a basic `-dry-run` trial run is enough). You don't need ListenBrainz configured to continue — the web page can run entirely on state-worker's own KV storage without depending on ListenBrainz (with one exception: "recent playback history" is only available via ListenBrainz, since state-worker doesn't keep its own history store — see "What This Can't Do" below).
+You already have collector running per the main [README](../README.md) (even just a basic `-dry-run` trial run is enough). You don't need ListenBrainz configured to continue — the web page can run entirely on state-worker's own KV storage without depending on ListenBrainz (with one exception: "recent playback history" is only available via ListenBrainz, since state-worker doesn't keep its own history store — see "What This Can't Do" below).
 
 ### Step 1: Deploy your own state-worker
 
-The full version of this step (Cloudflare account, KV namespace, custom domain, two secrets) is already written up in the main README — it isn't duplicated here a second time, to avoid the two copies drifting apart over time. Follow it there: [README, "Building state-worker From Scratch"](../README.md#L197-L220) (this section of the README is in Chinese; the GitHub web view link uses a line-number anchor rather than a heading anchor, since it doesn't depend on GitHub's slug-generation rules for headings with Chinese text/parentheses — if that section ever moves, these line numbers need updating to match).
+`state-worker/` is an optional Cloudflare Worker (the free tier is plenty: 1,000 KV writes / 100,000 reads per day) — collector pushes current state to it, and the web page reads from it. If you already have one set up, you can skip straight to `cd state-worker && npm run deploy` to publish code changes. To set one up from scratch:
+
+1. Sign up for a Cloudflare account.
+2. (Optional) Move DNS hosting for the domain you want to use to this Cloudflare account — only needed if you want a custom domain; without your own domain, you can use a Cloudflare-assigned `*.workers.dev` subdomain instead and skip this step and step 5.
+3. `npx wrangler login` to authorize the CLI against this account.
+4. Create a KV namespace: `npx wrangler kv namespace create NP_STATE`, and put the returned `id` into `state-worker/wrangler.toml`'s `[[kv_namespaces]]`.
+5. Change `wrangler.toml`'s `[[routes]]` to your own domain (`custom_domain = true` binds it automatically on first `deploy`, provided step 2's DNS hosting has already taken effect).
+6. Change `[vars]`'s `LB_USER` and `WEB_PAGE_URL` to your own ListenBrainz username and your own deployed web page URL (from step 2 below).
+7. Set two secrets (values are never committed to the repo):
+   ```bash
+   cd state-worker
+   npx wrangler secret put PUSH_TOKEN   # authenticates collector — any random string works
+   npx wrangler secret put ADMIN_TOKEN  # lets the site owner manually delete guestbook entries — must differ from PUSH_TOKEN
+   ```
+8. `npm run deploy`.
 
 By the end of this step, you'll have:
 - A reachable state-worker address (a custom domain or a `*.workers.dev` subdomain)
@@ -92,6 +106,14 @@ That's it — there's no separate switch to go find and turn on. The next time c
 1. Visit your own web page address directly and check whether you can see "now playing" or "last played" (rather than getting stuck on "connecting…").
 2. Switch tracks, wait a few seconds, and refresh — confirm the title/cover art actually changed. That confirms the collector → state-worker → web page chain is genuinely connected, rather than the page silently reading the ListenBrainz fallback (in fallback mode, there's usually a much longer delay between switching tracks on your Mac and seeing it reflected on the page, and modules like the guestbook won't show up at all).
 3. Try leaving a message or clicking the like button on the page, then refresh and confirm it's still there.
+
+### Optional: A GitHub README Badge (badge-worker)
+
+Requires the state-worker above to already be running. `badge-worker/` is another optional Cloudflare Worker that reads state-worker's data and renders it as a live-updating SVG badge:
+
+1. Change `RELAY_URL` in `badge-worker/wrangler.toml`'s `[vars]` to your own state-worker's address.
+2. `cd badge-worker && npm run deploy`.
+3. Embed it in any README: `![now playing](https://<your-badge-worker-address>.workers.dev/badge)`.
 
 ## What This Can't Do / Current Limitations
 
