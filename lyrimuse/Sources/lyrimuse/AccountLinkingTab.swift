@@ -448,7 +448,15 @@ struct AccountLinkingTab: View {
             // 播放"链路唯一的总开关(collector 侧 bridge() 只看 features.LastfmBridge
             // 这一个字段),关掉不只是不转发进 ListenBrainz,连"显示 iPhone 正在播放"
             // 这部分也会一起关掉——这里如实写清楚,不能让人以为只影响 ListenBrainz 那半句。
-            Text(L10n.t("读取 iPhone 上已经报给 Last.fm 的播放记录：Mac 没有播放时用来显示「iPhone 正在播」；打开下面的开关还会把这些记录转发进 ListenBrainz、统一两台设备的播放历史，这也需要「ListenBrainz」账号绑定好。"))
+            //
+            // 紧接着用户又指出上一版"用来显示「iPhone 正在播」"这半句容易被误读成跟
+            // 歌词模块本身有关——查代码确认:这个"iPhone 正在播"效果只喂给
+            // pushRelayState()(collector.go 里两处只读 p.remoteTrack/p.remoteAt 的地方
+            // 都在这个函数内),而这台 Mac 本地悬浮歌词的数据源(LocalPlaybackSource)只读
+            // 本机 media-control,压根不碰这条 iPhone/Last.fm 链路——歌词模块用不到这个
+            // 东西,唯一看得到效果的地方是「网页推送」那张网页,所以这里明确点名"网页推送"
+            // 而不是含糊地说"显示",避免让人误以为会影响本机悬浮歌词。
+            Text(L10n.t("读取 iPhone 上已经报给 Last.fm 的播放记录：Mac 没有播放时会推给「网页推送」显示「iPhone 正在播」（这台 Mac 本地的悬浮歌词只读本机播放状态，不受影响）；打开下面的开关还会把这些记录转发进 ListenBrainz，统一两台设备的播放历史，这也需要「ListenBrainz」账号绑定好。"))
         }
 
         Section {

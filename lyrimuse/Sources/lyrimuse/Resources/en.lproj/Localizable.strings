@@ -249,7 +249,7 @@
 "超过就截断" = "Truncate If Too Long";
 "跟上面桥接用的不是同一个 API Key，需要单独申请。" = "Not the same API Key used for bridging above — needs to be applied for separately.";
 "跟随系统" = "System Default";
-"读取 iPhone 上已经报给 Last.fm 的播放记录：Mac 没有播放时用来显示「iPhone 正在播」；打开下面的开关还会把这些记录转发进 ListenBrainz、统一两台设备的播放历史，这也需要「ListenBrainz」账号绑定好。" = "Reads the playback history your iPhone has already reported to Last.fm — used to show \"Now playing on iPhone\" when the Mac itself isn't playing anything. Turning on the switch below also forwards these plays into ListenBrainz to unify listening history across both devices, which also requires the \"ListenBrainz\" account to be connected.";
+"读取 iPhone 上已经报给 Last.fm 的播放记录：Mac 没有播放时会推给「网页推送」显示「iPhone 正在播」（这台 Mac 本地的悬浮歌词只读本机播放状态，不受影响）；打开下面的开关还会把这些记录转发进 ListenBrainz，统一两台设备的播放历史，这也需要「ListenBrainz」账号绑定好。" = "Reads the playback history your iPhone has already reported to Last.fm. When the Mac itself isn't playing anything, this is pushed to \"Web Push\" to show \"Now playing on iPhone\" (this Mac's own floating lyrics only read local playback and aren't affected). Turning on the switch below also forwards these plays into ListenBrainz to unify listening history across both devices, which also requires the \"ListenBrainz\" account to be connected.";
 "把这台 Mac 上的播放同步写回 Last.fm——Apple Music 本身不会自动同步，需要这个开关补上这份记录，Last.fm 个人主页才能看到用 Mac 听的这部分。" = "Syncs this Mac's own playback back to Last.fm — Apple Music doesn't scrobble there on its own, so this switch fills in that missing record, letting your Last.fm profile reflect what you've listened to on the Mac too.";
 "还差一步" = "One More Step";
 "还没填 API Key" = "API Key not set yet";
