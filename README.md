@@ -118,7 +118,7 @@ collector 跑起来、解析过至少一次当前这首歌之后，Lyrimuse 的�
 
 ## 顺带解锁的其他玩法
 
-因为 collector 本来就要常驻采集「正在播放」状态、也会往 ListenBrainz 提交播放记录，这套引擎装上之后还能免费解锁这些——都是独立可选，跟悬浮歌词窗口本身没有强依赖：
+因为 collector 本来就要常驻采集「正在播放」状态、也会往 ListenBrainz 提交播放记录，这套引擎装上之后还能免费解锁这些——都是独立可选，跟悬浮歌词窗口本身没有强依赖。带效果截图 + 分步教程的完整版见 [`docs/web-features.md`](docs/web-features.md)，这里只是速览：
 
 - **网页展示页**：把当前/历史播放做成一个可以到处分享的固定链接。
 - **Lyrimuse 的「中继模式」**：切换后悬浮窗改读某个 `state-worker` 的 `/now`，可以跨设备/跨房间同步（比如手机上也能看同一份数据）。
@@ -158,16 +158,15 @@ git clone git@github.com:Yudaotor/nowplaying.git web-page
 | 封面/主色/平台跳转链接 | 抓封面(网易云/QQ 兜底)、取封面原色作为强调色、拼 Apple/QQ/Spotify 跳转链接 | `lyrimuse-collector/enrich.go`/`lyrimuse-collector/color.go` | 始终开启；不再是可关闭的设置项(2026-07-17 起) |
 | ListenBrainz 提交 | 提交 playing_now/listen，是网页展示/其它玩法的数据源头；只想用悬浮歌词、不关心播放记录追踪可以完全不配 | `lyrimuse-collector/` | `config.json` 的 `listenbrainz_token` 留空即关闭，collector 正常启动、悬浮歌词不受影响 |
 | 展示页「正在播放」 | 网页显示当前/历史播放 | `lyrimuse-collector/` + `state-worker/` + `web/` | 展示页本身常驻部署，不经本机控制 |
-| 状态中继(国内加速，可选) | 采集器把当前状态推进 KV，网页/Lyrimuse「中继模式」优先读它、拿不到才回退直连 LB | `lyrimuse-collector/` + `state-worker/` | 设置里「推送状态到网页/徽章」开关 + `config.json` 填 `state_relay_url` |
+| 状态中继(国内加速，可选) | 采集器把当前状态推进 KV，网页/Lyrimuse「中继模式」优先读它、拿不到才回退直连 LB | `lyrimuse-collector/` + `state-worker/` | 设置里「网页推送」卡片填好 `state_relay_url`+`state_relay_token` 就自动推送，不需要额外开关（2026-07-20 起去掉了这个开关，见下方「网页玩法」教程） |
 | GitHub 动态徽章(可选) | README 里的实时 SVG 徽章 | `badge-worker/`(读 state-worker) | 常驻部署，本机不可控；依赖上面「状态中继」有没有新鲜数据 |
 | iPhone 播放桥接 | 把 iPhone 上经 Last.fm(FastScrobbler)记录的播放转发进 ListenBrainz | `lyrimuse-collector/poller.go`(`bridge`) | 设置里开关 + `config.json` 填 `lastfm_user`/`lastfm_api_key` |
 | Mac 播放同步进 Last.fm | 反向把 Mac 播放也镜像写进 Last.fm，让 Last.fm 上有完整历史 | `lyrimuse-collector/lastfm.go` | 设置里开关 + `config.json` 填 `lastfm_scrobble_*` 三项 |
 | 每周听歌小结 | 每周 Last.fm 图表收官时推一条通知 | `lyrimuse-collector/weekly.go` | 设置里开关 + 依赖 Last.fm 凭据 + `bark_url`(或其它 `notification_platform`) |
-| 历史 Top10 歌手统计 | 一天算一次，推给网页展示 | `lyrimuse-collector/topartists.go` | 设置里开关 + 依赖 Last.fm 凭据 + `state_relay_url` |
-| 网页模块可见性 | 单独控制展示页要不要显示历史/评论/表情反应/访客数/Top10 歌手 | `lyrimuse-collector/features.go` + `state-worker/` + `web/` | 设置里「网页推送」卡片「网页展示模块」5 个开关 |
-| 故障告警 | media-control/状态中继连续失败时推通知 | `lyrimuse-collector/alerter.go` | 设置里开关 + `config.json` 填 `bark_url`(或其它 `notification_platform`) |
+| 历史 Top10 歌手统计 | 一天算一次，推给网页展示 | `lyrimuse-collector/topartists.go` | 依赖 Last.fm 凭据 + `state_relay_url` 都配好后自动运行，不需要单独开关（同上，2026-07-20 起去掉了这个开关） |
+| 网页模块可见性 | 展示页历史/留言/表情反应/访客数/Top10 歌手这五个模块 | `lyrimuse-collector/features.go` + `state-worker/` + `web/` | 目前没有逐项开关的界面入口——「网页推送」配好地址+令牌后五个模块默认全部一起开启 |
 
-账号相关的这些功能（网页展示相关三项、iPhone 播放桥接、Mac 播放同步进 Last.fm、每周听歌小结、历史 Top10、故障告警）默认全部关闭：打开时才校验对应账号是否已配置，没配好会弹窗提示缺什么、并提供一键跳转到对应配置页，不会在没人碰过的情况下偷偷联网提交数据。
+账号相关的这些功能（网页展示相关三项、iPhone 播放桥接、Mac 播放同步进 Last.fm、每周听歌小结、历史 Top10）默认全部关闭：打开时才校验对应账号是否已配置，没配好会弹窗提示缺什么、并提供一键跳转到对应配置页，不会在没人碰过的情况下偷偷联网提交数据。
 
 ```
 Mac 采集器(Go, launchd 常驻)
@@ -217,7 +216,7 @@ cd state-worker && npm run deploy   # 或 badge-worker / worker，命令一样
    "state_relay_url": "https://np.yudaotor.me",
    "state_relay_token": "跟 PUSH_TOKEN 相同的值"
    ```
-   填完后设置里打开「推送状态到网页/徽章」开关（或重启 collector 让 `config.json` 生效），采集器就会开始往这个 KV 推状态，网页/徽章会自动读到；Lyrimuse 想切「中继模式」跟这个地址同步，在菜单栏「设置…」里填一样的 `state_relay_url`。
+   填完后重启 collector（让 `config.json` 生效，或在 Lyrimuse 设置「网页推送」卡片里填好同样这两项——填好就自动推送，不需要额外开关），采集器就会开始往这个 KV 推状态，网页/徽章会自动读到；Lyrimuse 想切「中继模式」跟这个地址同步，在菜单栏「设置…」里填一样的 `state_relay_url`。完整的效果展示 + 更友好的分步教程见 [`docs/web-features.md`](docs/web-features.md)。
 
 ### 从零搭建 badge-worker（可选）
 

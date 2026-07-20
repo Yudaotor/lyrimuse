@@ -371,14 +371,16 @@ struct AccountLinkingTab: View {
                 HStack(spacing: 4) {
                     Text(L10n.t("同步服务地址"))
                     HelpButton(
-                        text: L10n.t("自己用 Cloudflare Worker + KV 搭建的 state-worker 服务（项目里的 state-worker/ 目录）。不想自建也行：配好「ListenBrainz」也能让网页兜底显示「正在播放」，两者配一个就够。完整从零搭建步骤见 README「从零搭建 state-worker」一节。"),
-                        docTitle: L10n.t("打开 README →"),
-                        // 仓库 lyrimuse(2026-07-20 起改名,原 desktop-lyrics-suite,再往前原
-                        // nowplaying-backend)的 GitHub 网页版(排版好,不是本地 IDE 打开的原始
-                        // 文本)——用行号锚点而不是标题锚点,不用去猜 GitHub 对中文/括号标题的
-                        // slug 生成规则;这份 README 改动已提交推送,行号跟远端一致。以后这一节
-                        // 挪动过要跟着改这两个行号。
-                        docURL: URL(string: "https://github.com/Yudaotor/lyrimuse/blob/main/README.md#L198-L220")!
+                        text: L10n.t("自己用 Cloudflare Worker + KV 搭建的 state-worker 服务（项目里的 state-worker/ 目录）。不想自建也行：配好「ListenBrainz」也能让网页兜底显示「正在播放」，两者配一个就够。效果截图 + 完整从零搭建步骤见「网页玩法」教程。"),
+                        docTitle: L10n.t("查看效果 + 教程 →"),
+                        // 2026-07-20:这里原来直接指向 README「从零搭建 state-worker」那一节
+                        // (行号锚点 #L198-L220),现在改指向专门写的 docs/web-features.md——
+                        // 那份文档带真机效果截图、更友好的分步走读,并且它自己在需要 README
+                        // 那份"纯部署命令"细节时会再链接回去,不是简单地把入口挪走。文件名用
+                        // ASCII(web-features.md)而不是中文——这个 URL 要写死在 Swift 里当
+                        // URL(string:) 字面量,中文路径得先手动 percent-encode 才能保证解析
+                        // 成功,ASCII 文件名从根源上避免这个问题,可读性也更好。
+                        docURL: URL(string: "https://github.com/Yudaotor/lyrimuse/blob/main/docs/web-features.md")!
                     )
                 }
             }
@@ -391,7 +393,9 @@ struct AccountLinkingTab: View {
             // 逐项配置"。这两个字段填好本身就是"要不要推"这件事唯一的开关，不再需要
             // 额外一层可以打开也可以关闭的开关摞在上面；网页那边(state-worker/网页
             // 前端)看到 modules 配置缺失本来就按"全部启用"兜底，语义完全对得上。
-            Text(L10n.t("填好这两项就会自动推送到网页，历史播放、留言墙等展示模块默认全部开启。"))
+            // 后半句"历史播放、留言墙等展示模块默认全部开启"用户反馈删掉——不需要
+            // 逐一列举具体是哪些模块。
+            Text(L10n.t("填好这两项就会自动推送到网页。"))
         }
     }
 

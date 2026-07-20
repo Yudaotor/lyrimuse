@@ -156,7 +156,7 @@
 "恢复默认外观" = "Restore Default Appearance";
 "我已完成授权，继续" = "I've Authorized, Continue";
 "截屏/录屏时隐藏" = "Hide During Screenshots/Recording";
-"打开 README →" = "Open README →";
+"查看效果 + 教程 →" = "See Effect + Guide →";
 "打开 sct.ftqq.com，用微信扫码登录，首页会显示你的 SendKey——完整地址是 https://sctapi.ftqq.com/你的SendKey.send，把这一整串填进上面。" = "Go to sct.ftqq.com and log in by scanning the QR code with WeChat — your SendKey will appear on the home page. The full URL is https://sctapi.ftqq.com/YourSendKey.send; paste that whole string above.";
 "打开歌词文件夹" = "Open Lyrics Folder";
 "打开歌词管理…" = "Open Lyrics Manager…";
@@ -229,7 +229,7 @@
 "罗马音" = "Romanization";
 "联网搜索候选歌词" = "Search Online for Lyrics";
 "背景颜色" = "Background Color";
-"自己用 Cloudflare Worker + KV 搭建的 state-worker 服务（项目里的 state-worker/ 目录）。不想自建也行：配好「ListenBrainz」也能让网页兜底显示「正在播放」，两者配一个就够。完整从零搭建步骤见 README「从零搭建 state-worker」一节。" = "A self-hosted state-worker service built with Cloudflare Worker + KV (see the state-worker/ folder in this project). You don't have to self-host it — configuring \"ListenBrainz\" also lets the web page fall back to showing \"Now Playing,\" and either one alone is enough. For the full from-scratch setup steps, see the \"Building state-worker from Scratch\" section in the README.";
+"自己用 Cloudflare Worker + KV 搭建的 state-worker 服务（项目里的 state-worker/ 目录）。不想自建也行：配好「ListenBrainz」也能让网页兜底显示「正在播放」，两者配一个就够。效果截图 + 完整从零搭建步骤见「网页玩法」教程。" = "A self-hosted state-worker service built with Cloudflare Worker + KV (see the state-worker/ folder in this project). You don't have to self-host it — configuring \"ListenBrainz\" also lets the web page fall back to showing \"Now Playing,\" and either one alone is enough. For screenshots of the effect plus the full from-scratch setup steps, see the \"Web Features\" guide.";
 "至少需要保留一个歌词来源。" = "At least one lyrics source must stay enabled.";
 "解析" = "Parsing";
 "解析 Last.fm 响应失败" = "Failed to parse the Last.fm response";
@@ -288,6 +288,6 @@
 "需要单独申请一个有写入权限的 API Key + Secret，跟上面桥接用的不是同一个——在 Last.fm 后台创建应用时会同时给你这两项。" = "You'll need a separate API Key + Secret with write access — not the same one used for bridging above. Creating an app in the Last.fm dashboard gives you both at once.";
 "顺序优先" = "Priority Order";
 "飞书" = "Feishu";
-"填好这两项就会自动推送到网页，历史播放、留言墙等展示模块默认全部开启。" = "Fill in both fields and pushing to the web starts automatically — history, guestbook, and other display modules are all enabled by default.";
+"填好这两项就会自动推送到网页。" = "Fill in both fields and pushing to the web starts automatically.";
 "播放进度" = "Playback Progress";
 "用来接收「每周听歌小结」推送。" = "Used to receive \"Weekly Listening Digest\" notifications.";
