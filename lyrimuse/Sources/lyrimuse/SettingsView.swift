@@ -818,9 +818,6 @@ private struct GeneralSettingsTab: View {
                     Spacer()
                     Button(automationActionTitle) { handleAutomationAction() }
                 }
-                Text(L10n.t("采集器（collector）在「专辑预取」等功能里会单独用到自己的一份自动化权限，是完全独立的系统授权，跟上面这一项是两次不同的系统弹窗；如果专辑预取没有生效，可以去系统设置里检查一下。"))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
             }
             .onAppear { automationStatus = MusicAutomationPermission.check(askIfNeeded: false) }
 
@@ -845,7 +842,8 @@ private struct GeneralSettingsTab: View {
             // 跟悬浮歌词本身没关系,混在一起容易让人以为这是个必需项。拆成两个
             // Section:前六个(显示/隐藏悬浮歌词/锁定位置/打开歌词管理/打开设置+歌词
             // 时间轴微调两个)是歌词软件自己的操作,继续叫"快捷键";后三个单独一组,
-            // 标题+footer 直接点明"这是附加功能,不是歌词显示的一部分"。
+            // 标题直接写"（附加功能）"点明性质,不再另加一行解释——用户反馈这类
+            // 补充说明没必要,标题本身已经说清楚了。
             Section(L10n.t("快捷键")) {
                 ShortcutRecorder(L10n.t("显示/隐藏悬浮歌词"), name: .toggleOverlay)
                 ShortcutRecorder(L10n.t("锁定/解锁位置"), name: .toggleLockPosition)
@@ -864,14 +862,10 @@ private struct GeneralSettingsTab: View {
                 }
             }
 
-            Section {
+            Section(L10n.t("播放控制（附加功能）")) {
                 ShortcutRecorder(L10n.t("播放/暂停"), name: .playPauseHotkey)
                 ShortcutRecorder(L10n.t("下一首"), name: .nextTrackHotkey)
                 ShortcutRecorder(L10n.t("上一首"), name: .previousTrackHotkey)
-            } header: {
-                Text(L10n.t("播放控制（附加功能）"))
-            } footer: {
-                Text(L10n.t("用于远程控制 Apple Music 播放，不是歌词显示的一部分；同样需要上方的「Apple Music 自动化」权限。"))
             }
         }
         .formStyle(.grouped)

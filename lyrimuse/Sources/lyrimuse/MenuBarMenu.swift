@@ -1,4 +1,25 @@
 import SwiftUI
+import AppKit
+
+// 状态栏兜底图标——正式 App 图标(音符+三条歌词横线)的简笔剪影版,不是系统 SF Symbol。
+// 用户反馈"菜单栏那个图标也改成新图标的简笔版",不能直接拿正式图标(带渐变背景/高光/
+// 阴影)原样缩小塞进状态栏——那样会糊成一团色块,状态栏图标向来的惯例是纯剪影
+// (`isTemplate = true`),系统会自动按菜单栏当前明暗/悬停状态重新上色,不需要我们
+// 分别做浅色/深色两份。这份 PNG(Resources/MenuBarIconTemplate.png)是用代码画的
+// 矢量线稿(同一个"音符+歌词横线"构图,去掉颜色/阴影,只留纯黑剪影),不是从正式图标
+// 里抠像素抠出来的——正式图标那张背景是柔和的浅粉/浅橙渐变,跟白色符干很接近,直接
+// 阈值抠图边缘会发虚,不如照同一比例重新画一份线稿干净。
+private let menuBarIconImage: NSImage = {
+    guard let path = Bundle.module.path(forResource: "MenuBarIconTemplate", ofType: "png"),
+          let image = NSImage(contentsOfFile: path) else {
+        // 找不到就退回系统符号兜底,不让状态栏图标位置裸奔成空白——正常情况下这个
+        // 分支不会走到,resources: [.process("Resources")] 已经把这份 PNG 打进
+        // Bundle.module 了,跟 Localizable.strings 是同一套查找路径。
+        return NSImage(systemSymbolName: "text.quote", accessibilityDescription: nil) ?? NSImage()
+    }
+    image.isTemplate = true
+    return image
+}()
 
 // 状态栏图标本体(MenuBarExtra 的 label)——设置里关掉、没在播放、或者还没解析出这一句
 // 歌词时,退回固定的图标+文字;都满足时直接显示当前这一行,上限可以在设置里调
@@ -19,7 +40,14 @@ struct MenuBarLabel: View {
                 // "看不到剩下的部分",鼠标悬停时用系统原生 tooltip 把完整这一行显示出来。
                 Text(truncated(text)).help(text)
             } else {
-                Label(L10n.t("Lyrimuse"), systemImage: "text.quote")
+                Label {
+                    Text(L10n.t("Lyrimuse"))
+                } icon: {
+                    Image(nsImage: menuBarIconImage)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(width: 16, height: 16)
+                }
             }
         }
         // label: 是 MenuBarExtra 真正常驻状态栏的那部分,整个 App 运行期间只挂载一次

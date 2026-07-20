@@ -12,7 +12,6 @@
 "附加功能" = "Add-on Features";
 "以下都是可选的账号与推送服务，跟显示歌词本身无关；不配置也完全不影响悬浮歌词正常使用。" = "These are optional accounts and push services unrelated to displaying lyrics — leaving them unconfigured doesn't affect the floating lyrics at all.";
 "播放控制（附加功能）" = "Playback Control (Add-on)";
-"用于远程控制 Apple Music 播放，不是歌词显示的一部分；同样需要上方的「Apple Music 自动化」权限。" = "Remote-controls Apple Music playback — not part of lyrics display; also needs the \"Apple Music Automation\" permission above.";
 "%@ 字" = "%@ characters";
 "%@pt" = "%@pt";
 "快捷键" = "Keyboard Shortcuts";
@@ -56,7 +55,6 @@
 "开始使用" = "Get Started";
 "可以随时在设置里调整这些选项。" = "You can always adjust these later in Settings.";
 "未授权" = "Not Authorized";
-"采集器（collector）在「专辑预取」等功能里会单独用到自己的一份自动化权限，是完全独立的系统授权，跟上面这一项是两次不同的系统弹窗；如果专辑预取没有生效，可以去系统设置里检查一下。" = "The collector process uses its own separate Automation permission for features like album prefetch — this is an entirely independent system authorization from the one above (a different system dialog). If album prefetch doesn't seem to work, check System Settings for it too.";
 "语言" = "Language";
 "跟随系统" = "Follow System";
 "简体中文" = "简体中文";
