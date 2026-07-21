@@ -60,30 +60,15 @@ Lyrimuse 常驻在菜单栏里，跟着 Apple Music 播放弹出一个悬浮歌�
 
 ## 快速开始
 
-Lyrimuse 目前还没有做成签名发行版——需要自己构建，不需要 Apple 开发者账号（ad-hoc 签名即可）。
+Lyrimuse 目前还没有做成签名发行版——需要自己构建，不需要 Apple 开发者账号（ad-hoc 签名即可）。需要装 Xcode 的 Command Line Tools（跑 Swift）和 Go 工具链——`build.sh` 会一次性把 App 和它的后台采集器都构建好。
 
 ```bash
 git clone git@github.com:Yudaotor/lyrimuse.git
-cd lyrimuse
-
-cd lyrimuse-collector
-go build -o ../bin/collector .
-mkdir -p ~/.config/applemusic-nowplaying
-cp config.example.json ~/.config/applemusic-nowplaying/config.json
-cd ..
-
-# 装成开机自启的后台服务
-REPO="$(pwd)"
-mkdir -p ~/Library/LaunchAgents
-sed -e "s#/Users/chenyuhao/applemusic-nowplaying#$REPO#g" -e "s#/Users/chenyuhao#$HOME#g" \
-  launchd/com.lyrimuse.collector.plist > ~/Library/LaunchAgents/com.lyrimuse.collector.plist
-launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.lyrimuse.collector.plist
-
-# 构建并安装 App
-cd lyrimuse && ./build.sh && cd ..
+cd lyrimuse/lyrimuse
+./build.sh
 ```
 
-从 `/Applications` 打开 Lyrimuse——首次启动的引导向导会带你完成它唯一需要的那个权限授权：允许它以「自动化」方式读取 Music.app 当前播放的歌曲信息。授权之后，等采集器解析过当前这首歌，歌词就会显示出来（更多构建选项见 [lyrimuse/README.md](lyrimuse/README.md)）。
+从 `/Applications` 打开 Lyrimuse——首次启动的引导向导会带你完成它真正需要的两件事：允许它以「自动化」方式读取 Music.app 当前播放的歌曲信息，以及启用它的后台常驻采集服务（这样就算把窗口关掉，歌词/封面也会持续解析）。两步都完成后歌词马上就会显示出来（更多构建选项见 [lyrimuse/README.md](lyrimuse/README.md)）。
 
 不需要再配置任何其它东西才能看到歌词——上面提到的所有附加功能都是后续在设置里按需开启的。
 

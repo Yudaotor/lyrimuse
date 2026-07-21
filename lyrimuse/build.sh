@@ -36,6 +36,14 @@ RELEASE_DIR=".build/release"
 echo "==> building (release)"
 swift build -c release
 
+# 2026-07-21:collector 现在打包进 .app 里(见 Contents/Resources/collector),不再要求
+# 用户手动单独构建它——CollectorServiceManager.swift 靠 Bundle.main.bundleURL 精确知道
+# 它在哪，跟 LoginItemManager 认自己的方式一样。跟 lyrimuse-collector/build.sh 同款
+# GOTOOLCHAIN=go1.24.4(系统 Go 1.21 产出的二进制缺 LC_UUID，AMFI 拒签，见那份脚本的
+# 注释)。
+echo "==> building collector"
+(cd ../lyrimuse-collector && GOTOOLCHAIN=go1.24.4 go build -o "$OLDPWD/$RELEASE_DIR/collector" .)
+
 echo "==> assembling .app bundle"
 # CFBundleIdentifier 这次(2026-07-20 改名 Lyrimuse)跟上面的 $LABEL 统一成同一个
 # 字符串——早先(2026-07-18 打包成 .app 那次)故意让两者不同,是因为 CFBundleIdentifier
@@ -46,6 +54,9 @@ echo "==> assembling .app bundle"
 mkdir -p "$APP_DIR/Contents/MacOS" "$APP_DIR/Contents/Resources"
 cp "$RELEASE_DIR/lyrimuse" "$BIN"
 cp AppIcon.icns "$APP_DIR/Contents/Resources/AppIcon.icns"
+# collector 装在 Resources/ 而不是 MacOS/——那里是 CFBundleExecutable 指向的主执行文件，
+# collector 是被 launchd 单独拉起的后台辅助二进制，不是这个 App 自己的入口。
+cp "$RELEASE_DIR/collector" "$APP_DIR/Contents/Resources/collector"
 printf 'APPL????' > "$APP_DIR/Contents/PkgInfo"
 cat > "$APP_DIR/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
@@ -118,6 +129,10 @@ PLIST
 # 迁移唯一一次性的代价，同意一次之后往后重新构建/重启都不会再弹。
 codesign -s - --force --identifier "$LABEL" "$APP_DIR"
 codesign -v "$APP_DIR" && echo "    signature valid"
+# collector 自己在 go build 那一步已经原生签过一次(GOTOOLCHAIN=go1.24.4 的产物自带签名)——
+# 上面这行没加 --deep，只签外层 .app 这一个代码对象，理论上不会动内层这个独立二进制自己的
+# 签名；这里显式验证一下，而不是假设。
+codesign -v "$APP_DIR/Contents/Resources/collector" && echo "    collector signature valid"
 
 if [ "${1:-}" = "--no-restart" ]; then
   echo "==> built (restart skipped)"

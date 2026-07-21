@@ -60,30 +60,15 @@ Every extra above lives under Settings → **Add-on Features**, and each account
 
 ## Getting Started
 
-Lyrimuse isn't notarized or distributed as a signed release yet — you build it yourself, and no Apple Developer account is required (an ad-hoc signature is enough).
+Lyrimuse isn't notarized or distributed as a signed release yet — you build it yourself, and no Apple Developer account is required (an ad-hoc signature is enough). You'll need Xcode's Command Line Tools (for Swift) and a Go toolchain — `build.sh` builds both the app and its background collector in one shot.
 
 ```bash
 git clone git@github.com:Yudaotor/lyrimuse.git
-cd lyrimuse
-
-cd lyrimuse-collector
-go build -o ../bin/collector .
-mkdir -p ~/.config/applemusic-nowplaying
-cp config.example.json ~/.config/applemusic-nowplaying/config.json
-cd ..
-
-# Install it as a background service that survives reboots
-REPO="$(pwd)"
-mkdir -p ~/Library/LaunchAgents
-sed -e "s#/Users/chenyuhao/applemusic-nowplaying#$REPO#g" -e "s#/Users/chenyuhao#$HOME#g" \
-  launchd/com.lyrimuse.collector.plist > ~/Library/LaunchAgents/com.lyrimuse.collector.plist
-launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.lyrimuse.collector.plist
-
-# Build and install the app
-cd lyrimuse && ./build.sh && cd ..
+cd lyrimuse/lyrimuse
+./build.sh
 ```
 
-Open Lyrimuse from `/Applications` — the first-run wizard walks you through granting the one permission it actually needs: Automation access to Music.app, so it can read what's currently playing. Grant it and lyrics will appear the moment the collector catches up (see [lyrimuse/README.md](lyrimuse/README.md) for more build options).
+Open Lyrimuse from `/Applications` — the first-run wizard walks you through the two things it actually needs: Automation access to Music.app (so it can read what's currently playing) and enabling its background collector service (so lyrics/artwork keep resolving even when the window's closed). Complete both and lyrics will appear right away (see [lyrimuse/README.md](lyrimuse/README.md) for more build options).
 
 You don't need to configure anything else to get lyrics — every optional extra above is configured later, entirely from Settings.
 

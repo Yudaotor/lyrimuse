@@ -752,6 +752,11 @@ private struct GeneralSettingsTab: View {
     // 不是 @Published,系统层面的权限变化(比如用户自己去系统设置里手动改)不会主动
     // 推送通知回来,只能在这个页面被看到的时候被动刷新一次。
     @State private var automationStatus: MusicAutomationPermissionStatus = .notDetermined
+    // collector 常驻服务是否真的在跑——跟 automationStatus 同样的道理，只在 .onAppear
+    // 和每次操作后重新查一次，不是 @Published:这个状态由 launchd 管，App 自己不会主动
+    // 收到"进程挂了"这类通知，只能被动查。
+    @State private var collectorRunning = false
+    @State private var isTogglingCollectorService = false
 
     var body: some View {
         Form {
@@ -781,6 +786,37 @@ private struct GeneralSettingsTab: View {
                 Text(L10n.t("Lyrimuse 靠这个权限读取 Apple Music 当前播放的歌曲信息——没有它，悬浮歌词/灵动岛都无法显示任何歌词内容。"))
             }
             .onAppear { automationStatus = MusicAutomationPermission.check(askIfNeeded: false) }
+
+            // 2026-07-21:collector(读播放状态、抓歌词/封面写本地缓存的后台服务)以前
+            // 只能靠 README 里手动 sed+launchctl 装，现在打包进 .app 里、Settings 这里
+            // 能直接装/卸——跟"权限"那个 Section 一样用图标+文案+按钮而不是简单 Toggle，
+            // 因为需要展示"装了但没跑起来"这种中间态，纯 Toggle 表达不了。
+            Section {
+                HStack {
+                    Label {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(L10n.t("后台采集服务"))
+                            Text(collectorStatusCaption)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    } icon: {
+                        Image(systemName: collectorStatusIconName)
+                            .foregroundStyle(collectorStatusIconColor)
+                    }
+                    Spacer()
+                    if isTogglingCollectorService {
+                        ProgressView().controlSize(.small)
+                    } else {
+                        Button(collectorActionTitle) { toggleCollectorService() }
+                    }
+                }
+            } header: {
+                Text(L10n.t("常驻服务"))
+            } footer: {
+                Text(L10n.t("负责读取播放状态、解析歌词/封面并写入本地缓存的后台程序——没有它，悬浮歌词/灵动岛同样无法显示任何内容。"))
+            }
+            .onAppear { collectorRunning = CollectorServiceManager.isRunning }
 
             Section(L10n.t("语言")) {
                 // 下拉菜单而不是分段控件——分段控件的宽度会随选项数线性变宽,以后再加
@@ -867,6 +903,33 @@ private struct GeneralSettingsTab: View {
             automationStatus = MusicAutomationPermission.check(askIfNeeded: true)
         } else {
             NSWorkspace.shared.open(MusicAutomationPermission.systemSettingsURL)
+        }
+    }
+
+    private var collectorStatusCaption: String {
+        collectorRunning ? L10n.t("运行中") : L10n.t("未运行")
+    }
+
+    private var collectorStatusIconName: String {
+        collectorRunning ? "checkmark.circle.fill" : "xmark.circle.fill"
+    }
+
+    private var collectorStatusIconColor: Color {
+        collectorRunning ? .green : .red
+    }
+
+    private var collectorActionTitle: String {
+        collectorRunning ? L10n.t("停用") : L10n.t("启用")
+    }
+
+    private func toggleCollectorService() {
+        let enabling = !collectorRunning
+        isTogglingCollectorService = true
+        Task {
+            let running = await CollectorServiceManager.setEnabledAndWait(enabling)
+            settings.collectorServiceEnabled = enabling
+            collectorRunning = running
+            isTogglingCollectorService = false
         }
     }
 }

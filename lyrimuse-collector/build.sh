@@ -14,12 +14,25 @@ set -euo pipefail
 
 cd "$(dirname "$0")" # lyrimuse-collector/
 BIN="../bin/collector"
+BUNDLED_BIN="/Applications/Lyrimuse.app/Contents/Resources/collector"
 LABEL="com.lyrimuse.collector"
 TOOLCHAIN=go1.24.4 # 原生发 LC_UUID + 有效签名的工具链
 
 echo "==> building with $TOOLCHAIN (native LC_UUID + valid signature)"
 GOTOOLCHAIN="$TOOLCHAIN" go build -o "$BIN" .
 codesign -v "$BIN" && echo "    signature valid"
+
+# 2026-07-21 起 collector 真正被 launchd 管的那份是打包进 Lyrimuse.app 里的
+# Contents/Resources/collector(见 CollectorServiceManager.swift)，不再是仓库自己的
+# bin/collector——这里额外拷贝一份进已安装的 .app 包，这样改 collector 代码不用重新
+# swift build 整个 App 就能验证到"真正在跑的那份"。bin/collector 这份继续保留，纯粹
+# 方便手动 -dry-run 调试，不再是生产上跑的那份。
+RUNTIME_BIN="$BIN"
+if [ -d /Applications/Lyrimuse.app ]; then
+  cp "$BIN" "$BUNDLED_BIN"
+  codesign -v "$BUNDLED_BIN" && echo "    bundled copy signature valid"
+  RUNTIME_BIN="$BUNDLED_BIN"
+fi
 
 if [ "${1:-}" = "--no-restart" ]; then
   echo "==> built (restart skipped)"
@@ -29,7 +42,7 @@ fi
 echo "==> restarting via launchd"
 launchctl kickstart -k "gui/$(id -u)/$LABEL"
 sleep 3
-if ! pgrep -f bin/collector >/dev/null 2>&1; then
+if ! pgrep -f "$RUNTIME_BIN" >/dev/null 2>&1; then
   # kickstart 有时会静默失败——launchd 给这个 job 缓存了上一次运行遗留的 LWCR
   # (Lightweight Code Requirement)codesigning 约束,绑定的是旧二进制的 cdhash;
   # 每次重建都是新的 codesign,cdhash 必然变化,kickstart 本身不会刷新这个约束,
@@ -49,7 +62,7 @@ if ! pgrep -f bin/collector >/dev/null 2>&1; then
   launchctl kickstart -k "gui/$(id -u)/$LABEL"
   sleep 2
 fi
-if pid=$(pgrep -f bin/collector); then
+if pid=$(pgrep -f "$RUNTIME_BIN"); then
   echo "==> collector running, pid $pid"
 else
   echo "!! collector not running — see ~/Library/Logs/applemusic-nowplaying.log" >&2

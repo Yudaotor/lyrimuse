@@ -17,8 +17,13 @@ struct OnboardingView: View {
     @Environment(\.dismissWindow) private var dismissWindow
     @State private var step = 0
     @State private var automationStatus: MusicAutomationPermissionStatus = .notDetermined
+    // collector 常驻服务是否真的在跑——这一步是"软强制"的必经步骤(跟用户确认过:锁住
+    // 下一步按钮,但仍然可以直接关掉整个引导窗口跳过，跟其它步骤的"不反复打扰"哲学一致，
+    // 不禁用/隐藏关闭按钮)。
+    @State private var collectorRunning = false
+    @State private var isTogglingCollectorService = false
 
-    private static let totalSteps = 4
+    private static let totalSteps = 5
 
     var body: some View {
         VStack(spacing: 0) {
@@ -26,7 +31,8 @@ struct OnboardingView: View {
                 switch step {
                 case 0: welcomeStep
                 case 1: automationStep
-                case 2: languageStep
+                case 2: collectorServiceStep
+                case 3: languageStep
                 default: doneStep
                 }
             }
@@ -49,11 +55,15 @@ struct OnboardingView: View {
                     }
                 }
                 .keyboardShortcut(.defaultAction)
+                .disabled(step == 2 && !collectorRunning)
             }
             .padding(16)
         }
         .frame(width: 480, height: 420)
-        .onAppear { automationStatus = MusicAutomationPermission.check(askIfNeeded: false) }
+        .onAppear {
+            automationStatus = MusicAutomationPermission.check(askIfNeeded: false)
+            collectorRunning = CollectorServiceManager.isRunning
+        }
         // 不管走没走完(包括直接点红绿灯关掉窗口)都算"已经引导过一次"——跟这个 App
         // 里其它一次性引导(旧版自动化权限 NSAlert)同样的"不反复打扰"哲学,这里没有
         // 任何重新打开的入口,关掉就是关掉了。
@@ -94,6 +104,27 @@ struct OnboardingView: View {
                 Text(automationStatusCaption)
                 Spacer()
                 Button(automationActionTitle) { handleAutomationAction() }
+            }
+        }
+    }
+
+    private var collectorServiceStep: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text(L10n.t("常驻后台服务（必需）"))
+                .font(.title2.bold())
+            Text(L10n.t("Lyrimuse 需要一个后台程序常驻运行，负责读取播放状态、解析歌词/封面并写入本地缓存——没有它，悬浮歌词/灵动岛同样无法显示任何内容。点下面的按钮即可启用，之后开机会自动运行，不用再管。"))
+                .foregroundStyle(.secondary)
+            HStack {
+                Image(systemName: collectorRunning ? "checkmark.circle.fill" : "xmark.circle.fill")
+                    .foregroundStyle(collectorRunning ? .green : .red)
+                Text(collectorRunning ? L10n.t("运行中") : L10n.t("未运行"))
+                Spacer()
+                if isTogglingCollectorService {
+                    ProgressView().controlSize(.small)
+                } else {
+                    Button(L10n.t("启用")) { enableCollectorService() }
+                        .disabled(collectorRunning)
+                }
             }
         }
     }
@@ -159,6 +190,16 @@ struct OnboardingView: View {
             automationStatus = MusicAutomationPermission.check(askIfNeeded: true)
         } else {
             NSWorkspace.shared.open(MusicAutomationPermission.systemSettingsURL)
+        }
+    }
+
+    private func enableCollectorService() {
+        isTogglingCollectorService = true
+        Task {
+            let running = await CollectorServiceManager.setEnabledAndWait(true)
+            settings.collectorServiceEnabled = true
+            collectorRunning = running
+            isTogglingCollectorService = false
         }
     }
 

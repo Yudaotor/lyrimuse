@@ -6,6 +6,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         let settings = AppSettings.shared
 
+        // ConfigStore/FeatureSettingsStore 写配置文件、collector 自己写歌词/封面缓存都
+        // 假设这个目录已经存在，但谁都没有在写之前 createDirectory 过——以前全靠 README
+        // 里那句手动 `mkdir -p ~/.config/applemusic-nowplaying` 兜底，2026-07-21 起这个
+        // 手动步骤从安装指引里去掉了（collector 常驻服务改成引导流程里点一下就装好），
+        // 所以这里补上：无条件、幂等，不依赖引导是否跑完，第一次启动就先把这个目录建好。
+        try? FileManager.default.createDirectory(
+            at: FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".config/applemusic-nowplaying"),
+            withIntermediateDirectories: true)
+
         // 裸可执行文件(没打成 .app 包)也能表现成菜单栏专属应用,不占 Dock/Cmd-Tab——
         // 已实测确认,不需要 Info.plist 的 LSUIElement。默认(没碰过"在 Dock 中显示"这个
         // 设置的人)是 .accessory,保持这个 App 一直以来的既有体验；AppSettings.

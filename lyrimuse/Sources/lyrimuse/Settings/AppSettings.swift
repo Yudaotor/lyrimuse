@@ -22,6 +22,7 @@ final class AppSettings: ObservableObject {
         static let showRomanization = "np:showRomanization"
         static let showTranslation = "np:showTranslation"
         static let launchAtLoginEnabled = "np:launchAtLoginEnabled"
+        static let collectorServiceEnabled = "np:collectorServiceEnabled"
         static let showInDock = "np:showInDock"
         static let showNextLinePreview = "np:showNextLinePreview"
         static let showLyricsInMenuBar = "np:showLyricsInMenuBar"
@@ -69,6 +70,15 @@ final class AppSettings: ObservableObject {
         didSet {
             defaults.set(launchAtLoginEnabled, forKey: Keys.launchAtLoginEnabled)
             LoginItemManager.shared.setEnabled(launchAtLoginEnabled)
+        }
+    }
+    // collector 常驻服务的装/卸开关——跟 launchAtLoginEnabled 同样的写法，但默认值不能
+    // 照抄成 true:首次启动必须走一遍引导页面里的"启用"按钮，让用户看到真实的安装+验证
+    // 过程，不能在 init() 阶段就静默尝试装一个 LaunchAgent。
+    @Published var collectorServiceEnabled: Bool {
+        didSet {
+            defaults.set(collectorServiceEnabled, forKey: Keys.collectorServiceEnabled)
+            CollectorServiceManager.setEnabled(collectorServiceEnabled)
         }
     }
     // 是否在 Dock 里显示图标(以及连带出现在 Cmd-Tab 里)——用户反馈默认就应该开启,
@@ -253,6 +263,7 @@ final class AppSettings: ObservableObject {
         showRomanization = (defaults.object(forKey: Keys.showRomanization) as? Bool) ?? true
         showTranslation = (defaults.object(forKey: Keys.showTranslation) as? Bool) ?? true
         launchAtLoginEnabled = (defaults.object(forKey: Keys.launchAtLoginEnabled) as? Bool) ?? false
+        collectorServiceEnabled = (defaults.object(forKey: Keys.collectorServiceEnabled) as? Bool) ?? false
         showInDock = (defaults.object(forKey: Keys.showInDock) as? Bool) ?? true
         showNextLinePreview = (defaults.object(forKey: Keys.showNextLinePreview) as? Bool) ?? false
         showLyricsInMenuBar = (defaults.object(forKey: Keys.showLyricsInMenuBar) as? Bool) ?? false

@@ -14,7 +14,7 @@ private let logger = Logger(subsystem: "com.chenyuhao.lyrimuse", category: "coll
 // 本身只是给 launchd 发一条控制指令、不等目标进程完整启动完,同步等它退出不会明显卡住
 // 调用方。
 public enum CollectorControl {
-    public static let label = "com.chenyuhao.applemusic-nowplaying"
+    public static let label = "com.lyrimuse.collector"
 
     @discardableResult
     public static func restartAndWait() -> Bool {
