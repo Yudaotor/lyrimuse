@@ -60,7 +60,16 @@ Every extra above lives under Settings → **Add-on Features**, and each account
 
 ## Getting Started
 
-Lyrimuse isn't notarized or distributed as a signed release yet — you build it yourself, and no Apple Developer account is required (an ad-hoc signature is enough). You'll need Xcode's Command Line Tools (for Swift) and a Go toolchain — `build.sh` builds both the app and its background collector in one shot.
+Lyrimuse isn't notarized or distributed as a signed release yet — you build it yourself, and no Apple Developer account is required (an ad-hoc signature is enough).
+
+**One-time prerequisites** (skip anything you already have):
+
+```bash
+xcode-select --install   # Xcode Command Line Tools, for Swift — skip if `swift --version` already works
+brew install go          # any Go ≥ 1.21 — build.sh switches to 1.24.4 automatically via GOTOOLCHAIN
+```
+
+Then `build.sh` builds both the app and its background collector in one shot:
 
 ```bash
 git clone git@github.com:Yudaotor/lyrimuse.git

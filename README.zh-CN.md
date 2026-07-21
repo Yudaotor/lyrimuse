@@ -60,7 +60,16 @@ Lyrimuse 常驻在菜单栏里，跟着 Apple Music 播放弹出一个悬浮歌�
 
 ## 快速开始
 
-Lyrimuse 目前还没有做成签名发行版——需要自己构建，不需要 Apple 开发者账号（ad-hoc 签名即可）。需要装 Xcode 的 Command Line Tools（跑 Swift）和 Go 工具链——`build.sh` 会一次性把 App 和它的后台采集器都构建好。
+Lyrimuse 目前还没有做成签名发行版——需要自己构建，不需要 Apple 开发者账号（ad-hoc 签名即可）。
+
+**一次性前置依赖**（已经装过的可以跳过）：
+
+```bash
+xcode-select --install   # Xcode 的 Command Line Tools，跑 Swift 用——`swift --version` 能跑就说明已经装过
+brew install go          # 任意 ≥1.21 的 Go 都行——build.sh 会通过 GOTOOLCHAIN 自动切到 1.24.4
+```
+
+装好之后，`build.sh` 会一次性把 App 和它的后台采集器都构建好：
 
 ```bash
 git clone git@github.com:Yudaotor/lyrimuse.git
