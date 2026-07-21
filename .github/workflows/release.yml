@@ -42,6 +42,11 @@ jobs:
         uses: actions/setup-go@v7
         with:
           go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: lyrimuse-collector/go.sum
+          # go.sum lives in lyrimuse-collector/, not the repo root -- without this,
+          # setup-go's module cache silently never finds anything to key off of (seen as
+          # a "Restore cache failed: ... Supported file pattern: go.mod" annotation on the
+          # first real run of this workflow) and just re-downloads deps every time.
         # Installing the exact toolchain here means go1.24.4 is already on PATH and
         # cached before build.sh ever calls `go build`. When the active `go` binary
         # already reports 1.24.4, GOTOOLCHAIN=go1.24.4 (set inside build.sh itself) is
