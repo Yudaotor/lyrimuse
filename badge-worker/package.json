@@ -1,7 +1,0 @@
-{
-  "name": "nowplaying-badge-worker",
-  "private": true,
-  "scripts": {
-    "deploy": "npx wrangler deploy"
-  }
-}

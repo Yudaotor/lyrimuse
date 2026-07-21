@@ -53,7 +53,7 @@ Lyrimuse 常驻在菜单栏里，跟着 Apple Music 播放弹出一个悬浮歌�
 
 - **同步播放记录到 [ListenBrainz](https://listenbrainz.org)**，和/或 **Last.fm**（一键连接 Last.fm 账号，不用自己手动换 token）
 - **把 iPhone 上的播放记录桥接进来**（经 Last.fm），跟 Mac 上的播放记录合并成一份完整历史
-- **一个可以到处分享的"正在听什么"网页**——实时播放状态、历史播放、留言墙、表情反应、访客计数、历史 Top10 歌手榜单、黑胶唱片视觉效果、深浅色主题，分享到聊天工具里还会自动展开预览卡片。完整效果展示 + 从零搭建教程见 **[网页玩法教程](docs/web-features.zh-CN.md)**。
+- **一个可以到处分享的"正在听什么"网页**——实时播放状态、历史播放、留言墙、表情反应、访客计数、历史 Top10 歌手榜单、黑胶唱片视觉效果、深浅色主题，分享到聊天工具里还会自动展开预览卡片。完整效果展示 + 从零搭建教程见 **[网页玩法教程](https://github.com/Yudaotor/nowplaying-workers#readme)**。
 - **每周听歌小结**，通过推送通知发给你（支持 Bark、钉钉、企业微信、Discord、飞书、Server酱）
 
 以上每一项都在设置的「附加功能」里配置，每张账号卡片自带完整的分步引导——去哪申请 API Key/Token、怎么连接账号、怎么给选定的推送平台拿到 Webhook 地址，点开对应卡片就有。唯一的例外是网页展示页，它需要先自己部署一份 Cloudflare Worker，所以单独写了一份教程，而不是塞进设置里的一个小弹窗。
@@ -104,8 +104,7 @@ cd lyrimuse/lyrimuse
 
 - [`lyrimuse/`](lyrimuse) —— App 本体（Swift，SwiftUI + AppKit）
 - [`lyrimuse-collector/`](lyrimuse-collector) —— 后台引擎，负责解析歌词/封面并喂给 App（Go）
-- [`state-worker/`](state-worker)、[`badge-worker/`](badge-worker)、[`worker/`](worker) —— 上面网页功能背后可选的 Cloudflare Worker
-- [`docs/web-features.zh-CN.md`](docs/web-features.zh-CN.md) —— 网页展示页的完整教程，带真机截图和从零搭建步骤
+- [`Yudaotor/nowplaying-workers`](https://github.com/Yudaotor/nowplaying-workers) —— 独立仓库，装着上面网页功能背后可选的 Cloudflare Worker（`state-worker`、`badge-worker`，外加一个跟这个 App 无关的个人飞书签名用 `worker`），以及自己的从零搭建教程，带真机截图
 
 ## 致谢
 

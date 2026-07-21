@@ -53,7 +53,7 @@ Everything below is opt-in and off by default — turn on only what you want, ri
 
 - **Scrobble to [ListenBrainz](https://listenbrainz.org)** and/or **Last.fm** (one click to connect your Last.fm account, no manual token juggling)
 - **Bridge your iPhone's plays** (via Last.fm) into the same listening history as your Mac
-- **A shareable public "now playing" page** — live playback, history, a guestbook, reactions, a visitor counter, a Top-10-artists leaderboard, a vinyl-record visual, light/dark themes, and rich link previews when shared in chat apps. See the **[Web Features Guide](docs/web-features.md)** for a full walkthrough with screenshots.
+- **A shareable public "now playing" page** — live playback, history, a guestbook, reactions, a visitor counter, a Top-10-artists leaderboard, a vinyl-record visual, light/dark themes, and rich link previews when shared in chat apps. See the **[Web Features Guide](https://github.com/Yudaotor/nowplaying-workers#readme)** for a full walkthrough with screenshots.
 - **A weekly listening digest**, delivered as a push notification (Bark, DingTalk, WeCom, Discord, Feishu, or ServerChan)
 
 Every extra above lives under Settings → **Add-on Features**, and each account card has its own step-by-step setup guide built right in — where to grab an API key or token, how to connect an account, how to get a webhook URL for whichever push platform you pick. The one exception is the web page, which needs its own Cloudflare Worker deployed first — that's why it gets a dedicated guide instead of an in-app popover.
@@ -104,8 +104,7 @@ You don't need to configure anything else to get lyrics — every optional extra
 
 - [`lyrimuse/`](lyrimuse) — the app itself (Swift, SwiftUI + AppKit)
 - [`lyrimuse-collector/`](lyrimuse-collector) — the background engine that resolves lyrics/artwork and feeds them to the app (Go)
-- [`state-worker/`](state-worker), [`badge-worker/`](badge-worker), [`worker/`](worker) — optional Cloudflare Workers behind the web features above
-- [`docs/web-features.md`](docs/web-features.md) — the full guide to the shareable web page, with real screenshots and a from-scratch setup walkthrough
+- [`Yudaotor/nowplaying-workers`](https://github.com/Yudaotor/nowplaying-workers) — a separate repo with the optional Cloudflare Workers behind the web features above (`state-worker`, `badge-worker`, plus an unrelated personal Feishu-signature `worker`), and its own from-scratch setup guide with real screenshots
 
 ## Credits
 
