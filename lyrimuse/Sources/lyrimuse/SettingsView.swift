@@ -206,33 +206,14 @@ private struct LyricsSettingsTab: View {
     private let local = LocalPlaybackSource.shared
     @ObservedObject private var features = FeatureSettingsStore.shared
     @Environment(\.openWindow) private var openWindow
-    @State private var showAutomationDeniedAlert = false
 
     var body: some View {
         Form {
-            // 2026-07-20:去掉了"远程(网页同源)/本地播放"这个二选一——用户反馈"这个
-            // 可配置项没必要，全部默认本地就好"。本地 media-control 现在是唯一的数据源
-            // (见 PlaybackCoordinator.start()),这个 Section 只剩下本地模式本来就有的
-            // 这一项精确度调节,不再需要"只在 .local 分支才显示"这层判断。
-            Section(L10n.t("播放进度")) {
-                Toggle(L10n.t("精确追踪 Apple Music 播放进度"), isOn: Binding(
-                    get: { settings.preciseAppleMusicPosition },
-                    set: setPrecisePosition
-                ))
-                Text(L10n.t("需要系统「自动化」权限允许控制 Music.app；没有这个权限也能正常使用，播放进度会改用估算值，可能有 1-2 秒误差。"))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            .alert(
-                L10n.t("还没有自动化权限"),
-                isPresented: $showAutomationDeniedAlert
-            ) {
-                Button(L10n.t("打开系统设置")) { NSWorkspace.shared.open(MusicAutomationPermission.systemSettingsURL) }
-                Button(L10n.t("取消"), role: .cancel) {}
-            } message: {
-                Text(L10n.t("请先在系统设置的「自动化」里允许 Lyrimuse 控制 Music.app，再回来打开这个开关。"))
-            }
-
+            // 2026-07-21:去掉了"精确追踪 Apple Music 播放进度"这个开关——本地数据源
+            // 从依赖外部 media-control 换成了直接用 AppleScript 问 Music.app(见
+            // MediaControlClient.swift),问到的播放位置本身就是精确值,不再有"精确
+            // /估算"两条路径可选,自动化权限现在是让歌词显示出来的必要前提,而不是一个
+            // 可选的精度提升项——权限状态在"通用"tab的"权限"分区统一显示。
             Section(L10n.t("解析")) {
                 Toggle(isOn: Binding(
                     get: { features.lyrics },
@@ -442,22 +423,6 @@ private struct LyricsSettingsTab: View {
         Task { await features.save() }
     }
 
-    // 打开时才校验权限、没通过就弹窗提示——跟 AccountLinkingTab 里账号前置条件校验
-    // 同一种"点了才校验"的语言,不做静态常驻的 disabled/hint。关闭这个开关不需要任何
-    // 权限,始终允许。
-    private func setPrecisePosition(_ enabled: Bool) {
-        guard enabled else {
-            settings.preciseAppleMusicPosition = false
-            local.preciseAppleMusicPosition = false
-            return
-        }
-        guard MusicAutomationPermission.check(askIfNeeded: true).isAuthorized else {
-            showAutomationDeniedAlert = true
-            return
-        }
-        settings.preciseAppleMusicPosition = true
-        local.preciseAppleMusicPosition = true
-    }
 }
 
 private struct AppearanceSettingsTab: View {
@@ -790,7 +755,11 @@ private struct GeneralSettingsTab: View {
 
     var body: some View {
         Form {
-            Section(L10n.t("权限")) {
+            // 2026-07-21:本地数据源从依赖外部 media-control 换成了直接用 AppleScript
+            // 问 Music.app(见 MediaControlClient.swift),这个权限从"可选、只影响播放
+            // 进度精度"变成了"核心路径必需、没有就完全看不到歌词"，加一句 footer 说清楚
+            // 这一点，别让人以为不给也无所谓。
+            Section {
                 HStack {
                     Label {
                         VStack(alignment: .leading, spacing: 2) {
@@ -806,6 +775,10 @@ private struct GeneralSettingsTab: View {
                     Spacer()
                     Button(automationActionTitle) { handleAutomationAction() }
                 }
+            } header: {
+                Text(L10n.t("权限"))
+            } footer: {
+                Text(L10n.t("Lyrimuse 靠这个权限读取 Apple Music 当前播放的歌曲信息——没有它，悬浮歌词/灵动岛都无法显示任何歌词内容。"))
             }
             .onAppear { automationStatus = MusicAutomationPermission.check(askIfNeeded: false) }
 

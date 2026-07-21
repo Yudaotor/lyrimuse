@@ -1,5 +1,5 @@
 // Command collector watches the macOS system now-playing state via
-// media-control and submits playing_now / listen events to ListenBrainz.
+// AppleScript and submits playing_now / listen events to ListenBrainz.
 package main
 
 import (
@@ -796,7 +796,7 @@ func (p *poller) applyBridgeResult(r bridgeFetchResult) {
 // track is playing; treat a lone null as a glitch (keep the last state), and
 // only declare playback stopped after a few consecutive nulls.
 func (p *poller) poll() {
-	if state, ok := getState(p.ctx, p.cfg.MediaControlPath); ok {
+	if state, ok := getState(p.ctx); ok {
 		if len(state) == 0 { // "null" — nothing playing, or a transient read glitch
 			p.nullStreak++
 			if p.nullStreak >= 3 {

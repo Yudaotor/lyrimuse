@@ -1,5 +1,5 @@
 // Command collector watches the macOS system now-playing state via
-// media-control and submits playing_now / listen events to ListenBrainz.
+// AppleScript and submits playing_now / listen events to ListenBrainz.
 package main
 
 // 3DES 解密,专供 QQ 音乐 GetPlayLyricInfo 的 QRC 逐字歌词用——Go 标准库 crypto/des 是

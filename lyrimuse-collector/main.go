@@ -1,5 +1,5 @@
 // Command collector watches the macOS system now-playing state via
-// media-control and submits playing_now / listen events to ListenBrainz.
+// AppleScript and submits playing_now / listen events to ListenBrainz.
 package main
 
 import (
@@ -110,8 +110,8 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	log.Printf("%s %s starting (media-control: %s, bundles: %v, dry-run: %v)",
-		clientName, clientVersion, cfg.MediaControlPath, cfg.BundleIDs, *dryRun)
+	log.Printf("%s %s starting (bundles: %v, dry-run: %v)",
+		clientName, clientVersion, cfg.BundleIDs, *dryRun)
 	if err := run(ctx, cfg, lb); err != nil && ctx.Err() == nil {
 		log.Fatalf("run: %v", err)
 	}

@@ -41,7 +41,6 @@ final class AppSettings: ObservableObject {
         // 只写(负责持久化+驱动"通用"tab 的语言 Picker),两处各自独立实现,不要互相
         // import,理由见 L10n.swift 顶部注释(L10n 不依赖 @MainActor 的 AppSettings)。
         static let appLanguage = "np:appLanguage"
-        static let preciseAppleMusicPosition = "np:preciseAppleMusicPosition"
         static let hasShownAutomationOnboarding = "np:hasShownAutomationOnboarding" // 已废弃,只在 init() 里读一次做迁移
         static let hasCompletedOnboarding = "np:hasCompletedOnboarding"
         static let overlayStyle = "np:overlayStyle" // 已废弃,只在 init() 里读一次做迁移
@@ -144,14 +143,6 @@ final class AppSettings: ObservableObject {
     // (哪些界面需要额外补一份 @ObservedObject 才能吃到这次刷新,见各文件里的改动说明)。
     @Published var appLanguage: String {
         didSet { defaults.set(appLanguage, forKey: Keys.appLanguage) }
-    }
-    // 是否尝试用"自动化"权限问 Music.app 要精确到 ~0.1s 的播放位置(见
-    // AppleMusicPositionClient)——默认开(保持这个功能上线以来一直无条件尝试的行为
-    // 不变),关掉就直接跳过这次尝试、退回 media-control 的估算进度(等同于"这次调用
-    // 失败了"的既有回退路径,不需要改那条路径本身)。这个开关本身不受权限状态影响、
-    // 随时能切;真正会不会成功仍然取决于 MusicAutomationPermission 那份系统授权。
-    @Published var preciseAppleMusicPosition: Bool {
-        didSet { defaults.set(preciseAppleMusicPosition, forKey: Keys.preciseAppleMusicPosition) }
     }
     // 单曲歌词时间轴微调(菜单里的"歌词时间轴"/两个可选快捷键)每点一次调整多少——用户
     // 反馈"不要写死 0.2 秒",做成可调的步长而不是代码里的固定常量,跟 menuBarLyricsMaxChars
@@ -273,7 +264,6 @@ final class AppSettings: ObservableObject {
         hideDuringScreenCapture = (defaults.object(forKey: Keys.hideDuringScreenCapture) as? Bool) ?? false
         hideWhenNotPlaying = (defaults.object(forKey: Keys.hideWhenNotPlaying) as? Bool) ?? false
         appLanguage = defaults.string(forKey: Keys.appLanguage) ?? "system"
-        preciseAppleMusicPosition = (defaults.object(forKey: Keys.preciseAppleMusicPosition) as? Bool) ?? true
         hasCompletedOnboarding = (defaults.object(forKey: Keys.hasCompletedOnboarding) as? Bool)
             ?? (defaults.object(forKey: Keys.hasShownAutomationOnboarding) as? Bool) ?? false
         // 一次性迁移:互斥的"悬浮窗样式"拆成两个独立开关之前,只可能同时生效一个——

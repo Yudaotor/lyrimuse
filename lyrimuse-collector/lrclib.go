@@ -1,5 +1,5 @@
 // Command collector watches the macOS system now-playing state via
-// media-control and submits playing_now / listen events to ListenBrainz.
+// AppleScript and submits playing_now / listen events to ListenBrainz.
 package main
 
 import (

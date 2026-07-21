@@ -5,9 +5,10 @@ import os
 private let logger = Logger(subsystem: "com.chenyuhao.lyrimuse", category: "local")
 
 // 本地播放数据源:音乐本来就在这台 Mac 上放,没道理还要绕一圈公网——播放位置/进度靠
-// `media-control get` 本地轮询拿(零网络、零延迟),歌词靠读 collector 已经解析好、
-// 写在磁盘上的那份缓存(同样零网络)。2026-07-20 起是唯一的数据源(原本还有一个
-// 远程 relay 数据源、跟这个二选一,已删除——见 PlaybackCoordinator.start())。
+// AppleScript 本地轮询问 Music.app 本身要(零网络、零延迟,见 MediaControlClient.swift
+// 顶部注释——2026-07-21 起从依赖外部 `media-control` 换成了这个),歌词靠读 collector
+// 已经解析好、写在磁盘上的那份缓存(同样零网络)。2026-07-20 起是唯一的数据源(原本
+// 还有一个远程 relay 数据源、跟这个二选一,已删除——见 PlaybackCoordinator.start())。
 @MainActor
 public final class LocalPlaybackSource: ObservableObject {
     public static let shared = LocalPlaybackSource()
@@ -22,12 +23,6 @@ public final class LocalPlaybackSource: ObservableObject {
     @Published public var preferWordLevelKaraoke: Bool = true {
         didSet { reloadCurrentLyrics() }
     }
-    // 是否尝试用 AppleMusicPositionClient(需要"自动化"系统权限)问 Music.app 要精确
-    // 播放位置——App 层(AppSettings.preciseAppleMusicPosition)推值进来,这里不直接
-    // 依赖 AppSettings(LyrimuseCore 是纯逻辑 library,不该反过来依赖 App target),
-    // 照抄 preferWordLevelKaraoke 同一个"App 层推值"的既有模式。关掉时直接跳过这次
-    // 尝试,等同于"这次调用失败了",走 poll() 里现成的 media-control 估算进度回退。
-    public var preciseAppleMusicPosition: Bool = true
 
     private let syncEngine = LyricsSyncEngine()
     // 公开给 View 层——逐字填色现在按渲染帧频(TimelineView)从这个锚点直接外推真实
@@ -116,16 +111,14 @@ public final class LocalPlaybackSource: ObservableObject {
     }
 
     private func poll() {
-        // 两个都是同步阻塞调用(内部各自 fork 子进程等待退出),一起挪到后台线程跑,
-        // 避免卡住主线程/UI。
-        let wantsPrecisePosition = preciseAppleMusicPosition
+        // 同步阻塞调用(内部 fork 子进程等待退出),挪到后台线程跑,避免卡住主线程/UI。
         Task {
-            let (snapshot, livePosition) = await Task.detached {
-                (MediaControlClient.fetchSnapshot(), wantsPrecisePosition ? AppleMusicPositionClient.fetchPositionSeconds() : nil)
+            let snapshot = await Task.detached {
+                MediaControlClient.fetchSnapshot()
             }.value
             guard let snapshot else {
-                // media-control 返回 nil 不只是"调用失败",更常见的是真的没有任何曲目在
-                // 加载(比如 Music.app 处于 stopped 而不是 paused——paused 时 media-control
+                // 返回 nil 不只是"调用失败"(比如没有"自动化"权限),更常见的是真的没有
+                // 任何曲目在加载(比如 Music.app 处于 stopped 而不是 paused——paused 时
                 // 仍会给一个 playing=false 的正常快照,只有"压根没曲目"才会是 nil)。这里
                 // 之前只打日志就直接 return,不碰任何 @Published 状态——一旦从"正在播放"
                 // 变成这种 nil 快照,isPlayingNow/currentLine 全部卡在停播前那一刻,状态栏
@@ -134,27 +127,25 @@ public final class LocalPlaybackSource: ObservableObject {
                 // 完全一致的清理(anchor=nil 时清 currentLine/nextLineText+停快速计时器),
                 // 只是多加了 isPlayingNow=false——title/artist/album 不清空,跟"暂停"时
                 // 保留最近播放信息的既有行为保持一致。
-                logger.error("snapshot failed (media-control 不可用或解析失败,或者没有曲目在播放)")
+                logger.error("snapshot failed (没有自动化权限、Music.app 不在运行，或者没有曲目在播放)")
                 clearIfWasPlaying()
                 return
             }
-            // 系统级 Now Playing 会话不只 Apple Music 会占——网页视频(Safari/Chrome 里
-            // 放的 bilibili 等)、Podcasts 等任何注册了 MPNowPlayingInfoCenter 的 App 都能
-            // 抢占这个焦点,用户反馈"只有 Apple Music 才该算"。isMusicApp 非 true 时按
-            // "没有 Apple Music 在播"处理,跟上面 nil 快照走同一套清理逻辑——不清空
-            // title/artist/album(保留"最近播放的 Apple Music 曲目"这份信息,不被网页
-            // 视频的标题覆盖显示)。
+            // isMusicApp 现在直接由 MediaControlClient 硬编码为 true(只在真的问到
+            // Music.app 自己的当前曲目时才会返回非 nil 快照,不再是系统级 Now Playing
+            // 焦点判断)——这个 guard 留着只是保持跟旧版同一套代码路径,不删这一步的
+            // 保险性质。
             guard snapshot.isMusicApp == true else {
                 logger.debug("snapshot ignored: not Apple Music (isMusicApp=\(String(describing: snapshot.isMusicApp)))")
                 clearIfWasPlaying()
                 return
             }
-            logger.debug("snapshot ok: playing=\(snapshot.playing == true) livePos=\(livePosition != nil)")
-            self.apply(snapshot, livePositionSeconds: livePosition)
+            logger.debug("snapshot ok: playing=\(snapshot.playing == true)")
+            self.apply(snapshot)
         }
     }
 
-    private func apply(_ snapshot: MediaControlSnapshot, livePositionSeconds: Double?) {
+    private func apply(_ snapshot: MediaControlSnapshot) {
         lastSnapshot = snapshot
         title = snapshot.title ?? ""
         artist = snapshot.artist ?? ""
@@ -170,14 +161,11 @@ public final class LocalPlaybackSource: ObservableObject {
             reloadCurrentLyrics()
         }
 
-        // media-control 的 elapsedTime 在稳定播放期间会整段冻结不动(实测坐实:同一个值
-        // 连续多次轮询、跨越十几秒真实时间也不变),如果直接拿它当"这一刻的准确位置"、
-        // 每次轮询都重新锚定,外推出来的进度会一直卡在轨道刚开始播放的那个点附近,歌词
-        // 表现为"卡死在最前面不动、好像没有歌词"。改用 AppleMusicPositionClient(问
-        // Music.app 本身要实时位置,精确到 ~0.1s,不会冻结)优先,media-control 的
-        // elapsedTime 只在拿不到(比如没在放 Apple Music)时兜底。
+        // elapsedTime 现在就是 Music.app 自己实时算出来的播放位置(MediaControlClient
+        // 直接问 Music.app 要,不是旧版 media-control 那种会在稳定播放期间整段冻结不动
+        // 的估算值),不需要再额外问一次、也不需要区分"精确"和"估算"两条路径。
         if snapshot.playing == true, let duration = snapshot.duration, duration > 0 {
-            let positionSeconds = livePositionSeconds ?? snapshot.elapsedTime ?? 0
+            let positionSeconds = snapshot.elapsedTime ?? 0
             anchor = ProgressAnchor(
                 durationMs: Int(duration * 1000),
                 progressMs: Int(positionSeconds * 1000),

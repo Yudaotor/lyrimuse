@@ -36,14 +36,10 @@
 "应用" = "Apply";
 "正数=提前显示,负数=延后显示" = "Positive = show earlier, negative = show later";
 "请求权限" = "Request Access";
-"精确追踪 Apple Music 播放进度" = "Precisely Track Apple Music Playback Position";
-"需要系统「自动化」权限允许控制 Music.app；没有这个权限也能正常使用，播放进度会改用估算值，可能有 1-2 秒误差。" = "Requires system \"Automation\" access to control Music.app; it still works fine without it — playback position falls back to an estimate that may drift 1-2 seconds.";
-"还没有自动化权限" = "Automation Access Not Granted";
 "打开系统设置" = "Open System Settings";
-"请先在系统设置的「自动化」里允许 Lyrimuse 控制 Music.app，再回来打开这个开关。" = "Please allow Lyrimuse to control Music.app under \"Automation\" in System Settings first, then come back and turn this on.";
 "权限" = "Permissions";
 "Apple Music 自动化" = "Apple Music Automation";
-"Apple Music 自动化权限" = "Apple Music Automation Access";
+"Apple Music 自动化权限（必需）" = "Apple Music Automation Access (Required)";
 "已授权" = "Authorized";
 "已拒绝" = "Denied";
 "一切就绪" = "All Set";
@@ -51,7 +47,8 @@
 "下一步" = "Next";
 "上一步" = "Back";
 "欢迎使用 Lyrimuse" = "Welcome to Lyrimuse";
-"Lyrimuse 可以在本地模式下读取 Apple Music 的精确播放进度(误差 <0.1 秒)，需要系统「自动化」权限允许控制 Music.app。不授权也能正常使用——播放进度会改用估算值，可能有 1-2 秒误差。" = "In local mode, Lyrimuse can read Apple Music's precise playback position (accurate to <0.1s), which needs system \"Automation\" access to control Music.app. It works fine without it too — playback position falls back to an estimate that may drift 1-2 seconds.";
+"Lyrimuse 需要这个权限来读取 Apple Music 当前正在播放的歌曲信息——没有它，悬浮歌词完全没法显示任何内容。点下面的按钮会弹出系统授权对话框，选择「允许」即可；随时可以在设置里重新打开这一步。" = "Lyrimuse needs this permission to read what's currently playing in Apple Music — without it, the floating lyrics can't display anything at all. The button below opens the system authorization dialog; choose \"Allow.\" You can always come back to this step in Settings.";
+"Lyrimuse 靠这个权限读取 Apple Music 当前播放的歌曲信息——没有它，悬浮歌词/灵动岛都无法显示任何歌词内容。" = "Lyrimuse relies on this permission to read what's currently playing in Apple Music — without it, neither the floating lyrics nor the Dynamic Island style can show any lyrics content.";
 "开始使用" = "Get Started";
 "可以随时在设置里调整这些选项。" = "You can always adjust these later in Settings.";
 "未授权" = "Not Authorized";
@@ -289,5 +286,4 @@
 "顺序优先" = "Priority Order";
 "飞书" = "Feishu";
 "填好这两项就会自动推送到网页。" = "Fill in both fields and pushing to the web starts automatically.";
-"播放进度" = "Playback Progress";
 "用来接收「每周听歌小结」推送。" = "Used to receive \"Weekly Listening Digest\" notifications.";

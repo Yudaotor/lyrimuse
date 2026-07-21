@@ -66,9 +66,6 @@ Lyrimuse isn't notarized or distributed as a signed release yet — you build it
 git clone git@github.com:Yudaotor/lyrimuse.git
 cd lyrimuse
 
-# The collector reads what's currently playing — no special permissions needed
-brew install media-control
-
 cd lyrimuse-collector
 go build -o ../bin/collector .
 mkdir -p ~/.config/applemusic-nowplaying
@@ -88,7 +85,7 @@ launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.chenyuhao.applemusic
 cd lyrimuse && ./build.sh && cd ..
 ```
 
-Open Lyrimuse from `/Applications` and lyrics will appear the moment the collector catches up with whatever's playing (see [lyrimuse/README.md](lyrimuse/README.md) for more build options).
+Open Lyrimuse from `/Applications` — the first-run wizard walks you through granting the one permission it actually needs: Automation access to Music.app, so it can read what's currently playing. Grant it and lyrics will appear the moment the collector catches up (see [lyrimuse/README.md](lyrimuse/README.md) for more build options).
 
 You don't need to configure anything else to get lyrics — every optional extra above is configured later, entirely from Settings.
 

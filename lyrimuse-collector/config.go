@@ -1,5 +1,5 @@
 // Command collector watches the macOS system now-playing state via
-// media-control and submits playing_now / listen events to ListenBrainz.
+// AppleScript and submits playing_now / listen events to ListenBrainz.
 package main
 
 import (
@@ -9,15 +9,13 @@ import (
 	_ "image/jpeg" // 注册 JPEG 解码器
 	_ "image/png"  // 网易云取色缩略图有时是 PNG(content-type 却谎报 jpg)
 	"os"
-	"os/exec"
 )
 
 type config struct {
-	Token            string   `json:"listenbrainz_token"`
-	User             string   `json:"listenbrainz_user,omitempty"`
-	APIRoot          string   `json:"api_root,omitempty"`
-	MediaControlPath string   `json:"media_control_path,omitempty"`
-	BundleIDs        []string `json:"bundle_ids,omitempty"`
+	Token     string   `json:"listenbrainz_token"`
+	User      string   `json:"listenbrainz_user,omitempty"`
+	APIRoot   string   `json:"api_root,omitempty"`
+	BundleIDs []string `json:"bundle_ids,omitempty"`
 	// 自建状态中继(Cloudflare Worker+KV,取代 LB 作网页主数据源)。留空则不推。
 	// StateRelayURL 形如 https://np.yudaotor.me;/push 写当前状态。历史现在完全走
 	// state-worker 的 /history 端点读 LB 合并,采集器不再往这里写 /scrobble(旧端点
@@ -72,13 +70,6 @@ func loadConfig(path string) (*config, error) {
 	}
 	if len(cfg.BundleIDs) == 0 {
 		cfg.BundleIDs = []string{"com.apple.Music"}
-	}
-	if cfg.MediaControlPath == "" {
-		if p, err := exec.LookPath("media-control"); err == nil {
-			cfg.MediaControlPath = p
-		} else {
-			cfg.MediaControlPath = "/opt/homebrew/bin/media-control"
-		}
 	}
 	if cfg.NotificationPlatform == "" {
 		// 旧配置文件没有这个字段(是这次新加的),默认按最早唯一支持过的 Bark 处理,

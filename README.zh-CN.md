@@ -66,9 +66,6 @@ Lyrimuse 目前还没有做成签名发行版——需要自己构建，不需�
 git clone git@github.com:Yudaotor/lyrimuse.git
 cd lyrimuse
 
-# 采集器需要读取当前播放状态，不需要任何特殊权限
-brew install media-control
-
 cd lyrimuse-collector
 go build -o ../bin/collector .
 mkdir -p ~/.config/applemusic-nowplaying
@@ -88,7 +85,7 @@ launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.chenyuhao.applemusic
 cd lyrimuse && ./build.sh && cd ..
 ```
 
-从 `/Applications` 打开 Lyrimuse，等采集器解析过当前这首歌之后，歌词就会显示出来（更多构建选项见 [lyrimuse/README.md](lyrimuse/README.md)）。
+从 `/Applications` 打开 Lyrimuse——首次启动的引导向导会带你完成它唯一需要的那个权限授权：允许它以「自动化」方式读取 Music.app 当前播放的歌曲信息。授权之后，等采集器解析过当前这首歌，歌词就会显示出来（更多构建选项见 [lyrimuse/README.md](lyrimuse/README.md)）。
 
 不需要再配置任何其它东西才能看到歌词——上面提到的所有附加功能都是后续在设置里按需开启的。
 

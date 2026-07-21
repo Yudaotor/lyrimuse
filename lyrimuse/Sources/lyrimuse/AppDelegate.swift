@@ -13,7 +13,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // 所以这里必须显式按持久化的值应用一次,不能指望 didSet 帮忙补上这一步。
         NSApp.setActivationPolicy(settings.showInDock ? .regular : .accessory)
         LocalPlaybackSource.shared.preferWordLevelKaraoke = settings.preferWordLevelKaraoke
-        LocalPlaybackSource.shared.preciseAppleMusicPosition = settings.preciseAppleMusicPosition
 
         // 桌面悬浮歌词、灵动岛歌词各自独立开关,互不排斥,可以同时开、只开一个、或都不开。
         // 只对确实开启的那个(些)控制器调 setVisible(true),完全不碰关闭的那个:两个

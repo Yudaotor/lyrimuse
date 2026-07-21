@@ -8,7 +8,7 @@ import SwiftUI
 // 把它们串成一个有引导性的首次体验,不是另一套独立状态。
 //
 // 不含"播放状态来源"选择——用户反馈默认就该是本地播放,不需要在向导里单独问一遍
-// (2026-07-20 起这甚至已经不是个可选项:本地 media-control 是唯一的数据源,见
+// (2026-07-20 起这甚至已经不是个可选项:本地数据源是唯一的数据源,见
 // PlaybackCoordinator.start())。也没有任何"重新打开"的入口(菜单栏/设置都不留)——只在首次
 // 启动自动出现一次,关掉/走完都不会再自动弹出,想再调整这里涉及的每一项都能在
 // 设置里单独找到。
@@ -84,9 +84,9 @@ struct OnboardingView: View {
 
     private var automationStep: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text(L10n.t("Apple Music 自动化权限"))
+            Text(L10n.t("Apple Music 自动化权限（必需）"))
                 .font(.title2.bold())
-            Text(L10n.t("Lyrimuse 可以在本地模式下读取 Apple Music 的精确播放进度(误差 <0.1 秒)，需要系统「自动化」权限允许控制 Music.app。不授权也能正常使用——播放进度会改用估算值，可能有 1-2 秒误差。"))
+            Text(L10n.t("Lyrimuse 需要这个权限来读取 Apple Music 当前正在播放的歌曲信息——没有它，悬浮歌词完全没法显示任何内容。点下面的按钮会弹出系统授权对话框，选择「允许」即可；随时可以在设置里重新打开这一步。"))
                 .foregroundStyle(.secondary)
             HStack {
                 Image(systemName: automationStatusIconName)
