@@ -14,7 +14,7 @@ set -euo pipefail
 
 cd "$(dirname "$0")" # lyrimuse-collector/
 BIN="../bin/collector"
-LABEL="com.chenyuhao.applemusic-nowplaying"
+LABEL="com.lyrimuse.collector"
 TOOLCHAIN=go1.24.4 # 原生发 LC_UUID + 有效签名的工具链
 
 echo "==> building with $TOOLCHAIN (native LC_UUID + valid signature)"

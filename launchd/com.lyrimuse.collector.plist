@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>com.chenyuhao.applemusic-nowplaying</string>
+    <string>com.lyrimuse.collector</string>
     <key>ProgramArguments</key>
     <array>
         <string>/Users/chenyuhao/applemusic-nowplaying/bin/collector</string>

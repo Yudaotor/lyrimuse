@@ -72,14 +72,12 @@ mkdir -p ~/.config/applemusic-nowplaying
 cp config.example.json ~/.config/applemusic-nowplaying/config.json
 cd ..
 
-# Try it in the foreground first
-./bin/collector -dry-run
-
-# Once that looks right, install it as a background service that survives reboots
+# Install it as a background service that survives reboots
 REPO="$(pwd)"
+mkdir -p ~/Library/LaunchAgents
 sed -e "s#/Users/chenyuhao/applemusic-nowplaying#$REPO#g" -e "s#/Users/chenyuhao#$HOME#g" \
-  launchd/com.chenyuhao.applemusic-nowplaying.plist > ~/Library/LaunchAgents/com.chenyuhao.applemusic-nowplaying.plist
-launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.chenyuhao.applemusic-nowplaying.plist
+  launchd/com.lyrimuse.collector.plist > ~/Library/LaunchAgents/com.lyrimuse.collector.plist
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.lyrimuse.collector.plist
 
 # Build and install the app
 cd lyrimuse && ./build.sh && cd ..
