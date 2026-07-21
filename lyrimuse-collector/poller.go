@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"log"
+	"math"
 	"slices"
 	"time"
 )
@@ -273,6 +274,17 @@ func (p *poller) mirrorScrobbleTracked(artist, title, album string, timestamp in
 const (
 	loopRestartMinElapsedFrac    = 0.9
 	loopRestartMaxNewElapsedSecs = 10.0
+	// 2026-07-21:system.go 从 media-control 换成 AppleScript(Music.playerPosition())
+	// 之后,Elapsed 不再像旧版 media-control 那样在稳定播放期间"冻结"、只在真实事件时
+	// 更新——现在每一轮轮询读到的都是当下的实时进度,平稳播放时也会自然地比上一轮多走
+	// 约一个 pollInterval。下面 updatePosition() 判断"是否是 seek/resume"必须改成
+	// "实际值 vs 按 gap*rate 预测的值,偏差是否超出容差",不能再用逐字节的
+	// != 比较——否则平稳播放每一轮都会被误判成一次 seek,导致 pushRelayState 的
+	// "变化才写"节流被绕过、播放中每 5 秒(pollInterval)写一次 KV,实测半小时左右就能
+	// 烧穿 1000 写/天的免费额度(2026-07-21 当天从 3ab337c 部署后 11:06 起连续三次爆发,
+	// 一天写了 1416 次,17:47 后 /push 开始 503)。2 秒容差:大于轮询间隔的正常抖动
+	// (进程调度/AppleScript 调用往返延迟),小于真实 seek/跳曲通常至少几秒的跳变量。
+	seekJumpToleranceSecs = 2.0
 )
 
 func (p *poller) updatePosition(now time.Time) (reanchor bool, loopRestart bool) {
@@ -297,7 +309,7 @@ func (p *poller) updatePosition(now time.Time) (reanchor bool, loopRestart bool)
 		// 1000写/天配额)。暂停这个事件本身已经通过 key 从 mac|X 变成 macpause|X
 		// 触发过一次写入,不需要这里再帮它每轮强制重写。
 		reanchor = false
-	case p.cur.Elapsed != p.prevElapse: // seek/resume moved elapsed → re-anchor to it (补 McTS→now)
+	case math.Abs(p.cur.Elapsed-(p.prevElapse+gap*p.cur.Rate)) > seekJumpToleranceSecs: // seek/resume: actual position diverges from what steady playback alone would predict → re-anchor to it (补 McTS→now)
 		p.trackPos = seedFromMC()
 	case p.prevWall.IsZero(): // first observation → best guess from media-control's own anchor
 		p.trackPos = seedFromMC()
