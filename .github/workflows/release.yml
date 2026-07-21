@@ -1,0 +1,122 @@
+name: Release
+
+# Real tag push (v*) -> build, ad-hoc sign, package, publish a public GitHub Release.
+# Manual dispatch (Actions tab, no tag needed) -> build, sign, package, upload as a
+# workflow artifact only. The "Create GitHub Release" step is gated on the ref being a
+# tag, not on which event triggered the run -- that's what makes workflow_dispatch a safe
+# dry run: fire it against any branch, any time, and it will never create or touch a
+# public Release. Only an actual tag push reaches that step.
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+env:
+  # Matches GOTOOLCHAIN=go1.24.4 hardcoded in both lyrimuse/build.sh and
+  # lyrimuse-collector/build.sh -- system Go on some machines is older; go1.24.4 is the
+  # first toolchain confirmed to emit a native LC_UUID + valid signature that AMFI accepts.
+  GO_VERSION: "1.24.4"
+
+jobs:
+  build:
+    name: Build, ad-hoc sign, package
+    # Pinned to a specific image, not "macos-latest" -- macos-latest can silently jump to
+    # a newer Xcode/OS on GitHub's own schedule; bump this deliberately instead.
+    runs-on: macos-15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        # lyrimuse/ and lyrimuse-collector/ are sibling directories in this one repo (not
+        # two repos) -- lyrimuse/build.sh does `(cd ../lyrimuse-collector && ...)`, so a
+        # single full checkout already lays both out side by side. No submodules needed.
+
+      - name: Set up Go ${{ env.GO_VERSION }}
+        uses: actions/setup-go@v7
+        with:
+          go-version: ${{ env.GO_VERSION }}
+        # Installing the exact toolchain here means go1.24.4 is already on PATH and
+        # cached before build.sh ever calls `go build`. When the active `go` binary
+        # already reports 1.24.4, GOTOOLCHAIN=go1.24.4 (set inside build.sh itself) is
+        # just a no-op version match -- no network fetch happens mid-build. Swift's
+        # Command Line Tools ship preinstalled on GitHub's macOS runner images, so no
+        # separate Swift setup step is needed.
+
+      - name: Verify toolchains
+        run: |
+          swift --version
+          go version
+
+      - name: Determine version string
+        id: version
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            VERSION="${GITHUB_REF#refs/tags/}"
+          else
+            VERSION="dev-$(git rev-parse --short HEAD)"
+          fi
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "Building ${VERSION}"
+
+      - name: Build + assemble + ad-hoc sign
+        run: ./lyrimuse/build.sh --no-restart
+        # --no-restart is already exactly the CI-safe path -- it exits right after the
+        # ad-hoc codesign/verify steps, before any of the launchctl kickstart/bootout/
+        # bootstrap self-heal dance or the `open`/pgrep liveness check, none of which mean
+        # anything on a headless runner with no logged-in Aqua session. Nothing in
+        # build.sh needed to change for CI.
+
+      - name: Sanity-check the signature
+        run: |
+          codesign -dvvv /Applications/Lyrimuse.app
+          codesign -v /Applications/Lyrimuse.app && echo "app signature OK"
+          codesign -v /Applications/Lyrimuse.app/Contents/Resources/collector && echo "collector signature OK"
+          # Not a Gatekeeper/notarization check -- nothing here is notarized (see the
+          # README's Gatekeeper-bypass section). This only confirms the ad-hoc signature
+          # build.sh applied is internally well-formed before it ships.
+
+      - name: Package as zip
+        id: package
+        run: |
+          APP="/Applications/Lyrimuse.app"
+          VERSION="${{ steps.version.outputs.version }}"
+          ZIP="Lyrimuse-${VERSION}-macos.zip"
+          # Defensive only -- nothing upstream in this job should have set quarantine,
+          # but this mirrors the sanitize step other ad-hoc-signed macOS projects run
+          # before zipping, so a stray xattr never rides along into the release asset.
+          xattr -cr "$APP"
+          # ditto, not `zip` -- preserves the code signature/resource fork correctly.
+          ditto -c -k --keepParent "$APP" "$ZIP"
+          shasum -a 256 "$ZIP" > "${ZIP}.sha256"
+          echo "zip=${ZIP}" >> "$GITHUB_OUTPUT"
+
+      - name: Upload workflow artifact (every run -- tag push or manual dispatch)
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.package.outputs.zip }}
+          path: |
+            ${{ steps.package.outputs.zip }}
+            ${{ steps.package.outputs.zip }}.sha256
+          retention-days: 14
+        # Always runs, including on a bare workflow_dispatch with no tag -- the manual
+        # dry-run path: download the zip straight from the Actions run page and smoke-test
+        # it, without ever touching the public Releases tab.
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v3
+        with:
+          name: Lyrimuse ${{ steps.version.outputs.version }}
+          generate_release_notes: true
+          files: |
+            ${{ steps.package.outputs.zip }}
+            ${{ steps.package.outputs.zip }}.sha256
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

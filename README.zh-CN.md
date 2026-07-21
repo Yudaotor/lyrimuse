@@ -60,7 +60,24 @@ Lyrimuse 常驻在菜单栏里，跟着 Apple Music 播放弹出一个悬浮歌�
 
 ## 快速开始
 
-Lyrimuse 目前还没有做成签名发行版——需要自己构建，不需要 Apple 开发者账号（ad-hoc 签名即可）。
+Lyrimuse 一直都是 ad-hoc 签名——两种拿法都一样，都不涉及 Apple 开发者账号。也因为这样，不管选哪种方式，第一次打开时 Gatekeeper 都会提示"来自身份不明的开发者"——这是预期行为，不是 bug，一次性解决办法见下面 A 方案。
+
+### 方案 A：下载预编译版本
+
+1. 去 [Releases 页面](https://github.com/Yudaotor/lyrimuse/releases) 下载最新的 `Lyrimuse-*-macos.zip`（附带一份 `.sha256` 校验文件），解压后把 `Lyrimuse.app` 拖进 `/Applications`。
+2. 第一次打开时 macOS 会拒绝运行——提示"Lyrimuse 已损坏，无法打开"或"来自身份不明的开发者"。用下面任意一种方式解锁一次即可：
+
+   - **推荐——终端命令（永远有效）：**
+     ```bash
+     xattr -dr com.apple.quarantine /Applications/Lyrimuse.app
+     ```
+     然后正常打开即可，每份下载只需要做一次。
+   - **右键 → 打开：** 在 Finder 里右键（或 Control-点击）`Lyrimuse.app`，选择"打开"，弹窗里再确认一次"打开"。不是每个 macOS 版本、每种提示都能用这招，不行的话回退用上面的终端命令。
+   - **系统设置 → 隐私与安全性：** 先试着打开一次（会被拦下），再打开**系统设置 → 隐私与安全性**，滚到最底部，点 Lyrimuse 警告旁边的"仍要打开"，弹窗里再确认一次。
+
+   只对你真正信任的构建版本执行这几条命令——比如这个仓库自己 Releases 页面下的，或者你自己构建的那份。
+
+### 方案 B：自己构建
 
 **一次性前置依赖**（已经装过的可以跳过）：
 
@@ -76,6 +93,8 @@ git clone git@github.com:Yudaotor/lyrimuse.git
 cd lyrimuse/lyrimuse
 ./build.sh
 ```
+
+### 不管选哪种方案
 
 从 `/Applications` 打开 Lyrimuse——首次启动的引导向导会带你完成它真正需要的两件事：允许它以「自动化」方式读取 Music.app 当前播放的歌曲信息，以及启用它的后台常驻采集服务（这样就算把窗口关掉，歌词/封面也会持续解析）。两步都完成后歌词马上就会显示出来（更多构建选项见 [lyrimuse/README.md](lyrimuse/README.md)）。
 

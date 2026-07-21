@@ -60,7 +60,24 @@ Every extra above lives under Settings → **Add-on Features**, and each account
 
 ## Getting Started
 
-Lyrimuse isn't notarized or distributed as a signed release yet — you build it yourself, and no Apple Developer account is required (an ad-hoc signature is enough).
+Lyrimuse ships ad-hoc signed — same as it's always been — so there's no Apple Developer account involved either way you get it. That also means Gatekeeper will flag it as "from an unidentified developer" the first time you open it, regardless of which option below you pick. That's expected, not a bug — see the one-time fix under Option A.
+
+### Option A: Download a pre-built release
+
+1. Grab the latest `Lyrimuse-*-macos.zip` from the [Releases page](https://github.com/Yudaotor/lyrimuse/releases) (a matching `.sha256` file is attached too, if you want to verify the download), unzip it, and drag `Lyrimuse.app` into `/Applications`.
+2. On first launch, macOS will refuse to open it — "Lyrimuse can't be opened because Apple cannot check it for malicious software" or "is from an unidentified developer." Clear it once, with whichever of these you're more comfortable with:
+
+   - **Recommended — Terminal (always works):**
+     ```bash
+     xattr -dr com.apple.quarantine /Applications/Lyrimuse.app
+     ```
+     Then open the app normally. You only need to do this once per download.
+   - **Right-click → Open:** In Finder, right-click (or Control-click) `Lyrimuse.app` and choose **Open**, then confirm **Open** again in the dialog. Doesn't work on every macOS version for every kind of warning — fall back to the Terminal command above if it doesn't clear.
+   - **System Settings → Privacy & Security:** Try opening the app once (it'll be blocked), then open **System Settings → Privacy & Security**, scroll to the bottom, and click **Open Anyway** next to the Lyrimuse warning. Confirm once more if prompted.
+
+   Only run these against a build you actually trust — the one from this repo's own Releases page, or one you built yourself.
+
+### Option B: Build from source
 
 **One-time prerequisites** (skip anything you already have):
 
@@ -76,6 +93,8 @@ git clone git@github.com:Yudaotor/lyrimuse.git
 cd lyrimuse/lyrimuse
 ./build.sh
 ```
+
+### After either option
 
 Open Lyrimuse from `/Applications` — the first-run wizard walks you through the two things it actually needs: Automation access to Music.app (so it can read what's currently playing) and enabling its background collector service (so lyrics/artwork keep resolving even when the window's closed). Complete both and lyrics will appear right away (see [lyrimuse/README.md](lyrimuse/README.md) for more build options).
 
