@@ -60,6 +60,16 @@ cp "$RELEASE_DIR/collector" "$APP_DIR/Contents/Resources/collector"
 # 2026-07-21:本地化文案 + 状态栏图标直接从源码拷进 Contents/Resources/，不再依赖
 # SwiftPM 的 Bundle.module 访问器——原因见下面这段注释和 L10n.swift/MenuBarMenu.swift
 # 顶部注释。AppIcon.icns 已经证明 Contents/Resources/ 这个位置对 codesign 完全安全。
+#
+# 2026-07-21 当天另一次实测坐实的坑:`cp -R src dst` 在 dst 已经存在时会把 src 整个
+# 拷成 dst 下面的一个子目录(dst/src),而不是拿 src 的内容去覆盖 dst 本身——第一次
+# build.sh 跑的时候 en.lproj/zh-hans.lproj 还不存在,拷贝行为正常;从第二次往后,
+# Contents/Resources/{en,zh-hans}.lproj 已经是已存在的目录,每次重新构建都会在它
+# 下面多嵌一层 en.lproj/en.lproj、越嵌越深,而真正被读取的还是最外层那份第一次构建
+# 时的旧文案——新加的翻译永远生效不了,且不会有任何报错(App 里表现成"这个字符串一直
+# 显示中文原文",很容易被误判成 L10n 查找逻辑或者 SwiftUI 刷新的问题,实际上是这里)。
+# 先删再拷贝,保证每次都是干净覆盖,不会残留/嵌套旧内容。
+rm -rf "$APP_DIR/Contents/Resources/zh-hans.lproj" "$APP_DIR/Contents/Resources/en.lproj"
 cp -R Sources/lyrimuse/Resources/zh-hans.lproj "$APP_DIR/Contents/Resources/zh-hans.lproj"
 cp -R Sources/lyrimuse/Resources/en.lproj "$APP_DIR/Contents/Resources/en.lproj"
 cp Sources/lyrimuse/Resources/MenuBarIconTemplate.png "$APP_DIR/Contents/Resources/MenuBarIconTemplate.png"

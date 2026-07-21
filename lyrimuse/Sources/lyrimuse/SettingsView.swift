@@ -399,6 +399,14 @@ private struct LyricsSettingsTab: View {
             }
         }
         .formStyle(.grouped)
+        // 2026-07-21 实测坐实的一类 SwiftUI 刷新缺陷:手动切换语言后,这个 Form 里有些
+        // 文字(尤其是嵌套在自定义子 View/多个 .alert() 修饰符之后的内容)不会立刻跟着
+        // 换,要点开别的分类再点回来才会变过来。具体机制见 AccountLinkingTab.swift 里
+        // DestinationStatus.label 的详细注释——本质是 SwiftUI 判断"要不要重新执行某段
+        // 内容的 body"部分情况下是按这段内容自己的存储属性有没有变来决定的,不是看父
+        // 视图有没有重新渲染。用 .id(L10n.current) 把整个 Form 的"身份"跟当前生效的
+        // 语言绑死,语言一变就强制整个重新构造,不管内部具体是哪个子结构在悄悄跳过
+        // 刷新,一次性堵住整类问题,不需要逐个排查每一处。
     }
 
     // 只包含当前启用的来源,按 lyricsSourceOrder 里的相对顺序展示——"顺序优先"模式的
@@ -743,6 +751,14 @@ private struct AppearanceSettingsTab: View {
             }
         }
         .formStyle(.grouped)
+        // 2026-07-21 实测坐实的一类 SwiftUI 刷新缺陷:手动切换语言后,这个 Form 里有些
+        // 文字(尤其是嵌套在自定义子 View/多个 .alert() 修饰符之后的内容)不会立刻跟着
+        // 换,要点开别的分类再点回来才会变过来。具体机制见 AccountLinkingTab.swift 里
+        // DestinationStatus.label 的详细注释——本质是 SwiftUI 判断"要不要重新执行某段
+        // 内容的 body"部分情况下是按这段内容自己的存储属性有没有变来决定的,不是看父
+        // 视图有没有重新渲染。用 .id(L10n.current) 把整个 Form 的"身份"跟当前生效的
+        // 语言绑死,语言一变就强制整个重新构造,不管内部具体是哪个子结构在悄悄跳过
+        // 刷新,一次性堵住整类问题,不需要逐个排查每一处。
     }
 }
 
@@ -919,6 +935,14 @@ private struct GeneralSettingsTab: View {
             }
         }
         .formStyle(.grouped)
+        // 2026-07-21 实测坐实的一类 SwiftUI 刷新缺陷:手动切换语言后,这个 Form 里有些
+        // 文字(尤其是嵌套在自定义子 View/多个 .alert() 修饰符之后的内容)不会立刻跟着
+        // 换,要点开别的分类再点回来才会变过来。具体机制见 AccountLinkingTab.swift 里
+        // DestinationStatus.label 的详细注释——本质是 SwiftUI 判断"要不要重新执行某段
+        // 内容的 body"部分情况下是按这段内容自己的存储属性有没有变来决定的,不是看父
+        // 视图有没有重新渲染。用 .id(L10n.current) 把整个 Form 的"身份"跟当前生效的
+        // 语言绑死,语言一变就强制整个重新构造,不管内部具体是哪个子结构在悄悄跳过
+        // 刷新,一次性堵住整类问题,不需要逐个排查每一处。
     }
 
     private var automationStatusCaption: String {
@@ -1059,5 +1083,13 @@ private struct AboutSettingsTab: View {
             }
         }
         .formStyle(.grouped)
+        // 2026-07-21 实测坐实的一类 SwiftUI 刷新缺陷:手动切换语言后,这个 Form 里有些
+        // 文字(尤其是嵌套在自定义子 View/多个 .alert() 修饰符之后的内容)不会立刻跟着
+        // 换,要点开别的分类再点回来才会变过来。具体机制见 AccountLinkingTab.swift 里
+        // DestinationStatus.label 的详细注释——本质是 SwiftUI 判断"要不要重新执行某段
+        // 内容的 body"部分情况下是按这段内容自己的存储属性有没有变来决定的,不是看父
+        // 视图有没有重新渲染。用 .id(L10n.current) 把整个 Form 的"身份"跟当前生效的
+        // 语言绑死,语言一变就强制整个重新构造,不管内部具体是哪个子结构在悄悄跳过
+        // 刷新,一次性堵住整类问题,不需要逐个排查每一处。
     }
 }

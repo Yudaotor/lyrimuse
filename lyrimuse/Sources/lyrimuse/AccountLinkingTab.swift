@@ -11,7 +11,20 @@ enum DestinationStatus {
     case error(String)             // 红:硬性错误(ListenBrainz 缺 token / Last.fm 连接失败)
 
     var label: some View {
+        // .id(L10n.current) 必须加在这里(调用方外部),不能只加在 DestinationStatusLabel
+        // 自己 body 内部——2026-07-21 实测坐实:SwiftUI 判断"要不要重新执行某个子 View
+        // 的 body"是按这个子 View 自己的**存储属性**(这里是 status)有没有变来决定的,
+        // 跟父视图有没有重新渲染无关。切换语言时 status 本身的值没变(还是同一个
+        // .active(nil)),SwiftUI 因此认定"这个子 View 没变化,不需要重新执行它的 body"、
+        // 直接跳过——藏在 body 内部的 .id(L10n.current) 因为 body 压根没被再执行过,
+        // 永远等不到被重新求值的机会,等于形同虚设(这也是为什么之前那次"只在
+        // AccountSidebarRow 场景验证过"的修复,在 detailHeader 这个纯 VStack/HStack
+        // 场景下不生效——列表行重用和这里是两种不同的跳过机制,凑巧被那次验证掩盖了)。
+        // 改成在这里(调用方看得到的外部)加 .id(_:),SwiftUI 在决定"要不要跳过"这一步
+        // 之前就会先比较这个 id,id 变了就直接判定"这是一个全新的 View"、无条件整个
+        // 重新构造,根本不会走到"存储属性没变所以跳过"这条判断分支。
         DestinationStatusLabel(status: self)
+            .id(L10n.current)
     }
 }
 
@@ -27,16 +40,13 @@ private struct DestinationStatusLabel: View {
     private var dimmed: Bool { backgroundProminence == .increased }
 
     var body: some View {
-        // 真机实测坐实的 bug:这个 Label 嵌在 SettingsView 那层真侧边栏 List 里
-        // (AccountSidebarRow 用到它),手动切换语言后,"歌手/歌名"这类直接
-        // Text(destination.title) 的内容会立刻跟着换,但这个由自由函数
-        // (destinationStatus(for:))层层包出来的状态文字却停留在切换前的语言、
-        // 点进详情页(AccountLinkingTab,选中态变化触发这块内容整体重新构造)才会
-        // 变过来——这是 SwiftUI List 在 macOS(NSTableView 桥接)下已知的一类行复用/
-        // 局部刷新缺陷,不是这里的业务逻辑读错了值(L10n.t 本身每次都读的是当下最新的
-        // 语言)。用 .id(L10n.current) 把这块内容的"身份"跟当前实际生效的语言绑死——
-        // 语言一变,SwiftUI 就把它当成一个全新的 View 整个重新构造,而不是尝试局部
-        // 复用/diff 出了问题的那份内容,绕开这个复用缺陷而不是指望"修" List 内部实现。
+        // 2026-07-21 更正:这里之前有一版 .id(L10n.current) 直接包在这个 body 内部,
+        // 一度以为已经修好——实测坐实那个位置其实没用:SwiftUI 判断"要不要重新执行
+        // 这个 View 的 body"是按 DestinationStatusLabel 自己的存储属性(status)有没有
+        // 变来决定的,跟父视图/List 有没有重新渲染无关。切换语言时 status 的值没变,
+        // SwiftUI 因此直接判定"没变化,不用重新跑 body"——藏在 body 内部的 .id() 因为
+        // body 压根没被再执行过,永远等不到被重新求值的机会。真正生效的修复挪到了
+        // DestinationStatus.label 那个计算属性里(调用方外部),见那边的注释。
         Group {
             switch status {
             case .disabled:
@@ -52,7 +62,6 @@ private struct DestinationStatusLabel: View {
                     .foregroundStyle(dimmed ? Color.primary : Color.red)
             }
         }
-        .id(L10n.current)
     }
 }
 
@@ -277,6 +286,10 @@ struct AccountLinkingTab: View {
         } message: { alert in
             Text(alert.message)
         }
+        // 跟 SettingsView.swift 里给每个 Form 加 .id(L10n.current) 同一次修复、同一个
+        // 理由——这个详情页整体也绑一份,双重保险,详细机制见 DestinationStatus.label
+        // 的注释。
+        .id(L10n.current)
     }
 
     // 关闭永远放行;打开前先查前置条件——sameCardHint 非 nil 就是"这张卡自己的字段
