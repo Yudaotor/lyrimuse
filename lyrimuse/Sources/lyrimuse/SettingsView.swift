@@ -757,6 +757,9 @@ private struct GeneralSettingsTab: View {
     // 收到"进程挂了"这类通知，只能被动查。
     @State private var collectorRunning = false
     @State private var isTogglingCollectorService = false
+    @State private var showExportConfigWarning = false
+    @State private var showImportConfigConfirm = false
+    @State private var pendingImportData: Data?
 
     var body: some View {
         Form {
@@ -832,6 +835,56 @@ private struct GeneralSettingsTab: View {
             Section(L10n.t("启动")) {
                 Toggle(L10n.t("开机启动"), isOn: $settings.launchAtLoginEnabled)
                 Toggle(L10n.t("在 Dock 中显示"), isOn: $settings.showInDock)
+            }
+
+            // 2026-07-21:用户反馈"方便换电脑之类的",加一对导入/导出——导出打包
+            // collector 的 config.json(账号 token 原文都在里面)+ features.json + App
+            // 自己的偏好设置,合并成一份 JSON。刻意跟"导出诊断信息"反着来:那个绝不能带
+            // 任何 token(设计给贴进公开 issue),这个就是要把 token 原样带走(设计给换
+            // 新机器用)——两处的用户提示因此也刻意写成相反的语气。
+            Section {
+                Button(L10n.t("导出配置…")) { showExportConfigWarning = true }
+                Button(L10n.t("导入配置…")) {
+                    let panel = NSOpenPanel()
+                    panel.canChooseFiles = true
+                    panel.canChooseDirectories = false
+                    panel.allowedContentTypes = [.json]
+                    panel.prompt = L10n.t("导入")
+                    if panel.runModal() == .OK, let url = panel.url,
+                       let data = try? Data(contentsOf: url) {
+                        pendingImportData = data
+                        showImportConfigConfirm = true
+                    }
+                }
+            } header: {
+                Text(L10n.t("配置备份"))
+            } footer: {
+                Text(L10n.t("导出的文件包含账号 token、密钥等敏感信息，注意妥善保管，不要分享给他人。导入会覆盖当前所有设置并重启 App。"))
+            }
+            .alert(L10n.t("确定要导出配置吗？"), isPresented: $showExportConfigWarning) {
+                Button(L10n.t("取消"), role: .cancel) {}
+                Button(L10n.t("继续导出")) {
+                    guard let data = ConfigPortability.buildExportData() else { return }
+                    let panel = NSSavePanel()
+                    panel.nameFieldStringValue = ConfigPortability.suggestedFilename()
+                    panel.directoryURL = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Desktop")
+                    if panel.runModal() == .OK, let url = panel.url {
+                        try? data.write(to: url, options: .atomic)
+                    }
+                }
+            } message: {
+                Text(L10n.t("导出的文件包含你的账号 token、密钥等敏感信息，请妥善保管，不要分享给他人。"))
+            }
+            .alert(L10n.t("确定要导入这份配置吗？"), isPresented: $showImportConfigConfirm) {
+                Button(L10n.t("取消"), role: .cancel) {}
+                Button(L10n.t("导入并重启"), role: .destructive) {
+                    if let data = pendingImportData {
+                        ConfigPortability.importData(data)
+                        ConfigPortability.restartApp()
+                    }
+                }
+            } message: {
+                Text(L10n.t("这会覆盖当前所有设置（包括已连接的账号），并立即重启 Lyrimuse 使其生效。"))
             }
             // 2026-07-20:原来这 9 个快捷键挤在同一个"快捷键" Section 里——用户反馈
             // 设置里"非歌词本身相关的功能配置很混乱",这里正是一处典型:后三个(播放/
