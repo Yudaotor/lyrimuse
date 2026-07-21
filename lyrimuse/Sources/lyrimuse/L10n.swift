@@ -10,6 +10,17 @@ import Foundation
 // 语言,再手动定位到对应的 .lproj 目录、从这个具体路径构造 Bundle 直接查——这条路径
 // 已经验证不受"目录名被打小写"影响,协商也不再依赖失效的自动机制。
 //
+// 2026-07-21:查找起点从 `Bundle.module`(SwiftPM 生成的资源包访问器)换成了
+// `Bundle.main`——起因是给这次的 GitHub Actions 发布流水线做调研时读了
+// `resource_bundle_accessor.swift` 生成的源码才发现:那个访问器只认两个位置,一个是
+// `.app` 包的根目录(故意不放东西进去,放了会导致 codesign 报"unsealed contents
+// present in the bundle root"直接拒签,见 build.sh 里的历史注释),另一个是**写死指向
+// 这台开发机的绝对路径**——在任何别的机器上这两条路径全部失效,`Bundle.module` 会在
+// 第一次被访问时直接 `Swift.fatalError`,而 Swift 的 fatalError 不可捕获,意味着别人的
+// 机器打开这个 App(不管是自己 clone 源码构建,还是以后下载预编译包)几乎必崩。改成
+// `Bundle.main` 后,`.lproj` 目录直接放在 `Contents/Resources/` 下(build.sh 里新增的
+// 拷贝步骤)——这是 Apple 原生支持、不依赖任何机器的标准位置。
+//
 // 目前只做中/英两档:preferredLanguages 第一项以 "zh" 开头就用中文包,否则一律退到
 // 英文包。要支持更多语言,只需要:①在 Resources/ 下加一个新的 `<lang>.lproj/
 // Localizable.strings`(文件名用小写,跟这里打包出来的实际目录名一致);②在 `current`
@@ -45,11 +56,11 @@ enum L10n {
         let lang = current
         if let cached, cached.lang == lang { return cached.bundle }
         let resolved: Bundle
-        if let path = Bundle.module.path(forResource: lang, ofType: "lproj"),
+        if let path = Bundle.main.path(forResource: lang, ofType: "lproj"),
            let b = Bundle(path: path) {
             resolved = b
         } else {
-            resolved = Bundle.module
+            resolved = Bundle.main
         }
         cached = (lang, resolved)
         return resolved

@@ -10,11 +10,14 @@ import AppKit
 // 里抠像素抠出来的——正式图标那张背景是柔和的浅粉/浅橙渐变,跟白色符干很接近,直接
 // 阈值抠图边缘会发虚,不如照同一比例重新画一份线稿干净。
 private let menuBarIconImage: NSImage = {
-    guard let path = Bundle.module.path(forResource: "MenuBarIconTemplate", ofType: "png"),
+    // 2026-07-21:改用 Bundle.main 而不是 Bundle.module——跟 L10n.swift 同一次修复,
+    // 同一个理由(见那份文件顶部注释):SwiftPM 生成的 Bundle.module 访问器在别的机器上
+    // 会直接 fatalError 崩溃。这份 PNG 现在由 build.sh 直接拷进 Contents/Resources/。
+    guard let path = Bundle.main.path(forResource: "MenuBarIconTemplate", ofType: "png"),
           let image = NSImage(contentsOfFile: path) else {
         // 找不到就退回系统符号兜底,不让状态栏图标位置裸奔成空白——正常情况下这个
-        // 分支不会走到,resources: [.process("Resources")] 已经把这份 PNG 打进
-        // Bundle.module 了,跟 Localizable.strings 是同一套查找路径。
+        // 分支不会走到,build.sh 已经把这份 PNG 拷进 Contents/Resources/ 了,跟
+        // Localizable.strings 是同一套查找路径。
         return NSImage(systemSymbolName: "text.quote", accessibilityDescription: nil) ?? NSImage()
     }
     image.isTemplate = true

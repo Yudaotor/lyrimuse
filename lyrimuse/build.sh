@@ -57,6 +57,12 @@ cp AppIcon.icns "$APP_DIR/Contents/Resources/AppIcon.icns"
 # collector 装在 Resources/ 而不是 MacOS/——那里是 CFBundleExecutable 指向的主执行文件，
 # collector 是被 launchd 单独拉起的后台辅助二进制，不是这个 App 自己的入口。
 cp "$RELEASE_DIR/collector" "$APP_DIR/Contents/Resources/collector"
+# 2026-07-21:本地化文案 + 状态栏图标直接从源码拷进 Contents/Resources/，不再依赖
+# SwiftPM 的 Bundle.module 访问器——原因见下面这段注释和 L10n.swift/MenuBarMenu.swift
+# 顶部注释。AppIcon.icns 已经证明 Contents/Resources/ 这个位置对 codesign 完全安全。
+cp -R Sources/lyrimuse/Resources/zh-hans.lproj "$APP_DIR/Contents/Resources/zh-hans.lproj"
+cp -R Sources/lyrimuse/Resources/en.lproj "$APP_DIR/Contents/Resources/en.lproj"
+cp Sources/lyrimuse/Resources/MenuBarIconTemplate.png "$APP_DIR/Contents/Resources/MenuBarIconTemplate.png"
 printf 'APPL????' > "$APP_DIR/Contents/PkgInfo"
 cat > "$APP_DIR/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
@@ -89,23 +95,20 @@ cat > "$APP_DIR/Contents/Info.plist" <<PLIST
 </plist>
 PLIST
 
-# SwiftPM 给每个声明了 resources 的 target 生成的 Bundle.module 访问器，查找资源包时
-# 走的是 Bundle.main.bundleURL.appendingPathComponent("<target>_<target>.bundle")——
-# 对一个真正的 .app 来说 Bundle.main.bundleURL 是这个 .app 包本身的根目录(跟 Contents/
-# 同级)。2026-07-18 真机实测坐实过一次"把这两个资源包原样搬到包根目录"的方案，结果
-# codesign 直接拒签——不是 `codesign -v` 校验警告那么轻，是 `codesign -s` 签名这一步
-# 本身就以"unsealed contents present in the bundle root"报错退出(exit 1)，比对
-# `codesign -dv` 才发现整个签名操作根本没生效，一直在用上一次(甚至是链接器自动盖的)
-# 陈旧签名——真正的坑，不是能靠 --deep 或者给这两个资源包单独先签一遍就绕过去的(两条
-# 都实测试过，单独给 bundle 签完再签外层 .app 依然同样报错，根因是"包根目录下不能有
-# Contents/ 之外的东西"这条 codesign 规则本身，不是签名先后顺序的问题)。
+# 2026-07-18 曾经实测坐实过：SwiftPM 给每个声明了 resources 的 target 生成的
+# Bundle.module 访问器，查找资源包时走的是
+# Bundle.main.bundleURL.appendingPathComponent("<target>_<target>.bundle")——对一个
+# 真正的 .app 来说 Bundle.main.bundleURL 是这个 .app 包本身的根目录(跟 Contents/ 同
+# 级)，把资源包原样搬到这个位置会导致 codesign 直接拒签("unsealed contents present
+# in the bundle root")。当时的应对是"干脆不搬，让 Bundle.module 走它自己那条写死
+# 指向这台开发机 .build/.../release/ 的兜底路径"——但这意味着别的机器打开这个 App
+# (不管是自己 clone 源码构建，还是以后下载预编译包)几乎必然在第一次访问 Bundle.module
+# 时 fatalError 崩溃(fatalError 不可捕获，这个坑当时被记录下来但没有真的解决)。
 #
-# 所以这里不把这两个资源包搬进 .app：让 Bundle.module 访问器走它自己那条兜底
-# 路径——一个写死指向这台开发机 .build/arm64-apple-macosx/release/ 的绝对路径。这是
-# 一个有意识接受的取舍，不是偷懒:这个 App 从来没打算发布/搬到别的机器，`.build/` 目录
-# 只要还在(每次 build.sh 都会重新生成)这条兜底路径就一直成立，代价是"如果这个仓库被
-# clone 到别的机器上打包运行，本地化文案会取不到、可能直接 fatalError"——这台机器上不
-# 会发生，如实记录在这里以防以后忘记。
+# 2026-07-21 起正确修复：Contents/Resources/ 才是 codesign 认可的标准资源位置(跟
+# AppIcon.icns 用的是同一个目录，从来没出过问题)，不是 bundle 根目录——上面几行已经
+# 把 .lproj/图标直接拷到这里，L10n.swift/MenuBarMenu.swift 也已经改成用 Bundle.main
+# 查找，不再触碰 Bundle.module，从根源上消除了这个崩溃风险。
 
 # 主动 ad-hoc 签名(而不是只验证):Apple Silicon 上 AMFI 强制签名，工具链链接时已经
 # 自动盖过章，这一步是幂等的空操作；Intel Mac 上没有这层强制，工具链历史上不会自动
