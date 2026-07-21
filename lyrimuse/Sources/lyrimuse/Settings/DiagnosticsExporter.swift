@@ -1,0 +1,99 @@
+import Foundation
+import OSLog
+import AppKit
+
+// 一键导出诊断信息——用户反馈"在新电脑上排查不了问题":collector 日志一直写得比较完整
+// (~/Library/Logs/applemusic-nowplaying.log,launchd 重定向 stdout/stderr),但 App 自己
+// 的日志全部走 os.Logger(系统统一日志),普通用户不会用 Console.app 去查,也没有导出入口。
+// 这个文件把两边日志 + 关键状态(权限/常驻服务/各功能是否已配置)汇总成一份文本文件,
+// 默认建议存到桌面(用户可以在存储面板里改),存完在 Finder 里选中——不懂技术的人也能
+// 自己导出发过来。
+//
+// 安全上的硬约束:绝不能把 ConfigStore 里任何 token/secret 的原始值写进这份文件——这份
+// 文件很可能被贴进公开的 GitHub issue。所有"是否已配置"的判断都复用 ConfigStore 已有的
+// isXConfigured/xMissingHint() 这批只读布尔判断(它们本来就是为了不读原始字段设计的,见
+// ConfigStore.swift 顶部注释),不直接触碰 savedSnapshot 里的字段本身。
+enum DiagnosticsExporter {
+    static func suggestedFilename() -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd-HHmmss"
+        return "Lyrimuse-Diagnostics-\(formatter.string(from: Date())).txt"
+    }
+
+    // 只生成内容,不碰任何文件系统写入——存哪、怎么存交给调用方(SettingsView 用
+    // NSSavePanel)。最早那版直接写 ~/Desktop,真机测试时一度怀疑撞上了 macOS 对桌面/
+    // 文稿/下载三个目录的 TCC 保护——但没能实锤坐实这个具体根因(用来验证的开发环境本身
+    // 那次连读 ~/Desktop 都不行,不能排除是验证手段本身的问题,不是这个 App 真的写失败)。
+    // 不管真实根因是什么,改用 NSSavePanel 都是更稳的写法:写入路径由用户自己在系统
+    // 存储面板里确认,天然不会撞上这三个目录的 TCC 保护,也跟这个项目里选歌词文件夹用
+    // NSOpenPanel 是同一个思路,不用纠结原来那个问题到底是什么。
+    @MainActor
+    static func buildReport() -> String {
+        var lines: [String] = []
+
+        lines.append("Lyrimuse Diagnostics")
+        lines.append("Generated: \(ISO8601DateFormatter().string(from: Date()))")
+        lines.append("")
+
+        lines.append("== System ==")
+        lines.append("macOS: \(ProcessInfo.processInfo.operatingSystemVersionString)")
+        lines.append("App version: \(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "unknown")")
+        lines.append("")
+
+        lines.append("== State ==")
+        let settings = AppSettings.shared
+        let config = ConfigStore.shared
+        lines.append("Automation permission: \(MusicAutomationPermission.check(askIfNeeded: false))")
+        lines.append("Collector service enabled (setting): \(settings.collectorServiceEnabled)")
+        lines.append("Collector service actually running: \(CollectorServiceManager.isRunning)")
+        lines.append("App language: \(settings.appLanguage)")
+        lines.append("Classic overlay enabled: \(settings.classicOverlayEnabled)")
+        lines.append("Notch overlay enabled: \(settings.notchOverlayEnabled)")
+        lines.append("ListenBrainz configured: \(config.isListenBrainzConfigured)")
+        lines.append("Last.fm bridge configured: \(config.lastfmBridgeMissingHint() == nil)")
+        lines.append("Last.fm mirror configured: \(config.lastfmMirrorMissingHint() == nil)")
+        lines.append("State relay configured: \(config.stateRelayMissingHint() == nil)")
+        lines.append("Push notification configured: \(config.pushMissingHint() == nil)")
+        lines.append("")
+
+        lines.append("== App Log (last 24h, subsystem com.chenyuhao.lyrimuse) ==")
+        lines.append(contentsOf: recentAppLogLines())
+        lines.append("")
+
+        lines.append("== Collector Log (last 200 lines) ==")
+        lines.append(contentsOf: recentCollectorLogLines())
+
+        return lines.joined(separator: "\n")
+    }
+
+    // 只查这个 App 自己的 subsystem("com.chenyuhao.lyrimuse",6 处 Logger 调用点共用同一个
+    // 值),不是整个系统日志——不需要额外权限,读的也只是自己写过的东西。scope 用 .system
+    // 而不是 .currentProcessIdentifier:后者只能看到"这次启动之后"的记录,诊断"上次为什么
+    // 崩了/上次启动出的问题"这种场景必须能看到上一次进程生命周期里的记录。
+    private static func recentAppLogLines(hours: Int = 24) -> [String] {
+        guard let store = try? OSLogStore(scope: .system) else {
+            return ["(could not open log store)"]
+        }
+        let position = store.position(date: Date().addingTimeInterval(-Double(hours) * 3600))
+        let predicate = NSPredicate(format: "subsystem == %@", "com.chenyuhao.lyrimuse")
+        guard let entries = try? store.getEntries(at: position, matching: predicate) else {
+            return ["(could not read log entries)"]
+        }
+        var lines: [String] = []
+        for entry in entries {
+            guard let logEntry = entry as? OSLogEntryLog else { continue }
+            lines.append("\(logEntry.date) [\(logEntry.category)] \(logEntry.composedMessage)")
+        }
+        return lines.isEmpty ? ["(no entries in the last \(hours)h)"] : lines
+    }
+
+    private static func recentCollectorLogLines(limit: Int = 200) -> [String] {
+        let path = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/Logs/applemusic-nowplaying.log")
+        guard let content = try? String(contentsOf: path, encoding: .utf8) else {
+            return ["(could not read \(path.path))"]
+        }
+        let allLines = content.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+        return Array(allLines.suffix(limit))
+    }
+}

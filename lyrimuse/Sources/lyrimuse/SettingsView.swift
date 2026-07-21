@@ -980,6 +980,25 @@ private struct AboutSettingsTab: View {
                 .buttonStyle(.link)
             }
 
+            // 2026-07-21:用户反馈"在新电脑上有什么问题都排查不了"——collector 日志一直
+            // 写得比较完整,但 App 自己的日志全在系统统一日志里,普通人不会用 Console.app
+            // 去查。这里一键把两边日志+关键状态(权限/常驻服务/各功能是否已配置,不含任何
+            // token 原始值)汇总成一份文本存到桌面,方便贴进 issue 或者发给开发者。
+            Section {
+                Button(L10n.t("导出诊断信息")) {
+                    let report = DiagnosticsExporter.buildReport()
+                    let panel = NSSavePanel()
+                    panel.nameFieldStringValue = DiagnosticsExporter.suggestedFilename()
+                    panel.directoryURL = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Desktop")
+                    if panel.runModal() == .OK, let url = panel.url {
+                        try? report.write(to: url, atomically: true, encoding: .utf8)
+                        NSWorkspace.shared.activateFileViewerSelecting([url])
+                    }
+                }
+            } footer: {
+                Text(L10n.t("汇总 App/采集器日志和权限、常驻服务等关键状态,保存成一份文本文件——不会包含任何账号 token 或密钥的原始内容。"))
+            }
+
             Section {
                 Text("© 2026 Yudaotor")
                     .font(.caption)

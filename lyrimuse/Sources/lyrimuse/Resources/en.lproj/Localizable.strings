@@ -8,6 +8,8 @@
 "链接" = "Links";
 "GitHub 仓库" = "GitHub Repository";
 "反馈问题" = "Report an Issue";
+"导出诊断信息" = "Export Diagnostics";
+"汇总 App/采集器日志和权限、常驻服务等关键状态,保存成一份文本文件——不会包含任何账号 token 或密钥的原始内容。" = "Bundles App/collector logs plus key state (permissions, background service, etc.) into a text file — never includes any account tokens or secrets.";
 "核心设置" = "Core Settings";
 "附加功能" = "Add-on Features";
 "以下都是可选的账号与推送服务，跟显示歌词本身无关；不配置也完全不影响悬浮歌词正常使用。" = "These are optional accounts and push services unrelated to displaying lyrics — leaving them unconfigured doesn't affect the floating lyrics at all.";
