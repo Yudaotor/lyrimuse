@@ -124,6 +124,11 @@ type poller struct {
 	weeklyState         weeklyDigestState
 	weeklyLastCheckedAt time.Time
 
+	// ListenBrainz 每日听歌报告推送(见 daily.go)，复用提交收听同一套 cfg.User/cfg.Token，
+	// 跟上面的 Last.fm 每周小结是两个独立功能。
+	dailyState         dailyDigestState
+	dailyLastCheckedAt time.Time
+
 	// 历史播放 Top10 歌手,一天算一次推给状态中继(见 topartists.go)。
 	topArtistsState         topArtistsState
 	topArtistsLastCheckedAt time.Time
@@ -836,6 +841,7 @@ func (p *poller) poll() {
 	p.bridge(now)
 	p.pushRelayState(now, reanchored)
 	p.weeklyDigest(now)
+	p.dailyDigest(now)
 	p.topArtistsDigest(now)
 }
 
@@ -858,6 +864,7 @@ func run(ctx context.Context, cfg *config, lb *lbClient) error {
 		forwarded:       forwarded,
 		fwdSeeded:       fwdSeeded,
 		weeklyState:     weeklyDigestState{path: weeklyDigestPath},
+		dailyState:      dailyDigestState{path: dailyDigestPath},
 		topArtistsState: topArtistsState{path: topArtistsStatePath},
 		submitDoneCh:    make(chan submitOutcome, 8),
 		announceDoneCh:  make(chan announceOutcome, 8),

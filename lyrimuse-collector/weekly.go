@@ -10,18 +10,17 @@ import (
 	neturl "net/url"
 	"os"
 	"strconv"
-	"strings"
 	"time"
 )
 
-// weeklyDigestCheckInterval：Last.fm 的图表周边界一周才翻一次，不需要跟 5s 的 poll
-// 循环同频去查，省掉绝大多数没意义的 HTTP 调用。
+// weeklyDigestCheckInterval：不管走 Last.fm 的图表周边界还是自算的 ISO 周边界，一周
+// 才翻一次边界，不需要跟 5s 的 poll 循环同频去查，省掉绝大多数没意义的 HTTP 调用。
 const weeklyDigestCheckInterval = 2 * time.Hour
 
-// weeklyTopN 是推送里各展示几条——Bark 通知要能在锁屏预览里读完，不铺开全量。
-const weeklyTopN = 3
-
-// weeklyDigestState 持久化"已推送到哪一周"(该周 to 时间戳)，防重启后重复推送同一周。
+// weeklyDigestState 持久化"已推送到哪一周"(该周结束时刻的时间戳)，防重启后重复推送
+// 同一周。Last.fm 源和 ListenBrainz 源共用同一份状态——两条路径都只是"上次报告到的
+// 周边界时间戳"，语义一致，没必要分成两份状态各自维护(切换数据源时边界附近可能有一次
+// 轻微的重复/遗漏，接受这个小瑕疵，不为这个场景单独加逻辑)。
 // 只有单个字段、换周才写一次，不用 dedup.go 那套 tmp+rename 原子写。
 type weeklyDigestState struct{ path string }
 
@@ -163,46 +162,33 @@ func lastfmWeeklyTopArtists(ctx context.Context, user, apiKey string, from, to i
 	return entries, nil
 }
 
-// weeklyDigestPush 拼标题/正文并推 Bark。total 是本周全部 scrobble 数(= 各歌曲
-// playcount 之和，图表接口一次请求已是全量、不受 top-N 截断影响)。
-func weeklyDigestPush(a *alerter, from, to int64, tracks, artists []lastfmChartEntry) {
-	total := 0
-	for _, t := range tracks {
-		total += t.PlayCount
+// mostRecentMonday 返回 t 所在这一周的周一 00:00(本地时间)——ListenBrainz 源的周期
+// 边界用这个算，不依赖 Last.fm 账号自己的图表周(那是按首次 scrobble 日期定的、不一定
+// 是周一)。Go 的 time.Weekday: Sunday=0,Monday=1,...,Saturday=6，这里把 Sunday 当成 7
+// 处理，才能算出"距周一多少天"。
+func mostRecentMonday(t time.Time) time.Time {
+	wd := int(t.Weekday())
+	if wd == 0 {
+		wd = 7
 	}
-	title := fmt.Sprintf("🎵 上周听歌小结（%s~%s）",
-		time.Unix(from, 0).Local().Format("01-02"), time.Unix(to, 0).Local().Format("01-02"))
-
-	var b strings.Builder
-	fmt.Fprintf(&b, "共播放 %d 次\n", total)
-	if len(artists) > 0 {
-		b.WriteString("\nTop 歌手：\n")
-		for i, a := range artists {
-			if i >= weeklyTopN {
-				break
-			}
-			fmt.Fprintf(&b, "%d. %s（%d）\n", i+1, a.Name, a.PlayCount)
-		}
-	}
-	if len(tracks) > 0 {
-		b.WriteString("\nTop 歌曲：\n")
-		for i, t := range tracks {
-			if i >= weeklyTopN {
-				break
-			}
-			fmt.Fprintf(&b, "%d. %s - %s（%d）\n", i+1, t.Artist, t.Name, t.PlayCount)
-		}
-	}
-	a.push(title, strings.TrimRight(b.String(), "\n"))
+	y, m, d := t.Date()
+	startOfToday := time.Date(y, m, d, 0, 0, 0, 0, t.Location())
+	return startOfToday.AddDate(0, 0, -(wd - 1))
 }
 
-// weeklyDigest 检查(至多每 weeklyDigestCheckInterval 一次)Last.fm 有没有收官一个还
-// 没推送过的新周，有就拉排行推一条通知。复用桥接(bridge)已有的 lastfm_user/
-// lastfm_api_key——同一个 Last.fm 账号，没必要为这个功能再加一套凭证；推送目的地
-// (NotificationWebhookURL)未配则整体跳过(alerter.push 本身也会在 url 为空时忽略,
-// 这里提前判断纯粹省一次网络请求)。
+// weeklyDigest 检查(至多每 weeklyDigestCheckInterval 一次)是否有一个还没推送过的、
+// 已经收官的新周，有就拉统计推一条通知。数据源按 features.WeeklyDigestSource 解析
+// (见 digest.go 的 resolveDigestSource)：
+//   - Last.fm：周边界用它自己的图表周(lastfmWeeklyChartList，按首次 scrobble 日期定，
+//     不一定是周一)——这是原有行为，选这个源时完全不变。
+//   - ListenBrainz：没有等价的"图表周"概念，边界改用自算的 ISO 周(周一到下周一，见
+//     mostRecentMonday)，取"最近一个已经完整过完的自然周"。
+//
+// 两条路径共用同一份 weeklyState(见该类型声明处注释)，也共用同一套推送前提检查
+// (推送目的地未配置则整体跳过——alerter.push 本身也会在 url 为空时忽略，这里提前
+// 判断纯粹省一次网络请求)。
 func (p *poller) weeklyDigest(now time.Time) {
-	if !features.WeeklyDigest || p.cfg.LastfmUser == "" || p.cfg.LastfmAPIKey == "" || p.lb.alerter == nil || p.lb.alerter.url == "" {
+	if !features.WeeklyDigest || p.lb.alerter == nil || p.lb.alerter.url == "" {
 		return
 	}
 	if !p.weeklyLastCheckedAt.IsZero() && now.Sub(p.weeklyLastCheckedAt) < weeklyDigestCheckInterval {
@@ -210,27 +196,48 @@ func (p *poller) weeklyDigest(now time.Time) {
 	}
 	p.weeklyLastCheckedAt = now
 
-	weeks, err := lastfmWeeklyChartList(p.ctx, p.cfg.LastfmUser, p.cfg.LastfmAPIKey)
-	if err != nil || len(weeks) == 0 {
-		return
-	}
-	latest := weeks[len(weeks)-1]
-	if latest.To > now.Unix() || latest.To <= p.weeklyState.load() {
-		return // 这周还没收官，或者已经推送过了
+	lastfmConfigured := p.cfg.LastfmUser != "" && p.cfg.LastfmAPIKey != ""
+	lbConfigured := p.cfg.User != "" && p.cfg.Token != ""
+	source := resolveDigestSource(features.WeeklyDigestSource, lastfmConfigured, lbConfigured)
+	if source == "" {
+		return // 两个账号都没配，跳过
 	}
 
-	tracks, err := lastfmWeeklyTopTracks(p.ctx, p.cfg.LastfmUser, p.cfg.LastfmAPIKey, latest.From, latest.To)
+	var from, to int64
+	if source == digestSourceLastfm {
+		weeks, err := lastfmWeeklyChartList(p.ctx, p.cfg.LastfmUser, p.cfg.LastfmAPIKey)
+		if err != nil || len(weeks) == 0 {
+			return
+		}
+		latest := weeks[len(weeks)-1]
+		if latest.To > now.Unix() {
+			return // 这周还没收官
+		}
+		from, to = latest.From, latest.To
+	} else {
+		thisMonday := mostRecentMonday(now)
+		from, to = thisMonday.AddDate(0, 0, -7).Unix(), thisMonday.Unix()
+	}
+	if to <= p.weeklyState.load() {
+		return // 已经推送过了
+	}
+
+	var stats digestStats
+	var err error
+	if source == digestSourceLastfm {
+		stats, err = lastfmDigestStats(p.ctx, p.cfg.LastfmUser, p.cfg.LastfmAPIKey, from, to)
+	} else {
+		stats, err = listenbrainzDigestStats(p.ctx, p.lb.root, p.cfg.User, from, to)
+	}
 	if err != nil {
 		return
 	}
-	artists, err := lastfmWeeklyTopArtists(p.ctx, p.cfg.LastfmUser, p.cfg.LastfmAPIKey, latest.From, latest.To)
-	if err != nil {
+	if stats.TotalPlays == 0 {
+		p.weeklyState.save(to) // 这周确实没听，跳过不推送，但仍标记已处理，避免下次重查同一周
 		return
 	}
-	if len(tracks) == 0 {
-		p.weeklyState.save(latest.To) // 这周确实没听，跳过不推送，但仍标记已处理，避免下次重查同一周
-		return
-	}
-	weeklyDigestPush(p.lb.alerter, latest.From, latest.To, tracks, artists)
-	p.weeklyState.save(latest.To)
+	title := fmt.Sprintf("🎵 上周听歌小结（%s~%s）",
+		time.Unix(from, 0).Local().Format("01-02"), time.Unix(to, 0).Local().Format("01-02"))
+	digestPush(p.lb.alerter, title, stats)
+	p.weeklyState.save(to)
 }

@@ -46,6 +46,15 @@ type featureFlagsFile struct {
 	LastfmBridge         *bool `json:"lastfm_bridge,omitempty"`
 	LastfmMirrorScrobble *bool `json:"lastfm_mirror_scrobble,omitempty"`
 	WeeklyDigest         *bool `json:"weekly_digest,omitempty"`
+	// DailyDigest：见 daily.go。跟 WeeklyDigest 是独立开关，两个可以同时开、只开一个、
+	// 或都不开。
+	DailyDigest *bool `json:"daily_digest,omitempty"`
+	// WeeklyDigestSource/DailyDigestSource："lastfm"/"listenbrainz"/空。空值(用户
+	// 从没在设置里手动选过)交给 resolveDigestSource(digest.go)按"两个账号都配了→
+	// lastfm,只配了一个→用那个,都没配→跳过"自动判定,不是"缺省当 lastfm 处理"这么
+	// 简单——所以这里特意留空字符串而不是给一个非空的默认值常量。
+	WeeklyDigestSource string `json:"weekly_digest_source,omitempty"`
+	DailyDigestSource  string `json:"daily_digest_source,omitempty"`
 	// LyricsSources：启用的歌词源集合(lyricSourceXxx 常量的子集)。nil/缺失 = 全部
 	// 启用,维持这个字段加之前的既有行为不变。
 	LyricsSources []string `json:"lyrics_sources,omitempty"`
@@ -78,6 +87,9 @@ type featureFlags struct {
 	LastfmBridge         bool
 	LastfmMirrorScrobble bool
 	WeeklyDigest         bool
+	DailyDigest          bool
+	WeeklyDigestSource   string
+	DailyDigestSource    string
 	// 只被 pickLyricCandidate(enrich.go)读取,自动解析路径专用——手动的
 	// `collector search-lyrics` CLI 子命令故意不看这三个字段(见 pickLyricCandidate
 	// 注释),该子命令的 main() 分支也从不调用 loadFeatureFlags,这三个字段在那条
@@ -124,6 +136,9 @@ func loadFeatureFlags(path string) featureFlags {
 		LastfmBridge:         boolOr(f.LastfmBridge, false),
 		LastfmMirrorScrobble: boolOr(f.LastfmMirrorScrobble, false),
 		WeeklyDigest:         boolOr(f.WeeklyDigest, false),
+		DailyDigest:          boolOr(f.DailyDigest, false),
+		WeeklyDigestSource:   f.WeeklyDigestSource,
+		DailyDigestSource:    f.DailyDigestSource,
 		LyricsSources:        resolveLyricsSources(f.LyricsSources),
 		LyricsSourceMode:     resolveLyricsSourceMode(f.LyricsSourceMode),
 		LyricsSourceOrder:    resolveLyricsSourceOrder(f.LyricsSourceOrder),
