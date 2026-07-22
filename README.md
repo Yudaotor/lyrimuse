@@ -89,7 +89,7 @@ brew install go          # any Go ≥ 1.21 — build.sh switches to 1.24.4 autom
 Then `build.sh` builds both the app and its background collector in one shot:
 
 ```bash
-git clone git@github.com:Yudaotor/lyrimuse.git
+git clone https://github.com/Yudaotor/lyrimuse.git
 cd lyrimuse/lyrimuse
 ./build.sh
 ```
@@ -100,11 +100,23 @@ Open Lyrimuse from `/Applications` — the first-run wizard walks you through th
 
 You don't need to configure anything else to get lyrics — every optional extra above is configured later, entirely from Settings.
 
-## Also in This Repo
+## Project Layout
+
+This repo is the app:
 
 - [`lyrimuse/`](lyrimuse) — the app itself (Swift, SwiftUI + AppKit)
-- [`lyrimuse-collector/`](lyrimuse-collector) — the background engine that resolves lyrics/artwork and feeds them to the app (Go)
-- [`Yudaotor/nowplaying-workers`](https://github.com/Yudaotor/nowplaying-workers) — a separate repo with the optional Cloudflare Workers behind the web features above (`state-worker`, `badge-worker`, plus an unrelated personal Feishu-signature `worker`), and its own from-scratch setup guide with real screenshots
+- [`lyrimuse-collector/`](lyrimuse-collector) — the background engine that resolves lyrics/artwork and feeds them to the app (Go); built and bundled into the app automatically
+
+The optional web experience lives in two sibling repos, so you can fork either without touching the app:
+
+| Repo | Role |
+|---|---|
+| [`Yudaotor/nowplaying`](https://github.com/Yudaotor/nowplaying) | The shareable "now playing" web page itself, plus a fork-ready template |
+| [`Yudaotor/nowplaying-workers`](https://github.com/Yudaotor/nowplaying-workers) | The Cloudflare Worker relay + live README badge behind it, with a complete from-scratch setup guide |
+
+```
+this repo (app + collector)  ──push──▶  nowplaying-workers (relay)  ◀──read──  nowplaying (web page)
+```
 
 ## Credits
 

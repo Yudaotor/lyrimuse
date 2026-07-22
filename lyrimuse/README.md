@@ -13,10 +13,12 @@
   LaunchAgent——同样在首次启动引导时开启，或随时去设置的"通用"tab 里装/卸。它负责联网查
   歌词/封面并写进这份本地缓存，Lyrimuse 自己不联网找歌词。没有缓存时会正常显示"暂无歌词"，
   不会报错。
-- **中继模式（relay）**：跟网页版一样读某个 `state-worker` 的 `/now` 接口，用于跨设备/
-  跨房间同步（比如手机上也能看）。需要在设置里自己填 `state-worker` 的地址，不填会用一个
-  默认示例地址（这个项目作者自己部署的 `np.yudaotor.me`，仅供体验效果，不代表你自己的
-  播放数据）。
+- **中继模式（relay）**：跟网页版一样读某个 `state-worker`（状态中继，一个 Cloudflare
+  Worker，源码和部署教程见独立仓库
+  [Yudaotor/nowplaying-workers](https://github.com/Yudaotor/nowplaying-workers)）的
+  `/now` 接口，用于跨设备/跨房间同步（比如手机上也能看）。需要在设置里自己填
+  `state-worker` 的地址，不填会用一个默认示例地址（这个项目作者自己部署的
+  `np.yudaotor.me`，仅供体验效果，不代表你自己的播放数据）。
 
 ## 依赖与运行方式
 

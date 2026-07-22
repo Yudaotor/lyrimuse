@@ -89,7 +89,7 @@ brew install go          # 任意 ≥1.21 的 Go 都行——build.sh 会通过 
 装好之后，`build.sh` 会一次性把 App 和它的后台采集器都构建好：
 
 ```bash
-git clone git@github.com:Yudaotor/lyrimuse.git
+git clone https://github.com/Yudaotor/lyrimuse.git
 cd lyrimuse/lyrimuse
 ./build.sh
 ```
@@ -100,11 +100,23 @@ cd lyrimuse/lyrimuse
 
 不需要再配置任何其它东西才能看到歌词——上面提到的所有附加功能都是后续在设置里按需开启的。
 
-## 仓库里还有什么
+## 项目结构
+
+本仓库就是 App 本身：
 
 - [`lyrimuse/`](lyrimuse) —— App 本体（Swift，SwiftUI + AppKit）
-- [`lyrimuse-collector/`](lyrimuse-collector) —— 后台引擎，负责解析歌词/封面并喂给 App（Go）
-- [`Yudaotor/nowplaying-workers`](https://github.com/Yudaotor/nowplaying-workers) —— 独立仓库，装着上面网页功能背后可选的 Cloudflare Worker（`state-worker`、`badge-worker`，外加一个跟这个 App 无关的个人飞书签名用 `worker`），以及自己的从零搭建教程，带真机截图
+- [`lyrimuse-collector/`](lyrimuse-collector) —— 后台引擎，负责解析歌词/封面并喂给 App（Go）；构建时自动打包进 App
+
+可选的网页体验拆在两个独立的兄弟仓库里，想 fork 哪个都不用碰 App：
+
+| 仓库 | 角色 |
+|---|---|
+| [`Yudaotor/nowplaying`](https://github.com/Yudaotor/nowplaying) | 可分享的"正在听什么"网页本体，外带一份可直接 fork 的模板 |
+| [`Yudaotor/nowplaying-workers`](https://github.com/Yudaotor/nowplaying-workers) | 网页背后的 Cloudflare Worker 中继 + 实时 README 徽章，配完整的从零搭建教程 |
+
+```
+本仓库 (App + 采集器)  ──推送──▶  nowplaying-workers (中继)  ◀──读取──  nowplaying (网页)
+```
 
 ## 致谢
 
