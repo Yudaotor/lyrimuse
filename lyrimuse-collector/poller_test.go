@@ -15,13 +15,12 @@ func nowAt(offsetSecs int) time.Time {
 	return baseTestTime.Add(time.Duration(offsetSecs) * time.Second)
 }
 
-// 2026-07-21 回归测试:AppleScript 换掉 media-control 之后,Music.playerPosition()
-// 每轮轮询都是新鲜的实时进度,不再像旧版 media-control 那样在稳定播放期间冻结。
-// updatePosition() 里"是否需要重新锚定"的判断如果还用逐字节的 elapsed != prevElapse
-// 比较,稳定播放时每一轮都会被误判成一次 seek,导致 pushRelayState 每 5 秒(轮询间隔)
-// 写一次 KV,实测一天内烧穿了 1000 写/天的免费额度(2026-07-21 当天写了 1416 次、
-// 17:47 起 /push 开始 503)。这里直接覆盖"稳定播放不应重锚"和"真实 seek 应该重锚"
-// 两个分支,防止这个判断以后又被改回逐字节比较。
+// 回归测试:AppleScript 换掉 media-control 之后,Music.playerPosition() 每轮轮询都是
+// 新鲜的实时进度,不再像旧版 media-control 那样在稳定播放期间冻结。updatePosition()
+// 里"是否需要重新锚定"的判断如果还用逐字节的 elapsed != prevElapse 比较,稳定播放时
+// 每一轮都会被误判成一次 seek,导致 pushRelayState 每个轮询间隔就写一次 KV,足以烧穿
+// 1000 写/天的免费额度。这里直接覆盖"稳定播放不应重锚"和"真实 seek 应该重锚"两个
+// 分支,防止这个判断以后又被改回逐字节比较。
 func TestUpdatePosition_SteadyPlaybackDoesNotReanchor(t *testing.T) {
 	p := &poller{}
 	p.cur = snapshot{Title: "T", Artist: "A", Album: "Alb", Duration: 200, Playing: true, Elapsed: 10, Rate: 1}

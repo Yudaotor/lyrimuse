@@ -31,14 +31,9 @@ public enum LyricsSourceMode: String, CaseIterable, Identifiable, Codable {
 
 // 跟 collector/features.go 的 featureFlagsFile 逐字段对应的 on-disk 形状——所有字段
 // 可选(nil = 沿用默认开启),跟 collector 侧"文件缺失/字段缺失都当作 true"的约定一致,
-// 这里存的是 Lyrimuse 这台机器上用户明确设置过的值。
-// 2026-07-20:StateRelay 总开关 + 5 个 WebShowXxx 展示模块开关已从这份文件里删掉——
-// 用户反馈"网页推送是附加功能，填了地址就该默认全推，不用逐项配置"。同一天又删掉
-// 了 topArtistsDigest(同样改成"前置条件满足就默认统计推送，不用单独开关")和
-// barkAlerts(故障告警——用户反馈"压根不需要告警故障了"，这个是彻底删掉能力，不是
-// 简化成默认开启)。collector/features.go 那侧同步删掉了同名字段(不是各自独立决定
-// 的,两侧本来就是同一份共享 JSON 文件的镜像);旧配置文件里如果还留着这几个 key,
-// JSONDecoder/Go 的 encoding/json 都会静默忽略未知字段,不需要额外的迁移代码。
+// 这里存的是 Lyrimuse 这台机器上用户明确设置过的值。collector/features.go 那侧是
+// 同一份共享 JSON 文件的镜像,字段增删两侧同步;旧配置文件里如果还留着已经删掉的
+// key,JSONDecoder/Go 的 encoding/json 都会静默忽略未知字段,不需要额外的迁移代码。
 struct FeatureFlagsFile: Codable, Equatable {
     var lyrics: Bool?
     var albumPrefetch: Bool?
@@ -51,10 +46,8 @@ struct FeatureFlagsFile: Codable, Equatable {
     // "lastfm"/"listenbrainz"/缺省(空字符串)——两个 cadence 各自用哪个账号的数据源,
     // 缺省时按 collector/digest.go 的 resolveDigestSource 规则(两个都配了→lastfm,
     // 只配了一个→用那个,都没配→这个功能没法跑)自动判定,不是"缺省当 lastfm 处理"
-    // 这么简单,所以特意不给非空默认值。2026-07-22 新增:最初 weeklyDigest 写死只认
-    // Last.fm、dailyDigest 写死只认 ListenBrainz,真机实测坐实 Last.fm 的周榜接口其实
-    // 接受任意 from/to(不是只认它自己的官方周边界),用户因此要求两个 cadence 都能
-    // 自己选数据源。
+    // 这么简单,所以特意不给非空默认值。两个 cadence 都能自己选数据源,是因为
+    // Last.fm 的周榜接口其实接受任意 from/to,不是只认它自己的官方周边界。
     var weeklyDigestSource: String?
     var dailyDigestSource: String?
     var lyricsSources: [String]?
@@ -94,9 +87,9 @@ public final class FeatureSettingsStore: ObservableObject {
 
     @Published public var lyrics = true
     @Published public var albumPrefetch = true
-    // 2026-07-18:这几个都要连一个外部账号才有意义,改成默认关闭——用户反馈"非必需的
-    // 都设置为默认不开启"。collector/features.go 的 boolOr 默认值要跟着一起改,否则
-    // 全新安装时 Swift 这边显示关、Go 那边却按"缺字段=开启"实际执行,两边会对不上。
+    // 这几个都要连一个外部账号才有意义,默认关闭。collector/features.go 的 boolOr
+    // 默认值要跟着一起改,否则全新安装时 Swift 这边显示关、Go 那边却按"缺字段=开启"
+    // 实际执行,两边会对不上。
     @Published public var lastfmBridge = false
     @Published public var lastfmMirrorScrobble = false
     @Published public var weeklyDigest = false
@@ -156,7 +149,7 @@ public final class FeatureSettingsStore: ObservableObject {
               let f = try? JSONDecoder().decode(FeatureFlagsFile.self, from: data) else {
             // 文件不存在/解析失败——维持属性的默认值,跟 collector 侧 loadFeatureFlags
             // 的默认值约定完全一致(核心行为开关 fail-open=true;需要外部账号的 6 个
-            // 2026-07-18 起改成 fail-closed=false，见上面属性声明处的改动说明)。
+            // fail-closed=false,见上面属性声明处的说明)。
             savedSnapshot = currentSnapshot
             return
         }

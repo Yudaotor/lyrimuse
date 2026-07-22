@@ -97,6 +97,5 @@ const lfmMirroredTTL = 7 * 24 * time.Hour
 
 var lfmMirroredPath string
 
-// 完成收听落库改由 LB single 提交(带自身重试)+ Last.fm 镜像双路径覆盖,不再走 relay
-// /scrobble 端点——历史上留过一套本地落盘重放队列(enqueueScrobble/drainScrobbleQueue),
-// 但从未被接入任何失败路径,是死代码,已删除；state-worker 侧的 /scrobble 路由同步下线。
+// 完成收听落库走 LB single 提交(带自身重试)+ Last.fm 镜像双路径覆盖,不走 relay
+// /scrobble 端点(该端点连同本地重放队列已废弃下线,state-worker 侧路由同步移除)。

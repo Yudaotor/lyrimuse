@@ -60,11 +60,9 @@ func seedPosition(elapsed, rate float64, playing bool, mcTS, now time.Time) floa
 	return p
 }
 
-// poller holds all the mutable state a run() loop iteration reads/writes.
-// This used to be ~10 separate closures over ~500 lines of shared local
-// variables in run() itself — impossible to unit-test any one piece in
-// isolation, and every new mutable bit of state was one more capture to keep
-// straight. Same behavior, just organized as a struct + methods.
+// poller holds all the mutable state a run() loop iteration reads/writes,
+// organized as a struct + methods (rather than closures over run()'s locals)
+// so each piece can be unit-tested in isolation.
 type poller struct {
 	ctx context.Context
 	cfg *config
@@ -143,11 +141,8 @@ type poller struct {
 	announceDoneCh chan announceOutcome
 	// bridge() 里读 Last.fm(lastfmRecent,8s 超时)改到后台 goroutine 跑,结果经这个
 	// channel 送回单一 poll 主循环处理——理由同 submitDoneCh/announceDoneCh:Last.fm
-	// 一慢,原来同步调用会连带堵住 poll() 后面紧接着的 pushRelayState,让网页刷新(包括
-	// enrichNotify 刚解析出的封面/歌词)也跟着冻结最长 8 秒(实测坐实:2026-07-11,一次
-	// Last.fm 侧网络抖动期间,某首歌的封面/歌词其实几秒内就解析好了,但因为 bridge()
-	// 卡在 lastfmRecent 上迟迟没轮到 poll() 里紧跟其后的 pushRelayState,用户看到的
-	// 是"迟迟没有歌词"，实际是显示被连带延误了)。
+	// 一慢,同步调用会连带堵住 poll() 后面紧接着的 pushRelayState,让网页刷新(包括
+	// enrichNotify 刚解析出的封面/歌词)跟着冻结最长 8 秒。
 	bridgeDoneCh chan bridgeFetchResult
 }
 
@@ -163,26 +158,20 @@ type bridgeFetchResult struct {
 
 const lastfmPollInterval = 15 * time.Second
 
-// nearDuplicateWindow：见 recordRecentMacListen 注释。实测同一首歌从 Mac 完成收听到
-// 在 Last.fm 上冒出一条"独立"的第二条(带 (Remaster) 等标题后缀、uts 也对不上我方镜像
-// 写入值)之间，观察到 4~19 分钟不等的间隔，取 30 分钟留足余量。这个窗口只用来判断
-// "两条记录的 listened_at 是否足够接近、代表同一次物理收听"，不是缓冲区保留多久
-// （见 recentMacListenRetention）。
+// nearDuplicateWindow：见 recordRecentMacListen 注释。同一首歌从 Mac 完成收听到在
+// Last.fm 上冒出一条"独立"的第二条(带 (Remaster) 等标题后缀、uts 对不上我方镜像写入
+// 值)之间，观察到的间隔在 4~19 分钟不等，取 30 分钟留足余量。这个窗口只判断"两条记录
+// 的 listened_at 是否足够接近、代表同一次物理收听"，不是缓冲区保留多久（见
+// recentMacListenRetention）。
 const nearDuplicateWindow = 30 * time.Minute
 
-// recentMacListenRetention：recentMacListens 缓冲区实际保留多久(实测坐实
-// 2026-07-11)。最初把这个也设成 nearDuplicateWindow，误以为"FastScrobbler 的跨设备
-// 回声出现在 Last.fm 上"跟"两条 listened_at 数值相差多少"这两件事时间尺度一致——但
-// 实测坐实 FastScrobbler 自己把 scrobble 提交到 Last.fm 服务器这一步可以顺延几个
-// 小时甚至跨夜(日志显示当天 09:08 和 13:57 两次各转发一整批之前排队攒下来的旧
-// scrobble，时间横跨从前一天傍晚到当天上午)，而旧实现的 cutoff 是"每次新记一条 Mac
-// 收听、就把 30 分钟之前的全部裁掉"——早的那条 Mac 记录早被后面几十条新记录顺带裁掉，
-// 等 bridge() 终于看到延迟的回声时缓冲区里已经找不到匹配项，判定失败、被当"iPhone
-// 新收听"转发，造成同一首歌历史里一条 mac 一条 iphone 的重复(实测同一天分别复现在
-// Prince & The Revolution/Michael Jackson/Musiq Soulchild/宇多田ヒカル 共 11 首歌
-// 上)。修法:缓冲区保留时长跟"两条记录够不够近"这个匹配阈值彻底解耦，前者给足够长
-// (24 小时，覆盖观察到的最长延迟)，后者仍是 30 分钟——缓冲区里存的 (artist,title,uts)
-// 三元组一天顶多几百条，保留 24 小时内存开销可以忽略。
+// recentMacListenRetention：recentMacListens 缓冲区实际保留多久。故意跟
+// nearDuplicateWindow（判重阈值）解耦：FastScrobbler 把 scrobble 转发到 Last.fm
+// 服务器这一步可能顺延数小时甚至跨夜，如果保留时长也只有 30 分钟，早的那条 Mac 记录
+// 会被后续新记录挤掉，等 bridge() 终于看到延迟的回声时缓冲区里已经找不到匹配项，被
+// 误判成"iPhone 新收听"转发进去，造成同一首歌历史里一条 mac 一条 iphone 的重复。这里
+// 给足 24 小时覆盖观察到的最长延迟；缓冲区里存的 (artist,title,uts) 三元组一天顶多
+// 几百条，内存开销可以忽略。
 const recentMacListenRetention = 24 * time.Hour
 
 // recentListen 是最近一条已确认的 Mac 完成收听(artist/title/uts)，只用于
@@ -193,13 +182,13 @@ type recentListen struct {
 }
 
 // recordRecentMacListen 记一条刚完成的 Mac 收听，供 bridge() 的近重复抑制检查用。
-// 背景(实测坐实 2026-07-09)：iPhone 侧的 FastScrobbler 有时会经 Apple Music 跨设备
-// "最近播放"同步，把 Mac 已经播过、已经通过 lfm 镜像写过一次的同一首歌，在几分钟到
-// 十几分钟后真的又单独 scrobble 一次到 Last.fm——新生成的这条 uts 跟我方镜像写入时用
-// 的 uts 不一致(有时标题还带 "(2012 Remaster)" 这类 Last.fm/MusicBrainz 校正后缀)，
-// lfmMirroredSet 的精确 uts 匹配抓不到，bridge() 会把它当"iPhone 新收听"转发进 LB，
-// 造成同一首歌历史里一条 source=mac、一条 source=iphone 的重复。这条记录只喂给"名字
-// 够像+时间够近"的兜底检查，不影响精确匹配那条已验证工作正常的路径。
+// 背景：iPhone 侧的 FastScrobbler 有时会经 Apple Music 跨设备"最近播放"同步，把 Mac
+// 已经播过、已经通过 lfm 镜像写过一次的同一首歌，在几分钟到十几分钟后又单独 scrobble
+// 一次到 Last.fm——新生成的 uts 跟我方镜像写入值不一致(标题有时还带 "(2012 Remaster)"
+// 这类 Last.fm/MusicBrainz 校正后缀)，lfmMirroredSet 的精确 uts 匹配抓不到，bridge()
+// 会把它当"iPhone 新收听"转发进 LB，造成同一首歌历史里一条 source=mac、一条
+// source=iphone 的重复。这条记录只喂给"名字够像+时间够近"的兜底检查，不影响精确匹配
+// 那条路径。
 func (p *poller) recordRecentMacListen(artist, title string, uts int64) {
 	p.recentMacListens = append(p.recentMacListens, recentListen{artist: artist, title: title, uts: uts})
 	cutoff := uts - int64(recentMacListenRetention/time.Second)
@@ -215,10 +204,10 @@ func (p *poller) recordRecentMacListen(artist, title string, uts int64) {
 // recentlyPlayedOnMac reports whether artist/title matches a Mac listen
 // recorded within nearDuplicateWindow of uts — see recordRecentMacListen。
 // 艺人名允许"精确匹配 或 宽松互相包含"(而不是只认 artistMatches 那种更严格的精确/
-// 逗号分割式匹配)——实测坐实 2026-07-11:FastScrobbler 侧把 Musiq Soulchild 报成艺名
-// "Musiq"(不带 Soulchild)，artistMatches 判定不通过，导致 4 首歌漏判。这里放宽风险
-// 可控:判重失败最多是漏转发一条真实 iPhone 收听(少记，不是错记成别人的封面/歌词那种
-// 会显示错误信息的场景，跟 artistMatches 本来要防的仿冒号场景完全不是一个量级)。
+// 逗号分割式匹配)——FastScrobbler 侧有时会把艺人报成缩写艺名(比如漏掉合作艺人)，
+// artistMatches 判不过会漏判。这里放宽风险可控:判重失败最多是漏转发一条真实 iPhone
+// 收听(少记，不是错记成别人的封面/歌词那种会显示错误信息的场景，跟 artistMatches 本来
+// 要防的仿冒号场景不是一个量级)。
 func (p *poller) recentlyPlayedOnMac(artist, title string, uts int64) bool {
 	for _, r := range p.recentMacListens {
 		artistOK := artistMatches(r.artist, artist) || looseContains(r.artist, artist)
@@ -265,30 +254,25 @@ func (p *poller) mirrorScrobbleTracked(artist, title, album string, timestamp in
 // 极端条件。
 //
 // ⚠️ 这条判定必须建立在"我们自己连续追踪的 trackPos"上,不能挂在任何一个具体的
-// switch 分支/或 media-control 的 Elapsed 字段变化上——实测坐实(2026-07-10,当天
-// 两次踩坑):Apple Music 原生单曲循环重新起播时,media-control 的 elapsedTime 有时
-// 全程冻结在轨道最近一次真正开播的锚点(常年是 0,见 seedPosition 注释"a track 133s
-// in still reports elapsed≈0"),循环前后 Elapsed 值一样、并不触发"Elapsed 变了"那个
-// discontinuity 判断；但也观测到过 media-control 确实报告了一次 Elapsed 变化、只是
-// 变化前的值(prevElapse)本身就一直冻结在低位、不满足"上一次接近末尾"这个子条件,同样
-// 会被那条分支专属的判定漏判。两次踩坑都是因为把判定条件绑死在了具体某个 case 分支
-// 内部——现在改成不管 switch 走了哪个分支算出新位置,统一在 switch 结束后用
-// "prevTrackPos(这一轮开始前)"vs"p.trackPos(这一轮算出来的)"判定,不关心中间是
-// 通过 seedFromMC() 还是 wall-clock 累加得到的,天然不受 media-control 具体行为差异
-// 影响。
+// switch 分支/或 media-control 的 Elapsed 字段变化上——Apple Music 原生单曲循环
+// 重新起播时,media-control 的 elapsedTime 有时全程冻结在轨道最近一次真正开播的锚点
+// (常年是 0,见 seedPosition 注释"a track 133s in still reports elapsed≈0"),循环
+// 前后 Elapsed 值一样、不会触发"Elapsed 变了"那个 discontinuity 判断；即使某次
+// Elapsed 确有变化，变化前的值(prevElapse)也可能一直冻结在低位、不满足"上一次接近
+// 末尾"这个子条件，同样会被绑在具体分支里的判定漏判。现在不管 switch 走了哪个分支
+// 算出新位置,统一在 switch 结束后用"prevTrackPos(这一轮开始前)"vs"p.trackPos(这一轮
+// 算出来的)"判定,不关心中间是通过 seedFromMC() 还是 wall-clock 累加得到的,天然不受
+// media-control 具体行为差异影响。
 const (
 	loopRestartMinElapsedFrac    = 0.9
 	loopRestartMaxNewElapsedSecs = 10.0
-	// 2026-07-21:system.go 从 media-control 换成 AppleScript(Music.playerPosition())
-	// 之后,Elapsed 不再像旧版 media-control 那样在稳定播放期间"冻结"、只在真实事件时
-	// 更新——现在每一轮轮询读到的都是当下的实时进度,平稳播放时也会自然地比上一轮多走
-	// 约一个 pollInterval。下面 updatePosition() 判断"是否是 seek/resume"必须改成
-	// "实际值 vs 按 gap*rate 预测的值,偏差是否超出容差",不能再用逐字节的
-	// != 比较——否则平稳播放每一轮都会被误判成一次 seek,导致 pushRelayState 的
-	// "变化才写"节流被绕过、播放中每 5 秒(pollInterval)写一次 KV,实测半小时左右就能
-	// 烧穿 1000 写/天的免费额度(2026-07-21 当天从 3ab337c 部署后 11:06 起连续三次爆发,
-	// 一天写了 1416 次,17:47 后 /push 开始 503)。2 秒容差:大于轮询间隔的正常抖动
-	// (进程调度/AppleScript 调用往返延迟),小于真实 seek/跳曲通常至少几秒的跳变量。
+	// system.go 用 AppleScript(Music.playerPosition())取代 media-control 后,Elapsed
+	// 不再于稳定播放期间"冻结"、而是每一轮轮询都读到当下的实时进度。updatePosition()
+	// 判断"是否是 seek/resume"因此不能再用逐字节的 != 比较——那会把平稳播放的每一轮
+	// 都误判成一次 seek,绕过 pushRelayState 的"变化才写"节流,播放中每个 pollInterval
+	// 都写一次 KV,足以烧穿 1000 写/天的免费额度。改成"实际值 vs 按 gap*rate 预测的值,
+	// 偏差是否超出容差"。2 秒容差:大于轮询间隔的正常抖动(进程调度/AppleScript 调用
+	// 往返延迟),小于真实 seek/跳曲通常至少几秒的跳变量。
 	seekJumpToleranceSecs = 2.0
 )
 
@@ -348,10 +332,9 @@ func (p *poller) updatePosition(now time.Time) (reanchor bool, loopRestart bool)
 	return reanchor, loopRestart
 }
 
-// 2026-07-20:门槛只看 StateRelayURL 是否配置——原来还要求 features.StateRelay
-// 这个独立总开关先手动打开,但用户反馈"网页推送是附加功能，填了地址就该默认全推，
-// 不用再多一层开关",删掉后地址+令牌本身就是唯一的"要不要推"开关(见 desktop-lyrics
-// 侧 AccountLinkingTab.swift 的对应改动)。
+// 门槛只看 StateRelayURL 是否配置——不需要 features.StateRelay 这个独立总开关，
+// 地址+令牌本身就是唯一的"要不要推"开关(对应 desktop-lyrics 侧
+// AccountLinkingTab.swift)。
 func (p *poller) pushRelayState(now time.Time, reanchored bool) {
 	if p.cfg.StateRelayURL == "" {
 		return

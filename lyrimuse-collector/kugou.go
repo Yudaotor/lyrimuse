@@ -90,24 +90,18 @@ var (
 // krcToYRC 把解密后的酷狗 KRC 正文转换成 YRCParser(desktop-lyrics)认识的语法。
 //
 // 酷狗原生:"[行始ms,行长ms]<词始ms,词长ms,flag>词"——这里的"词始ms"是相对这一行
-// 行始的偏移量,从 0 开始逐词累加,加到最后一个词正好等于这一行的行长(真机实测坐实,
-// 见下面第二段)。网易云原生 YRC:"[行始ms,行长ms](词始ms,词长ms,flag)词"——这里的
-// "词始ms"是从整首歌开头算起的绝对时间戳,第一个词的值就等于行始ms。两种格式外形都是
-// "三个数字加一对括号",实际语义完全不是一回事。
+// 行始的偏移量,从 0 开始逐词累加,加到这一行的行长为止。网易云原生 YRC:
+// "[行始ms,行长ms](词始ms,词长ms,flag)词"——这里的"词始ms"是从整首歌开头算起的绝对
+// 时间戳。两种格式外形都是"三个数字加一对括号",实际语义完全不是一回事:若只做尖括号
+// →圆括号的语法转换而不做这层相对转绝对的换算,Swift 端(YRCParser 按"词始时间戳=
+// 绝对播放位置"这个假设算 fillFraction)读到的词始时间戳会远小于真实播放位置,导致
+// 这一行一开始播放,行内所有词的 fillFraction 立刻超过 1(已"填满"),整行瞬间全部
+// 点亮,没有逐字推进效果。
 //
-// 这个函数原来只做尖括号→圆括号的语法转换,没有把每个词的相对偏移量换算成绝对时间戳——
-// Swift 端(YRCParser 解析完直接把这三个数字原样交给 View 层 fillFraction,当初只对接过
-// 网易云一种来源,是按"词始时间戳等于绝对播放位置"这个假设写的)读到的词始时间戳因此
-// 远小于这一行实际播放时的真实位置,这一行一开始播放,行内所有词的 fillFraction 立刻
-// 远超过 1(已经"填满"),整行观感上是瞬间全部点亮,没有任何逐字推进的效果——这正是
-// "很多酷狗歌词标着逐字时间轴、播放时却没有逐字效果"这个反馈的真根因,不是 Swift 渲染端
-// 的 bug,是这里漏了"相对转绝对"这一步换算。
-//
-// 修法:按行处理,每行先读出行始时间戳,再把这一行内每个词的相对偏移量都加上行始时间戳、
-// 换算成绝对时间戳,才落成 YRCParser 认的语法。跟原来一样,只对精确匹配 <数字,数字,数字>
-// 的片段动手,不做裸字符 Replace,避免歌词正文里偶然出现的尖括号被误伤。行头
-// [行始,行长] 和 LRC 署名头([ti:]/[ar:] 等)本来就跟 YRC 兼容/会被 YRCParser 自然跳过,
-// 原样保留、不做任何改动。
+// 修法:按行处理,每行先读出行始时间戳,再把行内每个词的相对偏移量都加上行始时间戳、
+// 换算成绝对时间戳,才落成 YRCParser 认的语法。只对精确匹配 <数字,数字,数字> 的片段
+// 动手,不做裸字符 Replace,避免歌词正文里偶然出现的尖括号被误伤。行头 [行始,行长] 和
+// LRC 署名头([ti:]/[ar:] 等)本来就跟 YRC 兼容/会被 YRCParser 自然跳过,原样保留。
 func krcToYRC(krc string) string {
 	if krc == "" {
 		return ""
@@ -141,12 +135,11 @@ type kugouSong struct {
 	Duration   float64 `json:"duration"` // 秒
 }
 
-// kugouEscape 编码查询参数值。实测坐实:mobilecdn.kugou.com/krcs.kugou.com 这两个接口
-// 不认标准 application/x-www-form-urlencoded 里空格编码成 "+" 的写法(会直接搜出 0
-// 结果),必须编码成 "%20"——neturl.QueryEscape 对除空格外的字符转义规则都对,只把它的
-// "+" 输出替换成 "%20" 即可,不用换成 PathEscape(PathEscape 不转义 "&"/"="等query里
-// 有特殊含义的字符,遇到"Prince & The Revolution"这类歌手名会把 & 直接拼进 query 破坏
-// 参数边界)。
+// kugouEscape 编码查询参数值。mobilecdn.kugou.com/krcs.kugou.com 这两个接口不认标准
+// application/x-www-form-urlencoded 里空格编码成 "+" 的写法(会直接搜出 0 结果),必须
+// 编码成 "%20"——neturl.QueryEscape 对除空格外的字符转义规则都对,只把它的 "+" 输出替换
+// 成 "%20" 即可,不用换成 PathEscape(PathEscape 不转义 "&"/"="等 query 里有特殊含义的
+// 字符,遇到"Prince & The Revolution"这类歌手名会把 & 直接拼进 query 破坏参数边界)。
 func kugouEscape(s string) string {
 	return strings.ReplaceAll(neturl.QueryEscape(s), "+", "%20")
 }
@@ -171,8 +164,8 @@ func kugouGet(u string, v any) error {
 // resolveKugouLyric:①搜索拿 hash/时长(歌手名+歌名都要对上,同 netease/qq 的身份校验);
 // ②用 hash+时长 查 KRC 歌词库候选(krcs.kugou.com,官方推荐候选优先,取第一条);
 // ③用候选的 id+accesskey 下载两次(lyrics.kugou.com,分别 fmt=lrc 整行、fmt=krc 逐字,
-// 同一个 id/accesskey,只是 fmt 参数不同)。lrc 失败则整体放弃(跟原来一样);krc 单独
-// 失败不影响 lrc(逐字数据本来就是"有更好、没有也不影响整行可用"的加分项)。任何一步
+// 同一个 id/accesskey,只是 fmt 参数不同)。lrc 失败则整体放弃;krc 单独失败不影响 lrc
+// (逐字数据本来就是"有更好、没有也不影响整行可用"的加分项)。任何一步
 // 失败/拿不到都直接放弃,不重试(下次 enrich 短 TTL 到期自然再试)。
 func resolveKugouLyric(artist, title string, durationSecs float64) kugouResult {
 	var sr struct {

@@ -59,10 +59,10 @@ expectEqual(
 )
 
 // CRLF 换行(酷狗等社区上传内容常见 Windows 风格换行)——Swift 把 "\r\n" 当成一个扩展
-// 字形簇,split(separator:"\n") 按 Character 比较匹配不上,曾导致整份文本切不开、
+// 字形簇,split(separator:"\n") 按 Character 比较匹配不上,会导致整份文本切不开、
 // tagRegex(无 ^ 锚点)在这"一整行"里找到多个时间戳,但方括号剥离只对整份文本做了一次,
 // 于是每个时间戳都各自生成一条 LyricLine、text 却全部是同一份"整首歌拼在一起"的巨大
-// 字符串——实测坐实为用户反馈的"酷狗歌词整个桌面都是歌词"的真正根因(2026-07-14)。
+// 字符串——这正是"酷狗歌词整个桌面都是歌词"这个坑的根因,回归测试要覆盖。
 expectEqual(
     LRCParser.parse("[00:01.00]first\r\n[00:02.00]second\r\n[00:03.00]third\r\n"),
     [LyricLine(timeMs: 1000, text: "first"), LyricLine(timeMs: 2000, text: "second"), LyricLine(timeMs: 3000, text: "third")],
@@ -100,7 +100,7 @@ expectEqual(
 
 expectEqual(YRCParser.parse(""), [], "YRC: 空输入")
 
-// 见上面 LRCParser 同一处注释——CRLF 换行曾让 YRCParser 更彻底地失败:整份文本切不开后,
+// 见上面 LRCParser 同一处注释——CRLF 换行会让 YRCParser 更彻底地失败:整份文本切不开后,
 // headRegex 有 ^ 锚点、匹配不上"一整行"开头(通常是元信息标签而非 [数字,数字]),直接
 // 整份解析结果为空(比 LRCParser 的"表面有行、内容全错"更隐蔽,会静默退化成没有逐字数据)。
 expectEqual(

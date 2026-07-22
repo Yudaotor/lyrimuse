@@ -8,11 +8,11 @@ import CoreServices
 // API 能查到或触发它,设置页面对 collector 那份只给一句说明文字+跳系统设置的按钮。
 //
 // 用到的 AEDeterminePermissionToAutomateTarget/AECreateDesc 是老的 Apple Event
-// Manager API,在这台机器上已经用一次性测试脚本实测验证过:noErr(0)=已授权、
-// errAEEventNotPermitted(-1743)=已拒绝、errAEEventWouldRequireUserConsent(-1744)=
-// 还没问过(askIfNeeded=false 时不会弹窗,只读现状)、procNotFound(-600)=目标应用
-// 标识符查不到(极端情况,当"还没问过"处理)。event class/id 用 typeWildCard 是
-// Apple 文档里"查这个 App 整体自动化权限"的标准写法,不是针对某个具体事件。
+// Manager API:noErr(0)=已授权、errAEEventNotPermitted(-1743)=已拒绝、
+// errAEEventWouldRequireUserConsent(-1744)=还没问过(askIfNeeded=false 时不会弹窗,
+// 只读现状)、procNotFound(-600)=目标应用标识符查不到(极端情况,当"还没问过"处理)。
+// event class/id 用 typeWildCard 是 Apple 文档里"查这个 App 整体自动化权限"的标准
+// 写法,不是针对某个具体事件。
 enum MusicAutomationPermissionStatus {
     case authorized
     case denied

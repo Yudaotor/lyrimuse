@@ -76,19 +76,17 @@ final class LyricsSearchService {
             process.standardOutput = stdoutPipe
             process.standardError = stderrPipe
 
-            // 2026-07-17 真机实测坐实的死锁:内核管道缓冲区只有 64KB,四源都命中+带逐字
-            // YRC 数据的候选(比如 Michael Jackson - You Rock My World,合计输出 65KB+)
-            // 一旦超过这个缓冲区,子进程的 write() 就会阻塞、等父进程腾出空间——但父进程
-            // 原来只在下面 terminationHandler 里才 readDataToEndOfFile(),而子进程卡在
-            // write() 上永远不会退出、terminationHandler 也就永远不会触发,两边互相等
-            // 对方先动,Lyrimuse 的"搜索候选歌词"弹窗因此转圈转到天荒地老。修法:
-            // 在子进程运行期间就在后台队列持续把 stdout/stderr 读走(不等进程退出),
-            // 管道缓冲区就不会被灌满,子进程的 write() 也就不会阻塞。
-            // DispatchGroup.wait() 已经确保下面两条后台读取线程写完 box.value 之后、
-            // terminationHandler 才会往下读它们——这个 happens-before 关系是靠 group
-            // 保证的,不是靠 Swift 并发检查器认识的机制,所以用 @unchecked Sendable 包一层
-            // 声明"这里的跨线程访问我自己保证过安全了",避免 Swift 6 严格并发模式下把
-            // 这种直接捕获 var 的写法当成数据竞争报错。
+            // 内核管道缓冲区只有 64KB,四源都命中+带逐字 YRC 数据的候选(比如 Michael
+            // Jackson - You Rock My World,合计输出 65KB+)一旦超过这个缓冲区,子进程的
+            // write() 就会阻塞、等父进程腾出空间;如果父进程只在 terminationHandler 里才
+            // readDataToEndOfFile(),子进程卡在 write() 上永远不会退出、
+            // terminationHandler 也就永远不会触发,两边互相等对方先动导致死锁。这里在
+            // 子进程运行期间就在后台队列持续把 stdout/stderr 读走(不等进程退出),管道
+            // 缓冲区就不会被灌满。DispatchGroup.wait() 确保下面两条后台读取线程写完
+            // box.value 之后、terminationHandler 才会往下读它们——这个 happens-before
+            // 关系是靠 group 保证的,不是靠 Swift 并发检查器认识的机制,所以用
+            // @unchecked Sendable 包一层声明这里的跨线程访问已经自行保证过安全,避免
+            // Swift 6 严格并发模式下把这种直接捕获 var 的写法当成数据竞争报错。
             final class Box: @unchecked Sendable { var value = Data() }
             let outBox = Box()
             let errBox = Box()

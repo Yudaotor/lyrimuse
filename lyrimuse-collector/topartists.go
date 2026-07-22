@@ -14,9 +14,8 @@ import (
 	"time"
 )
 
-// topArtistsCheckInterval：网页这块内容明确不需要实时,"每天更新一次就好"——不用像
-// weeklyDigestCheckInterval(2小时)那么勤,一天检查一次即可,省掉绝大多数没意义的
-// Last.fm/Deezer 调用。
+// topArtistsCheckInterval：网页这块内容不需要实时,一天检查一次即可,省掉绝大多数
+// 没意义的 Last.fm/Deezer 调用——不用像 weeklyDigestCheckInterval(2小时)那么勤。
 const topArtistsCheckInterval = 24 * time.Hour
 
 // topArtistsN 是最终展示的歌手数量,跟网页这次要展示的"Top10"直接对应。
@@ -102,8 +101,8 @@ func lastfmTopArtists(ctx context.Context, user, apiKey string, limit int) ([]la
 	return entries, nil
 }
 
-// artistMergeNameKey 算"归并判定用"的归一化字符串——用户要求"简繁、中英、只要是同一个
-// 人都算上,还有'&'之类的也算到第一个人上":
+// artistMergeNameKey 算"归并判定用"的归一化字符串——简繁、中英文艺名、多人合唱都要
+// 能判定成同一个人:
 //  1. firstCreditedArtist:多人合credit(如"Prince & The Revolution")先取第一位,
 //     不单独占一个歌手名额;
 //  2. knownArtistAlias(match.go 的 artistAliasTable):已知的英文/罗马化艺名换成
@@ -133,14 +132,14 @@ func artistMergeDisplayName(name string) string {
 }
 
 // mergeAliasedArtists 把 Last.fm 统计里"同一个真人被拆成多条"的记录合并成一条,播放
-// 次数相加。单一手段(只按名字键比较)覆盖不全某些情况——比如这次实测"Dean Ting"这条
-// Last.fm 没能解析出 mbid、只有"丁世光"那条有——所以用两个信号一起判断"是不是同一个
-// 人",任一信号命中就合并(并查集,允许链式传递:比如 A/B 因名字键相同合并、B/C 又因
-// mbid 相同合并,最终 A/B/C 都算一个人):
+// 次数相加。单一手段(只按名字键比较)覆盖不全——有些记录解析不出 mbid、有些又不在
+// artistAliasTable 里,所以用两个信号一起判断"是不是同一个人",任一信号命中就合并
+// (并查集,允许链式传递:比如 A/B 因名字键相同合并、B/C 又因 mbid 相同合并,最终
+// A/B/C 都算一个人):
 //  1. artistMergeNameKey 相同(见其注释:合唱取第一位+已知别名+繁简折叠+大小写折叠);
-//  2. Last.fm 自己解析出的 mbid(MusicBrainz ID)相同——这是 Last.fm 服务端自己的艺人
-//     身份归并结果,能兜住名字键这条路径本身抓不到的情况(不在 artistAliasTable 里、
-//     写法也没有明显对应关系的同一人),但不能替代名字键匹配——mbid 不是每条记录都有。
+//  2. Last.fm 自己解析出的 mbid(MusicBrainz ID)相同——是服务端自己的艺人身份归并
+//     结果,能兜住名字键这条路径抓不到的情况,但不能替代名字键匹配——mbid 不是每条
+//     记录都有。
 //
 // 合并后按播放次数重新降序排列——合并可能改变名次,比如两条各自排第 6/7 名,合并后播放
 // 次数相加就可能前移到第 4 名。
@@ -205,14 +204,11 @@ func mergeAliasedArtists(entries []lastfmChartEntry) []lastfmChartEntry {
 }
 
 // resolveArtistAvatar 给一个歌手名找头像图——优先 QQ 音乐(qqSingerAvatar,这个项目
-// 给中文内容一贯优先选的服务,免认证、且实测中英文歌手都有覆盖),查不到才退到 Deezer
-// (deezerArtistAvatar)。2026-07-14 上线时最初只用了 Deezer(见下方注释,当时的理由是
-// Last.fm 自己不提供真实头像),用户随后问"能不能用 Apple Music 的或者 QQ 音乐的头像"——
-// Apple Music 官方头像数据只有付费 Apple Developer 账号才能拿到的 MusicKit 目录 API 才有
-// (这个项目一直用免费的 iTunes Search API 查预览/封面,那个接口的 musicArtist 类型结果
-// 没有任何图片字段,实测确认过),引入 MusicKit 需要新增付费开发者账号+JWT 签名基建,
-// 成本明显高于收益,没有做;QQ 音乐则直接可行(复用现成的免认证 smartbox_new.fcg),
-// 换成它当首选。
+// 给中文内容一贯优先选的服务,免认证、且中英文歌手都有覆盖),查不到才退到 Deezer
+// (deezerArtistAvatar)。Apple Music 官方头像数据只有付费 Apple Developer 账号才能
+// 拿到的 MusicKit 目录 API 才有(这个项目一直用免费的 iTunes Search API 查预览/封面,
+// 那个接口的 musicArtist 类型结果没有任何图片字段),引入 MusicKit 需要新增付费开发者
+// 账号+JWT 签名基建,成本明显高于收益,未采用。
 func resolveArtistAvatar(ctx context.Context, name string) string {
 	if pic := qqSingerAvatar(name); pic != "" {
 		return pic
@@ -220,12 +216,11 @@ func resolveArtistAvatar(ctx context.Context, name string) string {
 	return deezerArtistAvatar(ctx, name)
 }
 
-// deezerArtistAvatar 查 Deezer 的公开歌手搜索接口拿一张头像图——这次上线前实测确认过
-// Last.fm 自己的 artist.getinfo 现在对所有歌手都返回同一张占位图(2019 年前后的已知
-// API 变化,拿不到真实头像),Deezer 的 search/artist 不需要认证、且是按歌手实际区分的
-// 真实图片,拿它当头像来源。查不到/查失败时返回空字符串——调用方不应该因为单个歌手
-// 查图失败就放弃整批数据,前端对空头像也有兜底展示。现在是 resolveArtistAvatar 查不到
-// QQ 音乐头像时的兜底,不再是首选。
+// deezerArtistAvatar 查 Deezer 的公开歌手搜索接口拿一张头像图——Last.fm 自己的
+// artist.getinfo 对所有歌手都返回同一张占位图,拿不到真实头像,而 Deezer 的
+// search/artist 不需要认证、且是按歌手实际区分的真实图片。查不到/查失败时返回空
+// 字符串——调用方不应该因为单个歌手查图失败就放弃整批数据,前端对空头像也有兜底展示。
+// 现在是 resolveArtistAvatar 查不到 QQ 音乐头像时的兜底,不再是首选。
 func deezerArtistAvatar(ctx context.Context, name string) string {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
@@ -254,14 +249,10 @@ func deezerArtistAvatar(ctx context.Context, name string) string {
 }
 
 // topArtistsDigest 检查(至多每 topArtistsCheckInterval 一次)要不要重新计算"历史播放
-// Top10歌手"并推给状态中继——用户明确说了这块内容不用实时、一天一次就够,所以挂在跟
-// weeklyDigest 同样的 poll() 尾部、但用一个大得多的检查间隔,不会增加正常轮询的开销。
-// 复用跟 weeklyDigest 同一套 Last.fm 凭证,没配置就整体跳过;还要求 StateRelayURL 已配置
-// (数据要推给网页读的中继,没配这个推了也没地方读)。
-//
-// 2026-07-20:去掉了 features.TopArtistsDigest 这个额外开关——这三个凭据/地址字段
-// 本来就是这个功能唯一需要的前置条件,那个开关只是叠加在上面的一层多余手动确认
-// (desktop-lyrics 侧同步删掉了对应的手动 Toggle,见 AccountLinkingTab.swift)。
+// Top10歌手"并推给状态中继——这块内容不需要实时,所以挂在跟 weeklyDigest 同样的
+// poll() 尾部、但用一个大得多的检查间隔,不会增加正常轮询的开销。复用跟 weeklyDigest
+// 同一套 Last.fm 凭证,没配置就整体跳过;还要求 StateRelayURL 已配置(数据要推给网页读
+// 的中继,没配这个推了也没地方读)。
 func (p *poller) topArtistsDigest(now time.Time) {
 	if p.cfg.LastfmUser == "" || p.cfg.LastfmAPIKey == "" || p.cfg.StateRelayURL == "" {
 		return

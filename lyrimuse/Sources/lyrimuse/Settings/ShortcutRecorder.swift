@@ -3,22 +3,20 @@ import Carbon.HIToolbox
 import SwiftUI
 import KeyboardShortcuts
 
-// 替换 KeyboardShortcuts 库自带的 Recorder——真机实测坐实的根因:库自带的
-// RecorderCocoa 是 NSSearchField 子类(真正的可编辑文本框),只要它是第一响应者,
-// AppKit 就会把它接入系统的文字输入/输入法(IME)管线;当前活跃输入法是第三方中文
-// 输入法(如微信输入法拼音)时,敲下的按键组合会被输入法当成"正在拼词"拦截去合成
-// 候选字,根本到不了 RecorderCocoa 自己那个判断"这是不是一个快捷键"的本地事件监听器——
-// 于是不管按什么组合,要么框里毫无反应,要么冒出一个不相干的汉字候选字,快捷键永远
-// 录不进去。查过库的最新 3.0.1 版本源码,这个问题从未被修过,不是版本旧导致的、
-// 升级也解决不了。
+// 替换 KeyboardShortcuts 库自带的 Recorder——库自带的 RecorderCocoa 是 NSSearchField
+// 子类(真正的可编辑文本框),只要它是第一响应者,AppKit 就会把它接入系统的文字输入/
+// 输入法(IME)管线;当前活跃输入法是第三方中文输入法(如微信输入法拼音)时,敲下的
+// 按键组合会被输入法当成"正在拼词"拦截去合成候选字,根本到不了 RecorderCocoa 自己那个
+// 判断"这是不是一个快捷键"的本地事件监听器——于是不管按什么组合,要么框里毫无反应,
+// 要么冒出一个不相干的汉字候选字,快捷键永远录不进去。这是库本身(3.0.1)从未修过的
+// 问题,升级解决不了。
 //
-// 参考了 MASShortcut(另一个广泛使用的开源快捷键录制库)的做法:它的录制控件是纯
+// 参考 MASShortcut(另一个广泛使用的开源快捷键录制库)的做法:它的录制控件是纯
 // NSView/NSButton,根本不是文本输入控件——NSResponder.inputContext 默认就是 nil,
 // 系统输入法子系统只会盯着"当前第一响应者的 inputContext 是不是一个真的文字输入
 // 上下文"来决定要不要接管按键,纯 NSButton 从架构上就没有这个入口,不需要额外
 // "关掉输入法"这一步,天然对任何输入法免疫。这里照抄这个思路,而不是想办法在
-// NSSearchField 上关闭输入法(那样还要应对未来输入法/系统版本更新可能出现的新绕过
-// 方式,治标不治本)。
+// NSSearchField 上关闭输入法。
 final class ShortcutRecorderButton: NSButton {
     private let shortcutName: KeyboardShortcuts.Name
     private var eventMonitor: Any?

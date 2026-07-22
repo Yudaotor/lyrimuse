@@ -6,11 +6,9 @@ import Foundation
 // collector，一个真正无人值守的后台服务（读播放状态、抓歌词/封面写本地缓存），没有它
 // 悬浮歌词/灵动岛什么都显示不出来，所以 KeepAlive=true（崩了自动拉起）。
 //
-// 2026-07-21：collector 二进制现在打包进 .app 里（build.sh 在 swift build 之后额外
-// go build 一份，拷进 Contents/Resources/collector）——这样才能像 LoginItemManager 认
-// 自己一样，通过 Bundle.main.bundleURL 精确知道它在哪，不需要用户手动 clone 到哪都要自己
-// 拼路径（旧版做法：README 里让用户手敲 sed + launchctl bootstrap，这次改成 Settings/
-// 引导页面里点一下）。
+// collector 二进制打包进 .app 里（build.sh 在 swift build 之后额外 go build 一份，
+// 拷进 Contents/Resources/collector）——这样才能像 LoginItemManager 认自己一样，通过
+// Bundle.main.bundleURL 精确知道它在哪，不需要用户手动 clone 到哪都要自己拼路径。
 //
 // 不用 @MainActor（跟 CollectorControl 一样，只是 Process/FileManager 操作，没有碰任何
 // UI 状态）——install() 内部可能因为 kickstart 失败重试而 sleep 一两秒，必须能在

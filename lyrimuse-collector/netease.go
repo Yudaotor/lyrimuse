@@ -54,12 +54,9 @@ func neteaseLookup(artist, title, album string) neteaseInfo {
 		return neteaseInfo{}
 	}
 	// 版权已从网易云整体下架、曲库里只剩仿冒号的艺人(见 isNeteaseImpersonatorRidden 注释)——
-	// 这个门槛原来只挡在 nameOnlyMatch 那条歌手名兜底通道,resolveNeteaseInfo 里 pick() 选
-	// 封面/歌词的主路径完全没挡:这类艺人的搜索结果哪怕标题、歌手名(字面)都"匹配"上了,
-	// 也必然是仿冒号(真人官方版本根本不在库里,不存在侥幸对上的可能),pick() 却会照单全收。
-	// 实测坐实:周杰伦《Medley: 星晴/回到过去/最后的战役/爱我别走 (Live)》被仿冒号一条
-	// 不相关的候选顶了封面。这里直接整个跳过网易云、不发任何请求,让上层 enrich.go 退到
-	// QQ 音乐兜底(QQ 侧要求歌手名双重精确匹配,不受这个问题影响)。
+	// 这类艺人的搜索结果哪怕标题、歌手名字面都"匹配"上了也必然是仿冒号(真人官方版本根本
+	// 不在库里),pick() 的标题/歌手名校验拦不住这种情况。这里直接整个跳过网易云、不发任何
+	// 请求,让上层 enrich.go 退到 QQ 音乐兜底(QQ 侧要求歌手名双重精确匹配,不受此影响)。
 	if isNeteaseImpersonatorRidden(artist) {
 		return neteaseInfo{}
 	}
@@ -113,14 +110,11 @@ func resolveNeteaseInfo(artist, title, album string) neteaseInfo {
 	// 只回一堆热门歌兜底。用去括号标题查,不中再换一个词序(实测 "标题 歌手" 召回更好)。
 	ct := stripParens(title)
 	var queries []string
-	// 老歌撞新翻唱/新演出版本同名时,纯"歌手+标题"召回率不够——王力宏《落叶归根》实测
-	// 坐实:2007原专辑《改变自己》里的录音室版跟2025年《歌手》综艺里王力宏+单依纯合唱的
-	// 同名新版本标题、歌手都能各自精确匹配,但 2007 原版在 NetEase 搜索排名极靠后(实测
-	// offset 60~90 才出现,远超 pick() 能看到的候选窗口),pick() 只看到综艺合唱版这一条
-	// "唯一候选"、没有察觉真正的原版根本不在候选集合里,选错了封面。带上本地专辑名一起
-	// 查能大幅提升召回排名(实测同一首歌加上专辑名后原版直接排到第一位)——只在本地专辑名
-	// 非空时才加这条查询、且放在最前面优先尝试,不影响本来就没有专辑信息的情形(如"大鱼"
-	// 那种本地专辑名对不上/为空的正常单曲，见 pick 注释)。
+	// 老歌撞新翻唱/新演出版本同名时,纯"歌手+标题"召回率不够——真正想要的旧版本可能在
+	// NetEase 搜索排名里靠后,掉出 pick() 能看到的候选窗口,导致只看到新版本这一条"唯一
+	// 候选"而选错了封面。带上本地专辑名一起查能大幅提升召回排名——只在本地专辑名非空时才
+	// 加这条查询、且放在最前面优先尝试,不影响本来就没有专辑信息的情形(如"大鱼"那种本地
+	// 专辑名对不上/为空的正常单曲，见 pick 注释)。
 	if album != "" {
 		queries = append(queries, artist+" "+ct+" "+album)
 	}
@@ -142,25 +136,18 @@ func resolveNeteaseInfo(artist, title, album string) neteaseInfo {
 	// 选谁的封面/链接:同名歌里混着别歌手的翻唱/演奏/卡拉OK/同名他人歌。优先级:
 	// ①歌名+歌手都匹配、且专辑分最高(专辑名 loose 相等=100 直接锁定正确专辑版本);
 	// ②歌手名跨平台不一致但专辑强匹配(albumScore>0);③都无 → 返回空,不串错歌手。
-	// 只信 byArtist(歌手名精确对上),不再有"歌手对不上、专辑名对上就认"的 byAlbum 兜底。
-	// 实测坐实这条兜底能被反向利用:仿冒号可以把自己上传的"专辑名"字段直接抄成目标专辑名
-	// (如某仿冒号把假的"I do 周杰倫to marry"单曲的专辑字段就填成周杰伦真实新专辑名"太阳
-	// 之子",标题也做成含"I Do"子串来骗过 titleMatches),让专辑分打满分从而蒙混过关——
-	// 这比 artistMatches 要防的"歌手名加个符号"更难防,专辑名可以被仿冒号无成本抄成任意
-	// 值。官方曲库缺失时,宁可 pick() 返回空,让 resolveTrackEnrichment 退到 QQ 音乐兜底
-	// (QQ 侧要求歌手名双重精确匹配,见 qqCoverFallback),也不要信一个只凭专辑名认亲的结果。
+	// 只信 byArtist(歌手名精确对上),不再有"歌手对不上、专辑名对上就认"的 byAlbum 兜底——
+	// 专辑名字段能被仿冒号无成本抄成任意值(比 artistMatches 要防的"歌手名加个符号"更难防),
+	// 官方曲库缺失时宁可 pick() 返回空,让 resolveTrackEnrichment 退到 QQ 音乐兜底(QQ 侧
+	// 要求歌手名双重精确匹配,见 qqCoverFallback),也不要信一个只凭专辑名认亲的结果。
 	// pick 分两步:①先把"歌手真的对上"的候选按标题精确/宽松分两档;②每档内部只有
 	// 出现"不止一条"候选时才要求专辑分>0 才采信,单独一条候选时直接信它。
-	// 为什么按"是否有歧义"分情况,而不是无脑要求专辑分>0:很多正常单曲在网易云上专辑名
-	// 字段本就跟本地(Apple Music)写法不一致、甚至整个空着,这时候只有一条真人候选、没有
-	// 竞争者,没道理因为专辑名对不上就弃用(实测坐实:周深《大鱼》官方版专辑名是空的,
-	// 如果无脑要求专辑分>0 会被误杀)。但当同一首歌出现两条以上"歌手都是真人、标题都精确
-	// 同名"的候选时,这就是网易云上确实存在多个实体版本(旧单曲发行版/后来收录进新专辑的
-	// 版本等)的信号,这时候才需要专辑分>0 来确认选的是目标专辑对应的那个版本,选不出来
-	// 宁可整体放弃、交给 QQ 音乐兜底,也不要矮子里拔将军选一个不确定对不对版本的候选
-	// (实测坐实:《圣诞星(feat.杨瑞代)》网易云上有两条真人"周杰伦"精确同名候选,都是
-	// 2023年发行的旧单曲,没有一条关联得上目标专辑"太阳之子";这首歌其他同专辑曲目在
-	// 网易云上也是同样查无官方专辑版本,全部正确退到 QQ 音乐兜底,圣诞星理应同等对待)。
+	// 按"是否有歧义"分情况,而不是无脑要求专辑分>0:很多正常单曲在网易云上专辑名字段本就
+	// 跟本地(Apple Music)写法不一致、甚至整个空着,这时候只有一条真人候选、没有竞争者,
+	// 没道理因为专辑名对不上就弃用。但当同一首歌出现两条以上"歌手都是真人、标题都精确同名"
+	// 的候选时,说明网易云上确实存在多个实体版本(旧单曲发行版/后来收录进新专辑的版本等),
+	// 这时候才需要专辑分>0 来确认选的是目标专辑对应的版本,选不出来宁可整体放弃、交给
+	// QQ 音乐兜底,也不要矮子里拔将军选一个不确定对不对版本的候选。
 	pick := func(songs []neSong) *neSong {
 		type cand struct {
 			s  *neSong
@@ -190,9 +177,8 @@ func resolveNeteaseInfo(artist, title, album string) neteaseInfo {
 			}
 		}
 		// strict:looseCands 传 true——这批候选标题本身就带着"(Extended)"/"(Live)"/
-		// "(Instrumental)"这类版本限定词,天然就是"另一个版本",唯一候选也不能免检直接信,
-		// 见下面调用点分别传参处的实测坐实案例。exactCands 传 false,保留原有"唯一精确
-		// 同名候选、专辑名对不上也认"的既有行为(大鱼/陶喆等场景已经验证过,不能收紧)。
+		// "(Instrumental)"这类版本限定词,天然就是"另一个版本",唯一候选也不能免检直接信。
+		// exactCands 传 false,保留"唯一精确同名候选、专辑名对不上也认"的既有行为,不能收紧。
 		bestOf := func(cands []cand, strict bool) *neSong {
 			if len(cands) == 1 && !(strict && album != "" && cands[0].sc == 0) {
 				return cands[0].s // 唯一候选,没有歧义,直接信
@@ -210,35 +196,23 @@ func resolveNeteaseInfo(artist, title, album string) neteaseInfo {
 			}
 			return best
 		}
-		// exactCands 优先,但"优先"到"没有 bestOf 选得出的",不能直接放弃——网易云上
-		// 常年混着跟目标专辑无关、却标题恰好逐字同名的现场/盗版录音(如"Darling Nikki"
-		// 这首歌,Syracuse 1985 live bootleg 也叫这个名,跟正版录音室版一样精确同名却对不上
-		// 专辑),这类候选一多就会让 exactCands 内部因"有歧义+都对不上专辑"被 bestOf 拒绝、
-		// 返回 nil——但 looseCands 里那条真正官方专辑版本(标题带"(Remaster)"等后缀、专辑分
-		// 却明确对得上)本来是能唯一确定的,不该因为 exactCands 抢先返回 nil 就被连带放弃。
-		// 实测坐实:Prince & The Revolution《Darling Nikki》——两条"Darling Nikki"精确
-		// 同名的现场录音互相打平且专辑分都是 0,而"Darling Nikki (2015 Paisley Park
-		// Remaster)"(专辑"Purple Rain (Deluxe Edition)",专辑分 100)明明在 looseCands
-		// 里等着,却因为上面这条直接 return 被拦在门外,导致这首歌的网易云链接/封面都解析
-		// 不出来。
+		// exactCands 优先,但优先到"没有 bestOf 选得出的"时不能直接放弃返回 nil——网易云上
+		// 常年混着跟目标专辑无关、却标题恰好逐字同名的现场/盗版录音,这类候选一多就会让
+		// exactCands 内部因"有歧义+都对不上专辑"被 bestOf 拒绝返回 nil;但 looseCands 里
+		// 那条真正官方专辑版本(标题带"(Remaster)"等后缀、专辑分却明确对得上)本来是能唯一
+		// 确定的,不该因为 exactCands 抢先返回 nil 就被连带放弃。
 		if len(exactCands) > 0 {
 			if c := bestOf(exactCands, false); c != nil {
 				return c
 			}
 		}
-		// 2026-07-19 真机实测坐实:looseCands 的"唯一候选直接信"曾经也是无条件生效,
-		// 结果被"查询词带上本地专辑名"这条既有优化(见上面 queries 构造处注释,王力宏
-		// 《落叶归根》案例)反噬——迈克尔杰克逊《Billie Jean》(本地专辑"HIStory - PAST,
-		// PRESENT AND FUTURE - BOOK I")查询词带上这个很长的专辑名之后,网易云自己的
-		// 全文搜索排序把其它一堆同名候选(Thriller/Ultimate Collection/Live 等等,
-		// 用不带专辑名的更简单查询词能查到一大批)全部挤出了 limit=15 的结果窗口,只剩
-		// "Billie Jean (Extended)"(专辑"Billie Jean / Instrumental",跟目标专辑毫无
-		// 关系、其实是1983年原始单曲版本)这一条恰好通过标题/歌手校验——"唯一候选"这个
-		// 免检条件被这个查询词副作用意外触发,选出了错误版本的封面。looseCands 天然都是
-		// "标题带版本限定词"的候选(不然早被分进 exactCands 了),比 exactCands 更容易
-		// 出现这种"看似唯一、其实只是被这一次查询词意外筛剩下"的假象,收紧成"本地有专辑名
-		// 时,唯一候选也必须专辑分>0 才采信",专辑分对不上就整体放弃、交给 QQ 音乐兜底
-		// (宁可没有,也不要错,跟这个函数其它几处判断同一个原则)。
+		// looseCands 的"唯一候选直接信"不能像 exactCands 一样无条件生效——"查询词带上
+		// 本地专辑名"这条优化(见上面 queries 构造处注释)可能让网易云的搜索排序把其它候选
+		// 挤出结果窗口,只剩一条恰好通过标题/歌手校验、实为错误版本的候选,造成"看似唯一、
+		// 其实只是被这次查询词意外筛剩下"的假象。looseCands 天然都是"标题带版本限定词"的
+		// 候选(不然早被分进 exactCands 了),比 exactCands 更容易出现这种假象,所以收紧成
+		// "本地有专辑名时,唯一候选也必须专辑分>0 才采信",专辑分对不上就整体放弃、交给
+		// QQ 音乐兜底(宁可没有,也不要错,跟这个函数其它几处判断同一个原则)。
 		if len(looseCands) > 0 {
 			return bestOf(looseCands, true)
 		}
@@ -246,13 +220,12 @@ func resolveNeteaseInfo(artist, title, album string) neteaseInfo {
 	}
 	// 仅用于统一"歌手名怎么写"的兜底候选:歌名+专辑名都精确对上(albumScore=200)、且这批
 	// 结果里只有唯一一条这样的候选,才采信它的歌手名——即便歌手名字面对不上查询词也认(比如
-	// 查询用了罗马化/英文名"David Tao",网易云库里这首歌记的是"陶喆")。跟 pick() 分开、绝不
-	// 影响封面/歌词选择:那条判定必须先核实歌手名(见 artistMatches 注释里 Jay Chou 的教训——
-	// 版权下架的艺人满屏都是仿冒号,专辑名可以被仿冒号随意抄成目标专辑名蒙混过关)。这里放宽
-	// 的代价只是"历史列表偶尔显示错一个名字"这种低风险的展示问题,跟"封面选错"完全不是一个
-	// 量级,所以能接受;但仍要求"唯一候选"防止同名同专辑撞车时瞎选一个。
-	// 繁简转换现在下沉到 normLoose/albumScore 本身(见 match.go 的 normLoose 注释),这里
-	// 不用再手动转一遍——保留这条判据本身(歌名+专辑名都精确对上、且候选唯一才采信歌手名)。
+	// 查询用了罗马化/英文名,网易云库里这首歌记的是中文名)。跟 pick() 分开、绝不影响封面/
+	// 歌词选择:那条判定必须先核实歌手名(见 artistMatches 注释——版权下架的艺人满屏都是
+	// 仿冒号,专辑名可以被仿冒号随意抄成目标专辑名蒙混过关)。这里放宽的代价只是"历史列表
+	// 偶尔显示错一个名字"这种低风险的展示问题,跟"封面选错"不是一个量级,所以能接受;但
+	// 仍要求"唯一候选"防止同名同专辑撞车时瞎选一个。繁简转换已下沉到 normLoose/albumScore
+	// 本身(见 match.go 的 normLoose 注释),这里不用再手动转一遍。
 	nameOnlyMatch := func(songs []neSong) string {
 		var found string
 		n := 0
@@ -270,17 +243,11 @@ func resolveNeteaseInfo(artist, title, album string) neteaseInfo {
 		return ""
 	}
 
-	// limit=30(原来是15)——2026-07-19 真机实测坐实:紧接上面 looseCands 收紧那次改动
-	// 之后,《Billie Jean》这首歌的正确候选(网易云上真实存在,专辑名跟本地"HIStory..."
-	// 完全对得上、albumScore=200)压根没有出现在带专辑名那条查询词(queries 里第一条,
-	// 王力宏《落叶归根》案例引入的优化)的前 15 条结果里——直接实测过把这条查询词的
-	// limit 提到 60 依然找不到,说明"带专辑名"这个查询词本身对这首歌的检索排序是有害的,
-	// 不是"结果窗口不够大"能解的;但去掉专辑名的那条兜底查询词(queries 第二条)在
-	// limit=30 时就能在第 21 位命中这条正确候选。把所有查询词统一加大 limit 到 30,
-	// 让"不带专辑名"这条兜底查询词有机会捞到这条本来就存在、只是排得靠后的正确候选,
-	// 不需要为"带专辑名"那条查询词单独排除/回退(它对这首歌找不到东西时不会返回任何
-	// 可用候选,自然会让后续查询词的结果生效,见下面 chosen 只在 albumScore 更高时才
-	// 覆盖的逻辑)。
+	// limit=30:"带专辑名"这条查询词(queries 第一条)对某些歌曲的检索排序反而有害——
+	// 正确候选可能压根没出现在其结果里,加大它的 limit 也无济于事;但"不带专辑名"的兜底
+	// 查询词(queries 第二条)在 limit=30 时能捞到这条本来就存在、只是排得靠后的正确候选。
+	// 不需要为"带专辑名"那条单独做排除/回退,它找不到东西时自然不会返回任何可用候选,
+	// 后续查询词的结果照常生效(见下面 chosen 只在 albumScore 更高时才覆盖的逻辑)。
 	var chosen *neSong
 	var nameOnlyArtist string
 	for _, q := range queries {
@@ -320,16 +287,12 @@ func resolveNeteaseInfo(artist, title, album string) neteaseInfo {
 	id := chosen.ID
 	info := neteaseInfo{SongURL: fmt.Sprintf("https://music.163.com/song?id=%d", id)}
 	// 只有本地(Apple Music)标签本身就是单一人名(没有 &/、/, 等分隔符)时,才尝试用
-	// NetEase 这条数据统一拼写:哪怕 NetEase 把这首歌记成好几位歌手(如"陶喆、卢广仲"),
-	// pick() 选中它已经证明其中恰好一位通过 artistMatches 核实等于本地这唯一一人——
-	// 复用那次核实结果统一这一位的写法即可(实测坐实:漏了这步会导致"陶喆"在 feat.
-	// 曲目里显示成原始标签"David Tao"，跟其他独唱曲目不一致)。
+	// NetEase 这条数据统一拼写:pick() 选中候选已经证明其中恰好一位通过 artistMatches 核实
+	// 等于本地这唯一一人,复用那次核实结果统一这一位的写法即可。
 	// 但如果本地标签本来就是多人合credit(如"Prince & The Revolution"),就完全不碰、
 	// 让 lbMeta 原样用本地标签——NetEase 对同一张专辑不同曲目的"合credit拆分"口径本就
-	// 不统一(有的单曲只记 Prince、有的只记 The Revolution),拿这种残缺的单曲级别数据去
-	// 顶替本地已经写全的多人credit,会悄悄丢人(实测坐实:Purple Rain 专辑好几首曲目被
-	// 这样从"Prince & The Revolution"误伤成只剩"Prince"或只剩"The Revolution"，
-	// 同一张专辑显示三种不同写法)。
+	// 不统一(有的单曲只记其中一位),拿这种残缺的单曲级别数据去顶替本地已经写全的多人
+	// credit,会悄悄丢人。
 	if len(artistCreditParts(artist)) < 2 {
 		for _, a := range chosen.Artists {
 			if artistMatches(a.Name, artist) {

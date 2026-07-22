@@ -4,64 +4,17 @@ import LyrimuseCore
 import KeyboardShortcuts
 
 // 整个设置窗口是一层真正的 NavigationSplitView:左边一份侧边栏 List,右边显示当前
-// 选中项的详情。"账号连接"不是侧边栏里单独一个可选中的大分类,而是拆成 Section("账号
-// 连接")下的 4 个账号条目(ListenBrainz/Last.fm/网页推送/推送提醒),跟
-// 播放/歌词/外观/功能开关/通用平级放进同一个 List 里——这是踩了两次真实的 SwiftUI/
-// AppKit 坑之后收敛出来的结构:最早"账号连接"内部自己套了一层 NavigationSplitView
-// (分类侧边栏之下又嵌一层账号侧边栏),两层 NavigationSplitView 叠在同一个窗口里,
-// macOS 在侧边栏/工具栏这层窗口级 chrome 上打架,外层侧边栏直接不渲染;改成手搭的
-// HStack+List(.listStyle(.sidebar)) 规避了那个冲突,但这种"看起来像侧边栏、实际不是
-// NavigationSplitView 真正分栏列"的 List,又拿不到 AppKit 只对"真正的侧边栏列"做的
-// 窗口圆角遮罩,导致窗口左下角露出一块黑色阴影(实测截图坐实,是用户报的"有bug阴影")。
-// 两次踩坑指向同一个结论:伪造第二层"看起来像侧边栏"的容器,不管哪种实现方式,都会
-// 跟只按"一个真正侧边栏列"设计的窗口级 chrome/遮罩打架。唯一稳妥的解法是彻底拍平,
-// 全窗口只留一层真正的侧边栏,"账号"这一级也变成这层真侧边栏里的普通行。
+// 选中项的详情。"账号连接"没有做成侧边栏里单独可选中的大分类,而是拆成普通账号行,
+// 跟播放/歌词/外观/通用平级放进同一个 List 里——原因是嵌套第二层"看起来像侧边栏"的
+// 容器(不管是内层再套一个 NavigationSplitView,还是手搭 HStack+List 模拟侧边栏),
+// 都会跟 macOS 只按"一个真正侧边栏列"设计的窗口级 chrome/圆角遮罩打架,导致外层
+// 侧边栏不渲染,或者窗口露出黑色阴影。唯一稳妥的解法是彻底拍平,全窗口只留一层真正的
+// 侧边栏,账号这一级也变成这层真侧边栏里的普通行。
 //
-// 2026-07-16:新增"歌词"分类——用户反馈"应该单独设置出一个歌词模块把相关的功能放
-// 进去"。歌词相关的设置原来分散在三个不同 tab 里(播放 tab 的"歌词展示"、功能开关
-// tab 的"歌词解析"/"歌词文件夹作为权威源"、通用 tab 的"打开歌词文件夹"),要改个歌词
-// 相关的东西得先想好去哪个 tab 找。现在收进一个 LyricsSettingsTab,还顺带加了个
-// "打开歌词管理…"按钮(原来只能从菜单栏进,Settings 里完全没有入口)。留在原地没搬的:
-// "封面/主色/平台跳转链接"——这是纯封面/取色/跳转链接的事,跟歌词完全无关;字体/颜色/
-// 阴影这些视觉样式留在"外观"tab,那边管的是整个悬浮窗的视觉呈现,不只是歌词文字本身。
-// "换歌时预取同专辑其它曲目"最早也留在了功能开关 tab(当时的理由是"同时预取封面,不是
-// 歌词专属"),后来用户反馈"这个功能开关我理解是放在歌词tab里面合适一点"、又改了主意——
-// 搬进了"歌词"分类且改名"提前解析同专辑其它曲目（封面+歌词）",详见 LyricsSettingsTab
-// 里的改动说明。
-//
-// 2026-07-17:"功能开关"分类(原来的 FeatureTogglesTab)整个删掉了——搬完上面几轮之后
-// 它只剩"封面/主色/平台跳转链接"一个开关,用户反馈"这个不需要设置吧,默认就是支持的,
-// 也不需要可以设置为关闭",于是这个开关本身也从 lyrimuse-collector/lyrimuse 两侧一起
-// 删除,封面/主色/跳转链接变成无条件执行的行为,不再是可关闭的设置项。tab 因此被搬空、
-// 直接删掉这个分类,不留一个空壳——跟当初"播放"tab 空了就整个删除是同一个处理方式。
-//
-// 随后"播放"tab 剩下的"数据源"(远程/本地+Relay 地址)也搬进了"歌词"tab、改名"播放
-// 状态来源"——用户反馈"播放tab的那个也改到歌词tab吧"。"播放"tab因此被搬空,直接
-// 删掉这个分类,不留一个空壳。
-//
-// 每个分类各自还是独立的 View,直接访问对应的单例(AppSettings.shared/
+// 每个分类各自是独立的 View,直接访问对应的单例(AppSettings.shared/
 // FeatureSettingsStore.shared/ConfigStore.shared 等),不需要从 SettingsView 往下传
-// 参数——唯一的例外是"功能开关"分类里某个开关因为对应账号没连好被禁用时,旁边会有个
-// "前往「账号连接」"的跳转按钮,直接跳到侧边栏里对应的那一个账号行(而不是笼统跳到
-// "账号连接"这个不再存在的单一分类),这就需要 SettingsView 把跳转能力下传给它。
-//
-// 2026-07-20:上面提到的"账号连接"这个 Section 标题改名成"附加功能"了——用户反馈
-// "设置里很多非歌词本身相关的功能配置很混乱,分不清哪些是歌词软件需要的、哪些是
-// 另外功能需要的"。原来前四项(歌词/外观/通用/关于)没有 Section 包裹、只有账号那
-// 四项包在一个 Section 里,这条边界其实一直都在,只是没有显式标出来,看起来像是
-// 漏加了标题而不是刻意的分类。现在两组都显式给了 Section 标题(前四项包进"核心
-// 设置",账号四项的标题从"账号连接"改成"附加功能"、并加了一行 footer 说明"这些
-// 是可选的、不装不影响歌词正常使用"),对称摆出来,不用再靠"有没有 Section"这种
-// 隐晦信号猜。同时把"通用"tab 里"播放/暂停、上一首、下一首"这三个快捷键(远程控制
-// Apple Music 播放,不是歌词功能)从主"快捷键" Section 里拆出来,单独放进一个标题
-// 写明"（附加功能）"的 Section,理由是同一件事:这三个混在歌词软件自己的快捷键里,
-// 容易让人误以为是必需项。
-//
-// 2026-07-22:账号那四项的 Section 标题又从"附加功能"改成了"实验室功能"——用户
-// 直接指定的新名字。只改了下面 sidebarLabel 用不到、专属账号 Section 那一个
-// L10n key(见本文件里挂折叠按钮那处的 Text(L10n.t(...)));"通用"tab 那三个快捷键
-// 用的"（附加功能）"是完全独立的另一个字符串/key,跟这四张账号卡片是两回事,没有
-// 跟着一起改。
+// 参数——唯一的例外是某个开关因为对应账号没连好被禁用时,旁边会有个跳转按钮,直接跳到
+// 侧边栏里对应的那一个账号行,这就需要 SettingsView 把跳转能力下传给它。
 enum SettingsTab: Hashable, CaseIterable, Identifiable {
     case lyrics, appearance, general, about
 
@@ -85,14 +38,10 @@ enum SettingsTab: Hashable, CaseIterable, Identifiable {
         }
     }
 
-    // 2026-07-17:侧边栏视觉重设计——这几个纯设置分类原来是系统默认 Label(纯图标+
-    // 文字,无背景),"账号连接"那四个账号行却是自定义彩色圆角方块图标,同一个 List 里
-    // 两种风格混着很不统一。这里给这几个也配一个 tint,跟 sidebarLabel(_:) 一起改成
-    // 跟账号行同款的彩色徽标——特意避开已经在用的四个账号色(orange/pink/blue/red)和
-    // 歌词来源色点(red/green/cyan/purple,见 LyricsManagerView.swift 的 sourceColor):
-    // "外观"尤其不用青色系,因为默认打开的就是"歌词"分类,LRCLIB 色点(cyan)跟侧边栏里
-    // "外观"图标会同屏出现,选太近的色系容易混淆。"通用"用灰色齿轮,呼应 macOS 系统
-    // 设置里"通用"本来就是灰色齿轮的既有印象。
+    // tint 特意避开已经在用的四个账号色(orange/pink/blue/red)和歌词来源色点(red/
+    // green/cyan/purple,见 LyricsManagerView.swift 的 sourceColor)——"外观"尤其不用
+    // 青色系,因为默认打开的是"歌词"分类,会跟侧边栏里同屏出现的 LRCLIB 色点(cyan)
+    // 太接近;"通用"用灰色齿轮,呼应 macOS 系统设置里"通用"的既有印象。
     var tint: Color {
         switch self {
         case .lyrics: return .indigo
@@ -129,23 +78,13 @@ struct SettingsView: View {
     // 里读它的其它字段。
     @ObservedObject private var languageSettings = AppSettings.shared
     @State private var selection: SettingsSidebarItem? = .tab(.lyrics)
-    // 2026-07-22:"实验室功能"(改名前叫"附加功能")这四行默认收起,点击 Section 头
-    // 才展开——用户反馈这四项常驻占地方。不持久化这个折叠状态(每次打开设置窗口都
-    // 重新从收起状态开始),用户只要求"默认收起、点了才展开",没要求"记住上次展开过",
-    // 不额外加 UserDefaults 存取。变量名保留 isAdditionalFeatures 没有跟着改名——
-    // 纯内部实现细节,不是用户可见文案,犯不上为了一次改名连带重命名变量。
+    // 默认收起、点击 Section 头才展开,不持久化(每次打开设置窗口都从收起状态开始)。
+    // 变量名保留 isAdditionalFeaturesExpanded,没有跟着 Section 标题改成"实验室
+    // 功能"——纯内部实现细节,不是用户可见文案。
     @State private var isAdditionalFeaturesExpanded = false
 
     var body: some View {
         NavigationSplitView {
-            // 2026-07-20:侧边栏拆成两个显式带标题的 Section——用户反馈"设置里很多非
-            // 歌词本身相关的功能配置很混乱,分不清哪些是歌词软件需要的、哪些是另外功能
-            // 需要的"。原来的结构其实已经隐含了这条边界(前四项没有 Section 包裹、账号
-            // 那四项包在一个 Section 里),但"没有标题的一组"看起来像是随手漏加了标题,
-            // 不像是刻意的分类,读不出"这是核心、那是附加"的意图。两组都显式给标题,
-            // 对称摆出来,意图才是一目了然的,不用靠"有没有 Section"这种隐晦信号猜。
-            // 账号那组标题最早叫"附加功能"(引用用户当时的原话),2026-07-22 用户
-            // 又指定改叫"实验室功能"——见下面 Section 里挂折叠按钮那处的 L10n.t(...)。
             List(selection: $selection) {
                 Section(L10n.t("核心设置")) {
                     sidebarLabel(.lyrics)
@@ -154,22 +93,11 @@ struct SettingsView: View {
                     sidebarLabel(.about)
                 }
 
-                // 2026-07-22:原来用的是原生 Section(isExpanded:)——折叠三角/点击热区/
-                // 展开动画都交给系统,省事,但这个初始化方法的类型签名把 Footer 定死成
-                // EmptyView,原来的 footer 说明文字因此要挪进 header。改成完全手搭
-                // (@State 记录展开状态,header 换成一个普通 Button,自己画一个跟着状态
-                // 旋转的 chevron,点击时 toggle),方便把这句说明文字重新变回"?"图标+
-                // 悬浮提示的形式。
-                //
-                // 补充(同一天):用户反馈"悬浮还是不提示文案",一度怀疑是
-                // Section(isExpanded:) 的 header 走 NSOutlineView 原生折叠头 chrome、
-                // 根本没当成普通 SwiftUI 子视图渲染,导致 .help(_:) 压根没有挂载宿主——
-                // 但用户随后澄清:其实一直都能弹出来,只是系统默认的 tooltip 延迟
-                // (~1~1.5s)太长,等待期间被当成"没反应"。"NSOutlineView 吞掉悬浮事件"
-                // 这个猜测因此不成立;手搭改造本身没错(仍然是更可控、更适合以后加更多
-                // 交互的写法),但没有解决真正的问题——真正的修复是把 NSInitialToolTipDelay
-                // 调低(见 AppDelegate.swift),这样整个 App 里所有 .help() 提示都会更快弹出,
-                // 不只是这一处。
+                // 手搭折叠(而不是原生 Section(isExpanded:))是因为那个初始化方法的
+                // Footer 类型定死成 EmptyView,没法在这里放"?"图标+悬浮提示。tooltip
+                // 弹出延迟看着像没反应,其实是系统默认 tooltip 延迟(~1~1.5s)本身偏长,
+                // 真正的调整点是 AppDelegate.swift 里的 NSInitialToolTipDelay,会影响
+                // 整个 App 所有 .help() 提示,不是这一处独有的问题。
                 Section {
                     if isAdditionalFeaturesExpanded {
                         ForEach(AccountDestination.allCases) { destination in
@@ -240,9 +168,8 @@ struct SettingsView: View {
     }
 }
 
-// 歌词相关设置的统一入口——见上面 SettingsTab 枚举旁的改动说明。原"播放"tab 的
-// "数据源"(远程/本地+Relay 地址)也搬到这里、改名"播放状态来源"，所以这个 View
-// 也持有 PlaybackSettingsTab 原来那几个单例(settings/poller/local)。
+// 歌词相关设置的统一入口,也扛下原"播放"tab 的"数据源"设置(远程/本地+Relay 地址,
+// 现在叫"播放状态来源")。
 private struct LyricsSettingsTab: View {
     @ObservedObject private var settings = AppSettings.shared
     // local 在这个页面里只当"写目标"用(切换开关时顺手同步给它),这个 View 的 body
@@ -255,11 +182,9 @@ private struct LyricsSettingsTab: View {
 
     var body: some View {
         Form {
-            // 2026-07-21:去掉了"精确追踪 Apple Music 播放进度"这个开关——本地数据源
-            // 从依赖外部 media-control 换成了直接用 AppleScript 问 Music.app(见
-            // MediaControlClient.swift),问到的播放位置本身就是精确值,不再有"精确
-            // /估算"两条路径可选,自动化权限现在是让歌词显示出来的必要前提,而不是一个
-            // 可选的精度提升项——权限状态在"通用"tab的"权限"分区统一显示。
+            // 播放位置现在通过 AppleScript 问 Music.app(见 MediaControlClient.swift)
+            // 得到精确值,不再有"精确/估算"两条路径可选,所以没有对应开关——自动化权限
+            // 是显示歌词的必要前提,状态统一显示在"通用"tab 的"权限"分区。
             Section(L10n.t("解析")) {
                 Toggle(isOn: Binding(
                     get: { features.lyrics },
@@ -270,11 +195,8 @@ private struct LyricsSettingsTab: View {
                         HelpButton(text: L10n.t("控制要不要在线解析歌词——关闭后，第一次播放的新歌不会再去查下面「歌词来源」里的这些平台，只用本地已经缓存过的结果（如果有）。「歌词来源」「匹配算法」这两组设置都只在这个开关开启时才有意义。"))
                     }
                 }
-                // 2026-07-16:改名自"换歌时预取同专辑其它曲目"——原文案没提到它其实也会
-                // 预取封面,光看字面容易让人以为只跟歌词有关;"预取"改"解析"是为了跟上面
-                // "歌词在线匹配"的措辞统一,也避免被误读成"预先加载音频本身"(这个开关
-                // 从来不碰音频,只提前解析封面/歌词这类元数据)。同时从"功能开关"tab 搬
-                // 过来——用户反馈"这个功能开关我理解是放在歌词tab里面合适一点"。
+                // 文案强调"（封面+歌词）"——这个开关也会预取封面,不只是歌词;"解析"
+                // (而非"预取")避免被误读成预先加载音频本身,这个开关从不碰音频。
                 Toggle(isOn: Binding(
                     get: { features.albumPrefetch },
                     set: { features.albumPrefetch = $0; Task { await features.save() } }
@@ -286,13 +208,11 @@ private struct LyricsSettingsTab: View {
                 }
             }
 
-            // 2026-07-16:用户反馈"应该做到配置化，可以选择使用哪些源，然后还可以选择
-            // 智能算法，或者是自己排一个选择顺序"——原来"歌词解析"的四个源(网易云/QQ/
-            // 酷狗/LRCLIB)是硬编码全查+固定打分,现在拆成两件事:"歌词来源"决定查哪些
-            // (至少留一个,不然歌词解析开着却什么都不用毫无意义);"匹配算法"决定从查到
-            // 的结果里怎么选——智能算法沿用原有的四源打分取最高分,顺序优先则改成完全
-            // 听用户排的顺序、不比分数。实现在 collector/enrich.go 的 pickLyricCandidate,
-            // 故意不影响"歌词管理"窗口的手动搜索(那边永远查全部四源,理由见它的注释)。
+            // 拆成两件事:"歌词来源"决定查哪些源(至少留一个,不然歌词解析开着却什么都
+            // 不查毫无意义);"匹配算法"决定从查到的结果里怎么选——智能算法沿用四源
+            // 打分取最高分,顺序优先则完全听用户排的顺序、不比分数。实现在
+            // collector/enrich.go 的 pickLyricCandidate,故意不影响"歌词管理"窗口的
+            // 手动搜索(那边永远查全部四源,理由见它的注释)。
             Section {
                 ForEach(LyricsSource.allCases) { source in
                     Toggle(isOn: Binding(
@@ -318,11 +238,10 @@ private struct LyricsSettingsTab: View {
                 Text(L10n.t("至少需要保留一个歌词来源。"))
             }
 
-            // 实测坐实:Section 的 header/footer 只要塞进去的不是纯 Text(哪怕只是
-            // Text+HelpButton 这种最简单的 HStack),整个内容(连纯文字部分)都不出现在
-            // 可访问性树里,不是"footer 里的 Button 点不到"那种局部问题——跟这个项目
-            // 之前在 accountHintRow 上踩过的那个坑(footer 里嵌 Button 拿不到)是同一类
-            // 限制,只是这次连 header、连纯 Text 都受影响。说明/操作一律放回 Section
+            // Section 的 header/footer 只要塞进去的不是纯 Text(哪怕只是 Text+
+            // HelpButton 这种最简单的 HStack),整个内容(连纯文字部分)都不出现在
+            // 可访问性树里——跟 accountHintRow 上那个"footer 里嵌 Button 拿不到"是
+            // 同一类限制,这次连 header、连纯 Text 都受影响。说明/操作一律放回 Section
             // 正文,header/footer 只留死板的字符串字面量。
             Section(L10n.t("匹配算法")) {
                 // .labelsHidden()——Picker 自带的标签文字会跟上面 header 逐字重复
@@ -445,14 +364,10 @@ private struct LyricsSettingsTab: View {
             }
         }
         .formStyle(.grouped)
-        // 2026-07-21 实测坐实的一类 SwiftUI 刷新缺陷:手动切换语言后,这个 Form 里有些
-        // 文字(尤其是嵌套在自定义子 View/多个 .alert() 修饰符之后的内容)不会立刻跟着
-        // 换,要点开别的分类再点回来才会变过来。具体机制见 AccountLinkingTab.swift 里
-        // DestinationStatus.label 的详细注释——本质是 SwiftUI 判断"要不要重新执行某段
-        // 内容的 body"部分情况下是按这段内容自己的存储属性有没有变来决定的,不是看父
-        // 视图有没有重新渲染。用 .id(L10n.current) 把整个 Form 的"身份"跟当前生效的
-        // 语言绑死,语言一变就强制整个重新构造,不管内部具体是哪个子结构在悄悄跳过
-        // 刷新,一次性堵住整类问题,不需要逐个排查每一处。
+        // SwiftUI 有时不会在语言切换后重新执行某些嵌套内容的 body(取决于该内容自己的
+        // 存储属性有没有变,而非父视图是否重新渲染,详见 AccountLinkingTab.swift 里
+        // DestinationStatus.label 的注释)。用 .id(L10n.current) 把 Form 的身份跟当前
+        // 语言绑死,语言一变就强制整体重新构造,不需要逐个排查哪里在跳过刷新。
     }
 
     // 只包含当前启用的来源,按 lyricsSourceOrder 里的相对顺序展示——"顺序优先"模式的
@@ -484,19 +399,15 @@ private struct AppearanceSettingsTab: View {
     @State private var showSaveThemeAlert = false
     @State private var newThemeName = ""
 
-    // 精选常用字体,而不是列出这台机器上全部两百多个已安装字体族(选不过来是用户
-    // 2026-07-14 的原话反馈)。清单来源是真实调研,不是凭印象挑的:
-    // - 拉丁文/通用部分:Helvetica(被反复称为"现代排版标杆")、Arial(Windows/Office
-    //   数十年的默认字体,公认全球装机量/曝光量最高、因而"用得最多"的英文字体)、
-    //   Times New Roman(最常被提及/最易识别的衬线字体)、Futura(多份 2025 年度
-    //   常用字体盘点里反复出现的经典几何无衬线设计)。
-    // - 中文部分:调研结论是"黑体使用最多、宋体次多、楷体因屏幕显示效果差目前用得
-    //   最少"——只保留前两名(Heiti SC/Songti SC),刻意不收楷体。另外加了 PingFang SC:
-    //   它是 macOS/iOS 自 El Capitan 起所有设备的实际默认中文字体,是这台机器上体感
-    //   "用得最多"的中文字体,即使它不在"黑体/宋体/楷体"这个传统三分类调研范围内。
-    // 仍然过一遍 NSFontManager 实际安装列表做交叉核对而不是硬编码假设——理论上不会有
-    // 哪一个缺失(这几个都是 macOS 系统自带字体),但跟项目里"字体设置要显式检查装没装、
-    // 不能隐式假设"这个既有惯例(见 AppearanceHelpers.swift)保持一致。
+    // 精选常用字体,而不是列出这台机器上全部两百多个已安装字体族——选不过来。清单
+    // 来源是调研结论,不是凭印象挑的:
+    // - 拉丁文/通用部分:Helvetica(现代排版标杆)、Arial(全球装机量/曝光量最高的
+    //   英文字体)、Times New Roman(最常见的衬线字体)、Futura(经典几何无衬线设计)。
+    // - 中文部分:黑体用得最多、宋体次之,楷体屏幕显示效果差故不收;另加 PingFang SC,
+    //   因为它是 macOS/iOS 自 El Capitan 起的实际默认中文字体。
+    // 仍然过一遍 NSFontManager 实际安装列表做交叉核对而不是硬编码假设——理论上都是
+    // macOS 系统自带字体、不会缺失,但跟项目里"字体设置要显式检查装没装、不能隐式
+    // 假设"的既有惯例(见 AppearanceHelpers.swift)保持一致。
     private static let curatedFontFamilies: [String] = {
         let candidates = [
             "Helvetica Neue", "Arial", "Times New Roman", "Futura",
@@ -530,24 +441,18 @@ private struct AppearanceSettingsTab: View {
 
     var body: some View {
         // .formStyle(.grouped) 是 macOS 13+ 原生"系统设置"式外观(圆角分组卡片+
-        // 灰色小标题+尾注),换掉原来 Form 默认的纯列表样式——原来的问题:每个 Section
-        // 的标题只是一行普通粗体文字、跟内容之间没有视觉分组;ColorPicker/字体 Picker
-        // 在默认样式下会被拉伸成贯穿整行的长条,不像系统里那种紧凑的小色块/下拉按钮;
-        // 说明性文字(截屏隐藏/歌词存储那两句)夹在控件中间当成普通一行,读起来像是漏了
-        // 什么而不是备注。分组样式换来的排版全部是 SwiftUI 原生处理,不用手工调间距。
+        // 灰色小标题+尾注)——分组样式下 ColorPicker/字体 Picker 不会被拉伸成贯穿整行
+        // 的长条,说明性文字也有明确的"尾注"位置,不会跟控件混在一起,排版全部是
+        // SwiftUI 原生处理,不用手工调间距。
         Form {
-            // 2026-07-20:Section 标题"悬浮窗"改成"歌词展示"——用户反馈调整,这个
-            // Section 本来就是三个"歌词显示在哪"的开关放在一起(见下面各处已有的改动
-            // 说明),"悬浮窗"这个名字只描述了其中两个、还漏了菜单栏歌词那个,不如
-            // "歌词展示"准确。
             Section(L10n.t("歌词展示")) {
                 // 桌面悬浮歌词(经典悬浮窗)、灵动岛歌词是两个完全独立的展示位置,各自
-                // 独立开关,不互斥——可以同时开、只开一个、或都不开。最初做成互斥的单选
-                // "悬浮窗样式",用户反馈这两个应该分开,改成这样。每个开关只负责"生效"
-                // 这一个控制器自己的 setVisible,不碰另一个;首次打开某个样式时顺手把
-                // "截屏/录屏时隐藏"“暂停/无播放时隐藏"这两个已经配置好的偏好也应用上去——
-                // 否则那个控制器还停留在 init() 里的硬编码默认值,要等下次重启 App 走
-                // AppDelegate 那条初始化路径才会生效,期间会悄悄违背用户已经勾选的偏好。
+                // 独立开关,不互斥,可以同时开、只开一个、或都不开。每个开关只负责
+                // "生效"这一个控制器自己的 setVisible,不碰另一个;首次打开某个样式时
+                // 顺手把"截屏/录屏时隐藏""暂停/无播放时隐藏"这两个已配置好的偏好也
+                // 应用上去——否则那个控制器还停留在 init() 里的硬编码默认值,要等下次
+                // 重启 App 走 AppDelegate 那条初始化路径才会生效,期间会悄悄违背用户
+                // 已经勾选的偏好。
                 Toggle(L10n.t("桌面悬浮歌词"), isOn: Binding(
                     get: { settings.classicOverlayEnabled },
                     set: { newValue in
@@ -570,17 +475,13 @@ private struct AppearanceSettingsTab: View {
                         }
                     }
                 ))
-                // UI 预览阶段给用户看过三个背景风格方向,当时选了磨砂玻璃直接实现;
-                // 用户后来反馈"另外两个也做一下,做成可配置的"。只负责持久化,
-                // NotchLyricsView 每次渲染直接读 settings.notchCardStyle,不需要像
-                // classicOverlayEnabled/notchOverlayEnabled 那样在这里连带调用某个
-                // 窗口控制器的方法"生效"。
+                // 只负责持久化,NotchLyricsView 每次渲染直接读 settings.notchCardStyle,
+                // 不需要像 classicOverlayEnabled/notchOverlayEnabled 那样在这里连带
+                // 调用某个窗口控制器的方法"生效"。
                 //
-                // 2026-07-20:包进 `if settings.notchOverlayEnabled` 了——用户反馈
-                // "灵动岛风格配置只有打开了灵动岛才显示出来，联动一下"。灵动岛没开时
-                // 这个风格选项对用户毫无意义(没有窗口在用它),之前一直摆着容易让人
-                // 误以为跟"灵动岛歌词"开关的开关状态没关系。跟下面"超过就截断"那组
-                // 只在 showLyricsInMenuBar 开着时才出现是同一个既有模式。
+                // 灵动岛没开时这个风格选项对用户毫无意义(没有窗口在用它),包进
+                // `if settings.notchOverlayEnabled` 才显示——跟下面"超过就截断"那组
+                // 只在 showLyricsInMenuBar 开着时才出现是同一个模式。
                 if settings.notchOverlayEnabled {
                     Picker(L10n.t("灵动岛风格"), selection: $settings.notchCardStyle) {
                         ForEach(NotchCardStyle.allCases, id: \.self) { style in
@@ -589,12 +490,11 @@ private struct AppearanceSettingsTab: View {
                     }
                     .pickerStyle(.menu)
 
-                    // 2026-07-22 新增:灵动岛宽度改回固定值之后,用户接着要求"能在设置里
-                    // 调这个固定宽度"——跟上面"外观"tab 里经典悬浮窗的"宽度"滑块同一套
-                    // 写法(设置项本身只负责持久化,didSet 不碰 NSWindow,这里的 set 闭包
-                    // 显式调用窗口控制器的方法让改动立刻生效)。跟经典悬浮窗不同的是灵动岛
-                    // 不需要"保持中心点"的增量调整——它的位置从来都是重新居中算出来的,
-                    // 见 NotchLyricsWindowController.applyContentWidthSetting() 的注释。
+                    // 跟上面经典悬浮窗的"宽度"滑块同一套写法(设置项本身只负责持久化,
+                    // didSet 不碰 NSWindow,这里的 set 闭包显式调用窗口控制器的方法让
+                    // 改动立刻生效)。跟经典悬浮窗不同的是灵动岛不需要"保持中心点"的
+                    // 增量调整——它的位置从来都是重新居中算出来的,见
+                    // NotchLyricsWindowController.applyContentWidthSetting() 的注释。
                     LabeledContent(L10n.t("宽度")) {
                         HStack(spacing: 8) {
                             Slider(value: Binding(
@@ -611,11 +511,6 @@ private struct AppearanceSettingsTab: View {
                         }
                     }
                 }
-                // 从"歌词"tab 的"展示"分组搬过来——用户反馈"状态栏歌词也是个歌词展示
-                // 位置,应该跟桌面悬浮歌词/灵动岛歌词放一起",三个开关概念上都是"歌词
-                // 显示在哪"，不是三件互不相关的事。2026-07-20:文案改成"菜单栏歌词"，
-                // 跟"桌面悬浮歌词"/"灵动岛歌词"这两个"XX歌词"的命名方式统一——原来的
-                // "在状态栏显示当前歌词"是一整句描述,风格上跟另外两个不一致。
                 Toggle(L10n.t("菜单栏歌词"), isOn: $settings.showLyricsInMenuBar)
                 if settings.showLyricsInMenuBar {
                     LabeledContent(L10n.t("超过就截断")) {
@@ -642,9 +537,7 @@ private struct AppearanceSettingsTab: View {
                 // 跟配色是两回事,不该被同一个"主题"捆在一起改(见 ColorTheme.swift)。
                 // 套用即时生效,跟下面手动挪动色板是同一套 Binding,没有额外的"应用"步骤。
                 // Menu 的标签本身显示"当前配色正好等于哪个主题"(不等于任何一个就显示
-                // "自定义")——真机反馈"选了别的也看不出变化",根因是 Menu 标签原来固定
-                // 写死"使用内置预设"这几个字,不管点了哪个都不会变,虽然颜色其实已经真的
-                // 套用上了,但用户完全看不出来。现在标签本身就是最直接的反馈。
+                // "自定义"),作为这个 Menu 唯一的选中反馈。
                 Menu(currentColorThemeLabel) {
                     ForEach(ColorTheme.builtInPresets) { theme in
                         Button(theme.name) { applyColorTheme(theme) }
@@ -728,8 +621,7 @@ private struct AppearanceSettingsTab: View {
                         ),
                         supportsOpacity: true // 描边只让选颜色(含 alpha),粗细是固定常量
                                               // (LyricsOverlayView.swift 的 OptionalTextStroke),
-                                              // 不额外加调节项——延续这个功能原来是"阴影"
-                                              // 时同样的取舍(那时参考的是 LyricsX 的做法)
+                                              // 不额外加调节项——参考的是 LyricsX 的做法。
                     )
                 }
 
@@ -812,13 +704,12 @@ private struct AppearanceSettingsTab: View {
                     }
                 ))
             } header: {
-                // 2026-07-22:"窗口"改名成"悬浮歌词窗口"——用户反馈原来的名字太笼统,
-                // 容易跟"灵动岛歌词"那份独立设置搞混。这个 Section 里"宽度"/"锁定位置"
-                // 两项确实是经典悬浮窗(LyricsOverlayWindowController)专属的,但下面
-                // "截屏/录屏时隐藏"/"暂停/无播放时隐藏"这两个开关其实对灵动岛歌词
+                // 这个 Section 里"宽度"/"锁定位置"两项是经典悬浮窗
+                // (LyricsOverlayWindowController)专属的,但下面"截屏/录屏时隐藏"/
+                // "暂停/无播放时隐藏"这两个开关其实对灵动岛歌词
                 // (NotchLyricsWindowController)同样生效(见各自的 set 闭包,两个控制器
-                // 都会调)——这个新名字对这两项来说不算完全精确,但用户只要求把这个标题
-                // 改清楚、没要求拆分成两个 Section,先按字面执行。
+                // 都会调)——标题"悬浮歌词窗口"对这两项来说不算完全精确,但没有拆分成
+                // 两个 Section。
                 Text(L10n.t("悬浮歌词窗口"))
             } footer: {
                 // footer 挂在整个 Section 上(而不是紧跟某个 Toggle 下面的裸 Text)——
@@ -828,14 +719,10 @@ private struct AppearanceSettingsTab: View {
             }
         }
         .formStyle(.grouped)
-        // 2026-07-21 实测坐实的一类 SwiftUI 刷新缺陷:手动切换语言后,这个 Form 里有些
-        // 文字(尤其是嵌套在自定义子 View/多个 .alert() 修饰符之后的内容)不会立刻跟着
-        // 换,要点开别的分类再点回来才会变过来。具体机制见 AccountLinkingTab.swift 里
-        // DestinationStatus.label 的详细注释——本质是 SwiftUI 判断"要不要重新执行某段
-        // 内容的 body"部分情况下是按这段内容自己的存储属性有没有变来决定的,不是看父
-        // 视图有没有重新渲染。用 .id(L10n.current) 把整个 Form 的"身份"跟当前生效的
-        // 语言绑死,语言一变就强制整个重新构造,不管内部具体是哪个子结构在悄悄跳过
-        // 刷新,一次性堵住整类问题,不需要逐个排查每一处。
+        // SwiftUI 有时不会在语言切换后重新执行某些嵌套内容的 body(取决于该内容自己的
+        // 存储属性有没有变,而非父视图是否重新渲染,详见 AccountLinkingTab.swift 里
+        // DestinationStatus.label 的注释)。用 .id(L10n.current) 把 Form 的身份跟当前
+        // 语言绑死,语言一变就强制整体重新构造,不需要逐个排查哪里在跳过刷新。
     }
 }
 
@@ -857,10 +744,9 @@ private struct GeneralSettingsTab: View {
 
     var body: some View {
         Form {
-            // 2026-07-21:本地数据源从依赖外部 media-control 换成了直接用 AppleScript
-            // 问 Music.app(见 MediaControlClient.swift),这个权限从"可选、只影响播放
-            // 进度精度"变成了"核心路径必需、没有就完全看不到歌词"，加一句 footer 说清楚
-            // 这一点，别让人以为不给也无所谓。
+            // 本地数据源现在通过 AppleScript 直接问 Music.app(见 MediaControlClient.swift),
+            // 这个权限因此从"可选、只影响播放进度精度"变成"核心路径必需、没有就完全
+            // 看不到歌词",footer 特意说清楚这一点,别让人以为不给也无所谓。
             Section {
                 HStack {
                     Label {
@@ -884,10 +770,9 @@ private struct GeneralSettingsTab: View {
             }
             .onAppear { automationStatus = MusicAutomationPermission.check(askIfNeeded: false) }
 
-            // 2026-07-21:collector(读播放状态、抓歌词/封面写本地缓存的后台服务)以前
-            // 只能靠 README 里手动 sed+launchctl 装，现在打包进 .app 里、Settings 这里
-            // 能直接装/卸——跟"权限"那个 Section 一样用图标+文案+按钮而不是简单 Toggle，
-            // 因为需要展示"装了但没跑起来"这种中间态，纯 Toggle 表达不了。
+            // collector(读播放状态、抓歌词/封面写本地缓存的后台服务)跟"权限"那个
+            // Section 一样用图标+文案+按钮而不是简单 Toggle——需要展示"装了但没跑
+            // 起来"这种中间态，纯 Toggle 表达不了。
             Section {
                 HStack {
                     Label {
@@ -931,11 +816,11 @@ private struct GeneralSettingsTab: View {
                 Toggle(L10n.t("在 Dock 中显示"), isOn: $settings.showInDock)
             }
 
-            // 2026-07-21:用户反馈"方便换电脑之类的",加一对导入/导出——导出打包
-            // collector 的 config.json(账号 token 原文都在里面)+ features.json + App
-            // 自己的偏好设置,合并成一份 JSON。刻意跟"导出诊断信息"反着来:那个绝不能带
-            // 任何 token(设计给贴进公开 issue),这个就是要把 token 原样带走(设计给换
-            // 新机器用)——两处的用户提示因此也刻意写成相反的语气。
+            // 导入/导出打包 collector 的 config.json(账号 token 原文都在里面)+
+            // features.json + App 自己的偏好设置,合并成一份 JSON。刻意跟"导出诊断
+            // 信息"反着来:那个绝不能带任何 token(设计给贴进公开 issue),这个就是要把
+            // token 原样带走(设计给换新机器用)——两处的用户提示因此也刻意写成相反的
+            // 语气。
             Section {
                 Button(L10n.t("导出配置…")) { showExportConfigWarning = true }
                 Button(L10n.t("导入配置…")) {
@@ -950,9 +835,9 @@ private struct GeneralSettingsTab: View {
                         showImportConfigConfirm = true
                     }
                 }
-                // 2026-07-22:新增"清除所有配置"——跟上面两个反着来:不是搬一份配置走/
-                // 换一份进来,是直接清空回到刚装完的样子。role: .destructive 让它天生
-                // 就是红色文字,不用另外套样式表明这是危险操作。
+                // "清除所有配置"跟上面两个反着来:不是搬一份配置走/换一份进来,是
+                // 直接清空回到刚装完的样子。role: .destructive 让它天生就是红色文字,
+                // 不用另外套样式表明这是危险操作。
                 Button(L10n.t("清除所有配置…"), role: .destructive) { showClearConfigWarning = true }
             } header: {
                 Text(L10n.t("配置备份"))
@@ -993,14 +878,6 @@ private struct GeneralSettingsTab: View {
             } message: {
                 Text(L10n.t("这会清除所有账号 token、密钥和个人设置，恢复到刚装完时的样子（下次启动会重新走一遍引导向导），且无法撤销。如果还没备份过，建议先点上面「导出配置…」。"))
             }
-            // 2026-07-20:原来这 9 个快捷键挤在同一个"快捷键" Section 里——用户反馈
-            // 设置里"非歌词本身相关的功能配置很混乱",这里正是一处典型:后三个(播放/
-            // 暂停、上一首、下一首)其实是"远程控制 Apple Music 播放"这个附加能力,
-            // 跟悬浮歌词本身没关系,混在一起容易让人以为这是个必需项。拆成两个
-            // Section:前六个(显示/隐藏悬浮歌词/锁定位置/打开歌词管理/打开设置+歌词
-            // 时间轴微调两个)是歌词软件自己的操作,继续叫"快捷键";后三个单独一组,
-            // 标题直接写"（附加功能）"点明性质,不再另加一行解释——用户反馈这类
-            // 补充说明没必要,标题本身已经说清楚了。
             Section(L10n.t("快捷键")) {
                 ShortcutRecorder(L10n.t("显示/隐藏悬浮歌词"), name: .toggleOverlay)
                 ShortcutRecorder(L10n.t("锁定/解锁位置"), name: .toggleLockPosition)
@@ -1026,14 +903,10 @@ private struct GeneralSettingsTab: View {
             }
         }
         .formStyle(.grouped)
-        // 2026-07-21 实测坐实的一类 SwiftUI 刷新缺陷:手动切换语言后,这个 Form 里有些
-        // 文字(尤其是嵌套在自定义子 View/多个 .alert() 修饰符之后的内容)不会立刻跟着
-        // 换,要点开别的分类再点回来才会变过来。具体机制见 AccountLinkingTab.swift 里
-        // DestinationStatus.label 的详细注释——本质是 SwiftUI 判断"要不要重新执行某段
-        // 内容的 body"部分情况下是按这段内容自己的存储属性有没有变来决定的,不是看父
-        // 视图有没有重新渲染。用 .id(L10n.current) 把整个 Form 的"身份"跟当前生效的
-        // 语言绑死,语言一变就强制整个重新构造,不管内部具体是哪个子结构在悄悄跳过
-        // 刷新,一次性堵住整类问题,不需要逐个排查每一处。
+        // SwiftUI 有时不会在语言切换后重新执行某些嵌套内容的 body(取决于该内容自己的
+        // 存储属性有没有变,而非父视图是否重新渲染,详见 AccountLinkingTab.swift 里
+        // DestinationStatus.label 的注释)。用 .id(L10n.current) 把 Form 的身份跟当前
+        // 语言绑死,语言一变就强制整体重新构造,不需要逐个排查哪里在跳过刷新。
     }
 
     private var automationStatusCaption: String {
@@ -1104,12 +977,10 @@ private struct GeneralSettingsTab: View {
 
 // "关于"分类——参考常见 macOS App 的"关于本 App"面板(图标+名称+版本居中,下面分组
 // 罗列简介/仓库链接/版权)。这几项都是静态文本/链接,不需要任何 @Published 状态或
-// 单例,是这几个 tab 里最简单的一个。"歌词数据来源"/"使用的开源库"两块用户反馈不需要
-// 写,已经去掉——只留最基本的身份信息+反馈入口。
+// 单例,是这几个 tab 里最简单的一个,只留最基本的身份信息+反馈入口。
 private struct AboutSettingsTab: View {
-    // CFBundleIconFile 指向的就是新换的那份 AppIcon.icns(build.sh 里 CFBundleName
-    // 生成的 .app 包本身自带),直接读系统认的这份"当前 App 图标",不用再手动拼一遍
-    // Bundle 里的文件路径。
+    // CFBundleIconFile 指向 AppIcon.icns(build.sh 生成的 .app 包本身自带),直接读
+    // 系统认的这份"当前 App 图标",不用再手动拼一遍 Bundle 里的文件路径。
     private var appIcon: NSImage { NSApplication.shared.applicationIconImage }
 
     private var versionString: String {
@@ -1148,10 +1019,10 @@ private struct AboutSettingsTab: View {
                 .buttonStyle(.link)
             }
 
-            // 2026-07-21:用户反馈"在新电脑上有什么问题都排查不了"——collector 日志一直
-            // 写得比较完整,但 App 自己的日志全在系统统一日志里,普通人不会用 Console.app
-            // 去查。这里一键把两边日志+关键状态(权限/常驻服务/各功能是否已配置,不含任何
-            // token 原始值)汇总成一份文本存到桌面,方便贴进 issue 或者发给开发者。
+            // collector 日志一直写得比较完整,但 App 自己的日志全在系统统一日志里,
+            // 普通人不会用 Console.app 去查。这里一键把两边日志+关键状态(权限/常驻
+            // 服务/各功能是否已配置,不含任何 token 原始值)汇总成一份文本存到桌面,
+            // 方便贴进 issue 或者发给开发者。
             Section {
                 Button(L10n.t("导出诊断信息")) {
                     let report = DiagnosticsExporter.buildReport()
@@ -1174,13 +1045,9 @@ private struct AboutSettingsTab: View {
             }
         }
         .formStyle(.grouped)
-        // 2026-07-21 实测坐实的一类 SwiftUI 刷新缺陷:手动切换语言后,这个 Form 里有些
-        // 文字(尤其是嵌套在自定义子 View/多个 .alert() 修饰符之后的内容)不会立刻跟着
-        // 换,要点开别的分类再点回来才会变过来。具体机制见 AccountLinkingTab.swift 里
-        // DestinationStatus.label 的详细注释——本质是 SwiftUI 判断"要不要重新执行某段
-        // 内容的 body"部分情况下是按这段内容自己的存储属性有没有变来决定的,不是看父
-        // 视图有没有重新渲染。用 .id(L10n.current) 把整个 Form 的"身份"跟当前生效的
-        // 语言绑死,语言一变就强制整个重新构造,不管内部具体是哪个子结构在悄悄跳过
-        // 刷新,一次性堵住整类问题,不需要逐个排查每一处。
+        // SwiftUI 有时不会在语言切换后重新执行某些嵌套内容的 body(取决于该内容自己的
+        // 存储属性有没有变,而非父视图是否重新渲染,详见 AccountLinkingTab.swift 里
+        // DestinationStatus.label 的注释)。用 .id(L10n.current) 把 Form 的身份跟当前
+        // 语言绑死,语言一变就强制整体重新构造,不需要逐个排查哪里在跳过刷新。
     }
 }

@@ -7,12 +7,10 @@ private let logger = Logger(subsystem: "com.chenyuhao.lyrimuse", category: "coll
 // (歌词管理保存/删除)和 FeatureSettingsStore(功能开关保存)都要做同一件事,不各自
 // 实现一份。
 //
-// 之前 EnrichCacheStore 里的版本是 fire-and-forget:只检查 Process.run() 有没有抛异常
-// (launchctl 本身起不起得来),不等真正执行完、不看退出码——报不出"launchctl 命令跑完了
-// 但其实失败了"(比如 label 还没被 launchctl 加载过)这种情况。这里补上
-// waitUntilExit()+terminationStatus 检查,返回真实的成功/失败。`launchctl kickstart -k`
-// 本身只是给 launchd 发一条控制指令、不等目标进程完整启动完,同步等它退出不会明显卡住
-// 调用方。
+// 用 waitUntilExit()+terminationStatus 检查真实的成功/失败,不能只看 Process.run() 有
+// 没有抛异常——那只能确认 launchctl 本身起得来,报不出"命令跑完了但其实失败了"(比如
+// label 还没被 launchctl 加载过)这种情况。`launchctl kickstart -k` 本身只是给 launchd
+// 发一条控制指令、不等目标进程完整启动完,同步等它退出不会明显卡住调用方。
 public enum CollectorControl {
     public static let label = "com.lyrimuse.collector"
 

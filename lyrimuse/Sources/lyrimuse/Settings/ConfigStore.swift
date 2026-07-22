@@ -79,8 +79,8 @@ public enum NotificationPlatform: String, CaseIterable, Identifiable, Codable {
 // collector,所以持久化是一个显式调用点,由"推送账号"tab 底部的保存栏触发。
 //
 // isDirty 判定专门跟"已保存快照"比较,不看别的——如果直接读 @Published 字段是否非空,
-// 用户刚敲进去几个字符、还没点保存,状态就会被误判成"已配置/生效中",这是三方设计提案
-// 交叉评审时specifically指出的一个真实隐患,这里刻意避开。
+// 用户刚敲进去几个字符、还没点保存,状态就会被误判成"已配置/生效中",这里刻意避开
+// 这个坑。
 @MainActor
 public final class ConfigStore: ObservableObject {
     public static let shared = ConfigStore()
@@ -148,12 +148,9 @@ public final class ConfigStore: ObservableObject {
     // 返回 nil。
     public var isListenBrainzConfigured: Bool { !savedSnapshot.listenbrainzToken.isEmpty }
 
-    // 2026-07-22:两句 hint 都补上"（可选）"——之前这张卡片没配置时显示的橙色徽标
-    // 跟"缺凭据、还没配好"没区别,但网页展示页的"正在播放"/历史这两项基础功能光配
+    // 两句 hint 都带"（可选）"——网页展示页的"正在播放"/历史这两项基础功能光配
     // ListenBrainz 就够用,state-worker 完全是可选的加分项(留言墙/表情反应/访客计数/
-    // Top10 歌手这几个模块才真的依赖它)。ListenBrainz 那张卡片早就是"未配置（可选）"
-    // 这个写法(见 AccountLinkingTab.destinationStatus 的 .listenBrainz 分支),这里一直
-    // 没跟上,容易让人误以为不配这个是"没配置完"而不是"合理地选择不用"。
+    // Top10 歌手这几个模块才真的依赖它),不该让人误以为不配它是"没配置完"。
     public func stateRelayMissingHint() -> String? {
         if savedSnapshot.stateRelayURL.isEmpty { return L10n.t("还没填服务地址（可选）") }
         if savedSnapshot.stateRelayToken.isEmpty { return L10n.t("还没填访问令牌（可选）") }
@@ -173,8 +170,8 @@ public final class ConfigStore: ObservableObject {
         return nil
     }
 
-    // 改名自 barkMissingHint——推送提醒现在不止 Bark 一个平台,这个判断跟平台无关,
-    // 只看 webhook 地址填没填(平台本身有默认值 .bark,不会缺失)。
+    // 推送提醒支持多个平台,这个判断跟具体平台无关,只看 webhook 地址填没填
+    // (平台本身有默认值 .bark,不会缺失)。
     public func pushMissingHint() -> String? {
         savedSnapshot.notificationWebhookURL.isEmpty ? L10n.t("还没填 webhook 地址") : nil
     }

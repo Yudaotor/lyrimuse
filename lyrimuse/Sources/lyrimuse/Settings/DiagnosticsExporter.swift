@@ -2,17 +2,14 @@ import Foundation
 import OSLog
 import AppKit
 
-// 一键导出诊断信息——用户反馈"在新电脑上排查不了问题":collector 日志一直写得比较完整
-// (~/Library/Logs/applemusic-nowplaying.log,launchd 重定向 stdout/stderr),但 App 自己
-// 的日志全部走 os.Logger(系统统一日志),普通用户不会用 Console.app 去查,也没有导出入口。
-// 这个文件把两边日志 + 关键状态(权限/常驻服务/各功能是否已配置)汇总成一份文本文件,
-// 默认建议存到桌面(用户可以在存储面板里改),存完在 Finder 里选中——不懂技术的人也能
-// 自己导出发过来。
+// 一键导出诊断信息:collector 日志走 ~/Library/Logs/applemusic-nowplaying.log,App 自己
+// 的日志全部走 os.Logger(系统统一日志),普通用户不会用 Console.app 去查。这个文件把
+// 两边日志 + 关键状态(权限/常驻服务/各功能是否已配置)汇总成一份文本文件,方便不懂
+// 技术的用户自己导出发过来排查问题。
 //
 // 安全上的硬约束:绝不能把 ConfigStore 里任何 token/secret 的原始值写进这份文件——这份
 // 文件很可能被贴进公开的 GitHub issue。所有"是否已配置"的判断都复用 ConfigStore 已有的
-// isXConfigured/xMissingHint() 这批只读布尔判断(它们本来就是为了不读原始字段设计的,见
-// ConfigStore.swift 顶部注释),不直接触碰 savedSnapshot 里的字段本身。
+// isXConfigured/xMissingHint() 这批只读布尔判断,不直接触碰 savedSnapshot 里的字段本身。
 enum DiagnosticsExporter {
     static func suggestedFilename() -> String {
         let formatter = DateFormatter()
@@ -21,12 +18,9 @@ enum DiagnosticsExporter {
     }
 
     // 只生成内容,不碰任何文件系统写入——存哪、怎么存交给调用方(SettingsView 用
-    // NSSavePanel)。最早那版直接写 ~/Desktop,真机测试时一度怀疑撞上了 macOS 对桌面/
-    // 文稿/下载三个目录的 TCC 保护——但没能实锤坐实这个具体根因(用来验证的开发环境本身
-    // 那次连读 ~/Desktop 都不行,不能排除是验证手段本身的问题,不是这个 App 真的写失败)。
-    // 不管真实根因是什么,改用 NSSavePanel 都是更稳的写法:写入路径由用户自己在系统
-    // 存储面板里确认,天然不会撞上这三个目录的 TCC 保护,也跟这个项目里选歌词文件夹用
-    // NSOpenPanel 是同一个思路,不用纠结原来那个问题到底是什么。
+    // NSSavePanel)。写入路径由用户自己在系统存储面板里确认,天然不会撞上桌面/文稿/
+    // 下载三个目录可能存在的 TCC 保护,也跟这个项目里选歌词文件夹用 NSOpenPanel 是
+    // 同一个思路。
     @MainActor
     static func buildReport() -> String {
         var lines: [String] = []
@@ -67,10 +61,9 @@ enum DiagnosticsExporter {
     }
 
     // 只查这个 App 自己的 subsystem("com.chenyuhao.lyrimuse",全部 Logger 调用点共用同一个
-    // 值,含 2026-07-22 新加的 lastfm-connect/config-portability 两个 category),不是
-    // 整个系统日志——不需要额外权限,读的也只是自己写过的东西。scope 用 .system
-    // 而不是 .currentProcessIdentifier:后者只能看到"这次启动之后"的记录,诊断"上次为什么
-    // 崩了/上次启动出的问题"这种场景必须能看到上一次进程生命周期里的记录。
+    // 值),不是整个系统日志——不需要额外权限,读的也只是自己写过的东西。scope 用
+    // .system 而不是 .currentProcessIdentifier:后者只能看到"这次启动之后"的记录,诊断
+    // "上次为什么崩了/上次启动出的问题"这种场景必须能看到上一次进程生命周期里的记录。
     private static func recentAppLogLines(hours: Int = 24) -> [String] {
         guard let store = try? OSLogStore(scope: .system) else {
             return ["(could not open log store)"]

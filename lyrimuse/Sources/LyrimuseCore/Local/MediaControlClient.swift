@@ -1,14 +1,10 @@
 import Foundation
 
-// 2026-07-21:不再依赖外部 `media-control`(需要 `brew install`,私有 MediaRemote 框架的
-// 社区逆向实现)——改用 AppleScript(JXA)直接问 Music.app 本身要"现在在放什么"。
-// 用户反馈"这个能不能不用装"，查证后确认:①这台机器上被 media-control 绕开的那个
-// "自动化"权限，本来就已经是这个 App 的"精确追踪播放进度"功能在用的同一个权限
-// (MusicAutomationPermission)，只是从"可选、没有就退化成估算"变成了"核心路径必需"；
-// ②`media-control` 的实现方式是自带一份 `MediaRemoteAdapter.framework` + 一段 Perl
-// 脚本去访问私有 MediaRemote 框架，不是"随便装个库"这么简单，也没法简单地把这套没有
-// 文档、可能随系统版本失效的私有技巧搬进这个 App 自己的二进制——用 AppleScript 这条
-// 苹果官方支持、系统自带的路径换掉它，不需要用户再多装一个 Homebrew 包。
+// 用 AppleScript(JXA)直接问 Music.app 本身要"现在在放什么",不依赖外部 `media-control`
+// (需要 `brew install`,自带一份 `MediaRemoteAdapter.framework` + 一段 Perl 脚本去访问
+// 私有 MediaRemote 框架,没有文档、可能随系统版本失效)。两者需要的都是同一个"自动化"
+// 权限(MusicAutomationPermission),换成 AppleScript 这条苹果官方支持、系统自带的路径,
+// 不需要用户再多装一个 Homebrew 包。
 //
 // 返回值特意拼成跟旧版 `media-control get` 完全相同的 JSON 形状(title/artist/album/
 // duration/elapsedTime/playing/playbackRate/isMusicApp/bundleIdentifier)——

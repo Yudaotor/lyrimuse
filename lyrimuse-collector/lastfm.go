@@ -116,7 +116,6 @@ func (s *lastfmScrobbler) scrobble(ctx context.Context, artist, track, album str
 // track.scrobble)镜像出去——不阻塞 poll 循环(Last.fm 可能慢/抽风),失败只记日志不
 // 重试(下一次 poll/scrobble 自然会覆盖)。goroutine 自带超时上限,不会泄露(同
 // resolveEnrichAsync 的模式)。s==nil(未配置镜像凭证)时整体跳过,call 不会被执行。
-// 原来 mirrorNowPlaying/mirrorScrobble 是两份几乎逐行相同的样板代码,合并成这一个。
 func mirrorAsync(s *lastfmScrobbler, what string, call func(ctx context.Context) error) {
 	if s == nil {
 		return

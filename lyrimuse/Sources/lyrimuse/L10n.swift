@@ -1,34 +1,27 @@
 import Foundation
 
-// 本地化查找——不用 SwiftUI Text(_:LocalizedStringKey) 自带的自动语言协商,原因是
-// 2026-07-18 真机实测坐实的一个坑:这台没装完整 Xcode、纯用 `swift build` 编译的机器上,
-// SwiftPM 打包 .lproj 资源时会把目录名强制转小写(源码里写 zh-Hans.lproj,打包出来的
-// Bundle 里变成 zh-hans.lproj)。Apple 的 Bundle.preferredLocalizations 自动协商机制
-// 依赖精确匹配 BCP-47 语言标签的大小写,这一变小写就导致协商彻底失效——不管系统语言
-// 设成中文还是英文、也不管用 `-AppleLanguages` 启动参数怎么覆盖,自动协商永远只认到
-// "en"(实测坐实,不是猜测)。绕开办法:自己读 Locale.preferredLanguages 判断该用哪个
-// 语言,再手动定位到对应的 .lproj 目录、从这个具体路径构造 Bundle 直接查——这条路径
-// 已经验证不受"目录名被打小写"影响,协商也不再依赖失效的自动机制。
+// 本地化查找——不用 SwiftUI Text(_:LocalizedStringKey) 自带的自动语言协商,原因是一个
+// 坑:纯用 `swift build`(没装完整 Xcode)编译时,SwiftPM 打包 .lproj 资源会把目录名
+// 强制转小写(源码里写 zh-Hans.lproj,打包出来的 Bundle 里变成 zh-hans.lproj)。Apple
+// 的 Bundle.preferredLocalizations 自动协商依赖精确匹配 BCP-47 语言标签的大小写,一变
+// 小写协商就彻底失效——不管系统语言设成中文还是英文,自动协商永远只认到 "en"。绕开
+// 办法:自己读 Locale.preferredLanguages 判断该用哪个语言,再手动定位到对应的 .lproj
+// 目录、从这个具体路径构造 Bundle 直接查,不受目录名被打小写影响。
 //
-// 2026-07-21:查找起点从 `Bundle.module`(SwiftPM 生成的资源包访问器)换成了
-// `Bundle.main`——起因是给这次的 GitHub Actions 发布流水线做调研时读了
-// `resource_bundle_accessor.swift` 生成的源码才发现:那个访问器只认两个位置,一个是
-// `.app` 包的根目录(故意不放东西进去,放了会导致 codesign 报"unsealed contents
-// present in the bundle root"直接拒签,见 build.sh 里的历史注释),另一个是**写死指向
-// 这台开发机的绝对路径**——在任何别的机器上这两条路径全部失效,`Bundle.module` 会在
-// 第一次被访问时直接 `Swift.fatalError`,而 Swift 的 fatalError 不可捕获,意味着别人的
-// 机器打开这个 App(不管是自己 clone 源码构建,还是以后下载预编译包)几乎必崩。改成
-// `Bundle.main` 后,`.lproj` 目录直接放在 `Contents/Resources/` 下(build.sh 里新增的
-// 拷贝步骤)——这是 Apple 原生支持、不依赖任何机器的标准位置。
+// 查找起点用 `Bundle.main` 而不是 `Bundle.module`(SwiftPM 生成的资源包访问器)——
+// 那个访问器只认两个位置:`.app` 包根目录(故意不放东西进去,放了会导致 codesign 报
+// "unsealed contents present in the bundle root"直接拒签,见 build.sh)和**写死指向
+// 开发机的绝对路径**,在别的机器上两条路径都失效,`Bundle.module` 会在第一次被访问时
+// 直接 `Swift.fatalError`(不可捕获),意味着别人的机器打开这个 App 几乎必崩。改成
+// `Bundle.main` 后,`.lproj` 目录直接放在 `Contents/Resources/` 下(build.sh 里的拷贝
+// 步骤)——这是 Apple 原生支持、不依赖任何机器的标准位置。
 //
-// 目前只做中/英两档:preferredLanguages 第一项以 "zh" 开头就用中文包,否则一律退到
-// 英文包。要支持更多语言,只需要:①在 Resources/ 下加一个新的 `<lang>.lproj/
-// Localizable.strings`(文件名用小写,跟这里打包出来的实际目录名一致);②在 `current`
-// 这个计算属性里加一条判断分支返回对应的目录名。查找/兜底逻辑(bundle/t(_:))完全不用
-// 改,天然对更多语言开放。
+// 目前只做中/英两档:preferredLanguages 第一项以 "zh" 开头就用中文包,否则退到英文包。
+// 要支持更多语言:①在 Resources/ 下加 `<lang>.lproj/Localizable.strings`(文件名小写,
+// 跟打包出来的实际目录名一致);②在 `current` 里加一条判断分支返回对应目录名。查找/
+// 兜底逻辑(bundle/t(_:))不用改。
 enum L10n {
-    // 2026-07-18:加"通用"tab 里的手动语言切换开关后,current/bundle 从原来的
-    // `static let`(进程启动时算一次、之后永不变)改成每次读都重新解析——否则运行期切换
+    // current/bundle 每次读都重新解析,不用 `static let` 一次性缓存——否则运行期切换
     // 语言不会立刻生效,得强制重启 App。这里故意不 import AppSettings.shared 来读这个
     // 手动覆盖值:AppSettings 是 `@MainActor` 单例,L10n 是给任何上下文调用的纯查找
     // 工具,不该反过来背上 actor 隔离;两处各自独立读写同一个 UserDefaults key

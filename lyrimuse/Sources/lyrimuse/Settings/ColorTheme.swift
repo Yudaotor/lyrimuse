@@ -1,13 +1,10 @@
 import Foundation
 
-// 经典悬浮窗"配色主题"——用户反馈现在文字/背景/描边颜色只能逐项手动调,没有"内置预设
-// 一键套用"、也没有"把调好的一套另存复用"这两层(对标 PlayStatus/Lyricify/AlgerMusicPlayer/
-// HotLyric/VutronMusic 都有的配色主题功能)。只打包这四个"配色"相关字段(不含字体/字号——
-// 那是排版,不是配色,两者概念上不是一回事,不该被同一个"主题"捆在一起改动)。
-//
-// 2026-07-22:textShadowEnabled/textShadowColorHex 改名成 textStrokeEnabled/
-// textStrokeColorHex——渲染效果从模糊阴影换成了实心描边(见 LyricsOverlayView.swift
-// 的 OptionalTextStroke),字段名跟着改,不留旧名字造成"名不副实"。
+// 经典悬浮窗"配色主题"——内置预设一键套用 + 自定义主题另存复用,对标 PlayStatus/
+// Lyricify/AlgerMusicPlayer/HotLyric/VutronMusic 都有的配色主题功能。只打包这四个
+// "配色"相关字段(不含字体/字号——那是排版,不是配色,两者概念上不是一回事,不该被同一个
+// "主题"捆在一起改动)。textStrokeEnabled/textStrokeColorHex 对应的渲染效果是实心描边
+// (非模糊阴影,见 LyricsOverlayView.swift 的 OptionalTextStroke)。
 public struct ColorTheme: Codable, Identifiable, Hashable {
     public var id: String
     public var name: String
@@ -34,14 +31,11 @@ extension ColorTheme {
     // id 用固定字符串(不是随手 UUID())——内置预设每次启动都是同一份字面量构造出来的
     // 新实例,固定 id 才能让"当前配色是不是正好等于某个内置预设"这类比较(如果以后需要)
     // 有意义;用户自己存的自定义主题才用随机 UUID(见 SettingsView 里"存为新主题"那处)。
-    // 用户反馈带阴影的几个预设"太丑了"——统一去掉阴影(现已改名描边,见上面字段改名
-    // 说明),四个预设的 textStrokeEnabled 都是 false(textStrokeColorHex 留着一个
-    // 合理默认值,单纯是给用户手动重新打开描边开关时有个还算顺眼的起始值,不影响预设
-    // 本身的观感)。
-    // 2026-07-22:新增"经典黑字",跟"经典白字"对称的黑字版本——同时被定为
-    // defaultTheme(见下方),取代了之前散落在 AppSettings.init() 和 SettingsView"恢复
-    // 默认外观"按钮两处各自硬编码一遍的默认配色字面量(那两处这次改成统一引用这一个值,
-    // 不再有两份可能悄悄不同步的硬编码)。
+    // 四个预设的 textStrokeEnabled 都是 false(textStrokeColorHex 留着一个合理默认值,
+    // 单纯是给用户手动重新打开描边开关时有个还算顺眼的起始值,不影响预设本身的观感)。
+    // "经典黑字"跟"经典白字"对称,同时被定为 defaultTheme(见下方)——AppSettings.init()
+    // 和 SettingsView"恢复默认外观"按钮统一引用这一个值,不再各自硬编码一遍默认配色
+    // 字面量。
     public static let classicBlack = ColorTheme(
         id: "builtin-classic-black", name: L10n.t("经典黑字"),
         foregroundColorHex: "#000000FF", backgroundColorHex: "#00000000",

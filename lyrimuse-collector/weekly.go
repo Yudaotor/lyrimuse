@@ -180,7 +180,7 @@ func mostRecentMonday(t time.Time) time.Time {
 // 已经收官的新周，有就拉统计推一条通知。数据源按 features.WeeklyDigestSource 解析
 // (见 digest.go 的 resolveDigestSource)：
 //   - Last.fm：周边界用它自己的图表周(lastfmWeeklyChartList，按首次 scrobble 日期定，
-//     不一定是周一)——这是原有行为，选这个源时完全不变。
+//     不一定是周一)。
 //   - ListenBrainz：没有等价的"图表周"概念，边界改用自算的 ISO 周(周一到下周一，见
 //     mostRecentMonday)，取"最近一个已经完整过完的自然周"。
 //

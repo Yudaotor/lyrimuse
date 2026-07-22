@@ -5,10 +5,9 @@ import os
 
 private let logger = Logger(subsystem: "com.chenyuhao.lyrimuse", category: "coordinator")
 
-// 2026-07-20:去掉了远程(relay,读网页版同一个 state-worker /now)这个数据源选项——
-// 用户反馈"这个可配置项没必要，默认本地就好"。现在只有本地 media-control 这一个
-// 数据源,这个类退化成 LocalPlaybackSource 的一层薄转发,但还是留着这一层不直接让
-// UI 碰 LocalPlaybackSource.shared——万一以后又要接别的数据源,UI 层不用跟着改。
+// 目前只有本地 media-control 一个数据源,这个类退化成 LocalPlaybackSource 的一层薄
+// 转发,但还是留着这一层不直接让 UI 碰 LocalPlaybackSource.shared——万一以后又要接
+// 别的数据源,UI 层不用跟着改。
 @MainActor
 final class PlaybackCoordinator: ObservableObject {
     static let shared = PlaybackCoordinator()
@@ -27,8 +26,8 @@ final class PlaybackCoordinator: ObservableObject {
     private init() {}
 
     // 供 EnrichCacheStore 保存/删除/移除逐字后调用——默认只在"换歌"那一刻才重新读
-    // 歌词,同一首歌播放中途改了缓存内容不会自动生效(这正是"改完歌词、悬浮窗还是
-    // 旧版本"这个反馈的根因),这里直接读磁盘,写完盘立刻调用就行。
+    // 歌词,同一首歌播放中途改了缓存内容不会自动生效,这里直接读磁盘强制刷新,写完盘
+    // 立刻调用就行。
     func refreshLyricsForCurrentTrack() {
         LocalPlaybackSource.shared.forceReloadLyricsForCurrentTrack()
     }

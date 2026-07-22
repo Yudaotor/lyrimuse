@@ -59,13 +59,8 @@ var dailyDigestPath string
 // dailyDigest 检查(至多每 dailyDigestCheckInterval 一次)当地时间是否已经到了
 // dailyDigestTriggerHour、且今天还没推送过，是的话按 features.DailyDigestSource 解析出
 // 的数据源(Last.fm 或 ListenBrainz，见 digest.go 的 resolveDigestSource)拉今天的统计
-// 推一条报告。
-//
-// 2026-07-22:最初这里写死只认 ListenBrainz(以为 Last.fm 的榜单接口只能按"周"取数)，
-// 真机实测坐实 user.getWeeklyTrackChart/getWeeklyArtistChart 其实接受任意 from/to，
-// 用户因此要求两个 cadence 都能自己选账号——现在两条路径(lastfmDigestStats/
-// listenbrainzDigestStats)都定义在 digest.go，这里只负责"判断该不该触发+选哪个源+
-// 传今天的时间范围"，取数/聚合/拼文案的逻辑不在这个文件里重复一份。
+// 推一条报告。取数/聚合/拼文案的逻辑统一定义在 digest.go(lastfmDigestStats/
+// listenbrainzDigestStats)，这里只负责判断该不该触发、选哪个源、传今天的时间范围。
 func (p *poller) dailyDigest(now time.Time) {
 	if !features.DailyDigest || p.lb.alerter == nil || p.lb.alerter.url == "" {
 		return

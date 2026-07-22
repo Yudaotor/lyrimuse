@@ -37,10 +37,9 @@ type config struct {
 	// "feishu"/"serverchan"),NotificationWebhookURL 是对应平台的 webhook 地址,留空
 	// 则不推。
 	//
-	// 这个字段最早只支持 Bark、就叫 BarkURL,JSON key 也是 bark_url——加了平台选择
-	// 之后没有把 on-disk key 一起改名(改 key 要处理旧配置迁移,这里 Go 字段名换成
-	// 通用的 NotificationWebhookURL 就已经足够反映"不只是 Bark 专属"这件事,JSON tag
-	// 留着旧名字不影响任何人,还省了一次没必要的迁移)。
+	// 字段名 NotificationWebhookURL 与 JSON tag bark_url 不一致是有意保留:这个字段
+	// 最早只支持 Bark,加了平台选择后为避免旧配置迁移成本,没有把 on-disk key 一并
+	// 改名——Go 字段名换成通用名字就已经足够反映"不只是 Bark 专属"。
 	NotificationPlatform   string `json:"notification_platform,omitempty"`
 	NotificationWebhookURL string `json:"bark_url,omitempty"`
 	// DingtalkSignSecret/FeishuSignSecret 只有对应平台的机器人开了"加签"安全设置时

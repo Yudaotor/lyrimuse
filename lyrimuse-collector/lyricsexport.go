@@ -27,14 +27,11 @@ func splitEnrichKey(key string) (artist, title, album string) {
 
 // lyricsFileHeader 拼出 .lrc/.yrc 文件顶部统一的头部标签块。
 //
-// 2026-07-15: 这个头部是"歌词部分以 lyrics/ 文件夹为权威源"改造的核心——
-// sanitizeLyricsFilename 是单向有损转换(替换掉 "|" 和文件系统非法字符),不能从文件名
-// 反推出原始的 artist|title|album,所以"这个文件对应哪首歌"必须能从文件内容本身准确
-// 还原,而不是依赖文件名。这里用真实(未经 sanitizeLyricsFilename 转义)的歌手/歌名/
-// 专辑名写标准 LRC 的 [ar:]/[ti:]/[al:] 标签——顺带这也是任何 .lrc 播放器/工具都认识
-// 的写法,文件本身看起来就"像样"。source/manual 是非标准但无害的自定义标签,Swift 的
-// LRCParser/YRCParser(以及任何其它 LRC 解析器)只认时间戳格式的行,这几行匹配不上会被
-// 直接跳过,不需要改任何解析器。
+// sanitizeLyricsFilename 是单向有损转换,不能从文件名反推出原始的 artist|title|album,
+// 所以文件对应哪首歌必须能从文件内容本身准确还原。这里用真实(未转义)的歌手/歌名/专辑
+// 名写标准 LRC 的 [ar:]/[ti:]/[al:] 标签,顺带也是任何 .lrc 工具都认识的写法。
+// source/manual 是非标准但无害的自定义标签,Swift 的 LRCParser/YRCParser 只认时间戳
+// 格式的行,匹配不上会直接跳过,不需要改任何解析器。
 func lyricsFileHeader(artist, title, album, source string, manual bool) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "[ar:%s]\n[ti:%s]\n[al:%s]\n", artist, title, album)
@@ -57,22 +54,15 @@ var lyricsFileSuffixes = [4]string{".lrc", ".tr.lrc", ".roma.lrc", ".yrc"}
 // currently has lyrics, one level outside enrichCache. Full sweep over
 // enrichCache every call.
 //
-// 2026-07-15: 这个函数现在是"歌词部分以 lyrics/ 文件夹为权威源"改造里 Go 这一侧的主
-// 写入路径(配合 importLyricsFromFiles 做启动时的调和),不再只是一个"顺手导出存档"的
-// 次要功能——因此这次把之前只导出纯 Lyrics 一个字段的范围,扩成歌词家族全部 6 个字段
-// (含 LyricsTr/LyricsRoma/LyricsYRC/LyricsSource/ManualLyrics,后两者进头部标签)。
-// 对每个 key 的 4 个可能后缀都显式做"该有就写、不该有就删"——比如某条目原来有逐字
-// 时间轴、后来通过 removeWordTiming 清空了,这里要把之前导出的 .yrc 文件一并删掉,
+// 是"歌词部分以 lyrics/ 文件夹为权威源"里 Go 侧的主写入路径(配合 importLyricsFromFiles
+// 做启动时的调和)。对每个 key 的 4 个可能后缀都显式做"该有就写、不该有就删"——比如某
+// 条目的逐字时间轴被 removeWordTiming 清空了,这里要把之前导出的 .yrc 文件一并删掉,
 // 否则下次启动 importLyricsFromFiles 会把这个残留文件当成"文件夹里有数据"重新读回来,
-// 悄悄撤销用户刚做的"移除逐字时间轴"操作。
+// 悄悄撤销刚做的"移除逐字时间轴"操作。
 //
-// 2026-07-14 之前的注释(仍然成立,只是范围从"只有 .lrc"扩到"整个文件族"):deleting an
-// entry via desktop-lyrics's 歌词管理 window removes the corresponding files itself
-// right after removing the cache entry — this Go-side sweep has no concept of "this
-// key was just explicitly deleted" vs. "this key never existed", so the
-// deletion-cleanup responsibility for a still-existing entry's *stale variant files*
-// (see above) lives here, while whole-entry deletion cleanup lives in Swift (and, for
-// hand-deleted files, in importLyricsFromFiles's own "second pass").
+// 整条目删除的清理走 Swift 侧(desktop-lyrics 的"歌词管理"窗口删除时会同时删文件),
+// 这里的 Go-side sweep 无法区分"这个 key 刚被显式删除"和"这个 key 从未存在过",所以
+// 只负责清理仍存在条目的*过期变体文件*(如上)。
 func exportLyricsFiles() {
 	if lyricsDir == "" {
 		return
@@ -92,11 +82,10 @@ func exportLyricsFiles() {
 		}
 		artist, title, album := splitEnrichKey(key)
 		if artist == "" || title == "" {
-			// 防御性跳过:真机实测坐实过一次(见 lyricsimport.go 的 parseLyricsFile
-			// 注释)"artist/title 是空的"这种残缺 key 混进 enrichCache、被这里毫无
-			// 保留地导出成头部同样残缺的文件,再被导入逻辑当成合法数据循环放大的事故。
-			// 正常情况下 trackEnrichment 的 title=="" 早退+key 本身的构造方式,不会
-			// 产生这种记录;这里只是多一层保险,不指望这个分支真的常被命中。
+			// 防御性跳过:避免"artist/title 是空的"这种残缺 key 混进 enrichCache 时,
+			// 被这里导出成头部同样残缺的文件,再被导入逻辑当成合法数据循环放大(见
+			// lyricsimport.go 的 parseLyricsFile 注释)。正常情况下 trackEnrichment 的
+			// title=="" 早退+key 本身的构造方式,不会产生这种记录,这里只是多一层保险。
 			continue
 		}
 		jobs = append(jobs, entryJob{
@@ -113,17 +102,14 @@ func exportLyricsFiles() {
 		return
 	}
 
-	// 2026-07-15 真机实测坐实(不是假设的边界情况):macOS 默认文件系统(APFS)大小写
-	// 不敏感、只保留显示大小写——这个项目本来就有一个已知的、会反复复现的数据问题
-	// (media-control 偶尔读到的专辑名大小写跟 Music.app 真实库 tag 不一致,同一首歌
-	// 因此长出两条大小写不同的缓存条目,例如 "History Continues" 和 "HIStory
-	// Continues")。这类 key 各自 sanitizeLyricsFilename 出来的文件名只有大小写不同,
-	// 在这台文件系统上其实是同一个文件——先写的那条会被后写的那条悄悄覆盖,是真实的
-	// 数据丢失,不只是"文件名不好看"。所以按"文件系统实际会认成同一份文件"的键
+	// macOS 默认文件系统(APFS)大小写不敏感、只保留显示大小写——而这个项目本来就有个
+	// 已知问题:media-control 偶尔读到的专辑名大小写跟 Music.app 真实库 tag 不一致,
+	// 同一首歌因此长出两条大小写不同的缓存条目。这类 key 各自 sanitizeLyricsFilename
+	// 出来的文件名只有大小写不同,在这台文件系统上其实是同一个文件,先写的会被后写的
+	// 悄悄覆盖,是真实的数据丢失。所以按"文件系统实际会认成同一份文件"的键
 	// (sanitizeLyricsFilename 结果统一转小写)分组,组内 ≥2 个不同 key 撞车的,给
-	// 组里全部 key(不只是从第二个开始)都加一个确定性哈希后缀——用哈希而不是遇到
-	// 顺序决定谁加后缀,不受 Go map 遍历顺序(每次进程重启都随机)影响,同一个 key
-	// 每次都落在同一个文件名上,不会一会儿叫这个名字一会儿叫那个名字。
+	// 全部 key(不只是从第二个开始)都加一个确定性哈希后缀——用哈希而非遇到顺序决定,
+	// 不受 Go map 遍历顺序(每次进程重启都随机)影响,同一个 key 每次都落在同一个文件名。
 	byFold := make(map[string][]int, len(jobs))
 	for i, j := range jobs {
 		fold := strings.ToLower(sanitizeLyricsFilename(j.key))
@@ -145,12 +131,9 @@ func exportLyricsFiles() {
 		if !ok {
 			base = sanitizeLyricsFilename(j.key)
 		} else {
-			// 这个 key 这次被判定需要消歧——顺手清掉它在"未加哈希后缀的原始文件名"下
-			// 可能残留的旧文件。那个文件名现在同时"属于"碰撞组里好几个 key,内容早晚
-			// 会被其中某一个的写入弄乱,留着只会制造一份意义不明的孤儿文件(而且下次
-			// importLyricsFromFiles 扫描时会把它当成第三个可以解析出 key 的分组,虽然
-			// 无害——导入是只增不改的,内容碰巧一致时不会有副作用——但没有理由留着这份
-			// 混淆视听的文件)。
+			// 这个 key 被判定需要消歧——顺手清掉它在"未加哈希后缀的原始文件名"下可能
+			// 残留的旧文件:那个文件名现在同时"属于"碰撞组里好几个 key,内容早晚会被
+			// 其中某一个的写入弄乱,留着只是一份意义不明的孤儿文件。
 			plainBase := sanitizeLyricsFilename(j.key)
 			for _, suffix := range lyricsFileSuffixes {
 				_ = os.Remove(filepath.Join(lyricsDir, plainBase+suffix))

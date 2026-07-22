@@ -95,16 +95,13 @@ func qqSmartbox(query string) []qqSmartboxItem {
 	return out.Data.Song.ItemList
 }
 
-// qqSingerAvatar 给"历史播放 Top10 歌手"(见 topartists.go)查一张歌手头像——用的还是
-// smartbox_new.fcg 这同一个免认证接口,只是这次读响应里的"singer"分类(qqSmartbox 只读
-// 了"song"分类,两者是同一份 JSON 里并列的不同板块,所以是各自独立发一次请求、不能共用
-// 同一个 http.Response)。这个项目给中文内容找封面/歌词一贯优先 QQ 音乐/网易云而不是
-// 泛用的西方服务(见 qq.go/netease.go 其余部分),这次选头像来源同理:实测坐实对
-// 方大同/陶喆/周杰伦这类中文歌手、以及 Michael Jackson/Taylor Swift/Prince 这类西方
-// 歌手都有覆盖,是真实按 mid 区分的歌手照(不是占位图)。只取第一个结果,不做
-// artistMatches 那类严格核验——这里只是找一张装饰用的头像,不是核实版权归属,找错了
-// 最多是头像不准,不像歌词/封面匹配错那样是功能性 bug,用不着那套严格流程。查不到/
-// 网络失败返回空,调用方(topartists.go 的 resolveArtistAvatar)会转去 Deezer 兜底。
+// qqSingerAvatar 给"历史播放 Top10 歌手"(见 topartists.go)查一张歌手头像,复用
+// smartbox_new.fcg 这同一个免认证接口,但读的是响应里的"singer"分类(qqSmartbox 只读
+// "song"分类,两者是同一份 JSON 里并列的不同板块,需各自独立请求、不能共用同一个
+// http.Response)。只取第一个结果,不做 artistMatches 那类严格核验——这里只是找一张
+// 装饰用的头像,不是核实版权归属,找错了最多是头像不准,不像歌词/封面匹配错那样是
+// 功能性 bug。查不到/网络失败返回空,调用方(topartists.go 的 resolveArtistAvatar)
+// 会转去 Deezer 兜底。
 func qqSingerAvatar(name string) string {
 	u := "https://c.y.qq.com/splcloud/fcgi-bin/smartbox_new.fcg?_=1&cv=4747474&ct=24&format=json&is_xml=0&key=" + neturl.QueryEscape(name)
 	req, err := http.NewRequest(http.MethodGet, u, nil)
@@ -137,9 +134,9 @@ func qqSingerAvatar(name string) string {
 	if pic == "" {
 		return ""
 	}
-	// 接口给的是 150x150 缩略图(跟 qqSongCoverAndSinger 拼专辑封面同一个 CDN 套路),实测
-	// 把分辨率前缀换成 300x300、协议换成 https 同一个 mid 都能正常取到更清晰的图,页面本身
-	// 全程 https,混合内容图片在部分浏览器/CSP 下有被拦截的风险,统一升级成 https 更稳妥。
+	// 接口给的是 150x150 缩略图(跟 qqSongCoverAndSinger 拼专辑封面同一个 CDN 套路),把
+	// 分辨率前缀换成 300x300、协议换成 https 同一个 mid 也能取到更清晰的图;页面本身全程
+	// https,混合内容图片在部分浏览器/CSP 下有被拦截风险,统一升级更稳妥。
 	pic = strings.Replace(pic, "R150x150", "R300x300", 1)
 	pic = strings.Replace(pic, "http://", "https://", 1)
 	return pic
@@ -225,8 +222,8 @@ func qqSongCoverAndSinger(mid string) (cover, singer string) {
 
 // qqCoverFallback finds an official-artist cover via QQ Music for when
 // NetEase's own catalog has no genuine match for this artist — rights-
-// withdrawn artists (Jay Chou is the case that surfaced this; 实测坐实见
-// artistMatches 注释) are absent from NetEase entirely, so searching there
+// withdrawn artists (Jay Chou is the case that surfaced this; see the
+// artistMatches comment) are absent from NetEase entirely, so searching there
 // only turns up impersonator accounts. Requires a strict (non-loose) artist
 // match on BOTH the smartbox search hit and the detail-lookup singer field,
 // so a QQ-side impersonator/cover account can't slip through either step.
@@ -432,8 +429,7 @@ func resolveQQLyric(mid string) string {
 // 一套 API 家族(JSON-RPC 风格,comm+request 外壳),需要:①先建一个匿名 session(不需要
 // 登录);②数字型 songID(不是到处传的 mid 字符串,复用 fcg_play_single_song.fcg 这个
 // 已经在用的单曲详情接口额外取一下);③响应内容是 3DES 加密+zlib压缩的 XML,解出来的
-// LyricContent 属性里才是真正的逐字歌词正文。密钥/算法已用真实歌曲验证解密成功(含
-// 用户反馈"没有逐字"的方大同《GF》)。
+// LyricContent 属性里才是真正的逐字歌词正文。密钥/算法已用真实歌曲验证解密成功。
 
 type qqSessionInfo struct {
 	uid    string
@@ -609,10 +605,10 @@ var qrcDESKey = []byte("!@#)(*$%123ZXC!@!@#)(NHL")
 
 // decryptQRC 对 GetPlayLyricInfo 返回的 hex 编码密文做 3DES-ECB 解密(8 字节一块、块间
 // 互不链接) + zlib 解压,得到内层 XML
-// (<QrcInfos>...<Lyric_N LyricType="..." LyricContent="...">...)。**不能用 Go 标准库
-// crypto/des**——实测坐实标准 FIPS-46 DES 解不出合法 zlib 流(先报 zlib: invalid
-// header),QQ 音乐这份密文匹配的是社区逆向出的那个特定位运算实现(见 des3_qmusic.go
-// 顶部注释),必须用 qm3DESDecrypt。
+// (<QrcInfos>...<Lyric_N LyricType="..." LyricContent="...">...)。不能用 Go 标准库
+// crypto/des——标准 FIPS-46 DES 解不出合法 zlib 流(先报 zlib: invalid header),QQ 音乐
+// 这份密文匹配的是社区逆向出的特定位运算实现(见 des3_qmusic.go 顶部注释),必须用
+// qm3DESDecrypt。
 func decryptQRC(hexStr string) string {
 	raw, err := hex.DecodeString(hexStr)
 	if err != nil || len(raw) == 0 || len(raw)%8 != 0 {

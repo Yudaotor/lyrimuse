@@ -26,10 +26,10 @@ struct HelpButton: View {
                 Text(text).font(.callout)
                 if let docTitle, let docURL {
                     // 用 Button+NSWorkspace.shared.open 而不是 SwiftUI 的 Link——Link 对
-                    // file:// scheme 的 URL 在这个 app 里点了没反应(实测坐实:docURL 指向本地
-                    // README.md 时完全无响应),NSWorkspace.shared.open 是这个项目里已经验证过
-                    // 能正常工作的开文件/开链接方式(见 SettingsView.swift「打开歌词文件夹」),
-                    // 对 http(s) 链接同样有效(交给默认浏览器打开),统一用这一种方式两种场景都覆盖。
+                    // file:// scheme 的 URL 在这个 app 里点了没反应(docURL 指向本地 README.md
+                    // 时完全无响应),NSWorkspace.shared.open 是这个项目里已经验证过能正常
+                    // 工作的开文件/开链接方式(见 SettingsView.swift「打开歌词文件夹」),对
+                    // http(s) 链接同样有效(交给默认浏览器打开),统一用这一种方式两种场景都覆盖。
                     Button(docTitle) { NSWorkspace.shared.open(docURL) }
                         .buttonStyle(.link)
                         .font(.callout)

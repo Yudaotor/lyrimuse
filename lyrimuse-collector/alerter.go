@@ -13,11 +13,9 @@ import (
 )
 
 // alerter 推送一条通知。platform 决定 push() 怎么拼 body/URL——见 notify.go 的
-// buildNotifyPayload/dingtalkSignedURL/feishuSign。
-//
-// 2026-07-20:去掉了 ok()/fail() 这套"故障告警"(连续失败 N 次才推、恢复时再推一次)——
-// 用户反馈"压根不需要告警故障了",这是彻底删掉这个能力,不是简化成默认开启(跟同一天
-// 删掉的其它几个开关不一样)。weeklyDigestPush 还在用这个类型的 push(),那部分保留。
+// buildNotifyPayload/dingtalkSignedURL/feishuSign。这里不再有故障告警(连续失败 N
+// 次才推、恢复时再推一次)的 ok()/fail() 逻辑,该能力已整体下线;weeklyDigestPush
+// 仍复用这个类型的 push()。
 type alerter struct {
 	platform       string
 	url            string

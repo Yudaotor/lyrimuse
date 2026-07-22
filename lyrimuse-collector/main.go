@@ -71,30 +71,26 @@ func main() {
 	// listenbrainz_token 是可选的:没填也能正常启动,只是不会提交到 ListenBrainz(见
 	// lbClient.submit 里的空 token 直接跳过网络调用)——media-control 采集、歌词/封面
 	// 解析、写本地缓存(desktop-lyrics 悬浮窗要用的那份)全都照常工作,不依赖这个 token。
-	// 2026-07-17 前这里是 log.Fatalf 强制要求,哪怕只想用悬浮歌词也得先注册一个
-	// ListenBrainz 账号——现在只提醒一下,不再拦启动。
 	if cfg.Token == "" {
 		log.Printf("no listenbrainz_token configured: ListenBrainz submission disabled, running locally only (media-control + lyrics/cover enrichment still work)")
 	}
-	// 2026-07-15:desktop-lyrics"设置"窗口的"功能开关"分组写这份共享文件,collector
-	// 启动时读一次(没有文件监听,改了要重启才生效,跟 config.json/enrichCache 同一套
-	// 约定)。放在 loadEnrichCache 之前——下面读 features.LyricsDir 要用到。
+	// desktop-lyrics"设置"窗口的"功能开关"分组写这份共享文件,collector 启动时读一次
+	// (没有文件监听,改了要重启才生效,跟 config.json/enrichCache 同一套约定)。放在
+	// loadEnrichCache 之前——下面读 features.LyricsDir 要用到。
 	features = loadFeatureFlags(filepath.Join(filepath.Dir(*cfgPath), clientName+"-features.json"))
 	// 曲目元信息缓存落盘在 config 同目录，重启后不重解析同一首歌。
 	loadEnrichCache(filepath.Join(filepath.Dir(*cfgPath), clientName+"-enrich-cache.json"))
-	// 2026-07-15:歌词部分(lyrics/lyrics_tr/lyrics_roma/lyrics_yrc/lyrics_source/
-	// manual_lyrics)现在以 lyrics/ 文件夹为权威源,不再只是 enrichCache 的只读存档——
-	// 顺序很重要:先 importLyricsFromFiles() 用文件夹内容覆盖刚从 JSON 缓存加载出来的
-	// 内存态(文件永远赢),再 exportLyricsFiles() 把"刚被覆盖生效的内容"重新导出一遍,
-	// 让磁盘文件立刻互相对齐(老版本导出的无头文件、或者刚发生的"删除文件=删条目"调和
-	// 结果,都会在这一轮里落定)。desktop-lyrics 那边"歌词管理"手动编辑/删除后
-	// kickstart 重启 collector,走的也是这同一条启动路径,不用在 Swift 侧另外实现一遍
-	// 调和逻辑。2026-07-18:曾经有个 lyrics_files 开关可以关掉这整段,用户反馈"应该默认
-	// 开启,去掉配置项"——去掉了这个开关,lyrics/ 文件夹作为权威源现在是不可关闭的
-	// 固定行为。
-	// 2026-07-16:文件夹位置可以在"歌词"设置分类里自定义(lyrics_dir),留空才落到
-	// config.json 同目录下的默认 lyrics/ 子目录——desktop-lyrics 那边选新文件夹后不会
-	// 自动搬运旧文件夹里已有的文件,只是从这一刻起只认新位置读写。
+	// 歌词部分(lyrics/lyrics_tr/lyrics_roma/lyrics_yrc/lyrics_source/manual_lyrics)以
+	// lyrics/ 文件夹为权威源,不只是 enrichCache 的只读存档——顺序很重要:先
+	// importLyricsFromFiles() 用文件夹内容覆盖刚从 JSON 缓存加载出来的内存态(文件
+	// 永远赢),再 exportLyricsFiles() 把"刚被覆盖生效的内容"重新导出一遍,让磁盘
+	// 文件立刻互相对齐(老版本导出的无头文件、或者刚发生的"删除文件=删条目"调和结果,
+	// 都会在这一轮里落定)。desktop-lyrics 那边"歌词管理"手动编辑/删除后 kickstart
+	// 重启 collector,走的也是这同一条启动路径,不用在 Swift 侧另外实现一遍调和逻辑。
+	// 这是固定行为,不可关闭。
+	// 文件夹位置可以在"歌词"设置分类里自定义(lyrics_dir),留空则落到 config.json 同
+	// 目录下的默认 lyrics/ 子目录——切换新文件夹后不会自动搬运旧文件夹里已有的文件,
+	// 只从这一刻起只认新位置读写。
 	lyricsDir = features.LyricsDir
 	if lyricsDir == "" {
 		lyricsDir = filepath.Join(filepath.Dir(*cfgPath), "lyrics")

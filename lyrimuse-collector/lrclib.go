@@ -14,9 +14,7 @@ import (
 
 // lrclibLyric 是网易云/QQ 音乐都没能给出逐行歌词时的第三档兜底。LRCLIB(lrclib.net)
 // 是免费、无需 key 的开源逐行 LRC 歌词库，对网易云/QQ 音乐这类中文平台曲库覆盖偏弱的
-// 欧美/R&B 等曲目往往有收录——实测坐实：Musiq Soulchild《Time》网易云的歌词接口只返回
-// 作词/作曲 credit 信息占位(无真正歌词正文)、QQ 音乐搜索直接找不到这首歌，LRCLIB 却有
-// 完整的逐行歌词。只缓存"拿到有效逐行歌词"的结果，跟 qqLyric 的缓存策略一致。
+// 欧美/R&B 等曲目往往有收录。只缓存"拿到有效逐行歌词"的结果，跟 qqLyric 的缓存策略一致。
 var (
 	lrclibMu    sync.Mutex
 	lrclibCache = map[string]string{} // artist|title|album -> syncedLyrics
@@ -55,7 +53,7 @@ func resolveLRCLIBLyric(artist, title, album string) string {
 	}
 	// LRCLIB 的使用规范要求带上能标识调用方的 User-Agent。
 	req.Header.Set("User-Agent", clientName+"/"+clientVersion+" (+https://github.com/Yudaotor/desktop-lyrics-suite)")
-	// 实测坐实 lrclib.net 比网易云/QQ 音乐慢不少(观测 3.6~6.9s 不等),给足余量避免临界超时。
+	// lrclib.net 比网易云/QQ 音乐慢不少,给足余量避免临界超时。
 	resp, err := (&http.Client{Timeout: 10 * time.Second}).Do(req)
 	if err != nil {
 		return ""

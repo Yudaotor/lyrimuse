@@ -35,13 +35,12 @@ public enum EnrichCacheReader {
     private static let cacheURL = FileManager.default.homeDirectoryForCurrentUser
         .appendingPathComponent(".config/applemusic-nowplaying/applemusic-nowplaying-enrich-cache.json")
 
-    // 2026-07-17 真机实测坐实:这个缓存文件设计上永久不清理,现在已经攒到几百条、
-    // 几 MB——lookup() 原来是真·每次全量读+解析,而 LocalPlaybackSource 只要当前
-    // 播放的歌还没解析出歌词(新歌/纯音乐/查无此歌),每 2 秒轮询就会调用一次,一直
-    // 卡到这首歌播完,实测一次要 16ms 以上。加一层基于文件 mtime 的缓存:文件没变
-    // 就直接用上次解析好的结果,只有 collector 真的写过新内容(mtime 变了)才重新
-    // 读+解析。这个 enum 加 @MainActor 是因为目前唯一的调用方 LocalPlaybackSource
-    // 本来就是 @MainActor,静态缓存状态不需要额外加锁,让编译器保证单线程访问即可。
+    // 缓存文件设计上永久不清理,会攒到几百条、几 MB——如果每次 lookup() 都全量读+解析,
+    // 而当前播放的歌还没解析出歌词(新歌/纯音乐/查无此歌)时每 2 秒轮询都会触发一次,
+    // 代价可观。这里按文件 mtime 加一层缓存:文件没变就直接用上次解析好的结果,只有
+    // collector 真的写过新内容(mtime 变了)才重新读+解析。这个 enum 加 @MainActor 是
+    // 因为唯一的调用方 LocalPlaybackSource 本来就是 @MainActor,静态缓存状态不需要
+    // 额外加锁,让编译器保证单线程访问即可。
     private static var cachedMTime: Date?
     private static var cachedEntries: [String: EnrichCacheEntry]?
 

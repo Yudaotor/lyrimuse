@@ -12,28 +12,22 @@ enum DestinationStatus {
     case error(String)             // 红:硬性错误(ListenBrainz 缺 token / Last.fm 连接失败)
 
     var label: some View {
-        // .id(L10n.current) 必须加在这里(调用方外部),不能只加在 DestinationStatusLabel
-        // 自己 body 内部——2026-07-21 实测坐实:SwiftUI 判断"要不要重新执行某个子 View
-        // 的 body"是按这个子 View 自己的**存储属性**(这里是 status)有没有变来决定的,
-        // 跟父视图有没有重新渲染无关。切换语言时 status 本身的值没变(还是同一个
-        // .active(nil)),SwiftUI 因此认定"这个子 View 没变化,不需要重新执行它的 body"、
-        // 直接跳过——藏在 body 内部的 .id(L10n.current) 因为 body 压根没被再执行过,
-        // 永远等不到被重新求值的机会,等于形同虚设(这也是为什么之前那次"只在
-        // AccountSidebarRow 场景验证过"的修复,在 detailHeader 这个纯 VStack/HStack
-        // 场景下不生效——列表行重用和这里是两种不同的跳过机制,凑巧被那次验证掩盖了)。
-        // 改成在这里(调用方看得到的外部)加 .id(_:),SwiftUI 在决定"要不要跳过"这一步
-        // 之前就会先比较这个 id,id 变了就直接判定"这是一个全新的 View"、无条件整个
-        // 重新构造,根本不会走到"存储属性没变所以跳过"这条判断分支。
+        // .id(L10n.current) 必须加在这里(调用方外部),不能加在 DestinationStatusLabel 自己
+        // body 内部:SwiftUI 判断是否重新执行某个子 View 的 body,依据是这个子 View 自己的
+        // 存储属性(这里是 status)有没有变,跟父视图是否重新渲染无关。切换语言时 status 的
+        // 值没变,若 .id() 放在子 View body 内部就永远等不到被重新求值的机会。放在这里让
+        // 调用方在决定"要不要跳过"之前先比较 id,id 一变就判定是全新 View、无条件整体
+        // 重新构造。
         DestinationStatusLabel(status: self)
             .id(L10n.current)
     }
 }
 
 // 侧边栏这一行被选中时系统会铺一层高亮蓝底——固定的 .orange/.green/.red 不会跟着换色,
-// 深绿/深红字压在亮蓝底上对比度很差、看不清(实测反馈坐实)。用 backgroundProminence
-// 这个环境值(选中+聚焦时是 .increased)判断当前是否铺着高亮底,是就退回 .primary(会
-// 跟随高亮底自动换成清晰的颜色),不铺高亮底时才用状态本身的颜色,保持"一眼扫图标颜色
-// 分辨状态"这个设计意图不变。
+// 深绿/深红字压在亮蓝底上对比度很差、看不清。用 backgroundProminence 这个环境值(选中+
+// 聚焦时是 .increased)判断当前是否铺着高亮底,是就退回 .primary(会跟随高亮底自动换成
+// 清晰的颜色),不铺高亮底时才用状态本身的颜色,保持"一眼扫图标颜色分辨状态"这个设计
+// 意图不变。
 private struct DestinationStatusLabel: View {
     let status: DestinationStatus
     @Environment(\.backgroundProminence) private var backgroundProminence
@@ -41,13 +35,10 @@ private struct DestinationStatusLabel: View {
     private var dimmed: Bool { backgroundProminence == .increased }
 
     var body: some View {
-        // 2026-07-21 更正:这里之前有一版 .id(L10n.current) 直接包在这个 body 内部,
-        // 一度以为已经修好——实测坐实那个位置其实没用:SwiftUI 判断"要不要重新执行
-        // 这个 View 的 body"是按 DestinationStatusLabel 自己的存储属性(status)有没有
-        // 变来决定的,跟父视图/List 有没有重新渲染无关。切换语言时 status 的值没变,
-        // SwiftUI 因此直接判定"没变化,不用重新跑 body"——藏在 body 内部的 .id() 因为
-        // body 压根没被再执行过,永远等不到被重新求值的机会。真正生效的修复挪到了
-        // DestinationStatus.label 那个计算属性里(调用方外部),见那边的注释。
+        // .id(L10n.current) 放在这个 body 内部不生效——SwiftUI 判断是否重新执行这个 View
+        // 的 body 依据的是 DestinationStatusLabel 自己的存储属性(status)有没有变,跟
+        // 父视图/List 是否重新渲染无关。真正生效的修复在 DestinationStatus.label 那个
+        // 计算属性里(调用方外部),见那边的注释。
         Group {
             switch status {
             case .disabled:
@@ -113,10 +104,6 @@ enum AccountDestination: Hashable, CaseIterable, Identifiable {
     case listenBrainz, lastfm, stateRelay, bark
     var id: Self { self }
 
-    // 2026-07-16:后两个改名——ListenBrainz/Last.fm 是专有名词不动;"网页状态同步"→
-    // "网页推送","故障与周报提醒"→"推送提醒"。后者尤其是在修正一个过时的名字:上一步
-    // 把"每周听歌小结"开关挪进 Last.fm 卡片的"统计与提醒"小节之后,这张卡本身已经不再
-    // 直接管"周报"这件事,只剩 Bark 推送地址+故障告警开关,继续叫"周报提醒"名不副实。
     var title: String {
         switch self {
         case .listenBrainz: return "ListenBrainz"
@@ -144,8 +131,8 @@ enum AccountDestination: Hashable, CaseIterable, Identifiable {
 func destinationStatus(for destination: AccountDestination, config: ConfigStore, lastfmConnect: LastfmConnectController) -> DestinationStatus {
     switch destination {
     case .listenBrainz:
-        // 2026-07-17 起 collector 不再强制要求这个账号(只想用悬浮歌词可以完全不配)，
-        // 未配置不再是"硬性错误"，改用跟其它卡片一致的橙色"缺凭据"提示。
+        // ListenBrainz 是可选账号(只想用悬浮歌词可以完全不配),未配置不算硬性错误,
+        // 跟其它卡片一致用橙色"缺凭据"提示。
         return config.isListenBrainzConfigured
             ? .active(config.listenbrainzUser.isEmpty ? nil : String(format: L10n.t("已连接为 @%@"), config.listenbrainzUser))
             : .missingCreds(L10n.t("未配置（可选）"))
@@ -170,21 +157,16 @@ func destinationStatus(for destination: AccountDestination, config: ConfigStore,
 
 // "账号连接"侧边栏的一行(图标+名称+状态徽标)——单独抽成一个 View,而不是内嵌在
 // SettingsView 里当作普通 Label,因为它需要订阅 ConfigStore/LastfmConnectController
-// 才能实时刷新状态徽标(比如保存后从"还没有配置"变成"已连接")。这一行现在跟"播放"
+// 才能实时刷新状态徽标(比如保存后从"还没有配置"变成"已连接")。这一行跟"播放"
 // "外观"等其它分类平级放在 SettingsView 外层同一个 List 的 Section("账号连接")里——
-// 全窗口自始至终只有一层真正的侧边栏 List,不再是"整个设置窗口的分类侧边栏"之外又
-// 单独搭一层"账号连接内部专属的侧边栏"。
+// 全窗口自始至终只有一层真正的侧边栏 List。
 //
-// 这个"只留一层真侧边栏"的结构调整,是趟坑趟出来的:最早"账号连接"内部自己套了一层
-// NavigationSplitView,导致两层 NavigationSplitView 叠在同一个窗口里,macOS 在侧边栏/
-// 工具栏这层窗口级 chrome 上打架(外层侧边栏整个不渲染、内层列表行错位重叠);改成手搭
-// 的 HStack+List(.listStyle(.sidebar)) 规避了那个冲突,但这种"看起来像侧边栏、实际
-// 不是 NavigationSplitView 真正分栏列"的 List,拿不到 AppKit 只对"真正的侧边栏列"做的
-// 窗口圆角遮罩处理,导致侧边栏背景材质在窗口左下角露出一块方形黑影(实测截图坐实)。
-// 两次踩坑指向同一个结论:伪造第二层"看起来像侧边栏"的容器,不管是嵌套 NavigationSplitView
-// 还是手搭 HStack,都会跟 AppKit 只按"一个真正侧边栏列"设计的窗口级 chrome/遮罩打架。
-// 唯一稳妥的解法是彻底拍平,让全窗口只有一层真正的 NavigationSplitView 侧边栏,把"账号"
-// 这一级也变成这层真侧边栏里的普通行(用 Section 分组),而不是另起一层容器。
+// 这一层不能再拆出第二层"看起来像侧边栏"的容器:嵌套 NavigationSplitView 会导致外层
+// 侧边栏/工具栏在窗口级 chrome 上跟内层打架(外层侧边栏整个不渲染、内层列表行错位重叠);
+// 手搭的 HStack+List(.listStyle(.sidebar)) 能绕开这个冲突,但拿不到 AppKit 只对"真正的
+// 侧边栏列"做的窗口圆角遮罩,背景材质会在窗口角落露出一块方形黑影。全窗口只留一层真正的
+// NavigationSplitView 侧边栏,"账号"这一级用 Section 分组变成这层真侧边栏里的普通行,
+// 是唯一不会跟 AppKit 窗口级 chrome 打架的做法。
 struct AccountSidebarRow: View {
     let destination: AccountDestination
 
@@ -213,7 +195,7 @@ struct AccountSidebarRow: View {
 // 账号连接:回答"配好了没有"这个问题;每张账号卡片里也带对应的"要不要用这个功能"
 // 开关(比如"推送状态到网页/徽章"),但那是各个账号自己的开关,不是一个笼统的"功能
 // 开关"分类——不依赖任何账号的纯行为开关(比如封面/主色/平台跳转链接)已经从可关闭
-// 设置项直接删掉、改成无条件执行,不再需要一个单独的地方安放它们(2026-07-17)。
+// 设置项直接删掉、改成无条件执行,不再需要一个单独的地方安放它们。
 //
 // 只负责渲染"某一个目的地"的详情/编辑区+底部保存栏,不再自己管"当前选中哪个账号"——
 // 侧边栏(AccountSidebarRow)现在跟 SettingsView 的分类列表拍平在同一个 List 里,"选中
@@ -239,9 +221,8 @@ struct AccountLinkingTab: View {
     @State private var isSaving = false
     @State private var lastSavedAt: Date?
 
-    // 2026-07-18:开关校验从"预先灰置+旁边常驻小字"改成"打开时才校验,没满足就弹窗"——
-    // 用户反馈静态提示文字太多、想要的是"点了才提醒缺什么+能直接跳转"。missingPrereqAlert
-    // 非 nil 就弹一次;body 上只挂一个 .alert,所有开关共用同一套。
+    // 开关校验采用"打开时才校验,没满足就弹窗"(而不是预先灰置+旁边常驻小字提示)。
+    // missingPrereqAlert 非 nil 就弹一次;body 上只挂一个 .alert,所有开关共用同一套。
     private struct MissingPrereqAlert: Identifiable {
         let id = UUID()
         let message: String
@@ -270,17 +251,13 @@ struct AccountLinkingTab: View {
             Divider()
             autosaveStatusBar
         }
-        // 2026-07-22:文本字段(Token/API Key/Secret/Webhook 地址等,由 ConfigStore
-        // 承载)从"手动点『保存并应用』"改成自动保存——用户反馈"这里面的保存逻辑都是
-        // 失焦自动保存吧,不用专门搞一个保存按钮了"。ConfigStore 原来特意做成手动保存
-        // 是为了不让每敲一个字符/每次切换字段就重启一次 collector,这条顾虑依然成立,
-        // 所以没有直接用 .onChange(of:)在失焦或者逐字符时触发,而是用 Combine 的
-        // debounce:监听 config.objectWillChange(任何 @Published 字段——包括
-        // Last.fm 连接成功后自动写入的 lastfmScrobbleSessionKey/lastfmScrobbleUsername——
-        // 即将变化时都会发一次信号),等停止编辑 1.2 秒没有新变化才真正触发一次保存,
-        // 一次性覆盖所有文本字段,不需要给每个 TextField/SecretFieldRow 分别写
-        // onChange。performAutoSave() 内部会先判断 isDirty,被 lastError 这类非表单
-        // 内容变化误触发时不会做无意义的写盘+重启。
+        // 文本字段(Token/API Key/Secret/Webhook 地址等,由 ConfigStore 承载)自动保存:
+        // 不用 .onChange(of:)逐字符/失焦触发,而是监听 config.objectWillChange(任何
+        // @Published 字段变化都会发一次信号,包括 Last.fm 连接成功后自动写入的
+        // lastfmScrobbleSessionKey/lastfmScrobbleUsername)做 1.2 秒防抖,避免每敲一个
+        // 字符/每次切换字段就重启一次 collector,也不需要给每个字段分别写 onChange。
+        // performAutoSave() 内部会先判断 isDirty,不会被 lastError 这类非表单内容变化
+        // 误触发做无意义的写盘+重启。
         .onReceive(config.objectWillChange.debounce(for: .milliseconds(1200), scheduler: DispatchQueue.main)) {
             Task { await performAutoSave() }
         }
@@ -335,9 +312,9 @@ struct AccountLinkingTab: View {
         apply(true)
     }
 
-    // 2026-07-22:每周/每日听歌报告都能自己选数据源(Last.fm/ListenBrainz)之后,这两个
-    // helper 按 collector/digest.go 的 resolveDigestSource 同一套规则在 Swift 侧算一遍——
-    // 两边各自独立实现(跑在不同进程/语言里),规则必须保持一致,改一处务必同步改另一处。
+    // 这两个 helper 按 collector/digest.go 的 resolveDigestSource 同一套规则在 Swift 侧
+    // 算一遍——两边各自独立实现(跑在不同进程/语言里),规则必须保持一致,改一处务必同步
+    // 改另一处。
     //
     // resolvedDigestSource:preference 非空且对应账号确实配好了就用它;否则按"两个都配了
     // →Last.fm,只配了一个→用那个,都没配→空字符串(交给调用方按'需要先配置'处理)"解析。
@@ -366,15 +343,10 @@ struct AccountLinkingTab: View {
         }
     }
 
-    // 2026-07-17:视觉重设计——原来每张卡片手工用 Divider() 分割一整块 Form/Section,
-    // 观感上跟另外四个纯设置 tab"每个话题一个真正 Section"的原生分组卡片完全不同,是
-    // 这个窗口里视觉密度最高、最不像原生 macOS 设置的部分。现在改成每张卡片按话题拆成
-    // 真正的具名 Section(见下面 fields 里各张卡片的实现)。每张卡片最上面那句"整体
-    // 介绍"文案(描述整张卡是干什么的,不是某一个 Section 的)挪到这里,放在 detailHeader
-    // 和 Form 之间,不塞进任何一个 Section 的 header/footer——footer 只能放纯文字且
-    // 只描述那一个 Section,不适合放"整张卡"级别的介绍。ListenBrainz 没有这一段,因为
-    // 它原来的介绍句已经原封不动变成了"账户信息" Section 的 footer(那句本来就是
-    // 无条件常驻显示的静态文案,够格用 footer,是四张卡片里唯一一个)。
+    // 每张卡片最上面这句"整体介绍"文案(描述整张卡是干什么的,不是某一个 Section 的)
+    // 放在这里,在 detailHeader 和 Form 之间,不塞进任何一个 Section 的 header/footer——
+    // footer 只能放纯文字且只描述那一个 Section,不适合放"整张卡"级别的介绍。ListenBrainz
+    // 没有这一段,因为它的介绍句已经是"账户信息" Section 的 footer。
     @ViewBuilder
     private var cardIntro: some View {
         switch destination {
@@ -439,11 +411,8 @@ struct AccountLinkingTab: View {
                     HelpButton(
                         text: L10n.t("自己用 Cloudflare Worker + KV 搭建的 state-worker 服务（独立公开仓库 Yudaotor/nowplaying-workers）。不想自建也行：配好「ListenBrainz」也能让网页兜底显示「正在播放」，两者配一个就够。效果截图 + 完整从零搭建步骤见该仓库自己的 README。"),
                         docTitle: L10n.t("查看效果 + 教程 →"),
-                        // 2026-07-20:这里原来指向本仓库 docs/web-features.md;2026-07-22
-                        // state-worker/ 连同这份教程一起拆进了独立公开仓库
-                        // Yudaotor/nowplaying-workers(见该仓库自己的 git 历史/README),原
-                        // URL 已经 404——这里改指向新仓库的 README(#readme 锚点,GitHub 会
-                        // 自动渲染仓库首页那份)。
+                        // 指向 Yudaotor/nowplaying-workers 仓库自己的 README(#readme 锚点,
+                        // GitHub 会自动渲染仓库首页那份)。
                         docURL: URL(string: "https://github.com/Yudaotor/nowplaying-workers#readme")!
                     )
                 }
@@ -452,13 +421,9 @@ struct AccountLinkingTab: View {
         } header: {
             Text(L10n.t("连接信息"))
         } footer: {
-            // 2026-07-20:去掉"推送状态到网页/徽章"总开关 + 5 个网页模块子开关——
-            // 用户反馈"网页推送本来就是附加功能，只要填了地址就该默认全推，不需要
-            // 逐项配置"。这两个字段填好本身就是"要不要推"这件事唯一的开关，不再需要
-            // 额外一层可以打开也可以关闭的开关摞在上面；网页那边(state-worker/网页
-            // 前端)看到 modules 配置缺失本来就按"全部启用"兜底，语义完全对得上。
-            // 后半句"历史播放、留言墙等展示模块默认全部开启"用户反馈删掉——不需要
-            // 逐一列举具体是哪些模块。
+            // 这两个字段填好本身就是"要不要推"这件事唯一的开关,不再需要额外一层可以
+            // 打开也可以关闭的开关;网页那边(state-worker/网页前端)看到 modules 配置
+            // 缺失本来就按"全部启用"兜底,语义对得上。
             Text(L10n.t("填好这两项就会自动推送到网页。"))
         }
     }
@@ -467,28 +432,10 @@ struct AccountLinkingTab: View {
 
     @ViewBuilder
     private var lastfmFields: some View {
-        // 原来外面套了一层 GroupBox("账号授权")——现在 Section 标题本身已经是"账号授权",
-        // 再套一层同名 GroupBox 是双重装饰,直接删掉、内容平移进 Section 正文。
-        //
-        // 2026-07-20:这张卡原来在这下面还有一个"历史统计"Section,专门说明"配好这张卡
-        // +「网页推送」会自动统计 Top10 歌手推送到网页"——用户反馈"这一块全部去掉",
-        // 删掉了(连同上一轮把手动开关换成的这句纯说明文字一起删,不留任何痕迹)。
-        //
-        // 2026-07-22:这个 Section 曾经在 2026-07-20 从最后挪到过整个 tab 最顶端(理由见
-        // 下面保留的旧注释)，但那次改动漏看了一件事——连接按钮依赖的 Scrobble API Key/
-        // Secret 这两个字段仍然留在下面"Mac 播放镜像"里，视觉顺序(先看到按钮)和实际
-        // 依赖顺序(得先填好字段按钮才可能连上)是反的。实测坐实:有用户在没滚到下面
-        // 填 Scrobble API Key 之前就先点了这个按钮，得到一句"请先填写 API Key"的红字
-        // 提示，因为不够醒目而被当成"点了没反应"。
-        //
-        // 修法:把这两个字段搬进这个 Section、紧挨着按钮上方——这样"①填写密钥"这个
-        // 步骤点(下面 stepDots 里就有)才真的对应这个 Section 里能看到的输入框，不再是
-        // 悬空指向别处的一步。"Mac 播放镜像"Section 只留"同步进 Last.fm"这个开关。
-        //
-        // 保留的旧背景(2026-07-20 那次挪动的理由，依然成立，只是补上了字段要跟着一起搬):
-        // 下面"Mac 播放镜像"的"同步进 Last.fm"真正生效靠的是这里连接得到的 session key，
-        // 不是这两个字段本身(填好不代表已经走完授权)，放在最前面更能体现"这是基础前提"
-        // 而不是排在最后的一个附属细节。
+        // Scrobble API Key/Secret 放在这个 Section(而不是下面"Mac 播放镜像"):连接按钮
+        // 依赖这两个字段,视觉顺序需要跟"先填字段、再能点按钮"的依赖顺序一致;下面
+        // "同步进 Last.fm"开关真正生效靠的是这里连接得到的 session key,不是这两个字段
+        // 本身(填好不代表已经走完授权)。
         Section {
             HStack(spacing: 4) {
                 Text(L10n.t("需要单独申请一个有写入权限的 API Key + Secret，跟下面「iPhone 播放桥接」用的不是同一个。"))
@@ -532,21 +479,12 @@ struct AccountLinkingTab: View {
         } header: {
             Text(L10n.t("iPhone 播放桥接"))
         } footer: {
-            // 2026-07-20:用户反馈"'iPhone 播放桥接'这个词含义不明确，加一个说明是具体
-            // 干什么事情的"——补一句说清楚具体在干什么(读 iPhone 已经报给 Last.fm 的
-            // 播放记录、没在 Mac 播放时拿来当"正在播放"显示),再接上一轮已经改过的那句
-            // "转发进 ListenBrainz 需要账号绑定好"。这个开关实际上是整条"读 iPhone
-            // 播放"链路唯一的总开关(collector 侧 bridge() 只看 features.LastfmBridge
-            // 这一个字段),关掉不只是不转发进 ListenBrainz,连"显示 iPhone 正在播放"
-            // 这部分也会一起关掉——这里如实写清楚,不能让人以为只影响 ListenBrainz 那半句。
-            //
-            // 紧接着用户又指出上一版"用来显示「iPhone 正在播」"这半句容易被误读成跟
-            // 歌词模块本身有关——查代码确认:这个"iPhone 正在播"效果只喂给
-            // pushRelayState()(collector.go 里两处只读 p.remoteTrack/p.remoteAt 的地方
-            // 都在这个函数内),而这台 Mac 本地悬浮歌词的数据源(LocalPlaybackSource)只读
-            // 本机 media-control,压根不碰这条 iPhone/Last.fm 链路——歌词模块用不到这个
-            // 东西,唯一看得到效果的地方是「网页推送」那张网页,所以这里明确点名"网页推送"
-            // 而不是含糊地说"显示",避免让人误以为会影响本机悬浮歌词。
+            // 这个开关是整条"读 iPhone 播放"链路唯一的总开关(collector 侧 bridge() 只看
+            // features.LastfmBridge 这一个字段),关掉不只是不转发进 ListenBrainz,连
+            // "显示 iPhone 正在播放"这部分也会一起关掉。"iPhone 正在播"效果只喂给
+            // pushRelayState()(collector.go 里读 p.remoteTrack/p.remoteAt 的地方都在这个
+            // 函数内),本机悬浮歌词的数据源(LocalPlaybackSource)只读本机 media-control,
+            // 不碰这条 iPhone/Last.fm 链路,唯一能看到效果的地方是「网页推送」。
             Text(L10n.t("读取 iPhone 上已经报给 Last.fm 的播放记录：Mac 没有播放时会推给「网页推送」显示「iPhone 正在播」（这台 Mac 本地的悬浮歌词只读本机播放状态，不受影响）；打开下面的开关还会把这些记录转发进 ListenBrainz，统一两台设备的播放历史，这也需要「ListenBrainz」账号绑定好。"))
         }
 
@@ -562,11 +500,8 @@ struct AccountLinkingTab: View {
         } header: {
             Text(L10n.t("Mac 播放镜像"))
         } footer: {
-            // 2026-07-20:同上一条,"Mac 播放镜像"也补一句说清楚具体在干什么——
-            // Apple Music 本身不会自动同步到 Last.fm,这个开关是把这台 Mac 上的播放
-            // 单独写回 Last.fm,补上这一份原本没有的记录,跟上面"读 iPhone"方向正好
-            // 相反(这里是"写")。2026-07-22:Scrobble API Key/Secret 两个字段搬去了
-            // 上面"账号授权"Section(见那边注释),这里只剩这一个开关。
+            // Scrobble API Key/Secret 两个字段在上面"账号授权" Section 里(见那边注释),
+            // 这里只剩"同步进 Last.fm"这一个开关。
             Text(L10n.t("把这台 Mac 上的播放同步写回 Last.fm——Apple Music 本身不会自动同步，需要这个开关补上这份记录，Last.fm 个人主页才能看到用 Mac 听的这部分。"))
         }
     }
@@ -662,28 +597,18 @@ struct AccountLinkingTab: View {
 
     // MARK: - 推送提醒
 
-    // 2026-07-16:从"只支持 Bark 一家"扩成"选平台+填对应 webhook 地址"——用户反馈
-    // "现在不是只接入了bark吗，帮我继续接入dingding，企业微信，discord",随后又补了
-    // "飞书自定义机器人，Server酱这两个也接入一下"。绝大多数平台都是"群机器人 webhook"
-    // 这个模子(一个 URL,POST 一份 JSON),具体 payload 长什么样在 collector/notify.go
-    // 里,这边只管选平台+填地址;Server酱是个例外,走表单编码不是 JSON,但那是纯后端
-    // 的事,这边 UI 完全不用关心。钉钉/飞书这两个平台的机器人如果开了"加签"安全设置
-    // 就还需要额外一个签名密钥(两边算法不同,分开存,见 ConfigStore 的字段注释),用
-    // SecretFieldRow 收起来,不占地方——其余平台(Bark/企业微信/Discord/Server酱)都
-    // 不需要。
+    // 绝大多数平台都是"群机器人 webhook"这个模子(一个 URL,POST 一份 JSON),具体 payload
+    // 长什么样在 collector/notify.go 里,这边只管选平台+填地址;Server酱是个例外,走表单
+    // 编码不是 JSON,但那是纯后端的事,这边 UI 完全不用关心。钉钉/飞书这两个平台的机器人
+    // 如果开了"加签"安全设置就还需要额外一个签名密钥(两边算法不同,分开存,见 ConfigStore
+    // 的字段注释),用 SecretFieldRow 收起来;其余平台(Bark/企业微信/Discord/Server酱)
+    // 都不需要。
     //
-    // 顺带把"每周听歌小结"这个开关从别处搬了过来(用户反馈"既然现在都是模块了，那把
-    // 推送每周音乐报告的开关放到推送提醒里面"):这个开关的特点是"通知最终从这里推出去",
-    // 放在推送提醒卡片里,跟"网页推送"卡片里的开关道理一样——开关跟着它依赖的账号模块走,
-    // 而不是攒在"功能开关"tab 里让人猜"这个开关归哪个账号管"。还依赖 Last.fm 桥接
-    // (数据来源),缺了给一个跳转提示。
-    // 2026-07-20:"故障告警"整个开关连同底层告警机制一起删掉了——用户反馈"压根不需要
-    // 告警故障了"。这不是"默认打开、去掉可配置项"那种简化(跟"网页推送"/"历史 Top10
-    // 歌手统计"两处不一样),是彻底不需要这个能力,所以 collector 侧 alerter.ok/fail
-    // 这两个方法本身也一并删掉(alerter.push 还留着,weeklyDigestPush 在用)。
-    // 实际推的是 Top 歌手+Top 歌曲各三条+总播放次数(见 collector/weekly.go 的
-    // weeklyDigestPush),不是十首歌,也别跟另一个不相关的功能"历史 Top10 歌手统计"
-    // 搞混——那是网页上的常驻榜单,数据来源不同。这句是整张卡的介绍,在 cardIntro 里。
+    // 两个听歌报告开关放在这里(而不是单独的"功能开关"tab),是因为开关跟着它依赖的账号
+    // 模块走,不用去别处猜"这个开关归哪个账号管";还依赖 Last.fm 桥接(数据来源),缺了给
+    // 一个跳转提示。实际推送的是 Top 歌手+Top 歌曲各三条+总播放次数(见 collector/weekly.go
+    // 的 weeklyDigestPush),别跟另一个不相关的功能"历史 Top10 歌手统计"搞混——那是网页上
+    // 的常驻榜单,数据来源不同。
     @ViewBuilder
     private var barkFields: some View {
         Section {
@@ -722,17 +647,13 @@ struct AccountLinkingTab: View {
         }
 
         Section {
-            // 2026-07-22:数据源改成可选——最初"每周"写死只认 Last.fm、"每日"写死只认
-            // ListenBrainz,真机实测坐实 Last.fm 的周榜接口(user.getWeeklyTrackChart/
-            // getWeeklyArtistChart)其实接受任意 from/to,不是只认它自己的官方周边界,
-            // 用户因此要求两个 cadence 都能自己选用哪个账号的数据。Picker 挂在对应开关
-            // 打开之后(参照"灵动岛风格"只在"灵动岛歌词"开着才出现的同一个既有模式)——
-            // 没开这个提醒,选哪个数据源无所谓,不用平白多占一行;两个 Picker 各给了
-            // 区分度更高的标签("每周数据源"/"每日数据源"而不是都叫"数据源"),避免线性
-            // 阅读(尤其 VoiceOver)时分不清哪个 Picker 归哪个开关管。Picker 显示的是
-            // "这次实际会用哪个"(没手动选过时展示自动判定出的默认值,见
-            // resolvedDigestSource),一旦手动选过就变成显式 persist 的偏好,即便后来又
-            // 跟自动判定结果一样。
+            // 数据源可选——Last.fm 的周榜接口(user.getWeeklyTrackChart/getWeeklyArtistChart)
+            // 其实接受任意 from/to,不是只认官方周边界,因此两个 cadence 都能自己选数据源。
+            // Picker 挂在对应开关打开之后(参照"灵动岛风格"只在"灵动岛歌词"开着才出现的
+            // 既有模式)——没开这个提醒,选哪个数据源无所谓;两个 Picker 各给了区分度更高
+            // 的标签("每周数据源"/"每日数据源"而不是都叫"数据源"),避免分不清哪个 Picker
+            // 归哪个开关管。Picker 显示的是"这次实际会用哪个"(未手动选时是
+            // resolvedDigestSource 判定出的默认值),一旦手动选过就变成显式 persist 的偏好。
             Toggle(L10n.t("每周听歌小结"), isOn: Binding(
                 get: { features.weeklyDigest },
                 set: { newValue in
@@ -783,9 +704,8 @@ struct AccountLinkingTab: View {
 
     // MARK: - 底部状态栏
 
-    // 2026-07-22:原来这里是"保存并应用"按钮(手动触发)+旁边的状态文字,现在文本字段
-    // 已经自动保存(见 body 的 .onReceive),不再需要一个可点击的按钮,只保留状态展示:
-    // 正在自动保存/上次保存时间/报错。
+    // 文本字段已经自动保存(见 body 的 .onReceive),这里只保留状态展示:正在自动保存/
+    // 上次保存时间/报错。
     private var autosaveStatusBar: some View {
         HStack(spacing: 8) {
             if isSaving {

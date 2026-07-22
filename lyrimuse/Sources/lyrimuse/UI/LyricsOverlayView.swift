@@ -4,69 +4,9 @@ import LyrimuseCore
 // 悬浮窗内容:逐字高亮时用渐变扫过效果(近似网页版 CSS 渐变裁字的视觉,不追求逐像素
 // 还原),否则整行高亮;罗马音在上、译文在下,都是可选的小字。
 //
-// 换行动画的关键取舍(参考了 LyricFever/KaraokeView.swift 的 .id() 触发写法、
-// Apple-Music-Lyric-Animation 的 withAnimation 思路):原来的实现完全没有动画——
-// 换行是纯粹的属性赋值,SwiftUI 会直接跳变;逐字填色也是每 20Hz tick 用 GeometryReader
-// 重新量一次宽度、没有任何插值,两次 tick 之间的填色边界是"一格一格跳"而不是平滑移动。
-// 这两点合起来就是用户说的"渲染有问题、视觉效果很差"。
-//
-// 修法:
-// 1) 用只由歌词文本本身(不含 fillFraction)算出的 lineIdentity 当 .id(),配合
-//    .animation(value: lineIdentity) 只在真正换到不同一行歌词时才触发交叉淡入淡出+
-//    缩放,20Hz 的填色 tick 不会被误判成"换行"从而不会疯狂重触发。
-// 2) 逐字填色改成 LinearGradient 直接当 foregroundStyle,渐变的 stop 位置本身能被
-//    SwiftUI 平滑插值(.animation(.linear, value: fillFraction)),不用 GeometryReader
-//    手算像素宽度,离散更新之间会自己补间,不再是"跳变"。
-//
-// 上面两点做完之后用户反馈换行瞬间有"残影"——这是 SwiftUI .transition() 的既有机制:
-// .id() 一变,旧那份视图和新那份视图会在整个动画时长内同时留在渲染树里、在同一块屏幕
-// 位置上分别做透明度渐变(旧的淡出、新的淡入)。背景色/图片这样叠化没问题,但两份不同
-// 的文字字形在同一个位置同时半透明,视觉上就是重影。查过 LyricsX(NSStackView 里旧行
-// remove、新行 add,两行永远不共享同一个 frame,配合 removeProgressAnimation() 显式清
-// 掉上一行残留的填色动画状态)和 LyricFever(现有代码里主歌词行干脆完全不加
-// .transition(),整行硬切,只有背景专辑图层才淡入淡出)两个真实开源实现:两者的共同点
-// 是"换行时旧的和新的绝不同时以部分透明度占据同一块屏幕"。这里采用二者之间、改动最小
-// 的办法——asymmetric transition,旧行 removal 用 .identity(瞬间消失,不参与任何淡出
-// 动画),只有新行的 insertion 继续保留原来的淡入+缩小放大效果,这样任意时刻屏幕上只
-// 会有一份主歌词文字在渐变,不会重叠。
-//
-// 换行流畅之后用户又反馈"字与字之间的流转效果还是有点卡顿"——查了 LyricsX 的
-// KaraokeLabel.swift 才发现根本差异:LyricsX 是整行一次性建一个 CAKeyframeAnimation
-// (keyTimes/values 覆盖全行每个字的真实时间戳),交给 Core Animation 的渲染服务端按
-// 屏幕刷新率自主推进,跟应用主线程/轮询完全解耦;而这里原来是 20Hz Timer 采样一次位置、
-// 算好 fillFraction 塞进 @Published 结构体,View 端再用 .animation(.linear(duration:
-// 0.06), value:) 去补一小段间——60ms 的补间比 50ms 的采样间隔长,新一次几乎总在上一次
-// 没放完时就被重新触发,SwiftUI 对 .linear 这类曲线动画重新定目标时是矢量相加而不是
-// 从当前值接续,这就是逐字流转卡顿的根源。改法见 mainLine/wordText:不再预算
-// fillFraction、不再用 .animation() 补间,而是用 TimelineView(.animation) 按渲染帧频
-// 直接从连续的位置锚点(poller.anchor)现算每个字的真实进度——本质上是把"用一个真实
-// 时钟驱动纯函数"这件事从 CAKeyframeAnimation 换成了 SwiftUI 原生等价物,不用引入
-// AppKit/CALayer。
-//
-// 逐字流转顺滑之后用户又反馈两点:
-// 1) 换行那个 asymmetric transition(缩放+淡入)"感觉没啥用,反而会变卡"——逐字填色改
-//    成 TimelineView 驱动之后,换行瞬间除了缩放/淡入动画本身,还叠加了 TimelineView
-//    子树整个被 .id() 强制重新挂载的开销(旧的整个拆掉、新的从头建),这两件事撞在同一
-//    帧里,在填色已经很顺滑的衬托下这个开销反而显得更突兀。查过的 LyricFever 真实生产
-//    实现本来就是"主歌词行干脆不加 transition,硬切"——这次直接采纳,把 mainLine 的
-//    .id()/.transition() 整个去掉,换行就是普通的属性更新(SwiftUI 按分支自然 diff,
-//    不强制重新挂载),外层 .animation(value: lineIdentity) 留着只给罗马音/译文/下一句
-//    预览这几行做淡入淡出(它们只是普通 Text,没有 TimelineView 那份挂载成本)。
-// 2) 英文歌词感觉不够顺滑——查了本地缓存里真实的 YRC 数据坐实:同一批歌曲里,英文
-//    (Michael Jackson 几首)的逐字时长里有 durationMs==0 的词条(短介词/冠词等,网易云
-//    /QQ/酷狗给英文曲目算的逐字对齐精度明显不如中文,中文样本里一个==0都没有),
-//    <100ms 的短词占比也明显更高。fillFraction 原来对 durationMs<=0 是硬边界瞬间
-//    0→1,短词越多这种"瞬间跳"就越密集,读起来比中文更"跳"。改法见 fillFraction:
-//    给填色计算用的有效时长设一个下限(minWordDurationMs),短词/零时长词也能有一段
-//    看得见的扫过而不是瞬间跳变——只影响这一个词自己的视觉呈现,不改 startMs、不影响
-//    整体歌词对齐/下一个词何时开始。
-//
-// 用户进一步要求"去掉歌词切换的动效,尽可能保证流畅度"——原来只剩罗马音/译文/下一句
-// 预览这三行还挂着 .animation(value: lineIdentity) 的淡入淡出(mainLine 本身在上一轮
-// 就已经是硬切了)。这次连这最后一点动效也整个去掉:body 上的 .animation(value:) 和
-// 这三行各自的 .transition(.opacity) 一并删除,lineIdentity 这个专门为它算的属性也
-// 跟着删(没有别的地方用)。现在换到新的一行是纯粹的属性跳变,不经过任何 SwiftUI
-// 动画事务,零额外开销。
+// 换行不做任何动画(纯属性跳变,不经过 SwiftUI 动画事务),逐字填色用 TimelineView
+// 按渲染帧频直接从播放位置现算 fillFraction(不经过 Timer 采样+插值)——两者都是为了
+// 尽可能流畅、开销尽可能小,具体机制见下面 mainLine/wordText 的注释。
 struct LyricsOverlayView: View {
     @ObservedObject private var poller = PlaybackCoordinator.shared
     @ObservedObject private var settings = AppSettings.shared
@@ -79,12 +19,9 @@ struct LyricsOverlayView: View {
     // 用户一开背景色看到的是个生硬的直角矩形;两个参考的开源实现里圆角都不是用户可调项。
     private let overlayBackgroundCornerRadius: CGFloat = 16
 
-    // 2026-07-18 加播放控制:鼠标悬停才浮现一排按钮,不用一直占地方,平时观感跟改动前
-    // 逐像素一致。只在"锁定位置"关闭时生效——锁定后 LyricsOverlayWindowController.
-    // setLocked 会把 window.ignoresMouseEvents 设成 true,窗口整个不再接收任何鼠标事件
-    // (点击穿透到下层),.onHover 在那种状态下本来就永远不会被调用;这里用户明确要求
-    // "仅在没开启不可移动时才生效",在 View 这一层也显式判断一遍,不单纯依赖那个
-    // 窗口级副作用——同一个条件两处各自成立,不是互相依赖的隐式耦合。
+    // 鼠标悬停才浮现播放控制按钮,不用一直占地方。仅在"锁定位置"关闭时生效——锁定后
+    // window.ignoresMouseEvents 已经让整个窗口不再接收鼠标事件,.onHover 本来就不会被
+    // 调用;这里在 View 层再显式判断一遍 lockPosition,不单纯依赖窗口层那一处副作用。
     @State private var isHoveringForControls = false
 
     var body: some View {
@@ -142,13 +79,9 @@ struct LyricsOverlayView: View {
                 MusicPlaybackController.playPause()
             }
             controlButton("forward.fill") { MusicPlaybackController.nextTrack() }
-            // 2026-07-22:新增"锁定"按钮——用户反馈"没锁定时鼠标移到悬浮歌词上,除了
-            // 切歌三个按钮,想再加一个能直接在这里锁定的按钮",不用再去"设置"里找
-            // "锁定位置"那个开关。用一条竖线跟前面三个播放按钮分个组,提示这是不同类别
-            // 的操作,不是切歌功能的第四个按钮。点了之后 settings.lockPosition 变
-            // true,这一整排控制按钮(包括它自己)会立刻消失(见 body 里
-            // isHoveringForControls && !settings.lockPosition 那个条件),跟直接去
-            // 设置里打开那个开关效果完全一致。
+            // 用一条竖线跟前面三个播放按钮分组,提示这是不同类别的操作。点了之后
+            // settings.lockPosition 变 true,这一整排控制按钮(包括它自己)会立刻消失
+            // (见 body 里 isHoveringForControls && !settings.lockPosition 那个条件)。
             Rectangle()
                 .fill(Color.white.opacity(0.25))
                 .frame(width: 1, height: 16)
@@ -193,13 +126,9 @@ struct LyricsOverlayView: View {
         .buttonStyle(.plain)
     }
 
-    // 2026-07-19 再次调整:曾经在这里加过"没在播放就不画背景卡片/占位符"的判断,用户
-    // 反馈这跟"暂停/无播放时隐藏"(hideWhenNotPlaying,见 LyricsOverlayWindowController)
-    // 职责重叠了——那个开关本来就是给"没播放时要不要隐藏"这件事准备的入口,这里另开一条
-    // 隐藏逻辑,两条路径都在做同一件事,视觉上完全分不出这个开关到底有没有开,反而让人
-    // 以为开关失效了。撤回,把"没播放时要不要隐藏"这个决定权完整交还给那一个开关:关闭时
-    // (默认)窗口还在、内容也照常画(哪怕只是这个"♪"占位符),想要没播放时不显示,就该去
-    // 设置里打开那个开关,而不是指望内容这一层自己偷偷判断。
+    // "没在播放"要不要隐藏,完全交给 hideWhenNotPlaying 那个开关(见
+    // LyricsOverlayWindowController)决定——这里不重复处理,否则两条路径同时生效会分不清
+    // 究竟是谁在起作用,看起来像开关失灵。
     @ViewBuilder
     private var overlayBackground: some View {
         if settings.backgroundIsVisible {
@@ -216,16 +145,11 @@ struct LyricsOverlayView: View {
     @ViewBuilder
     private var mainLine: some View {
         if let words = poller.currentLine?.words {
-            // 逐字填色改成:只在这一小块子树里挂 TimelineView(.animation),按渲染帧频
-            // (最高到屏幕刷新率)直接从 poller.anchor 连续外推播放位置、现算每个字的
-            // fillFraction——不再靠 20Hz tick 把预算好的值塞进 @Published 结构体、
-            // 每次都用 .animation(.linear(duration:0.06), value:) 补一小段间。60ms 的
-            // 补间比 50ms 的 tick 间隔长,新一次几乎总在上一次没放完时就被重新触发;
-            // SwiftUI 对 .linear 这类"不可合并"(shouldMerge==false)的曲线动画,重新
-            // 定目标时是把新旧两段位移矢量相加而不是从当前值接续,这正是"字与字之间流转
-            // 卡顿"的结构性根源,换补间时长治标不治本。改成每帧直接算真值、完全不挂
-            // Animation 才是能根治的办法——暂停时 anchor 会变 nil(见 fastTick 守卫),
-            // TimelineView 的 paused 参数顺带把这个子树的刷新也停下来,不用额外处理。
+            // 逐字填色用 TimelineView(.animation) 按渲染帧频直接从 poller.anchor 外推
+            // 播放位置,每帧现算 fillFraction,不经过 @Published 值 + .animation() 插值
+            // ——SwiftUI 对 .linear 这类曲线动画在重新定目标时是矢量相加而不是从当前值
+            // 接续,高频率更新下会造成逐字流转卡顿。暂停时 anchor 会变 nil(见 fastTick
+            // 守卫),TimelineView 的 paused 参数顺带把这个子树的刷新也停下来。
             TimelineView(.animation(paused: !poller.isPlayingNow)) { context in
                 let currentMs = poller.anchor?.extrapolatedPositionMs(now: context.date) ?? 0
                 // 换成会自动换行的 WrapLayout——原来的 HStack(spacing: 0) 从不换行,一行
@@ -236,17 +160,10 @@ struct LyricsOverlayView: View {
                         wordText(w, atMs: currentMs)
                     }
                 }
-                // compositingGroup 把这一整行字先合成成一张位图,再统一套一次阴影——
-                // 之前是每个字的 Text 各自单独 .shadow(),SwiftUI 会把它们当成互相独立的
-                // 半透明图层分别渲染,相邻字之间阴影重叠的区域会叠加变暗,一整行看起来
-                // 深浅不均、糊成一片(这正是这次"感觉不好看"的根因)。查了 LyricsX 真实
-                // 实现(KaraokeLabel.swift)确认它是整行一次性 CTFrameDraw 之后,阴影
-                // (NSShadow)只套在这一整个 NSTextField 上、只算一次——不是逐字符各自
-                // 描边。这里用 .compositingGroup() 达到同样效果:阴影只按合成后的最终
-                // 轮廓统一算一次,顺带把 O(字数) 次阴影合成降到 O(1)(早前
-                // project_nowplaying_desktop_lyrics_text_shadow 那条记录里把这个优化项
-                // 标成"纯性能、视觉不变"是判断错了——分层阴影跟合并阴影视觉上确实不同,
-                // 这次一并订正)。
+                // compositingGroup 把这一整行字先合成成一张位图再统一套一次阴影——如果
+                // 每个字的 Text 各自单独 .shadow(),SwiftUI 会当成互相独立的半透明图层
+                // 分别渲染,相邻字阴影重叠的区域会叠加变暗,整行看起来深浅不均。合成后
+                // 阴影只按最终轮廓算一次,顺带把 O(字数) 次阴影合成降到 O(1)。
                 .compositingGroup()
                 .lyricsTextStroke(settings.textStrokeEnabled, color: settings.textStrokeColor)
             }
@@ -266,22 +183,19 @@ struct LyricsOverlayView: View {
     }
 
     // 逐字时长下限——只影响这一个词自己的填色速度,不改 startMs、不影响下一个词何时
-    // 开始,纯粹是"这个词的扫过动画至少要花多久"。实测坐实英文歌词(NetEase/QQ/酷狗给
-    // 的逐字对齐)比中文更容易出现 durationMs==0 或几十毫秒的极短词(介词/冠词一类),
-    // 原来的硬边界瞬间 0→1 在这种词密集的英文句子里显得比中文更"跳"。
+    // 开始。英文歌词(NetEase/QQ/酷狗给的逐字对齐)比中文更容易出现 durationMs==0 或
+    // 几十毫秒的极短词(介词/冠词一类),硬边界瞬间 0→1 在这种词密集的句子里会显得更"跳"。
     private static let minWordDurationMs = 80
     // 过渡带半宽(fraction 单位)——真正需要柔化的只是"刚好唱到/刚好唱完"这个边界附近
     // 一小段,不是整个 [0,1] 区间。
     private static let wordEdgeSoftenBand = 0.08
 
-    // 故意不夹到 [0,1]——早年版本在这里用 min(1,max(0,...)) 夹过,副作用是"还没轮到、
-    // 离真正唱到还有好几个字/好几句"的词全都被夹成跟"刚好唱到这个词的最前一刻"完全
-    // 相同的 0,wordText 里的过渡带因此在每一个尚未唱到的词开头都会误算出一小截"已经
-    // 唱过"的高亮——英文按整词(而非整字)分词,这一小截过渡带宽度恰好接近首字母的宽度,
-    // 表现成"还没唱到的英文词首字母却先带了点颜色"(中文逐字分词单位更小、同样的绝对
-    // 误差在视觉上没那么显眼,但机制其实是共通的)。真正需要的裁剪挪到 wordGradient 里,
-    // 按"过渡带跟 [0,1] 是否有交集"分情况处理,离得够远的词直接算纯色、不构造多余的
-    // 渐变过渡。
+    // 故意不夹到 [0,1]——如果夹住,"还没轮到、离真正唱到还有好几个字/好几句"的词会
+    // 全都被夹成跟"刚好唱到这个词最前一刻"相同的 0,wordText 里的过渡带因此会在每一个
+    // 尚未唱到的词开头误算出一小截"已经唱过"的高亮(英文按整词分词,这一小截宽度恰好
+    // 接近首字母宽度,表现成"还没唱到的词首字母却先带了点颜色";中文逐字分词单位更小,
+    // 同样误差没那么显眼,但机制相通)。真正需要的裁剪挪到 wordGradient 里,按"过渡带
+    // 跟 [0,1] 是否有交集"分情况处理。
     private func fillFraction(for w: SyncedLyricWord, atMs ms: Int) -> Double {
         let effectiveDuration = max(w.durationMs, Self.minWordDurationMs)
         return Double(ms - w.startMs) / Double(effectiveDuration)
@@ -341,34 +255,19 @@ struct LyricsOverlayView: View {
 // 悬浮窗背景透明、文字直接叠在桌面内容上,颜色/内容对不上时容易糊在一起——加一圈描边
 // 提高辨识度,是字幕类悬浮显示的常见做法。
 //
-// 2026-07-14 上线时这里做的是模糊阴影(.shadow(radius:)),参考 LyricsX 的
-// PreferenceDisplayViewController+KaraokeLyricsView.swift 调过取值(偏移量改成
-// shadowOffset = .zero 的"四面光晕"效果、逐字歌词那一行统一在 WrapLayout 外层
-// .compositingGroup() 之后只套一次,而不是每个字各自套一次)。
-//
-// 2026-07-22:用户反馈想要真正的描边(实心轮廓)而不是模糊阴影,要求参考同类开源歌词
-// 项目的做法——搜了几个 SwiftUI 文字描边的真实实现(包括 katagaki/DJDX、
-// zkHub/SwiftUIPreview 这两个仓库),归纳下来常见两条路:
-// 1) "N 个方向各偏移一份内容再叠加"(zkHub/SwiftUIPreview 的 StrokeText 就是这种,
-//    支持 8/16/32 个方向可调"质量")——写法简单,但每多一个方向就多渲染/布局一份完整
-//    内容,用在这里(mainLine 是 TimelineView(.animation) 驱动的 60fps 逐字填色)意味着
-//    每一帧要多付出 N 倍的重复开销,方向数越多描边越圆滑、开销也越高,这条路对这个
-//    项目的高频渲染路径不友好。
-// 2) katagaki/DJDX(github.com/katagaki/DJDX)View Modifiers/TextStroke.swift 的做法:
-//    content 先 .blur(radius:) 让字形轮廓往外"胀"开一圈,Canvas 里用
-//    .addFilter(.alphaThreshold(min:)) 把这层模糊的 alpha 通道硬切成非 0 即 1(胀开的
-//    区域变成一块实心剪影),拿这个剪影当 mask 盖一层纯色矩形,垫在原始文字(不模糊、
-//    保留自己的渐变/颜色)下面当描边。这个技术只需要文字的"形状"(alpha 通道),不关心
-//    文字本身画的是纯色还是渐变,所以能像原来的阴影一样整体套在 mainLine 外面一次
-//    搞定,不需要对每个字分别处理;开销是固定的"整体渲染 content 一遍 + 一次模糊 +
-//    一次阈值",不随描边粗细变化,量级上跟原来 .shadow() 自带的模糊开销相当——采用
-//    这条路径,详见下面 OptionalTextStroke。
+// 描边参考 katagaki/DJDX(View Modifiers/TextStroke.swift)的做法:content 先
+// .blur(radius:) 让字形轮廓往外"胀"开一圈,Canvas 里用 .addFilter(.alphaThreshold(min:))
+// 把这层模糊的 alpha 通道硬切成非 0 即 1,拿这个剪影当 mask 盖一层纯色矩形垫在原始文字
+// (不模糊、保留自己的渐变/颜色)下面当描边。这个技术只需要文字的"形状"(alpha 通道),
+// 不关心文字本身画的是纯色还是渐变,所以能像阴影一样整体套在 mainLine 外面一次搞定,
+// 不需要对每个字分别处理;开销是固定的"整体渲染一遍 + 一次模糊 + 一次阈值",不随描边
+// 粗细变化。备选的"N 个方向各偏移一份内容再叠加"写法更简单,但每多一个方向就多渲染一份
+// 完整内容,用在这里(mainLine 是 60fps 逐字填色的热路径)会造成 N 倍重复开销,故未采用。
 private struct OptionalTextStroke: ViewModifier {
     let enabled: Bool
     let color: Color
-    // 固定常量,不做成 Settings 可调项——延续这个功能原来是阴影时"只给颜色选择器,
-    // 半径/偏移是代码里的固定值"的取舍(那时参考的也是 LyricsX 的同款克制)。1.2pt
-    // 在这个项目常用的歌词字号下是一圈清晰但不臃肿的细描边。
+    // 固定常量,不做成 Settings 可调项——只给颜色选择器,粗细留在代码里,参考 LyricsX
+    // 同款克制。1.2pt 在这个项目常用的歌词字号下是一圈清晰但不臃肿的细描边。
     private let width: CGFloat = 1.2
     private let symbolID = "np-lyrics-stroke"
 

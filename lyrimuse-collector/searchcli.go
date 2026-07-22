@@ -35,22 +35,21 @@ func runSearchLyricsCLI(args []string) {
 
 	// main() 的正常启动流程会在这之后才 loadFeatureFlags(...),但这条 CLI 子命令走的是
 	// os.Args[1]=="search-lyrics" 的提前分支、马上 return,永远不会执行到那一行——
-	// features 这个包级变量在这里还是零值(LyricsSources 是 nil map)。2026-07-18 起
-	// 手动搜索改成遵循"歌词"设置里的"歌词来源"开关(此前故意不遵循,让手动搜索总能看到
-	// 全部四个源——用户反馈这个不一致该消除,手动搜索也只看你在设置里开着的那几个源),
-	// 所以这里必须按跟 main() 完全一致的默认路径规则自己加载一遍,不然下面过滤时 nil map
-	// 对任何 key 取值都是 false,会把四个源全部误判成"没启用"、直接返回空列表。
+	// features 这个包级变量在这里还是零值(LyricsSources 是 nil map)。手动搜索要遵循
+	// "歌词"设置里的"歌词来源"开关,所以这里必须按跟 main() 完全一致的默认路径规则自己
+	// 加载一遍,不然下面过滤时 nil map 对任何 key 取值都是 false,会把四个源全部误判成
+	// "没启用"、直接返回空列表。
 	home, err := os.UserHomeDir()
 	if err == nil {
 		cfgPath := filepath.Join(home, ".config", clientName, "config.json")
 		features = loadFeatureFlags(filepath.Join(filepath.Dir(cfgPath), clientName+"-features.json"))
 	}
 
-	// 跟 enrich.go 的 resolveTrackEnrichment 同一个理由(2026-07-15 真机实测坐实):
-	// NetEase/QQ/酷狗/LRCLIB 的搜索索引是简体中文,本地 Apple Music 标签若是繁体
-	// (比如"周杰倫"),繁体原文直接发起搜索请求会查不到任何候选——这个 CLI 子命令是
-	// desktop-lyrics"联网搜索候选歌词"功能唯一的数据来源,不经过 resolveTrackEnrichment,
-	// 必须单独转换一遍,不能指望那边的修复覆盖到这里。
+	// 跟 enrich.go 的 resolveTrackEnrichment 同一个理由:NetEase/QQ/酷狗/LRCLIB 的
+	// 搜索索引是简体中文,本地 Apple Music 标签若是繁体(比如"周杰倫"),繁体原文直接
+	// 发起搜索请求会查不到任何候选——这个 CLI 子命令是 desktop-lyrics"联网搜索候选
+	// 歌词"功能唯一的数据来源,不经过 resolveTrackEnrichment,必须单独转换一遍,不能
+	// 指望那边的修复覆盖到这里。
 	sArtist, sTitle, sAlbum := toSimplified(*artist), toSimplified(*title), toSimplified(*album)
 	ne := neteaseLookup(sArtist, sTitle, sAlbum)
 	results := scoredLyricCandidates(ne, sArtist, sTitle, sAlbum, *duration)

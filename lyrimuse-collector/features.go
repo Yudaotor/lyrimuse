@@ -72,15 +72,10 @@ type featureFlagsFile struct {
 
 // featureFlags is the resolved (never-nil) form consulted at every gate site.
 //
-// 2026-07-20:StateRelay 总开关 + 5 个 WebShowXxx 网页展示模块开关已删掉——用户
-// 反馈"网页推送是附加功能，配好 state-relay 地址+令牌就该默认全推，不用逐项配置"。
-// pushRelayState 现在只看 cfg.StateRelayURL 是否非空(config.go)来决定推不推；
-// webModules()/payload["modules"] 也一并删掉——网页前端(web/index.html
-// normalizeModules)本来就把 modules 字段缺失当"全部启用"处理,不推这个字段跟
-// 推一份全 true 的字段，网页那边看到的效果完全一样，没有必要维护一份形同虚设的
-// 可配置项。同一天还删掉了 TopArtistsDigest(同样改成"三个真实前置条件满足就自动
-// 跑",见 topArtistsDigest())和 BarkAlerts(故障告警——用户反馈"压根不需要告警
-// 故障了",这个是彻底删掉能力,见 alerter.go)。
+// 推送类模块(网页展示子开关、TopArtistsDigest、故障告警)不在这里出现:前两者已
+// 改成"配置齐了就默认全跑"(pushRelayState 只看 cfg.StateRelayURL 是否非空,见
+// config.go;TopArtistsDigest 见 topArtistsDigest()),不需要单独开关;故障告警
+// 已整个下线,见 alerter.go。
 type featureFlags struct {
 	Lyrics               bool
 	AlbumPrefetch        bool
@@ -118,9 +113,9 @@ func boolOr(p *bool, def bool) bool {
 // toggles (lyrics/albumPrefetch) miss-field-defaults to true — a
 // pure increment that never silently changes existing behavior. The 3 toggles
 // that each require an external account (Last.fm bridge+mirror / weekly
-// digest) default to false instead (2026-07-18): turning them on by default
-// for a stranger who never opened Settings would silently start network
-// calls to services they never configured.
+// digest) default to false instead: turning them on by default for a stranger
+// who never opened Settings would silently start network calls to services
+// they never configured.
 func loadFeatureFlags(path string) featureFlags {
 	var f featureFlagsFile
 	if data, err := os.ReadFile(path); err == nil {

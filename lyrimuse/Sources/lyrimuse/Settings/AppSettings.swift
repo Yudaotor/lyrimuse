@@ -2,10 +2,9 @@ import Foundation
 import SwiftUI
 import AppKit
 
-// 灵动岛卡片的三种视觉风格——UI 预览阶段给用户看过三个方向(纯黑/磨砂玻璃/深色渐变),
-// 当时选了磨砂玻璃直接实现,用户后来反馈"另外两个也做一下,做成可配置的"。displayName/
-// fill(alpha 相关的具体 ShapeStyle)定义在 NotchLyricsView.swift(跟灵动岛卡片本身的
-// UI 强相关,不适合放在这个纯设置文件里),这里只负责持久化用的 rawValue。
+// 灵动岛卡片的三种视觉风格。displayName/fill(alpha 相关的具体 ShapeStyle)定义在
+// NotchLyricsView.swift(跟灵动岛卡片本身的 UI 强相关,不适合放在这个纯设置文件里),
+// 这里只负责持久化用的 rawValue。
 enum NotchCardStyle: String, Codable, Hashable, CaseIterable {
     case solidBlack
     case frostedGlass
@@ -56,10 +55,8 @@ final class AppSettings: ObservableObject {
         static let customColorThemesJSON = "np:customColorThemesJSON"
     }
 
-    // 2026-07-22:字体/字号的默认值——配色四项的默认值改成引用 ColorTheme.defaultTheme
-    // 之后(见下方 init()),这两个排版字段(不属于 ColorTheme,见该文件顶部注释)单独在
-    // 这里给一个同样有名字的默认值,道理一样:init() 和 SettingsView"恢复默认外观"按钮
-    // 都读这两个,不再各自硬编码一遍数字/字符串。
+    // 字体/字号的默认值,跟配色四项(见下方 init())一样单独给一个有名字的默认值:
+    // init() 和 SettingsView"恢复默认外观"按钮都读这两个,不再各自硬编码一遍数字/字符串。
     static let defaultFontFamilyName = "PingFang SC"
     static let defaultFontSize = 31.0
 
@@ -89,13 +86,11 @@ final class AppSettings: ObservableObject {
             CollectorServiceManager.setEnabled(collectorServiceEnabled)
         }
     }
-    // 是否在 Dock 里显示图标(以及连带出现在 Cmd-Tab 里)——用户反馈默认就应该开启,
-    // 所以这里默认 true(见下面 init() 的兜底值),不是原来"跟裸可执行文件时代保持一致"
-    // 那版的默认关闭。跟 launchAtLoginEnabled 同样的写法,直接在 didSet 里调用生效
-    // (而不是像 classicOverlayEnabled 那样只负责持久化、把"生效"这
-    // 一步挪到 View 层)——NSApp.setActivationPolicy 是纯 AppKit 调用,不依赖任何其它
-    // 单例,不存在"AppSettings.init() 时那个单例还没构造好"的循环初始化风险,可以放心
-    // 直接在这里调用。
+    // 是否在 Dock 里显示图标(以及连带出现在 Cmd-Tab 里),默认 true(见下面 init() 的
+    // 兜底值)。跟 launchAtLoginEnabled 同样的写法,直接在 didSet 里调用生效(而不是像
+    // classicOverlayEnabled 那样只负责持久化、把"生效"这一步挪到 View 层)——
+    // NSApp.setActivationPolicy 是纯 AppKit 调用,不依赖任何其它单例,不存在
+    // "AppSettings.init() 时那个单例还没构造好"的循环初始化风险,可以放心直接在这里调用。
     @Published var showInDock: Bool {
         didSet {
             defaults.set(showInDock, forKey: Keys.showInDock)
@@ -110,8 +105,8 @@ final class AppSettings: ObservableObject {
     @Published var showLyricsInMenuBar: Bool {
         didSet { defaults.set(showLyricsInMenuBar, forKey: Keys.showLyricsInMenuBar) }
     }
-    // 状态栏歌词行超过这个字数就截断+悬停 tooltip 补全,不超过就整行显示——用户反馈
-    // "不拦截,有多长展示多少,合理范围内就好",做成可调的上限而不是写死一个数字。
+    // 状态栏歌词行超过这个字数就截断+悬停 tooltip 补全,不超过就整行显示——做成可调的
+    // 上限而不是写死一个数字。
     @Published var menuBarLyricsMaxChars: Int {
         didSet { defaults.set(menuBarLyricsMaxChars, forKey: Keys.menuBarLyricsMaxChars) }
     }
@@ -119,22 +114,17 @@ final class AppSettings: ObservableObject {
     // 加个描边提高辨识度。纯展示开关,LyricsOverlayView 每次渲染都直接读这个值,不需要
     // 像 lockPosition/hideDuringScreenCapture 那样额外调用某个单例的方法"生效"。
     //
-    // 2026-07-22:这两个属性原来叫 textShadowEnabled/textShadowColorHex,渲染效果是
-    // 模糊阴影(.shadow(radius:))——用户反馈想改成描边(实心轮廓),参考了
-    // katagaki/DJDX 仓库的 Canvas+alphaThreshold+blur 技术做出真正的描边效果(见
-    // LyricsOverlayView.swift 的 OptionalTextStroke)。属性/UserDefaults key 一并
-    // 改名,不留旧 key 做迁移——这是本机单用户的本地设置,旧值(阴影开关+颜色)语义已经
-    // 对不上新的渲染方式,沿用旧 key 只会让人以为这个值"应该还生效",不如直接改名、
-    // 重新走一遍默认值,跟这个项目其它"渲染方式变了就直接改名不做兼容"的先例一致
-    // (比如 weeklyDigestPush 整个函数被 digest.go 拆分替代时也没留旧接口)。
+    // 描边(非模糊阴影)效果参考了 katagaki/DJDX 仓库的 Canvas+alphaThreshold+blur
+    // 技术(见 LyricsOverlayView.swift 的 OptionalTextStroke)。UserDefaults key 没有
+    // 保留旧名做迁移——本机单用户的本地设置,旧值语义已经对不上新的渲染方式,不如直接
+    // 改名、重新走一遍默认值。
     @Published var textStrokeEnabled: Bool {
         didSet { defaults.set(textStrokeEnabled, forKey: Keys.textStrokeEnabled) }
     }
-    // #RRGGBBAA。延续原来阴影功能的取舍(参考 LyricsX 的 AlphaColorWell/shadowColor):
-    // 只让用户调"颜色"(含 alpha),描边粗细是代码里的固定常量(OptionalTextStroke 的
-    // width,1.2pt),不做成单独的滑杆——原来阴影功能的模糊半径/偏移量也是同样处理,
-    // 保持这个克制的一贯做法。默认 #000000A6(黑色、alpha≈0.65)直接沿用改名前的默认值,
-    // 没碰过这个设置的人从阴影切到描边后颜色不会跳变,只有渲染方式本身变了。
+    // #RRGGBBAA。只让用户调"颜色"(含 alpha),描边粗细是代码里的固定常量
+    // (OptionalTextStroke 的 width,1.2pt),不做成单独的滑杆——参考 LyricsX 的
+    // AlphaColorWell/shadowColor,保持这个克制的取舍。默认 #000000A6(黑色、
+    // alpha≈0.65),没碰过这个设置的人从阴影切到描边后颜色不会跳变。
     @Published var textStrokeColorHex: String {
         didSet {
             defaults.set(textStrokeColorHex, forKey: Keys.textStrokeColorHex)
@@ -170,9 +160,9 @@ final class AppSettings: ObservableObject {
     @Published var appLanguage: String {
         didSet { defaults.set(appLanguage, forKey: Keys.appLanguage) }
     }
-    // 单曲歌词时间轴微调(菜单里的"歌词时间轴"/两个可选快捷键)每点一次调整多少——用户
-    // 反馈"不要写死 0.2 秒",做成可调的步长而不是代码里的固定常量,跟 menuBarLyricsMaxChars
-    // 同样的取舍。范围 50~2000ms 在 SettingsView 的 Stepper 里约束,这里不重复校验。
+    // 单曲歌词时间轴微调(菜单里的"歌词时间轴"/两个可选快捷键)每点一次调整多少——做成
+    // 可调的步长而不是代码里的固定常量,跟 menuBarLyricsMaxChars 同样的取舍。范围
+    // 50~2000ms 在 SettingsView 的 Stepper 里约束,这里不重复校验。
     @Published var lyricsOffsetStepMs: Int {
         didSet { defaults.set(lyricsOffsetStepMs, forKey: Keys.lyricsOffsetStepMs) }
     }
@@ -187,21 +177,20 @@ final class AppSettings: ObservableObject {
     }
     // 桌面悬浮歌词(经典悬浮窗)、灵动岛歌词各自独立开关,互不排斥——两者对应完全独立的
     // 窗口控制器(LyricsOverlayWindowController/NotchLyricsWindowController),可以
-    // 同时开、同时关、或者只开一个。最初做成互斥的单选"悬浮窗样式"(要么经典要么灵动岛),
-    // 用户反馈这两个应该是独立的展示位置,不是同一个设置的两种取值,改成这样。只负责
-    // 持久化,原因跟 lockPosition 等既有窗口相关设置一样——"生效"这一步(setVisible)挪到
-    // SettingsView.swift 的 Toggle Binding.set 里手动调用,不在这里的 didSet 里连带触发,
-    // 避免在 AppSettings.init() 给这两个属性赋初值时就去访问两个窗口控制器单例、有循环
-    // 初始化风险。
+    // 同时开、同时关、或者只开一个(原来是互斥的单选"悬浮窗样式",迁移逻辑见下方
+    // init())。只负责持久化,原因跟 lockPosition 等既有窗口相关设置一样——"生效"这
+    // 一步(setVisible)挪到 SettingsView.swift 的 Toggle Binding.set 里手动调用,不在
+    // 这里的 didSet 里连带触发,避免在 AppSettings.init() 给这两个属性赋初值时就去访问
+    // 两个窗口控制器单例、有循环初始化风险。
     @Published var classicOverlayEnabled: Bool {
         didSet { defaults.set(classicOverlayEnabled, forKey: Keys.classicOverlayEnabled) }
     }
     @Published var notchOverlayEnabled: Bool {
         didSet { defaults.set(notchOverlayEnabled, forKey: Keys.notchOverlayEnabled) }
     }
-    // 灵动岛卡片的视觉风格——默认磨砂玻璃(第一版直接实现、真机验证过的那个方向),
-    // 只负责持久化,纯展示用的设置,NotchLyricsView 每次渲染直接读这个值,不需要像
-    // classicOverlayEnabled 那样在 didSet 里连带调用某个单例的方法。
+    // 灵动岛卡片的视觉风格——默认磨砂玻璃。只负责持久化,纯展示用的设置,
+    // NotchLyricsView 每次渲染直接读这个值,不需要像 classicOverlayEnabled 那样在
+    // didSet 里连带调用某个单例的方法。
     @Published var notchCardStyle: NotchCardStyle {
         didSet { defaults.set(notchCardStyle.rawValue, forKey: Keys.notchCardStyle) }
     }
@@ -227,11 +216,10 @@ final class AppSettings: ObservableObject {
     @Published var overlayWidth: Double {
         didSet { defaults.set(overlayWidth, forKey: Keys.overlayWidth) }
     }
-    // 灵动岛歌词的固定宽度(pt)——2026-07-22 新增,同一个模式:只在 didSet 里持久化,
-    // 不在这个 model 层直接碰 NSWindow,实时应用交给 SettingsView 的 Binding.set 显式调
-    // NotchLyricsWindowController.shared.applyContentWidthSetting()(见该文件注释——
-    // 这条设置项本身就是为了回应"灵动岛宽度不应该跟着歌词内容变"这条反馈而加的,默认值
-    // 360 沿用改回固定宽度那次定的数值)。
+    // 灵动岛歌词的固定宽度(pt)——同一个模式:只在 didSet 里持久化,不在这个 model 层
+    // 直接碰 NSWindow,实时应用交给 SettingsView 的 Binding.set 显式调
+    // NotchLyricsWindowController.shared.applyContentWidthSetting()。灵动岛宽度不跟着
+    // 歌词内容变化,保持固定。
     @Published var notchContentWidth: Double {
         didSet { defaults.set(notchContentWidth, forKey: Keys.notchContentWidth) }
     }

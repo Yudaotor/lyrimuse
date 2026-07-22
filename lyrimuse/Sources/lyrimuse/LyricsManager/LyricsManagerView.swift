@@ -2,7 +2,7 @@ import SwiftUI
 import LyrimuseCore
 
 // 歌词来源筛选——collector 只会写入这四种(见 collector/enrich.go 的 lyricCandidate
-// source 取值),"无来源"对应老缓存(lyrics_source 字段是 07-11 才加的,更早解析的
+// source 取值),"无来源"对应老缓存(lyrics_source 字段是后来才加的,更早解析的
 // 条目永久没有这个值,除非重新解析)。
 private enum SourceFilter: Hashable, Identifiable {
     case all
@@ -51,9 +51,8 @@ func primaryArtist(_ full: String) -> String {
 // 每个歌词源一个固定色,列表/详情页共用,方便肉眼快速扫源(不是随手配的——网易云红、
 // QQ音乐绿、酷狗蓝、LRCLIB紫,分别贴近各自品牌主色,"无来源"用中性灰)。
 //
-// 2026-07-16:从 private 改成 internal——"歌词"设置分类里新增的来源启用/优先级排序
-// UI(FeatureSettingsStore.swift 的 LyricsSource 枚举)要复用同一套名字/颜色,不想在
-// 第二个地方再维护一份一模一样的 switch,两边一旦某天改了色值/译名容易漂移。
+// internal 而非 private——"歌词"设置分类里的来源启用/优先级排序 UI(FeatureSettingsStore.swift
+// 的 LyricsSource 枚举)复用同一套名字/颜色,避免两处各维护一份 switch 导致漂移。
 func sourceColor(_ source: String) -> Color {
     switch source {
     case "netease": return .red
@@ -65,8 +64,7 @@ func sourceColor(_ source: String) -> Color {
 }
 
 // 歌词来源展示名——网易云音乐/QQ音乐/酷狗音乐是国内用户认得出的中文写法;LRCLIB 是纯
-// 西方的开源歌词库,没有约定俗成的中文名,保留英文原名(用户明确要求"只有英文的就用英文",
-// 不强行硬翻一个不存在的中文名)。
+// 西方的开源歌词库,没有约定俗成的中文名,保留英文原名,不强行硬翻一个不存在的中文名。
 func sourceDisplayName(_ source: String) -> String {
     switch source {
     case "netease": return L10n.t("网易云音乐")
@@ -132,14 +130,12 @@ struct LyricsManagerView: View {
         Array(Set(store.summaries.map { primaryArtist($0.artist) })).sorted()
     }
 
-    // 同一张专辑在不同缓存条目里,专辑名偶尔因为各自歌词源的候选写法大小写不一致
-    // (实测坐实:"BLOOD ON THE DANCE FLOOR/ HIStory In The Mix" vs "Blood on the Dance
-    // Floor/ HIStory in the Mix"、"HIStory Continues" vs "History Continues")而长得不
-    // 一样。归并键统一转小写比较,取第一次遇到(按 summaries 已有的排序)那条的原始写法
-    // 当这一组的统一展示文案——不只是筛选下拉要合并,列表每一行、详情页头部凡是要展示
-    // 专辑名的地方都用这份映射,同一张专辑不管底层哪条记录的原始大小写是什么,肉眼看到
-    // 的都是同一种写法。跟 primaryArtist 合并合唱曲目是同一个"归并键跟展示值分开"的
-    // 思路,只是这里归并键是转小写而不是按分隔符取第一段。
+    // 同一张专辑在不同缓存条目里,专辑名偶尔因为各自歌词源的候选写法大小写不一致而长得
+    // 不一样(如"BLOOD ON THE DANCE FLOOR..." vs "Blood on the Dance Floor...")。归并键
+    // 统一转小写比较,取第一次遇到(按 summaries 已有的排序)那条的原始写法当这一组的
+    // 统一展示文案——不只是筛选下拉要合并,列表每一行、详情页头部凡是要展示专辑名的地方
+    // 都用这份映射。跟 primaryArtist 合并合唱曲目是同一个"归并键跟展示值分开"的思路,
+    // 只是这里归并键是转小写而不是按分隔符取第一段。
     private var albumDisplayNames: [String: String] {
         var seen: [String: String] = [:] // 小写归并键 -> 第一次出现时的原始写法
         for s in store.summaries where !s.album.isEmpty {
@@ -263,11 +259,10 @@ struct LyricsManagerView: View {
 
     var body: some View {
         NavigationSplitView {
-            // ScrollViewReader 挪到包住整个侧栏(而不是只包 List)——工具栏的"回到当前播放"
-            // 按钮跟 List 是 VStack 里的兄弟节点、跟 .toolbar 修饰符也不在同一层,要拿到
-            // scrollProxy 就必须让它在这两者共同的外层作用域里可见,所以让 ScrollViewReader
-            // 的闭包整个包住 VStack+.toolbar,而不是像原来那样只包 List 本身。ScrollViewReader
-            // 只是个透明包装,不影响布局,包多包少视觉上没有区别。
+            // ScrollViewReader 包住整个侧栏(而不是只包 List)——工具栏的"回到当前播放"
+            // 按钮跟 List 是 VStack 里的兄弟节点、跟 .toolbar 修饰符也不在同一层,要让
+            // scrollProxy 在这两者共同的外层作用域里可见,闭包需要整个包住 VStack+.toolbar。
+            // ScrollViewReader 只是个透明包装,不影响布局。
             ScrollViewReader { scrollProxy in
                 VStack(spacing: 0) {
                     filterBar
@@ -281,25 +276,20 @@ struct LyricsManagerView: View {
                     .onAppear {
                         // reload 必须先于定位——刚打开窗口时 summaries 可能还是上次
                         // 关闭时的旧内容(或空的),定位逻辑要按最新磁盘内容匹配当前
-                        // 播放的这首歌。reload() 2026-07-17 起改成 async(读文件+解析
-                        // 挪到后台线程,避免缓存文件变大之后开窗卡一下),这里用 Task
-                        // 包一层、await 完了再定位,保持"先 reload 再定位"这个顺序不变。
+                        // 播放的这首歌。reload() 是 async(读文件+解析在后台线程,避免
+                        // 缓存文件变大之后开窗卡顿),这里用 Task 包一层、await 完了再定位。
                         Task {
                             await store.reload()
                             focusCurrentlyPlaying(scrollProxy: scrollProxy)
                         }
                     }
                 }
-                // 2026-07-22:用户反馈搜索框(这个本地过滤用的原生 .searchable)跟下面
-                // filterBar 那一整条筛选项(歌手/专辑/来源/时间轴等)离得太远、不像一组——
-                // 原来没指定 placement,macOS 上 .automatic 会解析成挂在整个窗口的顶部
-                // 工具栏里,而 filterBar 是应用自己手搭的、贴在内容区(这一栏)顶部的一条
-                // HStack,两者分处"窗口级"和"内容级"两个不同层次。加 placement: .sidebar
-                // 把搜索框的锚点从"整个窗口工具栏"改成"这一栏(NavigationSplitView 的
-                // sidebar 闭包,也就是 filterBar+List 所在这一栏)自己的顶部"——不用自己
-                // 手写 TextField 替代,继续用系统原生搜索框(放大镜图标/清除按钮/聚焦态
-                // 动画都不用自己实现),只是挪了挂载位置,这样它会紧贴在 filterBar 上方,
-                // 视觉上连成一组。
+                // placement: .sidebar——默认 .automatic 会把这个本地过滤用的原生
+                // .searchable 解析成挂在整个窗口的顶部工具栏,而 filterBar 是贴在内容区
+                // (这一栏)顶部的一条 HStack,两者分处"窗口级"和"内容级"两个不同层次,
+                // 离得太远不像一组。指定 .sidebar 把搜索框的锚点改成这一栏
+                // (NavigationSplitView 的 sidebar 闭包)自己的顶部,紧贴 filterBar,
+                // 仍是系统原生搜索框,只是挂载位置变了。
                 .searchable(text: $searchText, placement: .sidebar, prompt: L10n.t("搜索歌手/歌名"))
                 .navigationTitle(L10n.t("歌词管理"))
                 .navigationSubtitle(String(format: L10n.t("%@ / %@ 首"), "\(filtered.count)", "\(store.summaries.count)"))
@@ -339,8 +329,8 @@ struct LyricsManagerView: View {
                 }
                 // 列表这一栏(歌名/歌手/专辑/来源四列)给个够宽的默认/理想宽度——不然
                 // NavigationSplitView 默认分给侧栏的宽度偏窄,歌名(尤其是带 feat./remix
-                // 后缀的长标题)会被裁成省略号。630pt 是用户截图里实际截到的、歌名基本能
-                // 完整露出来的比例,拿来当 ideal 默认值。
+                // 后缀的长标题)会被裁成省略号。630pt 能让歌名基本完整露出来,拿来当
+                // ideal 默认值。
                 .navigationSplitViewColumnWidth(min: 480, ideal: 630, max: 900)
                 .confirmationDialog(
                     L10n.t("确定要清空全部歌词缓存吗?"),
@@ -377,9 +367,8 @@ struct LyricsManagerView: View {
     // 只在这里读一次 PlaybackCoordinator.shared 的当前值,不声明成 @ObservedObject——
     // 那个单例还同时发布 currentLine/anchor,播放中每秒 20 次刷新(本地模式的快速
     // 计时器),整个窗口订阅它会导致 body 跟着每秒重算 20 次,把手动点选/刷新按钮的
-    // 交互直接闷在这阵持续重渲染里,表现成"点了跟没点一样"(实测坐实的真 bug,不是
-    // 自动化环境的假象)。这里只需要开窗那一刻的快照,普通函数内直接访问单例属性即可,
-    // 不用建立订阅。
+    // 交互闷在这阵持续重渲染里,表现成"点了跟没点一样"。这里只需要开窗那一刻的快照,
+    // 普通函数内直接访问单例属性即可,不用建立订阅。
     private func refreshWithFeedback() {
         Task {
             await store.reload()
@@ -454,8 +443,8 @@ struct LyricsManagerView: View {
             Text(L10n.t("已导出到本地的歌词文件也会一并删除,下次播放这首歌会重新走一遍匹配解析,不保证一定能找到一样的歌词。"))
         }
         .sheet(isPresented: $showSearchSheet) {
-            // 采纳候选直接保存,不需要再手动点"保存修改"——用户反馈选了以为就存上了,
-            // 结果只是填进了编辑框,得再点一下保存才真正落盘,体验上是个多余的确认步骤。
+            // 采纳候选直接保存,不需要再手动点"保存修改"——避免让人误以为选了就已经
+            // 存上了,结果只是填进了编辑框,还得再点一下保存才真正落盘。
             LyricsSearchSheet(artist: summary.artist, title: summary.title, album: summary.album) { candidate in
                 editedLyrics = candidate.lyrics
                 editedTr = candidate.lyricsTr
@@ -480,12 +469,11 @@ struct LyricsManagerView: View {
                 }
             }
             Spacer(minLength: 12)
-            // 都挪到顶部——常用操作,原来放在底部操作栏每次都要翻到页面最下面才能点。
-            // .fixedSize() 强制这一组按钮永远按自己的完整期望宽度渲染,不参与跟左边
-            // 歌名/歌手/专辑那个 VStack 的空间压缩——之前歌名一长(比如带 feat./罗马数字
-            // 后缀),会连带把这两个按钮的文字挤到只剩省略号("联网搜..."/"删除本...")。
-            // 现在反过来:空间不够时,先紧着按钮拿够它们要的全部宽度,歌名那边(本来就
-            // 没有单行限制,靠 Text 自然换行)让出空间。
+            // 常用操作挪到顶部,不用翻到页面最下面才能点。.fixedSize() 强制这一组按钮
+            // 永远按自己的完整期望宽度渲染,不参与跟左边歌名/歌手/专辑那个 VStack 的
+            // 空间压缩——否则歌名一长(比如带 feat./罗马数字后缀),会把这两个按钮的
+            // 文字挤到只剩省略号("联网搜..."/"删除本...")。空间不够时优先满足按钮
+            // 宽度,歌名那边靠 Text 自然换行让出空间。
             HStack(spacing: 8) {
                 Button {
                     showSearchSheet = true
@@ -668,12 +656,10 @@ private struct LyricsManagerRow: View {
     // 的注释),这里传入调用方算好的统一展示文案,而不是自己再拿 summary.album 原样显示。
     let albumDisplayName: String
 
-    // 每行的图标槽位固定宽度——之前"人工修正"图标只在有的行才占位,导致有些行少一个
-    // 图标,后面的内容整体往左挪一截,几行错落对不齐看着乱。改成图标槽位固定宽度(没有
-    // 就用透明占位撑住位置,而不是整个不渲染),这样不管具体哪行有没有人工修正、是逐字
-    // 还是整行,几行的图标起始位置都对得齐。这两个图标算是"歌名"这一列的附加信息(是否
-    // 手工修正过/是逐字还是整行),跟着歌名走,不单独占一列——歌手/专辑/来源三列见
-    // LyricsListColumns。
+    // 图标槽位固定宽度(没有对应状态时用透明占位撑住位置,而不是整个不渲染)——保证
+    // 不管某行是否人工修正、是逐字还是整行,几行的图标起始位置都对得齐。这两个图标算是
+    // "歌名"这一列的附加信息(是否手工修正过/是逐字还是整行),跟着歌名走,不单独占一列
+    // ——歌手/专辑/来源三列见 LyricsListColumns。
     private static let badgeIconWidth: CGFloat = 14
 
     var body: some View {

@@ -1,25 +1,20 @@
 import SwiftUI
 
-// 首次启动的完整引导向导——之前只有"自动化权限"这一步单独的 NSAlert(见
-// AppSettings.hasCompletedOnboarding 迁移注释),用户反馈参照 Jukebox/PlayStatus/
-// Tuneful 这类"一步步走一遍"的完整体验。4 个固定步骤(欢迎/自动化权限/语言/完成),
-// 每一步的设置项都直接绑定到 AppSettings 对应属性、立即生效(跟 SettingsView 里
-// 同一批设置项一样,不做"最后统一确认"这种这个项目里从未出现过的模式),向导只是
-// 把它们串成一个有引导性的首次体验,不是另一套独立状态。
+// 首次启动的完整引导向导,参照 Jukebox/PlayStatus/Tuneful 这类"一步步走一遍"的
+// 体验。每一步的设置项都直接绑定到 AppSettings 对应属性、立即生效(跟 SettingsView
+// 里同一批设置项一样,不做"最后统一确认"),向导只是把它们串成一个有引导性的首次
+// 体验,不是另一套独立状态。
 //
-// 不含"播放状态来源"选择——用户反馈默认就该是本地播放,不需要在向导里单独问一遍
-// (2026-07-20 起这甚至已经不是个可选项:本地数据源是唯一的数据源,见
-// PlaybackCoordinator.start())。也没有任何"重新打开"的入口(菜单栏/设置都不留)——只在首次
-// 启动自动出现一次,关掉/走完都不会再自动弹出,想再调整这里涉及的每一项都能在
-// 设置里单独找到。
+// 不含"播放状态来源"选择——本地数据源是唯一的数据源(见 PlaybackCoordinator.start()),
+// 不是可配置项。也没有任何"重新打开"的入口(菜单栏/设置都不留)——只在首次启动自动
+// 出现一次,关掉/走完都不会再自动弹出,想再调整这里涉及的每一项都能在设置里单独找到。
 struct OnboardingView: View {
     @ObservedObject private var settings = AppSettings.shared
     @Environment(\.dismissWindow) private var dismissWindow
     @State private var step = 0
     @State private var automationStatus: MusicAutomationPermissionStatus = .notDetermined
-    // collector 常驻服务是否真的在跑——这一步是"软强制"的必经步骤(跟用户确认过:锁住
-    // 下一步按钮,但仍然可以直接关掉整个引导窗口跳过，跟其它步骤的"不反复打扰"哲学一致，
-    // 不禁用/隐藏关闭按钮)。
+    // collector 常驻服务是否真的在跑——这一步是"软强制"的必经步骤:锁住下一步按钮,
+    // 但仍然可以直接关掉整个引导窗口跳过,不禁用/隐藏关闭按钮。
     @State private var collectorRunning = false
     @State private var isTogglingCollectorService = false
 
@@ -64,9 +59,8 @@ struct OnboardingView: View {
             automationStatus = MusicAutomationPermission.check(askIfNeeded: false)
             collectorRunning = CollectorServiceManager.isRunning
         }
-        // 不管走没走完(包括直接点红绿灯关掉窗口)都算"已经引导过一次"——跟这个 App
-        // 里其它一次性引导(旧版自动化权限 NSAlert)同样的"不反复打扰"哲学,这里没有
-        // 任何重新打开的入口,关掉就是关掉了。
+        // 不管走没走完(包括直接点红绿灯关掉窗口)都算"已经引导过一次"——这里没有任何
+        // 重新打开的入口,关掉就是关掉了。
         .onDisappear { settings.hasCompletedOnboarding = true }
     }
 

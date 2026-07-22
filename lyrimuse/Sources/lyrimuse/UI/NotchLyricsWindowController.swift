@@ -5,14 +5,14 @@ import LyrimuseCore
 
 // 灵动岛/刘海样式悬浮歌词的窗口控制器——跟 LyricsOverlayWindowController 平行、完全
 // 独立的第二套实现(两种样式互斥、各自独立的窗口控制器,不去改造经典那一套让它同时
-// 兼容两种形态,那样的改造复杂度和风险都更高)。跟经典悬浮窗最大的行为差异:
+// 兼容两种形态,那样的改造复杂度和风险都更高)。跟经典悬浮窗的行为差异:
 // 1) 位置是算出来的、贴死在屏幕顶部居中,不支持用户拖拽(见 NotchLyricsWindow 里
 //    isMovableByWindowBackground = false),所以没有"锁定位置"这个概念,也不需要
 //    像经典悬浮窗那样持久化位置。
-// 2) 收起态(默认)只是刘海本身(或无刘海屏幕的兜底胶囊)大小;展开态靠鼠标 hover
-//    触发(NotchLyricsView 的 .onHover),展开态里播放控制按钮直接常驻,不用像经典
-//    悬浮窗那样再叠一层"展开后还要再单独 hover 一次才出现控制按钮"——用户明确要求
-//    "展开本身就已经代表用户正在看着它"。
+// 2) 稳态(没在播放、没 hover)缩到刘海本身(或无刘海屏幕的兜底胶囊)大小;播放中
+//    常显"歌名+控制按钮+当前歌词"整套,不需要 hover 才能看到——歌词类信息本来就该
+//    随时可见。hover 时在下面多展开一块补充信息(下一句歌词预览+迷你进度条),展开
+//    态里播放控制按钮直接常驻,不需要再单独 hover 一次才出现。
 //
 // 极其重要的一条不变量,贯穿 AppDelegate/SettingsView/MenuBarMenu 三处外部路由代码:
 // 这个类是 `static let shared`,真正引用到 `.shared` 才会执行 init() 建窗口——而
@@ -25,28 +25,14 @@ import LyrimuseCore
 // MenuBarMenu.swift,不能像"同时持有两个控制器的 @ObservedObject"这种最直白的写法
 // 那样两个都摸一遍。
 //
-// 真机(有物理刘海)实测坐实两个问题、这里改成常显、内容整体下移:
-// 1) 最初"收起态空胶囊+hover 展开"的设计,真机上悬停才会显示,用户明确反馈"预期是
-//    常显"——歌词类信息本来就需要随时可见,不该藏在 hover 后面,砍掉了 hover 才显示
-//    任何东西这层门槛,稳态(不 hover)永远显示"歌名+控制按钮+当前歌词"这一整套。
-// 2) 歌词文字这一行如果跟物理刘海本身占同一条 y 范围,会被刘海真实挡住一部分——物理
-//    刘海是屏幕硬件层面真实不发光的区域,不是"渲染层级"问题,任何 App 都不可能把内容
-//    "显示"在那个区域本身。真正可行的做法(参考 boring.notch/DynamicNotchKit 等真实
-//    刘海companion 应用的通用做法):可读内容整体让到刘海下方那一条,刘海本身所在的
-//    高度只留纯黑背景(视觉上跟物理刘海融为一体),不放任何文字/图标。
+// 歌词文字这一行让到物理刘海下方那一条,刘海本身所在的高度只留纯黑背景——物理刘海是
+// 屏幕硬件层面真实不发光的区域,不是"渲染层级"问题,任何 App 都不可能把内容"显示"在
+// 那个区域本身(参考 boring.notch/DynamicNotchKit 等真实刘海companion 应用的做法)。
 //
-// 2026-07-18 再次调整:hover 展开这个状态又加回来了,但跟最初那版语义完全不同——
-// 最初是"不 hover 就什么都没有",现在是"稳态本来就已经完整可用,hover 只是在下面
-// 多展开一块补充信息(下一句歌词预览 + 迷你进度条)",调研过 boring.notch 等真实
-// 参考实现后确认这个补充思路是合理的,详见 isExpanded/expandedExtraHeight。
-//
-// 2026-07-19 再次调整:上面这条"稳态永远显示完整内容"只在播放中才成立——用户明确
-// 要求"当前歌曲没有在播放的时候自动缩回去,不要占着空间",不是"缩到常显内容的下限
-// 宽度"那种程度,而是真的缩到跟物理刘海本身(或无刘海屏幕的兜底胶囊)一样大,常显
-// 内容整套不渲染。跟已有的 hideWhenNotPlaying(整个窗口隐藏)是两个独立机制,不冲突:
-// 那个开关关闭时窗口本身还在(用户能看到"这里有个东西"),只是不常显内容、缩到最小,
-// hover 到这一小块区域上依然能重新展开出完整内容(包括播放按钮,可以用来重新播放)。
-// 见 isCollapsed/collapsedFallbackWidth。
+// isCollapsed(缩到刘海大小,内容整套不渲染)跟已有的 hideWhenNotPlaying(整个窗口
+// 隐藏)是两个独立机制,不冲突:后者关闭时窗口本身还在(用户能看到"这里有个东西"),
+// 只是不常显内容、缩到最小,hover 到这一小块区域上依然能重新展开出完整内容(包括
+// 播放按钮,可以用来重新播放)。见 isCollapsed/collapsedFallbackWidth。
 @MainActor
 final class NotchLyricsWindowController: NSWindowController, ObservableObject {
     static let shared = NotchLyricsWindowController()
@@ -57,10 +43,10 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject {
     // 本身的高度,这样歌词永远从刘海往下才开始画,不会被刘海真实挡住一部分。
     // NotchLyricsView 读这个属性给歌词行加 .padding(.top, contentTopInset)。
     @Published private(set) var contentTopInset: CGFloat = 32
-    // 刘海本身的真实宽度(无真刘海时为 0)——播放控制按钮真机反馈要挪到刘海两侧
-    // ("耳朵")那两条空间里,不能摆在刘海本身的 x 范围内,物理刘海是屏幕硬件层面真实
-    // 不发光的区域,横向也会跟纵向一样把落在这个范围内的内容整个挡掉。NotchLyricsView
-    // 读这个属性把顶部这一行让出中间 notchWidth 宽度的空当,按钮只放在左右两侧。
+    // 刘海本身的真实宽度(无真刘海时为 0)——播放控制按钮要挪到刘海两侧("耳朵")那
+    // 两条空间里,不能摆在刘海本身的 x 范围内:物理刘海是屏幕硬件层面真实不发光的
+    // 区域,横向也会跟纵向一样把落在这个范围内的内容整个挡掉。NotchLyricsView 读这个
+    // 属性把顶部这一行让出中间 notchWidth 宽度的空当,按钮只放在左右两侧。
     @Published private(set) var notchWidth: CGFloat = 0
     // 鼠标是否悬停在这个悬浮窗上——由 NotchLyricsView 的 .onHover 驱动,决定窗口要不要
     // 多撑出 expandedExtraHeight 那一块、以及 NotchLyricsView 要不要渲染下一句预览+
@@ -86,28 +72,23 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject {
     // 常显内容行的固定高度(一行歌词 + 3 个播放控制按钮那一行的高度经验取值)——窗口
     // 总高度 = 刘海本身高度(或兜底高度)+ 这一行高度,让内容行完整落在刘海下方。
     private static let contentHeight: CGFloat = 44
-    // 2026-07-22:宽度改回固定值——中间有一版改成按当前这一句歌词的真实文字宽度动态算
-    // (真机反馈"歌词大部分时候没这么长,固定宽度显得空着一大截"),但用户后来反馈"歌词
-    // 一句太长时灵动岛整体长度会变化,这是非预期的,预期是多大就多大,不会随着歌词发生
-    // 变化"——两条反馈方向相反,这次按最新反馈改回固定宽度。数值本身(默认 360)以及
-    // 用户随后要求的"能在设置里调这个固定宽度"这条,都挪进了 AppSettings.
-    // notchContentWidth(默认值就定义在那一处,这里不重复放一份、避免两处数字不同步),
-    // 不再是这个文件自己的常量。超长歌词交给 NotchLyricsView 的 MarqueeText 来回滚动
-    // 展示,不再靠加宽窗口解决。
+    // 宽度是固定值,不随当前歌词文字宽度动态变化——预期是多大就多大,不会随着歌词
+    // 发生变化。数值本身(默认 360)以及用户可调的设置项都定义在 AppSettings.
+    // notchContentWidth(这里不重复放一份、避免两处数字不同步)。超长歌词交给
+    // NotchLyricsView 的 MarqueeText 来回滚动展示,不靠加宽窗口解决。
     // 顶行左右两只"耳朵"各自的最低可用宽度(歌名文字 + 3 个播放控制按钮都要放得下,
-    // 不能比这更窄)——算下限时要把这两只耳朵 + 刘海本身宽度 + 左右 padding 都算进去,
-    // 不能让总宽度小到连按钮都摆不下(真机踩过这个坑,按钮被裁一截)。真刘海本身可能
-    // 相当宽(这台机器实测约 179pt)、或者用户把设置里的宽度调得很小,这层下限比用户
-    // 设的宽度还宽的话取这层。
+    // 不能比这更窄)——算下限时要把这两只耳朵 + 刘海本身宽度 + 左右 padding 都算进去。
+    // 真刘海本身可能相当宽(实测有的机器约 179pt)、或者用户把设置里的宽度调得很小,
+    // 这层下限比用户设的宽度还宽的话取这层,保证按钮不会被裁切。
     private static let minEarWidth: CGFloat = 70
-    // hover 展开时在 contentSize 之外额外撑出的高度,放下一句歌词预览 + 迷你进度条
-    // 这两样调研后确定值得加的补充信息(调研结论:封面/更多控制按钮都不如这两样贴合
-    // "歌词类产品"的定位,专辑封面另外还受限于本地播放源目前没有转发 artwork 数据)。
+    // hover 展开时在 contentSize 之外额外撑出的高度,放下一句歌词预览 + 迷你进度条这
+    // 两样补充信息(封面/更多控制按钮都不如这两样贴合"歌词类产品"的定位,专辑封面
+    // 另外还受限于本地播放源目前没有转发 artwork 数据)。
     private static let expandedExtraHeight: CGFloat = 40
 
     private var isPlayingObserver: AnyCancellable?
     private var screenParamsObserver: NSObjectProtocol?
-    // 真机实测坐实的一个坑:窗口 hover 展开/收起时靠 autoresizingMask 让 NSHostingView
+    // 一个真实的坑:窗口 hover 展开/收起时靠 autoresizingMask 让 NSHostingView
     // 跟着 window.setFrame 自动同步尺寸——AppKit 层面这个同步是真的发生了(window.frame/
     // contentView.frame 都能读到新的高度),但 NSHostingView 内部的 SwiftUI 布局树没有
     // 跟着重新走一遍布局,导致新撑出来的那一段区域(展开态多出来的 40pt)在屏幕上什么都
@@ -155,11 +136,8 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject {
             self?.recomputeGeometry(animate: true, isPlayingOverride: isPlaying)
         }
 
-        // 2026-07-22:原来这里还订阅了 currentLine、每次换歌词就重新 recomputeGeometry
-        // 一遍——那是宽度按歌词文字宽度动态算的年代才需要的,换一句歌词宽度可能就变了。
-        // 宽度改回固定值之后,recomputeGeometry 的结果不再跟 currentLine 有任何关系,
-        // 这个订阅留着就是纯粹的空转(每换一句歌词都重算一遍、结果每次都跟上一次一样),
-        // 删掉了,不留奇怪的死代码等着以后的人猜"这个订阅是干嘛的"。
+        // 宽度固定后,recomputeGeometry 的结果不再跟 currentLine 有任何关系,不需要
+        // 额外订阅 currentLine 来触发重算。
     }
 
     deinit {
@@ -199,8 +177,7 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject {
     // 重设宽度容易把窗口推出屏幕外。灵动岛完全不是这么回事:它的位置从来不是持久化的,
     // 每次都是 recomputeGeometry 里用当前屏幕的 geo.centerX 重新居中算出来的,所以这里
     // 直接把完整的几何计算(位置+尺寸)重新走一遍就行,不用另外单独维护一份"保持居中"
-    // 的增量逻辑——两者殊途同归都是居中,只是灵动岛的居中本来就是每次全量重算,天然免疫
-    // 经典悬浮窗那个坑。
+    // 的增量逻辑。
     func applyContentWidthSetting() {
         recomputeGeometry(animate: true)
     }
@@ -267,9 +244,9 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject {
         notchWidth = geo.notchWidth
         let isPlayingNow = isPlayingOverride ?? PlaybackCoordinator.shared.isPlayingNow
         // 没在播放、也没 hover 展开——收缩到刘海本身大小,常显内容整套不渲染(见
-        // NotchLyricsView 里对 controller.isCollapsed 的判断)。用户明确要求"缩到正常
-        // 机器刘海的大小",不是简单地把常显内容那份宽度缩到下限——下限本身仍然要给
-        // 两只耳朵留够按钮/歌名的空间,不是"刘海大小"。
+        // NotchLyricsView 里对 controller.isCollapsed 的判断)。是真的缩到刘海本身
+        // 大小,不是把常显内容那份宽度缩到下限——下限本身仍然要给两只耳朵留够按钮/
+        // 歌名的空间。
         let collapsed = !isPlayingNow && !isExpanded
         isCollapsed = collapsed
         let size: NSSize

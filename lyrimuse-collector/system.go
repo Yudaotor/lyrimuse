@@ -13,16 +13,13 @@ import (
 	"time"
 )
 
-// 2026-07-21:不再依赖外部 `media-control`(需要 `brew install`,私有 MediaRemote 框架
-// 的社区逆向实现)——改用 AppleScript(JXA)直接问 Music.app 本身要"现在在放什么"。
-// 用户反馈"这个能不能不用装"，查证后确认这个项目本来就已经在用同一份"自动化"权限
-// (appleMusicPosition() 就是这么问 Music.app 要精确播放位置的),只是从"可选、拿不到
-// 就退回估算"变成"核心路径必需"。返回值特意拼成跟旧版 `media-control get` 完全相同
-// 的 JSON 字段(title/artist/album/duration/elapsedTime/playing/playbackRate/
-// bundleIdentifier)——下面 extract() 不用跟着改一行,只是换了"这份 JSON 从哪个进程
-// 产出"而已。isMusicApp 这里直接硬编码 true(不像旧版那样要区分"系统级 Now Playing
-// 焦点是不是 Apple Music")，因为这份 JSON 本来就只会在真的问到 Music.app 自己的当前
-// 曲目时才产出，不是系统级焦点判断。
+// 直接用 AppleScript(JXA)问 Music.app 本身要"现在在放什么",不依赖外部
+// `media-control`(需要 brew install 的私有 MediaRemote 框架社区逆向实现)——这个
+// 项目本来就已经在用同一份"自动化"权限(appleMusicPosition() 就是这么问 Music.app
+// 要精确播放位置的)。返回值特意拼成跟旧版 `media-control get` 完全相同的 JSON 字段
+// (title/artist/album/duration/elapsedTime/playing/playbackRate/bundleIdentifier),
+// 下面 extract() 不用跟着改。isMusicApp 这里直接硬编码 true——这份 JSON 本来就只会
+// 在真的问到 Music.app 自己的当前曲目时才产出,不是系统级 Now Playing 焦点判断。
 const getStateScript = `(() => {
     const Music = Application("Music");
     try {

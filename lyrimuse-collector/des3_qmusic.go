@@ -3,8 +3,8 @@
 package main
 
 // 3DES 解密,专供 QQ 音乐 GetPlayLyricInfo 的 QRC 逐字歌词用——Go 标准库 crypto/des 是
-// 标准 FIPS-46 DES,实测坐实(见 qq.go 里 decryptQRC 的验证过程)对不上 QQ 音乐这份密文;
-// 逐字移植社区已逆向、已用真实歌曲验证解密成功的这份实现(参考
+// 标准 FIPS-46 DES,对不上 QQ 音乐这份密文(验证过程见 qq.go 里的 decryptQRC);逐字移植
+// 社区已逆向、已用真实歌曲验证解密成功的这份实现(参考
 // https://github.com/WXRIW/QQMusicDecoder 的 C# 版本,和 chenmozhijin/LDDC 的 Python
 // 移植版),保留全部魔数与位运算顺序,任何"看起来等价"的改写都可能导致不兼容,不要动。
 

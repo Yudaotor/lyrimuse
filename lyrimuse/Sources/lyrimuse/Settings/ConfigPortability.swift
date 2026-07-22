@@ -2,11 +2,9 @@ import Foundation
 import AppKit
 import OSLog
 
-// 2026-07-22:导入这条路径原来全程 try?,任何一步(JSON 解析/写 config.json/写
-// features.json)失败都悄无声息——调用方(SettingsView)只看返回的 Bool 决定要不要弹
-// "导入并重启",分不清"整个没解析出来"跟"部分文件写失败"。这里补上日志,不代表改变了
-// 失败也继续走后续步骤这个既有行为(见下面 importData 内部注释),只是让失败这件事本身
-// 变得可追溯。同样绝不记文件内容本身(config.json 里就是原始 token)。
+// 导入路径里每一步(JSON 解析/写 config.json/写 features.json)失败都只记日志、不
+// 中断后续步骤(见下面 importData 内部注释)——这样才能区分"整个没解析出来"和"部分
+// 文件写失败"。日志里绝不记文件内容本身(config.json 里就是原始 token)。
 private let logger = Logger(subsystem: "com.chenyuhao.lyrimuse", category: "config-portability")
 
 // 导入/导出配置——方便换电脑:导出打包 collector 的 config.json(账号 token/密钥原文都在
@@ -18,8 +16,8 @@ private let logger = Logger(subsystem: "com.chenyuhao.lyrimuse", category: "conf
 // issue);这个就是要把 token 原文原样带走(设计给换新机器用),所以 UI 上要有反过来的
 // 警示——"这份文件包含你的账号密钥，不要分享给别人"。
 //
-// 2026-07-22 新增 clearAllConfig():跟 import 反着来的第三个操作——不是"换一份配置进来"
-// 而是"清空回到刚装完的样子",供 SettingsView 的"清除所有配置"按钮用。
+// clearAllConfig() 是跟 import 反着来的第三个操作——不是"换一份配置进来"而是"清空
+// 回到刚装完的样子",供 SettingsView 的"清除所有配置"按钮用。
 enum ConfigPortability {
     private static let configDir = FileManager.default.homeDirectoryForCurrentUser
         .appendingPathComponent(".config/applemusic-nowplaying")
@@ -135,7 +133,7 @@ enum ConfigPortability {
         return true
     }
 
-    // 2026-07-22:"清除所有配置"——回到刚装完时的样子。跟上面 import/export 用同一套
+    // "清除所有配置"——回到刚装完时的样子。跟上面 import/export 用同一套
     // 文件+UserDefaults 盘点逻辑,但故意不复用 excludedDefaultsKeys:那个集合是"换机器
     // 场景下不该带走"的字段(引导状态/废弃字段),这里恰恰要连这几个也一起清掉——
     // hasCompletedOnboarding 被清空后,下次启动会重新走一遍引导向导,这正是"最原始配置"

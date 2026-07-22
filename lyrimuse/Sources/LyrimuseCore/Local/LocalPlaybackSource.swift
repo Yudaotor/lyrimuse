@@ -5,10 +5,8 @@ import os
 private let logger = Logger(subsystem: "com.chenyuhao.lyrimuse", category: "local")
 
 // 本地播放数据源:音乐本来就在这台 Mac 上放,没道理还要绕一圈公网——播放位置/进度靠
-// AppleScript 本地轮询问 Music.app 本身要(零网络、零延迟,见 MediaControlClient.swift
-// 顶部注释——2026-07-21 起从依赖外部 `media-control` 换成了这个),歌词靠读 collector
-// 已经解析好、写在磁盘上的那份缓存(同样零网络)。2026-07-20 起是唯一的数据源(原本
-// 还有一个远程 relay 数据源、跟这个二选一,已删除——见 PlaybackCoordinator.start())。
+// AppleScript 本地轮询问 Music.app 本身要(零网络、零延迟,见 MediaControlClient.swift),
+// 歌词靠读 collector 已经解析好、写在磁盘上的那份缓存(同样零网络)。
 @MainActor
 public final class LocalPlaybackSource: ObservableObject {
     public static let shared = LocalPlaybackSource()
@@ -86,11 +84,11 @@ public final class LocalPlaybackSource: ObservableObject {
         }
         let pos = anchor.extrapolatedPositionMs()
         // 只在真的换了行/换了下一句预览时才赋值——这两个是 @Published,SwiftUI 不管
-        // 新旧值是否相等,只要赋值就会通知订阅者重新渲染。逐字填色早已经交给
-        // TimelineView 按渲染帧频现算(不经过这两个属性),这里 20Hz 只是为了"判断当前
-        // 该显示哪一行",绝大多数 tick 其实还是同一行——之前无条件赋值导致悬浮窗所在的
+        // 新旧值是否相等,只要赋值就会通知订阅者重新渲染。逐字填色已经交给
+        // TimelineView 按渲染帧频现算(不经过这两个属性),这里 20Hz 只是为了判断当前
+        // 该显示哪一行,绝大多数 tick 其实还是同一行——无条件赋值会让悬浮窗所在的
         // LyricsOverlayView(以及任何订阅 PlaybackCoordinator 的其它 View,比如"歌词
-        // 管理"窗口)整个 body 跟着每秒重算 20 次,是播放期间持续感觉卡顿的根因之一。
+        // 管理"窗口)整个 body 跟着每秒重算 20 次,造成播放期间的卡顿。
         let newLine = syncEngine.activeLine(atMs: pos)
         if newLine != currentLine { currentLine = newLine }
         let newNext = syncEngine.upcomingLineText(afterMs: pos)
@@ -119,14 +117,11 @@ public final class LocalPlaybackSource: ObservableObject {
             guard let snapshot else {
                 // 返回 nil 不只是"调用失败"(比如没有"自动化"权限),更常见的是真的没有
                 // 任何曲目在加载(比如 Music.app 处于 stopped 而不是 paused——paused 时
-                // 仍会给一个 playing=false 的正常快照,只有"压根没曲目"才会是 nil)。这里
-                // 之前只打日志就直接 return,不碰任何 @Published 状态——一旦从"正在播放"
-                // 变成这种 nil 快照,isPlayingNow/currentLine 全部卡在停播前那一刻,状态栏
-                // /悬浮窗会一直显示"还在播"的样子,不会自己恢复(2026-07-18 真机实测坐实:
-                // 完全停止播放后状态栏歌词卡死不消失)。现在补上跟 apply() 里"暂停"分支
-                // 完全一致的清理(anchor=nil 时清 currentLine/nextLineText+停快速计时器),
-                // 只是多加了 isPlayingNow=false——title/artist/album 不清空,跟"暂停"时
-                // 保留最近播放信息的既有行为保持一致。
+                // 仍会给一个 playing=false 的正常快照,只有"压根没曲目"才会是 nil)。必须
+                // 清理播放状态(anchor=nil 时清 currentLine/nextLineText+停快速计时器,
+                // 加 isPlayingNow=false),否则从"正在播放"切到这种 nil 快照时,状态栏/
+                // 悬浮窗会卡在停播前那一刻不会自己恢复;title/artist/album 不清空,跟
+                // "暂停"时保留最近播放信息的既有行为保持一致。
                 logger.error("snapshot failed (没有自动化权限、Music.app 不在运行，或者没有曲目在播放)")
                 clearIfWasPlaying()
                 return

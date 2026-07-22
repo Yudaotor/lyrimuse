@@ -7,13 +7,12 @@ import LyrimuseCore
 // MainActor-isolated static let 触发并发检查警告。
 private let overlayPositionKey = "np:overlayPositionOrigin" // "x,y" 字符串
 // 高度是初始/最小值,换行需要更多行时由 updateHeight 动态调整,不会比这个更矮。宽度
-// 2026-07-18 起从这里的写死常量搬进 AppSettings.overlayWidth(可在设置里调,默认值
-// 仍是这个 640——原来的选择是"比旧版 480 加宽,减少偏长歌词行触发换行的概率";真正
-// 装不下的极端长行交给 WrapLayout(LyricsOverlayView.swift)自动换行,不再单靠"更宽"兜底)。
+// 在 AppSettings.overlayWidth 里(可在设置里调,默认 640),真正装不下的极端长行交给
+// WrapLayout(LyricsOverlayView.swift)自动换行,不再单靠"更宽"兜底。
 private let overlayDefaultHeight: CGFloat = 120
 
 // 拥有悬浮窗面板 + SwiftUI 内容 + 拖拽位置持久化。位置存 UserDefaults(裸可执行文件也能
-// 跨进程重启正确持久化,已实测确认,不需要 .app 包)。ObservableObject 让菜单栏菜单
+// 跨进程重启正确持久化,不需要 .app 包)。ObservableObject 让菜单栏菜单
 // 直接观察 .shared 就能反映"是否显示/是否锁定位置"这两个状态,不用绕经 AppDelegate。
 @MainActor
 final class LyricsOverlayWindowController: NSWindowController, ObservableObject {
@@ -56,11 +55,9 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject 
         // 关键坑:sink 闭包里必须用这里收到的 isPlaying 参数,不能在闭包里另外去读
         // PlaybackCoordinator.shared.isPlayingNow 这个存储属性——@Published 的 willSet
         // 会在真正把新值写进存储属性*之前*就把新值发布出去,这个时间点上闭包里直接读存储
-        // 属性拿到的是*上一次*的旧值,不是这次改变后的新值(实测用独立 Combine demo 坐实:
-        // sink 收到的参数已经是新值,但闭包内 self.property 读到的还是旧值)。之前踩过这个
-        // 坑:改成从存储属性读,会导致每次暂停/恢复播放都要再等一次(本地模式 2 秒、
-        // relay 模式最长 60 秒)轮询周期后"碰巧又发布了一次没变化的值"才纠正过来,实测确认
-        // 暂停后隔了将近一个轮询周期悬浮窗才消失,不是立即生效。
+        // 属性拿到的是*上一次*的旧值。改成从存储属性读会导致每次暂停/恢复播放都要再等
+        // 一次轮询周期(本地模式 2 秒、relay 模式最长 60 秒)才纠正过来,悬浮窗不会立即
+        // 响应。
         isPlayingObserver = PlaybackCoordinator.shared.$isPlayingNow.sink { [weak self] isPlaying in
             self?.updateActualVisibility(isPlayingNow: isPlaying)
         }
@@ -101,10 +98,8 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject 
     }
 
     // 锁定位置:关掉"点背景拖拽移动"的能力,顺带打开点击穿透(ignoresMouseEvents)——
-    // 这个窗口除了拖拽移动之外没有任何其它可交互内容,原来把"点击穿透"设成独立开关,
-    // 实际效果几乎跟"锁定位置"完全重叠(开着点击穿透自然也拖不动),用户反馈这两个
-    // 开关是冗余的,合并成一个:锁定 = 不能拖 + 点击穿透到下层;解锁 = 能拖 + 正常
-    // 拦截点击。
+    // 这个窗口除了拖拽移动之外没有任何其它可交互内容,锁定 = 不能拖 + 点击穿透到下层;
+    // 解锁 = 能拖 + 正常拦截点击,两者合并成一个开关,不单独拆分。
     func setLocked(_ locked: Bool) {
         isPositionLocked = locked
         window?.isMovableByWindowBackground = !locked

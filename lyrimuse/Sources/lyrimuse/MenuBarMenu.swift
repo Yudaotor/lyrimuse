@@ -2,17 +2,15 @@ import SwiftUI
 import AppKit
 
 // 状态栏兜底图标——正式 App 图标(音符+三条歌词横线)的简笔剪影版,不是系统 SF Symbol。
-// 用户反馈"菜单栏那个图标也改成新图标的简笔版",不能直接拿正式图标(带渐变背景/高光/
-// 阴影)原样缩小塞进状态栏——那样会糊成一团色块,状态栏图标向来的惯例是纯剪影
-// (`isTemplate = true`),系统会自动按菜单栏当前明暗/悬停状态重新上色,不需要我们
-// 分别做浅色/深色两份。这份 PNG(Resources/MenuBarIconTemplate.png)是用代码画的
-// 矢量线稿(同一个"音符+歌词横线"构图,去掉颜色/阴影,只留纯黑剪影),不是从正式图标
-// 里抠像素抠出来的——正式图标那张背景是柔和的浅粉/浅橙渐变,跟白色符干很接近,直接
-// 阈值抠图边缘会发虚,不如照同一比例重新画一份线稿干净。
+// 不能直接把正式图标(带渐变背景/高光/阴影)缩小塞进状态栏——那样会糊成一团色块。
+// 状态栏图标用纯剪影(`isTemplate = true`),系统会自动按明暗/悬停状态重新上色,不需要
+// 分别做浅色/深色两份。这份 PNG(Resources/MenuBarIconTemplate.png)是照同一比例重新
+// 画的矢量线稿,不是从正式图标里抠像素抠出来的——正式图标背景是浅粉/浅橙渐变,跟白色
+// 符干很接近,直接阈值抠图边缘会发虚。
 private let menuBarIconImage: NSImage = {
-    // 2026-07-21:改用 Bundle.main 而不是 Bundle.module——跟 L10n.swift 同一次修复,
-    // 同一个理由(见那份文件顶部注释):SwiftPM 生成的 Bundle.module 访问器在别的机器上
-    // 会直接 fatalError 崩溃。这份 PNG 现在由 build.sh 直接拷进 Contents/Resources/。
+    // 用 Bundle.main 而不是 Bundle.module——SwiftPM 生成的 Bundle.module 访问器在别的
+    // 机器上会直接 fatalError 崩溃(原因见 L10n.swift 顶部注释)。这份 PNG 由 build.sh
+    // 直接拷进 Contents/Resources/。
     guard let path = Bundle.main.path(forResource: "MenuBarIconTemplate", ofType: "png"),
           let image = NSImage(contentsOfFile: path) else {
         // 找不到就退回系统符号兜底,不让状态栏图标位置裸奔成空白——正常情况下这个
@@ -53,12 +51,11 @@ struct MenuBarLabel: View {
                 }
             }
         }
-        // label: 是 MenuBarExtra 真正常驻状态栏的那部分,整个 App 运行期间只挂载一次
-        // (不像 content: 那样只在点开菜单时才有内容)——这里是"从非 View 上下文触发
-        // SwiftUI 环境 action"这个问题(见 AppActions.swift)里,唯一确定只会跑一次的
-        // 挂载点。跟 MenuBarMenu 里"设置…"按钮已经验证过的写法一致:accessory 策略
-        // (没有 Dock 图标)下,不先手动激活 App,openSettings()/openWindow(id:) 都会
-        // 静默没反应。
+        // label: 是 MenuBarExtra 真正常驻状态栏的部分,整个 App 运行期间只挂载一次
+        // (不像 content: 那样只在点开菜单时才有内容),是"从非 View 上下文触发 SwiftUI
+        // 环境 action"(见 AppActions.swift)这个问题里唯一确定只跑一次的挂载点。
+        // accessory 策略(没有 Dock 图标)下,不先手动激活 App,openSettings()/
+        // openWindow(id:) 都会静默没反应,跟 MenuBarMenu 里"设置…"按钮的写法一致。
         .onAppear {
             AppActions.shared.openSettings = {
                 NSApp.activate(ignoringOtherApps: true)
@@ -75,18 +72,16 @@ struct MenuBarLabel: View {
             // 首次启动的完整引导向导——放在这里而不是 AppDelegate.
             // applicationDidFinishLaunching 里直接调用,是因为 openWindow(id:) 这个
             // SwiftUI 环境 action 只有在某个 View 的挂载点才能拿到;AppDelegate 那个
-            // 时机早于 MenuBarExtra 的 label 真正挂载,这时候调用会静默没反应(旧版
-            // 用 NSAlert 走 AppDelegate 正是为了绕开这个时序问题,见 hasCompletedOnboarding
-            // 迁移注释)。这个 onAppear 本身就是"整个 App 生命周期内确定只跑一次"的
-            // 挂载点,直接在这里判断+打开,不需要再绕一层。
+            // 时机早于 MenuBarExtra 的 label 真正挂载,这时候调用会静默没反应。这个
+            // onAppear 本身就是"整个 App 生命周期内确定只跑一次"的挂载点,直接在这里
+            // 判断+打开,不需要再绕一层。
             //
-            // 真机实测坐实的坑:直接在这个 onAppear 里同步调 NSApp.activate+openWindow
-            // 完全不生效——这一刻是整个 App 启动过程里最早的时间点之一,系统这时候还没
-            // 走完把这个 accessory 策略 App 真正"启动完成"的那套流程,activate()/
-            // openWindow() 这两个调用本身不报错,但窗口要么根本没建出来、要么建出来立刻
-            // 被吞掉,肉眼完全看不到。"设置…"/"歌词管理…"这两个菜单按钮之所以没踩到
-            // 这个坑,是因为它们永远是用户手动点出来的、那时候 App 早已经完全启动稳定。
-            // 加一个不长的延迟,让启动流程先跑完再发起,实测坐实这样就能稳定弹出来。
+            // 坑:直接在这个 onAppear 里同步调 NSApp.activate+openWindow 完全不生效——
+            // 这一刻是启动过程里最早的时间点之一,系统还没走完 accessory 策略 App
+            // 真正"启动完成"的流程,两个调用本身不报错,但窗口要么没建出来、要么建出来
+            // 立刻被吞掉,肉眼看不到。"设置…"/"歌词管理…"这两个菜单按钮没踩到这个坑,
+            // 是因为它们永远是用户手动点出来的、那时候 App 早已完全启动稳定。加一个
+            // 不长的延迟,让启动流程先跑完再发起,就能稳定弹出来。
             if !settings.hasCompletedOnboarding {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                     AppActions.shared.openOnboarding?()
@@ -108,15 +103,14 @@ struct MenuBarMenu: View {
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
-        // 桌面悬浮歌词、灵动岛歌词现在互不排斥,菜单里各自的开关也就都独立显示——只在
-        // settings 里对应那个开关确实开着时才显示/构造那个控制器:两个控制器各自都是
-        // `static let shared`,真正引用到才会执行 init() 建窗口,而 init() 里订阅
-        // PlaybackCoordinator 的 Combine sink 在订阅的一瞬间就会用当下的 isVisible
-        // (默认 true)触发一次 orderFront——如果不管设置里开没开都无条件持有两份
-        // @ObservedObject,只是点开一次菜单就会把没启用的那个控制器也构造出来、连带
-        // 把它的窗口显示到屏幕上。SwiftUI 的 if 只会真正构建条件为真的那个分支对应的
-        // View,条件为假的分支连初始化都不会跑,借这个机制保证永远不会误碰不该碰的
-        // 那个控制器(这条不变量详见 NotchLyricsWindowController 顶部注释)。
+        // 桌面悬浮歌词、灵动岛歌词互不排斥,菜单里各自的开关独立显示——只在 settings 里
+        // 对应开关确实开着时才显示/构造那个控制器:两个控制器都是 `static let shared`,
+        // 真正引用到才会执行 init() 建窗口,而 init() 里订阅 PlaybackCoordinator 的
+        // Combine sink 在订阅瞬间就会用当下的 isVisible(默认 true)触发一次
+        // orderFront——如果不管设置开没开都无条件持有两份 @ObservedObject,点开一次
+        // 菜单就会把没启用的那个控制器也构造出来、连带显示窗口。SwiftUI 的 if 只会构建
+        // 条件为真的那个分支,条件为假的分支连初始化都不会跑,借这个机制保证不会误碰
+        // 不该碰的控制器(详见 NotchLyricsWindowController 顶部注释)。
         if settings.classicOverlayEnabled {
             ClassicOverlayMenuSection()
         }

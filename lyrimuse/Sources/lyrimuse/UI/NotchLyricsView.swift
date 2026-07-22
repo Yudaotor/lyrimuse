@@ -1,10 +1,9 @@
 import SwiftUI
 import LyrimuseCore
 
-// UI 预览阶段给用户看过三个背景风格方向,当时选了磨砂玻璃直接实现;用户后来反馈"另外
-// 两个也做一下,做成可配置的",这里把三种都补全。用 AnyShapeStyle 抹掉三种截然不同的
-// ShapeStyle 具体类型(纯色/材质/渐变),让 NotchHangingShape.fill(_:) 能用同一个属性
-// 统一接收,不需要写三份 if/switch 分支各自调用不同重载的 .fill()。
+// 用 AnyShapeStyle 抹掉三种截然不同的 ShapeStyle 具体类型(纯色/材质/渐变),让
+// NotchHangingShape.fill(_:) 能用同一个属性统一接收,不需要写三份 if/switch 分支
+// 各自调用不同重载的 .fill()。
 extension NotchCardStyle {
     var displayName: String {
         switch self {
@@ -21,7 +20,6 @@ extension NotchCardStyle {
         case .frostedGlass:
             return AnyShapeStyle(.thickMaterial)
         case .darkGradient:
-            // 跟当初 UI 预览里"深色渐变"选项同一组色值(#1c1a24/#14212a/#10161c),
             // 从左上到右下过渡,比纯黑多一点点冷色调层次感,又不像磨砂玻璃那样会透出
             // 桌面背景色。
             return AnyShapeStyle(
@@ -39,33 +37,29 @@ extension NotchCardStyle {
     }
 }
 
-// 灵动岛样式的内容视图。稳态(不 hover)常显"歌名+播放控制+当前歌词逐字高亮"这一整套,
-// 不需要 hover 才能用;hover 时在下面多展开一块"下一句歌词预览+迷你进度条"作为锦上
-// 添花的补充信息——调研过 boring.notch 等真实参考实现后确定这个分层思路(稳态给
-// 完整基本信息,hover 给深化信息),没有加专辑封面(本地播放源目前没有把 artwork 转发到
-// PlaybackCoordinator,不为这一个位置单独新增取图链路,等以后接了封面数据源再考虑)。
+// 灵动岛样式的内容视图。稳态(不 hover)常显"歌名+播放控制+当前歌词逐字高亮"整套,
+// hover 时在下面多展开一块"下一句歌词预览+迷你进度条"作为补充信息(参考 boring.notch
+// 等实现的分层思路:稳态给完整基本信息,hover 给深化信息)。没有加专辑封面——本地播放源
+// 目前没有把 artwork 转发到 PlaybackCoordinator,不为这一个位置单独新增取图链路。
 //
 // 分两/三行:
-// - 顶行(高度 = controller.contentTopInset,正好等于刘海本身/无刘海屏幕的兜底值):
-//   物理刘海是屏幕硬件层面真实不发光的区域,横向落在刘海本身宽度(controller.
-//   notchWidth)范围内的内容会被真实挡掉,所以这一行中间让出 notchWidth 宽度的空当
-//   什么都不放。左耳放歌名文字(真机反馈"应该放歌名",不再是固定的音符图标);右耳
-//   把 3 个播放控制按钮放在一起,尺寸比上一版小一号(真机反馈"有点被截断")。
-// - 歌词行:逐字高亮跟随播放进度扫过(真机反馈要支持逐字高亮),技术上跟
-//   LyricsOverlayView.mainLine 是同一套原理(TimelineView 按渲染帧频现算 fillFraction+
-//   渐变着色),但不复用那个文件里的实现——这里没有 WrapLayout(单行、不换行,超长
-//   直接硬裁,不追求省略号),前景色固定白色(不像经典悬浮窗那样可配置),复杂度明显
-//   小一截,直接在这个文件里写一份简化版更清楚,不值得为了复用去抽象出一层共享代码。
+// - 顶行(高度 = controller.contentTopInset,等于刘海本身/无刘海屏幕的兜底值):物理
+//   刘海是屏幕硬件层面真实不发光的区域,横向落在刘海宽度(controller.notchWidth)范围内
+//   的内容会被真实挡掉,这一行中间让出 notchWidth 宽度的空当什么都不放。左耳放歌名,
+//   右耳放 3 个播放控制按钮。
+// - 歌词行:逐字高亮跟随播放进度扫过,技术上跟 LyricsOverlayView.mainLine 是同一套原理
+//   (TimelineView 按渲染帧频现算 fillFraction+渐变着色),但不复用那份实现——这里没有
+//   WrapLayout(单行不换行,超长直接硬裁),前景色固定白色,复杂度明显小一截,直接写一份
+//   简化版更清楚,不值得为了复用去抽象共享代码。
 // - hover 展开时才出现的第三行:下一句歌词预览 + 一条迷你进度条。
 //
-// 整个卡片形状故意只在底部两个角做圆角、顶部两个角是直角(NotchHangingShape)——真机
-// 反馈"接近顶部的部分不要做弧度,下面有弧度":顶部紧贴屏幕/刘海本身那条边,视觉上应该
-// 是直接从刘海"长出来"、跟屏幕顶边严丝合缝,而不是一个悬空的、四角都带圆角的胶囊。
+// 整个卡片形状故意只在底部两个角做圆角、顶部两个角是直角(NotchHangingShape)——顶部
+// 紧贴屏幕/刘海本身那条边,视觉上应该是直接从刘海"长出来"、跟屏幕顶边严丝合缝,而不是
+// 一个悬空的、四角都带圆角的胶囊。
 //
-// 背景改成磨砂玻璃(.thickMaterial,配 NotchLyricsWindow 里固定的 .darkAqua 外观)——
-// 真机反馈"现在全是黑色不好看",给了三个方向(纯黑/磨砂玻璃/深色渐变)的预览之后选定
-// 磨砂玻璃。刘海本身所在的那一段空当(顶行中间)物理上不会显示任何像素,磨砂玻璃对着
-// 那一段渲染成什么都无所谓,不需要跟其余部分区别对待。
+// 背景用磨砂玻璃(.thickMaterial,配 NotchLyricsWindow 里固定的 .darkAqua 外观)。刘海
+// 本身所在的那一段空当(顶行中间)物理上不会显示任何像素,渲染成什么都无所谓,不需要跟
+// 其余部分区别对待。
 struct NotchLyricsView: View {
     @ObservedObject var controller: NotchLyricsWindowController
     @ObservedObject private var poller = PlaybackCoordinator.shared
@@ -82,12 +76,11 @@ struct NotchLyricsView: View {
         GeometryReader { proxy in
             // topRow 外层还有 .padding(.horizontal, 10)(左右各 10pt),这里要把这 20pt
             // 也算进去,否则「两只耳朵 + 刘海空当」正好等于 proxy.size.width 之后再叠加
-            // padding,会让 topRow 的实际宽度比 GeometryReader 分配的宽度多出整整 20pt——
-            // 真机实测坐实过这个 bug:ZStack 会跟着这个更宽的子视图一起变宽,导致背景
-            // 形状 NotchHangingShape 收到的 rect 比窗口真实宽度多 20pt,只有当这多出来的
-            // 20pt 沿某一侧溢出时,那一侧的底部圆角看起来才会显示为直角(圆角计算完全正确,
-            // 但整个形状的宽度本身就比窗口本身多算了一截，超出窗口边界的部分被窗口硬裁掉，
-            // 裁到的正好是圆弧那一小段)。
+            // padding,会让 topRow 的实际宽度比 GeometryReader 分配的宽度多出整整 20pt:
+            // ZStack 会跟着这个更宽的子视图一起变宽,导致背景形状 NotchHangingShape 收到
+            // 的 rect 比窗口真实宽度多 20pt,只有当这多出来的 20pt 沿某一侧溢出时,那一侧
+            // 的底部圆角才会显示为直角(圆角计算本身没错,只是形状宽度比窗口多算了一截,
+            // 超出边界的部分被窗口硬裁掉,裁到的正好是圆弧那一小段)。
             let earWidth = max(0, (proxy.size.width - controller.notchWidth - 20) / 2)
             ZStack(alignment: .top) {
                 NotchHangingShape(bottomCornerRadius: 20)
@@ -107,11 +100,9 @@ struct NotchLyricsView: View {
                     }
                 }
             }
-            // 展开态内容(下一句预览+进度条)本身没有另外裁一次形状——如果只让背景
-            // 那一层 fill 是圆角、前景内容不跟着裁,内容溢出圆角边界时会带着直角"戳"出
-            // 卡片轮廓(调试红色矩形块验证过这个现象:矩形四个角明显比卡片本身的圆角更
-            // 方)。这里对整个 ZStack 统一裁一次,保证任何内容都不会越出这个卡片的真实
-            // 外轮廓。
+            // 展开态内容(下一句预览+进度条)本身没有另外裁一次形状——如果只让背景那一层
+            // fill 是圆角、前景内容不跟着裁,内容溢出圆角边界时会带着直角"戳"出卡片轮廓。
+            // 这里对整个 ZStack 统一裁一次,保证任何内容都不会越出这个卡片的真实外轮廓。
             .clipShape(NotchHangingShape(bottomCornerRadius: 20))
         }
         .onHover { hovering in
@@ -121,8 +112,6 @@ struct NotchLyricsView: View {
 
     private func topRow(earWidth: CGFloat) -> some View {
         HStack(spacing: 0) {
-            // 左耳:歌名(真机反馈"应该放歌名",不再是固定的音符图标)。超长滚动展示
-            // (真机反馈"歌词和歌名一样,太长要滚动"),不再是硬截断省略号。
             MarqueeText(id: poller.title) {
                 Text(poller.title.isEmpty ? "♪" : poller.title)
                     .font(.system(size: 11.5, weight: .semibold))
@@ -134,9 +123,8 @@ struct NotchLyricsView: View {
             Color.clear
                 .frame(width: controller.notchWidth)
 
-            // 右耳:3 个播放控制按钮放在一起——真机反馈按钮偏大、贴边有裁切感,这一版
-            // 整体缩小一号(controlButton 的尺寸参数)。Spacer 放在最前面把按钮簇推到
-            // 这只耳朵的最右侧(真机反馈"整体还是往左挤了,应该往右移")。
+            // 右耳:3 个播放控制按钮放在一起。Spacer 放在最前面把按钮簇推到这只耳朵的
+            // 最右侧。
             HStack(spacing: 8) {
                 Spacer(minLength: 0)
                 controlButton("backward.fill") { MusicPlaybackController.previousTrack() }
@@ -232,9 +220,8 @@ struct NotchLyricsView: View {
         return LinearGradient(stops: stops, startPoint: .leading, endPoint: .trailing)
     }
 
-    // hover 展开时多出来的这一块——下一句歌词预览 + 迷你进度条,调研结论里排在"专辑
-    // 封面+歌名"之后的第二优先级(封面已经在顶行用歌名文字替代过,不重复加),用来强化
-    // "这是个歌词类产品"而不是退化成通用媒体控制器;进度条属于"有余量就加"的加分项。
+    // hover 展开时多出来的这一块——下一句歌词预览 + 迷你进度条,用来强化"这是个歌词类
+    // 产品"而不是退化成通用媒体控制器;进度条属于"有余量就加"的加分项。
     private var expandedContent: some View {
         VStack(alignment: .leading, spacing: 4) {
             if !nextLineDisplayText.isEmpty {
@@ -275,7 +262,6 @@ struct NotchLyricsView: View {
         .frame(height: Self.expandedExtraHeight, alignment: .top)
     }
 
-    // 真机反馈"去掉'下一句'这个字眼,直接显示下一句歌词内容就好"——不再加任何前缀标签。
     private var nextLineDisplayText: String {
         poller.nextLineText ?? ""
     }
@@ -300,11 +286,10 @@ struct NotchLyricsView: View {
     }
 }
 
-// 超长文字(歌名/歌词)靠自动来回滚动展示全部内容,而不是硬截断/省略号——真机反馈
-// "歌词和歌名一样,遇到太长的情况有滚动的方式来显示"。测量内容真实宽度 vs 容器宽度,
-// 只有真的溢出容器时才滚动,没溢出的短文字保持静止不动、不产生任何动画。滚动方式是
-// "停顿→滚到底→停顿→滚回起点"来回滚动,不是无限单向卷动,不需要为了卷动无缝衔接去
-// 复制一份内容拼接。
+// 超长文字(歌名/歌词)靠自动来回滚动展示全部内容,而不是硬截断/省略号。测量内容
+// 真实宽度 vs 容器宽度,只有真的溢出容器时才滚动,没溢出的短文字保持静止不动、不
+// 产生任何动画。滚动方式是"停顿→滚到底→停顿→滚回起点"来回滚动,不是无限单向卷动,
+// 不需要为了卷动无缝衔接去复制一份内容拼接。
 //
 // id 参数控制"什么时候该重新测量、重新从头开始滚动"——歌词行内部逐字变色(由外面
 // TimelineView 驱动)不应该打断/重置正在进行的滚动,那只是同一句歌词内部的高亮进度
@@ -331,8 +316,8 @@ private struct MarqueeText<Content: View>: View {
                     }
                 )
                 .offset(x: -offset)
-                // 垂直居中——GeometryReader 默认把内容摆在自己左上角,歌名那里真机
-                // 反馈"名字有点过于靠上",不居中的话文字会紧贴着这一整行的顶边。
+                // 垂直居中——GeometryReader 默认把内容摆在自己左上角,不居中的话文字
+                // 会紧贴着这一整行的顶边。
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
                 .onPreferenceChange(MarqueeWidthKey.self) { width in
                     contentWidth = width

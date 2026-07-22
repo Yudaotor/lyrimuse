@@ -19,12 +19,9 @@ var lrcTimestampCaptureRe = regexp.MustCompile(`\[(\d{1,2}):(\d{2})[.:](\d{1,3})
 
 // isTimedLRC reports whether s is genuinely逐行加了时间戳的 LRC 歌词，而不是网易云/
 // QQ 音乐偶尔返回的"纯文本歌词"——后者可能带 [Verse 1]/[Chorus] 这类段落标签,或者只有
-// 开头一行作词/作曲 credit 信息被打了个孤立时间戳,其余全是无时间戳纯文本(实测坐实:
-// Musiq Soulchild《Babygirl》/《Religious》都是这种情况——前者只有 [Verse 1] 这类
-// 段落标签、后者只有开头 credit 行带一个孤立的 [00:00.00-1]时间戳,单看"字符串里有没有
-// 方括号"完全区分不出来这两种和真正的逐行 LRC,导致这两首歌被当成"有歌词"缓存进去,
-// 但网页侧解析不出任何一行真正带时间戳的歌词,歌词区域自然什么都不显示)。要求至少
-// 3 行、且过半的行真的带 [mm:ss.xx] 格式时间戳,才认为是可用的逐行 LRC。
+// 开头一行作词/作曲 credit 信息被打了个孤立时间戳,其余全是无时间戳纯文本,单看"字符串
+// 里有没有方括号"区分不出这两者。要求至少 3 行、且过半的行真的带 [mm:ss.xx] 格式时间戳,
+// 才认为是可用的逐行 LRC。
 func isTimedLRC(s string) bool {
 	if s == "" || len(s) >= 20000 {
 		return false
@@ -59,10 +56,9 @@ func cjkRatio(s string) float64 {
 }
 
 // isProbablyWrongLanguageLyrics 判断"本地标签明明是非中文(歌手名+歌名都不含中文),
-// 但解析出来的'原文'歌词却大半是中文"这种明显文不对题的情况——实测坐实:Musiq
-// Soulchild《Bestfriend》网易云的 lrc(原文)字段本身 71% 是中文、tlyric(翻译)也是
-// 中文,应该是上传者把翻译当原文传错了。本地标签本身就是中文时不适用这条判断(中文
-// 歌配中文"原文"歌词完全正常，不该被当成异常拦下来)。
+// 但解析出来的'原文'歌词却大半是中文"这种明显文不对题的情况——通常是上传者把翻译当
+// 原文传错了。本地标签本身就是中文时不适用这条判断(中文歌配中文"原文"歌词完全正常，
+// 不该被当成异常拦下来)。
 func isProbablyWrongLanguageLyrics(localArtist, localTitle, lyrics string) bool {
 	if cjkRatio(localArtist) > 0 || cjkRatio(localTitle) > 0 {
 		return false
@@ -76,10 +72,10 @@ func isProbablyWrongLanguageLyrics(localArtist, localTitle, lyrics string) bool 
 var creditLineRe = regexp.MustCompile(`(?i)^(作词|作曲|编曲|制作人|演唱|混音|录音|lyrics by|composed by|written by|produced by|arranged by)\s*[:：]`)
 
 // isCreditOnlyLRC 判断这份"通过了 isTimedLRC"的歌词是不是只有作词/作曲等 credit 信息、
-// 没有真正的歌词正文——实测坐实:网易云有时把整首歌的"歌词"就只填了几行 credit,每行都
-// 单独带时间戳(能通过 isTimedLRC 那条"过半行数带时间戳"的检测),但去掉 credit 行之后
-// 剩不下几行真正在唱的词(Religious 那次就是这种情况)。去掉时间戳和 credit 行之后,
-// 剩余非空行少于 3 行就判定为"只有 credit,没有正文"。
+// 没有真正的歌词正文——网易云有时把整首歌的"歌词"就只填了几行 credit,每行都单独带
+// 时间戳(能通过 isTimedLRC 那条"过半行数带时间戳"的检测),但去掉 credit 行之后剩不下
+// 几行真正在唱的词。去掉时间戳和 credit 行之后,剩余非空行少于 3 行就判定为"只有
+// credit,没有正文"。
 func isCreditOnlyLRC(lrc string) bool {
 	lines := strings.Split(lrc, "\n")
 	nonCredit := 0
@@ -117,18 +113,16 @@ type lyricCandidate struct {
 }
 
 // lyricEndingCorroborationToleranceSecs 是判定"多个独立源的歌词末尾时间戳互相印证"的
-// 容差。实测标定:宇多田ヒカル《気分じゃないの》(真实数据,只是尾奏长)三源末尾互相只差
-// 0.2~1.5s;Something 那次网易云被 George Harrison 内容污染的候选,跟酷狗真实 Musiq
-// 版本的末尾相差约 19.6s——两者差出一个数量级,5s 足够宽容跨源转写的细微时间差,又足够
-// 严格不会让内容对不上的候选蒙混过关。
+// 容差。真正同一份内容的末尾时间戳跨源转写通常只差 1~2s,内容被串了的候选往往差出
+// 一个数量级(十几秒以上),5s 足够宽容跨源转写的细微差异,又足够严格不会让内容对不上
+// 的候选蒙混过关。
 const lyricEndingCorroborationToleranceSecs = 5.0
 
 // corroboratedEndings 返回"末尾时间戳被至少一个别的源印证"的来源集合。多个互相独立的
 // 歌词源末尾落在几乎同一个时间点,是"这些内容描述的是同一份真实歌词"的强证据——比单纯
 // "跟完整曲目时长差多少"更可靠:有些歌曲本身带很长的纯音乐尾奏,没有任何源把它转写进
-// 歌词也完全正常(気分じゃないの 实测坐实:真实时长 448s,网易云/酷狗/LRCLIB 三源全部
-// 独立在 305~307s 处结束,却因为跟完整时长差了 32% 被旧的纯时长阈值误杀);而内容确实
-// 被串到别的曲目/版本的候选,不会凑巧跟别的源落在同一个时间点上。
+// 歌词也完全正常,若只按时长差距判断会被误杀;而内容确实被串到别的曲目/版本的候选,
+// 不会凑巧跟别的源落在同一个时间点上。
 func corroboratedEndings(candidates []lyricCandidate) map[string]bool {
 	type ending struct {
 		source string
@@ -158,24 +152,18 @@ func corroboratedEndings(candidates []lyricCandidate) map[string]bool {
 // 别的候选分数多低,都不能选一份未通过基本校验的候选。三层基本校验(时间戳密度/语言/
 // 是否只有credit)都通过后,依次看:
 //  1. 歌词末尾时间戳跟真实曲目时长是否吻合——最能识破同名曲被误关联成另一版本/另一首
-//     歌(实测坐实:Something 那次,网易云给的内容末尾时间戳跟真实时长差了近 29%,内容
-//     被串了)。差超过 25% 且没有别的源印证,直接判定无效,不是扣分——时长对不上通常
-//     就是串了别的曲目/版本，留着只会增加"矮子里拔将军选中一个不确定对不对的候选"的
-//     风险。但如果 corroborated 为真(见 corroboratedEndings),说明别的独立源也在同一
-//     时间点结束,这是比"跟完整时长差多少"更直接的正确性证据,不再判定无效。
-//  2. 是否带逐字(yrc)时间轴:用户明确要求提升这项权重——没有逐字时间轴的话,悬浮窗/
-//     网页只能整行高亮,观感明显不如逐字扫过。目前只有网易云会带 yrc,而网易云在时长
-//     匹配上偶尔会比 QQ/酷狗差半档(时间戳切分方式不同导致末尾差几个百分点),原来
-//     "只差 50/30/20/10 的来源优先级"根本扛不住整整一档(200~400分)的时长分差距,
-//     经常导致带逐字的网易云候选被"时长吻合度恰好精确一点点、但没有逐字"的竞争者
-//     反超。这个奖励分刻意定得跟"一档时长差距"同量级(400)——足够让网易云在"只差
-//     一档"的常见场景里逆转取胜,但一份逐字数据本身撬不动两档以上的时长证据(比如
-//     netease 卡在最低档 100 分那种勉强及格,面对别的源干净利落地命中 1000 分档),
-//     不会让"有逐字但内容对不上"反而压过"内容明显更吻合"的候选。
+//     歌。差超过 25% 且没有别的源印证,直接判定无效,不是扣分——时长对不上通常就是串了
+//     别的曲目/版本，留着只会增加"矮子里拔将军选中一个不确定对不对的候选"的风险。但如果
+//     corroborated 为真(见 corroboratedEndings),说明别的独立源也在同一时间点结束,这是
+//     比"跟完整时长差多少"更直接的正确性证据,不再判定无效。
+//  2. 是否带逐字(yrc)时间轴:没有逐字时间轴的话,悬浮窗/网页只能整行高亮,观感明显不如
+//     逐字扫过,故权重较高。目前只有网易云会带 yrc,而网易云在时长匹配上偶尔会比 QQ/酷狗
+//     差半档,这个奖励分刻意定得跟"一档时长差距"同量级(400)——足够让网易云在"只差一档"
+//     的常见场景里逆转取胜,但一份逐字数据本身撬不动两档以上的时长证据差距,不会让"有
+//     逐字但内容对不上"反而压过"内容明显更吻合"的候选。
 //  3. 来源优先级:网易云能带翻译/罗马音这类其它源没有的增值内容,同等时长可信度下优先
 //     选它，其次QQ,再其次酷狗/LRCLIB——避免"纯按行数比大小"让内容切分方式恰好更碎的
-//     源意外挤掉本来完全合格、还带增值内容的网易云结果(实测坐实:Darling Nikki 网易云
-//     版本本来自带翻译/逐字,如果单纯比行数会被行数更多但没有增值内容的 LRCLIB 顶替掉)。
+//     源意外挤掉本来完全合格、还带增值内容的网易云结果。
 //  4. 内容行数只做非常次要的参考(封顶,避免行数虚高的候选靠行数堆分反超时长/来源都更
 //     可信的候选)。
 func scoreLyricCandidate(localArtist, localTitle string, durationSecs float64, c lyricCandidate, corroborated bool) int {
@@ -194,11 +182,9 @@ func scoreLyricCandidate(localArtist, localTitle string, durationSecs float64, c
 		if !ok {
 			return -1 // 通过了 isTimedLRC 却提不出最后一个时间戳,理论上不该发生,保守判定无效
 		}
-		// 阈值实测坐实(Something 那次):网易云被 George Harrison credit 污染的错误内容,
-		// 末尾时间戳跟真实时长差了 28.7%;而酷狗那份验证过是真正 Musiq Soulchild 原文
-		// 内容(不提 George Harrison)的候选,只是因为歌曲本身前奏/尾奏较长导致差了
-		// 22.3%——两者差距只有 6 个百分点,卡在 0.25 才能两边都分对(既拦住确凿污染的
-		// 网易云候选,又不错杀真实但有较长纯音乐尾奏的酷狗候选)。
+		// 0.25 这个阈值卡得比较紧:内容被污染/串错版本的候选跟真实但前奏/尾奏较长的
+		// 正确候选,时长偏差有时只差几个百分点,阈值定太松会放过污染候选,定太紧会
+		// 错杀真实但尾奏长的候选。
 		ratio := math.Abs(last-durationSecs) / durationSecs
 		switch {
 		case ratio <= 0.03:
@@ -238,14 +224,11 @@ func scoreLyricCandidate(localArtist, localTitle string, durationSecs float64, c
 // normLoose lowercases and drops everything but letters/digits (keeps CJK), so
 // "BLOOD ON THE DANCE FLOOR/ HIStory In The Mix" and "Blood On the Dance Floor:
 // HIStory In the Mix" compare equal when matching albums across services.
-// 顺带先过一遍 toSimplified——实测坐实:方大同《殭尸》(繁体,本地 Apple Music 标签原样)
-// 网易云搜索本身能查到这首歌(候选就在结果里),但候选的歌名字段存的是简体"僵尸",逐字符
-// 比较判定成两首不相关的歌,标题匹配这步就把本该采信的候选剔除了,QQ 音乐那边同款逐字符
-// 比较也会同样落空。这里没有像 nameOnlyMatch 当初那样只在窄范围手动转,而是直接下沉到
-// normLoose 本身——titleMatches/albumScore/两处直接 normLoose(a)==normLoose(b) 的
-// 精确匹配全部靠这一个改动统一受益,不用在每个调用点各自补一遍 toSimplified。toSimplified
-// 认不出的字符原样保留,不会让两个本来不相关的名字被错误判定成相关,不会削弱下游的防仿冒号
-// 判定(那部分靠歌手名/专辑名核实,繁简转换只影响字符形式,不影响身份判定的输入本身)。
+// 顺带先过一遍 toSimplified——候选的标题/专辑字段有时是简体、本地 Apple Music 标签是
+// 繁体,逐字符比较会误判成两首不相关的歌。直接下沉到 normLoose 本身,而不是在每个调用点
+// (titleMatches/albumScore 等)各自补一遍,统一受益。toSimplified 认不出的字符原样
+// 保留,不会让不相关的名字被错误判定成相关,也不影响下游防仿冒号判定(那部分靠歌手名/
+// 专辑名核实,繁简转换只影响字符形式)。
 func normLoose(s string) string {
 	var b strings.Builder
 	for _, r := range strings.ToLower(toSimplified(s)) {
@@ -270,8 +253,8 @@ func looseContains(a, b string) bool {
 // artistCreditParts splits a "多人合credit"字符串(如"Prince & The Revolution"、
 // "陶喆、卢广仲")按 逗号/斜杠/顿号/& 拆成各自的人名,裁剪空白后丢弃空段。只有真正切出
 // ≥2 段(说明分隔符确实在分隔两个人名)才算数——像"周杰伦、"这种切完只剩 1 段的,分隔符
-// 本身就是可疑的仿冒特征(实测坐实:网易云真实返回过艺人字段就是独立一条"周杰伦、"的
-// 仿冒条目),调用方按"len<2 就当成单一人名"处理,不能被这种情况悄悄吃掉。
+// 本身就是可疑的仿冒特征(网易云出现过艺人字段就是独立一条"周杰伦、"的仿冒条目),
+// 调用方按"len<2 就当成单一人名"处理,不能被这种情况悄悄吃掉。
 func artistCreditParts(s string) []string {
 	var parts []string
 	for _, p := range strings.FieldsFunc(strings.TrimSpace(strings.ToLower(s)), isArtistCreditSep) {
@@ -291,10 +274,10 @@ func isArtistCreditSep(r rune) bool {
 // firstCreditedArtist 把"多人合credit"字符串(如"Prince & The Revolution"、
 // "陶喆、卢广仲")按 artistCreditParts 同一套分隔符拆开,取第一位——歌手统计类场景(见
 // topartists.go 的 mergeAliasedArtists)要求这类合唱/feat.credit 全部算到"第一个人"
-// 头上,不单独占一个歌手名额。只有真正切出 ≥2 段才当作合唱处理(跟 artistCreditParts
-// 同一个理由:防止"周杰伦、"这种只有一个人、结尾恰好带分隔符的写法被误判成合唱、错误
-// 砍掉后半段——这种写法切完只剩 1 段)。返回原始大小写/原始文字(不像 artistCreditParts
-// 那样统一转小写——那是给"判断是否同一个人"这一步比较用的,这里要的是展示用的原始名字)。
+// 头上,不单独占一个歌手名额。只有真正切出 ≥2 段才当作合唱处理,跟 artistCreditParts
+// 同一个理由(防止"周杰伦、"这种只有一个人、结尾恰好带分隔符的写法被误判成合唱)。返回
+// 原始大小写/原始文字(不像 artistCreditParts 那样统一转小写——那是给"判断是否同一个人"
+// 这一步比较用的,这里要的是展示用的原始名字)。
 func firstCreditedArtist(s string) string {
 	trimmed := strings.TrimSpace(s)
 	var parts []string
@@ -316,10 +299,6 @@ func firstCreditedArtist(s string) string {
 // account like "周杰伦-" or "周杰伦." normalizes identical to "周杰伦" and would
 // wrongly pass as the genuine artist — and even without normLoose, plain
 // substring containment still lets "周杰伦" match as a prefix of "周杰伦-".
-// Real-world case that surfaced this (实测坐实): Jay Chou's catalog is pulled
-// from NetEase entirely, so searches only return impersonator accounts riding
-// on a near-identical name; the old check let them through and the wrong
-// impersonator's cover got cached and reused across several real songs.
 // This requires each comma/slash/顿号/&-separated part of either name to be
 // byte-for-byte equal (case-folded, trimmed) to the other — good enough for
 // legitimate cross-service formatting noise (spacing, multi-artist credit
@@ -350,16 +329,12 @@ func artistMatches(a, b string) bool {
 }
 
 // artistAliasTable 是极小的、手工登记的"已知英文/罗马化艺名 → 本库常用中文名"
-// 对照表，只兜底 NetEase/QQ 的跨服务自动匹配天生够不到的情况——两条已实测坐实的场景：
-// ①合唱/feat.曲目里 NetEase 把该曲目记成多位歌手(如"陶喆、卢广仲")，本地(Apple
-// Music)标签只留了主唱一人的英文名(如"David Tao")，且专辑名网易云也是中文写法，
-// title/album 都对不上文本，nameOnlyMatch 那套"跨服务强匹配"救不了(陶喆《那个女孩
-// (feat.卢广仲)》等)；②iPhone 经 Last.fm 桥接转发的收听，NetEase/QQ 搜索直接拿
-// 英文艺名(如"Jason Chan"/"Kun"/"Dean Ting")去查完全查无这首歌——两家平台索引的
-// 是这些歌手的中文舞台名，英文名不在可搜索的别名范围内，连封面都解析不出来(陈柏宇
-// 《你瞒我瞒》/蔡徐坤《Jasmine》/丁世光《情话》等)。这不是算法能推导的东西(不像
-// toSimplified 繁简转换有规律可循)，只能手工登记这个人自己公开、确凿无疑的艺名，
-// 覆盖不到的组合原样保留，不会比现状更差。
+// 对照表，只兜底 NetEase/QQ 的跨服务自动匹配天生够不到的两类情况：①合唱/feat.曲目里
+// NetEase 把曲目记成多位歌手、本地标签只留主唱一人的英文名，title/album 文本对不上，
+// nameOnlyMatch 那套"跨服务强匹配"救不了；②Last.fm 桥接转发的收听，本地标签是歌手的
+// 英文/罗马化艺名，但 NetEase/QQ 只按中文舞台名索引，英文名查不到任何候选，连封面都
+// 解析不出来。这不是算法能推导的东西(不像 toSimplified 繁简转换有规律可循)，只能手工
+// 登记这个人自己公开、确凿无疑的艺名，覆盖不到的组合原样保留，不会比现状更差。
 var artistAliasTable = map[string]string{
 	"david tao":  "陶喆",
 	"jason chan": "陈柏宇",
@@ -374,12 +349,10 @@ func knownArtistAlias(artist string) string {
 }
 
 // neteaseImpersonatorRiddenArtists 是版权已从网易云整体下架、曲库里只剩仿冒号的艺人
-// 名单(实测坐实,2026-07-11):这类艺人任何"标题+专辑名精确匹配"的候选，先天就该是
-// 仿冒号——真人官方版本根本不在库里，不存在"两者都对上但恰好不是官方"的中间地带。
-// nameOnlyMatch()"歌手名字面对不上也认"这条规则的前提是"信任跨服务强匹配大概率可信"，
-// 对这类艺人不成立,会直接把仿冒号的署名当成核实过的官方名(实测:周杰伦《爱在西元前》
-// 网易云唯一一条标题+专辑名精确匹配的候选，署名是自建小号"Jinhua Jue"，头像还是默认图)。
-// 只需要极少数确凿知名的名字,新的按实际踩坑追加即可。
+// 名单：这类艺人任何"标题+专辑名精确匹配"的候选，先天就该是仿冒号——真人官方版本根本
+// 不在库里，不存在"两者都对上但恰好不是官方"的中间地带。nameOnlyMatch()"歌手名字面
+// 对不上也认"这条规则的前提是"信任跨服务强匹配大概率可信"，对这类艺人不成立,会直接
+// 把仿冒号的署名当成核实过的官方名。只需要极少数确凿知名的名字,新的按实际踩坑追加即可。
 var neteaseImpersonatorRiddenArtists = map[string]bool{
 	"周杰伦": true,
 	"周杰倫": true,
@@ -396,14 +369,10 @@ func isNeteaseImpersonatorRidden(artist string) bool {
 // 通过 gocc 包自己的 go:embed 编译进二进制,不依赖运行时外部文件,这台机器/任何机器上
 // 跑起来行为都一样。
 //
-// 2026-07-15:toSimplified 原来是一张手工维护的单字对照表(约 160 字,不认识的字原样
-// 保留,查不到就不转换),覆盖不全的代价这天暴露过两次:「太美麗」这类专辑名比较偶尔漏转,
-// 更严重的一次是"周杰倫"(繁体"倫")因为表里根本没这个字,导致发给网易云/QQ/酷狗/LRCLIB
-// 的搜索关键词转换等于没转换,四个源全部搜不到候选(这个具体案例见
-// project_nowplaying_traditional_artist_search_query_bug 这条记忆)。换成 gocc 之后
-// 拿的是 OpenCC 官方词库(单字+多字词组两级),覆盖面不再依赖"撞见一个字才补一个字"这种
-// 被动积累,一次性解决这整类问题。换依赖的代价(collector 从零第三方依赖变成有 3 个间接
-// 依赖、多约 1MB 内嵌词典体积)权衡过后用户主动选择了接受。
+// 用 OpenCC 官方词库(单字+多字词组两级)而不是手工维护的单字对照表,是因为后者覆盖面
+// 依赖"撞见一个字才补一个字"的被动积累,容易漏转导致搜索关键词转换等于没转换、四个源
+// 全部搜不到候选。换依赖的代价(collector 从零第三方依赖变成有 3 个间接依赖、多约 1MB
+// 内嵌词典体积)权衡过后可以接受。
 var t2sConverter = func() *gocc.OpenCC {
 	cc, err := gocc.New("t2s")
 	if err != nil {
@@ -439,12 +408,8 @@ var albumStop = map[string]bool{
 // albumTokens 除了在非字母数字处断词,还在"数字→字母"/"字母→数字"的交界处断词——中文
 // 演唱会专辑名常见"2011Live"/"2020巡演"这种年份和后缀之间不留空格的写法,原来整段被
 // strings.FieldsFunc 当成一个词,导致跟本地(通常是英文、年份和单词之间有空格)标签的
-// "2011"+"live"两个独立词对不上、白白丢掉本该有的匹配分。实测坐实:方大同《四人游
-// (Live)》——网易云正确候选专辑"15 香港演唱会(2011Live)"因为"2011Live"没拆开,跟本地
-// 专辑"15 (Live in Hong Kong 2011)"只对上"15"这一个词(分数1),跟另一个同名但错误专辑
-// 的候选"This Love Live 2007"(只对上"live"这一个词,分数同样是1)打成平手,选谁全看
-// 网易云搜索接口自己的排序、选错了封面。拆开后正确候选能对上"15"+"2011"+"live"三个词、
-// 分数明显领先,不再靠运气打平。
+// "2011"+"live"两个独立词对不上、白白丢掉本该有的匹配分,容易在多个候选打平时选错。
+// 拆开后能对上"2011"+"live"这两个独立词,分数明显领先,不再靠运气打平。
 func albumTokens(s string) map[string]bool {
 	out := map[string]bool{}
 	s = strings.ToLower(s)
@@ -498,7 +463,7 @@ func albumScore(candidate, target string) int {
 	// 完全相等(200)必须严格高于宽松包含(100):对短专辑名(如"1999")尤其关键——几乎
 	// 任何同名重发/纪念版("1999 (Super Deluxe Edition)"等)都会被 looseContains 判定
 	// 为"包含"、拿到 100 分,若跟真正的原版专辑同分,谁先出现在候选里就赢,原版反而可能
-	// 被更晚出现的重发版顶替(实测坐实:Prince "1999" 曾被错配成 Super Deluxe 版封面)。
+	// 被更晚出现的重发版顶替。
 	nc, nt := normLoose(candidate), normLoose(target)
 	if nc == nt {
 		return 200
