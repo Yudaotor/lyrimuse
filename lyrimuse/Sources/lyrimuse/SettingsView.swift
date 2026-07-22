@@ -1019,6 +1019,19 @@ private struct AboutSettingsTab: View {
                 .buttonStyle(.link)
             }
 
+            // 落地页(微信/支付宝收款码)是独立的通用小仓库 Yudaotor/donate,托管在
+            // GitHub Pages 上,不跟 Lyrimuse 这一个项目绑定,后续其它项目也能复用——
+            // 这里只是一个外链按钮。
+            Section {
+                Button {
+                    NSWorkspace.shared.open(URL(string: "https://yudaotor.github.io/donate/")!)
+                } label: {
+                    Label(L10n.t("请作者喝杯咖啡"), systemImage: "cup.and.saucer.fill")
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(.orange)
+            }
+
             // collector 日志一直写得比较完整,但 App 自己的日志全在系统统一日志里,
             // 普通人不会用 Console.app 去查。这里一键把两边日志+关键状态(权限/常驻
             // 服务/各功能是否已配置,不含任何 token 原始值)汇总成一份文本存到桌面,

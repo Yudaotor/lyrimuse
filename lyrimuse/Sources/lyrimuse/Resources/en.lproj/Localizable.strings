@@ -8,6 +8,7 @@
 "链接" = "Links";
 "GitHub 仓库" = "GitHub Repository";
 "反馈问题" = "Report an Issue";
+"请作者喝杯咖啡" = "Buy the Author a Coffee";
 "导出诊断信息" = "Export Diagnostics";
 "汇总 App/采集器日志和权限、常驻服务等关键状态,保存成一份文本文件——不会包含任何账号 token 或密钥的原始内容。" = "Bundles App/collector logs plus key state (permissions, background service, etc.) into a text file — never includes any account tokens or secrets.";
 "配置备份" = "Config Backup";
