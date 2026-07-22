@@ -4,6 +4,16 @@ import LyrimuseCore
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // 2026-07-22:系统默认的 .help(_:) 悬浮提示延迟(NSInitialToolTipDelay,大约
+        // 1~1.5 秒)对"设置"里"实验室功能"那个"?"图标来说太长了——用户反馈"悬浮
+        // 半天不出来",一度以为是悬浮提示压根没工作,后来才弄清楚其实是等待时间太长
+        // 被当成了没反应。这个值是 AppKit 从本 App 自己的 UserDefaults 域里读的,不是
+        // 全局系统设置,只影响这个 App 进程内的 .help() 提示,不会改到别的 App 的悬浮
+        // 提示体验。.register(defaults:) 只在内存里注册一个后备默认值,不会写盘持久化,
+        // 每次启动都要重新设一次;调到 150ms 之后,这个 App 里所有用到 .help() 的地方
+        // (不只是这一个"?"图标)悬浮后都会更快弹出提示。
+        UserDefaults.standard.register(defaults: ["NSInitialToolTipDelay": 150])
+
         let settings = AppSettings.shared
 
         // ConfigStore/FeatureSettingsStore 写配置文件、collector 自己写歌词/封面缓存都
@@ -49,5 +59,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // 权限"NSAlert(曾经放在这里)正是为了绕开这个时序问题才用 NSAlert 而不是
         // SwiftUI 窗口,现在整段引导折进新向导后,连带这个绕开时序问题的写法一起废弃。
         GlobalHotkeys.registerAll()
+    }
+
+    // 2026-07-22:用户反馈"点 Dock 里的图标没有任何反应"——这个 App 没有传统意义上的
+    // "主窗口"(内容是菜单栏图标+悬浮歌词窗口+按需打开的设置窗口),之前也从没实现过
+    // 这个 delegate 方法,所以点 Dock 图标(只在"showInDock"开着、走 .regular 激活策略
+    // 时才会有 Dock 图标)完全没有任何默认行为。参考同类"菜单栏常驻+可选 Dock 图标"
+    // 工具(Bartender/iStat Menus 这类)的通行做法,把设置窗口当成这个 App 唯一称得上
+    // "主窗口"的东西——hasVisibleWindows 为 false(没有任何可见窗口,包括设置窗口本身
+    // 没开着)时才主动打开,已经有可见窗口时让系统默认的"带到前台"行为接管,不重复处理。
+    // openSettings() 是 SwiftUI 环境 action,AppDelegate 不在 View 上下文里拿不到,借道
+    // AppActions 这个桥(本来就是为 GlobalHotkeys 这类同样处境的调用方搭的,见该文件
+    // 注释),不用另起一套机制。
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        if !flag {
+            AppActions.shared.openSettings?()
+        }
+        return true
     }
 }

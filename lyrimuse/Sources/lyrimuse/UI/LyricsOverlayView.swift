@@ -94,7 +94,7 @@ struct LyricsOverlayView: View {
                     .font(settings.romanizationFont)
                     .foregroundStyle(settings.foregroundColor.opacity(0.6))
                     .fixedSize(horizontal: false, vertical: true) // 允许换行时如实撑高,不被裁掉
-                    .lyricsTextShadow(settings.textShadowEnabled, color: settings.textShadowColor)
+                    .lyricsTextStroke(settings.textStrokeEnabled, color: settings.textStrokeColor)
             }
             mainLine
             if settings.showTranslation, let tr = poller.currentLine?.translation {
@@ -102,14 +102,14 @@ struct LyricsOverlayView: View {
                     .font(settings.translationFont)
                     .foregroundStyle(settings.foregroundColor.opacity(0.75))
                     .fixedSize(horizontal: false, vertical: true)
-                    .lyricsTextShadow(settings.textShadowEnabled, color: settings.textShadowColor)
+                    .lyricsTextStroke(settings.textStrokeEnabled, color: settings.textStrokeColor)
             }
             if settings.showNextLinePreview, let next = poller.nextLineText {
                 Text(next)
                     .font(settings.previewFont)
                     .foregroundStyle(settings.foregroundColor.opacity(0.4))
                     .fixedSize(horizontal: false, vertical: true)
-                    .lyricsTextShadow(settings.textShadowEnabled, color: settings.textShadowColor)
+                    .lyricsTextStroke(settings.textStrokeEnabled, color: settings.textStrokeColor)
             }
             if isHoveringForControls && !settings.lockPosition {
                 playbackControls
@@ -142,6 +142,17 @@ struct LyricsOverlayView: View {
                 MusicPlaybackController.playPause()
             }
             controlButton("forward.fill") { MusicPlaybackController.nextTrack() }
+            // 2026-07-22:新增"锁定"按钮——用户反馈"没锁定时鼠标移到悬浮歌词上,除了
+            // 切歌三个按钮,想再加一个能直接在这里锁定的按钮",不用再去"设置"里找
+            // "锁定位置"那个开关。用一条竖线跟前面三个播放按钮分个组,提示这是不同类别
+            // 的操作,不是切歌功能的第四个按钮。点了之后 settings.lockPosition 变
+            // true,这一整排控制按钮(包括它自己)会立刻消失(见 body 里
+            // isHoveringForControls && !settings.lockPosition 那个条件),跟直接去
+            // 设置里打开那个开关效果完全一致。
+            Rectangle()
+                .fill(Color.white.opacity(0.25))
+                .frame(width: 1, height: 16)
+            lockButton
         }
         .padding(.horizontal, 18)
         .padding(.vertical, 7)
@@ -153,10 +164,26 @@ struct LyricsOverlayView: View {
     // 顺手弹一次系统授权对话框,已经拒绝过就静默不做,不需要在悬浮窗里再单独设计一套
     // 提示 UI。
     private func controlButton(_ systemName: String, primary: Bool = false, action: @escaping () -> Void) -> some View {
-        Button {
+        iconButton(systemName, primary: primary) {
             guard MusicAutomationPermission.check(askIfNeeded: true).isAuthorized else { return }
             action()
-        } label: {
+        }
+    }
+
+    // 图标用 lock.open.fill——画的是"当前是开着的"这个状态,点一下把它关上/锁定,跟
+    // 另外三个播放按钮统一用 .fill 系列图标保持视觉一致。不经过 controlButton 那层
+    // "先查 Apple Music 自动化权限"的守卫——锁定位置这个动作跟自动化播放控制完全不
+    // 搭边,复用会引入一个跟这个按钮语义不匹配的隐藏依赖,所以两者共享的只是纯视觉
+    // 样式(iconButton),各自的守卫/动作逻辑分开写。
+    private var lockButton: some View {
+        iconButton("lock.open.fill") {
+            settings.lockPosition = true
+            LyricsOverlayWindowController.shared.setLocked(true)
+        }
+    }
+
+    private func iconButton(_ systemName: String, primary: Bool = false, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
             Image(systemName: systemName)
                 .font(.system(size: primary ? 15 : 13, weight: .semibold))
                 .foregroundStyle(.white)
@@ -221,7 +248,7 @@ struct LyricsOverlayView: View {
                 // 标成"纯性能、视觉不变"是判断错了——分层阴影跟合并阴影视觉上确实不同,
                 // 这次一并订正)。
                 .compositingGroup()
-                .lyricsTextShadow(settings.textShadowEnabled, color: settings.textShadowColor)
+                .lyricsTextStroke(settings.textStrokeEnabled, color: settings.textStrokeColor)
             }
             .font(settings.mainFont)
         } else if let text = poller.currentLine?.mainText {
@@ -229,12 +256,12 @@ struct LyricsOverlayView: View {
                 .font(settings.mainFont)
                 .foregroundStyle(settings.foregroundColor)
                 .fixedSize(horizontal: false, vertical: true)
-                .lyricsTextShadow(settings.textShadowEnabled, color: settings.textShadowColor)
+                .lyricsTextStroke(settings.textStrokeEnabled, color: settings.textStrokeColor)
         } else {
             Text("♪")
                 .font(settings.mainFont)
                 .foregroundStyle(settings.foregroundColor.opacity(0.3))
-                .lyricsTextShadow(settings.textShadowEnabled, color: settings.textShadowColor)
+                .lyricsTextStroke(settings.textStrokeEnabled, color: settings.textStrokeColor)
         }
     }
 
@@ -272,8 +299,8 @@ struct LyricsOverlayView: View {
             .foregroundStyle(wordGradient(fg: fg, left: fraction - band, right: fraction + band))
             // 故意不再包 .animation(...)——TimelineView(.animation) 已经在按渲染帧频
             // 重算真值,这里再叠一层 SwiftUI Animation 补间只会重新引入上面注释里那套
-            // 矢量叠加问题。也故意不在这里单独套阴影——阴影统一挪到 mainLine 里
-            // WrapLayout 外层的 .compositingGroup()+.lyricsTextShadow(),见那边注释。
+            // 矢量叠加问题。也故意不在这里单独套描边——描边统一挪到 mainLine 里
+            // WrapLayout 外层的 .compositingGroup()+.lyricsTextStroke(),见那边注释。
     }
 
     // 过渡带 [left, right] 以这个字真实的(未夹到 [0,1] 的)进度为中心,可能整段落在
@@ -311,29 +338,65 @@ struct LyricsOverlayView: View {
     }
 }
 
-// 悬浮窗背景透明、文字直接叠在桌面内容上,颜色/内容对不上时容易糊在一起——加一圈阴影
-// 提高辨识度,是字幕类悬浮显示的常见做法。颜色可配置(参考 LyricsX 的
-// PreferenceDisplayViewController+KaraokeLyricsView.swift:阴影只让用户调"颜色"含 alpha,
-// 模糊半径/偏移量是代码里的固定常量,没有做成单独的滑杆)——这里同样只把颜色开放成设置项
-// (AppSettings.textShadowColor),半径(3)继续留作固定常量。
+// 悬浮窗背景透明、文字直接叠在桌面内容上,颜色/内容对不上时容易糊在一起——加一圈描边
+// 提高辨识度,是字幕类悬浮显示的常见做法。
 //
-// 2026-07-14 追加:用户反馈"文字阴影看起来不好看",重新逐字核对了 LyricsX 真实源码里
-// NSShadow 的具体取值(NSTextField._shadowColor setter),发现两处偏差:
-// 1) 偏移量——LyricsX 是 shadowOffset = .zero(阴影往四面八方均匀发散的"光晕"效果),
-//    这里当时(上线时)写的是 x:0,y:1(带一点方向性的"投影"效果)。这两种效果观感差别
-//    不小:偏移越大,阴影只在文字一侧加深,另一侧仍然直接暴露在桌面任意背景色前;这个
-//    功能本来就是为了不管背景是什么颜色都能撑起辨识度,偏移为零、四面都糊一层的做法
-//    更贴合这个目的,也是当时研究 LyricsX 时就已经查到、但没有同步改过来的遗留偏差,
-//    这次一并订正为 .zero。
-// 2) 逐字歌词那一行阴影是"每个字各自单独套一次"而不是"整行只套一次"——见 mainLine 里
-//    WrapLayout 外层新加的 .compositingGroup() 那段注释,这是这次"不好看"反馈里更主要
-//    的根因。
-private struct OptionalTextShadow: ViewModifier {
+// 2026-07-14 上线时这里做的是模糊阴影(.shadow(radius:)),参考 LyricsX 的
+// PreferenceDisplayViewController+KaraokeLyricsView.swift 调过取值(偏移量改成
+// shadowOffset = .zero 的"四面光晕"效果、逐字歌词那一行统一在 WrapLayout 外层
+// .compositingGroup() 之后只套一次,而不是每个字各自套一次)。
+//
+// 2026-07-22:用户反馈想要真正的描边(实心轮廓)而不是模糊阴影,要求参考同类开源歌词
+// 项目的做法——搜了几个 SwiftUI 文字描边的真实实现(包括 katagaki/DJDX、
+// zkHub/SwiftUIPreview 这两个仓库),归纳下来常见两条路:
+// 1) "N 个方向各偏移一份内容再叠加"(zkHub/SwiftUIPreview 的 StrokeText 就是这种,
+//    支持 8/16/32 个方向可调"质量")——写法简单,但每多一个方向就多渲染/布局一份完整
+//    内容,用在这里(mainLine 是 TimelineView(.animation) 驱动的 60fps 逐字填色)意味着
+//    每一帧要多付出 N 倍的重复开销,方向数越多描边越圆滑、开销也越高,这条路对这个
+//    项目的高频渲染路径不友好。
+// 2) katagaki/DJDX(github.com/katagaki/DJDX)View Modifiers/TextStroke.swift 的做法:
+//    content 先 .blur(radius:) 让字形轮廓往外"胀"开一圈,Canvas 里用
+//    .addFilter(.alphaThreshold(min:)) 把这层模糊的 alpha 通道硬切成非 0 即 1(胀开的
+//    区域变成一块实心剪影),拿这个剪影当 mask 盖一层纯色矩形,垫在原始文字(不模糊、
+//    保留自己的渐变/颜色)下面当描边。这个技术只需要文字的"形状"(alpha 通道),不关心
+//    文字本身画的是纯色还是渐变,所以能像原来的阴影一样整体套在 mainLine 外面一次
+//    搞定,不需要对每个字分别处理;开销是固定的"整体渲染 content 一遍 + 一次模糊 +
+//    一次阈值",不随描边粗细变化,量级上跟原来 .shadow() 自带的模糊开销相当——采用
+//    这条路径,详见下面 OptionalTextStroke。
+private struct OptionalTextStroke: ViewModifier {
     let enabled: Bool
     let color: Color
+    // 固定常量,不做成 Settings 可调项——延续这个功能原来是阴影时"只给颜色选择器,
+    // 半径/偏移是代码里的固定值"的取舍(那时参考的也是 LyricsX 的同款克制)。1.2pt
+    // 在这个项目常用的歌词字号下是一圈清晰但不臃肿的细描边。
+    private let width: CGFloat = 1.2
+    private let symbolID = "np-lyrics-stroke"
+
     func body(content: Content) -> some View {
         if enabled {
-            content.shadow(color: color, radius: 3, x: 0, y: 0)
+            content
+                // 模糊会让内容的可见范围往外"胀"出原本的 frame,这里预留出对应的空间,
+                // 不然 Canvas 会把胀出来的部分裁掉,描边看起来缺一圈。描边通常只有一两个
+                // 点粗,这圈额外留白很小,不会明显改变歌词行之间的间距。
+                .padding(width * 2)
+                .background(
+                    Rectangle()
+                        .foregroundStyle(color)
+                        .mask {
+                            Canvas { context, size in
+                                context.addFilter(.alphaThreshold(min: 0.01))
+                                context.drawLayer { ctx in
+                                    if let resolved = context.resolveSymbol(id: symbolID) {
+                                        ctx.draw(resolved, at: CGPoint(x: size.width / 2, y: size.height / 2))
+                                    }
+                                }
+                            } symbols: {
+                                content
+                                    .tag(symbolID)
+                                    .blur(radius: width)
+                            }
+                        }
+                )
         } else {
             content
         }
@@ -341,8 +404,8 @@ private struct OptionalTextShadow: ViewModifier {
 }
 
 private extension View {
-    func lyricsTextShadow(_ enabled: Bool, color: Color) -> some View {
-        modifier(OptionalTextShadow(enabled: enabled, color: color))
+    func lyricsTextStroke(_ enabled: Bool, color: Color) -> some View {
+        modifier(OptionalTextStroke(enabled: enabled, color: color))
     }
 }
 

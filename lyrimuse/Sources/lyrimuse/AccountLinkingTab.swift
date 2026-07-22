@@ -1,3 +1,4 @@
+import Combine
 import SwiftUI
 
 // 每张卡片的连接状态——只有三态会在"账号连接"这个分类里实际出现(这里只关心"有没有
@@ -267,7 +268,28 @@ struct AccountLinkingTab: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
             Divider()
-            saveBar
+            autosaveStatusBar
+        }
+        // 2026-07-22:文本字段(Token/API Key/Secret/Webhook 地址等,由 ConfigStore
+        // 承载)从"手动点『保存并应用』"改成自动保存——用户反馈"这里面的保存逻辑都是
+        // 失焦自动保存吧,不用专门搞一个保存按钮了"。ConfigStore 原来特意做成手动保存
+        // 是为了不让每敲一个字符/每次切换字段就重启一次 collector,这条顾虑依然成立,
+        // 所以没有直接用 .onChange(of:)在失焦或者逐字符时触发,而是用 Combine 的
+        // debounce:监听 config.objectWillChange(任何 @Published 字段——包括
+        // Last.fm 连接成功后自动写入的 lastfmScrobbleSessionKey/lastfmScrobbleUsername——
+        // 即将变化时都会发一次信号),等停止编辑 1.2 秒没有新变化才真正触发一次保存,
+        // 一次性覆盖所有文本字段,不需要给每个 TextField/SecretFieldRow 分别写
+        // onChange。performAutoSave() 内部会先判断 isDirty,被 lastError 这类非表单
+        // 内容变化误触发时不会做无意义的写盘+重启。
+        .onReceive(config.objectWillChange.debounce(for: .milliseconds(1200), scheduler: DispatchQueue.main)) {
+            Task { await performAutoSave() }
+        }
+        // 兜底:防抖计时器还没到 1.2 秒、用户就切换到别的账号卡片(这个 View 会被销毁
+        // 重建)或者关掉设置窗口,不能让这最后一段编辑内容悄悄丢掉不生效。
+        .onDisappear {
+            if config.isDirty {
+                Task { await performAutoSave() }
+            }
         }
         .alert(
             L10n.t("还差一步"),
@@ -313,6 +335,37 @@ struct AccountLinkingTab: View {
         apply(true)
     }
 
+    // 2026-07-22:每周/每日听歌报告都能自己选数据源(Last.fm/ListenBrainz)之后,这两个
+    // helper 按 collector/digest.go 的 resolveDigestSource 同一套规则在 Swift 侧算一遍——
+    // 两边各自独立实现(跑在不同进程/语言里),规则必须保持一致,改一处务必同步改另一处。
+    //
+    // resolvedDigestSource:preference 非空且对应账号确实配好了就用它;否则按"两个都配了
+    // →Last.fm,只配了一个→用那个,都没配→空字符串(交给调用方按'需要先配置'处理)"解析。
+    private func resolvedDigestSource(preference: String) -> String {
+        let lastfmOK = config.lastfmBridgeMissingHint() == nil
+        let lbOK = config.isListenBrainzConfigured
+        switch preference {
+        case "lastfm": if lastfmOK { return "lastfm" }
+        case "listenbrainz": if lbOK { return "listenbrainz" }
+        default: break
+        }
+        if lastfmOK { return "lastfm" }
+        if lbOK { return "listenbrainz" }
+        return ""
+    }
+
+    // digestCrossCard:给 toggleGuarded 的 crossCard 参数用——按"这次实际会用哪个数据源"
+    // 动态指向对应的账号卡片,不再像改动前那样写死指向 Last.fm。source 为空(两个账号都
+    // 没配)时仍需要给一个具体的 target(toggleGuarded 的 tuple 里这个字段不是 Optional),
+    // 这里选 ListenBrainz 卡片没有特殊含义,纯粹是两个都不满足时随便选一个当跳转目标。
+    private func digestCrossCard(source: String) -> (hint: String?, target: AccountDestination) {
+        switch source {
+        case "lastfm": return (hint: config.lastfmBridgeMissingHint(), target: .lastfm)
+        case "listenbrainz": return (hint: config.isListenBrainzConfigured ? nil : L10n.t("未配置"), target: .listenBrainz)
+        default: return (hint: L10n.t("未配置"), target: .listenBrainz)
+        }
+    }
+
     // 2026-07-17:视觉重设计——原来每张卡片手工用 Divider() 分割一整块 Form/Section,
     // 观感上跟另外四个纯设置 tab"每个话题一个真正 Section"的原生分组卡片完全不同,是
     // 这个窗口里视觉密度最高、最不像原生 macOS 设置的部分。现在改成每张卡片按话题拆成
@@ -334,7 +387,7 @@ struct AccountLinkingTab: View {
             Text(L10n.t("这台 Mac 用同一个 Last.fm 账号做两件事：读取 iPhone 上的播放记录、把 Mac 上的播放写回 Last.fm。"))
                 .font(.caption).foregroundStyle(.secondary)
         case .bark:
-            Text(L10n.t("用来接收「每周听歌小结」推送。"))
+            Text(L10n.t("用来接收「每周听歌小结」「每日听歌报告」推送。"))
                 .font(.caption).foregroundStyle(.secondary)
         }
     }
@@ -384,16 +437,14 @@ struct AccountLinkingTab: View {
                 HStack(spacing: 4) {
                     Text(L10n.t("同步服务地址"))
                     HelpButton(
-                        text: L10n.t("自己用 Cloudflare Worker + KV 搭建的 state-worker 服务（项目里的 state-worker/ 目录）。不想自建也行：配好「ListenBrainz」也能让网页兜底显示「正在播放」，两者配一个就够。效果截图 + 完整从零搭建步骤见「网页玩法」教程。"),
+                        text: L10n.t("自己用 Cloudflare Worker + KV 搭建的 state-worker 服务（独立公开仓库 Yudaotor/nowplaying-workers）。不想自建也行：配好「ListenBrainz」也能让网页兜底显示「正在播放」，两者配一个就够。效果截图 + 完整从零搭建步骤见该仓库自己的 README。"),
                         docTitle: L10n.t("查看效果 + 教程 →"),
-                        // 2026-07-20:这里原来直接指向 README「从零搭建 state-worker」那一节
-                        // (行号锚点 #L198-L220),现在改指向专门写的 docs/web-features.md——
-                        // 那份文档带真机效果截图、更友好的分步走读,并且它自己在需要 README
-                        // 那份"纯部署命令"细节时会再链接回去,不是简单地把入口挪走。文件名用
-                        // ASCII(web-features.md)而不是中文——这个 URL 要写死在 Swift 里当
-                        // URL(string:) 字面量,中文路径得先手动 percent-encode 才能保证解析
-                        // 成功,ASCII 文件名从根源上避免这个问题,可读性也更好。
-                        docURL: URL(string: "https://github.com/Yudaotor/lyrimuse/blob/main/docs/web-features.md")!
+                        // 2026-07-20:这里原来指向本仓库 docs/web-features.md;2026-07-22
+                        // state-worker/ 连同这份教程一起拆进了独立公开仓库
+                        // Yudaotor/nowplaying-workers(见该仓库自己的 git 历史/README),原
+                        // URL 已经 404——这里改指向新仓库的 README(#readme 锚点,GitHub 会
+                        // 自动渲染仓库首页那份)。
+                        docURL: URL(string: "https://github.com/Yudaotor/nowplaying-workers#readme")!
                     )
                 }
             }
@@ -671,41 +722,80 @@ struct AccountLinkingTab: View {
         }
 
         Section {
+            // 2026-07-22:数据源改成可选——最初"每周"写死只认 Last.fm、"每日"写死只认
+            // ListenBrainz,真机实测坐实 Last.fm 的周榜接口(user.getWeeklyTrackChart/
+            // getWeeklyArtistChart)其实接受任意 from/to,不是只认它自己的官方周边界,
+            // 用户因此要求两个 cadence 都能自己选用哪个账号的数据。Picker 挂在对应开关
+            // 打开之后(参照"灵动岛风格"只在"灵动岛歌词"开着才出现的同一个既有模式)——
+            // 没开这个提醒,选哪个数据源无所谓,不用平白多占一行;两个 Picker 各给了
+            // 区分度更高的标签("每周数据源"/"每日数据源"而不是都叫"数据源"),避免线性
+            // 阅读(尤其 VoiceOver)时分不清哪个 Picker 归哪个开关管。Picker 显示的是
+            // "这次实际会用哪个"(没手动选过时展示自动判定出的默认值,见
+            // resolvedDigestSource),一旦手动选过就变成显式 persist 的偏好,即便后来又
+            // 跟自动判定结果一样。
             Toggle(L10n.t("每周听歌小结"), isOn: Binding(
                 get: { features.weeklyDigest },
                 set: { newValue in
+                    let source = resolvedDigestSource(preference: features.weeklyDigestSource)
                     toggleGuarded(newValue,
                         sameCardHint: config.pushMissingHint(),
-                        crossCard: (hint: config.lastfmBridgeMissingHint(), target: .lastfm)
+                        crossCard: digestCrossCard(source: source)
                     ) { v in features.weeklyDigest = v; Task { await features.save() } }
                 }
             ))
+            if features.weeklyDigest {
+                Picker(L10n.t("每周数据源"), selection: Binding(
+                    get: { resolvedDigestSource(preference: features.weeklyDigestSource) },
+                    set: { features.weeklyDigestSource = $0; Task { await features.save() } }
+                )) {
+                    Text("Last.fm").tag("lastfm")
+                    Text("ListenBrainz").tag("listenbrainz")
+                }
+                .pickerStyle(.menu)
+            }
+
+            Toggle(L10n.t("每日听歌报告"), isOn: Binding(
+                get: { features.dailyDigest },
+                set: { newValue in
+                    let source = resolvedDigestSource(preference: features.dailyDigestSource)
+                    toggleGuarded(newValue,
+                        sameCardHint: config.pushMissingHint(),
+                        crossCard: digestCrossCard(source: source)
+                    ) { v in features.dailyDigest = v; Task { await features.save() } }
+                }
+            ))
+            if features.dailyDigest {
+                Picker(L10n.t("每日数据源"), selection: Binding(
+                    get: { resolvedDigestSource(preference: features.dailyDigestSource) },
+                    set: { features.dailyDigestSource = $0; Task { await features.save() } }
+                )) {
+                    Text("Last.fm").tag("lastfm")
+                    Text("ListenBrainz").tag("listenbrainz")
+                }
+                .pickerStyle(.menu)
+            }
         } header: {
             Text(L10n.t("提醒开关"))
+        } footer: {
+            Text(L10n.t("数据源留空时自动判定：两个账号都配了优先用 Last.fm，只配了一个就用那个。每日听歌报告在本地时间晚上 10 点之后、当天第一次检查时推送，内容是当天播放次数、累计时长（数据源是 ListenBrainz 时才有），以及听得最多的几首歌。"))
         }
     }
 
-    // MARK: - 底部保存栏
+    // MARK: - 底部状态栏
 
-    private var saveBar: some View {
-        HStack {
-            saveStatusText
+    // 2026-07-22:原来这里是"保存并应用"按钮(手动触发)+旁边的状态文字,现在文本字段
+    // 已经自动保存(见 body 的 .onReceive),不再需要一个可点击的按钮,只保留状态展示:
+    // 正在自动保存/上次保存时间/报错。
+    private var autosaveStatusBar: some View {
+        HStack(spacing: 8) {
+            if isSaving {
+                ProgressView().controlSize(.small)
+                Text(L10n.t("正在自动保存…"))
+                    .font(.caption).foregroundStyle(.secondary)
+            } else {
+                saveStatusText
+            }
             Spacer()
-            Button(isSaving ? "" : (config.isDirty ? L10n.t("保存并应用") : L10n.t("已全部保存"))) {
-                Task { await performSave() }
-            }
-            .buttonStyle(.borderedProminent)
-            .disabled(!config.isDirty || isSaving)
-            .keyboardShortcut(.defaultAction)
-            .overlay {
-                if isSaving {
-                    HStack(spacing: 6) {
-                        ProgressView().controlSize(.small)
-                        Text(L10n.t("正在保存并应用…"))
-                    }
-                    .font(.callout)
-                }
-            }
         }
         .padding()
     }
@@ -721,7 +811,8 @@ struct AccountLinkingTab: View {
         }
     }
 
-    private func performSave() async {
+    private func performAutoSave() async {
+        guard config.isDirty, !isSaving else { return }
         isSaving = true
         defer { isSaving = false }
         if await config.save() {

@@ -1,5 +1,13 @@
 import Foundation
 import AppKit
+import OSLog
+
+// 2026-07-22:导入这条路径原来全程 try?,任何一步(JSON 解析/写 config.json/写
+// features.json)失败都悄无声息——调用方(SettingsView)只看返回的 Bool 决定要不要弹
+// "导入并重启",分不清"整个没解析出来"跟"部分文件写失败"。这里补上日志,不代表改变了
+// 失败也继续走后续步骤这个既有行为(见下面 importData 内部注释),只是让失败这件事本身
+// 变得可追溯。同样绝不记文件内容本身(config.json 里就是原始 token)。
+private let logger = Logger(subsystem: "com.chenyuhao.lyrimuse", category: "config-portability")
 
 // 导入/导出配置——方便换电脑:导出打包 collector 的 config.json(账号 token/密钥原文都在
 // 里面)+ features.json(功能开关/歌词源排序等)+ App 自己的 UserDefaults(np: 前缀 +
@@ -9,6 +17,9 @@ import AppKit
 // 跟 DiagnosticsExporter 刻意反着来:那个绝不能包含任何 token 原文(设计给贴进公开
 // issue);这个就是要把 token 原文原样带走(设计给换新机器用),所以 UI 上要有反过来的
 // 警示——"这份文件包含你的账号密钥，不要分享给别人"。
+//
+// 2026-07-22 新增 clearAllConfig():跟 import 反着来的第三个操作——不是"换一份配置进来"
+// 而是"清空回到刚装完的样子",供 SettingsView 的"清除所有配置"按钮用。
 enum ConfigPortability {
     private static let configDir = FileManager.default.homeDirectoryForCurrentUser
         .appendingPathComponent(".config/applemusic-nowplaying")
@@ -42,10 +53,16 @@ enum ConfigPortability {
         if let configData = try? Data(contentsOf: configURL),
            let configObj = try? JSONSerialization.jsonObject(with: configData) {
             bundle["config"] = configObj
+        } else {
+            // 不一定是错误——采集器可能还没跑过、config.json 本来就不存在,只是留个痕迹
+            // 方便"导出的文件里怎么少了 config 这部分"这类问题的排查。
+            logger.notice("buildExportData: no config.json found/parseable at \(configURL.path, privacy: .public)")
         }
         if let featuresData = try? Data(contentsOf: featuresURL),
            let featuresObj = try? JSONSerialization.jsonObject(with: featuresData) {
             bundle["features"] = featuresObj
+        } else {
+            logger.notice("buildExportData: no features.json found/parseable at \(featuresURL.path, privacy: .public)")
         }
 
         var appSettings: [String: Any] = [:]
@@ -70,26 +87,92 @@ enum ConfigPortability {
     @discardableResult
     static func importData(_ data: Data) -> Bool {
         guard let bundle = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            logger.error("importData: top-level JSON parse failed — not a valid export file")
             return false
         }
 
-        try? FileManager.default.createDirectory(at: configDir, withIntermediateDirectories: true)
-
-        if let configObj = bundle["config"],
-           let configData = try? JSONSerialization.data(withJSONObject: configObj, options: [.prettyPrinted]) {
-            try? configData.write(to: configURL, options: .atomic)
+        do {
+            try FileManager.default.createDirectory(at: configDir, withIntermediateDirectories: true)
+        } catch {
+            logger.error("importData: createDirectory(\(configDir.path, privacy: .public)) failed — \(String(describing: error), privacy: .public)")
         }
-        if let featuresObj = bundle["features"],
-           let featuresData = try? JSONSerialization.data(withJSONObject: featuresObj, options: [.prettyPrinted]) {
-            try? featuresData.write(to: featuresURL, options: .atomic)
+
+        if let configObj = bundle["config"] {
+            if let configData = try? JSONSerialization.data(withJSONObject: configObj, options: [.prettyPrinted]) {
+                do {
+                    try configData.write(to: configURL, options: .atomic)
+                } catch {
+                    logger.error("importData: writing config.json failed — \(String(describing: error), privacy: .public)")
+                }
+            } else {
+                logger.error("importData: re-serializing 'config' from the import bundle failed")
+            }
+        } else {
+            logger.notice("importData: import bundle has no 'config' section")
+        }
+        if let featuresObj = bundle["features"] {
+            if let featuresData = try? JSONSerialization.data(withJSONObject: featuresObj, options: [.prettyPrinted]) {
+                do {
+                    try featuresData.write(to: featuresURL, options: .atomic)
+                } catch {
+                    logger.error("importData: writing features.json failed — \(String(describing: error), privacy: .public)")
+                }
+            } else {
+                logger.error("importData: re-serializing 'features' from the import bundle failed")
+            }
+        } else {
+            logger.notice("importData: import bundle has no 'features' section")
         }
         if let appSettings = bundle["appSettings"] as? [String: Any] {
             for (key, value) in appSettings {
                 guard !excludedDefaultsKeys.contains(key) else { continue }
                 UserDefaults.standard.set(value, forKey: key)
             }
+            logger.info("importData: applied \(appSettings.count) appSettings keys")
+        } else {
+            logger.notice("importData: import bundle has no 'appSettings' section")
         }
         return true
+    }
+
+    // 2026-07-22:"清除所有配置"——回到刚装完时的样子。跟上面 import/export 用同一套
+    // 文件+UserDefaults 盘点逻辑,但故意不复用 excludedDefaultsKeys:那个集合是"换机器
+    // 场景下不该带走"的字段(引导状态/废弃字段),这里恰恰要连这几个也一起清掉——
+    // hasCompletedOnboarding 被清空后,下次启动会重新走一遍引导向导,这正是"最原始配置"
+    // 应有的样子,不是遗漏。
+    //
+    // 清完不在这里做任何"活的"reload,原因跟 importData 那条注释一样:统一交给调用方
+    // 紧接着调 restartApp()。这一点还顺带解决了一个不那么直观的连锁反应——
+    // AppSettings.collectorServiceEnabled 清空后读回来是默认值 false,它的 didSet 会调
+    // CollectorServiceManager.setEnabled(false)→uninstall(),而 Swift 对 init() 内部
+    // 显式赋值一样会触发 didSet(不是只对运行期赋值生效的坑,这里刚好是期望行为)——
+    // 于是"清除配置+重启 App"顺带就把常驻服务的 LaunchAgent 卸载了,不需要在这里
+    // 另外手动调用 launchctl,行为完全等价于全新装机、还没跑过引导向导。
+    @discardableResult
+    static func clearAllConfig() -> Bool {
+        var ok = true
+        if FileManager.default.fileExists(atPath: configURL.path) {
+            do { try FileManager.default.removeItem(at: configURL) }
+            catch {
+                logger.error("clearAllConfig: removing config.json failed — \(String(describing: error), privacy: .public)")
+                ok = false
+            }
+        }
+        if FileManager.default.fileExists(atPath: featuresURL.path) {
+            do { try FileManager.default.removeItem(at: featuresURL) }
+            catch {
+                logger.error("clearAllConfig: removing features.json failed — \(String(describing: error), privacy: .public)")
+                ok = false
+            }
+        }
+        var clearedCount = 0
+        for key in UserDefaults.standard.dictionaryRepresentation().keys {
+            guard key.hasPrefix("np:") || key.hasPrefix("KeyboardShortcuts_") else { continue }
+            UserDefaults.standard.removeObject(forKey: key)
+            clearedCount += 1
+        }
+        logger.info("clearAllConfig: cleared \(clearedCount) UserDefaults keys, filesRemovedOK=\(ok)")
+        return ok
     }
 
     @MainActor

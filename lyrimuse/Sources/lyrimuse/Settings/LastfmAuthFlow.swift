@@ -1,6 +1,13 @@
 import Foundation
 import CryptoKit
 import AppKit
+import OSLog
+
+// 2026-07-22:用户反馈"点击连接 Last.fm 没反应"——实际是正常报错(字段没填对),但排查时
+// 发现这整条流程从来没写过一行 os.Logger,DiagnosticsExporter 导出的"App Log"那节因此
+// 完全看不到这里发生过什么。这个 logger 只记"发生了哪一步、失败原因是什么"，绝不记
+// api_key/secret/session key 这些凭据原文本身(跟 ConfigStore.swift 顶部同一条纪律)。
+private let logger = Logger(subsystem: "com.chenyuhao.lyrimuse", category: "lastfm-connect")
 
 // "连接 Last.fm"自动化流程——Last.fm 经典 auth API 没有回调机制:拿到一次性 token 之后,
 // 必须等用户自己在浏览器里点完"Yes, allow access",程序才能换永久 session key(见
@@ -109,37 +116,50 @@ final class LastfmConnectController: ObservableObject {
         // 名字很像、但用途完全不同的只读 API Key(iPhone 播放桥接用),笼统的提示曾经
         // 让人以为自己已经填过了、看不出问题出在哪个字段。
         guard !apiKey.isEmpty else {
+            logger.error("start: blocked — Scrobble API Key is empty")
             state = .failed(L10n.t("请先填写 Scrobble API Key"))
             return
         }
+        logger.info("start: requesting token")
         state = .requestingToken
         Task {
             do {
                 let token = try await LastfmAuthFlow.requestToken(apiKey: apiKey)
+                logger.info("start: got token, opening browser auth page")
                 NSWorkspace.shared.open(LastfmAuthFlow.authorizeURL(apiKey: apiKey, token: token))
                 state = .waitingForBrowserAuth(token: token)
             } catch {
-                state = .failed((error as? LocalizedError)?.errorDescription ?? error.localizedDescription)
+                let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+                logger.error("start: requestToken failed — \(message, privacy: .public)")
+                state = .failed(message)
             }
         }
     }
 
     func confirmBrowserAuth(apiKey: String, secret: String) {
-        guard case .waitingForBrowserAuth(let token) = state else { return }
+        guard case .waitingForBrowserAuth(let token) = state else {
+            logger.error("confirmBrowserAuth: called while not waitingForBrowserAuth (state=\(String(describing: self.state), privacy: .public)) — ignored")
+            return
+        }
         guard !secret.isEmpty else {
+            logger.error("confirmBrowserAuth: blocked — Scrobble Secret is empty")
             state = .failed(L10n.t("请先填写 Scrobble Secret"))
             return
         }
+        logger.info("confirmBrowserAuth: exchanging session")
         state = .exchanging
         Task {
             do {
                 let result = try await LastfmAuthFlow.exchangeSession(apiKey: apiKey, secret: secret, token: token)
+                logger.info("confirmBrowserAuth: connected successfully")
                 ConfigStore.shared.lastfmScrobbleSessionKey = result.sessionKey
                 ConfigStore.shared.lastfmScrobbleUsername = result.username
                 await ConfigStore.shared.save()
                 state = .success(username: result.username)
             } catch {
-                state = .failed((error as? LocalizedError)?.errorDescription ?? error.localizedDescription)
+                let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+                logger.error("confirmBrowserAuth: exchangeSession failed — \(message, privacy: .public)")
+                state = .failed(message)
             }
         }
     }

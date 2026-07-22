@@ -3,10 +3,21 @@ import SwiftUI
 // "联网搜索候选歌词"弹窗,参考 LyricsX 的 SearchLyricsViewController:左侧候选列表
 // (来源+分数+是否逐字),右侧选中候选的完整预览,"采用此候选"把内容交回调用方
 // (LyricsManagerView 负责真正写回缓存,这里只管搜索和展示)。
+//
+// 2026-07-22:歌名/歌手/专辑从固定不可改的 let 改成了可编辑字段——用户反馈"默认按照
+// 现有逻辑去查询,但也支持编辑之后再进行查询"(比如这首歌本身的元数据不准/有别名,
+// 想换个关键词试试能不能搜到更好的候选)。关键的边界(用户原话"实际这个歌词还是绑定在
+// 这首歌的")不需要这个文件额外做任何防护就自动成立——onApply 这个回调从一开始就
+// 只回传选中的 candidate 本身,真正决定"写进本地缓存哪一条记录"的 key 是调用方
+// LyricsManagerView.swift 里外层作用域早就捕获好的稳定 key(不依赖 artist/title/
+// album 这三个字段),改这三个字段只改变"拿什么关键词去联网查",跟"这首歌在本地叫
+// 什么名字/归属哪一条缓存记录"完全无关,两者本来就没有耦合在一起。
 struct LyricsSearchSheet: View {
-    let artist: String
-    let title: String
-    let album: String
+    // 原始值——用来在用户改乱查询关键词之后一键恢复,也是"默认查询"这句里"默认"的
+    // 具体所指(初次打开时 artist/title/album 就是从这三个值来的)。
+    let originalArtist: String
+    let originalTitle: String
+    let originalAlbum: String
     let onApply: (LyricsSearchService.Candidate) -> Void
 
     @Environment(\.dismiss) private var dismiss
@@ -15,19 +26,40 @@ struct LyricsSearchSheet: View {
     @State private var state: LoadState = .loading
     @State private var selectedSource: String?
 
+    // 可编辑的查询关键词,初始值取自 originalXxx——默认就是"现有逻辑"那套查询。
+    @State private var artist: String
+    @State private var title: String
+    @State private var album: String
+
     private enum LoadState {
         case loading
         case loaded([LyricsSearchService.Candidate])
         case failed(String)
     }
 
+    init(artist: String, title: String, album: String, onApply: @escaping (LyricsSearchService.Candidate) -> Void) {
+        self.originalArtist = artist
+        self.originalTitle = title
+        self.originalAlbum = album
+        self.onApply = onApply
+        self._artist = State(initialValue: artist)
+        self._title = State(initialValue: title)
+        self._album = State(initialValue: album)
+    }
+
+    private var isDirty: Bool {
+        artist != originalArtist || title != originalTitle || album != originalAlbum
+    }
+
+    private var isLoading: Bool {
+        if case .loading = state { return true }
+        return false
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             HStack {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(L10n.t("搜索候选歌词")).font(.title3.weight(.semibold))
-                    Text("\(artist) - \(title)").font(.caption).foregroundStyle(.secondary)
-                }
+                Text(L10n.t("搜索候选歌词")).font(.title3.weight(.semibold))
                 Spacer()
                 Button(L10n.t("关闭")) { dismiss() }
                     .keyboardShortcut(.cancelAction)
@@ -36,10 +68,39 @@ struct LyricsSearchSheet: View {
 
             Divider()
 
+            queryFieldsBar
+
+            Divider()
+
             content
         }
         .frame(minWidth: 680, minHeight: 480)
         .task { await load() }
+    }
+
+    // 三个可编辑的查询维度——默认展示这首歌本身的元数据(所以第一次打开弹窗时不用
+    // 碰这一条,.task { await load() } 直接拿这三个初始值发起搜索,行为跟改动前一致);
+    // 改了之后要显式点"重新搜索"(或者在任一输入框按下 Enter)才会真的重新发起查询,
+    // 不会敲一个字就发一次网络请求。
+    private var queryFieldsBar: some View {
+        HStack(spacing: 10) {
+            TextField(L10n.t("歌名"), text: $title).textFieldStyle(.roundedBorder)
+            TextField(L10n.t("歌手"), text: $artist).textFieldStyle(.roundedBorder)
+            TextField(L10n.t("专辑"), text: $album).textFieldStyle(.roundedBorder)
+            if isDirty {
+                Button(L10n.t("恢复原信息")) {
+                    artist = originalArtist
+                    title = originalTitle
+                    album = originalAlbum
+                }
+                .buttonStyle(.link)
+            }
+            Button(L10n.t("重新搜索")) { Task { await load() } }
+                .disabled(isLoading || title.trimmingCharacters(in: .whitespaces).isEmpty)
+        }
+        .onSubmit { Task { await load() } }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
     }
 
     @ViewBuilder

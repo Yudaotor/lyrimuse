@@ -290,7 +290,17 @@ struct LyricsManagerView: View {
                         }
                     }
                 }
-                .searchable(text: $searchText, prompt: L10n.t("搜索歌手/歌名"))
+                // 2026-07-22:用户反馈搜索框(这个本地过滤用的原生 .searchable)跟下面
+                // filterBar 那一整条筛选项(歌手/专辑/来源/时间轴等)离得太远、不像一组——
+                // 原来没指定 placement,macOS 上 .automatic 会解析成挂在整个窗口的顶部
+                // 工具栏里,而 filterBar 是应用自己手搭的、贴在内容区(这一栏)顶部的一条
+                // HStack,两者分处"窗口级"和"内容级"两个不同层次。加 placement: .sidebar
+                // 把搜索框的锚点从"整个窗口工具栏"改成"这一栏(NavigationSplitView 的
+                // sidebar 闭包,也就是 filterBar+List 所在这一栏)自己的顶部"——不用自己
+                // 手写 TextField 替代,继续用系统原生搜索框(放大镜图标/清除按钮/聚焦态
+                // 动画都不用自己实现),只是挪了挂载位置,这样它会紧贴在 filterBar 上方,
+                // 视觉上连成一组。
+                .searchable(text: $searchText, placement: .sidebar, prompt: L10n.t("搜索歌手/歌名"))
                 .navigationTitle(L10n.t("歌词管理"))
                 .navigationSubtitle(String(format: L10n.t("%@ / %@ 首"), "\(filtered.count)", "\(store.summaries.count)"))
                 .toolbar {

@@ -56,6 +56,12 @@ import KeyboardShortcuts
 // Apple Music 播放,不是歌词功能)从主"快捷键" Section 里拆出来,单独放进一个标题
 // 写明"（附加功能）"的 Section,理由是同一件事:这三个混在歌词软件自己的快捷键里,
 // 容易让人误以为是必需项。
+//
+// 2026-07-22:账号那四项的 Section 标题又从"附加功能"改成了"实验室功能"——用户
+// 直接指定的新名字。只改了下面 sidebarLabel 用不到、专属账号 Section 那一个
+// L10n key(见本文件里挂折叠按钮那处的 Text(L10n.t(...)));"通用"tab 那三个快捷键
+// 用的"（附加功能）"是完全独立的另一个字符串/key,跟这四张账号卡片是两回事,没有
+// 跟着一起改。
 enum SettingsTab: Hashable, CaseIterable, Identifiable {
     case lyrics, appearance, general, about
 
@@ -123,6 +129,12 @@ struct SettingsView: View {
     // 里读它的其它字段。
     @ObservedObject private var languageSettings = AppSettings.shared
     @State private var selection: SettingsSidebarItem? = .tab(.lyrics)
+    // 2026-07-22:"实验室功能"(改名前叫"附加功能")这四行默认收起,点击 Section 头
+    // 才展开——用户反馈这四项常驻占地方。不持久化这个折叠状态(每次打开设置窗口都
+    // 重新从收起状态开始),用户只要求"默认收起、点了才展开",没要求"记住上次展开过",
+    // 不额外加 UserDefaults 存取。变量名保留 isAdditionalFeatures 没有跟着改名——
+    // 纯内部实现细节,不是用户可见文案,犯不上为了一次改名连带重命名变量。
+    @State private var isAdditionalFeaturesExpanded = false
 
     var body: some View {
         NavigationSplitView {
@@ -132,7 +144,8 @@ struct SettingsView: View {
             // 那四项包在一个 Section 里),但"没有标题的一组"看起来像是随手漏加了标题,
             // 不像是刻意的分类,读不出"这是核心、那是附加"的意图。两组都显式给标题,
             // 对称摆出来,意图才是一目了然的,不用靠"有没有 Section"这种隐晦信号猜。
-            // "附加功能"四个字直接引用用户自己的原话,不再另造一个说法。
+            // 账号那组标题最早叫"附加功能"(引用用户当时的原话),2026-07-22 用户
+            // 又指定改叫"实验室功能"——见下面 Section 里挂折叠按钮那处的 L10n.t(...)。
             List(selection: $selection) {
                 Section(L10n.t("核心设置")) {
                     sidebarLabel(.lyrics)
@@ -141,15 +154,48 @@ struct SettingsView: View {
                     sidebarLabel(.about)
                 }
 
+                // 2026-07-22:原来用的是原生 Section(isExpanded:)——折叠三角/点击热区/
+                // 展开动画都交给系统,省事,但这个初始化方法的类型签名把 Footer 定死成
+                // EmptyView,原来的 footer 说明文字因此要挪进 header。改成完全手搭
+                // (@State 记录展开状态,header 换成一个普通 Button,自己画一个跟着状态
+                // 旋转的 chevron,点击时 toggle),方便把这句说明文字重新变回"?"图标+
+                // 悬浮提示的形式。
+                //
+                // 补充(同一天):用户反馈"悬浮还是不提示文案",一度怀疑是
+                // Section(isExpanded:) 的 header 走 NSOutlineView 原生折叠头 chrome、
+                // 根本没当成普通 SwiftUI 子视图渲染,导致 .help(_:) 压根没有挂载宿主——
+                // 但用户随后澄清:其实一直都能弹出来,只是系统默认的 tooltip 延迟
+                // (~1~1.5s)太长,等待期间被当成"没反应"。"NSOutlineView 吞掉悬浮事件"
+                // 这个猜测因此不成立;手搭改造本身没错(仍然是更可控、更适合以后加更多
+                // 交互的写法),但没有解决真正的问题——真正的修复是把 NSInitialToolTipDelay
+                // 调低(见 AppDelegate.swift),这样整个 App 里所有 .help() 提示都会更快弹出,
+                // 不只是这一处。
                 Section {
-                    ForEach(AccountDestination.allCases) { destination in
-                        AccountSidebarRow(destination: destination)
-                            .tag(SettingsSidebarItem.account(destination))
+                    if isAdditionalFeaturesExpanded {
+                        ForEach(AccountDestination.allCases) { destination in
+                            AccountSidebarRow(destination: destination)
+                                .tag(SettingsSidebarItem.account(destination))
+                        }
                     }
                 } header: {
-                    Text(L10n.t("附加功能"))
-                } footer: {
-                    Text(L10n.t("以下都是可选的账号与推送服务，跟显示歌词本身无关；不配置也完全不影响悬浮歌词正常使用。"))
+                    Button {
+                        withAnimation { isAdditionalFeaturesExpanded.toggle() }
+                    } label: {
+                        HStack(spacing: 4) {
+                            Text(L10n.t("实验室功能"))
+                            Image(systemName: "questionmark.circle")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.caption2.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                                .rotationEffect(.degrees(isAdditionalFeaturesExpanded ? 90 : 0))
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .help(L10n.t("以下都是可选的账号与推送服务，跟显示歌词本身无关；不配置也完全不影响悬浮歌词正常使用。"))
                 }
             }
             .listStyle(.sidebar)
@@ -463,8 +509,8 @@ private struct AppearanceSettingsTab: View {
     private func applyColorTheme(_ theme: ColorTheme) {
         settings.foregroundColorHex = theme.foregroundColorHex
         settings.backgroundColorHex = theme.backgroundColorHex
-        settings.textShadowEnabled = theme.textShadowEnabled
-        settings.textShadowColorHex = theme.textShadowColorHex
+        settings.textStrokeEnabled = theme.textStrokeEnabled
+        settings.textStrokeColorHex = theme.textStrokeColorHex
     }
 
     // 当前四个配色字段正好等于哪个内置预设/自定义主题就显示它的名字,谁都不等于
@@ -475,8 +521,8 @@ private struct AppearanceSettingsTab: View {
             name: "",
             foregroundColorHex: settings.foregroundColorHex,
             backgroundColorHex: settings.backgroundColorHex,
-            textShadowEnabled: settings.textShadowEnabled,
-            textShadowColorHex: settings.textShadowColorHex
+            textStrokeEnabled: settings.textStrokeEnabled,
+            textStrokeColorHex: settings.textStrokeColorHex
         )
         let all = ColorTheme.builtInPresets + settings.customColorThemes
         return all.first { $0.hasSameColors(as: current) }?.name ?? L10n.t("自定义")
@@ -542,6 +588,28 @@ private struct AppearanceSettingsTab: View {
                         }
                     }
                     .pickerStyle(.menu)
+
+                    // 2026-07-22 新增:灵动岛宽度改回固定值之后,用户接着要求"能在设置里
+                    // 调这个固定宽度"——跟上面"外观"tab 里经典悬浮窗的"宽度"滑块同一套
+                    // 写法(设置项本身只负责持久化,didSet 不碰 NSWindow,这里的 set 闭包
+                    // 显式调用窗口控制器的方法让改动立刻生效)。跟经典悬浮窗不同的是灵动岛
+                    // 不需要"保持中心点"的增量调整——它的位置从来都是重新居中算出来的,
+                    // 见 NotchLyricsWindowController.applyContentWidthSetting() 的注释。
+                    LabeledContent(L10n.t("宽度")) {
+                        HStack(spacing: 8) {
+                            Slider(value: Binding(
+                                get: { settings.notchContentWidth },
+                                set: { newValue in
+                                    settings.notchContentWidth = newValue
+                                    NotchLyricsWindowController.shared.applyContentWidthSetting()
+                                }
+                            ), in: 260...500, step: 10)
+                            Text(String(format: L10n.t("%@pt"), "\(Int(settings.notchContentWidth))"))
+                                .foregroundStyle(.secondary)
+                                .monospacedDigit()
+                                .frame(width: 40, alignment: .trailing)
+                        }
+                    }
                 }
                 // 从"歌词"tab 的"展示"分组搬过来——用户反馈"状态栏歌词也是个歌词展示
                 // 位置,应该跟桌面悬浮歌词/灵动岛歌词放一起",三个开关概念上都是"歌词
@@ -649,27 +717,29 @@ private struct AppearanceSettingsTab: View {
                                           // 不另加一根 opacity 滑杆
                 )
 
-                Toggle(L10n.t("文字阴影(与桌面背景区分)"), isOn: $settings.textShadowEnabled)
+                Toggle(L10n.t("文字描边(与桌面背景区分)"), isOn: $settings.textStrokeEnabled)
 
-                if settings.textShadowEnabled {
+                if settings.textStrokeEnabled {
                     ColorPicker(
-                        L10n.t("阴影颜色"),
+                        L10n.t("描边颜色"),
                         selection: Binding(
-                            get: { settings.textShadowColor },
-                            set: { settings.textShadowColorHex = $0.hexStringWithAlpha }
+                            get: { settings.textStrokeColor },
+                            set: { settings.textStrokeColorHex = $0.hexStringWithAlpha }
                         ),
-                        supportsOpacity: true // 参考 LyricsX:阴影只让选颜色(含 alpha),
-                                              // 模糊半径/偏移是固定常量,不额外加调节项
+                        supportsOpacity: true // 描边只让选颜色(含 alpha),粗细是固定常量
+                                              // (LyricsOverlayView.swift 的 OptionalTextStroke),
+                                              // 不额外加调节项——延续这个功能原来是"阴影"
+                                              // 时同样的取舍(那时参考的是 LyricsX 的做法)
                     )
                 }
 
                 Button(L10n.t("恢复默认外观")) {
-                    settings.fontFamilyName = ""
-                    settings.fontSize = 20
-                    settings.foregroundColorHex = "#FFFFFFFF"
-                    settings.backgroundColorHex = "#00000000"
-                    settings.textShadowEnabled = true
-                    settings.textShadowColorHex = "#000000A6"
+                    settings.fontFamilyName = AppSettings.defaultFontFamilyName
+                    settings.fontSize = AppSettings.defaultFontSize
+                    settings.foregroundColorHex = ColorTheme.defaultTheme.foregroundColorHex
+                    settings.backgroundColorHex = ColorTheme.defaultTheme.backgroundColorHex
+                    settings.textStrokeEnabled = ColorTheme.defaultTheme.textStrokeEnabled
+                    settings.textStrokeColorHex = ColorTheme.defaultTheme.textStrokeColorHex
                 }
                 .buttonStyle(.link)
             }
@@ -682,13 +752,13 @@ private struct AppearanceSettingsTab: View {
                         name: name,
                         foregroundColorHex: settings.foregroundColorHex,
                         backgroundColorHex: settings.backgroundColorHex,
-                        textShadowEnabled: settings.textShadowEnabled,
-                        textShadowColorHex: settings.textShadowColorHex
+                        textStrokeEnabled: settings.textStrokeEnabled,
+                        textStrokeColorHex: settings.textStrokeColorHex
                     ))
                 }
                 Button(L10n.t("取消"), role: .cancel) {}
             } message: {
-                Text(L10n.t("会把当前的文字颜色、背景颜色、阴影颜色存成一个可以随时再套用的主题。"))
+                Text(L10n.t("会把当前的文字颜色、背景颜色、描边颜色存成一个可以随时再套用的主题。"))
             }
 
             Section {
@@ -742,7 +812,14 @@ private struct AppearanceSettingsTab: View {
                     }
                 ))
             } header: {
-                Text(L10n.t("窗口"))
+                // 2026-07-22:"窗口"改名成"悬浮歌词窗口"——用户反馈原来的名字太笼统,
+                // 容易跟"灵动岛歌词"那份独立设置搞混。这个 Section 里"宽度"/"锁定位置"
+                // 两项确实是经典悬浮窗(LyricsOverlayWindowController)专属的,但下面
+                // "截屏/录屏时隐藏"/"暂停/无播放时隐藏"这两个开关其实对灵动岛歌词
+                // (NotchLyricsWindowController)同样生效(见各自的 set 闭包,两个控制器
+                // 都会调)——这个新名字对这两项来说不算完全精确,但用户只要求把这个标题
+                // 改清楚、没要求拆分成两个 Section,先按字面执行。
+                Text(L10n.t("悬浮歌词窗口"))
             } footer: {
                 // footer 挂在整个 Section 上(而不是紧跟某个 Toggle 下面的裸 Text)——
                 // 分组样式里这是原生"注脚"位置,明确点名是哪个开关的说明,避免视觉上跟
@@ -776,6 +853,7 @@ private struct GeneralSettingsTab: View {
     @State private var showExportConfigWarning = false
     @State private var showImportConfigConfirm = false
     @State private var pendingImportData: Data?
+    @State private var showClearConfigWarning = false
 
     var body: some View {
         Form {
@@ -872,10 +950,14 @@ private struct GeneralSettingsTab: View {
                         showImportConfigConfirm = true
                     }
                 }
+                // 2026-07-22:新增"清除所有配置"——跟上面两个反着来:不是搬一份配置走/
+                // 换一份进来,是直接清空回到刚装完的样子。role: .destructive 让它天生
+                // 就是红色文字,不用另外套样式表明这是危险操作。
+                Button(L10n.t("清除所有配置…"), role: .destructive) { showClearConfigWarning = true }
             } header: {
                 Text(L10n.t("配置备份"))
             } footer: {
-                Text(L10n.t("导出的文件包含账号 token、密钥等敏感信息，注意妥善保管，不要分享给他人。导入会覆盖当前所有设置并重启 App。"))
+                Text(L10n.t("导出的文件包含账号 token、密钥等敏感信息，注意妥善保管，不要分享给他人。导入会覆盖当前所有设置并重启 App。清除会抹掉所有账号和个人设置，恢复到刚装完时的样子。"))
             }
             .alert(L10n.t("确定要导出配置吗？"), isPresented: $showExportConfigWarning) {
                 Button(L10n.t("取消"), role: .cancel) {}
@@ -901,6 +983,15 @@ private struct GeneralSettingsTab: View {
                 }
             } message: {
                 Text(L10n.t("这会覆盖当前所有设置（包括已连接的账号），并立即重启 Lyrimuse 使其生效。"))
+            }
+            .alert(L10n.t("确定要清除所有配置吗？"), isPresented: $showClearConfigWarning) {
+                Button(L10n.t("取消"), role: .cancel) {}
+                Button(L10n.t("清除并重启"), role: .destructive) {
+                    ConfigPortability.clearAllConfig()
+                    ConfigPortability.restartApp()
+                }
+            } message: {
+                Text(L10n.t("这会清除所有账号 token、密钥和个人设置，恢复到刚装完时的样子（下次启动会重新走一遍引导向导），且无法撤销。如果还没备份过，建议先点上面「导出配置…」。"))
             }
             // 2026-07-20:原来这 9 个快捷键挤在同一个"快捷键" Section 里——用户反馈
             // 设置里"非歌词本身相关的功能配置很混乱",这里正是一处典型:后三个(播放/

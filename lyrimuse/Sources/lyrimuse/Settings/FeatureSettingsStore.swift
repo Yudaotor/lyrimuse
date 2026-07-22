@@ -45,6 +45,18 @@ struct FeatureFlagsFile: Codable, Equatable {
     var lastfmBridge: Bool?
     var lastfmMirrorScrobble: Bool?
     var weeklyDigest: Bool?
+    // 见 collector/daily.go——独立于 weeklyDigest 的开关,两个可以同时开、只开一个、
+    // 或都不开。
+    var dailyDigest: Bool?
+    // "lastfm"/"listenbrainz"/缺省(空字符串)——两个 cadence 各自用哪个账号的数据源,
+    // 缺省时按 collector/digest.go 的 resolveDigestSource 规则(两个都配了→lastfm,
+    // 只配了一个→用那个,都没配→这个功能没法跑)自动判定,不是"缺省当 lastfm 处理"
+    // 这么简单,所以特意不给非空默认值。2026-07-22 新增:最初 weeklyDigest 写死只认
+    // Last.fm、dailyDigest 写死只认 ListenBrainz,真机实测坐实 Last.fm 的周榜接口其实
+    // 接受任意 from/to(不是只认它自己的官方周边界),用户因此要求两个 cadence 都能
+    // 自己选数据源。
+    var weeklyDigestSource: String?
+    var dailyDigestSource: String?
     var lyricsSources: [String]?
     var lyricsSourceMode: String?
     var lyricsSourceOrder: [String]?
@@ -56,6 +68,9 @@ struct FeatureFlagsFile: Codable, Equatable {
         case lastfmBridge = "lastfm_bridge"
         case lastfmMirrorScrobble = "lastfm_mirror_scrobble"
         case weeklyDigest = "weekly_digest"
+        case dailyDigest = "daily_digest"
+        case weeklyDigestSource = "weekly_digest_source"
+        case dailyDigestSource = "daily_digest_source"
         case lyricsSources = "lyrics_sources"
         case lyricsSourceMode = "lyrics_source_mode"
         case lyricsSourceOrder = "lyrics_source_order"
@@ -85,6 +100,12 @@ public final class FeatureSettingsStore: ObservableObject {
     @Published public var lastfmBridge = false
     @Published public var lastfmMirrorScrobble = false
     @Published public var weeklyDigest = false
+    @Published public var dailyDigest = false
+    // 空字符串 = 用户没手动选过,交给 AccountLinkingTab 的 resolvedDigestSource 按
+    // "已配置的账号"自动判定要不要显示成"lastfm"/"listenbrainz"，这里只负责持久化
+    // 用户一旦手动选过之后的显式值。
+    @Published public var weeklyDigestSource = ""
+    @Published public var dailyDigestSource = ""
     @Published public var lyricsSources: Set<LyricsSource> = Set(LyricsSource.allCases)
     @Published public var lyricsSourceMode: LyricsSourceMode = .smart
     // 始终是全部 4 个源的一个排列(不是"只放启用的那几个")——启用/禁用状态单独由
@@ -105,7 +126,9 @@ public final class FeatureSettingsStore: ObservableObject {
         FeatureFlagsFile(
             lyrics: lyrics,
             albumPrefetch: albumPrefetch, lastfmBridge: lastfmBridge,
-            lastfmMirrorScrobble: lastfmMirrorScrobble, weeklyDigest: weeklyDigest,
+            lastfmMirrorScrobble: lastfmMirrorScrobble, weeklyDigest: weeklyDigest, dailyDigest: dailyDigest,
+            weeklyDigestSource: weeklyDigestSource.isEmpty ? nil : weeklyDigestSource,
+            dailyDigestSource: dailyDigestSource.isEmpty ? nil : dailyDigestSource,
             lyricsSources: lyricsSources.map(\.rawValue).sorted(),
             lyricsSourceMode: lyricsSourceMode.rawValue,
             lyricsSourceOrder: lyricsSourceOrder.map(\.rawValue),
@@ -142,6 +165,9 @@ public final class FeatureSettingsStore: ObservableObject {
         lastfmBridge = f.lastfmBridge ?? false
         lastfmMirrorScrobble = f.lastfmMirrorScrobble ?? false
         weeklyDigest = f.weeklyDigest ?? false
+        dailyDigest = f.dailyDigest ?? false
+        weeklyDigestSource = f.weeklyDigestSource ?? ""
+        dailyDigestSource = f.dailyDigestSource ?? ""
         // 缺失/空数组(旧配置文件没这个字段,或者曾经被清空过)都按"全部启用"处理,跟
         // collector 侧 resolveLyricsSources 的兜底规则一致。
         let decodedSources = (f.lyricsSources ?? []).compactMap(LyricsSource.init(rawValue:))

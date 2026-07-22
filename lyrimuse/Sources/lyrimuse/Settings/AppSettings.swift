@@ -28,11 +28,12 @@ final class AppSettings: ObservableObject {
         static let showLyricsInMenuBar = "np:showLyricsInMenuBar"
         static let menuBarLyricsMaxChars = "np:menuBarLyricsMaxChars"
         static let lyricsOffsetStepMs = "np:lyricsOffsetStepMs"
-        static let textShadowEnabled = "np:textShadowEnabled"
-        static let textShadowColorHex = "np:textShadowColorHex"
+        static let textStrokeEnabled = "np:textStrokeEnabled"
+        static let textStrokeColorHex = "np:textStrokeColorHex"
         static let fontFamilyName = "np:fontFamilyName"
         static let fontSize = "np:fontSize"
         static let overlayWidth = "np:overlayWidth"
+        static let notchContentWidth = "np:notchContentWidth"
         static let foregroundColorHex = "np:foregroundColorHex"
         static let backgroundColorHex = "np:backgroundColorHex"
         static let lockPosition = "np:lockPosition"
@@ -54,6 +55,13 @@ final class AppSettings: ObservableObject {
         // 存,`defaults read` 好歹还能读出一段可辨认的 JSON 文本,不是不可读的乱码。
         static let customColorThemesJSON = "np:customColorThemesJSON"
     }
+
+    // 2026-07-22:字体/字号的默认值——配色四项的默认值改成引用 ColorTheme.defaultTheme
+    // 之后(见下方 init()),这两个排版字段(不属于 ColorTheme,见该文件顶部注释)单独在
+    // 这里给一个同样有名字的默认值,道理一样:init() 和 SettingsView"恢复默认外观"按钮
+    // 都读这两个,不再各自硬编码一遍数字/字符串。
+    static let defaultFontFamilyName = "PingFang SC"
+    static let defaultFontSize = 31.0
 
     private let defaults = UserDefaults.standard
 
@@ -108,21 +116,29 @@ final class AppSettings: ObservableObject {
         didSet { defaults.set(menuBarLyricsMaxChars, forKey: Keys.menuBarLyricsMaxChars) }
     }
     // 悬浮窗背景透明,文字直接叠在桌面内容上——桌面壁纸/其它窗口文字撞色时容易糊在一起,
-    // 加个阴影提高辨识度。纯展示开关,LyricsOverlayView 每次渲染都直接读这个值,不需要
+    // 加个描边提高辨识度。纯展示开关,LyricsOverlayView 每次渲染都直接读这个值,不需要
     // 像 lockPosition/hideDuringScreenCapture 那样额外调用某个单例的方法"生效"。
-    @Published var textShadowEnabled: Bool {
-        didSet { defaults.set(textShadowEnabled, forKey: Keys.textShadowEnabled) }
+    //
+    // 2026-07-22:这两个属性原来叫 textShadowEnabled/textShadowColorHex,渲染效果是
+    // 模糊阴影(.shadow(radius:))——用户反馈想改成描边(实心轮廓),参考了
+    // katagaki/DJDX 仓库的 Canvas+alphaThreshold+blur 技术做出真正的描边效果(见
+    // LyricsOverlayView.swift 的 OptionalTextStroke)。属性/UserDefaults key 一并
+    // 改名,不留旧 key 做迁移——这是本机单用户的本地设置,旧值(阴影开关+颜色)语义已经
+    // 对不上新的渲染方式,沿用旧 key 只会让人以为这个值"应该还生效",不如直接改名、
+    // 重新走一遍默认值,跟这个项目其它"渲染方式变了就直接改名不做兼容"的先例一致
+    // (比如 weeklyDigestPush 整个函数被 digest.go 拆分替代时也没留旧接口)。
+    @Published var textStrokeEnabled: Bool {
+        didSet { defaults.set(textStrokeEnabled, forKey: Keys.textStrokeEnabled) }
     }
-    // #RRGGBBAA。参考 LyricsX(Controller/Preferences/PreferenceDisplayViewController.swift
-    // 的 AlphaColorWell + View/KaraokeLyricsView.swift 的 shadowColor)——那边阴影只让用户
-    // 调"颜色"(含 alpha),模糊半径/偏移量是代码里的固定常量(shadowBlurRadius=3,
-    // shadowOffset=.zero),没有做成单独的滑杆。这里跟随同一个克制的取舍:只加颜色选择器,
-    // 不加半径/偏移这类额外调节项。默认 #000000A6(黑色、alpha≈0.65)跟这个功能刚上线时
-    // 硬编码的 .black.opacity(0.65) 逐像素一致,没碰过这个新设置的人观感不变。
-    @Published var textShadowColorHex: String {
+    // #RRGGBBAA。延续原来阴影功能的取舍(参考 LyricsX 的 AlphaColorWell/shadowColor):
+    // 只让用户调"颜色"(含 alpha),描边粗细是代码里的固定常量(OptionalTextStroke 的
+    // width,1.2pt),不做成单独的滑杆——原来阴影功能的模糊半径/偏移量也是同样处理,
+    // 保持这个克制的一贯做法。默认 #000000A6(黑色、alpha≈0.65)直接沿用改名前的默认值,
+    // 没碰过这个设置的人从阴影切到描边后颜色不会跳变,只有渲染方式本身变了。
+    @Published var textStrokeColorHex: String {
         didSet {
-            defaults.set(textShadowColorHex, forKey: Keys.textShadowColorHex)
-            textShadowColor = Color(hexWithAlpha: textShadowColorHex, fallback: .black.opacity(0.65))
+            defaults.set(textStrokeColorHex, forKey: Keys.textStrokeColorHex)
+            textStrokeColor = Color(hexWithAlpha: textStrokeColorHex, fallback: .black.opacity(0.65))
         }
     }
     // 只负责持久化——不在这里连带调 LyricsOverlayWindowController.shared.setLocked(_:),
@@ -211,6 +227,14 @@ final class AppSettings: ObservableObject {
     @Published var overlayWidth: Double {
         didSet { defaults.set(overlayWidth, forKey: Keys.overlayWidth) }
     }
+    // 灵动岛歌词的固定宽度(pt)——2026-07-22 新增,同一个模式:只在 didSet 里持久化,
+    // 不在这个 model 层直接碰 NSWindow,实时应用交给 SettingsView 的 Binding.set 显式调
+    // NotchLyricsWindowController.shared.applyContentWidthSetting()(见该文件注释——
+    // 这条设置项本身就是为了回应"灵动岛宽度不应该跟着歌词内容变"这条反馈而加的,默认值
+    // 360 沿用改回固定宽度那次定的数值)。
+    @Published var notchContentWidth: Double {
+        didSet { defaults.set(notchContentWidth, forKey: Keys.notchContentWidth) }
+    }
     // #RRGGBBAA。默认不透明白色,跟悬浮窗原来硬编码的 .white 视觉完全一致。
     @Published var foregroundColorHex: String {
         didSet {
@@ -245,7 +269,7 @@ final class AppSettings: ObservableObject {
     @Published private(set) var foregroundColor: Color = .white
     @Published private(set) var backgroundColor: Color = .clear
     @Published private(set) var backgroundIsVisible: Bool = false
-    @Published private(set) var textShadowColor: Color = .black.opacity(0.65)
+    @Published private(set) var textStrokeColor: Color = .black.opacity(0.65)
     @Published private(set) var mainFont: Font = .system(size: 20, weight: .bold)
     @Published private(set) var romanizationFont: Font = .system(size: 13, weight: .medium)
     @Published private(set) var translationFont: Font = .system(size: 14, weight: .regular)
@@ -269,8 +293,8 @@ final class AppSettings: ObservableObject {
         showLyricsInMenuBar = (defaults.object(forKey: Keys.showLyricsInMenuBar) as? Bool) ?? false
         menuBarLyricsMaxChars = (defaults.object(forKey: Keys.menuBarLyricsMaxChars) as? Int) ?? 60
         lyricsOffsetStepMs = (defaults.object(forKey: Keys.lyricsOffsetStepMs) as? Int) ?? 200
-        textShadowEnabled = (defaults.object(forKey: Keys.textShadowEnabled) as? Bool) ?? true
-        textShadowColorHex = defaults.string(forKey: Keys.textShadowColorHex) ?? "#000000A6"
+        textStrokeEnabled = (defaults.object(forKey: Keys.textStrokeEnabled) as? Bool) ?? ColorTheme.defaultTheme.textStrokeEnabled
+        textStrokeColorHex = defaults.string(forKey: Keys.textStrokeColorHex) ?? ColorTheme.defaultTheme.textStrokeColorHex
         lockPosition = (defaults.object(forKey: Keys.lockPosition) as? Bool) ?? false
         hideDuringScreenCapture = (defaults.object(forKey: Keys.hideDuringScreenCapture) as? Bool) ?? false
         hideWhenNotPlaying = (defaults.object(forKey: Keys.hideWhenNotPlaying) as? Bool) ?? false
@@ -288,11 +312,12 @@ final class AppSettings: ObservableObject {
             notchOverlayEnabled = (defaults.object(forKey: Keys.notchOverlayEnabled) as? Bool) ?? false
         }
         notchCardStyle = defaults.string(forKey: Keys.notchCardStyle).flatMap(NotchCardStyle.init(rawValue:)) ?? .frostedGlass
-        fontFamilyName = defaults.string(forKey: Keys.fontFamilyName) ?? ""
-        fontSize = (defaults.object(forKey: Keys.fontSize) as? Double) ?? 20
+        fontFamilyName = defaults.string(forKey: Keys.fontFamilyName) ?? Self.defaultFontFamilyName
+        fontSize = (defaults.object(forKey: Keys.fontSize) as? Double) ?? Self.defaultFontSize
         overlayWidth = (defaults.object(forKey: Keys.overlayWidth) as? Double) ?? 640
-        foregroundColorHex = defaults.string(forKey: Keys.foregroundColorHex) ?? "#FFFFFFFF"
-        backgroundColorHex = defaults.string(forKey: Keys.backgroundColorHex) ?? "#00000000"
+        notchContentWidth = (defaults.object(forKey: Keys.notchContentWidth) as? Double) ?? 360
+        foregroundColorHex = defaults.string(forKey: Keys.foregroundColorHex) ?? ColorTheme.defaultTheme.foregroundColorHex
+        backgroundColorHex = defaults.string(forKey: Keys.backgroundColorHex) ?? ColorTheme.defaultTheme.backgroundColorHex
         if let json = defaults.string(forKey: Keys.customColorThemesJSON),
            let data = json.data(using: .utf8),
            let themes = try? JSONDecoder().decode([ColorTheme].self, from: data) {
@@ -307,7 +332,7 @@ final class AppSettings: ObservableObject {
         foregroundColor = Color(hexWithAlpha: foregroundColorHex, fallback: .white)
         backgroundColor = Color(hexWithAlpha: backgroundColorHex, fallback: .clear)
         backgroundIsVisible = (NSColor(hexStringWithAlpha: backgroundColorHex)?.alphaComponent ?? 0) > 0.02
-        textShadowColor = Color(hexWithAlpha: textShadowColorHex, fallback: .black.opacity(0.65))
+        textStrokeColor = Color(hexWithAlpha: textStrokeColorHex, fallback: .black.opacity(0.65))
     }
 
     // 把 lyricsOffsetStepMs(毫秒)格式成"0.2"/"0.05"/"1.0"这种干净的秒数文案——

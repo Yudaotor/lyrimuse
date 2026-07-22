@@ -57,7 +57,7 @@ Everything below is opt-in and off by default — turn on only what you want, ri
 - **A shareable public "now playing" page** — live playback, history, a guestbook, reactions, a visitor counter, a Top-10-artists leaderboard, a vinyl-record visual, light/dark themes, and rich link previews when shared in chat apps. See the **[Web Features Guide](https://github.com/Yudaotor/nowplaying-workers#readme)** for a full walkthrough with screenshots.
 - **A weekly listening digest**, delivered as a push notification (Bark, DingTalk, WeCom, Discord, Feishu, or ServerChan)
 
-Every extra above lives under Settings → **Add-on Features**, and each account card has its own step-by-step setup guide built right in — where to grab an API key or token, how to connect an account, how to get a webhook URL for whichever push platform you pick. The one exception is the web page, which needs its own Cloudflare Worker deployed first — that's why it gets a dedicated guide instead of an in-app popover.
+Every extra above lives under Settings → **Add-on Features**, and each account card has its own step-by-step setup guide built right in — where to grab an API key or token, how to connect an account, how to get a webhook URL for whichever push platform you pick. The web page is the one that gets a dedicated guide instead of an in-app popover, but it's not a hard requirement either: configuring ListenBrainz alone already lets the page show live playback and history, no Cloudflare Worker needed. Deploying one on top adds the guestbook, reactions, visitor counter, Top-10-artists leaderboard, and lower-latency updates — see the guide if you want those.
 
 ## Getting Started
 

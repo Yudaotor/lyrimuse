@@ -66,8 +66,9 @@ enum DiagnosticsExporter {
         return lines.joined(separator: "\n")
     }
 
-    // 只查这个 App 自己的 subsystem("com.chenyuhao.lyrimuse",6 处 Logger 调用点共用同一个
-    // 值),不是整个系统日志——不需要额外权限,读的也只是自己写过的东西。scope 用 .system
+    // 只查这个 App 自己的 subsystem("com.chenyuhao.lyrimuse",全部 Logger 调用点共用同一个
+    // 值,含 2026-07-22 新加的 lastfm-connect/config-portability 两个 category),不是
+    // 整个系统日志——不需要额外权限,读的也只是自己写过的东西。scope 用 .system
     // 而不是 .currentProcessIdentifier:后者只能看到"这次启动之后"的记录,诊断"上次为什么
     // 崩了/上次启动出的问题"这种场景必须能看到上一次进程生命周期里的记录。
     private static func recentAppLogLines(hours: Int = 24) -> [String] {

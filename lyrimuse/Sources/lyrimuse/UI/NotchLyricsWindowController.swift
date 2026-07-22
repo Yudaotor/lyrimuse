@@ -84,27 +84,28 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject {
     // 才用得到,给一个能装得下一小块胶囊、不会小到近乎看不见的经验值。
     private static let collapsedFallbackWidth: CGFloat = 120
     // 常显内容行的固定高度(一行歌词 + 3 个播放控制按钮那一行的高度经验取值)——窗口
-    // 总高度 = 刘海本身高度(或兜底高度)+ 这一行高度,让内容行完整落在刘海下方。宽度
-    // 不再是固定常量,见 contentWidth(for:)。
+    // 总高度 = 刘海本身高度(或兜底高度)+ 这一行高度,让内容行完整落在刘海下方。
     private static let contentHeight: CGFloat = 44
-    // 宽度改成按当前这一句歌词的真实文字宽度动态算,不再固定 360——真机反馈"歌词大部分
-    // 时候没这么长,固定宽度显得空着一大截"。上限、下限见 contentWidth(for:) 的注释。
-    private static let minContentWidth: CGFloat = 260
-    private static let maxContentWidth: CGFloat = 400
+    // 2026-07-22:宽度改回固定值——中间有一版改成按当前这一句歌词的真实文字宽度动态算
+    // (真机反馈"歌词大部分时候没这么长,固定宽度显得空着一大截"),但用户后来反馈"歌词
+    // 一句太长时灵动岛整体长度会变化,这是非预期的,预期是多大就多大,不会随着歌词发生
+    // 变化"——两条反馈方向相反,这次按最新反馈改回固定宽度。数值本身(默认 360)以及
+    // 用户随后要求的"能在设置里调这个固定宽度"这条,都挪进了 AppSettings.
+    // notchContentWidth(默认值就定义在那一处,这里不重复放一份、避免两处数字不同步),
+    // 不再是这个文件自己的常量。超长歌词交给 NotchLyricsView 的 MarqueeText 来回滚动
+    // 展示,不再靠加宽窗口解决。
     // 顶行左右两只"耳朵"各自的最低可用宽度(歌名文字 + 3 个播放控制按钮都要放得下,
-    // 不能比这更窄)——算 minContentWidth 时要把这两只耳朵 + 刘海本身宽度 + 左右
-    // padding 都算进去,不能让总宽度小到连按钮都摆不下(真机踩过这个坑,按钮被裁一截)。
+    // 不能比这更窄)——算下限时要把这两只耳朵 + 刘海本身宽度 + 左右 padding 都算进去,
+    // 不能让总宽度小到连按钮都摆不下(真机踩过这个坑,按钮被裁一截)。真刘海本身可能
+    // 相当宽(这台机器实测约 179pt)、或者用户把设置里的宽度调得很小,这层下限比用户
+    // 设的宽度还宽的话取这层。
     private static let minEarWidth: CGFloat = 70
-    // 歌词行左右各自的水平留白(NotchLyricsView.lyricRow 的 .padding(.horizontal, 16)),
-    // 算文字所需总宽度时要把这一圈也算进去。
-    private static let lyricHorizontalPadding: CGFloat = 32
     // hover 展开时在 contentSize 之外额外撑出的高度,放下一句歌词预览 + 迷你进度条
     // 这两样调研后确定值得加的补充信息(调研结论:封面/更多控制按钮都不如这两样贴合
     // "歌词类产品"的定位,专辑封面另外还受限于本地播放源目前没有转发 artwork 数据)。
     private static let expandedExtraHeight: CGFloat = 40
 
     private var isPlayingObserver: AnyCancellable?
-    private var currentLineObserver: AnyCancellable?
     private var screenParamsObserver: NSObjectProtocol?
     // 真机实测坐实的一个坑:窗口 hover 展开/收起时靠 autoresizingMask 让 NSHostingView
     // 跟着 window.setFrame 自动同步尺寸——AppKit 层面这个同步是真的发生了(window.frame/
@@ -118,7 +119,7 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject {
     convenience init() {
         // 初始 contentRect 只是占位——真正的尺寸/位置由下面 recomputeGeometry() 按
         // 当前屏幕几何重新算一遍并 setFrame,这里传什么都会被立刻覆盖掉。
-        let placeholder = NSSize(width: Self.minContentWidth, height: Self.fallbackNotchHeight + Self.contentHeight)
+        let placeholder = NSSize(width: AppSettings.shared.notchContentWidth, height: Self.fallbackNotchHeight + Self.contentHeight)
         let panel = NotchLyricsWindow(contentRect: NSRect(origin: .zero, size: placeholder))
         self.init(window: panel)
 
@@ -147,21 +148,18 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject {
         // LyricsOverlayWindowController.swift 同一处注释,不重复展开。
         isPlayingObserver = PlaybackCoordinator.shared.$isPlayingNow.sink { [weak self] isPlaying in
             self?.updateActualVisibility(isPlayingNow: isPlaying)
-            // 当前没有在播放时宽度缩回最小值(不再按歌词文字宽度撑开)——同一个坑同一个
+            // 当前没有在播放(且没 hover 展开)时收缩到刘海本身大小——同一个坑同一个
             // 修法,必须把 sink 参数里的 isPlaying 显式传下去,不能让 recomputeGeometry
             // 内部再去读 PlaybackCoordinator.shared.isPlayingNow 这个存储属性本身
             // (这一刻读到的还是切换前的旧值,原因见上面 isPlayingObserver 声明处注释)。
             self?.recomputeGeometry(animate: true, isPlayingOverride: isPlaying)
         }
 
-        // 宽度跟着当前这一句歌词的真实文字宽度走(见 contentWidth(for:))——换到新的
-        // 一句才需要重新算一次宽度,不是每帧都重算,这里订阅的是 currentLine 本身(整句
-        // 歌词切换),不是逐字填色进度那种高频刷新。用动画过渡("展开态"改宽/改高已经
-        // 验证过这条路径真的会重新触发 SwiftUI 布局,见 recomputeGeometry 里
-        // hostingView?.frame 那行的注释),不是硬切换,换歌词时不会有突兀的跳变感。
-        currentLineObserver = PlaybackCoordinator.shared.$currentLine.sink { [weak self] _ in
-            self?.recomputeGeometry(animate: true)
-        }
+        // 2026-07-22:原来这里还订阅了 currentLine、每次换歌词就重新 recomputeGeometry
+        // 一遍——那是宽度按歌词文字宽度动态算的年代才需要的,换一句歌词宽度可能就变了。
+        // 宽度改回固定值之后,recomputeGeometry 的结果不再跟 currentLine 有任何关系,
+        // 这个订阅留着就是纯粹的空转(每换一句歌词都重算一遍、结果每次都跟上一次一样),
+        // 删掉了,不留奇怪的死代码等着以后的人猜"这个订阅是干嘛的"。
     }
 
     deinit {
@@ -194,6 +192,17 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject {
         guard expanded != isExpanded else { return }
         isExpanded = expanded
         recomputeGeometry(animate: false)
+    }
+
+    // 设置里"灵动岛宽度"滑块调用——跟经典悬浮窗的 setWidth(_:) 不是同一套实现:那个
+    // 需要"保持窗口中心点不变"的增量调整,因为经典悬浮窗的位置是用户拖拽/持久化的,直接
+    // 重设宽度容易把窗口推出屏幕外。灵动岛完全不是这么回事:它的位置从来不是持久化的,
+    // 每次都是 recomputeGeometry 里用当前屏幕的 geo.centerX 重新居中算出来的,所以这里
+    // 直接把完整的几何计算(位置+尺寸)重新走一遍就行,不用另外单独维护一份"保持居中"
+    // 的增量逻辑——两者殊途同归都是居中,只是灵动岛的居中本来就是每次全量重算,天然免疫
+    // 经典悬浮窗那个坑。
+    func applyContentWidthSetting() {
+        recomputeGeometry(animate: true)
     }
 
     private func updateActualVisibility(isPlayingNow: Bool) {
@@ -232,48 +241,25 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject {
         return NotchGeometry(notchHeight: fallbackNotchHeight, centerX: screen.frame.midX, notchWidth: 0)
     }
 
-    // 用 AppKit 的 NSString 文字测量(不是 SwiftUI 那套量出来再回传给控制器的写法)——
-    // 直接在这里(AppKit 侧)按当前这一句歌词的纯文本、跟 NotchLyricsView.lyricRow 完全
-    // 一致的字体(13pt semibold)量出真实宽度,窗口一开始就用算好的目标宽度 setFrame,
-    // 不存在"SwiftUI 那边量完再回调回来改宽度"这种时序上的先后依赖,也就不会重新踩到
-    // hover 展开那次已经实测坐实过的"AppKit 层尺寸变了但 SwiftUI 没跟着重新布局"的坑。
-    private static let lyricMeasureFont = NSFont.systemFont(ofSize: 13, weight: .semibold)
-
-    // 没有在播放时直接当成"没有歌词文字"处理,宽度退回 contentWidth 的下限——用户
-    // 明确要求"当前歌曲没有在播放的时候自动缩回去,不要占着空间",跟已有的
-    // hideWhenNotPlaying(整个窗口隐藏)是两回事:这里即便暂停也还显示歌名+控制按钮,
-    // 只是不再为了迁就(可能是暂停前最后一句、此刻已经不会继续滚动的)歌词文字而占用
-    // 额外宽度。
-    private func estimatedLyricTextWidth(isPlayingNow: Bool) -> CGFloat {
-        guard isPlayingNow,
-              let text = PlaybackCoordinator.shared.currentLine?.plainText, !text.isEmpty else { return 0 }
-        let size = (text as NSString).size(withAttributes: [.font: Self.lyricMeasureFont])
-        return size.width
-    }
-
-    // 宽度不再固定 360——真机反馈"歌词大部分时候没这么长,固定宽度显得空着一大截"。
-    // 下限有两层:minContentWidth 是绝对下限(主要给无真刘海的兜底场景用);另一层是
-    // "刘海本身宽度 + 左右两只耳朵各自的最低可用宽度(按钮/歌名都要放得下)+ 顶行左右
-    // padding"算出来的下限——真刘海本身可能相当宽(这台机器实测约 179pt),这层下限
-    // 通常比 minContentWidth 更紧,取两者较大值才不会让耳朵窄到按钮被裁一截。上限
-    // maxContentWidth 封顶,超过这个宽度还装不下的歌词交给 NotchLyricsView 的
-    // MarqueeText 来回滚动展示,不再靠继续加宽解决。
-    private static func contentWidth(lyricTextWidth: CGFloat, notchWidth: CGFloat) -> CGFloat {
+    // 用户在设置里调的固定宽度(baseWidth,即 AppSettings.notchContentWidth)+ 耳朵下限
+    // 两者取较大值——大多数情况下就是 baseWidth 本身,只有真刘海本身特别宽(这台机器
+    // 实测约 179pt)、或者用户把 baseWidth 调得很小,把两只耳朵挤到摆不下按钮时才会
+    // 突破 baseWidth(这层下限保护的是"按钮不被裁",不是"给歌词文字腾地方",不跟当前
+    // 是哪句歌词、歌词有多长有任何关系)。
+    private static func contentWidth(baseWidth: CGFloat, notchWidth: CGFloat) -> CGFloat {
         let earBasedFloor = notchWidth + minEarWidth * 2 + 20
-        let floor = max(minContentWidth, earBasedFloor)
-        let desired = lyricTextWidth + lyricHorizontalPadding
-        return min(maxContentWidth, max(floor, desired))
+        return max(baseWidth, earBasedFloor)
     }
 
     // 顶边固定贴在屏幕最顶端(screen.frame.maxY)、水平居中对齐刘海中心点、总高度 =
-    // 刘海高度 + 内容行高度(+ hover 展开时再加 expandedExtraHeight)、宽度按当前歌词
-    // 动态算(见 contentWidth(lyricTextWidth:notchWidth:))。用 NSScreen.main(当前有
-    // 键盘焦点/菜单栏所在的那块屏幕)而不是记忆某一块固定屏幕——多屏环境下,这跟"灵动岛
-    // 只应该出现在当前主屏"这个直觉一致。
+    // 刘海高度 + 内容行高度(+ hover 展开时再加 expandedExtraHeight)、宽度固定(见
+    // contentWidth(baseWidth:notchWidth:))。用 NSScreen.main(当前有键盘焦点/菜单栏
+    // 所在的那块屏幕)而不是记忆某一块固定屏幕——多屏环境下,这跟"灵动岛只应该出现在
+    // 当前主屏"这个直觉一致。
     // isPlayingOverride 只在 isPlayingObserver 的 sink 闭包里传——那个时间点闭包参数
     // 才是真正的新值,读存储属性本身拿到的还是旧值(见 init() 里那处注释)。其余调用
-    // 场景(currentLineObserver/screenParamsObserver/setExpanded/init 本身)都不在那个
-    // 时序陷阱里,直接读 PlaybackCoordinator.shared.isPlayingNow 就是准确的当前值。
+    // 场景(screenParamsObserver/setExpanded/init 本身)都不在那个时序陷阱里,直接读
+    // PlaybackCoordinator.shared.isPlayingNow 就是准确的当前值。
     private func recomputeGeometry(animate: Bool, isPlayingOverride: Bool? = nil) {
         guard let window, let screen = NSScreen.main else { return }
         let geo = Self.geometry(for: screen)
@@ -292,7 +278,7 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject {
             size = NSSize(width: collapsedWidth, height: geo.notchHeight)
         } else {
             let extra = isExpanded ? Self.expandedExtraHeight : 0
-            let width = Self.contentWidth(lyricTextWidth: estimatedLyricTextWidth(isPlayingNow: isPlayingNow), notchWidth: geo.notchWidth)
+            let width = Self.contentWidth(baseWidth: AppSettings.shared.notchContentWidth, notchWidth: geo.notchWidth)
             size = NSSize(width: width, height: geo.notchHeight + Self.contentHeight + extra)
         }
         let frame = NSRect(
