@@ -259,14 +259,15 @@
 "访问令牌" = "Access Token";
 "译文" = "Translation";
 "请先在这张卡上填好：%@。" = "Please fill in %@ on this card first.";
-"请先填写 API Key" = "Please enter an API Key first";
-"请先填写 Secret" = "Please enter a Secret first";
+"请先填写 Scrobble API Key" = "Please enter a Scrobble API Key first";
+"请先填写 Scrobble Secret" = "Please enter a Scrobble Secret first";
 "读取本地记录文件失败" = "Failed to Read Local Record File";
 "账号授权" = "Account Authorization";
 "账户 Token" = "Account Token";
 "账户信息" = "Account Info";
 "超过就截断" = "Truncate If Too Long";
-"跟上面桥接用的不是同一个 API Key，需要单独申请。" = "Not the same API Key used for bridging above — needs to be applied for separately.";
+"需要单独申请一个有写入权限的 API Key + Secret，跟下面「iPhone 播放桥接」用的不是同一个。" = "Not the same API Key used for bridging below — needs a separate one with write access.";
+"填好上面两项，再点「连接 Last.fm 账号」——按钮会打开浏览器让你确认一次授权，回来点一下确认就完成了。" = "Fill in both fields above, then click \"Connect Last.fm Account\" — it opens your browser for a one-time confirmation; come back and click once more to finish.";
 "跟随系统" = "System Default";
 "读取 iPhone 上已经报给 Last.fm 的播放记录：Mac 没有播放时会推给「网页推送」显示「iPhone 正在播」（这台 Mac 本地的悬浮歌词只读本机播放状态，不受影响）；打开下面的开关还会把这些记录转发进 ListenBrainz，统一两台设备的播放历史，这也需要「ListenBrainz」账号绑定好。" = "Reads the playback history your iPhone has already reported to Last.fm. When the Mac itself isn't playing anything, this is pushed to \"Web Push\" to show \"Now playing on iPhone\" (this Mac's own floating lyrics only read local playback and aren't affected). Turning on the switch below also forwards these plays into ListenBrainz to unify listening history across both devices, which also requires the \"ListenBrainz\" account to be connected.";
 "把这台 Mac 上的播放同步写回 Last.fm——Apple Music 本身不会自动同步，需要这个开关补上这份记录，Last.fm 个人主页才能看到用 Mac 听的这部分。" = "Syncs this Mac's own playback back to Last.fm — Apple Music doesn't scrobble there on its own, so this switch fills in that missing record, letting your Last.fm profile reflect what you've listened to on the Mac too.";
@@ -304,7 +305,7 @@
 "镜像已配置" = "Mirror Configured";
 "阴影颜色" = "Shadow Color";
 "需要先配置「%@」（%@）。" = "You need to configure \"%@\" first (%@).";
-"需要单独申请一个有写入权限的 API Key + Secret，跟上面桥接用的不是同一个——在 Last.fm 后台创建应用时会同时给你这两项。" = "You'll need a separate API Key + Secret with write access — not the same one used for bridging above. Creating an app in the Last.fm dashboard gives you both at once.";
+"需要单独申请一个有写入权限的 API Key + Secret，跟下面「iPhone 播放桥接」用的不是同一个——在 Last.fm 后台创建应用时会同时给你这两项。" = "You'll need a separate API Key + Secret with write access — not the same one used for bridging below. Creating an app in the Last.fm dashboard gives you both at once.";
 "顺序优先" = "Priority Order";
 "飞书" = "Feishu";
 "填好这两项就会自动推送到网页。" = "Fill in both fields and pushing to the web starts automatically.";

@@ -423,15 +423,38 @@ struct AccountLinkingTab: View {
         // +「网页推送」会自动统计 Top10 歌手推送到网页"——用户反馈"这一块全部去掉",
         // 删掉了(连同上一轮把手动开关换成的这句纯说明文字一起删,不留任何痕迹)。
         //
-        // 同一天:这个 Section 从原来排在最后挪到了整个 tab 最顶端——用户反馈应该放在
-        // 最前面。这也更贴近实际依赖关系:下面"Mac 播放镜像"的"同步进 Last.fm"真正
-        // 生效靠的是这里连接得到的 session key,不是"Scrobble API Key/Secret"这两个
-        // 字段本身(那两个字段只是发起授权流程需要的参数,填好不代表已经走完授权),放在
-        // 最前面更能体现"这是基础前提"而不是排在最后的一个附属细节。
+        // 2026-07-22:这个 Section 曾经在 2026-07-20 从最后挪到过整个 tab 最顶端(理由见
+        // 下面保留的旧注释)，但那次改动漏看了一件事——连接按钮依赖的 Scrobble API Key/
+        // Secret 这两个字段仍然留在下面"Mac 播放镜像"里，视觉顺序(先看到按钮)和实际
+        // 依赖顺序(得先填好字段按钮才可能连上)是反的。实测坐实:有用户在没滚到下面
+        // 填 Scrobble API Key 之前就先点了这个按钮，得到一句"请先填写 API Key"的红字
+        // 提示，因为不够醒目而被当成"点了没反应"。
+        //
+        // 修法:把这两个字段搬进这个 Section、紧挨着按钮上方——这样"①填写密钥"这个
+        // 步骤点(下面 stepDots 里就有)才真的对应这个 Section 里能看到的输入框，不再是
+        // 悬空指向别处的一步。"Mac 播放镜像"Section 只留"同步进 Last.fm"这个开关。
+        //
+        // 保留的旧背景(2026-07-20 那次挪动的理由，依然成立，只是补上了字段要跟着一起搬):
+        // 下面"Mac 播放镜像"的"同步进 Last.fm"真正生效靠的是这里连接得到的 session key，
+        // 不是这两个字段本身(填好不代表已经走完授权)，放在最前面更能体现"这是基础前提"
+        // 而不是排在最后的一个附属细节。
         Section {
+            HStack(spacing: 4) {
+                Text(L10n.t("需要单独申请一个有写入权限的 API Key + Secret，跟下面「iPhone 播放桥接」用的不是同一个。"))
+                    .font(.caption2).foregroundStyle(.secondary)
+                HelpButton(
+                    text: L10n.t("需要单独申请一个有写入权限的 API Key + Secret，跟下面「iPhone 播放桥接」用的不是同一个——在 Last.fm 后台创建应用时会同时给你这两项。"),
+                    docTitle: L10n.t("前往 Last.fm 申请 →"),
+                    docURL: URL(string: "https://www.last.fm/api/account/create")!
+                )
+            }
+            SecretFieldRow("Scrobble API Key", value: $config.lastfmScrobbleAPIKey)
+            SecretFieldRow("Scrobble Secret", value: $config.lastfmScrobbleSecret, prompt: L10n.t("在 last.fm/api/account/create 创建应用后可见"))
             lastfmConnectArea
         } header: {
             Text(L10n.t("账号授权"))
+        } footer: {
+            Text(L10n.t("填好上面两项，再点「连接 Last.fm 账号」——按钮会打开浏览器让你确认一次授权，回来点一下确认就完成了。"))
         }
 
         Section {
@@ -477,19 +500,6 @@ struct AccountLinkingTab: View {
         }
 
         Section {
-            // 原来这里有两句几乎重复的话(HelpButton 文案 vs 单独一行 caption,说的是同一件
-            // 事:跟上面桥接用的不是同一个 API Key),精简合并成一句,不是简单挪位置。
-            HStack(spacing: 4) {
-                Text(L10n.t("跟上面桥接用的不是同一个 API Key，需要单独申请。"))
-                    .font(.caption2).foregroundStyle(.secondary)
-                HelpButton(
-                    text: L10n.t("需要单独申请一个有写入权限的 API Key + Secret，跟上面桥接用的不是同一个——在 Last.fm 后台创建应用时会同时给你这两项。"),
-                    docTitle: L10n.t("前往 Last.fm 申请 →"),
-                    docURL: URL(string: "https://www.last.fm/api/account/create")!
-                )
-            }
-            SecretFieldRow("Scrobble API Key", value: $config.lastfmScrobbleAPIKey)
-            SecretFieldRow("Scrobble Secret", value: $config.lastfmScrobbleSecret, prompt: L10n.t("在 last.fm/api/account/create 创建应用后可见"))
             Toggle(L10n.t("同步进 Last.fm"), isOn: Binding(
                 get: { features.lastfmMirrorScrobble },
                 set: { newValue in
@@ -504,7 +514,8 @@ struct AccountLinkingTab: View {
             // 2026-07-20:同上一条,"Mac 播放镜像"也补一句说清楚具体在干什么——
             // Apple Music 本身不会自动同步到 Last.fm,这个开关是把这台 Mac 上的播放
             // 单独写回 Last.fm,补上这一份原本没有的记录,跟上面"读 iPhone"方向正好
-            // 相反(这里是"写")。
+            // 相反(这里是"写")。2026-07-22:Scrobble API Key/Secret 两个字段搬去了
+            // 上面"账号授权"Section(见那边注释),这里只剩这一个开关。
             Text(L10n.t("把这台 Mac 上的播放同步写回 Last.fm——Apple Music 本身不会自动同步，需要这个开关补上这份记录，Last.fm 个人主页才能看到用 Mac 听的这部分。"))
         }
     }

@@ -105,8 +105,11 @@ final class LastfmConnectController: ObservableObject {
     @Published private(set) var state: LastfmConnectState = .idle
 
     func start(apiKey: String) {
+        // 这里点名"Scrobble API Key"而不是笼统的"API Key"——这张卡片里还有一个
+        // 名字很像、但用途完全不同的只读 API Key(iPhone 播放桥接用),笼统的提示曾经
+        // 让人以为自己已经填过了、看不出问题出在哪个字段。
         guard !apiKey.isEmpty else {
-            state = .failed(L10n.t("请先填写 API Key"))
+            state = .failed(L10n.t("请先填写 Scrobble API Key"))
             return
         }
         state = .requestingToken
@@ -124,7 +127,7 @@ final class LastfmConnectController: ObservableObject {
     func confirmBrowserAuth(apiKey: String, secret: String) {
         guard case .waitingForBrowserAuth(let token) = state else { return }
         guard !secret.isEmpty else {
-            state = .failed(L10n.t("请先填写 Secret"))
+            state = .failed(L10n.t("请先填写 Scrobble Secret"))
             return
         }
         state = .exchanging
