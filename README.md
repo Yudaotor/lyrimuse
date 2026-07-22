@@ -11,6 +11,7 @@
 ![Platform](https://img.shields.io/badge/platform-macOS%2014%2B-blue)
 ![Swift](https://img.shields.io/badge/Swift-5.9-orange)
 ![No Apple Developer account needed](https://img.shields.io/badge/Apple%20Developer%20account-not%20required-success)
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 
 </div>
 
