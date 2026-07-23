@@ -21,6 +21,7 @@ final class AppSettings: ObservableObject {
         static let showRomanization = "np:showRomanization"
         static let showTranslation = "np:showTranslation"
         static let launchAtLoginEnabled = "np:launchAtLoginEnabled"
+        static let launchMusicOnLyrimuseOpen = "np:launchMusicOnLyrimuseOpen"
         static let collectorServiceEnabled = "np:collectorServiceEnabled"
         static let showInDock = "np:showInDock"
         static let showNextLinePreview = "np:showNextLinePreview"
@@ -76,6 +77,13 @@ final class AppSettings: ObservableObject {
             defaults.set(launchAtLoginEnabled, forKey: Keys.launchAtLoginEnabled)
             LoginItemManager.shared.setEnabled(launchAtLoginEnabled)
         }
+    }
+    // 打开 Lyrimuse 时顺带唤起 Apple Music——只在 AppDelegate.applicationDidFinishLaunching
+    // 里读一次(见那边的调用点),不是"实时生效"的开关,didSet 只负责持久化,不需要额外
+    // 触发什么。默认关闭:"自动启动另一个 App"这类有侵入性的行为,不该在用户没有主动
+    // 选择的情况下发生。
+    @Published var launchMusicOnLyrimuseOpen: Bool {
+        didSet { defaults.set(launchMusicOnLyrimuseOpen, forKey: Keys.launchMusicOnLyrimuseOpen) }
     }
     // collector 常驻服务的装/卸开关——跟 launchAtLoginEnabled 同样的写法，但默认值不能
     // 照抄成 true:首次启动必须走一遍引导页面里的"启用"按钮，让用户看到真实的安装+验证
@@ -281,6 +289,7 @@ final class AppSettings: ObservableObject {
         // 已持久化的值,不会被这次改动覆盖。
         showTranslation = (defaults.object(forKey: Keys.showTranslation) as? Bool) ?? (L10n.current == "zh-hans")
         launchAtLoginEnabled = (defaults.object(forKey: Keys.launchAtLoginEnabled) as? Bool) ?? false
+        launchMusicOnLyrimuseOpen = (defaults.object(forKey: Keys.launchMusicOnLyrimuseOpen) as? Bool) ?? false
         collectorServiceEnabled = (defaults.object(forKey: Keys.collectorServiceEnabled) as? Bool) ?? false
         showInDock = (defaults.object(forKey: Keys.showInDock) as? Bool) ?? true
         showNextLinePreview = (defaults.object(forKey: Keys.showNextLinePreview) as? Bool) ?? false

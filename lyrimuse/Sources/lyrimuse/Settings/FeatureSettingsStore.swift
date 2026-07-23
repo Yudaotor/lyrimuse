@@ -98,6 +98,11 @@ struct FeatureFlagsFile: Codable, Equatable {
     // "auto"(跟随系统语言,默认)或具体 ISO 639-1 代码("en"/"zh"/"ja"...)——见
     // MusixmatchTranslationLanguage 注释,collector 侧负责把 "auto" 解析成具体代码。
     var lyricsTranslationLanguage: String?
+    // 打开 Apple Music 时顺带唤起 Lyrimuse——这个方向的联动由 collector(常驻后台,
+    // 不依赖 Lyrimuse.app 主进程是否在运行)负责监测 Music.app 的启动状态,见
+    // collector/companionlaunch.go。反方向("打开 Lyrimuse 时唤起 Music")不需要
+    // 这份共享文件,直接是 AppSettings.launchMusicOnLyrimuseOpen 一个纯 Swift 侧设置。
+    var launchLyrimuseOnMusicOpen: Bool?
 
     enum CodingKeys: String, CodingKey {
         case lyrics
@@ -113,6 +118,7 @@ struct FeatureFlagsFile: Codable, Equatable {
         case lyricsSourceOrder = "lyrics_source_order"
         case lyricsDir = "lyrics_dir"
         case lyricsTranslationLanguage = "lyrics_translation_language"
+        case launchLyrimuseOnMusicOpen = "launch_lyrimuse_on_music_open"
     }
 }
 
@@ -155,6 +161,10 @@ public final class FeatureSettingsStore: ObservableObject {
     @Published public var lyricsDir = ""
     // 只影响 Musixmatch 这个源的译文语言,详见 MusixmatchTranslationLanguage 注释。
     @Published public var lyricsTranslationLanguage: MusixmatchTranslationLanguage = .auto
+    // 打开 Apple Music 时顺带唤起 Lyrimuse——默认关闭,理由跟
+    // AppSettings.launchMusicOnLyrimuseOpen 一样:"自动启动另一个 App"不该是没问过
+    // 用户就默认打开的行为。
+    @Published public var launchLyrimuseOnMusicOpen = false
 
     @Published public private(set) var lastError: String?
 
@@ -173,7 +183,8 @@ public final class FeatureSettingsStore: ObservableObject {
             lyricsSourceMode: lyricsSourceMode.rawValue,
             lyricsSourceOrder: lyricsSourceOrder.map(\.rawValue),
             lyricsDir: lyricsDir.isEmpty ? nil : lyricsDir,
-            lyricsTranslationLanguage: lyricsTranslationLanguage.rawValue
+            lyricsTranslationLanguage: lyricsTranslationLanguage.rawValue,
+            launchLyrimuseOnMusicOpen: launchLyrimuseOnMusicOpen
         )
     }
 
@@ -221,6 +232,7 @@ public final class FeatureSettingsStore: ObservableObject {
         lyricsSourceOrder = decodedOrder.count == LyricsSource.allCases.count ? decodedOrder : LyricsSource.allCases
         lyricsDir = f.lyricsDir ?? ""
         lyricsTranslationLanguage = f.lyricsTranslationLanguage.flatMap(MusixmatchTranslationLanguage.init(rawValue:)) ?? .auto
+        launchLyrimuseOnMusicOpen = f.launchLyrimuseOnMusicOpen ?? false
         savedSnapshot = currentSnapshot
     }
 

@@ -796,6 +796,7 @@ func (p *poller) applyBridgeResult(r bridgeFetchResult) {
 // track is playing; treat a lone null as a glitch (keep the last state), and
 // only declare playback stopped after a few consecutive nulls.
 func (p *poller) poll() {
+	checkCompanionLaunch()
 	if state, ok := getState(p.ctx); ok {
 		if len(state) == 0 { // "null" — nothing playing, or a transient read glitch
 			p.nullStreak++

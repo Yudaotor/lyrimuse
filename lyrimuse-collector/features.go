@@ -76,6 +76,11 @@ type featureFlagsFile struct {
 	// 网易云/QQ 音乐的译文固定是中文,只有 Musixmatch 这个源支持指定任意语言。
 	// resolveLyricsTranslationLanguage 负责把"auto"/空值解析成具体代码,见其注释。
 	LyricsTranslationLanguage string `json:"lyrics_translation_language,omitempty"`
+	// LaunchLyrimuseOnMusicOpen：检测到 Music.app 从没运行变成运行时,顺带启动/唤起
+	// Lyrimuse.app(见 companionlaunch.go)。反方向("打开 Lyrimuse 时唤起 Music")
+	// 不在这份共享文件里,是 Swift 侧 AppSettings 自己的纯本地设置,不需要 collector
+	// 知道。
+	LaunchLyrimuseOnMusicOpen *bool `json:"launch_lyrimuse_on_music_open,omitempty"`
 }
 
 // featureFlags is the resolved (never-nil) form consulted at every gate site.
@@ -107,6 +112,8 @@ type featureFlags struct {
 	// 见 resolveLyricsTranslationLanguage)。只被 musixmatchTranslationLRC
 	// (musixmatch.go)读取。
 	LyricsTranslationLanguage string
+	// LaunchLyrimuseOnMusicOpen 只被 companionlaunch.go 读取。
+	LaunchLyrimuseOnMusicOpen bool
 }
 
 // features is set once in main() before run() starts; every gate site reads
@@ -151,6 +158,7 @@ func loadFeatureFlags(path string) featureFlags {
 		LyricsSourceOrder:         resolveLyricsSourceOrder(f.LyricsSourceOrder),
 		LyricsDir:                 f.LyricsDir,
 		LyricsTranslationLanguage: resolveLyricsTranslationLanguage(f.LyricsTranslationLanguage),
+		LaunchLyrimuseOnMusicOpen: boolOr(f.LaunchLyrimuseOnMusicOpen, false),
 	}
 }
 

@@ -47,6 +47,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         PlaybackCoordinator.shared.start()
 
+        // 打开 Lyrimuse 时顺带唤起 Apple Music(可选,见 AppSettings.launchMusicOnLyrimuseOpen
+        // 注释)。只在 Music.app 还没运行时才启动它——已经在跑就什么都不做,不做多余的
+        // "带到前台"动作,避免用户正在用别的 App 时被意外抢焦点。
+        if settings.launchMusicOnLyrimuseOpen,
+           !NSWorkspace.shared.runningApplications.contains(where: { $0.bundleIdentifier == "com.apple.Music" }),
+           let musicURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.apple.Music") {
+            let config = NSWorkspace.OpenConfiguration()
+            config.activates = false
+            NSWorkspace.shared.openApplication(at: musicURL, configuration: config)
+        }
+
         // 首次启动的完整引导向导——触发点在 MenuBarLabel.onAppear,不在这里:
         // openWindow(id:) 这个 SwiftUI 环境 action 只有挂载的 View 才能拿到,这个时机
         // (AppDelegate.applicationDidFinishLaunching)早于 MenuBarExtra 的 label 真正

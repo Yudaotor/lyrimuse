@@ -751,6 +751,7 @@ private struct AppearanceSettingsTab: View {
 
 private struct GeneralSettingsTab: View {
     @ObservedObject private var settings = AppSettings.shared
+    @ObservedObject private var features = FeatureSettingsStore.shared
     // 只在 .onAppear 和每次操作后重新查一次(askIfNeeded: false,不会弹窗,纯读状态)——
     // 不是 @Published,系统层面的权限变化(比如用户自己去系统设置里手动改)不会主动
     // 推送通知回来,只能在这个页面被看到的时候被动刷新一次。
@@ -872,6 +873,19 @@ private struct GeneralSettingsTab: View {
             Section(L10n.t("启动")) {
                 Toggle(L10n.t("开机启动"), isOn: $settings.launchAtLoginEnabled)
                 Toggle(L10n.t("在 Dock 中显示"), isOn: $settings.showInDock)
+            }
+            Section {
+                Toggle(L10n.t("打开 Lyrimuse 时启动 Apple Music"), isOn: $settings.launchMusicOnLyrimuseOpen)
+                Toggle(isOn: Binding(
+                    get: { features.launchLyrimuseOnMusicOpen },
+                    set: { features.launchLyrimuseOnMusicOpen = $0; Task { await features.save() } }
+                )) {
+                    Text(L10n.t("打开 Apple Music 时启动 Lyrimuse"))
+                }
+            } header: {
+                Text(L10n.t("App 联动"))
+            } footer: {
+                Text(L10n.t("「打开 Apple Music 时启动 Lyrimuse」由后台采集服务负责监测，需要先在上面启用「后台采集服务」才会生效。"))
             }
 
             // 导入/导出打包 collector 的 config.json(账号 token 原文都在里面)+
