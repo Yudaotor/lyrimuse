@@ -69,7 +69,7 @@ public enum NotificationPlatform: String, CaseIterable, Identifiable, Codable {
 }
 
 // "推送账号"tab 管理 collector 推送目的地凭据的数据层——读写 collector 自己的
-// ~/.config/applemusic-nowplaying/config.json(见 collector/config.go 的 `config`
+// ~/.config/lyrimuse/config.json(见 collector/config.go 的 `config`
 // struct)。照抄 EnrichCacheStore.swift 的模式:用 JSONSerialization 读写整份原始
 // 字典而不是用 Codable 精确建模——这份文件里还有 api_root/media_control_path/
 // bundle_ids 这几个这次 UI 不管的字段,整字典读写才能保证保存时原样保留它们,不会
@@ -109,7 +109,7 @@ public final class ConfigStore: ObservableObject {
     @Published public private(set) var lastError: String?
 
     private static let configURL = FileManager.default.homeDirectoryForCurrentUser
-        .appendingPathComponent(".config/applemusic-nowplaying/config.json")
+        .appendingPathComponent(".config/lyrimuse/config.json")
 
     private var raw: [String: Any] = [:]
 

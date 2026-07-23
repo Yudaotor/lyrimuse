@@ -24,7 +24,7 @@ public enum CollectorServiceManager {
             .appendingPathComponent("Library/LaunchAgents/\(label).plist")
     }
     private static let configDir = FileManager.default.homeDirectoryForCurrentUser
-        .appendingPathComponent(".config/applemusic-nowplaying")
+        .appendingPathComponent(".config/lyrimuse")
 
     // 服务是否真的在跑——不是看 AppSettings 里持久化的"用户意图"，是直接问 launchd。
     // Settings 页面和引导页面的状态展示都靠这个，覆盖"装了但没跑起来"这种中间态。
@@ -58,7 +58,7 @@ public enum CollectorServiceManager {
         try? FileManager.default.createDirectory(at: configDir, withIntermediateDirectories: true)
 
         let logPath = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent("Library/Logs/applemusic-nowplaying.log").path
+            .appendingPathComponent("Library/Logs/lyrimuse.log").path
         let plist: [String: Any] = [
             "Label": label,
             "ProgramArguments": [bundledCollectorPath],

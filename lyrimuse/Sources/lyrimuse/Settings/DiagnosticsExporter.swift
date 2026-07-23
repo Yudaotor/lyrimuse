@@ -2,7 +2,7 @@ import Foundation
 import OSLog
 import AppKit
 
-// 一键导出诊断信息:collector 日志走 ~/Library/Logs/applemusic-nowplaying.log,App 自己
+// 一键导出诊断信息:collector 日志走 ~/Library/Logs/lyrimuse.log,App 自己
 // 的日志全部走 os.Logger(系统统一日志),普通用户不会用 Console.app 去查。这个文件把
 // 两边日志 + 关键状态(权限/常驻服务/各功能是否已配置)汇总成一份文本文件,方便不懂
 // 技术的用户自己导出发过来排查问题。
@@ -83,7 +83,7 @@ enum DiagnosticsExporter {
 
     private static func recentCollectorLogLines(limit: Int = 200) -> [String] {
         let path = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent("Library/Logs/applemusic-nowplaying.log")
+            .appendingPathComponent("Library/Logs/lyrimuse.log")
         guard let content = try? String(contentsOf: path, encoding: .utf8) else {
             return ["(could not read \(path.path))"]
         }

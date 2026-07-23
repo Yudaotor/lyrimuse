@@ -73,7 +73,7 @@ struct FeatureFlagsFile: Codable, Equatable {
 
 // "歌词"tab 的纯行为开关(lyrics/albumPrefetch 等)和"账号连接"tab 里各张
 // 账号卡片的开关(lastfmBridge/lastfmMirrorScrobble/weeklyDigest)共用同一份数据层——读写
-// ~/.config/applemusic-nowplaying/applemusic-nowplaying-features.json,跟
+// ~/.config/lyrimuse/lyrimuse-features.json,跟
 // collector/features.go 是同一份共享文件的两侧独立实现。
 //
 // 这个 store 里的每一个开关都是"改了立刻保存"——Binding 的 set 里包一层
@@ -105,14 +105,14 @@ public final class FeatureSettingsStore: ObservableObject {
     // lyricsSources 记录,顺序调整只在这个数组内部交换位置,两者互不干扰,不需要"禁用
     // 一个源时把它从顺序表里摘出来/重新插回去"这种同步逻辑。
     @Published public var lyricsSourceOrder: [LyricsSource] = LyricsSource.allCases
-    // 空字符串 = 用默认位置(~/.config/applemusic-nowplaying/lyrics)。用 effectiveLyricsDir
+    // 空字符串 = 用默认位置(~/.config/lyrimuse/lyrics)。用 effectiveLyricsDir
     // 取实际生效的路径,不要直接读这个属性去拼路径。
     @Published public var lyricsDir = ""
 
     @Published public private(set) var lastError: String?
 
     private static let featuresURL = FileManager.default.homeDirectoryForCurrentUser
-        .appendingPathComponent(".config/applemusic-nowplaying/applemusic-nowplaying-features.json")
+        .appendingPathComponent(".config/lyrimuse/lyrimuse-features.json")
 
     private var savedSnapshot = FeatureFlagsFile()
     private var currentSnapshot: FeatureFlagsFile {
@@ -136,7 +136,7 @@ public final class FeatureSettingsStore: ObservableObject {
             return URL(fileURLWithPath: lyricsDir)
         }
         return FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent(".config/applemusic-nowplaying/lyrics")
+            .appendingPathComponent(".config/lyrimuse/lyrics")
     }
     public var isDirty: Bool { currentSnapshot != savedSnapshot }
 

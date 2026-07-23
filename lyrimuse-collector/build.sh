@@ -65,6 +65,6 @@ fi
 if pid=$(pgrep -f "$RUNTIME_BIN"); then
   echo "==> collector running, pid $pid"
 else
-  echo "!! collector not running — see ~/Library/Logs/applemusic-nowplaying.log" >&2
+  echo "!! collector not running — see ~/Library/Logs/lyrimuse.log" >&2
   exit 1
 fi

@@ -20,9 +20,9 @@ private let logger = Logger(subsystem: "com.chenyuhao.lyrimuse", category: "conf
 // 回到刚装完的样子",供 SettingsView 的"清除所有配置"按钮用。
 enum ConfigPortability {
     private static let configDir = FileManager.default.homeDirectoryForCurrentUser
-        .appendingPathComponent(".config/applemusic-nowplaying")
+        .appendingPathComponent(".config/lyrimuse")
     private static let configURL = configDir.appendingPathComponent("config.json")
-    private static let featuresURL = configDir.appendingPathComponent("applemusic-nowplaying-features.json")
+    private static let featuresURL = configDir.appendingPathComponent("lyrimuse-features.json")
 
     // np: 前缀里唯独不带走这三个:
     // - hasCompletedOnboarding / hasShownAutomationOnboarding:引导流程是不是走完了,

@@ -33,7 +33,7 @@ public struct EnrichCacheLyrics {
 @MainActor
 public enum EnrichCacheReader {
     private static let cacheURL = FileManager.default.homeDirectoryForCurrentUser
-        .appendingPathComponent(".config/applemusic-nowplaying/applemusic-nowplaying-enrich-cache.json")
+        .appendingPathComponent(".config/lyrimuse/lyrimuse-enrich-cache.json")
 
     // 缓存文件设计上永久不清理,会攒到几百条、几 MB——如果每次 lookup() 都全量读+解析,
     // 而当前播放的歌还没解析出歌词(新歌/纯音乐/查无此歌)时每 2 秒轮询都会触发一次,

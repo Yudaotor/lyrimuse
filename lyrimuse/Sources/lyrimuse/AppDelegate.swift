@@ -18,7 +18,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // 假设这个目录已经存在，但谁都不会在写之前 createDirectory——这里无条件、幂等
         // 地建一次，不依赖引导流程是否跑完，第一次启动就先把这个目录建好。
         try? FileManager.default.createDirectory(
-            at: FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".config/applemusic-nowplaying"),
+            at: FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".config/lyrimuse"),
             withIntermediateDirectories: true)
 
         // 裸可执行文件(没打成 .app 包)也能表现成菜单栏专属应用,不占 Dock/Cmd-Tab,

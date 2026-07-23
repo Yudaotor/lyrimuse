@@ -21,7 +21,7 @@ private let logger = Logger(subsystem: "com.chenyuhao.lyrimuse", category: "lyri
 // 字典级别的增删改,其它条目、以及被编辑条目里没碰过的字段,原样保留、逐字节不变。
 //
 // 歌词部分(lyrics/lyrics_tr/lyrics_roma/lyrics_yrc/lyrics_source/manual_lyrics 这 6 个
-// 字段)另有 ~/.config/applemusic-nowplaying/lyrics/ 下的纯文本文件族作为权威源
+// 字段)另有 ~/.config/lyrimuse/lyrics/ 下的纯文本文件族作为权威源
 // (collector 启动时会读这个文件夹、覆盖对应字段,见 collector/lyricsimport.go)——
 // saveEdit/removeWordTiming/delete 因此在 raw[key] 字典操作之外,还调用
 // writeLyricsFiles 同步写/删对应文件,两边由同一次用户操作一起改,靠"改完立刻重启
@@ -50,7 +50,7 @@ public final class EnrichCacheStore: ObservableObject {
     @Published public private(set) var totalSizeBytes: Int64 = 0
 
     private static let cacheURL = FileManager.default.homeDirectoryForCurrentUser
-        .appendingPathComponent(".config/applemusic-nowplaying/applemusic-nowplaying-enrich-cache.json")
+        .appendingPathComponent(".config/lyrimuse/lyrimuse-enrich-cache.json")
     // 读 FeatureSettingsStore 的计算属性,而不是编译期定死的 static let——用户可在
     // "歌词"设置分类里自定义文件夹位置,这里必须跟 collector 那边(main.go 读
     // features.LyricsDir)认的是同一个位置,否则存/删歌词文件的目录跟 collector 实际

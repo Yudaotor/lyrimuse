@@ -17,7 +17,10 @@ import (
 )
 
 const (
-	clientName    = "applemusic-nowplaying"
+	// 2026-07-23:项目最早叫 applemusic-nowplaying,后来改名 Lyrimuse 时这个常量
+	// 没跟着一起改——配置目录/文件名前缀/User-Agent/ListenBrainz submission_client
+	// 全部由它派生,现在统一改过来,不做旧路径兼容(不写自动迁移代码)。
+	clientName    = "lyrimuse"
 	clientVersion = "0.1.0"
 
 	pollInterval      = 5 * time.Second
