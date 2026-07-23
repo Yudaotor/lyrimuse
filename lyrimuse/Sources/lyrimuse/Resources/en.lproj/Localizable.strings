@@ -246,6 +246,7 @@
 "清空全部缓存" = "Clear All Cache";
 "用户名（选填，用于界面显示）" = "Username (optional, for display only)";
 "用来把当前播放状态推送到网页小组件和状态徽章。" = "Pushes the current playback status to the web widget and status badge.";
+"这台 Mac 上的播放记录会同步到 ListenBrainz，建立完整的听歌历史；也是网页展示、听歌报告的可选数据来源。" = "Syncs this Mac's playback to ListenBrainz, building a complete listening history — also an optional data source for the web page and listening digests.";
 "确定要删除「%@ - %@」的本地记录吗?" = "Delete the local record for \"%@ - %@\"?";
 "确定要清空全部歌词缓存吗?" = "Clear all cached lyrics?";
 "移除逐字时间轴" = "Remove Word Timing";

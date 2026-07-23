@@ -345,13 +345,18 @@ struct AccountLinkingTab: View {
 
     // 每张卡片最上面这句"整体介绍"文案(描述整张卡是干什么的,不是某一个 Section 的)
     // 放在这里,在 detailHeader 和 Form 之间,不塞进任何一个 Section 的 header/footer——
-    // footer 只能放纯文字且只描述那一个 Section,不适合放"整张卡"级别的介绍。ListenBrainz
-    // 没有这一段,因为它的介绍句已经是"账户信息" Section 的 footer。
+    // footer 只能放纯文字且只描述那一个 Section,不适合放"整张卡"级别的介绍。
     @ViewBuilder
     private var cardIntro: some View {
         switch destination {
         case .listenBrainz:
-            EmptyView()
+            // 2026-07-23:之前这里是 EmptyView(),理由是"账户信息" Section 的 footer
+            // 已经有一句话——但那句("可选，不填不影响悬浮歌词。")回答的是"要不要填"，
+            // 不是"填了之后 App 会拿它做什么"，用户反馈缺一句跟其它三张卡片一样的
+            // 用途说明，这里补上；下面 Section 的 footer 继续保留，两句话各自负责
+            // 不同的信息，跟其它卡片的结构一致。
+            Text(L10n.t("这台 Mac 上的播放记录会同步到 ListenBrainz，建立完整的听歌历史；也是网页展示、听歌报告的可选数据来源。"))
+                .font(.caption).foregroundStyle(.secondary)
         case .stateRelay:
             Text(L10n.t("用来把当前播放状态推送到网页小组件和状态徽章。"))
                 .font(.caption).foregroundStyle(.secondary)
