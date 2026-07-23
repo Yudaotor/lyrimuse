@@ -31,8 +31,8 @@ Lyrimuse sits quietly in your menu bar and shows a floating lyrics window that f
 
 ### Lyrics that just work
 - **Word-by-word synced highlighting**, following playback in real time
-- **Four lyrics sources checked automatically** — NetEase Cloud Music, QQ Music, Kugou, and LRCLIB — always picks the best match, no manual searching required
-- **Romanization and translation**, shown alongside the original lyrics
+- **Five lyrics sources checked automatically** — NetEase Cloud Music, QQ Music, Kugou, Musixmatch, and LRCLIB — always picks the best match, no manual searching required
+- **Romanization and translation**, shown alongside the original lyrics — translation language is configurable when the Musixmatch source has a community translation available
 - **A full Lyrics Manager window** — browse, hand-edit, delete, or re-search lyrics for any track, with per-track timing offset if the sync ever drifts
 - **Works fully offline** in local mode — no network round-trip needed to show lyrics that are already cached
 

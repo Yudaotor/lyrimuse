@@ -2,17 +2,58 @@ import Foundation
 import os
 import SwiftUI
 
-private let logger = Logger(subsystem: "com.chenyuhao.lyrimuse", category: "feature-settings")
+private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "feature-settings")
 
-// 四个歌词源——rawValue 必须跟 collector/features.go 的 lyricSourceXxx 常量逐字对应,
+// 五个歌词源——rawValue 必须跟 collector/features.go 的 lyricSourceXxx 常量逐字对应,
 // 这是两侧通过共享 json 文件交换的字符串。displayName/color 直接委托给
 // LyricsManagerView.swift 已有的 sourceDisplayName/sourceColor(那两个函数今天也在给
 // "歌词管理"窗口的来源筛选/列表用),不重复维护第二份名字/颜色映射。
 public enum LyricsSource: String, CaseIterable, Identifiable, Codable, Hashable {
-    case netease, qq, kugou, lrclib
+    case netease, qq, kugou, musixmatch, lrclib
     public var id: Self { self }
     public var displayName: String { sourceDisplayName(rawValue) }
     public var color: Color { sourceColor(rawValue) }
+}
+
+// Musixmatch 译文(collector/musixmatch.go 的 crowd.track.translations.get)目标语言——
+// 网易云/QQ 音乐的译文固定是中文,只有 Musixmatch 这个源能指定任意语言,rawValue 必须是
+// Musixmatch 认的 ISO 639-1 两位小写代码(已用真实接口核实过这个格式,见开发时的调研)。
+// .auto 的字面值原样写进共享 json,由 collector 侧 resolveLyricsTranslationLanguage
+// (features.go)解析成具体代码——那边用 `defaults read -g AppleLocale` 读 macOS 系统
+// 语言,不是 Swift 这边解析:collector 是长驻后台进程,读一次系统级偏好设置比 Swift
+// App 每次保存时读 Locale.current 更贴近"用户实际在用的系统语言此刻是什么",也让这个
+// 字段跟这个 store 里其它字段一样,原始 rawValue 直接对称读写、不需要额外的解析层。
+// 跟随的是 macOS 系统语言而不是 App 界面语言:App 界面本身只做了中英两版翻译,母语是
+// 西语/日语等的用户即使 App 界面只能显示英文,系统语言仍然如实反映其母语,能让这个
+// 功能真正惠及"母语非中非英"的用户,而不是被 App 界面语言的两个选项卡住。
+public enum MusixmatchTranslationLanguage: String, CaseIterable, Identifiable, Codable {
+    case auto
+    case en, zh, ja, ko, es, fr, de, pt, it, ru, ar, vi, th, id, nl, pl, tr
+
+    public var id: Self { self }
+
+    public var displayName: String {
+        switch self {
+        case .auto: return L10n.t("跟随系统语言")
+        case .en: return "English"
+        case .zh: return "简体中文"
+        case .ja: return "日本語"
+        case .ko: return "한국어"
+        case .es: return "Español"
+        case .fr: return "Français"
+        case .de: return "Deutsch"
+        case .pt: return "Português"
+        case .it: return "Italiano"
+        case .ru: return "Русский"
+        case .ar: return "العربية"
+        case .vi: return "Tiếng Việt"
+        case .th: return "ไทย"
+        case .id: return "Bahasa Indonesia"
+        case .nl: return "Nederlands"
+        case .pl: return "Polski"
+        case .tr: return "Türkçe"
+        }
+    }
 }
 
 // "智能算法"=四源全查+打分取最高分(现有行为,见 collector/enrich.go 的
@@ -54,6 +95,9 @@ struct FeatureFlagsFile: Codable, Equatable {
     var lyricsSourceMode: String?
     var lyricsSourceOrder: [String]?
     var lyricsDir: String?
+    // "auto"(跟随系统语言,默认)或具体 ISO 639-1 代码("en"/"zh"/"ja"...)——见
+    // MusixmatchTranslationLanguage 注释,collector 侧负责把 "auto" 解析成具体代码。
+    var lyricsTranslationLanguage: String?
 
     enum CodingKeys: String, CodingKey {
         case lyrics
@@ -68,6 +112,7 @@ struct FeatureFlagsFile: Codable, Equatable {
         case lyricsSourceMode = "lyrics_source_mode"
         case lyricsSourceOrder = "lyrics_source_order"
         case lyricsDir = "lyrics_dir"
+        case lyricsTranslationLanguage = "lyrics_translation_language"
     }
 }
 
@@ -108,6 +153,8 @@ public final class FeatureSettingsStore: ObservableObject {
     // 空字符串 = 用默认位置(~/.config/lyrimuse/lyrics)。用 effectiveLyricsDir
     // 取实际生效的路径,不要直接读这个属性去拼路径。
     @Published public var lyricsDir = ""
+    // 只影响 Musixmatch 这个源的译文语言,详见 MusixmatchTranslationLanguage 注释。
+    @Published public var lyricsTranslationLanguage: MusixmatchTranslationLanguage = .auto
 
     @Published public private(set) var lastError: String?
 
@@ -125,7 +172,8 @@ public final class FeatureSettingsStore: ObservableObject {
             lyricsSources: lyricsSources.map(\.rawValue).sorted(),
             lyricsSourceMode: lyricsSourceMode.rawValue,
             lyricsSourceOrder: lyricsSourceOrder.map(\.rawValue),
-            lyricsDir: lyricsDir.isEmpty ? nil : lyricsDir
+            lyricsDir: lyricsDir.isEmpty ? nil : lyricsDir,
+            lyricsTranslationLanguage: lyricsTranslationLanguage.rawValue
         )
     }
 
@@ -172,6 +220,7 @@ public final class FeatureSettingsStore: ObservableObject {
         let decodedOrder = (f.lyricsSourceOrder ?? []).compactMap(LyricsSource.init(rawValue:))
         lyricsSourceOrder = decodedOrder.count == LyricsSource.allCases.count ? decodedOrder : LyricsSource.allCases
         lyricsDir = f.lyricsDir ?? ""
+        lyricsTranslationLanguage = f.lyricsTranslationLanguage.flatMap(MusixmatchTranslationLanguage.init(rawValue:)) ?? .auto
         savedSnapshot = currentSnapshot
     }
 

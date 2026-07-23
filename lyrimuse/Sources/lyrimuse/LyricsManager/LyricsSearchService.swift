@@ -1,10 +1,10 @@
 import Foundation
 import os
 
-private let logger = Logger(subsystem: "com.chenyuhao.lyrimuse", category: "lyrics-search")
+private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "lyrics-search")
 
 // "联网搜索候选歌词"——参考 LyricsX 的 SearchLyricsViewController,但不在 Swift 这边
-// 重新实现网易云/QQ/酷狗/LRCLIB 的检索逻辑(那会是第二份、迟早会跟 Go collector 那份
+// 重新实现网易云/QQ/酷狗/Musixmatch/LRCLIB 的检索逻辑(那会是第二份、迟早会跟 Go collector 那份
 // 走样的实现)。改用一次性子进程调用 `collector search-lyrics`(collector/searchcli.go),
 // 复用 scoredLyricCandidates(collector/enrich.go)——跟自动解析路径完全同一份取分/排序
 // 代码,只是把"取最高分那个"换成"把全部候选连分数一起交给用户挑"。不新增常驻服务:

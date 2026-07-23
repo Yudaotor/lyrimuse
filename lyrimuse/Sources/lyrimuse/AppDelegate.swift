@@ -52,6 +52,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // (AppDelegate.applicationDidFinishLaunching)早于 MenuBarExtra 的 label 真正
         // 挂载,这里调用会静默没反应。
         GlobalHotkeys.registerAll()
+
+        // 触发 SparkleUpdaterManager 的懒加载初始化——它的 init() 会以
+        // startingUpdater: true 启动 Sparkle 自己的 updater,按 Info.plist 里
+        // SUEnableAutomaticChecks 的配置做周期性后台检查,不需要自己维护"查一次/
+        // 记录已提示过哪个版本"这套状态(Sparkle 自己管这些)。
+        _ = SparkleUpdaterManager.shared
     }
 
     // 这个 App 没有传统意义上的"主窗口"(内容是菜单栏图标+悬浮歌词窗口+按需打开的

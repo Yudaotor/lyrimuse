@@ -38,6 +38,12 @@ let package = Package(
     // `swift build` 在这台机器上跑通了整个 build 过程验证过(不只是 resolve 成功)。
     dependencies: [
         .package(url: "https://github.com/sindresorhus/KeyboardShortcuts", exact: "1.15.0"),
+        // 检查更新用——这个包本身只是把官方预编译的 Sparkle.xcframework(一个纯
+        // Objective-C/C 的二进制 target,不涉及任何 Swift Macro/plugin)包装成 SPM
+        // 依赖,不会重演 KeyboardShortcuts 那次"这台机器没有完整 Xcode、宏 plugin
+        // 解析不了"的坑。`swift build` 不会自动把这类二进制依赖嵌入 .app bundle,
+        // 需要 build.sh 手动 ditto 拷贝+签名,见那边的改动。
+        .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.9.4"),
     ],
     targets: [
         .target(
@@ -46,7 +52,7 @@ let package = Package(
         ),
         .executableTarget(
             name: "lyrimuse",
-            dependencies: ["LyrimuseCore", "KeyboardShortcuts"],
+            dependencies: ["LyrimuseCore", "KeyboardShortcuts", "Sparkle"],
             path: "Sources/lyrimuse",
             resources: [.process("Resources")]
         ),

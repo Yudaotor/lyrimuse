@@ -7,6 +7,8 @@ import (
 	"errors"
 	"log"
 	"os"
+	"os/exec"
+	"strings"
 )
 
 // featureFlagsFile is the on-disk shape written by desktop-lyrics's "设置" →
@@ -21,14 +23,15 @@ import (
 // 开关打开也没用;已经配了凭据的功能,现在才第一次有独立的"关"(尤其是
 // lastfm_bridge/weekly_digest/top_artists_digest 这三个,过去共用同一对
 // lastfm_user/lastfm_api_key 凭据当唯一开关,逻辑上是三个独立能力)。
-// 四个歌词源的 key——跟 enrich.go 里 lyricCandidate.source/scoredLyricCandidateResult.
+// 五个歌词源的 key——跟 enrich.go 里 lyricCandidate.source/scoredLyricCandidateResult.
 // Source 的取值、以及 desktop-lyrics「歌词管理」窗口 LyricsManagerView.swift 的
 // sourceDisplayName 逐字对应,这是整个项目里"歌词源"唯一的一套 id,不是这里新起的。
 const (
-	lyricSourceNetease = "netease"
-	lyricSourceQQ      = "qq"
-	lyricSourceKugou   = "kugou"
-	lyricSourceLRCLIB  = "lrclib"
+	lyricSourceNetease    = "netease"
+	lyricSourceQQ         = "qq"
+	lyricSourceKugou      = "kugou"
+	lyricSourceMusixmatch = "musixmatch"
+	lyricSourceLRCLIB     = "lrclib"
 )
 
 const (
@@ -38,7 +41,7 @@ const (
 
 // lyricsSourceDefaultOrder 是"顺序优先"模式缺省的顺序——照抄 enrich.go
 // scoredLyricCandidates 里 candidates 列表本来的 append 顺序,不是这里凭空定的。
-var lyricsSourceDefaultOrder = []string{lyricSourceNetease, lyricSourceQQ, lyricSourceKugou, lyricSourceLRCLIB}
+var lyricsSourceDefaultOrder = []string{lyricSourceNetease, lyricSourceQQ, lyricSourceKugou, lyricSourceMusixmatch, lyricSourceLRCLIB}
 
 type featureFlagsFile struct {
 	Lyrics               *bool `json:"lyrics,omitempty"`
@@ -58,7 +61,7 @@ type featureFlagsFile struct {
 	// LyricsSources：启用的歌词源集合(lyricSourceXxx 常量的子集)。nil/缺失 = 全部
 	// 启用,维持这个字段加之前的既有行为不变。
 	LyricsSources []string `json:"lyrics_sources,omitempty"`
-	// LyricsSourceMode："smart"(默认,四源全查+打分取最高分,见 enrich.go 的
+	// LyricsSourceMode："smart"(默认,五源全查+打分取最高分,见 enrich.go 的
 	// scoredLyricCandidates/pickLyricCandidate)或"priority"(按 LyricsSourceOrder
 	// 的顺序,取第一个通过质量校验(score>=0)的源,不比较分数高低)。空值按 smart 处理。
 	LyricsSourceMode string `json:"lyrics_source_mode,omitempty"`
@@ -68,6 +71,11 @@ type featureFlagsFile struct {
 	// LyricsDir：歌词文件夹("歌词文件夹作为权威源"读写的那个文件夹)的自定义位置。
 	// 留空则用默认位置(config.json 同目录下的 lyrics/,main.go 里兜底)。
 	LyricsDir string `json:"lyrics_dir,omitempty"`
+	// LyricsTranslationLanguage："auto"(跟随系统语言,默认)或 ISO 639-1 两位小写代码
+	// (如"en"/"es"/"ja")——Musixmatch 译文(crowd.track.translations.get)的目标语言。
+	// 网易云/QQ 音乐的译文固定是中文,只有 Musixmatch 这个源支持指定任意语言。
+	// resolveLyricsTranslationLanguage 负责把"auto"/空值解析成具体代码,见其注释。
+	LyricsTranslationLanguage string `json:"lyrics_translation_language,omitempty"`
 }
 
 // featureFlags is the resolved (never-nil) form consulted at every gate site.
@@ -95,6 +103,10 @@ type featureFlags struct {
 	// LyricsDir 空字符串表示"用默认位置",由 main.go 里设置包级变量 lyricsDir 时兜底,
 	// 不在这里(loadFeatureFlags)展开成绝对路径——那时候 *cfgPath 还没解析完。
 	LyricsDir string
+	// LyricsTranslationLanguage 是已经解析过的具体 ISO 639-1 代码(不会是"auto"或空值,
+	// 见 resolveLyricsTranslationLanguage)。只被 musixmatchTranslationLRC
+	// (musixmatch.go)读取。
+	LyricsTranslationLanguage string
 }
 
 // features is set once in main() before run() starts; every gate site reads
@@ -126,24 +138,28 @@ func loadFeatureFlags(path string) featureFlags {
 		log.Printf("read feature flags %s: %v (使用默认值)", path, err)
 	}
 	return featureFlags{
-		Lyrics:               boolOr(f.Lyrics, true),
-		AlbumPrefetch:        boolOr(f.AlbumPrefetch, true),
-		LastfmBridge:         boolOr(f.LastfmBridge, false),
-		LastfmMirrorScrobble: boolOr(f.LastfmMirrorScrobble, false),
-		WeeklyDigest:         boolOr(f.WeeklyDigest, false),
-		DailyDigest:          boolOr(f.DailyDigest, false),
-		WeeklyDigestSource:   f.WeeklyDigestSource,
-		DailyDigestSource:    f.DailyDigestSource,
-		LyricsSources:        resolveLyricsSources(f.LyricsSources),
-		LyricsSourceMode:     resolveLyricsSourceMode(f.LyricsSourceMode),
-		LyricsSourceOrder:    resolveLyricsSourceOrder(f.LyricsSourceOrder),
-		LyricsDir:            f.LyricsDir,
+		Lyrics:                    boolOr(f.Lyrics, true),
+		AlbumPrefetch:             boolOr(f.AlbumPrefetch, true),
+		LastfmBridge:              boolOr(f.LastfmBridge, false),
+		LastfmMirrorScrobble:      boolOr(f.LastfmMirrorScrobble, false),
+		WeeklyDigest:              boolOr(f.WeeklyDigest, false),
+		DailyDigest:               boolOr(f.DailyDigest, false),
+		WeeklyDigestSource:        f.WeeklyDigestSource,
+		DailyDigestSource:         f.DailyDigestSource,
+		LyricsSources:             resolveLyricsSources(f.LyricsSources),
+		LyricsSourceMode:          resolveLyricsSourceMode(f.LyricsSourceMode),
+		LyricsSourceOrder:         resolveLyricsSourceOrder(f.LyricsSourceOrder),
+		LyricsDir:                 f.LyricsDir,
+		LyricsTranslationLanguage: resolveLyricsTranslationLanguage(f.LyricsTranslationLanguage),
 	}
 }
 
 func resolveLyricsSources(list []string) map[string]bool {
 	if len(list) == 0 {
-		return map[string]bool{lyricSourceNetease: true, lyricSourceQQ: true, lyricSourceKugou: true, lyricSourceLRCLIB: true}
+		return map[string]bool{
+			lyricSourceNetease: true, lyricSourceQQ: true, lyricSourceKugou: true,
+			lyricSourceMusixmatch: true, lyricSourceLRCLIB: true,
+		}
 	}
 	m := make(map[string]bool, len(list))
 	for _, s := range list {
@@ -164,4 +180,39 @@ func resolveLyricsSourceOrder(order []string) []string {
 		return append([]string(nil), lyricsSourceDefaultOrder...)
 	}
 	return order
+}
+
+// resolveLyricsTranslationLanguage 把共享文件里的"auto"/空值解析成一个具体的 ISO
+// 639-1 代码——collector 是长驻后台进程(launchd gui/$(id -u) 用户级 agent,跟登录用户
+// 的 Aqua 会话同一身份运行),用 `defaults read -g AppleLocale` 能可靠读到这台 Mac 当前
+// 的系统语言,不依赖 launchd 环境变量(环境变量对用户级 agent 不一定完整继承登录 shell
+// 的 locale 设置)。读不到/查不到对应语言代码时兜底 "en"——总比整段不请求译文更有用。
+// 只在启动时解析一次(跟这个文件里其它字段同一个"读一次,重启才生效"的既定约定),运行
+// 中途切系统语言不会实时生效。
+func resolveLyricsTranslationLanguage(lang string) string {
+	if lang != "" && lang != "auto" {
+		return lang
+	}
+	if code := systemLanguageCode(); code != "" {
+		return code
+	}
+	return "en"
+}
+
+// systemLanguageCode 读 macOS 当前系统语言,取 AppleLocale("zh_Hans_CN"/"en_US"/
+// "ja_JP"这类形式)下划线前的两位语言代码并转小写。查询失败(命令不存在/超时/返回值
+// 解析不出下划线分隔的语言段)一律返回空串,交给调用方兜底,不 panic、不重试。
+func systemLanguageCode() string {
+	out, err := exec.Command("defaults", "read", "-g", "AppleLocale").Output()
+	if err != nil {
+		return ""
+	}
+	s := strings.TrimSpace(string(out))
+	if i := strings.IndexByte(s, '_'); i > 0 {
+		s = s[:i]
+	}
+	if s == "" {
+		return ""
+	}
+	return strings.ToLower(s)
 }

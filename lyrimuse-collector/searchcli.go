@@ -13,7 +13,7 @@ import (
 // -album ... -duration ...`: a one-shot, no-persistent-server way for desktop-lyrics
 // to let the user manually re-search lyric candidates for a specific song (its
 // "歌词管理" window's "联网搜索候选歌词" feature). It reuses scoredLyricCandidates
-// (enrich.go) — the exact same NetEase/QQ/酷狗/LRCLIB fetch-and-score logic the
+// (enrich.go) — the exact same NetEase/QQ/酷狗/Musixmatch/LRCLIB fetch-and-score logic the
 // normal background auto-resolve path uses — so there is no second, drifting
 // implementation of "how do we rank lyric sources" living in Swift. Prints the
 // full ranked candidate list as JSON to stdout and exits; never touches
@@ -37,7 +37,7 @@ func runSearchLyricsCLI(args []string) {
 	// os.Args[1]=="search-lyrics" 的提前分支、马上 return,永远不会执行到那一行——
 	// features 这个包级变量在这里还是零值(LyricsSources 是 nil map)。手动搜索要遵循
 	// "歌词"设置里的"歌词来源"开关,所以这里必须按跟 main() 完全一致的默认路径规则自己
-	// 加载一遍,不然下面过滤时 nil map 对任何 key 取值都是 false,会把四个源全部误判成
+	// 加载一遍,不然下面过滤时 nil map 对任何 key 取值都是 false,会把五个源全部误判成
 	// "没启用"、直接返回空列表。
 	home, err := os.UserHomeDir()
 	if err == nil {

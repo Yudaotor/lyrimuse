@@ -273,7 +273,13 @@ final class AppSettings: ObservableObject {
     private init() {
         preferWordLevelKaraoke = (defaults.object(forKey: Keys.preferWordLevelKaraoke) as? Bool) ?? true
         showRomanization = (defaults.object(forKey: Keys.showRomanization) as? Bool) ?? true
-        showTranslation = (defaults.object(forKey: Keys.showTranslation) as? Bool) ?? true
+        // 默认值跟 App 界面语言联动——译文这几个歌词源(网易云/QQ 音乐)给的固定是
+        // 中文翻译,不是"任意语言译文",界面语言不是中文的人默认看到一堆看不懂的
+        // 中文字没有意义。L10n.current 直接读 np:appLanguage 这个 UserDefaults key
+        // (不经过 self.appLanguage,那个要到下面几行才被赋值),只影响"从没手动碰过
+        // 这个开关"的默认值——已经手动开过/关过的人,defaults.object(forKey:) 能读到
+        // 已持久化的值,不会被这次改动覆盖。
+        showTranslation = (defaults.object(forKey: Keys.showTranslation) as? Bool) ?? (L10n.current == "zh-hans")
         launchAtLoginEnabled = (defaults.object(forKey: Keys.launchAtLoginEnabled) as? Bool) ?? false
         collectorServiceEnabled = (defaults.object(forKey: Keys.collectorServiceEnabled) as? Bool) ?? false
         showInDock = (defaults.object(forKey: Keys.showInDock) as? Bool) ?? true

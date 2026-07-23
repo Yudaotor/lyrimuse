@@ -64,19 +64,28 @@ jobs:
         run: |
           if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
             VERSION="${GITHUB_REF#refs/tags/}"
+            # BUNDLE_VERSION feeds build.sh's CFBundleShortVersionString/CFBundleVersion,
+            # which the in-app update checker compares against this repo's Releases --
+            # strip the leading "v" so it's a clean X.Y.Z, matching what UpdateChecker.swift
+            # does to the tag_name it gets back from the GitHub API.
+            BUNDLE_VERSION="${VERSION#v}"
           else
             VERSION="dev-$(git rev-parse --short HEAD)"
+            # Not a real release tag, so there's no meaningful X.Y.Z here -- build.sh's own
+            # placeholder default is fine, this build will never reach the public Releases
+            # page anyway (see the "Create GitHub Release" step's tag-only gate below).
+            BUNDLE_VERSION="1.0.0"
           fi
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
-          echo "Building ${VERSION}"
+          echo "bundle_version=${BUNDLE_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "Building ${VERSION} (bundle version ${BUNDLE_VERSION})"
 
       - name: Build + assemble + ad-hoc sign
-        run: ./lyrimuse/build.sh --no-restart
+        run: LYRIMUSE_VERSION="${{ steps.version.outputs.bundle_version }}" ./lyrimuse/build.sh --no-restart
         # --no-restart is already exactly the CI-safe path -- it exits right after the
         # ad-hoc codesign/verify steps, before any of the launchctl kickstart/bootout/
         # bootstrap self-heal dance or the `open`/pgrep liveness check, none of which mean
-        # anything on a headless runner with no logged-in Aqua session. Nothing in
-        # build.sh needed to change for CI.
+        # anything on a headless runner with no logged-in Aqua session.
 
       - name: Sanity-check the signature
         run: |
@@ -114,6 +123,70 @@ jobs:
         # dry-run path: download the zip straight from the Actions run page and smoke-test
         # it, without ever touching the public Releases tab.
 
+      # Only runs on a real tag push, same gate as "Create GitHub Release" below --
+      # appcast.xml's enclosure URL points at releases/latest/download/..., which is
+      # meaningless without an actual Release, and this step needs the SPARKLE_PRIVATE_KEY
+      # secret that a bare workflow_dispatch dry run has no reason to touch.
+      #
+      # sign_update lives in the same SPM binary-target download that build.sh's Sparkle
+      # embedding step already pulled in (.build/artifacts/sparkle/Sparkle/bin/) -- no
+      # separate download needed here.
+      #
+      # The private key never touches disk here: `--ed-key-file -` reads it from stdin,
+      # piped straight from the GitHub Secret. This is Sparkle's own documented CI pattern
+      # (see sign_update --help), not something improvised for this project.
+      #
+      # appcast.xml only ever lists this one release, not full history -- SPUStandardUpdaterController
+      # only needs the latest item to decide "is there something newer than what's
+      # installed," and not maintaining a multi-version feed avoids having to keep every
+      # past release's zip around on the runner just to regenerate a fuller feed.
+      - name: Generate signed appcast
+        if: startsWith(github.ref, 'refs/tags/')
+        id: appcast
+        env:
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+        run: |
+          SIGN_UPDATE=$(find .build/artifacts/sparkle -type f -name sign_update | head -1)
+          if [ -z "$SIGN_UPDATE" ]; then
+            echo "sign_update not found under .build/artifacts/sparkle -- did the build step resolve the Sparkle SPM dependency?" >&2
+            exit 1
+          fi
+          chmod +x "$SIGN_UPDATE"
+          ZIP="${{ steps.package.outputs.zip }}"
+          VERSION="${{ steps.version.outputs.bundle_version }}"
+          LENGTH=$(stat -f%z "$ZIP")
+          SIGNATURE=$(echo "$SPARKLE_PRIVATE_KEY" | "$SIGN_UPDATE" --ed-key-file - -p "$ZIP")
+          DOWNLOAD_URL="https://github.com/${{ github.repository }}/releases/latest/download/${ZIP}"
+          PUB_DATE=$(date -u +"%a, %d %b %Y %H:%M:%S +0000")
+          # Not a heredoc -- a heredoc's body must stay flush-left to avoid picking up
+          # this step's own YAML indentation as literal leading whitespace in every line
+          # of the generated file, but flush-left content itself violates the YAML `run: |`
+          # block scalar's rule that every line stay at or deeper than the block's own
+          # indentation. Building the file line-by-line with `echo` sidesteps both: each
+          # line's indentation in this workflow file is just normal shell-script
+          # indentation, entirely independent of what actually lands inside the quotes.
+          {
+            echo '<?xml version="1.0" encoding="utf-8"?>'
+            echo '<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">'
+            echo '  <channel>'
+            echo '    <title>Lyrimuse Updates</title>'
+            echo "    <link>https://github.com/${{ github.repository }}/releases/latest/download/appcast.xml</link>"
+            echo '    <description>Lyrimuse release feed</description>'
+            echo '    <language>en</language>'
+            echo '    <item>'
+            echo "      <title>${{ steps.version.outputs.version }}</title>"
+            echo "      <pubDate>${PUB_DATE}</pubDate>"
+            echo "      <sparkle:version>${VERSION}</sparkle:version>"
+            echo "      <sparkle:shortVersionString>${VERSION}</sparkle:shortVersionString>"
+            echo '      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>'
+            echo "      <enclosure url=\"${DOWNLOAD_URL}\" sparkle:version=\"${VERSION}\" sparkle:edSignature=\"${SIGNATURE}\" length=\"${LENGTH}\" type=\"application/octet-stream\" />"
+            echo '    </item>'
+            echo '  </channel>'
+            echo '</rss>'
+          } > appcast.xml
+          echo "---- appcast.xml ----"
+          cat appcast.xml
+
       - name: Create GitHub Release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v3
@@ -123,5 +196,6 @@ jobs:
           files: |
             ${{ steps.package.outputs.zip }}
             ${{ steps.package.outputs.zip }}.sha256
+            appcast.xml
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,7 +1,7 @@
 import SwiftUI
 import LyrimuseCore
 
-// 歌词来源筛选——collector 只会写入这四种(见 collector/enrich.go 的 lyricCandidate
+// 歌词来源筛选——collector 只会写入这五种(见 collector/enrich.go 的 lyricCandidate
 // source 取值),"无来源"对应老缓存(lyrics_source 字段是后来才加的,更早解析的
 // 条目永久没有这个值,除非重新解析)。
 private enum SourceFilter: Hashable, Identifiable {
@@ -9,7 +9,7 @@ private enum SourceFilter: Hashable, Identifiable {
     case named(String)
     case none
 
-    static let all_: [SourceFilter] = [.all, .named("netease"), .named("qq"), .named("kugou"), .named("lrclib"), .none]
+    static let all_: [SourceFilter] = [.all, .named("netease"), .named("qq"), .named("kugou"), .named("musixmatch"), .named("lrclib"), .none]
 
     var id: String { label }
     var label: String {
@@ -58,18 +58,21 @@ func sourceColor(_ source: String) -> Color {
     case "netease": return .red
     case "qq": return .green
     case "kugou": return .cyan
+    case "musixmatch": return .indigo
     case "lrclib": return .purple
     default: return .secondary
     }
 }
 
-// 歌词来源展示名——网易云音乐/QQ音乐/酷狗音乐是国内用户认得出的中文写法;LRCLIB 是纯
-// 西方的开源歌词库,没有约定俗成的中文名,保留英文原名,不强行硬翻一个不存在的中文名。
+// 歌词来源展示名——网易云音乐/QQ音乐/酷狗音乐是国内用户认得出的中文写法;Musixmatch/
+// LRCLIB 都是纯西方的歌词库(品牌),没有约定俗成的中文名,保留英文原名,不强行硬翻
+// 一个不存在的中文名。
 func sourceDisplayName(_ source: String) -> String {
     switch source {
     case "netease": return L10n.t("网易云音乐")
     case "qq": return L10n.t("QQ音乐")
     case "kugou": return L10n.t("酷狗音乐")
+    case "musixmatch": return "Musixmatch"
     case "lrclib": return "LRCLIB"
     case "": return L10n.t("无来源")
     default: return source

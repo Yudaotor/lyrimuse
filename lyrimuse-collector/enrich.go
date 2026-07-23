@@ -248,10 +248,11 @@ func resolveTrackEnrichment(artist, title, album string, durationSecs float64) e
 		e.SpotifyURL = "https://open.spotify.com/search/" + neturl.QueryEscape(artist+" "+title)
 	}
 	if features.Lyrics {
-		// 歌词:网易云/QQ音乐/酷狗/LRCLIB 四个源全部查一遍,不是查到第一个能用的就停——一首歌
-		// 只在缓存未命中时解析一次,后续都直接读缓存,四个源都查一遍换来更可信的结果性价比
-		// 很高。取分/并发细节见 scoredLyricCandidates(同一份逻辑也供 desktop-lyrics 的
-		// "重新搜索候选歌词"手动纠正功能复用,搜索用的 CLI 子命令见 searchcli.go)——那条
+		// 歌词:网易云/QQ音乐/酷狗/Musixmatch/LRCLIB 五个源全部查一遍,不是查到第一个能用
+		// 的就停——一首歌只在缓存未命中时解析一次,后续都直接读缓存,五个源都查一遍换来
+		// 更可信的结果性价比很高。取分/并发细节见 scoredLyricCandidates(同一份逻辑也供
+		// desktop-lyrics 的"重新搜索候选歌词"手动纠正功能复用,搜索用的 CLI 子命令见
+		// searchcli.go)——那条
 		// 手动路径故意不受下面 pickLyricCandidate 的"启用哪些源"过滤,理由见它的注释。
 		scored := scoredLyricCandidates(ne, artist, title, album, durationSecs)
 		if picked := pickLyricCandidate(scored); picked != nil {
@@ -312,22 +313,26 @@ type scoredLyricCandidateResult struct {
 	Score         int    `json:"score"`
 }
 
-// scoredLyricCandidates fetches qq/kugou/lrclib concurrently (netease's ne is
-// passed in already-resolved — resolveTrackEnrichment fetched it for cover/URL
-// purposes anyway, so this never issues a second netease request), scores every
-// candidate via scoreLyricCandidate, and returns all of them sorted best-first
-// (not just the winner) — this is the one place both the auto-resolve path
-// (resolveTrackEnrichment, above) and the on-demand `search-lyrics` CLI subcommand
-// (searchcli.go) gather/score candidates, so there is exactly one implementation
-// of "how do we rank lyric sources" in the whole project.
+// scoredLyricCandidates fetches qq/kugou/musixmatch/lrclib concurrently
+// (netease's ne is passed in already-resolved — resolveTrackEnrichment fetched
+// it for cover/URL purposes anyway, so this never issues a second netease
+// request), scores every candidate via scoreLyricCandidate, and returns all of
+// them sorted best-first (not just the winner) — this is the one place both
+// the auto-resolve path (resolveTrackEnrichment, above) and the on-demand
+// `search-lyrics` CLI subcommand (searchcli.go) gather/score candidates, so
+// there is exactly one implementation of "how do we rank lyric sources" in
+// the whole project.
 //
 // Apple Music 有时把歌手标签写成该歌手的英文/罗马化艺名,但网易云/QQ/酷狗/LRCLIB
 // 这四个源都是按歌手的中文舞台名索引/检索的——拿英文艺名去查,返回的候选是彻底的空
-// (不是排序/打分选不出好结果,是检索关键词本身就没命中任何东西)。四个源全空
-// (len(results)==0,不是"候选都被判负分")才触发兜底:用 artistAliasTable 里已经
-// 手工登记过的别名换关键词、原样重新查一遍——没有登记别名、或别名跟原名相同,就不重试;
-// 只重试这一次,不做别名的别名(表里也没有这种链式登记),换别名查到的结果为空就仍然
-// 如实返回原来那份空结果,不伪造候选。
+// (不是排序/打分选不出好结果,是检索关键词本身就没命中任何东西)。Musixmatch 是
+// 例外(国际曲库,英文/罗马化艺名反而更容易命中),不受这条别名兜底针对的问题影响,
+// 但它跟其它四个源共用同一个"全空才兜底"的判断——如果 Musixmatch 已经查到候选,
+// results 就不是空的,不会触发下面的别名重试(该重试本来也没必要,问题不在它身上)。
+// 五个源全空(len(results)==0,不是"候选都被判负分")才触发兜底:用 artistAliasTable
+// 里已经手工登记过的别名换关键词、原样重新查一遍——没有登记别名、或别名跟原名相同,
+// 就不重试;只重试这一次,不做别名的别名(表里也没有这种链式登记),换别名查到的结果
+// 为空就仍然如实返回原来那份空结果,不伪造候选。
 func scoredLyricCandidates(ne neteaseInfo, artist, title, album string, durationSecs float64) []scoredLyricCandidateResult {
 	results := fetchScoredLyricCandidates(ne, artist, title, album, durationSecs)
 	if len(results) > 0 {
@@ -347,15 +352,16 @@ func scoredLyricCandidates(ne neteaseInfo, artist, title, album string, duration
 }
 
 // fetchScoredLyricCandidates 是真正"拿这一个具体的歌手名字符串,去查网易云/QQ/酷狗/
-// LRCLIB 四个源、给查到的候选打分"的实现——从 scoredLyricCandidates 里拆出来,是
+// LRCLIB 五个源、给查到的候选打分"的实现——从 scoredLyricCandidates 里拆出来,是
 // 为了在第一次用原始歌手名查询彻底查无候选时,能原封不动地对已知别名再调用一遍
 // (见 scoredLyricCandidates 上面的注释),而不必把并发抓取/打分这套逻辑抄第二遍。
 func fetchScoredLyricCandidates(ne neteaseInfo, artist, title, album string, durationSecs float64) []scoredLyricCandidateResult {
 	qqURL := qqMusicURL(artist, title, album)
 	qqMid := qqMidFromURL(qqURL)
 	var qqLyr, qqYRC, kugouLyr, kugouYRC, lrclibLyr string
+	var mxLyr, mxYRC, mxTr string
 	var wg sync.WaitGroup
-	wg.Add(3)
+	wg.Add(4)
 	go func() {
 		defer wg.Done()
 		if qqMid != "" {
@@ -374,6 +380,11 @@ func fetchScoredLyricCandidates(ne neteaseInfo, artist, title, album string, dur
 		defer wg.Done()
 		lrclibLyr = lrclibLyric(artist, title, album)
 	}()
+	go func() {
+		defer wg.Done()
+		r := musixmatchLyric(artist, title, durationSecs, features.LyricsTranslationLanguage)
+		mxLyr, mxYRC, mxTr = r.lrc, r.yrc, r.tr
+	}()
 	wg.Wait()
 
 	var candidates []lyricCandidate
@@ -385,6 +396,9 @@ func fetchScoredLyricCandidates(ne neteaseInfo, artist, title, album string, dur
 	}
 	if kugouLyr != "" {
 		candidates = append(candidates, lyricCandidate{source: "kugou", lyrics: kugouLyr, wordTimingYRC: kugouYRC, hasWordTiming: kugouYRC != ""})
+	}
+	if mxLyr != "" {
+		candidates = append(candidates, lyricCandidate{source: "musixmatch", lyrics: mxLyr, wordTimingYRC: mxYRC, hasWordTiming: mxYRC != ""})
 	}
 	if lrclibLyr != "" {
 		candidates = append(candidates, lyricCandidate{source: "lrclib", lyrics: lrclibLyr})
@@ -400,10 +414,17 @@ func fetchScoredLyricCandidates(ne neteaseInfo, artist, title, album string, dur
 			HasWordTiming: c.hasWordTiming,
 			Score:         scoreLyricCandidate(artist, title, durationSecs, c, corroborated[c.source]),
 		}
-		if c.source == "netease" {
-			// 翻译/罗马音目前只有网易云会给(QQ/酷狗这次只接了逐字,不接翻译/罗马音,
-			// 见计划"刻意不做的")。
+		switch c.source {
+		case "netease":
+			// 翻译/罗马音网易云固定给中文;QQ/酷狗这次只接了逐字,不接翻译/罗马音,
+			// 见计划"刻意不做的"。
 			r.LyricsTr, r.LyricsRoma = ne.Trans, ne.Roma
+		case "musixmatch":
+			// Musixmatch 的译文语言是用户在"歌词"设置里配的
+			// LyricsTranslationLanguage(ISO 639-1 代码),不像网易云固定中文——
+			// 见 musixmatchTranslationLRC 注释。没配置/没查到社区翻译时 mxTr 是
+			// 空串,r.LyricsTr 保持空,不影响这条候选本身的原文歌词。
+			r.LyricsTr = mxTr
 		}
 		results = append(results, r)
 	}

@@ -4,7 +4,7 @@ import Foundation
 // 由 collector/main.go:68 拼出来,这台机器上固定是这个路径)。key 是
 // "歌手|歌名|专辑"(跟 collector/enrich.go:93 的 `artist + "|" + title + "|" + album`
 // 完全一致),value 里已经有解析好的歌词——本地数据源靠这个拿歌词,不用在 Swift 里
-// 重新实现一遍网易云/QQ/酷狗/LRCLIB 的匹配逻辑。
+// 重新实现一遍网易云/QQ/酷狗/Musixmatch/LRCLIB 的匹配逻辑。
 public struct EnrichCacheEntry: Decodable {
     let lyrics: String?
     let lyricsTr: String?

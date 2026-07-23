@@ -215,10 +215,10 @@ private struct LyricsSettingsTab: View {
             }
 
             // 拆成两件事:"歌词来源"决定查哪些源(至少留一个,不然歌词解析开着却什么都
-            // 不查毫无意义);"匹配算法"决定从查到的结果里怎么选——智能算法沿用四源
+            // 不查毫无意义);"匹配算法"决定从查到的结果里怎么选——智能算法沿用五源
             // 打分取最高分,顺序优先则完全听用户排的顺序、不比分数。实现在
             // collector/enrich.go 的 pickLyricCandidate,故意不影响"歌词管理"窗口的
-            // 手动搜索(那边永远查全部四源,理由见它的注释)。
+            // 手动搜索(那边永远查全部五源,理由见它的注释)。
             Section {
                 ForEach(LyricsSource.allCases) { source in
                     Toggle(isOn: Binding(
@@ -297,6 +297,23 @@ private struct LyricsSettingsTab: View {
                         }
                     }
                 }
+            }
+
+            Section {
+                Picker(selection: Binding(
+                    get: { features.lyricsTranslationLanguage },
+                    set: { features.lyricsTranslationLanguage = $0; Task { await features.save() } }
+                )) {
+                    ForEach(MusixmatchTranslationLanguage.allCases) { lang in
+                        Text(lang.displayName).tag(lang)
+                    }
+                } label: {
+                    Text(L10n.t("译文语言"))
+                }
+            } header: {
+                Text(L10n.t("译文语言"))
+            } footer: {
+                Text(L10n.t("仅对 Musixmatch 来源生效——网易云音乐/QQ音乐的译文固定是中文。"))
             }
 
             Section("展示") {
@@ -1003,7 +1020,7 @@ private struct AboutSettingsTab: View {
     private var appIcon: NSImage { NSApplication.shared.applicationIconImage }
 
     private var versionString: String {
-        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0"
     }
 
     var body: some View {
@@ -1022,6 +1039,13 @@ private struct AboutSettingsTab: View {
                         .font(.callout)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
+                    // Sparkle 自己处理"检查中/已是最新/发现新版本"这几种状态的 UI
+                    // 展示(SPUStandardUserDriver 的标准弹窗),不需要自己维护 loading
+                    // 状态或者判断结果再手动弹 alert。
+                    Button(L10n.t("检查更新")) {
+                        SparkleUpdaterManager.shared.checkForUpdates()
+                    }
+                    .buttonStyle(.link)
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 8)
