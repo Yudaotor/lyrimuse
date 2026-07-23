@@ -146,9 +146,13 @@ jobs:
         env:
           SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
         run: |
-          SIGN_UPDATE=$(find .build/artifacts/sparkle -type f -name sign_update | head -1)
+          # lyrimuse/build.sh 一开头就 `cd "$(dirname "$0")"` 切到 lyrimuse/ 目录,
+          # 所以 swift build 的 .build/ 产物实际生成在 lyrimuse/.build/ 下——不是
+          # 这个 step 默认所在的仓库根目录。第一次真实 tag push(而不是手动 dispatch
+          # 的 dry run,那条路径这一步整个被上面 if 门控跳过)才暴露这个路径写错的 bug。
+          SIGN_UPDATE=$(find lyrimuse/.build/artifacts/sparkle -type f -name sign_update | head -1)
           if [ -z "$SIGN_UPDATE" ]; then
-            echo "sign_update not found under .build/artifacts/sparkle -- did the build step resolve the Sparkle SPM dependency?" >&2
+            echo "sign_update not found under lyrimuse/.build/artifacts/sparkle -- did the build step resolve the Sparkle SPM dependency?" >&2
             exit 1
           fi
           chmod +x "$SIGN_UPDATE"
