@@ -13,6 +13,12 @@ struct OnboardingView: View {
     @Environment(\.dismissWindow) private var dismissWindow
     @State private var step = 0
     @State private var automationStatus: MusicAutomationPermissionStatus = .notDetermined
+    // 点"请求权限"之后到系统弹窗真正有结果之前的等待状态——见
+    // MusicAutomationPermission.requestWithTimeout 注释,这一步不能同步阻塞主线程。
+    @State private var isRequestingAutomation = false
+    // 等了 8 秒还没有结果(可能系统弹窗被晾在一边没处理,也可能就是那个已知的挂起
+    // bug 撞上了)——提前亮出"打开系统设置"这条备选路径,不用死等这次请求。
+    @State private var automationRequestTimedOut = false
     // collector 常驻服务是否真的在跑——这一步是"软强制"的必经步骤:锁住下一步按钮,
     // 但仍然可以直接关掉整个引导窗口跳过,不禁用/隐藏关闭按钮。
     @State private var collectorRunning = false
@@ -59,6 +65,20 @@ struct OnboardingView: View {
             automationStatus = MusicAutomationPermission.check(askIfNeeded: false)
             collectorRunning = CollectorServiceManager.isRunning
         }
+        // 用户点"请求权限"之后可能会切到系统设置面板手动处理(尤其是等超时了、
+        // 走"打开系统设置"这条备选路径的时候),切回来时重新读一次最新状态——不然
+        // 界面会一直卡在切出去之前的旧状态,像是"我明明点了允许,这里怎么还没变"。
+        // 顺带清掉 isRequestingAutomation/automationRequestTimedOut:如果已经确定
+        // 不再是 notDetermined,就没有理由继续显示"正在等待"这套 UI——不这样做的话,
+        // 上面状态文字已经变成"已授权"了,下面却还卡在超时提示/转圈,两处互相矛盾。
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            let latest = MusicAutomationPermission.check(askIfNeeded: false)
+            automationStatus = latest
+            if latest != .notDetermined {
+                isRequestingAutomation = false
+                automationRequestTimedOut = false
+            }
+        }
         // 不管走没走完(包括直接点红绿灯关掉窗口)都算"已经引导过一次"——这里没有任何
         // 重新打开的入口,关掉就是关掉了。
         .onDisappear { settings.hasCompletedOnboarding = true }
@@ -97,7 +117,27 @@ struct OnboardingView: View {
                     .foregroundStyle(automationStatusIconColor)
                 Text(automationStatusCaption)
                 Spacer()
-                Button(automationActionTitle) { handleAutomationAction() }
+                if isRequestingAutomation {
+                    ProgressView().controlSize(.small)
+                } else {
+                    Button(automationActionTitle) { handleAutomationAction() }
+                }
+            }
+            if isRequestingAutomation {
+                if automationRequestTimedOut {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(L10n.t("这次请求耗时有点久——如果你已经看到系统弹窗，请去处理它；找不到弹窗的话，可以直接去系统设置里手动开启。"))
+                        Button(L10n.t("打开系统设置")) {
+                            NSWorkspace.shared.open(MusicAutomationPermission.systemSettingsURL)
+                        }
+                    }
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                } else {
+                    Text(L10n.t("请查看屏幕上弹出的系统授权对话框，选择「允许」。"))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
         }
     }
@@ -181,9 +221,28 @@ struct OnboardingView: View {
 
     private func handleAutomationAction() {
         if automationStatus == .notDetermined {
-            automationStatus = MusicAutomationPermission.check(askIfNeeded: true)
+            requestAutomationPermission()
         } else {
             NSWorkspace.shared.open(MusicAutomationPermission.systemSettingsURL)
+        }
+    }
+
+    // 见 MusicAutomationPermission.requestWithTimeout 注释——这一步不能直接在按钮
+    // 点击回调里同步调用,那样会把整个 App UI 冻结、表现成"点了没反应"。超时(返回
+    // nil)时 isRequestingAutomation 故意保持 true、不重新允许点"请求权限":原来那次
+    // 检查很可能还在后台跑着,不该让用户再并发触发第二次系统弹窗请求,只亮出"打开
+    // 系统设置"这条不冲突的备选路径。
+    private func requestAutomationPermission() {
+        isRequestingAutomation = true
+        automationRequestTimedOut = false
+        Task {
+            if let status = await MusicAutomationPermission.requestWithTimeout() {
+                automationStatus = status
+                isRequestingAutomation = false
+                automationRequestTimedOut = false
+            } else {
+                automationRequestTimedOut = true
+            }
         }
     }
 

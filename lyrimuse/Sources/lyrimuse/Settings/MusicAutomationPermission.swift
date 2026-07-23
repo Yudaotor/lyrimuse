@@ -66,4 +66,31 @@ enum MusicAutomationPermission {
     static var systemSettingsURL: URL {
         URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Automation")!
     }
+
+    // 2026-07-23 实测坐实:全新安装(TCC 对这个 App 完全没有历史记录)的机器上,
+    // OnboardingView/SettingsView 直接在按钮点击回调里同步调 check(askIfNeeded: true)
+    // 会把整个 App UI 冻结、表现成"点了没反应"——这不是这个 App 自己写错了什么,是
+    // AEDeterminePermissionToAutomateTarget 本身有据可查的系统级已知问题:在主线程
+    // 调用时有时会直接永久挂起(SpamSieve 也踩过同一个坑,见开发时调研到的
+    // Michael Tsai 博客记录),官方建议是挪到后台线程调,并且要接受"结果可能压根
+    // 不会来"这个现实,不能让 UI 死等。
+    //
+    // 这里用 withTaskGroup 做"真正的检查 vs 超时"两个子任务的竞速:谁先完成就用谁
+    // 的结果,超时分支赢的话返回 nil(代表"还不确定",不是"已拒绝",不能瞎猜)。
+    // group.cancelAll() 对赢了比赛的另一个任务是"尽力而为"——如果是那个真正卡在
+    // C API 里的检查任务被取消,Swift 的协作式取消对不认取消信号的同步 C 调用没有
+    // 意义,那个线程依然会在后台陪跑下去,只是这次调用不再等它,调用方应该在后续别的
+    // 时机(比如.onAppear、App重新变为前台)用 askIfNeeded:false 再读一次最新状态，
+    // 覆盖"用户后来自己去系统设置手动开了、但这次请求已经放弃等待"这种情况。
+    static func requestWithTimeout(seconds: Double = 8) async -> MusicAutomationPermissionStatus? {
+        await withTaskGroup(of: MusicAutomationPermissionStatus?.self) { group in
+            group.addTask { check(askIfNeeded: true) }
+            group.addTask {
+                try? await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+                return nil
+            }
+            defer { group.cancelAll() }
+            return await group.next() ?? nil
+        }
+    }
 }

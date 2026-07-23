@@ -143,6 +143,16 @@ cat > "$APP_DIR/Contents/Info.plist" <<PLIST
     <true/>
     <key>NSHighResolutionCapable</key>
     <true/>
+    <!-- 2026-07-23 实测坐实：这个 key 缺失时,OnboardingView 第一步"请求权限"按钮
+         调 MusicAutomationPermission.check(askIfNeeded: true)在全新安装的机器上
+         (TCC 数据库对这个 App 完全没有历史记录)系统直接静默拒绝弹出授权对话框、
+         点了没反应——这台开发机上一直正常是因为本机 TCC 数据库里早就攒下了这个
+         App 改名前后各个身份的历史授权记录，把"首次全新请求"这条路径的真实缺陷
+         盖住了，只有在没有任何历史记录的全新机器上才会暴露。Apple 官方要求任何
+         要发 Apple Event 控制别的 App 的进程,必须在 Info.plist 里声明这个 key
+         说明用途,这段文字会原样显示在系统弹窗里,不经过 App 自己的 L10n 机制。 -->
+    <key>NSAppleEventsUsageDescription</key>
+    <string>Lyrimuse needs to send Apple Events to Music.app to read the currently playing track and show synced lyrics.</string>
     <key>SUFeedURL</key>
     <string>https://github.com/Yudaotor/lyrimuse/releases/latest/download/appcast.xml</string>
     <key>SUPublicEDKey</key>

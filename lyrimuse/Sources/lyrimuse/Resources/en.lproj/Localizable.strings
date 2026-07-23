@@ -55,6 +55,8 @@
 "应用" = "Apply";
 "正数=提前显示,负数=延后显示" = "Positive = show earlier, negative = show later";
 "请求权限" = "Request Access";
+"请查看屏幕上弹出的系统授权对话框，选择「允许」。" = "Check for a system permission dialog on screen and click \"Allow\".";
+"这次请求耗时有点久——如果你已经看到系统弹窗，请去处理它；找不到弹窗的话，可以直接去系统设置里手动开启。" = "This is taking a while — if you see a system dialog, go handle it; if you don't, you can enable this directly in System Settings instead.";
 "打开系统设置" = "Open System Settings";
 "权限" = "Permissions";
 "Apple Music 自动化" = "Apple Music Automation";

@@ -755,6 +755,10 @@ private struct GeneralSettingsTab: View {
     // 不是 @Published,系统层面的权限变化(比如用户自己去系统设置里手动改)不会主动
     // 推送通知回来,只能在这个页面被看到的时候被动刷新一次。
     @State private var automationStatus: MusicAutomationPermissionStatus = .notDetermined
+    // 见 OnboardingView 里同名属性的注释——请求权限这一步不能同步阻塞主线程,这两个
+    // 状态管这次请求的"正在等待/等了太久还没结果"两档展示。
+    @State private var isRequestingAutomation = false
+    @State private var automationRequestTimedOut = false
     // collector 常驻服务是否真的在跑——跟 automationStatus 同样的道理，只在 .onAppear
     // 和每次操作后重新查一次，不是 @Published:这个状态由 launchd 管，App 自己不会主动
     // 收到"进程挂了"这类通知，只能被动查。
@@ -784,7 +788,27 @@ private struct GeneralSettingsTab: View {
                             .foregroundStyle(automationStatusIconColor)
                     }
                     Spacer()
-                    Button(automationActionTitle) { handleAutomationAction() }
+                    if isRequestingAutomation {
+                        ProgressView().controlSize(.small)
+                    } else {
+                        Button(automationActionTitle) { handleAutomationAction() }
+                    }
+                }
+                if isRequestingAutomation {
+                    if automationRequestTimedOut {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(L10n.t("这次请求耗时有点久——如果你已经看到系统弹窗，请去处理它；找不到弹窗的话，可以直接去系统设置里手动开启。"))
+                            Button(L10n.t("打开系统设置")) {
+                                NSWorkspace.shared.open(MusicAutomationPermission.systemSettingsURL)
+                            }
+                        }
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    } else {
+                        Text(L10n.t("请查看屏幕上弹出的系统授权对话框，选择「允许」。"))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                 }
             } header: {
                 Text(L10n.t("权限"))
@@ -792,6 +816,17 @@ private struct GeneralSettingsTab: View {
                 Text(L10n.t("Lyrimuse 靠这个权限读取 Apple Music 当前播放的歌曲信息——没有它，悬浮歌词/灵动岛都无法显示任何歌词内容。"))
             }
             .onAppear { automationStatus = MusicAutomationPermission.check(askIfNeeded: false) }
+            // 见 OnboardingView 里同一处的注释:用户可能切去系统设置手动处理,切回来
+            // 要重新读一次最新状态,并在已经不是 notDetermined 时清掉"正在等待"这套
+            // UI,不然状态文字已经变了,下面却还卡在转圈/超时提示。
+            .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+                let latest = MusicAutomationPermission.check(askIfNeeded: false)
+                automationStatus = latest
+                if latest != .notDetermined {
+                    isRequestingAutomation = false
+                    automationRequestTimedOut = false
+                }
+            }
 
             // collector(读播放状态、抓歌词/封面写本地缓存的后台服务)跟"权限"那个
             // Section 一样用图标+文案+按钮而不是简单 Toggle——需要展示"装了但没跑
@@ -941,9 +976,26 @@ private struct GeneralSettingsTab: View {
 
     private func handleAutomationAction() {
         if automationStatus == .notDetermined {
-            automationStatus = MusicAutomationPermission.check(askIfNeeded: true)
+            requestAutomationPermission()
         } else {
             NSWorkspace.shared.open(MusicAutomationPermission.systemSettingsURL)
+        }
+    }
+
+    // 见 OnboardingView 里同名函数的注释——不能在按钮点击回调里同步调用,那样会把
+    // 整个 App UI 冻结、表现成"点了没反应"(AEDeterminePermissionToAutomateTarget
+    // 在主线程调用有据可查的"可能永久挂起"系统级已知问题)。
+    private func requestAutomationPermission() {
+        isRequestingAutomation = true
+        automationRequestTimedOut = false
+        Task {
+            if let status = await MusicAutomationPermission.requestWithTimeout() {
+                automationStatus = status
+                isRequestingAutomation = false
+                automationRequestTimedOut = false
+            } else {
+                automationRequestTimedOut = true
+            }
         }
     }
 
