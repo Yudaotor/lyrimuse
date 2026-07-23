@@ -1,7 +1,7 @@
 import Foundation
 import os
 
-private let logger = Logger(subsystem: "com.chenyuhao.lyrimuse", category: "config-store")
+private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "config-store")
 
 // 推送提醒目前支持的平台——绝大多数都是"群机器人 webhook"这个模子,一个 URL、POST
 // 一份 JSON 就能收到消息(Server酱是个例外,走表单编码,见 collector/notify.go 顶部

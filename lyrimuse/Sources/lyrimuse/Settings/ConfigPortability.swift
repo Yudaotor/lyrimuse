@@ -5,7 +5,7 @@ import OSLog
 // 导入路径里每一步(JSON 解析/写 config.json/写 features.json)失败都只记日志、不
 // 中断后续步骤(见下面 importData 内部注释)——这样才能区分"整个没解析出来"和"部分
 // 文件写失败"。日志里绝不记文件内容本身(config.json 里就是原始 token)。
-private let logger = Logger(subsystem: "com.chenyuhao.lyrimuse", category: "config-portability")
+private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "config-portability")
 
 // 导入/导出配置——方便换电脑:导出打包 collector 的 config.json(账号 token/密钥原文都在
 // 里面)+ features.json(功能开关/歌词源排序等)+ App 自己的 UserDefaults(np: 前缀 +

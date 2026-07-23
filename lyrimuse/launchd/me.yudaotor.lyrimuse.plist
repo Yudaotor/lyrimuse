@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>com.chenyuhao.lyrimuse</string>
+    <string>me.yudaotor.lyrimuse</string>
     <key>ProgramArguments</key>
     <array>
         <string>/Applications/Lyrimuse.app/Contents/MacOS/lyrimuse</string>
@@ -14,10 +14,12 @@
          服务——KeepAlive=true 会导致退出后立刻被拉起,体验是错的。这份 plist 平时不需要
          手动装,由 App 菜单里的"开机启动"开关通过 Settings/LoginItemManager.swift 自动
          装到 ~/Library/LaunchAgents/ 并 launchctl bootstrap;这份仓库里的版本只是留档
-         参考,不是给人手动 cp 过去用的。 -->
+         参考,不是给人手动 cp 过去用的。下面两条日志路径里的用户主目录同理是运行时按
+         当前登录用户动态生成的(FileManager.homeDirectoryForCurrentUser),这里写的是
+         占位符,不代表某个具体的人。 -->
     <key>StandardOutPath</key>
-    <string>/Users/chenyuhao/Library/Logs/lyrimuse.log</string>
+    <string>/Users/USERNAME/Library/Logs/lyrimuse.log</string>
     <key>StandardErrorPath</key>
-    <string>/Users/chenyuhao/Library/Logs/lyrimuse.log</string>
+    <string>/Users/USERNAME/Library/Logs/lyrimuse.log</string>
 </dict>
 </plist>

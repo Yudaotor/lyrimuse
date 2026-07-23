@@ -6,7 +6,7 @@ import OSLog
 // 这个 logger 只记"发生了哪一步、失败原因是什么"，绝不记 api_key/secret/session key
 // 这些凭据原文本身(跟 ConfigStore.swift 顶部同一条纪律)——DiagnosticsExporter 导出的
 // "App Log"那节靠它才能看到这条连接流程实际发生过什么。
-private let logger = Logger(subsystem: "com.chenyuhao.lyrimuse", category: "lastfm-connect")
+private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "lastfm-connect")
 
 // "连接 Last.fm"自动化流程——Last.fm 经典 auth API 没有回调机制:拿到一次性 token 之后,
 // 必须等用户自己在浏览器里点完"Yes, allow access",程序才能换永久 session key(见

@@ -1,7 +1,7 @@
 import Foundation
 import os
 
-private let logger = Logger(subsystem: "com.chenyuhao.lyrimuse", category: "collector-control")
+private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "collector-control")
 
 // 统一收敛"改完共享文件、踢一脚重启 collector 让它重新读盘"这件事——EnrichCacheStore
 // (歌词管理保存/删除)和 FeatureSettingsStore(功能开关保存)都要做同一件事,不各自

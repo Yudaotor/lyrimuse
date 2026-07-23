@@ -1,7 +1,7 @@
 import Foundation
 import os
 
-private let logger = Logger(subsystem: "com.chenyuhao.lyrimuse", category: "lyrics-manager")
+private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "lyrics-manager")
 
 // 歌词管理窗口的数据层。跟 EnrichCacheReader(单条只读查询)不同,这里要读写整个缓存
 // 文件——collector(Go)是这个文件的唯一真源,自己在内存里维护整个 map,每次存盘都是

@@ -12,7 +12,7 @@ import Foundation
 final class LoginItemManager {
     static let shared = LoginItemManager()
 
-    private let label = "com.chenyuhao.lyrimuse"
+    private let label = "me.yudaotor.lyrimuse"
     // LaunchAgent 应该始终指向 build.sh 真正安装的位置(跟 collector 的 bin/collector
     // 同一个约定),不是当前运行进程的路径——开发时用 swift run/直接跑 .build/debug 的
     // 那次,进程路径是临时调试目录,不该拿来当"以后开机启动"的目标。优先信任当前正在

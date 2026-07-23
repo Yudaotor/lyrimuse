@@ -3,7 +3,7 @@ import Combine
 import LyrimuseCore
 import os
 
-private let logger = Logger(subsystem: "com.chenyuhao.lyrimuse", category: "coordinator")
+private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "coordinator")
 
 // 目前只有本地 media-control 一个数据源,这个类退化成 LocalPlaybackSource 的一层薄
 // 转发,但还是留着这一层不直接让 UI 碰 LocalPlaybackSource.shared——万一以后又要接

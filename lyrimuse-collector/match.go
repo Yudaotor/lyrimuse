@@ -10,8 +10,6 @@ import (
 	"strconv"
 	"strings"
 	"unicode"
-
-	"github.com/liuzl/gocc"
 )
 
 var lrcTimestampRe = regexp.MustCompile(`\[\d{1,2}:\d{2}[.:]\d{1,3}\]`)
@@ -106,7 +104,7 @@ func lastLRCTimestampSecs(lrc string) (float64, bool) {
 
 // lyricCandidate 是某个歌词源解析出的一份候选结果,连同来源标记。
 type lyricCandidate struct {
-	source        string // "netease" | "qq" | "kugou" | "lrclib"
+	source        string // "netease" | "qq" | "kugou" | "musixmatch" | "lrclib"
 	lyrics        string
 	wordTimingYRC string // 该候选归一化成 YRCParser 语法后的逐字数据,没有则空串(netease/qq/kugou 都可能有,lrclib 恒无)
 	hasWordTiming bool   // = wordTimingYRC != "",构造候选时直接算好,见 enrich.go
@@ -162,8 +160,10 @@ func corroboratedEndings(candidates []lyricCandidate) map[string]bool {
 //     的常见场景里逆转取胜,但一份逐字数据本身撬不动两档以上的时长证据差距,不会让"有
 //     逐字但内容对不上"反而压过"内容明显更吻合"的候选。
 //  3. 来源优先级:网易云能带翻译/罗马音这类其它源没有的增值内容,同等时长可信度下优先
-//     选它，其次QQ,再其次酷狗/LRCLIB——避免"纯按行数比大小"让内容切分方式恰好更碎的
-//     源意外挤掉本来完全合格、还带增值内容的网易云结果。
+//     选它，其次QQ,再其次酷狗/Musixmatch/LRCLIB——避免"纯按行数比大小"让内容切分方式
+//     恰好更碎的源意外挤掉本来完全合格、还带增值内容的网易云结果。Musixmatch 排在酷狗
+//     之后、LRCLIB 之前:它是非官方逆向接口(不如酷狗这个已用了很久的既有源稳定),但
+//     能带逐字时间轴+可选语言译文,比只有纯逐行歌词的 LRCLIB 更有信息量。
 //  4. 内容行数只做非常次要的参考(封顶,避免行数虚高的候选靠行数堆分反超时长/来源都更
 //     可信的候选)。
 func scoreLyricCandidate(localArtist, localTitle string, durationSecs float64, c lyricCandidate, corroborated bool) int {
@@ -210,6 +210,8 @@ func scoreLyricCandidate(localArtist, localTitle string, durationSecs float64, c
 		score += 30
 	case "kugou":
 		score += 20
+	case "musixmatch":
+		score += 15
 	case "lrclib":
 		score += 10
 	}
@@ -365,35 +367,16 @@ func isNeteaseImpersonatorRidden(artist string) bool {
 	return neteaseImpersonatorRiddenArtists[strings.TrimSpace(artist)]
 }
 
-// t2sConverter 是 OpenCC(经 gocc 移植)的繁转简转换器,进程启动时初始化一次——词典数据
-// 通过 gocc 包自己的 go:embed 编译进二进制,不依赖运行时外部文件,这台机器/任何机器上
-// 跑起来行为都一样。
-//
-// 用 OpenCC 官方词库(单字+多字词组两级)而不是手工维护的单字对照表,是因为后者覆盖面
-// 依赖"撞见一个字才补一个字"的被动积累,容易漏转导致搜索关键词转换等于没转换、四个源
-// 全部搜不到候选。换依赖的代价(collector 从零第三方依赖变成有 3 个间接依赖、多约 1MB
-// 内嵌词典体积)权衡过后可以接受。
-var t2sConverter = func() *gocc.OpenCC {
-	cc, err := gocc.New("t2s")
-	if err != nil {
-		return nil
-	}
-	return cc
-}()
-
 // toSimplified 把繁体字/词转成简体——用于统一搜索关键词/本地比较字符串的书写形式,不是
-// 唯一权威判定(繁简本身不影响身份判定,查不到就原样返回,是安全默认)。转换失败(理论上
-// 只有词典数据本身损坏才会发生,几乎不可能)时原样返回输入,维持"识别不出/出错就不改动"
-// 这个一贯设计。
+// 唯一权威判定(繁简本身不影响身份判定,查不到就原样返回,是安全默认)。
+//
+// 用 OpenCC 官方词库(单字+多字词组两级,见 t2s.go)而不是手工维护的单字对照表,是因为
+// 后者覆盖面依赖"撞见一个字才补一个字"的被动积累,容易漏转导致搜索关键词转换等于没转换、
+// 五个源全部搜不到候选。实现细节(词典解析/最长前缀匹配算法)见 t2s.go 顶部注释——那里
+// 曾经是通过 github.com/liuzl/gocc 引入的,因为它间接依赖的 cedar-go 是 GPL-2.0-only、
+// 跟本项目 GPLv3 许可证不兼容,换成了自带同一份 OpenCC 词典数据的零依赖实现。
 func toSimplified(s string) string {
-	if t2sConverter == nil {
-		return s
-	}
-	out, err := t2sConverter.Convert(s)
-	if err != nil {
-		return s
-	}
-	return out
+	return toSimplifiedT2S(s)
 }
 
 // albumStop are filler words ignored when comparing album names by shared tokens.

@@ -50,7 +50,7 @@ enum DiagnosticsExporter {
         lines.append("Push notification configured: \(config.pushMissingHint() == nil)")
         lines.append("")
 
-        lines.append("== App Log (last 24h, subsystem com.chenyuhao.lyrimuse) ==")
+        lines.append("== App Log (last 24h, subsystem me.yudaotor.lyrimuse) ==")
         lines.append(contentsOf: recentAppLogLines())
         lines.append("")
 
@@ -60,7 +60,7 @@ enum DiagnosticsExporter {
         return lines.joined(separator: "\n")
     }
 
-    // 只查这个 App 自己的 subsystem("com.chenyuhao.lyrimuse",全部 Logger 调用点共用同一个
+    // 只查这个 App 自己的 subsystem("me.yudaotor.lyrimuse",全部 Logger 调用点共用同一个
     // 值),不是整个系统日志——不需要额外权限,读的也只是自己写过的东西。scope 用
     // .system 而不是 .currentProcessIdentifier:后者只能看到"这次启动之后"的记录,诊断
     // "上次为什么崩了/上次启动出的问题"这种场景必须能看到上一次进程生命周期里的记录。
@@ -69,7 +69,7 @@ enum DiagnosticsExporter {
             return ["(could not open log store)"]
         }
         let position = store.position(date: Date().addingTimeInterval(-Double(hours) * 3600))
-        let predicate = NSPredicate(format: "subsystem == %@", "com.chenyuhao.lyrimuse")
+        let predicate = NSPredicate(format: "subsystem == %@", "me.yudaotor.lyrimuse")
         guard let entries = try? store.getEntries(at: position, matching: predicate) else {
             return ["(could not read log entries)"]
         }

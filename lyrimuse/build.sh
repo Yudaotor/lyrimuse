@@ -14,6 +14,12 @@ set -euo pipefail
 
 cd "$(dirname "$0")" # lyrimuse/
 APP_NAME="Lyrimuse"
+# X.Y.Z 语义化版本——检查更新功能(UpdateChecker.swift)靠 CFBundleShortVersionString
+# 跟 GitHub Release 的 tag(去掉 v 前缀)比大小,必须是干净的三段数字,不能再是本地
+# 手动构建这边一直硬编码的"1.0"。CI(release.yml)在真正打 tag 触发时会传入
+# LYRIMUSE_VERSION 环境变量(从 tag 解析出的真实版本号);本地手动跑不设这个变量,
+# 用占位默认值——本地构建本来就不是要发布的正式版本,不需要精确。
+APP_VERSION="${LYRIMUSE_VERSION:-1.0.0}"
 # 装到 /Applications/ 而不是仓库自己的 bin/ 里(2026-07-18 当天改的——一开始装在 bin/
 # 下,用户把它拖/拷到了 /Applications/ 自己启动,导致真正在跑的是一份没同步过后续几次
 # 修复的旧拷贝,重新构建/重启了好几次都没反映到用户实际在看的那个进程上,排查了很久才
@@ -30,7 +36,7 @@ BIN="$APP_DIR/Contents/MacOS/lyrimuse"
 # 迁移步骤),不再需要保留那个历史包袱,直接统一成标准写法更清爽。副作用:改这两个
 # 字符串意味着 TCC 会认成一个新 App,自动化权限(控制 Music.app 播放)会重新弹一次
 # 系统授权对话框——这是这次改名一次性的代价,同意一次之后往后都不会再弹。
-LABEL="com.chenyuhao.lyrimuse"
+LABEL="me.yudaotor.lyrimuse"
 RELEASE_DIR=".build/release"
 
 echo "==> building (release)"
@@ -57,6 +63,42 @@ cp AppIcon.icns "$APP_DIR/Contents/Resources/AppIcon.icns"
 # collector 装在 Resources/ 而不是 MacOS/——那里是 CFBundleExecutable 指向的主执行文件，
 # collector 是被 launchd 单独拉起的后台辅助二进制，不是这个 App 自己的入口。
 cp "$RELEASE_DIR/collector" "$APP_DIR/Contents/Resources/collector"
+
+# 2026-07-23:检查更新改接 Sparkle(见 UpdateChecker.swift 的替代——那份手写的
+# "查 GitHub API+弹 Alert"逻辑已删,改用这个 macOS 生态里事实标准的自动更新框架)。
+# `swift build` 不会自动把这个 SPM 二进制依赖(binaryTarget,一个预编译的
+# Sparkle.xcframework)嵌入 .app bundle,要手动完成三件事,踩坑记录见几个真实项目的
+# Sparkle 集成笔记(比如 DanieliusIsiunas/drobu 的 sparkle-macos-gotchas.md):
+# 1) 用 ditto 而不是 cp -R 拷贝——Sparkle.framework 内部用了符号链接
+#    (Versions/Current -> B),cp -R 会把符号链接拆开变成实体拷贝,进而破坏代码签名。
+# 2) 给主执行文件加 @executable_path/../Frameworks 这个 rpath,不然运行时 dyld
+#    找不到这个 framework。
+# 3) inside-out 签名:framework 内部的 Autoupdate/Updater.app/两个 XPC service 各自
+#    先签,再签 framework 整体本身——不能用 --deep,也不要给这些子组件传
+#    --entitlements(只有最外层 .app 才需要)。下面这行的最终 `codesign -s - --force
+#    --identifier "$LABEL" "$APP_DIR"` 本来就没加 --deep,不会覆盖这里已经各自
+#    签过的 Sparkle 组件。
+#
+# 用 find 动态定位 xcframework 里的 slice 路径(而不是硬编码 macos-arm64_x86_64
+# 这个字符串)——SPM/Sparkle 版本更新时这层目录名可能变,find 对这类改动更稳。
+SPARKLE_FW_SRC=$(find .build/artifacts/sparkle -type d -name "Sparkle.framework" -path "*/Sparkle.xcframework/*" 2>/dev/null | head -1)
+if [ -z "$SPARKLE_FW_SRC" ]; then
+  echo "!! Sparkle.framework not found under .build/artifacts — did 'swift package resolve' run?" >&2
+  exit 1
+fi
+mkdir -p "$APP_DIR/Contents/Frameworks"
+rm -rf "$APP_DIR/Contents/Frameworks/Sparkle.framework"
+ditto "$SPARKLE_FW_SRC" "$APP_DIR/Contents/Frameworks/Sparkle.framework"
+# -add_rpath 在这个 rpath 已经存在时会报错退出(比如第二次跑这个脚本)——用
+# otool -l 先查一遍,已经有了就跳过,保持这一步幂等。
+if ! otool -l "$BIN" | grep -q "@executable_path/../Frameworks"; then
+  install_name_tool -add_rpath "@executable_path/../Frameworks" "$BIN"
+fi
+find "$APP_DIR/Contents/Frameworks/Sparkle.framework" \
+    \( -name "*.xpc" -o -name "*.app" -o -name "Autoupdate" \) \
+    -exec codesign --force --sign - {} \;
+codesign --force --sign - "$APP_DIR/Contents/Frameworks/Sparkle.framework"
+echo "    Sparkle.framework embedded + signed"
 # 2026-07-21:本地化文案 + 状态栏图标直接从源码拷进 Contents/Resources/，不再依赖
 # SwiftPM 的 Bundle.module 访问器——原因见下面这段注释和 L10n.swift/MenuBarMenu.swift
 # 顶部注释。AppIcon.icns 已经证明 Contents/Resources/ 这个位置对 codesign 完全安全。
@@ -88,9 +130,9 @@ cat > "$APP_DIR/Contents/Info.plist" <<PLIST
     <key>CFBundleDisplayName</key>
     <string>Lyrimuse</string>
     <key>CFBundleVersion</key>
-    <string>1.0</string>
+    <string>${APP_VERSION}</string>
     <key>CFBundleShortVersionString</key>
-    <string>1.0</string>
+    <string>${APP_VERSION}</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleIconFile</key>
@@ -100,6 +142,12 @@ cat > "$APP_DIR/Contents/Info.plist" <<PLIST
     <key>LSUIElement</key>
     <true/>
     <key>NSHighResolutionCapable</key>
+    <true/>
+    <key>SUFeedURL</key>
+    <string>https://github.com/Yudaotor/lyrimuse/releases/latest/download/appcast.xml</string>
+    <key>SUPublicEDKey</key>
+    <string>xTGKkA2z7gn42F0oyb6Qe4YyL+G/RTsKu5jvvsfytTE=</string>
+    <key>SUEnableAutomaticChecks</key>
     <true/>
 </dict>
 </plist>

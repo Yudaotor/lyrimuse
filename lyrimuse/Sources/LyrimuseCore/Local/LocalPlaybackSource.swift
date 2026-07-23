@@ -2,7 +2,7 @@ import Foundation
 import Combine
 import os
 
-private let logger = Logger(subsystem: "com.chenyuhao.lyrimuse", category: "local")
+private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "local")
 
 // 本地播放数据源:音乐本来就在这台 Mac 上放,没道理还要绕一圈公网——播放位置/进度靠
 // AppleScript 本地轮询问 Music.app 本身要(零网络、零延迟,见 MediaControlClient.swift),
