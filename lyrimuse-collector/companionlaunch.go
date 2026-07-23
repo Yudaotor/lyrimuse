@@ -24,9 +24,32 @@ import (
 // 请求产生任何交集。
 var lastMusicAppRunning bool
 
+// companionLaunchInterval 是专门检测 Music.app 启动状态用的轮询间隔——不能复用
+// poller.go 的 pollInterval(5 秒)。实测坐实:真的用 Cmd-Q/Dock 菜单退出 Music.app
+// 再重新打开,从进程消失到重新出现整个窗口只有 1 秒左右,5 秒轮询大概率会两次采样都
+// 落在"已经重新在跑"这一侧,完全跳过中间那个短暂的"没在跑"状态,导致这次真实的跳变
+// 被彻底漏检(不是偶发,是复现过的真实 bug)。1 秒本身也不能 100% 保证覆盖所有场景,
+// 但 pgrep 这个检测本身开销极小,加密到 1 秒不会有任何可感知的资源代价,换来的是
+// 覆盖绝大多数真实使用节奏的可靠性。
+const companionLaunchInterval = 1 * time.Second
+
+// startCompanionLaunchWatcher 独立于 poller.go 的主轮询跑,由 run() 用单独的
+// goroutine 启动,ctx 取消时退出。
+func startCompanionLaunchWatcher(ctx context.Context) {
+	ticker := time.NewTicker(companionLaunchInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			checkCompanionLaunch()
+		}
+	}
+}
+
 // checkCompanionLaunch 检测 Music.app 是否发生了"从没运行变成运行"这个状态跳变,
-// 跳变发生且用户开着这个开关时,启动/唤起 Lyrimuse.app。跟 poller.go 的 poll() 同一个
-// 节奏调用(pollInterval,目前 5 秒),不需要单独起一个定时器。
+// 跳变发生且用户开着这个开关时,启动/唤起 Lyrimuse.app。
 func checkCompanionLaunch() {
 	running := isMusicAppRunning()
 	justLaunched := running && !lastMusicAppRunning

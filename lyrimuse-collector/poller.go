@@ -796,7 +796,6 @@ func (p *poller) applyBridgeResult(r bridgeFetchResult) {
 // track is playing; treat a lone null as a glitch (keep the last state), and
 // only declare playback stopped after a few consecutive nulls.
 func (p *poller) poll() {
-	checkCompanionLaunch()
 	if state, ok := getState(p.ctx); ok {
 		if len(state) == 0 { // "null" — nothing playing, or a transient read glitch
 			p.nullStreak++
@@ -856,6 +855,7 @@ func run(ctx context.Context, cfg *config, lb *lbClient) error {
 	}
 	enrichNotify = make(chan struct{}, 1) // 后台 enrich 完成后触发一次重推
 	p.poll()                              // render immediately, don't wait a full interval on startup
+	go startCompanionLaunchWatcher(ctx)   // 独立节奏,见 companionlaunch.go 顶部注释
 
 	ticker := time.NewTicker(pollInterval)
 	defer ticker.Stop()
