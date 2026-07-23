@@ -16,7 +16,7 @@ import KeyboardShortcuts
 // 参数——唯一的例外是某个开关因为对应账号没连好被禁用时,旁边会有个跳转按钮,直接跳到
 // 侧边栏里对应的那一个账号行,这就需要 SettingsView 把跳转能力下传给它。
 enum SettingsTab: Hashable, CaseIterable, Identifiable {
-    case lyrics, appearance, general, about
+    case lyrics, appearance, shortcuts, general, about
 
     var id: Self { self }
 
@@ -24,6 +24,7 @@ enum SettingsTab: Hashable, CaseIterable, Identifiable {
         switch self {
         case .lyrics: return L10n.t("歌词")
         case .appearance: return L10n.t("外观")
+        case .shortcuts: return L10n.t("快捷键")
         case .general: return L10n.t("通用")
         case .about: return L10n.t("关于")
         }
@@ -33,6 +34,7 @@ enum SettingsTab: Hashable, CaseIterable, Identifiable {
         switch self {
         case .lyrics: return "text.quote"
         case .appearance: return "paintbrush"
+        case .shortcuts: return "keyboard"
         case .general: return "gearshape"
         case .about: return "info.circle"
         }
@@ -41,14 +43,16 @@ enum SettingsTab: Hashable, CaseIterable, Identifiable {
     // tint 特意避开已经在用的四个账号色(orange/pink/blue/red)和歌词来源色点(red/
     // green/cyan/purple,见 LyricsManagerView.swift 的 sourceColor)——"外观"尤其不用
     // 青色系,因为默认打开的是"歌词"分类,会跟侧边栏里同屏出现的 LRCLIB 色点(cyan)
-    // 太接近;"通用"用灰色齿轮,呼应 macOS 系统设置里"通用"的既有印象。
+    // 太接近;"通用"用灰色齿轮,呼应 macOS 系统设置里"通用"的既有印象;"快捷键"用
+    // teal,跟歌词来源色点的 cyan 有区分度、也不撞现有任何一个分类色。
     var tint: Color {
         switch self {
         case .lyrics: return .indigo
         case .appearance: return .yellow
+        case .shortcuts: return .teal
         case .general: return .gray
         // 蓝色是"关于/信息"这类内容在 macOS 上最约定俗成的配色(系统"关于本机"/大多数
-        // App 的 info.circle 图标都是蓝色),不跟其余三个分类的既有配色规避逻辑冲突。
+        // App 的 info.circle 图标都是蓝色),不跟其余分类的既有配色规避逻辑冲突。
         case .about: return .blue
         }
     }
@@ -89,6 +93,7 @@ struct SettingsView: View {
                 Section(L10n.t("核心设置")) {
                     sidebarLabel(.lyrics)
                     sidebarLabel(.appearance)
+                    sidebarLabel(.shortcuts)
                     sidebarLabel(.general)
                     sidebarLabel(.about)
                 }
@@ -133,6 +138,7 @@ struct SettingsView: View {
                 switch selection {
                 case .tab(.lyrics): LyricsSettingsTab()
                 case .tab(.appearance): AppearanceSettingsTab()
+                case .tab(.shortcuts): ShortcutsSettingsTab()
                 case .tab(.general): GeneralSettingsTab()
                 case .tab(.about): AboutSettingsTab()
                 case .account(let destination):
@@ -878,29 +884,6 @@ private struct GeneralSettingsTab: View {
             } message: {
                 Text(L10n.t("这会清除所有账号 token、密钥和个人设置，恢复到刚装完时的样子（下次启动会重新走一遍引导向导），且无法撤销。如果还没备份过，建议先点上面「导出配置…」。"))
             }
-            Section(L10n.t("快捷键")) {
-                ShortcutRecorder(L10n.t("显示/隐藏悬浮歌词"), name: .toggleOverlay)
-                ShortcutRecorder(L10n.t("锁定/解锁位置"), name: .toggleLockPosition)
-                ShortcutRecorder(L10n.t("打开歌词管理"), name: .openLyricsManagerHotkey)
-                ShortcutRecorder(L10n.t("打开设置"), name: .openSettingsHotkey)
-                ShortcutRecorder(L10n.t("歌词提前"), name: .lyricsAdvanceHotkey)
-                ShortcutRecorder(L10n.t("歌词延后"), name: .lyricsDelayHotkey)
-                // 每次调整的步长——跟菜单栏"歌词时间轴"共用同一个值,这里改了菜单里的
-                // 按钮文案/快捷键的实际调整量会一起变。0.05~2s 区间对"手动校准"这个场景
-                // 够用,不需要再大或者再细。
-                Stepper(value: Binding(
-                    get: { Double(settings.lyricsOffsetStepMs) / 1000 },
-                    set: { settings.lyricsOffsetStepMs = Int(($0 * 1000).rounded()) }
-                ), in: 0.05...2.0, step: 0.05) {
-                    Text("\(L10n.t("歌词时间轴步长"))：\(AppSettings.formattedSeconds(ms: settings.lyricsOffsetStepMs))\(L10n.t("秒"))")
-                }
-            }
-
-            Section(L10n.t("播放控制（附加功能）")) {
-                ShortcutRecorder(L10n.t("播放/暂停"), name: .playPauseHotkey)
-                ShortcutRecorder(L10n.t("下一首"), name: .nextTrackHotkey)
-                ShortcutRecorder(L10n.t("上一首"), name: .previousTrackHotkey)
-            }
         }
         .formStyle(.grouped)
         // SwiftUI 有时不会在语言切换后重新执行某些嵌套内容的 body(取决于该内容自己的
@@ -972,6 +955,42 @@ private struct GeneralSettingsTab: View {
             collectorRunning = running
             isTogglingCollectorService = false
         }
+    }
+}
+
+// "快捷键"分类——原来跟"通用"tab 挤在一起,内容量(6 个悬浮歌词相关快捷键+1 个步长
+// 调节+3 个播放控制快捷键)比"通用"其它几块加起来还多,拆成独立分类。
+private struct ShortcutsSettingsTab: View {
+    @ObservedObject private var settings = AppSettings.shared
+
+    var body: some View {
+        Form {
+            Section(L10n.t("快捷键")) {
+                ShortcutRecorder(L10n.t("显示/隐藏悬浮歌词"), name: .toggleOverlay)
+                ShortcutRecorder(L10n.t("锁定/解锁位置"), name: .toggleLockPosition)
+                ShortcutRecorder(L10n.t("打开歌词管理"), name: .openLyricsManagerHotkey)
+                ShortcutRecorder(L10n.t("打开设置"), name: .openSettingsHotkey)
+                ShortcutRecorder(L10n.t("歌词提前"), name: .lyricsAdvanceHotkey)
+                ShortcutRecorder(L10n.t("歌词延后"), name: .lyricsDelayHotkey)
+                // 每次调整的步长——跟菜单栏"歌词时间轴"共用同一个值,这里改了菜单里的
+                // 按钮文案/快捷键的实际调整量会一起变。0.05~2s 区间对"手动校准"这个场景
+                // 够用,不需要再大或者再细。
+                Stepper(value: Binding(
+                    get: { Double(settings.lyricsOffsetStepMs) / 1000 },
+                    set: { settings.lyricsOffsetStepMs = Int(($0 * 1000).rounded()) }
+                ), in: 0.05...2.0, step: 0.05) {
+                    Text("\(L10n.t("歌词时间轴步长"))：\(AppSettings.formattedSeconds(ms: settings.lyricsOffsetStepMs))\(L10n.t("秒"))")
+                }
+            }
+
+            Section(L10n.t("播放控制（附加功能）")) {
+                ShortcutRecorder(L10n.t("播放/暂停"), name: .playPauseHotkey)
+                ShortcutRecorder(L10n.t("下一首"), name: .nextTrackHotkey)
+                ShortcutRecorder(L10n.t("上一首"), name: .previousTrackHotkey)
+            }
+        }
+        .formStyle(.grouped)
+        .id(L10n.current)
     }
 }
 
