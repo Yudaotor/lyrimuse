@@ -163,6 +163,13 @@ struct NotchLyricsView: View {
                     .compositingGroup()
                     .shadow(color: .black.opacity(0.45), radius: 2, y: 1)
                 }
+            } else if poller.isPlayingNow && !poller.hasLyricsContent {
+                // 同 LyricsOverlayView.mainLine 的区分:currentLine==nil 可能是"还没解析
+                // 出这首歌的歌词"(collector 后台搜索中,见 poller.hasLyricsContent 注释),
+                // 不能跟"这首歌真没歌词/正在间奏"共用同一个♪占位符。
+                Text(L10n.t("搜索歌词中…"))
+                    .foregroundStyle(.white.opacity(0.7))
+                    .shadow(color: .black.opacity(0.45), radius: 2, y: 1)
             } else {
                 Text(poller.currentLine?.plainText ?? "♪")
                     .foregroundStyle(.white)

@@ -17,6 +17,13 @@ public final class LocalPlaybackSource: ObservableObject {
     @Published public private(set) var isPlayingNow: Bool = false
     @Published public private(set) var currentLine: SyncedLyricLine?
     @Published public private(set) var nextLineText: String?
+    // 当前曲目是否已经解析出任何歌词内容(syncEngine.hasContent 的转发)——只用来跟
+    // "currentLine 恰好是 nil"这种正常情况(整曲还没到第一句歌词、两句歌词间的空档)
+    // 区分开。collector 对一首没见过的歌是异步解析的(见 collector/enrich.go
+    // trackEnrichment),没解析完之前磁盘缓存里根本没有这个 key,reloadCurrentLyrics()
+    // 只能拿到空字符串——这时 hasLyricsContent 为 false,UI 据此判断"这是还没解析出来"
+    // 而不是"这首歌就是没歌词/正在间奏"。
+    @Published public private(set) var hasLyricsContent: Bool = false
 
     @Published public var preferWordLevelKaraoke: Bool = true {
         didSet { reloadCurrentLyrics() }
@@ -243,6 +250,7 @@ public final class LocalPlaybackSource: ObservableObject {
             lyricsYRC: found?.lyricsYRC ?? ""
         )
         syncEngine.offsetMs = LyricsOffsetStore.shared.offset(forKey: currentOffsetKey)
+        hasLyricsContent = syncEngine.hasContent
         logger.debug("lyrics reloaded: hasContent=\(self.syncEngine.hasContent) found=\(found != nil)")
     }
 }

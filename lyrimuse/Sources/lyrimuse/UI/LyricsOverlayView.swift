@@ -174,6 +174,15 @@ struct LyricsOverlayView: View {
                 .foregroundStyle(settings.foregroundColor)
                 .fixedSize(horizontal: false, vertical: true)
                 .lyricsTextStroke(settings.textStrokeEnabled, color: settings.textStrokeColor)
+        } else if poller.isPlayingNow && !poller.hasLyricsContent {
+            // 换到一首还没解析过的新歌,collector 后台搜索通常要几秒——这段空窗期跟"这首
+            // 歌确实没有歌词/正在间奏"共用同一个 currentLine==nil,但含义完全不同,不能
+            // 都糊成一个♪符号,容易让人以为"这首歌就是没词",见 poller.hasLyricsContent
+            // 注释。
+            Text(L10n.t("搜索歌词中…"))
+                .font(settings.mainFont)
+                .foregroundStyle(settings.foregroundColor.opacity(0.5))
+                .lyricsTextStroke(settings.textStrokeEnabled, color: settings.textStrokeColor)
         } else {
             Text("♪")
                 .font(settings.mainFont)

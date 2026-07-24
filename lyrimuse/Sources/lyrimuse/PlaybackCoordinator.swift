@@ -18,6 +18,7 @@ final class PlaybackCoordinator: ObservableObject {
     @Published private(set) var isPlayingNow: Bool = false
     @Published private(set) var currentLine: SyncedLyricLine?
     @Published private(set) var nextLineText: String?
+    @Published private(set) var hasLyricsContent: Bool = false
     @Published private(set) var anchor: ProgressAnchor?
 
     private var cancellables: [AnyCancellable] = []
@@ -74,6 +75,7 @@ final class PlaybackCoordinator: ObservableObject {
             },
             s.$nextLineText.assign(to: \.nextLineText, on: self),
             s.$anchor.assign(to: \.anchor, on: self),
+            s.$hasLyricsContent.assign(to: \.hasLyricsContent, on: self),
         ]
     }
 }
