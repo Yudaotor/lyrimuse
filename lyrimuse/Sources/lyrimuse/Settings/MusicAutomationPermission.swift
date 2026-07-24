@@ -1,5 +1,9 @@
-import Foundation
+import AppKit
 import CoreServices
+import Foundation
+import OSLog
+
+private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "automation-permission")
 
 // 查/请求"自动化"权限(允许这个 App 用 Apple Event 控制 Music.app)——只覆盖
 // Lyrimuse 自己这一份身份,给 AppleMusicPositionClient 读精确播放进度用。
@@ -83,7 +87,17 @@ enum MusicAutomationPermission {
     // 时机(比如.onAppear、App重新变为前台)用 askIfNeeded:false 再读一次最新状态，
     // 覆盖"用户后来自己去系统设置手动开了、但这次请求已经放弃等待"这种情况。
     static func requestWithTimeout(seconds: Double = 8) async -> MusicAutomationPermissionStatus? {
-        await withTaskGroup(of: MusicAutomationPermissionStatus?.self) { group in
+        // 2026-07-24 实测坐实(用户报告+复现):Music.app 没在运行时点"请求权限",
+        // 系统授权对话框根本不弹——不是超时/挂起,是压根没问。AECreateDesc 按
+        // bundle ID 解析目标时,如果找不到对应的运行中进程,大概率直接落到下面
+        // procNotFound(-600)分支,被当成"还没问过"静默返回,从来没有真正触发过
+        // TCC 的系统弹窗。AEDeterminePermissionToAutomateTarget 的文档说它不需要
+        // 目标在运行,但这台机器上的实际行为对不上文档——所以在真正发起检查之前,
+        // 先确保 Music.app 处于运行状态,让 bundle ID 一定能解析到一个真实进程。
+        // 用 activates=false 后台启动,不抢用户当前焦点,跟 AppDelegate.swift 里
+        // launchMusicOnLyrimuseOpen 那半用的是同一个"后台起、别抢前台"的做法。
+        await ensureMusicAppRunning()
+        return await withTaskGroup(of: MusicAutomationPermissionStatus?.self) { group in
             group.addTask { check(askIfNeeded: true) }
             group.addTask {
                 try? await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
@@ -91,6 +105,24 @@ enum MusicAutomationPermission {
             }
             defer { group.cancelAll() }
             return await group.next() ?? nil
+        }
+    }
+
+    private static func ensureMusicAppRunning() async {
+        guard !NSWorkspace.shared.runningApplications.contains(where: { $0.bundleIdentifier == musicBundleID }) else {
+            return
+        }
+        guard let musicURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: musicBundleID) else {
+            logger.error("cannot resolve Music.app URL by bundle id, skip pre-launch")
+            return
+        }
+        logger.notice("Music.app not running, launching in background before requesting automation permission")
+        let config = NSWorkspace.OpenConfiguration()
+        config.activates = false
+        do {
+            _ = try await NSWorkspace.shared.openApplication(at: musicURL, configuration: config)
+        } catch {
+            logger.error("failed to launch Music.app before permission request: \(error.localizedDescription, privacy: .public)")
         }
     }
 }
