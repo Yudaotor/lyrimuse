@@ -36,6 +36,43 @@ public final class LocalPlaybackSource: ObservableObject {
     private var lastKey = ""
     private var lastSnapshot: MediaControlSnapshot?
 
+    // ---- 播放位置平滑(2026-07-24 加,修 QQ 音乐"歌词时间不准") --------------------
+    //
+    // QQ 音乐没有 AppleScript,elapsedTime 来自 media-control --now 的 elapsedTimeNow
+    // 外推值(见 MediaControlClient.swift)——实测坐实:同一首歌连续轮询,单次读数相对
+    // 真实经过的时间能有 ±1~1.5 秒的抖动(不是持续偏向一个方向,是每次独立采样各自的
+    // 误差,推测是 QQ 音乐自己上报 Now Playing 信息给系统的节奏本来就不是每次都精确
+    // 刷新)。Apple Music 走的 AppleScript player position 没有这个问题,精确到
+    // ~0.1s。过去不管哪个播放器,每次轮询(2 秒一次)都无条件把这次读数直接当成新锚点
+    // ——QQ 音乐下逐字歌词填色因此每 2 秒就带着这份噪声跳一下,肉眼可见"歌词时间不准"。
+    //
+    // 改成跟 collector/poller.go 的 updatePosition() 同一套思路:只在真的发生"不
+    // 连续"(换歌、暂停⇄播放切换、或者这次读数跟"按上一次锚点+经过的真实时间外推"的
+    // 预测值差太多,说明真的 seek/跳曲了)时才信任这次读数重新锚定;平稳播放期间改成
+    // 按真实 wall-clock 经过的时间累加,不理会每次读数自身的抖动。这套逻辑对 Apple
+    // Music 同样安全——它的读数本来就精确,预测值和读数几乎总是相差无几,不会触发"跟
+    // 预测差太多"这个分支,实际观感跟改之前几乎一致。
+    private var trackPosSeconds: Double = 0
+    private var posTrackingKey = ""
+    private var posWasPlaying = false
+    private var posPrevWall: Date?
+    private static let seekJumpToleranceSecs = 2.0
+
+    // 调用方(apply())只在"这一轮确实在播放"时才会调用这个函数——暂停态不需要外推,
+    // apply() 的 else 分支直接把 anchor 置 nil,不经过这里。
+    private func resolvePositionSeconds(reported: Double, rate: Double, key: String, now: Date) -> Double {
+        guard key == posTrackingKey, posWasPlaying, let prevWall = posPrevWall else {
+            // 换歌 / 刚从暂停恢复播放 / 第一次观察 → 没有可信的上一次锚点可外推,直接
+            // 采用这次读数。
+            trackPosSeconds = reported
+            return trackPosSeconds
+        }
+        let gap = now.timeIntervalSince(prevWall)
+        let predicted = trackPosSeconds + gap * rate
+        trackPosSeconds = abs(reported - predicted) > Self.seekJumpToleranceSecs ? reported : predicted
+        return trackPosSeconds
+    }
+
     private var pollTimer: Timer?
     private var fastTimer: Timer?
 
@@ -163,23 +200,33 @@ public final class LocalPlaybackSource: ObservableObject {
             reloadCurrentLyrics()
         }
 
-        // elapsedTime 现在就是 Music.app 自己实时算出来的播放位置(MediaControlClient
-        // 直接问 Music.app 要,不是旧版 media-control 那种会在稳定播放期间整段冻结不动
-        // 的估算值),不需要再额外问一次、也不需要区分"精确"和"估算"两条路径。
-        if snapshot.playing == true, let duration = snapshot.duration, duration > 0 {
-            let positionSeconds = snapshot.elapsedTime ?? 0
+        // elapsedTime 对 Apple Music 是 Music.app 自己实时算出来的精确播放位置;对 QQ
+        // 音乐是 media-control --now 的外推值,带噪声,经 resolvePositionSeconds 平滑
+        // 过再用(见该函数注释)。
+        let now = Date()
+        let playing = snapshot.playing == true
+        if playing, let duration = snapshot.duration, duration > 0 {
+            let rate = snapshot.playbackRate ?? 1
+            let positionSeconds = resolvePositionSeconds(reported: snapshot.elapsedTime ?? 0, rate: rate, key: key, now: now)
             anchor = ProgressAnchor(
                 durationMs: Int(duration * 1000),
                 progressMs: Int(positionSeconds * 1000),
-                rate: snapshot.playbackRate ?? 1,
+                rate: rate,
                 progressTs: nil,
                 baseAgeMs: 0, // 本机直接读取,没有网络延迟需要外推的锚点年龄
-                fetchedAt: Date(),
+                fetchedAt: now,
                 fresh: true // 本地读取,始终当作新鲜锚点,不封顶外推
             )
         } else {
             anchor = nil
         }
+        // 无论这一轮是否在播放,都要更新这三个状态,供下一轮判断"是不是刚从暂停里恢复
+        // 播放"——只在上面播放分支里更新的话,"播放→暂停→再播放"这个序列会因为暂停期间
+        // 完全没走到这行,让下一次恢复播放时的判断误用暂停前的陈旧 posPrevWall/
+        // posWasPlaying,而不是正确识别出"刚从暂停恢复"。
+        posTrackingKey = key
+        posWasPlaying = playing
+        posPrevWall = now
         if anchor == nil {
             currentLine = nil
             nextLineText = nil
