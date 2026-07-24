@@ -136,6 +136,13 @@ struct MenuBarMenu: View {
             NSApp.activate(ignoringOtherApps: true)
             openWindow(id: "lyrics-manager")
         }
+        // 跟"设置…"/"歌词管理…"同一个坑:.accessory 策略下 Sparkle 弹出的检查更新
+        // UI 也得先手动激活 App,不然点了没反应(这里没有活跃窗口打底,不像"关于"页
+        // 那个按钮——那边是在已经打开的设置窗口里点,App 早就是激活状态,不需要这一步)。
+        Button(L10n.t("检查更新")) {
+            NSApp.activate(ignoringOtherApps: true)
+            SparkleUpdaterManager.shared.checkForUpdates()
+        }
         Divider()
         Button(L10n.t("退出")) { NSApplication.shared.terminate(nil) }
     }
