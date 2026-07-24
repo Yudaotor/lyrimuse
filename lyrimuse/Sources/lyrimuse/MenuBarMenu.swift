@@ -103,6 +103,11 @@ struct MenuBarMenu: View {
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
+        // .labelStyle(.titleAndIcon) 套在最外层 Group 上,靠 SwiftUI 环境值沿子视图树
+        // 一路往下传(包括下面几个独立 View 里的 Label)——实测坐实:这个菜单栏下拉菜单
+        // 默认不会显示 Label 的图标(只显示文字),不加这一句图标会整个消失,不是漏写了
+        // 某个具体图标名。
+        Group {
         // 桌面悬浮歌词、灵动岛歌词互不排斥,菜单里各自的开关独立显示——只在 settings 里
         // 对应开关确实开着时才显示/构造那个控制器:两个控制器都是 `static let shared`,
         // 真正引用到才会执行 init() 建窗口,而 init() 里订阅 PlaybackCoordinator 的
@@ -121,30 +126,48 @@ struct MenuBarMenu: View {
         // 不管哪种样式在显示都适用,所以不放进上面两个按样式互斥的 Section 里,单独一份。
         LyricsOffsetMenuSection()
         Divider()
-        Toggle(L10n.t("开机启动"), isOn: $settings.launchAtLoginEnabled)
+        Toggle(isOn: $settings.launchAtLoginEnabled) {
+            Label(L10n.t("开机启动"), systemImage: "power")
+        }
+        // 单独一条分隔线,把"开机启动"这个持久状态开关跟下面几个"点一下跳转/触发一次性
+        // 动作"的按钮分开——参考同类菜单栏工具(Bartender/AlDente 这类)常见的"开关一组、
+        // 操作入口另一组"分区习惯,原来两者混在一起没有区分。
+        Divider()
         // 不用 SettingsLink——这个 App 是 .accessory 策略(没有 Dock 图标/常规激活),
         // SettingsLink 内部触发设置窗口时依赖应用正常激活的那套机制,在 accessory 策略下
         // 实测点了没反应(窗口没弹出来,不是被挡住)。改成手动先激活 App 再调
         // openSettings(),激活这一步是关键,少了这步同样打不开。
-        Button(L10n.t("设置…")) {
+        Button {
             NSApp.activate(ignoringOtherApps: true)
             openSettings()
+        } label: {
+            Label(L10n.t("设置…"), systemImage: "gearshape")
         }
         // 跟"设置…"同一个坑:accessory 策略(没有 Dock 图标)下打开任何新窗口都得先
         // 手动激活 App,不然 openWindow 调了也没反应。
-        Button(L10n.t("歌词管理…")) {
+        Button {
             NSApp.activate(ignoringOtherApps: true)
             openWindow(id: "lyrics-manager")
+        } label: {
+            Label(L10n.t("歌词管理…"), systemImage: "music.note.list")
         }
         // 跟"设置…"/"歌词管理…"同一个坑:.accessory 策略下 Sparkle 弹出的检查更新
         // UI 也得先手动激活 App,不然点了没反应(这里没有活跃窗口打底,不像"关于"页
         // 那个按钮——那边是在已经打开的设置窗口里点,App 早就是激活状态,不需要这一步)。
-        Button(L10n.t("检查更新")) {
+        Button {
             NSApp.activate(ignoringOtherApps: true)
             SparkleUpdaterManager.shared.checkForUpdates()
+        } label: {
+            Label(L10n.t("检查更新"), systemImage: "arrow.triangle.2.circlepath")
         }
         Divider()
-        Button(L10n.t("退出")) { NSApplication.shared.terminate(nil) }
+        Button {
+            NSApplication.shared.terminate(nil)
+        } label: {
+            Label(L10n.t("退出"), systemImage: "rectangle.portrait.and.arrow.right")
+        }
+        } // Group
+        .labelStyle(.titleAndIcon)
     }
 }
 
@@ -157,17 +180,23 @@ private struct ClassicOverlayMenuSection: View {
     @ObservedObject private var settings = AppSettings.shared
 
     var body: some View {
-        Toggle(L10n.t("显示桌面悬浮歌词"), isOn: Binding(
+        Toggle(isOn: Binding(
             get: { overlay.isVisible },
             set: { overlay.setVisible($0) }
-        ))
-        Toggle(L10n.t("锁定位置(不可拖拽+点击穿透)"), isOn: Binding(
+        )) {
+            Label(L10n.t("显示桌面悬浮歌词"), systemImage: "captions.bubble")
+        }
+        Toggle(isOn: Binding(
             get: { overlay.isPositionLocked },
             set: { newValue in
                 settings.lockPosition = newValue
                 overlay.setLocked(newValue)
             }
-        ))
+        )) {
+            // 图标跟着锁定状态动态换(锁上/打开),不是固定图标——跟"关于"tab 里状态图标
+            // 那套"用图标本身表达当前状态"的做法一致。
+            Label(L10n.t("锁定位置(不可拖拽+点击穿透)"), systemImage: overlay.isPositionLocked ? "lock.fill" : "lock.open.fill")
+        }
     }
 }
 
@@ -179,10 +208,12 @@ private struct NotchOverlayMenuSection: View {
     @ObservedObject private var overlay = NotchLyricsWindowController.shared
 
     var body: some View {
-        Toggle(L10n.t("显示灵动岛歌词"), isOn: Binding(
+        Toggle(isOn: Binding(
             get: { overlay.isVisible },
             set: { overlay.setVisible($0) }
-        ))
+        )) {
+            Label(L10n.t("显示灵动岛歌词"), systemImage: "rectangle.topthird.inset.filled")
+        }
     }
 }
 
@@ -198,19 +229,27 @@ private struct LyricsOffsetMenuSection: View {
 
     var body: some View {
         if !coordinator.title.isEmpty {
-            Menu(menuTitle) {
-                Button(nudgeLabel(L10n.t("提前"))) {
+            Menu {
+                Button {
                     coordinator.nudgeLyricsOffset(by: settings.lyricsOffsetStepMs)
+                } label: {
+                    Label(nudgeLabel(L10n.t("提前")), systemImage: "gobackward")
                 }
-                Button(nudgeLabel(L10n.t("延后"))) {
+                Button {
                     coordinator.nudgeLyricsOffset(by: -settings.lyricsOffsetStepMs)
+                } label: {
+                    Label(nudgeLabel(L10n.t("延后")), systemImage: "goforward")
                 }
                 if coordinator.currentLyricsOffsetMs != 0 {
                     Divider()
-                    Button(L10n.t("重置")) {
+                    Button {
                         coordinator.resetLyricsOffset()
+                    } label: {
+                        Label(L10n.t("重置"), systemImage: "arrow.counterclockwise")
                     }
                 }
+            } label: {
+                Label(menuTitle, systemImage: "timer")
             }
         }
     }

@@ -28,23 +28,74 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject 
     private var moveDebounceTimer: Timer?
     private var isPlayingObserver: AnyCancellable?
 
+    // MARK: - 点击穿透 + 悬停热区 + 长按拖动
+    //
+    // 解锁状态下 window.ignoresMouseEvents 常年为 true(背景对任何单击都真穿透到下层
+    // App/桌面),原生 NSView 命中测试/事件分发对这个窗口完全失效,包括 .onHover——
+    // 所以悬停检测、长按判定、拖动本身,统统改成用鼠标监听器在"事件旁边"观察鼠标
+    // 位置/按键状态自己算,不依赖窗口原生收到事件。global+local 两个监听器都装、共用
+    // 同一个处理函数:鼠标在窗口外(穿透去的背景区域)时只有 global 能看到;一旦移进
+    // 播放控制按钮热区、ignoresMouseEvents 被临时收回 false,窗口就开始"本地"收到
+    // 事件,这时只有 local 能看到——单独装 global 会在这个切换点彻底看不到"什么时候
+    // 移出热区"。播放控制按钮胶囊的真实屏幕矩形由 LyricsOverlayView 通过 GeometryReader
+    // 汇报上来(controlsHotZoneScreen)。
+    @Published private(set) var isHoveringForControls: Bool = false
+    // 长按拖动是否已经"武装"(用于 View 层画一圈高亮提示"现在可以拖了")。
+    @Published private(set) var isDragArmed: Bool = false
+
+    private var globalMouseMonitor: Any?
+    private var localMouseMonitor: Any?
+    private var longPressTimer: Timer?
+    // 按下时的鼠标屏幕坐标,只用来算"武装前挪动是否超过容差"——武装之后的拖动本身
+    // 交给 performDrag 原生处理,不需要再自己算位移增量。
+    private var pressStartLocation: NSPoint?
+    // 播放控制按钮胶囊的实时屏幕矩形,由 LyricsOverlayView 汇报;nil = 当前没有显示
+    // 这排按钮(锁定中,或还没悬停出来)。
+    private var controlsHotZoneScreen: CGRect?
+
+    private let longPressThresholdSecs: TimeInterval = 0.35
+    // 按下之后到长按计时器触发之前,鼠标移动超过这个距离就当成"这是想让点击/拖拽
+    // 穿透到下层 App 的普通手势",取消长按判定,不武装拖动。
+    private let dragMoveTolerance: CGFloat = 4
+
     convenience init() {
         let size = NSSize(width: AppSettings.shared.overlayWidth, height: overlayDefaultHeight)
         let rect = NSRect(origin: Self.restoredOrigin(size: size), size: size)
         let panel = LyricsOverlayWindow(contentRect: rect)
         self.init(window: panel)
 
-        let hosting = NSHostingView(rootView: LyricsOverlayView(onContentHeightChange: { [weak self] height in
-            self?.updateHeight(height)
-        }))
+        // 拖动改由长按手势接管(见 handleGlobalMouseEvent),原生"点背景就拖"不再使用;
+        // 点击穿透常年开启,只有悬停到播放控制按钮胶囊那个热区时才会被临时收回。
+        panel.isMovableByWindowBackground = false
+        panel.ignoresMouseEvents = true
+
+        let hosting = NSHostingView(rootView: LyricsOverlayView(
+            overlayController: self,
+            onContentHeightChange: { [weak self] height in
+                self?.updateHeight(height)
+            },
+            onControlsFrameChange: { [weak self] rect in
+                self?.updateControlsHotZone(rect)
+            }
+        ))
         hosting.frame = NSRect(origin: .zero, size: size)
         hosting.autoresizingMask = [.width, .height]
         panel.contentView = hosting
 
+        installMouseMonitors()
+
         moveObserver = NotificationCenter.default.addObserver(
             forName: NSWindow.didMoveNotification, object: panel, queue: .main
         ) { [weak self] _ in
-            Task { @MainActor in self?.scheduleSavePosition() }
+            // queue: .main 已经保证这个闭包在主线程被调用,同样不需要 Task 跳转
+            // (理由跟 installMouseMonitors 那处一致)。另外拖动中 setFrameOrigin
+            // 每帧都会触发这个通知,而拖动结束时 handleMouseEvent 的 .leftMouseUp
+            // 分支已经显式存过一次最终位置——正在拖动("武装"中)时这里的重复调度
+            // 只是白白每帧都 invalidate+新建一个 Timer,跳过它减轻拖动路径上的负担。
+            MainActor.assumeIsolated {
+                guard let self, !self.isDragArmed else { return }
+                self.scheduleSavePosition()
+            }
         }
 
         // 订阅播放状态(PlaybackCoordinator 统一了 relay/local 两个数据源,不用关心当前
@@ -65,6 +116,8 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject 
 
     deinit {
         if let moveObserver { NotificationCenter.default.removeObserver(moveObserver) }
+        if let globalMouseMonitor { NSEvent.removeMonitor(globalMouseMonitor) }
+        if let localMouseMonitor { NSEvent.removeMonitor(localMouseMonitor) }
     }
 
     func setVisible(_ visible: Bool) {
@@ -97,13 +150,19 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject 
         if shouldShow { window?.orderFront(nil) } else { window?.orderOut(nil) }
     }
 
-    // 锁定位置:关掉"点背景拖拽移动"的能力,顺带打开点击穿透(ignoresMouseEvents)——
-    // 这个窗口除了拖拽移动之外没有任何其它可交互内容,锁定 = 不能拖 + 点击穿透到下层;
-    // 解锁 = 能拖 + 正常拦截点击,两者合并成一个开关,不单独拆分。
+    // 锁定位置:彻底停用长按拖动+悬停控制按钮这整套手势。解锁后不是"正常拦截点击"了
+    // ——背景常年保持点击穿透(isMovableByWindowBackground 也不再使用,原生"点了就拖"
+    // 已经被 handleGlobalMouseEvent 里的长按判定取代),只有鼠标真的悬停到播放控制
+    // 按钮胶囊那个热区时才会被动态收回 ignoresMouseEvents,见该方法的 .mouseMoved 分支。
     func setLocked(_ locked: Bool) {
         isPositionLocked = locked
-        window?.isMovableByWindowBackground = !locked
-        window?.ignoresMouseEvents = locked
+        window?.isMovableByWindowBackground = false
+        window?.ignoresMouseEvents = true
+        if locked {
+            // 锁定这一刻可能正悬停/正长按/正拖到一半,全部清零,不留任何残留状态。
+            cancelPendingPress()
+            isHoveringForControls = false
+        }
     }
 
     // sharingType = .none 让这个窗口对截图/录屏/视频会议共享屏幕统统读不到内容——跟
@@ -139,6 +198,162 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject 
         let centerX = current.origin.x + current.width / 2
         let newFrame = NSRect(x: centerX - width / 2, y: current.origin.y, width: width, height: current.height)
         window.setFrame(newFrame, display: true, animate: true)
+    }
+
+    private func installMouseMonitors() {
+        let mask: NSEvent.EventTypeMask = [.mouseMoved, .leftMouseDown, .leftMouseDragged, .leftMouseUp]
+        // AppKit 保证这两个监听器的回调固定在安装时所在的线程上调用(这里是主线程)——
+        // 用 MainActor.assumeIsolated 就地同步处理,不再经过 Task { @MainActor in ... }
+        // 的异步跳转。.leftMouseDragged 在拖动时是逐帧高频事件,每个都单开一个 Task 会被
+        // Main Actor 的任务队列按自己的调度节奏批处理/延后执行,跟真实鼠标位置对不上,
+        // 实测就是"拖动有卡顿感"的根因;改成同步调用后窗口位置直接跟事件本身对齐,
+        // 不再多一层调度延迟。
+        globalMouseMonitor = NSEvent.addGlobalMonitorForEvents(matching: mask) { [weak self] event in
+            let type = event.type
+            MainActor.assumeIsolated { self?.handleMouseEvent(type: type) }
+        }
+        // 本地监听器必须原样把 event 返回,否则会把这次点击整个吞掉,SwiftUI 按钮永远
+        // 收不到点击——这里只是"旁听"一下鼠标位置,不是要拦截。
+        localMouseMonitor = NSEvent.addLocalMonitorForEvents(matching: mask) { [weak self] event in
+            let type = event.type
+            MainActor.assumeIsolated { self?.handleMouseEvent(type: type) }
+            return event
+        }
+    }
+
+    // 把 LyricsOverlayView 汇报的 SwiftUI 内容坐标(GeometryReader 相对 overlayContent
+    // 命名坐标空间量出来的矩形,左上角原点、y 向下,单位跟窗口点数一致——跟 updateHeight
+    // 依赖的"GeometryReader 尺寸==窗口内容尺寸"是同一个已验证过的等价关系)转换成
+    // AppKit 的窗口本地坐标(左下角原点、y 向上)再转屏幕坐标,供 handleMouseEvent 直接
+    // 用 NSEvent.mouseLocation 做包含判断。
+    private func updateControlsHotZone(_ rect: CGRect) {
+        guard let window, rect != .zero else {
+            controlsHotZoneScreen = nil
+            return
+        }
+        let windowLocal = CGRect(
+            x: rect.minX,
+            y: window.frame.height - rect.maxY,
+            width: rect.width,
+            height: rect.height
+        )
+        controlsHotZoneScreen = window.convertToScreen(windowLocal)
+    }
+
+    private func handleMouseEvent(type: NSEvent.EventType) {
+        guard let window, !isPositionLocked else { return }
+        let loc = NSEvent.mouseLocation
+        let frame = window.frame
+        let insideHotZone = controlsHotZoneScreen?.contains(loc) ?? false
+
+        switch type {
+        case .mouseMoved:
+            let insideWindow = frame.contains(loc)
+            if isHoveringForControls != insideWindow {
+                isHoveringForControls = insideWindow
+            }
+            // 只有真的贴在按钮胶囊那一小块热区,才把点击穿透临时收回去,让 SwiftUI
+            // 按钮能正常收到点击;窗口里其它任何地方(包括歌词文字本身)永远穿透。
+            // 正在拖动("武装"中)时不要在这里改 ignoresMouseEvents——armDragIfStillPressed
+            // 已经为了 performDrag 把它收回 false 了,这里如果因为拖动途中飘出热区之外
+            // 又把它设回 true,会打断正在进行中的原生拖动。
+            guard !isDragArmed else { return }
+            let desiredIgnoresMouseEvents = !(insideWindow && insideHotZone)
+            if window.ignoresMouseEvents != desiredIgnoresMouseEvents {
+                window.ignoresMouseEvents = desiredIgnoresMouseEvents
+            }
+
+        case .leftMouseDown:
+            guard frame.contains(loc), !insideHotZone else { return }
+            pressStartLocation = loc
+            longPressTimer?.invalidate()
+            let timer = Timer(timeInterval: longPressThresholdSecs, repeats: false) { [weak self] _ in
+                MainActor.assumeIsolated { self?.armDragIfStillPressed() }
+            }
+            RunLoop.main.add(timer, forMode: .common)
+            longPressTimer = timer
+
+        case .leftMouseDragged:
+            // 武装之后整段拖动都交给 armDragIfStillPressed 里的 performDrag 原生处理
+            // (那是一个同步阻塞调用,函数返回时拖动已经结束)——这里只需要在"还没
+            // 武装"这段时间处理"移动太多就取消长按判定"。
+            guard !isDragArmed, let start = pressStartLocation else { return }
+            if hypot(loc.x - start.x, loc.y - start.y) > dragMoveTolerance {
+                // 计时器还没到点,鼠标就已经挪动超过容差——这是想穿透到下层的普通拖拽
+                // 手势(比如在桌面拖框选),不是想拖悬浮窗,取消长按判定。
+                cancelPendingPress()
+            }
+
+        case .leftMouseUp:
+            // 已经武装的情况下,这个 mouseUp 早被 performDrag 内部的原生跟踪循环
+            // 自己消费掉了,armDragIfStillPressed 会在 performDrag 返回后做收尾;
+            // 这里只需要处理"还没到长按阈值就松手"这种提前取消的情况。
+            guard !isDragArmed else { return }
+            cancelPendingPress()
+
+        default:
+            break
+        }
+    }
+
+    // 长按阈值一到、鼠标仍按着,就把整段拖动移交给 AppKit 原生的窗口拖动机制
+    // (NSWindow.performDrag(with:))接管,不再自己逐帧算 delta 调 setFrameOrigin。
+    //
+    // 原因:窗口在长按判定期间 ignoresMouseEvents 一直是 true(真穿透),物理按下
+    // 那一刻的原始 mouseDown 因此从没被这个窗口收到过——那个真实事件已经被派发去了
+    // 下层 App/桌面,没法"追认"回来。自己在监听器里手动追踪 dragged 事件、算 delta、
+    // 调 setFrameOrigin,每一帧都要走一遍"WindowServer 派发事件→我们的监听器观察到→
+    // 应用进程再发指令挪窗口"的来回,这条链路天然比原生拖动多好几层调度,实测就是
+    // "有卡顿感"的根源,不是靠省掉个把 Task 调度就能追平的。
+    //
+    // 这里改成:武装这一刻先把 ignoresMouseEvents 收回 false(AppKit 对每个后续事件
+    // 独立做命中测试,不是只在最初 mouseDown 时判一次——收回之后,只要物理左键还按着,
+    // WindowServer 从下一次事件派发起就会把这次手势剩余的 dragged/up 事件判给这个
+    // 窗口),再拿一个就地合成、时间戳为当下的 mouseDown 事件喂给 performDrag,把
+    // 剩下的拖动过程完全交给 WindowServer 原生处理(跟原来"点背景直接拖"完全同一套
+    // 机制,跟手不卡顿)。performDrag 是同步阻塞调用,内部有自己的事件循环,一直等到
+    // 物理左键松开才返回——所以这个函数直到用户松手才会执行到最后,返回后统一收尾。
+    private func armDragIfStillPressed() {
+        // NSEvent.pressedMouseButtons 的 bit 0 对应左键——计时器触发这一刻鼠标左键
+        // 必须还按着,否则说明 mouseUp 抢在计时器前面到了,不武装拖动。
+        guard let window, pressStartLocation != nil, NSEvent.pressedMouseButtons & 1 != 0 else {
+            cancelPendingPress()
+            return
+        }
+        isDragArmed = true
+        window.ignoresMouseEvents = false
+        defer {
+            window.ignoresMouseEvents = true
+            cancelPendingPress()
+        }
+
+        guard let syntheticDown = NSEvent.mouseEvent(
+            with: .leftMouseDown,
+            location: window.mouseLocationOutsideOfEventStream,
+            modifierFlags: [],
+            timestamp: ProcessInfo.processInfo.systemUptime,
+            windowNumber: window.windowNumber,
+            context: nil,
+            eventNumber: 0,
+            clickCount: 1,
+            pressure: 1
+        ) else { return }
+
+        window.performDrag(with: syntheticDown)
+        // performDrag 返回 = 这次拖动已经结束(正常松手,或者被系统提前打断),把
+        // 最终落点存下来——原来"武装期间跳过 moveObserver 里的 scheduleSavePosition"
+        // 那条 guard(见 init() 里的 didMoveNotification 观察者)在这里同样适用,拖动
+        // 过程中的中间位置不需要重复存,只存这一次最终结果。
+        UserDefaults.standard.set(
+            "\(window.frame.origin.x),\(window.frame.origin.y)", forKey: overlayPositionKey
+        )
+    }
+
+    private func cancelPendingPress() {
+        longPressTimer?.invalidate()
+        longPressTimer = nil
+        pressStartLocation = nil
+        isDragArmed = false
     }
 
     private func scheduleSavePosition() {

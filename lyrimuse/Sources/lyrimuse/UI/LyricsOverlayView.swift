@@ -10,19 +10,34 @@ import LyrimuseCore
 struct LyricsOverlayView: View {
     @ObservedObject private var poller = PlaybackCoordinator.shared
     @ObservedObject private var settings = AppSettings.shared
+    // 悬停展示控制按钮/长按拖动这套手势整个搬到了 WindowController 用全局鼠标监听器
+    // 实现(背景常年点击穿透,原生 .onHover 收不到事件),这里只读它算出来的结果
+    // (isHoveringForControls/isDragArmed)展示对应视觉效果,不再自己维护 @State。
+    //
+    // 故意不写成 "= LyricsOverlayWindowController.shared" 默认值——这个 View 正是在
+    // LyricsOverlayWindowController 自己的 init() 里被构造出来的(装进 NSHostingView),
+    // 这时候 .shared 这个 static let 的一次性初始化(dispatch_once)还没跑完,任何在这个
+    // 构造过程中对 .shared 的再次访问都会在同一线程递归触发同一个 dispatch_once,被
+    // 系统直接判定成非法重入而 SIGTRAP 崩溃(实测坐实:EXC_BREAKPOINT,栈顶正是
+    // _dispatch_once_wait 卡在这个默认值上)。改成必填参数,由外部显式传入当时已经
+    // 拿到手的 self,不再经过 .shared 这层。
+    // 不加 private——需要在另一个文件(LyricsOverlayWindowController.swift)里通过
+    // 编译器合成的 memberwise init 传入,标 private 会让那个 init 的访问级别一并降到
+    // private,导致跨文件调不到。
+    @ObservedObject var overlayController: LyricsOverlayWindowController
 
     // 悬浮窗高度跟着内容动态变化(见 LyricsOverlayWindowController.updateHeight)——这里
     // 汇报"这次渲染实际需要多高",不需要就什么都不做(默认空闭包,方便预览/测试构造)。
     var onContentHeightChange: (CGFloat) -> Void = { _ in }
+    // 播放控制按钮胶囊的实际屏幕矩形,汇报给 WindowController 当作"点击穿透的例外热区"
+    // ——只有落在这个矩形里的鼠标事件才会被窗口正常接收,其它任何地方(包括歌词文字
+    // 本身)永远穿透。按钮没显示时(锁定/未悬停)报 .zero。
+    var onControlsFrameChange: (CGRect) -> Void = { _ in }
 
     // 固定值,不是设置项——加一个圆角纯粹是给"背景颜色"这个设置配套的实现细节,免得
     // 用户一开背景色看到的是个生硬的直角矩形;两个参考的开源实现里圆角都不是用户可调项。
     private let overlayBackgroundCornerRadius: CGFloat = 16
-
-    // 鼠标悬停才浮现播放控制按钮,不用一直占地方。仅在"锁定位置"关闭时生效——锁定后
-    // window.ignoresMouseEvents 已经让整个窗口不再接收鼠标事件,.onHover 本来就不会被
-    // 调用;这里在 View 层再显式判断一遍 lockPosition,不单纯依赖窗口层那一处副作用。
-    @State private var isHoveringForControls = false
+    private let overlayCoordSpaceName = "overlayContent"
 
     var body: some View {
         VStack(spacing: 4) {
@@ -48,8 +63,19 @@ struct LyricsOverlayView: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .lyricsTextStroke(settings.textStrokeEnabled, color: settings.textStrokeColor)
             }
-            if isHoveringForControls && !settings.lockPosition {
+            if overlayController.isHoveringForControls && !settings.lockPosition {
                 playbackControls
+                    // 把这排按钮的真实屏幕位置汇报上去,当作点击穿透的例外热区(见
+                    // WindowController.updateControlsHotZone)。跟下面测高度用的是
+                    // 同一套 GeometryReader 手法,只是这里要的是矩形不是单个高度值。
+                    .background(
+                        GeometryReader { proxy in
+                            Color.clear.preference(
+                                key: ControlsFramePreferenceKey.self,
+                                value: proxy.frame(in: .named(overlayCoordSpaceName))
+                            )
+                        }
+                    )
                     .transition(.opacity.combined(with: .scale(scale: 0.97, anchor: .top)))
             }
         }
@@ -57,7 +83,17 @@ struct LyricsOverlayView: View {
         .padding(.vertical, 14)
         .frame(maxWidth: .infinity)
         .background(overlayBackground)
+        // 长按拖动"武装"后的视觉提示——一圈跟前景色同色的高亮描边,松手/取消立刻淡出。
+        .overlay(
+            RoundedRectangle(cornerRadius: overlayBackgroundCornerRadius, style: .continuous)
+                .stroke(settings.foregroundColor.opacity(overlayController.isDragArmed ? 0.6 : 0), lineWidth: 2)
+        )
         .multilineTextAlignment(.center)
+        // 给 playbackControls 的 GeometryReader 一个命名坐标空间基准,原点在这整块
+        // 内容区(padding/background 都已经应用之后)的左上角,尺寸跟窗口内容尺寸一致
+        // ——跟下面 ContentHeightPreferenceKey 依赖的"GeometryReader 尺寸==窗口内容
+        // 尺寸"是同一个已验证过的等价关系。
+        .coordinateSpace(name: overlayCoordSpaceName)
         // 纯测量用,不影响视觉——把这次渲染真正需要的高度报给窗口控制器去调整窗口高度,
         // 长歌词换行到第二行时窗口跟着变高,而不是被原来写死的高度裁掉。
         .background(
@@ -66,10 +102,8 @@ struct LyricsOverlayView: View {
             }
         )
         .onPreferenceChange(ContentHeightPreferenceKey.self) { onContentHeightChange($0) }
-        .onHover { hovering in
-            guard !settings.lockPosition else { return }
-            withAnimation(.easeOut(duration: 0.16)) { isHoveringForControls = hovering }
-        }
+        .onPreferenceChange(ControlsFramePreferenceKey.self) { onControlsFrameChange($0) }
+        .animation(.easeOut(duration: 0.16), value: overlayController.isHoveringForControls)
     }
 
     private var playbackControls: some View {
@@ -320,6 +354,15 @@ private extension View {
 private struct ContentHeightPreferenceKey: PreferenceKey {
     static var defaultValue: CGFloat = 0
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
+    }
+}
+
+// 播放控制按钮胶囊没显示时(锁定/未悬停),树里没有任何视图写这个 preference,最终值
+// 落回 .zero——WindowController 那边按"是不是零矩形"判断当前有没有热区。
+private struct ControlsFramePreferenceKey: PreferenceKey {
+    static var defaultValue: CGRect = .zero
+    static func reduce(value: inout CGRect, nextValue: () -> CGRect) {
         value = nextValue()
     }
 }
