@@ -726,7 +726,8 @@ func (p *poller) applyBridgeResult(r bridgeFetchResult) {
 				continue
 			}
 			m := lbMeta(snapshot{Title: s.Title, Artist: s.Artist, Album: s.Album})
-			m.AdditionalInfo["source"] = "iphone" // 来源:iPhone(经 Last.fm 桥接)
+			m.AdditionalInfo["source"] = "iphone"                     // 来源:iPhone(经 Last.fm 桥接)
+			m.AdditionalInfo["media_player"] = mediaPlayerLabelIPhone // 这条桥接固定是 iPhone 上的 Apple Music,不受本地 Mac 播放器选择影响
 			// 这条特意保留同步:失败要 break(停在这个点,下次从同一条重试)、成功要继续
 			// 处理 done 里剩下的旧记录——这个"按顺序处理、失败即停"的语义依赖同步调用,
 			// 改成 submitSingleAsync 那种即发即走会打乱这个顺序保证。且这里处理的是
@@ -788,7 +789,8 @@ func (p *poller) applyBridgeResult(r bridgeFetchResult) {
 	}
 	p.remoteKey, p.remotePN = key, now
 	meta := lbMeta(snapshot{Title: np.Title, Artist: np.Artist, Album: np.Album, Playing: true})
-	meta.AdditionalInfo["source"] = "iphone" // 来源:iPhone(经 Last.fm 桥接)
+	meta.AdditionalInfo["source"] = "iphone"                     // 来源:iPhone(经 Last.fm 桥接)
+	meta.AdditionalInfo["media_player"] = mediaPlayerLabelIPhone // 这条桥接固定是 iPhone 上的 Apple Music,不受本地 Mac 播放器选择影响
 	artist, title := np.Artist, np.Title
 	// 异步提交,不阻塞 bridge()/poll() 主循环(理由同 submitSingleAsync)——这条提交没有
 	// 任何后续状态要维护(不像 Mac 侧的 lastPN/pnPending),失败只需要记日志,fire-and-forget

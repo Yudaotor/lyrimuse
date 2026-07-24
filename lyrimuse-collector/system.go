@@ -144,6 +144,23 @@ func expectedPlayerBundleID() string {
 	return "com.apple.Music"
 }
 
+// mediaPlayerLabelIPhone 是 iPhone 桥接路径(poller.go 两处 "source"]="iphone" 附近)
+// 提交给 ListenBrainz 的 media_player 值——那条桥接只服务 iPhone 上的 Apple Music
+// (经 Last.fm/FastScrobbler 转发,见 bridge 相关注释),跟本地 Mac 选的是哪个播放器
+// 无关,固定写死,不需要走 mediaPlayerLabel() 那套判断。
+const mediaPlayerLabelIPhone = "Apple Music (iOS)"
+
+// mediaPlayerLabel 是 lbMeta()(Mac 本地这条路径)提交给 ListenBrainz 的 media_player
+// 字段——2026-07-24 之前这里不管实际来源一律写死"Apple Music (macOS)",QQ 音乐接入
+// 后如果继续写死会导致 ListenBrainz 上明明是 QQ 音乐放的歌却显示"通过 Apple Music
+// 播放",按当前选定的播放器如实报告。
+func mediaPlayerLabel() string {
+	if features.Player == playerQQMusic {
+		return "QQ Music (macOS)"
+	}
+	return "Apple Music (macOS)"
+}
+
 type mediaControlRawState struct {
 	Title          string  `json:"title"`
 	Artist         string  `json:"artist"`

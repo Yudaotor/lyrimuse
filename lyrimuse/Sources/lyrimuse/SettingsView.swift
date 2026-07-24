@@ -897,18 +897,22 @@ private struct GeneralSettingsTab: View {
                 Toggle(L10n.t("开机启动"), isOn: $settings.launchAtLoginEnabled)
                 Toggle(L10n.t("在 Dock 中显示"), isOn: $settings.showInDock)
             }
+            // 两个 Toggle 的文案跟着 features.player 走(Apple Music/QQ 音乐)——这两个
+            // 联动本身已经改成跟着选定的播放器走(见 AppDelegate.swift/companionlaunch.go),
+            // 文案继续写死"Apple Music"会跟实际行为对不上,选了 QQ 音乐却看着字面在说
+            // Apple Music。
             Section {
-                Toggle(L10n.t("打开 Lyrimuse 时启动 Apple Music"), isOn: $settings.launchMusicOnLyrimuseOpen)
+                Toggle(String(format: L10n.t("打开 Lyrimuse 时启动 %@"), features.player.displayName), isOn: $settings.launchMusicOnLyrimuseOpen)
                 Toggle(isOn: Binding(
                     get: { features.launchLyrimuseOnMusicOpen },
                     set: { features.launchLyrimuseOnMusicOpen = $0; Task { await features.save() } }
                 )) {
-                    Text(L10n.t("打开 Apple Music 时启动 Lyrimuse"))
+                    Text(String(format: L10n.t("打开 %@ 时启动 Lyrimuse"), features.player.displayName))
                 }
             } header: {
                 Text(L10n.t("App 联动"))
             } footer: {
-                Text(L10n.t("「打开 Apple Music 时启动 Lyrimuse」由后台采集服务负责监测，需要先在上面启用「后台采集服务」才会生效。"))
+                Text(String(format: L10n.t("「打开 %@ 时启动 Lyrimuse」由后台采集服务负责监测，需要先在上面启用「后台采集服务」才会生效。"), features.player.displayName))
             }
 
             // 导入/导出打包 collector 的 config.json(账号 token 原文都在里面)+

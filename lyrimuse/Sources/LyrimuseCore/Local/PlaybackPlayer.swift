@@ -13,6 +13,16 @@ public enum PlaybackPlayer: String, CaseIterable, Identifiable, Codable {
     case qqMusic = "qq_music"
 
     public var id: Self { self }
+
+    // 各自对应的 App bundle id——AppDelegate.swift("App 联动"打开对应播放器)、
+    // MediaControlClient.swift(核对 media-control 报的 bundleIdentifier 是不是它)
+    // 两处共用同一份映射,不重复各写一份魔法字符串。
+    public var bundleIdentifier: String {
+        switch self {
+        case .appleMusic: return "com.apple.Music"
+        case .qqMusic: return "com.tencent.QQMusicMac"
+        }
+    }
 }
 
 // 独立、轻量地读一次共享 features 文件(~/.config/lyrimuse/lyrimuse-features.json)里的

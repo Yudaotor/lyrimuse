@@ -34,8 +34,8 @@ type lbTrackMeta struct {
 
 func lbMeta(s snapshot) lbTrackMeta {
 	info := map[string]any{
-		"media_player":              "Apple Music (macOS)",
-		"source":                    "mac", // 播放来源:mac 本地;桥接的 iPhone 由 bridge 覆盖为 iphone
+		"media_player":              mediaPlayerLabel(), // 按当前选定的本地播放器如实报告,见该函数注释
+		"source":                    "mac",              // 播放来源:mac 本地;桥接的 iPhone 由 bridge 覆盖为 iphone(连带覆盖 media_player,见 poller.go 两处 "source"]="iphone" 附近)
 		"submission_client":         clientName,
 		"submission_client_version": clientVersion,
 	}

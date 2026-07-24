@@ -47,15 +47,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         PlaybackCoordinator.shared.start()
 
-        // 打开 Lyrimuse 时顺带唤起 Apple Music(可选,见 AppSettings.launchMusicOnLyrimuseOpen
-        // 注释)。只在 Music.app 还没运行时才启动它——已经在跑就什么都不做,不做多余的
-        // "带到前台"动作,避免用户正在用别的 App 时被意外抢焦点。
-        if settings.launchMusicOnLyrimuseOpen,
-           !NSWorkspace.shared.runningApplications.contains(where: { $0.bundleIdentifier == "com.apple.Music" }),
-           let musicURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.apple.Music") {
-            let config = NSWorkspace.OpenConfiguration()
-            config.activates = false
-            NSWorkspace.shared.openApplication(at: musicURL, configuration: config)
+        // 打开 Lyrimuse 时顺带唤起当前选定的播放器(可选,见 AppSettings.
+        // launchMusicOnLyrimuseOpen 注释)。跟着 PlaybackPlayerPreference.current 走,
+        // 不再写死 Apple Music——选了 QQ 音乐时唤起的应该是 QQ 音乐,不是一个用户压根
+        // 没在用的 App。只在目标 App 还没运行时才启动它——已经在跑就什么都不做,不做
+        // 多余的"带到前台"动作,避免用户正在用别的 App 时被意外抢焦点。
+        if settings.launchMusicOnLyrimuseOpen {
+            let bundleID = PlaybackPlayerPreference.current.bundleIdentifier
+            if !NSWorkspace.shared.runningApplications.contains(where: { $0.bundleIdentifier == bundleID }),
+               let playerURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) {
+                let config = NSWorkspace.OpenConfiguration()
+                config.activates = false
+                NSWorkspace.shared.openApplication(at: playerURL, configuration: config)
+            }
         }
 
         // 首次启动的完整引导向导——触发点在 MenuBarLabel.onAppear,不在这里:

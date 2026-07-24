@@ -24,9 +24,8 @@ private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "media-
 //   全程没有触发任何系统权限弹窗,跟 Apple Music 这条路要的"自动化"权限完全无关。
 //   MediaRemote 是系统级的、App 无关的机制,任何注册了 MPNowPlayingInfoCenter 的
 //   App(网页视频/Safari 等)都可能占用"当前正在播放"这个位置,必须靠
-//   bundleIdentifier 精确核对确实是 QQ 音乐本身在报告,见 qqMusicBundleID。
+//   bundleIdentifier 精确核对确实是 QQ 音乐本身在报告,见 PlaybackPlayer.bundleIdentifier。
 public enum MediaControlClient {
-    private static let qqMusicBundleID = "com.tencent.QQMusicMac"
 
     public static func fetchSnapshot(player: PlaybackPlayer = PlaybackPlayerPreference.current) -> MediaControlSnapshot? {
         switch player {
@@ -145,7 +144,7 @@ public enum MediaControlClient {
             // `try?` 落到下面的 guard raw != nil,行为跟"没有可报告的正在播放"一致。
             guard process.terminationStatus == 0,
                   let raw = try? JSONDecoder().decode(RawPayload.self, from: data),
-                  raw.bundleIdentifier == qqMusicBundleID else {
+                  raw.bundleIdentifier == PlaybackPlayer.qqMusic.bundleIdentifier else {
                 // bundleIdentifier 对不上:系统当前的 Now Playing 是别的 App(网页
                 // 视频/Safari 等),不是 QQ 音乐——不能把它当成 QQ 音乐的"正在播放"。
                 return nil
