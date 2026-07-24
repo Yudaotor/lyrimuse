@@ -195,7 +195,7 @@ private struct ClassicOverlayMenuSection: View {
         )) {
             // 图标跟着锁定状态动态换(锁上/打开),不是固定图标——跟"关于"tab 里状态图标
             // 那套"用图标本身表达当前状态"的做法一致。
-            Label(L10n.t("锁定位置(不可拖拽+点击穿透)"), systemImage: overlay.isPositionLocked ? "lock.fill" : "lock.open.fill")
+            Label(L10n.t("锁定位置"), systemImage: overlay.isPositionLocked ? "lock.fill" : "lock.open.fill")
         }
     }
 }

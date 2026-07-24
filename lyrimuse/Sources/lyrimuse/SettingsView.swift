@@ -692,7 +692,7 @@ private struct AppearanceSettingsTab: View {
                             .frame(width: 40, alignment: .trailing)
                     }
                 }
-                Toggle(L10n.t("锁定位置(不可拖拽+点击穿透)"), isOn: Binding(
+                Toggle(L10n.t("锁定位置"), isOn: Binding(
                     get: { settings.lockPosition },
                     set: { newValue in
                         settings.lockPosition = newValue
@@ -737,8 +737,18 @@ private struct AppearanceSettingsTab: View {
             } footer: {
                 // footer 挂在整个 Section 上(而不是紧跟某个 Toggle 下面的裸 Text)——
                 // 分组样式里这是原生"注脚"位置,明确点名是哪个开关的说明,避免视觉上跟
-                // "锁定位置"混在一起。
-                Text(L10n.t("开启「截屏/录屏时隐藏」后,截图、录屏、视频会议共享屏幕都不会拍到悬浮歌词——但你自己在这台 Mac 上仍然正常看得见。"))
+                // 其它开关混在一起。两句分行摆放,顺序跟上面 Toggle 的出现顺序对应
+                // (先"锁定位置"、再"截屏/录屏时隐藏")。
+                //
+                // 第一句是这次新加的:"锁定位置"改名去掉了"(不可拖拽+点击穿透)"这个
+                // 括号说明,是因为点击穿透现在解锁状态下也一直生效(不再是锁定独有的
+                // 行为),括号内容已经不准确;但"解锁后长按才能拖动"这个手势本身并不
+                // 直观(不看说明容易只当成"按住就能拖"或者"这窗口点不动了"),需要在
+                // 这里补一句显式说明,不能单靠去掉括号里的旧文案就假装用户会自己发现。
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(L10n.t("解锁「锁定位置」后,悬浮歌词默认可以直接点击穿透到它下面的内容;长按住悬浮歌词不放,才能拖动它的位置。"))
+                    Text(L10n.t("开启「截屏/录屏时隐藏」后,截图、录屏、视频会议共享屏幕都不会拍到悬浮歌词——但你自己在这台 Mac 上仍然正常看得见。"))
+                }
             }
         }
         .formStyle(.grouped)
