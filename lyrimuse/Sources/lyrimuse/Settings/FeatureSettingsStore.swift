@@ -1,4 +1,5 @@
 import Foundation
+import LyrimuseCore
 import os
 import SwiftUI
 
@@ -56,6 +57,18 @@ public enum MusixmatchTranslationLanguage: String, CaseIterable, Identifiable, C
     }
 }
 
+// PlaybackPlayer 定义在 LyrimuseCore(见 Local/PlaybackPlayer.swift)——MediaControlClient/
+// LocalPlaybackSource 也需要认这个类型,而它们在 LyrimuseCore、不能反向依赖这个
+// (lyrimuse 主 App target)文件,所以类型本身放在被依赖的下层,这里只是引用。
+extension PlaybackPlayer {
+    public var displayName: String {
+        switch self {
+        case .appleMusic: return "Apple Music"
+        case .qqMusic: return L10n.t("QQ 音乐")
+        }
+    }
+}
+
 // "智能算法"=四源全查+打分取最高分(现有行为,见 collector/enrich.go 的
 // scoredLyricCandidates/pickLyricCandidate);"顺序优先"=按用户手排的顺序,取第一个
 // 通过质量校验的源,不比较分数。
@@ -77,6 +90,11 @@ public enum LyricsSourceMode: String, CaseIterable, Identifiable, Codable {
 // key,JSONDecoder/Go 的 encoding/json 都会静默忽略未知字段,不需要额外的迁移代码。
 struct FeatureFlagsFile: Codable, Equatable {
     var lyrics: Bool?
+    // "apple_music"(默认)或"qq_music"——见 PlaybackPlayer 注释(LyrimuseCore)。跟这个
+    // 文件里其它字段一样"读一次,重启才生效":LocalPlaybackSource 每次轮询都会重新读
+    // 一次这个字段(它在 LyrimuseCore,没法直接订阅这个 store 的 @Published),collector
+    // 只在启动时读一次。
+    var player: String?
     var albumPrefetch: Bool?
     var lastfmBridge: Bool?
     var lastfmMirrorScrobble: Bool?
@@ -106,6 +124,7 @@ struct FeatureFlagsFile: Codable, Equatable {
 
     enum CodingKeys: String, CodingKey {
         case lyrics
+        case player
         case albumPrefetch = "album_prefetch"
         case lastfmBridge = "lastfm_bridge"
         case lastfmMirrorScrobble = "lastfm_mirror_scrobble"
@@ -137,6 +156,9 @@ public final class FeatureSettingsStore: ObservableObject {
     public static let shared = FeatureSettingsStore()
 
     @Published public var lyrics = true
+    // 本地播放状态读取哪个 App——默认 Apple Music,保持这个设置加入之前唯一存在过的
+    // 行为不变。见 PlaybackPlayer(LyrimuseCore)注释。
+    @Published public var player: PlaybackPlayer = .appleMusic
     @Published public var albumPrefetch = true
     // 这几个都要连一个外部账号才有意义,默认关闭。collector/features.go 的 boolOr
     // 默认值要跟着一起改,否则全新安装时 Swift 这边显示关、Go 那边却按"缺字段=开启"
@@ -175,6 +197,7 @@ public final class FeatureSettingsStore: ObservableObject {
     private var currentSnapshot: FeatureFlagsFile {
         FeatureFlagsFile(
             lyrics: lyrics,
+            player: player.rawValue,
             albumPrefetch: albumPrefetch, lastfmBridge: lastfmBridge,
             lastfmMirrorScrobble: lastfmMirrorScrobble, weeklyDigest: weeklyDigest, dailyDigest: dailyDigest,
             weeklyDigestSource: weeklyDigestSource.isEmpty ? nil : weeklyDigestSource,
@@ -213,6 +236,7 @@ public final class FeatureSettingsStore: ObservableObject {
             return
         }
         lyrics = f.lyrics ?? true
+        player = f.player.flatMap(PlaybackPlayer.init(rawValue:)) ?? .appleMusic
         albumPrefetch = f.albumPrefetch ?? true
         lastfmBridge = f.lastfmBridge ?? false
         lastfmMirrorScrobble = f.lastfmMirrorScrobble ?? false

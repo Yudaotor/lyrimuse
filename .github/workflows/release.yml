@@ -59,6 +59,12 @@ jobs:
           swift --version
           go version
 
+      - name: Install media-control (QQ 音乐支持)
+        # ungive/media-control(BSD-3-Clause),build.sh 会把它拷进 .app 包——不装的话
+        # build.sh 只是打个警告跳过这一步,不会让整个构建失败,但发布出去的这份 zip 就
+        # 不支持切到 QQ 音乐。GitHub 的 macOS runner 镜像自带 Homebrew。
+        run: brew install media-control
+
       - name: Determine version string
         id: version
         run: |
@@ -92,6 +98,7 @@ jobs:
           codesign -dvvv /Applications/Lyrimuse.app
           codesign -v /Applications/Lyrimuse.app && echo "app signature OK"
           codesign -v /Applications/Lyrimuse.app/Contents/Resources/collector && echo "collector signature OK"
+          codesign -v /Applications/Lyrimuse.app/Contents/Resources/media-control/bin/media-control && echo "media-control signature OK"
           # Not a Gatekeeper/notarization check -- nothing here is notarized (see the
           # README's Gatekeeper-bypass section). This only confirms the ad-hoc signature
           # build.sh applied is internally well-formed before it ships.

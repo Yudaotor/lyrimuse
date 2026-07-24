@@ -772,9 +772,31 @@ private struct GeneralSettingsTab: View {
 
     var body: some View {
         Form {
+            // 选哪个播放器决定了下面"权限"这个 Section 还要不要出现——QQ 音乐走系统级
+            // MediaRemote,没有"自动化"这个概念,继续显示这个 Section 只会误导人以为
+            // 还需要处理这个权限。切换后台采集服务(收集器只在启动时读一次这个设置)
+            // 需要重启才生效,跟这个 store 其它开关一样"保存即重启"。
+            Section {
+                Picker(L10n.t("播放器"), selection: Binding(
+                    get: { features.player },
+                    set: { features.player = $0; Task { await features.save() } }
+                )) {
+                    ForEach(PlaybackPlayer.allCases) { player in
+                        Text(player.displayName).tag(player)
+                    }
+                }
+                .pickerStyle(.menu)
+            } header: {
+                Text(L10n.t("播放器"))
+            } footer: {
+                Text(L10n.t("选择 Lyrimuse 读取哪个 App 的播放状态。"))
+            }
+
             // 本地数据源现在通过 AppleScript 直接问 Music.app(见 MediaControlClient.swift),
             // 这个权限因此从"可选、只影响播放进度精度"变成"核心路径必需、没有就完全
-            // 看不到歌词",footer 特意说清楚这一点,别让人以为不给也无所谓。
+            // 看不到歌词",footer 特意说清楚这一点,别让人以为不给也无所谓。QQ 音乐走
+            // 系统级 MediaRemote,不需要这个权限,选中它时整个 Section 不出现。
+            if features.player == .appleMusic {
             Section {
                 HStack {
                     Label {
@@ -828,6 +850,7 @@ private struct GeneralSettingsTab: View {
                     automationRequestTimedOut = false
                 }
             }
+            } // features.player == .appleMusic
 
             // collector(读播放状态、抓歌词/封面写本地缓存的后台服务)跟"权限"那个
             // Section 一样用图标+文案+按钮而不是简单 Toggle——需要展示"装了但没跑

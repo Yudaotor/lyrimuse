@@ -64,6 +64,44 @@ cp AppIcon.icns "$APP_DIR/Contents/Resources/AppIcon.icns"
 # collector 是被 launchd 单独拉起的后台辅助二进制，不是这个 App 自己的入口。
 cp "$RELEASE_DIR/collector" "$APP_DIR/Contents/Resources/collector"
 
+# 2026-07-24:QQ 音乐支持——QQ音乐.app 没有 AppleScript 支持(sdef/NSAppleScriptEnabled
+# 都核实过没有),读它的播放状态改走系统级 MediaRemote,经 ungive/media-control
+# (BSD-3-Clause 开源,https://github.com/ungive/media-control)读。这个工具不是单个
+# 独立二进制——`media-control` 可执行文件靠相对路径(`../lib/media-control/
+# mediaremote-adapter.pl`)找同一次 Homebrew 安装里的 Perl 适配脚本,脚本再调同一棵树下
+# 的 MediaRemoteAdapter.framework 去访问私有框架(实测坐实:只拷可执行文件本身,运行时
+# 会报 "Can't open perl script ... No such file or directory")。因此这里把 Homebrew
+# Cellar 里 bin/+lib/+Frameworks/ 这一整棵相对路径子树原样搬进
+# Contents/Resources/media-control/(排除 INSTALL_RECEIPT.json 等安装元数据),保持它
+# 内部的相对路径结构不变——collector 常驻进程按跟自己同目录的固定子路径找
+# media-control/bin/media-control(见 lyrimuse-collector/system.go 的
+# mediaControlBinaryPath),Swift 侧走 Bundle.main.resourcePath 拼同一条路径——两边都
+# 不需要用户自己额外 brew install 任何东西。本地开发机上要求已经
+# `brew install media-control`(CI 见 release.yml,跑在 GitHub Actions 的 macOS
+# runner 上,自带 Homebrew);没装的话跳过这一步、打个警告,不阻断整个构建——QQ 音乐
+# 支持是可选功能,不该让完全不需要它的人连 Apple Music 都构建不出来。
+MEDIA_CONTROL_PREFIX="$(brew --prefix media-control 2>/dev/null)"
+if [ -x "$MEDIA_CONTROL_PREFIX/bin/media-control" ]; then
+  # 先删再拷贝(跟 collector/.lproj 同款先例):Homebrew Cellar 里这些文件很多是只读的
+  # (-r-xr-xr-x),`cp -R` 会原样带过来只读位——第二次往后重新构建时,已存在的只读文件/
+  # 目录会让 `cp`/`codesign` 直接 "Permission denied"(实测坐实)。
+  rm -rf "$APP_DIR/Contents/Resources/media-control"
+  mkdir -p "$APP_DIR/Contents/Resources/media-control"
+  cp -R "$MEDIA_CONTROL_PREFIX/bin" "$APP_DIR/Contents/Resources/media-control/bin"
+  cp -R "$MEDIA_CONTROL_PREFIX/lib" "$APP_DIR/Contents/Resources/media-control/lib"
+  cp -R "$MEDIA_CONTROL_PREFIX/Frameworks" "$APP_DIR/Contents/Resources/media-control/Frameworks"
+  chmod -R u+w "$APP_DIR/Contents/Resources/media-control"
+  # media-control 这个可执行文件本身完全没签名(实测 `codesign -dv` 报 "code object is
+  # not signed at all")——跟 collector(go build 的产物自带签名)不一样,这里需要主动
+  # 补签,不然可能被 Gatekeeper 拦下来。MediaRemoteAdapter.framework 内部那个 Mach-O
+  # 已经带着 Homebrew 自己的 ad-hoc 签名,不需要(也不应该)重复处理;
+  # mediaremote-adapter.pl 是纯文本 Perl 脚本,同样不需要签名。
+  codesign --force --sign - "$APP_DIR/Contents/Resources/media-control/bin/media-control"
+  echo "    media-control bundled (QQ 音乐支持)"
+else
+  echo "!! media-control not found (brew install media-control) — QQ 音乐支持这次构建不可用,Apple Music 不受影响" >&2
+fi
+
 # 2026-07-23:检查更新改接 Sparkle(见 UpdateChecker.swift 的替代——那份手写的
 # "查 GitHub API+弹 Alert"逻辑已删,改用这个 macOS 生态里事实标准的自动更新框架)。
 # `swift build` 不会自动把这个 SPM 二进制依赖(binaryTarget,一个预编译的

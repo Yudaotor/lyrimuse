@@ -1,24 +1,22 @@
 # Lyrimuse
 
-原生 macOS 菜单栏 + 悬浮歌词窗口，跟着 Apple Music 播放实时显示逐字同步歌词，显示成一个
-常驻置顶、跨 Space 的小悬浮窗——类似网易云/QQ音乐桌面客户端的"桌面歌词"。另外还有一个
-"歌词管理"窗口，可以查看/手改/删除/重新搜索每首歌的歌词候选。
+原生 macOS 菜单栏 + 悬浮歌词窗口，跟着 Apple Music 或 QQ 音乐播放实时显示逐字同步歌词，
+显示成一个常驻置顶、跨 Space 的小悬浮窗——类似网易云/QQ音乐桌面客户端的"桌面歌词"。另外
+还有一个"歌词管理"窗口，可以查看/手改/删除/重新搜索每首歌的歌词候选。
 
-两种数据源（菜单栏"设置…"里切换）：
+数据完全本地读取，零网络：直接读这台 Mac 上播放器的当前状态（Apple Music 走 AppleScript，
+需要一次「自动化」权限授权；QQ 音乐没有 AppleScript 支持，改走系统级 MediaRemote，不需要
+任何权限，见下面"依赖"）+ `../lyrimuse-collector/` 采集器写在磁盘上的歌词/封面缓存。用哪个
+播放器是首次启动引导（或随时在设置里）的一个显式选择，默认 Apple Music。这个采集器现在
+打包进 `.app` 里（`build.sh` 会一并 `go build` 一份塞进 `Contents/Resources/collector`），
+常驻运行靠 `CollectorServiceManager.swift` 管理的 LaunchAgent——同样在首次启动引导时开启，
+或随时去设置的"通用"tab 里装/卸。它负责联网查歌词/封面并写进这份本地缓存，Lyrimuse 自己
+不联网找歌词。没有缓存时会正常显示"暂无歌词"，不会报错。
 
-- **本地模式（默认）**：零网络，直接用 AppleScript 读这台 Mac 上 Music.app 当前播放状态（需要
-  一次「自动化」权限授权，首次启动时会引导完成）+ `../lyrimuse-collector/` 采集器写在磁盘上的
-  歌词/封面缓存。这个采集器现在打包进 `.app` 里（`build.sh` 会一并 `go build` 一份塞进
-  `Contents/Resources/collector`），常驻运行靠 `CollectorServiceManager.swift` 管理的
-  LaunchAgent——同样在首次启动引导时开启，或随时去设置的"通用"tab 里装/卸。它负责联网查
-  歌词/封面并写进这份本地缓存，Lyrimuse 自己不联网找歌词。没有缓存时会正常显示"暂无歌词"，
-  不会报错。
-- **中继模式（relay）**：跟网页版一样读某个 `state-worker`（状态中继，一个 Cloudflare
-  Worker，源码和部署教程见独立仓库
-  [Yudaotor/nowplaying-workers](https://github.com/Yudaotor/nowplaying-workers)）的
-  `/now` 接口，用于跨设备/跨房间同步（比如手机上也能看）。需要在设置里自己填
-  `state-worker` 的地址，不填会用一个默认示例地址（这个项目作者自己部署的
-  `np.yudaotor.me`，仅供体验效果，不代表你自己的播放数据）。
+如果想要跨设备/跨房间同步展示（比如手机上也能看当前播放），或者想把"正在播放"做成一个
+公开网页/飞书卡片分享出去，见独立仓库
+[Yudaotor/nowplaying-workers](https://github.com/Yudaotor/nowplaying-workers)——那是一套
+完全独立、可选的功能，Lyrimuse 只负责单向推送状态给它，不依赖它也能正常显示悬浮歌词。
 
 ## 依赖与运行方式
 
@@ -28,6 +26,11 @@
   go1.24.4`，原因见 `lyrimuse-collector/build.sh` 顶部注释）塞进 `.app` 包里，所以也需要
   本机装了 Go 工具链——这样 collector 不再要求用户单独构建/手动装 LaunchAgent，App 自己
   的 `CollectorServiceManager.swift` 就能装/卸它（见首次启动引导，或设置的"通用"tab）。
+- 2026-07-24 起，构建 QQ 音乐支持需要本机 `brew install media-control`（
+  [ungive/media-control](https://github.com/ungive/media-control)，BSD-3-Clause）——
+  `build.sh` 会把这份二进制拷进 `.app` 包（`Contents/Resources/media-control`），最终
+  用户不需要自己装任何东西。没装这个包也能正常构建，只是这次构建出来的 App 不支持切换到
+  QQ 音乐（Apple Music 不受影响）。
 - 打包成正经的 `.app`（2026-07-18 起）：`build.sh` 把 release 构建的可执行文件+图标+
   `Info.plist`+collector 二进制组装安装到 `/Applications/Lyrimuse.app`，可以拖进 Dock 当
   启动器双击打开。`Info.plist` 里仍然设 `LSUIElement`，运行期间照旧不占 Dock/Cmd-Tab（跟

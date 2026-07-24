@@ -39,16 +39,26 @@ const (
 	lyricsModePriority = "priority"
 )
 
+// 本地播放状态读取哪个 App——跟 lyrimuse 侧 PlaybackPlayer(LyrimuseCore/Local/
+// PlaybackPlayer.swift)的 rawValue 逐字对应,共享文件里 "player" 字段的取值。两个值
+// 对应两条完全不同的读取路径,见 system.go 的 getState()/appleMusicPosition() 注释。
+const (
+	playerAppleMusic = "apple_music"
+	playerQQMusic    = "qq_music"
+)
+
 // lyricsSourceDefaultOrder 是"顺序优先"模式缺省的顺序——照抄 enrich.go
 // scoredLyricCandidates 里 candidates 列表本来的 append 顺序,不是这里凭空定的。
 var lyricsSourceDefaultOrder = []string{lyricSourceNetease, lyricSourceQQ, lyricSourceKugou, lyricSourceMusixmatch, lyricSourceLRCLIB}
 
 type featureFlagsFile struct {
-	Lyrics               *bool `json:"lyrics,omitempty"`
-	AlbumPrefetch        *bool `json:"album_prefetch,omitempty"`
-	LastfmBridge         *bool `json:"lastfm_bridge,omitempty"`
-	LastfmMirrorScrobble *bool `json:"lastfm_mirror_scrobble,omitempty"`
-	WeeklyDigest         *bool `json:"weekly_digest,omitempty"`
+	Lyrics *bool `json:"lyrics,omitempty"`
+	// Player："apple_music"(默认,缺省/认不出的值都按这个处理)或"qq_music"。
+	Player               string `json:"player,omitempty"`
+	AlbumPrefetch        *bool  `json:"album_prefetch,omitempty"`
+	LastfmBridge         *bool  `json:"lastfm_bridge,omitempty"`
+	LastfmMirrorScrobble *bool  `json:"lastfm_mirror_scrobble,omitempty"`
+	WeeklyDigest         *bool  `json:"weekly_digest,omitempty"`
 	// DailyDigest：见 daily.go。跟 WeeklyDigest 是独立开关，两个可以同时开、只开一个、
 	// 或都不开。
 	DailyDigest *bool `json:"daily_digest,omitempty"`
@@ -90,7 +100,11 @@ type featureFlagsFile struct {
 // config.go;TopArtistsDigest 见 topArtistsDigest()),不需要单独开关;故障告警
 // 已整个下线,见 alerter.go。
 type featureFlags struct {
-	Lyrics               bool
+	Lyrics bool
+	// Player 是已经解析过的具体值(playerAppleMusic/playerQQMusic,不会是空字符串或
+	// 认不出的值,见 resolvePlayer)。只被 system.go 的 getState()/appleMusicPosition()
+	// 读取。
+	Player               string
 	AlbumPrefetch        bool
 	LastfmBridge         bool
 	LastfmMirrorScrobble bool
@@ -146,6 +160,7 @@ func loadFeatureFlags(path string) featureFlags {
 	}
 	return featureFlags{
 		Lyrics:                    boolOr(f.Lyrics, true),
+		Player:                    resolvePlayer(f.Player),
 		AlbumPrefetch:             boolOr(f.AlbumPrefetch, true),
 		LastfmBridge:              boolOr(f.LastfmBridge, false),
 		LastfmMirrorScrobble:      boolOr(f.LastfmMirrorScrobble, false),
@@ -160,6 +175,15 @@ func loadFeatureFlags(path string) featureFlags {
 		LyricsTranslationLanguage: resolveLyricsTranslationLanguage(f.LyricsTranslationLanguage),
 		LaunchLyrimuseOnMusicOpen: boolOr(f.LaunchLyrimuseOnMusicOpen, false),
 	}
+}
+
+// resolvePlayer 兜底成 playerAppleMusic——这是这个设置加入之前唯一存在过的行为,
+// 保证全新安装/旧配置文件(没有 "player" 字段)不会被静默解读成别的播放器。
+func resolvePlayer(p string) string {
+	if p == playerQQMusic {
+		return playerQQMusic
+	}
+	return playerAppleMusic
 }
 
 func resolveLyricsSources(list []string) map[string]bool {

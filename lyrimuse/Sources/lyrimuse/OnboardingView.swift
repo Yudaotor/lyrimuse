@@ -1,15 +1,19 @@
+import LyrimuseCore
 import SwiftUI
 
 // 首次启动的完整引导向导,参照 Jukebox/PlayStatus/Tuneful 这类"一步步走一遍"的
-// 体验。每一步的设置项都直接绑定到 AppSettings 对应属性、立即生效(跟 SettingsView
-// 里同一批设置项一样,不做"最后统一确认"),向导只是把它们串成一个有引导性的首次
-// 体验,不是另一套独立状态。
+// 体验。每一步的设置项都直接绑定到 AppSettings/FeatureSettingsStore 对应属性、立即
+// 生效(跟 SettingsView 里同一批设置项一样,不做"最后统一确认"),向导只是把它们串成
+// 一个有引导性的首次体验,不是另一套独立状态。
 //
-// 不含"播放状态来源"选择——本地数据源是唯一的数据源(见 PlaybackCoordinator.start()),
-// 不是可配置项。也没有任何"重新打开"的入口(菜单栏/设置都不留)——只在首次启动自动
-// 出现一次,关掉/走完都不会再自动弹出,想再调整这里涉及的每一项都能在设置里单独找到。
+// 步数不再是写死的常量——选了 QQ 音乐时,"Apple Music 自动化权限"这一步整个不需要
+// 出现(QQ 音乐走系统级 MediaRemote,没有这个权限的概念),steps 按当前选中的播放器
+// 动态算出这一轮实际要走哪几步,下面的按钮/进度点都跟着这份列表走,不再硬编码具体
+// 步数下标。也没有任何"重新打开"的入口(菜单栏/设置都不留)——只在首次启动自动出现
+// 一次,关掉/走完都不会再自动弹出,想再调整这里涉及的每一项都能在设置里单独找到。
 struct OnboardingView: View {
     @ObservedObject private var settings = AppSettings.shared
+    @ObservedObject private var features = FeatureSettingsStore.shared
     @Environment(\.dismissWindow) private var dismissWindow
     @State private var step = 0
     @State private var automationStatus: MusicAutomationPermissionStatus = .notDetermined
@@ -24,17 +28,32 @@ struct OnboardingView: View {
     @State private var collectorRunning = false
     @State private var isTogglingCollectorService = false
 
-    private static let totalSteps = 5
+    private enum Step: Equatable {
+        case welcome, playerChoice, automation, collectorService, language, done
+    }
+
+    // Apple Music 才需要 automation 这一步——QQ 音乐没有"自动化"权限的概念(见文件
+    // 顶部注释)。这份列表本身不 @State,是纯粹从 features.player 派生出来的,player
+    // 一变(用户在上一步刚选完)下一次读到的就是新列表,不需要额外同步。
+    private var steps: [Step] {
+        var s: [Step] = [.welcome, .playerChoice]
+        if features.player == .appleMusic {
+            s.append(.automation)
+        }
+        s.append(contentsOf: [.collectorService, .language, .done])
+        return s
+    }
 
     var body: some View {
         VStack(spacing: 0) {
             Group {
-                switch step {
-                case 0: welcomeStep
-                case 1: automationStep
-                case 2: collectorServiceStep
-                case 3: languageStep
-                default: doneStep
+                switch steps[step] {
+                case .welcome: welcomeStep
+                case .playerChoice: playerChoiceStep
+                case .automation: automationStep
+                case .collectorService: collectorServiceStep
+                case .language: languageStep
+                case .done: doneStep
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -48,15 +67,15 @@ struct OnboardingView: View {
                 if step > 0 {
                     Button(L10n.t("上一步")) { step -= 1 }
                 }
-                Button(step == Self.totalSteps - 1 ? L10n.t("开始使用") : L10n.t("下一步")) {
-                    if step == Self.totalSteps - 1 {
+                Button(step == steps.count - 1 ? L10n.t("开始使用") : L10n.t("下一步")) {
+                    if step == steps.count - 1 {
                         finish()
                     } else {
                         step += 1
                     }
                 }
                 .keyboardShortcut(.defaultAction)
-                .disabled(step == 2 && !collectorRunning)
+                .disabled(steps[step] == .collectorService && !collectorRunning)
             }
             .padding(16)
         }
@@ -86,7 +105,7 @@ struct OnboardingView: View {
 
     private var stepDots: some View {
         HStack(spacing: 6) {
-            ForEach(0..<Self.totalSteps, id: \.self) { i in
+            ForEach(0..<steps.count, id: \.self) { i in
                 Circle()
                     .fill(i == step ? Color.accentColor : Color.secondary.opacity(0.3))
                     .frame(width: 6, height: 6)
@@ -103,6 +122,25 @@ struct OnboardingView: View {
                 .font(.title.bold())
             Text(L10n.t("一个贴心的桌面悬浮歌词小工具。接下来用几步简单设置，帮你把它调整成合适的样子——这些选项以后随时可以在设置里再调整。"))
                 .foregroundStyle(.secondary)
+        }
+    }
+
+    private var playerChoiceStep: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text(L10n.t("选择播放器"))
+                .font(.title2.bold())
+            Text(L10n.t("Lyrimuse 支持从 Apple Music 或 QQ 音乐读取播放状态——选一个你平时用来听歌的 App，随时可以在设置里重新选择。"))
+                .foregroundStyle(.secondary)
+            Picker(L10n.t("播放器"), selection: Binding(
+                get: { features.player },
+                set: { features.player = $0; Task { await features.save() } }
+            )) {
+                ForEach(PlaybackPlayer.allCases) { player in
+                    Text(player.displayName).tag(player)
+                }
+            }
+            .pickerStyle(.menu)
+            .labelsHidden()
         }
     }
 

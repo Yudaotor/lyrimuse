@@ -230,8 +230,21 @@ func (p *poller) recentlyPlayedOnMac(artist, title string, uts int64) bool {
 // "is this someone I actually care about" check that used to be repeated
 // (with slightly different combinations of the cur.Playing check) at each of
 // pushRelayState/handle/bridge/poll.
+//
+// 也接受当前选定播放器(features.Player)自己期望的 bundle id,不只是 cfg.BundleIDs
+// 里配置的那份——getState() 的两条路径(getAppleMusicState/getQQMusicState)只会在
+// bundle id 确实对得上当前选定的播放器时才产出非空快照,所以这里理应无条件认它,不能
+// 因为用户没有额外手动去 config.json 里加一条 bundle_ids 就把 QQ 音乐的播放判定成
+// "不是我关心的来源"。cfg.BundleIDs 仍然保留:留给需要额外识别别的 bundle id 的高级
+// 用法。
 func (p *poller) isTracked() bool {
-	return p.cur.key() != "" && slices.Contains(p.cfg.BundleIDs, p.cur.Bundle)
+	if p.cur.key() == "" {
+		return false
+	}
+	if slices.Contains(p.cfg.BundleIDs, p.cur.Bundle) {
+		return true
+	}
+	return p.cur.Bundle == expectedPlayerBundleID()
 }
 
 // mirrorScrobbleTracked 先同步记入"已镜像"集合并落盘,再异步镜像写入 Last.fm——见
@@ -815,7 +828,12 @@ func (p *poller) poll() {
 	// 锚点时间必须在 osascript 真正返回之后重新取——它要 fork 一个进程走 AppleEvents,
 	// 实测能有几百 ms 到 ~1s 的延迟;如果沿用调用前的 now,相当于把"稍晚采到的位置"报成
 	// "更早时刻就已经在那",网页据此外推会一直快出这段延迟(实锤:网页比实际快1秒左右)。
-	if p.cur.Playing && p.isTracked() {
+	// appleMusicPosition 只对 Apple Music 有意义(它是专门再问一次 Music.app 要更精确
+	// 播放头的第二次调用)——QQ 音乐没有这条路径,getQQMusicState 用的 elapsedTimeNow
+	// 已经是每一轮都新鲜的读数,不需要、也不应该再叠加这一步(不加这个判断的话,即使
+	// 选的是 QQ 音乐,这里仍会照样问一次 Music.app,如果它碰巧也开着在放别的东西,会
+	// 用 Music.app 的位置错误覆盖掉 QQ 音乐这边正确算出来的位置)。
+	if features.Player == playerAppleMusic && p.cur.Playing && p.isTracked() {
 		if pos, ok := appleMusicPosition(p.ctx); ok {
 			p.cur.Position, p.cur.AnchorTS = pos, time.Now()
 		}
