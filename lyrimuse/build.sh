@@ -62,6 +62,20 @@ cp "$RELEASE_DIR/lyrimuse" "$BIN"
 cp AppIcon.icns "$APP_DIR/Contents/Resources/AppIcon.icns"
 # collector 装在 Resources/ 而不是 MacOS/——那里是 CFBundleExecutable 指向的主执行文件，
 # collector 是被 launchd 单独拉起的后台辅助二进制，不是这个 App 自己的入口。
+#
+# 2026-07-24 实测坐实一个严重问题：反复在同一路径上 `cp`(不删旧文件、复用同一个
+# inode)覆盖这个可执行文件很多次之后，内核的代码签名信任判定会失效——表现是这个
+# 二进制不管谁来起(不只是 launchd 管的常驻服务，"歌词管理"窗口"搜索候选歌词"那种
+# 一次性子进程调用同样中招)全部被 SIGKILL，诊断报告(~/Library/Logs/
+# DiagnosticReports/collector-*.ips)里能看到明确原因："SIGKILL (Code Signature
+# Invalid)" / namespace CODESIGNING / indicator "Taskgated Invalid Signature"——
+# 即使当时用 `codesign -v` 单独验证这个文件本身完全通过。跟主执行文件($BIN)的处境
+# 不同:那个在下面会被 `codesign --force` 显式重新签名一次，这里 collector 从
+# `go build` 产物原样拷过来，从没有在 build.sh 里被重新签过，长期反复覆盖同一个
+# inode 更容易踩中这个内核侧缓存陈旧的坑。先删再拷，让每次构建都是一个全新的
+# inode，从根源避开这个问题(跟上面这次会话另外给 media-control 加的 rm -f 是
+# 同一类修法，那边最初是为了绕开只读权限，这里主要是为了这个签名信任缓存问题)。
+rm -f "$APP_DIR/Contents/Resources/collector"
 cp "$RELEASE_DIR/collector" "$APP_DIR/Contents/Resources/collector"
 
 # 2026-07-24:QQ 音乐支持——QQ音乐.app 没有 AppleScript 支持(sdef/NSAppleScriptEnabled
