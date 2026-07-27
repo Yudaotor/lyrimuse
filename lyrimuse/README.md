@@ -26,11 +26,13 @@
   go1.24.4`，原因见 `lyrimuse-collector/build.sh` 顶部注释）塞进 `.app` 包里，所以也需要
   本机装了 Go 工具链——这样 collector 不再要求用户单独构建/手动装 LaunchAgent，App 自己
   的 `CollectorServiceManager.swift` 就能装/卸它（见首次启动引导，或设置的"通用"tab）。
-- 2026-07-24 起，构建 QQ 音乐支持需要本机 `brew install media-control`（
-  [ungive/media-control](https://github.com/ungive/media-control)，BSD-3-Clause）——
+- 2026-07-24 起，构建 QQ 音乐支持需要
+  [ungive/media-control](https://github.com/ungive/media-control)（BSD-3-Clause）——
   `build.sh` 会把这份二进制拷进 `.app` 包（`Contents/Resources/media-control`），最终
-  用户不需要自己装任何东西。没装这个包也能正常构建，只是这次构建出来的 App 不支持切换到
-  QQ 音乐（Apple Music 不受影响）。
+  用户不需要自己装任何东西。**不需要提前手动 `brew install media-control`**：
+  2026-07-27 起 `build.sh` 检测到本机没装会自动装一次（前提是本机已经装了 Homebrew——
+  Go 工具链那条已经要求了）；如果自动安装失败（没网/没装 Homebrew 本身），会打个警告
+  继续构建，只是这次构建出来的 App 不支持切换到 QQ 音乐（Apple Music 不受影响）。
 - 打包成正经的 `.app`（2026-07-18 起）：`build.sh` 把 release 构建的可执行文件+图标+
   `Info.plist`+collector 二进制组装安装到 `/Applications/Lyrimuse.app`，可以拖进 Dock 当
   启动器双击打开。`Info.plist` 里仍然设 `LSUIElement`，运行期间照旧不占 Dock/Cmd-Tab（跟

@@ -90,11 +90,19 @@ cp "$RELEASE_DIR/collector" "$APP_DIR/Contents/Resources/collector"
 # 内部的相对路径结构不变——collector 常驻进程按跟自己同目录的固定子路径找
 # media-control/bin/media-control(见 lyrimuse-collector/system.go 的
 # mediaControlBinaryPath),Swift 侧走 Bundle.main.resourcePath 拼同一条路径——两边都
-# 不需要用户自己额外 brew install 任何东西。本地开发机上要求已经
-# `brew install media-control`(CI 见 release.yml,跑在 GitHub Actions 的 macOS
-# runner 上,自带 Homebrew);没装的话跳过这一步、打个警告,不阻断整个构建——QQ 音乐
-# 支持是可选功能,不该让完全不需要它的人连 Apple Music 都构建不出来。
+# 不需要用户自己额外 brew install 任何东西。
+#
+# 本地开发机上不要求提前手动 `brew install media-control`——下面检测到没装会自动装一次
+# (CI 见 release.yml,跑在 GitHub Actions 的 macOS runner 上,提前显式装过,这里的自动
+# 安装对 CI 是无操作的冗余检查,不影响什么)。`brew install` 失败(网络问题/没装 Homebrew
+# 本身等)不阻断整个构建,跳过这一步、打个警告——QQ 音乐支持是可选功能,不该让完全不需要
+# 它的人连 Apple Music 都构建不出来。
 MEDIA_CONTROL_PREFIX="$(brew --prefix media-control 2>/dev/null)"
+if [ ! -x "$MEDIA_CONTROL_PREFIX/bin/media-control" ] && command -v brew >/dev/null 2>&1; then
+  echo "==> media-control not found, installing via Homebrew (QQ 音乐支持)"
+  brew install media-control || echo "!! brew install media-control 失败——继续构建,QQ 音乐支持这次不可用,Apple Music 不受影响" >&2
+  MEDIA_CONTROL_PREFIX="$(brew --prefix media-control 2>/dev/null)"
+fi
 if [ -x "$MEDIA_CONTROL_PREFIX/bin/media-control" ]; then
   # 先删再拷贝(跟 collector/.lproj 同款先例):Homebrew Cellar 里这些文件很多是只读的
   # (-r-xr-xr-x),`cp -R` 会原样带过来只读位——第二次往后重新构建时,已存在的只读文件/
