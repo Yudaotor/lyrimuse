@@ -4,7 +4,7 @@
 
 # Lyrimuse
 
-**Real-time, word-synced lyrics for Apple Music, right on your Mac desktop.**
+**Real-time, word-synced lyrics for Apple Music or QQ Music, right on your Mac desktop.**
 
 **Language / 语言:** **English** | [简体中文](README.zh-CN.md)
 
@@ -15,7 +15,7 @@
 
 </div>
 
-Lyrimuse sits quietly in your menu bar and shows a floating lyrics window that follows whatever's playing in Apple Music — word by word, in sync, always on top, across every Space. Think of the "desktop lyrics" experience from NetEase Cloud Music or QQ Music, but native to macOS.
+Lyrimuse sits quietly in your menu bar and shows a floating lyrics window that follows whatever's playing — on Apple Music or QQ Music, your choice — word by word, in sync, always on top, across every Space. Think of the "desktop lyrics" experience from NetEase Cloud Music, but native to macOS.
 
 <div align="center">
 
@@ -37,10 +37,12 @@ Lyrimuse sits quietly in your menu bar and shows a floating lyrics window that f
 - **Works fully offline** in local mode — no network round-trip needed to show lyrics that are already cached
 
 ### Show it your way
+- **Choose your player**: reads what's playing from Apple Music (via Automation access) or QQ Music (via macOS's system-level MediaRemote — no permission needed); pick once during onboarding, switch anytime in Settings
 - **Two floating styles**: a classic desktop overlay, or a Dynamic-Island-style capsule docked at the top of the screen — turn on either, both, or neither
 - **Menu bar text mode** — read the current line directly from the status bar instead of a floating window
 - **Playback controls** (play/pause, next, previous) built right into the overlay
-- **Fully customizable look**: font (or follow the system), size, text/background/shadow colors with savable custom themes, overlay width, position lock
+- **Click-through by default, drag with a long-press** — the classic overlay never blocks clicks meant for whatever's behind it; press and hold it to reposition it, or lock its position entirely from the menu bar
+- **Fully customizable look**: font (or follow the system), size, text/background/shadow colors with savable custom themes, overlay width
 - **Hide during screenshots, recordings, or screen shares** — stays visible to you, invisible to everyone else
 - **Auto-hide when paused** so it never sits on your desktop doing nothing
 
@@ -48,6 +50,9 @@ Lyrimuse sits quietly in your menu bar and shows a floating lyrics window that f
 - **Simplified Chinese and English UI**, switches instantly, no restart needed
 - **Global keyboard shortcuts** for every action, all left unbound by default so you decide
 - **Menu-bar only by design** — doesn't clutter your Dock (optionally toggle Dock visibility if you want it there)
+- **Checks for updates on its own** (or on demand from the menu bar) — no need to keep revisiting the Releases page
+- **Optional companion launch** with Apple Music, in either direction — launch one when the other opens
+- **Export or import your whole configuration** to move to a new Mac, plus a one-click diagnostics export for troubleshooting
 
 ### Optional extras
 Everything below is opt-in and off by default — turn on only what you want, right from Settings:
@@ -95,9 +100,11 @@ cd lyrimuse/lyrimuse
 ./build.sh
 ```
 
+QQ Music support additionally needs [ungive/media-control](https://github.com/ungive/media-control) — `build.sh` installs it via Homebrew automatically if it's missing, so this isn't a step you need to do yourself either.
+
 ### After either option
 
-Open Lyrimuse from `/Applications` — the first-run wizard walks you through the two things it actually needs: Automation access to Music.app (so it can read what's currently playing) and enabling its background collector service (so lyrics/artwork keep resolving even when the window's closed). Complete both and lyrics will appear right away (see [lyrimuse/README.md](lyrimuse/README.md) for more build options).
+Open Lyrimuse from `/Applications` — the first-run wizard walks you through picking a player (Apple Music or QQ Music), granting Automation access to Music.app if you picked Apple Music (QQ Music needs no extra permission), and enabling its background collector service (so lyrics/artwork keep resolving even when the window's closed). Complete the wizard and lyrics will appear right away (see [lyrimuse/README.md](lyrimuse/README.md) for more build options).
 
 You don't need to configure anything else to get lyrics — every optional extra above is configured later, entirely from Settings.
 

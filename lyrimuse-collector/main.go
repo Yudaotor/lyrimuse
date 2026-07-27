@@ -20,8 +20,12 @@ const (
 	// 2026-07-23:项目最早叫 applemusic-nowplaying,后来改名 Lyrimuse 时这个常量
 	// 没跟着一起改——配置目录/文件名前缀/User-Agent/ListenBrainz submission_client
 	// 全部由它派生,现在统一改过来,不做旧路径兼容(不写自动迁移代码)。
-	clientName    = "lyrimuse"
-	clientVersion = "0.1.0"
+	clientName = "lyrimuse"
+	// 2026-07-27:之前一直没跟着 App 的 CFBundleShortVersionString 走(App 侧由
+	// LYRIMUSE_VERSION 从 git tag 自动派生,这个常量完全独立、从改名到现在没手动
+	// 动过)——收到 v1.1.0 发布时顺手同步一次,不代表以后每次发版都会自动跟着改,
+	// 这里仍然是纯手动维护的字面量。
+	clientVersion = "1.1.0"
 
 	pollInterval      = 5 * time.Second
 	playingNowRefresh = 60 * time.Second

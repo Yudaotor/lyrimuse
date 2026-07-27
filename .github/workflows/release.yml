@@ -34,6 +34,16 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          # fetch-depth: 0 -- a shallow (default depth-1) checkout does NOT reliably bring
+          # along annotated tag objects/messages, only the commit the pushed ref points to.
+          # The "Extract tag changelog" step below reads the pushed tag's own annotation
+          # message, which silently came back empty on v1.0.0/v1.0.1 for exactly this
+          # reason (verified after the fact via `gh release view` -- both releases' pages
+          # only ever showed GitHub's auto-generated compare link, never the changelog that
+          # was actually written into each tag's message). Full history costs a bit more
+          # fetch time on CI but this repo is small; correctness here matters more.
+          fetch-depth: 0
         # lyrimuse/ and lyrimuse-collector/ are sibling directories in this one repo (not
         # two repos) -- lyrimuse/build.sh does `(cd ../lyrimuse-collector && ...)`, so a
         # single full checkout already lays both out side by side. No submodules needed.
@@ -198,11 +208,30 @@ jobs:
           echo "---- appcast.xml ----"
           cat appcast.xml
 
+      - name: Extract tag changelog
+        # 之前的假设是错的:实测坐实 v1.0.0/v1.0.1 的 Release 页面从来没有显示过写进
+        # annotated tag message 里的改动点清单——只有 GitHub 自动生成的 compare 链接。
+        # generate_release_notes:true 在没有显式 body 时会直接把 body 整个替换成自动
+        # 生成的内容,不是"追加在 tag message 后面"。这里显式把这个 tag 自己的
+        # annotation 读出来,喂给下一步的 body 输入,GitHub 那边的规则是 body 在前、
+        # generate_release_notes 的自动内容追加在后,两者都要才凑得齐。
+        if: startsWith(github.ref, 'refs/tags/')
+        id: changelog
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          BODY="$(git for-each-ref "refs/tags/${TAG}" --format='%(contents)')"
+          {
+            echo "body<<CHANGELOG_EOF"
+            echo "$BODY"
+            echo "CHANGELOG_EOF"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Create GitHub Release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v3
         with:
           name: Lyrimuse ${{ steps.version.outputs.version }}
+          body: ${{ steps.changelog.outputs.body }}
           generate_release_notes: true
           files: |
             ${{ steps.package.outputs.zip }}
