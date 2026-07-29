@@ -534,13 +534,15 @@ struct AccountLinkingTab: View {
                 )
             }
             TextField(L10n.t("Last.fm 用户名"), text: $config.lastfmUser)
+            if let profileURL = lastfmProfileURL {
+                Link(L10n.t("在 Last.fm 网站查看主页 →"), destination: profileURL)
+                    .font(.caption)
+            }
             SecretFieldRow("API Key", value: $config.lastfmScrobbleAPIKey)
             SecretFieldRow("Secret", value: $config.lastfmScrobbleSecret, prompt: L10n.t("只用只读功能可以留空"))
             lastfmConnectArea
         } header: {
             Text(L10n.t("账号信息"))
-        } footer: {
-            Text(L10n.t("填好用户名 + API Key，同步到 ListenBrainz；填上 Secret 并连接账号，同步进 Last.fm。"))
         }
 
         Section {
@@ -557,6 +559,20 @@ struct AccountLinkingTab: View {
         } footer: {
             Text(L10n.t("开启后会把播放记录同步写入 Last.fm。"))
         }
+    }
+
+    // Last.fm 的公开主页地址就是 last.fm/user/<用户名>,不需要走已连接账号那一步——
+    // 只填了用户名(还没走连接流程)也能跳转,用户名是这个链接唯一需要的信息。用户名
+    // 本身没有格式校验(填错会跳转到一个不存在的 Last.fm 用户页,那是用户自己的输入
+    // 问题,不是这个链接的责任),这里只做"清空首尾空白 + URL 转义",避免空白/特殊
+    // 字符拼出一个明显打不开的地址。
+    private var lastfmProfileURL: URL? {
+        let trimmed = config.lastfmUser.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty,
+              let encoded = trimmed.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) else {
+            return nil
+        }
+        return URL(string: "https://www.last.fm/user/\(encoded)")
     }
 
     // Last.fm 经典 auth API 没有回调机制,中间必须有一步用户手动确认——三步小圆点让

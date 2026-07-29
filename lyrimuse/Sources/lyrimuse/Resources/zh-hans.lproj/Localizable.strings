@@ -148,6 +148,7 @@
 "创建 Last.fm 应用即可获取 API Key + Secret。" = "创建 Last.fm 应用即可获取 API Key + Secret。";
 "在 Last.fm 后台创建应用会同时给你 API Key 和 Secret，读取、写入都用这一套凭据。只填用户名 + API Key（不填 Secret、不点「连接」）也可以——配合 ListenBrainz 账号会自动同步收听记录。" = "在 Last.fm 后台创建应用会同时给你 API Key 和 Secret，读取、写入都用这一套凭据。只填用户名 + API Key（不填 Secret、不点「连接」）也可以——配合 ListenBrainz 账号会自动同步收听记录。";
 "在 ListenBrainz 网站获取 Token →" = "在 ListenBrainz 网站获取 Token →";
+"在 Last.fm 网站查看主页 →" = "在 Last.fm 网站查看主页 →";
 "在 iPhone 上安装 Bark App，首页显示的就是你的专属推送地址，复制粘贴过来即可，不需要额外设置。" = "在 iPhone 上安装 Bark App，首页显示的就是你的专属推送地址，复制粘贴过来即可，不需要额外设置。";
 "在 last.fm/api/account/create 创建应用后可见" = "在 last.fm/api/account/create 创建应用后可见";
 "在 last.fm/api/account/create 申请" = "在 last.fm/api/account/create 申请";
@@ -288,7 +289,6 @@
 "账户 Token" = "账户 Token";
 "账户信息" = "账户信息";
 "超过就截断" = "超过就截断";
-"填好用户名 + API Key，同步到 ListenBrainz；填上 Secret 并连接账号，同步进 Last.fm。" = "填好用户名 + API Key，同步到 ListenBrainz；填上 Secret 并连接账号，同步进 Last.fm。";
 "跟随系统" = "跟随系统";
 "开启后会把播放记录同步写入 Last.fm。" = "开启后会把播放记录同步写入 Last.fm。";
 "写入记录" = "写入记录";
