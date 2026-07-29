@@ -254,7 +254,7 @@ func deezerArtistAvatar(ctx context.Context, name string) string {
 // 同一套 Last.fm 凭证,没配置就整体跳过;还要求 StateRelayURL 已配置(数据要推给网页读
 // 的中继,没配这个推了也没地方读)。
 func (p *poller) topArtistsDigest(now time.Time) {
-	if p.cfg.LastfmUser == "" || p.cfg.LastfmAPIKey == "" || p.cfg.StateRelayURL == "" {
+	if p.cfg.LastfmUser == "" || p.cfg.lastfmBridgeAPIKey() == "" || p.cfg.StateRelayURL == "" {
 		return
 	}
 	if !p.topArtistsLastCheckedAt.IsZero() && now.Sub(p.topArtistsLastCheckedAt) < topArtistsCheckInterval {
@@ -265,7 +265,7 @@ func (p *poller) topArtistsDigest(now time.Time) {
 		return // 磁盘上记录的上次成功推送还没满一天(比如刚重启,内存态丢了但磁盘状态还在)
 	}
 
-	entries, err := lastfmTopArtists(p.ctx, p.cfg.LastfmUser, p.cfg.LastfmAPIKey, topArtistsFetchPool)
+	entries, err := lastfmTopArtists(p.ctx, p.cfg.LastfmUser, p.cfg.lastfmBridgeAPIKey(), topArtistsFetchPool)
 	if err != nil || len(entries) == 0 {
 		return
 	}

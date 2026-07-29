@@ -23,12 +23,17 @@ type config struct {
 	StateRelayURL   string `json:"state_relay_url,omitempty"`
 	StateRelayToken string `json:"state_relay_token,omitempty"`
 	// Last.fm 桥接：Mac 本地没在放时，把 iPhone(经 FastScrobbler→Last.fm)的
-	// "正在播放"转发进 LB，让网页也显示手机上的播放。两者留空则不启用桥接。
+	// "正在播放"转发进 LB，让网页也显示手机上的播放。LastfmUser 留空则不启用桥接;
+	// 只读用的 API Key 现在跟下面的 LastfmScrobbleAPIKey 是同一套凭据(见
+	// lastfmBridgeAPIKey())——LastfmAPIKey 是合并前的独立只读 Key 字段,只为了让
+	// 2026-07-29 之前就配好桥接的老用户不用重新操作而继续读取,新配置不会再写入它。
 	LastfmUser   string `json:"lastfm_user,omitempty"`
 	LastfmAPIKey string `json:"lastfm_api_key,omitempty"`
 	// Last.fm 镜像写入(独立于上面的桥接读取):把 Mac 播放也写进 Last.fm,让 Last.fm
 	// 上留一份完整历史(不含 iPhone——那些数据本来就来自 Last.fm,镜像回去会自环)。
-	// 三者都非空才启用。凭证经一次性网页 OAuth 式授权换取,session key 永久有效。
+	// 三者都非空才启用镜像写入。凭证经一次性网页 OAuth 式授权换取,session key 永久
+	// 有效。这套 API Key+Secret 同时也是桥接读取用的凭据(见 lastfmBridgeAPIKey())——
+	// Last.fm 的只读方法不需要签名,同一对 key+secret 不必分成两套。
 	LastfmScrobbleAPIKey     string `json:"lastfm_scrobble_api_key,omitempty"`
 	LastfmScrobbleSecret     string `json:"lastfm_scrobble_secret,omitempty"`
 	LastfmScrobbleSessionKey string `json:"lastfm_scrobble_session_key,omitempty"`
@@ -49,6 +54,17 @@ type config struct {
 	// 平台时不会互相污染。
 	DingtalkSignSecret string `json:"dingtalk_sign_secret,omitempty"`
 	FeishuSignSecret   string `json:"feishu_sign_secret,omitempty"`
+}
+
+// lastfmBridgeAPIKey 解析桥接/听歌报告/Top10 歌手统计这几个只读 Last.fm 调用该用
+// 哪把 Key:优先用合并后的 Scrobble API Key(账号授权那一步填的同一套凭据,只读接口
+// 不需要签名,直接复用);LastfmScrobbleAPIKey 为空时兜底老字段 LastfmAPIKey,兼容
+// 2026-07-29 合并之前就配好桥接、从没碰过账号授权那一步的老用户,不需要他们重新操作。
+func (c *config) lastfmBridgeAPIKey() string {
+	if c.LastfmScrobbleAPIKey != "" {
+		return c.LastfmScrobbleAPIKey
+	}
+	return c.LastfmAPIKey
 }
 
 func loadConfig(path string) (*config, error) {

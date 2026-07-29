@@ -196,7 +196,7 @@ func (p *poller) weeklyDigest(now time.Time) {
 	}
 	p.weeklyLastCheckedAt = now
 
-	lastfmConfigured := p.cfg.LastfmUser != "" && p.cfg.LastfmAPIKey != ""
+	lastfmConfigured := p.cfg.LastfmUser != "" && p.cfg.lastfmBridgeAPIKey() != ""
 	lbConfigured := p.cfg.User != "" && p.cfg.Token != ""
 	source := resolveDigestSource(features.WeeklyDigestSource, lastfmConfigured, lbConfigured)
 	if source == "" {
@@ -205,7 +205,7 @@ func (p *poller) weeklyDigest(now time.Time) {
 
 	var from, to int64
 	if source == digestSourceLastfm {
-		weeks, err := lastfmWeeklyChartList(p.ctx, p.cfg.LastfmUser, p.cfg.LastfmAPIKey)
+		weeks, err := lastfmWeeklyChartList(p.ctx, p.cfg.LastfmUser, p.cfg.lastfmBridgeAPIKey())
 		if err != nil || len(weeks) == 0 {
 			return
 		}
@@ -225,7 +225,7 @@ func (p *poller) weeklyDigest(now time.Time) {
 	var stats digestStats
 	var err error
 	if source == digestSourceLastfm {
-		stats, err = lastfmDigestStats(p.ctx, p.cfg.LastfmUser, p.cfg.LastfmAPIKey, from, to)
+		stats, err = lastfmDigestStats(p.ctx, p.cfg.LastfmUser, p.cfg.lastfmBridgeAPIKey(), from, to)
 	} else {
 		stats, err = listenbrainzDigestStats(p.ctx, p.lb.root, p.cfg.User, from, to)
 	}

@@ -78,7 +78,7 @@ func (p *poller) dailyDigest(now time.Time) {
 		return // 今天已经推送过了
 	}
 
-	lastfmConfigured := p.cfg.LastfmUser != "" && p.cfg.LastfmAPIKey != ""
+	lastfmConfigured := p.cfg.LastfmUser != "" && p.cfg.lastfmBridgeAPIKey() != ""
 	lbConfigured := p.cfg.User != "" && p.cfg.Token != ""
 	source := resolveDigestSource(features.DailyDigestSource, lastfmConfigured, lbConfigured)
 	if source == "" {
@@ -89,7 +89,7 @@ func (p *poller) dailyDigest(now time.Time) {
 	var stats digestStats
 	var err error
 	if source == digestSourceLastfm {
-		stats, err = lastfmDigestStats(p.ctx, p.cfg.LastfmUser, p.cfg.LastfmAPIKey, midnight.Unix(), now.Unix())
+		stats, err = lastfmDigestStats(p.ctx, p.cfg.LastfmUser, p.cfg.lastfmBridgeAPIKey(), midnight.Unix(), now.Unix())
 	} else {
 		stats, err = listenbrainzDigestStats(p.ctx, p.lb.root, p.cfg.User, midnight.Unix(), now.Unix())
 	}

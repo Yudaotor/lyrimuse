@@ -145,7 +145,8 @@
 "启动" = "Startup";
 "五个源都没找到可用的候选" = "No usable candidates found from any of the five sources";
 "回到当前播放" = "Jump to Now Playing";
-"在 Last.fm 官网申请一个 API Key 就够用（这是只读场景，不需要 Secret）。" = "A Last.fm API Key is all you need (this is read-only, no Secret required).";
+"在 Last.fm 后台创建一个应用即可拿到 API Key + Secret，读取、写入都用这一套。" = "Create an app in Last.fm's developer portal to get an API Key + Secret — the same pair is used for both reading and writing.";
+"在 Last.fm 后台创建应用会同时给你 API Key 和 Secret——这一套凭据同时用于下面「iPhone 播放桥接」这类只读功能，以及「Mac 播放镜像」这个写入功能。只需要只读功能的话，填好用户名 + API Key 就够，不用填 Secret、也不用点「连接」。" = "Creating an app in Last.fm's developer portal gives you both an API Key and a Secret — this one set of credentials is used for read-only features like \"iPhone Playback Bridge\" below, as well as the write feature \"Mac Playback Mirror\". If you only need the read-only features, filling in your username + API Key is enough — no need for the Secret or to click \"Connect\".";
 "在 ListenBrainz 网站获取 Token →" = "Get a Token from the ListenBrainz website →";
 "在 iPhone 上安装 Bark App，首页显示的就是你的专属推送地址，复制粘贴过来即可，不需要额外设置。" = "Install the Bark app on your iPhone — the home screen shows your personal push URL. Just copy and paste it here; no extra setup needed.";
 "在 last.fm/api/account/create 创建应用后可见" = "Visible after creating an app at last.fm/api/account/create";
@@ -170,7 +171,7 @@
 "完成" = "Done";
 "宽度" = "Width";
 "已刷新" = "Refreshed";
-"已在浏览器打开 Last.fm 授权页面。请在浏览器里点击「Yes, allow access」完成授权，然后回来点下面的按钮。" = "Last.fm's authorization page has opened in your browser. Click \"Yes, allow access\" there to finish authorizing, then come back and tap the button below.";
+"已在浏览器打开 Last.fm 授权页面。请在浏览器里点击「Yes, allow access」完成授权——授权完会自动跳回 Lyrimuse 继续；如果浏览器没有自动跳转，也可以回来手动点下面的按钮。" = "Last.fm's authorization page has opened in your browser. Click \"Yes, allow access\" there to finish authorizing — it'll automatically redirect back to Lyrimuse afterward; if your browser doesn't redirect automatically, you can also come back and tap the button below.";
 "已导出到本地的歌词文件也会一并删除,下次播放这首歌会重新走一遍匹配解析,不保证一定能找到一样的歌词。" = "The exported local lyrics file will be deleted as well. The next time this song plays, it'll go through matching and parsing again — there's no guarantee it'll find the same lyrics.";
 "已设置" = "Set";
 "已连接 Last.fm 账号" = "Connected to Last.fm Account";
@@ -252,6 +253,7 @@
 "清除筛选" = "Clear Filters";
 "清空全部缓存" = "Clear All Cache";
 "用户名（选填，用于界面显示）" = "Username (optional, for display only)";
+"只用只读功能可以留空" = "Leave blank if you only use the read-only features";
 "用来把当前播放状态推送到网页小组件和状态徽章。" = "Pushes the current playback status to the web widget and status badge.";
 "这台 Mac 上的播放记录会同步到 ListenBrainz，建立完整的听歌历史；也是网页展示、听歌报告的可选数据来源。" = "Syncs this Mac's playback to ListenBrainz, building a complete listening history — also an optional data source for the web page and listening digests.";
 "确定要删除「%@ - %@」的本地记录吗?" = "Delete the local record for \"%@ - %@\"?";
@@ -279,15 +281,15 @@
 "访问令牌" = "Access Token";
 "译文" = "Translation";
 "请先在这张卡上填好：%@。" = "Please fill in %@ on this card first.";
-"请先填写 Scrobble API Key" = "Please enter a Scrobble API Key first";
-"请先填写 Scrobble Secret" = "Please enter a Scrobble Secret first";
+"请先填写 API Key" = "Please enter an API Key first";
+"请先填写 Secret" = "Please enter a Secret first";
 "读取本地记录文件失败" = "Failed to Read Local Record File";
-"账号授权" = "Account Authorization";
+"账号" = "Account";
+"账号信息" = "Account Info";
 "账户 Token" = "Account Token";
 "账户信息" = "Account Info";
 "超过就截断" = "Truncate If Too Long";
-"需要单独申请一个有写入权限的 API Key + Secret，跟下面「iPhone 播放桥接」用的不是同一个。" = "Not the same API Key used for bridging below — needs a separate one with write access.";
-"填好上面两项，再点「连接 Last.fm 账号」——按钮会打开浏览器让你确认一次授权，回来点一下确认就完成了。" = "Fill in both fields above, then click \"Connect Last.fm Account\" — it opens your browser for a one-time confirmation; come back and click once more to finish.";
+"填好用户名 + API Key，「iPhone 播放桥接」「听歌报告」就能用；再填 Secret 并点「连接 Last.fm 账号」，才能把这台 Mac 的播放也写回 Last.fm。" = "Fill in your username + API Key and \"iPhone Playback Bridge\" and the listening reports will work; also fill in the Secret and click \"Connect Last.fm Account\" to sync this Mac's playback back to Last.fm too.";
 "跟随系统" = "System Default";
 "读取 iPhone 上已经报给 Last.fm 的播放记录：Mac 没有播放时会推给「网页推送」显示「iPhone 正在播」（这台 Mac 本地的悬浮歌词只读本机播放状态，不受影响）；打开下面的开关还会把这些记录转发进 ListenBrainz，统一两台设备的播放历史，这也需要「ListenBrainz」账号绑定好。" = "Reads the playback history your iPhone has already reported to Last.fm. When the Mac itself isn't playing anything, this is pushed to \"Web Push\" to show \"Now playing on iPhone\" (this Mac's own floating lyrics only read local playback and aren't affected). Turning on the switch below also forwards these plays into ListenBrainz to unify listening history across both devices, which also requires the \"ListenBrainz\" account to be connected.";
 "把这台 Mac 上的播放同步写回 Last.fm——Apple Music 本身不会自动同步，需要这个开关补上这份记录，Last.fm 个人主页才能看到用 Mac 听的这部分。" = "Syncs this Mac's own playback back to Last.fm — Apple Music doesn't scrobble there on its own, so this switch fills in that missing record, letting your Last.fm profile reflect what you've listened to on the Mac too.";
@@ -304,6 +306,9 @@
 "这会删除当前全部 %d 条本地记录,包括你手动编辑、联网搜索采纳过的内容,已导出到本地的歌词文件也会一并删除,且无法撤销。下次播放会重新走一遍匹配解析。" = "This deletes all %d cached records, including anything you've hand-edited or adopted from an online search. Any lyrics files already exported locally will also be deleted, and this can't be undone. The next playback will re-run matching from scratch.";
 "这首歌带逐字时间轴,播放时优先用它渲染——下面直接改「歌词(LRC)」文本框不会生效。如需手改主歌词,请先点「移除逐字时间轴」。译文/罗马音编辑不受影响,随时生效。" = "This song has word-by-word timing, which takes priority during playback — editing the \"Lyrics (LRC)\" text box below won't take effect. To hand-edit the main lyrics, first click \"Remove Word Timing\". Editing the translation or romanization isn't affected and takes effect right away.";
 "连接 Last.fm 账号" = "Connect Last.fm Account";
+"连接 Last.fm（可选）" = "Connect Last.fm (Optional)";
+"连上同一个 Last.fm 账号，可以把 iPhone 上的播放记录同步显示、把这台 Mac 的播放也写回 Last.fm，还能解锁「每周听歌小结」「每日听歌报告」推送。不连接完全不影响悬浮歌词，随时可以之后在设置里配置。" = "Connecting the same Last.fm account lets you mirror your iPhone's playback history, write this Mac's playback back to Last.fm, and unlock the \"Weekly Listening Digest\" and \"Daily Listening Report\" pushes. Skipping this has no effect on the floating lyrics — you can always set it up later in Settings.";
+"现在去设置里连接" = "Connect Now in Settings";
 "连接信息" = "Connection Info";
 "退出" = "Quit";
 "退出码 %@" = "Exit code %@";

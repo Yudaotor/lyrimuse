@@ -90,6 +90,9 @@ public final class ConfigStore: ObservableObject {
     @Published public var stateRelayURL = ""
     @Published public var stateRelayToken = ""
     @Published public var lastfmUser = ""
+    // 2026-07-29 合并之前独立存在的只读 API Key——UI 上已经不再单独收这个字段(桥接
+    // 现在复用下面的 lastfmScrobbleAPIKey),这里保留只是为了老用户已经存盘的值不会
+    // 在读写这份 JSON 时被悄悄丢掉,见 lastfmBridgeMissingHint() 的兜底判断。
     @Published public var lastfmAPIKey = ""
     @Published public var lastfmScrobbleAPIKey = ""
     @Published public var lastfmScrobbleSecret = ""
@@ -157,9 +160,13 @@ public final class ConfigStore: ObservableObject {
         return nil
     }
 
+    // 2026-07-29 合并之前,桥接单独要求一把只读 API Key(lastfmAPIKey);合并之后桥接
+    // 复用"账号信息"里那一套 API Key(lastfmScrobbleAPIKey——Last.fm 的只读接口不需要
+    // 签名,同一对凭据够用),这里两个字段任一非空都算满足,老用户已经填过的 lastfmAPIKey
+    // 继续有效,不强制重新操作。
     public func lastfmBridgeMissingHint() -> String? {
         if savedSnapshot.lastfmUser.isEmpty { return L10n.t("还没填用户名") }
-        if savedSnapshot.lastfmAPIKey.isEmpty { return L10n.t("还没填 API Key") }
+        if savedSnapshot.lastfmScrobbleAPIKey.isEmpty && savedSnapshot.lastfmAPIKey.isEmpty { return L10n.t("还没填 API Key") }
         return nil
     }
 

@@ -1,8 +1,38 @@
 import AppKit
+import CoreServices
 import LyrimuseCore
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
+    // 2026-07-29 新增:接住"连接 Last.fm 账号"授权页跳回来的 lyrimuse:// 回调(见
+    // build.sh 的 CFBundleURLTypes + LastfmAuthFlow.authorizeURL 的 cb= 参数)。
+    // 用最传统的 NSAppleEventManager 注册方式,而不是 SwiftUI 的 .onOpenURL——这个
+    // App 没有 WindowGroup 承载这个修饰符最典型的挂载点(MenuBarExtra/Settings 这类
+    // Scene 上是否稳定接收 GetURL 事件没有十足把握),Apple Event Manager 是 AppKit
+    // 官方文档明确支持、且这个项目里 MusicAutomationPermission 已经在用的同一层
+    // 机制,更可靠。必须在 applicationWillFinishLaunching(而不是 didFinishLaunching)
+    // 里注册——早于 launchServices 把已经攒着的 GetURL 事件投递进来,注册晚了会
+    // 错过"双击链接直接启动 App"这种冷启动场景(虽然这次的场景是 App 已经在跑,但
+    // 仍然照 Apple 官方推荐的时机来,不留隐患)。
+    func applicationWillFinishLaunching(_ notification: Notification) {
+        NSAppleEventManager.shared().setEventHandler(
+            self,
+            andSelector: #selector(handleGetURLEvent(_:withReplyEvent:)),
+            forEventClass: AEEventClass(kInternetEventClass),
+            andEventID: AEEventID(kAEGetURL)
+        )
+    }
+
+    @objc private func handleGetURLEvent(_ event: NSAppleEventDescriptor, withReplyEvent replyEvent: NSAppleEventDescriptor) {
+        guard let urlString = event.paramDescriptor(forKeyword: AEKeyword(keyDirectObject))?.stringValue,
+              let url = URL(string: urlString), url.scheme == "lyrimuse" else {
+            return
+        }
+        // 目前只有这一种回调用途,不需要按 host/path 再分流;后续如果这个 scheme 挂了
+        // 别的用途,再在这里加判断。
+        LastfmConnectController.shared.handleAuthCallback()
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         // 系统默认的 .help(_:) 悬浮提示延迟(NSInitialToolTipDelay,大约 1~1.5 秒)
         // 太长,容易被误以为悬浮提示没工作。这个值是 AppKit 从本 App 自己的 UserDefaults

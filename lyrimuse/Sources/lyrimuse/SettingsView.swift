@@ -98,6 +98,16 @@ struct SettingsView: View {
                     sidebarLabel(.about)
                 }
 
+                // 2026-07-29:Last.fm 从下面的折叠区里单独提出来,常驻可见——功能本身
+                // (iPhone 播放桥接 + Mac 播放镜像 + 喂两个"听歌报告"推送的数据源)已经
+                // 相当完整,继续跟"实验室功能"这几个字混在一起、默认收起才能看到,会让人
+                // 低估它的成熟度、也发现不了。ListenBrainz/网页推送/推送提醒这三个账号
+                // 保留原样在下面的折叠区,没有改动。
+                Section(L10n.t("账号")) {
+                    AccountSidebarRow(destination: .lastfm)
+                        .tag(SettingsSidebarItem.account(.lastfm))
+                }
+
                 // 手搭折叠(而不是原生 Section(isExpanded:))是因为那个初始化方法的
                 // Footer 类型定死成 EmptyView,没法在这里放"?"图标+悬浮提示。tooltip
                 // 弹出延迟看着像没反应,其实是系统默认 tooltip 延迟(~1~1.5s)本身偏长,
@@ -105,7 +115,9 @@ struct SettingsView: View {
                 // 整个 App 所有 .help() 提示,不是这一处独有的问题。
                 Section {
                     if isAdditionalFeaturesExpanded {
-                        ForEach(AccountDestination.allCases) { destination in
+                        // .lastfm 不在这里——它已经单独提到上面常驻可见的"账号" Section,
+                        // 这里排除掉避免同一个目的地在侧边栏出现两次。
+                        ForEach(AccountDestination.allCases.filter { $0 != .lastfm }) { destination in
                             AccountSidebarRow(destination: destination)
                                 .tag(SettingsSidebarItem.account(destination))
                         }
@@ -152,6 +164,15 @@ struct SettingsView: View {
         // NavigationSplitView,多了一列侧边栏,整体相应加宽;同样不设 maxWidth/固定
         // 高度,各分类继续按内容自动撑高。
         .frame(minWidth: 760, idealWidth: 860, minHeight: 460)
+        // 见 AppActions.pendingSettingsSelection 注释——Onboarding 的 Last.fm 步骤
+        // 借这个信箱指定"这次打开设置窗口要直接停在哪个分类",这里读一次就清空,不影响
+        // 之后用户正常打开设置窗口(默认还是回到 .tab(.lyrics))。
+        .onAppear {
+            if let pending = AppActions.shared.pendingSettingsSelection {
+                selection = pending
+                AppActions.shared.pendingSettingsSelection = nil
+            }
+        }
     }
 
     // 保持单行(图标+标题),不加状态小字——账号行有状态是因为账号真的有"连没连上"

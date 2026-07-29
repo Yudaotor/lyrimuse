@@ -69,11 +69,17 @@ enum LastfmAuthFlow {
         throw LastfmAuthError.api(decoded.message ?? L10n.t("未知错误"))
     }
 
+    // cb 参数是 Last.fm 授权页文档里的回调机制:用户点完"Yes, allow access"之后,
+    // 浏览器会跳转到这个地址(不带任何凭据,纯粹是"已授权"信号)。指向自定义 URL
+    // scheme(build.sh 里注册的 CFBundleURLTypes、AppDelegate 里处理 GetURL 事件),
+    // 浏览器会弹一次系统级"要打开 Lyrimuse 吗"确认框,用户点一下就跳回 App——比之前
+    // 要求用户自己回来点"我已完成授权,继续"少一步。
     static func authorizeURL(apiKey: String, token: String) -> URL {
         var comps = URLComponents(string: "https://www.last.fm/api/auth/")!
         comps.queryItems = [
             URLQueryItem(name: "api_key", value: apiKey),
             URLQueryItem(name: "token", value: token),
+            URLQueryItem(name: "cb", value: "lyrimuse://lastfm-auth-callback"),
         ]
         return comps.url!
     }
@@ -111,12 +117,12 @@ final class LastfmConnectController: ObservableObject {
     @Published private(set) var state: LastfmConnectState = .idle
 
     func start(apiKey: String) {
-        // 这里点名"Scrobble API Key"而不是笼统的"API Key"——这张卡片里还有一个
-        // 名字很像、但用途完全不同的只读 API Key(iPhone 播放桥接用),笼统的提示曾经
-        // 让人以为自己已经填过了、看不出问题出在哪个字段。
+        // 2026-07-29 起"账号信息"只有一套 API Key/Secret(合并了原来单独存在的只读
+        // Key),这里不再需要用"Scrobble API Key"这个名字跟另一个字段区分,直接叫
+        // "API Key"就够。
         guard !apiKey.isEmpty else {
-            logger.error("start: blocked — Scrobble API Key is empty")
-            state = .failed(L10n.t("请先填写 Scrobble API Key"))
+            logger.error("start: blocked — API Key is empty")
+            state = .failed(L10n.t("请先填写 API Key"))
             return
         }
         logger.info("start: requesting token")
@@ -141,8 +147,8 @@ final class LastfmConnectController: ObservableObject {
             return
         }
         guard !secret.isEmpty else {
-            logger.error("confirmBrowserAuth: blocked — Scrobble Secret is empty")
-            state = .failed(L10n.t("请先填写 Scrobble Secret"))
+            logger.error("confirmBrowserAuth: blocked — Secret is empty")
+            state = .failed(L10n.t("请先填写 Secret"))
             return
         }
         logger.info("confirmBrowserAuth: exchanging session")
@@ -153,6 +159,11 @@ final class LastfmConnectController: ObservableObject {
                 logger.info("confirmBrowserAuth: connected successfully")
                 ConfigStore.shared.lastfmScrobbleSessionKey = result.sessionKey
                 ConfigStore.shared.lastfmScrobbleUsername = result.username
+                // 桥接用的"用户名"字段自动回填——只在还没手动填过时才带过去,不覆盖用户
+                // 已经显式填的值(理论上极少见:桥接一个跟镜像不同的 Last.fm 账号)。
+                if ConfigStore.shared.lastfmUser.isEmpty {
+                    ConfigStore.shared.lastfmUser = result.username
+                }
                 await ConfigStore.shared.save()
                 state = .success(username: result.username)
             } catch {
@@ -175,5 +186,23 @@ final class LastfmConnectController: ObservableObject {
     // 主动退出的路径。
     func reset() {
         state = .idle
+    }
+
+    // 2026-07-29 新增:浏览器授权页(见 authorizeURL 的 cb= 参数)完成授权后会自动
+    // 跳转回 lyrimuse://lastfm-auth-callback,AppDelegate 收到这个 URL 事件后调这里,
+    // 免去用户手动点"我已完成授权,继续"这一步。回调 URL 本身不带任何凭据,只是"用户
+    // 已经点了 Yes, allow access"的信号——真正换 session key 仍然是重新调一次
+    // auth.getsession,跟手动点按钮走的是同一段逻辑,只是触发方式从"用户点击"变成
+    // "系统事件"。只在当前确实处于 waitingForBrowserAuth 时才生效:重复回调/陈旧回调
+    // (比如用户已经手动点过按钮、连接早就成功了)会被安全地忽略,不会误触发第二次
+    // 交换。手动按钮继续保留在 UI 上作为兜底——某些浏览器/安全软件可能拦截自定义
+    // URL scheme 跳转,不能假设这条自动化路径 100% 会触发。
+    func handleAuthCallback() {
+        guard case .waitingForBrowserAuth = state else {
+            logger.notice("handleAuthCallback: ignored — not currently waiting for browser auth (state=\(String(describing: self.state), privacy: .public))")
+            return
+        }
+        logger.info("handleAuthCallback: browser redirected back automatically, confirming without user click")
+        confirmBrowserAuth(apiKey: ConfigStore.shared.lastfmScrobbleAPIKey, secret: ConfigStore.shared.lastfmScrobbleSecret)
     }
 }

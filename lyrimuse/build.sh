@@ -213,6 +213,21 @@ cat > "$APP_DIR/Contents/Info.plist" <<PLIST
          说明用途,这段文字会原样显示在系统弹窗里,不经过 App 自己的 L10n 机制。 -->
     <key>NSAppleEventsUsageDescription</key>
     <string>Lyrimuse needs to send Apple Events to Music.app to read the currently playing track and show synced lyrics.</string>
+    <!-- 2026-07-29 新增:给"连接 Last.fm 账号"这一步的浏览器授权做自动回跳用
+         (见 LastfmAuthFlow.authorizeURL 的 cb= 参数 + AppDelegate 的 GetURL 事件
+         处理)——注册这个 scheme 之后,授权页跳转到 lyrimuse://lastfm-auth-callback
+         会被系统路由回这个 App,不需要用户自己回来点"我已完成授权,继续"。 -->
+    <key>CFBundleURLTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleURLName</key>
+            <string>${LABEL}</string>
+            <key>CFBundleURLSchemes</key>
+            <array>
+                <string>lyrimuse</string>
+            </array>
+        </dict>
+    </array>
     <key>SUFeedURL</key>
     <string>https://github.com/Yudaotor/lyrimuse/releases/latest/download/appcast.xml</string>
     <key>SUPublicEDKey</key>

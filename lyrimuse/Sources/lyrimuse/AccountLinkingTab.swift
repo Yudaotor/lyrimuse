@@ -435,43 +435,34 @@ struct AccountLinkingTab: View {
 
     // MARK: - Last.fm(合并 iPhone 桥接 + Mac 镜像——都是同一个 Last.fm 账号)
 
+    // 2026-07-29:两个功能原来各自要求一套独立凭据(桥接用一把只读 Key,镜像用另一把
+    // 带 Secret 的 Key),逼用户去 Last.fm 后台建两个"应用"填两遍——技术上没必要:
+    // Last.fm 的只读接口(user.getrecenttracks 等)不校验签名,同一对 API Key/Secret
+    // 既能免签名供桥接读,也能签名走连接流程供镜像写。现在合并成一套"账号信息",
+    // 下面两个 Section 只剩各自的开关,不再重复收凭据。
     @ViewBuilder
     private var lastfmFields: some View {
-        // Scrobble API Key/Secret 放在这个 Section(而不是下面"Mac 播放镜像"):连接按钮
-        // 依赖这两个字段,视觉顺序需要跟"先填字段、再能点按钮"的依赖顺序一致;下面
-        // "同步进 Last.fm"开关真正生效靠的是这里连接得到的 session key,不是这两个字段
-        // 本身(填好不代表已经走完授权)。
         Section {
             HStack(spacing: 4) {
-                Text(L10n.t("需要单独申请一个有写入权限的 API Key + Secret，跟下面「iPhone 播放桥接」用的不是同一个。"))
+                Text(L10n.t("在 Last.fm 后台创建一个应用即可拿到 API Key + Secret，读取、写入都用这一套。"))
                     .font(.caption2).foregroundStyle(.secondary)
                 HelpButton(
-                    text: L10n.t("需要单独申请一个有写入权限的 API Key + Secret，跟下面「iPhone 播放桥接」用的不是同一个——在 Last.fm 后台创建应用时会同时给你这两项。"),
-                    docTitle: L10n.t("前往 Last.fm 申请 →"),
-                    docURL: URL(string: "https://www.last.fm/api/account/create")!
-                )
-            }
-            SecretFieldRow("Scrobble API Key", value: $config.lastfmScrobbleAPIKey)
-            SecretFieldRow("Scrobble Secret", value: $config.lastfmScrobbleSecret, prompt: L10n.t("在 last.fm/api/account/create 创建应用后可见"))
-            lastfmConnectArea
-        } header: {
-            Text(L10n.t("账号授权"))
-        } footer: {
-            Text(L10n.t("填好上面两项，再点「连接 Last.fm 账号」——按钮会打开浏览器让你确认一次授权，回来点一下确认就完成了。"))
-        }
-
-        Section {
-            HStack(spacing: 4) {
-                Text(L10n.t("在 Last.fm 官网申请一个 API Key 就够用（这是只读场景，不需要 Secret）。"))
-                    .font(.caption2).foregroundStyle(.secondary)
-                HelpButton(
-                    text: L10n.t("在 Last.fm 官网申请一个 API Key 就够用（这是只读场景，不需要 Secret）。"),
+                    text: L10n.t("在 Last.fm 后台创建应用会同时给你 API Key 和 Secret——这一套凭据同时用于下面「iPhone 播放桥接」这类只读功能，以及「Mac 播放镜像」这个写入功能。只需要只读功能的话，填好用户名 + API Key 就够，不用填 Secret、也不用点「连接」。"),
                     docTitle: L10n.t("前往 Last.fm 申请 →"),
                     docURL: URL(string: "https://www.last.fm/api/account/create")!
                 )
             }
             TextField(L10n.t("Last.fm 用户名"), text: $config.lastfmUser)
-            SecretFieldRow("API Key", value: $config.lastfmAPIKey, prompt: L10n.t("在 last.fm/api/account/create 申请"))
+            SecretFieldRow("API Key", value: $config.lastfmScrobbleAPIKey)
+            SecretFieldRow("Secret", value: $config.lastfmScrobbleSecret, prompt: L10n.t("只用只读功能可以留空"))
+            lastfmConnectArea
+        } header: {
+            Text(L10n.t("账号信息"))
+        } footer: {
+            Text(L10n.t("填好用户名 + API Key，「iPhone 播放桥接」「听歌报告」就能用；再填 Secret 并点「连接 Last.fm 账号」，才能把这台 Mac 的播放也写回 Last.fm。"))
+        }
+
+        Section {
             Toggle(L10n.t("桥接回 ListenBrainz"), isOn: Binding(
                 get: { features.lastfmBridge },
                 set: { newValue in
@@ -505,8 +496,8 @@ struct AccountLinkingTab: View {
         } header: {
             Text(L10n.t("Mac 播放镜像"))
         } footer: {
-            // Scrobble API Key/Secret 两个字段在上面"账号授权" Section 里(见那边注释),
-            // 这里只剩"同步进 Last.fm"这一个开关。
+            // API Key/Secret 两个字段在上面"账号信息" Section 里(见那边注释),这里只剩
+            // "同步进 Last.fm"这一个开关。
             Text(L10n.t("把这台 Mac 上的播放同步写回 Last.fm——Apple Music 本身不会自动同步，需要这个开关补上这份记录，Last.fm 个人主页才能看到用 Mac 听的这部分。"))
         }
     }
@@ -545,7 +536,7 @@ struct AccountLinkingTab: View {
         case .waitingForBrowserAuth:
             stepDots(current: 2)
             VStack(alignment: .leading, spacing: 6) {
-                Text(L10n.t("已在浏览器打开 Last.fm 授权页面。请在浏览器里点击「Yes, allow access」完成授权，然后回来点下面的按钮。"))
+                Text(L10n.t("已在浏览器打开 Last.fm 授权页面。请在浏览器里点击「Yes, allow access」完成授权——授权完会自动跳回 Lyrimuse 继续；如果浏览器没有自动跳转，也可以回来手动点下面的按钮。"))
                     .font(.caption).foregroundStyle(.secondary)
                 Button(L10n.t("我已完成授权，继续")) {
                     lastfmConnect.confirmBrowserAuth(apiKey: config.lastfmScrobbleAPIKey, secret: config.lastfmScrobbleSecret)

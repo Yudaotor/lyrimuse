@@ -1,3 +1,4 @@
+import AppKit
 import LyrimuseCore
 import SwiftUI
 
@@ -15,6 +16,7 @@ struct OnboardingView: View {
     @ObservedObject private var settings = AppSettings.shared
     @ObservedObject private var features = FeatureSettingsStore.shared
     @Environment(\.dismissWindow) private var dismissWindow
+    @Environment(\.openSettings) private var openSettings
     @State private var step = 0
     @State private var automationStatus: MusicAutomationPermissionStatus = .notDetermined
     // 点"请求权限"之后到系统弹窗真正有结果之前的等待状态——见
@@ -29,7 +31,7 @@ struct OnboardingView: View {
     @State private var isTogglingCollectorService = false
 
     private enum Step: Equatable {
-        case welcome, playerChoice, automation, collectorService, language, done
+        case welcome, playerChoice, automation, collectorService, language, lastfm, done
     }
 
     // Apple Music 才需要 automation 这一步——QQ 音乐没有"自动化"权限的概念(见文件
@@ -40,7 +42,12 @@ struct OnboardingView: View {
         if features.player == .appleMusic {
             s.append(.automation)
         }
-        s.append(contentsOf: [.collectorService, .language, .done])
+        // lastfm 放在 language 之后、done 之前——跟前面 automation/collectorService
+        // 那两个"必需"步骤不同,这一步纯介绍性质、完全可跳过(下一步按钮从不为它禁用,
+        // 见 body 里的 .disabled),只是提升 Last.fm 这个已经相当完整的功能被新用户
+        // 发现的概率(之前完全没在 Onboarding 里出现过,只能自己摸到设置里折叠着的
+        // 入口才会发现)。
+        s.append(contentsOf: [.collectorService, .language, .lastfm, .done])
         return s
     }
 
@@ -53,6 +60,7 @@ struct OnboardingView: View {
                 case .automation: automationStep
                 case .collectorService: collectorServiceStep
                 case .language: languageStep
+                case .lastfm: lastfmStep
                 case .done: doneStep
                 }
             }
@@ -212,6 +220,27 @@ struct OnboardingView: View {
             }
             .pickerStyle(.menu)
             .labelsHidden()
+        }
+    }
+
+    // 纯介绍性质,不收集任何凭据(那些留给设置里的 Last.fm 详情页)——向导这一步只
+    // 负责让用户知道有这个功能、值不值得现在就去配。点了"现在去设置里连接"会直接
+    // 打开设置窗口并停在 Last.fm 详情页(见 AppActions.pendingSettingsSelection),
+    // 不用先关掉引导向导再自己去侧边栏找。
+    private var lastfmStep: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Image(systemName: "arrow.triangle.2.circlepath")
+                .font(.system(size: 44))
+                .foregroundStyle(.pink)
+            Text(L10n.t("连接 Last.fm（可选）"))
+                .font(.title.bold())
+            Text(L10n.t("连上同一个 Last.fm 账号，可以把 iPhone 上的播放记录同步显示、把这台 Mac 的播放也写回 Last.fm，还能解锁「每周听歌小结」「每日听歌报告」推送。不连接完全不影响悬浮歌词，随时可以之后在设置里配置。"))
+                .foregroundStyle(.secondary)
+            Button(L10n.t("现在去设置里连接")) {
+                AppActions.shared.pendingSettingsSelection = .account(.lastfm)
+                NSApp.activate(ignoringOtherApps: true)
+                openSettings()
+            }
         }
     }
 

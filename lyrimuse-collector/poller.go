@@ -656,7 +656,7 @@ func (p *poller) handle(now time.Time, reanchored, loopRestart bool) {
 // pushRelayState。实际的转发/镜像逻辑(有状态副作用)在 applyBridgeResult 里、
 // 结果送回主循环后才跑。
 func (p *poller) bridge(now time.Time) {
-	if !features.LastfmBridge || p.cfg.LastfmUser == "" || p.cfg.LastfmAPIKey == "" {
+	if !features.LastfmBridge || p.cfg.LastfmUser == "" || p.cfg.lastfmBridgeAPIKey() == "" {
 		return
 	}
 	if p.bridgeFetching || now.Sub(p.lastfmCheckedAt) < lastfmPollInterval {
@@ -664,7 +664,7 @@ func (p *poller) bridge(now time.Time) {
 	}
 	p.lastfmCheckedAt = now
 	p.bridgeFetching = true
-	user, apiKey := p.cfg.LastfmUser, p.cfg.LastfmAPIKey
+	user, apiKey := p.cfg.LastfmUser, p.cfg.lastfmBridgeAPIKey()
 	go func() {
 		np, done, ok := lastfmRecent(p.ctx, user, apiKey)
 		select {
