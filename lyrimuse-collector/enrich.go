@@ -399,16 +399,26 @@ func fetchScoredLyricCandidates(artist, title, album string, durationSecs float6
 	return fetchScoredLyricCandidatesStreaming(artist, title, album, durationSecs, func(neteaseInfo, []scoredLyricCandidateResult) {})
 }
 
-// fetchScoredLyricCandidatesStreaming 是实际实现:五个源(含网易云)真正一起并发发
-// 出去,用带缓冲的 channel 收集结果——之前网易云是在这个函数之外单独同步查一遍
-// (resolveTrackEnrichment 为了封面/跳转链接需要它),等它查完了才轮到这里的
-// qq/酷狗/Musixmatch/LRCLIB 四个开始并发,相当于白白把网易云自己最坏能到小三十秒的
-// 串行耗时,原样叠加在了整体等待时间最前面——搬进同一批 goroutine 后,网易云的耗时
-// 不再阻塞其它四个源起步,只跟它们一起被下面的 lyricSearchDeadline 兜底。用 channel
-// 而不是"WaitGroup+共享变量"是为了让超时后"放弃继续等、先用已经到手的候选"这件事是
-// 并发安全的:哪怕某个源在超时之后才真正返回,它往 channel 送结果这个动作本身不会
-// 阻塞(channel 容量=goroutine 数量),也不会跟已经不再读取的这边产生数据竞争,那个
-// 晚到的结果就单纯被丢弃,不影响这一轮的候选列表。
+// fetchScoredLyricCandidatesStreaming 是实际实现:五个歌词源(含网易云)+ 一路
+// Apple Music/iTunes 封面兜底,真正一起并发发出去,用带缓冲的 channel 收集结果——
+// 之前网易云是在这个函数之外单独同步查一遍(resolveTrackEnrichment 为了封面/跳转
+// 链接需要它),等它查完了才轮到这里的 qq/酷狗/Musixmatch/LRCLIB 四个开始并发,相当
+// 于白白把网易云自己最坏能到小三十秒的串行耗时,原样叠加在了整体等待时间最前面——
+// 搬进同一批 goroutine 后,网易云的耗时不再阻塞其它源起步,只跟它们一起被下面的
+// lyricSearchDeadline 兜底。用 channel 而不是"WaitGroup+共享变量"是为了让超时后
+// "放弃继续等、先用已经到手的候选"这件事是并发安全的:哪怕某个源在超时之后才真正
+// 返回,它往 channel 送结果这个动作本身不会阻塞(channel 容量=goroutine 数量),
+// 也不会跟已经不再读取的这边产生数据竞争,那个晚到的结果就单纯被丢弃,不影响这一轮
+// 的候选列表。
+//
+// Apple Music/iTunes 这一路不产生候选歌词,只提供一个"通用封面兜底"——QQ 这条路径
+// 没查封面(会多一次网络请求,不值得为了封面拖慢刚优化好的并发搜索)、酷狗接口压根
+// 没有可靠的封面字段、LRCLIB 没有封面这个概念,但 iTunes Search 曲库覆盖面很广(实测
+// 中文流行曲目也查得到),而且这个查询本来就要为"App 联动跳转链接"发一遍(见
+// resolveTrackEnrichment 的 appleMusicURL 调用,两处共用同一份 appleURLCache,见
+// apple.go),这里顺路复用,不算额外成本。哪个候选自己有封面(网易云/Musixmatch)
+// 就用自己的,没有的(QQ/酷狗/LRCLIB)才用这个兜底,见下面 scoreAndSort 里的
+// coverOrFallback。
 //
 // onUpdate 在每个源的结果到达(不只是全部到齐那一刻)后都会被调用一次,携带当前已知
 // 全部候选重新算出的完整排序结果——这是给 search-lyrics CLI 的"手动搜索陆续展示"
@@ -427,7 +437,7 @@ func fetchScoredLyricCandidatesStreaming(artist, title, album string, durationSe
 		matchTitle, matchArtist string
 		matchAlbum, matchCover  string
 	}
-	resultsCh := make(chan sourceResult, 5)
+	resultsCh := make(chan sourceResult, 6)
 
 	go func() {
 		resultsCh <- sourceResult{source: "netease", ne: neteaseLookup(artist, title, album)}
@@ -461,32 +471,48 @@ func fetchScoredLyricCandidatesStreaming(artist, title, album string, durationSe
 		r := musixmatchLyric(artist, title, durationSecs, features.LyricsTranslationLanguage)
 		resultsCh <- sourceResult{source: "musixmatch", lyr: r.lrc, yrc: r.yrc, tr: r.tr, matchTitle: r.title, matchArtist: r.artist, matchAlbum: r.album, matchCover: r.cover}
 	}()
+	go func() {
+		// 跟 resolveTrackEnrichment 里 e.AppleURL = appleMusicURL(...) 共用同一份
+		// appleURLCache——谁先查到谁写缓存,这里不重复消耗一次网络请求。
+		resultsCh <- sourceResult{source: "applecover", matchCover: appleMusicMatchCached(artist, title, album).cover}
+	}()
 
 	var ne neteaseInfo
 	var qqLyr, qqYRC, qqTitle, qqArtist, qqAlbum string
 	var kugouLyr, kugouYRC, kugouTitle, kugouArtist, kugouAlbum string
 	var lrclibLyr, lrclibTitle, lrclibArtist, lrclibAlbum string
 	var mxLyr, mxYRC, mxTr, mxTitle, mxArtist, mxAlbum, mxCover string
+	var appleCover string
 	// scoreAndSort 用目前为止已经到手的原始结果重新构建候选、算 corroboratedEndings、
 	// 打分、排序——每次有新结果到达都会重新跑一遍(而不是缓存增量),因为一份候选的
 	// corroborated 状态可能随后到的源变化(见上面 onUpdate 的注释),分数不是只增不改
 	// 的东西,不能靠增量更新蒙混过去。
 	scoreAndSort := func() []scoredLyricCandidateResult {
+		// coverOrFallback:候选自己的源有封面就用自己的(网易云/Musixmatch),没有就用
+		// Apple Music/iTunes 那路通用兜底(QQ/酷狗/LRCLIB)——即使 appleCover 这一刻
+		// 还没到(还在并发查),先留空,后面 applecover 到达触发的下一轮 onUpdate/最终
+		// 返回会自然补上,不需要特殊处理"到达顺序"。
+		coverOrFallback := func(own string) string {
+			if own != "" {
+				return own
+			}
+			return appleCover
+		}
 		var candidates []lyricCandidate
 		if ne.Lyrics != "" {
-			candidates = append(candidates, lyricCandidate{source: "netease", lyrics: ne.Lyrics, wordTimingYRC: ne.YRC, hasWordTiming: ne.YRC != "", title: ne.Title, artist: ne.Artist, album: ne.Album, cover: ne.Cover})
+			candidates = append(candidates, lyricCandidate{source: "netease", lyrics: ne.Lyrics, wordTimingYRC: ne.YRC, hasWordTiming: ne.YRC != "", title: ne.Title, artist: ne.Artist, album: ne.Album, cover: coverOrFallback(ne.Cover)})
 		}
 		if qqLyr != "" {
-			candidates = append(candidates, lyricCandidate{source: "qq", lyrics: qqLyr, wordTimingYRC: qqYRC, hasWordTiming: qqYRC != "", title: qqTitle, artist: qqArtist, album: qqAlbum})
+			candidates = append(candidates, lyricCandidate{source: "qq", lyrics: qqLyr, wordTimingYRC: qqYRC, hasWordTiming: qqYRC != "", title: qqTitle, artist: qqArtist, album: qqAlbum, cover: coverOrFallback("")})
 		}
 		if kugouLyr != "" {
-			candidates = append(candidates, lyricCandidate{source: "kugou", lyrics: kugouLyr, wordTimingYRC: kugouYRC, hasWordTiming: kugouYRC != "", title: kugouTitle, artist: kugouArtist, album: kugouAlbum})
+			candidates = append(candidates, lyricCandidate{source: "kugou", lyrics: kugouLyr, wordTimingYRC: kugouYRC, hasWordTiming: kugouYRC != "", title: kugouTitle, artist: kugouArtist, album: kugouAlbum, cover: coverOrFallback("")})
 		}
 		if mxLyr != "" {
-			candidates = append(candidates, lyricCandidate{source: "musixmatch", lyrics: mxLyr, wordTimingYRC: mxYRC, hasWordTiming: mxYRC != "", title: mxTitle, artist: mxArtist, album: mxAlbum, cover: mxCover})
+			candidates = append(candidates, lyricCandidate{source: "musixmatch", lyrics: mxLyr, wordTimingYRC: mxYRC, hasWordTiming: mxYRC != "", title: mxTitle, artist: mxArtist, album: mxAlbum, cover: coverOrFallback(mxCover)})
 		}
 		if lrclibLyr != "" {
-			candidates = append(candidates, lyricCandidate{source: "lrclib", lyrics: lrclibLyr, title: lrclibTitle, artist: lrclibArtist, album: lrclibAlbum})
+			candidates = append(candidates, lyricCandidate{source: "lrclib", lyrics: lrclibLyr, title: lrclibTitle, artist: lrclibArtist, album: lrclibAlbum, cover: coverOrFallback("")})
 		}
 		corroborated := corroboratedEndings(candidates)
 
@@ -523,7 +549,7 @@ func fetchScoredLyricCandidatesStreaming(artist, title, album string, durationSe
 
 	deadline := time.After(lyricSearchDeadline)
 collect:
-	for i := 0; i < 5; i++ {
+	for i := 0; i < 6; i++ {
 		select {
 		case r := <-resultsCh:
 			switch r.source {
@@ -537,10 +563,12 @@ collect:
 				lrclibLyr, lrclibTitle, lrclibArtist, lrclibAlbum = r.lyr, r.matchTitle, r.matchArtist, r.matchAlbum
 			case "musixmatch":
 				mxLyr, mxYRC, mxTr, mxTitle, mxArtist, mxAlbum, mxCover = r.lyr, r.yrc, r.tr, r.matchTitle, r.matchArtist, r.matchAlbum, r.matchCover
+			case "applecover":
+				appleCover = r.matchCover
 			}
 			onUpdate(ne, scoreAndSort())
 		case <-deadline:
-			log.Printf("lyrics: search deadline (%s) hit for artist=%q title=%q, proceeding with %d/5 sources back", lyricSearchDeadline, artist, title, i)
+			log.Printf("lyrics: search deadline (%s) hit for artist=%q title=%q, proceeding with %d/6 sources back", lyricSearchDeadline, artist, title, i)
 			break collect
 		}
 	}

@@ -9,21 +9,52 @@ import (
 	_ "image/png"  // 网易云取色缩略图有时是 PNG(content-type 却谎报 jpg)
 	"net/http"
 	neturl "net/url"
+	"strings"
 	"sync"
 	"time"
 )
 
 var (
 	appleURLMu    sync.Mutex
-	appleURLCache = map[string]string{}
+	appleURLCache = map[string]appleMusicMatch{}
 )
+
+// appleMusicMatch 是这首歌在 iTunes/Apple Music 曲库里匹配到的信息——url 给"App
+// 联动跳转链接"用,cover 是 Apple 官方封面,当作"搜索候选歌词"弹窗的通用封面兜底
+// (见 enrich.go 的 fetchScoredLyricCandidatesStreaming):QQ/酷狗这两个歌词源的
+// 接口本身没有可靠封面,而 iTunes Search 这个接口——不管歌曲原本是哪国语言,曲库
+// 覆盖面都很全,实测中文流行曲目也能查到——本来就已经为了"Apple Music 跳转链接"
+// 这个功能对几乎每首歌都查一遍,只是原来没把封面字段解析出来,不需要为了拿封面
+// 单独多发一轮请求。
+type appleMusicMatch struct {
+	url, cover string
+}
+
+// hiResArtwork 把 iTunes Search 默认给的 100x100 封面 URL 换成 600x600——mzstatic
+// 这个 CDN 支持在 URL 里直接换尺寸段拿高清图,不需要另外调用其它接口,已用真实 URL
+// 实测验证换尺寸后能正常访问。查不到"100x100"这个子串(理论上不会发生,防御性
+// 处理)就原样返回,好歹还有张小图,不是没有。
+func hiResArtwork(url string) string {
+	if url == "" {
+		return ""
+	}
+	return strings.Replace(url, "100x100bb", "600x600bb", 1)
+}
 
 // appleMusicURL returns the Apple Music page URL for a track via the public
 // iTunes Search API (results[0].trackViewUrl points at the exact song). Cached
 // per track; only successes are cached so a transient failure retries.
 func appleMusicURL(artist, title, album string) string {
+	return appleMusicMatchCached(artist, title, album).url
+}
+
+// appleMusicMatchCached 是 appleMusicURL 的富信息版本,跟 qq.go 的
+// qqMusicMatchCached 同一个套路:两个入口(跳转链接/搜索候选歌词的通用封面兜底)
+// 共用同一份按 artist|title|album 缓存的 appleMusicMatch,不管从哪个入口先查到,
+// 另一个都直接命中缓存,不会重复发两遍 iTunes 请求。
+func appleMusicMatchCached(artist, title, album string) appleMusicMatch {
 	if title == "" {
-		return ""
+		return appleMusicMatch{}
 	}
 	key := artist + "|" + title + "|" + album
 	appleURLMu.Lock()
@@ -33,63 +64,65 @@ func appleMusicURL(artist, title, album string) string {
 	}
 	appleURLMu.Unlock()
 
-	url := resolveAppleMusicURL(artist, title, album)
-	if url != "" {
+	m := resolveAppleMusicMatch(artist, title, album)
+	if m.url != "" {
 		appleURLMu.Lock()
-		appleURLCache[key] = url
+		appleURLCache[key] = m
 		appleURLMu.Unlock()
 	}
-	return url
+	return m
 }
 
-// resolveAppleMusicURL returns the Apple Music song URL, disambiguated by album:
-// the same song appears on many albums (originals, compilations, "This Is It"),
-// so results[0] often points at the wrong album. Prefer title+album match, then
-// title match, then first result. China store first (user preference), US fallback.
-func resolveAppleMusicURL(artist, title, album string) string {
-	if url := searchAppleMusicURL(artist, title, album); url != "" {
-		return url
+// resolveAppleMusicMatch returns the Apple Music song match, disambiguated by
+// album: the same song appears on many albums (originals, compilations, "This
+// Is It"), so results[0] often points at the wrong album. Prefer title+album
+// match, then title match, then first result. China store first (user
+// preference), US fallback.
+func resolveAppleMusicMatch(artist, title, album string) appleMusicMatch {
+	if m := searchAppleMusicMatch(artist, title, album); m.url != "" {
+		return m
 	}
 	// 全文搜索有时找不到确实存在于目录里的曲目——连写词标题(如 Prince "Partyup")
 	// 会被同名的其他热门曲目挤出排名靠前的结果,不管查询词怎么改写都搜不到。退而
 	// 求其次:按专辑名找到专辑,拉专辑完整曲目表本地按标题匹配,绕开全文搜索排序。
-	return resolveAppleMusicURLViaAlbum(artist, title, album)
+	return resolveAppleMusicMatchViaAlbum(artist, title, album)
 }
 
-func searchAppleMusicURL(artist, title, album string) string {
+func searchAppleMusicMatch(artist, title, album string) appleMusicMatch {
 	q := neturl.QueryEscape(artist + " " + title)
-	var titleFallback, bestURL string
+	var titleFallback appleMusicMatch
 	bestScore := 0
+	var best appleMusicMatch
 	for _, country := range []string{"CN", "US"} {
 		for _, r := range itunesSearch(q, country) {
 			if r.TrackViewURL == "" || !looseContains(r.TrackName, title) {
 				continue // skip unrelated results (song may not be in this catalog)
 			}
-			if titleFallback == "" {
-				titleFallback = r.TrackViewURL // CN-first first title match
+			if titleFallback.url == "" {
+				titleFallback = appleMusicMatch{url: r.TrackViewURL, cover: hiResArtwork(r.ArtworkURL100)} // CN-first first title match
 			}
 			if sc := albumScore(r.CollectionName, album); sc > bestScore {
-				bestScore, bestURL = sc, r.TrackViewURL // best album match
+				bestScore, best = sc, appleMusicMatch{url: r.TrackViewURL, cover: hiResArtwork(r.ArtworkURL100)} // best album match
 			}
 		}
 	}
-	if bestURL != "" {
-		return bestURL
+	if best.url != "" {
+		return best
 	}
-	// titleFallback ("" if the song isn't in the catalog): better no link than a
-	// wrong-song link (iTunes returns fuzzy unrelated hits for missing songs).
+	// titleFallback (空 url 表示压根没查到) 而不是"没查到就报错":better no link
+	// than a wrong-song link (iTunes returns fuzzy unrelated hits for missing songs)。
 	return titleFallback
 }
 
-// resolveAppleMusicURLViaAlbum finds the best-matching album by name via a
+// resolveAppleMusicMatchViaAlbum finds the best-matching album by name via a
 // song-entity search on "artist + album" (entity=album has the same relevance
 // gap as entity=song and often can't find this album either — verified), pulls
 // that album's full tracklist via iTunes lookup, and matches the title locally.
 // A lookup by numeric collection ID isn't ranked/filtered, so it can't miss a
 // track that genuinely exists in the catalog the way full-text search can.
-func resolveAppleMusicURLViaAlbum(artist, title, album string) string {
+func resolveAppleMusicMatchViaAlbum(artist, title, album string) appleMusicMatch {
 	if album == "" {
-		return ""
+		return appleMusicMatch{}
 	}
 	q := neturl.QueryEscape(artist + " " + album)
 	for _, country := range []string{"CN", "US"} {
@@ -104,11 +137,11 @@ func resolveAppleMusicURLViaAlbum(artist, title, album string) string {
 		}
 		for _, t := range itunesLookupTracks(bestID, country) {
 			if t.TrackViewURL != "" && looseContains(t.TrackName, title) {
-				return t.TrackViewURL
+				return appleMusicMatch{url: t.TrackViewURL, cover: hiResArtwork(t.ArtworkURL100)}
 			}
 		}
 	}
-	return ""
+	return appleMusicMatch{}
 }
 
 // itunesLookupTracks returns the full tracklist of an album via the lookup
@@ -131,9 +164,10 @@ func itunesLookupTracks(collectionID int64, country string) []itunesResult {
 	}
 	var out struct {
 		Results []struct {
-			WrapperType  string `json:"wrapperType"`
-			TrackName    string `json:"trackName"`
-			TrackViewURL string `json:"trackViewUrl"`
+			WrapperType   string `json:"wrapperType"`
+			TrackName     string `json:"trackName"`
+			TrackViewURL  string `json:"trackViewUrl"`
+			ArtworkURL100 string `json:"artworkUrl100"`
 		} `json:"results"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
@@ -144,7 +178,7 @@ func itunesLookupTracks(collectionID int64, country string) []itunesResult {
 		if r.WrapperType != "track" {
 			continue
 		}
-		tracks = append(tracks, itunesResult{TrackName: r.TrackName, TrackViewURL: r.TrackViewURL})
+		tracks = append(tracks, itunesResult{TrackName: r.TrackName, TrackViewURL: r.TrackViewURL, ArtworkURL100: r.ArtworkURL100})
 	}
 	return tracks
 }
@@ -154,6 +188,7 @@ type itunesResult struct {
 	CollectionName string `json:"collectionName"`
 	CollectionID   int64  `json:"collectionId"`
 	TrackViewURL   string `json:"trackViewUrl"`
+	ArtworkURL100  string `json:"artworkUrl100"`
 }
 
 func itunesSearch(q, country string) []itunesResult {
