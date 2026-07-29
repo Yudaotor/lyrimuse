@@ -73,14 +73,16 @@ func isMusicAppRunning() bool {
 }
 
 // playerProcessName 是当前选定播放器(features.Player)的可执行文件名,给 pgrep -x
-// 用——QQ音乐.app 的 CFBundleExecutable 是 QQMusic、网易云音乐.app 是 NeteaseMusic
-// (都用 PlistBuddy 核实过),Music.app 是 Music。
+// 用——QQ音乐.app 的 CFBundleExecutable 是 QQMusic、网易云音乐.app 是 NeteaseMusic、
+// Spotify.app 是 Spotify(都用 PlistBuddy 核实过),Music.app 是 Music。
 func playerProcessName() string {
 	switch features.Player {
 	case playerQQMusic:
 		return "QQMusic"
 	case playerNetease:
 		return "NeteaseMusic"
+	case playerSpotify:
+		return "Spotify"
 	default:
 		return "Music"
 	}

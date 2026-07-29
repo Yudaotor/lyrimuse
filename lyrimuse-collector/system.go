@@ -82,6 +82,8 @@ func getState(ctx context.Context) (map[string]any, bool) {
 		return getQQMusicState(ctx)
 	case playerNetease:
 		return getNeteaseMusicState(ctx)
+	case playerSpotify:
+		return getSpotifyState(ctx)
 	default:
 		return getAppleMusicState(ctx)
 	}
@@ -137,12 +139,13 @@ end tell`
 	return p, true
 }
 
-// qqMusicBundleID/neteaseMusicBundleID/mediaControlRawState 见 lyrimuse 侧
-// MediaControlClient.swift 同名常量/结构体的注释——同一套设计,两边分别用 Swift/Go
-// 实现一遍。
+// qqMusicBundleID/neteaseMusicBundleID/spotifyBundleID/mediaControlRawState 见
+// lyrimuse 侧 MediaControlClient.swift 同名常量/结构体的注释——同一套设计,两边
+// 分别用 Swift/Go 实现一遍。
 const (
 	qqMusicBundleID      = "com.tencent.QQMusicMac"
 	neteaseMusicBundleID = "com.netease.163music"
+	spotifyBundleID      = "com.spotify.client"
 )
 
 // expectedPlayerBundleID 是当前选定播放器(features.Player)自己会报告的 bundle id——
@@ -153,6 +156,8 @@ func expectedPlayerBundleID() string {
 		return qqMusicBundleID
 	case playerNetease:
 		return neteaseMusicBundleID
+	case playerSpotify:
+		return spotifyBundleID
 	default:
 		return "com.apple.Music"
 	}
@@ -174,6 +179,8 @@ func mediaPlayerLabel() string {
 		return "QQ Music (macOS)"
 	case playerNetease:
 		return "NetEase Cloud Music (macOS)"
+	case playerSpotify:
+		return "Spotify (macOS)"
 	default:
 		return "Apple Music (macOS)"
 	}
@@ -191,15 +198,20 @@ type mediaControlRawState struct {
 	PlaybackRate   float64 `json:"playbackRate"`
 }
 
-// getQQMusicState/getNeteaseMusicState 都是 getMediaControlState 的薄封装——QQ 音乐/
-// 网易云音乐都没有 AppleScript 支持,读取路径完全一样,只是各自要核对的 bundle id
-// 不同,不需要把整个函数体抄两遍。
+// getQQMusicState/getNeteaseMusicState/getSpotifyState 都是 getMediaControlState 的
+// 薄封装——QQ 音乐/网易云音乐都没有 AppleScript 支持,Spotify 虽然有但 2026-07-29 实测
+// 坐实它同样把播放状态发布进系统级 MediaRemote,三者读取路径完全一样,只是各自要核对
+// 的 bundle id 不同,不需要把整个函数体抄三遍。
 func getQQMusicState(ctx context.Context) (map[string]any, bool) {
 	return getMediaControlState(ctx, qqMusicBundleID)
 }
 
 func getNeteaseMusicState(ctx context.Context) (map[string]any, bool) {
 	return getMediaControlState(ctx, neteaseMusicBundleID)
+}
+
+func getSpotifyState(ctx context.Context) (map[string]any, bool) {
+	return getMediaControlState(ctx, spotifyBundleID)
 }
 
 // getMediaControlState 读内置 media-control 二进制(见 mediaControlBinaryPath)。--now

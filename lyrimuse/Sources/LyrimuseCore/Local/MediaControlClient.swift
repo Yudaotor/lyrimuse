@@ -31,7 +31,7 @@ public enum MediaControlClient {
     public static func fetchSnapshot(player: PlaybackPlayer = PlaybackPlayerPreference.current) -> MediaControlSnapshot? {
         switch player {
         case .appleMusic: return fetchAppleMusicSnapshot()
-        case .qqMusic, .netease: return fetchMediaControlSnapshot(expectedBundleID: player.bundleIdentifier)
+        case .qqMusic, .netease, .spotify: return fetchMediaControlSnapshot(expectedBundleID: player.bundleIdentifier)
         }
     }
 

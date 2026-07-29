@@ -44,11 +44,14 @@ const (
 // Apple Music 走 AppleScript;QQ 音乐/网易云音乐都没有 AppleScript 支持(用
 // sdef/PlistBuddy 核实过,两者都没有 .sdef、也没开 NSAppleScriptEnabled),共用同一条
 // 系统级 MediaRemote(media-control)读取路径,只是 bundle id 不同——见 system.go 的
-// getState()/appleMusicPosition() 注释。
+// getState()/appleMusicPosition() 注释。Spotify 自己虽然有 AppleScript 支持,但
+// 2026-07-29 实测坐实它同样会把播放状态发布进系统级 MediaRemote(`media-control get`/
+// 控制指令都正常),没必要单独写一套 AppleScript 集成,归到跟 QQ/网易云一样的路径。
 const (
 	playerAppleMusic = "apple_music"
 	playerQQMusic    = "qq_music"
 	playerNetease    = "netease_music"
+	playerSpotify    = "spotify"
 )
 
 // lyricsSourceDefaultOrder 是"顺序优先"模式缺省的顺序——照抄 enrich.go
@@ -186,7 +189,7 @@ func loadFeatureFlags(path string) featureFlags {
 // resolvePlayer 兜底成 playerAppleMusic——这是这个设置加入之前唯一存在过的行为,
 // 保证全新安装/旧配置文件(没有 "player" 字段)不会被静默解读成别的播放器。
 func resolvePlayer(p string) string {
-	if p == playerQQMusic || p == playerNetease {
+	if p == playerQQMusic || p == playerNetease || p == playerSpotify {
 		return p
 	}
 	return playerAppleMusic
