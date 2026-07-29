@@ -540,9 +540,7 @@ struct AccountLinkingTab: View {
         } header: {
             Text(L10n.t("账号信息"))
         } footer: {
-            // 2026-07-29:去掉了"读取记录"那个独立开关后,这句话不再需要提"填好就能
-            // 用"——填好这里 + 配好 ListenBrainz,自动生效,不需要用户在别处再确认一次。
-            Text(L10n.t("填好用户名 + API Key，如果也配置了「ListenBrainz」，会自动把收听记录同步过去；填上 Secret 并连接账号，还能同步进 Last.fm。"))
+            Text(L10n.t("填好用户名 + API Key，同步到 ListenBrainz；填上 Secret 并连接账号，同步进 Last.fm。"))
         }
 
         Section {

@@ -288,7 +288,7 @@
 "账户 Token" = "账户 Token";
 "账户信息" = "账户信息";
 "超过就截断" = "超过就截断";
-"填好用户名 + API Key，如果也配置了「ListenBrainz」，会自动把收听记录同步过去；填上 Secret 并连接账号，还能同步进 Last.fm。" = "填好用户名 + API Key，如果也配置了「ListenBrainz」，会自动把收听记录同步过去；填上 Secret 并连接账号，还能同步进 Last.fm。";
+"填好用户名 + API Key，同步到 ListenBrainz；填上 Secret 并连接账号，同步进 Last.fm。" = "填好用户名 + API Key，同步到 ListenBrainz；填上 Secret 并连接账号，同步进 Last.fm。";
 "跟随系统" = "跟随系统";
 "开启后会把播放记录同步写入 Last.fm。" = "开启后会把播放记录同步写入 Last.fm。";
 "写入记录" = "写入记录";

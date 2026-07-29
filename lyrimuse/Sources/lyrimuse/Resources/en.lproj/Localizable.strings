@@ -288,7 +288,7 @@
 "账户 Token" = "Account Token";
 "账户信息" = "Account Info";
 "超过就截断" = "Truncate If Too Long";
-"填好用户名 + API Key，如果也配置了「ListenBrainz」，会自动把收听记录同步过去；填上 Secret 并连接账号，还能同步进 Last.fm。" = "Fill in your username + API Key and it'll automatically sync your listening history over if \"ListenBrainz\" is also configured; add the Secret and connect your account to also sync into Last.fm.";
+"填好用户名 + API Key，同步到 ListenBrainz；填上 Secret 并连接账号，同步进 Last.fm。" = "Fill in your username + API Key to sync to ListenBrainz; add the Secret and connect your account to sync into Last.fm.";
 "跟随系统" = "System Default";
 "开启后会把播放记录同步写入 Last.fm。" = "When turned on, this syncs your listening history into Last.fm.";
 "写入记录" = "Write";
