@@ -39,12 +39,10 @@ final class LyricsSearchService {
 
     enum SearchError: LocalizedError {
         case processFailed(String)
-        case decodeFailed
 
         var errorDescription: String? {
             switch self {
             case .processFailed(let msg): return String(format: L10n.t("搜索失败: %@"), msg)
-            case .decodeFailed: return L10n.t("解析搜索结果失败")
             }
         }
     }
@@ -64,8 +62,20 @@ final class LyricsSearchService {
     // 条目,enrichEntry 本来就不持久化时长;collector 侧 scoreLyricCandidate 对
     // durationSecs<=0 有专门处理,直接跳过时长匹配这档评分(不会除零/不会被误判成
     // "时长对不上"),只退化成语言/署名行过滤+逐字加分+来源优先级+行数。
-    func search(artist: String, title: String, album: String, durationSecs: Double = 0) async throws -> [Candidate] {
-        try await withCheckedThrowingContinuation { continuation in
+    //
+    // onUpdate 每收到子进程一整行 stdout 就调用一次(不是等进程退出才调一次)——
+    // collector 那边(searchcli.go)改成了 NDJSON:谁先查完谁先打印一行,后面每一行是
+    // 目前为止已知全部候选重新排序过的完整列表,不是只有新到的这一条(collector 侧
+    // corroboratedEndings 是跨候选互相印证的信号,后到的源可能改变已经展示出来的某条
+    // 候选的分数,所以每次都要整份重新展示,不能只追加新的那一条)。调用方(desktop-
+    // lyrics 的"搜索候选歌词"弹窗)因此能做到"谁先搜到就先展示谁,列表随后续源陆续
+    // 刷新",不用等最慢的源(或者 20 秒兜底超时)才看到任何东西。回调固定在
+    // MainActor 上执行,调用方可以直接改 @State,不需要自己再跳线程。
+    func search(
+        artist: String, title: String, album: String, durationSecs: Double = 0,
+        onUpdate: @escaping @MainActor ([Candidate]) -> Void
+    ) async throws {
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
             let process = Process()
             process.executableURL = URL(fileURLWithPath: Self.collectorPath)
             process.arguments = [
@@ -82,49 +92,68 @@ final class LyricsSearchService {
 
             // 内核管道缓冲区只有 64KB,四源都命中+带逐字 YRC 数据的候选(比如 Michael
             // Jackson - You Rock My World,合计输出 65KB+)一旦超过这个缓冲区,子进程的
-            // write() 就会阻塞、等父进程腾出空间;如果父进程只在 terminationHandler 里才
-            // readDataToEndOfFile(),子进程卡在 write() 上永远不会退出、
-            // terminationHandler 也就永远不会触发,两边互相等对方先动导致死锁。这里在
-            // 子进程运行期间就在后台队列持续把 stdout/stderr 读走(不等进程退出),管道
-            // 缓冲区就不会被灌满。DispatchGroup.wait() 确保下面两条后台读取线程写完
-            // box.value 之后、terminationHandler 才会往下读它们——这个 happens-before
-            // 关系是靠 group 保证的,不是靠 Swift 并发检查器认识的机制,所以用
-            // @unchecked Sendable 包一层声明这里的跨线程访问已经自行保证过安全,避免
-            // Swift 6 严格并发模式下把这种直接捕获 var 的写法当成数据竞争报错。
-            final class Box: @unchecked Sendable { var value = Data() }
-            let outBox = Box()
-            let errBox = Box()
-            let pipeReadGroup = DispatchGroup()
-            pipeReadGroup.enter()
-            DispatchQueue.global(qos: .utility).async {
-                outBox.value = stdoutPipe.fileHandleForReading.readDataToEndOfFile()
-                pipeReadGroup.leave()
+            // write() 就会阻塞、等父进程腾出空间;如果父进程只在进程退出后才读,子进程
+            // 卡在 write() 上永远不会退出、进程也就永远不会终止,两边互相等对方先动
+            // 导致死锁。这里在子进程运行期间就持续把 stdout 读走(用 availableData 循环,
+            // 不是一次性 readDataToEndOfFile——后者要等到 EOF 才返回,等于还是"攒到最后
+            // 才读",会跟"边读边逐行展示"的目标自相矛盾),管道缓冲区就不会被灌满。
+            //
+            // 用 @unchecked Sendable 包一层是因为 outBuffer/pendingUpdate 只在下面这一条
+            // 后台队列(readQueue,串行)里被写,不会有真正的并发访问——Swift 6 严格并发
+            // 检查器认不出"同一个串行队列内先后执行"这种 happens-before 关系,只能显式
+            // 声明这里的跨线程访问已经自行保证过安全。
+            final class Box: @unchecked Sendable {
+                var outBuffer = Data()
+                var errBuffer = Data()
             }
-            pipeReadGroup.enter()
-            DispatchQueue.global(qos: .utility).async {
-                errBox.value = stderrPipe.fileHandleForReading.readDataToEndOfFile()
-                pipeReadGroup.leave()
+            let box = Box()
+            let readQueue = DispatchQueue(label: "me.yudaotor.lyrimuse.search-lyrics.stdout", qos: .utility)
+            let readGroup = DispatchGroup()
+
+            // 按 \n 切行,每凑齐一整行就尝试解码成 [RawCandidate] 并回调——半行(还没读到
+            // 换行符的尾巴)留在 outBuffer 里等下一批数据补全,不会被当成一行提前误判。
+            func drainCompleteLines() {
+                while let newlineRange = box.outBuffer.firstRange(of: Data([0x0A])) {
+                    let lineData = box.outBuffer.subdata(in: box.outBuffer.startIndex..<newlineRange.lowerBound)
+                    box.outBuffer.removeSubrange(box.outBuffer.startIndex..<newlineRange.upperBound)
+                    guard !lineData.isEmpty else { continue }
+                    guard let raw = try? JSONDecoder().decode([RawCandidate].self, from: lineData) else {
+                        logger.error("search-lyrics: failed to decode a stdout line, skipping")
+                        continue
+                    }
+                    let candidates = raw.map(Candidate.init)
+                    Task { @MainActor in onUpdate(candidates) }
+                }
+            }
+
+            readGroup.enter()
+            readQueue.async {
+                let handle = stdoutPipe.fileHandleForReading
+                while true {
+                    let chunk = handle.availableData
+                    if chunk.isEmpty { break } // EOF
+                    box.outBuffer.append(chunk)
+                    drainCompleteLines()
+                }
+                readGroup.leave()
+            }
+            readGroup.enter()
+            readQueue.async {
+                box.errBuffer = stderrPipe.fileHandleForReading.readDataToEndOfFile()
+                readGroup.leave()
             }
 
             process.terminationHandler = { proc in
-                // 进程已退出,两条后台读取线程读到 EOF 会自然返回;等它们真正写完
-                // outBox/errBox 再继续,避免极端情况下读线程还没来得及把最后一批数据
-                // 落进变量就被下面读到半份数据。
-                pipeReadGroup.wait()
-                let outData = outBox.value
-                let errData = errBox.value
+                // 进程已退出,两条后台读取任务读到 EOF 会自然结束;等它们真正跑完再继续,
+                // 避免极端情况下读任务还没来得及把最后一批数据处理完就被下面读到半份状态。
+                readGroup.wait()
                 guard proc.terminationStatus == 0 else {
-                    let msg = String(data: errData, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
+                    let msg = String(data: box.errBuffer, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
                     logger.error("search-lyrics exited \(proc.terminationStatus): \(msg ?? "", privacy: .public)")
                     continuation.resume(throwing: SearchError.processFailed(msg?.isEmpty == false ? msg! : String(format: L10n.t("退出码 %@"), "\(proc.terminationStatus)")))
                     return
                 }
-                guard let raw = try? JSONDecoder().decode([RawCandidate].self, from: outData) else {
-                    logger.error("search-lyrics: failed to decode stdout")
-                    continuation.resume(throwing: SearchError.decodeFailed)
-                    return
-                }
-                continuation.resume(returning: raw.map(Candidate.init))
+                continuation.resume(returning: ())
             }
 
             do {

@@ -20,19 +20,20 @@ struct LyricsSearchSheet: View {
     @Environment(\.dismiss) private var dismiss
     // 只为了让这个弹窗在手动切换语言时重新渲染,同 LyricsManagerView 的理由。
     @ObservedObject private var languageSettings = AppSettings.shared
-    @State private var state: LoadState = .loading
+    // candidates/isSearching 分开存,而不是揉进一个"loading/loaded/failed"三态 enum——
+    // 现在结果是陆续到达的(collector 那边改成 NDJSON 流式输出,谁先查完谁先展示,见
+    // LyricsSearchService.search 的 onUpdate),搜索"进行中"和"目前已经有哪些候选"是
+    // 两个独立维度:可能已经有几条候选摆在那了、但后面的源还没回来。用一个三态 enum
+    // 表达不了"进行中 + 已经有部分结果"这个中间状态。
+    @State private var candidates: [LyricsSearchService.Candidate] = []
+    @State private var isSearching = false
+    @State private var loadError: String?
     @State private var selectedSource: String?
 
     // 可编辑的查询关键词,初始值取自 originalXxx——默认就是"现有逻辑"那套查询。
     @State private var artist: String
     @State private var title: String
     @State private var album: String
-
-    private enum LoadState {
-        case loading
-        case loaded([LyricsSearchService.Candidate])
-        case failed(String)
-    }
 
     init(artist: String, title: String, album: String, onApply: @escaping (LyricsSearchService.Candidate) -> Void) {
         self.originalArtist = artist
@@ -46,11 +47,6 @@ struct LyricsSearchSheet: View {
 
     private var isDirty: Bool {
         artist != originalArtist || title != originalTitle || album != originalAlbum
-    }
-
-    private var isLoading: Bool {
-        if case .loading = state { return true }
-        return false
     }
 
     var body: some View {
@@ -92,26 +88,20 @@ struct LyricsSearchSheet: View {
                 .buttonStyle(.link)
             }
             Button(L10n.t("重新搜索")) { Task { await load() } }
-                .disabled(isLoading || title.trimmingCharacters(in: .whitespaces).isEmpty)
+                .disabled(isSearching || title.trimmingCharacters(in: .whitespaces).isEmpty)
         }
         .onSubmit { Task { await load() } }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
     }
 
+    // candidates 陆续到达、isSearching 才是"是否还没结束"的唯一依据——不能用
+    // "candidates.isEmpty"反过来判断有没有搜索完:目前为止一个候选都还没到手,不代表
+    // 五个源已经查完了(可能只是跑得快的那几个还没轮到),那样会把"还在搜"误判成
+    // "查完了、真的什么都没有",提前弹出"没找到候选"的空状态提示。
     @ViewBuilder
     private var content: some View {
-        switch state {
-        case .loading:
-            VStack(spacing: 12) {
-                ProgressView()
-                Text(L10n.t("正在查询网易云 / QQ音乐 / 酷狗 / Musixmatch / LRCLIB…"))
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-
-        case .failed(let msg):
+        if let msg = loadError {
             VStack(spacing: 12) {
                 Image(systemName: "exclamationmark.triangle")
                     .font(.system(size: 32))
@@ -120,12 +110,32 @@ struct LyricsSearchSheet: View {
                 Button(L10n.t("重试")) { Task { await load() } }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-
-        case .loaded(let candidates):
-            if candidates.isEmpty {
-                ContentUnavailableView(L10n.t("四个源都没找到可用的候选"), systemImage: "text.badge.xmark")
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if candidates.isEmpty {
+            if isSearching {
+                VStack(spacing: 12) {
+                    ProgressView()
+                    Text(L10n.t("正在查询网易云 / QQ音乐 / 酷狗 / Musixmatch / LRCLIB…"))
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
+                ContentUnavailableView(L10n.t("五个源都没找到可用的候选"), systemImage: "text.badge.xmark")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        } else {
+            VStack(spacing: 0) {
+                if isSearching {
+                    // 已经有候选可看了,但还有源没回来——小小一条提示,不用整页占用
+                    // ProgressView 挡住已经到手的结果。
+                    HStack(spacing: 6) {
+                        ProgressView().controlSize(.small)
+                        Text(L10n.t("其它源仍在搜索中…"))
+                    }
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .padding(.vertical, 6)
+                }
                 HSplitView {
                     List(candidates, selection: $selectedSource) { c in
                         candidateRow(c)
@@ -212,13 +222,24 @@ struct LyricsSearchSheet: View {
     }
 
     private func load() async {
-        state = .loading
+        candidates = []
+        loadError = nil
+        selectedSource = nil
+        isSearching = true
         do {
-            let results = try await LyricsSearchService.shared.search(artist: artist, title: title, album: album)
-            state = .loaded(results)
-            selectedSource = results.first?.source
+            try await LyricsSearchService.shared.search(artist: artist, title: title, album: album) { updated in
+                candidates = updated
+                // 只在第一次收到候选时选中"当前最靠前"的那个,后续更新哪怕重新排序也不
+                // 抢用户已经手动点开看的那个候选——同一个 source 不会在后续更新里消失
+                // (候选只增不减,见 collector 侧 scoreAndSort 的注释),只是分数/排序可能
+                // 变,selectedSource 指向的行还在,不会失效。
+                if selectedSource == nil {
+                    selectedSource = updated.first?.source
+                }
+            }
         } catch {
-            state = .failed(error.localizedDescription)
+            loadError = error.localizedDescription
         }
+        isSearching = false
     }
 }

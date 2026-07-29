@@ -357,7 +357,15 @@ const lyricSearchDeadline = 20 * time.Second
 // 的 ne(见下面 return ne, results 那一行,不是 aliasNe)——封面/跳转链接这些字段永远
 // 用原始歌手名查出来的结果,这是重构前就有的行为,这里保持不变。
 func scoredLyricCandidates(artist, title, album string, durationSecs float64) (neteaseInfo, []scoredLyricCandidateResult) {
-	ne, results := fetchScoredLyricCandidates(artist, title, album, durationSecs)
+	return scoredLyricCandidatesStreaming(artist, title, album, durationSecs, func(neteaseInfo, []scoredLyricCandidateResult) {})
+}
+
+// scoredLyricCandidatesStreaming 是 scoredLyricCandidates 的流式版本(见
+// fetchScoredLyricCandidatesStreaming 顶部注释)——onUpdate 一路透传给主查询和(如果
+// 触发了)别名重试查询,所以手动搜索(searchcli.go)在别名重试这条冷门路径上也能看到
+// 陆续到达的候选,不会因为切换成了 alias 重试就突然掉回"等全部查完才展示"。
+func scoredLyricCandidatesStreaming(artist, title, album string, durationSecs float64, onUpdate func(neteaseInfo, []scoredLyricCandidateResult)) (neteaseInfo, []scoredLyricCandidateResult) {
+	ne, results := fetchScoredLyricCandidatesStreaming(artist, title, album, durationSecs, onUpdate)
 	if len(results) > 0 {
 		return ne, results
 	}
@@ -365,7 +373,7 @@ func scoredLyricCandidates(artist, title, album string, durationSecs float64) (n
 	if alias == "" || alias == artist {
 		return ne, results
 	}
-	_, aliasResults := fetchScoredLyricCandidates(alias, title, album, durationSecs)
+	_, aliasResults := fetchScoredLyricCandidatesStreaming(alias, title, album, durationSecs, onUpdate)
 	if len(aliasResults) > 0 {
 		log.Printf("lyrics: artist alias fallback succeeded: original_artist=%q alias=%q title=%q candidates=%d", artist, alias, title, len(aliasResults))
 		return ne, aliasResults
@@ -377,19 +385,33 @@ func scoredLyricCandidates(artist, title, album string, durationSecs float64) (n
 // Musixmatch/LRCLIB 五个源、给查到的候选打分"的实现——从 scoredLyricCandidates 里
 // 拆出来,是为了在第一次用原始歌手名查询彻底查无候选时,能原封不动地对已知别名再
 // 调用一遍(见 scoredLyricCandidates 上面的注释),而不必把并发抓取/打分这套逻辑抄
-// 第二遍。
-//
-// 五个源(含网易云)真正一起并发发出去,用带缓冲的 channel 收集结果——之前网易云是
-// 在这个函数之外单独同步查一遍(resolveTrackEnrichment 为了封面/跳转链接需要它),
-// 等它查完了才轮到这里的 qq/酷狗/Musixmatch/LRCLIB 四个开始并发,相当于白白把网易云
-// 自己最坏能到小三十秒的串行耗时,原样叠加在了整体等待时间最前面——搬进同一批
-// goroutine 后,网易云的耗时不再阻塞其它四个源起步,只跟它们一起被下面的
-// lyricSearchDeadline 兜底。用 channel 而不是"WaitGroup+共享变量"是为了让超时后
-// "放弃继续等、先用已经到手的候选"这件事是并发安全的:哪怕某个源在超时之后才真正
-// 返回,它往 channel 送结果这个动作本身不会阻塞(channel 容量=goroutine 数量),
-// 也不会跟已经不再读取的这边产生数据竞争,那个晚到的结果就单纯被丢弃,不影响这一轮
-// 的候选列表。
+// 第二遍。只关心最终这一批结果的调用方(resolveTrackEnrichment/别名重试)走这个
+// 薄封装;真正的实现在下面 fetchScoredLyricCandidatesStreaming,onUpdate 传空函数。
 func fetchScoredLyricCandidates(artist, title, album string, durationSecs float64) (neteaseInfo, []scoredLyricCandidateResult) {
+	return fetchScoredLyricCandidatesStreaming(artist, title, album, durationSecs, func(neteaseInfo, []scoredLyricCandidateResult) {})
+}
+
+// fetchScoredLyricCandidatesStreaming 是实际实现:五个源(含网易云)真正一起并发发
+// 出去,用带缓冲的 channel 收集结果——之前网易云是在这个函数之外单独同步查一遍
+// (resolveTrackEnrichment 为了封面/跳转链接需要它),等它查完了才轮到这里的
+// qq/酷狗/Musixmatch/LRCLIB 四个开始并发,相当于白白把网易云自己最坏能到小三十秒的
+// 串行耗时,原样叠加在了整体等待时间最前面——搬进同一批 goroutine 后,网易云的耗时
+// 不再阻塞其它四个源起步,只跟它们一起被下面的 lyricSearchDeadline 兜底。用 channel
+// 而不是"WaitGroup+共享变量"是为了让超时后"放弃继续等、先用已经到手的候选"这件事是
+// 并发安全的:哪怕某个源在超时之后才真正返回,它往 channel 送结果这个动作本身不会
+// 阻塞(channel 容量=goroutine 数量),也不会跟已经不再读取的这边产生数据竞争,那个
+// 晚到的结果就单纯被丢弃,不影响这一轮的候选列表。
+//
+// onUpdate 在每个源的结果到达(不只是全部到齐那一刻)后都会被调用一次,携带当前已知
+// 全部候选重新算出的完整排序结果——这是给 search-lyrics CLI 的"手动搜索陆续展示"
+// 用的(searchcli.go),让用户不用等最慢的那个源(或者等到 20 秒兜底超时)才看到任何
+// 结果,谁先回来就先看到谁,列表随后续到达的源继续刷新。之所以每次都重新算完整列表、
+// 而不是"只把这一个新来源追加进去",是因为 corroboratedEndings(见 match.go)是跨候选
+// 互相印证的信号——后到的源可能会让已经展示出来的某条候选的可信度分数往上修正,重新
+// 算一遍整个列表才能让分数/排序始终反映"目前已知的全部信息",不会出现"先看到的候选
+// 分数再也不会变"这种半截状态。fetchScoredLyricCandidates(上面)只关心最终结果,传一
+// 个空函数复用这同一份实现。
+func fetchScoredLyricCandidatesStreaming(artist, title, album string, durationSecs float64, onUpdate func(neteaseInfo, []scoredLyricCandidateResult)) (neteaseInfo, []scoredLyricCandidateResult) {
 	type sourceResult struct {
 		source       string
 		ne           neteaseInfo
@@ -430,6 +452,56 @@ func fetchScoredLyricCandidates(artist, title, album string, durationSecs float6
 	var ne neteaseInfo
 	var qqLyr, qqYRC, kugouLyr, kugouYRC, lrclibLyr string
 	var mxLyr, mxYRC, mxTr string
+	// scoreAndSort 用目前为止已经到手的原始结果重新构建候选、算 corroboratedEndings、
+	// 打分、排序——每次有新结果到达都会重新跑一遍(而不是缓存增量),因为一份候选的
+	// corroborated 状态可能随后到的源变化(见上面 onUpdate 的注释),分数不是只增不改
+	// 的东西,不能靠增量更新蒙混过去。
+	scoreAndSort := func() []scoredLyricCandidateResult {
+		var candidates []lyricCandidate
+		if ne.Lyrics != "" {
+			candidates = append(candidates, lyricCandidate{source: "netease", lyrics: ne.Lyrics, wordTimingYRC: ne.YRC, hasWordTiming: ne.YRC != ""})
+		}
+		if qqLyr != "" {
+			candidates = append(candidates, lyricCandidate{source: "qq", lyrics: qqLyr, wordTimingYRC: qqYRC, hasWordTiming: qqYRC != ""})
+		}
+		if kugouLyr != "" {
+			candidates = append(candidates, lyricCandidate{source: "kugou", lyrics: kugouLyr, wordTimingYRC: kugouYRC, hasWordTiming: kugouYRC != ""})
+		}
+		if mxLyr != "" {
+			candidates = append(candidates, lyricCandidate{source: "musixmatch", lyrics: mxLyr, wordTimingYRC: mxYRC, hasWordTiming: mxYRC != ""})
+		}
+		if lrclibLyr != "" {
+			candidates = append(candidates, lyricCandidate{source: "lrclib", lyrics: lrclibLyr})
+		}
+		corroborated := corroboratedEndings(candidates)
+
+		results := make([]scoredLyricCandidateResult, 0, len(candidates))
+		for _, c := range candidates {
+			r := scoredLyricCandidateResult{
+				Source:        c.source,
+				Lyrics:        c.lyrics,
+				LyricsYRC:     c.wordTimingYRC,
+				HasWordTiming: c.hasWordTiming,
+				Score:         scoreLyricCandidate(artist, title, durationSecs, c, corroborated[c.source]),
+			}
+			switch c.source {
+			case "netease":
+				// 翻译/罗马音网易云固定给中文;QQ/酷狗这次只接了逐字,不接翻译/罗马音,
+				// 见计划"刻意不做的"。
+				r.LyricsTr, r.LyricsRoma = ne.Trans, ne.Roma
+			case "musixmatch":
+				// Musixmatch 的译文语言是用户在"歌词"设置里配的
+				// LyricsTranslationLanguage(ISO 639-1 代码),不像网易云固定中文——
+				// 见 musixmatchTranslationLRC 注释。没配置/没查到社区翻译时 mxTr 是
+				// 空串,r.LyricsTr 保持空,不影响这条候选本身的原文歌词。
+				r.LyricsTr = mxTr
+			}
+			results = append(results, r)
+		}
+		sort.Slice(results, func(i, j int) bool { return results[i].Score > results[j].Score })
+		return results
+	}
+
 	deadline := time.After(lyricSearchDeadline)
 collect:
 	for i := 0; i < 5; i++ {
@@ -447,55 +519,14 @@ collect:
 			case "musixmatch":
 				mxLyr, mxYRC, mxTr = r.lyr, r.yrc, r.tr
 			}
+			onUpdate(ne, scoreAndSort())
 		case <-deadline:
 			log.Printf("lyrics: search deadline (%s) hit for artist=%q title=%q, proceeding with %d/5 sources back", lyricSearchDeadline, artist, title, i)
 			break collect
 		}
 	}
 
-	var candidates []lyricCandidate
-	if ne.Lyrics != "" {
-		candidates = append(candidates, lyricCandidate{source: "netease", lyrics: ne.Lyrics, wordTimingYRC: ne.YRC, hasWordTiming: ne.YRC != ""})
-	}
-	if qqLyr != "" {
-		candidates = append(candidates, lyricCandidate{source: "qq", lyrics: qqLyr, wordTimingYRC: qqYRC, hasWordTiming: qqYRC != ""})
-	}
-	if kugouLyr != "" {
-		candidates = append(candidates, lyricCandidate{source: "kugou", lyrics: kugouLyr, wordTimingYRC: kugouYRC, hasWordTiming: kugouYRC != ""})
-	}
-	if mxLyr != "" {
-		candidates = append(candidates, lyricCandidate{source: "musixmatch", lyrics: mxLyr, wordTimingYRC: mxYRC, hasWordTiming: mxYRC != ""})
-	}
-	if lrclibLyr != "" {
-		candidates = append(candidates, lyricCandidate{source: "lrclib", lyrics: lrclibLyr})
-	}
-	corroborated := corroboratedEndings(candidates)
-
-	results := make([]scoredLyricCandidateResult, 0, len(candidates))
-	for _, c := range candidates {
-		r := scoredLyricCandidateResult{
-			Source:        c.source,
-			Lyrics:        c.lyrics,
-			LyricsYRC:     c.wordTimingYRC,
-			HasWordTiming: c.hasWordTiming,
-			Score:         scoreLyricCandidate(artist, title, durationSecs, c, corroborated[c.source]),
-		}
-		switch c.source {
-		case "netease":
-			// 翻译/罗马音网易云固定给中文;QQ/酷狗这次只接了逐字,不接翻译/罗马音,
-			// 见计划"刻意不做的"。
-			r.LyricsTr, r.LyricsRoma = ne.Trans, ne.Roma
-		case "musixmatch":
-			// Musixmatch 的译文语言是用户在"歌词"设置里配的
-			// LyricsTranslationLanguage(ISO 639-1 代码),不像网易云固定中文——
-			// 见 musixmatchTranslationLRC 注释。没配置/没查到社区翻译时 mxTr 是
-			// 空串,r.LyricsTr 保持空,不影响这条候选本身的原文歌词。
-			r.LyricsTr = mxTr
-		}
-		results = append(results, r)
-	}
-	sort.Slice(results, func(i, j int) bool { return results[i].Score > results[j].Score })
-	return ne, results
+	return ne, scoreAndSort()
 }
 
 // loadEnrichCache reads the persisted enrichment cache (best-effort) and sets the

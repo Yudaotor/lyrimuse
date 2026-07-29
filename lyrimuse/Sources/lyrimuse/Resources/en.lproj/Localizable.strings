@@ -143,7 +143,7 @@
 "同步服务地址" = "Sync Server URL";
 "同步进 Last.fm" = "Sync to Last.fm";
 "启动" = "Startup";
-"四个源都没找到可用的候选" = "No usable candidates found from any of the four sources";
+"五个源都没找到可用的候选" = "No usable candidates found from any of the five sources";
 "回到当前播放" = "Jump to Now Playing";
 "在 Last.fm 官网申请一个 API Key 就够用（这是只读场景，不需要 Secret）。" = "A Last.fm API Key is all you need (this is read-only, no Secret required).";
 "在 ListenBrainz 网站获取 Token →" = "Get a Token from the ListenBrainz website →";
@@ -272,7 +272,7 @@
 "仅对 Musixmatch 来源生效——网易云音乐/QQ音乐的译文固定是中文。" = "Only applies to the Musixmatch source — NetEase Cloud Music/QQ Music translations are always Chinese.";
 "解析" = "Parsing";
 "解析 Last.fm 响应失败" = "Failed to parse the Last.fm response";
-"解析搜索结果失败" = "Failed to Parse Search Results";
+"其它源仍在搜索中…" = "Still searching other sources…";
 "解析本地记录文件失败" = "Failed to Parse Local Record File";
 "设置" = "Settings";
 "设置…" = "Settings…";

@@ -12,11 +12,21 @@ import (
 // runSearchLyricsCLI implements `collector search-lyrics -artist ... -title ...
 // -album ... -duration ...`: a one-shot, no-persistent-server way for desktop-lyrics
 // to let the user manually re-search lyric candidates for a specific song (its
-// "歌词管理" window's "联网搜索候选歌词" feature). It reuses scoredLyricCandidates
+// "歌词管理" window's "联网搜索候选歌词" feature). It reuses scoredLyricCandidatesStreaming
 // (enrich.go) — the exact same NetEase/QQ/酷狗/Musixmatch/LRCLIB fetch-and-score logic the
 // normal background auto-resolve path uses — so there is no second, drifting
-// implementation of "how do we rank lyric sources" living in Swift. Prints the
-// full ranked candidate list as JSON to stdout and exits; never touches
+// implementation of "how do we rank lyric sources" living in Swift.
+//
+// Prints one JSON array line (NDJSON, via repeated json.Encoder.Encode calls on the
+// same stdout — each call already appends its own newline) per update instead of a
+// single array at the end: the first line lands as soon as the first source answers,
+// each later line is the full best-known-so-far ranked list including whichever
+// sources have answered by then (see fetchScoredLyricCandidatesStreaming's onUpdate
+// comment for why it's the whole list every time, not just the newly-arrived source),
+// and the last line printed is the final result. LyricsSearchService.swift reads stdout line
+// by line as the process runs (not just at exit) and replaces its displayed list with
+// each line's contents — that's the "陆陆续续出来" behavior instead of waiting for
+// everything (or the 20s deadline) before showing anything. Never touches
 // enrich-cache.json (that only happens if/when desktop-lyrics's existing
 // EnrichCacheStore.saveEdit persists whichever candidate the user picks).
 func runSearchLyricsCLI(args []string) {
@@ -51,11 +61,18 @@ func runSearchLyricsCLI(args []string) {
 	// 歌词"功能唯一的数据来源,不经过 resolveTrackEnrichment,必须单独转换一遍,不能
 	// 指望那边的修复覆盖到这里。
 	sArtist, sTitle, sAlbum := toSimplified(*artist), toSimplified(*title), toSimplified(*album)
-	_, results := scoredLyricCandidates(sArtist, sTitle, sAlbum, *duration)
-	results = filterEnabledLyricSources(results)
-	if err := json.NewEncoder(os.Stdout).Encode(results); err != nil {
-		log.Fatalf("search-lyrics: encode results: %v", err)
+	enc := json.NewEncoder(os.Stdout)
+	emit := func(_ neteaseInfo, results []scoredLyricCandidateResult) {
+		if err := enc.Encode(filterEnabledLyricSources(results)); err != nil {
+			log.Fatalf("search-lyrics: encode results: %v", err)
+		}
 	}
+	_, results := scoredLyricCandidatesStreaming(sArtist, sTitle, sAlbum, *duration, emit)
+	// 保底再打印一次最终结果——通常这跟 emit 在最后一个源到达时已经打过的那一行内容
+	// 完全一样(纯防御性的重复),唯一真正需要它的场景是:20 秒兜底超时在第一个源都还
+	// 没回来时就已经触发(五个源全部异常缓慢),这种极端情况下循环里的 emit 一次都没
+	// 被调用过,不能让 Swift 那边一行 stdout 都收不到、误判成"进程没有任何输出"。
+	emit(neteaseInfo{}, results)
 }
 
 // filterEnabledLyricSources drops candidates from sources the user disabled via
