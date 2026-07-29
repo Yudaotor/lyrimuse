@@ -175,6 +175,7 @@ rm -rf "$APP_DIR/Contents/Resources/zh-hans.lproj" "$APP_DIR/Contents/Resources/
 cp -R Sources/lyrimuse/Resources/zh-hans.lproj "$APP_DIR/Contents/Resources/zh-hans.lproj"
 cp -R Sources/lyrimuse/Resources/en.lproj "$APP_DIR/Contents/Resources/en.lproj"
 cp Sources/lyrimuse/Resources/MenuBarIconTemplate.png "$APP_DIR/Contents/Resources/MenuBarIconTemplate.png"
+cp Sources/lyrimuse/Resources/LastfmIcon.png "$APP_DIR/Contents/Resources/LastfmIcon.png"
 printf 'APPL????' > "$APP_DIR/Contents/PkgInfo"
 cat > "$APP_DIR/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>

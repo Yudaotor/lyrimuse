@@ -1,3 +1,4 @@
+import AppKit
 import Combine
 import SwiftUI
 
@@ -20,6 +21,15 @@ enum DestinationStatus {
         // 重新构造。
         DestinationStatusLabel(status: self)
             .id(L10n.current)
+    }
+
+    // 只要图标、不带文字的紧凑版——2026-07-29 起侧边栏行(AccountSidebarRow)改用这个:
+    // 一行"Last.fm + 一堆状态描述文字"在只有 220pt 宽的侧边栏里本来就挤不下、也没必要,
+    // 颜色/图标本身已经足够传达"配好了没有",文字留给有更多空间、也更需要具体信息的
+    // 详情页头部(仍然用上面的 label)。不需要绑 .id(L10n.current)——图标本身不随语言
+    // 变化,没有"切语言后没刷新"这个问题。
+    var indicator: some View {
+        DestinationStatusIndicator(status: self)
     }
 }
 
@@ -53,6 +63,32 @@ private struct DestinationStatusLabel: View {
                 Label(msg, systemImage: "exclamationmark.triangle.fill")
                     .foregroundStyle(dimmed ? Color.primary : Color.red)
             }
+        }
+    }
+}
+
+// DestinationStatusLabel 的图标——文字部分,同一套颜色/图标映射,只是不带 Label 的
+// 文字槽位。.disabled 分支的图标沿用"circle"(空心圆),视觉上跟"未启用"这个语义
+// 一致,不会被误认成"出错了"。
+private struct DestinationStatusIndicator: View {
+    let status: DestinationStatus
+    @Environment(\.backgroundProminence) private var backgroundProminence
+
+    private var dimmed: Bool { backgroundProminence == .increased }
+
+    var body: some View {
+        switch status {
+        case .disabled:
+            Image(systemName: "circle").foregroundStyle(.secondary)
+        case .missingCreds:
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(dimmed ? Color.primary : Color.orange)
+        case .active:
+            Image(systemName: "checkmark.circle.fill")
+                .foregroundStyle(dimmed ? Color.primary : Color.green)
+        case .error:
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(dimmed ? Color.primary : Color.red)
         }
     }
 }
@@ -113,15 +149,45 @@ enum AccountDestination: Hashable, CaseIterable, Identifiable {
         }
     }
 
-    var icon: (name: String, tint: Color) {
-        switch self {
-        case .listenBrainz: return ("waveform.circle.fill", .orange)
-        case .lastfm: return ("arrow.triangle.2.circlepath", .pink)
-        case .stateRelay: return ("dot.radiowaves.left.and.right", .blue)
-        case .bark: return ("bell.badge.fill", .red)
-        }
+}
+
+// 账号图标徽标——ListenBrainz/网页推送/推送提醒仍用 iconBadge(SF Symbol 白色剪影+纯色
+// 圆角方块背景);Last.fm 换成真实品牌图标(见 lastfmBadgeImage 注释),不再用泛化的
+// 循环箭头符号凑数。放在这里而不是 SettingsView.swift 的 iconBadge 旁边——只有
+// AccountDestination 这一种目的地需要"某个 case 换成自定义图片"这个分支,不该让通用的
+// iconBadge 也认识 AccountDestination。
+@ViewBuilder
+func accountIconBadge(_ destination: AccountDestination, size: CGFloat = 22, cornerRadius: CGFloat = 6) -> some View {
+    switch destination {
+    case .listenBrainz:
+        iconBadge("waveform.circle.fill", tint: .orange, size: size, cornerRadius: cornerRadius)
+    case .lastfm:
+        Image(nsImage: lastfmBadgeImage)
+            .resizable()
+            .frame(width: size, height: size)
+            .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
+    case .stateRelay:
+        iconBadge("dot.radiowaves.left.and.right", tint: .blue, size: size, cornerRadius: cornerRadius)
+    case .bark:
+        iconBadge("bell.badge.fill", tint: .red, size: size, cornerRadius: cornerRadius)
     }
 }
+
+// 真实的 Last.fm 品牌图标(红底+白色"scrobble"符号),取代之前拿 SF Symbol 循环箭头
+// 凑数的做法——素材取自 Simple Icons(CC0 授权、专门收录给第三方集成场景用的品牌图标
+// 合集),矢量描摹自 Last.fm 官方标志,不是从官网截图里抠像素。跟 MenuBarMenu.swift 里
+// menuBarIconImage 同一套加载方式:用 Bundle.main 而不是 Bundle.module(原因见
+// L10n.swift 顶部注释),PNG 由 build.sh 拷进 Contents/Resources/。不设 isTemplate——
+// 这不是状态栏图标,不需要跟随系统明暗色重新上色,品牌色本身就该固定显示红+白。
+private let lastfmBadgeImage: NSImage = {
+    guard let path = Bundle.main.path(forResource: "LastfmIcon", ofType: "png"),
+          let image = NSImage(contentsOfFile: path) else {
+        // 找不到就退回泛化符号兜底(比如 swift build 直接跑、没走 build.sh 打包的场景),
+        // 不让图标位置裸奔成空白。
+        return NSImage(systemSymbolName: "arrow.triangle.2.circlepath", accessibilityDescription: nil) ?? NSImage()
+    }
+    return image
+}()
 
 // 抽成自由函数而不是 AccountLinkingTab 的实例方法——侧边栏行(AccountSidebarRow)和
 // 详情页头部(AccountLinkingTab.detailHeader)两处都要算同一个目的地的状态,不想维护
@@ -177,16 +243,19 @@ struct AccountSidebarRow: View {
     // 不依赖 ForEach 复用行为的具体细节。
     @ObservedObject private var languageSettings = AppSettings.shared
 
+    // 2026-07-29:只保留一个状态图标,不带文字——"读取+写入已配置"这类描述性文案在
+    // 侧边栏这个只有 170~220pt 宽的位置本来就容易被挤断行,颜色/图标本身已经足够表达
+    // "配好了没有";需要具体缺了哪个字段这种细节,详情页头部(AccountLinkingTab.
+    // detailHeader)仍然用带文字的 .label,那里空间够、也更需要具体信息。
     var body: some View {
-        let iconInfo = destination.icon
-        return Label {
-            VStack(alignment: .leading, spacing: 1) {
+        Label {
+            HStack(spacing: 6) {
                 Text(destination.title)
                 destinationStatus(for: destination, config: config, lastfmConnect: lastfmConnect)
-                    .label.font(.caption2)
+                    .indicator
             }
         } icon: {
-            iconBadge(iconInfo.name, tint: iconInfo.tint)
+            accountIconBadge(destination)
         }
         .padding(.vertical, 2)
     }
@@ -370,9 +439,8 @@ struct AccountLinkingTab: View {
     }
 
     private var detailHeader: some View {
-        let iconInfo = destination.icon
-        return HStack(spacing: 12) {
-            iconBadge(iconInfo.name, tint: iconInfo.tint, size: 36, cornerRadius: 8)
+        HStack(spacing: 12) {
+            accountIconBadge(destination, size: 36, cornerRadius: 8)
             VStack(alignment: .leading, spacing: 2) {
                 Text(destination.title).font(.title3.weight(.semibold))
                 status.label.font(.caption)
