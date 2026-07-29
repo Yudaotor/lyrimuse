@@ -44,7 +44,10 @@ enum DiagnosticsExporter {
         lines.append("Classic overlay enabled: \(settings.classicOverlayEnabled)")
         lines.append("Notch overlay enabled: \(settings.notchOverlayEnabled)")
         lines.append("ListenBrainz configured: \(config.isListenBrainzConfigured)")
-        lines.append("Last.fm bridge configured: \(config.lastfmBridgeMissingHint() == nil)")
+        // 2026-07-29 起没有独立开关了,两边凭据都配好就自动生效,这里直接报告"是否真的
+        // 在跑"而不是"Last.fm 侧凭据填了没"(后者单独看意义不大,还得对照上一行才知道
+        // 有没有真的启用)。
+        lines.append("Last.fm bridge active: \(config.lastfmBridgeMissingHint() == nil && config.isListenBrainzConfigured)")
         lines.append("Last.fm mirror configured: \(config.lastfmMirrorMissingHint() == nil)")
         lines.append("State relay configured: \(config.stateRelayMissingHint() == nil)")
         lines.append("Push notification configured: \(config.pushMissingHint() == nil)")

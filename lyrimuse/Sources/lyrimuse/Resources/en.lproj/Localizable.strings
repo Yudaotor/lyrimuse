@@ -146,7 +146,7 @@
 "五个源都没找到可用的候选" = "No usable candidates found from any of the five sources";
 "回到当前播放" = "Jump to Now Playing";
 "创建 Last.fm 应用即可获取 API Key + Secret。" = "Create a Last.fm app to get an API Key + Secret.";
-"在 Last.fm 后台创建应用会同时给你 API Key 和 Secret，读取、写入都用这一套凭据。只需要「同步到 ListenBrainz」的话，填好用户名 + API Key 就够，不用填 Secret、也不用点「连接」。" = "Creating an app in Last.fm's developer portal gives you both an API Key and a Secret — this one set of credentials covers both reading and writing. If you only need \"Sync to ListenBrainz\", filling in your username + API Key is enough — no need for the Secret or to click \"Connect\".";
+"在 Last.fm 后台创建应用会同时给你 API Key 和 Secret，读取、写入都用这一套凭据。只填用户名 + API Key（不填 Secret、不点「连接」）也可以——配合 ListenBrainz 账号会自动同步收听记录。" = "Creating an app in Last.fm's developer portal gives you both an API Key and a Secret — this one set of credentials covers both reading and writing. Filling in just your username + API Key (skipping the Secret and \"Connect\") works too — pair it with a ListenBrainz account and your listening history syncs there automatically.";
 "在 ListenBrainz 网站获取 Token →" = "Get a Token from the ListenBrainz website →";
 "在 iPhone 上安装 Bark App，首页显示的就是你的专属推送地址，复制粘贴过来即可，不需要额外设置。" = "Install the Bark app on your iPhone — the home screen shows your personal push URL. Just copy and paste it here; no extra setup needed.";
 "在 last.fm/api/account/create 创建应用后可见" = "Visible after creating an app at last.fm/api/account/create";
@@ -226,9 +226,7 @@
 "查看官方文档 →" = "View Official Docs →";
 "Lyrimuse" = "Lyrimuse";
 "读取+写入已配置" = "Read + Write Configured";
-"同步到 ListenBrainz" = "Sync to ListenBrainz";
 "读取已配置" = "Read Configured";
-"读取记录" = "Read";
 "歌名" = "Title";
 "歌手" = "Artist";
 "歌词" = "Lyrics";
@@ -290,9 +288,8 @@
 "账户 Token" = "Account Token";
 "账户信息" = "Account Info";
 "超过就截断" = "Truncate If Too Long";
-"填好用户名 + API Key 就能同步到 ListenBrainz；填上 Secret 并连接账号，还能同步进 Last.fm。" = "Fill in your username + API Key and you can sync to ListenBrainz; add the Secret and connect your account to also sync into Last.fm.";
+"填好用户名 + API Key，如果也配置了「ListenBrainz」，会自动把收听记录同步过去；填上 Secret 并连接账号，还能同步进 Last.fm。" = "Fill in your username + API Key and it'll automatically sync your listening history over if \"ListenBrainz\" is also configured; add the Secret and connect your account to also sync into Last.fm.";
 "跟随系统" = "System Default";
-"开启后会同步显示「正在播放」，并把收听记录转发进 ListenBrainz，这也需要「ListenBrainz」账号绑定好。" = "When turned on, this syncs \"Now Playing\" and forwards your listening history into ListenBrainz, which also requires the \"ListenBrainz\" account to be connected.";
 "开启后会把播放记录同步写入 Last.fm。" = "When turned on, this syncs your listening history into Last.fm.";
 "写入记录" = "Write";
 "还差一步" = "One More Step";
@@ -308,7 +305,7 @@
 "这首歌带逐字时间轴,播放时优先用它渲染——下面直接改「歌词(LRC)」文本框不会生效。如需手改主歌词,请先点「移除逐字时间轴」。译文/罗马音编辑不受影响,随时生效。" = "This song has word-by-word timing, which takes priority during playback — editing the \"Lyrics (LRC)\" text box below won't take effect. To hand-edit the main lyrics, first click \"Remove Word Timing\". Editing the translation or romanization isn't affected and takes effect right away.";
 "连接 Last.fm 账号" = "Connect Last.fm Account";
 "连接 Last.fm（可选）" = "Connect Last.fm (Optional)";
-"连上同一个 Last.fm 账号，可以把 iPhone 上的播放记录同步显示、把这台 Mac 的播放也写回 Last.fm，还能解锁「每周听歌小结」「每日听歌报告」推送。不连接完全不影响悬浮歌词，随时可以之后在设置里配置。" = "Connecting the same Last.fm account lets you mirror your iPhone's playback history, write this Mac's playback back to Last.fm, and unlock the \"Weekly Listening Digest\" and \"Daily Listening Report\" pushes. Skipping this has no effect on the floating lyrics — you can always set it up later in Settings.";
+"连上同一个 Last.fm 账号，可以双向同步收听记录，还能解锁「每周听歌小结」「每日听歌报告」推送。不连接完全不影响悬浮歌词，随时可以之后在设置里配置。" = "The same Last.fm account can sync your listening history both ways, and unlocks the \"Weekly Listening Digest\" and \"Daily Listening Report\" pushes. Skipping this has no effect on the floating lyrics — you can always set it up later in Settings.";
 "现在去设置里连接" = "Connect Now in Settings";
 "连接信息" = "Connection Info";
 "退出" = "Quit";

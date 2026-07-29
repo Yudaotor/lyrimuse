@@ -655,8 +655,13 @@ func (p *poller) handle(now time.Time, reanchored, loopRestart bool) {
 // lastfmRecent 本身(8s 超时)挪到 goroutine 跑,不阻塞 poll() 后面紧跟的
 // pushRelayState。实际的转发/镜像逻辑(有状态副作用)在 applyBridgeResult 里、
 // 结果送回主循环后才跑。
+//
+// 2026-07-29:不再看一个独立的 features.LastfmBridge 开关——Last.fm 桥接凭据 +
+// ListenBrainz 账号都配好,就默认跑;这两项本来就是 Swift 侧 UI 上打开那个开关的
+// 前置条件(config.lastfmBridgeMissingHint()==nil 且 isListenBrainzConfigured 都
+// 满足才让点),独立开关只是多一次点击,没有实际区分度。
 func (p *poller) bridge(now time.Time) {
-	if !features.LastfmBridge || p.cfg.LastfmUser == "" || p.cfg.lastfmBridgeAPIKey() == "" {
+	if p.cfg.LastfmUser == "" || p.cfg.lastfmBridgeAPIKey() == "" || p.cfg.User == "" || p.cfg.Token == "" {
 		return
 	}
 	if p.bridgeFetching || now.Sub(p.lastfmCheckedAt) < lastfmPollInterval {

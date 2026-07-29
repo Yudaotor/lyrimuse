@@ -97,7 +97,6 @@ struct FeatureFlagsFile: Codable, Equatable {
     // 只在启动时读一次。
     var player: String?
     var albumPrefetch: Bool?
-    var lastfmBridge: Bool?
     var lastfmMirrorScrobble: Bool?
     var weeklyDigest: Bool?
     // 见 collector/daily.go——独立于 weeklyDigest 的开关,两个可以同时开、只开一个、
@@ -127,7 +126,6 @@ struct FeatureFlagsFile: Codable, Equatable {
         case lyrics
         case player
         case albumPrefetch = "album_prefetch"
-        case lastfmBridge = "lastfm_bridge"
         case lastfmMirrorScrobble = "lastfm_mirror_scrobble"
         case weeklyDigest = "weekly_digest"
         case dailyDigest = "daily_digest"
@@ -143,9 +141,12 @@ struct FeatureFlagsFile: Codable, Equatable {
 }
 
 // "歌词"tab 的纯行为开关(lyrics/albumPrefetch 等)和"账号连接"tab 里各张
-// 账号卡片的开关(lastfmBridge/lastfmMirrorScrobble/weeklyDigest)共用同一份数据层——读写
+// 账号卡片的开关(lastfmMirrorScrobble/weeklyDigest)共用同一份数据层——读写
 // ~/.config/lyrimuse/lyrimuse-features.json,跟
-// collector/features.go 是同一份共享文件的两侧独立实现。
+// collector/features.go 是同一份共享文件的两侧独立实现。2026-07-29:Last.fm 桥接
+// (读 Last.fm 转发进 ListenBrainz + 喂网页"正在播放")不再是这里的一个独立开关——
+// Last.fm 桥接凭据 + ListenBrainz 账号都配好就自动生效,跟 collector 侧
+// poller.go 的 bridge() 判断条件一致,见那边的注释。
 //
 // 这个 store 里的每一个开关都是"改了立刻保存"——Binding 的 set 里包一层
 // `Task { await features.save() }`,持久化+重启挪到后台执行,但从用户视角"点开关
@@ -164,7 +165,6 @@ public final class FeatureSettingsStore: ObservableObject {
     // 这几个都要连一个外部账号才有意义,默认关闭。collector/features.go 的 boolOr
     // 默认值要跟着一起改,否则全新安装时 Swift 这边显示关、Go 那边却按"缺字段=开启"
     // 实际执行,两边会对不上。
-    @Published public var lastfmBridge = false
     @Published public var lastfmMirrorScrobble = false
     @Published public var weeklyDigest = false
     @Published public var dailyDigest = false
@@ -199,7 +199,7 @@ public final class FeatureSettingsStore: ObservableObject {
         FeatureFlagsFile(
             lyrics: lyrics,
             player: player.rawValue,
-            albumPrefetch: albumPrefetch, lastfmBridge: lastfmBridge,
+            albumPrefetch: albumPrefetch,
             lastfmMirrorScrobble: lastfmMirrorScrobble, weeklyDigest: weeklyDigest, dailyDigest: dailyDigest,
             weeklyDigestSource: weeklyDigestSource.isEmpty ? nil : weeklyDigestSource,
             dailyDigestSource: dailyDigestSource.isEmpty ? nil : dailyDigestSource,
@@ -239,7 +239,6 @@ public final class FeatureSettingsStore: ObservableObject {
         lyrics = f.lyrics ?? true
         player = f.player.flatMap(PlaybackPlayer.init(rawValue:)) ?? .appleMusic
         albumPrefetch = f.albumPrefetch ?? true
-        lastfmBridge = f.lastfmBridge ?? false
         lastfmMirrorScrobble = f.lastfmMirrorScrobble ?? false
         weeklyDigest = f.weeklyDigest ?? false
         dailyDigest = f.dailyDigest ?? false

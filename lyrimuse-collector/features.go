@@ -61,7 +61,6 @@ type featureFlagsFile struct {
 	// "netease_music"。
 	Player               string `json:"player,omitempty"`
 	AlbumPrefetch        *bool  `json:"album_prefetch,omitempty"`
-	LastfmBridge         *bool  `json:"lastfm_bridge,omitempty"`
 	LastfmMirrorScrobble *bool  `json:"lastfm_mirror_scrobble,omitempty"`
 	WeeklyDigest         *bool  `json:"weekly_digest,omitempty"`
 	// DailyDigest：见 daily.go。跟 WeeklyDigest 是独立开关，两个可以同时开、只开一个、
@@ -103,7 +102,11 @@ type featureFlagsFile struct {
 // 推送类模块(网页展示子开关、TopArtistsDigest、故障告警)不在这里出现:前两者已
 // 改成"配置齐了就默认全跑"(pushRelayState 只看 cfg.StateRelayURL 是否非空,见
 // config.go;TopArtistsDigest 见 topArtistsDigest()),不需要单独开关;故障告警
-// 已整个下线,见 alerter.go。
+// 已整个下线,见 alerter.go。2026-07-29:Last.fm 桥接(读 Last.fm 转发进 LB + 喂
+// 网页"正在播放")加入这个"不需要单独开关"的阵营——之前独立的 LastfmBridge 开关
+// 在 UI 上本来就要求"Last.fm 桥接凭据 + ListenBrainz 都配好"才能打开,跟自动判定
+// 的条件完全一样,单独留一个开关只是多一次点击,没有实际区分度,见 poller.go 的
+// bridge() 判断条件。
 type featureFlags struct {
 	Lyrics bool
 	// Player 是已经解析过的具体值(playerAppleMusic/playerQQMusic,不会是空字符串或
@@ -111,7 +114,6 @@ type featureFlags struct {
 	// 读取。
 	Player               string
 	AlbumPrefetch        bool
-	LastfmBridge         bool
 	LastfmMirrorScrobble bool
 	WeeklyDigest         bool
 	DailyDigest          bool
@@ -149,11 +151,11 @@ func boolOr(p *bool, def bool) bool {
 // loadFeatureFlags reads the shared feature-toggle file (best-effort — missing
 // file / unparseable content all resolve to defaults below). Core behavior
 // toggles (lyrics/albumPrefetch) miss-field-defaults to true — a
-// pure increment that never silently changes existing behavior. The 3 toggles
-// that each require an external account (Last.fm bridge+mirror / weekly
-// digest) default to false instead: turning them on by default for a stranger
-// who never opened Settings would silently start network calls to services
-// they never configured.
+// pure increment that never silently changes existing behavior. The toggles
+// that each require an external account (Last.fm mirror / weekly digest /
+// daily digest) default to false instead: turning them on by default for a
+// stranger who never opened Settings would silently start network calls to
+// services they never configured.
 func loadFeatureFlags(path string) featureFlags {
 	var f featureFlagsFile
 	if data, err := os.ReadFile(path); err == nil {
@@ -167,7 +169,6 @@ func loadFeatureFlags(path string) featureFlags {
 		Lyrics:                    boolOr(f.Lyrics, true),
 		Player:                    resolvePlayer(f.Player),
 		AlbumPrefetch:             boolOr(f.AlbumPrefetch, true),
-		LastfmBridge:              boolOr(f.LastfmBridge, false),
 		LastfmMirrorScrobble:      boolOr(f.LastfmMirrorScrobble, false),
 		WeeklyDigest:              boolOr(f.WeeklyDigest, false),
 		DailyDigest:               boolOr(f.DailyDigest, false),

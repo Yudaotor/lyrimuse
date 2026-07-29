@@ -207,7 +207,13 @@ func destinationStatus(for destination: AccountDestination, config: ConfigStore,
         return .active()
     case .lastfm:
         if case .failed(let msg) = lastfmConnect.state { return .error(msg) }
-        let bridgeOK = config.lastfmBridgeMissingHint() == nil
+        // bridgeOK 故意不能只看 lastfmBridgeMissingHint()——那个函数是"Last.fm 侧凭据
+        // 填了没"这个更窄的判断,同时也被 resolvedDigestSource(听歌报告的数据源判定)
+        // 复用,不能因为这里也要求 ListenBrainz 就把它改成两个账号联查,否则会误伤只
+        // 配了 Last.fm、没配 ListenBrainz 的听歌报告场景。"读取"这个方向现在没有独立
+        // 开关了(2026-07-29 起两边都配好就自动生效,见 cardIntro 附近的注释),这里的
+        // 徽标要准确反映"真的在跑没有",所以额外叠一层 isListenBrainzConfigured。
+        let bridgeOK = config.lastfmBridgeMissingHint() == nil && config.isListenBrainzConfigured
         let mirrorOK = config.lastfmMirrorMissingHint() == nil
         switch (bridgeOK, mirrorOK) {
         case (true, true): return .active(L10n.t("读取+写入已配置"))
@@ -430,6 +436,12 @@ struct AccountLinkingTab: View {
             Text(L10n.t("用来把当前播放状态推送到网页小组件和状态徽章。"))
                 .font(.caption).foregroundStyle(.secondary)
         case .lastfm:
+            // 2026-07-29:"读取"方向(同步到 ListenBrainz)原来是下面一个独立开关,现在
+            // 去掉了——UI 上这个开关本来就要求"Last.fm 桥接凭据 + ListenBrainz 都配好"
+            // 才能打开(toggleGuarded 的 sameCardHint/crossCard 两层校验),跟"两边都配好
+            // 就默认生效"这个判定条件完全一样,单独留一个开关只是多一次点击,没有实际
+            // 区分度。跟"网页推送"那两个字段"填好就是唯一的开关"是同一个思路(见
+            // stateRelayFields 的 footer 注释)。
             Text(L10n.t("同一个 Last.fm 账号，可以双向同步收听记录。"))
                 .font(.caption).foregroundStyle(.secondary)
         case .bark:
@@ -507,7 +519,8 @@ struct AccountLinkingTab: View {
     // 带 Secret 的 Key),逼用户去 Last.fm 后台建两个"应用"填两遍——技术上没必要:
     // Last.fm 的只读接口(user.getrecenttracks 等)不校验签名,同一对 API Key/Secret
     // 既能免签名供桥接读,也能签名走连接流程供镜像写。现在合并成一套"账号信息",
-    // 下面两个 Section 只剩各自的开关,不再重复收凭据。
+    // 下面只剩"写入记录"这一个还需要手动开关的 Section——"读取"那一半(同步到
+    // ListenBrainz)同一天又被去掉了独立开关,理由见上面 cardIntro 附近的注释。
     @ViewBuilder
     private var lastfmFields: some View {
         Section {
@@ -515,7 +528,7 @@ struct AccountLinkingTab: View {
                 Text(L10n.t("创建 Last.fm 应用即可获取 API Key + Secret。"))
                     .font(.caption2).foregroundStyle(.secondary)
                 HelpButton(
-                    text: L10n.t("在 Last.fm 后台创建应用会同时给你 API Key 和 Secret，读取、写入都用这一套凭据。只需要「同步到 ListenBrainz」的话，填好用户名 + API Key 就够，不用填 Secret、也不用点「连接」。"),
+                    text: L10n.t("在 Last.fm 后台创建应用会同时给你 API Key 和 Secret，读取、写入都用这一套凭据。只填用户名 + API Key（不填 Secret、不点「连接」）也可以——配合 ListenBrainz 账号会自动同步收听记录。"),
                     docTitle: L10n.t("前往 Last.fm 申请 →"),
                     docURL: URL(string: "https://www.last.fm/api/account/create")!
                 )
@@ -527,23 +540,9 @@ struct AccountLinkingTab: View {
         } header: {
             Text(L10n.t("账号信息"))
         } footer: {
-            Text(L10n.t("填好用户名 + API Key 就能同步到 ListenBrainz；填上 Secret 并连接账号，还能同步进 Last.fm。"))
-        }
-
-        Section {
-            Toggle(L10n.t("同步到 ListenBrainz"), isOn: Binding(
-                get: { features.lastfmBridge },
-                set: { newValue in
-                    toggleGuarded(newValue,
-                        sameCardHint: config.lastfmBridgeMissingHint(),
-                        crossCard: (hint: config.isListenBrainzConfigured ? nil : L10n.t("未配置"), target: .listenBrainz)
-                    ) { v in features.lastfmBridge = v; Task { await features.save() } }
-                }
-            ))
-        } header: {
-            Text(L10n.t("读取记录"))
-        } footer: {
-            Text(L10n.t("开启后会同步显示「正在播放」，并把收听记录转发进 ListenBrainz，这也需要「ListenBrainz」账号绑定好。"))
+            // 2026-07-29:去掉了"读取记录"那个独立开关后,这句话不再需要提"填好就能
+            // 用"——填好这里 + 配好 ListenBrainz,自动生效,不需要用户在别处再确认一次。
+            Text(L10n.t("填好用户名 + API Key，如果也配置了「ListenBrainz」，会自动把收听记录同步过去；填上 Secret 并连接账号，还能同步进 Last.fm。"))
         }
 
         Section {

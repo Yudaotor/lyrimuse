@@ -164,6 +164,13 @@ public final class ConfigStore: ObservableObject {
     // 复用"账号信息"里那一套 API Key(lastfmScrobbleAPIKey——Last.fm 的只读接口不需要
     // 签名,同一对凭据够用),这里两个字段任一非空都算满足,老用户已经填过的 lastfmAPIKey
     // 继续有效,不强制重新操作。
+    //
+    // 故意只判断 Last.fm 侧凭据,不管 ListenBrainz——这个函数同时被两处调用:
+    // ①AccountLinkingTab 判断"桥接读取"是否真的在跑(那边额外自己叠一层
+    // isListenBrainzConfigured,见 destinationStatus 的 bridgeOK 注释);②听歌报告的
+    // resolvedDigestSource/collector 侧 weekly.go 判断"Last.fm 能不能当数据源",这个
+    // 场景完全不需要 ListenBrainz。两个用途混进同一个判断会互相伤害,所以这里保持
+    // 语义狭窄,"要不要额外查 ListenBrainz"交给各自调用点自己决定。
     public func lastfmBridgeMissingHint() -> String? {
         if savedSnapshot.lastfmUser.isEmpty { return L10n.t("还没填用户名") }
         if savedSnapshot.lastfmScrobbleAPIKey.isEmpty && savedSnapshot.lastfmAPIKey.isEmpty { return L10n.t("还没填 API Key") }

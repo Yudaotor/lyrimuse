@@ -234,7 +234,7 @@ struct OnboardingView: View {
                 .foregroundStyle(.pink)
             Text(L10n.t("连接 Last.fm（可选）"))
                 .font(.title.bold())
-            Text(L10n.t("连上同一个 Last.fm 账号，可以把 iPhone 上的播放记录同步显示、把这台 Mac 的播放也写回 Last.fm，还能解锁「每周听歌小结」「每日听歌报告」推送。不连接完全不影响悬浮歌词，随时可以之后在设置里配置。"))
+            Text(L10n.t("连上同一个 Last.fm 账号，可以双向同步收听记录，还能解锁「每周听歌小结」「每日听歌报告」推送。不连接完全不影响悬浮歌词，随时可以之后在设置里配置。"))
                 .foregroundStyle(.secondary)
             Button(L10n.t("现在去设置里连接")) {
                 AppActions.shared.pendingSettingsSelection = .account(.lastfm)
