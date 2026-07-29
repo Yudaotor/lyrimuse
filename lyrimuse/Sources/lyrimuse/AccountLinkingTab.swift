@@ -144,9 +144,9 @@ func destinationStatus(for destination: AccountDestination, config: ConfigStore,
         let bridgeOK = config.lastfmBridgeMissingHint() == nil
         let mirrorOK = config.lastfmMirrorMissingHint() == nil
         switch (bridgeOK, mirrorOK) {
-        case (true, true): return .active(L10n.t("桥接+镜像已配置"))
-        case (true, false): return .active(L10n.t("桥接已配置"))
-        case (false, true): return .active(L10n.t("镜像已配置"))
+        case (true, true): return .active(L10n.t("读取+写入已配置"))
+        case (true, false): return .active(L10n.t("读取已配置"))
+        case (false, true): return .active(L10n.t("写入已配置"))
         case (false, false): return .missingCreds(L10n.t("未配置"))
         }
     case .bark:
@@ -361,7 +361,7 @@ struct AccountLinkingTab: View {
             Text(L10n.t("用来把当前播放状态推送到网页小组件和状态徽章。"))
                 .font(.caption).foregroundStyle(.secondary)
         case .lastfm:
-            Text(L10n.t("这台 Mac 用同一个 Last.fm 账号做两件事：读取 iPhone 上的播放记录、把 Mac 上的播放写回 Last.fm。"))
+            Text(L10n.t("同一个 Last.fm 账号，可以双向同步收听记录。"))
                 .font(.caption).foregroundStyle(.secondary)
         case .bark:
             Text(L10n.t("用来接收「每周听歌小结」「每日听歌报告」推送。"))
@@ -444,10 +444,10 @@ struct AccountLinkingTab: View {
     private var lastfmFields: some View {
         Section {
             HStack(spacing: 4) {
-                Text(L10n.t("在 Last.fm 后台创建一个应用即可拿到 API Key + Secret，读取、写入都用这一套。"))
+                Text(L10n.t("创建 Last.fm 应用即可获取 API Key + Secret。"))
                     .font(.caption2).foregroundStyle(.secondary)
                 HelpButton(
-                    text: L10n.t("在 Last.fm 后台创建应用会同时给你 API Key 和 Secret——这一套凭据同时用于下面「iPhone 播放桥接」这类只读功能，以及「Mac 播放镜像」这个写入功能。只需要只读功能的话，填好用户名 + API Key 就够，不用填 Secret、也不用点「连接」。"),
+                    text: L10n.t("在 Last.fm 后台创建应用会同时给你 API Key 和 Secret，读取、写入都用这一套凭据。只需要「同步到 ListenBrainz」的话，填好用户名 + API Key 就够，不用填 Secret、也不用点「连接」。"),
                     docTitle: L10n.t("前往 Last.fm 申请 →"),
                     docURL: URL(string: "https://www.last.fm/api/account/create")!
                 )
@@ -459,11 +459,11 @@ struct AccountLinkingTab: View {
         } header: {
             Text(L10n.t("账号信息"))
         } footer: {
-            Text(L10n.t("填好用户名 + API Key，「iPhone 播放桥接」「听歌报告」就能用；再填 Secret 并点「连接 Last.fm 账号」，才能把这台 Mac 的播放也写回 Last.fm。"))
+            Text(L10n.t("填好用户名 + API Key 就能同步到 ListenBrainz；填上 Secret 并连接账号，还能同步进 Last.fm。"))
         }
 
         Section {
-            Toggle(L10n.t("桥接回 ListenBrainz"), isOn: Binding(
+            Toggle(L10n.t("同步到 ListenBrainz"), isOn: Binding(
                 get: { features.lastfmBridge },
                 set: { newValue in
                     toggleGuarded(newValue,
@@ -473,15 +473,9 @@ struct AccountLinkingTab: View {
                 }
             ))
         } header: {
-            Text(L10n.t("iPhone 播放桥接"))
+            Text(L10n.t("读取记录"))
         } footer: {
-            // 这个开关是整条"读 iPhone 播放"链路唯一的总开关(collector 侧 bridge() 只看
-            // features.LastfmBridge 这一个字段),关掉不只是不转发进 ListenBrainz,连
-            // "显示 iPhone 正在播放"这部分也会一起关掉。"iPhone 正在播"效果只喂给
-            // pushRelayState()(collector.go 里读 p.remoteTrack/p.remoteAt 的地方都在这个
-            // 函数内),本机悬浮歌词的数据源(LocalPlaybackSource)只读本机 media-control,
-            // 不碰这条 iPhone/Last.fm 链路,唯一能看到效果的地方是「网页推送」。
-            Text(L10n.t("读取 iPhone 上已经报给 Last.fm 的播放记录：Mac 没有播放时会推给「网页推送」显示「iPhone 正在播」（这台 Mac 本地的悬浮歌词只读本机播放状态，不受影响）；打开下面的开关还会把这些记录转发进 ListenBrainz，统一两台设备的播放历史，这也需要「ListenBrainz」账号绑定好。"))
+            Text(L10n.t("开启后会同步显示「正在播放」，并把收听记录转发进 ListenBrainz，这也需要「ListenBrainz」账号绑定好。"))
         }
 
         Section {
@@ -494,11 +488,9 @@ struct AccountLinkingTab: View {
                 }
             ))
         } header: {
-            Text(L10n.t("Mac 播放镜像"))
+            Text(L10n.t("写入记录"))
         } footer: {
-            // API Key/Secret 两个字段在上面"账号信息" Section 里(见那边注释),这里只剩
-            // "同步进 Last.fm"这一个开关。
-            Text(L10n.t("把这台 Mac 上的播放同步写回 Last.fm——Apple Music 本身不会自动同步，需要这个开关补上这份记录，Last.fm 个人主页才能看到用 Mac 听的这部分。"))
+            Text(L10n.t("开启后会把播放记录同步写入 Last.fm。"))
         }
     }
 

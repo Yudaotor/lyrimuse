@@ -170,9 +170,11 @@ public final class ConfigStore: ObservableObject {
         return nil
     }
 
+    // 字段名跟"账号信息" Section 里的输入框标签保持一致(API Key/Secret,不带
+    // "Scrobble"前缀,见 AccountLinkingTab.swift)。
     public func lastfmMirrorMissingHint() -> String? {
-        if savedSnapshot.lastfmScrobbleAPIKey.isEmpty { return L10n.t("还没填 Scrobble API Key") }
-        if savedSnapshot.lastfmScrobbleSecret.isEmpty { return L10n.t("还没填 Scrobble Secret") }
+        if savedSnapshot.lastfmScrobbleAPIKey.isEmpty { return L10n.t("还没填 API Key") }
+        if savedSnapshot.lastfmScrobbleSecret.isEmpty { return L10n.t("还没填 Secret") }
         if savedSnapshot.lastfmScrobbleSessionKey.isEmpty { return L10n.t("还没完成账号授权") }
         return nil
     }

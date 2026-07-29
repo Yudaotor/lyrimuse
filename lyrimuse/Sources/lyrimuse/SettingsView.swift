@@ -99,10 +99,10 @@ struct SettingsView: View {
                 }
 
                 // 2026-07-29:Last.fm 从下面的折叠区里单独提出来,常驻可见——功能本身
-                // (iPhone 播放桥接 + Mac 播放镜像 + 喂两个"听歌报告"推送的数据源)已经
-                // 相当完整,继续跟"实验室功能"这几个字混在一起、默认收起才能看到,会让人
-                // 低估它的成熟度、也发现不了。ListenBrainz/网页推送/推送提醒这三个账号
-                // 保留原样在下面的折叠区,没有改动。
+                // (双向同步收听记录 + 喂两个"听歌报告"推送的数据源)已经相当完整,继续
+                // 跟"实验室功能"这几个字混在一起、默认收起才能看到,会让人低估它的成熟度、
+                // 也发现不了。ListenBrainz/网页推送/推送提醒这三个账号保留原样在下面的
+                // 折叠区,没有改动。
                 Section(L10n.t("账号")) {
                     AccountSidebarRow(destination: .lastfm)
                         .tag(SettingsSidebarItem.account(.lastfm))
