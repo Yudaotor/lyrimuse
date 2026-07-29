@@ -117,9 +117,10 @@ public enum MediaControlClient {
     // 里的 Perl 适配脚本和 MediaRemoteAdapter.framework(build.sh 把 bin/+lib/+
     // Frameworks/ 整棵相对路径子树原样搬进 Contents/Resources/media-control/,详见
     // build.sh 那段注释),不能用 Bundle.main.path(forResource:) 那套只找单个文件的
-    // API,直接从 Bundle.main.resourcePath 拼这条固定子路径。QQ 音乐/网易云音乐共用
-    // 这同一份实现,只是要核对的 expectedBundleID 不同(见 fetchSnapshot 的 switch)。
-    private static func fetchMediaControlSnapshot(expectedBundleID: String) -> MediaControlSnapshot? {
+    // API,直接从 Bundle.main.resourcePath 拼这条固定子路径。同目录的
+    // MusicPlaybackController(发播放控制指令,同样需要这个二进制)也要用这同一条
+    // 路径,公开出去两边共用一份解析逻辑,不重复各写一份。
+    public static func binaryPath() -> String? {
         guard let resourcePath = Bundle.main.resourcePath else {
             logger.error("app bundle resourcePath unavailable")
             return nil
@@ -129,6 +130,13 @@ public enum MediaControlClient {
             logger.error("media-control binary not found in app bundle")
             return nil
         }
+        return binaryPath
+    }
+
+    // QQ 音乐/网易云音乐共用这同一份实现,只是要核对的 expectedBundleID 不同(见
+    // fetchSnapshot 的 switch)。
+    private static func fetchMediaControlSnapshot(expectedBundleID: String) -> MediaControlSnapshot? {
+        guard let binaryPath = binaryPath() else { return nil }
         let process = Process()
         process.executableURL = URL(fileURLWithPath: binaryPath)
         // --now 让工具自己按内部时钟外推出一个不会冻结的 elapsedTimeNow(见文件顶部

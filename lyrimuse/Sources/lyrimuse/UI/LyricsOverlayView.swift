@@ -129,10 +129,11 @@ struct LyricsOverlayView: View {
 
     // 跟 GlobalHotkeys.swift 里播放控制三个动作同一套"点了才校验权限"逻辑——没问过就
     // 顺手弹一次系统授权对话框,已经拒绝过就静默不做,不需要在悬浮窗里再单独设计一套
-    // 提示 UI。
+    // 提示 UI。只有选了 Apple Music 才真的会走到这个权限检查,见
+    // MusicAutomationPermission.checkForCurrentPlayer 注释。
     private func controlButton(_ systemName: String, primary: Bool = false, action: @escaping () -> Void) -> some View {
         iconButton(systemName, primary: primary) {
-            guard MusicAutomationPermission.check(askIfNeeded: true).isAuthorized else { return }
+            guard MusicAutomationPermission.checkForCurrentPlayer(askIfNeeded: true) else { return }
             action()
         }
     }

@@ -1,6 +1,7 @@
 import AppKit
 import CoreServices
 import Foundation
+import LyrimuseCore
 import OSLog
 
 private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "automation-permission")
@@ -69,6 +70,19 @@ enum MusicAutomationPermission {
     // 面板,一个跳转按钮足够覆盖两边的"去看看"需求。
     static var systemSettingsURL: URL {
         URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Automation")!
+    }
+
+    // LyricsOverlayView/GlobalHotkeys 两处"播放控制按钮/快捷键点了才校验权限"逻辑
+    // 共用这一个入口——只有选了 Apple Music 才需要真的查这个权限(MusicPlaybackController
+    // 也只在这个分支发 AppleScript);QQ 音乐/网易云音乐走 media-control(系统级
+    // MediaRemote),完全不需要"自动化"权限。2026-07-29 之前这两处都直接调
+    // check(askIfNeeded:),QQ 音乐/网易云音乐用户从没被问过、也永远不会被问这个权限
+    // (他们的播放器压根不需要),check() 对他们只会返回 .notDetermined/.denied——
+    // 导致播放控制按钮/快捷键在选了这两个播放器时永远进不了下面这一步,是接入这两个
+    // 播放器时遗留下来一直没修的坑,这次一起补上。
+    static func checkForCurrentPlayer(askIfNeeded: Bool) -> Bool {
+        guard PlaybackPlayerPreference.current == .appleMusic else { return true }
+        return check(askIfNeeded: askIfNeeded).isAuthorized
     }
 
     // 2026-07-23 实测坐实:全新安装(TCC 对这个 App 完全没有历史记录)的机器上,

@@ -42,17 +42,19 @@ enum GlobalHotkeys {
             AppActions.shared.openSettings?()
         }
         // 播放控制三个动作:先校验自动化权限——没问过就顺手弹一次系统授权对话框,
-        // 已经拒绝过就静默不做,不会每次按快捷键都弹一次提示打扰用户。
+        // 已经拒绝过就静默不做,不会每次按快捷键都弹一次提示打扰用户。只有选了
+        // Apple Music 才真的会走到这个权限检查,见
+        // MusicAutomationPermission.checkForCurrentPlayer 注释。
         KeyboardShortcuts.onKeyUp(for: .playPauseHotkey) {
-            guard MusicAutomationPermission.check(askIfNeeded: true).isAuthorized else { return }
+            guard MusicAutomationPermission.checkForCurrentPlayer(askIfNeeded: true) else { return }
             MusicPlaybackController.playPause()
         }
         KeyboardShortcuts.onKeyUp(for: .nextTrackHotkey) {
-            guard MusicAutomationPermission.check(askIfNeeded: true).isAuthorized else { return }
+            guard MusicAutomationPermission.checkForCurrentPlayer(askIfNeeded: true) else { return }
             MusicPlaybackController.nextTrack()
         }
         KeyboardShortcuts.onKeyUp(for: .previousTrackHotkey) {
-            guard MusicAutomationPermission.check(askIfNeeded: true).isAuthorized else { return }
+            guard MusicAutomationPermission.checkForCurrentPlayer(askIfNeeded: true) else { return }
             MusicPlaybackController.previousTrack()
         }
         // 单曲歌词时间轴微调——不需要自动化权限(不碰 Music.app,只改本地/relay 数据源

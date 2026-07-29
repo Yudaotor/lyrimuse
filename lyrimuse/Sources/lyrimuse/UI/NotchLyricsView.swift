@@ -280,7 +280,7 @@ struct NotchLyricsView: View {
 
     private func controlButton(_ systemName: String, primary: Bool = false, action: @escaping () -> Void) -> some View {
         Button {
-            guard MusicAutomationPermission.check(askIfNeeded: true).isAuthorized else { return }
+            guard MusicAutomationPermission.checkForCurrentPlayer(askIfNeeded: true) else { return }
             action()
         } label: {
             Image(systemName: systemName)
