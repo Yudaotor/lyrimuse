@@ -13,24 +13,25 @@ private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "media-
 //   Music.app 自己实时算的播放位置(精确到 ~0.1s),不是 media-control 那个会在稳定
 //   播放期间整段冻结不动的 elapsedTime。
 //
-// - QQ 音乐:用 `sdef`/PlistBuddy 核实过,QQ音乐.app 完全没有 AppleScript 支持(没有
-//   .sdef 文件,也没开 NSAppleScriptEnabled)——AppleScript 这条路对它是死路,只能改走
-//   系统级 MediaRemote(经内置的 `media-control` 二进制读,build.sh 从 Homebrew 拷贝进
-//   app bundle,不需要用户自己装任何东西,见该文件注释;BSD-3-Clause 开源,
+// - QQ 音乐/网易云音乐:用 `sdef`/PlistBuddy 核实过,两者都完全没有 AppleScript 支持
+//   (没有 .sdef 文件,也没开 NSAppleScriptEnabled)——AppleScript 这条路对它们都是死路,
+//   只能改走系统级 MediaRemote(经内置的 `media-control` 二进制读,build.sh 从 Homebrew
+//   拷贝进 app bundle,不需要用户自己装任何东西,见该文件注释;BSD-3-Clause 开源,
 //   https://github.com/ungive/media-control)。实测坐实两个细节:①原始 elapsedTime/
 //   timestamp 字段在稳定播放期间会整段冻结(跟旧版 media-control 用在 Music.app 上
 //   时一样的坑),但 `--now` 参数给的 elapsedTimeNow 是内部按真实时钟外推的,实测跨
 //   2 分钟窗口误差在 0.5 秒以内,足够覆盖现有歌词同步引擎 700ms 的匹配容差;②读取
 //   全程没有触发任何系统权限弹窗,跟 Apple Music 这条路要的"自动化"权限完全无关。
 //   MediaRemote 是系统级的、App 无关的机制,任何注册了 MPNowPlayingInfoCenter 的
-//   App(网页视频/Safari 等)都可能占用"当前正在播放"这个位置,必须靠
-//   bundleIdentifier 精确核对确实是 QQ 音乐本身在报告,见 PlaybackPlayer.bundleIdentifier。
+//   App(网页视频/Safari/另一个播放器等)都可能占用"当前正在播放"这个位置,必须靠
+//   bundleIdentifier 精确核对确实是当前选定的这个播放器本身在报告,见
+//   PlaybackPlayer.bundleIdentifier。
 public enum MediaControlClient {
 
     public static func fetchSnapshot(player: PlaybackPlayer = PlaybackPlayerPreference.current) -> MediaControlSnapshot? {
         switch player {
         case .appleMusic: return fetchAppleMusicSnapshot()
-        case .qqMusic: return fetchQQMusicSnapshot()
+        case .qqMusic, .netease: return fetchMediaControlSnapshot(expectedBundleID: player.bundleIdentifier)
         }
     }
 
@@ -116,8 +117,9 @@ public enum MediaControlClient {
     // 里的 Perl 适配脚本和 MediaRemoteAdapter.framework(build.sh 把 bin/+lib/+
     // Frameworks/ 整棵相对路径子树原样搬进 Contents/Resources/media-control/,详见
     // build.sh 那段注释),不能用 Bundle.main.path(forResource:) 那套只找单个文件的
-    // API,直接从 Bundle.main.resourcePath 拼这条固定子路径。
-    private static func fetchQQMusicSnapshot() -> MediaControlSnapshot? {
+    // API,直接从 Bundle.main.resourcePath 拼这条固定子路径。QQ 音乐/网易云音乐共用
+    // 这同一份实现,只是要核对的 expectedBundleID 不同(见 fetchSnapshot 的 switch)。
+    private static func fetchMediaControlSnapshot(expectedBundleID: String) -> MediaControlSnapshot? {
         guard let resourcePath = Bundle.main.resourcePath else {
             logger.error("app bundle resourcePath unavailable")
             return nil
@@ -144,9 +146,10 @@ public enum MediaControlClient {
             // `try?` 落到下面的 guard raw != nil,行为跟"没有可报告的正在播放"一致。
             guard process.terminationStatus == 0,
                   let raw = try? JSONDecoder().decode(RawPayload.self, from: data),
-                  raw.bundleIdentifier == PlaybackPlayer.qqMusic.bundleIdentifier else {
+                  raw.bundleIdentifier == expectedBundleID else {
                 // bundleIdentifier 对不上:系统当前的 Now Playing 是别的 App(网页
-                // 视频/Safari 等),不是 QQ 音乐——不能把它当成 QQ 音乐的"正在播放"。
+                // 视频/Safari/另一个播放器等),不是当前选定的这个——不能把它当成
+                // 这个播放器的"正在播放"。
                 return nil
             }
             // elapsedTimeNow 只在真的在播放时才可信——实测坐实:一首已经暂停的歌,
@@ -165,7 +168,7 @@ public enum MediaControlClient {
                 playbackRate: raw.playbackRate,
                 // 复用这个字段原本的语义("这是当前选定播放器的一份有效快照",见
                 // MediaControlSnapshot 注释)——上面已经用 bundleIdentifier 精确核实过
-                // 确实是 QQ 音乐在报告,这里如实置 true。
+                // 确实是当前选定的播放器在报告,这里如实置 true。
                 isMusicApp: true
             )
         } catch {

@@ -40,11 +40,15 @@ const (
 )
 
 // 本地播放状态读取哪个 App——跟 lyrimuse 侧 PlaybackPlayer(LyrimuseCore/Local/
-// PlaybackPlayer.swift)的 rawValue 逐字对应,共享文件里 "player" 字段的取值。两个值
-// 对应两条完全不同的读取路径,见 system.go 的 getState()/appleMusicPosition() 注释。
+// PlaybackPlayer.swift)的 rawValue 逐字对应,共享文件里 "player" 字段的取值。
+// Apple Music 走 AppleScript;QQ 音乐/网易云音乐都没有 AppleScript 支持(用
+// sdef/PlistBuddy 核实过,两者都没有 .sdef、也没开 NSAppleScriptEnabled),共用同一条
+// 系统级 MediaRemote(media-control)读取路径,只是 bundle id 不同——见 system.go 的
+// getState()/appleMusicPosition() 注释。
 const (
 	playerAppleMusic = "apple_music"
 	playerQQMusic    = "qq_music"
+	playerNetease    = "netease_music"
 )
 
 // lyricsSourceDefaultOrder 是"顺序优先"模式缺省的顺序——照抄 enrich.go
@@ -53,7 +57,8 @@ var lyricsSourceDefaultOrder = []string{lyricSourceNetease, lyricSourceQQ, lyric
 
 type featureFlagsFile struct {
 	Lyrics *bool `json:"lyrics,omitempty"`
-	// Player："apple_music"(默认,缺省/认不出的值都按这个处理)或"qq_music"。
+	// Player："apple_music"(默认,缺省/认不出的值都按这个处理)、"qq_music" 或
+	// "netease_music"。
 	Player               string `json:"player,omitempty"`
 	AlbumPrefetch        *bool  `json:"album_prefetch,omitempty"`
 	LastfmBridge         *bool  `json:"lastfm_bridge,omitempty"`
@@ -180,8 +185,8 @@ func loadFeatureFlags(path string) featureFlags {
 // resolvePlayer 兜底成 playerAppleMusic——这是这个设置加入之前唯一存在过的行为,
 // 保证全新安装/旧配置文件(没有 "player" 字段)不会被静默解读成别的播放器。
 func resolvePlayer(p string) string {
-	if p == playerQQMusic {
-		return playerQQMusic
+	if p == playerQQMusic || p == playerNetease {
+		return p
 	}
 	return playerAppleMusic
 }

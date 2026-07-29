@@ -65,6 +65,7 @@ extension PlaybackPlayer {
         switch self {
         case .appleMusic: return "Apple Music"
         case .qqMusic: return L10n.t("QQ 音乐")
+        case .netease: return L10n.t("网易云音乐")
         }
     }
 }

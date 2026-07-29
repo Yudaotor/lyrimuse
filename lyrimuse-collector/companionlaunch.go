@@ -73,13 +73,17 @@ func isMusicAppRunning() bool {
 }
 
 // playerProcessName 是当前选定播放器(features.Player)的可执行文件名,给 pgrep -x
-// 用——QQ音乐.app 的 CFBundleExecutable 是 QQMusic(用 PlistBuddy 核实过),Music.app
-// 是 Music。
+// 用——QQ音乐.app 的 CFBundleExecutable 是 QQMusic、网易云音乐.app 是 NeteaseMusic
+// (都用 PlistBuddy 核实过),Music.app 是 Music。
 func playerProcessName() string {
-	if features.Player == playerQQMusic {
+	switch features.Player {
+	case playerQQMusic:
 		return "QQMusic"
+	case playerNetease:
+		return "NeteaseMusic"
+	default:
+		return "Music"
 	}
-	return "Music"
 }
 
 // launchLyrimuseApp 用 bundle id(不是路径)启动/唤起 Lyrimuse.app——不依赖它具体

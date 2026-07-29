@@ -1,16 +1,18 @@
 import Foundation
 
 // Lyrimuse 读取"本地正在播放"状态的目标 App——rawValue 必须跟 collector/features.go 的
-// playerXxx 常量逐字对应,这是两侧通过共享 json 文件("player" 字段)交换的字符串。两个
+// playerXxx 常量逐字对应,这是两侧通过共享 json 文件("player" 字段)交换的字符串。三个
 // case 对应两条完全不同的读取路径(见 MediaControlClient.swift/collector/system.go 的
-// 注释):Apple Music 走 AppleScript 直接问 Music.app 要;QQ 音乐没有 AppleScript 支持
-// (用 `sdef`/PlistBuddy 核实过,压根没有 .sdef、也没开 NSAppleScriptEnabled),改走系统级
-// MediaRemote(经内置的 media-control 二进制读,不需要用户单独安装任何东西)。这是一个
-// 用户显式选择、持久化的设置,不是运行时按"当前谁在前台/谁最近更新过"自动判定——两个
+// 注释):Apple Music 走 AppleScript 直接问 Music.app 要;QQ 音乐/网易云音乐都没有
+// AppleScript 支持(用 `sdef`/PlistBuddy 核实过,两者都压根没有 .sdef、也没开
+// NSAppleScriptEnabled),共用同一条系统级 MediaRemote 路径(经内置的 media-control
+// 二进制读,不需要用户单独安装任何东西),只是各自的 bundleIdentifier 不同。这是一个
+// 用户显式选择、持久化的设置,不是运行时按"当前谁在前台/谁最近更新过"自动判定——多个
 // 播放器同时开着时自动判定天然有歧义,显式选择完全绕开这个问题。
 public enum PlaybackPlayer: String, CaseIterable, Identifiable, Codable {
     case appleMusic = "apple_music"
     case qqMusic = "qq_music"
+    case netease = "netease_music"
 
     public var id: Self { self }
 
@@ -21,6 +23,7 @@ public enum PlaybackPlayer: String, CaseIterable, Identifiable, Codable {
         switch self {
         case .appleMusic: return "com.apple.Music"
         case .qqMusic: return "com.tencent.QQMusicMac"
+        case .netease: return "com.netease.163music"
         }
     }
 }

@@ -16,16 +16,18 @@ import (
 	"time"
 )
 
-// 两条完全独立的读取路径,按 features.Player 选择——跟 lyrimuse 侧
-// MediaControlClient.swift 是同一套设计,注释详见那边:
+// 两条读取路径,按 features.Player 选择——跟 lyrimuse 侧 MediaControlClient.swift
+// 是同一套设计,注释详见那边:
 //
 //   - Apple Music:AppleScript(JXA)直接问 Music.app 本身要"现在在放什么",不依赖外部
 //     `media-control`(需要 brew install 的私有 MediaRemote 框架社区逆向实现)——这个
 //     项目本来就已经在用同一份"自动化"权限(appleMusicPosition() 就是这么问 Music.app
 //     要精确播放位置的)。
-//   - QQ 音乐:QQ音乐.app 没有 AppleScript 支持,只能走系统级 MediaRemote(经内置的
-//     `media-control` 二进制读,build.sh 从 Homebrew 拷贝进 app bundle,跟 collector
-//     自己一起放在 Contents/Resources/ 下,见 mediaControlBinaryPath)。
+//   - QQ 音乐/网易云音乐:两者的 .app 都没有 AppleScript 支持(用 sdef/PlistBuddy 核实
+//     过,都没有 .sdef、也没开 NSAppleScriptEnabled),共用同一条系统级 MediaRemote
+//     路径(经内置的 `media-control` 二进制读,build.sh 从 Homebrew 拷贝进 app bundle,
+//     跟 collector 自己一起放在 Contents/Resources/ 下,见 mediaControlBinaryPath),
+//     只是各自要核对的 bundle id 不同(getMediaControlState 的 expectedBundleID 参数)。
 //
 // 返回值特意拼成跟旧版 `media-control get` 完全相同的 JSON 字段
 // (title/artist/album/duration/elapsedTime/playing/playbackRate/bundleIdentifier),
@@ -75,10 +77,14 @@ const getStateScript = `(() => {
 // notifications (observed on this macOS beta), so the ticker re-reads ground
 // truth here to catch state changes the stream missed.
 func getState(ctx context.Context) (map[string]any, bool) {
-	if features.Player == playerQQMusic {
+	switch features.Player {
+	case playerQQMusic:
 		return getQQMusicState(ctx)
+	case playerNetease:
+		return getNeteaseMusicState(ctx)
+	default:
+		return getAppleMusicState(ctx)
 	}
-	return getAppleMusicState(ctx)
 }
 
 func getAppleMusicState(ctx context.Context) (map[string]any, bool) {
@@ -131,17 +137,25 @@ end tell`
 	return p, true
 }
 
-// qqMusicBundleID/mediaControlRawState 见 lyrimuse 侧 MediaControlClient.swift 同名
-// 常量/结构体的注释——同一套设计,两边分别用 Swift/Go 实现一遍。
-const qqMusicBundleID = "com.tencent.QQMusicMac"
+// qqMusicBundleID/neteaseMusicBundleID/mediaControlRawState 见 lyrimuse 侧
+// MediaControlClient.swift 同名常量/结构体的注释——同一套设计,两边分别用 Swift/Go
+// 实现一遍。
+const (
+	qqMusicBundleID      = "com.tencent.QQMusicMac"
+	neteaseMusicBundleID = "com.netease.163music"
+)
 
 // expectedPlayerBundleID 是当前选定播放器(features.Player)自己会报告的 bundle id——
 // 供 poller.go 的 isTracked() 兜底判断用,见其注释。
 func expectedPlayerBundleID() string {
-	if features.Player == playerQQMusic {
+	switch features.Player {
+	case playerQQMusic:
 		return qqMusicBundleID
+	case playerNetease:
+		return neteaseMusicBundleID
+	default:
+		return "com.apple.Music"
 	}
-	return "com.apple.Music"
 }
 
 // mediaPlayerLabelIPhone 是 iPhone 桥接路径(poller.go 两处 "source"]="iphone" 附近)
@@ -151,14 +165,18 @@ func expectedPlayerBundleID() string {
 const mediaPlayerLabelIPhone = "Apple Music (iOS)"
 
 // mediaPlayerLabel 是 lbMeta()(Mac 本地这条路径)提交给 ListenBrainz 的 media_player
-// 字段——2026-07-24 之前这里不管实际来源一律写死"Apple Music (macOS)",QQ 音乐接入
-// 后如果继续写死会导致 ListenBrainz 上明明是 QQ 音乐放的歌却显示"通过 Apple Music
-// 播放",按当前选定的播放器如实报告。
+// 字段——2026-07-24 之前这里不管实际来源一律写死"Apple Music (macOS)",QQ 音乐/网易云
+// 音乐接入后如果继续写死会导致 ListenBrainz 上明明是别的播放器放的歌却显示"通过
+// Apple Music 播放",按当前选定的播放器如实报告。
 func mediaPlayerLabel() string {
-	if features.Player == playerQQMusic {
+	switch features.Player {
+	case playerQQMusic:
 		return "QQ Music (macOS)"
+	case playerNetease:
+		return "NetEase Cloud Music (macOS)"
+	default:
+		return "Apple Music (macOS)"
 	}
-	return "Apple Music (macOS)"
 }
 
 type mediaControlRawState struct {
@@ -173,13 +191,24 @@ type mediaControlRawState struct {
 	PlaybackRate   float64 `json:"playbackRate"`
 }
 
-// getQQMusicState 读内置 media-control 二进制(见 mediaControlBinaryPath)。--now 让
-// 工具自己按内部时钟外推出一个不会冻结的 elapsedTimeNow——这里把它当成"elapsedTime"
+// getQQMusicState/getNeteaseMusicState 都是 getMediaControlState 的薄封装——QQ 音乐/
+// 网易云音乐都没有 AppleScript 支持,读取路径完全一样,只是各自要核对的 bundle id
+// 不同,不需要把整个函数体抄两遍。
+func getQQMusicState(ctx context.Context) (map[string]any, bool) {
+	return getMediaControlState(ctx, qqMusicBundleID)
+}
+
+func getNeteaseMusicState(ctx context.Context) (map[string]any, bool) {
+	return getMediaControlState(ctx, neteaseMusicBundleID)
+}
+
+// getMediaControlState 读内置 media-control 二进制(见 mediaControlBinaryPath)。--now
+// 让工具自己按内部时钟外推出一个不会冻结的 elapsedTimeNow——这里把它当成"elapsedTime"
 // 字段填回去,让下游 updatePosition()(poller.go)以为自己拿到的是"每一轮都新鲜"的
 // 读数,跟 Apple Music 那条 AppleScript 路径的行为假设完全一致(那条注释里写的"Elapsed
 // 不再于稳定播放期间冻结、每一轮轮询都读到当下的实时进度"同样适用于这里),不需要改
 // updatePosition() 一行代码。--no-artwork 省掉几百 KB 的 base64 封面数据,这里从不使用。
-func getQQMusicState(ctx context.Context) (map[string]any, bool) {
+func getMediaControlState(ctx context.Context, expectedBundleID string) (map[string]any, bool) {
 	bin := mediaControlBinaryPath()
 	if bin == "" {
 		return nil, false
@@ -200,9 +229,10 @@ func getQQMusicState(ctx context.Context) (map[string]any, bool) {
 	if err := json.Unmarshal(out, &raw); err != nil {
 		return nil, false
 	}
-	if raw.BundleID != qqMusicBundleID {
-		// 系统当前的 Now Playing 是别的 App(网页视频/Safari 等)在报告,不是 QQ 音乐——
-		// 不能把它当成 QQ 音乐的"正在播放",按"没有可报告的正在播放"处理。
+	if raw.BundleID != expectedBundleID {
+		// 系统当前的 Now Playing 是别的 App(网页视频/Safari/另一个播放器等)在报告,
+		// 不是当前选定的这个——不能把它当成这个播放器的"正在播放",按"没有可报告的
+		// 正在播放"处理。
 		return map[string]any{}, true
 	}
 	// elapsedTimeNow 只在真的在播放时才可信——实测坐实:一首已经暂停的歌,
