@@ -51,8 +51,7 @@ func runSearchLyricsCLI(args []string) {
 	// 歌词"功能唯一的数据来源,不经过 resolveTrackEnrichment,必须单独转换一遍,不能
 	// 指望那边的修复覆盖到这里。
 	sArtist, sTitle, sAlbum := toSimplified(*artist), toSimplified(*title), toSimplified(*album)
-	ne := neteaseLookup(sArtist, sTitle, sAlbum)
-	results := scoredLyricCandidates(ne, sArtist, sTitle, sAlbum, *duration)
+	_, results := scoredLyricCandidates(sArtist, sTitle, sAlbum, *duration)
 	results = filterEnabledLyricSources(results)
 	if err := json.NewEncoder(os.Stdout).Encode(results); err != nil {
 		log.Fatalf("search-lyrics: encode results: %v", err)

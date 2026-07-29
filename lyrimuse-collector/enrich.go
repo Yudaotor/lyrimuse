@@ -209,8 +209,24 @@ func resolveTrackEnrichment(artist, title, album string, durationSecs float64) e
 	artist, title, album = toSimplified(artist), toSimplified(title), toSimplified(album)
 	var e enrichEntry
 	// 网易云:封面(国内可加载,苹果 mzstatic 国内已无 CDN)+ 单曲链接 + 带轴歌词,一次搜索出。
-	// 无条件查一次——scoredLyricCandidates 需要这份已解析好的候选(ne)算网易云歌词分。
-	ne := neteaseLookup(artist, title, album)
+	// 无条件查一次——封面/跳转链接不管歌词功能开没开都要用。开着歌词功能时,这次网易云
+	// 查询挪进了 scoredLyricCandidates 内部,跟 qq/酷狗/Musixmatch/LRCLIB 四个源一起
+	// 并发发出去(不再是本函数单独先同步查一遍、查完了那四个才开始跑——之前这么写等于
+	// 把网易云自己最坏能到小三十秒的串行耗时,原样叠加在了整体等待时间最前面);只有
+	// 歌词功能关掉、根本不需要凑齐五个源时,才单独查这一次。
+	var ne neteaseInfo
+	var scored []scoredLyricCandidateResult
+	if features.Lyrics {
+		// 歌词:网易云/QQ音乐/酷狗/Musixmatch/LRCLIB 五个源全部并发查一遍,不是查到第一个
+		// 能用的就停——一首歌只在缓存未命中时解析一次,后续都直接读缓存,五个源都查一遍
+		// 换来更可信的结果性价比很高。取分/并发/超时兜底细节见 scoredLyricCandidates
+		// (同一份逻辑也供 desktop-lyrics 的"重新搜索候选歌词"手动纠正功能复用,搜索用的
+		// CLI 子命令见 searchcli.go)——那条手动路径故意不受下面 pickLyricCandidate 的
+		// "启用哪些源"过滤,理由见它的注释。
+		ne, scored = scoredLyricCandidates(artist, title, album, durationSecs)
+	} else {
+		ne = neteaseLookup(artist, title, album)
+	}
 	// 封面/主色/平台跳转链接是基础展示信息,不做成可关闭的开关,以下逻辑无条件执行。
 	e.CoverURL = ne.Cover
 	if e.CoverURL != "" {
@@ -248,13 +264,6 @@ func resolveTrackEnrichment(artist, title, album string, durationSecs float64) e
 		e.SpotifyURL = "https://open.spotify.com/search/" + neturl.QueryEscape(artist+" "+title)
 	}
 	if features.Lyrics {
-		// 歌词:网易云/QQ音乐/酷狗/Musixmatch/LRCLIB 五个源全部查一遍,不是查到第一个能用
-		// 的就停——一首歌只在缓存未命中时解析一次,后续都直接读缓存,五个源都查一遍换来
-		// 更可信的结果性价比很高。取分/并发细节见 scoredLyricCandidates(同一份逻辑也供
-		// desktop-lyrics 的"重新搜索候选歌词"手动纠正功能复用,搜索用的 CLI 子命令见
-		// searchcli.go)——那条
-		// 手动路径故意不受下面 pickLyricCandidate 的"启用哪些源"过滤,理由见它的注释。
-		scored := scoredLyricCandidates(ne, artist, title, album, durationSecs)
 		if picked := pickLyricCandidate(scored); picked != nil {
 			e.Lyrics = picked.Lyrics
 			e.LyricsSource = picked.Source
@@ -313,15 +322,27 @@ type scoredLyricCandidateResult struct {
 	Score         int    `json:"score"`
 }
 
-// scoredLyricCandidates fetches qq/kugou/musixmatch/lrclib concurrently
-// (netease's ne is passed in already-resolved — resolveTrackEnrichment fetched
-// it for cover/URL purposes anyway, so this never issues a second netease
-// request), scores every candidate via scoreLyricCandidate, and returns all of
-// them sorted best-first (not just the winner) — this is the one place both
-// the auto-resolve path (resolveTrackEnrichment, above) and the on-demand
-// `search-lyrics` CLI subcommand (searchcli.go) gather/score candidates, so
-// there is exactly one implementation of "how do we rank lyric sources" in
-// the whole project.
+// lyricSearchDeadline 给 fetchScoredLyricCandidates 整体加一个上限——五个源各自的
+// HTTP client 都有自己的超时(4~10秒不等),但单个源内部可能串行链好几次请求才死心
+// (网易云最多试 4 个搜索变体+详情+歌词,最坏能吃掉小三十秒;Musixmatch 的鉴权 token
+// 每 9 分钟过期一次,过期后重新申请若被限流会主动 sleep 10 秒再试一次)——五个源本身
+// 已经改成完全并发(见下面 fetchScoredLyricCandidates),但极端情况下(比如恰好赶上
+// Musixmatch token 冷启动)仍可能让这一轮搜索卡到快一分钟。20秒给足了每个源自己独立
+// 超时的空间,同时把最坏情况砍掉大半——到点还没回来的源,这一轮就不参与候选(不影响
+// 它自己继续跑完、下次同一首歌缓存命中时照常能用上,只是这一次不等它)。这个常量同时
+// 覆盖自动解析(resolveTrackEnrichment)和"歌词管理"的手动联网搜索(searchcli.go)两条
+// 路径,因为它俩共用这同一个函数。
+const lyricSearchDeadline = 20 * time.Second
+
+// scoredLyricCandidates fetches netease/qq/kugou/musixmatch/lrclib concurrently
+// (见 fetchScoredLyricCandidates),scores every candidate via scoreLyricCandidate,
+// and returns all of them sorted best-first (not just the winner) — this is the
+// one place both the auto-resolve path (resolveTrackEnrichment, above) and the
+// on-demand `search-lyrics` CLI subcommand (searchcli.go) gather/score
+// candidates, so there is exactly one implementation of "how do we rank lyric
+// sources" in the whole project. Also returns the primary (non-alias) netease
+// lookup — resolveTrackEnrichment needs it for cover/URL purposes regardless of
+// whether the alias fallback below ends up supplying the returned lyric results.
 //
 // Apple Music 有时把歌手标签写成该歌手的英文/罗马化艺名,但网易云/QQ/酷狗/LRCLIB
 // 这四个源都是按歌手的中文舞台名索引/检索的——拿英文艺名去查,返回的候选是彻底的空
@@ -332,60 +353,105 @@ type scoredLyricCandidateResult struct {
 // 五个源全空(len(results)==0,不是"候选都被判负分")才触发兜底:用 artistAliasTable
 // 里已经手工登记过的别名换关键词、原样重新查一遍——没有登记别名、或别名跟原名相同,
 // 就不重试;只重试这一次,不做别名的别名(表里也没有这种链式登记),换别名查到的结果
-// 为空就仍然如实返回原来那份空结果,不伪造候选。
-func scoredLyricCandidates(ne neteaseInfo, artist, title, album string, durationSecs float64) []scoredLyricCandidateResult {
-	results := fetchScoredLyricCandidates(ne, artist, title, album, durationSecs)
+// 为空就仍然如实返回原来那份空结果,不伪造候选。别名重试只影响歌词候选,不影响返回
+// 的 ne(见下面 return ne, results 那一行,不是 aliasNe)——封面/跳转链接这些字段永远
+// 用原始歌手名查出来的结果,这是重构前就有的行为,这里保持不变。
+func scoredLyricCandidates(artist, title, album string, durationSecs float64) (neteaseInfo, []scoredLyricCandidateResult) {
+	ne, results := fetchScoredLyricCandidates(artist, title, album, durationSecs)
 	if len(results) > 0 {
-		return results
+		return ne, results
 	}
 	alias := knownArtistAlias(artist)
 	if alias == "" || alias == artist {
-		return results
+		return ne, results
 	}
-	aliasNe := neteaseLookup(alias, title, album)
-	aliasResults := fetchScoredLyricCandidates(aliasNe, alias, title, album, durationSecs)
+	_, aliasResults := fetchScoredLyricCandidates(alias, title, album, durationSecs)
 	if len(aliasResults) > 0 {
 		log.Printf("lyrics: artist alias fallback succeeded: original_artist=%q alias=%q title=%q candidates=%d", artist, alias, title, len(aliasResults))
-		return aliasResults
+		return ne, aliasResults
 	}
-	return results
+	return ne, results
 }
 
 // fetchScoredLyricCandidates 是真正"拿这一个具体的歌手名字符串,去查网易云/QQ/酷狗/
-// LRCLIB 五个源、给查到的候选打分"的实现——从 scoredLyricCandidates 里拆出来,是
-// 为了在第一次用原始歌手名查询彻底查无候选时,能原封不动地对已知别名再调用一遍
-// (见 scoredLyricCandidates 上面的注释),而不必把并发抓取/打分这套逻辑抄第二遍。
-func fetchScoredLyricCandidates(ne neteaseInfo, artist, title, album string, durationSecs float64) []scoredLyricCandidateResult {
-	qqURL := qqMusicURL(artist, title, album)
-	qqMid := qqMidFromURL(qqURL)
-	var qqLyr, qqYRC, kugouLyr, kugouYRC, lrclibLyr string
-	var mxLyr, mxYRC, mxTr string
-	var wg sync.WaitGroup
-	wg.Add(4)
+// Musixmatch/LRCLIB 五个源、给查到的候选打分"的实现——从 scoredLyricCandidates 里
+// 拆出来,是为了在第一次用原始歌手名查询彻底查无候选时,能原封不动地对已知别名再
+// 调用一遍(见 scoredLyricCandidates 上面的注释),而不必把并发抓取/打分这套逻辑抄
+// 第二遍。
+//
+// 五个源(含网易云)真正一起并发发出去,用带缓冲的 channel 收集结果——之前网易云是
+// 在这个函数之外单独同步查一遍(resolveTrackEnrichment 为了封面/跳转链接需要它),
+// 等它查完了才轮到这里的 qq/酷狗/Musixmatch/LRCLIB 四个开始并发,相当于白白把网易云
+// 自己最坏能到小三十秒的串行耗时,原样叠加在了整体等待时间最前面——搬进同一批
+// goroutine 后,网易云的耗时不再阻塞其它四个源起步,只跟它们一起被下面的
+// lyricSearchDeadline 兜底。用 channel 而不是"WaitGroup+共享变量"是为了让超时后
+// "放弃继续等、先用已经到手的候选"这件事是并发安全的:哪怕某个源在超时之后才真正
+// 返回,它往 channel 送结果这个动作本身不会阻塞(channel 容量=goroutine 数量),
+// 也不会跟已经不再读取的这边产生数据竞争,那个晚到的结果就单纯被丢弃,不影响这一轮
+// 的候选列表。
+func fetchScoredLyricCandidates(artist, title, album string, durationSecs float64) (neteaseInfo, []scoredLyricCandidateResult) {
+	type sourceResult struct {
+		source       string
+		ne           neteaseInfo
+		lyr, yrc, tr string
+	}
+	resultsCh := make(chan sourceResult, 5)
+
 	go func() {
-		defer wg.Done()
+		resultsCh <- sourceResult{source: "netease", ne: neteaseLookup(artist, title, album)}
+	}()
+	go func() {
+		// qqMusicURL 本身也是一次网络请求(smartbox 搜索,6秒超时,按 artist|title|album
+		// 缓存)——挪进这个 goroutine 一起并发,不再是这个函数最前面的一步单独阻塞;
+		// resolveTrackEnrichment 那边为封面/跳转链接另外调用的那次会命中这里可能已经
+		// 写热的缓存,反过来也一样,谁先算出来谁写缓存,不要求哪边一定在前。
+		qqMid := qqMidFromURL(qqMusicURL(artist, title, album))
+		var lyr, yrc string
 		if qqMid != "" {
-			qqLyr = qqLyric(qqMid)
+			lyr = qqLyric(qqMid)
 			// 逐字(QRC)是完全独立的一套接口/密钥,自己失败不影响上面整行歌词——
 			// 见 qq.go 顶部注释。
-			qqYRC = qqQRCLyric(qqMid, artist, title, album, durationSecs)
+			yrc = qqQRCLyric(qqMid, artist, title, album, durationSecs)
 		}
+		resultsCh <- sourceResult{source: "qq", lyr: lyr, yrc: yrc}
 	}()
 	go func() {
-		defer wg.Done()
 		r := kugouLyric(artist, title, durationSecs)
-		kugouLyr, kugouYRC = r.lrc, r.yrc
+		resultsCh <- sourceResult{source: "kugou", lyr: r.lrc, yrc: r.yrc}
 	}()
 	go func() {
-		defer wg.Done()
-		lrclibLyr = lrclibLyric(artist, title, album)
+		resultsCh <- sourceResult{source: "lrclib", lyr: lrclibLyric(artist, title, album)}
 	}()
 	go func() {
-		defer wg.Done()
 		r := musixmatchLyric(artist, title, durationSecs, features.LyricsTranslationLanguage)
-		mxLyr, mxYRC, mxTr = r.lrc, r.yrc, r.tr
+		resultsCh <- sourceResult{source: "musixmatch", lyr: r.lrc, yrc: r.yrc, tr: r.tr}
 	}()
-	wg.Wait()
+
+	var ne neteaseInfo
+	var qqLyr, qqYRC, kugouLyr, kugouYRC, lrclibLyr string
+	var mxLyr, mxYRC, mxTr string
+	deadline := time.After(lyricSearchDeadline)
+collect:
+	for i := 0; i < 5; i++ {
+		select {
+		case r := <-resultsCh:
+			switch r.source {
+			case "netease":
+				ne = r.ne
+			case "qq":
+				qqLyr, qqYRC = r.lyr, r.yrc
+			case "kugou":
+				kugouLyr, kugouYRC = r.lyr, r.yrc
+			case "lrclib":
+				lrclibLyr = r.lyr
+			case "musixmatch":
+				mxLyr, mxYRC, mxTr = r.lyr, r.yrc, r.tr
+			}
+		case <-deadline:
+			log.Printf("lyrics: search deadline (%s) hit for artist=%q title=%q, proceeding with %d/5 sources back", lyricSearchDeadline, artist, title, i)
+			break collect
+		}
+	}
 
 	var candidates []lyricCandidate
 	if ne.Lyrics != "" {
@@ -429,7 +495,7 @@ func fetchScoredLyricCandidates(ne neteaseInfo, artist, title, album string, dur
 		results = append(results, r)
 	}
 	sort.Slice(results, func(i, j int) bool { return results[i].Score > results[j].Score })
-	return results
+	return ne, results
 }
 
 // loadEnrichCache reads the persisted enrichment cache (best-effort) and sets the
