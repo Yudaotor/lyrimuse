@@ -66,9 +66,19 @@ Lyrimuse 常驻在菜单栏里，跟着当前播放弹出一个悬浮歌词窗�
 
 ## 快速开始
 
-Lyrimuse 一直都是 ad-hoc 签名——两种拿法都一样，都不涉及 Apple 开发者账号。也因为这样，不管选哪种方式，第一次打开时 Gatekeeper 都会提示"来自身份不明的开发者"——这是预期行为，不是 bug，一次性解决办法见下面 A 方案。
+Lyrimuse 一直都是 ad-hoc 签名——不管用下面哪种方式拿到，都不涉及 Apple 开发者账号。也因为这样，除了下面的方案 A（会自动清掉这一步），其它方式第一次打开时 Gatekeeper 都会提示"来自身份不明的开发者"——这是预期行为，不是 bug，方案 B 里有一次性手动解决办法。
 
-### 方案 A：下载预编译版本
+### 方案 A：用 Homebrew 安装（推荐）
+
+```bash
+brew tap yudaotor/lyrimuse
+brew trust --cask yudaotor/lyrimuse/lyrimuse   # 一次性操作——Homebrew 要求任何非官方 tap 都得先信任
+brew install --cask lyrimuse
+```
+
+安装过程中会自动清掉这次的 Gatekeeper 隔离标记，不需要额外操作——`brew install` 跑完直接从 `/Applications`（或者 Spotlight）打开 Lyrimuse 就行。以后有新版本，`brew upgrade --cask lyrimuse` 同样能自动处理。
+
+### 方案 B：手动下载预编译版本
 
 1. 去 [Releases 页面](https://github.com/Yudaotor/lyrimuse/releases) 下载最新的 `Lyrimuse-*-macos.zip`（附带一份 `.sha256` 校验文件），解压后把 `Lyrimuse.app` 拖进 `/Applications`。
 2. 第一次打开时 macOS 会拒绝运行——提示"Lyrimuse 已损坏，无法打开"或"来自身份不明的开发者"。用下面任意一种方式解锁一次即可：
@@ -83,7 +93,7 @@ Lyrimuse 一直都是 ad-hoc 签名——两种拿法都一样，都不涉及 Ap
 
    只对你真正信任的构建版本执行这几条命令——比如这个仓库自己 Releases 页面下的，或者你自己构建的那份。
 
-### 方案 B：自己构建
+### 方案 C：自己构建
 
 **一次性前置依赖**（已经装过的可以跳过）：
 

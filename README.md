@@ -66,9 +66,19 @@ Every extra above lives under Settings → **Add-on Features**, and each account
 
 ## Getting Started
 
-Lyrimuse ships ad-hoc signed — same as it's always been — so there's no Apple Developer account involved either way you get it. That also means Gatekeeper will flag it as "from an unidentified developer" the first time you open it, regardless of which option below you pick. That's expected, not a bug — see the one-time fix under Option A.
+Lyrimuse ships ad-hoc signed — same as it's always been — so there's no Apple Developer account involved with any option below. That also means Gatekeeper will flag it as "from an unidentified developer" the first time it's opened, downloaded any way except Option A below (which clears it automatically) — that's expected, not a bug, and Option B covers the one-time manual fix.
 
-### Option A: Download a pre-built release
+### Option A: Install via Homebrew (recommended)
+
+```bash
+brew tap yudaotor/lyrimuse
+brew trust --cask yudaotor/lyrimuse/lyrimuse   # one-time -- Homebrew requires this for any non-official tap
+brew install --cask lyrimuse
+```
+
+This clears the one-time Gatekeeper quarantine automatically as part of installing, so there's no follow-up step — open Lyrimuse from `/Applications` (or Spotlight) right after `brew install` finishes. `brew upgrade --cask lyrimuse` picks up new releases the same way.
+
+### Option B: Download a pre-built release manually
 
 1. Grab the latest `Lyrimuse-*-macos.zip` from the [Releases page](https://github.com/Yudaotor/lyrimuse/releases) (a matching `.sha256` file is attached too, if you want to verify the download), unzip it, and drag `Lyrimuse.app` into `/Applications`.
 2. On first launch, macOS will refuse to open it — "Lyrimuse can't be opened because Apple cannot check it for malicious software" or "is from an unidentified developer." Clear it once, with whichever of these you're more comfortable with:
@@ -83,7 +93,7 @@ Lyrimuse ships ad-hoc signed — same as it's always been — so there's no Appl
 
    Only run these against a build you actually trust — the one from this repo's own Releases page, or one you built yourself.
 
-### Option B: Build from source
+### Option C: Build from source
 
 **One-time prerequisites** (skip anything you already have):
 
@@ -102,7 +112,7 @@ cd lyrimuse/lyrimuse
 
 QQ Music support additionally needs [ungive/media-control](https://github.com/ungive/media-control) — `build.sh` installs it via Homebrew automatically if it's missing, so this isn't a step you need to do yourself either.
 
-### After either option
+### After any option
 
 Open Lyrimuse from `/Applications` — the first-run wizard walks you through picking a player (Apple Music or QQ Music), granting Automation access to Music.app if you picked Apple Music (QQ Music needs no extra permission), and enabling its background collector service (so lyrics/artwork keep resolving even when the window's closed). Complete the wizard and lyrics will appear right away (see [lyrimuse/README.md](lyrimuse/README.md) for more build options).
 
