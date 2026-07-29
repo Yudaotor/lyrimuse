@@ -146,9 +146,9 @@
 "五个源都没找到可用的候选" = "No usable candidates found from any of the five sources";
 "回到当前播放" = "Jump to Now Playing";
 "创建 Last.fm 应用即可获取 API Key + Secret。" = "Create a Last.fm app to get an API Key + Secret.";
-"在 Last.fm 后台创建应用会同时给你 API Key 和 Secret，读取、写入都用这一套凭据。只填用户名 + API Key（不填 Secret、不点「连接」）也可以——配合 ListenBrainz 账号会自动同步收听记录。" = "Creating an app in Last.fm's developer portal gives you both an API Key and a Secret — this one set of credentials covers both reading and writing. Filling in just your username + API Key (skipping the Secret and \"Connect\") works too — pair it with a ListenBrainz account and your listening history syncs there automatically.";
+"在 Last.fm 后台创建应用会同时给你 API Key 和 Secret，读取、写入都用这一套凭据。只填用户名 + API Key（不填 Secret、不点「连接」）也可以。" = "Creating an app in Last.fm's developer portal gives you both an API Key and a Secret — this one set of credentials covers both reading and writing. Filling in just your username + API Key (skipping the Secret and \"Connect\") works too.";
 "在 ListenBrainz 网站获取 Token →" = "Get a Token from the ListenBrainz website →";
-"在 Last.fm 网站查看主页 →" = "View My Profile on Last.fm →";
+"在 Last.fm 网站查看主页" = "View My Profile on Last.fm";
 "在 iPhone 上安装 Bark App，首页显示的就是你的专属推送地址，复制粘贴过来即可，不需要额外设置。" = "Install the Bark app on your iPhone — the home screen shows your personal push URL. Just copy and paste it here; no extra setup needed.";
 "在 last.fm/api/account/create 创建应用后可见" = "Visible after creating an app at last.fm/api/account/create";
 "在 last.fm/api/account/create 申请" = "Apply at last.fm/api/account/create";

@@ -528,16 +528,12 @@ struct AccountLinkingTab: View {
                 Text(L10n.t("创建 Last.fm 应用即可获取 API Key + Secret。"))
                     .font(.caption2).foregroundStyle(.secondary)
                 HelpButton(
-                    text: L10n.t("在 Last.fm 后台创建应用会同时给你 API Key 和 Secret，读取、写入都用这一套凭据。只填用户名 + API Key（不填 Secret、不点「连接」）也可以——配合 ListenBrainz 账号会自动同步收听记录。"),
+                    text: L10n.t("在 Last.fm 后台创建应用会同时给你 API Key 和 Secret，读取、写入都用这一套凭据。只填用户名 + API Key（不填 Secret、不点「连接」）也可以。"),
                     docTitle: L10n.t("前往 Last.fm 申请 →"),
                     docURL: URL(string: "https://www.last.fm/api/account/create")!
                 )
             }
             TextField(L10n.t("Last.fm 用户名"), text: $config.lastfmUser)
-            if let profileURL = lastfmProfileURL {
-                Link(L10n.t("在 Last.fm 网站查看主页 →"), destination: profileURL)
-                    .font(.caption)
-            }
             SecretFieldRow("API Key", value: $config.lastfmScrobbleAPIKey)
             SecretFieldRow("Secret", value: $config.lastfmScrobbleSecret, prompt: L10n.t("只用只读功能可以留空"))
             lastfmConnectArea
@@ -575,6 +571,20 @@ struct AccountLinkingTab: View {
         return URL(string: "https://www.last.fm/user/\(encoded)")
     }
 
+    // 跳转按钮而不是单独一行——"查看主页"这个动作最自然的落点就是紧挨着"已连接"这行
+    // 状态信息,不需要在页面里单占一整行。图标用而不是文字,保持这一行紧凑;两处调用点
+    // (lastfmConnectArea 的 .idle 已连接分支 + .success 分支)都嵌进各自那个 HStack 的
+    // Spacer 之后,跟"断开"按钮同一行。
+    @ViewBuilder
+    private var lastfmProfileLinkButton: some View {
+        if let profileURL = lastfmProfileURL {
+            Link(destination: profileURL) {
+                Image(systemName: "arrow.up.forward.square")
+            }
+            .help(L10n.t("在 Last.fm 网站查看主页"))
+        }
+    }
+
     // Last.fm 经典 auth API 没有回调机制,中间必须有一步用户手动确认——三步小圆点让
     // 这个"看起来复杂"的流程翻译成"其实就三步,你现在在第几步"。
     @ViewBuilder
@@ -592,6 +602,7 @@ struct AccountLinkingTab: View {
                         systemImage: "checkmark.seal.fill"
                     ).foregroundStyle(.green)
                     Spacer()
+                    lastfmProfileLinkButton
                     Button(L10n.t("断开")) {
                         config.lastfmScrobbleSessionKey = ""
                         config.lastfmScrobbleUsername = ""
@@ -629,7 +640,11 @@ struct AccountLinkingTab: View {
                 Text(L10n.t("正在确认授权，即将完成…")).font(.caption)
             }
         case .success(let username):
-            Label(String(format: L10n.t("已连接：%@"), username), systemImage: "checkmark.seal.fill").foregroundStyle(.green)
+            HStack {
+                Label(String(format: L10n.t("已连接：%@"), username), systemImage: "checkmark.seal.fill").foregroundStyle(.green)
+                Spacer()
+                lastfmProfileLinkButton
+            }
         case .failed(let message):
             VStack(alignment: .leading, spacing: 6) {
                 Label(message, systemImage: "exclamationmark.triangle.fill")
