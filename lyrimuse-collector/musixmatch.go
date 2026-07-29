@@ -46,6 +46,11 @@ type musixmatchResult struct {
 	lrc string
 	yrc string // 归一化成 YRCParser 语法后的逐字数据,没有则空串
 	tr  string // 译文(逐行 LRC),语言取决于调用时传入的 features.LyricsTranslationLanguage,没有则空串
+	// title/artist/album/cover 是 Musixmatch 曲库里这首歌实际匹配到的信息——纯粹给
+	// "搜索候选歌词"弹窗展示用,不参与任何匹配/打分逻辑,取自 track.search 响应本身
+	// (本来就已经查到,只是原来没往外传)。cover 用 500x500 这档,跟网易云封面挑的
+	// 尺寸量级接近,不用最大的 800x800(候选列表里的小图不需要)。
+	title, artist, album, cover string
 }
 
 var (
@@ -80,17 +85,17 @@ func musixmatchLyric(artist, title string, durationSecs float64, trLang string) 
 
 func resolveMusixmatchLyric(artist, title string, durationSecs float64, trLang string) musixmatchResult {
 	_ = durationSecs // 时长匹配交给 enrich.go 统一的 scoreLyricCandidate,这里不用
-	trackID, ok := musixmatchSearchTrack(artist, title)
+	match, ok := musixmatchSearchTrack(artist, title)
 	if !ok {
 		return musixmatchResult{}
 	}
-	lrc := musixmatchSubtitleLRC(trackID)
+	lrc := musixmatchSubtitleLRC(match.trackID)
 	if lrc == "" {
 		return musixmatchResult{}
 	}
-	yrc := musixmatchRichsync(trackID)
-	tr := musixmatchTranslationLRC(trackID, lrc, trLang)
-	return musixmatchResult{lrc: lrc, yrc: yrc, tr: tr}
+	yrc := musixmatchRichsync(match.trackID)
+	tr := musixmatchTranslationLRC(match.trackID, lrc, trLang)
+	return musixmatchResult{lrc: lrc, yrc: yrc, tr: tr, title: match.title, artist: match.artist, album: match.album, cover: match.cover}
 }
 
 // musixmatchEnsureToken 返回一个可用的 usertoken——已缓存且未过期直接复用,否则重新
@@ -172,13 +177,21 @@ func musixmatchDo(action string, params neturl.Values) ([]byte, error) {
 	return io.ReadAll(resp.Body)
 }
 
+// musixmatchTrackMatch 是 musixmatchSearchTrack 选中的候选——title/artist/album/cover
+// 是 track.search 响应本身自带的字段(album_name/album_coverart_500x500,实测坐实真的
+// 存在,不是猜的),本来就已经查到,只是原来只取了 trackID 就把其余字段丢了。
+type musixmatchTrackMatch struct {
+	trackID                     int64
+	title, artist, album, cover string
+}
+
 // musixmatchSearchTrack 按歌手+歌名分字段搜索(q_artist/q_track,不是拼成一个字符串的
 // q——实测同一首歌用分字段搜索时,官方原唱排第一;拼成一个字符串搜索,排在前面的经常是
 // 同名翻唱/伴奏/合集这类噪音,即使歌手歌名都对得上字符串也不是真正想要的那个版本)。
 // s_track_rating=desc 让热门/权威版本排前面,进一步降低选到冷门错误版本的概率。取第一条
 // 歌手/歌名都对上、且 has_subtitles==1(没有逐行歌词的候选后面 track.subtitle.get 必然
 // 404,不必跑这一趟)的结果。
-func musixmatchSearchTrack(artist, title string) (int64, bool) {
+func musixmatchSearchTrack(artist, title string) (musixmatchTrackMatch, bool) {
 	body, err := musixmatchDo("track.search", neturl.Values{
 		"q_artist":       {artist},
 		"q_track":        {title},
@@ -187,7 +200,7 @@ func musixmatchSearchTrack(artist, title string) (int64, bool) {
 		"page":           {"1"},
 	})
 	if err != nil {
-		return 0, false
+		return musixmatchTrackMatch{}, false
 	}
 	var out struct {
 		Message struct {
@@ -197,27 +210,35 @@ func musixmatchSearchTrack(artist, title string) (int64, bool) {
 			Body struct {
 				TrackList []struct {
 					Track struct {
-						TrackID      int64  `json:"track_id"`
-						TrackName    string `json:"track_name"`
-						ArtistName   string `json:"artist_name"`
-						HasSubtitles int    `json:"has_subtitles"`
+						TrackID              int64  `json:"track_id"`
+						TrackName            string `json:"track_name"`
+						ArtistName           string `json:"artist_name"`
+						AlbumName            string `json:"album_name"`
+						AlbumCoverart500x500 string `json:"album_coverart_500x500"`
+						HasSubtitles         int    `json:"has_subtitles"`
 					} `json:"track"`
 				} `json:"track_list"`
 			} `json:"body"`
 		} `json:"message"`
 	}
 	if json.Unmarshal(body, &out) != nil || out.Message.Header.StatusCode != 200 {
-		return 0, false
+		return musixmatchTrackMatch{}, false
 	}
 	for _, t := range out.Message.Body.TrackList {
 		if t.Track.HasSubtitles != 1 {
 			continue
 		}
 		if looseContains(t.Track.TrackName, title) && artistMatches(t.Track.ArtistName, artist) {
-			return t.Track.TrackID, true
+			return musixmatchTrackMatch{
+				trackID: t.Track.TrackID,
+				title:   t.Track.TrackName,
+				artist:  t.Track.ArtistName,
+				album:   t.Track.AlbumName,
+				cover:   t.Track.AlbumCoverart500x500,
+			}, true
 		}
 	}
-	return 0, false
+	return musixmatchTrackMatch{}, false
 }
 
 // musixmatchSubtitleLRC 取该 track_id 官方的逐行 LRC 歌词,当作候选正文。

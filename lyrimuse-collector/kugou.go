@@ -26,6 +26,11 @@ import (
 type kugouResult struct {
 	lrc string
 	yrc string // 归一化成 YRCParser 语法后的逐字数据,没有则空串
+	// title/artist/album 是酷狗曲库里这首歌实际匹配到的歌名/歌手/专辑——纯粹给"搜索
+	// 候选歌词"弹窗展示用,不参与任何匹配/打分逻辑,取自搜索结果本身(本来就已经查到,
+	// 只是原来没往外传)。酷狗搜索接口没有可靠的封面图字段(AlbumImage 实测经常是空
+	// 字符串),这里不尝试凑封面。
+	title, artist, album string
 }
 
 var (
@@ -132,6 +137,7 @@ type kugouSong struct {
 	Hash       string  `json:"hash"`
 	SongName   string  `json:"songname"`
 	SingerName string  `json:"singername"`
+	AlbumName  string  `json:"album_name"`
 	Duration   float64 `json:"duration"` // 秒
 }
 
@@ -234,5 +240,5 @@ func resolveKugouLyric(artist, title string, durationSecs float64) kugouResult {
 			yrc = krcToYRC(decrypted)
 		}
 	}
-	return kugouResult{lrc: lrc, yrc: yrc}
+	return kugouResult{lrc: lrc, yrc: yrc, title: chosen.SongName, artist: chosen.SingerName, album: chosen.AlbumName}
 }

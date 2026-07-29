@@ -67,7 +67,7 @@ struct LyricsSearchSheet: View {
 
             content
         }
-        .frame(minWidth: 680, minHeight: 480)
+        .frame(minWidth: 720, minHeight: 480)
         .task { await load() }
     }
 
@@ -140,7 +140,7 @@ struct LyricsSearchSheet: View {
                     List(candidates, selection: $selectedSource) { c in
                         candidateRow(c)
                     }
-                    .frame(minWidth: 220, idealWidth: 240, maxWidth: 280)
+                    .frame(minWidth: 250, idealWidth: 280, maxWidth: 320)
 
                     if let c = candidates.first(where: { $0.source == selectedSource }) ?? candidates.first {
                         previewPane(c)
@@ -151,15 +151,17 @@ struct LyricsSearchSheet: View {
     }
 
     private func candidateRow(_ c: LyricsSearchService.Candidate) -> some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 4) {
+        HStack(alignment: .top, spacing: 8) {
+            coverThumbnail(c.coverURL, size: 40)
+            VStack(alignment: .leading, spacing: 3) {
                 Text(c.source).font(.body.weight(.medium))
+                candidateMatchInfo(c)
                 Text(String(format: L10n.t("分数 %@ · %@ 行"), "\(c.score)", "\(c.lineCount)"))
                     .font(.caption2)
                     .foregroundStyle(.secondary)
                 characteristicBadges(c)
             }
-            Spacer()
+            Spacer(minLength: 0)
         }
         .tag(c.source)
         .padding(.vertical, 3)
@@ -167,9 +169,11 @@ struct LyricsSearchSheet: View {
 
     private func previewPane(_ c: LyricsSearchService.Candidate) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack {
+            HStack(alignment: .top, spacing: 12) {
+                coverThumbnail(c.coverURL, size: 56)
                 VStack(alignment: .leading, spacing: 4) {
                     Text(c.source).font(.headline)
+                    candidateMatchInfo(c)
                     Text(String(format: L10n.t("分数 %@ · %@ 行"), "\(c.score)", "\(c.lineCount)"))
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -192,6 +196,50 @@ struct LyricsSearchSheet: View {
         }
         .padding(16)
         .frame(minWidth: 380)
+    }
+
+    // 这个候选实际匹配到的歌名(单独一行)+ 歌手/专辑(合并一行,用"·"分隔)——不是每个源
+    // 都能给全,哪一项是空的就不显示那一行,不留空白占位;title 单独一行是因为它通常
+    // 跟搜索关键词的歌名差不多、但偶尔不同(比如带 Live/Remix 后缀),值得单独看清楚。
+    @ViewBuilder
+    private func candidateMatchInfo(_ c: LyricsSearchService.Candidate) -> some View {
+        if !c.title.isEmpty {
+            Text(c.title).font(.caption).lineLimit(1)
+        }
+        if !c.artist.isEmpty || !c.album.isEmpty {
+            Text([c.artist, c.album].filter { !$0.isEmpty }.joined(separator: " · "))
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+        }
+    }
+
+    // 封面缩略图——没有 URL(这个源本来就没给,比如 LRCLIB 恒无)或者加载失败/加载中,
+    // 一律显示同一个占位图标,不特意区分"没有"和"加载中"这两种状态,用户不需要关心
+    // 这个区别。
+    @ViewBuilder
+    private func coverThumbnail(_ url: URL?, size: CGFloat) -> some View {
+        Group {
+            if let url {
+                AsyncImage(url: url) { phase in
+                    if case .success(let image) = phase {
+                        image.resizable().aspectRatio(contentMode: .fill)
+                    } else {
+                        coverPlaceholder
+                    }
+                }
+            } else {
+                coverPlaceholder
+            }
+        }
+        .frame(width: size, height: size)
+        .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+    }
+
+    private var coverPlaceholder: some View {
+        RoundedRectangle(cornerRadius: 4, style: .continuous)
+            .fill(.quaternary)
+            .overlay(Image(systemName: "music.note").foregroundStyle(.secondary))
     }
 
     // 逐字/译文/罗马音——分别对应"是否有逐字时间戳""是否带翻译""是否带罗马音标注",

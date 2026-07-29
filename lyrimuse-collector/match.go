@@ -108,6 +108,10 @@ type lyricCandidate struct {
 	lyrics        string
 	wordTimingYRC string // 该候选归一化成 YRCParser 语法后的逐字数据,没有则空串(netease/qq/kugou 都可能有,lrclib 恒无)
 	hasWordTiming bool   // = wordTimingYRC != "",构造候选时直接算好,见 enrich.go
+	// title/artist/album/cover 是这个源实际匹配到的歌名/歌手/专辑/封面——不参与打分,
+	// 纯粹给"搜索候选歌词"弹窗展示("这个候选到底对应哪首歌/哪个版本")。不同源可能
+	// 匹配到同一首歌的不同版本(不同专辑/live/合集),各自如实展示,不做跨源统一。
+	title, artist, album, cover string
 }
 
 // lyricEndingCorroborationToleranceSecs 是判定"多个独立源的歌词末尾时间戳互相印证"的

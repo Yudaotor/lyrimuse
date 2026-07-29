@@ -22,6 +22,13 @@ final class LyricsSearchService {
         let lyricsYRC: String
         let hasWordTiming: Bool
         let score: Int
+        // 这个源实际匹配到的歌名/歌手/专辑/封面——不同源可能匹配到同一首歌的不同版本
+        // (不同专辑/live/合集),各自如实展示,不做跨源统一;不是每个源都能给全,LRCLIB
+        // 没有封面这个概念,留空就是这个源确实没有,不是加载失败。
+        let title: String
+        let artist: String
+        let album: String
+        let coverURL: URL?
 
         // 给候选选择界面展示的补充特性——是否逐字这一项 collector 已经算好(hasWordTiming),
         // 译文/罗马音/行数纯粹是本地字段是否非空/切行数,不需要 collector 额外计算。
@@ -173,13 +180,18 @@ private struct RawCandidate: Decodable {
     let lyricsYRC: String?
     let hasWordTiming: Bool
     let score: Int
+    let title: String?
+    let artist: String?
+    let album: String?
+    let coverURL: String?
 
     enum CodingKeys: String, CodingKey {
-        case source, lyrics, score
+        case source, lyrics, score, title, artist, album
         case lyricsTr = "lyrics_tr"
         case lyricsRoma = "lyrics_roma"
         case lyricsYRC = "lyrics_yrc"
         case hasWordTiming = "has_word_timing"
+        case coverURL = "cover_url"
     }
 }
 
@@ -192,7 +204,11 @@ private extension LyricsSearchService.Candidate {
             lyricsRoma: raw.lyricsRoma ?? "",
             lyricsYRC: raw.lyricsYRC ?? "",
             hasWordTiming: raw.hasWordTiming,
-            score: raw.score
+            score: raw.score,
+            title: raw.title ?? "",
+            artist: raw.artist ?? "",
+            album: raw.album ?? "",
+            coverURL: raw.coverURL.flatMap(URL.init(string:))
         )
     }
 }

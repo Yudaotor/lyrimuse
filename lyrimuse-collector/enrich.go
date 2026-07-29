@@ -320,6 +320,14 @@ type scoredLyricCandidateResult struct {
 	LyricsYRC     string `json:"lyrics_yrc,omitempty"`
 	HasWordTiming bool   `json:"has_word_timing"`
 	Score         int    `json:"score"`
+	// Title/Artist/Album/CoverURL 是这个源实际匹配到的歌名/歌手/专辑/封面(不参与
+	// 打分,见 lyricCandidate 的同名字段注释)——"搜索候选歌词"弹窗靠这几个字段展示
+	// 每条候选具体对应哪首歌/哪个版本,不是只看来源名字。不是每个源都能给全:LRCLIB
+	// 没有封面这个概念,QQ 这条路径也没查封面,留空是"这个源确实没有",不是 bug。
+	Title    string `json:"title,omitempty"`
+	Artist   string `json:"artist,omitempty"`
+	Album    string `json:"album,omitempty"`
+	CoverURL string `json:"cover_url,omitempty"`
 }
 
 // lyricSearchDeadline 给 fetchScoredLyricCandidates 整体加一个上限——五个源各自的
@@ -413,9 +421,11 @@ func fetchScoredLyricCandidates(artist, title, album string, durationSecs float6
 // 个空函数复用这同一份实现。
 func fetchScoredLyricCandidatesStreaming(artist, title, album string, durationSecs float64, onUpdate func(neteaseInfo, []scoredLyricCandidateResult)) (neteaseInfo, []scoredLyricCandidateResult) {
 	type sourceResult struct {
-		source       string
-		ne           neteaseInfo
-		lyr, yrc, tr string
+		source                  string
+		ne                      neteaseInfo
+		lyr, yrc, tr            string
+		matchTitle, matchArtist string
+		matchAlbum, matchCover  string
 	}
 	resultsCh := make(chan sourceResult, 5)
 
@@ -423,11 +433,13 @@ func fetchScoredLyricCandidatesStreaming(artist, title, album string, durationSe
 		resultsCh <- sourceResult{source: "netease", ne: neteaseLookup(artist, title, album)}
 	}()
 	go func() {
-		// qqMusicURL 本身也是一次网络请求(smartbox 搜索,6秒超时,按 artist|title|album
-		// 缓存)——挪进这个 goroutine 一起并发,不再是这个函数最前面的一步单独阻塞;
-		// resolveTrackEnrichment 那边为封面/跳转链接另外调用的那次会命中这里可能已经
-		// 写热的缓存,反过来也一样,谁先算出来谁写缓存,不要求哪边一定在前。
-		qqMid := qqMidFromURL(qqMusicURL(artist, title, album))
+		// qqMusicMatchCached 本身也是一次网络请求(smartbox 搜索,6秒超时,按
+		// artist|title|album 缓存)——挪进这个 goroutine 一起并发,不再是这个函数最
+		// 前面的一步单独阻塞;resolveTrackEnrichment 那边为封面/跳转链接另外调用
+		// qqMusicURL 时会命中这里可能已经写热的缓存,反过来也一样,谁先算出来谁写
+		// 缓存,不要求哪边一定在前(两者共用同一份 qqURLCache,见 qq.go)。
+		match := qqMusicMatchCached(artist, title, album)
+		qqMid := qqMidFromURL(match.url)
 		var lyr, yrc string
 		if qqMid != "" {
 			lyr = qqLyric(qqMid)
@@ -435,23 +447,26 @@ func fetchScoredLyricCandidatesStreaming(artist, title, album string, durationSe
 			// 见 qq.go 顶部注释。
 			yrc = qqQRCLyric(qqMid, artist, title, album, durationSecs)
 		}
-		resultsCh <- sourceResult{source: "qq", lyr: lyr, yrc: yrc}
+		resultsCh <- sourceResult{source: "qq", lyr: lyr, yrc: yrc, matchTitle: match.title, matchArtist: match.artist, matchAlbum: match.album}
 	}()
 	go func() {
 		r := kugouLyric(artist, title, durationSecs)
-		resultsCh <- sourceResult{source: "kugou", lyr: r.lrc, yrc: r.yrc}
+		resultsCh <- sourceResult{source: "kugou", lyr: r.lrc, yrc: r.yrc, matchTitle: r.title, matchArtist: r.artist, matchAlbum: r.album}
 	}()
 	go func() {
-		resultsCh <- sourceResult{source: "lrclib", lyr: lrclibLyric(artist, title, album)}
+		r := lrclibLyric(artist, title, album)
+		resultsCh <- sourceResult{source: "lrclib", lyr: r.lyrics, matchTitle: r.title, matchArtist: r.artist, matchAlbum: r.album}
 	}()
 	go func() {
 		r := musixmatchLyric(artist, title, durationSecs, features.LyricsTranslationLanguage)
-		resultsCh <- sourceResult{source: "musixmatch", lyr: r.lrc, yrc: r.yrc, tr: r.tr}
+		resultsCh <- sourceResult{source: "musixmatch", lyr: r.lrc, yrc: r.yrc, tr: r.tr, matchTitle: r.title, matchArtist: r.artist, matchAlbum: r.album, matchCover: r.cover}
 	}()
 
 	var ne neteaseInfo
-	var qqLyr, qqYRC, kugouLyr, kugouYRC, lrclibLyr string
-	var mxLyr, mxYRC, mxTr string
+	var qqLyr, qqYRC, qqTitle, qqArtist, qqAlbum string
+	var kugouLyr, kugouYRC, kugouTitle, kugouArtist, kugouAlbum string
+	var lrclibLyr, lrclibTitle, lrclibArtist, lrclibAlbum string
+	var mxLyr, mxYRC, mxTr, mxTitle, mxArtist, mxAlbum, mxCover string
 	// scoreAndSort 用目前为止已经到手的原始结果重新构建候选、算 corroboratedEndings、
 	// 打分、排序——每次有新结果到达都会重新跑一遍(而不是缓存增量),因为一份候选的
 	// corroborated 状态可能随后到的源变化(见上面 onUpdate 的注释),分数不是只增不改
@@ -459,19 +474,19 @@ func fetchScoredLyricCandidatesStreaming(artist, title, album string, durationSe
 	scoreAndSort := func() []scoredLyricCandidateResult {
 		var candidates []lyricCandidate
 		if ne.Lyrics != "" {
-			candidates = append(candidates, lyricCandidate{source: "netease", lyrics: ne.Lyrics, wordTimingYRC: ne.YRC, hasWordTiming: ne.YRC != ""})
+			candidates = append(candidates, lyricCandidate{source: "netease", lyrics: ne.Lyrics, wordTimingYRC: ne.YRC, hasWordTiming: ne.YRC != "", title: ne.Title, artist: ne.Artist, album: ne.Album, cover: ne.Cover})
 		}
 		if qqLyr != "" {
-			candidates = append(candidates, lyricCandidate{source: "qq", lyrics: qqLyr, wordTimingYRC: qqYRC, hasWordTiming: qqYRC != ""})
+			candidates = append(candidates, lyricCandidate{source: "qq", lyrics: qqLyr, wordTimingYRC: qqYRC, hasWordTiming: qqYRC != "", title: qqTitle, artist: qqArtist, album: qqAlbum})
 		}
 		if kugouLyr != "" {
-			candidates = append(candidates, lyricCandidate{source: "kugou", lyrics: kugouLyr, wordTimingYRC: kugouYRC, hasWordTiming: kugouYRC != ""})
+			candidates = append(candidates, lyricCandidate{source: "kugou", lyrics: kugouLyr, wordTimingYRC: kugouYRC, hasWordTiming: kugouYRC != "", title: kugouTitle, artist: kugouArtist, album: kugouAlbum})
 		}
 		if mxLyr != "" {
-			candidates = append(candidates, lyricCandidate{source: "musixmatch", lyrics: mxLyr, wordTimingYRC: mxYRC, hasWordTiming: mxYRC != ""})
+			candidates = append(candidates, lyricCandidate{source: "musixmatch", lyrics: mxLyr, wordTimingYRC: mxYRC, hasWordTiming: mxYRC != "", title: mxTitle, artist: mxArtist, album: mxAlbum, cover: mxCover})
 		}
 		if lrclibLyr != "" {
-			candidates = append(candidates, lyricCandidate{source: "lrclib", lyrics: lrclibLyr})
+			candidates = append(candidates, lyricCandidate{source: "lrclib", lyrics: lrclibLyr, title: lrclibTitle, artist: lrclibArtist, album: lrclibAlbum})
 		}
 		corroborated := corroboratedEndings(candidates)
 
@@ -483,6 +498,10 @@ func fetchScoredLyricCandidatesStreaming(artist, title, album string, durationSe
 				LyricsYRC:     c.wordTimingYRC,
 				HasWordTiming: c.hasWordTiming,
 				Score:         scoreLyricCandidate(artist, title, durationSecs, c, corroborated[c.source]),
+				Title:         c.title,
+				Artist:        c.artist,
+				Album:         c.album,
+				CoverURL:      c.cover,
 			}
 			switch c.source {
 			case "netease":
@@ -511,13 +530,13 @@ collect:
 			case "netease":
 				ne = r.ne
 			case "qq":
-				qqLyr, qqYRC = r.lyr, r.yrc
+				qqLyr, qqYRC, qqTitle, qqArtist, qqAlbum = r.lyr, r.yrc, r.matchTitle, r.matchArtist, r.matchAlbum
 			case "kugou":
-				kugouLyr, kugouYRC = r.lyr, r.yrc
+				kugouLyr, kugouYRC, kugouTitle, kugouArtist, kugouAlbum = r.lyr, r.yrc, r.matchTitle, r.matchArtist, r.matchAlbum
 			case "lrclib":
-				lrclibLyr = r.lyr
+				lrclibLyr, lrclibTitle, lrclibArtist, lrclibAlbum = r.lyr, r.matchTitle, r.matchArtist, r.matchAlbum
 			case "musixmatch":
-				mxLyr, mxYRC, mxTr = r.lyr, r.yrc, r.tr
+				mxLyr, mxYRC, mxTr, mxTitle, mxArtist, mxAlbum, mxCover = r.lyr, r.yrc, r.tr, r.matchTitle, r.matchArtist, r.matchAlbum, r.matchCover
 			}
 			onUpdate(ne, scoreAndSort())
 		case <-deadline:

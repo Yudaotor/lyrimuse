@@ -20,6 +20,12 @@ type neteaseInfo struct {
 	// 避免把本地"歌手A & 歌手B"的联合署名压缩成只剩其中一个)。用于统一同一歌手在历史
 	// 记录里时而中文时而英文、时而全大写的写法(如 PRINCE/Prince、David Tao/陶喆)。
 	Artist string
+	// Title/Album 是这首歌在网易云曲库里实际匹配到的歌名/专辑名——纯粹给"搜索候选
+	// 歌词"弹窗展示用(用户想知道这个候选具体对应哪首歌/哪张专辑,不是只看"netease"
+	// 这个来源名),不参与任何匹配/打分逻辑,取自 pick() 选中的 chosen(候选 neSong)、
+	// 本来就已经查到只是原来没往外传。跟 Artist 不同,这两个字段不做"是否单一歌手"
+	// 之类的过滤,原样如实展示这首歌在网易云曲库里的名字。
+	Title, Album string
 }
 
 // neteaseCache 是这个文件自己内部的网络请求结果缓存(避免短时间内重复打网易云的接口),
@@ -285,7 +291,11 @@ func resolveNeteaseInfo(artist, title, album string) neteaseInfo {
 		return neteaseInfo{} // 三种查询都没可信匹配 → 不给封面,别串错歌
 	}
 	id := chosen.ID
-	info := neteaseInfo{SongURL: fmt.Sprintf("https://music.163.com/song?id=%d", id)}
+	info := neteaseInfo{
+		SongURL: fmt.Sprintf("https://music.163.com/song?id=%d", id),
+		Title:   chosen.Name,
+		Album:   chosen.Album.Name,
+	}
 	// 只有本地(Apple Music)标签本身就是单一人名(没有 &/、/, 等分隔符)时,才尝试用
 	// NetEase 这条数据统一拼写:pick() 选中候选已经证明其中恰好一位通过 artistMatches 核实
 	// 等于本地这唯一一人,复用那次核实结果统一这一位的写法即可。

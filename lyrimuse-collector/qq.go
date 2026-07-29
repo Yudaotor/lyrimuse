@@ -23,7 +23,7 @@ import (
 
 var (
 	qqURLMu    sync.Mutex
-	qqURLCache = map[string]string{}
+	qqURLCache = map[string]qqMusicMatch{}
 )
 
 // qqMusicURL returns the QQ Music song-detail URL for a track, resolved via
@@ -31,8 +31,26 @@ var (
 // artist|title|album; only real song URLs are cached — the search-link fallback
 // is not, so a later poll retries exact resolution.
 func qqMusicURL(artist, title, album string) string {
+	m := qqMusicMatchCached(artist, title, album)
+	if m.url != "" {
+		return m.url
+	}
 	if title == "" {
 		return ""
+	}
+	// smartbox 无结果/无标题匹配时，退回 QQ 搜索链接：桌面能打开搜索页、绝不串到错歌
+	// (用户自己选)。不缓存，下次提交再试精确解析。
+	return "https://y.qq.com/n/ryqq/search?w=" + neturl.QueryEscape(artist+" "+title)
+}
+
+// qqMusicMatchCached 是 qqMusicURL 的富信息版本——"搜索候选歌词"弹窗展示每条候选
+// 实际匹配到的歌名/歌手/专辑时(见 enrich.go 的 fetchScoredLyricCandidatesStreaming)
+// 需要这些字段,不能只要一个 URL 字符串。跟 qqMusicURL 共用同一份缓存(按
+// artist|title|album 存完整 qqMusicMatch,而不是只存 url 字符串)——不管从哪个入口
+// 先查到,另一个入口都能直接命中缓存,不会重复发两遍 smartbox/专辑请求。
+func qqMusicMatchCached(artist, title, album string) qqMusicMatch {
+	if title == "" {
+		return qqMusicMatch{}
 	}
 	key := artist + "|" + title + "|" + album
 	qqURLMu.Lock()
@@ -42,15 +60,13 @@ func qqMusicURL(artist, title, album string) string {
 	}
 	qqURLMu.Unlock()
 
-	if url := resolveQQMusicURL(artist, title, album); url != "" {
+	m := resolveQQMusicMatch(artist, title, album)
+	if m.url != "" {
 		qqURLMu.Lock()
-		qqURLCache[key] = url
+		qqURLCache[key] = m
 		qqURLMu.Unlock()
-		return url
 	}
-	// smartbox 无结果/无标题匹配时，退回 QQ 搜索链接：桌面能打开搜索页、绝不串到错歌
-	// (用户自己选)。不缓存，下次提交再试精确解析。
-	return "https://y.qq.com/n/ryqq/search?w=" + neturl.QueryEscape(artist+" "+title)
+	return m
 }
 
 // qqSmartboxItem is one suggestion from smartbox_new.fcg (mid + song name +
@@ -273,14 +289,26 @@ func qqArtistOK(strict bool, singer, artist string) bool {
 	return looseContains(singer, artist)
 }
 
+// qqMusicMatch 是 resolveQQMusicURL 选中同一个 mid 时顺带就已经拿到、原来直接丢掉的
+// 匹配信息——title/artist 来自 smartbox 搜索结果本身(it.Name/it.Singer),album 来自
+// (如果查询带了专辑名)顺带查过的 qqSongAlbum(mid)。给"搜索候选歌词"弹窗展示用,不
+// 参与任何匹配/打分逻辑。
+type qqMusicMatch struct {
+	url, title, artist, album string
+}
+
 func resolveQQMusicURL(artist, title, album string) string {
+	return resolveQQMusicMatch(artist, title, album).url
+}
+
+func resolveQQMusicMatch(artist, title, album string) qqMusicMatch {
 	items := qqSmartbox(artist + " " + title)
 	if len(items) == 0 {
 		items = qqSmartbox(title) // 歌手名跨平台不一致时,退一步只按标题再搜
 	}
 	type qqCand struct {
-		mid   string
-		exact bool // name 与 title loose 相等 → 规范版,避开 纯音乐/串烧/live 变体
+		mid, title, artist string
+		exact              bool // name 与 title loose 相等 → 规范版,避开 纯音乐/串烧/live 变体
 	}
 	// strict 档用 artistMatches(要求逗号/&等分隔的每一段都精确相等);strict 一无所获时
 	// 放宽成 looseContains 重试——但绝不完全跳过校验:完全不查歌手会让标题撞上、歌手完全
@@ -292,7 +320,7 @@ func resolveQQMusicURL(artist, title, album string) string {
 			if it.Mid == "" || !looseContains(it.Name, title) || !qqArtistOK(strict, it.Singer, artist) {
 				continue
 			}
-			cs = append(cs, qqCand{mid: it.Mid, exact: normLoose(it.Name) == normLoose(title)})
+			cs = append(cs, qqCand{mid: it.Mid, title: it.Name, artist: it.Singer, exact: normLoose(it.Name) == normLoose(title)})
 		}
 		return cs
 	}
@@ -301,17 +329,18 @@ func resolveQQMusicURL(artist, title, album string) string {
 		cands = collect(false) // artistMatches 太严格(跨平台歌手名写法不同)时放宽成 looseContains,但仍要求歌手名沾边
 	}
 	if len(cands) == 0 {
-		return "" // 无标题匹配 → 上层退搜索链接,绝不给错歌
+		return qqMusicMatch{} // 无标题匹配 → 上层退搜索链接,绝不给错歌
 	}
 	// 有专辑名 → 给前几条补专辑、按 albumScore 去重。采集器一首歌只解析一次,
 	// 频次低;补专辑失败(反爬/超时)时降级到按名字选,不影响出具体歌链接。
 	if album != "" {
-		bestMid, bestScore, bestExact := "", 0, false
+		bestMid, bestTitle, bestArtist, bestAlbum, bestScore, bestExact := "", "", "", "", 0, false
 		for i, c := range cands {
 			if i >= 4 {
 				break
 			}
-			sc := albumScore(qqSongAlbum(c.mid), album)
+			candAlbum := qqSongAlbum(c.mid)
+			sc := albumScore(candAlbum, album)
 			if sc == 0 && !c.exact {
 				continue // 专辑对不上、标题也非精确同名 → 不够格参与本轮选择
 			}
@@ -319,20 +348,21 @@ func resolveQQMusicURL(artist, title, album string) string {
 			// 同专辑里一首标题超串/子串的非规范版(live/伴奏等)靠专辑分打平甚至反超真正
 			// 同名曲目——历史上这类打分边界条件已经在 albumScore 上出过一次真实 bug。
 			if bestMid == "" || (c.exact && !bestExact) || (c.exact == bestExact && sc > bestScore) {
-				bestMid, bestScore, bestExact = c.mid, sc, c.exact
+				bestMid, bestTitle, bestArtist, bestAlbum, bestScore, bestExact = c.mid, c.title, c.artist, candAlbum, sc, c.exact
 			}
 		}
 		if bestMid != "" {
-			return qqSongURL(bestMid)
+			return qqMusicMatch{url: qqSongURL(bestMid), title: bestTitle, artist: bestArtist, album: bestAlbum}
 		}
 	}
 	// 无专辑 / 补专辑没命中 → 精确同名优先,否则第一条(smartbox 首条通常是规范版)。
 	for _, c := range cands {
 		if c.exact {
-			return qqSongURL(c.mid)
+			return qqMusicMatch{url: qqSongURL(c.mid), title: c.title, artist: c.artist}
 		}
 	}
-	return qqSongURL(cands[0].mid)
+	first := cands[0]
+	return qqMusicMatch{url: qqSongURL(first.mid), title: first.title, artist: first.artist}
 }
 
 func qqSongURL(mid string) string {
