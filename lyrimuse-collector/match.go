@@ -87,19 +87,31 @@ func isCreditOnlyLRC(lrc string) bool {
 	return nonCredit < 3
 }
 
-// lastLRCTimestampSecs 取 LRC 里最后一个 [mm:ss.xx] 时间戳、换算成秒。frac 部分可能是
-// 两位(百分之几秒)或三位(毫秒),按其实际代表的小数位数换算,不假设固定是哪一种。
+// lastLRCTimestampSecs 取 LRC 里最后一个"真的带歌词正文"的 [mm:ss.xx] 时间戳、换算成
+// 秒——不能简单取整份文本里最后一个时间戳:有些 LRC 会在真正唱完之后再补一行空白时间戳
+// 单独标记"这首歌到这里才算完"(常见于给尾奏占位),这种行没有对应的歌词正文,选它当
+// "最后一句歌词的时间"纯属巧合对上时长,不能算数(2026-07-30 实测坐实:某候选正是靠着
+// 这样一行空白尾行,巧合命中时长评分的最高档,反而反超了末尾真的有歌词、但差了几个百分
+// 点的候选)。逐行从后往前找,跳过"去掉时间戳后剩余文本为空"的行。frac 部分可能是两位
+// (百分之几秒)或三位(毫秒),按其实际代表的小数位数换算,不假设固定是哪一种。
 func lastLRCTimestampSecs(lrc string) (float64, bool) {
-	matches := lrcTimestampCaptureRe.FindAllStringSubmatch(lrc, -1)
-	if len(matches) == 0 {
-		return 0, false
+	lines := strings.Split(lrc, "\n")
+	for i := len(lines) - 1; i >= 0; i-- {
+		matches := lrcTimestampCaptureRe.FindAllStringSubmatch(lines[i], -1)
+		if len(matches) == 0 {
+			continue
+		}
+		if strings.TrimSpace(lrcTimestampRe.ReplaceAllString(lines[i], "")) == "" {
+			continue
+		}
+		m := matches[len(matches)-1]
+		mm, _ := strconv.Atoi(m[1])
+		ss, _ := strconv.Atoi(m[2])
+		frac, _ := strconv.Atoi(m[3])
+		fracSecs := float64(frac) / math.Pow(10, float64(len(m[3])))
+		return float64(mm*60+ss) + fracSecs, true
 	}
-	m := matches[len(matches)-1]
-	mm, _ := strconv.Atoi(m[1])
-	ss, _ := strconv.Atoi(m[2])
-	frac, _ := strconv.Atoi(m[3])
-	fracSecs := float64(frac) / math.Pow(10, float64(len(m[3])))
-	return float64(mm*60+ss) + fracSecs, true
+	return 0, false
 }
 
 // lyricCandidate 是某个歌词源解析出的一份候选结果,连同来源标记。
@@ -191,12 +203,14 @@ func scoreLyricCandidate(localArtist, localTitle string, durationSecs float64, c
 		// 错杀真实但尾奏长的候选。
 		ratio := math.Abs(last-durationSecs) / durationSecs
 		switch {
-		case ratio <= 0.03:
-			score += 1000
-		case ratio <= 0.08:
-			score += 600
 		case ratio <= 0.25:
-			score += 200
+			// 连续衰减,而不是硬分档——原来 3%/8%/25% 三级硬边界会让"差一点点"的候选
+			// 骤然掉一整档(2026-07-30 实测坐实:某候选末尾时间戳只是恰好比 8% 这道槛
+			// 多差了 0.32 个百分点,就从 600 分直接跌到 200 分,反被时长证据其实更弱、
+			// 只是巧合压线拿到高档的另一个候选反超)。0% 差距封顶 1000 分,线性降到
+			// 25% 差距时的 100 分——跟下面 corroborated 那档在边界处刚好平滑衔接,
+			// 不会在 25% 这个点上又制造一次新的悬崖。
+			score += 100 + int(900*(1-ratio/0.25))
 		case corroborated:
 			score += 100 // 时长差超阈值,但有别的独立源印证末尾时间点,信任交叉印证而非时长
 		default:
