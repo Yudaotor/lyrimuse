@@ -448,7 +448,7 @@ struct LyricsManagerView: View {
         .sheet(isPresented: $showSearchSheet) {
             // 采纳候选直接保存,不需要再手动点"保存修改"——避免让人误以为选了就已经
             // 存上了,结果只是填进了编辑框,还得再点一下保存才真正落盘。
-            LyricsSearchSheet(artist: summary.artist, title: summary.title, album: summary.album) { candidate in
+            LyricsSearchSheet(artist: summary.artist, title: summary.title, album: summary.album, currentSource: summary.lyricsSource) { candidate in
                 editedLyrics = candidate.lyrics
                 editedTr = candidate.lyricsTr
                 editedRoma = candidate.lyricsRoma

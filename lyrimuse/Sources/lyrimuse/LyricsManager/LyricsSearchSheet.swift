@@ -15,6 +15,11 @@ struct LyricsSearchSheet: View {
     let originalArtist: String
     let originalTitle: String
     let originalAlbum: String
+    // 这首歌眼下实际生效的歌词来源(EnrichCacheStore.Summary.lyricsSource,比如"qq")——
+    // 默认选中它,而不是"搜索结果里谁先到就选谁":2026-07-30 用户实测反馈,默认选中的
+    // 候选应该是眼下正在用的这一份,不是随便哪个候选,不然明明已经在用 QQ 音乐的歌词,
+    // 打开这个弹窗却默认高亮着完全不相关的 kugou,容易误导成"当前用的就是这个"。
+    let currentSource: String?
     let onApply: (LyricsSearchService.Candidate) -> Void
 
     @Environment(\.dismiss) private var dismiss
@@ -29,16 +34,36 @@ struct LyricsSearchSheet: View {
     @State private var isSearching = false
     @State private var loadError: String?
     @State private var selectedSource: String?
+    // 候选是陆续到达的(见下面 candidates 那条注释),currentSource 对应的候选不一定在
+    // 第一批就到——这个 flag 标记"selectedSource 现在的值是自动选出来的,还是用户自己
+    // 点的",只要还是自动选的,每来一批新候选就重新评估一次能不能换成 currentSource;
+    // 用户一旦手动点过任意一行就永远置为 true,此后不管后面来什么候选都不再自动改选中项
+    // (原有设计的"不抢用户已经手动点开看的那个候选"这条原则不能因为这次改动而失效)。
+    @State private var userPickedSource = false
+
+    // List(selection:) 直接绑 $selectedSource 拿不到"这次赋值是用户点的还是代码自己设的"
+    // 这个区分——包一层 Binding,只有真正经这层写回的(等价于用户在 List 里点了一行)
+    // 才会把 userPickedSource 标记为 true。
+    private var selectedSourceBinding: Binding<String?> {
+        Binding(
+            get: { selectedSource },
+            set: { newValue in
+                selectedSource = newValue
+                userPickedSource = true
+            }
+        )
+    }
 
     // 可编辑的查询关键词,初始值取自 originalXxx——默认就是"现有逻辑"那套查询。
     @State private var artist: String
     @State private var title: String
     @State private var album: String
 
-    init(artist: String, title: String, album: String, onApply: @escaping (LyricsSearchService.Candidate) -> Void) {
+    init(artist: String, title: String, album: String, currentSource: String?, onApply: @escaping (LyricsSearchService.Candidate) -> Void) {
         self.originalArtist = artist
         self.originalTitle = title
         self.originalAlbum = album
+        self.currentSource = currentSource
         self.onApply = onApply
         self._artist = State(initialValue: artist)
         self._title = State(initialValue: title)
@@ -137,7 +162,7 @@ struct LyricsSearchSheet: View {
                     .padding(.vertical, 6)
                 }
                 HSplitView {
-                    List(candidates, selection: $selectedSource) { c in
+                    List(candidates, selection: selectedSourceBinding) { c in
                         candidateRow(c)
                     }
                     .frame(minWidth: 250, idealWidth: 280, maxWidth: 320)
@@ -273,15 +298,23 @@ struct LyricsSearchSheet: View {
         candidates = []
         loadError = nil
         selectedSource = nil
+        userPickedSource = false
         isSearching = true
         do {
             try await LyricsSearchService.shared.search(artist: artist, title: title, album: album) { updated in
                 candidates = updated
-                // 只在第一次收到候选时选中"当前最靠前"的那个,后续更新哪怕重新排序也不
-                // 抢用户已经手动点开看的那个候选——同一个 source 不会在后续更新里消失
-                // (候选只增不减,见 collector 侧 scoreAndSort 的注释),只是分数/排序可能
-                // 变,selectedSource 指向的行还在,不会失效。
-                if selectedSource == nil {
+                // 默认项优先选"这首歌眼下实际生效的来源"(currentSource)——候选是陆续
+                // 到达的,currentSource 对应的那条不一定在第一批就到,所以只要用户还没
+                // 手动点过(userPickedSource),每来一批新候选都重新评估一次,等它一出现
+                // 就切过去,不是只在第一次到达时判断一锤子买卖。用户已经手动点过之后这里
+                // 整段直接跳过,不会倒回去抢用户已经选定的行(原有设计的这条原则不变)。
+                // currentSource 为空(比如这首歌还没有任何已生效来源)或它对应的候选
+                // 始终没搜到时,退回"目前排最前"兜底,且只兜底一次(已经选中过东西就不再
+                // 因为"还是没等到 currentSource"而重新改选)。
+                guard !userPickedSource else { return }
+                if let currentSource, updated.contains(where: { $0.source == currentSource }) {
+                    selectedSource = currentSource
+                } else if selectedSource == nil {
                     selectedSource = updated.first?.source
                 }
             }
