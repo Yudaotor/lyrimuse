@@ -84,7 +84,9 @@ func sourceDisplayName(_ source: String) -> String {
 private enum LyricsListColumns {
     static let artistWidth: CGFloat = 96
     static let albumWidth: CGFloat = 110
-    static let sourceWidth: CGFloat = 68
+    // 68pt 只够放得下裸文字,换成徽章样式(见 SourceBadge)之后要留出胶囊背景的内边距,
+    // 不然"网易云音乐"这种四字来源会被截断,加宽到 84pt。
+    static let sourceWidth: CGFloat = 84
 }
 
 // 歌词管理窗口:浏览目前 collector 缓存了哪些歌的歌词、来源是什么,支持手动纠正内容、
@@ -638,6 +640,33 @@ struct LyricsManagerView: View {
     }
 }
 
+// 列表"来源"列的展示——2026-07-30 之前是裸文字直接染色(见 sourceColor),在这种密集
+// 列表里五颜六色的整词文字看着比较粗糙,跟这个窗口别处已经在用的胶囊徽章风格
+// (InfoChip,详情页顶部那几个"QQ音乐/逐字时间轴"小标签)不一致。改成同一路子的迷你
+// 胶囊徽章——只是详情页 InfoChip 是给单独一行的大标签设计的(图标+文字+较大内边距),
+// 这里要塞进列表一整列、还要跟其它 9 行对齐,用更紧凑的内边距/字号,不带图标(色块本身
+// 已经足够跟旁边几种来源区分,加图标在这么窄的列里反而显得挤)。
+private struct SourceBadge: View {
+    let source: String
+    // 行被选中时系统会铺一层高饱和度蓝底(backgroundProminence 变成 .increased)——固定的
+    // 品牌色(浅绿/浅红背景+同色系文字)跟这层蓝底混在一起,深浅都对不上,糊成一团看不清
+    // (2026-07-30 用户实测反馈)。跟 AccountLinkingTab.swift 的 DestinationStatusLabel
+    // 同一个思路:选中时退回系统的 .primary(会跟着蓝底自动换成白色,天然清晰),不铺蓝底
+    // 的正常状态才用来源自己的品牌色,保持"一眼看出是哪个来源"这个设计意图不变。
+    @Environment(\.backgroundProminence) private var backgroundProminence
+    private var dimmed: Bool { backgroundProminence == .increased }
+
+    var body: some View {
+        Text(sourceDisplayName(source))
+            .font(.caption2.weight(.medium))
+            .lineLimit(1)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .foregroundStyle(dimmed ? .primary : sourceColor(source))
+            .background(dimmed ? Color.primary.opacity(0.18) : sourceColor(source).opacity(0.12), in: Capsule())
+    }
+}
+
 private struct InfoChip: View {
     let icon: String
     let text: String
@@ -700,10 +729,7 @@ private struct LyricsManagerRow: View {
                 .lineLimit(1)
                 .frame(width: LyricsListColumns.albumWidth, alignment: .leading)
 
-            Text(sourceDisplayName(summary.lyricsSource))
-                .font(.caption)
-                .foregroundStyle(sourceColor(summary.lyricsSource))
-                .lineLimit(1)
+            SourceBadge(source: summary.lyricsSource)
                 .frame(width: LyricsListColumns.sourceWidth, alignment: .leading)
         }
         .padding(.vertical, 3)
