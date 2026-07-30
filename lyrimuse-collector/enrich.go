@@ -233,7 +233,17 @@ func resolveTrackEnrichment(artist, title, album string, durationSecs float64) e
 		e.CoverSource = "netease"
 	}
 	e.NeteaseURL = ne.SongURL
-	e.CanonicalArtist = ne.Artist
+	// canonical_artist 解析链路,依次尝试、命中就用:
+	// ①MusicBrainz(按歌手整体查、按歌手整体缓存,不受"这一首曲目在网易云/QQ 搜不搜
+	//   得到"影响,见 musicbrainz.go 顶部注释——2026-07-30 加,修的就是同一个歌手有的
+	//   曲目匹配成功、有的失败这个问题);
+	// ②网易云本次搜索这首歌带回的歌手名(ne.Artist,按曲目匹配,老逻辑);
+	// ③QQ 音乐(同样按曲目匹配,只在网易云没给封面时才会去查,见下面);
+	// ④手工登记的已知艺名表(knownArtistAlias)。
+	e.CanonicalArtist = canonicalArtistViaMusicBrainz(artist)
+	if e.CanonicalArtist == "" {
+		e.CanonicalArtist = ne.Artist
+	}
 	if e.CoverURL == "" {
 		// 网易云官方曲库缺失该艺人(版权下架,如周杰伦)时,pick() 已经拒绝了仿冒号候选、
 		// 宁可返回空也不给错误封面(见 artistMatches 注释)。退回 QQ 音乐找同一首歌的
@@ -249,7 +259,7 @@ func resolveTrackEnrichment(artist, title, album string, durationSecs float64) e
 		}
 	}
 	if e.CanonicalArtist == "" {
-		// NetEase/QQ 的跨服务匹配都没能给出统一歌手名(常见于 title/album 本身就跨语言
+		// MusicBrainz/网易云/QQ 都没能给出统一歌手名(常见于 title/album 本身就跨语言
 		// 对不上文本的 feat. 曲目,见 artistAliasTable 注释)——用手工登记的已知艺名表兜底。
 		e.CanonicalArtist = knownArtistAlias(artist)
 	}

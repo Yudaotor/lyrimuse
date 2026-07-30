@@ -87,6 +87,9 @@ func main() {
 	features = loadFeatureFlags(filepath.Join(filepath.Dir(*cfgPath), clientName+"-features.json"))
 	// 曲目元信息缓存落盘在 config 同目录，重启后不重解析同一首歌。
 	loadEnrichCache(filepath.Join(filepath.Dir(*cfgPath), clientName+"-enrich-cache.json"))
+	// 按歌手(不是按曲目)缓存的 MusicBrainz 中文别名查询结果,同目录下单独一份文件——
+	// 见 musicbrainz.go 顶部注释。
+	loadArtistAliasCache(filepath.Join(filepath.Dir(*cfgPath), clientName+"-artist-alias-cache.json"))
 	// 歌词部分(lyrics/lyrics_tr/lyrics_roma/lyrics_yrc/lyrics_source/manual_lyrics)以
 	// lyrics/ 文件夹为权威源,不只是 enrichCache 的只读存档——顺序很重要:先
 	// importLyricsFromFiles() 用文件夹内容覆盖刚从 JSON 缓存加载出来的内存态(文件
