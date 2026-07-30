@@ -3,6 +3,7 @@
 "%@ / %@ 首" = "%@ / %@ songs";
 "在 Dock 中显示" = "Show in Dock";
 "关于" = "About";
+"关于 Lyrimuse" = "About Lyrimuse";
 "版本 %@" = "Version %@";
 "跟着 Apple Music 播放，实时显示逐字同步歌词" = "Real-time synced lyrics that follow Apple Music playback";
 "检查更新" = "Check for Updates";
@@ -34,6 +35,7 @@
 "%@ 字" = "%@ characters";
 "%@pt" = "%@pt";
 "快捷键" = "Keyboard Shortcuts";
+"至少需要搭配 ⌘/⌥/⌃ 中一个（功能键、媒体键除外）。" = "Must include at least one of ⌘/⌥/⌃ (function and media keys excepted).";
 "显示/隐藏悬浮歌词" = "Show/Hide Floating Lyrics";
 "锁定/解锁位置" = "Lock/Unlock Position";
 "打开歌词管理" = "Open Lyrics Manager";
@@ -43,6 +45,7 @@
 "上一首" = "Previous Track";
 "点击录制" = "Record Shortcut";
 "请按下快捷键…" = "Type Shortcut…";
+"清除快捷键" = "Clear Shortcut";
 "歌词提前" = "Advance Lyrics";
 "歌词延后" = "Delay Lyrics";
 "歌词时间轴" = "Lyrics Timing";
@@ -200,7 +203,7 @@
 "控制要不要在线解析歌词——关闭后，第一次播放的新歌不会再去查下面「歌词来源」里的这些平台，只用本地已经缓存过的结果（如果有）。「歌词来源」「匹配算法」这两组设置都只在这个开关开启时才有意义。" = "Controls whether lyrics are looked up online. When off, newly played songs won't be checked against the platforms listed under \"Lyrics Sources\" below — only locally cached results (if any) will be used. The \"Lyrics Sources\" and \"Matching Algorithm\" settings only matter while this is on.";
 "推送提醒" = "Push Alerts";
 "推送设置" = "Push Settings";
-"提前解析同专辑其它曲目（封面+歌词）" = "Prefetch Other Tracks in the Same Album (Cover + Lyrics)";
+"提前解析同专辑其它曲目" = "Prefetch Other Tracks in the Same Album";
 "提醒开关" = "Alert Toggles";
 "搜索候选歌词" = "Search for Lyrics";
 "搜索失败: %@" = "Search failed: %@";
@@ -311,7 +314,7 @@
 "连上同一个 Last.fm 账号，可以双向同步收听记录，还能解锁「每周听歌小结」「每日听歌报告」推送。不连接完全不影响悬浮歌词，随时可以之后在设置里配置。" = "The same Last.fm account can sync your listening history both ways, and unlocks the \"Weekly Listening Digest\" and \"Daily Listening Report\" pushes. Skipping this has no effect on the floating lyrics — you can always set it up later in Settings.";
 "现在去设置里连接" = "Connect Now in Settings";
 "连接信息" = "Connection Info";
-"退出" = "Quit";
+"退出 Lyrimuse" = "Quit Lyrimuse";
 "退出码 %@" = "Exit code %@";
 "选择" = "Choose";
 "选择左侧一首歌" = "Select a Song on the Left";

@@ -222,14 +222,13 @@ private struct LyricsSettingsTab: View {
                         HelpButton(text: L10n.t("控制要不要在线解析歌词——关闭后，第一次播放的新歌不会再去查下面「歌词来源」里的这些平台，只用本地已经缓存过的结果（如果有）。「歌词来源」「匹配算法」这两组设置都只在这个开关开启时才有意义。"))
                     }
                 }
-                // 文案强调"（封面+歌词）"——这个开关也会预取封面,不只是歌词;"解析"
-                // (而非"预取")避免被误读成预先加载音频本身,这个开关从不碰音频。
+                // "解析"(而非"预取")避免被误读成预先加载音频本身,这个开关从不碰音频。
                 Toggle(isOn: Binding(
                     get: { features.albumPrefetch },
                     set: { features.albumPrefetch = $0; Task { await features.save() } }
                 )) {
                     HStack(spacing: 4) {
-                        Text(L10n.t("提前解析同专辑其它曲目（封面+歌词）"))
+                        Text(L10n.t("提前解析同专辑其它曲目"))
                         HelpButton(text: L10n.t("换到一首歌时，如果它属于某张专辑，会顺带在后台把同专辑里还没解析过的其它曲目也提前解析——封面无条件都会解析，歌词是否被预取取决于上面的「歌词在线匹配」开关是否开启。"))
                     }
                 }
@@ -1116,7 +1115,7 @@ private struct ShortcutsSettingsTab: View {
 
     var body: some View {
         Form {
-            Section(L10n.t("快捷键")) {
+            Section {
                 ShortcutRecorder(L10n.t("显示/隐藏悬浮歌词"), name: .toggleOverlay)
                 ShortcutRecorder(L10n.t("锁定/解锁位置"), name: .toggleLockPosition)
                 ShortcutRecorder(L10n.t("打开歌词管理"), name: .openLyricsManagerHotkey)
@@ -1132,6 +1131,15 @@ private struct ShortcutsSettingsTab: View {
                 ), in: 0.05...2.0, step: 0.05) {
                     Text("\(L10n.t("歌词时间轴步长"))：\(AppSettings.formattedSeconds(ms: settings.lyricsOffsetStepMs))\(L10n.t("秒"))")
                 }
+            } header: {
+                Text(L10n.t("快捷键"))
+            } footer: {
+                // 录制时单独按字母/数字/符号键会被拒绝(响一声提示音,没有任何文字提示)
+                // ——这条规则照抄 KeyboardShortcuts 库自带 Recorder 的原有行为(见
+                // ShortcutRecorder.swift 里 handle(_:) 的注释),不是这次改动新引入的
+                // 限制,但一直没有地方说明,2026-07-30 用户实测顺着"只有组合键才成功"
+                // 这个疑问反馈过来,补一句说明。
+                Text(L10n.t("至少需要搭配 ⌘/⌥/⌃ 中一个（功能键、媒体键除外）。"))
             }
 
             Section(L10n.t("播放控制（附加功能）")) {

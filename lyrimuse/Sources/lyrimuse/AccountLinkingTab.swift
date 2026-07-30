@@ -305,10 +305,6 @@ struct AccountLinkingTab: View {
     }
     @State private var missingPrereqAlert: MissingPrereqAlert?
 
-    private var status: DestinationStatus {
-        destinationStatus(for: destination, config: config, lastfmConnect: lastfmConnect)
-    }
-
     var body: some View {
         VStack(spacing: 0) {
             ScrollView {
@@ -453,10 +449,7 @@ struct AccountLinkingTab: View {
     private var detailHeader: some View {
         HStack(spacing: 12) {
             accountIconBadge(destination, size: 36, cornerRadius: 8)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(destination.title).font(.title3.weight(.semibold))
-                status.label.font(.caption)
-            }
+            Text(destination.title).font(.title3.weight(.semibold))
         }
     }
 

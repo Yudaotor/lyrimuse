@@ -160,11 +160,21 @@ struct MenuBarMenu: View {
         } label: {
             Label(L10n.t("检查更新"), systemImage: "arrow.triangle.2.circlepath")
         }
+        // 跟"设置…"同一个坑,同一个解法:先激活 App 再打开——直接跳到设置窗口的
+        // "关于"分类,复用 Onboarding 的 Last.fm 步骤已经在用的同一套一次性信箱
+        // (AppActions.pendingSettingsSelection,见该文件注释),不用再点一次侧边栏。
+        Button {
+            NSApp.activate(ignoringOtherApps: true)
+            AppActions.shared.pendingSettingsSelection = .tab(.about)
+            openSettings()
+        } label: {
+            Label(L10n.t("关于 Lyrimuse"), systemImage: "info.circle")
+        }
         Divider()
         Button {
             NSApplication.shared.terminate(nil)
         } label: {
-            Label(L10n.t("退出"), systemImage: "rectangle.portrait.and.arrow.right")
+            Label(L10n.t("退出 Lyrimuse"), systemImage: "rectangle.portrait.and.arrow.right")
         }
         } // Group
         .labelStyle(.titleAndIcon)

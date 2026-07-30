@@ -24,6 +24,16 @@ final class ShortcutRecorderButton: NSButton {
     private var isRecording = false {
         didSet { refreshTitle() }
     }
+    // 清除按钮(见下面 ShortcutRecorderContainerView)的显隐跟这个按钮的标题在
+    // refreshTitle() 里同一时刻一起刷新——2026-07-30 曾经改成用 SwiftUI
+    // @State + NotificationCenter 广播驱动清除按钮的显隐,结果在这个 Form
+    // (.formStyle(.grouped) 在 macOS 上是拿 List 实现的,行会被复用)里触发
+    // 了行视图被错误复用:实测坐实"打开歌词管理"往后几行的 NSButton 全部
+    // 报出同一个(是前一行的)位置,点哪一行都可能点到别的快捷键上,原来已经
+    // 录好的组合还被误清空。根源是这个文件最上面就选定的思路——纯 NSView
+    // 命令式控件,不吃 SwiftUI 那套响应式重渲染——清除按钮也必须照这个思路
+    // 做,不能引入任何 @State/Combine 订阅,否则又会把这条列表重新变得不稳定。
+    weak var clearButton: NSButton?
 
     init(name: KeyboardShortcuts.Name) {
         self.shortcutName = name
@@ -128,26 +138,83 @@ final class ShortcutRecorderButton: NSButton {
         return nil
     }
 
+    @objc func clearShortcut() {
+        KeyboardShortcuts.setShortcut(nil, for: shortcutName)
+        refreshTitle()
+    }
+
     func refreshTitle() {
         if isRecording {
             title = L10n.t("请按下快捷键…")
+            clearButton?.isHidden = true
         } else if let shortcut = KeyboardShortcuts.getShortcut(for: shortcutName) {
             title = "\(shortcut)"
+            clearButton?.isHidden = false
         } else {
             title = L10n.t("点击录制")
+            clearButton?.isHidden = true
         }
     }
+}
+
+// 库自带的 Recorder 已经录进一个快捷键后,右侧会带一个可点的"×"用来清除;这里的替代
+// 实现(ShortcutRecorderButton)原来只在"点击进入录制状态后按 Delete/Backspace"这一步
+// 隐藏手势里做了清除(见上面 handle(_:) 里那个分支),没有任何可见控件——2026-07-30
+// 用户实测反馈"没有清空这种按钮，现在没办法移除",补一个同样位置的"×"按钮。跟录制
+// 按钮放进同一个 NSStackView,由 refreshTitle() 统一决定显隐,不用 SwiftUI
+// @State/NotificationCenter 驱动(见 ShortcutRecorderButton.clearButton 注释,这条
+// 路线已经在这个 Form 里踩过"行被错误复用"的坑)。
+private final class ShortcutRecorderContainerView: NSView {
+    let recordButton: ShortcutRecorderButton
+
+    init(name: KeyboardShortcuts.Name) {
+        let recordButton = ShortcutRecorderButton(name: name)
+        self.recordButton = recordButton
+
+        let clearButton = NSButton(
+            image: NSImage(systemSymbolName: "xmark.circle.fill", accessibilityDescription: L10n.t("清除快捷键"))!,
+            target: recordButton,
+            action: #selector(ShortcutRecorderButton.clearShortcut)
+        )
+        clearButton.isBordered = false
+        clearButton.bezelStyle = .regularSquare
+        clearButton.contentTintColor = .secondaryLabelColor
+        clearButton.toolTip = L10n.t("清除快捷键")
+        recordButton.clearButton = clearButton
+
+        super.init(frame: .zero)
+
+        let stack = NSStackView(views: [recordButton, clearButton])
+        stack.orientation = .horizontal
+        stack.spacing = 6
+        stack.alignment = .centerY
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(stack)
+        NSLayoutConstraint.activate([
+            stack.leadingAnchor.constraint(equalTo: leadingAnchor),
+            stack.trailingAnchor.constraint(equalTo: trailingAnchor),
+            stack.topAnchor.constraint(equalTo: topAnchor),
+            stack.bottomAnchor.constraint(equalTo: bottomAnchor),
+            clearButton.widthAnchor.constraint(equalToConstant: 16),
+            clearButton.heightAnchor.constraint(equalToConstant: 16),
+        ])
+
+        recordButton.refreshTitle()
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 }
 
 private struct ShortcutRecorderRepresentable: NSViewRepresentable {
     let name: KeyboardShortcuts.Name
 
-    func makeNSView(context: Context) -> ShortcutRecorderButton {
-        ShortcutRecorderButton(name: name)
+    func makeNSView(context: Context) -> ShortcutRecorderContainerView {
+        ShortcutRecorderContainerView(name: name)
     }
 
-    func updateNSView(_ nsView: ShortcutRecorderButton, context: Context) {
-        nsView.refreshTitle()
+    func updateNSView(_ nsView: ShortcutRecorderContainerView, context: Context) {
+        nsView.recordButton.refreshTitle()
     }
 }
 
