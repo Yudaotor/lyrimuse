@@ -346,6 +346,7 @@ var artistAliasTable = map[string]string{
 	"jason chan": "陈柏宇",
 	"kun":        "蔡徐坤",
 	"dean ting":  "丁世光",
+	"crowd lu":   "卢广仲",
 }
 
 // knownArtistAlias 只在 NetEase/QQ 都没能给出 canonical_artist 时,由
