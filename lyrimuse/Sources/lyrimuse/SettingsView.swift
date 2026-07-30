@@ -16,13 +16,18 @@ import KeyboardShortcuts
 // 参数——唯一的例外是某个开关因为对应账号没连好被禁用时,旁边会有个跳转按钮,直接跳到
 // 侧边栏里对应的那一个账号行,这就需要 SettingsView 把跳转能力下传给它。
 enum SettingsTab: Hashable, CaseIterable, Identifiable {
-    case lyrics, appearance, shortcuts, general, about
+    // 2026-07-30:播放器选择/权限/常驻服务/App 联动这几块原来跟语言/开机启动/配置备份
+    // 一起挤在"通用"里,内容上其实是两件不相干的事——前者全部围绕"选哪个播放器、能不能
+    // 正常读到它的播放状态"转,后者是些跟播放器选择完全无关的杂项。拆成独立的"播放器"
+    // 分类,见 PlayerSettingsTab;"通用"只留语言/启动/配置备份。
+    case lyrics, player, appearance, shortcuts, general, about
 
     var id: Self { self }
 
     var title: String {
         switch self {
         case .lyrics: return L10n.t("歌词")
+        case .player: return L10n.t("播放器")
         case .appearance: return L10n.t("外观")
         case .shortcuts: return L10n.t("快捷键")
         case .general: return L10n.t("通用")
@@ -33,6 +38,7 @@ enum SettingsTab: Hashable, CaseIterable, Identifiable {
     var icon: String {
         switch self {
         case .lyrics: return "text.quote"
+        case .player: return "play.circle"
         case .appearance: return "paintbrush"
         case .shortcuts: return "keyboard"
         case .general: return "gearshape"
@@ -44,10 +50,12 @@ enum SettingsTab: Hashable, CaseIterable, Identifiable {
     // green/cyan/purple,见 LyricsManagerView.swift 的 sourceColor)——"外观"尤其不用
     // 青色系,因为默认打开的是"歌词"分类,会跟侧边栏里同屏出现的 LRCLIB 色点(cyan)
     // 太接近;"通用"用灰色齿轮,呼应 macOS 系统设置里"通用"的既有印象;"快捷键"用
-    // teal,跟歌词来源色点的 cyan 有区分度、也不撞现有任何一个分类色。
+    // teal,跟歌词来源色点的 cyan 有区分度、也不撞现有任何一个分类色;"播放器"用
+    // mint,同样是上面这份"避开列表"之外、目前分类里也还没人用过的颜色。
     var tint: Color {
         switch self {
         case .lyrics: return .indigo
+        case .player: return .mint
         case .appearance: return .yellow
         case .shortcuts: return .teal
         case .general: return .gray
@@ -92,6 +100,7 @@ struct SettingsView: View {
             List(selection: $selection) {
                 Section(L10n.t("核心设置")) {
                     sidebarLabel(.lyrics)
+                    sidebarLabel(.player)
                     sidebarLabel(.appearance)
                     sidebarLabel(.shortcuts)
                     sidebarLabel(.general)
@@ -149,6 +158,7 @@ struct SettingsView: View {
             Group {
                 switch selection {
                 case .tab(.lyrics): LyricsSettingsTab()
+                case .tab(.player): PlayerSettingsTab()
                 case .tab(.appearance): AppearanceSettingsTab()
                 case .tab(.shortcuts): ShortcutsSettingsTab()
                 case .tab(.general): GeneralSettingsTab()
@@ -779,7 +789,11 @@ private struct AppearanceSettingsTab: View {
     }
 }
 
-private struct GeneralSettingsTab: View {
+// "播放器"分类——2026-07-30 从"通用"里拆出来:播放器选择/权限/常驻服务/App 联动这
+// 几块内容全部围绕"选哪个播放器、能不能正常读到它的播放状态"转,是同一件事的四个
+// 侧面;语言/开机启动/配置备份这些是完全不相干的杂项,继续留在"通用"里,不需要
+// 陪着一起挪(用户反馈原来两类东西挤在一个 tab 里不好找)。
+private struct PlayerSettingsTab: View {
     @ObservedObject private var settings = AppSettings.shared
     @ObservedObject private var features = FeatureSettingsStore.shared
     // 只在 .onAppear 和每次操作后重新查一次(askIfNeeded: false,不会弹窗,纯读状态)——
@@ -795,10 +809,6 @@ private struct GeneralSettingsTab: View {
     // 收到"进程挂了"这类通知，只能被动查。
     @State private var collectorRunning = false
     @State private var isTogglingCollectorService = false
-    @State private var showExportConfigWarning = false
-    @State private var showImportConfigConfirm = false
-    @State private var pendingImportData: Data?
-    @State private var showClearConfigWarning = false
 
     var body: some View {
         Form {
@@ -912,21 +922,6 @@ private struct GeneralSettingsTab: View {
             }
             .onAppear { collectorRunning = CollectorServiceManager.isRunning }
 
-            Section(L10n.t("语言")) {
-                // 下拉菜单而不是分段控件——分段控件的宽度会随选项数线性变宽,以后再加
-                // 语言(繁体中文/日语等)容易挤爆这一行;下拉菜单不管加多少个选项,这一行
-                // 的宽度都不变。
-                Picker(L10n.t("语言"), selection: $settings.appLanguage) {
-                    Text(L10n.t("跟随系统")).tag("system")
-                    Text(L10n.t("简体中文")).tag("zh-hans")
-                    Text("English").tag("en")
-                }
-                .pickerStyle(.menu)
-            }
-            Section(L10n.t("启动")) {
-                Toggle(L10n.t("开机启动"), isOn: $settings.launchAtLoginEnabled)
-                Toggle(L10n.t("在 Dock 中显示"), isOn: $settings.showInDock)
-            }
             // 两个 Toggle 的文案跟着 features.player 走(Apple Music/QQ 音乐/...)——这两个
             // 联动本身已经改成跟着选定的播放器走(见 AppDelegate.swift/companionlaunch.go),
             // 文案继续写死"Apple Music"会跟实际行为对不上,选了 QQ 音乐却看着字面在说
@@ -953,69 +948,6 @@ private struct GeneralSettingsTab: View {
                 Text(features.player == .auto
                     ? L10n.t("「打开任意已知播放器时启动 Lyrimuse」由后台采集服务负责监测，需要先在上面启用「后台采集服务」才会生效。")
                     : String(format: L10n.t("「打开 %@ 时启动 Lyrimuse」由后台采集服务负责监测，需要先在上面启用「后台采集服务」才会生效。"), features.player.displayName))
-            }
-
-            // 导入/导出打包 collector 的 config.json(账号 token 原文都在里面)+
-            // features.json + App 自己的偏好设置,合并成一份 JSON。刻意跟"导出诊断
-            // 信息"反着来:那个绝不能带任何 token(设计给贴进公开 issue),这个就是要把
-            // token 原样带走(设计给换新机器用)——两处的用户提示因此也刻意写成相反的
-            // 语气。
-            Section {
-                Button(L10n.t("导出配置…")) { showExportConfigWarning = true }
-                Button(L10n.t("导入配置…")) {
-                    let panel = NSOpenPanel()
-                    panel.canChooseFiles = true
-                    panel.canChooseDirectories = false
-                    panel.allowedContentTypes = [.json]
-                    panel.prompt = L10n.t("导入")
-                    if panel.runModal() == .OK, let url = panel.url,
-                       let data = try? Data(contentsOf: url) {
-                        pendingImportData = data
-                        showImportConfigConfirm = true
-                    }
-                }
-                // "清除所有配置"跟上面两个反着来:不是搬一份配置走/换一份进来,是
-                // 直接清空回到刚装完的样子。role: .destructive 让它天生就是红色文字,
-                // 不用另外套样式表明这是危险操作。
-                Button(L10n.t("清除所有配置…"), role: .destructive) { showClearConfigWarning = true }
-            } header: {
-                Text(L10n.t("配置备份"))
-            } footer: {
-                Text(L10n.t("导出的文件包含账号 token、密钥等敏感信息，注意妥善保管，不要分享给他人。导入会覆盖当前所有设置并重启 App。清除会抹掉所有账号和个人设置，恢复到刚装完时的样子。"))
-            }
-            .alert(L10n.t("确定要导出配置吗？"), isPresented: $showExportConfigWarning) {
-                Button(L10n.t("取消"), role: .cancel) {}
-                Button(L10n.t("继续导出")) {
-                    guard let data = ConfigPortability.buildExportData() else { return }
-                    let panel = NSSavePanel()
-                    panel.nameFieldStringValue = ConfigPortability.suggestedFilename()
-                    panel.directoryURL = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Desktop")
-                    if panel.runModal() == .OK, let url = panel.url {
-                        try? data.write(to: url, options: .atomic)
-                    }
-                }
-            } message: {
-                Text(L10n.t("导出的文件包含你的账号 token、密钥等敏感信息，请妥善保管，不要分享给他人。"))
-            }
-            .alert(L10n.t("确定要导入这份配置吗？"), isPresented: $showImportConfigConfirm) {
-                Button(L10n.t("取消"), role: .cancel) {}
-                Button(L10n.t("导入并重启"), role: .destructive) {
-                    if let data = pendingImportData {
-                        ConfigPortability.importData(data)
-                        ConfigPortability.restartApp()
-                    }
-                }
-            } message: {
-                Text(L10n.t("这会覆盖当前所有设置（包括已连接的账号），并立即重启 Lyrimuse 使其生效。"))
-            }
-            .alert(L10n.t("确定要清除所有配置吗？"), isPresented: $showClearConfigWarning) {
-                Button(L10n.t("取消"), role: .cancel) {}
-                Button(L10n.t("清除并重启"), role: .destructive) {
-                    ConfigPortability.clearAllConfig()
-                    ConfigPortability.restartApp()
-                }
-            } message: {
-                Text(L10n.t("这会清除所有账号 token、密钥和个人设置，恢复到刚装完时的样子（下次启动会重新走一遍引导向导），且无法撤销。如果还没备份过，建议先点上面「导出配置…」。"))
             }
         }
         .formStyle(.grouped)
@@ -1105,6 +1037,102 @@ private struct GeneralSettingsTab: View {
             collectorRunning = running
             isTogglingCollectorService = false
         }
+    }
+}
+
+private struct GeneralSettingsTab: View {
+    @ObservedObject private var settings = AppSettings.shared
+    @State private var showExportConfigWarning = false
+    @State private var showImportConfigConfirm = false
+    @State private var pendingImportData: Data?
+    @State private var showClearConfigWarning = false
+
+    var body: some View {
+        Form {
+            Section(L10n.t("语言")) {
+                // 下拉菜单而不是分段控件——分段控件的宽度会随选项数线性变宽,以后再加
+                // 语言(繁体中文/日语等)容易挤爆这一行;下拉菜单不管加多少个选项,这一行
+                // 的宽度都不变。
+                Picker(L10n.t("语言"), selection: $settings.appLanguage) {
+                    Text(L10n.t("跟随系统")).tag("system")
+                    Text(L10n.t("简体中文")).tag("zh-hans")
+                    Text("English").tag("en")
+                }
+                .pickerStyle(.menu)
+            }
+            Section(L10n.t("启动")) {
+                Toggle(L10n.t("开机启动"), isOn: $settings.launchAtLoginEnabled)
+                Toggle(L10n.t("在 Dock 中显示"), isOn: $settings.showInDock)
+            }
+
+            // 导入/导出打包 collector 的 config.json(账号 token 原文都在里面)+
+            // features.json + App 自己的偏好设置,合并成一份 JSON。刻意跟"导出诊断
+            // 信息"反着来:那个绝不能带任何 token(设计给贴进公开 issue),这个就是要把
+            // token 原样带走(设计给换新机器用)——两处的用户提示因此也刻意写成相反的
+            // 语气。
+            Section {
+                Button(L10n.t("导出配置…")) { showExportConfigWarning = true }
+                Button(L10n.t("导入配置…")) {
+                    let panel = NSOpenPanel()
+                    panel.canChooseFiles = true
+                    panel.canChooseDirectories = false
+                    panel.allowedContentTypes = [.json]
+                    panel.prompt = L10n.t("导入")
+                    if panel.runModal() == .OK, let url = panel.url,
+                       let data = try? Data(contentsOf: url) {
+                        pendingImportData = data
+                        showImportConfigConfirm = true
+                    }
+                }
+                // "清除所有配置"跟上面两个反着来:不是搬一份配置走/换一份进来,是
+                // 直接清空回到刚装完的样子。role: .destructive 让它天生就是红色文字,
+                // 不用另外套样式表明这是危险操作。
+                Button(L10n.t("清除所有配置…"), role: .destructive) { showClearConfigWarning = true }
+            } header: {
+                Text(L10n.t("配置备份"))
+            } footer: {
+                Text(L10n.t("导出的文件包含账号 token、密钥等敏感信息，注意妥善保管，不要分享给他人。导入会覆盖当前所有设置并重启 App。清除会抹掉所有账号和个人设置，恢复到刚装完时的样子。"))
+            }
+            .alert(L10n.t("确定要导出配置吗？"), isPresented: $showExportConfigWarning) {
+                Button(L10n.t("取消"), role: .cancel) {}
+                Button(L10n.t("继续导出")) {
+                    guard let data = ConfigPortability.buildExportData() else { return }
+                    let panel = NSSavePanel()
+                    panel.nameFieldStringValue = ConfigPortability.suggestedFilename()
+                    panel.directoryURL = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Desktop")
+                    if panel.runModal() == .OK, let url = panel.url {
+                        try? data.write(to: url, options: .atomic)
+                    }
+                }
+            } message: {
+                Text(L10n.t("导出的文件包含你的账号 token、密钥等敏感信息，请妥善保管，不要分享给他人。"))
+            }
+            .alert(L10n.t("确定要导入这份配置吗？"), isPresented: $showImportConfigConfirm) {
+                Button(L10n.t("取消"), role: .cancel) {}
+                Button(L10n.t("导入并重启"), role: .destructive) {
+                    if let data = pendingImportData {
+                        ConfigPortability.importData(data)
+                        ConfigPortability.restartApp()
+                    }
+                }
+            } message: {
+                Text(L10n.t("这会覆盖当前所有设置（包括已连接的账号），并立即重启 Lyrimuse 使其生效。"))
+            }
+            .alert(L10n.t("确定要清除所有配置吗？"), isPresented: $showClearConfigWarning) {
+                Button(L10n.t("取消"), role: .cancel) {}
+                Button(L10n.t("清除并重启"), role: .destructive) {
+                    ConfigPortability.clearAllConfig()
+                    ConfigPortability.restartApp()
+                }
+            } message: {
+                Text(L10n.t("这会清除所有账号 token、密钥和个人设置，恢复到刚装完时的样子（下次启动会重新走一遍引导向导），且无法撤销。如果还没备份过，建议先点上面「导出配置…」。"))
+            }
+        }
+        .formStyle(.grouped)
+        // SwiftUI 有时不会在语言切换后重新执行某些嵌套内容的 body(取决于该内容自己的
+        // 存储属性有没有变,而非父视图是否重新渲染,详见 AccountLinkingTab.swift 里
+        // DestinationStatus.label 的注释)。用 .id(L10n.current) 把 Form 的身份跟当前
+        // 语言绑死,语言一变就强制整体重新构造,不需要逐个排查哪里在跳过刷新。
     }
 }
 
