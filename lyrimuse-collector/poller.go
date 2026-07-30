@@ -244,6 +244,13 @@ func (p *poller) isTracked() bool {
 	if slices.Contains(p.cfg.BundleIDs, p.cur.Bundle) {
 		return true
 	}
+	// playerAuto("自动识别")没有唯一固定的期望 bundle id——getAutoDetectedState 已经
+	// 只在确认是四个已知播放器之一时才产出非空快照,这里认它是不是这四个之一即可,不能
+	// 拿 expectedPlayerBundleID() 那种"只认一个固定值"的判断(会把除了默认兜底值以外
+	// 的其它三个播放器误判成"不是我关心的来源")。
+	if features.Player == playerAuto {
+		return isKnownPlayerBundleID(p.cur.Bundle)
+	}
 	return p.cur.Bundle == expectedPlayerBundleID()
 }
 
@@ -839,8 +846,14 @@ func (p *poller) poll() {
 	// 播放头的第二次调用)——QQ 音乐没有这条路径,getQQMusicState 用的 elapsedTimeNow
 	// 已经是每一轮都新鲜的读数,不需要、也不应该再叠加这一步(不加这个判断的话,即使
 	// 选的是 QQ 音乐,这里仍会照样问一次 Music.app,如果它碰巧也开着在放别的东西,会
-	// 用 Music.app 的位置错误覆盖掉 QQ 音乐这边正确算出来的位置)。
-	if features.Player == playerAppleMusic && p.cur.Playing && p.isTracked() {
+	// 用 Music.app 的位置错误覆盖掉 QQ 音乐这边正确算出来的位置)。playerAuto("自动
+	// 识别")下额外允许"这一轮观测到的 bundle 恰好是 Apple Music"这个条件——故意不是
+	// 简单把整个判断换成只看 p.cur.Bundle:那样会让"手动选了 QQ 音乐/网易云音乐/
+	// Spotify,但 p.cur.Bundle 因为某种原因还留着上一轮的 Apple Music 值"这种边界情况
+	// 重新引入上面这段注释描述的坑,所以手动选择的三个非 Apple Music 播放器行为完全
+	// 不变,只有 playerAuto 这一种情况需要额外看 p.cur.Bundle。
+	if (features.Player == playerAppleMusic || (features.Player == playerAuto && p.cur.Bundle == "com.apple.Music")) &&
+		p.cur.Playing && p.isTracked() {
 		if pos, ok := appleMusicPosition(p.ctx); ok {
 			p.cur.Position, p.cur.AnchorTS = pos, time.Now()
 		}

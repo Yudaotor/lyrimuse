@@ -67,6 +67,7 @@ extension PlaybackPlayer {
         case .qqMusic: return L10n.t("QQ 音乐")
         case .netease: return L10n.t("网易云音乐")
         case .spotify: return "Spotify"
+        case .auto: return L10n.t("自动识别")
         }
     }
 }

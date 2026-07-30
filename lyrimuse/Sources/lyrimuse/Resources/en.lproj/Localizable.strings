@@ -85,6 +85,7 @@
 "语言" = "Language";
 "跟随系统" = "Follow System";
 "简体中文" = "简体中文";
+"自动识别" = "Auto-detect";
 "Last.fm 用户名" = "Last.fm Username";
 "Last.fm 返回错误: %@" = "Last.fm returned an error: %@";
 "Mac 播放镜像" = "Mac Playback Mirror";
@@ -191,8 +192,10 @@
 "打开歌词管理…" = "Open Lyrics Manager…";
 "打开 Lyrimuse 时启动 %@" = "Launch %@ when Lyrimuse opens";
 "打开 %@ 时启动 Lyrimuse" = "Launch Lyrimuse when %@ opens";
+"打开任意已知播放器时启动 Lyrimuse" = "Launch Lyrimuse when any known player opens";
 "App 联动" = "App Companion Launch";
 "「打开 %@ 时启动 Lyrimuse」由后台采集服务负责监测，需要先在上面启用「后台采集服务」才会生效。" = "\"Launch Lyrimuse when %@ opens\" is monitored by the background collector service — enable \"Background Collector Service\" above first for this to take effect.";
+"「打开任意已知播放器时启动 Lyrimuse」由后台采集服务负责监测，需要先在上面启用「后台采集服务」才会生效。" = "\"Launch Lyrimuse when any known player opens\" is monitored by the background collector service — enable \"Background Collector Service\" above first for this to take effect.";
 "换到一首歌时，如果它属于某张专辑，会顺带在后台把同专辑里还没解析过的其它曲目也提前解析——封面无条件都会解析，歌词是否被预取取决于上面的「歌词在线匹配」开关是否开启。" = "When you switch to a song that belongs to an album, other not-yet-resolved tracks from the same album are also resolved in the background ahead of time. Covers are always resolved regardless; whether lyrics are prefetched depends on whether \"Online Lyrics Matching\" above is enabled.";
 "控制要不要在线解析歌词——关闭后，第一次播放的新歌不会再去查下面「歌词来源」里的这些平台，只用本地已经缓存过的结果（如果有）。「歌词来源」「匹配算法」这两组设置都只在这个开关开启时才有意义。" = "Controls whether lyrics are looked up online. When off, newly played songs won't be checked against the platforms listed under \"Lyrics Sources\" below — only locally cached results (if any) will be used. The \"Lyrics Sources\" and \"Matching Algorithm\" settings only matter while this is on.";
 "推送提醒" = "Push Alerts";

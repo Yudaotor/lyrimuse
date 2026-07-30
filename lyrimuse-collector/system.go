@@ -84,6 +84,8 @@ func getState(ctx context.Context) (map[string]any, bool) {
 		return getNeteaseMusicState(ctx)
 	case playerSpotify:
 		return getSpotifyState(ctx)
+	case playerAuto:
+		return getAutoDetectedState(ctx)
 	default:
 		return getAppleMusicState(ctx)
 	}
@@ -149,7 +151,10 @@ const (
 )
 
 // expectedPlayerBundleID 是当前选定播放器(features.Player)自己会报告的 bundle id——
-// 供 poller.go 的 isTracked() 兜底判断用,见其注释。
+// 供 poller.go 的 isTracked() 兜底判断用,见其注释。playerAuto("自动识别")没有唯一
+// 固定的目标,不在这里处理——isTracked() 对 playerAuto 走单独一条分支(核对是不是
+// isKnownPlayerBundleID 覆盖的四个已知播放器之一),永远不会调用到这个函数,这里的
+// switch 因此不需要、也不应该加 playerAuto 这个 case。
 func expectedPlayerBundleID() string {
 	switch features.Player {
 	case playerQQMusic:
@@ -163,6 +168,18 @@ func expectedPlayerBundleID() string {
 	}
 }
 
+// isKnownPlayerBundleID 是"自动识别"模式专用的成员判断——playerAuto 下 isTracked()
+// 用它替代 expectedPlayerBundleID() 那种"只认一个固定 bundle id"的判断,因为自动识别
+// 模式下 p.cur.Bundle 可能是这四个已知播放器里的任意一个。
+func isKnownPlayerBundleID(bundleID string) bool {
+	switch bundleID {
+	case "com.apple.Music", qqMusicBundleID, neteaseMusicBundleID, spotifyBundleID:
+		return true
+	default:
+		return false
+	}
+}
+
 // mediaPlayerLabelIPhone 是 iPhone 桥接路径(poller.go 两处 "source"]="iphone" 附近)
 // 提交给 ListenBrainz 的 media_player 值——那条桥接只服务 iPhone 上的 Apple Music
 // (经 Last.fm/FastScrobbler 转发,见 bridge 相关注释),跟本地 Mac 选的是哪个播放器
@@ -172,8 +189,23 @@ const mediaPlayerLabelIPhone = "Apple Music (iOS)"
 // mediaPlayerLabel 是 lbMeta()(Mac 本地这条路径)提交给 ListenBrainz 的 media_player
 // 字段——2026-07-24 之前这里不管实际来源一律写死"Apple Music (macOS)",QQ 音乐/网易云
 // 音乐接入后如果继续写死会导致 ListenBrainz 上明明是别的播放器放的歌却显示"通过
-// Apple Music 播放",按当前选定的播放器如实报告。
-func mediaPlayerLabel() string {
+// Apple Music 播放",按当前选定的播放器如实报告。playerAuto("自动识别")下"当前选定的
+// 播放器"这个概念本身没有固定答案,改成按这条具体 listen 的 bundleID(调用方直接传
+// snapshot.Bundle,由 getAutoDetectedState 写入,已经是四个已知播放器之一)如实判断,
+// 不看 features.Player。
+func mediaPlayerLabel(bundleID string) string {
+	if features.Player == playerAuto {
+		switch bundleID {
+		case qqMusicBundleID:
+			return "QQ Music (macOS)"
+		case neteaseMusicBundleID:
+			return "NetEase Cloud Music (macOS)"
+		case spotifyBundleID:
+			return "Spotify (macOS)"
+		default:
+			return "Apple Music (macOS)"
+		}
+	}
 	switch features.Player {
 	case playerQQMusic:
 		return "QQ Music (macOS)"
@@ -203,49 +235,92 @@ type mediaControlRawState struct {
 // 坐实它同样把播放状态发布进系统级 MediaRemote,三者读取路径完全一样,只是各自要核对
 // 的 bundle id 不同,不需要把整个函数体抄三遍。
 func getQQMusicState(ctx context.Context) (map[string]any, bool) {
-	return getMediaControlState(ctx, qqMusicBundleID)
+	return matchMediaControlState(ctx, qqMusicBundleID)
 }
 
 func getNeteaseMusicState(ctx context.Context) (map[string]any, bool) {
-	return getMediaControlState(ctx, neteaseMusicBundleID)
+	return matchMediaControlState(ctx, neteaseMusicBundleID)
 }
 
 func getSpotifyState(ctx context.Context) (map[string]any, bool) {
-	return getMediaControlState(ctx, spotifyBundleID)
+	return matchMediaControlState(ctx, spotifyBundleID)
 }
 
-// getMediaControlState 读内置 media-control 二进制(见 mediaControlBinaryPath)。--now
-// 让工具自己按内部时钟外推出一个不会冻结的 elapsedTimeNow——这里把它当成"elapsedTime"
-// 字段填回去,让下游 updatePosition()(poller.go)以为自己拿到的是"每一轮都新鲜"的
-// 读数,跟 Apple Music 那条 AppleScript 路径的行为假设完全一致(那条注释里写的"Elapsed
-// 不再于稳定播放期间冻结、每一轮轮询都读到当下的实时进度"同样适用于这里),不需要改
-// updatePosition() 一行代码。--no-artwork 省掉几百 KB 的 base64 封面数据,这里从不使用。
-func getMediaControlState(ctx context.Context, expectedBundleID string) (map[string]any, bool) {
+// matchMediaControlState 核对 media-control 报的 bundle id 是不是 expectedBundleID——
+// QQ 音乐/网易云音乐/Spotify 共用这同一份实现,真正调用子进程/解析原始输出的逻辑收在
+// fetchRawMediaControlState 里。
+func matchMediaControlState(ctx context.Context, expectedBundleID string) (map[string]any, bool) {
+	raw, bundleID, ok := fetchRawMediaControlState(ctx)
+	if !ok {
+		return nil, false
+	}
+	if bundleID != expectedBundleID {
+		// 系统当前的 Now Playing 是别的 App(网页视频/Safari/另一个播放器等)在报告,
+		// 不是当前选定的这个——不能把它当成这个播放器的"正在播放",按"没有可报告的
+		// 正在播放"处理。
+		return map[string]any{}, true
+	}
+	return raw, true
+}
+
+// getAutoDetectedState 是 playerAuto("自动识别")的读取路径——不预先假定是哪个
+// 播放器,直接问 media-control 当前系统级 Now Playing 焦点是谁,再核对是不是这四个
+// 已知播放器之一(macOS 的 MediaRemote/Control Center 本来就只有一个"当前正在播放"
+// 焦点,不需要这里自己猜)。检测到的恰好是 Apple Music 时,额外走一次
+// getAppleMusicState 的 AppleScript 路径拿更精确的播放位置——跟手动选 Apple Music
+// 时同等精度;拿不到(没有"自动化"权限/其它原因)就退回 media-control 本身已经读到的
+// 这份基础数据,不整个放弃,让没单独开自动化权限的用户在自动识别模式下依然至少能看到
+// Apple Music 的歌词,只是播放位置精度稍低一点。
+func getAutoDetectedState(ctx context.Context) (map[string]any, bool) {
+	raw, bundleID, ok := fetchRawMediaControlState(ctx)
+	if !ok {
+		return nil, false
+	}
+	if bundleID == "com.apple.Music" {
+		if state, ok := getAppleMusicState(ctx); ok && len(state) > 0 {
+			return state, true
+		}
+		return raw, true
+	}
+	switch bundleID {
+	case qqMusicBundleID, neteaseMusicBundleID, spotifyBundleID:
+		return raw, true
+	default:
+		// 空字符串(没有任何 App 在报告 Now Playing)或者别的不相关 App(网页视频/
+		// Safari/另一个不受支持的播放器)——统一按"没有可报告的正在播放"处理。
+		return map[string]any{}, true
+	}
+}
+
+// fetchRawMediaControlState 读内置 media-control 二进制(见 mediaControlBinaryPath)。
+// --now 让工具自己按内部时钟外推出一个不会冻结的 elapsedTimeNow——这里把它当成
+// "elapsedTime"字段填回去,让下游 updatePosition()(poller.go)以为自己拿到的是
+// "每一轮都新鲜"的读数,跟 Apple Music 那条 AppleScript 路径的行为假设完全一致(那条
+// 注释里写的"Elapsed 不再于稳定播放期间冻结、每一轮轮询都读到当下的实时进度"同样适用
+// 于这里),不需要改 updatePosition() 一行代码。--no-artwork 省掉几百 KB 的 base64
+// 封面数据,这里从不使用。matchMediaControlState(核对单一 expectedBundleID)和
+// getAutoDetectedState(核对"是不是这几个已知播放器之一")共用这份子进程调用逻辑,
+// 只是各自拿到 bundleID 之后核对的规则不同。
+func fetchRawMediaControlState(ctx context.Context) (map[string]any, string, bool) {
 	bin := mediaControlBinaryPath()
 	if bin == "" {
-		return nil, false
+		return nil, "", false
 	}
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	out, err := exec.CommandContext(ctx, bin, "get", "--now", "--no-artwork").Output()
 	if err != nil {
-		return nil, false
+		return nil, "", false
 	}
 	trimmed := strings.TrimSpace(string(out))
 	if trimmed == "null" {
 		// 没有任何 App 在报告 Now Playing——跟 getAppleMusicState 的"null"分支同一种
 		// 语义,交给调用方(poller.go 的 poll())走既有的 nullStreak 渐进清空逻辑。
-		return map[string]any{}, true
+		return map[string]any{}, "", true
 	}
 	var raw mediaControlRawState
 	if err := json.Unmarshal(out, &raw); err != nil {
-		return nil, false
-	}
-	if raw.BundleID != expectedBundleID {
-		// 系统当前的 Now Playing 是别的 App(网页视频/Safari/另一个播放器等)在报告,
-		// 不是当前选定的这个——不能把它当成这个播放器的"正在播放",按"没有可报告的
-		// 正在播放"处理。
-		return map[string]any{}, true
+		return nil, "", false
 	}
 	// elapsedTimeNow 只在真的在播放时才可信——实测坐实:一首已经暂停的歌,
 	// elapsedTimeNow 仍然会按暂停前最后一次记录的 playbackRate 继续按真实时钟外推
@@ -261,7 +336,7 @@ func getMediaControlState(ctx context.Context, expectedBundleID string) (map[str
 		"duration": raw.Duration, "elapsedTime": elapsed,
 		"playing": raw.Playing, "playbackRate": raw.PlaybackRate,
 		"isMusicApp": true, "bundleIdentifier": raw.BundleID,
-	}, true
+	}, raw.BundleID, true
 }
 
 // mediaControlBinaryPath 找同一个 app bundle 里跟 collector 自己放在一起的

@@ -32,6 +32,7 @@ public enum MediaControlClient {
         switch player {
         case .appleMusic: return fetchAppleMusicSnapshot()
         case .qqMusic, .netease, .spotify: return fetchMediaControlSnapshot(expectedBundleID: player.bundleIdentifier)
+        case .auto: return fetchAutoDetectedSnapshot()
         }
     }
 
@@ -133,9 +134,40 @@ public enum MediaControlClient {
         return binaryPath
     }
 
-    // QQ 音乐/网易云音乐共用这同一份实现,只是要核对的 expectedBundleID 不同(见
-    // fetchSnapshot 的 switch)。
+    // QQ 音乐/网易云音乐/Spotify 共用这同一份实现,只是要核对的 expectedBundleID
+    // 不同(见 fetchSnapshot 的 switch)——真正跑 media-control 子进程、解析原始输出的
+    // 逻辑收在 fetchRawMediaControlSnapshot 里,这里只负责核对 bundle id 对不对得上。
     private static func fetchMediaControlSnapshot(expectedBundleID: String) -> MediaControlSnapshot? {
+        guard let (snapshot, bundleID) = fetchRawMediaControlSnapshot(), bundleID == expectedBundleID else {
+            // bundleIdentifier 对不上:系统当前的 Now Playing 是别的 App(网页视频/
+            // Safari/另一个播放器等),不是当前选定的这个——不能把它当成这个播放器的
+            // "正在播放"。
+            return nil
+        }
+        return snapshot
+    }
+
+    // "自动识别"(PlaybackPlayer.auto)——不预先假定是哪个播放器,直接问 media-control
+    // 当前系统级 Now Playing 是谁,核对 bundleIdentifier 是不是这四个已知播放器之一
+    // (不是的话说明是别的不相关的 App 在报告,视为"没有可关心的正在播放")。检测到的
+    // 恰好是 Apple Music 时,额外走一次 fetchAppleMusicSnapshot() 的 AppleScript 路径
+    // 拿更精确的播放位置——跟手动选 Apple Music 时同等精度;这一步需要"自动化"权限,
+    // 拿不到(或者其它任何原因失败)就退回 media-control 本身已经读到的这份基础数据,
+    // 不整个放弃,让没单独开自动化权限的用户在自动识别模式下依然至少看得到 Apple Music
+    // 的歌词,只是播放位置精度稍低一点。
+    private static func fetchAutoDetectedSnapshot() -> MediaControlSnapshot? {
+        guard let (snapshot, bundleID) = fetchRawMediaControlSnapshot(),
+              PlaybackPlayer.allCases.contains(where: { $0 != .auto && $0.bundleIdentifier == bundleID }) else {
+            return nil
+        }
+        guard bundleID == PlaybackPlayer.appleMusic.bundleIdentifier else { return snapshot }
+        return fetchAppleMusicSnapshot() ?? snapshot
+    }
+
+    // 真正调用 media-control 子进程、解析原始输出——fetchMediaControlSnapshot(核对
+    // 单一 expectedBundleID)和 fetchAutoDetectedSnapshot(核对"是不是这几个已知播放器
+    // 之一")共用同一份子进程调用逻辑,只是各自拿到 bundleID 之后核对的规则不同。
+    private static func fetchRawMediaControlSnapshot() -> (MediaControlSnapshot, String)? {
         guard let binaryPath = binaryPath() else { return nil }
         let process = Process()
         process.executableURL = URL(fileURLWithPath: binaryPath)
@@ -154,10 +186,7 @@ public enum MediaControlClient {
             // `try?` 落到下面的 guard raw != nil,行为跟"没有可报告的正在播放"一致。
             guard process.terminationStatus == 0,
                   let raw = try? JSONDecoder().decode(RawPayload.self, from: data),
-                  raw.bundleIdentifier == expectedBundleID else {
-                // bundleIdentifier 对不上:系统当前的 Now Playing 是别的 App(网页
-                // 视频/Safari/另一个播放器等),不是当前选定的这个——不能把它当成
-                // 这个播放器的"正在播放"。
+                  let bundleID = raw.bundleIdentifier else {
                 return nil
             }
             // elapsedTimeNow 只在真的在播放时才可信——实测坐实:一首已经暂停的歌,
@@ -166,7 +195,7 @@ public enum MediaControlClient {
             // media-control 内部的外推基准归零。暂停时真正正确的位置就是原始
             // elapsedTime(暂停就是"冻结在这一刻",不需要外推)。
             let elapsed = (raw.playing == true) ? (raw.elapsedTimeNow ?? raw.elapsedTime) : raw.elapsedTime
-            return MediaControlSnapshot(
+            let snapshot = MediaControlSnapshot(
                 title: raw.title,
                 artist: raw.artist,
                 album: raw.album,
@@ -175,10 +204,12 @@ public enum MediaControlClient {
                 playing: raw.playing,
                 playbackRate: raw.playbackRate,
                 // 复用这个字段原本的语义("这是当前选定播放器的一份有效快照",见
-                // MediaControlSnapshot 注释)——上面已经用 bundleIdentifier 精确核实过
-                // 确实是当前选定的播放器在报告,这里如实置 true。
+                // MediaControlSnapshot 注释)——调用方(fetchMediaControlSnapshot/
+                // fetchAutoDetectedSnapshot)已经各自核实过 bundleID 是它关心的那个,
+                // 这里如实置 true。
                 isMusicApp: true
             )
+            return (snapshot, bundleID)
         } catch {
             return nil
         }

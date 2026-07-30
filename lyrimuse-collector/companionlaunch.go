@@ -24,7 +24,13 @@ import (
 // 进程表,纯粹是否存在这个可执行文件对应的进程,不依赖任何 Apple Event/自动化权限,
 // 也不会跟"读取播放状态"那条路径的权限请求产生任何交集——这也是为什么这个方向能够
 // 对 QQ 音乐同样生效。
-var lastMusicAppRunning bool
+//
+// lastRunningByName 按进程名分别记"上一轮是否在跑"——playerAuto("自动识别")下要
+// 同时盯着 companionLaunchProcessNames() 返回的全部已知播放器,任意一个从没运行变成
+// 运行都算数,不能只用一个笼统的 bool(会丢失"到底是哪一个刚跳变"这个信息,也没法
+// 正确处理"A 在跑、B 刚启动"这种多个进程同时存在的情况)。手动选定单一播放器时这份
+// map 里实际上永远只有一个 key,行为跟旧版单 bool 完全等价。
+var lastRunningByName = map[string]bool{}
 
 // companionLaunchInterval 是专门检测目标播放器启动状态用的轮询间隔——不能复用
 // poller.go 的 pollInterval(5 秒)。实测坐实(用 Music.app 验证的):真的用 Cmd-Q/Dock
@@ -50,31 +56,58 @@ func startCompanionLaunchWatcher(ctx context.Context) {
 	}
 }
 
-// checkCompanionLaunch 检测当前选定播放器(features.Player)是否发生了"从没运行变成
-// 运行"这个状态跳变,跳变发生且用户开着这个开关时,启动/唤起 Lyrimuse.app。
+// checkCompanionLaunch 检测目标播放器(手动选定时只有一个;playerAuto 下是全部四个
+// 已知播放器)里有没有谁发生了"从没运行变成运行"这个状态跳变,跳变发生且用户开着这个
+// 开关时,启动/唤起 Lyrimuse.app。多个进程在同一轮里都从"没跑"变"在跑"的极端情况下
+// (概率很低,但不是不可能——比如用户同时点开了两个播放器)只按第一个检测到的触发一次
+// 启动,launchLyrimuseApp 本身对已运行的 Lyrimuse.app 也是空操作,不会有副作用。
 func checkCompanionLaunch() {
-	running := isMusicAppRunning()
-	justLaunched := running && !lastMusicAppRunning
-	lastMusicAppRunning = running
-	if !justLaunched || !features.LaunchLyrimuseOnMusicOpen {
+	// 不管开关开没开,每一轮都要照跑下面这个循环维护 lastRunningByName——开关关着的
+	// 时候如果直接跳过,关闭期间的真实状态变化不会被记录,开关重新打开的瞬间会凭空把
+	// "早就在跑"误判成"刚刚启动"。
+	var justStarted string
+	for _, name := range companionLaunchProcessNames() {
+		running := isProcessRunning(name)
+		if running && !lastRunningByName[name] && justStarted == "" {
+			justStarted = name
+		}
+		lastRunningByName[name] = running
+	}
+	if justStarted == "" || !features.LaunchLyrimuseOnMusicOpen {
 		return
 	}
-	log.Printf("companion launch: %s just started, launching Lyrimuse.app", playerProcessName())
+	log.Printf("companion launch: %s just started, launching Lyrimuse.app", justStarted)
 	launchLyrimuseApp()
 }
 
-// isMusicAppRunning 用 pgrep 按可执行文件名精确匹配(-x)查当前选定播放器的进程是否
-// 存在,不发送任何 Apple Event。函数名沿用旧名字(历史上只支持 Apple Music 时起的),
-// 实际检测目标跟着 playerProcessName() 走。
-func isMusicAppRunning() bool {
+// isProcessRunning 用 pgrep 按可执行文件名精确匹配(-x)查进程是否存在,不发送任何
+// Apple Event。
+func isProcessRunning(name string) bool {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
-	return exec.CommandContext(ctx, "pgrep", "-x", playerProcessName()).Run() == nil
+	return exec.CommandContext(ctx, "pgrep", "-x", name).Run() == nil
 }
 
-// playerProcessName 是当前选定播放器(features.Player)的可执行文件名,给 pgrep -x
-// 用——QQ音乐.app 的 CFBundleExecutable 是 QQMusic、网易云音乐.app 是 NeteaseMusic、
-// Spotify.app 是 Spotify(都用 PlistBuddy 核实过),Music.app 是 Music。
+// companionLaunchProcessNames 是这一轮要盯的可执行文件名列表——手动选定某个播放器时
+// 只有它自己这一个(行为跟合并前完全一致,不会因为多了 playerAuto 而误报别的播放器
+// 启动);playerAuto("自动识别")下没有唯一确定的目标,同时盯着全部四个已知播放器,
+// 任意一个启动都算数,这也是自动识别模式下这个方向反而更有用的地方——用户不需要
+// 事先告诉 Lyrimuse 自己接下来要开哪个播放器。
+func companionLaunchProcessNames() []string {
+	if features.Player == playerAuto {
+		return knownPlayerProcessNames
+	}
+	return []string{playerProcessName()}
+}
+
+// knownPlayerProcessNames 是全部四个已知播放器的可执行文件名——QQ音乐.app 是
+// QQMusic、网易云音乐.app 是 NeteaseMusic、Spotify.app 是 Spotify(都用 PlistBuddy
+// 核实过),Music.app 是 Music。playerProcessName() 按 features.Player 从这份列表里
+// 挑一个出来给手动选定的场景用;playerAuto 直接用整份列表。
+var knownPlayerProcessNames = []string{"Music", "QQMusic", "NeteaseMusic", "Spotify"}
+
+// playerProcessName 是当前选定播放器(features.Player)的可执行文件名,给手动选定的
+// 场景用,见 knownPlayerProcessNames 注释。
 func playerProcessName() string {
 	switch features.Player {
 	case playerQQMusic:

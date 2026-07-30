@@ -47,11 +47,15 @@ const (
 // getState()/appleMusicPosition() 注释。Spotify 自己虽然有 AppleScript 支持,但
 // 2026-07-29 实测坐实它同样会把播放状态发布进系统级 MediaRemote(`media-control get`/
 // 控制指令都正常),没必要单独写一套 AppleScript 集成,归到跟 QQ/网易云一样的路径。
+// playerAuto("自动识别")不对应固定的某个 App——问 media-control 当前系统级 Now
+// Playing 焦点是谁,核对是不是这四个已知播放器之一,见 system.go 的 getSpotifyState
+// 附近 getAutoDetectedState 的注释。
 const (
 	playerAppleMusic = "apple_music"
 	playerQQMusic    = "qq_music"
 	playerNetease    = "netease_music"
 	playerSpotify    = "spotify"
+	playerAuto       = "auto"
 )
 
 // lyricsSourceDefaultOrder 是"顺序优先"模式缺省的顺序——照抄 enrich.go
@@ -189,7 +193,7 @@ func loadFeatureFlags(path string) featureFlags {
 // resolvePlayer 兜底成 playerAppleMusic——这是这个设置加入之前唯一存在过的行为,
 // 保证全新安装/旧配置文件(没有 "player" 字段)不会被静默解读成别的播放器。
 func resolvePlayer(p string) string {
-	if p == playerQQMusic || p == playerNetease || p == playerSpotify {
+	if p == playerQQMusic || p == playerNetease || p == playerSpotify || p == playerAuto {
 		return p
 	}
 	return playerAppleMusic
