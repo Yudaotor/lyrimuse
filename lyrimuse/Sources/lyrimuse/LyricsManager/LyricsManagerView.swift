@@ -48,6 +48,18 @@ func primaryArtist(_ full: String) -> String {
     return first.trimmingCharacters(in: .whitespaces)
 }
 
+// 繁体折成简体,只用来算"是不是同一个人/同一张专辑"的归并键,不改动任何展示文案——
+// 跟 collector 那边 match.go/t2s.go 的 toSimplified 是同一个目的,但这边是 Swift 代码,
+// 没有引入 gocc 那类第三方库,直接用 Foundation/ICU 内置的 "Traditional-Simplified"
+// transform 就能做,不需要额外依赖(2026-07-30 实测坐实:"100種生活"/"100种生活" 这类
+// 繁简差一个字的专辑名,之前的归并键只转小写、不管繁简,被当成两张不同专辑,在筛选下拉
+// 里重复出现)。
+func toSimplified(_ s: String) -> String {
+    let mutable = NSMutableString(string: s) as CFMutableString
+    CFStringTransform(mutable, nil, "Traditional-Simplified" as CFString, false)
+    return mutable as String
+}
+
 // 每个歌词源一个固定色,列表/详情页共用,方便肉眼快速扫源(不是随手配的——网易云红、
 // QQ音乐绿、酷狗蓝、LRCLIB紫,分别贴近各自品牌主色,"无来源"用中性灰)。
 //
@@ -131,20 +143,37 @@ struct LyricsManagerView: View {
             || artistFilter != nil || albumFilter != nil
     }
 
-    private var distinctArtists: [String] {
-        Array(Set(store.summaries.map { primaryArtist($0.artist) })).sorted()
+    // primaryArtist 只按分隔符取第一段合并合唱曲目,不处理大小写/繁简——同一位歌手偶尔
+    // 因为不同歌词源的候选写法不一致而长得不一样(比如"周杰倫" vs "周杰伦"),不加这层
+    // 归并的话筛选下拉会重复出现,跟 albumDisplayNames 是完全同一个"归并键跟展示值
+    // 分开"的思路(2026-07-30 用户反馈专辑那边先出现过这个问题,顺手把歌手这边也补上,
+    // 避免以后复现同一类 bug)。
+    private var artistDisplayNames: [String: String] {
+        var seen: [String: String] = [:] // 归并键(小写+简体) -> 第一次出现时的原始写法
+        for s in store.summaries {
+            let raw = primaryArtist(s.artist)
+            guard !raw.isEmpty else { continue }
+            let key = toSimplified(raw).lowercased()
+            if seen[key] == nil { seen[key] = raw }
+        }
+        return seen
     }
 
-    // 同一张专辑在不同缓存条目里,专辑名偶尔因为各自歌词源的候选写法大小写不一致而长得
-    // 不一样(如"BLOOD ON THE DANCE FLOOR..." vs "Blood on the Dance Floor...")。归并键
-    // 统一转小写比较,取第一次遇到(按 summaries 已有的排序)那条的原始写法当这一组的
+    private var distinctArtists: [String] {
+        Array(Set(artistDisplayNames.values)).sorted()
+    }
+
+    // 同一张专辑在不同缓存条目里,专辑名偶尔因为各自歌词源的候选写法不一致而长得不一样——
+    // 大小写不同(如"BLOOD ON THE DANCE FLOOR..." vs "Blood on the Dance Floor..."),或者
+    // 繁简不同(如"100種生活" vs "100种生活",2026-07-30 用户实测反馈)。归并键统一转小写
+    // 再折成简体比较,取第一次遇到(按 summaries 已有的排序)那条的原始写法当这一组的
     // 统一展示文案——不只是筛选下拉要合并,列表每一行、详情页头部凡是要展示专辑名的地方
     // 都用这份映射。跟 primaryArtist 合并合唱曲目是同一个"归并键跟展示值分开"的思路,
-    // 只是这里归并键是转小写而不是按分隔符取第一段。
+    // 只是这里归并键是转小写+折简体而不是按分隔符取第一段。
     private var albumDisplayNames: [String: String] {
-        var seen: [String: String] = [:] // 小写归并键 -> 第一次出现时的原始写法
+        var seen: [String: String] = [:] // 归并键(小写+简体) -> 第一次出现时的原始写法
         for s in store.summaries where !s.album.isEmpty {
-            let key = s.album.lowercased()
+            let key = toSimplified(s.album).lowercased()
             if seen[key] == nil { seen[key] = s.album }
         }
         return seen
@@ -155,7 +184,7 @@ struct LyricsManagerView: View {
     }
 
     private func albumDisplay(_ album: String) -> String {
-        albumDisplayNames[album.lowercased()] ?? album
+        albumDisplayNames[toSimplified(album).lowercased()] ?? album
     }
 
     private var filtered: [EnrichCacheStore.Summary] {
@@ -164,10 +193,12 @@ struct LyricsManagerView: View {
                 let q = searchText.lowercased()
                 guard s.artist.lowercased().contains(q) || s.title.lowercased().contains(q) else { return false }
             }
-            if let artistFilter, primaryArtist(s.artist) != artistFilter { return false }
-            // 大小写不敏感比较——albumFilter 存的是 distinctAlbums 归并后选中的那个
-            // 展示写法,同一张专辑大小写不同的条目(s.album)也要匹配上,不能要求逐字相等。
-            if let albumFilter, s.album.lowercased() != albumFilter.lowercased() { return false }
+            // 大小写/繁简不敏感比较,跟上面 album 那条同一个理由(见 artistDisplayNames 注释)。
+            if let artistFilter, toSimplified(primaryArtist(s.artist)).lowercased() != toSimplified(artistFilter).lowercased() { return false }
+            // 大小写/繁简不敏感比较——albumFilter 存的是 distinctAlbums 归并后选中的那个
+            // 展示写法,同一张专辑大小写或繁简不同的条目(s.album)也要匹配上,不能要求
+            // 逐字相等,跟 albumDisplayNames 用同一套归并规则(见其注释)。
+            if let albumFilter, toSimplified(s.album).lowercased() != toSimplified(albumFilter).lowercased() { return false }
             guard sourceFilter.matches(s.lyricsSource) else { return false }
             switch timingFilter {
             case .all: break
