@@ -149,7 +149,7 @@
 "启动" = "启动";
 "五个源都没找到可用的候选" = "五个源都没找到可用的候选";
 "回到当前播放" = "回到当前播放";
-"创建 Last.fm 应用即可获取 API Key + Secret。" = "创建 Last.fm 应用即可获取 API Key + Secret。";
+"创建 Last.fm 应用即可获取 API Key + Secret" = "创建 Last.fm 应用即可获取 API Key + Secret";
 "在 Last.fm 后台创建应用会同时给你 API Key 和 Secret" = "在 Last.fm 后台创建应用会同时给你 API Key 和 Secret";
 "在 ListenBrainz 网站获取 Token →" = "在 ListenBrainz 网站获取 Token →";
 "在 Last.fm 网站查看主页" = "在 Last.fm 网站查看主页";

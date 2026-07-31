@@ -518,7 +518,7 @@ struct AccountLinkingTab: View {
     private var lastfmFields: some View {
         Section {
             HStack(spacing: 4) {
-                Text(L10n.t("创建 Last.fm 应用即可获取 API Key + Secret。"))
+                Text(L10n.t("创建 Last.fm 应用即可获取 API Key + Secret"))
                     .font(.caption2).foregroundStyle(.secondary)
                 HelpButton(
                     text: L10n.t("在 Last.fm 后台创建应用会同时给你 API Key 和 Secret"),

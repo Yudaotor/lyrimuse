@@ -149,7 +149,7 @@
 "启动" = "Startup";
 "五个源都没找到可用的候选" = "No usable candidates found from any of the five sources";
 "回到当前播放" = "Jump to Now Playing";
-"创建 Last.fm 应用即可获取 API Key + Secret。" = "Create a Last.fm app to get an API Key + Secret.";
+"创建 Last.fm 应用即可获取 API Key + Secret" = "Create a Last.fm app to get an API Key + Secret";
 "在 Last.fm 后台创建应用会同时给你 API Key 和 Secret" = "Creating an app in Last.fm's developer portal gives you both an API Key and a Secret";
 "在 ListenBrainz 网站获取 Token →" = "Get a Token from the ListenBrainz website →";
 "在 Last.fm 网站查看主页" = "View My Profile on Last.fm";
