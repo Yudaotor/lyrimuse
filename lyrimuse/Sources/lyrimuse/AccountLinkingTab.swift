@@ -521,7 +521,7 @@ struct AccountLinkingTab: View {
                 Text(L10n.t("创建 Last.fm 应用即可获取 API Key + Secret。"))
                     .font(.caption2).foregroundStyle(.secondary)
                 HelpButton(
-                    text: L10n.t("在 Last.fm 后台创建应用会同时给你 API Key 和 Secret，读取、写入都用这一套凭据。只填用户名 + API Key（不填 Secret、不点「连接」）也可以。"),
+                    text: L10n.t("在 Last.fm 后台创建应用会同时给你 API Key 和 Secret"),
                     docTitle: L10n.t("前往 Last.fm 申请 →"),
                     docURL: URL(string: "https://www.last.fm/api/account/create")!
                 )
