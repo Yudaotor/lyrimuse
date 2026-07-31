@@ -128,7 +128,7 @@ struct OnboardingView: View {
                 .foregroundStyle(Color.accentColor)
             Text(L10n.t("欢迎使用 Lyrimuse"))
                 .font(.title.bold())
-            Text(L10n.t("一个贴心的桌面悬浮歌词小工具。接下来用几步简单设置，帮你把它调整成合适的样子——这些选项以后随时可以在设置里再调整。"))
+            Text(L10n.t("一个贴心的桌面悬浮歌词小工具。接下来用几步简单设置，帮你把它调整成合适的样子——这些选项以后随时可以在设置里再调整"))
                 .foregroundStyle(.secondary)
         }
     }
@@ -137,7 +137,7 @@ struct OnboardingView: View {
         VStack(alignment: .leading, spacing: 16) {
             Text(L10n.t("选择播放器"))
                 .font(.title2.bold())
-            Text(L10n.t("Lyrimuse 支持从 Apple Music 或 QQ 音乐读取播放状态——选一个你平时用来听歌的 App，随时可以在设置里重新选择。"))
+            Text(L10n.t("Lyrimuse 支持从 Apple Music 或 QQ 音乐读取播放状态——选一个你平时用来听歌的 App，随时可以在设置里重新选择"))
                 .foregroundStyle(.secondary)
             Picker(L10n.t("播放器"), selection: Binding(
                 get: { features.player },
@@ -156,7 +156,7 @@ struct OnboardingView: View {
         VStack(alignment: .leading, spacing: 16) {
             Text(L10n.t("Apple Music 自动化权限（必需）"))
                 .font(.title2.bold())
-            Text(L10n.t("Lyrimuse 需要这个权限来读取 Apple Music 当前正在播放的歌曲信息——没有它，悬浮歌词完全没法显示任何内容。点下面的按钮会弹出系统授权对话框，选择「允许」即可；随时可以在设置里重新打开这一步。"))
+            Text(L10n.t("Lyrimuse 需要这个权限来读取 Apple Music 当前正在播放的歌曲信息——没有它，悬浮歌词完全没法显示任何内容。点下面的按钮会弹出系统授权对话框，选择「允许」即可；随时可以在设置里重新打开这一步"))
                 .foregroundStyle(.secondary)
             HStack {
                 Image(systemName: automationStatusIconName)
@@ -172,7 +172,7 @@ struct OnboardingView: View {
             if isRequestingAutomation {
                 if automationRequestTimedOut {
                     VStack(alignment: .leading, spacing: 6) {
-                        Text(L10n.t("这次请求耗时有点久——如果你已经看到系统弹窗，请去处理它；找不到弹窗的话，可以直接去系统设置里手动开启。"))
+                        Text(L10n.t("这次请求耗时有点久——如果你已经看到系统弹窗，请去处理它；找不到弹窗的话，可以直接去系统设置里手动开启"))
                         Button(L10n.t("打开系统设置")) {
                             NSWorkspace.shared.open(MusicAutomationPermission.systemSettingsURL)
                         }
@@ -180,7 +180,7 @@ struct OnboardingView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 } else {
-                    Text(L10n.t("请查看屏幕上弹出的系统授权对话框，选择「允许」。"))
+                    Text(L10n.t("请查看屏幕上弹出的系统授权对话框，选择「允许」"))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -192,7 +192,7 @@ struct OnboardingView: View {
         VStack(alignment: .leading, spacing: 16) {
             Text(L10n.t("常驻后台服务（必需）"))
                 .font(.title2.bold())
-            Text(L10n.t("Lyrimuse 需要一个后台程序常驻运行，负责读取播放状态、解析歌词/封面并写入本地缓存——没有它，悬浮歌词/灵动岛同样无法显示任何内容。点下面的按钮即可启用，之后开机会自动运行，不用再管。"))
+            Text(L10n.t("Lyrimuse 需要一个后台程序常驻运行，负责读取播放状态、解析歌词/封面并写入本地缓存——没有它，悬浮歌词/灵动岛同样无法显示任何内容。点下面的按钮即可启用，之后开机会自动运行，不用再管"))
                 .foregroundStyle(.secondary)
             HStack {
                 Image(systemName: collectorRunning ? "checkmark.circle.fill" : "xmark.circle.fill")
@@ -234,7 +234,7 @@ struct OnboardingView: View {
                 .foregroundStyle(.pink)
             Text(L10n.t("连接 Last.fm（可选）"))
                 .font(.title.bold())
-            Text(L10n.t("连上同一个 Last.fm 账号，可以双向同步收听记录，还能解锁「每周听歌小结」「每日听歌报告」推送。不连接完全不影响悬浮歌词，随时可以之后在设置里配置。"))
+            Text(L10n.t("连上同一个 Last.fm 账号，可以双向同步收听记录，还能解锁「每周听歌小结」「每日听歌报告」推送。不连接完全不影响悬浮歌词，随时可以之后在设置里配置"))
                 .foregroundStyle(.secondary)
             Button(L10n.t("现在去设置里连接")) {
                 AppActions.shared.pendingSettingsSelection = .account(.lastfm)
@@ -251,7 +251,7 @@ struct OnboardingView: View {
                 .foregroundStyle(.green)
             Text(L10n.t("一切就绪"))
                 .font(.title.bold())
-            Text(L10n.t("可以随时在设置里调整这些选项。"))
+            Text(L10n.t("可以随时在设置里调整这些选项"))
                 .foregroundStyle(.secondary)
         }
     }

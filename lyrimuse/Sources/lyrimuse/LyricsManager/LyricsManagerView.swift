@@ -381,7 +381,7 @@ struct LyricsManagerView: View {
                     }
                     Button(L10n.t("取消"), role: .cancel) {}
                 } message: {
-                    Text(String(format: L10n.t("这会删除当前全部 %d 条本地记录,包括你手动编辑、联网搜索采纳过的内容,已导出到本地的歌词文件也会一并删除,且无法撤销。下次播放会重新走一遍匹配解析。"), store.summaries.count))
+                    Text(String(format: L10n.t("这会删除当前全部 %d 条本地记录,包括你手动编辑、联网搜索采纳过的内容,已导出到本地的歌词文件也会一并删除,且无法撤销。下次播放会重新走一遍匹配解析"), store.summaries.count))
                 }
             }
         } detail: {
@@ -476,7 +476,7 @@ struct LyricsManagerView: View {
             }
             Button(L10n.t("取消"), role: .cancel) {}
         } message: {
-            Text(L10n.t("已导出到本地的歌词文件也会一并删除,下次播放这首歌会重新走一遍匹配解析,不保证一定能找到一样的歌词。"))
+            Text(L10n.t("已导出到本地的歌词文件也会一并删除,下次播放这首歌会重新走一遍匹配解析,不保证一定能找到一样的歌词"))
         }
         .sheet(isPresented: $showSearchSheet) {
             // 采纳候选直接保存,不需要再手动点"保存修改"——避免让人误以为选了就已经
@@ -578,7 +578,7 @@ struct LyricsManagerView: View {
 
     private var wordTimingHint: some View {
         Label(
-            L10n.t("这首歌带逐字时间轴,播放时优先用它渲染——下面直接改「歌词(LRC)」文本框不会生效。如需手改主歌词,请先点「移除逐字时间轴」。译文/罗马音编辑不受影响,随时生效。"),
+            L10n.t("这首歌带逐字时间轴,播放时优先用它渲染——下面直接改「歌词(LRC)」文本框不会生效。如需手改主歌词,请先点「移除逐字时间轴」。译文/罗马音编辑不受影响,随时生效"),
             systemImage: "info.circle"
         )
         .font(.caption)

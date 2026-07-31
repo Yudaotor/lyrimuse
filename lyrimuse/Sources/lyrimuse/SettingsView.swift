@@ -149,7 +149,7 @@ struct SettingsView: View {
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
-                    .help(L10n.t("以下都是可选的账号与推送服务，跟显示歌词本身无关；不配置也完全不影响悬浮歌词正常使用。"))
+                    .help(L10n.t("以下都是可选的账号与推送服务，跟显示歌词本身无关；不配置也完全不影响悬浮歌词正常使用"))
                 }
             }
             .listStyle(.sidebar)
@@ -229,7 +229,7 @@ private struct LyricsSettingsTab: View {
                 )) {
                     HStack(spacing: 4) {
                         Text(L10n.t("歌词在线匹配"))
-                        HelpButton(text: L10n.t("控制要不要在线解析歌词——关闭后，第一次播放的新歌不会再去查下面「歌词来源」里的这些平台，只用本地已经缓存过的结果（如果有）。「歌词来源」「匹配算法」这两组设置都只在这个开关开启时才有意义。"))
+                        HelpButton(text: L10n.t("控制要不要在线解析歌词——关闭后，第一次播放的新歌不会再去查下面「歌词来源」里的这些平台，只用本地已经缓存过的结果（如果有）。「歌词来源」「匹配算法」这两组设置都只在这个开关开启时才有意义"))
                     }
                 }
                 // "解析"(而非"预取")避免被误读成预先加载音频本身,这个开关从不碰音频。
@@ -239,7 +239,7 @@ private struct LyricsSettingsTab: View {
                 )) {
                     HStack(spacing: 4) {
                         Text(L10n.t("提前解析同专辑其它曲目"))
-                        HelpButton(text: L10n.t("换到一首歌时，如果它属于某张专辑，会顺带在后台把同专辑里还没解析过的其它曲目也提前解析——封面无条件都会解析，歌词是否被预取取决于上面的「歌词在线匹配」开关是否开启。"))
+                        HelpButton(text: L10n.t("换到一首歌时，如果它属于某张专辑，会顺带在后台把同专辑里还没解析过的其它曲目也提前解析——封面无条件都会解析，歌词是否被预取取决于上面的「歌词在线匹配」开关是否开启"))
                     }
                 }
             }
@@ -271,7 +271,7 @@ private struct LyricsSettingsTab: View {
             } header: {
                 Text(L10n.t("歌词来源"))
             } footer: {
-                Text(L10n.t("至少需要保留一个歌词来源。"))
+                Text(L10n.t("至少需要保留一个歌词来源"))
             }
 
             // Section 的 header/footer 只要塞进去的不是纯 Text(哪怕只是 Text+
@@ -296,9 +296,9 @@ private struct LyricsSettingsTab: View {
                 .pickerStyle(.segmented)
 
                 HStack(spacing: 4) {
-                    Text(L10n.t("智能算法自动打分选最高分，顺序优先按你排的顺序来。"))
+                    Text(L10n.t("智能算法自动打分选最高分，顺序优先按你排的顺序来"))
                         .font(.caption2).foregroundStyle(.secondary)
-                    HelpButton(text: L10n.t("智能算法：查到的每个来源都打分（逐字时间轴、语言是否匹配等维度），自动挑分数最高的一条。顺序优先：按下面排的顺序，用第一个查到有效结果的来源，不比较分数。"))
+                    HelpButton(text: L10n.t("智能算法：查到的每个来源都打分（逐字时间轴、语言是否匹配等维度），自动挑分数最高的一条。顺序优先：按下面排的顺序，用第一个查到有效结果的来源，不比较分数"))
                 }
 
                 if features.lyricsSourceMode == .priority {
@@ -343,7 +343,7 @@ private struct LyricsSettingsTab: View {
             } header: {
                 Text(L10n.t("译文语言"))
             } footer: {
-                Text(L10n.t("仅对 Musixmatch 来源生效——网易云音乐/QQ音乐的译文固定是中文。"))
+                Text(L10n.t("仅对 Musixmatch 来源生效——网易云音乐/QQ音乐的译文固定是中文"))
             }
 
             Section("展示") {
@@ -376,7 +376,7 @@ private struct LyricsSettingsTab: View {
                 } label: {
                     HStack(spacing: 4) {
                         Text(L10n.t("歌词文件夹"))
-                        HelpButton(text: L10n.t("歌词默认就以这个文件夹为准维护——联网匹配到的结果会导出成文件存在这里，「歌词管理」里手动导入/编辑的文件也在这里。换成新文件夹后，旧文件夹里已有的文件不会自动搬过去，需要自己手动移动。"))
+                        HelpButton(text: L10n.t("歌词默认就以这个文件夹为准维护——联网匹配到的结果会导出成文件存在这里，「歌词管理」里手动导入/编辑的文件也在这里。换成新文件夹后，旧文件夹里已有的文件不会自动搬过去，需要自己手动移动"))
                     }
                 }
 
@@ -413,7 +413,7 @@ private struct LyricsSettingsTab: View {
             } header: {
                 Text(L10n.t("管理"))
             } footer: {
-                Text(L10n.t("每首歌听过一次,歌词就会永久保存在这个文件夹里;在「歌词管理」里删除会同时删掉这里已导出的文件。"))
+                Text(L10n.t("每首歌听过一次,歌词就会永久保存在这个文件夹里;在「歌词管理」里删除会同时删掉这里已导出的文件"))
             }
         }
         .formStyle(.grouped)
@@ -578,7 +578,7 @@ private struct AppearanceSettingsTab: View {
                                 .frame(width: 40, alignment: .trailing)
                         }
                     }
-                    Text(L10n.t("没超过就整行显示；超过这个长度会截断，鼠标悬停在状态栏上能看到完整这一行。"))
+                    Text(L10n.t("没超过就整行显示；超过这个长度会截断，鼠标悬停在状态栏上能看到完整这一行"))
                         .font(.caption).foregroundStyle(.secondary)
                 }
             }
@@ -703,7 +703,7 @@ private struct AppearanceSettingsTab: View {
                 }
                 Button(L10n.t("取消"), role: .cancel) {}
             } message: {
-                Text(L10n.t("会把当前的文字颜色、背景颜色、描边颜色存成一个可以随时再套用的主题。"))
+                Text(L10n.t("会把当前的文字颜色、背景颜色、描边颜色存成一个可以随时再套用的主题"))
             }
 
             Section {
@@ -776,8 +776,8 @@ private struct AppearanceSettingsTab: View {
                 // 直观(不看说明容易只当成"按住就能拖"或者"这窗口点不动了"),需要在
                 // 这里补一句显式说明,不能单靠去掉括号里的旧文案就假装用户会自己发现。
                 VStack(alignment: .leading, spacing: 6) {
-                    Text(L10n.t("解锁「锁定位置」后,悬浮歌词默认可以直接点击穿透到它下面的内容;长按住悬浮歌词不放,才能拖动它的位置。"))
-                    Text(L10n.t("开启「截屏/录屏时隐藏」后,截图、录屏、视频会议共享屏幕都不会拍到悬浮歌词——但你自己在这台 Mac 上仍然正常看得见。"))
+                    Text(L10n.t("解锁「锁定位置」后,悬浮歌词默认可以直接点击穿透到它下面的内容;长按住悬浮歌词不放,才能拖动它的位置"))
+                    Text(L10n.t("开启「截屏/录屏时隐藏」后,截图、录屏、视频会议共享屏幕都不会拍到悬浮歌词——但你自己在这台 Mac 上仍然正常看得见"))
                 }
             }
         }
@@ -829,7 +829,7 @@ private struct PlayerSettingsTab: View {
             } header: {
                 Text(L10n.t("播放器"))
             } footer: {
-                Text(L10n.t("选择 Lyrimuse 读取哪个 App 的播放状态。"))
+                Text(L10n.t("选择 Lyrimuse 读取哪个 App 的播放状态"))
             }
 
             // 本地数据源现在通过 AppleScript 直接问 Music.app(见 MediaControlClient.swift),
@@ -860,7 +860,7 @@ private struct PlayerSettingsTab: View {
                 if isRequestingAutomation {
                     if automationRequestTimedOut {
                         VStack(alignment: .leading, spacing: 6) {
-                            Text(L10n.t("这次请求耗时有点久——如果你已经看到系统弹窗，请去处理它；找不到弹窗的话，可以直接去系统设置里手动开启。"))
+                            Text(L10n.t("这次请求耗时有点久——如果你已经看到系统弹窗，请去处理它；找不到弹窗的话，可以直接去系统设置里手动开启"))
                             Button(L10n.t("打开系统设置")) {
                                 NSWorkspace.shared.open(MusicAutomationPermission.systemSettingsURL)
                             }
@@ -868,7 +868,7 @@ private struct PlayerSettingsTab: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     } else {
-                        Text(L10n.t("请查看屏幕上弹出的系统授权对话框，选择「允许」。"))
+                        Text(L10n.t("请查看屏幕上弹出的系统授权对话框，选择「允许」"))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -876,7 +876,7 @@ private struct PlayerSettingsTab: View {
             } header: {
                 Text(L10n.t("权限"))
             } footer: {
-                Text(L10n.t("Lyrimuse 靠这个权限读取 Apple Music 当前播放的歌曲信息——没有它，悬浮歌词/灵动岛都无法显示任何歌词内容。"))
+                Text(L10n.t("Lyrimuse 靠这个权限读取 Apple Music 当前播放的歌曲信息——没有它，悬浮歌词/灵动岛都无法显示任何歌词内容"))
             }
             .onAppear { automationStatus = MusicAutomationPermission.check(askIfNeeded: false) }
             // 见 OnboardingView 里同一处的注释:用户可能切去系统设置手动处理,切回来
@@ -918,7 +918,7 @@ private struct PlayerSettingsTab: View {
             } header: {
                 Text(L10n.t("常驻服务"))
             } footer: {
-                Text(L10n.t("负责读取播放状态、解析歌词/封面并写入本地缓存的后台程序——没有它，悬浮歌词/灵动岛同样无法显示任何内容。"))
+                Text(L10n.t("负责读取播放状态、解析歌词/封面并写入本地缓存的后台程序——没有它，悬浮歌词/灵动岛同样无法显示任何内容"))
             }
             .onAppear { collectorRunning = CollectorServiceManager.isRunning }
 
@@ -946,8 +946,8 @@ private struct PlayerSettingsTab: View {
                 Text(L10n.t("App 联动"))
             } footer: {
                 Text(features.player == .auto
-                    ? L10n.t("「打开任意已知播放器时启动 Lyrimuse」由后台采集服务负责监测，需要先在上面启用「后台采集服务」才会生效。")
-                    : String(format: L10n.t("「打开 %@ 时启动 Lyrimuse」由后台采集服务负责监测，需要先在上面启用「后台采集服务」才会生效。"), features.player.displayName))
+                    ? L10n.t("「打开任意已知播放器时启动 Lyrimuse」由后台采集服务负责监测，需要先在上面启用「后台采集服务」才会生效")
+                    : String(format: L10n.t("「打开 %@ 时启动 Lyrimuse」由后台采集服务负责监测，需要先在上面启用「后台采集服务」才会生效"), features.player.displayName))
             }
         }
         .formStyle(.grouped)
@@ -1091,7 +1091,7 @@ private struct GeneralSettingsTab: View {
             } header: {
                 Text(L10n.t("配置备份"))
             } footer: {
-                Text(L10n.t("导出的文件包含账号 token、密钥等敏感信息，注意妥善保管，不要分享给他人。导入会覆盖当前所有设置并重启 App。清除会抹掉所有账号和个人设置，恢复到刚装完时的样子。"))
+                Text(L10n.t("导出的文件包含账号 token、密钥等敏感信息，注意妥善保管，不要分享给他人。导入会覆盖当前所有设置并重启 App。清除会抹掉所有账号和个人设置，恢复到刚装完时的样子"))
             }
             .alert(L10n.t("确定要导出配置吗？"), isPresented: $showExportConfigWarning) {
                 Button(L10n.t("取消"), role: .cancel) {}
@@ -1105,7 +1105,7 @@ private struct GeneralSettingsTab: View {
                     }
                 }
             } message: {
-                Text(L10n.t("导出的文件包含你的账号 token、密钥等敏感信息，请妥善保管，不要分享给他人。"))
+                Text(L10n.t("导出的文件包含你的账号 token、密钥等敏感信息，请妥善保管，不要分享给他人"))
             }
             .alert(L10n.t("确定要导入这份配置吗？"), isPresented: $showImportConfigConfirm) {
                 Button(L10n.t("取消"), role: .cancel) {}
@@ -1116,7 +1116,7 @@ private struct GeneralSettingsTab: View {
                     }
                 }
             } message: {
-                Text(L10n.t("这会覆盖当前所有设置（包括已连接的账号），并立即重启 Lyrimuse 使其生效。"))
+                Text(L10n.t("这会覆盖当前所有设置（包括已连接的账号），并立即重启 Lyrimuse 使其生效"))
             }
             .alert(L10n.t("确定要清除所有配置吗？"), isPresented: $showClearConfigWarning) {
                 Button(L10n.t("取消"), role: .cancel) {}
@@ -1125,7 +1125,7 @@ private struct GeneralSettingsTab: View {
                     ConfigPortability.restartApp()
                 }
             } message: {
-                Text(L10n.t("这会清除所有账号 token、密钥和个人设置，恢复到刚装完时的样子（下次启动会重新走一遍引导向导），且无法撤销。如果还没备份过，建议先点上面「导出配置…」。"))
+                Text(L10n.t("这会清除所有账号 token、密钥和个人设置，恢复到刚装完时的样子（下次启动会重新走一遍引导向导），且无法撤销。如果还没备份过，建议先点上面「导出配置…」"))
             }
         }
         .formStyle(.grouped)
@@ -1167,7 +1167,7 @@ private struct ShortcutsSettingsTab: View {
                 // ShortcutRecorder.swift 里 handle(_:) 的注释),不是这次改动新引入的
                 // 限制,但一直没有地方说明,2026-07-30 用户实测顺着"只有组合键才成功"
                 // 这个疑问反馈过来,补一句说明。
-                Text(L10n.t("至少需要搭配 ⌘/⌥/⌃ 中一个（功能键、媒体键除外）。"))
+                Text(L10n.t("至少需要搭配 ⌘/⌥/⌃ 中一个（功能键、媒体键除外）"))
             }
 
             Section(L10n.t("播放控制（附加功能）")) {
@@ -1261,7 +1261,7 @@ private struct AboutSettingsTab: View {
                     }
                 }
             } footer: {
-                Text(L10n.t("汇总 App/采集器日志和权限、常驻服务等关键状态,保存成一份文本文件——不会包含任何账号 token 或密钥的原始内容。"))
+                Text(L10n.t("汇总 App/采集器日志和权限、常驻服务等关键状态,保存成一份文本文件——不会包含任何账号 token 或密钥的原始内容"))
             }
 
             Section {

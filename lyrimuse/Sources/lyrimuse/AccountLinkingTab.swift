@@ -373,11 +373,11 @@ struct AccountLinkingTab: View {
     ) {
         guard newValue else { apply(false); return }
         if let sameCardHint {
-            missingPrereqAlert = MissingPrereqAlert(message: String(format: L10n.t("请先在这张卡上填好：%@。"), sameCardHint), jumpTarget: nil)
+            missingPrereqAlert = MissingPrereqAlert(message: String(format: L10n.t("请先在这张卡上填好：%@"), sameCardHint), jumpTarget: nil)
             return
         }
         if let crossCard, let hint = crossCard.hint {
-            missingPrereqAlert = MissingPrereqAlert(message: String(format: L10n.t("需要先配置「%@」（%@）。"), crossCard.target.title, hint), jumpTarget: crossCard.target)
+            missingPrereqAlert = MissingPrereqAlert(message: String(format: L10n.t("需要先配置「%@」（%@）"), crossCard.target.title, hint), jumpTarget: crossCard.target)
             return
         }
         apply(true)
@@ -422,14 +422,14 @@ struct AccountLinkingTab: View {
         switch destination {
         case .listenBrainz:
             // 2026-07-23:之前这里是 EmptyView(),理由是"账户信息" Section 的 footer
-            // 已经有一句话——但那句("可选，不填不影响悬浮歌词。")回答的是"要不要填"，
+            // 已经有一句话——但那句("可选，不填不影响悬浮歌词")回答的是"要不要填"，
             // 不是"填了之后 App 会拿它做什么"，用户反馈缺一句跟其它三张卡片一样的
             // 用途说明，这里补上；下面 Section 的 footer 继续保留，两句话各自负责
             // 不同的信息，跟其它卡片的结构一致。
-            Text(L10n.t("这台 Mac 上的播放记录会同步到 ListenBrainz，建立完整的听歌历史；也是网页展示、听歌报告的可选数据来源。"))
+            Text(L10n.t("这台 Mac 上的播放记录会同步到 ListenBrainz，建立完整的听歌历史；也是网页展示、听歌报告的可选数据来源"))
                 .font(.caption).foregroundStyle(.secondary)
         case .stateRelay:
-            Text(L10n.t("用来把当前播放状态推送到网页小组件和状态徽章。"))
+            Text(L10n.t("用来把当前播放状态推送到网页小组件和状态徽章"))
                 .font(.caption).foregroundStyle(.secondary)
         case .lastfm:
             // 2026-07-29:"读取"方向(同步到 ListenBrainz)原来是下面一个独立开关,现在
@@ -438,10 +438,10 @@ struct AccountLinkingTab: View {
             // 就默认生效"这个判定条件完全一样,单独留一个开关只是多一次点击,没有实际
             // 区分度。跟"网页推送"那两个字段"填好就是唯一的开关"是同一个思路(见
             // stateRelayFields 的 footer 注释)。
-            Text(L10n.t("同一个 Last.fm 账号，可以双向同步收听记录。"))
+            Text(L10n.t("同一个 Last.fm 账号，可以双向同步收听记录"))
                 .font(.caption).foregroundStyle(.secondary)
         case .bark:
-            Text(L10n.t("用来接收「每周听歌小结」「每日听歌报告」推送。"))
+            Text(L10n.t("用来接收「每周听歌小结」「每日听歌报告」推送"))
                 .font(.caption).foregroundStyle(.secondary)
         }
     }
@@ -474,7 +474,7 @@ struct AccountLinkingTab: View {
         } header: {
             Text(L10n.t("账户信息"))
         } footer: {
-            Text(L10n.t("可选，不填不影响悬浮歌词。"))
+            Text(L10n.t("可选，不填不影响悬浮歌词"))
         }
     }
 
@@ -487,7 +487,7 @@ struct AccountLinkingTab: View {
                 HStack(spacing: 4) {
                     Text(L10n.t("同步服务地址"))
                     HelpButton(
-                        text: L10n.t("自己用 Cloudflare Worker + KV 搭建的 state-worker 服务（独立公开仓库 Yudaotor/nowplaying-workers）。不想自建也行：配好「ListenBrainz」也能让网页兜底显示「正在播放」，两者配一个就够。效果截图 + 完整从零搭建步骤见该仓库自己的 README。"),
+                        text: L10n.t("自己用 Cloudflare Worker + KV 搭建的 state-worker 服务（独立公开仓库 Yudaotor/nowplaying-workers）。不想自建也行：配好「ListenBrainz」也能让网页兜底显示「正在播放」，两者配一个就够。效果截图 + 完整从零搭建步骤见该仓库自己的 README"),
                         docTitle: L10n.t("查看效果 + 教程 →"),
                         // 指向 Yudaotor/nowplaying-workers 仓库自己的 README(#readme 锚点,
                         // GitHub 会自动渲染仓库首页那份)。
@@ -502,7 +502,7 @@ struct AccountLinkingTab: View {
             // 这两个字段填好本身就是"要不要推"这件事唯一的开关,不再需要额外一层可以
             // 打开也可以关闭的开关;网页那边(state-worker/网页前端)看到 modules 配置
             // 缺失本来就按"全部启用"兜底,语义对得上。
-            Text(L10n.t("填好这两项就会自动推送到网页。"))
+            Text(L10n.t("填好这两项就会自动推送到网页"))
         }
     }
 
@@ -546,7 +546,7 @@ struct AccountLinkingTab: View {
         } header: {
             Text(L10n.t("写入记录"))
         } footer: {
-            Text(L10n.t("开启后会把播放记录同步写入 Last.fm。"))
+            Text(L10n.t("开启后会把播放记录同步写入 Last.fm"))
         }
     }
 
@@ -613,7 +613,7 @@ struct AccountLinkingTab: View {
         case .waitingForBrowserAuth:
             stepDots(current: 2)
             VStack(alignment: .leading, spacing: 6) {
-                Text(L10n.t("已在浏览器打开 Last.fm 授权页面。请在浏览器里点击「Yes, allow access」完成授权——授权完会自动跳回 Lyrimuse 继续；如果浏览器没有自动跳转，也可以回来手动点下面的按钮。"))
+                Text(L10n.t("已在浏览器打开 Last.fm 授权页面。请在浏览器里点击「Yes, allow access」完成授权——授权完会自动跳回 Lyrimuse 继续；如果浏览器没有自动跳转，也可以回来手动点下面的按钮"))
                     .font(.caption).foregroundStyle(.secondary)
                 Button(L10n.t("我已完成授权，继续")) {
                     lastfmConnect.confirmBrowserAuth(apiKey: config.lastfmScrobbleAPIKey, secret: config.lastfmScrobbleSecret)
@@ -712,11 +712,11 @@ struct AccountLinkingTab: View {
 
             if config.notificationPlatform == .dingtalk {
                 SecretFieldRow(L10n.t("加签密钥（可选）"), value: $config.dingtalkSignSecret)
-                Text(L10n.t("机器人安全设置选了「加签」才需要填，留空按未加签处理。"))
+                Text(L10n.t("机器人安全设置选了「加签」才需要填，留空按未加签处理"))
                     .font(.caption2).foregroundStyle(.secondary)
             } else if config.notificationPlatform == .feishu {
                 SecretFieldRow(L10n.t("签名密钥（可选）"), value: $config.feishuSignSecret)
-                Text(L10n.t("机器人安全设置开了「签名校验」才需要填，不开也能收到消息。"))
+                Text(L10n.t("机器人安全设置开了「签名校验」才需要填，不开也能收到消息"))
                     .font(.caption2).foregroundStyle(.secondary)
             }
         } header: {
@@ -775,7 +775,7 @@ struct AccountLinkingTab: View {
         } header: {
             Text(L10n.t("提醒开关"))
         } footer: {
-            Text(L10n.t("数据源留空时自动判定：两个账号都配了优先用 Last.fm，只配了一个就用那个。每日听歌报告在本地时间晚上 10 点之后、当天第一次检查时推送，内容是当天播放次数、累计时长（数据源是 ListenBrainz 时才有），以及听得最多的几首歌。"))
+            Text(L10n.t("数据源留空时自动判定：两个账号都配了优先用 Last.fm，只配了一个就用那个。每日听歌报告在本地时间晚上 10 点之后、当天第一次检查时推送，内容是当天播放次数、累计时长（数据源是 ListenBrainz 时才有），以及听得最多的几首歌"))
         }
     }
 
