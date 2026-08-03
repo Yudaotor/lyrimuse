@@ -24,8 +24,8 @@ const (
 	// 2026-07-27:之前一直没跟着 App 的 CFBundleShortVersionString 走(App 侧由
 	// LYRIMUSE_VERSION 从 git tag 自动派生,这个常量完全独立、从改名到现在没手动
 	// 动过)——收到 v1.1.0 发布时顺手同步一次,不代表以后每次发版都会自动跟着改,
-	// 这里仍然是纯手动维护的字面量。
-	clientVersion = "1.1.0"
+	// 这里仍然是纯手动维护的字面量。2026-08-03 随 v1.2.0 发布再同步一次。
+	clientVersion = "1.2.0"
 
 	pollInterval      = 5 * time.Second
 	playingNowRefresh = 60 * time.Second
