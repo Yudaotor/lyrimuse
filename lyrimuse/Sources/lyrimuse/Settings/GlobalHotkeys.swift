@@ -1,3 +1,4 @@
+import AppKit
 import KeyboardShortcuts
 import LyrimuseCore
 
@@ -12,6 +13,7 @@ extension KeyboardShortcuts.Name {
     static let toggleOverlay = Self("toggleOverlay")
     static let toggleLockPosition = Self("toggleLockPosition")
     static let openLyricsManagerHotkey = Self("openLyricsManagerHotkey")
+    static let openLyricsWindowHotkey = Self("openLyricsWindowHotkey")
     static let openSettingsHotkey = Self("openSettingsHotkey")
     static let playPauseHotkey = Self("playPauseHotkey")
     static let nextTrackHotkey = Self("nextTrackHotkey")
@@ -23,11 +25,23 @@ extension KeyboardShortcuts.Name {
 @MainActor
 enum GlobalHotkeys {
     static func registerAll() {
+        // ⚠️ 必须先判断 settings.classicOverlayEnabled 再碰 LyricsOverlayWindowController
+        // .shared——2026-08-02 实测排查坐实:这里早先漏掉了这层判断,是
+        // NotchLyricsWindowController.swift 顶部注释点名的"三处外部路由代码"(AppDelegate/
+        // SettingsView/MenuBarMenu)之外被漏判的第 4 处。真正引用到 `.shared` 才会执行
+        // init() 建窗口,而 init() 订阅 PlaybackCoordinator 的 Combine sink 在订阅瞬间
+        // 就会用当下的 isVisible(默认 true)触发一次 orderFront——用户只开了"灵动岛
+        // 歌词"、关掉"桌面悬浮歌词"(classicOverlayEnabled=false)时,这两个全局快捷键
+        // 仍然可以被录制、按下后会把从未构造过的经典悬浮窗凭空建出来并常驻显示,而且
+        // 因为 classicOverlayEnabled 是 false,MenuBarMenu 的 ClassicOverlayMenuSection
+        // 根本不会出现,菜单里找不到直接关掉它的入口。
         KeyboardShortcuts.onKeyUp(for: .toggleOverlay) {
+            guard AppSettings.shared.classicOverlayEnabled else { return }
             let overlay = LyricsOverlayWindowController.shared
             overlay.setVisible(!overlay.isVisible)
         }
         KeyboardShortcuts.onKeyUp(for: .toggleLockPosition) {
+            guard AppSettings.shared.classicOverlayEnabled else { return }
             let overlay = LyricsOverlayWindowController.shared
             let newValue = !overlay.isPositionLocked
             // 跟 MenuBarMenu.swift 现成的"锁定位置"Toggle 绑定逻辑完全一致:持久化
@@ -38,24 +52,50 @@ enum GlobalHotkeys {
         KeyboardShortcuts.onKeyUp(for: .openLyricsManagerHotkey) {
             AppActions.shared.openLyricsManager?()
         }
+        KeyboardShortcuts.onKeyUp(for: .openLyricsWindowHotkey) {
+            AppActions.shared.openLyricsWindow?()
+        }
         KeyboardShortcuts.onKeyUp(for: .openSettingsHotkey) {
             AppActions.shared.openSettings?()
         }
         // 播放控制三个动作:先校验自动化权限——没问过就顺手弹一次系统授权对话框,
-        // 已经拒绝过就静默不做,不会每次按快捷键都弹一次提示打扰用户。只有选了
-        // Apple Music 才真的会走到这个权限检查,见
-        // MusicAutomationPermission.checkForCurrentPlayer 注释。
+        // 已经拒绝过就不弹窗、只用 NSSound.beep() 给一个"没有生效"的听觉反馈(跟
+        // ShortcutRecorder.swift 录制失败时用的是同一个既有信号,不新引入一套提示
+        // 机制)——2026-08-02 补上:早先这里权限不够时是完全静默的,用户按了没反应,
+        // 分不清是没按中快捷键还是权限问题。只有选了 Apple Music 才真的会走到这个
+        // 权限检查,见 MusicAutomationPermission.checkForCurrentPlayer 注释。
+        //
+        // ⚠️ 必须用 checkForCurrentPlayerSafely(异步)而不是 checkForCurrentPlayer
+        // (同步)——2026-08-02 实测排查坐实:同步版本在还没问过时会直接触达
+        // AEDeterminePermissionToAutomateTarget,这个 API 在主线程调用有据可查地
+        // 可能永久挂起,详见 checkForCurrentPlayerSafely 定义处的注释。KeyboardShortcuts
+        // 的 onKeyUp 回调本身是同步闭包,用 Task { ... } 包一层去调用异步版本。
         KeyboardShortcuts.onKeyUp(for: .playPauseHotkey) {
-            guard MusicAutomationPermission.checkForCurrentPlayer(askIfNeeded: true) else { return }
-            MusicPlaybackController.playPause()
+            Task {
+                guard await MusicAutomationPermission.checkForCurrentPlayerSafely(askIfNeeded: true) else {
+                    NSSound.beep()
+                    return
+                }
+                MusicPlaybackController.playPause()
+            }
         }
         KeyboardShortcuts.onKeyUp(for: .nextTrackHotkey) {
-            guard MusicAutomationPermission.checkForCurrentPlayer(askIfNeeded: true) else { return }
-            MusicPlaybackController.nextTrack()
+            Task {
+                guard await MusicAutomationPermission.checkForCurrentPlayerSafely(askIfNeeded: true) else {
+                    NSSound.beep()
+                    return
+                }
+                MusicPlaybackController.nextTrack()
+            }
         }
         KeyboardShortcuts.onKeyUp(for: .previousTrackHotkey) {
-            guard MusicAutomationPermission.checkForCurrentPlayer(askIfNeeded: true) else { return }
-            MusicPlaybackController.previousTrack()
+            Task {
+                guard await MusicAutomationPermission.checkForCurrentPlayerSafely(askIfNeeded: true) else {
+                    NSSound.beep()
+                    return
+                }
+                MusicPlaybackController.previousTrack()
+            }
         }
         // 单曲歌词时间轴微调——不需要自动化权限(不碰 Music.app,只改本地/relay 数据源
         // 里 LyricsSyncEngine 的匹配位置),随时可用。步长现读 AppSettings(用户在设置里

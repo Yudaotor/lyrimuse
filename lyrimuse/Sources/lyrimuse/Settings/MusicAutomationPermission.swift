@@ -85,6 +85,27 @@ enum MusicAutomationPermission {
         return check(askIfNeeded: askIfNeeded).isAuthorized
     }
 
+    // GlobalHotkeys(播放/暂停/上一首/下一首)+ LyricsOverlayView/NotchLyricsView 的
+    // 播放控制按钮,一共 5 个调用点专用的安全版本——2026-08-02 实测排查坐实:这几处
+    // 以前直接同步调用上面的 checkForCurrentPlayer(askIfNeeded: true),而这个函数在
+    // 还没问过、真的需要询问系统时会触达 AEDeterminePermissionToAutomateTarget,正是
+    // requestWithTimeout() 那段注释里点名"在主线程调用有据可查地可能永久挂起"的同一个
+    // 风险点——SettingsView/OnboardingView 已经为此专门包了安全封装,这几处播放控制
+    // 入口却全部绕开、直接同步调,理论上足以把整个 App UI 冻住。已经确定过的状态
+    // (authorized/denied)不碰这条风险路径,直接同步返回;只有真的还没问过、且调用方
+    // 明确要求"可以顺便问一下"时,才走 requestWithTimeout() 同一套"真正检查 vs 超时"
+    // 赛跑机制——传 launchMusicAppIfNeeded: false,不像"设置/引导页显式点请求权限
+    // 按钮"那样为了拿到弹窗去后台拉起 Music.app:播放控制快捷键是被动触发的日常操作,
+    // 不该有"按一下播放/暂停,Music.app 却在后台悄悄启动"这种意料之外的副作用。
+    static func checkForCurrentPlayerSafely(askIfNeeded: Bool) async -> Bool {
+        guard PlaybackPlayerPreference.current == .appleMusic else { return true }
+        let current = check(askIfNeeded: false)
+        if current != .notDetermined { return current.isAuthorized }
+        guard askIfNeeded else { return false }
+        let result = await requestWithTimeout(launchMusicAppIfNeeded: false)
+        return result?.isAuthorized ?? false
+    }
+
     // 2026-07-23 实测坐实:全新安装(TCC 对这个 App 完全没有历史记录)的机器上,
     // OnboardingView/SettingsView 直接在按钮点击回调里同步调 check(askIfNeeded: true)
     // 会把整个 App UI 冻结、表现成"点了没反应"——这不是这个 App 自己写错了什么,是
@@ -100,7 +121,11 @@ enum MusicAutomationPermission {
     // 意义,那个线程依然会在后台陪跑下去,只是这次调用不再等它,调用方应该在后续别的
     // 时机(比如.onAppear、App重新变为前台)用 askIfNeeded:false 再读一次最新状态，
     // 覆盖"用户后来自己去系统设置手动开了、但这次请求已经放弃等待"这种情况。
-    static func requestWithTimeout(seconds: Double = 8) async -> MusicAutomationPermissionStatus? {
+    // launchMusicAppIfNeeded 默认 true(SettingsView/OnboardingView 这两个"用户显式点
+    // 请求权限按钮"的场景需要——不然 Music.app 没在运行时权限弹窗根本不出现,见下面
+    // ensureMusicAppRunning 调用点的注释);checkForCurrentPlayerSafely(播放控制快捷键/
+    // 按钮专用)传 false,理由见那边的注释。
+    static func requestWithTimeout(seconds: Double = 8, launchMusicAppIfNeeded: Bool = true) async -> MusicAutomationPermissionStatus? {
         // 2026-07-24 实测坐实(用户报告+复现):Music.app 没在运行时点"请求权限",
         // 系统授权对话框根本不弹——不是超时/挂起,是压根没问。AECreateDesc 按
         // bundle ID 解析目标时,如果找不到对应的运行中进程,大概率直接落到下面
@@ -110,7 +135,9 @@ enum MusicAutomationPermission {
         // 先确保 Music.app 处于运行状态,让 bundle ID 一定能解析到一个真实进程。
         // 用 activates=false 后台启动,不抢用户当前焦点,跟 AppDelegate.swift 里
         // launchMusicOnLyrimuseOpen 那半用的是同一个"后台起、别抢前台"的做法。
-        await ensureMusicAppRunning()
+        if launchMusicAppIfNeeded {
+            await ensureMusicAppRunning()
+        }
         return await withTaskGroup(of: MusicAutomationPermissionStatus?.self) { group in
             group.addTask { check(askIfNeeded: true) }
             group.addTask {

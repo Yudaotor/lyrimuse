@@ -83,7 +83,16 @@ struct OnboardingView: View {
                     }
                 }
                 .keyboardShortcut(.defaultAction)
-                .disabled(steps[step] == .collectorService && !collectorRunning)
+                // collectorService 和 automation 都标着"（必需）",锁"下一步"的逻辑必须
+                // 两步都覆盖到——2026-08-02 实测排查坐实:早先这里漏了 automation,用户
+                // 如果误点了系统权限弹窗的"不允许"、或者弹窗还没处理就切走,回来能直接
+                // 点到底走完向导,doneStep 却无条件显示"一切就绪",没有任何东西提醒用户
+                // 核心权限其实没给。跟 collectorServiceStep 一样是"软强制"——只锁"下一步"
+                // 按钮,不禁用/隐藏关闭按钮,用户仍然可以直接关掉整个引导窗口跳过。
+                .disabled(
+                    (steps[step] == .collectorService && !collectorRunning)
+                        || (steps[step] == .automation && automationStatus != .authorized)
+                )
             }
             .padding(16)
         }
