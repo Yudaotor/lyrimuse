@@ -90,7 +90,7 @@ func qqSmartbox(query string) []qqSmartboxItem {
 	}
 	req.Header.Set("Referer", "https://y.qq.com/")
 	req.Header.Set("User-Agent", qqUA)
-	resp, err := (&http.Client{Timeout: 6 * time.Second}).Do(req)
+	resp, err := doHTTPTracked(&http.Client{Timeout: 6 * time.Second}, req)
 	if err != nil {
 		return nil
 	}
@@ -126,7 +126,7 @@ func qqSingerAvatar(name string) string {
 	}
 	req.Header.Set("Referer", "https://y.qq.com/")
 	req.Header.Set("User-Agent", qqUA)
-	resp, err := (&http.Client{Timeout: 6 * time.Second}).Do(req)
+	resp, err := doHTTPTracked(&http.Client{Timeout: 6 * time.Second}, req)
 	if err != nil {
 		return ""
 	}
@@ -169,7 +169,7 @@ func qqSongAlbum(mid string) string {
 	}
 	req.Header.Set("Referer", "https://y.qq.com/")
 	req.Header.Set("User-Agent", qqUA)
-	resp, err := (&http.Client{Timeout: 6 * time.Second}).Do(req)
+	resp, err := doHTTPTracked(&http.Client{Timeout: 6 * time.Second}, req)
 	if err != nil {
 		return ""
 	}
@@ -205,7 +205,7 @@ func qqSongCoverAndSinger(mid string) (cover, singer string) {
 	}
 	req.Header.Set("Referer", "https://y.qq.com/")
 	req.Header.Set("User-Agent", qqUA)
-	resp, err := (&http.Client{Timeout: 6 * time.Second}).Do(req)
+	resp, err := doHTTPTracked(&http.Client{Timeout: 6 * time.Second}, req)
 	if err != nil {
 		return "", ""
 	}
@@ -245,7 +245,22 @@ func qqSongCoverAndSinger(mid string) (cover, singer string) {
 // so a QQ-side impersonator/cover account can't slip through either step.
 // 第二个返回值是 QQ 音乐核实过的官方歌手名(见下方 artistMatches 校验)，用于统一同一
 // 歌手在历史记录里时而中文时而英文、时而全大写的写法(如 PRINCE/Prince)。
-func qqCoverFallback(artist, title string) (cover, canonicalArtist string) {
+//
+// 2026-08-03 实测排查坐实(Michael Jackson《Morphine》——本地专辑标签是
+// "BLOOD ON THE DANCE FLOOR/ HIStory In The Mix",网页黑胶封面却显示成完全不相关的
+// 精选集《The Indispensable Collection》):这里原来"smartbox 结果里第一条双重校验
+// 通过的就是最终结果",跟同一文件里 resolveQQMusicMatch(给"QQ音乐链接"用)不是同一套
+// 选择逻辑——那边有 album 参数时会给前几条候选补专辑名、按 albumScore 选出最贴合本地
+// 专辑的那条,避免"同一首歌被合辑/精选集顶替"(albumScore 函数注释原文就点名了
+// "The Indispensable Collection" 这个例子)；这边完全没有这层专辑感知,只要 smartbox
+// 搜索结果第一条身份对得上就直接采用它的封面,哪个专辑版本排在前面全凭 QQ 搜索接口
+// 自己的排序,拿到精选集封面纯属运气不好。现在补上跟 resolveQQMusicMatch 同一套
+// album 打分:调用方传了专辑名时,先在前几条候选(封顶 4 条,理由/上限跟
+// resolveQQMusicMatch 一致——降低多打详情接口的次数)里按 albumScore 挑出最贴合的
+// 一条,单独过一遍下面这层身份校验;通不过(或本来就没传专辑名)时,原样退回到"逐条
+// 按 smartbox 原始顺序试、第一条双重校验通过就用"这条既有兜底路径,不会比改之前更
+// 容易返回空。
+func qqCoverFallback(artist, title, album string) (cover, canonicalArtist string) {
 	if artist == "" || title == "" {
 		return "", ""
 	}
@@ -253,15 +268,51 @@ func qqCoverFallback(artist, title string) (cover, canonicalArtist string) {
 	// & The Revolution")时,QQ 的 singer 字段可能只单独记了其中一位——不把这个当统一
 	// 歌手名用,避免悄悄丢掉本地已经写全的合作者;封面照常正常解析,不受影响。
 	singleArtist := len(artistCreditParts(artist)) < 2
+	type qqCoverCand struct {
+		mid   string
+		exact bool // name 与 title loose 相等,跟 resolveQQMusicMatch 的 exact 同一含义
+	}
+	var cands []qqCoverCand
 	for _, it := range qqSmartbox(artist + " " + title) {
 		if it.Mid == "" || !looseContains(it.Name, title) || !artistMatches(it.Singer, artist) {
 			continue
 		}
-		if c, singer := qqSongCoverAndSinger(it.Mid); c != "" && artistMatches(singer, artist) {
-			if !singleArtist {
-				return c, ""
+		cands = append(cands, qqCoverCand{mid: it.Mid, exact: normLoose(it.Name) == normLoose(title)})
+	}
+	tryCand := func(c qqCoverCand) (string, string, bool) {
+		cover, singer := qqSongCoverAndSinger(c.mid)
+		if cover == "" || !artistMatches(singer, artist) {
+			return "", "", false
+		}
+		if !singleArtist {
+			return cover, "", true
+		}
+		return cover, singer, true
+	}
+	if album != "" {
+		limit := len(cands)
+		if limit > 4 {
+			limit = 4
+		}
+		bestIdx, bestScore, bestExact := -1, 0, false
+		for i := 0; i < limit; i++ {
+			sc := albumScore(qqSongAlbum(cands[i].mid), album)
+			if sc == 0 && !cands[i].exact {
+				continue
 			}
-			return c, singer
+			if bestIdx == -1 || (cands[i].exact && !bestExact) || (cands[i].exact == bestExact && sc > bestScore) {
+				bestIdx, bestScore, bestExact = i, sc, cands[i].exact
+			}
+		}
+		if bestIdx != -1 {
+			if cover, singer, ok := tryCand(cands[bestIdx]); ok {
+				return cover, singer
+			}
+		}
+	}
+	for _, c := range cands {
+		if cover, singer, ok := tryCand(c); ok {
+			return cover, singer
 		}
 	}
 	return "", ""
@@ -422,7 +473,7 @@ func resolveQQLyric(mid string) string {
 	}
 	req.Header.Set("Referer", "https://y.qq.com/") // 反爬要求带 y.qq.com 来源
 	req.Header.Set("User-Agent", qqUA)
-	resp, err := (&http.Client{Timeout: 6 * time.Second}).Do(req)
+	resp, err := doHTTPTracked(&http.Client{Timeout: 6 * time.Second}, req)
 	if err != nil {
 		return ""
 	}
@@ -518,7 +569,7 @@ func qqMusicuPost(method, module string, param any, comm map[string]any) (json.R
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Cookie", "tmeLoginType=-1;")
 	req.Header.Set("User-Agent", "okhttp/3.14.9")
-	resp, err := (&http.Client{Timeout: 8 * time.Second}).Do(req)
+	resp, err := doHTTPTracked(&http.Client{Timeout: 8 * time.Second}, req)
 	if err != nil {
 		return nil, err
 	}
@@ -604,7 +655,7 @@ func qqSongMetaByMid(mid string) qqSongMeta {
 	}
 	req.Header.Set("Referer", "https://y.qq.com/")
 	req.Header.Set("User-Agent", qqUA)
-	resp, err := (&http.Client{Timeout: 6 * time.Second}).Do(req)
+	resp, err := doHTTPTracked(&http.Client{Timeout: 6 * time.Second}, req)
 	if err != nil {
 		return qqSongMeta{}
 	}

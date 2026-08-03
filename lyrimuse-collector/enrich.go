@@ -244,12 +244,30 @@ func resolveTrackEnrichment(artist, title, album string, durationSecs float64) e
 	if e.CanonicalArtist == "" {
 		e.CanonicalArtist = ne.Artist
 	}
+	// Apple Music/iTunes Search 的匹配结果反正下面第 ~272 行 e.AppleURL 也要用,这里
+	// 提前算出来复用同一份(appleMusicMatchCached 本身按 key 缓存,提前调不会多打一次
+	// 请求)——2026-08-03 实测排查坐实(Michael Jackson《Morphine》,本地专辑标签是
+	// "BLOOD ON THE DANCE FLOOR/ HIStory In The Mix"):网易云曲库缺失该艺人(整个
+	// 目录都查不到,推测版权原因,跟周杰伦同一类问题)时原来直接退到 QQ 音乐,而 QQ
+	// 音乐对这首歌唯一收录的版本偏偏就是"The Indispensable Collection"精选集
+	// (qqCoverFallback 已经会用 albumScore 判定这个不对版,但判定完也没有更好的 QQ
+	// 候选可选,只能将就用它)。resolveAppleMusicMatch 的专辑感知匹配(先按
+	// "歌手+专辑名"整体搜索定位到专辑,查不到再退化成拉专辑完整曲目表本地比对标题,
+	// 见 apple.go 注释)明显更强,而且这份数据本来就要为跳转链接查一次——实测这首歌
+	// 用这条路径能查到正确专辑封面(itunesLookupTracks 兜底分支命中),QQ 音乐反而
+	// 查不到。改成:网易云没有 → 先试 Apple Music 的封面,Apple 也没有 → 才退到 QQ
+	// (维持"至少给个官方封面"的兜底,不会比改之前更容易返回空)。
+	appleMatch := appleMusicMatchCached(artist, title, album)
+	if e.CoverURL == "" && appleMatch.cover != "" {
+		e.CoverURL = appleMatch.cover
+		e.CoverSource = "apple"
+	}
 	if e.CoverURL == "" {
-		// 网易云官方曲库缺失该艺人(版权下架,如周杰伦)时,pick() 已经拒绝了仿冒号候选、
-		// 宁可返回空也不给错误封面(见 artistMatches 注释)。退回 QQ 音乐找同一首歌的
-		// 官方版封面,双重校验歌手名(搜索结果+详情接口各查一次)避免 QQ 侧的仿冒号也
-		// 蒙混过关。
-		qqCover, qqArtist := qqCoverFallback(artist, title)
+		// 网易云、Apple Music 都没有(或都没能给出可信封面)时的最后一道兜底——QQ
+		// 音乐同一首歌的官方版封面,双重校验歌手名(搜索结果+详情接口各查一次)避免
+		// QQ 侧的仿冒号蒙混过关;传入 album 让 qqCoverFallback 内部按 albumScore
+		// 避开精选集/合辑顶替原始专辑封面。
+		qqCover, qqArtist := qqCoverFallback(artist, title, album)
 		e.CoverURL = qqCover
 		if e.CoverURL != "" {
 			e.CoverSource = "qq"
@@ -268,7 +286,9 @@ func resolveTrackEnrichment(artist, title, album string, durationSecs float64) e
 		e.AccentColor = dominantColor(e.CoverURL)
 	}
 	// 各平台单曲跳转链接。Apple Music 中国区优先(iTunes Search)、QQ 经 smartbox、Spotify 搜索链接。
-	e.AppleURL = appleMusicURL(artist, title, album)
+	// 复用上面封面兜底那步已经算出来的 appleMatch(同一个 key 缓存,不是重新发请求),
+	// 不用再单独调一次 appleMusicURL。
+	e.AppleURL = appleMatch.url
 	e.QQURL = qqMusicURL(artist, title, album)
 	if title != "" {
 		e.SpotifyURL = "https://open.spotify.com/search/" + neturl.QueryEscape(artist+" "+title)
@@ -482,7 +502,7 @@ func fetchScoredLyricCandidatesStreaming(artist, title, album string, durationSe
 		resultsCh <- sourceResult{source: "musixmatch", lyr: r.lrc, yrc: r.yrc, tr: r.tr, matchTitle: r.title, matchArtist: r.artist, matchAlbum: r.album, matchCover: r.cover}
 	}()
 	go func() {
-		// 跟 resolveTrackEnrichment 里 e.AppleURL = appleMusicURL(...) 共用同一份
+		// 跟 resolveTrackEnrichment 里 e.AppleURL = appleMatch.url 共用同一份
 		// appleURLCache——谁先查到谁写缓存,这里不重复消耗一次网络请求。
 		resultsCh <- sourceResult{source: "applecover", matchCover: appleMusicMatchCached(artist, title, album).cover}
 	}()

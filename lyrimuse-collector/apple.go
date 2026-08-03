@@ -41,17 +41,9 @@ func hiResArtwork(url string) string {
 	return strings.Replace(url, "100x100bb", "600x600bb", 1)
 }
 
-// appleMusicURL returns the Apple Music page URL for a track via the public
-// iTunes Search API (results[0].trackViewUrl points at the exact song). Cached
-// per track; only successes are cached so a transient failure retries.
-func appleMusicURL(artist, title, album string) string {
-	return appleMusicMatchCached(artist, title, album).url
-}
-
-// appleMusicMatchCached 是 appleMusicURL 的富信息版本,跟 qq.go 的
-// qqMusicMatchCached 同一个套路:两个入口(跳转链接/搜索候选歌词的通用封面兜底)
-// 共用同一份按 artist|title|album 缓存的 appleMusicMatch,不管从哪个入口先查到,
-// 另一个都直接命中缓存,不会重复发两遍 iTunes 请求。
+// appleMusicMatchCached 按 artist|title|album 缓存 Apple Music/iTunes Search 的匹配
+// 结果——url 给"App 跳转链接"用,cover 给封面(主封面兜底 + 搜索候选歌词的通用封面
+// 兜底)用,不管哪个调用方先查到,其它调用方都直接命中缓存,不会重复发两遍 iTunes 请求。
 func appleMusicMatchCached(artist, title, album string) appleMusicMatch {
 	if title == "" {
 		return appleMusicMatch{}
