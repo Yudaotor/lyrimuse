@@ -166,7 +166,7 @@ func musixmatchDo(action string, params neturl.Values) ([]byte, error) {
 		return nil, err
 	}
 	req.Header.Set("User-Agent", "Mozilla/5.0")
-	resp, err := (&http.Client{Timeout: 8 * time.Second}).Do(req)
+	resp, err := doHTTPTracked(&http.Client{Timeout: 8 * time.Second}, req)
 	if err != nil {
 		return nil, err
 	}

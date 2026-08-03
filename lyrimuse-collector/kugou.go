@@ -156,7 +156,7 @@ func kugouGet(u string, v any) error {
 		return err
 	}
 	req.Header.Set("User-Agent", "Mozilla/5.0")
-	resp, err := (&http.Client{Timeout: 6 * time.Second}).Do(req)
+	resp, err := doHTTPTracked(&http.Client{Timeout: 6 * time.Second}, req)
 	if err != nil {
 		return err
 	}

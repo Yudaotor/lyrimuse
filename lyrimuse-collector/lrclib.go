@@ -62,7 +62,7 @@ func resolveLRCLIBLyric(artist, title, album string) lrclibResult {
 	// LRCLIB 的使用规范要求带上能标识调用方的 User-Agent。
 	req.Header.Set("User-Agent", clientName+"/"+clientVersion+" (+https://github.com/Yudaotor/desktop-lyrics-suite)")
 	// lrclib.net 比网易云/QQ 音乐慢不少,给足余量避免临界超时。
-	resp, err := (&http.Client{Timeout: 10 * time.Second}).Do(req)
+	resp, err := doHTTPTracked(&http.Client{Timeout: 10 * time.Second}, req)
 	if err != nil {
 		return lrclibResult{}
 	}

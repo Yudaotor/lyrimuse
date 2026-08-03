@@ -17,18 +17,21 @@ import (
 // normal background auto-resolve path uses — so there is no second, drifting
 // implementation of "how do we rank lyric sources" living in Swift.
 //
-// Prints one JSON array line (NDJSON, via repeated json.Encoder.Encode calls on the
+// Prints one JSON object line (NDJSON, via repeated json.Encoder.Encode calls on the
 // same stdout — each call already appends its own newline) per update instead of a
 // single array at the end: the first line lands as soon as the first source answers,
 // each later line is the full best-known-so-far ranked list including whichever
 // sources have answered by then (see fetchScoredLyricCandidatesStreaming's onUpdate
 // comment for why it's the whole list every time, not just the newly-arrived source),
-// and the last line printed is the final result. LyricsSearchService.swift reads stdout line
-// by line as the process runs (not just at exit) and replaces its displayed list with
-// each line's contents — that's the "陆陆续续出来" behavior instead of waiting for
-// everything (or the 20s deadline) before showing anything. Never touches
-// enrich-cache.json (that only happens if/when desktop-lyrics's existing
-// EnrichCacheStore.saveEdit persists whichever candidate the user picks).
+// and the last line printed is the final result. Each line is a searchLyricsUpdate —
+// not a bare candidates array (2026-08-02 changed from bare array to this wrapper) —
+// so the networkLooksDown signal can ride along with the candidates without a second,
+// out-of-band channel. LyricsSearchService.swift reads stdout line by line as the
+// process runs (not just at exit) and replaces its displayed list with each line's
+// contents — that's the "陆陆续续出来" behavior instead of waiting for everything (or
+// the 20s deadline) before showing anything. Never touches enrich-cache.json (that only
+// happens if/when desktop-lyrics's existing EnrichCacheStore.saveEdit persists whichever
+// candidate the user picks).
 func runSearchLyricsCLI(args []string) {
 	fs := flag.NewFlagSet("search-lyrics", flag.ExitOnError)
 	artist := fs.String("artist", "", "track artist")
@@ -63,7 +66,15 @@ func runSearchLyricsCLI(args []string) {
 	sArtist, sTitle, sAlbum := toSimplified(*artist), toSimplified(*title), toSimplified(*album)
 	enc := json.NewEncoder(os.Stdout)
 	emit := func(_ neteaseInfo, results []scoredLyricCandidateResult) {
-		if err := enc.Encode(filterEnabledLyricSources(results)); err != nil {
+		// networkLooksDown() 2026-08-02 补上——之前每行 stdout 只是候选数组本身,五个源
+		// 都没查到时 desktop-lyrics 只能显示一句笼统的"都没找到",分不清是这首歌真的没有
+		// 网络歌词,还是网络整体不通导致五个源的请求全部发不出去。见 networkobs.go 的
+		// 注释,这里额外带上这个信号,让前端能区分这两种情况、给出不同的提示文案。
+		update := searchLyricsUpdate{
+			Candidates:       filterEnabledLyricSources(results),
+			NetworkLooksDown: networkLooksDown(),
+		}
+		if err := enc.Encode(update); err != nil {
 			log.Fatalf("search-lyrics: encode results: %v", err)
 		}
 	}
@@ -73,6 +84,16 @@ func runSearchLyricsCLI(args []string) {
 	// 没回来时就已经触发(五个源全部异常缓慢),这种极端情况下循环里的 emit 一次都没
 	// 被调用过,不能让 Swift 那边一行 stdout 都收不到、误判成"进程没有任何输出"。
 	emit(neteaseInfo{}, results)
+}
+
+// searchLyricsUpdate 是 search-lyrics 每行 stdout 输出的实际结构——2026-08-02 从裸
+// candidates 数组改成这个包一层的对象,好让 networkLooksDown 这个信号跟候选列表一起
+// 传给 Swift 那边,不用另开一条带外的信息通道。字段名用大写导出是 encoding/json
+// 序列化的要求,LyricsSearchService.swift 那边按同样的字段名(小写开头,Swift 惯例)
+// 解码。
+type searchLyricsUpdate struct {
+	Candidates       []scoredLyricCandidateResult `json:"candidates"`
+	NetworkLooksDown bool                         `json:"networkLooksDown"`
 }
 
 // filterEnabledLyricSources drops candidates from sources the user disabled via
