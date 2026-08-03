@@ -65,6 +65,10 @@ struct MenuBarLabel: View {
                 NSApp.activate(ignoringOtherApps: true)
                 openWindowAction(id: "lyrics-manager")
             }
+            AppActions.shared.openLyricsWindow = {
+                NSApp.activate(ignoringOtherApps: true)
+                openWindowAction(id: "lyrics-window")
+            }
             AppActions.shared.openOnboarding = {
                 NSApp.activate(ignoringOtherApps: true)
                 openWindowAction(id: "onboarding")
@@ -150,6 +154,14 @@ struct MenuBarMenu: View {
             openWindow(id: "lyrics-manager")
         } label: {
             Label(L10n.t("歌词管理…"), systemImage: "music.note.list")
+        }
+        // 跟"歌词管理…"同一个坑、同一个解法——正经的标题栏窗口,展示完整歌词并跟随
+        // 播放自动滚动,见 UI/LyricsWindowView.swift。
+        Button {
+            NSApp.activate(ignoringOtherApps: true)
+            openWindow(id: "lyrics-window")
+        } label: {
+            Label(L10n.t("歌词窗口…"), systemImage: "text.quote")
         }
         // 单独一条分隔线,把上面"打开某个窗口做配置/管理"这两项,跟下面"检查更新/关于"
         // 这类"了解一下这个 App 本身"的入口分开——原来四项挤在一起没有区分,看着乱

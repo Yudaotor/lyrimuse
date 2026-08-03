@@ -63,6 +63,16 @@ struct LyricsOverlayView: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .lyricsTextStroke(settings.textStrokeEnabled, color: settings.textStrokeColor)
             }
+            // 2026-08-02 补上——第一次解锁「锁定位置」时短暂弹一次的手势提示,4 秒后
+            // 自动消失,只弹一次(见 LyricsOverlayWindowController.hasShownDragHintKey
+            // 处的注释)。放在播放控制按钮上面同一个位置,不额外占用固定空间。
+            if overlayController.showDragHint {
+                Text(L10n.t("长按即可拖动位置"))
+                    .font(.caption)
+                    .foregroundStyle(settings.foregroundColor.opacity(0.8))
+                    .lyricsTextStroke(settings.textStrokeEnabled, color: settings.textStrokeColor)
+                    .transition(.opacity)
+            }
             if overlayController.isHoveringForControls && !settings.lockPosition {
                 playbackControls
                     // 把这排按钮的真实屏幕位置汇报上去,当作点击穿透的例外热区(见
@@ -104,6 +114,7 @@ struct LyricsOverlayView: View {
         .onPreferenceChange(ContentHeightPreferenceKey.self) { onContentHeightChange($0) }
         .onPreferenceChange(ControlsFramePreferenceKey.self) { onControlsFrameChange($0) }
         .animation(.easeOut(duration: 0.16), value: overlayController.isHoveringForControls)
+        .animation(.easeOut(duration: 0.3), value: overlayController.showDragHint)
     }
 
     private var playbackControls: some View {
@@ -128,13 +139,23 @@ struct LyricsOverlayView: View {
     }
 
     // 跟 GlobalHotkeys.swift 里播放控制三个动作同一套"点了才校验权限"逻辑——没问过就
-    // 顺手弹一次系统授权对话框,已经拒绝过就静默不做,不需要在悬浮窗里再单独设计一套
-    // 提示 UI。只有选了 Apple Music 才真的会走到这个权限检查,见
-    // MusicAutomationPermission.checkForCurrentPlayer 注释。
+    // 顺手弹一次系统授权对话框,已经拒绝过就用 NSSound.beep() 给一个"没有生效"的听觉
+    // 反馈,不需要在悬浮窗里再单独设计一套提示 UI(2026-08-02 补上,理由跟
+    // GlobalHotkeys.swift 同一处注释一致)。只有选了 Apple Music 才真的会走到这个
+    // 权限检查,见 MusicAutomationPermission.checkForCurrentPlayer 注释。
+    //
+    // ⚠️ 必须用 checkForCurrentPlayerSafely(异步)——理由见该方法定义处的注释:同步版本
+    // 在还没问过时会直接触达有据可查、可能永久挂起主线程的系统 API。iconButton 的
+    // action 是同步闭包(Button(action:) 要求),用 Task { ... } 包一层去调用异步版本。
     private func controlButton(_ systemName: String, primary: Bool = false, action: @escaping () -> Void) -> some View {
         iconButton(systemName, primary: primary) {
-            guard MusicAutomationPermission.checkForCurrentPlayer(askIfNeeded: true) else { return }
-            action()
+            Task {
+                guard await MusicAutomationPermission.checkForCurrentPlayerSafely(askIfNeeded: true) else {
+                    NSSound.beep()
+                    return
+                }
+                action()
+            }
         }
     }
 
@@ -186,7 +207,12 @@ struct LyricsOverlayView: View {
             // 接续,高频率更新下会造成逐字流转卡顿。暂停时 anchor 会变 nil(见 fastTick
             // 守卫),TimelineView 的 paused 参数顺带把这个子树的刷新也停下来。
             TimelineView(.animation(paused: !poller.isPlayingNow)) { context in
-                let currentMs = poller.anchor?.extrapolatedPositionMs(now: context.date) ?? 0
+                // 加上 currentLyricsOffsetMs——activeLine/activeLineIndex(决定"现在是哪一
+                // 行哪个词")内部已经把 offsetMs 加进判断了,这里如果不加同一个偏移量,
+                // "被判定成当前词"用的时间基准跟"这个词该填多满"用的时间基准就对不上:
+                // 词提前变成"当前词"了,但填色进度还是按未校正的原始位置算,会出现填到一半
+                // 就卡住、然后突然跳到下一个词从 0 开始的现象(2026-08-03 用户反馈实测坐实)。
+                let currentMs = (poller.anchor?.extrapolatedPositionMs(now: context.date) ?? 0) + poller.currentLyricsOffsetMs
                 // 换成会自动换行的 WrapLayout——原来的 HStack(spacing: 0) 从不换行,一行
                 // 装不下所有字时会把每个 Text 压缩到自己出省略号,长的逐字歌词行会直接
                 // "消失"变成一串"…"。见文件底部 WrapLayout 定义。
@@ -226,73 +252,19 @@ struct LyricsOverlayView: View {
         }
     }
 
-    // 逐字时长下限——只影响这一个词自己的填色速度,不改 startMs、不影响下一个词何时
-    // 开始。英文歌词(NetEase/QQ/酷狗给的逐字对齐)比中文更容易出现 durationMs==0 或
-    // 几十毫秒的极短词(介词/冠词一类),硬边界瞬间 0→1 在这种词密集的句子里会显得更"跳"。
-    private static let minWordDurationMs = 80
-    // 过渡带半宽(fraction 单位)——真正需要柔化的只是"刚好唱到/刚好唱完"这个边界附近
-    // 一小段,不是整个 [0,1] 区间。
-    private static let wordEdgeSoftenBand = 0.08
-
-    // 故意不夹到 [0,1]——如果夹住,"还没轮到、离真正唱到还有好几个字/好几句"的词会
-    // 全都被夹成跟"刚好唱到这个词最前一刻"相同的 0,wordText 里的过渡带因此会在每一个
-    // 尚未唱到的词开头误算出一小截"已经唱过"的高亮(英文按整词分词,这一小截宽度恰好
-    // 接近首字母宽度,表现成"还没唱到的词首字母却先带了点颜色";中文逐字分词单位更小,
-    // 同样误差没那么显眼,但机制相通)。真正需要的裁剪挪到 wordGradient 里,按"过渡带
-    // 跟 [0,1] 是否有交集"分情况处理。
-    private func fillFraction(for w: SyncedLyricWord, atMs ms: Int) -> Double {
-        let effectiveDuration = max(w.durationMs, Self.minWordDurationMs)
-        return Double(ms - w.startMs) / Double(effectiveDuration)
-    }
-
-    // 用渐变整体当文字颜色,而不是叠两层 Text + GeometryReader 手算裁剪宽度——渐变的
-    // stop 位置直接由 TimelineView 每帧算出的真实进度决定,不再需要额外插值。渐变的两个
-    // 颜色用可配置的 foregroundColor 而不是硬编码 .white——已唱过的部分永远是用户选的
-    // 前景色全强度,未唱到的部分是同一颜色的 35% 透明度,没有单独的"进度色"设置项。
+    // 软边渐变算法本体抽到 WordKaraokeGradient(悬浮歌词/歌词窗口共用,见该文件顶部
+    // 注释),这里只负责从 settings 取用户配置的前景色、算出这个字的当前进度,两者
+    // 传给共享算法。
     private func wordText(_ w: SyncedLyricWord, atMs currentMs: Int) -> some View {
         let fg = settings.foregroundColor
-        let fraction = fillFraction(for: w, atMs: currentMs)
-        let band = Self.wordEdgeSoftenBand
+        let fraction = WordKaraokeGradient.fillFraction(for: w, atMs: currentMs)
+        let band = WordKaraokeGradient.wordEdgeSoftenBand
         return Text(w.text)
-            .foregroundStyle(wordGradient(fg: fg, left: fraction - band, right: fraction + band))
+            .foregroundStyle(WordKaraokeGradient.gradient(fg: fg, left: fraction - band, right: fraction + band))
             // 故意不再包 .animation(...)——TimelineView(.animation) 已经在按渲染帧频
-            // 重算真值,这里再叠一层 SwiftUI Animation 补间只会重新引入上面注释里那套
-            // 矢量叠加问题。也故意不在这里单独套描边——描边统一挪到 mainLine 里
+            // 重算真值,这里再叠一层 SwiftUI Animation 补间只会重新引入 mainLine 注释里
+            // 那套矢量叠加问题。也故意不在这里单独套描边——描边统一挪到 mainLine 里
             // WrapLayout 外层的 .compositingGroup()+.lyricsTextStroke(),见那边注释。
-    }
-
-    // 过渡带 [left, right] 以这个字真实的(未夹到 [0,1] 的)进度为中心,可能整段落在
-    // [0,1] 之外——离真正唱到还很远的字(right<=0)、或者早就唱完很久的字(left>=1),
-    // 两种都不需要渐变,直接整字纯色,不构造多余的 stop、也不会在边界凭空冒出一截
-    // 不该有的高亮/暗淡。只有过渡带真正跟 [0,1] 有交集时才需要在夹住的那一端现算准确
-    // 的混合色(而不是硬编码"已唱"/"未唱"两个端值),避免同一位置出现两个不同颜色的
-    // stop 时被其中一个"抢占"。
-    private func wordGradient(fg: Color, left: Double, right: Double) -> LinearGradient {
-        let dim = fg.opacity(0.35)
-        if right <= 0 {
-            return LinearGradient(colors: [dim, dim], startPoint: .leading, endPoint: .trailing)
-        }
-        if left >= 1 {
-            return LinearGradient(colors: [fg, fg], startPoint: .leading, endPoint: .trailing)
-        }
-        func blended(at x: Double) -> Color {
-            let t = min(1, max(0, (x - left) / (right - left)))
-            return fg.opacity(1 - t * 0.65) // 0.65 = 1 - 0.35,在 full 和 dim(0.35)之间线性混
-        }
-        var stops: [Gradient.Stop] = []
-        if left > 0 {
-            stops.append(.init(color: fg, location: 0))
-            stops.append(.init(color: fg, location: left))
-        } else {
-            stops.append(.init(color: blended(at: 0), location: 0))
-        }
-        if right < 1 {
-            stops.append(.init(color: dim, location: right))
-            stops.append(.init(color: dim, location: 1))
-        } else {
-            stops.append(.init(color: blended(at: 1), location: 1))
-        }
-        return LinearGradient(stops: stops, startPoint: .leading, endPoint: .trailing)
     }
 }
 
@@ -376,7 +348,11 @@ private struct ControlsFramePreferenceKey: PreferenceKey {
 // 整体右移),跟这个界面其它文字元素统一的居中风格保持一致。刻意不处理"单个字本身就比
 // 一整行还宽"这种极端情况——真实歌词数据里几乎不会出现,出现了也就是这一"行"单独超宽,
 // 不做防御性拆分。
-private struct WrapLayout: Layout {
+// 2026-07-31 从 private 改成 internal:纯几何计算的自定义换行布局,不依赖这个文件里
+// 任何其它状态,"歌词窗口"(UI/LyricsWindowView.swift)复用它给当前行的逐字高亮做
+// 换行,不需要另起一份重复实现——同一个 target 内跨文件访问,行为对这里的悬浮窗
+// 零影响。
+struct WrapLayout: Layout {
     var horizontalSpacing: CGFloat = 0
     var verticalSpacing: CGFloat = 2
 

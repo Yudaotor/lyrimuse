@@ -3,6 +3,17 @@ import SwiftUI
 import Combine
 import LyrimuseCore
 
+// 文件级常量(跟 LyricsOverlayWindowController.swift 同一个理由不挂在 @MainActor 类
+// 上)。2026-08-03 补上——"显示灵动岛歌词"这个菜单开关(isVisible)之前只存在内存里,
+// setVisible() 只改了 @Published 属性、从没写过 UserDefaults。用户关掉灵动岛后退出
+// 重开 App,isVisible 又从声明处的硬编码默认值 true 重新起步,违背用户上一次的选择、
+// 无条件重新冒出来——这个窗口 level 是 .screenSaver(见 NotchLyricsWindow.swift,
+// 特意调到比系统菜单栏还高才能贴住刘海),意外重新出现时会整个盖在菜单栏那一整条上,
+// 挡住(包括这个 App 自己的)菜单栏图标,肉眼看起来像"菜单栏图标跑到灵动岛的位置去
+// 了"——实际是图标一直没动,只是被这个不该出现的高层级窗口盖住了。跟经典悬浮窗
+// (overlayVisibleKey)是各自独立的 key,两种样式的"显示/隐藏"偏好不共用。
+private let notchVisibleKey = "np:notchOverlayVisible"
+
 // 灵动岛/刘海样式悬浮歌词的窗口控制器——跟 LyricsOverlayWindowController 平行、完全
 // 独立的第二套实现(两种样式互斥、各自独立的窗口控制器,不去改造经典那一套让它同时
 // 兼容两种形态,那样的改造复杂度和风险都更高)。跟经典悬浮窗的行为差异:
@@ -37,7 +48,7 @@ import LyrimuseCore
 final class NotchLyricsWindowController: NSWindowController, ObservableObject {
     static let shared = NotchLyricsWindowController()
 
-    @Published private(set) var isVisible: Bool = true
+    @Published private(set) var isVisible: Bool = NotchLyricsWindowController.restoredVisible()
     @Published private(set) var hideWhenNotPlaying: Bool = false
     // 常显内容行(歌词)相对窗口顶部的偏移——正好等于刘海(或无刘海屏幕的兜底高度)
     // 本身的高度,这样歌词永远从刘海往下才开始画,不会被刘海真实挡住一部分。
@@ -146,7 +157,15 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject {
 
     func setVisible(_ visible: Bool) {
         isVisible = visible
+        UserDefaults.standard.set(visible, forKey: notchVisibleKey)
         updateActualVisibility(isPlayingNow: PlaybackCoordinator.shared.isPlayingNow)
+    }
+
+    // 没有存过(第一次启动/升级前的旧版本从没写过这个 key)时默认 true,跟这个属性
+    // 原来的硬编码默认值保持一致,不改变"从没手动关过的用户"的既有体验。
+    private static func restoredVisible() -> Bool {
+        guard UserDefaults.standard.object(forKey: notchVisibleKey) != nil else { return true }
+        return UserDefaults.standard.bool(forKey: notchVisibleKey)
     }
 
     // 跟经典悬浮窗共用同一个"暂停/无播放时隐藏"设置项(AppSettings.hideWhenNotPlaying),
@@ -162,10 +181,15 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject {
         window?.sharingType = hidden ? .none : .readWrite
     }
 
-    // NotchLyricsView 的 .onHover 调这个。用 AppKit 原生的 NSWindow.setFrame(animate:)
-    // 而不是 SwiftUI 的 withAnimation 包一层——跟经典悬浮窗
-    // LyricsOverlayWindowController.updateHeight() 同一个既有模式,窗口级尺寸变化交给
-    // AppKit 自己的动画,不叠加两套动画系统。
+    // NotchLyricsView 的 .onHover 调这个,animate 传 false(瞬间展开/收起,不做过渡
+    // 动画)——2026-08-02 实测排查坐实:这里原来的注释错误地写着"跟经典悬浮窗
+    // updateHeight() 同一个既有模式",但 updateHeight() 其实一直是 animate: true,
+    // 两者从未真正一致过,是注释本身写错了,不是代码需要改成 true 去凑注释。这里刻意
+    // 用瞬时响应是因为 hover 展开/收起是对鼠标动作的直接反馈,需要跟手感觉跟得上,不能
+    // 有过渡延迟;而下面 isPlayingObserver(播放状态切换)/applyContentWidthSetting
+    // (拖动宽度滑块)这两处用 animate: true,是因为它们是后台状态变化触发的、非用户
+    // 直接操作的尺寸调整,平滑过渡观感更好,不需要即时响应。两处需求不同,animate 参数
+    // 本来就该不一样,不是遗漏。
     func setExpanded(_ expanded: Bool) {
         guard expanded != isExpanded else { return }
         isExpanded = expanded

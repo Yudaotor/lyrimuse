@@ -150,23 +150,148 @@ public enum MediaControlClient {
     // "自动识别"(PlaybackPlayer.auto)——不预先假定是哪个播放器,直接问 media-control
     // 当前系统级 Now Playing 是谁,核对 bundleIdentifier 是不是这四个已知播放器之一
     // (不是的话说明是别的不相关的 App 在报告,视为"没有可关心的正在播放")。检测到的
-    // 恰好是 Apple Music 时,额外走一次 fetchAppleMusicSnapshot() 的 AppleScript 路径
-    // 拿更精确的播放位置——跟手动选 Apple Music 时同等精度;这一步需要"自动化"权限,
-    // 拿不到(或者其它任何原因失败)就退回 media-control 本身已经读到的这份基础数据,
-    // 不整个放弃,让没单独开自动化权限的用户在自动识别模式下依然至少看得到 Apple Music
-    // 的歌词,只是播放位置精度稍低一点。
+    // 恰好是 Apple Music 时,用 fetchAppleMusicSnapshot() 的 AppleScript 路径拿更精确的
+    // 播放位置——跟手动选 Apple Music 时同等精度。
+    //
+    // ⚠️ 不在这次调用里同步等 AppleScript 跑完——2026-08-02 实测排查坐实:早先这里是
+    // "先跑 media-control、判断出 bundleID 是 Apple Music 之后,顺序再跑一次
+    // fetchAppleMusicSnapshot()",两次子进程调用纯顺序阻塞,让 .auto+Apple Music 用户
+    // 单次轮询耗时翻倍(每次都要背两次子进程往返),加大了 LocalPlaybackSource.poll()
+    // 那边"较慢的一次轮询被较快的下一次轮询超车"的竞态窗口。改成:这次轮询直接返回
+    // media-control 已经给出的数据(elapsedTimeNow 外推,实测坐实误差在 0.5s 以内,已经
+    // 在歌词引擎 700ms 匹配容差范围内,不是"不可用"的数据),同时在后台异步刷新一份更
+    // 高精度的 AppleScript 快照缓存起来,供下一次轮询直接取用——代价是精度提升要晚
+    // 一个轮询周期(~2s)才体现,可以忽略不计,换来的是这次轮询不需要再多等一个子进程。
+    //
+    // 不选择"两个子进程一开始就并发发起"这个方案:①这个方法只在真的确认 bundleID 是
+    // Apple Music 之后才知道需要 AppleScript 那条路,并发发起意味着对所有 .auto 用户
+    // (包括从不用 Apple Music、只用 QQ音乐/网易云音乐/Spotify 的人)每次轮询都无条件多
+    // 起一次 AppleScript 子进程,而 AppleScript 首次对 Music.app 发送 Apple Event 可能
+    // 触发一次"自动化"权限的系统弹窗——对完全不相关的播放器用户凭空弹出这个权限对话框
+    // 是不可接受的副作用;②LyrimuseCore 这一层刻意不引入 AppKit(见 Package.swift 的
+    // 单向依赖注释),没有零成本的"Music.app 是否在跑"这类进程内检测手段能在不额外
+    // fork 子进程的前提下提前避开①这个问题。后台缓存刷新的方案完全规避了这两个顾虑。
+    private static let appleMusicSnapshotCacheLock = NSLock()
+    private static var cachedAppleMusicSnapshot: MediaControlSnapshot?
+    private static var isRefreshingAppleMusicSnapshot = false
+
     private static func fetchAutoDetectedSnapshot() -> MediaControlSnapshot? {
         guard let (snapshot, bundleID) = fetchRawMediaControlSnapshot(),
               PlaybackPlayer.allCases.contains(where: { $0 != .auto && $0.bundleIdentifier == bundleID }) else {
             return nil
         }
         guard bundleID == PlaybackPlayer.appleMusic.bundleIdentifier else { return snapshot }
-        return fetchAppleMusicSnapshot() ?? snapshot
+        refreshAppleMusicSnapshotCacheInBackground()
+        appleMusicSnapshotCacheLock.lock()
+        let cached = cachedAppleMusicSnapshot
+        appleMusicSnapshotCacheLock.unlock()
+        // 只在缓存快照确认是"同一首歌"(标题+歌手都对得上)时才借用它更精确的
+        // elapsedTime,其它字段一律用 media-control 这次刚给的最新值,不把整份缓存快照
+        // 原样顶替上去——换歌恰好发生在"上一次后台刷新"和"这一次轮询"之间的这一小段
+        // 窗口里,缓存里可能还是上一首歌的数据:如果直接整体替换,会在下一次后台刷新
+        // 追上之前,把上一首歌的标题/播放位置错当成新歌的显示出来(进度条突然跳到中段
+        // 这种更明显的错误);现在缓存不匹配时老老实实退回 snapshot 自己的 elapsedTime
+        // (精度稍低,但一定对应当前这首歌),精度让位于正确性。
+        guard let cached, cached.title == snapshot.title, cached.artist == snapshot.artist else {
+            return snapshot
+        }
+        return MediaControlSnapshot(
+            title: snapshot.title,
+            artist: snapshot.artist,
+            album: snapshot.album,
+            duration: snapshot.duration,
+            elapsedTime: cached.elapsedTime,
+            playing: snapshot.playing,
+            playbackRate: snapshot.playbackRate,
+            isMusicApp: snapshot.isMusicApp
+        )
+    }
+
+    // 后台线程刷新 cachedAppleMusicSnapshot——同一时刻只允许一份刷新在飞,避免每 2 秒
+    // 一次轮询如果刷新本身耗时超过 2 秒(理论上不该发生,但没有硬保证),背靠背堆积出
+    // 越来越多同时运行的 AppleScript 子进程。isRefreshingAppleMusicSnapshot 和
+    // cachedAppleMusicSnapshot 都可能被轮询线程(读)和这个后台线程(写)同时访问,用同
+    // 一把 NSLock 保护;这里没有用 actor/async——MediaControlClient 整个类型是同步、
+    // 无状态的静态方法集合(在这次改动前完全没有可变状态),用 Thread 而不是
+    // Task.detached 是因为这层文件里其它子进程调用都是纯 Foundation 同步阻塞风格,不
+    // 引入 Swift Concurrency 到这个原本纯同步的类型里,保持风格一致。
+    private static func refreshAppleMusicSnapshotCacheInBackground() {
+        appleMusicSnapshotCacheLock.lock()
+        guard !isRefreshingAppleMusicSnapshot else {
+            appleMusicSnapshotCacheLock.unlock()
+            return
+        }
+        isRefreshingAppleMusicSnapshot = true
+        appleMusicSnapshotCacheLock.unlock()
+        Thread.detachNewThread {
+            let result = fetchAppleMusicSnapshot()
+            appleMusicSnapshotCacheLock.lock()
+            cachedAppleMusicSnapshot = result
+            isRefreshingAppleMusicSnapshot = false
+            appleMusicSnapshotCacheLock.unlock()
+        }
     }
 
     // 真正调用 media-control 子进程、解析原始输出——fetchMediaControlSnapshot(核对
     // 单一 expectedBundleID)和 fetchAutoDetectedSnapshot(核对"是不是这几个已知播放器
     // 之一")共用同一份子进程调用逻辑,只是各自拿到 bundleID 之后核对的规则不同。
+    // 封面图——跟上面 fetchSnapshot()/fetchRawMediaControlSnapshot() 完全独立的一条轻量
+    // 取图路径,只在换歌那一刻调一次(见 LocalPlaybackSource.apply()/
+    // fetchArtworkForCurrentTrack()),不掺进每 2 秒一次的常规轮询,避免每次都解码几百
+    // KB 的 base64 图片数据。这里刻意统一走 media-control——不管当前选的是哪个播放器,
+    // 包括 Apple Music:实测坐实(`media-control get --now`,不带 --no-artwork)对 Apple
+    // Music 的系统级 Now Playing 会话同样能读到 artworkData 字段(systemwide
+    // MediaRemote,不是只有 QQ音乐/网易云音乐才有),不需要另外给 Apple Music 走
+    // AppleScript 的 track.artworks() 去拿封面(那条路要把二进制图片数据想办法序列化过
+    // JSON,明显更麻烦,而且完全没必要碰这个项目里唯一对播放位置精度敏感、已经调好的
+    // AppleScript 集成)。
+    public static func fetchArtwork(player: PlaybackPlayer = PlaybackPlayerPreference.current) -> (data: Data, mimeType: String)? {
+        guard let binaryPath = binaryPath() else { return nil }
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: binaryPath)
+        // 这次不传 --no-artwork——就是为了要这份数据。
+        process.arguments = ["get", "--now"]
+        let outPipe = Pipe()
+        process.standardOutput = outPipe
+        process.standardError = Pipe()
+        do {
+            try process.run()
+            let data = outPipe.fileHandleForReading.readDataToEndOfFile()
+            process.waitUntilExit()
+            guard process.terminationStatus == 0,
+                  let raw = try? JSONDecoder().decode(ArtworkPayload.self, from: data),
+                  let bundleID = raw.bundleIdentifier,
+                  artworkBundleIDMatches(bundleID, player: player),
+                  let base64 = raw.artworkData,
+                  let imageData = Data(base64Encoded: base64) else {
+                return nil
+            }
+            return (imageData, raw.artworkMimeType ?? "image/jpeg")
+        } catch {
+            return nil
+        }
+    }
+
+    // 只取封面相关的这几个字段——跟 RawPayload 是两份独立的 Decodable(理由跟文件顶部
+    // RawPayload 的注释一致:各自只镜像自己关心的那一部分 media-control 输出,不是
+    // 简单的一比一字段映射)。
+    private struct ArtworkPayload: Decodable {
+        let bundleIdentifier: String?
+        let artworkData: String?
+        let artworkMimeType: String?
+    }
+
+    // .auto 没有唯一固定的目标 bundle id,核对规则跟 fetchAutoDetectedSnapshot 一致:
+    // 只要是这四个已知播放器之一就认。选了具体某个播放器时要求精确匹配——系统级 Now
+    // Playing 焦点可能被别的 App(网页视频/Safari 等)抢走,不能把那份图错当成这个
+    // 播放器的封面,理由跟 fetchMediaControlSnapshot 一样。
+    private static func artworkBundleIDMatches(_ bundleID: String, player: PlaybackPlayer) -> Bool {
+        if player == .auto {
+            return PlaybackPlayer.allCases.contains { $0 != .auto && $0.bundleIdentifier == bundleID }
+        }
+        return bundleID == player.bundleIdentifier
+    }
+
     private static func fetchRawMediaControlSnapshot() -> (MediaControlSnapshot, String)? {
         guard let binaryPath = binaryPath() else { return nil }
         let process = Process()

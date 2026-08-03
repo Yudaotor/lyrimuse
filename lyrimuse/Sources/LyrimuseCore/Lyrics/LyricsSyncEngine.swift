@@ -28,6 +28,19 @@ public struct SyncedLyricLine: Equatable {
     }
 }
 
+// 供"歌词窗口"(完整可滚动歌词列表,跟悬浮窗/灵动岛那种只看当前一句不是一回事)用——
+// activeLine(atMs:)/upcomingLineText(afterMs:) 都只查询单个时间点对应的一句,这里要的
+// 是整首歌全部行一次性拿出来。id 不用裸的行下标:同一首歌换成下一首后,如果新旧两份
+// 数组在相同下标位置渲染出内容不同的行,SwiftUI 的 ForEach 会尝试把旧行"变形"成新行
+// 而不是干净地整体替换,换歌瞬间会有肉眼可见的串行/闪烁——调用方(LocalPlaybackSource)
+// 应该把这个 id 拼上当前曲目的标识(比如已有的 currentOffsetKey),保证换歌后 id 集合
+// 整体不同,ForEach 才会做一次干净的整体替换。
+public struct LyricsWindowLine: Identifiable, Equatable {
+    public let id: String
+    public let timeMs: Int
+    public let line: SyncedLyricLine
+}
+
 // 按当前歌曲的四个歌词字段选基准 + 按外推位置算当前应该展示哪一行,算法照抄
 // web/index.html 的 setLyrics()/syncLyrics():有 yrc(逐字)优先用,否则退化到 lyrics
 // 整行;roma/tr 各自独立解析、用 700ms 容差的最近邻匹配贴到对应原文行。
@@ -137,5 +150,52 @@ public final class LyricsSyncEngine {
         let nextIdx = idx + 1
         guard nextIdx < baseLines.count else { return nil }
         return baseLines[nextIdx].text
+    }
+
+    // "歌词窗口"用:整首歌全部行一次性拿出来,构造方式跟 activeLine(atMs:) 完全一致
+    // (同一个 nearestText 贴罗马音/译文),只是对每一行都做一次,而不是只对查询命中的
+    // 那一行做。idPrefix 由调用方传入(通常是当前曲目的标识,比如 currentOffsetKey),
+    // 拼进每个 id 里——见 LyricsWindowLine 的类型注释,这是为了让 SwiftUI 在换歌时做
+    // 一次干净的整体替换,而不是逐行"变形"旧内容。
+    public func allLines(idPrefix: String) -> [LyricsWindowLine] {
+        if usingWords {
+            return wordLines.enumerated().map { i, ln in
+                let words = ln.words.map { w in
+                    SyncedLyricWord(text: w.text, startMs: w.startMs, durationMs: w.durationMs)
+                }
+                let line = SyncedLyricLine(
+                    romanization: nearestText(romaLines, ln.timeMs),
+                    translation: nearestText(trLines, ln.timeMs),
+                    mainText: nil,
+                    words: words
+                )
+                return LyricsWindowLine(id: "\(idPrefix)#\(i)", timeMs: ln.timeMs, line: line)
+            }
+        }
+        return baseLines.enumerated().map { i, ln in
+            let line = SyncedLyricLine(
+                romanization: nearestText(romaLines, ln.timeMs),
+                translation: nearestText(trLines, ln.timeMs),
+                mainText: ln.text,
+                words: nil
+            )
+            return LyricsWindowLine(id: "\(idPrefix)#\(i)", timeMs: ln.timeMs, line: line)
+        }
+    }
+
+    // "歌词窗口"用:跟 activeLine(atMs:) 扫的是同一个数组、加同一个 offsetMs 校正,
+    // 只是返回下标而不是内容——故意不用"拿 activeLine 的内容去 allLines() 里找相同
+    // 内容的下标"这种实现,副歌重复句会有多个内容相同的行,内容匹配选不准具体是哪一次
+    // 出现,必须像这里一样直接按时间戳扫下标。
+    public func activeLineIndex(atMs rawPosMs: Int) -> Int? {
+        let posMs = rawPosMs + offsetMs
+        if usingWords {
+            var idx = -1
+            for (i, ln) in wordLines.enumerated() where ln.timeMs <= posMs { idx = i }
+            return idx >= 0 ? idx : nil
+        }
+        var idx = -1
+        for (i, ln) in baseLines.enumerated() where ln.timeMs <= posMs { idx = i }
+        return idx >= 0 ? idx : nil
     }
 }

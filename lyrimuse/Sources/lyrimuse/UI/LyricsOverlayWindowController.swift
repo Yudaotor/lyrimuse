@@ -6,6 +6,16 @@ import LyrimuseCore
 // 文件级常量(不挂在 @MainActor 类上),避免 Timer 的 @Sendable 闭包里引用
 // MainActor-isolated static let 触发并发检查警告。
 private let overlayPositionKey = "np:overlayPositionOrigin" // "x,y" 字符串
+// 2026-08-03 补上——"显示桌面悬浮歌词"这个菜单开关(isVisible)之前只存在内存里,
+// setVisible() 只改了 @Published 属性、从没写过 UserDefaults。用户关掉悬浮窗后退出
+// 重开 App,isVisible 又从声明处的硬编码默认值 true 重新起步,悬浮窗(以及灵动岛,见
+// NotchLyricsWindowController 同名 key)会违背用户上一次的选择、无条件重新冒出来。
+private let overlayVisibleKey = "np:overlayVisible"
+// 2026-08-02 补上——"解锁「锁定位置」后长按才能拖动"这条手势提示之前只写在设置页
+// footer,用户真正需要它的时刻(已经解锁、站在悬浮窗前面想拖却拖不动)完全看不到。
+// 只在解锁这一刻、且这台机器从没显示过一次时,才在悬浮窗本身短暂弹一条提示——只需要
+// 提醒一次,不是每次解锁都刷一遍存在感。
+private let hasShownDragHintKey = "np:hasShownOverlayDragHint"
 // 高度是初始/最小值,换行需要更多行时由 updateHeight 动态调整,不会比这个更矮。宽度
 // 在 AppSettings.overlayWidth 里(可在设置里调,默认 640),真正装不下的极端长行交给
 // WrapLayout(LyricsOverlayView.swift)自动换行,不再单靠"更宽"兜底。
@@ -18,7 +28,7 @@ private let overlayDefaultHeight: CGFloat = 120
 final class LyricsOverlayWindowController: NSWindowController, ObservableObject {
     static let shared = LyricsOverlayWindowController()
 
-    @Published private(set) var isVisible: Bool = true
+    @Published private(set) var isVisible: Bool = LyricsOverlayWindowController.restoredVisible()
     @Published private(set) var isPositionLocked: Bool = false
     // "暂停/无播放时自动隐藏"这个开关本身——跟 isVisible(用户手动的显示/隐藏偏好)是
     // 两个独立维度,见 updateActualVisibility() 的组合逻辑,不能互相覆盖对方的语义。
@@ -42,10 +52,13 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject 
     @Published private(set) var isHoveringForControls: Bool = false
     // 长按拖动是否已经"武装"(用于 View 层画一圈高亮提示"现在可以拖了")。
     @Published private(set) var isDragArmed: Bool = false
+    // 见 hasShownDragHintKey 处的注释——只在第一次解锁时短暂为 true,几秒后自动收回。
+    @Published private(set) var showDragHint: Bool = false
 
     private var globalMouseMonitor: Any?
     private var localMouseMonitor: Any?
     private var longPressTimer: Timer?
+    private var dragHintDismissTimer: Timer?
     // 按下时的鼠标屏幕坐标,只用来算"武装前挪动是否超过容差"——武装之后的拖动本身
     // 交给 performDrag 原生处理,不需要再自己算位移增量。
     private var pressStartLocation: NSPoint?
@@ -122,6 +135,7 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject 
 
     func setVisible(_ visible: Bool) {
         isVisible = visible
+        UserDefaults.standard.set(visible, forKey: overlayVisibleKey)
         updateActualVisibility(isPlayingNow: PlaybackCoordinator.shared.isPlayingNow)
     }
 
@@ -162,6 +176,21 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject 
             // 锁定这一刻可能正悬停/正长按/正拖到一半,全部清零,不留任何残留状态。
             cancelPendingPress()
             isHoveringForControls = false
+        } else {
+            maybeShowDragHintOnFirstUnlock()
+        }
+    }
+
+    // 见 hasShownDragHintKey 处的注释——这台机器第一次解锁时,在悬浮窗本身短暂弹一条
+    // "长按可拖动"提示,4 秒后自动收回,且只弹这一次(用 UserDefaults 记一个已展示过
+    // 的标记,不是每次解锁都刷)。
+    private func maybeShowDragHintOnFirstUnlock() {
+        guard !UserDefaults.standard.bool(forKey: hasShownDragHintKey) else { return }
+        UserDefaults.standard.set(true, forKey: hasShownDragHintKey)
+        dragHintDismissTimer?.invalidate()
+        showDragHint = true
+        dragHintDismissTimer = Timer.scheduledTimer(withTimeInterval: 4, repeats: false) { [weak self] _ in
+            MainActor.assumeIsolated { self?.showDragHint = false }
         }
     }
 
@@ -181,10 +210,19 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject 
     // 动态调整。
     private func updateHeight(_ contentHeight: CGFloat) {
         guard let window else { return }
-        let newHeight = max(overlayDefaultHeight, ceil(contentHeight))
+        let rawHeight = max(overlayDefaultHeight, ceil(contentHeight))
         let current = window.frame
-        guard abs(newHeight - current.height) >= 0.5 else { return } // 避免亚像素抖动反复触发
         let top = current.origin.y + current.height
+        // 顶边固定、向下增高的同时,不能让底边超出当前屏幕可见区域——2026-08-02 实测
+        // 排查坐实:早先这里只保证"不小于默认高度"这一层下限,极端情况下(罗马音+译文+
+        // 下一句预览都开着、又遇上长歌词多行换行)可能把窗口下半部分撑到 Dock 后面甚至
+        // 屏幕外,用户看不到、也没有任何自我纠正机制。跟 restoredOrigin(size:) 里"显示器
+        // 配置可能变了,夹回可见区域"是同一个思路,这里对称地夹一下高度上限——最多只
+        // 长到"顶边到屏幕可见区域底边"这么高,同时仍然保证不低于默认高度(用户内容真的
+        // 需要更多空间时优先满足默认下限,不能反过来让默认高度本身失效)。
+        let visibleFrame = window.screen?.visibleFrame ?? NSScreen.main?.visibleFrame ?? current
+        let newHeight = min(rawHeight, max(overlayDefaultHeight, top - visibleFrame.minY))
+        guard abs(newHeight - current.height) >= 0.5 else { return } // 避免亚像素抖动反复触发
         let newFrame = NSRect(x: current.origin.x, y: top - newHeight, width: current.width, height: newHeight)
         window.setFrame(newFrame, display: true, animate: true)
     }
@@ -196,7 +234,13 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject 
         guard let window else { return }
         let current = window.frame
         let centerX = current.origin.x + current.width / 2
-        let newFrame = NSRect(x: centerX - width / 2, y: current.origin.y, width: width, height: current.height)
+        // 按中心点算出的新左右边界同样需要夹回屏幕可见区域——2026-08-02 实测排查坐实:
+        // 早先这里没做这层钳制,宽度滑块调到接近上限(1000pt)且窗口当前位置偏向屏幕
+        // 一侧时,新边界可能超出屏幕,跟上面 updateHeight 是同一类"极端设置下窗口跑出
+        // 可见区域、且没有自我纠正"的问题,同一个思路一起修。
+        let visibleFrame = window.screen?.visibleFrame ?? NSScreen.main?.visibleFrame ?? current
+        let newX = min(max(centerX - width / 2, visibleFrame.minX), visibleFrame.maxX - width)
+        let newFrame = NSRect(x: newX, y: current.origin.y, width: width, height: current.height)
         window.setFrame(newFrame, display: true, animate: true)
     }
 
@@ -364,6 +408,13 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject 
         }
         RunLoop.main.add(t, forMode: .common)
         moveDebounceTimer = t
+    }
+
+    // 没有存过(第一次启动/升级前的旧版本从没写过这个 key)时默认 true,跟这个属性
+    // 原来的硬编码默认值保持一致,不改变"从没手动关过的用户"的既有体验。
+    private static func restoredVisible() -> Bool {
+        guard UserDefaults.standard.object(forKey: overlayVisibleKey) != nil else { return true }
+        return UserDefaults.standard.bool(forKey: overlayVisibleKey)
     }
 
     private static func restoredOrigin(size: NSSize) -> NSPoint {

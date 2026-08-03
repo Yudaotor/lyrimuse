@@ -11,6 +11,7 @@ final class AppActions {
 
     var openSettings: (() -> Void)?
     var openLyricsManager: (() -> Void)?
+    var openLyricsWindow: (() -> Void)?
     var openOnboarding: (() -> Void)?
 
     // 2026-07-29 新增:Onboarding 的 Last.fm 介绍步骤想直接跳到设置窗口的 Last.fm

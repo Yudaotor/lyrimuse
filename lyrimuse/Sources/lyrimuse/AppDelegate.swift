@@ -59,18 +59,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         LocalPlaybackSource.shared.preferWordLevelKaraoke = settings.preferWordLevelKaraoke
 
         // 桌面悬浮歌词、灵动岛歌词各自独立开关,互不排斥,可以同时开、只开一个、或都不开。
-        // 只对确实开启的那个(些)控制器调 setVisible(true),完全不碰关闭的那个:两个
-        // 控制器各自都是 static let shared,真正引用到 .shared 才会执行 init() 建窗口,
-        // 不主动碰关闭的那个,它就不会凭空建一个不需要的窗口(见
-        // NotchLyricsWindowController 顶部注释里这条不变量的详细说明)。
+        // 只对确实开启的那个(些)控制器碰一下 .shared,完全不碰关闭的那个:两个控制器
+        // 各自都是 static let shared,真正引用到 .shared 才会执行 init() 建窗口,不主动
+        // 碰关闭的那个,它就不会凭空建一个不需要的窗口(见 NotchLyricsWindowController
+        // 顶部注释里这条不变量的详细说明)。
+        //
+        // 2026-08-03 实测排查坐实、删掉这里原来的 setVisible(true) 调用:isVisible 现在
+        // 是持久化的用户偏好(见两个控制器各自的 restoredVisible()),.shared 的 init()
+        // 本身已经会用恢复出来的这个值触发一次 updateActualVisibility(见
+        // NotchLyricsWindowController.init() 里 isPlayingObserver 那段注释——订阅
+        // PlaybackCoordinator.$isPlayingNow 的一瞬间就会拿当下的 isVisible 显示/隐藏
+        // 一次)。这里如果还调 setVisible(true),会在 init() 刚刚正确恢复出"用户上次关掉
+        // 了"这个状态之后,立刻无条件覆盖成 true 并重新持久化——用户明明关掉了灵动岛/
+        // 悬浮歌词,下次打开 App 它又会自己重新出现,菜单里的勾选状态也会被这一行悄悄
+        // 改回勾选,这正是之前的真实 bug。下面几行 setLocked/setHiddenFromCapture/
+        // setHideWhenNotPlaying 本身已经足够触发 .shared 的构造,不需要再额外调
+        // setVisible 才能"顺便"建出窗口。
         if settings.classicOverlayEnabled {
-            LyricsOverlayWindowController.shared.setVisible(true)
             LyricsOverlayWindowController.shared.setLocked(settings.lockPosition)
             LyricsOverlayWindowController.shared.setHiddenFromCapture(settings.hideDuringScreenCapture)
             LyricsOverlayWindowController.shared.setHideWhenNotPlaying(settings.hideWhenNotPlaying)
         }
         if settings.notchOverlayEnabled {
-            NotchLyricsWindowController.shared.setVisible(true)
             NotchLyricsWindowController.shared.setHiddenFromCapture(settings.hideDuringScreenCapture)
             NotchLyricsWindowController.shared.setHideWhenNotPlaying(settings.hideWhenNotPlaying)
         }
@@ -117,5 +127,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             AppActions.shared.openSettings?()
         }
         return true
+    }
+
+    // Cmd+Q / 菜单"退出 Lyrimuse"的正常退出路径——2026-08-02 补上:AccountLinkingTab
+    // 里文本字段(Token/API Key 等)的自动保存是 1.2 秒防抖(见该文件 performAutoSave
+    // 的 onReceive),如果用户刚打完字就立刻 Cmd+Q,防抖计时器根本没机会触发,那次
+    // 编辑连磁盘都没写进去就随着进程退出彻底丢失——同一个文件里 .onDisappear 那道
+    // 兜底只覆盖"切换到别的账号卡片/关掉设置窗口"这两种场景,不覆盖"直接退出整个
+    // App":SwiftUI 的 .onDisappear 不保证在进程被终止时对每个视图都执行一遍,尤其是
+    // Settings 这类按需构造的 Scene。这里在真正退出前先同步检查 ConfigStore 是否还有
+    // 没保存的改动:没有就直接放行,不拖慢正常退出;有就用 .terminateLater 暂缓退出,
+    // 异步存盘(顺带重启 collector)完成后再 reply(toApplicationShouldTerminate:) 放行
+    // ——不管存盘成功与否都放行,避免磁盘写入异常时把 Cmd+Q 卡死。
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        guard ConfigStore.shared.isDirty else { return .terminateNow }
+        Task {
+            _ = await ConfigStore.shared.save()
+            NSApp.reply(toApplicationShouldTerminate: true)
+        }
+        return .terminateLater
     }
 }

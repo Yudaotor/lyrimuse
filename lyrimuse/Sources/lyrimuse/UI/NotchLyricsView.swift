@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 import LyrimuseCore
 
@@ -10,16 +11,22 @@ extension NotchCardStyle {
         case .solidBlack: return L10n.t("纯黑")
         case .frostedGlass: return L10n.t("磨砂玻璃")
         case .darkGradient: return L10n.t("深色渐变")
+        case .coverArt: return L10n.t("跟随封面")
         }
     }
 
+    // .coverArt 的真实渲染(封面模糊图)是在 NotchLyricsView.backgroundLayer 里单独
+    // 处理的(ShapeStyle 表达不了 .blur()/.overlay() 这类 View 修饰符,没法塞进这个
+    // AnyShapeStyle 里),这里给它的返回值只是"没有封面数据时的兜底"/"万一有别处意外
+    // 读到这个属性"的合理默认——跟 darkGradient 用同一个值,不代表 .coverArt 的
+    // 实际效果,不要在其它地方依赖这条分支来渲染 .coverArt。
     var fill: AnyShapeStyle {
         switch self {
         case .solidBlack:
             return AnyShapeStyle(Color.black)
         case .frostedGlass:
             return AnyShapeStyle(.thickMaterial)
-        case .darkGradient:
+        case .darkGradient, .coverArt:
             // 从左上到右下过渡,比纯黑多一点点冷色调层次感,又不像磨砂玻璃那样会透出
             // 桌面背景色。
             return AnyShapeStyle(
@@ -83,8 +90,7 @@ struct NotchLyricsView: View {
             // 超出边界的部分被窗口硬裁掉,裁到的正好是圆弧那一小段)。
             let earWidth = max(0, (proxy.size.width - controller.notchWidth - 20) / 2)
             ZStack(alignment: .top) {
-                NotchHangingShape(bottomCornerRadius: 20)
-                    .fill(settings.notchCardStyle.fill)
+                backgroundLayer(size: proxy.size)
                 // 收起态(没在播放、没 hover)窗口本身已经缩到刘海大小,这里额外把常显
                 // 内容整套摘掉而不是指望窗口太小自然裁掉——避免文字/按钮在收缩动画过程中
                 // 短暂挤压变形的观感,收起就是纯粹的一块背景,跟真实刘海融为一体。
@@ -107,6 +113,67 @@ struct NotchLyricsView: View {
         }
         .onHover { hovering in
             controller.setExpanded(hovering)
+        }
+    }
+
+    // 2026-08-02 新增"跟随封面"背景——跟"歌词窗口"的 artworkBackground(LyricsWindowView.swift)
+    // 完全同一套效果(封面整图放大、高斯模糊、压一层半透明黑),只是缩小到灵动岛胶囊
+    // 尺寸;poller.artworkData 那份数据本来就已经在转发给 PlaybackCoordinator 用于
+    // "歌词窗口",这里直接复用同一个数据源,不需要新开一条取图链路(这一点跟本文件
+    // 顶部旧注释"本地播放源没有转发 artwork"已经不一致——那条注释是加"歌词窗口"功能
+    // 之前写的,早已过期)。
+    //
+    // ShapeStyle(NotchCardStyle.fill)表达不了 .blur()/.overlay() 这类 View 修饰符,
+    // 所以 .coverArt 这个风格不走"给 NotchHangingShape 填色"这条路,改成在背景层直接
+    // 塞一张 Image。
+    //
+    // ⚠️ .scaledToFill() 之后、.clipShape 之前必须显式钉一次 .frame(width:height:)
+    // ——2026-08-02 实测排查坐实(用像素级采样确认过,不是肉眼被模糊柔化骗了),踩了
+    // 三版才找对根因:
+    // 第一版完全没裁——四个角全变直角。
+    // 第二版换成 `.clipped()`——`.clipped()` 只会裁成矩形,压根不认识
+    //   NotchHangingShape 这个"顶直角、底圆角"的形状,自然还是直角。
+    // 第三版改成 `.clipShape(NotchHangingShape(...))` 直接套在 Image 上,以为这样
+    //   总该认得形状了,肉眼截图看起来也像是圆角——但对左下角做像素级采样(逐行扫描
+    //   card 区域与背景的分界线 x 坐标,检查是否随 y 增大而右移)后发现分界线纹丝不动,
+    //   证明那次"看起来圆"其实是模糊本身的柔和渐变骗了肉眼,底层裁剪仍然是直角。
+    // 真正原因是本文件顶部 topRow/earWidth 那处注释描述过的同一类问题:
+    // `.scaledToFill()`(即 aspectRatio(contentMode: .fill))为了保证"图片撑满、
+    // 不留缝隙"而向布局系统请求一个可能比 ZStack 实际可见尺寸更大的 frame(维持宽高比
+    // 需要在某个方向溢出、裁掉多余部分)。`.clipShape` 是按它**紧邻**的上一个 View
+    // 的 frame 算 `path(in rect:)` 的,而不是按外层 GeometryReader/窗口的真实尺寸——
+    // 如果这张 Image 协商到的 frame 比灵动岛胶囊本身大一圈,NotchHangingShape 画出来的
+    // 圆角就落在了这个偏大的矩形边缘,而不是胶囊真正的可见边缘,可见区域里看到的只是
+    // 这个偏大矩形的中间一截,自然还是直角。修法:`.scaledToFill()` 之后先用
+    // `.frame(width: size.width, height: size.height)` 把协商结果显式钉回胶囊真正的
+    // 尺寸(GeometryReader 的 proxy.size,从 body 传进来),`.clipShape` 才会在正确的
+    // 边界上计算圆角。
+    //
+    // 没有封面数据(这首歌还没解析出封面/collector 还没查到/本来就没有)时退回
+    // NotchCardStyle.darkGradient 的固定渐变——不会露出空白背景,也不需要用户在"没有
+    // 封面"和"其它三个固定风格"之间多做一次选择。
+    //
+    // 模糊半径比"歌词窗口"artworkBackground 的 60 小得多——那边画布常年好几百 pt 高,
+    // 60pt 模糊半径只占画布的一小部分,还能看出封面本身的色块层次;灵动岛稳态高度只有
+    // 76pt、宽度 360pt(约 4.7:1 的又矮又宽比例),照搬同一个绝对数值相对尺寸夸张太多,
+    // 2026-08-02 实测排查坐实:哪怕换一张色彩很丰富的封面(比如粉色玩具马配红白条纹的
+    // 封面),灵动岛这里也会被抹成跟其它封面几乎分不出来的统一深灰色,颜色信息基本损失
+    // 殆尽,违背了"跟随封面颜色"这个功能本身的目的。调小到 20——仍然是明显的"模糊",
+    // 但能留住封面主色调之间可辨认的差异。
+    @ViewBuilder
+    private func backgroundLayer(size: CGSize) -> some View {
+        if settings.notchCardStyle == .coverArt, let data = poller.artworkData, let nsImage = NSImage(data: data) {
+            Image(nsImage: nsImage)
+                .resizable()
+                .scaledToFill()
+                .frame(width: size.width, height: size.height)
+                .blur(radius: 20)
+                .overlay(Color.black.opacity(0.45))
+                .clipShape(NotchHangingShape(bottomCornerRadius: 20))
+                .animation(.easeInOut(duration: 0.5), value: data)
+        } else {
+            NotchHangingShape(bottomCornerRadius: 20)
+                .fill(settings.notchCardStyle.fill)
         }
     }
 
@@ -154,7 +221,10 @@ struct NotchLyricsView: View {
         Group {
             if let words = poller.currentLine?.words, !words.isEmpty {
                 TimelineView(.animation(paused: !poller.isPlayingNow)) { context in
-                    let currentMs = poller.anchor?.extrapolatedPositionMs(now: context.date) ?? 0
+                    // 加上 currentLyricsOffsetMs,理由跟 LyricsOverlayView.mainLine 同一段
+                    // 注释——不加的话"当前词判定"和"填色进度"用的时间基准对不上,会出现填到
+                    // 一半就卡住的现象。
+                    let currentMs = (poller.anchor?.extrapolatedPositionMs(now: context.date) ?? 0) + poller.currentLyricsOffsetMs
                     HStack(spacing: 0) {
                         ForEach(Array(words.enumerated()), id: \.offset) { _, w in
                             wordText(w, atMs: currentMs)
@@ -278,10 +348,19 @@ struct NotchLyricsView: View {
         return String(format: "%d:%02d", totalSeconds / 60, totalSeconds % 60)
     }
 
+    // ⚠️ 必须用 checkForCurrentPlayerSafely(异步),不能用同步版本——理由跟
+    // LyricsOverlayView.swift 同名方法的注释一致:同步版本在还没问过时会直接触达有据
+    // 可查、可能永久挂起主线程的系统 API。权限不够时用 NSSound.beep() 给一个"没有
+    // 生效"的听觉反馈(2026-08-02 补上,跟另外两处播放控制入口保持一致),不静默无声。
     private func controlButton(_ systemName: String, primary: Bool = false, action: @escaping () -> Void) -> some View {
         Button {
-            guard MusicAutomationPermission.checkForCurrentPlayer(askIfNeeded: true) else { return }
-            action()
+            Task {
+                guard await MusicAutomationPermission.checkForCurrentPlayerSafely(askIfNeeded: true) else {
+                    NSSound.beep()
+                    return
+                }
+                action()
+            }
         } label: {
             Image(systemName: systemName)
                 .font(.system(size: primary ? 11 : 9.5, weight: .semibold))

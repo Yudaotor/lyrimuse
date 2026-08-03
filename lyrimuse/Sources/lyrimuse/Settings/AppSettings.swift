@@ -2,13 +2,19 @@ import Foundation
 import SwiftUI
 import AppKit
 
-// 灵动岛卡片的三种视觉风格。displayName/fill(alpha 相关的具体 ShapeStyle)定义在
+// 灵动岛卡片的四种视觉风格。displayName/fill(alpha 相关的具体 ShapeStyle)定义在
 // NotchLyricsView.swift(跟灵动岛卡片本身的 UI 强相关,不适合放在这个纯设置文件里),
 // 这里只负责持久化用的 rawValue。
+//
+// coverArt(2026-08-02 新增,"跟随封面")——背景铺当前曲目封面模糊放大+压暗,效果跟
+// "歌词窗口"(LyricsWindowView.artworkBackground)完全一致,只是缩小到灵动岛胶囊尺寸。
+// 没有封面数据(还没解析出来/这首歌本来就没有封面)时退回 darkGradient 的固定渐变,
+// 不会露出空白背景,具体判断逻辑在 NotchLyricsView.backgroundLayer。
 enum NotchCardStyle: String, Codable, Hashable, CaseIterable {
     case solidBlack
     case frostedGlass
     case darkGradient
+    case coverArt
 }
 
 // UserDefaults 支撑的设置存储。

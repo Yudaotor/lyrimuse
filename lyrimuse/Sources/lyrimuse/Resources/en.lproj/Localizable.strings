@@ -13,6 +13,7 @@
 "请作者喝杯咖啡" = "Buy the Author a Coffee";
 "导出诊断信息" = "Export Diagnostics";
 "汇总 App/采集器日志和权限、常驻服务等关键状态,保存成一份文本文件——不会包含任何账号 token 或密钥的原始内容" = "Bundles App/collector logs plus key state (permissions, background service, etc.) into a text file — never includes any account tokens or secrets";
+"启用失败——可能是权限或系统限制导致后台服务没能正常启动，导出诊断信息能看到具体原因，也方便反馈问题" = "Failed to enable — permissions or a system restriction may have kept the background service from starting. Exporting diagnostics shows the specific cause and makes it easier to report the issue";
 "配置备份" = "Config Backup";
 "导出配置…" = "Export Config…";
 "导入配置…" = "Import Config…";
@@ -39,6 +40,7 @@
 "显示/隐藏悬浮歌词" = "Show/Hide Floating Lyrics";
 "锁定/解锁位置" = "Lock/Unlock Position";
 "打开歌词管理" = "Open Lyrics Manager";
+"打开歌词窗口" = "Open Lyrics Window";
 "打开设置" = "Open Settings";
 "播放/暂停" = "Play/Pause";
 "下一首" = "Next Track";
@@ -62,6 +64,7 @@
 "这次请求耗时有点久——如果你已经看到系统弹窗，请去处理它；找不到弹窗的话，可以直接去系统设置里手动开启" = "This is taking a while — if you see a system dialog, go handle it; if you don't, you can enable this directly in System Settings instead";
 "打开系统设置" = "Open System Settings";
 "权限" = "Permissions";
+"%@ 通过系统级机制读取播放状态，不需要在这里做额外授权" = "%@ reads playback status through a system-level mechanism and doesn't need any extra authorization here";
 "Apple Music 自动化" = "Apple Music Automation";
 "Apple Music 自动化权限（必需）" = "Apple Music Automation Access (Required)";
 "已授权" = "Authorized";
@@ -148,7 +151,13 @@
 "同步进 Last.fm" = "Sync to Last.fm";
 "启动" = "Startup";
 "五个源都没找到可用的候选" = "No usable candidates found from any of the five sources";
+"网络似乎不通" = "Network Seems Down";
+"五个源的请求全部失败，很可能是网络连接有问题，不是这首歌真的没有歌词——检查网络后可以点下面的「重试」" = "All five sources failed to respond — this is likely a network issue, not that this song genuinely has no lyrics. Check your connection, then try “Retry” below";
 "回到当前播放" = "Jump to Now Playing";
+"进入全屏" = "Enter Full Screen";
+"退出全屏" = "Exit Full Screen";
+"置于最顶层" = "Always on Top";
+"取消置顶" = "Turn Off Always on Top";
 "创建 Last.fm 应用即可获取 API Key + Secret" = "Create a Last.fm app to get an API Key + Secret";
 "在 Last.fm 后台创建应用会同时给你 API Key 和 Secret" = "Creating an app in Last.fm's developer portal gives you both an API Key and a Secret";
 "在 ListenBrainz 网站获取 Token →" = "Get a Token from the ListenBrainz website →";
@@ -161,7 +170,11 @@
 "在钉钉群里：群设置 → 智能群助手 → 添加机器人 → 自定义，创建后复制 Webhook 地址。安全设置建议选「加签」，把生成的密钥填进下面的「加签密钥」" = "In your DingTalk group: Group Settings → Group Assistant → Add Robot → Custom, then copy the webhook URL after creating it. For security, we recommend choosing “Signature” and entering the generated secret in the “Signing Secret” field below";
 "在飞书群里：设置 → 群机器人 → 添加机器人 → 自定义机器人，创建后复制 Webhook 地址。想加一层校验可以开启「签名校验」，把密钥填进下面的「签名密钥」" = "In your Feishu group: Settings → Group Bots → Add Bot → Custom Bot, then copy the webhook URL after creating it. For an extra layer of verification, enable “Signature Verification” and enter the secret in the “Signing Secret” field below";
 "外观" = "Appearance";
+"以下设置只影响「桌面悬浮歌词」的外观；灵动岛歌词和歌词窗口使用固定的系统配色，菜单栏歌词是纯文字，均不受这里影响" = "The settings below only affect the Desktop Floating Lyrics appearance. Notch Lyrics and the Lyrics Window use fixed system colors, and Menu Bar Lyrics is plain text — none of them are affected here";
 "歌词展示" = "Lyrics Display";
+"四种展示方式互不冲突，可以同时开启：桌面悬浮歌词贴在桌面上、支持逐字高亮；灵动岛歌词紧凑地贴着刘海显示；菜单栏歌词最不打扰、只占状态栏一行文字；歌词窗口是可以滚动阅读的完整歌词列表" = "All four can be turned on at once — Desktop Floating Lyrics sits on your desktop with word-by-word highlighting; Notch Lyrics tucks compactly beside the notch; Menu Bar Lyrics is the least intrusive, just one line in the status bar; the Lyrics Window is a scrollable view of the full lyrics";
+"展示" = "Display";
+"「显示罗马音」「显示译文」只影响「桌面悬浮歌词」和「歌词窗口」；灵动岛歌词受限于胶囊空间不支持这两项，菜单栏歌词只能显示一行纯文字" = "“Show Romanization” and “Show Translation” only affect Desktop Floating Lyrics and the Lyrics Window. Notch Lyrics doesn't support either due to limited capsule space, and Menu Bar Lyrics can only show a single line of plain text";
 "桌面悬浮歌词" = "Desktop Floating Lyrics";
 "灵动岛歌词" = "Dynamic Island Lyrics";
 "显示桌面悬浮歌词" = "Show Desktop Floating Lyrics";
@@ -170,6 +183,7 @@
 "纯黑" = "Solid Black";
 "磨砂玻璃" = "Frosted Glass";
 "深色渐变" = "Dark Gradient";
+"跟随封面" = "Follow Cover Art";
 "好的" = "OK";
 "字体" = "Font";
 "字号" = "Font Size";
@@ -243,6 +257,9 @@
 "歌词来源" = "Lyrics Sources";
 "歌词管理" = "Lyrics Manager";
 "歌词管理…" = "Lyrics Manager…";
+"歌词窗口" = "Lyrics Window";
+"歌词窗口…" = "Lyrics Window…";
+"这个状态只在本次打开这扇窗口期间有效，下次重新打开会恢复默认" = "This resets to default the next time you reopen this window — it only applies while this window stays open";
 "歌词默认就以这个文件夹为准维护——联网匹配到的结果会导出成文件存在这里，「歌词管理」里手动导入/编辑的文件也在这里。换成新文件夹后，旧文件夹里已有的文件不会自动搬过去，需要自己手动移动" = "By default, lyrics are kept in sync with this folder — results matched online are exported as files here, and files manually imported or edited in \"Lyrics Manager\" live here too. If you switch to a new folder, existing files in the old one won't move automatically; you'll need to move them yourself";
 "正在自动保存…" = "Auto-saving…";
 "正在查询网易云 / QQ音乐 / 酷狗 / Musixmatch / LRCLIB…" = "Searching NetEase Cloud Music / QQ Music / Kugou / Musixmatch / LRCLIB…";
@@ -264,7 +281,12 @@
 "这台 Mac 上的播放记录会同步到 ListenBrainz，建立完整的听歌历史；也是网页展示、听歌报告的可选数据来源" = "Syncs this Mac's playback to ListenBrainz, building a complete listening history — also an optional data source for the web page and listening digests";
 "确定要删除「%@ - %@」的本地记录吗?" = "Delete the local record for \"%@ - %@\"?";
 "确定要清空全部歌词缓存吗?" = "Clear all cached lyrics?";
+"确定要移除逐字时间轴吗?" = "Remove word timing?";
 "移除逐字时间轴" = "Remove Word Timing";
+"移除" = "Remove";
+"已保存" = "Saved";
+"已移除" = "Removed";
+"重新解析很可能又抓到同一份不准的逐字时间轴，不一定能找回更准确的版本" = "Re-parsing may well fetch the same inaccurate word timing again — there's no guarantee of getting a more accurate version back";
 "悬浮歌词窗口" = "Floating Lyrics Window";
 "签名密钥（可选）" = "Signature Secret (Optional)";
 "管理" = "Management";
@@ -333,6 +355,7 @@
 "钉钉" = "DingTalk";
 "锁定位置" = "Lock Position";
 "解锁「锁定位置」后,悬浮歌词默认可以直接点击穿透到它下面的内容;长按住悬浮歌词不放,才能拖动它的位置" = "When unlocked, the overlay is click-through by default — clicks pass straight to whatever's behind it. Press and hold to drag it to a new position";
+"长按即可拖动位置" = "Press and hold to drag";
 "写入已配置" = "Write Configured";
 "描边颜色" = "Stroke Color";
 "需要先配置「%@」（%@）" = "You need to configure \"%@\" first (%@)";

@@ -20,6 +20,16 @@ final class PlaybackCoordinator: ObservableObject {
     @Published private(set) var nextLineText: String?
     @Published private(set) var hasLyricsContent: Bool = false
     @Published private(set) var anchor: ProgressAnchor?
+    // "歌词窗口"(完整可滚动歌词列表)用,见 LocalPlaybackSource 同名属性的注释。
+    @Published private(set) var currentLineIndex: Int?
+    @Published private(set) var allLines: [LyricsWindowLine] = []
+    // "歌词窗口"背景用的模糊封面图,见 LocalPlaybackSource 同名属性的注释。
+    @Published private(set) var artworkData: Data?
+    // 当前曲目已生效的歌词时间轴校正值,见 LocalPlaybackSource 同名属性的注释——直接
+    // 转发权威值,不在这一层另外拼 key 重新查一遍(2026-08-03 之前这里是一个计算属性,
+    // 自己拼了个 "\(artist)|\(title)" 去查 LyricsOffsetStore,跟实际存储用的
+    // key(LyricsOffsetStore.trackKey,多一段内容指纹)对不上,查出来的永远是 0)。
+    @Published private(set) var currentLyricsOffsetMs: Int = 0
 
     private var cancellables: [AnyCancellable] = []
     private var started = false
@@ -50,13 +60,6 @@ final class PlaybackCoordinator: ObservableObject {
         LocalPlaybackSource.shared.refreshOffsetFromStore()
     }
 
-    // 当前曲目已经校准过的时间偏移——读 LyricsOffsetStore,key 跟 trackKey 拼法完全
-    // 一致(artist/title 都是空字符串时 LyricsOffsetStore 自己会判定 key 无效返回 0,
-    // 不需要在这里额外判断"还没拿到任何曲目信息"这种情况)。
-    var currentLyricsOffsetMs: Int {
-        LyricsOffsetStore.shared.offset(forKey: "\(artist)|\(title)")
-    }
-
     // 应用启动时调一次即可——只有一个数据源,不需要再区分"切换模式",started 只是防手滑
     // 重复调用重新订阅一遍。
     func start() {
@@ -76,6 +79,10 @@ final class PlaybackCoordinator: ObservableObject {
             s.$nextLineText.assign(to: \.nextLineText, on: self),
             s.$anchor.assign(to: \.anchor, on: self),
             s.$hasLyricsContent.assign(to: \.hasLyricsContent, on: self),
+            s.$currentLineIndex.assign(to: \.currentLineIndex, on: self),
+            s.$allLines.assign(to: \.allLines, on: self),
+            s.$artworkData.assign(to: \.artworkData, on: self),
+            s.$currentLyricsOffsetMs.assign(to: \.currentLyricsOffsetMs, on: self),
         ]
     }
 }

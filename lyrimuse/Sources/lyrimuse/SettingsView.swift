@@ -164,7 +164,17 @@ struct SettingsView: View {
                 case .tab(.general): GeneralSettingsTab()
                 case .tab(.about): AboutSettingsTab()
                 case .account(let destination):
-                    AccountLinkingTab(destination: destination, onJumpToAccount: { selection = .account($0) })
+                    AccountLinkingTab(destination: destination, onJumpToAccount: { target in
+                        // 2026-08-02 补上——跳转目标如果落在"实验室功能"这个默认折叠的
+                        // 区域里(比如从 Last.fm 卡片跳去配置 ListenBrainz),detail 面板
+                        // 会正常切过去,但侧边栏因为这一行还没展开、根本不存在于列表里,
+                        // 高亮不到任何一行,用户会觉得"跳过去了但侧边栏看着什么都没选中"。
+                        // .lastfm 本身常驻可见,不需要展开这个折叠区。
+                        if target != .lastfm {
+                            withAnimation { isAdditionalFeaturesExpanded = true }
+                        }
+                        selection = .account(target)
+                    })
                 case nil: ContentUnavailableView(L10n.t("选择左侧的设置分类"), systemImage: "gearshape")
                 }
             }
@@ -249,6 +259,13 @@ private struct LyricsSettingsTab: View {
             // 打分取最高分,顺序优先则完全听用户排的顺序、不比分数。实现在
             // collector/enrich.go 的 pickLyricCandidate,故意不影响"歌词管理"窗口的
             // 手动搜索(那边永远查全部五源,理由见它的注释)。
+            //
+            // 这两组 Section 只在 features.lyrics(上面"歌词在线匹配"开关)打开时才
+            // 显示——2026-08-02 补上:上面 HelpButton 文字明确写了"这两组设置都只在
+            // 这个开关开启时才有意义",但 UI 上一直没有跟着做,关掉在线匹配后这两组
+            // 依然完全正常可交互,用户会以为调了就生效。跟下面"灵动岛风格"/"歌词窗口"
+            // 这两处已有的"父开关关闭就整体不显示"是同一个既有模式,不是新发明一套。
+            if features.lyrics {
             Section {
                 ForEach(LyricsSource.allCases) { source in
                     Toggle(isOn: Binding(
@@ -328,6 +345,7 @@ private struct LyricsSettingsTab: View {
                     }
                 }
             }
+            } // features.lyrics
 
             Section {
                 Picker(selection: Binding(
@@ -346,7 +364,7 @@ private struct LyricsSettingsTab: View {
                 Text(L10n.t("仅对 Musixmatch 来源生效——网易云音乐/QQ音乐的译文固定是中文"))
             }
 
-            Section("展示") {
+            Section {
                 Toggle(L10n.t("优先逐字高亮(有的话)"), isOn: Binding(
                     get: { settings.preferWordLevelKaraoke },
                     set: { newValue in
@@ -357,6 +375,15 @@ private struct LyricsSettingsTab: View {
                 Toggle(L10n.t("显示罗马音"), isOn: $settings.showRomanization)
                 Toggle(L10n.t("显示译文"), isOn: $settings.showTranslation)
                 Toggle(L10n.t("双行显示(预览下一句歌词)"), isOn: $settings.showNextLinePreview)
+            } header: {
+                Text(L10n.t("展示"))
+            } footer: {
+                // 2026-08-02 补上——"显示罗马音"/"显示译文"这两个开关只对"桌面悬浮歌词"
+                // 和"歌词窗口"生效:灵动岛歌词受限于胶囊本身的空间预算,没有实现这两行
+                // 附加内容(刻意的取舍,不是遗漏);菜单栏歌词是系统菜单栏标题、天生只能
+                // 放一行纯文字,概念上就不存在"额外一行罗马音/译文"这回事。之前没有任何
+                // 地方说明这一点,用户在灵动岛模式下打开这两个开关会发现毫无变化。
+                Text(L10n.t("「显示罗马音」「显示译文」只影响「桌面悬浮歌词」和「歌词窗口」；灵动岛歌词受限于胶囊空间不支持这两项，菜单栏歌词只能显示一行纯文字"))
             }
 
             Section {
@@ -449,6 +476,9 @@ private struct LyricsSettingsTab: View {
 
 private struct AppearanceSettingsTab: View {
     @ObservedObject private var settings = AppSettings.shared
+    @ObservedObject private var lyricsWindowPresence = LyricsWindowPresence.shared
+    @Environment(\.openWindow) private var openWindow
+    @Environment(\.dismissWindow) private var dismissWindow
     @State private var showSaveThemeAlert = false
     @State private var newThemeName = ""
 
@@ -498,7 +528,7 @@ private struct AppearanceSettingsTab: View {
         // 的长条,说明性文字也有明确的"尾注"位置,不会跟控件混在一起,排版全部是
         // SwiftUI 原生处理,不用手工调间距。
         Form {
-            Section(L10n.t("歌词展示")) {
+            Section {
                 // 桌面悬浮歌词(经典悬浮窗)、灵动岛歌词是两个完全独立的展示位置,各自
                 // 独立开关,不互斥,可以同时开、只开一个、或都不开。每个开关只负责
                 // "生效"这一个控制器自己的 setVisible,不碰另一个;首次打开某个样式时
@@ -581,9 +611,35 @@ private struct AppearanceSettingsTab: View {
                     Text(L10n.t("没超过就整行显示；超过这个长度会截断，鼠标悬停在状态栏上能看到完整这一行"))
                         .font(.caption).foregroundStyle(.secondary)
                 }
+                // "歌词窗口"(正经的标题栏窗口,完整歌词列表+自动滚动)不像上面三个那样
+                // 有一个 AppSettings 持久化的布尔开关来控制——它的开合状态完全交给
+                // SwiftUI Window(id:) 自己的窗口自动存档机制(见 App.swift 那个场景的
+                // 注释),这里的 Toggle 只是"现在这扇窗口是不是开着"的实时状态(见
+                // LyricsWindowPresence 注释),开/关直接对应打开/关闭这扇窗口,不写入
+                // 任何新的持久化配置项。
+                Toggle(L10n.t("歌词窗口"), isOn: Binding(
+                    get: { lyricsWindowPresence.isOpen },
+                    set: { newValue in
+                        if newValue {
+                            // accessory 策略下打开新窗口得先手动激活 App,不然 openWindow
+                            // 调了也没反应——跟"打开歌词管理…"按钮同一个坑、同一个修法。
+                            NSApp.activate(ignoringOtherApps: true)
+                            openWindow(id: "lyrics-window")
+                        } else {
+                            dismissWindow(id: "lyrics-window")
+                        }
+                    }
+                ))
+            } header: {
+                Text(L10n.t("歌词展示"))
+            } footer: {
+                // 2026-08-02 补上——这四个开关互相独立、可以同时开,但之前没有任何引导,
+                // 新用户第一次打开这个页面容易不知道该开哪个/是否可以全开。用一句话各自
+                // 说清楚典型使用场景,不需要展开成四段说明。
+                Text(L10n.t("四种展示方式互不冲突，可以同时开启：桌面悬浮歌词贴在桌面上、支持逐字高亮；灵动岛歌词紧凑地贴着刘海显示；菜单栏歌词最不打扰、只占状态栏一行文字；歌词窗口是可以滚动阅读的完整歌词列表"))
             }
 
-            Section(L10n.t("外观")) {
+            Section {
                 // 配色主题——内置预设一键套用+把当前调好的配色另存复用,对标 PlayStatus/
                 // Lyricify/AlgerMusicPlayer/HotLyric/VutronMusic 都有的这层。只打包"配色"
                 // 相关的四个字段(文字/背景/阴影颜色+阴影开关),不含字体/字号——那是排版,
@@ -687,6 +743,16 @@ private struct AppearanceSettingsTab: View {
                     settings.textStrokeColorHex = ColorTheme.defaultTheme.textStrokeColorHex
                 }
                 .buttonStyle(.link)
+            } header: {
+                Text(L10n.t("外观"))
+            } footer: {
+                // 2026-08-02 补上——这一整个 Section(配色主题/字体/字号/文字描边)紧挨在
+                // 上面"歌词展示"四个开关下面,视觉上容易被当成对全部四种展示形态都生效;
+                // 实际上只对"桌面悬浮歌词"生效,灵动岛/歌词窗口都用固定的系统颜色/字号
+                // (刻意设计,理由见 NotchLyricsView.swift/LyricsWindowView.swift 各自的
+                // 注释),菜单栏歌词更是纯文字、不存在这些概念。之前 UI 上没有一个字提到
+                // 这一点,只用灵动岛/菜单栏/歌词窗口的用户调了半天这里会发现毫无变化。
+                Text(L10n.t("以下设置只影响「桌面悬浮歌词」的外观；灵动岛歌词和歌词窗口使用固定的系统配色，菜单栏歌词是纯文字，均不受这里影响"))
             }
             .alert(L10n.t("存为新配色主题"), isPresented: $showSaveThemeAlert) {
                 TextField(L10n.t("主题名称"), text: $newThemeName)
@@ -809,6 +875,11 @@ private struct PlayerSettingsTab: View {
     // 收到"进程挂了"这类通知，只能被动查。
     @State private var collectorRunning = false
     @State private var isTogglingCollectorService = false
+    // 2026-08-02 补上——之前点"启用"失败后,前台只会看到红叉+"未运行"跟从没点过一模
+    // 一样,没有任何具体原因或下一步指引,用户卡在这里无计可施(对比下面"权限"Section
+    // 失败时有文案+"打开系统设置"按钮)。只在"这次是想启用、结果没启动起来"时才为真,
+    // 停用/切走这个 tab 都会清掉,不会把上一次失败的提示一直留着误导下一次操作。
+    @State private var collectorEnableFailed = false
 
     var body: some View {
         Form {
@@ -890,6 +961,21 @@ private struct PlayerSettingsTab: View {
                     automationRequestTimedOut = false
                 }
             }
+            } else {
+                // 2026-08-02 补上——切到 QQ 音乐/网易云音乐/Spotify/自动识别后,"权限"
+                // 整个 Section 直接消失,之前没有任何一句话确认"这是正常的、这个播放器
+                // 不需要走这道授权",容易让用户怀疑是不是哪里坏了。这里补一句确认文案,
+                // 不需要完整的 Section(没有状态/按钮可展示),用 Label 保持跟上面"权限"
+                // Section 同样"图标+文字"的视觉语言。
+                Section {
+                    Label(
+                        String(format: L10n.t("%@ 通过系统级机制读取播放状态，不需要在这里做额外授权"), features.player.displayName),
+                        systemImage: "checkmark.circle.fill"
+                    )
+                    .foregroundStyle(.secondary)
+                } header: {
+                    Text(L10n.t("权限"))
+                }
             } // features.player == .appleMusic
 
             // collector(读播放状态、抓歌词/封面写本地缓存的后台服务)跟"权限"那个
@@ -914,6 +1000,17 @@ private struct PlayerSettingsTab: View {
                     } else {
                         Button(collectorActionTitle) { toggleCollectorService() }
                     }
+                }
+                // 启用失败时给具体指引,不是只把红叉留在原地——跟"权限"Section 失败时
+                // 有文案+按钮同一个思路,这里能提供的具体行动是导出诊断信息(汇总 App/
+                // 采集器日志),不是空泛地说"启用失败"。
+                if collectorEnableFailed {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(L10n.t("启用失败——可能是权限或系统限制导致后台服务没能正常启动，导出诊断信息能看到具体原因，也方便反馈问题"))
+                        Button(L10n.t("导出诊断信息")) { exportDiagnostics() }
+                    }
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                 }
             } header: {
                 Text(L10n.t("常驻服务"))
@@ -1031,11 +1128,29 @@ private struct PlayerSettingsTab: View {
     private func toggleCollectorService() {
         let enabling = !collectorRunning
         isTogglingCollectorService = true
+        collectorEnableFailed = false
         Task {
             let running = await CollectorServiceManager.setEnabledAndWait(enabling)
             settings.collectorServiceEnabled = enabling
             collectorRunning = running
             isTogglingCollectorService = false
+            // 只有"这次是想启用"且结果确实没跑起来才算失败——停用操作本身就是想让它
+            // 不运行,running==false 是预期结果,不能也标红报错。
+            collectorEnableFailed = enabling && !running
+        }
+    }
+
+    // 跟"关于"tab 里"导出诊断信息"按钮同一份实现(DiagnosticsExporter 是无状态的纯
+    // 静态工具,两处各自调用即可,不需要抽共享 View)——常驻服务启用失败时给用户一个
+    // 具体能做的事,而不是让红叉停在原地不知道下一步。
+    private func exportDiagnostics() {
+        let report = DiagnosticsExporter.buildReport()
+        let panel = NSSavePanel()
+        panel.nameFieldStringValue = DiagnosticsExporter.suggestedFilename()
+        panel.directoryURL = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Desktop")
+        if panel.runModal() == .OK, let url = panel.url {
+            try? report.write(to: url, atomically: true, encoding: .utf8)
+            NSWorkspace.shared.activateFileViewerSelecting([url])
         }
     }
 }
@@ -1147,6 +1262,7 @@ private struct ShortcutsSettingsTab: View {
                 ShortcutRecorder(L10n.t("显示/隐藏悬浮歌词"), name: .toggleOverlay)
                 ShortcutRecorder(L10n.t("锁定/解锁位置"), name: .toggleLockPosition)
                 ShortcutRecorder(L10n.t("打开歌词管理"), name: .openLyricsManagerHotkey)
+                ShortcutRecorder(L10n.t("打开歌词窗口"), name: .openLyricsWindowHotkey)
                 ShortcutRecorder(L10n.t("打开设置"), name: .openSettingsHotkey)
                 ShortcutRecorder(L10n.t("歌词提前"), name: .lyricsAdvanceHotkey)
                 ShortcutRecorder(L10n.t("歌词延后"), name: .lyricsDelayHotkey)
