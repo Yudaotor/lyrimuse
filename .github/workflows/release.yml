@@ -69,6 +69,20 @@ jobs:
           swift --version
           go version
 
+      # 2026-08-03 补上——这之前整条流水线从来没有跑过任何测试:编译能过就直接签名
+      # 打包发布,selftest/go test 挂没挂全靠开发者自己在本地手动跑,是"人肉网关"不是
+      # 机制保证,漏跑一次坏版本就会真的发出去。放在装 media-control/构建之前,遵循
+      # "先跑最快、最容易暴露问题的检查"的 fail-fast 原则——测试挂了就不用再浪费时间
+      # 走完整个签名打包流程。GOTOOLCHAIN 这里其实是空操作(setup-go 已经装的就是
+      # env.GO_VERSION 这个精确版本,不需要再下载切换),写出来只是跟 build.sh 自己的
+      # 约定保持一致、意图更明确。
+      - name: Run test suites
+        run: |
+          echo "==> Go tests (lyrimuse-collector)"
+          (cd lyrimuse-collector && GOTOOLCHAIN="go${{ env.GO_VERSION }}" go test ./...)
+          echo "==> Swift selftest (lyrimuse)"
+          (cd lyrimuse && swift run lyrimuse-selftest)
+
       - name: Install media-control (QQ 音乐支持)
         # ungive/media-control(BSD-3-Clause),build.sh 会把它拷进 .app 包——不装的话
         # build.sh 只是打个警告跳过这一步,不会让整个构建失败,但发布出去的这份 zip 就
