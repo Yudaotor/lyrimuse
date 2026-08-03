@@ -1321,7 +1321,7 @@ private struct AboutSettingsTab: View {
                     Text(String(format: L10n.t("版本 %@"), versionString))
                         .font(.callout)
                         .foregroundStyle(.secondary)
-                    Text(L10n.t("跟着 Apple Music 播放，实时显示逐字同步歌词"))
+                    Text(L10n.t("跟着 Apple Music、QQ 音乐、网易云或 Spotify 播放，实时显示逐字同步歌词，还能一键同步播放记录到 Last.fm"))
                         .font(.callout)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)

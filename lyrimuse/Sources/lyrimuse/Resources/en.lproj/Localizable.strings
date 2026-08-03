@@ -5,7 +5,7 @@
 "关于" = "About";
 "关于 Lyrimuse" = "About Lyrimuse";
 "版本 %@" = "Version %@";
-"跟着 Apple Music 播放，实时显示逐字同步歌词" = "Real-time synced lyrics that follow Apple Music playback";
+"跟着 Apple Music、QQ 音乐、网易云或 Spotify 播放，实时显示逐字同步歌词，还能一键同步播放记录到 Last.fm" = "Real-time synced lyrics for Apple Music, QQ Music, NetEase, or Spotify — plus one-click Last.fm scrobbling";
 "检查更新" = "Check for Updates";
 "链接" = "Links";
 "GitHub 仓库" = "GitHub Repository";
