@@ -273,6 +273,20 @@ public final class FeatureSettingsStore: ObservableObject {
         savedSnapshot = currentSnapshot
     }
 
+    // 去抖用的状态——2026-08-02 实测排查坐实:"歌词"/"账号连接"tab 里每个开关各自独立
+    // 包一层 Task { await features.save() },用户连续快速切换好几个开关时会并发派生出
+    // 对应数量的独立调用,每一次都完整走一遍 persistFile()+重启 collector,而
+    // CollectorControl.restartAndWaitAsync() 走 launchctl kickstart -k(两次重启间隔
+    // 太近时会被 launchd 节流到约 10 秒才返回),连续多次触发会让"正在播放"推送反复
+    // 出现不必要的中断/延迟。改成:每次调用仍然立刻 persistFile()(廉价、无副作用,
+    // 不去抖),但重启动作延后一小段时间——这段时间内如果又有新的 save() 调用进来,取消
+    // 上一次还没触发的延时、重新计时,只有连续调用真正停下来之后才会触发唯一一次重启;
+    // 所有在等待期间调用过 save() 的地方,都会在这唯一一次重启真正完成后一起收到同一份
+    // 结果,不需要各自等到自己那次触发的重启(那次可能已经被取消)。
+    private var pendingRestartTask: Task<Void, Never>?
+    private var pendingSaveContinuations: [CheckedContinuation<Bool, Never>] = []
+    private static let restartDebounceNanoseconds: UInt64 = 500_000_000 // 0.5s
+
     // 独立保存入口(持久化+重启+提交快照一步到位)——给本文件里每一个即时保存的开关用。
     @discardableResult
     public func save() async -> Bool {
@@ -283,13 +297,32 @@ public final class FeatureSettingsStore: ObservableObject {
             logger.error("write failed: \(String(describing: error), privacy: .public)")
             return false
         }
+        return await withCheckedContinuation { continuation in
+            pendingSaveContinuations.append(continuation)
+            pendingRestartTask?.cancel()
+            pendingRestartTask = Task { [weak self] in
+                try? await Task.sleep(nanoseconds: Self.restartDebounceNanoseconds)
+                guard !Task.isCancelled else { return }
+                await self?.performDebouncedRestart()
+            }
+        }
+    }
+
+    private func performDebouncedRestart() async {
+        let continuations = pendingSaveContinuations
+        pendingSaveContinuations = []
+        pendingRestartTask = nil
+        let success: Bool
         if await CollectorControl.restartAndWaitAsync() {
             lastError = nil
             commitSnapshot()
-            return true
+            success = true
         } else {
             lastError = L10n.t("重启 collector 失败")
-            return false
+            success = false
+        }
+        for continuation in continuations {
+            continuation.resume(returning: success)
         }
     }
 }
