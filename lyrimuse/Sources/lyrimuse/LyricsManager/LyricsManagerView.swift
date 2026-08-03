@@ -124,6 +124,16 @@ struct LyricsManagerView: View {
     @State private var persistedYRCForOffset = ""
     @State private var showDeleteConfirm = false
     @State private var showSearchSheet = false
+    // 2026-08-02 补上——"保存修改"/"移除逐字时间轴"点了之前完全没有任何肉眼可见的
+    // 反馈,跟上面 showRefreshedFeedback("刷新"按钮已有的做法)是同一类问题、同一个
+    // 修法:短暂切换成"已保存"/"已移除"+对勾图标,1秒后自动变回去。
+    @State private var showSaveEditFeedback = false
+    @State private var showRemoveWordTimingFeedback = false
+    // "移除逐字时间轴"补一道二次确认——这是破坏性操作(重新解析很可能又抓到同一份不准
+    // 的逐字时间轴，不一定找得回来),跟同页面"删除本地记录"/工具栏"清空全部缓存"都有
+    // confirmationDialog 二次确认相比，这里之前是唯一没有的，破坏程度相近、防护级别
+    // 却不一致。
+    @State private var showRemoveWordTimingConfirm = false
     @State private var sourceFilter: SourceFilter = .all
     @State private var timingFilter: TimingFilter = .all
     @State private var manualOnly = false
@@ -449,7 +459,7 @@ struct LyricsManagerView: View {
                     wordTimingHint
                 }
 
-                editorSection(title: L10n.t("歌词(LRC)"), icon: "text.alignleft", text: $editedLyrics, minHeight: 220, monospaced: true)
+                editorSection(title: L10n.t("歌词(LRC)"), icon: "text.alignleft", text: $editedLyrics, minHeight: 220, monospaced: true, disabled: summary.hasWordTiming)
                 editorSection(title: L10n.t("译文"), icon: "character.book.closed", text: $editedTr, minHeight: 70, monospaced: false)
                 editorSection(title: L10n.t("罗马音"), icon: "textformat.abc", text: $editedRoma, minHeight: 70, monospaced: false)
 
@@ -490,6 +500,16 @@ struct LyricsManagerView: View {
                     // 采纳的候选歌词内容跟原来不一样,offset 的 key(内容指纹)也跟着变——
                     // 输入框要显示"新内容对应的偏移值",不能继续显示采纳前那份内容的值。
                     refreshOffsetState(artist: summary.artist, title: summary.title, lyrics: candidate.lyrics, yrc: candidate.lyricsYRC)
+                    // 2026-08-02 补上——采纳候选之前点了就直接关闭弹窗,真正的保存+重启
+                    // collector 在后台异步跑,用户看不到任何进度,失败时只能在下面
+                    // store.lastError 那行小字里发现。复用"保存修改"同一个反馈机制:
+                    // 成功就闪一下"已保存",失败不闪(已经有 lastError 的红字提示,不需要
+                    // 叠加两套反馈互相矛盾)。
+                    if store.lastError == nil {
+                        withAnimation { showSaveEditFeedback = true }
+                        try? await Task.sleep(for: .seconds(1))
+                        withAnimation { showSaveEditFeedback = false }
+                    }
                 }
             }
         }
@@ -588,7 +608,7 @@ struct LyricsManagerView: View {
         .background(.blue.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
     }
 
-    private func editorSection(title: String, icon: String, text: Binding<String>, minHeight: CGFloat, monospaced: Bool) -> some View {
+    private func editorSection(title: String, icon: String, text: Binding<String>, minHeight: CGFloat, monospaced: Bool, disabled: Bool = false) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Label(title, systemImage: icon)
                 .font(.subheadline.weight(.semibold))
@@ -598,12 +618,19 @@ struct LyricsManagerView: View {
                 .frame(minHeight: minHeight)
                 .padding(8)
                 .background(.quaternary.opacity(0.25), in: RoundedRectangle(cornerRadius: 8))
+                // 2026-08-02 补上——带逐字时间轴的歌曲,上面 wordTimingHint 已经用一段
+                // 蓝色提示文字警告"改这个文本框不会生效",但文本框本身依然完全可编辑,
+                // 容易被跳过阅读直接开始改,做一次看似成功、实际无效的修改。真正禁用
+                // 输入(而不是仅靠文字提示),配合降低不透明度给出"这里现在改不了"的
+                // 直观视觉反馈——想改主歌词得先点"移除逐字时间轴"(跟提示文字说的一致)。
+                .disabled(disabled)
+                .opacity(disabled ? 0.5 : 1)
         }
     }
 
     private func actionsRow(key: String, summary: EnrichCacheStore.Summary) -> some View {
         HStack(spacing: 10) {
-            Button(L10n.t("保存修改")) {
+            Button {
                 Task {
                     await store.saveEdit(key: key, lyrics: editedLyrics, tr: editedTr, roma: editedRoma)
                     // 歌词(LRC)内容可能改了,offset 的 key(内容指纹)也跟着变——重新
@@ -611,19 +638,43 @@ struct LyricsManagerView: View {
                     // 保证跟真正持久化下来的内容一致。
                     let d = store.detail(for: key)
                     refreshOffsetState(artist: summary.artist, title: summary.title, lyrics: d.lyrics, yrc: d.yrc)
+                    withAnimation { showSaveEditFeedback = true }
+                    try? await Task.sleep(for: .seconds(1))
+                    withAnimation { showSaveEditFeedback = false }
                 }
+            } label: {
+                Label(showSaveEditFeedback ? L10n.t("已保存") : L10n.t("保存修改"),
+                      systemImage: showSaveEditFeedback ? "checkmark" : "square.and.arrow.down")
             }
             .buttonStyle(.borderedProminent)
             .keyboardShortcut("s", modifiers: .command)
 
             if summary.hasWordTiming {
-                Button(L10n.t("移除逐字时间轴")) {
-                    Task {
-                        await store.removeWordTiming(key: key)
-                        // 逐字时间轴被清空了,内容指纹跟着变——同上,重新读一遍权威内容。
-                        let d = store.detail(for: key)
-                        refreshOffsetState(artist: summary.artist, title: summary.title, lyrics: d.lyrics, yrc: d.yrc)
+                Button(role: .destructive) {
+                    showRemoveWordTimingConfirm = true
+                } label: {
+                    Label(showRemoveWordTimingFeedback ? L10n.t("已移除") : L10n.t("移除逐字时间轴"),
+                          systemImage: showRemoveWordTimingFeedback ? "checkmark" : "xmark.circle")
+                }
+                .confirmationDialog(
+                    L10n.t("确定要移除逐字时间轴吗?"),
+                    isPresented: $showRemoveWordTimingConfirm,
+                    titleVisibility: .visible
+                ) {
+                    Button(L10n.t("移除"), role: .destructive) {
+                        Task {
+                            await store.removeWordTiming(key: key)
+                            // 逐字时间轴被清空了,内容指纹跟着变——同上,重新读一遍权威内容。
+                            let d = store.detail(for: key)
+                            refreshOffsetState(artist: summary.artist, title: summary.title, lyrics: d.lyrics, yrc: d.yrc)
+                            withAnimation { showRemoveWordTimingFeedback = true }
+                            try? await Task.sleep(for: .seconds(1))
+                            withAnimation { showRemoveWordTimingFeedback = false }
+                        }
                     }
+                    Button(L10n.t("取消"), role: .cancel) {}
+                } message: {
+                    Text(L10n.t("重新解析很可能又抓到同一份不准的逐字时间轴，不一定能找回更准确的版本"))
                 }
             }
 
@@ -657,7 +708,15 @@ struct LyricsManagerView: View {
     }
 
     private func applyOffsetEdit(_ summary: EnrichCacheStore.Summary) {
-        let seconds = Double(editedOffsetSeconds.trimmingCharacters(in: .whitespaces)) ?? 0
+        // 解析失败(打错字/用逗号当小数点/粘贴带单位的字符串)不能悄悄当成 0 秒——
+        // 2026-08-02 实测排查坐实:这会把已经手动校正过的非零偏移值直接静默清空,且
+        // 没有任何提示。改成解析失败就什么都不做,把输入框重新显示回当前实际生效的
+        // 偏移值,不写入任何改动——用户能立刻从"输入框弹回原来的数字"这个视觉反馈里
+        // 看出刚才那次输入没有被接受,不需要额外弹窗打扰。
+        guard let seconds = Double(editedOffsetSeconds.trimmingCharacters(in: .whitespaces)) else {
+            editedOffsetSeconds = AppSettings.formattedSeconds(ms: LyricsOffsetStore.shared.offset(forKey: currentOffsetKey(summary)))
+            return
+        }
         let ms = Int((seconds * 1000).rounded())
         LyricsOffsetStore.shared.setOffset(ms, forKey: currentOffsetKey(summary))
         editedOffsetSeconds = AppSettings.formattedSeconds(ms: ms)

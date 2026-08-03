@@ -44,6 +44,16 @@ final class LyricsSearchService {
         }
     }
 
+    // 2026-08-02 补上——之前 onUpdate 只传候选数组,五个源都没查到候选时,弹窗只能显示
+    // 一句笼统的"都没找到",分不清是这首歌真的没有网络歌词,还是网络整体不通导致五个源
+    // 的请求全部发不出去。networkLooksDown 由 collector 侧统计"这一轮联网搜索期间发出
+    // 的请求有没有全部失败"算出来(见 networkobs.go 的 networkLooksDown()),这里原样
+    // 转发给调用方决定展示哪种空状态文案。
+    struct SearchUpdate {
+        let candidates: [Candidate]
+        let networkLooksDown: Bool
+    }
+
     enum SearchError: LocalizedError {
         case processFailed(String)
 
@@ -80,7 +90,7 @@ final class LyricsSearchService {
     // MainActor 上执行,调用方可以直接改 @State,不需要自己再跳线程。
     func search(
         artist: String, title: String, album: String, durationSecs: Double = 0,
-        onUpdate: @escaping @MainActor ([Candidate]) -> Void
+        onUpdate: @escaping @MainActor (SearchUpdate) -> Void
     ) async throws {
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
             let process = Process()
@@ -117,19 +127,19 @@ final class LyricsSearchService {
             let readQueue = DispatchQueue(label: "me.yudaotor.lyrimuse.search-lyrics.stdout", qos: .utility)
             let readGroup = DispatchGroup()
 
-            // 按 \n 切行,每凑齐一整行就尝试解码成 [RawCandidate] 并回调——半行(还没读到
+            // 按 \n 切行,每凑齐一整行就尝试解码成 RawSearchUpdate 并回调——半行(还没读到
             // 换行符的尾巴)留在 outBuffer 里等下一批数据补全,不会被当成一行提前误判。
             func drainCompleteLines() {
                 while let newlineRange = box.outBuffer.firstRange(of: Data([0x0A])) {
                     let lineData = box.outBuffer.subdata(in: box.outBuffer.startIndex..<newlineRange.lowerBound)
                     box.outBuffer.removeSubrange(box.outBuffer.startIndex..<newlineRange.upperBound)
                     guard !lineData.isEmpty else { continue }
-                    guard let raw = try? JSONDecoder().decode([RawCandidate].self, from: lineData) else {
+                    guard let raw = try? JSONDecoder().decode(RawSearchUpdate.self, from: lineData) else {
                         logger.error("search-lyrics: failed to decode a stdout line, skipping")
                         continue
                     }
-                    let candidates = raw.map(Candidate.init)
-                    Task { @MainActor in onUpdate(candidates) }
+                    let update = SearchUpdate(candidates: raw.candidates.map(Candidate.init), networkLooksDown: raw.networkLooksDown)
+                    Task { @MainActor in onUpdate(update) }
                 }
             }
 
@@ -166,10 +176,31 @@ final class LyricsSearchService {
             do {
                 try process.run()
             } catch {
+                // process.run() 失败(collector 二进制不存在/不可执行——比如没跑过
+                // build.sh 就直接 swift run/.build/debug 调试,或者 Contents/Resources/
+                // collector 被误删/损坏)——2026-08-02 实测排查坐实:早先这里只
+                // resume 了 continuation,完全没有清理上面已经派发到 readQueue 的两个
+                // 读取闭包。这两个闭包在 process.run() 之前就已经提交(为了不错过子
+                // 进程刚起来就开始写的早期输出),它们各自阻塞在 fileHandleForReading
+                // 的 availableData/readDataToEndOfFile 上等第一批数据/EOF——但 Process
+                // 从未真正 fork/exec,写端从头到尾没有任何人写过、也没有任何人关闭过,
+                // 读端永远读不到 EOF,这两个闭包会永久阻塞在 readQueue 上,且
+                // process.terminationHandler 因为进程从未启动/终止而永远不会被调用,
+                // 没有任何地方能发现或清理这个卡死状态——每次重试都会再泄漏一次。显式
+                // 关闭两个管道的写端,让阻塞中的读取立刻观察到 EOF、正常退出循环。
+                stdoutPipe.fileHandleForWriting.closeFile()
+                stderrPipe.fileHandleForWriting.closeFile()
                 continuation.resume(throwing: SearchError.processFailed(error.localizedDescription))
             }
         }
     }
+}
+
+// 对应 collector 侧 searchcli.go 的 searchLyricsUpdate——字段名两边都是 lowerCamelCase,
+// 不需要像下面 RawCandidate 那样额外声明 CodingKeys 做 snake_case 转换。
+private struct RawSearchUpdate: Decodable {
+    let candidates: [RawCandidate]
+    let networkLooksDown: Bool
 }
 
 private struct RawCandidate: Decodable {

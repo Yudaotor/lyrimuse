@@ -221,11 +221,22 @@ public final class EnrichCacheStore: ObservableObject {
 
     // 删缓存条目的同时一并删掉对应的已导出文件——「歌词管理」里点删除,"删除"在两边
     // 都是真删除,不留一份用户自己都不知道还在的归档文件。
+    //
+    // ⚠️ 删文件必须排在 persistAndRestart() 之前——2026-08-02 实测排查坐实:早先这里的
+    // 顺序反了(先重启 collector、后删文件),跟本文件里 saveEdit/removeWordTiming/
+    // clearAll 建立的"先落盘文件、再重启 collector"顺序正相反。collector
+    // main() 每次启动都固定跑 loadEnrichCache → importLyricsFromFiles →
+    // exportLyricsFiles;importLyricsFromFiles 只要在 lyrics/ 目录下还看到这个 key 对应
+    // 的文件,就会把文件内容当"新条目"重新写回 enrichCache 并无条件存盘——也就是说,
+    // 如果文件删除排在重启之后,collector 重启那一刻磁盘上这些文件必然还在(Swift 侧还
+    // 没删),会在 collector 启动阶段就把刚删除的条目复活并写回磁盘,不需要等用户之后
+    // 再听一首歌才触发。现在改成先删文件、让 collector 重启时看到的磁盘状态已经是
+    // "没有这个 key"。
     public func delete(key: String) async {
         raw.removeValue(forKey: key)
+        deleteExportedLyricsFile(forKey: key)
         await persistAndRestart()
         rebuildSummaries()
-        deleteExportedLyricsFile(forKey: key)
     }
 
     // "缓存占用查看 + 一键清空"里的清空动作——真删除,不是软标记:清空 JSON 侧的 raw

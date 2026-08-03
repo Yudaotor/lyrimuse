@@ -33,6 +33,10 @@ struct LyricsSearchSheet: View {
     @State private var candidates: [LyricsSearchService.Candidate] = []
     @State private var isSearching = false
     @State private var loadError: String?
+    // 2026-08-02 补上——五个源都没查到候选时,原来只有一句笼统的"都没找到",分不清是
+    // 这首歌真的没有网络歌词还是网络整体不通。collector 侧统计"这一轮请求是否全部
+    // 失败"算出这个信号,见 LyricsSearchService.SearchUpdate 的注释。
+    @State private var networkLooksDown = false
     @State private var selectedSource: String?
     // 候选是陆续到达的(见下面 candidates 那条注释),currentSource 对应的候选不一定在
     // 第一批就到——这个 flag 标记"selectedSource 现在的值是自动选出来的,还是用户自己
@@ -142,6 +146,17 @@ struct LyricsSearchSheet: View {
                     Text(L10n.t("正在查询网易云 / QQ音乐 / 酷狗 / Musixmatch / LRCLIB…"))
                         .font(.callout)
                         .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if networkLooksDown {
+                // 2026-08-02 补上——跟下面"真的查了但没有"分开展示,别让用户以为这首歌
+                // 真没有网络歌词、白白灰心,其实只是网络本身有问题,重试大概率能查到。
+                ContentUnavailableView {
+                    Label(L10n.t("网络似乎不通"), systemImage: "wifi.slash")
+                } description: {
+                    Text(L10n.t("五个源的请求全部失败，很可能是网络连接有问题，不是这首歌真的没有歌词——检查网络后可以点下面的「重试」"))
+                } actions: {
+                    Button(L10n.t("重试")) { Task { await load() } }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
@@ -299,10 +314,12 @@ struct LyricsSearchSheet: View {
         loadError = nil
         selectedSource = nil
         userPickedSource = false
+        networkLooksDown = false
         isSearching = true
         do {
-            try await LyricsSearchService.shared.search(artist: artist, title: title, album: album) { updated in
-                candidates = updated
+            try await LyricsSearchService.shared.search(artist: artist, title: title, album: album) { update in
+                candidates = update.candidates
+                networkLooksDown = update.networkLooksDown
                 // 默认项优先选"这首歌眼下实际生效的来源"(currentSource)——候选是陆续
                 // 到达的,currentSource 对应的那条不一定在第一批就到,所以只要用户还没
                 // 手动点过(userPickedSource),每来一批新候选都重新评估一次,等它一出现
@@ -312,10 +329,10 @@ struct LyricsSearchSheet: View {
                 // 始终没搜到时,退回"目前排最前"兜底,且只兜底一次(已经选中过东西就不再
                 // 因为"还是没等到 currentSource"而重新改选)。
                 guard !userPickedSource else { return }
-                if let currentSource, updated.contains(where: { $0.source == currentSource }) {
+                if let currentSource, update.candidates.contains(where: { $0.source == currentSource }) {
                     selectedSource = currentSource
                 } else if selectedSource == nil {
-                    selectedSource = updated.first?.source
+                    selectedSource = update.candidates.first?.source
                 }
             }
         } catch {
