@@ -501,6 +501,10 @@ private struct AppearanceSettingsTab: View {
     }()
 
     private func applyColorTheme(_ theme: ColorTheme) {
+        // 套用一个具体命名主题就是在明确表态"我要固定色,不要动态色"——顺手关掉
+        // "跟随封面"(如果开着),不然套用之后前景色看起来毫无反应,像是这个 Menu
+        // 失灵了(实际上是被"跟随封面"接管了,只是用户不知道)。
+        settings.followsCoverArt = false
         settings.foregroundColorHex = theme.foregroundColorHex
         settings.backgroundColorHex = theme.backgroundColorHex
         settings.textStrokeEnabled = theme.textStrokeEnabled
@@ -509,8 +513,12 @@ private struct AppearanceSettingsTab: View {
 
     // 当前四个配色字段正好等于哪个内置预设/自定义主题就显示它的名字,谁都不等于
     // (比如套用之后又手动微调过某个颜色)就显示"自定义"——这是"使用内置预设"这个
-    // Menu 唯一的选中反馈来源,见调用点注释。
+    // Menu 唯一的选中反馈来源,见调用点注释。"跟随封面"开着时优先显示它,不比较颜色
+    // 字段——那几个字段这时只是"没有封面数据时的备用色",不代表当前实际生效的前景色。
     private var currentColorThemeLabel: String {
+        if settings.followsCoverArt {
+            return L10n.t("跟随封面")
+        }
         let current = ColorTheme(
             name: "",
             foregroundColorHex: settings.foregroundColorHex,
@@ -648,6 +656,14 @@ private struct AppearanceSettingsTab: View {
                 // Menu 的标签本身显示"当前配色正好等于哪个主题"(不等于任何一个就显示
                 // "自定义"),作为这个 Menu 唯一的选中反馈。
                 Menu(currentColorThemeLabel) {
+                    // "跟随封面"(2026-08-03 新增)——不是一个固定配色,是"改用当前曲目
+                    // 封面算出的动态高亮色"这个模式本身,跟下面的具体命名主题放在同一个
+                    // Menu 里、用 Divider 隔开,表明这是另一类选项。只影响前景色(见
+                    // PlaybackCoordinator.displayForegroundColor),背景色/描边仍然用
+                    // 下面手动挑的固定值,没有封面数据时前景也退回下面选的固定色——不是
+                    // 一整套独立的"主题",维持这个文件"配色只管四个字段"的既有范围。
+                    Button(L10n.t("跟随封面")) { settings.followsCoverArt = true }
+                    Divider()
                     ForEach(ColorTheme.builtInPresets) { theme in
                         Button(theme.name) { applyColorTheme(theme) }
                     }
@@ -657,6 +673,11 @@ private struct AppearanceSettingsTab: View {
                             Button(theme.name) { applyColorTheme(theme) }
                         }
                     }
+                }
+                if settings.followsCoverArt {
+                    Text(L10n.t("没有封面数据时会使用下面选择的文字颜色作为备用"))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
                 ForEach(settings.customColorThemes) { theme in
                     HStack {
@@ -735,6 +756,7 @@ private struct AppearanceSettingsTab: View {
                 }
 
                 Button(L10n.t("恢复默认外观")) {
+                    settings.followsCoverArt = false
                     settings.fontFamilyName = AppSettings.defaultFontFamilyName
                     settings.fontSize = AppSettings.defaultFontSize
                     settings.foregroundColorHex = ColorTheme.defaultTheme.foregroundColorHex

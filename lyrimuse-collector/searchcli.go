@@ -104,15 +104,21 @@ type searchLyricsUpdate struct {
 // empty (should not happen in practice — loadFeatureFlags always resolves it to
 // all-four-enabled when unset, see resolveLyricsSources — this is just a safety
 // net against showing zero candidates instead of trusting a genuinely-empty map).
+//
+// 顺带把 Instrumental 标记条目也过滤掉(2026-08-03 补上)——那不是一条真的候选歌词,
+// 是"lrclib 说这首歌是纯音乐"这个信号借 scored 列表搭车传出来的(见
+// scoredLyricCandidateResult.Instrumental 定义处的注释),"歌词管理"的手动搜索弹窗
+// 只该看到真正可以点选采用的候选,不该多出一行歌词是空的、点了也没用的候选。
 func filterEnabledLyricSources(results []scoredLyricCandidateResult) []scoredLyricCandidateResult {
-	if len(features.LyricsSources) == 0 {
-		return results
-	}
 	filtered := make([]scoredLyricCandidateResult, 0, len(results))
 	for _, r := range results {
-		if features.LyricsSources[r.Source] {
-			filtered = append(filtered, r)
+		if r.Instrumental {
+			continue
 		}
+		if len(features.LyricsSources) > 0 && !features.LyricsSources[r.Source] {
+			continue
+		}
+		filtered = append(filtered, r)
 	}
 	return filtered
 }

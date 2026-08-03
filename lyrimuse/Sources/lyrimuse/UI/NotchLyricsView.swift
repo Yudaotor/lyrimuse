@@ -233,6 +233,18 @@ struct NotchLyricsView: View {
                     .compositingGroup()
                     .shadow(color: .black.opacity(0.45), radius: 2, y: 1)
                 }
+            } else if poller.isCurrentTrackAdBreak {
+                // 同 LyricsOverlayView.mainLine 的区分,必须排在"还在搜索中"分支前面,
+                // 见 poller.isCurrentTrackAdBreak 定义处的注释。
+                Text(L10n.t("广告中"))
+                    .foregroundStyle(.white.opacity(0.7))
+                    .shadow(color: .black.opacity(0.45), radius: 2, y: 1)
+            } else if poller.isCurrentTrackInstrumental {
+                // 同 LyricsOverlayView.mainLine 的区分,必须排在"还在搜索中"分支前面,
+                // 见 poller.isCurrentTrackInstrumental 定义处的注释。
+                Text(L10n.t("纯音乐"))
+                    .foregroundStyle(.white.opacity(0.7))
+                    .shadow(color: .black.opacity(0.45), radius: 2, y: 1)
             } else if poller.isPlayingNow && !poller.hasLyricsContent {
                 // 同 LyricsOverlayView.mainLine 的区分:currentLine==nil 可能是"还没解析
                 // 出这首歌的歌词"(collector 后台搜索中,见 poller.hasLyricsContent 注释),

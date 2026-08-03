@@ -42,6 +42,11 @@ final class AppSettings: ObservableObject {
         static let notchContentWidth = "np:notchContentWidth"
         static let foregroundColorHex = "np:foregroundColorHex"
         static let backgroundColorHex = "np:backgroundColorHex"
+        // "跟随封面"——桌面悬浮歌词的前景色改用当前曲目封面算出的动态高亮色,见
+        // PlaybackCoordinator.displayForegroundColor。跟 foregroundColorHex 是独立的
+        // 两个字段:开着这个模式时 foregroundColorHex 仍然保留、当"没有封面数据时的
+        // 备用色"用,不会被覆盖/清空。
+        static let followsCoverArt = "np:followsCoverArt"
         static let lockPosition = "np:lockPosition"
         static let hideDuringScreenCapture = "np:hideDuringScreenCapture"
         static let hideWhenNotPlaying = "np:hideWhenNotPlaying"
@@ -253,6 +258,13 @@ final class AppSettings: ObservableObject {
             backgroundIsVisible = (NSColor(hexStringWithAlpha: backgroundColorHex)?.alphaComponent ?? 0) > 0.02
         }
     }
+    // 见 Keys.followsCoverArt 注释。纯持久化,不在这里连带计算任何缓存值——实际生效
+    // 靠 PlaybackCoordinator.displayForegroundColor 读取这个开关+按曲目算出的动态色,
+    // 跟 foregroundColorHex/backgroundColorHex 那种"存 hex→didSet 里转 Color 缓存"的
+    // 模式不一样,因为这个开关本身不是一个颜色值。
+    @Published var followsCoverArt: Bool {
+        didSet { defaults.set(followsCoverArt, forKey: Keys.followsCoverArt) }
+    }
     // 用户在"外观"设置里"把当前配色存为新主题"存下的自定义配色主题列表(ColorTheme.swift)——
     // 跟内置预设(ColorTheme.builtInPresets,不持久化、每次都是同一份字面量)分开存放,
     // 这里只放用户自己存的那些。JSON 编码成字符串持久化的理由见 Keys.customColorThemesJSON
@@ -327,6 +339,7 @@ final class AppSettings: ObservableObject {
         notchContentWidth = (defaults.object(forKey: Keys.notchContentWidth) as? Double) ?? 360
         foregroundColorHex = defaults.string(forKey: Keys.foregroundColorHex) ?? ColorTheme.defaultTheme.foregroundColorHex
         backgroundColorHex = defaults.string(forKey: Keys.backgroundColorHex) ?? ColorTheme.defaultTheme.backgroundColorHex
+        followsCoverArt = (defaults.object(forKey: Keys.followsCoverArt) as? Bool) ?? false
         if let json = defaults.string(forKey: Keys.customColorThemesJSON),
            let data = json.data(using: .utf8),
            let themes = try? JSONDecoder().decode([ColorTheme].self, from: data) {

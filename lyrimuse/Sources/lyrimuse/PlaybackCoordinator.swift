@@ -1,6 +1,7 @@
 import Foundation
 import Combine
 import LyrimuseCore
+import SwiftUI
 import os
 
 private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "coordinator")
@@ -19,12 +20,21 @@ final class PlaybackCoordinator: ObservableObject {
     @Published private(set) var currentLine: SyncedLyricLine?
     @Published private(set) var nextLineText: String?
     @Published private(set) var hasLyricsContent: Bool = false
+    // 联网查过了、明确是纯音乐,见 LocalPlaybackSource 同名属性的注释。
+    @Published private(set) var isCurrentTrackInstrumental: Bool = false
+    // Spotify 广告插播,见 LocalPlaybackSource 同名属性的注释。
+    @Published private(set) var isCurrentTrackAdBreak: Bool = false
     @Published private(set) var anchor: ProgressAnchor?
     // "歌词窗口"(完整可滚动歌词列表)用,见 LocalPlaybackSource 同名属性的注释。
     @Published private(set) var currentLineIndex: Int?
     @Published private(set) var allLines: [LyricsWindowLine] = []
     // "歌词窗口"背景用的模糊封面图,见 LocalPlaybackSource 同名属性的注释。
     @Published private(set) var artworkData: Data?
+    // 从封面算出来的动态高亮色(已经从 LocalPlaybackSource 转发的十六进制字符串转成
+    // Color——LyrimuseCore 那一层不引入 SwiftUI,转换只能在这一层做,见
+    // LocalPlaybackSource.artworkAccentHex 的注释)。供"跟随封面"外观模式用,见
+    // displayForegroundColor。
+    @Published private(set) var artworkAccentColor: Color?
     // 当前曲目已生效的歌词时间轴校正值,见 LocalPlaybackSource 同名属性的注释——直接
     // 转发权威值,不在这一层另外拼 key 重新查一遍(2026-08-03 之前这里是一个计算属性,
     // 自己拼了个 "\(artist)|\(title)" 去查 LyricsOffsetStore,跟实际存储用的
@@ -79,10 +89,30 @@ final class PlaybackCoordinator: ObservableObject {
             s.$nextLineText.assign(to: \.nextLineText, on: self),
             s.$anchor.assign(to: \.anchor, on: self),
             s.$hasLyricsContent.assign(to: \.hasLyricsContent, on: self),
+            s.$isCurrentTrackInstrumental.assign(to: \.isCurrentTrackInstrumental, on: self),
+            s.$isCurrentTrackAdBreak.assign(to: \.isCurrentTrackAdBreak, on: self),
             s.$currentLineIndex.assign(to: \.currentLineIndex, on: self),
             s.$allLines.assign(to: \.allLines, on: self),
             s.$artworkData.assign(to: \.artworkData, on: self),
+            // 十六进制字符串在这一层转成 Color——LocalPlaybackSource 所在的
+            // LyrimuseCore 不引入 SwiftUI,见该属性定义处的注释。
+            s.$artworkAccentHex
+                .map { $0.map { Color(hexWithAlpha: $0, fallback: .white) } }
+                .assign(to: \.artworkAccentColor, on: self),
             s.$currentLyricsOffsetMs.assign(to: \.currentLyricsOffsetMs, on: self),
         ]
+    }
+
+    // 悬浮歌词实际显示用的前景色——"跟随封面"外观模式开着且这首歌已经算出动态高亮色
+    // 时用它,否则退回用户在"外观"设置里手选的固定色(没有封面数据、还没算出来、或者
+    // 干脆没开这个模式都算这一档)。只被 LyricsOverlayView 消费,灵动岛/歌词窗口有
+    // 各自独立的、故意不接入 ColorTheme 的前景色规则(见 SettingsView.swift"外观"分组
+    // 的 footer 注释),不应该跟着"跟随封面"变。
+    var displayForegroundColor: Color {
+        let settings = AppSettings.shared
+        if settings.followsCoverArt, let accent = artworkAccentColor {
+            return accent
+        }
+        return settings.foregroundColor
     }
 }

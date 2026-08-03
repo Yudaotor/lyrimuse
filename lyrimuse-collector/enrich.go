@@ -48,6 +48,12 @@ type enrichEntry struct {
 	// 过的——纯粹是给 UI 显示"人工修正"徽章用的溯源标记,不再影响任何自动刷新逻辑(已经
 	// 没有自动刷新了,所有条目都是解析一次永久生效)。
 	ManualLyrics bool `json:"manual_lyrics,omitempty"`
+	// Instrumental 标记"联网查过了,至少一个源(目前是 lrclib)明确说这首歌是纯音乐"——
+	// 跟"Lyrics 为空"要分开看:后者也可能是"五个源都没查到、真的没搜到"这种更含糊的
+	// 情况(用户可能想手动重新搜索候选歌词试试),前者是有明确依据的结论,UI 上应该
+	// 显示成"纯音乐"而不是笼统的"无歌词"。2026-08-03 补上——这个信号 lrclib.go 里
+	// 原来读了就直接丢,见 lrclibResult 定义处的注释。
+	Instrumental bool `json:"instrumental,omitempty"`
 	// TS 只用来给"外围字段缺失时的短时重试"计时(见 needsPeripheralBackfill),不再是
 	// "多久没刷新就整条过期重新解析"的依据、也不再驱动任何淘汰逻辑。
 	TS int64 `json:"ts"`
@@ -97,8 +103,19 @@ var (
 // 每次报的时长有几百毫秒抖动也应该命中同一份记录。已经解析过的条目永远直接返回,不会
 // 自动整条重新解析——只有 needsPeripheralBackfill 命中时,会在后台补一次缺失的外围
 // 字段(不碰歌词/封面来源等身份字段)。
-func trackEnrichment(artist, title, album string, durationSecs float64) map[string]string {
+func trackEnrichment(artist, title, album, bundleID string, durationSecs float64) map[string]string {
 	if title == "" {
+		return nil
+	}
+	// Spotify 广告插播:media-control 自己的文档确认广告播放时 album 字段恒为空字符串
+	// (系统级 MediaRemote 本身就是这么报告的,不是我们没读到)。不能把广告的标题/歌手
+	// 当成一首正常歌曲丢进下面的五源歌词搜索——qqMusicURL()/e.SpotifyURL 这两路兜底
+	// 链接只要 title!="" 就会给出非空值,导致 resolveEnrichAsync 的"全空不写入"判断
+	// 永远不成立,广告标题会被当成一首"歌"永久写进磁盘缓存,污染"歌词管理"列表,还
+	// 白跑一轮网络搜索。这个信号只在 Spotify 广告上验证过(见 media-control README
+	// "Skip Spotify ads" 一节),不影响 QQ 音乐/网易云音乐——那两个平台的正常曲目本来
+	// 就该有专辑名,不会误伤。
+	if bundleID == spotifyBundleID && album == "" {
 		return nil
 	}
 	key := artist + "|" + title + "|" + album
@@ -298,6 +315,16 @@ func resolveTrackEnrichment(artist, title, album string, durationSecs float64) e
 			e.Lyrics = picked.Lyrics
 			e.LyricsSource = picked.Source
 			e.LyricsTr, e.LyricsRoma, e.LyricsYRC = picked.LyricsTr, picked.LyricsRoma, picked.LyricsYRC
+		} else {
+			// 没有任何源给出可用歌词——查一下 scored 里是否搭车带着"lrclib 明确说是
+			// 纯音乐"这条标记(见 Instrumental 字段定义处的注释),命中就记下来,UI 侧
+			// 才能把这种情况跟"真的谁都没搜到"区分开显示。
+			for _, c := range scored {
+				if c.Instrumental {
+					e.Instrumental = true
+					break
+				}
+			}
 		}
 	}
 	return e
@@ -358,6 +385,14 @@ type scoredLyricCandidateResult struct {
 	Artist   string `json:"artist,omitempty"`
 	Album    string `json:"album,omitempty"`
 	CoverURL string `json:"cover_url,omitempty"`
+	// Instrumental 标记这不是一条真正的歌词候选,是"lrclib 明确说这首歌是纯音乐"这个
+	// 信号本身,借这个结构体的 Score:-1(pickLyricCandidate/priority 模式都会跳过负分)
+	// 混进 scored 列表里"搭车"传出去,不需要为了传这一个 bool 单独改
+	// fetchScoredLyricCandidatesStreaming 的返回值签名(它被 searchcli.go 的手动搜索
+	// CLI 和 resolveTrackEnrichment 两条路径共用,改签名影响面更大)。手动搜索那边会把
+	// 这条标记过滤掉,不会当成一条空歌词的候选显示给用户,见 searchcli.go
+	// filterEnabledLyricSources 旁边的过滤。
+	Instrumental bool `json:"instrumental,omitempty"`
 }
 
 // lyricSearchDeadline 给 fetchScoredLyricCandidates 整体加一个上限——五个源各自的
@@ -466,6 +501,7 @@ func fetchScoredLyricCandidatesStreaming(artist, title, album string, durationSe
 		lyr, yrc, tr            string
 		matchTitle, matchArtist string
 		matchAlbum, matchCover  string
+		instrumental            bool // 目前只有 lrclib 这个源会给出这个信号,见 lrclibResult 注释
 	}
 	resultsCh := make(chan sourceResult, 6)
 
@@ -495,7 +531,7 @@ func fetchScoredLyricCandidatesStreaming(artist, title, album string, durationSe
 	}()
 	go func() {
 		r := lrclibLyric(artist, title, album)
-		resultsCh <- sourceResult{source: "lrclib", lyr: r.lyrics, matchTitle: r.title, matchArtist: r.artist, matchAlbum: r.album}
+		resultsCh <- sourceResult{source: "lrclib", lyr: r.lyrics, matchTitle: r.title, matchArtist: r.artist, matchAlbum: r.album, instrumental: r.instrumental}
 	}()
 	go func() {
 		r := musixmatchLyric(artist, title, durationSecs, features.LyricsTranslationLanguage)
@@ -511,6 +547,7 @@ func fetchScoredLyricCandidatesStreaming(artist, title, album string, durationSe
 	var qqLyr, qqYRC, qqTitle, qqArtist, qqAlbum string
 	var kugouLyr, kugouYRC, kugouTitle, kugouArtist, kugouAlbum string
 	var lrclibLyr, lrclibTitle, lrclibArtist, lrclibAlbum string
+	var lrclibInstrumental bool
 	var mxLyr, mxYRC, mxTr, mxTitle, mxArtist, mxAlbum, mxCover string
 	var appleCover string
 	// scoreAndSort 用目前为止已经到手的原始结果重新构建候选、算 corroboratedEndings、
@@ -545,6 +582,13 @@ func fetchScoredLyricCandidatesStreaming(artist, title, album string, durationSe
 			candidates = append(candidates, lyricCandidate{source: "lrclib", lyrics: lrclibLyr, title: lrclibTitle, artist: lrclibArtist, album: lrclibAlbum, cover: coverOrFallback("")})
 		}
 		corroborated := corroboratedEndings(candidates)
+		// lrclib 明确说这首歌是纯音乐、且没有真的歌词候选(lrclibLyr=="")时,搭车塞一条
+		// Score:-1 的标记进 results——见 Instrumental 字段定义处的注释,不参与打分/排序,
+		// 不会被 pickLyricCandidate 选中,只是把这个信号原样带出这个函数。
+		var instrumentalMarker *scoredLyricCandidateResult
+		if lrclibLyr == "" && lrclibInstrumental {
+			instrumentalMarker = &scoredLyricCandidateResult{Source: "lrclib", Score: -1, Instrumental: true}
+		}
 
 		results := make([]scoredLyricCandidateResult, 0, len(candidates))
 		for _, c := range candidates {
@@ -573,6 +617,9 @@ func fetchScoredLyricCandidatesStreaming(artist, title, album string, durationSe
 			}
 			results = append(results, r)
 		}
+		if instrumentalMarker != nil {
+			results = append(results, *instrumentalMarker)
+		}
 		sort.Slice(results, func(i, j int) bool { return results[i].Score > results[j].Score })
 		return results
 	}
@@ -591,6 +638,7 @@ collect:
 				kugouLyr, kugouYRC, kugouTitle, kugouArtist, kugouAlbum = r.lyr, r.yrc, r.matchTitle, r.matchArtist, r.matchAlbum
 			case "lrclib":
 				lrclibLyr, lrclibTitle, lrclibArtist, lrclibAlbum = r.lyr, r.matchTitle, r.matchArtist, r.matchAlbum
+				lrclibInstrumental = r.instrumental
 			case "musixmatch":
 				mxLyr, mxYRC, mxTr, mxTitle, mxArtist, mxAlbum, mxCover = r.lyr, r.yrc, r.tr, r.matchTitle, r.matchArtist, r.matchAlbum, r.matchCover
 			case "applecover":

@@ -1,5 +1,7 @@
 import Foundation
 import Combine
+import CoreImage
+import CoreGraphics
 import os
 
 private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "local")
@@ -29,6 +31,21 @@ public final class LocalPlaybackSource: ObservableObject {
     // 只能拿到空字符串——这时 hasLyricsContent 为 false,UI 据此判断"这是还没解析出来"
     // 而不是"这首歌就是没歌词/正在间奏"。
     @Published public private(set) var hasLyricsContent: Bool = false
+    // 联网查过了、至少一个源(目前是 lrclib)明确说这首歌是纯音乐——2026-08-03 补上,
+    // 跟 hasLyricsContent 是两个不同维度:hasLyricsContent==false 本身分不清是"还没
+    // 解析完"还是"解析完了但真没歌词",这个字段专门标记后一种情况里"有明确依据"的那
+    // 一类(而不是"五个源都没搜到"这种更含糊、可能只是没搜对的情况)。UI 侧靠这个字段
+    // 决定要不要显示"纯音乐"而不是笼统的占位符——见各 View 里 lyricContent/mainLine
+    // 的分支顺序,这个判断必须排在"还在搜索中"那个分支之前,不然一首已经确认是纯音乐
+    // 的歌会在播放期间一直卡在"搜索歌词中…"、永远不会显示出这个更准确的结论。
+    @Published public private(set) var isCurrentTrackInstrumental: Bool = false
+    // Spotify 广告插播——2026-08-03 补上:media-control 自己的文档确认广告播放时 album
+    // 字段恒为空字符串,靠"当前是 Spotify 在报告 + album 为空"这个信号判断(见
+    // apply() 里的计算);跟 isCurrentTrackInstrumental 同一个优先级问题,必须排在
+    // "还在搜索中"分支前面——否则一段广告会在整段广告期间一直卡在"搜索歌词中…"
+    // (广告的标题/歌手压根不会被写进歌词缓存,见 collector/enrich.go trackEnrichment
+    // 的对应守卫,hasLyricsContent 永远拿不到内容)。
+    @Published public private(set) var isCurrentTrackAdBreak: Bool = false
     // 当前曲目已生效的歌词时间轴校正值(毫秒)——跟 syncEngine.offsetMs 保持一致,供菜单栏
     // "歌词时间轴"菜单展示累计校准值/决定"重置"按钮是否显示用。2026-08-03 实测排查坐实:
     // 这里之前没有这个属性,PlaybackCoordinator 自己用 "\(artist)|\(title)" 现拼了一个跟
@@ -43,6 +60,13 @@ public final class LocalPlaybackSource: ObservableObject {
     // 解码成 NSImage/Image 交给 lyrimuse 主 App target 的 View 自己做。只在换歌那一刻
     // 异步取一次(见 apply()/fetchArtworkForCurrentTrack()),不是每 2 秒轮询的一部分。
     @Published public private(set) var artworkData: Data?
+    // 从 artworkData 里算出来的单一平均色(十六进制 #RRGGBBAA)——供"跟随封面"外观模式
+    // 用作悬浮歌词的动态高亮色。跟 artworkData 同一时刻算好、同一套 expectedKey 换歌
+    // 校验(见 fetchArtworkForCurrentTrack()),不是每次渲染都现算。只存十六进制字符串
+    // 不存 Color/NSColor——这一层刻意不引入 AppKit/SwiftUI(见 Package.swift 的单向
+    // 依赖注释),转成 Color 交给 lyrimuse 主 App target(PlaybackCoordinator)做,跟
+    // AppSettings 里所有颜色字段都是"存 hex、用的地方再转 Color"同一个既有模式。
+    @Published public private(set) var artworkAccentHex: String?
 
     @Published public var preferWordLevelKaraoke: Bool = true {
         didSet { reloadCurrentLyrics() }
@@ -187,6 +211,7 @@ public final class LocalPlaybackSource: ObservableObject {
             currentLineIndex = nil
             allLines = []
             artworkData = nil
+            artworkAccentHex = nil
             stopFastTimer()
         }
     }
@@ -256,6 +281,16 @@ public final class LocalPlaybackSource: ObservableObject {
         if newAlbum != album { album = newAlbum }
         let newIsPlayingNow = snapshot.playing == true
         if newIsPlayingNow != isPlayingNow { isPlayingNow = newIsPlayingNow }
+        // Spotify 广告插播判断——只在确认这次快照真的来自 Spotify(bundleIdentifier 对
+        // 得上)时才生效,QQ 音乐/网易云音乐/Apple Music 的正常曲目本来就该有专辑名,不
+        // 会误伤;title 也要求非空,避免在完全没有有效数据的边界情况下误判。跟
+        // collector/enrich.go trackEnrichment 里同一个信号、同一条判断逻辑,那边负责
+        // 不把广告当成歌曲写入歌词缓存,这里负责让 UI 立刻显示正确的"广告中"而不是无限期
+        // 卡在"搜索歌词中…"(因为广告的标题永远不会出现在歌词缓存里)。
+        let newIsAdBreak = !newTitle.isEmpty
+            && snapshot.bundleIdentifier == PlaybackPlayer.spotify.bundleIdentifier
+            && newAlbum.isEmpty
+        if newIsAdBreak != isCurrentTrackAdBreak { isCurrentTrackAdBreak = newIsAdBreak }
 
         let key = snapshot.trackKey
         let trackChanged = key != lastKey
@@ -277,6 +312,7 @@ public final class LocalPlaybackSource: ObservableObject {
             // 旧值不会误导人;这里是背景图,挂着旧图会让人误以为"这就是当前这首歌的
             // 封面")。
             artworkData = nil
+            artworkAccentHex = nil
             fetchArtworkForCurrentTrack(expectedKey: key)
         }
 
@@ -405,6 +441,8 @@ public final class LocalPlaybackSource: ObservableObject {
         // 里的定义),数组比较是安全、开销可忽略的操作(同一首歌的行数通常只有几十行)。
         let newHasContent = syncEngine.hasContent
         if newHasContent != hasLyricsContent { hasLyricsContent = newHasContent }
+        let newInstrumental = found?.instrumental ?? false
+        if newInstrumental != isCurrentTrackInstrumental { isCurrentTrackInstrumental = newInstrumental }
         // "歌词窗口"的全部行只在换歌词内容这一刻重新构造一次——同一首歌播放期间歌词
         // 本身不变,不需要每 20Hz tick 都重算。idPrefix 用 currentOffsetKey(已经是
         // 按当前曲目算出来的标识),保证换歌后这里产出的每个 LyricsWindowLine.id 整体
@@ -424,12 +462,59 @@ public final class LocalPlaybackSource: ObservableObject {
     // 这首歌的封面",必须清空。
     private func fetchArtworkForCurrentTrack(expectedKey: String) {
         Task {
-            let result = await Task.detached {
-                MediaControlClient.fetchArtwork()
+            // 取图和算平均色都在同一个后台 Task.detached 里做完——两者共用同一份原始
+            // 图片字节,没必要为了"少写一个函数"分成两次异步往返各自触发一次 MainActor
+            // 跳转。computeAccentHex 是 nonisolated 的纯函数,可以在这个非 MainActor 的
+            // 闭包里直接调用。
+            let (data, accentHex) = await Task.detached { () -> (Data?, String?) in
+                guard let result = MediaControlClient.fetchArtwork() else { return (nil, nil) }
+                return (result.data, Self.computeAccentHex(from: result.data))
             }.value
             guard expectedKey == self.lastKey else { return }
-            self.artworkData = result?.data
-            logger.debug("artwork fetched: bytes=\(result?.data.count ?? 0)")
+            self.artworkData = data
+            self.artworkAccentHex = accentHex
+            logger.debug("artwork fetched: bytes=\(data?.count ?? 0) accent=\(accentHex ?? "nil")")
         }
+    }
+
+    // 从封面原始图片数据算出一个单一的平均色,供"跟随封面"外观模式当动态高亮色用——
+    // 算法跟同类开源实现(Karacookie 的 DominantColor.swift)一致:CIAreaAverage 把
+    // 整张图平均成一个像素,而不是 K-means/直方图那类更贵的聚类算法,对"给悬浮歌词提供
+    // 一个跟封面基调呼应的强调色"这个用途完全够用。太暗的平均色(比如封面本身是纯黑或
+    // 深色专辑封面)会按亮度公式往上提亮到目标亮度 0.55——不提亮的话在深色封面上会算出
+    // 一个近乎看不清的暗色,当文字颜色用完全不可读。
+    //
+    // nonisolated:纯函数,不读写这个类的任何 @MainActor 隔离状态,允许从
+    // fetchArtworkForCurrentTrack() 里的后台 Task.detached 闭包(非 MainActor)直接调用,
+    // 不需要为了调用它专门跳回主线程再跳出去。
+    nonisolated private static func computeAccentHex(from data: Data) -> String? {
+        guard let ciImage = CIImage(data: data) else { return nil }
+        guard let filter = CIFilter(name: "CIAreaAverage") else { return nil }
+        filter.setValue(ciImage, forKey: kCIInputImageKey)
+        filter.setValue(CIVector(cgRect: ciImage.extent), forKey: kCIInputExtentKey)
+        guard let outputImage = filter.outputImage else { return nil }
+        // 不指定 workingColorSpace(传 NSNull())——只是要把一整张图迅速塌缩成一个像素
+        // 的均值,不需要色彩管理带来的准确性,换来的是渲染更快。
+        let context = CIContext(options: [.workingColorSpace: NSNull()])
+        var bitmap = [UInt8](repeating: 0, count: 4)
+        context.render(
+            outputImage, toBitmap: &bitmap, rowBytes: 4,
+            bounds: CGRect(x: 0, y: 0, width: 1, height: 1),
+            format: .RGBA8, colorSpace: CGColorSpaceCreateDeviceRGB()
+        )
+        var r = Double(bitmap[0]) / 255.0
+        var g = Double(bitmap[1]) / 255.0
+        var b = Double(bitmap[2]) / 255.0
+        let luminance = 0.299 * r + 0.587 * g + 0.114 * b
+        if luminance < 0.45 {
+            let boost = 0.55 / max(luminance, 0.05)
+            r = min(1.0, r * boost)
+            g = min(1.0, g * boost)
+            b = min(1.0, b * boost)
+        }
+        let ri = Int((r * 255).rounded())
+        let gi = Int((g * 255).rounded())
+        let bi = Int((b * 255).rounded())
+        return String(format: "#%02X%02X%02XFF", ri, gi, bi)
     }
 }

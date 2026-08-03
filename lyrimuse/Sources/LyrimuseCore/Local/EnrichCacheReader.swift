@@ -12,6 +12,10 @@ public struct EnrichCacheEntry: Decodable {
     let lyricsYRC: String?
     let lyricsSource: String?
     let coverSource: String?
+    // 联网查过了、至少一个源(目前是 lrclib)明确说这首歌是纯音乐——跟"lyrics 是空的"
+    // 要分开看,后者也可能是"还没解析完"或者"五个源都没查到"这类更含糊的情况。见
+    // collector/enrich.go 的 enrichEntry.Instrumental 定义处的注释。
+    let instrumental: Bool?
 
     enum CodingKeys: String, CodingKey {
         case lyrics
@@ -20,6 +24,7 @@ public struct EnrichCacheEntry: Decodable {
         case lyricsYRC = "lyrics_yrc"
         case lyricsSource = "lyrics_source"
         case coverSource = "cover_source"
+        case instrumental
     }
 }
 
@@ -28,6 +33,7 @@ public struct EnrichCacheLyrics {
     public let lyricsTr: String
     public let lyricsRoma: String
     public let lyricsYRC: String
+    public let instrumental: Bool
 }
 
 @MainActor
@@ -53,7 +59,8 @@ public enum EnrichCacheReader {
             lyrics: entry.lyrics ?? "",
             lyricsTr: entry.lyricsTr ?? "",
             lyricsRoma: entry.lyricsRoma ?? "",
-            lyricsYRC: entry.lyricsYRC ?? ""
+            lyricsYRC: entry.lyricsYRC ?? "",
+            instrumental: entry.instrumental ?? false
         )
     }
 

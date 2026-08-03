@@ -14,13 +14,21 @@ import (
 
 // lrclibLyric 是网易云/QQ 音乐都没能给出逐行歌词时的第三档兜底。LRCLIB(lrclib.net)
 // 是免费、无需 key 的开源逐行 LRC 歌词库，对网易云/QQ 音乐这类中文平台曲库覆盖偏弱的
-// 欧美/R&B 等曲目往往有收录。只缓存"拿到有效逐行歌词"的结果，跟 qqLyric 的缓存策略一致。
+// 欧美/R&B 等曲目往往有收录。只缓存"拿到有效逐行歌词"或"确认是纯音乐"的结果，跟
+// qqLyric 的缓存策略一致(单纯的查无此歌/网络失败不缓存,留给下次 enrich 重试)。
 // lrclibResult.title/artist/album 是 LRCLIB 收录的这首歌的 trackName/artistName/
 // albumName——纯粹给"搜索候选歌词"弹窗展示用,不参与任何匹配/打分逻辑,取自 /api/get
 // 响应本身(本来就已经查到,只是原来只挑了 syncedLyrics 就把其余字段丢了)。LRCLIB 的
 // API 没有封面图字段,这个来源永远给不出封面,不是没查、是压根不存在。
+//
+// instrumental 是 LRCLIB 自己标注的"这首歌是纯音乐"——2026-08-03 补上:这个字段
+// 原来读出来就直接丢了(instrumental==true 时跟"这个源压根没查到"返回同一个空结构体
+// 处理),下游"啥都没有"的空状态因此永远只有一种,用户分不清"是真没找到歌词"还是
+// "这首歌本来就没有歌词"。见 fetchScoredLyricCandidatesStreaming 里怎么把这个信号
+// 一路传到 enrichEntry.Instrumental。
 type lrclibResult struct {
 	lyrics, title, artist, album string
+	instrumental                 bool
 }
 
 var (
@@ -41,7 +49,7 @@ func lrclibLyric(artist, title, album string) lrclibResult {
 	lrclibMu.Unlock()
 
 	r := resolveLRCLIBLyric(artist, title, album)
-	if r.lyrics != "" {
+	if r.lyrics != "" || r.instrumental {
 		lrclibMu.Lock()
 		lrclibCache[key] = r
 		lrclibMu.Unlock()
@@ -80,7 +88,10 @@ func resolveLRCLIBLyric(artist, title, album string) lrclibResult {
 	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
 		return lrclibResult{}
 	}
-	if out.Instrumental || !isTimedLRC(out.SyncedLyrics) {
+	if out.Instrumental {
+		return lrclibResult{instrumental: true}
+	}
+	if !isTimedLRC(out.SyncedLyrics) {
 		return lrclibResult{}
 	}
 	return lrclibResult{lyrics: out.SyncedLyrics, title: out.TrackName, artist: out.ArtistName, album: out.AlbumName}

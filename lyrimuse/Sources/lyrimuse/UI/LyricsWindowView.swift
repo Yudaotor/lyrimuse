@@ -352,7 +352,15 @@ struct LyricsWindowView: View {
     // 已有的本地化字符串,不新造。
     @ViewBuilder
     private var emptyState: some View {
-        if poller.isPlayingNow && !poller.hasLyricsContent {
+        if poller.isCurrentTrackAdBreak {
+            // 必须排在"还在搜索中"分支前面,理由跟 LyricsOverlayView.mainLine 一致,见
+            // poller.isCurrentTrackAdBreak 定义处的注释。
+            ContentUnavailableView(L10n.t("广告中"), systemImage: "megaphone")
+        } else if poller.isCurrentTrackInstrumental {
+            // 必须排在"还在搜索中"分支前面,理由跟 LyricsOverlayView.mainLine 一致,见
+            // poller.isCurrentTrackInstrumental 定义处的注释。
+            ContentUnavailableView(L10n.t("纯音乐"), systemImage: "waveform")
+        } else if poller.isPlayingNow && !poller.hasLyricsContent {
             ContentUnavailableView(L10n.t("搜索歌词中…"), systemImage: "magnifyingglass")
         } else {
             ContentUnavailableView(L10n.t("无歌词"), systemImage: "text.quote")

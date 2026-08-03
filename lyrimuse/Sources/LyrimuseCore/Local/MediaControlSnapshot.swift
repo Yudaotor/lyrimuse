@@ -15,6 +15,12 @@ public struct MediaControlSnapshot: Decodable {
     // Safari/Chrome 里的播放器等),只有 Apple Music 才该算,不能把当前系统里随便谁在放
     // 的东西当成这个 App 的"正在播放"。
     public let isMusicApp: Bool?
+    // 这次快照实际匹配到的播放器 bundle id——Apple Music 走 AppleScript 时 JS 脚本自己
+    // 字面量给"com.apple.Music";QQ音乐/网易云音乐/Spotify/.auto 走 media-control 时是
+    // 它自己报的 bundleIdentifier(见 fetchRawMediaControlSnapshot)。2026-08-03 补上——
+    // 供 LocalPlaybackSource 判断"这次是不是 Spotify 在报告"(用于 Spotify 广告插播
+    // 检测),不参与 trackKey/既有逻辑,纯附加信息。
+    public let bundleIdentifier: String?
 
     public var trackKey: String { "\(artist ?? "")|\(title ?? "")" }
 }

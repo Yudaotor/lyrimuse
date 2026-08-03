@@ -203,7 +203,8 @@ public enum MediaControlClient {
             elapsedTime: cached.elapsedTime,
             playing: snapshot.playing,
             playbackRate: snapshot.playbackRate,
-            isMusicApp: snapshot.isMusicApp
+            isMusicApp: snapshot.isMusicApp,
+            bundleIdentifier: snapshot.bundleIdentifier
         )
     }
 
@@ -332,7 +333,8 @@ public enum MediaControlClient {
                 // MediaControlSnapshot 注释)——调用方(fetchMediaControlSnapshot/
                 // fetchAutoDetectedSnapshot)已经各自核实过 bundleID 是它关心的那个,
                 // 这里如实置 true。
-                isMusicApp: true
+                isMusicApp: true,
+                bundleIdentifier: bundleID
             )
             return (snapshot, bundleID)
         } catch {

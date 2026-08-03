@@ -44,7 +44,7 @@ struct LyricsOverlayView: View {
             if settings.showRomanization, let roma = poller.currentLine?.romanization {
                 Text(roma)
                     .font(settings.romanizationFont)
-                    .foregroundStyle(settings.foregroundColor.opacity(0.6))
+                    .foregroundStyle(poller.displayForegroundColor.opacity(0.6))
                     .fixedSize(horizontal: false, vertical: true) // 允许换行时如实撑高,不被裁掉
                     .lyricsTextStroke(settings.textStrokeEnabled, color: settings.textStrokeColor)
             }
@@ -52,14 +52,14 @@ struct LyricsOverlayView: View {
             if settings.showTranslation, let tr = poller.currentLine?.translation {
                 Text(tr)
                     .font(settings.translationFont)
-                    .foregroundStyle(settings.foregroundColor.opacity(0.75))
+                    .foregroundStyle(poller.displayForegroundColor.opacity(0.75))
                     .fixedSize(horizontal: false, vertical: true)
                     .lyricsTextStroke(settings.textStrokeEnabled, color: settings.textStrokeColor)
             }
             if settings.showNextLinePreview, let next = poller.nextLineText {
                 Text(next)
                     .font(settings.previewFont)
-                    .foregroundStyle(settings.foregroundColor.opacity(0.4))
+                    .foregroundStyle(poller.displayForegroundColor.opacity(0.4))
                     .fixedSize(horizontal: false, vertical: true)
                     .lyricsTextStroke(settings.textStrokeEnabled, color: settings.textStrokeColor)
             }
@@ -69,7 +69,7 @@ struct LyricsOverlayView: View {
             if overlayController.showDragHint {
                 Text(L10n.t("长按即可拖动位置"))
                     .font(.caption)
-                    .foregroundStyle(settings.foregroundColor.opacity(0.8))
+                    .foregroundStyle(poller.displayForegroundColor.opacity(0.8))
                     .lyricsTextStroke(settings.textStrokeEnabled, color: settings.textStrokeColor)
                     .transition(.opacity)
             }
@@ -96,7 +96,7 @@ struct LyricsOverlayView: View {
         // 长按拖动"武装"后的视觉提示——一圈跟前景色同色的高亮描边,松手/取消立刻淡出。
         .overlay(
             RoundedRectangle(cornerRadius: overlayBackgroundCornerRadius, style: .continuous)
-                .stroke(settings.foregroundColor.opacity(overlayController.isDragArmed ? 0.6 : 0), lineWidth: 2)
+                .stroke(poller.displayForegroundColor.opacity(overlayController.isDragArmed ? 0.6 : 0), lineWidth: 2)
         )
         .multilineTextAlignment(.center)
         // 给 playbackControls 的 GeometryReader 一个命名坐标空间基准,原点在这整块
@@ -232,8 +232,27 @@ struct LyricsOverlayView: View {
         } else if let text = poller.currentLine?.mainText {
             Text(text)
                 .font(settings.mainFont)
-                .foregroundStyle(settings.foregroundColor)
+                .foregroundStyle(poller.displayForegroundColor)
                 .fixedSize(horizontal: false, vertical: true)
+                .lyricsTextStroke(settings.textStrokeEnabled, color: settings.textStrokeColor)
+        } else if poller.isCurrentTrackAdBreak {
+            // 2026-08-03 补上——Spotify 广告插播,同样要排在"还在搜索中"分支前面:广告
+            // 的标题/歌手永远不会被写进歌词缓存(见 collector/enrich.go
+            // trackEnrichment 的对应守卫),hasLyricsContent 永远拿不到内容,不排在
+            // 前面的话会在整段广告期间一直显示"搜索歌词中…",见
+            // poller.isCurrentTrackAdBreak 定义处的注释。
+            Text(L10n.t("广告中"))
+                .font(settings.mainFont)
+                .foregroundStyle(poller.displayForegroundColor.opacity(0.5))
+                .lyricsTextStroke(settings.textStrokeEnabled, color: settings.textStrokeColor)
+        } else if poller.isCurrentTrackInstrumental {
+            // 2026-08-03 补上——联网查过了、明确是纯音乐,跟下面"还在搜索中"/"真的没搜到"
+            // 两种含糊状态不一样,是有明确依据的结论,必须排在"还在搜索中"这个分支前面:
+            // 不然这个分支会先命中、一直显示"搜索歌词中…",纯音乐的歌只要还在播放就永远
+            // 到不了这里,见 poller.isCurrentTrackInstrumental 定义处的注释。
+            Text(L10n.t("纯音乐"))
+                .font(settings.mainFont)
+                .foregroundStyle(poller.displayForegroundColor.opacity(0.5))
                 .lyricsTextStroke(settings.textStrokeEnabled, color: settings.textStrokeColor)
         } else if poller.isPlayingNow && !poller.hasLyricsContent {
             // 换到一首还没解析过的新歌,collector 后台搜索通常要几秒——这段空窗期跟"这首
@@ -242,12 +261,12 @@ struct LyricsOverlayView: View {
             // 注释。
             Text(L10n.t("搜索歌词中…"))
                 .font(settings.mainFont)
-                .foregroundStyle(settings.foregroundColor.opacity(0.5))
+                .foregroundStyle(poller.displayForegroundColor.opacity(0.5))
                 .lyricsTextStroke(settings.textStrokeEnabled, color: settings.textStrokeColor)
         } else {
             Text("♪")
                 .font(settings.mainFont)
-                .foregroundStyle(settings.foregroundColor.opacity(0.3))
+                .foregroundStyle(poller.displayForegroundColor.opacity(0.3))
                 .lyricsTextStroke(settings.textStrokeEnabled, color: settings.textStrokeColor)
         }
     }
@@ -256,7 +275,7 @@ struct LyricsOverlayView: View {
     // 注释),这里只负责从 settings 取用户配置的前景色、算出这个字的当前进度,两者
     // 传给共享算法。
     private func wordText(_ w: SyncedLyricWord, atMs currentMs: Int) -> some View {
-        let fg = settings.foregroundColor
+        let fg = poller.displayForegroundColor
         let fraction = WordKaraokeGradient.fillFraction(for: w, atMs: currentMs)
         let band = WordKaraokeGradient.wordEdgeSoftenBand
         return Text(w.text)

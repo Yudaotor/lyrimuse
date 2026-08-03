@@ -184,6 +184,7 @@
 "磨砂玻璃" = "Frosted Glass";
 "深色渐变" = "Dark Gradient";
 "跟随封面" = "Follow Cover Art";
+"没有封面数据时会使用下面选择的文字颜色作为备用" = "Falls back to the text color chosen below when there's no cover art";
 "好的" = "OK";
 "字体" = "Font";
 "字号" = "Font Size";
@@ -365,6 +366,8 @@
 "填好这两项就会自动推送到网页" = "Fill in both fields and pushing to the web starts automatically";
 "用来接收「每周听歌小结」「每日听歌报告」推送" = "Used to receive \"Weekly Listening Digest\" and \"Daily Listening Report\" notifications";
 "搜索歌词中…" = "Searching for lyrics…";
+"纯音乐" = "Instrumental";
+"广告中" = "Ad break";
 "QQ 音乐" = "QQ Music";
 "播放器" = "Player";
 "选择 Lyrimuse 读取哪个 App 的播放状态" = "Choose which app Lyrimuse reads playback state from";
