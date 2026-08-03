@@ -4,7 +4,7 @@
 
 # Lyrimuse
 
-**Real-time, word-synced lyrics for Apple Music or QQ Music, right on your Mac desktop.**
+**Real-time, word-synced lyrics for Apple Music, QQ Music, NetEase Cloud Music, or Spotify — right on your Mac desktop.**
 
 **Language / 语言:** **English** | [简体中文](README.zh-CN.md)
 
@@ -15,7 +15,7 @@
 
 </div>
 
-Lyrimuse sits quietly in your menu bar and shows a floating lyrics window that follows whatever's playing — on Apple Music or QQ Music, your choice — word by word, in sync, always on top, across every Space. Think of the "desktop lyrics" experience from NetEase Cloud Music, but native to macOS.
+Lyrimuse sits quietly in your menu bar and shows a floating lyrics window that follows whatever's playing — Apple Music, QQ Music, NetEase Cloud Music, or Spotify, your choice (or just let it auto-detect) — word by word, in sync, always on top, across every Space. Think of the "desktop lyrics" experience from NetEase Cloud Music, but native to macOS.
 
 <div align="center">
 
@@ -37,10 +37,10 @@ Lyrimuse sits quietly in your menu bar and shows a floating lyrics window that f
 - **Works fully offline** in local mode — no network round-trip needed to show lyrics that are already cached
 
 ### Show it your way
-- **Choose your player**: reads what's playing from Apple Music (via Automation access) or QQ Music (via macOS's system-level MediaRemote — no permission needed); pick once during onboarding, switch anytime in Settings
-- **Two floating styles**: a classic desktop overlay, or a Dynamic-Island-style capsule docked at the top of the screen — turn on either, both, or neither
+- **Choose your player, or let it auto-detect**: reads what's playing from Apple Music (via Automation access), or QQ Music / NetEase Cloud Music / Spotify (via macOS's system-level MediaRemote — no permission needed); pick once during onboarding, switch anytime in Settings, or leave it on auto-detect to follow whichever app macOS currently considers "Now Playing"
+- **Three ways to display it**: a classic desktop overlay, a Dynamic-Island-style capsule docked at the top of the screen (optionally with a blurred-cover-art background), or a proper resizable Lyrics Window with the full lyric sheet and auto-scroll — turn on any combination, or none
 - **Menu bar text mode** — read the current line directly from the status bar instead of a floating window
-- **Playback controls** (play/pause, next, previous) built right into the overlay
+- **Playback controls** (play/pause, next, previous) built right into the overlay, working with whichever player you've selected
 - **Click-through by default, drag with a long-press** — the classic overlay never blocks clicks meant for whatever's behind it; press and hold it to reposition it, or lock its position entirely from the menu bar
 - **Fully customizable look**: font (or follow the system), size, text/background/shadow colors with savable custom themes, overlay width
 - **Hide during screenshots, recordings, or screen shares** — stays visible to you, invisible to everyone else
@@ -51,14 +51,14 @@ Lyrimuse sits quietly in your menu bar and shows a floating lyrics window that f
 - **Global keyboard shortcuts** for every action, all left unbound by default so you decide
 - **Menu-bar only by design** — doesn't clutter your Dock (optionally toggle Dock visibility if you want it there)
 - **Checks for updates on its own** (or on demand from the menu bar) — no need to keep revisiting the Releases page
-- **Optional companion launch** with Apple Music, in either direction — launch one when the other opens
+- **Scrobble to Last.fm**, connected in one click right from the main Accounts section — no manual token juggling
+- **Optional companion launch** with your chosen player, in either direction — launch one when the other opens
 - **Export or import your whole configuration** to move to a new Mac, plus a one-click diagnostics export for troubleshooting
 
 ### Optional extras
 Everything below is opt-in and off by default — turn on only what you want, right from Settings:
 
-- **Scrobble to [ListenBrainz](https://listenbrainz.org)** and/or **Last.fm** (one click to connect your Last.fm account, no manual token juggling)
-- **Bridge your iPhone's plays** (via Last.fm) into the same listening history as your Mac
+- **Also scrobble to [ListenBrainz](https://listenbrainz.org)** — connect it alongside Last.fm and every play is submitted to both from the exact same real-time read of your player, so the two histories never drift apart; your iPhone's plays (recorded via Last.fm) get automatically bridged into ListenBrainz too, for one unified history across both devices instead of two separate ones
 - **A shareable public "now playing" page** — live playback, history, a guestbook, reactions, a visitor counter, a Top-10-artists leaderboard, a vinyl-record visual, light/dark themes, and rich link previews when shared in chat apps. See the **[Web Features Guide](https://github.com/Yudaotor/nowplaying-workers#readme)** for a full walkthrough with screenshots.
 - **A weekly listening digest**, delivered as a push notification (Bark, DingTalk, WeCom, Discord, Feishu, or ServerChan)
 
@@ -110,11 +110,11 @@ cd lyrimuse/lyrimuse
 ./build.sh
 ```
 
-QQ Music support additionally needs [ungive/media-control](https://github.com/ungive/media-control) — `build.sh` installs it via Homebrew automatically if it's missing, so this isn't a step you need to do yourself either.
+QQ Music / NetEase Cloud Music / Spotify / auto-detect support additionally needs [ungive/media-control](https://github.com/ungive/media-control) — `build.sh` installs it via Homebrew automatically if it's missing, so this isn't a step you need to do yourself either.
 
 ### After any option
 
-Open Lyrimuse from `/Applications` — the first-run wizard walks you through picking a player (Apple Music or QQ Music), granting Automation access to Music.app if you picked Apple Music (QQ Music needs no extra permission), and enabling its background collector service (so lyrics/artwork keep resolving even when the window's closed). Complete the wizard and lyrics will appear right away (see [lyrimuse/README.md](lyrimuse/README.md) for more build options).
+Open Lyrimuse from `/Applications` — the first-run wizard walks you through picking a player (Apple Music, QQ Music, NetEase Cloud Music, Spotify, or auto-detect), granting Automation access to Music.app if you picked Apple Music (the others need no extra permission), and enabling its background collector service (so lyrics/artwork keep resolving even when the window's closed). Complete the wizard and lyrics will appear right away (see [lyrimuse/README.md](lyrimuse/README.md) for more build options).
 
 You don't need to configure anything else to get lyrics — every optional extra above is configured later, entirely from Settings.
 

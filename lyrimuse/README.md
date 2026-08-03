@@ -1,13 +1,16 @@
 # Lyrimuse
 
-原生 macOS 菜单栏 + 悬浮歌词窗口，跟着 Apple Music 或 QQ 音乐播放实时显示逐字同步歌词，
-显示成一个常驻置顶、跨 Space 的小悬浮窗——类似网易云/QQ音乐桌面客户端的"桌面歌词"。另外
-还有一个"歌词管理"窗口，可以查看/手改/删除/重新搜索每首歌的歌词候选。
+原生 macOS 菜单栏 + 悬浮歌词窗口，跟着 Apple Music、QQ 音乐、网易云音乐或 Spotify 播放实时
+显示逐字同步歌词（也可以选"自动识别"，跟随 macOS 当前系统级 Now Playing 焦点），显示成一个
+常驻置顶、跨 Space 的小悬浮窗、灵动岛胶囊，或者一个正经的可缩放"歌词窗口"——类似网易云/
+QQ音乐桌面客户端的"桌面歌词"。另外还有一个"歌词管理"窗口，可以查看/手改/删除/重新搜索每
+首歌的歌词候选。
 
 数据完全本地读取，零网络：直接读这台 Mac 上播放器的当前状态（Apple Music 走 AppleScript，
-需要一次「自动化」权限授权；QQ 音乐没有 AppleScript 支持，改走系统级 MediaRemote，不需要
-任何权限，见下面"依赖"）+ `../lyrimuse-collector/` 采集器写在磁盘上的歌词/封面缓存。用哪个
-播放器是首次启动引导（或随时在设置里）的一个显式选择，默认 Apple Music。这个采集器现在
+需要一次「自动化」权限授权；QQ 音乐/网易云音乐/Spotify 都没有可用的 AppleScript 支持，
+统一改走系统级 MediaRemote，不需要任何权限，见下面"依赖"）+ `../lyrimuse-collector/` 采集器
+写在磁盘上的歌词/封面缓存。用哪个播放器是首次启动引导（或随时在设置里）的一个显式选择，
+默认 Apple Music。这个采集器现在
 打包进 `.app` 里（`build.sh` 会一并 `go build` 一份塞进 `Contents/Resources/collector`），
 常驻运行靠 `CollectorServiceManager.swift` 管理的 LaunchAgent——同样在首次启动引导时开启，
 或随时去设置的"通用"tab 里装/卸。它负责联网查歌词/封面并写进这份本地缓存，Lyrimuse 自己
@@ -26,13 +29,14 @@
   go1.24.4`，原因见 `lyrimuse-collector/build.sh` 顶部注释）塞进 `.app` 包里，所以也需要
   本机装了 Go 工具链——这样 collector 不再要求用户单独构建/手动装 LaunchAgent，App 自己
   的 `CollectorServiceManager.swift` 就能装/卸它（见首次启动引导，或设置的"通用"tab）。
-- 2026-07-24 起，构建 QQ 音乐支持需要
-  [ungive/media-control](https://github.com/ungive/media-control)（BSD-3-Clause）——
-  `build.sh` 会把这份二进制拷进 `.app` 包（`Contents/Resources/media-control`），最终
-  用户不需要自己装任何东西。**不需要提前手动 `brew install media-control`**：
-  2026-07-27 起 `build.sh` 检测到本机没装会自动装一次（前提是本机已经装了 Homebrew——
-  Go 工具链那条已经要求了）；如果自动安装失败（没网/没装 Homebrew 本身），会打个警告
-  继续构建，只是这次构建出来的 App 不支持切换到 QQ 音乐（Apple Music 不受影响）。
+- 2026-07-24 起，构建 QQ 音乐/网易云音乐/Spotify/自动识别这几个播放源的支持需要
+  [ungive/media-control](https://github.com/ungive/media-control)（BSD-3-Clause，这几个
+  播放源统一走它读取系统级 MediaRemote，不是各自独立集成）——`build.sh` 会把这份二进制
+  拷进 `.app` 包（`Contents/Resources/media-control`），最终用户不需要自己装任何东西。
+  **不需要提前手动 `brew install media-control`**：2026-07-27 起 `build.sh` 检测到本机
+  没装会自动装一次（前提是本机已经装了 Homebrew——Go 工具链那条已经要求了）；如果自动
+  安装失败（没网/没装 Homebrew 本身），会打个警告继续构建，只是这次构建出来的 App
+  不支持切换到这几个播放源（Apple Music 不受影响）。
 - 打包成正经的 `.app`（2026-07-18 起）：`build.sh` 把 release 构建的可执行文件+图标+
   `Info.plist`+collector 二进制组装安装到 `/Applications/Lyrimuse.app`，可以拖进 Dock 当
   启动器双击打开。`Info.plist` 里仍然设 `LSUIElement`，运行期间照旧不占 Dock/Cmd-Tab（跟
