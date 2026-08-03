@@ -32,23 +32,43 @@ public enum CollectorServiceManager {
         run("/bin/launchctl", ["print", "gui/\(getuid())/\(label)"]) == 0
     }
 
+    // install()/uninstall() 必须互斥——2026-08-02 实测排查坐实:早先 setEnabled(_:)/
+    // setEnabledAndWait(_:) 各自派发一个独立的 Task.detached,互相之间完全没有互斥。
+    // AppSettings.collectorServiceEnabled 的 didSet 对"赋同一个值"依然会触发(Swift 不
+    // 做 old==new 短路),而 SettingsView.toggleCollectorService/OnboardingView.
+    // enableCollectorService 在 setEnabledAndWait 完成后都会回写一次
+    // settings.collectorServiceEnabled = enabling——这次赋值会再触发一次
+    // didSet→setEnabled(_:),派生出一个完全独立、不等待的冗余调用。如果用户在这次冗余
+    // 调用还没跑完(install() 内部失败重试路径最坏可达 2-3 秒)之前就快速切换开关,足以
+    // 让 install()/uninstall() 真的并发执行,其中一个的 bootstrap 用到另一个已经删除的
+    // plist 路径而静默失败,最终 launchd 实际状态跟 collectorServiceEnabled 显示的对不
+    // 上。改用一条专属的串行队列承载所有 install()/uninstall() 调用——不管调用方是不是
+    // 冗余触发的,严格按到达顺序一个接一个执行,不再各自开一个独立、互不感知的
+    // Task.detached。
+    private static let operationQueue = DispatchQueue(label: "me.yudaotor.lyrimuse.collector-service-manager", qos: .userInitiated)
+
     // 供 AppSettings.collectorServiceEnabled 的 didSet 调用——fire-and-forget，不阻塞
     // 调用方（跟 CollectorControl.restartAndWaitAsync() 同样的理由：launchctl 操作 +
-    // 失败重试的 sleep 可能要一两秒，不该占住调用它的那个线程）。
+    // 失败重试的 sleep 可能要一两秒，不该占住调用它的那个线程）；串行队列本身已经保证了
+    // 不会跟别的调用并发执行,fire-and-forget 只是不阻塞调用方等它跑完。
     public static func setEnabled(_ enabled: Bool) {
-        Task.detached(priority: .userInitiated) {
+        operationQueue.async {
             if enabled { install() } else { uninstall() }
         }
     }
 
     // 需要拿到"真的装完了没有"这个结果时用——Settings/引导页面的按钮点下去之后要等它
-    // 跑完、刷新状态展示，不能像上面那样纯 fire-and-forget。
+    // 跑完、刷新状态展示，不能像上面那样纯 fire-and-forget。用 withCheckedContinuation
+    // 把串行队列上的同步操作桥接成 async,而不是像以前那样另起一个不受这条队列管辖的
+    // Task.detached——否则这次"等待版"调用会绕开上面的互斥,又制造出一条新的并发路径。
     @discardableResult
     public static func setEnabledAndWait(_ enabled: Bool) async -> Bool {
-        await Task.detached(priority: .userInitiated) {
-            if enabled { install() } else { uninstall() }
-            return isRunning
-        }.value
+        await withCheckedContinuation { continuation in
+            operationQueue.async {
+                if enabled { install() } else { uninstall() }
+                continuation.resume(returning: isRunning)
+            }
+        }
     }
 
     private static func install() {
