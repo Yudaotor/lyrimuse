@@ -57,10 +57,10 @@ func startCompanionLaunchWatcher(ctx context.Context) {
 }
 
 // checkCompanionLaunch 检测目标播放器(手动选定时只有一个;playerAuto 下是全部四个
-// 已知播放器)里有没有谁发生了"从没运行变成运行"这个状态跳变,跳变发生且用户开着这个
-// 开关时,启动/唤起 Lyrimuse.app。多个进程在同一轮里都从"没跑"变"在跑"的极端情况下
-// (概率很低,但不是不可能——比如用户同时点开了两个播放器)只按第一个检测到的触发一次
-// 启动,launchLyrimuseApp 本身对已运行的 Lyrimuse.app 也是空操作,不会有副作用。
+// 已知播放器)里有没有谁发生了"从没运行变成运行"这个状态跳变,跳变发生、用户开着这个
+// 开关、而且 Lyrimuse.app 当前**没有**在跑时,启动它。多个进程在同一轮里都从"没跑"变
+// "在跑"的极端情况下(概率很低,但不是不可能——比如用户同时点开了两个播放器)只按第一个
+// 检测到的触发一次启动。
 func checkCompanionLaunch() {
 	// 不管开关开没开,每一轮都要照跑下面这个循环维护 lastRunningByName——开关关着的
 	// 时候如果直接跳过,关闭期间的真实状态变化不会被记录,开关重新打开的瞬间会凭空把
@@ -73,11 +73,53 @@ func checkCompanionLaunch() {
 		}
 		lastRunningByName[name] = running
 	}
-	if justStarted == "" || !features.LaunchLyrimuseOnMusicOpen {
+	// alreadyRunning 只为了把"跳过"这一种否决单独记一条日志——这是唯一需要事后能核实的
+	// 分支(开关关着/没有跳变都不值得记,每秒一轮会刷爆日志)。判断本身仍然全在
+	// shouldCompanionLaunch 里,这里不重复一遍条件。
+	alreadyRunning := false
+	if !shouldCompanionLaunch(justStarted, features.LaunchLyrimuseOnMusicOpen, func() bool {
+		alreadyRunning = isProcessRunning(lyrimuseAppProcessName)
+		return alreadyRunning
+	}) {
+		if alreadyRunning {
+			log.Printf("companion launch: %s just started, Lyrimuse.app already running, skipping", justStarted)
+		}
 		return
 	}
 	log.Printf("companion launch: %s just started, launching Lyrimuse.app", justStarted)
 	launchLyrimuseApp()
+}
+
+// lyrimuseAppProcessName 是 Lyrimuse.app 的可执行文件名(/Applications/Lyrimuse.app/
+// Contents/MacOS/lyrimuse),给 pgrep -x 用。collector 自己的可执行名是 collector,
+// 两者不会互相误命中(实测核实过)。
+const lyrimuseAppProcessName = "lyrimuse"
+
+// shouldCompanionLaunch 把"这一轮到底要不要去启动 Lyrimuse.app"收成一个纯函数,便于
+// 单测覆盖三个否决条件。
+//
+// lyrimuseRunning 传的是函数而不是 bool,为的是保住短路:前两个条件绝大多数轮次就已经
+// 否决了,而查 Lyrimuse 在不在跑要 fork 一次 pgrep,没必要每秒都白跑一次。
+//
+// ⚠️ 第三个条件(已在运行就跳过)是 2026-08-05 补的,之前这里和 launchLyrimuseApp 的注释
+// 都断言"已经在运行时 open 是空操作、不需要提前判断",这个前提是错的,当天日志里有两种
+// 反例:
+//
+//	① `open` 会给已运行的实例投递 reopen 事件,而 AppDelegate.applicationShouldHandleReopen
+//	   在没有可见窗口时(菜单栏常驻 App 的常态)会把设置窗口当"主窗口"打开——表现成
+//	   "打开 Music 之后 Lyrimuse 的设置窗口自己弹出来了"(用户反馈)。
+//	② 更糟的一种:launchd 直接拉起的 App 进程没有以 GUI 实例身份注册进 LaunchServices,
+//	   `open` 当它不存在、又起了第二个实例(当天 launchctl list 里同时出现
+//	   me.yudaotor.lyrimuse 和 application.me.yudaotor.lyrimuse.* 两条,两个进程跑同一个
+//	   .app,菜单栏出现两个图标)。
+//
+// 这个功能的语义本来就是"播放器起来了、顺手把没在跑的 Lyrimuse 拉起来",已经在跑时跳过
+// 不损失任何东西。
+func shouldCompanionLaunch(justStarted string, enabled bool, lyrimuseRunning func() bool) bool {
+	if justStarted == "" || !enabled {
+		return false
+	}
+	return !lyrimuseRunning()
 }
 
 // isProcessRunning 用 pgrep 按可执行文件名精确匹配(-x)查进程是否存在,不发送任何
@@ -121,12 +163,17 @@ func playerProcessName() string {
 	}
 }
 
-// launchLyrimuseApp 用 bundle id(不是路径)启动/唤起 Lyrimuse.app——不依赖它具体
-// 装在哪个路径下,LaunchServices 自己按已注册的 bundle id 找。已经在运行时 `open`
-// 本身就是空操作(不会重复启动一个新实例),不需要提前自己判断"要不要跳过"。
-// 用 --background 避免把它带到前台抢用户当前的焦点(跟 AppDelegate.swift 里
-// launchMusicOnLyrimuseOpen 那半用 config.activates=false 的用意一致)。
+// launchLyrimuseApp 用 bundle id(不是路径)启动 Lyrimuse.app——不依赖它具体装在哪个
+// 路径下,LaunchServices 自己按已注册的 bundle id 找。用 --background 避免把它带到前台
+// 抢用户当前的焦点(跟 AppDelegate.swift 里 launchMusicOnLyrimuseOpen 那半用
+// config.activates=false 的用意一致)。
+//
+// ⚠️ 调用方必须先确认 Lyrimuse.app 没在跑(见 shouldCompanionLaunch 的注释)。这里再自查
+// 一次是纵深防御:对已运行的实例 `open` **不是**空操作,会弹设置窗口、甚至起第二个实例。
 func launchLyrimuseApp() {
+	if isProcessRunning(lyrimuseAppProcessName) {
+		return
+	}
 	if err := exec.Command("open", "--background", "-b", "me.yudaotor.lyrimuse").Start(); err != nil {
 		log.Printf("companion launch: failed to open Lyrimuse.app: %v", err)
 	}
