@@ -207,26 +207,23 @@ struct LyricsWindowView: View {
 
     var body: some View {
         ScrollViewReader { scrollProxy in
-            Group {
-                if poller.allLines.isEmpty {
-                    emptyState
-                } else {
-                    ScrollView {
-                        LazyVStack(spacing: 20) {
-                            ForEach(Array(poller.allLines.enumerated()), id: \.element.id) { index, item in
-                                lineView(item, distance: distance(for: index), isActive: item.id == activeID)
-                                    .id(item.id)
-                            }
-                        }
-                        .padding(.vertical, 60)
-                        .padding(.horizontal, 24)
-                        .frame(maxWidth: .infinity)
+            GeometryReader { geo in
+                // 2026-08-04 按 Apple Music 歌词页一比一重做:左列是封面卡片+曲目信息+
+                // 进度条+播放控制,右列是左对齐的大字歌词。左列只在窗口够宽时显示——
+                // 老版本竖长窗口的存档尺寸(~460pt)下硬塞两列会挤成一团,退化成只有
+                // 歌词的单列,跟 Apple Music 自己把窗口拖窄时的行为一致。
+                let showPlayerPane = geo.size.width >= 640
+                HStack(spacing: 0) {
+                    if showPlayerPane {
+                        playerPane
+                            .frame(width: min(geo.size.width * 0.42, 460))
+                            .frame(maxHeight: .infinity)
                     }
-                    // 只在真的展示歌词内容这个分支铺封面背景——emptyState 的
-                    // ContentUnavailableView 用的是没法在这里覆盖的系统默认文字颜色,
-                    // 铺在它背后会有前面注释说的可读性问题,直接不铺,维持系统默认背景。
-                    .background(artworkBackground)
+                    rightPane
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(artworkBackground)
             }
             .toolbar {
                 ToolbarItem {
@@ -283,8 +280,16 @@ struct LyricsWindowView: View {
                 }
             }
         }
-        .frame(minWidth: 360, idealWidth: 460, minHeight: 480, idealHeight: 640)
+        // 2026-08-04 从竖长阅读面板改成 Apple Music 歌词页同款的横向双列比例。窗口尺寸
+        // 由系统状态恢复机制记忆,老用户第一次打开还是旧的竖长尺寸(此时按上面的宽度
+        // 判断退化成单列),手动拖宽一次之后就会记住新比例。
+        .frame(minWidth: 520, idealWidth: 1020, minHeight: 480, idealHeight: 660)
         .background(LyricsWindowCapture(controller: windowController).frame(width: 0, height: 0))
+        // 见 AuxiliaryWindowActivation 注释——.accessory 策略下临时借一个 Dock 图标,
+        // 方便 Cmd-Tab 切回这扇正经标题栏窗口(这个窗口本来就设计成"跟随播放持续显示",
+        // 用户中途切去别的 App 很常见)。
+        .onAppear { AuxiliaryWindowActivation.windowDidAppear() }
+        .onDisappear { AuxiliaryWindowActivation.windowDidDisappear() }
     }
 
     private var activeID: String? {
@@ -292,14 +297,174 @@ struct LyricsWindowView: View {
         return poller.allLines[idx].id
     }
 
+    // Apple Music 歌词页把当前行定位在窗口偏上约 1/3 处(不是正中)——上面留少量已经
+    // 唱过的行,下面留更多即将到来的行,2026-08-04 从 .center 改过来。
+    private static let activeLineAnchor = UnitPoint(x: 0.5, y: 0.35)
+
     private func scrollToActiveLine(scrollProxy: ScrollViewProxy, animated: Bool) {
         guard let id = activeID else { return }
         if animated {
-            withAnimation { scrollProxy.scrollTo(id, anchor: .center) }
+            withAnimation { scrollProxy.scrollTo(id, anchor: Self.activeLineAnchor) }
         } else {
-            scrollProxy.scrollTo(id, anchor: .center)
+            scrollProxy.scrollTo(id, anchor: Self.activeLineAnchor)
         }
     }
+
+    // ---- 右列:歌词滚动列表 / 占位态 --------------------------------------------
+
+    @ViewBuilder
+    private var rightPane: some View {
+        if poller.allLines.isEmpty {
+            emptyState
+        } else {
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 32) {
+                    ForEach(Array(poller.allLines.enumerated()), id: \.element.id) { index, item in
+                        lineView(item, distance: distance(for: index), isActive: item.id == activeID)
+                            .id(item.id)
+                    }
+                }
+                .padding(.vertical, 88)
+                .padding(.leading, 44)
+                .padding(.trailing, 52)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+    }
+
+    // ---- 左列:封面 + 曲目信息 + 进度条 + 播放控制 --------------------------------
+
+    private var playerPane: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Spacer(minLength: 20)
+            artworkCard
+            trackInfoRow
+                .padding(.top, 22)
+            progressSection
+                .padding(.top, 14)
+            playbackControls
+                .padding(.top, 20)
+            Spacer(minLength: 20)
+        }
+        .padding(.horizontal, 48)
+    }
+
+    private var artworkCard: some View {
+        // Color.clear 先撑出 1:1 的方形框、图片以 scaledToFill 铺进去再裁圆角——不能
+        // 直接对 Image 用 scaledToFill(没有外框约束时它会按原始比例撑开布局)。
+        Color.clear
+            .aspectRatio(1, contentMode: .fit)
+            .overlay {
+                if let data = poller.artworkData, let nsImage = NSImage(data: data) {
+                    Image(nsImage: nsImage)
+                        .resizable()
+                        .scaledToFill()
+                } else {
+                    ZStack {
+                        Rectangle().fill(hasArtworkBackground ? Color.white.opacity(0.1) : Color.primary.opacity(0.06))
+                        Image(systemName: "music.note")
+                            .font(.system(size: 44))
+                            .foregroundStyle(secondaryTextColor)
+                    }
+                }
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .shadow(color: .black.opacity(hasArtworkBackground ? 0.45 : 0.2), radius: 26, y: 12)
+            .animation(.easeInOut(duration: 0.5), value: poller.artworkData)
+    }
+
+    private var trackInfoRow: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(poller.title)
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(primaryTextColor)
+                .lineLimit(1)
+            Text(artistAlbumText)
+                .font(.system(size: 17))
+                .foregroundStyle(secondaryTextColor)
+                .lineLimit(1)
+        }
+    }
+
+    // Apple Music 同款"歌手 — 专辑"一行(em dash),专辑缺失时只显示歌手。
+    private var artistAlbumText: String {
+        poller.album.isEmpty ? poller.artist : "\(poller.artist) — \(poller.album)"
+    }
+
+    @ViewBuilder
+    private var progressSection: some View {
+        if let anchor = poller.anchor {
+            // 播放中:1 秒一档从锚点外推——4pt 高的进度条上,秒级步进配 .linear 补间在
+            // 视觉上已经连续,不值得为它再挂一个逐帧刷新的 TimelineView(.animation)。
+            TimelineView(.periodic(from: .now, by: 1)) { context in
+                progressBar(positionMs: anchor.extrapolatedPositionMs(now: context.date), durationMs: anchor.durationMs)
+            }
+        } else if let paused = poller.pausedPositionMs, let duration = poller.currentDurationMs, duration > 0 {
+            // 暂停:显示冻结位置(anchor 此时是 nil,见 pausedPositionMs 定义处注释)。
+            progressBar(positionMs: paused, durationMs: duration)
+        }
+    }
+
+    private func progressBar(positionMs: Int, durationMs: Int) -> some View {
+        let fraction = durationMs > 0 ? min(1, max(0, Double(positionMs) / Double(durationMs))) : 0
+        return VStack(spacing: 5) {
+            GeometryReader { g in
+                ZStack(alignment: .leading) {
+                    Capsule().fill(primaryTextColor.opacity(0.25))
+                    Capsule().fill(primaryTextColor.opacity(0.85))
+                        .frame(width: max(4, g.size.width * fraction))
+                }
+                .animation(reduceMotion ? nil : .linear(duration: 1), value: fraction)
+            }
+            .frame(height: 4)
+            HStack {
+                Text(Self.formatTime(ms: positionMs))
+                Spacer()
+                Text("-" + Self.formatTime(ms: max(0, durationMs - positionMs)))
+            }
+            .font(.system(size: 11))
+            .monospacedDigit()
+            .foregroundStyle(secondaryTextColor)
+        }
+    }
+
+    private static func formatTime(ms: Int) -> String {
+        let totalSeconds = max(0, ms / 1000)
+        return "\(totalSeconds / 60):" + String(format: "%02d", totalSeconds % 60)
+    }
+
+    private var playbackControls: some View {
+        HStack(spacing: 44) {
+            Button {
+                MusicPlaybackController.previousTrack()
+            } label: {
+                Image(systemName: "backward.fill").font(.system(size: 22))
+            }
+            .help(L10n.t("上一首"))
+            Button {
+                MusicPlaybackController.playPause()
+            } label: {
+                Image(systemName: poller.isPlayingNow ? "pause.fill" : "play.fill")
+                    .font(.system(size: 30))
+                    .frame(width: 34) // 播放/暂停两个图标宽度不同,固定住避免两侧按钮跟着跳动
+            }
+            .help(L10n.t("播放/暂停"))
+            Button {
+                MusicPlaybackController.nextTrack()
+            } label: {
+                Image(systemName: "forward.fill").font(.system(size: 22))
+            }
+            .help(L10n.t("下一首"))
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(primaryTextColor)
+        .frame(maxWidth: .infinity)
+    }
+
+    // ---- 颜色:有封面背景时全窗白色系,没有时退回系统色(浅色外观可读性) ------------
+
+    private var primaryTextColor: Color { hasArtworkBackground ? .white : .primary }
+    private var secondaryTextColor: Color { hasArtworkBackground ? .white.opacity(0.6) : .secondary }
 
     // 距当前行的行数差——按下标算,不按内容(副歌重复句内容相同但下标不同,详见
     // LyricsSyncEngine.activeLineIndex 的注释)。nil(还没播到第一句)统一按"远"处理。
@@ -308,15 +473,22 @@ struct LyricsWindowView: View {
         return abs(index - activeIdx)
     }
 
-    // Apple Music 歌词页的核心视觉语言是"按跟当前行的远近分档淡出",照抄这个项目自己
-    // 已经在网页端(index.html .lrc-line/.lrc-near)验证过的三档不透明度,数值直接复用
-    // 保持两端视觉语言一致:当前行 1.0、前后各一行 0.6、再远 0.35。
+    // Apple Music 歌词页的景深:当前行完全清晰,其余行统一压到低不透明度、并随距离
+    // 加重高斯模糊——非当前行之间的不透明度差异很小(0.50 → 0.35 缓降),远近感主要靠
+    // 模糊量区分。nil(还没播到第一句)整页轻虚化,保持可读。
     private func lineOpacity(forDistance distance: Int?) -> Double {
-        switch distance {
-        case .some(0): return 1
-        case .some(1): return 0.6
-        default: return 0.35
-        }
+        guard let d = distance else { return 0.45 }
+        if d == 0 { return 1 }
+        return max(0.35, 0.55 - Double(d) * 0.05)
+    }
+
+    // 距离越远、高斯模糊越重——1.1pt/行、封顶 4pt。2026-08-04 第一版按 1.6pt/行封顶
+    // 6pt,用户对照 AM 同曲截图反馈"太糊了,后面几行都失真了"——AM 最远的可见行仍然
+    // 认得出字形(模糊半径约为字号的 12~14%,6pt/28pt 是 21%),照它调轻。SwiftUI 的
+    // .blur() 本身就是可动画属性,复用调用点已有的 .animation(value: distance)。
+    private func lineBlur(forDistance distance: Int?) -> CGFloat {
+        guard let d = distance else { return 2 }
+        return min(CGFloat(d) * 1.1, 4)
     }
 
     private var hasArtworkBackground: Bool { poller.artworkData != nil }
@@ -339,8 +511,21 @@ struct LyricsWindowView: View {
             Image(nsImage: nsImage)
                 .resizable()
                 .scaledToFill()
-                .blur(radius: 60)
-                .overlay(Color.black.opacity(0.45))
+                // 2026-08-04 按 Apple Music 截图重调:它的背景是亮而饱和的(饱和度拉高、
+                // 只压一层不重的黑),不是旧版那种压 45% 黑的暗色调。blur 的 opaque: true
+                // 让模糊不采样边缘外的透明区,避免四周一圈发暗的镶边——不需要再放大图片
+                // 去遮。
+                //
+                // 22% 这一档是拿两类封面跟 AM 逐像素取样校准出来的(不是拍脑袋):橙色
+                // 饱和封面 raw B 0.72→AM 显示 0.58、浅色封面 0.63→0.50,都精确等于
+                // "压 22% 黑"。中途试过按封面亮度自适应加重遮罩(0.12+0.36×lum),实测
+                // 浅色封面被压到 0.41、比 AM 明显更暗,已回退——AM 对同源(Apple 官方
+                // 封面,跟这里 media-control 拿到的是同一张)就是固定一档,不自适应;
+                // 网页端因为封面源不同(网易云/QQ 版本亮度分布不一样)才需要那套 canvas
+                // 自适应归一,两边故意不同,见 index.html computeArtScrim() 注释。
+                .saturation(1.5)
+                .blur(radius: 72, opaque: true)
+                .overlay(Color.black.opacity(0.22))
                 .clipped()
                 .animation(.easeInOut(duration: 0.5), value: data)
         }
@@ -350,60 +535,74 @@ struct LyricsWindowView: View {
     // allLines.isEmpty,含义不一样,判断条件跟 LyricsOverlayView.mainLine 里的同一个
     // 分支保持一致(poller.hasLyricsContent 的注释详见 LocalPlaybackSource)。文案复用
     // 已有的本地化字符串,不新造。
+    // 广告/纯音乐两个分支必须排在"还在搜索中"前面,理由跟 LyricsOverlayView.mainLine
+    // 一致,见 poller.isCurrentTrackAdBreak / isCurrentTrackInstrumental 定义处的注释。
+    private var emptyStateSpec: (icon: String, text: String) {
+        if poller.isCurrentTrackAdBreak { return ("megaphone", L10n.t("广告中")) }
+        if poller.isCurrentTrackInstrumental { return ("waveform", L10n.t("纯音乐")) }
+        if poller.isPlayingNow && !poller.hasLyricsContent { return ("magnifyingglass", L10n.t("搜索歌词中…")) }
+        return ("text.quote", L10n.t("无歌词"))
+    }
+
     @ViewBuilder
     private var emptyState: some View {
-        if poller.isCurrentTrackAdBreak {
-            // 必须排在"还在搜索中"分支前面,理由跟 LyricsOverlayView.mainLine 一致,见
-            // poller.isCurrentTrackAdBreak 定义处的注释。
-            ContentUnavailableView(L10n.t("广告中"), systemImage: "megaphone")
-        } else if poller.isCurrentTrackInstrumental {
-            // 必须排在"还在搜索中"分支前面,理由跟 LyricsOverlayView.mainLine 一致,见
-            // poller.isCurrentTrackInstrumental 定义处的注释。
-            ContentUnavailableView(L10n.t("纯音乐"), systemImage: "waveform")
-        } else if poller.isPlayingNow && !poller.hasLyricsContent {
-            ContentUnavailableView(L10n.t("搜索歌词中…"), systemImage: "magnifyingglass")
+        let spec = emptyStateSpec
+        if hasArtworkBackground {
+            // 封面背景上 ContentUnavailableView 的系统默认文字颜色没法覆盖(深色模糊图
+            // 上的浅色外观深色文字基本看不清),换成自绘的白色版本,条件跟系统版共用
+            // emptyStateSpec。
+            VStack(spacing: 12) {
+                Image(systemName: spec.icon).font(.system(size: 40))
+                Text(spec.text).font(.system(size: 16, weight: .semibold))
+            }
+            .foregroundStyle(.white.opacity(0.75))
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
-            ContentUnavailableView(L10n.t("无歌词"), systemImage: "text.quote")
+            ContentUnavailableView(spec.text, systemImage: spec.icon)
         }
     }
 
     @ViewBuilder
     private func lineView(_ item: LyricsWindowLine, distance: Int?, isActive: Bool) -> some View {
-        VStack(spacing: 4) {
+        VStack(alignment: .leading, spacing: 6) {
             if settings.showRomanization, let roma = item.line.romanization {
                 Text(roma)
-                    .font(.system(size: 15))
-                    .foregroundStyle(hasArtworkBackground ? Color.white.opacity(0.7) : Color.secondary)
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(secondaryTextColor)
             }
             mainText(item, isActive: isActive)
             if settings.showTranslation, let tr = item.line.translation {
                 Text(tr)
-                    .font(.system(size: 16))
-                    .foregroundStyle(hasArtworkBackground ? Color.white.opacity(0.7) : Color.secondary)
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(secondaryTextColor)
             }
         }
-        .multilineTextAlignment(.center)
-        .frame(maxWidth: .infinity)
+        // Apple Music 歌词是左对齐排版,2026-08-04 从居中改过来。
+        .multilineTextAlignment(.leading)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .opacity(lineOpacity(forDistance: distance))
-        // 当前行放大一档(1.04x)——同样照抄网页端 .lrc-line.active { transform:
-        // scale(1.04) },减少动态效果的系统设置(reduceMotion)下跟网页
-        // @media(prefers-reduced-motion) 的处理保持一致,直接不做缩放。
-        .scaleEffect(isActive && !reduceMotion ? 1.04 : 1)
+        // 模糊跟缩放一样受 reduceMotion 影响时直接关掉——虽然模糊本身不是"位移类"动效,
+        // 但它是这套"聚焦感"视觉效果里跟缩放同一批的非必要装饰,减少动态效果的用户大概率
+        // 也不想要这层模糊,统一用同一个开关关掉,不单独加一个新设置项。
+        .blur(radius: reduceMotion ? 0 : lineBlur(forDistance: distance))
+        // 当前行只轻微放大(1.02x)——Apple Music 全行同一字号,当前行靠亮度/清晰度+
+        // 一点点缩放"浮起"。anchor 用 .leading:左对齐排版下从行首往右生长,不是从中心
+        // 向两边(那样行首会跟着左右移动)。
+        .scaleEffect(isActive && !reduceMotion ? 1.02 : 1, anchor: .leading)
         .animation(.easeInOut(duration: 0.3), value: distance)
     }
 
     @ViewBuilder
     private func mainText(_ item: LyricsWindowLine, isActive: Bool) -> some View {
-        // 非当前行的主文字颜色规则(见文件顶部注释里"例外"那段):有封面背景就固定用
-        // 浅色,没有就吃系统 .primary。当前行逐字高亮"还没唱到"的部分不用这个——那是
-        // WordKaraokeGradient 用 accentColor 自己算出的暗淡版本(见下面 gradient 调用),
-        // 让整条当前行始终是同一个 accentColor 色调,只是亮度不同。
-        let dimmedText: Color = hasArtworkBackground ? .white : .primary
+        // Apple Music 歌词页所有行同一字号同一字重(远近靠透明度+模糊区分,不靠字号),
+        // 当前行的逐字填色也是"同色 35% → 全强度"的同色系渐变,不引入另一个强调色——
+        // 2026-08-04 按截图一比一对照改过来(旧版是当前行 accentColor 30pt/其余 24pt)。
+        // 有封面背景时这个"同色"是白色;没有封面时退回系统 .primary(白字在浅色外观的
+        // 默认窗口背景上不可读,正确性优先),远近区分交给 lineOpacity。
+        let base: Color = hasArtworkBackground ? .white : .primary
         if isActive, let words = item.line.words {
-            // 逐字高亮改用跟悬浮歌词(LyricsOverlayView)同一套软边渐变算法
-            // (WordKaraokeGradient,见该文件顶部注释)——原来这里是二值判断(唱到/
-            // 没唱到瞬间切换)+ 100ms 一档的 .periodic 采样,被指出观感不够丝滑,根源
-            // 就是没有复用悬浮窗那套已经调好的连续渐变。换成同款 TimelineView(.animation)
+            // 逐字高亮用跟悬浮歌词(LyricsOverlayView)同一套软边渐变算法
+            // (WordKaraokeGradient,见该文件顶部注释),TimelineView(.animation)
             // 按渲染帧频现算,只有当前这一行会挂这个逐帧刷新的 TimelineView,不影响
             // 列表里其它行。
             TimelineView(.animation(paused: !poller.isPlayingNow)) { context in
@@ -411,26 +610,20 @@ struct LyricsWindowView: View {
                 // 注释——不加的话"当前词判定"和"填色进度"用的时间基准对不上,会出现填到
                 // 一半就卡住的现象。
                 let currentMs = (poller.anchor?.extrapolatedPositionMs(now: context.date) ?? 0) + poller.currentLyricsOffsetMs
-                WrapLayout {
+                WrapLayout(rowAlignment: .leading) {
                     ForEach(Array(words.enumerated()), id: \.offset) { _, w in
                         let fraction = WordKaraokeGradient.fillFraction(for: w, atMs: currentMs)
                         let band = WordKaraokeGradient.wordEdgeSoftenBand
                         Text(w.text)
-                            .foregroundStyle(WordKaraokeGradient.gradient(fg: .accentColor, left: fraction - band, right: fraction + band))
+                            .foregroundStyle(WordKaraokeGradient.gradient(fg: base, left: fraction - band, right: fraction + band))
                     }
                 }
             }
-            .font(.system(size: 30, weight: .bold))
+            .font(.system(size: 28, weight: .bold))
         } else {
-            // 字号也跟着当前/非当前分两档(30 / 24),不只是颜色/透明度——真正的 Apple
-            // Music 歌词页当前行会明显更大,不是网页迷你卡片那种"字号不变、只变颜色"的
-            // 简化版(网页 .lrc-main 空间太小放不下字号差异)。粗细统一用 .bold,不再
-            // 像悬浮窗那样只有当前行加粗——网页端 .lrc-main 本身不论是否高亮都是
-            // font-weight:700,这次直接照抄这个"整体粗体、靠字号+颜色+透明度分层"的
-            // 处理。
             Text(item.line.plainText ?? "")
-                .font(.system(size: isActive ? 30 : 24, weight: .bold))
-                .foregroundStyle(isActive ? Color.accentColor : dimmedText)
+                .font(.system(size: 28, weight: .bold))
+                .foregroundStyle(base)
         }
     }
 }

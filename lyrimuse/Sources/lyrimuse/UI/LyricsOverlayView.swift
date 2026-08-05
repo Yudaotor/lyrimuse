@@ -372,8 +372,13 @@ private struct ControlsFramePreferenceKey: PreferenceKey {
 // 换行,不需要另起一份重复实现——同一个 target 内跨文件访问,行为对这里的悬浮窗
 // 零影响。
 struct WrapLayout: Layout {
+    // 行内的水平对齐——悬浮歌词/灵动岛是居中排版(默认值,行为不变);"歌词窗口"2026-08-04
+    // 改成 Apple Music 歌词页同款的左对齐排版后传 .leading。
+    enum RowAlignment { case center, leading }
+
     var horizontalSpacing: CGFloat = 0
     var verticalSpacing: CGFloat = 2
+    var rowAlignment: RowAlignment = .center
 
     private func computeRows(sizes: [CGSize], maxWidth: CGFloat) -> [(indices: [Int], width: CGFloat, height: CGFloat)] {
         var rows: [(indices: [Int], width: CGFloat, height: CGFloat)] = []
@@ -418,7 +423,7 @@ struct WrapLayout: Layout {
         let rows = computeRows(sizes: sizes, maxWidth: bounds.width)
         var y = bounds.minY
         for row in rows {
-            var x = bounds.minX + max(0, (bounds.width - row.width) / 2) // 整行居中
+            var x = bounds.minX + (rowAlignment == .center ? max(0, (bounds.width - row.width) / 2) : 0) // 按 rowAlignment 居中/靠左
             for i in row.indices {
                 let size = sizes[i]
                 subviews[i].place(

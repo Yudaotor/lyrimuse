@@ -40,6 +40,9 @@ final class PlaybackCoordinator: ObservableObject {
     // 自己拼了个 "\(artist)|\(title)" 去查 LyricsOffsetStore,跟实际存储用的
     // key(LyricsOffsetStore.trackKey,多一段内容指纹)对不上,查出来的永远是 0)。
     @Published private(set) var currentLyricsOffsetMs: Int = 0
+    // "歌词窗口"进度条的暂停态冻结位置/时长,见 LocalPlaybackSource 同名属性的注释。
+    @Published private(set) var pausedPositionMs: Int?
+    @Published private(set) var currentDurationMs: Int?
 
     private var cancellables: [AnyCancellable] = []
     private var started = false
@@ -100,6 +103,8 @@ final class PlaybackCoordinator: ObservableObject {
                 .map { $0.map { Color(hexWithAlpha: $0, fallback: .white) } }
                 .assign(to: \.artworkAccentColor, on: self),
             s.$currentLyricsOffsetMs.assign(to: \.currentLyricsOffsetMs, on: self),
+            s.$pausedPositionMs.assign(to: \.pausedPositionMs, on: self),
+            s.$currentDurationMs.assign(to: \.currentDurationMs, on: self),
         ]
     }
 
