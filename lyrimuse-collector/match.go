@@ -69,17 +69,41 @@ func isProbablyWrongLanguageLyrics(localArtist, localTitle, lyrics string) bool 
 // 中间的情况(那种情况极罕见,但宁可放过也不误杀真歌词)。
 var creditLineRe = regexp.MustCompile(`(?i)^(作词|作曲|编曲|制作人|演唱|混音|录音|lyrics by|composed by|written by|produced by|arranged by)\s*[:：]`)
 
+// genericHanCreditLineRe 是 creditLineRe 的结构化补充——2026-08-04 实测坐实:网易云对
+// 纯音乐/配乐类曲目偶尔会把完整制作人员名单当"歌词"返回,每行都带真实时间戳(能通过
+// isTimedLRC),但角色名(指挥/混音师/贝斯/中提琴/吉他/大提琴/母带工程师……)远超
+// creditLineRe 手工枚举的那几个词,枚举法天然堵不完。改成认"短中文标签+冒号+人名"这个
+// 结构本身——不管标签具体是什么词,只要是 1~8 个汉字紧跟冒号,大概率就是"角色: 姓名"这种
+// 职员表格式,不是真正在唱的歌词正文(真歌词句子极少长这个形状)。故意只匹配汉字标签(不
+// 含数字/字母),避免误伤"1、2、3："这类真歌词里可能出现的编号或场景标签。
+var genericHanCreditLineRe = regexp.MustCompile(`^\p{Han}{1,8}[:：]`)
+
+// isCreditLine 判断去掉时间戳/trim 过的一行文本是不是"角色: 人名"这种职员表格式——
+// creditLineRe(手工枚举的中英文关键词)和 genericHanCreditLineRe(结构化兜底)两条规则
+// 任一命中即算,理由分别见各自的注释。
+func isCreditLine(text string) bool {
+	return creditLineRe.MatchString(text) || genericHanCreditLineRe.MatchString(text)
+}
+
+// neteaseInstrumentalPlaceholderMarker 是网易云对纯音乐曲目自己给出的固定占位文案(常
+// 跟在完整制作人员名单里、同样带着时间戳)——命中即可高置信度判定"这整份不是真歌词",
+// 不需要再逐行数 credit 行,比 isCreditLine 的结构化判断更直接、误判空间更小。
+const neteaseInstrumentalPlaceholderMarker = "纯音乐"
+
 // isCreditOnlyLRC 判断这份"通过了 isTimedLRC"的歌词是不是只有作词/作曲等 credit 信息、
 // 没有真正的歌词正文——网易云有时把整首歌的"歌词"就只填了几行 credit,每行都单独带
 // 时间戳(能通过 isTimedLRC 那条"过半行数带时间戳"的检测),但去掉 credit 行之后剩不下
 // 几行真正在唱的词。去掉时间戳和 credit 行之后,剩余非空行少于 3 行就判定为"只有
 // credit,没有正文"。
 func isCreditOnlyLRC(lrc string) bool {
+	if strings.Contains(lrc, neteaseInstrumentalPlaceholderMarker) {
+		return true
+	}
 	lines := strings.Split(lrc, "\n")
 	nonCredit := 0
 	for _, l := range lines {
 		text := strings.TrimSpace(lrcTimestampRe.ReplaceAllString(l, ""))
-		if text == "" || creditLineRe.MatchString(text) {
+		if text == "" || isCreditLine(text) {
 			continue
 		}
 		nonCredit++
@@ -120,9 +144,18 @@ type lyricCandidate struct {
 	lyrics        string
 	wordTimingYRC string // 该候选归一化成 YRCParser 语法后的逐字数据,没有则空串(netease/qq/kugou 都可能有,lrclib 恒无)
 	hasWordTiming bool   // = wordTimingYRC != "",构造候选时直接算好,见 enrich.go
-	// title/artist/album/cover 是这个源实际匹配到的歌名/歌手/专辑/封面——不参与打分,
-	// 纯粹给"搜索候选歌词"弹窗展示("这个候选到底对应哪首歌/哪个版本")。不同源可能
-	// 匹配到同一首歌的不同版本(不同专辑/live/合集),各自如实展示,不做跨源统一。
+	// title/artist/album/cover 是这个源实际匹配到的歌名/歌手/专辑/封面,给"搜索候选歌词"
+	// 弹窗展示("这个候选到底对应哪首歌/哪个版本")。不同源可能匹配到同一首歌的不同版本
+	// (不同专辑/live/合集),各自如实展示,不做跨源统一。
+	//
+	// 2026-08-05 起 title **参与打分**:只用来判"版本限定词对不对得上"(见
+	// versionTagsMismatch)。改动前它完全不参与,而 scoreLyricCandidate 的其余信号
+	// (时长吻合度/有无逐字/来源/行数)对"同一首歌的两个不同录音"几乎无区分力——同一首歌的
+	// demo/original version/live 版时长接近、歌词字面还一样,于是自报标题明明写着
+	// "(Original Version)" 的候选也能压过标题完全吻合的候选(实测坐实:Michael Jackson
+	// 的 "Blue Gangsta" 被匹配成酷狗的 "Blue Gangsta (Original Version)",播放时展示的
+	// 第一句就是 "Michael Jackson - Blue Gangsta(Original Version)",时间轴也是原始版
+	// 那一套)。
 	title, artist, album, cover string
 }
 
@@ -238,6 +271,13 @@ func scoreLyricCandidate(localArtist, localTitle string, durationSecs float64, c
 		lines = 200
 	}
 	score += lines
+	// 版本限定词对不上 → 重扣。放在最后、扣完再夹到 1,理由见 versionMismatchPenalty。
+	if versionTagsMismatch(localTitle, c.title) {
+		score -= versionMismatchPenalty
+		if score < 1 {
+			score = 1
+		}
+	}
 	return score
 }
 
@@ -509,6 +549,108 @@ func stripParens(s string) string {
 // titleMatches reports whether a NetEase result name refers to the same song as
 // the played title, comparing both full and paren-stripped forms (so
 // "Hold My Hand" matches "Hold My Hand (Duet with Akon)").
+// distinctRecordingVersionTags 是"意味着这是另一次录音"的版本限定词——命中它们的候选,
+// 歌词字面可能跟正式版一模一样,但时间轴是另一套,拿来对齐播放位置必然错。
+//
+// 故意**不**收 remaster/remastered/deluxe/bonus/explicit/clean/mono/stereo/anniversary
+// 这一类:它们指的是同一次录音的不同发行/母带,时间轴基本一致,拿来用没问题,收进来只会
+// 制造大量假不匹配(本地标签和各源标签在这类后缀上本来就经常不一致)。
+//
+// 也故意只收多词短语或歧义极小的单词:单独一个 "edit"/"mix"/"version" 太容易命中正常
+// 曲目名,所以只认 "radio edit"/"extended"/"original version" 这类完整说法。
+var distinctRecordingVersionTags = []string{
+	"demo", "original version", "album version", "single version",
+	"live", "unplugged", "acoustic", "instrumental", "karaoke",
+	"remix", "extended", "radio edit", "alternate", "alternative version",
+	"rehearsal", "reprise", "a cappella", "acapella",
+}
+
+// titleVersionTags 抽出歌名里的版本限定词。**只在"限定词该出现的位置"里找**——括号/方括号
+// 里的段落,以及最后一个 " - " 之后的段落。不能对整个歌名做子串匹配:那样 "Live and Let
+// Die" 会被当成 live 版、"Demolition" 会命中 demo,全是假阳性。
+func titleVersionTags(title string) map[string]bool {
+	segs := parentheticalSegments(title)
+	// "Song - Live at Wembley" 这种把限定词写在破折号后面的写法也认。用最后一个 " - ",
+	// 因为歌名本身含破折号的情况下,限定词总在最右边那一段。
+	if i := strings.LastIndex(title, " - "); i >= 0 {
+		segs = append(segs, title[i+3:])
+	}
+	out := map[string]bool{}
+	for _, seg := range segs {
+		n := normLoose(seg)
+		if n == "" {
+			continue
+		}
+		for _, tag := range distinctRecordingVersionTags {
+			if strings.Contains(n, normLoose(tag)) {
+				out[tag] = true
+			}
+		}
+	}
+	return out
+}
+
+// parentheticalSegments 返回歌名里每一段括号内的内容(圆括号/方括号/花括号,支持嵌套时
+// 取最外层整段)。跟 stripParens 是一对:那个丢掉括号内容,这个只要括号内容。
+func parentheticalSegments(s string) []string {
+	var out []string
+	var cur strings.Builder
+	depth := 0
+	for _, r := range s {
+		switch r {
+		case '(', '[', '{':
+			depth++
+			if depth == 1 {
+				cur.Reset()
+				continue
+			}
+		case ')', ']', '}':
+			if depth > 0 {
+				depth--
+				if depth == 0 {
+					out = append(out, cur.String())
+					continue
+				}
+			}
+		}
+		if depth > 0 {
+			cur.WriteRune(r)
+		}
+	}
+	// 括号没闭合(标签写得不规范)时把已经攒下的那段也算上,不白丢
+	if depth > 0 && cur.Len() > 0 {
+		out = append(out, cur.String())
+	}
+	return out
+}
+
+// versionTagsMismatch 判断"候选自报的歌名"跟"本地正在播的歌名"在版本限定词上是否对不上。
+// 双向判定:本地是正式版而候选是 demo/live(会展示错版本的时间轴),以及本地是 demo 而候选
+// 是正式版(同理),都算不匹配。
+//
+// candidateTitle 为空(某些源不回报歌名)时一律判不匹配为 false —— 没有证据就不扣分,
+// 不能因为源的元数据缺失就把它的歌词判死。
+func versionTagsMismatch(localTitle, candidateTitle string) bool {
+	if strings.TrimSpace(candidateTitle) == "" {
+		return false
+	}
+	local, cand := titleVersionTags(localTitle), titleVersionTags(candidateTitle)
+	if len(local) != len(cand) {
+		return true
+	}
+	for tag := range local {
+		if !cand[tag] {
+			return true
+		}
+	}
+	return false
+}
+
+// versionMismatchPenalty 要足够大到"永远压不过标题吻合的候选":时长项最高 1000、逐字项
+// 400,600 分足以让原本领先几十分的错版本候选彻底掉到最后。扣完不让它变成负分(负分会被
+// pickLyricCandidate 直接丢弃),而是留 1 分—— 实在只有这一个候选时,有总比没有好。
+const versionMismatchPenalty = 600
+
 func titleMatches(name, title string) bool {
 	if looseContains(name, title) {
 		return true
