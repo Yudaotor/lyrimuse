@@ -174,7 +174,6 @@
 "在钉钉群里：群设置 → 智能群助手 → 添加机器人 → 自定义，创建后复制 Webhook 地址。安全设置建议选「加签」，把生成的密钥填进下面的「加签密钥」" = "In your DingTalk group: Group Settings → Group Assistant → Add Robot → Custom, then copy the webhook URL after creating it. For security, we recommend choosing “Signature” and entering the generated secret in the “Signing Secret” field below";
 "在飞书群里：设置 → 群机器人 → 添加机器人 → 自定义机器人，创建后复制 Webhook 地址。想加一层校验可以开启「签名校验」，把密钥填进下面的「签名密钥」" = "In your Feishu group: Settings → Group Bots → Add Bot → Custom Bot, then copy the webhook URL after creating it. For an extra layer of verification, enable “Signature Verification” and enter the secret in the “Signing Secret” field below";
 "外观" = "Appearance";
-"以下设置只影响「桌面悬浮歌词」的外观；灵动岛歌词和歌词窗口使用固定的系统配色，菜单栏歌词是纯文字，均不受这里影响" = "The settings below only affect the Desktop Floating Lyrics appearance. Notch Lyrics and the Lyrics Window use fixed system colors, and Menu Bar Lyrics is plain text — none of them are affected here";
 "歌词展示" = "Lyrics Display";
 "四种展示方式互不冲突，可以同时开启：桌面悬浮歌词贴在桌面上、支持逐字高亮；灵动岛歌词紧凑地贴着刘海显示；菜单栏歌词最不打扰、只占状态栏一行文字；歌词窗口是可以滚动阅读的完整歌词列表" = "All four can be turned on at once — Desktop Floating Lyrics sits on your desktop with word-by-word highlighting; Notch Lyrics tucks compactly beside the notch; Menu Bar Lyrics is the least intrusive, just one line in the status bar; the Lyrics Window is a scrollable view of the full lyrics";
 "展示" = "Display";
@@ -183,7 +182,13 @@
 "灵动岛歌词" = "Dynamic Island Lyrics";
 "显示桌面悬浮歌词" = "Show Desktop Floating Lyrics";
 "显示灵动岛歌词" = "Show Dynamic Island Lyrics";
-"灵动岛风格" = "Dynamic Island Style";
+"风格" = "Style";
+"自动隐藏" = "Auto-Hide";
+"以上配色、字体、字号只影响「桌面悬浮歌词」；灵动岛歌词和歌词窗口用的是固定的系统配色和字号，菜单栏歌词是纯文字，都不受这里影响" = "The color, font, and text size settings above only affect Desktop Floating Lyrics. Notch Lyrics and the Lyrics Window use fixed system colors and sizes, and Menu Bar Lyrics is plain text — none of them are affected here";
+"灵动岛的配色由上面的「风格」决定、字号固定，不使用「桌面悬浮歌词」那一组配色和字体设置" = "The Dynamic Island takes its colors from the Style option above and its text size is fixed; it does not use the Desktop Floating Lyrics color and font settings";
+"这两项对「桌面悬浮歌词」和「灵动岛歌词」同时生效；菜单栏歌词和歌词窗口不受影响" = "Both options apply to Desktop Floating Lyrics and Dynamic Island Lyrics at the same time; Menu Bar Lyrics and the Lyrics Window are unaffected";
+"显示专辑封面" = "Show Album Artwork";
+"在灵动岛右下角显示一枚专辑封面小图。开启后当前歌词能显示的宽度会略微变窄（过长的歌词仍然会横向滚动播完整句）" = "Shows a small album artwork thumbnail in the bottom-right corner of the Dynamic Island. Turning this on slightly narrows the room left for the current lyric line (overly long lines still scroll horizontally to play through the full line)";
 "纯黑" = "Solid Black";
 "磨砂玻璃" = "Frosted Glass";
 "深色渐变" = "Dark Gradient";
@@ -307,7 +312,6 @@
 "已导出到本地的歌词文件也会一并删除,且无法撤销。下次播放这些歌会重新走一遍匹配解析,不保证能找到一样的歌词" = "The exported lyrics files will be deleted too, and this can't be undone. The next time you play these songs Lyrimuse will match and parse them again, with no guarantee of finding the same lyrics";
 "其中 %@ 条是你手动修正过的,删掉之后找不回来。已导出到本地的歌词文件也会一并删除,且无法撤销。下次播放这些歌会重新走一遍匹配解析,不保证能找到一样的歌词" = "%@ of them are hand-corrected and can't be recovered. The exported lyrics files will be deleted too, and this can't be undone. The next time you play these songs Lyrimuse will match and parse them again, with no guarantee of finding the same lyrics";
 "重新解析很可能又抓到同一份不准的逐字时间轴，不一定能找回更准确的版本" = "Re-parsing may well fetch the same inaccurate word timing again — there's no guarantee of getting a more accurate version back";
-"悬浮歌词窗口" = "Floating Lyrics Window";
 "签名密钥（可选）" = "Signature Secret (Optional)";
 "管理" = "Management";
 "网易云音乐" = "NetEase Cloud Music";

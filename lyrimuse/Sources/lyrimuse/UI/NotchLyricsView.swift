@@ -44,10 +44,9 @@ extension NotchCardStyle {
     }
 }
 
-// 灵动岛样式的内容视图。稳态(不 hover)常显"歌名+播放控制+当前歌词逐字高亮"整套,
-// hover 时在下面多展开一块"下一句歌词预览+迷你进度条"作为补充信息(参考 boring.notch
-// 等实现的分层思路:稳态给完整基本信息,hover 给深化信息)。没有加专辑封面——本地播放源
-// 目前没有把 artwork 转发到 PlaybackCoordinator,不为这一个位置单独新增取图链路。
+// 灵动岛样式的内容视图。稳态(不 hover)常显"歌名+播放控制+当前歌词逐字高亮+专辑封面"
+// 整套,hover 时在下面多展开一块"下一句歌词预览+迷你进度条"作为补充信息(参考 boring.notch
+// 等实现的分层思路:稳态给完整基本信息,hover 给深化信息)。
 //
 // 分两/三行:
 // - 顶行(高度 = controller.contentTopInset,等于刘海本身/无刘海屏幕的兜底值):物理
@@ -57,7 +56,8 @@ extension NotchCardStyle {
 // - 歌词行:逐字高亮跟随播放进度扫过,技术上跟 LyricsOverlayView.mainLine 是同一套原理
 //   (TimelineView 按渲染帧频现算 fillFraction+渐变着色),但不复用那份实现——这里没有
 //   WrapLayout(单行不换行,超长直接硬裁),前景色固定白色,复杂度明显小一截,直接写一份
-//   简化版更清楚,不值得为了复用去抽象共享代码。
+//   简化版更清楚,不值得为了复用去抽象共享代码。这一行的尾端(也就是稳态下卡片的右下角)
+//   放一枚专辑封面小图,见 artworkThumbnail。
 // - hover 展开时才出现的第三行:下一句歌词预览 + 一条迷你进度条。
 //
 // 整个卡片形状故意只在底部两个角做圆角、顶部两个角是直角(NotchHangingShape)——顶部
@@ -71,6 +71,11 @@ struct NotchLyricsView: View {
     @ObservedObject var controller: NotchLyricsWindowController
     @ObservedObject private var poller = PlaybackCoordinator.shared
     @ObservedObject private var settings = AppSettings.shared
+    // 正在拖进度条时手指所在的比例(0~1);没在拖就是 nil。见进度条那段注释。
+    // 用 @GestureState:手势被取消时(拖动中这块条件分支被摘掉)自动复位,@State 会永久卡住。
+    @GestureState private var scrubbingFraction: Double?
+    // 进度条那一块的实际宽度,拖拽换算比例用。
+    @State private var scrubWidth: CGFloat = 0
 
     // 稳态歌词行的固定高度——跟 NotchLyricsWindowController.contentSize.height 保持
     // 一致(两个文件都描述同一个窗口的几何,这点数值耦合是设计使然,不值得为两个常量
@@ -118,10 +123,9 @@ struct NotchLyricsView: View {
 
     // 2026-08-02 新增"跟随封面"背景——跟"歌词窗口"的 artworkBackground(LyricsWindowView.swift)
     // 完全同一套效果(封面整图放大、高斯模糊、压一层半透明黑),只是缩小到灵动岛胶囊
-    // 尺寸;poller.artworkData 那份数据本来就已经在转发给 PlaybackCoordinator 用于
-    // "歌词窗口",这里直接复用同一个数据源,不需要新开一条取图链路(这一点跟本文件
-    // 顶部旧注释"本地播放源没有转发 artwork"已经不一致——那条注释是加"歌词窗口"功能
-    // 之前写的,早已过期)。
+    // 尺寸;封面数据本来就已经在转发给 PlaybackCoordinator 供"歌词窗口"用,这里直接复用
+    // 同一个数据源,不需要新开一条取图链路。读的是解码缓存 poller.artworkImage 而不是
+    // 原始字节,理由见 PlaybackCoordinator.artworkImage 的注释。
     //
     // ShapeStyle(NotchCardStyle.fill)表达不了 .blur()/.overlay() 这类 View 修饰符,
     // 所以 .coverArt 这个风格不走"给 NotchHangingShape 填色"这条路,改成在背景层直接
@@ -162,15 +166,18 @@ struct NotchLyricsView: View {
     // 但能留住封面主色调之间可辨认的差异。
     @ViewBuilder
     private func backgroundLayer(size: CGSize) -> some View {
-        if settings.notchCardStyle == .coverArt, let data = poller.artworkData, let nsImage = NSImage(data: data) {
-            Image(nsImage: nsImage)
+        if settings.notchCardStyle == .coverArt, let image = poller.artworkImage {
+            Image(nsImage: image)
                 .resizable()
                 .scaledToFill()
                 .frame(width: size.width, height: size.height)
                 .blur(radius: 20)
                 .overlay(Color.black.opacity(0.45))
                 .clipShape(NotchHangingShape(bottomCornerRadius: 20))
-                .animation(.easeInOut(duration: 0.5), value: data)
+                // 动画触发键仍然用原始字节 artworkData(Data 是按字节比较的 Equatable),
+                // 保持跟 2026-08-05 加解码缓存之前逐字节相同的判定语义——artworkImage 是
+                // NSObject,== 退化成指针比较,语义上不等价。
+                .animation(.easeInOut(duration: 0.5), value: poller.artworkData)
         } else {
             NotchHangingShape(bottomCornerRadius: 20)
                 .fill(settings.notchCardStyle.fill)
@@ -205,15 +212,76 @@ struct NotchLyricsView: View {
         .padding(.horizontal, 10)
     }
 
+    // 封面小图跟歌词之间的间距。
+    private static let artworkLyricSpacing: CGFloat = 10
+    private static let artworkCornerRadius: CGFloat = 5
+
+    // 32pt 是"在 44pt 高的歌词行里上下各留 6pt"倒推出来的观感取值,夹在 [16, 32] 之间:
+    // 上限避免歌词行万一变高就把封面撑得比歌词本身还抢眼(歌词才是这个产品的主体),
+    // 下限保证行高万一变矮,方块也不会缩到看不出是一张封面。
+    private static func artworkSide(rowHeight: CGFloat) -> CGFloat {
+        max(16, min(32, rowHeight - 12))
+    }
+
+    // 歌词行尾端(卡片右下角)那枚专辑封面小图(2026-08-05 新增)。
+    //
+    // 位置选在这里而不是顶行歌名左边:顶行左耳的可用宽度是 (窗口宽 - 刘海宽 - 20) / 2,
+    // 默认 360pt 宽配实测 179pt 刘海只有 80.5pt,放进一枚小图连间距要占掉四分之一以上,
+    // 歌名被挤得只剩 50 多 pt——实机看过就是放不下。歌词行是整条 360pt(去掉左右各 16pt
+    // padding 还有 328pt)、行高 44pt,同一枚封面在这里能做到 32pt 见方而只占掉歌词
+    // 12.8% 的宽度,视觉上也正好落在卡片右下角这个空着的位置上。
+    //
+    // 稳态下这里就是卡片的右下角;hover 展开时下面会再长出"下一句预览+进度条"那一块,
+    // 封面保持钉在歌词行内不动(不跟着卡片底边往下跑),避免鼠标一进一出封面就上下跳。
+    //
+    // 没有封面数据时不画占位方块、直接连位置一起不占:灵动岛没在播放时是收起态,播放中
+    // 绝大多数曲目都拿得到封面(拿不到的是本来没有封面的播客/取图失败这类少数情况),
+    // 为这种少数情况长期锁掉一块位置画一个空方块不值得。这不会导致换歌时"封面消失再
+    // 出现"式的布局跳动——换歌那一刻旧封面会一直留着直到新封面取回来(见
+    // LocalPlaybackSource 的 scheduleArtworkStaleTimeout/artworkRetryDelays,那是
+    // 2026-08-05 修"切歌白屏"时定下来的行为),只有"启动后第一首"和"这首歌真的没有封面"
+    // 两种情况才会真的发生一次宽度增减。
+    //
+    // ⚠️ `.scaledToFill()` 之后、`.clipShape` 之前必须显式钉一次 `.frame(width:height:)`
+    // ——同 backgroundLayer 上面那一大段注释里踩过三版才找对的坑,不重复展开。
+    //
+    // 描边 + 投影是给"卡片背景可能是浅色"兜底:磨砂玻璃风格会透出桌面颜色,浅色壁纸下
+    // 一张浅色封面直接贴上去边界会糊成一片,一圈极淡的白描边能把方块轮廓钉住。
+    private func artworkThumbnail(_ image: NSImage) -> some View {
+        let side = Self.artworkSide(rowHeight: Self.compactRowHeight)
+        return Image(nsImage: image)
+            .resizable()
+            .scaledToFill()
+            .frame(width: side, height: side)
+            .clipShape(RoundedRectangle(cornerRadius: Self.artworkCornerRadius, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: Self.artworkCornerRadius, style: .continuous)
+                    .strokeBorder(.white.opacity(0.18), lineWidth: 0.5)
+            )
+            .shadow(color: .black.opacity(0.35), radius: 1.5, y: 0.5)
+    }
+
     // 用歌词这一行纯文本(不含逐字填色进度)当 MarqueeText 的 id——换到新的一句歌词才
     // 重新测量/重新开始滚动,同一句歌词内部逐字变色的高频刷新(TimelineView 那部分)
     // 不应该打断正在进行的滚动。
     private var lyricRow: some View {
-        MarqueeText(id: poller.currentLine?.plainText ?? "") {
-            lyricContent
+        HStack(spacing: Self.artworkLyricSpacing) {
+            MarqueeText(id: poller.currentLine?.plainText ?? "") {
+                lyricContent
+            }
+            .font(.system(size: 13, weight: .semibold))
+            // MarqueeText 内层是 GeometryReader(没有固有尺寸、能吃下任何被提议的宽度),
+            // HStack 会先给定尺寸的封面分配它那 32pt,剩下的宽度都留给歌词。这里仍然显式
+            // 写一次 maxWidth: .infinity 把"歌词吃掉剩余宽度"这个意图钉死,不依赖
+            // GeometryReader 在 stack 里的隐式伸缩行为。
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+            // 封面小图在歌词右边(卡片右下角),没有封面数据时整个摘掉、把宽度全部还给
+            // 歌词,理由见 artworkThumbnail 上面的注释。
+            if settings.notchShowArtwork, let image = poller.artworkImage {
+                artworkThumbnail(image)
+            }
         }
-        .font(.system(size: 13, weight: .semibold))
-        .frame(maxHeight: .infinity)
         .padding(.horizontal, 16)
     }
 
@@ -323,7 +391,10 @@ struct NotchLyricsView: View {
 
             if let anchor = poller.anchor, anchor.durationMs > 0 {
                 TimelineView(.animation(paused: !poller.isPlayingNow)) { context in
-                    let currentMs = anchor.extrapolatedPositionMs(now: context.date)
+                    // 拖动期间显示手指按住的位置,而不是外推出的真实位置——否则进度条会在
+                    // 手指底下被 TimelineView 每帧拉回去。松手才真的发 seek。
+                    let currentMs = scrubbingFraction.map { Int($0 * Double(anchor.durationMs)) }
+                        ?? anchor.extrapolatedPositionMs(now: context.date)
                     VStack(spacing: 3) {
                         GeometryReader { proxy in
                             let fraction = min(1, max(0, Double(currentMs) / Double(anchor.durationMs)))
@@ -334,10 +405,37 @@ struct NotchLyricsView: View {
                             }
                         }
                         .frame(height: 3)
+                        // 命中区**只覆盖进度条这一行**,不含下面的时间行——原来挂在整块上,
+                        // 点右侧"剩余时间"文字就等于 seek 到 ~94%(把这首歌跳过去)。
+                        // 上下各撑 8pt 让 3pt 的条好按,再用等量负 padding 抵消布局:
+                        // 展开区高度是写死的 expandedExtraHeight(40pt,alignment .top),
+                        // 长高一点就把时间行裁掉。
+                        .padding(.vertical, 8)
+                        .contentShape(Rectangle())
+                        .padding(.vertical, -8)
+                        .background(
+                            GeometryReader { g in
+                                Color.clear
+                                    .onAppear { scrubWidth = g.size.width }
+                                    .onChange(of: g.size.width) { _, w in scrubWidth = w }
+                            }
+                        )
+                        .gesture(
+                            DragGesture(minimumDistance: 0)
+                                .updating($scrubbingFraction) { value, state, _ in
+                                    guard scrubWidth > 0 else { return }
+                                    state = min(1, max(0, value.location.x / scrubWidth))
+                                }
+                                .onEnded { value in
+                                    guard scrubWidth > 0 else { return }
+                                    let f = min(1, max(0, value.location.x / scrubWidth))
+                                    poller.seek(toMs: Int(f * Double(anchor.durationMs)))
+                                }
+                        )
                         HStack {
                             Text(Self.timeString(ms: currentMs))
                             Spacer()
-                            Text("-" + Self.timeString(ms: anchor.durationMs - currentMs))
+                            Text("-" + Self.timeString(ms: max(0, anchor.durationMs - currentMs)))
                         }
                         .font(.system(size: 9, weight: .medium))
                         .foregroundStyle(.white.opacity(0.4))

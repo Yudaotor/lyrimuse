@@ -6,11 +6,9 @@ import LyrimuseCore
 // 文件级常量(不挂在 @MainActor 类上),避免 Timer 的 @Sendable 闭包里引用
 // MainActor-isolated static let 触发并发检查警告。
 private let overlayPositionKey = "np:overlayPositionOrigin" // "x,y" 字符串
-// 2026-08-03 补上——"显示桌面悬浮歌词"这个菜单开关(isVisible)之前只存在内存里,
-// setVisible() 只改了 @Published 属性、从没写过 UserDefaults。用户关掉悬浮窗后退出
-// 重开 App,isVisible 又从声明处的硬编码默认值 true 重新起步,悬浮窗(以及灵动岛,见
-// NotchLyricsWindowController 同名 key)会违背用户上一次的选择、无条件重新冒出来。
-private let overlayVisibleKey = "np:overlayVisible"
+// isVisible 的持久化在 2026-08-05 并进了 AppSettings.classicOverlayEnabled(原来这里有
+// 一个私有的 np:overlayVisible,跟设置页那个开关是同一件事的两个真值,详见 setVisible(_:)
+// 和 AppSettings.init() 里的迁移注释),所以这里不再有自己的 visible key。
 // 2026-08-02 补上——"解锁「锁定位置」后长按才能拖动"这条手势提示之前只写在设置页
 // footer,用户真正需要它的时刻(已经解锁、站在悬浮窗前面想拖却拖不动)完全看不到。
 // 只在解锁这一刻、且这台机器从没显示过一次时,才在悬浮窗本身短暂弹一条提示——只需要
@@ -28,7 +26,9 @@ private let overlayDefaultHeight: CGFloat = 120
 final class LyricsOverlayWindowController: NSWindowController, ObservableObject {
     static let shared = LyricsOverlayWindowController()
 
-    @Published private(set) var isVisible: Bool = LyricsOverlayWindowController.restoredVisible()
+    // 真值在 AppSettings.classicOverlayEnabled,这里只是它的镜像(菜单栏/悬浮窗本身要观察
+    // 这个 @Published)。只能经 setVisible(_:) 改,那是打开/关闭的唯一入口。
+    @Published private(set) var isVisible: Bool = AppSettings.shared.classicOverlayEnabled
     @Published private(set) var isPositionLocked: Bool = false
     // "暂停/无播放时自动隐藏"这个开关本身——跟 isVisible(用户手动的显示/隐藏偏好)是
     // 两个独立维度,见 updateActualVisibility() 的组合逻辑,不能互相覆盖对方的语义。
@@ -133,9 +133,25 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject 
         if let localMouseMonitor { NSEvent.removeMonitor(localMouseMonitor) }
     }
 
+    // 打开/关闭"桌面悬浮歌词"的**唯一**入口——设置页那个 Toggle、菜单栏"显示桌面悬浮歌词"、
+    // 全局快捷键三处都必须走这里。
+    //
+    // 2026-08-05:不再往私有的 np:overlayVisible 写一份,统一写回
+    // AppSettings.classicOverlayEnabled(由它的 didSet 负责持久化)。合并之前这两份是各自
+    // 独立持久化的,同一件事有两个真值,后果见 AppSettings.init() 里那段迁移注释。真值必须
+    // 落在 AppSettings 那一侧:AppDelegate/MenuBarMenu/GlobalHotkeys 都需要在**不构造这个
+    // 控制器**的前提下判断"这个模式开没开"(见 NotchLyricsWindowController 顶部那条不变量)。
+    //
+    // 打开时顺手把两个已配置好的隐藏偏好应用上——这一步以前只有设置页那一处做了,菜单栏和
+    // 全局快捷键打开时都会漏掉,控制器会一直停在 init() 的默认值上直到下次重启 App。收进
+    // 这里之后三个入口不可能再各自漏一次。
     func setVisible(_ visible: Bool) {
         isVisible = visible
-        UserDefaults.standard.set(visible, forKey: overlayVisibleKey)
+        AppSettings.shared.classicOverlayEnabled = visible
+        if visible {
+            setHiddenFromCapture(AppSettings.shared.hideDuringScreenCapture)
+            setHideWhenNotPlaying(AppSettings.shared.hideWhenNotPlaying)
+        }
         updateActualVisibility(isPlayingNow: PlaybackCoordinator.shared.isPlayingNow)
     }
 
@@ -408,13 +424,6 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject 
         }
         RunLoop.main.add(t, forMode: .common)
         moveDebounceTimer = t
-    }
-
-    // 没有存过(第一次启动/升级前的旧版本从没写过这个 key)时默认 true,跟这个属性
-    // 原来的硬编码默认值保持一致,不改变"从没手动关过的用户"的既有体验。
-    private static func restoredVisible() -> Bool {
-        guard UserDefaults.standard.object(forKey: overlayVisibleKey) != nil else { return true }
-        return UserDefaults.standard.bool(forKey: overlayVisibleKey)
     }
 
     private static func restoredOrigin(size: NSSize) -> NSPoint {

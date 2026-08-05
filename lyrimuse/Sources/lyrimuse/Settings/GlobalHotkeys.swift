@@ -30,15 +30,16 @@ enum GlobalHotkeys {
         // NotchLyricsWindowController.swift 顶部注释点名的"三处外部路由代码"(AppDelegate/
         // SettingsView/MenuBarMenu)之外被漏判的第 4 处。真正引用到 `.shared` 才会执行
         // init() 建窗口,而 init() 订阅 PlaybackCoordinator 的 Combine sink 在订阅瞬间
-        // 就会用当下的 isVisible(默认 true)触发一次 orderFront——用户只开了"灵动岛
-        // 歌词"、关掉"桌面悬浮歌词"(classicOverlayEnabled=false)时,这两个全局快捷键
-        // 仍然可以被录制、按下后会把从未构造过的经典悬浮窗凭空建出来并常驻显示,而且
-        // 因为 classicOverlayEnabled 是 false,MenuBarMenu 的 ClassicOverlayMenuSection
-        // 根本不会出现,菜单里找不到直接关掉它的入口。
+        // 就会用当下的 isVisible 触发一次显示/隐藏——下面"锁定位置"那个快捷键因此必须先
+        // 判断 classicOverlayEnabled:用户只开了"灵动岛歌词"、关掉"桌面悬浮歌词"时,那个
+        // 快捷键仍然可以被录制,按下后会把从未构造过的经典悬浮窗凭空建出来并常驻显示。
+        //
+        // 但"显示/隐藏悬浮歌词"这个快捷键**不能**加同一个判断:2026-08-05 把"这个模式开
+        // 没开"合并成单一开关之后,它切换的就是 classicOverlayEnabled 本身,再 guard 一次
+        // 就变成"只能关、不能开"(关掉之后 guard 直接 return,这个快捷键就再也按不动了)。
+        // 这里碰 .shared 是用户主动按键要求打开/关闭它,不是被动误触构造。
         KeyboardShortcuts.onKeyUp(for: .toggleOverlay) {
-            guard AppSettings.shared.classicOverlayEnabled else { return }
-            let overlay = LyricsOverlayWindowController.shared
-            overlay.setVisible(!overlay.isVisible)
+            LyricsOverlayWindowController.shared.setVisible(!AppSettings.shared.classicOverlayEnabled)
         }
         KeyboardShortcuts.onKeyUp(for: .toggleLockPosition) {
             guard AppSettings.shared.classicOverlayEnabled else { return }

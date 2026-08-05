@@ -548,359 +548,407 @@ private struct AppearanceSettingsTab: View {
         // 灰色小标题+尾注)——分组样式下 ColorPicker/字体 Picker 不会被拉伸成贯穿整行
         // 的长条,说明性文字也有明确的"尾注"位置,不会跟控件混在一起,排版全部是
         // SwiftUI 原生处理,不用手工调间距。
+        //
+        // 2026-08-05 按"每种展示方式各占一张卡片"重排。改动前是按"设置的种类"分卡的,
+        // 用户反馈几种歌词模式的设置混在一起、看不清哪一项属于谁。具体是三处混淆:
+        // ① "歌词展示"这张卡里,四个总开关之间插着灵动岛的三项、菜单栏的三项子设置,
+        //    子设置跟总开关同级并排,看不出它属于上面哪一个开关;
+        // ② "外观"卡(配色/字体/字号)其实只对桌面悬浮歌词生效,但它是一张独立卡片、位置
+        //    又紧跟在四个总开关下面,视觉上像是对四种方式都生效,只能靠一句尾注去解释;
+        // ③ "悬浮歌词窗口"卡里"宽度/锁定位置"是桌面悬浮歌词专属,"截屏时隐藏/暂停时隐藏"
+        //    两项却对灵动岛同样生效(见各自 set 闭包里两个控制器都会调),那个标题对后两项
+        //    并不精确——改动前的注释里已经承认过这一点,但没拆。
+        //
+        // 现在的结构:"歌词展示"只放四个总开关;之后每种展示方式各自一张卡,卡片标题就是
+        // 这种方式的名字、且只在这种方式开着时才出现;真正两个悬浮窗共用的两个隐藏开关
+        // 单独一张卡。"这一项属于哪种展示方式"由卡片归属直接回答,不再依赖尾注解释。
+        //
+        // 歌词窗口没有自己的卡片——它一个可配置项都没有,只有总开关那一行。
         Form {
-            Section {
-                // 桌面悬浮歌词(经典悬浮窗)、灵动岛歌词是两个完全独立的展示位置,各自
-                // 独立开关,不互斥,可以同时开、只开一个、或都不开。每个开关只负责
-                // "生效"这一个控制器自己的 setVisible,不碰另一个;首次打开某个样式时
-                // 顺手把"截屏/录屏时隐藏""暂停/无播放时隐藏"这两个已配置好的偏好也
-                // 应用上去——否则那个控制器还停留在 init() 里的硬编码默认值,要等下次
-                // 重启 App 走 AppDelegate 那条初始化路径才会生效,期间会悄悄违背用户
-                // 已经勾选的偏好。
-                Toggle(L10n.t("桌面悬浮歌词"), isOn: Binding(
-                    get: { settings.classicOverlayEnabled },
-                    set: { newValue in
-                        settings.classicOverlayEnabled = newValue
-                        LyricsOverlayWindowController.shared.setVisible(newValue)
-                        if newValue {
-                            LyricsOverlayWindowController.shared.setHiddenFromCapture(settings.hideDuringScreenCapture)
-                            LyricsOverlayWindowController.shared.setHideWhenNotPlaying(settings.hideWhenNotPlaying)
-                        }
-                    }
-                ))
-                Toggle(L10n.t("灵动岛歌词"), isOn: Binding(
-                    get: { settings.notchOverlayEnabled },
-                    set: { newValue in
-                        settings.notchOverlayEnabled = newValue
-                        NotchLyricsWindowController.shared.setVisible(newValue)
-                        if newValue {
-                            NotchLyricsWindowController.shared.setHiddenFromCapture(settings.hideDuringScreenCapture)
-                            NotchLyricsWindowController.shared.setHideWhenNotPlaying(settings.hideWhenNotPlaying)
-                        }
-                    }
-                ))
-                // 只负责持久化,NotchLyricsView 每次渲染直接读 settings.notchCardStyle,
-                // 不需要像 classicOverlayEnabled/notchOverlayEnabled 那样在这里连带
-                // 调用某个窗口控制器的方法"生效"。
-                //
-                // 灵动岛没开时这个风格选项对用户毫无意义(没有窗口在用它),包进
-                // `if settings.notchOverlayEnabled` 才显示——跟下面"超过就截断"那组
-                // 只在 showLyricsInMenuBar 开着时才出现是同一个模式。
-                if settings.notchOverlayEnabled {
-                    Picker(L10n.t("灵动岛风格"), selection: $settings.notchCardStyle) {
-                        ForEach(NotchCardStyle.allCases, id: \.self) { style in
-                            Text(style.displayName).tag(style)
-                        }
-                    }
-                    .pickerStyle(.menu)
-
-                    // 跟上面经典悬浮窗的"宽度"滑块同一套写法(设置项本身只负责持久化,
-                    // didSet 不碰 NSWindow,这里的 set 闭包显式调用窗口控制器的方法让
-                    // 改动立刻生效)。跟经典悬浮窗不同的是灵动岛不需要"保持中心点"的
-                    // 增量调整——它的位置从来都是重新居中算出来的,见
-                    // NotchLyricsWindowController.applyContentWidthSetting() 的注释。
-                    LabeledContent(L10n.t("宽度")) {
-                        HStack(spacing: 8) {
-                            Slider(value: Binding(
-                                get: { settings.notchContentWidth },
-                                set: { newValue in
-                                    settings.notchContentWidth = newValue
-                                    NotchLyricsWindowController.shared.applyContentWidthSetting()
-                                }
-                            ), in: 260...500, step: 10)
-                            Text(String(format: L10n.t("%@pt"), "\(Int(settings.notchContentWidth))"))
-                                .foregroundStyle(.secondary)
-                                .monospacedDigit()
-                                .frame(width: 40, alignment: .trailing)
-                        }
-                    }
-                }
-                Toggle(L10n.t("菜单栏歌词"), isOn: $settings.showLyricsInMenuBar)
-                if settings.showLyricsInMenuBar {
-                    Toggle(isOn: $settings.menuBarLyricsScroll) {
-                        HStack(spacing: 4) {
-                            Text(L10n.t("超宽时横向滚动"))
-                            HelpButton(text: L10n.t("歌词比下面设置的宽度更长时，在状态栏里横向滚动播完整句（开头会先停一下再滚）；关掉则截断成「前 N 个字…」。两种模式下鼠标悬停在状态栏上都能看到完整的这一行"))
-                        }
-                    }
-                    LabeledContent(L10n.t(settings.menuBarLyricsScroll ? "显示宽度" : "超过就截断")) {
-                        HStack(spacing: 8) {
-                            Slider(value: Binding(
-                                get: { Double(settings.menuBarLyricsMaxChars) },
-                                set: { settings.menuBarLyricsMaxChars = Int($0) }
-                            ), in: 20...120, step: 5)
-                            Text(String(format: L10n.t("%@ 字"), "\(settings.menuBarLyricsMaxChars)"))
-                                .foregroundStyle(.secondary)
-                                .monospacedDigit()
-                                .frame(width: 40, alignment: .trailing)
-                        }
-                    }
-                    Text(L10n.t(settings.menuBarLyricsScroll
-                        ? "状态栏里最多同时显示这么多字；更长的歌词会横向滚动播完"
-                        : "没超过就整行显示；超过这个长度会截断，鼠标悬停在状态栏上能看到完整这一行"))
-                        .font(.caption).foregroundStyle(.secondary)
-                }
-                // "歌词窗口"(正经的标题栏窗口,完整歌词列表+自动滚动)不像上面三个那样
-                // 有一个 AppSettings 持久化的布尔开关来控制——它的开合状态完全交给
-                // SwiftUI Window(id:) 自己的窗口自动存档机制(见 App.swift 那个场景的
-                // 注释),这里的 Toggle 只是"现在这扇窗口是不是开着"的实时状态(见
-                // LyricsWindowPresence 注释),开/关直接对应打开/关闭这扇窗口,不写入
-                // 任何新的持久化配置项。
-                Toggle(L10n.t("歌词窗口"), isOn: Binding(
-                    get: { lyricsWindowPresence.isOpen },
-                    set: { newValue in
-                        if newValue {
-                            // accessory 策略下打开新窗口得先手动激活 App,不然 openWindow
-                            // 调了也没反应——跟"打开歌词管理…"按钮同一个坑、同一个修法。
-                            NSApp.activate(ignoringOtherApps: true)
-                            openWindow(id: "lyrics-window")
-                        } else {
-                            dismissWindow(id: "lyrics-window")
-                        }
-                    }
-                ))
-            } header: {
-                Text(L10n.t("歌词展示"))
-            } footer: {
-                // 2026-08-02 补上——这四个开关互相独立、可以同时开,但之前没有任何引导,
-                // 新用户第一次打开这个页面容易不知道该开哪个/是否可以全开。用一句话各自
-                // 说清楚典型使用场景,不需要展开成四段说明。
-                Text(L10n.t("四种展示方式互不冲突，可以同时开启：桌面悬浮歌词贴在桌面上、支持逐字高亮；灵动岛歌词紧凑地贴着刘海显示；菜单栏歌词最不打扰、只占状态栏一行文字；歌词窗口是可以滚动阅读的完整歌词列表"))
-            }
-
-            Section {
-                // 配色主题——内置预设一键套用+把当前调好的配色另存复用,对标 PlayStatus/
-                // Lyricify/AlgerMusicPlayer/HotLyric/VutronMusic 都有的这层。只打包"配色"
-                // 相关的四个字段(文字/背景/阴影颜色+阴影开关),不含字体/字号——那是排版,
-                // 跟配色是两回事,不该被同一个"主题"捆在一起改(见 ColorTheme.swift)。
-                // 套用即时生效,跟下面手动挪动色板是同一套 Binding,没有额外的"应用"步骤。
-                // Menu 的标签本身显示"当前配色正好等于哪个主题"(不等于任何一个就显示
-                // "自定义"),作为这个 Menu 唯一的选中反馈。
-                Menu(currentColorThemeLabel) {
-                    // "跟随封面"(2026-08-03 新增)——不是一个固定配色,是"改用当前曲目
-                    // 封面算出的动态高亮色"这个模式本身,跟下面的具体命名主题放在同一个
-                    // Menu 里、用 Divider 隔开,表明这是另一类选项。只影响前景色(见
-                    // PlaybackCoordinator.displayForegroundColor),背景色/描边仍然用
-                    // 下面手动挑的固定值,没有封面数据时前景也退回下面选的固定色——不是
-                    // 一整套独立的"主题",维持这个文件"配色只管四个字段"的既有范围。
-                    Button(L10n.t("跟随封面")) { settings.followsCoverArt = true }
-                    Divider()
-                    ForEach(ColorTheme.builtInPresets) { theme in
-                        Button(theme.name) { applyColorTheme(theme) }
-                    }
-                    if !settings.customColorThemes.isEmpty {
-                        Divider()
-                        ForEach(settings.customColorThemes) { theme in
-                            Button(theme.name) { applyColorTheme(theme) }
-                        }
-                    }
-                }
-                if settings.followsCoverArt {
-                    Text(L10n.t("没有封面数据时会使用下面选择的文字颜色作为备用"))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                ForEach(settings.customColorThemes) { theme in
-                    HStack {
-                        Button(theme.name) { applyColorTheme(theme) }
-                            .buttonStyle(.plain)
-                        Spacer()
-                        Button {
-                            settings.customColorThemes.removeAll { $0.id == theme.id }
-                        } label: {
-                            Image(systemName: "trash")
-                        }
-                        .buttonStyle(.plain)
-                        .foregroundStyle(.secondary)
-                    }
-                }
-                Button(L10n.t("将当前配色存为新主题…")) {
-                    newThemeName = ""
-                    showSaveThemeAlert = true
-                }
-                .buttonStyle(.link)
-
-                Picker(L10n.t("字体"), selection: $settings.fontFamilyName) {
-                    // 这一项原来也叫「跟随系统」,跟语言选择器那一项撞成同一个 L10n key
-                    // ("跟随系统"),而 .strings 里一个 key 只能有一个值——两处需要的英文
-                    // 不一样("Follow System" vs 字体语境下的默认系统字体),重复 key 里
-                    // plutil 只保留最后一条,结果语言选择器的英文被字体那条顶掉了。
-                    // 改成「系统字体」:key 各自独立,而且在「字体」选择器下这个说法本身就比
-                    // 「跟随系统」准确(后者容易被读成跟随深浅色外观)。
-                    Text(L10n.t("系统字体")).tag("")
-                    ForEach(Self.curatedFontFamilies, id: \.self) { family in
-                        Text(family).tag(family)
-                    }
-                }
-                .pickerStyle(.menu)
-
-                // LabeledContent 而不是裸 HStack——分组样式下 Toggle/Picker/ColorPicker
-                // 这些自带标签的控件,标签会自动对齐成同一条竖线;裸 HStack 的"字号"只是
-                // 行内第一个 Text,对不上那条对齐线。LabeledContent 让它享受同一套对齐。
-                LabeledContent(L10n.t("字号")) {
-                    HStack(spacing: 8) {
-                        Slider(value: $settings.fontSize, in: 14...36, step: 1)
-                        Text(String(format: L10n.t("%@pt"), "\(Int(settings.fontSize))"))
-                            .foregroundStyle(.secondary)
-                            .monospacedDigit()
-                            .frame(width: 32, alignment: .trailing)
-                    }
-                }
-
-                ColorPicker(
-                    L10n.t("文字颜色"),
-                    selection: Binding(
-                        get: { settings.foregroundColor },
-                        set: { settings.foregroundColorHex = $0.hexStringWithAlpha }
-                    ),
-                    supportsOpacity: false // 故意关掉——文字颜色允许透明的话,容易把 alpha
-                                           // 拖到 0,悬浮窗整个消失且没有任何视觉提示能定位问题
-                )
-
-                ColorPicker(
-                    L10n.t("背景颜色"),
-                    selection: Binding(
-                        get: { settings.backgroundColor },
-                        set: { settings.backgroundColorHex = $0.hexStringWithAlpha }
-                    ),
-                    supportsOpacity: true // 背景不透明度就是这个颜色的 alpha 通道本身,
-                                          // 不另加一根 opacity 滑杆
-                )
-
-                Toggle(L10n.t("文字描边（与桌面背景区分）"), isOn: $settings.textStrokeEnabled)
-
-                if settings.textStrokeEnabled {
-                    ColorPicker(
-                        L10n.t("描边颜色"),
-                        selection: Binding(
-                            get: { settings.textStrokeColor },
-                            set: { settings.textStrokeColorHex = $0.hexStringWithAlpha }
-                        ),
-                        supportsOpacity: true // 描边只让选颜色(含 alpha),粗细是固定常量
-                                              // (LyricsOverlayView.swift 的 OptionalTextStroke),
-                                              // 不额外加调节项——参考的是 LyricsX 的做法。
-                    )
-                }
-
-                Button(L10n.t("恢复默认外观")) {
-                    settings.followsCoverArt = false
-                    settings.fontFamilyName = AppSettings.defaultFontFamilyName
-                    settings.fontSize = AppSettings.defaultFontSize
-                    settings.foregroundColorHex = ColorTheme.defaultTheme.foregroundColorHex
-                    settings.backgroundColorHex = ColorTheme.defaultTheme.backgroundColorHex
-                    settings.textStrokeEnabled = ColorTheme.defaultTheme.textStrokeEnabled
-                    settings.textStrokeColorHex = ColorTheme.defaultTheme.textStrokeColorHex
-                }
-                .buttonStyle(.link)
-            } header: {
-                Text(L10n.t("外观"))
-            } footer: {
-                // 2026-08-02 补上——这一整个 Section(配色主题/字体/字号/文字描边)紧挨在
-                // 上面"歌词展示"四个开关下面,视觉上容易被当成对全部四种展示形态都生效;
-                // 实际上只对"桌面悬浮歌词"生效,灵动岛/歌词窗口都用固定的系统颜色/字号
-                // (刻意设计,理由见 NotchLyricsView.swift/LyricsWindowView.swift 各自的
-                // 注释),菜单栏歌词更是纯文字、不存在这些概念。之前 UI 上没有一个字提到
-                // 这一点,只用灵动岛/菜单栏/歌词窗口的用户调了半天这里会发现毫无变化。
-                Text(L10n.t("以下设置只影响「桌面悬浮歌词」的外观；灵动岛歌词和歌词窗口使用固定的系统配色，菜单栏歌词是纯文字，均不受这里影响"))
-            }
-            .alert(L10n.t("存为新配色主题"), isPresented: $showSaveThemeAlert) {
-                TextField(L10n.t("主题名称"), text: $newThemeName)
-                Button(L10n.t("保存")) {
-                    let name = newThemeName.trimmingCharacters(in: .whitespacesAndNewlines)
-                    guard !name.isEmpty else { return }
-                    settings.customColorThemes.append(ColorTheme(
-                        name: name,
-                        foregroundColorHex: settings.foregroundColorHex,
-                        backgroundColorHex: settings.backgroundColorHex,
-                        textStrokeEnabled: settings.textStrokeEnabled,
-                        textStrokeColorHex: settings.textStrokeColorHex
-                    ))
-                }
-                Button(L10n.t("取消"), role: .cancel) {}
-            } message: {
-                Text(L10n.t("会把当前的文字颜色、背景颜色、描边颜色存成一个可以随时再套用的主题"))
-            }
-
-            Section {
-                LabeledContent(L10n.t("宽度")) {
-                    HStack(spacing: 8) {
-                        Slider(value: Binding(
-                            get: { settings.overlayWidth },
-                            set: { newValue in
-                                settings.overlayWidth = newValue
-                                LyricsOverlayWindowController.shared.setWidth(newValue)
-                            }
-                        ), in: 420...1000, step: 10)
-                        Text(String(format: L10n.t("%@pt"), "\(Int(settings.overlayWidth))"))
-                            .foregroundStyle(.secondary)
-                            .monospacedDigit()
-                            .frame(width: 40, alignment: .trailing)
-                    }
-                }
-                Toggle(L10n.t("锁定位置"), isOn: Binding(
-                    get: { settings.lockPosition },
-                    set: { newValue in
-                        settings.lockPosition = newValue
-                        LyricsOverlayWindowController.shared.setLocked(newValue)
-                    }
-                ))
-                Toggle(L10n.t("截屏/录屏时隐藏"), isOn: Binding(
-                    get: { settings.hideDuringScreenCapture },
-                    set: { newValue in
-                        settings.hideDuringScreenCapture = newValue
-                        // 两个悬浮窗现在互不排斥,可能同时开着——应用到当前每一个确实
-                        // 启用了的控制器,关闭的那个不碰(避免凭空构造出一个没人要的
-                        // 窗口,见 NotchLyricsWindowController 顶部注释的那条不变量)。
-                        if settings.classicOverlayEnabled {
-                            LyricsOverlayWindowController.shared.setHiddenFromCapture(newValue)
-                        }
-                        if settings.notchOverlayEnabled {
-                            NotchLyricsWindowController.shared.setHiddenFromCapture(newValue)
-                        }
-                    }
-                ))
-                Toggle(L10n.t("暂停/无播放时隐藏"), isOn: Binding(
-                    get: { settings.hideWhenNotPlaying },
-                    set: { newValue in
-                        settings.hideWhenNotPlaying = newValue
-                        if settings.classicOverlayEnabled {
-                            LyricsOverlayWindowController.shared.setHideWhenNotPlaying(newValue)
-                        }
-                        if settings.notchOverlayEnabled {
-                            NotchLyricsWindowController.shared.setHideWhenNotPlaying(newValue)
-                        }
-                    }
-                ))
-            } header: {
-                // 这个 Section 里"宽度"/"锁定位置"两项是经典悬浮窗
-                // (LyricsOverlayWindowController)专属的,但下面"截屏/录屏时隐藏"/
-                // "暂停/无播放时隐藏"这两个开关其实对灵动岛歌词
-                // (NotchLyricsWindowController)同样生效(见各自的 set 闭包,两个控制器
-                // 都会调)——标题"悬浮歌词窗口"对这两项来说不算完全精确,但没有拆分成
-                // 两个 Section。
-                Text(L10n.t("悬浮歌词窗口"))
-            } footer: {
-                // footer 挂在整个 Section 上(而不是紧跟某个 Toggle 下面的裸 Text)——
-                // 分组样式里这是原生"注脚"位置,明确点名是哪个开关的说明,避免视觉上跟
-                // 其它开关混在一起。两句分行摆放,顺序跟上面 Toggle 的出现顺序对应
-                // (先"锁定位置"、再"截屏/录屏时隐藏")。
-                //
-                // 第一句是这次新加的:"锁定位置"改名去掉了"(不可拖拽+点击穿透)"这个
-                // 括号说明,是因为点击穿透现在解锁状态下也一直生效(不再是锁定独有的
-                // 行为),括号内容已经不准确;但"解锁后长按才能拖动"这个手势本身并不
-                // 直观(不看说明容易只当成"按住就能拖"或者"这窗口点不动了"),需要在
-                // 这里补一句显式说明,不能单靠去掉括号里的旧文案就假装用户会自己发现。
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(L10n.t("解锁「锁定位置」后，悬浮歌词默认可以直接点击穿透到它下面的内容；长按住悬浮歌词不放，才能拖动它的位置"))
-                    Text(L10n.t("开启「截屏/录屏时隐藏」后，截图、录屏、视频会议共享屏幕都不会拍到悬浮歌词，但你自己在这台 Mac 上仍然正常看得见"))
-                }
-            }
+            displayModesSection
+            // 每种方式的详细设置只在这种方式开着时才出现——沿用改动前灵动岛/菜单栏子设置
+            // 的既有做法,关掉的方式不留一张空卡占位。
+            if settings.classicOverlayEnabled { classicOverlaySection }
+            if settings.notchOverlayEnabled { notchOverlaySection }
+            if settings.showLyricsInMenuBar { menuBarSection }
+            // 这两个开关只作用于两个悬浮窗(菜单栏歌词/歌词窗口不受影响),两个悬浮窗都
+            // 关着时整张卡没有意义,不显示。
+            if settings.classicOverlayEnabled || settings.notchOverlayEnabled { autoHideSection }
         }
         .formStyle(.grouped)
         // SwiftUI 有时不会在语言切换后重新执行某些嵌套内容的 body(取决于该内容自己的
         // 存储属性有没有变,而非父视图是否重新渲染,详见 AccountLinkingTab.swift 里
         // DestinationStatus.label 的注释)。用 .id(L10n.current) 把 Form 的身份跟当前
         // 语言绑死,语言一变就强制整体重新构造,不需要逐个排查哪里在跳过刷新。
+        //
+        // 2026-08-05 补回这个修饰符:它本来是 8e3f8fd("Fix language-switch staleness")
+        // 一次性给几个 Form 都加上的,后来拆分 tab 的几次重构把修饰符丢了、上面这段注释
+        // 却留了下来,变成"注释描述了一个并不存在的修复"。本文件还有另外 4 个 Form 是
+        // 同样的状态(歌词/播放器/通用/关于),不在这次改动范围内。
+        .id(L10n.current)
+    }
+
+    // 四个总开关。四种展示方式互不冲突,可以同时开、只开一个、或者都不开;每个开关只
+    // 负责"生效"它自己那一个控制器,不碰另一个。
+    //
+    // 前两个的 set 只调 setVisible(_:) 一句:2026-08-05 把"这个模式开没开"合并成单一
+    // 开关之后,写回 AppSettings.{classic,notch}OverlayEnabled 和"顺手应用两个已配置好的
+    // 隐藏偏好"都收进了 setVisible(_:) 里面,这里再各自写一遍就是两个写入方,又会漂移。
+    private var displayModesSection: some View {
+        Section {
+            Toggle(L10n.t("桌面悬浮歌词"), isOn: Binding(
+                get: { settings.classicOverlayEnabled },
+                set: { LyricsOverlayWindowController.shared.setVisible($0) }
+            ))
+            Toggle(L10n.t("灵动岛歌词"), isOn: Binding(
+                get: { settings.notchOverlayEnabled },
+                set: { NotchLyricsWindowController.shared.setVisible($0) }
+            ))
+            Toggle(L10n.t("菜单栏歌词"), isOn: $settings.showLyricsInMenuBar)
+            // "歌词窗口"(正经的标题栏窗口,完整歌词列表+自动滚动)不像上面三个那样有一个
+            // AppSettings 持久化的布尔开关来控制——它的开合状态完全交给 SwiftUI Window(id:)
+            // 自己的窗口自动存档机制(见 App.swift 那个场景的注释),这里的 Toggle 只是
+            // "现在这扇窗口是不是开着"的实时状态(见 LyricsWindowPresence 注释),开/关直接
+            // 对应打开/关闭这扇窗口,不写入任何新的持久化配置项。
+            Toggle(L10n.t("歌词窗口"), isOn: Binding(
+                get: { lyricsWindowPresence.isOpen },
+                set: { newValue in
+                    if newValue {
+                        // accessory 策略下打开新窗口得先手动激活 App,不然 openWindow
+                        // 调了也没反应——跟"打开歌词管理…"按钮同一个坑、同一个修法。
+                        NSApp.activate(ignoringOtherApps: true)
+                        openWindow(id: "lyrics-window")
+                    } else {
+                        dismissWindow(id: "lyrics-window")
+                    }
+                }
+            ))
+        } header: {
+            Text(L10n.t("歌词展示"))
+        } footer: {
+            // 这四个开关互相独立、可以同时开,但没有引导的话新用户第一次打开这个页面容易
+            // 不知道该开哪个/是否可以全开。一句话各自说清典型使用场景,不展开成四段说明。
+            Text(L10n.t("四种展示方式互不冲突，可以同时开启：桌面悬浮歌词贴在桌面上、支持逐字高亮；灵动岛歌词紧凑地贴着刘海显示；菜单栏歌词最不打扰、只占状态栏一行文字；歌词窗口是可以滚动阅读的完整歌词列表"))
+        }
+    }
+
+    // 桌面悬浮歌词(经典悬浮窗)专属的一整套:窗口几何(宽度/锁定位置)+ 配色与字体。
+    //
+    // 配色/字体挪进这张卡是这次重排的核心一步。2026-08-05 全仓核对过消费方,确认这些设置
+    // 确实只对这一种展示方式生效:mainFont/romanizationFont/translationFont 和
+    // foregroundColor/backgroundColor/textStrokeColor 的读取点全部落在
+    // LyricsOverlayView.swift 一个文件里(灵动岛/歌词窗口各自用固定的系统配色,菜单栏歌词
+    // 是纯文字,都不读这些字段)。所以它们本来就该跟这个模式绑在同一张卡里,而不是单独一张
+    // 看起来全局生效的"外观"卡 + 一句尾注。
+    private var classicOverlaySection: some View {
+        Section {
+            LabeledContent(L10n.t("宽度")) {
+                HStack(spacing: 8) {
+                    Slider(value: Binding(
+                        get: { settings.overlayWidth },
+                        set: { newValue in
+                            settings.overlayWidth = newValue
+                            LyricsOverlayWindowController.shared.setWidth(newValue)
+                        }
+                    ), in: 420...1000, step: 10)
+                    Text(String(format: L10n.t("%@pt"), "\(Int(settings.overlayWidth))"))
+                        .foregroundStyle(.secondary)
+                        .monospacedDigit()
+                        .frame(width: 40, alignment: .trailing)
+                }
+            }
+            // "解锁后长按才能拖动"这个手势不直观(不看说明容易只当成"按住就能拖",或者
+            // 反过来以为"这窗口点不动了"),必须有一句显式说明。改动前它挂在整个 Section 的
+            // footer 里、跟"截屏时隐藏"那句挤在一个 VStack 中——那个写法有两个问题:一是
+            // 本文件既定的约束是 header/footer 只放纯 Text 字面量(塞 VStack/HStack 进去
+            // 整段文字都拿不到可访问性,见"匹配算法"那一节上面的注释),二是说明离它描述的
+            // 那个开关隔了好几行。改成挂在开关自己身上的 HelpButton,跟"显示专辑封面"
+            // "超宽时横向滚动"这两处已有做法一致。
+            Toggle(isOn: Binding(
+                get: { settings.lockPosition },
+                set: { newValue in
+                    settings.lockPosition = newValue
+                    LyricsOverlayWindowController.shared.setLocked(newValue)
+                }
+            )) {
+                HStack(spacing: 4) {
+                    Text(L10n.t("锁定位置"))
+                    HelpButton(text: L10n.t("解锁「锁定位置」后，悬浮歌词默认可以直接点击穿透到它下面的内容；长按住悬浮歌词不放，才能拖动它的位置"))
+                }
+            }
+
+            // 配色主题——内置预设一键套用+把当前调好的配色另存复用,对标 PlayStatus/
+            // Lyricify/AlgerMusicPlayer/HotLyric/VutronMusic 都有的这层。只打包"配色"
+            // 相关的四个字段(文字/背景/阴影颜色+阴影开关),不含字体/字号——那是排版,
+            // 跟配色是两回事,不该被同一个"主题"捆在一起改(见 ColorTheme.swift)。
+            // 套用即时生效,跟下面手动挪动色板是同一套 Binding,没有额外的"应用"步骤。
+            // Menu 的标签本身显示"当前配色正好等于哪个主题"(不等于任何一个就显示
+            // "自定义"),作为这个 Menu 唯一的选中反馈。
+            Menu(currentColorThemeLabel) {
+                // "跟随封面"(2026-08-03 新增)——不是一个固定配色,是"改用当前曲目
+                // 封面算出的动态高亮色"这个模式本身,跟下面的具体命名主题放在同一个
+                // Menu 里、用 Divider 隔开,表明这是另一类选项。只影响前景色(见
+                // PlaybackCoordinator.displayForegroundColor),背景色/描边仍然用
+                // 下面手动挑的固定值,没有封面数据时前景也退回下面选的固定色——不是
+                // 一整套独立的"主题",维持这个文件"配色只管四个字段"的既有范围。
+                Button(L10n.t("跟随封面")) { settings.followsCoverArt = true }
+                Divider()
+                ForEach(ColorTheme.builtInPresets) { theme in
+                    Button(theme.name) { applyColorTheme(theme) }
+                }
+                if !settings.customColorThemes.isEmpty {
+                    Divider()
+                    ForEach(settings.customColorThemes) { theme in
+                        Button(theme.name) { applyColorTheme(theme) }
+                    }
+                }
+            }
+            if settings.followsCoverArt {
+                Text(L10n.t("没有封面数据时会使用下面选择的文字颜色作为备用"))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            ForEach(settings.customColorThemes) { theme in
+                HStack {
+                    Button(theme.name) { applyColorTheme(theme) }
+                        .buttonStyle(.plain)
+                    Spacer()
+                    Button {
+                        settings.customColorThemes.removeAll { $0.id == theme.id }
+                    } label: {
+                        Image(systemName: "trash")
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.secondary)
+                }
+            }
+            Button(L10n.t("将当前配色存为新主题…")) {
+                newThemeName = ""
+                showSaveThemeAlert = true
+            }
+            .buttonStyle(.link)
+
+            Picker(L10n.t("字体"), selection: $settings.fontFamilyName) {
+                // 这一项原来也叫「跟随系统」,跟语言选择器那一项撞成同一个 L10n key
+                // ("跟随系统"),而 .strings 里一个 key 只能有一个值——两处需要的英文
+                // 不一样("Follow System" vs 字体语境下的默认系统字体),重复 key 里
+                // plutil 只保留最后一条,结果语言选择器的英文被字体那条顶掉了。
+                // 改成「系统字体」:key 各自独立,而且在「字体」选择器下这个说法本身就比
+                // 「跟随系统」准确(后者容易被读成跟随深浅色外观)。
+                Text(L10n.t("系统字体")).tag("")
+                ForEach(Self.curatedFontFamilies, id: \.self) { family in
+                    Text(family).tag(family)
+                }
+            }
+            .pickerStyle(.menu)
+
+            // LabeledContent 而不是裸 HStack——分组样式下 Toggle/Picker/ColorPicker
+            // 这些自带标签的控件,标签会自动对齐成同一条竖线;裸 HStack 的"字号"只是
+            // 行内第一个 Text,对不上那条对齐线。LabeledContent 让它享受同一套对齐。
+            LabeledContent(L10n.t("字号")) {
+                HStack(spacing: 8) {
+                    Slider(value: $settings.fontSize, in: 14...36, step: 1)
+                    Text(String(format: L10n.t("%@pt"), "\(Int(settings.fontSize))"))
+                        .foregroundStyle(.secondary)
+                        .monospacedDigit()
+                        .frame(width: 32, alignment: .trailing)
+                }
+            }
+
+            ColorPicker(
+                L10n.t("文字颜色"),
+                selection: Binding(
+                    get: { settings.foregroundColor },
+                    set: { settings.foregroundColorHex = $0.hexStringWithAlpha }
+                ),
+                supportsOpacity: false // 故意关掉——文字颜色允许透明的话,容易把 alpha
+                                       // 拖到 0,悬浮窗整个消失且没有任何视觉提示能定位问题
+            )
+
+            ColorPicker(
+                L10n.t("背景颜色"),
+                selection: Binding(
+                    get: { settings.backgroundColor },
+                    set: { settings.backgroundColorHex = $0.hexStringWithAlpha }
+                ),
+                supportsOpacity: true // 背景不透明度就是这个颜色的 alpha 通道本身,
+                                      // 不另加一根 opacity 滑杆
+            )
+
+            Toggle(L10n.t("文字描边（与桌面背景区分）"), isOn: $settings.textStrokeEnabled)
+
+            if settings.textStrokeEnabled {
+                ColorPicker(
+                    L10n.t("描边颜色"),
+                    selection: Binding(
+                        get: { settings.textStrokeColor },
+                        set: { settings.textStrokeColorHex = $0.hexStringWithAlpha }
+                    ),
+                    supportsOpacity: true // 描边只让选颜色(含 alpha),粗细是固定常量
+                                          // (LyricsOverlayView.swift 的 OptionalTextStroke),
+                                          // 不额外加调节项——参考的是 LyricsX 的做法。
+                )
+            }
+
+            Button(L10n.t("恢复默认外观")) {
+                settings.followsCoverArt = false
+                settings.fontFamilyName = AppSettings.defaultFontFamilyName
+                settings.fontSize = AppSettings.defaultFontSize
+                settings.foregroundColorHex = ColorTheme.defaultTheme.foregroundColorHex
+                settings.backgroundColorHex = ColorTheme.defaultTheme.backgroundColorHex
+                settings.textStrokeEnabled = ColorTheme.defaultTheme.textStrokeEnabled
+                settings.textStrokeColorHex = ColorTheme.defaultTheme.textStrokeColorHex
+            }
+            .buttonStyle(.link)
+        } header: {
+            Text(L10n.t("桌面悬浮歌词"))
+        } footer: {
+            Text(L10n.t("以上配色、字体、字号只影响「桌面悬浮歌词」；灵动岛歌词和歌词窗口用的是固定的系统配色和字号，菜单栏歌词是纯文字，都不受这里影响"))
+        }
+        .alert(L10n.t("存为新配色主题"), isPresented: $showSaveThemeAlert) {
+            TextField(L10n.t("主题名称"), text: $newThemeName)
+            Button(L10n.t("保存")) {
+                let name = newThemeName.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !name.isEmpty else { return }
+                settings.customColorThemes.append(ColorTheme(
+                    name: name,
+                    foregroundColorHex: settings.foregroundColorHex,
+                    backgroundColorHex: settings.backgroundColorHex,
+                    textStrokeEnabled: settings.textStrokeEnabled,
+                    textStrokeColorHex: settings.textStrokeColorHex
+                ))
+            }
+            Button(L10n.t("取消"), role: .cancel) {}
+        } message: {
+            Text(L10n.t("会把当前的文字颜色、背景颜色、描边颜色存成一个可以随时再套用的主题"))
+        }
+    }
+
+    // 灵动岛歌词专属。三项都只负责持久化,NotchLyricsView 每次渲染直接读,不需要像
+    // classicOverlayEnabled/notchOverlayEnabled 那样在这里连带调某个窗口控制器"生效"
+    // ——唯一的例外是"宽度",它改的是窗口本身的几何,见下面那一项。
+    //
+    // 标签从改动前的"灵动岛风格"简化成"风格":卡片标题已经是"灵动岛歌词"了,再重复一遍
+    // "灵动岛"是冗余(同理"宽度"也不需要写成"灵动岛宽度",跟上面桌面悬浮歌词那张卡里的
+    // "宽度"靠卡片归属区分,不会混淆)。
+    private var notchOverlaySection: some View {
+        Section {
+            Picker(L10n.t("风格"), selection: $settings.notchCardStyle) {
+                ForEach(NotchCardStyle.allCases, id: \.self) { style in
+                    Text(style.displayName).tag(style)
+                }
+            }
+            .pickerStyle(.menu)
+
+            Toggle(isOn: $settings.notchShowArtwork) {
+                HStack(spacing: 4) {
+                    Text(L10n.t("显示专辑封面"))
+                    HelpButton(text: L10n.t("在灵动岛右下角显示一枚专辑封面小图。开启后当前歌词能显示的宽度会略微变窄（过长的歌词仍然会横向滚动播完整句）"))
+                }
+            }
+
+            // 跟上面桌面悬浮歌词的"宽度"滑块同一套写法(设置项本身只负责持久化,didSet
+            // 不碰 NSWindow,这里的 set 闭包显式调用窗口控制器的方法让改动立刻生效)。
+            // 跟桌面悬浮歌词不同的是灵动岛不需要"保持中心点"的增量调整——它的位置从来
+            // 都是重新居中算出来的,见 NotchLyricsWindowController.applyContentWidthSetting()。
+            LabeledContent(L10n.t("宽度")) {
+                HStack(spacing: 8) {
+                    Slider(value: Binding(
+                        get: { settings.notchContentWidth },
+                        set: { newValue in
+                            settings.notchContentWidth = newValue
+                            NotchLyricsWindowController.shared.applyContentWidthSetting()
+                        }
+                    ), in: 260...500, step: 10)
+                    Text(String(format: L10n.t("%@pt"), "\(Int(settings.notchContentWidth))"))
+                        .foregroundStyle(.secondary)
+                        .monospacedDigit()
+                        .frame(width: 40, alignment: .trailing)
+                }
+            }
+        } header: {
+            Text(L10n.t("灵动岛歌词"))
+        } footer: {
+            Text(L10n.t("灵动岛的配色由上面的「风格」决定、字号固定，不使用「桌面悬浮歌词」那一组配色和字体设置"))
+        }
+    }
+
+    // 菜单栏歌词专属。改动前那句随开关变化的说明是 Section 正文里一行 .font(.caption) 的
+    // 裸 Text,现在挪到 footer——分组样式里 footer 才是"注脚"的原生位置,而且它是单个纯
+    // Text,不触碰本文件那条"header/footer 只放纯 Text 字面量"的约束。
+    private var menuBarSection: some View {
+        Section {
+            Toggle(isOn: $settings.menuBarLyricsScroll) {
+                HStack(spacing: 4) {
+                    Text(L10n.t("超宽时横向滚动"))
+                    HelpButton(text: L10n.t("歌词比下面设置的宽度更长时，在状态栏里横向滚动播完整句（开头会先停一下再滚）；关掉则截断成「前 N 个字…」。两种模式下鼠标悬停在状态栏上都能看到完整的这一行"))
+                }
+            }
+            LabeledContent(L10n.t(settings.menuBarLyricsScroll ? "显示宽度" : "超过就截断")) {
+                HStack(spacing: 8) {
+                    Slider(value: Binding(
+                        get: { Double(settings.menuBarLyricsMaxChars) },
+                        set: { settings.menuBarLyricsMaxChars = Int($0) }
+                    ), in: 20...120, step: 5)
+                    Text(String(format: L10n.t("%@ 字"), "\(settings.menuBarLyricsMaxChars)"))
+                        .foregroundStyle(.secondary)
+                        .monospacedDigit()
+                        .frame(width: 40, alignment: .trailing)
+                }
+            }
+        } header: {
+            Text(L10n.t("菜单栏歌词"))
+        } footer: {
+            Text(L10n.t(settings.menuBarLyricsScroll
+                ? "状态栏里最多同时显示这么多字；更长的歌词会横向滚动播完"
+                : "没超过就整行显示；超过这个长度会截断，鼠标悬停在状态栏上能看到完整这一行"))
+        }
+    }
+
+    // 两个悬浮窗共用的两个隐藏开关。改动前它们跟桌面悬浮歌词专属的"宽度/锁定位置"挤在
+    // 同一张叫"悬浮歌词窗口"的卡里,那个标题对这两项并不精确(它们对灵动岛同样生效)——
+    // 改动前的注释已经指出过这个不精确,这次按归属拆开:专属的回各自的模式卡,共用的留在
+    // 这张卡。标题用"自动隐藏"而不是"共用设置":它描述的是这两个开关实际在做的事,不管
+    // 当下开着的是一个还是两个悬浮窗都成立。
+    private var autoHideSection: some View {
+        Section {
+            Toggle(isOn: Binding(
+                get: { settings.hideDuringScreenCapture },
+                set: { newValue in
+                    settings.hideDuringScreenCapture = newValue
+                    // 两个悬浮窗互不排斥,可能同时开着——应用到当前每一个确实启用了的
+                    // 控制器,关闭的那个不碰(避免凭空构造出一个没人要的窗口,见
+                    // NotchLyricsWindowController 顶部注释的那条不变量)。
+                    if settings.classicOverlayEnabled {
+                        LyricsOverlayWindowController.shared.setHiddenFromCapture(newValue)
+                    }
+                    if settings.notchOverlayEnabled {
+                        NotchLyricsWindowController.shared.setHiddenFromCapture(newValue)
+                    }
+                }
+            )) {
+                HStack(spacing: 4) {
+                    Text(L10n.t("截屏/录屏时隐藏"))
+                    HelpButton(text: L10n.t("开启「截屏/录屏时隐藏」后，截图、录屏、视频会议共享屏幕都不会拍到悬浮歌词，但你自己在这台 Mac 上仍然正常看得见"))
+                }
+            }
+            Toggle(L10n.t("暂停/无播放时隐藏"), isOn: Binding(
+                get: { settings.hideWhenNotPlaying },
+                set: { newValue in
+                    settings.hideWhenNotPlaying = newValue
+                    if settings.classicOverlayEnabled {
+                        LyricsOverlayWindowController.shared.setHideWhenNotPlaying(newValue)
+                    }
+                    if settings.notchOverlayEnabled {
+                        NotchLyricsWindowController.shared.setHideWhenNotPlaying(newValue)
+                    }
+                }
+            ))
+        } header: {
+            Text(L10n.t("自动隐藏"))
+        } footer: {
+            Text(L10n.t("这两项对「桌面悬浮歌词」和「灵动岛歌词」同时生效；菜单栏歌词和歌词窗口不受影响"))
+        }
     }
 }
 

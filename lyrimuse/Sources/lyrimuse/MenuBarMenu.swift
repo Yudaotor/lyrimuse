@@ -110,19 +110,22 @@ struct MenuBarMenu: View {
         // 默认不会显示 Label 的图标(只显示文字),不加这一句图标会整个消失,不是漏写了
         // 某个具体图标名。
         Group {
-        // 桌面悬浮歌词、灵动岛歌词互不排斥,菜单里各自的开关独立显示——只在 settings 里
-        // 对应开关确实开着时才显示/构造那个控制器:两个控制器都是 `static let shared`,
-        // 真正引用到才会执行 init() 建窗口,而 init() 里订阅 PlaybackCoordinator 的
-        // Combine sink 在订阅瞬间就会用当下的 isVisible(默认 true)触发一次
-        // orderFront——如果不管设置开没开都无条件持有两份 @ObservedObject,点开一次
-        // 菜单就会把没启用的那个控制器也构造出来、连带显示窗口。SwiftUI 的 if 只会构建
-        // 条件为真的那个分支,条件为假的分支连初始化都不会跑,借这个机制保证不会误碰
-        // 不该碰的控制器(详见 NotchLyricsWindowController 顶部注释)。
+        // 桌面悬浮歌词、灵动岛歌词互不排斥,菜单里两个"显示…"开关都常驻——2026-08-05 把
+        // "这个模式开没开"合并成单一开关之后,这两项就是那个开关本身,不能再拿它自己当
+        // 显示条件:那样从菜单栏关掉之后这一项会跟着从菜单里消失,再也找不到打开的入口。
+        //
+        // 常驻的前提是它们的 get 只读 AppSettings、完全不碰 WindowController:两个控制器
+        // 都是 `static let shared`,真正引用到才会执行 init() 建窗口,而 init() 里订阅
+        // PlaybackCoordinator 的 Combine sink 在订阅瞬间就会按当下的 isVisible 显示/隐藏
+        // 一次——菜单每次开合都会重新构造这些 View,get 里碰 .shared 就等于"点开一次菜单
+        // 就把没启用的窗口也建出来"(详见 NotchLyricsWindowController 顶部注释)。set 里
+        // 碰是可以的:那是用户主动在打开/关闭这个模式。
+        OverlayVisibilityMenuToggles()
+        // "锁定位置"只有经典悬浮窗有这个概念,而且它的 get 必须读控制器自己的
+        // isPositionLocked(不是 AppSettings),所以这一项仍然只在经典悬浮窗确实开着时
+        // 才出现——靠 SwiftUI 的 if 只构建条件为真的分支,保证关着时连 .shared 都不碰。
         if settings.classicOverlayEnabled {
-            ClassicOverlayMenuSection()
-        }
-        if settings.notchOverlayEnabled {
-            NotchOverlayMenuSection()
+            ClassicOverlayLockMenuSection()
         }
         // 跟悬浮窗样式(经典/灵动岛)正交——校准的是"当前这首歌的歌词该提前/延后多少",
         // 不管哪种样式在显示都适用,所以不放进上面两个按样式互斥的 Section 里,单独一份。
@@ -195,21 +198,38 @@ struct MenuBarMenu: View {
     }
 }
 
-// 经典悬浮窗样式生效时的菜单项——"显示悬浮歌词"+"锁定位置"。只在这个子 View 里持有
-// LyricsOverlayWindowController.shared,不放在 MenuBarMenu 本体上:MenuBarMenu.body
-// 的 if/else 只会构建被选中分支对应的 View,把控制器引用限制在这个分支专属的小
-// View 里,才能保证灵动岛样式生效时永远不会误触构造经典控制器。
-private struct ClassicOverlayMenuSection: View {
-    @ObservedObject private var overlay = LyricsOverlayWindowController.shared
+// 两种悬浮歌词的"显示…"开关,常驻。get 只读 AppSettings 里那个唯一的开关、不持有任何
+// WindowController(理由见 MenuBarMenu.body 里那段注释);set 统一走各自控制器的
+// setVisible(_:) —— 那是打开/关闭一种悬浮歌词的唯一入口,连"顺手把已配置好的隐藏偏好
+// 也应用上"这一步都在那里面,菜单/设置页/全局快捷键三处不各自复制一遍。
+private struct OverlayVisibilityMenuToggles: View {
     @ObservedObject private var settings = AppSettings.shared
 
     var body: some View {
         Toggle(isOn: Binding(
-            get: { overlay.isVisible },
-            set: { overlay.setVisible($0) }
+            get: { settings.classicOverlayEnabled },
+            set: { LyricsOverlayWindowController.shared.setVisible($0) }
         )) {
             Label(L10n.t("显示桌面悬浮歌词"), systemImage: "captions.bubble")
         }
+        Toggle(isOn: Binding(
+            get: { settings.notchOverlayEnabled },
+            set: { NotchLyricsWindowController.shared.setVisible($0) }
+        )) {
+            Label(L10n.t("显示灵动岛歌词"), systemImage: "rectangle.topthird.inset.filled")
+        }
+    }
+}
+
+// "锁定位置"——只有经典悬浮窗有这个概念(灵动岛的位置是算出来的、贴死在屏幕顶部,见
+// NotchLyricsWindow 里 isMovableByWindowBackground = false 那段注释)。持有
+// LyricsOverlayWindowController.shared 的部分收窄到这一个子 View,由调用处的
+// `if settings.classicOverlayEnabled` 保证经典悬浮窗关着时它连初始化都不会跑。
+private struct ClassicOverlayLockMenuSection: View {
+    @ObservedObject private var overlay = LyricsOverlayWindowController.shared
+    @ObservedObject private var settings = AppSettings.shared
+
+    var body: some View {
         Toggle(isOn: Binding(
             get: { overlay.isPositionLocked },
             set: { newValue in
@@ -220,23 +240,6 @@ private struct ClassicOverlayMenuSection: View {
             // 图标跟着锁定状态动态换(锁上/打开),不是固定图标——跟"关于"tab 里状态图标
             // 那套"用图标本身表达当前状态"的做法一致。
             Label(L10n.t("锁定位置"), systemImage: overlay.isPositionLocked ? "lock.fill" : "lock.open.fill")
-        }
-    }
-}
-
-// 灵动岛样式生效时的菜单项——只有"显示悬浮歌词"一项:灵动岛的位置是算出来的、贴死
-// 在屏幕顶部,没有"锁定位置"这个概念(见 NotchLyricsWindow 里
-// isMovableByWindowBackground = false 那段注释)。同理只在这个子 View 里持有
-// NotchLyricsWindowController.shared,理由跟 ClassicOverlayMenuSection 对称。
-private struct NotchOverlayMenuSection: View {
-    @ObservedObject private var overlay = NotchLyricsWindowController.shared
-
-    var body: some View {
-        Toggle(isOn: Binding(
-            get: { overlay.isVisible },
-            set: { overlay.setVisible($0) }
-        )) {
-            Label(L10n.t("显示灵动岛歌词"), systemImage: "rectangle.topthird.inset.filled")
         }
     }
 }

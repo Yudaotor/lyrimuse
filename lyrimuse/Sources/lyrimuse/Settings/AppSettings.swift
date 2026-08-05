@@ -61,6 +61,16 @@ final class AppSettings: ObservableObject {
         static let classicOverlayEnabled = "np:classicOverlayEnabled"
         static let notchOverlayEnabled = "np:notchOverlayEnabled"
         static let notchCardStyle = "np:notchCardStyle"
+        // 灵动岛歌词行尾端(卡片右下角)那枚专辑封面小图,见 NotchLyricsView.artworkThumbnail。默认开。
+        static let notchShowArtwork = "np:notchShowArtwork"
+        // 2026-08-05 之前,"这种悬浮歌词要不要显示"这一件事有**两份**独立持久化:上面这两个
+        // {classic,notch}OverlayEnabled(设置页那两个 Toggle 读它),外加两个 WindowController
+        // 各自私有的这两个 key(菜单栏"显示…"那两项、全局快捷键读它)。两份可以不一致,后果见
+        // init() 里那段迁移注释。现在真值只剩上面那两个,这两个 key 只在 init() 里被读一次做
+        // 迁移、随后主动删除(不能留着——留着的话每次启动都会再做一次逻辑与,用户以后重新
+        // 打开这个模式,下次启动又会被旧的 false 关掉)。
+        static let legacyClassicOverlayVisible = "np:overlayVisible"
+        static let legacyNotchOverlayVisible = "np:notchOverlayVisible"
         // 存的是 JSON 字符串,不是 Data——这个文件里所有持久化字段一直是纯 String/Bool/
         // enum 原语(见 AppearanceHelpers.swift 顶部注释:图的是 `defaults read` 能直接
         // 看懂),自定义配色主题数组是个例外,但用 JSON 编码成字符串(不是 Data blob)
@@ -219,6 +229,13 @@ final class AppSettings: ObservableObject {
     @Published var notchCardStyle: NotchCardStyle {
         didSet { defaults.set(notchCardStyle.rawValue, forKey: Keys.notchCardStyle) }
     }
+    // 灵动岛歌词行尾端(卡片右下角)那枚专辑封面小图——默认开。同样只负责持久化,
+    // NotchLyricsView 每次渲染直接读这个值。之所以给它一个开关而不是无条件显示:封面连
+    // 间距会占掉歌词行 42pt 宽度(整行 328pt 的 12.8%),歌词可显示的宽度会跟着变窄
+    // (见 NotchLyricsView.artworkThumbnail 的注释),这个取舍值得让用户自己决定。
+    @Published var notchShowArtwork: Bool {
+        didSet { defaults.set(notchShowArtwork, forKey: Keys.notchShowArtwork) }
+    }
     // 字体族名——空字符串表示"跟随系统",对应悬浮窗原来硬编码的系统字体,不用额外
     // enum/Optional 表达"未设置"。
     @Published var fontFamilyName: String {
@@ -332,14 +349,42 @@ final class AppSettings: ObservableObject {
         // 一次性迁移:互斥的"悬浮窗样式"拆成两个独立开关之前,只可能同时生效一个——
         // 用旧值原样映射过来,保留用户当下已经在看的那个,不强行帮用户多打开另一个
         // (想同时开两个,拆开之后自己在设置里再手动开)。旧 key 只读不删,留着无害。
+        //
+        // 两个开关先算进局部变量、最后才一次性赋给属性:下面第二段迁移需要读到"算到目前为止
+        // 是什么值",而在 init() 里所有存储属性都赋值完成之前读 self 的属性是编译错误
+        // ('self' used in property access before all stored properties are initialized)。
+        var classicOn: Bool
+        var notchOn: Bool
         if let legacyStyle = defaults.string(forKey: Keys.overlayStyle) {
-            classicOverlayEnabled = (defaults.object(forKey: Keys.classicOverlayEnabled) as? Bool) ?? (legacyStyle != "notch")
-            notchOverlayEnabled = (defaults.object(forKey: Keys.notchOverlayEnabled) as? Bool) ?? (legacyStyle == "notch")
+            classicOn = (defaults.object(forKey: Keys.classicOverlayEnabled) as? Bool) ?? (legacyStyle != "notch")
+            notchOn = (defaults.object(forKey: Keys.notchOverlayEnabled) as? Bool) ?? (legacyStyle == "notch")
         } else {
-            classicOverlayEnabled = (defaults.object(forKey: Keys.classicOverlayEnabled) as? Bool) ?? true
-            notchOverlayEnabled = (defaults.object(forKey: Keys.notchOverlayEnabled) as? Bool) ?? false
+            classicOn = (defaults.object(forKey: Keys.classicOverlayEnabled) as? Bool) ?? true
+            notchOn = (defaults.object(forKey: Keys.notchOverlayEnabled) as? Bool) ?? false
         }
+        // 一次性迁移(2026-08-05):把"菜单栏那份可见性"折进上面这两个开关,然后删掉旧 key。
+        // 合并之前同一件事有两个真值——用户从菜单栏关掉某种悬浮歌词,只写了旧的 visible 那一
+        // 份,设置页那个 Toggle 读的却是 {classic,notch}OverlayEnabled,于是设置页显示"开"、
+        // 窗口实际是隐藏的;而且那个 Toggle 的 set 一旦被触发,就会把用户刚隐藏掉的窗口重新
+        // 弄出来。取两者的逻辑与:旧的 visible 一侧是用户最后一次手动显示/隐藏的意图,只要它
+        // 明确是 false 就以它为准,绝不把用户已经隐藏的窗口重新打开。
+        //
+        // 这里显式 defaults.set/removeObject 而不是指望属性的 didSet——didSet 在 init() 里给
+        // 属性赋值时不会触发(跟本文件 showInDock 那处注释同一个 Swift 语义),不写就丢。
+        if let legacyVisible = defaults.object(forKey: Keys.legacyClassicOverlayVisible) as? Bool {
+            if !legacyVisible { classicOn = false }
+            defaults.set(classicOn, forKey: Keys.classicOverlayEnabled)
+            defaults.removeObject(forKey: Keys.legacyClassicOverlayVisible)
+        }
+        if let legacyVisible = defaults.object(forKey: Keys.legacyNotchOverlayVisible) as? Bool {
+            if !legacyVisible { notchOn = false }
+            defaults.set(notchOn, forKey: Keys.notchOverlayEnabled)
+            defaults.removeObject(forKey: Keys.legacyNotchOverlayVisible)
+        }
+        classicOverlayEnabled = classicOn
+        notchOverlayEnabled = notchOn
         notchCardStyle = defaults.string(forKey: Keys.notchCardStyle).flatMap(NotchCardStyle.init(rawValue:)) ?? .frostedGlass
+        notchShowArtwork = (defaults.object(forKey: Keys.notchShowArtwork) as? Bool) ?? true
         fontFamilyName = defaults.string(forKey: Keys.fontFamilyName) ?? Self.defaultFontFamilyName
         fontSize = (defaults.object(forKey: Keys.fontSize) as? Double) ?? Self.defaultFontSize
         overlayWidth = (defaults.object(forKey: Keys.overlayWidth) as? Double) ?? 640

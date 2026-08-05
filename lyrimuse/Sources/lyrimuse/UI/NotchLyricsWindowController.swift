@@ -12,7 +12,9 @@ import LyrimuseCore
 // 挡住(包括这个 App 自己的)菜单栏图标,肉眼看起来像"菜单栏图标跑到灵动岛的位置去
 // 了"——实际是图标一直没动,只是被这个不该出现的高层级窗口盖住了。跟经典悬浮窗
 // (overlayVisibleKey)是各自独立的 key,两种样式的"显示/隐藏"偏好不共用。
-private let notchVisibleKey = "np:notchOverlayVisible"
+// isVisible 的持久化在 2026-08-05 并进了 AppSettings.notchOverlayEnabled(原来这里有一个
+// 私有的 np:notchOverlayVisible,跟设置页那个开关是同一件事的两个真值),详见 setVisible(_:)
+// 和 AppSettings.init() 里的迁移注释。
 
 // 灵动岛/刘海样式悬浮歌词的窗口控制器——跟 LyricsOverlayWindowController 平行、完全
 // 独立的第二套实现(两种样式互斥、各自独立的窗口控制器,不去改造经典那一套让它同时
@@ -48,7 +50,9 @@ private let notchVisibleKey = "np:notchOverlayVisible"
 final class NotchLyricsWindowController: NSWindowController, ObservableObject {
     static let shared = NotchLyricsWindowController()
 
-    @Published private(set) var isVisible: Bool = NotchLyricsWindowController.restoredVisible()
+    // 真值在 AppSettings.notchOverlayEnabled,这里只是它的镜像(菜单栏要观察这个
+    // @Published)。只能经 setVisible(_:) 改,那是打开/关闭的唯一入口。
+    @Published private(set) var isVisible: Bool = AppSettings.shared.notchOverlayEnabled
     @Published private(set) var hideWhenNotPlaying: Bool = false
     // 常显内容行(歌词)相对窗口顶部的偏移——正好等于刘海(或无刘海屏幕的兜底高度)
     // 本身的高度,这样歌词永远从刘海往下才开始画,不会被刘海真实挡住一部分。
@@ -93,8 +97,9 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject {
     // 这层下限比用户设的宽度还宽的话取这层,保证按钮不会被裁切。
     private static let minEarWidth: CGFloat = 70
     // hover 展开时在 contentSize 之外额外撑出的高度,放下一句歌词预览 + 迷你进度条这
-    // 两样补充信息(封面/更多控制按钮都不如这两样贴合"歌词类产品"的定位,专辑封面
-    // 另外还受限于本地播放源目前没有转发 artwork 数据)。
+    // 两样补充信息(更多控制按钮都不如这两样贴合"歌词类产品"的定位)。专辑封面不在这一块
+    // ——它常显在歌词行的尾端(见 NotchLyricsView.artworkThumbnail),不需要 hover 才出现,
+    // 也不占额外高度。
     private static let expandedExtraHeight: CGFloat = 40
 
     private var isPlayingObserver: AnyCancellable?
@@ -155,17 +160,18 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject {
         if let screenParamsObserver { NotificationCenter.default.removeObserver(screenParamsObserver) }
     }
 
+    // 打开/关闭"灵动岛歌词"的**唯一**入口——设置页那个 Toggle、菜单栏"显示灵动岛歌词"两处
+    // 都必须走这里。理由跟 LyricsOverlayWindowController.setVisible(_:) 完全对称,不重复展开:
+    // 统一写回 AppSettings.notchOverlayEnabled(由它的 didSet 持久化),打开时顺手把两个已
+    // 配置好的隐藏偏好也应用上。
     func setVisible(_ visible: Bool) {
         isVisible = visible
-        UserDefaults.standard.set(visible, forKey: notchVisibleKey)
+        AppSettings.shared.notchOverlayEnabled = visible
+        if visible {
+            setHiddenFromCapture(AppSettings.shared.hideDuringScreenCapture)
+            setHideWhenNotPlaying(AppSettings.shared.hideWhenNotPlaying)
+        }
         updateActualVisibility(isPlayingNow: PlaybackCoordinator.shared.isPlayingNow)
-    }
-
-    // 没有存过(第一次启动/升级前的旧版本从没写过这个 key)时默认 true,跟这个属性
-    // 原来的硬编码默认值保持一致,不改变"从没手动关过的用户"的既有体验。
-    private static func restoredVisible() -> Bool {
-        guard UserDefaults.standard.object(forKey: notchVisibleKey) != nil else { return true }
-        return UserDefaults.standard.bool(forKey: notchVisibleKey)
     }
 
     // 跟经典悬浮窗共用同一个"暂停/无播放时隐藏"设置项(AppSettings.hideWhenNotPlaying),
