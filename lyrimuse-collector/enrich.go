@@ -530,7 +530,7 @@ func fetchScoredLyricCandidatesStreaming(artist, title, album string, durationSe
 		resultsCh <- sourceResult{source: "kugou", lyr: r.lrc, yrc: r.yrc, matchTitle: r.title, matchArtist: r.artist, matchAlbum: r.album}
 	}()
 	go func() {
-		r := lrclibLyric(artist, title, album)
+		r := lrclibLyric(artist, title, album, durationSecs)
 		resultsCh <- sourceResult{source: "lrclib", lyr: r.lyrics, matchTitle: r.title, matchArtist: r.artist, matchAlbum: r.album, instrumental: r.instrumental}
 	}()
 	go func() {
