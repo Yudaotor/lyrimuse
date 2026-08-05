@@ -571,6 +571,138 @@ do {
     expectEqual(W.sanitized(LyricsColumnWidths(artist: 96, album: 110, source: 60)), W.defaults, "列宽: 来源列低于专属下限整组退回默认")
 }
 
+// ---- LyricsSyncEngine: 署名行的结构化判定(2026-08-05) ----
+//
+// 上面那张关键词表已经补过至少两轮(两字全称 → 单字缩写 → "Arranged by:" 这种夹 by 的
+// 写法),每次都是被漏判的真实数据打回来才加的,说明枚举法在这件事上收敛不了。补一条认
+// "短汉字标签 + 冒号 + 内容"这个形状的规则,跟 collector 侧 genericHanCreditLineRe 对齐。
+// 关键是**不能误杀真歌词**,所以下面正反两个方向都要覆盖。
+
+do {
+    let engine = LyricsSyncEngine()
+    // 关键词表里没有的角色名(指挥/中提琴/母带),靠结构判定认出来
+    let lrc = "[00:00.00]指挥：某人\n[00:01.00]中提琴：某人\n[00:02.00]母带工程师：某人\n[00:26.74]la la la\n"
+    engine.load(lyrics: lrc, lyricsTr: "", lyricsRoma: "", lyricsYRC: "", preferWordLevel: true)
+    expectEqual(engine.activeLine(atMs: 500)?.mainText, nil, "署名行(结构): 关键词表外的角色名也被判成署名行")
+    expectEqual(engine.activeLine(atMs: 27000)?.mainText, "la la la", "署名行(结构): 真歌词不受影响")
+    expectEqual(engine.allLines(idPrefix: "t").count, 1, "署名行(结构): 三行职员表全被剔除,只剩 1 行真歌词")
+}
+
+do {
+    let engine = LyricsSyncEngine()
+    // ⚠️ 反向:正常歌词里带冒号不能被误杀。这是收窄规则(只认汉字标签、上限 8 字、冒号后
+    // 必须有非空白内容)真正要守住的东西——用宽松的 `^.{1,20}[:：].+` 会把这些全吃掉。
+    let lrc = """
+    [00:10.00]他说：我不走
+    [00:20.00]1、2、3：走
+    [00:30.00]Verse 1: hello
+    [00:40.00]这是一句很长的歌词不是标签所以不该被当成署名行：后面还有内容
+    """
+    engine.load(lyrics: lrc, lyricsTr: "", lyricsRoma: "", lyricsYRC: "", preferWordLevel: true)
+    expectEqual(engine.activeLine(atMs: 11000)?.mainText, "他说：我不走", "署名行(结构): 对白式冒号不误杀")
+    expectEqual(engine.activeLine(atMs: 21000)?.mainText, "1、2、3：走", "署名行(结构): 数字编号标签不误杀(只认汉字标签)")
+    expectEqual(engine.activeLine(atMs: 31000)?.mainText, "Verse 1: hello", "署名行(结构): 英文场景标签不误杀")
+    expectEqual(engine.allLines(idPrefix: "t").count, 4, "署名行(结构): 四句正常歌词一句都没被剔除")
+}
+
+do {
+    // 边界:结构化规则要求"命中 ≥3 行 **且** 过半"。这两条各自单独都不够——
+    // ① 只看比例:短曲里一句对白就过半;② 只看行数:长歌里三句对白就被误杀。
+    let engine = LyricsSyncEngine()
+    // 3 句对白 + 7 句正常歌词 = 命中 3 行达到下限,但只占 3/10 没过半 → 规则不启用,一句不删
+    var lines = ["他说：走", "她说：不走", "我说：算了"]
+    for i in 0..<7 { lines.append("普通歌词第\(i)句") }
+    let lrc = lines.enumerated().map { "[00:\(String(format: "%02d", $0.offset + 10)).00]\($0.element)" }.joined(separator: "\n")
+    engine.load(lyrics: lrc, lyricsTr: "", lyricsRoma: "", lyricsYRC: "", preferWordLevel: true)
+    expectEqual(engine.allLines(idPrefix: "t").count, 10, "署名行(结构): 命中够 3 行但没过半 → 规则不启用,10 句全留")
+}
+
+do {
+    // 反过来:过半但不够 3 行 → 同样不启用。必须构造成"只有行数这一个条件不满足",否则
+    // 测不出这一支——2 行里 1 行命中时 hits*2 > count 是 2 > 2 = false(代码用严格大于),
+    // 两个条件同时不满足,断言就算把 `hits >= 3` 删掉也照样通过,等于空转。
+    // 3 行里 2 行命中:4 > 3 过半成立,hits=2 < 3 不成立 → 恰好只卡在行数这一条。
+    let engine = LyricsSyncEngine()
+    let lrc = "[00:10.00]他说：走\n[00:20.00]她说：不走\n[00:30.00]普通歌词\n"
+    engine.load(lyrics: lrc, lyricsTr: "", lyricsRoma: "", lyricsYRC: "", preferWordLevel: true)
+    expectEqual(engine.allLines(idPrefix: "t").count, 3, "署名行(结构): 过半但不够 3 行 → 规则不启用,3 句全留")
+}
+
+do {
+    // 审查确认的 IMPORTANT 的回归测试:对唱/口白类 LRC 把**每一句**都标成「男：/女：/合：」,
+    // 形状 100% 命中结构正则,"命中 ≥3 行且过半"那道门反而天然被满足 → 整首歌被删空。
+    // 说话人标签因此必须整体豁免(既不算 hits、也不会被删)。
+    let engine = LyricsSyncEngine()
+    let lrc = """
+    [00:10.00]男：第一句
+    [00:20.00]女：第二句
+    [00:30.00]合：第三句
+    [00:40.00]男：第四句
+    [00:50.00]女：第五句
+    """
+    engine.load(lyrics: lrc, lyricsTr: "", lyricsRoma: "", lyricsYRC: "", preferWordLevel: true)
+    expectEqual(engine.allLines(idPrefix: "t").count, 5, "署名行(结构): 对唱标签(男/女/合)整份豁免,5 句一句不删")
+    expectEqual(engine.activeLine(atMs: 11000)?.mainText, "男：第一句", "署名行(结构): 对唱句正常展示")
+}
+
+do {
+    // 兜底闸门:万一判据出了没预料到的偏差、把整份都判成职员表,展示过滤也不许删空——
+    // "整片空白/一直显示♪"比"多显示几行职员表"糟糕得多。用关键词表能全命中的一份来验
+    // (关键词表是逐行无条件生效的,不受整份门控影响)。
+    let engine = LyricsSyncEngine()
+    let lrc = "[00:10.00]作词：甲\n[00:20.00]作曲：乙\n[00:30.00]编曲：丙\n"
+    engine.load(lyrics: lrc, lyricsTr: "", lyricsRoma: "", lyricsYRC: "", preferWordLevel: true)
+    expectEqual(engine.allLines(idPrefix: "t").count, 3, "署名行: 会被删空时整份不删(宁可漏治,不可删空)")
+}
+
+// ---- LocalPlaybackSource: seek 之后丢弃陈旧位置读数(2026-08-05) ----
+//
+// 审查确认的 IMPORTANT:seek 发出去之后,在飞的那次 poll(子进程往返几十到几百毫秒)拿到的
+// 是 seek **之前**的位置,落地后会被当成"真实 seek 跳变"硬重锚回旧位置——松手跳过去、一瞬间
+// 又弹回来。除了作废在飞的 poll(pollGeneration),还需要这道判据兜住"seek 之后新发起、但
+// 播放器状态还没跟上"的那些读数(Music.app 实测要 ~294ms 才切换)。
+
+do {
+    let f = LocalPlaybackSource.shouldRejectStalePositionAfterSeek
+    // 从 30s 拖到 120s,读数还是 30s → 更靠近旧位置 → 丢弃
+    expectEqual(f(30.2, 120, 30, 0.1), true, "seek 静默窗: 读数还在旧位置附近 → 丢弃")
+    // 读数已经跟上目标 → 接受
+    expectEqual(f(120.3, 120, 30, 0.1), false, "seek 静默窗: 读数已跟上目标 → 接受")
+    // 窗口过了就一律接受,不能永久拒收(否则真的 seek 到别处就再也纠正不回来)
+    expectEqual(f(30.2, 120, 30, 5.0), false, "seek 静默窗: 超出窗口后不再拦")
+    // 小幅拖动:从 100s 拖到 100.5s,读数 100.0 更靠近旧位置 → 丢弃
+    // (这一支很重要:Apple Music 是 preciseSource,servo 门槛只有 0.15s,不拦就会被
+    //  snap 回旧位置,根本用不着超过 2s 的 seek 容差)
+    expectEqual(f(100.0, 100.5, 100, 0.1), true, "seek 静默窗: 小幅拖动同样要拦")
+    // 正好等距时不丢——拖动幅度极小时两者本来分不开,丢了反而卡住自愈
+    expectEqual(f(75, 100, 50, 0.1), false, "seek 静默窗: 与新旧位置等距时不拦")
+    // 负的 elapsed(时钟回跳)不拦
+    expectEqual(f(30, 120, 30, -1), false, "seek 静默窗: 时间差为负时不拦")
+}
+
+// ---- MusicPlaybackController.seek: 参数格式化与夹值(2026-08-05) ----
+//
+// seek 的 I/O(发 AppleScript / 跑 media-control)没法在 selftest 里跑,但"传进去的数值
+// 长什么样"是纯计算、而且是最容易出错的地方:直接插值 Double 可能吐出
+// "2.2000000000000002" 这种长尾表示,拼进 AppleScript 源码里不保险。
+
+do {
+    let arg = MusicPlaybackController.seekArgument(forSeconds:)
+    expectEqual(arg(2.2), "2.200", "seek: 浮点长尾被截成 3 位小数")
+    expectEqual(arg(255.4567), "255.457", "seek: 四舍五入到毫秒精度")
+    expectEqual(arg(0), "0.000", "seek: 0 正常")
+    expectEqual(arg(-5), "0.000", "seek: 负值夹到 0")
+    // 上界故意不夹(这一层不知道时长),原样透给播放器
+    expectEqual(arg(99999.5), "99999.500", "seek: 上界不夹,原样透传")
+    // 非有限值(比例算式里 0 除 0 之类)不能拼出 "nan"/"inf" 进 AppleScript
+    expectEqual(arg(.nan), "0.000", "seek: NaN 退化成 0 而不是拼出 nan")
+    expectEqual(arg(.infinity), "0.000", "seek: 无穷大退化成 0")
+    // 钉住"小数点必须是点"。实测核实过 String(format:) 不带 locale 本来就不本地化,所以
+    // 这条不是在防一个现存 bug,而是防以后有人顺手把 locale 改成 .current —— 那样在逗号
+    // 小数点的区域会拼出 "2,200",AppleScript 直接语法错误。
+    expectEqual(arg(2.2).contains(","), false, "seek: 小数点固定用点(拼进 AppleScript 不能是逗号)")
+}
+
 // ---- 汇总 ----
 
 if failures == 0 {

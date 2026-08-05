@@ -88,6 +88,15 @@ public final class LocalPlaybackSource: ObservableObject {
     private var lastKey = ""
     private var lastSnapshot: MediaControlSnapshot?
 
+    /// 最近一次快照实际来自哪个播放器的 bundle id,拿不到就是 nil。给「导出诊断信息」用——
+    /// 用户在设置里选的可能是"自动识别",那一档只报设置值等于什么都没说,必须同时报出
+    /// 这一刻真正被认下来的是谁。故意不做成 @Published:诊断报告只在导出那一刻读一次,
+    /// 发布它只会让所有订阅者跟着每次轮询白重算一遍。
+    public var lastResolvedBundleID: String? {
+        let id = lastSnapshot?.bundleIdentifier ?? ""
+        return id.isEmpty ? nil : id
+    }
+
     // ---- 播放位置平滑(2026-07-24 加,修 QQ 音乐"歌词时间不准") --------------------
     //
     // QQ 音乐没有 AppleScript,elapsedTime 来自 media-control --now 的 elapsedTimeNow
@@ -145,6 +154,15 @@ public final class LocalPlaybackSource: ObservableObject {
     // (换歌/刚恢复播放/第一次观察/真实 seek,即用了 reported 而不是 predicted)。
     // 调用方(apply())用这个标记判断"这次真的有必要重新构造 anchor 吗"——见那边注释。
     private func resolvePositionSeconds(reported: Double, rate: Double, key: String, now: Date, preciseSource: Bool) -> (seconds: Double, didReanchor: Bool) {
+        // seek 刚发出去的一小段时间里,播放器可能还没跳过去(或这份快照是 seek 之前抓的)。
+        // 这种读数比目标位置更靠近旧位置,采信它就会把刚跳过去的进度条/歌词硬拽回原处。
+        // 直接沿用当前外推值(等于"这一轮不更新位置"),等播放器状态跟上。
+        if let target = lastSeekTargetSecs, let prev = lastSeekPrevSecs, let at = lastSeekAt,
+           Self.shouldRejectStalePositionAfterSeek(
+               reported: reported, target: target, previous: prev, elapsedSinceSeek: now.timeIntervalSince(at)
+           ) {
+            return (trackPosSeconds, false)
+        }
         guard key == posTrackingKey, posWasPlaying, let prevWall = posPrevWall else {
             // 换歌 / 刚从暂停恢复播放 / 第一次观察 → 没有可信的上一次锚点可外推,直接
             // 采用这次读数。
@@ -438,17 +456,25 @@ public final class LocalPlaybackSource: ObservableObject {
             reloadCurrentLyrics()
         }
         if trackChanged {
-            // 换歌那一刻立即清空上一首歌的封面——不能只靠下面异步任务里 expectedKey
-            // 校验(那个校验解决的是"结果回来时如果又换了下一首歌该不该采用"，防止旧结果
-            // 覆盖新状态,但不解决"结果还没回来之前的这段空窗期该显示什么"这个问题)。
-            // 2026-08-02 实测排查坐实:子进程调用有真实的、可感知的延迟(fork+管道读取+
-            // JSON/base64 解码),这段时间里不清空的话,"歌词窗口"的封面模糊背景会继续
-            // 显示上一首歌的封面,新封面抓完后才突然跳变,是一次可避免的视觉闪烁。跟
-            // title/artist/album 故意保留"最近一次播放信息"是两回事(那三个是纯文字,
-            // 旧值不会误导人;这里是背景图,挂着旧图会让人误以为"这就是当前这首歌的
-            // 封面")。
-            artworkData = nil
-            artworkAccentHex = nil
+            // ⚠️ 换歌时**不再**立即清空上一首歌的封面。
+            //
+            // 2026-08-02 曾经是立即清空的,当时的理由是"不清空的话背景会继续显示上一首的
+            // 封面、新封面抓完才突然跳变,是一次可避免的闪烁"。2026-08-05 用户反馈坐实这个
+            // 权衡选错了方向:清空造成的后果严重得多——"歌词窗口"的背景、文字颜色、封面占位
+            // 全都挂在 artworkData != nil 上(见 LyricsWindowView.hasArtworkBackground),
+            // 一清空,整扇窗从"封面模糊底 + 白色文字"整体回落到"系统默认背景 + 主文字色",
+            // 浅色外观下就是**整窗白闪一下**,而封面取图有真实的、可感知的延迟(fork 子进程
+            // + 管道读取 + base64 解码)。相比之下"背景多显示 200~500ms 上一首的模糊图"几乎
+            // 无感——Apple Music 自己也是留着旧封面直到新封面加载完再交叉淡入。
+            //
+            // 现在交给 fetchArtworkForCurrentTrack 的完成回调收敛:拿到新封面就替换,确认这
+            // 首歌没有封面(结果为 nil)就在那一刻清空——两种情况都只有一次视觉变化,没有
+            // "先白闪再回来"。
+            //
+            // 但完成回调不能是唯一出路:MediaControlClient.fetchArtwork() 用的是
+            // waitUntilExit() 且**没有超时**,子进程真挂住的话回调永远不来,旧封面就会一直
+            // 挂着。所以再加一道超时兜底,见 scheduleArtworkStaleTimeout。
+            scheduleArtworkStaleTimeout(forKey: key)
             fetchArtworkForCurrentTrack(expectedKey: key)
         }
 
@@ -523,6 +549,82 @@ public final class LocalPlaybackSource: ObservableObject {
     // 调用这个就能拿到最新内容,不需要等 collector 重启。
     public func forceReloadLyricsForCurrentTrack() {
         reloadCurrentLyrics()
+    }
+
+    /// 跳到曲目内的某个位置(毫秒)——发指令给播放器,并**立刻**把本地外推重锚到目标位置。
+    ///
+    /// 为什么必须自己重锚、不能等下一轮轮询自愈:
+    /// ① 轮询是 2 秒一轮(reschedulePollTimer),不重锚的话最坏要等 2 秒歌词才跟上,而拖
+    ///    进度条这个动作用户预期是即时反馈;
+    /// ② 更要命的是小幅拖动会被**永久**吞掉:resolvePositionSeconds 里那道
+    ///    seekJumpToleranceSecs(2 秒)判定"读数跟外推差 2 秒以内算稳定播放,继续按旧基准
+    ///    外推",拖动幅度小于 2 秒时它压根不认为发生了跳变,伺服 EMA 也会把这点差异当噪声
+    ///    慢慢磨平——歌词会一直按拖动前的基准走。
+    ///
+    /// 重锚要同时改三处,少一处就会被下一轮"稳定播放"分支按旧值覆盖回去:trackPosSeconds
+    /// (外推累加器)、posPrevWall(外推的墙钟基准)、posErrEMA(清零,拖动不是需要伺服慢慢
+    /// 校正的漂移)。anchor 也当场重建,让 UI 这一帧就跳过去,不等 apply()。
+    ///
+    /// 暂停状态下也允许拖:此时 anchor 是 nil、pausedPositionMs 才是显示源,所以只更新它。
+    // seek 之后短暂不信"更像 seek 之前"的位置读数,见 seek(toMs:) 与
+    // shouldRejectStalePositionAfterSeek 的注释。
+    private var lastSeekTargetSecs: Double?
+    private var lastSeekPrevSecs: Double?
+    private var lastSeekAt: Date?
+    public nonisolated static let seekSettleWindow: TimeInterval = 1.2
+
+    /// seek 刚发出去之后,这一份位置读数是不是"还是 seek 之前的播放器状态"、该整份丢弃。
+    ///
+    /// 纯函数,便于 selftest 覆盖。判据:还在窗口内,且这次读数**更靠近 seek 前的旧位置**
+    /// 而不是目标位置。相等时不丢(拖动幅度极小时两者本来就分不开,丢了反而卡住自愈)。
+    public nonisolated static func shouldRejectStalePositionAfterSeek(
+        reported: Double, target: Double, previous: Double, elapsedSinceSeek: TimeInterval
+    ) -> Bool {
+        guard elapsedSinceSeek >= 0, elapsedSinceSeek < seekSettleWindow else { return false }
+        return abs(reported - previous) < abs(reported - target)
+    }
+
+    public func seek(toMs targetMs: Int) {
+        let clampedMs = max(0, min(targetMs, currentDurationMs ?? targetMs))
+        let seconds = Double(clampedMs) / 1000
+        // .auto 模式下要按"这一刻实际在播的是谁"选后端,不能只看设置值——设置是"自动识别"时
+        // PlaybackPlayerPreference.current 不等于 .appleMusic,写路径会走 media-control,而
+        // 读路径对 Apple Music 走的是精确的 AppleScript 播放头,两条路不一致。
+        let resolvedIsAppleMusic = lastSnapshot?.bundleIdentifier == PlaybackPlayer.appleMusic.bundleIdentifier
+        MusicPlaybackController.seek(toSeconds: seconds, preferAppleScript: resolvedIsAppleMusic)
+
+        let now = Date()
+        // 记下"从哪跳到哪",用来在接下来一小段时间里识别并丢弃 seek 之前采样的陈旧读数。
+        lastSeekPrevSecs = trackPosSeconds
+        lastSeekTargetSecs = seconds
+        lastSeekAt = now
+        // 作废所有在飞的 poll:它们的快照是 seek **之前**抓的(子进程往返几十到几百毫秒),
+        // 落地后会被 resolvePositionSeconds 当成"真实 seek 跳变"硬重锚回旧位置,表现成
+        // 松手跳过去、一瞬间又弹回来。这一行只治"已经在飞"的那次;seek 本身还有 ~300ms
+        // 才在播放器侧生效(Music.app 的 AppleScript 状态实测要 ~294ms 才切换,见
+        // handlePlayerInfoChanged 那段注释),那之后**新发起**的 poll 同样会读到旧位置,
+        // 靠上面那个接受窗兜。
+        pollGeneration += 1
+        trackPosSeconds = seconds
+        posPrevWall = now
+        posErrEMA = 0
+        if let existing = anchor {
+            anchor = ProgressAnchor(
+                durationMs: existing.durationMs,
+                progressMs: clampedMs,
+                rate: existing.rate,
+                progressTs: nil,
+                baseAgeMs: 0,
+                fetchedAt: now,
+                fresh: true
+            )
+        } else if currentDurationMs != nil {
+            // 暂停态:显示源是 pausedPositionMs(见 apply() 里那段注释),没有锚点可改。
+            pausedPositionMs = clampedMs
+        }
+        // 歌词高亮跟着立刻走到新位置,不等 20Hz 的下一拍(它本来也会跟上,但那一拍之前
+        // 屏幕上仍是旧的一句,拖动时看着像没反应)。
+        fastTick()
     }
 
     // 单曲歌词时间轴微调——只对"当前正在播的这首歌"生效,立即体现在下一次 fastTick()
@@ -612,20 +714,70 @@ public final class LocalPlaybackSource: ObservableObject {
     // 硬挂着——跟 title/artist/album 故意保留"最近一次播放信息"是两回事:那三个字段是
     // 文字,显示旧值不会误导人;封面是背景图,挂着上一首歌的图会让人以为"这就是当前
     // 这首歌的封面",必须清空。
+    // 换歌后"旧封面最多还能挂多久"的兜底期限。取 3 秒:封面取图正常在几百毫秒内回来(见
+    // fetchArtwork 的子进程往返),3 秒还没回来只可能是子进程卡死或那个二进制出了问题,
+    // 此时挂着上一首的封面已经不合理了,宁可回落到系统背景。
+    private static let artworkStaleTimeout: TimeInterval = 3
+    private var artworkStaleTimeoutTask: Task<Void, Never>?
+
+    /// 换歌时安排一次"旧封面过期清理"。只在真的有旧封面可挂时才安排——本来就没有封面的
+    /// 情况下什么都不用做。取图回调先到就会把这个任务取消掉(见 fetchArtworkForCurrentTrack)。
+    private func scheduleArtworkStaleTimeout(forKey key: String) {
+        artworkStaleTimeoutTask?.cancel()
+        artworkStaleTimeoutTask = nil
+        guard artworkData != nil else { return }
+        artworkStaleTimeoutTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(Self.artworkStaleTimeout))
+            guard !Task.isCancelled, let self, self.lastKey == key else { return }
+            logger.debug("artwork stale timeout: clearing previous cover after \(Self.artworkStaleTimeout)s")
+            self.artworkData = nil
+            self.artworkAccentHex = nil
+            self.artworkStaleTimeoutTask = nil
+        }
+    }
+
+    // 换歌后取图拿到 nil 时的重试节奏(秒)。2026-08-05 实测坐实:切歌那一刻系统 Now Playing
+    // 的封面往往还没更新完,media-control 会先返回"有新曲目元数据、但没有 artworkData",
+    // 而原来的代码一次 nil 就当成"这首歌没有封面"定案——于是整首歌都显示占位音符 + 系统
+    // 浅色背景(实测切歌后录屏:左栏平均亮度从 0.446 升到 0.946 并**一直保持**,不是闪一下)。
+    // 用户报的"切歌白屏一下子"就是这件事,只是通常重新播到下一首又碰巧取到了。
+    //
+    // 间隔递增而不是等间隔:绝大多数情况第一次重试(0.3s)就有了,不值得为罕见的慢场景把
+    // 每次切歌都拖长;最后一次在 ~2.1s,留在 artworkStaleTimeout(3s)之内。
+    private static let artworkRetryDelays: [TimeInterval] = [0.3, 0.6, 1.2]
+
     private func fetchArtworkForCurrentTrack(expectedKey: String) {
         Task {
             // 取图和算平均色都在同一个后台 Task.detached 里做完——两者共用同一份原始
             // 图片字节,没必要为了"少写一个函数"分成两次异步往返各自触发一次 MainActor
             // 跳转。computeAccentHex 是 nonisolated 的纯函数,可以在这个非 MainActor 的
             // 闭包里直接调用。
-            let (data, accentHex) = await Task.detached { () -> (Data?, String?) in
-                guard let result = MediaControlClient.fetchArtwork() else { return (nil, nil) }
-                return (result.data, Self.computeAccentHex(from: result.data))
-            }.value
+            func attempt() async -> (Data?, String?) {
+                await Task.detached { () -> (Data?, String?) in
+                    guard let result = MediaControlClient.fetchArtwork() else { return (nil, nil) }
+                    return (result.data, Self.computeAccentHex(from: result.data))
+                }.value
+            }
+            var (data, accentHex) = await attempt()
+            // 拿到 nil 就重试几次(见 artworkRetryDelays 的注释:切歌那一刻系统侧封面常还没
+            // 更新完)。每次重试前都重新核对 expectedKey——期间用户可能又切了下一首,那就
+            // 直接放弃这一轮,交给新那一轮自己去取。
+            var round = 0
+            while data == nil, round < Self.artworkRetryDelays.count {
+                guard expectedKey == self.lastKey else { return }
+                try? await Task.sleep(for: .seconds(Self.artworkRetryDelays[round]))
+                guard expectedKey == self.lastKey else { return }
+                (data, accentHex) = await attempt()
+                round += 1
+            }
             guard expectedKey == self.lastKey else { return }
+            // 结果定案了(data 仍为 nil = 重试完还是没有,判定这首歌确实没有封面),
+            // 兜底任务不再需要。
+            self.artworkStaleTimeoutTask?.cancel()
+            self.artworkStaleTimeoutTask = nil
             self.artworkData = data
             self.artworkAccentHex = accentHex
-            logger.debug("artwork fetched: bytes=\(data?.count ?? 0) accent=\(accentHex ?? "nil")")
+            logger.debug("artwork fetched: bytes=\(data?.count ?? 0) retries=\(round) accent=\(accentHex ?? "nil")")
         }
     }
 

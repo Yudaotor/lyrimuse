@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import Combine
 import LyrimuseCore
@@ -30,6 +31,17 @@ final class PlaybackCoordinator: ObservableObject {
     @Published private(set) var allLines: [LyricsWindowLine] = []
     // "歌词窗口"背景用的模糊封面图,见 LocalPlaybackSource 同名属性的注释。
     @Published private(set) var artworkData: Data?
+    // 上面那份原始字节解码出来的位图,只在封面数据真的变了的时候解一次。
+    //
+    // 2026-08-05 加"灵动岛顶行显示专辑封面"时补上的:灵动岛那一个 body 里会有两处读封面
+    // (顶行那枚清晰小图 + "跟随封面"风格的模糊背景),各自现调 `NSImage(data:)` 的话,
+    // 每次 body 重算都要把同一张几百 KB 的 JPEG 重解两遍——而 body 重算在换歌词行、换歌、
+    // 重锚进度时都会发生(逐字高亮那一块是 TimelineView 自己的闭包,不牵动整个 body,
+    // 所以不是 20Hz,但仍然远比"每首歌一次"频繁)。解码收敛到这一层做一次、两处共用。
+    //
+    // 放在这一层而不是 LocalPlaybackSource:跟 artworkAccentColor 同一个分层理由——
+    // LyrimuseCore 那一层不引入 AppKit/SwiftUI,类型转换只能在这一层做。
+    @Published private(set) var artworkImage: NSImage?
     // 从封面算出来的动态高亮色(已经从 LocalPlaybackSource 转发的十六进制字符串转成
     // Color——LyrimuseCore 那一层不引入 SwiftUI,转换只能在这一层做,见
     // LocalPlaybackSource.artworkAccentHex 的注释)。供"跟随封面"外观模式用,见
@@ -54,6 +66,22 @@ final class PlaybackCoordinator: ObservableObject {
     // 立刻调用就行。
     func refreshLyricsForCurrentTrack() {
         LocalPlaybackSource.shared.forceReloadLyricsForCurrentTrack()
+    }
+
+    // 拖进度条跳转——转发给 LocalPlaybackSource,由它发指令 + 立刻重锚(见那边注释)。
+    // UI 层(歌词窗口/灵动岛的进度条)只认 PlaybackCoordinator。
+    func seek(toMs targetMs: Int) {
+        LocalPlaybackSource.shared.seek(toMs: targetMs)
+    }
+
+    // 「导出诊断信息」用:这一刻实际被认下来的播放器,翻成人读得懂的名字。认不出来的
+    // bundle id 原样附上(比只说"未知"有用得多——排查时那串 id 就是线索)。
+    var resolvedPlayerDescription: String {
+        guard let id = LocalPlaybackSource.shared.lastResolvedBundleID else { return "none (no snapshot yet)" }
+        if let known = PlaybackPlayer.allCases.first(where: { $0.bundleIdentifier == id }) {
+            return "\(known.rawValue) (\(id))"
+        }
+        return "unknown (\(id))"
     }
 
     // 单曲歌词时间轴微调——转发给 LocalPlaybackSource,UI 层(菜单/快捷键)只认
@@ -97,6 +125,13 @@ final class PlaybackCoordinator: ObservableObject {
             s.$currentLineIndex.assign(to: \.currentLineIndex, on: self),
             s.$allLines.assign(to: \.allLines, on: self),
             s.$artworkData.assign(to: \.artworkData, on: self),
+            // 解码在这里做一次,消费方(灵动岛顶行小封面/模糊背景)直接拿 NSImage,不在
+            // view body 里反复解同一张图,见 artworkImage 声明处的注释。@Published 的
+            // willSet 语义让这两条订阅在同一次调用里同步跑完,artworkData 和 artworkImage
+            // 不会跨渲染帧不一致(SwiftUI 在这一轮 runloop 结束时才真正重绘)。
+            s.$artworkData
+                .map { $0.flatMap { NSImage(data: $0) } }
+                .assign(to: \.artworkImage, on: self),
             // 十六进制字符串在这一层转成 Color——LocalPlaybackSource 所在的
             // LyrimuseCore 不引入 SwiftUI,见该属性定义处的注释。
             s.$artworkAccentHex

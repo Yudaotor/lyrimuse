@@ -204,6 +204,12 @@ struct LyricsWindowView: View {
     @ObservedObject private var settings = AppSettings.shared
     @StateObject private var windowController = LyricsWindowController()
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    // 正在拖进度条时手指所在的比例(0~1);没在拖就是 nil。拖动期间进度条和时间文字都显示
+    // 这个值而不是真实播放位置,松手才发 seek —— 见 progressBar 里的注释。
+    // 用 @GestureState:手势被取消时会自动复位,不会像 @State 那样永久卡住(理由同上)。
+    @GestureState private var scrubbingFraction: Double?
+    // 进度条那一块的实际宽度,拖拽时换算比例用(见 progressBar 里为什么不用 GeometryReader 包)。
+    @State private var scrubWidth: CGFloat = 0
 
     var body: some View {
         ScrollViewReader { scrollProxy in
@@ -368,9 +374,16 @@ struct LyricsWindowView: View {
                     }
                 }
             }
+            // 动画收在 overlay 内容上,而不是挂在整张卡片的最外层。
+            //
+            // 挂在最外层时,这个 0.5s 的动画作用域会覆盖卡片自身的几何——只要有别的状态在
+            // 同一个更新事务里改变了布局(2026-08-05 实测坐实的那次:anchor 到达让进度条那
+            // 一行插进 VStack,整个左栏跟着重排),这次布局位移就会被它一起 animate 成缓慢
+            // 飘移,表现成"进度条从上面飘下来"。它要动画的本来只是"换歌时封面图交叉淡入"
+            // 这一件事,不该有能力动画到版式。
+            .animation(.easeInOut(duration: 0.5), value: poller.artworkData)
             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
             .shadow(color: .black.opacity(hasArtworkBackground ? 0.45 : 0.2), radius: 26, y: 12)
-            .animation(.easeInOut(duration: 0.5), value: poller.artworkData)
     }
 
     private var trackInfoRow: some View {
@@ -402,11 +415,27 @@ struct LyricsWindowView: View {
         } else if let paused = poller.pausedPositionMs, let duration = poller.currentDurationMs, duration > 0 {
             // 暂停:显示冻结位置(anchor 此时是 nil,见 pausedPositionMs 定义处注释)。
             progressBar(positionMs: paused, durationMs: duration)
+        } else {
+            // 什么位置数据都还没有(刚打开窗口、poller 还没读到第一份快照)时**占住同样的
+            // 空间**,而不是整块不渲染。
+            //
+            // 2026-08-05 用户反馈"首次进入时进度条会从上面飘下来到对应位置"的根因就在这里:
+            // 原来这个分支什么都不渲染,等 anchor 到达才把这一行插进 playerPane 的 VStack,
+            // 于是整个左栏的 Spacer 重新分配、上下内容各自位移十几 pt;而这块布局变化恰好
+            // 落在 artworkCard 那条 0.5s easeInOut 动画的同一个更新事务里,被它一起animate
+            // 成了"缓慢飘移"。占住位之后布局从第一帧起就是终态,插入这件事本身不再发生。
+            //
+            // .hidden() 保留布局、不参与命中测试;durationMs 传 0,progressBar 里的手势有
+            // `durationMs > 0` 守卫,不会误发 seek。
+            progressBar(positionMs: 0, durationMs: 0).hidden()
         }
     }
 
     private func progressBar(positionMs: Int, durationMs: Int) -> some View {
-        let fraction = durationMs > 0 ? min(1, max(0, Double(positionMs) / Double(durationMs))) : 0
+        // 拖动期间显示手指按住的位置,而不是真实播放位置——松手才真的发 seek。拖动中
+        // 播放器还在按旧位置走,若这里显示真实位置,进度条会在手指底下往回跳。
+        let shownMs = scrubbingFraction.map { Int($0 * Double(durationMs)) } ?? positionMs
+        let fraction = durationMs > 0 ? min(1, max(0, Double(shownMs) / Double(durationMs))) : 0
         return VStack(spacing: 5) {
             GeometryReader { g in
                 ZStack(alignment: .leading) {
@@ -414,13 +443,52 @@ struct LyricsWindowView: View {
                     Capsule().fill(primaryTextColor.opacity(0.85))
                         .frame(width: max(4, g.size.width * fraction))
                 }
-                .animation(reduceMotion ? nil : .linear(duration: 1), value: fraction)
+                // 拖动期间不要补间动画:那 1 秒的 .linear 会让进度条追着手指慢慢挪,手感发黏。
+                .animation(reduceMotion || scrubbingFraction != nil ? nil : .linear(duration: 1), value: fraction)
             }
             .frame(height: 4)
+            // 命中区**只覆盖进度条这一行**,不含下面的时间行。原来把手势挂在整个 VStack 上,
+            // 于是点右侧那个"剩余时间"文字就等于 seek 到 ~95%(把这首歌跳过去)、点左侧已播
+            // 时间则从头重播——那两个看起来是纯静态标签的文字,点一下就毁掉当前播放。
+            //
+            // 上下各撑 9pt 让 4pt 的条好按,再用**等量负 padding** 把布局高度抵消回去:
+            // 这块 AM 风格的间距是逐像素对着截图调过的,不能因为要加命中区就长高 18pt。
+            .padding(.vertical, 9)
+            .contentShape(Rectangle())
+            .padding(.vertical, -9)
+            // 量宽度的 background 和手势必须挂在**同一个**视图上,location.x 与 scrubWidth
+            // 才在同一个坐标系里。不把它包进 GeometryReader:那个是贪心的,会撑满可用空间。
+            .background(
+                GeometryReader { g in
+                    Color.clear
+                        .onAppear { scrubWidth = g.size.width }
+                        .onChange(of: g.size.width) { _, w in scrubWidth = w }
+                }
+            )
+            .gesture(
+                // minimumDistance: 0 让"点一下就跳"也能用,不用真的拖开一段距离。
+                //
+                // 用 @GestureState 而不是 @State 存拖动位置:SwiftUI 在手势被**取消**时
+                // (拖动过程中宿主子树被移出层级,比如这首歌播完/被暂停,进度条所在的条件
+                // 分支整块被摘掉)不会调 onEnded,用 @State 的话 scrubbingFraction 会永久
+                // 停在最后一次 onChanged 的值,进度条和两个时间文字从此冻结、补间动画也被
+                // 永久关掉,只有再完整拖一次才自愈。@GestureState 在手势结束或取消时自动
+                // 复位成初始值,天然没有这个问题。
+                DragGesture(minimumDistance: 0)
+                    .updating($scrubbingFraction) { value, state, _ in
+                        guard durationMs > 0, scrubWidth > 0 else { return }
+                        state = min(1, max(0, value.location.x / scrubWidth))
+                    }
+                    .onEnded { value in
+                        guard durationMs > 0, scrubWidth > 0 else { return }
+                        let f = min(1, max(0, value.location.x / scrubWidth))
+                        poller.seek(toMs: Int(f * Double(durationMs)))
+                    }
+            )
             HStack {
-                Text(Self.formatTime(ms: positionMs))
+                Text(Self.formatTime(ms: shownMs))
                 Spacer()
-                Text("-" + Self.formatTime(ms: max(0, durationMs - positionMs)))
+                Text("-" + Self.formatTime(ms: max(0, durationMs - shownMs)))
             }
             .font(.system(size: 11))
             .monospacedDigit()
