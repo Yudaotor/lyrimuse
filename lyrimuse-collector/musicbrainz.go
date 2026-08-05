@@ -144,11 +144,50 @@ type mbSearchResponse struct {
 	} `json:"artists"`
 }
 
+type mbAlias struct {
+	Name   string `json:"name"`
+	Locale string `json:"locale"`
+}
+
 type mbArtistWithAliases struct {
-	Aliases []struct {
-		Name   string `json:"name"`
-		Locale string `json:"locale"`
-	} `json:"aliases"`
+	// Country 是这次收紧判定的关键字段(2026-08-05 加,见 pickChineseAlias 注释)。
+	Country string    `json:"country"`
+	Aliases []mbAlias `json:"aliases"`
+}
+
+// 中文圈地区——只有这些地区的艺人,MusicBrainz 上那条中文别名才是"他本人的名字";
+// 其它地区(尤其欧美)艺人的中文别名只是面向中文市场的译名,不该拿来当规范名。
+var chineseSpeakingCountries = map[string]bool{
+	"CN": true, "TW": true, "HK": true, "MO": true, "SG": true,
+}
+
+// pickChineseAlias 从别名列表里挑出该采用的中文名,挑不到返回空串。纯函数,有单测。
+//
+// ⚠️ 2026-08-05 修的真实 bug:原来这里只要"含汉字且 locale 不是 ja"就直接采纳第一条,
+// 结果把欧美艺人的中文译名也当成了规范名——实测 Michael Jackson 在 MusicBrainz 上就有
+// 一条 `迈克尔·杰克逊`(locale=yue_Hans_CN、type=Artist name、primary=true),于是所有
+// 新解析的 MJ 曲目历史里都显示成"迈克尔·杰克逊",跟同一批老缓存里的英文名不一致。
+//
+// 判据只能用艺人所属地区(country),不能用别名自己的 type/primary:实测坐实
+// Michael Jackson 那条中文别名的 type 同样是 "Artist name"、primary 同样是 true,跟
+// 陈柏宇(HK,中文名确实是本名)那条一模一样,靠别名自身字段完全区分不开。
+//
+// country 缺失时一律不采纳——保守选择,代价很小:canonical_artist 是一条四层解析链,
+// 这里放弃之后网易云那一层会接手,而真正的中文歌手在网易云本来就返回中文名。
+func pickChineseAlias(aliases []mbAlias, country string) string {
+	if !chineseSpeakingCountries[strings.ToUpper(strings.TrimSpace(country))] {
+		return ""
+	}
+	for _, al := range aliases {
+		// 仍然排除明确标了日文 locale 的别名(日文汉字别名不是中文名)。
+		if al.Locale == "ja" {
+			continue
+		}
+		if containsHan(al.Name) {
+			return toSimplified(al.Name)
+		}
+	}
+	return ""
 }
 
 // musicbrainzMinScore 是"认为搜索命中的确实是这个歌手"的置信度门槛——2026-07-30 实测
@@ -183,15 +222,7 @@ func lookupMusicBrainzChineseAlias(rawArtist string) string {
 	if err := mbGetJSON(aliasURL, &withAliases); err != nil {
 		return ""
 	}
-	for _, al := range withAliases.Aliases {
-		if al.Locale == "ja" {
-			continue
-		}
-		if containsHan(al.Name) {
-			return toSimplified(al.Name)
-		}
-	}
-	return ""
+	return pickChineseAlias(withAliases.Aliases, withAliases.Country)
 }
 
 func mbGetJSON(url string, v any) error {
