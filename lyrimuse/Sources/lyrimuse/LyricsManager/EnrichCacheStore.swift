@@ -1,4 +1,5 @@
 import Foundation
+import LyrimuseCore
 import os
 
 private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "lyrics-manager")
@@ -214,7 +215,12 @@ public final class EnrichCacheStore: ObservableObject {
         entry.removeValue(forKey: "lyrics_yrc")
         raw[key] = entry
         // 只删 .yrc 文件,其它变体文件不动——跟上面 JSON 侧"只清掉这一个字段"的语义对应。
-        try? FileManager.default.removeItem(at: Self.lyricsDir.appendingPathComponent(Self.sanitizeLyricsFilename(key) + ".yrc"))
+        // 普通名和带消歧后缀两种形态都要删:这个 key 在碰撞组里时磁盘上只有后一种(理由见
+        // EnrichCacheKeys.exportedFileNames 的注释),只删普通名的话残留的 .yrc 会在
+        // collector 重启时被 importLyricsFromFiles 导回来,逐字时间轴自己长回去。
+        for base in [EnrichCacheKeys.sanitizeFilename(key), EnrichCacheKeys.disambiguatedName(forKey: key)] {
+            try? FileManager.default.removeItem(at: Self.lyricsDir.appendingPathComponent(base + ".yrc"))
+        }
         await persistAndRestart()
         rebuildSummaries()
     }
@@ -232,11 +238,51 @@ public final class EnrichCacheStore: ObservableObject {
     // 没删),会在 collector 启动阶段就把刚删除的条目复活并写回磁盘,不需要等用户之后
     // 再听一首歌才触发。现在改成先删文件、让 collector 重启时看到的磁盘状态已经是
     // "没有这个 key"。
+    //
+    // 2026-08-05 实测排查坐实的卡顿修复:原来这里是 `await persistAndRestart()` 之后才
+    // rebuildSummaries(),也就是列表要等 collector 重启完才更新。实测重启是唯一的大头——
+    // JSON 校验+序列化 8.9MB+原子写盘合计只要 26ms,而 `launchctl kickstart` 在"距上次
+    // 重启不久"时会原地等满 launchd 给这个 LaunchAgent 配的 `minimum runtime = 10`
+    // (实测连续两次:第一次 0.02 秒、第二次 9.02 秒)。用户视角就是"点了删除,列表卡住
+    // 十秒才把那一行去掉"。
+    //
+    // 改成:先删内存+删文件+刷列表(界面立刻响应),再落盘(26ms),重启改成不阻塞的后台
+    // 排队。重启本身仍然必须做——collector 在内存里持有这份缓存,不让它重新读盘的话它
+    // 会把删掉的条目按内存旧值重新写回磁盘、把删除操作复活。
     public func delete(key: String) async {
-        raw.removeValue(forKey: key)
-        deleteExportedLyricsFile(forKey: key)
-        await persistAndRestart()
+        await delete(keys: [key])
+    }
+
+    // 「歌词管理」多选后批量删除。**不是** N 次 delete(key:) 的循环:那样会做 N 次
+    // rebuildSummaries()(852 条 compactMap + 带 primaryArtist 比较器的全量排序)和 N 次
+    // persist()(整份 9.4MB JSON 校验+序列化+原子写,实测单次 26ms),全都在 MainActor 上
+    // 同步跑——删 50 条就是 1 秒多、删几百条是十几秒的界面假死,正是这次要避免的东西。
+    // 三个重活各做一次即可。
+    //
+    // 顺序跟单条版完全一致、不能动:先删文件 → 再刷列表 → 再落盘 → 最后才排队重启
+    // collector。删文件必须排在重启之前,理由见上面那一大段注释(collector 启动时
+    // importLyricsFromFiles 会从残留文件把条目复活)。
+    public func delete(keys: Set<String>) async {
+        // 只删真的还在缓存里的 key——选中集合里可能残留已失效的 key(筛选变了/点过刷新/
+        // 别处删过),让它们混进来不会删错东西,但会让"删了 N 条"这个数字虚高。
+        let victims = EnrichCacheKeys.deletionPlan(selected: keys, existing: Set(raw.keys))
+        guard !victims.isEmpty else { return }
+        var removed: [String: [String: Any]] = [:]
+        removed.reserveCapacity(victims.count)
+        for key in victims {
+            if let entry = raw.removeValue(forKey: key) { removed[key] = entry }
+            deleteExportedLyricsFile(forKey: key)
+        }
         rebuildSummaries()
+        guard persist() else {
+            // 写盘失败就把这一批全部放回去——不能让界面显示成"已删除"而磁盘上其实还在。
+            // 已经删掉的导出文件不用管:collector 启动时会按缓存内容重新导出一遍。
+            for (key, entry) in removed { raw[key] = entry }
+            rebuildSummaries()
+            return
+        }
+        scheduleCollectorRestart()
+        refreshSizeBytes()
     }
 
     // "缓存占用查看 + 一键清空"里的清空动作——真删除,不是软标记:清空 JSON 侧的 raw
@@ -248,9 +294,10 @@ public final class EnrichCacheStore: ObservableObject {
         if let urls = try? FileManager.default.contentsOfDirectory(at: Self.lyricsDir, includingPropertiesForKeys: nil) {
             for url in urls { try? FileManager.default.removeItem(at: url) }
         }
-        await persistAndRestart()
         rebuildSummaries()
         totalSizeBytes = 0
+        guard persist() else { return }
+        scheduleCollectorRestart()
     }
 
     // 跟 collector/lyricsexport.go 的 sanitizeLyricsFilename 逐字对应的 Swift 版本——
@@ -259,11 +306,27 @@ public final class EnrichCacheStore: ObservableObject {
     // 走样"必须收敛成一份的那类逻辑(跟 search-lyrics 复用 scoredLyricCandidates 的
     // 场景不同,那边是真的检索/打分逻辑)。
     private static func sanitizeLyricsFilename(_ key: String) -> String {
-        var name = key.replacingOccurrences(of: "|", with: " - ")
-        for c in ["/", ":", "*", "?", "\"", "<", ">", "\\"] {
-            name = name.replacingOccurrences(of: c, with: "_")
+        EnrichCacheKeys.sanitizeFilename(key)
+    }
+
+    // 这个 key 在 lyrics/ 目录下应该用哪个文件名 base 写文件——必须跟 collector 实际会用的
+    // 那个一致。碰撞组(sanitize 结果只差大小写的多个 key)内的成员用带 crc32 后缀的名字,
+    // 其余用普通名,规则跟 collector/lyricsexport.go:105-141 对齐。
+    //
+    // ⚠️ 2026-08-05 排查坐实的真实 bug:改动之前 writeLyricsFiles 一律写普通名。碰撞组里的
+    // 条目在磁盘上本来只有带后缀的那份(Go 会主动删普通名),于是"保存修改"写出一个普通名
+    // 文件、带后缀的旧文件还在,下次 collector 重启时 importLyricsFromFiles 把这两份文件
+    // 当成两组分别处理,而两组的头部标签完全一样、解析出的 key 是同一个,于是各自往
+    // enrichCache[key] 写一次——谁最后写谁生效,而它遍历的是 Go map(顺序每次进程启动都
+    // 随机)。也就是说这 219 条(本机实测占 25.7%)上的手动修改是**每次重启随机决定生效还是
+    // 被旧内容覆盖回去**。现在改成写 collector 认的那个名字,并在 writeLyricsFiles 里顺手
+    // 清掉另一种形态的残留,消掉"同一个 key 对应两组文件"这个根源。
+    private func exportBaseName(forKey key: String) -> String {
+        let fold = EnrichCacheKeys.sanitizeFilename(key).lowercased()
+        let collides = raw.keys.contains { other in
+            other != key && EnrichCacheKeys.sanitizeFilename(other).lowercased() == fold
         }
-        return name.trimmingCharacters(in: .whitespacesAndNewlines)
+        return collides ? EnrichCacheKeys.disambiguatedName(forKey: key) : EnrichCacheKeys.sanitizeFilename(key)
     }
 
     // 找不到文件(比如这条从来没有译文/罗马音/逐字时间轴)是正常情况,静默忽略——这只是
@@ -272,14 +335,13 @@ public final class EnrichCacheStore: ObservableObject {
     // lyricsFileSuffixes 全部 4 个后缀都试一遍,跟 writeLyricsFiles 对称——"删除"要
     // 清掉整个歌词文件族,不只是纯歌词那一份。
     private func deleteExportedLyricsFile(forKey key: String) {
-        let base = Self.sanitizeLyricsFilename(key)
-        for suffix in Self.lyricsFileSuffixes {
-            try? FileManager.default.removeItem(at: Self.lyricsDir.appendingPathComponent(base + suffix))
+        for name in EnrichCacheKeys.exportedFileNames(forKey: key) {
+            try? FileManager.default.removeItem(at: Self.lyricsDir.appendingPathComponent(name))
         }
     }
 
     // lyricsFileSuffixes 跟 collector/lyricsexport.go 的同名变量逐一对应。
-    private static let lyricsFileSuffixes = [".lrc", ".tr.lrc", ".roma.lrc", ".yrc"]
+    private static let lyricsFileSuffixes = EnrichCacheKeys.lyricsFileSuffixes
 
     // writeLyricsFiles 把 saveEdit 对 raw[key] 做的改动,同步写成 lyrics/ 文件夹下对应的
     // 文件,跟 collector/lyricsexport.go 的 exportLyricsFiles/lyricsFileHeader 是同一份
@@ -291,7 +353,17 @@ public final class EnrichCacheStore: ObservableObject {
     // 任何残留的文件名碰撞,不需要在 Swift 这边重复实现一遍。
     private func writeLyricsFiles(key: String, lyrics: String, tr: String, roma: String, yrc: String, source: String, manual: Bool) {
         guard let parts = Self.splitKey(key) else { return }
-        let base = Self.sanitizeLyricsFilename(key)
+        let base = exportBaseName(forKey: key)
+        // 先清掉"另一种形态"下可能残留的整族文件——不然同一个 key 会同时对应两组文件,
+        // collector 导入时两组各写一次 enrichCache[key],生效哪一份取决于 Go map 的随机
+        // 遍历顺序(见 exportBaseName 的注释)。这里必须精确取"另一个 base",不能用
+        // hasPrefix 筛:普通名恰好是带哈希名的前缀("X" 是 "X~00fad0" 的前缀),用 hasPrefix
+        // 在 base 是普通名时一个都清不掉。
+        let plainBase = EnrichCacheKeys.sanitizeFilename(key)
+        let staleBase = base == plainBase ? EnrichCacheKeys.disambiguatedName(forKey: key) : plainBase
+        for suffix in EnrichCacheKeys.lyricsFileSuffixes {
+            try? FileManager.default.removeItem(at: Self.lyricsDir.appendingPathComponent(staleBase + suffix))
+        }
         var header = "[ar:\(parts.artist)]\n[ti:\(parts.title)]\n[al:\(parts.album)]\n"
         if !source.isEmpty { header += "[source:\(source)]\n" }
         if manual { header += "[manual:1]\n" }
@@ -315,11 +387,15 @@ public final class EnrichCacheStore: ObservableObject {
     // LaunchAgent 配了 `minimum runtime = 10`,两次重启间隔太近时 kickstart 会原地等满
     // 10 秒才返回,如果在 MainActor 上同步等待,期间整个 app(窗口、菜单栏)会彻底冻住
     // 不响应。
-    private func persistAndRestart() async {
+    // 只负责把 raw 落盘,不碰 collector。实测这一整套(校验+序列化 8.9MB+原子写盘)只要
+    // 26ms,留在 MainActor 上同步做完全没问题,不值得为它多绕一层异步。
+    // 返回是否成功——调用方据此决定要不要回滚内存状态。
+    @discardableResult
+    private func persist() -> Bool {
         guard JSONSerialization.isValidJSONObject(raw) else {
             lastError = L10n.t("内部数据不是合法 JSON,已放弃保存")
             logger.error("raw dict is not valid JSON, aborting save")
-            return
+            return false
         }
         do {
             let data = try JSONSerialization.data(withJSONObject: raw)
@@ -327,8 +403,64 @@ public final class EnrichCacheStore: ObservableObject {
         } catch {
             lastError = String(format: L10n.t("写入本地记录文件失败: %@"), error.localizedDescription)
             logger.error("write failed: \(String(describing: error), privacy: .public)")
+            return false
+        }
+        return true
+    }
+
+    // 删完之后把工具栏那个"缓存占用"数字刷新一遍。它原来只有 reload() 会重算、clearAll()
+    // 会硬置 0,单条 delete 完全不碰——删一条时误差小到没人注意,但批量删掉几百条之后,那个
+    // 数字还挂着删之前的值,而它恰好就是"清空全部缓存"这个破坏性入口的标签,显示一个明显
+    // 偏大的陈旧值容易让人误判。
+    //
+    // 只重算大小,不走 reload():reload() 会把 9.4MB JSON 重新读盘+解析一遍,而 raw 此刻
+    // 已经是最新的权威内容(我们刚 persist 过),没必要再解析一次;而且 reload() 会顺手把
+    // lastError 清掉,会吞掉刚刚可能产生的错误提示。
+    private func refreshSizeBytes() {
+        let cacheURL = Self.cacheURL
+        let lyricsDir = Self.lyricsDir
+        Task { [weak self] in
+            let bytes = await Task.detached(priority: .utility) {
+                Self.directorySizeBytes(lyricsDir) + Self.fileSizeBytes(cacheURL)
+            }.value
+            self?.totalSizeBytes = bytes
+        }
+    }
+
+    // 不阻塞界面的 collector 重启,并且**合并**连续多次请求:已经有一次在飞就直接返回。
+    // 合并是安全的——collector 启动时重新读盘,读到的必然是当时磁盘上最新的内容(我们
+    // 总是先 persist() 再排队重启);而排队只会让 launchd 的 10 秒 minimum-runtime 惩罚
+    // 一次次叠加,连删几条会越来越慢,却不会让最终结果更正确。
+    private var pendingRestart: Task<Void, Never>?
+    // 有重启在飞期间又落盘过——收尾时需要再补一次重启,见下面的注释。
+    private var needsFollowUpRestart = false
+
+    private func scheduleCollectorRestart() {
+        if pendingRestart != nil {
+            // ⚠️ 不能简单地"已经有一次在飞就直接丢弃这次请求":在飞的那一次可能已经把
+            // collector 杀掉重启、而新进程已经读完盘了,此刻才发生的这次落盘它就看不到,
+            // collector 内存里的旧值之后会把刚删的条目写回磁盘、复活它。窗口很窄(新进程
+            // 启动读盘 与 kickstart 进程退出后本任务恢复执行 几乎同时),但不是不存在。
+            // 记一个标记,等在飞那次收尾时补一次重启——不管期间删了多少条,最多只补一次,
+            // 重启次数仍然有界。
+            needsFollowUpRestart = true
             return
         }
+        pendingRestart = Task { [weak self] in
+            let ok = await CollectorControl.restartAndWaitAsync()
+            guard let self else { return }
+            self.pendingRestart = nil
+            if !ok { self.lastError = L10n.t("重启 collector 失败") }
+            PlaybackCoordinator.shared.refreshLyricsForCurrentTrack()
+            if self.needsFollowUpRestart {
+                self.needsFollowUpRestart = false
+                self.scheduleCollectorRestart()
+            }
+        }
+    }
+
+    private func persistAndRestart() async {
+        guard persist() else { return }
         if await !CollectorControl.restartAndWaitAsync() {
             lastError = L10n.t("重启 collector 失败")
         }

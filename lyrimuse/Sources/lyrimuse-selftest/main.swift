@@ -395,6 +395,182 @@ do {
     expectEqual(MenuBarMarquee.window(text: "0123456789", maxChars: 4, step: 0, holdSteps: 0), "0123", "跑马灯: holdSteps=0 时开头仍会露出(不漏首字)")
 }
 
+// ---- EnrichCacheKeys: 缓存 key ↔ lyrics/ 导出文件名(2026-08-05) ----
+//
+// 2026-08-05 实测排查坐实的真实 bug 的回归测试:collector 会给"sanitize 出来的文件名只差
+// 大小写"的碰撞组成员改用带 crc32 后缀的文件名(lyricsexport.go:105-141),而 Swift 侧原来
+// 一律只认普通名——删除时漏删 → collector 重启后 importLyricsFromFiles 从残留文件把条目
+// 复活(本机 852 条里 219 条命中,占 25.7%);保存修改时写出普通名 → 同一个 key 对应两组
+// 文件、导入时各写一次、生效哪份取决于 Go map 的随机遍历顺序。
+// crc32 必须跟 Go 的 hash/crc32.ChecksumIEEE 逐位一致,否则算出来的文件名对不上。
+
+do {
+    // 公认的 CRC-32(IEEE) 标准向量,锁死查表实现本身。
+    expectEqual(EnrichCacheKeys.crc32IEEE(""), UInt32(0), "EnrichCacheKeys: crc32 空串标准向量")
+    expectEqual(EnrichCacheKeys.crc32IEEE("123456789"), UInt32(0xCBF4_3926), "EnrichCacheKeys: crc32 \"123456789\" 标准向量")
+    expectEqual(EnrichCacheKeys.crc32IEEE("a"), UInt32(0xE8B7_BE43), "EnrichCacheKeys: crc32 \"a\" 标准向量")
+
+    // 从本机磁盘上真实存在的两个碰撞文件反推出来的用例(同一首歌只差 feat./Feat. 一个
+    // 字母大小写,两条 key 都真的在缓存里)——这两条锁死的是"Swift 算出来的文件名跟
+    // collector 实际写在磁盘上的那个一模一样"。
+    expectEqual(
+        EnrichCacheKeys.disambiguatedName(forKey: "方大同|张永成 (feat. Ghost Style)|15"),
+        "方大同 - 张永成 (feat. Ghost Style) - 15~00fad0",
+        "EnrichCacheKeys: 消歧文件名跟磁盘上真实文件一致(小写 feat.)"
+    )
+    expectEqual(
+        EnrichCacheKeys.disambiguatedName(forKey: "方大同|张永成 (Feat. Ghost Style)|15"),
+        "方大同 - 张永成 (Feat. Ghost Style) - 15~c8df08",
+        "EnrichCacheKeys: 同一首歌大小写不同的另一条 key 落在不同文件名"
+    )
+}
+
+do {
+    // "|" 换成 " - ",文件系统不安全字符转下划线,跟 collector/lyricsexport.go 的
+    // sanitizeLyricsFilename 对齐。
+    expectEqual(EnrichCacheKeys.sanitizeFilename("Artist|Song|Album"), "Artist - Song - Album", "EnrichCacheKeys: 「|」换成「 - 」")
+    expectEqual(EnrichCacheKeys.sanitizeFilename("A/B|C:D|E*F?"), "A_B - C_D - E_F_", "EnrichCacheKeys: 不安全字符转下划线")
+
+    // 删除必须把两种形态各 4 个后缀全试一遍——漏掉带后缀那 4 个就是上面说的复活 bug。
+    let names = EnrichCacheKeys.exportedFileNames(forKey: "Artist|Song|Album")
+    expectEqual(names.count, 8, "EnrichCacheKeys: 待删文件名 = 普通名4个 + 消歧名4个")
+    expectEqual(names[0], "Artist - Song - Album.lrc", "EnrichCacheKeys: 普通名第一个是 .lrc")
+    expectEqual(names[3], "Artist - Song - Album.yrc", "EnrichCacheKeys: 普通名第四个是 .yrc")
+    expectEqual(
+        names[4], "Artist - Song - Album~\(String(format: "%06x", EnrichCacheKeys.crc32IEEE("Artist|Song|Album") & 0xFF_FFFF)).lrc",
+        "EnrichCacheKeys: 第五个开始是带消歧后缀的同族文件"
+    )
+    // 普通名恰好是消歧名的前缀,所以任何"按前缀筛"的写法都会出错——这条锁死这个陷阱。
+    expectEqual(names[4].hasPrefix("Artist - Song - Album"), true, "EnrichCacheKeys: 消歧名以普通名开头(禁止用 hasPrefix 区分两种形态)")
+}
+
+do {
+    // 选中集合 → 实际删除计划:交集 + 排序。
+    let existing: Set<String> = ["B|b|al2", "A|a|al1", "C|c|al3"]
+    expectEqual(
+        EnrichCacheKeys.deletionPlan(selected: ["A|a|al1", "已经没了|x|y"], existing: existing),
+        ["A|a|al1"],
+        "EnrichCacheKeys: 选中集合里已失效的 key 被剔除"
+    )
+    expectEqual(EnrichCacheKeys.deletionPlan(selected: [], existing: existing), [], "EnrichCacheKeys: 空选中集合不产生删除")
+    expectEqual(
+        EnrichCacheKeys.deletionPlan(selected: existing, existing: existing),
+        ["A|a|al1", "B|b|al2", "C|c|al3"],
+        "EnrichCacheKeys: 全选时按 key 排序返回,顺序稳定可复现"
+    )
+    expectEqual(
+        EnrichCacheKeys.deletionPlan(selected: ["X|x|x"], existing: existing), [],
+        "EnrichCacheKeys: 全部失效时删除计划为空(调用方据此直接返回,不做空写盘)"
+    )
+}
+
+// ---- LyricsColumnWidths: 「歌词管理」可拖拽列宽的夹值逻辑(2026-08-05) ----
+//
+// 三条分隔条语义不对称:第 0 条(歌名|歌手)左边是弹性的歌名列,只能改「歌手」、由歌名被动
+// 吸收;第 1/2 条是标准的"此消彼长、总宽不变"。夹值要同时守住三件事:每列不低于自己的下限、
+// 歌名不低于 minTitle、单列不超过 maxColumn。
+
+do {
+    let W = LyricsColumnWidths.self
+    let d = W.defaults
+    // 表头总宽 630(navigationSplitViewColumnWidth 的 ideal 值),chrome = 12*2 + 8*3 = 48
+    let total: CGFloat = 630, chrome: CGFloat = 48
+
+    // 第 0 条:边界右移 = 歌名变宽 → 歌手变窄(减号方向不能搞反)
+    expectEqual(
+        W.dragged(from: d, divider: 0, dx: 20, totalWidth: total, chrome: chrome).artist,
+        d.artist - 20, "列宽: 拖第0条向右 → 歌手变窄(歌名吸收)"
+    )
+    expectEqual(
+        W.dragged(from: d, divider: 0, dx: -20, totalWidth: total, chrome: chrome).artist,
+        d.artist + 20, "列宽: 拖第0条向左 → 歌手变宽"
+    )
+    // 第 0 条只动歌手,不该碰专辑/来源
+    do {
+        let r = W.dragged(from: d, divider: 0, dx: 30, totalWidth: total, chrome: chrome)
+        expectEqual(r.album, d.album, "列宽: 拖第0条不影响专辑")
+        expectEqual(r.source, d.source, "列宽: 拖第0条不影响来源")
+    }
+    // 下限:再怎么拖也不低于 minColumn
+    expectEqual(
+        W.dragged(from: d, divider: 0, dx: 9999, totalWidth: total, chrome: chrome).artist,
+        W.minColumn, "列宽: 第0条拖到底停在列下限"
+    )
+    // 上限:歌名必须留住 minTitle —— 630-48-140-110-84 = 248,但单列上限 280 更宽松,取 248
+    expectEqual(
+        W.dragged(from: d, divider: 0, dx: -9999, totalWidth: total, chrome: chrome).artist,
+        total - chrome - W.minTitle - d.album - d.source, "列宽: 第0条反向拖到底时歌名仍保住 minTitle"
+    )
+    // 可用宽度很小时上下限打角:结果必须仍 >= minColumn(不能返回比下限还小的值)
+    expectEqual(
+        W.dragged(from: d, divider: 0, dx: -9999, totalWidth: 200, chrome: chrome).artist >= W.minColumn,
+        true, "列宽: 可用宽度过小时不返回小于下限的值"
+    )
+}
+
+do {
+    let W = LyricsColumnWidths.self
+    let d = W.defaults
+    let total: CGFloat = 630, chrome: CGFloat = 48
+
+    // 第 1 条(歌手|专辑):此消彼长,两列之和不变 → 歌名宽度完全不受影响
+    do {
+        let r = W.dragged(from: d, divider: 1, dx: 25, totalWidth: total, chrome: chrome)
+        expectEqual(r.artist, d.artist + 25, "列宽: 拖第1条向右 → 歌手变宽")
+        expectEqual(r.album, d.album - 25, "列宽: 拖第1条向右 → 专辑同量变窄")
+        expectEqual(r.artist + r.album, d.artist + d.album, "列宽: 第1条保持两列总宽不变(歌名不受影响)")
+        expectEqual(r.source, d.source, "列宽: 拖第1条不影响来源")
+    }
+    // 第 1 条拖到底:专辑落到下限,总宽仍不变
+    do {
+        let r = W.dragged(from: d, divider: 1, dx: 9999, totalWidth: total, chrome: chrome)
+        expectEqual(r.album, W.minColumn, "列宽: 第1条拖到底时专辑停在下限")
+        expectEqual(r.artist + r.album, d.artist + d.album, "列宽: 第1条拖到底仍保持总宽不变")
+    }
+    // 第 2 条(专辑|来源):来源列有更高的下限(要放得下胶囊徽章)
+    do {
+        let r = W.dragged(from: d, divider: 2, dx: 9999, totalWidth: total, chrome: chrome)
+        expectEqual(r.source, W.minSourceColumn, "列宽: 第2条拖到底时来源停在它专属的更高下限")
+        expectEqual(r.album + r.source, d.album + d.source, "列宽: 第2条拖到底仍保持总宽不变")
+    }
+}
+
+do {
+    let W = LyricsColumnWidths.self
+    let chrome: CGFloat = 48
+    // fitted:窗口够宽时原样返回,不动用户存下来的值
+    expectEqual(W.fitted(W.defaults, totalWidth: 900, chrome: chrome), W.defaults, "列宽: 窗口够宽时 fitted 原样返回")
+    // headerWidth 还没量到(0)时也原样返回,首帧不会算出奇怪的宽度
+    expectEqual(W.fitted(W.defaults, totalWidth: 0, chrome: chrome), W.defaults, "列宽: 尚未量到宽度时 fitted 不做收敛")
+    // 三列都拖得很宽之后把窗口拖窄:必须等比收敛到"歌名刚好还有 minTitle"
+    do {
+        let wide = LyricsColumnWidths(artist: 240, album: 240, source: 200)
+        let r = W.fitted(wide, totalWidth: 600, chrome: chrome)
+        expectEqual(r.total <= 600 - chrome - W.minTitle + 0.001, true, "列宽: 变窄后收敛到歌名保住 minTitle")
+        expectEqual(r.artist >= W.minColumn && r.album >= W.minColumn && r.source >= W.minSourceColumn,
+                    true, "列宽: 收敛后每列仍不低于各自下限")
+    }
+    // 极窄到连三列下限都塞不下 → 全部回落下限(宁可挤窄歌名,也不让某列消失)
+    do {
+        let r = W.fitted(W.defaults, totalWidth: 240, chrome: chrome)
+        expectEqual(r, LyricsColumnWidths(artist: W.minColumn, album: W.minColumn, source: W.minSourceColumn),
+                    "列宽: 极窄时全部回落到各列下限")
+    }
+}
+
+do {
+    let W = LyricsColumnWidths.self
+    // sanitized:挡住手改 UserDefaults / 老版本残留写进来的非法值,整组退回默认
+    expectEqual(W.sanitized(W.defaults), W.defaults, "列宽: 合法值原样通过")
+    expectEqual(W.sanitized(LyricsColumnWidths(artist: 0, album: 110, source: 84)), W.defaults, "列宽: 0 宽度整组退回默认")
+    expectEqual(W.sanitized(LyricsColumnWidths(artist: -50, album: 110, source: 84)), W.defaults, "列宽: 负宽度整组退回默认")
+    expectEqual(W.sanitized(LyricsColumnWidths(artist: 5000, album: 110, source: 84)), W.defaults, "列宽: 超过单列上限整组退回默认")
+    expectEqual(W.sanitized(LyricsColumnWidths(artist: .nan, album: 110, source: 84)), W.defaults, "列宽: NaN 整组退回默认")
+    expectEqual(W.sanitized(LyricsColumnWidths(artist: .infinity, album: 110, source: 84)), W.defaults, "列宽: 无穷大整组退回默认")
+    // 来源列卡在普通下限与它专属下限之间(56~70)也算非法 —— 徽章会被截断
+    expectEqual(W.sanitized(LyricsColumnWidths(artist: 96, album: 110, source: 60)), W.defaults, "列宽: 来源列低于专属下限整组退回默认")
+}
+
 // ---- 汇总 ----
 
 if failures == 0 {

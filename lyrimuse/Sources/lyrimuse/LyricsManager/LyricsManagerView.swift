@@ -93,12 +93,66 @@ func sourceDisplayName(_ source: String) -> String {
 
 // 歌名/歌手/专辑/来源四列表头和每一行列表项共用同一组列宽——歌名是主列、拿剩余空间,
 // 后三列固定宽度+单行截断,这样表头文字和每行内容的起始位置对得上。
-private enum LyricsListColumns {
-    static let artistWidth: CGFloat = 96
-    static let albumWidth: CGFloat = 110
-    // 68pt 只够放得下裸文字,换成徽章样式(见 SourceBadge)之后要留出胶囊背景的内边距,
-    // 不然"网易云音乐"这种四字来源会被截断,加宽到 84pt。
-    static let sourceWidth: CGFloat = 84
+// 列宽拖拽手柄:1pt 的细线 + 9pt 的命中区(线本身太细,按 HIG 可拖拽目标不该小于 8pt)。
+// 单独抽成一个 View 是为了让 hover 光标的 push/pop 有地方存状态自己配平——onHover 的退出
+// 事件在拖拽中/窗口切走时可能丢,无条件 pop 会把别人压进去的光标弹掉,连续 push 又会让
+// 双箭头光标一直卡住不还原。
+// 列宽拖拽 + 行内容边界测量共用的命名坐标空间。挂在侧栏最外层的 VStack 上(不是表头上):
+// 表头的拖拽手势和列表里每一行都要在**同一个**空间里报坐标才能互相对齐。这个 VStack
+// 不随列宽变化而移动,所以也是拖拽位移的可靠参照系。
+private enum LyricsColumnHeaderSpace {
+    static let name = "lyricsColumnHeader"
+}
+
+// 列表里"一行内容"的实际左右边界。List(.inset) 自己给每行加的 inset 是 AppKit 给的、会随
+// 系统版本变(实测 leading≈16pt、trailing≈33pt,后者含滚动条留白),不能在表头那边写死一个
+// 猜的数字——让行自己量出来往上报,表头据此对齐,分隔线才真的画在列边界上。
+private struct RowContentBounds: Equatable {
+    var minX: CGFloat
+    var maxX: CGFloat
+}
+
+private struct RowContentBoundsKey: PreferenceKey {
+    static let defaultValue: RowContentBounds? = nil
+    // 取第一个上报的即可——所有行的左右边界都一样,没必要合并。
+    static func reduce(value: inout RowContentBounds?, nextValue: () -> RowContentBounds?) {
+        if value == nil { value = nextValue() }
+    }
+}
+
+private struct ColumnDividerHandle: View {
+    let onDrag: (CGFloat) -> Void
+    let onDragEnd: () -> Void
+    let onDoubleClick: () -> Void
+    @State private var pushedCursor = false
+
+    var body: some View {
+        Rectangle()
+            .fill(Color.secondary.opacity(0.28))
+            .frame(width: 1)
+            .frame(width: 9)
+            .contentShape(Rectangle())
+            .onHover { inside in
+                if inside, !pushedCursor { NSCursor.resizeLeftRight.push(); pushedCursor = true }
+                if !inside, pushedCursor { NSCursor.pop(); pushedCursor = false }
+            }
+            .onDisappear { if pushedCursor { NSCursor.pop(); pushedCursor = false } }
+            // minimumDistance: 1 而不是 0——0 会让双击的第一次按下就被当成拖拽开始,
+            // 下面那个双击复位手势永远收不到。
+            //
+            // ⚠️ 位移必须在**表头这个固定坐标空间**里算(location - startLocation),不能用
+            // value.translation:translation 是相对手势所在视图算的,而这个手柄正是随列宽
+            // 变化而移动的那个视图——拖宽一点手柄就往右跑一点,光标相对它的偏移被吃掉,
+            // 形成反馈回路。2026-08-05 真机实测坐实:拖 40pt 只涨了 22pt,而且本该守恒的
+            // "歌手+专辑总宽"也被破坏(歌名被反向挤窄 13.5pt)。命名坐标空间挂在表头容器上,
+            // 它不随列宽改变,量出来的位移才跟鼠标实际移动一致。
+            .gesture(
+                DragGesture(minimumDistance: 1, coordinateSpace: .named(LyricsColumnHeaderSpace.name))
+                    .onChanged { onDrag($0.location.x - $0.startLocation.x) }
+                    .onEnded { _ in onDragEnd() }
+            )
+            .onTapGesture(count: 2, perform: onDoubleClick)
+    }
 }
 
 // 歌词管理窗口:浏览目前 collector 缓存了哪些歌的歌词、来源是什么,支持手动纠正内容、
@@ -111,7 +165,18 @@ struct LyricsManagerView: View {
     // 重新渲染——这个窗口原来不观察 AppSettings,加了才会响应 appLanguage 的变化。
     @ObservedObject private var languageSettings = AppSettings.shared
     @State private var searchText = ""
-    @State private var selectedKey: String?
+    // 多选。原来是单选的 `String?`,那种绑定下 List 完全不响应 Cmd 点选/Shift 连选。
+    // 三态由 selectedKeys.count 决定:0 = 空占位,1 = 原来的单曲详情页,≥2 = 批量操作面板。
+    @State private var selectedKeys: Set<String> = []
+    // 待删 key 的**快照**。删除确认弹窗一律只读这一份,绝不在弹窗回调里现读 selectedKeys:
+    // 弹窗弹出时 List 会失去 first responder,已知会出现 selection 被系统清空的情况,现读
+    // 可能读到空集(什么都没删、用户以为删了)或读到中途被改过的集合。
+    @State private var pendingDeleteKeys: [String] = []
+    @State private var showBatchDeleteConfirm = false
+    // 删完之后 selectedKeys 清空、右侧面板变回空占位,如果一点反馈都没有,用户看到的就是
+    // "列表少了一批、面板莫名变空"。跟这个文件里已有的 showRefreshedFeedback/
+    // showSaveEditFeedback 是同一套写法:短暂切换成"已删除"+对勾,1 秒后自动变回去。
+    @State private var showDeletedFeedback = false
     @State private var editedLyrics = ""
     @State private var editedTr = ""
     @State private var editedRoma = ""
@@ -122,7 +187,16 @@ struct LyricsManagerView: View {
     @State private var editedOffsetSeconds = ""
     @State private var persistedLyricsForOffset = ""
     @State private var persistedYRCForOffset = ""
-    @State private var showDeleteConfirm = false
+    // 列宽(可拖拽调节 + 持久化,见 LyricsColumnWidthsStore)。
+    @ObservedObject private var columnWidths = LyricsColumnWidthsStore.shared
+    // 表头实际渲染宽度,拖拽夹值要用;首帧还没量到时是 0。
+    @State private var headerWidth: CGFloat = 0
+    // 一次拖拽开始那一刻的列宽快照——必须按"起点 + 累计位移"算,不能每次 onChanged 都在
+    // 当前值上叠加增量:DragGesture 的 translation 是相对手势起点的累计值,不是帧间增量,
+    // 叠加会让列宽以平方速度飞出去。
+    @State private var dragStartWidths: LyricsColumnWidths?
+    // List 里一行内容的实际左右边界(由行自己通过 preference 上报,见 RowContentBoundsKey)。
+    @State private var rowContentBounds: RowContentBounds?
     @State private var showSearchSheet = false
     // 2026-08-02 补上——"保存修改"/"移除逐字时间轴"点了之前完全没有任何肉眼可见的
     // 反馈,跟上面 showRefreshedFeedback("刷新"按钮已有的做法)是同一类问题、同一个
@@ -221,6 +295,50 @@ struct LyricsManagerView: View {
         }
     }
 
+    // 只有恰好选中一条时才显示单曲详情页——detail 侧整条链(编辑缓冲区、offset 输入框、
+    // 联网搜索 sheet)都建立在"当前就这一条"上,不能把多选硬塞进去。
+    private var singleSelectedKey: String? {
+        selectedKeys.count == 1 ? selectedKeys.first : nil
+    }
+
+    // 把全部筛选状态拼成一个字符串,只为了给 onChange 当变化信号用——否则要给七个 @State
+    // 各挂一个 onChange 做同一件事(收敛选中项)。
+    //
+    // 分隔符用 U+001F(ASCII 单元分隔符)而不是 "|":searchText、歌手名、专辑名里都可能出现
+    // "|",那样两个不同的筛选状态理论上能拼出同一个 token,onChange 就不会触发、选中项不会
+    // 被收敛(而这个收敛正是防误删的那道防线)。虽然要真撞上得刻意构造,但换个用户输入里
+    // 不可能出现的控制字符是零成本的,不用去论证"实际撞不上"。
+    private var filterToken: String {
+        let sep = "\u{1F}"
+        return [
+            searchText, sourceFilter.id, timingFilter.rawValue,
+            String(manualOnly), String(missingLyricsOnly),
+            artistFilter ?? "", albumFilter ?? "",
+        ].joined(separator: sep)
+    }
+
+    // 选中集合里"当前筛选结果中真的看得见"的那些,按列表显示顺序返回。
+    //
+    // ⚠️ 这是防误删的关键一道:filtered 是计算属性,selectedKeys 是独立 @State,行从筛选
+    // 结果里消失后 SwiftUI 不保证替你把 key 从 selection 里剪掉。真实误操作路径:搜
+    // "Jackson" 多选 8 条 → 清空搜索框 → 点删除,此时那 8 条一条也看不见,弹窗却写着 8 条,
+    // 删完用户完全不知道删了什么,而这个删除是不可逆的(连 lyrics/ 下导出文件一起删)。
+    // 所有删除入口和所有计数都走这个函数,保证"弹窗说删 N 条" == "列表里看得见的 N 条"。
+    // 按 filtered 顺序而不是 Set 顺序,是为了让删除计划稳定可复现。
+    private func orderedVisibleKeys(_ keys: Set<String>) -> [String] {
+        filtered.compactMap { keys.contains($0.key) ? $0.key : nil }
+    }
+
+    private var selectedVisibleKeys: [String] { orderedVisibleKeys(selectedKeys) }
+
+    // 触发删除确认:先把待删清单快照下来再弹窗(理由见 pendingDeleteKeys 的注释)。
+    private func requestDelete(_ keys: Set<String>) {
+        let victims = orderedVisibleKeys(keys)
+        guard !victims.isEmpty else { return }
+        pendingDeleteKeys = victims
+        showBatchDeleteConfirm = true
+    }
+
     private func resetFilters() {
         sourceFilter = .all
         timingFilter = .all
@@ -273,7 +391,26 @@ struct LyricsManagerView: View {
 
                 Spacer()
 
+                // 「全选筛选结果」给一个显式按钮,不能只靠 ⌘A:这个窗口的核心动线正是"在筛选
+                // 栏勾出一批 → 立刻想全选删掉",此时焦点大概率还在上面那个原生搜索框上,⌘A
+                // 会变成"全选搜索框里的文字"。按钮上带的数字跟标题栏副标题「N / 852 首」左边
+                // 那个数完全一致,用户一眼能对上"我选的就是筛出来的这批"。
+                if selectedKeys.isEmpty {
+                    if !filtered.isEmpty {
+                        Button(String(format: L10n.t("全选 %@ 首"), "\(filtered.count)")) {
+                            selectedKeys = Set(filtered.map(\.key))
+                        }
+                        .foregroundStyle(.secondary)
+                    }
+                } else {
+                    Text(String(format: L10n.t("已选 %@ 首"), "\(selectedVisibleKeys.count)"))
+                        .foregroundStyle(.secondary)
+                    Button(L10n.t("取消选择")) { selectedKeys.removeAll() }
+                        .foregroundStyle(.secondary)
+                }
+
                 if hasActiveFilters {
+                    Divider().frame(height: 14)
                     Button(L10n.t("清除筛选"), action: resetFilters)
                         .foregroundStyle(.secondary)
                 }
@@ -287,20 +424,95 @@ struct LyricsManagerView: View {
         .background(.thinMaterial)
     }
 
-    // 列名表头——歌名/歌手/专辑/来源,跟 LyricsManagerRow 共用 LyricsListColumns 的列宽
+    // 列名表头——歌名/歌手/专辑/来源,跟 LyricsManagerRow 共用 shownWidths 这一组列宽
     // 常量,保证表头文字跟每行对应列对得齐。水平内边距(12pt)特意跟 List(.inset 样式)
     // 默认给每行内容的左右留白对齐,不然表头会跟下面的行错位。
     private var listColumnHeader: some View {
         HStack(spacing: 8) {
             Text(L10n.t("歌名")).frame(maxWidth: .infinity, alignment: .leading)
-            Text(L10n.t("歌手")).frame(width: LyricsListColumns.artistWidth, alignment: .leading)
-            Text(L10n.t("专辑")).frame(width: LyricsListColumns.albumWidth, alignment: .leading)
-            Text(L10n.t("来源")).frame(width: LyricsListColumns.sourceWidth, alignment: .leading)
+            // 三条分隔条都挂成对应列的 .overlay(alignment: .leading) ——overlay 不参与布局,
+            // 所以表头的列宽/间距跟下面每一行仍然逐 pt 对齐(这一点很关键:如果把手柄当成
+            // HStack 的一个真实子视图,它自己的 9pt 宽度会把表头整体右推,表头和行就错位了)。
+            Text(L10n.t("歌手")).frame(width: shownWidths.artist, alignment: .leading)
+                .overlay(alignment: .leading) { columnDivider(0) }
+            Text(L10n.t("专辑")).frame(width: shownWidths.album, alignment: .leading)
+                .overlay(alignment: .leading) { columnDivider(1) }
+            Text(L10n.t("来源")).frame(width: shownWidths.source, alignment: .leading)
+                .overlay(alignment: .leading) { columnDivider(2) }
         }
         .font(.caption2.weight(.semibold))
         .foregroundStyle(.secondary)
-        .padding(.horizontal, 12)
+        // 左右内边距跟着 List 里"行内容的实际左右边界"走,而不是写死 12pt。
+        // List(.inset) 给每行加的 inset 跟表头的内边距本来就不相等(实测 leading≈16pt、
+        // trailing≈33pt——后者还含滚动条留白),两边一直是错开的;以前表头没有分隔线,错开
+        // 20pt 看不出来,现在分隔线画的就是列边界,错开就直接可见了。这两个值是 AppKit 给的、
+        // 会随系统版本变,所以运行时量(见 RowContentBoundsKey),不硬编码。
+        .padding(.leading, headerLeading)
+        .padding(.trailing, headerTrailing)
         .padding(.vertical, 5)
+        // 量出表头这一行的实际可用宽度,拖拽时用来算"歌名列还剩多少"(见
+        // LyricsColumnWidths.dragged 的 totalWidth 参数)。放在 .background 里的
+        // GeometryReader 不影响布局,是量宽度又不改版式的标准做法。
+        .background(
+            GeometryReader { g in
+                Color.clear
+                    .onAppear { headerWidth = g.size.width }
+                    .onChange(of: g.size.width) { _, w in headerWidth = w }
+            }
+        )
+        .contextMenu {
+            Button(L10n.t("重置列宽")) { columnWidths.reset() }
+        }
+    }
+
+    // 量不到行内容边界时的兜底内边距(首帧、或列表还没渲染出任何一行)。
+    private static let fallbackHPadding: CGFloat = 12
+
+    private var headerLeading: CGFloat { rowContentBounds?.minX ?? Self.fallbackHPadding }
+    private var headerTrailing: CGFloat {
+        guard let b = rowContentBounds, headerWidth > 0 else { return Self.fallbackHPadding }
+        return max(0, headerWidth - b.maxX)
+    }
+    // 表头左右内边距 + 三个 8pt 列间距 = 这一行里不属于任何列的固定开销,算歌名列剩余
+    // 宽度时要先扣掉它(见 LyricsColumnWidths.dragged/fitted 的 chrome 参数)。
+    private var headerChrome: CGFloat { headerLeading + headerTrailing + 8 * 3 }
+
+    // 真正拿去渲染的列宽:窗口/侧栏被拖窄后,用户存下来的列宽可能已经把歌名挤没,fitted
+    // 会临时等比收敛(不改存下来的值)。headerWidth 还没量到(=0)时 fitted 原样返回,
+    // 首帧不会算出奇怪的宽度。
+    private var shownWidths: LyricsColumnWidths {
+        LyricsColumnWidths.fitted(columnWidths.widths, totalWidth: headerWidth, chrome: headerChrome)
+    }
+
+    private func columnDivider(_ index: Int) -> some View {
+        // 手柄 9pt 宽、居中压在两列之间那个 8pt 间距的正中:overlay 的 leading 让手柄左边缘
+        // 贴着本列左边缘,而间距中点在本列左边缘往左 4pt 处,所以整体左移 9/2 + 4 = 8.5pt。
+        ColumnDividerHandle(
+            onDrag: { dx in
+                if dragStartWidths == nil { dragStartWidths = columnWidths.widths }
+                guard let start = dragStartWidths else { return }
+                columnWidths.widths = LyricsColumnWidths.dragged(
+                    from: start, divider: index, dx: dx,
+                    totalWidth: headerWidth, chrome: headerChrome
+                )
+            },
+            onDragEnd: { dragStartWidths = nil },
+            onDoubleClick: { resetDivider(index) }
+        )
+        .offset(x: -8.5)
+    }
+
+    // 双击某条分隔条 = 把这条边界两侧的列恢复默认宽度(不是全部三列——只动用户正在操作的
+    // 那条边界更符合预期;要整体恢复用表头右键菜单里的「重置列宽」)。
+    private func resetDivider(_ index: Int) {
+        let d = LyricsColumnWidths.defaults
+        var w = columnWidths.widths
+        switch index {
+        case 0: w.artist = d.artist                       // 左边是弹性的歌名列,只需复位歌手
+        case 1: w.artist = d.artist; w.album = d.album
+        default: w.album = d.album; w.source = d.source
+        }
+        columnWidths.widths = w
     }
 
     var body: some View {
@@ -315,10 +527,58 @@ struct LyricsManagerView: View {
                     Divider()
                     listColumnHeader
                     Divider()
-                    List(filtered, selection: $selectedKey) { summary in
-                        LyricsManagerRow(summary: summary, albumDisplayName: albumDisplay(summary.album))
+                    List(filtered, selection: $selectedKeys) { summary in
+                        LyricsManagerRow(summary: summary, albumDisplayName: albumDisplay(summary.album), widths: shownWidths)
                     }
                     .listStyle(.inset(alternatesRowBackgrounds: true))
+                    // ⚠️ 菜单闭包里只用参数 keys,一个字都不能读 selectedKeys。官方文档明确:
+                    // 从空白处唤出菜单时 keys 是空集(即使当前有选中项也一样);图省事读
+                    // selectedKeys 就会变成"右键点空白 → 菜单显示『删除 8 条』 → 删掉 8 条
+                    // 根本不在右键位置的条目"。空集时整个菜单不给任何项(= 文档说的停用菜单)。
+                    // 右键点某个未被选中的行时系统会把选中收敛到那一行、keys 就是那一行;
+                    // 右键点已选中区内任一行则 keys 是整个选区——这正是需要的原生行为,给每行
+                    // 单独挂 .contextMenu 拿不到。
+                    // 不传 primaryAction:macOS 上它绑的是双击,这个列表双击目前没有语义,
+                    // 绑上破坏性操作等于给它配一个极易误触的手势。
+                    .contextMenu(forSelectionType: String.self) { keys in
+                        if !keys.isEmpty {
+                            Button(role: .destructive) {
+                                requestDelete(keys)
+                            } label: {
+                                Text(keys.count == 1
+                                    ? L10n.t("删除本地记录")
+                                    : String(format: L10n.t("删除选中的 %@ 条"), "\(keys.count)"))
+                            }
+                        }
+                    }
+                    // 筛选条件一变就把选中项收敛到当前可见集合。用 formIntersection 而不是
+                    // 无条件清空:用户只是微调搜索词时保住已有选择更符合预期。
+                    .onChange(of: filterToken) { _, _ in
+                        selectedKeys.formIntersection(Set(filtered.map(\.key)))
+                    }
+                    // 删除确认弹窗挂在 List 上——不能挂在 detailView 里(多选时右侧渲染的是批量
+                    // 面板、detailView 根本不在视图树里,置 isPresented 会静默无效),也故意不跟
+                    // 下面「清空全部缓存」那个弹窗挂在同一条修饰符链上:SwiftUI 对同一条链上叠加
+                    // 多个同类型呈现修饰符历史上有互相顶掉的问题,挂在层级明确不同的两个视图上
+                    // 就不用去论证"这个版本到底会不会冲突"。List 在侧栏里始终存在、生命周期稳定。
+                    // title/actions/message 一律只读 pendingDeleteKeys 这份快照,不读 selectedKeys。
+                    .confirmationDialog(
+                        batchDeleteTitle,
+                        isPresented: $showBatchDeleteConfirm,
+                        titleVisibility: .visible
+                    ) {
+                        Button(
+                            pendingDeleteKeys.count == 1
+                                ? L10n.t("删除")
+                                : String(format: L10n.t("删除 %@ 条"), "\(pendingDeleteKeys.count)"),
+                            role: .destructive
+                        ) {
+                            performPendingDelete()
+                        }
+                        Button(L10n.t("取消"), role: .cancel) {}
+                    } message: {
+                        Text(batchDeleteMessage)
+                    }
                     .onAppear {
                         // reload 必须先于定位——刚打开窗口时 summaries 可能还是上次
                         // 关闭时的旧内容(或空的),定位逻辑要按最新磁盘内容匹配当前
@@ -329,6 +589,29 @@ struct LyricsManagerView: View {
                             focusCurrentlyPlaying(scrollProxy: scrollProxy)
                         }
                     }
+
+                    // store.lastError 原来只在右侧详情页里渲染(见 detailView)——批量删完
+                    // selectedKeys 清空、右侧变回空占位,「写入本地记录文件失败」和「重启
+                    // collector 失败」两条就都没有宿主视图了。后者尤其要命:collector 没重启
+                    // 成功时它内存里还持有整份旧缓存,下次它自己存盘就会把刚删的条目整体写回
+                    // 磁盘(见 EnrichCacheStore 顶部注释),用户看到的是"删了一批、过一会儿又
+                    // 全回来了",而全程零提示。这条横幅挂在列表下面,跟选中状态无关、永远在。
+                    if let error = store.lastError {
+                        Divider()
+                        Label(error, systemImage: "exclamationmark.triangle.fill")
+                            .font(.caption)
+                            .foregroundStyle(.red)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(.thinMaterial)
+                    }
+                }
+                // 坐标空间挂在这里(不是表头上):表头的拖拽手势和列表每一行都要在同一个空间
+                // 里报坐标,才能让分隔线对齐到行内容的真实列边界。见 LyricsColumnHeaderSpace。
+                .coordinateSpace(.named(LyricsColumnHeaderSpace.name))
+                .onPreferenceChange(RowContentBoundsKey.self) { bounds in
+                    if let bounds { rowContentBounds = bounds }
                 }
                 // placement: .sidebar——默认 .automatic 会把这个本地过滤用的原生
                 // .searchable 解析成挂在整个窗口的顶部工具栏,而 filterBar 是贴在内容区
@@ -356,6 +639,27 @@ struct LyricsManagerView: View {
                         } label: {
                             Label(L10n.t("回到当前播放"), systemImage: "location.fill")
                         }
+                    }
+                    ToolbarItem {
+                        // 常驻 + 空选时置灰,不做"选中才出现"——按钮凭空插进来会把旁边几个
+                        // 工具栏项整排挤位移,而 Mac 上(邮件的废纸篓按钮)的惯例本来就是
+                        // 常驻置灰。文案固定不带数字,避免每次改选中都抖动。
+                        //
+                        // 快捷键取 ⌘⌫ 而不是裸 ⌫:惯例上裸 ⌫ 是给"删除可撤销/进废纸篓"用的
+                        // (邮件删完 ⌘Z 能回来),⌘⌫ 才是给不可逆或直接动文件系统的删除用的
+                        // (Finder 移到废纸篓、照片删除),而这里两条都占——没有撤销,还真的
+                        // unlink lyrics/ 下的文件。更实际的理由是:.keyboardShortcut 挂在按钮上
+                        // 是**窗口级**快捷键,跟焦点在哪无关,绑裸 ⌫ 会把这个窗口里搜索框和三个
+                        // 歌词文本框的退格键全抢掉——在搜索框里退一个字符就弹出删除确认。
+                        // .disabled 让空选时按 ⌘⌫ 毫无反应,天然挡住误触。
+                        Button {
+                            requestDelete(selectedKeys)
+                        } label: {
+                            Label(showDeletedFeedback ? L10n.t("已删除") : L10n.t("删除记录"),
+                                  systemImage: showDeletedFeedback ? "checkmark" : "trash")
+                        }
+                        .disabled(selectedVisibleKeys.isEmpty)
+                        .keyboardShortcut(.delete, modifiers: .command)
                     }
                     ToolbarItem {
                         // 缓存占用查看 + 一键清空——这份缓存设计上"解析一次永久保留",
@@ -386,7 +690,7 @@ struct LyricsManagerView: View {
                     Button(L10n.t("清空全部缓存"), role: .destructive) {
                         Task {
                             await store.clearAll()
-                            selectedKey = nil
+                            selectedKeys.removeAll()
                         }
                     }
                     Button(L10n.t("取消"), role: .cancel) {}
@@ -395,13 +699,18 @@ struct LyricsManagerView: View {
                 }
             }
         } detail: {
-            if let key = selectedKey, let summary = store.summaries.first(where: { $0.key == key }) {
+            if let key = singleSelectedKey, let summary = store.summaries.first(where: { $0.key == key }) {
                 detailView(key: key, summary: summary)
+            } else if selectedKeys.count > 1 {
+                batchSelectionPanel
             } else {
                 ContentUnavailableView(L10n.t("选择左侧一首歌"), systemImage: "text.quote")
             }
         }
         .frame(minWidth: 780, idealWidth: 1040, minHeight: 540, idealHeight: 640)
+        // 见 AuxiliaryWindowActivation 注释——.accessory 策略下临时借一个 Dock 图标。
+        .onAppear { AuxiliaryWindowActivation.windowDidAppear() }
+        .onDisappear { AuxiliaryWindowActivation.windowDidDisappear() }
     }
 
     // 打开窗口时自动定位到当前正在播放的这首歌(如果它已经被缓存过)——跟
@@ -418,10 +727,106 @@ struct LyricsManagerView: View {
     private func refreshWithFeedback() {
         Task {
             await store.reload()
+            // 重新读盘之后缓存内容可能已经变了(collector 自己写过、或别处删过),选中集合里
+            // 可能残留已经不存在的 key——跟筛选变化那条 onChange 同一个道理,收敛一次。
+            selectedKeys.formIntersection(Set(store.summaries.map(\.key)))
             withAnimation { showRefreshedFeedback = true }
             try? await Task.sleep(for: .seconds(1))
             withAnimation { showRefreshedFeedback = false }
         }
+    }
+
+    // N == 1 时沿用原来那条带歌名的单曲文案(既有词条,不新造);N ≥ 2 只给数量,不列歌名——
+    // confirmationDialog 的 message 是不可滚动的小字,列十几首要么撑爆要么截断,而左侧列表里
+    // 那些行本来就正高亮着,弹窗再列一遍是重复且更难读(Finder/照片/邮件都是只给数量)。
+    private var batchDeleteTitle: String {
+        if pendingDeleteKeys.count == 1,
+           let summary = store.summaries.first(where: { $0.key == pendingDeleteKeys[0] }) {
+            return String(format: L10n.t("确定要删除「%@ - %@」的本地记录吗?"), summary.artist, summary.title)
+        }
+        return String(format: L10n.t("确定要删除选中的 %@ 条本地记录吗?"), "\(pendingDeleteKeys.count)")
+    }
+
+    // 三条完整独立的句子,不在运行时拼接——拼出来的句子英文侧语序没法翻。
+    // "其中 N 条是人工修正过的" 单独成一条:那是这批里唯一删了真找不回来的东西(其余条目
+    // 下次播放会重新解析),属于决策信息,值得在确认这一刻单独点出来。
+    private var batchDeleteMessage: String {
+        if pendingDeleteKeys.count == 1 {
+            return L10n.t("已导出到本地的歌词文件也会一并删除,下次播放这首歌会重新走一遍匹配解析,不保证一定能找到一样的歌词")
+        }
+        let pending = Set(pendingDeleteKeys)
+        let manual = store.summaries.filter { pending.contains($0.key) && $0.isManual }.count
+        if manual > 0 {
+            return String(format: L10n.t("其中 %@ 条是你手动修正过的,删掉之后找不回来。已导出到本地的歌词文件也会一并删除,且无法撤销。下次播放这些歌会重新走一遍匹配解析,不保证能找到一样的歌词"), "\(manual)")
+        }
+        return L10n.t("已导出到本地的歌词文件也会一并删除,且无法撤销。下次播放这些歌会重新走一遍匹配解析,不保证能找到一样的歌词")
+    }
+
+    private func performPendingDelete() {
+        let victims = Set(pendingDeleteKeys)
+        guard !victims.isEmpty else { return }
+        Task {
+            await store.delete(keys: victims)
+            // 已删的 key 必须自己从选中集合里拿掉,别指望 SwiftUI 替你收拾。
+            selectedKeys.subtract(victims)
+            // 故意不清空 pendingDeleteKeys:弹窗的标题/按钮文案都读它的 count,在关闭动画
+            // 还没走完时清掉会让按钮文字闪一下"删除 0 条"。它每次 requestDelete 都会被整体
+            // 覆盖,留着上一批的内容不会被误用。
+            // 失败时不叠加"已删除"反馈——列表下面那条红色 lastError 横幅已经在说了,
+            // 两套反馈同时出现互相矛盾(跟采纳联网候选那里的处理一致)。
+            guard store.lastError == nil else { return }
+            withAnimation { showDeletedFeedback = true }
+            try? await Task.sleep(for: .seconds(1))
+            withAnimation { showDeletedFeedback = false }
+        }
+    }
+
+    // 多选时右侧显示什么:只放"确认我选中的就是我以为的那批" + 一个够明确的删除按钮。
+    // 不放歌名清单(左侧列表就是权威视图)、不放编辑器、不放占用空间——算这批的真实体积要对
+    // lyrics/ 目录做 4N 次 stat,而"删歌词"本来也不是为了腾空间,工具栏那个菜单标题已经是
+    // 总大小了。
+    private var batchSelectionPanel: some View {
+        let victims = Set(selectedVisibleKeys)
+        let picked = store.summaries.filter { victims.contains($0.key) }
+        let manual = picked.filter(\.isManual).count
+        let wordTiming = picked.filter(\.hasWordTiming).count
+        let missing = picked.filter { !$0.hasLyrics }.count
+        return VStack(spacing: 14) {
+            Image(systemName: "checklist")
+                .font(.system(size: 40))
+                .foregroundStyle(.secondary)
+            Text(String(format: L10n.t("已选择 %@ 首"), "\(picked.count)"))
+                .font(.title2.weight(.semibold))
+            // 三个统计各自独立成词条,不在运行时拼成一句长句(同 batchDeleteMessage 的理由);
+            // 为 0 的那项整个不显示,不写"0 首"。
+            HStack(spacing: 8) {
+                if manual > 0 {
+                    InfoChip(icon: "pencil.circle.fill", text: String(format: L10n.t("人工修正 %@ 首"), "\(manual)"), tint: .orange)
+                }
+                if wordTiming > 0 {
+                    InfoChip(icon: "text.word.spacing", text: String(format: L10n.t("逐字时间轴 %@ 首"), "\(wordTiming)"), tint: .blue)
+                }
+                if missing > 0 {
+                    InfoChip(icon: "text.badge.xmark", text: String(format: L10n.t("无歌词 %@ 首"), "\(missing)"), tint: .red)
+                }
+            }
+            if manual > 0 {
+                Text(L10n.t("人工修正过的歌词删掉之后找不回来"))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Button(role: .destructive) {
+                requestDelete(selectedKeys)
+            } label: {
+                Label(String(format: L10n.t("删除选中的 %@ 条"), "\(picked.count)"), systemImage: "trash")
+            }
+            .buttonStyle(.borderedProminent)
+            .padding(.top, 4)
+            Button(L10n.t("取消选择")) { selectedKeys.removeAll() }
+                .buttonStyle(.link)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(24)
     }
 
     // .useAll 而不是限定 .useMB——总大小从几百 KB(刚起步)到几十 MB(用了很久)跨度
@@ -437,11 +842,13 @@ struct LyricsManagerView: View {
     // 两种调用方式都一样静默不做任何事,不额外弹提示——开窗自动定位场景本来就不该弹,
     // 手动点按钮那次不做区分只是图简单,真找不到时用户自己也看得出列表没跳。
     private func focusCurrentlyPlaying(scrollProxy: ScrollViewProxy, force: Bool = false) {
-        guard force || selectedKey == nil else { return }
+        guard force || selectedKeys.isEmpty else { return }
         let playback = PlaybackCoordinator.shared
         let key = "\(playback.artist)|\(playback.title)|\(playback.album)"
         guard store.summaries.contains(where: { $0.key == key }) else { return }
-        selectedKey = key
+        // 整体替换成这一条、不是追加:"回到当前播放"的语义是聚焦到这首歌。追加的话用户点完
+        // 之后工具栏删除按钮上还挂着之前选的一堆,极易误删。
+        selectedKeys = [key]
         DispatchQueue.main.async {
             withAnimation { scrollProxy.scrollTo(key, anchor: .center) }
         }
@@ -475,19 +882,6 @@ struct LyricsManagerView: View {
         }
         .onAppear { loadDetail(key: key) }
         .onChange(of: key) { _, newKey in loadDetail(key: newKey) }
-        .confirmationDialog(
-            String(format: L10n.t("确定要删除「%@ - %@」的本地记录吗?"), summary.artist, summary.title),
-            isPresented: $showDeleteConfirm,
-            titleVisibility: .visible
-        ) {
-            Button(L10n.t("删除"), role: .destructive) {
-                Task { await store.delete(key: key) }
-                selectedKey = nil
-            }
-            Button(L10n.t("取消"), role: .cancel) {}
-        } message: {
-            Text(L10n.t("已导出到本地的歌词文件也会一并删除,下次播放这首歌会重新走一遍匹配解析,不保证一定能找到一样的歌词"))
-        }
         .sheet(isPresented: $showSearchSheet) {
             // 采纳候选直接保存,不需要再手动点"保存修改"——避免让人误以为选了就已经
             // 存上了,结果只是填进了编辑框,还得再点一下保存才真正落盘。
@@ -536,8 +930,11 @@ struct LyricsManagerView: View {
                 } label: {
                     Label(L10n.t("联网搜索候选歌词"), systemImage: "magnifyingglass")
                 }
+                // 跟工具栏按钮、右键菜单走同一条 requestDelete → 侧栏那个确认弹窗的路径:
+                // 只留一处弹窗,文案/统计/快照逻辑不会两处漂移。N==1 时 batchDeleteTitle 会
+                // 自动用带歌名的那条既有文案,跟改动之前一模一样。
                 Button(role: .destructive) {
-                    showDeleteConfirm = true
+                    requestDelete([summary.key])
                 } label: {
                     Label(L10n.t("删除本地记录"), systemImage: "trash")
                 }
@@ -777,11 +1174,14 @@ private struct LyricsManagerRow: View {
     // 同一张专辑在不同条目里原始大小写可能不一致(见 LyricsManagerView.albumDisplayNames
     // 的注释),这里传入调用方算好的统一展示文案,而不是自己再拿 summary.album 原样显示。
     let albumDisplayName: String
+    // 列宽由调用方传入(而不是各自读单例):表头和每一行必须拿到**同一组**值才对得齐,
+    // 而调用方那份已经过 fitted 收敛(窗口变窄时的临时等比缩放),行这边不能绕过它。
+    let widths: LyricsColumnWidths
 
     // 图标槽位固定宽度(没有对应状态时用透明占位撑住位置,而不是整个不渲染)——保证
     // 不管某行是否人工修正、是逐字还是整行,几行的图标起始位置都对得齐。这两个图标算是
     // "歌名"这一列的附加信息(是否手工修正过/是逐字还是整行),跟着歌名走,不单独占一列
-    // ——歌手/专辑/来源三列见 LyricsListColumns。
+    // ——歌手/专辑/来源三列的宽度由调用方传入的 widths 决定(可拖拽调节)。
     private static let badgeIconWidth: CGFloat = 14
 
     var body: some View {
@@ -811,17 +1211,30 @@ private struct LyricsManagerRow: View {
                 .font(.callout)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
-                .frame(width: LyricsListColumns.artistWidth, alignment: .leading)
+                .frame(width: widths.artist, alignment: .leading)
 
             Text(albumDisplayName)
                 .font(.callout)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
-                .frame(width: LyricsListColumns.albumWidth, alignment: .leading)
+                .frame(width: widths.album, alignment: .leading)
 
             SourceBadge(source: summary.lyricsSource)
-                .frame(width: LyricsListColumns.sourceWidth, alignment: .leading)
+                .frame(width: widths.source, alignment: .leading)
         }
         .padding(.vertical, 3)
+        // 让整行(含上下 3pt 内边距)都算命中这一行。不加的话在内边距上右键会被判成"点在
+        // 空白处",而 contextMenu(forSelectionType:) 在空白处给的是空集 → 菜单不出现,
+        // 表现成"右键有时候没反应"。
+        .contentShape(Rectangle())
+        // 把这一行内容的实际左右边界报给上层,表头照它对齐(见 RowContentBoundsKey 注释)。
+        // 放在 .background 里,不影响布局。
+        .background(
+            GeometryReader { g in
+                let f = g.frame(in: .named(LyricsColumnHeaderSpace.name))
+                Color.clear.preference(key: RowContentBoundsKey.self,
+                                       value: RowContentBounds(minX: f.minX, maxX: f.maxX))
+            }
+        )
     }
 }
