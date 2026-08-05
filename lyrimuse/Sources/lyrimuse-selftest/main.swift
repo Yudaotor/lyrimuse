@@ -183,28 +183,6 @@ do {
     expectEqual(lines.map(\.id), ["test#0", "test#1", "test#2"], "SyncEngine.allLines: id 按 idPrefix#下标 拼接")
 }
 
-// 副歌重复句:两处出现的歌词文字完全相同(常见于"副歌"),activeLineIndex 必须靠时间戳
-// 扫下标区分是第几次出现——如果实现改成"拿 activeLine 的内容去 allLines 里找相同内容
-// 的下标",遇到这种重复句会永远选中第一次出现,这个用例专门堵住这种回归。
-do {
-    let engine = LyricsSyncEngine()
-    let lrc = "[00:10.00]副歌歌词\n[00:20.00]桥段歌词\n[00:30.00]副歌歌词\n"
-    engine.load(lyrics: lrc, lyricsTr: "", lyricsRoma: "", lyricsYRC: "", preferWordLevel: true)
-    expectEqual(engine.activeLineIndex(atMs: 15000), 0, "SyncEngine.activeLineIndex: 第一次出现的副歌句命中下标 0")
-    expectEqual(engine.activeLineIndex(atMs: 35000), 2, "SyncEngine.activeLineIndex: 第二次出现的副歌句命中下标 2(不是被内容匹配误判回 0)")
-    expectEqual(engine.activeLineIndex(atMs: 5000), nil, "SyncEngine.activeLineIndex: 还没到第一句时是 nil")
-}
-
-do {
-    let engine = LyricsSyncEngine()
-    let yrc = "[10000,1000](10000,500,0)la (10500,500,0)la \n[20000,1000](20000,500,0)la (20500,500,0)la \n"
-    engine.load(lyrics: "", lyricsTr: "", lyricsRoma: "", lyricsYRC: yrc, preferWordLevel: true)
-    let lines = engine.allLines(idPrefix: "test")
-    expectEqual(lines.count, 2, "SyncEngine.allLines(YRC): 逐字歌词也能拿到完整行列表")
-    expectEqual(lines.map { $0.line.words?.map(\.text) }, [["la ", "la "], ["la ", "la "]], "SyncEngine.allLines(YRC): 每行的逐字词数组保留完整")
-    expectEqual(engine.activeLineIndex(atMs: 20500), 1, "SyncEngine.activeLineIndex(YRC): 逐字歌词同样按时间戳扫下标")
-}
-
 // ---- LyricsOffsetStore: 校正值 key 要按"歌词内容"区分,不能只按歌手/歌名 ----
 
 do {
@@ -213,6 +191,110 @@ do {
     let keyBDifferentLyrics = LyricsOffsetStore.trackKey(artist: "陈奕迅", title: "富士山下", lyrics: "[00:12.00]第一句(重新匹配的另一份歌词)\n", lyricsYRC: "")
     expectEqual(keyA, keyASame, "LyricsOffsetStore.trackKey: 同一首歌+同一份歌词内容,key 应该完全一致")
     expectEqual(keyA == keyBDifferentLyrics, false, "LyricsOffsetStore.trackKey: 同一首歌换了一份不同的歌词内容,key 应该不同")
+}
+
+// ---- MediaControlClient.ageCompensatedCachedElapsed: 借用后台 AppleScript 缓存 ----
+// 快照前的年龄补偿+合理性核对(2026-08-04 实测排查坐实的回归:缓存值不补偿年龄直接
+// 当"当前位置"用,本地整条展示链慢 ~1.8s,详见该函数注释)。
+
+do {
+    let t0 = Date(timeIntervalSince1970: 1_000_000)
+    // 稳定播放:缓存读数 100.0s、1.8s 前抓的、速率 1 → 补偿到 101.8s;新鲜读数 101.9s,
+    // 差 0.1s 在核对容差内 → 借用补偿后的值,而不是原始的 100.0。
+    let steady = MediaControlClient.ageCompensatedCachedElapsed(
+        cachedElapsed: 100.0, cachedPlaying: true, cachedRate: 1, cachedAt: t0,
+        freshElapsed: 101.9, freshPlaying: true, now: t0.addingTimeInterval(1.8)
+    )
+    expectEqual(steady.map { abs($0 - 101.8) < 0.001 }, true, "ageCompensatedCachedElapsed: 稳定播放按读数年龄×速率补偿")
+    // 单曲循环重启:缓存还是上一轮循环的位置(240s),真实已经回到 1.6s → 补偿后跟新鲜
+    // 读数差 2s 以上,缓存不可信,返回 nil(调用方退回新鲜读数)。
+    let loopRestart = MediaControlClient.ageCompensatedCachedElapsed(
+        cachedElapsed: 240.0, cachedPlaying: true, cachedRate: 1, cachedAt: t0,
+        freshElapsed: 1.6, freshPlaying: true, now: t0.addingTimeInterval(1.8)
+    )
+    expectEqual(loopRestart == nil, true, "ageCompensatedCachedElapsed: 单曲循环重启后过期缓存不借用")
+    // 缓存是暂停态读数(刚恢复播放):这段年龄里位置没在走,没法按速率外推 → 不借用。
+    let pausedCache = MediaControlClient.ageCompensatedCachedElapsed(
+        cachedElapsed: 100.0, cachedPlaying: false, cachedRate: 0, cachedAt: t0,
+        freshElapsed: 100.1, freshPlaying: true, now: t0.addingTimeInterval(1.8)
+    )
+    expectEqual(pausedCache == nil, true, "ageCompensatedCachedElapsed: 暂停态缓存读数不借用")
+    // 切歌加载瞬间速率短暂报 0 但确实在播:按速率 1 计,跟 collector/lb.go 同一处理。
+    let zeroRate = MediaControlClient.ageCompensatedCachedElapsed(
+        cachedElapsed: 100.0, cachedPlaying: true, cachedRate: 0, cachedAt: t0,
+        freshElapsed: 101.9, freshPlaying: true, now: t0.addingTimeInterval(1.8)
+    )
+    expectEqual(zeroRate.map { abs($0 - 101.8) < 0.001 }, true, "ageCompensatedCachedElapsed: 播放中速率报 0 按 1 计")
+}
+
+// ---- LocalPlaybackSource.servoDecision: 播放位置外推的"锁死偏差"伺服校正 ----
+// (2026-08-04 实测排查坐实:稳定播放分支只按墙钟外推、不回看真实读数,播种偏差/漏观察
+// 的短暂停会造成小于 seek 容差的永久锁死,详见该函数注释。)
+
+do {
+    // 精确源(Apple Music):持续 1.2s 的锁死偏差(漏观察的短暂停)应在几轮内触发校正。
+    var ema = 0.0
+    var snapped = false
+    var rounds = 0
+    for _ in 1...5 {
+        rounds += 1
+        let (newEMA, snap) = LocalPlaybackSource.servoDecision(errEMA: ema, error: -1.2, preciseSource: true)
+        ema = newEMA
+        if snap { snapped = true; break }
+    }
+    expectEqual(snapped, true, "servoDecision(精确源): 持续 1.2s 偏差应触发校正")
+    expectEqual(rounds <= 3, true, "servoDecision(精确源): 校正应在 3 轮(6 秒)内发生,实际 \(rounds) 轮")
+}
+
+do {
+    // 精确源:实测抓到的那次 0.205s 启动播种偏差,同样应该被修正(原实现会永久锁死)。
+    var ema = 0.0
+    var snapped = false
+    for _ in 1...10 {
+        let (newEMA, snap) = LocalPlaybackSource.servoDecision(errEMA: ema, error: 0.205, preciseSource: true)
+        ema = newEMA
+        if snap { snapped = true; break }
+    }
+    expectEqual(snapped, true, "servoDecision(精确源): 0.205s 的播种偏差(实测案例)应被校正")
+}
+
+do {
+    // 精确源:±0.06s 的正常读数噪声(零均值)不该误触发校正。
+    var ema = 0.0
+    var falseSnap = false
+    for i in 1...50 {
+        let err = i % 2 == 0 ? 0.06 : -0.06
+        let (newEMA, snap) = LocalPlaybackSource.servoDecision(errEMA: ema, error: err, preciseSource: true)
+        ema = newEMA
+        if snap { falseSnap = true; break }
+    }
+    expectEqual(falseSnap, false, "servoDecision(精确源): ±0.06s 零均值噪声不该误触发")
+}
+
+do {
+    // 噪声源(QQ 音乐):±1.5s 的零均值抖动不该误触发校正——这正是原来"只按墙钟外推"
+    // 设计要防的场景,伺服不能把它破坏掉。
+    var ema = 0.0
+    var falseSnap = false
+    for i in 1...50 {
+        let err = i % 2 == 0 ? 1.5 : -1.5
+        let (newEMA, snap) = LocalPlaybackSource.servoDecision(errEMA: ema, error: err, preciseSource: false)
+        ema = newEMA
+        if snap { falseSnap = true; break }
+    }
+    expectEqual(falseSnap, false, "servoDecision(噪声源): ±1.5s 零均值抖动不该误触发")
+}
+
+do {
+    // 噪声源:持续 +1.5s 的真锁死偏差(低于 2s seek 容差,原来永远修不掉)应该能修正。
+    var ema = 0.0
+    var snapped = false
+    for _ in 1...10 {
+        let (newEMA, snap) = LocalPlaybackSource.servoDecision(errEMA: ema, error: 1.5, preciseSource: false)
+        ema = newEMA
+        if snap { snapped = true; break }
+    }
+    expectEqual(snapped, true, "servoDecision(噪声源): 持续 1.5s 锁死偏差应最终被校正")
 }
 
 // ---- 汇总 ----

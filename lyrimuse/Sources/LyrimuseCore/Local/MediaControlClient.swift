@@ -173,6 +173,7 @@ public enum MediaControlClient {
     // fork 子进程的前提下提前避开①这个问题。后台缓存刷新的方案完全规避了这两个顾虑。
     private static let appleMusicSnapshotCacheLock = NSLock()
     private static var cachedAppleMusicSnapshot: MediaControlSnapshot?
+    private static var cachedAppleMusicSnapshotAt: Date?
     private static var isRefreshingAppleMusicSnapshot = false
 
     private static func fetchAutoDetectedSnapshot() -> MediaControlSnapshot? {
@@ -184,6 +185,7 @@ public enum MediaControlClient {
         refreshAppleMusicSnapshotCacheInBackground()
         appleMusicSnapshotCacheLock.lock()
         let cached = cachedAppleMusicSnapshot
+        let cachedAt = cachedAppleMusicSnapshotAt
         appleMusicSnapshotCacheLock.unlock()
         // 只在缓存快照确认是"同一首歌"(标题+歌手都对得上)时才借用它更精确的
         // elapsedTime,其它字段一律用 media-control 这次刚给的最新值,不把整份缓存快照
@@ -192,7 +194,12 @@ public enum MediaControlClient {
         // 追上之前,把上一首歌的标题/播放位置错当成新歌的显示出来(进度条突然跳到中段
         // 这种更明显的错误);现在缓存不匹配时老老实实退回 snapshot 自己的 elapsedTime
         // (精度稍低,但一定对应当前这首歌),精度让位于正确性。
-        guard let cached, cached.title == snapshot.title, cached.artist == snapshot.artist else {
+        guard let cached, cached.title == snapshot.title, cached.artist == snapshot.artist,
+              let compensated = ageCompensatedCachedElapsed(
+                  cachedElapsed: cached.elapsedTime, cachedPlaying: cached.playing,
+                  cachedRate: cached.playbackRate, cachedAt: cachedAt,
+                  freshElapsed: snapshot.elapsedTime, freshPlaying: snapshot.playing
+              ) else {
             return snapshot
         }
         return MediaControlSnapshot(
@@ -200,12 +207,43 @@ public enum MediaControlClient {
             artist: snapshot.artist,
             album: snapshot.album,
             duration: snapshot.duration,
-            elapsedTime: cached.elapsedTime,
+            elapsedTime: compensated,
             playing: snapshot.playing,
             playbackRate: snapshot.playbackRate,
             isMusicApp: snapshot.isMusicApp,
             bundleIdentifier: snapshot.bundleIdentifier
         )
+    }
+
+    // 借用后台 AppleScript 缓存快照的 elapsedTime 之前必经的补偿+核对,纯函数,
+    // selftest 直接覆盖。2026-08-04 实测排查坐实的真实回归(这一层 2026-08-02 引入
+    // 异步缓存时埋下):缓存里存的是"抓取那一刻"的播放位置,轮询借用它时读数已经老了
+    // 一整个后台刷新周期(实测恒定 ~1.8s),不补偿就直接当"当前位置"用,等于把整条本地
+    // 展示链(悬浮窗/灵动岛/歌词窗口)的时间基准整体拖慢 ~1.8s——超过歌词引擎 700ms 的
+    // 匹配容差,肉眼可见"本地歌词比网页慢"。更隐蔽的是它跟 LocalPlaybackSource.
+    // resolvePositionSeconds 的 2s seek 容差咬合出"有时正常有时慢"的双稳态:锚点如果
+    // 恰好在"没借到缓存"的一轮(换歌瞬间)播种,预测值正确,之后每轮落后 1.8s 的借用值
+    // 都在 2s 容差内被忽略,表现正常;锚点一旦在借用值上播种(实测单曲循环重启后必然
+    // 发生:缓存还是上一轮循环的位置,先触发一次 JUMP 重锚到落后值),就整体慢 1.8s 且
+    // 每轮借用值继续喂进来、永远纠不回去。修法:按"读数年龄 × 播放速率"把缓存值外推到
+    // 当下再用,并跟这次 media-control 的新鲜读数(elapsedTimeNow,实测误差 ≤0.5s)做
+    // 合理性核对——补偿后仍差 2s 以上,只可能是缓存跨越了一次不连续(seek/单曲循环
+    // 重启),这时缓存不可信,退回新鲜读数(返回 nil = 调用方不借用)。
+    public static func ageCompensatedCachedElapsed(
+        cachedElapsed: Double?, cachedPlaying: Bool?, cachedRate: Double?, cachedAt: Date?,
+        freshElapsed: Double?, freshPlaying: Bool?, now: Date = Date()
+    ) -> Double? {
+        // 暂停态不借用:当前暂停时 media-control 的冻结 elapsedTime 本身就是精确值;
+        // 缓存是暂停态读数时无法按速率外推(刚恢复播放的这段年龄里位置没在走)。
+        guard freshPlaying == true, cachedPlaying == true,
+              let cachedElapsed, let cachedAt else { return nil }
+        let age = now.timeIntervalSince(cachedAt)
+        guard age >= 0 else { return nil }
+        var rate = cachedRate ?? 1
+        if rate <= 0 { rate = 1 } // 切歌加载瞬间短暂报 0,语义上按播放中(1)计,跟 collector/lb.go 同一处理
+        let extrapolated = cachedElapsed + age * rate
+        if let freshElapsed, abs(extrapolated - freshElapsed) > 2.0 { return nil }
+        return extrapolated
     }
 
     // 后台线程刷新 cachedAppleMusicSnapshot——同一时刻只允许一份刷新在飞,避免每 2 秒
@@ -226,8 +264,10 @@ public enum MediaControlClient {
         appleMusicSnapshotCacheLock.unlock()
         Thread.detachNewThread {
             let result = fetchAppleMusicSnapshot()
+            let capturedAt = Date()
             appleMusicSnapshotCacheLock.lock()
             cachedAppleMusicSnapshot = result
+            cachedAppleMusicSnapshotAt = capturedAt
             isRefreshingAppleMusicSnapshot = false
             appleMusicSnapshotCacheLock.unlock()
         }

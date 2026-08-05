@@ -67,6 +67,15 @@ public final class LocalPlaybackSource: ObservableObject {
     // 依赖注释),转成 Color 交给 lyrimuse 主 App target(PlaybackCoordinator)做,跟
     // AppSettings 里所有颜色字段都是"存 hex、用的地方再转 Color"同一个既有模式。
     @Published public private(set) var artworkAccentHex: String?
+    // "歌词窗口"进度条用(2026-08-04 随 Apple Music 风格重做补上):暂停时 anchor 会被
+    // 置 nil(见 apply() 的 else 分支),进度条如果只认 anchor,一暂停就整个没有位置可
+    // 显示。暂停态 media-control/AppleScript 的 elapsedTime 本身就是精确的冻结位置,
+    // 这里单独发布出来,让进度条在暂停时显示冻结的进度而不是直接消失。播放中恒为 nil
+    // (此时该用 anchor 外推)。
+    @Published public private(set) var pausedPositionMs: Int?
+    // 当前曲目时长(毫秒)——anchor 里虽然也带 durationMs,但暂停时 anchor 是 nil,
+    // 冻结进度条还需要时长算比例,单独发布。没有曲目/时长未知时为 nil。
+    @Published public private(set) var currentDurationMs: Int?
 
     @Published public var preferWordLevelKaraoke: Bool = true {
         didSet { reloadCurrentLyrics() }
@@ -99,7 +108,35 @@ public final class LocalPlaybackSource: ObservableObject {
     private var posTrackingKey = ""
     private var posWasPlaying = false
     private var posPrevWall: Date?
+    // "真实读数 − 墙钟外推值"偏差的滑动平均——见 servoDecision() 的注释,2026-08-04
+    // 实测排查坐实的"锁死偏差"问题的修复状态。播种/跳变/校正后都归零重新累计。
+    private var posErrEMA: Double = 0
     private static let seekJumpToleranceSecs = 2.0
+
+    // 2026-08-04 实测排查坐实的设计缺陷修复:原来"稳定播放"分支只按墙钟外推、完全不回看
+    // 真实读数,任何播种时刻带进来的偏差——App 启动那一拍的读数毛刺、恰好整个落在两次
+    // 2 秒轮询之间而完全没被观察到的短暂停(墙钟累加器会把暂停时长也当播放时间加进去)——
+    // 只要小于 2 秒的 seek 容差,就会永久锁死、永远不被纠正(诊断日志实锤:一次启动播种
+    // 偏差 0.205s,之后每一轮 reported−predicted 恒等于 +0.205,150 秒纹丝不动;用户视角
+    // 就是"本地进度跟网页差了一截,而且一直差着")。
+    //
+    // 修法:对偏差做指数滑动平均(EMA),持续、同号的真实偏差会让 EMA 收敛到偏差值本身,
+    // 超过门槛就把外推基准一次性校正回真实读数(snap)并触发重新锚定;而零均值的读数噪声
+    // (QQ 音乐 elapsedTimeNow 的 ±1~1.5s 抖动)在 EMA 里相互抵消、到不了门槛,原有的
+    // 抗抖动能力不受影响。两档参数按数据源精度选:
+    // - precise(Apple Music,AppleScript 播放头,读数精确到 ~0.1s):alpha 0.5、门槛
+    //   0.15s——持续偏差两三轮(4~6 秒)就校正,稳定期读数噪声 ±0.06s 的 EMA 幅度 ~±0.04,
+    //   离门槛很远,不会误触发。
+    // - 非 precise(QQ 音乐/网易云/Spotify,media-control 外推读数):alpha 0.3、门槛
+    //   1.0s——±1.5s 零均值抖动的 EMA 分布 ~±0.6,大部分时间到不了 1.0;真有持续 1 秒
+    //   以上的锁死偏差(同样低于 2 秒 seek 容差、原来永远修不掉的那种)时几轮后能修正。
+    // 纯函数,selftest 直接覆盖(nonisolated:不碰任何 @MainActor 隔离状态)。
+    public nonisolated static func servoDecision(errEMA: Double, error: Double, preciseSource: Bool) -> (newEMA: Double, snap: Bool) {
+        let alpha = preciseSource ? 0.5 : 0.3
+        let threshold = preciseSource ? 0.15 : 1.0
+        let newEMA = errEMA * (1 - alpha) + error * alpha
+        return (newEMA, abs(newEMA) > threshold)
+    }
 
     // 调用方(apply())只在"这一轮确实在播放"时才会调用这个函数——暂停态不需要外推,
     // apply() 的 else 分支直接把 anchor 置 nil,不经过这里。
@@ -107,27 +144,53 @@ public final class LocalPlaybackSource: ObservableObject {
     // 返回值除了外推出的秒数,还带一个 didReanchor:标记这次是不是真的发生了"不连续"
     // (换歌/刚恢复播放/第一次观察/真实 seek,即用了 reported 而不是 predicted)。
     // 调用方(apply())用这个标记判断"这次真的有必要重新构造 anchor 吗"——见那边注释。
-    private func resolvePositionSeconds(reported: Double, rate: Double, key: String, now: Date) -> (seconds: Double, didReanchor: Bool) {
+    private func resolvePositionSeconds(reported: Double, rate: Double, key: String, now: Date, preciseSource: Bool) -> (seconds: Double, didReanchor: Bool) {
         guard key == posTrackingKey, posWasPlaying, let prevWall = posPrevWall else {
             // 换歌 / 刚从暂停恢复播放 / 第一次观察 → 没有可信的上一次锚点可外推,直接
             // 采用这次读数。
             trackPosSeconds = reported
+            posErrEMA = 0
             return (trackPosSeconds, true)
         }
         let gap = now.timeIntervalSince(prevWall)
         let predicted = trackPosSeconds + gap * rate
-        let jumped = abs(reported - predicted) > Self.seekJumpToleranceSecs
-        trackPosSeconds = jumped ? reported : predicted
-        return (trackPosSeconds, jumped)
+        if abs(reported - predicted) > Self.seekJumpToleranceSecs {
+            // 真实 seek/跳变:直接重锚到这次读数。
+            trackPosSeconds = reported
+            posErrEMA = 0
+            return (trackPosSeconds, true)
+        }
+        // 稳定播放:默认继续墙钟外推,但用偏差 EMA 盯着"外推值是不是持续偏离真实读数"
+        // ——持续偏差超过门槛就一次性校正(见 servoDecision 注释,修"播种偏差/漏观察的
+        // 短暂停造成的永久锁死")。校正也走 didReanchor=true,让 apply() 重建锚点,
+        // 不然校正只改了内部累加器、UI 用的锚点还在按旧基准外推,校正根本到不了屏幕。
+        let (newEMA, snap) = Self.servoDecision(errEMA: posErrEMA, error: reported - predicted, preciseSource: preciseSource)
+        posErrEMA = newEMA
+        if snap {
+            trackPosSeconds = preciseSource ? reported : predicted + newEMA
+            posErrEMA = 0
+            return (trackPosSeconds, true)
+        }
+        trackPosSeconds = predicted
+        return (trackPosSeconds, false)
     }
 
     private var pollTimer: Timer?
     private var fastTimer: Timer?
 
+    // Music.app 的播放状态变化通知(2026-08-04 加,借鉴 FlowX)——见
+    // startObservingPlayerInfoNotification() 的注释。
+    private var playerInfoObserver: NSObjectProtocol?
+    // 通知去抖动:待触发的那次补查(收到新通知就取消重排)——见
+    // handlePlayerInfoChanged() 的注释。
+    private var pendingNotificationPoll: Task<Void, Never>?
+    private static let playerInfoDebounce: Duration = .milliseconds(250)
+
     private init() {}
 
     public func start() {
         reschedulePollTimer()
+        startObservingPlayerInfoNotification()
         // 快速 tick 不在这里无条件启动——是否需要它取决于第一次 poll() 拿到的播放
         // 状态,交给 apply() 里的 ensureFastTimerRunning()/stopFastTimer() 决定。
         poll()
@@ -135,7 +198,72 @@ public final class LocalPlaybackSource: ObservableObject {
 
     public func stop() {
         pollTimer?.invalidate(); pollTimer = nil
+        if let playerInfoObserver {
+            DistributedNotificationCenter.default().removeObserver(playerInfoObserver)
+            self.playerInfoObserver = nil
+        }
+        pendingNotificationPoll?.cancel()
+        pendingNotificationPoll = nil
         stopFastTimer()
+    }
+
+    // Music.app 每次换歌/暂停/恢复播放都会往分布式通知中心广播一条
+    // "com.apple.Music.playerInfo"(系统级、无需任何额外权限,跟已有的"自动化"权限
+    // 无关)。2026-08-04 借鉴 FlowX(Kadxy/FlowX,同类菜单栏歌词工具)加上这条订阅,
+    // 补上 2 秒轮询天然的感知延迟。
+    //
+    // ⚠️ 设计取舍(刻意的,不要"顺手优化"掉):通知**只当作"提前触发一次 poll()"的信号**,
+    // 完全不从 notification.userInfo 里取标题/播放状态/位置去直接喂状态——虽然那份
+    // userInfo 里确实带着这些字段(FlowX 就是直接用的)。理由是这个类的状态机已经相当
+    // 微妙(poll 世代号防乱序、resolvePositionSeconds 的位置平滑+伺服校正、
+    // ensureFastTimerRunning 的生命周期),再引入一条"绕过 poll() 直接改状态"的并行
+    // 路径,就会出现两套数据源需要互相对账:通知先到还是轮询先到、通知里的位置跟
+    // AppleScript 读数哪个更准、平滑器该信谁——这些都是实打实的乱序 bug 温床。现在的
+    // 写法让所有状态变更仍然只发生在 apply() 这一条路径上,通知的唯一作用是让那条路径
+    // 提早跑一次,已有的世代号防护(见 poll())原样继续生效、不需要任何改动。
+    //
+    // 只对 Apple Music 有效——QQ 音乐/网易云音乐/Spotify 不广播这个通知,它们继续靠
+    // 2 秒轮询感知(不是遗漏,是这些播放器没有等价机制)。选了别的播放器时这条订阅只是
+    // 一条永远不触发的空订阅,不需要按 features.player 条件挂载:Music.app 可能同时开着
+    // 但不是当前选定的播放器,那种情况下补查一次 poll() 也完全无害(poll() 自己会核对
+    // bundleIdentifier,见 MediaControlClient.fetchSnapshot 的各条分支)。
+    private func startObservingPlayerInfoNotification() {
+        guard playerInfoObserver == nil else { return }
+        playerInfoObserver = DistributedNotificationCenter.default().addObserver(
+            forName: NSNotification.Name("com.apple.Music.playerInfo"),
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.handlePlayerInfoChanged() }
+        }
+    }
+
+    // 通知到达 → 去抖动之后补查一次 poll()。
+    //
+    // ⚠️ 用"去抖动"(延迟一小段再查,期间再来通知就重新计时)而不是"立刻查一次+之后节流",
+    // 是 2026-08-04 实测量出来的必要选择,不是随手挑的:
+    // ① Music.app 一次用户操作会连发 2 条 playerInfo(实测:按暂停 → 第一条 +116ms、
+    //    第二条 +231ms),而且**第一条带的往往还是操作前的旧状态**(按暂停时第一条
+    //    Player State 居然是 Playing,第二条才是 Paused);
+    // ② 更关键的是 Music.app 自己的 AppleScript 可见状态也不是立刻切换的——实测
+    //    `player state` 在命令后 +134ms 读到的还是 playing,到 +294ms 才变成 paused。
+    // 所以"收到第一条通知就立刻查"会有很大概率读到一份还没切换完的快照,再叠加
+    // "之后节流把真正带新状态的第二条吞掉",结果是白跑一次子进程、状态还得等下一次 2 秒
+    // 轮询才纠正过来——比不加这套通知机制还糟。250ms 去抖动同时解掉这两点:一次操作的
+    // 连发被合并成一次查询,且这次查询稳定发生在状态真正切换完之后(最后一条通知
+    // +231ms,再等 250ms,查询落在 ~+480ms,远晚于 ~+294ms 的状态稳定点)。
+    //
+    // 即便如此仍明显优于改动前:感知延迟从"平均 1 秒、最坏 2 秒"降到 ~0.5 秒且稳定。
+    // 2 秒轮询 Timer 继续独立运行不动,是这套机制的兜底——去抖动/取消逻辑万一有任何
+    // 边界情况没覆盖到,最坏也只是退化成改动之前的行为,不会漏状态。
+    private func handlePlayerInfoChanged() {
+        pendingNotificationPoll?.cancel()
+        pendingNotificationPoll = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: Self.playerInfoDebounce)
+            guard !Task.isCancelled else { return }
+            self?.pendingNotificationPoll = nil
+            self?.poll()
+        }
     }
 
     private func reschedulePollTimer() {
@@ -212,6 +340,8 @@ public final class LocalPlaybackSource: ObservableObject {
             allLines = []
             artworkData = nil
             artworkAccentHex = nil
+            pausedPositionMs = nil
+            currentDurationMs = nil
             stopFastTimer()
         }
     }
@@ -224,6 +354,12 @@ public final class LocalPlaybackSource: ObservableObject {
     // 才继续走 apply()/clearIfWasPlaying()——跟 fetchArtworkForCurrentTrack() 已经用
     // expectedKey 做的事是同一个模式,只是这里换歌与否都要防护,不能用 trackKey 当
     // 世代标识。
+    //
+    // 2026-08-04:poll() 现在有两个调用方(2 秒轮询 Timer + playerInfo 通知补查,见
+    // handlePlayerInfoChanged),这道防护对新入口天然同样成立、不需要任何改动——它保护的
+    // 是"任意两次 poll() 的返回乱序",跟这两次分别是谁触发的无关。通知补查跟定时轮询
+    // 挨得很近(通知先到、轮询紧随其后)时,后发起的那次赢,先发起的那次结果被丢弃,
+    // 正是想要的行为。
     private var pollGeneration = 0
 
     private func poll() {
@@ -323,7 +459,11 @@ public final class LocalPlaybackSource: ObservableObject {
         let playing = snapshot.playing == true
         if playing, let duration = snapshot.duration, duration > 0 {
             let rate = snapshot.playbackRate ?? 1
-            let (positionSeconds, didReanchor) = resolvePositionSeconds(reported: snapshot.elapsedTime ?? 0, rate: rate, key: key, now: now)
+            // Apple Music 的读数是 AppleScript 播放头(精确到 ~0.1s),伺服校正用小门槛;
+            // 其它播放器是 media-control 的带噪外推读数,维持高门槛抗抖动——见
+            // servoDecision 的两档参数注释。
+            let preciseSource = snapshot.bundleIdentifier == PlaybackPlayer.appleMusic.bundleIdentifier
+            let (positionSeconds, didReanchor) = resolvePositionSeconds(reported: snapshot.elapsedTime ?? 0, rate: rate, key: key, now: now, preciseSource: preciseSource)
             // 只在真的有必要时才重新构造锚点——稳定播放期间(没有换歌/没有真实
             // seek/rate 和时长都没变),继续外推旧锚点在数学上跟重新构造一份新锚点得到
             // 完全相同的 extrapolatedPositionMs(now:) 结果(旧锚点的 fetchedAt+
@@ -348,6 +488,18 @@ public final class LocalPlaybackSource: ObservableObject {
         } else {
             if anchor != nil { anchor = nil }
         }
+        // "歌词窗口"进度条的暂停态冻结位置/时长——见两个属性定义处的注释。跟其它
+        // @Published 一样只在真的变化时才赋值。暂停态的 snapshot.elapsedTime 就是精确的
+        // 冻结位置(AppleScript 对 Apple Music、media-control 的原始 elapsedTime 对其它
+        // 播放器都是"暂停即冻结",见 MediaControlClient.fetchRawMediaControlSnapshot
+        // 里暂停分支的注释),不需要再经过 resolvePositionSeconds 平滑。
+        let newDurationMs: Int? = {
+            if let d = snapshot.duration, d > 0 { return Int(d * 1000) }
+            return nil
+        }()
+        if newDurationMs != currentDurationMs { currentDurationMs = newDurationMs }
+        let newPausedPositionMs: Int? = playing ? nil : Int((snapshot.elapsedTime ?? 0) * 1000)
+        if newPausedPositionMs != pausedPositionMs { pausedPositionMs = newPausedPositionMs }
         // 无论这一轮是否在播放,都要更新这三个状态,供下一轮判断"是不是刚从暂停里恢复
         // 播放"——只在上面播放分支里更新的话,"播放→暂停→再播放"这个序列会因为暂停期间
         // 完全没走到这行,让下一次恢复播放时的判断误用暂停前的陈旧 posPrevWall/

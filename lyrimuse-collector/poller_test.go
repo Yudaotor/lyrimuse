@@ -56,6 +56,40 @@ func TestUpdatePosition_RealSeekReanchors(t *testing.T) {
 	}
 }
 
+// 回归测试:2026-08-04 实测排查坐实的 bug——poll() 里 appleMusicPosition() 校准
+// p.cur.Position/AnchorTS(这一轮推给网页的值)之后,如果不回写 p.trackPos/p.prevWall,
+// 下一轮 updatePosition() 的"稳定播放"分支(p.trackPos += gap*rate)会从校准前那个
+// 旧值继续累加,校准效果只在当轮昙花一现。这里直接模拟 poll() 里那次回写,验证下一轮
+// updatePosition() 确实从校准后的值(而不是校准前的旧 trackPos)继续外推。
+func TestAppleScriptCorrectionFeedsBackIntoTrackPos(t *testing.T) {
+	p := &poller{}
+	p.cur = snapshot{Title: "T", Artist: "A", Album: "Alb", Duration: 200, Playing: true, Elapsed: 10, Rate: 1}
+	p.updatePosition(nowAt(0)) // seed first observation
+
+	p.cur.Elapsed = 15
+	if reanchor, _ := p.updatePosition(nowAt(5)); reanchor {
+		t.Fatalf("steady playback must not reanchor")
+	}
+	if p.trackPos != 15 {
+		t.Fatalf("trackPos before correction should be 15, got %v", p.trackPos)
+	}
+
+	// 模拟 poll() 里 appleMusicPosition() 校准命中:真实播放头比内部累加器悄悄快了
+	// 0.5s,poll() 应把 p.trackPos/p.prevWall 一并回写成校准后的值+对应时刻。
+	p.trackPos = 15.5
+	p.prevWall = nowAt(5)
+
+	// 媒体控件自己那条独立的 Elapsed 跟踪流照常前进(不受这次校准影响,见 poller.go
+	// 里 p.prevElapse 单独维护的注释)——5 秒后到 20,没有触发 seek 容差。
+	p.cur.Elapsed = 20
+	if reanchor, _ := p.updatePosition(nowAt(10)); reanchor {
+		t.Fatalf("steady playback after correction must not reanchor")
+	}
+	if p.trackPos != 20.5 {
+		t.Fatalf("trackPos should extrapolate from the corrected 15.5 baseline (want 20.5), got %v — correction was discarded", p.trackPos)
+	}
+}
+
 func TestUpdatePosition_PauseDoesNotReanchor(t *testing.T) {
 	p := &poller{}
 	p.cur = snapshot{Title: "T", Artist: "A", Album: "Alb", Duration: 200, Playing: true, Elapsed: 10, Rate: 1}

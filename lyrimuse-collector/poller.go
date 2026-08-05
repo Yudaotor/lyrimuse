@@ -855,7 +855,19 @@ func (p *poller) poll() {
 	if (features.Player == playerAppleMusic || (features.Player == playerAuto && p.cur.Bundle == "com.apple.Music")) &&
 		p.cur.Playing && p.isTracked() {
 		if pos, ok := appleMusicPosition(p.ctx); ok {
-			p.cur.Position, p.cur.AnchorTS = pos, time.Now()
+			correctedAt := time.Now()
+			p.cur.Position, p.cur.AnchorTS = pos, correctedAt
+			// 2026-08-04 实测排查坐实的一个真实 bug(不是这次网页/本地进度差的全部
+			// 根因,但独立成立、值得修):光纠正 p.cur.Position/AnchorTS(这一轮推给
+			// 网页的值)不够——下一轮 updatePosition() 的"稳定播放:按真实经过时间
+			// 累加"分支(p.trackPos += gap*rate,见该函数)是从 p.trackPos 这个内部
+			// 累加器续算的,这里的校准值从没回写过 p.trackPos/p.prevWall,所以这次
+			// 校准只在"这一轮"昙花一现,下一轮立刻从纠正前那个可能已经悄悄漂移的旧
+			// p.trackPos 继续累加,校准效果被吃掉——只有累积漂移凑巧超过 2 秒的 seek
+			// 容差时才会被动纠正一次。回写这两个字段,让下一轮从这次校准过的真值+
+			// 对应时刻开始累加,而不是从旧累加器续算。
+			p.trackPos = pos
+			p.prevWall = correctedAt
 		}
 	}
 	p.handle(now, reanchored, loopRestart)
