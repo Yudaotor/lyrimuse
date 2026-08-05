@@ -74,9 +74,89 @@ public final class LyricsSyncEngine {
         options: [.caseInsensitive]
     )
 
-    private static func isCreditLine(_ text: String) -> Bool {
-        let range = NSRange(text.startIndex..., in: text)
-        return creditLinePattern.firstMatch(in: text, range: range) != nil
+    // genericHanCreditLinePattern 是上面那张关键词表的**结构化**补充,跟 collector 侧的
+    // genericHanCreditLineRe(match.go)是同一条规则、同一个理由——上面那张表已经补过至少
+    // 两轮(两字全称 → 单字缩写 → "Arranged by:" 这种夹 by 的写法),每次都是被漏判的真实
+    // 数据打回来才加的,说明枚举法在这件事上收敛不了:角色名的取值空间(指挥/混音师/贝斯/
+    // 中提琴/大提琴/母带工程师/和声编写……)本来就堵不完。
+    //
+    // 改成认"短汉字标签 + 冒号 + 内容"这个**形状**:1~8 个汉字紧跟冒号,大概率就是
+    // "角色:姓名"的职员表格式,真正在唱的歌词句子极少长这个样子。
+    //
+    // 三个刻意的收窄,都是为了不误杀真歌词:
+    // ① 只认汉字标签(不含数字/字母),避免误伤"1、2、3:"这类编号或英文场景标签;
+    // ② 上限 8 个汉字,再长就不像标签了;
+    // ③ 冒号后必须有非空白内容(\S),纯粹以冒号结尾的句子(真歌词里的语气停顿)不算。
+    //
+    // ⚠️ 不要照抄别人那种 `^.{1,20}\s*[:：]\s*.+` 的宽松写法:`.` 能匹配任何字符,会把
+    // "他说:我不走"这类正常带冒号的歌词整行吃掉。
+    private static let genericHanCreditLinePattern = try! NSRegularExpression(
+        pattern: #"^\p{Han}{1,8}\s*[:：]\s*\S"#
+    )
+
+    private static func matchesKeywordCreditPattern(_ text: String) -> Bool {
+        creditLinePattern.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)) != nil
+    }
+
+    /// 对唱/口白类歌词的**说话人标签**——这些跟职员表标签形状完全一样("短汉字 + 冒号"),
+    /// 但冒号后面跟的是真歌词正文,绝对不能删。
+    ///
+    /// ⚠️ 这份豁免名单是必须的,不是保险起见:这类 LRC 把**每一句**都标成「男：」「女：」
+    /// 「合：」,形状 100% 命中结构正则,下面那道"命中 ≥3 行且过半"的门反而**天然被满足**
+    /// ——门是为了区分"零星对白"和"整份职员表",可这种歌是"整份都带标签的真歌词",占比判据
+    /// 根本分不开。实测用户自己库里《怎么了 (feat. 袁咏琳)》已经 34% 命中,离 50% 只差一步,
+    /// 一旦过线就是整首歌被静默删空。
+    private static let speakerLabels: Set<String> = [
+        "男", "女", "合", "男合", "女合", "男女", "众", "齐",
+        "白", "旁白", "念", "说", "对白", "口白",
+        "男声", "女声", "合唱", "伴唱",
+    ]
+
+    private static func matchesStructuralCreditPattern(_ text: String) -> Bool {
+        guard genericHanCreditLinePattern.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)) != nil else {
+            return false
+        }
+        // 命中形状之后再看标签本身是不是说话人标签——是就豁免(既不算 hits、也不会被删)。
+        guard let sep = text.firstIndex(where: { $0 == ":" || $0 == "：" }) else { return false }
+        let label = text[text.startIndex..<sep].trimmingCharacters(in: .whitespaces)
+        return !speakerLabels.contains(label)
+    }
+
+    /// 结构化规则该不该对**这一整份**歌词生效。
+    ///
+    /// ⚠️ 这道整份判定是必须的,不是保险起见。collector 侧同一条结构正则(match.go 的
+    /// genericHanCreditLineRe)用在"整份候选要不要拒收"的**计数**上,误判一行无害;这边用在
+    /// "这一行删不删"的**展示过滤**上,误判一行就是静默吞掉一句真歌词——同一条规则,爆炸
+    /// 半径完全不同,不能原样搬。2026-08-05 补这条规则时,selftest 的反向用例当场抓到
+    /// "他说：我不走"被误杀("他说"= 2 个汉字 + 冒号 + 内容,形状完全命中)。
+    ///
+    /// 判据:真正要治的病是"网易云给纯音乐/配乐类曲目返回一整份职员表当歌词",特征是**整份
+    /// 都是这个形状**;而正常歌曲里的对白冒号只是零星一两句。所以要求命中行既达到绝对下限
+    /// (≥3 行,一两句对白够不着),又占到半数以上(整份被主导)。两个条件缺一不可:只看比例,
+    /// 一首只有 2 句歌词的短曲里一句对白就过半;只看行数,一首 50 行的歌里 3 句对白就被误杀。
+    private static func shouldApplyStructuralCreditFilter(_ texts: [String]) -> Bool {
+        guard !texts.isEmpty else { return false }
+        let hits = texts.filter(matchesStructuralCreditPattern).count
+        return hits >= 3 && hits * 2 > texts.count
+    }
+
+    /// 过滤掉署名/职员表行。关键词表逐行生效(它枚举的都是明确的角色名,误判空间很小);
+    /// 结构化规则只在整份被主导时才生效,见 shouldApplyStructuralCreditFilter。
+    private static func strippingCreditLines(_ texts: [String]) -> [Bool] {
+        let useStructural = shouldApplyStructuralCreditFilter(texts)
+        let drop = texts.map { text -> Bool in
+            if matchesKeywordCreditPattern(text) { return true }
+            return useStructural && matchesStructuralCreditPattern(text)
+        }
+        // 兜底闸门:展示过滤**永远不把整份删空**。走到这一步说明判据出了我没预料到的偏差
+        // (某种全篇都长成职员表形状、但其实是真歌词的写法),此时"整片空白/一直显示♪"对用户
+        // 来说比"多显示几行职员表"糟糕得多——宁可漏治,不可删空。跟 collector 侧
+        // isCreditOnlyLRC 的"整份拒收"是两回事:那边拒收之后还有别的源可以顶上,这边删空了
+        // 就真的什么都没有了。
+        if drop.allSatisfy({ $0 }) && !texts.isEmpty {
+            return texts.map { _ in false }
+        }
+        return drop
     }
 
     public init() {}
@@ -84,8 +164,19 @@ public final class LyricsSyncEngine {
     public func load(lyrics: String, lyricsTr: String, lyricsRoma: String, lyricsYRC: String, preferWordLevel: Bool = true) {
         let yrc = preferWordLevel ? YRCParser.parse(lyricsYRC) : []
         usingWords = !yrc.isEmpty
-        wordLines = usingWords ? yrc.filter { !Self.isCreditLine($0.words.map(\.text).joined()) } : []
-        baseLines = usingWords ? [] : LRCParser.parse(lyrics).filter { !Self.isCreditLine($0.text) }
+        // 过滤前先把整份的文本取出来判一次(结构化规则是整份粒度的,见
+        // shouldApplyStructuralCreditFilter),不能像原来那样逐行独立 filter。
+        if usingWords {
+            let texts = yrc.map { $0.words.map(\.text).joined() }
+            let drop = Self.strippingCreditLines(texts)
+            wordLines = zip(yrc, drop).compactMap { $0.1 ? nil : $0.0 }
+            baseLines = []
+        } else {
+            let parsed = LRCParser.parse(lyrics)
+            let drop = Self.strippingCreditLines(parsed.map(\.text))
+            wordLines = []
+            baseLines = zip(parsed, drop).compactMap { $0.1 ? nil : $0.0 }
+        }
         romaLines = LRCParser.parse(lyricsRoma)
         trLines = LRCParser.parse(lyricsTr)
         // 罗马音客户端兜底该不该对这首歌的汉字生效——按"整首歌"粒度判一次(扫原始的
