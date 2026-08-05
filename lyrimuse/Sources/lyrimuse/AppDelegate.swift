@@ -86,6 +86,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         PlaybackCoordinator.shared.start()
+        // 菜单栏歌词跑马灯的驱动器——生命周期自持(靠 Combine 自己决定何时开停计时器),
+        // 这里只需要在启动时点一次,见 MenuBarMarqueeTicker 顶部注释。
+        MenuBarMarqueeTicker.shared.start()
 
         // 打开 Lyrimuse 时顺带唤起当前选定的播放器(可选,见 AppSettings.
         // launchMusicOnLyrimuseOpen 注释)。跟着 PlaybackPlayerPreference.current 走,

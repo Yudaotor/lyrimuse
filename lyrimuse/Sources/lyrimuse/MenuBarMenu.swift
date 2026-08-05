@@ -28,6 +28,7 @@ private let menuBarIconImage: NSImage = {
 struct MenuBarLabel: View {
     @ObservedObject private var settings = AppSettings.shared
     @ObservedObject private var coordinator = PlaybackCoordinator.shared
+    @ObservedObject private var marquee = MenuBarMarqueeTicker.shared
     @Environment(\.openSettings) private var openSettingsAction
     @Environment(\.openWindow) private var openWindowAction
 
@@ -37,9 +38,11 @@ struct MenuBarLabel: View {
                coordinator.isPlayingNow,
                let text = coordinator.currentLine?.plainText,
                !text.isEmpty {
-                // 状态栏空间有限,截断是必须的,不能像悬浮窗那样直接自动换行——但截断不该等于
-                // "看不到剩下的部分",鼠标悬停时用系统原生 tooltip 把完整这一行显示出来。
-                Text(truncated(text)).help(text)
+                // 状态栏空间有限,不能像悬浮窗那样自动换行。超宽时默认横向滚动(跑马灯,
+                // 见 MenuBarMarqueeTicker;设置里可关,关掉就退回截断加省略号)——两种模式
+                // 下真正显示哪一段都由 ticker 算好发布,这里只渲染。tooltip 始终给完整
+                // 这一行,滚动/截断都不影响"想看全文就悬停"这条既有出路。
+                Text(marquee.visibleText.isEmpty ? text : marquee.visibleText).help(text)
             } else {
                 Label {
                     Text(L10n.t("Lyrimuse"))
@@ -94,11 +97,6 @@ struct MenuBarLabel: View {
         }
     }
 
-    private func truncated(_ text: String) -> String {
-        let maxChars = settings.menuBarLyricsMaxChars
-        guard text.count > maxChars else { return text }
-        return String(text.prefix(maxChars)) + "…"
-    }
 }
 
 struct MenuBarMenu: View {
