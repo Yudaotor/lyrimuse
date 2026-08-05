@@ -613,7 +613,7 @@ struct AccountLinkingTab: View {
         case .waitingForBrowserAuth:
             stepDots(current: 2)
             VStack(alignment: .leading, spacing: 6) {
-                Text(L10n.t("已在浏览器打开 Last.fm 授权页面。请在浏览器里点击「Yes, allow access」完成授权——授权完会自动跳回 Lyrimuse 继续；如果浏览器没有自动跳转，也可以回来手动点下面的按钮"))
+                Text(L10n.t("已在浏览器打开 Last.fm 授权页面。请在浏览器里点击「Yes, allow access」完成授权，授权完会自动跳回 Lyrimuse 继续；如果浏览器没有自动跳转，也可以回来手动点下面的按钮"))
                     .font(.caption).foregroundStyle(.secondary)
                 Button(L10n.t("我已完成授权，继续")) {
                     lastfmConnect.confirmBrowserAuth(apiKey: config.lastfmScrobbleAPIKey, secret: config.lastfmScrobbleSecret)

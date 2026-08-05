@@ -118,6 +118,9 @@ struct OnboardingView: View {
         // 不管走没走完(包括直接点红绿灯关掉窗口)都算"已经引导过一次"——这里没有任何
         // 重新打开的入口,关掉就是关掉了。
         .onDisappear { settings.hasCompletedOnboarding = true }
+        // 见 AuxiliaryWindowActivation 注释——.accessory 策略下临时借一个 Dock 图标。
+        .onAppear { AuxiliaryWindowActivation.windowDidAppear() }
+        .onDisappear { AuxiliaryWindowActivation.windowDidDisappear() }
     }
 
     private var stepDots: some View {
@@ -181,7 +184,7 @@ struct OnboardingView: View {
             if isRequestingAutomation {
                 if automationRequestTimedOut {
                     VStack(alignment: .leading, spacing: 6) {
-                        Text(L10n.t("这次请求耗时有点久——如果你已经看到系统弹窗，请去处理它；找不到弹窗的话，可以直接去系统设置里手动开启"))
+                        Text(L10n.t("这次请求耗时有点久。如果你已经看到系统弹窗，请去处理它；找不到弹窗的话，可以直接去系统设置里手动开启"))
                         Button(L10n.t("打开系统设置")) {
                             NSWorkspace.shared.open(MusicAutomationPermission.systemSettingsURL)
                         }

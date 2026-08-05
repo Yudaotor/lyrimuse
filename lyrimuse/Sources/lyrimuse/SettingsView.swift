@@ -193,6 +193,10 @@ struct SettingsView: View {
                 AppActions.shared.pendingSettingsSelection = nil
             }
         }
+        // 见 AuxiliaryWindowActivation 注释——.accessory 策略下临时借一个 Dock 图标,
+        // 关掉后(没有别的辅助窗口还开着)还原,不跟"在 Dock 中显示"这个永久偏好打架。
+        .onAppear { AuxiliaryWindowActivation.windowDidAppear() }
+        .onDisappear { AuxiliaryWindowActivation.windowDidDisappear() }
     }
 
     // 保持单行(图标+标题),不加状态小字——账号行有状态是因为账号真的有"连没连上"
@@ -239,7 +243,7 @@ private struct LyricsSettingsTab: View {
                 )) {
                     HStack(spacing: 4) {
                         Text(L10n.t("歌词在线匹配"))
-                        HelpButton(text: L10n.t("控制要不要在线解析歌词——关闭后，第一次播放的新歌不会再去查下面「歌词来源」里的这些平台，只用本地已经缓存过的结果（如果有）。「歌词来源」「匹配算法」这两组设置都只在这个开关开启时才有意义"))
+                        HelpButton(text: L10n.t("控制要不要在线解析歌词。关闭后，第一次播放的新歌不会再去查下面「歌词来源」里的这些平台，只用本地已经缓存过的结果（如果有）。「歌词来源」「匹配算法」这两组设置都只在这个开关开启时才有意义"))
                     }
                 }
                 // "解析"(而非"预取")避免被误读成预先加载音频本身,这个开关从不碰音频。
@@ -249,7 +253,7 @@ private struct LyricsSettingsTab: View {
                 )) {
                     HStack(spacing: 4) {
                         Text(L10n.t("提前解析同专辑其它曲目"))
-                        HelpButton(text: L10n.t("换到一首歌时，如果它属于某张专辑，会顺带在后台把同专辑里还没解析过的其它曲目也提前解析——封面无条件都会解析，歌词是否被预取取决于上面的「歌词在线匹配」开关是否开启"))
+                        HelpButton(text: L10n.t("换到一首歌时，如果它属于某张专辑，会顺带在后台把同专辑里还没解析过的其它曲目也提前解析。封面无条件都会解析，歌词是否被预取取决于上面的「歌词在线匹配」开关是否开启"))
                     }
                 }
             }
@@ -361,29 +365,38 @@ private struct LyricsSettingsTab: View {
             } header: {
                 Text(L10n.t("译文语言"))
             } footer: {
-                Text(L10n.t("仅对 Musixmatch 来源生效——网易云音乐/QQ音乐的译文固定是中文"))
+                Text(L10n.t("仅对 Musixmatch 来源生效，网易云音乐/QQ音乐的译文固定是中文"))
             }
 
             Section {
-                Toggle(L10n.t("优先逐字高亮(有的话)"), isOn: Binding(
+                Toggle(L10n.t("优先逐字高亮（有的话）"), isOn: Binding(
                     get: { settings.preferWordLevelKaraoke },
                     set: { newValue in
                         settings.preferWordLevelKaraoke = newValue
                         local.preferWordLevelKaraoke = newValue
                     }
                 ))
-                Toggle(L10n.t("显示罗马音"), isOn: $settings.showRomanization)
-                Toggle(L10n.t("显示译文"), isOn: $settings.showTranslation)
-                Toggle(L10n.t("双行显示(预览下一句歌词)"), isOn: $settings.showNextLinePreview)
+                Toggle(isOn: $settings.showRomanization) {
+                    HStack(spacing: 4) {
+                        Text(L10n.t("显示罗马音"))
+                        // 2026-08-04 从常驻 footer caption 改成按需展开的 HelpButton——
+                        // 跟本 Section 里"歌词在线匹配"等开关同一个既有约定(见 HelpButton
+                        // 顶部注释:常驻 caption 留给"一眼扫过就该知道"的内容,这类需要
+                        // 多一点背景知识才看得懂的说明按需展开)。这条说明原来整段常驻在
+                        // footer,但内容其实只跟这两个具体开关有关,挤在 Section 底部反而
+                        // 不如直接挂在对应开关旁边醒目。
+                        HelpButton(text: L10n.t("这个开关只影响「桌面悬浮歌词」和「歌词窗口」；灵动岛歌词受限于胶囊空间不支持这一项，菜单栏歌词只能显示一行纯文字"))
+                    }
+                }
+                Toggle(isOn: $settings.showTranslation) {
+                    HStack(spacing: 4) {
+                        Text(L10n.t("显示译文"))
+                        HelpButton(text: L10n.t("这个开关只影响「桌面悬浮歌词」和「歌词窗口」；灵动岛歌词受限于胶囊空间不支持这一项，菜单栏歌词只能显示一行纯文字"))
+                    }
+                }
+                Toggle(L10n.t("双行显示（预览下一句歌词）"), isOn: $settings.showNextLinePreview)
             } header: {
                 Text(L10n.t("展示"))
-            } footer: {
-                // 2026-08-02 补上——"显示罗马音"/"显示译文"这两个开关只对"桌面悬浮歌词"
-                // 和"歌词窗口"生效:灵动岛歌词受限于胶囊本身的空间预算,没有实现这两行
-                // 附加内容(刻意的取舍,不是遗漏);菜单栏歌词是系统菜单栏标题、天生只能
-                // 放一行纯文字,概念上就不存在"额外一行罗马音/译文"这回事。之前没有任何
-                // 地方说明这一点,用户在灵动岛模式下打开这两个开关会发现毫无变化。
-                Text(L10n.t("「显示罗马音」「显示译文」只影响「桌面悬浮歌词」和「歌词窗口」；灵动岛歌词受限于胶囊空间不支持这两项，菜单栏歌词只能显示一行纯文字"))
             }
 
             Section {
@@ -403,7 +416,7 @@ private struct LyricsSettingsTab: View {
                 } label: {
                     HStack(spacing: 4) {
                         Text(L10n.t("歌词文件夹"))
-                        HelpButton(text: L10n.t("歌词默认就以这个文件夹为准维护——联网匹配到的结果会导出成文件存在这里，「歌词管理」里手动导入/编辑的文件也在这里。换成新文件夹后，旧文件夹里已有的文件不会自动搬过去，需要自己手动移动"))
+                        HelpButton(text: L10n.t("歌词默认就以这个文件夹为准维护。联网匹配到的结果会导出成文件存在这里，「歌词管理」里手动导入/编辑的文件也在这里。换成新文件夹后，旧文件夹里已有的文件不会自动搬过去，需要自己手动移动"))
                     }
                 }
 
@@ -440,7 +453,7 @@ private struct LyricsSettingsTab: View {
             } header: {
                 Text(L10n.t("管理"))
             } footer: {
-                Text(L10n.t("每首歌听过一次,歌词就会永久保存在这个文件夹里;在「歌词管理」里删除会同时删掉这里已导出的文件"))
+                Text(L10n.t("每首歌听过一次，歌词就会永久保存在这个文件夹里；在「歌词管理」里删除会同时删掉这里已导出的文件"))
             }
         }
         .formStyle(.grouped)
@@ -604,7 +617,13 @@ private struct AppearanceSettingsTab: View {
                 }
                 Toggle(L10n.t("菜单栏歌词"), isOn: $settings.showLyricsInMenuBar)
                 if settings.showLyricsInMenuBar {
-                    LabeledContent(L10n.t("超过就截断")) {
+                    Toggle(isOn: $settings.menuBarLyricsScroll) {
+                        HStack(spacing: 4) {
+                            Text(L10n.t("超宽时横向滚动"))
+                            HelpButton(text: L10n.t("歌词比下面设置的宽度更长时，在状态栏里横向滚动播完整句（开头会先停一下再滚）；关掉则截断成「前 N 个字…」。两种模式下鼠标悬停在状态栏上都能看到完整的这一行"))
+                        }
+                    }
+                    LabeledContent(L10n.t(settings.menuBarLyricsScroll ? "显示宽度" : "超过就截断")) {
                         HStack(spacing: 8) {
                             Slider(value: Binding(
                                 get: { Double(settings.menuBarLyricsMaxChars) },
@@ -616,7 +635,9 @@ private struct AppearanceSettingsTab: View {
                                 .frame(width: 40, alignment: .trailing)
                         }
                     }
-                    Text(L10n.t("没超过就整行显示；超过这个长度会截断，鼠标悬停在状态栏上能看到完整这一行"))
+                    Text(L10n.t(settings.menuBarLyricsScroll
+                        ? "状态栏里最多同时显示这么多字；更长的歌词会横向滚动播完"
+                        : "没超过就整行显示；超过这个长度会截断，鼠标悬停在状态栏上能看到完整这一行"))
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 // "歌词窗口"(正经的标题栏窗口,完整歌词列表+自动滚动)不像上面三个那样
@@ -700,7 +721,13 @@ private struct AppearanceSettingsTab: View {
                 .buttonStyle(.link)
 
                 Picker(L10n.t("字体"), selection: $settings.fontFamilyName) {
-                    Text(L10n.t("跟随系统")).tag("")
+                    // 这一项原来也叫「跟随系统」,跟语言选择器那一项撞成同一个 L10n key
+                    // ("跟随系统"),而 .strings 里一个 key 只能有一个值——两处需要的英文
+                    // 不一样("Follow System" vs 字体语境下的默认系统字体),重复 key 里
+                    // plutil 只保留最后一条,结果语言选择器的英文被字体那条顶掉了。
+                    // 改成「系统字体」:key 各自独立,而且在「字体」选择器下这个说法本身就比
+                    // 「跟随系统」准确(后者容易被读成跟随深浅色外观)。
+                    Text(L10n.t("系统字体")).tag("")
                     ForEach(Self.curatedFontFamilies, id: \.self) { family in
                         Text(family).tag(family)
                     }
@@ -740,7 +767,7 @@ private struct AppearanceSettingsTab: View {
                                           // 不另加一根 opacity 滑杆
                 )
 
-                Toggle(L10n.t("文字描边(与桌面背景区分)"), isOn: $settings.textStrokeEnabled)
+                Toggle(L10n.t("文字描边（与桌面背景区分）"), isOn: $settings.textStrokeEnabled)
 
                 if settings.textStrokeEnabled {
                     ColorPicker(
@@ -864,8 +891,8 @@ private struct AppearanceSettingsTab: View {
                 // 直观(不看说明容易只当成"按住就能拖"或者"这窗口点不动了"),需要在
                 // 这里补一句显式说明,不能单靠去掉括号里的旧文案就假装用户会自己发现。
                 VStack(alignment: .leading, spacing: 6) {
-                    Text(L10n.t("解锁「锁定位置」后,悬浮歌词默认可以直接点击穿透到它下面的内容;长按住悬浮歌词不放,才能拖动它的位置"))
-                    Text(L10n.t("开启「截屏/录屏时隐藏」后,截图、录屏、视频会议共享屏幕都不会拍到悬浮歌词——但你自己在这台 Mac 上仍然正常看得见"))
+                    Text(L10n.t("解锁「锁定位置」后，悬浮歌词默认可以直接点击穿透到它下面的内容；长按住悬浮歌词不放，才能拖动它的位置"))
+                    Text(L10n.t("开启「截屏/录屏时隐藏」后，截图、录屏、视频会议共享屏幕都不会拍到悬浮歌词，但你自己在这台 Mac 上仍然正常看得见"))
                 }
             }
         }
@@ -953,7 +980,7 @@ private struct PlayerSettingsTab: View {
                 if isRequestingAutomation {
                     if automationRequestTimedOut {
                         VStack(alignment: .leading, spacing: 6) {
-                            Text(L10n.t("这次请求耗时有点久——如果你已经看到系统弹窗，请去处理它；找不到弹窗的话，可以直接去系统设置里手动开启"))
+                            Text(L10n.t("这次请求耗时有点久。如果你已经看到系统弹窗，请去处理它；找不到弹窗的话，可以直接去系统设置里手动开启"))
                             Button(L10n.t("打开系统设置")) {
                                 NSWorkspace.shared.open(MusicAutomationPermission.systemSettingsURL)
                             }
@@ -969,7 +996,7 @@ private struct PlayerSettingsTab: View {
             } header: {
                 Text(L10n.t("权限"))
             } footer: {
-                Text(L10n.t("Lyrimuse 靠这个权限读取 Apple Music 当前播放的歌曲信息——没有它，悬浮歌词/灵动岛都无法显示任何歌词内容"))
+                Text(L10n.t("Lyrimuse 靠这个权限读取 Apple Music 当前播放的歌曲信息。没有它，悬浮歌词/灵动岛都无法显示任何歌词内容"))
             }
             .onAppear { automationStatus = MusicAutomationPermission.check(askIfNeeded: false) }
             // 见 OnboardingView 里同一处的注释:用户可能切去系统设置手动处理,切回来
@@ -1028,8 +1055,8 @@ private struct PlayerSettingsTab: View {
                 // 采集器日志),不是空泛地说"启用失败"。
                 if collectorEnableFailed {
                     VStack(alignment: .leading, spacing: 6) {
-                        Text(L10n.t("启用失败——可能是权限或系统限制导致后台服务没能正常启动，导出诊断信息能看到具体原因，也方便反馈问题"))
-                        Button(L10n.t("导出诊断信息")) { exportDiagnostics() }
+                        Text(L10n.t("启用失败，可能是权限或系统限制导致后台服务没能正常启动，导出诊断信息能看到具体原因，也方便反馈问题"))
+                        Button(L10n.t("导出诊断信息…")) { exportDiagnostics() }
                     }
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -1037,7 +1064,7 @@ private struct PlayerSettingsTab: View {
             } header: {
                 Text(L10n.t("常驻服务"))
             } footer: {
-                Text(L10n.t("负责读取播放状态、解析歌词/封面并写入本地缓存的后台程序——没有它，悬浮歌词/灵动岛同样无法显示任何内容"))
+                Text(L10n.t("负责读取播放状态、解析歌词/封面并写入本地缓存的后台程序。没有它，悬浮歌词/灵动岛同样无法显示任何内容"))
             }
             .onAppear { collectorRunning = CollectorServiceManager.isRunning }
 
@@ -1350,7 +1377,7 @@ private struct AboutSettingsTab: View {
                     // Sparkle 自己处理"检查中/已是最新/发现新版本"这几种状态的 UI
                     // 展示(SPUStandardUserDriver 的标准弹窗),不需要自己维护 loading
                     // 状态或者判断结果再手动弹 alert。
-                    Button(L10n.t("检查更新")) {
+                    Button(L10n.t("检查更新…")) {
                         SparkleUpdaterManager.shared.checkForUpdates()
                     }
                     .buttonStyle(.link)
@@ -1388,7 +1415,7 @@ private struct AboutSettingsTab: View {
             // 服务/各功能是否已配置,不含任何 token 原始值)汇总成一份文本存到桌面,
             // 方便贴进 issue 或者发给开发者。
             Section {
-                Button(L10n.t("导出诊断信息")) {
+                Button(L10n.t("导出诊断信息…")) {
                     let report = DiagnosticsExporter.buildReport()
                     let panel = NSSavePanel()
                     panel.nameFieldStringValue = DiagnosticsExporter.suggestedFilename()
@@ -1399,7 +1426,7 @@ private struct AboutSettingsTab: View {
                     }
                 }
             } footer: {
-                Text(L10n.t("汇总 App/采集器日志和权限、常驻服务等关键状态,保存成一份文本文件——不会包含任何账号 token 或密钥的原始内容"))
+                Text(L10n.t("汇总 App/采集器日志和权限、常驻服务等关键状态，保存成一份文本文件，不会包含任何账号 token 或密钥的原始内容"))
             }
 
             Section {

@@ -52,7 +52,7 @@ public enum NotificationPlatform: String, CaseIterable, Identifiable, Codable {
         case .feishu:
             return L10n.t("在飞书群里：设置 → 群机器人 → 添加机器人 → 自定义机器人，创建后复制 Webhook 地址。想加一层校验可以开启「签名校验」，把密钥填进下面的「签名密钥」")
         case .serverchan:
-            return L10n.t("打开 sct.ftqq.com，用微信扫码登录，首页会显示你的 SendKey——完整地址是 https://sctapi.ftqq.com/你的SendKey.send，把这一整串填进上面")
+            return L10n.t("打开 sct.ftqq.com，用微信扫码登录，首页会显示你的 SendKey，完整地址是 https://sctapi.ftqq.com/你的SendKey.send，把这一整串填进上面")
         }
     }
 
