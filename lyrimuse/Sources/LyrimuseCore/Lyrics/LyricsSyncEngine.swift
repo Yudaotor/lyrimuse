@@ -88,9 +88,22 @@ public final class LyricsSyncEngine {
         baseLines = usingWords ? [] : LRCParser.parse(lyrics).filter { !Self.isCreditLine($0.text) }
         romaLines = LRCParser.parse(lyricsRoma)
         trLines = LRCParser.parse(lyricsTr)
+        // 罗马音客户端兜底该不该对这首歌的汉字生效——按"整首歌"粒度判一次(扫原始的
+        // lyrics/lyricsYRC 两个字段,不是解析过滤后的 baseLines/wordLines,署名行也该
+        // 算进这个判断:哪怕正文过滤掉了,一整首歌只要出现过假名就足以确证是日文),
+        // 而不是逐行判断——理由见 Romanizer.looksJapanese 的调用点注释,极少数纯汉字的
+        // 日文行不该被局部误判成中文。
+        songLooksJapanese = Romanizer.looksJapanese(lyrics) || Romanizer.looksJapanese(lyricsYRC)
+        // 换歌词内容清空——见 romanizationText() 的缓存注释,纯粹是内存卫生考虑(避免
+        // 常年挂着的进程把每一句听过的歌词文本都无限期缓存下去),不清空也不会算错,
+        // 只是没必要让它跨曲目继续增长。
+        romanizerFallbackCache.removeAll()
     }
 
+    private var songLooksJapanese = false
+
     public var hasContent: Bool { usingWords ? !wordLines.isEmpty : !baseLines.isEmpty }
+
 
     private func nearestText(_ arr: [LyricLine], _ t: Int, tolerance: Int = 700) -> String? {
         var best: String?
@@ -100,6 +113,36 @@ public final class LyricsSyncEngine {
             if d <= bestDiff { bestDiff = d; best = it.text }
         }
         return best
+    }
+
+    // 罗马音字段的服务端来源 + 客户端兜底组合——romaLines 完全为空(这首歌整体就没有
+    // 服务端罗马音)时才现算兜底,不在"这一行没匹配上、但别的行有"这种局部空档里现算:
+    // 那种情况混着展示"服务端标注的几行"+"现算兜底的几行"观感会不一致,不如保持现状
+    // (那一行没有罗马音)交给下面 700ms 容差本身已经算合理的判断。
+    //
+    // ⚠️ 2026-08-04 实测排查坐实的真实性能回归:activeLine(atMs:) 由
+    // LocalPlaybackSource.fastTick() 以 20Hz 调用,每次都会重新算一遍这一行的
+    // romanization——没有服务端罗马音的歌(比如纯英文歌词)会在每一次 tick 都重新跑一遍
+    // Romanizer.romanize() 的 ICU 音译,而不是只在真的换到新的一行时才算一次,导致主线程
+    // 20 次/秒白白做重复的字符串音译运算,表现成"本地悬浮窗/歌词窗口进度肉眼可见地比
+    // 网页端(走的是完全不同的一套外推逻辑,不受这里影响)慢、跟不上播放进度"。按
+    // plainText 记忆化:同一句歌词文本只在第一次真正算一遍,之后的 19/20 次 tick 直接
+    // 命中缓存,不再重复调用这个开销不小的字符串变换。
+    private var romanizerFallbackCache: [String: String?] = [:]
+
+    private func romanizationText(timeMs: Int, plainText: String) -> String? {
+        if let fromSource = nearestText(romaLines, timeMs) { return fromSource }
+        guard romaLines.isEmpty else { return nil }
+        // 2026-08-04 实测排查坐实的真实 bug:含汉字的行只在"整首歌确认是日文"
+        // (songLooksJapanese)时才允许兜底——纯中文歌曲(没有假名)没有这层限制的话,
+        // 汉字会被 ICU 音译成拼音展示,对中文读者是纯噪声(NetEase 本来就不给中文歌曲
+        // 算 lyrics_roma,这本身就是"不需要罗马音"的信号,客户端兜底不该越权覆盖这个
+        // 判断)。不含汉字的行(韩文谚文/泰文/西里尔字母等)没有这层混淆,始终允许。
+        if Romanizer.containsHan(plainText) && !songLooksJapanese { return nil }
+        if let cached = romanizerFallbackCache[plainText] { return cached }
+        let result = Romanizer.romanize(plainText)
+        romanizerFallbackCache[plainText] = result
+        return result
     }
 
     public func activeLine(atMs rawPosMs: Int) -> SyncedLyricLine? {
@@ -113,7 +156,7 @@ public final class LyricsSyncEngine {
                 SyncedLyricWord(text: w.text, startMs: w.startMs, durationMs: w.durationMs)
             }
             return SyncedLyricLine(
-                romanization: nearestText(romaLines, ln.timeMs),
+                romanization: romanizationText(timeMs: ln.timeMs, plainText: words.map(\.text).joined()),
                 translation: nearestText(trLines, ln.timeMs),
                 mainText: nil,
                 words: words
@@ -124,7 +167,7 @@ public final class LyricsSyncEngine {
         guard idx >= 0 else { return nil }
         let ln = baseLines[idx]
         return SyncedLyricLine(
-            romanization: nearestText(romaLines, ln.timeMs),
+            romanization: romanizationText(timeMs: ln.timeMs, plainText: ln.text),
             translation: nearestText(trLines, ln.timeMs),
             mainText: ln.text,
             words: nil
@@ -164,7 +207,7 @@ public final class LyricsSyncEngine {
                     SyncedLyricWord(text: w.text, startMs: w.startMs, durationMs: w.durationMs)
                 }
                 let line = SyncedLyricLine(
-                    romanization: nearestText(romaLines, ln.timeMs),
+                    romanization: romanizationText(timeMs: ln.timeMs, plainText: words.map(\.text).joined()),
                     translation: nearestText(trLines, ln.timeMs),
                     mainText: nil,
                     words: words
@@ -174,7 +217,7 @@ public final class LyricsSyncEngine {
         }
         return baseLines.enumerated().map { i, ln in
             let line = SyncedLyricLine(
-                romanization: nearestText(romaLines, ln.timeMs),
+                romanization: romanizationText(timeMs: ln.timeMs, plainText: ln.text),
                 translation: nearestText(trLines, ln.timeMs),
                 mainText: ln.text,
                 words: nil
