@@ -81,7 +81,10 @@ brew install --cask lyrimuse
 
 ### 方案 B：手动下载预编译版本
 
-1. 去 [Releases 页面](https://github.com/Yudaotor/lyrimuse/releases) 下载最新的 `Lyrimuse-*-macos.zip`（附带一份 `.sha256` 校验文件），解压后把 `Lyrimuse.app` 拖进 `/Applications`。只有一个 zip，是 universal 包（Apple Silicon 和 Intel 两份都在里面），不用挑架构。
+1. 去 [Releases 页面](https://github.com/Yudaotor/lyrimuse/releases) 下载，两种格式随你挑，装出来是同一个 App（同一次构建打的两份包），都是 universal（Apple Silicon 和 Intel 两份都在里面），不用挑架构：
+
+   - `Lyrimuse-*-macos.dmg` —— 双击挂载，把 `Lyrimuse.app` 拖到旁边的 `Applications` 上。
+   - `Lyrimuse-*-macos.zip` —— 解压后把 `Lyrimuse.app` 拖进 `/Applications`。附带一份 `.sha256`，想核对下载完整性的话在同一目录里跑 `shasum -c Lyrimuse-*-macos.zip.sha256`。这也是 Homebrew 和 App 内自动更新用的那一份。
 2. 第一次打开时 macOS 会拒绝运行——提示"Lyrimuse 已损坏，无法打开"或"来自身份不明的开发者"。用下面任意一种方式解锁一次即可：
 
    - **推荐——终端命令（永远有效）：**

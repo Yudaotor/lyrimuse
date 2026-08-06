@@ -81,7 +81,10 @@ This clears the one-time Gatekeeper quarantine automatically as part of installi
 
 ### Option B: Download a pre-built release manually
 
-1. Grab the latest `Lyrimuse-*-macos.zip` from the [Releases page](https://github.com/Yudaotor/lyrimuse/releases) (a matching `.sha256` file is attached too, if you want to verify the download), unzip it, and drag `Lyrimuse.app` into `/Applications`. There is only one zip — it is a universal build carrying both Apple Silicon and Intel slices, so there is no architecture to pick.
+1. Grab it from the [Releases page](https://github.com/Yudaotor/lyrimuse/releases) in whichever format you prefer — both come from the same build and install the same app, and both are universal, carrying Apple Silicon and Intel slices, so there is no architecture to pick:
+
+   - `Lyrimuse-*-macos.dmg` — double-click to mount, then drag `Lyrimuse.app` onto the `Applications` shortcut next to it.
+   - `Lyrimuse-*-macos.zip` — unzip and drag `Lyrimuse.app` into `/Applications`. A matching `.sha256` is attached if you want to verify the download (`shasum -c Lyrimuse-*-macos.zip.sha256` from the same folder). This is also the archive Homebrew and the app's own updater use.
 2. On first launch, macOS will refuse to open it — "Lyrimuse can't be opened because Apple cannot check it for malicious software" or "is from an unidentified developer." Clear it once, with whichever of these you're more comfortable with:
 
    - **Recommended — Terminal (always works):**

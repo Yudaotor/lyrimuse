@@ -7,3 +7,4 @@ node_modules/
 .DS_Store
 .dev.vars
 lyrimuse/.build/
+lyrimuse/dist/
