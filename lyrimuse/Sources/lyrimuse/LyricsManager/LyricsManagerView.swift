@@ -663,18 +663,37 @@ struct LyricsManagerView: View {
                     }
                     ToolbarItem {
                         // 缓存占用查看 + 一键清空——这份缓存设计上"解析一次永久保留",
-                        // 之前只能在下面列表里逐条删,没有总大小展示、也没有批量清空的
-                        // 入口。菜单本身的标题就是总大小(ByteCountFormatter 格式化),
-                        // 不需要另外找地方展示这个数字。
+                        // 之前只能在下面列表里逐条删,没有总大小展示、也没有批量清空的入口。
+                        //
+                        // ⚠️ 2026-08-05 修:这里原来只有 `Label(cacheSizeText, systemImage:)`
+                        // 当 Menu 的标签,旧注释还写着"菜单本身的标题就是总大小,不需要另外找
+                        // 地方展示这个数字"——但 macOS 工具栏里的 Label **默认只画图标、把标题
+                        // 整个丢掉**(跟 MenuBarMenu.swift 里"下拉菜单默认不画 Label 图标"是相反
+                        // 方向的同一类默认行为),所以那个数字从来没真的出现在界面上,工具栏上
+                        // 只有一个硬盘图标 + 展开箭头。补 .labelStyle(.titleAndIcon) 让标题真的
+                        // 画出来。
+                        //
+                        // 菜单里再放一行"共 N 条,占用 X":用户点开这个菜单本来就是想看占用,而且
+                        // 这一行紧贴着"清空全部缓存"这个不可撤销的操作,让人在点下去之前先看清
+                        // 自己要删掉多少东西。
                         Menu {
-                            Button(role: .destructive) {
-                                showClearAllConfirm = true
-                            } label: {
-                                Label(L10n.t("清空全部缓存"), systemImage: "trash")
+                            Section {
+                                Button(role: .destructive) {
+                                    showClearAllConfirm = true
+                                } label: {
+                                    Label(L10n.t("清空全部缓存"), systemImage: "trash")
+                                }
+                            } header: {
+                                Text(String(format: L10n.t("共 %d 条，占用 %@"),
+                                            store.summaries.count, cacheSizeText))
                             }
                         } label: {
                             Label(cacheSizeText, systemImage: "internaldrive")
+                                .labelStyle(.titleAndIcon)
                         }
+                        // 光看一个数字说不清算的是什么——说明它同时含缓存 JSON 和已导出的
+                        // lyrics/ 文件夹(见 EnrichCacheStore.totalSizeBytes)。
+                        .help(L10n.t("歌词缓存文件，加上已导出的 .lrc 歌词文件夹，合计占用的磁盘空间"))
                     }
                 }
                 // 列表这一栏(歌名/歌手/专辑/来源四列)给个够宽的默认/理想宽度——不然
