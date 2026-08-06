@@ -360,6 +360,21 @@ public final class LocalPlaybackSource: ObservableObject {
             artworkAccentHex = nil
             pausedPositionMs = nil
             currentDurationMs = nil
+            // ⚠️ lastKey 必须一起清空,否则上面清掉的 allLines/artworkData 再也回不来。
+            //
+            // apply() 里重建这两样的两条路径都只在**换歌**时才跑:
+            // reloadCurrentLyrics() 的条件是 `trackChanged || !syncEngine.hasContent`,
+            // 而 syncEngine 在这里并没有被卸载、hasContent 仍是 true;取封面那条更是只有
+            // `if trackChanged`。而 trackChanged 是 `key != lastKey` —— 不清 lastKey 的话,
+            // 同一首歌恢复播放时 trackChanged 就是 false,两条路径全部跳过,"歌词窗口"会
+            // 一直停在 allLines 为空的"无歌词"占位态、灵动岛也一直没有封面,直到用户换一
+            // 首歌为止;而桌面悬浮歌词因为直接读 syncEngine(见 fastTick),显示的却是正常
+            // 的,两个窗口互相矛盾。
+            //
+            // 这条路径不罕见:Music.app 退出、播放列表放完进入 stopped、以及选了 QQ 音乐/
+            // 网易云/Spotify/自动识别时被别的 App(比如网页视频)抢走一次系统 Now Playing
+            // 焦点,都会让快照变成 nil 走到这里。
+            lastKey = ""
             stopFastTimer()
         }
     }
@@ -524,7 +539,24 @@ public final class LocalPlaybackSource: ObservableObject {
             return nil
         }()
         if newDurationMs != currentDurationMs { currentDurationMs = newDurationMs }
-        let newPausedPositionMs: Int? = playing ? nil : Int((snapshot.elapsedTime ?? 0) * 1000)
+        // 暂停态也要挡住 seek 之后的陈旧读数——播放分支走 resolvePositionSeconds,那个
+        // 函数一进门就有 shouldRejectStalePositionAfterSeek 这层保护,而这行原来是直接
+        // 采信 snapshot.elapsedTime。结果:暂停时拖进度条,seek(toMs:) 刚把 pausedPositionMs
+        // 设成目标位置,紧接着这一轮 apply() 抓到的快照可能还是 seek 之前的位置(播放器
+        // 没跟上,或这份快照本来就是 seek 之前抓的),于是进度条和歌词被硬拽回原处,过
+        // 一两轮才跳到目标——手感上就是"弹回去一下再过去"。判定为陈旧时沿用当前值
+        // (seek 刚写进去的目标位置),等播放器状态跟上。
+        let newPausedPositionMs: Int? = {
+            guard !playing else { return nil }
+            let reported = snapshot.elapsedTime ?? 0
+            if let target = lastSeekTargetSecs, let prev = lastSeekPrevSecs, let at = lastSeekAt,
+               Self.shouldRejectStalePositionAfterSeek(
+                   reported: reported, target: target, previous: prev, elapsedSinceSeek: now.timeIntervalSince(at)
+               ) {
+                return pausedPositionMs ?? Int(target * 1000)
+            }
+            return Int(reported * 1000)
+        }()
         if newPausedPositionMs != pausedPositionMs { pausedPositionMs = newPausedPositionMs }
         // 无论这一轮是否在播放,都要更新这三个状态,供下一轮判断"是不是刚从暂停里恢复
         // 播放"——只在上面播放分支里更新的话,"播放→暂停→再播放"这个序列会因为暂停期间
@@ -534,10 +566,33 @@ public final class LocalPlaybackSource: ObservableObject {
         posWasPlaying = playing
         posPrevWall = now
         if anchor == nil {
-            if currentLine != nil { currentLine = nil }
-            if nextLineText != nil { nextLineText = nil }
-            if currentLineIndex != nil { currentLineIndex = nil }
+            // 暂停(anchor == nil 但曲目还在、位置已冻结)时**不能**把当前歌词行清掉。
+            //
+            // 这里原来是无条件三连清空,于是一按暂停,悬浮歌词/灵动岛/菜单栏那一行歌词
+            // 直接消失、歌词窗口的高亮也没了——而用户按暂停的典型场景恰恰是"这句是什么?
+            // 我看一下",清掉正是最不该发生的事。停掉 20Hz 定时器是对的(暂停期间位置不
+            // 再前进,没有必要每秒算 20 次),但"停止推进"跟"清空显示"是两回事。
+            //
+            // 暂停态有精确的冻结位置(pausedPositionMs,见上面那段注释:AppleScript 和
+            // media-control 在暂停时给的 elapsedTime 都是冻结值),所以直接按这个位置解一
+            // 次当前行即可。真的没有位置或没有歌词内容时才回落到清空。
             stopFastTimer()
+            if let frozen = pausedPositionMs, syncEngine.hasContent {
+                // 不要在这里另外加 currentLyricsOffsetMs:activeLine/upcomingLineText/
+                // activeLineIndex 内部都会先做 rawPosMs + offsetMs(见 LyricsSyncEngine),
+                // 手动再加一次就是双倍校正。fastTick 传的也是未加 offset 的原始位置。
+                let pos = frozen
+                let newLine = syncEngine.activeLine(atMs: pos)
+                if newLine != currentLine { currentLine = newLine }
+                let newNext = syncEngine.upcomingLineText(afterMs: pos)
+                if newNext != nextLineText { nextLineText = newNext }
+                let newIndex = syncEngine.activeLineIndex(atMs: pos)
+                if newIndex != currentLineIndex { currentLineIndex = newIndex }
+            } else {
+                if currentLine != nil { currentLine = nil }
+                if nextLineText != nil { nextLineText = nil }
+                if currentLineIndex != nil { currentLineIndex = nil }
+            }
         } else {
             ensureFastTimerRunning()
         }
@@ -743,7 +798,16 @@ public final class LocalPlaybackSource: ObservableObject {
     // 用户报的"切歌白屏一下子"就是这件事,只是通常重新播到下一首又碰巧取到了。
     //
     // 间隔递增而不是等间隔:绝大多数情况第一次重试(0.3s)就有了,不值得为罕见的慢场景把
-    // 每次切歌都拖长;最后一次在 ~2.1s,留在 artworkStaleTimeout(3s)之内。
+    // 每次切歌都拖长。
+    //
+    // ⚠️ 不能只按这几个 sleep 之和(2.1s)去论证"落在 artworkStaleTimeout(3s)之内"——
+    // 这条链上还有最多 4 次 attempt(),每次都要 fork media-control 子进程、把几百 KB 的
+    // base64 封面读到 EOF、waitUntilExit 再解码,单次就是几百毫秒量级(见本文件取图那段
+    // 注释)。只要平均往返超过 ~225ms,3s 的兜底就会在重试还没跑完时先开火,把旧封面清掉
+    // ——正好重演它当初要消除的那次白屏(先闪成系统浅色背景,重试成功后再闪回来,两次跳变)。
+    // 修法是每次重试前把兜底任务重新排一遍(见 fetchArtworkForCurrentTrack 里的调用),
+    // 这样"3s"变成"距最后一次尝试 3s",既不会打断重试,也保留了"子进程真挂住就别无限期
+    // 挂着旧封面"这个原始目的。
     private static let artworkRetryDelays: [TimeInterval] = [0.3, 0.6, 1.2]
 
     private func fetchArtworkForCurrentTrack(expectedKey: String) {
@@ -765,6 +829,8 @@ public final class LocalPlaybackSource: ObservableObject {
             var round = 0
             while data == nil, round < Self.artworkRetryDelays.count {
                 guard expectedKey == self.lastKey else { return }
+                // 把兜底清理往后推一轮,理由见 artworkRetryDelays 上面那段注释。
+                self.scheduleArtworkStaleTimeout(forKey: expectedKey)
                 try? await Task.sleep(for: .seconds(Self.artworkRetryDelays[round]))
                 guard expectedKey == self.lastKey else { return }
                 (data, accentHex) = await attempt()

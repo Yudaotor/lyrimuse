@@ -703,6 +703,33 @@ do {
     expectEqual(arg(2.2).contains(","), false, "seek: 小数点固定用点(拼进 AppleScript 不能是逗号)")
 }
 
+// ── 逐字数据退化时必须退回整行模式(2026-08-06) ──
+// 实测过的真实形态:某些源给的 YRC 只包含开头的署名行,正文一行都没有;署名行被过滤后
+// wordLines 只剩极少几行,而 activeLine 取的是"时间戳 <= 当前位置的最后一行",于是整首歌
+// 从头到尾都停在那一行上。判据是覆盖率,不是"YRC 是否为空"。
+do {
+    let yrc = [
+        "[60,900](60,400,0)特别的人 - 方大同",
+        "[1110,600](1110,600,0)词：方大同",
+        "[1760,600](1760,600,0)曲：方大同",
+    ].joined(separator: "\n")
+    var lrcLines: [String] = []
+    for i in 0..<10 {
+        lrcLines.append("[00:" + String(format: "%02d", i * 5) + ".000]第 " + String(i) + " 句歌词")
+    }
+    let lrc = lrcLines.joined(separator: "\n")
+
+    let engine = LyricsSyncEngine()
+    engine.load(lyrics: lrc, lyricsTr: "", lyricsRoma: "", lyricsYRC: yrc)
+    // 3 行逐字 vs 10 行整行 → 覆盖率不足,退回整行;45 秒处应命中第 9 句
+    expectEqual(engine.activeLine(atMs: 45_000)?.plainText, "第 9 句歌词", "逐字数据退化时退回整行歌词")
+
+    // 没有整行歌词可退时仍然用逐字数据(不能因为覆盖率判据把唯一的内容也否掉)
+    let onlyWords = LyricsSyncEngine()
+    onlyWords.load(lyrics: "", lyricsTr: "", lyricsRoma: "", lyricsYRC: yrc)
+    expectEqual(onlyWords.hasContent, true, "没有整行歌词时仍使用逐字数据")
+}
+
 // ---- 汇总 ----
 
 if failures == 0 {

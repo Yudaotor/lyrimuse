@@ -163,19 +163,36 @@ public final class LyricsSyncEngine {
 
     public func load(lyrics: String, lyricsTr: String, lyricsRoma: String, lyricsYRC: String, preferWordLevel: Bool = true) {
         let yrc = preferWordLevel ? YRCParser.parse(lyricsYRC) : []
-        usingWords = !yrc.isEmpty
         // 过滤前先把整份的文本取出来判一次(结构化规则是整份粒度的,见
         // shouldApplyStructuralCreditFilter),不能像原来那样逐行独立 filter。
-        if usingWords {
+        //
+        // 两种来源都先各自解析+过滤出来,再决定用哪个 —— 原来是"有 YRC 就一定用 YRC",
+        // 而有些源给的逐字数据是**退化**的:2026-08-06 在用户缓存里实测到「方大同 - 特别的人」
+        // 的 YRC 只有 10 行、且全是署名行(编曲/混音师/录制…),而同一首的 LRC 有 105 行。
+        // 署名行过滤掉 9 行之后 wordLines 只剩 1 行,而 activeLine 取的是"时间戳 <= 当前位置
+        // 的最后一行"——于是整首歌从头到尾都卡在那一行上,悬浮歌词/灵动岛/歌词窗口全都
+        // 一动不动,看起来像"这首歌的歌词坏了"。
+        //
+        // 判据是**覆盖率**而不是"YRC 是否为空":逐字行数不到整行歌词的一半就认为它没覆盖
+        // 这首歌,退回整行模式(整行歌词是完整的,只是没有逐字填色)。LRC 本身为空时没得选,
+        // 仍然用逐字数据。
+        let parsedBase = LRCParser.parse(lyrics)
+        let baseDrop = Self.strippingCreditLines(parsedBase.map(\.text))
+        let filteredBase = zip(parsedBase, baseDrop).compactMap { $0.1 ? nil : $0.0 }
+        var candidateWords: [LyricLineWords] = []
+        if !yrc.isEmpty {
             let texts = yrc.map { $0.words.map(\.text).joined() }
             let drop = Self.strippingCreditLines(texts)
-            wordLines = zip(yrc, drop).compactMap { $0.1 ? nil : $0.0 }
+            candidateWords = zip(yrc, drop).compactMap { $0.1 ? nil : $0.0 }
+        }
+        usingWords = !candidateWords.isEmpty
+            && (filteredBase.isEmpty || candidateWords.count * 2 >= filteredBase.count)
+        if usingWords {
+            wordLines = candidateWords
             baseLines = []
         } else {
-            let parsed = LRCParser.parse(lyrics)
-            let drop = Self.strippingCreditLines(parsed.map(\.text))
             wordLines = []
-            baseLines = zip(parsed, drop).compactMap { $0.1 ? nil : $0.0 }
+            baseLines = filteredBase
         }
         romaLines = LRCParser.parse(lyricsRoma)
         trLines = LRCParser.parse(lyricsTr)
