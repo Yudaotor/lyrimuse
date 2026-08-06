@@ -32,6 +32,14 @@ struct LyricsSearchSheet: View {
     // 表达不了"进行中 + 已经有部分结果"这个中间状态。
     @State private var candidates: [LyricsSearchService.Candidate] = []
     @State private var isSearching = false
+    // searchGeneration:第几轮搜索。load() 有三个入口(.task 首次进入、"重新搜索"按钮、
+    // 输入框 .onSubmit),按钮有 .disabled(isSearching) 挡着,但 .onSubmit 没有——改完
+    // 查询词直接回车就能在上一轮还没结束时开第二轮。两轮各自持有自己的进度回调,
+    // 谁后返回谁的结果就留在界面上:慢的旧一轮(旧查询词)后返回时会把新查询词的候选
+    // 整个盖掉,并且把 isSearching 提前关成 false。这里给每轮发一个自增序号,回调和
+    // 收尾都先核对"我还是最新那一轮吗",不是就整段丢弃(不需要真去 cancel 子进程——
+    // 让它自己跑完、结果丢掉即可,搜索本身没有副作用)。
+    @State private var searchGeneration = 0
     @State private var loadError: String?
     // 2026-08-02 补上——五个源都没查到候选时,原来只有一句笼统的"都没找到",分不清是
     // 这首歌真的没有网络歌词还是网络整体不通。collector 侧统计"这一轮请求是否全部
@@ -310,6 +318,8 @@ struct LyricsSearchSheet: View {
     }
 
     private func load() async {
+        searchGeneration += 1
+        let generation = searchGeneration
         candidates = []
         loadError = nil
         selectedSource = nil
@@ -318,6 +328,7 @@ struct LyricsSearchSheet: View {
         isSearching = true
         do {
             try await LyricsSearchService.shared.search(artist: artist, title: title, album: album) { update in
+                guard generation == searchGeneration else { return } // 已经有更新的一轮在跑,这批结果作废
                 candidates = update.candidates
                 networkLooksDown = update.networkLooksDown
                 // 默认项优先选"这首歌眼下实际生效的来源"(currentSource)——候选是陆续
@@ -336,8 +347,9 @@ struct LyricsSearchSheet: View {
                 }
             }
         } catch {
-            loadError = error.localizedDescription
+            if generation == searchGeneration { loadError = error.localizedDescription }
         }
+        guard generation == searchGeneration else { return } // 别让旧一轮的收尾把新一轮的"正在搜索"关掉
         isSearching = false
     }
 }

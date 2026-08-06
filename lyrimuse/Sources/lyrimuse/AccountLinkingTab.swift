@@ -432,6 +432,32 @@ struct AccountLinkingTab: View {
         }
     }
 
+    // digestSourcePicked:两个"数据源" Picker 的 set 分支共用。
+    //
+    // 原来这里是无条件 `features.xxxDigestSource = $0; save()`,而 get 读的是
+    // resolvedDigestSource(**解析后**的值)——两边口径不一致。选一个还没配好的源(比如
+    // ListenBrainz 一个字段都没填)会同时发生两件事:偏好被静默写盘并触发 save()(重写
+    // 配置文件、重启 collector),而 Picker 因为 get 把它解析回 Last.fm 立刻弹回去。用户
+    // 看到的是"点了没反应",但一个看不见的偏好已经落盘,等哪天真把那个账号配好,数据源
+    // 会自己悄悄换过去。
+    //
+    // 现在:没配好就不写偏好、也不重启 collector,复用开关那套 missingPrereqAlert
+    // ("需要先配置「X」"+跳转到对应账号卡片)给出跟 toggleGuarded 一致的反馈。
+    // digestCrossCard 本来就是按 source 返回 (hint, target) 的,直接拿它判断配好了没。
+    // 反过来,如果之前已经落过一个用不了的偏好,用户改选一个配好的源就能把它治回来。
+    private func digestSourcePicked(_ picked: String, current: String, apply: (String) -> Void) {
+        guard picked != current else { return }
+        let cross = digestCrossCard(source: picked)
+        if let hint = cross.hint {
+            missingPrereqAlert = MissingPrereqAlert(
+                message: String(format: L10n.t("需要先配置「%@」（%@）"), cross.target.title, hint),
+                jumpTarget: cross.target
+            )
+            return
+        }
+        apply(picked)
+    }
+
     // 每张卡片最上面这句"整体介绍"文案(描述整张卡是干什么的,不是某一个 Section 的)
     // 放在这里,在 detailHeader 和 Form 之间,不塞进任何一个 Section 的 header/footer——
     // footer 只能放纯文字且只描述那一个 Section,不适合放"整张卡"级别的介绍。
@@ -790,7 +816,12 @@ struct AccountLinkingTab: View {
                 SettingsSubRow(title: L10n.t("每周数据源")) {
                     Picker("", selection: Binding(
                         get: { resolvedDigestSource(preference: features.weeklyDigestSource) },
-                        set: { features.weeklyDigestSource = $0; Task { await features.save() } }
+                        set: { picked in
+                            digestSourcePicked(picked, current: features.weeklyDigestSource) {
+                                features.weeklyDigestSource = $0
+                                Task { await features.save() }
+                            }
+                        }
                     )) {
                         Text("Last.fm").tag("lastfm")
                         Text("ListenBrainz").tag("listenbrainz")
@@ -821,7 +852,12 @@ struct AccountLinkingTab: View {
                 SettingsSubRow(title: L10n.t("每日数据源")) {
                     Picker("", selection: Binding(
                         get: { resolvedDigestSource(preference: features.dailyDigestSource) },
-                        set: { features.dailyDigestSource = $0; Task { await features.save() } }
+                        set: { picked in
+                            digestSourcePicked(picked, current: features.dailyDigestSource) {
+                                features.dailyDigestSource = $0
+                                Task { await features.save() }
+                            }
+                        }
                     )) {
                         Text("Last.fm").tag("lastfm")
                         Text("ListenBrainz").tag("listenbrainz")
