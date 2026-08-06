@@ -29,7 +29,18 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject 
     // 真值在 AppSettings.classicOverlayEnabled,这里只是它的镜像(菜单栏/悬浮窗本身要观察
     // 这个 @Published)。只能经 setVisible(_:) 改,那是打开/关闭的唯一入口。
     @Published private(set) var isVisible: Bool = AppSettings.shared.classicOverlayEnabled
-    @Published private(set) var isPositionLocked: Bool = false
+    // 跟 isVisible 一样,真值在 AppSettings(lockPosition),这里只是镜像 —— 必须从那份
+    // 持久化值起步,不能硬编码 false。
+    //
+    // 原来这一行是 `= false`,于是同一个设置有了两个互相矛盾的读数:设置页读
+    // AppSettings.lockPosition,菜单栏「锁定位置」读的却是这个镜像。唯一修补它的地方是
+    // AppDelegate 启动时那句 setLocked(settings.lockPosition),而那句被包在
+    // `if settings.classicOverlayEnabled` 里 —— 用户上次是"锁定着、但把桌面悬浮歌词关掉"
+    // 退出的话,启动时这个分支根本不执行,之后再从设置里打开悬浮歌词,控制器就带着
+    // isPositionLocked=false 建出来:设置页显示"已锁定",菜单栏显示"未锁定",而且实际
+    // **是没锁的**——handleMouseEvent 用的就是这个镜像,长按 0.35s 就能把"显示为已锁定"
+    // 的窗口拖走。
+    @Published private(set) var isPositionLocked: Bool = AppSettings.shared.lockPosition
     // "暂停/无播放时自动隐藏"这个开关本身——跟 isVisible(用户手动的显示/隐藏偏好)是
     // 两个独立维度,见 updateActualVisibility() 的组合逻辑,不能互相覆盖对方的语义。
     @Published private(set) var hideWhenNotPlaying: Bool = false
@@ -151,6 +162,11 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject 
         if visible {
             setHiddenFromCapture(AppSettings.shared.hideDuringScreenCapture)
             setHideWhenNotPlaying(AppSettings.shared.hideWhenNotPlaying)
+            // lockPosition 跟上面两个是同一类"已经配置好、打开时要一并应用"的偏好,
+            // 原来漏在外面(本函数上面那段注释说的"三个入口不可能再各自漏一次"当时只点了
+            // 那两个隐藏偏好)。补进来之后,不管从设置页、菜单栏还是全局快捷键打开,窗口的
+            // 锁定状态都跟持久化值一致。
+            setLocked(AppSettings.shared.lockPosition)
         }
         updateActualVisibility(isPlayingNow: PlaybackCoordinator.shared.isPlayingNow)
     }
@@ -240,7 +256,26 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject 
         let newHeight = min(rawHeight, max(overlayDefaultHeight, top - visibleFrame.minY))
         guard abs(newHeight - current.height) >= 0.5 else { return } // 避免亚像素抖动反复触发
         let newFrame = NSRect(x: current.origin.x, y: top - newHeight, width: current.width, height: newHeight)
-        window.setFrame(newFrame, display: true, animate: true)
+        setFrameAnimated(window, to: newFrame)
+    }
+
+    // setFrame(_:display:animate:) 是**同步阻塞**的:它自己跑一个动画循环,函数返回时
+    // 动画已经播完,期间主线程什么都干不了。而调用它的两处都在热路径上——updateHeight
+    // 每次歌词渲染高度变化(长句换行、罗马音/译文/下一句预览开合)都会调,setWidth 在
+    // 设置里拖宽度滑块时连续调——每调一次就卡住主线程一整档动画时长(NSWindow 按尺寸
+    // 变化量算,约 0.1~0.2s),表现就是逐字高亮(60fps 的 TimelineView)在窗口变高那一
+    // 瞬间僵住、宽度滑块拖起来发黏。
+    //
+    // 换成 animator() 代理:视觉上一样有动画,但走 Core Animation 异步执行,不占主线程。
+    // duration 取 animationResizeTime(与原来 animate: true 同一套时长算法),保证观感
+    // 不变。两处调用都保持"某条边/中心点不动"的不变量:动画过程中读 window.frame 拿到
+    // 的是中间值,但 origin.y + height(顶边)和 origin.x + width/2(中心)在各自的动画
+    // 里本来就是恒定的,所以中途再被调用一次也不会让窗口跑位。
+    private func setFrameAnimated(_ window: NSWindow, to frame: NSRect) {
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = window.animationResizeTime(frame)
+            window.animator().setFrame(frame, display: true)
+        }
     }
 
     // 设置里的宽度滑块调用——保持窗口中心点不变(左右对称伸缩),而不是像 updateHeight
@@ -257,7 +292,7 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject 
         let visibleFrame = window.screen?.visibleFrame ?? NSScreen.main?.visibleFrame ?? current
         let newX = min(max(centerX - width / 2, visibleFrame.minX), visibleFrame.maxX - width)
         let newFrame = NSRect(x: newX, y: current.origin.y, width: width, height: current.height)
-        window.setFrame(newFrame, display: true, animate: true)
+        setFrameAnimated(window, to: newFrame)
     }
 
     private func installMouseMonitors() {
@@ -302,6 +337,21 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject 
 
     private func handleMouseEvent(type: NSEvent.EventType) {
         guard let window, !isPositionLocked else { return }
+        // 窗口当前不在屏幕上时直接不处理。这两个全局监视器是在 setUp 时装一次、只在
+        // deinit 卸载的(见 installMouseMonitors),隐藏悬浮窗走的是 window.orderOut(nil),
+        // 监视器照旧在收事件——而下面 .leftMouseDown 分支判断"点在窗口里吗"用的是
+        // frame.contains(loc),隐藏窗口的 frame 还停在原处。于是用户在桌面上那块区域
+        // 长按 0.4s 就能把拖动"武装"起来,armDragIfStillPressed 把 ignoresMouseEvents
+        // 收回 false 并对一个看不见的窗口发起 performDrag,那次点击被悄悄吞掉。
+        // 顺便把可能残留的长按判定/悬停态清干净(可能正好在按着的时候被隐藏);已经
+        // 武装的情况不碰,交给 performDrag 自己的收尾逻辑。
+        guard window.isVisible else {
+            if !isDragArmed {
+                cancelPendingPress()
+                if isHoveringForControls { isHoveringForControls = false }
+            }
+            return
+        }
         let loc = NSEvent.mouseLocation
         let frame = window.frame
         let insideHotZone = controlsHotZoneScreen?.contains(loc) ?? false
