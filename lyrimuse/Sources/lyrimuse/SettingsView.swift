@@ -1430,7 +1430,7 @@ private struct GeneralSettingsTab: View {
                     ConfigPortability.restartApp()
                 }
             } message: {
-                Text(L10n.t("这会清除所有账号 token、密钥和个人设置，恢复到刚装完时的样子（下次启动会重新走一遍引导向导），且无法撤销。如果还没备份过，建议先点上面「导出配置…」"))
+                Text(L10n.t("这会清除所有账号 token、密钥和个人设置，恢复到刚装完时的样子（下次启动会重新走一遍引导向导），且无法撤销。如果还没备份过，建议先用上面「导出配置」那一行的「导出…」按钮备份一份"))
             }
         }
         .id(L10n.current)
