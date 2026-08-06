@@ -149,8 +149,10 @@ func readVariantBody(path string) string {
 // (lyrics 与 lyrics_tr 字节数完全相同,导出的主 .lrc 也变成了译文),其中一条能跟
 // 几小时前的缓存备份对上——原文 3608 字节被 1723 字节的译文顶掉。
 //
-// 修法只改这里的选择规则,**不动数组顺序**:数组下标跟 group.variants[4] 和
-// enrichEntry 的字段一一对应(见上面 variants 的注释),重排会静默错位。
+// 修法只改这里的选择规则,**不动数组顺序**:按下标对齐这份列表的是**导出侧** ——
+// lyricsexport.go 里的 entryJob.variants 是按 {Lyrics, LyricsTr, LyricsRoma, LyricsYRC}
+// 的顺序填进去、再按同样下标取后缀的,重排这个数组会把导出的四个变体静默错位。导入侧
+// 自己是按后缀取的(group.files 以后缀为键),不吃顺序,所以坏掉的只会是导出、而且无声。
 // 抽成独立的纯函数是为了能被单测覆盖 —— importLyricsFromFiles 本身要读目录、没法直接测,
 // 而这条规则一旦回退就会**静默毁数据**(不报错、不崩,只是原文被译文替换),必须有测试兜住。
 func lyricsFileSuffixOf(name string) string {

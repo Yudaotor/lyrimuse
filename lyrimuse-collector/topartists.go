@@ -277,8 +277,14 @@ func (p *poller) topArtistsDigest(now time.Time) {
 	// 头像并发取,不要串行。topArtistsDigest 是在轮询循环里**同步**调用的
 	// (见 poller.go 里 p.topArtistsDigest(now) 那一行),而 resolveArtistAvatar 每次都是
 	// 真实网络请求(先 QQ 音乐、失败再 Deezer)。串行 10 个的话,这一轮 poll 会被卡住十次
-	// 网络往返的总时长 —— 期间读不到播放状态、歌词不推进。虽然它至多 24 小时才跑一次
-	// (topArtistsState 节流),但那一次卡顿是用户能直接看到的。
+	// 网络往返的总时长 —— 期间这个 collector 什么都察觉不到:换歌、暂停、seek 都发现不了,
+	// 刚开始播的那首也补不上元数据。(歌词行本身不会停:App 侧有自己的 20Hz fastTick,网页
+	// 那边按最后一个锚点外推,所以这是"检测停摆"而不是"画面冻住"。)
+	//
+	// 成功路径下它至多一天跑一次:进程内的 topArtistsLastCheckedAt 是主节流,topArtistsState
+	// 只是重启后的兜底。而 save() 只在 postRelay 成功之后才写(见下面),推送失败就没有时间戳
+	// 落盘 —— 同一天再重启一次(每次保存 features 都会 kickstart collector,很常见)就会把这
+	// 十次取头像重跑一遍。哪条路径下,那一次卡顿都是用户能直接感觉到的。
 	//
 	// 并发度压到 4 而不是全放开:这两个都是别人的公开接口,10 个请求同时砸过去没有必要,
 	// 4 路已经把总耗时压到约四分之一。顺序必须保持(展示的是 Top10 排名),所以按下标写回
