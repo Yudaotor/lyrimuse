@@ -430,7 +430,6 @@
 "本地时间晚上 10 点之后当天第一次检查时推送：当天播放次数、累计时长、听得最多的几首歌" = "Pushed on the first check after 10 PM local time: today's play count, total listening time, and your most-played tracks";
 "检查更新" = "Check for Updates";
 "歌词从哪里来、怎么挑，以及显示哪些内容" = "Where lyrics come from, how they're picked, and what gets shown";
-"每次调整" = "Step";
 "没有它，悬浮歌词/灵动岛都无法显示任何歌词内容" = "Without it, neither the floating lyrics nor the Dynamic Island can show any lyrics";
 "清除…" = "Erase…";
 "清除所有配置" = "Erase All Settings";
@@ -450,3 +449,5 @@
 "双行显示" = "Two-Line Display";
 "当前这句下面再显示一行下一句歌词" = "Shows the next line below the current one";
 "快速开关" = "Quick Toggles";
+"调整步长" = "Step Size";
+"「歌词提前」「歌词延后」每按一次的幅度；菜单栏的「歌词时间轴」也用这个值" = "How much each press of Advance/Delay Lyrics shifts the timing; the menu bar's Lyrics Timing uses this too";

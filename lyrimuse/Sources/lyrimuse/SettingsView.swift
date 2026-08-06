@@ -306,11 +306,18 @@ private struct LyricsSettingsTab: View {
                     Toggle("", isOn: Binding(
                         get: { features.lyricsSources.contains(source) },
                         set: { newValue in
+                            // 关掉最后一个来源是不允许的(下面那句 count > 1 的守卫),这时
+                            // 集合没有任何变化 —— 但原来 save() 是无条件调的,于是这次被
+                            // 拒绝的点击照样写一遍 features.json 并 kickstart 一次 collector:
+                            // 后台服务被杀掉重启,期间歌词整片空掉(launchd 对连续 kickstart
+                            // 还有约 10s 的节流),而配置压根没变。改成只在真的变了才保存。
+                            let before = features.lyricsSources
                             if newValue {
                                 features.lyricsSources.insert(source)
                             } else if features.lyricsSources.count > 1 {
                                 features.lyricsSources.remove(source)
                             }
+                            guard features.lyricsSources != before else { return }
                             Task { await features.save() }
                         }
                     ))
@@ -1483,13 +1490,28 @@ private struct ShortcutsSettingsTab: View {
                 // 每次调整的步长——跟菜单栏"歌词时间轴"共用同一个值,这里改了菜单里的
                 // 按钮文案/快捷键的实际调整量会一起变。0.05~2s 区间对"手动校准"这个场景
                 // 够用,不需要再大或者再细。
-                SettingsSubRow(title: L10n.t("每次调整")) {
-                    Stepper(value: Binding(
-                        get: { Double(settings.lyricsOffsetStepMs) / 1000 },
-                        set: { settings.lyricsOffsetStepMs = Int(($0 * 1000).rounded()) }
-                    ), in: 0.05...2.0, step: 0.05) {
+                //
+                // ⚠️ 数值必须作为**独立内容**摆在 Stepper 外面,不能塞进 Stepper 的 label:
+                // SettingsRow/SettingsSubRow 对尾部控件统一套了 .labelsHidden()(用来藏掉
+                // Toggle/Picker 自带的、会跟行标题重复的那份标签),而 Stepper 恰恰是把数值
+                // 画在 label 里的——放进去会被一并藏掉,界面上只剩一对光秃秃的上下箭头,
+                // 完全看不出当前步长是多少(2026-08-06 实机确认过是这个症状)。
+                //
+                // 同时从 SettingsSubRow 换成完整的 SettingsRow:原来只有"每次调整"四个字,
+                // 没说清调的是什么、影响哪里,配上图标和副标题才自解释。
+                SettingsRow(
+                    icon: "timer",
+                    title: L10n.t("调整步长"),
+                    subtitle: L10n.t("「歌词提前」「歌词延后」每按一次的幅度；菜单栏的「歌词时间轴」也用这个值")
+                ) {
+                    HStack(spacing: 8) {
                         Text("\(AppSettings.formattedSeconds(ms: settings.lyricsOffsetStepMs))\(L10n.t("秒"))")
                             .monospacedDigit()
+                            .foregroundStyle(.secondary)
+                        Stepper("", value: Binding(
+                            get: { Double(settings.lyricsOffsetStepMs) / 1000 },
+                            set: { settings.lyricsOffsetStepMs = Int(($0 * 1000).rounded()) }
+                        ), in: 0.05...2.0, step: 0.05)
                     }
                 }
             }
