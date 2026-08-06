@@ -136,6 +136,33 @@ func readVariantBody(path string) string {
 //     字段(内容不同才算变化),不存在就不碰。新建条目时 TS 留 enrichEntry 零值(不设
 //     time.Now()),这样 needsPeripheralBackfill 会在这首歌真正被播放时才补封面/链接,
 //     不会被 10 分钟节流误伤。
+//
+// ⚠️ 必须挑**最长**的匹配后缀,不能"首次命中就 break"。
+//
+// lyricsFileSuffixes 是 [".lrc", ".tr.lrc", ".roma.lrc", ".yrc"],而 ".lrc" 是
+// ".tr.lrc"/".roma.lrc" 的真后缀 —— 按数组顺序首次命中,"X.tr.lrc" 会被判成主歌词、
+// base 被截成 "X.tr",生成一个幻影分组。而分组的缓存 key 是按**文件头标签**
+// ([ar:]/[ti:]/[al:])重建的(见本文件算法说明第 2 步),幻影组的标签跟本尊一模一样,
+// 于是译文被当成主歌词写回 lyrics 字段,把原文永久覆盖。
+//
+// 2026-08-06 实测确认这不是理论风险:用户磁盘上 5 个 .tr.lrc 里已有 2 条被这样毁掉
+// (lyrics 与 lyrics_tr 字节数完全相同,导出的主 .lrc 也变成了译文),其中一条能跟
+// 几小时前的缓存备份对上——原文 3608 字节被 1723 字节的译文顶掉。
+//
+// 修法只改这里的选择规则,**不动数组顺序**:数组下标跟 group.variants[4] 和
+// enrichEntry 的字段一一对应(见上面 variants 的注释),重排会静默错位。
+// 抽成独立的纯函数是为了能被单测覆盖 —— importLyricsFromFiles 本身要读目录、没法直接测,
+// 而这条规则一旦回退就会**静默毁数据**(不报错、不崩,只是原文被译文替换),必须有测试兜住。
+func lyricsFileSuffixOf(name string) string {
+	var suffix string
+	for _, s := range lyricsFileSuffixes {
+		if strings.HasSuffix(name, s) && len(s) > len(suffix) {
+			suffix = s
+		}
+	}
+	return suffix
+}
+
 func importLyricsFromFiles() {
 	if lyricsDir == "" {
 		return
@@ -152,13 +179,7 @@ func importLyricsFromFiles() {
 			continue
 		}
 		name := ent.Name()
-		var suffix string
-		for _, s := range lyricsFileSuffixes {
-			if strings.HasSuffix(name, s) {
-				suffix = s
-				break
-			}
-		}
+		suffix := lyricsFileSuffixOf(name)
 		if suffix == "" {
 			continue // 不认识的文件(比如 .DS_Store),忽略
 		}
