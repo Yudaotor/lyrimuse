@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -273,12 +274,32 @@ func (p *poller) topArtistsDigest(now time.Time) {
 	if len(merged) > topArtistsN {
 		merged = merged[:topArtistsN]
 	}
-	artists := make([]topArtistEntry, 0, len(merged))
-	for _, e := range merged {
-		artists = append(artists, topArtistEntry{
-			Name: e.Name, PlayCount: e.PlayCount,
-			Avatar: resolveArtistAvatar(p.ctx, e.Name),
-		})
+	// 头像并发取,不要串行。topArtistsDigest 是在轮询循环里**同步**调用的
+	// (见 poller.go 里 p.topArtistsDigest(now) 那一行),而 resolveArtistAvatar 每次都是
+	// 真实网络请求(先 QQ 音乐、失败再 Deezer)。串行 10 个的话,这一轮 poll 会被卡住十次
+	// 网络往返的总时长 —— 期间读不到播放状态、歌词不推进。虽然它至多 24 小时才跑一次
+	// (topArtistsState 节流),但那一次卡顿是用户能直接看到的。
+	//
+	// 并发度压到 4 而不是全放开:这两个都是别人的公开接口,10 个请求同时砸过去没有必要,
+	// 4 路已经把总耗时压到约四分之一。顺序必须保持(展示的是 Top10 排名),所以按下标写回
+	// 预分配好的 slice,不用 append 竞争。
+	artists := make([]topArtistEntry, len(merged))
+	{
+		var wg sync.WaitGroup
+		sem := make(chan struct{}, 4)
+		for i, e := range merged {
+			wg.Add(1)
+			go func(i int, name string, playCount int) {
+				defer wg.Done()
+				sem <- struct{}{}
+				defer func() { <-sem }()
+				artists[i] = topArtistEntry{
+					Name: name, PlayCount: playCount,
+					Avatar: resolveArtistAvatar(p.ctx, name),
+				}
+			}(i, e.Name, e.PlayCount)
+		}
+		wg.Wait()
 	}
 	payload := map[string]any{"artists": artists, "updatedAt": now.Unix()}
 	if err := postRelay(p.ctx, p.cfg, "/top-artists", payload); err != nil {
