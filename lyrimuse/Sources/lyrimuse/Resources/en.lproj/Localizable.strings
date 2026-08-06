@@ -180,6 +180,8 @@
 "灵动岛歌词" = "Dynamic Island Lyrics";
 "显示桌面悬浮歌词" = "Show Desktop Floating Lyrics";
 "显示灵动岛歌词" = "Show Dynamic Island Lyrics";
+"显示菜单栏歌词" = "Show Menu Bar Lyrics";
+"显示歌词窗口" = "Show Lyrics Window";
 "风格" = "Style";
 "自动隐藏" = "Auto-Hide";
 "以上配色、字体、字号只影响「桌面悬浮歌词」；灵动岛歌词和歌词窗口用的是固定的系统配色和字号，菜单栏歌词是纯文字，都不受这里影响" = "The color, font, and text size settings above only affect Desktop Floating Lyrics. Notch Lyrics and the Lyrics Window use fixed system colors and sizes, and Menu Bar Lyrics is plain text — none of them are affected here";
@@ -266,7 +268,6 @@
 "歌词管理" = "Lyrics Manager";
 "歌词管理…" = "Lyrics Manager…";
 "歌词窗口" = "Lyrics Window";
-"歌词窗口…" = "Lyrics Window…";
 "这个状态只在本次打开这扇窗口期间有效，下次重新打开会恢复默认" = "This resets to default the next time you reopen this window — it only applies while this window stays open";
 "歌词默认就以这个文件夹为准维护。联网匹配到的结果会导出成文件存在这里，「歌词管理」里手动导入/编辑的文件也在这里。换成新文件夹后，旧文件夹里已有的文件不会自动搬过去，需要自己手动移动" = "By default, lyrics are kept in sync with this folder — results matched online are exported as files here, and files manually imported or edited in \"Lyrics Manager\" live here too. If you switch to a new folder, existing files in the old one won't move automatically; you'll need to move them yourself";
 "正在自动保存…" = "Auto-saving…";

@@ -110,7 +110,7 @@ struct MenuBarMenu: View {
         // 默认不会显示 Label 的图标(只显示文字),不加这一句图标会整个消失,不是漏写了
         // 某个具体图标名。
         Group {
-        // 桌面悬浮歌词、灵动岛歌词互不排斥,菜单里两个"显示…"开关都常驻——2026-08-05 把
+        // 三种展示方式互不排斥,菜单里"显示…"开关都常驻——2026-08-05 把
         // "这个模式开没开"合并成单一开关之后,这两项就是那个开关本身,不能再拿它自己当
         // 显示条件:那样从菜单栏关掉之后这一项会跟着从菜单里消失,再也找不到打开的入口。
         //
@@ -129,7 +129,7 @@ struct MenuBarMenu: View {
         // 关着时连 .shared 都不碰——这条不变量在子菜单里同样要守(详见
         // NotchLyricsWindowController 顶部注释)。
         Menu {
-            OverlayVisibilityMenuToggles()
+            DisplayModeMenuToggles()
             if settings.classicOverlayEnabled {
                 ClassicOverlayLockMenuSection()
             }
@@ -163,14 +163,9 @@ struct MenuBarMenu: View {
         } label: {
             Label(L10n.t("歌词管理…"), systemImage: "music.note.list")
         }
-        // 跟"歌词管理…"同一个坑、同一个解法——正经的标题栏窗口,展示完整歌词并跟随
-        // 播放自动滚动,见 UI/LyricsWindowView.swift。
-        Button {
-            NSApp.activate(ignoringOtherApps: true)
-            openWindow(id: "lyrics-window")
-        } label: {
-            Label(L10n.t("歌词窗口…"), systemImage: "text.quote")
-        }
+        // 2026-08-06:"歌词窗口"从这里挪进了「快速开关」子菜单——它是四种歌词展示方式
+        // 之一(见设置页"歌词展示"那张卡),跟另外三种放在一起才成体系;留在顶层会让它看着
+        // 像"歌词管理…"那样的管理入口,而它其实是一个开/关。
         // 单独一条分隔线,把上面"打开某个窗口做配置/管理"这两项,跟下面"检查更新/关于"
         // 这类"了解一下这个 App 本身"的入口分开——原来四项挤在一起没有区分,看着乱
         // (2026-07-30 用户反馈),跟上面"开机启动"单独一组同一个分区原则。
@@ -209,8 +204,11 @@ struct MenuBarMenu: View {
 // WindowController(理由见 MenuBarMenu.body 里那段注释);set 统一走各自控制器的
 // setVisible(_:) —— 那是打开/关闭一种悬浮歌词的唯一入口,连"顺手把已配置好的隐藏偏好
 // 也应用上"这一步都在那里面,菜单/设置页/全局快捷键三处不各自复制一遍。
-private struct OverlayVisibilityMenuToggles: View {
+private struct DisplayModeMenuToggles: View {
     @ObservedObject private var settings = AppSettings.shared
+    @ObservedObject private var lyricsWindowPresence = LyricsWindowPresence.shared
+    @Environment(\.openWindow) private var openWindow
+    @Environment(\.dismissWindow) private var dismissWindow
 
     var body: some View {
         Toggle(isOn: Binding(
@@ -224,6 +222,32 @@ private struct OverlayVisibilityMenuToggles: View {
             set: { NotchLyricsWindowController.shared.setVisible($0) }
         )) {
             Label(L10n.t("显示灵动岛歌词"), systemImage: "rectangle.topthird.inset.filled")
+        }
+        // 菜单栏歌词跟上面两个不一样:它没有独立的 WindowController(就画在状态栏那一行
+        // 文字上),所以直接绑 AppSettings 那个布尔值就够,不需要 setVisible 那一套
+        // "写回开关 + 顺手应用隐藏偏好"的处理。
+        Toggle(isOn: $settings.showLyricsInMenuBar) {
+            Label(L10n.t("显示菜单栏歌词"), systemImage: "menubar.rectangle")
+        }
+        // "歌词窗口"是第三种情况:它连持久化布尔值都没有,开合完全交给 SwiftUI Window(id:)
+        // 自己的窗口存档机制(见 App.swift 那个场景的注释),这里的 isOn 只是"现在这扇窗口
+        // 是不是开着"的实时观测(LyricsWindowPresence 是纯只读的,构造它不会凭空建出窗口,
+        // 所以在菜单里持有它不违反本文件那条"别碰关闭模式的 .shared"的不变量)。
+        //
+        // accessory 策略下打开新窗口必须先手动激活 App,不然 openWindow 调了也没反应——
+        // 跟本文件"设置…""歌词管理…"两处同一个坑、同一个修法。
+        Toggle(isOn: Binding(
+            get: { lyricsWindowPresence.isOpen },
+            set: { newValue in
+                if newValue {
+                    NSApp.activate(ignoringOtherApps: true)
+                    openWindow(id: "lyrics-window")
+                } else {
+                    dismissWindow(id: "lyrics-window")
+                }
+            }
+        )) {
+            Label(L10n.t("显示歌词窗口"), systemImage: "text.quote")
         }
     }
 }
