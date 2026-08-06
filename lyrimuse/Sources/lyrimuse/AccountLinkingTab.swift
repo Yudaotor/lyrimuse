@@ -306,18 +306,36 @@ struct AccountLinkingTab: View {
     @State private var missingPrereqAlert: MissingPrereqAlert?
 
     var body: some View {
+        // 2026-08-06 从 .formStyle(.grouped) 换成跟其余六个设置分类同一套卡片组件
+        // (见 SettingsDesignSystem.swift)。页头从"左对齐的小徽标 + 标题"改成居中的
+        // "大徽标 + 大标题 + 说明",跟其它分类一致;底部那条自动保存状态栏保持原样留在
+        // 滚动区之外——它是常驻状态,不该跟着内容滚走。
+        //
+        // ⚠️ 这次只改外壳:.onReceive 的自动保存防抖、.onDisappear 的兜底保存、
+        // .alert 的前置条件提示全部原样保留在同一个位置。Last.fm 连接流程那一块
+        // (lastfmConnectArea/stepDots)和 SecretFieldRow 也没有拆成 SettingsRow ——
+        // 它们各自带着真实逻辑(密钥的展开/收起、三步授权状态机),硬塞进"图标+标题+尾部
+        // 控件"这个模子要重写控件本身,而这是全 App 最不该冒风险重写的地方(授权流程一旦
+        // 坏掉,用户连不上账号且不容易看出是 UI 改动导致的)。这些成组控件整块放进
+        // SettingsRawRow,拿到跟其它行一致的内边距即可。
         VStack(spacing: 0) {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    detailHeader
-                    cardIntro
-                    Form {
-                        fields
+            SettingsPageCustomHeader {
+                VStack(spacing: 6) {
+                    accountIconBadge(destination, size: 52, cornerRadius: 12)
+                        .padding(.bottom, 2)
+                    Text(destination.title)
+                        .font(.system(size: 22, weight: .bold))
+                    if let intro = cardIntroText {
+                        Text(intro)
+                            .font(.system(size: 13))
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                            .frame(maxWidth: 380)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
-                    .formStyle(.grouped)
                 }
-                .padding(20)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            } content: {
+                fields
             }
             Divider()
             autosaveStatusBar
@@ -417,8 +435,7 @@ struct AccountLinkingTab: View {
     // 每张卡片最上面这句"整体介绍"文案(描述整张卡是干什么的,不是某一个 Section 的)
     // 放在这里,在 detailHeader 和 Form 之间,不塞进任何一个 Section 的 header/footer——
     // footer 只能放纯文字且只描述那一个 Section,不适合放"整张卡"级别的介绍。
-    @ViewBuilder
-    private var cardIntro: some View {
+    private var cardIntroText: String? {
         switch destination {
         case .listenBrainz:
             // 2026-07-23:之前这里是 EmptyView(),理由是"账户信息" Section 的 footer
@@ -426,11 +443,9 @@ struct AccountLinkingTab: View {
             // 不是"填了之后 App 会拿它做什么"，用户反馈缺一句跟其它三张卡片一样的
             // 用途说明，这里补上；下面 Section 的 footer 继续保留，两句话各自负责
             // 不同的信息，跟其它卡片的结构一致。
-            Text(L10n.t("这台 Mac 上的播放记录会同步到 ListenBrainz，建立完整的听歌历史；也是网页展示、听歌报告的可选数据来源"))
-                .font(.caption).foregroundStyle(.secondary)
+            return L10n.t("这台 Mac 上的播放记录会同步到 ListenBrainz，建立完整的听歌历史；也是网页展示、听歌报告的可选数据来源")
         case .stateRelay:
-            Text(L10n.t("用来把当前播放状态推送到网页小组件和状态徽章"))
-                .font(.caption).foregroundStyle(.secondary)
+            return L10n.t("用来把当前播放状态推送到网页小组件和状态徽章")
         case .lastfm:
             // 2026-07-29:"读取"方向(同步到 ListenBrainz)原来是下面一个独立开关,现在
             // 去掉了——UI 上这个开关本来就要求"Last.fm 桥接凭据 + ListenBrainz 都配好"
@@ -438,18 +453,9 @@ struct AccountLinkingTab: View {
             // 就默认生效"这个判定条件完全一样,单独留一个开关只是多一次点击,没有实际
             // 区分度。跟"网页推送"那两个字段"填好就是唯一的开关"是同一个思路(见
             // stateRelayFields 的 footer 注释)。
-            Text(L10n.t("同一个 Last.fm 账号，可以双向同步收听记录"))
-                .font(.caption).foregroundStyle(.secondary)
+            return L10n.t("同一个 Last.fm 账号，可以双向同步收听记录")
         case .bark:
-            Text(L10n.t("用来接收「每周听歌小结」「每日听歌报告」推送"))
-                .font(.caption).foregroundStyle(.secondary)
-        }
-    }
-
-    private var detailHeader: some View {
-        HStack(spacing: 12) {
-            accountIconBadge(destination, size: 36, cornerRadius: 8)
-            Text(destination.title).font(.title3.weight(.semibold))
+            return L10n.t("用来接收「每周听歌小结」「每日听歌报告」推送")
         }
     }
 
@@ -466,15 +472,21 @@ struct AccountLinkingTab: View {
     // MARK: - ListenBrainz
 
     private var listenBrainzFields: some View {
-        Section {
-            SecretFieldRow(L10n.t("账户 Token"), value: $config.listenbrainzToken)
-            Link(L10n.t("在 ListenBrainz 网站获取 Token →"), destination: URL(string: "https://listenbrainz.org/settings/")!)
-                .font(.caption)
-            TextField(L10n.t("用户名（选填，用于界面显示）"), text: $config.listenbrainzUser)
-        } header: {
-            Text(L10n.t("账户信息"))
-        } footer: {
-            Text(L10n.t("可选，不填不影响悬浮歌词"))
+        SettingsCard {
+            SettingsRow(
+                icon: "key",
+                title: L10n.t("账户信息"),
+                subtitle: L10n.t("可选，不填不影响悬浮歌词")
+            )
+            CardDivider()
+            SettingsRawRow(insetToText: true) {
+                VStack(alignment: .leading, spacing: 8) {
+                    SecretFieldRow(L10n.t("账户 Token"), value: $config.listenbrainzToken)
+                    Link(L10n.t("在 ListenBrainz 网站获取 Token →"), destination: URL(string: "https://listenbrainz.org/settings/")!)
+                        .font(.caption)
+                    TextField(L10n.t("用户名（选填，用于界面显示）"), text: $config.listenbrainzUser)
+                }
+            }
         }
     }
 
@@ -482,7 +494,15 @@ struct AccountLinkingTab: View {
 
     @ViewBuilder
     private var stateRelayFields: some View {
-        Section {
+        SettingsCard {
+            SettingsRow(
+                icon: "antenna.radiowaves.left.and.right",
+                title: L10n.t("连接信息"),
+                subtitle: L10n.t("填好这两项就会自动推送到网页")
+            )
+            CardDivider()
+            SettingsRawRow(insetToText: true) {
+                VStack(alignment: .leading, spacing: 8) {
             TextField(text: $config.stateRelayURL, prompt: Text(L10n.t("例如 https://yourdomain.com/api/state"))) {
                 HStack(spacing: 4) {
                     Text(L10n.t("同步服务地址"))
@@ -496,13 +516,8 @@ struct AccountLinkingTab: View {
                 }
             }
             SecretFieldRow(L10n.t("访问令牌"), value: $config.stateRelayToken)
-        } header: {
-            Text(L10n.t("连接信息"))
-        } footer: {
-            // 这两个字段填好本身就是"要不要推"这件事唯一的开关,不再需要额外一层可以
-            // 打开也可以关闭的开关;网页那边(state-worker/网页前端)看到 modules 配置
-            // 缺失本来就按"全部启用"兜底,语义对得上。
-            Text(L10n.t("填好这两项就会自动推送到网页"))
+                }
+            }
         }
     }
 
@@ -516,37 +531,41 @@ struct AccountLinkingTab: View {
     // ListenBrainz)同一天又被去掉了独立开关,理由见上面 cardIntro 附近的注释。
     @ViewBuilder
     private var lastfmFields: some View {
-        Section {
-            HStack(spacing: 4) {
-                Text(L10n.t("创建 Last.fm 应用即可获取 API Key + Secret"))
-                    .font(.caption2).foregroundStyle(.secondary)
-                HelpButton(
-                    text: L10n.t("在 Last.fm 后台创建应用会同时给你 API Key 和 Secret"),
-                    docTitle: L10n.t("前往 Last.fm 申请 →"),
-                    docURL: URL(string: "https://www.last.fm/api/account/create")!
-                )
+        SettingsCard {
+            SettingsRow(
+                icon: "key",
+                title: L10n.t("账号信息"),
+                subtitle: L10n.t("创建 Last.fm 应用即可获取 API Key + Secret"),
+                help: L10n.t("在 Last.fm 后台创建应用会同时给你 API Key 和 Secret")
+            ) {
+                Link(L10n.t("前往申请"), destination: URL(string: "https://www.last.fm/api/account/create")!)
             }
-            TextField(L10n.t("Last.fm 用户名"), text: $config.lastfmUser)
-            SecretFieldRow("API Key", value: $config.lastfmScrobbleAPIKey)
-            SecretFieldRow("Secret", value: $config.lastfmScrobbleSecret, prompt: L10n.t("只用只读功能可以留空"))
-            lastfmConnectArea
-        } header: {
-            Text(L10n.t("账号信息"))
+            CardDivider()
+            SettingsRawRow(insetToText: true) {
+                VStack(alignment: .leading, spacing: 8) {
+                    TextField(L10n.t("Last.fm 用户名"), text: $config.lastfmUser)
+                    SecretFieldRow("API Key", value: $config.lastfmScrobbleAPIKey)
+                    SecretFieldRow("Secret", value: $config.lastfmScrobbleSecret, prompt: L10n.t("只用只读功能可以留空"))
+                    lastfmConnectArea
+                }
+            }
         }
 
-        Section {
-            Toggle(L10n.t("同步进 Last.fm"), isOn: Binding(
-                get: { features.lastfmMirrorScrobble },
-                set: { newValue in
-                    toggleGuarded(newValue, sameCardHint: config.lastfmMirrorMissingHint()) { v in
-                        features.lastfmMirrorScrobble = v; Task { await features.save() }
+        SettingsCard {
+            SettingsRow(
+                icon: "arrow.up.circle",
+                title: L10n.t("同步进 Last.fm"),
+                subtitle: L10n.t("开启后会把播放记录同步写入 Last.fm")
+            ) {
+                Toggle("", isOn: Binding(
+                    get: { features.lastfmMirrorScrobble },
+                    set: { newValue in
+                        toggleGuarded(newValue, sameCardHint: config.lastfmMirrorMissingHint()) { v in
+                            features.lastfmMirrorScrobble = v; Task { await features.save() }
+                        }
                     }
-                }
-            ))
-        } header: {
-            Text(L10n.t("写入记录"))
-        } footer: {
-            Text(L10n.t("开启后会把播放记录同步写入 Last.fm"))
+                ))
+            }
         }
     }
 
@@ -688,42 +707,61 @@ struct AccountLinkingTab: View {
     // 的常驻榜单,数据来源不同。
     @ViewBuilder
     private var barkFields: some View {
-        Section {
-            Picker(selection: $config.notificationPlatform) {
-                ForEach(NotificationPlatform.allCases) { platform in
-                    Text(platform.displayName).tag(platform)
-                }
-            } label: {
-                HStack(spacing: 4) {
+        SettingsCard {
+            // 这一行的"?"里带官方文档外链(docTitle/docURL),SettingsRow 的 help 参数只收
+            // 纯文本,所以这一行整块用 SettingsRawRow 自己排:图标列宽和左缩进都取
+            // SettingsRowMetrics,跟其它行对齐在同一条竖线上。
+            SettingsRawRow {
+                HStack(spacing: SettingsRowMetrics.iconTextSpacing) {
+                    Image(systemName: "bell.badge")
+                        .font(.system(size: 13))
+                        .foregroundStyle(.secondary)
+                        .frame(width: SettingsRowMetrics.iconWidth)
                     Text(L10n.t("通知平台"))
+                        .font(.system(size: 13))
                     HelpButton(
                         text: config.notificationPlatform.setupGuide,
                         docTitle: L10n.t("查看官方文档 →"),
                         docURL: config.notificationPlatform.setupDocURL
                     )
+                    Spacer(minLength: 12)
+                    Picker("", selection: $config.notificationPlatform) {
+                        ForEach(NotificationPlatform.allCases) { platform in
+                            Text(platform.displayName).tag(platform)
+                        }
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.menu)
+                    .fixedSize()
                 }
             }
-            .pickerStyle(.menu)
-
-            TextField(
-                L10n.t("Webhook 地址"), text: $config.notificationWebhookURL,
-                prompt: Text(config.notificationPlatform.urlPlaceholder)
-            )
-
-            if config.notificationPlatform == .dingtalk {
-                SecretFieldRow(L10n.t("加签密钥（可选）"), value: $config.dingtalkSignSecret)
-                Text(L10n.t("机器人安全设置选了「加签」才需要填，留空按未加签处理"))
-                    .font(.caption2).foregroundStyle(.secondary)
-            } else if config.notificationPlatform == .feishu {
-                SecretFieldRow(L10n.t("签名密钥（可选）"), value: $config.feishuSignSecret)
-                Text(L10n.t("机器人安全设置开了「签名校验」才需要填，不开也能收到消息"))
-                    .font(.caption2).foregroundStyle(.secondary)
+            CardDivider()
+            SettingsRawRow(insetToText: true) {
+                VStack(alignment: .leading, spacing: 8) {
+                    TextField(
+                        L10n.t("Webhook 地址"), text: $config.notificationWebhookURL,
+                        prompt: Text(config.notificationPlatform.urlPlaceholder)
+                    )
+                    if config.notificationPlatform == .dingtalk {
+                        SecretFieldRow(L10n.t("加签密钥（可选）"), value: $config.dingtalkSignSecret)
+                        Text(L10n.t("机器人安全设置选了「加签」才需要填，留空按未加签处理"))
+                            .font(.caption2).foregroundStyle(.secondary)
+                    } else if config.notificationPlatform == .feishu {
+                        SecretFieldRow(L10n.t("签名密钥（可选）"), value: $config.feishuSignSecret)
+                        Text(L10n.t("机器人安全设置开了「签名校验」才需要填，不开也能收到消息"))
+                            .font(.caption2).foregroundStyle(.secondary)
+                    }
+                }
             }
-        } header: {
-            Text(L10n.t("推送设置"))
         }
 
-        Section {
+        SettingsCard {
+            SettingsRow(
+                icon: "chart.bar.doc.horizontal",
+                title: L10n.t("提醒开关"),
+                subtitle: L10n.t("数据源留空时自动判定：两个账号都配了优先用 Last.fm，只配了一个就用那个")
+            )
+            CardDivider()
             // 数据源可选——Last.fm 的周榜接口(user.getWeeklyTrackChart/getWeeklyArtistChart)
             // 其实接受任意 from/to,不是只认官方周边界,因此两个 cadence 都能自己选数据源。
             // Picker 挂在对应开关打开之后(参照"灵动岛风格"只在"灵动岛歌词"开着才出现的
@@ -731,51 +769,67 @@ struct AccountLinkingTab: View {
             // 的标签("每周数据源"/"每日数据源"而不是都叫"数据源"),避免分不清哪个 Picker
             // 归哪个开关管。Picker 显示的是"这次实际会用哪个"(未手动选时是
             // resolvedDigestSource 判定出的默认值),一旦手动选过就变成显式 persist 的偏好。
-            Toggle(L10n.t("每周听歌小结"), isOn: Binding(
-                get: { features.weeklyDigest },
-                set: { newValue in
-                    let source = resolvedDigestSource(preference: features.weeklyDigestSource)
-                    toggleGuarded(newValue,
-                        sameCardHint: config.pushMissingHint(),
-                        crossCard: digestCrossCard(source: source)
-                    ) { v in features.weeklyDigest = v; Task { await features.save() } }
-                }
-            ))
+            SettingsRow(
+                icon: "calendar",
+                title: L10n.t("每周听歌小结"),
+                subtitle: L10n.t("Top 歌手 + Top 歌曲各三条 + 总播放次数")
+            ) {
+                Toggle("", isOn: Binding(
+                    get: { features.weeklyDigest },
+                    set: { newValue in
+                        let source = resolvedDigestSource(preference: features.weeklyDigestSource)
+                        toggleGuarded(newValue,
+                            sameCardHint: config.pushMissingHint(),
+                            crossCard: digestCrossCard(source: source)
+                        ) { v in features.weeklyDigest = v; Task { await features.save() } }
+                    }
+                ))
+            }
             if features.weeklyDigest {
-                Picker(L10n.t("每周数据源"), selection: Binding(
-                    get: { resolvedDigestSource(preference: features.weeklyDigestSource) },
-                    set: { features.weeklyDigestSource = $0; Task { await features.save() } }
-                )) {
-                    Text("Last.fm").tag("lastfm")
-                    Text("ListenBrainz").tag("listenbrainz")
+                CardDivider()
+                SettingsSubRow(title: L10n.t("每周数据源")) {
+                    Picker("", selection: Binding(
+                        get: { resolvedDigestSource(preference: features.weeklyDigestSource) },
+                        set: { features.weeklyDigestSource = $0; Task { await features.save() } }
+                    )) {
+                        Text("Last.fm").tag("lastfm")
+                        Text("ListenBrainz").tag("listenbrainz")
+                    }
+                    .pickerStyle(.menu)
+                    .fixedSize()
                 }
-                .pickerStyle(.menu)
             }
-
-            Toggle(L10n.t("每日听歌报告"), isOn: Binding(
-                get: { features.dailyDigest },
-                set: { newValue in
-                    let source = resolvedDigestSource(preference: features.dailyDigestSource)
-                    toggleGuarded(newValue,
-                        sameCardHint: config.pushMissingHint(),
-                        crossCard: digestCrossCard(source: source)
-                    ) { v in features.dailyDigest = v; Task { await features.save() } }
-                }
-            ))
+            CardDivider()
+            SettingsRow(
+                icon: "sun.max",
+                title: L10n.t("每日听歌报告"),
+                subtitle: L10n.t("本地时间晚上 10 点之后当天第一次检查时推送：当天播放次数、累计时长、听得最多的几首歌")
+            ) {
+                Toggle("", isOn: Binding(
+                    get: { features.dailyDigest },
+                    set: { newValue in
+                        let source = resolvedDigestSource(preference: features.dailyDigestSource)
+                        toggleGuarded(newValue,
+                            sameCardHint: config.pushMissingHint(),
+                            crossCard: digestCrossCard(source: source)
+                        ) { v in features.dailyDigest = v; Task { await features.save() } }
+                    }
+                ))
+            }
             if features.dailyDigest {
-                Picker(L10n.t("每日数据源"), selection: Binding(
-                    get: { resolvedDigestSource(preference: features.dailyDigestSource) },
-                    set: { features.dailyDigestSource = $0; Task { await features.save() } }
-                )) {
-                    Text("Last.fm").tag("lastfm")
-                    Text("ListenBrainz").tag("listenbrainz")
+                CardDivider()
+                SettingsSubRow(title: L10n.t("每日数据源")) {
+                    Picker("", selection: Binding(
+                        get: { resolvedDigestSource(preference: features.dailyDigestSource) },
+                        set: { features.dailyDigestSource = $0; Task { await features.save() } }
+                    )) {
+                        Text("Last.fm").tag("lastfm")
+                        Text("ListenBrainz").tag("listenbrainz")
+                    }
+                    .pickerStyle(.menu)
+                    .fixedSize()
                 }
-                .pickerStyle(.menu)
             }
-        } header: {
-            Text(L10n.t("提醒开关"))
-        } footer: {
-            Text(L10n.t("数据源留空时自动判定：两个账号都配了优先用 Last.fm，只配了一个就用那个。每日听歌报告在本地时间晚上 10 点之后、当天第一次检查时推送，内容是当天播放次数、累计时长（数据源是 ListenBrainz 时才有），以及听得最多的几首歌"))
         }
     }
 

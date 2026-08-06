@@ -247,3 +247,15 @@ struct ShortcutRecorder: View {
         }
     }
 }
+
+/// 只有录制按钮、不带标签的版本。给"标题已经由外层行自己画了"的场合用(见
+/// SettingsDesignSystem.swift 的 SettingsRow)——直接把上面那个带 LabeledContent 的版本
+/// 套 .labelsHidden() 也能藏掉文字,但 LabeledContent 在 Form 之外的布局行为不好预期
+/// (它仍然会参与"标签列对齐"那套逻辑),不如直接暴露里面的控件本体。
+struct ShortcutRecorderControl: View {
+    let name: KeyboardShortcuts.Name
+
+    var body: some View {
+        ShortcutRecorderRepresentable(name: name)
+    }
+}

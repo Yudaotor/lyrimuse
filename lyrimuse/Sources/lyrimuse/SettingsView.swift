@@ -154,6 +154,11 @@ struct SettingsView: View {
             }
             .listStyle(.sidebar)
             .navigationSplitViewColumnWidth(min: 170, ideal: 190, max: 220)
+            // 去掉 NavigationSplitView 自动塞进工具栏的那颗"隐藏边栏"按钮:这个窗口的
+            // 侧边栏就是它唯一的导航方式,收起来之后整扇窗口只剩内容、没有任何切换分类的
+            // 入口,是个只会把人卡住的开关。窗口本身也不可缩放(见 .frame 那一处),不存在
+            // "屏幕太窄需要腾地方"这种要收起侧边栏的场景。
+            .toolbar(removing: .sidebarToggle)
         } detail: {
             Group {
                 switch selection {
@@ -232,47 +237,73 @@ private struct LyricsSettingsTab: View {
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
-        Form {
-            // 播放位置现在通过 AppleScript 问 Music.app(见 MediaControlClient.swift)
-            // 得到精确值,不再有"精确/估算"两条路径可选,所以没有对应开关——自动化权限
-            // 是显示歌词的必要前提,状态统一显示在"通用"tab 的"权限"分区。
-            Section(L10n.t("解析")) {
-                Toggle(isOn: Binding(
+        SettingsPage(
+            title: L10n.t("歌词"),
+            subtitle: L10n.t("歌词从哪里来、怎么挑，以及显示哪些内容")
+        ) {
+            parsingCard
+            // "歌词来源""匹配算法"两张卡只在 features.lyrics(在线匹配总开关)打开时才显示
+            // ——2026-08-02 定的规则:关掉在线匹配后这两组设置毫无意义,继续让它们完全可交互
+            // 会让人以为调了就生效。
+            if features.lyrics {
+                sourcesCard.transition(.settingsCard)
+                matchingCard.transition(.settingsCard)
+            }
+            translationCard
+            displayCard
+            managementCard
+        }
+        .id(L10n.current)
+    }
+
+    // 播放位置现在通过 AppleScript 问 Music.app(见 MediaControlClient.swift)得到精确值,
+    // 不再有"精确/估算"两条路径可选,所以没有对应开关——自动化权限是显示歌词的必要前提,
+    // 状态统一显示在"播放器"分类的"权限"里。
+    private var parsingCard: some View {
+        SettingsCard {
+            SettingsRow(
+                icon: "magnifyingglass",
+                title: L10n.t("歌词在线匹配"),
+                subtitle: L10n.t("关掉之后新歌不再联网查，只用本地已经缓存过的结果"),
+                help: L10n.t("控制要不要在线解析歌词。关闭后，第一次播放的新歌不会再去查下面「歌词来源」里的这些平台，只用本地已经缓存过的结果（如果有）。「歌词来源」「匹配算法」这两组设置都只在这个开关开启时才有意义")
+            ) {
+                Toggle("", isOn: Binding(
                     get: { features.lyrics },
-                    set: { features.lyrics = $0; Task { await features.save() } }
-                )) {
-                    HStack(spacing: 4) {
-                        Text(L10n.t("歌词在线匹配"))
-                        HelpButton(text: L10n.t("控制要不要在线解析歌词。关闭后，第一次播放的新歌不会再去查下面「歌词来源」里的这些平台，只用本地已经缓存过的结果（如果有）。「歌词来源」「匹配算法」这两组设置都只在这个开关开启时才有意义"))
+                    set: { newValue in
+                        withAnimation(.settingsCardReveal) { features.lyrics = newValue }
+                        Task { await features.save() }
                     }
-                }
-                // "解析"(而非"预取")避免被误读成预先加载音频本身,这个开关从不碰音频。
-                Toggle(isOn: Binding(
+                ))
+            }
+            CardDivider()
+            // "解析"(而非"预取")避免被误读成预先加载音频本身,这个开关从不碰音频。
+            SettingsRow(
+                icon: "square.stack",
+                title: L10n.t("提前解析同专辑其它曲目"),
+                subtitle: L10n.t("换歌时顺带在后台把同专辑还没解析过的曲目也解析掉"),
+                help: L10n.t("换到一首歌时，如果它属于某张专辑，会顺带在后台把同专辑里还没解析过的其它曲目也提前解析。封面无条件都会解析，歌词是否被预取取决于上面的「歌词在线匹配」开关是否开启")
+            ) {
+                Toggle("", isOn: Binding(
                     get: { features.albumPrefetch },
                     set: { features.albumPrefetch = $0; Task { await features.save() } }
-                )) {
-                    HStack(spacing: 4) {
-                        Text(L10n.t("提前解析同专辑其它曲目"))
-                        HelpButton(text: L10n.t("换到一首歌时，如果它属于某张专辑，会顺带在后台把同专辑里还没解析过的其它曲目也提前解析。封面无条件都会解析，歌词是否被预取取决于上面的「歌词在线匹配」开关是否开启"))
-                    }
-                }
+                ))
             }
+        }
+    }
 
-            // 拆成两件事:"歌词来源"决定查哪些源(至少留一个,不然歌词解析开着却什么都
-            // 不查毫无意义);"匹配算法"决定从查到的结果里怎么选——智能算法沿用五源
-            // 打分取最高分,顺序优先则完全听用户排的顺序、不比分数。实现在
-            // collector/enrich.go 的 pickLyricCandidate,故意不影响"歌词管理"窗口的
-            // 手动搜索(那边永远查全部五源,理由见它的注释)。
-            //
-            // 这两组 Section 只在 features.lyrics(上面"歌词在线匹配"开关)打开时才
-            // 显示——2026-08-02 补上:上面 HelpButton 文字明确写了"这两组设置都只在
-            // 这个开关开启时才有意义",但 UI 上一直没有跟着做,关掉在线匹配后这两组
-            // 依然完全正常可交互,用户会以为调了就生效。跟下面"灵动岛风格"/"歌词窗口"
-            // 这两处已有的"父开关关闭就整体不显示"是同一个既有模式,不是新发明一套。
-            if features.lyrics {
-            Section {
-                ForEach(LyricsSource.allCases) { source in
-                    Toggle(isOn: Binding(
+    // 每个来源前面那个彩色圆点用 iconTint 上色——这里的图标不是"行首的视觉锚点",它本身
+    // 就是这个来源的身份色(跟"歌词管理"窗口里来源列的色点是同一套 source.color)。
+    private var sourcesCard: some View {
+        SettingsCard {
+            SettingsRow(
+                icon: "arrow.down.circle",
+                title: L10n.t("歌词来源"),
+                subtitle: L10n.t("至少需要保留一个歌词来源")
+            )
+            ForEach(LyricsSource.allCases) { source in
+                CardDivider()
+                SettingsRow(icon: "circle.fill", iconTint: source.color, title: source.displayName) {
+                    Toggle("", isOn: Binding(
                         get: { features.lyricsSources.contains(source) },
                         set: { newValue in
                             if newValue {
@@ -282,54 +313,47 @@ private struct LyricsSettingsTab: View {
                             }
                             Task { await features.save() }
                         }
-                    )) {
-                        HStack(spacing: 6) {
-                            Circle().fill(source.color).frame(width: 8, height: 8)
-                            Text(source.displayName)
-                        }
-                    }
+                    ))
                 }
-            } header: {
-                Text(L10n.t("歌词来源"))
-            } footer: {
-                Text(L10n.t("至少需要保留一个歌词来源"))
             }
+        }
+    }
 
-            // Section 的 header/footer 只要塞进去的不是纯 Text(哪怕只是 Text+
-            // HelpButton 这种最简单的 HStack),整个内容(连纯文字部分)都不出现在
-            // 可访问性树里——跟 accountHintRow 上那个"footer 里嵌 Button 拿不到"是
-            // 同一类限制,这次连 header、连纯 Text 都受影响。说明/操作一律放回 Section
-            // 正文,header/footer 只留死板的字符串字面量。
-            Section(L10n.t("匹配算法")) {
-                // .labelsHidden()——Picker 自带的标签文字会跟上面 header 逐字重复
-                // (两行同一句话叠在一起),这里隐藏掉,下面单独一行放简短说明+"?"。
-                Picker(selection: Binding(
+    // "匹配算法"决定从查到的结果里怎么选——智能算法沿用五源打分取最高分,顺序优先则完全
+    // 听用户排的顺序、不比分数。实现在 collector/enrich.go 的 pickLyricCandidate,故意不
+    // 影响"歌词管理"窗口的手动搜索(那边永远查全部五源,理由见它的注释)。
+    private var matchingCard: some View {
+        SettingsCard {
+            SettingsRow(
+                icon: "slider.horizontal.3",
+                title: L10n.t("匹配算法"),
+                subtitle: L10n.t("智能算法自动打分选最高分，顺序优先按你排的顺序来"),
+                help: L10n.t("智能算法：查到的每个来源都打分（逐字时间轴、语言是否匹配等维度），自动挑分数最高的一条。顺序优先：按下面排的顺序，用第一个查到有效结果的来源，不比较分数")
+            )
+            CardDivider()
+            SettingsSubRow {
+                Picker("", selection: Binding(
                     get: { features.lyricsSourceMode },
                     set: { features.lyricsSourceMode = $0; Task { await features.save() } }
                 )) {
                     ForEach(LyricsSourceMode.allCases) { mode in
                         Text(mode.displayName).tag(mode)
                     }
-                } label: {
-                    Text(L10n.t("匹配算法"))
                 }
-                .labelsHidden()
                 .pickerStyle(.segmented)
-
-                HStack(spacing: 4) {
-                    Text(L10n.t("智能算法自动打分选最高分，顺序优先按你排的顺序来"))
-                        .font(.caption2).foregroundStyle(.secondary)
-                    HelpButton(text: L10n.t("智能算法：查到的每个来源都打分（逐字时间轴、语言是否匹配等维度），自动挑分数最高的一条。顺序优先：按下面排的顺序，用第一个查到有效结果的来源，不比较分数"))
-                }
-
-                if features.lyricsSourceMode == .priority {
-                    ForEach(Array(orderedEnabledSources.enumerated()), id: \.element) { index, source in
+                .fixedSize()
+            }
+            if features.lyricsSourceMode == .priority {
+                ForEach(Array(orderedEnabledSources.enumerated()), id: \.element) { index, source in
+                    CardDivider()
+                    SettingsRawRow(insetToText: true) {
                         HStack(spacing: 8) {
                             Text("\(index + 1)")
                                 .font(.caption).monospacedDigit().foregroundStyle(.secondary)
                                 .frame(width: 14, alignment: .trailing)
                             Circle().fill(source.color).frame(width: 8, height: 8)
                             Text(source.displayName)
+                                .font(.system(size: 13))
                             Spacer()
                             Button {
                                 moveEnabledSource(source, direction: -1)
@@ -349,78 +373,104 @@ private struct LyricsSettingsTab: View {
                     }
                 }
             }
-            } // features.lyrics
+        }
+    }
 
-            Section {
-                Picker(selection: Binding(
+    private var translationCard: some View {
+        SettingsCard {
+            SettingsRow(
+                icon: "globe",
+                title: L10n.t("译文语言"),
+                subtitle: L10n.t("仅对 Musixmatch 来源生效，网易云音乐/QQ音乐的译文固定是中文")
+            ) {
+                Picker("", selection: Binding(
                     get: { features.lyricsTranslationLanguage },
                     set: { features.lyricsTranslationLanguage = $0; Task { await features.save() } }
                 )) {
                     ForEach(MusixmatchTranslationLanguage.allCases) { lang in
                         Text(lang.displayName).tag(lang)
                     }
-                } label: {
-                    Text(L10n.t("译文语言"))
                 }
-            } header: {
-                Text(L10n.t("译文语言"))
-            } footer: {
-                Text(L10n.t("仅对 Musixmatch 来源生效，网易云音乐/QQ音乐的译文固定是中文"))
+                .pickerStyle(.menu)
+                .fixedSize()
             }
+        }
+    }
 
-            Section {
-                Toggle(L10n.t("优先逐字高亮（有的话）"), isOn: Binding(
+    private var displayCard: some View {
+        SettingsCard {
+            SettingsRow(
+                icon: "sparkles",
+                title: L10n.t("优先逐字高亮"),
+                subtitle: L10n.t("这首歌带逐字时间轴时逐字扫过，否则整行高亮")
+            ) {
+                Toggle("", isOn: Binding(
                     get: { settings.preferWordLevelKaraoke },
                     set: { newValue in
                         settings.preferWordLevelKaraoke = newValue
                         local.preferWordLevelKaraoke = newValue
                     }
                 ))
-                Toggle(isOn: $settings.showRomanization) {
-                    HStack(spacing: 4) {
-                        Text(L10n.t("显示罗马音"))
-                        // 2026-08-04 从常驻 footer caption 改成按需展开的 HelpButton——
-                        // 跟本 Section 里"歌词在线匹配"等开关同一个既有约定(见 HelpButton
-                        // 顶部注释:常驻 caption 留给"一眼扫过就该知道"的内容,这类需要
-                        // 多一点背景知识才看得懂的说明按需展开)。这条说明原来整段常驻在
-                        // footer,但内容其实只跟这两个具体开关有关,挤在 Section 底部反而
-                        // 不如直接挂在对应开关旁边醒目。
-                        HelpButton(text: L10n.t("这个开关只影响「桌面悬浮歌词」和「歌词窗口」；灵动岛歌词受限于胶囊空间不支持这一项，菜单栏歌词只能显示一行纯文字"))
-                    }
-                }
-                Toggle(isOn: $settings.showTranslation) {
-                    HStack(spacing: 4) {
-                        Text(L10n.t("显示译文"))
-                        HelpButton(text: L10n.t("这个开关只影响「桌面悬浮歌词」和「歌词窗口」；灵动岛歌词受限于胶囊空间不支持这一项，菜单栏歌词只能显示一行纯文字"))
-                    }
-                }
-                Toggle(L10n.t("双行显示（预览下一句歌词）"), isOn: $settings.showNextLinePreview)
-            } header: {
-                Text(L10n.t("展示"))
             }
+            CardDivider()
+            SettingsRow(
+                icon: "textformat.alt",
+                title: L10n.t("显示罗马音"),
+                help: L10n.t("这个开关只影响「桌面悬浮歌词」和「歌词窗口」；灵动岛歌词受限于胶囊空间不支持这一项，菜单栏歌词只能显示一行纯文字")
+            ) {
+                Toggle("", isOn: $settings.showRomanization)
+            }
+            CardDivider()
+            SettingsRow(
+                icon: "text.bubble",
+                title: L10n.t("显示译文"),
+                help: L10n.t("这个开关只影响「桌面悬浮歌词」和「歌词窗口」；灵动岛歌词受限于胶囊空间不支持这一项，菜单栏歌词只能显示一行纯文字")
+            ) {
+                Toggle("", isOn: $settings.showTranslation)
+            }
+            CardDivider()
+            SettingsRow(
+                icon: "text.aligncenter",
+                title: L10n.t("双行显示"),
+                subtitle: L10n.t("当前这句下面再显示一行下一句歌词")
+            ) {
+                Toggle("", isOn: $settings.showNextLinePreview)
+            }
+        }
+    }
 
-            Section {
-                // accessory 策略下打开新窗口得先手动激活 App,不然 openWindow 调了也
-                // 没反应——跟 MenuBarMenu.swift 里"歌词管理…"菜单项同一个坑、同一个
-                // 修法,这里复用一模一样的写法。
-                Button(L10n.t("打开歌词管理…")) {
+    private var managementCard: some View {
+        SettingsCard {
+            SettingsRow(
+                icon: "list.bullet.rectangle",
+                title: L10n.t("歌词管理"),
+                subtitle: L10n.t("逐条查看、编辑、联网重搜每首歌已缓存的歌词")
+            ) {
+                // accessory 策略下打开新窗口得先手动激活 App,不然 openWindow 调了也没反应
+                // ——跟 MenuBarMenu.swift 里"歌词管理…"菜单项同一个坑、同一个修法。
+                Button(L10n.t("打开…")) {
                     NSApp.activate(ignoringOtherApps: true)
                     openWindow(id: "lyrics-manager")
                 }
-
-                LabeledContent {
-                    Text(features.effectiveLyricsDir.path)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                } label: {
-                    HStack(spacing: 4) {
-                        Text(L10n.t("歌词文件夹"))
-                        HelpButton(text: L10n.t("歌词默认就以这个文件夹为准维护。联网匹配到的结果会导出成文件存在这里，「歌词管理」里手动导入/编辑的文件也在这里。换成新文件夹后，旧文件夹里已有的文件不会自动搬过去，需要自己手动移动"))
-                    }
-                }
-
-                HStack {
+            }
+            CardDivider()
+            SettingsRow(
+                icon: "folder",
+                title: L10n.t("歌词文件夹"),
+                subtitle: L10n.t("每首歌听过一次，歌词就会永久保存在这个文件夹里；在「歌词管理」里删除会同时删掉这里已导出的文件"),
+                help: L10n.t("歌词默认就以这个文件夹为准维护。联网匹配到的结果会导出成文件存在这里，「歌词管理」里手动导入/编辑的文件也在这里。换成新文件夹后，旧文件夹里已有的文件不会自动搬过去，需要自己手动移动")
+            )
+            CardDivider()
+            SettingsRawRow(insetToText: true) {
+                Text(features.effectiveLyricsDir.path)
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
+            CardDivider()
+            SettingsRawRow(insetToText: true) {
+                HStack(spacing: 10) {
                     Button(L10n.t("选择文件夹…")) {
                         let panel = NSOpenPanel()
                         panel.canChooseDirectories = true
@@ -433,6 +483,14 @@ private struct LyricsSettingsTab: View {
                             Task { await features.save() }
                         }
                     }
+                    Button(L10n.t("打开歌词文件夹")) {
+                        let url = features.effectiveLyricsDir
+                        // collector 那边(见 collector/lyricsexport.go)只在真正解析/导出过
+                        // 至少一首歌之后才会建这个目录,这里先兜底建一下,避免文件夹还不存在
+                        // 时 NSWorkspace 打不开、又没有任何提示。
+                        try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+                        NSWorkspace.shared.open(url)
+                    }
                     if !features.lyricsDir.isEmpty {
                         Button(L10n.t("恢复默认位置")) {
                             features.lyricsDir = ""
@@ -441,26 +499,9 @@ private struct LyricsSettingsTab: View {
                         .buttonStyle(.link)
                     }
                     Spacer()
-                    Button(L10n.t("打开歌词文件夹")) {
-                        let url = features.effectiveLyricsDir
-                        // collector 那边(见 collector/lyricsexport.go)只在真正解析/导出过至少
-                        // 一首歌之后才会建这个目录,这里先兜底建一下,避免文件夹还不存在时
-                        // NSWorkspace 打不开、又没有任何提示。
-                        try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
-                        NSWorkspace.shared.open(url)
-                    }
                 }
-            } header: {
-                Text(L10n.t("管理"))
-            } footer: {
-                Text(L10n.t("每首歌听过一次，歌词就会永久保存在这个文件夹里；在「歌词管理」里删除会同时删掉这里已导出的文件"))
             }
         }
-        .formStyle(.grouped)
-        // SwiftUI 有时不会在语言切换后重新执行某些嵌套内容的 body(取决于该内容自己的
-        // 存储属性有没有变,而非父视图是否重新渲染,详见 AccountLinkingTab.swift 里
-        // DestinationStatus.label 的注释)。用 .id(L10n.current) 把 Form 的身份跟当前
-        // 语言绑死,语言一变就强制整体重新构造,不需要逐个排查哪里在跳过刷新。
     }
 
     // 只包含当前启用的来源,按 lyricsSourceOrder 里的相对顺序展示——"顺序优先"模式的
@@ -484,7 +525,6 @@ private struct LyricsSettingsTab: View {
         features.lyricsSourceOrder.swapAt(i, j)
         Task { await features.save() }
     }
-
 }
 
 private struct AppearanceSettingsTab: View {
@@ -544,105 +584,134 @@ private struct AppearanceSettingsTab: View {
     }
 
     var body: some View {
-        // .formStyle(.grouped) 是 macOS 13+ 原生"系统设置"式外观(圆角分组卡片+
-        // 灰色小标题+尾注)——分组样式下 ColorPicker/字体 Picker 不会被拉伸成贯穿整行
-        // 的长条,说明性文字也有明确的"尾注"位置,不会跟控件混在一起,排版全部是
-        // SwiftUI 原生处理,不用手工调间距。
+        // 2026-08-06 从 .formStyle(.grouped) 换成这套卡片组件(见 SettingsDesignSystem.swift)。
+        // 结构上的分组沿用 2026-08-05 那次"每种展示方式各占一张卡"的划分,没有再动:
+        // 一张卡放四个总开关,之后每种展示方式各一张卡、只在这种方式开着时出现,共用的
+        // 两个隐藏开关单独一张。
         //
-        // 2026-08-05 按"每种展示方式各占一张卡片"重排。改动前是按"设置的种类"分卡的,
-        // 用户反馈几种歌词模式的设置混在一起、看不清哪一项属于谁。具体是三处混淆:
-        // ① "歌词展示"这张卡里,四个总开关之间插着灵动岛的三项、菜单栏的三项子设置,
-        //    子设置跟总开关同级并排,看不出它属于上面哪一个开关;
-        // ② "外观"卡(配色/字体/字号)其实只对桌面悬浮歌词生效,但它是一张独立卡片、位置
-        //    又紧跟在四个总开关下面,视觉上像是对四种方式都生效,只能靠一句尾注去解释;
-        // ③ "悬浮歌词窗口"卡里"宽度/锁定位置"是桌面悬浮歌词专属,"截屏时隐藏/暂停时隐藏"
-        //    两项却对灵动岛同样生效(见各自 set 闭包里两个控制器都会调),那个标题对后两项
-        //    并不精确——改动前的注释里已经承认过这一点,但没拆。
-        //
-        // 现在的结构:"歌词展示"只放四个总开关;之后每种展示方式各自一张卡,卡片标题就是
-        // 这种方式的名字、且只在这种方式开着时才出现;真正两个悬浮窗共用的两个隐藏开关
-        // 单独一张卡。"这一项属于哪种展示方式"由卡片归属直接回答,不再依赖尾注解释。
-        //
-        // 歌词窗口没有自己的卡片——它一个可配置项都没有,只有总开关那一行。
-        Form {
-            displayModesSection
-            // 每种方式的详细设置只在这种方式开着时才出现——沿用改动前灵动岛/菜单栏子设置
-            // 的既有做法,关掉的方式不留一张空卡占位。
-            if settings.classicOverlayEnabled { classicOverlaySection }
-            if settings.notchOverlayEnabled { notchOverlaySection }
-            if settings.showLyricsInMenuBar { menuBarSection }
-            // 这两个开关只作用于两个悬浮窗(菜单栏歌词/歌词窗口不受影响),两个悬浮窗都
-            // 关着时整张卡没有意义,不显示。
-            if settings.classicOverlayEnabled || settings.notchOverlayEnabled { autoHideSection }
+        // 换成卡片之后多出来一件原来做不到的事:每一行可以自带一句副标题。原来"四种展示
+        // 方式互不冲突,可以同时开启:桌面悬浮歌词贴在桌面上、支持逐字高亮;灵动岛歌词
+        // 紧凑地贴着刘海显示;..." 是**一整段** Section 尾注,四种方式的说明串在一句话里,
+        // 读者得自己把每一小段对应回上面第几个开关;现在直接拆成四行各自的副标题。
+        SettingsPage(
+            title: L10n.t("外观"),
+            subtitle: L10n.t("四种展示方式互不冲突，可以同时开启")
+        ) {
+            displayModesCard
+            if settings.classicOverlayEnabled {
+                classicOverlayCard.transition(.settingsCard)
+            }
+            if settings.notchOverlayEnabled {
+                notchOverlayCard.transition(.settingsCard)
+            }
+            if settings.showLyricsInMenuBar {
+                menuBarCard.transition(.settingsCard)
+            }
+            if settings.classicOverlayEnabled || settings.notchOverlayEnabled {
+                autoHideCard.transition(.settingsCard)
+            }
         }
-        .formStyle(.grouped)
-        // SwiftUI 有时不会在语言切换后重新执行某些嵌套内容的 body(取决于该内容自己的
-        // 存储属性有没有变,而非父视图是否重新渲染,详见 AccountLinkingTab.swift 里
-        // DestinationStatus.label 的注释)。用 .id(L10n.current) 把 Form 的身份跟当前
-        // 语言绑死,语言一变就强制整体重新构造,不需要逐个排查哪里在跳过刷新。
-        //
-        // 2026-08-05 补回这个修饰符:它本来是 8e3f8fd("Fix language-switch staleness")
-        // 一次性给几个 Form 都加上的,后来拆分 tab 的几次重构把修饰符丢了、上面这段注释
-        // 却留了下来,变成"注释描述了一个并不存在的修复"。本文件还有另外 4 个 Form 是
-        // 同样的状态(歌词/播放器/通用/关于),不在这次改动范围内。
         .id(L10n.current)
     }
 
     // 四个总开关。四种展示方式互不冲突,可以同时开、只开一个、或者都不开;每个开关只
     // 负责"生效"它自己那一个控制器,不碰另一个。
     //
-    // 前两个的 set 只调 setVisible(_:) 一句:2026-08-05 把"这个模式开没开"合并成单一
-    // 开关之后,写回 AppSettings.{classic,notch}OverlayEnabled 和"顺手应用两个已配置好的
-    // 隐藏偏好"都收进了 setVisible(_:) 里面,这里再各自写一遍就是两个写入方,又会漂移。
-    private var displayModesSection: some View {
-        Section {
-            Toggle(L10n.t("桌面悬浮歌词"), isOn: Binding(
-                get: { settings.classicOverlayEnabled },
-                set: { LyricsOverlayWindowController.shared.setVisible($0) }
-            ))
-            Toggle(L10n.t("灵动岛歌词"), isOn: Binding(
-                get: { settings.notchOverlayEnabled },
-                set: { NotchLyricsWindowController.shared.setVisible($0) }
-            ))
-            Toggle(L10n.t("菜单栏歌词"), isOn: $settings.showLyricsInMenuBar)
+    // set 只调 setVisible(_:) 一句:2026-08-05 把"这个模式开没开"合并成单一开关之后,
+    // 写回 AppSettings.{classic,notch}OverlayEnabled 和"顺手应用两个已配置好的隐藏偏好"
+    // 都收进了 setVisible(_:) 里面,这里再各自写一遍就是两个写入方,又会漂移。
+    private var displayModesCard: some View {
+        SettingsCard {
+            SettingsRow(
+                icon: "captions.bubble",
+                title: L10n.t("桌面悬浮歌词"),
+                subtitle: L10n.t("贴在桌面上，支持逐字高亮")
+            ) {
+                Toggle("", isOn: Binding(
+                    get: { settings.classicOverlayEnabled },
+                    set: { newValue in
+                        // withAnimation 包在"改状态"这一处,而不是挂在卡片列容器上,理由见
+                        // Animation.settingsCardReveal 的注释。
+                        withAnimation(.settingsCardReveal) {
+                            LyricsOverlayWindowController.shared.setVisible(newValue)
+                        }
+                    }
+                ))
+            }
+            CardDivider()
+            SettingsRow(
+                icon: "rectangle.topthird.inset.filled",
+                title: L10n.t("灵动岛歌词"),
+                subtitle: L10n.t("紧凑地贴着屏幕顶部的刘海显示")
+            ) {
+                Toggle("", isOn: Binding(
+                    get: { settings.notchOverlayEnabled },
+                    set: { newValue in
+                        withAnimation(.settingsCardReveal) {
+                            NotchLyricsWindowController.shared.setVisible(newValue)
+                        }
+                    }
+                ))
+            }
+            CardDivider()
+            SettingsRow(
+                icon: "menubar.rectangle",
+                title: L10n.t("菜单栏歌词"),
+                subtitle: L10n.t("最不打扰，只占状态栏一行纯文字")
+            ) {
+                Toggle("", isOn: Binding(
+                    get: { settings.showLyricsInMenuBar },
+                    set: { newValue in
+                        withAnimation(.settingsCardReveal) { settings.showLyricsInMenuBar = newValue }
+                    }
+                ))
+            }
+            CardDivider()
             // "歌词窗口"(正经的标题栏窗口,完整歌词列表+自动滚动)不像上面三个那样有一个
             // AppSettings 持久化的布尔开关来控制——它的开合状态完全交给 SwiftUI Window(id:)
             // 自己的窗口自动存档机制(见 App.swift 那个场景的注释),这里的 Toggle 只是
             // "现在这扇窗口是不是开着"的实时状态(见 LyricsWindowPresence 注释),开/关直接
             // 对应打开/关闭这扇窗口,不写入任何新的持久化配置项。
-            Toggle(L10n.t("歌词窗口"), isOn: Binding(
-                get: { lyricsWindowPresence.isOpen },
-                set: { newValue in
-                    if newValue {
-                        // accessory 策略下打开新窗口得先手动激活 App,不然 openWindow
-                        // 调了也没反应——跟"打开歌词管理…"按钮同一个坑、同一个修法。
-                        NSApp.activate(ignoringOtherApps: true)
-                        openWindow(id: "lyrics-window")
-                    } else {
-                        dismissWindow(id: "lyrics-window")
+            SettingsRow(
+                icon: "text.quote",
+                title: L10n.t("歌词窗口"),
+                subtitle: L10n.t("可以滚动阅读的完整歌词列表")
+            ) {
+                Toggle("", isOn: Binding(
+                    get: { lyricsWindowPresence.isOpen },
+                    set: { newValue in
+                        if newValue {
+                            // accessory 策略下打开新窗口得先手动激活 App,不然 openWindow
+                            // 调了也没反应——跟"打开歌词管理…"按钮同一个坑、同一个修法。
+                            NSApp.activate(ignoringOtherApps: true)
+                            openWindow(id: "lyrics-window")
+                        } else {
+                            dismissWindow(id: "lyrics-window")
+                        }
                     }
-                }
-            ))
-        } header: {
-            Text(L10n.t("歌词展示"))
-        } footer: {
-            // 这四个开关互相独立、可以同时开,但没有引导的话新用户第一次打开这个页面容易
-            // 不知道该开哪个/是否可以全开。一句话各自说清典型使用场景,不展开成四段说明。
-            Text(L10n.t("四种展示方式互不冲突，可以同时开启：桌面悬浮歌词贴在桌面上、支持逐字高亮；灵动岛歌词紧凑地贴着刘海显示；菜单栏歌词最不打扰、只占状态栏一行文字；歌词窗口是可以滚动阅读的完整歌词列表"))
+                ))
+            }
         }
     }
 
-    // 桌面悬浮歌词(经典悬浮窗)专属的一整套:窗口几何(宽度/锁定位置)+ 配色与字体。
+    // 桌面悬浮歌词(经典悬浮窗)专属的一整套:窗口几何 + 配色与字体。
     //
-    // 配色/字体挪进这张卡是这次重排的核心一步。2026-08-05 全仓核对过消费方,确认这些设置
-    // 确实只对这一种展示方式生效:mainFont/romanizationFont/translationFont 和
-    // foregroundColor/backgroundColor/textStrokeColor 的读取点全部落在
-    // LyricsOverlayView.swift 一个文件里(灵动岛/歌词窗口各自用固定的系统配色,菜单栏歌词
-    // 是纯文字,都不读这些字段)。所以它们本来就该跟这个模式绑在同一张卡里,而不是单独一张
-    // 看起来全局生效的"外观"卡 + 一句尾注。
-    private var classicOverlaySection: some View {
-        Section {
-            LabeledContent(L10n.t("宽度")) {
+    // 配色/字体放在这张卡里的依据:2026-08-05 全仓核对过消费方,确认这些设置确实只对这一种
+    // 展示方式生效——mainFont/romanizationFont/translationFont 和 foregroundColor/
+    // backgroundColor/textStrokeColor 的读取点全部落在 LyricsOverlayView.swift 一个文件里
+    // (灵动岛/歌词窗口各自用固定的系统配色,菜单栏歌词是纯文字,都不读这些字段)。
+    //
+    // 第一行是一条没有控件的"身份行",只写模式名 + 适用范围。这张卡里全是"配色/字体"这类
+    // 通用词,不点名属于谁的话,跟上面那张总开关卡分不清关系。
+    private var classicOverlayCard: some View {
+        SettingsCard {
+            SettingsRow(
+                icon: "captions.bubble",
+                title: L10n.t("桌面悬浮歌词"),
+                subtitle: L10n.t("以下配色、字体、字号只影响这一种展示方式")
+            )
+            CardDivider()
+            SettingsRow(icon: "arrow.left.and.right", title: L10n.t("宽度")) {
                 HStack(spacing: 8) {
                     Slider(value: Binding(
                         get: { settings.overlayWidth },
@@ -651,159 +720,153 @@ private struct AppearanceSettingsTab: View {
                             LyricsOverlayWindowController.shared.setWidth(newValue)
                         }
                     ), in: 420...1000, step: 10)
+                    .frame(width: 150)
                     Text(String(format: L10n.t("%@pt"), "\(Int(settings.overlayWidth))"))
                         .foregroundStyle(.secondary)
                         .monospacedDigit()
-                        .frame(width: 40, alignment: .trailing)
+                        .frame(width: 46, alignment: .trailing)
                 }
             }
+            CardDivider()
             // "解锁后长按才能拖动"这个手势不直观(不看说明容易只当成"按住就能拖",或者
-            // 反过来以为"这窗口点不动了"),必须有一句显式说明。改动前它挂在整个 Section 的
-            // footer 里、跟"截屏时隐藏"那句挤在一个 VStack 中——那个写法有两个问题:一是
-            // 本文件既定的约束是 header/footer 只放纯 Text 字面量(塞 VStack/HStack 进去
-            // 整段文字都拿不到可访问性,见"匹配算法"那一节上面的注释),二是说明离它描述的
-            // 那个开关隔了好几行。改成挂在开关自己身上的 HelpButton,跟"显示专辑封面"
-            // "超宽时横向滚动"这两处已有做法一致。
-            Toggle(isOn: Binding(
-                get: { settings.lockPosition },
-                set: { newValue in
-                    settings.lockPosition = newValue
-                    LyricsOverlayWindowController.shared.setLocked(newValue)
-                }
-            )) {
-                HStack(spacing: 4) {
-                    Text(L10n.t("锁定位置"))
-                    HelpButton(text: L10n.t("解锁「锁定位置」后，悬浮歌词默认可以直接点击穿透到它下面的内容；长按住悬浮歌词不放，才能拖动它的位置"))
-                }
+            // 反过来以为"这窗口点不动了"),必须有一句显式说明。挂成这一行的副标题,而不是
+            // 卡片底部的统一说明——它只跟这一个开关有关。
+            SettingsRow(
+                icon: "lock",
+                title: L10n.t("锁定位置"),
+                subtitle: L10n.t("解锁后可以直接点击穿透；长按住悬浮歌词不放才能拖动它")
+            ) {
+                Toggle("", isOn: Binding(
+                    get: { settings.lockPosition },
+                    set: { newValue in
+                        settings.lockPosition = newValue
+                        LyricsOverlayWindowController.shared.setLocked(newValue)
+                    }
+                ))
             }
-
-            // 配色主题——内置预设一键套用+把当前调好的配色另存复用,对标 PlayStatus/
-            // Lyricify/AlgerMusicPlayer/HotLyric/VutronMusic 都有的这层。只打包"配色"
-            // 相关的四个字段(文字/背景/阴影颜色+阴影开关),不含字体/字号——那是排版,
-            // 跟配色是两回事,不该被同一个"主题"捆在一起改(见 ColorTheme.swift)。
-            // 套用即时生效,跟下面手动挪动色板是同一套 Binding,没有额外的"应用"步骤。
-            // Menu 的标签本身显示"当前配色正好等于哪个主题"(不等于任何一个就显示
-            // "自定义"),作为这个 Menu 唯一的选中反馈。
-            Menu(currentColorThemeLabel) {
-                // "跟随封面"(2026-08-03 新增)——不是一个固定配色,是"改用当前曲目
-                // 封面算出的动态高亮色"这个模式本身,跟下面的具体命名主题放在同一个
-                // Menu 里、用 Divider 隔开,表明这是另一类选项。只影响前景色(见
-                // PlaybackCoordinator.displayForegroundColor),背景色/描边仍然用
-                // 下面手动挑的固定值,没有封面数据时前景也退回下面选的固定色——不是
-                // 一整套独立的"主题",维持这个文件"配色只管四个字段"的既有范围。
-                Button(L10n.t("跟随封面")) { settings.followsCoverArt = true }
-                Divider()
-                ForEach(ColorTheme.builtInPresets) { theme in
-                    Button(theme.name) { applyColorTheme(theme) }
-                }
-                if !settings.customColorThemes.isEmpty {
+            CardDivider()
+            // 配色主题——内置预设一键套用+把当前调好的配色另存复用。只打包"配色"相关的
+            // 四个字段(文字/背景/阴影颜色+阴影开关),不含字体/字号——那是排版,跟配色是
+            // 两回事,不该被同一个"主题"捆在一起改(见 ColorTheme.swift)。Menu 的标签本身
+            // 显示"当前配色正好等于哪个主题"(不等于任何一个就显示"自定义")。
+            SettingsRow(
+                icon: "paintpalette",
+                title: L10n.t("配色主题"),
+                subtitle: settings.followsCoverArt ? L10n.t("没有封面数据时会使用下面选择的文字颜色作为备用") : nil
+            ) {
+                Menu(currentColorThemeLabel) {
+                    // "跟随封面"不是一个固定配色,是"改用当前曲目封面算出的动态高亮色"这个
+                    // 模式本身,用 Divider 跟下面的具体命名主题隔开,表明这是另一类选项。
+                    Button(L10n.t("跟随封面")) { settings.followsCoverArt = true }
                     Divider()
-                    ForEach(settings.customColorThemes) { theme in
+                    ForEach(ColorTheme.builtInPresets) { theme in
                         Button(theme.name) { applyColorTheme(theme) }
                     }
+                    if !settings.customColorThemes.isEmpty {
+                        Divider()
+                        ForEach(settings.customColorThemes) { theme in
+                            Button(theme.name) { applyColorTheme(theme) }
+                        }
+                    }
                 }
-            }
-            if settings.followsCoverArt {
-                Text(L10n.t("没有封面数据时会使用下面选择的文字颜色作为备用"))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                .fixedSize()
             }
             ForEach(settings.customColorThemes) { theme in
-                HStack {
-                    Button(theme.name) { applyColorTheme(theme) }
+                CardDivider()
+                SettingsSubRow(title: theme.name) {
+                    HStack(spacing: 10) {
+                        Button(L10n.t("套用")) { applyColorTheme(theme) }
+                        Button {
+                            settings.customColorThemes.removeAll { $0.id == theme.id }
+                        } label: {
+                            Image(systemName: "trash")
+                        }
                         .buttonStyle(.plain)
-                    Spacer()
-                    Button {
-                        settings.customColorThemes.removeAll { $0.id == theme.id }
-                    } label: {
-                        Image(systemName: "trash")
+                        .foregroundStyle(.secondary)
                     }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(.secondary)
                 }
             }
-            Button(L10n.t("将当前配色存为新主题…")) {
-                newThemeName = ""
-                showSaveThemeAlert = true
-            }
-            .buttonStyle(.link)
-
-            Picker(L10n.t("字体"), selection: $settings.fontFamilyName) {
-                // 这一项原来也叫「跟随系统」,跟语言选择器那一项撞成同一个 L10n key
-                // ("跟随系统"),而 .strings 里一个 key 只能有一个值——两处需要的英文
-                // 不一样("Follow System" vs 字体语境下的默认系统字体),重复 key 里
-                // plutil 只保留最后一条,结果语言选择器的英文被字体那条顶掉了。
-                // 改成「系统字体」:key 各自独立,而且在「字体」选择器下这个说法本身就比
-                // 「跟随系统」准确(后者容易被读成跟随深浅色外观)。
-                Text(L10n.t("系统字体")).tag("")
-                ForEach(Self.curatedFontFamilies, id: \.self) { family in
-                    Text(family).tag(family)
+            CardDivider()
+            SettingsSubRow {
+                Button(L10n.t("将当前配色存为新主题…")) {
+                    newThemeName = ""
+                    showSaveThemeAlert = true
                 }
+                .buttonStyle(.link)
             }
-            .pickerStyle(.menu)
-
-            // LabeledContent 而不是裸 HStack——分组样式下 Toggle/Picker/ColorPicker
-            // 这些自带标签的控件,标签会自动对齐成同一条竖线;裸 HStack 的"字号"只是
-            // 行内第一个 Text,对不上那条对齐线。LabeledContent 让它享受同一套对齐。
-            LabeledContent(L10n.t("字号")) {
+            CardDivider()
+            SettingsRow(icon: "textformat", title: L10n.t("字体")) {
+                Picker("", selection: $settings.fontFamilyName) {
+                    // 这一项原来也叫「跟随系统」,跟语言选择器那一项撞成同一个 L10n key,
+                    // 而 .strings 里一个 key 只能有一个值——改成「系统字体」:key 各自独立,
+                    // 而且在「字体」选择器下这个说法本身就比「跟随系统」准确。
+                    Text(L10n.t("系统字体")).tag("")
+                    ForEach(Self.curatedFontFamilies, id: \.self) { family in
+                        Text(family).tag(family)
+                    }
+                }
+                .pickerStyle(.menu)
+                .fixedSize()
+            }
+            CardDivider()
+            SettingsRow(icon: "textformat.size", title: L10n.t("字号")) {
                 HStack(spacing: 8) {
                     Slider(value: $settings.fontSize, in: 14...36, step: 1)
+                        .frame(width: 150)
                     Text(String(format: L10n.t("%@pt"), "\(Int(settings.fontSize))"))
                         .foregroundStyle(.secondary)
                         .monospacedDigit()
-                        .frame(width: 32, alignment: .trailing)
+                        .frame(width: 46, alignment: .trailing)
                 }
             }
-
-            ColorPicker(
-                L10n.t("文字颜色"),
-                selection: Binding(
+            CardDivider()
+            SettingsRow(icon: "paintbrush", title: L10n.t("文字颜色")) {
+                ColorPicker("", selection: Binding(
                     get: { settings.foregroundColor },
                     set: { settings.foregroundColorHex = $0.hexStringWithAlpha }
-                ),
-                supportsOpacity: false // 故意关掉——文字颜色允许透明的话,容易把 alpha
-                                       // 拖到 0,悬浮窗整个消失且没有任何视觉提示能定位问题
-            )
-
-            ColorPicker(
-                L10n.t("背景颜色"),
-                selection: Binding(
+                ), supportsOpacity: false) // 故意关掉——文字颜色允许透明的话,容易把 alpha
+                                           // 拖到 0,悬浮窗整个消失且没有任何视觉提示能定位问题
+            }
+            CardDivider()
+            SettingsRow(icon: "rectangle.fill", title: L10n.t("背景颜色")) {
+                ColorPicker("", selection: Binding(
                     get: { settings.backgroundColor },
                     set: { settings.backgroundColorHex = $0.hexStringWithAlpha }
-                ),
-                supportsOpacity: true // 背景不透明度就是这个颜色的 alpha 通道本身,
-                                      // 不另加一根 opacity 滑杆
-            )
-
-            Toggle(L10n.t("文字描边（与桌面背景区分）"), isOn: $settings.textStrokeEnabled)
-
+                ), supportsOpacity: true) // 背景不透明度就是这个颜色的 alpha 通道本身,
+                                          // 不另加一根 opacity 滑杆
+            }
+            CardDivider()
+            SettingsRow(
+                icon: "pencil.and.outline",
+                title: L10n.t("文字描边"),
+                subtitle: L10n.t("在浅色或杂乱的桌面背景上把字撑出来")
+            ) {
+                Toggle("", isOn: $settings.textStrokeEnabled)
+            }
             if settings.textStrokeEnabled {
-                ColorPicker(
-                    L10n.t("描边颜色"),
-                    selection: Binding(
+                CardDivider()
+                SettingsSubRow(title: L10n.t("描边颜色")) {
+                    ColorPicker("", selection: Binding(
                         get: { settings.textStrokeColor },
                         set: { settings.textStrokeColorHex = $0.hexStringWithAlpha }
-                    ),
-                    supportsOpacity: true // 描边只让选颜色(含 alpha),粗细是固定常量
-                                          // (LyricsOverlayView.swift 的 OptionalTextStroke),
-                                          // 不额外加调节项——参考的是 LyricsX 的做法。
-                )
+                    ), supportsOpacity: true) // 描边只让选颜色(含 alpha),粗细是固定常量
+                                              // (LyricsOverlayView.swift 的 OptionalTextStroke),
+                                              // 不额外加调节项——参考的是 LyricsX 的做法。
+                }
             }
-
-            Button(L10n.t("恢复默认外观")) {
-                settings.followsCoverArt = false
-                settings.fontFamilyName = AppSettings.defaultFontFamilyName
-                settings.fontSize = AppSettings.defaultFontSize
-                settings.foregroundColorHex = ColorTheme.defaultTheme.foregroundColorHex
-                settings.backgroundColorHex = ColorTheme.defaultTheme.backgroundColorHex
-                settings.textStrokeEnabled = ColorTheme.defaultTheme.textStrokeEnabled
-                settings.textStrokeColorHex = ColorTheme.defaultTheme.textStrokeColorHex
+            CardDivider()
+            SettingsSubRow {
+                Button(L10n.t("恢复默认外观")) {
+                    settings.followsCoverArt = false
+                    settings.fontFamilyName = AppSettings.defaultFontFamilyName
+                    settings.fontSize = AppSettings.defaultFontSize
+                    settings.foregroundColorHex = ColorTheme.defaultTheme.foregroundColorHex
+                    settings.backgroundColorHex = ColorTheme.defaultTheme.backgroundColorHex
+                    settings.textStrokeEnabled = ColorTheme.defaultTheme.textStrokeEnabled
+                    settings.textStrokeColorHex = ColorTheme.defaultTheme.textStrokeColorHex
+                }
+                .buttonStyle(.link)
             }
-            .buttonStyle(.link)
-        } header: {
-            Text(L10n.t("桌面悬浮歌词"))
-        } footer: {
-            Text(L10n.t("以上配色、字体、字号只影响「桌面悬浮歌词」；灵动岛歌词和歌词窗口用的是固定的系统配色和字号，菜单栏歌词是纯文字，都不受这里影响"))
         }
         .alert(L10n.t("存为新配色主题"), isPresented: $showSaveThemeAlert) {
             TextField(L10n.t("主题名称"), text: $newThemeName)
@@ -824,34 +887,39 @@ private struct AppearanceSettingsTab: View {
         }
     }
 
-    // 灵动岛歌词专属。三项都只负责持久化,NotchLyricsView 每次渲染直接读,不需要像
-    // classicOverlayEnabled/notchOverlayEnabled 那样在这里连带调某个窗口控制器"生效"
-    // ——唯一的例外是"宽度",它改的是窗口本身的几何,见下面那一项。
-    //
-    // 标签从改动前的"灵动岛风格"简化成"风格":卡片标题已经是"灵动岛歌词"了,再重复一遍
-    // "灵动岛"是冗余(同理"宽度"也不需要写成"灵动岛宽度",跟上面桌面悬浮歌词那张卡里的
-    // "宽度"靠卡片归属区分,不会混淆)。
-    private var notchOverlaySection: some View {
-        Section {
-            Picker(L10n.t("风格"), selection: $settings.notchCardStyle) {
-                ForEach(NotchCardStyle.allCases, id: \.self) { style in
-                    Text(style.displayName).tag(style)
+    // 灵动岛歌词专属。三项都只负责持久化,NotchLyricsView 每次渲染直接读,不需要连带调
+    // 某个窗口控制器"生效"——唯一的例外是"宽度",它改的是窗口本身的几何。
+    private var notchOverlayCard: some View {
+        SettingsCard {
+            SettingsRow(
+                icon: "rectangle.topthird.inset.filled",
+                title: L10n.t("灵动岛歌词"),
+                subtitle: L10n.t("配色由下面的「风格」决定、字号固定，不使用「桌面悬浮歌词」那一组配色和字体设置")
+            )
+            CardDivider()
+            SettingsRow(icon: "paintbrush.pointed", title: L10n.t("风格")) {
+                Picker("", selection: $settings.notchCardStyle) {
+                    ForEach(NotchCardStyle.allCases, id: \.self) { style in
+                        Text(style.displayName).tag(style)
+                    }
                 }
+                .pickerStyle(.menu)
+                .fixedSize()
             }
-            .pickerStyle(.menu)
-
-            Toggle(isOn: $settings.notchShowArtwork) {
-                HStack(spacing: 4) {
-                    Text(L10n.t("显示专辑封面"))
-                    HelpButton(text: L10n.t("在灵动岛右下角显示一枚专辑封面小图。开启后当前歌词能显示的宽度会略微变窄（过长的歌词仍然会横向滚动播完整句）"))
-                }
+            CardDivider()
+            SettingsRow(
+                icon: "photo",
+                title: L10n.t("显示专辑封面"),
+                subtitle: L10n.t("在右下角显示一枚封面小图；开启后当前歌词能显示的宽度会略微变窄")
+            ) {
+                Toggle("", isOn: $settings.notchShowArtwork)
             }
-
+            CardDivider()
             // 跟上面桌面悬浮歌词的"宽度"滑块同一套写法(设置项本身只负责持久化,didSet
             // 不碰 NSWindow,这里的 set 闭包显式调用窗口控制器的方法让改动立刻生效)。
             // 跟桌面悬浮歌词不同的是灵动岛不需要"保持中心点"的增量调整——它的位置从来
             // 都是重新居中算出来的,见 NotchLyricsWindowController.applyContentWidthSetting()。
-            LabeledContent(L10n.t("宽度")) {
+            SettingsRow(icon: "arrow.left.and.right", title: L10n.t("宽度")) {
                 HStack(spacing: 8) {
                     Slider(value: Binding(
                         get: { settings.notchContentWidth },
@@ -860,94 +928,98 @@ private struct AppearanceSettingsTab: View {
                             NotchLyricsWindowController.shared.applyContentWidthSetting()
                         }
                     ), in: 260...500, step: 10)
+                    .frame(width: 150)
                     Text(String(format: L10n.t("%@pt"), "\(Int(settings.notchContentWidth))"))
                         .foregroundStyle(.secondary)
                         .monospacedDigit()
-                        .frame(width: 40, alignment: .trailing)
+                        .frame(width: 46, alignment: .trailing)
                 }
             }
-        } header: {
-            Text(L10n.t("灵动岛歌词"))
-        } footer: {
-            Text(L10n.t("灵动岛的配色由上面的「风格」决定、字号固定，不使用「桌面悬浮歌词」那一组配色和字体设置"))
         }
     }
 
-    // 菜单栏歌词专属。改动前那句随开关变化的说明是 Section 正文里一行 .font(.caption) 的
-    // 裸 Text,现在挪到 footer——分组样式里 footer 才是"注脚"的原生位置,而且它是单个纯
-    // Text,不触碰本文件那条"header/footer 只放纯 Text 字面量"的约束。
-    private var menuBarSection: some View {
-        Section {
-            Toggle(isOn: $settings.menuBarLyricsScroll) {
-                HStack(spacing: 4) {
-                    Text(L10n.t("超宽时横向滚动"))
-                    HelpButton(text: L10n.t("歌词比下面设置的宽度更长时，在状态栏里横向滚动播完整句（开头会先停一下再滚）；关掉则截断成「前 N 个字…」。两种模式下鼠标悬停在状态栏上都能看到完整的这一行"))
-                }
+    // 菜单栏歌词专属。那句随开关变化的说明挂成"超宽时横向滚动"这一行的副标题——它讲的
+    // 就是这个开关两种状态各自的行为,原来是 Section 正文里一行独立的 caption 文字。
+    private var menuBarCard: some View {
+        SettingsCard {
+            SettingsRow(
+                icon: "menubar.rectangle",
+                title: L10n.t("菜单栏歌词"),
+                subtitle: L10n.t("鼠标悬停在状态栏上永远能看到完整的这一行")
+            )
+            CardDivider()
+            SettingsRow(
+                icon: "arrow.left.arrow.right",
+                title: L10n.t("超宽时横向滚动"),
+                subtitle: L10n.t(settings.menuBarLyricsScroll
+                    ? "比下面的宽度更长时，在状态栏里横向滚动播完整句（开头会先停一下再滚）"
+                    : "比下面的宽度更长时截断成「前 N 个字…」，不滚动")
+            ) {
+                Toggle("", isOn: $settings.menuBarLyricsScroll)
             }
-            LabeledContent(L10n.t(settings.menuBarLyricsScroll ? "显示宽度" : "超过就截断")) {
+            CardDivider()
+            SettingsSubRow(title: L10n.t(settings.menuBarLyricsScroll ? "显示宽度" : "超过就截断")) {
                 HStack(spacing: 8) {
                     Slider(value: Binding(
                         get: { Double(settings.menuBarLyricsMaxChars) },
                         set: { settings.menuBarLyricsMaxChars = Int($0) }
                     ), in: 20...120, step: 5)
+                    .frame(width: 150)
                     Text(String(format: L10n.t("%@ 字"), "\(settings.menuBarLyricsMaxChars)"))
                         .foregroundStyle(.secondary)
                         .monospacedDigit()
-                        .frame(width: 40, alignment: .trailing)
+                        .frame(width: 46, alignment: .trailing)
                 }
             }
-        } header: {
-            Text(L10n.t("菜单栏歌词"))
-        } footer: {
-            Text(L10n.t(settings.menuBarLyricsScroll
-                ? "状态栏里最多同时显示这么多字；更长的歌词会横向滚动播完"
-                : "没超过就整行显示；超过这个长度会截断，鼠标悬停在状态栏上能看到完整这一行"))
         }
     }
 
-    // 两个悬浮窗共用的两个隐藏开关。改动前它们跟桌面悬浮歌词专属的"宽度/锁定位置"挤在
-    // 同一张叫"悬浮歌词窗口"的卡里,那个标题对这两项并不精确(它们对灵动岛同样生效)——
-    // 改动前的注释已经指出过这个不精确,这次按归属拆开:专属的回各自的模式卡,共用的留在
-    // 这张卡。标题用"自动隐藏"而不是"共用设置":它描述的是这两个开关实际在做的事,不管
-    // 当下开着的是一个还是两个悬浮窗都成立。
-    private var autoHideSection: some View {
-        Section {
-            Toggle(isOn: Binding(
-                get: { settings.hideDuringScreenCapture },
-                set: { newValue in
-                    settings.hideDuringScreenCapture = newValue
-                    // 两个悬浮窗互不排斥,可能同时开着——应用到当前每一个确实启用了的
-                    // 控制器,关闭的那个不碰(避免凭空构造出一个没人要的窗口,见
-                    // NotchLyricsWindowController 顶部注释的那条不变量)。
-                    if settings.classicOverlayEnabled {
-                        LyricsOverlayWindowController.shared.setHiddenFromCapture(newValue)
+    // 两个悬浮窗共用的隐藏开关。标题用"自动隐藏"而不是"共用设置":它描述的是这两个开关
+    // 实际在做的事,不管当下开着的是一个还是两个悬浮窗都成立。
+    private var autoHideCard: some View {
+        SettingsCard {
+            SettingsRow(
+                icon: "eye.slash",
+                title: L10n.t("自动隐藏"),
+                subtitle: L10n.t("以下两项对「桌面悬浮歌词」和「灵动岛歌词」同时生效，菜单栏歌词和歌词窗口不受影响")
+            )
+            CardDivider()
+            SettingsRow(
+                icon: "camera.viewfinder",
+                title: L10n.t("截屏/录屏时隐藏"),
+                subtitle: L10n.t("截图、录屏、视频会议共享屏幕都不会拍到悬浮歌词，你自己仍然看得见")
+            ) {
+                Toggle("", isOn: Binding(
+                    get: { settings.hideDuringScreenCapture },
+                    set: { newValue in
+                        settings.hideDuringScreenCapture = newValue
+                        // 两个悬浮窗互不排斥,可能同时开着——应用到当前每一个确实启用了的
+                        // 控制器,关闭的那个不碰(避免凭空构造出一个没人要的窗口,见
+                        // NotchLyricsWindowController 顶部注释的那条不变量)。
+                        if settings.classicOverlayEnabled {
+                            LyricsOverlayWindowController.shared.setHiddenFromCapture(newValue)
+                        }
+                        if settings.notchOverlayEnabled {
+                            NotchLyricsWindowController.shared.setHiddenFromCapture(newValue)
+                        }
                     }
-                    if settings.notchOverlayEnabled {
-                        NotchLyricsWindowController.shared.setHiddenFromCapture(newValue)
-                    }
-                }
-            )) {
-                HStack(spacing: 4) {
-                    Text(L10n.t("截屏/录屏时隐藏"))
-                    HelpButton(text: L10n.t("开启「截屏/录屏时隐藏」后，截图、录屏、视频会议共享屏幕都不会拍到悬浮歌词，但你自己在这台 Mac 上仍然正常看得见"))
-                }
+                ))
             }
-            Toggle(L10n.t("暂停/无播放时隐藏"), isOn: Binding(
-                get: { settings.hideWhenNotPlaying },
-                set: { newValue in
-                    settings.hideWhenNotPlaying = newValue
-                    if settings.classicOverlayEnabled {
-                        LyricsOverlayWindowController.shared.setHideWhenNotPlaying(newValue)
+            CardDivider()
+            SettingsRow(icon: "pause.circle", title: L10n.t("暂停/无播放时隐藏")) {
+                Toggle("", isOn: Binding(
+                    get: { settings.hideWhenNotPlaying },
+                    set: { newValue in
+                        settings.hideWhenNotPlaying = newValue
+                        if settings.classicOverlayEnabled {
+                            LyricsOverlayWindowController.shared.setHideWhenNotPlaying(newValue)
+                        }
+                        if settings.notchOverlayEnabled {
+                            NotchLyricsWindowController.shared.setHideWhenNotPlaying(newValue)
+                        }
                     }
-                    if settings.notchOverlayEnabled {
-                        NotchLyricsWindowController.shared.setHideWhenNotPlaying(newValue)
-                    }
-                }
-            ))
-        } header: {
-            Text(L10n.t("自动隐藏"))
-        } footer: {
-            Text(L10n.t("这两项对「桌面悬浮歌词」和「灵动岛歌词」同时生效；菜单栏歌词和歌词窗口不受影响"))
+                ))
+            }
         }
     }
 }
@@ -973,19 +1045,34 @@ private struct PlayerSettingsTab: View {
     @State private var collectorRunning = false
     @State private var isTogglingCollectorService = false
     // 2026-08-02 补上——之前点"启用"失败后,前台只会看到红叉+"未运行"跟从没点过一模
-    // 一样,没有任何具体原因或下一步指引,用户卡在这里无计可施(对比下面"权限"Section
-    // 失败时有文案+"打开系统设置"按钮)。只在"这次是想启用、结果没启动起来"时才为真,
-    // 停用/切走这个 tab 都会清掉,不会把上一次失败的提示一直留着误导下一次操作。
+    // 一样,没有任何具体原因或下一步指引,用户卡在这里无计可施。只在"这次是想启用、结果
+    // 没启动起来"时才为真,停用/切走这个 tab 都会清掉,不会把上一次失败的提示一直留着
+    // 误导下一次操作。
     @State private var collectorEnableFailed = false
 
     var body: some View {
-        Form {
-            // 选哪个播放器决定了下面"权限"这个 Section 还要不要出现——QQ 音乐走系统级
-            // MediaRemote,没有"自动化"这个概念,继续显示这个 Section 只会误导人以为
-            // 还需要处理这个权限。切换后台采集服务(收集器只在启动时读一次这个设置)
-            // 需要重启才生效,跟这个 store 其它开关一样"保存即重启"。
-            Section {
-                Picker(L10n.t("播放器"), selection: Binding(
+        SettingsPage(
+            title: L10n.t("播放器"),
+            subtitle: L10n.t("选择读取哪个 App 的播放状态，并确认它能被正常读到")
+        ) {
+            playerCard
+            permissionCard
+            collectorCard
+            companionCard
+        }
+        .id(L10n.current)
+    }
+
+    // 切换后台采集服务(收集器只在启动时读一次这个设置)需要重启才生效,跟这个 store
+    // 其它开关一样"保存即重启"。
+    private var playerCard: some View {
+        SettingsCard {
+            SettingsRow(
+                icon: "music.note.list",
+                title: L10n.t("播放器"),
+                subtitle: L10n.t("选择 Lyrimuse 读取哪个 App 的播放状态")
+            ) {
+                Picker("", selection: Binding(
                     get: { features.player },
                     set: { features.player = $0; Task { await features.save() } }
                 )) {
@@ -994,31 +1081,26 @@ private struct PlayerSettingsTab: View {
                     }
                 }
                 .pickerStyle(.menu)
-            } header: {
-                Text(L10n.t("播放器"))
-            } footer: {
-                Text(L10n.t("选择 Lyrimuse 读取哪个 App 的播放状态"))
+                .fixedSize()
             }
+        }
+    }
 
-            // 本地数据源现在通过 AppleScript 直接问 Music.app(见 MediaControlClient.swift),
-            // 这个权限因此从"可选、只影响播放进度精度"变成"核心路径必需、没有就完全
-            // 看不到歌词",footer 特意说清楚这一点,别让人以为不给也无所谓。QQ 音乐走
-            // 系统级 MediaRemote,不需要这个权限,选中它时整个 Section 不出现。
-            if features.player == .appleMusic {
-            Section {
-                HStack {
-                    Label {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(L10n.t("Apple Music 自动化"))
-                            Text(automationStatusCaption)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    } icon: {
-                        Image(systemName: automationStatusIconName)
-                            .foregroundStyle(automationStatusIconColor)
-                    }
-                    Spacer()
+    // 本地数据源现在通过 AppleScript 直接问 Music.app(见 MediaControlClient.swift),
+    // 这个权限因此从"可选、只影响播放进度精度"变成"核心路径必需、没有就完全看不到
+    // 歌词",副标题特意说清楚这一点,别让人以为不给也无所谓。QQ 音乐/网易云/Spotify 走
+    // 系统级 MediaRemote,不需要这个权限——那种情况下不是把这张卡整个撤掉(2026-08-02
+    // 的教训:卡片凭空消失会让人怀疑是不是坏了),而是换成一句明确的"不需要授权"确认。
+    @ViewBuilder
+    private var permissionCard: some View {
+        if features.player == .appleMusic {
+            SettingsCard {
+                SettingsRow(
+                    icon: automationStatusIconName,
+                    iconTint: automationStatusIconColor,
+                    title: L10n.t("Apple Music 自动化"),
+                    subtitle: automationStatusCaption + "・" + L10n.t("没有它，悬浮歌词/灵动岛都无法显示任何歌词内容")
+                ) {
                     if isRequestingAutomation {
                         ProgressView().controlSize(.small)
                     } else {
@@ -1026,25 +1108,18 @@ private struct PlayerSettingsTab: View {
                     }
                 }
                 if isRequestingAutomation {
-                    if automationRequestTimedOut {
-                        VStack(alignment: .leading, spacing: 6) {
+                    CardDivider()
+                    SettingsNote {
+                        if automationRequestTimedOut {
                             Text(L10n.t("这次请求耗时有点久。如果你已经看到系统弹窗，请去处理它；找不到弹窗的话，可以直接去系统设置里手动开启"))
                             Button(L10n.t("打开系统设置")) {
                                 NSWorkspace.shared.open(MusicAutomationPermission.systemSettingsURL)
                             }
+                        } else {
+                            Text(L10n.t("请查看屏幕上弹出的系统授权对话框，选择「允许」"))
                         }
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    } else {
-                        Text(L10n.t("请查看屏幕上弹出的系统授权对话框，选择「允许」"))
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
                     }
                 }
-            } header: {
-                Text(L10n.t("权限"))
-            } footer: {
-                Text(L10n.t("Lyrimuse 靠这个权限读取 Apple Music 当前播放的歌曲信息。没有它，悬浮歌词/灵动岛都无法显示任何歌词内容"))
             }
             .onAppear { automationStatus = MusicAutomationPermission.check(askIfNeeded: false) }
             // 见 OnboardingView 里同一处的注释:用户可能切去系统设置手动处理,切回来
@@ -1058,97 +1133,77 @@ private struct PlayerSettingsTab: View {
                     automationRequestTimedOut = false
                 }
             }
-            } else {
-                // 2026-08-02 补上——切到 QQ 音乐/网易云音乐/Spotify/自动识别后,"权限"
-                // 整个 Section 直接消失,之前没有任何一句话确认"这是正常的、这个播放器
-                // 不需要走这道授权",容易让用户怀疑是不是哪里坏了。这里补一句确认文案,
-                // 不需要完整的 Section(没有状态/按钮可展示),用 Label 保持跟上面"权限"
-                // Section 同样"图标+文字"的视觉语言。
-                Section {
-                    Label(
-                        String(format: L10n.t("%@ 通过系统级机制读取播放状态，不需要在这里做额外授权"), features.player.displayName),
-                        systemImage: "checkmark.circle.fill"
-                    )
-                    .foregroundStyle(.secondary)
-                } header: {
-                    Text(L10n.t("权限"))
-                }
-            } // features.player == .appleMusic
-
-            // collector(读播放状态、抓歌词/封面写本地缓存的后台服务)跟"权限"那个
-            // Section 一样用图标+文案+按钮而不是简单 Toggle——需要展示"装了但没跑
-            // 起来"这种中间态，纯 Toggle 表达不了。
-            Section {
-                HStack {
-                    Label {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(L10n.t("后台采集服务"))
-                            Text(collectorStatusCaption)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    } icon: {
-                        Image(systemName: collectorStatusIconName)
-                            .foregroundStyle(collectorStatusIconColor)
-                    }
-                    Spacer()
-                    if isTogglingCollectorService {
-                        ProgressView().controlSize(.small)
-                    } else {
-                        Button(collectorActionTitle) { toggleCollectorService() }
-                    }
-                }
-                // 启用失败时给具体指引,不是只把红叉留在原地——跟"权限"Section 失败时
-                // 有文案+按钮同一个思路,这里能提供的具体行动是导出诊断信息(汇总 App/
-                // 采集器日志),不是空泛地说"启用失败"。
-                if collectorEnableFailed {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text(L10n.t("启用失败，可能是权限或系统限制导致后台服务没能正常启动，导出诊断信息能看到具体原因，也方便反馈问题"))
-                        Button(L10n.t("导出诊断信息…")) { exportDiagnostics() }
-                    }
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                }
-            } header: {
-                Text(L10n.t("常驻服务"))
-            } footer: {
-                Text(L10n.t("负责读取播放状态、解析歌词/封面并写入本地缓存的后台程序。没有它，悬浮歌词/灵动岛同样无法显示任何内容"))
-            }
-            .onAppear { collectorRunning = CollectorServiceManager.isRunning }
-
-            // 两个 Toggle 的文案跟着 features.player 走(Apple Music/QQ 音乐/...)——这两个
-            // 联动本身已经改成跟着选定的播放器走(见 AppDelegate.swift/companionlaunch.go),
-            // 文案继续写死"Apple Music"会跟实际行为对不上,选了 QQ 音乐却看着字面在说
-            // Apple Music。选了"自动识别"(.auto)时这两个方向不对称:
-            // "打开 Lyrimuse 时启动 X"没有唯一确定的 X,直接隐藏这个开关(而不是显示一句
-            // "打开自动识别时启动 Lyrimuse"这种读不通的文案);"打开 X 时启动 Lyrimuse"
-            // 反而在自动识别模式下更有用——companionlaunch.go 这时会同时盯着全部四个
-            // 已知播放器的进程,任意一个启动都算数,文案换成不点名具体某个 App 的说法。
-            Section {
-                if features.player != .auto {
-                    Toggle(String(format: L10n.t("打开 Lyrimuse 时启动 %@"), features.player.displayName), isOn: $settings.launchMusicOnLyrimuseOpen)
-                }
-                Toggle(isOn: Binding(
-                    get: { features.launchLyrimuseOnMusicOpen },
-                    set: { features.launchLyrimuseOnMusicOpen = $0; Task { await features.save() } }
-                )) {
-                    Text(features.player == .auto
-                        ? L10n.t("打开任意已知播放器时启动 Lyrimuse")
-                        : String(format: L10n.t("打开 %@ 时启动 Lyrimuse"), features.player.displayName))
-                }
-            } header: {
-                Text(L10n.t("App 联动"))
-            } footer: {
-                Text(features.player == .auto
-                    ? L10n.t("「打开任意已知播放器时启动 Lyrimuse」由后台采集服务负责监测，需要先在上面启用「后台采集服务」才会生效")
-                    : String(format: L10n.t("「打开 %@ 时启动 Lyrimuse」由后台采集服务负责监测，需要先在上面启用「后台采集服务」才会生效"), features.player.displayName))
+        } else {
+            SettingsCard {
+                SettingsRow(
+                    icon: "checkmark.circle.fill",
+                    iconTint: .green,
+                    title: L10n.t("无需额外授权"),
+                    subtitle: String(format: L10n.t("%@ 通过系统级机制读取播放状态，不需要在这里做额外授权"), features.player.displayName)
+                )
             }
         }
-        .formStyle(.grouped)
-        // SwiftUI 有时不会在语言切换后重新执行某些嵌套内容的 body(取决于该内容自己的
-        // 存储属性有没有变,而非父视图是否重新渲染,详见 AccountLinkingTab.swift 里
-        // DestinationStatus.label 的注释)。用 .id(L10n.current) 把 Form 的身份跟当前
-        // 语言绑死,语言一变就强制整体重新构造,不需要逐个排查哪里在跳过刷新。
+    }
+
+    // collector(读播放状态、抓歌词/封面写本地缓存的后台服务)用"状态图标 + 状态文字 +
+    // 动作按钮"而不是简单 Toggle——需要展示"装了但没跑起来"这种中间态,纯 Toggle 表达不了。
+    private var collectorCard: some View {
+        SettingsCard {
+            SettingsRow(
+                icon: collectorStatusIconName,
+                iconTint: collectorStatusIconColor,
+                title: L10n.t("后台采集服务"),
+                subtitle: collectorStatusCaption + "・" + L10n.t("负责读取播放状态、解析歌词/封面并写入本地缓存；没有它同样无法显示任何内容")
+            ) {
+                if isTogglingCollectorService {
+                    ProgressView().controlSize(.small)
+                } else {
+                    Button(collectorActionTitle) { toggleCollectorService() }
+                }
+            }
+            // 启用失败时给具体指引,不是只把红叉留在原地——这里能提供的具体行动是导出
+            // 诊断信息(汇总 App/采集器日志),不是空泛地说"启用失败"。
+            if collectorEnableFailed {
+                CardDivider()
+                SettingsNote {
+                    Text(L10n.t("启用失败，可能是权限或系统限制导致后台服务没能正常启动，导出诊断信息能看到具体原因，也方便反馈问题"))
+                    Button(L10n.t("导出诊断信息…")) { exportDiagnostics() }
+                }
+            }
+        }
+        .onAppear { collectorRunning = CollectorServiceManager.isRunning }
+    }
+
+    // 两个开关的文案跟着 features.player 走(Apple Music/QQ 音乐/...)——这两个联动本身
+    // 已经改成跟着选定的播放器走(见 AppDelegate.swift/companionlaunch.go),文案继续写死
+    // "Apple Music"会跟实际行为对不上。选了"自动识别"(.auto)时这两个方向不对称:
+    // "打开 Lyrimuse 时启动 X"没有唯一确定的 X,直接隐藏这个开关(而不是显示一句"打开
+    // 自动识别时启动 Lyrimuse"这种读不通的文案);"打开 X 时启动 Lyrimuse"反而在自动识别
+    // 模式下更有用——companionlaunch.go 这时会同时盯着全部四个已知播放器的进程。
+    private var companionCard: some View {
+        SettingsCard {
+            if features.player != .auto {
+                SettingsRow(
+                    icon: "arrow.up.forward.app",
+                    title: String(format: L10n.t("打开 Lyrimuse 时启动 %@"), features.player.displayName)
+                ) {
+                    Toggle("", isOn: $settings.launchMusicOnLyrimuseOpen)
+                }
+                CardDivider()
+            }
+            SettingsRow(
+                icon: "arrow.down.app",
+                title: features.player == .auto
+                    ? L10n.t("打开任意已知播放器时启动 Lyrimuse")
+                    : String(format: L10n.t("打开 %@ 时启动 Lyrimuse"), features.player.displayName),
+                subtitle: L10n.t("由后台采集服务负责监测，需要先启用上面的「后台采集服务」才会生效")
+            ) {
+                Toggle("", isOn: Binding(
+                    get: { features.launchLyrimuseOnMusicOpen },
+                    set: { features.launchLyrimuseOnMusicOpen = $0; Task { await features.save() } }
+                ))
+            }
+        }
     }
 
     private var automationStatusCaption: String {
@@ -1260,21 +1315,35 @@ private struct GeneralSettingsTab: View {
     @State private var showClearConfigWarning = false
 
     var body: some View {
-        Form {
-            Section(L10n.t("语言")) {
+        SettingsPage(
+            title: L10n.t("通用"),
+            subtitle: L10n.t("语言、启动方式，以及把全部配置搬到另一台 Mac")
+        ) {
+            SettingsCard {
                 // 下拉菜单而不是分段控件——分段控件的宽度会随选项数线性变宽,以后再加
                 // 语言(繁体中文/日语等)容易挤爆这一行;下拉菜单不管加多少个选项,这一行
                 // 的宽度都不变。
-                Picker(L10n.t("语言"), selection: $settings.appLanguage) {
-                    Text(L10n.t("跟随系统")).tag("system")
-                    Text(L10n.t("简体中文")).tag("zh-hans")
-                    Text("English").tag("en")
+                SettingsRow(icon: "globe", title: L10n.t("语言")) {
+                    Picker("", selection: $settings.appLanguage) {
+                        Text(L10n.t("跟随系统")).tag("system")
+                        Text(L10n.t("简体中文")).tag("zh-hans")
+                        Text("English").tag("en")
+                    }
+                    .pickerStyle(.menu)
+                    .fixedSize()
                 }
-                .pickerStyle(.menu)
-            }
-            Section(L10n.t("启动")) {
-                Toggle(L10n.t("开机启动"), isOn: $settings.launchAtLoginEnabled)
-                Toggle(L10n.t("在 Dock 中显示"), isOn: $settings.showInDock)
+                CardDivider()
+                SettingsRow(icon: "power", title: L10n.t("开机启动")) {
+                    Toggle("", isOn: $settings.launchAtLoginEnabled)
+                }
+                CardDivider()
+                SettingsRow(
+                    icon: "macwindow",
+                    title: L10n.t("在 Dock 中显示"),
+                    subtitle: L10n.t("关闭后只保留菜单栏图标，不占 Dock 位置")
+                ) {
+                    Toggle("", isOn: $settings.showInDock)
+                }
             }
 
             // 导入/导出打包 collector 的 config.json(账号 token 原文都在里面)+
@@ -1282,28 +1351,45 @@ private struct GeneralSettingsTab: View {
             // 信息"反着来:那个绝不能带任何 token(设计给贴进公开 issue),这个就是要把
             // token 原样带走(设计给换新机器用)——两处的用户提示因此也刻意写成相反的
             // 语气。
-            Section {
-                Button(L10n.t("导出配置…")) { showExportConfigWarning = true }
-                Button(L10n.t("导入配置…")) {
-                    let panel = NSOpenPanel()
-                    panel.canChooseFiles = true
-                    panel.canChooseDirectories = false
-                    panel.allowedContentTypes = [.json]
-                    panel.prompt = L10n.t("导入")
-                    if panel.runModal() == .OK, let url = panel.url,
-                       let data = try? Data(contentsOf: url) {
-                        pendingImportData = data
-                        showImportConfigConfirm = true
+            //
+            // 三条说明原来是**一整段** Section footer,三件事挤在一句话里;拆成各自行下面
+            // 的副标题之后,每条只讲它自己那个按钮会发生什么,尤其"会覆盖""无法撤销"这类
+            // 后果紧贴着对应的按钮,不用读者自己去对应。
+            SettingsCard {
+                SettingsRow(
+                    icon: "square.and.arrow.up",
+                    title: L10n.t("导出配置"),
+                    subtitle: L10n.t("文件里包含账号 token、密钥等敏感信息，注意妥善保管，不要分享给他人")
+                ) {
+                    Button(L10n.t("导出…")) { showExportConfigWarning = true }
+                }
+                CardDivider()
+                SettingsRow(
+                    icon: "square.and.arrow.down",
+                    title: L10n.t("导入配置"),
+                    subtitle: L10n.t("会覆盖当前所有设置（包括已连接的账号），并立即重启 Lyrimuse")
+                ) {
+                    Button(L10n.t("导入…")) {
+                        let panel = NSOpenPanel()
+                        panel.canChooseFiles = true
+                        panel.canChooseDirectories = false
+                        panel.allowedContentTypes = [.json]
+                        panel.prompt = L10n.t("导入")
+                        if panel.runModal() == .OK, let url = panel.url,
+                           let data = try? Data(contentsOf: url) {
+                            pendingImportData = data
+                            showImportConfigConfirm = true
+                        }
                     }
                 }
-                // "清除所有配置"跟上面两个反着来:不是搬一份配置走/换一份进来,是
-                // 直接清空回到刚装完的样子。role: .destructive 让它天生就是红色文字,
-                // 不用另外套样式表明这是危险操作。
-                Button(L10n.t("清除所有配置…"), role: .destructive) { showClearConfigWarning = true }
-            } header: {
-                Text(L10n.t("配置备份"))
-            } footer: {
-                Text(L10n.t("导出的文件包含账号 token、密钥等敏感信息，注意妥善保管，不要分享给他人。导入会覆盖当前所有设置并重启 App。清除会抹掉所有账号和个人设置，恢复到刚装完时的样子"))
+                CardDivider()
+                SettingsRow(
+                    icon: "trash",
+                    title: L10n.t("清除所有配置"),
+                    subtitle: L10n.t("抹掉所有账号和个人设置，恢复到刚装完时的样子，且无法撤销")
+                ) {
+                    DestructiveButton(title: L10n.t("清除…")) { showClearConfigWarning = true }
+                }
             }
             .alert(L10n.t("确定要导出配置吗？"), isPresented: $showExportConfigWarning) {
                 Button(L10n.t("取消"), role: .cancel) {}
@@ -1340,11 +1426,7 @@ private struct GeneralSettingsTab: View {
                 Text(L10n.t("这会清除所有账号 token、密钥和个人设置，恢复到刚装完时的样子（下次启动会重新走一遍引导向导），且无法撤销。如果还没备份过，建议先点上面「导出配置…」"))
             }
         }
-        .formStyle(.grouped)
-        // SwiftUI 有时不会在语言切换后重新执行某些嵌套内容的 body(取决于该内容自己的
-        // 存储属性有没有变,而非父视图是否重新渲染,详见 AccountLinkingTab.swift 里
-        // DestinationStatus.label 的注释)。用 .id(L10n.current) 把 Form 的身份跟当前
-        // 语言绑死,语言一变就强制整体重新构造,不需要逐个排查哪里在跳过刷新。
+        .id(L10n.current)
     }
 }
 
@@ -1354,42 +1436,78 @@ private struct ShortcutsSettingsTab: View {
     @ObservedObject private var settings = AppSettings.shared
 
     var body: some View {
-        Form {
-            Section {
-                ShortcutRecorder(L10n.t("显示/隐藏悬浮歌词"), name: .toggleOverlay)
-                ShortcutRecorder(L10n.t("锁定/解锁位置"), name: .toggleLockPosition)
-                ShortcutRecorder(L10n.t("打开歌词管理"), name: .openLyricsManagerHotkey)
-                ShortcutRecorder(L10n.t("打开歌词窗口"), name: .openLyricsWindowHotkey)
-                ShortcutRecorder(L10n.t("打开设置"), name: .openSettingsHotkey)
-                ShortcutRecorder(L10n.t("歌词提前"), name: .lyricsAdvanceHotkey)
-                ShortcutRecorder(L10n.t("歌词延后"), name: .lyricsDelayHotkey)
+        // "至少需要搭配 ⌘/⌥/⌃ 中一个"这条限制对本页每一个录制框都成立,所以挪到页面说明
+        // 里(原来是第一组 Section 的 footer,只挨着上面那一组,下面"播放控制"那一组的
+        // 录制框其实也受这条限制,却看不到这句话)。这条规则本身照抄 KeyboardShortcuts
+        // 库自带 Recorder 的行为(见 ShortcutRecorder.swift 里 handle(_:) 的注释),不是
+        // 这个项目额外加的限制——但它只会"响一声"、没有任何文字提示,必须写出来。
+        SettingsPage(
+            title: L10n.t("快捷键"),
+            subtitle: L10n.t("全局快捷键在任何 App 里都能触发。至少需要搭配 ⌘/⌥/⌃ 中一个（功能键、媒体键除外）")
+        ) {
+            SettingsCard {
+                SettingsRow(icon: "eye", title: L10n.t("显示/隐藏悬浮歌词")) {
+                    ShortcutRecorderControl(name: .toggleOverlay)
+                }
+                CardDivider()
+                SettingsRow(icon: "lock", title: L10n.t("锁定/解锁位置")) {
+                    ShortcutRecorderControl(name: .toggleLockPosition)
+                }
+                CardDivider()
+                SettingsRow(icon: "list.bullet.rectangle", title: L10n.t("打开歌词管理")) {
+                    ShortcutRecorderControl(name: .openLyricsManagerHotkey)
+                }
+                CardDivider()
+                SettingsRow(icon: "text.quote", title: L10n.t("打开歌词窗口")) {
+                    ShortcutRecorderControl(name: .openLyricsWindowHotkey)
+                }
+                CardDivider()
+                SettingsRow(icon: "gearshape", title: L10n.t("打开设置")) {
+                    ShortcutRecorderControl(name: .openSettingsHotkey)
+                }
+            }
+
+            SettingsCard {
+                SettingsRow(
+                    icon: "backward.end",
+                    title: L10n.t("歌词提前"),
+                    subtitle: L10n.t("按当前这首歌记忆校准值，下次再放这首歌自动生效")
+                ) {
+                    ShortcutRecorderControl(name: .lyricsAdvanceHotkey)
+                }
+                CardDivider()
+                SettingsRow(icon: "forward.end", title: L10n.t("歌词延后")) {
+                    ShortcutRecorderControl(name: .lyricsDelayHotkey)
+                }
+                CardDivider()
                 // 每次调整的步长——跟菜单栏"歌词时间轴"共用同一个值,这里改了菜单里的
                 // 按钮文案/快捷键的实际调整量会一起变。0.05~2s 区间对"手动校准"这个场景
                 // 够用,不需要再大或者再细。
-                Stepper(value: Binding(
-                    get: { Double(settings.lyricsOffsetStepMs) / 1000 },
-                    set: { settings.lyricsOffsetStepMs = Int(($0 * 1000).rounded()) }
-                ), in: 0.05...2.0, step: 0.05) {
-                    Text("\(L10n.t("歌词时间轴步长"))：\(AppSettings.formattedSeconds(ms: settings.lyricsOffsetStepMs))\(L10n.t("秒"))")
+                SettingsSubRow(title: L10n.t("每次调整")) {
+                    Stepper(value: Binding(
+                        get: { Double(settings.lyricsOffsetStepMs) / 1000 },
+                        set: { settings.lyricsOffsetStepMs = Int(($0 * 1000).rounded()) }
+                    ), in: 0.05...2.0, step: 0.05) {
+                        Text("\(AppSettings.formattedSeconds(ms: settings.lyricsOffsetStepMs))\(L10n.t("秒"))")
+                            .monospacedDigit()
+                    }
                 }
-            } header: {
-                Text(L10n.t("快捷键"))
-            } footer: {
-                // 录制时单独按字母/数字/符号键会被拒绝(响一声提示音,没有任何文字提示)
-                // ——这条规则照抄 KeyboardShortcuts 库自带 Recorder 的原有行为(见
-                // ShortcutRecorder.swift 里 handle(_:) 的注释),不是这次改动新引入的
-                // 限制,但一直没有地方说明,2026-07-30 用户实测顺着"只有组合键才成功"
-                // 这个疑问反馈过来,补一句说明。
-                Text(L10n.t("至少需要搭配 ⌘/⌥/⌃ 中一个（功能键、媒体键除外）"))
             }
 
-            Section(L10n.t("播放控制（附加功能）")) {
-                ShortcutRecorder(L10n.t("播放/暂停"), name: .playPauseHotkey)
-                ShortcutRecorder(L10n.t("下一首"), name: .nextTrackHotkey)
-                ShortcutRecorder(L10n.t("上一首"), name: .previousTrackHotkey)
+            SettingsCard {
+                SettingsRow(icon: "playpause", title: L10n.t("播放/暂停")) {
+                    ShortcutRecorderControl(name: .playPauseHotkey)
+                }
+                CardDivider()
+                SettingsRow(icon: "forward.fill", title: L10n.t("下一首")) {
+                    ShortcutRecorderControl(name: .nextTrackHotkey)
+                }
+                CardDivider()
+                SettingsRow(icon: "backward.fill", title: L10n.t("上一首")) {
+                    ShortcutRecorderControl(name: .previousTrackHotkey)
+                }
             }
         }
-        .formStyle(.grouped)
         .id(L10n.current)
     }
 }
@@ -1407,86 +1525,81 @@ private struct AboutSettingsTab: View {
     }
 
     var body: some View {
-        Form {
-            Section {
-                VStack(spacing: 10) {
-                    Image(nsImage: appIcon)
-                        .resizable()
-                        .frame(width: 96, height: 96)
-                    Text("Lyrimuse")
-                        .font(.title2.weight(.semibold))
-                    Text(String(format: L10n.t("版本 %@"), versionString))
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                    Text(L10n.t("跟着 Apple Music、QQ 音乐、网易云或 Spotify 播放，实时显示逐字同步歌词，还能一键同步播放记录到 Last.fm"))
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
-                    // Sparkle 自己处理"检查中/已是最新/发现新版本"这几种状态的 UI
-                    // 展示(SPUStandardUserDriver 的标准弹窗),不需要自己维护 loading
-                    // 状态或者判断结果再手动弹 alert。
+        // 这一页的页头本身就是"App 身份"(图标 + 名称 + 版本 + 一句简介),所以直接用
+        // SettingsPage 的 heroImage/title/subtitle 三件套承担,不另外再搭一张卡。
+        SettingsPage(
+            title: "Lyrimuse",
+            subtitle: String(format: L10n.t("版本 %@"), versionString) + "\n"
+                + L10n.t("跟着 Apple Music、QQ 音乐、网易云或 Spotify 播放，实时显示逐字同步歌词，还能一键同步播放记录到 Last.fm"),
+            heroImage: appIcon
+        ) {
+            SettingsCard {
+                // Sparkle 自己处理"检查中/已是最新/发现新版本"这几种状态的 UI 展示
+                // (SPUStandardUserDriver 的标准弹窗),不需要自己维护 loading 状态或者
+                // 判断结果再手动弹 alert。
+                SettingsRow(icon: "arrow.triangle.2.circlepath", title: L10n.t("检查更新")) {
                     Button(L10n.t("检查更新…")) {
                         SparkleUpdaterManager.shared.checkForUpdates()
                     }
-                    .buttonStyle(.link)
                 }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 8)
+                CardDivider()
+                SettingsRow(icon: "chevron.left.forwardslash.chevron.right", title: L10n.t("GitHub 仓库")) {
+                    Button(L10n.t("打开")) {
+                        NSWorkspace.shared.open(URL(string: "https://github.com/Yudaotor/lyrimuse")!)
+                    }
+                }
+                CardDivider()
+                SettingsRow(icon: "exclamationmark.bubble", title: L10n.t("反馈问题")) {
+                    Button(L10n.t("打开")) {
+                        NSWorkspace.shared.open(URL(string: "https://github.com/Yudaotor/lyrimuse/issues")!)
+                    }
+                }
             }
 
-            Section(L10n.t("链接")) {
-                Button(L10n.t("GitHub 仓库")) {
-                    NSWorkspace.shared.open(URL(string: "https://github.com/Yudaotor/lyrimuse")!)
+            SettingsCard {
+                // collector 日志一直写得比较完整,但 App 自己的日志全在系统统一日志里,
+                // 普通人不会用 Console.app 去查。这里一键把两边日志+关键状态(权限/常驻
+                // 服务/各功能是否已配置,不含任何 token 原始值)汇总成一份文本存到桌面,
+                // 方便贴进 issue 或者发给开发者。
+                SettingsRow(
+                    icon: "doc.text.magnifyingglass",
+                    title: L10n.t("导出诊断信息"),
+                    subtitle: L10n.t("汇总 App/采集器日志和权限、常驻服务等关键状态，保存成一份文本文件，不会包含任何账号 token 或密钥的原始内容")
+                ) {
+                    Button(L10n.t("导出…")) {
+                        let report = DiagnosticsExporter.buildReport()
+                        let panel = NSSavePanel()
+                        panel.nameFieldStringValue = DiagnosticsExporter.suggestedFilename()
+                        panel.directoryURL = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Desktop")
+                        if panel.runModal() == .OK, let url = panel.url {
+                            try? report.write(to: url, atomically: true, encoding: .utf8)
+                            NSWorkspace.shared.activateFileViewerSelecting([url])
+                        }
+                    }
                 }
-                .buttonStyle(.link)
-                Button(L10n.t("反馈问题")) {
-                    NSWorkspace.shared.open(URL(string: "https://github.com/Yudaotor/lyrimuse/issues")!)
-                }
-                .buttonStyle(.link)
             }
 
             // 落地页(微信/支付宝收款码)是独立的通用小仓库 Yudaotor/donate,托管在
             // GitHub Pages 上,不跟 Lyrimuse 这一个项目绑定,后续其它项目也能复用——
-            // 这里只是一个外链按钮。
-            Section {
-                Button {
-                    NSWorkspace.shared.open(URL(string: "https://yudaotor.github.io/donate/")!)
-                } label: {
-                    Label(L10n.t("请作者喝杯咖啡"), systemImage: "cup.and.saucer.fill")
-                }
-                .buttonStyle(.borderedProminent)
-                .tint(.orange)
+            // 这里只是一个外链按钮。放在卡片之外单独居中,因为它不是一条"设置",
+            // 混进卡片列里反而像一个可以开关的选项。
+            Button {
+                NSWorkspace.shared.open(URL(string: "https://yudaotor.github.io/donate/")!)
+            } label: {
+                Label(L10n.t("请作者喝杯咖啡"), systemImage: "cup.and.saucer.fill")
             }
+            .settingsProminentGlassButton(tint: .orange)
+            .padding(.top, 4)
 
-            // collector 日志一直写得比较完整,但 App 自己的日志全在系统统一日志里,
-            // 普通人不会用 Console.app 去查。这里一键把两边日志+关键状态(权限/常驻
-            // 服务/各功能是否已配置,不含任何 token 原始值)汇总成一份文本存到桌面,
-            // 方便贴进 issue 或者发给开发者。
-            Section {
-                Button(L10n.t("导出诊断信息…")) {
-                    let report = DiagnosticsExporter.buildReport()
-                    let panel = NSSavePanel()
-                    panel.nameFieldStringValue = DiagnosticsExporter.suggestedFilename()
-                    panel.directoryURL = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Desktop")
-                    if panel.runModal() == .OK, let url = panel.url {
-                        try? report.write(to: url, atomically: true, encoding: .utf8)
-                        NSWorkspace.shared.activateFileViewerSelecting([url])
-                    }
-                }
-            } footer: {
-                Text(L10n.t("汇总 App/采集器日志和权限、常驻服务等关键状态，保存成一份文本文件，不会包含任何账号 token 或密钥的原始内容"))
-            }
-
-            Section {
-                Text("© 2026 Yudaotor")
-                    .font(.caption)
-                    .foregroundStyle(.tertiary)
-            }
+            Text("© 2026 Yudaotor")
+                .font(.caption)
+                .foregroundStyle(.tertiary)
+                .padding(.top, 2)
         }
-        .formStyle(.grouped)
         // SwiftUI 有时不会在语言切换后重新执行某些嵌套内容的 body(取决于该内容自己的
         // 存储属性有没有变,而非父视图是否重新渲染,详见 AccountLinkingTab.swift 里
-        // DestinationStatus.label 的注释)。用 .id(L10n.current) 把 Form 的身份跟当前
-        // 语言绑死,语言一变就强制整体重新构造,不需要逐个排查哪里在跳过刷新。
+        // DestinationStatus.label 的注释)。用 .id(L10n.current) 把整页的身份跟当前语言
+        // 绑死,语言一变就强制整体重新构造,不需要逐个排查哪里在跳过刷新。
+        .id(L10n.current)
     }
 }
