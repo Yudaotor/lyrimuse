@@ -314,11 +314,35 @@ public final class LocalPlaybackSource: ObservableObject {
         fastTimer = nil
     }
 
-    private func fastTick() {
-        guard let anchor else {
+    /// 没有 anchor(暂停,或曲目还在但位置已冻结)时按冻结位置 pausedPositionMs 解一次当前
+    /// 歌词行;真的没有冻结位置、或引擎里没有歌词内容时才清空。
+    ///
+    /// ⚠️ apply() 和 fastTick() 必须都走这里。这两处本来各写了一份"anchor 为 nil 就三连
+    /// 清空",于是把 apply() 那份改成"暂停不清行"之后,fastTick() 那份还在原样清 —— 而
+    /// seek(toMs:) 末尾是**无条件**调 fastTick() 的(为了拖动进度条时歌词立刻跟到新位置),
+    /// 所以暂停状态下拖一次进度条,行又被清掉,要等下一次 apply()(2 秒轮询)才回来。抽成
+    /// 一处,两边不可能再错开。
+    ///
+    /// 不要在这里另外加 currentLyricsOffsetMs:activeLine/upcomingLineText/activeLineIndex
+    /// 内部都会先做 rawPosMs + offsetMs(见 LyricsSyncEngine),手动再加一次就是双倍校正。
+    private func resolveLinesForPausedPosition() {
+        guard let frozen = pausedPositionMs, syncEngine.hasContent else {
             if currentLine != nil { currentLine = nil }
             if nextLineText != nil { nextLineText = nil }
             if currentLineIndex != nil { currentLineIndex = nil }
+            return
+        }
+        let newLine = syncEngine.activeLine(atMs: frozen)
+        if newLine != currentLine { currentLine = newLine }
+        let newNext = syncEngine.upcomingLineText(afterMs: frozen)
+        if newNext != nextLineText { nextLineText = newNext }
+        let newIndex = syncEngine.activeLineIndex(atMs: frozen)
+        if newIndex != currentLineIndex { currentLineIndex = newIndex }
+    }
+
+    private func fastTick() {
+        guard let anchor else {
+            resolveLinesForPausedPosition()
             return
         }
         let pos = anchor.extrapolatedPositionMs()
@@ -577,22 +601,7 @@ public final class LocalPlaybackSource: ObservableObject {
             // media-control 在暂停时给的 elapsedTime 都是冻结值),所以直接按这个位置解一
             // 次当前行即可。真的没有位置或没有歌词内容时才回落到清空。
             stopFastTimer()
-            if let frozen = pausedPositionMs, syncEngine.hasContent {
-                // 不要在这里另外加 currentLyricsOffsetMs:activeLine/upcomingLineText/
-                // activeLineIndex 内部都会先做 rawPosMs + offsetMs(见 LyricsSyncEngine),
-                // 手动再加一次就是双倍校正。fastTick 传的也是未加 offset 的原始位置。
-                let pos = frozen
-                let newLine = syncEngine.activeLine(atMs: pos)
-                if newLine != currentLine { currentLine = newLine }
-                let newNext = syncEngine.upcomingLineText(afterMs: pos)
-                if newNext != nextLineText { nextLineText = newNext }
-                let newIndex = syncEngine.activeLineIndex(atMs: pos)
-                if newIndex != currentLineIndex { currentLineIndex = newIndex }
-            } else {
-                if currentLine != nil { currentLine = nil }
-                if nextLineText != nil { nextLineText = nil }
-                if currentLineIndex != nil { currentLineIndex = nil }
-            }
+            resolveLinesForPausedPosition()
         } else {
             ensureFastTimerRunning()
         }

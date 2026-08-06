@@ -243,7 +243,7 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject 
     private func updateHeight(_ contentHeight: CGFloat) {
         guard let window else { return }
         let rawHeight = max(overlayDefaultHeight, ceil(contentHeight))
-        let current = window.frame
+        let current = baseFrame(of: window)
         let top = current.origin.y + current.height
         // 顶边固定、向下增高的同时,不能让底边超出当前屏幕可见区域——2026-08-02 实测
         // 排查坐实:早先这里只保证"不小于默认高度"这一层下限,极端情况下(罗马音+译文+
@@ -271,11 +271,36 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject 
     // 不变。两处调用都保持"某条边/中心点不动"的不变量:动画过程中读 window.frame 拿到
     // 的是中间值,但 origin.y + height(顶边)和 origin.x + width/2(中心)在各自的动画
     // 里本来就是恒定的,所以中途再被调用一次也不会让窗口跑位。
+    // 这次动画的目标 frame。动画改成异步之后,动画途中读 window.frame 拿到的是**中间帧**,
+    // 而 updateHeight/setWidth 都是"以当前 frame 为基准算新 frame",于是连续调用(宽度滑块
+    // step 10 一路拖过去、歌词渲染高度连续变化)会以中间帧为基准层层累积。
+    //
+    // updateHeight 恰好不受影响:它守恒的是 origin.y + height(顶边),那个和在自己这段动画
+    // 的首尾是同一个值。setWidth 会受影响:它算的中心点一旦撞上下面那层"夹回屏幕可见区域"
+    // 的钳制就不再守恒(newX + width/2 != centerX),再以中间帧为基准重算一次,窗口就会漂到
+    // 一个跟时序有关的位置上 —— 正是原来同步阻塞版本不会出现的问题。统一以"上一次的目标
+    // frame"为基准,两处都稳。
+    private var animatingTargetFrame: NSRect?
+
+    // 算新 frame 的基准:有动画在飞就用它的目标,否则用窗口真实 frame —— 用户可能自己把
+    // 窗口拖走过(performDrag),那种情况必须以真实位置为准,所以动画一结束就把缓存放掉。
+    private func baseFrame(of window: NSWindow) -> NSRect {
+        animatingTargetFrame ?? window.frame
+    }
+
     private func setFrameAnimated(_ window: NSWindow, to frame: NSRect) {
-        NSAnimationContext.runAnimationGroup { context in
+        animatingTargetFrame = frame
+        NSAnimationContext.runAnimationGroup({ context in
             context.duration = window.animationResizeTime(frame)
             window.animator().setFrame(frame, display: true)
-        }
+        }, completionHandler: { [weak self] in
+            MainActor.assumeIsolated {
+                // 只有"最后那次动画"结束时才清:动画途中又来一次调用会覆盖
+                // animatingTargetFrame,那时旧动画的完成回调不该把新目标清掉。
+                guard let self, self.animatingTargetFrame == frame else { return }
+                self.animatingTargetFrame = nil
+            }
+        })
     }
 
     // 设置里的宽度滑块调用——保持窗口中心点不变(左右对称伸缩),而不是像 updateHeight
@@ -283,7 +308,7 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject 
     // 适应,固定左边界的话,拖到屏幕右侧的窗口调宽后容易被推出屏幕外。
     func setWidth(_ width: CGFloat) {
         guard let window else { return }
-        let current = window.frame
+        let current = baseFrame(of: window)
         let centerX = current.origin.x + current.width / 2
         // 按中心点算出的新左右边界同样需要夹回屏幕可见区域——2026-08-02 实测排查坐实:
         // 早先这里没做这层钳制,宽度滑块调到接近上限(1000pt)且窗口当前位置偏向屏幕
@@ -337,11 +362,13 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject 
 
     private func handleMouseEvent(type: NSEvent.EventType) {
         guard let window, !isPositionLocked else { return }
-        // 窗口当前不在屏幕上时直接不处理。这两个全局监视器是在 setUp 时装一次、只在
-        // deinit 卸载的(见 installMouseMonitors),隐藏悬浮窗走的是 window.orderOut(nil),
-        // 监视器照旧在收事件——而下面 .leftMouseDown 分支判断"点在窗口里吗"用的是
-        // frame.contains(loc),隐藏窗口的 frame 还停在原处。于是用户在桌面上那块区域
-        // 长按 0.4s 就能把拖动"武装"起来,armDragIfStillPressed 把 ignoresMouseEvents
+        // 窗口当前不在屏幕上时直接不处理。两个鼠标监视器(一个 global、一个 local)是在
+        // convenience init 里装一次、只在 deinit 卸载的(见 installMouseMonitors),隐藏悬浮窗
+        // 走的是 window.orderOut(nil),global 那个照旧在收桌面上的点击(local 只看得到派发给
+        // 本 App 的事件,窗口 orderOut 之后真正还在送进来的就是 global 这一路)——而下面
+        // .leftMouseDown 分支判断"点在窗口里吗"用的是 frame.contains(loc),隐藏窗口的 frame
+        // 还停在原处。于是用户在桌面上那块区域按过 longPressThresholdSecs(0.35s)就能把拖动
+        // "武装"起来,armDragIfStillPressed 把 ignoresMouseEvents
         // 收回 false 并对一个看不见的窗口发起 performDrag,那次点击被悄悄吞掉。
         // 顺便把可能残留的长按判定/悬停态清干净(可能正好在按着的时候被隐藏);已经
         // 武装的情况不碰,交给 performDrag 自己的收尾逻辑。
