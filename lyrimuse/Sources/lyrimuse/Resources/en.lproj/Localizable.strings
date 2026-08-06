@@ -54,7 +54,6 @@
 "请查看屏幕上弹出的系统授权对话框，选择「允许」" = "Check for a system permission dialog on screen and click \"Allow\"";
 "这次请求耗时有点久。如果你已经看到系统弹窗，请去处理它；找不到弹窗的话，可以直接去系统设置里手动开启" = "This is taking a while — if you see a system dialog, go handle it; if you don't, you can enable this directly in System Settings instead";
 "打开系统设置" = "Open System Settings";
-"权限" = "Permissions";
 "%@ 通过系统级机制读取播放状态，不需要在这里做额外授权" = "%@ reads playback status through a system-level mechanism and doesn't need any extra authorization here";
 "Apple Music 自动化" = "Apple Music Automation";
 "Apple Music 自动化权限（必需）" = "Apple Music Automation Access (Required)";
@@ -152,7 +151,6 @@
 "在钉钉群里：群设置 → 智能群助手 → 添加机器人 → 自定义，创建后复制 Webhook 地址。安全设置建议选「加签」，把生成的密钥填进下面的「加签密钥」" = "In your DingTalk group: Group Settings → Group Assistant → Add Robot → Custom, then copy the webhook URL after creating it. For security, we recommend choosing “Signature” and entering the generated secret in the “Signing Secret” field below";
 "在飞书群里：设置 → 群机器人 → 添加机器人 → 自定义机器人，创建后复制 Webhook 地址。想加一层校验可以开启「签名校验」，把密钥填进下面的「签名密钥」" = "In your Feishu group: Settings → Group Bots → Add Bot → Custom Bot, then copy the webhook URL after creating it. For an extra layer of verification, enable “Signature Verification” and enter the secret in the “Signing Secret” field below";
 "外观" = "Appearance";
-"歌词展示" = "Lyrics Display";
 "这个开关只影响「桌面悬浮歌词」和「歌词窗口」；灵动岛歌词受限于胶囊空间不支持这一项，菜单栏歌词只能显示一行纯文字" = "This setting only affects Desktop Floating Lyrics and the Lyrics Window. Notch Lyrics doesn't support it due to limited capsule space, and Menu Bar Lyrics can only show a single line of plain text";
 "桌面悬浮歌词" = "Desktop Floating Lyrics";
 "灵动岛歌词" = "Dynamic Island Lyrics";
@@ -189,11 +187,9 @@
 "查看效果 + 教程 →" = "See Effect + Guide →";
 "打开 sct.ftqq.com，用微信扫码登录，首页会显示你的 SendKey，完整地址是 https://sctapi.ftqq.com/你的SendKey.send，把这一整串填进上面" = "Go to sct.ftqq.com and log in by scanning the QR code with WeChat — your SendKey will appear on the home page. The full URL is https://sctapi.ftqq.com/YourSendKey.send; paste that whole string above";
 "打开歌词文件夹" = "Open Lyrics Folder";
-"打开歌词管理…" = "Open Lyrics Manager…";
 "打开 Lyrimuse 时启动 %@" = "Launch %@ when Lyrimuse opens";
 "打开 %@ 时启动 Lyrimuse" = "Launch Lyrimuse when %@ opens";
 "打开任意已知播放器时启动 Lyrimuse" = "Launch Lyrimuse when any known player opens";
-"App 联动" = "App Companion Launch";
 "换到一首歌时，如果它属于某张专辑，会顺带在后台把同专辑里还没解析过的其它曲目也提前解析。封面无条件都会解析，歌词是否被预取取决于上面的「歌词在线匹配」开关是否开启" = "When you switch to a song that belongs to an album, other not-yet-resolved tracks from the same album are also resolved in the background ahead of time. Covers are always resolved regardless; whether lyrics are prefetched depends on whether \"Online Lyrics Matching\" above is enabled";
 "控制要不要在线解析歌词。关闭后，第一次播放的新歌不会再去查下面「歌词来源」里的这些平台，只用本地已经缓存过的结果（如果有）。「歌词来源」「匹配算法」这两组设置都只在这个开关开启时才有意义" = "Controls whether lyrics are looked up online. When off, newly played songs won't be checked against the platforms listed under \"Lyrics Sources\" below — only locally cached results (if any) will be used. The \"Lyrics Sources\" and \"Matching Algorithm\" settings only matter while this is on";
 "推送提醒" = "Push Alerts";
@@ -291,7 +287,6 @@
 "译文语言" = "Translation Language";
 "跟随系统语言" = "Follow System Language";
 "仅对 Musixmatch 来源生效，网易云音乐/QQ音乐的译文固定是中文" = "Only applies to the Musixmatch source — NetEase Cloud Music/QQ Music translations are always Chinese";
-"解析" = "Parsing";
 "解析 Last.fm 响应失败" = "Failed to parse the Last.fm response";
 "其它源仍在搜索中…" = "Still searching other sources…";
 "解析本地记录文件失败" = "Failed to Parse Local Record File";
@@ -311,7 +306,6 @@
 "系统字体" = "System Font";
 "重置列宽" = "Reset Column Widths";
 "开启后会把播放记录同步写入 Last.fm" = "When turned on, this syncs your listening history into Last.fm";
-"写入记录" = "Write";
 "还差一步" = "One More Step";
 "还没填 API Key" = "API Key not set yet";
 "还没填 Secret" = "Secret not set yet";
