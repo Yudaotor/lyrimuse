@@ -8,34 +8,58 @@
 # 里自己控制的开关，见 Settings/LoginItemManager.swift)。
 #
 # 用法:
-#   ./build.sh              构建(默认 universal:arm64 + x86_64) + 重启(如果当前有实例在跑)
-#   ./build.sh --no-restart 只构建
-#   ./build.sh --host-only  只编当前机器这一个架构,本地迭代时省掉另一半构建时间
+#   ./build.sh                构建本机架构 + 装到 /Applications + 重启(如果当前有实例在跑)
+#   ./build.sh --universal    构建 arm64 + x86_64 的 universal 包(给 Intel 用户的兼容包)
+#   ./build.sh --no-restart   只构建,不重启
+#   ./build.sh --dest <路径>  组装到指定路径而不是 /Applications(隐含 --no-restart),
+#                             供 package.sh 一次跑出两种架构的包
 #
-# 2026-08-06:默认改成 universal(arm64 + x86_64)。在此之前默认只编本机架构,而发布包就是
-# 在本机手动打出来的(这个仓库没有 CI —— 下面那句"CI(release.yml)"是早先的设想,
-# .github/workflows 从来没存在过),于是 v1.0.0~v1.2.0 发出去的全是 arm64-only。而
-# Homebrew cask 只写了 `depends_on macos: :sonoma`、appcast 只写了
-# minimumSystemVersion,两个都不管架构 —— Intel Mac 上装得上、打开直接失败。
-# 默认 universal 就是为了让"忘了加参数"的那次发布仍然是对的;本地想快显式传 --host-only。
+# 2026-08-06 这里改过两轮,最终定成"分开发两份",过程值得记下来免得又绕回去:
+#
+# 起因是发现 v1.0.0~v1.2.0 发出去的全是 arm64-only —— 发布包在本机手动打,而这里当时默认
+# 只编本机架构,cask 只写 `depends_on macos: :sonoma`、appcast 只写 minimumSystemVersion,
+# 两个都不管架构,Intel Mac 上装得上、打开直接失败。于是先把默认改成了 universal。
+#
+# 但随后在这台 macOS 27 上实测到:包里一旦含 x86_64 代码,系统会弹"需要更新 App —— 此版本
+# 包含的一个组件无法在下个主要版本 macOS 28 中打开"(macOS 28 移除 Rosetta)。这条告警会打在
+# **多数用户**(Apple Silicon)脸上,而 App 本身一点问题都没有 —— 对一个开源项目来说,看着
+# 像已废弃比少支持一批老机器更伤。
+#
+# 所以最终形态(打包见 package.sh):
+#   - 主包 arm64-only:彻底不含 x86_64,不会触发那条告警,下载体积也小一半
+#   - Intel 兼容包 universal:单独一份资产,只引导 Intel 用户下
+#   - appcast 里主包那条标 sparkle:hardwareRequirements="arm64" —— Sparkle 在 Intel 客户端
+#     上会判定该条不适用而跳过(见 SPUAppcastItemStateResolver.isArm64HardwareRequirementOK,
+#     它自己的注释就写着 "macOS 27+ will no longer support Intel Macs"),只会说"已是最新",
+#     不会给 Intel 用户推一个跑不起来的包
+# 默认因此回到"本机架构";两种包由 package.sh 显式各要一次,不依赖谁记得传参数。
 set -euo pipefail
 
 cd "$(dirname "$0")" # lyrimuse/
 
 NO_RESTART=0
-HOST_ONLY=0
-for arg in "$@"; do
-  case "$arg" in
+UNIVERSAL=0
+DEST=""
+while [ "$#" -gt 0 ]; do
+  case "$1" in
     --no-restart) NO_RESTART=1 ;;
-    --host-only) HOST_ONLY=1 ;;
-    *) echo "!! 未知参数:$arg(可用:--no-restart / --host-only)" >&2; exit 2 ;;
+    --universal) UNIVERSAL=1 ;;
+    --dest)
+      shift
+      DEST="${1:-}"
+      [ -n "$DEST" ] || { echo "!! --dest 需要一个路径" >&2; exit 2; }
+      ;;
+    *) echo "!! 未知参数:$1(可用:--universal / --no-restart / --dest <路径>)" >&2; exit 2 ;;
   esac
+  shift
 done
-if [ "$HOST_ONLY" = 1 ]; then
-  ARCHES="$(uname -m)"
-else
+if [ "$UNIVERSAL" = 1 ]; then
   ARCHES="arm64 x86_64"
+else
+  ARCHES="$(uname -m)"
 fi
+# --dest 是给打包用的:组装到别处就不该去碰用户正在跑的那个实例。
+[ -n "$DEST" ] && NO_RESTART=1
 # 单架构时直接拷,不套一层只含一个架构的 fat 文件(那种文件能跑,但没必要)。
 merge_slices() {
   local out="$1"; shift
@@ -54,7 +78,8 @@ APP_VERSION="${LYRIMUSE_VERSION:-1.0.0}"
 # 修复的旧拷贝,重新构建/重启了好几次都没反映到用户实际在看的那个进程上,排查了很久才
 # 发现。/Applications/ 才是这个 App 实际使用的位置,以后 build.sh 直接装到这里，不再
 # 留一份 bin/ 下的拷贝，避免"到底哪份是真的在跑"这种混乱再发生一次)。
-APP_DIR="/Applications/${APP_NAME}.app"
+# 默认装到 /Applications;--dest 让 package.sh 把包组装到暂存目录,好一次产出多种架构。
+APP_DIR="${DEST:-/Applications/${APP_NAME}.app}"
 BIN="$APP_DIR/Contents/MacOS/lyrimuse"
 # 2026-07-20:App 正式改名 Lyrimuse 这次,把 LABEL(codesign --identifier / launchd
 # Label,TCC 自动化权限按这个认)和 Info.plist 的 CFBundleIdentifier(UserDefaults
@@ -208,7 +233,7 @@ if [ -x "$MEDIA_CONTROL_PREFIX/bin/media-control" ]; then
   # 这一步失败不阻断构建,跟上面"没装 media-control 就跳过"同一个策略(QQ 音乐支持是可选
   # 功能,不该让不需要它的人连 Apple Music 都构建不出来)。代价是那次产物在 Intel 上没有
   # QQ 音乐支持,所以下面的架构自检会把还是单架构的文件列出来。
-  if [ "$HOST_ONLY" = 0 ]; then
+  if [ "$UNIVERSAL" = 1 ]; then
     MC_FW="$APP_DIR/Contents/Resources/media-control/Frameworks/MediaRemoteAdapter.framework"
     MC_VER="$(brew list --versions media-control | awk '{print $2}')"
     MC_META="$(curl -fsS https://formulae.brew.sh/api/formula/media-control.json | /usr/bin/python3 -c '
@@ -288,6 +313,19 @@ fi
 mkdir -p "$APP_DIR/Contents/Frameworks"
 rm -rf "$APP_DIR/Contents/Frameworks/Sparkle.framework"
 ditto "$SPARKLE_FW_SRC" "$APP_DIR/Contents/Frameworks/Sparkle.framework"
+# 目标不是 universal 时,Sparkle 也要瘦到目标架构。它是预编译的 universal xcframework
+# (macos-arm64_x86_64),不瘦的话主包里照样躺着 x86_64 代码 —— 而"包里含 Intel 代码"正是
+# 那条 macOS 告警的触发条件,主包 arm64-only 的意义就没了。瘦完签名必然失效,所以放在下面
+# 本来就有的 inside-out 签名之前,由那几行一并重签。
+if [ "$UNIVERSAL" = 0 ]; then
+  while IFS= read -r f; do
+    archs="$(lipo -archs "$f" 2>/dev/null || true)"
+    case "$archs" in
+      *" "*) lipo -thin "$ARCHES" "$f" -output "$f.thin" && mv "$f.thin" "$f" ;;
+    esac
+  done < <(find "$APP_DIR/Contents/Frameworks/Sparkle.framework" -type f)
+  echo "    Sparkle.framework thinned to $ARCHES"
+fi
 # -add_rpath 在这个 rpath 已经存在时会报错退出(比如第二次跑这个脚本)——用
 # otool -l 先查一遍,已经有了就跳过,保持这一步幂等。
 if ! otool -l "$BIN" | grep -q "@executable_path/../Frameworks"; then
@@ -424,23 +462,27 @@ codesign -v "$APP_DIR/Contents/Resources/collector" && echo "    collector signa
 # 架构自检:把包里每个 Mach-O 的架构列出来,并在"要求 universal 却有文件只剩一个架构"时
 # 明确报出来。加这一步的直接原因是 v1.0.0~v1.2.0 三个版本都在没人察觉的情况下发成了
 # arm64-only —— 光靠"记得传参数"不够,产物本身要能自证。
+# 架构自检:两个方向都查。缺目标架构要报(universal 包少一半就白做了);多出目标之外的架构
+# 同样要报 —— 主包多带一份 x86_64 就会踩那条 macOS 告警。加这一步的直接原因是
+# v1.0.0~v1.2.0 三个版本都在没人察觉的情况下发成了 arm64-only:光靠"记得传参数"不够,
+# 产物本身要能自证。用 find -type f(不加 -perm)以免漏掉没有执行位的 Mach-O。
 echo "==> architecture check [$ARCHES]"
-ARCH_THIN=""
+ARCH_BAD=""
 while IFS= read -r f; do
   archs="$(lipo -archs "$f" 2>/dev/null || true)"
   [ -z "$archs" ] && continue # 脚本/资源文件,没有架构这回事
   printf "    %-56s %s\n" "${f#$APP_DIR/}" "$archs"
-  if [ "$HOST_ONLY" = 0 ]; then
-    case "$archs" in
-      *arm64*) case "$archs" in *x86_64*) ;; *) ARCH_THIN="$ARCH_THIN ${f#$APP_DIR/}" ;; esac ;;
-      *) ARCH_THIN="$ARCH_THIN ${f#$APP_DIR/}" ;;
-    esac
-  fi
-done < <(find "$APP_DIR" -type f -perm -u+x)
-if [ -n "$ARCH_THIN" ]; then
-  echo "!! 以下文件不是 universal(缺 arm64 或 x86_64):" >&2
-  for f in $ARCH_THIN; do echo "     $f" >&2; done
-  echo "!! 如果这次是要发布的构建,先解决上面这些再打包" >&2
+  for want in $ARCHES; do
+    case " $archs " in *" $want "*) ;; *) ARCH_BAD="$ARCH_BAD ${f#$APP_DIR/}(缺$want)" ;; esac
+  done
+  for got in $archs; do
+    case " $ARCHES " in *" $got "*) ;; *) ARCH_BAD="$ARCH_BAD ${f#$APP_DIR/}(多余$got)" ;; esac
+  done
+done < <(find "$APP_DIR" -type f)
+if [ -n "$ARCH_BAD" ]; then
+  echo "!! 架构与目标[$ARCHES]不符:" >&2
+  for f in $ARCH_BAD; do echo "     $f" >&2; done
+  echo "!! 要发布的构建先解决上面这些(package.sh 会硬拦)" >&2
 fi
 
 if [ "$NO_RESTART" = 1 ]; then

@@ -81,10 +81,18 @@ brew install --cask lyrimuse
 
 ### 方案 B：手动下载预编译版本
 
-1. 去 [Releases 页面](https://github.com/Yudaotor/lyrimuse/releases) 下载，两种格式随你挑，装出来是同一个 App（同一次构建打的两份包），都是 universal（Apple Silicon 和 Intel 两份都在里面），不用挑架构：
+1. 去 [Releases 页面](https://github.com/Yudaotor/lyrimuse/releases) 下载。**先看清自己是哪种 Mac**（左上角  → 关于本机 →「芯片」：`Apple M…` 是 Apple Silicon，`Intel Core…` 是 Intel）：
 
-   - `Lyrimuse-*-macos.dmg` —— 双击挂载，把 `Lyrimuse.app` 拖到旁边的 `Applications` 上。
-   - `Lyrimuse-*-macos.zip` —— 解压后把 `Lyrimuse.app` 拖进 `/Applications`。附带一份 `.sha256`，想核对下载完整性的话在同一目录里跑 `shasum -c Lyrimuse-*-macos.zip.sha256`。这也是 Homebrew 和 App 内自动更新用的那一份。
+   | 你的 Mac | 下这份 |
+   | --- | --- |
+   | Apple Silicon（M1 及以后） | `Lyrimuse-*-macos.dmg` 或 `.zip` |
+   | Intel | `Lyrimuse-*-macos-intel.dmg` 或 `.zip` |
+
+   dmg 双击挂载后把 `Lyrimuse.app` 拖到旁边的 `Applications` 上；zip 解压后把 `Lyrimuse.app` 拖进 `/Applications`。两种格式装出来完全是同一个 App，zip 还附带一份 `.sha256`，想核对下载完整性就在同一目录里跑 `shasum -c Lyrimuse-*.zip.sha256`。
+
+   两份的区别只在架构：不带后缀的那份是纯 Apple Silicon，`-intel` 那份同时含 Intel 和 Apple Silicon 两套代码。`-intel` 也能在 Apple Silicon 上跑，但没必要——体积大一倍，而且 macOS 27 及以后会因为它含 Intel 代码而提示「需要更新 App」（Apple 要在 macOS 28 移除 Rosetta；App 本身没问题）。
+
+   App 内的自动更新只服务 Apple Silicon 那份。Intel 用户不会被推送更新（Sparkle 会正确跳过、只显示「已是最新」，不会推一个装上打不开的包），有新版本请回这个页面手动下 `-intel` 那份。
 2. 第一次打开时 macOS 会拒绝运行——提示"Lyrimuse 已损坏，无法打开"或"来自身份不明的开发者"。用下面任意一种方式解锁一次即可：
 
    - **推荐——终端命令（永远有效）：**
@@ -111,11 +119,11 @@ brew install go          # 任意 ≥1.21 的 Go 都行——build.sh 会通过 
 ```bash
 git clone https://github.com/Yudaotor/lyrimuse.git
 cd lyrimuse/lyrimuse
-./build.sh                # 默认出 universal 包(arm64 + x86_64)
-./build.sh --host-only    # 只编当前这台机器的架构,本地反复迭代时快一半
+./build.sh               # 编当前这台机器的架构
+./build.sh --universal   # 编 arm64 + x86_64 的 universal 包(给 Intel 用的那份兼容包)
 ```
 
-`build.sh` 最后会把包里每个二进制的架构列出来，缺哪一半会直接报出来——发布包用默认（universal）那条路。
+`build.sh` 最后会把包里每个二进制的架构列出来，跟目标不符（缺一半、或多带了一份）都会报出来。发布资产不要手工打——用 `./package.sh`，它自己会把两种架构各构建一次、各出一套 zip + sha256 + dmg，架构不符直接拒绝打包。
 
 QQ 音乐/网易云音乐/Spotify/自动识别这几个播放源支持额外需要 [ungive/media-control](https://github.com/ungive/media-control)——本机没装的话 `build.sh` 会自动用 Homebrew 装一次，这一步也不需要你自己动手。
 

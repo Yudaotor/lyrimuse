@@ -57,22 +57,32 @@ QQ音乐桌面客户端的"桌面歌词"。另外还有一个"歌词管理"窗�
 ## 构建 / 运行
 
 ```bash
-./build.sh              # release 构建(默认 universal:arm64 + x86_64) + 装到 /Applications/Lyrimuse.app + 重启(如果当前有实例在跑)
-./build.sh --host-only  # 只编当前机器的架构,本地反复迭代时快一半
+./build.sh               # release 构建(本机架构) + 装到 /Applications/Lyrimuse.app + 重启(如果当前有实例在跑)
+./build.sh --universal   # 编 arm64 + x86_64(给 Intel 的兼容包)
 ./build.sh --no-restart  # 只构建
+./build.sh --dest <路径> # 组装到指定路径(隐含 --no-restart),package.sh 用这个一次出两种架构
 swift run lyrimuse-selftest   # 跑歌词解析器的合成字符串测试
 ```
 
-发布资产由 `package.sh` 从**已经装好的** `/Applications/Lyrimuse.app` 打出来(zip + sha256 +
-dmg,输出到 `lyrimuse/dist/`),它会在打包前硬性校验"每个二进制都是 universal"——
-v1.0.0~v1.2.0 三个版本都在没人察觉的情况下发成了 arm64-only,这道闸门就是为此加的:
+发布资产由 `package.sh` 打(输出到 `lyrimuse/dist/`)。它**自己调 `build.sh --dest` 构建两份**,
+不打包 `/Applications` 那份:
 
 ```bash
-LYRIMUSE_VERSION=1.2.1 ./build.sh --no-restart && ./package.sh
+LYRIMUSE_VERSION=1.2.1 ./package.sh
 ```
 
-`package.sh` 故意不碰签名/上传:Sparkle 的 EdDSA 私钥和 GitHub 凭据不该经过打包脚本,
-剩下的手工步骤(appcast 签名、`gh release create`、更新 Homebrew cask)它会在结尾打印出来。
+出两套资产 —— 主包 arm64-only(`Lyrimuse-v*-macos.*`)和 Intel 兼容包 universal
+(`Lyrimuse-v*-macos-intel.*`),各含 zip + sha256 + dmg。为什么要分成两份、以及为什么主包
+必须彻底不含 x86_64(含了 macOS 27 就会对多数用户弹"需要更新 App"),见 `build.sh` 顶部注释。
+
+打包前有两道**硬闸门**(不是警告):每个二进制的架构必须跟该变体的目标完全一致(缺一半、
+或多带一份都拦),以及 `codesign --deep --strict` 必须通过。v1.0.0~v1.2.0 三个版本都在没人
+察觉的情况下发成了 arm64-only,这两道闸门就是为此加的。
+
+⚠️ appcast 里主包那条 item 必须带 `sparkle:hardwareRequirements="arm64"` —— 少了它,Intel
+用户会被自动更新推一个 arm64-only 的包、装上打不开。`package.sh` 结尾会把这条和其余手工
+步骤(EdDSA 签名、`gh release create`、更新 Homebrew cask)一起打印出来;签名和上传故意不做,
+Sparkle 的私钥和 GitHub 凭据不该经过打包脚本。
 
 ## 开机启动
 

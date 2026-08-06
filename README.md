@@ -81,10 +81,18 @@ This clears the one-time Gatekeeper quarantine automatically as part of installi
 
 ### Option B: Download a pre-built release manually
 
-1. Grab it from the [Releases page](https://github.com/Yudaotor/lyrimuse/releases) in whichever format you prefer — both come from the same build and install the same app, and both are universal, carrying Apple Silicon and Intel slices, so there is no architecture to pick:
+1. Grab it from the [Releases page](https://github.com/Yudaotor/lyrimuse/releases). **Check which Mac you have first** ( → About This Mac → "Chip": `Apple M…` is Apple Silicon, `Intel Core…` is Intel):
 
-   - `Lyrimuse-*-macos.dmg` — double-click to mount, then drag `Lyrimuse.app` onto the `Applications` shortcut next to it.
-   - `Lyrimuse-*-macos.zip` — unzip and drag `Lyrimuse.app` into `/Applications`. A matching `.sha256` is attached if you want to verify the download (`shasum -c Lyrimuse-*-macos.zip.sha256` from the same folder). This is also the archive Homebrew and the app's own updater use.
+   | Your Mac | Download |
+   | --- | --- |
+   | Apple Silicon (M1 and later) | `Lyrimuse-*-macos.dmg` or `.zip` |
+   | Intel | `Lyrimuse-*-macos-intel.dmg` or `.zip` |
+
+   With the dmg, double-click to mount and drag `Lyrimuse.app` onto the `Applications` shortcut next to it; with the zip, unzip and drag `Lyrimuse.app` into `/Applications`. Both formats install exactly the same app, and the zip comes with a `.sha256` if you want to verify the download (`shasum -c Lyrimuse-*.zip.sha256` from the same folder).
+
+   The only difference between the two downloads is architecture: the one without a suffix is Apple Silicon only, while `-intel` carries both Intel and Apple Silicon code. `-intel` does run on Apple Silicon, but there is no reason to use it there — it is twice the size, and macOS 27 and later will warn that the app "needs to be updated" because it contains Intel code (Apple is removing Rosetta in macOS 28; nothing is actually wrong with the app).
+
+   The in-app updater serves the Apple Silicon build only. Intel users are never offered an update — Sparkle correctly skips it and reports "you're up to date" rather than pushing a build that would not open — so check back here for a newer `-intel` download.
 2. On first launch, macOS will refuse to open it — "Lyrimuse can't be opened because Apple cannot check it for malicious software" or "is from an unidentified developer." Clear it once, with whichever of these you're more comfortable with:
 
    - **Recommended — Terminal (always works):**
@@ -111,11 +119,11 @@ Then `build.sh` builds both the app and its background collector in one shot:
 ```bash
 git clone https://github.com/Yudaotor/lyrimuse.git
 cd lyrimuse/lyrimuse
-./build.sh                # universal by default (arm64 + x86_64)
-./build.sh --host-only    # this machine's architecture only — about twice as fast for local iteration
+./build.sh              # this machine's architecture
+./build.sh --universal  # arm64 + x86_64 (the compatibility build shipped for Intel)
 ```
 
-`build.sh` ends by listing the architectures of every binary in the bundle and flagging anything that is missing a slice — release builds should use the default (universal) path.
+`build.sh` ends by listing the architectures of every binary in the bundle and flags anything that does not match the target — a missing slice or an extra one. Don't assemble release assets by hand: `./package.sh` builds each architecture once and produces a zip + sha256 + dmg for each, refusing to package if the architectures are wrong.
 
 QQ Music / NetEase Cloud Music / Spotify / auto-detect support additionally needs [ungive/media-control](https://github.com/ungive/media-control) — `build.sh` installs it via Homebrew automatically if it's missing, so this isn't a step you need to do yourself either.
 
