@@ -361,7 +361,7 @@ struct LyricsWindowView: View {
         Color.clear
             .aspectRatio(1, contentMode: .fit)
             .overlay {
-                if let data = poller.artworkData, let nsImage = NSImage(data: data) {
+                if let nsImage = poller.artworkImage {
                     Image(nsImage: nsImage)
                         .resizable()
                         .scaledToFill()
@@ -575,7 +575,7 @@ struct LyricsWindowView: View {
     // .background() 铺的范围。
     @ViewBuilder
     private var artworkBackground: some View {
-        if let data = poller.artworkData, let nsImage = NSImage(data: data) {
+        if let nsImage = poller.artworkImage {
             Image(nsImage: nsImage)
                 .resizable()
                 .scaledToFill()
@@ -595,7 +595,10 @@ struct LyricsWindowView: View {
                 .blur(radius: 72, opaque: true)
                 .overlay(Color.black.opacity(0.22))
                 .clipped()
-                .animation(.easeInOut(duration: 0.5), value: data)
+                // 动画触发键仍用原始字节 poller.artworkData(Data 是按字节比较的 Equatable),
+                // 保持跟改用解码缓存之前逐字节相同的判定语义 —— artworkImage 是 NSObject,
+                // == 退化成指针比较,语义上不等价。跟灵动岛那边同一套写法。
+                .animation(.easeInOut(duration: 0.5), value: poller.artworkData)
         }
     }
 
