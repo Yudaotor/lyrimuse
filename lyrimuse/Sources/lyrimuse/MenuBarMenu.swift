@@ -120,23 +120,30 @@ struct MenuBarMenu: View {
         // 一次——菜单每次开合都会重新构造这些 View,get 里碰 .shared 就等于"点开一次菜单
         // 就把没启用的窗口也建出来"(详见 NotchLyricsWindowController 顶部注释)。set 里
         // 碰是可以的:那是用户主动在打开/关闭这个模式。
-        OverlayVisibilityMenuToggles()
-        // "锁定位置"只有经典悬浮窗有这个概念,而且它的 get 必须读控制器自己的
-        // isPositionLocked(不是 AppSettings),所以这一项仍然只在经典悬浮窗确实开着时
-        // 才出现——靠 SwiftUI 的 if 只构建条件为真的分支,保证关着时连 .shared 都不碰。
-        if settings.classicOverlayEnabled {
-            ClassicOverlayLockMenuSection()
+        // 2026-08-06:四个状态开关收进一个二级子菜单,顶层只留"点一下就发生一件事"的动作
+        // 入口。原来开关和动作混在顶层、靠两条分隔线分区,菜单一共十一项、相当长;收起来
+        // 之后顶层短得多,而"从菜单栏快速开关悬浮歌词"这个用法也没丢(多一层展开)。
+        //
+        // ⚠️ "锁定位置"仍然只在经典悬浮窗开着时才出现:它的 get 必须读控制器自己的
+        // isPositionLocked(不是 AppSettings),而 SwiftUI 的 if 只构建条件为真的分支,
+        // 关着时连 .shared 都不碰——这条不变量在子菜单里同样要守(详见
+        // NotchLyricsWindowController 顶部注释)。
+        Menu {
+            OverlayVisibilityMenuToggles()
+            if settings.classicOverlayEnabled {
+                ClassicOverlayLockMenuSection()
+            }
+            Divider()
+            Toggle(isOn: $settings.launchAtLoginEnabled) {
+                Label(L10n.t("开机启动"), systemImage: "power")
+            }
+        } label: {
+            Label(L10n.t("快速开关"), systemImage: "switch.2")
         }
         // 跟悬浮窗样式(经典/灵动岛)正交——校准的是"当前这首歌的歌词该提前/延后多少",
-        // 不管哪种样式在显示都适用,所以不放进上面两个按样式互斥的 Section 里,单独一份。
+        // 不管哪种样式在显示都适用,所以不收进上面那个"快速开关"子菜单:它是一组带子菜单的
+        // 增减操作,不是开关。
         LyricsOffsetMenuSection()
-        Divider()
-        Toggle(isOn: $settings.launchAtLoginEnabled) {
-            Label(L10n.t("开机启动"), systemImage: "power")
-        }
-        // 单独一条分隔线,把"开机启动"这个持久状态开关跟下面几个"点一下跳转/触发一次性
-        // 动作"的按钮分开——参考同类菜单栏工具(Bartender/AlDente 这类)常见的"开关一组、
-        // 操作入口另一组"分区习惯,原来两者混在一起没有区分。
         Divider()
         // 不用 SettingsLink——这个 App 是 .accessory 策略(没有 Dock 图标/常规激活),
         // SettingsLink 内部触发设置窗口时依赖应用正常激活的那套机制,在 accessory 策略下
