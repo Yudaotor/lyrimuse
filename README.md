@@ -9,6 +9,7 @@
 **Language / 语言:** **English** | [简体中文](README.zh-CN.md)
 
 ![Platform](https://img.shields.io/badge/platform-macOS%2014%2B-blue)
+![Architecture](https://img.shields.io/badge/arch-Apple%20Silicon%20%2B%20Intel-blue)
 ![Swift](https://img.shields.io/badge/Swift-5.9-orange)
 ![No Apple Developer account needed](https://img.shields.io/badge/Apple%20Developer%20account-not%20required-success)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
@@ -80,7 +81,7 @@ This clears the one-time Gatekeeper quarantine automatically as part of installi
 
 ### Option B: Download a pre-built release manually
 
-1. Grab the latest `Lyrimuse-*-macos.zip` from the [Releases page](https://github.com/Yudaotor/lyrimuse/releases) (a matching `.sha256` file is attached too, if you want to verify the download), unzip it, and drag `Lyrimuse.app` into `/Applications`.
+1. Grab the latest `Lyrimuse-*-macos.zip` from the [Releases page](https://github.com/Yudaotor/lyrimuse/releases) (a matching `.sha256` file is attached too, if you want to verify the download), unzip it, and drag `Lyrimuse.app` into `/Applications`. There is only one zip — it is a universal build carrying both Apple Silicon and Intel slices, so there is no architecture to pick.
 2. On first launch, macOS will refuse to open it — "Lyrimuse can't be opened because Apple cannot check it for malicious software" or "is from an unidentified developer." Clear it once, with whichever of these you're more comfortable with:
 
    - **Recommended — Terminal (always works):**
@@ -107,8 +108,11 @@ Then `build.sh` builds both the app and its background collector in one shot:
 ```bash
 git clone https://github.com/Yudaotor/lyrimuse.git
 cd lyrimuse/lyrimuse
-./build.sh
+./build.sh                # universal by default (arm64 + x86_64)
+./build.sh --host-only    # this machine's architecture only — about twice as fast for local iteration
 ```
+
+`build.sh` ends by listing the architectures of every binary in the bundle and flagging anything that is missing a slice — release builds should use the default (universal) path.
 
 QQ Music / NetEase Cloud Music / Spotify / auto-detect support additionally needs [ungive/media-control](https://github.com/ungive/media-control) — `build.sh` installs it via Homebrew automatically if it's missing, so this isn't a step you need to do yourself either.
 

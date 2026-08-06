@@ -9,6 +9,7 @@
 **语言 / Language:** [English](README.md) | **简体中文**
 
 ![Platform](https://img.shields.io/badge/platform-macOS%2014%2B-blue)
+![Architecture](https://img.shields.io/badge/arch-Apple%20Silicon%20%2B%20Intel-blue)
 ![Swift](https://img.shields.io/badge/Swift-5.9-orange)
 ![No Apple Developer account needed](https://img.shields.io/badge/Apple%20Developer%20account-not%20required-success)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
@@ -80,7 +81,7 @@ brew install --cask lyrimuse
 
 ### 方案 B：手动下载预编译版本
 
-1. 去 [Releases 页面](https://github.com/Yudaotor/lyrimuse/releases) 下载最新的 `Lyrimuse-*-macos.zip`（附带一份 `.sha256` 校验文件），解压后把 `Lyrimuse.app` 拖进 `/Applications`。
+1. 去 [Releases 页面](https://github.com/Yudaotor/lyrimuse/releases) 下载最新的 `Lyrimuse-*-macos.zip`（附带一份 `.sha256` 校验文件），解压后把 `Lyrimuse.app` 拖进 `/Applications`。只有一个 zip，是 universal 包（Apple Silicon 和 Intel 两份都在里面），不用挑架构。
 2. 第一次打开时 macOS 会拒绝运行——提示"Lyrimuse 已损坏，无法打开"或"来自身份不明的开发者"。用下面任意一种方式解锁一次即可：
 
    - **推荐——终端命令（永远有效）：**
@@ -107,8 +108,11 @@ brew install go          # 任意 ≥1.21 的 Go 都行——build.sh 会通过 
 ```bash
 git clone https://github.com/Yudaotor/lyrimuse.git
 cd lyrimuse/lyrimuse
-./build.sh
+./build.sh                # 默认出 universal 包(arm64 + x86_64)
+./build.sh --host-only    # 只编当前这台机器的架构,本地反复迭代时快一半
 ```
+
+`build.sh` 最后会把包里每个二进制的架构列出来，缺哪一半会直接报出来——发布包用默认（universal）那条路。
 
 QQ 音乐/网易云音乐/Spotify/自动识别这几个播放源支持额外需要 [ungive/media-control](https://github.com/ungive/media-control)——本机没装的话 `build.sh` 会自动用 Homebrew 装一次，这一步也不需要你自己动手。
 

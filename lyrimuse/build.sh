@@ -8,11 +8,40 @@
 # 里自己控制的开关，见 Settings/LoginItemManager.swift)。
 #
 # 用法:
-#   ./build.sh              构建 + 重启(如果当前有实例在跑)
+#   ./build.sh              构建(默认 universal:arm64 + x86_64) + 重启(如果当前有实例在跑)
 #   ./build.sh --no-restart 只构建
+#   ./build.sh --host-only  只编当前机器这一个架构,本地迭代时省掉另一半构建时间
+#
+# 2026-08-06:默认改成 universal(arm64 + x86_64)。在此之前默认只编本机架构,而发布包就是
+# 在本机手动打出来的(这个仓库没有 CI —— 下面那句"CI(release.yml)"是早先的设想,
+# .github/workflows 从来没存在过),于是 v1.0.0~v1.2.0 发出去的全是 arm64-only。而
+# Homebrew cask 只写了 `depends_on macos: :sonoma`、appcast 只写了
+# minimumSystemVersion,两个都不管架构 —— Intel Mac 上装得上、打开直接失败。
+# 默认 universal 就是为了让"忘了加参数"的那次发布仍然是对的;本地想快显式传 --host-only。
 set -euo pipefail
 
 cd "$(dirname "$0")" # lyrimuse/
+
+NO_RESTART=0
+HOST_ONLY=0
+for arg in "$@"; do
+  case "$arg" in
+    --no-restart) NO_RESTART=1 ;;
+    --host-only) HOST_ONLY=1 ;;
+    *) echo "!! 未知参数:$arg(可用:--no-restart / --host-only)" >&2; exit 2 ;;
+  esac
+done
+if [ "$HOST_ONLY" = 1 ]; then
+  ARCHES="$(uname -m)"
+else
+  ARCHES="arm64 x86_64"
+fi
+# 单架构时直接拷,不套一层只含一个架构的 fat 文件(那种文件能跑,但没必要)。
+merge_slices() {
+  local out="$1"; shift
+  if [ "$#" -eq 1 ]; then cp "$1" "$out"; else lipo -create "$@" -output "$out"; fi
+}
+
 APP_NAME="Lyrimuse"
 # X.Y.Z 语义化版本——检查更新功能(UpdateChecker.swift)靠 CFBundleShortVersionString
 # 跟 GitHub Release 的 tag(去掉 v 前缀)比大小,必须是干净的三段数字,不能再是本地
@@ -37,18 +66,49 @@ BIN="$APP_DIR/Contents/MacOS/lyrimuse"
 # 字符串意味着 TCC 会认成一个新 App,自动化权限(控制 Music.app 播放)会重新弹一次
 # 系统授权对话框——这是这次改名一次性的代价,同意一次之后往后都不会再弹。
 LABEL="me.yudaotor.lyrimuse"
-RELEASE_DIR=".build/release"
+# 合并后的二进制放这里。**不要**用 .build/release —— 那是个指向"最后一次构建的那个
+# 架构"的符号链接,多架构循环里它会在中途被改指向,拿它取产物必然错(2026-08-06 实测:
+# 跑完一次 `swift build --arch x86_64` 之后 .build/release 就指向
+# x86_64-apple-macosx/release 了)。
+FAT_DIR=".build/fat"
+rm -rf "$FAT_DIR"
+mkdir -p "$FAT_DIR"
 
-echo "==> building (release)"
-swift build -c release
+echo "==> building (release) [$ARCHES]"
+# 每个架构单独编一次再 lipo 合并,而不是 `swift build --arch arm64 --arch x86_64` 一步
+# 出 universal —— 后者要走 xcbuild
+# (/Library/Developer/SharedFrameworks/XCBuild.framework/.../xcbuild),那是**完整 Xcode**
+# 才有的组件,只装 Command Line Tools 的机器上直接报 "xcbuild executable ... does not
+# exist or is not executable"(2026-08-06 实测)。单 --arch 交叉编译不经过 xcbuild,可用。
+SWIFT_SLICES=()
+for arch in $ARCHES; do
+  swift build -c release --arch "$arch"
+  # 产物目录问 --show-bin-path,不硬编码 ".build/<arch>-apple-macosx/release"。
+  SWIFT_SLICES+=("$(swift build -c release --arch "$arch" --show-bin-path)/lyrimuse")
+done
+merge_slices "$FAT_DIR/lyrimuse" "${SWIFT_SLICES[@]}"
 
 # 2026-07-21:collector 现在打包进 .app 里(见 Contents/Resources/collector),不再要求
 # 用户手动单独构建它——CollectorServiceManager.swift 靠 Bundle.main.bundleURL 精确知道
 # 它在哪，跟 LoginItemManager 认自己的方式一样。跟 lyrimuse-collector/build.sh 同款
 # GOTOOLCHAIN=go1.24.4(系统 Go 1.21 产出的二进制缺 LC_UUID，AMFI 拒签，见那份脚本的
 # 注释)。
-echo "==> building collector"
-(cd ../lyrimuse-collector && GOTOOLCHAIN=go1.24.4 go build -o "$OLDPWD/$RELEASE_DIR/collector" .)
+echo "==> building collector [$ARCHES]"
+# collector 是纯 Go(没有 import "C",2026-08-06 核实过),所以 GOARCH 交叉编译不需要交叉
+# 工具链,直接编两份再 lipo 合并即可。GOARCH 的写法跟 uname -m 不一样:x86_64 在 Go 里
+# 叫 amd64。
+COLLECTOR_SLICES=()
+for arch in $ARCHES; do
+  case "$arch" in
+    arm64) goarch=arm64 ;;
+    x86_64) goarch=amd64 ;;
+    *) echo "!! 不认识的架构:$arch" >&2; exit 2 ;;
+  esac
+  out="$PWD/$FAT_DIR/collector-$arch"
+  (cd ../lyrimuse-collector && GOTOOLCHAIN=go1.24.4 GOOS=darwin GOARCH="$goarch" go build -o "$out" .)
+  COLLECTOR_SLICES+=("$out")
+done
+merge_slices "$FAT_DIR/collector" "${COLLECTOR_SLICES[@]}"
 
 echo "==> assembling .app bundle"
 # CFBundleIdentifier 这次(2026-07-20 改名 Lyrimuse)跟上面的 $LABEL 统一成同一个
@@ -58,7 +118,7 @@ echo "==> assembling .app bundle"
 # 已经用一次性脚本从"desktop-lyrics"域迁移到新域,不再需要靠"保持 CFBundleIdentifier
 # 不变"这个手段来保护旧设置,直接统一成标准的反向域名写法。
 mkdir -p "$APP_DIR/Contents/MacOS" "$APP_DIR/Contents/Resources"
-cp "$RELEASE_DIR/lyrimuse" "$BIN"
+cp "$FAT_DIR/lyrimuse" "$BIN"
 cp AppIcon.icns "$APP_DIR/Contents/Resources/AppIcon.icns"
 # collector 装在 Resources/ 而不是 MacOS/——那里是 CFBundleExecutable 指向的主执行文件，
 # collector 是被 launchd 单独拉起的后台辅助二进制，不是这个 App 自己的入口。
@@ -76,7 +136,12 @@ cp AppIcon.icns "$APP_DIR/Contents/Resources/AppIcon.icns"
 # inode，从根源避开这个问题(跟上面这次会话另外给 media-control 加的 rm -f 是
 # 同一类修法，那边最初是为了绕开只读权限，这里主要是为了这个签名信任缓存问题)。
 rm -f "$APP_DIR/Contents/Resources/collector"
-cp "$RELEASE_DIR/collector" "$APP_DIR/Contents/Resources/collector"
+cp "$FAT_DIR/collector" "$APP_DIR/Contents/Resources/collector"
+# 2026-08-06:collector 现在必须在这里显式补签。以前这份是 `go build` 的产物原样拷进来、
+# 自带工具链盖的 ad-hoc 签名,所以下面只做 `codesign -v` 验证;改成 universal 之后中间多了
+# 一步 lipo,而 lipo 会让原有签名失效(实测:合并后的文件 `codesign -v` 直接不通过),
+# 只验证会被 set -e 拦腰打断。签名必须在 lipo 之后做,顺序不能反。
+codesign --force --sign - "$APP_DIR/Contents/Resources/collector"
 
 # 2026-07-24:QQ 音乐支持——QQ音乐.app 没有 AppleScript 支持(sdef/NSAppleScriptEnabled
 # 都核实过没有),读它的播放状态改走系统级 MediaRemote,经 ungive/media-control
@@ -119,6 +184,80 @@ if [ -x "$MEDIA_CONTROL_PREFIX/bin/media-control" ]; then
   # 已经带着 Homebrew 自己的 ad-hoc 签名,不需要(也不应该)重复处理;
   # mediaremote-adapter.pl 是纯文本 Perl 脚本,同样不需要签名。
   codesign --force --sign - "$APP_DIR/Contents/Resources/media-control/bin/media-control"
+  # 2026-08-06:universal 构建时把 x86_64 那半也 lipo 进来。
+  #
+  # Homebrew 在 Apple Silicon 上只会装 arm64 那份,而且不让你拉异架构 bottle
+  # (`brew fetch --bottle-tag=sonoma media-control` 直接回 "Bottle for tag :sonoma is
+  # unavailable",实测)。所以 Intel 那半得自己取:media-control 在官方 homebrew-core 里,
+  # bottle 放在 ghcr.io,可以拿 formula JSON 里记录的 sha256 直接下对应 blob(匿名 token
+  # 就是字面量 "QQ==" —— Homebrew 自己访问 ghcr 用的也是这个),下完**先校验 sha256 再
+  # 解包**,不无条件信任下载内容。Intel 的 bottle tag 就是不带 arm64_ 前缀的那个 macOS
+  # 代号(现在是 sonoma),所以这里按"排除 arm64_* 和 *_linux"动态挑,而不是写死 sonoma。
+  #
+  # 只有两个 Mach-O 需要合并(逐文件核实过):框架里的 MediaRemoteAdapter 和 lib/ 下的
+  # MediaRemoteAdapterTestClient。bin/media-control 本身是 Perl 脚本(`file` 报
+  # "Perl script text executable"),没有架构这回事。
+  #
+  # 版本必须两边完全一致才合并 —— 把 0.7.6 的 arm64 切片和别的版本的 x86_64 切片拼进
+  # 同一个文件,属于"看着能跑、两个架构行为却不一定一样"的坑,宁可不合并、只报警告。
+  #
+  # 合并完必须重签框架:lipo 会让原签名失效(实测合并后 codesign -v 不通过)。签的是整个
+  # .framework 包而不是里面那个 Mach-O —— 包里有 _CodeSignature/CodeResources,只重签
+  # 内层二进制会留下一份对不上的资源清单。
+  #
+  # 这一步失败不阻断构建,跟上面"没装 media-control 就跳过"同一个策略(QQ 音乐支持是可选
+  # 功能,不该让不需要它的人连 Apple Music 都构建不出来)。代价是那次产物在 Intel 上没有
+  # QQ 音乐支持,所以下面的架构自检会把还是单架构的文件列出来。
+  if [ "$HOST_ONLY" = 0 ]; then
+    MC_FW="$APP_DIR/Contents/Resources/media-control/Frameworks/MediaRemoteAdapter.framework"
+    MC_VER="$(brew list --versions media-control | awk '{print $2}')"
+    MC_META="$(curl -fsS https://formulae.brew.sh/api/formula/media-control.json | /usr/bin/python3 -c '
+import json, sys
+d = json.load(sys.stdin)
+files = d["bottle"]["stable"]["files"]
+cand = [t for t in files if not t.startswith("arm64_") and not t.endswith("_linux")]
+print(cand[0], files[cand[0]]["sha256"], d["versions"]["stable"]) if cand else print("")
+' || true)"
+    MC_TAG="$(echo "$MC_META" | awk '{print $1}')"
+    MC_SHA="$(echo "$MC_META" | awk '{print $2}')"
+    MC_API_VER="$(echo "$MC_META" | awk '{print $3}')"
+    if [ -z "$MC_SHA" ]; then
+      echo "!! media-control 没有 Intel bottle(只有 arm64)——x86_64 上 QQ 音乐支持不可用" >&2
+    elif [ "$MC_VER" != "$MC_API_VER" ]; then
+      echo "!! media-control 本机版本 $MC_VER 与 formula 当前版本 $MC_API_VER 不一致,跳过 lipo(先 brew upgrade media-control)" >&2
+    else
+      MC_TGZ="$FAT_DIR/media-control-x86_64-$MC_API_VER.tar.gz"
+      if curl -fsSL -H "Authorization: Bearer QQ==" \
+           "https://ghcr.io/v2/homebrew/core/media-control/blobs/sha256:$MC_SHA" -o "$MC_TGZ" \
+         && [ "$(shasum -a 256 "$MC_TGZ" | awk '{print $1}')" = "$MC_SHA" ]; then
+        MC_X86="$FAT_DIR/media-control-x86_64"
+        rm -rf "$MC_X86"; mkdir -p "$MC_X86"
+        tar -xzf "$MC_TGZ" -C "$MC_X86"
+        # bottle 解出来是 media-control/<版本>/... 这层结构,用 find 定位而不是拼路径。
+        MC_X86_ROOT="$(find "$MC_X86" -type d -name "Frameworks" -maxdepth 3 | head -1)"
+        MC_X86_ROOT="$(dirname "${MC_X86_ROOT:-$MC_X86}")"
+        merged=0
+        for rel in "Frameworks/MediaRemoteAdapter.framework/Versions/A/MediaRemoteAdapter" \
+                   "lib/media-control/MediaRemoteAdapterTestClient"; do
+          dst="$APP_DIR/Contents/Resources/media-control/$rel"
+          src="$MC_X86_ROOT/$rel"
+          if [ -f "$dst" ] && [ -f "$src" ]; then
+            lipo -create "$dst" "$src" -output "$dst.fat" && mv "$dst.fat" "$dst"
+            merged=$((merged + 1))
+          fi
+        done
+        if [ "$merged" -gt 0 ]; then
+          codesign --force --sign - "$MC_FW"
+          codesign --force --sign - "$APP_DIR/Contents/Resources/media-control/lib/media-control/MediaRemoteAdapterTestClient" 2>/dev/null || true
+          echo "    media-control x86_64 切片已合入($merged 个 Mach-O, bottle tag=$MC_TAG)"
+        else
+          echo "!! media-control x86_64 bottle 里没找到预期的 Mach-O,跳过 lipo" >&2
+        fi
+      else
+        echo "!! media-control x86_64 bottle 下载或校验失败,跳过 lipo——x86_64 上 QQ 音乐支持不可用" >&2
+      fi
+    fi
+  fi
   echo "    media-control bundled (QQ 音乐支持)"
 else
   echo "!! media-control not found (brew install media-control) — QQ 音乐支持这次构建不可用,Apple Music 不受影响" >&2
@@ -276,12 +415,35 @@ PLIST
 # 迁移唯一一次性的代价，同意一次之后往后重新构建/重启都不会再弹。
 codesign -s - --force --identifier "$LABEL" "$APP_DIR"
 codesign -v "$APP_DIR" && echo "    signature valid"
-# collector 自己在 go build 那一步已经原生签过一次(GOTOOLCHAIN=go1.24.4 的产物自带签名)——
-# 上面这行没加 --deep，只签外层 .app 这一个代码对象，理论上不会动内层这个独立二进制自己的
-# 签名；这里显式验证一下，而不是假设。
+# collector 已经在上面 lipo 之后显式 ad-hoc 签过一次(见那一步的注释:lipo 会让 go build
+# 产物自带的那份签名失效,所以不能再像以前那样只验证不签)——最外层这行 codesign 没加
+# --deep，只签 .app 这一个代码对象，不会动内层这个独立二进制自己的签名；这里显式验证
+# 一遍，而不是假设。
 codesign -v "$APP_DIR/Contents/Resources/collector" && echo "    collector signature valid"
 
-if [ "${1:-}" = "--no-restart" ]; then
+# 架构自检:把包里每个 Mach-O 的架构列出来,并在"要求 universal 却有文件只剩一个架构"时
+# 明确报出来。加这一步的直接原因是 v1.0.0~v1.2.0 三个版本都在没人察觉的情况下发成了
+# arm64-only —— 光靠"记得传参数"不够,产物本身要能自证。
+echo "==> architecture check [$ARCHES]"
+ARCH_THIN=""
+while IFS= read -r f; do
+  archs="$(lipo -archs "$f" 2>/dev/null || true)"
+  [ -z "$archs" ] && continue # 脚本/资源文件,没有架构这回事
+  printf "    %-56s %s\n" "${f#$APP_DIR/}" "$archs"
+  if [ "$HOST_ONLY" = 0 ]; then
+    case "$archs" in
+      *arm64*) case "$archs" in *x86_64*) ;; *) ARCH_THIN="$ARCH_THIN ${f#$APP_DIR/}" ;; esac ;;
+      *) ARCH_THIN="$ARCH_THIN ${f#$APP_DIR/}" ;;
+    esac
+  fi
+done < <(find "$APP_DIR" -type f -perm -u+x)
+if [ -n "$ARCH_THIN" ]; then
+  echo "!! 以下文件不是 universal(缺 arm64 或 x86_64):" >&2
+  for f in $ARCH_THIN; do echo "     $f" >&2; done
+  echo "!! 如果这次是要发布的构建,先解决上面这些再打包" >&2
+fi
+
+if [ "$NO_RESTART" = 1 ]; then
   echo "==> built (restart skipped)"
   exit 0
 fi
