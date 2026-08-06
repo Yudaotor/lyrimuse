@@ -4,6 +4,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	_ "image/jpeg" // 注册 JPEG 解码器
 	_ "image/png"  // 网易云取色缩略图有时是 PNG(content-type 却谎报 jpg)
 	"log"
@@ -196,8 +197,27 @@ func backfillPeripheralFields(key, artist, title, album string, durationSecs flo
 		enrichMu.Unlock()
 		return
 	}
-	e.CoverURL, e.CoverSource, e.AccentColor = fresh.CoverURL, fresh.CoverSource, fresh.AccentColor
-	e.AppleURL, e.QQURL, e.SpotifyURL, e.NeteaseURL = fresh.AppleURL, fresh.QQURL, fresh.SpotifyURL, fresh.NeteaseURL
+	// ⚠️ 只在这次真的拿到值时才覆盖 —— 原来是无条件赋值,一次网络抖动/某个源临时挂掉,
+	// fresh 里这些字段就是空的,于是把之前已经解析好的封面、主色和各平台链接**抹成空**,
+	// 而下面那行 e.TS = now 又把节流时间戳推进去,10 分钟内不会再补,封面就这么消失了。
+	// 紧挨着的 CanonicalArtist 本来就有 `== ""` 守卫,这几行属于漏了同一层保护。
+	//
+	// 封面三件套一起判(主色是从这张封面算出来的,不能出现"新封面配旧主色"的错配)。
+	if fresh.CoverURL != "" {
+		e.CoverURL, e.CoverSource, e.AccentColor = fresh.CoverURL, fresh.CoverSource, fresh.AccentColor
+	}
+	if fresh.AppleURL != "" {
+		e.AppleURL = fresh.AppleURL
+	}
+	if fresh.QQURL != "" {
+		e.QQURL = fresh.QQURL
+	}
+	if fresh.SpotifyURL != "" {
+		e.SpotifyURL = fresh.SpotifyURL
+	}
+	if fresh.NeteaseURL != "" {
+		e.NeteaseURL = fresh.NeteaseURL
+	}
 	if e.CanonicalArtist == "" {
 		e.CanonicalArtist = fresh.CanonicalArtist
 	}
@@ -684,7 +704,10 @@ func saveEnrichCache() {
 	if err != nil {
 		return
 	}
-	tmp := enrichPath + ".tmp"
+	// 临时文件名带进程号:固定的 ".tmp" 一旦有两个写入方(collector 自己 + 未来任何别的
+	// 写入者,或同一进程里并发走到这里)就会互相覆盖同一个临时文件,rename 出去的可能是
+	// 半份别人的内容 —— 那样"先写 tmp 再 rename"这套原子性就白做了。
+	tmp := fmt.Sprintf("%s.tmp.%d", enrichPath, os.Getpid())
 	if err := os.WriteFile(tmp, data, 0o644); err != nil {
 		return
 	}

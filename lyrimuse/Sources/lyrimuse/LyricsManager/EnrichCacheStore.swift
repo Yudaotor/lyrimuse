@@ -59,6 +59,9 @@ public final class EnrichCacheStore: ObservableObject {
     private static var lyricsDir: URL { FeatureSettingsStore.shared.effectiveLyricsDir }
 
     private var raw: [String: [String: Any]] = [:]
+    // 上一次 reload() 时盘上存在的 key 集合(加上此后我们自己新增的)。persist() 用它区分
+    // "用户删掉的" 和 "collector 在我们背后新写的",见 persist() 里那段注释。
+    private var knownKeys: Set<String> = []
 
     private init() {}
 
@@ -93,6 +96,7 @@ public final class EnrichCacheStore: ObservableObject {
         totalSizeBytes = box.sizeBytes
         if let obj = box.obj {
             raw = obj
+            knownKeys = Set(obj.keys)
             lastError = nil
         } else {
             raw = [:]
@@ -291,8 +295,28 @@ public final class EnrichCacheStore: ObservableObject {
     // destructive 程度需要在 UI 侧用强提示词说清楚,这里只负责真正执行。
     public func clearAll() async {
         raw = [:]
+        // 清空是用户明确要求的"全清",不能让 persist() 里那段"并回 collector 在我们背后
+        // 新写的条目"把刚清掉的东西又拉回来:「歌词管理」是可以一直开着的窗口,开窗之后
+        // collector 每解析出一首新歌都会往盘上写一条,那些 key 不在 knownKeys 里,于是会
+        // 被那段合并逻辑当成"用户没见过、不该丢"而救回来——清空之后莫名剩下几条。
+        // 先把此刻盘上所有 key 都认领成"已知",那段合并对这次写入就整段不生效。
+        if let disk = try? Data(contentsOf: Self.cacheURL),
+           let diskObj = try? JSONSerialization.jsonObject(with: disk) as? [String: [String: Any]] {
+            knownKeys.formUnion(diskObj.keys)
+        }
+        // ⚠️ 只删**歌词文件**,不能把这个目录里的东西一律删掉。
+        //
+        // 原来是 contentsOfDirectory 之后无差别 removeItem,而 lyrics/ 这个目录是**用户
+        // 可以在设置里自己指定的**(设置 → 歌词 → 歌词文件夹 → 选择文件夹…)。一旦有人把它
+        // 指到一个还放着别的东西的目录(甚至就是"文稿"这类现成目录),点一下「清空全部缓存」
+        // 就会连带删光那个目录里所有无关文件——那已经不是清空本 App 的缓存了。即便在默认
+        // 目录下,无差别删除也会顺手清掉用户自己丢进去的 .txt 备注、封面图之类。
+        // 按后缀白名单过滤(跟导出用的是同一份 EnrichCacheKeys.lyricsFileSuffixes),
+        // 认不出来的文件一律不碰。
         if let urls = try? FileManager.default.contentsOfDirectory(at: Self.lyricsDir, includingPropertiesForKeys: nil) {
-            for url in urls { try? FileManager.default.removeItem(at: url) }
+            for url in urls where EnrichCacheKeys.lyricsFileSuffixes.contains(where: { url.lastPathComponent.hasSuffix($0) }) {
+                try? FileManager.default.removeItem(at: url)
+            }
         }
         rebuildSummaries()
         totalSizeBytes = 0
@@ -396,6 +420,21 @@ public final class EnrichCacheStore: ObservableObject {
             lastError = L10n.t("内部数据不是合法 JSON,已放弃保存")
             logger.error("raw dict is not valid JSON, aborting save")
             return false
+        }
+        // 写回前先把"盘上有、但我们这份内存快照里从来没有过"的条目并回来。
+        //
+        // raw 只有 reload() 会刷新(开窗 .onAppear 和工具栏「刷新」两处),而 persist() 是
+        // 整份覆盖写。"歌词管理"是个可以一直开着的窗口,典型用法就是边听边整理——开窗之后
+        // collector 每解析出一首新歌都会往盘上写一条,而窗口里随便一次删除/保存都会用开窗
+        // 那一刻的旧快照把它们抹掉。
+        //
+        // 只并"没见过的 key":用户明确删掉的 key 在 knownKeys 里,所以不会被这段逻辑复活。
+        if let disk = try? Data(contentsOf: Self.cacheURL),
+           let diskObj = try? JSONSerialization.jsonObject(with: disk) as? [String: [String: Any]] {
+            for (k, v) in diskObj where !knownKeys.contains(k) && raw[k] == nil {
+                raw[k] = v
+                knownKeys.insert(k)
+            }
         }
         do {
             let data = try JSONSerialization.data(withJSONObject: raw)
