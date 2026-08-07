@@ -27,6 +27,10 @@ import (
 type lastfmScrobbler struct {
 	apiKey, secret, sk string
 	hc                 *http.Client
+	// collapse 决定一条提交该用哪个艺人名 —— 播放器报的合唱串("汪苏泷 & 荷莉")在
+	// Last.fm 编目里往往不存在,原样提交会造出一个只有自己一个听众的影子艺人页。
+	// 为 nil(没配只读 api_key)时所有提交按原样走,见 lastfmcollapse.go。
+	collapse *lastfmArtistCollapser
 }
 
 // newLastfmScrobbler 三者任一为空则不启用(返回 nil,调用方需判空跳过)。
@@ -43,7 +47,13 @@ func lastfmScrobblerIfEnabled(cfg *config) *lastfmScrobbler {
 	if !features.LastfmMirrorScrobble {
 		return nil
 	}
-	return newLastfmScrobbler(cfg.LastfmScrobbleAPIKey, cfg.LastfmScrobbleSecret, cfg.LastfmScrobbleSessionKey)
+	s := newLastfmScrobbler(cfg.LastfmScrobbleAPIKey, cfg.LastfmScrobbleSecret, cfg.LastfmScrobbleSessionKey)
+	if s != nil {
+		// 用**只读**的那个 api_key:track.getInfo 不需要签名/session key,而且读写本来
+		// 就是两个独立的 key,别让判定这一步碰到写凭据。
+		s.collapse = newLastfmArtistCollapser(cfg.LastfmAPIKey)
+	}
+	return s
 }
 
 // sign 实现 Last.fm 签名算法:参数(不含 format/callback)按 key 字母序拼接、末尾接
@@ -97,6 +107,7 @@ func (s *lastfmScrobbler) call(ctx context.Context, method string, params map[st
 }
 
 func (s *lastfmScrobbler) updateNowPlaying(ctx context.Context, artist, track, album string) error {
+	artist = s.collapse.resolve(ctx, artist, track)
 	p := map[string]string{"artist": artist, "track": track}
 	if album != "" {
 		p["album"] = album
@@ -105,6 +116,9 @@ func (s *lastfmScrobbler) updateNowPlaying(ctx context.Context, artist, track, a
 }
 
 func (s *lastfmScrobbler) scrobble(ctx context.Context, artist, track, album string, timestamp int64) error {
+	// 正在播放和完成收听必须走同一次判定,否则 Last.fm 上会出现"now playing 是 A、
+	// 落库却是 A & B"这种自相矛盾的状态。判定结果有缓存,这里不会再打一次网络。
+	artist = s.collapse.resolve(ctx, artist, track)
 	p := map[string]string{"artist": artist, "track": track, "timestamp": strconv.FormatInt(timestamp, 10)}
 	if album != "" {
 		p["album"] = album
