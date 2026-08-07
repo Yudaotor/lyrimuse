@@ -221,6 +221,16 @@ struct LyricsManagerView: View {
     // 反应——短暂切换成"已刷新"+对勾图标给个明确反馈,1秒后自动变回去。
     @State private var showRefreshedFeedback = false
     @State private var showClearAllConfirm = false
+    // "这次开窗还没有自动定位过当前播放的歌"。⚠️ 不能靠"selectedKeys 是空的"来判断这是不是
+    // 一次全新的开窗——2026-08-07 实测坐实(加文件日志抓到 `focus bail: selection not empty`,
+    // 第二次开窗时 sel=1):SwiftUI 的 Window scene 关掉之后**并不销毁根视图**,@State 原样
+    // 留着,第二次打开时 selectedKeys 还是上次选的那一条。原来那道 `guard selectedKeys.isEmpty`
+    // 于是从第二次开窗起就把定位整个挡掉了(选中不刷新、列表也不滚),表现成"选中的还是当前
+    // 播放这首、但列表不会滚过去"——因为上次开窗时自动选中的本来就是它。
+    // 窗口关闭时(根视图 .onDisappear)置回 true,所以是"每次开窗定位一次"而不是"整个 App
+    // 生命周期只定位一次";用它当闸也顺带挡住侧栏被折叠/展开时 List 重新 onAppear 把用户
+    // 当前选中项抢走这种误伤。
+    @State private var pendingAutoFocus = true
 
     private var hasActiveFilters: Bool {
         sourceFilter != .all || timingFilter != .all || manualOnly || missingLyricsOnly
@@ -596,7 +606,12 @@ struct LyricsManagerView: View {
                         // 缓存文件变大之后开窗卡顿),这里用 Task 包一层、await 完了再定位。
                         Task {
                             await store.reload()
-                            focusCurrentlyPlaying(scrollProxy: scrollProxy)
+                            guard pendingAutoFocus else { return }
+                            pendingAutoFocus = false
+                            // animated: false——开窗那一刻用户还没看过这个列表,从顶部一路
+                            // 滚下去的动画没有任何信息量,只会让人等;而且首帧行高还没量完,
+                            // 不带动画才好在量准之后补一次定位(见函数内注释)。
+                            focusCurrentlyPlaying(scrollProxy: scrollProxy, animated: false)
                         }
                     }
 
@@ -640,12 +655,10 @@ struct LyricsManagerView: View {
                         }
                     }
                     ToolbarItem {
-                        // 跟开窗时自动定位复用同一个 focusCurrentlyPlaying,但 force:true——
-                        // 那个 selectedKey==nil 的门槛是给"刚开窗别覆盖用户已经选中的行"这个
-                        // 场景挡的,手动点这个按钮时用户往往正选着别的歌、就是想跳回来,不能
-                        // 被同一个门槛拦住。
+                        // 跟开窗时自动定位复用同一个 focusCurrentlyPlaying,只是这次带动画:
+                        // 用户正看着列表点的这个按钮,滚动过程本身就是"往哪儿跳了"的反馈。
                         Button {
-                            focusCurrentlyPlaying(scrollProxy: scrollProxy, force: true)
+                            focusCurrentlyPlaying(scrollProxy: scrollProxy)
                         } label: {
                             Label(L10n.t("回到当前播放"), systemImage: "location.fill")
                         }
@@ -739,20 +752,14 @@ struct LyricsManagerView: View {
         .frame(minWidth: 780, idealWidth: 1040, minHeight: 540, idealHeight: 640)
         // 见 AuxiliaryWindowActivation 注释——.accessory 策略下临时借一个 Dock 图标。
         .onAppear { AuxiliaryWindowActivation.windowDidAppear() }
-        .onDisappear { AuxiliaryWindowActivation.windowDidDisappear() }
+        .onDisappear {
+            AuxiliaryWindowActivation.windowDidDisappear()
+            // 见 pendingAutoFocus 的注释:@State 会跨关窗存活,得自己把这个闸复位,
+            // 下次开窗才会重新定位一次。
+            pendingAutoFocus = true
+        }
     }
 
-    // 打开窗口时自动定位到当前正在播放的这首歌(如果它已经被缓存过)——跟
-    // EnrichCacheStore.splitKey 用的是同一套 "歌手|歌名|专辑" 拼法,PlaybackCoordinator
-    // 转发的 artist/title/album 本来就来自 media-control/relay,跟 collector 当初写入
-    // 缓存时用的是同一份数据,能精确对上。selectedKey == nil 这个门槛只是防御性的——
-    // Window scene 每次重新打开都是全新的 @State,首次 onAppear 时必然是 nil。
-    //
-    // 只在这里读一次 PlaybackCoordinator.shared 的当前值,不声明成 @ObservedObject——
-    // 那个单例还同时发布 currentLine/anchor,播放中每秒 20 次刷新(本地模式的快速
-    // 计时器),整个窗口订阅它会导致 body 跟着每秒重算 20 次,把手动点选/刷新按钮的
-    // 交互闷在这阵持续重渲染里,表现成"点了跟没点一样"。这里只需要开窗那一刻的快照,
-    // 普通函数内直接访问单例属性即可,不用建立订阅。
     private func refreshWithFeedback() {
         Task {
             await store.reload()
@@ -866,12 +873,19 @@ struct LyricsManagerView: View {
         return formatter.string(fromByteCount: store.totalSizeBytes)
     }
 
-    // force:true 是给工具栏"回到当前播放"按钮用的——绕开"已经选中别的行就不动"这道
-    // 只为"开窗自动定位"场景设的门槛(见调用点注释)。找不到当前播放曲目的缓存条目时
-    // 两种调用方式都一样静默不做任何事,不额外弹提示——开窗自动定位场景本来就不该弹,
-    // 手动点按钮那次不做区分只是图简单,真找不到时用户自己也看得出列表没跳。
-    private func focusCurrentlyPlaying(scrollProxy: ScrollViewProxy, force: Bool = false) {
-        guard force || selectedKeys.isEmpty else { return }
+    // 选中并滚动到当前正在播放的这首歌(如果它已经被缓存过)——开窗时自动跑一次
+    // (见 pendingAutoFocus),工具栏"回到当前播放"按钮手动跑。key 跟
+    // EnrichCacheStore.splitKey 用的是同一套 "歌手|歌名|专辑" 拼法,PlaybackCoordinator
+    // 转发的 artist/title/album 本来就来自 media-control/relay,跟 collector 当初写入
+    // 缓存时用的是同一份数据,能精确对上。找不到对应缓存条目时静默不做任何事,不弹提示——
+    // 开窗自动定位场景本来就不该弹,手动点按钮那次真找不到时用户自己也看得出列表没跳。
+    //
+    // 只在这里读一次 PlaybackCoordinator.shared 的当前值,不声明成 @ObservedObject——
+    // 那个单例还同时发布 currentLine/anchor,播放中每秒 20 次刷新(本地模式的快速
+    // 计时器),整个窗口订阅它会导致 body 跟着每秒重算 20 次,把手动点选/刷新按钮的
+    // 交互闷在这阵持续重渲染里,表现成"点了跟没点一样"。这里只需要调用那一刻的快照,
+    // 普通函数内直接访问单例属性即可,不用建立订阅。
+    private func focusCurrentlyPlaying(scrollProxy: ScrollViewProxy, animated: Bool = true) {
         let playback = PlaybackCoordinator.shared
         let key = "\(playback.artist)|\(playback.title)|\(playback.album)"
         guard store.summaries.contains(where: { $0.key == key }) else { return }
@@ -879,7 +893,20 @@ struct LyricsManagerView: View {
         // 之后工具栏删除按钮上还挂着之前选的一堆,极易误删。
         selectedKeys = [key]
         DispatchQueue.main.async {
-            withAnimation { scrollProxy.scrollTo(key, anchor: .center) }
+            if animated {
+                withAnimation { scrollProxy.scrollTo(key, anchor: .center) }
+            } else {
+                scrollProxy.scrollTo(key, anchor: .center)
+                // 开窗那一次要补一发。2026-08-07 实测(临时文件日志量 NSScrollView 的
+                // documentVisibleRect + NSTableView.rect(ofRow:)):冷启动第一次滚的时候
+                // List 还在陆续量后面那些行的真实高度(行高先按 24 估、量完是 31,
+                // documentView 高度从 2639 变到 2800),按当时的行高算出来的落点差了两三行、
+                // 没能真的居中。等这一轮布局走完再按最终行高定一次位,居中误差归零。
+                // 不带动画,所以这次补正在视觉上就是"一开窗就已经在那儿"。
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                    scrollProxy.scrollTo(key, anchor: .center)
+                }
+            }
         }
     }
 
