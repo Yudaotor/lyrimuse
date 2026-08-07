@@ -409,3 +409,5 @@
 "快速开关" = "Quick Toggles";
 "调整步长" = "Step Size";
 "「歌词提前」「歌词延后」每按一次的幅度；菜单栏的「歌词时间轴」也用这个值" = "How much each press of Advance/Delay Lyrics shifts the timing; the menu bar's Lyrics Timing uses this too";
+"喜欢" = "Favorite";
+"取消喜欢" = "Remove Favorite";

@@ -99,6 +99,17 @@ enum MusicAutomationPermission {
     // 不该有"按一下播放/暂停,Music.app 却在后台悄悄启动"这种意料之外的副作用。
     static func checkForCurrentPlayerSafely(askIfNeeded: Bool) async -> Bool {
         guard PlaybackPlayerPreference.current == .appleMusic else { return true }
+        return await checkAppleMusicSafely(askIfNeeded: askIfNeeded)
+    }
+
+    /// 跟上面同一套"安全检查",但**不看设置里选的是哪个播放器**——给"这一刻实际在播的就是
+    /// Apple Music"这种场景用。
+    ///
+    /// 为什么需要它:上面那个函数在设置值不是 .appleMusic 时直接返回 true(前提是"别的播放器
+    /// 不需要这个权限")。但设置成"自动识别"时,实际在播的完全可能就是 Apple Music —— 这时
+    /// 那个前提不成立,直接返回 true 等于跳过了真正需要的权限检查,后面的 AppleScript 会静默
+    /// 失败。悬浮窗那颗"喜欢"就是这种情况(见 PlaybackCoordinator.toggleFavorited)。
+    static func checkAppleMusicSafely(askIfNeeded: Bool) async -> Bool {
         let current = check(askIfNeeded: false)
         if current != .notDetermined { return current.isAuthorized }
         guard askIfNeeded else { return false }

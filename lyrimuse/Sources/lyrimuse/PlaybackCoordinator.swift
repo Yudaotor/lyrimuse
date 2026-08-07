@@ -101,6 +101,68 @@ final class PlaybackCoordinator: ObservableObject {
         LocalPlaybackSource.shared.refreshOffsetFromStore()
     }
 
+    // 「喜欢」(Apple Music 的 favorited)只有 Apple Music 有:QQ 音乐/网易云音乐没有
+    // AppleScript 支持,media-control 走的系统级 MediaRemote 也只有播放控制、没有收藏这个
+    // 概念。所以 nil 有明确含义 ——"这个播放器根本没有这回事",悬浮窗据此整个不显示那个
+    // 按钮,而不是显示一个永远点不亮的心。
+    //
+    // 这条状态**没有**跟着 2 秒轮询走:读一次要起一个 osascript 子进程,为一个绝大多数时候
+    // 不变的布尔值每 2 秒 fork 一次不值当。改成两个时机各刷一次 —— 换歌时(见 start() 里
+    // 那条订阅),以及鼠标悬停、控制排真的露出来的时候(见 LyricsOverlayView)。后者正好
+    // 覆盖了"用户在 Music.app 里自己点了心、回头来看悬浮窗"这种情况。
+    @Published private(set) var isFavorited: Bool?
+
+    /// 这一刻**实际在播**的是不是 Apple Music。
+    ///
+    /// ⚠️ 判定必须看这个,不能看 PlaybackPlayerPreference.current。设置里那一档可以是"自动
+    /// 识别"(这台机器上就是),那时 current 不等于 .appleMusic,但实际在播的完全可能就是
+    /// Apple Music —— 用设置值判断会让这颗心在"自动识别"下永远不出现。seek 那条路径早就
+    /// 踩过同一个坑并用同一个信号修好了(见 LocalPlaybackSource.seek 里的 resolvedIsAppleMusic)。
+    private var isAppleMusicPlayingNow: Bool {
+        LocalPlaybackSource.shared.lastResolvedBundleID == PlaybackPlayer.appleMusic.bundleIdentifier
+    }
+
+    /// 重新读一次当前曲目的"喜欢"状态。当前在播的不是 Apple Music、或自动化权限还没拿到时
+    /// 置 nil(按钮据此整个不显示)。
+    ///
+    /// 权限用 askIfNeeded: false 检查 —— 这是个后台刷新,绝不能因为它弹出系统授权对话框。
+    func refreshFavorited() {
+        guard isAppleMusicPlayingNow,
+              MusicAutomationPermission.check(askIfNeeded: false).isAuthorized else {
+            if isFavorited != nil { isFavorited = nil }
+            return
+        }
+        Task.detached(priority: .utility) {
+            let value = MusicPlaybackController.favoritedState()
+            await MainActor.run { [weak self] in
+                guard let self, self.isFavorited != value else { return }
+                self.isFavorited = value
+            }
+        }
+    }
+
+    /// 点心:翻转当前曲目的"喜欢"状态。先乐观更新本地状态好让按钮立刻有反馈,再回读一次
+    /// 以实际结果为准(写失败/曲目刚好换掉时会被纠回来)。
+    ///
+    /// 这里的权限检查用 askIfNeeded: true —— 这是用户主动点的,该问就问,跟播放控制那三个
+    /// 按钮同一套(见 LyricsOverlayView.controlButton)。
+    func toggleFavorited() {
+        guard isAppleMusicPlayingNow else { return }
+        let target = !(isFavorited ?? false)
+        isFavorited = target
+        Task.detached(priority: .userInitiated) {
+            // 用 checkAppleMusicSafely 而不是 checkForCurrentPlayerSafely:后者在设置为
+            // "自动识别"时会直接返回 true(它假定别的播放器不需要这个权限),而这里已经确认
+            // 实际在播的就是 Apple Music,必须真的查一次权限,否则下面的 AppleScript 会静默失败。
+            guard await MusicAutomationPermission.checkAppleMusicSafely(askIfNeeded: true) else {
+                await MainActor.run { [weak self] in self?.refreshFavorited() }
+                return
+            }
+            MusicPlaybackController.setFavorited(target)
+            await MainActor.run { [weak self] in self?.refreshFavorited() }
+        }
+    }
+
     // 应用启动时调一次即可——只有一个数据源,不需要再区分"切换模式",started 只是防手滑
     // 重复调用重新订阅一遍。
     func start() {
@@ -110,6 +172,12 @@ final class PlaybackCoordinator: ObservableObject {
         s.start()
         cancellables = [
             s.$title.assign(to: \.title, on: self),
+            // 换歌就重读一次"喜欢"状态。用 title+artist 组合去重而不是只看 title:同名不同
+            // 歌手的曲目(翻唱/合辑里很常见)只看 title 会被当成同一首,漏掉一次刷新。
+            s.$title.combineLatest(s.$artist)
+                .map { "\($0)|\($1)" }
+                .removeDuplicates()
+                .sink { [weak self] _ in self?.refreshFavorited() },
             s.$artist.assign(to: \.artist, on: self),
             s.$album.assign(to: \.album, on: self),
             s.$isPlayingNow.assign(to: \.isPlayingNow, on: self),

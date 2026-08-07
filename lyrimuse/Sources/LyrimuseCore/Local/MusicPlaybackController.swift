@@ -30,6 +30,47 @@ public enum MusicPlaybackController {
         dispatch(appleScript: #"tell application "Music" to previous track"#, mediaControlCommand: "previous-track")
     }
 
+    /// 「喜欢」这件事只有 Apple Music 有——QQ 音乐/网易云音乐没有 AppleScript 支持,
+    /// media-control 走的系统级 MediaRemote 也只有播放控制、没有"收藏"这个概念。所以下面
+    /// 这两个函数不走 dispatch 的双后端分派,只发 AppleScript;调用方负责先确认当前播放器
+    /// 确实是 Apple Music、以及自动化权限已经拿到(跟上面几个动作同一个约定)。
+    ///
+    /// ⚠️ 属性名在不同 macOS 上不一样,而且**必须分两次调用、不能写在同一段 try 里**。
+    /// 这台 macOS 27 的 Music.app 脚本字典里已经没有 `loved` 了,同一个属性(四字符码都是
+    /// `pLov`)改名成了 `favorited`;而更早的系统上只有 `loved`。AppleScript 是整段先编译
+    /// 再执行的,字典里不存在的属性会让**整段**编译失败,`on error` 根本轮不到执行,所以
+    /// 只能先发一段 favorited 版本、失败了再发一段 loved 版本。
+    private static let favoritedPropertyNames = ["favorited", "loved"]
+
+    /// 读当前曲目的"喜欢"状态。读不到(不是 Apple Music / 没权限 / 当前没有曲目 / 两个
+    /// 属性名都不认)时返回 nil,调用方据此决定要不要显示这个按钮。
+    ///
+    /// 会阻塞到子进程结束,**不要在主线程调用**。
+    public static func favoritedState() -> Bool? {
+        for name in favoritedPropertyNames {
+            guard let out = runAppleScriptCapturing(
+                #"tell application "Music" to get \#(name) of current track"#
+            ) else { continue }
+            switch out.trimmingCharacters(in: .whitespacesAndNewlines) {
+            case "true": return true
+            case "false": return false
+            default: continue
+            }
+        }
+        return nil
+    }
+
+    /// 设置当前曲目的"喜欢"状态。跟上面同一套属性名兜底。
+    public static func setFavorited(_ value: Bool) {
+        for name in favoritedPropertyNames {
+            if runAppleScriptCapturing(
+                #"tell application "Music" to set \#(name) of current track to \#(value)"#
+            ) != nil {
+                return
+            }
+        }
+    }
+
     /// 跳到曲目内的某个位置(秒)。跟上面三个动作走同一套双后端分派:Apple Music 用
     /// AppleScript 的 `set player position to`,其余播放器用 media-control 的 `seek`
     /// (实测核实过内置二进制的 `--help` 里有 `seek POSITION` 这个一等命令)。
@@ -87,6 +128,27 @@ public enum MusicPlaybackController {
         process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
         process.arguments = ["-e", script]
         try? process.run()
+    }
+
+    /// 跟 runAppleScript 的区别:这个要**等**子进程结束并取回 stdout,失败(非零退出)返回
+    /// nil。上面那个是"发完就不管"的写指令,这个给需要读回值、或者需要知道这条脚本到底
+    /// 有没有成功的场景用(见 favoritedState/setFavorited 的属性名兜底)。
+    ///
+    /// 会阻塞到子进程结束,调用方负责别在主线程上调。
+    private static func runAppleScriptCapturing(_ script: String) -> String? {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
+        process.arguments = ["-e", script]
+        let pipe = Pipe()
+        process.standardOutput = pipe
+        // stderr 丢掉:属性名不认时 osascript 会往 stderr 打一段编译错误,那是这里预期内的
+        // 兜底路径,不该污染 App 自己的日志。
+        process.standardError = FileHandle.nullDevice
+        do { try process.run() } catch { return nil }
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
+        guard process.terminationStatus == 0 else { return nil }
+        return String(data: data, encoding: .utf8)
     }
 
     // 二进制路径解析复用 MediaControlClient.binaryPath()(同目录,读取状态那条路径

@@ -96,6 +96,12 @@ struct LyricsOverlayView: View {
         .onPreferenceChange(ControlsFramePreferenceKey.self) { onControlsFrameChange($0) }
         .animation(.easeOut(duration: 0.16), value: controlsVisible)
         .animation(.easeOut(duration: 0.3), value: overlayController.showDragHint)
+        // 控制排每次露出来时重读一次"喜欢"状态。这条状态不跟着 2 秒轮询走(每次读要起一个
+        // osascript 子进程,为一个几乎不变的布尔值那么干不值当),换歌时刷一次之外,就靠这里
+        // ——正好覆盖"用户刚在 Music.app 里自己点了心、回头来看悬浮窗"这种情况。
+        .onChange(of: controlsVisible) { _, visible in
+            if visible { poller.refreshFavorited() }
+        }
         // ⚠️ 内容必须**贴着窗口顶边**放,不能让它在窗口里居中。
         //
         // 在这一行之前,根视图只约束了宽度,高度就是内容的固有高度;而窗口高度有 120pt 的
@@ -171,6 +177,21 @@ struct LyricsOverlayView: View {
                 MusicPlaybackController.playPause()
             }
             controlButton("forward.fill") { MusicPlaybackController.nextTrack() }
+            // 「喜欢」——对应 Apple Music 里那颗心(脚本字典里的 favorited)。只有 Apple Music
+            // 有这个概念,所以 poller.isFavorited 为 nil(别的播放器/没拿到自动化权限)时整个
+            // 按钮不出现,而不是显示一颗永远点不亮的心。跟前面三个播放按钮同属"对当前这首歌
+            // 的操作",放在同一组里、竖线之前。
+            //
+            // 不走 controlButton:那个包装是为播放控制准备的(先查权限、被拒就 NSSound.beep()),
+            // 而这里的权限检查和乐观更新都在 poller.toggleFavorited() 里一起做了,再套一层会
+            // 变成查两遍权限。
+            if let favorited = poller.isFavorited {
+                iconButton(favorited ? "heart.fill" : "heart", primary: false) {
+                    poller.toggleFavorited()
+                }
+                .foregroundStyle(favorited ? Color.red : Color.white)
+                .help(L10n.t(favorited ? "取消喜欢" : "喜欢"))
+            }
             // 用一条竖线跟前面三个播放按钮分组,提示这是不同类别的操作。点了之后
             // settings.lockPosition 变 true,这一整排控制按钮(包括它自己)会立刻消失
             // (见 body 里 isHoveringForControls && !settings.lockPosition 那个条件)。
