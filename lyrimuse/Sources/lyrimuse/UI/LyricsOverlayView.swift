@@ -39,7 +39,78 @@ struct LyricsOverlayView: View {
     private let overlayBackgroundCornerRadius: CGFloat = 16
     private let overlayCoordSpaceName = "overlayContent"
 
+    // 播放控制排该不该显示:悬停中、且没锁定位置。抽成计算属性是因为下面有三处要用同一个
+    // 判断(可见性、是否接受点击、热区要不要上报),散开写容易改漏其中一处。
+    private var controlsVisible: Bool {
+        overlayController.isHoveringForControls && !settings.lockPosition
+    }
+
     var body: some View {
+        // ⚠️ 按钮排在**歌词卡片上方**,而且**槽位常驻**(不显示时只是透明+不接受点击),两点缺一
+        // 不可,原因分别是:
+        //
+        // 1) 放上方是用户 2026-08-07 明确要的。但如果照旧写成 `if controlsVisible { ... }`
+        //    再放在歌词前面,按钮一出现就会把下面的歌词整个往下推 —— 那正是刚修掉的"悬停时
+        //    歌词跳动"的反向版本(见下面 .frame(maxHeight:alignment:.top) 那段注释)。槽位常驻
+        //    之后内容高度恒定,歌词的位置跟悬不悬停完全无关。
+        // 2) 按钮排放在卡片**外面**而不是塞进卡片里:它自己已经是一个独立的深色胶囊
+        //    (见 playbackControls 的 .background(.black.opacity(0.55), in: Capsule())),不需要
+        //    借歌词卡片的背景。放外面还有个实际好处 —— 常驻槽位那块空白落在卡片之外,
+        //    "深色卡片/浅色卡片"这类有可见背景的主题不会在卡片顶部多出一条空带。
+        VStack(spacing: 0) {
+            playbackControls
+                .opacity(controlsVisible ? 1 : 0)
+                // 不显示时不接受点击 —— 槽位虽然常驻,但那时它必须对鼠标完全透明,否则会
+                // 在歌词上方挖出一块"看不见却挡手"的区域。
+                .allowsHitTesting(controlsVisible)
+                // 把这排按钮的真实位置汇报上去,当作点击穿透的例外热区(见
+                // WindowController.updateControlsHotZone)。不显示时上报 .zero,让整扇窗口
+                // 恢复全区域穿透 —— 以前靠"这个视图根本不存在"来达到同样效果,现在槽位常驻,
+                // 得显式报零。
+                .background(
+                    GeometryReader { proxy in
+                        Color.clear.preference(
+                            key: ControlsFramePreferenceKey.self,
+                            value: controlsVisible ? proxy.frame(in: .named(overlayCoordSpaceName)) : .zero
+                        )
+                    }
+                )
+            lyricsCard
+        }
+        .coordinateSpace(name: overlayCoordSpaceName)
+        // 纯测量用,不影响视觉——把这次渲染真正需要的高度(按钮槽位+歌词卡片)报给窗口控制器
+        // 去调整窗口高度,长歌词换行到第二行时窗口跟着变高,而不是被原来写死的高度裁掉。
+        .background(
+            GeometryReader { proxy in
+                Color.clear.preference(key: ContentHeightPreferenceKey.self, value: proxy.size.height)
+            }
+        )
+        .onPreferenceChange(ContentHeightPreferenceKey.self) { onContentHeightChange($0) }
+        .onPreferenceChange(ControlsFramePreferenceKey.self) { onControlsFrameChange($0) }
+        .animation(.easeOut(duration: 0.16), value: controlsVisible)
+        .animation(.easeOut(duration: 0.3), value: overlayController.showDragHint)
+        // ⚠️ 内容必须**贴着窗口顶边**放,不能让它在窗口里居中。
+        //
+        // 在这一行之前,根视图只约束了宽度,高度就是内容的固有高度;而窗口高度有 120pt 的
+        // 地板(updateHeight 里的 max(overlayDefaultHeight, …)),单行歌词的内容比它矮不少。
+        // NSHostingView 比内容高的时候,SwiftUI 默认把内容**垂直居中**放 —— 于是内容高度一变,
+        // 整块内容(连同歌词文字)就会在窗口里上下移动半个差值。
+        //
+        // 2026-08-07 用独立的 SwiftUI 沙盒逐像素量过(同样的修饰符链 + 固定 120pt 宿主):
+        //   居中(改前):静止时内容顶边距窗口顶 30.0pt,内容变高后 17.0pt —— 上移 13pt
+        //   贴顶(改后):两种状态都是 0.0pt —— 纹丝不动
+        //
+        // 贴顶还顺带修正了一处隐含假设:updateControlsHotZone 把控制排的坐标从
+        // overlayCoordSpaceName 换算成窗口坐标时用的是 `window.frame.height - rect.maxY`,
+        // 这只有在"内容块顶边 == 窗口顶边"时才成立。内容居中时这个前提在内容高<120 的情况下
+        // 是破的;贴顶之后它才真正永远成立。
+        //
+        // 必须加在所有 background/测量修饰符**之后**:加在前面的话,那个测内容高度的
+        // GeometryReader 量到的会变成整个窗口高度,updateHeight 就再也收不到真实内容高度了。
+        .frame(maxHeight: .infinity, alignment: .top)
+    }
+
+    private var lyricsCard: some View {
         VStack(spacing: 4) {
             if settings.showRomanization, let roma = poller.currentLine?.romanization {
                 Text(roma)
@@ -73,21 +144,6 @@ struct LyricsOverlayView: View {
                     .lyricsTextStroke(settings.textStrokeEnabled, color: settings.textStrokeColor)
                     .transition(.opacity)
             }
-            if overlayController.isHoveringForControls && !settings.lockPosition {
-                playbackControls
-                    // 把这排按钮的真实屏幕位置汇报上去,当作点击穿透的例外热区(见
-                    // WindowController.updateControlsHotZone)。跟下面测高度用的是
-                    // 同一套 GeometryReader 手法,只是这里要的是矩形不是单个高度值。
-                    .background(
-                        GeometryReader { proxy in
-                            Color.clear.preference(
-                                key: ControlsFramePreferenceKey.self,
-                                value: proxy.frame(in: .named(overlayCoordSpaceName))
-                            )
-                        }
-                    )
-                    .transition(.opacity.combined(with: .scale(scale: 0.97, anchor: .top)))
-            }
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 14)
@@ -99,52 +155,6 @@ struct LyricsOverlayView: View {
                 .stroke(poller.displayForegroundColor.opacity(overlayController.isDragArmed ? 0.6 : 0), lineWidth: 2)
         )
         .multilineTextAlignment(.center)
-        // 给 playbackControls 的 GeometryReader 一个命名坐标空间基准,原点在这整块
-        // 内容区(padding/background 都已经应用之后)的左上角,尺寸跟窗口内容尺寸一致
-        // ——跟下面 ContentHeightPreferenceKey 依赖的"GeometryReader 尺寸==窗口内容
-        // 尺寸"是同一个已验证过的等价关系。
-        .coordinateSpace(name: overlayCoordSpaceName)
-        // 纯测量用,不影响视觉——把这次渲染真正需要的高度报给窗口控制器去调整窗口高度,
-        // 长歌词换行到第二行时窗口跟着变高,而不是被原来写死的高度裁掉。
-        .background(
-            GeometryReader { proxy in
-                Color.clear.preference(key: ContentHeightPreferenceKey.self, value: proxy.size.height)
-            }
-        )
-        .onPreferenceChange(ContentHeightPreferenceKey.self) { onContentHeightChange($0) }
-        .onPreferenceChange(ControlsFramePreferenceKey.self) { onControlsFrameChange($0) }
-        .animation(.easeOut(duration: 0.16), value: overlayController.isHoveringForControls)
-        .animation(.easeOut(duration: 0.3), value: overlayController.showDragHint)
-        // ⚠️ 内容必须**贴着窗口顶边**放,不能让它在窗口里居中。
-        //
-        // 在这一行之前,根视图只约束了宽度(上面那句 .frame(maxWidth: .infinity)),高度就是内容
-        // 的固有高度;而窗口高度有 120pt 的地板(updateHeight 里的 max(overlayDefaultHeight, …)),
-        // 单行歌词的内容只有 70pt 上下。NSHostingView 比内容高的时候,SwiftUI 默认把内容**垂直
-        // 居中**放 —— 于是内容高度一变,整块内容(连同歌词文字)就会在窗口里上下移动半个差值。
-        //
-        // 用户报的就是这个:鼠标移上去、播放控制排被插进同一个 VStack(见上面
-        // isHoveringForControls 那个分支),内容一下子高出约 50pt,居中落位把整行歌词往上顶了
-        // 二十多 pt,看着就是"歌词往上跳一下"。锁定位置时不会发生,只是因为那时控制排根本不
-        // 插入(handleMouseEvent 首行就 guard 掉了),内容高度没变过。
-        //
-        // 2026-08-07 用一个独立的 SwiftUI 沙盒逐像素量过(同样的修饰符链 + 固定 120pt 宿主):
-        //   居中(改前):静止时内容顶边距窗口顶 30.0pt,插入按钮后 17.0pt —— 上移 13pt
-        //   贴顶(改后):两种状态都是 0.0pt —— 纹丝不动
-        //
-        // 贴顶还顺带修正了一处隐含假设:updateControlsHotZone 把控制排的坐标从
-        // overlayCoordSpaceName 换算成窗口坐标时用的是 `window.frame.height - rect.maxY`,
-        // 这只有在"内容块顶边 == 窗口顶边"时才成立(那段注释自己把它当成已验证的等价关系)。
-        // 内容居中时这个前提在 内容高<120 的情况下是破的;贴顶之后它才真正永远成立。
-        //
-        // 必须加在所有 background/测量修饰符**之后**:加在前面的话,那个测内容高度的
-        // GeometryReader 量到的会变成整个窗口高度,updateHeight 就再也收不到真实内容高度了;
-        // 背景胶囊也会被撑满整个窗口,而不是只包住歌词。
-        //
-        // 代价:静止时歌词从"窗口垂直居中"变成"贴着窗口顶边",相对窗口位置一次性上移约
-        // (窗口高 − 内容高)/2。窗口本身是透明的、用户看不到边界,所以表现为文字一次性往上挪
-        // 一截,拖一次窗口即可调回;换来的是此后任何内容高度变化(悬停、歌词换行、罗马音/译文
-        // 开关、拖动提示弹出)都不再让歌词位移。
-        .frame(maxHeight: .infinity, alignment: .top)
     }
 
     private var playbackControls: some View {
@@ -165,7 +175,9 @@ struct LyricsOverlayView: View {
         .padding(.horizontal, 18)
         .padding(.vertical, 7)
         .background(.black.opacity(0.55), in: Capsule())
-        .padding(.top, 4)
+        // 2026-08-07 这排按钮挪到歌词卡片**上方**之后,这 4pt 的间距也跟着从 .top 翻到
+        // .bottom —— 它要隔开的一直是"按钮胶囊和歌词卡片之间"那道缝。
+        .padding(.bottom, 4)
     }
 
     // 跟 GlobalHotkeys.swift 里播放控制三个动作同一套"点了才校验权限"逻辑——没问过就
