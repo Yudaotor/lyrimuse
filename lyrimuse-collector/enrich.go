@@ -45,6 +45,19 @@ type enrichEntry struct {
 	// 干脆哪个平台都没有)。
 	CoverSource  string `json:"cover_source,omitempty"`
 	LyricsSource string `json:"lyrics_source,omitempty"`
+	// LyricsScore/LyricsSourcesSeen 记录"这条歌词是在什么情况下选出来的",给
+	// needsLyricsRetry 判断值不值得再搜一次用。
+	//
+	// 背景(2026-08-07 实测复现):五源搜索有 20 秒总上限(lyricSearchDeadline),到点没回来
+	// 的源这一轮直接不参与候选;而网易云恰恰是最慢、也最可能带逐字歌词的那个。实测同一首
+	// 「悟空 2003 Demo」连查两次:一次 3 秒返回、候选里**根本没有网易云**,lrclib 以 83 分
+	// 胜出;另一次跑满 20 秒,网易云回来了、525 分带逐字。也就是说选中哪个源有相当大的运气
+	// 成分 —— 而缓存又是"解析一次永久保留",于是那一瞬间的运气被永久固化。
+	LyricsScore       int      `json:"lyrics_score,omitempty"`
+	LyricsSourcesSeen []string `json:"lyrics_sources_seen,omitempty"`
+	// 升级重试的节流与上限,见 needsLyricsRetry。
+	LyricsRetryTS    int64 `json:"lyrics_retry_ts,omitempty"`
+	LyricsRetryCount int   `json:"lyrics_retry_count,omitempty"`
 	// ManualLyrics 标记这条歌词是用户在 desktop-lyrics 的"歌词管理"窗口里手动纠正/采纳
 	// 过的——纯粹是给 UI 显示"人工修正"徽章用的溯源标记,不再影响任何自动刷新逻辑(已经
 	// 没有自动刷新了,所有条目都是解析一次永久生效)。
@@ -126,6 +139,9 @@ func trackEnrichment(artist, title, album, bundleID string, durationSecs float64
 		if needsPeripheralBackfill(e) && !enrichInflight[key] {
 			enrichInflight[key] = true
 			go backfillPeripheralFields(key, artist, title, album, durationSecs)
+		} else if needsLyricsRetry(e) && !enrichInflight[key] {
+			enrichInflight[key] = true
+			go retryLyricsUpgrade(key, artist, title, album, durationSecs)
 		}
 		enrichMu.Unlock()
 		return e.fields()
@@ -148,6 +164,125 @@ func needsPeripheralBackfill(e enrichEntry) bool {
 		return false
 	}
 	return time.Now().Unix()-e.TS >= int64(enrichPeripheralRetryInterval/time.Second)
+}
+
+// lyricSourcesWithCandidates 挑出这一轮真的给出了可用候选的源(负分是"纯音乐"这类搭车
+// 标记,不算候选,见 scoredLyricCandidateResult.Instrumental)。
+func lyricSourcesWithCandidates(scored []scoredLyricCandidateResult) []string {
+	seen := make([]string, 0, len(scored))
+	for _, c := range scored {
+		if c.Score < 0 {
+			continue
+		}
+		dup := false
+		for _, s := range seen {
+			if s == c.Source {
+				dup = true
+				break
+			}
+		}
+		if !dup {
+			seen = append(seen, c.Source)
+		}
+	}
+	return seen
+}
+
+// lyricsRetryInterval / lyricsRetryMaxAttempts 给"歌词升级重试"设的节流和上限。
+//
+// 6 小时 + 最多 3 次:重试只在这首歌又被播放时才可能发生,所以这两个数控制的是"最坏情况下
+// 一首歌总共会多跑几轮五源搜索"。缺席的源可能是真的没有这首歌(那样永远补不上),所以必须
+// 有硬上限,不能无限重试。
+const (
+	lyricsRetryInterval    = 6 * time.Hour
+	lyricsRetryMaxAttempts = 3
+)
+
+// needsLyricsRetry 判断这条缓存的歌词值不值得再搜一次、试着升级到更好的源。
+//
+// 只在"这次决定是在信息不全的情况下做出来的"时才重试 —— 即有**已启用**的源在当初那一轮
+// 里压根没露面(超时/失败,见 lyricSearchDeadline 的注释)。所有源都回来了、lrclib 是货真价实
+// 赢的,就不折腾。
+//
+// 三道闸门缺一不可:
+//   - 已经有逐字歌词(LyricsYRC)就不再重试:逐字是这套打分里最值钱的东西(scoreLyricCandidate
+//     给它加 400 分),已经拿到就没什么可升级的了,没必要为了几分之差再跑一轮网络搜索。
+//   - 重试次数上限:缺席的源可能真的没有这首歌,那样永远补不上,必须有硬上限。
+//   - 时间节流:同一首歌被反复播放时不能每次都重搜。
+//
+// 老条目(这个功能上线前写入的)没有 LyricsSourcesSeen,会被判成"所有启用的源都缺席"从而
+// 获得一次升级机会 —— 这是有意的:它们当初正是在没有这层保护的情况下定下来的。
+func needsLyricsRetry(e enrichEntry) bool {
+	if !features.Lyrics || e.Lyrics == "" || e.LyricsYRC != "" {
+		return false
+	}
+	if e.LyricsRetryCount >= lyricsRetryMaxAttempts {
+		return false
+	}
+	missing := false
+	for source, enabled := range features.LyricsSources {
+		if !enabled {
+			continue
+		}
+		found := false
+		for _, s := range e.LyricsSourcesSeen {
+			if s == source {
+				found = true
+				break
+			}
+		}
+		if !found {
+			missing = true
+			break
+		}
+	}
+	if !missing {
+		return false
+	}
+	// 从"上次重试"和"当初解析"里取更晚的那个当基准,免得老条目刚升级完又立刻符合条件。
+	base := e.LyricsRetryTS
+	if e.TS > base {
+		base = e.TS
+	}
+	return time.Now().Unix()-base >= int64(lyricsRetryInterval/time.Second)
+}
+
+// retryLyricsUpgrade 后台重跑一轮五源搜索,只有分数**严格更高**才替换歌词。
+//
+// 跟 backfillPeripheralFields 同一个范式(inflight 去重 + 重新取锁 + 条目可能已被删)。
+// 不管有没有升级成功都要记一次重试(次数+时间戳),否则缺席的源如果是真的没有这首歌,
+// 这条会每 6 小时被重搜一次、永远停不下来。
+func retryLyricsUpgrade(key, artist, title, album string, durationSecs float64) {
+	defer func() {
+		enrichMu.Lock()
+		delete(enrichInflight, key)
+		enrichMu.Unlock()
+	}()
+	_, scored := scoredLyricCandidates(artist, title, album, durationSecs)
+	picked := pickLyricCandidate(scored)
+	seen := lyricSourcesWithCandidates(scored)
+
+	enrichMu.Lock()
+	defer enrichMu.Unlock()
+	e, ok := enrichCache[key]
+	if !ok {
+		// 重搜这段时间里这条被用户在"歌词管理"里删掉了 —— 不要把它复活回去。
+		return
+	}
+	e.LyricsRetryCount++
+	e.LyricsRetryTS = time.Now().Unix()
+	if len(seen) > 0 {
+		e.LyricsSourcesSeen = seen
+	}
+	if picked != nil && picked.Score > e.LyricsScore {
+		log.Printf("lyrics upgrade: %s  %s(%d) -> %s(%d)", key, e.LyricsSource, e.LyricsScore, picked.Source, picked.Score)
+		e.Lyrics = picked.Lyrics
+		e.LyricsSource = picked.Source
+		e.LyricsScore = picked.Score
+		e.LyricsTr, e.LyricsRoma, e.LyricsYRC = picked.LyricsTr, picked.LyricsRoma, picked.LyricsYRC
+	}
+	enrichCache[key] = e
+	enrichDirty = true
 }
 
 // resolveEnrichAsync 首次解析一首歌的完整信息(封面/主色/链接/歌词),写入并永久保留,
@@ -332,9 +467,13 @@ func resolveTrackEnrichment(artist, title, album string, durationSecs float64) e
 		e.SpotifyURL = "https://open.spotify.com/search/" + neturl.QueryEscape(artist+" "+title)
 	}
 	if features.Lyrics {
+		// 不管选没选中,都记下这一轮到底有哪些源真的给出了可用候选 —— needsLyricsRetry
+		// 靠"有启用的源这轮没露面"来判断这次结果是不是在信息不全的情况下做的决定。
+		e.LyricsSourcesSeen = lyricSourcesWithCandidates(scored)
 		if picked := pickLyricCandidate(scored); picked != nil {
 			e.Lyrics = picked.Lyrics
 			e.LyricsSource = picked.Source
+			e.LyricsScore = picked.Score
 			e.LyricsTr, e.LyricsRoma, e.LyricsYRC = picked.LyricsTr, picked.LyricsRoma, picked.LyricsYRC
 		} else {
 			// 没有任何源给出可用歌词——查一下 scored 里是否搭车带着"lrclib 明确说是
@@ -422,8 +561,15 @@ type scoredLyricCandidateResult struct {
 // 每 9 分钟过期一次,过期后重新申请若被限流会主动 sleep 10 秒再试一次)——五个源本身
 // 已经改成完全并发(见下面 fetchScoredLyricCandidates),但极端情况下(比如恰好赶上
 // Musixmatch token 冷启动)仍可能让这一轮搜索卡到快一分钟。20秒给足了每个源自己独立
-// 超时的空间,同时把最坏情况砍掉大半——到点还没回来的源,这一轮就不参与候选(不影响
-// 它自己继续跑完、下次同一首歌缓存命中时照常能用上,只是这一次不等它)。这个常量同时
+// 超时的空间,同时把最坏情况砍掉大半——到点还没回来的源,这一轮就不参与候选。
+//
+// ⚠️ 这里原来写的是"不影响它自己继续跑完、下次同一首歌缓存命中时照常能用上,只是这一次
+// 不等它" —— **那是错的**。缓存没有 TTL、歌词解析一次就永久保留(只有外围字段会被
+// needsPeripheralBackfill 补),缓存命中直接返回存好的那条,迟到的结果永远不会被用上。
+// 2026-08-07 实测坐实这条错误注释掩盖的真问题:「悟空 2003 Demo」连查两次,一次 3 秒返回、
+// 候选里根本没有网易云,lrclib 以 83 分胜出;另一次跑满 20 秒,网易云回来了、525 分带逐字。
+// 第一种情况一旦发生在首次解析上,这首歌就永久用着 83 分那份。现在靠 needsLyricsRetry 兜:
+// 记下当初"哪些源露过面",有启用的源缺席就在之后择机重搜一次,分数更高才替换。这个常量同时
 // 覆盖自动解析(resolveTrackEnrichment)和"歌词管理"的手动联网搜索(searchcli.go)两条
 // 路径,因为它俩共用这同一个函数。
 const lyricSearchDeadline = 20 * time.Second
