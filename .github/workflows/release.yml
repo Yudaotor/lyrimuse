@@ -81,7 +81,17 @@ jobs:
           echo "==> Go tests (lyrimuse-collector)"
           (cd lyrimuse-collector && GOTOOLCHAIN="go${{ env.GO_VERSION }}" go test ./...)
           echo "==> Swift selftest (lyrimuse)"
-          (cd lyrimuse && swift run lyrimuse-selftest)
+          # `swift build` then execute the binary, NOT `swift run`. On the macos-15 runner
+          # (SwiftPM 6.1.2) `swift run lyrimuse-selftest` is SIGKILLed the instant it execs
+          # what it just built: the build reports success, then the shell prints
+          # "Killed: 9" and the step exits 137. The binary is not the problem -- verified on
+          # the runner that it is a valid ad-hoc-signed arm64 Mach-O, that `codesign -v`
+          # passes and its designated requirement is satisfied, that no crash report is
+          # written, and that running it directly prints ALL PASS and exits 0 (so do
+          # re-signing it and running a copy). Only SwiftPM's own exec wrapper dies, so
+          # don't use it. A newer local toolchain runs `swift run` fine, which is why this
+          # only surfaced the first time this step actually ran on CI.
+          (cd lyrimuse && swift build --product lyrimuse-selftest && ./.build/debug/lyrimuse-selftest)
 
       - name: Install media-control (QQ 音乐支持)
         # ungive/media-control(BSD-3-Clause),build.sh 会把它拷进 .app 包——不装的话
