@@ -33,17 +33,19 @@ Lyrimuse sits quietly in your menu bar and shows a floating lyrics window that f
 ### Lyrics that just work
 - **Word-by-word synced highlighting**, following playback in real time
 - **Five lyrics sources checked automatically** — NetEase Cloud Music, QQ Music, Kugou, Musixmatch, and LRCLIB — always picks the best match, no manual searching required
-- **Romanization and translation**, shown alongside the original lyrics — translation language is configurable when the Musixmatch source has a community translation available
-- **A full Lyrics Manager window** — browse, hand-edit, delete, or re-search lyrics for any track, with per-track timing offset if the sync ever drifts
+- **Romanization and translation**, shown alongside the original lyrics — translation language is configurable when the Musixmatch source has a community translation available; romanization only fires on Japanese lyrics, so Chinese never gets pinyin it didn't ask for
+- **Instrumental tracks say so**, instead of sitting on "searching for lyrics…" forever
+- **A full Lyrics Manager window** — browse, hand-edit, delete, or re-search lyrics for any track, with multi-select batch delete, resizable columns, and per-track timing offset if the sync ever drifts
 - **Works fully offline** in local mode — no network round-trip needed to show lyrics that are already cached
 
 ### Show it your way
 - **Choose your player, or let it auto-detect**: reads what's playing from Apple Music (via Automation access), or QQ Music / NetEase Cloud Music / Spotify (via macOS's system-level MediaRemote — no permission needed); pick once during onboarding, switch anytime in Settings, or leave it on auto-detect to follow whichever app macOS currently considers "Now Playing"
-- **Three ways to display it**: a classic desktop overlay, a Dynamic-Island-style capsule docked at the top of the screen (optionally with a blurred-cover-art background), or a proper resizable Lyrics Window with the full lyric sheet and auto-scroll — turn on any combination, or none
-- **Menu bar text mode** — read the current line directly from the status bar instead of a floating window
-- **Playback controls** (play/pause, next, previous) built right into the overlay, working with whichever player you've selected
+- **Three ways to display it**: a classic desktop overlay, a Dynamic-Island-style capsule docked at the top of the screen (optionally showing the album artwork, and blurring it behind the capsule), or a resizable Lyrics Window modelled on the Apple Music lyrics page — two columns, a blurred cover backdrop, and the full sheet auto-scrolling to the current line — turn on any combination, or none
+- **Menu bar text mode** — read the current line directly from the status bar instead of a floating window; long lines scroll rather than getting cut off mid-sentence (truncating is still one toggle away)
+- **Playback controls** (play/pause, next, previous) built right into the overlay, working with whichever player you've selected — plus a heart to favorite the current track when Apple Music is what's playing
+- **Drag the progress bar to seek** — the bars in the Lyrics Window and the notch are controls, not just indicators
 - **Click-through by default, drag with a long-press** — the classic overlay never blocks clicks meant for whatever's behind it; press and hold it to reposition it, or lock its position entirely from the menu bar
-- **Fully customizable look**: font (or follow the system), size, text/background/shadow colors with savable custom themes, overlay width
+- **Fully customizable look**: font (or follow the system), size, text/background/shadow colors with savable custom themes or a color pulled from the current album art, overlay width
 - **Hide during screenshots, recordings, or screen shares** — stays visible to you, invisible to everyone else
 - **Auto-hide when paused** so it never sits on your desktop doing nothing
 
