@@ -1,6 +1,9 @@
 package main
 
-import "testing"
+import (
+	"testing"
+	"time"
+)
 
 // needsLyricsRescore 的回归测试。
 //
@@ -56,6 +59,25 @@ func TestNeedsLyricsRescore(t *testing.T) {
 			e:    func() enrichEntry { e := stale; e.LyricsYRC = "y"; return e }(),
 			want: true,
 		},
+		{
+			name: "刚尝试过:等间隔到了再来(不然一秒内就把次数烧光,全烧在同一个网络时机上)",
+			e: func() enrichEntry {
+				e := stale
+				e.LyricsRescoreCount, e.LyricsRescoreTS = 1, time.Now().Unix()
+				return e
+			}(),
+			want: false,
+		},
+		{
+			name: "间隔已过:再试一次",
+			e: func() enrichEntry {
+				e := stale
+				e.LyricsRescoreCount = 1
+				e.LyricsRescoreTS = time.Now().Unix() - int64(lyricsRescoreDeferInterval/time.Second) - 1
+				return e
+			}(),
+			want: true,
+		},
 	}
 	for _, c := range cases {
 		if got := needsLyricsRescore(c.e); got != c.want {
@@ -104,5 +126,41 @@ func TestAllEnabledLyricSourcesResponded(t *testing.T) {
 		{Source: "netease", Score: 1}, {Source: "qq", Score: 1}, {Source: "musixmatch", Score: 1},
 	}) {
 		t.Error("被禁用的 kugou 缺席不该影响判断")
+	}
+}
+
+// rescoreDecidable 是这个功能能不能真正生效的关键闸。
+//
+// 2026-08-07 上线当天真机日志坐实:五源搜索 20 秒上限下**有源超时是常态**,原来那条
+// "所有启用的源都回来了才算数"让同一首歌连着两次都 deferred,次数烧光、永远轮不到重选。
+// 换成"当前这份歌词的来源这一轮回来了"就够 —— 它自己参与了新规则下的比较。
+func TestRescoreDecidable(t *testing.T) {
+	saved := features
+	defer func() { features = saved }()
+	features.LyricsSources = map[string]bool{"netease": true, "qq": true, "musixmatch": true, "kugou": false}
+
+	partial := []scoredLyricCandidateResult{
+		{Source: "netease", Score: 173},
+		{Source: "qq", Score: 582},
+	}
+	if !rescoreDecidable(partial, "netease") {
+		t.Error("手上这份来自 netease、它这轮回来了:够格重选,不该因为 musixmatch 缺席就推迟")
+	}
+	if rescoreDecidable(partial, "musixmatch") {
+		t.Error("手上这份来自 musixmatch、它这轮没回来:什么都不该动")
+	}
+	// 来源已被用户关掉 / 老条目压根没记来源:无从判断"手上这份"参没参与,退回严格口径。
+	// 这一轮缺了 musixmatch,所以两种都不够格。
+	if rescoreDecidable(partial, "kugou") {
+		t.Error("来源已被关掉时退回严格口径,而这一轮缺了 musixmatch,不该够格")
+	}
+	if rescoreDecidable(partial, "") {
+		t.Error("老条目没记来源时退回严格口径,而这一轮缺了 musixmatch,不该够格")
+	}
+
+	full := append(append([]scoredLyricCandidateResult{}, partial...),
+		scoredLyricCandidateResult{Source: "musixmatch", Score: -1})
+	if !rescoreDecidable(full, "") {
+		t.Error("没记来源、但这一轮所有启用的源都回来了:够格")
 	}
 }
