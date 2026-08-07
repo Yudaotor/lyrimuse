@@ -58,6 +58,14 @@ type enrichEntry struct {
 	// 升级重试的节流与上限,见 needsLyricsRetry。
 	LyricsRetryTS    int64 `json:"lyrics_retry_ts,omitempty"`
 	LyricsRetryCount int   `json:"lyrics_retry_count,omitempty"`
+	// 外围字段补全的已尝试次数,见 needsPeripheralBackfill 的上限说明。
+	PeripheralRetryCount int `json:"peripheral_retry_count,omitempty"`
+	// 解析这条时用的曲目真实时长(秒)。存下来是给"歌词管理"的手动搜索用的:打分里
+	// 时长匹配那一档权重很重,而手动搜索以前只能传 0(浏览的是任意历史缓存条目、拿不到
+	// 时长),于是弹窗里显示的排名跟当初真正做决定用的那组分数不是一回事 —— 2026-08-07
+	// 用户就是这么被误导的:弹窗显示 qq 482 最高,而自动决策时(带时长)是 Musixmatch 962
+	// 胜出。存下来之后两边口径就一致了。
+	DurationSecs float64 `json:"duration_secs,omitempty"`
 	// ManualLyrics 标记这条歌词是用户在 desktop-lyrics 的"歌词管理"窗口里手动纠正/采纳
 	// 过的——纯粹是给 UI 显示"人工修正"徽章用的溯源标记,不再影响任何自动刷新逻辑(已经
 	// 没有自动刷新了,所有条目都是解析一次永久生效)。
@@ -136,7 +144,7 @@ func trackEnrichment(artist, title, album, bundleID string, durationSecs float64
 	enrichMu.Lock()
 	e, ok := enrichCache[key]
 	if ok {
-		if needsPeripheralBackfill(e) && !enrichInflight[key] {
+		if needsPeripheralBackfill(e, artist) && !enrichInflight[key] {
 			enrichInflight[key] = true
 			go backfillPeripheralFields(key, artist, title, album, durationSecs)
 		} else if needsLyricsRetry(e) && !enrichInflight[key] {
@@ -158,9 +166,27 @@ func trackEnrichment(artist, title, album, bundleID string, durationSecs float64
 // needsPeripheralBackfill 判断是否要补一次外围字段(主色/Apple/QQ/网易云链接)——这几路
 // 各自独立请求,可能因限流/超时单独失败,漏了哪个就该重试哪个,不代表歌词/封面本身有问题。
 // 用 TS 节流,避免同一首歌每次 poll(几秒一次)都重新发一遍网络请求。
-func needsPeripheralBackfill(e enrichEntry) bool {
-	missing := e.AccentColor == "" || e.AppleURL == "" || e.QQURL == "" || e.NeteaseURL == ""
+// peripheralBackfillMaxAttempts 给外围字段补全设的硬上限。
+//
+// 以前只有 10 分钟节流、**没有次数上限**:某个字段如果是真的补不上(这首歌在网易云压根
+// 没有、Apple Music 没收录……),这条记录会每 10 分钟重发一轮网络请求,只要它还在被播放
+// 就永远停不下来。5 次 ≈ 给足偶发网络抖动恢复的机会,之后认账。
+const peripheralBackfillMaxAttempts = 5
+
+// needsPeripheralBackfill 判断是否要补一次外围字段。artist 用来判断"canonical 为空"到底
+// 算不算缺 —— collector 只在**单一歌手**时才给 canonical_artist,合唱曲目为空是正常的,
+// 不该为它反复重试。
+func needsPeripheralBackfill(e enrichEntry, artist string) bool {
+	// canonical_artist 2026-08-07 加进这个条件。它本来就在 backfillPeripheralFields 里有
+	// `== ""` 的补全分支,但触发条件不看它 —— 于是只要那四个字段都齐了,一条缺 canonical 的
+	// 记录就再也没机会补上。实测撞到过:同一张专辑里一半曲目报 "Leah Dou"、一半报"窦靖童",
+	// 而前者靠 canonical 归一成功、后者其中两条 canonical 是空的。
+	missingCanonical := e.CanonicalArtist == "" && len(artistCreditParts(artist)) <= 1
+	missing := e.AccentColor == "" || e.AppleURL == "" || e.QQURL == "" || e.NeteaseURL == "" || missingCanonical
 	if !missing {
+		return false
+	}
+	if e.PeripheralRetryCount >= peripheralBackfillMaxAttempts {
 		return false
 	}
 	return time.Now().Unix()-e.TS >= int64(enrichPeripheralRetryInterval/time.Second)
@@ -357,7 +383,12 @@ func backfillPeripheralFields(key, artist, title, album string, durationSecs flo
 	if e.CanonicalArtist == "" {
 		e.CanonicalArtist = fresh.CanonicalArtist
 	}
+	if e.DurationSecs <= 0 {
+		e.DurationSecs = fresh.DurationSecs
+	}
 	e.TS = time.Now().Unix() // 推进节流时间戳,不管这次补没补全,10 分钟内不再重试
+	// 不管补没补上都记一次 —— 上限就是靠它生效的(见 peripheralBackfillMaxAttempts)。
+	e.PeripheralRetryCount++
 	enrichCache[key] = e
 	enrichDirty = true
 	enrichMu.Unlock()
@@ -466,6 +497,7 @@ func resolveTrackEnrichment(artist, title, album string, durationSecs float64) e
 	if title != "" {
 		e.SpotifyURL = "https://open.spotify.com/search/" + neturl.QueryEscape(artist+" "+title)
 	}
+	e.DurationSecs = durationSecs
 	if features.Lyrics {
 		// 不管选没选中,都记下这一轮到底有哪些源真的给出了可用候选 —— needsLyricsRetry
 		// 靠"有启用的源这轮没露面"来判断这次结果是不是在信息不全的情况下做的决定。
