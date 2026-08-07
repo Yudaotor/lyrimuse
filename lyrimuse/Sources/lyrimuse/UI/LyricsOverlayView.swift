@@ -64,14 +64,21 @@ struct LyricsOverlayView: View {
                 // 在歌词上方挖出一块"看不见却挡手"的区域。
                 .allowsHitTesting(controlsVisible)
                 // 把这排按钮的真实位置汇报上去,当作点击穿透的例外热区(见
-                // WindowController.updateControlsHotZone)。不显示时上报 .zero,让整扇窗口
-                // 恢复全区域穿透 —— 以前靠"这个视图根本不存在"来达到同样效果,现在槽位常驻,
-                // 得显式报零。
+                // WindowController.updateControlsHotZone)。
+                //
+                // ⚠️ 这里**永远报真实矩形**,不能写成"没显示时报 .zero"来兼表可见性。
+                // 2026-08-07 实测坐实:那样写的话观察者收到的恒为 .zero —— 这个 key 的
+                // reduce 是"后来者覆盖",而树里别的分支(外层那个测高度的 background 里的
+                // Color.clear)会贡献 defaultValue(.zero)并排在后面,把真实矩形冲掉。
+                // 日志里能直接看到两行并排:GeometryReader 算出 (341.5,0.1,217,48),
+                // 而 onPreferenceChange 收到 (0,0,0,0)。
+                // 现在 .zero 只有一个含义 ——"这一轮没有任何人报告位置",可见性判断挪到
+                // 控制器侧(见 handleMouseEvent 里的 controlsShown)。
                 .background(
                     GeometryReader { proxy in
                         Color.clear.preference(
                             key: ControlsFramePreferenceKey.self,
-                            value: controlsVisible ? proxy.frame(in: .named(overlayCoordSpaceName)) : .zero
+                            value: proxy.frame(in: .named(overlayCoordSpaceName))
                         )
                     }
                 )
@@ -396,8 +403,12 @@ private struct ContentHeightPreferenceKey: PreferenceKey {
 // 落回 .zero——WindowController 那边按"是不是零矩形"判断当前有没有热区。
 private struct ControlsFramePreferenceKey: PreferenceKey {
     static var defaultValue: CGRect = .zero
+    // 保留最后一个**非零**报告,而不是无脑 value = nextValue()。树里没设过这个 key 的分支
+    // (比如外层测高度的 background 里那个 Color.clear)会贡献 defaultValue(.zero),按原来的
+    // 写法排在后面就会把真正报上来的矩形冲掉 —— 2026-08-07 实测就是这么坏的。
     static func reduce(value: inout CGRect, nextValue: () -> CGRect) {
-        value = nextValue()
+        let next = nextValue()
+        if next != .zero { value = next }
     }
 }
 

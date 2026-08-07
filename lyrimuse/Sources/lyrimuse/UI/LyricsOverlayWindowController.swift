@@ -394,7 +394,11 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject 
         }
         let loc = NSEvent.mouseLocation
         let frame = window.frame
-        let insideHotZone = controlsHotZoneScreen?.contains(loc) ?? false
+        // 热区矩形现在是**无条件**上报的(见 LyricsOverlayView 里那段注释:让它兼表可见性会
+        // 被 preference 归约冲掉),所以"按钮到底显示着没有"这一层判断放在这里。槽位是常驻的,
+        // 不加这层的话没显示时那块区域也会挡住点击穿透 —— 变成"看不见却挡手"。
+        let controlsShown = isHoveringForControls && !AppSettings.shared.lockPosition
+        let insideHotZone = controlsShown && (controlsHotZoneScreen?.contains(loc) ?? false)
 
         switch type {
         case .mouseMoved:
