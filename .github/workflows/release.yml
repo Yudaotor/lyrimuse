@@ -30,7 +30,19 @@ jobs:
     name: Build, ad-hoc sign, package
     # Pinned to a specific image, not "macos-latest" -- macos-latest can silently jump to
     # a newer Xcode/OS on GitHub's own schedule; bump this deliberately instead.
-    runs-on: macos-15
+    #
+    # Bumped 15 -> 26 because the settings rework uses the Liquid Glass API
+    # (SettingsDesignSystem.swift: .buttonStyle(.glass)/.glassProminent,
+    # GlassEffectContainer). Every use is behind `if #available(macOS 26.0, *)`, but that
+    # only gates them at runtime -- the symbols still have to exist in the SDK to compile,
+    # and macos-15 ships the macOS 15 SDK, so the whole app failed to build there with
+    # "cannot find 'GlassEffectContainer' in scope". Deployment target is unchanged
+    # (Package.swift pins .macOS(.v14)); a newer SDK does not raise it.
+    #
+    # The label resolves to an Apple Silicon runner, which the primary variant requires.
+    # If that ever changes, it fails loudly rather than silently: package.sh builds the
+    # primary for the host architecture and hard-fails when it is not exactly arm64.
+    runs-on: macos-26
     steps:
       - name: Checkout
         uses: actions/checkout@v7
