@@ -411,3 +411,7 @@
 "「歌词提前」「歌词延后」每按一次的幅度；菜单栏的「歌词时间轴」也用这个值" = "How much each press of Advance/Delay Lyrics shifts the timing; the menu bar's Lyrics Timing uses this too";
 "喜欢" = "Favorite";
 "取消喜欢" = "Remove Favorite";
+"显示在哪块屏幕" = "Show On";
+"「自动」选带刘海的那块；指定的屏幕拔掉后自动回到「自动」" = "Automatic picks the display with the notch; if the chosen display is disconnected it falls back to automatic";
+"自动" = "Automatic";
+"已断开的屏幕" = "Disconnected display";

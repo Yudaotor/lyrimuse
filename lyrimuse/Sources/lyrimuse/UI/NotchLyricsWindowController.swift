@@ -258,17 +258,40 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject {
         return max(baseWidth, earBasedFloor)
     }
 
+    // 灵动岛贴哪块屏。
+    //
+    // 用户在设置里指定了某块屏(存的是显示器 UUID,见 ScreenIdentity)就用那块;没指定
+    // (或者指定的那块现在没接着——拔了、合盖了)就自动挑**真的有刘海**的那块,再没有
+    // 就退回 NSScreen.main。
+    //
+    // 2026-08-07 之前这里直接用 NSScreen.main,注释写的是"当前有键盘焦点/菜单栏所在的
+    // 那块屏幕……跟'灵动岛只应该出现在当前主屏'这个直觉一致"。实测这个直觉不成立:
+    // NSScreen.main 跟着**键盘焦点**跳,而 recomputeGeometry 只在少数几个时机重算
+    // (init/屏幕配置变化/播放状态切换/hover/拖宽度),于是最后一次重算时焦点碰巧在哪块
+    // 屏,窗口就一直停在哪块屏。用户的外接屏排在内置屏上方,灵动岛就停在外接屏顶部
+    // (CG 坐标 y=-1440)——那块屏还没有刘海,而用户正看着内置屏,怎么找都找不到它,
+    // 报的是"开了灵动岛歌词但是不显示"。
+    private static func targetScreen() -> NSScreen? {
+        if let pinned = ScreenIdentity.screen(withID: AppSettings.shared.notchScreenID) {
+            return pinned
+        }
+        return ScreenIdentity.notched ?? NSScreen.main
+    }
+
+    // 设置页改完"显示在哪块屏幕"后调这个立刻生效(跟 applyContentWidthSetting 同一个模式)。
+    func applyScreenSetting() {
+        recomputeGeometry(animate: false)
+    }
+
     // 顶边固定贴在屏幕最顶端(screen.frame.maxY)、水平居中对齐刘海中心点、总高度 =
     // 刘海高度 + 内容行高度(+ hover 展开时再加 expandedExtraHeight)、宽度固定(见
-    // contentWidth(baseWidth:notchWidth:))。用 NSScreen.main(当前有键盘焦点/菜单栏
-    // 所在的那块屏幕)而不是记忆某一块固定屏幕——多屏环境下,这跟"灵动岛只应该出现在
-    // 当前主屏"这个直觉一致。
+    // contentWidth(baseWidth:notchWidth:))。
     // isPlayingOverride 只在 isPlayingObserver 的 sink 闭包里传——那个时间点闭包参数
     // 才是真正的新值,读存储属性本身拿到的还是旧值(见 init() 里那处注释)。其余调用
     // 场景(screenParamsObserver/setExpanded/init 本身)都不在那个时序陷阱里,直接读
     // PlaybackCoordinator.shared.isPlayingNow 就是准确的当前值。
     private func recomputeGeometry(animate: Bool, isPlayingOverride: Bool? = nil) {
-        guard let window, let screen = NSScreen.main else { return }
+        guard let window, let screen = Self.targetScreen() else { return }
         let geo = Self.geometry(for: screen)
         contentTopInset = geo.notchHeight
         notchWidth = geo.notchWidth

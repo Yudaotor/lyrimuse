@@ -541,6 +541,10 @@ private struct AppearanceSettingsTab: View {
     @Environment(\.dismissWindow) private var dismissWindow
     @State private var showSaveThemeAlert = false
     @State private var newThemeName = ""
+    // 灵动岛"显示在哪块屏幕"下拉的选项来源。用 @State 快照而不是每次 body 现读
+    // NSScreen.screens:插拔显示器时 SwiftUI 不会因为一个全局数组变了就重算 body,
+    // 得靠下面那条 didChangeScreenParameters 通知显式刷新。
+    @State private var availableScreens: [NSScreen] = NSScreen.screens
 
     // 精选常用字体,而不是列出这台机器上全部两百多个已安装字体族——选不过来。清单
     // 来源是调研结论,不是凭印象挑的:
@@ -942,6 +946,41 @@ private struct AppearanceSettingsTab: View {
                         .frame(width: 46, alignment: .trailing)
                 }
             }
+            CardDivider()
+            SettingsRow(
+                icon: "display",
+                title: L10n.t("显示在哪块屏幕"),
+                subtitle: L10n.t("「自动」选带刘海的那块；指定的屏幕拔掉后自动回到「自动」")
+            ) {
+                Picker("", selection: Binding(
+                    get: { settings.notchScreenID },
+                    set: { newValue in
+                        settings.notchScreenID = newValue
+                        NotchLyricsWindowController.shared.applyScreenSetting()
+                    }
+                )) {
+                    Text(L10n.t("自动")).tag("")
+                    ForEach(availableScreens, id: \.self) { screen in
+                        if let id = ScreenIdentity.id(of: screen) {
+                            Text(screen.localizedName).tag(id)
+                        }
+                    }
+                    // 存着的那块屏现在没接着时补一个占位项。Picker 的选中值如果在选项里
+                    // 找不到对应 tag,整个控件会显示成空白——那看起来像设置丢了,而实际上
+                    // 偏好还在、屏幕插回来就会恢复。
+                    if !settings.notchScreenID.isEmpty,
+                       ScreenIdentity.screen(withID: settings.notchScreenID) == nil {
+                        Text(L10n.t("已断开的屏幕")).tag(settings.notchScreenID)
+                    }
+                }
+                .pickerStyle(.menu)
+                .fixedSize()
+            }
+        }
+        // 设置页开着的时候插拔显示器,下拉里的选项要跟着变。灵动岛窗口自己也订阅了同一条
+        // 通知去重算位置(见 NotchLyricsWindowController.screenParamsObserver)。
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didChangeScreenParametersNotification)) { _ in
+            availableScreens = NSScreen.screens
         }
     }
 

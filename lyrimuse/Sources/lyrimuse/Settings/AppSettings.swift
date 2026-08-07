@@ -63,6 +63,7 @@ final class AppSettings: ObservableObject {
         static let notchCardStyle = "np:notchCardStyle"
         // 灵动岛歌词行尾端(卡片右下角)那枚专辑封面小图,见 NotchLyricsView.artworkThumbnail。默认开。
         static let notchShowArtwork = "np:notchShowArtwork"
+        static let notchScreenID = "np:notchScreenID"
         // 2026-08-05 之前,"这种悬浮歌词要不要显示"这一件事有**两份**独立持久化:上面这两个
         // {classic,notch}OverlayEnabled(设置页那两个 Toggle 读它),外加两个 WindowController
         // 各自私有的这两个 key(菜单栏"显示…"那两项、全局快捷键读它)。两份可以不一致,后果见
@@ -236,6 +237,12 @@ final class AppSettings: ObservableObject {
     @Published var notchShowArtwork: Bool {
         didSet { defaults.set(notchShowArtwork, forKey: Keys.notchShowArtwork) }
     }
+    // 灵动岛贴在哪块屏幕上——存的是显示器 UUID(见 ScreenIdentity),空字符串 = 自动
+    // (挑有刘海的那块)。跟 lockPosition/notchContentWidth 同一个模式:这里只负责持久化,
+    // 不碰 NSWindow,由 SettingsView 的 Binding.set 显式调用窗口控制器让它立刻生效。
+    @Published var notchScreenID: String {
+        didSet { defaults.set(notchScreenID, forKey: Keys.notchScreenID) }
+    }
     // 字体族名——空字符串表示"跟随系统",对应悬浮窗原来硬编码的系统字体,不用额外
     // enum/Optional 表达"未设置"。
     @Published var fontFamilyName: String {
@@ -385,6 +392,7 @@ final class AppSettings: ObservableObject {
         notchOverlayEnabled = notchOn
         notchCardStyle = defaults.string(forKey: Keys.notchCardStyle).flatMap(NotchCardStyle.init(rawValue:)) ?? .frostedGlass
         notchShowArtwork = (defaults.object(forKey: Keys.notchShowArtwork) as? Bool) ?? true
+        notchScreenID = defaults.string(forKey: Keys.notchScreenID) ?? ""
         fontFamilyName = defaults.string(forKey: Keys.fontFamilyName) ?? Self.defaultFontFamilyName
         fontSize = (defaults.object(forKey: Keys.fontSize) as? Double) ?? Self.defaultFontSize
         overlayWidth = (defaults.object(forKey: Keys.overlayWidth) as? Double) ?? 640
