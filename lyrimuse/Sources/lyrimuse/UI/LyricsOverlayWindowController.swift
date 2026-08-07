@@ -5,7 +5,20 @@ import LyrimuseCore
 
 // 文件级常量(不挂在 @MainActor 类上),避免 Timer 的 @Sendable 闭包里引用
 // MainActor-isolated static let 触发并发检查警告。
-private let overlayPositionKey = "np:overlayPositionOrigin" // "x,y" 字符串
+// 2026-08-07:位置改成存**顶边**("x,顶边y" 字符串),不再存 AppKit 的左下角 origin。
+//
+// 旧写法(overlayPositionLegacyOriginKey)存 frame.origin,而 updateHeight 是"顶边固定、
+// 向下增高"的:内容一变高,origin.y 就跟着变小,didMoveNotification 又把这个新 origin.y 存
+// 下来;下次启动窗口按**默认高度** 120 重建、把那个 origin.y 当左下角还原 —— 顶边就落到了
+// (存的时候的顶边 − (存的时候的高度 − 120))。于是悬浮窗每次重启都往下漂一截,漂多少等于
+// "上次那份内容比默认高多少":悬停一次(122pt)漂 2pt,歌词换行成两行(150pt 上下)一次就漂
+// 30pt,而且会累积。
+//
+// 顶边是这个窗口真正稳定的锚:updateHeight 固定的是它,用户拖窗口时看的也是它。存顶边之后
+// 高度怎么变都不影响还原结果。
+private let overlayPositionKey = "np:overlayPositionTop" // "x,顶边y" 字符串
+// 旧键只读不写,给一次性迁移用(见 restoredOrigin)。
+private let overlayPositionLegacyOriginKey = "np:overlayPositionOrigin" // 旧:"x,左下角y"
 // isVisible 的持久化在 2026-08-05 并进了 AppSettings.classicOverlayEnabled(原来这里有
 // 一个私有的 np:overlayVisible,跟设置页那个开关是同一件事的两个真值,详见 setVisible(_:)
 // 和 AppSettings.init() 里的迁移注释),所以这里不再有自己的 visible key。
@@ -482,7 +495,7 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject 
         // 那条 guard(见 init() 里的 didMoveNotification 观察者)在这里同样适用,拖动
         // 过程中的中间位置不需要重复存,只存这一次最终结果。
         UserDefaults.standard.set(
-            "\(window.frame.origin.x),\(window.frame.origin.y)", forKey: overlayPositionKey
+            "\(window.frame.origin.x),\(window.frame.maxY)", forKey: overlayPositionKey
         )
     }
 
@@ -496,8 +509,8 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject 
     private func scheduleSavePosition() {
         moveDebounceTimer?.invalidate()
         let t = Timer(timeInterval: 0.3, repeats: false) { [weak self] _ in
-            guard let origin = self?.window?.frame.origin else { return }
-            UserDefaults.standard.set("\(origin.x),\(origin.y)", forKey: overlayPositionKey)
+            guard let frame = self?.window?.frame else { return }
+            UserDefaults.standard.set("\(frame.origin.x),\(frame.maxY)", forKey: overlayPositionKey)
         }
         RunLoop.main.add(t, forMode: .common)
         moveDebounceTimer = t
@@ -506,10 +519,28 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject 
     private static func restoredOrigin(size: NSSize) -> NSPoint {
         let screenFrame = NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
         let defaultOrigin = NSPoint(x: screenFrame.midX - size.width / 2, y: screenFrame.maxY - size.height - 40)
-        guard let saved = UserDefaults.standard.string(forKey: overlayPositionKey) else { return defaultOrigin }
-        let parts = saved.split(separator: ",").compactMap { Double($0) }
-        guard parts.count == 2 else { return defaultOrigin }
-        var origin = NSPoint(x: parts[0], y: parts[1])
+        // 新键存的是顶边;没有新键时读一次旧键(左下角 origin)做迁移。
+        //
+        // 迁移换算成"顶边"用的是 overlayDefaultHeight 而不是传进来的 size.height:旧值是被
+        // 上一次运行的**某个**高度污染过的左下角坐标,而这个函数只在 convenience init() 里被
+        // 调用一次、那时 size.height 就等于 overlayDefaultHeight —— 用它换算出的顶边,恰好
+        // 等于旧代码这次启动本来就会摆出的位置。也就是说迁移这一步**视觉上完全无感**:窗口
+        // 停在旧逻辑会摆的地方,只是从此以后不再继续往下漂。
+        func parsePair(_ key: String) -> (x: Double, y: Double)? {
+            guard let saved = UserDefaults.standard.string(forKey: key) else { return nil }
+            let parts = saved.split(separator: ",").compactMap { Double($0) }
+            guard parts.count == 2 else { return nil }
+            return (parts[0], parts[1])
+        }
+        let anchor: (x: Double, top: Double)
+        if let p = parsePair(overlayPositionKey) {
+            anchor = (p.x, p.y) // 新键:第二个分量就是顶边
+        } else if let p = parsePair(overlayPositionLegacyOriginKey) {
+            anchor = (p.x, p.y + Double(overlayDefaultHeight)) // 旧键:左下角 → 换算成顶边
+        } else {
+            return defaultOrigin
+        }
+        var origin = NSPoint(x: anchor.x, y: anchor.top - Double(size.height))
         // 显示器配置可能变了(比如拔了外接屏):夹回当前可见区域内,避免悬浮窗跑到看不见的地方。
         origin.x = min(max(origin.x, screenFrame.minX), screenFrame.maxX - size.width)
         origin.y = min(max(origin.y, screenFrame.minY), screenFrame.maxY - size.height)
