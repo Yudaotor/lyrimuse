@@ -20,6 +20,11 @@ struct LyricsSearchSheet: View {
     // 候选应该是眼下正在用的这一份,不是随便哪个候选,不然明明已经在用 QQ 音乐的歌词,
     // 打开这个弹窗却默认高亮着完全不相关的 kugou,容易误导成"当前用的就是这个"。
     let currentSource: String?
+    // 曲目真实时长(秒),0 表示未知。必须传 —— 打分里时长匹配那一档权重很重,传 0 会
+    // 让整档对所有候选一律跳过,弹窗里显示的排名就跟当初自动决策用的那组分数对不上。
+    // 2026-08-07 实测:同一首歌传 0 时 qq 482 排第一,传真实时长(270.8s)时 qq 是 582、
+    // 而当初胜出的 Musixmatch 拿的是 962 —— 用户看着"分最高的没被选",其实看的是另一套数。
+    let durationSecs: Double
     let onApply: (LyricsSearchService.Candidate) -> Void
 
     @Environment(\.dismiss) private var dismiss
@@ -71,11 +76,12 @@ struct LyricsSearchSheet: View {
     @State private var title: String
     @State private var album: String
 
-    init(artist: String, title: String, album: String, currentSource: String?, onApply: @escaping (LyricsSearchService.Candidate) -> Void) {
+    init(artist: String, title: String, album: String, currentSource: String?, durationSecs: Double, onApply: @escaping (LyricsSearchService.Candidate) -> Void) {
         self.originalArtist = artist
         self.originalTitle = title
         self.originalAlbum = album
         self.currentSource = currentSource
+        self.durationSecs = durationSecs
         self.onApply = onApply
         self._artist = State(initialValue: artist)
         self._title = State(initialValue: title)
@@ -327,7 +333,7 @@ struct LyricsSearchSheet: View {
         networkLooksDown = false
         isSearching = true
         do {
-            try await LyricsSearchService.shared.search(artist: artist, title: title, album: album) { update in
+            try await LyricsSearchService.shared.search(artist: artist, title: title, album: album, durationSecs: durationSecs) { update in
                 guard generation == searchGeneration else { return } // 已经有更新的一轮在跑,这批结果作废
                 candidates = update.candidates
                 networkLooksDown = update.networkLooksDown

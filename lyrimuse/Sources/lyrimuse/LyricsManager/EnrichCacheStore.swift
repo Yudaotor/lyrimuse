@@ -35,6 +35,20 @@ public final class EnrichCacheStore: ObservableObject {
         public var id: String { key }
         public let key: String
         public let artist: String
+        // collector 解析出的"官方歌手名"(网易云/QQ/MusicBrainz 核实过),没有则为空。
+        //
+        // 为什么列表要用它:同一位歌手在不同曲目上可能被播放器报成完全不同的写法 ——
+        // 2026-08-07 用户实测,一张专辑里一半曲目报 "Leah Dou"、另一半报"窦靖童"
+        // (连专辑名都是繁简两版:"春遊"/"春游")。artistDisplayNames 那套归并只折繁简和
+        // 大小写,救不了跨文字的别名;canonical_artist 正是为此存在的,只是一直没接到这个
+        // 界面上来 —— 值早就算好、存进缓存了,列表却仍在显示原始写法。
+        //
+        // 合唱曲目上它是空的(collector 只在单一歌手时才给值),所以消费方要回退到 artist。
+        public let canonicalArtist: String
+        // 解析这条时的曲目真实时长(秒),collector 存进缓存的。手动搜索要用它 ——
+        // 打分里时长匹配那一档权重很重,传 0 的话弹窗里的排名跟当初真正做决定用的那组
+        // 分数不是一回事(见 LyricsSearchSheet 的用法)。老条目没有这个字段,为 0。
+        public let durationSecs: Double
         public let title: String
         public let album: String
         public let lyricsSource: String
@@ -141,6 +155,8 @@ public final class EnrichCacheStore: ObservableObject {
             return Summary(
                 key: key,
                 artist: parts.artist,
+                canonicalArtist: entry["canonical_artist"] as? String ?? "",
+                durationSecs: entry["duration_secs"] as? Double ?? 0,
                 title: parts.title,
                 album: parts.album,
                 lyricsSource: entry["lyrics_source"] as? String ?? "",
@@ -154,10 +170,27 @@ public final class EnrichCacheStore: ObservableObject {
         // 同一个函数)归并——"Scream"这类跟其他人合唱的曲目,artist 字段整段写的是
         // "Michael Jackson & JANET JACKSON",原始字符串排序会单独归成一组、跟同一张
         // 专辑里其余单独署名"Michael Jackson"的曲目拆开,不符合"同专辑排一起"的预期。
-        }.sorted {
-            (primaryArtist($0.artist), $0.album.lowercased(), $0.title)
-                < (primaryArtist($1.artist), $1.album.lowercased(), $1.title)
-        }
+        }.sorted { Self.sortKey($0) < Self.sortKey($1) }
+    }
+
+    // ⚠️ 排序键必须跟"列表上看到的那套分组"用**同一套归并规则**,否则会出现"显示层合并了、
+    // 排序层还按原始写法把同一张专辑劈成两半"。2026-08-07 用户实测撞到:「春游」这张专辑
+    // 一半曲目排在列表最上面、一半排在最下面 —— 播放器把它们分别报成 "Leah Dou" / "窦靖童"
+    // (歌手)和 "春遊" / "春游"(专辑繁简),而这里的排序键当时用的是**原始** artist、专辑也
+    // 只 lowercased() 没折简体,两组自然隔得很远。
+    //
+    // 三个分量分别对应:
+    //   歌手 —— 先取 canonical(collector 核实过的官方名,同一个人的不同别名在这里收敛),
+    //           再 primaryArtist 取合唱的第一位,最后折简体+小写;
+    //   专辑 —— 折简体+小写(跟 albumDisplayNames 的归并键一致);
+    //   歌名 —— 原样,同一张专辑内的次序不需要归一化。
+    private static func sortKey(_ s: Summary) -> (String, String, String) {
+        let artist = s.canonicalArtist.isEmpty ? s.artist : s.canonicalArtist
+        return (
+            toSimplified(primaryArtist(artist)).lowercased(),
+            toSimplified(s.album).lowercased(),
+            s.title
+        )
     }
 
     // 返回值含 yrc:「歌词管理」的单曲歌词时间轴偏移输入框需要跟 LocalPlaybackSource

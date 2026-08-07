@@ -232,10 +232,16 @@ struct LyricsManagerView: View {
     // 归并的话筛选下拉会重复出现,跟 albumDisplayNames 是完全同一个"归并键跟展示值
     // 分开"的思路(2026-07-30 用户反馈专辑那边先出现过这个问题,顺手把歌手这边也补上,
     // 避免以后复现同一类 bug)。
+    // 一行/一条记录该显示哪个歌手名:优先 collector 核实过的官方名,没有(合唱曲目、或者
+    // 还没解析出来)才退回播放器报的原始写法。见 Summary.canonicalArtist 的注释。
+    private func artistName(_ s: EnrichCacheStore.Summary) -> String {
+        s.canonicalArtist.isEmpty ? s.artist : s.canonicalArtist
+    }
+
     private var artistDisplayNames: [String: String] {
         var seen: [String: String] = [:] // 归并键(小写+简体) -> 第一次出现时的原始写法
         for s in store.summaries {
-            let raw = primaryArtist(s.artist)
+            let raw = primaryArtist(artistName(s))
             guard !raw.isEmpty else { continue }
             let key = toSimplified(raw).lowercased()
             if seen[key] == nil { seen[key] = raw }
@@ -275,10 +281,14 @@ struct LyricsManagerView: View {
         store.summaries.filter { s in
             if !searchText.isEmpty {
                 let q = searchText.lowercased()
-                guard s.artist.lowercased().contains(q) || s.title.lowercased().contains(q) else { return false }
+                // 搜索两个写法都认:用户可能按原始写法搜(播放器里看到的那个),也可能按
+                // 官方名搜(列表里显示的那个)。
+                guard s.artist.lowercased().contains(q)
+                    || artistName(s).lowercased().contains(q)
+                    || s.title.lowercased().contains(q) else { return false }
             }
             // 大小写/繁简不敏感比较,跟上面 album 那条同一个理由(见 artistDisplayNames 注释)。
-            if let artistFilter, toSimplified(primaryArtist(s.artist)).lowercased() != toSimplified(artistFilter).lowercased() { return false }
+            if let artistFilter, toSimplified(primaryArtist(artistName(s))).lowercased() != toSimplified(artistFilter).lowercased() { return false }
             // 大小写/繁简不敏感比较——albumFilter 存的是 distinctAlbums 归并后选中的那个
             // 展示写法,同一张专辑大小写或繁简不同的条目(s.album)也要匹配上,不能要求
             // 逐字相等,跟 albumDisplayNames 用同一套归并规则(见其注释)。
@@ -528,7 +538,7 @@ struct LyricsManagerView: View {
                     listColumnHeader
                     Divider()
                     List(filtered, selection: $selectedKeys) { summary in
-                        LyricsManagerRow(summary: summary, albumDisplayName: albumDisplay(summary.album), widths: shownWidths)
+                        LyricsManagerRow(summary: summary, artistDisplayName: artistName(summary), albumDisplayName: albumDisplay(summary.album), widths: shownWidths)
                     }
                     .listStyle(.inset(alternatesRowBackgrounds: true))
                     // ⚠️ 菜单闭包里只用参数 keys,一个字都不能读 selectedKeys。官方文档明确:
@@ -904,7 +914,7 @@ struct LyricsManagerView: View {
         .sheet(isPresented: $showSearchSheet) {
             // 采纳候选直接保存,不需要再手动点"保存修改"——避免让人误以为选了就已经
             // 存上了,结果只是填进了编辑框,还得再点一下保存才真正落盘。
-            LyricsSearchSheet(artist: summary.artist, title: summary.title, album: summary.album, currentSource: summary.lyricsSource) { candidate in
+            LyricsSearchSheet(artist: summary.artist, title: summary.title, album: summary.album, currentSource: summary.lyricsSource, durationSecs: summary.durationSecs) { candidate in
                 editedLyrics = candidate.lyrics
                 editedTr = candidate.lyricsTr
                 editedRoma = candidate.lyricsRoma
@@ -1192,6 +1202,9 @@ private struct LyricsManagerRow: View {
     let summary: EnrichCacheStore.Summary
     // 同一张专辑在不同条目里原始大小写可能不一致(见 LyricsManagerView.albumDisplayNames
     // 的注释),这里传入调用方算好的统一展示文案,而不是自己再拿 summary.album 原样显示。
+    // 跟 albumDisplayName 同一个道理:展示用的歌手名由外面算好传进来(优先 canonical),
+    // 行视图自己不重复那套判断。
+    let artistDisplayName: String
     let albumDisplayName: String
     // 列宽由调用方传入(而不是各自读单例):表头和每一行必须拿到**同一组**值才对得齐,
     // 而调用方那份已经过 fitted 收敛(窗口变窄时的临时等比缩放),行这边不能绕过它。
@@ -1226,7 +1239,7 @@ private struct LyricsManagerRow: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
-            Text(summary.artist)
+            Text(artistDisplayName)
                 .font(.callout)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
