@@ -28,7 +28,7 @@
 # 所以最终形态(打包见 package.sh):
 #   - 主包 arm64-only:彻底不含 x86_64,不会触发那条告警,下载体积也小一半
 #   - Intel 兼容包 universal:单独一份资产,只引导 Intel 用户下
-#   - appcast 里主包那条标 sparkle:hardwareRequirements="arm64" —— Sparkle 在 Intel 客户端
+#   - appcast 里主包那条 item 带子元素 <sparkle:hardwareRequirements>arm64</...> —— Sparkle 在 Intel 客户端
 #     上会判定该条不适用而跳过(见 SPUAppcastItemStateResolver.isArm64HardwareRequirementOK,
 #     它自己的注释就写着 "macOS 27+ will no longer support Intel Macs"),只会说"已是最新",
 #     不会给 Intel 用户推一个跑不起来的包

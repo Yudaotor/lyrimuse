@@ -21,11 +21,21 @@
 # (Sparkle 下载并解开这个 zip 完成自我升级),Homebrew cask 也从同一个 zip 安装。dmg 纯粹
 # 是给"去 Releases 页面手动下载"的人的,观感更像正经的 macOS 分发方式。
 #
-# ⚠️ appcast 里**主包那条 item 必须带 sparkle:hardwareRequirements="arm64"**。Sparkle 在
-# Intel 客户端上会据此判定该条不适用、直接跳过(见 Sparkle 的
+# ⚠️ appcast 里**主包那条 item 必须带这个子元素**:
+#
+#     <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
+#
+# Sparkle 在 Intel 客户端上会据此判定该条不适用、直接跳过(见 Sparkle 的
 # SPUAppcastItemStateResolver.isArm64HardwareRequirementOK),于是 Intel 用户只会看到"已是
-# 最新",而不会被推一个 arm64-only、装上就打不开的包。漏了这个属性,Intel 用户会被自动
-# 更新推坏 —— 这是这套双资产方案里唯一一处"漏了就出事"的地方。
+# 最新",而不会被推一个 arm64-only、装上就打不开的包。漏了它,Intel 用户会被自动更新推坏
+# —— 这是这套双资产方案里唯一一处"漏了就出事"的地方。
+#
+# 它是 <item> 的**子元素**,不是 <enclosure> 上的属性。这行注释 2026-08-07 之前写的就是
+# 属性写法(sparkle:hardwareRequirements="arm64"),错的:Sparkle 用
+# SUAppcastElementHardwareRequirements = "sparkle:hardwareRequirements" 从 item 的元素字典里
+# 取值,它自己的测试样例(Tests/Resources/testappcast_arm64HardwareRequirement.xml)也是写成
+# 元素。写成属性 XML 解析不报错、但匹配不到任何东西 —— 于是每个 Intel 客户端照样会被推
+# 这条更新,正好是它要防的那件事。
 #
 # 为什么不塞进 build.sh:build.sh 每次本地迭代都跑、职责是装了就重启;这里要构建两份、压缩、
 # 跑 hdiutil,只在发布时需要。同时也把"发布包到底是怎么打出来的"写进仓库 —— 在此之前它只
@@ -144,7 +154,7 @@ INTEL="Lyrimuse-v$VERSION-macos-intel"
 echo
 echo "==> 剩下的手工步骤(这个脚本故意不做):"
 echo "    1) 给**主包** zip 签 EdDSA、生成 appcast.xml,那条 item 必须带:"
-echo "         sparkle:hardwareRequirements=\"arm64\""
+echo "         <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>   (item 的子元素,不是 enclosure 的属性)"
 echo "       (没有它,Intel 用户会被自动更新推一个 arm64-only 的包,装上打不开)"
 echo "       enclosure 指向 $PRIMARY.zip,不要指向 -intel 那份"
 echo "    2) gh release create v$VERSION --title \"Lyrimuse v$VERSION\" \\"

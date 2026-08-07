@@ -106,53 +106,42 @@ jobs:
             # page anyway (see the "Create GitHub Release" step's tag-only gate below).
             BUNDLE_VERSION="1.0.0"
           fi
-          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
-          echo "bundle_version=${BUNDLE_VERSION}" >> "$GITHUB_OUTPUT"
+          # asset_base is derived from the bundle version, not the tag: package.sh names its
+          # output from the built app's own Info.plist, so the two have to agree. On a tag
+          # push they do by construction (v1.3.0 -> 1.3.0 -> Lyrimuse-v1.3.0-macos...); on a
+          # dry run the placeholder bundle version is what actually lands on disk.
+          {
+            echo "version=${VERSION}"
+            echo "bundle_version=${BUNDLE_VERSION}"
+            echo "asset_base=Lyrimuse-v${BUNDLE_VERSION}-macos"
+          } >> "$GITHUB_OUTPUT"
           echo "Building ${VERSION} (bundle version ${BUNDLE_VERSION})"
 
-      - name: Build + assemble + ad-hoc sign
-        run: LYRIMUSE_VERSION="${{ steps.version.outputs.bundle_version }}" ./lyrimuse/build.sh --no-restart
-        # --no-restart is already exactly the CI-safe path -- it exits right after the
-        # ad-hoc codesign/verify steps, before any of the launchctl kickstart/bootout/
-        # bootstrap self-heal dance or the `open`/pgrep liveness check, none of which mean
-        # anything on a headless runner with no logged-in Aqua session.
-
-      - name: Sanity-check the signature
+      # package.sh, not build.sh -- it is the single definition of what a release asset is,
+      # and it builds BOTH variants: an arm64-only primary and a universal one for Intel.
+      # Until 2026-08-07 this job ran build.sh once and shipped whatever architecture the
+      # runner happened to be, which is how v1.0.0 through v1.2.0 all went out arm64-only
+      # without anyone noticing.
+      #
+      # No separate signature sanity-check step follows this one any more: package.sh
+      # already refuses to package unless every Mach-O in each variant matches the expected
+      # architecture set exactly (missing *or* extra) and `codesign -v --deep --strict`
+      # passes. Those are hard failures inside the script, so a green step here means more
+      # than the old codesign echo did.
+      - name: Build + package release assets
         run: |
-          codesign -dvvv /Applications/Lyrimuse.app
-          codesign -v /Applications/Lyrimuse.app && echo "app signature OK"
-          codesign -v /Applications/Lyrimuse.app/Contents/Resources/collector && echo "collector signature OK"
-          codesign -v /Applications/Lyrimuse.app/Contents/Resources/media-control/bin/media-control && echo "media-control signature OK"
-          # Not a Gatekeeper/notarization check -- nothing here is notarized (see the
-          # README's Gatekeeper-bypass section). This only confirms the ad-hoc signature
-          # build.sh applied is internally well-formed before it ships.
-
-      - name: Package as zip
-        id: package
-        run: |
-          APP="/Applications/Lyrimuse.app"
-          VERSION="${{ steps.version.outputs.version }}"
-          ZIP="Lyrimuse-${VERSION}-macos.zip"
-          # Defensive only -- nothing upstream in this job should have set quarantine,
-          # but this mirrors the sanitize step other ad-hoc-signed macOS projects run
-          # before zipping, so a stray xattr never rides along into the release asset.
-          xattr -cr "$APP"
-          # ditto, not `zip` -- preserves the code signature/resource fork correctly.
-          ditto -c -k --keepParent "$APP" "$ZIP"
-          shasum -a 256 "$ZIP" > "${ZIP}.sha256"
-          echo "zip=${ZIP}" >> "$GITHUB_OUTPUT"
+          LYRIMUSE_VERSION="${{ steps.version.outputs.bundle_version }}" ./lyrimuse/package.sh
+          ls -la lyrimuse/dist
 
       - name: Upload workflow artifact (every run -- tag push or manual dispatch)
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ steps.package.outputs.zip }}
-          path: |
-            ${{ steps.package.outputs.zip }}
-            ${{ steps.package.outputs.zip }}.sha256
+          name: ${{ steps.version.outputs.asset_base }}
+          path: lyrimuse/dist/*
           retention-days: 14
         # Always runs, including on a bare workflow_dispatch with no tag -- the manual
-        # dry-run path: download the zip straight from the Actions run page and smoke-test
-        # it, without ever touching the public Releases tab.
+        # dry-run path: download the assets straight from the Actions run page and
+        # smoke-test them, without ever touching the public Releases tab.
 
       # Only runs on a real tag push, same gate as "Create GitHub Release" below --
       # appcast.xml's enclosure URL points at releases/latest/download/..., which is
@@ -171,6 +160,22 @@ jobs:
       # only needs the latest item to decide "is there something newer than what's
       # installed," and not maintaining a multi-version feed avoids having to keep every
       # past release's zip around on the runner just to regenerate a fuller feed.
+      #
+      # The feed advertises the **primary (arm64-only)** zip and nothing else, and the item
+      # carries <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>. That
+      # element is the one thing in the two-asset scheme that breaks users if it is missing:
+      # Sparkle running natively on x86_64 uses it to decide the item does not apply and
+      # reports "you're up to date" (SPUAppcastItemStateResolver.isArm64HardwareRequirementOK),
+      # so Intel users are never handed a package that cannot launch on their machine. They
+      # download the -intel asset from the Releases page by hand instead, which is what the
+      # README tells them.
+      #
+      # It is an ELEMENT inside <item>, not an attribute on <enclosure>. Sparkle reads it
+      # via SUAppcastElementHardwareRequirements = "sparkle:hardwareRequirements" out of the
+      # item's element dictionary, and its own fixture (Tests/Resources/
+      # testappcast_arm64HardwareRequirement.xml) writes it as an element. Spelled as an
+      # attribute it parses fine, matches nothing, and silently offers the arm64 build to
+      # every Intel client -- exactly the failure it exists to prevent.
       - name: Generate signed appcast
         if: startsWith(github.ref, 'refs/tags/')
         id: appcast
@@ -187,11 +192,14 @@ jobs:
             exit 1
           fi
           chmod +x "$SIGN_UPDATE"
-          ZIP="${{ steps.package.outputs.zip }}"
+          # The primary zip only -- never the -intel one. Sparkle updates Apple Silicon
+          # users; Intel users are handled by the hardwareRequirements element below.
+          ZIP_NAME="${{ steps.version.outputs.asset_base }}.zip"
+          ZIP="lyrimuse/dist/${ZIP_NAME}"
           VERSION="${{ steps.version.outputs.bundle_version }}"
           LENGTH=$(stat -f%z "$ZIP")
           SIGNATURE=$(echo "$SPARKLE_PRIVATE_KEY" | "$SIGN_UPDATE" --ed-key-file - -p "$ZIP")
-          DOWNLOAD_URL="https://github.com/${{ github.repository }}/releases/latest/download/${ZIP}"
+          DOWNLOAD_URL="https://github.com/${{ github.repository }}/releases/latest/download/${ZIP_NAME}"
           PUB_DATE=$(date -u +"%a, %d %b %Y %H:%M:%S +0000")
           # Not a heredoc -- a heredoc's body must stay flush-left to avoid picking up
           # this step's own YAML indentation as literal leading whitespace in every line
@@ -214,6 +222,7 @@ jobs:
             echo "      <sparkle:version>${VERSION}</sparkle:version>"
             echo "      <sparkle:shortVersionString>${VERSION}</sparkle:shortVersionString>"
             echo '      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>'
+            echo '      <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>'
             echo "      <enclosure url=\"${DOWNLOAD_URL}\" sparkle:version=\"${VERSION}\" sparkle:edSignature=\"${SIGNATURE}\" length=\"${LENGTH}\" type=\"application/octet-stream\" />"
             echo '    </item>'
             echo '  </channel>'
@@ -247,9 +256,18 @@ jobs:
           name: Lyrimuse ${{ steps.version.outputs.version }}
           body: ${{ steps.changelog.outputs.body }}
           generate_release_notes: true
+          # Both variants ship: the unsuffixed one is arm64-only and is what Sparkle and
+          # the Homebrew cask both point at; -intel is universal, for the Intel Macs that
+          # every release up to v1.2.0 silently excluded. Each comes as a zip (the format
+          # Sparkle unpacks and the cask installs, so it cannot be dropped) plus a dmg for
+          # people downloading by hand.
           files: |
-            ${{ steps.package.outputs.zip }}
-            ${{ steps.package.outputs.zip }}.sha256
+            lyrimuse/dist/${{ steps.version.outputs.asset_base }}.zip
+            lyrimuse/dist/${{ steps.version.outputs.asset_base }}.zip.sha256
+            lyrimuse/dist/${{ steps.version.outputs.asset_base }}.dmg
+            lyrimuse/dist/${{ steps.version.outputs.asset_base }}-intel.zip
+            lyrimuse/dist/${{ steps.version.outputs.asset_base }}-intel.zip.sha256
+            lyrimuse/dist/${{ steps.version.outputs.asset_base }}-intel.dmg
             appcast.xml
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

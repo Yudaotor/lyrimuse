@@ -79,10 +79,12 @@ LYRIMUSE_VERSION=1.2.1 ./package.sh
 或多带一份都拦),以及 `codesign --deep --strict` 必须通过。v1.0.0~v1.2.0 三个版本都在没人
 察觉的情况下发成了 arm64-only,这两道闸门就是为此加的。
 
-⚠️ appcast 里主包那条 item 必须带 `sparkle:hardwareRequirements="arm64"` —— 少了它,Intel
-用户会被自动更新推一个 arm64-only 的包、装上打不开。`package.sh` 结尾会把这条和其余手工
-步骤(EdDSA 签名、`gh release create`、更新 Homebrew cask)一起打印出来;签名和上传故意不做,
-Sparkle 的私钥和 GitHub 凭据不该经过打包脚本。
+⚠️ appcast 里主包那条 item 必须带子元素 `<sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>`
+——**是 `<item>` 的子元素,不是 `<enclosure>` 的属性**(写成属性解析不报错但匹配不到任何东西)。
+少了它,Intel 用户会被自动更新推一个 arm64-only 的包、装上打不开。这一步现在由
+`.github/workflows/release.yml` 在 tag push 时自动做;`package.sh` 只出资产、不签名不上传
+(Sparkle 的私钥和 GitHub 凭据不该经过打包脚本),它结尾打印的手工步骤是给"不走 CI、在本机
+手动发一版"时用的。
 
 ## 开机启动
 
