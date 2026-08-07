@@ -219,6 +219,19 @@ func corroboratedEndings(candidates []lyricCandidate) map[string]bool {
 // 收尾渐弱、时长取整这类正常误差通常在两三秒内,5 秒足够宽松;再多就是标错了。
 const lyricOvershootToleranceSecs = 5.0
 
+// lyricsScoringVersion 是下面这套打分规则的版本号。
+//
+// **改动 scoreLyricCandidate 的任何一档权重/判定,都必须把这个数 +1。** 缓存是"解析一次
+// 永久保留",每条记着自己是按哪一版规则选出来的(enrichEntry.LyricsScoringVersion);
+// 版本落后的条目会在这首歌下次被播放时后台重搜一轮、按新规则重选(见 needsLyricsRescore)。
+// 忘了 +1 的后果不是报错而是静默失效:新规则只对以后从没听过的歌生效,已经听过的那批
+// 永远停在旧选择上 —— 2026-08-07 改权重时正是这样,用户那首歌缓存里还挂着按旧规则选出来
+// 的 Musixmatch。
+//
+// v2(2026-08-07):时长档封顶从 +1000 压到 +300(不再压过逐字时间轴的 +400);歌词结尾
+// 超出曲目时长 5 秒以上的候选直接判无效。v1 = 这个字段还不存在时写入的所有条目。
+const lyricsScoringVersion = 2
+
 func scoreLyricCandidate(localArtist, localTitle string, durationSecs float64, c lyricCandidate, corroborated bool) int {
 	if !isTimedLRC(c.lyrics) {
 		return -1

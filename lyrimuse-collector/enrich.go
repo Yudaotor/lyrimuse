@@ -58,6 +58,12 @@ type enrichEntry struct {
 	// 升级重试的节流与上限,见 needsLyricsRetry。
 	LyricsRetryTS    int64 `json:"lyrics_retry_ts,omitempty"`
 	LyricsRetryCount int   `json:"lyrics_retry_count,omitempty"`
+	// LyricsScoringVersion 记录这条歌词是按哪一版打分规则选出来的(见 lyricsScoringVersion),
+	// LyricsRescoreCount 是按新规则重选的已尝试次数(见 needsLyricsRescore)。
+	// 没有这个字段的老条目会读成 0,一律落后于当前版本 —— 正是想要的:它们确实是按更老的
+	// 规则选的。
+	LyricsScoringVersion int `json:"lyrics_scoring_version,omitempty"`
+	LyricsRescoreCount   int `json:"lyrics_rescore_count,omitempty"`
 	// 外围字段补全的已尝试次数,见 needsPeripheralBackfill 的上限说明。
 	PeripheralRetryCount int `json:"peripheral_retry_count,omitempty"`
 	// 解析这条时用的曲目真实时长(秒)。存下来是给"歌词管理"的手动搜索用的:打分里
@@ -146,9 +152,15 @@ func trackEnrichment(artist, title, album, bundleID string, durationSecs float64
 	enrichMu.Lock()
 	e, ok := enrichCache[key]
 	if ok {
+		// 一次只跑一路后台任务(都会重新取锁改同一条记录),下次播放时轮到下一个。
+		// 重选排在升级重试前面:后者用旧分做"严格更高"的比较,而版本落后的条目那个旧分
+		// 本来就作废了,先按新规则重选一次再谈升级才有意义。
 		if needsPeripheralBackfill(e, artist) && !enrichInflight[key] {
 			enrichInflight[key] = true
 			go backfillPeripheralFields(key, artist, title, album, durationSecs)
+		} else if needsLyricsRescore(e) && !enrichInflight[key] {
+			enrichInflight[key] = true
+			go rescoreLyrics(key, artist, title, album, durationSecs)
 		} else if needsLyricsRetry(e) && !enrichInflight[key] {
 			enrichInflight[key] = true
 			go retryLyricsUpgrade(key, artist, title, album, durationSecs)
@@ -197,9 +209,20 @@ func needsPeripheralBackfill(e enrichEntry, artist string) bool {
 // lyricSourcesWithCandidates 挑出这一轮真的给出了可用候选的源(负分是"纯音乐"这类搭车
 // 标记,不算候选,见 scoredLyricCandidateResult.Instrumental)。
 func lyricSourcesWithCandidates(scored []scoredLyricCandidateResult) []string {
+	return distinctLyricSources(scored, true)
+}
+
+// lyricSourcesResponded 跟上面的区别是**不看分数**:只要这个源在这一轮里给出过候选就算,
+// 哪怕那个候选被判成无效(Score<0)。用来回答"这一轮五源是不是都回来了",而不是"哪些源
+// 给出了能用的东西" —— 一个源明确给出了一份烂候选,跟它超时没露面,是两回事。
+func lyricSourcesResponded(scored []scoredLyricCandidateResult) []string {
+	return distinctLyricSources(scored, false)
+}
+
+func distinctLyricSources(scored []scoredLyricCandidateResult, onlyValid bool) []string {
 	seen := make([]string, 0, len(scored))
 	for _, c := range scored {
-		if c.Score < 0 {
+		if onlyValid && c.Score < 0 {
 			continue
 		}
 		dup := false
@@ -214,6 +237,29 @@ func lyricSourcesWithCandidates(scored []scoredLyricCandidateResult) []string {
 		}
 	}
 	return seen
+}
+
+// allEnabledLyricSourcesResponded 判断这一轮搜索是不是"信息完整"的:每个启用的源都给出了
+// 候选(能不能用另说)。按新打分规则重选时必须以此为前提 —— 缺了一个源就重选,等于拿一份
+// 更残缺的信息去推翻当初那次决定,可能越换越差。
+func allEnabledLyricSourcesResponded(scored []scoredLyricCandidateResult) bool {
+	responded := lyricSourcesResponded(scored)
+	for source, enabled := range features.LyricsSources {
+		if !enabled {
+			continue
+		}
+		found := false
+		for _, s := range responded {
+			if s == source {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return false
+		}
+	}
+	return true
 }
 
 // lyricsRetryInterval / lyricsRetryMaxAttempts 给"歌词升级重试"设的节流和上限。
@@ -319,7 +365,92 @@ func retryLyricsUpgrade(key, artist, title, album string, durationSecs float64) 
 		e.Lyrics = picked.Lyrics
 		e.LyricsSource = picked.Source
 		e.LyricsScore = picked.Score
+		e.LyricsScoringVersion = lyricsScoringVersion
 		e.LyricsTr, e.LyricsRoma, e.LyricsYRC = picked.LyricsTr, picked.LyricsRoma, picked.LyricsYRC
+	}
+	enrichCache[key] = e
+	enrichDirty = true
+}
+
+// lyricsRescoreMaxAttempts 是"按新打分规则重选"的尝试次数上限。
+//
+// 正常情况下一次就够:重选完就盖上当前版本号,这条以后再也不会进这条路径。会用到第二次的
+// 只有"这一轮有源没回来、不敢拿残缺信息推翻旧决定"(见 allEnabledLyricSourcesResponded)
+// 那种情况,所以 2 次足够;再不成就认账,保留旧选择,不为一次规则升级无限重搜。
+const lyricsRescoreMaxAttempts = 2
+
+// needsLyricsRescore 判断这条缓存的歌词是不是按**过时的**打分规则选出来的、该重选一次。
+//
+// 跟 needsLyricsRetry 是两件不同的事,别合并:
+//   - needsLyricsRetry 处理的是"当初信息不全"(有源超时没露面),规则没变、只是运气不好,
+//     所以它只在**新分严格更高**时才替换;
+//   - 这个处理的是"规则本身改了",当初那次决定用的标尺已经作废。两边的分数不可比
+//     (旧分是旧规则算出来的),所以重选走的是"新规则下重新选一次最优",而不是比大小。
+//
+// 三道闸:手改过的不碰(见 ManualLyrics)、版本已经是最新的不碰、次数用尽不碰。故意**不**加
+// 时间节流:这条路径的目的就是让存量条目尽快跟上新规则,而成功一次就盖版本号、自然只会
+// 发生一次;失败的情况由次数上限兜住。
+func needsLyricsRescore(e enrichEntry) bool {
+	if !features.Lyrics || e.Lyrics == "" || e.ManualLyrics {
+		return false
+	}
+	if e.LyricsScoringVersion >= lyricsScoringVersion {
+		return false
+	}
+	return e.LyricsRescoreCount < lyricsRescoreMaxAttempts
+}
+
+// rescoreLyrics 按当前打分规则重跑一轮搜索并重新选一次歌词。
+//
+// 跟 retryLyricsUpgrade 同一个范式(inflight 去重 + 重新取锁 + 条目可能已被删),两点不同:
+//  1. 不跟旧分比大小 —— 旧分是按旧规则算的,不可比(见 needsLyricsRescore)。
+//  2. 只有这一轮所有启用的源都回来了才认结果并盖版本号;缺源就只记一次尝试、下次再来,
+//     免得拿残缺信息推翻当初那次(可能信息更完整的)决定。
+func rescoreLyrics(key, artist, title, album string, durationSecs float64) {
+	defer func() {
+		enrichMu.Lock()
+		delete(enrichInflight, key)
+		enrichMu.Unlock()
+	}()
+	_, scored := scoredLyricCandidates(artist, title, album, durationSecs)
+	picked := pickLyricCandidate(scored)
+	complete := allEnabledLyricSourcesResponded(scored)
+	seen := lyricSourcesWithCandidates(scored)
+
+	enrichMu.Lock()
+	defer enrichMu.Unlock()
+	e, ok := enrichCache[key]
+	if !ok {
+		// 重搜这段时间里这条被用户在"歌词管理"里删掉了 —— 不要把它复活回去。
+		return
+	}
+	// 期间用户可能刚好手改了这条(重搜是异步的,进来时的快照已经过期)。跟删除同理:
+	// 以拿锁这一刻的实际状态为准,不能用几秒前的判断结果去覆盖人工修正。
+	if e.ManualLyrics {
+		return
+	}
+	e.LyricsRescoreCount++
+	if len(seen) > 0 {
+		e.LyricsSourcesSeen = seen
+	}
+	switch {
+	case !complete:
+		log.Printf("lyrics rescore deferred (source missing): %s", key)
+	case picked == nil:
+		// 所有源都回来了、但新规则下一个能用的都没有(比如全被"超出曲目时长"判掉)。
+		// 保留现有歌词不动 —— 有一份存疑的歌词也好过没有 —— 但版本号照盖:结论已经
+		// 在完整信息下得出过了,再重搜一次也是同样的结果。
+		e.LyricsScoringVersion = lyricsScoringVersion
+		log.Printf("lyrics rescore: %s  no valid candidate under v%d, keeping %s", key, lyricsScoringVersion, e.LyricsSource)
+	default:
+		if picked.Lyrics != e.Lyrics {
+			log.Printf("lyrics rescore: %s  %s(v%d) -> %s(%d)", key, e.LyricsSource, e.LyricsScoringVersion, picked.Source, picked.Score)
+			e.Lyrics = picked.Lyrics
+			e.LyricsTr, e.LyricsRoma, e.LyricsYRC = picked.LyricsTr, picked.LyricsRoma, picked.LyricsYRC
+		}
+		e.LyricsSource = picked.Source
+		e.LyricsScore = picked.Score
+		e.LyricsScoringVersion = lyricsScoringVersion
 	}
 	enrichCache[key] = e
 	enrichDirty = true
@@ -520,6 +651,7 @@ func resolveTrackEnrichment(artist, title, album string, durationSecs float64) e
 			e.Lyrics = picked.Lyrics
 			e.LyricsSource = picked.Source
 			e.LyricsScore = picked.Score
+			e.LyricsScoringVersion = lyricsScoringVersion
 			e.LyricsTr, e.LyricsRoma, e.LyricsYRC = picked.LyricsTr, picked.LyricsRoma, picked.LyricsYRC
 		} else {
 			// 没有任何源给出可用歌词——查一下 scored 里是否搭车带着"lrclib 明确说是
