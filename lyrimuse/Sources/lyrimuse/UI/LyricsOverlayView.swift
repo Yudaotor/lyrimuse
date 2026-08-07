@@ -115,6 +115,36 @@ struct LyricsOverlayView: View {
         .onPreferenceChange(ControlsFramePreferenceKey.self) { onControlsFrameChange($0) }
         .animation(.easeOut(duration: 0.16), value: overlayController.isHoveringForControls)
         .animation(.easeOut(duration: 0.3), value: overlayController.showDragHint)
+        // ⚠️ 内容必须**贴着窗口顶边**放,不能让它在窗口里居中。
+        //
+        // 在这一行之前,根视图只约束了宽度(上面那句 .frame(maxWidth: .infinity)),高度就是内容
+        // 的固有高度;而窗口高度有 120pt 的地板(updateHeight 里的 max(overlayDefaultHeight, …)),
+        // 单行歌词的内容只有 70pt 上下。NSHostingView 比内容高的时候,SwiftUI 默认把内容**垂直
+        // 居中**放 —— 于是内容高度一变,整块内容(连同歌词文字)就会在窗口里上下移动半个差值。
+        //
+        // 用户报的就是这个:鼠标移上去、播放控制排被插进同一个 VStack(见上面
+        // isHoveringForControls 那个分支),内容一下子高出约 50pt,居中落位把整行歌词往上顶了
+        // 二十多 pt,看着就是"歌词往上跳一下"。锁定位置时不会发生,只是因为那时控制排根本不
+        // 插入(handleMouseEvent 首行就 guard 掉了),内容高度没变过。
+        //
+        // 2026-08-07 用一个独立的 SwiftUI 沙盒逐像素量过(同样的修饰符链 + 固定 120pt 宿主):
+        //   居中(改前):静止时内容顶边距窗口顶 30.0pt,插入按钮后 17.0pt —— 上移 13pt
+        //   贴顶(改后):两种状态都是 0.0pt —— 纹丝不动
+        //
+        // 贴顶还顺带修正了一处隐含假设:updateControlsHotZone 把控制排的坐标从
+        // overlayCoordSpaceName 换算成窗口坐标时用的是 `window.frame.height - rect.maxY`,
+        // 这只有在"内容块顶边 == 窗口顶边"时才成立(那段注释自己把它当成已验证的等价关系)。
+        // 内容居中时这个前提在 内容高<120 的情况下是破的;贴顶之后它才真正永远成立。
+        //
+        // 必须加在所有 background/测量修饰符**之后**:加在前面的话,那个测内容高度的
+        // GeometryReader 量到的会变成整个窗口高度,updateHeight 就再也收不到真实内容高度了;
+        // 背景胶囊也会被撑满整个窗口,而不是只包住歌词。
+        //
+        // 代价:静止时歌词从"窗口垂直居中"变成"贴着窗口顶边",相对窗口位置一次性上移约
+        // (窗口高 − 内容高)/2。窗口本身是透明的、用户看不到边界,所以表现为文字一次性往上挪
+        // 一截,拖一次窗口即可调回;换来的是此后任何内容高度变化(悬停、歌词换行、罗马音/译文
+        // 开关、拖动提示弹出)都不再让歌词位移。
+        .frame(maxHeight: .infinity, alignment: .top)
     }
 
     private var playbackControls: some View {
