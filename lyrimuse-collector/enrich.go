@@ -67,8 +67,10 @@ type enrichEntry struct {
 	// 胜出。存下来之后两边口径就一致了。
 	DurationSecs float64 `json:"duration_secs,omitempty"`
 	// ManualLyrics 标记这条歌词是用户在 desktop-lyrics 的"歌词管理"窗口里手动纠正/采纳
-	// 过的——纯粹是给 UI 显示"人工修正"徽章用的溯源标记,不再影响任何自动刷新逻辑(已经
-	// 没有自动刷新了,所有条目都是解析一次永久生效)。
+	// 过的。除了给 UI 显示"人工修正"徽章,它还是**所有自动重搜路径的一道否决闸**:
+	// needsLyricsRetry / needsLyricsRescore 都必须先看它。用户手改过的歌词是这套缓存里
+	// 唯一删了就找不回来的东西(重新解析只会又抓到当初那份不准的),自动逻辑没有任何理由
+	// 觉得自己比人工更懂。
 	ManualLyrics bool `json:"manual_lyrics,omitempty"`
 	// Instrumental 标记"联网查过了,至少一个源(目前是 lrclib)明确说这首歌是纯音乐"——
 	// 跟"Lyrics 为空"要分开看:后者也可能是"五个源都没查到、真的没搜到"这种更含糊的
@@ -242,6 +244,13 @@ func needsLyricsRetry(e enrichEntry) bool {
 	if !features.Lyrics || e.Lyrics == "" || e.LyricsYRC != "" {
 		return false
 	}
+	// 用户手改过的绝不自动重搜,理由见 ManualLyrics 字段的注释。这道闸 2026-08-07 补上:
+	// 这个升级重试刚上线时漏了它,而 saveEdit 只写 manual_lyrics、不动 lyrics_score,于是
+	// 一条人工修正过的记录仍挂着当初自动选出来那份的分数,后台重搜一旦拿到更高分就会把
+	// 用户手改的内容直接覆盖掉 —— 而这是整个缓存里唯一不可恢复的东西。
+	if e.ManualLyrics {
+		return false
+	}
 	if e.LyricsRetryCount >= lyricsRetryMaxAttempts {
 		return false
 	}
@@ -293,6 +302,11 @@ func retryLyricsUpgrade(key, artist, title, album string, durationSecs float64) 
 	e, ok := enrichCache[key]
 	if !ok {
 		// 重搜这段时间里这条被用户在"歌词管理"里删掉了 —— 不要把它复活回去。
+		return
+	}
+	if e.ManualLyrics {
+		// 重搜这几秒里用户刚好在"歌词管理"里手改了这条 —— 进来时的快照已经过期,以拿锁
+		// 这一刻的实际状态为准(跟 rescoreLyrics 里同一道判断)。
 		return
 	}
 	e.LyricsRetryCount++
