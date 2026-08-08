@@ -274,7 +274,8 @@ func qqCoverFallback(artist, title, album string) (cover, canonicalArtist string
 	}
 	var cands []qqCoverCand
 	for _, it := range qqSmartbox(artist + " " + title) {
-		if it.Mid == "" || !looseContains(it.Name, title) || !artistMatches(it.Singer, artist) {
+		if it.Mid == "" || !lyricTitleAccepted(it.Name, title) ||
+			!artistMatches(it.Singer, artist) {
 			continue
 		}
 		cands = append(cands, qqCoverCand{mid: it.Mid, exact: normLoose(it.Name) == normLoose(title)})
@@ -368,7 +369,8 @@ func resolveQQMusicMatch(artist, title, album string) qqMusicMatch {
 	collect := func(strict bool) []qqCand {
 		var cs []qqCand
 		for _, it := range items {
-			if it.Mid == "" || !looseContains(it.Name, title) || !qqArtistOK(strict, it.Singer, artist) {
+			if it.Mid == "" || !lyricTitleAccepted(it.Name, title) ||
+				!qqArtistOK(strict, it.Singer, artist) {
 				continue
 			}
 			cs = append(cs, qqCand{mid: it.Mid, title: it.Name, artist: it.Singer, exact: normLoose(it.Name) == normLoose(title)})

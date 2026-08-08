@@ -222,3 +222,36 @@ func TestLRCLIBStrictTitleMatchParenModes(t *testing.T) {
 		t.Error("即使忽略括号,也绝不能退化成子串包含 —— 那会把另一首歌当成这一首")
 	}
 }
+
+// 「歌名匹配」这个设置必须对**所有**源生效。
+//
+// 2026-08-09 用户报的真实场景:设成「严格」,自动选中的却是 kugou 那条曲名叫
+// "Never let go"(没有 "(Remastered 2014)" 后缀)的候选。原因是这个设置当初只接到了
+// netease 和 lrclib —— kugou/QQ/Musixmatch 各自直接调 looseContains,谁都没查过它。
+func TestLyricTitleAcceptedHonoursStrictSetting(t *testing.T) {
+	saved := features
+	defer func() { features = saved }()
+
+	const local = "Never Let Go (Remastered 2014)"
+	features.LyricsStrictTitleMatch = false
+	if !lyricTitleAccepted("Never let go", local) {
+		t.Error("忽略括号档:少了版本后缀也该认(大小写不敏感)")
+	}
+	if !lyricTitleAccepted("Never Let Go (Remastered 2014)", local) {
+		t.Error("忽略括号档:完全一致当然该认")
+	}
+
+	features.LyricsStrictTitleMatch = true
+	if lyricTitleAccepted("Never let go", local) {
+		t.Error("严格档:没有版本后缀就不该认 —— 这正是用户撞到的那一条")
+	}
+	if !lyricTitleAccepted("never let go (remastered 2014)", local) {
+		t.Error("严格档要的是归一化后相等,不是逐字节相等(大小写/空格不算差异)")
+	}
+	if lyricTitleAccepted("Never Let Go (Live)", local) {
+		t.Error("严格档:括号内容不同就是不同版本")
+	}
+	if lyricTitleAccepted("", local) || lyricTitleAccepted("Never Let Go", "") {
+		t.Error("空串两档都不该认")
+	}
+}

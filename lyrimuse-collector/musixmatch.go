@@ -228,7 +228,7 @@ func musixmatchSearchTrack(artist, title string) (musixmatchTrackMatch, bool) {
 		if t.Track.HasSubtitles != 1 {
 			continue
 		}
-		if looseContains(t.Track.TrackName, title) && artistMatches(t.Track.ArtistName, artist) {
+		if lyricTitleAccepted(t.Track.TrackName, title) && artistMatches(t.Track.ArtistName, artist) {
 			return musixmatchTrackMatch{
 				trackID: t.Track.TrackID,
 				title:   t.Track.TrackName,

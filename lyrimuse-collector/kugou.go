@@ -186,7 +186,8 @@ func resolveKugouLyric(artist, title string, durationSecs float64) kugouResult {
 	var chosen *kugouSong
 	for i := range sr.Data.Info {
 		s := &sr.Data.Info[i]
-		if s.Hash == "" || !looseContains(s.SongName, title) || !artistMatches(s.SingerName, artist) {
+		if s.Hash == "" || !lyricTitleAccepted(s.SongName, title) ||
+			!artistMatches(s.SingerName, artist) {
 			continue
 		}
 		chosen = s

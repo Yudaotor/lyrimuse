@@ -724,6 +724,24 @@ const versionMismatchPenalty = 600
 //
 // ⚠️ 这只管"接不接受这个候选",不管"拿什么去搜" —— 搜索词那边(netease.go 的
 // stripParens(title))照旧去括号,那是为了召回率,跟严不严格无关:搜不到就更谈不上匹配。
+// lyricTitleAccepted 是各个源共用的「这条候选的曲名算不算这首歌」判定。
+//
+// 2026-08-09 补上:「歌名匹配」那个设置刚做出来时只接到了 netease 和 lrclib —— 那两处
+// 本来就有"去掉括号再比一次"的兜底,改起来最显眼。而 kugou/QQ/Musixmatch 走的是完全
+// 独立的一行 looseContains,谁都没查过这个设置,于是用户明明选了「严格」,kugou 照样
+// 拿一条没有 "(Remastered 2014)" 后缀的候选顶上来,而且因为带逐字时间轴分数还最高。
+//
+// netease 和 lrclib 保留各自的函数:它们在**忽略括号**这一档下有额外的门道
+// (netease 多一层剥括号兜底、lrclib 反而故意不认子串包含),不能一并压平。三者在
+// **严格**这一档下是同一个判定 —— 归一化后完全相等。
+func lyricTitleAccepted(candidateTitle, localTitle string) bool {
+	if features.LyricsStrictTitleMatch {
+		n, t := normLoose(candidateTitle), normLoose(localTitle)
+		return n != "" && n == t
+	}
+	return looseContains(candidateTitle, localTitle)
+}
+
 func titleMatches(name, title string, ignoreParens bool) bool {
 	if !ignoreParens {
 		// 严格档:归一化之后必须完全相等。
