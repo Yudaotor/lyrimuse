@@ -360,15 +360,29 @@ struct LyricsSearchSheet: View {
         .help(scoreExplanation(c))
     }
 
+    /// 分数说明。一项一行、按贡献从大到小排 —— 用户真正在问的是"它凭什么排第一",
+    /// answer 应该第一行就给出来,而不是让人在一串加号里自己找最大的那个。
+    /// 负的那一项(版本不符 −600)按绝对值排同样会冒到最前,那也正是它该在的位置。
     private func scoreExplanation(_ c: LyricsSearchService.Candidate) -> String {
         guard let first = c.scoreTerms.first else { return "" }
         if first.isRejection {
+            let detail = first.detail
             return String(format: L10n.t("不可用：%@"), first.label)
+                + (detail.isEmpty ? "" : "\n" + detail)
         }
-        let parts = c.scoreTerms.map { term in
-            "\(term.label) \(term.points > 0 ? "+" : "")\(term.points)"
+        var lines = [String(format: L10n.t("总分 %@"), "\(c.score)")]
+        for term in c.scoreTerms.sorted(by: { abs($0.points) > abs($1.points) }) {
+            let signed = "\(term.points > 0 ? "+" : "")\(term.points)"
+            // 来源那一项额外点名是哪个源:光说"来源 +20"还得自己回去数是谁。
+            var detail = term.detail
+            if term.kind == "source", let known = LyricsSource(rawValue: c.source) {
+                detail = known.displayName + " · " + detail
+            }
+            lines.append(detail.isEmpty
+                ? "\(signed)  \(term.label)"
+                : "\(signed)  \(term.label) · \(detail)")
         }
-        return "\(c.score) = " + parts.joined(separator: "  ")
+        return lines.joined(separator: "\n")
     }
 
     private func characteristicBadge(_ text: String, _ icon: String, _ tint: Color) -> some View {

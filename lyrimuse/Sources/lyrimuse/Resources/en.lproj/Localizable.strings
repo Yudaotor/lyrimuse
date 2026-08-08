@@ -449,3 +449,14 @@
 "整份只有署名行，没有正文" = "Credits only, no actual lyrics";
 "取不到最后一句的时间" = "Could not read the last timestamp";
 "时长明显对不上，也没有别的源印证" = "Duration is far off and nothing corroborates it";
+"结束点获印证" = "End time corroborated";
+"来源" = "Source";
+"版本不符" = "Version mismatch";
+"总分 %@" = "Total %@";
+"最后一句的时间跟曲长越接近分越高，最多 300" = "The closer the last line's time is to the track length, the higher — up to 300";
+"时长对不上，但别的源也在这个时间结束，改信这个印证" = "The duration is off, but another source ends at the same time, so that is trusted instead";
+"带逐字（卡拉OK）时间轴，是歌词质量最直接的证据" = "Has word-by-word (karaoke) timing, the most direct evidence of quality";
+"网易云 50 · QQ 30 · 酷狗 20 · Musixmatch 15 · LRCLIB 10" = "NetEase 50 · QQ 30 · Kugou 20 · Musixmatch 15 · LRCLIB 10";
+"一行 1 分，最多 200" = "One point per line, up to 200";
+"括号里的 Live / Remix / Demo 等跟本地曲名对不上" = "Live / Remix / Demo in the parentheses does not match the local title";
+"最后一句的时间跟曲长差了 25% 以上，多半是另一个版本" = "The last line's time is more than 25% off the track length — most likely another version";
