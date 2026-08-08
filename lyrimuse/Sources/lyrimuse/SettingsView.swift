@@ -306,44 +306,34 @@ private struct LyricsSettingsTab: View {
             // 用 WrapLayout 而不是 HStack:万一系统字号调大、或以后加了第六个来源,自动折到
             // 第二行,不会被卡片宽度裁掉。
             SettingsRawRow(insetToText: true) {
-                WrapLayout(horizontalSpacing: 8, verticalSpacing: 8, rowAlignment: .leading) {
+                WrapLayout(horizontalSpacing: 20, verticalSpacing: 8, rowAlignment: .leading) {
                     ForEach(LyricsSource.allCases) { source in
-                        sourceChip(source)
+                        sourceCheckbox(source)
                     }
                 }
             }
         }
     }
 
-    private func sourceChip(_ source: LyricsSource) -> some View {
-        let enabled = features.lyricsSources.contains(source)
-        return Button {
-            setSource(source, enabled: !enabled)
-        } label: {
+    /// 一个来源 = 一个原生复选框。
+    ///
+    /// 2026-08-09 先做成了带来源色底的胶囊,用户反馈"跟整体风格不搭" —— 这一页其余控件
+    /// 全是系统原生件(开关、分段控件、下拉),五个饱和色块摆在中间确实突兀,而且"选中"
+    /// 本来就有一个所有人都认识的 macOS 表达方式。来源色只留一个小圆点作身份标记(跟
+    /// "歌词管理"窗口来源列同一套色),不再铺成背景。
+    private func sourceCheckbox(_ source: LyricsSource) -> some View {
+        Toggle(
+            isOn: Binding(
+                get: { features.lyricsSources.contains(source) },
+                set: { setSource(source, enabled: $0) }
+            )
+        ) {
             HStack(spacing: 5) {
-                // 勾在关掉时也占位(只是透明),否则一勾一取消整排胶囊都会左右挪一下。
-                Image(systemName: "checkmark")
-                    .font(.system(size: 9, weight: .bold))
-                    .frame(width: 9)
-                    .opacity(enabled ? 1 : 0)
                 Circle().fill(source.color).frame(width: 7, height: 7)
-                Text(source.displayName).font(.system(size: 12))
+                Text(source.displayName).font(.system(size: 13))
             }
-            .padding(.horizontal, 9)
-            .padding(.vertical, 5)
-            .background(
-                Capsule().fill(
-                    enabled ? source.color.opacity(0.14) : Color.secondary.opacity(0.09))
-            )
-            .overlay(
-                Capsule().strokeBorder(
-                    enabled ? source.color.opacity(0.45) : Color.clear, lineWidth: 1)
-            )
-            .foregroundStyle(enabled ? Color.primary : Color.secondary)
-            .contentShape(Capsule())
         }
-        .buttonStyle(.plain)
-        .help(source.displayName)
+        .toggleStyle(.checkbox)
     }
 
     private func setSource(_ source: LyricsSource, enabled: Bool) {
