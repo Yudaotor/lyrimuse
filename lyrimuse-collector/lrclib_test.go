@@ -102,7 +102,7 @@ func TestLRCLIBStrictTitleMatch(t *testing.T) {
 		{"Blue Gangsta", "", false, "本地空 → 拒"},
 	}
 	for _, c := range cases {
-		if got := lrclibStrictTitleMatch(c.candidate, c.local); got != c.want {
+		if got := lrclibStrictTitleMatch(c.candidate, c.local, true); got != c.want {
 			t.Errorf("%s: lrclibStrictTitleMatch(%q, %q) = %v, want %v", c.label, c.candidate, c.local, got, c.want)
 		}
 	}

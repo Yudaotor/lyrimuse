@@ -178,3 +178,47 @@ func TestScoreLyricCandidatePenalizesWrongVersion(t *testing.T) {
 		t.Errorf("差距要足够决定性,实际只差 %d 分", gs-bs)
 	}
 }
+
+// 设置里的「歌名匹配」两档:忽略括号(默认)vs 严格。
+//
+// 这两档的差别只在"括号里的内容算不算数",不影响拿什么去搜(搜索词照旧去括号,那是召回率
+// 的事)。真实场景:本地是 "In My Room (Remastered 2014)",而歌词源上普遍只叫 "In My Room"。
+func TestTitleMatchesParenModes(t *testing.T) {
+	cases := []struct {
+		label                 string
+		name, title           string
+		wantLoose, wantStrict bool
+	}{
+		{"完全一致:两档都认", "In My Room", "In My Room", true, true},
+		{"候选没有版本后缀:忽略括号认,严格不认",
+			"In My Room", "In My Room (Remastered 2014)", true, false},
+		{"本地没有、候选有:同理", "In My Room (Remastered 2014)", "In My Room", true, false},
+		{"两边括号内容不同但主名相同:忽略括号认,严格不认",
+			"Hello (Live)", "Hello (Studio)", true, false},
+		{"括号完全一致:两档都认",
+			"In My Room (Remastered 2014)", "In My Room (Remastered 2014)", true, true},
+		{"根本是两首歌:两档都不认", "First Love", "In My Room", false, false},
+	}
+	for _, c := range cases {
+		if got := titleMatches(c.name, c.title, true); got != c.wantLoose {
+			t.Errorf("%s: 忽略括号 = %v, want %v", c.label, got, c.wantLoose)
+		}
+		if got := titleMatches(c.name, c.title, false); got != c.wantStrict {
+			t.Errorf("%s: 严格 = %v, want %v", c.label, got, c.wantStrict)
+		}
+	}
+}
+
+func TestLRCLIBStrictTitleMatchParenModes(t *testing.T) {
+	// 注意:这个函数名里的 Strict 指"比 titleMatches 严",跟设置里那两档是两件事 ——
+	// 即使忽略括号,它也只认相等、不认双向子串包含。
+	if !lrclibStrictTitleMatch("In My Room", "In My Room (Remastered 2014)", true) {
+		t.Error("忽略括号档:去掉括号后相等,该认")
+	}
+	if lrclibStrictTitleMatch("In My Room", "In My Room (Remastered 2014)", false) {
+		t.Error("严格档:括号里的内容也要对上,不该认")
+	}
+	if lrclibStrictTitleMatch("Real Love Baby", "Real Love", true) {
+		t.Error("即使忽略括号,也绝不能退化成子串包含 —— 那会把另一首歌当成这一首")
+	}
+}

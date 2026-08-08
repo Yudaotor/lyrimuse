@@ -375,6 +375,25 @@ private struct LyricsSettingsTab: View {
                 .pickerStyle(.segmented)
                 .fixedSize()
             }
+            CardDivider()
+            // 歌名匹配的松紧。跟上面那个"用哪个候选"是两件事:这一档决定**一条候选算不算
+            // 这首歌**,上面那档决定在算数的候选里怎么挑。
+            SettingsRow(
+                icon: "textformat",
+                title: L10n.t("歌名匹配"),
+                help: L10n.t("忽略括号：歌词源上的「In My Room」也能匹配本地的「In My Room (Remastered 2014)」。严格：括号里的内容也必须一字不差地对上，宁可没有歌词也不要另一个版本的")
+            )
+            SettingsSubRow {
+                Picker("", selection: Binding(
+                    get: { features.lyricsStrictTitleMatch },
+                    set: { features.lyricsStrictTitleMatch = $0; Task { await features.save() } }
+                )) {
+                    Text(L10n.t("忽略括号")).tag(false)
+                    Text(L10n.t("严格")).tag(true)
+                }
+                .pickerStyle(.segmented)
+                .fixedSize()
+            }
             if features.lyricsSourceMode == .priority {
                 ForEach(Array(orderedEnabledSources.enumerated()), id: \.element) { index, source in
                     CardDivider()

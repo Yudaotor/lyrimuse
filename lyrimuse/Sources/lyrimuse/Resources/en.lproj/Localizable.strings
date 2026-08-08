@@ -428,4 +428,7 @@
 
 "系统兜底翻译" = "System Fallback Translation";
 "歌词源没带译文时补充" = "Fills in where the lyrics source ships none";
-"请提前下载好需要翻译的语言" = "Download the languages you want translated ahead of time";
+"请提前下载好需要翻译的语言" = "Download the languages you want translated ahead of time";"歌名匹配" = "Title Matching";
+"忽略括号" = "Ignore Parentheses";
+"严格" = "Exact";
+"忽略括号：歌词源上的「In My Room」也能匹配本地的「In My Room (Remastered 2014)」。严格：括号里的内容也必须一字不差地对上，宁可没有歌词也不要另一个版本的" = "Ignore parentheses: a source's \"In My Room\" matches your \"In My Room (Remastered 2014)\". Exact: what is inside the parentheses has to match too — better no lyrics than another version's";

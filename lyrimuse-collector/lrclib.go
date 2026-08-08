@@ -171,13 +171,19 @@ func lrclibSearch(artist, title string, durationSecs float64, timeout time.Durat
 //
 // 这里只认两种:归一化后完全相等,或者"去掉括号段之后"完全相等(容 "(feat. X)"/"(Remastered)"
 // 这类后缀差异——真正的版本差异由 versionTagsMismatch 那一门单独拦)。
-func lrclibStrictTitleMatch(candidate, local string) bool {
+// ignoreParens 的含义跟 titleMatches 那个同名参数一致(见那边注释),对应设置里的
+// 「歌名匹配」档位。注意这个函数名里的 "Strict" 说的是"比 titleMatches 严",跟那个档位
+// 是两件事:即使 ignoreParens 为真,这里也只认相等、不认双向子串包含。
+func lrclibStrictTitleMatch(candidate, local string, ignoreParens bool) bool {
 	nc, nl := normLoose(candidate), normLoose(local)
 	if nc == "" || nl == "" {
 		return false
 	}
 	if nc == nl {
 		return true
+	}
+	if !ignoreParens {
+		return false
 	}
 	sc, sl := normLoose(stripParens(candidate)), normLoose(stripParens(local))
 	return sc != "" && sl != "" && sc == sl
@@ -213,7 +219,8 @@ func pickLRCLIBSearchResult(items []lrclibSearchItem, artist, title string, dura
 		if !isTimedLRC(it.SyncedLyrics) {
 			continue
 		}
-		if !lrclibStrictTitleMatch(it.TrackName, title) || !artistMatches(it.ArtistName, artist) {
+		if !lrclibStrictTitleMatch(it.TrackName, title, !features.LyricsStrictTitleMatch) ||
+			!artistMatches(it.ArtistName, artist) {
 			continue
 		}
 		if versionTagsMismatch(title, it.TrackName) {

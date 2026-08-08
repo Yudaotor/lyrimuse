@@ -100,6 +100,7 @@ struct FeatureFlagsFile: Codable, Equatable {
     var player: String?
     var albumPrefetch: Bool?
     var lyricsMachineTranslation: Bool?
+    var lyricsStrictTitleMatch: Bool?
     var lastfmMirrorScrobble: Bool?
     var weeklyDigest: Bool?
     // 见 collector/daily.go——独立于 weeklyDigest 的开关,两个可以同时开、只开一个、
@@ -130,6 +131,7 @@ struct FeatureFlagsFile: Codable, Equatable {
         case player
         case albumPrefetch = "album_prefetch"
         case lyricsMachineTranslation = "lyrics_machine_translation"
+        case lyricsStrictTitleMatch = "lyrics_strict_title_match"
         case lastfmMirrorScrobble = "lastfm_mirror_scrobble"
         case weeklyDigest = "weekly_digest"
         case dailyDigest = "daily_digest"
@@ -173,6 +175,8 @@ public final class FeatureSettingsStore: ObservableObject {
     // 但在 macOS 26 以下、或语言包没装时会退到网络翻译服务,那条路会把歌词正文发出去,
     // 该由用户显式同意 —— 现有的五个歌词源只发歌手/歌名。
     @Published public var lyricsMachineTranslation = false
+    /// 歌名要不要连括号里的内容一起对上。默认 false(忽略括号),理由见采集器侧同名字段。
+    @Published public var lyricsStrictTitleMatch = false
     @Published public var lastfmMirrorScrobble = false
     @Published public var weeklyDigest = false
     @Published public var dailyDigest = false
@@ -209,6 +213,7 @@ public final class FeatureSettingsStore: ObservableObject {
             player: player.rawValue,
             albumPrefetch: albumPrefetch,
             lyricsMachineTranslation: lyricsMachineTranslation,
+            lyricsStrictTitleMatch: lyricsStrictTitleMatch,
             lastfmMirrorScrobble: lastfmMirrorScrobble, weeklyDigest: weeklyDigest, dailyDigest: dailyDigest,
             weeklyDigestSource: weeklyDigestSource.isEmpty ? nil : weeklyDigestSource,
             dailyDigestSource: dailyDigestSource.isEmpty ? nil : dailyDigestSource,
@@ -249,6 +254,7 @@ public final class FeatureSettingsStore: ObservableObject {
         player = f.player.flatMap(PlaybackPlayer.init(rawValue:)) ?? .appleMusic
         albumPrefetch = f.albumPrefetch ?? true
         lyricsMachineTranslation = f.lyricsMachineTranslation ?? false
+        lyricsStrictTitleMatch = f.lyricsStrictTitleMatch ?? false
         lastfmMirrorScrobble = f.lastfmMirrorScrobble ?? false
         weeklyDigest = f.weeklyDigest ?? false
         dailyDigest = f.dailyDigest ?? false

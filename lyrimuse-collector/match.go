@@ -682,7 +682,22 @@ func versionTagsMismatch(localTitle, candidateTitle string) bool {
 // pickLyricCandidate 直接丢弃),而是留 1 分—— 实在只有这一个候选时,有总比没有好。
 const versionMismatchPenalty = 600
 
-func titleMatches(name, title string) bool {
+// ignoreParens 对应设置里的「歌名匹配」:false 时只认原样的曲名,true(默认)时允许双方
+// 各自去掉括号段之后再比一次 —— 歌词源的曲名常常没有本地那串 "(Remastered 2014)"/
+// "(feat. X)" 后缀,不给这条退路的话很多歌一条候选都匹配不到。
+//
+// ⚠️ 这只管"接不接受这个候选",不管"拿什么去搜" —— 搜索词那边(netease.go 的
+// stripParens(title))照旧去括号,那是为了召回率,跟严不严格无关:搜不到就更谈不上匹配。
+func titleMatches(name, title string, ignoreParens bool) bool {
+	if !ignoreParens {
+		// 严格档:归一化之后必须完全相等。
+		//
+		// ⚠️ 这里**不能**先走一遍 looseContains —— 它是**双向子串包含**,"In My Room" 本来
+		// 就是 "In My Room (Remastered 2014)" 的子串,严格档会形同虚设(2026-08-09 第一版
+		// 就是这么写的,被单测当场抓住:两个"该拒绝"的用例全都返回了 true)。
+		n, t := normLoose(name), normLoose(title)
+		return n != "" && n == t
+	}
 	if looseContains(name, title) {
 		return true
 	}

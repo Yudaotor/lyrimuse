@@ -162,7 +162,7 @@ func resolveNeteaseInfo(artist, title, album string) neteaseInfo {
 		var exactCands, looseCands []cand
 		for i := range songs {
 			s := &songs[i]
-			if !titleMatches(s.Name, title) {
+			if !titleMatches(s.Name, title, !features.LyricsStrictTitleMatch) {
 				continue
 			}
 			artistMatch := false
