@@ -2,18 +2,92 @@ import Foundation
 
 // 罗马音兜底——LyricsSyncEngine 现有的罗马音字段完全依赖网易云服务端"恰好给这首歌算好了
 // lyrics_roma"(见 enrich.go/collector 那边),源没给就是空,中文歌曲的拼音、日文歌曲的
-// 罗马字完全没有客户端兜底。2026-08-04 补上:用系统自带的 ICU 音译(String 的
-// .toLatin StringTransform,Foundation 内建、零第三方依赖),在服务端没给这个字段时
-// 现算一份兜底——不追求跟专业罗马音标注工具(分词感知的日文罗马字转写)同等质量,只是
-// "有总比没有强"的免费兜底,真正的专业标注仍然优先用服务端字段(见调用点)。
+// 罗马字完全没有客户端兜底。2026-08-04 补上:用系统自带的音译在服务端没给这个字段时现算
+// 一份兜底——真正的专业标注仍然优先用服务端字段(见调用点)。
 public enum Romanizer {
-    // 输出等于输入(比如原文本来就是纯英文/已经是拉丁字母,音译是无操作)时返回 nil——
-    // 不展示一份跟原文一模一样的"罗马音",那对用户没有任何信息增量,徒增一行重复文字。
-    public static func romanize(_ text: String) -> String? {
+    /// 现算一份罗马音。`japanese` 由调用方按**整首歌**判定后传进来(见 looksJapanese)。
+    ///
+    /// ⚠️ 日文**必须**走形态分析,不能用 ICU 的 Any-Latin。汉字是中日共用的文字系统,而
+    /// Any-Latin 对汉字一律按普通话读——2026-08-09 用户报的正是这个:
+    ///
+    ///     火曜日の朝は   → Any-Latin: "huǒ yào rìno cháoha"   ← 拼音,完全不对
+    ///                    → 形态分析: "kayou hi no asa ha"
+    ///     受話器を取った君 → Any-Latin: "shòu huà qìwo qǔtta jūn"
+    ///                    → 形态分析: "juwa ki wo totta kimi"
+    ///
+    /// 2026-08-04 那次只解决了"别给纯中文歌加拼音"(靠 songLooksJapanese 整首拦掉),
+    /// 但日文行里夹着的汉字照样走 Any-Latin,于是假名出罗马字、汉字出拼音,混在一行里。
+    ///
+    /// 非日文(韩文谚文/泰文/西里尔字母等)跟汉字毫无交集,Any-Latin 对它们本来就是正确、
+    /// 无歧义的罗马化,继续用。
+    public static func romanize(_ text: String, japanese: Bool = false) -> String? {
         guard !text.isEmpty else { return nil }
+        // 日文歌里夹的纯英文行不要送进分词器:它会按词边界重新加空格,产出一份跟原文只差
+        // 空格的"罗马音",纯属噪声。只有真的含假名/汉字的行才需要读音。
+        if japanese, looksJapanese(text) || containsHan(text),
+            let reading = japaneseReading(text), reading != text
+        {
+            return reading
+        }
+        // 输出等于输入(原文本来就是拉丁字母,音译是无操作)时返回 nil——不展示一份跟原文
+        // 一模一样的"罗马音",那对用户没有任何信息增量,徒增一行重复文字。
         guard let transformed = text.applyingTransform(.toLatin, reverse: false),
-              transformed != text else { return nil }
+            transformed != text
+        else { return nil }
         return transformed
+    }
+
+    // 系统自带的日语形态分析:按词切开,每个词问它的拉丁转写。这是 Apple 平台上拿日文读音
+    // 的标准做法,kanji 的读音由词典决定,而不是逐字音译。
+    private static let japaneseLocale = CFLocaleCreate(
+        nil, CFLocaleIdentifier("ja_JP" as CFString))
+
+    private static func japaneseReading(_ text: String) -> String? {
+        let cf = text as CFString
+        let range = CFRangeMake(0, CFStringGetLength(cf))
+        let tokenizer = CFStringTokenizerCreate(
+            nil, cf, range, kCFStringTokenizerUnitWordBoundary, japaneseLocale)
+        var tokens: [String] = []
+        while CFStringTokenizerAdvanceToNextToken(tokenizer) != [] {
+            let tokenRange = CFStringTokenizerGetCurrentTokenRange(tokenizer)
+            let piece = CFStringCreateWithSubstring(nil, cf, tokenRange) as String? ?? ""
+            if let reading = CFStringTokenizerCopyCurrentTokenAttribute(
+                tokenizer, kCFStringTokenizerAttributeLatinTranscription) as? String,
+                !reading.isEmpty
+            {
+                tokens.append(reading)
+            } else if !piece.trimmingCharacters(in: .whitespaces).isEmpty {
+                // 标点/符号之类拿不到读音的,原样保留,别把它们吞掉。
+                tokens.append(piece)
+            }
+        }
+        guard !tokens.isEmpty else { return nil }
+        return mergeSokuon(tokens).joined(separator: " ")
+    }
+
+    /// 促音「っ」被单独切成一个词时,ICU 转写成字面的 "~tsu" —— 直接显示出来是乱码。
+    /// 赫本式的写法是把后一个辅音双写:取った → "to~tsu" + "ta" → "totta"。
+    private static func mergeSokuon(_ tokens: [String]) -> [String] {
+        var out: [String] = []
+        var index = 0
+        while index < tokens.count {
+            let token = tokens[index]
+            if token.hasSuffix("~tsu"), index + 1 < tokens.count,
+                let consonant = tokens[index + 1].first, consonant.isASCII, consonant.isLetter
+            {
+                out.append(token.dropLast(4) + String(consonant) + tokens[index + 1])
+                index += 2
+            } else if token.hasSuffix("~tsu") {
+                // 后面没词可双写(整行以促音结尾),丢掉这个记号,不要露给用户。
+                let head = String(token.dropLast(4))
+                if !head.isEmpty { out.append(head) }
+                index += 1
+            } else {
+                out.append(token)
+                index += 1
+            }
+        }
+        return out
     }
 
     // 2026-08-04 实测排查坐实的真实 bug:汉字本身是中文/日文共用的文字系统,
@@ -27,7 +101,8 @@ public enum Romanizer {
     // 假名字符就能确证"这是日文",借这个信号反过来判定该不该对含汉字的行启用兜底——
     // 调用方(LyricsSyncEngine)按"整首歌"粒度调一次、缓存结果,不是逐行判断,理由见
     // 调用点注释(极少数纯汉字的日文行不该因为局部特征被误判成中文)。
-    private static let kanaPattern = try! NSRegularExpression(pattern: #"\p{Hiragana}|\p{Katakana}"#)
+    private static let kanaPattern = try! NSRegularExpression(
+        pattern: #"\p{Hiragana}|\p{Katakana}"#)
 
     public static func looksJapanese(_ text: String) -> Bool {
         let range = NSRange(text.startIndex..., in: text)

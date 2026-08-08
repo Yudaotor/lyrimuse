@@ -250,7 +250,7 @@ public final class LyricsSyncEngine {
         // 判断)。不含汉字的行(韩文谚文/泰文/西里尔字母等)没有这层混淆,始终允许。
         if Romanizer.containsHan(plainText) && !songLooksJapanese { return nil }
         if let cached = romanizerFallbackCache[plainText] { return cached }
-        let result = Romanizer.romanize(plainText)
+        let result = Romanizer.romanize(plainText, japanese: songLooksJapanese)
         romanizerFallbackCache[plainText] = result
         return result
     }

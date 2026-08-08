@@ -732,6 +732,34 @@ do {
 
 // ---- 汇总 ----
 
+
+// 2026-08-09 用户报的真实 bug:日文行里的汉字被按普通话读成了拼音。
+// Any-Latin 对汉字一律出拼音,不看上下文是不是日语 —— 日文必须走形态分析。
+expectEqual(
+    Romanizer.romanize("火曜日の朝は", japanese: true)?.contains("kayou") ?? false, true,
+    "Romanizer: 日文汉字要按日语读音(火曜日 → kayou…),不是拼音")
+expectEqual(
+    Romanizer.romanize("火曜日の朝は", japanese: true)?.contains("huǒ") ?? true, false,
+    "Romanizer: 日文行里绝不能出现普通话拼音")
+expectEqual(
+    Romanizer.romanize("君のことが好きだから", japanese: true), "kimi no koto ga suki da kara",
+    "Romanizer: 整句日文读音")
+// 促音「っ」被 ICU 单独转写成字面的 "~tsu",必须合并成双写辅音,不能露给用户。
+expectEqual(
+    Romanizer.romanize("取った", japanese: true)?.contains("~tsu") ?? true, false,
+    "Romanizer: 促音记号不能出现在结果里")
+expectEqual(
+    Romanizer.romanize("取った", japanese: true), "totta",
+    "Romanizer: 促音合并成双写辅音")
+// 非日文仍然走 Any-Latin —— 谚文/泰文/西里尔跟汉字没有交集,音译对它们本来就是对的。
+expectEqual(
+    Romanizer.romanize("사랑해") != nil, true, "Romanizer: 韩文仍然照常音译")
+// 日文歌里夹的纯英文行不该被分词器加一堆空格当成"罗马音"
+expectEqual(
+    Romanizer.romanize("Baby I love you", japanese: true), nil,
+    "Romanizer: 日文歌里的英文行没有罗马音可言")
+
+
 if failures == 0 {
     print("\nALL PASS")
 } else {
