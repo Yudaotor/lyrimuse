@@ -864,6 +864,9 @@ type scoredLyricCandidateResult struct {
 	LyricsYRC     string `json:"lyrics_yrc,omitempty"`
 	HasWordTiming bool   `json:"has_word_timing"`
 	Score         int    `json:"score"`
+	// ScoreTerms 是这个分数的构成明细(或者被判 -1 时的唯一那条原因),给"搜索候选歌词"
+	// 弹窗把分数摊开显示用。只在那条手动搜索路径上有意义,自动解析路径不读它。
+	ScoreTerms []scoreTerm `json:"score_terms,omitempty"`
 	// Title/Artist/Album/CoverURL 是这个源实际匹配到的歌名/歌手/专辑/封面(不参与
 	// 打分,见 lyricCandidate 的同名字段注释)——"搜索候选歌词"弹窗靠这几个字段展示
 	// 每条候选具体对应哪首歌/哪个版本,不是只看来源名字。不是每个源都能给全:LRCLIB
@@ -1091,12 +1094,13 @@ func fetchScoredLyricCandidatesStreaming(artist, title, album string, durationSe
 				Lyrics:        c.lyrics,
 				LyricsYRC:     c.wordTimingYRC,
 				HasWordTiming: c.hasWordTiming,
-				Score:         scoreLyricCandidate(artist, title, durationSecs, c, corroborated[c.source]),
 				Title:         c.title,
 				Artist:        c.artist,
 				Album:         c.album,
 				CoverURL:      c.cover,
 			}
+			r.Score, r.ScoreTerms = scoreLyricCandidateDetailed(
+				artist, title, durationSecs, c, corroborated[c.source])
 			switch c.source {
 			case "netease":
 				// 翻译/罗马音网易云固定给中文;QQ/酷狗这次只接了逐字,不接翻译/罗马音,

@@ -436,3 +436,16 @@
 "显示" = "Display";
 "管理" = "Library";
 "让每首歌都有一份对得上的歌词" = "Give every track lyrics that actually match it";
+"当前使用" = "In use";
+"不可用：%@" = "Unusable: %@";
+"时长吻合" = "Duration match";
+"其它源印证了结束点" = "End time corroborated";
+"逐字时间轴" = "Word timing";
+"来源可靠度" = "Source";
+"行数" = "Lines";
+"版本限定词不符" = "Version tag mismatch";
+"不是带时间戳的歌词" = "Not timestamped lyrics";
+"语言跟这首歌对不上" = "Language does not match this song";
+"整份只有署名行，没有正文" = "Credits only, no actual lyrics";
+"取不到最后一句的时间" = "Could not read the last timestamp";
+"时长明显对不上，也没有别的源印证" = "Duration is far off and nothing corroborates it";

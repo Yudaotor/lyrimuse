@@ -130,8 +130,11 @@ struct LyricsSearchSheet: View {
                 }
                 .buttonStyle(.link)
             }
+            // 搜索途中也允许再点:上一轮会被 load() 里的 searchGeneration 判作废,子进程
+            // 也会被 LyricsSearchService.cancelRunning 杀掉。改了关键词却要等上一轮跑完
+            // (最长 20 秒)才能重搜,是没道理的等待。
             Button(L10n.t("重新搜索")) { Task { await load() } }
-                .disabled(isSearching || title.trimmingCharacters(in: .whitespaces).isEmpty)
+                .disabled(title.trimmingCharacters(in: .whitespaces).isEmpty)
         }
         .onSubmit { Task { await load() } }
         .padding(.horizontal, 16)
@@ -208,12 +211,11 @@ struct LyricsSearchSheet: View {
         HStack(alignment: .top, spacing: 8) {
             coverThumbnail(c.coverURL, size: 40)
             VStack(alignment: .leading, spacing: 3) {
-                Text(c.source).font(.body.weight(.medium))
-                candidateMatchInfo(c)
-                Text(String(format: L10n.t("分数 %@ · %@ 行"), "\(c.score)", "\(c.lineCount)"))
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                characteristicBadges(c)
+                // 第一行放这个候选**实际匹配到的歌名**,不再放来源名 —— 挑候选时最要紧的
+                // 判断是"这条到底对上了哪首歌/哪个版本",来源只是附带信息,挪到末尾的标签排。
+                candidateMatchInfo(c, titleFont: .body.weight(.medium))
+                scoreLine(c, font: .caption2)
+                characteristicBadges(c, source: c.source, isCurrent: c.source == currentSource)
             }
             Spacer(minLength: 0)
         }
@@ -226,11 +228,8 @@ struct LyricsSearchSheet: View {
             HStack(alignment: .top, spacing: 12) {
                 coverThumbnail(c.coverURL, size: 56)
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(c.source).font(.headline)
-                    candidateMatchInfo(c)
-                    Text(String(format: L10n.t("分数 %@ · %@ 行"), "\(c.score)", "\(c.lineCount)"))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                    candidateMatchInfo(c, titleFont: .headline)
+                    scoreLine(c, font: .caption)
                 }
                 Spacer()
                 Button(L10n.t("采用此候选")) {
@@ -239,7 +238,7 @@ struct LyricsSearchSheet: View {
                 }
                 .buttonStyle(.borderedProminent)
             }
-            characteristicBadges(c)
+            characteristicBadges(c, source: c.source, isCurrent: c.source == currentSource)
             ScrollView {
                 Text(c.lyrics)
                     .font(.system(.callout, design: .monospaced))
@@ -256,9 +255,11 @@ struct LyricsSearchSheet: View {
     // 都能给全,哪一项是空的就不显示那一行,不留空白占位;title 单独一行是因为它通常
     // 跟搜索关键词的歌名差不多、但偶尔不同(比如带 Live/Remix 后缀),值得单独看清楚。
     @ViewBuilder
-    private func candidateMatchInfo(_ c: LyricsSearchService.Candidate) -> some View {
+    private func candidateMatchInfo(
+        _ c: LyricsSearchService.Candidate, titleFont: Font
+    ) -> some View {
         if !c.title.isEmpty {
-            Text(c.title).font(.caption).lineLimit(1)
+            Text(c.title).font(titleFont).lineLimit(1)
         }
         if !c.artist.isEmpty || !c.album.isEmpty {
             Text([c.artist, c.album].filter { !$0.isEmpty }.joined(separator: " · "))
@@ -300,8 +301,12 @@ struct LyricsSearchSheet: View {
     // 跟 LyricsManagerView 详情页三个编辑区(歌词/译文/罗马音)用同一组图标,方便用户
     // 把候选列表里的图标和保存后详情页里的字段对上号。
     @ViewBuilder
-    private func characteristicBadges(_ c: LyricsSearchService.Candidate) -> some View {
-        HStack(spacing: 5) {
+    private func characteristicBadges(
+        _ c: LyricsSearchService.Candidate, source: String, isCurrent: Bool
+    ) -> some View {
+        // WrapLayout 而不是 HStack:最多可能同时有五个标签(逐字/译文/罗马音/来源/当前使用),
+        // 左侧那一列只有 ~300pt 宽,挤不下时该折行,不该被裁掉。
+        WrapLayout(horizontalSpacing: 5, verticalSpacing: 4, rowAlignment: .leading) {
             if c.hasWordTiming {
                 characteristicBadge(L10n.t("逐字时间戳"), "text.word.spacing", .blue)
             }
@@ -311,8 +316,59 @@ struct LyricsSearchSheet: View {
             if c.hasRomanization {
                 characteristicBadge(L10n.t("罗马音"), "textformat.abc", .purple)
             }
+            // 来源:用它在别处(歌词管理列表、设置里的来源勾选)一贯的身份色,一眼能对上号。
+            sourceBadge(source)
+            if isCurrent {
+                // 这首歌眼下真正在用的就是这一条。实心填充,跟上面几个描述性标签区分开 ——
+                // 那几个说的是"这条候选有什么",这一个说的是"你现在用的是它"。
+                Label(L10n.t("当前使用"), systemImage: "checkmark.seal.fill")
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(Color.accentColor, in: Capsule())
+            }
         }
         .font(.caption2)
+    }
+
+    private func sourceBadge(_ source: String) -> some View {
+        let known = LyricsSource(rawValue: source)
+        let tint = known?.color ?? .secondary
+        return Text(known?.displayName ?? source)
+            .foregroundStyle(tint)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(tint.opacity(0.12), in: Capsule())
+    }
+
+    /// 「分数 742 · 82 行」那一行,分数带一个悬停说明,摊开它是怎么加出来的。
+    ///
+    /// 加这个是因为分数单独摆着完全不可读:742 不知道高在哪,-1 更是会被当成"分很低",
+    /// 其实它是"这条被判定不可用"的标记(歌词没时间戳、语言对不上、时长明显对不上等),
+    /// 跟 741 分不是同一个量级上的东西。
+    @ViewBuilder
+    private func scoreLine(_ c: LyricsSearchService.Candidate, font: Font) -> some View {
+        HStack(spacing: 3) {
+            Text(String(format: L10n.t("分数 %@ · %@ 行"), "\(c.score)", "\(c.lineCount)"))
+            if !c.scoreTerms.isEmpty {
+                Image(systemName: "questionmark.circle")
+                    .foregroundStyle(.tertiary)
+            }
+        }
+        .font(font)
+        .foregroundStyle(.secondary)
+        .help(scoreExplanation(c))
+    }
+
+    private func scoreExplanation(_ c: LyricsSearchService.Candidate) -> String {
+        guard let first = c.scoreTerms.first else { return "" }
+        if first.isRejection {
+            return String(format: L10n.t("不可用：%@"), first.label)
+        }
+        let parts = c.scoreTerms.map { term in
+            "\(term.label) \(term.points > 0 ? "+" : "")\(term.points)"
+        }
+        return "\(c.score) = " + parts.joined(separator: "  ")
     }
 
     private func characteristicBadge(_ text: String, _ icon: String, _ tint: Color) -> some View {

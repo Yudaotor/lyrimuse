@@ -232,21 +232,70 @@ const lyricOvershootToleranceSecs = 5.0
 // 超出曲目时长 5 秒以上的候选直接判无效。v1 = 这个字段还不存在时写入的所有条目。
 const lyricsScoringVersion = 2
 
+// scoreTerm 是打分里的一项。只带**机器可读的类型**和分值,文案交给界面本地化 ——
+// App 有中英两套界面,从这里吐中文字符串会让英文用户看到一串中文。
+//
+// 加它是为了让"搜索候选歌词"弹窗能把分数摊开给人看:一个 742 或者一个 -1 单独摆着,
+// 没人知道它是怎么来的、更不知道 -1 到底是"被排除了"还是"分数很低"。
+type scoreTerm struct {
+	Kind   string `json:"kind"`
+	Points int    `json:"points"`
+}
+
+// 加分项。
+const (
+	scoreTermDuration     = "duration"     // 末尾时间戳跟曲长吻合的程度
+	scoreTermCorroborated = "corroborated" // 时长对不上,但别的源印证了同一个结束点
+	scoreTermWordTiming   = "wordTiming"   // 带逐字时间轴
+	scoreTermSource       = "source"       // 来源本身的可靠度
+	scoreTermLines        = "lines"        // 行数(封顶 200)
+	scoreTermVersionTags  = "versionTags"  // 版本限定词对不上,重扣
+)
+
+// 直接判定为"不可用"(分数 -1)的原因。这几种不是"分低",是压根不能用。
+const (
+	scoreRejectNotTimed         = "rejectNotTimed"         // 不是带时间戳的逐行歌词
+	scoreRejectWrongLanguage    = "rejectWrongLanguage"    // 语言明显对不上
+	scoreRejectCreditOnly       = "rejectCreditOnly"       // 整份只有署名行,没有正文
+	scoreRejectNoLastTimestamp  = "rejectNoLastTimestamp"  // 提不出最后一个时间戳
+	scoreRejectDurationMismatch = "rejectDurationMismatch" // 时长明显对不上,又没有别的源印证
+)
+
 func scoreLyricCandidate(localArtist, localTitle string, durationSecs float64, c lyricCandidate, corroborated bool) int {
+	score, _ := scoreLyricCandidateDetailed(localArtist, localTitle, durationSecs, c, corroborated)
+	return score
+}
+
+// scoreLyricCandidateDetailed 跟 scoreLyricCandidate 是同一套逻辑,只是额外把每一项摊出来。
+// 分数被判 -1 时返回的那一项就是原因(Points 为 0),调用方据此告诉用户"为什么这条不能用"。
+func scoreLyricCandidateDetailed(
+	localArtist, localTitle string, durationSecs float64, c lyricCandidate, corroborated bool,
+) (int, []scoreTerm) {
+	reject := func(kind string) (int, []scoreTerm) {
+		return -1, []scoreTerm{{Kind: kind}}
+	}
 	if !isTimedLRC(c.lyrics) {
-		return -1
+		return reject(scoreRejectNotTimed)
 	}
 	if isProbablyWrongLanguageLyrics(localArtist, localTitle, c.lyrics) {
-		return -1
+		return reject(scoreRejectWrongLanguage)
 	}
 	if isCreditOnlyLRC(c.lyrics) {
-		return -1
+		return reject(scoreRejectCreditOnly)
 	}
 	score := 0
+	var terms []scoreTerm
+	add := func(kind string, points int) {
+		if points == 0 {
+			return
+		}
+		score += points
+		terms = append(terms, scoreTerm{Kind: kind, Points: points})
+	}
 	if durationSecs > 0 {
 		last, ok := lastLRCTimestampSecs(c.lyrics)
 		if !ok {
-			return -1 // 通过了 isTimedLRC 却提不出最后一个时间戳,理论上不该发生,保守判定无效
+			return reject(scoreRejectNoLastTimestamp) // 通过了 isTimedLRC 却提不出时间戳,理论上不该发生
 		}
 		// 0.25 这个阈值卡得比较紧:内容被污染/串错版本的候选跟真实但前奏/尾奏较长的
 		// 正确候选,时长偏差有时只差几个百分点,阈值定太松会放过污染候选,定太紧会
@@ -254,62 +303,49 @@ func scoreLyricCandidate(localArtist, localTitle string, durationSecs float64, c
 		ratio := math.Abs(last-durationSecs) / durationSecs
 		// 歌词末尾**超过**曲目时长,是标错而不是"吻合得好":那几句在实际播放中根本到不了。
 		// 现在的 ratio 取的是绝对值,把"早结束"和"晚结束"当同一回事,于是一份标歪到超出
-		// 曲长的候选反而能拿满档。2026-08-07 实测坐实:赵雷《我们的时光》(全长 270.8s,
-		// 尾奏很长、正常歌词 168s 就唱完了)——qq/酷狗那两份 52 行带逐字的完整版本因为
-		// 差 38% 只拿到 corroborated 兜底的 100 分,而 Musixmatch 一份 32 行、没逐字、
-		// 末尾标到 284.2s(比整首歌还长 13 秒)的版本差 5%、拿到 962 分,直接胜出。
-		// 留 5 秒容差给收尾渐弱/取整这类正常误差。
+		// 曲长的候选反而能拿满档。留 5 秒容差给收尾渐弱/取整这类正常误差。
 		overshot := last > durationSecs+lyricOvershootToleranceSecs
 		switch {
 		case ratio <= 0.25 && !overshot:
 			// 连续衰减,而不是硬分档——原来 3%/8%/25% 三级硬边界会让"差一点点"的候选
-			// 骤然掉一整档(2026-07-30 实测坐实:某候选末尾时间戳只是恰好比 8% 这道槛
-			// 多差了 0.32 个百分点,就从 600 分直接跌到 200 分,反被时长证据其实更弱、
-			// 只是巧合压线拿到高档的另一个候选反超)。
-			//
-			// ⚠️ 2026-08-07 把封顶从 1000 压到 300:时长吻合只是正确性的**间接代理**,
-			// 而且被前奏/尾奏系统性带偏(尾奏越长,越是完整正确的歌词越"不吻合");逐字
-			// 时间轴则是歌词质量的**直接**证据。原来这一档最高 1000、逐字只有 400,等于
-			// 让间接代理压过直接证据 —— 上面那首《我们的时光》就是这么选错的。压到 300
-			// 之后,同一场景下 qq(100+400+30+52=582)稳稳压过 Musixmatch(≈307)。
-			// 仍然保持"0% 差距最高、线性降到 25% 差距时的 100 分",跟下面 corroborated
-			// 那档在边界处平滑衔接,不会在 25% 这个点上制造新的悬崖。
-			score += 100 + int(200*(1-ratio/0.25))
+			// 骤然掉一整档。⚠️ 2026-08-07 把封顶从 1000 压到 300:时长吻合只是正确性的
+			// **间接代理**,而且被前奏/尾奏系统性带偏(尾奏越长,越是完整正确的歌词越
+			// "不吻合");逐字时间轴则是歌词质量的**直接**证据。
+			add(scoreTermDuration, 100+int(200*(1-ratio/0.25)))
 		case corroborated:
-			score += 100 // 时长差超阈值,但有别的独立源印证末尾时间点,信任交叉印证而非时长
+			add(scoreTermCorroborated, 100) // 时长差超阈值,但有别的独立源印证末尾时间点
 		default:
-			return -1 // 时长明显对不上,又没有别的源印证,大概率串了别的曲目/版本
+			return reject(scoreRejectDurationMismatch)
 		}
 	}
 	if c.hasWordTiming {
-		score += 400 // 见函数注释第2点:跟"一档时长差距"同量级,让带逐字时间轴的候选在
-		// "只差一档时长吻合度"的常见场景里能逆转,但撬不动两档以上的时长证据差距。
+		add(scoreTermWordTiming, 400) // 跟"一档时长差距"同量级,让带逐字时间轴的候选能逆转
 	}
 	switch c.source {
 	case "netease":
-		score += 50
+		add(scoreTermSource, 50)
 	case "qq":
-		score += 30
+		add(scoreTermSource, 30)
 	case "kugou":
-		score += 20
+		add(scoreTermSource, 20)
 	case "musixmatch":
-		score += 15
+		add(scoreTermSource, 15)
 	case "lrclib":
-		score += 10
+		add(scoreTermSource, 10)
 	}
 	lines := len(strings.Split(c.lyrics, "\n"))
 	if lines > 200 {
 		lines = 200
 	}
-	score += lines
+	add(scoreTermLines, lines)
 	// 版本限定词对不上 → 重扣。放在最后、扣完再夹到 1,理由见 versionMismatchPenalty。
 	if versionTagsMismatch(localTitle, c.title) {
-		score -= versionMismatchPenalty
+		add(scoreTermVersionTags, -versionMismatchPenalty)
 		if score < 1 {
 			score = 1
 		}
 	}
-	return score
+	return score, terms
 }
 
 // normLoose lowercases and drops everything but letters/digits (keeps CJK), so

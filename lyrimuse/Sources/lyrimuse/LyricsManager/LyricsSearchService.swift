@@ -13,6 +13,48 @@ private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "lyrics
 final class LyricsSearchService {
     static let shared = LyricsSearchService()
 
+    /// 上一次还在跑的搜索子进程。2026-08-09 把「重新搜索」按钮在搜索途中也放开之后需要它:
+    /// 不杀掉的话,旧那一轮会继续跑满(最长 20 秒兜底超时),白占五个源的网络请求 —— 结果
+    /// 反正会被调用方的 searchGeneration 判定作废、一行都不会显示。
+    /// 用锁而不是 @MainActor:search() 的进程收尾在后台队列上,两边都要碰这个引用。
+    private let processLock = NSLock()
+    private var runningProcess: Process?
+
+    /// 取消正在跑的那一轮(没有就什么都不做)。
+    func cancelRunning() {
+        processLock.lock()
+        let process = runningProcess
+        runningProcess = nil
+        processLock.unlock()
+        if let process, process.isRunning { process.terminate() }
+    }
+
+    struct ScoreTerm: Equatable, Decodable {
+        let kind: String
+        let points: Int
+
+        /// 界面上显示的名字。认不出来的类型原样显示 kind —— collector 以后加了新项目
+        /// 也不会在这里显示成空白。
+        var label: String {
+            switch kind {
+            case "duration": return L10n.t("时长吻合")
+            case "corroborated": return L10n.t("其它源印证了结束点")
+            case "wordTiming": return L10n.t("逐字时间轴")
+            case "source": return L10n.t("来源可靠度")
+            case "lines": return L10n.t("行数")
+            case "versionTags": return L10n.t("版本限定词不符")
+            case "rejectNotTimed": return L10n.t("不是带时间戳的歌词")
+            case "rejectWrongLanguage": return L10n.t("语言跟这首歌对不上")
+            case "rejectCreditOnly": return L10n.t("整份只有署名行，没有正文")
+            case "rejectNoLastTimestamp": return L10n.t("取不到最后一句的时间")
+            case "rejectDurationMismatch": return L10n.t("时长明显对不上，也没有别的源印证")
+            default: return kind
+            }
+        }
+
+        var isRejection: Bool { kind.hasPrefix("reject") }
+    }
+
     struct Candidate: Identifiable, Equatable {
         var id: String { source }
         let source: String
@@ -22,6 +64,9 @@ final class LyricsSearchService {
         let lyricsYRC: String
         let hasWordTiming: Bool
         let score: Int
+        /// 这个分数的构成明细;被判 -1 时只有一项,内容是原因。collector 只给机器可读的
+        /// 类型 + 分值,文案在这边本地化(见 ScoreTerm.label)——App 有中英两套界面。
+        let scoreTerms: [ScoreTerm]
         // 这个源实际匹配到的歌名/歌手/专辑/封面——不同源可能匹配到同一首歌的不同版本
         // (不同专辑/live/合集),各自如实展示,不做跨源统一;不是每个源都能给全,LRCLIB
         // 没有封面这个概念,留空就是这个源确实没有,不是加载失败。
@@ -102,6 +147,12 @@ final class LyricsSearchService {
                 "-album", album,
                 "-duration", String(durationSecs),
             ]
+            // 新一轮开始前先把上一轮杀掉,并记下自己,好让下一轮也能杀掉我。
+            self.cancelRunning()
+            self.processLock.lock()
+            self.runningProcess = process
+            self.processLock.unlock()
+
             let stdoutPipe = Pipe()
             let stderrPipe = Pipe()
             process.standardOutput = stdoutPipe
@@ -211,6 +262,7 @@ private struct RawCandidate: Decodable {
     let lyricsYRC: String?
     let hasWordTiming: Bool
     let score: Int
+    let scoreTerms: [LyricsSearchService.ScoreTerm]?
     let title: String?
     let artist: String?
     let album: String?
@@ -222,6 +274,7 @@ private struct RawCandidate: Decodable {
         case lyricsRoma = "lyrics_roma"
         case lyricsYRC = "lyrics_yrc"
         case hasWordTiming = "has_word_timing"
+        case scoreTerms = "score_terms"
         case coverURL = "cover_url"
     }
 }
@@ -236,6 +289,7 @@ private extension LyricsSearchService.Candidate {
             lyricsYRC: raw.lyricsYRC ?? "",
             hasWordTiming: raw.hasWordTiming,
             score: raw.score,
+            scoreTerms: raw.scoreTerms ?? [],
             title: raw.title ?? "",
             artist: raw.artist ?? "",
             album: raw.album ?? "",
