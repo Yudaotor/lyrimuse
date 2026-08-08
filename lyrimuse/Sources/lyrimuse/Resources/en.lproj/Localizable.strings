@@ -422,3 +422,6 @@
 "机器翻译" = "Machine translation";
 "检查中…" = "Checking…";
 "已下载 %@ / %@" = "%@ of %@ downloaded";
+"已下载" = "Downloaded";
+"未下载" = "Not downloaded";
+"下载中…" = "Downloading…";

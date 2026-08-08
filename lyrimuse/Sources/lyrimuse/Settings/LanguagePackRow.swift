@@ -99,14 +99,18 @@ struct LanguagePackRow: View {
                         pending = TranslationSession.Configuration(
                             source: Locale.Language(identifier: code), target: target)
                     } label: {
-                        // 状态用 Label 自带的图标位表达:已装打勾、没装是下载箭头、正在下
-                        // 的用虚线箭头(菜单项里放不了 ProgressView)。
+                        // 状态**写进文字**,不只靠图标:2026-08-08 实测,macOS 的 SwiftUI
+                        // Menu 默认把菜单项 Label 的图标整个丢掉,只渲染标题 —— 上一版就是
+                        // 这样,一整列语言看不出哪个装了。.labelStyle(.titleAndIcon) 是
+                        // 官方的要图标写法,加上;但状态不能只押在它身上,所以文字里也说清。
                         Label(
-                            displayName(code),
+                            "\(displayName(code))  ·  \(stateText(code))",
                             systemImage: downloading == code
                                 ? "arrow.down.circle.dotted"
                                 : (store.statuses[code] == .installed
-                                    ? "checkmark.circle.fill" : "arrow.down.circle"))
+                                    ? "checkmark.circle.fill" : "arrow.down.circle")
+                        )
+                        .labelStyle(.titleAndIcon)
                     }
                     // 已装好的也不禁用:读数万一是旧的,用户还能点(系统对已装的语言不会
                     // 重复下载),总好过被一个错误状态锁死。
@@ -142,5 +146,12 @@ struct LanguagePackRow: View {
 
     private func displayName(_ code: String) -> String {
         Locale.current.localizedString(forLanguageCode: code) ?? code
+    }
+
+    private func stateText(_ code: String) -> String {
+        if downloading == code { return L10n.t("下载中…") }
+        if store.statuses[code] == .installed { return L10n.t("已下载") }
+        if !store.hasLoaded { return L10n.t("检查中…") }
+        return L10n.t("未下载")
     }
 }
