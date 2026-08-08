@@ -71,3 +71,37 @@ func TestNeedsPeripheralBackfill(t *testing.T) {
 		}
 	}
 }
+
+// 外围补全的节流时间戳必须**跟条目的解析时刻分开**。
+//
+// 2026-08-09 拆分之前两者共用 e.TS:backfillPeripheralFields 每跑一次就把它推到当下
+// (最多 5 次、每次隔 10 分钟),而 needsLyricsRetry 的 6 小时起算点正是 e.TS —— 于是
+// 补个封面主色就能把"去别的源再搜一遍歌词"整体往后拖近一小时。两件事本来毫无关系。
+func TestPeripheralThrottleDoesNotDelayLyricsRetry(t *testing.T) {
+	saved := features
+	defer func() { features = saved }()
+	features.Lyrics = true
+	features.LyricsSources = map[string]bool{"netease": true, "kugou": true}
+
+	// 一条 6 小时前解析出来的记录,当时只有网易云给了候选 —— 酷狗没出现过,该重搜。
+	longAgo := time.Now().Unix() - int64(lyricsRetryInterval/time.Second) - 1
+	e := enrichEntry{
+		Lyrics:            "[00:01.00]hello",
+		LyricsSourcesSeen: []string{"netease"},
+		TS:                longAgo,
+	}
+	if !needsLyricsRetry(e) {
+		t.Fatal("间隔已过、又确实缺源,本来就该重搜")
+	}
+
+	// 外围补全刚跑过一次(只推它自己的时间戳)。歌词重搜不该因此被推迟。
+	e.PeripheralTS = time.Now().Unix()
+	e.PeripheralRetryCount++
+	if !needsLyricsRetry(e) {
+		t.Error("补了一次外围字段就把歌词重搜挡掉了 —— 两个节流又耦合回去了")
+	}
+	// 而外围补全自己的节流要照常生效。
+	if needsPeripheralBackfill(e, "someone") {
+		t.Error("外围补全刚跑过,10 分钟内不该再来")
+	}
+}

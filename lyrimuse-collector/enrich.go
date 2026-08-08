@@ -104,9 +104,18 @@ type enrichEntry struct {
 	// 显示成"纯音乐"而不是笼统的"无歌词"。2026-08-03 补上——这个信号 lrclib.go 里
 	// 原来读了就直接丢,见 lrclibResult 定义处的注释。
 	Instrumental bool `json:"instrumental,omitempty"`
-	// TS 只用来给"外围字段缺失时的短时重试"计时(见 needsPeripheralBackfill),不再是
-	// "多久没刷新就整条过期重新解析"的依据、也不再驱动任何淘汰逻辑。
+	// TS 是**这条记录当初被解析出来的时刻**,不再是任何一种节流时间戳。它现在只被
+	// needsLyricsRetry 当作"歌词重搜"6 小时间隔的起算点。
+	//
+	// 2026-08-09 把外围补全的节流拆到 PeripheralTS 之前,这一个字段同时担着两个互不相干
+	// 的职责:外围补全每跑一次就把它推到当下(最多 5 次、每次隔 10 分钟),而歌词重搜的
+	// 起算点正是它 —— 于是补个封面主色就能把"去别的源再搜一遍歌词"这件事整体往后推近
+	// 一小时。两者本来毫无关系,只是恰好共用了一个字段。
 	TS int64 `json:"ts"`
+	// PeripheralTS 是外围字段补全**上一次尝试**的时刻,只给 needsPeripheralBackfill 节流用。
+	// 老条目没有这个字段(读成 0),此时回退到 TS —— 那正是拆分之前的语义,不会让存量条目
+	// 在升级后一股脑全部立刻重试一遍。
+	PeripheralTS int64 `json:"peripheral_ts,omitempty"`
 }
 
 func (e enrichEntry) fields() map[string]string {
@@ -226,7 +235,11 @@ func needsPeripheralBackfill(e enrichEntry, artist string) bool {
 	if e.PeripheralRetryCount >= peripheralBackfillMaxAttempts {
 		return false
 	}
-	return time.Now().Unix()-e.TS >= int64(enrichPeripheralRetryInterval/time.Second)
+	base := e.PeripheralTS
+	if base == 0 {
+		base = e.TS // 老条目:拆分之前两者是同一个值
+	}
+	return time.Now().Unix()-base >= int64(enrichPeripheralRetryInterval/time.Second)
 }
 
 // lyricSourcesWithCandidates 挑出这一轮真的给出了可用候选的源(负分是"纯音乐"这类搭车
@@ -661,7 +674,9 @@ func backfillPeripheralFields(key, artist, title, album string, durationSecs flo
 	if e.DurationSecs <= 0 {
 		e.DurationSecs = fresh.DurationSecs
 	}
-	e.TS = time.Now().Unix() // 推进节流时间戳,不管这次补没补全,10 分钟内不再重试
+	// 只推自己那个节流时间戳。**不要**去动 e.TS —— 那是这条记录的解析时刻,歌词重搜拿它
+	// 当起算点,推它等于每补一次外围字段就把歌词重搜往后拖 10 分钟(见 TS 字段的注释)。
+	e.PeripheralTS = time.Now().Unix()
 	// 不管补没补上都记一次 —— 上限就是靠它生效的(见 peripheralBackfillMaxAttempts)。
 	e.PeripheralRetryCount++
 	enrichCache[key] = e
