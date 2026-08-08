@@ -61,14 +61,19 @@ public enum MusicPlaybackController {
     }
 
     /// 设置当前曲目的"喜欢"状态。跟上面同一套属性名兜底。
-    public static func setFavorited(_ value: Bool) {
+    ///
+    /// 返回值 = 指令有没有被接受(osascript 正常退出)。调用方**应该据此决定要不要回读**:
+    /// 见 setPlaybackMode 的注释,Music.app 的 getter 会滞后于 setter,写完马上读会读到旧值。
+    @discardableResult
+    public static func setFavorited(_ value: Bool) -> Bool {
         for name in favoritedPropertyNames {
             if runAppleScriptCapturing(
                 #"tell application "Music" to set \#(name) of current track to \#(value)"#
             ) != nil {
-                return
+                return true
             }
         }
+        return false
     }
 
     /// 播放模式。Music.app 那边是**两个互相独立的属性** —— `shuffle enabled`(布尔)和
@@ -112,7 +117,15 @@ public enum MusicPlaybackController {
     /// 用户没要求就把整个资料库改成永远循环下去是多管闲事。这里只保证"不是单曲循环、
     /// 不是随机",repeat 原来是 off 还是 all 一概保留(用户可能在 Music.app 里特意开的)。
     /// 只有从单曲循环切出来时才必须动它,否则读回来还是单曲循环。
-    public static func setPlaybackMode(_ mode: MusicPlaybackMode) {
+    /// 返回值 = 指令有没有被接受。
+    ///
+    /// ⚠️ **写完不要马上回读**。2026-08-08 实测坐实:`set shuffle enabled to true` 这段脚本
+    /// 正常退出、值也确实写进去了,但另起一个进程去 `get shuffle enabled`,250ms 之后读回来
+    /// 的仍是旧值(再等一会儿才变)。原来的 cyclePlaybackMode 正是写完就回读,于是那个旧值
+    /// 把已经画出来的正确图标又覆盖回去,表现成"点了要过一会儿才变"。
+    /// 既然退出码已经能回答"指令被接受了吗",成功时就不必再问 Music.app 一遍。
+    @discardableResult
+    public static func setPlaybackMode(_ mode: MusicPlaybackMode) -> Bool {
         let script: String
         switch mode {
         case .list:
@@ -137,7 +150,7 @@ public enum MusicPlaybackController {
                 end tell
                 """#
         }
-        _ = runAppleScriptCapturing(script)
+        return runAppleScriptCapturing(script) != nil
     }
 
     /// 跳到曲目内的某个位置(秒)。跟上面三个动作走同一套双后端分派:Apple Music 用

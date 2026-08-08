@@ -118,6 +118,15 @@ final class PlaybackCoordinator: ObservableObject {
     /// 用户可能在 Music.app 里自己改了模式,我们没有任何事件能收到,只能在这几个时机回读。
     @Published private(set) var playbackMode: MusicPlaybackController.MusicPlaybackMode?
 
+    /// 用户动作序号,"喜欢"和"播放模式"各一份。
+    ///
+    /// 回读是**异步**的(要起一个 osascript 子进程,实测约 125ms),而这期间用户完全可能已经
+    /// 点了按钮。没有这道守卫的话,一次在途的旧读数会把刚点出来的新状态盖回去 —— 最容易撞上
+    /// 的时机就是"点击窗口把 App 激活"本身:激活触发一次刷新,紧接着的那一下点击落在按钮上,
+    /// 读数回来正好把它抹掉。读之前记下序号,回来发现序号变了就整个丢弃。
+    private var favoritedActionSeq = 0
+    private var playbackModeActionSeq = 0
+
     /// 这一刻**实际在播**的是不是 Apple Music。
     ///
     /// ⚠️ 判定必须看这个,不能看 PlaybackPlayerPreference.current。设置里那一档可以是"自动
@@ -138,10 +147,12 @@ final class PlaybackCoordinator: ObservableObject {
             if isFavorited != nil { isFavorited = nil }
             return
         }
+        let seq = favoritedActionSeq
         Task.detached(priority: .utility) {
             let value = MusicPlaybackController.favoritedState()
             await MainActor.run { [weak self] in
-                guard let self, self.isFavorited != value else { return }
+                guard let self, self.favoritedActionSeq == seq else { return }
+                guard self.isFavorited != value else { return }
                 self.isFavorited = value
             }
         }
@@ -159,10 +170,12 @@ final class PlaybackCoordinator: ObservableObject {
             if playbackMode != nil { playbackMode = nil }
             return
         }
+        let seq = playbackModeActionSeq
         Task.detached(priority: .utility) {
             let value = MusicPlaybackController.playbackMode()
             await MainActor.run { [weak self] in
-                guard let self, self.playbackMode != value else { return }
+                guard let self, self.playbackModeActionSeq == seq else { return }
+                guard self.playbackMode != value else { return }
                 self.playbackMode = value
             }
         }
@@ -173,12 +186,17 @@ final class PlaybackCoordinator: ObservableObject {
         guard isAppleMusicPlayingNow else { return }
         let target = (playbackMode ?? .list).next
         playbackMode = target
+        playbackModeActionSeq &+= 1
         Task.detached(priority: .userInitiated) {
             guard await MusicAutomationPermission.checkAppleMusicSafely(askIfNeeded: true) else {
                 await MainActor.run { [weak self] in self?.refreshPlaybackMode() }
                 return
             }
-            MusicPlaybackController.setPlaybackMode(target)
+            let wrote = MusicPlaybackController.setPlaybackMode(target)
+            // 写成功就**不回读**:Music.app 的 getter 滞后于 setter(见 setPlaybackMode
+            // 的注释),这时候读回来的是旧值,只会把刚画对的图标又抹掉。只有写没被接受时
+            // 才需要问一遍真实状态,好把乐观更新纠回去。
+            guard !wrote else { return }
             await MainActor.run { [weak self] in self?.refreshPlaybackMode() }
         }
     }
@@ -187,6 +205,7 @@ final class PlaybackCoordinator: ObservableObject {
         guard isAppleMusicPlayingNow else { return }
         let target = !(isFavorited ?? false)
         isFavorited = target
+        favoritedActionSeq &+= 1
         Task.detached(priority: .userInitiated) {
             // 用 checkAppleMusicSafely 而不是 checkForCurrentPlayerSafely:后者在设置为
             // "自动识别"时会直接返回 true(它假定别的播放器不需要这个权限),而这里已经确认
@@ -195,7 +214,8 @@ final class PlaybackCoordinator: ObservableObject {
                 await MainActor.run { [weak self] in self?.refreshFavorited() }
                 return
             }
-            MusicPlaybackController.setFavorited(target)
+            // 跟播放模式同一个道理:写被接受了就别回读,Music.app 的 getter 会滞后。
+            guard !MusicPlaybackController.setFavorited(target) else { return }
             await MainActor.run { [weak self] in self?.refreshFavorited() }
         }
     }
