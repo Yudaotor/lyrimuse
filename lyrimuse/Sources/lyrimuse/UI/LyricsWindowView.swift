@@ -296,6 +296,17 @@ struct LyricsWindowView: View {
         // 用户中途切去别的 App 很常见)。
         .onAppear { AuxiliaryWindowActivation.windowDidAppear() }
         .onDisappear { AuxiliaryWindowActivation.windowDidDisappear() }
+        // "喜欢"状态不跟着 2 秒轮询走(每读一次要起一个 osascript 子进程,为一个几乎不变
+        // 的布尔值那么干不值当),换歌时由 PlaybackCoordinator 刷一次。悬浮窗还借"控制排
+        // 露出来"这个动作补刷,而这扇窗口是常显的、没有那个动作,所以换成:打开时刷一次,
+        // 以及每次 App 重新变成前台时刷一次 —— 后者正好覆盖"用户刚切去 Music.app 点了
+        // 心、再切回来"这条路径。
+        .onAppear { poller.refreshFavorited() }
+        .onReceive(NotificationCenter.default.publisher(
+            for: NSApplication.didBecomeActiveNotification)
+        ) { _ in
+            poller.refreshFavorited()
+        }
     }
 
     private var activeID: String? {
@@ -503,6 +514,11 @@ struct LyricsWindowView: View {
 
     private var playbackControls: some View {
         HStack(spacing: 44) {
+            // 左边这个是**占位**,不是第二颗心:跟右边那颗等宽,让播放/暂停键无论有没有心
+            // 都停在正中。没有它的话,心一出现整排就整体左移半个按钮宽 —— 而 isFavorited
+            // 是异步读出来的(refreshFavorited 里起 osascript 子进程),那次位移正好落在
+            // 窗口刚打开的一瞬间,很扎眼;切到非 Apple Music 的播放器时也会再抖一次。
+            favoriteButton.hidden()
             Button {
                 MusicPlaybackController.previousTrack()
             } label: {
@@ -523,10 +539,35 @@ struct LyricsWindowView: View {
                 Image(systemName: "forward.fill").font(.system(size: 22))
             }
             .help(L10n.t("下一首"))
+            favoriteButton
         }
         .buttonStyle(.plain)
         .foregroundStyle(primaryTextColor)
         .frame(maxWidth: .infinity)
+    }
+
+    /// 「喜欢」——对应 Apple Music 里那颗心(脚本字典里的 favorited)。
+    ///
+    /// 跟悬浮窗那颗是同一份状态、同一个开关(PlaybackCoordinator.isFavorited /
+    /// toggleFavorited),两处点哪个都一样,权限检查和乐观更新都在 coordinator 里做。
+    ///
+    /// 只有 Apple Music 有"喜欢"这个概念,所以 isFavorited 为 nil(在播的是别的播放器、
+    /// 或者自动化权限还没拿到)时这里是空的,而不是显示一颗永远点不亮的心 —— 跟悬浮窗
+    /// 同一个判断。宽度固定住,理由见 playbackControls 里那个占位。
+    private var favoriteButton: some View {
+        Group {
+            if let favorited = poller.isFavorited {
+                Button {
+                    poller.toggleFavorited()
+                } label: {
+                    Image(systemName: favorited ? "heart.fill" : "heart")
+                        .font(.system(size: 20))
+                }
+                .foregroundStyle(favorited ? Color.red : primaryTextColor)
+                .help(L10n.t(favorited ? "取消喜欢" : "喜欢"))
+            }
+        }
+        .frame(width: 22)
     }
 
     // ---- 颜色:有封面背景时全窗白色系,没有时退回系统色(浅色外观可读性) ------------
