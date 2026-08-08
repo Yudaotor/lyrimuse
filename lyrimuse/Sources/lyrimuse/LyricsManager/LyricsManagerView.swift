@@ -1014,6 +1014,11 @@ struct LyricsManagerView: View {
             if summary.isManual {
                 InfoChip(icon: "pencil.circle.fill", text: L10n.t("人工修正"), tint: .orange)
             }
+            // 机翻的译文单独标出来,不让它冒充歌词源自带的社区翻译 —— 跟"人工修正"徽章
+            // 同一个原则:凡是"这份内容是哪来的"能影响用户判断的,就如实说。
+            if summary.hasTranslation && summary.lyricsTrSource == "machine" {
+                InfoChip(icon: "character.book.closed", text: L10n.t("机器翻译"), tint: .purple)
+            }
             if !summary.hasLyrics {
                 InfoChip(icon: "text.badge.xmark", text: L10n.t("无歌词"), tint: .red)
             }

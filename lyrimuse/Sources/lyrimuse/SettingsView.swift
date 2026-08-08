@@ -401,6 +401,24 @@ private struct LyricsSettingsTab: View {
                 .pickerStyle(.menu)
                 .fixedSize()
             }
+            CardDivider()
+            SettingsRow(
+                icon: "character.book.closed",
+                title: L10n.t("没有译文时自动翻译"),
+                subtitle: L10n.t("只在歌词源本身没带译文时补一份。优先用系统的端上翻译，不联网、歌词不会离开这台 Mac")
+            ) {
+                Toggle("", isOn: Binding(
+                    get: { features.lyricsMachineTranslation },
+                    set: { features.lyricsMachineTranslation = $0; Task { await features.save() } }
+                ))
+            }
+            // 系统翻译按语言分别下载语言包,没装的语言(实测这台机器上日语/韩语默认就没装)
+            // 只能退回联网翻译。下载弹窗是系统 UI,只有 SwiftUI 的 .translationTask 建出来的
+            // session 才有权拉起它 —— 采集器那个无界面子进程做不到,所以入口必须在这里。
+            if #available(macOS 26.0, *), features.lyricsMachineTranslation {
+                CardDivider()
+                LanguagePackRow()
+            }
         }
     }
 

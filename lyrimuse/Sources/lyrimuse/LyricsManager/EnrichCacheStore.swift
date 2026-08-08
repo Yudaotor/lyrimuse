@@ -54,6 +54,10 @@ public final class EnrichCacheStore: ObservableObject {
         public let lyricsSource: String
         public let hasWordTiming: Bool
         public let isManual: Bool
+        // 译文是机翻补的(见 collector 的 translate.go)还是歌词源自带的社区翻译。
+        // 空 = 社区翻译(老条目没有这个字段,读成空正是事实)。
+        public let lyricsTrSource: String
+        public let hasTranslation: Bool
         public let hasLyrics: Bool
     }
 
@@ -162,6 +166,8 @@ public final class EnrichCacheStore: ObservableObject {
                 lyricsSource: entry["lyrics_source"] as? String ?? "",
                 hasWordTiming: !(entry["lyrics_yrc"] as? String ?? "").isEmpty,
                 isManual: entry["manual_lyrics"] as? Bool ?? false,
+                lyricsTrSource: entry["lyrics_tr_source"] as? String ?? "",
+                hasTranslation: !((entry["lyrics_tr"] as? String ?? "").isEmpty),
                 hasLyrics: !lyrics.isEmpty
             )
         // 专辑归并键跟展示值分开:同一张专辑偶尔因歌词源候选写法大小写不一致而在
