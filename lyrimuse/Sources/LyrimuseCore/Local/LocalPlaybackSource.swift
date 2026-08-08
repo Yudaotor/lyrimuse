@@ -492,10 +492,14 @@ public final class LocalPlaybackSource: ObservableObject {
         // 只在换歌或"完全没歌词"时才重读,于是这类中途补上的东西要等下一次换歌才看得到 ——
         // 2026-08-09 用户问"为什么当前这歌没有英文译文",译文其实早在 19 秒前就翻好并落盘了。
         //
-        // 只在"这首还缺东西"时才盯 mtime:歌词和译文都齐了就不再重读。否则别的歌被解析、
-        // 缓存文件被重写时,这边会白白把几 MB 的 JSON 重新解析一遍。
-        let mayStillGrow = !syncEngine.hasContent || !currentHasTranslation
-        let enrichMTime = mayStillGrow ? EnrichCacheReader.fileModificationDate : lastEnrichMTime
+        // ⚠️ 不要加"已经有译文了就不用再盯"这类省事的闸门。2026-08-09 试过一版,当场被
+        // 一个真实场景打脸:译文不只会从无到有,还会**被顶替** —— 网易云先给一份固定中文的
+        // 社区译文(于是"已有译文"成立、不再盯了),采集器随后判定它语言跟设置对不上、机翻
+        // 成英文写回去,而这边已经不看了,界面就一直停在那份中文上。
+        //
+        // 代价是可控的:mtime 只是一次 stat,而重新解析只在文件真的被改写时发生 —— 那时候
+        // 下一次 lookup() 本来也要重新解析(EnrichCacheReader 自己就是按 mtime 缓存的)。
+        let enrichMTime = EnrichCacheReader.fileModificationDate
         if trackChanged || !syncEngine.hasContent || enrichMTime != lastEnrichMTime {
             if trackChanged {
                 logger.info("track changed: \(snapshot.artist ?? "", privacy: .public) - \(snapshot.title ?? "", privacy: .public)")
@@ -737,10 +741,9 @@ public final class LocalPlaybackSource: ObservableObject {
     // 复用,不用每次都重新拼一遍(也保证跟当初读校正值时用的是同一个 key)。
     private var currentOffsetKey = ""
 
-    /// 上一次读缓存时那个文件的 mtime,以及这首歌当时到底有没有译文 —— 一起决定还要不要
-    /// 继续盯着文件看(见 apply() 里那段注释)。
+    /// 上一次读缓存时那个文件的 mtime。变了就说明 collector 又写过,当前这首歌的内容可能
+    /// 已经不是手上这一份了(见 apply() 里那段注释)。
     private var lastEnrichMTime: Date?
-    private var currentHasTranslation = false
 
     private func reloadCurrentLyrics() {
         guard let snapshot = lastSnapshot else { return }
@@ -749,7 +752,6 @@ public final class LocalPlaybackSource: ObservableObject {
             title: snapshot.title ?? "",
             album: snapshot.album ?? ""
         )
-        currentHasTranslation = !(found?.lyricsTr ?? "").isEmpty
         syncEngine.load(
             lyrics: found?.lyrics ?? "",
             lyricsTr: found?.lyricsTr ?? "",
