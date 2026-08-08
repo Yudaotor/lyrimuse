@@ -300,30 +300,65 @@ private struct LyricsSettingsTab: View {
                 title: L10n.t("歌词来源"),
                 subtitle: L10n.t("至少需要保留一个歌词来源")
             )
-            ForEach(LyricsSource.allCases) { source in
-                CardDivider()
-                SettingsRow(icon: "circle.fill", iconTint: source.color, title: source.displayName) {
-                    Toggle("", isOn: Binding(
-                        get: { features.lyricsSources.contains(source) },
-                        set: { newValue in
-                            // 关掉最后一个来源是不允许的(下面那句 count > 1 的守卫),这时
-                            // 集合没有任何变化 —— 但原来 save() 是无条件调的,于是这次被
-                            // 拒绝的点击照样写一遍 features.json 并 kickstart 一次 collector:
-                            // 后台服务被杀掉重启,期间歌词整片空掉(launchd 对连续 kickstart
-                            // 还有约 10s 的节流),而配置压根没变。改成只在真的变了才保存。
-                            let before = features.lyricsSources
-                            if newValue {
-                                features.lyricsSources.insert(source)
-                            } else if features.lyricsSources.count > 1 {
-                                features.lyricsSources.remove(source)
-                            }
-                            guard features.lyricsSources != before else { return }
-                            Task { await features.save() }
-                        }
-                    ))
+            CardDivider()
+            // 五个来源横排成一排可勾选的胶囊,不再一个来源占一整行 —— 五行开关加上分隔线
+            // 把这张卡撑到了半屏高,而这里要表达的只是"哪几个开着"。
+            // 用 WrapLayout 而不是 HStack:万一系统字号调大、或以后加了第六个来源,自动折到
+            // 第二行,不会被卡片宽度裁掉。
+            SettingsRawRow(insetToText: true) {
+                WrapLayout(horizontalSpacing: 8, verticalSpacing: 8, rowAlignment: .leading) {
+                    ForEach(LyricsSource.allCases) { source in
+                        sourceChip(source)
+                    }
                 }
             }
         }
+    }
+
+    private func sourceChip(_ source: LyricsSource) -> some View {
+        let enabled = features.lyricsSources.contains(source)
+        return Button {
+            setSource(source, enabled: !enabled)
+        } label: {
+            HStack(spacing: 5) {
+                // 勾在关掉时也占位(只是透明),否则一勾一取消整排胶囊都会左右挪一下。
+                Image(systemName: "checkmark")
+                    .font(.system(size: 9, weight: .bold))
+                    .frame(width: 9)
+                    .opacity(enabled ? 1 : 0)
+                Circle().fill(source.color).frame(width: 7, height: 7)
+                Text(source.displayName).font(.system(size: 12))
+            }
+            .padding(.horizontal, 9)
+            .padding(.vertical, 5)
+            .background(
+                Capsule().fill(
+                    enabled ? source.color.opacity(0.14) : Color.secondary.opacity(0.09))
+            )
+            .overlay(
+                Capsule().strokeBorder(
+                    enabled ? source.color.opacity(0.45) : Color.clear, lineWidth: 1)
+            )
+            .foregroundStyle(enabled ? Color.primary : Color.secondary)
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .help(source.displayName)
+    }
+
+    private func setSource(_ source: LyricsSource, enabled: Bool) {
+        // 关掉最后一个来源是不允许的(下面那句 count > 1 的守卫),这时集合没有任何变化 ——
+        // 但原来 save() 是无条件调的,于是这次被拒绝的点击照样写一遍 features.json 并
+        // kickstart 一次 collector:后台服务被杀掉重启,期间歌词整片空掉(launchd 对连续
+        // kickstart 还有约 10s 的节流),而配置压根没变。只在真的变了才保存。
+        let before = features.lyricsSources
+        if enabled {
+            features.lyricsSources.insert(source)
+        } else if features.lyricsSources.count > 1 {
+            features.lyricsSources.remove(source)
+        }
+        guard features.lyricsSources != before else { return }
+        Task { await features.save() }
     }
 
     // "匹配算法"决定从查到的结果里怎么选——智能算法沿用五源打分取最高分,顺序优先则完全
