@@ -73,6 +73,13 @@ type enrichEntry struct {
 	// 用户就是这么被误导的:弹窗显示 qq 482 最高,而自动决策时(带时长)是 Musixmatch 962
 	// 胜出。存下来之后两边口径就一致了。
 	DurationSecs float64 `json:"duration_secs,omitempty"`
+	// LyricsTrSource 记录 lyrics_tr 是哪来的:空 = 歌词源自带的社区翻译(网易云/Musixmatch),
+	// "machine" = translate.go 机翻补的。UI 据此如实标注,不让机翻冒充社区翻译 —— 跟页脚
+	// "歌词来自 XX" 是同一个原则。老条目没有这个字段,读成空 = 社区翻译,正是事实。
+	LyricsTrSource string `json:"lyrics_tr_source,omitempty"`
+	// 机翻补全的已尝试次数与上次尝试时间,见 needsTranslationBackfill。
+	TranslationRetryCount int   `json:"translation_retry_count,omitempty"`
+	TranslationTS         int64 `json:"translation_ts,omitempty"`
 	// ManualLyrics 标记这条歌词是用户在 desktop-lyrics 的"歌词管理"窗口里手动纠正/采纳
 	// 过的。除了给 UI 显示"人工修正"徽章,它还是**所有自动重搜路径的一道否决闸**:
 	// needsLyricsRetry / needsLyricsRescore 都必须先看它。用户手改过的歌词是这套缓存里
@@ -165,6 +172,9 @@ func trackEnrichment(artist, title, album, bundleID string, durationSecs float64
 		} else if needsLyricsRetry(e) && !enrichInflight[key] {
 			enrichInflight[key] = true
 			go retryLyricsUpgrade(key, artist, title, album, durationSecs)
+		} else if needsTranslationBackfill(e) && !enrichInflight[key] {
+			enrichInflight[key] = true
+			go backfillTranslation(key)
 		}
 		enrichMu.Unlock()
 		return e.fields()

@@ -61,5 +61,12 @@ let package = Package(
             dependencies: ["LyrimuseCore"],
             path: "Sources/lyrimuse-selftest"
         ),
+        // 端上歌词翻译小助手。单独一个可执行文件而不是并进 App:调用方是 Go 写的
+        // collector,它没法调 Apple 的 Translation 框架,只能起一个子进程 —— 跟已有的
+        // media-control 同一个形态。见 Sources/lyrics-translate/main.swift 顶部注释。
+        .executableTarget(
+            name: "lyrics-translate",
+            path: "Sources/lyrics-translate"
+        ),
     ]
 )

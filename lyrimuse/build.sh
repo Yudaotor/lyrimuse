@@ -106,12 +106,16 @@ echo "==> building (release) [$ARCHES]"
 # 才有的组件,只装 Command Line Tools 的机器上直接报 "xcbuild executable ... does not
 # exist or is not executable"(2026-08-06 实测)。单 --arch 交叉编译不经过 xcbuild,可用。
 SWIFT_SLICES=()
+TRANSLATE_SLICES=()
 for arch in $ARCHES; do
   swift build -c release --arch "$arch"
   # 产物目录问 --show-bin-path,不硬编码 ".build/<arch>-apple-macosx/release"。
-  SWIFT_SLICES+=("$(swift build -c release --arch "$arch" --show-bin-path)/lyrimuse")
+  BIN_PATH="$(swift build -c release --arch "$arch" --show-bin-path)"
+  SWIFT_SLICES+=("$BIN_PATH/lyrimuse")
+  TRANSLATE_SLICES+=("$BIN_PATH/lyrics-translate")
 done
 merge_slices "$FAT_DIR/lyrimuse" "${SWIFT_SLICES[@]}"
+merge_slices "$FAT_DIR/lyrics-translate" "${TRANSLATE_SLICES[@]}"
 
 # 2026-07-21:collector 现在打包进 .app 里(见 Contents/Resources/collector),不再要求
 # 用户手动单独构建它——CollectorServiceManager.swift 靠 Bundle.main.bundleURL 精确知道
@@ -167,6 +171,14 @@ cp "$FAT_DIR/collector" "$APP_DIR/Contents/Resources/collector"
 # 一步 lipo,而 lipo 会让原有签名失效(实测:合并后的文件 `codesign -v` 直接不通过),
 # 只验证会被 set -e 拦腰打断。签名必须在 lipo 之后做,顺序不能反。
 codesign --force --sign - "$APP_DIR/Contents/Resources/collector"
+
+# 端上歌词翻译小助手。collector(Go)调不了 Apple 的 Translation 框架,所以拆成这个独立的
+# Swift 可执行文件,由 collector 按自身可执行文件的相对路径调起 —— 跟 media-control 同一
+# 个形态。先删再拷再补签的三步跟上面 collector 一模一样,理由见那段注释(lipo 会让签名
+# 失效 + 覆盖同 inode 容易踩内核签名缓存)。
+rm -f "$APP_DIR/Contents/Resources/lyrics-translate"
+cp "$FAT_DIR/lyrics-translate" "$APP_DIR/Contents/Resources/lyrics-translate"
+codesign --force --sign - "$APP_DIR/Contents/Resources/lyrics-translate"
 
 # 2026-07-24:QQ 音乐支持——QQ音乐.app 没有 AppleScript 支持(sdef/NSAppleScriptEnabled
 # 都核实过没有),读它的播放状态改走系统级 MediaRemote,经 ungive/media-control

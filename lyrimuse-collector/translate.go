@@ -1,0 +1,447 @@
+package main
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"log"
+	"net/http"
+	neturl "net/url"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"regexp"
+	"strings"
+	"time"
+	"unicode"
+)
+
+// 机器翻译兜底:歌词源自带社区译文时一律用社区译文,没有才拿 MyMemory 机翻补上。
+//
+// 为什么需要:lyrics_tr 目前只在网易云/Musixmatch 恰好带社区翻译时才有。实测本机缓存
+// 179 条有歌词的记录里带译文的 40 条(22%),而"歌词里没有中文"的外语歌 32 条里带译文的
+// 只有 1 条 —— 也就是听英文/日文歌时 97% 看不到翻译,恰恰是最需要翻译的场景。
+//
+// 为什么是 MyMemory:免费、不需要 API key(可选传邮箱提额),而且实测日译中/英译中的质量
+// 对"看个大意"这个用途够用:
+//
+//	君のことが好きだから      → 因为我喜欢你
+//	The painful youth I've had → 我经历过的痛苦的青春
+//
+// 译文沿用**主歌词自己的时间戳**逐行生成,不另求时间轴 —— 天然逐行对齐,比社区译文各自
+// 带一套时间戳还准(播放端是按最近时间戳配对的,见 LyricsSyncEngine.nearestText)。
+const (
+	// MyMemory 单次请求的硬上限,实测超了直接 403:
+	// "QUERY LENGTH LIMIT EXCEEDED. MAX ALLOWED QUERY : 500 CHARS"。
+	// 留 40 字符余量给换行和 URL 编码的波动。
+	translateMaxChunkChars = 460
+	// 一首歌最多切这么多块。整首歌约 1500 字符 ≈ 4 块;给到 12 块(≈5500 字符)足够覆盖
+	// 长歌,再多就不是歌词了,拒掉免得一首歌把当天配额吃光。
+	translateMaxChunks = 12
+	// 源语言跟目标语言相同时 MyMemory 不报错,而是把这句**当作译文返回** —— 不识别就会
+	// 让中文歌的译文栏显示 "PLEASE SELECT TWO DISTINCT LANGUAGES"。
+	translateSameLangSentinel = "PLEASE SELECT TWO DISTINCT LANGUAGES"
+	// 当天配额用尽时 MyMemory **不是**把 quotaFinished 置真,而是回一个 HTTP 429 + 这句
+	// 警告文本(实测:"MYMEMORY WARNING: YOU USED ALL AVAILABLE FREE TRANSLATIONS FOR
+	// TODAY. NEXT AVAILABLE IN 15 HOURS...")。只认 quotaFinished 会把它当成普通失败,
+	// 白烧一次重试次数 —— 三次烧完这首歌就再也不会被翻了。
+	translateQuotaSentinel = "ALL AVAILABLE FREE TRANSLATIONS"
+)
+
+var lrcLinePattern = regexp.MustCompile(`^\s*(\[\d+:\d+(?:[.:]\d+)?\])\s*(.*)$`)
+
+type lrcLine struct {
+	tag  string // 含方括号的时间标签,如 "[00:20.94]"
+	text string
+}
+
+// parseLRCLines 只留带时间标签、且正文非空的行。`[by:]`/`[ar:]` 这类元信息标签不匹配
+// 时间戳格式,自然被丢掉 —— 它们不该被翻译,也不该占一行译文。
+func parseLRCLines(lrc string) []lrcLine {
+	var out []lrcLine
+	for _, raw := range strings.Split(lrc, "\n") {
+		m := lrcLinePattern.FindStringSubmatch(raw)
+		if m == nil {
+			continue
+		}
+		if text := strings.TrimSpace(m[2]); text != "" {
+			out = append(out, lrcLine{tag: m[1], text: text})
+		}
+	}
+	return out
+}
+
+// chunkForTranslation 按 translateMaxChunkChars 把行分组,**不拆行** —— 一行必须完整地
+// 待在一个块里,否则回来的译文没法跟行对上。单行本身就超长(理论上不会,歌词一行几十字)
+// 时单独成块,交给上层按"行数对不上就整块作废"处理。
+func chunkForTranslation(texts []string) [][]string {
+	var chunks [][]string
+	var cur []string
+	curLen := 0
+	for _, t := range texts {
+		n := len(t) + 1 // +1 是拼接用的换行
+		if len(cur) > 0 && curLen+n > translateMaxChunkChars {
+			chunks = append(chunks, cur)
+			cur, curLen = nil, 0
+		}
+		cur = append(cur, t)
+		curLen += n
+	}
+	if len(cur) > 0 {
+		chunks = append(chunks, cur)
+	}
+	return chunks
+}
+
+// looksLikeTargetLanguage 判断这份歌词是不是已经就是目标语言,是的话整个跳过 —— 既躲开
+// 上面那个 sentinel,也省配额。只做目标语言为中文这一种判断:那是这个功能唯一的实际用途
+// (外语歌配中文译文),其它目标语言宁可多翻一次也不瞎猜。
+func looksLikeTargetLanguage(lyrics, target string) bool {
+	if !strings.HasPrefix(strings.ToLower(target), "zh") {
+		return false
+	}
+	var han, letters int
+	for _, r := range lyrics {
+		switch {
+		case unicode.Is(unicode.Han, r):
+			han++
+		case unicode.IsLetter(r):
+			letters++
+		}
+	}
+	// 汉字占"有意义字符"的多数就当成中文歌。中英混排的华语歌(常见)也应该判成中文,
+	// 所以阈值不设成"完全没有拉丁字母"。
+	return han > 0 && han >= letters
+}
+
+type translationResult struct {
+	lrc          string
+	quotaReached bool
+}
+
+// machineTranslateLRC 把主歌词逐行机翻成 target 语言,返回一份跟主歌词同时间戳的译文 LRC。
+// 返回空串表示"这次没有译文"(已经是目标语言/一行都没翻成/配额用尽),不是错误。
+func machineTranslateLRC(ctx context.Context, hc *http.Client, lyrics, target string) (translationResult, error) {
+	return machineTranslateLRCWithBase(ctx, hc, "", lyrics, target)
+}
+
+// machineTranslateLRCWithBase 是上面那个的可注入版本,baseURL 为空时用 MyMemory 正式端点。
+// 单测靠它把整条链路(分块 → 请求 → 行数校验 → 回写时间戳)跑在本地假服务器上。
+func machineTranslateLRCWithBase(ctx context.Context, hc *http.Client, baseURL, lyrics, target string) (translationResult, error) {
+	if lyrics == "" || target == "" {
+		return translationResult{}, nil
+	}
+	if looksLikeTargetLanguage(lyrics, target) {
+		return translationResult{}, nil
+	}
+	lines := parseLRCLines(lyrics)
+	if len(lines) == 0 {
+		return translationResult{}, nil
+	}
+	texts := make([]string, 0, len(lines))
+	for _, l := range lines {
+		texts = append(texts, l.text)
+	}
+	// 优先端上翻译:不联网、无配额、歌词不出这台机器,而且没有 500 字符的分块限制,
+	// 整首歌一次翻完。失败(系统太老/语言包没装/helper 不在)才退到 MyMemory。
+	if out, err := onDeviceTranslate(ctx, appleLangCode(target), texts); err == nil {
+		return assembleTranslationLRC(lines, out), nil
+	} else if !errors.Is(err, errOnDeviceUnavailable) {
+		log.Printf("translate: on-device failed, falling back to network: %v", err)
+	}
+
+	chunks := chunkForTranslation(texts)
+	if len(chunks) > translateMaxChunks {
+		return translationResult{}, fmt.Errorf("lyrics too long: %d chunks", len(chunks))
+	}
+
+	translated := make([]string, 0, len(texts))
+	for _, chunk := range chunks {
+		out, quota, err := translateChunk(ctx, hc, baseURL, chunk, target)
+		if quota {
+			return translationResult{quotaReached: true}, nil
+		}
+		if err != nil {
+			return translationResult{}, err
+		}
+		// 行数对不上就整块作废,用原文占位 —— 错位的译文比没有译文更糟:第 3 行的中文
+		// 挂在第 5 行的歌词下面,用户没法察觉是错的,只会觉得翻译很离谱。
+		if len(out) != len(chunk) {
+			out = chunk
+		}
+		translated = append(translated, out...)
+	}
+
+	return assembleTranslationLRC(lines, translated), nil
+}
+
+// assembleTranslationLRC 把逐行译文拼回一份跟主歌词同时间戳的 LRC。两条翻译路径(端上
+// helper / MyMemory)共用,保证它们产出的形状完全一致。
+func assembleTranslationLRC(lines []lrcLine, translated []string) translationResult {
+	var b strings.Builder
+	written := 0
+	for i, l := range lines {
+		if i >= len(translated) {
+			break
+		}
+		t := strings.TrimSpace(translated[i])
+		if t == "" || t == l.text { // 没翻动的行不写进译文,免得译文栏重复一遍原文
+			continue
+		}
+		b.WriteString(l.tag)
+		b.WriteString(t)
+		b.WriteString("\n")
+		written++
+	}
+	// 太少行翻出来说明这次基本没成 —— 与其给一份七零八落的译文,不如当作没有。
+	if written*3 < len(lines) {
+		return translationResult{}
+	}
+	return translationResult{lrc: strings.TrimRight(b.String(), "\n")}
+}
+
+// translateChunk 发一次 MyMemory 请求。第二个返回值为真表示当天配额用尽(调用方应该整体
+// 停下,而不是继续把剩下的块也撞上去)。
+func translateChunk(ctx context.Context, hc *http.Client, baseURL string, lines []string, target string) ([]string, bool, error) {
+	q := neturl.Values{}
+	q.Set("q", strings.Join(lines, "\n"))
+	// autodetect:实测跟显式指定源语言结果一致,省掉自己做语种识别这一整块。
+	q.Set("langpair", "autodetect|"+target)
+	if baseURL == "" {
+		baseURL = "https://api.mymemory.translated.net/get"
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, baseURL+"?"+q.Encode(), nil)
+	if err != nil {
+		return nil, false, fmt.Errorf("build request: %w", err)
+	}
+	resp, err := hc.Do(req)
+	if err != nil {
+		return nil, false, fmt.Errorf("translate: %w", err)
+	}
+	defer resp.Body.Close()
+	var body struct {
+		ResponseData struct {
+			TranslatedText string `json:"translatedText"`
+		} `json:"responseData"`
+		ResponseStatus  json.RawMessage `json:"responseStatus"`
+		ResponseDetails string          `json:"responseDetails"`
+		QuotaFinished   bool            `json:"quotaFinished"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		return nil, false, fmt.Errorf("decode translate response: %w", err)
+	}
+	if body.QuotaFinished ||
+		resp.StatusCode == http.StatusTooManyRequests ||
+		strings.Contains(strings.ToUpper(body.ResponseDetails), translateQuotaSentinel) {
+		return nil, true, nil
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, false, fmt.Errorf("translate status %d: %s", resp.StatusCode, body.ResponseDetails)
+	}
+	text := body.ResponseData.TranslatedText
+	if text == "" || strings.Contains(strings.ToUpper(text), translateSameLangSentinel) {
+		return nil, false, fmt.Errorf("no usable translation: %q", body.ResponseDetails)
+	}
+	return strings.Split(text, "\n"), false, nil
+}
+
+var translateClient = &http.Client{Timeout: 15 * time.Second}
+
+// translationBackfillMaxAttempts / translationBackfillInterval:机翻补全的上限与节流。
+//
+// 这条路径跟 needsPeripheralBackfill / needsLyricsRescore 是同一个范式:只在这首歌被播放
+// 时才可能触发,所以这两个数控制的是"最坏情况下一首歌总共会多打几次翻译接口"。3 次足够
+// 覆盖偶发网络抖动;间隔 6 小时主要是给"当天配额用尽"留出恢复时间 —— MyMemory 的配额按天
+// 重置,几分钟后重试只会再撞一次墙、白烧一次尝试次数。
+const (
+	translationBackfillMaxAttempts = 3
+	translationBackfillInterval    = 6 * time.Hour
+)
+
+// needsTranslationBackfill 判断这条要不要机翻补一份译文。
+//
+// 已经有 lyrics_tr 就一律不动 —— 社区翻译(网易云/Musixmatch 的人工译文)质量高于机翻,
+// 机翻只是"没有社区译文时总比没有强"的兜底,不是升级。
+func needsTranslationBackfill(e enrichEntry) bool {
+	if !features.Lyrics || !features.LyricsMachineTranslation {
+		return false
+	}
+	if e.Lyrics == "" || e.LyricsTr != "" {
+		return false
+	}
+	if e.TranslationRetryCount >= translationBackfillMaxAttempts {
+		return false
+	}
+	target := myMemoryLangCode(features.LyricsTranslationLanguage)
+	if target == "" {
+		return false
+	}
+	// 歌词本来就是目标语言时连 goroutine 都不用起 —— machineTranslateLRC 里也有同一道
+	// 判断兜底,但那时已经白占了一次 inflight 和一次尝试次数。
+	if looksLikeTargetLanguage(e.Lyrics, target) {
+		return false
+	}
+	if e.TranslationTS > 0 &&
+		time.Now().Unix()-e.TranslationTS < int64(translationBackfillInterval/time.Second) {
+		return false
+	}
+	return true
+}
+
+// myMemoryLangCode 把 features.LyricsTranslationLanguage 的 ISO 639-1 代码转成 MyMemory
+// 认的写法。只有中文需要转:MyMemory 要 zh-CN/zh-TW 这种带地区的写法,而那个设置里存的是
+// 两位代码。其余语言原样透传。
+func myMemoryLangCode(iso string) string {
+	switch strings.ToLower(strings.TrimSpace(iso)) {
+	case "":
+		return ""
+	case "zh", "zh-hans", "zh-cn":
+		return "zh-CN"
+	case "zh-hant", "zh-tw":
+		return "zh-TW"
+	default:
+		return strings.ToLower(iso)
+	}
+}
+
+// backfillTranslation 后台给一条已有歌词、但没有译文的记录补一份机翻。
+//
+// 跟 backfillPeripheralFields / rescoreLyrics 同一个范式(inflight 去重 + 重新取锁 +
+// 条目可能已被删)。不管成没成都记一次尝试,否则真的翻不出来的歌会每次播放都重试。
+func backfillTranslation(key string) {
+	defer func() {
+		enrichMu.Lock()
+		delete(enrichInflight, key)
+		enrichMu.Unlock()
+	}()
+	enrichMu.Lock()
+	lyrics := enrichCache[key].Lyrics
+	enrichMu.Unlock()
+	if lyrics == "" {
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	defer cancel()
+	target := myMemoryLangCode(features.LyricsTranslationLanguage)
+	res, err := machineTranslateLRC(ctx, translateClient, lyrics, target)
+
+	enrichMu.Lock()
+	defer enrichMu.Unlock()
+	e, ok := enrichCache[key]
+	if !ok {
+		// 翻译这段时间里这条被用户在"歌词管理"里删掉了 —— 不要把它复活回去。
+		return
+	}
+	// 期间用户可能刚好手动采纳了一份带社区译文的候选;那份优先,别覆盖。
+	if e.LyricsTr != "" {
+		return
+	}
+	e.TranslationTS = time.Now().Unix()
+	switch {
+	case res.quotaReached:
+		// **不**记这次尝试:配额是全局的、跟这首歌翻不翻得出来无关,记进去等于让今天
+		// 恰好轮到的那几首歌白白烧掉重试额度,以后再也不会被翻。只更新时间戳做节流。
+		log.Printf("translate: %s deferred, daily quota reached", key)
+	case err != nil:
+		e.TranslationRetryCount++
+		log.Printf("translate: %s failed: %v", key, err)
+	case res.lrc == "":
+		e.TranslationRetryCount++
+		log.Printf("translate: %s produced nothing usable (already target language, or too few lines translated)", key)
+	default:
+		e.LyricsTr = res.lrc
+		e.LyricsTrSource = lyricsTrSourceMachine
+		log.Printf("translate: %s got a machine translation (%d lines)", key, strings.Count(res.lrc, "\n")+1)
+	}
+	enrichCache[key] = e
+	enrichDirty = true
+}
+
+// lyricsTrSourceMachine 是 enrichEntry.LyricsTrSource 目前唯一的非空取值。
+const lyricsTrSourceMachine = "machine"
+
+// errOnDeviceUnavailable 表示"这台机器上这条路本来就走不通"(系统太老/语言包没装/helper
+// 不在),跟"该翻但翻失败了"区分开:前者是常态、不该刷日志,后者才值得记一笔。
+var errOnDeviceUnavailable = errors.New("on-device translation unavailable")
+
+// onDeviceTranslate 调打包在 Contents/Resources/ 里的 Swift 小助手做端上翻译。
+//
+// 为什么要起子进程:Apple 的 Translation 框架只有 Swift/ObjC 接口,Go 调不了。helper 的
+// 位置按自己的可执行文件相对定位,跟 media-control 完全一样(见 system.go 的
+// mediaControlBinaryPath)。开发时直接跑 collector 二进制不在 .app 里,找不到 helper 会
+// 返回 errOnDeviceUnavailable,自动退回网络翻译。
+func onDeviceTranslate(ctx context.Context, target string, lines []string) ([]string, error) {
+	if target == "" || len(lines) == 0 {
+		return nil, errOnDeviceUnavailable
+	}
+	exe, err := os.Executable()
+	if err != nil {
+		return nil, errOnDeviceUnavailable
+	}
+	bin := filepath.Join(filepath.Dir(exe), "lyrics-translate")
+	if _, err := os.Stat(bin); err != nil {
+		return nil, errOnDeviceUnavailable
+	}
+	payload, err := json.Marshal(struct {
+		Target string   `json:"target"`
+		Lines  []string `json:"lines"`
+	}{Target: target, Lines: lines})
+	if err != nil {
+		return nil, fmt.Errorf("marshal translate request: %w", err)
+	}
+
+	cmd := exec.CommandContext(ctx, bin)
+	cmd.Stdin = bytes.NewReader(payload)
+	out, err := cmd.Output()
+	// helper 用退出码非 0 表示"没翻成",但原因写在 stdout 的 JSON 里 —— 先解析再判错,
+	// 别把"语言包没装"这种正常情况报成执行失败。
+	var res struct {
+		OK     bool     `json:"ok"`
+		Source string   `json:"source"`
+		Lines  []string `json:"lines"`
+		Reason string   `json:"reason"`
+	}
+	if jsonErr := json.Unmarshal(out, &res); jsonErr != nil {
+		if err != nil {
+			return nil, fmt.Errorf("run lyrics-translate: %w", err)
+		}
+		return nil, fmt.Errorf("parse lyrics-translate output: %w", jsonErr)
+	}
+	if !res.OK {
+		switch res.Reason {
+		case "same-language", "needs-macos-26", "no-translation-framework", "undetected-source":
+			return nil, errOnDeviceUnavailable
+		case "supported", "notSupported", "unsupported":
+			// 语言包没下载。这是最值得让用户知道的一种"不可用",单独记一条日志,
+			// 但仍然算 unavailable(退回网络翻译),不当作错误刷屏。
+			log.Printf("translate: on-device pack for %s not installed (%s), using network fallback",
+				res.Source, res.Reason)
+			return nil, errOnDeviceUnavailable
+		default:
+			return nil, fmt.Errorf("lyrics-translate: %s", res.Reason)
+		}
+	}
+	if len(res.Lines) != len(lines) {
+		return nil, fmt.Errorf("lyrics-translate returned %d lines for %d", len(res.Lines), len(lines))
+	}
+	return res.Lines, nil
+}
+
+// appleLangCode 把 features.LyricsTranslationLanguage 的 ISO 639-1 代码转成 Apple
+// Translation 认的 BCP-47 写法。跟 myMemoryLangCode 分开:同一个"中文"两边写法不同
+// (zh-Hans vs zh-CN),混用会让其中一条路静默失效。
+func appleLangCode(iso string) string {
+	switch strings.ToLower(strings.TrimSpace(iso)) {
+	case "":
+		return ""
+	case "zh", "zh-cn", "zh-hans":
+		return "zh-Hans"
+	case "zh-tw", "zh-hant":
+		return "zh-Hant"
+	default:
+		return strings.ToLower(iso)
+	}
+}

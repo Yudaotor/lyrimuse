@@ -97,6 +97,10 @@ type featureFlagsFile struct {
 	// 网易云/QQ 音乐的译文固定是中文,只有 Musixmatch 这个源支持指定任意语言。
 	// resolveLyricsTranslationLanguage 负责把"auto"/空值解析成具体代码,见其注释。
 	LyricsTranslationLanguage string `json:"lyrics_translation_language,omitempty"`
+	// LyricsMachineTranslation:歌词源没带社区译文时,用机器翻译补一份(见 translate.go)。
+	// **默认关**,跟其它附加功能一致 —— 它会把歌词正文发给第三方翻译服务,而现有的五个
+	// 歌词源只发歌手/歌名,这是一条新的外发数据,该由用户显式同意。
+	LyricsMachineTranslation *bool `json:"lyrics_machine_translation,omitempty"`
 	// LaunchLyrimuseOnMusicOpen：检测到 Music.app 从没运行变成运行时,顺带启动/唤起
 	// Lyrimuse.app(见 companionlaunch.go)。反方向("打开 Lyrimuse 时唤起 Music")
 	// 不在这份共享文件里,是 Swift 侧 AppSettings 自己的纯本地设置,不需要 collector
@@ -140,6 +144,8 @@ type featureFlags struct {
 	// 见 resolveLyricsTranslationLanguage)。只被 musixmatchTranslationLRC
 	// (musixmatch.go)读取。
 	LyricsTranslationLanguage string
+	// 见上面同名字段的注释。只被 needsTranslationBackfill/backfillTranslation 读取。
+	LyricsMachineTranslation bool
 	// LaunchLyrimuseOnMusicOpen 只被 companionlaunch.go 读取。
 	LaunchLyrimuseOnMusicOpen bool
 }
@@ -186,6 +192,7 @@ func loadFeatureFlags(path string) featureFlags {
 		LyricsSourceOrder:         resolveLyricsSourceOrder(f.LyricsSourceOrder),
 		LyricsDir:                 f.LyricsDir,
 		LyricsTranslationLanguage: resolveLyricsTranslationLanguage(f.LyricsTranslationLanguage),
+		LyricsMachineTranslation:  boolOr(f.LyricsMachineTranslation, false),
 		LaunchLyrimuseOnMusicOpen: boolOr(f.LaunchLyrimuseOnMusicOpen, false),
 	}
 }
