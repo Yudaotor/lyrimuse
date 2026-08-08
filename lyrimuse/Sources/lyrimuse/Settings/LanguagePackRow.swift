@@ -90,7 +90,7 @@ struct LanguagePackRow: View {
         SettingsRow(
             icon: "arrow.down.circle",
             title: L10n.t("翻译语言包"),
-            subtitle: L10n.t("没装语言包的语言会退回联网翻译；选一个由系统下载，之后就完全在本机翻译")
+            subtitle: L10n.t("选一个语言，让系统下载对应的语言包")
         ) {
             Menu {
                 ForEach(Self.candidates, id: \.self) { code in

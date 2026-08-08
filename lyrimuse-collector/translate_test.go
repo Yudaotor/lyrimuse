@@ -243,3 +243,59 @@ func jsonEscape(s string) (string, error) {
 	b, err := json.Marshal(s)
 	return string(b), err
 }
+
+// 每次请求都要带一个**不一样**的 de= —— MyMemory 的免费额度按邮箱分别计,固定一个就等于
+// 没换。顺带钉住域名:example.com 是保留域,换成真实域名会有随机撞上真人邮箱的风险。
+func TestRandomTranslateEmailIsDistinctAndReserved(t *testing.T) {
+	seen := map[string]bool{}
+	for i := 0; i < 200; i++ {
+		e := randomTranslateEmail()
+		if !strings.HasSuffix(e, "@example.com") {
+			t.Fatalf("域名不是保留域: %q", e)
+		}
+		if local := strings.TrimSuffix(e, "@example.com"); len(local) < 12 {
+			t.Fatalf("本地部分太短、随机性不够: %q", e)
+		}
+		if seen[e] {
+			t.Fatalf("第 %d 次就撞了: %q", i, e)
+		}
+		seen[e] = true
+	}
+}
+
+// 光有函数不够,得确认它真的被挂到请求上、而且逐块都换。
+func TestTranslateChunkSendsFreshEmailEachRequest(t *testing.T) {
+	var got []string
+	srv := fakeMyMemory(t, func(w http.ResponseWriter, r *http.Request) {
+		got = append(got, r.URL.Query().Get("de"))
+		lines := strings.Split(r.URL.Query().Get("q"), "\n")
+		out := make([]string, len(lines))
+		for i := range lines {
+			out[i] = "译" + lines[i]
+		}
+		body, _ := jsonEscape(strings.Join(out, "\n"))
+		fmt.Fprintf(w, `{"responseData":{"translatedText":%s},"responseStatus":200}`, body)
+	})
+	// 拼一首长到必须切成多块的歌,才能验证"每块一个新邮箱"。
+	var b strings.Builder
+	for i := 0; i < 60; i++ {
+		fmt.Fprintf(&b, "[00:%02d.00]%s\n", i, strings.Repeat("word ", 8))
+	}
+	if _, err := machineTranslateLRCWithBase(context.Background(), srv.Client(), srv.URL,
+		strings.TrimRight(b.String(), "\n"), "zh-CN"); err != nil {
+		t.Fatal(err)
+	}
+	if len(got) < 2 {
+		t.Fatalf("只发了 %d 次请求,验证不了逐块换邮箱", len(got))
+	}
+	for i, e := range got {
+		if !strings.Contains(e, "@example.com") {
+			t.Fatalf("第 %d 次请求没带上邮箱: %q", i, e)
+		}
+	}
+	for i := 1; i < len(got); i++ {
+		if got[i] == got[i-1] {
+			t.Fatalf("第 %d、%d 次请求用了同一个邮箱: %q", i-1, i, got[i])
+		}
+	}
+}

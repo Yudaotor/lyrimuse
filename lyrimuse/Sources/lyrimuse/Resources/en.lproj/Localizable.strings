@@ -416,9 +416,9 @@
 "自动" = "Automatic";
 "已断开的屏幕" = "Disconnected display";
 "没有译文时自动翻译" = "Translate When No Translation Exists";
-"只在歌词源本身没带译文时补一份。优先用系统的端上翻译，不联网、歌词不会离开这台 Mac" = "Fills in only where the lyrics source ships no translation. Prefers macOS's on-device translation — offline, and the lyrics never leave this Mac";
+"歌词源没带译文时，用系统翻译补一份" = "Fills in a translation with the system translator when the lyrics source ships none";
 "翻译语言包" = "Translation Languages";
-"没装语言包的语言会退回联网翻译；选一个由系统下载，之后就完全在本机翻译" = "Languages without a downloaded pack fall back to online translation; pick one to let macOS download it and translate entirely on this Mac";
+"选一个语言，让系统下载对应的语言包" = "Pick a language and macOS downloads its pack";
 "机器翻译" = "Machine translation";
 "检查中…" = "Checking…";
 "已下载 %@ / %@" = "%@ of %@ downloaded";

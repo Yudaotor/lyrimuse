@@ -3,6 +3,8 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -202,6 +204,26 @@ func assembleTranslationLRC(lines []lrcLine, translated []string) translationRes
 	return translationResult{lrc: strings.TrimRight(b.String(), "\n")}
 }
 
+// randomTranslateEmail 每次请求现生成一个邮箱。
+//
+// MyMemory 的免费额度是**按 de= 里的邮箱分别计**的(匿名约 5000 字符/天,带邮箱约 50000),
+// 所以每次换一个就不会被单个地址的日额度卡住 —— 而歌词兜底翻译本来就零零散散、每首几百
+// 字符,固定一个地址很容易在听得多的那天用光。
+//
+// 不让用户自己填:填邮箱这一步对用户毫无收益(纯粹是第三方的计量口径),还要把真实邮箱交给
+// 一个只用来翻歌词的服务。
+//
+// 域名固定 example.com:RFC 2606 保留域,不解析、收不了信,所以随机出来的地址不可能撞上
+// 某个真人的邮箱。换成一个真实域名就有这个风险。
+func randomTranslateEmail() string {
+	var b [8]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		// crypto/rand 读不出来基本等于系统出了大问题;退回时间戳也比整个请求发不出去强。
+		return fmt.Sprintf("lyrimuse-%d@example.com", time.Now().UnixNano())
+	}
+	return "lyrimuse-" + hex.EncodeToString(b[:]) + "@example.com"
+}
+
 // translateChunk 发一次 MyMemory 请求。第二个返回值为真表示当天配额用尽(调用方应该整体
 // 停下,而不是继续把剩下的块也撞上去)。
 func translateChunk(ctx context.Context, hc *http.Client, baseURL string, lines []string, target string) ([]string, bool, error) {
@@ -209,6 +231,7 @@ func translateChunk(ctx context.Context, hc *http.Client, baseURL string, lines 
 	q.Set("q", strings.Join(lines, "\n"))
 	// autodetect:实测跟显式指定源语言结果一致,省掉自己做语种识别这一整块。
 	q.Set("langpair", "autodetect|"+target)
+	q.Set("de", randomTranslateEmail())
 	if baseURL == "" {
 		baseURL = "https://api.mymemory.translated.net/get"
 	}

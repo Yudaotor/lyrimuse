@@ -405,7 +405,7 @@ private struct LyricsSettingsTab: View {
             SettingsRow(
                 icon: "character.book.closed",
                 title: L10n.t("没有译文时自动翻译"),
-                subtitle: L10n.t("只在歌词源本身没带译文时补一份。优先用系统的端上翻译，不联网、歌词不会离开这台 Mac")
+                subtitle: L10n.t("歌词源没带译文时，用系统翻译补一份")
             ) {
                 Toggle("", isOn: Binding(
                     get: { features.lyricsMachineTranslation },
