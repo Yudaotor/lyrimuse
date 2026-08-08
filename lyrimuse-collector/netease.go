@@ -93,6 +93,24 @@ func neteaseLookup(artist, title, album string) neteaseInfo {
 	return info
 }
 
+// neteaseSearch 发一次搜索,主端点被限流时换备用端点再试一次。
+//
+// 2026-08-09 实测:网易云的限流是**按端点分桶**的 —— 短时间内多查几十次之后
+// /api/search/get/web 稳定回 code 405,而同一刻 /api/search/get 照常返回 200,两者的
+// 响应结构完全一致(result.songs[] 里 name/id/artists/album/duration 都在)。
+//
+// 只有一个端点的时候,一撞上限流这个源就整个哑掉,而它是唯一给译文和罗马音的源;结果还会
+// 被永久缓存(缓存没有 TTL)。多一个桶不是为了跑得更快,是为了在被限的那几分钟里仍然有
+// 一条路走通。
+func neteaseSearch(get func(string, any) error, q string, out any) error {
+	escaped := neturl.QueryEscape(q)
+	err := get("https://music.163.com/api/search/get/web?type=1&limit=30&s="+escaped, out)
+	if err == nil {
+		return nil
+	}
+	return get("https://music.163.com/api/search/get?type=1&limit=30&s="+escaped, out)
+}
+
 func resolveNeteaseInfo(artist, title, album string) neteaseInfo {
 	cli := &http.Client{Timeout: 4 * time.Second}
 	get := func(u string, v any) error {
@@ -284,7 +302,7 @@ func resolveNeteaseInfo(artist, title, album string) neteaseInfo {
 				Songs []neSong `json:"songs"`
 			} `json:"result"`
 		}
-		if err := get("https://music.163.com/api/search/get/web?type=1&limit=30&s="+neturl.QueryEscape(q), &r); err != nil {
+		if err := neteaseSearch(get, q, &r); err != nil {
 			continue
 		}
 		if c := pick(r.Result.Songs); c != nil {
