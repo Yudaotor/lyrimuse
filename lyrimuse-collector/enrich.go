@@ -388,7 +388,25 @@ func retryLyricsUpgrade(key, artist, title, album string, durationSecs float64) 
 	seen := lyricSourcesWithCandidates(scored)
 
 	enrichMu.Lock()
-	defer enrichMu.Unlock()
+	// 解锁之后再落盘 —— App 侧读的是**磁盘上**这份缓存文件(EnrichCacheReader 每次直读
+	// 文件),只把 enrichDirty 标成 true 是不够的:补出来的东西只活在 collector 内存里,
+	// 界面永远看不到。2026-08-08 用户报"译文语言切成英文了还是没有翻译",日志里译文明明
+	// 一首首翻出来了,而缓存文件停在两小时前——就是这里漏了这一步。resolveEnrichAsync /
+	// backfillPeripheralFields 一直是"解锁→saveEnrichCache",另外三条补全路径全漏了。
+	//
+	// 顺序不能反:saveEnrichCache 和 exportLyricsFiles 自己都要拿同一把 enrichMu,
+	// 在持锁期间调用会死锁。
+	//
+	// 导出只在歌词族字段真的变了的时候做:它每次都要全量扫一遍 enrichCache,而这几条
+	// 路径就算什么都没补上也会推进重试计数/时间戳(那些只要落盘、不涉及 lyrics/ 文件)。
+	lyricsChanged := false
+	defer func() {
+		enrichMu.Unlock()
+		saveEnrichCache()
+		if lyricsChanged {
+			exportLyricsFiles()
+		}
+	}()
 	e, ok := enrichCache[key]
 	if !ok {
 		// 重搜这段时间里这条被用户在"歌词管理"里删掉了 —— 不要把它复活回去。
@@ -411,6 +429,7 @@ func retryLyricsUpgrade(key, artist, title, album string, durationSecs float64) 
 		e.LyricsScore = picked.Score
 		e.LyricsScoringVersion = lyricsScoringVersion
 		e.LyricsTr, e.LyricsRoma, e.LyricsYRC = picked.LyricsTr, picked.LyricsRoma, picked.LyricsYRC
+		lyricsChanged = true
 		// 译文换人了,描述译文的两个字段必须跟着换:语言(否则拿旧语言判新译文),
 		// 来源(否则上一轮机翻留下的 "machine" 会让新来的社区译文被标成机翻)。
 		e.LyricsTrLang, e.LyricsTrSource = picked.LyricsTrLang, ""
@@ -483,7 +502,25 @@ func rescoreLyrics(key, artist, title, album string, durationSecs float64) {
 	seen := lyricSourcesWithCandidates(scored)
 
 	enrichMu.Lock()
-	defer enrichMu.Unlock()
+	// 解锁之后再落盘 —— App 侧读的是**磁盘上**这份缓存文件(EnrichCacheReader 每次直读
+	// 文件),只把 enrichDirty 标成 true 是不够的:补出来的东西只活在 collector 内存里,
+	// 界面永远看不到。2026-08-08 用户报"译文语言切成英文了还是没有翻译",日志里译文明明
+	// 一首首翻出来了,而缓存文件停在两小时前——就是这里漏了这一步。resolveEnrichAsync /
+	// backfillPeripheralFields 一直是"解锁→saveEnrichCache",另外三条补全路径全漏了。
+	//
+	// 顺序不能反:saveEnrichCache 和 exportLyricsFiles 自己都要拿同一把 enrichMu,
+	// 在持锁期间调用会死锁。
+	//
+	// 导出只在歌词族字段真的变了的时候做:它每次都要全量扫一遍 enrichCache,而这几条
+	// 路径就算什么都没补上也会推进重试计数/时间戳(那些只要落盘、不涉及 lyrics/ 文件)。
+	lyricsChanged := false
+	defer func() {
+		enrichMu.Unlock()
+		saveEnrichCache()
+		if lyricsChanged {
+			exportLyricsFiles()
+		}
+	}()
 	e, ok := enrichCache[key]
 	if !ok {
 		// 重搜这段时间里这条被用户在"歌词管理"里删掉了 —— 不要把它复活回去。
@@ -514,6 +551,7 @@ func rescoreLyrics(key, artist, title, album string, durationSecs float64) {
 			log.Printf("lyrics rescore: %s  %s(v%d) -> %s(%d)", key, e.LyricsSource, e.LyricsScoringVersion, picked.Source, picked.Score)
 			e.Lyrics = picked.Lyrics
 			e.LyricsTr, e.LyricsRoma, e.LyricsYRC = picked.LyricsTr, picked.LyricsRoma, picked.LyricsYRC
+			lyricsChanged = true
 			// 译文换人了,描述译文的两个字段必须跟着换:语言(否则拿旧语言判新译文),
 			// 来源(否则上一轮机翻留下的 "machine" 会让新来的社区译文被标成机翻)。
 			e.LyricsTrLang, e.LyricsTrSource = picked.LyricsTrLang, ""

@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -392,5 +394,65 @@ func TestNeedsTranslationBackfillResetsAttemptsOnLanguageChange(t *testing.T) {
 	e.TranslationLang = "" // 老条目没记语言:当成同一门语言,维持原有行为
 	if needsTranslationBackfill(e) {
 		t.Error("老条目不该因为没记语言就绕过次数上限")
+	}
+}
+
+// 回归测试:译文必须**落到磁盘**,不能只标 enrichDirty。
+//
+// 2026-08-08 用户报"译文语言切成英文了还是没有翻译"。日志里译文一首首都翻出来了,可缓存
+// 文件停在两小时前 —— backfillTranslation 只把 enrichDirty 置 true、从不调 saveEnrichCache,
+// 而 App 侧读的正是磁盘上这份文件(EnrichCacheReader 每次直读),于是翻译只活在 collector
+// 内存里,界面上永远看不到,重启一次还全没了。
+func TestBackfillTranslationPersistsToDisk(t *testing.T) {
+	srv := fakeMyMemory(t, func(w http.ResponseWriter, r *http.Request) {
+		lines := strings.Split(r.URL.Query().Get("q"), "\n")
+		out := make([]string, len(lines))
+		for i := range lines {
+			out[i] = "译" + lines[i]
+		}
+		body, _ := jsonEscape(strings.Join(out, "\n"))
+		fmt.Fprintf(w, `{"responseData":{"translatedText":%s},"responseStatus":200}`, body)
+	})
+
+	savedFeatures, savedCache, savedPath, savedBase, savedDir, savedClient :=
+		features, enrichCache, enrichPath, translateBaseURL, lyricsDir, translateClient
+	defer func() {
+		features, enrichCache, enrichPath, translateBaseURL, lyricsDir, translateClient =
+			savedFeatures, savedCache, savedPath, savedBase, savedDir, savedClient
+	}()
+
+	features.Lyrics = true
+	features.LyricsMachineTranslation = true
+	features.LyricsTranslationLanguage = "zh"
+	translateBaseURL = srv.URL
+	translateClient = srv.Client()
+	lyricsDir = "" // 不测文件导出,exportLyricsFiles 会因此直接返回
+	enrichPath = filepath.Join(t.TempDir(), "enrich-cache.json")
+
+	const key = "Someone|Some Song|Some Album"
+	enrichCache = map[string]enrichEntry{
+		key: {Lyrics: "[00:01.00]The painful youth\n[00:02.00]I have had"},
+	}
+	enrichInflight = map[string]bool{key: true}
+
+	backfillTranslation(key)
+
+	raw, err := os.ReadFile(enrichPath)
+	if err != nil {
+		t.Fatalf("缓存根本没写到磁盘: %v", err)
+	}
+	var onDisk map[string]enrichEntry
+	if err := json.Unmarshal(raw, &onDisk); err != nil {
+		t.Fatal(err)
+	}
+	got := onDisk[key]
+	if got.LyricsTr == "" {
+		t.Fatal("译文没有落盘 —— App 读的是这个文件,界面上就会一直没有翻译")
+	}
+	if got.LyricsTrLang != "zh-CN" {
+		t.Errorf("落盘的译文语言 = %q, 期望 zh-CN", got.LyricsTrLang)
+	}
+	if got.LyricsTrSource != lyricsTrSourceMachine {
+		t.Errorf("落盘的译文来源 = %q, 期望 %q", got.LyricsTrSource, lyricsTrSourceMachine)
 	}
 }

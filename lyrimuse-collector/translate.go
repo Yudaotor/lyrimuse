@@ -155,8 +155,12 @@ type translationResult struct {
 
 // machineTranslateLRC 把主歌词逐行机翻成 target 语言,返回一份跟主歌词同时间戳的译文 LRC。
 // 返回空串表示"这次没有译文"(已经是目标语言/一行都没翻成/配额用尽),不是错误。
+// translateBaseURL 为空时走 MyMemory 正式端点。留这个包级变量是为了让测试能把
+// backfillTranslation **整条**路径(翻译 → 写缓存 → 落盘)跑起来,而不是只能测中间那段。
+var translateBaseURL string
+
 func machineTranslateLRC(ctx context.Context, hc *http.Client, lyrics, target string) (translationResult, error) {
-	return machineTranslateLRCWithBase(ctx, hc, "", lyrics, target)
+	return machineTranslateLRCWithBase(ctx, hc, translateBaseURL, lyrics, target)
 }
 
 // machineTranslateLRCWithBase 是上面那个的可注入版本,baseURL 为空时用 MyMemory 正式端点。
@@ -389,7 +393,25 @@ func backfillTranslation(key string) {
 	res, err := machineTranslateLRC(ctx, translateClient, lyrics, target)
 
 	enrichMu.Lock()
-	defer enrichMu.Unlock()
+	// 解锁之后再落盘 —— App 侧读的是**磁盘上**这份缓存文件(EnrichCacheReader 每次直读
+	// 文件),只把 enrichDirty 标成 true 是不够的:补出来的东西只活在 collector 内存里,
+	// 界面永远看不到。2026-08-08 用户报"译文语言切成英文了还是没有翻译",日志里译文明明
+	// 一首首翻出来了,而缓存文件停在两小时前——就是这里漏了这一步。resolveEnrichAsync /
+	// backfillPeripheralFields 一直是"解锁→saveEnrichCache",另外三条补全路径全漏了。
+	//
+	// 顺序不能反:saveEnrichCache 和 exportLyricsFiles 自己都要拿同一把 enrichMu,
+	// 在持锁期间调用会死锁。
+	//
+	// 导出只在歌词族字段真的变了的时候做:它每次都要全量扫一遍 enrichCache,而这几条
+	// 路径就算什么都没补上也会推进重试计数/时间戳(那些只要落盘、不涉及 lyrics/ 文件)。
+	lyricsChanged := false
+	defer func() {
+		enrichMu.Unlock()
+		saveEnrichCache()
+		if lyricsChanged {
+			exportLyricsFiles()
+		}
+	}()
 	e, ok := enrichCache[key]
 	if !ok {
 		// 翻译这段时间里这条被用户在"歌词管理"里删掉了 —— 不要把它复活回去。
@@ -421,6 +443,7 @@ func backfillTranslation(key string) {
 		e.LyricsTr = res.lrc
 		e.LyricsTrSource = lyricsTrSourceMachine
 		e.LyricsTrLang = target
+		lyricsChanged = true
 		log.Printf("translate: %s got a machine translation (%d lines)", key, strings.Count(res.lrc, "\n")+1)
 	}
 	enrichCache[key] = e
