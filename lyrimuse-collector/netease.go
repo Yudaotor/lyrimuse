@@ -7,6 +7,7 @@ import (
 	"fmt"
 	_ "image/jpeg" // 注册 JPEG 解码器
 	_ "image/png"  // 网易云取色缩略图有时是 PNG(content-type 却谎报 jpg)
+	"io"
 	"net/http"
 	neturl "net/url"
 	"strings"
@@ -109,7 +110,28 @@ func resolveNeteaseInfo(artist, title, album string) neteaseInfo {
 		if resp.StatusCode != http.StatusOK {
 			return fmt.Errorf("status %d", resp.StatusCode)
 		}
-		return json.NewDecoder(resp.Body).Decode(v)
+		// ⚠️ 网易云限流时**照样回 HTTP 200**,把拒绝写在 body 的 code 字段里(实测
+		// 2026-08-09:短时间内连发几十次搜索之后,/api/search/get/web 稳定返回
+		// {"result":{},"code":405},而同一刻 /api/search/get 仍然正常 —— 是按端点分桶的
+		// 应用层限流,不是封 IP)。
+		//
+		// 只看 HTTP 状态码的话,这份响应会被解成"零首歌",跟"这首歌网易云真的没有"完全
+		// 分不开。后果不是少一条候选那么轻:这一轮的结果会被**永久缓存**(缓存没有 TTL),
+		// 而网易云是唯一提供译文和罗马音的源 —— 一次几分钟的限流,能让那段时间里解析的
+		// 歌永远缺译文。当成错误返回之后,这个源就不会被记进 LyricsSourcesSeen,
+		// needsLyricsRetry 才有机会在之后重搜(见那边的 missing 判断)。
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return err
+		}
+		var probe struct {
+			Code int `json:"code"`
+		}
+		// code 缺省(有些端点不带这个字段)时是 0,不当作错误。
+		if err := json.Unmarshal(body, &probe); err == nil && probe.Code != 0 && probe.Code != 200 {
+			return fmt.Errorf("netease api code %d", probe.Code)
+		}
+		return json.Unmarshal(body, v)
 	}
 
 	// NetEase 搜索对词序/括号噪声敏感:带一堆 (feat.)/(with) 的完整标题常搜不到真曲、
