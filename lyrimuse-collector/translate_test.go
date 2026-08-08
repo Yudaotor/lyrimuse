@@ -299,3 +299,98 @@ func TestTranslateChunkSendsFreshEmailEachRequest(t *testing.T) {
 		}
 	}
 }
+
+// 这次改动的核心:一份**语言对不上**的已有译文不能再挡住机翻。
+// 场景来源:网易云的社区译文固定是中文,用户把译文语言设成日语后,原来的"有译文就跳过"
+// 让机翻永远没机会跑,日语用户只能一直看中文。
+func TestTranslationUsableRespectsLanguage(t *testing.T) {
+	cases := []struct {
+		name   string
+		e      enrichEntry
+		target string
+		want   bool
+	}{
+		{"没有译文", enrichEntry{}, "zh-CN", false},
+
+		// 记了语言的:直接按语言比,不看内容。
+		{"网易云中文译文 + 目标中文:用得上",
+			enrichEntry{LyricsTr: "[00:01.00]你好", LyricsTrLang: "zh"}, "zh-CN", true},
+		{"网易云中文译文 + 目标日语:用不上,该重翻",
+			enrichEntry{LyricsTr: "[00:01.00]你好", LyricsTrLang: "zh"}, "ja", false},
+		{"Musixmatch 日语译文 + 目标日语:用得上",
+			enrichEntry{LyricsTr: "[00:01.00]こんにちは", LyricsTrLang: "ja"}, "ja", true},
+		{"Musixmatch 日语译文 + 目标改成了中文:用不上",
+			enrichEntry{LyricsTr: "[00:01.00]こんにちは", LyricsTrLang: "ja"}, "zh-CN", false},
+		{"简繁也算不同语言",
+			enrichEntry{LyricsTr: "[00:01.00]你好", LyricsTrLang: "zh-Hans"}, "zh-TW", false},
+
+		// 没记语言的老条目:退回文本判别,只在能确定的方向上下判断。
+		{"老条目中文译文 + 目标中文:用得上",
+			enrichEntry{LyricsTr: "[00:01.00]我们的时光"}, "zh-CN", true},
+		{"老条目中文译文 + 目标日语:看得出是中文,用不上",
+			enrichEntry{LyricsTr: "[00:01.00]我们的时光"}, "ja", false},
+		{"老条目非中文译文 + 目标日语:判不出,保守留着不重翻",
+			enrichEntry{LyricsTr: "[00:01.00]Hello there"}, "ja", true},
+		{"老条目非中文译文 + 目标中文:显然用不上",
+			enrichEntry{LyricsTr: "[00:01.00]Hello there"}, "zh-CN", false},
+	}
+	for _, c := range cases {
+		if got := translationUsable(c.e, c.target); got != c.want {
+			t.Errorf("%s: = %v, want %v", c.name, got, c.want)
+		}
+	}
+}
+
+// 闸门层面走一遍同样的场景,确认 translationUsable 真的接进了 needsTranslationBackfill。
+func TestNeedsTranslationBackfillIgnoresWrongLanguageTranslation(t *testing.T) {
+	saved := features
+	defer func() { features = saved }()
+	features.Lyrics = true
+	features.LyricsMachineTranslation = true
+
+	base := enrichEntry{
+		Lyrics:       "[00:01.00]The painful youth I've had",
+		LyricsTr:     "[00:01.00]我经历过的痛苦的青春",
+		LyricsTrLang: "zh",
+	}
+
+	features.LyricsTranslationLanguage = "zh"
+	if needsTranslationBackfill(base) {
+		t.Error("目标是中文、已有中文译文时不该再翻一遍")
+	}
+
+	features.LyricsTranslationLanguage = "ja"
+	if !needsTranslationBackfill(base) {
+		t.Error("目标是日语、只有中文译文时必须让机翻接手 —— 这正是这次要修的")
+	}
+}
+
+// 换了目标语言之后,上一门语言累计的失败次数不该继续挡着。
+func TestNeedsTranslationBackfillResetsAttemptsOnLanguageChange(t *testing.T) {
+	saved := features
+	defer func() { features = saved }()
+	features.Lyrics = true
+	features.LyricsMachineTranslation = true
+	features.LyricsTranslationLanguage = "ja"
+
+	e := enrichEntry{
+		Lyrics:                "[00:01.00]The painful youth I've had",
+		TranslationRetryCount: translationBackfillMaxAttempts,
+		TranslationTS:         time.Now().Unix(),
+	}
+
+	e.TranslationLang = "ja"
+	if needsTranslationBackfill(e) {
+		t.Error("同一个目标语言下次数用尽就该停手")
+	}
+
+	e.TranslationLang = "zh-CN" // 之前为中文失败了那么多次
+	if !needsTranslationBackfill(e) {
+		t.Error("换到日语后应该重新开始尝试,而不是背着中文那轮的失败次数")
+	}
+
+	e.TranslationLang = "" // 老条目没记语言:当成同一门语言,维持原有行为
+	if needsTranslationBackfill(e) {
+		t.Error("老条目不该因为没记语言就绕过次数上限")
+	}
+}

@@ -77,9 +77,21 @@ type enrichEntry struct {
 	// "machine" = translate.go 机翻补的。UI 据此如实标注,不让机翻冒充社区翻译 —— 跟页脚
 	// "歌词来自 XX" 是同一个原则。老条目没有这个字段,读成空 = 社区翻译,正是事实。
 	LyricsTrSource string `json:"lyrics_tr_source,omitempty"`
+	// LyricsTrLang 是 lyrics_tr 实际所用的语言(ISO 639-1,可带地区)。
+	//
+	// 存它是因为**译文的语言未必是用户当前想要的那个**:网易云的社区译文永远是中文,
+	// Musixmatch 的是抓取当时设置里的那个语言,机翻的是当时的目标语言 —— 三者都可能跟
+	// 现在的设置对不上。没有这个字段就只能"有译文就当数",于是设成日语的用户拿到一首
+	// 网易云歌词时,永远只会看到那份中文社区译文(见 needsTranslationBackfill)。
+	//
+	// 空 = 语言不详(老条目,或用户在 lyrics/ 目录里手改过译文),此时退回文本判别。
+	LyricsTrLang string `json:"lyrics_tr_lang,omitempty"`
 	// 机翻补全的已尝试次数与上次尝试时间,见 needsTranslationBackfill。
-	TranslationRetryCount int   `json:"translation_retry_count,omitempty"`
-	TranslationTS         int64 `json:"translation_ts,omitempty"`
+	// TranslationLang 是这些次数**针对哪个目标语言**累计的:换了语言以后,上一门语言的
+	// 失败次数(比如那时语言包没装)不该继续把新语言的尝试挡在门外。
+	TranslationRetryCount int    `json:"translation_retry_count,omitempty"`
+	TranslationTS         int64  `json:"translation_ts,omitempty"`
+	TranslationLang       string `json:"translation_lang,omitempty"`
 	// ManualLyrics 标记这条歌词是用户在 desktop-lyrics 的"歌词管理"窗口里手动纠正/采纳
 	// 过的。除了给 UI 显示"人工修正"徽章,它还是**所有自动重搜路径的一道否决闸**:
 	// needsLyricsRetry / needsLyricsRescore 都必须先看它。用户手改过的歌词是这套缓存里
@@ -399,6 +411,9 @@ func retryLyricsUpgrade(key, artist, title, album string, durationSecs float64) 
 		e.LyricsScore = picked.Score
 		e.LyricsScoringVersion = lyricsScoringVersion
 		e.LyricsTr, e.LyricsRoma, e.LyricsYRC = picked.LyricsTr, picked.LyricsRoma, picked.LyricsYRC
+		// 译文换人了,描述译文的两个字段必须跟着换:语言(否则拿旧语言判新译文),
+		// 来源(否则上一轮机翻留下的 "machine" 会让新来的社区译文被标成机翻)。
+		e.LyricsTrLang, e.LyricsTrSource = picked.LyricsTrLang, ""
 	}
 	enrichCache[key] = e
 	enrichDirty = true
@@ -499,6 +514,9 @@ func rescoreLyrics(key, artist, title, album string, durationSecs float64) {
 			log.Printf("lyrics rescore: %s  %s(v%d) -> %s(%d)", key, e.LyricsSource, e.LyricsScoringVersion, picked.Source, picked.Score)
 			e.Lyrics = picked.Lyrics
 			e.LyricsTr, e.LyricsRoma, e.LyricsYRC = picked.LyricsTr, picked.LyricsRoma, picked.LyricsYRC
+			// 译文换人了,描述译文的两个字段必须跟着换:语言(否则拿旧语言判新译文),
+			// 来源(否则上一轮机翻留下的 "machine" 会让新来的社区译文被标成机翻)。
+			e.LyricsTrLang, e.LyricsTrSource = picked.LyricsTrLang, ""
 		}
 		e.LyricsSource = picked.Source
 		e.LyricsScore = picked.Score
@@ -705,6 +723,9 @@ func resolveTrackEnrichment(artist, title, album string, durationSecs float64) e
 			e.LyricsScore = picked.Score
 			e.LyricsScoringVersion = lyricsScoringVersion
 			e.LyricsTr, e.LyricsRoma, e.LyricsYRC = picked.LyricsTr, picked.LyricsRoma, picked.LyricsYRC
+			// 译文换人了,描述译文的两个字段必须跟着换:语言(否则拿旧语言判新译文),
+			// 来源(否则上一轮机翻留下的 "machine" 会让新来的社区译文被标成机翻)。
+			e.LyricsTrLang, e.LyricsTrSource = picked.LyricsTrLang, ""
 		} else {
 			// 没有任何源给出可用歌词——查一下 scored 里是否搭车带着"lrclib 明确说是
 			// 纯音乐"这条标记(见 Instrumental 字段定义处的注释),命中就记下来,UI 侧
@@ -763,6 +784,7 @@ type scoredLyricCandidateResult struct {
 	Source        string `json:"source"`
 	Lyrics        string `json:"lyrics"`
 	LyricsTr      string `json:"lyrics_tr,omitempty"`
+	LyricsTrLang  string `json:"lyrics_tr_lang,omitempty"`
 	LyricsRoma    string `json:"lyrics_roma,omitempty"`
 	LyricsYRC     string `json:"lyrics_yrc,omitempty"`
 	HasWordTiming bool   `json:"has_word_timing"`
@@ -1003,14 +1025,23 @@ func fetchScoredLyricCandidatesStreaming(artist, title, album string, durationSe
 			switch c.source {
 			case "netease":
 				// 翻译/罗马音网易云固定给中文;QQ/酷狗这次只接了逐字,不接翻译/罗马音,
-				// 见计划"刻意不做的"。
+				// 见计划"刻意不做的"。"固定中文"这件事必须记下来:目标语言不是中文时,
+				// 这份译文用不上,得让机翻接手(见 needsTranslationBackfill)。
 				r.LyricsTr, r.LyricsRoma = ne.Trans, ne.Roma
+				if r.LyricsTr != "" {
+					r.LyricsTrLang = "zh"
+				}
 			case "musixmatch":
 				// Musixmatch 的译文语言是用户在"歌词"设置里配的
 				// LyricsTranslationLanguage(ISO 639-1 代码),不像网易云固定中文——
 				// 见 musixmatchTranslationLRC 注释。没配置/没查到社区翻译时 mxTr 是
 				// 空串,r.LyricsTr 保持空,不影响这条候选本身的原文歌词。
 				r.LyricsTr = mxTr
+				if r.LyricsTr != "" {
+					// 抓取时用的就是当时设置里的语言。之后用户改了设置,这里记下的旧语言
+					// 就会跟新目标对不上 —— 那正是要的:对不上就重翻。
+					r.LyricsTrLang = features.LyricsTranslationLanguage
+				}
 			}
 			results = append(results, r)
 		}

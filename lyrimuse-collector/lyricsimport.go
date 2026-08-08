@@ -224,6 +224,9 @@ func importLyricsFromFiles() {
 		if path, ok := g.files[".tr.lrc"]; ok {
 			if v := readVariantBody(path); e.LyricsTr != v {
 				e.LyricsTr, changed = v, true
+				// 译文被文件里的内容顶替了,原来记的语言不再描述它 —— 清掉,让
+				// translationUsable 退回文本判别,别拿旧语言给新内容背书。
+				e.LyricsTrLang = ""
 			}
 		}
 		if path, ok := g.files[".roma.lrc"]; ok {

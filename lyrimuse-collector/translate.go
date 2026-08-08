@@ -104,8 +104,15 @@ func looksLikeTargetLanguage(lyrics, target string) bool {
 	if !strings.HasPrefix(strings.ToLower(target), "zh") {
 		return false
 	}
+	return looksChinese(lyrics)
+}
+
+// looksChinese 判断一段文本是不是中文。只认中文这一种语言 —— 判别只是个兜底,用在
+// 没记语言的老条目上,而"是不是中文"恰好是唯一需要判、也判得准的一种(会自带译文的
+// 两个源里,网易云固定给中文)。
+func looksChinese(text string) bool {
 	var han, letters int
-	for _, r := range lyrics {
+	for _, r := range text {
 		switch {
 		case unicode.Is(unicode.Han, r):
 			han++
@@ -113,9 +120,32 @@ func looksLikeTargetLanguage(lyrics, target string) bool {
 			letters++
 		}
 	}
-	// 汉字占"有意义字符"的多数就当成中文歌。中英混排的华语歌(常见)也应该判成中文,
+	// 汉字占"有意义字符"的多数就当成中文。中英混排的华语歌(常见)也应该判成中文,
 	// 所以阈值不设成"完全没有拉丁字母"。
 	return han > 0 && han >= letters
+}
+
+// translationUsable 判断一条已有的译文对**当前**的目标语言还算不算数。
+//
+// 这是这次改动的核心。原来的判断是"有译文就跳过",于是一首网易云歌词一旦带上它那份
+// 固定中文的社区译文,把设置改成日语的用户就永远只能看到中文 —— 机翻根本没机会跑。
+// 而降低网易云/QQ 的打分并不能解决这件事:打分里压根没有"有译文"这一项(见
+// scoreLyricCandidate),译文不参与选源;降分只会把原文歌词的质量一起赔进去。
+func translationUsable(e enrichEntry, target string) bool {
+	if e.LyricsTr == "" {
+		return false
+	}
+	if e.LyricsTrLang != "" {
+		return myMemoryLangCode(e.LyricsTrLang) == target
+	}
+	// 语言不详(老条目,或用户手改过 lyrics/ 里的译文):只在能确定的方向上下判断。
+	if strings.HasPrefix(strings.ToLower(target), "zh") {
+		// 目标是中文:看着是中文才算数。
+		return looksChinese(e.LyricsTr)
+	}
+	// 目标不是中文:看着是中文的一定用不上(网易云那份就是这种);其余判不出来,保守
+	// 当作算数 —— 宁可留着一份可能本来就对的社区译文,也不要平白重翻一遍。
+	return !looksChinese(e.LyricsTr)
 }
 
 type translationResult struct {
@@ -291,14 +321,21 @@ func needsTranslationBackfill(e enrichEntry) bool {
 	if !features.Lyrics || !features.LyricsMachineTranslation {
 		return false
 	}
-	if e.Lyrics == "" || e.LyricsTr != "" {
-		return false
-	}
-	if e.TranslationRetryCount >= translationBackfillMaxAttempts {
+	if e.Lyrics == "" {
 		return false
 	}
 	target := myMemoryLangCode(features.LyricsTranslationLanguage)
 	if target == "" {
+		return false
+	}
+	if translationUsable(e, target) {
+		return false
+	}
+	// 次数上限和节流只对"同一个目标语言"成立:用户刚把语言从中文改成日语时,之前为中文
+	// 累计的失败次数(比如那时日语包没装)不该把新语言的第一次尝试就挡掉。老条目没记
+	// TranslationLang,当成同一个语言看待 —— 保守,维持原有行为。
+	sameTarget := e.TranslationLang == "" || e.TranslationLang == target
+	if sameTarget && e.TranslationRetryCount >= translationBackfillMaxAttempts {
 		return false
 	}
 	// 歌词本来就是目标语言时连 goroutine 都不用起 —— machineTranslateLRC 里也有同一道
@@ -306,7 +343,7 @@ func needsTranslationBackfill(e enrichEntry) bool {
 	if looksLikeTargetLanguage(e.Lyrics, target) {
 		return false
 	}
-	if e.TranslationTS > 0 &&
+	if sameTarget && e.TranslationTS > 0 &&
 		time.Now().Unix()-e.TranslationTS < int64(translationBackfillInterval/time.Second) {
 		return false
 	}
@@ -358,11 +395,17 @@ func backfillTranslation(key string) {
 		// 翻译这段时间里这条被用户在"歌词管理"里删掉了 —— 不要把它复活回去。
 		return
 	}
-	// 期间用户可能刚好手动采纳了一份带社区译文的候选;那份优先,别覆盖。
-	if e.LyricsTr != "" {
+	// 期间用户可能刚好手动采纳了一份**用得上的**社区译文;那份优先,别覆盖。用得上是
+	// 关键限定:一份语言对不上的社区译文正是这次翻译要顶替的东西,不能反过来挡住它。
+	if translationUsable(e, target) {
 		return
 	}
 	e.TranslationTS = time.Now().Unix()
+	if e.TranslationLang != target {
+		// 换了目标语言:上一门语言累计的失败次数不作数,从头再来。
+		e.TranslationRetryCount = 0
+		e.TranslationLang = target
+	}
 	switch {
 	case res.quotaReached:
 		// **不**记这次尝试:配额是全局的、跟这首歌翻不翻得出来无关,记进去等于让今天
@@ -377,6 +420,7 @@ func backfillTranslation(key string) {
 	default:
 		e.LyricsTr = res.lrc
 		e.LyricsTrSource = lyricsTrSourceMachine
+		e.LyricsTrLang = target
 		log.Printf("translate: %s got a machine translation (%d lines)", key, strings.Count(res.lrc, "\n")+1)
 	}
 	enrichCache[key] = e
