@@ -71,6 +71,75 @@ public enum MusicPlaybackController {
         }
     }
 
+    /// 播放模式。Music.app 那边是**两个互相独立的属性** —— `shuffle enabled`(布尔)和
+    /// `song repeat`(off/one/all)。这里把它们收成用户熟悉的一个三档循环。
+    ///
+    /// 六种组合都得能读出一档来:用户完全可能绕过我们、直接在 Music.app 里调那两个开关,
+    /// 所以 current 是个**全函数**,优先级 单曲循环 > 随机 > 列表。
+    public enum MusicPlaybackMode: String, CaseIterable, Sendable {
+        case list
+        case shuffle
+        case repeatOne
+
+        public var next: MusicPlaybackMode {
+            switch self {
+            case .list: return .shuffle
+            case .shuffle: return .repeatOne
+            case .repeatOne: return .list
+            }
+        }
+    }
+
+    /// 读当前播放模式。不是 Apple Music / 没权限 / 读不出来时返回 nil,调用方据此不显示按钮。
+    ///
+    /// 两个属性一次脚本读回来,不发两趟 —— 每趟都是一个 osascript 子进程。
+    ///
+    /// 会阻塞到子进程结束,**不要在主线程调用**。
+    public static func playbackMode() -> MusicPlaybackMode? {
+        guard let out = runAppleScriptCapturing(
+            #"tell application "Music" to return (shuffle enabled as text) & "," & (song repeat as text)"#
+        ) else { return nil }
+        let parts = out.trimmingCharacters(in: .whitespacesAndNewlines).split(separator: ",")
+        guard parts.count == 2 else { return nil }
+        if parts[1] == "one" { return .repeatOne }
+        if parts[0] == "true" { return .shuffle }
+        return .list
+    }
+
+    /// 切到某个播放模式。
+    ///
+    /// ⚠️ 「列表播放」**不**顺手把 `song repeat` 设成 all —— 那是"列表循环",是另一回事,
+    /// 用户没要求就把整个资料库改成永远循环下去是多管闲事。这里只保证"不是单曲循环、
+    /// 不是随机",repeat 原来是 off 还是 all 一概保留(用户可能在 Music.app 里特意开的)。
+    /// 只有从单曲循环切出来时才必须动它,否则读回来还是单曲循环。
+    public static func setPlaybackMode(_ mode: MusicPlaybackMode) {
+        let script: String
+        switch mode {
+        case .list:
+            script = #"""
+                tell application "Music"
+                    set shuffle enabled to false
+                    if song repeat is one then set song repeat to off
+                end tell
+                """#
+        case .shuffle:
+            script = #"""
+                tell application "Music"
+                    set shuffle enabled to true
+                    if song repeat is one then set song repeat to off
+                end tell
+                """#
+        case .repeatOne:
+            script = #"""
+                tell application "Music"
+                    set shuffle enabled to false
+                    set song repeat to one
+                end tell
+                """#
+        }
+        _ = runAppleScriptCapturing(script)
+    }
+
     /// 跳到曲目内的某个位置(秒)。跟上面三个动作走同一套双后端分派:Apple Music 用
     /// AppleScript 的 `set player position to`,其余播放器用 media-control 的 `seek`
     /// (实测核实过内置二进制的 `--help` 里有 `seek POSITION` 这个一等命令)。

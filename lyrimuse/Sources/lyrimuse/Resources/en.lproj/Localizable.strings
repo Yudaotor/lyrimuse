@@ -425,3 +425,6 @@
 "已下载" = "Downloaded";
 "未下载" = "Not downloaded";
 "下载中…" = "Downloading…";
+"列表播放" = "Play in Order";
+"随机播放" = "Shuffle";
+"单曲循环" = "Repeat One";

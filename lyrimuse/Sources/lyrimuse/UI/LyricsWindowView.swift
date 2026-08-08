@@ -301,11 +301,15 @@ struct LyricsWindowView: View {
         // 露出来"这个动作补刷,而这扇窗口是常显的、没有那个动作,所以换成:打开时刷一次,
         // 以及每次 App 重新变成前台时刷一次 —— 后者正好覆盖"用户刚切去 Music.app 点了
         // 心、再切回来"这条路径。
-        .onAppear { poller.refreshFavorited() }
+        .onAppear {
+            poller.refreshFavorited()
+            poller.refreshPlaybackMode()
+        }
         .onReceive(NotificationCenter.default.publisher(
             for: NSApplication.didBecomeActiveNotification)
         ) { _ in
             poller.refreshFavorited()
+            poller.refreshPlaybackMode()
         }
     }
 
@@ -514,11 +518,7 @@ struct LyricsWindowView: View {
 
     private var playbackControls: some View {
         HStack(spacing: 44) {
-            // 左边这个是**占位**,不是第二颗心:跟右边那颗等宽,让播放/暂停键无论有没有心
-            // 都停在正中。没有它的话,心一出现整排就整体左移半个按钮宽 —— 而 isFavorited
-            // 是异步读出来的(refreshFavorited 里起 osascript 子进程),那次位移正好落在
-            // 窗口刚打开的一瞬间,很扎眼;切到非 Apple Music 的播放器时也会再抖一次。
-            favoriteButton.hidden()
+            playbackModeButton
             Button {
                 MusicPlaybackController.previousTrack()
             } label: {
@@ -544,6 +544,43 @@ struct LyricsWindowView: View {
         .buttonStyle(.plain)
         .foregroundStyle(primaryTextColor)
         .frame(maxWidth: .infinity)
+    }
+
+    /// 播放模式——列表播放 / 随机播放 / 单曲循环,点一下切下一档,图标本身就是当前模式。
+    ///
+    /// 放在整排最左边,跟最右边那颗心对称:左边是"怎么播",右边是"对这首歌的态度",
+    /// 中间三个是"播什么"。跟心一样,读不到模式(不是 Apple Music / 没权限)时整个不显示,
+    /// 而且宽度跟心固定成一样 —— 这两侧等宽是播放/暂停键能停在正中的前提,而它们各自都是
+    /// 异步读出来的,不占位的话按钮排会在窗口打开后错开一瞬。
+    private var playbackModeButton: some View {
+        Group {
+            if let mode = poller.playbackMode {
+                Button {
+                    poller.cyclePlaybackMode()
+                } label: {
+                    Image(systemName: playbackModeIcon(mode))
+                        .font(.system(size: 20))
+                }
+                .help(playbackModeLabel(mode))
+            }
+        }
+        .frame(width: 22)
+    }
+
+    private func playbackModeIcon(_ mode: MusicPlaybackController.MusicPlaybackMode) -> String {
+        switch mode {
+        case .list: return "list.bullet"
+        case .shuffle: return "shuffle"
+        case .repeatOne: return "repeat.1"
+        }
+    }
+
+    private func playbackModeLabel(_ mode: MusicPlaybackController.MusicPlaybackMode) -> String {
+        switch mode {
+        case .list: return L10n.t("列表播放")
+        case .shuffle: return L10n.t("随机播放")
+        case .repeatOne: return L10n.t("单曲循环")
+        }
     }
 
     /// 「喜欢」——对应 Apple Music 里那颗心(脚本字典里的 favorited)。

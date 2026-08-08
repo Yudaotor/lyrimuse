@@ -112,6 +112,12 @@ final class PlaybackCoordinator: ObservableObject {
     // 覆盖了"用户在 Music.app 里自己点了心、回头来看悬浮窗"这种情况。
     @Published private(set) var isFavorited: Bool?
 
+    /// 播放模式(列表/随机/单曲循环)。跟"喜欢"一样只有 Apple Music 有 —— media-control 走的
+    /// 系统级 MediaRemote 没有这个概念 —— 所以 nil 同样表示"这个播放器根本没有这回事",
+    /// 按钮据此整个不显示。刷新时机也跟"喜欢"共用(换歌 / 窗口出现 / App 回到前台):
+    /// 用户可能在 Music.app 里自己改了模式,我们没有任何事件能收到,只能在这几个时机回读。
+    @Published private(set) var playbackMode: MusicPlaybackController.MusicPlaybackMode?
+
     /// 这一刻**实际在播**的是不是 Apple Music。
     ///
     /// ⚠️ 判定必须看这个,不能看 PlaybackPlayerPreference.current。设置里那一档可以是"自动
@@ -146,6 +152,37 @@ final class PlaybackCoordinator: ObservableObject {
     ///
     /// 这里的权限检查用 askIfNeeded: true —— 这是用户主动点的,该问就问,跟播放控制那三个
     /// 按钮同一套(见 LyricsOverlayView.controlButton)。
+    /// 重新读一次播放模式。跟 refreshFavorited 同一套前置判断和后台线程约定。
+    func refreshPlaybackMode() {
+        guard isAppleMusicPlayingNow,
+              MusicAutomationPermission.check(askIfNeeded: false).isAuthorized else {
+            if playbackMode != nil { playbackMode = nil }
+            return
+        }
+        Task.detached(priority: .utility) {
+            let value = MusicPlaybackController.playbackMode()
+            await MainActor.run { [weak self] in
+                guard let self, self.playbackMode != value else { return }
+                self.playbackMode = value
+            }
+        }
+    }
+
+    /// 点一下切到下一档模式。跟 toggleFavorited 一样先乐观更新再回读,以实际结果为准。
+    func cyclePlaybackMode() {
+        guard isAppleMusicPlayingNow else { return }
+        let target = (playbackMode ?? .list).next
+        playbackMode = target
+        Task.detached(priority: .userInitiated) {
+            guard await MusicAutomationPermission.checkAppleMusicSafely(askIfNeeded: true) else {
+                await MainActor.run { [weak self] in self?.refreshPlaybackMode() }
+                return
+            }
+            MusicPlaybackController.setPlaybackMode(target)
+            await MainActor.run { [weak self] in self?.refreshPlaybackMode() }
+        }
+    }
+
     func toggleFavorited() {
         guard isAppleMusicPlayingNow else { return }
         let target = !(isFavorited ?? false)
@@ -177,7 +214,10 @@ final class PlaybackCoordinator: ObservableObject {
             s.$title.combineLatest(s.$artist)
                 .map { "\($0)|\($1)" }
                 .removeDuplicates()
-                .sink { [weak self] _ in self?.refreshFavorited() },
+                .sink { [weak self] _ in
+                    self?.refreshFavorited()
+                    self?.refreshPlaybackMode()
+                },
             s.$artist.assign(to: \.artist, on: self),
             s.$album.assign(to: \.album, on: self),
             s.$isPlayingNow.assign(to: \.isPlayingNow, on: self),
