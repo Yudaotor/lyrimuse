@@ -174,6 +174,16 @@ struct LanguagePackRow: View {
             downloading = nil
             store.refresh(target: target)
         }
+        // 每次窗口重新变成前台再查一次。这一行的内容不是 App 自己的状态,而是**系统当下**
+        // 的语言包情况 —— 用户完全可能刚去"系统设置 → 翻译"里装了或删了一个包,回来时
+        // 这里该是新的。顺带也给一次坏读数一条自愈的路:2026-08-09 用户截到过一次
+        // "已下载 0 / 19",而同一份代码事后连查四轮(含三次冷启动)都是正确的 5 / 19 ——
+        // 原因没能复现,但至少点开别处再回来就能纠正,而不是一直卡着。
+        .onReceive(NotificationCenter.default.publisher(
+            for: NSApplication.didBecomeActiveNotification)
+        ) { _ in
+            store.refresh(target: target)
+        }
         // configuration 置空再赋值才会重新触发;下载结束后回到 nil,顺带刷新一次状态。
         .translationTask(pending) { session in
             try? await session.prepareTranslation()
