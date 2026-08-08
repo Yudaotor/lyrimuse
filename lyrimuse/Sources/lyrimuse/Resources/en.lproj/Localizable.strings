@@ -418,7 +418,7 @@
 "没有译文时自动翻译" = "Translate When No Translation Exists";
 "只在歌词源本身没带译文时补一份。优先用系统的端上翻译，不联网、歌词不会离开这台 Mac" = "Fills in only where the lyrics source ships no translation. Prefers macOS's on-device translation — offline, and the lyrics never leave this Mac";
 "翻译语言包" = "Translation Languages";
-"没装语言包的语言会退回联网翻译；点一下由系统下载，之后就完全在本机翻译" = "Languages without a downloaded pack fall back to online translation; tap to let macOS download one and translate entirely on this Mac";
-"已下载，可离线翻译" = "Downloaded — translates offline";
-"点击下载语言包" = "Tap to download";
+"没装语言包的语言会退回联网翻译；选一个由系统下载，之后就完全在本机翻译" = "Languages without a downloaded pack fall back to online translation; pick one to let macOS download it and translate entirely on this Mac";
 "机器翻译" = "Machine translation";
+"检查中…" = "Checking…";
+"已下载 %@ / %@" = "%@ of %@ downloaded";
