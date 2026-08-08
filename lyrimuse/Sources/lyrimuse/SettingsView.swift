@@ -388,7 +388,7 @@ private struct LyricsSettingsTab: View {
             SettingsRow(
                 icon: "globe",
                 title: L10n.t("译文语言"),
-                subtitle: L10n.t("仅对 Musixmatch 来源生效，网易云音乐/QQ音乐的译文固定是中文")
+                subtitle: L10n.t("机器翻译和 Musixmatch 都用这个语言；网易云音乐 /QQ 音乐自带的译文固定是中文")
             ) {
                 Picker("", selection: Binding(
                     get: { features.lyricsTranslationLanguage },

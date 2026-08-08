@@ -141,8 +141,10 @@ type featureFlags struct {
 	// 不在这里(loadFeatureFlags)展开成绝对路径——那时候 *cfgPath 还没解析完。
 	LyricsDir string
 	// LyricsTranslationLanguage 是已经解析过的具体 ISO 639-1 代码(不会是"auto"或空值,
-	// 见 resolveLyricsTranslationLanguage)。只被 musixmatchTranslationLRC
-	// (musixmatch.go)读取。
+	// 见 resolveLyricsTranslationLanguage)。三处读取,含义都是"译文要什么语言":
+	// musixmatchTranslationLRC(musixmatch.go)向 Musixmatch 索取该语言的社区译文;
+	// appleLangCode / myMemoryLangCode(translate.go)把它转成端上翻译和网络兜底
+	// 各自的语言代码。网易云/QQ 不在此列——它们自带的社区译文只有中文,给不了别的语言。
 	LyricsTranslationLanguage string
 	// 见上面同名字段的注释。只被 needsTranslationBackfill/backfillTranslation 读取。
 	LyricsMachineTranslation bool
