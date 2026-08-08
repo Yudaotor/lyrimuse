@@ -487,11 +487,21 @@ public final class LocalPlaybackSource: ObservableObject {
 
         let key = snapshot.trackKey
         let trackChanged = key != lastKey
-        if trackChanged || !syncEngine.hasContent {
+        // 同一首歌播到中途,collector 还可能给它补出译文、或者换上一份更好的歌词(见
+        // collector 的 backfillTranslation / retryLyricsUpgrade / rescoreLyrics)。原来这里
+        // 只在换歌或"完全没歌词"时才重读,于是这类中途补上的东西要等下一次换歌才看得到 ——
+        // 2026-08-09 用户问"为什么当前这歌没有英文译文",译文其实早在 19 秒前就翻好并落盘了。
+        //
+        // 只在"这首还缺东西"时才盯 mtime:歌词和译文都齐了就不再重读。否则别的歌被解析、
+        // 缓存文件被重写时,这边会白白把几 MB 的 JSON 重新解析一遍。
+        let mayStillGrow = !syncEngine.hasContent || !currentHasTranslation
+        let enrichMTime = mayStillGrow ? EnrichCacheReader.fileModificationDate : lastEnrichMTime
+        if trackChanged || !syncEngine.hasContent || enrichMTime != lastEnrichMTime {
             if trackChanged {
                 logger.info("track changed: \(snapshot.artist ?? "", privacy: .public) - \(snapshot.title ?? "", privacy: .public)")
             }
             lastKey = key
+            lastEnrichMTime = enrichMTime
             reloadCurrentLyrics()
         }
         if trackChanged {
@@ -727,6 +737,11 @@ public final class LocalPlaybackSource: ObservableObject {
     // 复用,不用每次都重新拼一遍(也保证跟当初读校正值时用的是同一个 key)。
     private var currentOffsetKey = ""
 
+    /// 上一次读缓存时那个文件的 mtime,以及这首歌当时到底有没有译文 —— 一起决定还要不要
+    /// 继续盯着文件看(见 apply() 里那段注释)。
+    private var lastEnrichMTime: Date?
+    private var currentHasTranslation = false
+
     private func reloadCurrentLyrics() {
         guard let snapshot = lastSnapshot else { return }
         let found = EnrichCacheReader.lookup(
@@ -734,6 +749,7 @@ public final class LocalPlaybackSource: ObservableObject {
             title: snapshot.title ?? "",
             album: snapshot.album ?? ""
         )
+        currentHasTranslation = !(found?.lyricsTr ?? "").isEmpty
         syncEngine.load(
             lyrics: found?.lyrics ?? "",
             lyricsTr: found?.lyricsTr ?? "",

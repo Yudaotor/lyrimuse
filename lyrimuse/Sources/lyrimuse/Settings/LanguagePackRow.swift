@@ -127,7 +127,7 @@ struct LanguagePackRow: View {
         SettingsRow(
             icon: "arrow.down.circle",
             title: L10n.t("翻译语言包"),
-            subtitle: L10n.t("选一个语言，让系统下载对应的语言包")
+            help: L10n.t("请提前下载好需要翻译的语言")
         ) {
             Menu {
                 ForEach(store.codes, id: \.self) { code in

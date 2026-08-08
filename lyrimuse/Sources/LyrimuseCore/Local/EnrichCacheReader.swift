@@ -50,6 +50,16 @@ public enum EnrichCacheReader {
     private static var cachedMTime: Date?
     private static var cachedEntries: [String: EnrichCacheEntry]?
 
+    /// 缓存文件当前的 mtime,拿不到就是 nil。
+    ///
+    /// 给调用方判断"collector 是不是又写过了"。同一首歌播放中途补出来的译文/换上来的更好
+    /// 的歌词,在这一侧唯一的外部体现就是这个文件被重写 —— collector 那边的重推通知只走
+    /// relay,本地模式压根不看。一次 stat,比重新解析几 MB 的 JSON 便宜得多。
+    public static var fileModificationDate: Date? {
+        (try? FileManager.default.attributesOfItem(atPath: cacheURL.path))?[.modificationDate]
+            as? Date
+    }
+
     // 文件不存在/解析失败/key 查不到都返回 nil,上层据此显示"还没有内容"而不是崩溃。
     public static func lookup(artist: String, title: String, album: String) -> EnrichCacheLyrics? {
         guard let all = loadEntries() else { return nil }

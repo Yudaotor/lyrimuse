@@ -403,8 +403,19 @@ func retryLyricsUpgrade(key, artist, title, album string, durationSecs float64) 
 	defer func() {
 		enrichMu.Unlock()
 		saveEnrichCache()
-		if lyricsChanged {
-			exportLyricsFiles()
+		if !lyricsChanged {
+			return
+		}
+		exportLyricsFiles()
+		// 非阻塞通知 poll 立刻重推。跟 saveEnrichCache 一样,原来只有 resolveEnrichAsync /
+		// backfillPeripheralFields 做了这一步,这三条补全路径全漏了 —— 于是同一首歌播到
+		// 中途才补出来的译文,要等下一次换歌才会被推出去(2026-08-09 用户问"为什么当前这
+		// 歌没有英文译文",译文其实早就翻好、也落盘了,只是没人通知)。
+		if enrichNotify != nil {
+			select {
+			case enrichNotify <- struct{}{}:
+			default:
+			}
 		}
 	}()
 	e, ok := enrichCache[key]
@@ -517,8 +528,19 @@ func rescoreLyrics(key, artist, title, album string, durationSecs float64) {
 	defer func() {
 		enrichMu.Unlock()
 		saveEnrichCache()
-		if lyricsChanged {
-			exportLyricsFiles()
+		if !lyricsChanged {
+			return
+		}
+		exportLyricsFiles()
+		// 非阻塞通知 poll 立刻重推。跟 saveEnrichCache 一样,原来只有 resolveEnrichAsync /
+		// backfillPeripheralFields 做了这一步,这三条补全路径全漏了 —— 于是同一首歌播到
+		// 中途才补出来的译文,要等下一次换歌才会被推出去(2026-08-09 用户问"为什么当前这
+		// 歌没有英文译文",译文其实早就翻好、也落盘了,只是没人通知)。
+		if enrichNotify != nil {
+			select {
+			case enrichNotify <- struct{}{}:
+			default:
+			}
 		}
 	}()
 	e, ok := enrichCache[key]

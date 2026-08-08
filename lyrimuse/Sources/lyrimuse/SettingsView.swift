@@ -385,10 +385,19 @@ private struct LyricsSettingsTab: View {
 
     private var translationCard: some View {
         SettingsCard {
+            // 顺序是一条链:要不要显示译文 → 要哪种语言 → 没有译文时兜底 → 兜底要的语言包。
+            // "显示译文"原来在下面那张"显示"卡片里,跟罗马音/双行放一起,离它真正相关的三行很远。
+            SettingsRow(
+                icon: "text.bubble",
+                title: L10n.t("显示译文"),
+                help: L10n.t("这个开关只影响「桌面悬浮歌词」和「歌词窗口」；灵动岛歌词受限于胶囊空间不支持这一项，菜单栏歌词只能显示一行纯文字")
+            ) {
+                Toggle("", isOn: $settings.showTranslation)
+            }
+            CardDivider()
             SettingsRow(
                 icon: "globe",
-                title: L10n.t("译文语言"),
-                subtitle: L10n.t("机器翻译和 Musixmatch 都用这个语言；网易云音乐 /QQ 音乐自带的译文固定是中文")
+                title: L10n.t("译文语言")
             ) {
                 Picker("", selection: Binding(
                     get: { features.lyricsTranslationLanguage },
@@ -404,8 +413,8 @@ private struct LyricsSettingsTab: View {
             CardDivider()
             SettingsRow(
                 icon: "character.book.closed",
-                title: L10n.t("没有译文时自动翻译"),
-                subtitle: L10n.t("歌词源没带译文时，用系统翻译补一份")
+                title: L10n.t("系统兜底翻译"),
+                help: L10n.t("歌词源没带译文时补充")
             ) {
                 Toggle("", isOn: Binding(
                     get: { features.lyricsMachineTranslation },
@@ -444,14 +453,6 @@ private struct LyricsSettingsTab: View {
                 help: L10n.t("这个开关只影响「桌面悬浮歌词」和「歌词窗口」；灵动岛歌词受限于胶囊空间不支持这一项，菜单栏歌词只能显示一行纯文字")
             ) {
                 Toggle("", isOn: $settings.showRomanization)
-            }
-            CardDivider()
-            SettingsRow(
-                icon: "text.bubble",
-                title: L10n.t("显示译文"),
-                help: L10n.t("这个开关只影响「桌面悬浮歌词」和「歌词窗口」；灵动岛歌词受限于胶囊空间不支持这一项，菜单栏歌词只能显示一行纯文字")
-            ) {
-                Toggle("", isOn: $settings.showTranslation)
             }
             CardDivider()
             SettingsRow(

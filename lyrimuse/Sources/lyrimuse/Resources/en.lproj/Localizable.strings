@@ -286,7 +286,6 @@
 "至少需要保留一个歌词来源" = "At least one lyrics source must stay enabled";
 "译文语言" = "Translation Language";
 "跟随系统语言" = "Follow System Language";
-"机器翻译和 Musixmatch 都用这个语言；网易云音乐 /QQ 音乐自带的译文固定是中文" = "Used for machine translation and for Musixmatch; NetEase and QQ ship their own translations, always in Chinese";
 "解析 Last.fm 响应失败" = "Failed to parse the Last.fm response";
 "其它源仍在搜索中…" = "Still searching other sources…";
 "解析本地记录文件失败" = "Failed to Parse Local Record File";
@@ -415,10 +414,7 @@
 "「自动」选带刘海的那块；指定的屏幕拔掉后自动回到「自动」" = "Automatic picks the display with the notch; if the chosen display is disconnected it falls back to automatic";
 "自动" = "Automatic";
 "已断开的屏幕" = "Disconnected display";
-"没有译文时自动翻译" = "Translate When No Translation Exists";
-"歌词源没带译文时，用系统翻译补一份" = "Fills in a translation with the system translator when the lyrics source ships none";
 "翻译语言包" = "Translation Languages";
-"选一个语言，让系统下载对应的语言包" = "Pick a language and macOS downloads its pack";
 "机器翻译" = "Machine translation";
 "检查中…" = "Checking…";
 "已下载 %@ / %@" = "%@ of %@ downloaded";
@@ -429,3 +425,7 @@
 "随机播放" = "Shuffle";
 "单曲循环" = "Repeat One";
 "不支持" = "Not supported";
+
+"系统兜底翻译" = "System Fallback Translation";
+"歌词源没带译文时补充" = "Fills in where the lyrics source ships none";
+"请提前下载好需要翻译的语言" = "Download the languages you want translated ahead of time";
