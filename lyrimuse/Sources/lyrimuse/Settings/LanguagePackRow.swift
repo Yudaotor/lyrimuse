@@ -4,7 +4,7 @@ import SwiftUI
     import Translation
 #endif
 
-/// 语言包可用性的共享缓存。
+/// 语言包清单 + 可用性的共享缓存。
 ///
 /// **为什么不能放在视图的 @State 里**:2026-08-08 用户反馈"点完打勾、退出去再进来又变回
 /// 没装"。装没装这件事本来就不需要 App 自己持久化 —— `LanguageAvailability` 读的就是系统
@@ -18,23 +18,66 @@ import SwiftUI
 final class LanguagePackStatusStore: ObservableObject {
     static let shared = LanguagePackStatusStore()
 
+    /// 当前该列出来的源语言,已经排好序、并且**剔除了目标语言自己**。
+    @Published private(set) var codes: [String] = []
     @Published private(set) var statuses: [String: LanguageAvailability.Status] = [:]
     @Published private(set) var hasLoaded = false
 
     private var inFlight: Task<Void, Never>?
 
-    func refresh(codes: [String], target: Locale.Language) {
+    /// 歌词里最常撞见的几种排前面,其余按本地化名称排。系统给的顺序本身没有可读性。
+    private static let preferred = ["en", "ja", "ko", "zh-Hans", "zh-Hant"]
+
+    /// 归一成菜单里用的语言代码。
+    ///
+    /// 中文**保留 script**:简繁是两个独立的语言包,状态确实会不同(2026-08-09 实测
+    /// zh-Hans→en 已装、zh-Hant→en 只是"支持未装")。其余语言的 script 没有区分意义,
+    /// `en-Latn-US` 和 `en-Latn-GB` 是同一种英语,合成一条,否则菜单里会并排两个"英语"。
+    private static func canonical(_ lang: Locale.Language) -> String? {
+        guard let base = lang.languageCode?.identifier else { return nil }
+        if base == "zh", let script = lang.script?.identifier { return "zh-\(script)" }
+        return base
+    }
+
+    static func displayName(_ code: String) -> String {
+        Locale.current.localizedString(forIdentifier: code) ?? code
+    }
+
+    func refresh(target: Locale.Language) {
         // 同一时刻只跑一次:视图出现和目标语言变化可能几乎同时触发,重复问一遍纯属浪费。
         inFlight?.cancel()
         inFlight = Task { [weak self] in
             let availability = LanguageAvailability()
+            let targetCode = Self.canonical(target)
+            var seen = Set<String>()
+            var list: [String] = []
+            // 清单由系统给,不再硬编码。硬编码那一版漏掉了**中文本身** —— 目标语言换成英语
+            // 之后,中文歌要的正是 zh→en 这个包,而菜单里根本没有它可点;顺带还漏了荷兰语/
+            // 波兰语/土耳其语/乌克兰语,以及以后系统新增的任何语言。
+            for lang in await availability.supportedLanguages {
+                guard let code = Self.canonical(lang) else { continue }
+                // 源语言就是目标语言时这一对没有意义,系统给的状态是 unsupported。留在菜单
+                // 里只会让人点了之后卡在"下载中…"永远不动 —— 2026-08-09 用户就这么撞上了:
+                // 译文语言设成英语,菜单里还列着"英语"。
+                guard code != targetCode else { continue }
+                guard seen.insert(code).inserted else { continue }
+                list.append(code)
+            }
+            list.sort { a, b in
+                let ia = Self.preferred.firstIndex(of: a) ?? Int.max
+                let ib = Self.preferred.firstIndex(of: b) ?? Int.max
+                if ia != ib { return ia < ib }
+                return Self.displayName(a).localizedCompare(Self.displayName(b)) == .orderedAscending
+            }
+
             var next: [String: LanguageAvailability.Status] = [:]
-            for code in codes {
+            for code in list {
                 if Task.isCancelled { return }
                 next[code] = await availability.status(
                     from: Locale.Language(identifier: code), to: target)
             }
             guard !Task.isCancelled else { return }
+            self?.codes = list
             self?.statuses = next
             self?.hasLoaded = true
         }
@@ -48,15 +91,9 @@ final class LanguagePackStatusStore: ObservableObject {
 /// (`canRequestDownloads`)。采集器调的那个 `lyrics-translate` 是无界面子进程,自己触发
 /// 下载会弹出没头没尾的窗口,所以它只负责如实回报"语言包没装",引导落在这里。
 ///
-/// 做成下拉而不是一排并列的胶囊:同样是那次反馈 —— 并排排开六种就已经换行挤成两行了,
-/// 语言再多就没法操作。下拉之后不受宽度限制,列表可以给全。
+/// 做成下拉而不是一排并列的胶囊:并排排开六种就已经换行挤成两行了,语言再多就没法操作。
 @available(macOS 26.0, *)
 struct LanguagePackRow: View {
-    /// 歌词常见的外语 + 系统支持的主要语种。
-    private static let candidates = [
-        "en", "ja", "ko", "es", "fr", "de", "it", "pt", "ru", "th", "vi", "id", "ar", "hi",
-    ]
-
     @ObservedObject private var features = FeatureSettingsStore.shared
     @ObservedObject private var store = LanguagePackStatusStore.shared
     @State private var pending: TranslationSession.Configuration?
@@ -93,7 +130,7 @@ struct LanguagePackRow: View {
             subtitle: L10n.t("选一个语言，让系统下载对应的语言包")
         ) {
             Menu {
-                ForEach(Self.candidates, id: \.self) { code in
+                ForEach(store.codes, id: \.self) { code in
                     Button {
                         downloading = code
                         pending = TranslationSession.Configuration(
@@ -104,7 +141,7 @@ struct LanguagePackRow: View {
                         // 这样,一整列语言看不出哪个装了。.labelStyle(.titleAndIcon) 是
                         // 官方的要图标写法,加上;但状态不能只押在它身上,所以文字里也说清。
                         Label(
-                            "\(displayName(code))  ·  \(stateText(code))",
+                            "\(LanguagePackStatusStore.displayName(code))  ·  \(stateText(code))",
                             systemImage: downloading == code
                                 ? "arrow.down.circle.dotted"
                                 : (store.statuses[code] == .installed
@@ -113,8 +150,9 @@ struct LanguagePackRow: View {
                         .labelStyle(.titleAndIcon)
                     }
                     // 已装好的也不禁用:读数万一是旧的,用户还能点(系统对已装的语言不会
-                    // 重复下载),总好过被一个错误状态锁死。
-                    .disabled(downloading != nil)
+                    // 重复下载),总好过被一个错误状态锁死。系统明说不支持的那一档要禁用 ——
+                    // 那不是"还没下载",是这一对永远下不来,点了只会卡在"下载中…"。
+                    .disabled(downloading != nil || store.statuses[code] == .unsupported)
                 }
             } label: {
                 // 首次读取有可见延迟,这段时间明说"检查中",而不是让人以为一个都没装。
@@ -122,16 +160,19 @@ struct LanguagePackRow: View {
                     store.hasLoaded
                         ? String(
                             format: L10n.t("已下载 %@ / %@"), "\(installedCount)",
-                            "\(Self.candidates.count)")
+                            "\(store.codes.count)")
                         : L10n.t("检查中…"))
             }
             .menuStyle(.borderlessButton)
             .fixedSize()
         }
-        // 出现时刷新一次;目标语言改了要按新目标重算(同一种源语言对不同目标语言的可用性
-        // 是分开的)。缓存在单例里,所以这两次刷新都不会让界面先空一下。
+        // 出现时刷新一次;目标语言改了要按新目标重算 —— 可用性是**按语言对**算的,换了目标
+        // 整张表的含义都变了(2026-08-09 实测同一台机器:目标中文时 en/ja/ko/ru 四种已装,
+        // 目标英语时只剩 ja/ko/ru 三种,英语那一格变成 unsupported)。缓存在单例里,所以
+        // 这两次刷新都不会让界面先空一下。
         .task(id: target.maximalIdentifier) {
-            store.refresh(codes: Self.candidates, target: target)
+            downloading = nil
+            store.refresh(target: target)
         }
         // configuration 置空再赋值才会重新触发;下载结束后回到 nil,顺带刷新一次状态。
         .translationTask(pending) { session in
@@ -139,19 +180,18 @@ struct LanguagePackRow: View {
             await MainActor.run {
                 downloading = nil
                 pending = nil
-                store.refresh(codes: Self.candidates, target: target)
+                store.refresh(target: target)
             }
         }
     }
 
-    private func displayName(_ code: String) -> String {
-        Locale.current.localizedString(forLanguageCode: code) ?? code
-    }
-
     private func stateText(_ code: String) -> String {
         if downloading == code { return L10n.t("下载中…") }
-        if store.statuses[code] == .installed { return L10n.t("已下载") }
-        if !store.hasLoaded { return L10n.t("检查中…") }
-        return L10n.t("未下载")
+        switch store.statuses[code] {
+        case .installed: return L10n.t("已下载")
+        case .unsupported: return L10n.t("不支持")
+        case .supported: return L10n.t("未下载")
+        default: return store.hasLoaded ? L10n.t("未下载") : L10n.t("检查中…")
+        }
     }
 }
