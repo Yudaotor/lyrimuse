@@ -386,7 +386,6 @@
 "最不打扰，只占状态栏一行纯文字" = "The least intrusive — one line of plain text in the menu bar";
 "本地时间晚上 10 点之后当天第一次检查时推送：当天播放次数、累计时长、听得最多的几首歌" = "Pushed on the first check after 10 PM local time: today's play count, total listening time, and your most-played tracks";
 "检查更新" = "Check for Updates";
-"歌词从哪里来、怎么挑，以及显示哪些内容" = "Where lyrics come from, how they're picked, and what gets shown";
 "没有它，悬浮歌词/灵动岛都无法显示任何歌词内容" = "Without it, neither the floating lyrics nor the Dynamic Island can show any lyrics";
 "清除…" = "Erase…";
 "清除所有配置" = "Erase All Settings";
@@ -432,3 +431,8 @@
 "忽略括号" = "Ignore Parentheses";
 "严格" = "Exact";
 "忽略括号：歌词源上的「In My Room」也能匹配本地的「In My Room (Remastered 2014)」。严格：括号里的内容也必须一字不差地对上，宁可没有歌词也不要另一个版本的" = "Ignore parentheses: a source's \"In My Room\" matches your \"In My Room (Remastered 2014)\". Exact: what is inside the parentheses has to match too — better no lyrics than another version's";
+"获取" = "Fetching";
+"译文" = "Translation";
+"显示" = "Display";
+"管理" = "Library";
+"让每首歌都有一份对得上的歌词" = "Give every track lyrics that actually match it";

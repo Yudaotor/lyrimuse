@@ -235,25 +235,93 @@ private struct LyricsSettingsTab: View {
     private let local = LocalPlaybackSource.shared
     @ObservedObject private var features = FeatureSettingsStore.shared
     @Environment(\.openWindow) private var openWindow
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    /// 这一页的四个分段。
+    ///
+    /// 2026-08-09 重排:原来 6 张卡片、14 个设置项平铺在一条长滚动里,没有层级也没有主次,
+    /// 一屏装不下、找一项要滚半天。四段各 2–4 项,一屏放得下,而且分法本身就是语义:
+    /// 「怎么找到这首歌的歌词」「译文怎么来」「歌词长什么样」「已经存下来的怎么管」。
+    ///
+    /// 为什么不拆成两个侧边栏条目:那样侧边栏会从 6 项变 7 项,而这四段里真正常用的只有
+    /// 前两段,把「显示」「管理」也提到侧边栏是把不常用的东西抬得更高了。
+    private enum Section: String, CaseIterable, Identifiable {
+        case fetch, translation, display, manage
+        var id: Self { self }
+        var title: String {
+            switch self {
+            case .fetch: return L10n.t("获取")
+            case .translation: return L10n.t("译文")
+            case .display: return L10n.t("显示")
+            case .manage: return L10n.t("管理")
+            }
+        }
+    }
+
+    // 记住上次看的是哪一段 —— 每次重开设置都跳回第一段的话,连着调同一段的两项就要多点
+    // 一次。存 rawValue 而不是枚举:@AppStorage 只吃基础类型。
+    @AppStorage("settings:lyricsSection") private var sectionRaw = Section.fetch.rawValue
+    private var section: Section { Section(rawValue: sectionRaw) ?? .fetch }
 
     var body: some View {
         SettingsPage(
             title: L10n.t("歌词"),
-            subtitle: L10n.t("歌词从哪里来、怎么挑，以及显示哪些内容")
+            subtitle: L10n.t("让每首歌都有一份对得上的歌词")
         ) {
+            sectionPicker
+            // 切段用纯淡入淡出,不用卡片那套 .settingsCard(带从顶边缩放):那个是"这一行下面
+            // 长出一张卡"的语义,整页换内容时会像整块东西塌下去。时长也短一截 —— 分段切换
+            // 在用户心里等同于换标签页,该是即时的。
+            currentSection
+                .id(section)
+                .transition(.opacity)
+        }
+        .id(L10n.current)
+    }
+
+    private var sectionPicker: some View {
+        Picker(
+            "",
+            selection: Binding(
+                get: { section },
+                set: { next in
+                    withAnimation(reduceMotion ? nil : .easeOut(duration: 0.16)) {
+                        sectionRaw = next.rawValue
+                    }
+                })
+        ) {
+            ForEach(Section.allCases) { s in
+                Text(s.title).tag(s)
+            }
+        }
+        .pickerStyle(.segmented)
+        .labelsHidden()
+        // 不铺满整列:居中的固定宽度跟上面居中的标题/说明是同一根轴,铺满会让它看起来像
+        // 一条工具栏,而不是页头的一部分。
+        .fixedSize()
+        .padding(.bottom, 2)
+    }
+
+    @ViewBuilder
+    private var currentSection: some View {
+        switch section {
+        case .fetch:
             parsingCard
             // "歌词来源""匹配算法"两张卡只在 features.lyrics(在线匹配总开关)打开时才显示
             // ——2026-08-02 定的规则:关掉在线匹配后这两组设置毫无意义,继续让它们完全可交互
             // 会让人以为调了就生效。
+            // 「来源」和「匹配」合成一张卡:它们是同一件事的两半 —— 去哪儿查、查回来怎么挑。
+            // 分成两张卡的时候这一段是三张卡、一屏装不下,而其余三段都只有一张卡,轻重失衡。
             if features.lyrics {
-                sourcesCard.transition(.settingsCard)
-                matchingCard.transition(.settingsCard)
+                sourcesAndMatchingCard.transition(.settingsCard)
             }
+        case .translation:
             translationCard
+        case .display:
             displayCard
+        case .manage:
             managementCard
         }
-        .id(L10n.current)
     }
 
     // 播放位置现在通过 AppleScript 问 Music.app(见 MediaControlClient.swift)得到精确值,
@@ -293,7 +361,7 @@ private struct LyricsSettingsTab: View {
 
     // 每个来源前面那个彩色圆点用 iconTint 上色——这里的图标不是"行首的视觉锚点",它本身
     // 就是这个来源的身份色(跟"歌词管理"窗口里来源列的色点是同一套 source.color)。
-    private var sourcesCard: some View {
+    private var sourcesAndMatchingCard: some View {
         SettingsCard {
             SettingsRow(
                 icon: "arrow.down.circle",
@@ -312,58 +380,16 @@ private struct LyricsSettingsTab: View {
                     }
                 }
             }
-        }
-    }
-
-    /// 一个来源 = 一个原生复选框。
-    ///
-    /// 2026-08-09 先做成了带来源色底的胶囊,用户反馈"跟整体风格不搭" —— 这一页其余控件
-    /// 全是系统原生件(开关、分段控件、下拉),五个饱和色块摆在中间确实突兀,而且"选中"
-    /// 本来就有一个所有人都认识的 macOS 表达方式。来源色只留一个小圆点作身份标记(跟
-    /// "歌词管理"窗口来源列同一套色),不再铺成背景。
-    private func sourceCheckbox(_ source: LyricsSource) -> some View {
-        Toggle(
-            isOn: Binding(
-                get: { features.lyricsSources.contains(source) },
-                set: { setSource(source, enabled: $0) }
-            )
-        ) {
-            HStack(spacing: 5) {
-                Circle().fill(source.color).frame(width: 7, height: 7)
-                Text(source.displayName).font(.system(size: 13))
-            }
-        }
-        .toggleStyle(.checkbox)
-    }
-
-    private func setSource(_ source: LyricsSource, enabled: Bool) {
-        // 关掉最后一个来源是不允许的(下面那句 count > 1 的守卫),这时集合没有任何变化 ——
-        // 但原来 save() 是无条件调的,于是这次被拒绝的点击照样写一遍 features.json 并
-        // kickstart 一次 collector:后台服务被杀掉重启,期间歌词整片空掉(launchd 对连续
-        // kickstart 还有约 10s 的节流),而配置压根没变。只在真的变了才保存。
-        let before = features.lyricsSources
-        if enabled {
-            features.lyricsSources.insert(source)
-        } else if features.lyricsSources.count > 1 {
-            features.lyricsSources.remove(source)
-        }
-        guard features.lyricsSources != before else { return }
-        Task { await features.save() }
-    }
-
-    // "匹配算法"决定从查到的结果里怎么选——智能算法沿用五源打分取最高分,顺序优先则完全
-    // 听用户排的顺序、不比分数。实现在 collector/enrich.go 的 pickLyricCandidate,故意不
-    // 影响"歌词管理"窗口的手动搜索(那边永远查全部五源,理由见它的注释)。
-    private var matchingCard: some View {
-        SettingsCard {
+            CardDivider()
+            // 分段控件放在标题行右边,不再单独占一整行 —— 一行一个设置是这套设置页其余地方
+            // 的通用写法(开关、下拉都是这样),原来那种"标题一行、控件再一行"把这一段的高度
+            // 白白翻了一倍。
             SettingsRow(
                 icon: "slider.horizontal.3",
                 title: L10n.t("匹配算法"),
                 subtitle: L10n.t("智能算法自动打分选最高分，顺序优先按你排的顺序来"),
                 help: L10n.t("智能算法：查到的每个来源都打分（逐字时间轴、语言是否匹配等维度），自动挑分数最高的一条。顺序优先：按下面排的顺序，用第一个查到有效结果的来源，不比较分数")
-            )
-            CardDivider()
-            SettingsSubRow {
+            ) {
                 Picker("", selection: Binding(
                     get: { features.lyricsSourceMode },
                     set: { features.lyricsSourceMode = $0; Task { await features.save() } }
@@ -376,14 +402,11 @@ private struct LyricsSettingsTab: View {
                 .fixedSize()
             }
             CardDivider()
-            // 歌名匹配的松紧。跟上面那个"用哪个候选"是两件事:这一档决定**一条候选算不算
-            // 这首歌**,上面那档决定在算数的候选里怎么挑。
             SettingsRow(
                 icon: "textformat",
                 title: L10n.t("歌名匹配"),
                 help: L10n.t("忽略括号：歌词源上的「In My Room」也能匹配本地的「In My Room (Remastered 2014)」。严格：括号里的内容也必须一字不差地对上，宁可没有歌词也不要另一个版本的")
-            )
-            SettingsSubRow {
+            ) {
                 Picker("", selection: Binding(
                     get: { features.lyricsStrictTitleMatch },
                     set: { features.lyricsStrictTitleMatch = $0; Task { await features.save() } }
@@ -425,6 +448,42 @@ private struct LyricsSettingsTab: View {
                 }
             }
         }
+    }
+
+    /// 一个来源 = 一个原生复选框。
+    ///
+    /// 2026-08-09 先做成了带来源色底的胶囊,用户反馈"跟整体风格不搭" —— 这一页其余控件
+    /// 全是系统原生件(开关、分段控件、下拉),五个饱和色块摆在中间确实突兀,而且"选中"
+    /// 本来就有一个所有人都认识的 macOS 表达方式。来源色只留一个小圆点作身份标记(跟
+    /// "歌词管理"窗口来源列同一套色),不再铺成背景。
+    private func sourceCheckbox(_ source: LyricsSource) -> some View {
+        Toggle(
+            isOn: Binding(
+                get: { features.lyricsSources.contains(source) },
+                set: { setSource(source, enabled: $0) }
+            )
+        ) {
+            HStack(spacing: 5) {
+                Circle().fill(source.color).frame(width: 7, height: 7)
+                Text(source.displayName).font(.system(size: 13))
+            }
+        }
+        .toggleStyle(.checkbox)
+    }
+
+    private func setSource(_ source: LyricsSource, enabled: Bool) {
+        // 关掉最后一个来源是不允许的(下面那句 count > 1 的守卫),这时集合没有任何变化 ——
+        // 但原来 save() 是无条件调的,于是这次被拒绝的点击照样写一遍 features.json 并
+        // kickstart 一次 collector:后台服务被杀掉重启,期间歌词整片空掉(launchd 对连续
+        // kickstart 还有约 10s 的节流),而配置压根没变。只在真的变了才保存。
+        let before = features.lyricsSources
+        if enabled {
+            features.lyricsSources.insert(source)
+        } else if features.lyricsSources.count > 1 {
+            features.lyricsSources.remove(source)
+        }
+        guard features.lyricsSources != before else { return }
+        Task { await features.save() }
     }
 
     private var translationCard: some View {
