@@ -478,7 +478,12 @@ struct LyricsWindowView: View {
             // 播放中:1 秒一档从锚点外推——4pt 高的进度条上,秒级步进配 .linear 补间在
             // 视觉上已经连续,不值得为它再挂一个逐帧刷新的 TimelineView(.animation)。
             TimelineView(.periodic(from: .now, by: 1)) { context in
-                progressBar(positionMs: anchor.extrapolatedPositionMs(now: context.date), durationMs: anchor.durationMs)
+                progressBar(
+                    positionMs: anchor.extrapolatedPositionMs(now: context.date),
+                    durationMs: anchor.durationMs,
+                    // 播放中每过一墙钟秒,播放头前进多少毫秒(倍速播放时不是 1000)。
+                    // 补间要用它把终点提前一秒,见 progressBar 里 onChange 的注释。
+                    advancePerSecondMs: 1000 * anchor.rate)
             }
         } else if let paused = poller.pausedPositionMs, let duration = poller.currentDurationMs, duration > 0 {
             // 暂停:显示冻结位置(anchor 此时是 nil,见 pausedPositionMs 定义处注释)。
@@ -499,7 +504,7 @@ struct LyricsWindowView: View {
         }
     }
 
-    private func progressBar(positionMs: Int, durationMs: Int) -> some View {
+    private func progressBar(positionMs: Int, durationMs: Int, advancePerSecondMs: Double = 0) -> some View {
         // 拖动期间显示手指按住的位置,而不是真实播放位置——松手才真的发 seek。拖动中
         // 播放器还在按旧位置走,若这里显示真实位置,进度条会在手指底下往回跳。
         let shownMs = scrubbingFraction.map { Int($0 * Double(durationMs)) } ?? positionMs
@@ -527,7 +532,21 @@ struct LyricsWindowView: View {
                 let smooth = progressPrimed && !reduceMotion && scrubbingFraction == nil
                 if smooth {
                     // 正常推进:1 秒一档,配 .linear 补间在视觉上就是连续的。
-                    withAnimation(.linear(duration: 1)) { shownFraction = f }
+                    //
+                    // ⚠️ 补间的终点必须是**一秒之后**的位置,不是刚算出来的这个当前位置。
+                    // 2026-08-10 用户报"进度比 Apple Music 慢不到 1 秒",根因就在这里:
+                    // 原来是 `shownFraction = f`,即用一秒时间从上一档"走到"刚拿到的这一档,
+                    // 于是走到位的那一刻这个值已经旧了整整一秒 —— 稳态下 t+s 时刻条上显示的
+                    // 是 pos(t-1+s),**恒定落后 1 秒**。这是把插值当外推用的经典错误:两档
+                    // 采样之间做线性插值,画出来的永远是过去。
+                    //
+                    // 改成终点取 pos(t+1) 之后,[t, t+1] 这一秒里线性走过去,每一刻显示的
+                    // 正好是 pos(t+s) —— 也就是当下的真实位置。
+                    //
+                    // 数据源本身不是问题:同一时刻实测 media-control 的 elapsedTimeNow 跟
+                    // Apple Music 播放头只差 36~50ms,位置伺服的校正门槛也只有 0.15s。
+                    let step = durationMs > 0 ? advancePerSecondMs / Double(durationMs) : 0
+                    withAnimation(.linear(duration: 1)) { shownFraction = min(1, max(0, f + step)) }
                 } else {
                     // 冷启动 / 拖动中 / 关了动效:直接到位。拖动时补间会让进度条追着
                     // 手指慢慢挪,手感发黏。
