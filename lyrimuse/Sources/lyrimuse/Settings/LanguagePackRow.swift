@@ -77,6 +77,15 @@ final class LanguagePackStatusStore: ObservableObject {
                     from: Locale.Language(identifier: code), to: target)
             }
             guard !Task.isCancelled else { return }
+            // 2026-08-10:用户第二次报"语言包全变成未下载"。同一时刻用独立进程跑**同一套
+            // 查询**(同样的 canonical 代码往返、同样的 target "en")拿到的是 5 个已安装
+            // (ja/ko/ru/zh-Hans/zh-Hant),全程 0.07s —— 也就是说 App 外复现不出来,输入也
+            // 完全一致。差别只剩"进程"本身,那就只能让 App 自己把它读到的东西说出来,
+            // 下次再发生时直接看日志,不用再靠猜。
+            let installed = next.filter { $0.value == .installed }.map(\.key).sorted()
+            NSLog("lyrimuse: language packs target=%@ listed=%d installed=%d %@",
+                  Self.canonical(target) ?? "?", list.count, installed.count,
+                  installed.joined(separator: ","))
             self?.codes = list
             self?.statuses = next
             self?.hasLoaded = true
