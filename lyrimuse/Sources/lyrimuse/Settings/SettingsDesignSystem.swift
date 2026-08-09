@@ -86,7 +86,17 @@ extension View {
     @ViewBuilder
     func volumeCapsuleGlass(rim: Color) -> some View {
         if #available(macOS 26.0, *) {
-            glassEffect(.regular, in: Capsule())
+            // ⚠️ 用 .clear 不是 .regular。
+            //
+            // Liquid Glass 有两档材质:.regular 是磨砂,给普通 UI 用,在深色背景上就是一块
+            // 不透明的浅灰;.clear 才是给**浮在图像/媒体之上**的元素用的,更通透、能让背后
+            // 的内容透过来 —— Apple Music 那个音量胶囊正是这种场景。2026-08-09 用户连着
+            // 两次指出"这个没透明",第一次的原因是玻璃套玻璃(见调用点注释),第二次就是
+            // 这里:位置改对了,材质档还是磨砂的那一档。
+            //
+            // 官方guidance 说 .clear 通常需要配一层压暗来保证对比度 —— 这里的图标和滑块
+            // 本来就是白色系,压暗那一层由 rim 描边和滑块自身的阴影兜住,不额外加。
+            glassEffect(.clear, in: Capsule())
                 .overlay(Capsule().strokeBorder(rim, lineWidth: 0.5))
         } else {
             background(Capsule().fill(.ultraThinMaterial))
