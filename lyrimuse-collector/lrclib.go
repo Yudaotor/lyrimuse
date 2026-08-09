@@ -183,7 +183,8 @@ func lrclibSearch(artist, title string, durationSecs float64, timeout time.Durat
 		items = append(items, l...)
 	}
 	// 挑选判定用的始终是**本地原样标题** title,裸标题只是搜索词——放宽的是"拿什么去搜",
-	// 不是"什么算匹配"。原样标题的结果排在前面,时长同样接近时它优先(pick 的并列取先到者)。
+	// 不是"什么算匹配"。合并顺序跟着 searchTitleVariants 走(忽略括号档裸标题在前、严格档
+	// 原样在前),时长同样接近时排在前面的那一档优先(pick 的并列取先到者)。
 	best := pickLRCLIBSearchResult(items, artist, title, durationSecs)
 	if best == nil {
 		return lrclibResult{}

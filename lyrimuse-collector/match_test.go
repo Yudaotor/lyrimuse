@@ -329,19 +329,31 @@ func TestScoringAfter20260809Review(t *testing.T) {
 // 逐源实测(见 searchTitleVariants 注释)坐实这不是洁癖问题:QQ 的 smartbox 只要 key 里
 // 带括号就返回 0 条,酷狗则返回 10 条该歌手的热门歌、目标曲根本不在里面。
 func TestSearchTitleVariants(t *testing.T) {
+	saved := features
+	defer func() { features = saved }()
+	features.LyricsStrictTitleMatch = false
+
 	cases := []struct {
 		label string
 		title string
 		want  []string
 	}{
 		{"没有括号:只有一条,不做无谓的重复请求", "Automatic", []string{"Automatic"}},
-		{"有括号:原样在前、裸标题在后",
-			"Automatic (Remastered 2014)", []string{"Automatic (Remastered 2014)", "Automatic"}},
+		{"忽略括号档:裸标题优先,原样作兜底",
+			"Automatic (Remastered 2014)", []string{"Automatic", "Automatic (Remastered 2014)"}},
 		{"方括号同样算", "Hold My Hand [feat. Akon]",
-			[]string{"Hold My Hand [feat. Akon]", "Hold My Hand"}},
+			[]string{"Hold My Hand", "Hold My Hand [feat. Akon]"}},
 		{"整个标题都在括号里:剥完是空的,不能生成一条空查询",
 			"(Untitled)", []string{"(Untitled)"}},
 		{"空标题", "", []string{""}},
+		// 括号里是"另一次录音"的限定词时,忽略括号档也不能把裸标题提前——去掉它搜回来的
+		// 是另一版录音,时间轴对不上。实测:提前之后酷狗这条从 806 分掉到 207。
+		{"括号里是版本限定词:忽略括号档也照旧原样优先",
+			"Billie Jean (Single Version)",
+			[]string{"Billie Jean (Single Version)", "Billie Jean"}},
+		{"live 同理", "Hello (Live)", []string{"Hello (Live)", "Hello"}},
+		{"remaster 不算另一次录音,该去括号",
+			"Hello (Remastered 2015)", []string{"Hello", "Hello (Remastered 2015)"}},
 	}
 	for _, c := range cases {
 		got := searchTitleVariants(c.title)
@@ -358,37 +370,45 @@ func TestSearchTitleVariants(t *testing.T) {
 	}
 }
 
-// 搜索词的去括号跟「歌名匹配:忽略括号/严格」那个设置**无关**,两档必须生成同一组查询。
+// 「歌名匹配」这个设置决定**先拿哪一种写法去搜**——这正是用户对它的预期读法:
+// "忽略括号"就该是"搜的时候先把括号去掉"。
 //
-// 这条是防回归的核心:很容易顺手把它接到 features.LyricsStrictTitleMatch 上("用户都选
-// 严格了,那就别去括号了吧")——那是错的。设置管的是"候选算不算这首歌",这里管的是"拿
-// 什么去搜";严格档同样需要裸标题这条退路,否则 QQ 那种带括号直接 0 条的源,严格档下
-// 一条候选都拿不到,连被严格判定的机会都没有。放宽搜索词不会放松判定:搜回来的结果照旧
-// 要过 lyricTitleAccepted。
-func TestSearchTitleVariantsIgnoresStrictSetting(t *testing.T) {
+// 但两档都必须保留另一种写法作为兜底(只在前一条搜空时才发第二次请求):
+//   - 严格档丢掉裸标题 → 酷狗那条 "Billie Jean (Single Version)" 就没了(实测 9 个
+//     "源×歌"组合里它是唯一靠裸标题搜出来、又能过严格判定的);
+//   - 忽略括号档丢掉原样标题 → LRCLIB 那两条重制版就没了(搜裸标题回的 20 条全是普通版)。
+func TestSearchTitleVariantsFollowsStrictSetting(t *testing.T) {
 	saved := features
 	defer func() { features = saved }()
 
 	const title = "Automatic (Remastered 2014)"
+
 	features.LyricsStrictTitleMatch = false
 	loose := searchTitleVariants(title)
+	if len(loose) != 2 || loose[0] != "Automatic" || loose[1] != title {
+		t.Errorf("忽略括号档该是[裸标题, 原样], got %q", loose)
+	}
+
 	features.LyricsStrictTitleMatch = true
 	strict := searchTitleVariants(title)
-
-	if len(loose) != 2 || len(strict) != 2 {
-		t.Fatalf("两档都该有两条查询, 忽略括号=%q 严格=%q", loose, strict)
+	if len(strict) != 2 || strict[0] != title || strict[1] != "Automatic" {
+		t.Errorf("严格档该是[原样, 裸标题], got %q", strict)
 	}
-	for i := range loose {
-		if loose[i] != strict[i] {
-			t.Errorf("第 %d 条查询两档不一致: 忽略括号=%q 严格=%q", i, loose[i], strict[i])
-		}
+
+	// 两档只是顺序不同,覆盖的查询集合必须一致——任何一档少一条都会丢掉上面注释里那类歌
+	if loose[0] != strict[1] || loose[1] != strict[0] {
+		t.Errorf("两档的查询集合该相同、只有顺序不同: 忽略括号=%q 严格=%q", loose, strict)
 	}
 }
 
-// QQ 是受害最重的一个源,单独钉住它的查询梯子。
+// QQ 是受害最重的一个源(带括号直接 0 条),单独钉住它的查询梯子。
 func TestQQSearchQueries(t *testing.T) {
+	saved := features
+	defer func() { features = saved }()
+	features.LyricsStrictTitleMatch = false
+
 	got := qqSearchQueries("宇多田ヒカル", "Automatic (Remastered 2014)")
-	want := []string{"宇多田ヒカル Automatic (Remastered 2014)", "宇多田ヒカル Automatic"}
+	want := []string{"宇多田ヒカル Automatic", "宇多田ヒカル Automatic (Remastered 2014)"}
 	if len(got) != len(want) {
 		t.Fatalf("qqSearchQueries = %q, want %q", got, want)
 	}
