@@ -456,3 +456,36 @@ func TestBackfillTranslationPersistsToDisk(t *testing.T) {
 		t.Errorf("落盘的译文来源 = %q, 期望 %q", got.LyricsTrSource, lyricsTrSourceMachine)
 	}
 }
+
+// 「译文语言选了英文却永远看到中文」——2026-08-09 用户实报,根因在 App 侧
+// EnrichCacheStore.saveEdit 采纳候选时只写 lyrics_tr、不同步 lyrics_tr_lang,让一份
+// 网易云中文社区译文顶着上一轮机翻留下的 "en" 标签蒙混过关。写入侧已修,这里钉的是
+// 读取侧的不变式:标签跟正文自相矛盾时以正文为准,好让已经写坏的老条目也能自愈。
+func TestTranslationUsableDistrustsLangLabelContradictedByText(t *testing.T) {
+	const chineseTr = "[00:10.00]虽然觉得\n[00:12.00]不会有恋慕的眼神\n[00:15.00]如此幸运的邂逅\n"
+	const englishTr = "[00:10.00]Even though I thought\n[00:12.00]no one would look at me\n[00:15.00]such luck\n"
+
+	cases := []struct {
+		label  string
+		lang   string
+		tr     string
+		target string
+		want   bool
+	}{
+		{"标签 en 但正文是中文 → 不算数(用户实报的那条)", "en", chineseTr, "en", false},
+		{"同上,目标是中文 → 反而算数", "en", chineseTr, "zh-CN", true},
+		{"标签 en、正文确实是英文 → 照旧算数", "en", englishTr, "en", true},
+		{"标签 zh、正文中文、目标中文 → 算数", "zh", chineseTr, "zh-CN", true},
+		{"标签 zh、正文中文、目标英文 → 不算数", "zh", chineseTr, "en", false},
+		{"没有标签、正文中文、目标英文 → 不算数", "", chineseTr, "en", false},
+		{"没有标签、正文英文、目标英文 → 保守当作算数", "", englishTr, "en", true},
+		{"压根没有译文", "en", "", "en", false},
+	}
+	for _, c := range cases {
+		e := enrichEntry{LyricsTr: c.tr, LyricsTrLang: c.lang}
+		if got := translationUsable(e, c.target); got != c.want {
+			t.Errorf("%s: translationUsable(lang=%q, target=%q) = %v, want %v",
+				c.label, c.lang, c.target, got, c.want)
+		}
+	}
+}

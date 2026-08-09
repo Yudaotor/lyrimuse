@@ -135,8 +135,20 @@ func translationUsable(e enrichEntry, target string) bool {
 	if e.LyricsTr == "" {
 		return false
 	}
-	if e.LyricsTrLang != "" {
-		return myMemoryLangCode(e.LyricsTrLang) == target
+	// ⚠️ 记的语言跟正文自相矛盾时,以**正文**为准 —— 标签会骗人,正文不会。
+	//
+	// 2026-08-09 实测抓到:App 侧"采纳候选/手改译文"那条路(EnrichCacheStore.saveEdit)
+	// 只写 lyrics_tr,不动 lyrics_tr_lang / lyrics_tr_source。于是采纳一份网易云的中文
+	// 社区译文之后,语言标签还留着上一轮机翻写的 "en",这道门一看"语言 en、目标 en"就放行,
+	// 机翻永远不会再接手 —— 用户把译文语言选成英文,却永远只看到中文。那条写入路径已经
+	// 修好,但这里也要挡一层:这是唯一消费 LyricsTrLang 的地方,把不变式钉在这里,既能自愈
+	// 已经写坏的老条目,也不指望以后每一个写入方都记得同步这两个字段。
+	lang := e.LyricsTrLang
+	if lang != "" && !strings.HasPrefix(strings.ToLower(lang), "zh") && looksChinese(e.LyricsTr) {
+		lang = "" // 标签说不是中文、正文明明是中文 → 当作语言不详,走下面的文本判别
+	}
+	if lang != "" {
+		return myMemoryLangCode(lang) == target
 	}
 	// 语言不详(老条目,或用户手改过 lyrics/ 里的译文):只在能确定的方向上下判断。
 	if strings.HasPrefix(strings.ToLower(target), "zh") {

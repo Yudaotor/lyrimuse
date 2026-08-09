@@ -224,6 +224,28 @@ public final class EnrichCacheStore: ObservableObject {
     // 来源"更容易误导人,跟"人工修正"徽章(isManual)搭配显示才诚实。
     public func saveEdit(key: String, lyrics: String, tr: String, roma: String, yrc: String? = nil, source: String? = nil) async {
         var entry = raw[key] ?? [:]
+        // 译文换了内容 → 描述译文的那两个字段(lyrics_tr_lang / lyrics_tr_source)不再
+        // 描述它,必须一起清掉。跟 collector 侧 importLyricsFromFiles 是同一条规矩:
+        // 别拿旧语言给新内容背书。
+        //
+        // 漏掉这一步的后果 2026-08-09 实测抓到过:在"搜索候选歌词"里采纳一条网易云候选
+        // (译文固定是中文)之后,lyrics_tr_lang 还留着上一轮机翻写下的 "en",于是采集器那边
+        // translationUsable 认定"这份译文对英文目标够用",机翻再也不会接手 —— 用户把译文
+        // 语言选成英文,却永远只看到中文,而且徽章还把这份社区译文标成机翻。
+        //
+        // 清空而不是猜一个语言写进去:清空之后采集器会退回按正文判别语言(looksChinese),
+        // 那比在这里猜可靠。
+        // translation_ts / translation_retry_count 也要一起清:它们是采集器给机翻用的
+        // 节流和重试计数(6 小时内不重试、连败 3 次放弃),记的是"上一份译文"那次尝试。
+        // 留着的话,就算语言字段已经清对了,这条也要等节流到期才轮得到重翻——实测正是
+        // 卡在这里:语言判定已经修好,但 translation_ts 还剩三个多小时才过期。
+        let previousTr = raw[key]?["lyrics_tr"] as? String ?? ""
+        if tr != previousTr {
+            for stale in ["lyrics_tr_lang", "lyrics_tr_source",
+                          "translation_ts", "translation_retry_count"] {
+                entry.removeValue(forKey: stale)
+            }
+        }
         entry["lyrics"] = lyrics
         entry["lyrics_tr"] = tr
         entry["lyrics_roma"] = roma
