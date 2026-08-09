@@ -165,12 +165,47 @@ type lyricCandidate struct {
 // 的候选蒙混过关。
 const lyricEndingCorroborationToleranceSecs = 5.0
 
+// durationFitTolerance:歌词末句时间戳跟曲目时长差多少以内算"吻合"。
+//
+// 卡得比较紧:内容被污染/串错版本的候选,跟真实但前奏/尾奏较长的正确候选,时长偏差有时
+// 只差几个百分点——阈值定太松会放过污染候选,定太紧会错杀真实但尾奏长的候选。
+const durationFitTolerance = 0.25
+
+// durationFits 是"这份歌词的长度跟这首歌对得上吗"的**唯一**判据。
+//
+// corroboratedEndings 和 scoreLyricCandidateDetailed 必须共用它:前者靠"有没有任何一条
+// 候选吻合"决定要不要发印证豁免,后者靠它决定走哪一档。两边一旦各写一份、日后漂移,就会
+// 出现"因为有人吻合所以不发豁免、但那个人自己又没走吻合档"这种两头落空。
+func durationFits(lastSecs, durationSecs float64) bool {
+	if durationSecs <= 0 {
+		return false
+	}
+	// 歌词末尾**超过**曲目时长,是标错而不是"吻合得好":那几句在实际播放中根本到不了。
+	// 留 lyricOvershootToleranceSecs 秒容差给收尾渐弱/取整这类正常误差。
+	if lastSecs > durationSecs+lyricOvershootToleranceSecs {
+		return false
+	}
+	return math.Abs(lastSecs-durationSecs)/durationSecs <= durationFitTolerance
+}
+
 // corroboratedEndings 返回"末尾时间戳被至少一个别的源印证"的来源集合。多个互相独立的
 // 歌词源末尾落在几乎同一个时间点,是"这些内容描述的是同一份真实歌词"的强证据——比单纯
 // "跟完整曲目时长差多少"更可靠:有些歌曲本身带很长的纯音乐尾奏,没有任何源把它转写进
 // 歌词也完全正常,若只按时长差距判断会被误杀;而内容确实被串到别的曲目/版本的候选,
 // 不会凑巧跟别的源落在同一个时间点上。
-func corroboratedEndings(candidates []lyricCandidate) map[string]bool {
+//
+// ⚠️ 但"互相独立"这个前提是有条件的,2026-08-09 实测抓到它翻车:
+// "Valentina (feat. Rick Ross) [Bonus]"(237s)——QQ 和酷狗都抓到了**普通版**(都停在
+// 2:23),于是互相"印证"成功、各拿 +100 豁免掉时长惩罚,而真正抓到 bonus 版、末句 3:46
+// 几乎正好压着曲长的 LRCLIB 反倒分数低一截,冠军判给了 QQ。根子在于:各源拿的是同一个
+// 搜索词,搜歪的时候会被**一起**带到同一个错版本上,这时候"两个源一致"根本不是独立证据。
+//
+// 判别办法:真·长尾奏的歌,**所有**源都会提前结束(没人转写那段纯音乐);而抓错版本的
+// 局面里,总有某个源的末句是跟得上曲长的 —— 它的存在直接证伪了"这首歌的歌词本来就早
+// 早结束"。所以只要**batch 里有任何一条候选的时长是吻合的**,就不再给任何人发豁免:
+// 那条吻合的候选本身走 ratio<=durationFitTolerance 那一档,不需要豁免;剩下那些差一大截
+// 的,该扣就扣。
+func corroboratedEndings(candidates []lyricCandidate, durationSecs float64) map[string]bool {
 	type ending struct {
 		source string
 		secs   float64
@@ -179,6 +214,13 @@ func corroboratedEndings(candidates []lyricCandidate) map[string]bool {
 	for _, c := range candidates {
 		if secs, ok := lastLRCTimestampSecs(c.lyrics); ok {
 			endings = append(endings, ending{c.source, secs})
+		}
+	}
+	if durationSecs > 0 {
+		for _, e := range endings {
+			if durationFits(e.secs, durationSecs) {
+				return map[string]bool{}
+			}
 		}
 	}
 	corroborated := map[string]bool{}
@@ -314,23 +356,18 @@ func scoreLyricCandidateDetailed(
 		if !ok {
 			return reject(scoreRejectNoLastTimestamp) // 通过了 isTimedLRC 却提不出时间戳,理论上不该发生
 		}
-		// 0.25 这个阈值卡得比较紧:内容被污染/串错版本的候选跟真实但前奏/尾奏较长的
-		// 正确候选,时长偏差有时只差几个百分点,阈值定太松会放过污染候选,定太紧会
-		// 错杀真实但尾奏长的候选。
 		ratio := math.Abs(last-durationSecs) / durationSecs
-		// 歌词末尾**超过**曲目时长,是标错而不是"吻合得好":那几句在实际播放中根本到不了。
-		// 现在的 ratio 取的是绝对值,把"早结束"和"晚结束"当同一回事,于是一份标歪到超出
-		// 曲长的候选反而能拿满档。留 5 秒容差给收尾渐弱/取整这类正常误差。
-		overshot := last > durationSecs+lyricOvershootToleranceSecs
 		switch {
-		case ratio <= 0.25 && !overshot:
+		case durationFits(last, durationSecs):
 			// 连续衰减,而不是硬分档——原来 3%/8%/25% 三级硬边界会让"差一点点"的候选
 			// 骤然掉一整档。⚠️ 2026-08-07 把封顶从 1000 压到 300:时长吻合只是正确性的
 			// **间接代理**,而且被前奏/尾奏系统性带偏(尾奏越长,越是完整正确的歌词越
 			// "不吻合");逐字时间轴则是歌词质量的**直接**证据。
-			add(scoreTermDuration, 100+int(200*(1-ratio/0.25)))
+			add(scoreTermDuration, 100+int(200*(1-ratio/durationFitTolerance)))
 		case corroborated:
-			add(scoreTermCorroborated, 100) // 时长差超阈值,但有别的独立源印证末尾时间点
+			// 时长差超阈值,但有别的独立源印证末尾时间点。⚠️ 只有在**没有任何一条候选
+			// 时长吻合**时才可能走到这里,见 corroboratedEndings 里那段注释。
+			add(scoreTermCorroborated, 100)
 		default:
 			// 不再一票否决,见 durationMismatchPenalty 的注释。
 			add(scoreTermDurationOff, -durationMismatchPenalty)

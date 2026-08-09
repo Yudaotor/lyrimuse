@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -375,4 +376,79 @@ func TestQQSearchQueries(t *testing.T) {
 	if q := qqSearchQueries("", "Automatic"); len(q) != 1 || q[0] != "Automatic" {
 		t.Errorf("歌手名为空: qqSearchQueries = %q, want [Automatic]", q)
 	}
+}
+
+// lrcEndingAt 造一份"末句正好落在 lastSecs"的合法 LRC(足够行数通过 isTimedLRC、
+// 不被当成只有 credit 的空壳)。
+func lrcEndingAt(lastSecs int, lines int) string {
+	var b strings.Builder
+	step := lastSecs / lines
+	if step < 1 {
+		step = 1
+	}
+	for i := 0; i < lines; i++ {
+		t := i * step
+		if i == lines-1 {
+			t = lastSecs
+		}
+		// 正文用英文:本地标题是英文时,中文正文会被 isProbablyWrongLanguageLyrics 判为
+		// 文不对题直接拒掉(第一版就栽在这儿,两条候选都得 -1 分)。
+		fmt.Fprintf(&b, "[%02d:%02d.00]this is lyric line number %d\n", t/60, t%60, i)
+	}
+	return b.String()
+}
+
+// 「两个源一起抓错版本、互相印证」——2026-08-09 实测抓到的真实翻车。
+//
+// Valentina (feat. Rick Ross) [Bonus] 是 237s,QQ 和酷狗都抓到了普通版(都停在 143s),
+// 于是互相印证、各拿 +100 豁免掉时长惩罚;真正抓到 bonus 版、末句 226s 的 LRCLIB 反倒
+// 分数低一截,冠军判给了 QQ。
+//
+// 各源拿的是同一个搜索词,搜歪时会被**一起**带到同一个错版本上——这时候"两个源一致"
+// 不是独立证据。判别信号:只要 batch 里有任何一条候选时长是吻合的,就证伪了"这首歌的
+// 歌词本来就早早结束",不再发豁免。
+func TestCorroborationYieldsToAWellFittingCandidate(t *testing.T) {
+	const dur = 237.0
+	shortA := lyricCandidate{source: "qq", lyrics: lrcEndingAt(143, 40)}
+	shortB := lyricCandidate{source: "kugou", lyrics: lrcEndingAt(143, 40)}
+	fits := lyricCandidate{source: "lrclib", lyrics: lrcEndingAt(226, 44)}
+
+	// ① 有一条吻合 → 印证豁免整体作废,两条短的该吃时长惩罚
+	corr := corroboratedEndings([]lyricCandidate{shortA, shortB, fits}, dur)
+	if len(corr) != 0 {
+		t.Errorf("有候选时长吻合时不该再发印证豁免, got %v", corr)
+	}
+	qqScore, qqTerms := scoreLyricCandidateDetailed("Daniel Caesar", "Valentina", dur, shortA, corr[shortA.source])
+	lrcScore, _ := scoreLyricCandidateDetailed("Daniel Caesar", "Valentina", dur, fits, corr[fits.source])
+	for _, term := range qqTerms {
+		if term.Kind == scoreTermCorroborated {
+			t.Error("抓错版本的候选不该再拿到 corroborated 加分")
+		}
+	}
+	if lrcScore <= qqScore {
+		t.Errorf("时长吻合的候选该赢: lrclib %d vs qq %d", lrcScore, qqScore)
+	}
+
+	// ② 没有任何一条吻合(真·长尾奏)→ 印证照旧生效,别错杀
+	corr2 := corroboratedEndings([]lyricCandidate{shortA, shortB}, dur)
+	if !corr2[shortA.source] || !corr2[shortB.source] {
+		t.Errorf("所有源都提前结束时,印证豁免必须保留(长尾奏的歌全靠它), got %v", corr2)
+	}
+	if _, terms := scoreLyricCandidateDetailed("Daniel Caesar", "Valentina", dur, shortA, corr2[shortA.source]); !hasTerm(terms, scoreTermCorroborated) {
+		t.Error("这一档该走 corroborated 加分")
+	}
+
+	// ③ 本地时长未知时不做任何判断,行为跟以前一致
+	if corr3 := corroboratedEndings([]lyricCandidate{shortA, shortB, fits}, 0); !corr3[shortA.source] {
+		t.Errorf("时长未知时不该收紧, got %v", corr3)
+	}
+}
+
+func hasTerm(terms []scoreTerm, kind string) bool {
+	for _, t := range terms {
+		if t.Kind == kind {
+			return true
+		}
+	}
+	return false
 }

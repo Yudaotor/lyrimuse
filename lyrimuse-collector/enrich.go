@@ -1078,7 +1078,7 @@ func fetchScoredLyricCandidatesStreaming(artist, title, album string, durationSe
 		if lrclibLyr != "" {
 			candidates = append(candidates, lyricCandidate{source: "lrclib", lyrics: lrclibLyr, title: lrclibTitle, artist: lrclibArtist, album: lrclibAlbum, cover: coverOrFallback("")})
 		}
-		corroborated := corroboratedEndings(candidates)
+		corroborated := corroboratedEndings(candidates, durationSecs)
 		// lrclib 明确说这首歌是纯音乐、且没有真的歌词候选(lrclibLyr=="")时,搭车塞一条
 		// Score:-1 的标记进 results——见 Instrumental 字段定义处的注释,不参与打分/排序,
 		// 不会被 pickLyricCandidate 选中,只是把这个信号原样带出这个函数。
