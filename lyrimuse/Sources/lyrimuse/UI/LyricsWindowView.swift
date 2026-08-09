@@ -364,6 +364,31 @@ struct LyricsWindowView: View {
                         .onChange(of: g.size.width) { _, w in lyricsColumnWidth = w }
                 }
             )
+            // 上下边缘渐隐。
+            //
+            // 2026-08-09 用户反馈右上角那两个玻璃胶囊挡住歌词。挪走不如照 Apple Music 的
+            // 做法:它的胶囊也在右上角、歌词也从底下滚过去,靠的是列表顶部有一段渐隐,
+            // 文字在够到胶囊之前就已经淡掉了。
+            //
+            // 右上角本来也是最该放它们的位置 —— 当前行锚在从上往下 35% 处(activeLineAnchor),
+            // 所以上方是**已经唱过的**行,下方是还没唱到、跟着唱时要预读的行。要挡也是挡
+            // 上面那半。
+            //
+            // 顺带底边也渐隐:滚动列表被窗口边缘直切一刀本来就不好看。
+            .mask(
+                LinearGradient(
+                    stops: [
+                        // 顶部这一段要一直全透明到**胶囊下沿之后**才开始显现 —— 胶囊占了
+                        // 内容区顶部约 7% 的高度,渐隐若从 0 就开始爬,滚到那里的文字仍有
+                        // 一半不透明度,照样糊在胶囊上。
+                        .init(color: .clear, location: 0),
+                        .init(color: .clear, location: 0.075),
+                        .init(color: .black, location: 0.2),
+                        .init(color: .black, location: 0.9),
+                        .init(color: .clear, location: 1),
+                    ],
+                    startPoint: .top, endPoint: .bottom)
+            )
         }
     }
 
