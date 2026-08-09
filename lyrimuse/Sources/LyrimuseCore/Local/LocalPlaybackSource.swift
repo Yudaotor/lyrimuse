@@ -757,7 +757,10 @@ public final class LocalPlaybackSource: ObservableObject {
             lyricsTr: found?.lyricsTr ?? "",
             lyricsRoma: found?.lyricsRoma ?? "",
             lyricsYRC: found?.lyricsYRC ?? "",
-            preferWordLevel: preferWordLevelKaraoke
+            preferWordLevel: preferWordLevelKaraoke,
+            // 用来认出歌词文件开头那行「曲名 - 歌手」抬头,见 looksLikeHeaderLine。
+            trackTitle: snapshot.title ?? "",
+            trackArtist: snapshot.artist ?? ""
         )
         currentOffsetKey = LyricsOffsetStore.trackKey(
             artist: snapshot.artist ?? "",

@@ -847,6 +847,46 @@ do {
     expectEqual(KanaAnnotation.needsAnnotation("の"), false, "假名不占标注条目")
 }
 
+// 一首歌开头那一堆制作人信息该被过滤掉 —— 2026-08-10 用户实报。原有的关键词表只收了
+// 中文角色名和少数几个英文词,拉丁字母标签的整排漏网。
+do {
+    let lrc = """
+    [00:00.00]First Love - 宇多田光 (宇多田ヒカル)
+    [00:03.31]词：宇多田ヒカル
+    [00:10.18]Strings Arrange：河野圭
+    [00:11.84]Keyboards Programming：河野圭
+    [00:17.53]Guitar：秋山浩徳
+    [00:21.89]最後のキスは
+    [00:26.89]タバコのflavorがした
+    [00:32.17]ニガくてせつない香り
+    [00:43.12]明日の今頃には
+    """
+    let engine = LyricsSyncEngine()
+    engine.load(lyrics: lrc, lyricsTr: "", lyricsRoma: "", lyricsYRC: "",
+                preferWordLevel: false,
+                trackTitle: "First Love (Remastered 2014)", trackArtist: "宇多田ヒカル")
+    let shown = engine.allLines(idPrefix: "t").compactMap { $0.line.plainText }
+    expectEqual(shown.count, 4, "只该留下 4 行真歌词,实际留下 \(shown.count) 行:\(shown)")
+    expectEqual(shown.first ?? "", "最後のキスは", "第一句该是真歌词,实际 \(shown.first ?? "")")
+    for bad in ["Guitar", "Strings Arrange", "Keyboards", "词：", "First Love - "] {
+        expectEqual(shown.contains { $0.contains(bad) }, false, "«\(bad)» 不该出现在歌词里")
+    }
+
+    // 反向:英文歌词里的半角冒号绝不能被当成署名删掉
+    expectEqual(LyricsSyncEngine.looksLikeHeaderLine(
+        "First Love", trackTitle: "First Love", trackArtist: "宇多田ヒカル"), false,
+        "第一句歌词恰好就是歌名时不能删 —— 抬头必须同时含歌手名")
+    let plain = """
+    [00:01.00]Verse 1: here we go
+    [00:02.00]I said: let's go
+    [00:03.00]Baby you know
+    """
+    let e2 = LyricsSyncEngine()
+    e2.load(lyrics: plain, lyricsTr: "", lyricsRoma: "", lyricsYRC: "", preferWordLevel: false)
+    expectEqual(e2.allLines(idPrefix: "t").count, 3,
+                "英文歌词里带半角冒号的行一行都不能删")
+}
+
 if failures == 0 {
     print("\nALL PASS")
 } else {

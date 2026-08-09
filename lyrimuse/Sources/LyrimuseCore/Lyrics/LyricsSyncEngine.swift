@@ -127,6 +127,64 @@ public final class LyricsSyncEngine {
         pattern: #"^\p{Han}{1,8}\s*[:：]\s*\S"#
     )
 
+    // 拉丁字母标签的职员表行。上面那张关键词表只收了中文角色名和少数几个英文词,于是
+    // 「Guitar：秋山浩徳」「Keyboards Programming：河野圭」「Strings Arrange：河野圭」
+    // 这些整排漏网 —— 2026-08-10 用户报的正是这个:一首歌开头一堆制作人信息照样显示。
+    //
+    // 判据不是"英文角色名"的枚举(枚举收敛不了,见 genericHanCreditLinePattern 那段),
+    // 而是**全角冒号**这个形状:这类署名块来自中日文歌词源,标签用拉丁字母、冒号却是全角
+    // 的「：」。英文歌词里出现全角冒号几乎不可能,所以这一条几乎没有误杀空间。
+    // 实测:全库 537 行里精确命中那 6 行署名,零误伤。
+    //
+    // 半角冒号只在**冒号后面跟着中日文**时才认 —— 同样是"中日文源的署名块"这个信号,
+    // 而英文歌词里的冒号("I said: let's go")后面不会跟汉字/假名。单靠半角冒号 + 拉丁
+    // 标签是不敢删的:"Verse 1: ..." 这类真会出现在歌词里。
+    private static let latinCreditFullWidthPattern = try! NSRegularExpression(
+        pattern: #"^[A-Za-z][A-Za-z0-9 .&/'’\-]{0,28}：\s*\S"#
+    )
+    private static let latinCreditHalfWidthPattern = try! NSRegularExpression(
+        pattern: #"^[A-Za-z][A-Za-z0-9 .&/'’\-]{0,28}:\s*\S*[\p{Han}\p{Hiragana}\p{Katakana}]"#
+    )
+
+    private static func matchesLatinCreditPattern(_ text: String) -> Bool {
+        let r = NSRange(text.startIndex..., in: text)
+        if latinCreditFullWidthPattern.firstMatch(in: text, range: r) != nil { return true }
+        return latinCreditHalfWidthPattern.firstMatch(in: text, range: r) != nil
+    }
+
+    /// 歌词文件开头那行「曲名 - 歌手」抬头。它没有冒号,上面所有规则都够不着,但它同样
+    /// 不是歌词 —— 用户看到的第一句就是它。
+    ///
+    /// 判据要求这一行**同时**含曲名和歌手名,而且必须是正文第一行。只看曲名是不行的:
+    /// 很多歌的第一句歌词本来就是歌名(「First Love」)。歌手名对不上(抬头用罗马字而我们
+    /// 记的是日文名)时宁可不删。
+    public static func looksLikeHeaderLine(_ text: String, trackTitle: String, trackArtist: String) -> Bool {
+        guard !trackTitle.isEmpty, !trackArtist.isEmpty else { return false }
+        func norm(_ s: String) -> String {
+            s.lowercased().filter { $0.isLetter || $0.isNumber }
+        }
+        // 抬头写的常是**裸曲名**,而本地标签带着 "(Remastered 2014)" 这类后缀 —— 两边直接
+        // 比会对不上(2026-08-10 第一版就栽在这儿,抬头一行没删掉)。去掉括号段再比一次。
+        func stripBrackets(_ s: String) -> String {
+            var out = "", depth = 0
+            for c in s {
+                if c == "(" || c == "[" || c == "（" || c == "［" { depth += 1 }
+                else if c == ")" || c == "]" || c == "）" || c == "］" { depth = max(0, depth - 1) }
+                else if depth == 0 { out.append(c) }
+            }
+            return out
+        }
+        let line = norm(text)
+        let a = norm(trackArtist)
+        guard !a.isEmpty, line.contains(a) else { return false }
+        for candidate in [trackTitle, stripBrackets(trackTitle)] {
+            let t = norm(candidate)
+            guard !t.isEmpty, line.count > t.count else { continue }
+            if line.contains(t) { return true }
+        }
+        return false
+    }
+
     private static func matchesKeywordCreditPattern(_ text: String) -> Bool {
         creditLinePattern.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)) != nil
     }
@@ -175,10 +233,17 @@ public final class LyricsSyncEngine {
 
     /// 过滤掉署名/职员表行。关键词表逐行生效(它枚举的都是明确的角色名,误判空间很小);
     /// 结构化规则只在整份被主导时才生效,见 shouldApplyStructuralCreditFilter。
-    private static func strippingCreditLines(_ texts: [String]) -> [Bool] {
+    private static func strippingCreditLines(
+        _ texts: [String], trackTitle: String = "", trackArtist: String = ""
+    ) -> [Bool] {
         let useStructural = shouldApplyStructuralCreditFilter(texts)
-        let drop = texts.map { text -> Bool in
+        let drop = texts.enumerated().map { i, text -> Bool in
             if matchesKeywordCreditPattern(text) { return true }
+            if matchesLatinCreditPattern(text) { return true }
+            // 抬头只在第一行认 —— 别的位置出现同样的字样多半是真歌词。
+            if i == 0, looksLikeHeaderLine(text, trackTitle: trackTitle, trackArtist: trackArtist) {
+                return true
+            }
             return useStructural && matchesStructuralCreditPattern(text)
         }
         // 兜底闸门:展示过滤**永远不把整份删空**。走到这一步说明判据出了我没预料到的偏差
@@ -194,7 +259,10 @@ public final class LyricsSyncEngine {
 
     public init() {}
 
-    public func load(lyrics: String, lyricsTr: String, lyricsRoma: String, lyricsYRC: String, preferWordLevel: Bool = true) {
+    public func load(
+        lyrics: String, lyricsTr: String, lyricsRoma: String, lyricsYRC: String,
+        preferWordLevel: Bool = true, trackTitle: String = "", trackArtist: String = ""
+    ) {
         let yrc = preferWordLevel ? YRCParser.parse(lyricsYRC) : []
         // 过滤前先把整份的文本取出来判一次(结构化规则是整份粒度的,见
         // shouldApplyStructuralCreditFilter),不能像原来那样逐行独立 filter。
@@ -212,12 +280,14 @@ public final class LyricsSyncEngine {
         // 这首歌,退回整行模式(整行歌词是完整的,只是没有逐字填色)。LRC 本身为空时没得选,
         // 仍然用逐字数据。
         let parsedBase = LRCParser.parse(lyrics)
-        let baseDrop = Self.strippingCreditLines(parsedBase.map(\.text))
+        let baseDrop = Self.strippingCreditLines(
+            parsedBase.map(\.text), trackTitle: trackTitle, trackArtist: trackArtist)
         let filteredBase = zip(parsedBase, baseDrop).compactMap { $0.1 ? nil : $0.0 }
         var candidateWords: [LyricLineWords] = []
         if !yrc.isEmpty {
             let texts = yrc.map { $0.words.map(\.text).joined() }
-            let drop = Self.strippingCreditLines(texts)
+            let drop = Self.strippingCreditLines(
+                texts, trackTitle: trackTitle, trackArtist: trackArtist)
             candidateWords = zip(yrc, drop).compactMap { $0.1 ? nil : $0.0 }
         }
         usingWords = !candidateWords.isEmpty
