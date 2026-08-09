@@ -266,7 +266,7 @@ type musixmatchTrackMatch struct {
 // s_track_rating=desc 让热门/权威版本排前面,进一步降低选到冷门错误版本的概率。取第一条
 // 歌手/歌名都对上、且 has_subtitles==1(没有逐行歌词的候选后面 track.subtitle.get 必然
 // 404,不必跑这一趟)的结果。
-// 搜索词按 searchTitleVariants 逐个试(原样标题 → 去括号裸标题),先命中先返回。
+// 搜索词按 searchTitleVariants 逐个试,先命中先返回(顺序跟设置走,见那边注释)。
 // Musixmatch 在这一点上是五个源里最温和的:带括号仍能回 1~2 条、而且往往就是对的那条,
 // 不像 QQ 直接 0 条、酷狗回一堆热门歌。但实测(2026-08-09)差距确实存在——
 // "Billie Jean (Single Version)" 带括号回 1 条、去括号回 5 条(page_size 上限),

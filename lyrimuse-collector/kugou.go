@@ -174,7 +174,7 @@ func kugouGet(u string, v any) error {
 // (逐字数据本来就是"有更好、没有也不影响整行可用"的加分项)。任何一步
 // 失败/拿不到都直接放弃,不重试(下次 enrich 短 TTL 到期自然再试)。
 func resolveKugouLyric(artist, title string, durationSecs float64) kugouResult {
-	// 搜索词逐个 variant 试(原样标题 → 去括号裸标题),先命中先用。带括号的标题在酷狗
+	// 搜索词逐个 variant 试,先命中先用(顺序由 searchTitleVariants 定,跟设置走)。带括号的标题在酷狗
 	// 上不会返回空、而是回一串该歌手的热门歌,所以"搜砸了"表现为下面的循环一条都收不下,
 	// 不是 kugouGet 报错——必须靠 chosen==nil 才能发现,不能只在 err != nil 时才换词。
 	// 详见 searchTitleVariants 的注释。第二跳(krcs 查 KRC 候选)不受影响:实测同一个
