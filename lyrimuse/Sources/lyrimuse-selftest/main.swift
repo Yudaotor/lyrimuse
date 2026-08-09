@@ -815,6 +815,38 @@ do {
     expectEqual(konnichiwa, "konnichiwa", "こんにちは 该读 konnichiwa,实际 \(konnichiwa)")
 }
 
+// 歌词源自带的假名标注:多音词该念哪个由标注说了算,而不是让分词器在合法读音里挑。
+// 「明日」分词器给 asu、酷狗标注给 あした(Apple 也是 ashita)。
+do {
+    // 一句真实歌词 + 它真实的标注(2 表示这条读音覆盖两个汉字:明+日)
+    let lrc = "[00:43.12]明日の今頃には\n[kana:2あした1いま1ごろ]"
+    let ann = KanaAnnotation.parse(lrc: lrc)
+    expectEqual(ann != nil, true, "带 [kana:] 的 LRC 该解析出标注")
+    let marks = ann?.marks(forLine: "明日の今頃には") ?? []
+    expectEqual(marks.count, 3, "这一句该有 3 处标注(明日/今/頃),实际 \(marks.count)")
+    expectEqual(marks.first?.reading ?? "", "あした", "「明日」的标注读音该是 あした")
+    expectEqual(marks.first?.utf16Length ?? 0, 2, "「明日」这条标注该覆盖两个字")
+
+    let roma = Romanizer.romanize("明日の今頃には", japanese: true, marks: marks) ?? ""
+    expectEqual(roma.contains("ashita"), true, "有标注时该读 ashita,实际 \(roma)")
+    expectEqual(roma.contains("asu"), false, "有标注时不该再出现分词器的 asu:\(roma)")
+    expectEqual(roma.split(separator: " ").contains("wa"), true,
+                "助词规则仍要生效(は→wa):\(roma)")
+
+    // 没有标注时退回分词器,行为不变
+    let plain = Romanizer.romanize("明日の今頃には", japanese: true) ?? ""
+    expectEqual(plain.isEmpty, false, "没有标注时仍要给得出读音")
+
+    // 对不齐必须整份弃用 —— 标注条目覆盖 4 个字,这里只给 2 个字的量
+    let bad = KanaAnnotation.parse(lrc: "[00:43.12]明日の今頃には\n[kana:2あした]")
+    expectEqual(bad == nil, true, "覆盖字数对不上时必须整份弃用,不能半对半错地标歪")
+
+    // 叠字符号 々 也算待标字符 —— 漏算它会从那里开始整体错位
+    expectEqual(KanaAnnotation.needsAnnotation("々"), true, "々 必须算作待标字符")
+    expectEqual(KanaAnnotation.needsAnnotation("明"), true, "汉字是待标字符")
+    expectEqual(KanaAnnotation.needsAnnotation("の"), false, "假名不占标注条目")
+}
+
 if failures == 0 {
     print("\nALL PASS")
 } else {

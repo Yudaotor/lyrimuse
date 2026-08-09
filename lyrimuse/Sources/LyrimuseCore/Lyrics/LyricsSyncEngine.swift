@@ -237,13 +237,18 @@ public final class LyricsSyncEngine {
         // 而不是逐行判断——理由见 Romanizer.looksJapanese 的调用点注释,极少数纯汉字的
         // 日文行不该被局部误判成中文。
         songLooksJapanese = Romanizer.looksJapanese(lyrics) || Romanizer.looksJapanese(lyricsYRC)
+        // 歌词源自带的假名标注(酷狗的 [kana:] 标签)。对不齐时 parse 返回 nil,读音自动
+        // 退回形态分析 —— 见 KanaAnnotation 顶部注释里"半对半错比不标更糟"那段。
+        kanaAnnotation = KanaAnnotation.parse(lrc: lyrics)
         // 换歌词内容清空——见 romanizationText() 的缓存注释,纯粹是内存卫生考虑(避免
         // 常年挂着的进程把每一句听过的歌词文本都无限期缓存下去),不清空也不会算错,
         // 只是没必要让它跨曲目继续增长。
         romanizerFallbackCache.removeAll()
+        wordGroupCache.removeAll()
     }
 
     private var songLooksJapanese = false
+    private var kanaAnnotation: KanaAnnotation?
 
     public var hasContent: Bool { usingWords ? !wordLines.isEmpty : !baseLines.isEmpty }
 
@@ -283,7 +288,9 @@ public final class LyricsSyncEngine {
         // 判断)。不含汉字的行(韩文谚文/泰文/西里尔字母等)没有这层混淆,始终允许。
         if Romanizer.containsHan(plainText) && !songLooksJapanese { return nil }
         if let cached = romanizerFallbackCache[plainText] { return cached }
-        let result = Romanizer.romanize(plainText, japanese: songLooksJapanese)
+        let result = Romanizer.romanize(
+            plainText, japanese: songLooksJapanese,
+            marks: kanaAnnotation?.marks(forLine: plainText) ?? [])
         romanizerFallbackCache[plainText] = result
         return result
     }
@@ -304,19 +311,22 @@ public final class LyricsSyncEngine {
         guard !words.isEmpty else { return nil }
         let line = words.map(\.text).joined()
         if let cached = wordGroupCache[line] { return cached }
-        let result = Self.buildWordGroups(words: words, line: line, japanese: songLooksJapanese)
+        let result = Self.buildWordGroups(
+            words: words, line: line, japanese: songLooksJapanese,
+            marks: kanaAnnotation?.marks(forLine: line) ?? [])
         wordGroupCache[line] = result
         return result
     }
 
     // nonisolated static:纯函数,不碰引擎自身状态,selftest 直接覆盖。
     public static func buildWordGroups(
-        words: [SyncedLyricWord], line: String, japanese: Bool
+        words: [SyncedLyricWord], line: String, japanese: Bool,
+        marks: [KanaAnnotation.Mark] = []
     ) -> [SyncedLyricWordGroup]? {
         // 跟 romanizationText 同一道门:含汉字但整首歌看着不像日文时不敢标读音,那多半是
         // 中文歌,标出来会是拼音、不是用户要的东西。
         guard japanese, Romanizer.looksJapanese(line) else { return nil }
-        let segs = Romanizer.japaneseSegments(line)
+        let segs = Romanizer.japaneseSegments(line, marks: marks)
         guard !segs.isEmpty else { return nil }
 
         var starts: [Int] = []

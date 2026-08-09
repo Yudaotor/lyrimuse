@@ -20,12 +20,15 @@ public enum Romanizer {
     ///
     /// 非日文(韩文谚文/泰文/西里尔字母等)跟汉字毫无交集,Any-Latin 对它们本来就是正确、
     /// 无歧义的罗马化,继续用。
-    public static func romanize(_ text: String, japanese: Bool = false) -> String? {
+    public static func romanize(
+        _ text: String, japanese: Bool = false,
+        marks: [KanaAnnotation.Mark] = []
+    ) -> String? {
         guard !text.isEmpty else { return nil }
         // 日文歌里夹的纯英文行不要送进分词器:它会按词边界重新加空格,产出一份跟原文只差
         // 空格的"罗马音",纯属噪声。只有真的含假名/汉字的行才需要读音。
         if japanese, looksJapanese(text) || containsHan(text),
-            let reading = japaneseReading(text), reading != text
+            let reading = japaneseReading(text, marks: marks), reading != text
         {
             return reading
         }
@@ -79,13 +82,53 @@ public enum Romanizer {
         public var utf16End: Int { utf16Start + utf16Length }
     }
 
+    /// 用歌词源自带的假名标注拼出这个 token 的读音;这个 token 上没有标注时返回 nil,
+    /// 交回给分词器。
+    ///
+    /// 拼法是"标注段用标注的假名、空档处保留原字":「明日の」里 明日 换成 あした、の 原样
+    /// 留着 → あしたの,再整体音译成罗马字。纯假名走 ICU 的 toLatin 是确定的、无歧义的
+    /// (汉字才有拼音那个坑,见 romanize 的注释),所以这一步安全。
+    static func annotatedReading(
+        in text: String, utf16Start: Int, utf16Length: Int, marks: [KanaAnnotation.Mark]
+    ) -> String? {
+        let end = utf16Start + utf16Length
+        let hits = marks.filter { $0.utf16Start < end && $0.utf16End > utf16Start }
+            .sorted { $0.utf16Start < $1.utf16Start }
+        guard !hits.isEmpty else { return nil }
+        let units = Array(text.utf16)
+        guard end <= units.count else { return nil }
+        var kana = ""
+        var cursor = utf16Start
+        for m in hits {
+            // 标注可能超出 token 边界(整词标注跨过分词边界),超出就别用 —— 宁可退回
+            // 分词器,也不要把邻词的读音塞进来。
+            guard m.utf16Start >= utf16Start, m.utf16End <= end else { return nil }
+            if m.utf16Start > cursor {
+                kana += String(utf16CodeUnits: Array(units[cursor..<m.utf16Start]),
+                               count: m.utf16Start - cursor)
+            }
+            kana += m.reading
+            cursor = m.utf16End
+        }
+        if cursor < end {
+            kana += String(utf16CodeUnits: Array(units[cursor..<end]), count: end - cursor)
+        }
+        guard !kana.isEmpty,
+            let latin = kana.applyingTransform(.toLatin, reverse: false),
+            latin != kana
+        else { return nil }
+        return latin.trimmingCharacters(in: .whitespaces)
+    }
+
     /// 把若干个片段的读音拼成一段罗马音。跟 `japaneseReading` 用同一套促音归并规则,
     /// 分组渲染时才不会跟整行渲染出现不一致的写法。
     public static func joinLatin(_ pieces: [String]) -> String {
         mergeSokuon(pieces).joined(separator: " ")
     }
 
-    public static func japaneseSegments(_ text: String) -> [JapaneseSegment] {
+    public static func japaneseSegments(
+        _ text: String, marks: [KanaAnnotation.Mark] = []
+    ) -> [JapaneseSegment] {
         let cf = text as CFString
         let range = CFRangeMake(0, CFStringGetLength(cf))
         let tokenizer = CFStringTokenizerCreate(
@@ -96,6 +139,12 @@ public enum Romanizer {
             let piece = CFStringCreateWithSubstring(nil, cf, r) as String? ?? ""
             var latin = CFStringTokenizerCopyCurrentTokenAttribute(
                 tokenizer, kCFStringTokenizerAttributeLatinTranscription) as? String ?? ""
+            // 歌词源自带的假名标注优先于分词器 —— 多音词该念哪个,标注说了算。
+            if let annotated = annotatedReading(
+                in: text, utf16Start: r.location, utf16Length: r.length, marks: marks)
+            {
+                latin = annotated
+            }
             if let fixed = particleLatin(for: piece) { latin = fixed }
             if latin.isEmpty {
                 // 拿不到读音的(标点/拉丁词本身)原样留着 —— 但纯空白不值得占一个片段。
@@ -110,7 +159,9 @@ public enum Romanizer {
         return out
     }
 
-    private static func japaneseReading(_ text: String) -> String? {
+    private static func japaneseReading(
+        _ text: String, marks: [KanaAnnotation.Mark] = []
+    ) -> String? {
         let cf = text as CFString
         let range = CFRangeMake(0, CFStringGetLength(cf))
         let tokenizer = CFStringTokenizerCreate(
@@ -121,6 +172,11 @@ public enum Romanizer {
             let piece = CFStringCreateWithSubstring(nil, cf, tokenRange) as String? ?? ""
             if let fixed = particleLatin(for: piece) {
                 tokens.append(fixed)
+            } else if let annotated = annotatedReading(
+                in: text, utf16Start: tokenRange.location, utf16Length: tokenRange.length,
+                marks: marks)
+            {
+                tokens.append(annotated)
             } else if let reading = CFStringTokenizerCopyCurrentTokenAttribute(
                 tokenizer, kCFStringTokenizerAttributeLatinTranscription) as? String,
                 !reading.isEmpty
