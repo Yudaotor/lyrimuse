@@ -489,3 +489,87 @@ func TestTranslationUsableDistrustsLangLabelContradictedByText(t *testing.T) {
 		}
 	}
 }
+
+// 「日英混排的歌一句译文都没有」——2026-08-10 用户实报,First Love(主歌日文、副歌整段
+// 英文)选了英文译文却完全没有译文。两个后端对**整批**做语种识别都判成英文:
+//
+//	on-device: {"ok":false,"source":"en","reason":"same-language"}
+//	MyMemory:  "PLEASE SELECT TWO DISTINCT LANGUAGES"
+//
+// 于是每次都失败、烧掉重试额度,三次之后永久不再翻。修法是送去翻之前逐行按文字系统分流。
+func TestDominantScriptAndLineNeeds(t *testing.T) {
+	cases := []struct {
+		text   string
+		target string
+		need   bool
+		label  string
+	}{
+		{"最後のキスは", "en", true, "日文行 → 要翻成英文"},
+		{"You are always gonna be my love", "en", false, "英文行 → 目标就是英文,不用翻"},
+		{"タバコのflavorがした", "en", true, "日英混在一行,假名占优 → 仍是日文行"},
+		{"我爱你", "en", true, "中文行 → 要翻"},
+		{"I love you", "zh", true, "英文行 → 要翻成中文"},
+		{"我爱你", "zh", false, "中文行 → 目标就是中文,不用翻"},
+		{"最後のキスは", "ja", false, "日文行 → 目标是日文,不用翻"},
+		{"사랑해", "en", true, "韩文行 → 要翻"},
+		{"♪♪♪", "en", false, "没有文字,没什么可翻"},
+		{"", "en", false, "空行"},
+	}
+	for _, c := range cases {
+		if got := lineNeedsTranslation(c.text, c.target); got != c.need {
+			t.Errorf("%s: lineNeedsTranslation(%q, %q) = %v, want %v",
+				c.label, c.text, c.target, got, c.need)
+		}
+	}
+	// 汉字比假名多的日文行也必须判成日文 —— 只要出现假名就是日文,不能按数量取胜。
+	if dominantScript("明日の今頃には") != scriptKana {
+		t.Error("含假名的日文行该判成假名档,不该被汉字数量盖过去")
+	}
+}
+
+// 端到端:混排歌词只把非目标语言的行发出去,英文副歌不进请求体。
+func TestMixedLanguageLyricsOnlySendsForeignLines(t *testing.T) {
+	var sent []string
+	srv := fakeMyMemory(t, func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query().Get("q")
+		sent = append(sent, q)
+		lines := strings.Split(q, "\n")
+		out := make([]string, len(lines))
+		for i := range lines {
+			out[i] = "TRANSLATED"
+		}
+		fmt.Fprintf(w, `{"responseData":{"translatedText":%q},"responseStatus":200}`,
+			strings.Join(out, "\n"))
+	})
+	// 主歌日文 + 副歌英文,正是 First Love 的形状
+	lrc := "[00:01.00]最後のキスは\n[00:02.00]タバコのflavorがした\n" +
+		"[00:03.00]You are always gonna be my love\n[00:04.00]I'll remember to love\n" +
+		"[00:05.00]明日の今頃には"
+	res, err := machineTranslateLRCWithBase(context.Background(), srv.Client(), srv.URL, lrc, "en")
+	if err != nil {
+		t.Fatalf("不该报错: %v", err)
+	}
+	if res.lrc == "" {
+		t.Fatal("该产出译文,实际是空的 —— 正是用户报的症状")
+	}
+	body := strings.Join(sent, "\n")
+	for _, eng := range []string{"You are always gonna be my love", "I'll remember to love"} {
+		if strings.Contains(body, eng) {
+			t.Errorf("英文行不该被发去翻译,却出现在请求里: %q", eng)
+		}
+	}
+	for _, jp := range []string{"最後のキスは", "明日の今頃には"} {
+		if !strings.Contains(body, jp) {
+			t.Errorf("日文行必须被发去翻译,却没出现在请求里: %q", jp)
+		}
+	}
+	// 英文行不该在译文里占一行(它们没被翻,assemble 会跳过)
+	if strings.Contains(res.lrc, "00:03") || strings.Contains(res.lrc, "00:04") {
+		t.Errorf("英文行不该出现在译文 LRC 里:\n%s", res.lrc)
+	}
+	for _, tag := range []string{"[00:01.00]", "[00:02.00]", "[00:05.00]"} {
+		if !strings.Contains(res.lrc, tag) {
+			t.Errorf("日文行的译文该带原时间戳 %s:\n%s", tag, res.lrc)
+		}
+	}
+}

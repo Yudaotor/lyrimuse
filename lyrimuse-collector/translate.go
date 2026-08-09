@@ -175,6 +175,123 @@ func machineTranslateLRC(ctx context.Context, hc *http.Client, lyrics, target st
 	return machineTranslateLRCWithBase(ctx, hc, translateBaseURL, lyrics, target)
 }
 
+// ── 逐行按文字系统分流 ───────────────────────────────────────────────────────
+//
+// 2026-08-10 实测坐实的真 bug:宇多田ヒカル 的 First Love 是**日英混排**(主歌日文、
+// 副歌整段英文),译文目标选英文时,两个后端对**整批文本**做语种识别都判成"英文",于是
+//
+//	on-device helper: {"ok":false,"source":"en","reason":"same-language"}
+//	MyMemory:         "PLEASE SELECT TWO DISTINCT LANGUAGES"
+//
+// 前者退成"不可用"、后者直接报错,一路走到 TranslationRetryCount++;攒够 3 次之后这首歌
+// **永久**不再尝试。用户看到的就是"明明选了英文译文,这首歌一句译文都没有",而它那些日文
+// 行显然是需要翻的。
+//
+// 修法:送去翻之前先逐行看文字系统,只把"跟目标语言不是同一套文字"的行送过去 —— 副歌那些
+// 英文行本来就不需要译文(assembleTranslationLRC 也早就会跳过"没翻动"的行),剩下的日文行
+// 单独成批,后端识别出来就是日文,两边都能正常工作。
+//
+// 只分到"翻译上真正有区别"的粒度。源和目标共用同一套文字时(法语歌 → 英文译文)这套判断
+// 帮不上忙 —— 但那种情况整批识别本来也会失败,不比现在更糟。
+type lyricScript int
+
+const (
+	scriptNone lyricScript = iota
+	scriptLatin
+	scriptHan
+	scriptKana
+	scriptHangul
+	scriptCyrillic
+	scriptArabic
+	scriptThai
+)
+
+// scriptOrder 固定遍历次序 —— 直接遍历 map 求最大值会让"平手"的结果随机,同一行歌词
+// 两次跑出不同结论。
+var scriptOrder = []lyricScript{
+	scriptKana, scriptHangul, scriptHan, scriptCyrillic, scriptArabic, scriptThai, scriptLatin,
+}
+
+// dominantScript 返回一行文本里占多数的文字系统;一个字母都没有(纯符号/数字/空)时是
+// scriptNone。假名优先于汉字:日文行里汉字常比假名多,但只要出现假名就一定是日文。
+func dominantScript(s string) lyricScript {
+	counts := map[lyricScript]int{}
+	for _, r := range s {
+		switch {
+		case unicode.Is(unicode.Hiragana, r), unicode.Is(unicode.Katakana, r):
+			counts[scriptKana]++
+		case unicode.Is(unicode.Han, r):
+			counts[scriptHan]++
+		case unicode.Is(unicode.Hangul, r):
+			counts[scriptHangul]++
+		case unicode.Is(unicode.Cyrillic, r):
+			counts[scriptCyrillic]++
+		case unicode.Is(unicode.Arabic, r):
+			counts[scriptArabic]++
+		case unicode.Is(unicode.Thai, r):
+			counts[scriptThai]++
+		case unicode.IsLetter(r):
+			counts[scriptLatin]++
+		}
+	}
+	if counts[scriptKana] > 0 {
+		return scriptKana
+	}
+	best, bestN := scriptNone, 0
+	for _, k := range scriptOrder {
+		if counts[k] > bestN {
+			best, bestN = k, counts[k]
+		}
+	}
+	return best
+}
+
+// targetScripts 目标语言写出来会用到哪几套文字。
+func targetScripts(target string) []lyricScript {
+	t := strings.ToLower(strings.TrimSpace(target))
+	switch {
+	case strings.HasPrefix(t, "zh"):
+		return []lyricScript{scriptHan}
+	case strings.HasPrefix(t, "ja"):
+		return []lyricScript{scriptKana, scriptHan}
+	case strings.HasPrefix(t, "ko"):
+		return []lyricScript{scriptHangul}
+	case strings.HasPrefix(t, "ru"), strings.HasPrefix(t, "uk"):
+		return []lyricScript{scriptCyrillic}
+	case strings.HasPrefix(t, "ar"):
+		return []lyricScript{scriptArabic}
+	case strings.HasPrefix(t, "th"):
+		return []lyricScript{scriptThai}
+	default:
+		return []lyricScript{scriptLatin}
+	}
+}
+
+// lineNeedsTranslation:这一行还需不需要翻成 target。
+func lineNeedsTranslation(text, target string) bool {
+	s := dominantScript(text)
+	if s == scriptNone {
+		return false // 纯符号/数字,没什么可翻
+	}
+	for _, ts := range targetScripts(target) {
+		if s == ts {
+			return false
+		}
+	}
+	return true
+}
+
+// anyLineNeedsTranslation:整首歌里还有没有需要翻的行。给 needsTranslationBackfill 用,
+// 免得一首整篇都已经是目标语言的歌反复起 goroutine、白烧三次重试额度。
+func anyLineNeedsTranslation(lyrics, target string) bool {
+	for _, l := range parseLRCLines(lyrics) {
+		if lineNeedsTranslation(l.text, target) {
+			return true
+		}
+	}
+	return false
+}
+
 // machineTranslateLRCWithBase 是上面那个的可注入版本,baseURL 为空时用 MyMemory 正式端点。
 // 单测靠它把整条链路(分块 → 请求 → 行数校验 → 回写时间戳)跑在本地假服务器上。
 func machineTranslateLRCWithBase(ctx context.Context, hc *http.Client, baseURL, lyrics, target string) (translationResult, error) {
@@ -188,14 +305,35 @@ func machineTranslateLRCWithBase(ctx context.Context, hc *http.Client, baseURL, 
 	if len(lines) == 0 {
 		return translationResult{}, nil
 	}
+	// 只把"跟目标语言不是同一套文字"的行送去翻,理由见 dominantScript 那一段。
+	// idx 记住它们在原文里的下标,翻完再按位置散回去。
+	idx := make([]int, 0, len(lines))
 	texts := make([]string, 0, len(lines))
-	for _, l := range lines {
+	for i, l := range lines {
+		if !lineNeedsTranslation(l.text, target) {
+			continue
+		}
+		idx = append(idx, i)
 		texts = append(texts, l.text)
+	}
+	if len(texts) == 0 {
+		return translationResult{}, nil // 整首都已经是目标语言了
+	}
+	// scatter 把"只翻了一部分"的结果按原文下标铺回整首歌的长度,没送去翻的行留空串
+	// (assembleTranslationLRC 会跳过空串,不会在译文栏重复一遍原文)。
+	scatter := func(out []string) []string {
+		full := make([]string, len(lines))
+		for j, i := range idx {
+			if j < len(out) {
+				full[i] = out[j]
+			}
+		}
+		return full
 	}
 	// 优先端上翻译:不联网、无配额、歌词不出这台机器,而且没有 500 字符的分块限制,
 	// 整首歌一次翻完。失败(系统太老/语言包没装/helper 不在)才退到 MyMemory。
 	if out, err := onDeviceTranslate(ctx, appleLangCode(target), texts); err == nil {
-		return assembleTranslationLRC(lines, out), nil
+		return assembleTranslationLRC(lines, scatter(out), len(texts)), nil
 	} else if !errors.Is(err, errOnDeviceUnavailable) {
 		log.Printf("translate: on-device failed, falling back to network: %v", err)
 	}
@@ -222,12 +360,15 @@ func machineTranslateLRCWithBase(ctx context.Context, hc *http.Client, baseURL, 
 		translated = append(translated, out...)
 	}
 
-	return assembleTranslationLRC(lines, translated), nil
+	return assembleTranslationLRC(lines, scatter(translated), len(texts)), nil
 }
 
 // assembleTranslationLRC 把逐行译文拼回一份跟主歌词同时间戳的 LRC。两条翻译路径(端上
 // helper / MyMemory)共用,保证它们产出的形状完全一致。
-func assembleTranslationLRC(lines []lrcLine, translated []string) translationResult {
+// attempted 是这次**真正送去翻**的行数(不是整首歌的行数)。下面那道"翻出来太少就当没成"
+// 的闸门必须拿它当分母 —— 2026-08-10 起只翻"跟目标语言不同文字"的行,像 First Love 这种
+// 日英混排的歌,一半行本来就不需要译文,用总行数当分母会把一份完全正常的译文判成失败。
+func assembleTranslationLRC(lines []lrcLine, translated []string, attempted int) translationResult {
 	var b strings.Builder
 	written := 0
 	for i, l := range lines {
@@ -244,7 +385,7 @@ func assembleTranslationLRC(lines []lrcLine, translated []string) translationRes
 		written++
 	}
 	// 太少行翻出来说明这次基本没成 —— 与其给一份七零八落的译文,不如当作没有。
-	if written*3 < len(lines) {
+	if attempted <= 0 || written*3 < attempted {
 		return translationResult{}
 	}
 	return translationResult{lrc: strings.TrimRight(b.String(), "\n")}
@@ -357,6 +498,11 @@ func needsTranslationBackfill(e enrichEntry) bool {
 	// 歌词本来就是目标语言时连 goroutine 都不用起 —— machineTranslateLRC 里也有同一道
 	// 判断兜底,但那时已经白占了一次 inflight 和一次尝试次数。
 	if looksLikeTargetLanguage(e.Lyrics, target) {
+		return false
+	}
+	// 逐行看:一行都不需要翻(整首都已经是目标语言那套文字)时同样别起 —— 否则会一次次
+	// 翻出空结果、把三次重试额度白白烧完,之后这首歌就算真该翻也不会再试了。
+	if !anyLineNeedsTranslation(e.Lyrics, target) {
 		return false
 	}
 	if sameTarget && e.TranslationTS > 0 &&
