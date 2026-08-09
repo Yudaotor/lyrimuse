@@ -84,13 +84,13 @@ extension View {
     /// 描边的理由见 settingsCardBackground:液态玻璃的可见度完全取决于背后有什么,而歌词
     /// 窗口的背景是被高斯模糊过的专辑封面,亮暗随歌变化 —— 没有描边时边界时有时无。
     @ViewBuilder
-    func volumeCapsuleGlass() -> some View {
+    func volumeCapsuleGlass(rim: Color) -> some View {
         if #available(macOS 26.0, *) {
             glassEffect(.regular, in: Capsule())
-                .overlay(Capsule().strokeBorder(Color.primary.opacity(0.10), lineWidth: 0.5))
+                .overlay(Capsule().strokeBorder(rim, lineWidth: 0.5))
         } else {
             background(Capsule().fill(.ultraThinMaterial))
-                .overlay(Capsule().strokeBorder(Color.primary.opacity(0.10), lineWidth: 0.5))
+                .overlay(Capsule().strokeBorder(rim, lineWidth: 0.5))
         }
     }
 }

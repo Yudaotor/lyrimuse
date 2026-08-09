@@ -243,11 +243,21 @@ struct LyricsWindowView: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(artworkBackground)
+                // ⚠️ 音量胶囊必须**浮在内容之上**,不能放进 .toolbar。
+                //
+                // 2026-08-09 用户反馈"这个玻璃效果好垃圾",对比 Apple Music 那个能透出背景
+                // 暖色、边缘有光泽的胶囊。查了 Liquid Glass 的规则(见 LiquidGlassReference:
+                // "Glass cannot sample other glass"、"Avoid Glass-on-Glass"、玻璃只用于
+                // **浮在内容之上**的导航层),再做了一次对照实验:同一个胶囊同时放进工具栏和
+                // 内容浮层,同一张截图里工具栏那个是灰扁色块、浮层那个透出了背后模糊封面的
+                // 暖棕色。工具栏本身就是一层玻璃,玻璃采样不到玻璃,只能退化成不透明材质。
+                .overlay(alignment: .topTrailing) {
+                    volumeControl
+                        .padding(.trailing, 18)
+                        .padding(.top, 14)
+                }
             }
             .toolbar {
-                if poller.soundVolume != nil {
-                    ToolbarItem { volumeControl }
-                }
                 ToolbarItem {
                     Button {
                         windowController.toggleAlwaysOnTop()
@@ -661,9 +671,12 @@ struct LyricsWindowView: View {
                     .frame(width: 16, alignment: .leading)
             }
             .foregroundStyle(.secondary)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 4)
-            .volumeCapsuleGlass()
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .volumeCapsuleGlass(
+                // 有封面背景时边缘走白色 —— 那一圈亮边正是"玻璃光泽"的来源;纯色底
+                // (没有封面)下白边会显得脏,退回中性描边。
+                rim: hasArtworkBackground ? Color.white.opacity(0.28) : Color.primary.opacity(0.10))
         }
     }
 
