@@ -314,7 +314,7 @@ struct LyricsSearchSheet: View {
                 characteristicBadge(L10n.t("译文"), "character.book.closed", .green)
             }
             if c.hasRomanization {
-                characteristicBadge(L10n.t("罗马音"), "textformat.abc", .purple)
+                characteristicBadge(L10n.t("罗马音"), "textformat.abc", .purple, latinIcon: true)
             }
             // 来源:用它在别处(歌词管理列表、设置里的来源勾选)一贯的身份色,一眼能对上号。
             sourceBadge(source)
@@ -385,12 +385,22 @@ struct LyricsSearchSheet: View {
         return lines.joined(separator: "\n")
     }
 
-    private func characteristicBadge(_ text: String, _ icon: String, _ tint: Color) -> some View {
-        Label(text, systemImage: icon)
-            .foregroundStyle(tint)
-            .padding(.horizontal, 6)
-            .padding(.vertical, 2)
-            .background(tint.opacity(0.12), in: Capsule())
+    /// latinIcon:图标必须画成拉丁字母才说得通(「罗马音」),理由见 LatinIconLabel。
+    @ViewBuilder
+    private func characteristicBadge(
+        _ text: String, _ icon: String, _ tint: Color, latinIcon: Bool = false
+    ) -> some View {
+        Group {
+            if latinIcon {
+                LatinIconLabel(text, systemImage: icon)
+            } else {
+                Label(text, systemImage: icon)
+            }
+        }
+        .foregroundStyle(tint)
+        .padding(.horizontal, 6)
+        .padding(.vertical, 2)
+        .background(tint.opacity(0.12), in: Capsule())
     }
 
     private func load() async {

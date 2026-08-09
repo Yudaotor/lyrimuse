@@ -924,7 +924,7 @@ struct LyricsManagerView: View {
 
                 editorSection(title: L10n.t("歌词(LRC)"), icon: "text.alignleft", text: $editedLyrics, minHeight: 220, monospaced: true, disabled: summary.hasWordTiming)
                 editorSection(title: L10n.t("译文"), icon: "character.book.closed", text: $editedTr, minHeight: 70, monospaced: false)
-                editorSection(title: L10n.t("罗马音"), icon: "textformat.abc", text: $editedRoma, minHeight: 70, monospaced: false)
+                editorSection(title: L10n.t("罗马音"), icon: "textformat.abc", text: $editedRoma, minHeight: 70, monospaced: false, latinIcon: true)
 
                 if let error = store.lastError {
                     Label(error, systemImage: "exclamationmark.triangle.fill")
@@ -1066,11 +1066,18 @@ struct LyricsManagerView: View {
         .background(.blue.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
     }
 
-    private func editorSection(title: String, icon: String, text: Binding<String>, minHeight: CGFloat, monospaced: Bool, disabled: Bool = false) -> some View {
+    /// latinIcon:图标必须画成拉丁字母才说得通(「罗马音」),理由见 LatinIconLabel。
+    private func editorSection(title: String, icon: String, text: Binding<String>, minHeight: CGFloat, monospaced: Bool, disabled: Bool = false, latinIcon: Bool = false) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            Label(title, systemImage: icon)
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(.secondary)
+            Group {
+                if latinIcon {
+                    LatinIconLabel(title, systemImage: icon)
+                } else {
+                    Label(title, systemImage: icon)
+                }
+            }
+            .font(.subheadline.weight(.semibold))
+            .foregroundStyle(.secondary)
             TextEditor(text: text)
                 .font(monospaced ? .system(.body, design: .monospaced) : .system(.body))
                 .frame(minHeight: minHeight)
