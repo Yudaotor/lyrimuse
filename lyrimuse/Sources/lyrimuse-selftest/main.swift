@@ -791,6 +791,30 @@ do {
         true, "不是日文歌时不该分组(否则汉字会被标成拼音)")
 }
 
+// 助词 は/へ/を 读 wa/e/o,不是字面的 ha/he/wo —— Apple Music 标的是实际念法。
+// 判据是"单独成词",词内部的同一个假名不能被改掉。
+do {
+    let cases: [(String, String, String)] = [
+        ("今はまだ悲しい", "wa", "は 作助词该读 wa"),
+        ("明日の今頃には", "wa", "には 里的 は 同样是助词"),
+        ("本を読む", "o", "を 作助词该读 o(不是 wo)"),
+        ("海へ行く", "e", "へ 作助词该读 e(不是 he)"),
+    ]
+    for (text, expect, label) in cases {
+        let roma = Romanizer.romanize(text, japanese: true) ?? ""
+        expectEqual(roma.split(separator: " ").contains(Substring(expect)), true,
+                    "\(label):\(text) → \(roma)")
+    }
+    // 词**内部**的假名不能被误改 —— 「あなた」不该变成 「あな+wa」之类
+    let anata = Romanizer.romanize("あなたはどこ", japanese: true) ?? ""
+    expectEqual(anata.contains("anata"), true, "词内部的假名不能被助词规则改掉:\(anata)")
+    expectEqual(anata.split(separator: " ").contains("wa"), true,
+                "同一句里的助词 は 仍要改成 wa:\(anata)")
+    // 固定语整词切出来,规则套不上,靠单列的表兜住
+    let konnichiwa = Romanizer.romanize("こんにちは", japanese: true) ?? ""
+    expectEqual(konnichiwa, "konnichiwa", "こんにちは 该读 konnichiwa,实际 \(konnichiwa)")
+}
+
 if failures == 0 {
     print("\nALL PASS")
 } else {

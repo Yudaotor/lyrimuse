@@ -42,6 +42,30 @@ public enum Romanizer {
     private static let japaneseLocale = CFLocaleCreate(
         nil, CFLocaleIdentifier("ja_JP" as CFString))
 
+    /// 助词读音修正。は/へ/を 作助词时读 wa/e/o,而分词器给的是**字面**读音 ha/he/wo ——
+    /// Apple Music 标的是前者,这也是日语实际的念法。
+    ///
+    /// 判据是「这个 token 恰好就是这一个假名」。2026-08-10 实测 CFStringTokenizer 对日文
+    /// 的切分:助词总是被单独切成一个 token(「今/は/まだ/悲しい」「本/を/読む」
+    /// 「海/へ/行く」),而词内部的同一个假名不会单独成词(「あなた」是一整个 token,不会
+    /// 切出中间的「な」)。所以只改单独成词的那些,词里的假名一概不碰。
+    ///
+    /// 另外单列几个固定语:它们被当成**一个**词切出来(「こんにちは」→ 一个 token,读音
+    /// kon'nichiha),规则套不上,但词尾那个は历史上同样是助词、实际就念 wa。这个表只收
+    /// "整词固定、且词尾は必读wa"的少数几个,不做通用推测。
+    ///
+    /// 返回 nil 表示"这个片段不需要修正",照用分词器给的读音。
+    static func particleLatin(for piece: String) -> String? {
+        switch piece {
+        case "は": return "wa"
+        case "へ": return "e"
+        case "を": return "o"
+        case "こんにちは": return "konnichiwa"
+        case "こんばんは": return "konbanwa"
+        default: return nil
+        }
+    }
+
     /// 一段日文按分词器切出来的片段:每片带它在原文里的 UTF-16 范围和拉丁读音。
     ///
     /// `japaneseReading` 把这些片段拼成一整行就丢掉了位置信息;要做 Apple Music 那种
@@ -72,6 +96,7 @@ public enum Romanizer {
             let piece = CFStringCreateWithSubstring(nil, cf, r) as String? ?? ""
             var latin = CFStringTokenizerCopyCurrentTokenAttribute(
                 tokenizer, kCFStringTokenizerAttributeLatinTranscription) as? String ?? ""
+            if let fixed = particleLatin(for: piece) { latin = fixed }
             if latin.isEmpty {
                 // 拿不到读音的(标点/拉丁词本身)原样留着 —— 但纯空白不值得占一个片段。
                 guard !piece.trimmingCharacters(in: .whitespaces).isEmpty else { continue }
@@ -94,7 +119,9 @@ public enum Romanizer {
         while CFStringTokenizerAdvanceToNextToken(tokenizer) != [] {
             let tokenRange = CFStringTokenizerGetCurrentTokenRange(tokenizer)
             let piece = CFStringCreateWithSubstring(nil, cf, tokenRange) as String? ?? ""
-            if let reading = CFStringTokenizerCopyCurrentTokenAttribute(
+            if let fixed = particleLatin(for: piece) {
+                tokens.append(fixed)
+            } else if let reading = CFStringTokenizerCopyCurrentTokenAttribute(
                 tokenizer, kCFStringTokenizerAttributeLatinTranscription) as? String,
                 !reading.isEmpty
             {
