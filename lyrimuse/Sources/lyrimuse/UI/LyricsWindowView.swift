@@ -218,6 +218,8 @@ struct LyricsWindowView: View {
     /// 每秒一档的推进要补间(否则一跳一跳),而冷启动第一次赋值、以及窗口缩放引起的
     /// 宽度变化不能补间 —— 那正是"进度条从别的位置平移过来"的来源。
     @State private var shownFraction: Double = 0
+    /// 鼠标悬在哪一行(行 id)。悬停的行不虚化、点一下跳到那一句。
+    @State private var hoveredLineID: String?
     @State private var progressPrimed = false
     /// 歌词那一栏的实际宽度。字号按它算 —— 写死 28pt 的话窗口越拖越大、文字占的比例
     /// 越来越小,右边空出一大片(2026-08-09 用户对比 Apple Music 提的)。Apple Music 的
@@ -317,10 +319,20 @@ struct LyricsWindowView: View {
     // 唱过的行,下面留更多即将到来的行,2026-08-04 从 .center 改过来。
     private static let activeLineAnchor = UnitPoint(x: 0.5, y: 0.35)
 
+    /// 换行时整页滚动 + 每行虚化/亮度/缩放变化,用**同一条**曲线、同一个时长 —— 原来滚动
+    /// 用 withAnimation 的默认曲线、行样式用 easeInOut(0.3),两套动画各走各的,同一次换行
+    /// 里页面和文字的节奏对不上,看起来就是"一顿一顿"。
+    ///
+    /// 用 .smooth(无回弹的弹簧)而不是 easeInOut:Apple Music 的歌词滚动是减速停下、末尾
+    /// 不回弹,easeInOut 起步太"推"、收尾太硬。
+    static let lineTransition: Animation = .smooth(duration: 0.45)
+
     private func scrollToActiveLine(scrollProxy: ScrollViewProxy, animated: Bool) {
         guard let id = activeID else { return }
         if animated {
-            withAnimation { scrollProxy.scrollTo(id, anchor: Self.activeLineAnchor) }
+            withAnimation(Self.lineTransition) {
+                scrollProxy.scrollTo(id, anchor: Self.activeLineAnchor)
+            }
         } else {
             scrollProxy.scrollTo(id, anchor: Self.activeLineAnchor)
         }
@@ -965,12 +977,27 @@ struct LyricsWindowView: View {
             && item.line.words != nil
     }
 
+    /// 正在唱的那个字微微上浮,唱完落回 —— Apple Music 的逐字效果不只是填色,字本身会
+    /// 抬一下,一行看下来像一道波沿着字往右走。
+    ///
+    /// 用 sin(π·进度) 而不是"到了就抬起、过了就落下":那样是两个突变,看起来是在"跳";
+    /// 正弦在 0 和 1 两端的斜率都是 0,抬起和落回都自然收尾,峰值正好落在这个字唱到一半时。
+    /// 幅度跟字号挂钩(7%),不同字号下观感一致;reduceMotion 时整个关掉。
+    private func karaokeRise(_ fraction: Double) -> CGFloat {
+        guard !reduceMotion else { return 0 }
+        let f = min(1, max(0, fraction))
+        guard f > 0, f < 1 else { return 0 }
+        return -sin(f * .pi) * lyricFontSize * 0.07
+    }
+
     private func karaokeWord(_ w: SyncedLyricWord, atMs currentMs: Int, base: Color) -> some View {
         let fraction = WordKaraokeGradient.fillFraction(for: w, atMs: currentMs)
         let band = WordKaraokeGradient.wordEdgeSoftenBand
         return Text(w.text)
             .foregroundStyle(WordKaraokeGradient.gradient(
                 fg: base, left: fraction - band, right: fraction + band))
+            // .offset 是渲染期位移,不参与布局 —— 字抬起来不会把整行的排版推歪。
+            .offset(y: karaokeRise(fraction))
     }
 
     @ViewBuilder
@@ -995,16 +1022,31 @@ struct LyricsWindowView: View {
         // Apple Music 歌词是左对齐排版,2026-08-04 从居中改过来。
         .multilineTextAlignment(.leading)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .opacity(lineOpacity(forDistance: distance))
+        .opacity(hoveredLineID == item.id ? 1 : lineOpacity(forDistance: distance))
         // 模糊跟缩放一样受 reduceMotion 影响时直接关掉——虽然模糊本身不是"位移类"动效,
         // 但它是这套"聚焦感"视觉效果里跟缩放同一批的非必要装饰,减少动态效果的用户大概率
         // 也不想要这层模糊,统一用同一个开关关掉,不单独加一个新设置项。
-        .blur(radius: reduceMotion ? 0 : lineBlur(forDistance: distance))
+        // 鼠标悬在哪一行,哪一行就恢复清晰 —— 跟 Apple Music 一样,让你能看清要跳去的是
+        // 哪一句,再决定点不点。
+        .blur(radius: (reduceMotion || hoveredLineID == item.id)
+            ? 0 : lineBlur(forDistance: distance))
         // 当前行只轻微放大(1.02x)——Apple Music 全行同一字号,当前行靠亮度/清晰度+
         // 一点点缩放"浮起"。anchor 用 .leading:左对齐排版下从行首往右生长,不是从中心
         // 向两边(那样行首会跟着左右移动)。
         .scaleEffect(isActive && !reduceMotion ? 1.02 : 1, anchor: .leading)
-        .animation(.easeInOut(duration: 0.3), value: distance)
+        .animation(Self.lineTransition, value: distance)
+        .animation(.easeOut(duration: 0.16), value: hoveredLineID)
+        // 命中区要盖满整行(含左右空白),否则只有文字上才点得到
+        .contentShape(Rectangle())
+        .onHover { inside in
+            if inside { hoveredLineID = item.id }
+            else if hoveredLineID == item.id { hoveredLineID = nil }
+        }
+        .onTapGesture {
+            // 减去当前歌词偏移:引擎判定"现在是哪一行"时会把 offsetMs 加到播放位置上
+            // (见 activeLine),这里不减回去的话,跳过去之后落在的会是隔壁行。
+            poller.seek(toMs: max(0, item.timeMs - poller.currentLyricsOffsetMs))
+        }
     }
 
     @ViewBuilder
