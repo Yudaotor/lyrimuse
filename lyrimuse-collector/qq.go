@@ -111,6 +111,29 @@ func qqSmartbox(query string) []qqSmartboxItem {
 	return out.Data.Song.ItemList
 }
 
+// qqSearchQueries 是 smartbox 的"歌手+歌名"查询尝试序列。QQ 这一源对括号**格外**敏感:
+// 2026-08-09 逐源实测,smartbox 的 key 里只要出现括号就返回 0 条(不是少几条,是一条不
+// 回),而去掉括号立刻有结果——也就是说改之前,凡是本地标题带 "(Remastered 2014)"/
+// "(Single Version)"/"(Taylor's Version)" 这类后缀的歌,QQ 音乐整个源都是废的,而且因为
+// 返回空跟"QQ 没收录这首歌"长得一模一样,从外面完全看不出来。
+func qqSearchQueries(artist, title string) []string {
+	var out []string
+	for _, t := range searchTitleVariants(title) {
+		out = append(out, strings.TrimSpace(artist+" "+t))
+	}
+	return out
+}
+
+// qqSmartboxFirstNonEmpty 按顺序试查询词,返回第一个非空结果。
+func qqSmartboxFirstNonEmpty(queries []string) []qqSmartboxItem {
+	for _, q := range queries {
+		if items := qqSmartbox(q); len(items) > 0 {
+			return items
+		}
+	}
+	return nil
+}
+
 // qqSingerAvatar 给"历史播放 Top10 歌手"(见 topartists.go)查一张歌手头像,复用
 // smartbox_new.fcg 这同一个免认证接口,但读的是响应里的"singer"分类(qqSmartbox 只读
 // "song"分类,两者是同一份 JSON 里并列的不同板块,需各自独立请求、不能共用同一个
@@ -273,7 +296,7 @@ func qqCoverFallback(artist, title, album string) (cover, canonicalArtist string
 		exact bool // name 与 title loose 相等,跟 resolveQQMusicMatch 的 exact 同一含义
 	}
 	var cands []qqCoverCand
-	for _, it := range qqSmartbox(artist + " " + title) {
+	for _, it := range qqSmartboxFirstNonEmpty(qqSearchQueries(artist, title)) {
 		if it.Mid == "" || !lyricTitleAccepted(it.Name, title) ||
 			!artistMatches(it.Singer, artist) {
 			continue
@@ -354,9 +377,10 @@ func resolveQQMusicURL(artist, title, album string) string {
 }
 
 func resolveQQMusicMatch(artist, title, album string) qqMusicMatch {
-	items := qqSmartbox(artist + " " + title)
+	items := qqSmartboxFirstNonEmpty(qqSearchQueries(artist, title))
 	if len(items) == 0 {
-		items = qqSmartbox(title) // 歌手名跨平台不一致时,退一步只按标题再搜
+		// 歌手名跨平台不一致时,退一步只按标题再搜(同样要带上去括号的那一版)
+		items = qqSmartboxFirstNonEmpty(searchTitleVariants(title))
 	}
 	type qqCand struct {
 		mid, title, artist string

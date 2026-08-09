@@ -145,13 +145,45 @@ type lrclibSearchItem struct {
 	SyncedLyrics string  `json:"syncedLyrics"`
 }
 
-func lrclibSearch(artist, title string, durationSecs float64, timeout time.Duration) lrclibResult {
+// lrclibSearchItems 只取一次 /api/search 的候选数组,不做挑选。
+func lrclibSearchItems(artist, title string, timeout time.Duration) []lrclibSearchItem {
 	u := "https://lrclib.net/api/search?artist_name=" + neturl.QueryEscape(artist) +
 		"&track_name=" + neturl.QueryEscape(title)
 	var items []lrclibSearchItem
 	if !lrclibRequest(u, timeout, &items) {
-		return lrclibResult{}
+		return nil
 	}
+	return items
+}
+
+func lrclibSearch(artist, title string, durationSecs float64, timeout time.Duration) lrclibResult {
+	// 原样标题和去括号裸标题各搜一次,**并发**跑,合并候选后统一挑一条。
+	//
+	// 为什么并发而不是再串一级降级:上面 resolveLRCLIBLyric 的三级已经吃掉 8+5+5=18s,
+	// 而 enrich 那边 20s 是**硬**截止(到点就不再读 resultsCh,晚到的结果整轮丢弃,前两级
+	// 的收益跟着一起没)。再串一级必然超预算。这两条查询打的是同一个端点、互不依赖,
+	// 并发跑总耗时仍然只是一个 timeout,总预算一分钟没变。
+	//
+	// 为什么两条都要、不能只留裸标题:实测搜 "Automatic (Remastered 2014)" 回的两条
+	// 都是同名重制版(严格档下唯一可能被接受的候选),搜 "Automatic" 回的 20 条则全是
+	// 普通版。丢掉任何一条都会漏一类歌。
+	queries := searchTitleVariants(title)
+	lists := make([][]lrclibSearchItem, len(queries))
+	var wg sync.WaitGroup
+	for i, q := range queries {
+		wg.Add(1)
+		go func(idx int, query string) {
+			defer wg.Done()
+			lists[idx] = lrclibSearchItems(artist, query, timeout)
+		}(i, q)
+	}
+	wg.Wait()
+	var items []lrclibSearchItem
+	for _, l := range lists {
+		items = append(items, l...)
+	}
+	// 挑选判定用的始终是**本地原样标题** title,裸标题只是搜索词——放宽的是"拿什么去搜",
+	// 不是"什么算匹配"。原样标题的结果排在前面,时长同样接近时它优先(pick 的并列取先到者)。
 	best := pickLRCLIBSearchResult(items, artist, title, durationSecs)
 	if best == nil {
 		return lrclibResult{}

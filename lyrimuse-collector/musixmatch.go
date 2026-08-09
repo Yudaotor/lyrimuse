@@ -266,10 +266,26 @@ type musixmatchTrackMatch struct {
 // s_track_rating=desc 让热门/权威版本排前面,进一步降低选到冷门错误版本的概率。取第一条
 // 歌手/歌名都对上、且 has_subtitles==1(没有逐行歌词的候选后面 track.subtitle.get 必然
 // 404,不必跑这一趟)的结果。
+// 搜索词按 searchTitleVariants 逐个试(原样标题 → 去括号裸标题),先命中先返回。
+// Musixmatch 在这一点上是五个源里最温和的:带括号仍能回 1~2 条、而且往往就是对的那条,
+// 不像 QQ 直接 0 条、酷狗回一堆热门歌。但实测(2026-08-09)差距确实存在——
+// "Billie Jean (Single Version)" 带括号回 1 条、去括号回 5 条(page_size 上限),
+// 候选池小一截就更容易被 has_subtitles/歌手名这两道门全部筛光。多打的这一次请求只在
+// 第一次一无所获时才发生,命中时零额外开销。
 func musixmatchSearchTrack(artist, title string) (musixmatchTrackMatch, bool) {
+	for _, q := range searchTitleVariants(title) {
+		// 判定用的始终是本地原样标题 title,q 只是搜索词。
+		if m, ok := musixmatchSearchTrackOnce(artist, q, title); ok {
+			return m, true
+		}
+	}
+	return musixmatchTrackMatch{}, false
+}
+
+func musixmatchSearchTrackOnce(artist, queryTitle, localTitle string) (musixmatchTrackMatch, bool) {
 	body, err := musixmatchDo("track.search", neturl.Values{
 		"q_artist":       {artist},
-		"q_track":        {title},
+		"q_track":        {queryTitle},
 		"s_track_rating": {"desc"},
 		"page_size":      {"5"},
 		"page":           {"1"},
@@ -303,7 +319,7 @@ func musixmatchSearchTrack(artist, title string) (musixmatchTrackMatch, bool) {
 		if t.Track.HasSubtitles != 1 {
 			continue
 		}
-		if lyricTitleAccepted(t.Track.TrackName, title) && artistMatches(t.Track.ArtistName, artist) {
+		if lyricTitleAccepted(t.Track.TrackName, localTitle) && artistMatches(t.Track.ArtistName, artist) {
 			return musixmatchTrackMatch{
 				trackID: t.Track.TrackID,
 				title:   t.Track.TrackName,

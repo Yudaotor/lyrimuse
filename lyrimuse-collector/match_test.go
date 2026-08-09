@@ -321,3 +321,84 @@ func TestScoringAfter20260809Review(t *testing.T) {
 		}
 	})
 }
+
+// 「搜索词也要去一次括号」——2026-08-09 用户报的场景:设置里选了「忽略括号」,搜索候选
+// 里各源拿去搜的却仍然是带 "(Remastered 2014)" 的原样标题。
+//
+// 当时只有 netease 在搜索词那一层调了 stripParens,其余四个源全是拿原样标题去搜。
+// 逐源实测(见 searchTitleVariants 注释)坐实这不是洁癖问题:QQ 的 smartbox 只要 key 里
+// 带括号就返回 0 条,酷狗则返回 10 条该歌手的热门歌、目标曲根本不在里面。
+func TestSearchTitleVariants(t *testing.T) {
+	cases := []struct {
+		label string
+		title string
+		want  []string
+	}{
+		{"没有括号:只有一条,不做无谓的重复请求", "Automatic", []string{"Automatic"}},
+		{"有括号:原样在前、裸标题在后",
+			"Automatic (Remastered 2014)", []string{"Automatic (Remastered 2014)", "Automatic"}},
+		{"方括号同样算", "Hold My Hand [feat. Akon]",
+			[]string{"Hold My Hand [feat. Akon]", "Hold My Hand"}},
+		{"整个标题都在括号里:剥完是空的,不能生成一条空查询",
+			"(Untitled)", []string{"(Untitled)"}},
+		{"空标题", "", []string{""}},
+	}
+	for _, c := range cases {
+		got := searchTitleVariants(c.title)
+		if len(got) != len(c.want) {
+			t.Errorf("%s: searchTitleVariants(%q) = %q, want %q", c.label, c.title, got, c.want)
+			continue
+		}
+		for i := range got {
+			if got[i] != c.want[i] {
+				t.Errorf("%s: searchTitleVariants(%q)[%d] = %q, want %q",
+					c.label, c.title, i, got[i], c.want[i])
+			}
+		}
+	}
+}
+
+// 搜索词的去括号跟「歌名匹配:忽略括号/严格」那个设置**无关**,两档必须生成同一组查询。
+//
+// 这条是防回归的核心:很容易顺手把它接到 features.LyricsStrictTitleMatch 上("用户都选
+// 严格了,那就别去括号了吧")——那是错的。设置管的是"候选算不算这首歌",这里管的是"拿
+// 什么去搜";严格档同样需要裸标题这条退路,否则 QQ 那种带括号直接 0 条的源,严格档下
+// 一条候选都拿不到,连被严格判定的机会都没有。放宽搜索词不会放松判定:搜回来的结果照旧
+// 要过 lyricTitleAccepted。
+func TestSearchTitleVariantsIgnoresStrictSetting(t *testing.T) {
+	saved := features
+	defer func() { features = saved }()
+
+	const title = "Automatic (Remastered 2014)"
+	features.LyricsStrictTitleMatch = false
+	loose := searchTitleVariants(title)
+	features.LyricsStrictTitleMatch = true
+	strict := searchTitleVariants(title)
+
+	if len(loose) != 2 || len(strict) != 2 {
+		t.Fatalf("两档都该有两条查询, 忽略括号=%q 严格=%q", loose, strict)
+	}
+	for i := range loose {
+		if loose[i] != strict[i] {
+			t.Errorf("第 %d 条查询两档不一致: 忽略括号=%q 严格=%q", i, loose[i], strict[i])
+		}
+	}
+}
+
+// QQ 是受害最重的一个源,单独钉住它的查询梯子。
+func TestQQSearchQueries(t *testing.T) {
+	got := qqSearchQueries("宇多田ヒカル", "Automatic (Remastered 2014)")
+	want := []string{"宇多田ヒカル Automatic (Remastered 2014)", "宇多田ヒカル Automatic"}
+	if len(got) != len(want) {
+		t.Fatalf("qqSearchQueries = %q, want %q", got, want)
+	}
+	for i := range got {
+		if got[i] != want[i] {
+			t.Errorf("qqSearchQueries[%d] = %q, want %q", i, got[i], want[i])
+		}
+	}
+	// 歌手名为空时不能留下一个前导空格,那会变成另一个查询词
+	if q := qqSearchQueries("", "Automatic"); len(q) != 1 || q[0] != "Automatic" {
+		t.Errorf("歌手名为空: qqSearchQueries = %q, want [Automatic]", q)
+	}
+}

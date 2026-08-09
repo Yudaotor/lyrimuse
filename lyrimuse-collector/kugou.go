@@ -174,24 +174,35 @@ func kugouGet(u string, v any) error {
 // (逐字数据本来就是"有更好、没有也不影响整行可用"的加分项)。任何一步
 // 失败/拿不到都直接放弃,不重试(下次 enrich 短 TTL 到期自然再试)。
 func resolveKugouLyric(artist, title string, durationSecs float64) kugouResult {
-	var sr struct {
-		Data struct {
-			Info []kugouSong `json:"info"`
-		} `json:"data"`
-	}
-	q := artist + " " + title
-	if err := kugouGet("http://mobilecdn.kugou.com/api/v3/search/song?format=json&keyword="+kugouEscape(q)+"&page=1&pagesize=10&showtype=1", &sr); err != nil {
-		return kugouResult{}
-	}
+	// 搜索词逐个 variant 试(原样标题 → 去括号裸标题),先命中先用。带括号的标题在酷狗
+	// 上不会返回空、而是回一串该歌手的热门歌,所以"搜砸了"表现为下面的循环一条都收不下,
+	// 不是 kugouGet 报错——必须靠 chosen==nil 才能发现,不能只在 err != nil 时才换词。
+	// 详见 searchTitleVariants 的注释。第二跳(krcs 查 KRC 候选)不受影响:实测同一个
+	// hash 下 keyword 带不带括号返回的候选完全一致,身份是 hash 认的。
 	var chosen *kugouSong
-	for i := range sr.Data.Info {
-		s := &sr.Data.Info[i]
-		if s.Hash == "" || !lyricTitleAccepted(s.SongName, title) ||
-			!artistMatches(s.SingerName, artist) {
+	for _, q := range searchTitleVariants(title) {
+		var sr struct {
+			Data struct {
+				Info []kugouSong `json:"info"`
+			} `json:"data"`
+		}
+		if err := kugouGet("http://mobilecdn.kugou.com/api/v3/search/song?format=json&keyword="+kugouEscape(artist+" "+q)+"&page=1&pagesize=10&showtype=1", &sr); err != nil {
 			continue
 		}
-		chosen = s
-		break
+		for i := range sr.Data.Info {
+			s := &sr.Data.Info[i]
+			// 判定用的始终是**本地原样标题** title,不是当前这轮的搜索词 q——放宽的只是
+			// "拿什么去搜",不是"什么算匹配"。
+			if s.Hash == "" || !lyricTitleAccepted(s.SongName, title) ||
+				!artistMatches(s.SingerName, artist) {
+				continue
+			}
+			chosen = s
+			break
+		}
+		if chosen != nil {
+			break
+		}
 	}
 	if chosen == nil {
 		return kugouResult{}

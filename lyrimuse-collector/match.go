@@ -635,6 +635,33 @@ func stripParens(s string) string {
 	return strings.Join(strings.Fields(b.String()), " ")
 }
 
+// searchTitleVariants 返回「拿哪些曲名去各歌词源搜」的尝试序列:原样标题在前,去掉括号
+// 段的裸标题在后;两者相同(标题本来就没括号)时只有一条。调用方按顺序试,先命中先返回。
+//
+// 为什么原样在前:带括号的查询在某些源上反而更准——实测 LRCLIB 搜
+// "Automatic (Remastered 2014)" 直接回两条同名的重制版,而搜 "Automatic" 回的 20 条
+// 全是普通版。原样优先意味着这个改动对"原样本来就搜得到"的歌**零行为变化**,裸标题
+// 只在原样一无所获时才补一次召回,纯增量。
+//
+// 为什么必须有裸标题这一条(2026-08-09 实测,四首歌逐源探测):
+//   - QQ 音乐 smartbox 查询里只要带括号就**返回 0 条**,一条不回。凡是本地标题带
+//     "(Remastered 2014)"/"(Single Version)" 这类后缀的歌,QQ 这一源等于整个失效。
+//   - 酷狗搜索带括号时**返回 10 条但全是该歌手的热门歌**、目标曲根本不在里面(搜
+//     "宇多田ヒカル Automatic (Remastered 2014)" 回的是 Come Back To Me / One Last
+//     Kiss / Beautiful World)。它不返回空,所以从日志上看不出来搜砸了。
+//
+// ⚠️ 这跟「歌名匹配:忽略括号/严格」那个设置**无关**,不要接到 features 上。那个设置管
+// 的是"候选算不算这首歌"(lyricTitleAccepted),这里管的是"拿什么去搜";搜都搜不到就更
+// 谈不上匹配,所以严格档同样需要这条退路——裸标题搜回来的结果照旧要过一遍严格判定,
+// 不会因为搜索词放宽就把另一个版本放进来。
+func searchTitleVariants(title string) []string {
+	out := []string{title}
+	if bare := stripParens(title); bare != "" && bare != title {
+		out = append(out, bare)
+	}
+	return out
+}
+
 // titleMatches reports whether a NetEase result name refers to the same song as
 // the played title, comparing both full and paren-stripped forms (so
 // "Hold My Hand" matches "Hold My Hand (Duet with Akon)").
@@ -744,9 +771,9 @@ const versionMismatchPenalty = 600
 // 各自去掉括号段之后再比一次 —— 歌词源的曲名常常没有本地那串 "(Remastered 2014)"/
 // "(feat. X)" 后缀,不给这条退路的话很多歌一条候选都匹配不到。
 //
-// ⚠️ 这只管"接不接受这个候选",不管"拿什么去搜" —— 搜索词那边(netease.go 的
-// stripParens(title))照旧去括号,那是为了召回率,跟严不严格无关:搜不到就更谈不上匹配。
-// lyricTitleAccepted 是各个源共用的「这条候选的曲名算不算这首歌」判定。
+// ⚠️ 这只管"接不接受这个候选",不管"拿什么去搜" —— 搜索词那边(searchTitleVariants)
+// 无论哪一档都会补一次去括号的查询,那是为了召回率,跟严不严格无关:搜不到就更谈不上
+// 匹配。lyricTitleAccepted 是各个源共用的「这条候选的曲名算不算这首歌」判定。
 //
 // 2026-08-09 补上:「歌名匹配」那个设置刚做出来时只接到了 netease 和 lrclib —— 那两处
 // 本来就有"去掉括号再比一次"的兜底,改起来最显眼。而 kugou/QQ/Musixmatch 走的是完全
