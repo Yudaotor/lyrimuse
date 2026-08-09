@@ -182,80 +182,40 @@ func TestScoreLyricCandidatePenalizesWrongVersion(t *testing.T) {
 	}
 }
 
-// 设置里的「歌名匹配」两档:忽略括号(默认)vs 严格。
+// lyricTitleAccepted 是五个源共用的、**唯一**一条曲名判定(2026-08-09 由三个函数合并
+// 而来:netease 的 titleMatches、lrclib 的 lrclibStrictTitleMatch、以及这个)。
 //
-// 这两档的差别只在"括号里的内容算不算数",不影响拿什么去搜(搜索词照旧去括号,那是召回率
-// 的事)。真实场景:本地是 "In My Room (Remastered 2014)",而歌词源上普遍只叫 "In My Room"。
-func TestTitleMatchesParenModes(t *testing.T) {
+// 只认「归一化后相等」或「双方各自去括号后相等」,**绝不认任意子串包含**。
+// 收紧的代价实测为零:250 首全量候选数据里,靠子串才被接受的候选一条都没有。
+func TestLyricTitleAccepted(t *testing.T) {
 	cases := []struct {
-		label                 string
-		name, title           string
-		wantLoose, wantStrict bool
+		label           string
+		candidate, want string
+		accept          bool
 	}{
-		{"完全一致:两档都认", "In My Room", "In My Room", true, true},
-		{"候选没有版本后缀:忽略括号认,严格不认",
-			"In My Room", "In My Room (Remastered 2014)", true, false},
-		{"本地没有、候选有:同理", "In My Room (Remastered 2014)", "In My Room", true, false},
-		{"两边括号内容不同但主名相同:忽略括号认,严格不认",
-			"Hello (Live)", "Hello (Studio)", true, false},
-		{"括号完全一致:两档都认",
-			"In My Room (Remastered 2014)", "In My Room (Remastered 2014)", true, true},
-		{"根本是两首歌:两档都不认", "First Love", "In My Room", false, false},
+		{"完全一致", "In My Room", "In My Room", true},
+		{"候选没有版本后缀:去括号后相等,认",
+			"In My Room", "In My Room (Remastered 2014)", true},
+		{"本地没有、候选有:同理", "In My Room (Remastered 2014)", "In My Room", true},
+		{"两边括号内容不同但主名相同:认(真正的版本差异交给 versionTagsMismatch 拦)",
+			"Hello (Live)", "Hello (Studio)", true},
+		{"括号完全一致", "In My Room (Remastered 2014)", "In My Room (Remastered 2014)", true},
+		{"大小写/空格不算差异", "never let go (remastered 2014)", "Never Let Go (Remastered 2014)", true},
+		{"根本是两首歌", "First Love", "In My Room", false},
+		// 下面三条是这次收紧的核心:旧的 looseContains(双向子串包含)会全部误认
+		{"子串:候选是本地的前缀,不认", "Real Love", "Real Love Baby", false},
+		{"子串:本地是候选的前缀,不认", "Real Love Baby", "Real Love", false},
+		{"子串:短词命中长曲名,不认", "Love", "Real Love", false},
+		{"空串两侧都不认", "", "In My Room", false},
 	}
 	for _, c := range cases {
-		if got := titleMatches(c.name, c.title, true); got != c.wantLoose {
-			t.Errorf("%s: 忽略括号 = %v, want %v", c.label, got, c.wantLoose)
-		}
-		if got := titleMatches(c.name, c.title, false); got != c.wantStrict {
-			t.Errorf("%s: 严格 = %v, want %v", c.label, got, c.wantStrict)
+		if got := lyricTitleAccepted(c.candidate, c.want); got != c.accept {
+			t.Errorf("%s: lyricTitleAccepted(%q, %q) = %v, want %v",
+				c.label, c.candidate, c.want, got, c.accept)
 		}
 	}
-}
-
-func TestLRCLIBStrictTitleMatchParenModes(t *testing.T) {
-	// 注意:这个函数名里的 Strict 指"比 titleMatches 严",跟设置里那两档是两件事 ——
-	// 即使忽略括号,它也只认相等、不认双向子串包含。
-	if !lrclibStrictTitleMatch("In My Room", "In My Room (Remastered 2014)", true) {
-		t.Error("忽略括号档:去掉括号后相等,该认")
-	}
-	if lrclibStrictTitleMatch("In My Room", "In My Room (Remastered 2014)", false) {
-		t.Error("严格档:括号里的内容也要对上,不该认")
-	}
-	if lrclibStrictTitleMatch("Real Love Baby", "Real Love", true) {
-		t.Error("即使忽略括号,也绝不能退化成子串包含 —— 那会把另一首歌当成这一首")
-	}
-}
-
-// 「歌名匹配」这个设置必须对**所有**源生效。
-//
-// 2026-08-09 用户报的真实场景:设成「严格」,自动选中的却是 kugou 那条曲名叫
-// "Never let go"(没有 "(Remastered 2014)" 后缀)的候选。原因是这个设置当初只接到了
-// netease 和 lrclib —— kugou/QQ/Musixmatch 各自直接调 looseContains,谁都没查过它。
-func TestLyricTitleAcceptedHonoursStrictSetting(t *testing.T) {
-	saved := features
-	defer func() { features = saved }()
-
-	const local = "Never Let Go (Remastered 2014)"
-	features.LyricsStrictTitleMatch = false
-	if !lyricTitleAccepted("Never let go", local) {
-		t.Error("忽略括号档:少了版本后缀也该认(大小写不敏感)")
-	}
-	if !lyricTitleAccepted("Never Let Go (Remastered 2014)", local) {
-		t.Error("忽略括号档:完全一致当然该认")
-	}
-
-	features.LyricsStrictTitleMatch = true
-	if lyricTitleAccepted("Never let go", local) {
-		t.Error("严格档:没有版本后缀就不该认 —— 这正是用户撞到的那一条")
-	}
-	if !lyricTitleAccepted("never let go (remastered 2014)", local) {
-		t.Error("严格档要的是归一化后相等,不是逐字节相等(大小写/空格不算差异)")
-	}
-	if lyricTitleAccepted("Never Let Go (Live)", local) {
-		t.Error("严格档:括号内容不同就是不同版本")
-	}
-	if lyricTitleAccepted("", local) || lyricTitleAccepted("Never Let Go", "") {
-		t.Error("空串两档都不该认")
+	if lyricTitleAccepted("In My Room", "") {
+		t.Error("本地标题为空不该认")
 	}
 }
 
@@ -322,38 +282,35 @@ func TestScoringAfter20260809Review(t *testing.T) {
 	})
 }
 
-// 「搜索词也要去一次括号」——2026-08-09 用户报的场景:设置里选了「忽略括号」,搜索候选
-// 里各源拿去搜的却仍然是带 "(Remastered 2014)" 的原样标题。
+// 「搜索词也要去一次括号」——2026-08-09 用户报的场景:各源拿去搜的一直是带
+// "(Remastered 2014)" 的原样标题。当时只有 netease 在搜索词那一层调了 stripParens。
 //
-// 当时只有 netease 在搜索词那一层调了 stripParens,其余四个源全是拿原样标题去搜。
 // 逐源实测(见 searchTitleVariants 注释)坐实这不是洁癖问题:QQ 的 smartbox 只要 key 里
 // 带括号就返回 0 条,酷狗则返回 10 条该歌手的热门歌、目标曲根本不在里面。
 func TestSearchTitleVariants(t *testing.T) {
-	saved := features
-	defer func() { features = saved }()
-	features.LyricsStrictTitleMatch = false
-
 	cases := []struct {
 		label string
 		title string
 		want  []string
 	}{
 		{"没有括号:只有一条,不做无谓的重复请求", "Automatic", []string{"Automatic"}},
-		{"忽略括号档:裸标题优先,原样作兜底",
+		{"噪音括号:裸标题优先,原样作兜底",
 			"Automatic (Remastered 2014)", []string{"Automatic", "Automatic (Remastered 2014)"}},
 		{"方括号同样算", "Hold My Hand [feat. Akon]",
 			[]string{"Hold My Hand", "Hold My Hand [feat. Akon]"}},
 		{"整个标题都在括号里:剥完是空的,不能生成一条空查询",
 			"(Untitled)", []string{"(Untitled)"}},
 		{"空标题", "", []string{""}},
-		// 括号里是"另一次录音"的限定词时,忽略括号档也不能把裸标题提前——去掉它搜回来的
-		// 是另一版录音,时间轴对不上。实测:提前之后酷狗这条从 806 分掉到 207。
-		{"括号里是版本限定词:忽略括号档也照旧原样优先",
+		// 括号里是"另一次录音"的限定词时不能把裸标题提前——去掉它搜回来的是另一版录音,
+		// 时间轴对不上。实测:提前之后酷狗这条从 806 分掉到 207。
+		{"版本限定词:原样优先",
 			"Billie Jean (Single Version)",
 			[]string{"Billie Jean (Single Version)", "Billie Jean"}},
 		{"live 同理", "Hello (Live)", []string{"Hello (Live)", "Hello"}},
 		{"remaster 不算另一次录音,该去括号",
 			"Hello (Remastered 2015)", []string{"Hello", "Hello (Remastered 2015)"}},
+		{"破折号写法的版本限定词也认", "Hello - Live at Wembley",
+			[]string{"Hello - Live at Wembley"}}, // 没有括号可剥,只有一条
 	}
 	for _, c := range cases {
 		got := searchTitleVariants(c.title)
@@ -370,43 +327,40 @@ func TestSearchTitleVariants(t *testing.T) {
 	}
 }
 
-// 「歌名匹配」这个设置决定**先拿哪一种写法去搜**——这正是用户对它的预期读法:
-// "忽略括号"就该是"搜的时候先把括号去掉"。
-//
-// 但两档都必须保留另一种写法作为兜底(只在前一条搜空时才发第二次请求):
-//   - 严格档丢掉裸标题 → 酷狗那条 "Billie Jean (Single Version)" 就没了(实测 9 个
-//     "源×歌"组合里它是唯一靠裸标题搜出来、又能过严格判定的);
-//   - 忽略括号档丢掉原样标题 → LRCLIB 那两条重制版就没了(搜裸标题回的 20 条全是普通版)。
-func TestSearchTitleVariantsFollowsStrictSetting(t *testing.T) {
-	saved := features
-	defer func() { features = saved }()
-
-	const title = "Automatic (Remastered 2014)"
-
-	features.LyricsStrictTitleMatch = false
-	loose := searchTitleVariants(title)
-	if len(loose) != 2 || loose[0] != "Automatic" || loose[1] != title {
-		t.Errorf("忽略括号档该是[裸标题, 原样], got %q", loose)
-	}
-
-	features.LyricsStrictTitleMatch = true
-	strict := searchTitleVariants(title)
-	if len(strict) != 2 || strict[0] != title || strict[1] != "Automatic" {
-		t.Errorf("严格档该是[原样, 裸标题], got %q", strict)
-	}
-
-	// 两档只是顺序不同,覆盖的查询集合必须一致——任何一档少一条都会丢掉上面注释里那类歌
-	if loose[0] != strict[1] || loose[1] != strict[0] {
-		t.Errorf("两档的查询集合该相同、只有顺序不同: 忽略括号=%q 严格=%q", loose, strict)
+// 两种写法都必须在序列里,只是谁先谁后。任何一边被砍掉都会丢掉一整类歌:
+//   - 丢掉裸标题 → QQ 那种"带括号直接 0 条"的源,对这类歌整个失效;
+//   - 丢掉原样标题 → LRCLIB 那两条重制版就没了(搜裸标题回的 20 条全是普通版)。
+func TestSearchTitleVariantsAlwaysKeepsBothForms(t *testing.T) {
+	for _, title := range []string{
+		"Automatic (Remastered 2014)",  // 噪音括号
+		"Billie Jean (Single Version)", // 版本限定词
+		"Blue Gangsta (Original Version)",
+	} {
+		got := searchTitleVariants(title)
+		if len(got) != 2 {
+			t.Errorf("%q 该有两条查询, got %q", title, got)
+			continue
+		}
+		if got[0] == got[1] {
+			t.Errorf("%q 两条查询不该重复: %q", title, got)
+		}
+		bare, raw := false, false
+		for _, q := range got {
+			if q == title {
+				raw = true
+			}
+			if q == stripParens(title) {
+				bare = true
+			}
+		}
+		if !raw || !bare {
+			t.Errorf("%q 的查询序列必须同时含原样和裸标题, got %q", title, got)
+		}
 	}
 }
 
 // QQ 是受害最重的一个源(带括号直接 0 条),单独钉住它的查询梯子。
 func TestQQSearchQueries(t *testing.T) {
-	saved := features
-	defer func() { features = saved }()
-	features.LyricsStrictTitleMatch = false
-
 	got := qqSearchQueries("宇多田ヒカル", "Automatic (Remastered 2014)")
 	want := []string{"宇多田ヒカル Automatic", "宇多田ヒカル Automatic (Remastered 2014)"}
 	if len(got) != len(want) {

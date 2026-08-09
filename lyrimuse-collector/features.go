@@ -89,11 +89,6 @@ type featureFlagsFile struct {
 	// LyricsSourceOrder：只有 LyricsSourceMode == "priority" 时才生效。缺失时按
 	// lyricsSourceDefaultOrder 兜底。
 	LyricsSourceOrder []string `json:"lyrics_source_order,omitempty"`
-	// LyricsStrictTitleMatch：歌名要不要**连括号里的内容一起**对上。
-	// 默认 false(忽略括号)——歌词源的曲名常常没有本地那一串
-	// "(Remastered 2014)"/"(feat. X)" 后缀,一律要求带上它会让很多歌一条候选都匹配不到。
-	// 打开之后只认归一化后完全相等的曲名,宁可没有歌词也不要另一个版本的。
-	LyricsStrictTitleMatch *bool `json:"lyrics_strict_title_match,omitempty"`
 	// LyricsDir：歌词文件夹("歌词文件夹作为权威源"读写的那个文件夹)的自定义位置。
 	// 留空则用默认位置(config.json 同目录下的 lyrics/,main.go 里兜底)。
 	LyricsDir string `json:"lyrics_dir,omitempty"`
@@ -142,8 +137,6 @@ type featureFlags struct {
 	LyricsSources     map[string]bool
 	LyricsSourceMode  string
 	LyricsSourceOrder []string
-	// 见上面同名字段的注释。只被 titleMatches / lrclibStrictTitleMatch 读取。
-	LyricsStrictTitleMatch bool
 	// LyricsDir 空字符串表示"用默认位置",由 main.go 里设置包级变量 lyricsDir 时兜底,
 	// 不在这里(loadFeatureFlags)展开成绝对路径——那时候 *cfgPath 还没解析完。
 	LyricsDir string
@@ -199,7 +192,6 @@ func loadFeatureFlags(path string) featureFlags {
 		LyricsSources:             resolveLyricsSources(f.LyricsSources),
 		LyricsSourceMode:          resolveLyricsSourceMode(f.LyricsSourceMode),
 		LyricsSourceOrder:         resolveLyricsSourceOrder(f.LyricsSourceOrder),
-		LyricsStrictTitleMatch:    boolOr(f.LyricsStrictTitleMatch, false),
 		LyricsDir:                 f.LyricsDir,
 		LyricsTranslationLanguage: resolveLyricsTranslationLanguage(f.LyricsTranslationLanguage),
 		LyricsMachineTranslation:  boolOr(f.LyricsMachineTranslation, false),

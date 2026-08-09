@@ -401,22 +401,6 @@ private struct LyricsSettingsTab: View {
                 .pickerStyle(.segmented)
                 .fixedSize()
             }
-            CardDivider()
-            SettingsRow(
-                icon: "textformat",
-                title: L10n.t("歌名匹配"),
-                help: L10n.t("忽略括号：搜索时先去掉括号，歌词源上的「In My Room」也能匹配本地的「In My Room (Remastered 2014)」。严格：带着括号搜，括号里的内容也必须一字不差地对上，宁可没有歌词也不要另一个版本的")
-            ) {
-                Picker("", selection: Binding(
-                    get: { features.lyricsStrictTitleMatch },
-                    set: { features.lyricsStrictTitleMatch = $0; Task { await features.save() } }
-                )) {
-                    Text(L10n.t("忽略括号")).tag(false)
-                    Text(L10n.t("严格")).tag(true)
-                }
-                .pickerStyle(.segmented)
-                .fixedSize()
-            }
             if features.lyricsSourceMode == .priority {
                 ForEach(Array(orderedEnabledSources.enumerated()), id: \.element) { index, source in
                     CardDivider()

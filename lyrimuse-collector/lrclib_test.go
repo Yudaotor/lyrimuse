@@ -78,10 +78,11 @@ func TestPickLRCLIBSearchResult(t *testing.T) {
 	}
 }
 
-// 审查确认的 BLOCKER 的回归测试:第三级曲名门原来用 titleMatches(→ looseContains 双向子串
-// 包含),而第三级只在前两级精确 get 都 404 后才跑,正是"search 返回同歌手近似曲名"的场合,
-// 双向包含会把另一首歌的歌词当成本曲。收紧成 lrclibStrictTitleMatch,理由见那边注释。
-func TestLRCLIBStrictTitleMatch(t *testing.T) {
+// 审查确认的 BLOCKER 的回归测试:第三级曲名门原来用 looseContains(双向子串包含),而第三级
+// 只在前两级精确 get 都 404 后才跑,正是"search 返回同歌手近似曲名"的场合,双向包含会把
+// 另一首歌的歌词当成本曲。当时收紧成 lrclib 专用的 lrclibStrictTitleMatch;2026-08-09 起
+// 这条规则推广到全部五个源、合并成 lyricTitleAccepted,这里改为直接钉它。
+func TestLRCLIBTitleGate(t *testing.T) {
 	cases := []struct {
 		candidate, local string
 		want             bool
@@ -102,8 +103,8 @@ func TestLRCLIBStrictTitleMatch(t *testing.T) {
 		{"Blue Gangsta", "", false, "本地空 → 拒"},
 	}
 	for _, c := range cases {
-		if got := lrclibStrictTitleMatch(c.candidate, c.local, true); got != c.want {
-			t.Errorf("%s: lrclibStrictTitleMatch(%q, %q) = %v, want %v", c.label, c.candidate, c.local, got, c.want)
+		if got := lyricTitleAccepted(c.candidate, c.local); got != c.want {
+			t.Errorf("%s: lyricTitleAccepted(%q, %q) = %v, want %v", c.label, c.candidate, c.local, got, c.want)
 		}
 	}
 }

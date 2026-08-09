@@ -638,47 +638,37 @@ func stripParens(s string) string {
 // searchTitleVariants 返回「拿哪些曲名去各歌词源搜」的尝试序列。调用方按顺序试,先命中
 // 先返回;标题本来就没括号(或整串都在括号里、剥完是空)时只有一条,不做无谓的重复请求。
 //
-// **顺序跟着「歌名匹配」这个设置走**,这正是用户对这个设置的预期读法:
-//   - 忽略括号(默认):去括号的裸标题**优先**去搜 —— "忽略括号"字面上就该是"搜的时候
-//     先把括号去掉"。既然用户已经声明不在乎括号里的内容,那就没有理由还拿
-//     "(Remastered 2014)" 这种后缀去干扰搜索排序。
-//   - 严格:原样标题优先 —— 括号里的内容也要一字不差对上,那搜索就该带着它去搜。
+// 顺序取决于**括号里装的是什么**,这是 2026-08-09 一整轮实测定下来的:
 //
-// ⚠️ 但有一类括号**不是噪音、是身份的一部分**:括号里写着 live/demo/original version/
-// single version 这类"另一次录音"的限定词时(titleVersionTags 认的就是这些),去掉它搜
-// 回来的是另一版录音——歌词字面可能一模一样,时间轴却是另一套。这类标题无论哪一档都
-// 原样优先,裸标题只当最后的兜底。
+//	① 括号里是"另一次录音"的限定词(live/demo/original version/single version…,
+//	   titleVersionTags 认的就是这些)→ **原样标题优先**。这类括号不是噪音、是身份的
+//	   一部分:去掉它搜回来的是另一版录音,歌词字面可能一模一样,时间轴却是另一套。
+//	   实测把裸标题无条件提前之后,"Billie Jean (Single Version)" 的酷狗候选从 806 分
+//	   掉到 207(拿回普通版,被 versionMismatchPenalty 那 600 分打下去),
+//	   "Blue Gangsta (Original Version)" 从 611 掉到 10。
+//	② 其余(remaster/deluxe/feat./bonus/Taylor's Version… —— 同一次录音的不同发行,
+//	   **故意不在** distinctRecordingVersionTags 里,见那边注释)→ **裸标题优先**。
+//	   这一档才是收益来源,见下面两条实测。
 //
-// 这不是理论顾虑,是实测(2026-08-09)打脸出来的:把裸标题无条件提前之后,
-// "Billie Jean (Single Version)" 的酷狗候选从 806 分掉到 207(拿回的是普通版,被
-// versionMismatchPenalty 那 600 分打下去),"Blue Gangsta (Original Version)" 从 611
-// 掉到 10。而 "(Remastered 2014)"/"(Taylor's Version)"/"(feat. X)" 这些**故意不在**
-// distinctRecordingVersionTags 里(见那边注释:同一次录音的不同发行/母带),该去还是去,
-// 收益也正是从它们身上来的。
-//
-// 两档都保留另一种写法作为**兜底**(只在前一条一无所获时才发第二次请求),因为两个方向
-// 的收益都实测存在:
-//   - 裸标题的必要性(2026-08-09 四首歌逐源探测):QQ 音乐 smartbox 的 key 里只要带括号
-//     就**返回 0 条**,一条不回 —— 凡是本地标题带 "(Remastered 2014)"/"(Single
-//     Version)" 后缀的歌,QQ 这一源整个失效,而且返回空跟"QQ 没收录"长得一模一样;酷狗
-//     则**返回 10 条但全是该歌手的热门歌**、目标曲根本不在里面(搜 "宇多田ヒカル
-//     Automatic (Remastered 2014)" 回的是 Come Back To Me / One Last Kiss /
-//     Beautiful World),它不返回空,所以从外面完全看不出来搜砸了。
+// 另一种写法始终保留作**兜底**,只在前一条一无所获时才发第二次请求,所以两个方向的
+// 收益都拿得到:
+//   - 裸标题的必要性(四首歌逐源探测):QQ 音乐 smartbox 的 key 里只要带括号就**返回
+//     0 条**,一条不回 —— 凡是本地标题带 "(Remastered 2014)"/"(Single Version)" 后缀
+//     的歌,QQ 这一源整个失效,而且返回空跟"QQ 没收录"长得一模一样;酷狗则**返回 10 条
+//     但全是该歌手的热门歌**、目标曲根本不在里面(搜 "宇多田ヒカル Automatic
+//     (Remastered 2014)" 回的是 Come Back To Me / One Last Kiss / Beautiful World),
+//     它不返回空,所以从外面完全看不出来搜砸了。
 //   - 原样标题的必要性:LRCLIB 搜 "Automatic (Remastered 2014)" 直接回两条同名重制版,
-//     搜 "Automatic" 回的 20 条全是普通版。严格档下前者是唯一可能被接受的候选。
-//     (反过来,严格档保留裸标题兜底的收益偏小但非零:同一批探测里 9 个"源×歌"组合中
-//     只有 1 个靠裸标题搜出了能过严格判定的候选 —— 酷狗的 "Billie Jean (Single
-//     Version)"。它只在原样搜空时多打一次请求,没有正确性风险,所以留着。)
+//     搜 "Automatic" 回的 20 条全是普通版。
 //
-// ⚠️ 无论哪一档,搜回来的候选照旧要过 lyricTitleAccepted 那一关,判定用的始终是**本地
-// 原样标题**。放宽的只是"拿什么去搜",不是"什么算匹配" —— 换了搜索词不会让另一个版本
-// 混进来。
+// ⚠️ 搜回来的候选照旧要过 lyricTitleAccepted 那一关,判定用的始终是**本地原样标题**。
+// 放宽的只是"拿什么去搜",不是"什么算匹配" —— 换了搜索词不会让另一个版本混进来。
 func searchTitleVariants(title string) []string {
 	bare := stripParens(title)
 	if bare == "" || bare == title {
 		return []string{title}
 	}
-	if features.LyricsStrictTitleMatch || len(titleVersionTags(title)) > 0 {
+	if len(titleVersionTags(title)) > 0 {
 		return []string{title, bare}
 	}
 	return []string{bare, title}
@@ -789,43 +779,41 @@ func versionTagsMismatch(localTitle, candidateTitle string) bool {
 // pickLyricCandidate 直接丢弃),而是留 1 分—— 实在只有这一个候选时,有总比没有好。
 const versionMismatchPenalty = 600
 
-// ignoreParens 对应设置里的「歌名匹配」:false 时只认原样的曲名,true(默认)时允许双方
-// 各自去掉括号段之后再比一次 —— 歌词源的曲名常常没有本地那串 "(Remastered 2014)"/
-// "(feat. X)" 后缀,不给这条退路的话很多歌一条候选都匹配不到。
+// lyricTitleAccepted 是**五个源共用**的唯一一条「这条候选的曲名算不算这首歌」判定。
+// 只认两种:
 //
-// ⚠️ 这只管"接不接受这个候选",不管"拿什么去搜" —— 搜索词那边(searchTitleVariants)
-// 无论哪一档都会补一次去括号的查询,那是为了召回率,跟严不严格无关:搜不到就更谈不上
-// 匹配。lyricTitleAccepted 是各个源共用的「这条候选的曲名算不算这首歌」判定。
+//	① 归一化后完全相等;
+//	② 双方各自去掉括号段之后相等 —— 歌词源的曲名常常没有本地那串 "(Remastered 2014)"/
+//	   "(feat. X)" 后缀,不给这条退路的话很多歌一条候选都匹配不到。
 //
-// 2026-08-09 补上:「歌名匹配」那个设置刚做出来时只接到了 netease 和 lrclib —— 那两处
-// 本来就有"去掉括号再比一次"的兜底,改起来最显眼。而 kugou/QQ/Musixmatch 走的是完全
-// 独立的一行 looseContains,谁都没查过这个设置,于是用户明明选了「严格」,kugou 照样
-// 拿一条没有 "(Remastered 2014)" 后缀的候选顶上来,而且因为带逐字时间轴分数还最高。
+// **绝不认任意的双向子串包含**。那是 2026-08-09 之前 kugou/QQ/Musixmatch/netease 的
+// 做法,是个定时炸弹:"Real Love" 本来就是 "Real Love Baby" 的子串,查 "love" 能命中
+// 同歌手的 "Real Love",时长又常在容差内,于是把另一首歌的歌词当成这一首。lrclib 早就
+// 因为这个单独收紧过(见 lrclib.go 里那段注释),现在统一到这里。
 //
-// netease 和 lrclib 保留各自的函数:它们在**忽略括号**这一档下有额外的门道
-// (netease 多一层剥括号兜底、lrclib 反而故意不认子串包含),不能一并压平。三者在
-// **严格**这一档下是同一个判定 —— 归一化后完全相等。
+// 收紧的代价实测为**零**:250 首全量候选数据里,「旧规则(子串)认、新规则不认」的候选
+// 一条都没有 —— 那个分支从来没有真正起过作用,只是在攒风险。
+//
+// ⚠️ 这只管"接不接受这个候选",不管"拿什么去搜"(那是 searchTitleVariants 的事)。
+// 判定对象**始终是本地原样标题**,跟这条候选是用哪个搜索词搜到的无关。
+//
+// 真正的"版本差异"(live/demo/original version 这类另一次录音)不在这里拦,由
+// versionTagsMismatch + versionMismatchPenalty 单独负责 —— 那一层按"是不是另一次录音"
+// 判,比"括号里的字对不对得上"准得多。
+//
+// 历史:这里曾经有一个「歌名匹配:忽略括号/严格」的用户设置。2026-08-09 实测后删除
+//
+//	——严格档让 18% 的歌完全拿不到歌词、可用源数从 3.78 腰斩到 1.98,而用独立于打分的
+//	时长吻合度做代理,29 首胜出者不同的歌里"忽略档更贴 7 / 严格档更贴 4 / 打平 18",
+//	噪声级别、测不出质量收益。它承诺的保护本来就由上面说的版本限定词那一层提供。
 func lyricTitleAccepted(candidateTitle, localTitle string) bool {
-	if features.LyricsStrictTitleMatch {
-		n, t := normLoose(candidateTitle), normLoose(localTitle)
-		return n != "" && n == t
+	nc, nl := normLoose(candidateTitle), normLoose(localTitle)
+	if nc == "" || nl == "" {
+		return false
 	}
-	return looseContains(candidateTitle, localTitle)
-}
-
-func titleMatches(name, title string, ignoreParens bool) bool {
-	if !ignoreParens {
-		// 严格档:归一化之后必须完全相等。
-		//
-		// ⚠️ 这里**不能**先走一遍 looseContains —— 它是**双向子串包含**,"In My Room" 本来
-		// 就是 "In My Room (Remastered 2014)" 的子串,严格档会形同虚设(2026-08-09 第一版
-		// 就是这么写的,被单测当场抓住:两个"该拒绝"的用例全都返回了 true)。
-		n, t := normLoose(name), normLoose(title)
-		return n != "" && n == t
-	}
-	if looseContains(name, title) {
+	if nc == nl {
 		return true
 	}
-	cn, ct := stripParens(name), stripParens(title)
-	return cn != "" && ct != "" && looseContains(cn, ct)
+	sc, sl := normLoose(stripParens(candidateTitle)), normLoose(stripParens(localTitle))
+	return sc != "" && sl != "" && sc == sl
 }

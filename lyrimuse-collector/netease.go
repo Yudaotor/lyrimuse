@@ -154,6 +154,17 @@ func resolveNeteaseInfo(artist, title, album string) neteaseInfo {
 
 	// NetEase 搜索对词序/括号噪声敏感:带一堆 (feat.)/(with) 的完整标题常搜不到真曲、
 	// 只回一堆热门歌兜底。用去括号标题查,不中再换一个词序(实测 "标题 歌手" 召回更好)。
+	//
+	// ⚠️ 这里**故意不走 searchTitleVariants**,是唯一一个不走的源 —— 别把它"顺手统一"过去。
+	// 那个函数里的"版本限定词 → 原样标题优先"守卫是给 kugou/QQ/Musixmatch 准备的,因为
+	// 那三个源是**取第一条通过校验的候选就收工**,搜索词一偏就直接定死在错版本上。而下面
+	// 的 pick() 是**扫完 10 条结果再排序挑**(精确同名 exactCands 优先于宽松 looseCands,
+	// 再按专辑分),版本选择由排序负责,不依赖搜索词的写法。
+	//
+	// 2026-08-09 实测坐实:把这里也改成"版本限定词原样优先"之后,14 首带 (Live)/
+	// (Original Version)/(reprise) 的歌,网易云拿到的候选曲名**一条都没变**(分数的整齐
+	// -50 是另一次改动删掉来源加分造成的,与此无关),白白多打最多 2 次请求 —— 而网易云
+	// 恰恰是五个源里最容易被限流的那个(HTTP 200 + body code 405)。所以改回来。
 	ct := stripParens(title)
 	var queries []string
 	// 老歌撞新翻唱/新演出版本同名时,纯"歌手+标题"召回率不够——真正想要的旧版本可能在
@@ -202,7 +213,7 @@ func resolveNeteaseInfo(artist, title, album string) neteaseInfo {
 		var exactCands, looseCands []cand
 		for i := range songs {
 			s := &songs[i]
-			if !titleMatches(s.Name, title, !features.LyricsStrictTitleMatch) {
+			if !lyricTitleAccepted(s.Name, title) {
 				continue
 			}
 			artistMatch := false

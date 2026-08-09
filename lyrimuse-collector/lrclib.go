@@ -192,35 +192,14 @@ func lrclibSearch(artist, title string, durationSecs float64, timeout time.Durat
 	return lrclibResult{lyrics: best.SyncedLyrics, title: best.TrackName, artist: best.ArtistName, album: best.AlbumName}
 }
 
-// lrclibStrictTitleMatch 是给 /api/search 这一级专用的曲名判定,**故意比 titleMatches 严**。
+// 曲名判定统一走 match.go 的 lyricTitleAccepted。
 //
-// titleMatches 走 looseContains,而 looseContains 是**双向子串包含**(normLoose 后
-// na==nb || Contains(na,nb) || Contains(nb,na))——这在网易云那边是合适的:那边还有专辑分、
-// 精确/宽松两档候选、多查询变体互相印证。但这一级没有那些东西,而且它**只在前两级精确
-// get 都 404 之后才跑**,也就是恰好在"这首歌 LRCLIB 大概没收录、search 返回的全是同歌手
-// 的近似曲名"这个场合。双向包含在这种场合是灾难:查 "love" 会命中同歌手的 "Real Love"、
-// 查 "Real Love" 会命中 "Real Love Baby",时长又都在容差内,于是把另一首歌的歌词当成
-// 这首歌的返回。
-//
-// 这里只认两种:归一化后完全相等,或者"去掉括号段之后"完全相等(容 "(feat. X)"/"(Remastered)"
-// 这类后缀差异——真正的版本差异由 versionTagsMismatch 那一门单独拦)。
-// ignoreParens 的含义跟 titleMatches 那个同名参数一致(见那边注释),对应设置里的
-// 「歌名匹配」档位。注意这个函数名里的 "Strict" 说的是"比 titleMatches 严",跟那个档位
-// 是两件事:即使 ignoreParens 为真,这里也只认相等、不认双向子串包含。
-func lrclibStrictTitleMatch(candidate, local string, ignoreParens bool) bool {
-	nc, nl := normLoose(candidate), normLoose(local)
-	if nc == "" || nl == "" {
-		return false
-	}
-	if nc == nl {
-		return true
-	}
-	if !ignoreParens {
-		return false
-	}
-	sc, sl := normLoose(stripParens(candidate)), normLoose(stripParens(local))
-	return sc != "" && sl != "" && sc == sl
-}
+// 历史:这一级曾经有一个专用的、比别处更严的 lrclibStrictTitleMatch —— 因为当时别的源
+// 走的是 looseContains(双向子串包含),而这一级**只在前两级精确 get 都 404 之后才跑**,
+// 恰好落在"这首歌 LRCLIB 大概没收录、search 返回的全是同歌手近似曲名"这个场合,双向包含
+// 在那儿是灾难:查 "Real Love" 会命中 "Real Love Baby",时长又都在容差内,于是把另一首歌
+// 的歌词当成这一首返回。2026-08-09 起 lyricTitleAccepted 对**所有源**都收紧成了同一条
+// 规则(相等 或 各自去括号后相等,不认子串),这个专用函数就没有存在的理由了。
 
 // lrclibSearchDurationTolerance 跟 scoreLyricCandidate 的时长闸门(match.go 里那个
 // ratio <= 0.25)取同一个值——挑一个下游注定会因为时长对不上而丢弃的候选毫无意义。
@@ -252,7 +231,7 @@ func pickLRCLIBSearchResult(items []lrclibSearchItem, artist, title string, dura
 		if !isTimedLRC(it.SyncedLyrics) {
 			continue
 		}
-		if !lrclibStrictTitleMatch(it.TrackName, title, !features.LyricsStrictTitleMatch) ||
+		if !lyricTitleAccepted(it.TrackName, title) ||
 			!artistMatches(it.ArtistName, artist) {
 			continue
 		}
