@@ -462,3 +462,7 @@
 "静音" = "Mute";
 "最大音量" = "Full volume";
 "取消静音" = "Unmute";
+"人工修正过" = "Edited by hand";
+"整行时间戳" = "Line-level timing";
+"译文(机器翻译)" = "Translation (machine)";
+"译文(歌词源自带)" = "Translation (from the source)";

@@ -58,6 +58,9 @@ public final class EnrichCacheStore: ObservableObject {
         // 空 = 社区翻译(老条目没有这个字段,读成空正是事实)。
         public let lyricsTrSource: String
         public let hasTranslation: Bool
+        // 有没有罗马音标注(lyrics_roma)。值一直存在缓存里,只是列表一直没显示 ——
+        // 详情页有这一栏、"搜索候选歌词"弹窗也有对应徽章,唯独列表看不出来。
+        public let hasRomanization: Bool
         public let hasLyrics: Bool
     }
 
@@ -168,6 +171,7 @@ public final class EnrichCacheStore: ObservableObject {
                 isManual: entry["manual_lyrics"] as? Bool ?? false,
                 lyricsTrSource: entry["lyrics_tr_source"] as? String ?? "",
                 hasTranslation: !((entry["lyrics_tr"] as? String ?? "").isEmpty),
+                hasRomanization: !((entry["lyrics_roma"] as? String ?? "").isEmpty),
                 hasLyrics: !lyrics.isEmpty
             )
         // 专辑归并键跟展示值分开:同一张专辑偶尔因歌词源候选写法大小写不一致而在

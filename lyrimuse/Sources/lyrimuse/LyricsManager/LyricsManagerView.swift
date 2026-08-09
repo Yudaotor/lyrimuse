@@ -1249,11 +1249,35 @@ private struct LyricsManagerRow: View {
     // 而调用方那份已经过 fitted 收敛(窗口变窄时的临时等比缩放),行这边不能绕过它。
     let widths: LyricsColumnWidths
 
-    // 图标槽位固定宽度(没有对应状态时用透明占位撑住位置,而不是整个不渲染)——保证
-    // 不管某行是否人工修正、是逐字还是整行,几行的图标起始位置都对得齐。这两个图标算是
-    // "歌名"这一列的附加信息(是否手工修正过/是逐字还是整行),跟着歌名走,不单独占一列
-    // ——歌手/专辑/来源三列的宽度由调用方传入的 widths 决定(可拖拽调节)。
-    private static let badgeIconWidth: CGFloat = 14
+    // 每个标记一个固定宽度的槽位,没有对应状态时放**透明占位**而不是整个不渲染 ——
+    // 槽位数和宽度对每一行都一样,配合下面把整组推到歌名列尾,所有行的标记就落在同一条
+    // 竖线上。
+    //
+    // 2026-08-10 之前这组图标是紧跟在标题文字后面的,于是 x 位置随标题长短浮动,一列
+    // 看下来参差不齐(用户反馈"整齐一点")。固定槽位只能保证组**内部**对齐,保证不了组
+    // 跟组之间 —— 那要靠 Spacer 把整组顶到列尾。
+    private static let badgeIconWidth: CGFloat = 16
+
+    // 这四个标记跟"搜索候选歌词"弹窗、详情页编辑区**共用同一组图标和配色**(蓝=逐字、
+    // 绿=译文、紫=罗马音、橙=人工修正),用户在三个地方看到的是同一套语言。
+    //
+    // 译文/罗马音是 2026-08-10 补上的:值一直在缓存里(实测这台机器 11 条里 10 条有译文、
+    // 1 条有罗马音),详情页和搜索弹窗都显示,唯独列表看不出来。
+    @ViewBuilder
+    private func badge(_ systemName: String, tint: Color, on: Bool, help: String,
+                       forceLatinIcon: Bool = false) -> some View {
+        Image(systemName: systemName)
+            // textformat.abc 会跟着 locale 变成"甲乙丙"(中文)/"あいう"(日文),用在
+            // 罗马音上正好跟含义相反 —— 钉成拉丁变体,理由见 LatinIconLabel。
+            .environment(\.locale, forceLatinIcon ? Locale(identifier: "en") : .current)
+            .foregroundStyle(tint)
+            .font(.caption2)
+            .frame(width: Self.badgeIconWidth)
+            .opacity(on ? 1 : 0)
+            // 没这个状态时连提示也别弹,否则鼠标划过一片透明占位会冒出一堆解释
+            .help(on ? help : "")
+            .accessibilityHidden(!on)
+    }
 
     var body: some View {
         HStack(alignment: .center, spacing: 8) {
@@ -1262,15 +1286,19 @@ private struct LyricsManagerRow: View {
                     Text(summary.title)
                         .font(.body.weight(.medium))
                         .lineLimit(1)
-                    Image(systemName: "pencil.circle.fill")
-                        .foregroundStyle(.orange)
-                        .opacity(summary.isManual ? 1 : 0)
-                        .font(.caption2)
-                        .frame(width: Self.badgeIconWidth)
-                    Image(systemName: summary.hasWordTiming ? "text.word.spacing" : "text.alignleft")
-                        .foregroundStyle(summary.hasWordTiming ? .blue : .secondary)
-                        .font(.caption2)
-                        .frame(width: Self.badgeIconWidth)
+                    // 把标记整组顶到歌名列的尾部 —— 这一步才是"几行之间对得齐"的关键。
+                    // minLength 留 8pt,标题长到顶格时也不会跟标记挤在一起。
+                    Spacer(minLength: 8)
+                    badge("pencil.circle.fill", tint: .orange, on: summary.isManual,
+                          help: L10n.t("人工修正过"))
+                    badge(summary.hasWordTiming ? "text.word.spacing" : "text.alignleft",
+                          tint: summary.hasWordTiming ? .blue : .secondary, on: true,
+                          help: summary.hasWordTiming ? L10n.t("逐字时间戳") : L10n.t("整行时间戳"))
+                    badge("character.book.closed", tint: .green, on: summary.hasTranslation,
+                          help: summary.lyricsTrSource == "machine"
+                              ? L10n.t("译文(机器翻译)") : L10n.t("译文(歌词源自带)"))
+                    badge("textformat.abc", tint: .purple, on: summary.hasRomanization,
+                          help: L10n.t("罗马音"), forceLatinIcon: true)
                 }
                 if !summary.hasLyrics {
                     Text(L10n.t("无歌词")).font(.caption2).foregroundStyle(.red)
