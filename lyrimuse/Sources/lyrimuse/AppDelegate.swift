@@ -15,12 +15,69 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // 错过"双击链接直接启动 App"这种冷启动场景(虽然这次的场景是 App 已经在跑,但
     // 仍然照 Apple 官方推荐的时机来,不留隐患)。
     func applicationWillFinishLaunching(_ notification: Notification) {
+        terminateOlderInstances()
         NSAppleEventManager.shared().setEventHandler(
             self,
             andSelector: #selector(handleGetURLEvent(_:withReplyEvent:)),
             forEventClass: AEEventClass(kInternetEventClass),
             andEventID: AEEventID(kAEGetURL)
         )
+    }
+
+    // 同一个 App 同时跑起两份时,把**比自己老**的那几份请走,只留最新启动的这一个。
+    //
+    // 2026-08-09 实测抓到过双实例:开机自启走的是 LaunchAgent(label me.yudaotor.lyrimuse,
+    // 直接 exec 二进制),而从访达/聚焦/Dock 再打开一次会另外注册成一个 application.* 的
+    // job —— LaunchServices 那条"同一个 bundle 只开一份"的常规约束拦不住前者起的那份,
+    // 于是两个实例并存。表现相当隐蔽:两扇桌面悬浮歌词窗**坐标完全重合**,两边各自独立
+    // 解析歌词,切歌那几秒进度不同步,看上去就是"一次显示了两首歌的词",等两边收敛到同一句
+    // 之后文字完全重叠又"自己好了"。除了显示,两份实例还会各跑一套轮询、各自 scrobble。
+    //
+    // 选"新的赢"而不是"老的赢":用户刚刚双击打开、或刚装了新版本重启,期待生效的都是新
+    // 启动的这一份;开发时 build.sh 换完二进制重启,也该是新二进制接管。
+    //
+    // 只请走**严格早于**自己启动的那几份,避免两份几乎同时起来时互相踢掉、一个都不剩。
+    //
+    // ⚠️ 判先后**不能**用 NSRunningApplication.launchDate:那个字段只有经 LaunchServices
+    // 启动(双击/open)的进程才有,而这里最要防的恰恰是 LaunchAgent 直接 exec 二进制起来的
+    // 那一份 —— 它的 launchDate 是 nil。2026-08-09 第一版就是用 launchDate 写的,实测三个
+    // 实例并存、守卫一次都没触发,探针打出来两个实例的 launchDate 全是 nil。
+    // 改用 sysctl 读内核记的真实进程启动时间,对任何来路的进程都有效。
+    //
+    // 先 terminate()(礼貌退出,让对方有机会把缓存落盘),3 秒后还没走再 forceTerminate ——
+    // 留着一个僵着不退的旧实例,等于这个守卫白做。
+    private func terminateOlderInstances() {
+        let me = NSRunningApplication.current
+        guard let myID = me.bundleIdentifier,
+              let myStart = Self.processStartTime(getpid()) else { return }
+        for other in NSWorkspace.shared.runningApplications
+        where other.bundleIdentifier == myID && other.processIdentifier != me.processIdentifier {
+            guard let theirStart = Self.processStartTime(other.processIdentifier),
+                  theirStart < myStart else { continue }
+            NSLog("lyrimuse: terminating older instance pid %d", other.processIdentifier)
+            other.terminate()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+                if !other.isTerminated {
+                    NSLog("lyrimuse: older instance pid %d ignored terminate, forcing",
+                          other.processIdentifier)
+                    other.forceTerminate()
+                }
+            }
+        }
+    }
+
+    /// 进程启动时间(Unix 秒),取自内核的 kinfo_proc。任何来路的进程都有,不像
+    /// NSRunningApplication.launchDate 只对经 LaunchServices 启动的有效。
+    private static func processStartTime(_ pid: pid_t) -> TimeInterval? {
+        var mib: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_PID, pid]
+        var info = kinfo_proc()
+        var size = MemoryLayout<kinfo_proc>.stride
+        let rc = mib.withUnsafeMutableBufferPointer { buf in
+            sysctl(buf.baseAddress, UInt32(buf.count), &info, &size, nil, 0)
+        }
+        guard rc == 0, size > 0 else { return nil }
+        let tv = info.kp_proc.p_starttime
+        return TimeInterval(tv.tv_sec) + TimeInterval(tv.tv_usec) / 1_000_000
     }
 
     @objc private func handleGetURLEvent(_ event: NSAppleEventDescriptor, withReplyEvent replyEvent: NSAppleEventDescriptor) {
