@@ -79,6 +79,20 @@ extension View {
             self
         }
     }
+
+    /// 歌词窗口工具栏里那个音量控件的玻璃胶囊。跟卡片同一套写法(玻璃 + 一条发丝描边),
+    /// 描边的理由见 settingsCardBackground:液态玻璃的可见度完全取决于背后有什么,而歌词
+    /// 窗口的背景是被高斯模糊过的专辑封面,亮暗随歌变化 —— 没有描边时边界时有时无。
+    @ViewBuilder
+    func volumeCapsuleGlass() -> some View {
+        if #available(macOS 26.0, *) {
+            glassEffect(.regular, in: Capsule())
+                .overlay(Capsule().strokeBorder(Color.primary.opacity(0.10), lineWidth: 0.5))
+        } else {
+            background(Capsule().fill(.ultraThinMaterial))
+                .overlay(Capsule().strokeBorder(Color.primary.opacity(0.10), lineWidth: 0.5))
+        }
+    }
 }
 
 /// 把一页里所有玻璃卡片包进同一个 GlassEffectContainer——同一个容器内的玻璃元素才会在

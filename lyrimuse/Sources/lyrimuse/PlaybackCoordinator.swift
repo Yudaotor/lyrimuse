@@ -132,6 +132,12 @@ final class PlaybackCoordinator: ObservableObject {
     /// 跟"喜欢""播放模式"同一个约定,界面据此整个不显示这个控件。
     @Published private(set) var soundVolume: Int?
 
+    /// 静音之前的音量,用来再点一次时还原。
+    ///
+    /// 2026-08-09 用户反馈"静音键再点一次没反应" —— 原来那个按钮是无条件 setVolume(0),
+    /// 已经是 0 的时候再点等于把 0 写成 0,什么都不会发生。静音本来就该是个**开关**。
+    private var volumeBeforeMute: Int?
+
     /// 这一刻**实际在播**的是不是 Apple Music。
     ///
     /// ⚠️ 判定必须看这个,不能看 PlaybackPlayerPreference.current。设置里那一档可以是"自动
@@ -219,6 +225,19 @@ final class PlaybackCoordinator: ObservableObject {
             // 跟播放模式同一个道理:写被接受了就别回读,Music.app 的 getter 会滞后。
             guard !MusicPlaybackController.setSoundVolume(target) else { return }
             await MainActor.run { [weak self] in self?.refreshVolume() }
+        }
+    }
+
+    /// 静音 / 取消静音。已经静音时还原到静音前那个音量;没有记录(比如一进来音量就是 0)
+    /// 时给一个能听见的默认值,总好过点了没反应。
+    func toggleMute() {
+        guard let current = soundVolume else { return }
+        if current > 0 {
+            volumeBeforeMute = current
+            setVolume(0)
+        } else {
+            setVolume(volumeBeforeMute ?? 50)
+            volumeBeforeMute = nil
         }
     }
 

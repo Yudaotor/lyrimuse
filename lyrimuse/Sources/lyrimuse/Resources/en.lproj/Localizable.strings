@@ -464,3 +464,4 @@
 "最后一句的时间跟曲长差了 25% 以上；仍可选用，但会排在所有时长对得上的后面" = "The last line's time is more than 25% off the track length — still usable, but ranked below anything that fits";
 "静音" = "Mute";
 "最大音量" = "Full volume";
+"取消静音" = "Unmute";

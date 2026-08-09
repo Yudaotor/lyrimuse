@@ -634,34 +634,80 @@ struct LyricsWindowView: View {
     /// 跟"喜欢""播放模式"一样,只有 Apple Music 有这个概念,读不到就整个不显示(外面
     /// `if poller.soundVolume != nil` 那道判断)。
     ///
-    /// 两个小喇叭图标夹着滑杆是 macOS 音量控件的通行样子;点小喇叭直接到 0/100,省得
-    /// 为了静音把滑杆拖到底。
+    /// 样式照着 Apple Music 那个玻璃胶囊做:左边一个静音开关、一条发丝分隔线、中间是
+    /// **不带蓝色填充**的轨道加圆头滑块、右边一个跟着音量变的喇叭图标。系统 Slider 的
+    /// 蓝色填充和小圆点在这里太"表单化",跟这扇窗口其余部分对不上。
     @ViewBuilder
     private var volumeControl: some View {
         if let volume = poller.soundVolume {
-            HStack(spacing: 6) {
-                Button { poller.setVolume(0) } label: {
-                    Image(systemName: "speaker.fill").font(.system(size: 10))
+            HStack(spacing: 8) {
+                Button {
+                    poller.toggleMute()
+                } label: {
+                    Image(systemName: volume == 0 ? "speaker.slash.fill" : "speaker.fill")
+                        .font(.system(size: 11))
+                        .frame(width: 14)
                 }
                 .buttonStyle(.plain)
-                .help(L10n.t("静音"))
-                Slider(
-                    value: Binding(
-                        get: { Double(volume) },
-                        // 拖动中每一步都写回去 —— PlaybackCoordinator.setVolume 里是乐观
-                        // 更新,滑杆跟着手指走,不等 osascript 往返(实测约 125ms)。
-                        set: { poller.setVolume(Int($0.rounded())) }
-                    ), in: 0...100
-                )
-                .controlSize(.small)
-                .frame(width: 90)
-                Button { poller.setVolume(100) } label: {
-                    Image(systemName: "speaker.wave.3.fill").font(.system(size: 10))
-                }
-                .buttonStyle(.plain)
-                .help(L10n.t("最大音量"))
+                .help(volume == 0 ? L10n.t("取消静音") : L10n.t("静音"))
+                Rectangle()
+                    .fill(Color.primary.opacity(0.18))
+                    .frame(width: 1, height: 14)
+                volumeSlider(volume: volume)
+                    .frame(width: 92, height: 16)
+                Image(systemName: volumeLevelIcon(volume))
+                    .font(.system(size: 11))
+                    // 图标宽度随音量档位变化,固定住,不然整条控件会左右呼吸。
+                    .frame(width: 16, alignment: .leading)
             }
             .foregroundStyle(.secondary)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 4)
+            .volumeCapsuleGlass()
+        }
+    }
+
+    private func volumeLevelIcon(_ v: Int) -> String {
+        switch v {
+        case 0: return "speaker.slash.fill"
+        case 1...33: return "speaker.wave.1.fill"
+        case 34...66: return "speaker.wave.2.fill"
+        default: return "speaker.wave.3.fill"
+        }
+    }
+
+    /// 自绘滑杆。不用系统 Slider:那个的蓝色强调填充和小圆点是表单控件的样子,
+    /// Apple Music 这个位置是"轨道 + 圆头滑块",而且已播部分只是比轨道稍亮一点。
+    private func volumeSlider(volume: Int) -> some View {
+        GeometryReader { g in
+            let w = g.size.width
+            let f = min(1, max(0, Double(volume) / 100))
+            // 滑块是**横向药丸**,不是圆点 —— 参考 Apple Music 那个控件,它明显比高要宽。
+            let knob: CGFloat = 20
+            let knobHeight: CGFloat = 13
+            let travel = max(0, w - knob)
+            ZStack(alignment: .leading) {
+                Capsule().fill(Color.primary.opacity(0.16)).frame(height: 4)
+                Capsule().fill(Color.primary.opacity(0.45))
+                    .frame(width: knob / 2 + travel * f, height: 4)
+                Capsule()
+                    .fill(Color.white)
+                    .frame(width: knob, height: knobHeight)
+                    .shadow(color: .black.opacity(0.25), radius: 1.5, y: 0.5)
+                    .offset(x: travel * f)
+            }
+            .frame(height: g.size.height, alignment: .center)
+            .contentShape(Rectangle())
+            .gesture(
+                // minimumDistance 0:点一下就跳到那个位置,不用真的拖。
+                // 换算时把滑块自身宽度扣掉,否则拖到最右也到不了 100。
+                DragGesture(minimumDistance: 0)
+                    .onChanged { value in
+                        guard travel > 0 else { return }
+                        let x = min(travel, max(0, value.location.x - knob / 2))
+                        poller.setVolume(Int((x / travel * 100).rounded()))
+                    }
+            )
         }
     }
 
