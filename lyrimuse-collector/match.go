@@ -250,15 +250,32 @@ const (
 	scoreTermSource       = "source"       // 来源本身的可靠度
 	scoreTermLines        = "lines"        // 行数(封顶 200)
 	scoreTermVersionTags  = "versionTags"  // 版本限定词对不上,重扣
+	scoreTermDurationOff  = "durationOff"  // 时长明显对不上,重扣(以前是直接判 -1)
 )
+
+// durationMismatchPenalty:时长明显对不上时扣多少。
+//
+// 2026-08-09 之前这是直接判 -1(一票否决)。实测推翻了它:被判 -1 的候选里 83%(5/6)
+// 内容其实跟多数派完全一致 —— 它们是对的词,只是尾奏长、或者版本时长标注有出入。同一批
+// 样本里还有 4 首歌是「有候选但全被判 -1」,最后一条歌词都没有。
+//
+// 改成重扣之后语义变成「比没有强,但比任何时长对得上的都差」:500 分足以让它输给任何一条
+// 正常候选(时长吻合那一项本身就值 100~300,再加逐字/行数),但在它是唯一一条、或者它就是
+// 共识内容时仍能胜出。
+//
+// 代价说清楚:真正串错版本的候选(这道闸门当初就是为它设的)现在会在「只有它一条」时被
+// 选中,也就是「宁可显示错的,不要没有」。数据支持这个取舍 —— 误杀是 5:1,但它确实是个取舍。
+const durationMismatchPenalty = 500
 
 // 直接判定为"不可用"(分数 -1)的原因。这几种不是"分低",是压根不能用。
 const (
-	scoreRejectNotTimed         = "rejectNotTimed"         // 不是带时间戳的逐行歌词
-	scoreRejectWrongLanguage    = "rejectWrongLanguage"    // 语言明显对不上
-	scoreRejectCreditOnly       = "rejectCreditOnly"       // 整份只有署名行,没有正文
-	scoreRejectNoLastTimestamp  = "rejectNoLastTimestamp"  // 提不出最后一个时间戳
-	scoreRejectDurationMismatch = "rejectDurationMismatch" // 时长明显对不上,又没有别的源印证
+	scoreRejectNotTimed        = "rejectNotTimed"        // 不是带时间戳的逐行歌词
+	scoreRejectWrongLanguage   = "rejectWrongLanguage"   // 语言明显对不上
+	scoreRejectCreditOnly      = "rejectCreditOnly"      // 整份只有署名行,没有正文
+	scoreRejectNoLastTimestamp = "rejectNoLastTimestamp" // 提不出最后一个时间戳
+	// 2026-08-09 起不再产生:时长不符改成重扣(scoreTermDurationOff),不再一票否决。
+	// 常量留着是因为缓存/界面可能还遇得到老数据。
+	scoreRejectDurationMismatch = "rejectDurationMismatch"
 )
 
 func scoreLyricCandidate(localArtist, localTitle string, durationSecs float64, c lyricCandidate, corroborated bool) int {
@@ -315,35 +332,40 @@ func scoreLyricCandidateDetailed(
 		case corroborated:
 			add(scoreTermCorroborated, 100) // 时长差超阈值,但有别的独立源印证末尾时间点
 		default:
-			return reject(scoreRejectDurationMismatch)
+			// 不再一票否决,见 durationMismatchPenalty 的注释。
+			add(scoreTermDurationOff, -durationMismatchPenalty)
 		}
 	}
 	if c.hasWordTiming {
 		add(scoreTermWordTiming, 400) // 跟"一档时长差距"同量级,让带逐字时间轴的候选能逆转
 	}
-	switch c.source {
-	case "netease":
-		add(scoreTermSource, 50)
-	case "qq":
-		add(scoreTermSource, 30)
-	case "kugou":
-		add(scoreTermSource, 20)
-	case "musixmatch":
-		add(scoreTermSource, 15)
-	case "lrclib":
-		add(scoreTermSource, 10)
-	}
+	// ⚠️ 这里曾经按来源加 10~50 分。2026-08-09 实测把它删掉了 —— 250 首抽样、751 条候选、
+	// 以「跨源内容一致性」为准的消融实验结论:
+	//
+	//   它改变了 69/206 首歌的冠军,其中 0 次让结果变对、6 次让结果变错。
+	//   去掉之后准确率 93% → 96%。
+	//
+	// 而且它并不是「平手时的决胜项」——冠亚军分差中位只有 22 分、74% 的歌 ≤40 分,正好落在
+	// 它的跨度里,也就是说它在大多数歌里都是决定性的。它排的是我们对来源的先入之见,不是
+	// 关于这一份歌词的任何证据(引入它的那次提交连一行理由都没写,排序只是照抄了改造前的
+	// 顺序回退次序)。
+	//
+	// 完全同分时的先后交给**稳定排序 + 候选构造顺序**(见 scoredLyricCandidates 里
+	// candidates 的追加次序),不再用分数假装那是质量判断。
 	lines := len(strings.Split(c.lyrics, "\n"))
 	if lines > 200 {
 		lines = 200
 	}
 	add(scoreTermLines, lines)
-	// 版本限定词对不上 → 重扣。放在最后、扣完再夹到 1,理由见 versionMismatchPenalty。
+	// 版本限定词对不上 → 重扣。理由见 versionMismatchPenalty。
 	if versionTagsMismatch(localTitle, c.title) {
 		add(scoreTermVersionTags, -versionMismatchPenalty)
-		if score < 1 {
-			score = 1
-		}
+	}
+	// 扣完统一夹到 1:负分会被 pickLyricCandidate 当成「不可用」直接丢弃,而这两种重扣
+	// 表达的是「差」,不是「不能用」。夹到同一个 1 意味着几条都被重扣的候选会同分,先后
+	// 由稳定排序按构造顺序决定 —— 可接受:走到这一步说明它们没有一条是像样的。
+	if score < 1 {
+		score = 1
 	}
 	return score, terms
 }

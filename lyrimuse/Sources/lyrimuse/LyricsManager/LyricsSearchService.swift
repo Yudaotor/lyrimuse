@@ -43,6 +43,7 @@ final class LyricsSearchService {
             case "source": return L10n.t("来源")
             case "lines": return L10n.t("行数")
             case "versionTags": return L10n.t("版本不符")
+            case "durationOff": return L10n.t("时长不符")
             case "rejectNotTimed": return L10n.t("不是带时间戳的歌词")
             case "rejectWrongLanguage": return L10n.t("语言跟这首歌对不上")
             case "rejectCreditOnly": return L10n.t("整份只有署名行，没有正文")
@@ -65,6 +66,8 @@ final class LyricsSearchService {
             case "source": return L10n.t("网易云 50 · QQ 30 · 酷狗 20 · Musixmatch 15 · LRCLIB 10")
             case "lines": return L10n.t("一行 1 分，最多 200")
             case "versionTags": return L10n.t("括号里的 Live / Remix / Demo 等跟本地曲名对不上")
+            case "durationOff":
+                return L10n.t("最后一句的时间跟曲长差了 25% 以上；仍可选用，但会排在所有时长对得上的后面")
             case "rejectDurationMismatch":
                 return L10n.t("最后一句的时间跟曲长差了 25% 以上，多半是另一个版本")
             default: return ""

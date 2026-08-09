@@ -1,6 +1,9 @@
 package main
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 // 固定样本回归测试——覆盖 2026-08-04 实测坐实的网易云"纯音乐曲目返回一份看着正常的
 // 完整制作人员名单、每行都带真实时间戳"这个坑:isTimedLRC 会认为它是可用的逐行 LRC
@@ -254,4 +257,67 @@ func TestLyricTitleAcceptedHonoursStrictSetting(t *testing.T) {
 	if lyricTitleAccepted("", local) || lyricTitleAccepted("Never Let Go", "") {
 		t.Error("空串两档都不该认")
 	}
+}
+
+// 2026-08-09 打分体系评估后的三处改动，逐条钉住。
+func TestScoringAfter20260809Review(t *testing.T) {
+	const dur = 200.0
+	// 一份时长吻合、49 行的普通歌词
+	good := "[00:00.00]a\n" + strings.Repeat("[00:10.00]x\n", 47) + "[03:20.00]end"
+
+	t.Run("来源不再加分", func(t *testing.T) {
+		var scores []int
+		for _, src := range []string{"netease", "qq", "kugou", "musixmatch", "lrclib"} {
+			s, terms := scoreLyricCandidateDetailed(
+				"someone", "song", dur, lyricCandidate{source: src, lyrics: good}, false)
+			scores = append(scores, s)
+			for _, term := range terms {
+				if term.Kind == scoreTermSource {
+					t.Errorf("%s 仍然带着来源加分 %d", src, term.Points)
+				}
+			}
+		}
+		for i := 1; i < len(scores); i++ {
+			if scores[i] != scores[0] {
+				t.Errorf("同一份歌词换个来源分数就变了: %v —— 来源不该再影响分数", scores)
+				break
+			}
+		}
+	})
+
+	t.Run("时长不符改成重扣而不是一票否决", func(t *testing.T) {
+		// 末尾时间戳 60s,曲长 200s —— 差 70%,远超 25% 阈值
+		off := "[00:00.00]a\n[00:30.00]b\n[01:00.00]c"
+		score, terms := scoreLyricCandidateDetailed(
+			"someone", "song", dur, lyricCandidate{source: "qq", lyrics: off}, false)
+		if score < 0 {
+			t.Fatalf("时长不符不该再判 -1(会被整条丢弃),实际 %d", score)
+		}
+		var penalized bool
+		for _, term := range terms {
+			if term.Kind == scoreTermDurationOff {
+				penalized = true
+				if term.Points >= 0 {
+					t.Errorf("时长不符那一项应该是扣分,实际 %+d", term.Points)
+				}
+			}
+		}
+		if !penalized {
+			t.Error("没有记下「时长不符」这一项,用户就看不到它为什么排在后面")
+		}
+		// 关键性质:再怎么样也得输给一条时长对得上的
+		ok, _ := scoreLyricCandidateDetailed(
+			"someone", "song", dur, lyricCandidate{source: "lrclib", lyrics: good}, false)
+		if score >= ok {
+			t.Errorf("时长不符的候选(%d)不该压过时长吻合的(%d)", score, ok)
+		}
+	})
+
+	t.Run("硬拒绝只留真的不能用的那几种", func(t *testing.T) {
+		// 没有时间戳的纯文本仍然一票否决
+		if s, _ := scoreLyricCandidateDetailed(
+			"someone", "song", dur, lyricCandidate{source: "qq", lyrics: "just words\nno timestamps"}, false); s != -1 {
+			t.Errorf("没有时间戳的歌词仍应判 -1,实际 %d", s)
+		}
+	})
 }

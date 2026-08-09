@@ -8,6 +8,8 @@ import (
 	"io"
 	"net/http"
 	neturl "net/url"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -108,7 +110,78 @@ func musixmatchEnsureToken() string {
 		return t
 	}
 	musixmatchTokenMu.Unlock()
+	// 内存里没有就先看磁盘 —— 见 musixmatchTokenPath 的注释:一次性的 search-lyrics CLI
+	// 每次都是新进程,只靠内存缓存等于每次都要重新 token.get,而那个接口一被拒整个源就哑了。
+	if t := musixmatchLoadTokenFile(); t != "" {
+		return t
+	}
 	return musixmatchFetchToken(0)
+}
+
+// musixmatchTokenPath 是 token 的磁盘缓存位置。
+//
+// 2026-08-09 实测:250 首抽样里 Musixmatch 只在 5% 出现过,连 Billie Jean、Hello 这种它
+// 必然收录的歌都拿不到。原因不在匹配,在鉴权 —— 匿名 usertoken 只缓存在**进程内存**里、
+// 官方有效期 10 分钟,而"搜索候选歌词"走的是一次性子进程:每调一次都要重新 token.get,
+// 一密集就撞 401(官方样例的做法是退避 10 秒重试一次,再失败就放弃),于是这个源整个失效。
+// 常驻的采集器能复用那份内存缓存,一次性 CLI 不能 —— 这正是它在自动解析里勉强能用、在
+// 手动搜索里几乎从不出现的原因。
+//
+// 落盘之后两条路径共用同一个 token,10 分钟内不管起多少个进程都只取一次。
+func musixmatchTokenPath() string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(home, ".config", clientName, clientName+"-musixmatch-token.json")
+}
+
+type musixmatchTokenFile struct {
+	Token  string `json:"token"`
+	Expiry int64  `json:"expiry"`
+}
+
+func musixmatchLoadTokenFile() string {
+	path := musixmatchTokenPath()
+	if path == "" {
+		return ""
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	var f musixmatchTokenFile
+	if json.Unmarshal(raw, &f) != nil || f.Token == "" {
+		return ""
+	}
+	if time.Now().Unix() >= f.Expiry {
+		return ""
+	}
+	musixmatchTokenMu.Lock()
+	musixmatchToken = f.Token
+	musixmatchTokenExpiry = time.Unix(f.Expiry, 0)
+	musixmatchTokenMu.Unlock()
+	return f.Token
+}
+
+func musixmatchSaveTokenFile(token string, expiry time.Time) {
+	path := musixmatchTokenPath()
+	if path == "" {
+		return
+	}
+	raw, err := json.Marshal(musixmatchTokenFile{Token: token, Expiry: expiry.Unix()})
+	if err != nil {
+		return
+	}
+	// 先写临时文件再 rename:两个进程同时刷新 token 时不会读到半份内容。临时文件名带
+	// 进程号,否则并发的两个写入方会互相覆盖同一个 tmp,rename 出去的可能是半份别人的。
+	tmp := fmt.Sprintf("%s.tmp.%d", path, os.Getpid())
+	if os.WriteFile(tmp, raw, 0o600) != nil {
+		return
+	}
+	if os.Rename(tmp, path) != nil {
+		os.Remove(tmp)
+	}
 }
 
 // musixmatchFetchToken 请求一个新 token。401 表示这次匿名请求被限流/拒绝,官方样例
@@ -143,10 +216,12 @@ func musixmatchFetchToken(retry int) string {
 	if token == "" {
 		return ""
 	}
+	expiry := time.Now().Add(9 * time.Minute)
 	musixmatchTokenMu.Lock()
 	musixmatchToken = token
-	musixmatchTokenExpiry = time.Now().Add(9 * time.Minute)
+	musixmatchTokenExpiry = expiry
 	musixmatchTokenMu.Unlock()
+	musixmatchSaveTokenFile(token, expiry)
 	return token
 }
 

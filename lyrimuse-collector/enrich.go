@@ -1127,7 +1127,10 @@ func fetchScoredLyricCandidatesStreaming(artist, title, album string, durationSe
 		if instrumentalMarker != nil {
 			results = append(results, *instrumentalMarker)
 		}
-		sort.Slice(results, func(i, j int) bool { return results[i].Score > results[j].Score })
+		// 稳定排序:来源加分拿掉之后同分会变多(见 scoreLyricCandidateDetailed 里那段注释),
+		// 不稳定的排序会让同分候选的先后随运行变化,同一首歌两次解析可能选出不同的源。
+		// 稳定之后就是按 candidates 的构造顺序决胜,确定且可复现。
+		sort.SliceStable(results, func(i, j int) bool { return results[i].Score > results[j].Score })
 		return results
 	}
 
