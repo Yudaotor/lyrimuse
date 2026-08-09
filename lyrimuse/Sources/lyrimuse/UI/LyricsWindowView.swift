@@ -252,46 +252,12 @@ struct LyricsWindowView: View {
                 // 内容浮层,同一张截图里工具栏那个是灰扁色块、浮层那个透出了背后模糊封面的
                 // 暖棕色。工具栏本身就是一层玻璃,玻璃采样不到玻璃,只能退化成不透明材质。
                 .overlay(alignment: .topTrailing) {
-                    volumeControl
-                        .padding(.trailing, 18)
-                        .padding(.top, 14)
-                }
-            }
-            .toolbar {
-                ToolbarItem {
-                    Button {
-                        windowController.toggleAlwaysOnTop()
-                    } label: {
-                        Label(
-                            windowController.isAlwaysOnTop ? L10n.t("取消置顶") : L10n.t("置于最顶层"),
-                            systemImage: windowController.isAlwaysOnTop ? "pin.fill" : "pin"
-                        )
+                    HStack(spacing: 10) {
+                        volumeControl
+                        windowActionsCapsule(scrollProxy: scrollProxy)
                     }
-                    // 2026-08-02 补上——置顶/伪全屏这两个状态是"只在这次打开期间有效",
-                    // 不持久化(见 LyricsWindowController 顶部注释),但按钮本身没有任何
-                    // 提示说明,习惯把它固定置顶的用户每次重开窗口都要重新点一次,容易
-                    // 被当成 bug。这里用 .help() 补一句悬停提示,不需要额外的 UI 元素。
-                    .help(L10n.t("这个状态只在本次打开这扇窗口期间有效，下次重新打开会恢复默认"))
-                }
-                ToolbarItem {
-                    Button {
-                        windowController.toggle(reduceMotion: reduceMotion)
-                    } label: {
-                        Label(
-                            windowController.isActive ? L10n.t("退出全屏") : L10n.t("进入全屏"),
-                            systemImage: windowController.isActive
-                                ? "arrow.down.right.and.arrow.up.left"
-                                : "arrow.up.left.and.arrow.down.right"
-                        )
-                    }
-                    .help(L10n.t("这个状态只在本次打开这扇窗口期间有效，下次重新打开会恢复默认"))
-                }
-                ToolbarItem {
-                    Button {
-                        scrollToActiveLine(scrollProxy: scrollProxy, animated: true)
-                    } label: {
-                        Label(L10n.t("回到当前播放"), systemImage: "location.fill")
-                    }
+                    .padding(.trailing, 18)
+                    .padding(.top, 14)
                 }
             }
             .onChange(of: poller.currentLineIndex) {
@@ -638,6 +604,62 @@ struct LyricsWindowView: View {
         .frame(maxWidth: .infinity)
     }
 
+    /// 置顶 / 全屏 / 回到当前播放。
+    ///
+    /// 这三个原来是 .toolbar 里的 ToolbarItem。2026-08-09 搬出来的理由:工具栏的玻璃是
+    /// 系统给的 .regular 磨砂档,我改不了它的材质,于是它永远是块不透明浅灰,跟旁边用
+    /// .clear 的音量胶囊放在一起对比强烈。搬成浮层之后两组用同一档材质、同一套描边,
+    /// 而且都能真的采样到背后的模糊封面。
+    ///
+    /// 顺带跟 Apple Music 更像了:它的窗口控件也是浮在内容上的胶囊,不是标题栏工具栏。
+    private func windowActionsCapsule(scrollProxy: ScrollViewProxy) -> some View {
+        HStack(spacing: 14) {
+            Button {
+                windowController.toggleAlwaysOnTop()
+            } label: {
+                Image(systemName: windowController.isAlwaysOnTop ? "pin.fill" : "pin")
+                    .font(.system(size: 12))
+                    .frame(width: 16)
+            }
+            // 2026-08-02 补上——置顶/伪全屏这两个状态是"只在这次打开期间有效",不持久化
+            // (见 LyricsWindowController 顶部注释),但按钮本身没有任何提示说明,习惯把它
+            // 固定置顶的用户每次重开窗口都要重新点一次,容易被当成 bug。
+            .help(
+                (windowController.isAlwaysOnTop ? L10n.t("取消置顶") : L10n.t("置于最顶层"))
+                    + " · " + L10n.t("这个状态只在本次打开这扇窗口期间有效，下次重新打开会恢复默认"))
+            Button {
+                windowController.toggle(reduceMotion: reduceMotion)
+            } label: {
+                Image(
+                    systemName: windowController.isActive
+                        ? "arrow.down.right.and.arrow.up.left"
+                        : "arrow.up.left.and.arrow.down.right"
+                )
+                .font(.system(size: 12))
+                .frame(width: 16)
+            }
+            .help(
+                (windowController.isActive ? L10n.t("退出全屏") : L10n.t("进入全屏"))
+                    + " · " + L10n.t("这个状态只在本次打开这扇窗口期间有效，下次重新打开会恢复默认"))
+            Button {
+                scrollToActiveLine(scrollProxy: scrollProxy, animated: true)
+            } label: {
+                Image(systemName: "location.fill")
+                    .font(.system(size: 12))
+                    .frame(width: 16)
+            }
+            .help(L10n.t("回到当前播放"))
+        }
+        .buttonStyle(.plain)
+        // 图标跟着背景走:.clear 玻璃是透明的,背后是深色的模糊封面时 .secondary 会暗到
+        // 快看不清 —— Apple Music 那两个胶囊上的图标也是白色系。
+        .foregroundStyle(capsuleIconColor)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .clearGlassCapsule(
+            rim: hasArtworkBackground ? Color.white.opacity(0.28) : Color.primary.opacity(0.10))
+    }
+
     /// 音量。调的是 **Music.app 自己的输出音量**(跟 Apple Music 那个滑杆同一个东西),
     /// 不是系统音量 —— 拖它不会影响别的 App 的声音。
     ///
@@ -670,10 +692,10 @@ struct LyricsWindowView: View {
                     // 图标宽度随音量档位变化,固定住,不然整条控件会左右呼吸。
                     .frame(width: 16, alignment: .leading)
             }
-            .foregroundStyle(.secondary)
+            .foregroundStyle(capsuleIconColor)
             .padding(.horizontal, 12)
             .padding(.vertical, 6)
-            .volumeCapsuleGlass(
+            .clearGlassCapsule(
                 // 有封面背景时边缘走白色 —— 那一圈亮边正是"玻璃光泽"的来源;纯色底
                 // (没有封面)下白边会显得脏,退回中性描边。
                 rim: hasArtworkBackground ? Color.white.opacity(0.28) : Color.primary.opacity(0.10))
@@ -788,6 +810,10 @@ struct LyricsWindowView: View {
     // ---- 颜色:有封面背景时全窗白色系,没有时退回系统色(浅色外观可读性) ------------
 
     private var primaryTextColor: Color { hasArtworkBackground ? .white : .primary }
+    /// 浮在内容上的那两个玻璃胶囊里的图标颜色。
+    private var capsuleIconColor: Color {
+        hasArtworkBackground ? .white.opacity(0.9) : .primary.opacity(0.75)
+    }
     private var secondaryTextColor: Color { hasArtworkBackground ? .white.opacity(0.6) : .secondary }
 
     // 距当前行的行数差——按下标算,不按内容(副歌重复句内容相同但下标不同,详见

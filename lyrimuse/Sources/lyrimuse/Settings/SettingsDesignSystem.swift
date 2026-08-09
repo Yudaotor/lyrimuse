@@ -80,11 +80,11 @@ extension View {
         }
     }
 
-    /// 歌词窗口工具栏里那个音量控件的玻璃胶囊。跟卡片同一套写法(玻璃 + 一条发丝描边),
+    /// 歌词窗口里那些浮在内容之上的玻璃胶囊(音量、窗口操作)。跟卡片同一套写法(玻璃 + 一条发丝描边),
     /// 描边的理由见 settingsCardBackground:液态玻璃的可见度完全取决于背后有什么,而歌词
     /// 窗口的背景是被高斯模糊过的专辑封面,亮暗随歌变化 —— 没有描边时边界时有时无。
     @ViewBuilder
-    func volumeCapsuleGlass(rim: Color) -> some View {
+    func clearGlassCapsule(rim: Color) -> some View {
         if #available(macOS 26.0, *) {
             // ⚠️ 用 .clear 不是 .regular。
             //
