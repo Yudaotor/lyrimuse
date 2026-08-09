@@ -126,6 +126,11 @@ final class PlaybackCoordinator: ObservableObject {
     /// 读数回来正好把它抹掉。读之前记下序号,回来发现序号变了就整个丢弃。
     private var favoritedActionSeq = 0
     private var playbackModeActionSeq = 0
+    private var volumeActionSeq = 0
+
+    /// Music.app 自己的输出音量(0~100)。nil = 当前播放器没有这个概念/没拿到权限,
+    /// 跟"喜欢""播放模式"同一个约定,界面据此整个不显示这个控件。
+    @Published private(set) var soundVolume: Int?
 
     /// 这一刻**实际在播**的是不是 Apple Music。
     ///
@@ -178,6 +183,42 @@ final class PlaybackCoordinator: ObservableObject {
                 guard self.playbackMode != value else { return }
                 self.playbackMode = value
             }
+        }
+    }
+
+    /// 重新读一次 Music.app 的音量。跟 refreshFavorited 同一套前置判断与守卫。
+    func refreshVolume() {
+        guard isAppleMusicPlayingNow,
+              MusicAutomationPermission.check(askIfNeeded: false).isAuthorized else {
+            if soundVolume != nil { soundVolume = nil }
+            return
+        }
+        let seq = volumeActionSeq
+        Task.detached(priority: .utility) {
+            let value = MusicPlaybackController.soundVolume()
+            await MainActor.run { [weak self] in
+                guard let self, self.volumeActionSeq == seq else { return }
+                guard self.soundVolume != value else { return }
+                self.soundVolume = value
+            }
+        }
+    }
+
+    /// 拖音量滑杆。跟"喜欢"一样先乐观更新再写回去 —— 滑杆必须跟着手指走,不能等
+    /// osascript 往返(实测约 125ms)才动。
+    func setVolume(_ value: Int) {
+        guard isAppleMusicPlayingNow else { return }
+        let target = min(100, max(0, value))
+        soundVolume = target
+        volumeActionSeq &+= 1
+        Task.detached(priority: .userInitiated) {
+            guard await MusicAutomationPermission.checkAppleMusicSafely(askIfNeeded: true) else {
+                await MainActor.run { [weak self] in self?.refreshVolume() }
+                return
+            }
+            // 跟播放模式同一个道理:写被接受了就别回读,Music.app 的 getter 会滞后。
+            guard !MusicPlaybackController.setSoundVolume(target) else { return }
+            await MainActor.run { [weak self] in self?.refreshVolume() }
         }
     }
 
@@ -237,6 +278,7 @@ final class PlaybackCoordinator: ObservableObject {
                 .sink { [weak self] _ in
                     self?.refreshFavorited()
                     self?.refreshPlaybackMode()
+                    self?.refreshVolume()
                 },
             s.$artist.assign(to: \.artist, on: self),
             s.$album.assign(to: \.album, on: self),

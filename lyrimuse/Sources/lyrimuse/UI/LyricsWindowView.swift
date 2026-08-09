@@ -219,6 +219,10 @@ struct LyricsWindowView: View {
     /// 宽度变化不能补间 —— 那正是"进度条从别的位置平移过来"的来源。
     @State private var shownFraction: Double = 0
     @State private var progressPrimed = false
+    /// 歌词那一栏的实际宽度。字号按它算 —— 写死 28pt 的话窗口越拖越大、文字占的比例
+    /// 越来越小,右边空出一大片(2026-08-09 用户对比 Apple Music 提的)。Apple Music 的
+    /// 歌词字号是跟着窗口长的,这里照做,再夹进一个区间,不无限放大。
+    @State private var lyricsColumnWidth: CGFloat = 0
 
     var body: some View {
         ScrollViewReader { scrollProxy in
@@ -241,6 +245,9 @@ struct LyricsWindowView: View {
                 .background(artworkBackground)
             }
             .toolbar {
+                if poller.soundVolume != nil {
+                    ToolbarItem { volumeControl }
+                }
                 ToolbarItem {
                     Button {
                         windowController.toggleAlwaysOnTop()
@@ -305,6 +312,7 @@ struct LyricsWindowView: View {
         // 用户中途切去别的 App 很常见)。
         .onAppear { AuxiliaryWindowActivation.windowDidAppear() }
         .onDisappear { AuxiliaryWindowActivation.windowDidDisappear() }
+        // 音量跟"喜欢""播放模式"共用同一批刷新时机,理由见下面那段注释。
         // "喜欢"状态不跟着 2 秒轮询走(每读一次要起一个 osascript 子进程,为一个几乎不变
         // 的布尔值那么干不值当),换歌时由 PlaybackCoordinator 刷一次。悬浮窗还借"控制排
         // 露出来"这个动作补刷,而这扇窗口是常显的、没有那个动作,所以换成:打开时刷一次,
@@ -313,12 +321,14 @@ struct LyricsWindowView: View {
         .onAppear {
             poller.refreshFavorited()
             poller.refreshPlaybackMode()
+            poller.refreshVolume()
         }
         .onReceive(NotificationCenter.default.publisher(
             for: NSApplication.didBecomeActiveNotification)
         ) { _ in
             poller.refreshFavorited()
             poller.refreshPlaybackMode()
+            poller.refreshVolume()
         }
     }
 
@@ -342,13 +352,25 @@ struct LyricsWindowView: View {
 
     // ---- 右列:歌词滚动列表 / 占位态 --------------------------------------------
 
+    /// 歌词正文字号。0.072 这个系数是量 Apple Music 歌词页截图反推的:它的歌词栏宽约
+    /// 485pt、字号约 35pt。下界 22 保证窄窗口下还能读,上界 56 避免超宽屏上一行只放得下
+    /// 三四个字。
+    private var lyricFontSize: CGFloat {
+        let w = lyricsColumnWidth > 0 ? lyricsColumnWidth : 460
+        return min(56, max(22, w * 0.072))
+    }
+    // 罗马音/译文跟正文保持原来的比例(15/28、17/28),行间距同理(32/28)。
+    private var romaFontSize: CGFloat { lyricFontSize * 0.54 }
+    private var translationFontSize: CGFloat { lyricFontSize * 0.61 }
+    private var lyricLineSpacing: CGFloat { lyricFontSize * 1.14 }
+
     @ViewBuilder
     private var rightPane: some View {
         if poller.allLines.isEmpty {
             emptyState
         } else {
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: 32) {
+                LazyVStack(alignment: .leading, spacing: lyricLineSpacing) {
                     ForEach(Array(poller.allLines.enumerated()), id: \.element.id) { index, item in
                         lineView(item, distance: distance(for: index), isActive: item.id == activeID)
                             .id(item.id)
@@ -359,6 +381,13 @@ struct LyricsWindowView: View {
                 .padding(.trailing, 52)
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
+            .background(
+                GeometryReader { g in
+                    Color.clear
+                        .onAppear { lyricsColumnWidth = g.size.width }
+                        .onChange(of: g.size.width) { _, w in lyricsColumnWidth = w }
+                }
+            )
         }
     }
 
@@ -599,6 +628,43 @@ struct LyricsWindowView: View {
         .frame(maxWidth: .infinity)
     }
 
+    /// 音量。调的是 **Music.app 自己的输出音量**(跟 Apple Music 那个滑杆同一个东西),
+    /// 不是系统音量 —— 拖它不会影响别的 App 的声音。
+    ///
+    /// 跟"喜欢""播放模式"一样,只有 Apple Music 有这个概念,读不到就整个不显示(外面
+    /// `if poller.soundVolume != nil` 那道判断)。
+    ///
+    /// 两个小喇叭图标夹着滑杆是 macOS 音量控件的通行样子;点小喇叭直接到 0/100,省得
+    /// 为了静音把滑杆拖到底。
+    @ViewBuilder
+    private var volumeControl: some View {
+        if let volume = poller.soundVolume {
+            HStack(spacing: 6) {
+                Button { poller.setVolume(0) } label: {
+                    Image(systemName: "speaker.fill").font(.system(size: 10))
+                }
+                .buttonStyle(.plain)
+                .help(L10n.t("静音"))
+                Slider(
+                    value: Binding(
+                        get: { Double(volume) },
+                        // 拖动中每一步都写回去 —— PlaybackCoordinator.setVolume 里是乐观
+                        // 更新,滑杆跟着手指走,不等 osascript 往返(实测约 125ms)。
+                        set: { poller.setVolume(Int($0.rounded())) }
+                    ), in: 0...100
+                )
+                .controlSize(.small)
+                .frame(width: 90)
+                Button { poller.setVolume(100) } label: {
+                    Image(systemName: "speaker.wave.3.fill").font(.system(size: 10))
+                }
+                .buttonStyle(.plain)
+                .help(L10n.t("最大音量"))
+            }
+            .foregroundStyle(.secondary)
+        }
+    }
+
     /// 播放模式——列表播放 / 随机播放 / 单曲循环,点一下切下一档,图标本身就是当前模式。
     ///
     /// 放在整排最左边,跟最右边那颗心对称:左边是"怎么播",右边是"对这首歌的态度",
@@ -769,13 +835,13 @@ struct LyricsWindowView: View {
         VStack(alignment: .leading, spacing: 6) {
             if settings.showRomanization, let roma = item.line.romanization {
                 Text(roma)
-                    .font(.system(size: 15, weight: .medium))
+                    .font(.system(size: romaFontSize, weight: .medium))
                     .foregroundStyle(secondaryTextColor)
             }
             mainText(item, isActive: isActive)
             if settings.showTranslation, let tr = item.line.translation {
                 Text(tr)
-                    .font(.system(size: 17, weight: .semibold))
+                    .font(.system(size: translationFontSize, weight: .semibold))
                     .foregroundStyle(secondaryTextColor)
             }
         }
@@ -821,10 +887,10 @@ struct LyricsWindowView: View {
                     }
                 }
             }
-            .font(.system(size: 28, weight: .bold))
+            .font(.system(size: lyricFontSize, weight: .bold))
         } else {
             Text(item.line.plainText ?? "")
-                .font(.system(size: 28, weight: .bold))
+                .font(.system(size: lyricFontSize, weight: .bold))
                 .foregroundStyle(base)
         }
     }

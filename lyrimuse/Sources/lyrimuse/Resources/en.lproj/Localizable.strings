@@ -462,3 +462,5 @@
 "最后一句的时间跟曲长差了 25% 以上，多半是另一个版本" = "The last line's time is more than 25% off the track length — most likely another version";
 "时长不符" = "Duration mismatch";
 "最后一句的时间跟曲长差了 25% 以上；仍可选用，但会排在所有时长对得上的后面" = "The last line's time is more than 25% off the track length — still usable, but ranked below anything that fits";
+"静音" = "Mute";
+"最大音量" = "Full volume";

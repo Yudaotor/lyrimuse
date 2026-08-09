@@ -153,6 +153,28 @@ public enum MusicPlaybackController {
         return runAppleScriptCapturing(script) != nil
     }
 
+    /// 读 Music.app 自己的输出音量(0~100)。读不到返回 nil —— 跟"喜欢"同一个约定:
+    /// 别的播放器没有这个概念,调用方据此不显示这个控件。
+    ///
+    /// 注意这是**Music.app 的音量**,不是系统音量 —— 跟 Apple Music 自己那个滑杆是同一个
+    /// 东西。调它不会影响别的 App 的声音。
+    ///
+    /// 会阻塞到子进程结束,**不要在主线程调用**。
+    public static func soundVolume() -> Int? {
+        guard let out = runAppleScriptCapturing(#"tell application "Music" to get sound volume"#)
+        else { return nil }
+        return Int(out.trimmingCharacters(in: .whitespacesAndNewlines))
+    }
+
+    /// 设置 Music.app 的输出音量。超出 0~100 会被夹住 —— AppleScript 那边给越界值会报错,
+    /// 报错就整条指令不生效,不如在这里夹好。
+    @discardableResult
+    public static func setSoundVolume(_ value: Int) -> Bool {
+        let v = min(100, max(0, value))
+        return runAppleScriptCapturing(
+            #"tell application "Music" to set sound volume to \#(v)"#) != nil
+    }
+
     /// 跳到曲目内的某个位置(秒)。跟上面三个动作走同一套双后端分派:Apple Music 用
     /// AppleScript 的 `set player position to`,其余播放器用 media-control 的 `seek`
     /// (实测核实过内置二进制的 `--help` 里有 `seek POSITION` 这个一等命令)。
