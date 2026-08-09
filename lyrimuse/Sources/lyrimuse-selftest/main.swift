@@ -760,6 +760,37 @@ expectEqual(
     "Romanizer: 日文歌里的英文行没有罗马音可言")
 
 
+// 逐词罗马音的分组:分词器的片段边界跟歌词源的逐字切分不一定对齐,分组必须两个方向都兜住。
+do {
+    func w(_ t: String, _ s: Int, _ d: Int) -> SyncedLyricWord {
+        SyncedLyricWord(text: t, startMs: s, durationMs: d)
+    }
+    // 酷狗常见的切法:一个汉字/假名一个词。「いつか」在分词器眼里是一个词,必须并成一组。
+    let words = [w("い", 0, 100), w("つ", 100, 100), w("か", 200, 100),
+                 w("誰", 300, 100), w("か", 400, 100)]
+    let groups = LyricsSyncEngine.buildWordGroups(
+        words: words, line: "いつか誰か", japanese: true)
+    expectEqual(groups != nil, true, "日文行该分得出词组")
+    if let groups {
+        // 每个词都必须**恰好**出现在一个组里,不能丢也不能重复 —— 丢了那个字就不显示了。
+        let flat = groups.flatMap { g in g.words.map { $0.text } }.joined()
+        expectEqual(flat, "いつか誰か", "分组必须完整覆盖原行、且不重复")
+        expectEqual(groups.contains { $0.words.count > 1 }, true,
+                    "「いつか」这种跨多个逐字词的读音必须并成一组")
+        expectEqual(groups.contains { ($0.romanization ?? "").isEmpty == false }, true,
+                    "至少要有一组标出读音")
+        // 组内时间必须递增且覆盖到组尾,下面那行罗马音的填色进度才对
+        for g in groups {
+            expectEqual(g.endMs >= g.startMs, true, "组的结束时间不能早于开始时间")
+        }
+    }
+    // 中文歌不该被标成拼音 —— japanese=false 时直接不给组。
+    expectEqual(
+        LyricsSyncEngine.buildWordGroups(
+            words: [w("我", 0, 100), w("爱", 100, 100)], line: "我爱", japanese: false) == nil,
+        true, "不是日文歌时不该分组(否则汉字会被标成拼音)")
+}
+
 if failures == 0 {
     print("\nALL PASS")
 } else {

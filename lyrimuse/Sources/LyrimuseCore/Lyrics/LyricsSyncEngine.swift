@@ -11,6 +11,36 @@ public struct SyncedLyricWord: Equatable {
     // 卡顿的结构性根源,不是调个补间时长能治本的。
     public let startMs: Int
     public let durationMs: Int
+
+    public init(text: String, startMs: Int, durationMs: Int) {
+        self.text = text
+        self.startMs = startMs
+        self.durationMs = durationMs
+    }
+}
+
+/// 一组「共享同一段罗马音」的逐字词。
+///
+/// Apple Music 的日文歌词是把罗马音标在**对应内容的正下方**、而不是整行堆在上面一行,
+/// 而且罗马音跟着逐字一起填色。要做到这个,就得知道"这段读音对应原文的哪几个字"——
+/// 分词器给的片段边界跟歌词源的逐字切分**不一定对齐**(酷狗常常一个汉字一个词,而
+/// 「いつか」在分词器眼里是一个词),所以按片段把逐字词并成组:一组一列,列宽取
+/// 「主文字」和「罗马音」里更宽的那个 —— Apple 那边日文行间距不均匀,正是被下面的罗马音
+/// 撑开的。
+public struct SyncedLyricWordGroup: Equatable, Identifiable {
+    public let id: Int
+    public let words: [SyncedLyricWord]
+    public let romanization: String?
+
+    public init(id: Int, words: [SyncedLyricWord], romanization: String?) {
+        self.id = id
+        self.words = words
+        self.romanization = romanization
+    }
+
+    /// 这一组整体的起止,用来给下面那行罗马音算填色进度(跟着整组走,不跟着单个字跳)。
+    public var startMs: Int { words.first?.startMs ?? 0 }
+    public var endMs: Int { words.last.map { $0.startMs + $0.durationMs } ?? 0 }
 }
 
 public struct SyncedLyricLine: Equatable {
@@ -18,6 +48,9 @@ public struct SyncedLyricLine: Equatable {
     public let translation: String?
     public let mainText: String?         // 整行高亮时用(没有逐字数据)
     public let words: [SyncedLyricWord]? // 逐字高亮时用(有 yrc 数据)
+    /// 逐字词按读音分好的组,只有"这一行确实能标罗马音"时才非空。视图可以选择用它做
+    /// Apple 那种逐词标注,拿不到时退回 `romanization` 那一整行。
+    public let wordGroups: [SyncedLyricWordGroup]?
 
     // 不关心逐字填色进度、只要这一行的纯文本时用(比如状态栏显示)——mainText/words
     // 两种形态只会有一个非空,按现有的判断顺序(有逐字数据优先逐字)取值。
@@ -255,6 +288,73 @@ public final class LyricsSyncEngine {
         return result
     }
 
+    // 行文本 → 词组。跟 romanizerFallbackCache 同样按行缓存:同一行在播放期间会被反复
+    // 查询(20Hz 定位 + 每帧填色),分词是纯 CPU 活,不该每次重算。
+    private var wordGroupCache: [String: [SyncedLyricWordGroup]?] = [:]
+
+    /// 把逐字词按分词器的片段边界并成组,并给每组配上罗马音。
+    ///
+    /// 关键点是**整行一次性分词**再按 UTF-16 范围对回去,而不是逐词单独求读音 —— 日文
+    /// 读音吃上下文,单独喂「明日」和放在句子里给出的读音可能不一样。
+    ///
+    /// 边界不对齐是常态:酷狗的逐字常常一个汉字一个词,而分词器眼里「いつか」是一个词。
+    /// 所以一个片段横跨几个词时就把这几个词并成一组(下面那段罗马音标在整组底下);反过来
+    /// 一个词里落进好几个片段时,把这些片段的读音拼起来给这一个词。
+    private func wordGroups(for words: [SyncedLyricWord]) -> [SyncedLyricWordGroup]? {
+        guard !words.isEmpty else { return nil }
+        let line = words.map(\.text).joined()
+        if let cached = wordGroupCache[line] { return cached }
+        let result = Self.buildWordGroups(words: words, line: line, japanese: songLooksJapanese)
+        wordGroupCache[line] = result
+        return result
+    }
+
+    // nonisolated static:纯函数,不碰引擎自身状态,selftest 直接覆盖。
+    public static func buildWordGroups(
+        words: [SyncedLyricWord], line: String, japanese: Bool
+    ) -> [SyncedLyricWordGroup]? {
+        // 跟 romanizationText 同一道门:含汉字但整首歌看着不像日文时不敢标读音,那多半是
+        // 中文歌,标出来会是拼音、不是用户要的东西。
+        guard japanese, Romanizer.looksJapanese(line) else { return nil }
+        let segs = Romanizer.japaneseSegments(line)
+        guard !segs.isEmpty else { return nil }
+
+        var starts: [Int] = []
+        var cursor = 0
+        for w in words {
+            starts.append(cursor)
+            cursor += w.text.utf16.count
+        }
+
+        var groups: [SyncedLyricWordGroup] = []
+        var i = 0
+        while i < words.count {
+            var j = i
+            var end = starts[j] + words[j].text.utf16.count
+            // 有片段跨过这一组的右边界 → 把下一个词也吃进来,直到边界落在片段之间。
+            var grew = true
+            while grew {
+                grew = false
+                for seg in segs where seg.utf16Start < end && seg.utf16End > end {
+                    guard j + 1 < words.count else { break }
+                    j += 1
+                    end = starts[j] + words[j].text.utf16.count
+                    grew = true
+                    break
+                }
+            }
+            let start = starts[i]
+            let latins = segs.filter { $0.utf16Start < end && $0.utf16End > start }.map(\.latin)
+            groups.append(SyncedLyricWordGroup(
+                id: groups.count,
+                words: Array(words[i...j]),
+                romanization: latins.isEmpty ? nil : Romanizer.joinLatin(latins)))
+            i = j + 1
+        }
+        // 一组罗马音都配不上(整行都是拉丁字母之类)时当作没有,让视图退回原来的整行罗马音。
+        return groups.contains { $0.romanization != nil } ? groups : nil
+    }
+
     public func activeLine(atMs rawPosMs: Int) -> SyncedLyricLine? {
         let posMs = rawPosMs + offsetMs
         if usingWords {
@@ -269,7 +369,8 @@ public final class LyricsSyncEngine {
                 romanization: romanizationText(timeMs: ln.timeMs, plainText: words.map(\.text).joined()),
                 translation: nearestText(trLines, ln.timeMs),
                 mainText: nil,
-                words: words
+                words: words,
+                wordGroups: wordGroups(for: words)
             )
         }
         var idx = -1
@@ -280,7 +381,8 @@ public final class LyricsSyncEngine {
             romanization: romanizationText(timeMs: ln.timeMs, plainText: ln.text),
             translation: nearestText(trLines, ln.timeMs),
             mainText: ln.text,
-            words: nil
+            words: nil,
+            wordGroups: nil
         )
     }
 
@@ -320,7 +422,8 @@ public final class LyricsSyncEngine {
                     romanization: romanizationText(timeMs: ln.timeMs, plainText: words.map(\.text).joined()),
                     translation: nearestText(trLines, ln.timeMs),
                     mainText: nil,
-                    words: words
+                    words: words,
+                    wordGroups: wordGroups(for: words)
                 )
                 return LyricsWindowLine(id: "\(idPrefix)#\(i)", timeMs: ln.timeMs, line: line)
             }
@@ -330,7 +433,8 @@ public final class LyricsSyncEngine {
                 romanization: romanizationText(timeMs: ln.timeMs, plainText: ln.text),
                 translation: nearestText(trLines, ln.timeMs),
                 mainText: ln.text,
-                words: nil
+                words: nil,
+                wordGroups: nil
             )
             return LyricsWindowLine(id: "\(idPrefix)#\(i)", timeMs: ln.timeMs, line: line)
         }

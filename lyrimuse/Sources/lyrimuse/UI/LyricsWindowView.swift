@@ -959,15 +959,33 @@ struct LyricsWindowView: View {
         }
     }
 
+    /// 这一行是不是把读音逐词标进正文了(标了就别再单独渲染一整行罗马音)。
+    private func usesPerWordRomanization(_ item: LyricsWindowLine, isActive: Bool) -> Bool {
+        isActive && settings.showRomanization && item.line.wordGroups?.isEmpty == false
+            && item.line.words != nil
+    }
+
+    private func karaokeWord(_ w: SyncedLyricWord, atMs currentMs: Int, base: Color) -> some View {
+        let fraction = WordKaraokeGradient.fillFraction(for: w, atMs: currentMs)
+        let band = WordKaraokeGradient.wordEdgeSoftenBand
+        return Text(w.text)
+            .foregroundStyle(WordKaraokeGradient.gradient(
+                fg: base, left: fraction - band, right: fraction + band))
+    }
+
     @ViewBuilder
     private func lineView(_ item: LyricsWindowLine, distance: Int?, isActive: Bool) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            if settings.showRomanization, let roma = item.line.romanization {
+            mainText(item, isActive: isActive)
+            // 罗马音在**下面**,跟 Apple Music 一致(原来在上面)。当前行如果分得出词组,
+            // 读音已经逐词标进 mainText 里了,这里就不再重复一整行。
+            if settings.showRomanization, !usesPerWordRomanization(item, isActive: isActive),
+                let roma = item.line.romanization
+            {
                 Text(roma)
                     .font(.system(size: romaFontSize, weight: .medium))
                     .foregroundStyle(secondaryTextColor)
             }
-            mainText(item, isActive: isActive)
             if settings.showTranslation, let tr = item.line.translation {
                 Text(tr)
                     .font(.system(size: translationFontSize, weight: .semibold))
@@ -1008,11 +1026,37 @@ struct LyricsWindowView: View {
                 // 一半就卡住的现象。
                 let currentMs = (poller.anchor?.extrapolatedPositionMs(now: context.date) ?? 0) + poller.currentLyricsOffsetMs
                 WrapLayout(rowAlignment: .leading) {
-                    ForEach(Array(words.enumerated()), id: \.offset) { _, w in
-                        let fraction = WordKaraokeGradient.fillFraction(for: w, atMs: currentMs)
-                        let band = WordKaraokeGradient.wordEdgeSoftenBand
-                        Text(w.text)
-                            .foregroundStyle(WordKaraokeGradient.gradient(fg: base, left: fraction - band, right: fraction + band))
+                    if let groups = item.line.wordGroups, settings.showRomanization {
+                        // 一组一列:上面这一组的字各自逐字填色,下面标这一组的读音,列宽取
+                        // 两者更宽的那个 —— 主文字的间距因此被读音撑开,跟 Apple 一样。
+                        ForEach(groups) { g in
+                            VStack(alignment: .center, spacing: 0) {
+                                HStack(spacing: 0) {
+                                    ForEach(Array(g.words.enumerated()), id: \.offset) { _, w in
+                                        karaokeWord(w, atMs: currentMs, base: base)
+                                    }
+                                }
+                                if let roma = g.romanization {
+                                    // 读音按**整组**的进度填,不跟着组里单个字跳。
+                                    let pseudo = SyncedLyricWord(
+                                        text: roma, startMs: g.startMs,
+                                        durationMs: max(1, g.endMs - g.startMs))
+                                    let f = WordKaraokeGradient.fillFraction(for: pseudo, atMs: currentMs)
+                                    let b = WordKaraokeGradient.wordEdgeSoftenBand
+                                    Text(roma)
+                                        .font(.system(size: romaFontSize, weight: .medium))
+                                        .foregroundStyle(WordKaraokeGradient.gradient(
+                                            fg: base.opacity(0.75), left: f - b, right: f + b))
+                                        .lineLimit(1)
+                                        .fixedSize()
+                                        .padding(.horizontal, 2)
+                                }
+                            }
+                        }
+                    } else {
+                        ForEach(Array(words.enumerated()), id: \.offset) { _, w in
+                            karaokeWord(w, atMs: currentMs, base: base)
+                        }
                     }
                 }
             }

@@ -42,6 +42,49 @@ public enum Romanizer {
     private static let japaneseLocale = CFLocaleCreate(
         nil, CFLocaleIdentifier("ja_JP" as CFString))
 
+    /// 一段日文按分词器切出来的片段:每片带它在原文里的 UTF-16 范围和拉丁读音。
+    ///
+    /// `japaneseReading` 把这些片段拼成一整行就丢掉了位置信息;要做 Apple Music 那种
+    /// "罗马音跟着具体内容走"(每个词下面单独标注)就必须留着范围,才能把读音对回原文的
+    /// 哪几个字。**整行一次性分词**而不是逐词分,是因为日文读音吃上下文:同样是「明日」,
+    /// 单独喂给分词器和放在句子里给出的读音可能不同。
+    public struct JapaneseSegment: Equatable {
+        public let utf16Start: Int
+        public let utf16Length: Int
+        public let latin: String
+        public var utf16End: Int { utf16Start + utf16Length }
+    }
+
+    /// 把若干个片段的读音拼成一段罗马音。跟 `japaneseReading` 用同一套促音归并规则,
+    /// 分组渲染时才不会跟整行渲染出现不一致的写法。
+    public static func joinLatin(_ pieces: [String]) -> String {
+        mergeSokuon(pieces).joined(separator: " ")
+    }
+
+    public static func japaneseSegments(_ text: String) -> [JapaneseSegment] {
+        let cf = text as CFString
+        let range = CFRangeMake(0, CFStringGetLength(cf))
+        let tokenizer = CFStringTokenizerCreate(
+            nil, cf, range, kCFStringTokenizerUnitWordBoundary, japaneseLocale)
+        var out: [JapaneseSegment] = []
+        while CFStringTokenizerAdvanceToNextToken(tokenizer) != [] {
+            let r = CFStringTokenizerGetCurrentTokenRange(tokenizer)
+            let piece = CFStringCreateWithSubstring(nil, cf, r) as String? ?? ""
+            var latin = CFStringTokenizerCopyCurrentTokenAttribute(
+                tokenizer, kCFStringTokenizerAttributeLatinTranscription) as? String ?? ""
+            if latin.isEmpty {
+                // 拿不到读音的(标点/拉丁词本身)原样留着 —— 但纯空白不值得占一个片段。
+                guard !piece.trimmingCharacters(in: .whitespaces).isEmpty else { continue }
+                latin = piece
+            }
+            // ICU 对促音「っ」会吐出字面的 "~tsu",单片段里也要按双写辅音归并
+            // (mergeSokuon 是按片段序列做的,这里先各自留着,拼接时再交给它)。
+            out.append(JapaneseSegment(
+                utf16Start: r.location, utf16Length: r.length, latin: latin))
+        }
+        return out
+    }
+
     private static func japaneseReading(_ text: String) -> String? {
         let cf = text as CFString
         let range = CFRangeMake(0, CFStringGetLength(cf))

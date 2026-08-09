@@ -125,7 +125,11 @@ struct LyricsOverlayView: View {
 
     private var lyricsCard: some View {
         VStack(spacing: 4) {
-            if settings.showRomanization, let roma = poller.currentLine?.romanization {
+            // 有逐词标注(perWordRomanization)时,罗马音改标在每个词的正下方,上面这一整行
+            // 就不再重复一遍 —— 那正是 Apple Music 的做法,也是用户要的效果。
+            if settings.showRomanization, !usesPerWordRomanization,
+                let roma = poller.currentLine?.romanization
+            {
                 Text(roma)
                     .font(settings.romanizationFont)
                     .foregroundStyle(poller.displayForegroundColor.opacity(0.6))
@@ -287,8 +291,26 @@ struct LyricsOverlayView: View {
                 // 装不下所有字时会把每个 Text 压缩到自己出省略号,长的逐字歌词行会直接
                 // "消失"变成一串"…"。见文件底部 WrapLayout 定义。
                 WrapLayout {
-                    ForEach(Array(words.enumerated()), id: \.offset) { _, w in
-                        wordText(w, atMs: currentMs)
+                    if let groups = poller.currentLine?.wordGroups, usesPerWordRomanization {
+                        // 一组一列:上面是这一组的字(各自逐字填色),下面是这一组的罗马音
+                        // (跟着整组的进度填)。列宽由 VStack 取"上下两行里更宽的那个",
+                        // 主文字之间的间距因此会被下面的罗马音撑开 —— Apple 那边也是这样。
+                        ForEach(groups) { g in
+                            VStack(alignment: .center, spacing: 0) {
+                                HStack(spacing: 0) {
+                                    ForEach(Array(g.words.enumerated()), id: \.offset) { _, w in
+                                        wordText(w, atMs: currentMs)
+                                    }
+                                }
+                                if let roma = g.romanization {
+                                    romaText(roma, group: g, atMs: currentMs)
+                                }
+                            }
+                        }
+                    } else {
+                        ForEach(Array(words.enumerated()), id: \.offset) { _, w in
+                            wordText(w, atMs: currentMs)
+                        }
                     }
                 }
                 // compositingGroup 把这一整行字先合成成一张位图再统一套一次阴影——如果
@@ -344,6 +366,31 @@ struct LyricsOverlayView: View {
     // 软边渐变算法本体抽到 WordKaraokeGradient(悬浮歌词/歌词窗口共用,见该文件顶部
     // 注释),这里只负责从 settings 取用户配置的前景色、算出这个字的当前进度,两者
     // 传给共享算法。
+    /// 这一行能不能把罗马音标到每个词底下。要同时满足:用户开了罗马音、这一行确实分出了
+    /// 词组(引擎只在"看着是日文"时才给,中文歌不会被标成拼音)。
+    private var usesPerWordRomanization: Bool {
+        settings.showRomanization && poller.currentLine?.wordGroups?.isEmpty == false
+    }
+
+    /// 一组的罗马音。填色进度按**整组**算,不跟着组里单个字跳 —— 一组常常只对应一个读音
+    /// (「いつか」是一个词),按字跳会让下面这行一顿一顿的。
+    private func romaText(_ roma: String, group: SyncedLyricWordGroup, atMs currentMs: Int) -> some View {
+        let fg = poller.displayForegroundColor
+        let pseudo = SyncedLyricWord(
+            text: roma, startMs: group.startMs,
+            durationMs: max(1, group.endMs - group.startMs))
+        let fraction = WordKaraokeGradient.fillFraction(for: pseudo, atMs: currentMs)
+        let band = WordKaraokeGradient.wordEdgeSoftenBand
+        return Text(roma)
+            .font(settings.romanizationFont)
+            .foregroundStyle(WordKaraokeGradient.gradient(
+                fg: fg.opacity(0.75), left: fraction - band, right: fraction + band))
+            .lineLimit(1)
+            .fixedSize()
+            // 左右各留一点,免得相邻两组的罗马音贴在一起分不清词界
+            .padding(.horizontal, 2)
+    }
+
     private func wordText(_ w: SyncedLyricWord, atMs currentMs: Int) -> some View {
         let fg = poller.displayForegroundColor
         let fraction = WordKaraokeGradient.fillFraction(for: w, atMs: currentMs)
