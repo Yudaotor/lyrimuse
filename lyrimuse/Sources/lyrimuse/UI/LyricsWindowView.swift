@@ -210,6 +210,15 @@ struct LyricsWindowView: View {
     @GestureState private var scrubbingFraction: Double?
     // 进度条那一块的实际宽度,拖拽时换算比例用(见 progressBar 里为什么不用 GeometryReader 包)。
     @State private var scrubWidth: CGFloat = 0
+    /// 封面的实际边长。控制排的图标大小和间距都按它算 —— 封面是随窗口缩放的,而按钮
+    /// 原来是写死的字号,窄窗口下整排比左栏还宽、最左边那个模式键直接被裁在窗口外面
+    /// (2026-08-09 用户截图),宽窗口下又显得过小、跟封面不成比例。
+    @State private var artworkWidth: CGFloat = 0
+    /// 进度条真正画出来的进度。跟 fraction 分开存,是为了**自己决定什么时候补间**:
+    /// 每秒一档的推进要补间(否则一跳一跳),而冷启动第一次赋值、以及窗口缩放引起的
+    /// 宽度变化不能补间 —— 那正是"进度条从别的位置平移过来"的来源。
+    @State private var shownFraction: Double = 0
+    @State private var progressPrimed = false
 
     var body: some View {
         ScrollViewReader { scrollProxy in
@@ -399,18 +408,32 @@ struct LyricsWindowView: View {
             .animation(.easeInOut(duration: 0.5), value: poller.artworkData)
             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
             .shadow(color: .black.opacity(hasArtworkBackground ? 0.45 : 0.2), radius: 26, y: 12)
+            .background(
+                GeometryReader { g in
+                    Color.clear
+                        .onAppear { artworkWidth = g.size.width }
+                        .onChange(of: g.size.width) { _, w in artworkWidth = w }
+                }
+            )
     }
 
     private var trackInfoRow: some View {
         VStack(alignment: .leading, spacing: 3) {
-            Text(poller.title)
-                .font(.system(size: 17, weight: .semibold))
-                .foregroundStyle(primaryTextColor)
-                .lineLimit(1)
-            Text(artistAlbumText)
-                .font(.system(size: 17))
-                .foregroundStyle(secondaryTextColor)
-                .lineLimit(1)
+            // 放不下就滚,不再直接截断成 "Automatic (Remastered 20…" —— 这两行是这一栏
+            // 唯一说明"现在放的是哪一版"的地方,截掉的恰好是版本后缀。
+            // 显式给行高:MarqueeText 内部是 GeometryReader,纵向贪心,不定高会把整栏撑开。
+            MarqueeText(id: poller.title) {
+                Text(poller.title)
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(primaryTextColor)
+            }
+            .frame(height: 22)
+            MarqueeText(id: artistAlbumText) {
+                Text(artistAlbumText)
+                    .font(.system(size: 17))
+                    .foregroundStyle(secondaryTextColor)
+            }
+            .frame(height: 22)
         }
     }
 
@@ -456,12 +479,33 @@ struct LyricsWindowView: View {
                 ZStack(alignment: .leading) {
                     Capsule().fill(primaryTextColor.opacity(0.25))
                     Capsule().fill(primaryTextColor.opacity(0.85))
-                        .frame(width: max(4, g.size.width * fraction))
+                        // 宽度用 shownFraction(自己驱动)而不是 fraction,补间由下面的
+                        // onChange 显式决定 —— 挂 .animation(_:value: fraction) 那一版有两个
+                        // 症状:冷启动时 fraction 从 0 一步跳到真实进度,被补成"滑过去";
+                        // 缩放窗口时 g.size.width 变了,而这次宽度变化恰好落在每秒一次的
+                        // 动画事务里,于是整条也跟着平移。现在这两种情况都直接赋值、不补间。
+                        .frame(width: max(4, g.size.width * shownFraction))
                 }
-                // 拖动期间不要补间动画:那 1 秒的 .linear 会让进度条追着手指慢慢挪,手感发黏。
-                .animation(reduceMotion || scrubbingFraction != nil ? nil : .linear(duration: 1), value: fraction)
             }
             .frame(height: 4)
+            .onAppear {
+                shownFraction = fraction
+                // 第一次渲染之后才允许补间:开窗那一下的赋值必须是瞬时的。
+                DispatchQueue.main.async { progressPrimed = true }
+            }
+            .onChange(of: fraction) { _, f in
+                let smooth = progressPrimed && !reduceMotion && scrubbingFraction == nil
+                if smooth {
+                    // 正常推进:1 秒一档,配 .linear 补间在视觉上就是连续的。
+                    withAnimation(.linear(duration: 1)) { shownFraction = f }
+                } else {
+                    // 冷启动 / 拖动中 / 关了动效:直接到位。拖动时补间会让进度条追着
+                    // 手指慢慢挪,手感发黏。
+                    var t = Transaction()
+                    t.disablesAnimations = true
+                    withTransaction(t) { shownFraction = f }
+                }
+            }
             // 命中区**只覆盖进度条这一行**,不含下面的时间行。原来把手势挂在整个 VStack 上,
             // 于是点右侧那个"剩余时间"文字就等于 seek 到 ~95%(把这首歌跳过去)、点左侧已播
             // 时间则从头重播——那两个看起来是纯静态标签的文字,点一下就毁掉当前播放。
@@ -516,27 +560,36 @@ struct LyricsWindowView: View {
         return "\(totalSeconds / 60):" + String(format: "%02d", totalSeconds % 60)
     }
 
+    // 控制排的尺寸全部从封面边长算出来,再夹进一个合理区间 —— 封面随窗口缩放,按钮
+    // 写死尺寸就会在窄窗口下溢出被裁、在宽窗口下小得跟封面不成比例(2026-08-09 用户反馈)。
+    // 夹值的上下界是按"最窄能用"和"再大就傻了"定的,不是等比无限放大。
+    private var controlScale: CGFloat { artworkWidth > 0 ? artworkWidth : 300 }
+    private func ctrl(_ ratio: CGFloat, _ lo: CGFloat, _ hi: CGFloat) -> CGFloat {
+        min(hi, max(lo, controlScale * ratio))
+    }
+
     private var playbackControls: some View {
-        HStack(spacing: 44) {
+        HStack(spacing: ctrl(0.115, 18, 48)) {
             playbackModeButton
             Button {
                 MusicPlaybackController.previousTrack()
             } label: {
-                Image(systemName: "backward.fill").font(.system(size: 22))
+                Image(systemName: "backward.fill").font(.system(size: ctrl(0.075, 15, 26)))
             }
             .help(L10n.t("上一首"))
             Button {
                 MusicPlaybackController.playPause()
             } label: {
                 Image(systemName: poller.isPlayingNow ? "pause.fill" : "play.fill")
-                    .font(.system(size: 30))
-                    .frame(width: 34) // 播放/暂停两个图标宽度不同,固定住避免两侧按钮跟着跳动
+                    .font(.system(size: ctrl(0.105, 21, 38)))
+                    // 播放/暂停两个图标宽度不同,固定住避免两侧按钮跟着跳动
+                    .frame(width: ctrl(0.12, 24, 44))
             }
             .help(L10n.t("播放/暂停"))
             Button {
                 MusicPlaybackController.nextTrack()
             } label: {
-                Image(systemName: "forward.fill").font(.system(size: 22))
+                Image(systemName: "forward.fill").font(.system(size: ctrl(0.075, 15, 26)))
             }
             .help(L10n.t("下一首"))
             favoriteButton
@@ -559,12 +612,12 @@ struct LyricsWindowView: View {
                     poller.cyclePlaybackMode()
                 } label: {
                     Image(systemName: playbackModeIcon(mode))
-                        .font(.system(size: 20))
+                        .font(.system(size: ctrl(0.062, 13, 23)))
                 }
                 .help(playbackModeLabel(mode))
             }
         }
-        .frame(width: 22)
+        .frame(width: ctrl(0.062, 13, 23) + 2)
     }
 
     private func playbackModeIcon(_ mode: MusicPlaybackController.MusicPlaybackMode) -> String {
@@ -598,13 +651,13 @@ struct LyricsWindowView: View {
                     poller.toggleFavorited()
                 } label: {
                     Image(systemName: favorited ? "heart.fill" : "heart")
-                        .font(.system(size: 20))
+                        .font(.system(size: ctrl(0.062, 13, 23)))
                 }
                 .foregroundStyle(favorited ? Color.red : primaryTextColor)
                 .help(L10n.t(favorited ? "取消喜欢" : "喜欢"))
             }
         }
-        .frame(width: 22)
+        .frame(width: ctrl(0.062, 13, 23) + 2)
     }
 
     // ---- 颜色:有封面背景时全窗白色系,没有时退回系统色(浅色外观可读性) ------------
