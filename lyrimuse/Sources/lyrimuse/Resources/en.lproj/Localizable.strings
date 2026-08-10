@@ -471,10 +471,6 @@
 "不转换" = "As-is";
 "简体" = "Simplified";
 "繁体" = "Traditional";
-"总览" = "Overview";
 "灵动岛" = "Notch";
 "菜单栏" = "Menu Bar";
-"桌面悬浮歌词还没开启" = "Desktop overlay is off";
-"灵动岛歌词还没开启" = "Notch lyrics are off";
-"菜单栏歌词还没开启" = "Menu bar lyrics are off";
-"打开之后这里会出现它的全部外观设置" = "Turn it on and its appearance settings appear here";
+"其它" = "Other";

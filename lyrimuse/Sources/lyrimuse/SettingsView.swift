@@ -764,20 +764,20 @@ private struct AppearanceSettingsTab: View {
     /// 那一段调它自己的样子。「自动隐藏」跟着总览走,因为它是**跨形态**的规则(悬浮歌词和
     /// 灵动岛共用),放进任何一个单独形态里都不对。
     private enum Section: String, CaseIterable, Identifiable {
-        case modes, overlay, notch, menuBar
+        case overlay, notch, menuBar, other
         var id: Self { self }
         var title: String {
             switch self {
-            case .modes: return L10n.t("总览")
             case .overlay: return L10n.t("悬浮歌词")
             case .notch: return L10n.t("灵动岛")
             case .menuBar: return L10n.t("菜单栏")
+            case .other: return L10n.t("其它")
             }
         }
     }
 
-    @AppStorage("settings:appearanceSection") private var sectionRaw = Section.modes.rawValue
-    private var section: Section { Section(rawValue: sectionRaw) ?? .modes }
+    @AppStorage("settings:appearanceSection") private var sectionRaw = Section.overlay.rawValue
+    private var section: Section { Section(rawValue: sectionRaw) ?? .overlay }
 
     private var sectionPicker: some View {
         Picker(
@@ -803,57 +803,64 @@ private struct AppearanceSettingsTab: View {
     @ViewBuilder
     private var currentSection: some View {
         switch section {
-        case .modes:
-            displayModesCard
-            // 自动隐藏是**跨形态**的(悬浮歌词/灵动岛共用同一组规则),所以留在总览里,
-            // 而不是在两个形态段里各放一份。两个都没开时它没有作用对象,不显示。
-            if settings.classicOverlayEnabled || settings.notchOverlayEnabled {
-                autoHideCard.transition(.settingsCard)
-            }
         case .overlay:
+            modeToggleCard(
+                icon: "captions.bubble",
+                title: L10n.t("桌面悬浮歌词"),
+                subtitle: L10n.t("贴在桌面上，支持逐字高亮"),
+                isOn: Binding(
+                    get: { settings.classicOverlayEnabled },
+                    set: { LyricsOverlayWindowController.shared.setVisible($0) }))
             if settings.classicOverlayEnabled {
-                classicOverlayCard
-            } else {
-                disabledSectionHint(
-                    title: L10n.t("桌面悬浮歌词还没开启"),
-                    isOn: Binding(
-                        get: { settings.classicOverlayEnabled },
-                        set: { LyricsOverlayWindowController.shared.setVisible($0) }))
+                classicOverlayCard.transition(.settingsCard)
             }
         case .notch:
+            modeToggleCard(
+                icon: "rectangle.topthird.inset.filled",
+                title: L10n.t("灵动岛歌词"),
+                subtitle: L10n.t("紧凑地贴着屏幕顶部的刘海显示"),
+                isOn: Binding(
+                    get: { settings.notchOverlayEnabled },
+                    set: { NotchLyricsWindowController.shared.setVisible($0) }))
             if settings.notchOverlayEnabled {
-                notchOverlayCard
-            } else {
-                disabledSectionHint(
-                    title: L10n.t("灵动岛歌词还没开启"),
-                    isOn: Binding(
-                        get: { settings.notchOverlayEnabled },
-                        set: { NotchLyricsWindowController.shared.setVisible($0) }))
+                notchOverlayCard.transition(.settingsCard)
             }
         case .menuBar:
+            modeToggleCard(
+                icon: "menubar.rectangle",
+                title: L10n.t("菜单栏歌词"),
+                subtitle: L10n.t("最不打扰，只占状态栏一行纯文字"),
+                isOn: $settings.showLyricsInMenuBar)
             if settings.showLyricsInMenuBar {
-                menuBarCard
-            } else {
-                disabledSectionHint(
-                    title: L10n.t("菜单栏歌词还没开启"),
-                    isOn: $settings.showLyricsInMenuBar)
+                menuBarCard.transition(.settingsCard)
+            }
+        case .other:
+            lyricsWindowCard
+            // 自动隐藏是**跨形态**的(悬浮歌词/灵动岛共用同一组规则),所以不能塞进任何一个
+            // 单独形态那一段,只能留在这里。两个都没开时它没有作用对象,不显示。
+            if settings.classicOverlayEnabled || settings.notchOverlayEnabled {
+                autoHideCard.transition(.settingsCard)
             }
         }
     }
 
-    /// 某个形态没开启时,这一段不能是**空白** —— 平铺版本里"卡片直接不出现"是合理的
-    /// (上面还有别的内容),但分段之后点进来只剩一片空,看起来像坏了。给一句说明 + 一个
-    /// 就地打开的开关,不用退回总览再点一次。
-    private func disabledSectionHint(title: String, isOn: Binding<Bool>) -> some View {
+    /// 每一段开头那张"这个形态开不开"的卡。
+    ///
+    /// 2026-08-10 从原来集中的一张总开关卡拆过来:开关跟它自己那一堆设置隔着一个分段,
+    /// 要开某个形态得先退回总览、开完再切回来,来回两次。放在这一段的最上面之后,
+    /// "开启 → 立刻在下面调它的样子"是一条直线。
+    ///
+    /// 关着的时候这一段也不会是空白 —— 这张卡本身就是内容,替代了原来那个"还没开启"的
+    /// 占位提示。
+    private func modeToggleCard(
+        icon: String, title: String, subtitle: String, isOn: Binding<Bool>
+    ) -> some View {
         SettingsCard {
-            SettingsRow(
-                icon: "eye.slash",
-                title: title,
-                subtitle: L10n.t("打开之后这里会出现它的全部外观设置")
-            ) {
+            SettingsRow(icon: icon, title: title, subtitle: subtitle) {
                 Toggle("", isOn: Binding(
                     get: { isOn.wrappedValue },
                     set: { newValue in
+                        // withAnimation 包在"改状态"这一处,理由见 Animation.settingsCardReveal
                         withAnimation(.settingsCardReveal) { isOn.wrappedValue = newValue }
                     }
                 ))
@@ -861,64 +868,15 @@ private struct AppearanceSettingsTab: View {
         }
     }
 
-    // 四个总开关。四种展示方式互不冲突,可以同时开、只开一个、或者都不开;每个开关只
-    // 负责"生效"它自己那一个控制器,不碰另一个。
-    //
-    // set 只调 setVisible(_:) 一句:2026-08-05 把"这个模式开没开"合并成单一开关之后,
-    // 写回 AppSettings.{classic,notch}OverlayEnabled 和"顺手应用两个已配置好的隐藏偏好"
-    // 都收进了 setVisible(_:) 里面,这里再各自写一遍就是两个写入方,又会漂移。
-    private var displayModesCard: some View {
+    /// "歌词窗口"跟上面三种形态不是一回事:它没有 AppSettings 里的持久化开关,开合状态
+    /// 完全交给 SwiftUI Window(id:) 自己的窗口自动存档机制(见 App.swift 那个场景的注释),
+    /// 这里的 Toggle 只是"现在这扇窗口是不是开着"的实时状态(见 LyricsWindowPresence),
+    /// 开/关直接对应打开/关闭这扇窗口,不写入任何配置项。
+    ///
+    /// 它也没有任何外观设置可调(用固定的系统配色),所以不单独占一段,跟同样跨形态的
+    /// "自动隐藏"一起放在「其它」里。
+    private var lyricsWindowCard: some View {
         SettingsCard {
-            SettingsRow(
-                icon: "captions.bubble",
-                title: L10n.t("桌面悬浮歌词"),
-                subtitle: L10n.t("贴在桌面上，支持逐字高亮")
-            ) {
-                Toggle("", isOn: Binding(
-                    get: { settings.classicOverlayEnabled },
-                    set: { newValue in
-                        // withAnimation 包在"改状态"这一处,而不是挂在卡片列容器上,理由见
-                        // Animation.settingsCardReveal 的注释。
-                        withAnimation(.settingsCardReveal) {
-                            LyricsOverlayWindowController.shared.setVisible(newValue)
-                        }
-                    }
-                ))
-            }
-            CardDivider()
-            SettingsRow(
-                icon: "rectangle.topthird.inset.filled",
-                title: L10n.t("灵动岛歌词"),
-                subtitle: L10n.t("紧凑地贴着屏幕顶部的刘海显示")
-            ) {
-                Toggle("", isOn: Binding(
-                    get: { settings.notchOverlayEnabled },
-                    set: { newValue in
-                        withAnimation(.settingsCardReveal) {
-                            NotchLyricsWindowController.shared.setVisible(newValue)
-                        }
-                    }
-                ))
-            }
-            CardDivider()
-            SettingsRow(
-                icon: "menubar.rectangle",
-                title: L10n.t("菜单栏歌词"),
-                subtitle: L10n.t("最不打扰，只占状态栏一行纯文字")
-            ) {
-                Toggle("", isOn: Binding(
-                    get: { settings.showLyricsInMenuBar },
-                    set: { newValue in
-                        withAnimation(.settingsCardReveal) { settings.showLyricsInMenuBar = newValue }
-                    }
-                ))
-            }
-            CardDivider()
-            // "歌词窗口"(正经的标题栏窗口,完整歌词列表+自动滚动)不像上面三个那样有一个
-            // AppSettings 持久化的布尔开关来控制——它的开合状态完全交给 SwiftUI Window(id:)
-            // 自己的窗口自动存档机制(见 App.swift 那个场景的注释),这里的 Toggle 只是
-            // "现在这扇窗口是不是开着"的实时状态(见 LyricsWindowPresence 注释),开/关直接
-            // 对应打开/关闭这扇窗口,不写入任何新的持久化配置项。
             SettingsRow(
                 icon: "text.quote",
                 title: L10n.t("歌词窗口"),
