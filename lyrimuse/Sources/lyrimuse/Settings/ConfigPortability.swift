@@ -24,19 +24,54 @@ enum ConfigPortability {
     private static let configURL = configDir.appendingPathComponent("config.json")
     private static let featuresURL = configDir.appendingPathComponent("lyrimuse-features.json")
 
-    // np: 前缀里唯独不带走这三个:
-    // - hasCompletedOnboarding / hasShownAutomationOnboarding:引导流程是不是走完了,
-    //   这是"这台机器"的状态,不是用户的偏好——新机器本来就该自己走一遍引导(自动化权限/
-    //   常驻服务都是每台机器各自要重新授权/重新装的,带着旧机器"已完成"的标记过去,新
-    //   机器反而不会弹出引导,用户会找不到入口去处理这两件事)。
-    // - overlayStyle:已废弃的迁移专用字段,不是当前设置(见 AppSettings.swift 注释)。
-    // - hasOfferedICloudImport:"这台机器已经问过要不要从 iCloud 导入"——同样是本机
-    //   状态,带过去会让新机器不再弹那一问(见 AppSettings 里同名属性的注释)。
+    /// np: 前缀里**不**带走的键。
+    ///
+    /// 判据是"这一项描述的是这台机器的状态,还是这个人的偏好"。偏好该跟着人走,机器状态
+    /// 搬过去只会让新机器显示一件不成立的事。导出和导入两侧用的是同一个集合(见
+    /// `importData`),所以往这里加一个键,连**旧版本导出的文件**里那一项也会在导入时被
+    /// 挡掉,不用另做兼容。
+    ///
+    /// ### 引导/一次性提示:讲的是这台机器走到哪一步了
+    ///
+    /// - `hasCompletedOnboarding` / `hasShownAutomationOnboarding`:引导流程是不是走完了。
+    ///   新机器本来就该自己走一遍——自动化权限、常驻服务都是每台机器各自要重新授权/
+    ///   重新装的;带着旧机器"已完成"的标记过去,新机器反而不弹引导,用户找不到入口去
+    ///   处理这两件事。
+    /// - `hasOfferedICloudImport`:"这台机器已经问过要不要从 iCloud 导入"。带过去会让新
+    ///   机器不再弹那一问(见 AppSettings 里同名属性的注释)。
+    /// - `hasShownOverlayDragHint`:"长按才能拖动"这条手势提示放没放过。
+    ///   LyricsOverlayWindowController 里的原话就是"且**这台机器**从没显示过一次时"——
+    ///   它按机器计数是设计如此。
+    ///
+    /// 注意 `hasSeenChineseLyrics` 不在此列:它记的是"这个人听到过中文歌"(决定简繁那项
+    /// 设置露不露出来),讲的是这个人的曲库,不是这台机器,该跟着走。
+    ///
+    /// ### 屏幕坐标/屏幕身份:换台机器就不成立了
+    ///
+    /// - `overlayPositionTop`:存的是 `"x,顶边y"` 绝对屏幕坐标。新机器显示器尺寸/排布
+    ///   不同,原样还原可能把悬浮窗放到屏幕外——用户会以为"悬浮歌词开了但不显示"。
+    /// - `overlayPositionOrigin`:上面那个键的旧版本,现在只读不写、供一次性迁移用,
+    ///   同样是绝对坐标。
+    /// - `notchScreenID`:灵动岛显示在哪块屏幕上,存的是屏幕身份串。这个 ID 在新机器上
+    ///   一定解析不出对应屏幕(设置页为此专门有一档"已断开的屏幕"占位)。
+    ///
+    /// ### 装没装 LaunchAgent:是机器状态,不是开关状态
+    ///
+    /// - `launchAtLoginEnabled`:它的 didSet 会去调 `LoginItemManager.setEnabled`,也就是
+    ///   在**这台**机器上装/卸一个 LaunchAgent。而导入是直接写 UserDefaults、不走 didSet
+    ///   (导入完就重启,而 Swift 的属性观察器在 init 里赋值时也不触发),所以带过去的结果
+    ///   是:新机器上开关显示"已开启",实际上没有任何 LaunchAgent —— 界面在说谎。宁可让
+    ///   用户在新机器上自己开一次。
     private static let excludedDefaultsKeys: Set<String> = [
         "np:hasCompletedOnboarding",
         "np:hasShownAutomationOnboarding",
         "np:hasOfferedICloudImport",
+        "np:hasShownOverlayDragHint",
         "np:overlayStyle",
+        "np:overlayPositionTop",
+        "np:overlayPositionOrigin",
+        "np:notchScreenID",
+        "np:launchAtLoginEnabled",
     ]
 
     static func suggestedFilename() -> String {
