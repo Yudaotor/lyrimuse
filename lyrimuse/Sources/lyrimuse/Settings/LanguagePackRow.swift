@@ -76,6 +76,19 @@ final class LanguagePackStatusStore: ObservableObject {
                 next[code] = await availability.status(
                     from: Locale.Language(identifier: code), to: target)
             }
+            // 系统说这一对压根不支持的,直接不列 —— 列出来也点不动,只会让人以为坏了。
+            //
+            // 上面按"规范代码相等"排除目标语言只挡住了 en→en 这种同码的情况。2026-08-10
+            // 用户报「繁体中文 · 不支持」,查下来是**系统把中文当作一种语言**:简体和繁体
+            // 之间不构成翻译对,所以目标是中文时 zh-Hant 和 zh-Hans 都会报 unsupported
+            // (实测表:zh-Hant→zh-Hans / zh-Hant→zh-Hant / zh-Hans→zh 全是 unsupported,
+            // 而 zh-Hant→en、zh-Hant→ja 都是已下载)。目标写成 zh-Hans 时 zh-Hans 被排除、
+            // zh-Hant 却因为字符串不等留了下来,就露出了这一行。
+            //
+            // 不特判中文而是按**系统给的状态**过滤:同语言、中文简繁、以及以后任何一种
+            // 系统不认的组合,都会被同一条规则挡掉,不用每出现一种就补一次名单。
+            list.removeAll { next[$0] == .unsupported }
+            next = next.filter { $0.value != .unsupported }
             guard !Task.isCancelled else { return }
             // 2026-08-10:用户第二次报"语言包全变成未下载"。同一时刻用独立进程跑**同一套
             // 查询**(同样的 canonical 代码往返、同样的 target "en")拿到的是 5 个已安装
