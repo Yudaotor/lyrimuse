@@ -149,7 +149,7 @@ struct SettingsView: View {
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
-                    .help(L10n.t("以下都是可选的账号与推送服务，跟显示歌词本身无关；不配置也完全不影响悬浮歌词正常使用"))
+                    .help(L10n.t("实验性 Beta 功能"))
                 }
             }
             .listStyle(.sidebar)

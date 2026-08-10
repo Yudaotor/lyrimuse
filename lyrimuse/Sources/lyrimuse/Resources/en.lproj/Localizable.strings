@@ -25,7 +25,7 @@
 "这会覆盖当前所有设置（包括已连接的账号），并立即重启 Lyrimuse 使其生效" = "This overwrites all current settings (including connected accounts) and immediately restarts Lyrimuse to apply them";
 "核心设置" = "Core Settings";
 "实验室功能" = "Lab Features";
-"以下都是可选的账号与推送服务，跟显示歌词本身无关；不配置也完全不影响悬浮歌词正常使用" = "These are optional accounts and push services unrelated to displaying lyrics — leaving them unconfigured doesn't affect the floating lyrics at all";
+"实验性 Beta 功能" = "Experimental beta features";
 "%@ 字" = "%@ characters";
 "%@pt" = "%@pt";
 "快捷键" = "Keyboard Shortcuts";
