@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import CoreServices
 import LyrimuseCore
 
@@ -68,6 +69,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// 进程启动时间(Unix 秒),取自内核的 kinfo_proc。任何来路的进程都有,不像
     /// NSRunningApplication.launchDate 只对经 LaunchServices 启动的有效。
+    private var cancellables = Set<AnyCancellable>()
+
     private static func processStartTime(_ pid: pid_t) -> TimeInterval? {
         var mib: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_PID, pid]
         var info = kinfo_proc()
@@ -115,6 +118,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.setActivationPolicy(settings.showInDock ? .regular : .accessory)
         LocalPlaybackSource.shared.preferWordLevelKaraoke = settings.preferWordLevelKaraoke
         LocalPlaybackSource.shared.chineseVariant = settings.lyricsChineseVariant
+        // Core 见到中文歌词就会置一个粘性标记;这里把它持久化下来,好让"简繁切换"这一项
+        // 在下次启动、还没播中文歌之前就已经该露出来(见 SettingsView 里那个条件)。
+        if !settings.hasSeenChineseLyrics {
+            LocalPlaybackSource.shared.$sawChineseLyrics
+                .filter { $0 }
+                .first()
+                .sink { _ in AppSettings.shared.hasSeenChineseLyrics = true }
+                .store(in: &cancellables)
+        }
 
         // 桌面悬浮歌词、灵动岛歌词各自独立开关,互不排斥,可以同时开、只开一个、或都不开。
         // 只对确实开启的那个(些)控制器碰一下 .shared,完全不碰关闭的那个:两个控制器

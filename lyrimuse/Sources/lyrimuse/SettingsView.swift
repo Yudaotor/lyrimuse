@@ -540,7 +540,9 @@ private struct LyricsSettingsTab: View {
             // 真实用户(比如系统语言列表里没加中文、但确实在听中文歌),而他之前已经打开过
             // 这个开关,收起来就等于**歌词正在被转换、而那个开关不见了** —— 那是最糟的
             // 一种状态,用户根本无从找回。只要它还在起作用,就一定看得见。
-            if AppSettings.userReadsChinese || settings.lyricsChineseVariant != .off {
+            if AppSettings.userReadsChinese || settings.hasSeenChineseLyrics
+                || settings.lyricsChineseVariant != .off
+            {
             CardDivider()
             SettingsRow(
                 icon: "character.bubble",

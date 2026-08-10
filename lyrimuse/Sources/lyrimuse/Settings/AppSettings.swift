@@ -26,6 +26,7 @@ final class AppSettings: ObservableObject {
     private enum Keys {
         static let preferWordLevelKaraoke = "np:preferWordLevelKaraoke"
         static let lyricsChineseVariant = "np:lyricsChineseVariant"
+        static let hasSeenChineseLyrics = "np:hasSeenChineseLyrics"
         static let showRomanization = "np:showRomanization"
         static let showTranslation = "np:showTranslation"
         static let launchAtLoginEnabled = "np:launchAtLoginEnabled"
@@ -91,6 +92,13 @@ final class AppSettings: ObservableObject {
     @Published var preferWordLevelKaraoke: Bool {
         didSet { defaults.set(preferWordLevelKaraoke, forKey: Keys.preferWordLevelKaraoke) }
     }
+    /// 这台机器上曾经出现过中文歌词。只置不清 —— 一个已经露出来的设置不该因为"这首歌
+    /// 不是中文"就消失。跨启动持久化:第一次会话里听过中文歌、第二次会话直接开设置页也
+    /// 要看得见。
+    @Published var hasSeenChineseLyrics: Bool {
+        didSet { defaults.set(hasSeenChineseLyrics, forKey: Keys.hasSeenChineseLyrics) }
+    }
+
     /// 这台机器的用户读不读中文 —— 用系统的**首选语言列表**判,不是只看 App 界面语言:
     /// 一个把系统语言设成英文、但语言列表里加了中文的用户,照样在听中文歌。
     /// 只在启动时算一次就够了(系统语言不会在 App 运行期间变)。
@@ -343,6 +351,7 @@ final class AppSettings: ObservableObject {
         preferWordLevelKaraoke = (defaults.object(forKey: Keys.preferWordLevelKaraoke) as? Bool) ?? true
         lyricsChineseVariant = defaults.string(forKey: Keys.lyricsChineseVariant)
             .flatMap(ChineseVariant.init(rawValue:)) ?? .off
+        hasSeenChineseLyrics = defaults.bool(forKey: Keys.hasSeenChineseLyrics)
         showRomanization = (defaults.object(forKey: Keys.showRomanization) as? Bool) ?? true
         // 默认值跟 App 界面语言联动——译文这几个歌词源(网易云/QQ 音乐)给的固定是
         // 中文翻译,不是"任意语言译文",界面语言不是中文的人默认看到一堆看不懂的

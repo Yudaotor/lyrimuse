@@ -85,6 +85,13 @@ public final class LocalPlaybackSource: ObservableObject {
     @Published public var chineseVariant: ChineseVariant = .off {
         didSet { reloadCurrentLyrics() }
     }
+    /// 这台机器上**见过**中文歌词没有。一旦见过就不再变回 false —— 设置项靠它决定要不要
+    /// 露出简繁开关,而"这首歌不是中文"不该让一个已经露出来的设置消失。
+    ///
+    /// 为什么需要这个信号:光看用户的系统语言会漏掉"英文系统、但在听中文歌"的人 ——
+    /// 比如英文系统的港台用户,他读繁体、正需要这个开关,而语言列表里可能压根没有中文。
+    /// "库里有没有中文歌词"比"用户读什么语言"更贴近"这个设置对你有没有用"。
+    @Published public private(set) var sawChineseLyrics = false
 
     private let syncEngine = LyricsSyncEngine()
     // 公开给 View 层——逐字填色现在按渲染帧频(TimelineView)从这个锚点直接外推真实
@@ -757,6 +764,12 @@ public final class LocalPlaybackSource: ObservableObject {
             title: snapshot.title ?? "",
             album: snapshot.album ?? ""
         )
+        // 见过中文歌词就记一笔(粘性,只置不清)。判据跟 ChineseVariant.converted 一致:
+        // 有汉字、且没有假名(有假名是日文)。
+        let raw = found?.lyrics ?? ""
+        if !sawChineseLyrics, Romanizer.containsHan(raw), !Romanizer.looksJapanese(raw) {
+            sawChineseLyrics = true
+        }
         // 简繁转换只作用在展示上:正文、译文、逐字数据都转,罗马音是拉丁字母不用转。
         // 逐字数据整串转是安全的 —— 时间戳是数字,转换只碰汉字。
         let variant = chineseVariant
