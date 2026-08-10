@@ -744,7 +744,7 @@ private struct AppearanceSettingsTab: View {
         // 读者得自己把每一小段对应回上面第几个开关;现在直接拆成四行各自的副标题。
         SettingsPage(
             title: L10n.t("外观"),
-            subtitle: L10n.t("四种展示方式互不冲突，可以同时开启")
+            subtitle: L10n.t("四种展示方式可以同时开启")
         ) {
             sectionPicker
             currentSection
@@ -913,7 +913,8 @@ private struct AppearanceSettingsTab: View {
             SettingsRow(
                 icon: "captions.bubble",
                 title: L10n.t("桌面悬浮歌词"),
-                subtitle: L10n.t("以下配色、字体、字号只影响这一种展示方式")
+                subtitle: L10n.t("配色与字体只作用于这里"),
+                help: L10n.t("下面的配色、字体、字号只影响桌面悬浮歌词；灵动岛、菜单栏、歌词窗口各自用固定样式")
             )
             CardDivider()
             SettingsRow(icon: "arrow.left.and.right", title: L10n.t("宽度")) {
@@ -939,7 +940,8 @@ private struct AppearanceSettingsTab: View {
             SettingsRow(
                 icon: "lock",
                 title: L10n.t("锁定位置"),
-                subtitle: L10n.t("解锁后可以直接点击穿透；长按住悬浮歌词不放才能拖动它")
+                subtitle: L10n.t("解锁后可点击穿透"),
+                help: L10n.t("解锁后鼠标点击会穿到桌面上；长按住悬浮歌词不放才能拖动它")
             ) {
                 Toggle("", isOn: Binding(
                     get: { settings.lockPosition },
@@ -1044,7 +1046,8 @@ private struct AppearanceSettingsTab: View {
             SettingsRow(
                 icon: "pencil.and.outline",
                 title: L10n.t("文字描边"),
-                subtitle: L10n.t("在浅色或杂乱的桌面背景上把字撑出来")
+                subtitle: L10n.t("杂乱背景上更清楚"),
+                help: L10n.t("在浅色或杂乱的桌面背景上给文字加一圈描边，把字撑出来")
             ) {
                 Toggle("", isOn: $settings.textStrokeEnabled)
             }
@@ -1099,7 +1102,8 @@ private struct AppearanceSettingsTab: View {
             SettingsRow(
                 icon: "rectangle.topthird.inset.filled",
                 title: L10n.t("灵动岛歌词"),
-                subtitle: L10n.t("配色由下面的「风格」决定、字号固定，不使用「桌面悬浮歌词」那一组配色和字体设置")
+                subtitle: L10n.t("样式固定，不跟随悬浮歌词"),
+                help: L10n.t("配色由下面的「风格」决定、字号固定，不使用「桌面悬浮歌词」那一组配色和字体设置")
             )
             CardDivider()
             SettingsRow(icon: "paintbrush.pointed", title: L10n.t("风格")) {
@@ -1115,7 +1119,8 @@ private struct AppearanceSettingsTab: View {
             SettingsRow(
                 icon: "photo",
                 title: L10n.t("显示专辑封面"),
-                subtitle: L10n.t("在右下角显示一枚封面小图；开启后当前歌词能显示的宽度会略微变窄")
+                subtitle: L10n.t("右下角一枚封面小图"),
+                help: L10n.t("开启后当前歌词能显示的宽度会略微变窄")
             ) {
                 Toggle("", isOn: $settings.notchShowArtwork)
             }
@@ -1144,7 +1149,7 @@ private struct AppearanceSettingsTab: View {
             SettingsRow(
                 icon: "display",
                 title: L10n.t("显示在哪块屏幕"),
-                subtitle: L10n.t("「自动」选带刘海的那块；指定的屏幕拔掉后自动回到「自动」")
+                help: L10n.t("「自动」选带刘海的那块；指定的屏幕拔掉后自动回到「自动」")
             ) {
                 Picker("", selection: Binding(
                     get: { settings.notchScreenID },
@@ -1185,7 +1190,8 @@ private struct AppearanceSettingsTab: View {
             SettingsRow(
                 icon: "menubar.rectangle",
                 title: L10n.t("菜单栏歌词"),
-                subtitle: L10n.t("鼠标悬停在状态栏上永远能看到完整的这一行")
+                subtitle: L10n.t("悬停可看完整一行"),
+                help: L10n.t("状态栏宽度有限，歌词可能被截断；鼠标悬停在上面永远能看到完整的这一行")
             )
             CardDivider()
             SettingsRow(
@@ -1221,13 +1227,15 @@ private struct AppearanceSettingsTab: View {
             SettingsRow(
                 icon: "eye.slash",
                 title: L10n.t("自动隐藏"),
-                subtitle: L10n.t("以下两项对「桌面悬浮歌词」和「灵动岛歌词」同时生效，菜单栏歌词和歌词窗口不受影响")
+                subtitle: L10n.t("对悬浮歌词和灵动岛生效"),
+                help: L10n.t("以下两项对「桌面悬浮歌词」和「灵动岛歌词」同时生效；菜单栏歌词和歌词窗口不受影响")
             )
             CardDivider()
             SettingsRow(
                 icon: "camera.viewfinder",
                 title: L10n.t("截屏/录屏时隐藏"),
-                subtitle: L10n.t("截图、录屏、视频会议共享屏幕都不会拍到悬浮歌词，你自己仍然看得见")
+                subtitle: L10n.t("别人看不到，你仍看得见"),
+                help: L10n.t("截图、录屏、视频会议共享屏幕都不会拍到悬浮歌词")
             ) {
                 Toggle("", isOn: Binding(
                     get: { settings.hideDuringScreenCapture },
