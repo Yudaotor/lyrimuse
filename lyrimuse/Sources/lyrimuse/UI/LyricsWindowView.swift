@@ -358,7 +358,11 @@ struct LyricsWindowView: View {
             emptyState
         } else {
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: lyricLineSpacing) {
+                // 用 VStack 而不是 LazyVStack:歌词就几十行(这首 43 行),lazy 省不下什么,
+                // 却会让带动画的 scrollTo 卡 —— 目标行没渲染过就没有尺寸,滚动动画得一边
+                // 跑一边现算行高,表现就是换行时一顿一顿。全部一次性布好之后,滚动只是
+                // 平移已经量好的内容。
+                VStack(alignment: .leading, spacing: lyricLineSpacing) {
                     ForEach(Array(poller.allLines.enumerated()), id: \.element.id) { index, item in
                         lineView(item, distance: distance(for: index), isActive: item.id == activeID)
                             .id(item.id)
@@ -983,11 +987,19 @@ struct LyricsWindowView: View {
     /// 用 sin(π·进度) 而不是"到了就抬起、过了就落下":那样是两个突变,看起来是在"跳";
     /// 正弦在 0 和 1 两端的斜率都是 0,抬起和落回都自然收尾,峰值正好落在这个字唱到一半时。
     /// 幅度跟字号挂钩(7%),不同字号下观感一致;reduceMotion 时整个关掉。
-    private func karaokeRise(_ fraction: Double) -> CGFloat {
+    /// 抬起再落回的**固定时长**。原来是按这个字自己的时长拉伸,于是长音会一直吊在上面:
+    /// 实测这首歌逐字词时长中位 473ms,但最长 2302ms、25 个词超过 1 秒 —— 用户看到的
+    /// "字抬起来不会重新下去"就是这些长音。抬一下本来就该是个短促的"点头",跟音符按住
+    /// 多久无关。
+    private static let karaokeRiseWindowMs: Double = 320
+
+    private func karaokeRise(_ w: SyncedLyricWord, atMs currentMs: Int) -> CGFloat {
         guard !reduceMotion else { return 0 }
-        let f = min(1, max(0, fraction))
-        guard f > 0, f < 1 else { return 0 }
-        return -sin(f * .pi) * lyricFontSize * 0.07
+        let elapsed = Double(currentMs - w.startMs)
+        // 窗口不超过这个字自己的时长 —— 短音符不该被拉长成 320ms 的动作。
+        let window = min(Self.karaokeRiseWindowMs, Double(max(1, w.durationMs)))
+        guard elapsed > 0, elapsed < window else { return 0 }
+        return -sin(elapsed / window * .pi) * lyricFontSize * 0.07
     }
 
     private func karaokeWord(_ w: SyncedLyricWord, atMs currentMs: Int, base: Color) -> some View {
@@ -997,7 +1009,7 @@ struct LyricsWindowView: View {
             .foregroundStyle(WordKaraokeGradient.gradient(
                 fg: base, left: fraction - band, right: fraction + band))
             // .offset 是渲染期位移,不参与布局 —— 字抬起来不会把整行的排版推歪。
-            .offset(y: karaokeRise(fraction))
+            .offset(y: karaokeRise(w, atMs: currentMs))
     }
 
     @ViewBuilder
@@ -1072,7 +1084,9 @@ struct LyricsWindowView: View {
                         // 一组一列:上面这一组的字各自逐字填色,下面标这一组的读音,列宽取
                         // 两者更宽的那个 —— 主文字的间距因此被读音撑开,跟 Apple 一样。
                         ForEach(groups) { g in
-                            VStack(alignment: .center, spacing: 0) {
+                            // 组内左对齐:罗马音跟这一组的**第一个字**对齐,不是居中。
+                            // Apple Music 就是这么排的(用户 2026-08-10 截图对照)。
+                            VStack(alignment: .leading, spacing: 0) {
                                 HStack(spacing: 0) {
                                     ForEach(Array(g.words.enumerated()), id: \.offset) { _, w in
                                         karaokeWord(w, atMs: currentMs, base: base)

@@ -296,7 +296,8 @@ struct LyricsOverlayView: View {
                         // (跟着整组的进度填)。列宽由 VStack 取"上下两行里更宽的那个",
                         // 主文字之间的间距因此会被下面的罗马音撑开 —— Apple 那边也是这样。
                         ForEach(groups) { g in
-                            VStack(alignment: .center, spacing: 0) {
+                            // 组内左对齐,跟歌词窗口/Apple Music 一致
+                            VStack(alignment: .leading, spacing: 0) {
                                 HStack(spacing: 0) {
                                     ForEach(Array(g.words.enumerated()), id: \.offset) { _, w in
                                         wordText(w, atMs: currentMs)
