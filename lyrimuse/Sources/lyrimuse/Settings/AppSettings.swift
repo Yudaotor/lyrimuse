@@ -91,6 +91,13 @@ final class AppSettings: ObservableObject {
     @Published var preferWordLevelKaraoke: Bool {
         didSet { defaults.set(preferWordLevelKaraoke, forKey: Keys.preferWordLevelKaraoke) }
     }
+    /// 这台机器的用户读不读中文 —— 用系统的**首选语言列表**判,不是只看 App 界面语言:
+    /// 一个把系统语言设成英文、但语言列表里加了中文的用户,照样在听中文歌。
+    /// 只在启动时算一次就够了(系统语言不会在 App 运行期间变)。
+    static let userReadsChinese: Bool = Locale.preferredLanguages.contains {
+        $0.lowercased().hasPrefix("zh")
+    }
+
     /// 歌词正文显示成简体还是繁体。默认 .off:原样显示歌词源给的写法,不做任何转换。
     @Published var lyricsChineseVariant: ChineseVariant {
         didSet { defaults.set(lyricsChineseVariant.rawValue, forKey: Keys.lyricsChineseVariant) }

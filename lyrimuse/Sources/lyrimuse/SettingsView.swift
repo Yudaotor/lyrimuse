@@ -533,6 +533,14 @@ private struct LyricsSettingsTab: View {
                     }
                 ))
             }
+            // 这一项对完全不听中文歌的人是纯噪声,按系统首选语言收起来 —— 设置页已有
+            // 同类先例(按来源模式/按跟随封面显示的那几行)。
+            //
+            // ⚠️ `|| 已经不是默认值` 这半边是必须的,不是保险起见:万一判据没覆盖到某个
+            // 真实用户(比如系统语言列表里没加中文、但确实在听中文歌),而他之前已经打开过
+            // 这个开关,收起来就等于**歌词正在被转换、而那个开关不见了** —— 那是最糟的
+            // 一种状态,用户根本无从找回。只要它还在起作用,就一定看得见。
+            if AppSettings.userReadsChinese || settings.lyricsChineseVariant != .off {
             CardDivider()
             SettingsRow(
                 icon: "character.bubble",
@@ -552,6 +560,7 @@ private struct LyricsSettingsTab: View {
                 }
                 .pickerStyle(.segmented)
                 .fixedSize()
+            }
             }
             CardDivider()
             SettingsRow(
