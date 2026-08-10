@@ -1564,6 +1564,12 @@ private struct GeneralSettingsTab: View {
     @ObservedObject private var settings = AppSettings.shared
     @State private var showExportConfigWarning = false
     @State private var showImportConfigConfirm = false
+    @State private var showICloudExportWarning = false
+    // iCloud 文件夹里最新的那份配置(没有就是 nil)。只在 .onAppear 查一次 —— 这是文件
+    // 系统状态,App 不会主动收到"iCloud 里多了个文件"的通知。
+    @State private var iCloudSnapshot: ICloudConfigStore.Snapshot?
+    @State private var iCloudBusy = false
+    @State private var iCloudMessage: String?
     @State private var pendingImportData: Data?
     @State private var showClearConfigWarning = false
 
@@ -1609,6 +1615,31 @@ private struct GeneralSettingsTab: View {
             // 的副标题之后,每条只讲它自己那个按钮会发生什么,尤其"会覆盖""无法撤销"这类
             // 后果紧贴着对应的按钮,不用读者自己去对应。
             SettingsCard {
+                // 换电脑用的快捷通道:一键存到 iCloud Drive 的 Lyrimuse 文件夹、在新机器上
+                // 一键读回来。下面的"导出…/导入…"仍然保留 —— 那是通用的存文件路径(存到
+                // U 盘、发给自己、放进别的网盘),不是所有人都用 iCloud。
+                //
+                // 用户没开 iCloud Drive 时整行不显示,而不是留一个点了必然失败的按钮。
+                if ICloudConfigStore.isAvailable {
+                    SettingsRow(
+                        icon: "icloud",
+                        title: L10n.t("iCloud 配置"),
+                        subtitle: iCloudSubtitle
+                    ) {
+                        HStack(spacing: 8) {
+                            if iCloudBusy { ProgressView().controlSize(.small) }
+                            Button(L10n.t("存到 iCloud")) { showICloudExportWarning = true }
+                            if iCloudSnapshot != nil {
+                                Button(L10n.t("导入…")) { importFromICloud() }
+                            }
+                        }
+                    }
+                    if let iCloudMessage {
+                        CardDivider()
+                        SettingsNote { Text(iCloudMessage) }
+                    }
+                    CardDivider()
+                }
                 SettingsRow(
                     icon: "square.and.arrow.up",
                     title: L10n.t("导出配置"),
@@ -1628,6 +1659,9 @@ private struct GeneralSettingsTab: View {
                         panel.canChooseDirectories = false
                         panel.allowedContentTypes = [.json]
                         panel.prompt = L10n.t("导入")
+                        if ICloudConfigStore.isAvailable {
+                            panel.directoryURL = ICloudConfigStore.folderURL
+                        }
                         if panel.runModal() == .OK, let url = panel.url,
                            let data = try? Data(contentsOf: url) {
                             pendingImportData = data
@@ -1644,13 +1678,35 @@ private struct GeneralSettingsTab: View {
                     DestructiveButton(title: L10n.t("清除…")) { showClearConfigWarning = true }
                 }
             }
+            .onAppear { iCloudSnapshot = ICloudConfigStore.latestSnapshot() }
+            .alert(L10n.t("确定要存到 iCloud 吗？"), isPresented: $showICloudExportWarning) {
+                Button(L10n.t("取消"), role: .cancel) {}
+                Button(L10n.t("存到 iCloud")) {
+                    guard let data = ConfigPortability.buildExportData() else { return }
+                    if ICloudConfigStore.write(
+                        data, filename: ConfigPortability.suggestedFilename()) != nil
+                    {
+                        iCloudSnapshot = ICloudConfigStore.latestSnapshot()
+                        iCloudMessage = L10n.t("已存好。在新电脑上装好 Lyrimuse，第一次启动时会问你要不要导入")
+                    } else {
+                        iCloudMessage = L10n.t("写入 iCloud 失败，可以改用下面的「导出…」存成文件")
+                    }
+                }
+            } message: {
+                Text(L10n.t("这份配置里的账号 token 和密钥会以明文存进 iCloud Drive，能访问你 iCloud 的人就能看到"))
+            }
             .alert(L10n.t("确定要导出配置吗？"), isPresented: $showExportConfigWarning) {
                 Button(L10n.t("取消"), role: .cancel) {}
                 Button(L10n.t("继续导出")) {
                     guard let data = ConfigPortability.buildExportData() else { return }
                     let panel = NSSavePanel()
                     panel.nameFieldStringValue = ConfigPortability.suggestedFilename()
-                    panel.directoryURL = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Desktop")
+                    // 默认落点改成 iCloud Drive 里的 Lyrimuse 文件夹(没开 iCloud 就退回
+                    // 桌面)—— 换电脑是这个按钮唯一的用途,而新机器能自动找到的就是这个
+                    // 文件夹。用户仍然可以在面板里改到任何地方。
+                    panel.directoryURL = ICloudConfigStore.isAvailable
+                        ? ICloudConfigStore.preparedFolderURL()
+                        : FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Desktop")
                     if panel.runModal() == .OK, let url = panel.url {
                         try? data.write(to: url, options: .atomic)
                     }
@@ -1680,6 +1736,36 @@ private struct GeneralSettingsTab: View {
             }
         }
         .id(L10n.current)
+    }
+
+    /// iCloud 那一行的副标题:有配置就说清是哪一份(时间 + 哪台机器写的),没有就说还没存过。
+    private var iCloudSubtitle: String {
+        guard let snap = iCloudSnapshot else { return L10n.t("还没存过配置") }
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .short
+        let when = formatter.string(from: snap.exportedAt ?? snap.modifiedAt)
+        if let device = snap.deviceName, !device.isEmpty {
+            return String(format: L10n.t("%1$@ · 来自 %2$@"), when, device)
+        }
+        return when
+    }
+
+    private func importFromICloud() {
+        guard let snap = iCloudSnapshot else { return }
+        iCloudBusy = true
+        iCloudMessage = nil
+        Task {
+            // 新机器上这份文件很可能还只是个未下载的占位符,read 会先触发下载再等它到位。
+            let data = await ICloudConfigStore.read(snap.url)
+            iCloudBusy = false
+            guard let data else {
+                iCloudMessage = L10n.t("这份配置还没从 iCloud 下载下来，等一会儿再试")
+                return
+            }
+            pendingImportData = data
+            showImportConfigConfirm = true
+        }
     }
 }
 

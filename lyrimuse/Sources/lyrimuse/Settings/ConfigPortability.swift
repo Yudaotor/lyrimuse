@@ -30,9 +30,12 @@ enum ConfigPortability {
     //   常驻服务都是每台机器各自要重新授权/重新装的,带着旧机器"已完成"的标记过去,新
     //   机器反而不会弹出引导,用户会找不到入口去处理这两件事)。
     // - overlayStyle:已废弃的迁移专用字段,不是当前设置(见 AppSettings.swift 注释)。
+    // - hasOfferedICloudImport:"这台机器已经问过要不要从 iCloud 导入"——同样是本机
+    //   状态,带过去会让新机器不再弹那一问(见 AppSettings 里同名属性的注释)。
     private static let excludedDefaultsKeys: Set<String> = [
         "np:hasCompletedOnboarding",
         "np:hasShownAutomationOnboarding",
+        "np:hasOfferedICloudImport",
         "np:overlayStyle",
     ]
 
@@ -46,6 +49,10 @@ enum ConfigPortability {
         var bundle: [String: Any] = [
             "version": 1,
             "exportedAt": ISO8601DateFormatter().string(from: Date()),
+            // 从哪台机器导出的。iCloud 文件夹里会攒着好几份配置,只有时间戳的话分不清
+            // 是哪台机器写的 —— 导入前的那句确认里要能说清楚"这份来自谁"。
+            // 只是台机器名,不是敏感信息。
+            "deviceName": Host.current().localizedName ?? "",
         ]
 
         if let configData = try? Data(contentsOf: configURL),

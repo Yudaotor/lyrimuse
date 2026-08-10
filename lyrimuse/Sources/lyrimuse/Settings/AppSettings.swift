@@ -60,6 +60,7 @@ final class AppSettings: ObservableObject {
         static let appLanguage = "np:appLanguage"
         static let hasShownAutomationOnboarding = "np:hasShownAutomationOnboarding" // 已废弃,只在 init() 里读一次做迁移
         static let hasCompletedOnboarding = "np:hasCompletedOnboarding"
+        static let hasOfferedICloudImport = "np:hasOfferedICloudImport"
         static let overlayStyle = "np:overlayStyle" // 已废弃,只在 init() 里读一次做迁移
         static let classicOverlayEnabled = "np:classicOverlayEnabled"
         static let notchOverlayEnabled = "np:notchOverlayEnabled"
@@ -231,6 +232,16 @@ final class AppSettings: ObservableObject {
     @Published var hasCompletedOnboarding: Bool {
         didSet { defaults.set(hasCompletedOnboarding, forKey: Keys.hasCompletedOnboarding) }
     }
+    // 首次启动时"在 iCloud 里发现一份配置,要导入吗"这一问只问一次。
+    //
+    // 必须有这个标记,否则会死循环:导入之后要重启才生效,而 hasCompletedOnboarding 是
+    // 刻意不跟着导出走的(新机器本该自己走一遍引导,见 ConfigPortability 注释),重启后
+    // 它仍然是 false、iCloud 里那份配置也仍然在,于是又弹一次同样的问题。
+    //
+    // 跟 hasCompletedOnboarding 同类:属于"这台机器的状态",所以同样被排除在导出之外。
+    @Published var hasOfferedICloudImport: Bool {
+        didSet { defaults.set(hasOfferedICloudImport, forKey: Keys.hasOfferedICloudImport) }
+    }
     // 桌面悬浮歌词(经典悬浮窗)、灵动岛歌词各自独立开关,互不排斥——两者对应完全独立的
     // 窗口控制器(LyricsOverlayWindowController/NotchLyricsWindowController),可以
     // 同时开、同时关、或者只开一个(原来是互斥的单选"悬浮窗样式",迁移逻辑见下方
@@ -370,6 +381,8 @@ final class AppSettings: ObservableObject {
         appLanguage = defaults.string(forKey: Keys.appLanguage) ?? "system"
         hasCompletedOnboarding = (defaults.object(forKey: Keys.hasCompletedOnboarding) as? Bool)
             ?? (defaults.object(forKey: Keys.hasShownAutomationOnboarding) as? Bool) ?? false
+        hasOfferedICloudImport =
+            (defaults.object(forKey: Keys.hasOfferedICloudImport) as? Bool) ?? false
         // 一次性迁移:互斥的"悬浮窗样式"拆成两个独立开关之前,只可能同时生效一个——
         // 用旧值原样映射过来,保留用户当下已经在看的那个,不强行帮用户多打开另一个
         // (想同时开两个,拆开之后自己在设置里再手动开)。旧 key 只读不删,留着无害。

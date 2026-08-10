@@ -911,6 +911,22 @@ do {
                 "英文原样返回")
 }
 
+do {
+    print("\n== 配置文件名识别(iCloud 换机链路) ==")
+    typealias N = ConfigSnapshotName
+    let real = "Lyrimuse-Config-2026-08-10-164500.json"
+    expectEqual(N.realName(ofDirectoryEntry: real), real, "普通文件名原样认出")
+    // 这一条是整条链路的命门:新电脑上那份配置几乎必然还没下载,只以占位符形态存在
+    expectEqual(N.realName(ofDirectoryEntry: ".\(real).icloud"), real,
+                "iCloud 未下载占位符要还原成真名")
+    expectEqual(N.realName(ofDirectoryEntry: "Lyrimuse-Config-x.txt"), nil, "扩展名不对不认")
+    expectEqual(N.realName(ofDirectoryEntry: "other.json"), nil, "别人的 json 不认")
+    expectEqual(N.realName(ofDirectoryEntry: ".hidden.json"), nil,
+                "只以点开头、不是 .icloud 占位符的隐藏文件不认")
+    expectEqual(N.realName(ofDirectoryEntry: "Lyrimuse-Config-.json"), nil,
+                "只有前后缀、没有时间戳的不算导出产物")
+}
+
 if failures == 0 {
     print("\nALL PASS")
 } else {

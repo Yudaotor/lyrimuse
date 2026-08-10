@@ -91,7 +91,12 @@ struct MenuBarLabel: View {
             // 不长的延迟,让启动流程先跑完再发起,就能稳定弹出来。
             if !settings.hasCompletedOnboarding {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                    AppActions.shared.openOnboarding?()
+                    // 换电脑这条路先走一步:iCloud 里已经有配置就先问要不要导入,导入了
+                    // 就重启(引导在重启之后照样走,理由见 ICloudConfigImportPrompt);
+                    // 没有/跳过/还没下载好就原样走引导。
+                    ICloudConfigImportPrompt.offerIfNeeded {
+                        AppActions.shared.openOnboarding?()
+                    }
                 }
             }
         }

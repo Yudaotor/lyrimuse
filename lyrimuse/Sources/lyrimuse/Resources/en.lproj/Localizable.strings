@@ -470,3 +470,17 @@
 "查看、编辑、重搜已缓存的歌词" = "View, edit and re-search cached lyrics";
 "歌词永久保存在这里" = "Lyrics are kept here permanently";
 "比下面的宽度更长时截断成「前 N 个字…」，不滚动" = "Truncates to the first N characters when it doesn't fit";
+"iCloud 配置" = "iCloud Config";
+"存到 iCloud" = "Save to iCloud";
+"跳过" = "Skip";
+"还没存过配置" = "Nothing saved yet";
+"%1$@ · 来自 %2$@" = "%1$@ · from %2$@";
+"确定要存到 iCloud 吗？" = "Save your config to iCloud?";
+"这份配置里的账号 token 和密钥会以明文存进 iCloud Drive，能访问你 iCloud 的人就能看到" = "The account tokens and keys in this config are written to iCloud Drive in plain text — anyone with access to your iCloud can read them";
+"已存好。在新电脑上装好 Lyrimuse，第一次启动时会问你要不要导入" = "Saved. Install Lyrimuse on the new Mac and it will offer to import this on first launch";
+"写入 iCloud 失败，可以改用下面的「导出…」存成文件" = "Could not write to iCloud — use Export… below to save it as a file instead";
+"这份配置还没从 iCloud 下载下来，等一会儿再试" = "This config hasn't finished downloading from iCloud — try again in a moment";
+"在 iCloud 里发现一份 Lyrimuse 配置" = "Found a Lyrimuse config in iCloud";
+"导出时间 %1$@，来自 %2$@。" = "Exported %1$@ from %2$@. ";
+"导出时间 %@。" = "Exported %@. ";
+"导入会带上账号和所有个人设置，随后重启 Lyrimuse。" = "Importing brings over your accounts and every personal setting, then restarts Lyrimuse.";
