@@ -543,3 +543,39 @@ else
   echo "!! Lyrimuse not running — check ~/Library/Logs/lyrimuse.log" >&2
   exit 1
 fi
+
+# collector 是独立的一份 launchd job(com.lyrimuse.collector),上面那一整套 kickstart/
+# bootout 只管 $LABEL 这个 App job，从来没管过它 —— 而这个脚本每跑一次，都会把
+# Resources/collector 删掉重拷、再 `codesign --force --sign -` 重签一遍(见上面那一步)，
+# cdhash 必然变。于是:
+#
+#   1. 正在跑的老 collector 因为二进制被换掉，下次缺页时被 SIGKILL;
+#   2. launchd(KeepAlive=true)想拉起新的，但它给这个 job 缓存的 LWCR
+#      (Lightweight Code Requirement)还绑在旧 cdhash 上 —— 新二进制被内核直接拒绝，
+#      崩溃报告里写得很明白:CODESIGNING / "Launch Constraint Violation" +
+#      SIGKILL (Code Signature Invalid)，launchctl 那边则是 exit 78 EX_CONFIG、
+#      job state = spawn failed;
+#   3. KeepAlive 会一直重试一直失败(2026-08-10 实测抓到时 runs 已经 127 次)，
+#      collector 就此永久躺平 —— 歌词解析、scrobble、relay 全停，而 App 本身活得好好的，
+#      表现成"这首歌一直没歌词、歌词管理也没条目"，极难联想到是构建脚本干的。
+#
+# 所以这里不先试 kickstart:App 那边 kickstart 只是"有时"失败，collector 这边是**每次构建
+# 必然**失效，直接走完整的卸载重装。中间那个 sleep 跟上面同理 —— bootout 是异步的。
+COLLECTOR_LABEL="com.lyrimuse.collector"
+COLLECTOR_PLIST="$HOME/Library/LaunchAgents/$COLLECTOR_LABEL.plist"
+if [ -f "$COLLECTOR_PLIST" ]; then
+  echo "==> reloading collector job (refreshing its launch constraint)"
+  launchctl bootout "gui/$(id -u)/$COLLECTOR_LABEL" 2>/dev/null || true
+  sleep 1
+  launchctl bootstrap "gui/$(id -u)" "$COLLECTOR_PLIST" 2>/dev/null || true
+  sleep 1
+  launchctl kickstart -k "gui/$(id -u)/$COLLECTOR_LABEL" 2>/dev/null || true
+  sleep 2
+  if cpid=$(pgrep -f "$APP_DIR/Contents/Resources/collector"); then
+    echo "==> collector running, pid $cpid"
+  else
+    # 不 exit 1:App 本身已经起来了，collector 没起来是个独立故障，值得刺眼但不该让
+    # 整个构建被判失败(而且这条分支真出现时，多半要人去看崩溃报告)。
+    echo "!! collector not running — launchctl print gui/$(id -u)/$COLLECTOR_LABEL" >&2
+  fi
+fi
