@@ -207,20 +207,12 @@ func destinationStatus(for destination: AccountDestination, config: ConfigStore,
         return .active()
     case .lastfm:
         if case .failed(let msg) = lastfmConnect.state { return .error(msg) }
-        // bridgeOK 故意不能只看 lastfmBridgeMissingHint()——那个函数是"Last.fm 侧凭据
-        // 填了没"这个更窄的判断,同时也被 resolvedDigestSource(听歌报告的数据源判定)
-        // 复用,不能因为这里也要求 ListenBrainz 就把它改成两个账号联查,否则会误伤只
-        // 配了 Last.fm、没配 ListenBrainz 的听歌报告场景。"读取"这个方向现在没有独立
-        // 开关了(2026-07-29 起两边都配好就自动生效,见 cardIntro 附近的注释),这里的
-        // 徽标要准确反映"真的在跑没有",所以额外叠一层 isListenBrainzConfigured。
-        let bridgeOK = config.lastfmBridgeMissingHint() == nil && config.isListenBrainzConfigured
-        let mirrorOK = config.lastfmMirrorMissingHint() == nil
-        switch (bridgeOK, mirrorOK) {
-        case (true, true): return .active(L10n.t("读取+写入已配置"))
-        case (true, false): return .active(L10n.t("读取已配置"))
-        case (false, true): return .active(L10n.t("写入已配置"))
-        case (false, false): return .missingCreds(L10n.t("未配置"))
-        }
+        // 2026-08-11 起徽标只报"连没连"。旧版把读/写两条链路的组合状态摊给用户
+        // ("读取+写入已配置"那一套)——那是在解释用户不需要理解的架构,见 lastfmFields
+        // 顶部注释。
+        if config.lastfmScrobbleSessionKey.isEmpty { return .missingCreds(L10n.t("未配置（可选）")) }
+        let name = config.lastfmScrobbleUsername.isEmpty ? config.lastfmUser : config.lastfmScrobbleUsername
+        return .active(name.isEmpty ? nil : String(format: L10n.t("已连接：%@"), name))
     case .bark:
         if let hint = config.pushMissingHint() { return .missingCreds(hint) }
         return .active(config.notificationPlatform.displayName)
@@ -304,6 +296,9 @@ struct AccountLinkingTab: View {
         let jumpTarget: AccountDestination?
     }
     @State private var missingPrereqAlert: MissingPrereqAlert?
+    // "连接 Last.fm"向导 sheet 开没开——见 lastfmFields 顶部注释,未连接时打开
+    // scrobble 开关就是打开它。
+    @State private var showLastfmWizard = false
 
     var body: some View {
         // 2026-08-06 从 .formStyle(.grouped) 换成跟其余六个设置分类同一套卡片组件
@@ -479,7 +474,7 @@ struct AccountLinkingTab: View {
             // 就默认生效"这个判定条件完全一样,单独留一个开关只是多一次点击,没有实际
             // 区分度。跟"网页推送"那两个字段"填好就是唯一的开关"是同一个思路(见
             // stateRelayFields 的 footer 注释)。
-            return L10n.t("同一个 Last.fm 账号，可以双向同步收听记录")
+            return L10n.t("把你播放的歌记录到 Last.fm")
         case .bark:
             return L10n.t("用来接收「每周听歌小结」「每日听歌报告」推送")
         }
@@ -555,42 +550,119 @@ struct AccountLinkingTab: View {
     // 既能免签名供桥接读,也能签名走连接流程供镜像写。现在合并成一套"账号信息",
     // 下面只剩"写入记录"这一个还需要手动开关的 Section——"读取"那一半(同步到
     // ListenBrainz)同一天又被去掉了独立开关,理由见上面 cardIntro 附近的注释。
+    // 2026-08-11 按「一个开关」方案重做:这一页 99% 的时间处于"已连接"态,旧版却把
+    // 配置期才需要的东西(用户名输入框、API Key/Secret 两行、"前往申请")永久平铺着,
+    // 三个绿色指示器("已设置"×2 +"已连接")说的其实是同一件事。现在:
+    //   - 主界面只剩一行开关(+ 已连接时一行状态);
+    //   - API Key/Secret 收进"连接向导"sheet,只在配置那一刻出现;
+    //   - 未连接时打开开关 = 打开向导,连接成功自动开启 scrobble——消灭"已连接但开关
+    //     没开"这个死状态(用户以为连上就会记录,实际还差一个开关);断开时同步关掉;
+    //   - 手填用户名框删掉:授权成功返回的真实用户名自动回填(LastfmAuthFlow 里已有
+    //     该逻辑),桥接/周报读的就是它。
     @ViewBuilder
     private var lastfmFields: some View {
         SettingsCard {
             SettingsRow(
-                icon: "key",
-                title: L10n.t("账号信息"),
-                subtitle: L10n.t("创建 Last.fm 应用即可获取 API Key + Secret"),
-                help: L10n.t("在 Last.fm 后台创建应用会同时给你 API Key 和 Secret")
-            ) {
-                Link(L10n.t("前往申请"), destination: URL(string: "https://www.last.fm/api/account/create")!)
-            }
-            CardDivider()
-            SettingsRawRow(insetToText: true) {
-                VStack(alignment: .leading, spacing: 8) {
-                    TextField(L10n.t("Last.fm 用户名"), text: $config.lastfmUser)
-                    SecretFieldRow("API Key", value: $config.lastfmScrobbleAPIKey)
-                    SecretFieldRow("Secret", value: $config.lastfmScrobbleSecret, prompt: L10n.t("只用只读功能可以留空"))
-                    lastfmConnectArea
-                }
-            }
-        }
-
-        SettingsCard {
-            SettingsRow(
                 icon: "arrow.up.circle",
-                title: L10n.t("同步进 Last.fm"),
-                subtitle: L10n.t("开启后会把播放记录同步写入 Last.fm")
+                title: L10n.t("Scrobble 到 Last.fm")
             ) {
                 Toggle("", isOn: Binding(
-                    get: { features.lastfmMirrorScrobble },
-                    set: { newValue in
-                        toggleGuarded(newValue, sameCardHint: config.lastfmMirrorMissingHint()) { v in
-                            features.lastfmMirrorScrobble = v; Task { await features.save() }
+                    get: { lastfmConnected && features.lastfmMirrorScrobble },
+                    set: { on in
+                        if on {
+                            if lastfmConnected {
+                                features.lastfmMirrorScrobble = true
+                                Task { await features.save() }
+                            } else {
+                                // 开关本身就是配置入口。视觉上不先扳过去(get 算出来
+                                // 仍是 false),等向导真正连接成功再亮。
+                                showLastfmWizard = true
+                            }
+                        } else {
+                            features.lastfmMirrorScrobble = false
+                            Task { await features.save() }
                         }
                     }
                 ))
+            }
+            if lastfmConnected {
+                CardDivider()
+                SettingsRawRow(insetToText: true) {
+                    HStack {
+                        Label(
+                            lastfmDisplayName.isEmpty
+                                ? L10n.t("已连接 Last.fm 账号")
+                                : String(format: L10n.t("已连接：%@"), lastfmDisplayName),
+                            systemImage: "checkmark.seal.fill"
+                        ).foregroundStyle(.green)
+                        Spacer()
+                        lastfmProfileLinkButton
+                        Button(L10n.t("断开")) {
+                            config.lastfmScrobbleSessionKey = ""
+                            config.lastfmScrobbleUsername = ""
+                            // 断开后 scrobble 一定发不出去,开关跟着关,不留一个
+                            // "看着开着、实际废了"的假状态。
+                            features.lastfmMirrorScrobble = false
+                            Task {
+                                await config.save()
+                                await features.save()
+                            }
+                        }
+                        .buttonStyle(.link)
+                    }
+                }
+            }
+        }
+        .sheet(isPresented: $showLastfmWizard) { lastfmWizardSheet }
+    }
+
+    private var lastfmConnected: Bool { !config.lastfmScrobbleSessionKey.isEmpty }
+
+    // 展示用的用户名。scrobbleUsername 是授权返回的权威值,但老用户的连接早于"授权返回
+    // 用户名"这个功能(2026-07-29 加的),它可能是空的——这时退回手填时代留下的
+    // lastfmUser,别让老用户看到一行没有名字的"已连接"。
+    private var lastfmDisplayName: String {
+        config.lastfmScrobbleUsername.isEmpty ? config.lastfmUser : config.lastfmScrobbleUsername
+    }
+
+    private var lastfmConnectSucceeded: Bool {
+        if case .success = lastfmConnect.state { return true }
+        return false
+    }
+
+    // 连接向导——整个 App 里唯一会见到 API Key/Secret 的地方。
+    private var lastfmWizardSheet: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                Text(L10n.t("连接 Last.fm")).font(.title3.bold())
+                Spacer()
+                Button(L10n.t("取消")) {
+                    lastfmConnect.reset()
+                    showLastfmWizard = false
+                }
+            }
+            HStack {
+                Text(L10n.t("先在 Last.fm 创建一个应用，拿到 API Key 和 Secret"))
+                    .font(.callout).foregroundStyle(.secondary)
+                Spacer()
+                Link(L10n.t("前往申请"), destination: URL(string: "https://www.last.fm/api/account/create")!)
+            }
+            SecretFieldRow("API Key", value: $config.lastfmScrobbleAPIKey)
+            SecretFieldRow("Secret", value: $config.lastfmScrobbleSecret)
+            Divider()
+            lastfmConnectArea
+        }
+        .padding(20)
+        .frame(width: 460)
+        .onChange(of: lastfmConnectSucceeded) { _, ok in
+            guard ok else { return }
+            // 连接成功 = 想要 scrobble,直接开,不让用户猜"还差一个开关"。
+            features.lastfmMirrorScrobble = true
+            Task { await features.save() }
+            // 停一拍让"已连接"那行被看见,再收起向导。
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) {
+                showLastfmWizard = false
+                lastfmConnect.reset()
             }
         }
     }

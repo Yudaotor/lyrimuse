@@ -57,7 +57,9 @@ enum DiagnosticsExporter {
         // 在跑"而不是"Last.fm 侧凭据填了没"(后者单独看意义不大,还得对照上一行才知道
         // 有没有真的启用)。
         lines.append("Last.fm bridge active: \(config.lastfmBridgeMissingHint() == nil && config.isListenBrainzConfigured)")
-        lines.append("Last.fm mirror configured: \(config.lastfmMirrorMissingHint() == nil)")
+        // lastfmMirrorMissingHint 2026-08-11 已删(开关自己就是配置入口,不再需要前置
+        // 校验函数),它检查的三个字段里 sessionKey 是最后一步产物,单看它就等价。
+        lines.append("Last.fm mirror configured: \(!config.lastfmScrobbleSessionKey.isEmpty)")
         lines.append("State relay configured: \(config.stateRelayMissingHint() == nil)")
         lines.append("Push notification configured: \(config.pushMissingHint() == nil)")
         lines.append("")

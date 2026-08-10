@@ -172,17 +172,14 @@ public final class ConfigStore: ObservableObject {
     // 场景完全不需要 ListenBrainz。两个用途混进同一个判断会互相伤害,所以这里保持
     // 语义狭窄,"要不要额外查 ListenBrainz"交给各自调用点自己决定。
     public func lastfmBridgeMissingHint() -> String? {
-        if savedSnapshot.lastfmUser.isEmpty { return L10n.t("还没填用户名") }
-        if savedSnapshot.lastfmScrobbleAPIKey.isEmpty && savedSnapshot.lastfmAPIKey.isEmpty { return L10n.t("还没填 API Key") }
-        return nil
-    }
-
-    // 字段名跟"账号信息" Section 里的输入框标签保持一致(API Key/Secret,不带
-    // "Scrobble"前缀,见 AccountLinkingTab.swift)。
-    public func lastfmMirrorMissingHint() -> String? {
-        if savedSnapshot.lastfmScrobbleAPIKey.isEmpty { return L10n.t("还没填 API Key") }
-        if savedSnapshot.lastfmScrobbleSecret.isEmpty { return L10n.t("还没填 Secret") }
-        if savedSnapshot.lastfmScrobbleSessionKey.isEmpty { return L10n.t("还没完成账号授权") }
+        // 2026-08-11:用户名输入框已删(见 AccountLinkingTab.lastfmFields 注释)——用户名
+        // 和 API Key 现在都来自"连接 Last.fm"向导(授权成功自动回填),所以两种缺失对
+        // 用户是同一个动作:去连接。原来还有一个 lastfmMirrorMissingHint 给写入开关做
+        // 前置校验,新设计里开关自己就是配置入口,那个函数一并删了。
+        if savedSnapshot.lastfmUser.isEmpty
+            || (savedSnapshot.lastfmScrobbleAPIKey.isEmpty && savedSnapshot.lastfmAPIKey.isEmpty) {
+            return L10n.t("还没连接 Last.fm 账号")
+        }
         return nil
     }
 
