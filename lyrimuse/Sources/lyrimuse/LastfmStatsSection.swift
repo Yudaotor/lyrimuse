@@ -13,6 +13,9 @@ struct LastfmStatsSection: View {
     @AppStorage("np:lastfmChartKind") private var kindRaw = LastfmStatsService.ChartKind.artists.rawValue
     @AppStorage("np:lastfmChartPeriod") private var periodRaw = LastfmStatsService.Period.month.rawValue
 
+    // 悬停行的高亮(说明"这里能点"),chart|N / recent|id 两个列表共用一个变量
+    @State private var hoveredRow: String?
+
     private var kind: LastfmStatsService.ChartKind {
         .init(rawValue: kindRaw) ?? .artists
     }
@@ -112,6 +115,9 @@ struct LastfmStatsSection: View {
         let maxCount = max(entries.map(\.playcount).max() ?? 1, 1)
         return VStack(spacing: 0) {
             ForEach(entries) { e in
+                Button {
+                    if let url = Self.lastfmURL(kind: kind, entry: e) { NSWorkspace.shared.open(url) }
+                } label: {
                 HStack(spacing: 10) {
                     Text("\(e.rank)")
                         .font(.caption).monospacedDigit().foregroundStyle(.tertiary)
@@ -137,16 +143,58 @@ struct LastfmStatsSection: View {
                 }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 5)
+                .background(
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(hoveredRow == "chart|\(e.rank)" ? Color.secondary.opacity(0.10) : .clear)
+                        .padding(.horizontal, 6))
+                .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .onHover { hoveredRow = $0 ? "chart|\(e.rank)" : (hoveredRow == "chart|\(e.rank)" ? nil : hoveredRow) }
+                .help(L10n.t("在 Last.fm 打开"))
             }
         }
         .padding(.vertical, 5)
+    }
+
+    /// Last.fm 的实体页地址。路径段里的 "/" 必须转义 —— 专辑名里带斜杠(The Hits/The
+    /// B-Sides)会把路径切开;urlPathAllowed 本身放行 "/",要从集合里挖掉。
+    static func lastfmURL(kind: LastfmStatsService.ChartKind, entry: LastfmStatsService.ChartEntry) -> URL? {
+        var allowed = CharacterSet.urlPathAllowed
+        allowed.remove(charactersIn: "/")
+        func enc(_ s: String) -> String? { s.addingPercentEncoding(withAllowedCharacters: allowed) }
+        switch kind {
+        case .artists:
+            guard let a = enc(entry.name) else { return nil }
+            return URL(string: "https://www.last.fm/music/\(a)")
+        case .albums:
+            guard let a = enc(entry.detail), let al = enc(entry.name) else { return nil }
+            return URL(string: "https://www.last.fm/music/\(a)/\(al)")
+        case .tracks:
+            guard let a = enc(entry.detail), let t = enc(entry.name) else { return nil }
+            return URL(string: "https://www.last.fm/music/\(a)/_/\(t)")
+        }
+    }
+
+    static func trackURL(artist: String, title: String) -> URL? {
+        lastfmURL(kind: .tracks, entry: .init(rank: 0, name: title, detail: artist, playcount: 0, imageURL: nil))
     }
 
     /// 榜单行的图:专辑有真封面;歌手/歌曲的 API 图是白星占位(见 LastfmStatsService
     /// 的注释),画首字母色块 —— 色相由名字哈希决定,同一个名字永远同一个颜色。
     @ViewBuilder
     private func thumb(for e: LastfmStatsService.ChartEntry) -> some View {
-        if let url = e.imageURL {
+        // 歌手榜(detail 为空的就是歌手行)优先用 collector 解析的真头像,圆形;
+        // 还没解析出来/查不到时落回首字母色块 —— 头像是异步补上的,先字母后照片。
+        if e.imageURL == nil, e.detail.isEmpty, let avatar = stats.artistAvatars[e.name] {
+            AsyncImage(url: avatar) { image in
+                image.resizable().aspectRatio(contentMode: .fill)
+            } placeholder: {
+                Circle().fill(Self.stableColor(for: e.name))
+            }
+            .frame(width: 26, height: 26)
+            .clipShape(Circle())
+        } else if let url = e.imageURL {
             AsyncImage(url: url) { image in
                 image.resizable().aspectRatio(contentMode: .fill)
             } placeholder: {
@@ -212,6 +260,9 @@ struct LastfmStatsSection: View {
                         .padding(.vertical, 5)
                     }
                     ForEach(recentHistory) { t in
+                        Button {
+                            if let url = Self.trackURL(artist: t.artist, title: t.title) { NSWorkspace.shared.open(url) }
+                        } label: {
                         HStack(spacing: 10) {
                             AsyncImage(url: t.imageURL) { image in
                                 image.resizable().aspectRatio(contentMode: .fill)
@@ -228,10 +279,20 @@ struct LastfmStatsSection: View {
                             if let date = t.date {
                                 Text(Self.relative(date))
                                     .font(.caption).foregroundStyle(.tertiary).monospacedDigit()
+                                    // 相对时间悬停给精确时刻 —— "1 小时前"想核对到分钟时不用去网站查
+                                    .help(Self.absolute(date))
                             }
                         }
                         .padding(.horizontal, 14)
                         .padding(.vertical, 5)
+                        .background(
+                            RoundedRectangle(cornerRadius: 6)
+                                .fill(hoveredRow == "recent|\(t.id)" ? Color.secondary.opacity(0.10) : .clear)
+                                .padding(.horizontal, 6))
+                        .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .onHover { hoveredRow = $0 ? "recent|\(t.id)" : (hoveredRow == "recent|\(t.id)" ? nil : hoveredRow) }
                     }
                 }
                 .padding(.vertical, 5)
@@ -269,6 +330,15 @@ struct LastfmStatsSection: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 14)
+    }
+
+    /// 精确时刻("2026年8月11日 14:32"),给相对时间的悬停提示用。
+    static func absolute(_ date: Date) -> String {
+        let f = DateFormatter()
+        f.dateStyle = .medium
+        f.timeStyle = .short
+        f.locale = Locale(identifier: L10n.current == "en" ? "en_US" : "zh_CN")
+        return f.string(from: date)
     }
 
     /// 相对时间("4 分钟前"),locale 跟着 App 语言走 —— RelativeDateTimeFormatter

@@ -63,6 +63,12 @@ func main() {
 		runSearchLyricsCLI(os.Args[2:])
 		return
 	}
+	// `collector artist-avatars ...`:同 search-lyrics 的形态,给 Last.fm 信息页解析
+	// 歌手头像(见 avatarcli.go)。
+	if len(os.Args) > 1 && os.Args[1] == "artist-avatars" {
+		runArtistAvatarsCLI(os.Args[2:])
+		return
+	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		log.Fatalf("resolve home dir: %v", err)

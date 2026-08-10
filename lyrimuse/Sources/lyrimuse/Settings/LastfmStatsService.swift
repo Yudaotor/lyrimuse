@@ -99,6 +99,10 @@ final class LastfmStatsService: ObservableObject {
     /// kind|period → 榜单。切分段/时段时旧内容还在,不闪空。
     @Published private(set) var charts: [String: [ChartEntry]] = [:]
     @Published private(set) var chartLoading = false
+    /// 歌手名 → 真头像 URL。由 collector 的 artist-avatars 子命令解析(QQ 音乐优先、
+    /// Deezer 兜底,14 天磁盘缓存,见 avatarcli.go)——Last.fm API 的歌手图是占位星。
+    /// 查不到的名字**不会**出现在这里,UI 自然回落到首字母色块。
+    @Published private(set) var artistAvatars: [String: URL] = [:]
     @Published private(set) var baselineFailed = false
     @Published private(set) var chartFailed = false
 
@@ -188,6 +192,40 @@ final class LastfmStatsService: ObservableObject {
                                           playcount: count, imageURL: image))
             }
             charts[key] = entries
+            if kind == .artists {
+                resolveAvatars(names: entries.map(\.name))
+            }
+        }
+    }
+
+    /// 让 collector 去查一批歌手头像。失败静默 —— 头像是锦上添花,查不到就显示首字母,
+    /// 不值得占一条错误提示。
+    private func resolveAvatars(names: [String]) {
+        let missing = names.filter { artistAvatars[$0] == nil }
+        guard !missing.isEmpty else { return }
+        let collectorPath = Bundle.main.bundleURL
+            .appendingPathComponent("Contents/Resources/collector").path
+        Task.detached(priority: .utility) {
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: collectorPath)
+            process.arguments = ["artist-avatars"] + missing
+            let pipe = Pipe()
+            process.standardOutput = pipe
+            process.standardError = FileHandle.nullDevice
+            do {
+                try process.run()
+            } catch {
+                logger.notice("artist-avatars: launch failed: \(error.localizedDescription, privacy: .public)")
+                return
+            }
+            let data = pipe.fileHandleForReading.readDataToEndOfFile()
+            process.waitUntilExit()
+            guard let map = try? JSONSerialization.jsonObject(with: data) as? [String: String] else { return }
+            await MainActor.run {
+                for (name, url) in map where !url.isEmpty {
+                    if let u = URL(string: url) { LastfmStatsService.shared.artistAvatars[name] = u }
+                }
+            }
         }
     }
 
