@@ -623,7 +623,7 @@ private struct LyricsSettingsTab: View {
                 icon: "folder",
                 title: L10n.t("歌词文件夹"),
                 subtitle: L10n.t("歌词永久保存在这里"),
-                help: L10n.t("歌词默认就以这个文件夹为准维护。联网匹配到的结果会导出成文件存在这里，「歌词管理」里手动导入/编辑的文件也在这里。换成新文件夹后，旧文件夹里已有的文件不会自动搬过去，需要自己手动移动")
+                help: L10n.t("换文件夹后，旧文件不会自动搬过去")
             )
             CardDivider()
             SettingsRawRow(insetToText: true) {
