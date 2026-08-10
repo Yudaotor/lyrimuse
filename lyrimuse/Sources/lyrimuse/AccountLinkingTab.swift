@@ -614,6 +614,19 @@ struct AccountLinkingTab: View {
             }
         }
         .sheet(isPresented: $showLastfmWizard) { lastfmWizardSheet }
+
+        // 信息展示区(方案 A「档案页」):已连接才有数据可看;未连接给一句预告,
+        // 不画一页空骨架。
+        if lastfmConnected {
+            LastfmStatsSection()
+        } else {
+            SettingsCard {
+                Text(L10n.t("连接后这里会展示你的听歌档案"))
+                    .font(.callout).foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 18)
+            }
+        }
     }
 
     private var lastfmConnected: Bool { !config.lastfmScrobbleSessionKey.isEmpty }

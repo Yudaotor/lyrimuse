@@ -475,3 +475,17 @@
 "先在 Last.fm 创建一个应用，拿到 API Key 和 Secret" = "First create a Last.fm application to get an API Key and Secret";
 "把你播放的歌记录到 Last.fm" = "Records what you play to Last.fm";
 "还没连接 Last.fm 账号" = "Last.fm account isn't connected yet";
+"连接后这里会展示你的听歌档案" = "Once connected, your listening profile shows up here";
+"今天" = "Today";
+"近 7 天" = "Past 7 days";
+"近 30 天" = "Past 30 days";
+"近一年" = "Past year";
+"总 scrobble" = "Total scrobbles";
+"听得最多" = "Most played";
+"歌曲" = "Track";
+"最近记录" = "Recent scrobbles";
+"正在记录" = "Scrobbling now";
+"这个时段还没有记录" = "No scrobbles in this period";
+"还没有 scrobble 记录" = "No scrobbles yet";
+"加载失败" = "Couldn't load";
+"%d 次" = "%d plays";
