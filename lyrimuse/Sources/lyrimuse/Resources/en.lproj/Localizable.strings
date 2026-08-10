@@ -380,10 +380,10 @@
 "语言、启动方式，以及把全部配置搬到另一台 Mac" = "Language, startup behavior, and moving all your settings to another Mac";
 "负责读取播放状态、解析歌词/封面并写入本地缓存；没有它同样无法显示任何内容" = "Reads playback state, resolves lyrics and artwork, and writes the local cache; nothing displays without it";
 "贴在桌面上，支持逐字高亮" = "Sits on your desktop, with word-by-word highlighting";
-"这首歌带逐字时间轴时逐字扫过，否则整行高亮" = "Sweeps word by word when the song has word timings, otherwise highlights the whole line";
+"逐字歌词，唱到哪个字亮到哪个字；没有逐字数据的歌整行高亮" = "Word-by-word lyrics: each word lights up as it is sung. Songs without word timings highlight the whole line";
 "选择读取哪个 App 的播放状态，并确认它能被正常读到" = "Choose which app to read playback from, and confirm it can be read";
 "配色主题" = "Color Theme";
-"优先逐字高亮" = "Prefer Word-by-Word Highlighting";
+"卡拉OK效果" = "Karaoke Effect";
 "双行显示" = "Two-Line Display";
 "快速开关" = "Quick Toggles";
 "调整步长" = "Step Size";
@@ -473,7 +473,6 @@
 "超出宽度时横向滚动播完" = "Scrolls when it doesn't fit";
 "只对资料库里的曲目生效。在 Apple Music 里直接点播、没有添加到资料库的专辑查不到曲目" = "Only works for tracks in your library. An album played straight from Apple Music without adding it has no tracks to find";
 "多显示一行下一句" = "Also show the next line";
-"有逐字数据时逐字扫过" = "Word-by-word when the data allows";
 "查看、编辑、重搜已缓存的歌词" = "View, edit and re-search cached lyrics";
 "歌词永久保存在这里" = "Lyrics are kept here permanently";
 "比下面的宽度更长时截断成「前 N 个字…」，不滚动" = "Truncates to the first N characters when it doesn't fit";

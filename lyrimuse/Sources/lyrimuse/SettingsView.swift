@@ -543,9 +543,8 @@ private struct LyricsSettingsTab: View {
         SettingsCard {
             SettingsRow(
                 icon: "sparkles",
-                title: L10n.t("优先逐字高亮"),
-                subtitle: L10n.t("有逐字数据时逐字扫过"),
-                help: L10n.t("这首歌带逐字时间轴时逐字扫过，否则整行高亮")
+                title: L10n.t("卡拉OK效果"),
+                help: L10n.t("逐字歌词，唱到哪个字亮到哪个字；没有逐字数据的歌整行高亮")
             ) {
                 Toggle("", isOn: Binding(
                     get: { settings.preferWordLevelKaraoke },
