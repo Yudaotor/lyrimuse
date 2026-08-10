@@ -569,7 +569,7 @@ private struct LyricsSettingsTab: View {
             SettingsRow(
                 icon: "character.bubble",
                 title: L10n.t("中文歌词字体"),
-                help: L10n.t("把中文歌词统一显示成简体或繁体。只改显示，不动本地存的歌词原文，随时切回来都是原样。日文歌不受影响——日文汉字里的「学/国」这类新字体会被简繁转换改错，所以带假名的歌一律原样显示")
+                help: L10n.t("把中文歌词统一显示成简体或繁体")
             ) {
                 Picker("", selection: Binding(
                     get: { settings.lyricsChineseVariant },

@@ -448,7 +448,7 @@
 "译文(机器翻译)" = "Translation (machine)";
 "译文(歌词源自带)" = "Translation (from the source)";
 "中文歌词字体" = "Chinese Lyrics Script";
-"把中文歌词统一显示成简体或繁体。只改显示，不动本地存的歌词原文，随时切回来都是原样。日文歌不受影响——日文汉字里的「学/国」这类新字体会被简繁转换改错，所以带假名的歌一律原样显示" = "Show Chinese lyrics in simplified or traditional throughout. Display only — the stored lyrics are untouched, so switching back is lossless. Japanese is left alone: simplified/traditional conversion would corrupt shinjitai kanji like 学 and 国, so anything containing kana is shown as-is";
+"把中文歌词统一显示成简体或繁体" = "Show Chinese lyrics in simplified or traditional throughout";
 "不转换" = "As-is";
 "简体" = "Simplified";
 "繁体" = "Traditional";
