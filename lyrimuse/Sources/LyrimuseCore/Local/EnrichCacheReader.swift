@@ -16,6 +16,15 @@ public struct EnrichCacheEntry: Decodable {
     // 要分开看,后者也可能是"还没解析完"或者"五个源都没查到"这类更含糊的情况。见
     // collector/enrich.go 的 enrichEntry.Instrumental 定义处的注释。
     let instrumental: Bool?
+    // 这条记录的**解析时刻**(Unix 秒)。>0 就代表"联网解析已经完整跑完一轮"——
+    // collector 一轮搜索结束时才写它,而且找不到歌词时**同样会写**一条只有 ts、
+    // 没有 lyrics 的记录(2026-08-11 在真实缓存里核实过确有这种条目)。
+    //
+    // 为什么不能用"查得到这个 key"当判据:外围字段补全那条路径(封面/各平台链接)也会
+    // 写这个 key,但它刻意不动 ts(见 collector/enrich.go 里 e.PeripheralTS 那段注释),
+    // 于是"条目存在"可能只代表封面补好了、歌词还在查 —— 拿它当"搜完了"会让 UI 提前
+    // 认输。ts 是那一轮搜索真正结束的凭据。
+    let ts: Int64?
 
     enum CodingKeys: String, CodingKey {
         case lyrics
@@ -25,6 +34,7 @@ public struct EnrichCacheEntry: Decodable {
         case lyricsSource = "lyrics_source"
         case coverSource = "cover_source"
         case instrumental
+        case ts
     }
 }
 
@@ -34,6 +44,10 @@ public struct EnrichCacheLyrics {
     public let lyricsRoma: String
     public let lyricsYRC: String
     public let instrumental: Bool
+    /// 这首歌已经被完整解析过一轮了吗(见 EnrichCacheEntry.ts)。
+    /// 它为 true 而 lyrics 为空,就是"搜过了,确实没有"——UI 靠这个区别把
+    /// "搜索歌词中…"换成"暂无歌词",而不是无限期转圈。
+    public let resolved: Bool
 }
 
 @MainActor
@@ -70,7 +84,8 @@ public enum EnrichCacheReader {
             lyricsTr: entry.lyricsTr ?? "",
             lyricsRoma: entry.lyricsRoma ?? "",
             lyricsYRC: entry.lyricsYRC ?? "",
-            instrumental: entry.instrumental ?? false
+            instrumental: entry.instrumental ?? false,
+            resolved: (entry.ts ?? 0) > 0
         )
     }
 

@@ -483,3 +483,4 @@
 "导出时间 %@。" = "Exported %@. ";
 "导入会带上账号和所有个人设置，随后重启 Lyrimuse。" = "Importing brings over your accounts and every personal setting, then restarts Lyrimuse.";
 "更新" = "Update";
+"暂无歌词" = "No lyrics found";

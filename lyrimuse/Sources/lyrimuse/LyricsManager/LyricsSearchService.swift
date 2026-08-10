@@ -119,6 +119,10 @@ final class LyricsSearchService {
     struct SearchUpdate {
         let candidates: [Candidate]
         let networkLooksDown: Bool
+        /// 已经回来的歌词源 / 一共要等几个。语义(为什么分母只数开着的源、为什么
+        /// applecover 不算)见 collector/enrich.go 的 lyricSearchUpdateFunc 注释。
+        let sourcesDone: Int
+        let sourcesTotal: Int
     }
 
     enum SearchError: LocalizedError {
@@ -211,7 +215,12 @@ final class LyricsSearchService {
                         logger.error("search-lyrics: failed to decode a stdout line, skipping")
                         continue
                     }
-                    let update = SearchUpdate(candidates: raw.candidates.map(Candidate.init), networkLooksDown: raw.networkLooksDown)
+                    let update = SearchUpdate(
+                        candidates: raw.candidates.map(Candidate.init),
+                        networkLooksDown: raw.networkLooksDown,
+                        // 可选 + 兜底 0:字段缺失不该让整行解码失败、把这一批候选整批丢掉。
+                        sourcesDone: raw.sourcesDone ?? 0,
+                        sourcesTotal: raw.sourcesTotal ?? 0)
                     Task { @MainActor in onUpdate(update) }
                 }
             }
@@ -274,6 +283,8 @@ final class LyricsSearchService {
 private struct RawSearchUpdate: Decodable {
     let candidates: [RawCandidate]
     let networkLooksDown: Bool
+    let sourcesDone: Int?
+    let sourcesTotal: Int?
 }
 
 private struct RawCandidate: Decodable {

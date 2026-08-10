@@ -39,6 +39,16 @@ public final class LocalPlaybackSource: ObservableObject {
     // 的分支顺序,这个判断必须排在"还在搜索中"那个分支之前,不然一首已经确认是纯音乐
     // 的歌会在播放期间一直卡在"搜索歌词中…"、永远不会显示出这个更准确的结论。
     @Published public private(set) var isCurrentTrackInstrumental: Bool = false
+    /// 联网解析已经跑完一轮,但一句歌词都没拿到。
+    ///
+    /// 跟 hasLyricsContent==false 的区别就是"搜没搜过":没有它的话,一首查遍五个源都
+    /// 找不到歌词的歌,只要还在播,界面就会**永远**停在"搜索歌词中…"——那句话在第 3 秒
+    /// 是实话,在第 3 分钟就是假话了。判据是缓存条目里的解析时刻(见
+    /// EnrichCacheLyrics.resolved)。
+    ///
+    /// 跟 isCurrentTrackInstrumental 互斥:纯音乐是"有依据地确认没有歌词",比这个更精确,
+    /// 所以那一档单独判、并且排在前面(见各 View 的分支顺序)。
+    @Published public private(set) var currentTrackHasNoLyrics: Bool = false
     // Spotify 广告插播——2026-08-03 补上:media-control 自己的文档确认广告播放时 album
     // 字段恒为空字符串,靠"当前是 Spotify 在报告 + album 为空"这个信号判断(见
     // apply() 里的计算);跟 isCurrentTrackInstrumental 同一个优先级问题,必须排在
@@ -803,6 +813,9 @@ public final class LocalPlaybackSource: ObservableObject {
         if newHasContent != hasLyricsContent { hasLyricsContent = newHasContent }
         let newInstrumental = found?.instrumental ?? false
         if newInstrumental != isCurrentTrackInstrumental { isCurrentTrackInstrumental = newInstrumental }
+        // 解析跑完了、又不是纯音乐、还是一句都没有 —— 那就是真的没有,别再说"搜索中"。
+        let newNoLyrics = (found?.resolved ?? false) && !newHasContent && !newInstrumental
+        if newNoLyrics != currentTrackHasNoLyrics { currentTrackHasNoLyrics = newNoLyrics }
         // "歌词窗口"的全部行只在换歌词内容这一刻重新构造一次——同一首歌播放期间歌词
         // 本身不变,不需要每 20Hz tick 都重算。idPrefix 用 currentOffsetKey(已经是
         // 按当前曲目算出来的标识),保证换歌后这里产出的每个 LyricsWindowLine.id 整体

@@ -23,6 +23,7 @@ final class PlaybackCoordinator: ObservableObject {
     @Published private(set) var hasLyricsContent: Bool = false
     // 联网查过了、明确是纯音乐,见 LocalPlaybackSource 同名属性的注释。
     @Published private(set) var isCurrentTrackInstrumental: Bool = false
+    @Published private(set) var currentTrackHasNoLyrics: Bool = false
     // Spotify 广告插播,见 LocalPlaybackSource 同名属性的注释。
     @Published private(set) var isCurrentTrackAdBreak: Bool = false
     @Published private(set) var anchor: ProgressAnchor?
@@ -310,6 +311,7 @@ final class PlaybackCoordinator: ObservableObject {
             s.$anchor.assign(to: \.anchor, on: self),
             s.$hasLyricsContent.assign(to: \.hasLyricsContent, on: self),
             s.$isCurrentTrackInstrumental.assign(to: \.isCurrentTrackInstrumental, on: self),
+            s.$currentTrackHasNoLyrics.assign(to: \.currentTrackHasNoLyrics, on: self),
             s.$isCurrentTrackAdBreak.assign(to: \.isCurrentTrackAdBreak, on: self),
             s.$currentLineIndex.assign(to: \.currentLineIndex, on: self),
             s.$allLines.assign(to: \.allLines, on: self),

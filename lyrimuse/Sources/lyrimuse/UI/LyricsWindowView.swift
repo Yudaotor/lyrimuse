@@ -956,6 +956,8 @@ struct LyricsWindowView: View {
     private var emptyStateSpec: (icon: String, text: String) {
         if poller.isCurrentTrackAdBreak { return ("megaphone", L10n.t("广告中")) }
         if poller.isCurrentTrackInstrumental { return ("waveform", L10n.t("纯音乐")) }
+        // 搜完确实没有 → 别再说"搜索中",理由见 poller.currentTrackHasNoLyrics。
+        if poller.currentTrackHasNoLyrics { return ("text.badge.xmark", L10n.t("暂无歌词")) }
         if poller.isPlayingNow && !poller.hasLyricsContent { return ("magnifyingglass", L10n.t("搜索歌词中…")) }
         return ("text.quote", L10n.t("无歌词"))
     }

@@ -65,7 +65,7 @@ func runSearchLyricsCLI(args []string) {
 	// 指望那边的修复覆盖到这里。
 	sArtist, sTitle, sAlbum := toSimplified(*artist), toSimplified(*title), toSimplified(*album)
 	enc := json.NewEncoder(os.Stdout)
-	emit := func(_ neteaseInfo, results []scoredLyricCandidateResult) {
+	emit := func(_ neteaseInfo, results []scoredLyricCandidateResult, done, total int) {
 		// networkLooksDown() 2026-08-02 补上——之前每行 stdout 只是候选数组本身,五个源
 		// 都没查到时 desktop-lyrics 只能显示一句笼统的"都没找到",分不清是这首歌真的没有
 		// 网络歌词,还是网络整体不通导致五个源的请求全部发不出去。见 networkobs.go 的
@@ -73,6 +73,8 @@ func runSearchLyricsCLI(args []string) {
 		update := searchLyricsUpdate{
 			Candidates:       filterEnabledLyricSources(results),
 			NetworkLooksDown: networkLooksDown(),
+			SourcesDone:      done,
+			SourcesTotal:     total,
 		}
 		if err := enc.Encode(update); err != nil {
 			log.Fatalf("search-lyrics: encode results: %v", err)
@@ -83,7 +85,9 @@ func runSearchLyricsCLI(args []string) {
 	// 完全一样(纯防御性的重复),唯一真正需要它的场景是:20 秒兜底超时在第一个源都还
 	// 没回来时就已经触发(五个源全部异常缓慢),这种极端情况下循环里的 emit 一次都没
 	// 被调用过,不能让 Swift 那边一行 stdout 都收不到、误判成"进程没有任何输出"。
-	emit(neteaseInfo{}, results)
+	// 这一行代表"这轮搜索结束了",所以进度直接报满 —— 即便是 20 秒兜底超时提前收场,
+	// 也不该让弹窗停在 3/5 让人以为还在查(真正"还在查"由进程是否退出决定,见 Swift 侧)。
+	emit(neteaseInfo{}, results, enabledLyricSourceCount(), enabledLyricSourceCount())
 }
 
 // searchLyricsUpdate 是 search-lyrics 每行 stdout 输出的实际结构——2026-08-02 从裸
@@ -94,6 +98,9 @@ func runSearchLyricsCLI(args []string) {
 type searchLyricsUpdate struct {
 	Candidates       []scoredLyricCandidateResult `json:"candidates"`
 	NetworkLooksDown bool                         `json:"networkLooksDown"`
+	// 歌词源的完成进度,给弹窗显示 (X/Y)——语义见 lyricSearchUpdateFunc 的注释。
+	SourcesDone  int `json:"sourcesDone"`
+	SourcesTotal int `json:"sourcesTotal"`
 }
 
 // filterEnabledLyricSources drops candidates from sources the user disabled via

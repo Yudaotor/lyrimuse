@@ -925,14 +925,14 @@ const lyricSearchDeadline = 20 * time.Second
 // 的 ne(见下面 return ne, results 那一行,不是 aliasNe)——封面/跳转链接这些字段永远
 // 用原始歌手名查出来的结果,这是重构前就有的行为,这里保持不变。
 func scoredLyricCandidates(artist, title, album string, durationSecs float64) (neteaseInfo, []scoredLyricCandidateResult) {
-	return scoredLyricCandidatesStreaming(artist, title, album, durationSecs, func(neteaseInfo, []scoredLyricCandidateResult) {})
+	return scoredLyricCandidatesStreaming(artist, title, album, durationSecs, func(neteaseInfo, []scoredLyricCandidateResult, int, int) {})
 }
 
 // scoredLyricCandidatesStreaming 是 scoredLyricCandidates 的流式版本(见
 // fetchScoredLyricCandidatesStreaming 顶部注释)——onUpdate 一路透传给主查询和(如果
 // 触发了)别名重试查询,所以手动搜索(searchcli.go)在别名重试这条冷门路径上也能看到
 // 陆续到达的候选,不会因为切换成了 alias 重试就突然掉回"等全部查完才展示"。
-func scoredLyricCandidatesStreaming(artist, title, album string, durationSecs float64, onUpdate func(neteaseInfo, []scoredLyricCandidateResult)) (neteaseInfo, []scoredLyricCandidateResult) {
+func scoredLyricCandidatesStreaming(artist, title, album string, durationSecs float64, onUpdate lyricSearchUpdateFunc) (neteaseInfo, []scoredLyricCandidateResult) {
 	ne, results := fetchScoredLyricCandidatesStreaming(artist, title, album, durationSecs, onUpdate)
 	if len(results) > 0 {
 		return ne, results
@@ -956,7 +956,7 @@ func scoredLyricCandidatesStreaming(artist, title, album string, durationSecs fl
 // 第二遍。只关心最终这一批结果的调用方(resolveTrackEnrichment/别名重试)走这个
 // 薄封装;真正的实现在下面 fetchScoredLyricCandidatesStreaming,onUpdate 传空函数。
 func fetchScoredLyricCandidates(artist, title, album string, durationSecs float64) (neteaseInfo, []scoredLyricCandidateResult) {
-	return fetchScoredLyricCandidatesStreaming(artist, title, album, durationSecs, func(neteaseInfo, []scoredLyricCandidateResult) {})
+	return fetchScoredLyricCandidatesStreaming(artist, title, album, durationSecs, func(neteaseInfo, []scoredLyricCandidateResult, int, int) {})
 }
 
 // fetchScoredLyricCandidatesStreaming 是实际实现:五个歌词源(含网易云)+ 一路
@@ -989,7 +989,33 @@ func fetchScoredLyricCandidates(artist, title, album string, durationSecs float6
 // 算一遍整个列表才能让分数/排序始终反映"目前已知的全部信息",不会出现"先看到的候选
 // 分数再也不会变"这种半截状态。fetchScoredLyricCandidates(上面)只关心最终结果,传一
 // 个空函数复用这同一份实现。
-func fetchScoredLyricCandidatesStreaming(artist, title, album string, durationSecs float64, onUpdate func(neteaseInfo, []scoredLyricCandidateResult)) (neteaseInfo, []scoredLyricCandidateResult) {
+// lyricSearchUpdateFunc 是流式搜索的进度回调。done/total 是**歌词源**的完成进度
+// (给"搜索候选歌词"弹窗显示 (X/Y)):
+//
+//   - total 只数用户在"歌词来源"里**开着**的源。关掉的源即便查了也不会出现在候选里
+//     (见 filterEnabledLyricSources),把它算进分母会让进度永远停在 4/5 这种数上。
+//   - 六个并发 goroutine 里有一个是 applecover(只查封面兜底),它不是歌词源,不计入。
+//   - 别名重试那条路径会带着同一个回调再跑一轮完整搜索,于是 done 会从头再数一遍 ——
+//     如实反映"确实又查了五个源",不假装单调递增。
+type lyricSearchUpdateFunc func(ne neteaseInfo, results []scoredLyricCandidateResult, done, total int)
+
+// lyricSourceNames 是五个歌词源的名字,顺序无关紧要,只用来数进度分母。
+// applecover 不在里面 —— 它查的是封面。
+var lyricSourceNames = []string{"netease", "qq", "kugou", "lrclib", "musixmatch"}
+
+// enabledLyricSourceCount 数"用户开着的歌词源"有几个。features.LyricsSources 为空
+// 表示还没配置过 = 全开(跟 filterEnabledLyricSources 同一条约定)。
+func enabledLyricSourceCount() int {
+	n := 0
+	for _, s := range lyricSourceNames {
+		if len(features.LyricsSources) == 0 || features.LyricsSources[s] {
+			n++
+		}
+	}
+	return n
+}
+
+func fetchScoredLyricCandidatesStreaming(artist, title, album string, durationSecs float64, onUpdate lyricSearchUpdateFunc) (neteaseInfo, []scoredLyricCandidateResult) {
 	type sourceResult struct {
 		source                  string
 		ne                      neteaseInfo
@@ -1133,10 +1159,24 @@ func fetchScoredLyricCandidatesStreaming(artist, title, album string, durationSe
 	}
 
 	deadline := time.After(lyricSearchDeadline)
+	// 哪些歌词源已经回来了。按名字记而不是只数个数:六个 goroutine 里有一个是
+	// applecover(封面兜底,不是歌词源),数个数会把它算进进度、让 (X/Y) 虚高一格。
+	doneSources := map[string]bool{}
+	totalSources := enabledLyricSourceCount()
+	enabledDone := func() int {
+		n := 0
+		for _, s := range lyricSourceNames {
+			if doneSources[s] && (len(features.LyricsSources) == 0 || features.LyricsSources[s]) {
+				n++
+			}
+		}
+		return n
+	}
 collect:
 	for i := 0; i < 6; i++ {
 		select {
 		case r := <-resultsCh:
+			doneSources[r.source] = true
 			switch r.source {
 			case "netease":
 				ne = r.ne
@@ -1152,7 +1192,7 @@ collect:
 			case "applecover":
 				appleCover = r.matchCover
 			}
-			onUpdate(ne, scoreAndSort())
+			onUpdate(ne, scoreAndSort(), enabledDone(), totalSources)
 		case <-deadline:
 			log.Printf("lyrics: search deadline (%s) hit for artist=%q title=%q, proceeding with %d/6 sources back", lyricSearchDeadline, artist, title, i)
 			break collect

@@ -36,7 +36,17 @@ struct LyricsSearchSheet: View {
     // 两个独立维度:可能已经有几条候选摆在那了、但后面的源还没回来。用一个三态 enum
     // 表达不了"进行中 + 已经有部分结果"这个中间状态。
     @State private var candidates: [LyricsSearchService.Candidate] = []
+    /// 给"还在搜索"那两处提示缀的进度,形如 "（2/5）"。还没收到任何一行时是空串。
+    private var searchProgressSuffix: String {
+        guard sourcesTotal > 0 else { return "" }
+        return "（\(sourcesDone)/\(sourcesTotal)）"
+    }
+
     @State private var isSearching = false
+    // 已经回来几个源 / 一共几个 —— 只用来在"还在搜"的提示后面缀一个 (X/Y),让干等的时候
+    // 知道进度在动。总数为 0(还没收到任何一行)时不显示,不写成 (0/0)。
+    @State private var sourcesDone = 0
+    @State private var sourcesTotal = 0
     // searchGeneration:第几轮搜索。load() 有三个入口(.task 首次进入、"重新搜索"按钮、
     // 输入框 .onSubmit),按钮有 .disabled(isSearching) 挡着,但 .onSubmit 没有——改完
     // 查询词直接回车就能在上一轮还没结束时开第二轮。两轮各自持有自己的进度回调,
@@ -160,7 +170,8 @@ struct LyricsSearchSheet: View {
             if isSearching {
                 VStack(spacing: 12) {
                     ProgressView()
-                    Text(L10n.t("正在查询网易云 / QQ音乐 / 酷狗 / Musixmatch / LRCLIB…"))
+                    Text(L10n.t("正在查询网易云 / QQ音乐 / 酷狗 / Musixmatch / LRCLIB…")
+                        + searchProgressSuffix)
                         .font(.callout)
                         .foregroundStyle(.secondary)
                 }
@@ -187,7 +198,7 @@ struct LyricsSearchSheet: View {
                     // ProgressView 挡住已经到手的结果。
                     HStack(spacing: 6) {
                         ProgressView().controlSize(.small)
-                        Text(L10n.t("其它源仍在搜索中…"))
+                        Text(L10n.t("其它源仍在搜索中…") + searchProgressSuffix)
                     }
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -411,12 +422,16 @@ struct LyricsSearchSheet: View {
         selectedSource = nil
         userPickedSource = false
         networkLooksDown = false
+        sourcesDone = 0
+        sourcesTotal = 0
         isSearching = true
         do {
             try await LyricsSearchService.shared.search(artist: artist, title: title, album: album, durationSecs: durationSecs) { update in
                 guard generation == searchGeneration else { return } // 已经有更新的一轮在跑,这批结果作废
                 candidates = update.candidates
                 networkLooksDown = update.networkLooksDown
+                sourcesDone = update.sourcesDone
+                sourcesTotal = update.sourcesTotal
                 // 默认项优先选"这首歌眼下实际生效的来源"(currentSource)——候选是陆续
                 // 到达的,currentSource 对应的那条不一定在第一批就到,所以只要用户还没
                 // 手动点过(userPickedSource),每来一批新候选都重新评估一次,等它一出现

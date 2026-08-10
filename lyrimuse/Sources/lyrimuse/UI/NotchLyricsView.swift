@@ -315,6 +315,12 @@ struct NotchLyricsView: View {
                 Text(L10n.t("纯音乐"))
                     .foregroundStyle(.white.opacity(0.7))
                     .shadow(color: .black.opacity(0.45), radius: 2, y: 1)
+            } else if poller.currentTrackHasNoLyrics {
+                // 搜完了、确实一句都没有,同 LyricsOverlayView.mainLine 的同名分支——
+                // 必须排在下面那个"搜索歌词中…"前面。
+                Text(L10n.t("暂无歌词"))
+                    .foregroundStyle(.white.opacity(0.7))
+                    .shadow(color: .black.opacity(0.45), radius: 2, y: 1)
             } else if poller.isPlayingNow && !poller.hasLyricsContent {
                 // 同 LyricsOverlayView.mainLine 的区分:currentLine==nil 可能是"还没解析
                 // 出这首歌的歌词"(collector 后台搜索中,见 poller.hasLyricsContent 注释),
