@@ -260,6 +260,8 @@ private struct LyricsSettingsTab: View {
 
     // 记住上次看的是哪一段 —— 每次重开设置都跳回第一段的话,连着调同一段的两项就要多点
     // 一次。存 rawValue 而不是枚举:@AppStorage 只吃基础类型。
+    /// 鼠标悬在哪个来源上(只为悬停底色,不影响任何配置)。
+    @State private var hoveredSource: LyricsSource?
     @AppStorage("settings:lyricsSection") private var sectionRaw = Section.fetch.rawValue
     private var section: Section { Section(rawValue: sectionRaw) ?? .fetch }
 
@@ -356,7 +358,7 @@ private struct LyricsSettingsTab: View {
             // 用 WrapLayout 而不是 HStack:万一系统字号调大、或以后加了第六个来源,自动折到
             // 第二行,不会被卡片宽度裁掉。
             SettingsRawRow(insetToText: true) {
-                WrapLayout(horizontalSpacing: 20, verticalSpacing: 8, rowAlignment: .leading) {
+                WrapLayout(horizontalSpacing: 10, verticalSpacing: 6, rowAlignment: .leading) {
                     ForEach(LyricsSource.allCases) { source in
                         sourceCheckbox(source)
                     }
@@ -421,19 +423,57 @@ private struct LyricsSettingsTab: View {
     /// 全是系统原生件(开关、分段控件、下拉),五个饱和色块摆在中间确实突兀,而且"选中"
     /// 本来就有一个所有人都认识的 macOS 表达方式。来源色只留一个小圆点作身份标记(跟
     /// "歌词管理"窗口来源列同一套色),不再铺成背景。
+    /// 一个来源的开关。
+    ///
+    /// 2026-08-10 重做:原来是系统复选框 + 品牌色圆点并排,**同一个状态画了两遍** ——
+    /// 复选框说"选中了"、圆点说"这是网易云",五个亮蓝方块横成一排,把它们各自的品牌色
+    /// 全压住了,一眼看过去只剩一串蓝。
+    ///
+    /// 现在合成一个元素:选中圈填品牌色、里面一个白勾,没选中就是一圈空心灰环 + 文字
+    /// 转次要色。勾负责"选没选中"、颜色负责"这是哪个来源",一个控件说两件不重复的事。
+    ///
+    /// 刻意不加胶囊底色 —— 那一版(彩色 chip)做过,用户的评价是"和整体不是很搭":这一页
+    /// 其余全是白底卡片 + 行,一排彩色药丸是外来物。悬停时才给一层极淡的底,只为了说明
+    /// "这里能点"。
     private func sourceCheckbox(_ source: LyricsSource) -> some View {
-        Toggle(
-            isOn: Binding(
-                get: { features.lyricsSources.contains(source) },
-                set: { setSource(source, enabled: $0) }
-            )
-        ) {
-            HStack(spacing: 5) {
-                Circle().fill(source.color).frame(width: 7, height: 7)
-                Text(source.displayName).font(.system(size: 13))
+        let on = features.lyricsSources.contains(source)
+        let hovered = hoveredSource == source
+        return Button {
+            setSource(source, enabled: !on)
+        } label: {
+            HStack(spacing: 6) {
+                // 勾要留着 —— 只画一个实心圆点的话,五个来源全开时这一排看上去就是一条
+                // 静态色标图例,完全读不出"能点"。勾 = 多选,圆的颜色 = 这是谁,两件事各
+                // 说各的,不再重复。
+                ZStack {
+                    Circle()
+                        .fill(on ? source.color : .clear)
+                        .overlay(
+                            Circle().strokeBorder(
+                                on ? .clear : Color.secondary.opacity(0.4), lineWidth: 1.5))
+                    if on {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 8, weight: .bold))
+                            .foregroundStyle(.white)
+                    }
+                }
+                .frame(width: 15, height: 15)
+                Text(source.displayName)
+                    .font(.system(size: 13))
+                    .foregroundStyle(on ? Color.primary : Color.secondary)
             }
+            .padding(.vertical, 4)
+            .padding(.horizontal, 7)
+            .background(
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(hovered ? Color.secondary.opacity(0.12) : .clear))
+            // 整块(含内边距)都算命中区,不是只有文字和圆点上才点得到
+            .contentShape(RoundedRectangle(cornerRadius: 6))
         }
-        .toggleStyle(.checkbox)
+        .buttonStyle(.plain)
+        .onHover { hoveredSource = $0 ? source : (hoveredSource == source ? nil : hoveredSource) }
+        .animation(.easeOut(duration: 0.12), value: hovered)
+        .accessibilityAddTraits(on ? [.isSelected] : [])
     }
 
     private func setSource(_ source: LyricsSource, enabled: Bool) {
