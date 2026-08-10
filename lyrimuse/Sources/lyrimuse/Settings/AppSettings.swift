@@ -444,6 +444,10 @@ final class AppSettings: ObservableObject {
         backgroundColor = Color(hexWithAlpha: backgroundColorHex, fallback: .clear)
         backgroundIsVisible = (NSColor(hexStringWithAlpha: backgroundColorHex)?.alphaComponent ?? 0) > 0.02
         textStrokeColor = Color(hexWithAlpha: textStrokeColorHex, fallback: .black.opacity(0.65))
+        // 顺手把功能改名/删除之后遗留下来的死键清掉(名单和理由见
+        // ConfigPortability.obsoleteDefaultsKeys)。放在最后:上面那些读取全部完成之后再动
+        // UserDefaults,不会影响本次启动读到的任何值。
+        ConfigPortability.pruneObsoleteDefaults()
     }
 
     // 把 lyricsOffsetStepMs(毫秒)格式成"0.2"/"0.05"/"1.0"这种干净的秒数文案——

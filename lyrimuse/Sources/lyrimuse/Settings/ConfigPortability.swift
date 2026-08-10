@@ -62,7 +62,7 @@ enum ConfigPortability {
     ///   (导入完就重启,而 Swift 的属性观察器在 init 里赋值时也不触发),所以带过去的结果
     ///   是:新机器上开关显示"已开启",实际上没有任何 LaunchAgent —— 界面在说谎。宁可让
     ///   用户在新机器上自己开一次。
-    private static let excludedDefaultsKeys: Set<String> = [
+    private static let machineLocalDefaultsKeys: Set<String> = [
         "np:hasCompletedOnboarding",
         "np:hasShownAutomationOnboarding",
         "np:hasOfferedICloudImport",
@@ -73,6 +73,48 @@ enum ConfigPortability {
         "np:notchScreenID",
         "np:launchAtLoginEnabled",
     ]
+
+    /// 已经没有任何代码在读的旧键 —— 功能改名或删掉之后,值还留在 UserDefaults 里。
+    ///
+    /// 2026-08-10 对本机全部 44 个 `np:` 键做了一次全仓扫描(源码里既搜 `"np:xxx"` 字面量、
+    /// 又搜短名标识符),这五个在 **lyrimuse / LyrimuseCore / collector / desktop-lyrics /
+    /// web 全部代码里零命中**,并逐个确认过去向:
+    ///
+    /// - `useSystemTranslationFallback`:"系统兜底翻译"这个开关还在,但早就改绑到
+    ///   `features.lyricsMachineTranslation`(features.json)了,不再走 UserDefaults。
+    /// - `textShadowEnabled` / `textShadowColorHex`:文字阴影这个功能整个已经不存在。
+    /// - `relayBaseURL`:中继地址现在由 collector 的 config.json (`state_relay_url`) 管。
+    /// - `dataSourceMode`:旧版本的数据源开关,早已没有对应 UI 和读取方。
+    ///
+    /// **跟上面那份机器专属名单不是一回事**:那些键是活的、只是不该跨机器带;这些是死的,
+    /// 留着就是垃圾 —— 会被导出进配置文件、在新机器上再被导入回去,一路传下去。
+    ///
+    /// 刻意**不**包含 `overlayStyle` / `hasShownAutomationOnboarding`:它们看着也像废弃字段,
+    /// 但 AppSettings.init() 每次启动都还在读它们做一次性迁移,删了会让从老版本升上来的
+    /// 用户丢掉迁移结果。
+    static let obsoleteDefaultsKeys: Set<String> = [
+        "np:dataSourceMode",
+        "np:relayBaseURL",
+        "np:textShadowColorHex",
+        "np:textShadowEnabled",
+        "np:useSystemTranslationFallback",
+    ]
+
+    /// 导出/导入都要跳过的键 = 机器专属的 + 已经死掉的。
+    private static let excludedDefaultsKeys: Set<String> =
+        machineLocalDefaultsKeys.union(obsoleteDefaultsKeys)
+
+    /// 把死键从本机 UserDefaults 里删掉。启动时调一次,幂等。
+    ///
+    /// 光在导出时跳过它们还不够 —— 那只是不再往外传,本机这份仍然留着,`defaults read`
+    /// 里也一直看得见。既然确认没有任何读取方,就地删干净。
+    static func pruneObsoleteDefaults() {
+        let defaults = UserDefaults.standard
+        for key in obsoleteDefaultsKeys where defaults.object(forKey: key) != nil {
+            defaults.removeObject(forKey: key)
+            logger.notice("pruned obsolete default key \(key, privacy: .public)")
+        }
+    }
 
     static func suggestedFilename() -> String {
         let formatter = DateFormatter()
