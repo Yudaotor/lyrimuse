@@ -4,6 +4,11 @@ import SwiftUI
 /// 一张分段榜单卡、最近记录。只在已连接时由 AccountLinkingTab 挂出来。
 struct LastfmStatsSection: View {
     @ObservedObject private var stats = LastfmStatsService.shared
+    // "正在记录"行接本地播放状态,不用 API 的 nowplaying 标记 —— API 那份要等下一次
+    // 拉取才更新(缓存 15 分钟),本地这份换歌瞬间就变。这也正是设计方案里"活状态"
+    // 一节定的做法。
+    @ObservedObject private var poller = PlaybackCoordinator.shared
+    @ObservedObject private var features = FeatureSettingsStore.shared
     // 分段/时段都持久化 —— 这页会被反复打开,每次都跳回默认档等于没记住用户在看什么。
     @AppStorage("np:lastfmChartKind") private var kindRaw = LastfmStatsService.ChartKind.artists.rawValue
     @AppStorage("np:lastfmChartPeriod") private var periodRaw = LastfmStatsService.Period.month.rawValue
@@ -181,7 +186,32 @@ struct LastfmStatsSection: View {
                 }
             } else {
                 VStack(spacing: 0) {
-                    ForEach(stats.recent) { t in
+                    if let live = liveRow {
+                        HStack(spacing: 10) {
+                            Group {
+                                if let img = poller.artworkImage {
+                                    Image(nsImage: img).resizable().aspectRatio(contentMode: .fill)
+                                } else {
+                                    RoundedRectangle(cornerRadius: 5).fill(.quaternary)
+                                }
+                            }
+                            .frame(width: 26, height: 26)
+                            .clipShape(RoundedRectangle(cornerRadius: 5))
+                            VStack(alignment: .leading, spacing: 0) {
+                                Text(live.title).font(.system(size: 13)).lineLimit(1)
+                                Text(live.artist).font(.system(size: 10.5)).foregroundStyle(.secondary).lineLimit(1)
+                            }
+                            Spacer()
+                            Label(L10n.t("正在记录"), systemImage: "circle.fill")
+                                .font(.caption)
+                                .foregroundStyle(Color(red: 0.84, green: 0.06, blue: 0.03))
+                                .labelStyle(.titleAndIcon)
+                                .imageScale(.small)
+                        }
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 5)
+                    }
+                    ForEach(recentHistory) { t in
                         HStack(spacing: 10) {
                             AsyncImage(url: t.imageURL) { image in
                                 image.resizable().aspectRatio(contentMode: .fill)
@@ -195,13 +225,7 @@ struct LastfmStatsSection: View {
                                 Text(t.artist).font(.system(size: 10.5)).foregroundStyle(.secondary).lineLimit(1)
                             }
                             Spacer()
-                            if t.nowPlaying {
-                                Label(L10n.t("正在记录"), systemImage: "circle.fill")
-                                    .font(.caption)
-                                    .foregroundStyle(Color(red: 0.84, green: 0.06, blue: 0.03))
-                                    .labelStyle(.titleAndIcon)
-                                    .imageScale(.small)
-                            } else if let date = t.date {
+                            if let date = t.date {
                                 Text(Self.relative(date))
                                     .font(.caption).foregroundStyle(.tertiary).monospacedDigit()
                             }
@@ -213,6 +237,20 @@ struct LastfmStatsSection: View {
                 .padding(.vertical, 5)
             }
         }
+    }
+
+    /// 本地"正在记录"行:正在播放、且 scrobble 开着才显示 —— 开关关着时这首歌不会被
+    /// 记录,标一句"正在记录"就是撒谎。
+    private var liveRow: (title: String, artist: String)? {
+        guard features.lastfmMirrorScrobble, poller.isPlayingNow, !poller.title.isEmpty else { return nil }
+        return (poller.title, poller.artist)
+    }
+
+    /// 历史行:API 返回的 nowplaying 行(date 为 nil)丢掉 —— 它跟上面的本地行说的是
+    /// 同一首歌;本地行没显示时(暂停/开关关着)它也照丢,暂停中的歌不该以"正在播"的
+    /// 形态出现在历史里。
+    private var recentHistory: [LastfmStatsService.RecentTrack] {
+        stats.recent.filter { $0.date != nil }
     }
 
     // MARK: - 小件
