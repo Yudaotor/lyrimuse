@@ -682,6 +682,7 @@ private struct AppearanceSettingsTab: View {
     // NSScreen.screens:插拔显示器时 SwiftUI 不会因为一个全局数组变了就重算 body,
     // 得靠下面那条 didChangeScreenParameters 通知显式刷新。
     @State private var availableScreens: [NSScreen] = NSScreen.screens
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     // 精选常用字体,而不是列出这台机器上全部两百多个已安装字体族——选不过来。清单
     // 来源是调研结论,不是凭印象挑的:
@@ -745,21 +746,119 @@ private struct AppearanceSettingsTab: View {
             title: L10n.t("外观"),
             subtitle: L10n.t("四种展示方式互不冲突，可以同时开启")
         ) {
+            sectionPicker
+            currentSection
+                .id(section)
+                .transition(.opacity)
+        }
+        .id(L10n.current)
+    }
+
+    /// 这一页的四个分段,跟「歌词」页同一个范式(见 LyricsSettingsTab.Section 的注释)。
+    ///
+    /// 原来是 5 张卡片平铺在一条长滚动里,而且「桌面悬浮歌词」那一张自己就有十几项
+    /// (字体/字号/颜色/描边/阴影/宽度/位置…),开着两三个形态时这一页要滚很久,想改灵动岛
+    /// 的一项得先翻过悬浮歌词的全部设置。
+    ///
+    /// 分法就按**形态**走 —— 这是这一页天然的结构:先在「总览」里决定开哪几个,再进各自
+    /// 那一段调它自己的样子。「自动隐藏」跟着总览走,因为它是**跨形态**的规则(悬浮歌词和
+    /// 灵动岛共用),放进任何一个单独形态里都不对。
+    private enum Section: String, CaseIterable, Identifiable {
+        case modes, overlay, notch, menuBar
+        var id: Self { self }
+        var title: String {
+            switch self {
+            case .modes: return L10n.t("总览")
+            case .overlay: return L10n.t("悬浮歌词")
+            case .notch: return L10n.t("灵动岛")
+            case .menuBar: return L10n.t("菜单栏")
+            }
+        }
+    }
+
+    @AppStorage("settings:appearanceSection") private var sectionRaw = Section.modes.rawValue
+    private var section: Section { Section(rawValue: sectionRaw) ?? .modes }
+
+    private var sectionPicker: some View {
+        Picker(
+            "",
+            selection: Binding(
+                get: { section },
+                set: { next in
+                    withAnimation(reduceMotion ? nil : .easeOut(duration: 0.16)) {
+                        sectionRaw = next.rawValue
+                    }
+                })
+        ) {
+            ForEach(Section.allCases) { s in
+                Text(s.title).tag(s)
+            }
+        }
+        .pickerStyle(.segmented)
+        .labelsHidden()
+        .fixedSize()
+        .padding(.bottom, 2)
+    }
+
+    @ViewBuilder
+    private var currentSection: some View {
+        switch section {
+        case .modes:
             displayModesCard
-            if settings.classicOverlayEnabled {
-                classicOverlayCard.transition(.settingsCard)
-            }
-            if settings.notchOverlayEnabled {
-                notchOverlayCard.transition(.settingsCard)
-            }
-            if settings.showLyricsInMenuBar {
-                menuBarCard.transition(.settingsCard)
-            }
+            // 自动隐藏是**跨形态**的(悬浮歌词/灵动岛共用同一组规则),所以留在总览里,
+            // 而不是在两个形态段里各放一份。两个都没开时它没有作用对象,不显示。
             if settings.classicOverlayEnabled || settings.notchOverlayEnabled {
                 autoHideCard.transition(.settingsCard)
             }
+        case .overlay:
+            if settings.classicOverlayEnabled {
+                classicOverlayCard
+            } else {
+                disabledSectionHint(
+                    title: L10n.t("桌面悬浮歌词还没开启"),
+                    isOn: Binding(
+                        get: { settings.classicOverlayEnabled },
+                        set: { LyricsOverlayWindowController.shared.setVisible($0) }))
+            }
+        case .notch:
+            if settings.notchOverlayEnabled {
+                notchOverlayCard
+            } else {
+                disabledSectionHint(
+                    title: L10n.t("灵动岛歌词还没开启"),
+                    isOn: Binding(
+                        get: { settings.notchOverlayEnabled },
+                        set: { NotchLyricsWindowController.shared.setVisible($0) }))
+            }
+        case .menuBar:
+            if settings.showLyricsInMenuBar {
+                menuBarCard
+            } else {
+                disabledSectionHint(
+                    title: L10n.t("菜单栏歌词还没开启"),
+                    isOn: $settings.showLyricsInMenuBar)
+            }
         }
-        .id(L10n.current)
+    }
+
+    /// 某个形态没开启时,这一段不能是**空白** —— 平铺版本里"卡片直接不出现"是合理的
+    /// (上面还有别的内容),但分段之后点进来只剩一片空,看起来像坏了。给一句说明 + 一个
+    /// 就地打开的开关,不用退回总览再点一次。
+    private func disabledSectionHint(title: String, isOn: Binding<Bool>) -> some View {
+        SettingsCard {
+            SettingsRow(
+                icon: "eye.slash",
+                title: title,
+                subtitle: L10n.t("打开之后这里会出现它的全部外观设置")
+            ) {
+                Toggle("", isOn: Binding(
+                    get: { isOn.wrappedValue },
+                    set: { newValue in
+                        withAnimation(.settingsCardReveal) { isOn.wrappedValue = newValue }
+                    }
+                ))
+            }
+        }
     }
 
     // 四个总开关。四种展示方式互不冲突,可以同时开、只开一个、或者都不开;每个开关只
