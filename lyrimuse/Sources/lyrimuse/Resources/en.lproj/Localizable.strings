@@ -160,7 +160,6 @@
 "显示歌词窗口" = "Show Lyrics Window";
 "风格" = "Style";
 "自动隐藏" = "Auto-Hide";
-"显示专辑封面" = "Show Album Artwork";
 "纯黑" = "Solid Black";
 "磨砂玻璃" = "Frosted Glass";
 "深色渐变" = "Dark Gradient";
@@ -392,7 +391,6 @@
 "选择读取哪个 App 的播放状态，并确认它能被正常读到" = "Choose which app to read playback from, and confirm it can be read";
 "逐条查看、编辑、联网重搜每首歌已缓存的歌词" = "Browse, edit, and re-search the cached lyrics for each song";
 "配色主题" = "Color Theme";
-"配色由下面的「风格」决定、字号固定，不使用「桌面悬浮歌词」那一组配色和字体设置" = "Colors come from Style below and the text size is fixed; the Desktop Floating Lyrics color and font settings don't apply";
 "优先逐字高亮" = "Prefer Word-by-Word Highlighting";
 "双行显示" = "Two-Line Display";
 "当前这句下面再显示一行下一句歌词" = "Shows the next line below the current one";
@@ -469,15 +467,12 @@
 "下面的配色、字体、字号只影响桌面悬浮歌词；灵动岛、菜单栏、歌词窗口各自用固定样式" = "The colours, fonts and sizes below affect the desktop overlay only — the notch, menu bar and lyrics window each use a fixed style";
 "以下两项对「桌面悬浮歌词」和「灵动岛歌词」同时生效；菜单栏歌词和歌词窗口不受影响" = "Both settings below apply to the desktop overlay and the notch; menu bar lyrics and the lyrics window are unaffected";
 "别人看不到，你仍看得见" = "Hidden from others, still visible to you";
-"右下角一枚封面小图" = "A small cover thumbnail, bottom right";
 "四种展示方式可以同时开启" = "All four can be on at once";
 "在浅色或杂乱的桌面背景上给文字加一圈描边，把字撑出来" = "Outlines the text so it holds up against a light or busy desktop";
 "对悬浮歌词和灵动岛生效" = "Applies to the overlay and the notch";
-"开启后当前歌词能显示的宽度会略微变窄" = "Turning it on slightly narrows the room for the current line";
 "悬浮歌词" = "Overlay";
 "截图、录屏、视频会议共享屏幕都不会拍到悬浮歌词" = "Screenshots, screen recordings and video-call screen sharing won't capture the overlay";
 "杂乱背景上更清楚" = "Clearer on busy backgrounds";
-"样式固定，不跟随悬浮歌词" = "Fixed style, independent of the overlay";
 "状态栏宽度有限，歌词可能被截断；鼠标悬停在上面永远能看到完整的这一行" = "The menu bar is narrow so the line may be truncated; hovering always shows it in full";
 "解锁后可点击穿透" = "Unlocked: clicks pass through";
 "解锁后鼠标点击会穿到桌面上；长按住悬浮歌词不放才能拖动它" = "When unlocked, clicks pass through to whatever is behind; press and hold the lyrics to drag them";

@@ -1101,8 +1101,6 @@ private struct AppearanceSettingsTab: View {
             SettingsRow(
                 icon: "rectangle.topthird.inset.filled",
                 title: L10n.t("灵动岛歌词"),
-                subtitle: L10n.t("样式固定，不跟随悬浮歌词"),
-                help: L10n.t("配色由下面的「风格」决定、字号固定，不使用「桌面悬浮歌词」那一组配色和字体设置")
             )
             CardDivider()
             SettingsRow(icon: "paintbrush.pointed", title: L10n.t("风格")) {
@@ -1113,15 +1111,6 @@ private struct AppearanceSettingsTab: View {
                 }
                 .pickerStyle(.menu)
                 .fixedSize()
-            }
-            CardDivider()
-            SettingsRow(
-                icon: "photo",
-                title: L10n.t("显示专辑封面"),
-                subtitle: L10n.t("右下角一枚封面小图"),
-                help: L10n.t("开启后当前歌词能显示的宽度会略微变窄")
-            ) {
-                Toggle("", isOn: $settings.notchShowArtwork)
             }
             CardDivider()
             // 跟上面桌面悬浮歌词的"宽度"滑块同一套写法(设置项本身只负责持久化,didSet

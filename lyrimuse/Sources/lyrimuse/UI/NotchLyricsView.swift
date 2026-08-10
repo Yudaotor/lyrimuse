@@ -278,7 +278,9 @@ struct NotchLyricsView: View {
 
             // 封面小图在歌词右边(卡片右下角),没有封面数据时整个摘掉、把宽度全部还给
             // 歌词,理由见 artworkThumbnail 上面的注释。
-            if settings.notchShowArtwork, let image = poller.artworkImage {
+            // 2026-08-10 删掉了「显示专辑封面」开关(用户要求),固定按原来的默认值走:
+            // 有封面就显示。
+            if let image = poller.artworkImage {
                 artworkThumbnail(image)
             }
         }

@@ -65,7 +65,6 @@ final class AppSettings: ObservableObject {
         static let notchOverlayEnabled = "np:notchOverlayEnabled"
         static let notchCardStyle = "np:notchCardStyle"
         // 灵动岛歌词行尾端(卡片右下角)那枚专辑封面小图,见 NotchLyricsView.artworkThumbnail。默认开。
-        static let notchShowArtwork = "np:notchShowArtwork"
         static let notchScreenID = "np:notchScreenID"
         // 2026-08-05 之前,"这种悬浮歌词要不要显示"这一件事有**两份**独立持久化:上面这两个
         // {classic,notch}OverlayEnabled(设置页那两个 Toggle 读它),外加两个 WindowController
@@ -252,12 +251,6 @@ final class AppSettings: ObservableObject {
         didSet { defaults.set(notchCardStyle.rawValue, forKey: Keys.notchCardStyle) }
     }
     // 灵动岛歌词行尾端(卡片右下角)那枚专辑封面小图——默认开。同样只负责持久化,
-    // NotchLyricsView 每次渲染直接读这个值。之所以给它一个开关而不是无条件显示:封面连
-    // 间距会占掉歌词行 42pt 宽度(整行 328pt 的 12.8%),歌词可显示的宽度会跟着变窄
-    // (见 NotchLyricsView.artworkThumbnail 的注释),这个取舍值得让用户自己决定。
-    @Published var notchShowArtwork: Bool {
-        didSet { defaults.set(notchShowArtwork, forKey: Keys.notchShowArtwork) }
-    }
     // 灵动岛贴在哪块屏幕上——存的是显示器 UUID(见 ScreenIdentity),空字符串 = 自动
     // (挑有刘海的那块)。跟 lockPosition/notchContentWidth 同一个模式:这里只负责持久化,
     // 不碰 NSWindow,由 SettingsView 的 Binding.set 显式调用窗口控制器让它立刻生效。
@@ -415,7 +408,6 @@ final class AppSettings: ObservableObject {
         classicOverlayEnabled = classicOn
         notchOverlayEnabled = notchOn
         notchCardStyle = defaults.string(forKey: Keys.notchCardStyle).flatMap(NotchCardStyle.init(rawValue:)) ?? .frostedGlass
-        notchShowArtwork = (defaults.object(forKey: Keys.notchShowArtwork) as? Bool) ?? true
         notchScreenID = defaults.string(forKey: Keys.notchScreenID) ?? ""
         fontFamilyName = defaults.string(forKey: Keys.fontFamilyName) ?? Self.defaultFontFamilyName
         fontSize = (defaults.object(forKey: Keys.fontSize) as? Double) ?? Self.defaultFontSize
