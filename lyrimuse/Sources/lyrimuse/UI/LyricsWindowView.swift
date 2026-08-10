@@ -987,19 +987,25 @@ struct LyricsWindowView: View {
     /// 用 sin(π·进度) 而不是"到了就抬起、过了就落下":那样是两个突变,看起来是在"跳";
     /// 正弦在 0 和 1 两端的斜率都是 0,抬起和落回都自然收尾,峰值正好落在这个字唱到一半时。
     /// 幅度跟字号挂钩(7%),不同字号下观感一致;reduceMotion 时整个关掉。
-    /// 抬起再落回的**固定时长**。原来是按这个字自己的时长拉伸,于是长音会一直吊在上面:
-    /// 实测这首歌逐字词时长中位 473ms,但最长 2302ms、25 个词超过 1 秒 —— 用户看到的
-    /// "字抬起来不会重新下去"就是这些长音。抬一下本来就该是个短促的"点头",跟音符按住
-    /// 多久无关。
+    /// 字抬起来之后**保持**,直到这一行唱完换下一行才整体落回 —— 唱过的那一截一直浮在
+    /// 上面,像一级台阶跟着演唱往右推。
+    ///
+    /// ⚠️ 不是"抬一下再落回"。2026-08-10 我先按点头式做了一版(sin(π·进度),峰值在字中间、
+    /// 结束落回),用户明确纠正:预期是第一个字抬起后一直不下来,第二个字抬起时第一个仍然
+    /// 浮着,整行结束才一起下去。落回由"这一行不再是当前行"接管 —— 非当前行走的是纯文本
+    /// 分支,本来就没有位移,跟着滚动淡出一起发生,不需要额外补一段落回动画。
+    ///
+    /// 抬升过程用 sin(p·π/2):从 0 平滑升到 1、终点斜率为 0,停住时不会有"撞顶"感;
+    /// 时长取固定 320ms(不超过这个字自己的时长,短音符不被拉长),跟音符按住多久无关。
     private static let karaokeRiseWindowMs: Double = 320
 
     private func karaokeRise(_ w: SyncedLyricWord, atMs currentMs: Int) -> CGFloat {
         guard !reduceMotion else { return 0 }
         let elapsed = Double(currentMs - w.startMs)
-        // 窗口不超过这个字自己的时长 —— 短音符不该被拉长成 320ms 的动作。
+        guard elapsed > 0 else { return 0 } // 还没唱到这个字
         let window = min(Self.karaokeRiseWindowMs, Double(max(1, w.durationMs)))
-        guard elapsed > 0, elapsed < window else { return 0 }
-        return -sin(elapsed / window * .pi) * lyricFontSize * 0.07
+        let p = min(1, elapsed / window)
+        return -sin(p * .pi / 2) * lyricFontSize * 0.07
     }
 
     private func karaokeWord(_ w: SyncedLyricWord, atMs currentMs: Int, base: Color) -> some View {
