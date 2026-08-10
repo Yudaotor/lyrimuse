@@ -1692,8 +1692,6 @@ private struct GeneralSettingsTab: View {
                         iCloudMessage = L10n.t("写入 iCloud 失败，可以改用下面的「导出…」存成文件")
                     }
                 }
-            } message: {
-                Text(L10n.t("这份配置里的账号 token 和密钥会以明文存进 iCloud Drive，能访问你 iCloud 的人就能看到"))
             }
             .alert(L10n.t("确定要导出配置吗？"), isPresented: $showExportConfigWarning) {
                 Button(L10n.t("取消"), role: .cancel) {}
