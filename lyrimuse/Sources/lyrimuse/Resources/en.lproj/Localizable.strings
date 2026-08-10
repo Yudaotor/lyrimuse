@@ -378,7 +378,6 @@
 "文件里包含账号 token、密钥等敏感信息，注意妥善保管，不要分享给他人" = "The file contains account tokens and secrets — keep it safe and don't share it";
 "文字描边" = "Text Outline";
 "无需额外授权" = "No Permission Needed";
-"最不打扰，只占状态栏一行纯文字" = "The least intrusive — one line of plain text in the menu bar";
 "本地时间晚上 10 点之后当天第一次检查时推送：当天播放次数、累计时长、听得最多的几首歌" = "Pushed on the first check after 10 PM local time: today's play count, total listening time, and your most-played tracks";
 "检查更新" = "Check for Updates";
 "没有它，悬浮歌词/灵动岛都无法显示任何歌词内容" = "Without it, neither the floating lyrics nor the Dynamic Island can show any lyrics";
@@ -475,7 +474,6 @@
 "在浅色或杂乱的桌面背景上给文字加一圈描边，把字撑出来" = "Outlines the text so it holds up against a light or busy desktop";
 "对悬浮歌词和灵动岛生效" = "Applies to the overlay and the notch";
 "开启后当前歌词能显示的宽度会略微变窄" = "Turning it on slightly narrows the room for the current line";
-"悬停可看完整一行" = "Hover to see the whole line";
 "悬浮歌词" = "Overlay";
 "截图、录屏、视频会议共享屏幕都不会拍到悬浮歌词" = "Screenshots, screen recordings and video-call screen sharing won't capture the overlay";
 "杂乱背景上更清楚" = "Clearer on busy backgrounds";
@@ -484,3 +482,6 @@
 "解锁后可点击穿透" = "Unlocked: clicks pass through";
 "解锁后鼠标点击会穿到桌面上；长按住悬浮歌词不放才能拖动它" = "When unlocked, clicks pass through to whatever is behind; press and hold the lyrics to drag them";
 "配色与字体只作用于这里" = "Colours and fonts apply here only";
+"比下面的宽度更长时，在状态栏里横向滚动播完整句；开头会先停一下再滚" = "Anything longer than the width below scrolls across the menu bar in full, after a brief pause at the start";
+"超出宽度时截断，不滚动" = "Truncates when it doesn't fit";
+"超出宽度时横向滚动播完" = "Scrolls when it doesn't fit";

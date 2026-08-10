@@ -829,7 +829,6 @@ private struct AppearanceSettingsTab: View {
             modeToggleCard(
                 icon: "menubar.rectangle",
                 title: L10n.t("菜单栏歌词"),
-                subtitle: L10n.t("最不打扰，只占状态栏一行纯文字"),
                 isOn: $settings.showLyricsInMenuBar)
             if settings.showLyricsInMenuBar {
                 menuBarCard.transition(.settingsCard)
@@ -853,7 +852,7 @@ private struct AppearanceSettingsTab: View {
     /// 关着的时候这一段也不会是空白 —— 这张卡本身就是内容,替代了原来那个"还没开启"的
     /// 占位提示。
     private func modeToggleCard(
-        icon: String, title: String, subtitle: String, isOn: Binding<Bool>
+        icon: String, title: String, subtitle: String? = nil, isOn: Binding<Bool>
     ) -> some View {
         SettingsCard {
             SettingsRow(icon: icon, title: title, subtitle: subtitle) {
@@ -1190,7 +1189,6 @@ private struct AppearanceSettingsTab: View {
             SettingsRow(
                 icon: "menubar.rectangle",
                 title: L10n.t("菜单栏歌词"),
-                subtitle: L10n.t("悬停可看完整一行"),
                 help: L10n.t("状态栏宽度有限，歌词可能被截断；鼠标悬停在上面永远能看到完整的这一行")
             )
             CardDivider()
@@ -1198,7 +1196,10 @@ private struct AppearanceSettingsTab: View {
                 icon: "arrow.left.arrow.right",
                 title: L10n.t("超宽时横向滚动"),
                 subtitle: L10n.t(settings.menuBarLyricsScroll
-                    ? "比下面的宽度更长时，在状态栏里横向滚动播完整句（开头会先停一下再滚）"
+                    ? "超出宽度时横向滚动播完"
+                    : "超出宽度时截断，不滚动"),
+                help: L10n.t(settings.menuBarLyricsScroll
+                    ? "比下面的宽度更长时，在状态栏里横向滚动播完整句；开头会先停一下再滚"
                     : "比下面的宽度更长时截断成「前 N 个字…」，不滚动")
             ) {
                 Toggle("", isOn: $settings.menuBarLyricsScroll)
