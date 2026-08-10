@@ -1304,15 +1304,15 @@ private struct PlayerSettingsTab: View {
     @State private var collectorRunning = false
     @State private var isTogglingCollectorService = false
     // 2026-08-02 补上——之前点"启用"失败后,前台只会看到红叉+"未运行"跟从没点过一模
-    // 一样,没有任何具体原因或下一步指引,用户卡在这里无计可施。只在"这次是想启用、结果
-    // 没启动起来"时才为真,停用/切走这个 tab 都会清掉,不会把上一次失败的提示一直留着
-    // 误导下一次操作。
+    // 一样,没有任何具体原因或下一步指引,用户卡在这里无计可施。只在"这次点了启用、结果
+    // 没启动起来"时才为真,切走这个 tab 就清掉,不会把上一次失败的提示一直留着误导下一次
+    // 操作。
     @State private var collectorEnableFailed = false
 
     var body: some View {
         SettingsPage(
             title: L10n.t("播放器"),
-            subtitle: L10n.t("选择读取哪个 App 的播放状态，并确认它能被正常读到")
+            subtitle: L10n.t("选择读取哪个 App 的播放状态")
         ) {
             playerCard
             permissionCard
@@ -1328,8 +1328,7 @@ private struct PlayerSettingsTab: View {
         SettingsCard {
             SettingsRow(
                 icon: "music.note.list",
-                title: L10n.t("播放器"),
-                subtitle: L10n.t("选择 Lyrimuse 读取哪个 App 的播放状态")
+                title: L10n.t("播放器")
             ) {
                 Picker("", selection: Binding(
                     get: { features.player },
@@ -1358,7 +1357,7 @@ private struct PlayerSettingsTab: View {
                     icon: automationStatusIconName,
                     iconTint: automationStatusIconColor,
                     title: L10n.t("Apple Music 自动化"),
-                    subtitle: automationStatusCaption + "・" + L10n.t("没有它，悬浮歌词/灵动岛都无法显示任何歌词内容")
+                    subtitle: automationStatusCaption + "・" + L10n.t("没有它读不到播放状态")
                 ) {
                     if isRequestingAutomation {
                         ProgressView().controlSize(.small)
@@ -1398,7 +1397,7 @@ private struct PlayerSettingsTab: View {
                     icon: "checkmark.circle.fill",
                     iconTint: .green,
                     title: L10n.t("无需额外授权"),
-                    subtitle: String(format: L10n.t("%@ 通过系统级机制读取播放状态，不需要在这里做额外授权"), features.player.displayName)
+                    subtitle: String(format: L10n.t("%@ 走系统接口读取播放状态"), features.player.displayName)
                 )
             }
         }
@@ -1412,12 +1411,17 @@ private struct PlayerSettingsTab: View {
                 icon: collectorStatusIconName,
                 iconTint: collectorStatusIconColor,
                 title: L10n.t("后台采集服务"),
-                subtitle: collectorStatusCaption + "・" + L10n.t("负责读取播放状态、解析歌词/封面并写入本地缓存；没有它同样无法显示任何内容")
+                subtitle: collectorStatusCaption + "・" + L10n.t("读取播放状态、抓歌词和封面")
             ) {
+                // 2026-08-10:这里原来是「启用/停用」双向按钮。停用入口去掉了 ——
+                // 这个服务停掉之后 App 就是个空壳(读不到播放状态、不解析歌词、不写缓存),
+                // 界面上每一处都不再更新,而用户很难把"什么都不动了"跟自己在设置里点过的
+                // 一个按钮联系起来。它没有"用户可能想关掉它"的正当场景,不该出现在设置里。
+                // 只保留没跑起来时的「启用」——那是个真的能救回来的动作。
                 if isTogglingCollectorService {
                     ProgressView().controlSize(.small)
-                } else {
-                    Button(collectorActionTitle) { toggleCollectorService() }
+                } else if !collectorRunning {
+                    Button(L10n.t("启用")) { enableCollectorService() }
                 }
             }
             // 启用失败时给具体指引,不是只把红叉留在原地——这里能提供的具体行动是导出
@@ -1455,7 +1459,7 @@ private struct PlayerSettingsTab: View {
                 title: features.player == .auto
                     ? L10n.t("打开任意已知播放器时启动 Lyrimuse")
                     : String(format: L10n.t("打开 %@ 时启动 Lyrimuse"), features.player.displayName),
-                subtitle: L10n.t("由后台采集服务负责监测，需要先启用上面的「后台采集服务」才会生效")
+                subtitle: L10n.t("需要后台采集服务在运行")
             ) {
                 Toggle("", isOn: Binding(
                     get: { features.launchLyrimuseOnMusicOpen },
@@ -1532,22 +1536,16 @@ private struct PlayerSettingsTab: View {
         collectorRunning ? .green : .red
     }
 
-    private var collectorActionTitle: String {
-        collectorRunning ? L10n.t("停用") : L10n.t("启用")
-    }
-
-    private func toggleCollectorService() {
-        let enabling = !collectorRunning
+    private func enableCollectorService() {
         isTogglingCollectorService = true
         collectorEnableFailed = false
         Task {
-            let running = await CollectorServiceManager.setEnabledAndWait(enabling)
-            settings.collectorServiceEnabled = enabling
+            let running = await CollectorServiceManager.setEnabledAndWait(true)
+            settings.collectorServiceEnabled = true
             collectorRunning = running
             isTogglingCollectorService = false
-            // 只有"这次是想启用"且结果确实没跑起来才算失败——停用操作本身就是想让它
-            // 不运行,running==false 是预期结果,不能也标红报错。
-            collectorEnableFailed = enabling && !running
+            // 只有这一个方向了(见上面按钮处的注释),没跑起来就是失败,直接标红给指引。
+            collectorEnableFailed = !running
         }
     }
 
