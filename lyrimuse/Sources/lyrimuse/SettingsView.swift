@@ -932,9 +932,7 @@ private struct AppearanceSettingsTab: View {
         SettingsCard {
             SettingsRow(
                 icon: "captions.bubble",
-                title: L10n.t("桌面悬浮歌词"),
-                subtitle: L10n.t("配色与字体只作用于这里"),
-                help: L10n.t("下面的配色、字体、字号只影响桌面悬浮歌词；灵动岛、菜单栏、歌词窗口各自用固定样式")
+                title: L10n.t("桌面悬浮歌词")
             )
             CardDivider()
             SettingsRow(icon: "arrow.left.and.right", title: L10n.t("宽度")) {
@@ -1065,9 +1063,7 @@ private struct AppearanceSettingsTab: View {
             CardDivider()
             SettingsRow(
                 icon: "pencil.and.outline",
-                title: L10n.t("文字描边"),
-                subtitle: L10n.t("杂乱背景上更清楚"),
-                help: L10n.t("在浅色或杂乱的桌面背景上给文字加一圈描边，把字撑出来")
+                title: L10n.t("文字描边")
             ) {
                 Toggle("", isOn: $settings.textStrokeEnabled)
             }
