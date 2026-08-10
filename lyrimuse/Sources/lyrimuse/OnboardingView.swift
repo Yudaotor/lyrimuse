@@ -246,7 +246,7 @@ struct OnboardingView: View {
                 .foregroundStyle(.pink)
             Text(L10n.t("同步收听到 Last.fm（可选）"))
                 .font(.title.bold())
-            Text(L10n.t("连上之后，你在 Apple Music 听的每一首都会自动 scrobble 到 Last.fm"))
+            Text(L10n.t("连上之后，你播放的每一首歌都会自动 scrobble 到 Last.fm"))
                 .foregroundStyle(.secondary)
             Button(L10n.t("现在去设置里连接")) {
                 AppActions.shared.pendingSettingsSelection = .account(.lastfm)
