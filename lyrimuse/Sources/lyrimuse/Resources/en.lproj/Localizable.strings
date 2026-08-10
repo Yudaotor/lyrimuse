@@ -16,7 +16,7 @@
 "导入" = "Import";
 "确定要清除所有配置吗？" = "Clear all configuration?";
 "清除并重启" = "Clear and Restart";
-"这会清除所有账号 token、密钥和个人设置，恢复到刚装完时的样子（下次启动会重新走一遍引导向导），且无法撤销。如果还没备份过，建议先用上面「导出配置」那一行的「导出…」按钮备份一份" = "This clears every account token, secret, and personal setting, returning to a fresh-install state (the setup wizard will run again on next launch). This cannot be undone. If you haven't backed up yet, back one up first with \"Export…\" in the \"Export Config\" row above";
+"这会清除本机所有账号 token、密钥和个人设置，恢复到刚装完时的样子（下次启动会重新走一遍引导向导），且无法撤销。iCloud 里那份配置和已经导出的备份文件都不受影响；两样都没有的话，建议先备份一份" = "This wipes every account token, key and personal setting on this Mac, back to how it was right after installing (the setup guide runs again next launch), and cannot be undone. The copy in iCloud and any files you exported are left untouched; if you have neither, back up first";
 "确定要导出配置吗？" = "Export configuration?";
 "继续导出" = "Continue Exporting";
 "导出的文件包含你的账号 token、密钥等敏感信息，请妥善保管，不要分享给他人" = "The exported file contains your account tokens and secrets — keep it safe, don't share it with anyone";
@@ -362,7 +362,7 @@
 "导出配置" = "Export Settings";
 "打开" = "Open";
 "打开…" = "Open…";
-"抹掉所有账号和个人设置，恢复到刚装完时的样子，且无法撤销" = "Erases all accounts and personal settings, back to a fresh install — cannot be undone";
+"只抹掉本机配置，无法撤销；iCloud 和已导出的备份不受影响" = "Wipes this Mac's config only and cannot be undone; the iCloud copy and any exported backups are left alone";
 "按当前这首歌记忆校准值，下次再放这首歌自动生效" = "Remembered per song; applies automatically next time that song plays";
 "数据源留空时自动判定：两个账号都配了优先用 Last.fm，只配了一个就用那个" = "With no source chosen: Last.fm if both accounts are set up, otherwise whichever one is";
 "文件里包含账号 token、密钥等敏感信息，注意妥善保管，不要分享给他人" = "The file contains account tokens and secrets — keep it safe and don't share it";
@@ -476,10 +476,10 @@
 "还没存过配置" = "Nothing saved yet";
 "%1$@ · 来自 %2$@" = "%1$@ · from %2$@";
 "确定要存到 iCloud 吗？" = "Save your config to iCloud?";
-"已存好。在新电脑上装好 Lyrimuse，第一次启动时会问你要不要导入" = "Saved. Install Lyrimuse on the new Mac and it will offer to import this on first launch";
 "写入 iCloud 失败，可以改用下面的「导出…」存成文件" = "Could not write to iCloud — use Export… below to save it as a file instead";
 "这份配置还没从 iCloud 下载下来，等一会儿再试" = "This config hasn't finished downloading from iCloud — try again in a moment";
 "在 iCloud 里发现一份 Lyrimuse 配置" = "Found a Lyrimuse config in iCloud";
 "导出时间 %1$@，来自 %2$@。" = "Exported %1$@ from %2$@. ";
 "导出时间 %@。" = "Exported %@. ";
 "导入会带上账号和所有个人设置，随后重启 Lyrimuse。" = "Importing brings over your accounts and every personal setting, then restarts Lyrimuse.";
+"更新" = "Update";

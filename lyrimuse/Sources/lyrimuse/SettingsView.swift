@@ -1628,7 +1628,14 @@ private struct GeneralSettingsTab: View {
                     ) {
                         HStack(spacing: 8) {
                             if iCloudBusy { ProgressView().controlSize(.small) }
-                            Button(L10n.t("存到 iCloud")) { showICloudExportWarning = true }
+                            // 已经存过一份的话这个动作是覆盖式地再存一份新的,叫"存到
+                            // iCloud"读起来像还没存过。副标题那行同时在显示现有那份是
+                            // 什么时候的,两处合起来才说得通。
+                            Button(iCloudSnapshot == nil
+                                ? L10n.t("存到 iCloud") : L10n.t("更新"))
+                            {
+                                showICloudExportWarning = true
+                            }
                             if iCloudSnapshot != nil {
                                 Button(L10n.t("导入…")) { importFromICloud() }
                             }
@@ -1673,7 +1680,7 @@ private struct GeneralSettingsTab: View {
                 SettingsRow(
                     icon: "trash",
                     title: L10n.t("清除所有配置"),
-                    subtitle: L10n.t("抹掉所有账号和个人设置，恢复到刚装完时的样子，且无法撤销")
+                    subtitle: L10n.t("只抹掉本机配置，无法撤销；iCloud 和已导出的备份不受影响")
                 ) {
                     DestructiveButton(title: L10n.t("清除…")) { showClearConfigWarning = true }
                 }
@@ -1686,8 +1693,10 @@ private struct GeneralSettingsTab: View {
                     if ICloudConfigStore.write(
                         data, filename: ConfigPortability.suggestedFilename()) != nil
                     {
+                        // 不弹"已存好"——副标题会立刻换成刚写进去那份的时间,按钮也从
+                        // "存到 iCloud"变成"更新",反馈已经在界面上了。
                         iCloudSnapshot = ICloudConfigStore.latestSnapshot()
-                        iCloudMessage = L10n.t("已存好。在新电脑上装好 Lyrimuse，第一次启动时会问你要不要导入")
+                        iCloudMessage = nil
                     } else {
                         iCloudMessage = L10n.t("写入 iCloud 失败，可以改用下面的「导出…」存成文件")
                     }
@@ -1730,7 +1739,7 @@ private struct GeneralSettingsTab: View {
                     ConfigPortability.restartApp()
                 }
             } message: {
-                Text(L10n.t("这会清除所有账号 token、密钥和个人设置，恢复到刚装完时的样子（下次启动会重新走一遍引导向导），且无法撤销。如果还没备份过，建议先用上面「导出配置」那一行的「导出…」按钮备份一份"))
+                Text(L10n.t("这会清除本机所有账号 token、密钥和个人设置，恢复到刚装完时的样子（下次启动会重新走一遍引导向导），且无法撤销。iCloud 里那份配置和已经导出的备份文件都不受影响；两样都没有的话，建议先备份一份"))
             }
         }
         .id(L10n.current)
