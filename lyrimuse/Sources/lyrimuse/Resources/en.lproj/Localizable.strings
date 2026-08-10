@@ -189,7 +189,6 @@
 "打开 Lyrimuse 时启动 %@" = "Launch %@ when Lyrimuse opens";
 "打开 %@ 时启动 Lyrimuse" = "Launch Lyrimuse when %@ opens";
 "打开任意已知播放器时启动 Lyrimuse" = "Launch Lyrimuse when any known player opens";
-"换到一首歌时，如果它属于某张专辑，会顺带在后台把同专辑里还没解析过的其它曲目也提前解析。封面无条件都会解析，歌词是否被预取取决于上面的「歌词在线匹配」开关是否开启" = "When you switch to a song that belongs to an album, other not-yet-resolved tracks from the same album are also resolved in the background ahead of time. Covers are always resolved regardless; whether lyrics are prefetched depends on whether \"Online Lyrics Matching\" above is enabled";
 "推送提醒" = "Push Alerts";
 "提前解析同专辑其它曲目" = "Prefetch Other Tracks in the Same Album";
 "提醒开关" = "Alert Toggles";
@@ -205,7 +204,6 @@
 "显示罗马音" = "Show Romanization";
 "显示译文" = "Show Translation";
 "智能算法" = "Smart Matching";
-"智能算法自动打分选最高分，顺序优先按你排的顺序来" = "The Smart algorithm scores automatically and picks the highest; Priority order follows the order you've arranged";
 "智能算法：查到的每个来源都打分（逐字时间轴、语言是否匹配等维度），自动挑分数最高的一条。顺序优先：按下面排的顺序，用第一个查到有效结果的来源，不比较分数" = "Smart: Every source found is scored (based on factors like word-level timing and language match), and the highest-scoring result is picked automatically. Priority: Uses the first source (in the order listed below) that returns a valid result, without comparing scores";
 "暂停/无播放时隐藏" = "Hide When Paused or Not Playing";
 "更改" = "Change";
@@ -241,7 +239,6 @@
 "每周听歌小结" = "Weekly Listening Digest";
 "每日数据源" = "Daily Data Source";
 "每日听歌报告" = "Daily Listening Report";
-"每首歌听过一次，歌词就会永久保存在这个文件夹里；在「歌词管理」里删除会同时删掉这里已导出的文件" = "Once a song has been played, its lyrics are saved permanently in this folder; deleting it in \"Lyrics Manager\" also deletes the exported file here";
 "清除筛选" = "Clear Filters";
 "清空全部缓存" = "Clear All Cache";
 "共 %d 条，占用 %@" = "%d entries, %@ on disk";
@@ -369,7 +366,6 @@
 "打开…" = "Open…";
 "抹掉所有账号和个人设置，恢复到刚装完时的样子，且无法撤销" = "Erases all accounts and personal settings, back to a fresh install — cannot be undone";
 "按当前这首歌记忆校准值，下次再放这首歌自动生效" = "Remembered per song; applies automatically next time that song plays";
-"换歌时顺带在后台把同专辑还没解析过的曲目也解析掉" = "On a track change, also resolves the album's remaining tracks in the background";
 "数据源留空时自动判定：两个账号都配了优先用 Last.fm，只配了一个就用那个" = "With no source chosen: Last.fm if both accounts are set up, otherwise whichever one is";
 "文件里包含账号 token、密钥等敏感信息，注意妥善保管，不要分享给他人" = "The file contains account tokens and secrets — keep it safe and don't share it";
 "文字描边" = "Text Outline";
@@ -386,11 +382,9 @@
 "贴在桌面上，支持逐字高亮" = "Sits on your desktop, with word-by-word highlighting";
 "这首歌带逐字时间轴时逐字扫过，否则整行高亮" = "Sweeps word by word when the song has word timings, otherwise highlights the whole line";
 "选择读取哪个 App 的播放状态，并确认它能被正常读到" = "Choose which app to read playback from, and confirm it can be read";
-"逐条查看、编辑、联网重搜每首歌已缓存的歌词" = "Browse, edit, and re-search the cached lyrics for each song";
 "配色主题" = "Color Theme";
 "优先逐字高亮" = "Prefer Word-by-Word Highlighting";
 "双行显示" = "Two-Line Display";
-"当前这句下面再显示一行下一句歌词" = "Shows the next line below the current one";
 "快速开关" = "Quick Toggles";
 "调整步长" = "Step Size";
 "「歌词提前」「歌词延后」每按一次的幅度；菜单栏的「歌词时间轴」也用这个值" = "How much each press of Advance/Delay Lyrics shifts the timing; the menu bar's Lyrics Timing uses this too";
@@ -477,3 +471,9 @@
 "比下面的宽度更长时，在状态栏里横向滚动播完整句；开头会先停一下再滚" = "Anything longer than the width below scrolls across the menu bar in full, after a brief pause at the start";
 "超出宽度时截断，不滚动" = "Truncates when it doesn't fit";
 "超出宽度时横向滚动播完" = "Scrolls when it doesn't fit";
+"只对资料库里的曲目生效。在 Apple Music 里直接点播、没有添加到资料库的专辑查不到曲目" = "Only works for tracks in your library. An album played straight from Apple Music without adding it has no tracks to find";
+"多显示一行下一句" = "Also show the next line";
+"有逐字数据时逐字扫过" = "Word-by-word when the data allows";
+"查看、编辑、重搜已缓存的歌词" = "View, edit and re-search cached lyrics";
+"歌词永久保存在这里" = "Lyrics are kept here permanently";
+"比下面的宽度更长时截断成「前 N 个字…」，不滚动" = "Truncates to the first N characters when it doesn't fit";

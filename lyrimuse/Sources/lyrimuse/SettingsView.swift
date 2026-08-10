@@ -328,8 +328,10 @@ private struct LyricsSettingsTab: View {
             SettingsRow(
                 icon: "square.stack",
                 title: L10n.t("提前解析同专辑其它曲目"),
-                subtitle: L10n.t("换歌时顺带在后台把同专辑还没解析过的曲目也解析掉"),
-                help: L10n.t("换到一首歌时，如果它属于某张专辑，会顺带在后台把同专辑里还没解析过的其它曲目也提前解析。封面无条件都会解析，歌词是否被预取取决于上面的「歌词在线匹配」开关是否开启")
+                // 副标题原来是把标题重说一遍;? 里原来还提到「歌词在线匹配」开关 —— 那个
+                // 开关 2026-08-10 已经删掉,留着就是条错信息。现在只说一件从界面上看不出来、
+                // 又真的会让人白开开关的事:它只认资料库里的曲目。
+                help: L10n.t("只对资料库里的曲目生效。在 Apple Music 里直接点播、没有添加到资料库的专辑查不到曲目")
             ) {
                 Toggle("", isOn: Binding(
                     get: { features.albumPrefetch },
@@ -367,7 +369,6 @@ private struct LyricsSettingsTab: View {
             SettingsRow(
                 icon: "slider.horizontal.3",
                 title: L10n.t("匹配算法"),
-                subtitle: L10n.t("智能算法自动打分选最高分，顺序优先按你排的顺序来"),
                 help: L10n.t("智能算法：查到的每个来源都打分（逐字时间轴、语言是否匹配等维度），自动挑分数最高的一条。顺序优先：按下面排的顺序，用第一个查到有效结果的来源，不比较分数")
             ) {
                 Picker("", selection: Binding(
@@ -503,7 +504,8 @@ private struct LyricsSettingsTab: View {
             SettingsRow(
                 icon: "sparkles",
                 title: L10n.t("优先逐字高亮"),
-                subtitle: L10n.t("这首歌带逐字时间轴时逐字扫过，否则整行高亮")
+                subtitle: L10n.t("有逐字数据时逐字扫过"),
+                help: L10n.t("这首歌带逐字时间轴时逐字扫过，否则整行高亮")
             ) {
                 Toggle("", isOn: Binding(
                     get: { settings.preferWordLevelKaraoke },
@@ -556,7 +558,7 @@ private struct LyricsSettingsTab: View {
             SettingsRow(
                 icon: "text.aligncenter",
                 title: L10n.t("双行显示"),
-                subtitle: L10n.t("当前这句下面再显示一行下一句歌词")
+                subtitle: L10n.t("多显示一行下一句")
             ) {
                 Toggle("", isOn: $settings.showNextLinePreview)
             }
@@ -568,7 +570,7 @@ private struct LyricsSettingsTab: View {
             SettingsRow(
                 icon: "list.bullet.rectangle",
                 title: L10n.t("歌词管理"),
-                subtitle: L10n.t("逐条查看、编辑、联网重搜每首歌已缓存的歌词")
+                subtitle: L10n.t("查看、编辑、重搜已缓存的歌词")
             ) {
                 // accessory 策略下打开新窗口得先手动激活 App,不然 openWindow 调了也没反应
                 // ——跟 MenuBarMenu.swift 里"歌词管理…"菜单项同一个坑、同一个修法。
@@ -581,7 +583,7 @@ private struct LyricsSettingsTab: View {
             SettingsRow(
                 icon: "folder",
                 title: L10n.t("歌词文件夹"),
-                subtitle: L10n.t("每首歌听过一次，歌词就会永久保存在这个文件夹里；在「歌词管理」里删除会同时删掉这里已导出的文件"),
+                subtitle: L10n.t("歌词永久保存在这里"),
                 help: L10n.t("歌词默认就以这个文件夹为准维护。联网匹配到的结果会导出成文件存在这里，「歌词管理」里手动导入/编辑的文件也在这里。换成新文件夹后，旧文件夹里已有的文件不会自动搬过去，需要自己手动移动")
             )
             CardDivider()
