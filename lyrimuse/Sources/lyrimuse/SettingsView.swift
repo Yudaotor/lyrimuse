@@ -535,6 +535,26 @@ private struct LyricsSettingsTab: View {
             }
             CardDivider()
             SettingsRow(
+                icon: "character.bubble",
+                title: L10n.t("中文歌词字体"),
+                help: L10n.t("把中文歌词统一显示成简体或繁体。只改显示，不动本地存的歌词原文，随时切回来都是原样。日文歌不受影响——日文汉字里的「学/国」这类新字体会被简繁转换改错，所以带假名的歌一律原样显示")
+            ) {
+                Picker("", selection: Binding(
+                    get: { settings.lyricsChineseVariant },
+                    set: { newValue in
+                        settings.lyricsChineseVariant = newValue
+                        local.chineseVariant = newValue
+                    }
+                )) {
+                    Text(L10n.t("不转换")).tag(ChineseVariant.off)
+                    Text(L10n.t("简体")).tag(ChineseVariant.simplified)
+                    Text(L10n.t("繁体")).tag(ChineseVariant.traditional)
+                }
+                .pickerStyle(.segmented)
+                .fixedSize()
+            }
+            CardDivider()
+            SettingsRow(
                 icon: "textformat.alt",
                 title: L10n.t("显示罗马音"),
                 help: L10n.t("这个开关只影响「桌面悬浮歌词」和「歌词窗口」；灵动岛歌词受限于胶囊空间不支持这一项，菜单栏歌词只能显示一行纯文字")

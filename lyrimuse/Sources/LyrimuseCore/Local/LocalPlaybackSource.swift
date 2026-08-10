@@ -80,6 +80,11 @@ public final class LocalPlaybackSource: ObservableObject {
     @Published public var preferWordLevelKaraoke: Bool = true {
         didSet { reloadCurrentLyrics() }
     }
+    /// 歌词正文的简繁偏好。改了立刻重新加载当前这首 —— 转换发生在**送进解析引擎之前**,
+    /// 缓存里存的原文一个字节都不动,切回来是无损的。
+    @Published public var chineseVariant: ChineseVariant = .off {
+        didSet { reloadCurrentLyrics() }
+    }
 
     private let syncEngine = LyricsSyncEngine()
     // 公开给 View 层——逐字填色现在按渲染帧频(TimelineView)从这个锚点直接外推真实
@@ -752,11 +757,14 @@ public final class LocalPlaybackSource: ObservableObject {
             title: snapshot.title ?? "",
             album: snapshot.album ?? ""
         )
+        // 简繁转换只作用在展示上:正文、译文、逐字数据都转,罗马音是拉丁字母不用转。
+        // 逐字数据整串转是安全的 —— 时间戳是数字,转换只碰汉字。
+        let variant = chineseVariant
         syncEngine.load(
-            lyrics: found?.lyrics ?? "",
-            lyricsTr: found?.lyricsTr ?? "",
+            lyrics: variant.converted(found?.lyrics ?? ""),
+            lyricsTr: variant.converted(found?.lyricsTr ?? ""),
             lyricsRoma: found?.lyricsRoma ?? "",
-            lyricsYRC: found?.lyricsYRC ?? "",
+            lyricsYRC: variant.converted(found?.lyricsYRC ?? ""),
             preferWordLevel: preferWordLevelKaraoke,
             // 用来认出歌词文件开头那行「曲名 - 歌手」抬头,见 looksLikeHeaderLine。
             trackTitle: snapshot.title ?? "",

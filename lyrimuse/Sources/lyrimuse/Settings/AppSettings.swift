@@ -1,4 +1,5 @@
 import Foundation
+import LyrimuseCore
 import SwiftUI
 import AppKit
 
@@ -24,6 +25,7 @@ final class AppSettings: ObservableObject {
 
     private enum Keys {
         static let preferWordLevelKaraoke = "np:preferWordLevelKaraoke"
+        static let lyricsChineseVariant = "np:lyricsChineseVariant"
         static let showRomanization = "np:showRomanization"
         static let showTranslation = "np:showTranslation"
         static let launchAtLoginEnabled = "np:launchAtLoginEnabled"
@@ -88,6 +90,10 @@ final class AppSettings: ObservableObject {
 
     @Published var preferWordLevelKaraoke: Bool {
         didSet { defaults.set(preferWordLevelKaraoke, forKey: Keys.preferWordLevelKaraoke) }
+    }
+    /// 歌词正文显示成简体还是繁体。默认 .off:原样显示歌词源给的写法,不做任何转换。
+    @Published var lyricsChineseVariant: ChineseVariant {
+        didSet { defaults.set(lyricsChineseVariant.rawValue, forKey: Keys.lyricsChineseVariant) }
     }
     @Published var showRomanization: Bool {
         didSet { defaults.set(showRomanization, forKey: Keys.showRomanization) }
@@ -328,6 +334,8 @@ final class AppSettings: ObservableObject {
 
     private init() {
         preferWordLevelKaraoke = (defaults.object(forKey: Keys.preferWordLevelKaraoke) as? Bool) ?? true
+        lyricsChineseVariant = defaults.string(forKey: Keys.lyricsChineseVariant)
+            .flatMap(ChineseVariant.init(rawValue:)) ?? .off
         showRomanization = (defaults.object(forKey: Keys.showRomanization) as? Bool) ?? true
         // 默认值跟 App 界面语言联动——译文这几个歌词源(网易云/QQ 音乐)给的固定是
         // 中文翻译,不是"任意语言译文",界面语言不是中文的人默认看到一堆看不懂的

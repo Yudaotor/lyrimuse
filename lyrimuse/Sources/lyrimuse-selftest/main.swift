@@ -887,6 +887,30 @@ do {
                 "英文歌词里带半角冒号的行一行都不能删")
 }
 
+// 歌词简繁切换。只改显示、不动原文,而且**绝不能碰日文**。
+do {
+    expectEqual(ChineseVariant.traditional.converted("这是一首简单的小情歌"),
+                "這是一首簡單的小情歌", "简→繁")
+    expectEqual(ChineseVariant.simplified.converted("這是一首簡單的小情歌"),
+                "这是一首简单的小情歌", "繁→简")
+    expectEqual(ChineseVariant.off.converted("这是一首简单的小情歌"),
+                "这是一首简单的小情歌", "关掉时原样返回")
+
+    // ⚠️ 日文汉字里有大量新字体(学/国/条),简繁转换会把它们改错 —— 带假名就一律不碰
+    let jp = "明日の今頃には"
+    expectEqual(ChineseVariant.traditional.converted(jp), jp, "日文行必须原样返回")
+    let jp2 = "新しい歌 うたえるまで"
+    expectEqual(ChineseVariant.traditional.converted(jp2), jp2, "含假名的行一律不转换")
+    // 纯汉字的日文标题没有假名,兜不住是已知取舍,但至少中文歌要转对
+    expectEqual(ChineseVariant.traditional.converted("头发"), "頭髮",
+                "词组级转换要对(不是无脑逐字)")
+    expectEqual(ChineseVariant.traditional.converted("只有你"), "只有你",
+                "「只」在这里不该被转成「隻」")
+    // 拉丁字母不受影响
+    expectEqual(ChineseVariant.traditional.converted("First Love"), "First Love",
+                "英文原样返回")
+}
+
 if failures == 0 {
     print("\nALL PASS")
 } else {

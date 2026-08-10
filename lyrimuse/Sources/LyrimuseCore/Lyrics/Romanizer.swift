@@ -1,5 +1,29 @@
 import Foundation
 
+/// 歌词正文的简繁偏好。只影响**显示**,不动缓存里存的原文 —— 随时切回来都是无损的。
+public enum ChineseVariant: String, CaseIterable, Sendable {
+    case off, simplified, traditional
+
+    /// ⚠️ 只对**中文**歌词生效,日文歌一律原样返回。
+    ///
+    /// 日文汉字里有大量新字体(学/国/条…),简繁转换会把它们一起改掉(学→學、国→國),
+    /// 那不是"转成繁体",是把日文写坏。判据用"这段文字里有没有假名"——有假名就是日文,
+    /// 中文歌不会有假名。
+    ///
+    /// 用 ICU 的 Simplified-Traditional。实测它不是无脑逐字:头发→頭髮、干净→乾淨、
+    /// 后来→後來 都对,「只有你」也没被误转成「隻」;日文/拉丁字符完全不动。
+    public func converted(_ text: String) -> String {
+        guard self != .off, !text.isEmpty else { return text }
+        guard !Romanizer.looksJapanese(text) else { return text }
+        let transform: StringTransform =
+            self == .traditional
+            ? StringTransform("Simplified-Traditional")
+            : StringTransform("Traditional-Simplified")
+        return text.applyingTransform(transform, reverse: false) ?? text
+    }
+}
+
+
 // 罗马音兜底——LyricsSyncEngine 现有的罗马音字段完全依赖网易云服务端"恰好给这首歌算好了
 // lyrics_roma"(见 enrich.go/collector 那边),源没给就是空,中文歌曲的拼音、日文歌曲的
 // 罗马字完全没有客户端兜底。2026-08-04 补上:用系统自带的音译在服务端没给这个字段时现算
