@@ -311,7 +311,7 @@
 "这首歌带逐字时间轴,播放时优先用它渲染——下面直接改「歌词(LRC)」文本框不会生效。如需手改主歌词,请先点「移除逐字时间轴」。译文/罗马音编辑不受影响,随时生效" = "This song has word-by-word timing, which takes priority during playback — editing the \"Lyrics (LRC)\" text box below won't take effect. To hand-edit the main lyrics, first click \"Remove Word Timing\". Editing the translation or romanization isn't affected and takes effect right away";
 "连接 Last.fm 账号" = "Connect Last.fm Account";
 "同步收听到 Last.fm（可选）" = "Scrobble to Last.fm (optional)";
-"连上之后，你在 Apple Music 听的每一首都会自动 scrobble 到 Last.fm；iPhone 上记录的收听也会同步回来，「每周听歌小结」「每日听歌报告」推送也靠它。不连不影响歌词，之后在设置里随时能连" = "Once connected, everything you play in Apple Music is scrobbled to Last.fm automatically. Listens recorded on your iPhone come back the other way, and the Weekly Listening Digest and Daily Listening Report both rely on it. Skipping this changes nothing about the lyrics — you can connect later in Settings";
+"连上之后，你在 Apple Music 听的每一首都会自动 scrobble 到 Last.fm" = "Once connected, everything you play in Apple Music is scrobbled to Last.fm automatically";
 "现在去设置里连接" = "Connect Now in Settings";
 "连接信息" = "Connection Info";
 "退出 Lyrimuse" = "Quit Lyrimuse";
