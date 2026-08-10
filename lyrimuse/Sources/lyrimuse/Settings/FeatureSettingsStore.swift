@@ -92,7 +92,6 @@ public enum LyricsSourceMode: String, CaseIterable, Identifiable, Codable {
 // 同一份共享 JSON 文件的镜像,字段增删两侧同步;旧配置文件里如果还留着已经删掉的
 // key,JSONDecoder/Go 的 encoding/json 都会静默忽略未知字段,不需要额外的迁移代码。
 struct FeatureFlagsFile: Codable, Equatable {
-    var lyrics: Bool?
     // "apple_music"(默认)或"qq_music"——见 PlaybackPlayer 注释(LyrimuseCore)。跟这个
     // 文件里其它字段一样"读一次,重启才生效":LocalPlaybackSource 每次轮询都会重新读
     // 一次这个字段(它在 LyrimuseCore,没法直接订阅这个 store 的 @Published),collector
@@ -126,7 +125,6 @@ struct FeatureFlagsFile: Codable, Equatable {
     var launchLyrimuseOnMusicOpen: Bool?
 
     enum CodingKeys: String, CodingKey {
-        case lyrics
         case player
         case albumPrefetch = "album_prefetch"
         case lyricsMachineTranslation = "lyrics_machine_translation"
@@ -161,7 +159,6 @@ struct FeatureFlagsFile: Codable, Equatable {
 public final class FeatureSettingsStore: ObservableObject {
     public static let shared = FeatureSettingsStore()
 
-    @Published public var lyrics = true
     // 本地播放状态读取哪个 App——默认 Apple Music,保持这个设置加入之前唯一存在过的
     // 行为不变。见 PlaybackPlayer(LyrimuseCore)注释。
     @Published public var player: PlaybackPlayer = .appleMusic
@@ -205,7 +202,6 @@ public final class FeatureSettingsStore: ObservableObject {
     private var savedSnapshot = FeatureFlagsFile()
     private var currentSnapshot: FeatureFlagsFile {
         FeatureFlagsFile(
-            lyrics: lyrics,
             player: player.rawValue,
             albumPrefetch: albumPrefetch,
             lyricsMachineTranslation: lyricsMachineTranslation,
@@ -245,7 +241,6 @@ public final class FeatureSettingsStore: ObservableObject {
             savedSnapshot = currentSnapshot
             return
         }
-        lyrics = f.lyrics ?? true
         player = f.player.flatMap(PlaybackPlayer.init(rawValue:)) ?? .appleMusic
         albumPrefetch = f.albumPrefetch ?? true
         lyricsMachineTranslation = f.lyricsMachineTranslation ?? false

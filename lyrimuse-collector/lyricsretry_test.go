@@ -15,7 +15,6 @@ import (
 func TestNeedsLyricsRetry(t *testing.T) {
 	saved := features
 	defer func() { features = saved }()
-	features.Lyrics = true
 	features.LyricsSources = map[string]bool{"netease": true, "qq": true, "lrclib": true}
 
 	long, recent := time.Now().Unix()-int64(lyricsRetryInterval/time.Second)-1, time.Now().Unix()
@@ -72,18 +71,12 @@ func TestNeedsLyricsRetry(t *testing.T) {
 		}
 	}
 
-	// 歌词功能整个关掉时不该有任何重试
-	features.Lyrics = false
-	if needsLyricsRetry(enrichEntry{Lyrics: "x", LyricsSourcesSeen: []string{"lrclib"}, TS: long}) {
-		t.Error("歌词功能关掉时不应重试")
-	}
 }
 
 // 未启用的源缺席不算数——只有**已启用**的源缺席才说明这次决定是在信息不全的情况下做的。
 func TestNeedsLyricsRetryIgnoresDisabledSources(t *testing.T) {
 	saved := features
 	defer func() { features = saved }()
-	features.Lyrics = true
 	features.LyricsSources = map[string]bool{"lrclib": true, "netease": false}
 	long := time.Now().Unix() - int64(lyricsRetryInterval/time.Second) - 1
 

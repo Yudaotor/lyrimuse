@@ -14,7 +14,6 @@ import (
 func TestNeedsLyricsRescore(t *testing.T) {
 	saved := features
 	defer func() { features = saved }()
-	features.Lyrics = true
 
 	stale := enrichEntry{Lyrics: "x", LyricsScoringVersion: lyricsScoringVersion - 1}
 
@@ -85,10 +84,6 @@ func TestNeedsLyricsRescore(t *testing.T) {
 		}
 	}
 
-	features.Lyrics = false
-	if needsLyricsRescore(stale) {
-		t.Error("歌词功能关掉时不应重选")
-	}
 }
 
 // 一个源明确给出了一份"烂"候选(被判无效),跟它超时压根没露面,是两回事——重选要求的是

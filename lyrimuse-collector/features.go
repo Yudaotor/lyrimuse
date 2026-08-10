@@ -63,7 +63,6 @@ const (
 var lyricsSourceDefaultOrder = []string{lyricSourceNetease, lyricSourceQQ, lyricSourceKugou, lyricSourceMusixmatch, lyricSourceLRCLIB}
 
 type featureFlagsFile struct {
-	Lyrics *bool `json:"lyrics,omitempty"`
 	// Player："apple_music"(默认,缺省/认不出的值都按这个处理)、"qq_music" 或
 	// "netease_music"。
 	Player               string `json:"player,omitempty"`
@@ -119,7 +118,6 @@ type featureFlagsFile struct {
 // 的条件完全一样,单独留一个开关只是多一次点击,没有实际区分度,见 poller.go 的
 // bridge() 判断条件。
 type featureFlags struct {
-	Lyrics bool
 	// Player 是已经解析过的具体值(playerAppleMusic/playerQQMusic,不会是空字符串或
 	// 认不出的值,见 resolvePlayer)。只被 system.go 的 getState()/appleMusicPosition()
 	// 读取。
@@ -181,7 +179,6 @@ func loadFeatureFlags(path string) featureFlags {
 		log.Printf("read feature flags %s: %v (使用默认值)", path, err)
 	}
 	return featureFlags{
-		Lyrics:                    boolOr(f.Lyrics, true),
 		Player:                    resolvePlayer(f.Player),
 		AlbumPrefetch:             boolOr(f.AlbumPrefetch, true),
 		LastfmMirrorScrobble:      boolOr(f.LastfmMirrorScrobble, false),

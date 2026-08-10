@@ -80,7 +80,6 @@ func TestNeedsPeripheralBackfill(t *testing.T) {
 func TestPeripheralThrottleDoesNotDelayLyricsRetry(t *testing.T) {
 	saved := features
 	defer func() { features = saved }()
-	features.Lyrics = true
 	features.LyricsSources = map[string]bool{"netease": true, "kugou": true}
 
 	// 一条 6 小时前解析出来的记录,当时只有网易云给了候选 —— 酷狗没出现过,该重搜。

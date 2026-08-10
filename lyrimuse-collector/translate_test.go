@@ -201,7 +201,6 @@ func TestTranslateKeepsSourceTimestamps(t *testing.T) {
 func TestNeedsTranslationBackfill(t *testing.T) {
 	saved := features
 	defer func() { features = saved }()
-	features.Lyrics = true
 	features.LyricsMachineTranslation = true
 	features.LyricsTranslationLanguage = "zh"
 
@@ -347,7 +346,6 @@ func TestTranslationUsableRespectsLanguage(t *testing.T) {
 func TestNeedsTranslationBackfillIgnoresWrongLanguageTranslation(t *testing.T) {
 	saved := features
 	defer func() { features = saved }()
-	features.Lyrics = true
 	features.LyricsMachineTranslation = true
 
 	base := enrichEntry{
@@ -371,7 +369,6 @@ func TestNeedsTranslationBackfillIgnoresWrongLanguageTranslation(t *testing.T) {
 func TestNeedsTranslationBackfillResetsAttemptsOnLanguageChange(t *testing.T) {
 	saved := features
 	defer func() { features = saved }()
-	features.Lyrics = true
 	features.LyricsMachineTranslation = true
 	features.LyricsTranslationLanguage = "ja"
 
@@ -421,7 +418,6 @@ func TestBackfillTranslationPersistsToDisk(t *testing.T) {
 			savedFeatures, savedCache, savedPath, savedBase, savedDir, savedClient
 	}()
 
-	features.Lyrics = true
 	features.LyricsMachineTranslation = true
 	features.LyricsTranslationLanguage = "zh"
 	translateBaseURL = srv.URL

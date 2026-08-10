@@ -475,7 +475,7 @@ const (
 // 已经有 lyrics_tr 就一律不动 —— 社区翻译(网易云/Musixmatch 的人工译文)质量高于机翻,
 // 机翻只是"没有社区译文时总比没有强"的兜底,不是升级。
 func needsTranslationBackfill(e enrichEntry) bool {
-	if !features.Lyrics || !features.LyricsMachineTranslation {
+	if !features.LyricsMachineTranslation {
 		return false
 	}
 	if e.Lyrics == "" {

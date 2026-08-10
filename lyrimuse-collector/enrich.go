@@ -344,7 +344,7 @@ const (
 // 老条目(这个功能上线前写入的)没有 LyricsSourcesSeen,会被判成"所有启用的源都缺席"从而
 // 获得一次升级机会 —— 这是有意的:它们当初正是在没有这层保护的情况下定下来的。
 func needsLyricsRetry(e enrichEntry) bool {
-	if !features.Lyrics || e.Lyrics == "" || e.LyricsYRC != "" {
+	if e.Lyrics == "" || e.LyricsYRC != "" {
 		return false
 	}
 	// 用户手改过的绝不自动重搜,理由见 ManualLyrics 字段的注释。这道闸 2026-08-07 补上:
@@ -488,7 +488,7 @@ const (
 // 太近不碰。第一次尝试没有时间门槛(LyricsRescoreTS 为 0)—— 这条路径的目的就是让存量条目
 // 尽快跟上新规则;只有需要再试时才拉开间隔,见 lyricsRescoreDeferInterval。
 func needsLyricsRescore(e enrichEntry) bool {
-	if !features.Lyrics || e.Lyrics == "" || e.ManualLyrics {
+	if e.Lyrics == "" || e.ManualLyrics {
 		return false
 	}
 	if e.LyricsScoringVersion >= lyricsScoringVersion {
@@ -710,17 +710,17 @@ func resolveTrackEnrichment(artist, title, album string, durationSecs float64) e
 	// 歌词功能关掉、根本不需要凑齐五个源时,才单独查这一次。
 	var ne neteaseInfo
 	var scored []scoredLyricCandidateResult
-	if features.Lyrics {
-		// 歌词:网易云/QQ音乐/酷狗/Musixmatch/LRCLIB 五个源全部并发查一遍,不是查到第一个
-		// 能用的就停——一首歌只在缓存未命中时解析一次,后续都直接读缓存,五个源都查一遍
-		// 换来更可信的结果性价比很高。取分/并发/超时兜底细节见 scoredLyricCandidates
-		// (同一份逻辑也供 desktop-lyrics 的"重新搜索候选歌词"手动纠正功能复用,搜索用的
-		// CLI 子命令见 searchcli.go)——那条手动路径故意不受下面 pickLyricCandidate 的
-		// "启用哪些源"过滤,理由见它的注释。
-		ne, scored = scoredLyricCandidates(artist, title, album, durationSecs)
-	} else {
-		ne = neteaseLookup(artist, title, album)
-	}
+	// 歌词:网易云/QQ音乐/酷狗/Musixmatch/LRCLIB 五个源全部并发查一遍,不是查到第一个
+	// 能用的就停——一首歌只在缓存未命中时解析一次,后续都直接读缓存,五个源都查一遍
+	// 换来更可信的结果性价比很高。取分/并发/超时兜底细节见 scoredLyricCandidates
+	// (同一份逻辑也供 desktop-lyrics 的"重新搜索候选歌词"手动纠正功能复用,搜索用的
+	// CLI 子命令见 searchcli.go)——那条手动路径故意不受下面 pickLyricCandidate 的
+	// "启用哪些源"过滤,理由见它的注释。
+	//
+	// 2026-08-10 删掉了「歌词在线匹配」总开关(见 features.go 的说明),原来关掉时走的
+	// 那条 neteaseLookup 单查分支也一并删了 —— 它存在的唯一理由就是"歌词关着、但封面
+	// 和跳转链接还得要"。
+	ne, scored = scoredLyricCandidates(artist, title, album, durationSecs)
 	// 封面/主色/平台跳转链接是基础展示信息,不做成可关闭的开关,以下逻辑无条件执行。
 	e.CoverURL = ne.Cover
 	if e.CoverURL != "" {
@@ -788,28 +788,26 @@ func resolveTrackEnrichment(artist, title, album string, durationSecs float64) e
 		e.SpotifyURL = "https://open.spotify.com/search/" + neturl.QueryEscape(artist+" "+title)
 	}
 	e.DurationSecs = durationSecs
-	if features.Lyrics {
-		// 不管选没选中,都记下这一轮到底有哪些源真的给出了可用候选 —— needsLyricsRetry
-		// 靠"有启用的源这轮没露面"来判断这次结果是不是在信息不全的情况下做的决定。
-		e.LyricsSourcesSeen = lyricSourcesWithCandidates(scored)
-		if picked := pickLyricCandidate(scored); picked != nil {
-			e.Lyrics = picked.Lyrics
-			e.LyricsSource = picked.Source
-			e.LyricsScore = picked.Score
-			e.LyricsScoringVersion = lyricsScoringVersion
-			e.LyricsTr, e.LyricsRoma, e.LyricsYRC = picked.LyricsTr, picked.LyricsRoma, picked.LyricsYRC
-			// 译文换人了,描述译文的两个字段必须跟着换:语言(否则拿旧语言判新译文),
-			// 来源(否则上一轮机翻留下的 "machine" 会让新来的社区译文被标成机翻)。
-			e.LyricsTrLang, e.LyricsTrSource = picked.LyricsTrLang, ""
-		} else {
-			// 没有任何源给出可用歌词——查一下 scored 里是否搭车带着"lrclib 明确说是
-			// 纯音乐"这条标记(见 Instrumental 字段定义处的注释),命中就记下来,UI 侧
-			// 才能把这种情况跟"真的谁都没搜到"区分开显示。
-			for _, c := range scored {
-				if c.Instrumental {
-					e.Instrumental = true
-					break
-				}
+	// 不管选没选中,都记下这一轮到底有哪些源真的给出了可用候选 —— needsLyricsRetry
+	// 靠"有启用的源这轮没露面"来判断这次结果是不是在信息不全的情况下做的决定。
+	e.LyricsSourcesSeen = lyricSourcesWithCandidates(scored)
+	if picked := pickLyricCandidate(scored); picked != nil {
+		e.Lyrics = picked.Lyrics
+		e.LyricsSource = picked.Source
+		e.LyricsScore = picked.Score
+		e.LyricsScoringVersion = lyricsScoringVersion
+		e.LyricsTr, e.LyricsRoma, e.LyricsYRC = picked.LyricsTr, picked.LyricsRoma, picked.LyricsYRC
+		// 译文换人了,描述译文的两个字段必须跟着换:语言(否则拿旧语言判新译文),
+		// 来源(否则上一轮机翻留下的 "machine" 会让新来的社区译文被标成机翻)。
+		e.LyricsTrLang, e.LyricsTrSource = picked.LyricsTrLang, ""
+	} else {
+		// 没有任何源给出可用歌词——查一下 scored 里是否搭车带着"lrclib 明确说是
+		// 纯音乐"这条标记(见 Instrumental 字段定义处的注释),命中就记下来,UI 侧
+		// 才能把这种情况跟"真的谁都没搜到"区分开显示。
+		for _, c := range scored {
+			if c.Instrumental {
+				e.Instrumental = true
+				break
 			}
 		}
 	}

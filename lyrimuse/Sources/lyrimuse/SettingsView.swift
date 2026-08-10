@@ -307,14 +307,9 @@ private struct LyricsSettingsTab: View {
         switch section {
         case .fetch:
             parsingCard
-            // "歌词来源""匹配算法"两张卡只在 features.lyrics(在线匹配总开关)打开时才显示
-            // ——2026-08-02 定的规则:关掉在线匹配后这两组设置毫无意义,继续让它们完全可交互
-            // 会让人以为调了就生效。
             // 「来源」和「匹配」合成一张卡:它们是同一件事的两半 —— 去哪儿查、查回来怎么挑。
             // 分成两张卡的时候这一段是三张卡、一屏装不下,而其余三段都只有一张卡,轻重失衡。
-            if features.lyrics {
-                sourcesAndMatchingCard.transition(.settingsCard)
-            }
+            sourcesAndMatchingCard
         case .translation:
             translationCard
         case .display:
@@ -329,21 +324,6 @@ private struct LyricsSettingsTab: View {
     // 状态统一显示在"播放器"分类的"权限"里。
     private var parsingCard: some View {
         SettingsCard {
-            SettingsRow(
-                icon: "magnifyingglass",
-                title: L10n.t("歌词在线匹配"),
-                subtitle: L10n.t("关掉之后新歌不再联网查，只用本地已经缓存过的结果"),
-                help: L10n.t("控制要不要在线解析歌词。关闭后，第一次播放的新歌不会再去查下面「歌词来源」里的这些平台，只用本地已经缓存过的结果（如果有）。「歌词来源」「匹配算法」这两组设置都只在这个开关开启时才有意义")
-            ) {
-                Toggle("", isOn: Binding(
-                    get: { features.lyrics },
-                    set: { newValue in
-                        withAnimation(.settingsCardReveal) { features.lyrics = newValue }
-                        Task { await features.save() }
-                    }
-                ))
-            }
-            CardDivider()
             // "解析"(而非"预取")避免被误读成预先加载音频本身,这个开关从不碰音频。
             SettingsRow(
                 icon: "square.stack",
