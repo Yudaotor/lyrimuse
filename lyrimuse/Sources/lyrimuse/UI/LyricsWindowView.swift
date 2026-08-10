@@ -204,6 +204,9 @@ struct LyricsWindowView: View {
     @ObservedObject private var settings = AppSettings.shared
     @StateObject private var windowController = LyricsWindowController()
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    // 这块屏一个点等于几个物理像素。外接 1x 显示器上 = 1,内建 Retina = 2 —— 逐字抬升
+    // 的落点要按它对齐到整像素,见 karaokeRise。
+    @Environment(\.displayScale) private var displayScale
     // 正在拖进度条时手指所在的比例(0~1);没在拖就是 nil。拖动期间进度条和时间文字都显示
     // 这个值而不是真实播放位置,松手才发 seek —— 见 progressBar 里的注释。
     // 用 @GestureState:手势被取消时会自动复位,不会像 @State 那样永久卡住(理由同上)。
@@ -1005,7 +1008,15 @@ struct LyricsWindowView: View {
         guard elapsed > 0 else { return 0 } // 还没唱到这个字
         let window = min(Self.karaokeRiseWindowMs, Double(max(1, w.durationMs)))
         let p = min(1, elapsed / window)
-        return -sin(p * .pi / 2) * lyricFontSize * 0.07
+        // 抬到顶之后这个字会**停在那儿好几秒**(抬起来不落回,一直到换行)。原来的幅度是
+        // lyricFontSize * 0.07,28pt 字号下 = 1.96pt —— 在 1x 外接屏上就是停在 1.96 个
+        // 物理像素这种半吊子位置上,整行文字被垂直重采样、边缘糊掉,而且是一直糊着,不是
+        // 动画期间一闪而过。把幅度收到最近的整数个**设备像素**:1x 屏上取 2px、2x 屏上
+        // 仍是 1.96pt(=3.92px→4px/2),视觉幅度几乎没变,但停住时字是压在像素格上的。
+        // 爬升途中依然是连续值 —— 那会儿字本来就在动,没人会盯着一帧看。
+        let scale = max(1, displayScale)
+        let amplitude = (lyricFontSize * 0.07 * scale).rounded() / scale
+        return -sin(p * .pi / 2) * amplitude
     }
 
     private func karaokeWord(_ w: SyncedLyricWord, atMs currentMs: Int, base: Color) -> some View {
@@ -1048,10 +1059,17 @@ struct LyricsWindowView: View {
         // 哪一句,再决定点不点。
         .blur(radius: (reduceMotion || hoveredLineID == item.id)
             ? 0 : lineBlur(forDistance: distance))
-        // 当前行只轻微放大(1.02x)——Apple Music 全行同一字号,当前行靠亮度/清晰度+
-        // 一点点缩放"浮起"。anchor 用 .leading:左对齐排版下从行首往右生长,不是从中心
-        // 向两边(那样行首会跟着左右移动)。
-        .scaleEffect(isActive && !reduceMotion ? 1.02 : 1, anchor: .leading)
+        // 这里原来给当前行挂了 .scaleEffect(1.02)。删掉了 —— .scaleEffect 是**渲染后**
+        // 的仿射变换:文字先按原字号栅格化,再整体拉大 1.02 倍,是个非整数倍重采样。在
+        // Retina 上看不太出来,在 1x 外接屏上直接把**最该看清的那一行**糊掉:2026-08-10
+        // 实测同一张截图里,当前行的字形边缘平均过渡宽度 1.48px,而同窗口里没做任何变换
+        // 的左栏歌名只有 1.25px、歌手行 1.14px。
+        //
+        // 2% 的放大本来就几乎看不出来,而"当前行"的强调其实是另外三样在扛:满不透明度、
+        // 零模糊、逐字填色。为了一个看不见的收益去糊掉正文,不划算。
+        //
+        // (想保留"浮起"感的话,正解是让这一行用更大的**字号**渲染而不是缩放位图 —— 但
+        // 字号变化会改变换行、整个列表在切行时重排抖动,那是更糟的毛病。)
         .animation(Self.lineTransition, value: distance)
         .animation(.easeOut(duration: 0.16), value: hoveredLineID)
         // 命中区要盖满整行(含左右空白),否则只有文字上才点得到
