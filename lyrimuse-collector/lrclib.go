@@ -92,7 +92,7 @@ func resolveLRCLIBLyric(artist, title, album string, durationSecs float64) lrcli
 			return r
 		}
 	}
-	return lrclibSearch(artist, title, durationSecs, 5*time.Second)
+	return lrclibSearch(artist, title, album, durationSecs, 5*time.Second)
 }
 
 // lrclibRequest 是三级共用的请求执行 + JSON 解码,out 传指针。
@@ -156,7 +156,7 @@ func lrclibSearchItems(artist, title string, timeout time.Duration) []lrclibSear
 	return items
 }
 
-func lrclibSearch(artist, title string, durationSecs float64, timeout time.Duration) lrclibResult {
+func lrclibSearch(artist, title, album string, durationSecs float64, timeout time.Duration) lrclibResult {
 	// 原样标题和去括号裸标题各搜一次,**并发**跑,合并候选后统一挑一条。
 	//
 	// 为什么并发而不是再串一级降级:上面 resolveLRCLIBLyric 的三级已经吃掉 8+5+5=18s,
@@ -185,7 +185,7 @@ func lrclibSearch(artist, title string, durationSecs float64, timeout time.Durat
 	// 挑选判定用的始终是**本地原样标题** title,裸标题只是搜索词——放宽的是"拿什么去搜",
 	// 不是"什么算匹配"。合并顺序跟着 searchTitleVariants 走(忽略括号档裸标题在前、严格档
 	// 原样在前),时长同样接近时排在前面的那一档优先(pick 的并列取先到者)。
-	best := pickLRCLIBSearchResult(items, artist, title, durationSecs)
+	best := pickLRCLIBSearchResult(items, artist, title, album, durationSecs)
 	if best == nil {
 		return lrclibResult{}
 	}
@@ -223,7 +223,7 @@ const lrclibSearchDurationTolerance = 0.25
 // "Blue Gangsta (Original Version)" 返回的第一个候选 duration=4.0 秒(库里的脏数据),
 // 盲取第一条就会拿它。本地时长未知(durationSecs<=0)时退回"取第一个过门的",此时没有
 // 任何信号能分辨,交给下游 scoreLyricCandidate 继续把关。
-func pickLRCLIBSearchResult(items []lrclibSearchItem, artist, title string, durationSecs float64) *lrclibSearchItem {
+func pickLRCLIBSearchResult(items []lrclibSearchItem, artist, title, album string, durationSecs float64) *lrclibSearchItem {
 	var best *lrclibSearchItem
 	bestDiff := -1.0
 	for i := range items {
@@ -235,7 +235,8 @@ func pickLRCLIBSearchResult(items []lrclibSearchItem, artist, title string, dura
 			!artistMatches(it.ArtistName, artist) {
 			continue
 		}
-		if versionTagsMismatch(title, it.TrackName) {
+		// 专辑名一起看:限定词常常只写在专辑上(见 versionTagsMismatch 的注释)。
+		if versionTagsMismatch(title, album, it.TrackName, it.AlbumName) {
 			continue
 		}
 		if durationSecs <= 0 {

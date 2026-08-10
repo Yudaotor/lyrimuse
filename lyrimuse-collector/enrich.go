@@ -1098,7 +1098,7 @@ func fetchScoredLyricCandidatesStreaming(artist, title, album string, durationSe
 				CoverURL:      c.cover,
 			}
 			r.Score, r.ScoreTerms = scoreLyricCandidateDetailed(
-				artist, title, durationSecs, c, corroborated[c.source])
+				artist, title, album, durationSecs, c, corroborated[c.source])
 			switch c.source {
 			case "netease":
 				// 翻译/罗马音网易云固定给中文;QQ/酷狗这次只接了逐字,不接翻译/罗马音,

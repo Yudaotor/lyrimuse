@@ -16,7 +16,7 @@ func TestPickLRCLIBSearchResult(t *testing.T) {
 	got := pickLRCLIBSearchResult([]lrclibSearchItem{
 		item("Blue Gangsta", 4, lrc),
 		item("Blue Gangsta", 257, lrc),
-	}, "Michael Jackson", "Blue Gangsta", 255)
+	}, "Michael Jackson", "Blue Gangsta", "", 255)
 	if got == nil || got.Duration != 257 {
 		t.Errorf("应挑到 257s 那条(而不是 4s 的脏数据),实际 %v", got)
 	}
@@ -26,7 +26,7 @@ func TestPickLRCLIBSearchResult(t *testing.T) {
 		item("Blue Gangsta", 270, lrc),
 		item("Blue Gangsta", 256, lrc),
 		item("Blue Gangsta", 240, lrc),
-	}, "Michael Jackson", "Blue Gangsta", 255)
+	}, "Michael Jackson", "Blue Gangsta", "", 255)
 	if got == nil || got.Duration != 256 {
 		t.Errorf("应取最接近 255s 的 256s,实际 %v", got)
 	}
@@ -34,46 +34,46 @@ func TestPickLRCLIBSearchResult(t *testing.T) {
 	// 版本限定词相反的候选必须跳过——搜 "Song" 很容易返回 "Song (Live)"
 	got = pickLRCLIBSearchResult([]lrclibSearchItem{
 		item("Blue Gangsta (Live)", 255, lrc),
-	}, "Michael Jackson", "Blue Gangsta", 255)
+	}, "Michael Jackson", "Blue Gangsta", "", 255)
 	if got != nil {
 		t.Errorf("版本限定词相反的候选不该被采纳,实际 %v", got.TrackName)
 	}
 	// 两边版本一致则可以采纳
 	got = pickLRCLIBSearchResult([]lrclibSearchItem{
 		item("Blue Gangsta (Live)", 255, lrc),
-	}, "Michael Jackson", "Blue Gangsta (Live)", 255)
+	}, "Michael Jackson", "Blue Gangsta (Live)", "", 255)
 	if got == nil {
 		t.Error("两边都是 Live 版应该采纳")
 	}
 
 	// 没有逐行时间戳的候选跳过
-	if got = pickLRCLIBSearchResult([]lrclibSearchItem{item("Blue Gangsta", 255, "")}, "Michael Jackson", "Blue Gangsta", 255); got != nil {
+	if got = pickLRCLIBSearchResult([]lrclibSearchItem{item("Blue Gangsta", 255, "")}, "Michael Jackson", "Blue Gangsta", "", 255); got != nil {
 		t.Error("syncedLyrics 为空的候选不该被采纳")
 	}
-	if got = pickLRCLIBSearchResult([]lrclibSearchItem{item("Blue Gangsta", 255, "no timestamps here")}, "Michael Jackson", "Blue Gangsta", 255); got != nil {
+	if got = pickLRCLIBSearchResult([]lrclibSearchItem{item("Blue Gangsta", 255, "no timestamps here")}, "Michael Jackson", "Blue Gangsta", "", 255); got != nil {
 		t.Error("没有时间戳的候选不该被采纳")
 	}
 
 	// 歌手对不上跳过
 	bad := item("Blue Gangsta", 255, lrc)
 	bad.ArtistName = "Someone Else"
-	if got = pickLRCLIBSearchResult([]lrclibSearchItem{bad}, "Michael Jackson", "Blue Gangsta", 255); got != nil {
+	if got = pickLRCLIBSearchResult([]lrclibSearchItem{bad}, "Michael Jackson", "Blue Gangsta", "", 255); got != nil {
 		t.Error("歌手对不上的候选不该被采纳")
 	}
 
 	// 全部超出时长容差 → 挑不出,宁可这一源没结果
-	if got = pickLRCLIBSearchResult([]lrclibSearchItem{item("Blue Gangsta", 600, lrc)}, "Michael Jackson", "Blue Gangsta", 255); got != nil {
+	if got = pickLRCLIBSearchResult([]lrclibSearchItem{item("Blue Gangsta", 600, lrc)}, "Michael Jackson", "Blue Gangsta", "", 255); got != nil {
 		t.Error("时长差一倍以上的候选不该被采纳")
 	}
 
 	// 本地时长未知 → 退回"取第一个过门的",不因为无法核对就整源放弃
-	got = pickLRCLIBSearchResult([]lrclibSearchItem{item("Blue Gangsta", 0, lrc), item("Blue Gangsta", 257, lrc)}, "Michael Jackson", "Blue Gangsta", 0)
+	got = pickLRCLIBSearchResult([]lrclibSearchItem{item("Blue Gangsta", 0, lrc), item("Blue Gangsta", 257, lrc)}, "Michael Jackson", "Blue Gangsta", "", 0)
 	if got == nil || got.Duration != 0 {
 		t.Errorf("本地时长未知时应取第一个过门的候选,实际 %v", got)
 	}
 
 	// 候选为空 / 全不过门
-	if got = pickLRCLIBSearchResult(nil, "Michael Jackson", "Blue Gangsta", 255); got != nil {
+	if got = pickLRCLIBSearchResult(nil, "Michael Jackson", "Blue Gangsta", "", 255); got != nil {
 		t.Error("空候选列表应返回 nil")
 	}
 }
@@ -115,7 +115,7 @@ func TestPickLRCLIBSearchResultRejectsNearMissTitle(t *testing.T) {
 	items := []lrclibSearchItem{
 		{TrackName: "Real Love", ArtistName: "Michael Jackson", Duration: 255, SyncedLyrics: lrc},
 	}
-	if got := pickLRCLIBSearchResult(items, "Michael Jackson", "Love", 255); got != nil {
+	if got := pickLRCLIBSearchResult(items, "Michael Jackson", "Love", "", 255); got != nil {
 		t.Errorf("同歌手的近似曲名不该被采纳,实际选中 %q", got.TrackName)
 	}
 }

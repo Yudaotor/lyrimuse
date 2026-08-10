@@ -320,15 +320,19 @@ const (
 	scoreRejectDurationMismatch = "rejectDurationMismatch"
 )
 
-func scoreLyricCandidate(localArtist, localTitle string, durationSecs float64, c lyricCandidate, corroborated bool) int {
-	score, _ := scoreLyricCandidateDetailed(localArtist, localTitle, durationSecs, c, corroborated)
+func scoreLyricCandidate(
+	localArtist, localTitle, localAlbum string, durationSecs float64,
+	c lyricCandidate, corroborated bool,
+) int {
+	score, _ := scoreLyricCandidateDetailed(localArtist, localTitle, localAlbum, durationSecs, c, corroborated)
 	return score
 }
 
 // scoreLyricCandidateDetailed 跟 scoreLyricCandidate 是同一套逻辑,只是额外把每一项摊出来。
 // 分数被判 -1 时返回的那一项就是原因(Points 为 0),调用方据此告诉用户"为什么这条不能用"。
 func scoreLyricCandidateDetailed(
-	localArtist, localTitle string, durationSecs float64, c lyricCandidate, corroborated bool,
+	localArtist, localTitle, localAlbum string, durationSecs float64,
+	c lyricCandidate, corroborated bool,
 ) (int, []scoreTerm) {
 	reject := func(kind string) (int, []scoreTerm) {
 		return -1, []scoreTerm{{Kind: kind}}
@@ -394,8 +398,9 @@ func scoreLyricCandidateDetailed(
 		lines = 200
 	}
 	add(scoreTermLines, lines)
-	// 版本限定词对不上 → 重扣。理由见 versionMismatchPenalty。
-	if versionTagsMismatch(localTitle, c.title) {
+	// 版本限定词对不上 → 重扣。理由见 versionMismatchPenalty。判定同时看歌名和**专辑名**,
+	// 理由见 versionTagsMismatch。
+	if versionTagsMismatch(localTitle, localAlbum, c.title, c.album) {
 		add(scoreTermVersionTags, -versionMismatchPenalty)
 	}
 	// 扣完统一夹到 1:负分会被 pickLyricCandidate 当成「不可用」直接丢弃,而这两种重扣
@@ -789,17 +794,28 @@ func parentheticalSegments(s string) []string {
 	return out
 }
 
-// versionTagsMismatch 判断"候选自报的歌名"跟"本地正在播的歌名"在版本限定词上是否对不上。
+// versionTagsMismatch 判断候选跟本地正在播的这首在版本限定词上是否对不上。
 // 双向判定:本地是正式版而候选是 demo/live(会展示错版本的时间轴),以及本地是 demo 而候选
 // 是正式版(同理),都算不匹配。
 //
-// candidateTitle 为空(某些源不回报歌名)时一律判不匹配为 false —— 没有证据就不扣分,
-// 不能因为源的元数据缺失就把它的歌词判死。
-func versionTagsMismatch(localTitle, candidateTitle string) bool {
-	if strings.TrimSpace(candidateTitle) == "" {
+// **歌名和专辑名一起看**。2026-08-10 实测坐实这一点非做不可:PRINCE 的 "1999"
+// (本地专辑 The Hits/The B-Sides)匹配到了 Musixmatch 的一条现场版,而那条候选的
+// **歌名就是干净的 "1999"**,"Live" 藏在它的专辑名里
+// ("Nude Tour, 1990 (Remastered, Live On Broadcasting)")——只看歌名的话这道闸门
+// 一点反应都没有,那条现场版拿着 768 分(逐字 +400、时长 +283、行数 +85)稳居第一,
+// 把专辑真正对得上的 LRCLIB 那条(368 分)压在下面。
+//
+// 两边都是"歌名 ∪ 专辑名"取并集再比,而不是歌名对歌名、专辑对专辑:限定词写在哪个字段
+// 里各源习惯不同(本地写 "1999 (Live)"、某源写在专辑上),按字段分别比会把这种纯粹的
+// 位置差异误判成版本不符。
+//
+// 候选的歌名和专辑名都为空(某些源不回报元数据)时一律判不匹配为 false —— 没有证据就
+// 不扣分,不能因为源的元数据缺失就把它的歌词判死。
+func versionTagsMismatch(localTitle, localAlbum, candidateTitle, candidateAlbum string) bool {
+	if strings.TrimSpace(candidateTitle) == "" && strings.TrimSpace(candidateAlbum) == "" {
 		return false
 	}
-	local, cand := titleVersionTags(localTitle), titleVersionTags(candidateTitle)
+	local, cand := versionTagsIn(localTitle, localAlbum), versionTagsIn(candidateTitle, candidateAlbum)
 	if len(local) != len(cand) {
 		return true
 	}
@@ -809,6 +825,19 @@ func versionTagsMismatch(localTitle, candidateTitle string) bool {
 		}
 	}
 	return false
+}
+
+// versionTagsIn 把若干个字段(歌名/专辑名)里的版本限定词并成一个集合。
+// 每个字段各自走 titleVersionTags 的"只在限定词该出现的位置里找"规则(括号段、最后一个
+// " - " 之后),所以专辑名里不带括号的普通词不会被误当成限定词。
+func versionTagsIn(fields ...string) map[string]bool {
+	out := map[string]bool{}
+	for _, f := range fields {
+		for tag := range titleVersionTags(f) {
+			out[tag] = true
+		}
+	}
+	return out
 }
 
 // versionMismatchPenalty 要足够大到"永远压不过标题吻合的候选":时长项最高 1000、逐字项

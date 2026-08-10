@@ -75,7 +75,7 @@ func TestScoreLyricCandidateRejectsCreditOnlyLyrics(t *testing.T) {
 		"[00:07.00]大提琴: 辛\n" +
 		"[04:35.19]母带工程师: 壬"
 	c := lyricCandidate{source: "netease", lyrics: fakeCreditLRC}
-	if got := scoreLyricCandidate("Someone", "Instrumental Track", 275.19, c, false); got != -1 {
+	if got := scoreLyricCandidate("Someone", "Instrumental Track", "", 275.19, c, false); got != -1 {
 		t.Errorf("scoreLyricCandidate() = %d, want -1 (credit-only lyrics must be rejected)", got)
 	}
 }
@@ -132,31 +132,77 @@ func TestVersionTagsMismatch(t *testing.T) {
 	cases := []struct {
 		label      string
 		local      string
+		localAlbum string
 		candidate  string
+		candAlbum  string
 		wantMismat bool
 	}{
 		// 核心回归:本地是正式版,候选自报 Original Version → 必须判不匹配
-		{"正式版 vs Original Version", "Blue Gangsta", "Blue Gangsta (Original Version)", true},
-		{"正式版 vs Demo", "Beat It", "Beat It (Demo)", true},
-		{"正式版 vs Live", "Billie Jean", "Billie Jean (Live)", true},
+		{"正式版 vs Original Version", "Blue Gangsta", "", "Blue Gangsta (Original Version)", "", true},
+		{"正式版 vs Demo", "Beat It", "", "Beat It (Demo)", "", true},
+		{"正式版 vs Live", "Billie Jean", "", "Billie Jean (Live)", "", true},
 		// 反向同理:本地就是 demo,候选给正式版也不行(时间轴同样对不上)
-		{"Demo vs 正式版", "Beat It (Demo)", "Beat It", true},
-		{"Original Version vs 正式版", "Blue Gangsta (Original Version)", "Blue Gangsta", true},
+		{"Demo vs 正式版", "Beat It (Demo)", "", "Beat It", "", true},
+		{"Original Version vs 正式版", "Blue Gangsta (Original Version)", "", "Blue Gangsta", "", true},
 		// 两边同一种版本 → 匹配
-		{"两边都是 Live", "Billie Jean (Live)", "Billie Jean [Live]", false},
-		{"两边都干净", "Blue Gangsta", "Blue Gangsta", false},
+		{"两边都是 Live", "Billie Jean (Live)", "", "Billie Jean [Live]", "", false},
+		{"两边都干净", "Blue Gangsta", "", "Blue Gangsta", "", false},
 		// 母带/发行版差异不该判不匹配
-		{"正式版 vs Remastered", "Thriller", "Thriller (2001 Remastered)", false},
-		{"正式版 vs Deluxe", "Bad", "Bad (Deluxe Edition)", false},
+		{"正式版 vs Remastered", "Thriller", "", "Thriller (2001 Remastered)", "", false},
+		{"正式版 vs Deluxe", "Bad", "", "Bad (Deluxe Edition)", "", false},
 		// 候选没回报歌名 → 没有证据,不扣分
-		{"候选歌名为空", "Blue Gangsta", "", false},
-		{"候选歌名只有空白", "Blue Gangsta", "   ", false},
+		{"候选歌名为空", "Blue Gangsta", "", "", "", false},
+		{"候选歌名只有空白", "Blue Gangsta", "", "   ", "", false},
 		// 假阳性陷阱不能触发不匹配
-		{"Live and Let Die 不是 live 版", "Live and Let Die", "Live and Let Die", false},
+		{"Live and Let Die 不是 live 版", "Live and Let Die", "", "Live and Let Die", "", false},
+
+		// ↓↓↓ 2026-08-10 新增:限定词写在**专辑名**里的那一类 ↓↓↓
+
+		// 真实事故复现:PRINCE 的 "1999"。候选歌名干干净净就叫 "1999",Live 只出现在
+		// 专辑名里,只看歌名的话这道闸门完全不响,那条现场版拿 768 分排第一。
+		{
+			"歌名干净但专辑是现场版", "1999", "The Hits/The B-Sides",
+			"1999", "Nude Tour, 1990 (Remastered, Live On Broadcasting)", true,
+		},
+		// 同一事故里专辑真正对得上的那条,不能被误伤
+		{
+			"专辑对得上(连字符写法)", "1999", "The Hits/The B-Sides",
+			"1999", "The Hits-The B-Sides", false,
+		},
+		// 合集 vs 原始专辑:两边都没有版本限定词,不该因为"专辑名不一样"就判不匹配
+		{"合集 vs 原始专辑", "1999", "The Hits/The B-Sides", "1999", "1999", false},
+		// 位置差异不算差异:一边写在歌名、一边写在专辑,取并集之后是一致的
+		{
+			"限定词一个写歌名一个写专辑", "Layla (Acoustic)", "",
+			"Layla", "Unplugged (Acoustic)", false,
+		},
+		// ⚠️ 已知缺口,固化在这里:限定词在专辑名里**裸着**出现(没有括号、也不在
+		// 最后一个 " - " 之后)时抓不到 —— titleVersionTags 只在"限定词该出现的位置"
+		// 里找,而那条规则是为了挡住 "Live and Let Die"/"Demolition" 这类假阳性。
+		// 代价就是 "MTV Unplugged in New York"、"Live at Wembley" 这种专辑名逃过判定。
+		// 要补的话得给专辑名单独做**按词边界**的全名匹配(能认 unplugged/live,又不会
+		// 把 "Alive"/"Demolition" 认错),但也会带来 "Extended Play" 这类新的假阳性,
+		// 值不值得要另做实测。现在如实标成 false。
+		{
+			"已知缺口:专辑名里的裸词限定词抓不到", "Come As You Are", "MTV Unplugged in New York",
+			"Come As You Are", "Nevermind", false,
+		},
+		// 专辑里的母带/发行说明不该触发(remastered/deluxe 故意不在词表里)
+		{
+			"专辑写 Remastered 不算版本差异", "Thriller", "Thriller",
+			"Thriller", "Thriller (2001 Remastered Edition)", false,
+		},
+		// 专辑名里不带括号的普通词不该被当成限定词 —— titleVersionTags 只在括号段和
+		// 最后一个 " - " 之后找
+		{"专辑名裸词 Alive 不算 live", "Song", "Alive", "Song", "Some Album", false},
+		// 候选歌名和专辑都为空 → 没有证据,不扣分
+		{"候选元数据全空", "Blue Gangsta", "Bad", "", "", false},
 	}
 	for _, c := range cases {
-		if got := versionTagsMismatch(c.local, c.candidate); got != c.wantMismat {
-			t.Errorf("%s: versionTagsMismatch(%q, %q) = %v, want %v", c.label, c.local, c.candidate, got, c.wantMismat)
+		got := versionTagsMismatch(c.local, c.localAlbum, c.candidate, c.candAlbum)
+		if got != c.wantMismat {
+			t.Errorf("%s: versionTagsMismatch(%q/%q, %q/%q) = %v, want %v",
+				c.label, c.local, c.localAlbum, c.candidate, c.candAlbum, got, c.wantMismat)
 		}
 	}
 }
@@ -170,8 +216,8 @@ func TestScoreLyricCandidatePenalizesWrongVersion(t *testing.T) {
 	bad := base
 	bad.title = "Blue Gangsta (Original Version)"
 
-	gs := scoreLyricCandidate("Michael Jackson", "Blue Gangsta", 9, good, false)
-	bs := scoreLyricCandidate("Michael Jackson", "Blue Gangsta", 9, bad, false)
+	gs := scoreLyricCandidate("Michael Jackson", "Blue Gangsta", "", 9, good, false)
+	bs := scoreLyricCandidate("Michael Jackson", "Blue Gangsta", "", 9, bad, false)
 	if gs <= bs {
 		t.Errorf("标题吻合的候选(%d)必须高于版本对不上的候选(%d)", gs, bs)
 	}
@@ -230,7 +276,7 @@ func TestScoringAfter20260809Review(t *testing.T) {
 		var scores []int
 		for _, src := range []string{"netease", "qq", "kugou", "musixmatch", "lrclib"} {
 			s, terms := scoreLyricCandidateDetailed(
-				"someone", "song", dur, lyricCandidate{source: src, lyrics: good}, false)
+				"someone", "song", "", dur, lyricCandidate{source: src, lyrics: good}, false)
 			scores = append(scores, s)
 			for _, term := range terms {
 				if term.Kind == scoreTermSource {
@@ -250,7 +296,7 @@ func TestScoringAfter20260809Review(t *testing.T) {
 		// 末尾时间戳 60s,曲长 200s —— 差 70%,远超 25% 阈值
 		off := "[00:00.00]a\n[00:30.00]b\n[01:00.00]c"
 		score, terms := scoreLyricCandidateDetailed(
-			"someone", "song", dur, lyricCandidate{source: "qq", lyrics: off}, false)
+			"someone", "song", "", dur, lyricCandidate{source: "qq", lyrics: off}, false)
 		if score < 0 {
 			t.Fatalf("时长不符不该再判 -1(会被整条丢弃),实际 %d", score)
 		}
@@ -268,7 +314,7 @@ func TestScoringAfter20260809Review(t *testing.T) {
 		}
 		// 关键性质:再怎么样也得输给一条时长对得上的
 		ok, _ := scoreLyricCandidateDetailed(
-			"someone", "song", dur, lyricCandidate{source: "lrclib", lyrics: good}, false)
+			"someone", "song", "", dur, lyricCandidate{source: "lrclib", lyrics: good}, false)
 		if score >= ok {
 			t.Errorf("时长不符的候选(%d)不该压过时长吻合的(%d)", score, ok)
 		}
@@ -277,7 +323,7 @@ func TestScoringAfter20260809Review(t *testing.T) {
 	t.Run("硬拒绝只留真的不能用的那几种", func(t *testing.T) {
 		// 没有时间戳的纯文本仍然一票否决
 		if s, _ := scoreLyricCandidateDetailed(
-			"someone", "song", dur, lyricCandidate{source: "qq", lyrics: "just words\nno timestamps"}, false); s != -1 {
+			"someone", "song", "", dur, lyricCandidate{source: "qq", lyrics: "just words\nno timestamps"}, false); s != -1 {
 			t.Errorf("没有时间戳的歌词仍应判 -1,实际 %d", s)
 		}
 	})
@@ -418,8 +464,8 @@ func TestCorroborationYieldsToAWellFittingCandidate(t *testing.T) {
 	if len(corr) != 0 {
 		t.Errorf("有候选时长吻合时不该再发印证豁免, got %v", corr)
 	}
-	qqScore, qqTerms := scoreLyricCandidateDetailed("Daniel Caesar", "Valentina", dur, shortA, corr[shortA.source])
-	lrcScore, _ := scoreLyricCandidateDetailed("Daniel Caesar", "Valentina", dur, fits, corr[fits.source])
+	qqScore, qqTerms := scoreLyricCandidateDetailed("Daniel Caesar", "Valentina", "", dur, shortA, corr[shortA.source])
+	lrcScore, _ := scoreLyricCandidateDetailed("Daniel Caesar", "Valentina", "", dur, fits, corr[fits.source])
 	for _, term := range qqTerms {
 		if term.Kind == scoreTermCorroborated {
 			t.Error("抓错版本的候选不该再拿到 corroborated 加分")
@@ -434,7 +480,7 @@ func TestCorroborationYieldsToAWellFittingCandidate(t *testing.T) {
 	if !corr2[shortA.source] || !corr2[shortB.source] {
 		t.Errorf("所有源都提前结束时,印证豁免必须保留(长尾奏的歌全靠它), got %v", corr2)
 	}
-	if _, terms := scoreLyricCandidateDetailed("Daniel Caesar", "Valentina", dur, shortA, corr2[shortA.source]); !hasTerm(terms, scoreTermCorroborated) {
+	if _, terms := scoreLyricCandidateDetailed("Daniel Caesar", "Valentina", "", dur, shortA, corr2[shortA.source]); !hasTerm(terms, scoreTermCorroborated) {
 		t.Error("这一档该走 corroborated 加分")
 	}
 
