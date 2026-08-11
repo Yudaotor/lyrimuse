@@ -97,5 +97,9 @@ const lfmMirroredTTL = 7 * 24 * time.Hour
 
 var lfmMirroredPath string
 
+// lastfmStatusPath:Last.fm 镜像凭据致命错误的状态文件(见 lastfm.go 的
+// writeLastfmMirrorStatus),App 的账号卡读它显示"授权已失效"。
+var lastfmStatusPath string
+
 // 完成收听落库走 LB single 提交(带自身重试)+ Last.fm 镜像双路径覆盖,不走 relay
 // /scrobble 端点(该端点连同本地重放队列已废弃下线,state-worker 侧路由同步移除)。

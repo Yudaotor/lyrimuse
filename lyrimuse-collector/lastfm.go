@@ -7,6 +7,7 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	_ "image/jpeg" // 注册 JPEG 解码器
 	_ "image/png"  // 网易云取色缩略图有时是 PNG(content-type 却谎报 jpg)
@@ -14,9 +15,12 @@ import (
 	"log"
 	"net/http"
 	neturl "net/url"
+	"os"
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -27,6 +31,14 @@ import (
 type lastfmScrobbler struct {
 	apiKey, secret, sk string
 	hc                 *http.Client
+	// dead:session key / API key 已被 Last.fm 判死(error 4/9/10/26)。置位后停止一切
+	// 后续提交 —— 原来这种情况下每首歌照样白打 2 个注定失败的请求,且除了日志刷屏没有
+	// 任何机制让用户知道 scrobble 早就全停了(2026-08-11 审阅确认)。进程重启(保存
+	// 配置/重连账号都会 kickstart collector)自然复位。
+	dead atomic.Bool
+	// clearStatus:第一次提交成功时删掉上次运行留下的状态文件(有就删,没有白删一次),
+	// sync.Once 保证整个进程生命周期只做一次这个 stat+remove。
+	clearStatus sync.Once
 	// collapse 决定一条提交该用哪个艺人名 —— 播放器报的合唱串("汪苏泷 & 荷莉")在
 	// Last.fm 编目里往往不存在,原样提交会造出一个只有自己一个听众的影子艺人页。
 	// 为 nil(没配只读 api_key)时所有提交按原样走,见 lastfmcollapse.go。
@@ -99,11 +111,57 @@ func (s *lastfmScrobbler) call(ctx context.Context, method string, params map[st
 		return err
 	}
 	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	// Last.fm 的错误经常以 HTTP 200 + {"error":N,"message":...} 返回(读路径
+	// LastfmAuthFlow.swift 早有同样的注释,写路径一直没做,2026-08-11 审阅确认)——
+	// 所以 200 和非 200 的 body 都要解析,先认 error 字段再看状态码。
+	var out struct {
+		Error     int    `json:"error"`
+		Message   string `json:"message"`
+		Scrobbles *struct {
+			Attr struct {
+				Accepted json.Number `json:"accepted"`
+				Ignored  json.Number `json:"ignored"`
+			} `json:"@attr"`
+		} `json:"scrobbles"`
+	}
+	_ = json.Unmarshal(body, &out) // 解不开就当没有错误体,靠状态码兜底
+	if out.Error != 0 {
+		return &lastfmAPIError{Code: out.Error, Message: out.Message, Method: method}
+	}
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("lastfm %s: status %d: %s", method, resp.StatusCode, body)
 	}
+	// track.scrobble 的"被忽略"也是 200:accepted=0(时间戳超两周、艺人被判无效等),
+	// 原来会被当成功。不算致命错误,但必须如实报出去让日志可见。
+	if out.Scrobbles != nil {
+		if accepted, _ := out.Scrobbles.Attr.Accepted.Int64(); accepted == 0 {
+			return fmt.Errorf("lastfm %s: ignored by server (accepted=0)", method)
+		}
+	}
 	return nil
+}
+
+// lastfmAPIError 是 Last.fm 应用层错误(区别于网络/HTTP 错误)。
+type lastfmAPIError struct {
+	Code    int
+	Message string
+	Method  string
+}
+
+func (e *lastfmAPIError) Error() string {
+	return fmt.Sprintf("lastfm %s: api error %d: %s", e.Method, e.Code, e.Message)
+}
+
+// fatal:这几个错误码意味着凭据已死,重试只会永远失败 —— 4=Authentication Failed,
+// 9=Invalid session key(用户在网站上撤销了授权),10=Invalid API key,26=API key
+// suspended。其余(服务暂时不可用/限流等)是暂时性的,不熔断。
+func (e *lastfmAPIError) fatal() bool {
+	switch e.Code {
+	case 4, 9, 10, 26:
+		return true
+	}
+	return false
 }
 
 func (s *lastfmScrobbler) updateNowPlaying(ctx context.Context, artist, track, album string) error {
@@ -131,16 +189,52 @@ func (s *lastfmScrobbler) scrobble(ctx context.Context, artist, track, album str
 // 重试(下一次 poll/scrobble 自然会覆盖)。goroutine 自带超时上限,不会泄露(同
 // resolveEnrichAsync 的模式)。s==nil(未配置镜像凭证)时整体跳过,call 不会被执行。
 func mirrorAsync(s *lastfmScrobbler, what string, call func(ctx context.Context) error) {
-	if s == nil {
+	if s == nil || s.dead.Load() {
 		return
 	}
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
 		defer cancel()
-		if err := call(ctx); err != nil {
-			log.Printf("lastfm mirror %s failed: %v", what, err)
+		err := call(ctx)
+		if err == nil {
+			// 干净的一次成功:把上次运行可能留下的"授权失效"状态文件清掉(App 的
+			// Last.fm 卡靠它显示红标),整个进程只查一次。
+			s.clearStatus.Do(func() { os.Remove(lastfmStatusPath) })
+			return
 		}
+		var apiErr *lastfmAPIError
+		if errors.As(err, &apiErr) && apiErr.fatal() {
+			// 只有第一个发现者负责收尾:打一条(且只有一条)显眼日志 + 落状态文件给
+			// App 读。之后 mirrorAsync 在入口处直接短路,不再刷屏、不再白打请求。
+			if s.dead.CompareAndSwap(false, true) {
+				log.Printf("lastfm mirror DISABLED: %v (fatal credential error; reconnect the account in Lyrimuse settings to resume)", apiErr)
+				writeLastfmMirrorStatus(apiErr)
+			}
+			return
+		}
+		log.Printf("lastfm mirror %s failed: %v", what, err)
 	}()
+}
+
+// writeLastfmMirrorStatus 把致命的 Last.fm 写入错误落盘(lyrimuse-lastfm-status.json),
+// App 的账号卡读它来显示"授权已失效"红标 —— 沿用 collector 落盘/Swift 读的既有约定
+// (同 lfmMirroredPath 等)。写失败只记日志:状态文件是通知通道,不是正确性依赖。
+func writeLastfmMirrorStatus(apiErr *lastfmAPIError) {
+	if lastfmStatusPath == "" {
+		return
+	}
+	data, err := json.Marshal(struct {
+		Error   int    `json:"error"`
+		Message string `json:"message"`
+		Method  string `json:"method"`
+		At      int64  `json:"at"`
+	}{apiErr.Code, apiErr.Message, apiErr.Method, time.Now().Unix()})
+	if err != nil {
+		return
+	}
+	if err := os.WriteFile(lastfmStatusPath, data, 0o644); err != nil {
+		log.Printf("lastfm mirror: write status file failed: %v", err)
+	}
 }
 
 // lastfmTrack is a track from Last.fm. UTS is the scrobble time in unix seconds
