@@ -96,6 +96,13 @@ final class LastfmStatsService: ObservableObject {
 
     @Published private(set) var overview: Overview?
     @Published private(set) var recent: [RecentTrack] = []
+    /// 最近记录当前拉多少条:8 → 30 → 100 阶梯,由"显示更多"推进。存在服务里而不是
+    /// 视图里 —— 2 分钟定时刷新和换歌强刷都走 refreshBaseline,得按用户已经展开到的
+    /// 条数重拉,不能刷一次又缩回 8 条。
+    @Published private(set) var recentLimit = 8
+    /// "显示更多"正在加载(按钮转圈用)。跟 baselineFailed 分开:展开失败不该把整卡
+    /// 换成失败态,已有的 8 条还好好的。
+    @Published private(set) var recentExpanding = false
     /// kind|period → 榜单。切分段/时段时旧内容还在,不闪空。
     @Published private(set) var charts: [String: [ChartEntry]] = [:]
     @Published private(set) var chartLoading = false
@@ -147,7 +154,7 @@ final class LastfmStatsService: ObservableObject {
             baselineFailed = false
             async let info = request(method: "user.getinfo", cred: cred)
             async let recentJSON = request(method: "user.getrecenttracks", cred: cred,
-                                           extra: ["limit": "8"])
+                                           extra: ["limit": String(recentLimit)])
             // 两个计数:recenttracks 带 from 时,@attr.total 就是区间内的条数,limit=1
             // 让响应体最小。
             let dayStart = Calendar.current.startOfDay(for: Date())
@@ -168,6 +175,25 @@ final class LastfmStatsService: ObservableObject {
                 week: attrTotal(w)
             )
             recent = parseRecent(r)
+        }
+    }
+
+    /// "显示更多":把最近记录的条数推进到下一档并重拉。到顶(100)后调用是空操作,
+    /// UI 侧到顶也不再显示按钮,这里只是兜底。
+    func expandRecent() {
+        let ladder = [8, 30, 100]
+        guard let next = ladder.first(where: { $0 > recentLimit }) else { return }
+        guard !recentExpanding else { return }
+        recentLimit = next
+        recentExpanding = true
+        Task {
+            defer { recentExpanding = false }
+            guard let cred = credentials,
+                  let json = await request(method: "user.getrecenttracks", cred: cred,
+                                           extra: ["limit": String(next)])
+            else { return }
+            recent = parseRecent(json)
+            fetchedAt["baseline"] = Date() // 刚拉过,定时器下一拍不用再拉一遍
         }
     }
 

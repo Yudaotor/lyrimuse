@@ -316,6 +316,27 @@ struct LastfmStatsSection: View {
                         .buttonStyle(.plain)
                         .onHover { hoveredRow = $0 ? "recent|\(t.id)" : (hoveredRow == "recent|\(t.id)" ? nil : hoveredRow) }
                     }
+                    // 显示更多:8 → 30 → 100。到 100 就不再给按钮 —— 再往下不是"看一眼
+                    // 最近在听什么"的范畴了,交给「查看主页 ↗」。
+                    if stats.recentLimit < 100 {
+                        Divider().padding(.horizontal, 14).padding(.vertical, 4)
+                        Button {
+                            stats.expandRecent()
+                        } label: {
+                            HStack(spacing: 6) {
+                                if stats.recentExpanding {
+                                    ProgressView().controlSize(.small)
+                                }
+                                Text(L10n.t("显示更多"))
+                                    .font(.callout).foregroundStyle(Color.accentColor)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 6)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(stats.recentExpanding)
+                    }
                 }
                 .padding(.vertical, 5)
             }
