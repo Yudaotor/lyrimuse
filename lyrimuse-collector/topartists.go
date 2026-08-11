@@ -206,7 +206,9 @@ func mergeAliasedArtists(entries []lastfmChartEntry) []lastfmChartEntry {
 		b := buckets[root]
 		out = append(out, lastfmChartEntry{Name: b.name, PlayCount: b.playCount})
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].PlayCount > out[j].PlayCount })
+	// SliceStable:平分的歌手保持合并前的相对次序(合并前列表来自 Last.fm,本身有序),
+	// sort.Slice 的不稳定性会让平分名次每次刷新随机跳(审阅指出)。
+	sort.SliceStable(out, func(i, j int) bool { return out[i].PlayCount > out[j].PlayCount })
 	return out
 }
 

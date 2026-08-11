@@ -29,6 +29,16 @@ func runTopArtistsCLI(args []string) {
 	if err := fs.Parse(args); err != nil {
 		log.Fatalf("top-artists: %v", err)
 	}
+	// -limit 0/负数会让下面的切片截断 panic;period 打错的话 Last.fm 会静默按默认处理,
+	// 返回一份跟请求对不上的数据 —— 都在本地挡掉(审阅指出)。
+	if *limit < 1 {
+		*limit = 10
+	}
+	switch *period {
+	case "7day", "1month", "3month", "6month", "12month", "overall":
+	default:
+		log.Fatalf("top-artists: invalid -period %q", *period)
+	}
 
 	home, err := os.UserHomeDir()
 	if err != nil {

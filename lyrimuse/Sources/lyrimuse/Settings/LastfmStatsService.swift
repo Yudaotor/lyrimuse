@@ -83,13 +83,16 @@ final class LastfmStatsService: ObservableObject {
     }
 
     struct RecentTrack: Identifiable, Equatable {
+        /// 在这批响应里的序号 —— 掺进 id 防撞:同一首歌在同一秒被记两次(双端同时
+        /// scrobble 等)时,光靠 title|artist|uts 会撞 ForEach 的 id(审阅指出)。
+        let seq: Int
         let title: String
         let artist: String
         let imageURL: URL?
         /// nil = 这行是"正在播放"(Last.fm 把 nowplaying 行的 date 整个省掉)。
         let date: Date?
         var nowPlaying: Bool { date == nil }
-        var id: String { "\(title)|\(artist)|\(date?.timeIntervalSince1970 ?? -1)" }
+        var id: String { "\(seq)|\(title)|\(artist)|\(date?.timeIntervalSince1970 ?? -1)" }
     }
 
     // MARK: - 状态
@@ -148,12 +151,13 @@ final class LastfmStatsService: ObservableObject {
 
     // MARK: - 凭据
 
-    /// 用户名优先手填时代的 lastfmUser(桥接读的就是它),空了退回授权返回的用户名;
-    /// Key 优先账号卡那把,退回老的只读 Key —— 跟 collector 侧 lastfmBridgeAPIKey()
-    /// 同一套优先级。
+    /// 用户名以**授权返回的**为准(scrobbleUsername),空了才退回手填时代的 lastfmUser
+    /// —— 跟卡片头部"已连接:X"的展示优先级一致。原来这里反着排(lastfmUser 优先),
+    /// 两个字段都有值且不同时,头部显示 A、下面统计的却是 B 的账号(审阅确认)。
+    /// Key 优先账号卡那把,退回老的只读 Key,同 collector 侧 lastfmBridgeAPIKey()。
     private var credentials: (user: String, key: String)? {
         let c = ConfigStore.shared
-        let user = c.lastfmUser.isEmpty ? c.lastfmScrobbleUsername : c.lastfmUser
+        let user = c.lastfmScrobbleUsername.isEmpty ? c.lastfmUser : c.lastfmScrobbleUsername
         let key = c.lastfmScrobbleAPIKey.isEmpty ? c.lastfmAPIKey : c.lastfmScrobbleAPIKey
         guard !user.isEmpty, !key.isEmpty else { return nil }
         return (user, key)
@@ -172,7 +176,8 @@ final class LastfmStatsService: ObservableObject {
         let gen = baselineGen
         Task {
             baselineFailed = false
-            async let info = request(method: "user.getinfo", cred: cred)
+            // 总数不用单独打 user.getinfo:下面拉最近记录那次(不带 from)的 @attr.total
+            // 本来就是全量 scrobble 数,一个请求两用,4 个请求并成 3 个(审阅指出)。
             async let recentJSON = request(method: "user.getrecenttracks", cred: cred,
                                            extra: ["limit": String(recentLimit)])
             // 两个计数:recenttracks 带 from 时,@attr.total 就是区间内的条数,limit=1
@@ -182,16 +187,15 @@ final class LastfmStatsService: ObservableObject {
                                           extra: ["limit": "1", "from": String(Int(dayStart.timeIntervalSince1970))])
             async let weekJSON = request(method: "user.getrecenttracks", cred: cred,
                                          extra: ["limit": "1", "from": String(Int(Date().timeIntervalSince1970 - 7 * 86400))])
-            let (i, r, t, w) = await (info, recentJSON, todayJSON, weekJSON)
+            let (r, t, w) = await (recentJSON, todayJSON, weekJSON)
             guard gen == baselineGen else { return } // 已有更新一代在飞/已完成,这批作废
-            guard let i, let r, let t, let w else {
+            guard let r, let t, let w else {
                 baselineFailed = true
                 fetchedAt["baseline"] = nil // 失败不占用 TTL,重试立刻能发
                 return
             }
-            let total = Int(dig(i, "user", "playcount") as? String ?? "") ?? 0
             overview = Overview(
-                total: total,
+                total: attrTotal(r),
                 today: attrTotal(t),
                 week: attrTotal(w)
             )
@@ -314,8 +318,9 @@ final class LastfmStatsService: ObservableObject {
             process.executableURL = URL(fileURLWithPath: collectorPath)
             process.arguments = ["top-artists", "-period", period.rawValue, "-limit", "10"]
             let pipe = Pipe()
+            let errPipe = Pipe()
             process.standardOutput = pipe
-            process.standardError = FileHandle.nullDevice
+            process.standardError = errPipe
             var rows: [[String: Any]] = []
             do {
                 try process.run()
@@ -332,7 +337,14 @@ final class LastfmStatsService: ObservableObject {
                 watchdog.cancel()
                 guard process.terminationStatus == 0,
                       let arr = try JSONSerialization.jsonObject(with: data) as? [[String: Any]]
-                else { throw CocoaError(.fileReadCorruptFile) }
+                else {
+                    // 失败时把子命令的 stderr 带进日志 —— 原来丢 nullDevice,collector 侧
+                    // log.Fatal 的死因(配置缺失/网络全挂)从这边完全看不见(审阅指出)。
+                    let err = String(data: errPipe.fileHandleForReading.readDataToEndOfFile(),
+                                     encoding: .utf8)?.prefix(300) ?? ""
+                    logger.notice("top-artists failed (exit \(process.terminationStatus)): \(String(err), privacy: .public)")
+                    throw CocoaError(.fileReadCorruptFile)
+                }
                 rows = arr
             } catch {
                 await MainActor.run {
@@ -369,8 +381,9 @@ final class LastfmStatsService: ObservableObject {
             process.executableURL = URL(fileURLWithPath: collectorPath)
             process.arguments = ["artist-avatars"] + missing
             let pipe = Pipe()
+            let errPipe = Pipe()
             process.standardOutput = pipe
-            process.standardError = FileHandle.nullDevice
+            process.standardError = errPipe
             do {
                 try process.run()
             } catch {
@@ -386,7 +399,12 @@ final class LastfmStatsService: ObservableObject {
             let data = pipe.fileHandleForReading.readDataToEndOfFile()
             process.waitUntilExit()
             watchdog.cancel()
-            guard let map = try? JSONSerialization.jsonObject(with: data) as? [String: String] else { return }
+            guard let map = try? JSONSerialization.jsonObject(with: data) as? [String: String] else {
+                let err = String(data: errPipe.fileHandleForReading.readDataToEndOfFile(),
+                                 encoding: .utf8)?.prefix(300) ?? ""
+                logger.notice("artist-avatars failed (exit \(process.terminationStatus)): \(String(err), privacy: .public)")
+                return
+            }
             await MainActor.run {
                 for (name, url) in map where !url.isEmpty {
                     if let u = URL(string: url) { LastfmStatsService.shared.artistAvatars[name] = u }
@@ -399,12 +417,13 @@ final class LastfmStatsService: ObservableObject {
 
     private func parseRecent(_ json: [String: Any]) -> [RecentTrack] {
         let items = (dig(json, "recenttracks", "track") as? [[String: Any]]) ?? []
-        return items.compactMap { item in
+        return items.enumerated().compactMap { seq, item in
             let title = item["name"] as? String ?? ""
             guard !title.isEmpty else { return nil }
             let artist = dig(item, "artist", "#text") as? String ?? ""
             let uts = dig(item, "date", "uts") as? String
             return RecentTrack(
+                seq: seq,
                 title: title,
                 artist: artist,
                 imageURL: imageURL(item["image"]),
@@ -463,7 +482,15 @@ final class LastfmStatsService: ObservableObject {
                 logger.notice("\(method, privacy: .public): http \((resp as? HTTPURLResponse)?.statusCode ?? -1)")
                 return nil
             }
-            return try JSONSerialization.jsonObject(with: data) as? [String: Any]
+            let obj = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+            // Last.fm 的错误多以 200 + {"error":N} 返回(API key 失效就是这形态)。不识别
+            // 它的话,失效的 key 会让页面显示"0 scrobble/还没有记录"——一套看起来很确定、
+            // 实际全错的数据,比失败态糟糕得多(审阅确认)。
+            if let errCode = obj?["error"] as? Int {
+                logger.notice("\(method, privacy: .public): api error \(errCode) \((obj?["message"] as? String) ?? "", privacy: .public)")
+                return nil
+            }
+            return obj
         } catch {
             logger.notice("\(method, privacy: .public) failed: \(error.localizedDescription, privacy: .public)")
             return nil

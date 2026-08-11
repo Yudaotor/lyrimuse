@@ -15,6 +15,10 @@ struct LastfmStatsSection: View {
 
     // 悬停行的高亮(说明"这里能点"),chart|N / recent|id 两个列表共用一个变量
     @State private var hoveredRow: String?
+    // 换歌触发的"10 秒后强刷"任务。存起来是为了去重:快速连切 N 首歌,原来会堆 N 个
+    // asyncAfter、各发一轮请求,且视图关掉后照样触发(审阅指出)——新歌来了就取消旧的,
+    // 只留最后一个;onDisappear 一并取消。
+    @State private var pendingForceRefresh: Task<Void, Never>?
 
     private var kind: LastfmStatsService.ChartKind {
         .init(rawValue: kindRaw) ?? .artists
@@ -52,10 +56,14 @@ struct LastfmStatsSection: View {
             // 换歌 = 上一首刚被 scrobble。给 collector 十秒把记录提交出去,然后无视
             // 缓存强刷一次,刚唱完的歌就出现在列表顶上,不用等下一个两分钟周期。
             .onChange(of: poller.title) { _, _ in
-                DispatchQueue.main.asyncAfter(deadline: .now() + 10) {
+                pendingForceRefresh?.cancel()
+                pendingForceRefresh = Task {
+                    try? await Task.sleep(nanoseconds: 10_000_000_000)
+                    guard !Task.isCancelled else { return }
                     stats.refreshBaseline(force: true)
                 }
             }
+            .onDisappear { pendingForceRefresh?.cancel() }
     }
 
     // MARK: - 三个数字
@@ -276,6 +284,11 @@ struct LastfmStatsSection: View {
             } else {
                 VStack(spacing: 0) {
                     if let live = liveRow {
+                        Button {
+                            if let url = Self.trackURL(artist: live.artist, title: live.title) {
+                                NSWorkspace.shared.open(url)
+                            }
+                        } label: {
                         HStack(spacing: 10) {
                             Group {
                                 if let img = poller.artworkImage {
@@ -299,6 +312,15 @@ struct LastfmStatsSection: View {
                         }
                         .padding(.horizontal, 14)
                         .padding(.vertical, 5)
+                        .background(
+                            RoundedRectangle(cornerRadius: 6)
+                                .fill(hoveredRow == "recent|live" ? Color.secondary.opacity(0.10) : .clear)
+                                .padding(.horizontal, 6))
+                        .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .onHover { hoveredRow = $0 ? "recent|live" : (hoveredRow == "recent|live" ? nil : hoveredRow) }
+                        .help(L10n.t("在 Last.fm 打开"))
                     }
                     ForEach(recentHistory) { t in
                         Button {
@@ -334,6 +356,7 @@ struct LastfmStatsSection: View {
                         }
                         .buttonStyle(.plain)
                         .onHover { hoveredRow = $0 ? "recent|\(t.id)" : (hoveredRow == "recent|\(t.id)" ? nil : hoveredRow) }
+                        .help(L10n.t("在 Last.fm 打开"))
                     }
                     // 显示更多:8 → 30 → 100。到 100 就不再给按钮 —— 再往下不是"看一眼
                     // 最近在听什么"的范畴了,交给「查看主页 ↗」。
@@ -394,21 +417,36 @@ struct LastfmStatsSection: View {
         .padding(.vertical, 14)
     }
 
+    // Formatter 是重对象,静态复用 —— 原来每行渲染各 new 一个,展开到 100 行时一次
+    // 重渲染就是 ~200 次分配(审阅指出)。语言可在设置里切,所以按 lang 失效重建;
+    // 这个视图只在主线程渲染,静态可变量不需要锁。
+    private static var fmtLang = ""
+    private static var absFmt = DateFormatter()
+    private static var relFmt = RelativeDateTimeFormatter()
+
+    private static func ensureFormatters() {
+        let lang = L10n.current == "en" ? "en_US" : "zh_CN"
+        guard lang != fmtLang else { return }
+        fmtLang = lang
+        absFmt = DateFormatter()
+        absFmt.dateStyle = .medium
+        absFmt.timeStyle = .short
+        absFmt.locale = Locale(identifier: lang)
+        relFmt = RelativeDateTimeFormatter()
+        relFmt.unitsStyle = .short
+        relFmt.locale = Locale(identifier: lang)
+    }
+
     /// 精确时刻("2026年8月11日 14:32"),给相对时间的悬停提示用。
     static func absolute(_ date: Date) -> String {
-        let f = DateFormatter()
-        f.dateStyle = .medium
-        f.timeStyle = .short
-        f.locale = Locale(identifier: L10n.current == "en" ? "en_US" : "zh_CN")
-        return f.string(from: date)
+        ensureFormatters()
+        return absFmt.string(from: date)
     }
 
     /// 相对时间("4 分钟前"),locale 跟着 App 语言走 —— RelativeDateTimeFormatter
     /// 默认跟系统语言,而这个 App 的语言可以在设置里单独切。
     static func relative(_ date: Date) -> String {
-        let f = RelativeDateTimeFormatter()
-        f.unitsStyle = .short
-        f.locale = Locale(identifier: L10n.current == "en" ? "en_US" : "zh_CN")
-        return f.localizedString(for: date, relativeTo: Date())
+        ensureFormatters()
+        return relFmt.localizedString(for: date, relativeTo: Date())
     }
 }

@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 )
 
@@ -55,12 +56,13 @@ func runArtistAvatarsCLI(args []string) {
 	out := map[string]string{}
 	dirty := false
 	now := time.Now()
+	// 先把缓存命中的收掉,剩下的才要打网络
+	var misses []string
 	for _, name := range args {
 		if name == "" {
 			continue
 		}
-		old, hasOld := cache[name]
-		if hasOld {
+		if old, ok := cache[name]; ok {
 			ttl := avatarCacheTTL
 			if old.Transient {
 				ttl = avatarTransientTTL
@@ -70,30 +72,45 @@ func runArtistAvatarsCLI(args []string) {
 				continue
 			}
 		}
-		// 每个名字各自限 6 秒 —— 一批 10 个名字全部超时也只有一分钟,而且缓存写进去后
-		// 下次就不会再打网络。
-		ctx, cancel := context.WithTimeout(context.Background(), 6*time.Second)
-		url, definitive := resolveArtistAvatar(ctx, name)
-		cancel()
-		switch {
-		case url != "" || definitive:
-			// 拿到了图,或者两条腿都正常应答说"确实没有" —— 都是可以放心存 14 天的结论
-			out[name] = url
-			cache[name] = avatarCacheEntry{URL: url, TS: now.Unix()}
-			dirty = true
-		case hasOld && old.URL != "":
-			// 暂时故障 + 手上有过期的旧头像:继续用旧的,**不覆盖**。原来这条路会拿空串
-			// 把已知好头像抹掉再锁 14 天(2026-08-11 审阅确认),serve-stale 是这里唯一
-			// 正确的选择 —— 头像这种东西,过期的真图永远好过一个空位。
-			out[name] = old.URL
-		default:
-			// 暂时故障且没有任何旧值:这次输出空,只落 30 分钟短负缓存防抖动期连打,
-			// 网络恢复后很快能重查。
-			out[name] = ""
-			cache[name] = avatarCacheEntry{URL: "", TS: now.Unix(), Transient: true}
-			dirty = true
-		}
+		misses = append(misses, name)
 	}
+	// 冷缓存并发解析:串行时每名最坏 6 秒,一次冷打开(10 个新歌手)能卡到一分钟 ——
+	// daemon 侧 topArtistsDigest 早为同样的理由用了 4 路并发(见那边注释),这里对齐。
+	// 顺序无关(输出是 map),cache/out 的写入用锁护住。
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+	sem := make(chan struct{}, 4)
+	for _, name := range misses {
+		wg.Add(1)
+		go func(name string) {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+			ctx, cancel := context.WithTimeout(context.Background(), 6*time.Second)
+			url, definitive := resolveArtistAvatar(ctx, name)
+			cancel()
+			mu.Lock()
+			defer mu.Unlock()
+			old, hasOld := cache[name]
+			switch {
+			case url != "" || definitive:
+				// 拿到了图,或者两条腿都正常应答说"确实没有" —— 都可以放心存 14 天
+				out[name] = url
+				cache[name] = avatarCacheEntry{URL: url, TS: now.Unix()}
+				dirty = true
+			case hasOld && old.URL != "":
+				// 暂时故障 + 手上有过期的旧头像:继续用旧的,**不覆盖**(serve-stale,
+				// 过期的真图永远好过一个空位;2026-08-11 审阅确认原先会抹掉好头像)。
+				out[name] = old.URL
+			default:
+				// 暂时故障且没有旧值:输出空,落 30 分钟短负缓存防抖动期连打。
+				out[name] = ""
+				cache[name] = avatarCacheEntry{URL: "", TS: now.Unix(), Transient: true}
+				dirty = true
+			}
+		}(name)
+	}
+	wg.Wait()
 
 	if dirty {
 		if data, err := json.MarshalIndent(cache, "", "  "); err == nil {
