@@ -299,6 +299,9 @@ struct AccountLinkingTab: View {
     // "连接 Last.fm"向导 sheet 开没开——见 lastfmFields 顶部注释,未连接时打开
     // scrobble 开关就是打开它。
     @State private var showLastfmWizard = false
+    // 点过「前往申请」才展开"怎么填"提示 —— 没点之前它是噪声(密钥早就填好的人根本
+    // 不会去申请页)。
+    @State private var showLastfmApplyHint = false
 
     var body: some View {
         // 2026-08-06 从 .formStyle(.grouped) 换成跟其余六个设置分类同一套卡片组件
@@ -658,7 +661,33 @@ struct AccountLinkingTab: View {
                 Text(L10n.t("下面的「连接」要用这对密钥完成授权：先在 Last.fm 创建一个应用，拿到 API Key 和 Secret"))
                     .font(.callout).foregroundStyle(.secondary)
                 Spacer()
-                Link(L10n.t("前往申请"), destination: URL(string: "https://www.last.fm/api/account/create")!)
+                // 不是纯 Link:打开申请页的同时展开下面那条"怎么填"。申请页在登录墙
+                // 后面、不支持 URL 参数预填(2026-08-11 实测:未登录 302 到 /login),
+                // 帮用户填表做不到,能做的是把"该填什么"送到眼前。
+                Button(L10n.t("前往申请")) {
+                    NSWorkspace.shared.open(URL(string: "https://www.last.fm/api/account/create")!)
+                    withAnimation { showLastfmApplyHint = true }
+                }
+                .buttonStyle(.link)
+            }
+            if showLastfmApplyHint {
+                HStack(spacing: 8) {
+                    Image(systemName: "info.circle")
+                        .foregroundStyle(.secondary)
+                    Text(L10n.t("申请页基本只需要填「应用名称」，其余留空即可；提交后页面会直接显示 API Key 和 Shared Secret"))
+                        .font(.caption).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer()
+                    Button(L10n.t("拷贝名称")) {
+                        NSPasteboard.general.clearContents()
+                        NSPasteboard.general.setString("Lyrimuse", forType: .string)
+                    }
+                    .buttonStyle(.link)
+                    .font(.caption)
+                    .help(L10n.t("把「Lyrimuse」拷到剪贴板，粘进申请页的应用名称"))
+                }
+                .padding(10)
+                .background(RoundedRectangle(cornerRadius: 8).fill(Color.secondary.opacity(0.08)))
             }
             SecretFieldRow("API Key", value: $config.lastfmScrobbleAPIKey)
             SecretFieldRow("Secret", value: $config.lastfmScrobbleSecret)

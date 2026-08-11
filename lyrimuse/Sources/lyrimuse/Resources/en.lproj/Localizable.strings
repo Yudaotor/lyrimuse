@@ -491,3 +491,6 @@
 "%d 次" = "%d plays";
 "在 Last.fm 打开" = "Open on Last.fm";
 "显示更多" = "Show more";
+"申请页基本只需要填「应用名称」，其余留空即可；提交后页面会直接显示 API Key 和 Shared Secret" = "The form really only needs an application name -- leave the rest blank. Submitting shows your API Key and Shared Secret right away";
+"拷贝名称" = "Copy name";
+"把「Lyrimuse」拷到剪贴板，粘进申请页的应用名称" = "Copies \"Lyrimuse\" so you can paste it as the application name";
