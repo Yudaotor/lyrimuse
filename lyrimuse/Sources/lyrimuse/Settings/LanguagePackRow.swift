@@ -76,6 +76,25 @@ final class LanguagePackStatusStore: ObservableObject {
                 next[code] = await availability.status(
                     from: Locale.Language(identifier: code), to: target)
             }
+            // 全零复查:2026-08-11 第三次复发终于抓到现行 —— 同一进程 19:46:25 查到
+            // installed=0、19:46:32(7 秒后)就是 4,进程外同刻探针也是 4。也就是说
+            // LanguageAvailability 在 translationd 冷启动/闲置退出后的第一轮查询会把
+            // "已安装"整体误报成"未安装",几秒内自愈。所以:一轮查下来一个已装的都没有
+            // 时先不信,等 5 秒重查一遍,以第二遍为准 —— 真被系统清掉的话第二遍还是零,
+            // 照实显示;冷启动误报则被这一步吸收,用户不再看到"0/18"闪现。
+            // (期间不发布任何结果,界面维持上一次的读数,单例缓存本来就在。)
+            if !list.isEmpty, !next.values.contains(.installed) {
+                NSLog("lyrimuse: language packs all-zero, re-verifying in 5s (translationd cold-start suspected)")
+                try? await Task.sleep(nanoseconds: 5_000_000_000)
+                if Task.isCancelled { return }
+                var second: [String: LanguageAvailability.Status] = [:]
+                for code in list {
+                    if Task.isCancelled { return }
+                    second[code] = await availability.status(
+                        from: Locale.Language(identifier: code), to: target)
+                }
+                next = second
+            }
             // 系统说这一对压根不支持的,直接不列 —— 列出来也点不动,只会让人以为坏了。
             //
             // 上面按"规范代码相等"排除目标语言只挡住了 en→en 这种同码的情况。2026-08-10
