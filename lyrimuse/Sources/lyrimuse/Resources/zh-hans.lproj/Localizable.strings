@@ -472,7 +472,7 @@
 "暂无歌词" = "暂无歌词";
 "Scrobble 到 Last.fm" = "Scrobble 到 Last.fm";
 "连接 Last.fm" = "连接 Last.fm";
-"先在 Last.fm 创建一个应用，拿到 API Key 和 Secret" = "先在 Last.fm 创建一个应用，拿到 API Key 和 Secret";
+"下面的「连接」要用这对密钥完成授权：先在 Last.fm 创建一个应用，拿到 API Key 和 Secret" = "下面的「连接」要用这对密钥完成授权：先在 Last.fm 创建一个应用，拿到 API Key 和 Secret";
 "把你播放的歌记录到 Last.fm" = "把你播放的歌记录到 Last.fm";
 "还没连接 Last.fm 账号" = "还没连接 Last.fm 账号";
 "连接后这里会展示你的听歌档案" = "连接后这里会展示你的听歌档案";

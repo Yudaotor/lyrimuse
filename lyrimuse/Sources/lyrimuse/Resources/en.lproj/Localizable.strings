@@ -472,7 +472,7 @@
 "暂无歌词" = "No lyrics found";
 "Scrobble 到 Last.fm" = "Scrobble to Last.fm";
 "连接 Last.fm" = "Connect Last.fm";
-"先在 Last.fm 创建一个应用，拿到 API Key 和 Secret" = "First create a Last.fm application to get an API Key and Secret";
+"下面的「连接」要用这对密钥完成授权：先在 Last.fm 创建一个应用，拿到 API Key 和 Secret" = "Connect below needs this key pair to authorize: first create a Last.fm application to get an API Key and Secret";
 "把你播放的歌记录到 Last.fm" = "Records what you play to Last.fm";
 "还没连接 Last.fm 账号" = "Last.fm account isn't connected yet";
 "连接后这里会展示你的听歌档案" = "Once connected, your listening profile shows up here";

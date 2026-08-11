@@ -655,7 +655,7 @@ struct AccountLinkingTab: View {
                 }
             }
             HStack {
-                Text(L10n.t("先在 Last.fm 创建一个应用，拿到 API Key 和 Secret"))
+                Text(L10n.t("下面的「连接」要用这对密钥完成授权：先在 Last.fm 创建一个应用，拿到 API Key 和 Secret"))
                     .font(.callout).foregroundStyle(.secondary)
                 Spacer()
                 Link(L10n.t("前往申请"), destination: URL(string: "https://www.last.fm/api/account/create")!)
