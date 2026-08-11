@@ -4,21 +4,16 @@ import SwiftUI
 /// 一张分段榜单卡、最近记录。只在已连接时由 AccountLinkingTab 挂出来。
 struct LastfmStatsSection: View {
     @ObservedObject private var stats = LastfmStatsService.shared
-    // "正在记录"行接本地播放状态,不用 API 的 nowplaying 标记 —— API 那份要等下一次
-    // 拉取才更新(缓存 15 分钟),本地这份换歌瞬间就变。这也正是设计方案里"活状态"
-    // 一节定的做法。
-    @ObservedObject private var poller = PlaybackCoordinator.shared
-    @ObservedObject private var features = FeatureSettingsStore.shared
+    // 刻意**不**订阅 PlaybackCoordinator:它在放歌时每个歌词行边界都发布一次,整个
+    // Section(三张卡、最多一百多行)跟着白白重算。所有跟播放状态相关的东西(正在记录行、
+    // 换歌强刷、第 N 次听)都关进 LiveScrobbleRow 子视图,只有那一行随歌词节奏重渲染
+    // (2026-08-11 发散采纳)。
     // 分段/时段都持久化 —— 这页会被反复打开,每次都跳回默认档等于没记住用户在看什么。
     @AppStorage("np:lastfmChartKind") private var kindRaw = LastfmStatsService.ChartKind.artists.rawValue
     @AppStorage("np:lastfmChartPeriod") private var periodRaw = LastfmStatsService.Period.month.rawValue
 
     // 悬停行的高亮(说明"这里能点"),chart|N / recent|id 两个列表共用一个变量
     @State private var hoveredRow: String?
-    // 换歌触发的"10 秒后强刷"任务。存起来是为了去重:快速连切 N 首歌,原来会堆 N 个
-    // asyncAfter、各发一轮请求,且视图关掉后照样触发(审阅指出)——新歌来了就取消旧的,
-    // 只留最后一个;onDisappear 一并取消。
-    @State private var pendingForceRefresh: Task<Void, Never>?
 
     private var kind: LastfmStatsService.ChartKind {
         .init(rawValue: kindRaw) ?? .artists
@@ -31,10 +26,14 @@ struct LastfmStatsSection: View {
         statsCard
         chartCard
         recentCard
-        // onAppear 挂在最后一张卡上就够了(三张卡同生同灭)
+        // onAppear/.task 必须挂在**常驻**的卡上。onThisDayCard 是 `if let` 条件视图——
+        // 没数据时它根本不在视图层级里,挂它身上的 onAppear 永远不触发,而 onThisDay
+        // 的数据又只能靠这里的刷新去拉,整个区会死锁在"一个请求都没发过"的骨架态
+        // (2026-08-11 实测踩坑:档案数字全是"—"、榜单永远骨架、快照文件不生成)。
             .onAppear {
                 stats.refreshBaseline()
                 stats.refreshChart(kind: kind, period: period)
+                stats.refreshOnThisDay()
             }
             // 页面开着不该是一张死快照:每 2 分钟刷一轮档案数字和最近记录(服务侧
             // baselineTTL 同为 2 分钟,正好放行),recent 重新赋值触发重渲染,"6 小时前"
@@ -53,17 +52,7 @@ struct LastfmStatsSection: View {
                     stats.refreshBaseline()
                 }
             }
-            // 换歌 = 上一首刚被 scrobble。给 collector 十秒把记录提交出去,然后无视
-            // 缓存强刷一次,刚唱完的歌就出现在列表顶上,不用等下一个两分钟周期。
-            .onChange(of: poller.title) { _, _ in
-                pendingForceRefresh?.cancel()
-                pendingForceRefresh = Task {
-                    try? await Task.sleep(nanoseconds: 10_000_000_000)
-                    guard !Task.isCancelled else { return }
-                    stats.refreshBaseline(force: true)
-                }
-            }
-            .onDisappear { pendingForceRefresh?.cancel() }
+        onThisDayCard
     }
 
     // MARK: - 三个数字
@@ -282,46 +271,10 @@ struct LastfmStatsSection: View {
                     placeholderRow(L10n.t("还没有 scrobble 记录"))
                 }
             } else {
-                VStack(spacing: 0) {
-                    if let live = liveRow {
-                        Button {
-                            if let url = Self.trackURL(artist: live.artist, title: live.title) {
-                                NSWorkspace.shared.open(url)
-                            }
-                        } label: {
-                        HStack(spacing: 10) {
-                            Group {
-                                if let img = poller.artworkImage {
-                                    Image(nsImage: img).resizable().aspectRatio(contentMode: .fill)
-                                } else {
-                                    RoundedRectangle(cornerRadius: 5).fill(.quaternary)
-                                }
-                            }
-                            .frame(width: 26, height: 26)
-                            .clipShape(RoundedRectangle(cornerRadius: 5))
-                            VStack(alignment: .leading, spacing: 0) {
-                                Text(live.title).font(.system(size: 13)).lineLimit(1)
-                                Text(live.artist).font(.system(size: 10.5)).foregroundStyle(.secondary).lineLimit(1)
-                            }
-                            Spacer()
-                            Label(L10n.t("正在记录"), systemImage: "circle.fill")
-                                .font(.caption)
-                                .foregroundStyle(Color(red: 0.84, green: 0.06, blue: 0.03))
-                                .labelStyle(.titleAndIcon)
-                                .imageScale(.small)
-                        }
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 5)
-                        .background(
-                            RoundedRectangle(cornerRadius: 6)
-                                .fill(hoveredRow == "recent|live" ? Color.secondary.opacity(0.10) : .clear)
-                                .padding(.horizontal, 6))
-                        .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                        .onHover { hoveredRow = $0 ? "recent|live" : (hoveredRow == "recent|live" ? nil : hoveredRow) }
-                        .help(L10n.t("在 Last.fm 打开"))
-                    }
+                // LazyVStack:展开到 100 行时行视图和封面按需实例化,不一口气全建
+                // (2026-08-11 发散采纳)。
+                LazyVStack(spacing: 0) {
+                    LiveScrobbleRow()
                     ForEach(recentHistory) { t in
                         Button {
                             if let url = Self.trackURL(artist: t.artist, title: t.title) { NSWorkspace.shared.open(url) }
@@ -385,13 +338,6 @@ struct LastfmStatsSection: View {
         }
     }
 
-    /// 本地"正在记录"行:正在播放、且 scrobble 开着才显示 —— 开关关着时这首歌不会被
-    /// 记录,标一句"正在记录"就是撒谎。
-    private var liveRow: (title: String, artist: String)? {
-        guard features.lastfmMirrorScrobble, poller.isPlayingNow, !poller.title.isEmpty else { return nil }
-        return (poller.title, poller.artist)
-    }
-
     /// 历史行:API 返回的 nowplaying 行(date 为 nil)丢掉 —— 它跟上面的本地行说的是
     /// 同一首歌;本地行没显示时(暂停/开关关着)它也照丢,暂停中的歌不该以"正在播"的
     /// 形态出现在历史里。
@@ -448,5 +394,170 @@ struct LastfmStatsSection: View {
     static func relative(_ date: Date) -> String {
         ensureFormatters()
         return relFmt.localizedString(for: date, relativeTo: Date())
+    }
+
+    // MARK: - 那年今日
+
+    private var onThisDayCard: some View {
+        Group {
+            if let o = stats.onThisDay {
+                SettingsCard {
+                    SettingsRow(
+                        icon: "calendar",
+                        title: L10n.t("那年今日"),
+                        subtitle: String(
+                            format: L10n.t("%1$@ 年前的今天听了 %2$@ 次，循环最多的是《%3$@》"),
+                            "\(o.yearsAgo)", "\(o.total)", o.topTitle)
+                    )
+                    CardDivider()
+                    VStack(spacing: 0) {
+                        ForEach(o.rows) { t in
+                            Button {
+                                if let url = Self.trackURL(artist: t.artist, title: t.title) {
+                                    NSWorkspace.shared.open(url)
+                                }
+                            } label: {
+                                HStack(spacing: 10) {
+                                    AsyncImage(url: t.imageURL) { image in
+                                        image.resizable().aspectRatio(contentMode: .fill)
+                                    } placeholder: {
+                                        RoundedRectangle(cornerRadius: 5).fill(.quaternary)
+                                    }
+                                    .frame(width: 26, height: 26)
+                                    .clipShape(RoundedRectangle(cornerRadius: 5))
+                                    VStack(alignment: .leading, spacing: 0) {
+                                        Text(t.title).font(.system(size: 13)).lineLimit(1)
+                                        Text(t.artist).font(.system(size: 10.5)).foregroundStyle(.secondary).lineLimit(1)
+                                    }
+                                    Spacer()
+                                    if let date = t.date {
+                                        // 那天的具体时刻(相对时间在跨年场景没有信息量)
+                                        Text(Self.absolute(date))
+                                            .font(.caption).foregroundStyle(.tertiary).monospacedDigit()
+                                    }
+                                }
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 5)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 6)
+                                        .fill(hoveredRow == "otd|\(t.id)" ? Color.secondary.opacity(0.10) : .clear)
+                                        .padding(.horizontal, 6))
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                            .onHover { hoveredRow = $0 ? "otd|\(t.id)" : (hoveredRow == "otd|\(t.id)" ? nil : hoveredRow) }
+                            .help(L10n.t("在 Last.fm 打开"))
+                        }
+                    }
+                    .padding(.vertical, 5)
+                }
+            }
+        }
+    }
+}
+
+/// 「正在记录」活状态行,独立子视图:全 Section 里唯一订阅 PlaybackCoordinator 的地方,
+/// 歌词逐行推进引发的 20Hz 级发布只重渲染这一行,不再拖着三张卡陪跑(2026-08-11 发散
+/// 采纳)。换歌强刷和「第 N 次听」的取数也一并住在这里 —— 它们的触发源就是播放状态。
+///
+/// 不播放/开关关着时渲染成零高度占位而不是移出层级:onChange(poller.title) 得一直挂着,
+/// 暂停状态下换歌(手动切曲再播放)也要能触发强刷。
+private struct LiveScrobbleRow: View {
+    @ObservedObject private var stats = LastfmStatsService.shared
+    @ObservedObject private var poller = PlaybackCoordinator.shared
+    @ObservedObject private var features = FeatureSettingsStore.shared
+    @State private var hovered = false
+    @State private var pendingForceRefresh: Task<Void, Never>?
+
+    private var live: (title: String, artist: String)? {
+        guard features.lastfmMirrorScrobble, poller.isPlayingNow, !poller.title.isEmpty else { return nil }
+        return (poller.title, poller.artist)
+    }
+
+    /// 红点的真值:Last.fm 的 recenttracks 里出现了这首的 nowplaying 条目,说明
+    /// collector 发的 updateNowPlaying 已被服务器收到 —— 之前红点只看本地状态,
+    /// 网络断了/提交失败它照样红着(2026-08-11 发散采纳,改为服务器确认制)。
+    /// 标题宽松比对:大小写/首尾空白不算差异;艺人不参与(合唱串会被 collapse 改写)。
+    private var serverConfirmed: Bool {
+        guard let np = stats.apiNowPlaying, let live else { return false }
+        return np.title.trimmingCharacters(in: .whitespaces).lowercased()
+            == live.title.trimmingCharacters(in: .whitespaces).lowercased()
+    }
+
+    var body: some View {
+        Group {
+            if let live {
+                Button {
+                    if let url = LastfmStatsSection.trackURL(artist: live.artist, title: live.title) {
+                        NSWorkspace.shared.open(url)
+                    }
+                } label: {
+                    HStack(spacing: 10) {
+                        Group {
+                            if let img = poller.artworkImage {
+                                Image(nsImage: img).resizable().aspectRatio(contentMode: .fill)
+                            } else {
+                                RoundedRectangle(cornerRadius: 5).fill(.quaternary)
+                            }
+                        }
+                        .frame(width: 26, height: 26)
+                        .clipShape(RoundedRectangle(cornerRadius: 5))
+                        VStack(alignment: .leading, spacing: 0) {
+                            Text(live.title).font(.system(size: 13)).lineLimit(1)
+                            Text(live.artist).font(.system(size: 10.5)).foregroundStyle(.secondary).lineLimit(1)
+                        }
+                        Spacer()
+                        if let n = stats.nowPlayingCount {
+                            // 老歌重逢的小情绪点:"第 208 次听"
+                            Text(String(format: L10n.t("第 %@ 次听"), "\(n)"))
+                                .font(.caption).foregroundStyle(.tertiary).monospacedDigit()
+                        }
+                        if serverConfirmed {
+                            Label(L10n.t("正在记录"), systemImage: "circle.fill")
+                                .font(.caption)
+                                .foregroundStyle(Color(red: 0.84, green: 0.06, blue: 0.03))
+                                .labelStyle(.titleAndIcon)
+                                .imageScale(.small)
+                                .help(L10n.t("Last.fm 已确认收到这次播放"))
+                        } else {
+                            Label(L10n.t("正在播放"), systemImage: "circle.dotted")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .labelStyle(.titleAndIcon)
+                                .imageScale(.small)
+                                .help(L10n.t("等待 Last.fm 确认（通常几秒内）"))
+                        }
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 5)
+                    .background(
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(hovered ? Color.secondary.opacity(0.10) : .clear)
+                            .padding(.horizontal, 6))
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .onHover { hovered = $0 }
+                .help(L10n.t("在 Last.fm 打开"))
+            } else {
+                Color.clear.frame(height: 0)
+            }
+        }
+        .onAppear {
+            if let live { stats.refreshNowPlayingCount(title: live.title, artist: live.artist) }
+        }
+        .onChange(of: poller.title) { _, _ in
+            if let live { stats.refreshNowPlayingCount(title: live.title, artist: live.artist) }
+            // 换歌 = 上一首刚被 scrobble。给 collector 十秒把记录提交出去,然后无视缓存
+            // 强刷一次 —— 刚唱完的歌马上出现在列表顶上,顺带把 apiNowPlaying 换成新歌
+            // (红点的服务器确认就是靠这次刷新到位的)。
+            pendingForceRefresh?.cancel()
+            pendingForceRefresh = Task {
+                try? await Task.sleep(nanoseconds: 10_000_000_000)
+                guard !Task.isCancelled else { return }
+                stats.refreshBaseline(force: true)
+            }
+        }
+        .onDisappear { pendingForceRefresh?.cancel() }
     }
 }

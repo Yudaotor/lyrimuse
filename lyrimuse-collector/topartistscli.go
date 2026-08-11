@@ -26,6 +26,11 @@ func runTopArtistsCLI(args []string) {
 	fs := flag.NewFlagSet("top-artists", flag.ExitOnError)
 	period := fs.String("period", "overall", "7day|1month|3month|6month|12month|overall")
 	limit := fs.Int("limit", 10, "merged entries to output")
+	// -all-periods:一次进程拿全 App 用的四个时段,输出 {"7day":[...],...}。
+	// App 的歌手榜切时段原来每档各起一个 collector 进程(spawn + 磁盘加载 + 网络往返),
+	// 四档并发取数在 Go 里只是四个 goroutine —— 一次 spawn,切时段零等待(2026-08-11
+	// 发散采纳)。
+	allPeriods := fs.Bool("all-periods", false, "fetch 7day/1month/12month/overall in one run")
 	if err := fs.Parse(args); err != nil {
 		log.Fatalf("top-artists: %v", err)
 	}
@@ -54,6 +59,48 @@ func runTopArtistsCLI(args []string) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
+	if *allPeriods {
+		periods := []string{"7day", "1month", "12month", "overall"}
+		type periodResult struct {
+			period  string
+			entries []lastfmChartEntry
+			err     error
+		}
+		ch := make(chan periodResult, len(periods))
+		for _, pd := range periods {
+			go func(pd string) {
+				pool := topArtistsFetchPool
+				if pool < *limit*3 {
+					pool = *limit * 3
+				}
+				entries, err := lastfmTopArtistsPeriod(ctx, cfg.LastfmUser, cfg.lastfmBridgeAPIKey(), pd, pool)
+				ch <- periodResult{pd, entries, err}
+			}(pd)
+		}
+		out := map[string][]topArtistEntry{}
+		for range periods {
+			r := <-ch
+			if r.err != nil {
+				// 单个时段失败不拖垮整批 —— 缺的那档 App 侧会按失败态显示重试,
+				// 其余三档照常可用。
+				log.Printf("top-artists: period %s failed: %v", r.period, r.err)
+				continue
+			}
+			merged := mergeAliasedArtists(r.entries)
+			if len(merged) > *limit {
+				merged = merged[:*limit]
+			}
+			rows := make([]topArtistEntry, 0, len(merged))
+			for _, e := range merged {
+				rows = append(rows, topArtistEntry{Name: e.Name, PlayCount: e.PlayCount})
+			}
+			out[r.period] = rows
+		}
+		if err := json.NewEncoder(os.Stdout).Encode(out); err != nil {
+			log.Fatalf("top-artists: encode: %v", err)
+		}
+		return
+	}
 	// 跟网页推送同一个道理(topArtistsFetchPool 的注释):合并会把多条折成一条,原始
 	// 条目必须拉得比要展示的多,不然合并完不足数。上限对齐那边的经验值,再按 limit
 	// 放大一档兜住大 limit 的调用。

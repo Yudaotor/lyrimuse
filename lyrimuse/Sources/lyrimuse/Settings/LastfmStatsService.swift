@@ -22,6 +22,10 @@ private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "lastfm
 final class LastfmStatsService: ObservableObject {
     static let shared = LastfmStatsService()
 
+    private init() {
+        loadSnapshot()
+    }
+
     // MARK: - 模型
 
     enum ChartKind: String, CaseIterable, Identifiable {
@@ -64,13 +68,13 @@ final class LastfmStatsService: ObservableObject {
         }
     }
 
-    struct Overview: Equatable {
+    struct Overview: Equatable, Codable {
         var total: Int
         var today: Int
         var week: Int
     }
 
-    struct ChartEntry: Identifiable, Equatable {
+    struct ChartEntry: Identifiable, Equatable, Codable {
         let rank: Int
         let name: String
         /// 专辑/歌曲的所属歌手;歌手榜为空。
@@ -82,7 +86,7 @@ final class LastfmStatsService: ObservableObject {
         var id: Int { rank }
     }
 
-    struct RecentTrack: Identifiable, Equatable {
+    struct RecentTrack: Identifiable, Equatable, Codable {
         /// 在这批响应里的序号 —— 掺进 id 防撞:同一首歌在同一秒被记两次(双端同时
         /// scrobble 等)时,光靠 title|artist|uts 会撞 ForEach 的 id(审阅指出)。
         let seq: Int
@@ -137,6 +141,26 @@ final class LastfmStatsService: ObservableObject {
     @Published private(set) var trackCovers: [String: URL] = [:]
     @Published private(set) var baselineFailed = false
     @Published private(set) var chartFailed = false
+    /// Last.fm 侧当前回报的 nowplaying 条目(recenttracks 里 date 缺失的那行)。
+    /// 「正在记录」红点的**真值来源**:collector 发出的 updateNowPlaying 被 Last.fm 收到
+    /// 后才会出现在这里 —— 本地开始播放只能算「正在播放」,服务器确认过才算「正在记录」
+    /// (2026-08-11 发散采纳,红点不再本地猜)。
+    @Published private(set) var apiNowPlaying: RecentTrack?
+    /// 「这是你第 N 次听」:track.getinfo 带 username 的 userplaycount + 1。
+    /// 换歌那一刻取一次,同一首歌不重取(取晚了这次播放被 scrobble 进去就会多算一)。
+    @Published private(set) var nowPlayingCount: Int?
+    private var nowPlayingCountKey = ""
+    /// 那年今日:去年(查不到再往前,最多三年)同一天的收听。整天没有记录则为 nil,卡片隐藏。
+    @Published private(set) var onThisDay: OnThisDayResult?
+
+    struct OnThisDayResult: Equatable {
+        let yearsAgo: Int
+        let total: Int
+        let topTitle: String
+        let topArtist: String
+        let topCount: Int
+        let rows: [RecentTrack]
+    }
 
     private var fetchedAt: [String: Date] = [:]
     /// 榜单的缓存时长 —— Top 榜一天都未必变一名,15 分钟足够。
@@ -155,6 +179,12 @@ final class LastfmStatsService: ObservableObject {
         baselineGen += 1
         overview = nil
         recent = []
+        apiNowPlaying = nil
+        nowPlayingCount = nil
+        nowPlayingCountKey = ""
+        onThisDay = nil
+        snapshotSaveTask?.cancel()
+        try? FileManager.default.removeItem(at: Self.snapshotURL)
         charts = [:]
         artistAvatars = [:]
         trackCovers = [:]
@@ -164,6 +194,121 @@ final class LastfmStatsService: ObservableObject {
         recentExpanding = false
         recentLimit = 8
         fetchedAt = [:]
+    }
+
+    /// 「第 N 次听」:换歌那一刻取一次。key 守卫保证晚到的响应不会写到下一首歌头上,
+    /// 也保证同一首歌不重取(播放中途重取会把这次已 scrobble 的计入,多算一)。
+    func refreshNowPlayingCount(title: String, artist: String) {
+        let key = "\(artist)|\(title)"
+        guard key != nowPlayingCountKey else { return }
+        nowPlayingCountKey = key
+        nowPlayingCount = nil
+        guard !title.isEmpty, let cred = credentials else { return }
+        Task {
+            let json = await request(method: "track.getinfo", cred: cred,
+                                     extra: ["artist": artist, "track": title,
+                                             "autocorrect": "1", "username": cred.user])
+            guard nowPlayingCountKey == key, let json else { return }
+            if let s = dig(json, "track", "userplaycount") as? String, let n = Int(s) {
+                // userplaycount 是**过去**的次数,这一次还没被记进去 —— 所以是第 n+1 次
+                nowPlayingCount = n + 1
+            }
+        }
+    }
+
+    /// 那年今日:去年同一天(0 点到 24 点)的收听。整天为空自动再往前一年,最多探三年,
+    /// 全空保持 nil(卡片整个隐藏)。6 小时 TTL —— 一天之内内容不会变。
+    func refreshOnThisDay() {
+        guard fresh("onthisday", ttl: 6 * 3600) == false else { return }
+        guard let cred = credentials else { return }
+        fetchedAt["onthisday"] = Date()
+        Task {
+            let cal = Calendar.current
+            for yearsAgo in 1...3 {
+                guard let anchor = cal.date(byAdding: .year, value: -yearsAgo, to: Date()) else { continue }
+                let from = cal.startOfDay(for: anchor)
+                guard let json = await request(method: "user.getrecenttracks", cred: cred,
+                                               extra: ["limit": "100",
+                                                       "from": String(Int(from.timeIntervalSince1970)),
+                                                       "to": String(Int(from.timeIntervalSince1970) + 86400)])
+                else { continue }
+                let total = attrTotal(json)
+                let rows = parseRecent(json).filter { $0.date != nil }
+                guard total > 0, !rows.isEmpty else { continue }
+                var counts: [String: Int] = [:]
+                var sample: [String: RecentTrack] = [:]
+                for r in rows {
+                    let k = "\(r.artist)|\(r.title)"
+                    counts[k, default: 0] += 1
+                    if sample[k] == nil { sample[k] = r }
+                }
+                guard let top = counts.max(by: { $0.value < $1.value }),
+                      let topTrack = sample[top.key] else { continue }
+                var seen = Set<String>()
+                var display: [RecentTrack] = []
+                for r in rows {
+                    let k = "\(r.artist)|\(r.title)"
+                    if seen.insert(k).inserted {
+                        display.append(r)
+                        if display.count == 3 { break }
+                    }
+                }
+                onThisDay = OnThisDayResult(
+                    yearsAgo: yearsAgo, total: total,
+                    topTitle: topTrack.title, topArtist: topTrack.artist,
+                    topCount: top.value, rows: display)
+                return
+            }
+        }
+    }
+
+    // MARK: - 快照(stale-while-revalidate)
+
+    /// 重启后信息页原来要空窗几秒等五个请求 —— 把上一次的数字/榜单/头像/封面落盘,
+    /// 启动时先端上桌,刷新照常在后台跑(2026-08-11 发散采纳)。快照就是缓存,删了无损。
+    private struct StatsSnapshot: Codable {
+        var username: String
+        var overview: Overview?
+        var recent: [RecentTrack]
+        var recentLimit: Int
+        var charts: [String: [ChartEntry]]
+        var artistAvatars: [String: URL]
+        var trackCovers: [String: URL]
+    }
+
+    private static let snapshotURL = FileManager.default.homeDirectoryForCurrentUser
+        .appendingPathComponent(".config/lyrimuse/lyrimuse-lastfm-stats-cache.json")
+    private var snapshotSaveTask: Task<Void, Never>?
+
+    private func loadSnapshot() {
+        guard let data = try? Data(contentsOf: Self.snapshotURL),
+              let snap = try? JSONDecoder().decode(StatsSnapshot.self, from: data) else { return }
+        // 换过账号就不吃旧快照 —— 那是前任的数据
+        guard let cred = credentials, cred.user == snap.username else { return }
+        overview = snap.overview
+        recent = snap.recent
+        recentLimit = max(snap.recentLimit, 8)
+        charts = snap.charts
+        artistAvatars = snap.artistAvatars
+        trackCovers = snap.trackCovers
+        // fetchedAt 刻意留空:所有刷新照常发生,快照只是首屏的底
+    }
+
+    /// 防抖落盘:一轮刷新会连着改好几个字段,攒 2 秒写一次;nowplaying 行是瞬时状态,
+    /// 不落盘(重启后它十有八九已经不是真的)。
+    private func scheduleSnapshotSave() {
+        snapshotSaveTask?.cancel()
+        snapshotSaveTask = Task {
+            try? await Task.sleep(nanoseconds: 2_000_000_000)
+            guard !Task.isCancelled, let cred = credentials else { return }
+            let snap = StatsSnapshot(
+                username: cred.user, overview: overview,
+                recent: recent.filter { $0.date != nil },
+                recentLimit: recentLimit,
+                charts: charts, artistAvatars: artistAvatars, trackCovers: trackCovers)
+            guard let data = try? JSONEncoder().encode(snap) else { return }
+            try? data.write(to: Self.snapshotURL, options: .atomic)
+        }
     }
 
     // MARK: - 凭据
@@ -216,8 +361,14 @@ final class LastfmStatsService: ObservableObject {
                 today: attrTotal(t),
                 week: attrTotal(w)
             )
-            recent = parseRecent(r)
+            applyRecent(parseRecent(r))
+            scheduleSnapshotSave()
         }
+    }
+
+    private func applyRecent(_ rows: [RecentTrack]) {
+        recent = rows
+        apiNowPlaying = rows.first(where: \.nowPlaying)
     }
 
     /// "显示更多":把最近记录的条数推进到下一档并重拉。到顶(100)后调用是空操作,
@@ -244,7 +395,8 @@ final class LastfmStatsService: ObservableObject {
                 return
             }
             guard gen == baselineGen else { return }
-            recent = parseRecent(json)
+            applyRecent(parseRecent(json))
+            scheduleSnapshotSave()
             fetchedAt["baseline"] = Date() // 刚拉过,定时器下一拍不用再拉一遍
         }
     }
@@ -289,6 +441,7 @@ final class LastfmStatsService: ObservableObject {
                                           playcount: count, imageURL: image))
             }
             charts[key] = entries
+            scheduleSnapshotSave()
             // 歌手榜在上面就分流去 refreshMergedArtistChart 了,这条 Task 只会是
             // 专辑/歌曲 —— 头像解析在那边触发,这里只管歌曲封面。
             if kind == .tracks {
@@ -322,6 +475,7 @@ final class LastfmStatsService: ObservableObject {
                     if let url { trackCovers[key] = url }
                 }
             }
+            scheduleSnapshotSave()
         }
     }
 
@@ -333,12 +487,14 @@ final class LastfmStatsService: ObservableObject {
         Task.detached(priority: .userInitiated) {
             let process = Process()
             process.executableURL = URL(fileURLWithPath: collectorPath)
-            process.arguments = ["top-artists", "-period", period.rawValue, "-limit", "10"]
+            // -all-periods:四个时段一次进程拿全(Go 侧四路并发取数),切时段零等待、
+            // 也免了每档各一次 spawn + 磁盘加载(2026-08-11 发散采纳)。
+            process.arguments = ["top-artists", "-all-periods", "-limit", "10"]
             let pipe = Pipe()
             let errPipe = Pipe()
             process.standardOutput = pipe
             process.standardError = errPipe
-            var rows: [[String: Any]] = []
+            var rows: [String: [[String: Any]]] = [:]
             do {
                 try process.run()
                 // 看门狗:子命令自己有 15 秒网络超时,25 秒还没退就是卡死了 —— 不杀的话
@@ -353,7 +509,7 @@ final class LastfmStatsService: ObservableObject {
                 process.waitUntilExit()
                 watchdog.cancel()
                 guard process.terminationStatus == 0,
-                      let arr = try JSONSerialization.jsonObject(with: data) as? [[String: Any]]
+                      let arr = try JSONSerialization.jsonObject(with: data) as? [String: [[String: Any]]]
                 else {
                     // 失败时把子命令的 stderr 带进日志 —— 原来丢 nullDevice,collector 侧
                     // log.Fatal 的死因(配置缺失/网络全挂)从这边完全看不见(审阅指出)。
@@ -372,16 +528,33 @@ final class LastfmStatsService: ObservableObject {
                 }
                 return
             }
-            let entries = rows.enumerated().compactMap { idx, row -> ChartEntry? in
-                guard let name = row["name"] as? String, !name.isEmpty else { return nil }
-                let count = row["playCount"] as? Int ?? 0
-                return ChartEntry(rank: idx + 1, name: name, detail: "", playcount: count, imageURL: nil)
+            var byKey: [String: [ChartEntry]] = [:]
+            for (pd, periodRows) in rows {
+                byKey["\(ChartKind.artists.rawValue)|\(pd)"] = periodRows.enumerated().compactMap { idx, row -> ChartEntry? in
+                    guard let name = row["name"] as? String, !name.isEmpty else { return nil }
+                    let count = row["playCount"] as? Int ?? 0
+                    return ChartEntry(rank: idx + 1, name: name, detail: "", playcount: count, imageURL: nil)
+                }
             }
+            let filled = byKey
             await MainActor.run {
                 let svc = LastfmStatsService.shared
                 svc.chartLoadingKeys.remove(cacheKey)
-                svc.charts[cacheKey] = entries
-                svc.resolveAvatars(names: entries.map(\.name))
+                let now = Date()
+                for (key, entries) in filled {
+                    svc.charts[key] = entries
+                    svc.fetchedAt[key] = now // 四档全部盖到 TTL,切时段不再各自重拉
+                }
+                // 用户正看的时段可能不在返回里(单时段失败被 Go 侧跳过):按失败态给重试入口
+                if filled[cacheKey] == nil {
+                    svc.chartFailedKeys.insert(cacheKey)
+                    svc.fetchedAt[cacheKey] = nil
+                }
+                // 头像只解析当前时段的名字 —— 其它时段大量重合,切过去时按需补(有磁盘缓存)
+                if let visible = filled[cacheKey] {
+                    svc.resolveAvatars(names: visible.map(\.name))
+                }
+                svc.scheduleSnapshotSave()
             }
         }
     }
@@ -426,6 +599,7 @@ final class LastfmStatsService: ObservableObject {
                 for (name, url) in map where !url.isEmpty {
                     if let u = URL(string: url) { LastfmStatsService.shared.artistAvatars[name] = u }
                 }
+                LastfmStatsService.shared.scheduleSnapshotSave()
             }
         }
     }

@@ -302,6 +302,9 @@ struct AccountLinkingTab: View {
     // "连接 Last.fm"向导 sheet 开没开——见 lastfmFields 顶部注释,未连接时打开
     // scrobble 开关就是打开它。
     @State private var showLastfmWizard = false
+    // 「断开」的确认框 —— 重连要重新走一遍浏览器授权,一次误点的代价不小,值得拦一下
+    // (2026-08-11 发散采纳)。
+    @State private var showLastfmDisconnectConfirm = false
     // 点过「前往申请」才展开"怎么填"提示 —— 没点之前它是噪声(密钥早就填好的人根本
     // 不会去申请页)。
     @State private var showLastfmApplyHint = false
@@ -616,28 +619,19 @@ struct AccountLinkingTab: View {
                         ).foregroundStyle(.green)
                         Spacer()
                         lastfmProfileLinkButton
-                        Button(L10n.t("断开")) {
-                            config.lastfmScrobbleSessionKey = ""
-                            config.lastfmScrobbleUsername = ""
-                            // 旧钥匙的"授权失效"红标跟着一起清 —— 它描述的是刚被扔掉的
-                            // 这把钥匙,不是账号卡的新状态。
-                            LastfmMirrorStatus.clear()
-                            // 统计/榜单/头像全是这个账号的,一并归零(重连别的账号不该看到前任的数据)
-                            LastfmStatsService.shared.resetAll()
-                            // 断开后 scrobble 一定发不出去,开关跟着关,不留一个
-                            // "看着开着、实际废了"的假状态。
-                            features.lastfmMirrorScrobble = false
-                            Task {
-                                await config.save()
-                                await features.save()
-                            }
-                        }
+                        Button(L10n.t("断开")) { showLastfmDisconnectConfirm = true }
                         .buttonStyle(.link)
                     }
                 }
             }
         }
         .sheet(isPresented: $showLastfmWizard) { lastfmWizardSheet }
+        .alert(L10n.t("断开 Last.fm？"), isPresented: $showLastfmDisconnectConfirm) {
+            Button(L10n.t("取消"), role: .cancel) {}
+            Button(L10n.t("断开"), role: .destructive) { performLastfmDisconnect() }
+        } message: {
+            Text(L10n.t("重新连接需要再走一次浏览器授权"))
+        }
 
         // 信息展示区(方案 A「档案页」):已连接才有数据可看;未连接给一句预告,
         // 不画一页空骨架。
@@ -654,6 +648,21 @@ struct AccountLinkingTab: View {
     }
 
     private var lastfmConnected: Bool { !config.lastfmScrobbleSessionKey.isEmpty }
+
+    /// 断开的完整不变量集:清凭据、清"授权失效"红标(描述的是刚扔掉的旧钥匙)、
+    /// 统计归零(数字/榜单/头像都是这个账号的,重连别人不该看到前任数据)、关掉
+    /// scrobble 开关(断开后一定发不出去,不留假状态)。
+    private func performLastfmDisconnect() {
+        config.lastfmScrobbleSessionKey = ""
+        config.lastfmScrobbleUsername = ""
+        LastfmMirrorStatus.clear()
+        LastfmStatsService.shared.resetAll()
+        features.lastfmMirrorScrobble = false
+        Task {
+            await config.save()
+            await features.save()
+        }
+    }
 
     // 展示用的用户名。scrobbleUsername 是授权返回的权威值,但老用户的连接早于"授权返回
     // 用户名"这个功能(2026-07-29 加的),它可能是空的——这时退回手填时代留下的
@@ -795,18 +804,9 @@ struct AccountLinkingTab: View {
                     Spacer()
                     lastfmProfileLinkButton
                     Button(L10n.t("断开")) {
-                        // 跟主卡片的「断开」保持同一套不变量:开关关掉、红标清掉、统计归零
-                        // —— 这个分支在"重新连接"打开向导时是可达的(审阅指出它原来漏了
-                        // 关开关,违背"断开即停止 scrobble"的自家规则)。
-                        config.lastfmScrobbleSessionKey = ""
-                        config.lastfmScrobbleUsername = ""
-                        LastfmMirrorStatus.clear()
-                        LastfmStatsService.shared.resetAll()
-                        features.lastfmMirrorScrobble = false
-                        Task {
-                            await config.save()
-                            await features.save()
-                        }
+                        // 同一套不变量,复用主卡的方法。不再弹确认:这里已经在
+                        // 「重新连接」两层交互之下,误点概率低,sheet 上叠 alert 反而别扭。
+                        performLastfmDisconnect()
                     }
                     .buttonStyle(.link)
                 }
