@@ -216,11 +216,19 @@ func mergeAliasedArtists(entries []lastfmChartEntry) []lastfmChartEntry {
 // 拿到的 MusicKit 目录 API 才有(这个项目一直用免费的 iTunes Search API 查预览/封面,
 // 那个接口的 musicArtist 类型结果没有任何图片字段),引入 MusicKit 需要新增付费开发者
 // 账号+JWT 签名基建,成本明显高于收益,未采用。
-func resolveArtistAvatar(ctx context.Context, name string) string {
-	if pic := qqSingerAvatar(name); pic != "" {
-		return pic
+// 返回 (URL, definitive):definitive=true 表示"这是可负缓存的确定结论"(找到了,或
+// 两条腿都正常应答且都说没有);false 表示至少一条腿是暂时故障,空结果不可信。
+func resolveArtistAvatar(ctx context.Context, name string) (string, bool) {
+	qqPic, qqDef := qqSingerAvatar(name)
+	if qqPic != "" {
+		return qqPic, true
 	}
-	return deezerArtistAvatar(ctx, name)
+	dzPic, dzDef := deezerArtistAvatar(ctx, name)
+	if dzPic != "" {
+		return dzPic, true
+	}
+	// 两条腿都空:只有两边都是"正常应答查无此人"才算可负缓存的确定结论
+	return "", qqDef && dzDef
 }
 
 // deezerArtistAvatar 查 Deezer 的公开歌手搜索接口拿一张头像图——Last.fm 自己的
@@ -228,31 +236,35 @@ func resolveArtistAvatar(ctx context.Context, name string) string {
 // search/artist 不需要认证、且是按歌手实际区分的真实图片。查不到/查失败时返回空
 // 字符串——调用方不应该因为单个歌手查图失败就放弃整批数据,前端对空头像也有兜底展示。
 // 现在是 resolveArtistAvatar 查不到 QQ 音乐头像时的兜底,不再是首选。
-func deezerArtistAvatar(ctx context.Context, name string) string {
+// 返回 (URL, definitive),语义同 qqSingerAvatar:false = 暂时故障,不可负缓存。
+func deezerArtistAvatar(ctx context.Context, name string) (string, bool) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	u := "https://api.deezer.com/search/artist?limit=1&q=" + neturl.QueryEscape(name)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {
-		return ""
+		return "", false
 	}
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return ""
+		return "", false
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return ""
+		return "", false
 	}
 	var out struct {
 		Data []struct {
 			PictureMedium string `json:"picture_medium"`
 		} `json:"data"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil || len(out.Data) == 0 {
-		return ""
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return "", false
 	}
-	return out.Data[0].PictureMedium
+	if len(out.Data) == 0 {
+		return "", true // 服务端明确说查无此人
+	}
+	return out.Data[0].PictureMedium, true
 }
 
 // topArtistsDigest 检查(至多每 topArtistsCheckInterval 一次)要不要重新计算"历史播放
@@ -305,9 +317,10 @@ func (p *poller) topArtistsDigest(now time.Time) {
 				defer wg.Done()
 				sem <- struct{}{}
 				defer func() { <-sem }()
+				avatar, _ := resolveArtistAvatar(p.ctx, name)
 				artists[i] = topArtistEntry{
 					Name: name, PlayCount: playCount,
-					Avatar: resolveArtistAvatar(p.ctx, name),
+					Avatar: avatar,
 				}
 			}(i, e.Name, e.PlayCount)
 		}

@@ -26,9 +26,14 @@ import (
 type avatarCacheEntry struct {
 	URL string `json:"url"`
 	TS  int64  `json:"ts"`
+	// Transient:这是一次"暂时故障"下的空结果(网络挂了/服务抽风),不是确定性的
+	// 查无此人 —— 只配 30 分钟的短负缓存(防抖动期连打),不配 14 天。老缓存文件没有
+	// 这个字段,读出来是 false = 按确定性结论处理,正确。
+	Transient bool `json:"transient,omitempty"`
 }
 
 const avatarCacheTTL = 14 * 24 * time.Hour
+const avatarTransientTTL = 30 * time.Minute
 
 func runArtistAvatarsCLI(args []string) {
 	if len(args) == 0 {
@@ -54,24 +59,51 @@ func runArtistAvatarsCLI(args []string) {
 		if name == "" {
 			continue
 		}
-		if e, ok := cache[name]; ok && now.Sub(time.Unix(e.TS, 0)) < avatarCacheTTL {
-			out[name] = e.URL
-			continue
+		old, hasOld := cache[name]
+		if hasOld {
+			ttl := avatarCacheTTL
+			if old.Transient {
+				ttl = avatarTransientTTL
+			}
+			if now.Sub(time.Unix(old.TS, 0)) < ttl {
+				out[name] = old.URL
+				continue
+			}
 		}
 		// 每个名字各自限 6 秒 —— 一批 10 个名字全部超时也只有一分钟,而且缓存写进去后
 		// 下次就不会再打网络。
 		ctx, cancel := context.WithTimeout(context.Background(), 6*time.Second)
-		url := resolveArtistAvatar(ctx, name)
+		url, definitive := resolveArtistAvatar(ctx, name)
 		cancel()
-		out[name] = url
-		cache[name] = avatarCacheEntry{URL: url, TS: now.Unix()}
-		dirty = true
+		switch {
+		case url != "" || definitive:
+			// 拿到了图,或者两条腿都正常应答说"确实没有" —— 都是可以放心存 14 天的结论
+			out[name] = url
+			cache[name] = avatarCacheEntry{URL: url, TS: now.Unix()}
+			dirty = true
+		case hasOld && old.URL != "":
+			// 暂时故障 + 手上有过期的旧头像:继续用旧的,**不覆盖**。原来这条路会拿空串
+			// 把已知好头像抹掉再锁 14 天(2026-08-11 审阅确认),serve-stale 是这里唯一
+			// 正确的选择 —— 头像这种东西,过期的真图永远好过一个空位。
+			out[name] = old.URL
+		default:
+			// 暂时故障且没有任何旧值:这次输出空,只落 30 分钟短负缓存防抖动期连打,
+			// 网络恢复后很快能重查。
+			out[name] = ""
+			cache[name] = avatarCacheEntry{URL: "", TS: now.Unix(), Transient: true}
+			dirty = true
+		}
 	}
 
 	if dirty {
 		if data, err := json.MarshalIndent(cache, "", "  "); err == nil {
-			if err := os.WriteFile(cachePath, data, 0o644); err != nil {
+			// 临时文件 + rename 原子落盘:App 可能同时起两个 artist-avatars 进程(切时段
+			// 触发两批解析),半写状态被另一个进程读到会整份解析失败、缓存全丢。
+			tmp := cachePath + ".tmp"
+			if err := os.WriteFile(tmp, data, 0o644); err != nil {
 				log.Printf("artist-avatars: write cache failed: %v", err)
+			} else if err := os.Rename(tmp, cachePath); err != nil {
+				log.Printf("artist-avatars: rename cache failed: %v", err)
 			}
 		}
 	}

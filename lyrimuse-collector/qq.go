@@ -141,21 +141,25 @@ func qqSmartboxFirstNonEmpty(queries []string) []qqSmartboxItem {
 // 装饰用的头像,不是核实版权归属,找错了最多是头像不准,不像歌词/封面匹配错那样是
 // 功能性 bug。查不到/网络失败返回空,调用方(topartists.go 的 resolveArtistAvatar)
 // 会转去 Deezer 兜底。
-func qqSingerAvatar(name string) string {
+// 返回 (头像 URL, definitive)。definitive 区分两种"没有":true = 服务端正常应答且
+// 确定查无此人(可以放心负缓存);false = 网络/非 200/解码失败这类**暂时故障**,不能
+// 当"查无"记下来 —— avatarcli 曾把两者都缓存 14 天,离线打开一次页面就让一批歌手
+// 14 天只显示首字母(2026-08-11 审阅确认)。
+func qqSingerAvatar(name string) (string, bool) {
 	u := "https://c.y.qq.com/splcloud/fcgi-bin/smartbox_new.fcg?_=1&cv=4747474&ct=24&format=json&is_xml=0&key=" + neturl.QueryEscape(name)
 	req, err := http.NewRequest(http.MethodGet, u, nil)
 	if err != nil {
-		return ""
+		return "", false
 	}
 	req.Header.Set("Referer", "https://y.qq.com/")
 	req.Header.Set("User-Agent", qqUA)
 	resp, err := doHTTPTracked(&http.Client{Timeout: 6 * time.Second}, req)
 	if err != nil {
-		return ""
+		return "", false
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return ""
+		return "", false
 	}
 	var out struct {
 		Data struct {
@@ -166,19 +170,22 @@ func qqSingerAvatar(name string) string {
 			} `json:"singer"`
 		} `json:"data"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil || len(out.Data.Singer.ItemList) == 0 {
-		return ""
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return "", false
+	}
+	if len(out.Data.Singer.ItemList) == 0 {
+		return "", true // 服务端明确说没有这个歌手
 	}
 	pic := out.Data.Singer.ItemList[0].Pic
 	if pic == "" {
-		return ""
+		return "", true
 	}
 	// 接口给的是 150x150 缩略图(跟 qqSongCoverAndSinger 拼专辑封面同一个 CDN 套路),把
 	// 分辨率前缀换成 300x300、协议换成 https 同一个 mid 也能取到更清晰的图;页面本身全程
 	// https,混合内容图片在部分浏览器/CSP 下有被拦截风险,统一升级更稳妥。
 	pic = strings.Replace(pic, "R150x150", "R300x300", 1)
 	pic = strings.Replace(pic, "http://", "https://", 1)
-	return pic
+	return pic, true
 }
 
 // qqSongAlbum returns the album name for a QQ song mid via the single-song
