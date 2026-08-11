@@ -172,6 +172,15 @@ final class LastfmStatsService: ObservableObject {
         guard fresh(key) == false else { return }
         guard let cred = credentials else { return }
         fetchedAt[key] = Date()
+        // 歌手榜不直连 API:Last.fm 的原始记录会把同一个真人拆成多条(中英文艺名
+        // "Dean Ting"/"丁世光"、繁简"周杰倫"/"周杰伦"、合唱 credit "Prince & The
+        // Revolution"),走 collector 的 top-artists 子命令拿**合并后**的榜 —— 那边复用
+        // 网页版 Top 歌手已经在用的并查集(名字键+mbid,见 topartists.go),不在 Swift
+        // 里重抄繁简表/别名表。专辑/歌曲榜没有这个问题,照旧直连。
+        if kind == .artists {
+            refreshMergedArtistChart(cacheKey: key, period: period)
+            return
+        }
         Task {
             chartLoading = true
             chartFailed = false
@@ -200,6 +209,50 @@ final class LastfmStatsService: ObservableObject {
             charts[key] = entries
             if kind == .artists {
                 resolveAvatars(names: entries.map(\.name))
+            }
+        }
+    }
+
+    private func refreshMergedArtistChart(cacheKey: String, period: Period) {
+        let collectorPath = Bundle.main.bundleURL
+            .appendingPathComponent("Contents/Resources/collector").path
+        chartLoading = true
+        chartFailed = false
+        Task.detached(priority: .userInitiated) {
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: collectorPath)
+            process.arguments = ["top-artists", "-period", period.rawValue, "-limit", "10"]
+            let pipe = Pipe()
+            process.standardOutput = pipe
+            process.standardError = FileHandle.nullDevice
+            var rows: [[String: Any]] = []
+            do {
+                try process.run()
+                let data = pipe.fileHandleForReading.readDataToEndOfFile()
+                process.waitUntilExit()
+                guard process.terminationStatus == 0,
+                      let arr = try JSONSerialization.jsonObject(with: data) as? [[String: Any]]
+                else { throw CocoaError(.fileReadCorruptFile) }
+                rows = arr
+            } catch {
+                await MainActor.run {
+                    let svc = LastfmStatsService.shared
+                    svc.chartLoading = false
+                    svc.chartFailed = true
+                    svc.fetchedAt[cacheKey] = nil
+                }
+                return
+            }
+            let entries = rows.enumerated().compactMap { idx, row -> ChartEntry? in
+                guard let name = row["name"] as? String, !name.isEmpty else { return nil }
+                let count = row["playCount"] as? Int ?? 0
+                return ChartEntry(rank: idx + 1, name: name, detail: "", playcount: count, imageURL: nil)
+            }
+            await MainActor.run {
+                let svc = LastfmStatsService.shared
+                svc.chartLoading = false
+                svc.charts[cacheKey] = entries
+                svc.resolveAvatars(names: entries.map(\.name))
             }
         }
     }

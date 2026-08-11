@@ -69,6 +69,11 @@ func main() {
 		runArtistAvatarsCLI(os.Args[2:])
 		return
 	}
+	// `collector top-artists ...`:合并同名歌手后的 Top 榜(见 topartistscli.go)。
+	if len(os.Args) > 1 && os.Args[1] == "top-artists" {
+		runTopArtistsCLI(os.Args[2:])
+		return
+	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		log.Fatalf("resolve home dir: %v", err)

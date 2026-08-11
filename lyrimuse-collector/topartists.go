@@ -78,6 +78,12 @@ type topArtistEntry struct {
 // lastfmWeeklyTopArtists 是姐妹接口(同一个 user.get*Chart 系列 API),复用同一个
 // lastfmAPIGet helper,不用另起一套 HTTP 调用逻辑。
 func lastfmTopArtists(ctx context.Context, user, apiKey string, limit int) ([]lastfmChartEntry, error) {
+	return lastfmTopArtistsPeriod(ctx, user, apiKey, "overall", limit)
+}
+
+// lastfmTopArtistsPeriod 是带时段参数的版本 —— top-artists CLI 子命令(App 的 Last.fm
+// 信息页)要按 7day/1month/12month/overall 查,原有的网页推送调用方固定用 overall。
+func lastfmTopArtistsPeriod(ctx context.Context, user, apiKey, period string, limit int) ([]lastfmChartEntry, error) {
 	var out struct {
 		TopArtists struct {
 			Artist []struct {
@@ -89,7 +95,7 @@ func lastfmTopArtists(ctx context.Context, user, apiKey string, limit int) ([]la
 	}
 	params := neturl.Values{
 		"method": {"user.getTopArtists"}, "user": {user}, "api_key": {apiKey},
-		"period": {"overall"}, "limit": {strconv.Itoa(limit)},
+		"period": {period}, "limit": {strconv.Itoa(limit)},
 	}
 	if err := lastfmAPIGet(ctx, params, &out); err != nil {
 		return nil, err
