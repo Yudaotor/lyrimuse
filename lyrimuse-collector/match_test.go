@@ -254,6 +254,17 @@ func TestLyricTitleAccepted(t *testing.T) {
 		{"子串:本地是候选的前缀,不认", "Real Love Baby", "Real Love", false},
 		{"子串:短词命中长曲名,不认", "Love", "Real Love", false},
 		{"空串两侧都不认", "", "In My Room", false},
+
+		// ↓↓↓ 2026-08-11 新增:双语标题(中文名 + 英文别名后缀) ↓↓↓
+
+		// 真实事故复现:丁世光《起源》,QQ/酷狗都叫「起源 Origin」,原规则五源只剩两条候选
+		{"双语后缀:候选带英文别名,认", "起源 Origin", "起源", true},
+		{"双语后缀:反向(本地带别名),认", "起源", "起源 Origin", true},
+		{"双语后缀 + 括号叠加,认", "起源 Origin (Live)", "起源", true},
+		// 三条护栏:规则只对「含汉字的前缀 + 纯字母尾巴」开口子
+		{"纯英文前缀关系仍不认(Love/Love Song 是两首歌)", "Love Song", "Love", false},
+		{"尾巴带数字不认(起源2 是另一首歌)", "起源2", "起源", false},
+		{"尾巴含汉字不认(起源之战 是另一首歌)", "起源之战", "起源", false},
 	}
 	for _, c := range cases {
 		if got := lyricTitleAccepted(c.candidate, c.want); got != c.accept {

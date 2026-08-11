@@ -846,11 +846,14 @@ func versionTagsIn(fields ...string) map[string]bool {
 const versionMismatchPenalty = 600
 
 // lyricTitleAccepted 是**五个源共用**的唯一一条「这条候选的曲名算不算这首歌」判定。
-// 只认两种:
+// 只认三种:
 //
 //	① 归一化后完全相等;
 //	② 双方各自去掉括号段之后相等 —— 歌词源的曲名常常没有本地那串 "(Remastered 2014)"/
-//	   "(feat. X)" 后缀,不给这条退路的话很多歌一条候选都匹配不到。
+//	   "(feat. X)" 后缀,不给这条退路的话很多歌一条候选都匹配不到;
+//	③ 双语标题:一边是另一边的前缀,共同前缀含汉字、多出的尾巴全是拉丁字母 ——
+//	   QQ/酷狗给中文歌普遍缀英文别名("起源" vs "起源 Origin",2026-08-11 实测这首歌
+//	   两个源都因此被拦,五源只剩两条候选)。见 bilingualTitleEqual。
 //
 // **绝不认任意的双向子串包含**。那是 2026-08-09 之前 kugou/QQ/Musixmatch/netease 的
 // 做法,是个定时炸弹:"Real Love" 本来就是 "Real Love Baby" 的子串,查 "love" 能命中
@@ -881,5 +884,38 @@ func lyricTitleAccepted(candidateTitle, localTitle string) bool {
 		return true
 	}
 	sc, sl := normLoose(stripParens(candidateTitle)), normLoose(stripParens(localTitle))
-	return sc != "" && sl != "" && sc == sl
+	if sc != "" && sl != "" && sc == sl {
+		return true
+	}
+	// ③ 双语标题(去括号后的形态上比,让「起源 Origin (Live)」这类叠加形态也能走到这里;
+	// live 之类的版本差异照旧由 versionTagsMismatch 那一层单独处理)
+	return bilingualTitleEqual(sc, sl) || bilingualTitleEqual(nc, nl)
+}
+
+// bilingualTitleEqual 判两个 normLoose 之后的标题是不是「同名的中英双语写法」:
+// 短的是长的前缀,短的含汉字,长的多出的尾巴**全是拉丁字母**。
+//
+// 三个约束各挡一类误伤:
+//   - 「前缀含汉字」:纯英文歌不适用 —— "Love" vs "Love Song" 是两首歌,不能因为
+//     后者以前者开头就算同一首(这正是 2026-08-09 删掉的"双向子串包含"的定时炸弹,
+//     这条规则只对中文标题+英文别名这个特定形态开口子);
+//   - 「尾巴全是字母」:数字不算 —— "起源" vs "起源2" 是两首歌;
+//   - 「前缀关系」而不是子串:英文别名只会缀在后面,不会插在中间。
+func bilingualTitleEqual(a, b string) bool {
+	short, long := a, b
+	if len(short) > len(long) {
+		short, long = long, short
+	}
+	if short == "" || len(short) == len(long) || !strings.HasPrefix(long, short) {
+		return false
+	}
+	if !containsHan(short) {
+		return false
+	}
+	for _, r := range long[len(short):] {
+		if r < 'a' || r > 'z' {
+			return false
+		}
+	}
+	return true
 }
