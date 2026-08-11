@@ -116,7 +116,18 @@ final class LastfmConnectController: ObservableObject {
 
     @Published private(set) var state: LastfmConnectState = .idle
 
-    func start(apiKey: String) {
+    // 本次流程用的密钥,start() 时**钉死**在这里 —— confirm/reopen/回调一律用这份,
+    // 不再读输入框的现值。原来 confirm 用的是调用那一刻输入框里的 Key/Secret:授权页
+    // 开着的时候改一下密钥再点"继续",换 session 必败还查不出为什么(审阅指出)。
+    private var pendingAPIKey = ""
+    private var pendingSecret = ""
+
+    // 代际计数器:reset()/新一轮 start() 都会自增。所有 async 收尾在写状态/开浏览器/
+    // 写配置之前核对代际 —— 原来"取消"只是把 state 扳回 idle,在途的 requestToken
+    // 完成后照样开浏览器+把状态改成 waitingForBrowserAuth,整个流程被复活(审阅确认)。
+    private var gen = 0
+
+    func start(apiKey: String, secret: String) {
         // 2026-07-29 起"账号信息"只有一套 API Key/Secret(合并了原来单独存在的只读
         // Key),这里不再需要用"Scrobble API Key"这个名字跟另一个字段区分,直接叫
         // "API Key"就够。
@@ -125,15 +136,28 @@ final class LastfmConnectController: ObservableObject {
             state = .failed(L10n.t("请先填写 API Key"))
             return
         }
+        // Secret 到 exchange 那步才真正用到,但现在就校验 —— 空着走完浏览器授权才失败,
+        // 一次性 token 白白作废,用户还得重走一遍(审阅指出)。
+        guard !secret.isEmpty else {
+            logger.error("start: blocked — Secret is empty")
+            state = .failed(L10n.t("请先填写 Secret"))
+            return
+        }
+        pendingAPIKey = apiKey
+        pendingSecret = secret
+        gen += 1
+        let myGen = gen
         logger.info("start: requesting token")
         state = .requestingToken
         Task {
             do {
                 let token = try await LastfmAuthFlow.requestToken(apiKey: apiKey)
+                guard myGen == self.gen else { return } // 已被取消/重开,别复活流程
                 logger.info("start: got token, opening browser auth page")
                 NSWorkspace.shared.open(LastfmAuthFlow.authorizeURL(apiKey: apiKey, token: token))
                 state = .waitingForBrowserAuth(token: token)
             } catch {
+                guard myGen == self.gen else { return }
                 let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
                 logger.error("start: requestToken failed — \(message, privacy: .public)")
                 state = .failed(message)
@@ -141,27 +165,30 @@ final class LastfmConnectController: ObservableObject {
         }
     }
 
-    func confirmBrowserAuth(apiKey: String, secret: String) {
+    func confirmBrowserAuth() {
         guard case .waitingForBrowserAuth(let token) = state else {
             logger.error("confirmBrowserAuth: called while not waitingForBrowserAuth (state=\(String(describing: self.state), privacy: .public)) — ignored")
             return
         }
-        guard !secret.isEmpty else {
-            logger.error("confirmBrowserAuth: blocked — Secret is empty")
-            state = .failed(L10n.t("请先填写 Secret"))
-            return
-        }
+        // 密钥用 start() 钉死的那份,不读输入框现值(见 pendingAPIKey 注释)
+        let apiKey = pendingAPIKey
+        let secret = pendingSecret
+        let myGen = gen
         logger.info("confirmBrowserAuth: exchanging session")
         state = .exchanging
         Task {
             do {
                 let result = try await LastfmAuthFlow.exchangeSession(apiKey: apiKey, secret: secret, token: token)
+                guard myGen == self.gen else { return } // 已被取消,不写任何东西
                 logger.info("confirmBrowserAuth: connected successfully")
                 ConfigStore.shared.lastfmScrobbleSessionKey = result.sessionKey
                 ConfigStore.shared.lastfmScrobbleUsername = result.username
                 // 换到了新 session key,上一把钥匙的"授权失效"红标(如果有)立刻作废 ——
                 // 不等 collector 下一次成功提交再删,界面反馈要即时。
                 LastfmMirrorStatus.clear()
+                // 可能连的是另一个账号:上一个账号的统计/头像/榜单全部作废,让信息页
+                // 按新身份重拉(审阅指出旧账号数据会一直挂着)。
+                LastfmStatsService.shared.resetAll()
                 // 桥接用的"用户名"字段自动回填——只在还没手动填过时才带过去,不覆盖用户
                 // 已经显式填的值(理论上极少见:桥接一个跟镜像不同的 Last.fm 账号)。
                 if ConfigStore.shared.lastfmUser.isEmpty {
@@ -170,6 +197,7 @@ final class LastfmConnectController: ObservableObject {
                 await ConfigStore.shared.save()
                 state = .success(username: result.username)
             } catch {
+                guard myGen == self.gen else { return }
                 let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
                 logger.error("confirmBrowserAuth: exchangeSession failed — \(message, privacy: .public)")
                 state = .failed(message)
@@ -179,15 +207,16 @@ final class LastfmConnectController: ObservableObject {
 
     // 用户手误关掉了浏览器标签页、或者想再看一遍授权页——重新打开同一个 token 对应的
     // 授权链接,不用整个流程从头(重新请求 token)开始,state 保持在 waitingForBrowserAuth。
-    func reopenBrowserAuth(apiKey: String) {
+    func reopenBrowserAuth() {
         guard case .waitingForBrowserAuth(let token) = state else { return }
-        NSWorkspace.shared.open(LastfmAuthFlow.authorizeURL(apiKey: apiKey, token: token))
+        NSWorkspace.shared.open(LastfmAuthFlow.authorizeURL(apiKey: pendingAPIKey, token: token))
     }
 
     // "取消"——退出当前流程回到 idle,不留下 requestingToken/waitingForBrowserAuth 这类
     // 卡住的中间态。之前实现里一旦发起了流程就只能硬着头皮走完或者放着不管,这里补上
     // 主动退出的路径。
     func reset() {
+        gen += 1 // 作废一切在途收尾 —— 光扳状态挡不住它们回来复活流程(见 gen 注释)
         state = .idle
     }
 
@@ -206,6 +235,6 @@ final class LastfmConnectController: ObservableObject {
             return
         }
         logger.info("handleAuthCallback: browser redirected back automatically, confirming without user click")
-        confirmBrowserAuth(apiKey: ConfigStore.shared.lastfmScrobbleAPIKey, secret: ConfigStore.shared.lastfmScrobbleSecret)
+        confirmBrowserAuth()
     }
 }

@@ -149,6 +149,23 @@ final class LastfmStatsService: ObservableObject {
         charts["\(kind.rawValue)|\(period.rawValue)"]
     }
 
+    /// 断开/换账号时把一切归零 —— 统计数字、榜单、头像、封面都是**上一个身份**的,
+    /// 挂着不清,重连另一个账号后页面会先展示前任的数据(审阅指出)。
+    func resetAll() {
+        baselineGen += 1
+        overview = nil
+        recent = []
+        charts = [:]
+        artistAvatars = [:]
+        trackCovers = [:]
+        chartLoadingKeys = []
+        chartFailedKeys = []
+        baselineFailed = false
+        recentExpanding = false
+        recentLimit = 8
+        fetchedAt = [:]
+    }
+
     // MARK: - 凭据
 
     /// 用户名以**授权返回的**为准(scrobbleUsername),空了才退回手填时代的 lastfmUser

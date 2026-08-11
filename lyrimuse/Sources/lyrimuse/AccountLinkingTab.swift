@@ -622,6 +622,8 @@ struct AccountLinkingTab: View {
                             // 旧钥匙的"授权失效"红标跟着一起清 —— 它描述的是刚被扔掉的
                             // 这把钥匙,不是账号卡的新状态。
                             LastfmMirrorStatus.clear()
+                            // 统计/榜单/头像全是这个账号的,一并归零(重连别的账号不该看到前任的数据)
+                            LastfmStatsService.shared.resetAll()
                             // 断开后 scrobble 一定发不出去,开关跟着关,不留一个
                             // "看着开着、实际废了"的假状态。
                             features.lastfmMirrorScrobble = false
@@ -726,6 +728,10 @@ struct AccountLinkingTab: View {
         }
         .padding(20)
         .frame(width: 460)
+        // Esc / 点外面关掉 sheet 时状态机跟着复位 —— 原来残留在 waitingForBrowserAuth,
+        // 下次打开向导直接停在中间步骤,还带着一个已经作废的 token(审阅确认)。成功
+        // 自动关闭那条路里 reset 已经调用过,这里重复调用无害(幂等)。
+        .onDisappear { lastfmConnect.reset() }
         .onChange(of: lastfmConnectSucceeded) { _, ok in
             guard ok else { return }
             // 连接成功 = 想要 scrobble,直接开,不让用户猜"还差一个开关"。
@@ -775,7 +781,10 @@ struct AccountLinkingTab: View {
         case .idle:
             if config.lastfmScrobbleSessionKey.isEmpty {
                 stepDots(current: 0)
-                Button(L10n.t("连接 Last.fm 账号")) { lastfmConnect.start(apiKey: trimmedLastfmKeys().key) }
+                Button(L10n.t("连接 Last.fm 账号")) {
+                    let keys = trimmedLastfmKeys()
+                    lastfmConnect.start(apiKey: keys.key, secret: keys.secret)
+                }
                     .buttonStyle(.borderedProminent)
             } else {
                 HStack {
@@ -786,9 +795,18 @@ struct AccountLinkingTab: View {
                     Spacer()
                     lastfmProfileLinkButton
                     Button(L10n.t("断开")) {
+                        // 跟主卡片的「断开」保持同一套不变量:开关关掉、红标清掉、统计归零
+                        // —— 这个分支在"重新连接"打开向导时是可达的(审阅指出它原来漏了
+                        // 关开关,违背"断开即停止 scrobble"的自家规则)。
                         config.lastfmScrobbleSessionKey = ""
                         config.lastfmScrobbleUsername = ""
-                        Task { await config.save() }
+                        LastfmMirrorStatus.clear()
+                        LastfmStatsService.shared.resetAll()
+                        features.lastfmMirrorScrobble = false
+                        Task {
+                            await config.save()
+                            await features.save()
+                        }
                     }
                     .buttonStyle(.link)
                 }
@@ -804,13 +822,10 @@ struct AccountLinkingTab: View {
             VStack(alignment: .leading, spacing: 6) {
                 Text(L10n.t("已在浏览器打开 Last.fm 授权页面。请在浏览器里点击「Yes, allow access」完成授权，授权完会自动跳回 Lyrimuse 继续；如果浏览器没有自动跳转，也可以回来手动点下面的按钮"))
                     .font(.caption).foregroundStyle(.secondary)
-                Button(L10n.t("我已完成授权，继续")) {
-                    let keys = trimmedLastfmKeys()
-                    lastfmConnect.confirmBrowserAuth(apiKey: keys.key, secret: keys.secret)
-                }
+                Button(L10n.t("我已完成授权，继续")) { lastfmConnect.confirmBrowserAuth() }
                 .buttonStyle(.borderedProminent)
                 HStack(spacing: 12) {
-                    Button(L10n.t("重新打开授权页面")) { lastfmConnect.reopenBrowserAuth(apiKey: trimmedLastfmKeys().key) }
+                    Button(L10n.t("重新打开授权页面")) { lastfmConnect.reopenBrowserAuth() }
                         .buttonStyle(.link)
                     Button(L10n.t("取消")) { lastfmConnect.reset() }
                         .buttonStyle(.link).foregroundStyle(.secondary)
