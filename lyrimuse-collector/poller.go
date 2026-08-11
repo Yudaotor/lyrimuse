@@ -256,8 +256,15 @@ func (p *poller) isTracked() bool {
 
 // mirrorScrobbleTracked 先同步记入"已镜像"集合并落盘,再异步镜像写入 Last.fm——见
 // lfmMirroredTTL 处注释:写入必须先于发起请求完成,防 bridge 抢在标记前误转发。
+//
+// 幂等:同一个 timestamp 只提交一次。2026-08-11 起 Last.fm 镜像与 ListenBrainz 的
+// 提交结果解耦(见 applySubmitOutcome),LB 失败重试成功后会再次走到调用点 —— 没有
+// 这个守卫就会对 Last.fm 重复提交同一次收听。
 func (p *poller) mirrorScrobbleTracked(artist, title, album string, timestamp int64) {
 	if p.lfm == nil || timestamp <= 0 {
+		return
+	}
+	if p.lfmMirrored[timestamp] {
 		return
 	}
 	p.lfmMirrored[timestamp] = true
@@ -265,6 +272,24 @@ func (p *poller) mirrorScrobbleTracked(artist, title, album string, timestamp in
 	mirrorAsync(p.lfm, "scrobble", func(ctx context.Context) error {
 		return p.lfm.scrobble(ctx, artist, title, album, timestamp)
 	})
+}
+
+// mirrorScrobbleSync 是 mirrorScrobbleTracked 的**同步**变体,只给进程退出前的最后
+// 一次 flush 用:mirrorAsync 起的 goroutine 活不过紧接着的进程退出(2026-08-11 审阅
+// 确认的竞态 —— 标记已落盘、请求没发出去,这首歌对 Last.fm 永久丢失),退出路径必须
+// 拿 flush 的 ctx 同步把请求发完。
+func (p *poller) mirrorScrobbleSync(ctx context.Context, artist, title, album string, timestamp int64) {
+	if p.lfm == nil || timestamp <= 0 || p.lfm.dead.Load() {
+		return
+	}
+	if p.lfmMirrored[timestamp] {
+		return
+	}
+	p.lfmMirrored[timestamp] = true
+	p.lfmMirroredSet.save(p.lfmMirrored)
+	if err := p.lfm.scrobble(ctx, artist, title, album, timestamp); err != nil {
+		log.Printf("lastfm mirror scrobble (final flush) failed: %v", err)
+	}
 }
 
 // loopRestartMinElapsedFrac/loopRestartMaxNewElapsedSecs 判定"单曲循环重新起播"(含
@@ -470,6 +495,11 @@ func (p *poller) submitSingleAsync(sess *playSession, meta snapshot, startedAt i
 // 收听记录都只作用于结果自带的 sess/meta，不依赖 p.sess 当前值，所以时序上没有问题。
 func (p *poller) applySubmitOutcome(r submitOutcome) {
 	r.sess.submitting = false
+	// Last.fm 镜像与 ListenBrainz 的提交结果解耦(2026-08-11,批4):这次收听够不够格
+	// 在发起提交前就已经判定过了,LB 服务抽风不该殃及 Last.fm 那份记录 —— 原来镜像躲
+	// 在下面的成功分支里,LB 挂则两边一起停摆(审阅确认)。LB 失败重试成功后会再次走到
+	// 这里,mirrorScrobbleTracked 的幂等守卫保证不重复提交。
+	p.mirrorScrobbleTracked(r.meta.Artist, r.meta.Title, r.meta.Album, r.startedAt)
 	if r.err != nil {
 		log.Printf("submit listen failed: %v", r.err)
 		return
@@ -477,7 +507,6 @@ func (p *poller) applySubmitOutcome(r submitOutcome) {
 	r.sess.listenSent = true
 	log.Printf("listen recorded: %s - %s", r.meta.Artist, r.meta.Title)
 	p.pushScrobble(r.meta, r.startedAt, "mac")
-	p.mirrorScrobbleTracked(r.meta.Artist, r.meta.Title, r.meta.Album, r.startedAt)
 	p.recordRecentMacListen(r.meta.Artist, r.meta.Title, r.startedAt)
 	p.pushRelayState(time.Now(), false) // 立刻把刚确认的收听/上次播放状态推给网页,不必等下一轮 5s 心跳
 }
@@ -524,13 +553,14 @@ func (p *poller) announce(now time.Time, why string) {
 	m := lbMeta(p.cur)
 	artist, title, album := p.cur.Artist, p.cur.Title, p.cur.Album
 	go func() {
+		// now-playing 镜像与 LB 解耦(2026-08-11,批4):"正在播放"反映的是本机播放器
+		// 的真实状态,不是 LB 提交的成败。放在 LB 请求之前发起 —— 两者本就各自异步。
+		mirrorAsync(p.lfm, "now-playing", func(ctx context.Context) error {
+			return p.lfm.updateNowPlaying(ctx, artist, title, album)
+		})
 		err := p.lb.submit(p.ctx, "playing_now", 0, m)
 		if err != nil {
 			log.Printf("submit playing_now (%s) failed: %v", why, err)
-		} else {
-			mirrorAsync(p.lfm, "now-playing", func(ctx context.Context) error {
-				return p.lfm.updateNowPlaying(ctx, artist, title, album)
-			})
 		}
 		select {
 		case p.announceDoneCh <- announceOutcome{sess: sess, at: now, ok: err == nil}:
@@ -917,10 +947,12 @@ func run(ctx context.Context, cfg *config, lb *lbClient) error {
 			defer cancel()
 			if p.sess != nil && !p.sess.listenSent && p.sess.playedSecs >= listenThreshold(p.sess.meta.Duration) &&
 				(p.sess.meta.Duration <= 0 || p.sess.meta.Duration >= minTrackSecs) {
+				// Last.fm 镜像:与 LB 解耦,且必须走同步变体 —— 异步 goroutine 活不过
+				// 紧接着的 return(见 mirrorScrobbleSync 注释)。
+				p.mirrorScrobbleSync(flushCtx, p.sess.meta.Artist, p.sess.meta.Title, p.sess.meta.Album, p.sess.startedAt.Unix())
 				if err := lb.submit(flushCtx, "single", p.sess.startedAt.Unix(), lbMeta(p.sess.meta)); err != nil {
 					log.Printf("final listen flush failed: %v", err)
 				} else {
-					p.mirrorScrobbleTracked(p.sess.meta.Artist, p.sess.meta.Title, p.sess.meta.Album, p.sess.startedAt.Unix())
 					p.recordRecentMacListen(p.sess.meta.Artist, p.sess.meta.Title, p.sess.startedAt.Unix())
 				}
 				// relay 现在是网页历史主源:退出前放的最后一首也要补进 relay。
