@@ -32,6 +32,19 @@ struct LastfmStatsSection: View {
                 stats.refreshBaseline()
                 stats.refreshChart(kind: kind, period: period)
             }
+            // 页面开着不该是一张死快照:每 2 分钟刷一轮档案数字和最近记录(服务侧
+            // baselineTTL 同为 2 分钟,正好放行),同时 recent 重新赋值会触发整卡重渲染,
+            // "6 小时前"这些相对时间跟着重算 —— 不用单独再挂一个每分钟的时钟。
+            .onReceive(Timer.publish(every: 120, on: .main, in: .common).autoconnect()) { _ in
+                stats.refreshBaseline()
+            }
+            // 换歌 = 上一首刚被 scrobble。给 collector 十秒把记录提交出去,然后无视
+            // 缓存强刷一次,刚唱完的歌就出现在列表顶上,不用等下一个两分钟周期。
+            .onChange(of: poller.title) { _, _ in
+                DispatchQueue.main.asyncAfter(deadline: .now() + 10) {
+                    stats.refreshBaseline(force: true)
+                }
+            }
     }
 
     // MARK: - 三个数字

@@ -107,7 +107,11 @@ final class LastfmStatsService: ObservableObject {
     @Published private(set) var chartFailed = false
 
     private var fetchedAt: [String: Date] = [:]
+    /// 榜单的缓存时长 —— Top 榜一天都未必变一名,15 分钟足够。
     private let ttl: TimeInterval = 15 * 60
+    /// 档案数字 + 最近记录的缓存时长。这块是页面上"活"的部分:刚听完的歌应该几分钟内
+    /// 出现,页面常开时每次定时器到点也靠它放行,不能跟榜单共用 15 分钟。
+    private let baselineTTL: TimeInterval = 2 * 60
 
     func chart(_ kind: ChartKind, _ period: Period) -> [ChartEntry]? {
         charts["\(kind.rawValue)|\(period.rawValue)"]
@@ -128,9 +132,11 @@ final class LastfmStatsService: ObservableObject {
 
     // MARK: - 拉取
 
-    /// 档案数字 + 最近记录。TTL 内重复调用是空操作。
-    func refreshBaseline() {
-        guard fresh("baseline") == false else { return }
+    /// 档案数字 + 最近记录。TTL 内重复调用是空操作;force 无视 TTL(换歌触发的
+    /// 刷新用 —— 刚唱完的那首就该马上出现,不该被缓存挡两分钟)。
+    func refreshBaseline(force: Bool = false) {
+        if force { fetchedAt["baseline"] = nil }
+        guard fresh("baseline", ttl: baselineTTL) == false else { return }
         guard let cred = credentials else { return }
         fetchedAt["baseline"] = Date()
         Task {
@@ -268,9 +274,9 @@ final class LastfmStatsService: ObservableObject {
         return cur
     }
 
-    private func fresh(_ key: String) -> Bool {
+    private func fresh(_ key: String, ttl overrideTTL: TimeInterval? = nil) -> Bool {
         guard let at = fetchedAt[key] else { return false }
-        return Date().timeIntervalSince(at) < ttl
+        return Date().timeIntervalSince(at) < (overrideTTL ?? ttl)
     }
 
     private func request(method: String, cred: (user: String, key: String),
