@@ -103,6 +103,10 @@ final class LastfmStatsService: ObservableObject {
     /// Deezer 兜底,14 天磁盘缓存,见 avatarcli.go)——Last.fm API 的歌手图是占位星。
     /// 查不到的名字**不会**出现在这里,UI 自然回落到首字母色块。
     @Published private(set) var artistAvatars: [String: URL] = [:]
+    /// "歌手|歌名" → 这首歌所属专辑的封面。歌曲榜的 API 图也是占位星,真封面得按首
+    /// 调 track.getInfo 拿它的专辑图 —— 榜单到手后并发补一轮,查不到的(无专辑的单曲)
+    /// 不进字典,UI 回落到首字母色块。
+    @Published private(set) var trackCovers: [String: URL] = [:]
     @Published private(set) var baselineFailed = false
     @Published private(set) var chartFailed = false
 
@@ -210,6 +214,37 @@ final class LastfmStatsService: ObservableObject {
             if kind == .artists {
                 resolveAvatars(names: entries.map(\.name))
             }
+            if kind == .tracks {
+                resolveTrackCovers(entries, cred: cred)
+            }
+        }
+    }
+
+    /// 给一批歌曲榜条目补真封面。并发全放开也就 10 个轻量 JSON 请求,Last.fm 的
+    /// 限速(约 5 req/s)对这个量级无感;失败静默 —— 封面是锦上添花。
+    private func resolveTrackCovers(_ entries: [ChartEntry], cred: (user: String, key: String)) {
+        let missing = entries.filter { trackCovers["\($0.detail)|\($0.name)"] == nil }
+        guard !missing.isEmpty else { return }
+        Task {
+            await withTaskGroup(of: (String, URL?).self) { group in
+                for e in missing {
+                    group.addTask { [weak self] in
+                        let key = "\(e.detail)|\(e.name)"
+                        guard let self else { return (key, nil) }
+                        let json = await self.request(method: "track.getinfo", cred: cred,
+                                                      extra: ["artist": e.detail, "track": e.name,
+                                                              "autocorrect": "1"])
+                        guard let json else { return (key, nil) }
+                        let image = await MainActor.run {
+                            self.imageURL(self.dig(json, "track", "album", "image"))
+                        }
+                        return (key, image)
+                    }
+                }
+                for await (key, url) in group {
+                    if let url { trackCovers[key] = url }
+                }
+            }
         }
     }
 
@@ -316,6 +351,10 @@ final class LastfmStatsService: ObservableObject {
         let by = { (size: String) in arr.first { ($0["size"] as? String) == size } }
         let url = (by("large") ?? by("extralarge") ?? arr.last)?["#text"] as? String ?? ""
         guard !url.isEmpty else { return nil }
+        // Last.fm 的"万能占位图"(一颗白星,所有缺图的实体共用同一个文件名 hash)。
+        // 它是一个能正常加载的 URL,不滤掉的话会顶掉首字母色块、显示成一块灰 ——
+        // 2026-08-11 歌曲榜实测:關於愛的定義/花田錯 两行就是这么来的。
+        guard !url.contains("2a96cbd8b46e442fc41c2b86b821562f") else { return nil }
         return URL(string: url)
     }
 

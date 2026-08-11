@@ -199,7 +199,16 @@ struct LastfmStatsSection: View {
     private func thumb(for e: LastfmStatsService.ChartEntry) -> some View {
         // 歌手榜(detail 为空的就是歌手行)优先用 collector 解析的真头像,圆形;
         // 还没解析出来/查不到时落回首字母色块 —— 头像是异步补上的,先字母后照片。
-        if e.imageURL == nil, e.detail.isEmpty, let avatar = stats.artistAvatars[e.name] {
+        // 歌曲榜(detail 非空、imageURL 为 nil 的行):用 track.getInfo 补出来的专辑封面
+        if e.imageURL == nil, !e.detail.isEmpty, let cover = stats.trackCovers["\(e.detail)|\(e.name)"] {
+            AsyncImage(url: cover) { image in
+                image.resizable().aspectRatio(contentMode: .fill)
+            } placeholder: {
+                RoundedRectangle(cornerRadius: 5).fill(.quaternary)
+            }
+            .frame(width: 26, height: 26)
+            .clipShape(RoundedRectangle(cornerRadius: 5))
+        } else if e.imageURL == nil, e.detail.isEmpty, let avatar = stats.artistAvatars[e.name] {
             AsyncImage(url: avatar) { image in
                 image.resizable().aspectRatio(contentMode: .fill)
             } placeholder: {
