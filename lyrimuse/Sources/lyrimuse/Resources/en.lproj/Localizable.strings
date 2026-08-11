@@ -494,3 +494,6 @@
 "申请页基本只需要填「应用名称」，其余留空即可；提交后页面会直接显示 API Key 和 Shared Secret" = "The form really only needs an application name -- leave the rest blank. Submitting shows your API Key and Shared Secret right away";
 "拷贝名称" = "Copy name";
 "把「Lyrimuse」拷到剪贴板，粘进申请页的应用名称" = "Copies \"Lyrimuse\" so you can paste it as the application name";
+"授权已失效" = "Authorization expired";
+"Last.fm 拒绝了写入，Scrobble 已暂停——授权可能已在网站上被撤销" = "Last.fm rejected writes and scrobbling is paused -- the authorization may have been revoked on the site";
+"重新连接" = "Reconnect";

@@ -159,6 +159,9 @@ final class LastfmConnectController: ObservableObject {
                 logger.info("confirmBrowserAuth: connected successfully")
                 ConfigStore.shared.lastfmScrobbleSessionKey = result.sessionKey
                 ConfigStore.shared.lastfmScrobbleUsername = result.username
+                // 换到了新 session key,上一把钥匙的"授权失效"红标(如果有)立刻作废 ——
+                // 不等 collector 下一次成功提交再删,界面反馈要即时。
+                LastfmMirrorStatus.clear()
                 // 桥接用的"用户名"字段自动回填——只在还没手动填过时才带过去,不覆盖用户
                 // 已经显式填的值(理论上极少见:桥接一个跟镜像不同的 Last.fm 账号)。
                 if ConfigStore.shared.lastfmUser.isEmpty {

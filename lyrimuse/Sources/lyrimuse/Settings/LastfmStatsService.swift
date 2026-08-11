@@ -105,7 +105,25 @@ final class LastfmStatsService: ObservableObject {
     @Published private(set) var recentExpanding = false
     /// kind|period → 榜单。切分段/时段时旧内容还在,不闪空。
     @Published private(set) var charts: [String: [ChartEntry]] = [:]
-    @Published private(set) var chartLoading = false
+    /// 正在拉取/拉取失败的榜单键(kind|period)。原来是两个全局布尔 —— 歌手榜和歌曲榜
+    /// 并发拉取时互相踩:一个先完成会把另一个的转圈提前掐掉,一个失败会把失败态标到
+    /// 正在看的另一个榜头上(2026-08-11 审阅确认)。按键控各管各的。
+    @Published private(set) var chartLoadingKeys: Set<String> = []
+    @Published private(set) var chartFailedKeys: Set<String> = []
+
+    func chartLoading(_ kind: ChartKind, _ period: Period) -> Bool {
+        chartLoadingKeys.contains("\(kind.rawValue)|\(period.rawValue)")
+    }
+    func chartFailed(_ kind: ChartKind, _ period: Period) -> Bool {
+        chartFailedKeys.contains("\(kind.rawValue)|\(period.rawValue)")
+    }
+
+    /// baseline(数字+最近记录)的代际计数器。refreshBaseline 和 expandRecent 的 Task
+    /// 都会写 overview/recent,彼此之间没有取消 —— 没有它的话,点「显示更多」拉回 30 条
+    /// 之后,一个更早在飞的 limit=8 旧响应后到,会把列表又缩回 8 条(2026-08-11 审阅
+    /// 确认,窗口就是一个网络 RTT)。规则:发起时自增并捕获,写回前核对,旧代直接丢弃。
+    /// 所有读写都在 MainActor 上,check-then-write 天然原子。
+    private var baselineGen = 0
     /// 歌手名 → 真头像 URL。由 collector 的 artist-avatars 子命令解析(QQ 音乐优先、
     /// Deezer 兜底,14 天磁盘缓存,见 avatarcli.go)——Last.fm API 的歌手图是占位星。
     /// 查不到的名字**不会**出现在这里,UI 自然回落到首字母色块。
@@ -150,6 +168,8 @@ final class LastfmStatsService: ObservableObject {
         guard fresh("baseline", ttl: baselineTTL) == false else { return }
         guard let cred = credentials else { return }
         fetchedAt["baseline"] = Date()
+        baselineGen += 1
+        let gen = baselineGen
         Task {
             baselineFailed = false
             async let info = request(method: "user.getinfo", cred: cred)
@@ -163,6 +183,7 @@ final class LastfmStatsService: ObservableObject {
             async let weekJSON = request(method: "user.getrecenttracks", cred: cred,
                                          extra: ["limit": "1", "from": String(Int(Date().timeIntervalSince1970 - 7 * 86400))])
             let (i, r, t, w) = await (info, recentJSON, todayJSON, weekJSON)
+            guard gen == baselineGen else { return } // 已有更新一代在飞/已完成,这批作废
             guard let i, let r, let t, let w else {
                 baselineFailed = true
                 fetchedAt["baseline"] = nil // 失败不占用 TTL,重试立刻能发
@@ -184,14 +205,24 @@ final class LastfmStatsService: ObservableObject {
         let ladder = [8, 30, 100]
         guard let next = ladder.first(where: { $0 > recentLimit }) else { return }
         guard !recentExpanding else { return }
+        // 档位在成功后才算数:失败回滚到 prev。原来是先提交不回滚 —— 失败后阶梯的
+        // first(where:) 会跳档(8→失败停在30→再点直达100),推到 100 那次失败更是让
+        // 按钮直接消失、想重试都没入口(2026-08-11 审阅确认)。
+        let prev = recentLimit
         recentLimit = next
         recentExpanding = true
+        baselineGen += 1
+        let gen = baselineGen
         Task {
             defer { recentExpanding = false }
             guard let cred = credentials,
                   let json = await request(method: "user.getrecenttracks", cred: cred,
                                            extra: ["limit": String(next)])
-            else { return }
+            else {
+                if gen == baselineGen { recentLimit = prev }
+                return
+            }
+            guard gen == baselineGen else { return }
             recent = parseRecent(json)
             fetchedAt["baseline"] = Date() // 刚拉过,定时器下一拍不用再拉一遍
         }
@@ -212,13 +243,13 @@ final class LastfmStatsService: ObservableObject {
             return
         }
         Task {
-            chartLoading = true
-            chartFailed = false
-            defer { chartLoading = false }
+            chartLoadingKeys.insert(key)
+            chartFailedKeys.remove(key)
+            defer { chartLoadingKeys.remove(key) }
             guard let json = await request(method: kind.method, cred: cred,
                                            extra: ["period": period.rawValue, "limit": "10"])
             else {
-                chartFailed = true
+                chartFailedKeys.insert(key)
                 fetchedAt[key] = nil
                 return
             }
@@ -237,9 +268,8 @@ final class LastfmStatsService: ObservableObject {
                                           playcount: count, imageURL: image))
             }
             charts[key] = entries
-            if kind == .artists {
-                resolveAvatars(names: entries.map(\.name))
-            }
+            // 歌手榜在上面就分流去 refreshMergedArtistChart 了,这条 Task 只会是
+            // 专辑/歌曲 —— 头像解析在那边触发,这里只管歌曲封面。
             if kind == .tracks {
                 resolveTrackCovers(entries, cred: cred)
             }
@@ -277,8 +307,8 @@ final class LastfmStatsService: ObservableObject {
     private func refreshMergedArtistChart(cacheKey: String, period: Period) {
         let collectorPath = Bundle.main.bundleURL
             .appendingPathComponent("Contents/Resources/collector").path
-        chartLoading = true
-        chartFailed = false
+        chartLoadingKeys.insert(cacheKey)
+        chartFailedKeys.remove(cacheKey)
         Task.detached(priority: .userInitiated) {
             let process = Process()
             process.executableURL = URL(fileURLWithPath: collectorPath)
@@ -289,8 +319,17 @@ final class LastfmStatsService: ObservableObject {
             var rows: [[String: Any]] = []
             do {
                 try process.run()
+                // 看门狗:子命令自己有 15 秒网络超时,25 秒还没退就是卡死了 —— 不杀的话
+                // readDataToEndOfFile 永远不返回,这个榜单转圈到天荒地老,fetchedAt 还把
+                // 重试锁 15 分钟(2026-08-11 审阅确认)。terminate 后读端拿到 EOF,走下面
+                // 的解码失败路径,fetchedAt 被清掉,下次能重试。
+                let watchdog = Task.detached {
+                    try? await Task.sleep(nanoseconds: 25_000_000_000)
+                    if !Task.isCancelled, process.isRunning { process.terminate() }
+                }
                 let data = pipe.fileHandleForReading.readDataToEndOfFile()
                 process.waitUntilExit()
+                watchdog.cancel()
                 guard process.terminationStatus == 0,
                       let arr = try JSONSerialization.jsonObject(with: data) as? [[String: Any]]
                 else { throw CocoaError(.fileReadCorruptFile) }
@@ -298,8 +337,8 @@ final class LastfmStatsService: ObservableObject {
             } catch {
                 await MainActor.run {
                     let svc = LastfmStatsService.shared
-                    svc.chartLoading = false
-                    svc.chartFailed = true
+                    svc.chartLoadingKeys.remove(cacheKey)
+                    svc.chartFailedKeys.insert(cacheKey)
                     svc.fetchedAt[cacheKey] = nil
                 }
                 return
@@ -311,7 +350,7 @@ final class LastfmStatsService: ObservableObject {
             }
             await MainActor.run {
                 let svc = LastfmStatsService.shared
-                svc.chartLoading = false
+                svc.chartLoadingKeys.remove(cacheKey)
                 svc.charts[cacheKey] = entries
                 svc.resolveAvatars(names: entries.map(\.name))
             }
@@ -338,8 +377,15 @@ final class LastfmStatsService: ObservableObject {
                 logger.notice("artist-avatars: launch failed: \(error.localizedDescription, privacy: .public)")
                 return
             }
+            // 看门狗:冷缓存串行解析 10 个名字最坏约一分钟(每名 6s 超时),75 秒兜底,
+            // 只防真正卡死的进程,不误杀正常的冷启动。
+            let watchdog = Task.detached {
+                try? await Task.sleep(nanoseconds: 75_000_000_000)
+                if !Task.isCancelled, process.isRunning { process.terminate() }
+            }
             let data = pipe.fileHandleForReading.readDataToEndOfFile()
             process.waitUntilExit()
+            watchdog.cancel()
             guard let map = try? JSONSerialization.jsonObject(with: data) as? [String: String] else { return }
             await MainActor.run {
                 for (name, url) in map where !url.isEmpty {

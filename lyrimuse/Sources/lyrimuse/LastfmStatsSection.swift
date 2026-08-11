@@ -33,10 +33,21 @@ struct LastfmStatsSection: View {
                 stats.refreshChart(kind: kind, period: period)
             }
             // 页面开着不该是一张死快照:每 2 分钟刷一轮档案数字和最近记录(服务侧
-            // baselineTTL 同为 2 分钟,正好放行),同时 recent 重新赋值会触发整卡重渲染,
-            // "6 小时前"这些相对时间跟着重算 —— 不用单独再挂一个每分钟的时钟。
-            .onReceive(Timer.publish(every: 120, on: .main, in: .common).autoconnect()) { _ in
-                stats.refreshBaseline()
+            // baselineTTL 同为 2 分钟,正好放行),recent 重新赋值触发重渲染,"6 小时前"
+            // 这些相对时间跟着重算。
+            //
+            // 用 .task 而不是 .onReceive(Timer.publish(...)):后者的 publisher 内联在
+            // body 里,每次重渲染都是新实例,SwiftUI 会掐掉旧订阅重新订阅,倒计时清零 ——
+            // 而本视图订阅着 PlaybackCoordinator,放歌时歌词每推进一句就重渲染一次,
+            // 120 秒永远数不满,定时刷新恰恰在放歌时(最需要活数据时)静默失效
+            // (2026-08-11 审阅确认)。.task 的生命周期跟视图在场与否走,不受重渲染影响,
+            // 视图移出层级自动取消。
+            .task {
+                while !Task.isCancelled {
+                    try? await Task.sleep(nanoseconds: 120_000_000_000)
+                    guard !Task.isCancelled else { break }
+                    stats.refreshBaseline()
+                }
             }
             // 换歌 = 上一首刚被 scrobble。给 collector 十秒把记录提交出去,然后无视
             // 缓存强刷一次,刚唱完的歌就出现在列表顶上,不用等下一个两分钟周期。
@@ -112,23 +123,27 @@ struct LastfmStatsSection: View {
                 } else {
                     chartList(entries)
                 }
-            } else if stats.chartFailed {
+            } else if stats.chartFailed(kind, period) {
                 retryRow { stats.refreshChart(kind: kind, period: period) }
             } else {
-                // 骨架:行高跟真实行一致,加载完成不跳版
-                chartList((1...5).map {
-                    .init(rank: $0, name: "占位占位", detail: "", playcount: 0, imageURL: nil)
-                })
+                // 骨架:10 行(跟真实榜单等行数),专辑/歌曲榜带第二行小字(真实行是两行),
+                // 加载完成不跳版;interactive: false —— 骨架不是内容,不该能悬停、更不该
+                // 点开 last.fm/music/占位占位(2026-08-11 审阅确认这真能点)。
+                chartList((1...10).map {
+                    .init(rank: $0, name: "占位占位", detail: kind == .artists ? "" : "占位",
+                          playcount: 0, imageURL: nil)
+                }, interactive: false)
                 .redacted(reason: .placeholder)
             }
         }
     }
 
-    private func chartList(_ entries: [LastfmStatsService.ChartEntry]) -> some View {
+    private func chartList(_ entries: [LastfmStatsService.ChartEntry], interactive: Bool = true) -> some View {
         let maxCount = max(entries.map(\.playcount).max() ?? 1, 1)
         return VStack(spacing: 0) {
             ForEach(entries) { e in
                 Button {
+                    guard interactive else { return }
                     if let url = Self.lastfmURL(kind: kind, entry: e) { NSWorkspace.shared.open(url) }
                 } label: {
                 HStack(spacing: 10) {
@@ -163,8 +178,12 @@ struct LastfmStatsSection: View {
                 .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .onHover { hoveredRow = $0 ? "chart|\(e.rank)" : (hoveredRow == "chart|\(e.rank)" ? nil : hoveredRow) }
-                .help(L10n.t("在 Last.fm 打开"))
+                .disabled(!interactive)
+                .onHover { hovering in
+                    guard interactive else { return }
+                    hoveredRow = hovering ? "chart|\(e.rank)" : (hoveredRow == "chart|\(e.rank)" ? nil : hoveredRow)
+                }
+                .help(interactive ? L10n.t("在 Last.fm 打开") : "")
             }
         }
         .padding(.vertical, 5)
