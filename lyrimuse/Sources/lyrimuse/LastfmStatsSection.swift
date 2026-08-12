@@ -17,8 +17,6 @@ struct LastfmStatsSection: View {
     @AppStorage("np:lastfmChartKind") private var kindRaw = LastfmStatsService.ChartKind.artists.rawValue
     @AppStorage("np:lastfmChartPeriod") private var periodRaw = LastfmStatsService.Period.month.rawValue
 
-    // 悬停行的高亮(说明"这里能点"),chart|N / recent|id 两个列表共用一个变量
-    @State private var hoveredRow: String?
     /// 页码输入框的文本。跟 stats.recentPage 单向同步(那边变了就覆盖这里),
     /// 用户输入期间不打断 —— 只在提交或页码真的换了时才回写。
     @State private var pageInput = "1"
@@ -194,19 +192,11 @@ struct LastfmStatsSection: View {
                 }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 5)
-                .background(
-                    RoundedRectangle(cornerRadius: 6)
-                        .fill(hoveredRow == "chart|\(e.rank)" ? Color.secondary.opacity(0.10) : .clear)
-                        .padding(.horizontal, 6))
                 .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .disabled(!interactive)
-                .onHover { hovering in
-                    guard interactive else { return }
-                    hoveredRow = hovering ? "chart|\(e.rank)" : (hoveredRow == "chart|\(e.rank)" ? nil : hoveredRow)
-                }
-                .help(interactive ? L10n.t("在 Last.fm 打开") : "")
+                .rowHoverHighlight(enabled: interactive)
             }
         }
         .padding(.vertical, 5)
@@ -309,7 +299,8 @@ struct LastfmStatsSection: View {
                     if stats.recentPage == 1 {
                         LiveScrobbleRow()
                     }
-                    ForEach(Array(recentHistory.enumerated()), id: \.element.id) { index, t in
+                    ForEach(recentRows, id: \.track.id) { entry in
+                        let t = entry.track
                         Button {
                             if let url = Self.trackURL(artist: t.artist, title: t.title) { NSWorkspace.shared.open(url) }
                         } label: {
@@ -326,7 +317,7 @@ struct LastfmStatsSection: View {
                                 Text(t.artist).font(.system(size: 10.5)).foregroundStyle(.secondary).lineLimit(1)
                             }
                             Spacer()
-                            if let n = playCount(at: index) {
+                            if let n = entry.count {
                                 Text(String(format: L10n.t("第 %@ 次听"), "\(n)"))
                                     .font(.caption).foregroundStyle(.tertiary).monospacedDigit()
                                     .help(L10n.t("这首歌在你 Last.fm 上的第几次收听"))
@@ -341,15 +332,10 @@ struct LastfmStatsSection: View {
                         }
                         .padding(.horizontal, 14)
                         .padding(.vertical, 5)
-                        .background(
-                            RoundedRectangle(cornerRadius: 6)
-                                .fill(hoveredRow == "recent|\(t.id)" ? Color.secondary.opacity(0.10) : .clear)
-                                .padding(.horizontal, 6))
                         .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
-                        .onHover { hoveredRow = $0 ? "recent|\(t.id)" : (hoveredRow == "recent|\(t.id)" ? nil : hoveredRow) }
-                        .help(L10n.t("在 Last.fm 打开"))
+                        .rowHoverHighlight()
                     }
                     // 翻页(2026-08-12 取代原来的"显示更多"一路展开):一路展开会把这一卡
                     // 撑到上百行 —— 整页越滚越长、每次刷新还要给上百首查播放次数,而看历史
@@ -403,25 +389,28 @@ struct LastfmStatsSection: View {
         stats.recent.filter { $0.date != nil }
     }
 
-    /// 第 index 行那次收听是这首歌的第几次。
+    /// 最近记录的每一行 + 那一次是这首歌的第几次。
     ///
     /// 服务给的是**当前总数**(userplaycount,已含这一次),不是"那一刻是第几次"。换算:
     /// 当前总数 − 比这一行**更新**的同曲收听次数。列表是最近 N 条、按时间倒序,所以比
-    /// 这一行更新的同曲收听必然也在这个窗口里(窗口是从最新往回取的),这个减法在窗口内
-    /// 精确 —— 不需要额外请求。窗口外的都是更旧的收听,本来就该算在总数里,不用减。
+    /// 这一行更新的同曲收听必然也在这个窗口里,这个减法在窗口内精确、不需要额外请求。
+    ///
+    /// ⚠️ 整段**一次线性扫描**算完,不要写成"每行现算":那样每行都要重跑一遍 recentHistory
+    /// 的全表 filter、还要对它前面所有行重建归一化键,20 行就是 21 次数组分配 + 210 次
+    /// 字符串归一化,而这段是 SwiftUI body 的同步路径(2026-08-12 性能审阅坐实)。
     ///
     /// 正在播放那条不参与:它还没被 scrobble,不在 userplaycount 里(实时行自己 +1)。
-    private func playCount(at index: Int) -> Int? {
-        let rows = recentHistory
-        guard index < rows.count else { return nil }
-        let row = rows[index]
-        let key = LastfmStatsService.playCountKey(artist: row.artist, title: row.title)
-        guard let total = stats.trackPlayCounts[key] else { return nil }
-        let newerSamePlays = rows[..<index].reduce(0) {
-            $0 + (LastfmStatsService.playCountKey(artist: $1.artist, title: $1.title) == key ? 1 : 0)
+    private var recentRows: [(track: LastfmStatsService.RecentTrack, count: Int?)] {
+        var newerSame: [String: Int] = [:]
+        return recentHistory.map { row in
+            let key = LastfmStatsService.playCountKey(artist: row.artist, title: row.title)
+            let newer = newerSame[key, default: 0]
+            newerSame[key] = newer + 1
+            guard let total = stats.trackPlayCounts[key] else { return (row, nil) }
+            let n = total - newer
+            // 竞态(刚多了一次收听、总数还没重取)时宁可不显示,不显示错的
+            return (row, n > 0 ? n : nil)
         }
-        let n = total - newerSamePlays
-        return n > 0 ? n : nil // 竞态(刚多了一次收听、总数还没重取)时宁可不显示,不显示错的
     }
 
     // MARK: - 小件
@@ -605,17 +594,13 @@ struct LastfmStatsSection: View {
                                 }
                                 .padding(.horizontal, 14)
                                 .padding(.vertical, 5)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 6)
-                                        .fill(hoveredRow == "otd|\(t.id)" ? Color.secondary.opacity(0.10) : .clear)
-                                        .padding(.horizontal, 6))
                                 .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
-                            .onHover { hoveredRow = $0 ? "otd|\(t.id)" : (hoveredRow == "otd|\(t.id)" ? nil : hoveredRow) }
+                            .rowHoverHighlight()
                             .help(entry.lastPlayed.map {
                                 String(format: L10n.t("那天最后一次:%@"), Self.absolute($0))
-                            } ?? L10n.t("在 Last.fm 打开"))
+                            } ?? "")
                         }
                     }
                     .padding(.vertical, 5)
@@ -769,7 +754,6 @@ private struct LiveScrobbleRow: View {
                 }
                 .buttonStyle(.plain)
                 .onHover { hovered = $0 }
-                .help(L10n.t("在 Last.fm 打开"))
             } else {
                 Color.clear.frame(height: 0)
             }
@@ -788,7 +772,7 @@ private struct LiveScrobbleRow: View {
             pendingForceRefresh?.cancel()
             pendingForceRefresh = Task {
                 try? await Task.sleep(nanoseconds: 10_000_000_000)
-                guard !Task.isCancelled else { return }
+                guard !Task.isCancelled, stats.recentPage == 1 else { return }
                 stats.refreshBaseline(force: true)
             }
         }
@@ -799,10 +783,40 @@ private struct LiveScrobbleRow: View {
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: 45_000_000_000)
                 guard !Task.isCancelled else { break }
-                guard !poller.isPlayingNow, remoteSessionLikelyActive else { continue }
+                // 跟父视图那条 2 分钟轮询同一条守卫:翻到历史页时别把用户正看的那屏
+                // 换掉(强刷会无视 TTL,原来这两条路径都漏了这个判断)。
+                guard stats.recentPage == 1, !poller.isPlayingNow, remoteSessionLikelyActive else { continue }
                 stats.refreshBaseline(force: true)
             }
         }
         .onDisappear { pendingForceRefresh?.cancel() }
+    }
+}
+
+
+/// 行级悬停高亮。
+///
+/// ⚠️ 刻意做成**每行自己持有 @State**,而不是父视图存一个"当前悬停的是哪一行"的字符串:
+/// 那样任何一次 hover 进/出都会让整个 Section(三张卡、三十多行)的 body 重算 —— 鼠标从
+/// 列表顶划到底就是四十次整段重渲染,换来的可见变化只有一行背景色(2026-08-12 性能审阅
+/// 坐实)。行内化之后,hover 只让这一行的这层包装重画,顺带也省掉了每帧为每行拼
+/// "recent|<id>" 这类比较用字符串。
+private struct RowHoverHighlight: ViewModifier {
+    var enabled: Bool = true
+    @State private var hovered = false
+
+    func body(content: Content) -> some View {
+        content
+            .background(
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(hovered && enabled ? Color.secondary.opacity(0.10) : .clear)
+                    .padding(.horizontal, 6))
+            .onHover { hovered = $0 }
+    }
+}
+
+extension View {
+    func rowHoverHighlight(enabled: Bool = true) -> some View {
+        modifier(RowHoverHighlight(enabled: enabled))
     }
 }

@@ -167,8 +167,12 @@ final class LastfmStatsService: ObservableObject {
     /// 按 scrobble 里那个专辑名归一后的封面。给"getinfo 连专辑都没返回"的曲目兜底:
     /// 同一张专辑里只要有一首纠正成功,这一整张的行都能共用它的封面。
     @Published private(set) var recentAlbumCovers: [String: URL] = [:]
-    /// getinfo 查不到数据的曲目(Last.fm 压根没有这条目)。记下来别每轮刷新都重查一遍。
-    private var trackDetailsUnavailable = Set<String>()
+    /// 已经问过 getinfo、但那边**确实没有**这一项的曲目。分成两张表:次数和封面是两件事,
+    /// 合成一张的话「有次数没封面」会永远满足重查条件、每轮刷新都重发一次请求,永不收敛
+    /// (2026-08-12 性能审阅坐实的死循环)。
+    /// ⚠️ 只在请求**成功返回**但该项为空时才记;网络失败/限流不记,那种要留给下次重试。
+    private var playCountUnavailable = Set<String>()
+    private var coverUnavailable = Set<String>()
     /// 上一次 applyRecent 时看的是第几页。翻了页就不做下面那套"同曲次数变多 → 旧总数
     /// 作废"的判定:换了一批完全不同的行,那个比较没有意义。
     private var lastAppliedRecentPage = 0
@@ -236,7 +240,8 @@ final class LastfmStatsService: ObservableObject {
         trackPlayCounts = [:]
         recentTrackCovers = [:]
         recentAlbumCovers = [:]
-        trackDetailsUnavailable = []
+        playCountUnavailable = []
+        coverUnavailable = []
         playCountsInFlight = []
         lastAppliedRecentPage = 0
         chartLoadingKeys = []
@@ -386,15 +391,35 @@ final class LastfmStatsService: ObservableObject {
             guard !Task.isCancelled, let cred = credentials else { return }
             // 只快照第一页:快照是给"重开时先端上桌"用的,端一页历史上来没有意义
             guard recentPage == 1 else { return }
+            // 只带**这一页用得上的**次数/封面下快照。这三张表在内存里随"听过多少歌、翻过
+            // 多少页"只增不减,整份写盘的话文件会月复一月长大,而快照的用途只是"重开时先把
+            // 第一页端上桌",多出来的键一个也用不上(2026-08-12 审阅指出的无界增长)。
+            let rows = recent.filter { $0.date != nil }
+            var keptCounts: [String: Int] = [:]
+            var keptCovers: [String: URL] = [:]
+            var keptAlbumCovers: [String: URL] = [:]
+            for r in rows {
+                let key = Self.playCountKey(artist: r.artist, title: r.title)
+                if let n = trackPlayCounts[key] { keptCounts[key] = n }
+                if let c = recentTrackCovers[key] { keptCovers[key] = c }
+                if let ak = Self.albumKey(artist: r.artist, album: r.album), let c = recentAlbumCovers[ak] {
+                    keptAlbumCovers[ak] = c
+                }
+            }
             let snap = StatsSnapshot(
                 username: cred.user, overview: overview,
-                recent: recent.filter { $0.date != nil },
+                recent: rows,
                 recentLimit: nil,
                 charts: charts, artistAvatars: artistAvatars, trackCovers: trackCovers,
-                trackPlayCounts: trackPlayCounts,
-                recentTrackCovers: recentTrackCovers, recentAlbumCovers: recentAlbumCovers)
-            guard let data = try? JSONEncoder().encode(snap) else { return }
-            try? data.write(to: Self.snapshotURL, options: .atomic)
+                trackPlayCounts: keptCounts,
+                recentTrackCovers: keptCovers, recentAlbumCovers: keptAlbumCovers)
+            // 编码 + 落盘挪出主线程:这个类是 @MainActor,Task{} 会继承它的隔离,原来
+            // JSONEncoder 和同步的 atomic 写(临时文件 + rename)全压在主线程上(审阅指出)。
+            let url = Self.snapshotURL
+            await Task.detached(priority: .utility) {
+                guard let data = try? JSONEncoder().encode(snap) else { return }
+                try? data.write(to: url, options: .atomic)
+            }.value
         }
     }
 
@@ -456,9 +481,12 @@ final class LastfmStatsService: ObservableObject {
     }
 
     /// 专辑名归一(大小写/首尾空白不算差异)。空名返回 nil —— 空专辑不该互相共享封面。
-    nonisolated static func albumKey(_ album: String?) -> String? {
+    /// 专辑封面表的键。**必须带歌手** —— 只用专辑名的话是个全局命名空间,两个不同歌手
+    /// 的同名专辑会互相覆盖,第三级兜底就会拿到别人专辑的封面,还会随快照长期留存
+    /// (2026-08-12 性能/正确性审阅指出)。
+    nonisolated static func albumKey(artist: String, album: String?) -> String? {
         guard let a = album?.trimmingCharacters(in: .whitespaces), !a.isEmpty else { return nil }
-        return a.lowercased()
+        return artist.trimmingCharacters(in: .whitespaces).lowercased() + "|" + a.lowercased()
     }
 
     /// 一行最近记录该用哪张封面:自带的(scrobble 记录里的真图)→ getinfo 纠正后的曲目封面
@@ -468,7 +496,7 @@ final class LastfmStatsService: ObservableObject {
         if let byTrack = recentTrackCovers[Self.playCountKey(artist: track.artist, title: track.title)] {
             return byTrack
         }
-        if let key = Self.albumKey(track.album) { return recentAlbumCovers[key] }
+        if let key = Self.albumKey(artist: track.artist, album: track.album) { return recentAlbumCovers[key] }
         return nil
     }
 
@@ -516,9 +544,14 @@ final class LastfmStatsService: ObservableObject {
         var seen = Set<String>()
         let missing = rows.compactMap { r -> (key: String, artist: String, title: String, album: String?)? in
             let key = Self.playCountKey(artist: r.artist, title: r.title)
-            // 次数和封面共用这一次请求,任一还缺就得查;查过一次没有数据的不再重查。
-            let needs = trackPlayCounts[key] == nil || recentTrackCovers[key] == nil
-            guard needs, !trackDetailsUnavailable.contains(key), !playCountsInFlight.contains(key),
+            // 次数还缺、且没被判定为"那边没有"
+            let needsCount = trackPlayCounts[key] == nil && !playCountUnavailable.contains(key)
+            // 封面还缺:三级兜底任一有值就不必为封面发请求 —— 自带图/同专辑兄弟都算数,
+            // 否则封面明明已经显示出来了还在每轮重查(审阅指出的放大器)。
+            let hasCover = r.imageURL != nil || recentTrackCovers[key] != nil
+                || Self.albumKey(artist: r.artist, album: r.album).map { recentAlbumCovers[$0] != nil } ?? false
+            let needsCover = !hasCover && !coverUnavailable.contains(key)
+            guard needsCount || needsCover, !playCountsInFlight.contains(key),
                   seen.insert(key).inserted, !r.artist.isEmpty, !r.title.isEmpty else { return nil }
             return (key, r.artist, r.title, r.album)
         }
@@ -527,37 +560,53 @@ final class LastfmStatsService: ObservableObject {
         Task {
             defer { missing.forEach { playCountsInFlight.remove($0.key) } }
             var index = 0
-            await withTaskGroup(of: (String, String?, Int?, URL?).self) { group in
+            // 元组多带两项:artist(专辑键要用)和 ok(请求本身成不成功 —— 只有成功返回
+            // 才能断言"那边没有这一项",超时/限流不能记进 unavailable)
+            await withTaskGroup(of: (String, String, String?, Bool, Int?, URL?).self) { group in
                 let maxConcurrent = 4
                 func addNext() {
                     guard index < missing.count else { return }
                     let item = missing[index]
                     index += 1
                     group.addTask { [weak self] in
-                        guard let self else { return (item.key, item.album, nil, nil) }
+                        guard let self else { return (item.key, item.artist, item.album, false, nil, nil) }
                         let json = await self.request(method: "track.getinfo", cred: cred,
                                                       extra: ["artist": item.artist, "track": item.title,
                                                               "autocorrect": "1", "username": cred.user])
-                        guard let json else { return (item.key, item.album, nil, nil) }
+                        guard let json else { return (item.key, item.artist, item.album, false, nil, nil) }
                         let parsed = await MainActor.run { () -> (Int?, URL?) in
                             let n = (self.dig(json, "track", "userplaycount") as? String).flatMap { Int($0) }
                             // 封面从纠正后的规范专辑实体上取 —— scrobble 自带的那张多半是占位星星。
                             return (n, self.imageURL(self.dig(json, "track", "album", "image")))
                         }
-                        return (item.key, item.album, parsed.0, parsed.1)
+                        return (item.key, item.artist, item.album, true, parsed.0, parsed.1)
                     }
                 }
+                // 结果先攒在本地,循环结束再一次性合并写回:@Published 字典每写一次就发一次
+                // objectWillChange,而这些结果按网络节奏跨秒到达、SwiftUI 合并不了,逐条写
+                // 就是二十次整段重渲染(审阅坐实)。
+                var counts: [String: Int] = [:]
+                var covers: [String: URL] = [:]
+                var albumCovers: [String: URL] = [:]
+                var noCount = Set<String>()
+                var noCover = Set<String>()
                 for _ in 0..<min(maxConcurrent, missing.count) { addNext() }
-                for await (key, album, n, cover) in group {
-                    if let n, n > 0 { trackPlayCounts[key] = n }
+                for await (key, artist, album, ok, n, cover) in group {
+                    if let n, n > 0 { counts[key] = n } else if ok { noCount.insert(key) }
                     if let cover {
-                        recentTrackCovers[key] = cover
+                        covers[key] = cover
                         // 同一张专辑的其它行(包括 getinfo 压根没返回专辑的那些)共用它
-                        if let ak = Self.albumKey(album) { recentAlbumCovers[ak] = cover }
+                        if let ak = Self.albumKey(artist: artist, album: album) { albumCovers[ak] = cover }
+                    } else if ok {
+                        noCover.insert(key)
                     }
-                    if n == nil, cover == nil { trackDetailsUnavailable.insert(key) }
                     addNext()
                 }
+                if !counts.isEmpty { trackPlayCounts.merge(counts) { _, new in new } }
+                if !covers.isEmpty { recentTrackCovers.merge(covers) { _, new in new } }
+                if !albumCovers.isEmpty { recentAlbumCovers.merge(albumCovers) { _, new in new } }
+                playCountUnavailable.formUnion(noCount)
+                coverUnavailable.formUnion(noCover)
             }
             scheduleSnapshotSave()
         }

@@ -16,15 +16,39 @@ final class ImageMemoryCache {
 
     private let cache: NSCache<NSURL, NSImage> = {
         let c = NSCache<NSURL, NSImage>()
-        // 26×26 的小图,几百张也就几 MB;这个页面最多同时用到榜单 10 + 最近记录 20 +
-        // 那年今日 3,留足冗余让来回切换全部命中。
+        // 显示只有 26×26,但存的是**原图**(Last.fm 的 large 是 174²、extralarge 300²,
+        // 歌手头像更大),只限张数不限字节的话上限是不确定的几十 MB。两个上限都设:
+        // 400 张封顶,同时按解码后的估算字节数封到 48MB(审阅指出只设 countLimit 的问题)。
         c.countLimit = 400
+        c.totalCostLimit = 48 << 20
         return c
     }()
 
+    /// 正在下载中的 URL → 共享的加载任务。没有它的话同一个 URL 出现在 N 行就是 N 个
+    /// 并发请求 + N 次解码:URLCache 不合并并发的同 URL 请求(第一个还没写回,后面全 miss),
+    /// 冷缓存时是真发 N 次网络(审阅坐实)。
+    private var inFlight: [URL: Task<NSImage?, Never>] = [:]
+
     func image(for url: URL) -> NSImage? { cache.object(forKey: url as NSURL) }
 
-    func store(_ image: NSImage, for url: URL) { cache.setObject(image, forKey: url as NSURL) }
+    func store(_ image: NSImage, for url: URL) {
+        // cost 用解码后的估算字节数(宽×高×4),NSCache 才有依据按字节淘汰
+        let size = image.size
+        let cost = max(1, Int(size.width * size.height * 4))
+        cache.setObject(image, forKey: url as NSURL, cost: cost)
+    }
+
+    /// 取图:命中内存直接返回;否则同一个 URL 只发一次请求,其余调用方等同一个任务。
+    func load(_ url: URL) async -> NSImage? {
+        if let hit = image(for: url) { return hit }
+        if let running = inFlight[url] { return await running.value }
+        let task = Task<NSImage?, Never> { await CachedImage<EmptyView>.loadForPrewarm(url) }
+        inFlight[url] = task
+        let result = await task.value
+        inFlight[url] = nil
+        if let result { store(result, for: url) }
+        return result
+    }
 
     /// 预热:把一批 URL 提前解码进内存。给"启动后不久、页面还没打开"这个空窗用 ——
     /// 冷启动时 URLCache 里有字节但内存里没有解码结果,首屏第一帧仍会闪一下占位符
@@ -43,11 +67,13 @@ final class ImageMemoryCache {
                     guard index < missing.count else { return }
                     let url = missing[index]
                     index += 1
-                    group.addTask { (url, await CachedImage<EmptyView>.loadForPrewarm(url)) }
+                    group.addTask { [weak self] in
+                        (url, await self?.load(url))
+                    }
                 }
                 for _ in 0..<min(4, missing.count) { addNext() }
-                for await (url, image) in group {
-                    if let image { self?.store(image, for: url) }
+                for await (_, _) in group {
+                    // load 内部已经写好缓存,这里只是把并发放到下一个
                     addNext()
                 }
             }
@@ -85,12 +111,10 @@ struct CachedImage<Placeholder: View>: View {
                 image = nil
                 return
             }
-            if let cached = ImageMemoryCache.shared.image(for: url) {
-                image = cached
-                return
-            }
-            guard let loaded = await Self.load(url) else { return }
-            ImageMemoryCache.shared.store(loaded, for: url)
+            // init 已经用缓存值做过初值:命中时这里再赋一次同样的对象,只会白白多触发
+            // 一次 body 求值(@State 的 setter 不比较引用),所以先看有没有必要。
+            if image != nil, ImageMemoryCache.shared.image(for: url) != nil { return }
+            guard let loaded = await ImageMemoryCache.shared.load(url) else { return }
             // 迟到的结果如果对应的已经不是当前这个 url(行被复用了),就丢掉
             guard !Task.isCancelled else { return }
             image = loaded
