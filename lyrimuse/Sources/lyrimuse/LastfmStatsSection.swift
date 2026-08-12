@@ -14,6 +14,9 @@ struct LastfmStatsSection: View {
 
     // 悬停行的高亮(说明"这里能点"),chart|N / recent|id 两个列表共用一个变量
     @State private var hoveredRow: String?
+    /// 页码输入框的文本。跟 stats.recentPage 单向同步(那边变了就覆盖这里),
+    /// 用户输入期间不打断 —— 只在提交或页码真的换了时才回写。
+    @State private var pageInput = "1"
 
     private var kind: LastfmStatsService.ChartKind {
         .init(rawValue: kindRaw) ?? .artists
@@ -34,7 +37,9 @@ struct LastfmStatsSection: View {
                 stats.refreshBaseline()
                 stats.refreshChart(kind: kind, period: period)
                 stats.refreshOnThisDay()
+                pageInput = "\(stats.recentPage)"
             }
+            .onChange(of: stats.recentPage) { _, page in pageInput = "\(page)" }
             // 页面开着不该是一张死快照:每 2 分钟刷一轮档案数字和最近记录(服务侧
             // baselineTTL 同为 2 分钟,正好放行),recent 重新赋值触发重渲染,"6 小时前"
             // 这些相对时间跟着重算。
@@ -340,9 +345,21 @@ struct LastfmStatsSection: View {
                             if stats.recentPaging {
                                 ProgressView().controlSize(.small)
                             }
-                            Text(String(format: L10n.t("第 %1$@ / %2$@ 页"),
-                                        "\(stats.recentPage)", "\(stats.recentTotalPages)"))
-                                .font(.caption).foregroundStyle(.secondary).monospacedDigit()
+                            // 页码可直接输入:一千多页只靠上/下一页翻不动(用户要求)。
+                            // 回车提交,越界/乱输由 goToPage 夹到合法范围,再由 onChange 同步回来。
+                            HStack(spacing: 5) {
+                                Text(L10n.t("第")).font(.caption).foregroundStyle(.secondary)
+                                TextField("", text: $pageInput)
+                                    .textFieldStyle(.roundedBorder)
+                                    .font(.caption)
+                                    .monospacedDigit()
+                                    .multilineTextAlignment(.center)
+                                    .frame(width: 54)
+                                    .disabled(stats.recentPaging)
+                                    .onSubmit { submitPageInput() }
+                                Text(String(format: L10n.t("/ %@ 页"), "\(stats.recentTotalPages)"))
+                                    .font(.caption).foregroundStyle(.secondary).monospacedDigit()
+                            }
                             Spacer()
                             pagerButton(systemImage: "chevron.right", label: L10n.t("下一页"),
                                         enabled: stats.recentPage < stats.recentTotalPages) {
@@ -387,6 +404,19 @@ struct LastfmStatsSection: View {
     }
 
     // MARK: - 小件
+
+    /// 提交页码输入:非数字/越界都交给 goToPage 夹,夹完由 onChange 把框里的值同步成
+    /// 真正生效的那一页 —— 用户看到的永远是"实际在第几页",不会停在一个没生效的数字上。
+    private func submitPageInput() {
+        let raw = Int(pageInput.trimmingCharacters(in: .whitespaces)) ?? stats.recentPage
+        let target = max(1, min(raw, max(stats.recentTotalPages, 1)))
+        // 先把框里的值订正成"实际会生效的那一页"再决定跳不跳:输 0 或超出总页数时,
+        // 夹完可能正好等于当前页,那样 goToPage 会直接返回、onChange 也不会触发,
+        // 框里就会一直挂着那个根本没生效的数字。
+        pageInput = "\(target)"
+        guard target != stats.recentPage else { return }
+        stats.goToPage(target)
+    }
 
     private func pagerButton(systemImage: String, label: String,
                              enabled: Bool, action: @escaping () -> Void) -> some View {
