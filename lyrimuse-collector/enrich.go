@@ -343,6 +343,28 @@ const (
 //
 // 老条目(这个功能上线前写入的)没有 LyricsSourcesSeen,会被判成"所有启用的源都缺席"从而
 // 获得一次升级机会 —— 这是有意的:它们当初正是在没有这层保护的情况下定下来的。
+// lyricsUpgradeBaseline 给"歌词升级重试"算出该跟谁比大小,以及这一轮到底能不能比。
+//
+// 跨打分版本**不能**直接比大小:v3 给同一份候选普遍多算几百分(专辑/标题/共识/增值),
+// 拿 v3 新分去比存量的 v2 旧分,"严格更高才替换"这道闸就形同虚设 —— 一份更差的候选
+// 只因为按新规则算就轻松超过旧分,把好歌词换掉。版本落后的条目本该由 rescoreLyrics
+// 收编(它是版本感知的、压根不比大小),但 rescore 有 1 小时节流 + 3 次上限,节流窗口里
+// retry 照样会跑到这儿(2026-08-12 审阅确认)。
+//
+// 解法是把基准换成**同尺度**的量:现存这份歌词若还在这一轮候选里,就用它这一轮的分数
+// 当基准(like-for-like);它没出现(源这轮没答、或内容变了)就这轮不换,等 rescore 收编。
+func lyricsUpgradeBaseline(e enrichEntry, scored []scoredLyricCandidateResult) (baseline int, comparable bool) {
+	if e.LyricsScoringVersion == lyricsScoringVersion {
+		return e.LyricsScore, true
+	}
+	for i := range scored {
+		if scored[i].Source == e.LyricsSource && scored[i].Lyrics == e.Lyrics {
+			return scored[i].Score, true
+		}
+	}
+	return 0, false
+}
+
 func needsLyricsRetry(e enrichEntry) bool {
 	if e.Lyrics == "" || e.LyricsYRC != "" {
 		return false
@@ -446,7 +468,8 @@ func retryLyricsUpgrade(key, artist, title, album string, durationSecs float64) 
 	if len(seen) > 0 {
 		e.LyricsSourcesSeen = seen
 	}
-	if picked != nil && picked.Score > e.LyricsScore {
+	baseline, comparable := lyricsUpgradeBaseline(e, scored)
+	if picked != nil && comparable && picked.Score > baseline {
 		log.Printf("lyrics upgrade: %s  %s(%d) -> %s(%d)", key, e.LyricsSource, e.LyricsScore, picked.Source, picked.Score)
 		e.Lyrics = picked.Lyrics
 		e.LyricsSource = picked.Source
@@ -590,6 +613,12 @@ func rescoreLyrics(key, artist, title, album string, durationSecs float64) {
 			// 译文换人了,描述译文的两个字段必须跟着换:语言(否则拿旧语言判新译文),
 			// 来源(否则上一轮机翻留下的 "machine" 会让新来的社区译文被标成机翻)。
 			e.LyricsTrLang, e.LyricsTrSource = picked.LyricsTrLang, ""
+		}
+		if picked.Source != e.LyricsSource {
+			// 正文一样但冠军换了源:导出的 .lrc 里 [source:] 头也得跟着重写。lyrics/
+			// 文件夹是 6 字段权威源,importLyricsFromFiles 下次启动会拿文件头把缓存里的
+			// LyricsSource 静默改回旧值,rescore 的结论被回滚(2026-08-12 审阅)。
+			lyricsChanged = true
 		}
 		e.LyricsSource = picked.Source
 		e.LyricsScore = picked.Score
@@ -865,6 +894,9 @@ type scoredLyricCandidateResult struct {
 	// ScoreTerms 是这个分数的构成明细(或者被判 -1 时的唯一那条原因),给"搜索候选歌词"
 	// 弹窗把分数摊开显示用。只在那条手动搜索路径上有意义,自动解析路径不读它。
 	ScoreTerms []scoreTerm `json:"score_terms,omitempty"`
+	// SourceReportedDurationSecs:源自己声明的曲长(秒),0=该源没给。2026-08-12 起透传,
+	// 不参与打分——给下一轮维度评测攒"源报版本同一性"数据(见 lyricCandidate 同名字段)。
+	SourceReportedDurationSecs float64 `json:"source_reported_duration_secs,omitempty"`
 	// Title/Artist/Album/CoverURL 是这个源实际匹配到的歌名/歌手/专辑/封面(不参与
 	// 打分,见 lyricCandidate 的同名字段注释)——"搜索候选歌词"弹窗靠这几个字段展示
 	// 每条候选具体对应哪首歌/哪个版本,不是只看来源名字。不是每个源都能给全:LRCLIB
@@ -1022,7 +1054,8 @@ func fetchScoredLyricCandidatesStreaming(artist, title, album string, durationSe
 		lyr, yrc, tr            string
 		matchTitle, matchArtist string
 		matchAlbum, matchCover  string
-		instrumental            bool // 目前只有 lrclib 这个源会给出这个信号,见 lrclibResult 注释
+		srcDur                  float64 // 源自己声明的曲长(秒),0=没给。见 lyricCandidate.sourceReportedDurationSecs
+		instrumental            bool    // 目前只有 lrclib 这个源会给出这个信号,见 lrclibResult 注释
 	}
 	resultsCh := make(chan sourceResult, 6)
 
@@ -1038,21 +1071,26 @@ func fetchScoredLyricCandidatesStreaming(artist, title, album string, durationSe
 		match := qqMusicMatchCached(artist, title, album)
 		qqMid := qqMidFromURL(match.url)
 		var lyr, yrc string
+		var qqDur float64
 		if qqMid != "" {
 			lyr = qqLyric(qqMid)
 			// 逐字(QRC)是完全独立的一套接口/密钥,自己失败不影响上面整行歌词——
 			// 见 qq.go 顶部注释。
 			yrc = qqQRCLyric(qqMid, artist, title, album, durationSecs)
+			// 只读缓存:QRC 那步走通时(它内部查过同一首的单曲详情)这里是热的,没走通
+			// (会话拿不到 sid / 详情接口失败,那边不写负缓存)就留 0。srcDur 是纯透传的
+			// 评测数据,不值得为它在歌词主路径上多挂一次最多 6s 的请求(2026-08-12 审阅)。
+			qqDur = qqSongMetaCachedOnly(qqMid).interval
 		}
-		resultsCh <- sourceResult{source: "qq", lyr: lyr, yrc: yrc, matchTitle: match.title, matchArtist: match.artist, matchAlbum: match.album}
+		resultsCh <- sourceResult{source: "qq", lyr: lyr, yrc: yrc, matchTitle: match.title, matchArtist: match.artist, matchAlbum: match.album, srcDur: qqDur}
 	}()
 	go func() {
 		r := kugouLyric(artist, title, durationSecs)
-		resultsCh <- sourceResult{source: "kugou", lyr: r.lrc, yrc: r.yrc, matchTitle: r.title, matchArtist: r.artist, matchAlbum: r.album}
+		resultsCh <- sourceResult{source: "kugou", lyr: r.lrc, yrc: r.yrc, matchTitle: r.title, matchArtist: r.artist, matchAlbum: r.album, srcDur: r.durationSecs}
 	}()
 	go func() {
 		r := lrclibLyric(artist, title, album, durationSecs)
-		resultsCh <- sourceResult{source: "lrclib", lyr: r.lyrics, matchTitle: r.title, matchArtist: r.artist, matchAlbum: r.album, instrumental: r.instrumental}
+		resultsCh <- sourceResult{source: "lrclib", lyr: r.lyrics, matchTitle: r.title, matchArtist: r.artist, matchAlbum: r.album, srcDur: r.durationSecs, instrumental: r.instrumental}
 	}()
 	go func() {
 		r := musixmatchLyric(artist, title, durationSecs, features.LyricsTranslationLanguage)
@@ -1066,6 +1104,7 @@ func fetchScoredLyricCandidatesStreaming(artist, title, album string, durationSe
 
 	var ne neteaseInfo
 	var qqLyr, qqYRC, qqTitle, qqArtist, qqAlbum string
+	var qqDur, kugouDur, lrclibDur float64
 	var kugouLyr, kugouYRC, kugouTitle, kugouArtist, kugouAlbum string
 	var lrclibLyr, lrclibTitle, lrclibArtist, lrclibAlbum string
 	var lrclibInstrumental bool
@@ -1088,21 +1127,29 @@ func fetchScoredLyricCandidatesStreaming(artist, title, album string, durationSe
 		}
 		var candidates []lyricCandidate
 		if ne.Lyrics != "" {
-			candidates = append(candidates, lyricCandidate{source: "netease", lyrics: ne.Lyrics, wordTimingYRC: ne.YRC, hasWordTiming: ne.YRC != "", title: ne.Title, artist: ne.Artist, album: ne.Album, cover: coverOrFallback(ne.Cover)})
+			// 网易云的社区翻译固定中文(见下面附着处的注释),usable 判定按目标语言过闸;
+			// 这两个标志必须在**打分前**算好挂到候选上(v3 的增值内容决胜分要读它),
+			// 不能等选完冠军再附着。
+			neTr, neRoma := usableValueAdd(ne.Lyrics, ne.Trans, "zh", ne.Roma, features.LyricsTranslationLanguage)
+			candidates = append(candidates, lyricCandidate{source: "netease", lyrics: ne.Lyrics, wordTimingYRC: ne.YRC, hasWordTiming: ne.YRC != "", hasUsableTranslation: neTr, hasUsableRomanization: neRoma, sourceReportedDurationSecs: ne.DurationSecs, title: ne.Title, artist: ne.Artist, album: ne.Album, cover: coverOrFallback(ne.Cover)})
 		}
 		if qqLyr != "" {
-			candidates = append(candidates, lyricCandidate{source: "qq", lyrics: qqLyr, wordTimingYRC: qqYRC, hasWordTiming: qqYRC != "", title: qqTitle, artist: qqArtist, album: qqAlbum, cover: coverOrFallback("")})
+			candidates = append(candidates, lyricCandidate{source: "qq", lyrics: qqLyr, wordTimingYRC: qqYRC, hasWordTiming: qqYRC != "", sourceReportedDurationSecs: qqDur, title: qqTitle, artist: qqArtist, album: qqAlbum, cover: coverOrFallback("")})
 		}
 		if kugouLyr != "" {
-			candidates = append(candidates, lyricCandidate{source: "kugou", lyrics: kugouLyr, wordTimingYRC: kugouYRC, hasWordTiming: kugouYRC != "", title: kugouTitle, artist: kugouArtist, album: kugouAlbum, cover: coverOrFallback("")})
+			candidates = append(candidates, lyricCandidate{source: "kugou", lyrics: kugouLyr, wordTimingYRC: kugouYRC, hasWordTiming: kugouYRC != "", sourceReportedDurationSecs: kugouDur, title: kugouTitle, artist: kugouArtist, album: kugouAlbum, cover: coverOrFallback("")})
 		}
 		if mxLyr != "" {
-			candidates = append(candidates, lyricCandidate{source: "musixmatch", lyrics: mxLyr, wordTimingYRC: mxYRC, hasWordTiming: mxYRC != "", title: mxTitle, artist: mxArtist, album: mxAlbum, cover: coverOrFallback(mxCover)})
+			mxUsableTr, _ := usableValueAdd(mxLyr, mxTr, features.LyricsTranslationLanguage, "", features.LyricsTranslationLanguage)
+			candidates = append(candidates, lyricCandidate{source: "musixmatch", lyrics: mxLyr, wordTimingYRC: mxYRC, hasWordTiming: mxYRC != "", hasUsableTranslation: mxUsableTr, title: mxTitle, artist: mxArtist, album: mxAlbum, cover: coverOrFallback(mxCover)})
 		}
 		if lrclibLyr != "" {
-			candidates = append(candidates, lyricCandidate{source: "lrclib", lyrics: lrclibLyr, title: lrclibTitle, artist: lrclibArtist, album: lrclibAlbum, cover: coverOrFallback("")})
+			candidates = append(candidates, lyricCandidate{source: "lrclib", lyrics: lrclibLyr, sourceReportedDurationSecs: lrclibDur, title: lrclibTitle, artist: lrclibArtist, album: lrclibAlbum, cover: coverOrFallback("")})
 		}
 		corroborated := corroboratedEndings(candidates, durationSecs)
+		// v3:跨源正文共识,整批统一算(理由同 corroboratedEndings——peers 随后到的源变化,
+		// 每轮全量重算)。artist/title 已是 toSimplified 后的搜索关键词,与打分入参一致。
+		consensusPeers := contentConsensusPeers(artist, title, candidates, durationSecs)
 		// lrclib 明确说这首歌是纯音乐、且没有真的歌词候选(lrclibLyr=="")时,搭车塞一条
 		// Score:-1 的标记进 results——见 Instrumental 字段定义处的注释,不参与打分/排序,
 		// 不会被 pickLyricCandidate 选中,只是把这个信号原样带出这个函数。
@@ -1114,17 +1161,18 @@ func fetchScoredLyricCandidatesStreaming(artist, title, album string, durationSe
 		results := make([]scoredLyricCandidateResult, 0, len(candidates))
 		for _, c := range candidates {
 			r := scoredLyricCandidateResult{
-				Source:        c.source,
-				Lyrics:        c.lyrics,
-				LyricsYRC:     c.wordTimingYRC,
-				HasWordTiming: c.hasWordTiming,
-				Title:         c.title,
-				Artist:        c.artist,
-				Album:         c.album,
-				CoverURL:      c.cover,
+				Source:                     c.source,
+				Lyrics:                     c.lyrics,
+				LyricsYRC:                  c.wordTimingYRC,
+				HasWordTiming:              c.hasWordTiming,
+				SourceReportedDurationSecs: c.sourceReportedDurationSecs,
+				Title:                      c.title,
+				Artist:                     c.artist,
+				Album:                      c.album,
+				CoverURL:                   c.cover,
 			}
 			r.Score, r.ScoreTerms = scoreLyricCandidateDetailed(
-				artist, title, album, durationSecs, c, corroborated[c.source])
+				artist, title, album, durationSecs, c, corroborated[c.source], consensusPeers[c.source])
 			switch c.source {
 			case "netease":
 				// 翻译/罗马音网易云固定给中文;QQ/酷狗这次只接了逐字,不接翻译/罗马音,
@@ -1181,11 +1229,11 @@ collect:
 			case "netease":
 				ne = r.ne
 			case "qq":
-				qqLyr, qqYRC, qqTitle, qqArtist, qqAlbum = r.lyr, r.yrc, r.matchTitle, r.matchArtist, r.matchAlbum
+				qqLyr, qqYRC, qqTitle, qqArtist, qqAlbum, qqDur = r.lyr, r.yrc, r.matchTitle, r.matchArtist, r.matchAlbum, r.srcDur
 			case "kugou":
-				kugouLyr, kugouYRC, kugouTitle, kugouArtist, kugouAlbum = r.lyr, r.yrc, r.matchTitle, r.matchArtist, r.matchAlbum
+				kugouLyr, kugouYRC, kugouTitle, kugouArtist, kugouAlbum, kugouDur = r.lyr, r.yrc, r.matchTitle, r.matchArtist, r.matchAlbum, r.srcDur
 			case "lrclib":
-				lrclibLyr, lrclibTitle, lrclibArtist, lrclibAlbum = r.lyr, r.matchTitle, r.matchArtist, r.matchAlbum
+				lrclibLyr, lrclibTitle, lrclibArtist, lrclibAlbum, lrclibDur = r.lyr, r.matchTitle, r.matchArtist, r.matchAlbum, r.srcDur
 				lrclibInstrumental = r.instrumental
 			case "musixmatch":
 				mxLyr, mxYRC, mxTr, mxTitle, mxArtist, mxAlbum, mxCover = r.lyr, r.yrc, r.tr, r.matchTitle, r.matchArtist, r.matchAlbum, r.matchCover

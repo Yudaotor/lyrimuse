@@ -144,6 +144,17 @@ type lyricCandidate struct {
 	lyrics        string
 	wordTimingYRC string // 该候选归一化成 YRCParser 语法后的逐字数据,没有则空串(netease/qq/kugou 都可能有,lrclib 恒无)
 	hasWordTiming bool   // = wordTimingYRC != "",构造候选时直接算好,见 enrich.go
+	// hasUsableTranslation/hasUsableRomanization:这份候选自带**可用的**增值内容(社区
+	// 译文语言与目标语言一致且时间轴/覆盖率过闸、罗马音配日文形态歌词)。在候选构造时由
+	// usableValueAdd 算好(那里能拿到 features 里的目标语言),打分函数保持纯函数。v3 起
+	// 参与打分(译文+50/罗马音+30):同质候选间带可用增值内容者优先——这不是来源先验
+	// (那个 2026-08-09 被消融实验删掉了),是关于这份候选本身的内容事实。
+	hasUsableTranslation  bool
+	hasUsableRomanization bool
+	// sourceReportedDurationSecs:源自己声明的这首歌时长(秒),0=该源没给。2026-08-12 起
+	// 透传(qq interval/kugou duration/lrclib duration/netease duration),暂不参与打分——
+	// 它是"源报版本同一性"的干净信号(不被长尾奏带偏),先攒数据供下一轮消融评测。
+	sourceReportedDurationSecs float64
 	// title/artist/album/cover 是这个源实际匹配到的歌名/歌手/专辑/封面,给"搜索候选歌词"
 	// 弹窗展示("这个候选到底对应哪首歌/哪个版本")。不同源可能匹配到同一首歌的不同版本
 	// (不同专辑/live/合集),各自如实展示,不做跨源统一。
@@ -272,7 +283,15 @@ const lyricOvershootToleranceSecs = 5.0
 //
 // v2(2026-08-07):时长档封顶从 +1000 压到 +300(不再压过逐字时间轴的 +400);歌词结尾
 // 超出曲目时长 5 秒以上的候选直接判无效。v1 = 这个字段还不存在时写入的所有条目。
-const lyricsScoringVersion = 2
+//
+// v3(2026-08-12):四个新维度 + overshoot 独立档,全部经 201 首真实库内曲目的反事实消融
+// 坐实(联合 61 翻盘/5 纠错/0 回归/6 首手选金标签无损,评测器见 simeval_test.go):
+//   - 专辑亲和(+150/+75/+40,只加不减):跨源层终于看专辑,精选集候选不再与原专辑平权;
+//   - 跨源正文共识(+250/+150):五份歌词全文互证,替代只比末尾时间戳一个标量;
+//   - 标题吻合梯度(+120/+60/+30):精确同名不再与"剥括号才相等"平权;
+//   - 增值内容决胜(译文+50/罗马音+30,带资格闸):同质候选间带可用增值内容者优先;
+//   - overshoot 独立档(−700):歌词末句超过曲长 5s 是物理矛盾,不再吃跨源印证豁免。
+const lyricsScoringVersion = 3
 
 // scoreTerm 是打分里的一项。只带**机器可读的类型**和分值,文案交给界面本地化 ——
 // App 有中英两套界面,从这里吐中文字符串会让英文用户看到一串中文。
@@ -293,6 +312,13 @@ const (
 	scoreTermLines        = "lines"        // 行数(封顶 200)
 	scoreTermVersionTags  = "versionTags"  // 版本限定词对不上,重扣
 	scoreTermDurationOff  = "durationOff"  // 时长明显对不上,重扣(以前是直接判 -1)
+	// v3 新增(2026-08-12):
+	scoreTermDurationOvershoot = "durationOvershoot" // 歌词末句超过曲长 5s(物理矛盾),重扣
+	scoreTermAlbum             = "album"             // 候选自报专辑与本地专辑的亲和(只加不减)
+	scoreTermTitleMatch        = "titleMatch"        // 标题吻合梯度(精确/仅括号差/双语)
+	scoreTermConsensus         = "consensus"         // 跨源正文共识(与其它源的歌词内容互证)
+	scoreTermTranslation       = "translation"       // 自带可用的目标语言译文
+	scoreTermRoma              = "romanization"      // 日文形态歌词自带罗马音
 )
 
 // durationMismatchPenalty:时长明显对不上时扣多少。
@@ -322,9 +348,9 @@ const (
 
 func scoreLyricCandidate(
 	localArtist, localTitle, localAlbum string, durationSecs float64,
-	c lyricCandidate, corroborated bool,
+	c lyricCandidate, corroborated bool, consensusPeers int,
 ) int {
-	score, _ := scoreLyricCandidateDetailed(localArtist, localTitle, localAlbum, durationSecs, c, corroborated)
+	score, _ := scoreLyricCandidateDetailed(localArtist, localTitle, localAlbum, durationSecs, c, corroborated, consensusPeers)
 	return score
 }
 
@@ -332,7 +358,7 @@ func scoreLyricCandidate(
 // 分数被判 -1 时返回的那一项就是原因(Points 为 0),调用方据此告诉用户"为什么这条不能用"。
 func scoreLyricCandidateDetailed(
 	localArtist, localTitle, localAlbum string, durationSecs float64,
-	c lyricCandidate, corroborated bool,
+	c lyricCandidate, corroborated bool, consensusPeers int,
 ) (int, []scoreTerm) {
 	reject := func(kind string) (int, []scoreTerm) {
 		return -1, []scoreTerm{{Kind: kind}}
@@ -368,6 +394,12 @@ func scoreLyricCandidateDetailed(
 			// **间接代理**,而且被前奏/尾奏系统性带偏(尾奏越长,越是完整正确的歌词越
 			// "不吻合");逐字时间轴则是歌词质量的**直接**证据。
 			add(scoreTermDuration, 100+int(200*(1-ratio/durationFitTolerance)))
+		case last > durationSecs+lyricOvershootToleranceSecs:
+			// v3:overshoot 独立档。歌词末句比歌曲结束还晚 5s 以上是**物理矛盾**(那几句
+			// 在实际播放中根本到不了)——欠覆盖有"长尾奏没人转写"这个合法成因,超长没有,
+			// 它几乎总是"完整版歌词配了精简版曲目"。所以罚得比 durationOff 更重,且**不给**
+			// 跨源印证豁免:两个源一起抓到同一个错版本恰恰是印证的已知翻车形态(Valentina)。
+			add(scoreTermDurationOvershoot, -700)
 		case corroborated:
 			// 时长差超阈值,但有别的独立源印证末尾时间点。⚠️ 只有在**没有任何一条候选
 			// 时长吻合**时才可能走到这里,见 corroboratedEndings 里那段注释。
@@ -402,6 +434,41 @@ func scoreLyricCandidateDetailed(
 	// 理由见 versionTagsMismatch。
 	if versionTagsMismatch(localTitle, localAlbum, c.title, c.album) {
 		add(scoreTermVersionTags, -versionMismatchPenalty)
+	}
+	// ---- v3 新维度(2026-08-12,分值全部来自 201 首反事实消融,见 lyricsScoringVersion 注释) ----
+	// 专辑亲和:只加不减——专辑名缺失/对不上是"零证据",不是负证据(中英互译专辑名、
+	// single 发行 vs 专辑收录都是合法的"对不上");各源内部挑歌时算过的专辑锁定,在这里
+	// 终于反映到跨源排序上。复用 albumScore 的档位(normLoose 相等=200/词元子集=100/…)。
+	if strings.TrimSpace(localAlbum) != "" && strings.TrimSpace(c.album) != "" {
+		switch s := albumScore(c.album, localAlbum); {
+		case s >= 200:
+			add(scoreTermAlbum, 150)
+		case s >= 100:
+			add(scoreTermAlbum, 75)
+		case s >= 1:
+			add(scoreTermAlbum, 40)
+		}
+	}
+	// 标题吻合梯度:②层的 lyricTitleAccepted 是道布尔门,过了门"精确同名"与"剥括号后
+	// 才相等"在打分层完全平权——18 词版本表之外的限定词(sped up/TV size)全靠它区分。
+	if p := titleMatchTierPoints(c.title, localTitle); p > 0 {
+		add(scoreTermTitleMatch, p)
+	}
+	// 跨源正文共识:与其它源的歌词**内容**互证(3-gram Jaccard),比 corroboratedEndings
+	// 只比末尾时间戳一个标量强得多——串到别的歌/版本的候选不会凑巧和别的源正文一致。
+	// peers 由 contentConsensusPeers 在整批候选上统一算好传入(带防搜歪共伴的时长闸)。
+	switch {
+	case consensusPeers >= 2:
+		add(scoreTermConsensus, 250)
+	case consensusPeers == 1:
+		add(scoreTermConsensus, 150)
+	}
+	// 增值内容决胜:见 lyricCandidate.hasUsableTranslation 的注释。
+	if c.hasUsableTranslation {
+		add(scoreTermTranslation, 50)
+	}
+	if c.hasUsableRomanization {
+		add(scoreTermRoma, 30)
 	}
 	// 扣完统一夹到 1:负分会被 pickLyricCandidate 当成「不可用」直接丢弃,而这两种重扣
 	// 表达的是「差」,不是「不能用」。夹到同一个 1 意味着几条都被重扣的候选会同分,先后
@@ -890,6 +957,284 @@ func lyricTitleAccepted(candidateTitle, localTitle string) bool {
 	// ③ 双语标题(去括号后的形态上比,让「起源 Origin (Live)」这类叠加形态也能走到这里;
 	// live 之类的版本差异照旧由 versionTagsMismatch 那一层单独处理)
 	return bilingualTitleEqual(sc, sl) || bilingualTitleEqual(nc, nl)
+}
+
+// ---- v3 打分维度的支撑 helper(2026-08-12) ----
+
+// lyricConsensusBody 把一份 LRC 归一成"可跨源比对的正文":逐行去时间戳、丢署名行与
+// 空行,每行 normLoose 后拼接。给 contentConsensusPeers 的 3-gram 比对用。
+func lyricConsensusBody(lyrics string) string {
+	var b strings.Builder
+	for _, line := range strings.Split(lyrics, "\n") {
+		text := strings.TrimSpace(lrcTimestampRe.ReplaceAllString(line, ""))
+		if text == "" || isCreditLine(text) {
+			continue
+		}
+		b.WriteString(normLoose(text))
+	}
+	return b.String()
+}
+
+// lyricGram3Set 返回字符 3-gram 集合。用 3-gram 而不是行集合:对各源的行切分差异鲁棒
+// (同一句被切成一行还是两行不影响字符层面的重叠)。
+func lyricGram3Set(s string) map[string]struct{} {
+	rs := []rune(s)
+	out := make(map[string]struct{}, len(rs))
+	for i := 0; i+3 <= len(rs); i++ {
+		out[string(rs[i:i+3])] = struct{}{}
+	}
+	return out
+}
+
+func gramJaccard(a, b map[string]struct{}) float64 {
+	if len(a) == 0 || len(b) == 0 {
+		return 0
+	}
+	small, big := a, b
+	if len(small) > len(big) {
+		small, big = big, small
+	}
+	inter := 0
+	for g := range small {
+		if _, ok := big[g]; ok {
+			inter++
+		}
+	}
+	union := len(a) + len(b) - inter
+	if union == 0 {
+		return 0
+	}
+	return float64(inter) / float64(union)
+}
+
+// 跨源正文共识的参数。0.55:同一份真实歌词跨源转写(标点/空行/繁简差异)的相似度
+// 通常 >0.7,串了版本/曲目的通常 <0.3,0.55 居中带余量。30 字符下限挡"正文短到
+// 什么都能撞上"的退化比对。
+const (
+	lyricConsensusSimThreshold = 0.55
+	lyricConsensusMinBodyRunes = 30
+)
+
+// contentConsensusPeers 对整批候选统一计算"每个源的正文被几个**其它源**印证"。
+// 打分侧按 peers>=2 → +250 / ==1 → +150 给分。
+//
+// 防搜歪共伴闸(与 corroboratedEndings 同一课题、同一哲学):durationSecs>0 且批内
+// 存在时长吻合的候选时,自身时长不吻合的候选**领不到**共识分(它可以继续为别人作证,
+// 但自己不领)——QQ 和酷狗一起被同一个搜索词带到同一个错版本上时,它们的正文当然一致,
+// "一致"在这种局面下不是独立证据;而那条时长吻合的候选的存在,直接证伪了"这首歌的
+// 歌词本来就长这样"。
+//
+// 参与比对的候选先过与打分同款的基本校验(时间戳密度/语言/纯署名),正文归一后不足
+// lyricConsensusMinBodyRunes 字符的不参与(既不领分也不为别人作证)。
+func contentConsensusPeers(localArtist, localTitle string, candidates []lyricCandidate, durationSecs float64) map[string]int {
+	if len(candidates) < 2 {
+		return map[string]int{} // 一条候选无从互证,省掉整批 3-gram 构建
+	}
+	type member struct {
+		source  string
+		grams   map[string]struct{}
+		last    float64
+		hasLast bool
+	}
+	members := make([]member, 0, len(candidates))
+	// anyFits 在**全量**候选上统计,跟 corroboratedEndings 保持同一口径:一条"时长吻合
+	// 但会被打分 reject"的候选,照样证伪了"这首歌的歌词本来就早早结束",两套互证机制
+	// 不该对同一批输入一个开闸一个关闸(2026-08-12 审阅)。
+	anyFits := false
+	for _, c := range candidates {
+		if durationSecs > 0 {
+			if last, ok := lastLRCTimestampSecs(c.lyrics); ok && durationFits(last, durationSecs) {
+				anyFits = true
+			}
+		}
+	}
+	for _, c := range candidates {
+		if !isTimedLRC(c.lyrics) ||
+			isProbablyWrongLanguageLyrics(localArtist, localTitle, c.lyrics) ||
+			isCreditOnlyLRC(c.lyrics) {
+			continue
+		}
+		last, hasLast := lastLRCTimestampSecs(c.lyrics)
+		var grams map[string]struct{}
+		if body := lyricConsensusBody(c.lyrics); len([]rune(body)) >= lyricConsensusMinBodyRunes {
+			grams = lyricGram3Set(body)
+		}
+		members = append(members, member{c.source, grams, last, hasLast})
+	}
+	peers := map[string]int{}
+	for i := range members {
+		if members[i].grams == nil {
+			continue
+		}
+		n := 0
+		for j := range members {
+			if i == j || members[j].source == members[i].source || members[j].grams == nil {
+				continue
+			}
+			if gramJaccard(members[i].grams, members[j].grams) >= lyricConsensusSimThreshold {
+				n++
+			}
+		}
+		peers[members[i].source] = n
+	}
+	if durationSecs > 0 {
+		for i := range members {
+			if !members[i].hasLast {
+				continue
+			}
+			fits := durationFits(members[i].last, durationSecs)
+			// ① 批内有人时长吻合时,自身不吻合的候选领不到共识分(防搜歪共伴,见上面注释)。
+			// ② overshoot 的候选**任何情况下**都领不到:v3 认定"歌词比歌曲还长"是物理
+			//    矛盾,那一档刻意不吃跨源印证豁免(见 scoreTermDurationOvershoot 处的注释);
+			//    而两个源被同一个搜索词一起带到同一个错的完整版时,恰恰是全员 overshoot、
+			//    没人 fits、①闸不触发的局面——正是印证机制该收手的地方(2026-08-12 审阅)。
+			if (anyFits && !fits) || members[i].last > durationSecs+lyricOvershootToleranceSecs {
+				peers[members[i].source] = 0
+			}
+		}
+	}
+	return peers
+}
+
+// titleMatchTierPoints 把标题吻合从布尔门升级成梯度分:精确同名 +120 > 仅括号差异 +60
+// > 中英双语同名 +30 > 对不上 0(0 不是惩罚——"验的标题≠取的歌词"的标的漂移形态未在
+// 样本坐实前,负档是死代码兼潜在误伤源,见 2026-08-12 评测目录的裁剪记录)。
+// 括号里没有版本词(纯噪音括号,如 feat. 名单)时升回精确档——只看**括号段**,不能用
+// titleVersionTags(它连 dash 尾段一起抽,两侧 dash 尾段带相同版本词时会把本该精确的
+// 压在括号档)。
+func titleMatchTierPoints(candidateTitle, localTitle string) int {
+	nct, nlt := normLoose(candidateTitle), normLoose(localTitle)
+	if nct == "" || nlt == "" {
+		return 0
+	}
+	if nct == nlt {
+		return 120
+	}
+	sc, sl := normLoose(stripParens(candidateTitle)), normLoose(stripParens(localTitle))
+	if sc != "" && sl != "" && sc == sl {
+		if len(parenOnlyVersionTags(candidateTitle)) == 0 && len(parenOnlyVersionTags(localTitle)) == 0 {
+			return 120
+		}
+		return 60
+	}
+	if bilingualTitleEqual(sc, sl) || bilingualTitleEqual(nct, nlt) {
+		return 30
+	}
+	return 0
+}
+
+// parenOnlyVersionTags 只从括号段抽版本限定词(不含 titleVersionTags 的 dash 尾段扩展),
+// 语义区别见 titleMatchTierPoints 注释。
+func parenOnlyVersionTags(title string) map[string]bool {
+	out := map[string]bool{}
+	for _, seg := range parentheticalSegments(title) {
+		for tag := range segmentVersionTags(seg) {
+			out[tag] = true
+		}
+	}
+	return out
+}
+
+// segmentVersionTags 在一个段落里找版本限定词,按**词**匹配而不是子串匹配。
+//
+// 子串匹配在这里是实打实的坑:normLoose 会把空格标点全挤掉,"feat. Oliver Tree" 变成
+// "featolivertree" —— 里面凭空出现 "live";"feat. Demons" → "featdemons" 命中 "demo"
+// (2026-08-12 审阅实测)。而 feat. 名单恰恰是 titleMatchTierPoints 最该判成"纯噪音括号、
+// 升回精确档"的形态,子串匹配把这个升档逻辑对着它自己的主场用例关掉了。
+// distinctRecordingVersionTags 全部是纯拉丁词,按非字母数字切词后比对连续词序列即可。
+//
+// ⚠️ 只给这个 v3 新 helper 用。titleVersionTags(versionTagsMismatch 那条 −600 的存量路径)
+// 保持原样:它的行为已被 201 首反事实评测背书,改它等于动一个没评测过的维度。
+func segmentVersionTags(seg string) map[string]bool {
+	toks := strings.FieldsFunc(strings.ToLower(seg), func(r rune) bool {
+		return !unicode.IsLetter(r) && !unicode.IsDigit(r)
+	})
+	out := map[string]bool{}
+	for _, tag := range distinctRecordingVersionTags {
+		tagToks := strings.Fields(tag)
+		for i := 0; i+len(tagToks) <= len(toks); i++ {
+			match := true
+			for j, tt := range tagToks {
+				if toks[i+j] != tt {
+					match = false
+					break
+				}
+			}
+			if match {
+				out[tag] = true
+				break
+			}
+		}
+	}
+	return out
+}
+
+// timedNonEmptyLRCLines:带时间戳且去戳后非空的行数(译文覆盖率判定用)。
+func timedNonEmptyLRCLines(lrc string) int {
+	n := 0
+	for _, line := range strings.Split(lrc, "\n") {
+		if !lrcTimestampRe.MatchString(line) {
+			continue
+		}
+		if strings.TrimSpace(lrcTimestampRe.ReplaceAllString(line, "")) != "" {
+			n++
+		}
+	}
+	return n
+}
+
+// kanaRatio:去戳正文中平/片假名字符占非空白字符的比例。判"这首歌是日文形态"用
+// (罗马音只对日文歌词有增值)。
+func kanaRatio(s string) float64 {
+	stripped := lrcTimestampRe.ReplaceAllString(s, "")
+	total, kana := 0, 0
+	for _, r := range stripped {
+		if unicode.IsSpace(r) {
+			continue
+		}
+		total++
+		if (r >= 0x3041 && r <= 0x309F) || (r >= 0x30A0 && r <= 0x30FF) {
+			kana++
+		}
+	}
+	if total == 0 {
+		return 0
+	}
+	return float64(kana) / float64(total)
+}
+
+// usableValueAdd 判一份候选的增值内容是否**可用**(可用才配 +50/+30,防"有就加分"变成
+// 来源先验借尸还魂):
+//   - 译文:语言前缀匹配目标语言(zh 匹配 zh-hans)、本身是带时间戳的逐行 LRC、行数
+//     覆盖原文过半(机翻兜底/残缺译文不算);目标语言是中文时,原文本身就是中文的歌
+//     不需要中文译文(cjkRatio>0.5 不给分)。
+//   - 罗马音:本身带时间轴,且原文歌词是日文形态(kanaRatio>0.05)——给英文歌配的
+//     "罗马音"没有增值。
+func usableValueAdd(lyrics, tr, trLang, roma, targetLang string) (usableTr, usableRoma bool) {
+	// 语言比对只看主语言子标签(zh-hans / zh-Hant / zh 视为同一种):网易云的社区译文
+	// 固定记 "zh",用户的目标语言却可能配成 "zh-hans",单向 HasPrefix 会把它判成语言
+	// 不符、白白丢掉这条决胜分(2026-08-12 审阅)。
+	baseLang := func(s string) string {
+		if i := strings.IndexAny(s, "-_"); i >= 0 {
+			s = s[:i]
+		}
+		return strings.ToLower(strings.TrimSpace(s))
+	}
+	// "原文已经是中文,不需要中文译文" 这道闸要排除日文:cjkRatio 只数汉字,而日文汉字
+	// 同属 Han,汉字密集的日文歌(文语/演歌)会被误判成中文原文,恰恰丢掉这个维度最有
+	// 价值的场景(日文歌 + 网易云中文对照)。用假名占比把日文形态摘出来(2026-08-12 审阅)。
+	looksChineseOriginal := cjkRatio(lyrics) > 0.5 && kanaRatio(lyrics) <= 0.05
+	if tr != "" && targetLang != "" &&
+		baseLang(trLang) != "" && baseLang(trLang) == baseLang(targetLang) &&
+		isTimedLRC(tr) &&
+		2*timedNonEmptyLRCLines(tr) >= timedNonEmptyLRCLines(lyrics) &&
+		!(baseLang(targetLang) == "zh" && looksChineseOriginal) {
+		usableTr = true
+	}
+	if roma != "" && isTimedLRC(roma) && kanaRatio(lyrics) > 0.05 {
+		usableRoma = true
+	}
+	return
 }
 
 // bilingualTitleEqual 判两个 normLoose 之后的标题是不是「同名的中英双语写法」:

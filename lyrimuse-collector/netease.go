@@ -17,6 +17,9 @@ import (
 
 type neteaseInfo struct {
 	Cover, SongURL, Lyrics, Trans, Roma, YRC string
+	// DurationSecs:网易云曲库里这首歌自报的时长(秒),0=没拿到。2026-08-12 起透传给
+	// 候选(sourceReportedDurationSecs),不参与打分,先攒评测数据。
+	DurationSecs float64
 	// Artist 是网易云曲库里这首歌的官方歌手名(单一歌手才填,合唱/多歌手曲目留空——
 	// 避免把本地"歌手A & 歌手B"的联合署名压缩成只剩其中一个)。用于统一同一歌手在历史
 	// 记录里时而中文时而英文、时而全大写的写法(如 PRINCE/Prince、David Tao/陶喆)。
@@ -189,6 +192,8 @@ func resolveNeteaseInfo(artist, title, album string) neteaseInfo {
 		Album struct {
 			Name string `json:"name"`
 		} `json:"album"`
+		// Duration:搜索结果自带的曲长(毫秒)。透传给候选,不参与本文件内的任何挑选逻辑。
+		Duration float64 `json:"duration"`
 	}
 	// 选谁的封面/链接:同名歌里混着别歌手的翻唱/演奏/卡拉OK/同名他人歌。优先级:
 	// ①歌名+歌手都匹配、且专辑分最高(专辑名 loose 相等=100 直接锁定正确专辑版本);
@@ -343,9 +348,10 @@ func resolveNeteaseInfo(artist, title, album string) neteaseInfo {
 	}
 	id := chosen.ID
 	info := neteaseInfo{
-		SongURL: fmt.Sprintf("https://music.163.com/song?id=%d", id),
-		Title:   chosen.Name,
-		Album:   chosen.Album.Name,
+		SongURL:      fmt.Sprintf("https://music.163.com/song?id=%d", id),
+		Title:        chosen.Name,
+		Album:        chosen.Album.Name,
+		DurationSecs: chosen.Duration / 1000,
 	}
 	// 只有本地(Apple Music)标签本身就是单一人名(没有 &/、/, 等分隔符)时,才尝试用
 	// NetEase 这条数据统一拼写:pick() 选中候选已经证明其中恰好一位通过 artistMatches 核实

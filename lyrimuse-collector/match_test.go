@@ -75,7 +75,7 @@ func TestScoreLyricCandidateRejectsCreditOnlyLyrics(t *testing.T) {
 		"[00:07.00]大提琴: 辛\n" +
 		"[04:35.19]母带工程师: 壬"
 	c := lyricCandidate{source: "netease", lyrics: fakeCreditLRC}
-	if got := scoreLyricCandidate("Someone", "Instrumental Track", "", 275.19, c, false); got != -1 {
+	if got := scoreLyricCandidate("Someone", "Instrumental Track", "", 275.19, c, false, 0); got != -1 {
 		t.Errorf("scoreLyricCandidate() = %d, want -1 (credit-only lyrics must be rejected)", got)
 	}
 }
@@ -216,8 +216,8 @@ func TestScoreLyricCandidatePenalizesWrongVersion(t *testing.T) {
 	bad := base
 	bad.title = "Blue Gangsta (Original Version)"
 
-	gs := scoreLyricCandidate("Michael Jackson", "Blue Gangsta", "", 9, good, false)
-	bs := scoreLyricCandidate("Michael Jackson", "Blue Gangsta", "", 9, bad, false)
+	gs := scoreLyricCandidate("Michael Jackson", "Blue Gangsta", "", 9, good, false, 0)
+	bs := scoreLyricCandidate("Michael Jackson", "Blue Gangsta", "", 9, bad, false, 0)
 	if gs <= bs {
 		t.Errorf("标题吻合的候选(%d)必须高于版本对不上的候选(%d)", gs, bs)
 	}
@@ -287,7 +287,7 @@ func TestScoringAfter20260809Review(t *testing.T) {
 		var scores []int
 		for _, src := range []string{"netease", "qq", "kugou", "musixmatch", "lrclib"} {
 			s, terms := scoreLyricCandidateDetailed(
-				"someone", "song", "", dur, lyricCandidate{source: src, lyrics: good}, false)
+				"someone", "song", "", dur, lyricCandidate{source: src, lyrics: good}, false, 0)
 			scores = append(scores, s)
 			for _, term := range terms {
 				if term.Kind == scoreTermSource {
@@ -307,7 +307,7 @@ func TestScoringAfter20260809Review(t *testing.T) {
 		// 末尾时间戳 60s,曲长 200s —— 差 70%,远超 25% 阈值
 		off := "[00:00.00]a\n[00:30.00]b\n[01:00.00]c"
 		score, terms := scoreLyricCandidateDetailed(
-			"someone", "song", "", dur, lyricCandidate{source: "qq", lyrics: off}, false)
+			"someone", "song", "", dur, lyricCandidate{source: "qq", lyrics: off}, false, 0)
 		if score < 0 {
 			t.Fatalf("时长不符不该再判 -1(会被整条丢弃),实际 %d", score)
 		}
@@ -325,7 +325,7 @@ func TestScoringAfter20260809Review(t *testing.T) {
 		}
 		// 关键性质:再怎么样也得输给一条时长对得上的
 		ok, _ := scoreLyricCandidateDetailed(
-			"someone", "song", "", dur, lyricCandidate{source: "lrclib", lyrics: good}, false)
+			"someone", "song", "", dur, lyricCandidate{source: "lrclib", lyrics: good}, false, 0)
 		if score >= ok {
 			t.Errorf("时长不符的候选(%d)不该压过时长吻合的(%d)", score, ok)
 		}
@@ -334,7 +334,7 @@ func TestScoringAfter20260809Review(t *testing.T) {
 	t.Run("硬拒绝只留真的不能用的那几种", func(t *testing.T) {
 		// 没有时间戳的纯文本仍然一票否决
 		if s, _ := scoreLyricCandidateDetailed(
-			"someone", "song", "", dur, lyricCandidate{source: "qq", lyrics: "just words\nno timestamps"}, false); s != -1 {
+			"someone", "song", "", dur, lyricCandidate{source: "qq", lyrics: "just words\nno timestamps"}, false, 0); s != -1 {
 			t.Errorf("没有时间戳的歌词仍应判 -1,实际 %d", s)
 		}
 	})
@@ -475,8 +475,8 @@ func TestCorroborationYieldsToAWellFittingCandidate(t *testing.T) {
 	if len(corr) != 0 {
 		t.Errorf("有候选时长吻合时不该再发印证豁免, got %v", corr)
 	}
-	qqScore, qqTerms := scoreLyricCandidateDetailed("Daniel Caesar", "Valentina", "", dur, shortA, corr[shortA.source])
-	lrcScore, _ := scoreLyricCandidateDetailed("Daniel Caesar", "Valentina", "", dur, fits, corr[fits.source])
+	qqScore, qqTerms := scoreLyricCandidateDetailed("Daniel Caesar", "Valentina", "", dur, shortA, corr[shortA.source], 0)
+	lrcScore, _ := scoreLyricCandidateDetailed("Daniel Caesar", "Valentina", "", dur, fits, corr[fits.source], 0)
 	for _, term := range qqTerms {
 		if term.Kind == scoreTermCorroborated {
 			t.Error("抓错版本的候选不该再拿到 corroborated 加分")
@@ -491,7 +491,7 @@ func TestCorroborationYieldsToAWellFittingCandidate(t *testing.T) {
 	if !corr2[shortA.source] || !corr2[shortB.source] {
 		t.Errorf("所有源都提前结束时,印证豁免必须保留(长尾奏的歌全靠它), got %v", corr2)
 	}
-	if _, terms := scoreLyricCandidateDetailed("Daniel Caesar", "Valentina", "", dur, shortA, corr2[shortA.source]); !hasTerm(terms, scoreTermCorroborated) {
+	if _, terms := scoreLyricCandidateDetailed("Daniel Caesar", "Valentina", "", dur, shortA, corr2[shortA.source], 0); !hasTerm(terms, scoreTermCorroborated) {
 		t.Error("这一档该走 corroborated 加分")
 	}
 
@@ -508,4 +508,228 @@ func hasTerm(terms []scoreTerm, kind string) bool {
 		}
 	}
 	return false
+}
+
+// ---- v3 维度(2026-08-12)的单测。分值背书见 lyricsScoringVersion 注释的消融数据 ----
+
+func TestTitleMatchTierPoints(t *testing.T) {
+	cases := []struct {
+		name        string
+		cand, local string
+		want        int
+	}{
+		{"精确同名", "月食", "月食", 120},
+		{"大小写与空白不敏感", "Blue  Gangsta", "blue gangsta", 120},
+		{"feat 噪音括号升回精确档", "Song (feat. Rick Ross)", "Song", 120},
+		{"版本括号只到括号档", "Song (Live)", "Song", 60},
+		{"中英双语同名", "起源 Origin", "起源", 30},
+		{"完全不同的歌名", "Another Tune", "Song", 0},
+		{"候选没报标题", "", "Song", 0},
+	}
+	for _, c := range cases {
+		if got := titleMatchTierPoints(c.cand, c.local); got != c.want {
+			t.Errorf("%s: titleMatchTierPoints(%q, %q) = %d, want %d", c.name, c.cand, c.local, got, c.want)
+		}
+	}
+}
+
+func TestAlbumAffinityTerm(t *testing.T) {
+	lyr := "[00:10.00]first real line here\n[00:20.00]second real line here\n[00:30.00]third real line here"
+	find := func(terms []scoreTerm, kind string) int {
+		for _, tm := range terms {
+			if tm.Kind == kind {
+				return tm.Points
+			}
+		}
+		return 0
+	}
+	// 专辑 loose 相等 → albumScore=200 档 → +150
+	_, terms := scoreLyricCandidateDetailed("someone", "song", "实况电影", 0,
+		lyricCandidate{source: "qq", lyrics: lyr, album: "实况电影"}, false, 0)
+	if got := find(terms, scoreTermAlbum); got != 150 {
+		t.Errorf("专辑完全一致应 +150,实际 %+d", got)
+	}
+	// 候选没报专辑 → 零证据,不加不减
+	_, terms = scoreLyricCandidateDetailed("someone", "song", "实况电影", 0,
+		lyricCandidate{source: "qq", lyrics: lyr}, false, 0)
+	if got := find(terms, scoreTermAlbum); got != 0 {
+		t.Errorf("候选专辑缺失应是零证据(0),实际 %+d", got)
+	}
+	// 专辑对不上 → 只加不减:不能出现负的 album 项
+	_, terms = scoreLyricCandidateDetailed("someone", "song", "实况电影", 0,
+		lyricCandidate{source: "qq", lyrics: lyr, album: "Totally Different"}, false, 0)
+	if got := find(terms, scoreTermAlbum); got < 0 {
+		t.Errorf("专辑亲和是 bonus-only,不该扣分,实际 %+d", got)
+	}
+}
+
+func TestContentConsensusPeers(t *testing.T) {
+	same := "[00:01.00]this is the same lyric line one\n[00:05.00]and the very same line two here\n[00:09.00]closing line of the song text"
+	diff := "[00:01.00]completely different words entirely\n[00:05.00]nothing shared with the others\n[00:09.00]another unrelated closing line"
+	cands := []lyricCandidate{
+		{source: "netease", lyrics: same},
+		{source: "qq", lyrics: same},
+		{source: "kugou", lyrics: diff},
+	}
+	peers := contentConsensusPeers("someone", "song", cands, 0)
+	if peers["netease"] != 1 || peers["qq"] != 1 {
+		t.Errorf("内容一致的两源应互为 peer(各 1),实际 netease=%d qq=%d", peers["netease"], peers["qq"])
+	}
+	if peers["kugou"] != 0 {
+		t.Errorf("内容孤立的源 peers 应为 0,实际 %d", peers["kugou"])
+	}
+	// 防搜歪共伴闸:批内存在时长吻合的候选时,自身时长不吻合的候选领不到共识分。
+	// same 末句 9s,diffFits 末句 98s 吻合 100s 曲长 → netease/qq 的 peer 数被闸成 0。
+	diffFits := "[00:01.00]completely different words entirely\n[00:50.00]nothing shared with the others\n[01:38.00]another unrelated closing line"
+	cands2 := []lyricCandidate{
+		{source: "netease", lyrics: same},
+		{source: "qq", lyrics: same},
+		{source: "lrclib", lyrics: diffFits},
+	}
+	peers2 := contentConsensusPeers("someone", "song", cands2, 100)
+	if peers2["netease"] != 0 || peers2["qq"] != 0 {
+		t.Errorf("存在时长吻合候选时,时长不吻合的候选不该领共识分,实际 netease=%d qq=%d", peers2["netease"], peers2["qq"])
+	}
+	// 打分侧:peers>=2 → +250,peers==1 → +150
+	lyr := "[00:10.00]first real line here\n[00:20.00]second real line here\n[00:30.00]third real line here"
+	s2, _ := scoreLyricCandidateDetailed("someone", "song", "", 0, lyricCandidate{source: "qq", lyrics: lyr}, false, 2)
+	s1, _ := scoreLyricCandidateDetailed("someone", "song", "", 0, lyricCandidate{source: "qq", lyrics: lyr}, false, 1)
+	s0, _ := scoreLyricCandidateDetailed("someone", "song", "", 0, lyricCandidate{source: "qq", lyrics: lyr}, false, 0)
+	if s2-s0 != 250 || s1-s0 != 150 {
+		t.Errorf("共识分档位不对: peers2-peers0=%d(want 250), peers1-peers0=%d(want 150)", s2-s0, s1-s0)
+	}
+}
+
+func TestUsableValueAdd(t *testing.T) {
+	main := "[00:01.00]la la la one\n[00:02.00]lo lo lo two\n[00:03.00]le le le three\n[00:04.00]li li li four"
+	trFull := "[00:01.00]中文一\n[00:02.00]中文二\n[00:03.00]中文三\n[00:04.00]中文四"
+	trSparse := "[00:01.00]中文一\n[00:02.00]中文二\nx\ny\nz\nw"
+	kanaMain := "[00:01.00]ひかりのなか one\n[00:02.00]こころのうた two\n[00:03.00]そらとうみが three"
+	roma := "[00:01.00]hikari no naka\n[00:02.00]kokoro no uta\n[00:03.00]sora to umi ga"
+
+	if tr, _ := usableValueAdd(main, trFull, "zh", "", "zh"); !tr {
+		t.Error("覆盖全的中文译文配英文原文应判可用")
+	}
+	if tr, _ := usableValueAdd(main, trFull, "zh", "", "en"); tr {
+		t.Error("目标语言 en 时中文译文不该判可用")
+	}
+	if tr, _ := usableValueAdd(main, trSparse, "zh", "", "zh"); tr {
+		t.Error("覆盖不过半的译文不该判可用")
+	}
+	if tr, _ := usableValueAdd(trFull, trFull, "zh", "", "zh"); tr {
+		t.Error("原文本身是中文(cjk>0.5)时不需要中文译文,不该加分")
+	}
+	if _, rm := usableValueAdd(kanaMain, "", "", roma, "zh"); !rm {
+		t.Error("日文形态歌词配带时间轴罗马音应判可用")
+	}
+	if _, rm := usableValueAdd(main, "", "", roma, "zh"); rm {
+		t.Error("非日文歌词的\"罗马音\"没有增值,不该判可用")
+	}
+}
+
+func TestOvershootPenalty(t *testing.T) {
+	dur := 100.0
+	// 末句 115s > 100+5:物理矛盾
+	over := "[00:01.00]aaa bbb ccc\n[01:50.00]ddd eee fff\n[01:55.00]ggg hhh iii"
+	find := func(terms []scoreTerm, kind string) (int, bool) {
+		for _, tm := range terms {
+			if tm.Kind == kind {
+				return tm.Points, true
+			}
+		}
+		return 0, false
+	}
+	// 关键性质:即便 corroborated=true(别的源在同一点结束)也不豁免——两个源一起
+	// 抓到同一个错版本正是印证机制的已知翻车形态。
+	_, terms := scoreLyricCandidateDetailed("someone", "song", "", dur,
+		lyricCandidate{source: "qq", lyrics: over}, true, 0)
+	if p, ok := find(terms, scoreTermDurationOvershoot); !ok || p != -700 {
+		t.Errorf("overshoot 应记独立项 -700,实际 %+d (present=%v)", p, ok)
+	}
+	if _, ok := find(terms, scoreTermCorroborated); ok {
+		t.Error("overshoot 候选不该再拿到印证豁免那一项")
+	}
+}
+
+// ---- 2026-08-12 审阅修复的回归断言 ----
+
+func TestParenVersionTagsWordBoundary(t *testing.T) {
+	// feat. 名单里的人名不该被当成版本词:normLoose 挤掉空格后 "featolivertree" 含
+	// "live"、"featdemons" 含 "demo",子串匹配会把这类纯噪音括号错判成版本括号。
+	for _, title := range []string{"Song (feat. Oliver Tree)", "Song (feat. Demons)", "Song (with Akon)"} {
+		if tags := parenOnlyVersionTags(title); len(tags) != 0 {
+			t.Errorf("%q 的括号是纯噪音,不该抽出版本词,实际 %v", title, tags)
+		}
+		if got := titleMatchTierPoints("Song", title); got != 120 {
+			t.Errorf("%q 对裸标题候选应升回精确档 120,实际 %d", title, got)
+		}
+	}
+	// 真的版本括号照旧要认出来
+	for _, title := range []string{"Song (Live)", "Song (Acoustic Version)", "Song (Radio Edit)"} {
+		if tags := parenOnlyVersionTags(title); len(tags) == 0 {
+			t.Errorf("%q 的括号是真版本词,应该抽出来", title)
+		}
+	}
+}
+
+func TestUsableTranslationLanguageAndJapanese(t *testing.T) {
+	main := "[00:01.00]one two three\n[00:02.00]four five six\n[00:03.00]seven eight nine\n[00:04.00]ten eleven twelve"
+	trZh := "[00:01.00]中文一\n[00:02.00]中文二\n[00:03.00]中文三\n[00:04.00]中文四"
+	// zh 译文 vs zh-hans 目标:主语言子标签相同就该判可用
+	if tr, _ := usableValueAdd(main, trZh, "zh", "", "zh-hans"); !tr {
+		t.Error("trLang=zh 与 targetLang=zh-hans 是同一种语言,应判可用")
+	}
+	// 汉字密集的日文原文 + 中文译文:不该被"原文已是中文"那道闸误杀
+	jaMain := "[00:01.00]桜流し 春の空\n[00:02.00]記憶の海 深く沈む\n[00:03.00]永遠の夢 見果てぬまま\n[00:04.00]君の声 遠く響く"
+	if cjkRatio(jaMain) <= 0.5 {
+		t.Skipf("测试样本汉字占比 %.2f 未达 0.5,构造不出该场景", cjkRatio(jaMain))
+	}
+	if tr, _ := usableValueAdd(jaMain, trZh, "zh", "", "zh"); !tr {
+		t.Error("汉字密集的日文原文配中文译文应判可用(kana 占比已排除中文原文)")
+	}
+	// 纯中文原文仍然不需要中文译文
+	if tr, _ := usableValueAdd(trZh, trZh, "zh", "", "zh"); tr {
+		t.Error("纯中文原文不需要中文译文,不该加分")
+	}
+}
+
+func TestConsensusDeniedToOvershoot(t *testing.T) {
+	// 两个源被同一个搜索词一起带到同一个错的完整版:内容一致、双双超出曲长、
+	// 没有任何候选时长吻合 —— 正是 anyFits 闸盖不住、必须靠 overshoot 规则收手的局面。
+	long := "[00:01.00]same wrong version line one\n[01:30.00]same wrong version line two\n[02:30.00]same wrong version line three"
+	cands := []lyricCandidate{
+		{source: "qq", lyrics: long},
+		{source: "kugou", lyrics: long},
+	}
+	peers := contentConsensusPeers("someone", "song", cands, 100) // 曲长 100s,末句 150s
+	if peers["qq"] != 0 || peers["kugou"] != 0 {
+		t.Errorf("overshoot 候选不该领跨源共识分,实际 qq=%d kugou=%d", peers["qq"], peers["kugou"])
+	}
+}
+
+func TestLyricsUpgradeBaselineAcrossScoringVersions(t *testing.T) {
+	const oldLyrics = "[00:01.00]stored line one\n[00:02.00]stored line two\n[00:03.00]stored line three"
+	e := enrichEntry{
+		Lyrics:               oldLyrics,
+		LyricsSource:         "kugou",
+		LyricsScore:          549, // 按 v2 规则算出来的分
+		LyricsScoringVersion: 2,
+	}
+	scored := []scoredLyricCandidateResult{
+		{Source: "netease", Lyrics: "[00:01.00]other", Score: 700},
+		{Source: "kugou", Lyrics: oldLyrics, Score: 880}, // 同一份歌词在当前规则下的分
+	}
+	// 版本落后:基准必须换成"同一份歌词在这一轮的分",不能拿 v2 的 549 去比 v3 的分
+	if base, ok := lyricsUpgradeBaseline(e, scored); !ok || base != 880 {
+		t.Errorf("跨版本应改用同一份歌词的本轮分 880 作基准,实际 base=%d ok=%v", base, ok)
+	}
+	// 版本落后且现存歌词这轮没出现 → 不可比,这一轮不该换
+	if _, ok := lyricsUpgradeBaseline(e, scored[:1]); ok {
+		t.Error("现存歌词不在本轮候选里时应判为不可比,交给 rescore 收编")
+	}
+	// 版本一致:照旧用存量分
+	e.LyricsScoringVersion = lyricsScoringVersion
+	if base, ok := lyricsUpgradeBaseline(e, scored); !ok || base != 549 {
+		t.Errorf("同版本应直接用存量分 549,实际 base=%d ok=%v", base, ok)
+	}
 }

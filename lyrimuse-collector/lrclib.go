@@ -29,7 +29,9 @@ import (
 // 一路传到 enrichEntry.Instrumental。
 type lrclibResult struct {
 	lyrics, title, artist, album string
-	instrumental                 bool
+	// durationSecs:LRCLIB 自报的这首歌时长(秒),0=没给。透传用,见 lyricCandidate 同名字段。
+	durationSecs float64
+	instrumental bool
 }
 
 var (
@@ -130,7 +132,7 @@ func lrclibGet(artist, title, album string, timeout time.Duration) lrclibResult 
 	if !isTimedLRC(out.SyncedLyrics) {
 		return lrclibResult{}
 	}
-	return lrclibResult{lyrics: out.SyncedLyrics, title: out.TrackName, artist: out.ArtistName, album: out.AlbumName}
+	return lrclibResult{lyrics: out.SyncedLyrics, durationSecs: out.Duration, title: out.TrackName, artist: out.ArtistName, album: out.AlbumName}
 }
 
 // lrclibSearchItem 同时用于 /api/get 的单条响应和 /api/search 的数组元素——两个端点
@@ -189,7 +191,7 @@ func lrclibSearch(artist, title, album string, durationSecs float64, timeout tim
 	if best == nil {
 		return lrclibResult{}
 	}
-	return lrclibResult{lyrics: best.SyncedLyrics, title: best.TrackName, artist: best.ArtistName, album: best.AlbumName}
+	return lrclibResult{lyrics: best.SyncedLyrics, durationSecs: best.Duration, title: best.TrackName, artist: best.ArtistName, album: best.AlbumName}
 }
 
 // 曲名判定统一走 match.go 的 lyricTitleAccepted。

@@ -670,6 +670,17 @@ var (
 // qqSongAlbum/qqSongCoverAndSinger 已经在用的同一个单曲详情接口
 // (fcg_play_single_song.fcg),按 mid 单独缓存(这两个现有函数各自只取自己关心的
 // 字段,没有把 id 传出来)。
+// qqSongMetaCachedOnly 只读缓存、绝不发请求:给"有就带上、没有就算了"的纯透传字段用,
+// 不能让它把歌词主路径拖慢(见 enrich.go 里 qqDur 的调用点)。
+func qqSongMetaCachedOnly(mid string) qqSongMeta {
+	if mid == "" {
+		return qqSongMeta{}
+	}
+	qqSongMetaMu.Lock()
+	defer qqSongMetaMu.Unlock()
+	return qqSongMetaCache[mid]
+}
+
 func qqSongMetaByMid(mid string) qqSongMeta {
 	if mid == "" {
 		return qqSongMeta{}

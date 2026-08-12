@@ -65,6 +65,7 @@ func runSearchLyricsCLI(args []string) {
 	// 指望那边的修复覆盖到这里。
 	sArtist, sTitle, sAlbum := toSimplified(*artist), toSimplified(*title), toSimplified(*album)
 	enc := json.NewEncoder(os.Stdout)
+	var appleTitle, appleAlbum string
 	emit := func(_ neteaseInfo, results []scoredLyricCandidateResult, done, total int) {
 		// networkLooksDown() 2026-08-02 补上——之前每行 stdout 只是候选数组本身,五个源
 		// 都没查到时 desktop-lyrics 只能显示一句笼统的"都没找到",分不清是这首歌真的没有
@@ -75,12 +76,25 @@ func runSearchLyricsCLI(args []string) {
 			NetworkLooksDown: networkLooksDown(),
 			SourcesDone:      done,
 			SourcesTotal:     total,
+			AppleTitle:       appleTitle,
+			AppleAlbum:       appleAlbum,
+		}
+		for _, r := range results {
+			if r.Instrumental {
+				update.LrclibInstrumental = true
+			}
 		}
 		if err := enc.Encode(update); err != nil {
 			log.Fatalf("search-lyrics: encode results: %v", err)
 		}
 	}
 	_, results := scoredLyricCandidatesStreaming(sArtist, sTitle, sAlbum, *duration, emit)
+	// 苹果侧元数据:搜索里的 applecover goroutine 用同一组关键词查过、通常已写热
+	// appleURLCache(同 key)。这里**只读缓存**——查无此歌时它不写缓存,真去查会在
+	// "这轮搜索结束了"那行之前同步重跑一整轮 CN+US 搜索,把收尾挂住几秒(2026-08-12 审阅);
+	// 这两个字段是给下一轮评测攒的数据,缺一次无妨,不值得让用户等。
+	appleMatch := appleMusicMatchCachedOnly(sArtist, sTitle, sAlbum)
+	appleTitle, appleAlbum = appleMatch.title, appleMatch.album
 	// 保底再打印一次最终结果——通常这跟 emit 在最后一个源到达时已经打过的那一行内容
 	// 完全一样(纯防御性的重复),唯一真正需要它的场景是:20 秒兜底超时在第一个源都还
 	// 没回来时就已经触发(五个源全部异常缓慢),这种极端情况下循环里的 emit 一次都没
@@ -101,6 +115,14 @@ type searchLyricsUpdate struct {
 	// 歌词源的完成进度,给弹窗显示 (X/Y)——语义见 lyricSearchUpdateFunc 的注释。
 	SourcesDone  int `json:"sourcesDone"`
 	SourcesTotal int `json:"sourcesTotal"`
+	// 2026-08-12 起的透传字段,给下一轮打分维度评测攒数据(Swift 端不认识就忽略,无影响):
+	// AppleTitle/AppleAlbum:iTunes(第六方,不与五歌词源共享曲库)匹配到的歌名/专辑名,
+	// 只在最终那行输出上带(拿的是搜索过程中 applecover goroutine 已写热的同 key 缓存,
+	// 不多打网络);LrclibInstrumental:lrclib 明确说这首歌是纯音乐(独立字段,不再只靠
+	// Score:-1 哨兵行传递,消费端能与普通 reject 可靠区分)。
+	AppleTitle         string `json:"appleTitle,omitempty"`
+	AppleAlbum         string `json:"appleAlbum,omitempty"`
+	LrclibInstrumental bool   `json:"lrclibInstrumental,omitempty"`
 }
 
 // filterEnabledLyricSources drops candidates from sources the user disabled via

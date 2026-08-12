@@ -28,6 +28,10 @@ var (
 // 单独多发一轮请求。
 type appleMusicMatch struct {
 	url, cover string
+	// title/album:iTunes 曲库里实际匹配到的歌名/专辑名。2026-08-12 起透传——它是不与
+	// 五个歌词源共享曲库和搜歪模式的**第六方**元数据,给下一轮"独立专辑互证"维度评测
+	// 攒数据(search-lyrics CLI 的输出会带上),不参与本文件内的任何挑选逻辑。
+	title, album string
 }
 
 // hiResArtwork 把 iTunes Search 默认给的 100x100 封面 URL 换成 600x600——mzstatic
@@ -44,6 +48,18 @@ func hiResArtwork(url string) string {
 // appleMusicMatchCached 按 artist|title|album 缓存 Apple Music/iTunes Search 的匹配
 // 结果——url 给"App 跳转链接"用,cover 给封面(主封面兜底 + 搜索候选歌词的通用封面
 // 兜底)用,不管哪个调用方先查到,其它调用方都直接命中缓存,不会重复发两遍 iTunes 请求。
+// appleMusicMatchCachedOnly 只读缓存、绝不发请求。appleMusicMatchCached 只在查到
+// (url 非空)时写缓存,所以"iTunes 没这首歌"的情形每次调用都会完整重跑一轮 CN+US 搜索;
+// 用在"有就带上"的纯透传字段上会把 search-lyrics 的收尾白白挂住几秒(2026-08-12 审阅)。
+func appleMusicMatchCachedOnly(artist, title, album string) appleMusicMatch {
+	if title == "" {
+		return appleMusicMatch{}
+	}
+	appleURLMu.Lock()
+	defer appleURLMu.Unlock()
+	return appleURLCache[artist+"|"+title+"|"+album]
+}
+
 func appleMusicMatchCached(artist, title, album string) appleMusicMatch {
 	if title == "" {
 		return appleMusicMatch{}
@@ -91,10 +107,10 @@ func searchAppleMusicMatch(artist, title, album string) appleMusicMatch {
 				continue // skip unrelated results (song may not be in this catalog)
 			}
 			if titleFallback.url == "" {
-				titleFallback = appleMusicMatch{url: r.TrackViewURL, cover: hiResArtwork(r.ArtworkURL100)} // CN-first first title match
+				titleFallback = appleMusicMatch{url: r.TrackViewURL, cover: hiResArtwork(r.ArtworkURL100), title: r.TrackName, album: r.CollectionName} // CN-first first title match
 			}
 			if sc := albumScore(r.CollectionName, album); sc > bestScore {
-				bestScore, best = sc, appleMusicMatch{url: r.TrackViewURL, cover: hiResArtwork(r.ArtworkURL100)} // best album match
+				bestScore, best = sc, appleMusicMatch{url: r.TrackViewURL, cover: hiResArtwork(r.ArtworkURL100), title: r.TrackName, album: r.CollectionName} // best album match
 			}
 		}
 	}
@@ -129,7 +145,7 @@ func resolveAppleMusicMatchViaAlbum(artist, title, album string) appleMusicMatch
 		}
 		for _, t := range itunesLookupTracks(bestID, country) {
 			if t.TrackViewURL != "" && looseContains(t.TrackName, title) {
-				return appleMusicMatch{url: t.TrackViewURL, cover: hiResArtwork(t.ArtworkURL100)}
+				return appleMusicMatch{url: t.TrackViewURL, cover: hiResArtwork(t.ArtworkURL100), title: t.TrackName, album: t.CollectionName}
 			}
 		}
 	}
