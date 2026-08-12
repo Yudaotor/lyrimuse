@@ -106,6 +106,8 @@ struct LastfmStatsSection: View {
         SettingsCard {
             collapsibleHeader(icon: "chart.bar", title: L10n.t("听得最多"),
                               collapsed: $chartCollapsed) {
+                // 收起后分段/时段选择器既看不到内容也改不了什么,藏起来
+                if !chartCollapsed {
                 HStack(spacing: 10) {
                     Picker("", selection: Binding(
                         get: { kindRaw },
@@ -127,6 +129,7 @@ struct LastfmStatsSection: View {
                     }
                     .pickerStyle(.menu)
                     .fixedSize()
+                }
                 }
             }
             if !chartCollapsed {
@@ -280,7 +283,15 @@ struct LastfmStatsSection: View {
     private var recentCard: some View {
         SettingsCard {
             collapsibleHeader(icon: "clock", title: L10n.t("最近记录"),
-                              collapsed: $recentCollapsed) { EmptyView() }
+                              collapsed: $recentCollapsed) {
+                if let at = stats.recentUpdatedAt {
+                    // 这一页的数据是轮询来的(远端会话 45 秒一轮、否则两分钟),标一下它
+                    // 是什么时候的,免得看着一个不动的列表猜是不是卡住了。
+                    Text(String(format: L10n.t("%@更新"), Self.relative(at)))
+                        .font(.caption).foregroundStyle(.tertiary)
+                        .help(String(format: L10n.t("上次刷新:%@"), Self.absolute(at)))
+                }
+            }
             if !recentCollapsed {
             CardDivider()
             if stats.recent.isEmpty {
@@ -470,9 +481,9 @@ struct LastfmStatsSection: View {
             }
             .buttonStyle(.plain)
             .help(collapsed.wrappedValue ? L10n.t("展开") : L10n.t("收起"))
-            if !collapsed.wrappedValue {
-                trailing().labelsHidden().settingsGlassButtons()
-            }
+            // trailing 一律渲染:收起时要不要藏由各卡自己决定(榜单的分段选择器收起后
+            // 没有意义要藏;最近记录的"几分钟前更新"收起时照样有用,不藏)。
+            trailing().labelsHidden().settingsGlassButtons()
         }
         .padding(.horizontal, SettingsRowMetrics.horizontalPadding)
         .padding(.vertical, SettingsRowMetrics.verticalPadding)

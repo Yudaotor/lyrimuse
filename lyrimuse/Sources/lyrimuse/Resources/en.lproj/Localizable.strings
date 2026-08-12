@@ -529,3 +529,5 @@
 "那天最后一次:%@" = "Last played that day: %@";
 "展开" = "Expand";
 "收起" = "Collapse";
+"%@更新" = "Updated %@";
+"上次刷新:%@" = "Last refreshed: %@";

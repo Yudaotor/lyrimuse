@@ -122,6 +122,9 @@ final class LastfmStatsService: ObservableObject {
     /// 正在翻页(按钮转圈用)。跟 baselineFailed 分开:翻页失败不该把整卡换成失败态,
     /// 当前这页还好好的。
     @Published private(set) var recentPaging = false
+    /// 最近记录最后一次**成功**拉到内容的时刻。给卡片头显示"几分钟前更新"。
+    /// 刻意不从快照恢复:那是上次会话的数据,标成"刚刚更新"是撒谎;首次刷新落地后才有值。
+    @Published private(set) var recentUpdatedAt: Date?
     /// kind|period → 榜单。切分段/时段时旧内容还在,不闪空。
     @Published private(set) var charts: [String: [ChartEntry]] = [:]
     /// 正在拉取/拉取失败的榜单键(kind|period)。原来是两个全局布尔 —— 歌手榜和歌曲榜
@@ -242,6 +245,7 @@ final class LastfmStatsService: ObservableObject {
         recentPaging = false
         recentPage = 1
         recentTotalPages = 1
+        recentUpdatedAt = nil
         fetchedAt = [:]
     }
 
@@ -484,6 +488,7 @@ final class LastfmStatsService: ObservableObject {
             }
         }
         lastAppliedRecentPage = recentPage
+        recentUpdatedAt = Date()
         recent = rows
         let next = rows.first(where: \.nowPlaying)
         let nextKey = next.map { "\($0.artist)|\($0.title)" }
