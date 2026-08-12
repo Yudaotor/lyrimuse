@@ -139,6 +139,15 @@ final class LastfmStatsService: ObservableObject {
     /// 调 track.getInfo 拿它的专辑图 —— 榜单到手后并发补一轮,查不到的(无专辑的单曲)
     /// 不进字典,UI 回落到首字母色块。
     @Published private(set) var trackCovers: [String: URL] = [:]
+    /// 每首歌**当前的**总收听次数(track.getinfo 的 userplaycount,含已 scrobble 的这一次)。
+    /// 键用 playCountKey 归一。注意它是"到此刻为止的总数",不是"那一次是第几次"——
+    /// 后者由视图侧减去更新的同曲收听算出,见 LastfmStatsSection.playCount(at:)。
+    @Published private(set) var trackPlayCounts: [String: Int] = [:]
+    /// 上一次 applyRecent 时的窗口大小。窗口变了(点了"显示更多")就不做下面那套
+    /// "同曲次数变多 → 旧总数作废"的判定:那时候几乎每首都会"变多",一判就是全表作废。
+    private var lastAppliedRecentLimit = 0
+    /// 正在查次数的曲目键 —— 挡住"2 分钟定时刷新又触发一轮同样的请求"这种重复。
+    private var playCountsInFlight = Set<String>()
     @Published private(set) var baselineFailed = false
     @Published private(set) var chartFailed = false
     /// Last.fm 侧当前回报的 nowplaying 条目(recenttracks 里 date 缺失的那行)。
@@ -192,6 +201,9 @@ final class LastfmStatsService: ObservableObject {
         charts = [:]
         artistAvatars = [:]
         trackCovers = [:]
+        trackPlayCounts = [:]
+        playCountsInFlight = []
+        lastAppliedRecentLimit = 0
         chartLoadingKeys = []
         chartFailedKeys = []
         baselineFailed = false
@@ -278,6 +290,8 @@ final class LastfmStatsService: ObservableObject {
         var charts: [String: [ChartEntry]]
         var artistAvatars: [String: URL]
         var trackCovers: [String: URL]
+        /// 老快照没有这个字段,解码时给空表(不能让整份快照因为缺它而解不出来)。
+        var trackPlayCounts: [String: Int]? 
     }
 
     private static let snapshotURL = FileManager.default.homeDirectoryForCurrentUser
@@ -295,6 +309,7 @@ final class LastfmStatsService: ObservableObject {
         charts = snap.charts
         artistAvatars = snap.artistAvatars
         trackCovers = snap.trackCovers
+        trackPlayCounts = snap.trackPlayCounts ?? [:]
         // fetchedAt 刻意留空:所有刷新照常发生,快照只是首屏的底
     }
 
@@ -309,7 +324,8 @@ final class LastfmStatsService: ObservableObject {
                 username: cred.user, overview: overview,
                 recent: recent.filter { $0.date != nil },
                 recentLimit: recentLimit,
-                charts: charts, artistAvatars: artistAvatars, trackCovers: trackCovers)
+                charts: charts, artistAvatars: artistAvatars, trackCovers: trackCovers,
+                trackPlayCounts: trackPlayCounts)
             guard let data = try? JSONEncoder().encode(snap) else { return }
             try? data.write(to: Self.snapshotURL, options: .atomic)
         }
@@ -370,7 +386,22 @@ final class LastfmStatsService: ObservableObject {
         }
     }
 
+    /// 曲目在播放次数表里的键:大小写/首尾空白不算差异(跟红点的宽松比对同一套口径)。
+    nonisolated static func playCountKey(artist: String, title: String) -> String {
+        artist.trimmingCharacters(in: .whitespaces).lowercased()
+            + "|" + title.trimmingCharacters(in: .whitespaces).lowercased()
+    }
+
     private func applyRecent(_ rows: [RecentTrack]) {
+        // 同一首歌在窗口里多出一次收听 → 它的总数已经变了,作废让它重取。只在窗口大小
+        // 没变时判(展开"显示更多"那一下几乎每首都会变多,一判就是全表作废+重取风暴)。
+        if lastAppliedRecentLimit == recentLimit {
+            let before = countByKey(recent)
+            for (key, n) in countByKey(rows) where n > (before[key] ?? 0) {
+                trackPlayCounts[key] = nil
+            }
+        }
+        lastAppliedRecentLimit = recentLimit
         recent = rows
         let next = rows.first(where: \.nowPlaying)
         let nextKey = next.map { "\($0.artist)|\($0.title)" }
@@ -379,6 +410,61 @@ final class LastfmStatsService: ObservableObject {
             apiNowPlayingSince = next == nil ? nil : Date()
         }
         apiNowPlaying = next
+        resolvePlayCounts(for: rows)
+    }
+
+    private func countByKey(_ rows: [RecentTrack]) -> [String: Int] {
+        var out: [String: Int] = [:]
+        for r in rows where !r.nowPlaying {
+            out[Self.playCountKey(artist: r.artist, title: r.title), default: 0] += 1
+        }
+        return out
+    }
+
+    /// 给最近记录里还没有次数的曲目补 userplaycount。一首一个 track.getinfo(Last.fm 没有
+    /// 批量接口),故并发压到 4 —— 展开到 100 条时这是一百个请求,放开跑会撞限速(约 5 req/s),
+    /// 而这些数字是锦上添花,不值得为它把整页的额度吃掉。失败静默:那一行不显示次数即可。
+    private func resolvePlayCounts(for rows: [RecentTrack]) {
+        guard let cred = credentials else { return }
+        var seen = Set<String>()
+        let missing = rows.compactMap { r -> (key: String, artist: String, title: String)? in
+            let key = Self.playCountKey(artist: r.artist, title: r.title)
+            guard trackPlayCounts[key] == nil, !playCountsInFlight.contains(key),
+                  seen.insert(key).inserted, !r.artist.isEmpty, !r.title.isEmpty else { return nil }
+            return (key, r.artist, r.title)
+        }
+        guard !missing.isEmpty else { return }
+        missing.forEach { playCountsInFlight.insert($0.key) }
+        Task {
+            defer { missing.forEach { playCountsInFlight.remove($0.key) } }
+            var index = 0
+            await withTaskGroup(of: (String, Int?).self) { group in
+                let maxConcurrent = 4
+                func addNext() {
+                    guard index < missing.count else { return }
+                    let item = missing[index]
+                    index += 1
+                    group.addTask { [weak self] in
+                        guard let self else { return (item.key, nil) }
+                        let json = await self.request(method: "track.getinfo", cred: cred,
+                                                      extra: ["artist": item.artist, "track": item.title,
+                                                              "autocorrect": "1", "username": cred.user])
+                        guard let json else { return (item.key, nil) }
+                        let n = await MainActor.run { () -> Int? in
+                            guard let s = self.dig(json, "track", "userplaycount") as? String else { return nil }
+                            return Int(s)
+                        }
+                        return (item.key, n)
+                    }
+                }
+                for _ in 0..<min(maxConcurrent, missing.count) { addNext() }
+                for await (key, n) in group {
+                    if let n, n > 0 { trackPlayCounts[key] = n }
+                    addNext()
+                }
+            }
+            scheduleSnapshotSave()
+        }
     }
 
     /// Last.fm 的 nowplaying 条目在播放停止后**不会**立刻消失(服务端按自己的节奏过期,

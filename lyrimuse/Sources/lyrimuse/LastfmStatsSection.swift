@@ -275,7 +275,7 @@ struct LastfmStatsSection: View {
                 // (2026-08-11 发散采纳)。
                 LazyVStack(spacing: 0) {
                     LiveScrobbleRow()
-                    ForEach(recentHistory) { t in
+                    ForEach(Array(recentHistory.enumerated()), id: \.element.id) { index, t in
                         Button {
                             if let url = Self.trackURL(artist: t.artist, title: t.title) { NSWorkspace.shared.open(url) }
                         } label: {
@@ -292,11 +292,17 @@ struct LastfmStatsSection: View {
                                 Text(t.artist).font(.system(size: 10.5)).foregroundStyle(.secondary).lineLimit(1)
                             }
                             Spacer()
+                            if let n = playCount(at: index) {
+                                Text(String(format: L10n.t("第 %@ 次听"), "\(n)"))
+                                    .font(.caption).foregroundStyle(.tertiary).monospacedDigit()
+                                    .help(L10n.t("这首歌在你 Last.fm 上的第几次收听"))
+                            }
                             if let date = t.date {
                                 Text(Self.relative(date))
                                     .font(.caption).foregroundStyle(.tertiary).monospacedDigit()
                                     // 相对时间悬停给精确时刻 —— "1 小时前"想核对到分钟时不用去网站查
                                     .help(Self.absolute(date))
+                                    .frame(minWidth: 62, alignment: .trailing)
                             }
                         }
                         .padding(.horizontal, 14)
@@ -343,6 +349,27 @@ struct LastfmStatsSection: View {
     /// 也还没拿到 scrobble 时间,混进"最近记录"里会是一条没有时间的怪行。
     private var recentHistory: [LastfmStatsService.RecentTrack] {
         stats.recent.filter { $0.date != nil }
+    }
+
+    /// 第 index 行那次收听是这首歌的第几次。
+    ///
+    /// 服务给的是**当前总数**(userplaycount,已含这一次),不是"那一刻是第几次"。换算:
+    /// 当前总数 − 比这一行**更新**的同曲收听次数。列表是最近 N 条、按时间倒序,所以比
+    /// 这一行更新的同曲收听必然也在这个窗口里(窗口是从最新往回取的),这个减法在窗口内
+    /// 精确 —— 不需要额外请求。窗口外的都是更旧的收听,本来就该算在总数里,不用减。
+    ///
+    /// 正在播放那条不参与:它还没被 scrobble,不在 userplaycount 里(实时行自己 +1)。
+    private func playCount(at index: Int) -> Int? {
+        let rows = recentHistory
+        guard index < rows.count else { return nil }
+        let row = rows[index]
+        let key = LastfmStatsService.playCountKey(artist: row.artist, title: row.title)
+        guard let total = stats.trackPlayCounts[key] else { return nil }
+        let newerSamePlays = rows[..<index].reduce(0) {
+            $0 + (LastfmStatsService.playCountKey(artist: $1.artist, title: $1.title) == key ? 1 : 0)
+        }
+        let n = total - newerSamePlays
+        return n > 0 ? n : nil // 竞态(刚多了一次收听、总数还没重取)时宁可不显示,不显示错的
     }
 
     // MARK: - 小件

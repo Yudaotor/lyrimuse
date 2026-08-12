@@ -518,3 +518,4 @@
 "自带可用的中文译文，同水平候选间优先" = "Comes with a usable translation in your language; preferred among otherwise-equal candidates";
 "日文歌词自带罗马音，同水平候选间优先" = "Japanese lyrics with romanization; preferred among otherwise-equal candidates";
 "在其他设备上播放，Last.fm 已收到" = "Playing on another device; Last.fm has received it";
+"这首歌在你 Last.fm 上的第几次收听" = "Which play of this track on your Last.fm this was";
