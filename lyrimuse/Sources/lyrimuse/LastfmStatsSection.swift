@@ -49,6 +49,9 @@ struct LastfmStatsSection: View {
                 while !Task.isCancelled {
                     try? await Task.sleep(nanoseconds: 120_000_000_000)
                     guard !Task.isCancelled else { break }
+                    // 只自动刷第一页:后面几页是历史,内容不会变,重拉一遍纯属打扰
+                    // (正看着的那一屏被替换掉)。
+                    guard stats.recentPage == 1 else { continue }
                     stats.refreshBaseline()
                 }
             }
@@ -274,7 +277,11 @@ struct LastfmStatsSection: View {
                 // LazyVStack:展开到 100 行时行视图和封面按需实例化,不一口气全建
                 // (2026-08-11 发散采纳)。
                 LazyVStack(spacing: 0) {
-                    LiveScrobbleRow()
+                    // 实时行说的是"此刻正在记录什么",只属于第一页;翻到历史页时它跟着
+                    // 出现会很怪(那一屏讲的是几小时前的事)。
+                    if stats.recentPage == 1 {
+                        LiveScrobbleRow()
+                    }
                     ForEach(Array(recentHistory.enumerated()), id: \.element.id) { index, t in
                         Button {
                             if let url = Self.trackURL(artist: t.artist, title: t.title) { NSWorkspace.shared.open(url) }
@@ -319,26 +326,31 @@ struct LastfmStatsSection: View {
                         .onHover { hoveredRow = $0 ? "recent|\(t.id)" : (hoveredRow == "recent|\(t.id)" ? nil : hoveredRow) }
                         .help(L10n.t("在 Last.fm 打开"))
                     }
-                    // 显示更多:8 → 30 → 100。到 100 就不再给按钮 —— 再往下不是"看一眼
-                    // 最近在听什么"的范畴了,交给「查看主页 ↗」。
-                    if stats.recentLimit < 100 {
+                    // 翻页(2026-08-12 取代原来的"显示更多"一路展开):一路展开会把这一卡
+                    // 撑到上百行 —— 整页越滚越长、每次刷新还要给上百首查播放次数,而看历史
+                    // 本来就是翻页的事。
+                    if stats.recentTotalPages > 1 {
                         Divider().padding(.horizontal, 14).padding(.vertical, 4)
-                        Button {
-                            stats.expandRecent()
-                        } label: {
-                            HStack(spacing: 6) {
-                                if stats.recentExpanding {
-                                    ProgressView().controlSize(.small)
-                                }
-                                Text(L10n.t("显示更多"))
-                                    .font(.callout).foregroundStyle(Color.accentColor)
+                        HStack(spacing: 12) {
+                            pagerButton(systemImage: "chevron.left", label: L10n.t("上一页"),
+                                        enabled: stats.recentPage > 1) {
+                                stats.goToPage(stats.recentPage - 1)
                             }
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 6)
-                            .contentShape(Rectangle())
+                            Spacer()
+                            if stats.recentPaging {
+                                ProgressView().controlSize(.small)
+                            }
+                            Text(String(format: L10n.t("第 %1$@ / %2$@ 页"),
+                                        "\(stats.recentPage)", "\(stats.recentTotalPages)"))
+                                .font(.caption).foregroundStyle(.secondary).monospacedDigit()
+                            Spacer()
+                            pagerButton(systemImage: "chevron.right", label: L10n.t("下一页"),
+                                        enabled: stats.recentPage < stats.recentTotalPages) {
+                                stats.goToPage(stats.recentPage + 1)
+                            }
                         }
-                        .buttonStyle(.plain)
-                        .disabled(stats.recentExpanding)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 4)
                     }
                 }
                 .padding(.vertical, 5)
@@ -375,6 +387,20 @@ struct LastfmStatsSection: View {
     }
 
     // MARK: - 小件
+
+    private func pagerButton(systemImage: String, label: String,
+                             enabled: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Label(label, systemImage: systemImage)
+                .labelStyle(.titleAndIcon)
+                .font(.callout)
+                .foregroundStyle(enabled ? Color.accentColor : Color.secondary.opacity(0.5))
+                .padding(.vertical, 4)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(!enabled || stats.recentPaging)
+    }
 
     private func placeholderRow(_ text: String) -> some View {
         Text(text)

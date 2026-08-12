@@ -87,9 +87,13 @@ final class LastfmStatsService: ObservableObject {
     }
 
     struct RecentTrack: Identifiable, Equatable, Codable {
-        /// 在这批响应里的序号 —— 掺进 id 防撞:同一首歌在同一秒被记两次(双端同时
-        /// scrobble 等)时,光靠 title|artist|uts 会撞 ForEach 的 id(审阅指出)。
-        let seq: Int
+        /// 同一时刻+同一首歌重复出现时的序号(双端同时 scrobble 等罕见情况),几乎恒为 0。
+        ///
+        /// ⚠️ 这里**不能**放"在这批响应里的行号":那样每来一条新 scrobble,后面所有行的
+        /// id 全变,SwiftUI 会把整张列表当成被替换掉、连带把滚动位置顶回去 —— 表现就是
+        /// "列表滑不动/滑到一半弹回去"(2026-08-12 用户反馈,列表每 45 秒刷一次)。
+        /// 老快照没有这个键,可选类型解码为 nil。
+        var dup: Int?
         let title: String
         let artist: String
         /// scrobble 记录里带的专辑名(可能为空)。用来给同专辑的兄弟曲目共享封面,
@@ -99,20 +103,25 @@ final class LastfmStatsService: ObservableObject {
         /// nil = 这行是"正在播放"(Last.fm 把 nowplaying 行的 date 整个省掉)。
         let date: Date?
         var nowPlaying: Bool { date == nil }
-        var id: String { "\(seq)|\(title)|\(artist)|\(date?.timeIntervalSince1970 ?? -1)" }
+        var id: String { "\(date?.timeIntervalSince1970 ?? -1)|\(artist)|\(title)|\(dup ?? 0)" }
     }
 
     // MARK: - 状态
 
     @Published private(set) var overview: Overview?
     @Published private(set) var recent: [RecentTrack] = []
-    /// 最近记录当前拉多少条:8 → 30 → 100 阶梯,由"显示更多"推进。存在服务里而不是
-    /// 视图里 —— 2 分钟定时刷新和换歌强刷都走 refreshBaseline,得按用户已经展开到的
-    /// 条数重拉,不能刷一次又缩回 8 条。
-    @Published private(set) var recentLimit = 8
-    /// "显示更多"正在加载(按钮转圈用)。跟 baselineFailed 分开:展开失败不该把整卡
-    /// 换成失败态,已有的 8 条还好好的。
-    @Published private(set) var recentExpanding = false
+    /// 最近记录一页放多少条。2026-08-12 从"8→30→100 一路展开"改成分页:一路展开会把
+    /// 一页撑到上百行(整页越滚越长、每页刷新都要给上百首查播放次数),而看历史本来就是
+    /// 翻页的事,不是无限长列表(用户要求)。
+    static let recentPageSize = 20
+    /// 当前第几页(1 起)。存在服务里而不是视图里 —— 定时刷新和换歌强刷都走
+    /// refreshBaseline,得按用户正在看的那一页重拉。
+    @Published private(set) var recentPage = 1
+    /// 总页数(来自响应的 @attr.totalPages),给翻页控件显示和封顶。
+    @Published private(set) var recentTotalPages = 1
+    /// 正在翻页(按钮转圈用)。跟 baselineFailed 分开:翻页失败不该把整卡换成失败态,
+    /// 当前这页还好好的。
+    @Published private(set) var recentPaging = false
     /// kind|period → 榜单。切分段/时段时旧内容还在,不闪空。
     @Published private(set) var charts: [String: [ChartEntry]] = [:]
     /// 正在拉取/拉取失败的榜单键(kind|period)。原来是两个全局布尔 —— 歌手榜和歌曲榜
@@ -128,8 +137,8 @@ final class LastfmStatsService: ObservableObject {
         chartFailedKeys.contains("\(kind.rawValue)|\(period.rawValue)")
     }
 
-    /// baseline(数字+最近记录)的代际计数器。refreshBaseline 和 expandRecent 的 Task
-    /// 都会写 overview/recent,彼此之间没有取消 —— 没有它的话,点「显示更多」拉回 30 条
+    /// baseline(数字+最近记录)的代际计数器。refreshBaseline 和 goToPage 的 Task
+    /// 都会写 overview/recent,彼此之间没有取消 —— 没有它的话,翻页拉回来的那批
     /// 之后,一个更早在飞的 limit=8 旧响应后到,会把列表又缩回 8 条(2026-08-11 审阅
     /// 确认,窗口就是一个网络 RTT)。规则:发起时自增并捕获,写回前核对,旧代直接丢弃。
     /// 所有读写都在 MainActor 上,check-then-write 天然原子。
@@ -157,9 +166,9 @@ final class LastfmStatsService: ObservableObject {
     @Published private(set) var recentAlbumCovers: [String: URL] = [:]
     /// getinfo 查不到数据的曲目(Last.fm 压根没有这条目)。记下来别每轮刷新都重查一遍。
     private var trackDetailsUnavailable = Set<String>()
-    /// 上一次 applyRecent 时的窗口大小。窗口变了(点了"显示更多")就不做下面那套
-    /// "同曲次数变多 → 旧总数作废"的判定:那时候几乎每首都会"变多",一判就是全表作废。
-    private var lastAppliedRecentLimit = 0
+    /// 上一次 applyRecent 时看的是第几页。翻了页就不做下面那套"同曲次数变多 → 旧总数
+    /// 作废"的判定:换了一批完全不同的行,那个比较没有意义。
+    private var lastAppliedRecentPage = 0
     /// 正在查次数的曲目键 —— 挡住"2 分钟定时刷新又触发一轮同样的请求"这种重复。
     private var playCountsInFlight = Set<String>()
     @Published private(set) var baselineFailed = false
@@ -220,12 +229,13 @@ final class LastfmStatsService: ObservableObject {
         recentAlbumCovers = [:]
         trackDetailsUnavailable = []
         playCountsInFlight = []
-        lastAppliedRecentLimit = 0
+        lastAppliedRecentPage = 0
         chartLoadingKeys = []
         chartFailedKeys = []
         baselineFailed = false
-        recentExpanding = false
-        recentLimit = 8
+        recentPaging = false
+        recentPage = 1
+        recentTotalPages = 1
         fetchedAt = [:]
     }
 
@@ -303,7 +313,9 @@ final class LastfmStatsService: ObservableObject {
         var username: String
         var overview: Overview?
         var recent: [RecentTrack]
-        var recentLimit: Int
+        /// 老快照留下的阶梯档位,现已改分页(2026-08-12)。字段保留为可选只为让老快照
+        /// 仍能解出来,值不再使用。
+        var recentLimit: Int?
         var charts: [String: [ChartEntry]]
         var artistAvatars: [String: URL]
         var trackCovers: [String: URL]
@@ -324,7 +336,8 @@ final class LastfmStatsService: ObservableObject {
         guard let cred = credentials, cred.user == snap.username else { return }
         overview = snap.overview
         recent = snap.recent
-        recentLimit = max(snap.recentLimit, 8)
+        // 快照里存的永远是第一页(见 scheduleSnapshotSave),重开也从第一页看起
+        recentPage = 1
         charts = snap.charts
         artistAvatars = snap.artistAvatars
         trackCovers = snap.trackCovers
@@ -341,10 +354,12 @@ final class LastfmStatsService: ObservableObject {
         snapshotSaveTask = Task {
             try? await Task.sleep(nanoseconds: 2_000_000_000)
             guard !Task.isCancelled, let cred = credentials else { return }
+            // 只快照第一页:快照是给"重开时先端上桌"用的,端一页历史上来没有意义
+            guard recentPage == 1 else { return }
             let snap = StatsSnapshot(
                 username: cred.user, overview: overview,
                 recent: recent.filter { $0.date != nil },
-                recentLimit: recentLimit,
+                recentLimit: nil,
                 charts: charts, artistAvatars: artistAvatars, trackCovers: trackCovers,
                 trackPlayCounts: trackPlayCounts,
                 recentTrackCovers: recentTrackCovers, recentAlbumCovers: recentAlbumCovers)
@@ -383,7 +398,8 @@ final class LastfmStatsService: ObservableObject {
             // 总数不用单独打 user.getinfo:下面拉最近记录那次(不带 from)的 @attr.total
             // 本来就是全量 scrobble 数,一个请求两用,4 个请求并成 3 个(审阅指出)。
             async let recentJSON = request(method: "user.getrecenttracks", cred: cred,
-                                           extra: ["limit": String(recentLimit)])
+                                           extra: ["limit": String(Self.recentPageSize),
+                                                   "page": String(recentPage)])
             // 两个计数:recenttracks 带 from 时,@attr.total 就是区间内的条数,limit=1
             // 让响应体最小。
             let dayStart = Calendar.current.startOfDay(for: Date())
@@ -404,6 +420,7 @@ final class LastfmStatsService: ObservableObject {
                 week: attrTotal(w)
             )
             applyRecent(parseRecent(r))
+            applyRecentPaging(r) // 总页数只在响应里,首次加载这条路径也得取(翻页控件靠它才出现)
             scheduleSnapshotSave()
         }
     }
@@ -433,14 +450,14 @@ final class LastfmStatsService: ObservableObject {
 
     private func applyRecent(_ rows: [RecentTrack]) {
         // 同一首歌在窗口里多出一次收听 → 它的总数已经变了,作废让它重取。只在窗口大小
-        // 没变时判(展开"显示更多"那一下几乎每首都会变多,一判就是全表作废+重取风暴)。
-        if lastAppliedRecentLimit == recentLimit {
+        // 没变时判(翻页那一下换的是完全不同的一批行,那个比较没有意义)。
+        if lastAppliedRecentPage == recentPage {
             let before = countByKey(recent)
             for (key, n) in countByKey(rows) where n > (before[key] ?? 0) {
                 trackPlayCounts[key] = nil
             }
         }
-        lastAppliedRecentLimit = recentLimit
+        lastAppliedRecentPage = recentPage
         recent = rows
         let next = rows.first(where: \.nowPlaying)
         let nextKey = next.map { "\($0.artist)|\($0.title)" }
@@ -525,33 +542,38 @@ final class LastfmStatsService: ObservableObject {
         return Date().timeIntervalSince(since) < Self.apiNowPlayingMaxAge
     }
 
-    /// "显示更多":把最近记录的条数推进到下一档并重拉。到顶(100)后调用是空操作,
-    /// UI 侧到顶也不再显示按钮,这里只是兜底。
-    func expandRecent() {
-        let ladder = [8, 30, 100]
-        guard let next = ladder.first(where: { $0 > recentLimit }) else { return }
-        guard !recentExpanding else { return }
-        // 档位在成功后才算数:失败回滚到 prev。原来是先提交不回滚 —— 失败后阶梯的
-        // first(where:) 会跳档(8→失败停在30→再点直达100),推到 100 那次失败更是让
-        // 按钮直接消失、想重试都没入口(2026-08-11 审阅确认)。
-        let prev = recentLimit
-        recentLimit = next
-        recentExpanding = true
+    /// 翻到第 page 页(1 起)。页码在成功后才算数:失败回滚,不让翻页控件停在一个
+    /// 内容根本没换过的页码上(沿用 expandRecent 那次审阅定下的规矩)。
+    func goToPage(_ page: Int) {
+        let target = max(1, min(page, max(recentTotalPages, 1)))
+        guard target != recentPage, !recentPaging else { return }
+        let prev = recentPage
+        recentPage = target
+        recentPaging = true
         baselineGen += 1
         let gen = baselineGen
         Task {
-            defer { recentExpanding = false }
+            defer { recentPaging = false }
             guard let cred = credentials,
                   let json = await request(method: "user.getrecenttracks", cred: cred,
-                                           extra: ["limit": String(next)])
+                                           extra: ["limit": String(Self.recentPageSize),
+                                                   "page": String(target)])
             else {
-                if gen == baselineGen { recentLimit = prev }
+                if gen == baselineGen { recentPage = prev }
                 return
             }
             guard gen == baselineGen else { return }
             applyRecent(parseRecent(json))
+            applyRecentPaging(json)
             scheduleSnapshotSave()
             fetchedAt["baseline"] = Date() // 刚拉过,定时器下一拍不用再拉一遍
+        }
+    }
+
+    /// 从响应的 @attr 里取总页数。缺字段就保持原值,不把它当 1(那会让翻页按钮消失)。
+    private func applyRecentPaging(_ json: [String: Any]) {
+        if let s = dig(json, "recenttracks", "@attr", "totalPages") as? String, let n = Int(s), n > 0 {
+            recentTotalPages = n
         }
     }
 
@@ -762,13 +784,18 @@ final class LastfmStatsService: ObservableObject {
 
     private func parseRecent(_ json: [String: Any]) -> [RecentTrack] {
         let items = (dig(json, "recenttracks", "track") as? [[String: Any]]) ?? []
-        return items.enumerated().compactMap { seq, item in
+        var dupCount: [String: Int] = [:]
+        return items.compactMap { item in
             let title = item["name"] as? String ?? ""
             guard !title.isEmpty else { return nil }
             let artist = dig(item, "artist", "#text") as? String ?? ""
             let uts = dig(item, "date", "uts") as? String
+            // 只在"同一时刻+同一首歌"之间编号,不受整表位置影响(见 RecentTrack.dup)
+            let dupKey = "\(uts ?? "np")|\(artist)|\(title)"
+            let dup = dupCount[dupKey, default: 0]
+            dupCount[dupKey] = dup + 1
             return RecentTrack(
-                seq: seq,
+                dup: dup,
                 title: title,
                 artist: artist,
                 album: dig(item, "album", "#text") as? String,
