@@ -517,3 +517,4 @@
 "歌词内容跟其它来源高度一致（2 家以上 250 · 1 家 150），串版本的拿不到" = "Lyric text agrees with other sources (2+ sources 250 · one 150); wrong-version candidates can't earn this";
 "自带可用的中文译文，同水平候选间优先" = "Comes with a usable translation in your language; preferred among otherwise-equal candidates";
 "日文歌词自带罗马音，同水平候选间优先" = "Japanese lyrics with romanization; preferred among otherwise-equal candidates";
+"在其他设备上播放，Last.fm 已收到" = "Playing on another device; Last.fm has received it";

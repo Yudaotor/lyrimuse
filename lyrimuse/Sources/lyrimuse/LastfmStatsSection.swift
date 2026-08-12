@@ -338,9 +338,9 @@ struct LastfmStatsSection: View {
         }
     }
 
-    /// 历史行:API 返回的 nowplaying 行(date 为 nil)丢掉 —— 它跟上面的本地行说的是
-    /// 同一首歌;本地行没显示时(暂停/开关关着)它也照丢,暂停中的歌不该以"正在播"的
-    /// 形态出现在历史里。
+    /// 历史行:API 返回的 nowplaying 行(date 为 nil)丢掉 —— 那首歌由上面的实时行负责,
+    /// 无论它在本机还是别的设备上放(见 LiveScrobbleRow.live 的两条分支);它还没结束、
+    /// 也还没拿到 scrobble 时间,混进"最近记录"里会是一条没有时间的怪行。
     private var recentHistory: [LastfmStatsService.RecentTrack] {
         stats.recent.filter { $0.date != nil }
     }
@@ -469,19 +469,62 @@ private struct LiveScrobbleRow: View {
     @State private var hovered = false
     @State private var pendingForceRefresh: Task<Void, Never>?
 
-    private var live: (title: String, artist: String)? {
-        guard features.lastfmMirrorScrobble, poller.isPlayingNow, !poller.title.isEmpty else { return nil }
-        return (poller.title, poller.artist)
+    /// 这一行说的是「**现在正在被 Last.fm 记录的**那首歌」,不是「本机正在放的歌」——
+    /// 两者只在"播放源就是这台 Mac"时才重合。2026-08-12 用户实测:手机在放、本机暂停时,
+    /// Last.fm 明明有 nowplaying 条目(我们也早就拉下来存着了),这一行却整个不显示,
+    /// 因为它当时只认本机播放状态。
+    private struct LiveSource {
+        var title: String
+        var artist: String
+        var artwork: NSImage?  // 本机播放才有(直接拿现成的位图,不用再下载)
+        var imageURL: URL?     // 远端来源用 API 给的封面
+        var confirmed: Bool    // Last.fm 是否已确认收到
+        var remote: Bool       // 播放源不是这台 Mac
     }
 
-    /// 红点的真值:Last.fm 的 recenttracks 里出现了这首的 nowplaying 条目,说明
-    /// collector 发的 updateNowPlaying 已被服务器收到 —— 之前红点只看本地状态,
+    private var live: LiveSource? {
+        // ① 本机在放、且我们确实在往 Last.fm 记录(开关关着=这首没人在记,不该显示)
+        if features.lastfmMirrorScrobble, poller.isPlayingNow, !poller.title.isEmpty {
+            return LiveSource(title: poller.title, artist: poller.artist,
+                              artwork: poller.artworkImage, imageURL: nil,
+                              confirmed: serverConfirms(poller.title), remote: false)
+        }
+        // ② 本机没在放,但 Last.fm 说有一首正在记录 —— 多半在手机/网页/别的设备上放。
+        // 它按定义就是服务器确认过的(数据本身就来自服务器),直接红点。
+        //
+        // 但服务端那条跟本机当前曲目同名时不算:Last.fm 的 nowplaying 停播后不会立刻
+        // 消失,这种情况几乎总是**我们自己**刚才播它时留下的残影(本机现在是暂停),
+        // 拿它显示"正在记录"就是在撒谎。真在别的设备上放时,那首歌跟本机这首对不上。
+        if let np = stats.apiNowPlaying, stats.apiNowPlayingIsFresh, !matchesLocalTrack(np.title) {
+            return LiveSource(title: np.title, artist: np.artist, artwork: nil,
+                              imageURL: np.imageURL, confirmed: true, remote: true)
+        }
+        return nil
+    }
+
+    /// 本机这首是否已被 Last.fm 确认收到:recenttracks 里出现了同名的 nowplaying 条目,
+    /// 说明 collector 发的 updateNowPlaying 已经到了服务器 —— 红点只看本地状态的话,
     /// 网络断了/提交失败它照样红着(2026-08-11 发散采纳,改为服务器确认制)。
     /// 标题宽松比对:大小写/首尾空白不算差异;艺人不参与(合唱串会被 collapse 改写)。
-    private var serverConfirmed: Bool {
-        guard let np = stats.apiNowPlaying, let live else { return false }
-        return np.title.trimmingCharacters(in: .whitespaces).lowercased()
-            == live.title.trimmingCharacters(in: .whitespaces).lowercased()
+    private func serverConfirms(_ localTitle: String) -> Bool {
+        guard let np = stats.apiNowPlaying else { return false }
+        return looseSameTitle(np.title, localTitle)
+    }
+
+    /// 服务端这条 nowplaying 说的是不是本机播放器里当前这首(不论在放还是暂停)。
+    private func matchesLocalTrack(_ title: String) -> Bool {
+        !poller.title.isEmpty && looseSameTitle(title, poller.title)
+    }
+
+    private func looseSameTitle(_ a: String, _ b: String) -> Bool {
+        a.trimmingCharacters(in: .whitespaces).lowercased()
+            == b.trimmingCharacters(in: .whitespaces).lowercased()
+    }
+
+    /// 给 onChange 用的身份串:本机换歌、远端换歌、本机↔远端来源切换都算变化。
+    private var liveKey: String {
+        guard let live else { return "" }
+        return "\(live.remote ? "r" : "l")|\(live.artist)|\(live.title)"
     }
 
     var body: some View {
@@ -494,8 +537,14 @@ private struct LiveScrobbleRow: View {
                 } label: {
                     HStack(spacing: 10) {
                         Group {
-                            if let img = poller.artworkImage {
+                            if let img = live.artwork {
                                 Image(nsImage: img).resizable().aspectRatio(contentMode: .fill)
+                            } else if let url = live.imageURL {
+                                AsyncImage(url: url) { image in
+                                    image.resizable().aspectRatio(contentMode: .fill)
+                                } placeholder: {
+                                    RoundedRectangle(cornerRadius: 5).fill(.quaternary)
+                                }
                             } else {
                                 RoundedRectangle(cornerRadius: 5).fill(.quaternary)
                             }
@@ -512,13 +561,15 @@ private struct LiveScrobbleRow: View {
                             Text(String(format: L10n.t("第 %@ 次听"), "\(n)"))
                                 .font(.caption).foregroundStyle(.tertiary).monospacedDigit()
                         }
-                        if serverConfirmed {
+                        if live.confirmed {
                             Label(L10n.t("正在记录"), systemImage: "circle.fill")
                                 .font(.caption)
                                 .foregroundStyle(Color(red: 0.84, green: 0.06, blue: 0.03))
                                 .labelStyle(.titleAndIcon)
                                 .imageScale(.small)
-                                .help(L10n.t("Last.fm 已确认收到这次播放"))
+                                .help(live.remote
+                                      ? L10n.t("在其他设备上播放，Last.fm 已收到")
+                                      : L10n.t("Last.fm 已确认收到这次播放"))
                         } else {
                             Label(L10n.t("正在播放"), systemImage: "circle.dotted")
                                 .font(.caption)
@@ -546,15 +597,29 @@ private struct LiveScrobbleRow: View {
         .onAppear {
             if let live { stats.refreshNowPlayingCount(title: live.title, artist: live.artist) }
         }
-        .onChange(of: poller.title) { _, _ in
+        .onChange(of: liveKey) { _, _ in
+            // 本机换歌、远端换歌、来源切换都要重取"第 N 次听"
             if let live { stats.refreshNowPlayingCount(title: live.title, artist: live.artist) }
-            // 换歌 = 上一首刚被 scrobble。给 collector 十秒把记录提交出去,然后无视缓存
+        }
+        .onChange(of: poller.title) { _, _ in
+            // 本机换歌 = 上一首刚被 scrobble。给 collector 十秒把记录提交出去,然后无视缓存
             // 强刷一次 —— 刚唱完的歌马上出现在列表顶上,顺带把 apiNowPlaying 换成新歌
             // (红点的服务器确认就是靠这次刷新到位的)。
             pendingForceRefresh?.cancel()
             pendingForceRefresh = Task {
                 try? await Task.sleep(nanoseconds: 10_000_000_000)
                 guard !Task.isCancelled else { return }
+                stats.refreshBaseline(force: true)
+            }
+        }
+        // 远端会话(在别的设备上放)时,这一行的唯一数据来源就是轮询:父视图那轮 2 分钟
+        // 对一首三四分钟的歌太慢,整首歌可能只露一次面。这里在**确实处于远端记录**时
+        // 加密到 45 秒,本机播放/没在放时不发任何请求(本机有 poller 实时驱动,不需要)。
+        .task {
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 45_000_000_000)
+                guard !Task.isCancelled else { break }
+                guard !poller.isPlayingNow, stats.apiNowPlaying != nil, stats.apiNowPlayingIsFresh else { continue }
                 stats.refreshBaseline(force: true)
             }
         }

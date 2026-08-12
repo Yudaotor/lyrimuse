@@ -146,6 +146,9 @@ final class LastfmStatsService: ObservableObject {
     /// 后才会出现在这里 —— 本地开始播放只能算「正在播放」,服务器确认过才算「正在记录」
     /// (2026-08-11 发散采纳,红点不再本地猜)。
     @Published private(set) var apiNowPlaying: RecentTrack?
+    /// 我们第一次看到 apiNowPlaying 这一首的时刻(换了一首才重置)。
+    /// 用途见 apiNowPlayingIsFresh —— Last.fm 的 nowplaying 不会在播放停止时立刻消失。
+    @Published private(set) var apiNowPlayingSince: Date?
     /// 「这是你第 N 次听」:track.getinfo 带 username 的 userplaycount + 1。
     /// 换歌那一刻取一次,同一首歌不重取(取晚了这次播放被 scrobble 进去就会多算一)。
     @Published private(set) var nowPlayingCount: Int?
@@ -180,6 +183,7 @@ final class LastfmStatsService: ObservableObject {
         overview = nil
         recent = []
         apiNowPlaying = nil
+        apiNowPlayingSince = nil
         nowPlayingCount = nil
         nowPlayingCountKey = ""
         onThisDay = nil
@@ -368,7 +372,23 @@ final class LastfmStatsService: ObservableObject {
 
     private func applyRecent(_ rows: [RecentTrack]) {
         recent = rows
-        apiNowPlaying = rows.first(where: \.nowPlaying)
+        let next = rows.first(where: \.nowPlaying)
+        let nextKey = next.map { "\($0.artist)|\($0.title)" }
+        let prevKey = apiNowPlaying.map { "\($0.artist)|\($0.title)" }
+        if nextKey != prevKey {
+            apiNowPlayingSince = next == nil ? nil : Date()
+        }
+        apiNowPlaying = next
+    }
+
+    /// Last.fm 的 nowplaying 条目在播放停止后**不会**立刻消失(服务端按自己的节奏过期,
+    /// 常能残留好几分钟)。拿它当"正在记录"显示就必须自己设一个上限,否则手机早停了、
+    /// 这边还红着说正在记录。以"我们第一次看到这首"为起点计时:对开页面前就开始放的
+    /// 那首,这个起点偏晚,但它要的只是一个"别一直挂着"的封顶,不是精确播放时长。
+    static let apiNowPlayingMaxAge: TimeInterval = 15 * 60
+    var apiNowPlayingIsFresh: Bool {
+        guard apiNowPlaying != nil, let since = apiNowPlayingSince else { return false }
+        return Date().timeIntervalSince(since) < Self.apiNowPlayingMaxAge
     }
 
     /// "显示更多":把最近记录的条数推进到下一档并重拉。到顶(100)后调用是空操作,

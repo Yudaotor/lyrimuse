@@ -552,12 +552,22 @@ func (p *poller) announce(now time.Time, why string) {
 	sess := p.sess
 	m := lbMeta(p.cur)
 	artist, title, album := p.cur.Artist, p.cur.Title, p.cur.Album
+	playing := p.cur.Playing
 	go func() {
 		// now-playing 镜像与 LB 解耦(2026-08-11,批4):"正在播放"反映的是本机播放器
 		// 的真实状态,不是 LB 提交的成败。放在 LB 请求之前发起 —— 两者本就各自异步。
-		mirrorAsync(p.lfm, "now-playing", func(ctx context.Context) error {
-			return p.lfm.updateNowPlaying(ctx, artist, title, album)
-		})
+		//
+		// ⚠️ 只在**真的在放**时镜像给 Last.fm:track.updateNowPlaying 没有"暂停"这个
+		// 概念,暂停时发过去等于宣布"我正在听这首"。announce 有三个调用点会在非播放态
+		// 触发:进程启动时当前曲目本就暂停(走"换曲"分支开 session)、播放↔暂停的状态
+		// 切换、挂起首条到点补发。2026-08-12 实测坐实危害:collector 一重启就把一首
+		// 暂停的歌 announce 上去,直接顶掉了用户手机上正在放的那首的 nowplaying。
+		// LB 不受影响 —— 它要靠 rate=0 表达暂停、自己会丢弃,所以下面的 submit 照旧发。
+		if playing {
+			mirrorAsync(p.lfm, "now-playing", func(ctx context.Context) error {
+				return p.lfm.updateNowPlaying(ctx, artist, title, album)
+			})
+		}
 		err := p.lb.submit(p.ctx, "playing_now", 0, m)
 		if err != nil {
 			log.Printf("submit playing_now (%s) failed: %v", why, err)
