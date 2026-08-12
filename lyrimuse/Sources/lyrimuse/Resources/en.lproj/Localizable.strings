@@ -527,3 +527,5 @@
 "%1$@ 年前的今天听了 %2$@ 次，最常循环的是这几首" = "%1$@ year(s) ago today: %2$@ plays, most looped:";
 "%@ 次" = "%@ plays";
 "那天最后一次:%@" = "Last played that day: %@";
+"展开" = "Expand";
+"收起" = "Collapse";

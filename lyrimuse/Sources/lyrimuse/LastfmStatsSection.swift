@@ -9,6 +9,11 @@ struct LastfmStatsSection: View {
     // 换歌强刷、第 N 次听)都关进 LiveScrobbleRow 子视图,只有那一行随歌词节奏重渲染
     // (2026-08-11 发散采纳)。
     // 分段/时段都持久化 —— 这页会被反复打开,每次都跳回默认档等于没记住用户在看什么。
+    // 三张卡各自的折叠状态。持久化 —— 这页会被反复打开,收起来的卡每次都自己弹回来
+    // 就等于没收(2026-08-12 用户要求)。
+    @AppStorage("np:lastfmChartCollapsed") private var chartCollapsed = false
+    @AppStorage("np:lastfmRecentCollapsed") private var recentCollapsed = false
+    @AppStorage("np:lastfmOnThisDayCollapsed") private var onThisDayCollapsed = false
     @AppStorage("np:lastfmChartKind") private var kindRaw = LastfmStatsService.ChartKind.artists.rawValue
     @AppStorage("np:lastfmChartPeriod") private var periodRaw = LastfmStatsService.Period.month.rawValue
 
@@ -35,7 +40,9 @@ struct LastfmStatsSection: View {
         // (2026-08-11 实测踩坑:档案数字全是"—"、榜单永远骨架、快照文件不生成)。
             .onAppear {
                 stats.refreshBaseline()
-                stats.refreshChart(kind: kind, period: period)
+                // 榜单收起时不查(那是一次 collector 进程+网络请求);展开那一下由
+                // onChange 补上。「那年今日」照常查:它的那句概述留在表头,收起来也要显示。
+                if !chartCollapsed { stats.refreshChart(kind: kind, period: period) }
                 stats.refreshOnThisDay()
                 pageInput = "\(stats.recentPage)"
             }
@@ -97,7 +104,8 @@ struct LastfmStatsSection: View {
 
     private var chartCard: some View {
         SettingsCard {
-            SettingsRow(icon: "chart.bar", title: L10n.t("听得最多")) {
+            collapsibleHeader(icon: "chart.bar", title: L10n.t("听得最多"),
+                              collapsed: $chartCollapsed) {
                 HStack(spacing: 10) {
                     Picker("", selection: Binding(
                         get: { kindRaw },
@@ -121,6 +129,7 @@ struct LastfmStatsSection: View {
                     .fixedSize()
                 }
             }
+            if !chartCollapsed {
             CardDivider()
             if let entries = stats.chart(kind, period) {
                 if entries.isEmpty {
@@ -140,6 +149,12 @@ struct LastfmStatsSection: View {
                 }, interactive: false)
                 .redacted(reason: .placeholder)
             }
+            }
+        }
+        // 收起时不查榜:那是一次 collector 进程 + 一轮网络请求,收起来了就别花
+        // (展开时补上,见下面的 onChange)
+        .onChange(of: chartCollapsed) { _, nowCollapsed in
+            if !nowCollapsed { stats.refreshChart(kind: kind, period: period) }
         }
     }
 
@@ -270,7 +285,9 @@ struct LastfmStatsSection: View {
 
     private var recentCard: some View {
         SettingsCard {
-            SettingsRow(icon: "clock", title: L10n.t("最近记录"))
+            collapsibleHeader(icon: "clock", title: L10n.t("最近记录"),
+                              collapsed: $recentCollapsed) { EmptyView() }
+            if !recentCollapsed {
             CardDivider()
             if stats.recent.isEmpty {
                 if stats.baselineFailed {
@@ -372,6 +389,7 @@ struct LastfmStatsSection: View {
                 }
                 .padding(.vertical, 5)
             }
+            }
         }
     }
 
@@ -416,6 +434,56 @@ struct LastfmStatsSection: View {
         pageInput = "\(target)"
         guard target != stats.recentPage else { return }
         stats.goToPage(target)
+    }
+
+    /// 卡片折叠表头。左半(图标+标题+副标题+箭头)整块可点,尾部控件只在展开时出现 ——
+    /// 收起来之后分段选择器既看不到内容也改不了什么,留着只是噪音。
+    ///
+    /// 刻意不复用 SettingsRow:那个组件的整行不可点(它的尾部本来就放交互控件,再套一层
+    /// Button 会把控件的点击吞掉)。这里手搭,但尺寸全部取自 SettingsRowMetrics,跟同一页
+    /// 其它卡的图标列/文字起点/内边距严格对齐。
+    private func collapsibleHeader<Trailing: View>(
+        icon: String, title: String, subtitle: String? = nil,
+        collapsed: Binding<Bool>,
+        @ViewBuilder trailing: () -> Trailing
+    ) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            Button {
+                withAnimation(.easeInOut(duration: 0.18)) { collapsed.wrappedValue.toggle() }
+            } label: {
+                HStack(alignment: .top, spacing: SettingsRowMetrics.iconTextSpacing) {
+                    Image(systemName: icon)
+                        .font(.system(size: 13))
+                        .foregroundStyle(Color.secondary)
+                        .frame(width: SettingsRowMetrics.iconWidth, alignment: .center)
+                        .padding(.top, 1)
+                    VStack(alignment: .leading, spacing: 2) {
+                        HStack(spacing: 5) {
+                            Text(title).font(.system(size: 13))
+                            Image(systemName: "chevron.down")
+                                .font(.system(size: 9, weight: .semibold))
+                                .foregroundStyle(.tertiary)
+                                .rotationEffect(.degrees(collapsed.wrappedValue ? -90 : 0))
+                        }
+                        if let subtitle, !subtitle.isEmpty {
+                            Text(subtitle)
+                                .font(.system(size: 11))
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                    Spacer(minLength: 12)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help(collapsed.wrappedValue ? L10n.t("展开") : L10n.t("收起"))
+            if !collapsed.wrappedValue {
+                trailing().labelsHidden().settingsGlassButtons()
+            }
+        }
+        .padding(.horizontal, SettingsRowMetrics.horizontalPadding)
+        .padding(.vertical, SettingsRowMetrics.verticalPadding)
     }
 
     private func pagerButton(systemImage: String, label: String,
@@ -487,15 +555,19 @@ struct LastfmStatsSection: View {
         Group {
             if let o = stats.onThisDay {
                 SettingsCard {
-                    SettingsRow(
+                    // 副标题留在表头:收起来之后它就是这张卡的摘要(那天听了多少),
+                    // 不至于收成一个只剩标题、什么都没说的条。
+                    collapsibleHeader(
                         icon: "calendar",
                         title: L10n.t("那年今日"),
                         // 不再在这里点名某一首:下面第一行就是它,重复一遍还容易让人以为
                         // 那是两件事(2026-08-12 改成"次数最多的前三首"之后)。
                         subtitle: String(
                             format: L10n.t("%1$@ 年前的今天听了 %2$@ 次，最常循环的是这几首"),
-                            "\(o.yearsAgo)", "\(o.total)")
-                    )
+                            "\(o.yearsAgo)", "\(o.total)"),
+                        collapsed: $onThisDayCollapsed
+                    ) { EmptyView() }
+                    if !onThisDayCollapsed {
                     CardDivider()
                     VStack(spacing: 0) {
                         ForEach(o.top) { entry in
@@ -539,6 +611,7 @@ struct LastfmStatsSection: View {
                         }
                     }
                     .padding(.vertical, 5)
+                    }
                 }
             }
         }
