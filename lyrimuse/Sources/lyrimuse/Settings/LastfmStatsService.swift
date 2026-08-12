@@ -92,6 +92,9 @@ final class LastfmStatsService: ObservableObject {
         let seq: Int
         let title: String
         let artist: String
+        /// scrobble 记录里带的专辑名(可能为空)。用来给同专辑的兄弟曲目共享封面,
+        /// 见 coverURL(for:)。老快照没有这个键,可选类型解码时自动为 nil。
+        var album: String?
         let imageURL: URL?
         /// nil = 这行是"正在播放"(Last.fm 把 nowplaying 行的 date 整个省掉)。
         let date: Date?
@@ -143,6 +146,17 @@ final class LastfmStatsService: ObservableObject {
     /// 键用 playCountKey 归一。注意它是"到此刻为止的总数",不是"那一次是第几次"——
     /// 后者由视图侧减去更新的同曲收听算出,见 LastfmStatsSection.playCount(at:)。
     @Published private(set) var trackPlayCounts: [String: Int] = [:]
+    /// 最近记录行的封面兜底。scrobble 记录自带的图常常是 Last.fm 的占位星星(被
+    /// imageURL 滤成 nil)—— 那是因为 scrobble 上报的专辑名跟 Last.fm 的规范实体对不上
+    /// (实测:上报"公转.自转",规范实体叫"公轉自轉",简繁+标点都不同),落到了一个没有图的
+    /// 条目上。track.getinfo 带 autocorrect 能纠到有图的那个,而它正是算播放次数时**已经
+    /// 在调**的同一个请求,封面白拿(2026-08-12 用户点出这条线索)。
+    @Published private(set) var recentTrackCovers: [String: URL] = [:]
+    /// 按 scrobble 里那个专辑名归一后的封面。给"getinfo 连专辑都没返回"的曲目兜底:
+    /// 同一张专辑里只要有一首纠正成功,这一整张的行都能共用它的封面。
+    @Published private(set) var recentAlbumCovers: [String: URL] = [:]
+    /// getinfo 查不到数据的曲目(Last.fm 压根没有这条目)。记下来别每轮刷新都重查一遍。
+    private var trackDetailsUnavailable = Set<String>()
     /// 上一次 applyRecent 时的窗口大小。窗口变了(点了"显示更多")就不做下面那套
     /// "同曲次数变多 → 旧总数作废"的判定:那时候几乎每首都会"变多",一判就是全表作废。
     private var lastAppliedRecentLimit = 0
@@ -202,6 +216,9 @@ final class LastfmStatsService: ObservableObject {
         artistAvatars = [:]
         trackCovers = [:]
         trackPlayCounts = [:]
+        recentTrackCovers = [:]
+        recentAlbumCovers = [:]
+        trackDetailsUnavailable = []
         playCountsInFlight = []
         lastAppliedRecentLimit = 0
         chartLoadingKeys = []
@@ -290,8 +307,10 @@ final class LastfmStatsService: ObservableObject {
         var charts: [String: [ChartEntry]]
         var artistAvatars: [String: URL]
         var trackCovers: [String: URL]
-        /// 老快照没有这个字段,解码时给空表(不能让整份快照因为缺它而解不出来)。
-        var trackPlayCounts: [String: Int]? 
+        /// 老快照没有这几个字段,解码时给空表(不能让整份快照因为缺它而解不出来)。
+        var trackPlayCounts: [String: Int]?
+        var recentTrackCovers: [String: URL]?
+        var recentAlbumCovers: [String: URL]?
     }
 
     private static let snapshotURL = FileManager.default.homeDirectoryForCurrentUser
@@ -310,6 +329,8 @@ final class LastfmStatsService: ObservableObject {
         artistAvatars = snap.artistAvatars
         trackCovers = snap.trackCovers
         trackPlayCounts = snap.trackPlayCounts ?? [:]
+        recentTrackCovers = snap.recentTrackCovers ?? [:]
+        recentAlbumCovers = snap.recentAlbumCovers ?? [:]
         // fetchedAt 刻意留空:所有刷新照常发生,快照只是首屏的底
     }
 
@@ -325,7 +346,8 @@ final class LastfmStatsService: ObservableObject {
                 recent: recent.filter { $0.date != nil },
                 recentLimit: recentLimit,
                 charts: charts, artistAvatars: artistAvatars, trackCovers: trackCovers,
-                trackPlayCounts: trackPlayCounts)
+                trackPlayCounts: trackPlayCounts,
+                recentTrackCovers: recentTrackCovers, recentAlbumCovers: recentAlbumCovers)
             guard let data = try? JSONEncoder().encode(snap) else { return }
             try? data.write(to: Self.snapshotURL, options: .atomic)
         }
@@ -386,6 +408,23 @@ final class LastfmStatsService: ObservableObject {
         }
     }
 
+    /// 专辑名归一(大小写/首尾空白不算差异)。空名返回 nil —— 空专辑不该互相共享封面。
+    nonisolated static func albumKey(_ album: String?) -> String? {
+        guard let a = album?.trimmingCharacters(in: .whitespaces), !a.isEmpty else { return nil }
+        return a.lowercased()
+    }
+
+    /// 一行最近记录该用哪张封面:自带的(scrobble 记录里的真图)→ getinfo 纠正后的曲目封面
+    /// → 同专辑兄弟曲目的封面。三级都没有才留空位。
+    func coverURL(for track: RecentTrack) -> URL? {
+        if let own = track.imageURL { return own }
+        if let byTrack = recentTrackCovers[Self.playCountKey(artist: track.artist, title: track.title)] {
+            return byTrack
+        }
+        if let key = Self.albumKey(track.album) { return recentAlbumCovers[key] }
+        return nil
+    }
+
     /// 曲目在播放次数表里的键:大小写/首尾空白不算差异(跟红点的宽松比对同一套口径)。
     nonisolated static func playCountKey(artist: String, title: String) -> String {
         artist.trimmingCharacters(in: .whitespaces).lowercased()
@@ -427,39 +466,48 @@ final class LastfmStatsService: ObservableObject {
     private func resolvePlayCounts(for rows: [RecentTrack]) {
         guard let cred = credentials else { return }
         var seen = Set<String>()
-        let missing = rows.compactMap { r -> (key: String, artist: String, title: String)? in
+        let missing = rows.compactMap { r -> (key: String, artist: String, title: String, album: String?)? in
             let key = Self.playCountKey(artist: r.artist, title: r.title)
-            guard trackPlayCounts[key] == nil, !playCountsInFlight.contains(key),
+            // 次数和封面共用这一次请求,任一还缺就得查;查过一次没有数据的不再重查。
+            let needs = trackPlayCounts[key] == nil || recentTrackCovers[key] == nil
+            guard needs, !trackDetailsUnavailable.contains(key), !playCountsInFlight.contains(key),
                   seen.insert(key).inserted, !r.artist.isEmpty, !r.title.isEmpty else { return nil }
-            return (key, r.artist, r.title)
+            return (key, r.artist, r.title, r.album)
         }
         guard !missing.isEmpty else { return }
         missing.forEach { playCountsInFlight.insert($0.key) }
         Task {
             defer { missing.forEach { playCountsInFlight.remove($0.key) } }
             var index = 0
-            await withTaskGroup(of: (String, Int?).self) { group in
+            await withTaskGroup(of: (String, String?, Int?, URL?).self) { group in
                 let maxConcurrent = 4
                 func addNext() {
                     guard index < missing.count else { return }
                     let item = missing[index]
                     index += 1
                     group.addTask { [weak self] in
-                        guard let self else { return (item.key, nil) }
+                        guard let self else { return (item.key, item.album, nil, nil) }
                         let json = await self.request(method: "track.getinfo", cred: cred,
                                                       extra: ["artist": item.artist, "track": item.title,
                                                               "autocorrect": "1", "username": cred.user])
-                        guard let json else { return (item.key, nil) }
-                        let n = await MainActor.run { () -> Int? in
-                            guard let s = self.dig(json, "track", "userplaycount") as? String else { return nil }
-                            return Int(s)
+                        guard let json else { return (item.key, item.album, nil, nil) }
+                        let parsed = await MainActor.run { () -> (Int?, URL?) in
+                            let n = (self.dig(json, "track", "userplaycount") as? String).flatMap { Int($0) }
+                            // 封面从纠正后的规范专辑实体上取 —— scrobble 自带的那张多半是占位星星。
+                            return (n, self.imageURL(self.dig(json, "track", "album", "image")))
                         }
-                        return (item.key, n)
+                        return (item.key, item.album, parsed.0, parsed.1)
                     }
                 }
                 for _ in 0..<min(maxConcurrent, missing.count) { addNext() }
-                for await (key, n) in group {
+                for await (key, album, n, cover) in group {
                     if let n, n > 0 { trackPlayCounts[key] = n }
+                    if let cover {
+                        recentTrackCovers[key] = cover
+                        // 同一张专辑的其它行(包括 getinfo 压根没返回专辑的那些)共用它
+                        if let ak = Self.albumKey(album) { recentAlbumCovers[ak] = cover }
+                    }
+                    if n == nil, cover == nil { trackDetailsUnavailable.insert(key) }
                     addNext()
                 }
             }
@@ -723,6 +771,7 @@ final class LastfmStatsService: ObservableObject {
                 seq: seq,
                 title: title,
                 artist: artist,
+                album: dig(item, "album", "#text") as? String,
                 imageURL: imageURL(item["image"]),
                 date: uts.flatMap { Double($0) }.map { Date(timeIntervalSince1970: $0) }
             )

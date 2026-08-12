@@ -280,7 +280,9 @@ struct LastfmStatsSection: View {
                             if let url = Self.trackURL(artist: t.artist, title: t.title) { NSWorkspace.shared.open(url) }
                         } label: {
                         HStack(spacing: 10) {
-                            AsyncImage(url: t.imageURL) { image in
+                            // 封面走三级兜底(自带 → getinfo 纠正 → 同专辑兄弟),理由见
+                            // LastfmStatsService.coverURL(for:)
+                            AsyncImage(url: stats.coverURL(for: t)) { image in
                                 image.resizable().aspectRatio(contentMode: .fill)
                             } placeholder: {
                                 RoundedRectangle(cornerRadius: 5).fill(.quaternary)
@@ -524,7 +526,7 @@ private struct LiveScrobbleRow: View {
         // 拿它显示"正在记录"就是在撒谎。真在别的设备上放时,那首歌跟本机这首对不上。
         if let np = stats.apiNowPlaying, stats.apiNowPlayingIsFresh, !matchesLocalTrack(np.title) {
             return LiveSource(title: np.title, artist: np.artist, artwork: nil,
-                              imageURL: np.imageURL, confirmed: true, remote: true)
+                              imageURL: stats.coverURL(for: np), confirmed: true, remote: true)
         }
         return nil
     }
