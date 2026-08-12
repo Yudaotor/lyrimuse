@@ -287,7 +287,7 @@ struct LastfmStatsSection: View {
                 if let at = stats.recentUpdatedAt {
                     // 这一页的数据是轮询来的(远端会话 45 秒一轮、否则两分钟),标一下它
                     // 是什么时候的,免得看着一个不动的列表猜是不是卡住了。
-                    Text(String(format: L10n.t("%@更新"), Self.relative(at)))
+                    Text(String(format: L10n.t("%@更新"), Self.coarseRelative(at)))
                         .font(.caption).foregroundStyle(.tertiary)
                         .help(String(format: L10n.t("上次刷新:%@"), Self.absolute(at)))
                 }
@@ -445,6 +445,13 @@ struct LastfmStatsSection: View {
     /// 刻意不复用 SettingsRow:那个组件的整行不可点(它的尾部本来就放交互控件,再套一层
     /// Button 会把控件的点击吞掉)。这里手搭,但尺寸全部取自 SettingsRowMetrics,跟同一页
     /// 其它卡的图标列/文字起点/内边距严格对齐。
+    /// 粗到分钟的相对时间。不到一分钟一律说"刚刚" —— 这行字每次刷新都会重算,秒级
+    /// 精度会让它一直跳数字(28 秒→45 秒→刚过 1 分…),而"上次刷新是多久以前"本来也
+    /// 不需要精确到秒(2026-08-12 用户反馈)。要精确时刻的话 tooltip 里有。
+    private static func coarseRelative(_ date: Date) -> String {
+        Date().timeIntervalSince(date) < 60 ? L10n.t("刚刚") : relative(date)
+    }
+
     private func collapsibleHeader<Trailing: View>(
         icon: String, title: String, subtitle: String? = nil,
         collapsed: Binding<Bool>,
