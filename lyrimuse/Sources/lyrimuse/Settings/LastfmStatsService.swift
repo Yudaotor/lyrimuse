@@ -363,6 +363,13 @@ final class LastfmStatsService: ObservableObject {
         trackPlayCounts = snap.trackPlayCounts ?? [:]
         recentTrackCovers = snap.recentTrackCovers ?? [:]
         recentAlbumCovers = snap.recentAlbumCovers ?? [:]
+        // 快照里的图提前解码进内存:否则冷启动第一次打开这一页,每张图都要先画一帧占位符
+        // 再从 URLCache 里异步取(见 ImageMemoryCache.prewarm)。
+        ImageMemoryCache.shared.prewarm(
+            Array(artistAvatars.values) + Array(recentTrackCovers.values)
+                + Array(recentAlbumCovers.values)
+                + charts.values.flatMap { $0.compactMap(\.imageURL) }
+                + recent.compactMap(\.imageURL))
         // fetchedAt 刻意留空:所有刷新照常发生,快照只是首屏的底
     }
 

@@ -240,25 +240,19 @@ struct LastfmStatsSection: View {
         // 还没解析出来/查不到时落回首字母色块 —— 头像是异步补上的,先字母后照片。
         // 歌曲榜(detail 非空、imageURL 为 nil 的行):用 track.getInfo 补出来的专辑封面
         if e.imageURL == nil, !e.detail.isEmpty, let cover = stats.trackCovers["\(e.detail)|\(e.name)"] {
-            AsyncImage(url: cover) { image in
-                image.resizable().aspectRatio(contentMode: .fill)
-            } placeholder: {
+            CachedImage(url: cover) {
                 RoundedRectangle(cornerRadius: 5).fill(.quaternary)
             }
             .frame(width: 26, height: 26)
             .clipShape(RoundedRectangle(cornerRadius: 5))
         } else if e.imageURL == nil, e.detail.isEmpty, let avatar = stats.artistAvatars[e.name] {
-            AsyncImage(url: avatar) { image in
-                image.resizable().aspectRatio(contentMode: .fill)
-            } placeholder: {
+            CachedImage(url: avatar) {
                 Circle().fill(Self.stableColor(for: e.name))
             }
             .frame(width: 26, height: 26)
             .clipShape(Circle())
         } else if let url = e.imageURL {
-            AsyncImage(url: url) { image in
-                image.resizable().aspectRatio(contentMode: .fill)
-            } placeholder: {
+            CachedImage(url: url) {
                 RoundedRectangle(cornerRadius: 5).fill(.quaternary)
             }
             .frame(width: 26, height: 26)
@@ -311,9 +305,7 @@ struct LastfmStatsSection: View {
                         HStack(spacing: 10) {
                             // 封面走三级兜底(自带 → getinfo 纠正 → 同专辑兄弟),理由见
                             // LastfmStatsService.coverURL(for:)
-                            AsyncImage(url: stats.coverURL(for: t)) { image in
-                                image.resizable().aspectRatio(contentMode: .fill)
-                            } placeholder: {
+                            CachedImage(url: stats.coverURL(for: t)) {
                                 RoundedRectangle(cornerRadius: 5).fill(.quaternary)
                             }
                             .frame(width: 26, height: 26)
@@ -578,9 +570,7 @@ struct LastfmStatsSection: View {
                                 }
                             } label: {
                                 HStack(spacing: 10) {
-                                    AsyncImage(url: stats.coverURL(for: t)) { image in
-                                        image.resizable().aspectRatio(contentMode: .fill)
-                                    } placeholder: {
+                                    CachedImage(url: stats.coverURL(for: t)) {
                                         RoundedRectangle(cornerRadius: 5).fill(.quaternary)
                                     }
                                     .frame(width: 26, height: 26)
@@ -714,9 +704,7 @@ private struct LiveScrobbleRow: View {
                             if let img = live.artwork {
                                 Image(nsImage: img).resizable().aspectRatio(contentMode: .fill)
                             } else if let url = live.imageURL {
-                                AsyncImage(url: url) { image in
-                                    image.resizable().aspectRatio(contentMode: .fill)
-                                } placeholder: {
+                                CachedImage(url: url) {
                                     RoundedRectangle(cornerRadius: 5).fill(.quaternary)
                                 }
                             } else {

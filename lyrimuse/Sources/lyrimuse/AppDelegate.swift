@@ -98,6 +98,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // 默认容量小得可怜 —— 最近记录展开到 100 行再切个 tab 回来,九十多张封面全部
         // 重新下载(审阅确认)。给共享缓存一个像样的容量,磁盘部分跨启动依然有效。
         URLCache.shared = URLCache(memoryCapacity: 32 << 20, diskCapacity: 256 << 20)
+        // 启动后把 Last.fm 信息页那批小图(头像/封面)提前解码进内存:那一页是用户点进
+        // 设置才打开的,启动到点进去之间有充足的空窗,预热完再打开就不会闪占位符了
+        // (触发点是 LastfmStatsService 首次实例化 → loadSnapshot → prewarm)。
+        // 延后 3 秒,不跟启动本身抢资源;没连 Last.fm 的话 loadSnapshot 直接返回,零成本。
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+            _ = LastfmStatsService.shared
+        }
         // 系统默认的 .help(_:) 悬浮提示延迟(NSInitialToolTipDelay,大约 1~1.5 秒)
         // 太长,容易被误以为悬浮提示没工作。这个值是 AppKit 从本 App 自己的 UserDefaults
         // 域里读的,不是全局系统设置,只影响这个 App 进程内的 .help() 提示,不会改到

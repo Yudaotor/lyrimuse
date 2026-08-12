@@ -135,16 +135,21 @@ struct SettingsView: View {
                     Button {
                         withAnimation { isAdditionalFeaturesExpanded.toggle() }
                     } label: {
+                        // 箭头紧跟标题,不用 Spacer 顶到最右:侧边栏只有 220pt 宽,顶到最右
+                        // 会离边缘只剩 3.5pt(比下面那些行的胶囊还往外突出一截)、中间空出
+                        // 近 100pt,一个孤零零的箭头吊在那儿(2026-08-12 用户反馈)。跟
+                        // Last.fm 那三张卡的折叠表头也是同一个样式:箭头就在标题旁边。
                         HStack(spacing: 4) {
                             Text(L10n.t("实验室功能"))
                             Image(systemName: "questionmark.circle")
                                 .font(.caption2)
                                 .foregroundStyle(.secondary)
-                            Spacer()
                             Image(systemName: "chevron.right")
                                 .font(.caption2.weight(.semibold))
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(.tertiary)
                                 .rotationEffect(.degrees(isAdditionalFeaturesExpanded ? 90 : 0))
+                                .padding(.leading, 1)
+                            Spacer(minLength: 0)
                         }
                         .contentShape(Rectangle())
                     }
