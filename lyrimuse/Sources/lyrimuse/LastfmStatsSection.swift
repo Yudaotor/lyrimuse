@@ -548,6 +548,18 @@ private struct LiveScrobbleRow: View {
             == b.trimmingCharacters(in: .whitespaces).lowercased()
     }
 
+    /// 远端会话看着还活着吗 —— 决定要不要用 45 秒的快节奏轮询。
+    ///
+    /// 不能只看"此刻有没有 nowplaying":换歌的空档、手机侧桥接偶尔漏发 now-playing,都会让
+    /// 它瞬间为 nil,而刷新恰好落在那一刻的话,快轮询就把自己关掉了 —— 接下来只能等父视图
+    /// 两分钟那一拍,期间恢复播放也看不到实时行(2026-08-12 用户反馈"怎么不更新了")。
+    /// 补上"最近十分钟内有过 scrobble"这条:刚听过就说明这个会话还在,值得继续盯着。
+    private var remoteSessionLikelyActive: Bool {
+        if stats.apiNowPlaying != nil { return true }
+        guard let newest = stats.recent.first(where: { $0.date != nil })?.date else { return false }
+        return Date().timeIntervalSince(newest) < 10 * 60
+    }
+
     /// 给 onChange 用的身份串:本机换歌、远端换歌、本机↔远端来源切换都算变化。
     private var liveKey: String {
         guard let live else { return "" }
@@ -640,13 +652,13 @@ private struct LiveScrobbleRow: View {
             }
         }
         // 远端会话(在别的设备上放)时,这一行的唯一数据来源就是轮询:父视图那轮 2 分钟
-        // 对一首三四分钟的歌太慢,整首歌可能只露一次面。这里在**确实处于远端记录**时
-        // 加密到 45 秒,本机播放/没在放时不发任何请求(本机有 poller 实时驱动,不需要)。
+        // 对一首三四分钟的歌太慢,整首歌可能只露一次面。这里在远端会话看着还活着时加密到
+        // 45 秒;本机在放不发请求(那边由 poller 实时驱动,不需要轮询)。
         .task {
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: 45_000_000_000)
                 guard !Task.isCancelled else { break }
-                guard !poller.isPlayingNow, stats.apiNowPlaying != nil, stats.apiNowPlayingIsFresh else { continue }
+                guard !poller.isPlayingNow, remoteSessionLikelyActive else { continue }
                 stats.refreshBaseline(force: true)
             }
         }
