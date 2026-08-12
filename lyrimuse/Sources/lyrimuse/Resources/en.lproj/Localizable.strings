@@ -524,3 +524,6 @@
 "第 %1$@ / %2$@ 页" = "Page %1$@ of %2$@";
 "第" = "Page";
 "/ %@ 页" = "of %@";
+"%1$@ 年前的今天听了 %2$@ 次，最常循环的是这几首" = "%1$@ year(s) ago today: %2$@ plays, most looped:";
+"%@ 次" = "%@ plays";
+"那天最后一次:%@" = "Last played that day: %@";

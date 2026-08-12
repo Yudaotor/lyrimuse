@@ -189,12 +189,18 @@ final class LastfmStatsService: ObservableObject {
     @Published private(set) var onThisDay: OnThisDayResult?
 
     struct OnThisDayResult: Equatable {
+        /// 当天播放最多的一首:曲目本身 + 那天听了几次 + 那天最后一次的时刻。
+        struct TopTrack: Equatable, Identifiable {
+            let track: RecentTrack
+            let count: Int
+            let lastPlayed: Date?
+            var id: String { track.id }
+        }
         let yearsAgo: Int
         let total: Int
-        let topTitle: String
-        let topArtist: String
-        let topCount: Int
-        let rows: [RecentTrack]
+        /// 当天播放最多的前三首(次数降序)。2026-08-12 从"当天最后听的三首"改成这个:
+        /// 副标题讲的是"循环最多",下面却列着"最后听的",一张卡说两套口径,用户实测被绕住。
+        let top: [TopTrack]
     }
 
     private var fetchedAt: [String: Date] = [:]
@@ -270,36 +276,49 @@ final class LastfmStatsService: ObservableObject {
             for yearsAgo in 1...3 {
                 guard let anchor = cal.date(byAdding: .year, value: -yearsAgo, to: Date()) else { continue }
                 let from = cal.startOfDay(for: anchor)
-                guard let json = await request(method: "user.getrecenttracks", cred: cred,
-                                               extra: ["limit": "100",
-                                                       "from": String(Int(from.timeIntervalSince1970)),
-                                                       "to": String(Int(from.timeIntervalSince1970) + 86400)])
+                let base = ["from": String(Int(from.timeIntervalSince1970)),
+                            "to": String(Int(from.timeIntervalSince1970) + 86400),
+                            "limit": String(onThisDayPageSize)]
+                guard let first = await request(method: "user.getrecenttracks", cred: cred, extra: base)
                 else { continue }
-                let total = attrTotal(json)
-                let rows = parseRecent(json).filter { $0.date != nil }
+                let total = attrTotal(first)
+                var rows = parseRecent(first).filter { $0.date != nil }
                 guard total > 0, !rows.isEmpty else { continue }
-                var counts: [String: Int] = [:]
-                var sample: [String: RecentTrack] = [:]
-                for r in rows {
-                    let k = "\(r.artist)|\(r.title)"
-                    counts[k, default: 0] += 1
-                    if sample[k] == nil { sample[k] = r }
-                }
-                guard let top = counts.max(by: { $0.value < $1.value }),
-                      let topTrack = sample[top.key] else { continue }
-                var seen = Set<String>()
-                var display: [RecentTrack] = []
-                for r in rows {
-                    let k = "\(r.artist)|\(r.title)"
-                    if seen.insert(k).inserted {
-                        display.append(r)
-                        if display.count == 3 { break }
+                // 统计口径必须跟"听了 N 次"这个数对得上:一页 200 条盖不住的重听大日子,
+                // 再翻几页补齐,不然会出现"总数是全天的、最多那首却只从最近 200 条里挑"
+                // 的混用(2026-08-12 用户点出)。翻页上限兜住极端值,超出部分如实少算。
+                let totalPages = Int(dig(first, "recenttracks", "@attr", "totalPages") as? String ?? "") ?? 1
+                if totalPages > 1 {
+                    for page in 2...min(totalPages, onThisDayMaxPages) {
+                        guard let more = await request(method: "user.getrecenttracks", cred: cred,
+                                                       extra: base.merging(["page": String(page)]) { _, new in new })
+                        else { break }
+                        rows.append(contentsOf: parseRecent(more).filter { $0.date != nil })
                     }
                 }
-                onThisDay = OnThisDayResult(
-                    yearsAgo: yearsAgo, total: total,
-                    topTitle: topTrack.title, topArtist: topTrack.artist,
-                    topCount: top.value, rows: display)
+                var counts: [String: Int] = [:]
+                var sample: [String: RecentTrack] = [:]
+                var lastPlayed: [String: Date] = [:]
+                for r in rows {
+                    let k = Self.playCountKey(artist: r.artist, title: r.title)
+                    counts[k, default: 0] += 1
+                    if sample[k] == nil { sample[k] = r } // 响应是倒序,首见即当天最后一次
+                    if let d = r.date, lastPlayed[k] == nil || d > lastPlayed[k]! { lastPlayed[k] = d }
+                }
+                // 确定性排序:次数降序 → 当天最后一次更晚的在前 → 歌名。少了后两级的话,
+                // 并列时取谁全看字典迭代序,同一天刷两次能给出不同的"最多那首"。
+                let ranked = counts.keys.compactMap { key -> OnThisDayResult.TopTrack? in
+                    guard let track = sample[key], let n = counts[key] else { return nil }
+                    return OnThisDayResult.TopTrack(track: track, count: n, lastPlayed: lastPlayed[key])
+                }.sorted { a, b in
+                    if a.count != b.count { return a.count > b.count }
+                    let ad = a.lastPlayed ?? .distantPast, bd = b.lastPlayed ?? .distantPast
+                    if ad != bd { return ad > bd }
+                    return a.track.title < b.track.title
+                }
+                guard !ranked.isEmpty else { continue }
+                onThisDay = OnThisDayResult(yearsAgo: yearsAgo, total: total,
+                                            top: Array(ranked.prefix(3)))
                 return
             }
         }
@@ -537,6 +556,11 @@ final class LastfmStatsService: ObservableObject {
     /// 这边还红着说正在记录。以"我们第一次看到这首"为起点计时:对开页面前就开始放的
     /// 那首,这个起点偏晚,但它要的只是一个"别一直挂着"的封顶,不是精确播放时长。
     static let apiNowPlayingMaxAge: TimeInterval = 15 * 60
+
+    /// 「那年今日」取当天记录的分页参数。200 是 Last.fm recenttracks 单页上限;
+    /// 3 页 = 600 次播放,比任何一天的真实收听量都宽裕。
+    private let onThisDayPageSize = 200
+    private let onThisDayMaxPages = 3
     var apiNowPlayingIsFresh: Bool {
         guard apiNowPlaying != nil, let since = apiNowPlayingSince else { return false }
         return Date().timeIntervalSince(since) < Self.apiNowPlayingMaxAge

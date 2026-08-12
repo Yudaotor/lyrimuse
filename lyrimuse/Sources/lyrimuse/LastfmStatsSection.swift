@@ -490,20 +490,23 @@ struct LastfmStatsSection: View {
                     SettingsRow(
                         icon: "calendar",
                         title: L10n.t("那年今日"),
+                        // 不再在这里点名某一首:下面第一行就是它,重复一遍还容易让人以为
+                        // 那是两件事(2026-08-12 改成"次数最多的前三首"之后)。
                         subtitle: String(
-                            format: L10n.t("%1$@ 年前的今天听了 %2$@ 次，循环最多的是《%3$@》"),
-                            "\(o.yearsAgo)", "\(o.total)", o.topTitle)
+                            format: L10n.t("%1$@ 年前的今天听了 %2$@ 次，最常循环的是这几首"),
+                            "\(o.yearsAgo)", "\(o.total)")
                     )
                     CardDivider()
                     VStack(spacing: 0) {
-                        ForEach(o.rows) { t in
+                        ForEach(o.top) { entry in
+                            let t = entry.track
                             Button {
                                 if let url = Self.trackURL(artist: t.artist, title: t.title) {
                                     NSWorkspace.shared.open(url)
                                 }
                             } label: {
                                 HStack(spacing: 10) {
-                                    AsyncImage(url: t.imageURL) { image in
+                                    AsyncImage(url: stats.coverURL(for: t)) { image in
                                         image.resizable().aspectRatio(contentMode: .fill)
                                     } placeholder: {
                                         RoundedRectangle(cornerRadius: 5).fill(.quaternary)
@@ -515,11 +518,10 @@ struct LastfmStatsSection: View {
                                         Text(t.artist).font(.system(size: 10.5)).foregroundStyle(.secondary).lineLimit(1)
                                     }
                                     Spacer()
-                                    if let date = t.date {
-                                        // 那天的具体时刻(相对时间在跨年场景没有信息量)
-                                        Text(Self.absolute(date))
-                                            .font(.caption).foregroundStyle(.tertiary).monospacedDigit()
-                                    }
+                                    // 尾部给"那天听了几次" —— 这张卡讲的是那一天,具体时刻
+                                    // 意义不大,挪进 tooltip。
+                                    Text(String(format: L10n.t("%@ 次"), "\(entry.count)"))
+                                        .font(.caption).foregroundStyle(.tertiary).monospacedDigit()
                                 }
                                 .padding(.horizontal, 14)
                                 .padding(.vertical, 5)
@@ -531,7 +533,9 @@ struct LastfmStatsSection: View {
                             }
                             .buttonStyle(.plain)
                             .onHover { hoveredRow = $0 ? "otd|\(t.id)" : (hoveredRow == "otd|\(t.id)" ? nil : hoveredRow) }
-                            .help(L10n.t("在 Last.fm 打开"))
+                            .help(entry.lastPlayed.map {
+                                String(format: L10n.t("那天最后一次:%@"), Self.absolute($0))
+                            } ?? L10n.t("在 Last.fm 打开"))
                         }
                     }
                     .padding(.vertical, 5)
