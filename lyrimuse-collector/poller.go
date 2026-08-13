@@ -172,6 +172,26 @@ const nearDuplicateWindow = 30 * time.Minute
 // 误判成"iPhone 新收听"转发进去，造成同一首歌历史里一条 mac 一条 iphone 的重复。这里
 // 给足 24 小时覆盖观察到的最长延迟；缓冲区里存的 (artist,title,uts) 三元组一天顶多
 // 几百条，内存开销可以忽略。
+// bridgeMaxListenAge:bridge 只转发**足够新**的 Last.fm 记录,更老的一律跳过。
+//
+// 修一个既有缺陷 + 为回填铺路,一举两得:
+//
+//  1. **既有缺陷**:forwarded 集合是 7 天 TTL(dedup.go 的 forwardedTTL),而 bridge 读的是
+//     `user.getrecenttracks limit=50` —— 一个听歌频繁的用户,最近 50 条只覆盖一两天,
+//     远小于 7 天,所以"被 trim 掉的条目还留在窗口里"不会发生。但一个**听歌很少**的用户
+//     (一周十几首),最近 50 条能横跨好几周:超过 7 天的条目被 trim → 集合里查不到 →
+//     bridge 又转发一次 → 记入集合 → 7 天后再被裁……周期性地把同一条重复灌进 ListenBrainz。
+//     整个链条只靠"窗口跨度 < TTL"这条**隐式**不变量撑着,而那取决于用户听歌多勤。
+//  2. **回填**:回填会往 Last.fm 写带过去时间戳的 scrobble。那些条目如果落进 bridge 的
+//     可见窗口,会被当成"真实 iPhone 收听"再转发进 LB(设备归属还会被错标成 iphone)。
+//
+// 3 天这个值:比观察到的最长回声延迟(FastScrobbler 跨设备同步可到跨夜,见
+// recentMacListenRetention 那段)宽出一倍多,又明显小于 forwardedTTL 的 7 天 —— 必须小于,
+// 否则被 trim 的条目仍能过闸,缺陷 1 就没修掉。
+//
+// 这道闸**无状态**:不读任何集合、不受 trim 影响,所以永久有效,不像 TTL 那样会过期。
+const bridgeMaxListenAge = 3 * 24 * time.Hour
+
 const recentMacListenRetention = 24 * time.Hour
 
 // recentListen 是最近一条已确认的 Mac 完成收听(artist/title/uts)，只用于
@@ -500,6 +520,15 @@ func (p *poller) applySubmitOutcome(r submitOutcome) {
 	// 在下面的成功分支里,LB 挂则两边一起停摆(审阅确认)。LB 失败重试成功后会再次走到
 	// 这里,mirrorScrobbleTracked 的幂等守卫保证不重复提交。
 	p.mirrorScrobbleTracked(r.meta.Artist, r.meta.Title, r.meta.Album, r.startedAt)
+	// 本地收听日志:**无条件**记一笔,不看任何账号配没配(见 listenlog.go 顶部注释)。
+	//
+	// 位置必须在下面那句 `if r.err != nil { return }` **之前** —— 否则 LB token 填错
+	// 或 LB 挂掉的用户就漏了,"无论如何都写"这个前提就不成立。这跟紧上方 2026-08-11
+	// 把 Last.fm 镜像从 LB 成功分支里挪出来是同一个道理。
+	// 只在没有在往 Last.fm 提交时才记 —— 见 appendListen 的注释。
+	if p.lfm == nil {
+		appendListen(r.meta.Artist, r.meta.Title, r.meta.Album, r.startedAt, r.meta.Duration)
+	}
 	if r.err != nil {
 		log.Printf("submit listen failed: %v", r.err)
 		return
@@ -704,9 +733,15 @@ func (p *poller) handle(now time.Time, reanchored, loopRestart bool) {
 // 结果送回主循环后才跑。
 //
 // 2026-07-29:不再看一个独立的 features.LastfmBridge 开关——Last.fm 桥接凭据 +
-// ListenBrainz 账号都配好,就默认跑;这两项本来就是 Swift 侧 UI 上打开那个开关的
-// 前置条件(config.lastfmBridgeMissingHint()==nil 且 isListenBrainzConfigured 都
-// 满足才让点),独立开关只是多一次点击,没有实际区分度。
+// ListenBrainz 账号都配好,就默认跑;独立开关只是多一次点击,没有实际区分度。
+//
+// ⚠️ 2026-08-13 更正:这段原来还断言"这两项本来就是 Swift 侧 UI 上打开那个开关的前置
+// 条件(lastfmBridgeMissingHint()==nil 且 isListenBrainzConfigured 都满足才让点)"——
+// 那句话是**错的**。下面这个门要求 cfg.User(ListenBrainz 用户名)非空,而 Swift 侧的
+// isListenBrainzConfigured 只看 token,当时 UI 上用户名那栏还标着"选填"。于是只填
+// token 的用户在设置页看到桥接是"活的",这里却直接 return,什么都不发生、也不报错。
+// Swift 侧现已补上 isListenBrainzReadable(token+用户名)专门表示"能读统计",跟这个门
+// 对齐;用户名输入框的提示也改成了"听歌报告需要"。改这里的条件时记得同步那一侧。
 func (p *poller) bridge(now time.Time) {
 	if p.cfg.LastfmUser == "" || p.cfg.lastfmBridgeAPIKey() == "" || p.cfg.User == "" || p.cfg.Token == "" {
 		return
@@ -759,6 +794,11 @@ func (p *poller) applyBridgeResult(r bridgeFetchResult) {
 	} else {
 		for i := len(done) - 1; i >= 0; i-- { // oldest → newest
 			s := done[i]
+			// 年龄闸,见 bridgeMaxListenAge。放在所有集合判断**之前**:它无状态,
+			// 不依赖 forwarded/lfmMirrored 是否还留着对应条目。
+			if s.UTS > 0 && now.Unix()-s.UTS > int64(bridgeMaxListenAge/time.Second) {
+				continue
+			}
 			if s.UTS <= 0 || p.forwarded[s.UTS] {
 				continue // 已转发过(不看时间顺序)→ 跳,天然容忍乱序/迟到
 			}
@@ -960,6 +1000,12 @@ func run(ctx context.Context, cfg *config, lb *lbClient) error {
 				// Last.fm 镜像:与 LB 解耦,且必须走同步变体 —— 异步 goroutine 活不过
 				// 紧接着的 return(见 mirrorScrobbleSync 注释)。
 				p.mirrorScrobbleSync(flushCtx, p.sess.meta.Artist, p.sess.meta.Title, p.sess.meta.Album, p.sess.startedAt.Unix())
+				// 同上:退出前这最后一首也是一次算数的收听,本地日志不能漏。放在 LB
+				// 提交之前,理由跟 applySubmitOutcome 那处一致。
+				if p.lfm == nil {
+					appendListen(p.sess.meta.Artist, p.sess.meta.Title, p.sess.meta.Album,
+						p.sess.startedAt.Unix(), p.sess.meta.Duration)
+				}
 				if err := lb.submit(flushCtx, "single", p.sess.startedAt.Unix(), lbMeta(p.sess.meta)); err != nil {
 					log.Printf("final listen flush failed: %v", err)
 				} else {

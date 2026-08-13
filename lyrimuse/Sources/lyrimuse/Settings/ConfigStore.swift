@@ -180,7 +180,22 @@ public final class ConfigStore: ObservableObject {
     // 值)而不是当前 @Published 字段,道理跟 isDirty 一样:用户刚敲了几个字符还没点
     // 保存,不该被判定成"已配置"。返回值是具体缺哪个字段的提示文案,全部配置齐全时
     // 返回 nil。
+    /// 能不能**往** ListenBrainz 提交收听。提交只需要 token,所以这里只看 token。
     public var isListenBrainzConfigured: Bool { !savedSnapshot.listenbrainzToken.isEmpty }
+
+    /// 能不能**从** ListenBrainz 读回统计(听歌报告的数据源、Last.fm 桥接的去重比对)。
+    ///
+    /// 读统计必须带用户名 —— collector 侧 daily.go / weekly.go 是把它当 API 参数传进
+    /// `listenbrainzDigestStats(…, p.cfg.User, …)` 的,没有用户名根本无从查起。所以它跟
+    /// "能提交"是两个不同的条件,不能共用 isListenBrainzConfigured。
+    ///
+    /// 2026-08-13 补。在此之前 Swift 全程只看 token,而 Go 三处(weekly.go:200 /
+    /// daily.go:82 / poller.go:711)都要求 user 和 token 同时非空 —— 于是一个只填了 token
+    /// 的用户(UI 上用户名那栏当时还写着"选填"),在设置页看到开关能开、数据源显示
+    /// ListenBrainz,而 daemon 侧周报、日报、桥接三件事全部静默跳过,没有任何提示。
+    public var isListenBrainzReadable: Bool {
+        !savedSnapshot.listenbrainzToken.isEmpty && !savedSnapshot.listenbrainzUser.isEmpty
+    }
 
     // 两句 hint 都带"（可选）"——网页展示页的"正在播放"/历史这两项基础功能光配
     // ListenBrainz 就够用,state-worker 完全是可选的加分项(留言墙/表情反应/访客计数/

@@ -199,9 +199,15 @@ func destinationStatus(for destination: AccountDestination, config: ConfigStore,
     case .listenBrainz:
         // ListenBrainz 是可选账号(只想用悬浮歌词可以完全不配),未配置不算硬性错误,
         // 跟其它卡片一致用橙色"缺凭据"提示。
-        return config.isListenBrainzConfigured
-            ? .active(config.listenbrainzUser.isEmpty ? nil : String(format: L10n.t("已连接为 @%@"), config.listenbrainzUser))
-            : .missingCreds(L10n.t("未配置（可选）"))
+        if config.isListenBrainzReadable {
+            return .active(String(format: L10n.t("已连接为 @%@"), config.listenbrainzUser))
+        }
+        // 只填了 token、没填用户名:提交收听其实已经在跑了,但听歌报告读不回数据。这跟
+        // "压根没配"是两种不同的状态,混成一句"未配置"会让填了 token 的人以为自己没填。
+        if config.isListenBrainzConfigured {
+            return .missingCreds(L10n.t("还缺用户名，听歌报告用不了"))
+        }
+        return .missingCreds(L10n.t("未配置（可选）"))
     case .stateRelay:
         if let hint = config.stateRelayMissingHint() { return .missingCreds(hint) }
         return .active()
@@ -285,6 +291,8 @@ struct AccountLinkingTab: View {
     @ObservedObject private var config = ConfigStore.shared
     @ObservedObject private var features = FeatureSettingsStore.shared
     @ObservedObject private var lastfmConnect = LastfmConnectController.shared
+    @ObservedObject private var backfill = ScrobbleBackfillService.shared
+    @State private var pendingListensExpanded = false
     // 只为了让手动切换语言时这块详情页重新渲染,同 AccountSidebarRow 的理由。
     @ObservedObject private var languageSettings = AppSettings.shared
 
@@ -413,7 +421,10 @@ struct AccountLinkingTab: View {
     // →Last.fm,只配了一个→用那个,都没配→空字符串(交给调用方按'需要先配置'处理)"解析。
     private func resolvedDigestSource(preference: String) -> String {
         let lastfmOK = config.lastfmBridgeMissingHint() == nil
-        let lbOK = config.isListenBrainzConfigured
+        // 数据源是要去**读**统计的,所以看 isListenBrainzReadable(token+用户名),
+        // 不是 isListenBrainzConfigured(只有 token)—— 后者会让只填 token 的用户
+        // 在这里看到 ListenBrainz 可选,而 collector 那边永远跳过。
+        let lbOK = config.isListenBrainzReadable
         switch preference {
         case "lastfm": if lastfmOK { return "lastfm" }
         case "listenbrainz": if lbOK { return "listenbrainz" }
@@ -431,7 +442,7 @@ struct AccountLinkingTab: View {
     private func digestCrossCard(source: String) -> (hint: String?, target: AccountDestination) {
         switch source {
         case "lastfm": return (hint: config.lastfmBridgeMissingHint(), target: .lastfm)
-        case "listenbrainz": return (hint: config.isListenBrainzConfigured ? nil : L10n.t("未配置"), target: .listenBrainz)
+        case "listenbrainz": return (hint: config.isListenBrainzReadable ? nil : L10n.t("还缺用户名"), target: .listenBrainz)
         default: return (hint: L10n.t("未配置"), target: .listenBrainz)
         }
     }
@@ -514,7 +525,7 @@ struct AccountLinkingTab: View {
                     SecretFieldRow(L10n.t("账户 Token"), value: $config.listenbrainzToken)
                     Link(L10n.t("在 ListenBrainz 网站获取 Token →"), destination: URL(string: "https://listenbrainz.org/settings/")!)
                         .font(.caption)
-                    TextField(L10n.t("用户名（选填，用于界面显示）"), text: $config.listenbrainzUser)
+                    TextField(L10n.t("用户名（听歌报告需要）"), text: $config.listenbrainzUser)
                 }
             }
         }
@@ -568,8 +579,109 @@ struct AccountLinkingTab: View {
     //     没开"这个死状态(用户以为连上就会记录,实际还差一个开关);断开时同步关掉;
     //   - 手填用户名框删掉:授权成功返回的真实用户名自动回填(LastfmAuthFlow 里已有
     //     该逻辑),桥接/周报读的就是它。
+    /// 未连接时那一栏:本地已记录的收听清单。
+    ///
+    /// 折起来只占一行(显示条数),展开才是清单 —— 攒到几十首时不该把整页顶开。
+    @ViewBuilder
+    private var pendingListensRow: some View {
+        let items = backfill.pending?.items ?? []
+        SettingsRawRow(insetToText: true) {
+            DisclosureGroup(isExpanded: $pendingListensExpanded) {
+                // 高度封顶 + 自己滚:清单可能几十上百条,不能让它无限撑高这张卡。
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 4) {
+                        ForEach(items, id: \.uts) { item in
+                            HStack(spacing: 6) {
+                                Text(item.title)
+                                    .font(.caption)
+                                    .lineLimit(1)
+                                Text(item.artist)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                                Spacer(minLength: 8)
+                                Text(Self.listenTimeText(item.uts))
+                                    .font(.caption2)
+                                    .foregroundStyle(.tertiary)
+                                    .monospacedDigit()
+                            }
+                        }
+                    }
+                    .padding(.top, 4)
+                }
+                .frame(maxHeight: 180)
+            } label: {
+                Label(
+                    String(format: L10n.t("本地已记录 %@ 首，连接后可补提交"), "\(items.count)"),
+                    systemImage: "tray.full"
+                )
+                .font(.callout)
+            }
+        }
+    }
+
+    private static func listenTimeText(_ uts: Int64) -> String {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .short
+        formatter.timeStyle = .short
+        return formatter.string(from: Date(timeIntervalSince1970: TimeInterval(uts)))
+    }
+
+    /// 「补提交历史收听」那一行。数量来自 collector 的 dry-run(不发任何请求)。
+    @ViewBuilder
+    private var backfillRow: some View {
+        let pending = backfill.pending?.eligible ?? 0
+        let tooOld = backfill.pending?.skippedTooOld ?? 0
+        let last = backfill.lastRun
+        SettingsRow(
+            icon: "clock.arrow.circlepath",
+            title: L10n.t("补提交历史收听"),
+            subtitle: backfillSubtitle(pending: pending, tooOld: tooOld, last: last)
+        ) {
+            HStack(spacing: 8) {
+                if backfill.busy { ProgressView().controlSize(.small) }
+                Button(L10n.t("补提交")) { backfill.runBackfill() }
+                    .disabled(backfill.busy || pending == 0)
+            }
+        }
+    }
+
+    private func backfillSubtitle(
+        pending: Int, tooOld: Int, last: ScrobbleBackfillService.Outcome?
+    ) -> String {
+        // 刚跑完就报这次的结果,比"还剩几条"更是用户此刻想知道的。
+        if let last, last.accepted + last.ignored + last.quarantined > 0 {
+            var parts = [String(format: L10n.t("已补 %@ 条"), "\(last.accepted)")]
+            if last.quarantined > 0 {
+                parts.append(String(format: L10n.t("%@ 条状态未知，不会自动重试"), "\(last.quarantined)"))
+            }
+            if last.ignored > 0 {
+                parts.append(String(format: L10n.t("%@ 条被 Last.fm 拒绝"), "\(last.ignored)"))
+            }
+            return parts.joined(separator: "，")
+        }
+        if pending == 0 {
+            // 没有可补的是最常见的状态(一直连着账号的人永远看到这句),所以这句话要
+            // 解释清楚这栏存在的意义,而不是干巴巴一个"没有"。
+            return tooOld > 0
+                ? String(format: L10n.t("没有待补的收听；%@ 条已超过 Last.fm 能接受的两周期限"), "\(tooOld)")
+                : L10n.t("没连账号时听的歌会记在本地，连上之后可以补提交到 Last.fm")
+        }
+        var s = String(format: L10n.t("有 %@ 条本地收听还没提交"), "\(pending)")
+        if tooOld > 0 {
+            s += String(format: L10n.t("，另有 %@ 条太旧、Last.fm 不再接受"), "\(tooOld)")
+        }
+        return s
+    }
+
     @ViewBuilder
     private var lastfmFields: some View {
+        // ⚠️ refreshPending 必须挂在**总会渲染**的这张卡上,不能挂在下面那两行里。
+        //
+        // 2026-08-13 用户实测"断开听了几首、回来什么都没有"抓到的死锁:那两行的显示条件都是
+        // `eligible > 0`,而 eligible 又只有 refreshPending 跑过才不是 0 —— 把刷新挂在它们
+        // 自己的 .onAppear 上,就成了"不显示 → 不刷新 → 永远是 0 → 永远不显示"。
+        // 当时数据层是完全正确的(日志里躺着 3 条待补),纯粹是界面永远不去问一次。
         SettingsCard {
             SettingsRow(
                 icon: "arrow.up.circle",
@@ -594,6 +706,14 @@ struct AccountLinkingTab: View {
                     }
                 ))
             }
+            // 未连接时:把本地已经记下来的歌列出来。
+            //
+            // 光说"会记在本地"是空头承诺 —— 用户没法验证到底记了没有、记了什么。列出来
+            // 之后这件事就是可核对的,连账号时也能预期"补上去大概是这些"。
+            if !lastfmConnected, (backfill.pending?.eligible ?? 0) > 0 {
+                CardDivider()
+                pendingListensRow
+            }
             if lastfmConnected, LastfmMirrorStatus.current != nil {
                 CardDivider()
                 SettingsRawRow(insetToText: true) {
@@ -606,6 +726,18 @@ struct AccountLinkingTab: View {
                         Button(L10n.t("重新连接")) { showLastfmWizard = true }
                     }
                 }
+            }
+            // 补提交历史收听 —— **只在真有东西可补时才出现**。
+            //
+            // 这是个一辈子可能只点一次的操作(先用了一阵、之后才连账号的那段空窗),
+            // 常驻一行"没有待补的收听"纯属占地方。有内容才露出来,没内容就完全不存在。
+            //
+            // 仍然坚持"必须人工点一下"、不做连接成功自动弹窗:这一步往用户的 Last.fm
+            // 写数据,而 scrobble 落进去基本删不掉(只能在网页上一条条手删),自动弹窗
+            // 容易被顺手点掉,而顺手的代价是永久污染自己的听歌历史。
+            if lastfmConnected, (backfill.pending?.eligible ?? 0) > 0 {
+                CardDivider()
+                backfillRow
             }
             if lastfmConnected {
                 CardDivider()
@@ -625,6 +757,10 @@ struct AccountLinkingTab: View {
                 }
             }
         }
+        .onAppear { backfill.refreshPending() }
+        // 连接状态一变就重算:刚断开的那一刻要立刻列出本地已记的歌,刚连上的那一刻要立刻
+        // 露出补提交那一行。只靠 .onAppear 的话,用户不离开这一页就什么都不会变。
+        .onChange(of: lastfmConnected) { _, _ in backfill.refreshPending() }
         .sheet(isPresented: $showLastfmWizard) { lastfmWizardSheet }
         .alert(L10n.t("断开 Last.fm？"), isPresented: $showLastfmDisconnectConfirm) {
             Button(L10n.t("取消"), role: .cancel) {}

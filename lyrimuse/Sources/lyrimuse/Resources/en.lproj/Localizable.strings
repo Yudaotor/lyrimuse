@@ -542,3 +542,16 @@
 "选一个会自动同步的文件夹（Dropbox、坚果云、OneDrive 等），换 Mac 时在那台机器上指向同一个文件夹即可" = "Pick a folder that syncs on its own — Dropbox, OneDrive and the like. On your next Mac, point Lyrimuse at that same folder";
 "配置文件夹" = "Config Folder";
 "整份配置都在这里，纯文本可直接编辑；里面含账号凭据，不要发给别人" = "Everything lives here in plain text you can edit directly. It holds your account credentials, so don't send it to anyone";
+"还缺用户名" = "Username missing";
+"还缺用户名，听歌报告用不了" = "Username missing — listening digests can't run";
+"用户名（听歌报告需要）" = "Username (needed for listening digests)";
+"补提交历史收听" = "Backfill Past Listens";
+"补提交" = "Backfill";
+"已补 %@ 条" = "%@ backfilled";
+"%@ 条状态未知，不会自动重试" = "%@ with unknown status — not retried automatically";
+"%@ 条被 Last.fm 拒绝" = "%@ rejected by Last.fm";
+"有 %@ 条本地收听还没提交" = "%@ local listens haven't been submitted yet";
+"，另有 %@ 条太旧、Last.fm 不再接受" = "; %@ more are too old for Last.fm to accept";
+"没有待补的收听；%@ 条已超过 Last.fm 能接受的两周期限" = "Nothing to backfill; %@ are past the two weeks Last.fm accepts";
+"没连账号时听的歌会记在本地，连上之后可以补提交到 Last.fm" = "Listens while no account is connected are kept locally, and can be submitted to Last.fm once you connect";
+"本地已记录 %@ 首，连接后可补提交" = "%@ listens saved locally — can be submitted once you connect";
