@@ -196,13 +196,15 @@ func loadFeatureFlags(path string) featureFlags {
 	}
 }
 
-// resolvePlayer 兜底成 playerAppleMusic——这是这个设置加入之前唯一存在过的行为,
-// 保证全新安装/旧配置文件(没有 "player" 字段)不会被静默解读成别的播放器。
+// resolvePlayer 兜底成 playerAuto(2026-08-13 从 playerAppleMusic 改过来,跟 Swift 侧
+// PlaybackPlayer.current 保持同一个默认 —— 两侧默认值必须一致,否则界面显示的播放器和
+// 采集器实际在问的那个会不是同一个)。理由见 PlaybackPlayer.swift 上那段注释:写死
+// Apple Music 会让只用 Spotify/QQ 音乐/网易云的新用户对着一个永远空白的界面。
 func resolvePlayer(p string) string {
 	if p == playerQQMusic || p == playerNetease || p == playerSpotify || p == playerAuto {
 		return p
 	}
-	return playerAppleMusic
+	return playerAuto
 }
 
 func resolveLyricsSources(list []string) map[string]bool {

@@ -64,15 +64,20 @@ public enum PlaybackPlayerPreference {
     private static let featuresURL = FileManager.default.homeDirectoryForCurrentUser
         .appendingPathComponent(".config/lyrimuse/lyrimuse-features.json")
 
-    // 文件不存在/解析失败/字段缺失/值认不出,一律兜底 Apple Music——这是这个设置加入
-    // 之前唯一存在过的行为,保证没有明确选过的人(全新安装、旧配置文件)不会被静默切换
-    // 到一个从没配置过的播放器。
+    // 文件不存在/解析失败/字段缺失/值认不出,一律兜底**自动识别**。
+    //
+    // 2026-08-13 从 appleMusic 改成 auto。原来的理由是"这是这个设置加入之前唯一存在过的
+    // 行为",但那对全新用户是个坏默认:只用 Spotify / QQ 音乐 / 网易云的人如果跳过引导里
+    // 选播放器那一步,App 会一直去问 Music.app,界面永远空白、且完全看不出原因;顺带还要
+    // 为此多要一次 Apple Music 自动化权限(请求前会后台把 Music.app 拉起来),对一个压根
+    // 不用 Apple Music 的人既没必要又突兀。auto 问的是系统级 Now Playing 是谁在放,
+    // 装完就能用。
     public static var current: PlaybackPlayer {
         guard let data = try? Data(contentsOf: featuresURL),
               let f = try? JSONDecoder().decode(MinimalFeatureFlags.self, from: data),
               let raw = f.player,
               let player = PlaybackPlayer(rawValue: raw) else {
-            return .appleMusic
+            return .auto
         }
         return player
     }

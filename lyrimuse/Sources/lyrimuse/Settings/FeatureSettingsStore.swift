@@ -274,7 +274,7 @@ public final class FeatureSettingsStore: ObservableObject {
         } else {
             unknownFileKeys = [:]
         }
-        player = f.player.flatMap(PlaybackPlayer.init(rawValue:)) ?? .appleMusic
+        player = f.player.flatMap(PlaybackPlayer.init(rawValue:)) ?? .auto
         albumPrefetch = f.albumPrefetch ?? true
         lyricsMachineTranslation = f.lyricsMachineTranslation ?? false
         lastfmMirrorScrobble = f.lastfmMirrorScrobble ?? false
