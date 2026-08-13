@@ -704,6 +704,8 @@ private struct AppearanceSettingsTab: View {
     @Environment(\.dismissWindow) private var dismissWindow
     @State private var showSaveThemeAlert = false
     @State private var newThemeName = ""
+    // 待确认删除的自定义主题。删除会立刻落盘且没有撤销,必须先问一句。
+    @State private var themePendingDeletion: ColorTheme?
     // 灵动岛"显示在哪块屏幕"下拉的选项来源。用 @State 快照而不是每次 body 现读
     // NSScreen.screens:插拔显示器时 SwiftUI 不会因为一个全局数组变了就重算 body,
     // 得靠下面那条 didChangeScreenParameters 通知显式刷新。
@@ -742,11 +744,13 @@ private struct AppearanceSettingsTab: View {
     // 当前四个配色字段正好等于哪个内置预设/自定义主题就显示它的名字,谁都不等于
     // (比如套用之后又手动微调过某个颜色)就显示"自定义"——这是"使用内置预设"这个
     // Menu 唯一的选中反馈来源,见调用点注释。"跟随封面"开着时优先显示它,不比较颜色
-    // 字段——那几个字段这时只是"没有封面数据时的备用色",不代表当前实际生效的前景色。
+    // 字段。
+    //
+    // 2026-08-14 去掉了"followsCoverArt 开着就直接显示「跟随封面」"这个短路。当时那么写是
+    // 因为「跟随封面」也是这个 Menu 里的一项,不短路的话选中态会指向别处;现在它已经是一个
+    // 独立开关,这个 Menu 只负责固定配色,就该老老实实反映四个颜色字段当前等于哪一套 ——
+    // 否则开着"跟随封面"时,用户完全看不出自己的备用色到底是哪个主题。
     private var currentColorThemeLabel: String {
-        if settings.followsCoverArt {
-            return L10n.t("跟随封面")
-        }
         let current = ColorTheme(
             name: "",
             foregroundColorHex: settings.foregroundColorHex,
@@ -776,6 +780,22 @@ private struct AppearanceSettingsTab: View {
             currentSection
                 .id(section)
                 .transition(.opacity)
+        }
+        // 实时预览钉在页顶,只在"桌面悬浮歌词"这一段、且它确实开着的时候出现。
+        //
+        // 用 safeAreaInset 而不是塞进 SettingsPage 的 content:content 在 ScrollView 里面,
+        // 往下滚就看不见了 —— 而这一页控件多到本来就要滚,调下半屏的字号时预览滚出视野等于
+        // 白做。safeAreaInset 把它固定在滚动区之上,同时自动把滚动内容顶下去,不会遮住第一
+        // 张卡。⚠️ 预览条必须自带不透明底色(见 OverlayPreviewBar):SettingsPage 的
+        // .background 只铺在 ScrollView 上,盖不到 inset 区域。
+        //
+        // 另外三段(灵动岛/菜单栏/其它)不给预览:灵动岛和歌词窗口用的是各自固定的系统配色,
+        // 压根不读这一页的字体/颜色字段(见 classicOverlayCard 上那段消费方核对),菜单栏
+        // 歌词是纯文字。给它们挂预览会暗示这些设置对它们也有效,那是错的。
+        .safeAreaInset(edge: .top, spacing: 0) {
+            if section == .overlay, settings.classicOverlayEnabled {
+                OverlayPreviewBar()
+            }
         }
         .id(L10n.current)
     }
@@ -931,14 +951,206 @@ private struct AppearanceSettingsTab: View {
     // backgroundColor/textStrokeColor 的读取点全部落在 LyricsOverlayView.swift 一个文件里
     // (灵动岛/歌词窗口各自用固定的系统配色,菜单栏歌词是纯文字,都不读这些字段)。
     //
-    // 第一行是一条没有控件的"身份行",只写模式名 + 适用范围。这张卡里全是"配色/字体"这类
-    // 通用词,不点名属于谁的话,跟上面那张总开关卡分不清关系。
+    // 原来第一行是一条没有控件的"身份行"(图标 captions.bubble + 标题「桌面悬浮歌词」),
+    // 跟正上方那张总开关卡的图标和标题**一模一样**、相隔 14pt 说了两遍。2026-08-10 把总开关
+    // 按展示方式拆开之后,它当初存在的理由("不点名就跟上面那张卡分不清关系")已经失效,这次
+    // 一并去掉;分组改由每张卡自己的组标题承担。
+    //
+    // 2026-08-14 从一张 13 行的巨型卡拆成五张。原来那张卡里"宽度(几何)/锁定位置(行为)/
+    // 配色主题/字体/字号/三个颜色选择器/描边"平铺在一起,只靠分隔线隔开,读起来分不出层次;
+    // 更糟的是自定义主题列表被 ForEach 插在"配色主题"和"字体"中间 —— **页面长度成了用户
+    // 数据的函数**,每存一个主题,下面的字体/字号/颜色就整体往下掉一行。
+    //
+    // 拆完的顺序是"离预览条越近的越先出现":配色和字体是预览里当场看得见的,窗口几何看不
+    // 太出来,重置放最后。
     private var classicOverlayCard: some View {
+        Group {
+            overlayColorCard
+            overlayThemesCard
+            overlayTextCard
+            overlayWindowCard
+            overlayResetCard
+        }
+    }
+
+    // 配色。原来"配色主题"这个 Menu 里塞着「跟随封面」,而它根本不是一个配色,是"改用封面
+    // 算出的动态色"这个模式本身 —— 结果是**只能开、不能关**:Menu 里没有"不跟随"这一项,
+    // 唯一的退出路径是套用某个具体主题(连带覆盖四个颜色字段)。拆成一个独立开关之后,开关
+    // 两个方向都走得通,Menu 也回归它本来的职责(选一套固定配色)。
+    private var overlayColorCard: some View {
         SettingsCard {
+            SettingsRow(icon: "paintpalette", title: L10n.t("配色"))
+            CardDivider()
             SettingsRow(
-                icon: "captions.bubble",
-                title: L10n.t("桌面悬浮歌词")
-            )
+                icon: "photo.on.rectangle.angled",
+                title: L10n.t("跟随封面取色"),
+                // 这句必须精确,原来那句挂在"配色主题"行上、暗示下面三个颜色都是备用,是错的:
+                // 实测只有**文字颜色**被接管(PlaybackCoordinator.displayForegroundColor),
+                // 背景色(LyricsOverlayView 的 overlayBackground)和描边色(.lyricsTextStroke)
+                // 任何时候都无条件生效。
+                subtitle: L10n.t("只接管文字颜色；背景色和描边色始终按下面设置的来")
+            ) {
+                Toggle("", isOn: $settings.followsCoverArt)
+            }
+            CardDivider()
+            // 只打包"配色"相关的四个字段(文字/背景/描边颜色 + 描边开关),不含字体/字号 ——
+            // 那是排版,跟配色是两回事,不该被同一个"主题"捆在一起改(见 ColorTheme.swift)。
+            SettingsRow(icon: "swatchpalette", title: L10n.t("配色主题")) {
+                Menu(currentColorThemeLabel) {
+                    ForEach(ColorTheme.builtInPresets) { theme in
+                        Button(theme.name) { applyColorTheme(theme) }
+                    }
+                    if !settings.customColorThemes.isEmpty {
+                        Divider()
+                        ForEach(settings.customColorThemes) { theme in
+                            Button(theme.name) { applyColorTheme(theme) }
+                        }
+                    }
+                }
+                .fixedSize()
+            }
+            CardDivider()
+            SettingsRow(
+                icon: "paintbrush",
+                title: L10n.t("文字颜色"),
+                subtitle: settings.followsCoverArt
+                    ? L10n.t("跟随封面开着，这个颜色只在拿不到封面主色时才用")
+                    : nil
+            ) {
+                ColorPicker("", selection: Binding(
+                    get: { settings.foregroundColor },
+                    set: { settings.foregroundColorHex = $0.hexStringWithAlpha }
+                ), supportsOpacity: false) // 故意关掉——文字颜色允许透明的话,容易把 alpha
+                                           // 拖到 0,悬浮窗整个消失且没有任何视觉提示能定位问题
+            }
+            CardDivider()
+            SettingsRow(icon: "rectangle.fill", title: L10n.t("背景颜色")) {
+                ColorPicker("", selection: Binding(
+                    get: { settings.backgroundColor },
+                    set: { settings.backgroundColorHex = $0.hexStringWithAlpha }
+                ), supportsOpacity: true) // 背景不透明度就是这个颜色的 alpha 通道本身,
+                                          // 不另加一根 opacity 滑杆
+            }
+            CardDivider()
+            SettingsRow(icon: "pencil.and.outline", title: L10n.t("文字描边")) {
+                Toggle("", isOn: $settings.textStrokeEnabled)
+            }
+            if settings.textStrokeEnabled {
+                CardDivider()
+                SettingsSubRow(title: L10n.t("描边颜色")) {
+                    ColorPicker("", selection: Binding(
+                        get: { settings.textStrokeColor },
+                        set: { settings.textStrokeColorHex = $0.hexStringWithAlpha }
+                    ), supportsOpacity: true) // 描边只让选颜色(含 alpha),粗细是固定常量
+                                              // (LyricsOverlayView.swift 的 OptionalTextStroke),
+                                              // 不额外加调节项——参考的是 LyricsX 的做法。
+                }
+            }
+        }
+    }
+
+    // 自定义主题独占一张卡。挪出配色卡是这次拆卡的主要目的之一(见 classicOverlayCard 上
+    // 的注释:它原来夹在配色和字体中间,存几个主题就把页面撑长几行)。一个都没存过时整张卡
+    // 只有"存为新主题"一行,不占地方。
+    private var overlayThemesCard: some View {
+        SettingsCard {
+            SettingsRow(icon: "square.stack", title: L10n.t("我的配色主题")) {
+                Button(L10n.t("存为新主题…")) {
+                    newThemeName = ""
+                    showSaveThemeAlert = true
+                }
+            }
+            ForEach(settings.customColorThemes) { theme in
+                CardDivider()
+                SettingsSubRow(title: theme.name) {
+                    HStack(spacing: 10) {
+                        Button(L10n.t("套用")) { applyColorTheme(theme) }
+                        // ⚠️ 删除必须二次确认。customColorThemes 的 didSet 立刻落盘、没有撤销,
+                        // 而这一行的"套用"和"删除"两颗按钮挨着 —— 点错一次,用户自己调了半天
+                        // 的配色就没了,且无从恢复。
+                        Button {
+                            themePendingDeletion = theme
+                        } label: {
+                            Image(systemName: "trash")
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(.secondary)
+                    }
+                }
+            }
+        }
+        .alert(L10n.t("存为新配色主题"), isPresented: $showSaveThemeAlert) {
+            TextField(L10n.t("主题名称"), text: $newThemeName)
+            Button(L10n.t("保存")) {
+                let name = newThemeName.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !name.isEmpty else { return }
+                settings.customColorThemes.append(ColorTheme(
+                    name: name,
+                    foregroundColorHex: settings.foregroundColorHex,
+                    backgroundColorHex: settings.backgroundColorHex,
+                    textStrokeEnabled: settings.textStrokeEnabled,
+                    textStrokeColorHex: settings.textStrokeColorHex
+                ))
+            }
+            // 空名原来走 `guard !name.isEmpty else { return }` 静默丢弃:alert 已经关掉了,
+            // 用户看不到任何反馈,只会以为"存了但没出现"。禁用按钮才是能看见的那种拒绝。
+            .disabled(newThemeName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            Button(L10n.t("取消"), role: .cancel) {}
+        } message: {
+            Text(L10n.t("会把当前的文字颜色、背景颜色、描边颜色存成一个可以随时再套用的主题"))
+        }
+        .alert(
+            L10n.t("删除这个配色主题？"),
+            isPresented: Binding(
+                get: { themePendingDeletion != nil },
+                set: { if !$0 { themePendingDeletion = nil } }
+            ),
+            presenting: themePendingDeletion
+        ) { theme in
+            Button(L10n.t("删除"), role: .destructive) {
+                settings.customColorThemes.removeAll { $0.id == theme.id }
+                themePendingDeletion = nil
+            }
+            Button(L10n.t("取消"), role: .cancel) { themePendingDeletion = nil }
+        } message: { theme in
+            Text(String(format: L10n.t("「%@」删除后无法恢复"), theme.name))
+        }
+    }
+
+    private var overlayTextCard: some View {
+        SettingsCard {
+            SettingsRow(icon: "textformat", title: L10n.t("文字"))
+            CardDivider()
+            SettingsRow(icon: "character", title: L10n.t("字体")) {
+                Picker("", selection: $settings.fontFamilyName) {
+                    // 这一项原来也叫「跟随系统」,跟语言选择器那一项撞成同一个 L10n key,
+                    // 而 .strings 里一个 key 只能有一个值——改成「系统字体」:key 各自独立,
+                    // 而且在「字体」选择器下这个说法本身就比「跟随系统」准确。
+                    Text(L10n.t("系统字体")).tag("")
+                    ForEach(Self.curatedFontFamilies, id: \.self) { family in
+                        Text(family).tag(family)
+                    }
+                }
+                .pickerStyle(.menu)
+                .fixedSize()
+            }
+            CardDivider()
+            SettingsRow(icon: "textformat.size", title: L10n.t("字号")) {
+                HStack(spacing: 8) {
+                    Slider(value: $settings.fontSize, in: 14...36, step: 1)
+                        .frame(width: 150)
+                    Text(String(format: L10n.t("%@pt"), "\(Int(settings.fontSize))"))
+                        .foregroundStyle(.secondary)
+                        .monospacedDigit()
+                        .frame(width: 46, alignment: .trailing)
+                }
+            }
+        }
+    }
+
+    private var overlayWindowCard: some View {
+        SettingsCard {
+            SettingsRow(icon: "macwindow", title: L10n.t("窗口"))
             CardDivider()
             SettingsRow(icon: "arrow.left.and.right", title: L10n.t("宽度")) {
                 HStack(spacing: 8) {
@@ -974,118 +1186,21 @@ private struct AppearanceSettingsTab: View {
                     }
                 ))
             }
-            CardDivider()
-            // 配色主题——内置预设一键套用+把当前调好的配色另存复用。只打包"配色"相关的
-            // 四个字段(文字/背景/阴影颜色+阴影开关),不含字体/字号——那是排版,跟配色是
-            // 两回事,不该被同一个"主题"捆在一起改(见 ColorTheme.swift)。Menu 的标签本身
-            // 显示"当前配色正好等于哪个主题"(不等于任何一个就显示"自定义")。
+        }
+    }
+
+    // 名字从"恢复默认外观"收窄成"恢复默认文字与配色":它重置七个字段,却**不碰**宽度和
+    // 锁定位置。原来两者同在一张卡里,"外观"这个说法看着就像把整张卡都恢复了。补上副标题
+    // 明说不含窗口项,比悄悄扩大重置范围安全 —— 扩大的话还得连带调 setWidth/setLocked,
+    // 漏调就会变成"点了按钮但窗口纹丝不动"。
+    private var overlayResetCard: some View {
+        SettingsCard {
             SettingsRow(
-                icon: "paintpalette",
-                title: L10n.t("配色主题"),
-                subtitle: settings.followsCoverArt ? L10n.t("没有封面数据时会使用下面选择的文字颜色作为备用") : nil
+                icon: "arrow.uturn.backward",
+                title: L10n.t("恢复默认文字与配色"),
+                subtitle: L10n.t("不含宽度和锁定位置")
             ) {
-                Menu(currentColorThemeLabel) {
-                    // "跟随封面"不是一个固定配色,是"改用当前曲目封面算出的动态高亮色"这个
-                    // 模式本身,用 Divider 跟下面的具体命名主题隔开,表明这是另一类选项。
-                    Button(L10n.t("跟随封面")) { settings.followsCoverArt = true }
-                    Divider()
-                    ForEach(ColorTheme.builtInPresets) { theme in
-                        Button(theme.name) { applyColorTheme(theme) }
-                    }
-                    if !settings.customColorThemes.isEmpty {
-                        Divider()
-                        ForEach(settings.customColorThemes) { theme in
-                            Button(theme.name) { applyColorTheme(theme) }
-                        }
-                    }
-                }
-                .fixedSize()
-            }
-            ForEach(settings.customColorThemes) { theme in
-                CardDivider()
-                SettingsSubRow(title: theme.name) {
-                    HStack(spacing: 10) {
-                        Button(L10n.t("套用")) { applyColorTheme(theme) }
-                        Button {
-                            settings.customColorThemes.removeAll { $0.id == theme.id }
-                        } label: {
-                            Image(systemName: "trash")
-                        }
-                        .buttonStyle(.plain)
-                        .foregroundStyle(.secondary)
-                    }
-                }
-            }
-            CardDivider()
-            SettingsSubRow {
-                Button(L10n.t("将当前配色存为新主题…")) {
-                    newThemeName = ""
-                    showSaveThemeAlert = true
-                }
-                .buttonStyle(.link)
-            }
-            CardDivider()
-            SettingsRow(icon: "textformat", title: L10n.t("字体")) {
-                Picker("", selection: $settings.fontFamilyName) {
-                    // 这一项原来也叫「跟随系统」,跟语言选择器那一项撞成同一个 L10n key,
-                    // 而 .strings 里一个 key 只能有一个值——改成「系统字体」:key 各自独立,
-                    // 而且在「字体」选择器下这个说法本身就比「跟随系统」准确。
-                    Text(L10n.t("系统字体")).tag("")
-                    ForEach(Self.curatedFontFamilies, id: \.self) { family in
-                        Text(family).tag(family)
-                    }
-                }
-                .pickerStyle(.menu)
-                .fixedSize()
-            }
-            CardDivider()
-            SettingsRow(icon: "textformat.size", title: L10n.t("字号")) {
-                HStack(spacing: 8) {
-                    Slider(value: $settings.fontSize, in: 14...36, step: 1)
-                        .frame(width: 150)
-                    Text(String(format: L10n.t("%@pt"), "\(Int(settings.fontSize))"))
-                        .foregroundStyle(.secondary)
-                        .monospacedDigit()
-                        .frame(width: 46, alignment: .trailing)
-                }
-            }
-            CardDivider()
-            SettingsRow(icon: "paintbrush", title: L10n.t("文字颜色")) {
-                ColorPicker("", selection: Binding(
-                    get: { settings.foregroundColor },
-                    set: { settings.foregroundColorHex = $0.hexStringWithAlpha }
-                ), supportsOpacity: false) // 故意关掉——文字颜色允许透明的话,容易把 alpha
-                                           // 拖到 0,悬浮窗整个消失且没有任何视觉提示能定位问题
-            }
-            CardDivider()
-            SettingsRow(icon: "rectangle.fill", title: L10n.t("背景颜色")) {
-                ColorPicker("", selection: Binding(
-                    get: { settings.backgroundColor },
-                    set: { settings.backgroundColorHex = $0.hexStringWithAlpha }
-                ), supportsOpacity: true) // 背景不透明度就是这个颜色的 alpha 通道本身,
-                                          // 不另加一根 opacity 滑杆
-            }
-            CardDivider()
-            SettingsRow(
-                icon: "pencil.and.outline",
-                title: L10n.t("文字描边")
-            ) {
-                Toggle("", isOn: $settings.textStrokeEnabled)
-            }
-            if settings.textStrokeEnabled {
-                CardDivider()
-                SettingsSubRow(title: L10n.t("描边颜色")) {
-                    ColorPicker("", selection: Binding(
-                        get: { settings.textStrokeColor },
-                        set: { settings.textStrokeColorHex = $0.hexStringWithAlpha }
-                    ), supportsOpacity: true) // 描边只让选颜色(含 alpha),粗细是固定常量
-                                              // (LyricsOverlayView.swift 的 OptionalTextStroke),
-                                              // 不额外加调节项——参考的是 LyricsX 的做法。
-                }
-            }
-            CardDivider()
-            SettingsSubRow {
-                Button(L10n.t("恢复默认外观")) {
+                Button(L10n.t("恢复")) {
                     settings.followsCoverArt = false
                     settings.fontFamilyName = AppSettings.defaultFontFamilyName
                     settings.fontSize = AppSettings.defaultFontSize
@@ -1094,25 +1209,7 @@ private struct AppearanceSettingsTab: View {
                     settings.textStrokeEnabled = ColorTheme.defaultTheme.textStrokeEnabled
                     settings.textStrokeColorHex = ColorTheme.defaultTheme.textStrokeColorHex
                 }
-                .buttonStyle(.link)
             }
-        }
-        .alert(L10n.t("存为新配色主题"), isPresented: $showSaveThemeAlert) {
-            TextField(L10n.t("主题名称"), text: $newThemeName)
-            Button(L10n.t("保存")) {
-                let name = newThemeName.trimmingCharacters(in: .whitespacesAndNewlines)
-                guard !name.isEmpty else { return }
-                settings.customColorThemes.append(ColorTheme(
-                    name: name,
-                    foregroundColorHex: settings.foregroundColorHex,
-                    backgroundColorHex: settings.backgroundColorHex,
-                    textStrokeEnabled: settings.textStrokeEnabled,
-                    textStrokeColorHex: settings.textStrokeColorHex
-                ))
-            }
-            Button(L10n.t("取消"), role: .cancel) {}
-        } message: {
-            Text(L10n.t("会把当前的文字颜色、背景颜色、描边颜色存成一个可以随时再套用的主题"))
         }
     }
 

@@ -462,7 +462,9 @@ private struct OptionalTextStroke: ViewModifier {
     }
 }
 
-private extension View {
+// internal(而不是 private):设置页顶部的实时预览要用同一个描边实现渲染同一段歌词 ——
+// 预览和真窗口各写一份描边最终一定会漂,而描边是这一页最难凭想象判断效果的一项。
+extension View {
     func lyricsTextStroke(_ enabled: Bool, color: Color) -> some View {
         modifier(OptionalTextStroke(enabled: enabled, color: color))
     }

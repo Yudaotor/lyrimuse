@@ -1,0 +1,139 @@
+import AppKit
+import LyrimuseCore
+import SwiftUI
+
+// 「外观 → 桌面悬浮歌词」那一页钉在顶部的实时预览。
+//
+// 为什么需要它:这一页几乎每一项(字体/字号/文字色/背景色/描边/宽度)改完的效果都只在
+// **桌面上那扇悬浮窗**里,而调这些设置的那一刻,那扇窗多半正被设置窗盖着;更糟的是
+// hideWhenNotPlaying 开着而当前没在播放时,它压根不显示 —— 于是用户拖完滑杆什么都看不到,
+// 分不清"是我没调对"还是"这设置没生效"。把同一段渲染搬到这一页顶上,改什么当场看得见。
+//
+// ⚠️ 这是**第二份渲染实现**,天然会跟真窗口漂。为把漂移压到最小,能复用的一律复用:
+// settings.mainFont / settings.backgroundColor / settings.backgroundIsVisible /
+// PlaybackCoordinator.displayForegroundColor(它才是"跟随封面"真正生效的地方),以及
+// LyricsOverlayView 里那个 .lyricsTextStroke(为此把它从 private 放开成 internal)。
+//
+// 刻意**不**复制的东西,以及理由:
+//   - 逐字卡拉OK填色:那是随播放进度连续变化的,预览要 60fps 跟着跑才不假,而这一页
+//     不值得为此常驻一个高频重绘。预览只画整行的最终颜色。
+//   - 罗马音/译文/下一句:它们各有独立的字体和显隐开关,画全了预览条会高得挤掉正文,
+//     而这一页调的是主歌词那一行的字体和配色。
+//   - 窗口圆角以外的窗口行为(点击穿透、拖动、随屏幕定位):跟外观无关。
+//
+// 高度是**固定**的(按字号算出来),不跟着内容变:它挂在 safeAreaInset 上,高度一变整页
+// 内容就会跳一下,拖字号滑杆时会变成整页抖动。
+@MainActor
+struct OverlayPreviewBar: View {
+    @ObservedObject private var settings = AppSettings.shared
+
+    // ⚠️ 只订阅需要的那两个字段,**不要**写成 @ObservedObject PlaybackCoordinator.shared。
+    // 那个单例有二十来个 @Published(anchor / pausedPositionMs / currentLyricsOffsetMs 等
+    // 每个播放 tick 都在变),整页设置会跟着高频重绘 —— 这个仓库为"@ObservedObject 订阅
+    // 整个单例"踩过一次真实的 20Hz 过度重渲染 bug。removeDuplicates 保证只有歌词真的换行、
+    // 或封面主色真的变了才动一次。
+    @State private var line: SyncedLyricLine?
+    @State private var accent: Color?
+
+    // 真窗口的圆角(LyricsOverlayView 里的 overlayBackgroundCornerRadius,那是个 private
+    // 常量,取不到,只能同步一份)。改那边记得改这里。
+    private let overlayCornerRadius: CGFloat = 16
+    // 预览条允许占用的最大宽度。比卡片列(600)窄一点,两侧留出呼吸。
+    private let maxPreviewWidth: CGFloat = 520
+
+    // 真窗口多宽就按多宽画,放不下时整体等比缩小 —— 这样拖"宽度"滑杆在预览里是看得见的。
+    private var scale: CGFloat {
+        min(1, maxPreviewWidth / max(settings.overlayWidth, 1))
+    }
+
+    // 一行主歌词的高度按字号推,不去实测 —— 见类型注释里"高度必须固定"那一段。
+    // 1.5 是行高系数,上下各 14 是仿真窗口的内边距。
+    private var contentHeight: CGFloat { settings.fontSize * 1.5 + 28 }
+
+    // 没在播放(或这首歌没解析出歌词)时给一句示例,而不是留白:留白的话文字颜色/字体/
+    // 描边这几项就全都预览不到了,而那恰恰是最需要预览的几项。
+    private var previewText: String {
+        if let text = line?.plainText, !text.isEmpty { return text }
+        return L10n.t("这里是一句歌词示例")
+    }
+
+    private var foreground: Color {
+        // 跟 PlaybackCoordinator.displayForegroundColor 同一条规则:开着"跟随封面"且真的
+        // 算出了封面主色才用它,否则用手选的固定色。不直接读那个计算属性是因为它每次求值
+        // 都要摸一次单例,这里已经把需要的两个输入订阅进来了。
+        if settings.followsCoverArt, let accent { return accent }
+        return settings.foregroundColor
+    }
+
+    // 相对亮度用 BT.601 系数(0.299/0.587/0.114),跟人眼对绿色更敏感这一点吻合,够这里用。
+    // 先转 sRGB:foregroundColor 可能是从 hex 造的、也可能是封面取色算出来的,色彩空间不定,
+    // 不转的话取 redComponent 会在某些色彩空间上直接抛异常。
+    private var backdrop: Color {
+        let ns = NSColor(foreground).usingColorSpace(.sRGB)
+        guard let ns else { return Color(nsColor: .textColor).opacity(0.08) }
+        let luma = 0.299 * ns.redComponent + 0.587 * ns.greenComponent + 0.114 * ns.blueComponent
+        return luma > 0.5 ? Color.black.opacity(0.62) : Color.white.opacity(0.72)
+    }
+
+    var body: some View {
+        VStack(spacing: 6) {
+            preview
+            caption
+        }
+        .padding(.top, 14)
+        .padding(.bottom, 10)
+        .frame(maxWidth: .infinity)
+        // ⚠️ 必须自带不透明底色。这块是挂在 safeAreaInset 上的,而 SettingsPage 的
+        // .background(windowBackgroundColor) 只铺在 ScrollView 上、盖不到 inset 区域 ——
+        // 不画底色的话,下面滚动的卡片会从预览条底下透出来。
+        .background(Color(nsColor: .windowBackgroundColor))
+        .overlay(alignment: .bottom) { Divider() }
+        .onReceive(PlaybackCoordinator.shared.$currentLine.removeDuplicates()) { line = $0 }
+        .onReceive(PlaybackCoordinator.shared.$artworkAccentColor.removeDuplicates()) { accent = $0 }
+    }
+
+    private var preview: some View {
+        ZStack {
+            if settings.backgroundIsVisible {
+                RoundedRectangle(cornerRadius: overlayCornerRadius, style: .continuous)
+                    .fill(settings.backgroundColor)
+            }
+            Text(previewText)
+                .font(settings.mainFont)
+                .foregroundStyle(foreground)
+                .lyricsTextStroke(settings.textStrokeEnabled, color: settings.textStrokeColor)
+                .lineLimit(1)
+                .padding(.horizontal, 20)
+        }
+        .frame(width: settings.overlayWidth, height: contentHeight)
+        .scaleEffect(scale, anchor: .center)
+        // 缩放不改变布局占位,得显式把外框收到缩放后的尺寸,否则会按原始宽度占位、把整条撑爆。
+        .frame(width: settings.overlayWidth * scale, height: contentHeight * scale)
+        // 垫底色**按文字明度自适应**:浅色文字垫深底,深色文字垫浅底。
+        //
+        // 2026-08-14 真机截图抓到的:第一版垫的是固定的浅灰(textColor 0.06),而这台机器
+        // 开着"跟随封面取色"、当前封面主色是浅的,于是浅字浮在浅底上,整条预览等于白板 ——
+        // 而"改文字色能当场看见"正是这块预览存在的理由。
+        //
+        // 不去冒充真实壁纸:那要读 NSWorkspace.desktopImageURL,它在动态/Aerial 壁纸下经常
+        // 拿不到可用图,而且 NSScreen.main 在无屏时是 nil。宁可给一块诚实的中性底,也不要
+        // 一个在部分机器上直接退化成灰块的"假壁纸"。
+        .background(
+            RoundedRectangle(cornerRadius: overlayCornerRadius, style: .continuous)
+                .fill(backdrop)
+        )
+        .accessibilityHidden(true)
+    }
+
+    private var caption: some View {
+        Text(
+            scale < 1
+                ? String(format: L10n.t("预览 · %@pt · 已缩放至 %@%%"),
+                         "\(Int(settings.overlayWidth))", "\(Int(scale * 100))")
+                : String(format: L10n.t("预览 · %@pt"), "\(Int(settings.overlayWidth))")
+        )
+        .font(.caption)
+        .foregroundStyle(.secondary)
+        .monospacedDigit()
+    }
+}
