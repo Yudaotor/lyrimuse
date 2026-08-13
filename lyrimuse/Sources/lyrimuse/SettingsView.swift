@@ -699,9 +699,6 @@ private struct LyricsSettingsTab: View {
 
 private struct AppearanceSettingsTab: View {
     @ObservedObject private var settings = AppSettings.shared
-    @ObservedObject private var lyricsWindowPresence = LyricsWindowPresence.shared
-    @Environment(\.openWindow) private var openWindow
-    @Environment(\.dismissWindow) private var dismissWindow
     @State private var showSaveThemeAlert = false
     @State private var newThemeName = ""
     // 待确认删除的自定义主题。删除会立刻落盘且没有撤销,必须先问一句。
@@ -880,11 +877,19 @@ private struct AppearanceSettingsTab: View {
                 menuBarCard.transition(.settingsCard)
             }
         case .other:
-            lyricsWindowCard
             // 自动隐藏是**跨形态**的(悬浮歌词/灵动岛共用同一组规则),所以不能塞进任何一个
             // 单独形态那一段,只能留在这里。两个都没开时它没有作用对象,不显示。
             if settings.classicOverlayEnabled || settings.notchOverlayEnabled {
                 autoHideCard.transition(.settingsCard)
+            } else {
+                // 2026-08-14「歌词窗口」那张卡从这里移走之后,这一段就只剩"自动隐藏"一张卡,
+                // 而它本身是条件渲染的 —— 两个悬浮窗都关着时整段会变成一块白板,看着像页面
+                // 坏了。补一句说明,把"这里现在没东西"变成"这里为什么没东西"。
+                ContentUnavailableView(
+                    L10n.t("没有可调整的项目"),
+                    systemImage: "slider.horizontal.3",
+                    description: Text(L10n.t("这里的设置对桌面悬浮歌词和灵动岛生效，先开启其中一种"))
+                )
             }
         }
     }
@@ -913,36 +918,6 @@ private struct AppearanceSettingsTab: View {
         }
     }
 
-    /// "歌词窗口"跟上面三种形态不是一回事:它没有 AppSettings 里的持久化开关,开合状态
-    /// 完全交给 SwiftUI Window(id:) 自己的窗口自动存档机制(见 App.swift 那个场景的注释),
-    /// 这里的 Toggle 只是"现在这扇窗口是不是开着"的实时状态(见 LyricsWindowPresence),
-    /// 开/关直接对应打开/关闭这扇窗口,不写入任何配置项。
-    ///
-    /// 它也没有任何外观设置可调(用固定的系统配色),所以不单独占一段,跟同样跨形态的
-    /// "自动隐藏"一起放在「其它」里。
-    private var lyricsWindowCard: some View {
-        SettingsCard {
-            SettingsRow(
-                icon: "text.quote",
-                title: L10n.t("歌词窗口"),
-                subtitle: L10n.t("可以滚动阅读的完整歌词列表")
-            ) {
-                Toggle("", isOn: Binding(
-                    get: { lyricsWindowPresence.isOpen },
-                    set: { newValue in
-                        if newValue {
-                            // accessory 策略下打开新窗口得先手动激活 App,不然 openWindow
-                            // 调了也没反应——跟"打开歌词管理…"按钮同一个坑、同一个修法。
-                            NSApp.activate(ignoringOtherApps: true)
-                            openWindow(id: "lyrics-window")
-                        } else {
-                            dismissWindow(id: "lyrics-window")
-                        }
-                    }
-                ))
-            }
-        }
-    }
 
     // 桌面悬浮歌词(经典悬浮窗)专属的一整套:窗口几何 + 配色与字体。
     //

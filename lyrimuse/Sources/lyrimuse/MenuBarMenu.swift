@@ -168,11 +168,20 @@ struct MenuBarMenu: View {
         } label: {
             Label(L10n.t("歌词管理…"), systemImage: "music.note.list")
         }
-        // 2026-08-06:"歌词窗口"从这里挪进了「快速开关」子菜单——它是四种歌词展示方式
-        // 之一(见设置 → 外观里那张放着四个展示方式开关的卡;那张卡现在没有标题,"歌词展示"
-        // 这个小标题在改版成卡片式布局时已经去掉了),跟另外三种放在一起才成体系;留在顶层
-        // 会让它看着
-        // 像"歌词管理…"那样的管理入口,而它其实是一个开/关。
+        // 2026-08-14 挪回顶层,并从 Toggle 改回普通菜单项。
+        //
+        // 2026-08-06 曾把它放进「快速开关」子菜单,理由是"它是四种歌词展示方式之一"。那个
+        // 归类站不住:另外三种背后都有 AppSettings 里的持久化布尔(classicOverlayEnabled /
+        // notchOverlayEnabled / showLyricsInMenuBar),是"常驻显示形态";而歌词窗口一个都
+        // 没有 —— 它就是一扇 Window(id:),跟正上方的"歌词管理…"完全同构。把一扇窗口包装
+        // 成开关,还要为此常驻一个观测窗口开合的单例(LyricsWindowPresence,已随之删除),
+        // 是拿复杂度换了一个误导性的外观。
+        Button {
+            NSApp.activate(ignoringOtherApps: true)
+            openWindow(id: "lyrics-window")
+        } label: {
+            Label(L10n.t("歌词窗口…"), systemImage: "text.quote")
+        }
         // 单独一条分隔线,把上面"打开某个窗口做配置/管理"这两项,跟下面"检查更新/关于"
         // 这类"了解一下这个 App 本身"的入口分开——原来四项挤在一起没有区分,看着乱
         // (2026-07-30 用户反馈),跟上面"开机启动"单独一组同一个分区原则。
@@ -224,9 +233,6 @@ struct MenuBarMenu: View {
 // 也应用上"这一步都在那里面,菜单/设置页/全局快捷键三处不各自复制一遍。
 private struct DisplayModeMenuToggles: View {
     @ObservedObject private var settings = AppSettings.shared
-    @ObservedObject private var lyricsWindowPresence = LyricsWindowPresence.shared
-    @Environment(\.openWindow) private var openWindow
-    @Environment(\.dismissWindow) private var dismissWindow
 
     var body: some View {
         Toggle(isOn: Binding(
@@ -247,26 +253,8 @@ private struct DisplayModeMenuToggles: View {
         Toggle(isOn: $settings.showLyricsInMenuBar) {
             Label(L10n.t("显示菜单栏歌词"), systemImage: "menubar.rectangle")
         }
-        // "歌词窗口"是第三种情况:它连持久化布尔值都没有,开合完全交给 SwiftUI Window(id:)
-        // 自己的窗口存档机制(见 App.swift 那个场景的注释),这里的 isOn 只是"现在这扇窗口
-        // 是不是开着"的实时观测(LyricsWindowPresence 是纯只读的,构造它不会凭空建出窗口,
-        // 所以在菜单里持有它不违反本文件那条"别碰关闭模式的 .shared"的不变量)。
-        //
-        // accessory 策略下打开新窗口必须先手动激活 App,不然 openWindow 调了也没反应——
-        // 跟本文件"设置…""歌词管理…"两处同一个坑、同一个修法。
-        Toggle(isOn: Binding(
-            get: { lyricsWindowPresence.isOpen },
-            set: { newValue in
-                if newValue {
-                    NSApp.activate(ignoringOtherApps: true)
-                    openWindow(id: "lyrics-window")
-                } else {
-                    dismissWindow(id: "lyrics-window")
-                }
-            }
-        )) {
-            Label(L10n.t("显示歌词窗口"), systemImage: "text.quote")
-        }
+        // 这里只放**有持久化布尔值的常驻显示形态**。"歌词窗口"2026-08-14 移出去了:它没有
+        // 持久化开关,是一扇 Window(id:),现在跟"歌词管理…"一样在顶层用普通菜单项打开。
     }
 }
 

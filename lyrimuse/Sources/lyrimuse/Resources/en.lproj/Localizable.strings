@@ -581,3 +581,6 @@
 "这里是一句歌词示例" = "A line of lyrics looks like this";
 "预览 · %@pt · 已缩放至 %@%%" = "Preview · %@pt · scaled to %@%%";
 "预览 · %@pt" = "Preview · %@pt";
+"歌词窗口…" = "Lyrics Window…";
+"没有可调整的项目" = "Nothing to adjust here";
+"这里的设置对桌面悬浮歌词和灵动岛生效，先开启其中一种" = "These settings apply to Desktop Floating Lyrics and Notch Lyrics — turn one of them on first";
