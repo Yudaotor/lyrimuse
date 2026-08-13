@@ -561,9 +561,14 @@ struct LastfmStatsSection: View {
                         title: L10n.t("那年今日"),
                         // 不再在这里点名某一首:下面第一行就是它,重复一遍还容易让人以为
                         // 那是两件事(2026-08-12 改成"次数最多的前三首"之后)。
-                        subtitle: String(
-                            format: L10n.t("%1$@ 年前的今天听了 %2$@ 次，最常循环的是这几首"),
-                            "\(o.yearsAgo)", "\(o.total)"),
+                        // yearsAgo 是 1 时必须走单数句:英文没有能同时读通 "1 years ago"
+                        // 和 "2 years ago" 的写法,原来那条靠 "year(s)" 糊过去 —— 那是
+                        // 机翻痕迹,而 1...3 的循环里 1 恰好是最常出现的一档。
+                        subtitle: o.yearsAgo == 1
+                            ? String(format: L10n.t("去年今天听了 %@ 次，最常循环的是这几首"), "\(o.total)")
+                            : String(
+                                format: L10n.t("%1$@ 年前的今天听了 %2$@ 次，最常循环的是这几首"),
+                                "\(o.yearsAgo)", "\(o.total)"),
                         collapsed: $onThisDayCollapsed
                     ) { EmptyView() }
                     if !onThisDayCollapsed {

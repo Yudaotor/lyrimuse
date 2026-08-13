@@ -927,6 +927,143 @@ do {
                 "只有前后缀、没有时间戳的不算导出产物")
 }
 
+// ---- LogRedactor(诊断包脱敏) ----
+//
+// 这一组断言守的是一条会被贴进公开 GitHub issue 的输出:2026-08-13 实测坐实,诊断报告
+// 末尾附的 collector 日志里带着 Last.fm API Key 原文。用例全部是合成的假密钥。
+do {
+    print("\n== 诊断日志脱敏 ==")
+    typealias R = LogRedactor
+    // 用例里的"密钥"都是合成串,长度贴着真实凭据(32/36/48)。
+    let apiKey = "0123456789abcdef0123456789abcdef"
+    let relayToken = "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT"
+    let secrets = ["lastfmScrobbleAPIKey": apiKey, "stateRelayToken": relayToken]
+
+    // 实测泄露的那一行的形状:Go *url.Error 把完整 URL 带进错误文本。
+    let leaky = "2026/08/13 10:00:05 lastfmRecent: request failed: Get "
+        + "\"https://ws.audioscrobbler.com/2.0/?method=user.getrecenttracks&user=someone&api_key=\(apiKey)\""
+    let cleaned = R.redactAll(leaky, secrets: secrets)
+    expectEqual(cleaned.contains(apiKey), false, "值级脱敏:日志里的 API Key 原文必须消失")
+    expectEqual(cleaned.contains("<redacted:lastfmScrobbleAPIKey>"), true,
+                "脱敏后要留下字段名,排查时才知道那里原本是哪一项")
+    expectEqual(cleaned.contains("user=someone"), true, "非敏感参数(用户名)要原样保留,否则报告没法读")
+    expectEqual(cleaned.contains("audioscrobbler.com"), true, "host 要保留")
+
+    // 第二层:配置里已经没有这把旧 key 了(用户换过),值级脱敏命中不了,靠正则兜住。
+    let rotated = "Get \"https://ws.audioscrobbler.com/2.0/?api_key=deadbeefdeadbeefdeadbeefdeadbeef\""
+    expectEqual(R.redactAll(rotated, secrets: [:]).contains("deadbeef"), false,
+                "模式级脱敏:配置里已不存在的旧 key 也要打掉")
+
+    // Bark 的 device key 长在 URL path 里,不是 query 参数——这是 alerter.go 那条尚未
+    // 触发的同形状风险,两层都要能兜住。
+    let bark = "notify push failed (platform=bark): Post \"https://api.day.app/SECRETDEVICEKEY123/t/b\": timeout"
+    expectEqual(R.redactAll(bark, secrets: [:]).contains("SECRETDEVICEKEY123"), false,
+                "路径型凭据(Bark device key)必须打掉")
+    expectEqual(R.redactAll(bark, secrets: [:]).contains("api.day.app"), true, "Bark 的 host 保留")
+
+    // 互为子串的两个凭据:必须先替换长的,否则长的会被切碎、漏出一截原文。
+    let nested = "a=\(relayToken) b=\(relayToken + "SUFFIX")"
+    let both = R.redact(nested, secrets: ["short": relayToken, "long": relayToken + "SUFFIX"])
+    expectEqual(both.contains("SUFFIX"), false, "长短凭据互为前缀时,长的不能被切碎留下尾巴")
+
+    // 过短的配置值不参与字面替换,否则普通日志词会被打成马赛克。
+    let short = R.redact("platform=bark and the bark failed", secrets: ["notificationPlatform": "bark"])
+    expectEqual(short.contains("bark and the bark"), true, "过短的配置值不该参与值级替换")
+
+    expectEqual(R.redactAll("nothing sensitive here", secrets: secrets),
+                "nothing sensitive here", "干净的行原样返回")
+}
+
+// 真机端到端校验:拿**这台机器上真实的** config.json + 真实的 collector 日志跑一遍,
+// 断言脱敏后没有任何一个真实凭据残留。默认不跑 —— 它要读用户的真实密钥,跟
+// lyrimuse-collector 的 simeval_test.go 用 SIMEVAL_DATA 把真实曲库 gate 住是同一个模式。
+// 跑法:LYRIMUSE_REDACT_CHECK=1 swift run lyrimuse-selftest
+// 全程只做比对,绝不打印任何密钥值(连长度以外的信息都不打)。
+// ---- ImportPolicy(外来配置里的 relay 地址) ----
+//
+// 守的是"备份文件夹可以指向共享目录"之后新出现的那条路径:目录里的文件成了导入源,而
+// state_relay_url 决定收听状态和 relay token 往哪台服务器发。
+do {
+    print("\n== 导入配置的地址校验 ==")
+    typealias P = ImportPolicy
+    expectEqual(P.isAcceptableRelayURL("https://np.yudaotor.me"), true, "https 放行")
+    expectEqual(P.isAcceptableRelayURL("https://np.yudaotor.me/"), true, "https 带斜杠放行")
+    expectEqual(P.isAcceptableRelayURL("  https://np.yudaotor.me  "), true, "两侧空白要先 trim")
+    expectEqual(P.isAcceptableRelayURL("http://attacker.example.com"), false,
+                "明文 http 发到公网必须拒绝(token 会跟着请求头一起走)")
+    expectEqual(P.isAcceptableRelayURL("http://localhost:8787"), true, "本地调试放行")
+    expectEqual(P.isAcceptableRelayURL("http://127.0.0.1:8787"), true, "回环 IP 放行")
+    expectEqual(P.isAcceptableRelayURL("file:///etc/passwd"), false, "file: 拒绝")
+    expectEqual(P.isAcceptableRelayURL("javascript:alert(1)"), false, "自定义 scheme 拒绝")
+    expectEqual(P.isAcceptableRelayURL("np.yudaotor.me"), false, "没有 scheme 的裸 host 拒绝")
+    expectEqual(P.isAcceptableRelayURL("https://"), false, "有 scheme 但没 host 拒绝")
+    expectEqual(P.isAcceptableRelayURL(""), false, "空串在这里判 false,由调用方先行区分'没配置'")
+}
+
+// ---- writeSecurely(含凭据的文件必须落成 0600) ----
+do {
+    print("\n== 凭据文件权限 ==")
+    let tmp = FileManager.default.temporaryDirectory
+        .appendingPathComponent("lyrimuse-selftest-perm-\(ProcessInfo.processInfo.processIdentifier).json")
+    defer { try? FileManager.default.removeItem(at: tmp) }
+
+    // 先用普通 .atomic 写一次,证明默认权限确实是松的 —— 不然这条断言可能只是在
+    // 复述当前 umask 恰好是什么。
+    try? Data("{}".utf8).write(to: tmp, options: .atomic)
+    let plain = ((try? FileManager.default.attributesOfItem(atPath: tmp.path))?[.posixPermissions]
+        as? NSNumber)?.intValue ?? -1
+    print("  普通 .atomic 写入的权限: \(String(plain, radix: 8))")
+
+    try? FileManager.default.removeItem(at: tmp)
+    try? Data("{}".utf8).writeSecurely(to: tmp)
+    let secure = ((try? FileManager.default.attributesOfItem(atPath: tmp.path))?[.posixPermissions]
+        as? NSNumber)?.intValue ?? -1
+    expectEqual(secure, 0o600, "writeSecurely 落地的文件必须是 0600(实测普通写入是 \(String(plain, radix: 8)))")
+
+    // 覆盖写一次:.atomic 换的是新 inode,权限得重新收紧,不能只在首次创建时对。
+    try? Data("{\"a\":1}".utf8).writeSecurely(to: tmp)
+    let rewritten = ((try? FileManager.default.attributesOfItem(atPath: tmp.path))?[.posixPermissions]
+        as? NSNumber)?.intValue ?? -1
+    expectEqual(rewritten, 0o600, "覆盖写之后权限仍须是 0600(.atomic 会换掉 inode)")
+}
+
+if ProcessInfo.processInfo.environment["LYRIMUSE_REDACT_CHECK"] == "1" {
+    print("\n== 诊断脱敏真机校验 ==")
+    let home = FileManager.default.homeDirectoryForCurrentUser
+    let cfgURL = home.appendingPathComponent(".config/lyrimuse/config.json")
+    let logURL = home.appendingPathComponent("Library/Logs/lyrimuse.log")
+
+    guard let cfgData = try? Data(contentsOf: cfgURL),
+          let cfg = try? JSONSerialization.jsonObject(with: cfgData) as? [String: Any],
+          let logText = try? String(contentsOf: logURL, encoding: .utf8) else {
+        failures += 1
+        print("FAIL - 读不到真实 config.json 或日志,校验没跑成")
+        exit(1)
+    }
+
+    // DiagnosticsExporter.recentCollectorLogLines(limit: 200) 复制的就是这个窗口。
+    let window = logText.split(separator: "\n", omittingEmptySubsequences: false)
+        .map(String.init).suffix(200).joined(separator: "\n")
+
+    // 只挑真正是凭据的字段,跟 ConfigStore.secretsForRedaction 的取舍保持一致。
+    let credentialFields = ["listenbrainz_token", "state_relay_token", "lastfm_api_key",
+                            "lastfm_scrobble_api_key", "lastfm_scrobble_secret",
+                            "lastfm_scrobble_session_key", "bark_url",
+                            "dingtalk_sign_secret", "feishu_sign_secret"]
+    var secrets: [String: String] = [:]
+    for f in credentialFields {
+        if let v = cfg[f] as? String, !v.isEmpty { secrets[f] = v }
+    }
+
+    let before = secrets.filter { window.contains($0.value) }
+    let cleaned = LogRedactor.redactAll(window, secrets: secrets)
+    let after = secrets.filter { cleaned.contains($0.value) }
+
+    print("  真实凭据字段数: \(secrets.count)")
+    print("  脱敏前出现在导出窗口里的: \(before.count) 项 -> \(before.keys.sorted())")
+    expectEqual(after.count, 0, "脱敏后不得有任何真实凭据残留(残留项: \(after.keys.sorted()))")
+}
+
 if failures == 0 {
     print("\nALL PASS")
 } else {

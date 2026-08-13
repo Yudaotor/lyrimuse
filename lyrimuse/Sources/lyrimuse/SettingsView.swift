@@ -376,7 +376,7 @@ private struct LyricsSettingsTab: View {
             SettingsRow(
                 icon: "slider.horizontal.3",
                 title: L10n.t("匹配算法"),
-                help: L10n.t("智能算法：查到的每个来源都打分（逐字时间轴、语言是否匹配等维度），自动挑分数最高的一条。顺序优先：按下面排的顺序，用第一个查到有效结果的来源，不比较分数")
+                help: L10n.t("智能算法：给每个来源打分（逐字时间轴、语言匹配等），取分最高的。顺序优先：不打分，按下面的顺序取第一个有结果的来源")
             ) {
                 Picker("", selection: Binding(
                     get: { features.lyricsSourceMode },
@@ -1581,7 +1581,7 @@ private struct GeneralSettingsTab: View {
     var body: some View {
         SettingsPage(
             title: L10n.t("通用"),
-            subtitle: L10n.t("语言、启动方式，以及把全部配置搬到另一台 Mac")
+            subtitle: L10n.t("语言、启动方式、Dock 图标，以及把全部设置搬到另一台 Mac")
         ) {
             SettingsCard {
                 // 下拉菜单而不是分段控件——分段控件的宽度会随选项数线性变宽,以后再加
@@ -1627,8 +1627,11 @@ private struct GeneralSettingsTab: View {
                 // 用户没开 iCloud Drive 时整行不显示,而不是留一个点了必然失败的按钮。
                 if ICloudConfigStore.isAvailable {
                     SettingsRow(
-                        icon: "icloud",
-                        title: L10n.t("iCloud 配置"),
+                        // 用户把备份挪到别处之后,再叫"iCloud 备份"就是错的。图标一起换:
+                        // 云 vs 文件夹,一眼能看出这份备份现在落在哪一类地方。
+                        icon: ICloudConfigStore.usingCustomFolder ? "folder" : "icloud",
+                        title: ICloudConfigStore.usingCustomFolder
+                            ? L10n.t("备份文件夹") : L10n.t("iCloud 备份"),
                         subtitle: iCloudSubtitle
                     ) {
                         HStack(spacing: 8) {
@@ -1637,13 +1640,35 @@ private struct GeneralSettingsTab: View {
                             // iCloud"读起来像还没存过。副标题那行同时在显示现有那份是
                             // 什么时候的,两处合起来才说得通。
                             Button(iCloudSnapshot == nil
-                                ? L10n.t("存到 iCloud") : L10n.t("更新"))
+                                ? (ICloudConfigStore.usingCustomFolder
+                                    ? L10n.t("存一份") : L10n.t("存到 iCloud"))
+                                : L10n.t("更新备份"))
                             {
                                 showICloudExportWarning = true
                             }
                             if iCloudSnapshot != nil {
                                 Button(L10n.t("导入…")) { importFromICloud() }
                             }
+                            // 换文件夹这类低频动作收进省略号菜单,不跟上面两个常用按钮抢
+                            // 这一行本来就不宽的横向空间。
+                            Menu {
+                                Button(L10n.t("更换备份文件夹…")) { chooseBackupFolder() }
+                                if ICloudConfigStore.usingCustomFolder {
+                                    Button(L10n.t("改回 iCloud")) {
+                                        ICloudConfigStore.setCustomFolder(nil)
+                                        iCloudSnapshot = ICloudConfigStore.latestSnapshot()
+                                    }
+                                }
+                                Divider()
+                                Button(L10n.t("在访达中显示")) {
+                                    NSWorkspace.shared.activateFileViewerSelecting(
+                                        [ICloudConfigStore.preparedFolderURL()])
+                                }
+                            } label: {
+                                Image(systemName: "ellipsis.circle")
+                            }
+                            .menuStyle(.borderlessButton)
+                            .fixedSize()
                         }
                     }
                     if let iCloudMessage {
@@ -1654,16 +1679,16 @@ private struct GeneralSettingsTab: View {
                 }
                 SettingsRow(
                     icon: "square.and.arrow.up",
-                    title: L10n.t("导出配置"),
-                    subtitle: L10n.t("文件里包含账号 token、密钥等敏感信息，注意妥善保管，不要分享给他人")
+                    title: L10n.t("导出设置"),
+                    subtitle: L10n.t("文件里包含账号登录凭证和密钥，妥善保管，不要发给别人")
                 ) {
                     Button(L10n.t("导出…")) { showExportConfigWarning = true }
                 }
                 CardDivider()
                 SettingsRow(
                     icon: "square.and.arrow.down",
-                    title: L10n.t("导入配置"),
-                    subtitle: L10n.t("会覆盖当前所有设置（包括已连接的账号），并立即重启 Lyrimuse")
+                    title: L10n.t("导入设置"),
+                    subtitle: L10n.t("会覆盖当前所有设置，包括已连接的账号和播放数据发往的地址，并立即重启 Lyrimuse")
                 ) {
                     Button(L10n.t("导入…")) {
                         let panel = NSOpenPanel()
@@ -1682,10 +1707,24 @@ private struct GeneralSettingsTab: View {
                     }
                 }
                 CardDivider()
+                // 给拿 dotfiles/chezmoi 管机器的人用:这个 App 的配置本来就是
+                // ~/.config 下的纯文本 JSON,直接纳入版本管理就行,不必走导出。
+                // 副标题必须点明"外观和快捷键不在里面"—— 它们在 UserDefaults,
+                // 只拷这个文件夹会静默丢掉,这是这条路子最容易踩的坑。
+                SettingsRow(
+                    icon: "folder",
+                    title: L10n.t("配置文件夹"),
+                    subtitle: L10n.t("config.json 和功能开关在这里，纯文本、可直接编辑或纳入版本管理；界面外观和快捷键不在其中")
+                ) {
+                    Button(L10n.t("在访达中显示")) {
+                        NSWorkspace.shared.activateFileViewerSelecting([ConfigPortability.configFolderURL])
+                    }
+                }
+                CardDivider()
                 SettingsRow(
                     icon: "trash",
-                    title: L10n.t("清除所有配置"),
-                    subtitle: L10n.t("只抹掉本机配置，无法撤销；iCloud 和已导出的备份不受影响")
+                    title: L10n.t("清除所有设置"),
+                    subtitle: L10n.t("只抹掉本机设置，无法撤销；iCloud 和已导出的备份不受影响")
                 ) {
                     DestructiveButton(title: L10n.t("清除…")) { showClearConfigWarning = true }
                 }
@@ -1707,7 +1746,7 @@ private struct GeneralSettingsTab: View {
                     }
                 }
             }
-            .alert(L10n.t("确定要导出配置吗？"), isPresented: $showExportConfigWarning) {
+            .alert(L10n.t("确定要导出设置吗？"), isPresented: $showExportConfigWarning) {
                 Button(L10n.t("取消"), role: .cancel) {}
                 Button(L10n.t("继续导出")) {
                     guard let data = ConfigPortability.buildExportData() else { return }
@@ -1720,31 +1759,40 @@ private struct GeneralSettingsTab: View {
                         ? ICloudConfigStore.preparedFolderURL()
                         : FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Desktop")
                     if panel.runModal() == .OK, let url = panel.url {
-                        try? data.write(to: url, options: .atomic)
+                        // 导出包里带着全部凭据(上面那句警告文案说的就是它)。
+                        try? data.writeSecurely(to: url)
                     }
                 }
             } message: {
-                Text(L10n.t("导出的文件包含你的账号 token、密钥等敏感信息，请妥善保管，不要分享给他人"))
+                Text(L10n.t("导出的文件包含账号登录凭证和密钥，妥善保管，不要发给别人"))
             }
-            .alert(L10n.t("确定要导入这份配置吗？"), isPresented: $showImportConfigConfirm) {
+            .alert(L10n.t("确定要导入这份设置吗？"), isPresented: $showImportConfigConfirm) {
                 Button(L10n.t("取消"), role: .cancel) {}
+                // Task 包一层:importData 现在要等 collector 重新读到新配置才返回(见那边
+                // 的注释),而 restartApp() 必须排在它后面 —— 一旦 terminate,没跑完的
+                // launchctl 操作就跟着进程一起没了。
                 Button(L10n.t("导入并重启"), role: .destructive) {
                     if let data = pendingImportData {
-                        ConfigPortability.importData(data)
+                        Task { @MainActor in
+                            await ConfigPortability.importData(data)
+                            ConfigPortability.restartApp()
+                        }
+                    }
+                }
+            } message: {
+                Text(L10n.t("这会覆盖当前所有设置，包括已连接的账号和播放数据发往的地址，并立即重启 Lyrimuse 使其生效"))
+            }
+            .alert(L10n.t("确定要清除所有设置吗？"), isPresented: $showClearConfigWarning) {
+                Button(L10n.t("取消"), role: .cancel) {}
+                // 同上:clearAllConfig 现在要等常驻服务真的卸载完才返回,不能在它之前 terminate。
+                Button(L10n.t("清除并重启"), role: .destructive) {
+                    Task { @MainActor in
+                        await ConfigPortability.clearAllConfig()
                         ConfigPortability.restartApp()
                     }
                 }
             } message: {
-                Text(L10n.t("这会覆盖当前所有设置（包括已连接的账号），并立即重启 Lyrimuse 使其生效"))
-            }
-            .alert(L10n.t("确定要清除所有配置吗？"), isPresented: $showClearConfigWarning) {
-                Button(L10n.t("取消"), role: .cancel) {}
-                Button(L10n.t("清除并重启"), role: .destructive) {
-                    ConfigPortability.clearAllConfig()
-                    ConfigPortability.restartApp()
-                }
-            } message: {
-                Text(L10n.t("这会清除本机所有账号 token、密钥和个人设置，恢复到刚装完时的样子（下次启动会重新走一遍引导向导），且无法撤销。iCloud 里那份配置和已经导出的备份文件都不受影响；两样都没有的话，建议先备份一份"))
+                Text(L10n.t("这会清除本机所有账号 token、密钥和个人设置，恢复到刚装完时的样子（下次启动会重新走一遍引导向导），且无法撤销。iCloud 里那份备份和已经导出的文件都不受影响；两样都没有的话，建议先备份一份"))
             }
         }
         .id(L10n.current)
@@ -1752,15 +1800,46 @@ private struct GeneralSettingsTab: View {
 
     /// iCloud 那一行的副标题:有配置就说清是哪一份(时间 + 哪台机器写的),没有就说还没存过。
     private var iCloudSubtitle: String {
-        guard let snap = iCloudSnapshot else { return L10n.t("还没存过配置") }
+        guard let snap = iCloudSnapshot else {
+            // 还没存过时这行是这一栏唯一的说明,所以要说清楚存了有什么用。自选了文件夹
+            // 的话改成报位置 —— 那时"换 Mac 时读回来"能不能成立取决于用户挑的是不是一个
+            // 会同步的目录,不该由我们替他打这个包票。
+            guard ICloudConfigStore.usingCustomFolder else {
+                return L10n.t("存一份到 iCloud，换 Mac 时直接读回来")
+            }
+            return String(format: L10n.t("备份到「%@」，还没存过"), ICloudConfigStore.folderURL.lastPathComponent)
+        }
         let formatter = DateFormatter()
         formatter.dateStyle = .medium
         formatter.timeStyle = .short
         let when = formatter.string(from: snap.exportedAt ?? snap.modifiedAt)
+        let base: String
         if let device = snap.deviceName, !device.isEmpty {
-            return String(format: L10n.t("%1$@ · 来自 %2$@"), when, device)
+            base = String(format: L10n.t("%1$@ · 来自 %2$@"), when, device)
+        } else {
+            base = when
         }
-        return when
+        // 自选文件夹时把落点也报出来 —— 否则用户看到一个时间戳,却不知道它指的是哪个目录
+        // 里的那份(尤其是在两台机器指了不同目录的时候)。
+        guard ICloudConfigStore.usingCustomFolder else { return base }
+        return base + " · " + ICloudConfigStore.folderURL.lastPathComponent
+    }
+
+    /// 让用户挑一个目录当备份落点 —— Dropbox / 坚果云 / OneDrive / Syncthing / 一个 git
+    /// 工作副本都行,我们只管往里写文件,同步是那个目录自己的事(见 ICloudConfigStore)。
+    private func chooseBackupFolder() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.prompt = L10n.t("选择")
+        panel.message = L10n.t("选一个会自动同步的文件夹（Dropbox、坚果云、OneDrive 等），换 Mac 时在那台机器上指向同一个文件夹即可")
+        panel.directoryURL = ICloudConfigStore.preparedFolderURL()
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        ICloudConfigStore.setCustomFolder(url)
+        // 换了目录,原来那份快照的信息就不成立了,立刻按新目录重新探测一次。
+        iCloudSnapshot = ICloudConfigStore.latestSnapshot()
+        iCloudMessage = nil
     }
 
     private func importFromICloud() {
@@ -1772,7 +1851,7 @@ private struct GeneralSettingsTab: View {
             let data = await ICloudConfigStore.read(snap.url)
             iCloudBusy = false
             guard let data else {
-                iCloudMessage = L10n.t("这份配置还没从 iCloud 下载下来，等一会儿再试")
+                iCloudMessage = L10n.t("这份备份还没从 iCloud 下载下来，等一会儿再试")
                 return
             }
             pendingImportData = data

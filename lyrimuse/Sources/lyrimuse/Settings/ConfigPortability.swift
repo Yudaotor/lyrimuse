@@ -1,5 +1,6 @@
 import Foundation
 import AppKit
+import LyrimuseCore
 import OSLog
 
 // 导入路径里每一步(JSON 解析/写 config.json/写 features.json)失败都只记日志、不
@@ -21,6 +22,12 @@ private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "config
 enum ConfigPortability {
     private static let configDir = FileManager.default.homeDirectoryForCurrentUser
         .appendingPathComponent(".config/lyrimuse")
+
+    /// 给"在访达中显示配置文件夹"用。这个 App 的配置本来就住在 `~/.config/lyrimuse`
+    /// (对一个 SwiftUI 菜单栏 App 来说不常见),对拿 dotfiles / chezmoi 管机器的人来说
+    /// 正是他们要找的东西 —— 同类里 Karabiner-Elements 的官方"导出导入配置"整页文档
+    /// 就是"打开配置文件夹、把 karabiner.json 拷过去"。
+    static var configFolderURL: URL { configDir }
     private static let configURL = configDir.appendingPathComponent("config.json")
     private static let featuresURL = configDir.appendingPathComponent("lyrimuse-features.json")
 
@@ -72,6 +79,14 @@ enum ConfigPortability {
         "np:overlayPositionOrigin",
         "np:notchScreenID",
         "np:launchAtLoginEnabled",
+        // launchAtLoginEnabled 的同类,2026-08-13 补上 —— 判据(见本组注释末尾"装没装
+        // LaunchAgent 是机器状态")对它一字不差地成立:它记的是"这台机器上装没装 collector
+        // 的 LaunchAgent",而不是用户的偏好。带过去的话,新机器上服务其实还没装,界面却
+        // 显示"已启用",用户找不到那个能把它真正装上的开关。
+        "np:collectorServiceEnabled",
+        // 备份文件夹的路径(见 ICloudConfigStore.customFolderKey)。同样是"这台机器上的一个
+        // 路径"——新机器上那个目录多半不存在,带过去只会让备份这一块指向一个不存在的地方。
+        ICloudConfigStore.customFolderKey,
     ]
 
     /// 已经没有任何代码在读的旧键 —— 功能改名或删掉之后,值还留在 UserDefaults 里。
@@ -122,9 +137,18 @@ enum ConfigPortability {
         return "Lyrimuse-Config-\(formatter.string(from: Date())).json"
     }
 
+    /// 导出包的格式版本。
+    ///
+    /// 2026-08-13 之前这个数字是个**死字段**:只在 buildExportData 里写出去,importData
+    /// 从头到尾没读过(全仓 grep 只有一处命中)。现在导入时至少会看它一眼 —— 不是为了做
+    /// 版本迁移(格式一直是向后兼容的:未知字段本来就会被忽略,缺失字段各有默认值),而是
+    /// 为了让"从新版本的机器导过来、有些设置没跟过来"这类问题在日志里留下痕迹,而不是
+    /// 让人对着一份看不出差别的 JSON 猜。真要 break 格式那天,钩子在这儿。
+    static let exportFormatVersion = 1
+
     static func buildExportData() -> Data? {
         var bundle: [String: Any] = [
-            "version": 1,
+            "version": exportFormatVersion,
             "exportedAt": ISO8601DateFormatter().string(from: Date()),
             // 从哪台机器导出的。iCloud 文件夹里会攒着好几份配置,只有时间戳的话分不清
             // 是哪台机器写的 —— 导入前的那句确认里要能说清楚"这份来自谁"。
@@ -166,11 +190,34 @@ enum ConfigPortability {
     // 整个 App——等价于一次全新的 AppSettings.init(),每个副作用只在启动时按正常顺序
     // 触发一次,行为跟"刚装完/换了台新机器"完全一致,不用为导入这一件事单独维护一套
     // "热重载"逻辑。
+    //
+    // ⚠️ 2026-08-13 补:上面那句"统一提示重启整个 App"只对 **App 自己**成立,漏了
+    // collector —— 它是独立的 launchd 进程,重启 App 完全不碰它,而它的配置是**启动时读
+    // 进内存的那一份**(main.go 里没有任何文件监听)。所以在一台已经装过 collector 的
+    // Mac 上导入(= 第二台机器保持同步、或本机从 iCloud 恢复),盘上和界面都换成新配置了,
+    // 后台却还在拿旧凭据 scrobble、往旧地址推状态,直到用户碰巧改了别的设置、或者重启机器。
+    //
+    // 为什么一直没被发现:全新 Mac 上 collector 还没装,而 hasCompletedOnboarding 又被
+    // 刻意排除在导入之外(见 excludedDefaultsKeys),引导会在导入之后把服务装上 —— 主路径
+    // 恰好绕开了这个洞。
+    //
+    // 修在这里而不是三个调用点各加一句:调用点有三个(设置页导入、iCloud 启动询问、以后
+    // 可能的第四个),忘一个就是同一个 bug 再来一次。
     @discardableResult
-    static func importData(_ data: Data) -> Bool {
+    static func importData(_ data: Data) async -> Bool {
         guard let bundle = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             logger.error("importData: top-level JSON parse failed — not a valid export file")
             return false
+        }
+
+        // 见 exportFormatVersion 的注释:只记录、不拒绝。格式向后兼容,更高版本的包里多出来
+        // 的字段这一版认不出、会被忽略,但已知字段照样能用 —— 直接拒掉反而让"新机器导给
+        // 旧机器"这条真实路径彻底走不通。
+        let bundleVersion = bundle["version"] as? Int ?? 0
+        if bundleVersion > exportFormatVersion {
+            logger.warning("importData: bundle format v\(bundleVersion) is newer than this build's v\(exportFormatVersion) — fields this version doesn't know will be ignored")
+        } else if bundleVersion == 0 {
+            logger.notice("importData: bundle has no usable 'version' field")
         }
 
         do {
@@ -180,9 +227,11 @@ enum ConfigPortability {
         }
 
         if let configObj = bundle["config"] {
-            if let configData = try? JSONSerialization.data(withJSONObject: configObj, options: [.prettyPrinted]) {
+            let sanitized = sanitizeImportedConfig(configObj)
+            if let configData = try? JSONSerialization.data(withJSONObject: sanitized, options: [.prettyPrinted]) {
                 do {
-                    try configData.write(to: configURL, options: .atomic)
+                    // 含全部账号凭据 —— 走 writeSecurely 收紧到 0600,见那边的注释。
+                    try configData.writeSecurely(to: configURL)
                 } catch {
                     logger.error("importData: writing config.json failed — \(String(describing: error), privacy: .public)")
                 }
@@ -214,6 +263,15 @@ enum ConfigPortability {
         } else {
             logger.notice("importData: import bundle has no 'appSettings' section")
         }
+
+        // 让 collector 读到刚写下去的 config.json/features.json。必须**在这里等它跑完**:
+        // 调用方紧接着就 restartApp() → NSApp.terminate,进程说没就没,fire-and-forget
+        // 的重启很可能根本来不及发出去。
+        //
+        // 失败不算导入失败:全新机器上 collector 还没装,kickstart 必然失败,而那条路径
+        // 随后的引导流程本来就会把服务装上、届时自然读的是新配置。
+        let reloaded = await CollectorControl.restartAndWaitAsync()
+        logger.info("importData: collector reload after import — ok=\(reloaded)")
         return true
     }
 
@@ -223,15 +281,50 @@ enum ConfigPortability {
     // hasCompletedOnboarding 被清空后,下次启动会重新走一遍引导向导,这正是"最原始配置"
     // 应有的样子,不是遗漏。
     //
-    // 清完不在这里做任何"活的"reload,原因跟 importData 那条注释一样:统一交给调用方
-    // 紧接着调 restartApp()。这一点还顺带解决了一个不那么直观的连锁反应——
-    // AppSettings.collectorServiceEnabled 清空后读回来是默认值 false,它的 didSet 会调
-    // CollectorServiceManager.setEnabled(false)→uninstall(),而 Swift 对 init() 内部
-    // 显式赋值一样会触发 didSet(不是只对运行期赋值生效的坑,这里刚好是期望行为)——
-    // 于是"清除配置+重启 App"顺带就把常驻服务的 LaunchAgent 卸载了,不需要在这里
-    // 另外手动调用 launchctl,行为完全等价于全新装机、还没跑过引导向导。
+    // App 自己的状态清完交给调用方紧接着的 restartApp() 复位,原因跟 importData 那条
+    // 注释一样。但**常驻服务必须在这里显式停掉**。
+    //
+    // ⚠️ 这里原本写着一段推理:"collectorServiceEnabled 清空后读回来是 false,它的 didSet
+    // 会调 setEnabled(false)→uninstall(),而 Swift 对 init() 内部显式赋值一样会触发
+    // didSet,于是清除配置+重启 App 顺带就把 LaunchAgent 卸载了"。2026-08-13 用 swiftc
+    // 实测,这段推理的前提是**错的**:
+    //
+    //     声明时无默认值 + init 里首次赋值 → didSet 不触发
+    //     声明时有默认值 + init 里重新赋值 → didSet 触发
+    //
+    // 而 AppSettings.collectorServiceEnabled / launchAtLoginEnabled 都是**无默认值**声明
+    // (`@Published var x: Bool {` 直接跟 didSet),走的是不触发那一档。本文件 :60-64 解释
+    // 排除 launchAtLoginEnabled 时给出的正是正确结论 —— 同一个文件里两条注释互相矛盾,
+    // 而这一条是错的那条。
+    //
+    // 后果不是"少卸了个 LaunchAgent"这么轻:collector 是 KeepAlive=true 的 launchd 进程,
+    // 配置在启动时读进内存(无文件监听)。删掉 config.json 并不会让它闭嘴 —— 用户点了
+    // "清除所有设置"、界面告诉他"恢复到刚装完时的样子",后台却**继续拿着刚被清除的
+    // Last.fm session key 往那个账号 scrobble**,直到机器重启。承诺没兑现,而且是隐私性质的。
+    //
+    // 用 setEnabledAndWait 而不是 setEnabled:后者是 operationQueue.async 的
+    // fire-and-forget,而调用方下一句就是 restartApp() → NSApp.terminate,卸载多半来不及跑完。
+    /// 导入前对 `config` 段做的最小净化,规则和理由见 `ImportPolicy`。
+    ///
+    /// 只在这一处做,不在 ConfigStore 里做:那边处理的是**用户自己在界面上敲进去的值**,
+    /// 拦下来只会让人莫名其妙"我填的地址怎么没保存上";这里处理的是**外来文件**,
+    /// 尤其在备份文件夹可以指向共享目录之后。两者信任级别不同。
+    private static func sanitizeImportedConfig(_ configObj: Any) -> Any {
+        guard var config = configObj as? [String: Any] else { return configObj }
+        if let raw = config["state_relay_url"] as? String,
+           !raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+           !ImportPolicy.isAcceptableRelayURL(raw) {
+            // 连同 token 一起清掉:留着一把配不上地址的 token 没有意义,而万一以后哪里
+            // 补了个默认地址,它会跟着被发出去。
+            config["state_relay_url"] = ""
+            config["state_relay_token"] = ""
+            logger.warning("importData: dropped state_relay_url with an unacceptable scheme (and its token)")
+        }
+        return config
+    }
+
     @discardableResult
-    static func clearAllConfig() -> Bool {
+    static func clearAllConfig() async -> Bool {
         var ok = true
         if FileManager.default.fileExists(atPath: configURL.path) {
             do { try FileManager.default.removeItem(at: configURL) }
@@ -254,6 +347,11 @@ enum ConfigPortability {
             clearedCount += 1
         }
         logger.info("clearAllConfig: cleared \(clearedCount) UserDefaults keys, filesRemovedOK=\(ok)")
+
+        // 卸 LaunchAgent 并停掉进程。放在清 UserDefaults **之后**:uninstall 只做 launchctl
+        // 操作,不回写偏好,顺序上不会把刚清掉的键又写回来。
+        let stopped = await CollectorServiceManager.setEnabledAndWait(false)
+        logger.info("clearAllConfig: collector service stopped — stillRunning=\(stopped)")
         return ok
     }
 

@@ -9,8 +9,17 @@ import AppKit
 // 技术的用户自己导出发过来排查问题。
 //
 // 安全上的硬约束:绝不能把 ConfigStore 里任何 token/secret 的原始值写进这份文件——这份
-// 文件很可能被贴进公开的 GitHub issue。所有"是否已配置"的判断都复用 ConfigStore 已有的
-// isXConfigured/xMissingHint() 这批只读布尔判断,不直接触碰 savedSnapshot 里的字段本身。
+// 文件很可能被贴进公开的 GitHub issue。这条约束由**两道**独立的机制守着,缺一不可:
+//
+//  1. 结构化那一段(== State ==)只复用 ConfigStore 已有的 isXConfigured/xMissingHint()
+//     这批只读布尔判断,不直接触碰 savedSnapshot 里的字段本身。
+//  2. 附在报告末尾的两段**日志正文**统一过 redacted() → LogRedactor 脱敏。
+//
+// 第 2 条是 2026-08-13 补的,补之前这条约束实际上是**破的**:第 1 条只管结构化字段,而
+// 报告末尾把 ~/Library/Logs/lyrimuse.log 的最后 200 行原样附上,凭据从日志正文里漏出去。
+// 实测当时本机那 200 行内就有 3 处 Last.fm API Key 原文 —— 来源是 collector 打印 Go
+// *url.Error 的原文,而它的 Error() 会带出完整 URL,api_key 就在 query string 里。
+// 详见 LogRedactor 的注释。往这份报告里加任何新的日志段落,都必须一并套上 redacted()。
 enum DiagnosticsExporter {
     static func suggestedFilename() -> String {
         let formatter = DateFormatter()
@@ -65,11 +74,11 @@ enum DiagnosticsExporter {
         lines.append("")
 
         lines.append("== App Log (last 24h, subsystem me.yudaotor.lyrimuse) ==")
-        lines.append(contentsOf: recentAppLogLines())
+        lines.append(contentsOf: redacted(recentAppLogLines()))
         lines.append("")
 
         lines.append("== Collector Log (last 200 lines) ==")
-        lines.append(contentsOf: recentCollectorLogLines())
+        lines.append(contentsOf: redacted(recentCollectorLogLines()))
 
         return lines.joined(separator: "\n")
     }
@@ -78,6 +87,17 @@ enum DiagnosticsExporter {
     // 值),不是整个系统日志——不需要额外权限,读的也只是自己写过的东西。scope 用
     // .system 而不是 .currentProcessIdentifier:后者只能看到"这次启动之后"的记录,诊断
     // "上次为什么崩了/上次启动出的问题"这种场景必须能看到上一次进程生命周期里的记录。
+    /// 两段日志正文的**唯一**出口都要过这里,见 LogRedactor 的注释。
+    ///
+    /// 放在这一层而不是各自的取日志函数里,是为了让"报告里出现的每一行日志都脱过敏"这件事
+    /// 只有一个地方可查、也只有一个地方会漏 —— 以后再加第三段日志(比如 Sparkle 的更新
+    /// 日志),忘了套这个函数会很显眼。
+    @MainActor
+    private static func redacted(_ lines: [String]) -> [String] {
+        let secrets = ConfigStore.shared.secretsForRedaction
+        return lines.map { LogRedactor.redactAll($0, secrets: secrets) }
+    }
+
     private static func recentAppLogLines(hours: Int = 24) -> [String] {
         guard let store = try? OSLogStore(scope: .system) else {
             return ["(could not open log store)"]

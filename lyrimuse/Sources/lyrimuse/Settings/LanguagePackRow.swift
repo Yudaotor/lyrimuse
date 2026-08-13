@@ -39,8 +39,12 @@ final class LanguagePackStatusStore: ObservableObject {
         return base
     }
 
+    /// 用 `L10n.locale` 而不是 `Locale.current`:这里出来的是**界面文本**(下拉里那一列
+    /// 语言名),必须跟同一行右边走 `L10n.t()` 的状态文案用同一种语言。用系统 locale 的话,
+    /// 界面切成英文、系统仍是中文的机器上会渲染成「英语 · Downloaded」这种中英混排
+    /// (2026-08-13 用户报)。译文的**目标**语言(target)是另一回事,那个照旧跟随系统。
     static func displayName(_ code: String) -> String {
-        Locale.current.localizedString(forIdentifier: code) ?? code
+        L10n.locale.localizedString(forIdentifier: code) ?? code
     }
 
     func refresh(target: Locale.Language) {
@@ -67,7 +71,11 @@ final class LanguagePackStatusStore: ObservableObject {
                 let ia = Self.preferred.firstIndex(of: a) ?? Int.max
                 let ib = Self.preferred.firstIndex(of: b) ?? Int.max
                 if ia != ib { return ia < ib }
-                return Self.displayName(a).localizedCompare(Self.displayName(b)) == .orderedAscending
+                // 排序规则也跟着界面语言走:localizedCompare 用的是系统 locale,英文界面下
+                // 会按中文拼音序排出一串英文名,看着像没排序。
+                return Self.displayName(a).compare(
+                    Self.displayName(b), options: [], range: nil, locale: L10n.locale
+                ) == .orderedAscending
             }
 
             var next: [String: LanguageAvailability.Status] = [:]

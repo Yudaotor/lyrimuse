@@ -36,12 +36,58 @@ enum ICloudConfigStore {
             .appendingPathComponent("Library/Mobile Documents/com~apple~CloudDocs")
     }
 
-    /// 我们在 iCloud Drive 里的文件夹。故意用 App 名字,用户在 Finder 里一眼认得出来。
-    static var folderURL: URL { cloudDocsURL.appendingPathComponent("Lyrimuse") }
+    /// 用户自选的备份文件夹。为 nil 表示用默认的 iCloud Drive 那个。
+    ///
+    /// 2026-08-13 加。这一整套原来写死在 iCloud —— 但它压根没用 iCloud 的任何 API
+    /// (没有 CloudKit、没有 NSUbiquitousKeyValueStore,那些都需要这个 ad-hoc 签名的 App
+    /// 拿不到的 entitlement),只是往 `~/Library/Mobile Documents/com~apple~CloudDocs/`
+    /// 底下写普通 JSON 文件而已。同步能力全部来自那个文件夹本身。
+    ///
+    /// 既然如此,换成任意一个用户指定的目录,这套逻辑一行都不用改就同时支持了 Dropbox /
+    /// 坚果云 / OneDrive / Syncthing / 一个 git 工作副本 —— 一个设置项顶掉一堆各自对接。
+    /// 这也是同类 App 的通行做法(Alfred 的 "Set preferences folder…"、Keyboard Maestro
+    /// 的 "Start Syncing Macros" 都是让用户自己指目录,而不是内置某几家网盘)。
+    ///
+    /// 存的是**裸路径字符串**,没用 security-scoped bookmark:这个 App 非沙箱,拿到路径就
+    /// 能读写。(沙箱 App 才需要 bookmark 来跨启动保留授权。)
+    ///
+    /// ⚠️ 这个键必须留在本机、不跟着配置搬家 —— 它是"这台机器上的一个路径",在新机器上
+    /// 多半不存在。已加进 ConfigPortability.machineLocalDefaultsKeys。
+    static let customFolderKey = "np:backupFolderPath"
 
-    /// 用户开了 iCloud Drive 吗。没开就整块 UI 都不显示,而不是给一个点了会报错的按钮。
+    static var customFolderPath: String? {
+        let raw = UserDefaults.standard.string(forKey: customFolderKey) ?? ""
+        return raw.isEmpty ? nil : raw
+    }
+
+    static func setCustomFolder(_ url: URL?) {
+        if let url {
+            UserDefaults.standard.set(url.path, forKey: customFolderKey)
+        } else {
+            UserDefaults.standard.removeObject(forKey: customFolderKey)
+        }
+    }
+
+    /// 现在用的是用户自选的目录,还是默认的 iCloud。UI 靠它决定那一行叫什么。
+    static var usingCustomFolder: Bool { customFolderPath != nil }
+
+    /// 备份文件夹。默认是 iCloud Drive 里的 Lyrimuse 目录(故意用 App 名字,用户在 Finder
+    /// 里一眼认得出来);用户选过别的就用那个。
+    static var folderURL: URL {
+        if let path = customFolderPath { return URL(fileURLWithPath: path) }
+        return cloudDocsURL.appendingPathComponent("Lyrimuse")
+    }
+
+    /// 这套 UI 能不能用。自选目录时看那个目录还在不在(用户可能把它删了、或者那是个已经
+    /// 拔掉的外置盘);没自选过就是看用户开没开 iCloud Drive。不可用就整块不显示,而不是
+    /// 给一个点了必然报错的按钮。
     static var isAvailable: Bool {
-        FileManager.default.fileExists(atPath: cloudDocsURL.path)
+        if let path = customFolderPath {
+            var isDirectory: ObjCBool = false
+            let exists = FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory)
+            return exists && isDirectory.boolValue
+        }
+        return FileManager.default.fileExists(atPath: cloudDocsURL.path)
     }
 
     /// 建好文件夹再把它交出去,给保存面板当默认落点用。
@@ -190,7 +236,9 @@ enum ICloudConfigStore {
             try FileManager.default.createDirectory(
                 at: folderURL, withIntermediateDirectories: true)
             let url = folderURL.appendingPathComponent(filename)
-            try data.write(to: url, options: .atomic)
+            // 备份包里带着明文凭据。iCloud 那个父目录本身是 drwx------、本地已被兜住,
+            // 收紧到 0600 主要是为了它被拷/移到别处之后仍然不松。
+            try data.writeSecurely(to: url)
             return url
         } catch {
             logger.error("write failed: \(error.localizedDescription, privacy: .public)")

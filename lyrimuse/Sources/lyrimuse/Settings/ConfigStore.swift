@@ -145,6 +145,37 @@ public final class ConfigStore: ObservableObject {
     }
     public var isDirty: Bool { currentSnapshot != savedSnapshot }
 
+    /// 给诊断导出**脱敏**用:字段名 → 该字段当前的值。
+    ///
+    /// ⚠️ 这批值只有一个正当用途:交给 `LogRedactor` 去把它们从日志正文里**抹掉**。
+    /// 任何把它们写进报告、日志或界面的用法都直接违反 `DiagnosticsExporter` 开头那条
+    /// 硬约束(诊断文件会被贴进公开 issue)。字段名本身不敏感,打码后会以
+    /// `<redacted:lastfmScrobbleAPIKey>` 的形式留在报告里,方便排查时知道那里原本是哪一项。
+    ///
+    /// 刻意读 `currentSnapshot` 而不是 `savedSnapshot`:用户可能刚在界面上粘了一把新
+    /// 密钥还没点保存,而 collector 侧的日志里已经可能有它 —— 脱敏要按"可能出现过的值"
+    /// 取全集,宁可多抹一个。
+    ///
+    /// 不收进来的两类,都是有意的:
+    /// - **用户名**(lastfmUser / listenbrainzUser 等):是公开信息,而且排查"scrobble 到
+    ///   了哪个账号"这类问题时正需要它。
+    /// - **stateRelayURL**:host 本身对排查网络问题有用;它的凭据部分是另一个字段
+    ///   (stateRelayToken)。反过来 `notificationWebhookURL` 必须收 —— Bark/Server酱/
+    ///   飞书的 webhook 地址里凭据就长在 URL 自己身上,整条即凭据。
+    public var secretsForRedaction: [String: String] {
+        [
+            "listenbrainzToken": listenbrainzToken,
+            "stateRelayToken": stateRelayToken,
+            "lastfmAPIKey": lastfmAPIKey,
+            "lastfmScrobbleAPIKey": lastfmScrobbleAPIKey,
+            "lastfmScrobbleSecret": lastfmScrobbleSecret,
+            "lastfmScrobbleSessionKey": lastfmScrobbleSessionKey,
+            "notificationWebhookURL": notificationWebhookURL,
+            "dingtalkSignSecret": dingtalkSignSecret,
+            "feishuSignSecret": feishuSignSecret,
+        ].filter { !$0.value.isEmpty }
+    }
+
     // 以下几个只读判断专给"推送账号"tab 的状态徽标用——刻意读 savedSnapshot(已保存的
     // 值)而不是当前 @Published 字段,道理跟 isDirty 一样:用户刚敲了几个字符还没点
     // 保存,不该被判定成"已配置"。返回值是具体缺哪个字段的提示文案,全部配置齐全时
@@ -248,7 +279,8 @@ public final class ConfigStore: ObservableObject {
             throw NSError(domain: "ConfigStore", code: 1, userInfo: [NSLocalizedDescriptionKey: L10n.t("内部数据不是合法 JSON,已放弃保存")])
         }
         let data = try JSONSerialization.data(withJSONObject: raw, options: [.prettyPrinted])
-        try data.write(to: Self.configURL, options: .atomic)
+        // 这份就是凭据本体(Last.fm session key / ListenBrainz token / relay token…)。
+        try data.writeSecurely(to: Self.configURL)
     }
 
     // 保存成功后调用,把"已保存快照"推进到当前值——之后 isDirty 会重新变 false,状态徽标

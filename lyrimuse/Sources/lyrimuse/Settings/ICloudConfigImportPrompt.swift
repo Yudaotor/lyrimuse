@@ -56,7 +56,7 @@ enum ICloudConfigImportPrompt {
             }
 
             let alert = NSAlert()
-            alert.messageText = L10n.t("在 iCloud 里发现一份 Lyrimuse 配置")
+            alert.messageText = L10n.t("在 iCloud 里发现一份 Lyrimuse 备份")
             alert.informativeText = detail + L10n.t("导入会带上账号和所有个人设置，随后重启 Lyrimuse。")
             alert.addButton(withTitle: L10n.t("导入并重启"))
             alert.addButton(withTitle: L10n.t("跳过"))
@@ -68,7 +68,7 @@ enum ICloudConfigImportPrompt {
                 continuation()
                 return
             }
-            ConfigPortability.importData(data)
+            await ConfigPortability.importData(data)
             ConfigPortability.restartApp()
         }
     }

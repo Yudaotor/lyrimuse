@@ -124,7 +124,9 @@ struct FeatureFlagsFile: Codable, Equatable {
     // 这份共享文件,直接是 AppSettings.launchMusicOnLyrimuseOpen 一个纯 Swift 侧设置。
     var launchLyrimuseOnMusicOpen: Bool?
 
-    enum CodingKeys: String, CodingKey {
+    /// CaseIterable 是为了让 `knownFileKeys` 能自动跟着字段增删走 —— 手工维护第二份
+    /// 键名清单迟早会跟这里对不上,而对不上的后果正是下面要修的那种静默丢数据。
+    enum CodingKeys: String, CodingKey, CaseIterable {
         case player
         case albumPrefetch = "album_prefetch"
         case lyricsMachineTranslation = "lyrics_machine_translation"
@@ -140,6 +142,9 @@ struct FeatureFlagsFile: Codable, Equatable {
         case lyricsTranslationLanguage = "lyrics_translation_language"
         case launchLyrimuseOnMusicOpen = "launch_lyrimuse_on_music_open"
     }
+
+    /// 这个版本认识的全部 JSON 键。见 FeatureSettingsStore.unknownFileKeys 的注释。
+    static let knownFileKeys: Set<String> = Set(CodingKeys.allCases.map(\.rawValue))
 }
 
 // "歌词"tab 的纯行为开关(lyrics/albumPrefetch 等)和"账号连接"tab 里各张
@@ -232,14 +237,42 @@ public final class FeatureSettingsStore: ObservableObject {
         load()
     }
 
+    /// 磁盘上存在、但**这个版本**的 FeatureFlagsFile 不认识的键,原样留着,写盘时再合并回去。
+    ///
+    /// 2026-08-13 补。原来 persistFile() 直接 `JSONEncoder().encode(currentSnapshot)`,
+    /// 只吐出 FeatureFlagsFile 声明过的字段 —— 磁盘上任何它不认识的键**写一次就没了**。
+    /// 上面 :93 那条注释("JSONDecoder/Go 都会静默忽略未知字段,不需要额外的迁移代码")
+    /// 只对**读**成立,漏了写这一半。
+    ///
+    /// 具体会怎么丢:Mac A 已经更新到新版、Mac B 还停在旧版(Sparkle 不会同时到达两台)。
+    /// A 导出 → B 导入,B 的 features.json 这时带着新版才有的字段 → 用户在 B 上随手拨一个
+    /// 开关 → persistFile() 按旧版的 struct 重新编码 → 新版字段被抹掉 → B 再导出/更新
+    /// iCloud 备份,损失就回传给 A 了。
+    ///
+    /// 隔壁 ConfigStore 没这个问题,它是 `raw: [String: Any]` 整字典读写(见那边 :72-78
+    /// 花了六行解释为什么必须这样)。两个 Store 对未知字段的处理原本是**反的**,这里补齐。
+    private var unknownFileKeys: [String: Any] = [:]
+
     public func load() {
         guard let data = try? Data(contentsOf: Self.featuresURL),
               let f = try? JSONDecoder().decode(FeatureFlagsFile.self, from: data) else {
             // 文件不存在/解析失败——维持属性的默认值,跟 collector 侧 loadFeatureFlags
             // 的默认值约定完全一致(核心行为开关 fail-open=true;需要外部账号的 6 个
             // fail-closed=false,见上面属性声明处的说明)。
+            unknownFileKeys = [:]
             savedSnapshot = currentSnapshot
             return
+        }
+        // 同一份字节再按裸字典解一次,把这个版本不认识的键记下来(见 unknownFileKeys)。
+        if let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            unknownFileKeys = obj.filter { !FeatureFlagsFile.knownFileKeys.contains($0.key) }
+            // os.Logger 的插值参数是 @autoclosure,引用实例属性要显式写 self —— debug 构建
+            // 放过了这一点,release(-O)才报错,所以只跑 `swift build` 验证是不够的。
+            if !unknownFileKeys.isEmpty {
+                logger.notice("features.json carries \(self.unknownFileKeys.count) key(s) this build doesn't know; they will be preserved on write")
+            }
+        } else {
+            unknownFileKeys = [:]
         }
         player = f.player.flatMap(PlaybackPlayer.init(rawValue:)) ?? .appleMusic
         albumPrefetch = f.albumPrefetch ?? true
@@ -269,7 +302,21 @@ public final class FeatureSettingsStore: ObservableObject {
     // 一起调用后,只统一重启一次 collector。
     public func persistFile() throws {
         let data = try JSONEncoder().encode(currentSnapshot)
-        try data.write(to: Self.featuresURL, options: .atomic)
+        var payload = data
+        // 把这个版本不认识的键合并回去,别让它们随这次写盘消失(见 unknownFileKeys)。
+        // 合并方向是"已知字段覆盖未知同名键"——本次编码出来的才是用户刚设置的值。
+        if !unknownFileKeys.isEmpty,
+           var obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            for (key, value) in unknownFileKeys where obj[key] == nil {
+                obj[key] = value
+            }
+            if let merged = try? JSONSerialization.data(
+                withJSONObject: obj, options: [.prettyPrinted, .sortedKeys]
+            ) {
+                payload = merged
+            }
+        }
+        try payload.write(to: Self.featuresURL, options: .atomic)
     }
 
     public func commitSnapshot() {
