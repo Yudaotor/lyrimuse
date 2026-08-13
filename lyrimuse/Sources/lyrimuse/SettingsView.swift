@@ -1554,14 +1554,7 @@ private struct PlayerSettingsTab: View {
     // 静态工具,两处各自调用即可,不需要抽共享 View)——常驻服务启用失败时给用户一个
     // 具体能做的事,而不是让红叉停在原地不知道下一步。
     private func exportDiagnostics() {
-        let report = DiagnosticsExporter.buildReport()
-        let panel = NSSavePanel()
-        panel.nameFieldStringValue = DiagnosticsExporter.suggestedFilename()
-        panel.directoryURL = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Desktop")
-        if panel.runModal() == .OK, let url = panel.url {
-            try? report.write(to: url, atomically: true, encoding: .utf8)
-            NSWorkspace.shared.activateFileViewerSelecting([url])
-        }
+        DiagnosticsExporter.exportInteractively()
     }
 }
 
@@ -1985,7 +1978,7 @@ private struct AboutSettingsTab: View {
         SettingsPage(
             title: "Lyrimuse",
             subtitle: String(format: L10n.t("版本 %@"), versionString) + "\n"
-                + L10n.t("跟着 Apple Music、QQ 音乐、网易云或 Spotify 播放，实时显示逐字同步歌词，还能一键同步播放记录到 Last.fm"),
+                + L10n.t("跟着 Apple Music、QQ 音乐、网易云或 Spotify 播放，实时显示逐字歌词并同步播放记录到 Last.fm"),
             heroImage: appIcon
         ) {
             SettingsCard {
@@ -1998,7 +1991,14 @@ private struct AboutSettingsTab: View {
                     }
                 }
                 CardDivider()
-                SettingsRow(icon: "chevron.left.forwardslash.chevron.right", title: L10n.t("GitHub 仓库")) {
+                // 这一行的副标题是唯一一处"求 star"的地方,所以用常显 subtitle 而不是
+                // help 气泡 —— 藏进悬停提示就没人会看到了。语气刻意跟同一页的"请作者喝杯
+                // 咖啡"呼应,自嘲而不是撒娇,跟这个 App 其余克制的文案调子还搭得上。
+                SettingsRow(
+                    icon: "chevron.left.forwardslash.chevron.right",
+                    title: L10n.t("GitHub 仓库"),
+                    subtitle: L10n.t("开源免费，觉得顺手就点颗 ⭐")
+                ) {
                     Button(L10n.t("打开")) {
                         NSWorkspace.shared.open(URL(string: "https://github.com/Yudaotor/lyrimuse")!)
                     }
@@ -2022,14 +2022,7 @@ private struct AboutSettingsTab: View {
                     subtitle: L10n.t("汇总 App/采集器日志和权限、常驻服务等关键状态，保存成一份文本文件，不会包含任何账号 token 或密钥的原始内容")
                 ) {
                     Button(L10n.t("导出…")) {
-                        let report = DiagnosticsExporter.buildReport()
-                        let panel = NSSavePanel()
-                        panel.nameFieldStringValue = DiagnosticsExporter.suggestedFilename()
-                        panel.directoryURL = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Desktop")
-                        if panel.runModal() == .OK, let url = panel.url {
-                            try? report.write(to: url, atomically: true, encoding: .utf8)
-                            NSWorkspace.shared.activateFileViewerSelecting([url])
-                        }
+                        DiagnosticsExporter.exportInteractively()
                     }
                 }
             }
