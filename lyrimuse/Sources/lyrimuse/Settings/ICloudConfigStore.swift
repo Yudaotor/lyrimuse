@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import LyrimuseCore
 import OSLog
@@ -166,7 +167,38 @@ enum ICloudConfigStore {
     /// 别处"。建不出来(iCloud 目录不可写等)就返回它本身,让面板自己去回退。
     static func preparedFolderURL() -> URL {
         try? FileManager.default.createDirectory(at: folderURL, withIntermediateDirectories: true)
+        ensureFolderIcon(at: folderURL)
         return folderURL
+    }
+
+    /// 给备份文件夹贴上 App 图标,在 Finder 一排蓝文件夹里能一眼认出来。
+    ///
+    /// macOS 存自定义图标的方式是在文件夹**内部**放一个隐藏文件,文件名是 `Icon` 加一个
+    /// 回车符(`Icon\r`)。因为它就是目录里的一个普通文件,所以会跟着 iCloud/Dropbox 一起
+    /// 同步 —— 新机器上那个文件夹同样带图标,不用各自再设一次。
+    ///
+    /// 它不会被备份探测误认:`ConfigSnapshotName` 只认 `Lyrimuse-Config-<时间>.json`
+    /// (selftest 里有针对这个文件名的断言)。
+    ///
+    /// 图标取 `NSImage.applicationIconName` 而不是去 /Applications 里按路径读 —— 那是本
+    /// 进程自己的图标,带全部分辨率,也不依赖 App 装在哪。
+    static func ensureFolderIcon(at folder: URL) {
+        // 已经有了就不再写。setIcon 会重写资源文件并触碰目录,而 preparedFolderURL 在每次
+        // 导出/打开菜单时都会被调 —— 每次都写一遍等于每次都让同步服务认为这个文件夹变了。
+        let marker = folder.appendingPathComponent("Icon\r")
+        guard !FileManager.default.fileExists(atPath: marker.path) else { return }
+        guard FileManager.default.fileExists(atPath: folder.path) else { return }
+        guard let icon = NSImage(named: NSImage.applicationIconName) else { return }
+        let ok = NSWorkspace.shared.setIcon(icon, forFile: folder.path, options: [])
+        logger.info("folder icon applied to \(folder.lastPathComponent, privacy: .public): \(ok, privacy: .public)")
+    }
+
+    /// 启动时调:文件夹**已经存在**才补图标,不为了贴个图标去创建一个用户还没用过的目录。
+    static func ensureFolderIconIfPresent() {
+        guard isAvailable else { return }
+        let url = folderURL
+        guard FileManager.default.fileExists(atPath: url.path) else { return }
+        ensureFolderIcon(at: url)
     }
 
     /// iCloud 里的一份配置。

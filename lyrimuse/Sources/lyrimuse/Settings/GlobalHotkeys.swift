@@ -7,7 +7,7 @@ import LyrimuseCore
 // 发 AppleScript 指令,复用已经拿到的自动化权限(见 MusicAutomationPermission)。
 //
 // 默认不预置任何按键组合——KeyboardShortcuts.Recorder 不预注册默认值时本来就是空的
-// "点击录制"状态,所有 6 个快捷键必须用户自己在设置里主动录制才会生效,不会有任何
+// "点击录制"状态,下面这 10 个快捷键全部必须用户自己在设置里主动录制才会生效,不会有
 // 按键在用户不知情下被这个 App 抢占。
 extension KeyboardShortcuts.Name {
     static let toggleOverlay = Self("toggleOverlay")

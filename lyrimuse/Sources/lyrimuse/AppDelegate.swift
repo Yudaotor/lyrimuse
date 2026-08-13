@@ -103,6 +103,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // 配置文件夹里压根不会有这个文件 —— 而"拷整个文件夹换机器"恰恰是这类用户最可能
         // 走的路。幂等,内容没变时也就是重写一遍同样的字节。
         AppSettingsMirror.write()
+        // 备份文件夹贴上 App 图标(仅在它已经存在时),让它在 Finder 里认得出来。
+        ICloudConfigStore.ensureFolderIconIfPresent()
         // 封面/头像全走 AsyncImage(内部用 URLSession.shared),它吃的是 URLCache.shared,
         // 默认容量小得可怜 —— 最近记录展开到 100 行再切个 tab 回来,九十多张封面全部
         // 重新下载(审阅确认)。给共享缓存一个像样的容量,磁盘部分跨启动依然有效。
@@ -131,10 +133,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             at: FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".config/lyrimuse"),
             withIntermediateDirectories: true)
 
-        // 裸可执行文件(没打成 .app 包)也能表现成菜单栏专属应用,不占 Dock/Cmd-Tab,
-        // 不需要 Info.plist 的 LSUIElement。默认(没碰过"在 Dock 中显示"这个设置的人)
-        // 是 .accessory；AppSettings.showInDock 的 didSet 不会在它自己 init() 赋初值
-        // 这一步触发(Swift 语义),所以这里必须显式按持久化的值应用一次。
+        // 这一句决定 App 是普通应用(占 Dock + 进 Cmd-Tab)还是菜单栏专属应用。
+        //
+        // ⚠️ 2026-08-13 更正:这段原来写"默认(没碰过'在 Dock 中显示'这个设置的人)是
+        // .accessory"、"不需要 Info.plist 的 LSUIElement" —— 两句都不对。showInDock 的
+        // 兜底是 `?? true`(AppSettings.init),所以新用户走的是 .regular、**有** Dock 图标;
+        // 而 build.sh 打包时确实写了 LSUIElement=true,是这里在启动时把它翻回 .regular。
+        // 两处一起看才说得通:plist 让它默认不占 Dock,这一行按用户的设置再决定要不要占。
+        //
+        // AppSettings.showInDock 的 didSet 不会在它自己 init() 赋初值这一步触发
+        // (Swift 语义,实测见 ConfigPortability.clearAllConfig 上那段),所以这里必须
+        // 显式按持久化的值应用一次。
         NSApp.setActivationPolicy(settings.showInDock ? .regular : .accessory)
         LocalPlaybackSource.shared.preferWordLevelKaraoke = settings.preferWordLevelKaraoke
         LocalPlaybackSource.shared.chineseVariant = settings.lyricsChineseVariant

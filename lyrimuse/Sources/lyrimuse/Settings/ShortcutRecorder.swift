@@ -196,7 +196,11 @@ private final class ShortcutRecorderContainerView: NSView {
         recordButton.setContentHuggingPriority(.required, for: .horizontal)
         recordButton.setContentCompressionResistancePriority(.required, for: .horizontal)
 
-        let stack = NSStackView(views: [recordButton, clearButton])
+        // "×"排在录制按钮**前面**。放在后面(库自带 Recorder 的做法)时,只有已录过快捷键
+        // 的那几行才多出这颗按钮,而 stack 的 trailing 钉在行右缘 —— 于是那几行的录制
+        // 胶囊被"×"往左顶,跟没录过的行对不齐,一列胶囊左右参差(2026-08-13 用户实测反馈)。
+        // 挪到前面之后,胶囊右缘永远贴着同一条线,"×"出现或消失只影响它自己左边那点空隙。
+        let stack = NSStackView(views: [clearButton, recordButton])
         stack.orientation = .horizontal
         stack.spacing = 6
         stack.alignment = .centerY
