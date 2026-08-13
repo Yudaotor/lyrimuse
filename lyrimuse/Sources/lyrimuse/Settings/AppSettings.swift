@@ -65,7 +65,6 @@ final class AppSettings: ObservableObject {
         static let classicOverlayEnabled = "np:classicOverlayEnabled"
         static let notchOverlayEnabled = "np:notchOverlayEnabled"
         static let notchCardStyle = "np:notchCardStyle"
-        // 灵动岛歌词行尾端(卡片右下角)那枚专辑封面小图,见 NotchLyricsView.artworkThumbnail。默认开。
         static let notchScreenID = "np:notchScreenID"
         // 2026-08-05 之前,"这种悬浮歌词要不要显示"这一件事有**两份**独立持久化:上面这两个
         // {classic,notch}OverlayEnabled(设置页那两个 Toggle 读它),外加两个 WindowController
@@ -223,9 +222,12 @@ final class AppSettings: ObservableObject {
     @Published var lyricsOffsetStepMs: Int {
         didSet { defaults.set(lyricsOffsetStepMs, forKey: Keys.lyricsOffsetStepMs) }
     }
-    // 首次启动的完整引导向导(欢迎/自动化权限/语言/完成)只走一次——不管从哪一步
-    // 关掉窗口都会置为 true(见 OnboardingView 的 .onDisappear),没有任何重新打开的
-    // 入口(不留菜单项),关掉就是关掉了。这个向导上线前的老版本只有"自动化权限"
+    // 首次启动的完整引导向导(欢迎/播放器/自动化权限/常驻服务/语言/显示形态/Last.fm/
+    // 完成)只走一次。⚠️ 只由 finish() 置位,也就是**真的走到最后一步**才算引导过 ——
+    // 中途关窗等于"稍后再说",下次启动会再问一次(2026-08-13 改;此前是"不管从哪一步
+    // 关窗都算引导过",会把第一步就关窗的用户永久困在"服务没装、引导再也不出现"的
+    // 死路上)。走完之后菜单栏留有"重新运行引导…"随时可以重来。这个向导上线前的老版本
+    // 只有"自动化权限"
     // 这一步单独的 NSAlert(hasShownAutomationOnboarding,现已废弃),init() 里做
     // 一次性迁移:老版本已经弹过那一步的,直接视为"已经引导过"，不会突然对已经
     // 用过这个 App 的人强插一整套全新的多步向导。
@@ -261,7 +263,6 @@ final class AppSettings: ObservableObject {
     @Published var notchCardStyle: NotchCardStyle {
         didSet { defaults.set(notchCardStyle.rawValue, forKey: Keys.notchCardStyle) }
     }
-    // 灵动岛歌词行尾端(卡片右下角)那枚专辑封面小图——默认开。同样只负责持久化,
     // 灵动岛贴在哪块屏幕上——存的是显示器 UUID(见 ScreenIdentity),空字符串 = 自动
     // (挑有刘海的那块)。跟 lockPosition/notchContentWidth 同一个模式:这里只负责持久化,
     // 不碰 NSWindow,由 SettingsView 的 Binding.set 显式调用窗口控制器让它立刻生效。
@@ -297,7 +298,10 @@ final class AppSettings: ObservableObject {
     @Published var notchContentWidth: Double {
         didSet { defaults.set(notchContentWidth, forKey: Keys.notchContentWidth) }
     }
-    // #RRGGBBAA。默认不透明白色,跟悬浮窗原来硬编码的 .white 视觉完全一致。
+    // #RRGGBBAA。默认值统一取 ColorTheme.defaultTheme(现在是"深色卡片":不透明白字 +
+    // 七成不透明黑底),不在这里硬编码 —— 这一行以前写的是"默认不透明白色,跟悬浮窗原来
+    // 硬编码的 .white 视觉完全一致",而实际默认早就被换成过纯黑字、注释没跟上,导致
+    // 2026-08-13 审计默认值时一度以为黑字是有意的设计。
     @Published var foregroundColorHex: String {
         didSet {
             defaults.set(foregroundColorHex, forKey: Keys.foregroundColorHex)
@@ -363,7 +367,7 @@ final class AppSettings: ObservableObject {
         // (不经过 self.appLanguage,那个要到下面几行才被赋值),只影响"从没手动碰过
         // 这个开关"的默认值——已经手动开过/关过的人,defaults.object(forKey:) 能读到
         // 已持久化的值,不会被这次改动覆盖。
-        showTranslation = (defaults.object(forKey: Keys.showTranslation) as? Bool) ?? (L10n.current == "zh-hans")
+        showTranslation = (defaults.object(forKey: Keys.showTranslation) as? Bool) ?? Self.userReadsChinese
         launchAtLoginEnabled = (defaults.object(forKey: Keys.launchAtLoginEnabled) as? Bool) ?? false
         launchMusicOnLyrimuseOpen = (defaults.object(forKey: Keys.launchMusicOnLyrimuseOpen) as? Bool) ?? false
         collectorServiceEnabled = (defaults.object(forKey: Keys.collectorServiceEnabled) as? Bool) ?? false
@@ -420,7 +424,7 @@ final class AppSettings: ObservableObject {
         }
         classicOverlayEnabled = classicOn
         notchOverlayEnabled = notchOn
-        notchCardStyle = defaults.string(forKey: Keys.notchCardStyle).flatMap(NotchCardStyle.init(rawValue:)) ?? .frostedGlass
+        notchCardStyle = defaults.string(forKey: Keys.notchCardStyle).flatMap(NotchCardStyle.init(rawValue:)) ?? .coverArt
         notchScreenID = defaults.string(forKey: Keys.notchScreenID) ?? ""
         fontFamilyName = defaults.string(forKey: Keys.fontFamilyName) ?? Self.defaultFontFamilyName
         fontSize = (defaults.object(forKey: Keys.fontSize) as? Double) ?? Self.defaultFontSize

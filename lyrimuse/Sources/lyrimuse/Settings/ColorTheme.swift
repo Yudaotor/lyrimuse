@@ -31,11 +31,21 @@ extension ColorTheme {
     // id 用固定字符串(不是随手 UUID())——内置预设每次启动都是同一份字面量构造出来的
     // 新实例,固定 id 才能让"当前配色是不是正好等于某个内置预设"这类比较(如果以后需要)
     // 有意义;用户自己存的自定义主题才用随机 UUID(见 SettingsView 里"存为新主题"那处)。
-    // 四个预设的 textStrokeEnabled 都是 false(textStrokeColorHex 留着一个合理默认值,
+    // 六个内置预设的 textStrokeEnabled 都是 false(textStrokeColorHex 留着一个合理默认值,
     // 单纯是给用户手动重新打开描边开关时有个还算顺眼的起始值,不影响预设本身的观感)。
-    // "经典黑字"跟"经典白字"对称,同时被定为 defaultTheme(见下方)——AppSettings.init()
-    // 和 SettingsView"恢复默认外观"按钮统一引用这一个值,不再各自硬编码一遍默认配色
-    // 字面量。
+    // "经典黑字"跟"经典白字"对称。defaultTheme 现在指向的是"深色卡片"(见下方)。
+    /// 白字 + 七成不透明黑底。被定为 `defaultTheme`(见下方)—— 全新安装长这个样子。
+    ///
+    /// 跟 classicBlack 一样单独命名而不是只躺在 builtInPresets 里:defaultTheme 要引用它,
+    /// 而"默认配色"和"预设列表里第 N 项"是两件事,不该靠数组下标耦合。
+    public static var darkCard: ColorTheme {
+        ColorTheme(
+            id: "builtin-card", name: L10n.t("深色卡片"),
+            foregroundColorHex: "#FFFFFFFF", backgroundColorHex: "#000000B3",
+            textStrokeEnabled: false, textStrokeColorHex: "#000000A6"
+        )
+    }
+
     public static var classicBlack: ColorTheme {
         ColorTheme(
             id: "builtin-classic-black", name: L10n.t("经典黑字"),
@@ -72,11 +82,7 @@ extension ColorTheme {
             foregroundColorHex: "#FFE29AFF", backgroundColorHex: "#00000000",
             textStrokeEnabled: false, textStrokeColorHex: "#000000CC"
         ),
-        ColorTheme(
-            id: "builtin-card", name: L10n.t("深色卡片"),
-            foregroundColorHex: "#FFFFFFFF", backgroundColorHex: "#000000B3",
-            textStrokeEnabled: false, textStrokeColorHex: "#000000A6"
-        ),
+        darkCard,
         // 跟"深色卡片"对称的浅色版本——同样的卡片不透明度(0xB3),前景/背景黑白对调。
         ColorTheme(
             id: "builtin-light-card", name: L10n.t("浅色卡片"),
@@ -92,10 +98,14 @@ extension ColorTheme {
 
     // 全新安装/"恢复默认外观"/"清除所有配置"之后应该长成的样子——AppSettings.init()
     // 和 SettingsView 的"恢复默认外观"按钮都读这一个值,不再各自硬编码一遍。
-    // 也写成计算属性:眼下四个调用点只读它的十六进制色值(name 从不读),所以冻结与否
-    // 不影响现在的行为;但它是 classicBlack 的别名,让两者求值语义一致,免得以后有人
+    // 也写成计算属性:眼下几个调用点只读它的十六进制色值(name 从不读),所以冻结与否
+    // 不影响现在的行为;但它是 darkCard 的别名,让两者求值语义一致,免得以后有人
     // 读 defaultTheme.name 又踩一次上面那个语言冻结。
-    public static var defaultTheme: ColorTheme { classicBlack }
+    //
+    // 2026-08-13 从 classicBlack 换成 card。桌面悬浮歌词是全新安装唯一默认可见的界面,
+    // 而 classicBlack 是"不透明黑字 + 全透明背景 + 不描边"—— 深色壁纸上基本看不见,
+    // 新用户会以为悬浮歌词没工作。card 是白字 + 七成不透明黑底,任何壁纸上都读得清。
+    public static var defaultTheme: ColorTheme { darkCard }
 
     // 跟"是不是同一个主题"(id/name)无关,只比较四个真正影响观感的字段——用来判断
     // "当前配色是不是正好等于某个预设/自定义主题",给菜单标签当"当前生效哪个"的

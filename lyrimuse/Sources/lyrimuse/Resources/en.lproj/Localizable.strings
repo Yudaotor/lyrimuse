@@ -5,7 +5,7 @@
 "关于" = "About";
 "关于 Lyrimuse" = "About Lyrimuse";
 "版本 %@" = "Version %@";
-"跟着 Apple Music、QQ 音乐、网易云或 Spotify 播放，实时显示逐字同步歌词，还能一键同步播放记录到 Last.fm" = "Real-time synced lyrics for Apple Music, QQ Music, NetEase, or Spotify — plus one-click Last.fm scrobbling";
+"跟着 Apple Music、QQ 音乐、网易云或 Spotify 播放，实时显示逐字歌词并同步播放记录到 Last.fm" = "Real-time word-by-word lyrics for Apple Music, QQ Music, NetEase or Spotify, scrobbling your plays to Last.fm as you listen";
 "检查更新…" = "Check for Updates…";
 "GitHub 仓库" = "GitHub Repository";
 "反馈问题" = "Report an Issue";
@@ -542,9 +542,11 @@
 "选一个会自动同步的文件夹（Dropbox、坚果云、OneDrive 等），换 Mac 时在那台机器上指向同一个文件夹即可" = "Pick a folder that syncs on its own — Dropbox, OneDrive and the like. On your next Mac, point Lyrimuse at that same folder";
 "配置文件夹" = "Config Folder";
 "整份配置都在这里，纯文本可直接编辑；里面含账号凭据，不要发给别人" = "Everything lives here in plain text you can edit directly. It holds your account credentials, so don't send it to anyone";
+"开源免费，觉得顺手就点颗 ⭐" = "Free and open source. Drop a ⭐ if you like it";
 "还缺用户名" = "Username missing";
 "还缺用户名，听歌报告用不了" = "Username missing — listening digests can't run";
 "用户名（听歌报告需要）" = "Username (needed for listening digests)";
+"重新运行引导…" = "Run Setup Guide Again…";
 "补提交历史收听" = "Backfill Past Listens";
 "补提交" = "Backfill";
 "已补 %@ 条" = "%@ backfilled";
@@ -555,3 +557,11 @@
 "没有待补的收听；%@ 条已超过 Last.fm 能接受的两周期限" = "Nothing to backfill; %@ are past the two weeks Last.fm accepts";
 "没连账号时听的歌会记在本地，连上之后可以补提交到 Last.fm" = "Listens while no account is connected are kept locally, and can be submitted to Last.fm once you connect";
 "本地已记录 %@ 首，连接后可补提交" = "%@ listens saved locally — can be submitted once you connect";
+"歌词显示在哪里" = "Where Lyrics Appear";
+"这几种可以同时开着，先挑你现在想用的——之后随时能在设置里单独开关" = "These can all be on at once — pick what you want for now and change it any time in Settings";
+"贴在桌面上" = "Sits on your desktop";
+"紧凑地贴着屏幕顶部的刘海" = "Tucked beside the notch at the top";
+"这台 Mac 没有刘海，会显示在屏幕顶部正中" = "No notch on this Mac, so it sits at the top center";
+"菜单栏里的一行字" = "A single line in the menu bar";
+"三种方式都关掉了，播放时屏幕上不会出现歌词——菜单栏图标一直都在，随时可以从那里重新打开" = "All three are off, so no lyrics will show while music plays. The menu bar icon is always there — you can turn them back on from it";
+"现在没有在播放——桌面悬浮歌词会立刻出现，灵动岛和菜单栏歌词要等开始播放才看得到" = "Nothing is playing right now — Desktop Floating Lyrics appears straight away; Notch Lyrics and Menu Bar Lyrics only show up once playback starts";

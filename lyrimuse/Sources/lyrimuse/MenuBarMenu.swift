@@ -189,6 +189,17 @@ struct MenuBarMenu: View {
         // 跟"设置…"同一个坑,同一个解法:先激活 App 再打开——直接跳到设置窗口的
         // "关于"分类,复用 Onboarding 的 Last.fm 步骤已经在用的同一套一次性信箱
         // (AppActions.pendingSettingsSelection,见该文件注释),不用再点一次侧边栏。
+        // 引导现在可以重来:关窗算"稍后",而走完的人后来想重新配一遍(换了播放器、
+        // 服务被自己关掉了、想重新给权限)也得有入口。没有这个入口的话,上面那条
+        // "关窗不算完成"就只是把死路换了个地方 —— 走完的人依然回不去。
+        //
+        // 不用在这里 NSApp.activate:openOnboarding 这个闭包自己第一句就是激活
+        // (见本文件上方 AppActions.shared.openOnboarding 的注册处)。
+        Button {
+            AppActions.shared.openOnboarding?()
+        } label: {
+            Label(L10n.t("重新运行引导…"), systemImage: "sparkles")
+        }
         Button {
             NSApp.activate(ignoringOtherApps: true)
             AppActions.shared.pendingSettingsSelection = .tab(.about)
