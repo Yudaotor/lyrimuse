@@ -11,6 +11,7 @@ import (
 	neturl "net/url"
 	"os"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 )
@@ -162,6 +163,33 @@ var (
 // 每次报的时长有几百毫秒抖动也应该命中同一份记录。已经解析过的条目永远直接返回,不会
 // 自动整条重新解析——只有 needsPeripheralBackfill 命中时,会在后台补一次缺失的外围
 // 字段(不碰歌词/封面来源等身份字段)。
+// canonicalEnrichKey 在已有缓存里找一个"只差大小写"的等价 key。
+//
+// 同一首歌会被不同来源报成不同大小写:本机 Apple Music 给的是专辑元数据的原始写法
+// (PRINCE / "Get on the Boat"),而 Last.fm 桥接(bridge → remoteTrack → relayState →
+// lbMeta → 这里)给的是 Last.fm 自己规范化过的写法(Prince / "Get On The Boat")。
+// key 是 artist|title|album 拼出来的、大小写敏感,于是同一首歌被存成两条:
+//
+//   - "歌词管理"列表里出现重复行(2026-08-13 用户实测:Prince 的 3121 专辑 12 首歌
+//     存成了 15 条,重复的三对差别只在 PRINCE/Prince 和 "on the"/"On The")
+//   - 第二条要白跑一轮五源歌词搜索
+//   - lyrics/ 里多出一份内容几乎相同的 .lrc 导出文件
+//
+// 线性扫而不是维护一份小写索引:写入点分散在四条补全路径里,维护索引得每处都记得同步
+// (这个仓库里已经有过几次"漏同步一处"的教训),而这里的规模是几百条、每轮轮询扫一遍
+// 也就几十微秒。
+//
+// ⚠️ 调用方必须已经持有 enrichMu。
+func canonicalEnrichKey(key string) (string, bool) {
+	lower := strings.ToLower(key)
+	for existing := range enrichCache {
+		if existing != key && strings.ToLower(existing) == lower {
+			return existing, true
+		}
+	}
+	return "", false
+}
+
 func trackEnrichment(artist, title, album, bundleID string, durationSecs float64) map[string]string {
 	if title == "" {
 		return nil
@@ -180,6 +208,14 @@ func trackEnrichment(artist, title, album, bundleID string, durationSecs float64
 	key := artist + "|" + title + "|" + album
 	enrichMu.Lock()
 	e, ok := enrichCache[key]
+	if !ok {
+		// 精确没命中时,再看看已有条目里有没有"只差大小写"的同一首歌 —— 有就复用那个 key,
+		// 别另存一份。理由见 canonicalEnrichKey。
+		if alt, found := canonicalEnrichKey(key); found {
+			log.Printf("enrich: reusing existing entry %q for %q (case-only difference)", alt, key)
+			key, e, ok = alt, enrichCache[alt], true
+		}
+	}
 	if ok {
 		// 一次只跑一路后台任务(都会重新取锁改同一条记录),下次播放时轮到下一个。
 		// 重选排在升级重试前面:后者用旧分做"严格更高"的比较,而版本落后的条目那个旧分

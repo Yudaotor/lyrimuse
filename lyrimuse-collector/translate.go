@@ -470,6 +470,61 @@ const (
 	translationBackfillInterval    = 6 * time.Hour
 )
 
+// invalidateStaleTranslations 把语言跟当前设置对不上的**机翻**译文清掉,让它们下次
+// 播放时按新语言重翻。
+//
+// 为什么需要:needsTranslationBackfill 本来就能判出"记录的语言 != 当前目标"并触发重翻,
+// 但那道判断只在**播放到这首歌时**才跑(见 enrich.go 主循环里那串 else if)。于是用户把
+// 译文语言从英文改回中文之后,以前听过的歌仍然显示英文译文,直到碰巧再放一次 —— 2026-08-13
+// 用户报的就是这个。当时实测本机缓存:12 条语言不匹配,其中 11 条"会在下次播放时重翻",
+// 也就是机制在、只是没有触发的机会。
+//
+// 放在启动时扫一遍正好覆盖这个场景:Swift 侧改完译文语言会重启 collector
+// (FeatureSettingsStore.save → CollectorControl.restartAndWaitAsync)。
+//
+// **只清 lyrics_tr_source == "machine" 的**。歌词源自带的社区译文(网易云/Musixmatch)
+// 质量高于机翻,而且清掉之后万一机翻失败(没网/超额),用户就一份译文都没有了;留着它
+// translationUsable 照样判它不可用、让机翻覆盖过去,那条路本来就通。
+//
+// ⚠️ 调用点必须夹在 importLyricsFromFiles() 和 exportLyricsFiles() 之间:前者让磁盘上的
+// lyrics/ 文件赢(那是权威源),后者会把这里清空的字段同步成"删掉对应的 .tr.lrc"
+// (见 lyricsexport.go 里 content == "" 时的 os.Remove)。顺序错了,清掉的译文会在下次
+// 启动被 import 原样导回来。
+func invalidateStaleTranslations() {
+	target := myMemoryLangCode(features.LyricsTranslationLanguage)
+	if target == "" {
+		return
+	}
+	enrichMu.Lock()
+	cleared := 0
+	for key, e := range enrichCache {
+		if e.LyricsTr == "" || e.LyricsTrSource != "machine" {
+			continue
+		}
+		// 语言不详的不动:判不出来就别删,交给 translationUsable 那套文本判别去处理。
+		if e.LyricsTrLang == "" || myMemoryLangCode(e.LyricsTrLang) == target {
+			continue
+		}
+		e.LyricsTr, e.LyricsTrLang, e.LyricsTrSource = "", "", ""
+		// 连同这门语言的重试计数/节流一起清,否则新语言的第一次尝试可能被上一门语言
+		// 攒下的次数挡掉(needsTranslationBackfill 里 sameTarget 那段的同一个道理)。
+		e.TranslationRetryCount, e.TranslationTS, e.TranslationLang = 0, 0, ""
+		enrichCache[key] = e
+		cleared++
+	}
+	if cleared > 0 {
+		// 必须置脏:saveEnrichCache 开头就是 `if !enrichDirty || enrichPath == "" { return }`,
+		// 不置的话下面那次保存会被静默跳过,清空只活在内存里、重启就回来了。
+		enrichDirty = true
+	}
+	enrichMu.Unlock()
+	if cleared > 0 {
+		log.Printf("cleared %d machine translation(s) whose language no longer matches %q", cleared, target)
+		// 必须在解锁之后:saveEnrichCache 自己要拿同一把 enrichMu。
+		saveEnrichCache()
+	}
+}
+
 // needsTranslationBackfill 判断这条要不要机翻补一份译文。
 //
 // 已经有 lyrics_tr 就一律不动 —— 社区翻译(网易云/Musixmatch 的人工译文)质量高于机翻,

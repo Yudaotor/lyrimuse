@@ -69,6 +69,12 @@ func main() {
 		runArtistAvatarsCLI(os.Args[2:])
 		return
 	}
+	// `collector backfill-lastfm [-dry-run]`:把本地收听日志里还没提交过的收听补到
+	// Last.fm(见 backfillcli.go / backfill.go)。跟上面几个一样是一次性子命令。
+	if len(os.Args) > 1 && os.Args[1] == "backfill-lastfm" {
+		runBackfillLastfmCLI(os.Args[2:])
+		return
+	}
 	// `collector top-artists ...`:合并同名歌手后的 Top 榜(见 topartistscli.go)。
 	if len(os.Args) > 1 && os.Args[1] == "top-artists" {
 		runTopArtistsCLI(os.Args[2:])
@@ -117,7 +123,13 @@ func main() {
 		lyricsDir = filepath.Join(filepath.Dir(*cfgPath), "lyrics")
 	}
 	importLyricsFromFiles()
+	// 夹在 import 和 export 之间:见 invalidateStaleTranslations 的注释——前者让
+	// lyrics/ 文件夹赢,后者负责把这里清空的译文同步成删掉对应的 .tr.lrc。
+	invalidateStaleTranslations()
 	exportLyricsFiles()
+	// 本地收听日志:刻意**不带** lastfm-/lb- 这类账号域前缀 —— 这份日志存在的全部意义
+	// 就是"不依赖任何账号",挂上某个账号的名字就说反了。
+	initListenLog(filepath.Join(filepath.Dir(*cfgPath), clientName+"-listens.jsonl"))
 	forwardedPath = filepath.Join(filepath.Dir(*cfgPath), clientName+"-lastfm-forwarded.json")
 	lastfmCollapsePath = filepath.Join(filepath.Dir(*cfgPath), clientName+"-lastfm-collapse.json")
 	lfmMirroredPath = filepath.Join(filepath.Dir(*cfgPath), clientName+"-lastfm-mirrored.json")
