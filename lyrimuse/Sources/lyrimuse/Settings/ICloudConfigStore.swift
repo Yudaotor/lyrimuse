@@ -71,6 +71,25 @@ enum ICloudConfigStore {
     /// 现在用的是用户自选的目录,还是默认的 iCloud。UI 靠它决定那一行叫什么。
     static var usingCustomFolder: Bool { customFolderPath != nil }
 
+    /// 导入完成后,把"备份文件夹"这个设置对齐到刚导入的那份备份的**来源目录**。
+    ///
+    /// 不做这一步会分裂:探测范围比写入范围大(见 searchFolders),所以新机器上很可能是从
+    /// Dropbox 里那份恢复的,而 folderURL 仍然指着 iCloud —— 用户之后点"更新备份"会写去
+    /// iCloud,于是他有两个半份备份,而且哪一份是新的取决于他上次点的是哪台机器。
+    ///
+    /// 来源恰好就是默认的 iCloud 目录时,清掉自选值而不是把 iCloud 路径存成"自选" ——
+    /// 后者会让 UI 显示成"备份文件夹"、菜单里冒出一个没意义的"改回 iCloud"。
+    static func adoptFolder(_ sourceFolder: URL) {
+        let cloudDefault = cloudDocsURL.appendingPathComponent("Lyrimuse").standardizedFileURL
+        let source = sourceFolder.standardizedFileURL
+        if source == cloudDefault {
+            if customFolderPath != nil { setCustomFolder(nil) }
+            return
+        }
+        guard source != folderURL.standardizedFileURL else { return }
+        setCustomFolder(source)
+    }
+
     /// 备份文件夹。默认是 iCloud Drive 里的 Lyrimuse 目录(故意用 App 名字,用户在 Finder
     /// 里一眼认得出来);用户选过别的就用那个。
     static var folderURL: URL {
@@ -82,12 +101,62 @@ enum ICloudConfigStore {
     /// 拔掉的外置盘);没自选过就是看用户开没开 iCloud Drive。不可用就整块不显示,而不是
     /// 给一个点了必然报错的按钮。
     static var isAvailable: Bool {
-        if let path = customFolderPath {
-            var isDirectory: ObjCBool = false
-            let exists = FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory)
-            return exists && isDirectory.boolValue
+        if let path = customFolderPath { return isDirectory(atPath: path) }
+        if FileManager.default.fileExists(atPath: cloudDocsURL.path) { return true }
+        // 没开 iCloud Drive 也不该把这一栏整个藏掉 —— 那样"换个文件夹备份"这个功能对这批
+        // 用户完全不可达(要用它,就得先能看见这一行)。只要机器上存在任何一个已知的云盘
+        // 挂载点,就把这栏亮出来。
+        return !knownCloudFolders().isEmpty
+    }
+
+    private static func isDirectory(atPath path: String) -> Bool {
+        var isDir: ObjCBool = false
+        let exists = FileManager.default.fileExists(atPath: path, isDirectory: &isDir)
+        return exists && isDir.boolValue
+    }
+
+    /// 这台机器上能找到的第三方云盘根目录。
+    ///
+    /// `~/Library/CloudStorage/` 是 macOS 12 起 Dropbox / OneDrive / Google Drive / Box
+    /// 这些客户端通过 File Provider 统一挂载的位置(子目录名形如 `Dropbox`、
+    /// `OneDrive-Personal`、`GoogleDrive-someone@gmail.com`)。老版 Dropbox 客户端仍然用
+    /// `~/Dropbox`,所以两处都看。
+    ///
+    /// 只列目录、不读内容,而且都在用户自己的家目录下 —— 非沙箱 App 读这些不需要 TCC 授权
+    /// (Desktop/Documents/Downloads 那三个才需要)。
+    private static func knownCloudFolders() -> [URL] {
+        let home = FileManager.default.homeDirectoryForCurrentUser
+        var roots: [URL] = []
+        let cloudStorage = home.appendingPathComponent("Library/CloudStorage")
+        if let subs = try? FileManager.default.contentsOfDirectory(
+            at: cloudStorage, includingPropertiesForKeys: nil,
+            options: [.skipsHiddenFiles, .skipsSubdirectoryDescendants]) {
+            roots.append(contentsOf: subs.filter { isDirectory(atPath: $0.path) })
         }
-        return FileManager.default.fileExists(atPath: cloudDocsURL.path)
+        for legacy in ["Dropbox", "OneDrive"] {
+            let url = home.appendingPathComponent(legacy)
+            if isDirectory(atPath: url.path) { roots.append(url) }
+        }
+        return roots
+    }
+
+    /// 探测备份时要翻的**所有**目录,按"最可能是权威的那份"排在前面。
+    ///
+    /// 为什么探测的范围必须比写入的范围大:写入只写一个地方(`folderURL`),但**换新机器时,
+    /// "备份在哪"这个信息本身存在旧机器的偏好里,新机器恰恰没有**。如果只按 folderURL 找,
+    /// 一个把备份放在 Dropbox 的用户在新机器上首启时会什么都找不到 —— 因为新机器的
+    /// UserDefaults 是空的,customFolderPath 必然是 nil,folderURL 于是回退到 iCloud。
+    /// 这就是 2026-08-13 用户问出来的那个洞。
+    static func searchFolders() -> [URL] {
+        var out: [URL] = [folderURL]
+        let cloudDefault = cloudDocsURL.appendingPathComponent("Lyrimuse")
+        if !out.contains(cloudDefault) { out.append(cloudDefault) }
+        for root in knownCloudFolders() {
+            out.append(root.appendingPathComponent("Lyrimuse"))
+        }
+        // 去重但保持顺序
+        var seen = Set<String>()
+        return out.filter { seen.insert($0.standardizedFileURL.path).inserted }
     }
 
     /// 建好文件夹再把它交出去,给保存面板当默认落点用。
@@ -107,6 +176,10 @@ enum ICloudConfigStore {
         let url: URL
         /// 文件的修改时间 —— 用来排序"哪份最新"。
         let modifiedAt: Date
+        /// 这份备份所在的目录。探测范围比写入范围大(见 searchFolders),所以找到的那份
+        /// 未必来自当前的 folderURL —— 导入时要据此把备份文件夹一并切过去,否则用户从
+        /// Dropbox 恢复完,之后的"更新备份"还是写去 iCloud,两边就分裂了。
+        let folderURL: URL
         /// 配置里自报的导出时间/机器名(读文件内容才有,列目录阶段拿不到)。
         var exportedAt: Date?
         var deviceName: String?
@@ -114,30 +187,24 @@ enum ICloudConfigStore {
 
     // MARK: - 列目录
 
-    /// iCloud 文件夹里最新的一份配置。没有就返回 nil。
+    /// 所有候选目录里最新的那一份配置。没有就返回 nil。
+    ///
+    /// 翻的是 `searchFolders()` 而不是单个 `folderURL` —— 理由见那边的注释(换新机器时
+    /// "备份在哪"这个信息只存在旧机器上)。跨目录之间同样按修改时间比,取最新的一份。
     ///
     /// 只列目录、不读内容 —— 未下载的文件在这一步也能被看到(见
     /// `ConfigSnapshotName.realName(ofDirectoryEntry:)`),真正要读的时候才触发下载。
     static func latestSnapshot() -> Snapshot? {
-        guard isAvailable else { return nil }
-        let fm = FileManager.default
-        guard let entries = try? fm.contentsOfDirectory(
-            at: folderURL,
-            includingPropertiesForKeys: [.contentModificationDateKey],
-            options: [.skipsSubdirectoryDescendants]) else { return nil }
-
-        var best: Snapshot?
-        for entry in entries {
-            // 认文件名的规则(含 iCloud 未下载占位符 `.<真名>.icloud`)在
-            // ConfigSnapshotName 里,那边有自测覆盖。
-            guard let name = ConfigSnapshotName.realName(ofDirectoryEntry: entry.lastPathComponent)
-            else { continue }
-            let real = folderURL.appendingPathComponent(name)
-            let modified = (try? entry.resourceValues(forKeys: [.contentModificationDateKey]))?
-                .contentModificationDate ?? .distantPast
-            if best == nil || modified > best!.modifiedAt {
-                best = Snapshot(url: real, modifiedAt: modified)
-            }
+        let folders = searchFolders()
+        let hit = BackupDiscovery.latest(in: folders)
+        // 记一笔"翻了几个目录、最后选中哪个"——这条链路(尤其是从 iCloud 之外的目录命中)
+        // 只在换机器时走一次,出问题时没有现场可看,日志是唯一线索。目录名不敏感。
+        logger.info("""
+            snapshot scan: \(folders.count, privacy: .public) folder(s), \
+            picked \(hit?.folder.lastPathComponent ?? "none", privacy: .public)
+            """)
+        let best = hit.map {
+            Snapshot(url: $0.url, modifiedAt: $0.modifiedAt, folderURL: $0.folder)
         }
         guard var found = best else { return nil }
         // 只在文件**已经下载到本机**时才读内容补充自报信息。

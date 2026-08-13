@@ -146,6 +146,36 @@ enum ConfigPortability {
     /// 让人对着一份看不出差别的 JSON 猜。真要 break 格式那天,钩子在这儿。
     static let exportFormatVersion = 1
 
+    /// 该跟着这个人走的那批 App 偏好 —— 也就是"全部 np:/KeyboardShortcuts_ 键,减去机器
+    /// 专属的和已经死掉的"。
+    ///
+    /// 抽成一处是因为它现在有三个消费者:导出包的 appSettings 段、`AppSettingsMirror`
+    /// 写进配置文件夹的那份镜像、以及导入时用同一份排除表做过滤。三处各写一遍循环,迟早
+    /// 会有一处漏掉排除表 —— 而漏掉的后果是把屏幕坐标之类的机器状态搬到别的机器上。
+    static func exportableAppSettings() -> [String: Any] {
+        var out: [String: Any] = [:]
+        for (key, value) in UserDefaults.standard.dictionaryRepresentation() {
+            guard key.hasPrefix("np:") || key.hasPrefix("KeyboardShortcuts_") else { continue }
+            guard !excludedDefaultsKeys.contains(key) else { continue }
+            out[key] = value
+        }
+        return out
+    }
+
+    /// 把一份 appSettings 落进 UserDefaults,同样过一遍排除表。
+    ///
+    /// 排除表在**写入侧也要过**,不能只在导出时过:一份旧版本导出的包(那时排除表还没这一
+    /// 项)里可能带着现在不该导入的键,这里挡住,不用为每次扩表另做一套兼容。
+    static func applyAppSettings(_ appSettings: [String: Any]) -> Int {
+        var applied = 0
+        for (key, value) in appSettings {
+            guard !excludedDefaultsKeys.contains(key) else { continue }
+            UserDefaults.standard.set(value, forKey: key)
+            applied += 1
+        }
+        return applied
+    }
+
     static func buildExportData() -> Data? {
         var bundle: [String: Any] = [
             "version": exportFormatVersion,
@@ -171,13 +201,7 @@ enum ConfigPortability {
             logger.notice("buildExportData: no features.json found/parseable at \(featuresURL.path, privacy: .public)")
         }
 
-        var appSettings: [String: Any] = [:]
-        for (key, value) in UserDefaults.standard.dictionaryRepresentation() {
-            guard key.hasPrefix("np:") || key.hasPrefix("KeyboardShortcuts_") else { continue }
-            guard !excludedDefaultsKeys.contains(key) else { continue }
-            appSettings[key] = value
-        }
-        bundle["appSettings"] = appSettings
+        bundle["appSettings"] = exportableAppSettings()
 
         return try? JSONSerialization.data(withJSONObject: bundle, options: [.prettyPrinted, .sortedKeys])
     }
@@ -255,11 +279,12 @@ enum ConfigPortability {
             logger.notice("importData: import bundle has no 'features' section")
         }
         if let appSettings = bundle["appSettings"] as? [String: Any] {
-            for (key, value) in appSettings {
-                guard !excludedDefaultsKeys.contains(key) else { continue }
-                UserDefaults.standard.set(value, forKey: key)
-            }
-            logger.info("importData: applied \(appSettings.count) appSettings keys")
+            let applied = applyAppSettings(appSettings)
+            logger.info("importData: applied \(applied) of \(appSettings.count) appSettings keys")
+            // 顺手把配置文件夹里那份镜像也刷成刚导入的内容。不刷的话它会一直是覆盖前的
+            // 旧值,直到用户下次改动某个设置 —— 中间这段时间里"把配置文件夹拷去别的机器"
+            // 带走的是旧偏好,而用户以为自己刚导入的就是全部。
+            AppSettingsMirror.write()
         } else {
             logger.notice("importData: import bundle has no 'appSettings' section")
         }
@@ -346,6 +371,9 @@ enum ConfigPortability {
             UserDefaults.standard.removeObject(forKey: key)
             clearedCount += 1
         }
+        // 镜像也要删。留着它下次启动就会被 restoreIfPristine 原样恢复回来 —— 用户点的
+        // 那个"恢复到刚装完时的样子"等于白点。
+        AppSettingsMirror.remove()
         logger.info("clearAllConfig: cleared \(clearedCount) UserDefaults keys, filesRemovedOK=\(ok)")
 
         // 卸 LaunchAgent 并停掉进程。放在清 UserDefaults **之后**:uninstall 只做 launchctl

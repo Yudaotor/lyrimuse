@@ -1576,6 +1576,9 @@ private struct GeneralSettingsTab: View {
     @State private var iCloudBusy = false
     @State private var iCloudMessage: String?
     @State private var pendingImportData: Data?
+    // 这次待确认的导入来自哪个**备份目录**。从任意文件选进来的那条路径是 nil ——
+    // 那可能只是下载目录里的一份临时文件,不该因此把它当成今后的备份落点。
+    @State private var pendingImportFolder: URL?
     @State private var showClearConfigWarning = false
 
     var body: some View {
@@ -1680,7 +1683,7 @@ private struct GeneralSettingsTab: View {
                 SettingsRow(
                     icon: "square.and.arrow.up",
                     title: L10n.t("导出设置"),
-                    subtitle: L10n.t("文件里包含账号登录凭证和密钥，妥善保管，不要发给别人")
+                    help: L10n.t("文件里包含账号登录凭证和密钥，妥善保管，不要发给别人")
                 ) {
                     Button(L10n.t("导出…")) { showExportConfigWarning = true }
                 }
@@ -1688,7 +1691,7 @@ private struct GeneralSettingsTab: View {
                 SettingsRow(
                     icon: "square.and.arrow.down",
                     title: L10n.t("导入设置"),
-                    subtitle: L10n.t("会覆盖当前所有设置，包括已连接的账号和播放数据发往的地址，并立即重启 Lyrimuse")
+                    help: L10n.t("会覆盖当前所有设置，包括已连接的账号和播放数据发往的地址，并立即重启 Lyrimuse")
                 ) {
                     Button(L10n.t("导入…")) {
                         let panel = NSOpenPanel()
@@ -1702,6 +1705,7 @@ private struct GeneralSettingsTab: View {
                         if panel.runModal() == .OK, let url = panel.url,
                            let data = try? Data(contentsOf: url) {
                             pendingImportData = data
+                            pendingImportFolder = nil
                             showImportConfigConfirm = true
                         }
                     }
@@ -1714,7 +1718,7 @@ private struct GeneralSettingsTab: View {
                 SettingsRow(
                     icon: "folder",
                     title: L10n.t("配置文件夹"),
-                    subtitle: L10n.t("config.json 和功能开关在这里，纯文本、可直接编辑或纳入版本管理；界面外观和快捷键不在其中")
+                    help: L10n.t("整份配置都在这里，纯文本可直接编辑；里面含账号凭据，不要发给别人")
                 ) {
                     Button(L10n.t("在访达中显示")) {
                         NSWorkspace.shared.activateFileViewerSelecting([ConfigPortability.configFolderURL])
@@ -1775,6 +1779,11 @@ private struct GeneralSettingsTab: View {
                     if let data = pendingImportData {
                         Task { @MainActor in
                             await ConfigPortability.importData(data)
+                            // 必须排在 importData 之后:备份目录这个键在导入排除表里、
+                            // 不会被导入的包覆盖,但顺序反了会先被写、再被这一句改回来。
+                            if let folder = pendingImportFolder {
+                                ICloudConfigStore.adoptFolder(folder)
+                            }
                             ConfigPortability.restartApp()
                         }
                     }
@@ -1855,6 +1864,7 @@ private struct GeneralSettingsTab: View {
                 return
             }
             pendingImportData = data
+            pendingImportFolder = snap.folderURL
             showImportConfigConfirm = true
         }
     }

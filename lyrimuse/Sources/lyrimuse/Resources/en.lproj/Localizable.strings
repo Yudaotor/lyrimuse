@@ -541,4 +541,4 @@
 "备份到「%@」，还没存过" = "Backing up to “%@” — nothing saved yet";
 "选一个会自动同步的文件夹（Dropbox、坚果云、OneDrive 等），换 Mac 时在那台机器上指向同一个文件夹即可" = "Pick a folder that syncs on its own — Dropbox, OneDrive and the like. On your next Mac, point Lyrimuse at that same folder";
 "配置文件夹" = "Config Folder";
-"config.json 和功能开关在这里，纯文本、可直接编辑或纳入版本管理；界面外观和快捷键不在其中" = "config.json and the feature flags live here — plain text, edit them or keep them in version control. Appearance and shortcuts aren't in this folder";
+"整份配置都在这里，纯文本可直接编辑；里面含账号凭据，不要发给别人" = "Everything lives here in plain text you can edit directly. It holds your account credentials, so don't send it to anyone";

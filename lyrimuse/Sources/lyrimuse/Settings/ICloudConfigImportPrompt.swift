@@ -69,6 +69,9 @@ enum ICloudConfigImportPrompt {
                 return
             }
             await ConfigPortability.importData(data)
+            // 探测范围比写入范围大 —— 这份很可能来自 Dropbox 之类而不是 iCloud。
+            // 不对齐的话,用户之后点"更新备份"会写去 iCloud,备份就分裂成两半了。
+            ICloudConfigStore.adoptFolder(snapshot.folderURL)
             ConfigPortability.restartApp()
         }
     }

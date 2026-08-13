@@ -94,6 +94,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // ⚠️ 必须是这个函数的第一件事:AppSettings 在 init 里一次性把所有属性从 UserDefaults
+        // 读进内存(下面第一次访问 AppSettings.shared 时发生),恢复晚了就只落了盘、这次启动
+        // 的内存态还是空的。见 AppSettingsMirror.restoreIfPristine 的注释。
+        AppSettingsMirror.restoreIfPristine()
+        AppSettingsMirror.startObserving()
+        // 启动时无条件写一次。只靠 startObserving 的话,一个从来没动过任何设置的用户
+        // 配置文件夹里压根不会有这个文件 —— 而"拷整个文件夹换机器"恰恰是这类用户最可能
+        // 走的路。幂等,内容没变时也就是重写一遍同样的字节。
+        AppSettingsMirror.write()
         // 封面/头像全走 AsyncImage(内部用 URLSession.shared),它吃的是 URLCache.shared,
         // 默认容量小得可怜 —— 最近记录展开到 100 行再切个 tab 回来,九十多张封面全部
         // 重新下载(审阅确认)。给共享缓存一个像样的容量,磁盘部分跨启动依然有效。

@@ -979,6 +979,57 @@ do {
 // lyrimuse-collector 的 simeval_test.go 用 SIMEVAL_DATA 把真实曲库 gate 住是同一个模式。
 // 跑法:LYRIMUSE_REDACT_CHECK=1 swift run lyrimuse-selftest
 // 全程只做比对,绝不打印任何密钥值(连长度以外的信息都不打)。
+// ---- BackupDiscovery(跨目录找最新备份) ----
+//
+// 这是"换新 Mac 能不能一键恢复"的唯一入口,而它只在换机器时走一次、出错时没有现场可看,
+// 所以用真实的临时目录做一次端到端。2026-08-13 用户问出的洞就在这条路上:备份放在
+// Dropbox 的人,新机器上 UserDefaults 是空的、当前设置必然指向 iCloud,只按当前设置找
+// 就什么都找不到。
+do {
+    print("\n== 跨目录探测备份 ==")
+    let fm = FileManager.default
+    let root = fm.temporaryDirectory
+        .appendingPathComponent("lyrimuse-backup-probe-\(ProcessInfo.processInfo.processIdentifier)")
+    let iCloudish = root.appendingPathComponent("iCloudish/Lyrimuse")
+    let dropboxish = root.appendingPathComponent("Dropboxish/Lyrimuse")
+    let empty = root.appendingPathComponent("NothingHere/Lyrimuse")
+    defer { try? fm.removeItem(at: root) }
+
+    try? fm.createDirectory(at: iCloudish, withIntermediateDirectories: true)
+    try? fm.createDirectory(at: dropboxish, withIntermediateDirectories: true)
+    try? fm.createDirectory(at: empty, withIntermediateDirectories: true)
+
+    let older = iCloudish.appendingPathComponent("Lyrimuse-Config-2026-08-01-120000.json")
+    let newer = dropboxish.appendingPathComponent("Lyrimuse-Config-2026-08-13-160000.json")
+    try? Data("{}".utf8).write(to: older)
+    try? Data("{}".utf8).write(to: newer)
+    // 显式钉住修改时间,不靠"写入顺序恰好决定 mtime"这种巧合。
+    try? fm.setAttributes([.modificationDate: Date(timeIntervalSince1970: 1_000_000)], ofItemAtPath: older.path)
+    try? fm.setAttributes([.modificationDate: Date(timeIntervalSince1970: 2_000_000)], ofItemAtPath: newer.path)
+
+    // 候选顺序刻意把"当前设置指向的目录"(iCloudish)排在前面 —— 命中的必须是更新的那份,
+    // 而不是排在前面的那份。
+    let hit = BackupDiscovery.latest(in: [iCloudish, empty, dropboxish])
+    expectEqual(hit?.url.lastPathComponent, "Lyrimuse-Config-2026-08-13-160000.json",
+                "跨目录要取最新的那份,不是候选列表里排最前的")
+    expectEqual(hit?.folder.lastPathComponent, "Lyrimuse", "要报出它所在的目录")
+    expectEqual(hit?.folder.path, dropboxish.path, "目录必须是真正命中的那个(用于导入后对齐备份位置)")
+
+    // 不存在的目录必须被跳过而不是让整次探测失败 —— 探测要翻好几个候选,大部分机器上
+    // 大部分候选都不存在,那是常态。
+    let missing = root.appendingPathComponent("DoesNotExist/Lyrimuse")
+    let hit2 = BackupDiscovery.latest(in: [missing, iCloudish])
+    expectEqual(hit2?.url.lastPathComponent, "Lyrimuse-Config-2026-08-01-120000.json",
+                "候选里夹着不存在的目录时,其余目录照样要扫到")
+
+    expectEqual(BackupDiscovery.latest(in: [empty, missing]) == nil, true, "都没有备份时返回 nil")
+
+    // 目录里的无关文件不能被当成备份(认名规则归 ConfigSnapshotName,那边另有覆盖)。
+    try? Data("{}".utf8).write(to: empty.appendingPathComponent("notes.txt"))
+    try? Data("{}".utf8).write(to: empty.appendingPathComponent("other.json"))
+    expectEqual(BackupDiscovery.latest(in: [empty]) == nil, true, "无关文件不算备份")
+}
+
 // ---- ImportPolicy(外来配置里的 relay 地址) ----
 //
 // 守的是"备份文件夹可以指向共享目录"之后新出现的那条路径:目录里的文件成了导入源,而
