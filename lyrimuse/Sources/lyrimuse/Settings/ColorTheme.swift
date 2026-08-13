@@ -25,6 +25,56 @@ public struct ColorTheme: Codable, Identifiable, Hashable {
         self.textStrokeEnabled = textStrokeEnabled
         self.textStrokeColorHex = textStrokeColorHex
     }
+
+    // 手写解码,只为兼容改名之前存下的主题。
+    //
+    // 这两个字段早先叫 textShadowEnabled / textShadowColorHex(那会儿渲染的确是模糊阴影,
+    // 后来换成实心描边才一起改的名),改名时没做迁移 —— 于是任何在那之前存过自定义主题的
+    // 用户,合成的 Codable 解到旧 JSON 会抛 keyNotFound,而 AppSettings 那边是
+    // `try? JSONDecoder().decode([ColorTheme].self, …)`,**整个数组**被吞成空:界面上一个
+    // 自定义主题都不剩,用户以为自己存的东西没了。
+    //
+    // 比"看不见"更糟的是下一步:数组已经是空的,用户再存一个新主题时,didSet 会把这个只有
+    // 一条的新数组整体编码回写,旧 JSON 被覆盖 —— 那才是真的不可恢复。所以这不只是显示
+    // 问题,是一条数据丢失路径。
+    //
+    // 2026-08-14 实测复现(用户机器上真实存着的那串 JSON):
+    //   DecodingError.keyNotFound: Key 'textStrokeEnabled' not found …
+    //
+    // 只写 init(from:) 不写 encode(to:):编码继续用合成的那份,也就是**只写新名字**,旧名
+    // 只在读的时候认。这样迁移是一次性的 —— 存过一次之后 JSON 里就没有旧名了。
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decodeIfPresent(String.self, forKey: .id) ?? UUID().uuidString
+        name = try c.decode(String.self, forKey: .name)
+        foregroundColorHex = try c.decode(String.self, forKey: .foregroundColorHex)
+        backgroundColorHex = try c.decode(String.self, forKey: .backgroundColorHex)
+        textStrokeEnabled = try c.decodeIfPresent(Bool.self, forKey: .textStrokeEnabled)
+            ?? c.decodeIfPresent(Bool.self, forKey: .legacyTextShadowEnabled)
+            ?? false
+        textStrokeColorHex = try c.decodeIfPresent(String.self, forKey: .textStrokeColorHex)
+            ?? c.decodeIfPresent(String.self, forKey: .legacyTextShadowColorHex)
+            ?? "#000000A6"
+    }
+
+    // 必须手写:CodingKeys 里多了两个没有对应属性的 legacy case,合成的 encode 编不出来。
+    // 只写新名字 —— 旧名是纯粹的读兼容,不该被再写回磁盘。
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(id, forKey: .id)
+        try c.encode(name, forKey: .name)
+        try c.encode(foregroundColorHex, forKey: .foregroundColorHex)
+        try c.encode(backgroundColorHex, forKey: .backgroundColorHex)
+        try c.encode(textStrokeEnabled, forKey: .textStrokeEnabled)
+        try c.encode(textStrokeColorHex, forKey: .textStrokeColorHex)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, name, foregroundColorHex, backgroundColorHex
+        case textStrokeEnabled, textStrokeColorHex
+        case legacyTextShadowEnabled = "textShadowEnabled"
+        case legacyTextShadowColorHex = "textShadowColorHex"
+    }
 }
 
 extension ColorTheme {
