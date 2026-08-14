@@ -601,6 +601,40 @@ var artistAliasTable = map[string]string{
 	"crowd lu":   "卢广仲",
 }
 
+// retryArtistIdentities 给出"第一轮没查到可用候选时,还值得换个名字再搜一遍"的歌手名,
+// 按可信度排序、去重、不含原名。
+//
+// 2026-08-15 加。在此之前重试只认 artistAliasTable 那 5 条手工登记 —— 而
+// canonicalArtistViaMusicBrainz 早就在为每个非中文歌手查 MusicBrainz 的中文名了,查到的
+// 结果却只写进 CanonicalArtist 这个展示字段,**从不回喂检索**(全仓唯一调用点是
+// enrich.go 里那一处赋值)。也就是说:我们手上明明有"这位歌手在中文曲库里叫什么",却还是
+// 拿英文名去网易云/QQ 搜,搜不到就算了。
+//
+// 顺序是人工 > 自动:手写表登记的是这个人自己公开、确凿无疑的艺名;MusicBrainz 是自动
+// 查询,覆盖面大得多但偶有噪声。两者都拿到时先试人工那条。
+//
+// 成本几乎为零:MusicBrainz 那次查询本来就会发生(resolveTrackEnrichment 里紧接着就调),
+// 只是被挪早了,而且它按歌手永久缓存,那边随后再调就是一次 map 读。
+func retryArtistIdentities(artist string) []string {
+	seen := map[string]bool{normLoose(artist): true} // 原名不必再搜一遍
+	var out []string
+	add := func(s string) {
+		s = strings.TrimSpace(s)
+		if s == "" {
+			return
+		}
+		k := normLoose(s)
+		if seen[k] {
+			return
+		}
+		seen[k] = true
+		out = append(out, s)
+	}
+	add(knownArtistAlias(artist))
+	add(canonicalArtistViaMusicBrainz(artist))
+	return out
+}
+
 // knownArtistAlias 只在 NetEase/QQ 都没能给出 canonical_artist 时,由
 // resolveTrackEnrichment 作最后一道兜底调用——优先级低于跨服务实时核实的结果。
 func knownArtistAlias(artist string) string {

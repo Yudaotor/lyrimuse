@@ -997,19 +997,50 @@ func scoredLyricCandidates(artist, title, album string, durationSecs float64) (n
 // 陆续到达的候选,不会因为切换成了 alias 重试就突然掉回"等全部查完才展示"。
 func scoredLyricCandidatesStreaming(artist, title, album string, durationSecs float64, onUpdate lyricSearchUpdateFunc) (neteaseInfo, []scoredLyricCandidateResult) {
 	ne, results := fetchScoredLyricCandidatesStreaming(artist, title, album, durationSecs, onUpdate)
-	if len(results) > 0 {
+	// 判据是"有没有**能用**的候选",不是"有没有候选"。
+	//
+	// 原来写的是 len(results) > 0 —— 五个源都答了、但每一条都被 scoreLyricCandidate 判
+	// 了 -1(不是逐行时间戳、语言对不上、整份只有署名行……)时,results 非空,于是重试根本
+	// 不触发,最后拿一堆废候选收场。而这恰恰是最该换个歌手名再试一次的情形。
+	if hasUsableLyricCandidate(results) {
 		return ne, results
 	}
-	alias := knownArtistAlias(artist)
-	if alias == "" || alias == artist {
-		return ne, results
-	}
-	_, aliasResults := fetchScoredLyricCandidatesStreaming(alias, title, album, durationSecs, onUpdate)
-	if len(aliasResults) > 0 {
-		log.Printf("lyrics: artist alias fallback succeeded: original_artist=%q alias=%q title=%q candidates=%d", artist, alias, title, len(aliasResults))
-		return ne, aliasResults
+	for _, alt := range retryArtistIdentities(artist) {
+		altNe, altResults := fetchScoredLyricCandidatesStreaming(alt, title, album, durationSecs, onUpdate)
+		if hasUsableLyricCandidate(altResults) {
+			log.Printf("lyrics: artist alias fallback succeeded: original_artist=%q alias=%q title=%q candidates=%d",
+				artist, alt, title, len(altResults))
+			// 封面/链接一并采用这一轮的结果。原名查空时 ne 里的封面和跳转链接本来就是
+			// 空的,而原来这里写的是 `_, aliasResults :=`——把别名这轮查到的 neteaseInfo
+			// 整个丢掉,结果是"歌词有了、封面没了"。只在原来那份确实没有时才覆盖,不动
+			// 已经拿到的东西。
+			if ne.Cover == "" && altNe.Cover != "" {
+				ne = altNe
+			}
+			return ne, altResults
+		}
+		// 这一轮也没有能用的,但如果原来那批是彻底空的,留下有内容的这批 ——
+		// "搜索候选歌词"弹窗至少还能把它们摊开给用户看,附带被判废的原因。
+		if len(results) == 0 && len(altResults) > 0 {
+			results = altResults
+			if ne.Cover == "" && altNe.Cover != "" {
+				ne = altNe
+			}
+		}
 	}
 	return ne, results
+}
+
+// hasUsableLyricCandidate:这批候选里有没有至少一条没被判废的。
+// Score < 0 是 scoreLyricCandidateDetailed 的"一票否决"标记(见 match.go 里的
+// scoreReject* 常量),不是"分低"。
+func hasUsableLyricCandidate(scored []scoredLyricCandidateResult) bool {
+	for _, c := range scored {
+		if c.Score >= 0 {
+			return true
+		}
+	}
+	return false
 }
 
 // fetchScoredLyricCandidates 是真正"拿这一个具体的歌手名字符串,去查网易云/QQ/酷狗/

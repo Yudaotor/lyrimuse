@@ -56,6 +56,11 @@ func runSearchLyricsCLI(args []string) {
 	if err == nil {
 		cfgPath := filepath.Join(home, ".config", clientName, "config.json")
 		features = loadFeatureFlags(filepath.Join(filepath.Dir(cfgPath), clientName+"-features.json"))
+		// 同理,MusicBrainz 的歌手别名缓存也得自己加载一遍。2026-08-15 起
+		// retryArtistIdentities 会在没查到可用候选时拿 canonical 名再搜一次,而
+		// artistAliasPath 为空的话这份缓存既不读也不写 —— 每开一次"搜索候选歌词"
+		// 弹窗都要重新打一次 MusicBrainz(它自己还有节流,直接体现为用户多等)。
+		loadArtistAliasCache(filepath.Join(filepath.Dir(cfgPath), clientName+"-artist-alias-cache.json"))
 	}
 
 	// 跟 enrich.go 的 resolveTrackEnrichment 同一个理由:NetEase/QQ/酷狗/LRCLIB 的
