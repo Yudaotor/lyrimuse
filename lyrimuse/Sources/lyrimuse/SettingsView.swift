@@ -1430,7 +1430,10 @@ private struct PlayerSettingsTab: View {
                     icon: automationStatusIconName,
                     iconTint: automationStatusIconColor,
                     title: L10n.t("Apple Music 自动化"),
-                    subtitle: automationStatusCaption + "・" + L10n.t("没有它读不到播放状态")
+                    // 副标题只留状态本身,"为什么需要它"挪进「?」——状态是每次扫一眼都要读的,
+                    // 而理由只在第一次(或者犹豫要不要授权时)才需要,两者挤在一行里前者被拖长了。
+                    subtitle: automationStatusCaption,
+                    help: L10n.t("没有它读不到播放状态")
                 ) {
                     if isRequestingAutomation {
                         ProgressView().controlSize(.small)
@@ -1484,7 +1487,9 @@ private struct PlayerSettingsTab: View {
                 icon: collectorStatusIconName,
                 iconTint: collectorStatusIconColor,
                 title: L10n.t("后台采集服务"),
-                subtitle: collectorStatusCaption + "・" + L10n.t("读取播放状态、抓歌词和封面")
+                // 同 permissionCard:副标题只留状态,职责说明进「?」。
+                subtitle: collectorStatusCaption,
+                help: L10n.t("读取播放状态、抓歌词和封面")
             ) {
                 // 2026-08-10:这里原来是「启用/停用」双向按钮。停用入口去掉了 ——
                 // 这个服务停掉之后 App 就是个空壳(读不到播放状态、不解析歌词、不写缓存),
