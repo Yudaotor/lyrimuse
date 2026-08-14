@@ -1390,6 +1390,81 @@ do {
                 "EnrichCacheMerge: 编辑后又删除,结果是删除")
 }
 
+// ---- LaunchdPrintParser ----
+//
+// 样本取自 2026-08-15 在真机上抓的 `launchctl print gui/<uid>/<label>` 实际输出(见
+// LaunchdJobState 里那张三态表),只保留跟解析有关的行。
+do {
+    // 真实输出里同时有这三种行,后两种都是**陷阱**:
+    //   \t\tstate = active     嵌套在子结构里,不是 job 状态
+    //   \tjob state = running  同一层缩进,但是另一个字段
+    let runningOutput = """
+    gui/502/com.lyrimuse.collector = {
+    \tactive count = 1
+    \tstate = running
+    \tpid = 82285
+    \tlast exit code = 0
+    \tspawn type = daemon
+    \tendpoints = {
+    \t\t"com.example.socket" = {
+    \t\t\tstate = active
+    \t\t}
+    \t}
+    \tjob state = running
+    }
+    """
+    expectEqual(LaunchdPrintParser.parse(printExitCode: 0, printOutput: runningOutput),
+                .running(pid: 82285), "Launchd: 在跑 → running(pid)")
+
+    // 这就是原来那个 bug 的形状:退出码同样是 0,但进程根本不在。
+    let notRunningOutput = """
+    gui/502/com.lyrimuse.collector = {
+    \tactive count = 0
+    \tstate = not running
+    \tlast exit code = 78
+    }
+    """
+    expectEqual(LaunchdPrintParser.parse(printExitCode: 0, printOutput: notRunningOutput),
+                .registeredNotRunning(lastExitCode: 78),
+                "Launchd: 注册了但没在跑 → 带上次退出码,不能当成在跑")
+
+    // launchd 真正报退出码时带 sysexits 助记名:`78: EX_CONFIG`。实测抓到的形态,
+    // 直接 Int32(...) 会返回 nil 把退出码吞掉。
+    let exitCodeWithName = "gui/502/x = {\n\tstate = not running\n\truns = 1\n\tlast exit code = 78: EX_CONFIG\n}"
+    expectEqual(LaunchdPrintParser.parse(printExitCode: 0, printOutput: exitCodeWithName),
+                .registeredNotRunning(lastExitCode: 78),
+                "Launchd: `78: EX_CONFIG` 要解析出 78,不能吞掉")
+
+    // launchd 对没退出过的 job 写的是 `(never exited)`,不是数字。
+    let neverExited = "gui/502/x = {\n\tstate = not running\n\tlast exit code = (never exited)\n}"
+    expectEqual(LaunchdPrintParser.parse(printExitCode: 0, printOutput: neverExited),
+                .registeredNotRunning(lastExitCode: nil),
+                "Launchd: (never exited) 解析成 nil 而不是 0")
+
+    // print 对未注册的 job 返回 113。
+    expectEqual(LaunchdPrintParser.parse(printExitCode: 113, printOutput: ""),
+                .notRegistered, "Launchd: 未注册 → notRegistered")
+
+    // 陷阱一:只有嵌套的 state,顶层没有 —— 不能被当成 job 状态。
+    let nestedOnly = "gui/502/x = {\n\tendpoints = {\n\t\tstate = active\n\t}\n}"
+    expectEqual(LaunchdPrintParser.parse(printExitCode: 0, printOutput: nestedOnly),
+                .unknown, "Launchd: 嵌套的 state = active 不能被当成 job 状态")
+
+    // 陷阱二:`job state` 跟 `state` 同一层缩进,前缀却不同 —— contains 会误判。
+    let jobStateOnly = "gui/502/x = {\n\tjob state = running\n}"
+    expectEqual(LaunchdPrintParser.parse(printExitCode: 0, printOutput: jobStateOnly),
+                .unknown, "Launchd: job state 不是 state,不能误认成在跑")
+
+    // 认不出来就说认不出来,不要假装知道它没在跑。
+    expectEqual(LaunchdPrintParser.parse(printExitCode: 0, printOutput: "完全不认识的输出"),
+                .unknown, "Launchd: 读不懂的输出 → unknown,不塌缩成未运行")
+
+    expectEqual(LaunchdJobState.running(pid: 1).isRunning, true, "Launchd: running.isRunning")
+    expectEqual(LaunchdJobState.registeredNotRunning(lastExitCode: 78).isRunning, false,
+                "Launchd: 注册但没跑 isRunning=false")
+    expectEqual(LaunchdJobState.unknown.isRunning, false, "Launchd: unknown 不算在跑")
+}
+
 if failures == 0 {
     print("\nALL PASS")
 } else {

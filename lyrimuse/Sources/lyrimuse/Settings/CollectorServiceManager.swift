@@ -1,4 +1,5 @@
 import Foundation
+import LyrimuseCore
 
 // 装/卸/查询 collector 这个后台常驻服务的 LaunchAgent。跟 LoginItemManager 管这个 App
 // 自己的 LaunchAgent是同一种模式，但目标不同：LoginItemManager 装的是"这个 App 要不要
@@ -26,11 +27,20 @@ public enum CollectorServiceManager {
     private static let configDir = FileManager.default.homeDirectoryForCurrentUser
         .appendingPathComponent(".config/lyrimuse")
 
-    // 服务是否真的在跑——不是看 AppSettings 里持久化的"用户意图"，是直接问 launchd。
-    // Settings 页面和引导页面的状态展示都靠这个，覆盖"装了但没跑起来"这种中间态。
-    public static var isRunning: Bool {
-        run("/bin/launchctl", ["print", "gui/\(getuid())/\(label)"]) == 0
+    // 服务的真实状态——不是看 AppSettings 里持久化的"用户意图"，是直接问 launchd。
+    // Settings 页面和引导页面的状态展示都靠这个。
+    //
+    // ⚠️ 2026-08-15 修:这里原来是 `run("/bin/launchctl", ["print", …]) == 0`,而那个退出码
+    // 表示的是"**这个 job 注册过**",不是"进程在跑"——实测三态见 LaunchdJobState 的注释。
+    // 后果是 collector 在 KeepAlive 下崩溃重启循环时,设置页一直显示绿勾"运行中"。更糟的
+    // 是下面 install() 的自愈重试也用它当判据(`if !isRunning`),bootstrap 一成功就认为大功
+    // 告成,那段专门为"kickstart 静默失败"写的 LWCR 重试根本轮不到执行。
+    public static var state: LaunchdJobState {
+        let (status, output) = runCapturing("/bin/launchctl", ["print", "gui/\(getuid())/\(label)"])
+        return LaunchdPrintParser.parse(printExitCode: status, printOutput: output)
     }
+
+    public static var isRunning: Bool { state.isRunning }
 
     // install()/uninstall() 必须互斥——2026-08-02 实测排查坐实:早先 setEnabled(_:)/
     // setEnabledAndWait(_:) 各自派发一个独立的 Task.detached,互相之间完全没有互斥。
@@ -61,12 +71,14 @@ public enum CollectorServiceManager {
     // 跑完、刷新状态展示，不能像上面那样纯 fire-and-forget。用 withCheckedContinuation
     // 把串行队列上的同步操作桥接成 async,而不是像以前那样另起一个不受这条队列管辖的
     // Task.detached——否则这次"等待版"调用会绕开上面的互斥,又制造出一条新的并发路径。
+    // 返回完整状态而不是 Bool:调用方要区分"装上了但起不来"(能给出具体退出码)和"压根没
+    // 装上",两者该给用户的提示不一样。
     @discardableResult
-    public static func setEnabledAndWait(_ enabled: Bool) async -> Bool {
+    public static func setEnabledAndWait(_ enabled: Bool) async -> LaunchdJobState {
         await withCheckedContinuation { continuation in
             operationQueue.async {
                 if enabled { install() } else { uninstall() }
-                continuation.resume(returning: isRunning)
+                continuation.resume(returning: state)
             }
         }
     }
@@ -122,17 +134,33 @@ public enum CollectorServiceManager {
 
     @discardableResult
     private static func run(_ path: String, _ args: [String]) -> Int32 {
+        runCapturing(path, args).status
+    }
+
+    /// 跑一条命令,拿到退出码和 stdout。
+    ///
+    /// ⚠️ 读管道必须在 `waitUntilExit()` **之前**:管道缓冲区(64KB)写满之后子进程会阻塞在
+    /// write 上永远不退出,而父进程正卡在 waitUntilExit 等它退出 —— 互相等死。原来的写法
+    /// 是设了 Pipe 却从不读、直接 waitUntilExit,只是因为 launchctl 的输出一直很小才没炸
+    /// (print 一份 job 约 1.6KB)。`readDataToEndOfFile()` 会一直读到子进程关闭 stdout,
+    /// 之后 waitUntilExit 立刻返回。
+    ///
+    /// stderr 直接丢进 nullDevice 而不是另开一个 Pipe:同样是"设了不读"的死锁形状,而这里
+    /// 的调用方要的信息退出码已经给全了。
+    private static func runCapturing(_ path: String, _ args: [String]) -> (status: Int32, output: String) {
         let p = Process()
         p.executableURL = URL(fileURLWithPath: path)
         p.arguments = args
-        p.standardOutput = Pipe()
-        p.standardError = Pipe()
+        let outPipe = Pipe()
+        p.standardOutput = outPipe
+        p.standardError = FileHandle.nullDevice
         do {
             try p.run()
+            let data = outPipe.fileHandleForReading.readDataToEndOfFile()
             p.waitUntilExit()
-            return p.terminationStatus
+            return (p.terminationStatus, String(data: data, encoding: .utf8) ?? "")
         } catch {
-            return -1
+            return (-1, "")
         }
     }
 }

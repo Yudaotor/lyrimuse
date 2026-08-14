@@ -492,9 +492,10 @@ struct OnboardingView: View {
     private func enableCollectorService() {
         isTogglingCollectorService = true
         Task {
-            let running = await CollectorServiceManager.setEnabledAndWait(true)
+            // 引导页只关心"起来了没",不铺开三态——那是设置页排查问题时才需要的粒度。
+            let state = await CollectorServiceManager.setEnabledAndWait(true)
             settings.collectorServiceEnabled = true
-            collectorRunning = running
+            collectorRunning = state.isRunning
             isTogglingCollectorService = false
         }
     }

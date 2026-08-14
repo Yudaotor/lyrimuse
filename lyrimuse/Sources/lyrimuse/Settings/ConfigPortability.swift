@@ -378,8 +378,8 @@ enum ConfigPortability {
 
         // 卸 LaunchAgent 并停掉进程。放在清 UserDefaults **之后**:uninstall 只做 launchctl
         // 操作,不回写偏好,顺序上不会把刚清掉的键又写回来。
-        let stopped = await CollectorServiceManager.setEnabledAndWait(false)
-        logger.info("clearAllConfig: collector service stopped — stillRunning=\(stopped)")
+        let state = await CollectorServiceManager.setEnabledAndWait(false)
+        logger.info("clearAllConfig: collector service stopped — stillRunning=\(state.isRunning)")
         return ok
     }
 

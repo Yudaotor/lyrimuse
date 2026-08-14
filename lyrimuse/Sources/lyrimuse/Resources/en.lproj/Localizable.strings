@@ -71,6 +71,9 @@
 "后台采集服务" = "Background Collector Service";
 "运行中" = "Running";
 "未运行" = "Not Running";
+"已安装但未运行" = "Installed but not running";
+"已安装但未运行（上次退出码 %d）" = "Installed but not running (last exit code %d)";
+"状态未知" = "Status unknown";
 "启用" = "Enable";
 "常驻后台服务（必需）" = "Background Service (Required)";
 "Lyrimuse 需要一个后台程序常驻运行，负责读取播放状态、解析歌词/封面并写入本地缓存——没有它，悬浮歌词/灵动岛同样无法显示任何内容。点下面的按钮即可启用，之后开机会自动运行，不用再管" = "Lyrimuse needs a background service running at all times to read playback state, resolve lyrics and artwork, and cache them locally. Without it, the floating lyrics and the notch have nothing to show. Click Enable below; it then starts automatically at login and needs no further attention";

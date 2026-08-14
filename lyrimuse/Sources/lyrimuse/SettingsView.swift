@@ -1374,7 +1374,9 @@ private struct PlayerSettingsTab: View {
     // collector 常驻服务是否真的在跑——跟 automationStatus 同样的道理，只在 .onAppear
     // 和每次操作后重新查一次，不是 @Published:这个状态由 launchd 管，App 自己不会主动
     // 收到"进程挂了"这类通知，只能被动查。
-    @State private var collectorRunning = false
+    // 三态而不是 Bool —— 这张卡片的注释一直写着要展示"装了但没跑起来"这个中间态,
+    // 但底层的 isRunning 以前根本区分不出来(见 LaunchdJobState)。
+    @State private var collectorState: LaunchdJobState = .notRegistered
     @State private var isTogglingCollectorService = false
     // 2026-08-02 补上——之前点"启用"失败后,前台只会看到红叉+"未运行"跟从没点过一模
     // 一样,没有任何具体原因或下一步指引,用户卡在这里无计可施。只在"这次点了启用、结果
@@ -1498,7 +1500,7 @@ private struct PlayerSettingsTab: View {
                 // 只保留没跑起来时的「启用」——那是个真的能救回来的动作。
                 if isTogglingCollectorService {
                     ProgressView().controlSize(.small)
-                } else if !collectorRunning {
+                } else if !collectorState.isRunning {
                     Button(L10n.t("启用")) { enableCollectorService() }
                 }
             }
@@ -1512,7 +1514,7 @@ private struct PlayerSettingsTab: View {
                 }
             }
         }
-        .onAppear { collectorRunning = CollectorServiceManager.isRunning }
+        .onAppear { collectorState = CollectorServiceManager.state }
     }
 
     // 两个开关的文案跟着 features.player 走(Apple Music/QQ 音乐/...)——这两个联动本身
@@ -1603,27 +1605,49 @@ private struct PlayerSettingsTab: View {
     }
 
     private var collectorStatusCaption: String {
-        collectorRunning ? L10n.t("运行中") : L10n.t("未运行")
+        switch collectorState {
+        case .running:
+            return L10n.t("运行中")
+        case .registeredNotRunning(let code):
+            // 装上了却没有进程 —— KeepAlive 的 job 落到这个状态基本就是起不来/崩溃重启
+            // 循环。带上退出码,用户反馈时这一个数字就够定位了。
+            if let code {
+                return String(format: L10n.t("已安装但未运行（上次退出码 %d）"), code)
+            }
+            return L10n.t("已安装但未运行")
+        case .unknown:
+            return L10n.t("状态未知")
+        case .notRegistered:
+            return L10n.t("未运行")
+        }
     }
 
     private var collectorStatusIconName: String {
-        collectorRunning ? "checkmark.circle.fill" : "xmark.circle.fill"
+        switch collectorState {
+        case .running: return "checkmark.circle.fill"
+        case .registeredNotRunning, .unknown: return "exclamationmark.triangle.fill"
+        case .notRegistered: return "xmark.circle.fill"
+        }
     }
 
     private var collectorStatusIconColor: Color {
-        collectorRunning ? .green : .red
+        switch collectorState {
+        case .running: return .green
+        case .registeredNotRunning, .unknown: return .orange
+        case .notRegistered: return .red
+        }
     }
 
     private func enableCollectorService() {
         isTogglingCollectorService = true
         collectorEnableFailed = false
         Task {
-            let running = await CollectorServiceManager.setEnabledAndWait(true)
+            let state = await CollectorServiceManager.setEnabledAndWait(true)
             settings.collectorServiceEnabled = true
-            collectorRunning = running
+            collectorState = state
             isTogglingCollectorService = false
             // 只有这一个方向了(见上面按钮处的注释),没跑起来就是失败,直接标红给指引。
-            collectorEnableFailed = !running
+            collectorEnableFailed = !state.isRunning
         }
     }
 

@@ -96,7 +96,9 @@ enum DiagnosticsExporter {
         // 知道这一点,否则会把陈旧值当成当下状态。
         lines.append("Player (last detected): \(PlaybackCoordinator.shared.resolvedPlayerDescription)")
         lines.append("Collector service enabled (setting): \(settings.collectorServiceEnabled)")
-        lines.append("Collector service actually running: \(CollectorServiceManager.isRunning)")
+        // 报完整三态而不是 true/false —— "注册了但起不来"正是最需要出现在诊断报告里的那
+        // 一档(带上次退出码),以前它跟"在跑"一样报 true,报告等于把最关键的线索抹掉了。
+        lines.append("Collector service state: \(CollectorServiceManager.state)")
         lines.append("App language: \(settings.appLanguage)")
         lines.append("Classic overlay enabled: \(settings.classicOverlayEnabled)")
         lines.append("Notch overlay enabled: \(settings.notchOverlayEnabled)")
