@@ -1633,6 +1633,68 @@ do {
     expectEqual(noOverlap, true, "WrapLayout: 任意两个元素都不重叠")
 }
 
+// ---- OverlayPlacement ----
+//
+// 拔掉外接屏之后悬浮窗还找得回来吗。这台开发机只有一块内置屏，"两块屏拔掉一块"没法真机
+// 复现，这些断言是唯一覆盖它的手段。
+do {
+    let mainScreen = CGRect(x: 0, y: 0, width: 1470, height: 900)
+    let secondScreen = CGRect(x: 1470, y: 0, width: 1920, height: 1080)
+    let overlaySize = CGSize(width: 900, height: 166)
+
+    // 窗口好端端待在主屏上：不该动它。
+    let onMain = CGRect(origin: CGPoint(x: 285, y: 700), size: overlaySize)
+    expectEqual(OverlayPlacement.repositionIfOffscreen(frame: onMain, screens: [mainScreen]) == nil, true,
+                "OverlayPlacement: 窗口在屏内不动它")
+
+    // 窗口在副屏上，两块屏都在：同样不该动。
+    let onSecond = CGRect(origin: CGPoint(x: 1600, y: 100), size: overlaySize)
+    expectEqual(
+        OverlayPlacement.repositionIfOffscreen(frame: onSecond, screens: [mainScreen, secondScreen]) == nil, true,
+        "OverlayPlacement: 窗口在副屏上、副屏还在,不动它")
+
+    // 同一个窗口，副屏被拔掉 —— 这就是这次要修的场景。
+    let rescued = OverlayPlacement.repositionIfOffscreen(frame: onSecond, screens: [mainScreen])
+    expectEqual(rescued?.x, 570, "OverlayPlacement: 拔掉副屏后夹回主屏右边界内 (1470-900)")
+    expectEqual(rescued?.y, 100, "OverlayPlacement: y 本来就在范围内,保持不变")
+
+    // 保守判据：用户主动把窗口拖到边缘、只露一部分，是正常用法，不许"纠正"。
+    // 露出 200pt 宽，远超 60pt 阈值。
+    let mostlyOff = CGRect(origin: CGPoint(x: 1270, y: 700), size: overlaySize)
+    expectEqual(OverlayPlacement.repositionIfOffscreen(frame: mostlyOff, screens: [mainScreen]) == nil, true,
+                "OverlayPlacement: 只露一部分但够得着,不动它")
+
+    // 只剩 30pt 露在屏内，低于 60pt 阈值 → 救回来。
+    let slivered = CGRect(origin: CGPoint(x: 1440, y: 700), size: overlaySize)
+    expectEqual(OverlayPlacement.repositionIfOffscreen(frame: slivered, screens: [mainScreen]) != nil, true,
+                "OverlayPlacement: 只剩一丝可见时救回来")
+
+    // 窗口比屏幕还宽：夹取不能把它推到右边界外面去（先 max 再 min 的顺序问题）。
+    let tooWide = CGRect(x: 3000, y: 100, width: 2000, height: 166)
+    let clampedWide = OverlayPlacement.clamped(frame: tooWide, into: mainScreen)
+    expectEqual(clampedWide.x, 0, "OverlayPlacement: 比屏还宽时贴左边,不能被推出右边界")
+
+    // 屏幕原点不是 (0,0) 时也要跟着走（多屏排列里副屏常有负坐标）。
+    let leftScreen = CGRect(x: -1920, y: 0, width: 1920, height: 1080)
+    let strayFrame = CGRect(x: -5000, y: 0, width: 900, height: 166)
+    expectEqual(OverlayPlacement.clamped(frame: strayFrame, into: leftScreen).x, -1920,
+                "OverlayPlacement: 夹取跟随屏幕自己的原点,不假设从 0 开始")
+
+    // 窗口比阈值还小时，阈值要退让到窗口尺寸，否则它永远判不出"可见"。
+    let tiny = CGRect(x: 10, y: 10, width: 20, height: 10)
+    expectEqual(OverlayPlacement.isSufficientlyVisible(frame: tiny, screens: [mainScreen]), true,
+                "OverlayPlacement: 比阈值还小的窗口只要整个在屏内就算可见")
+
+    // 一块屏都没有（理论上不会发生）时别崩、别乱动。
+    expectEqual(OverlayPlacement.repositionIfOffscreen(frame: onMain, screens: []) == nil, true,
+                "OverlayPlacement: 没有任何屏幕时不动")
+
+    // 夹取结果跟原位置相同时不返回移动 —— 免得白白触发一次位置持久化。
+    let exactlyAtEdge = CGRect(origin: CGPoint(x: 570, y: 100), size: overlaySize)
+    expectEqual(OverlayPlacement.repositionIfOffscreen(frame: exactlyAtEdge, screens: [mainScreen]) == nil, true,
+                "OverlayPlacement: 已经在合法位置时不发多余的移动")
+}
+
 if failures == 0 {
     print("\nALL PASS")
 } else {

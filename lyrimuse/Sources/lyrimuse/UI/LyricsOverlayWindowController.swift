@@ -59,6 +59,7 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject 
     @Published private(set) var hideWhenNotPlaying: Bool = false
 
     private var moveObserver: NSObjectProtocol?
+    private var screenObserver: NSObjectProtocol?
     private var moveDebounceTimer: Timer?
     private var isPlayingObserver: AnyCancellable?
 
@@ -121,6 +122,19 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject 
 
         installMouseMonitors()
 
+        // 显示器配置变了(拔插外接屏、改分辨率、改排列)之后重新确认窗口还看得见。
+        //
+        // restoredOrigin(size:) 里本来就有这套 clamp,注释也写着"显示器配置可能变了(比如
+        // 拔了外接屏)"——但它只在上面那行 convenience init 里跑一次。App 跑着的时候拔掉
+        // 外接屏,窗口就停在一个不存在的坐标上,用户看不见,也没有任何自我纠正机制。
+        screenObserver = NotificationCenter.default.addObserver(
+            forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                self?.repositionIfOffscreen()
+            }
+        }
+
         moveObserver = NotificationCenter.default.addObserver(
             forName: NSWindow.didMoveNotification, object: panel, queue: .main
         ) { [weak self] _ in
@@ -153,6 +167,7 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject 
 
     deinit {
         if let moveObserver { NotificationCenter.default.removeObserver(moveObserver) }
+        if let screenObserver { NotificationCenter.default.removeObserver(screenObserver) }
         if let globalMouseMonitor { NSEvent.removeMonitor(globalMouseMonitor) }
         if let localMouseMonitor { NSEvent.removeMonitor(localMouseMonitor) }
     }
@@ -508,6 +523,23 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject 
         longPressTimer = nil
         pressStartLocation = nil
         isDragArmed = false
+    }
+
+    // 屏幕配置变化后重新落位。判断/夹取的几何都在 OverlayPlacement(LyrimuseCore)里,
+    // selftest 覆盖 —— 这台机器只有一块内置屏,"拔掉两块屏中的一块"没法真机复现,单元测试
+    // 是唯一能覆盖它的手段。
+    private func repositionIfOffscreen() {
+        guard let window else { return }
+        // 主屏排在第一个:窗口无处可去时的落脚点(见 OverlayPlacement 的约定)。
+        var screens: [CGRect] = []
+        if let main = NSScreen.main { screens.append(main.visibleFrame) }
+        for s in NSScreen.screens where s != NSScreen.main { screens.append(s.visibleFrame) }
+        guard let target = OverlayPlacement.repositionIfOffscreen(frame: window.frame, screens: screens) else {
+            return
+        }
+        window.setFrameOrigin(target)
+        // 新位置要存下来,否则下次启动 restoredOrigin 又会读到那个已经失效的坐标。
+        // setFrameOrigin 会发 didMoveNotification,由那边的观察者去调度保存。
     }
 
     private func scheduleSavePosition() {
