@@ -218,6 +218,42 @@ func mediaPlayerLabel(bundleID string) string {
 	}
 }
 
+// cleanMediaTag 洗掉播放器报上来的标签里的不可见空白。
+//
+// 2026-08-14 实测抓到的真实故障:「歌词管理」里出现成对的重复歌,肉眼完全看不出差别 ——
+// 因为差的是一个 U+00A0(不换行空格)。媒体标签里带 NBSP 并不罕见(有些发行版的官方元数据
+// 就是这么打的),而这个字符会一路原样传下去:
+//
+//   缓存 key    "方大同|偷笑|爱爱爱"  vs  "方大同|偷笑\u00a0|爱爱爱"   → 两条独立条目
+//   导出文件名  "方大同 - 偷笑 - 爱爱爱.lrc"  vs  "方大同 - 偷笑\u00a0 - 爱爱爱.lrc"
+//
+// 两边各自解析歌词、各自打分、各自导出文件,谁也不知道对方存在。用户看到的就是"同一首歌
+// 出现两次"。
+//
+// ⚠️ 别指望 strings.TrimSpace 兜住:Go 的 unicode.IsSpace 确实认 U+00A0,但 TrimSpace 只
+// 削首尾 —— 而 NBSP 一旦落在拼好的文件名中段("… - 偷笑\u00a0 - …"),就削不掉了。必须在
+// 拼接**之前**逐个字段洗。
+//
+// 处理方式:各种不换行/全角空格统一成普通空格,零宽字符直接删,再把连续空白折成一个、
+// 去掉首尾。不做大小写折叠 —— 那是 canonicalEnrichKey 的职责,而且标签本身的大小写要
+// 原样保留给界面显示。
+func cleanMediaTag(s string) string {
+	if s == "" {
+		return ""
+	}
+	s = strings.Map(func(r rune) rune {
+		switch r {
+		case '\u00a0', '\u2007', '\u202f', '\u3000': // 各种不换行空格 / 全角空格
+			return ' '
+		case '\u200b', '\u200c', '\u200d', '\ufeff': // 零宽字符,没有宽度,直接删
+			return -1
+		}
+		return r
+	}, s)
+	// Fields 按空白切分并丢掉空片段,Join 回去等于"连续空白折成一个 + 去掉首尾"。
+	return strings.Join(strings.Fields(s), " ")
+}
+
 type mediaControlRawState struct {
 	Title          string  `json:"title"`
 	Artist         string  `json:"artist"`
@@ -332,7 +368,9 @@ func fetchRawMediaControlState(ctx context.Context) (map[string]any, string, boo
 		elapsed = raw.ElapsedTimeNow
 	}
 	return map[string]any{
-		"title": raw.Title, "artist": raw.Artist, "album": raw.Album,
+		// ⚠️ 三个标签必须先洗一遍不可见空白,见 cleanMediaTag —— 这里是本地这条路径唯一的
+		// 元数据入口,洗在这里,下游(缓存 key / 导出文件名 / ListenBrainz / 网页中继)全都干净。
+		"title": cleanMediaTag(raw.Title), "artist": cleanMediaTag(raw.Artist), "album": cleanMediaTag(raw.Album),
 		"duration": raw.Duration, "elapsedTime": elapsed,
 		"playing": raw.Playing, "playbackRate": raw.PlaybackRate,
 		"isMusicApp": true, "bundleIdentifier": raw.BundleID,
