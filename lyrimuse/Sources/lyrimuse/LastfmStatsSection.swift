@@ -20,6 +20,11 @@ struct LastfmStatsSection: View {
     /// 页码输入框的文本。跟 stats.recentPage 单向同步(那边变了就覆盖这里),
     /// 用户输入期间不打断 —— 只在提交或页码真的换了时才回写。
     @State private var pageInput = "1"
+    // 点了手动刷新之后转圈,直到这一轮真的有结果。refreshBaseline 是 fire-and-forget、
+    // 没有完成回调,所以靠观察它的两个出口关掉:成功会更新 recentUpdatedAt,失败会置
+    // baselineFailed。这张卡只在已连接时才挂出来,所以"没有凭据直接 return"那条早退
+    // 路径在这里不会发生(否则转圈会停不下来)。
+    @State private var recentRefreshing = false
 
     private var kind: LastfmStatsService.ChartKind {
         .init(rawValue: kindRaw) ?? .artists
@@ -281,6 +286,25 @@ struct LastfmStatsSection: View {
                         .font(.caption).foregroundStyle(.tertiary)
                         .help(String(format: L10n.t("上次刷新:%@"), Self.absolute(at)))
                 }
+                // 手动刷新。轮询最慢要等两分钟,而"刚听完一首歌想立刻看到它"正是这张卡
+                // 最常见的用法 —— 干等不如给一颗按钮。
+                //
+                // ⚠️ 必须传 force:true。refreshBaseline 开头就是 `guard fresh(...) == false`,
+                // 不传的话"刚拉过"会让它直接早退,按了等于没按 —— 而这恰恰是手动刷新最常
+                // 发生的情形(用户就是因为刚才那次没带出新内容才来点它)。
+                if recentRefreshing {
+                    ProgressView().controlSize(.small)
+                } else {
+                    Button {
+                        recentRefreshing = true
+                        stats.refreshBaseline(force: true)
+                    } label: {
+                        Image(systemName: "arrow.clockwise").font(.system(size: 11))
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.secondary)
+                    .help(L10n.t("立即刷新"))
+                }
             }
             if !recentCollapsed {
             CardDivider()
@@ -380,6 +404,10 @@ struct LastfmStatsSection: View {
             }
             }
         }
+        // refreshBaseline 没有完成回调,靠观察它的两个出口关掉转圈:成功会更新
+        // recentUpdatedAt,失败会置 baselineFailed,两者必居其一(见 recentRefreshing 注释)。
+        .onChange(of: stats.recentUpdatedAt) { _, _ in recentRefreshing = false }
+        .onChange(of: stats.baselineFailed) { _, failed in if failed { recentRefreshing = false } }
     }
 
     /// 历史行:API 返回的 nowplaying 行(date 为 nil)丢掉 —— 那首歌由上面的实时行负责,
