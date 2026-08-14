@@ -1465,6 +1465,79 @@ do {
     expectEqual(LaunchdJobState.unknown.isRunning, false, "Launchd: unknown 不算在跑")
 }
 
+// ---- KaraokeFill ----
+//
+// 逐字填色的数值部分。这段算法之前混在 LyricsOverlayView 里，每次改都只能盯着屏幕看
+// 对不对；下面每一条都对应一个真出过的 bug。
+do {
+    func word(_ start: Int, _ dur: Int) -> SyncedLyricWord {
+        SyncedLyricWord(text: "x", startMs: start, durationMs: dur)
+    }
+    func rounded(_ stops: [KaraokeFill.Stop]) -> [[Double]] {
+        stops.map { [($0.location * 10000).rounded() / 10000, ($0.intensity * 10000).rounded() / 10000] }
+    }
+
+    // fillFraction 故意**不**夹到 [0,1]：夹住的话，一句里所有还没唱到的字都会得到 0，
+    // 跟"刚好唱到最前一刻"无法区分，于是每个未唱字的开头都会冒出一小截高亮。
+    expectEqual(KaraokeFill.fillFraction(for: word(1000, 500), atMs: 0) < 0, true,
+                "KaraokeFill: 还没唱到的字必须给负数,不能夹成 0")
+    expectEqual(KaraokeFill.fillFraction(for: word(1000, 500), atMs: 2000) > 1, true,
+                "KaraokeFill: 早就唱完的字必须大于 1")
+    expectEqual(KaraokeFill.fillFraction(for: word(1000, 500), atMs: 1250), 0.5,
+                "KaraokeFill: 正中间是 0.5")
+
+    // durationMs=0 的极短词（英文歌词常见）按下限算，否则瞬间 0→1 会很跳。
+    expectEqual(KaraokeFill.fillFraction(for: word(0, 0), atMs: 40), 0.5,
+                "KaraokeFill: durationMs=0 按 minWordDurationMs 下限算")
+
+    // 离得远的字：整片暗色，不能有任何过渡带残留。
+    expectEqual(rounded(KaraokeFill.stops(left: -0.5, right: -0.34)),
+                [[0, 0], [1, 0]], "KaraokeFill: 还没唱到 → 整片暗色")
+    // 唱完很久的字：整片亮色。
+    expectEqual(rounded(KaraokeFill.stops(left: 1.2, right: 1.36)),
+                [[0, 1], [1, 1]], "KaraokeFill: 早就唱完 → 整片亮色")
+
+    // 正常中间态：亮 → 过渡 → 暗，四个分段点。
+    expectEqual(rounded(KaraokeFill.stops(left: 0.2, right: 0.36)),
+                [[0, 1], [0.2, 1], [0.36, 0], [1, 0]],
+                "KaraokeFill: 中间态四个分段点")
+
+    // 过渡带跨过左边界：0 这一点的强度要**现算**，不能硬写成 1 —— 否则 0 处同时存在
+    // 强度 1 和过渡带算出的另一个值，渲染时互相抢占，边界会闪。
+    expectEqual(rounded(KaraokeFill.stops(left: -0.05, right: 0.11)),
+                [[0, 0.6875], [0.11, 0], [1, 0]],
+                "KaraokeFill: 过渡带跨左边界时 0 处强度要现算")
+    // 跨右边界同理。
+    expectEqual(rounded(KaraokeFill.stops(left: 0.95, right: 1.11)),
+                [[0, 1], [0.95, 1], [1, 0.6875]],
+                "KaraokeFill: 过渡带跨右边界时 1 处强度要现算")
+
+    // 全局不变式，扫一遍整个进度区间：
+    //   ① location 单调不减 —— 这正是网页端"提前上色"那个 bug 的判据（渐变 stop 一旦
+    //      逆序，渲染层会把它钳回去，视觉上表现为颜色跑到前面去了）
+    //   ② location 始终落在 [0,1]
+    //   ③ intensity 始终落在 [0,1]
+    //   ④ 强度沿着位置单调不增（唱过的在左边，越往右越暗）
+    var monotonic = true, inRange = true, intensityOK = true, intensityDesc = true
+    for step in -30...130 {
+        let fraction = Double(step) / 100
+        let s = KaraokeFill.stops(left: fraction - KaraokeFill.wordEdgeSoftenBand,
+                                  right: fraction + KaraokeFill.wordEdgeSoftenBand)
+        for (i, stop) in s.enumerated() {
+            if stop.location < 0 || stop.location > 1 { inRange = false }
+            if stop.intensity < 0 || stop.intensity > 1 { intensityOK = false }
+            if i > 0 {
+                if stop.location < s[i - 1].location - 1e-12 { monotonic = false }
+                if stop.intensity > s[i - 1].intensity + 1e-12 { intensityDesc = false }
+            }
+        }
+    }
+    expectEqual(monotonic, true, "KaraokeFill: stop 位置始终单调不减(逆序=提前上色)")
+    expectEqual(inRange, true, "KaraokeFill: stop 位置始终在 [0,1]")
+    expectEqual(intensityOK, true, "KaraokeFill: 强度始终在 [0,1]")
+    expectEqual(intensityDesc, true, "KaraokeFill: 强度沿位置单调不增")
+}
+
 if failures == 0 {
     print("\nALL PASS")
 } else {
