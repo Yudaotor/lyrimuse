@@ -333,6 +333,51 @@ public enum MediaControlClient {
         return bundleID == player.bundleIdentifier
     }
 
+    /// 直接问 Spotify 自己要当前播放位置(秒)。读不到返回 nil,调用方沿用 media-control
+    /// 的读数 —— 那个虽然慢 1.6 秒,但总比没有强。
+    ///
+    /// ⚠️ 必须先 `.running()` 再碰任何属性:JXA 里 `Application('Spotify')` 本身不会拉起
+    /// App,但访问它的属性就会 —— 没开 Spotify 的用户会被莫名其妙启动一个播放器。守卫写法
+    /// 跟本文件 Apple Music 那段脚本一致。
+    private static func spotifyPlayerPosition() -> Double? {
+        let script = """
+        (() => {
+            const Spotify = Application('Spotify');
+            try {
+                if (!Spotify.running()) return JSON.stringify(null);
+            } catch (e) {
+                return JSON.stringify(null);
+            }
+            try {
+                const state = Spotify.playerState();
+                if (state !== 'playing' && state !== 'paused') return JSON.stringify(null);
+                return JSON.stringify({ position: Spotify.playerPosition() });
+            } catch (e) {
+                return JSON.stringify(null);
+            }
+        })()
+        """
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
+        process.arguments = ["-l", "JavaScript", "-e", script]
+        let outPipe = Pipe()
+        process.standardOutput = outPipe
+        process.standardError = Pipe()
+        do {
+            try process.run()
+            let data = outPipe.fileHandleForReading.readDataToEndOfFile()
+            process.waitUntilExit()
+            guard process.terminationStatus == 0 else { return nil }
+            struct Payload: Decodable { let position: Double }
+            guard let p = try? JSONDecoder().decode(Payload.self, from: data), p.position >= 0 else {
+                return nil
+            }
+            return p.position
+        } catch {
+            return nil
+        }
+    }
+
     private static func fetchRawMediaControlSnapshot() -> (MediaControlSnapshot, String)? {
         guard let binaryPath = binaryPath() else { return nil }
         let process = Process()
@@ -360,7 +405,19 @@ public enum MediaControlClient {
             // 时钟外推(拿到过远超歌曲时长本身的荒谬值),因为暂停这件事本身并没有让
             // media-control 内部的外推基准归零。暂停时真正正确的位置就是原始
             // elapsedTime(暂停就是"冻结在这一刻",不需要外推)。
-            let elapsed = (raw.playing == true) ? (raw.elapsedTimeNow ?? raw.elapsedTime) : raw.elapsedTime
+            var elapsed = (raw.playing == true) ? (raw.elapsedTimeNow ?? raw.elapsedTime) : raw.elapsedTime
+            // Spotify 的位置改问它自己 —— MediaRemote 给 Spotify 的锚点本身就滞后,
+            // 2026-08-14 实测 elapsedTimeNow 恒定落后 Spotify 报的 player position
+            // 1.64 秒(波动仅 ±0.02,是固定偏移不是抖动,所以提高轮询频率没用)。
+            // Apple Music 不受影响是因为它走 AppleScript 直接问 Music.app。
+            //
+            // ⚠️ 采集器(collector/system.go)里有一份**同样的**修正。两边各自独立读
+            // media-control(采集器喂 ListenBrainz/网页,这里喂桌面悬浮窗),改一边只修一半 ——
+            // 上一轮就是只改了采集器,用户反馈"还是有延迟",因为悬浮窗走的正是这条路。
+            if bundleID == PlaybackPlayer.spotify.bundleIdentifier,
+               let truth = spotifyPlayerPosition() {
+                elapsed = truth
+            }
             let snapshot = MediaControlSnapshot(
                 title: raw.title,
                 artist: raw.artist,

@@ -563,7 +563,13 @@ public final class LocalPlaybackSource: ObservableObject {
             // Apple Music 的读数是 AppleScript 播放头(精确到 ~0.1s),伺服校正用小门槛;
             // 其它播放器是 media-control 的带噪外推读数,维持高门槛抗抖动——见
             // servoDecision 的两档参数注释。
+            // Spotify 2026-08-14 起也算 precise:它的位置已经改成直接问 Spotify 自己
+            // (见 MediaControlClient.spotifyPlayerPosition),跟 Apple Music 一样是播放器
+            // 报的真值,不再是 media-control 的带噪外推。继续按"非 precise"走 EMA 平滑
+            // (alpha 0.3、门槛 1.0s)只会在已经准确的读数上**再加**一层滞后。
+            // QQ 音乐/网易云没有 AppleScript 接口,仍旧维持原有的抗抖动处理。
             let preciseSource = snapshot.bundleIdentifier == PlaybackPlayer.appleMusic.bundleIdentifier
+                || snapshot.bundleIdentifier == PlaybackPlayer.spotify.bundleIdentifier
             let (positionSeconds, didReanchor) = resolvePositionSeconds(reported: snapshot.elapsedTime ?? 0, rate: rate, key: key, now: now, preciseSource: preciseSource)
             // 只在真的有必要时才重新构造锚点——稳定播放期间(没有换歌/没有真实
             // seek/rate 和时长都没变),继续外推旧锚点在数学上跟重新构造一份新锚点得到
