@@ -572,7 +572,7 @@ private struct LyricsSettingsTab: View {
             CardDivider()
             SettingsRow(
                 icon: "character.bubble",
-                title: L10n.t("中文歌词字体"),
+                title: L10n.t("中文繁简切换"),
                 help: L10n.t("把中文歌词统一显示成简体或繁体")
             ) {
                 Picker("", selection: Binding(
@@ -601,8 +601,7 @@ private struct LyricsSettingsTab: View {
             CardDivider()
             SettingsRow(
                 icon: "text.aligncenter",
-                title: L10n.t("双行显示"),
-                subtitle: L10n.t("多显示一行下一句")
+                title: L10n.t("双行显示")
             ) {
                 Toggle("", isOn: $settings.showNextLinePreview)
             }
@@ -627,7 +626,7 @@ private struct LyricsSettingsTab: View {
             SettingsRow(
                 icon: "folder",
                 title: L10n.t("歌词文件夹"),
-                subtitle: L10n.t("歌词永久保存在这里"),
+                subtitle: L10n.t("歌词保存在这里"),
                 help: L10n.t("换文件夹后，旧文件不会自动搬过去")
             )
             CardDivider()

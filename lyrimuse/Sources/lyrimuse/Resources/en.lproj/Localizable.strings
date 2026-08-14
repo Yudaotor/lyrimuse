@@ -431,7 +431,7 @@
 "整行时间戳" = "Line timing";
 "译文(机器翻译)" = "Translation (machine)";
 "译文(歌词源自带)" = "Translation (from the source)";
-"中文歌词字体" = "Chinese Lyrics Script";
+"中文繁简切换" = "Chinese Lyrics Script";
 "把中文歌词统一显示成简体或繁体" = "Show Chinese lyrics in simplified or traditional throughout";
 "不转换" = "As-is";
 "简体" = "Simplified";
@@ -452,9 +452,8 @@
 "超出宽度时截断，不滚动" = "Truncates when it doesn't fit";
 "超出宽度时横向滚动播完" = "Scrolls when it doesn't fit";
 "只对资料库里的曲目生效。在 Apple Music 里直接点播、没有添加到资料库的专辑查不到曲目" = "Only works for tracks in your library. If you play an album straight from Apple Music without adding it to your library, there are no tracks to find";
-"多显示一行下一句" = "Also show the next line";
 "查看、编辑、重搜已缓存的歌词" = "View, edit and re-search cached lyrics";
-"歌词永久保存在这里" = "Lyrics are kept here permanently";
+"歌词保存在这里" = "Lyrics are kept here";
 "比下面的宽度更长时截断成「前 N 个字…」，不滚动" = "Truncates to the first N characters when it doesn't fit";
 "iCloud 备份" = "Backup in iCloud";
 "存到 iCloud" = "Save to iCloud";
