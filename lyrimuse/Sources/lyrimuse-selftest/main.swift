@@ -1115,6 +1115,58 @@ if ProcessInfo.processInfo.environment["LYRIMUSE_REDACT_CHECK"] == "1" {
     expectEqual(after.count, 0, "脱敏后不得有任何真实凭据残留(残留项: \(after.keys.sorted()))")
 }
 
+
+// ---- EnrichCacheMerge: 「歌词管理」写回缓存的合并规则(2026-08-14) ----
+//
+// 守的是一条**静默丢数据**的路径。「歌词管理」可以一直开着边听边整理,而 collector 在这期间
+// 会往同一个文件写:新歌是新增 key,给已有歌补机翻译文/逐字/封面则是原地更新。窗口里的内存
+// 快照只在开窗和点「刷新」时刷新,所以早先那种"整份覆盖写"会把这期间 collector 写的东西全
+// 回滚掉。用户看到的第一个症状是"这首歌明明有翻译,列表里却没有译文标记" —— 那还只是显示层,
+// 底下是真的在丢。
+do {
+    let base: [String: [String: Any]] = ["A|a|x": ["lyrics": "L"]]
+
+    // ① 最要命的那一条:盘上的已有 key 被 collector 补了译文,而用户这次动的是**别的** key。
+    //    那份译文必须活下来。
+    let disk: [String: [String: Any]] = [
+        "A|a|x": ["lyrics": "L", "lyrics_tr": "译文"],   // collector 刚补上的
+        "B|b|y": ["lyrics": "N"],                        // collector 刚新增的一首
+    ]
+    var memory = base
+    memory["C|c|z"] = ["lyrics": "C"]                    // 用户新采纳的一首
+    let merged = EnrichCacheMerge.merge(
+        disk: disk, memory: memory, edited: ["C|c|z"], deleted: [])
+    expectEqual(merged["A|a|x"]?["lyrics_tr"] as? String, "译文",
+                "EnrichCacheMerge: 用户没碰的 key,盘上新补的译文不能被回滚")
+    expectEqual(merged["B|b|y"] != nil, true,
+                "EnrichCacheMerge: 窗口开着期间 collector 新增的歌不能被抹掉")
+    expectEqual(merged["C|c|z"]?["lyrics"] as? String, "C",
+                "EnrichCacheMerge: 用户新采纳的内容要写进去")
+
+    // ② 用户编辑过的 key:以内存为准,盘上的旧值必须被盖掉(否则用户的修改看着像没保存)。
+    let edited = EnrichCacheMerge.merge(
+        disk: ["A|a|x": ["lyrics": "盘上旧的"]],
+        memory: ["A|a|x": ["lyrics": "用户改的"]],
+        edited: ["A|a|x"], deleted: [])
+    expectEqual(edited["A|a|x"]?["lyrics"] as? String, "用户改的",
+                "EnrichCacheMerge: 用户编辑过的 key 以内存为准")
+
+    // ③ 用户删掉的 key:即便盘上还在也要删 —— 这正是"删除"的意思,也是 collector 会在
+    //    背后把它写回来的场景(它内存里还持有旧缓存)。
+    let deleted = EnrichCacheMerge.merge(
+        disk: ["A|a|x": ["lyrics": "L"]], memory: [:],
+        edited: [], deleted: ["A|a|x"])
+    expectEqual(deleted["A|a|x"] == nil, true,
+                "EnrichCacheMerge: 用户删掉的 key 不能被盘上的版本复活")
+
+    // ④ 先编辑、后删除同一个 key:删除赢。edited 里还留着它但内存里已经没有了。
+    let editThenDelete = EnrichCacheMerge.merge(
+        disk: ["A|a|x": ["lyrics": "L"]], memory: [:],
+        edited: ["A|a|x"], deleted: ["A|a|x"])
+    expectEqual(editThenDelete["A|a|x"] == nil, true,
+                "EnrichCacheMerge: 编辑后又删除,结果是删除")
+}
+
 if failures == 0 {
     print("\nALL PASS")
 } else {

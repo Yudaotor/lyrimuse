@@ -752,6 +752,20 @@ struct LyricsManagerView: View {
         .frame(minWidth: 780, idealWidth: 1040, minHeight: 540, idealHeight: 640)
         // 见 AuxiliaryWindowActivation 注释——.accessory 策略下临时借一个 Dock 图标。
         .onAppear { AuxiliaryWindowActivation.windowDidAppear() }
+        // 切回 App 时重新读一次盘。
+        //
+        // 列表是**开窗那一刻的快照**,而 collector 在窗口开着期间会持续往同一个文件写:新歌
+        // 是新增条目,给已有歌补机翻译文/逐字时间轴则是原地更新。不刷新的话,一首刚补上译文
+        // 的歌在列表里始终不亮绿色的译文标记 —— 用户的原话是"这首歌明明有翻译,但没有译文
+        // 的 tag",而歌词本身在悬浮窗里是正常显示的(那条路径读的是实时数据)。
+        //
+        // 挑"App 重新激活"当触发点,而不是上文件监听:典型用法就是切出去听歌、过一阵切回来,
+        // 这个时机覆盖得住,而且 reload() 会把读盘+解析(缓存大了要 30ms 以上)放后台线程,
+        // 不像 FSEvent 那样需要自己做防抖。窗口一直摆在副屏、人从不切走的情况仍然要靠工具栏
+        // 的「刷新」—— 那颗按钮本来就在。
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            Task { await store.reload() }
+        }
         .onDisappear {
             AuxiliaryWindowActivation.windowDidDisappear()
             // 见 pendingAutoFocus 的注释:@State 会跨关窗存活,得自己把这个闸复位,

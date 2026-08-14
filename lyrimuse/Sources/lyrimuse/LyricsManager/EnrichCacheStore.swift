@@ -80,11 +80,29 @@ public final class EnrichCacheStore: ObservableObject {
     private static var lyricsDir: URL { FeatureSettingsStore.shared.effectiveLyricsDir }
 
     private var raw: [String: [String: Any]] = [:]
-    // 上一次 reload() 时盘上存在的 key 集合(加上此后我们自己新增的)。persist() 用它区分
-    // "用户删掉的" 和 "collector 在我们背后新写的",见 persist() 里那段注释。
+    // 上一次跟磁盘同步时盘上存在的 key 集合。2026-08-14 之前 persist() 用它区分"用户删掉的"
+    // 和 "collector 在我们背后新写的";现在这件事由 locallyEditedKeys/locallyDeletedKeys
+    // 直接表达(那是**意图**,这只是**快照**),它退化成一份纯记录,保留是因为 reload/persist
+    // 两处都在维护它、拿掉要动的地方比留着多。
     private var knownKeys: Set<String> = []
+    // 自上次落盘以来,**用户在这个窗口里真正动过**的 key。
+    //
+    // persist() 靠它把"整份覆盖"改成"读-改-写":写盘前重新读一次磁盘,只把这两个集合里的
+    // key 盖上去,其余一律以盘上为准。没有它的话,开窗那一刻的内存快照会把窗口开着期间
+    // collector 新写进去的任何东西(机翻译文、逐字时间轴、封面)静默回滚掉。
+    private var locallyEditedKeys: Set<String> = []
+    private var locallyDeletedKeys: Set<String> = []
+    // persist() 从盘上并回了本次快照没有的 key —— 调用方据此决定要不要重刷列表。
+    private var lastPersistPulledInNewKeys = false
 
     private init() {}
+
+    /// 记下"这个 key 的内容是用户在窗口里改出来的",persist() 据此决定它盖过盘上的版本。
+    /// 同时撤销可能存在的删除意图 —— 编辑一个刚被删掉的 key 意味着它又回来了。
+    private func markLocallyEdited(_ key: String) {
+        locallyEditedKeys.insert(key)
+        locallyDeletedKeys.remove(key)
+    }
 
     // 缓存文件设计上永久不清理("解析一次永久保留"),攒到几百条、几 MB 后
     // JSONSerialization 解析整份文件要 30ms 以上——若直接在 MainActor 上同步做,开窗/点
@@ -118,6 +136,11 @@ public final class EnrichCacheStore: ObservableObject {
         if let obj = box.obj {
             raw = obj
             knownKeys = Set(obj.keys)
+            // 这两个集合描述的是"相对上一份快照做了什么改动";快照整个换掉之后它们就失去
+            // 参照,留着会让下一次 persist 拿旧意图去盖新内容。所有改动路径都是"改完立刻
+            // persist",正常情况下它们此刻本来就是空的 —— 这里只是把不变量写死。
+            locallyEditedKeys.removeAll()
+            locallyDeletedKeys.removeAll()
             lastError = nil
         } else {
             raw = [:]
@@ -267,6 +290,7 @@ public final class EnrichCacheStore: ObservableObject {
             entry.removeValue(forKey: "lyrics_source")
         }
         raw[key] = entry
+        markLocallyEdited(key)
         writeLyricsFiles(
             key: key, lyrics: lyrics, tr: tr, roma: roma,
             yrc: entry["lyrics_yrc"] as? String ?? "",
@@ -283,6 +307,7 @@ public final class EnrichCacheStore: ObservableObject {
         var entry = raw[key] ?? [:]
         entry.removeValue(forKey: "lyrics_yrc")
         raw[key] = entry
+        markLocallyEdited(key)
         // 只删 .yrc 文件,其它变体文件不动——跟上面 JSON 侧"只清掉这一个字段"的语义对应。
         // 普通名和带消歧后缀两种形态都要删:这个 key 在碰撞组里时磁盘上只有后一种(理由见
         // EnrichCacheKeys.exportedFileNames 的注释),只删普通名的话残留的 .yrc 会在
@@ -340,16 +365,25 @@ public final class EnrichCacheStore: ObservableObject {
         removed.reserveCapacity(victims.count)
         for key in victims {
             if let entry = raw.removeValue(forKey: key) { removed[key] = entry }
+            locallyDeletedKeys.insert(key)
+            locallyEditedKeys.remove(key)
             deleteExportedLyricsFile(forKey: key)
         }
         rebuildSummaries()
         guard persist() else {
             // 写盘失败就把这一批全部放回去——不能让界面显示成"已删除"而磁盘上其实还在。
             // 已经删掉的导出文件不用管:collector 启动时会按缓存内容重新导出一遍。
-            for (key, entry) in removed { raw[key] = entry }
+            for (key, entry) in removed {
+                raw[key] = entry
+                locallyDeletedKeys.remove(key)
+            }
             rebuildSummaries()
             return
         }
+        // persist() 刚从盘上并回了窗口开着期间 collector 新写的条目 —— 列表得再刷一次才
+        // 看得到它们。只在真有新增时才重刷:rebuildSummaries 是全量 compactMap + 排序,
+        // 白跑一次在几百条规模上是肉眼可见的卡顿(见本函数上方那段注释)。
+        if lastPersistPulledInNewKeys { rebuildSummaries() }
         scheduleCollectorRestart()
         refreshSizeBytes()
     }
@@ -360,15 +394,13 @@ public final class EnrichCacheStore: ObservableObject {
     // destructive 程度需要在 UI 侧用强提示词说清楚,这里只负责真正执行。
     public func clearAll() async {
         raw = [:]
-        // 清空是用户明确要求的"全清",不能让 persist() 里那段"并回 collector 在我们背后
-        // 新写的条目"把刚清掉的东西又拉回来:「歌词管理」是可以一直开着的窗口,开窗之后
-        // collector 每解析出一首新歌都会往盘上写一条,那些 key 不在 knownKeys 里,于是会
-        // 被那段合并逻辑当成"用户没见过、不该丢"而救回来——清空之后莫名剩下几条。
-        // 先把此刻盘上所有 key 都认领成"已知",那段合并对这次写入就整段不生效。
-        if let disk = try? Data(contentsOf: Self.cacheURL),
-           let diskObj = try? JSONSerialization.jsonObject(with: disk) as? [String: [String: Any]] {
-            knownKeys.formUnion(diskObj.keys)
-        }
+        // 清空是用户明确要求的"全清",不能让 persist() 的读-改-写把刚清掉的东西从盘上并回来
+        // ——「歌词管理」是可以一直开着的窗口,开窗之后 collector 每解析出一首新歌都会往盘上
+        // 写一条,合并回来就成了"清空之后莫名剩下几条"。下面那次 persist 因此走整份替换。
+        //
+        // (2026-08-14 之前这里是"先把此刻盘上所有 key 都认领进 knownKeys,好让合并整段失效"
+        // ——那是配合旧的"只并回没见过的 key"写的绕法,现在有了显式的 replacingEverything,
+        // 那段绕法已经没有意义,一并去掉。)
         // ⚠️ 只删**歌词文件**,不能把这个目录里的东西一律删掉。
         //
         // 原来是 contentsOfDirectory 之后无差别 removeItem,而 lyrics/ 这个目录是**用户
@@ -385,7 +417,8 @@ public final class EnrichCacheStore: ObservableObject {
         }
         rebuildSummaries()
         totalSizeBytes = 0
-        guard persist() else { return }
+        // 整份替换:清空是用户明确的"全清",读-改-写会把盘上一切并回来,正好相反。
+        guard persist(replacingEverything: true) else { return }
         scheduleCollectorRestart()
     }
 
@@ -480,27 +513,43 @@ public final class EnrichCacheStore: ObservableObject {
     // 26ms,留在 MainActor 上同步做完全没问题,不值得为它多绕一层异步。
     // 返回是否成功——调用方据此决定要不要回滚内存状态。
     @discardableResult
-    private func persist() -> Bool {
+    /// - Parameter replacingEverything: 用户明确要求"整份替换"(清空全部缓存)时传 true,
+    ///   跳过下面的读-改-写合并 —— 那种场景下把盘上内容并回来正是要避免的。
+    private func persist(replacingEverything: Bool = false) -> Bool {
         guard JSONSerialization.isValidJSONObject(raw) else {
             lastError = L10n.t("内部数据不是合法 JSON,已放弃保存")
             logger.error("raw dict is not valid JSON, aborting save")
             return false
         }
-        // 写回前先把"盘上有、但我们这份内存快照里从来没有过"的条目并回来。
+        // 读-改-写:以**盘上此刻的内容**为底,只把用户这次真正动过的 key 盖上去。
         //
-        // raw 只有 reload() 会刷新(开窗 .onAppear 和工具栏「刷新」两处),而 persist() 是
-        // 整份覆盖写。"歌词管理"是个可以一直开着的窗口,典型用法就是边听边整理——开窗之后
-        // collector 每解析出一首新歌都会往盘上写一条,而窗口里随便一次删除/保存都会用开窗
-        // 那一刻的旧快照把它们抹掉。
+        // 2026-08-14 之前这里是"整份覆盖 + 只并回没见过的新 key"。那半套只堵住了一半:
+        // raw 只有 reload() 会刷新(开窗 .onAppear 和工具栏「刷新」两处),而"歌词管理"是个
+        // 可以一直开着的窗口,典型用法就是边听边整理。开窗之后 collector 会持续往盘上写 ——
+        // 新歌是**新 key**(旧逻辑救得回来),但给**已有 key 补上机翻译文/逐字时间轴/封面**
+        // 是原地更新,旧逻辑完全不管:内存里那份还是开窗时的样子,窗口里随便一次删除或保存
+        // 都会把它整份写回去,刚补上的译文就没了。用户能看到的症状是"这首歌明明有翻译,
+        // 歌词管理里却不显示译文标记" —— 那还只是显示层,底下是真的在丢数据。
         //
-        // 只并"没见过的 key":用户明确删掉的 key 在 knownKeys 里,所以不会被这段逻辑复活。
-        if let disk = try? Data(contentsOf: Self.cacheURL),
+        // 顺带一个好处:写完之后 raw 就是盘上最新内容,列表的标记不再停留在开窗那一刻。
+        if !replacingEverything,
+           let disk = try? Data(contentsOf: Self.cacheURL),
            let diskObj = try? JSONSerialization.jsonObject(with: disk) as? [String: [String: Any]] {
-            for (k, v) in diskObj where !knownKeys.contains(k) && raw[k] == nil {
-                raw[k] = v
-                knownKeys.insert(k)
-            }
+            // 合并规则本身抽在 LyrimuseCore.EnrichCacheMerge,好让 lyrimuse-selftest 能真的
+            // 测它 —— 这个类是 @MainActor 且直接读写磁盘,测不了,而这段逻辑错了就是静默丢
+            // 用户的歌词。
+            let merged = EnrichCacheMerge.merge(
+                disk: diskObj, memory: raw,
+                edited: locallyEditedKeys, deleted: locallyDeletedKeys)
+            lastPersistPulledInNewKeys = !Set(merged.keys).subtracting(raw.keys).isEmpty
+            raw = merged
+            knownKeys = Set(merged.keys)
+        } else {
+            // 盘读不出来/解析不了,或者调用方明确要求整份替换(清空全部缓存)——直接写 raw。
+            lastPersistPulledInNewKeys = false
         }
+        locallyEditedKeys.removeAll()
+        locallyDeletedKeys.removeAll()
         do {
             let data = try JSONSerialization.data(withJSONObject: raw)
             try data.write(to: Self.cacheURL, options: .atomic)

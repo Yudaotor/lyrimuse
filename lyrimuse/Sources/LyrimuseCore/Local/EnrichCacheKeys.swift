@@ -7,6 +7,37 @@ import Foundation
 // CollectorControl/PlaybackCoordinator/L10n,lyrimuse-selftest 只依赖 LyrimuseCore、跨
 // target 一行都测不到它。把确定性的纯换算下沉到这里,才能在 selftest 里对着 collector 的
 // 真实行为写断言(见 main.swift 里对应分节)。
+// 「歌词管理」写回缓存文件时的合并规则。
+//
+// 抽成纯函数放在这里(而不是留在 EnrichCacheStore 里)只有一个理由:那个类是 @MainActor、
+// 直接读写磁盘,测不了;而这段逻辑一旦错,代价是**静默丢用户的歌词数据**,必须能测。
+public enum EnrichCacheMerge {
+    /// 把用户在窗口里做的改动,合到**盘上此刻的内容**之上。
+    ///
+    /// 「歌词管理」是个可以一直开着的窗口,而 collector 在窗口开着期间会持续往同一个文件写:
+    /// 新歌是新增 key,给已有歌补机翻译文/逐字时间轴/封面则是**原地更新**。窗口里的内存快照
+    /// 只在开窗和点「刷新」时更新,所以整份覆盖写会把这期间 collector 写的东西全部回滚。
+    ///
+    /// - Parameters:
+    ///   - disk: 写盘前重新读到的磁盘内容(权威底稿)。
+    ///   - memory: 窗口里的内存快照。
+    ///   - edited: 用户明确编辑过的 key —— 以内存为准。在内存里已不存在则表示编辑后又删了。
+    ///   - deleted: 用户明确删除的 key —— 即便盘上还在也要删掉。
+    public static func merge(
+        disk: [String: [String: Any]],
+        memory: [String: [String: Any]],
+        edited: Set<String>,
+        deleted: Set<String>
+    ) -> [String: [String: Any]] {
+        var out = disk
+        for k in edited {
+            if let v = memory[k] { out[k] = v } else { out.removeValue(forKey: k) }
+        }
+        for k in deleted { out.removeValue(forKey: k) }
+        return out
+    }
+}
+
 public enum EnrichCacheKeys {
     // 跟 collector/lyricsexport.go 的同名变量逐一对应。
     public static let lyricsFileSuffixes = [".lrc", ".tr.lrc", ".roma.lrc", ".yrc"]
