@@ -1,0 +1,80 @@
+name: CI
+
+# 每次 push 到 dev/main 和每个 PR 都跑一遍测试。
+#
+# release.yml 里也有同样的测试步骤，但它只在打 tag（和手动 dispatch）时触发 —— 也就是说
+# 平时提交挂没挂，全靠开发者记得在本地跑，等发版那一刻才由流水线发现。这个 workflow 把那
+# 道网关前移到每次提交。
+#
+# tag push 不会重复触发这里：下面只列了 branches，没有 tags 过滤器，而 GitHub 对 tag 的
+# push 事件只匹配 tags:，不匹配 branches:。
+on:
+  push:
+    branches: [dev, main]
+  pull_request:
+
+concurrency:
+  # 跟 release 相反，这里**要**取消进行中的旧运行：连续推几次时只有最后一次的结论有意义，
+  # 而 macOS runner 是排队最紧张的一种。
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  # 跟 lyrimuse/build.sh、lyrimuse-collector/build.sh 里硬编码的 GOTOOLCHAIN 保持一致。
+  # 更老的工具链产出的二进制缺 LC_UUID，AMFI 会拒签（详见 AGENTS.md）。
+  GO_VERSION: "1.24.4"
+
+jobs:
+  test:
+    name: 测试
+    # 跟 release.yml 钉同一个镜像。不用 macos-latest —— 它会按 GitHub 自己的节奏跳到新的
+    # Xcode/OS。App 代码用到 Liquid Glass API（macOS 26 SDK 才有符号），低于 26 编不过。
+    runs-on: macos-26
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Go
+        uses: actions/setup-go@v7
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          # go.sum 在 lyrimuse-collector/ 而不是仓库根。不写这一行 setup-go 会找不到
+          # 可以做 cache key 的文件（release.yml 里记着那次 "Supported file pattern:
+          # go.mod" 的告警）。collector 目前零外部依赖、go.sum 是空文件，所以这里缓存
+          # 到的东西也是空的 —— 保留它是为了跟 release.yml 一致，将来真加了依赖不用再想起来补。
+          cache-dependency-path: lyrimuse-collector/go.sum
+
+      # 顺序按"最快、最容易暴露问题的先跑"排：格式 → 静态检查 → 单测 → 编译。
+      - name: gofmt
+        run: |
+          cd lyrimuse-collector
+          unformatted="$(gofmt -l .)"
+          if [ -n "$unformatted" ]; then
+            echo "以下文件没有格式化，跑 gofmt -w 修一下："
+            echo "$unformatted"
+            exit 1
+          fi
+
+      - name: go vet
+        run: cd lyrimuse-collector && GOTOOLCHAIN="go${{ env.GO_VERSION }}" go vet ./...
+
+      - name: go test
+        run: cd lyrimuse-collector && GOTOOLCHAIN="go${{ env.GO_VERSION }}" go test ./...
+
+      - name: Swift selftest
+        # 用 `swift build` 再直接执行产物，**不要**用 `swift run`。release.yml 里记着实测
+        # 结论：runner 上 `swift run lyrimuse-selftest` 会在 exec 刚构建出来的二进制那一刻
+        # 被 SIGKILL（步骤退出 137），而二进制本身没问题 —— 直接跑它会正常打印 ALL PASS。
+        # 死的是 SwiftPM 自己的 exec wrapper。
+        run: |
+          cd lyrimuse
+          swift build --product lyrimuse-selftest
+          ./.build/debug/lyrimuse-selftest
+
+      - name: 编译整个 App
+        # selftest 只依赖 LyrimuseCore，编它编不到 app target。不加这一步的话，app 侧的
+        # 编译错误要等到发版打包时才会暴露。
+        run: cd lyrimuse && swift build
