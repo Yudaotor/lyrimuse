@@ -135,6 +135,25 @@ Open Lyrimuse from `/Applications` — the first-run wizard walks you through pi
 
 You don't need to configure anything else to get lyrics — every optional extra above is configured later, entirely from Settings.
 
+## Uninstalling
+
+Dragging `Lyrimuse.app` to the Trash is **not** enough. The background collector is
+registered with launchd as a `KeepAlive` job, so its LaunchAgent stays behind and
+launchd keeps trying to start a binary that is no longer there.
+
+```sh
+lyrimuse/scripts/uninstall.sh              # report only — shows what is installed
+lyrimuse/scripts/uninstall.sh --services   # unregister both launchd jobs, keep your data
+lyrimuse/scripts/uninstall.sh --purge      # also delete config, caches and logs
+```
+
+Running it with no arguments changes nothing; it just tells you what is on your
+system. `--purge` lists everything it is about to delete, warns you how many exported
+`.lrc` files are among them, and requires you to type `yes`.
+
+Your settings live in `defaults` and are left alone either way — remove them with
+`defaults delete me.yudaotor.lyrimuse` if you want a completely clean slate.
+
 ## Project Layout
 
 This repo is the app:

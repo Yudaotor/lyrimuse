@@ -66,6 +66,11 @@ screencapture -x -o -l <窗口ID> /tmp/shot.png                   # 只截那一
 它用自己的一次性 job 造出 running / 已退出 / 未注册三种状态，跑完自动注销并核对真实服务
 没被动过。
 
+**`lyrimuse/scripts/uninstall.sh` 是这个仓库里唯一会删用户数据的脚本，不要随手跑它。**
+不带参数是只读报告（安全）；`--services` 会真的把 collector 停掉；`--purge` 会删掉歌词
+缓存（含用户手工修正过的内容，不可逆）。改它之后跑 `uninstall_test.sh` ——那个测试搭一套
+假家目录 + 一次性 probe job，走同一份代码路径，并核对真实环境没被碰。
+
 **动播放器之前先存状态、之后必须恢复。** 需要真的播一首才能验证时（歌词渲染、性能采样），
 先读当前 `player state` 和 `player position`，测完恢复原样。`tell application "Music"`
 会**启动**没在运行的 Music，所以任何 `tell` 之前先 `pgrep -x Music` 守卫。

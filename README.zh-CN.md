@@ -135,6 +135,23 @@ QQ 音乐/网易云音乐/Spotify/自动识别这几个播放源支持额外需�
 
 不需要再配置任何其它东西才能看到歌词——上面提到的所有附加功能都是后续在设置里按需开启的。
 
+## 卸载
+
+把 `Lyrimuse.app` 拖进废纸篓**是不够的**。后台采集服务在 launchd 里注册的是 `KeepAlive`
+类型的 job，它的 LaunchAgent 会留下来，于是 launchd 会一直去启动一个已经不存在的二进制。
+
+```sh
+lyrimuse/scripts/uninstall.sh              # 只看：报告当前装了什么
+lyrimuse/scripts/uninstall.sh --services   # 注销两个 launchd job，数据一律保留
+lyrimuse/scripts/uninstall.sh --purge      # 连配置、缓存、日志一起删
+```
+
+不带参数运行不会改动任何东西，只是告诉你系统里现在有什么。`--purge` 会先把要删的东西
+逐个列出来、提醒你其中有多少个已导出的 `.lrc` 歌词文件，并且要求手动输入 `yes` 才继续。
+
+两种方式都不会碰你的偏好设置——想彻底清干净的话执行
+`defaults delete me.yudaotor.lyrimuse`。
+
 ## 项目结构
 
 本仓库就是 App 本身：
