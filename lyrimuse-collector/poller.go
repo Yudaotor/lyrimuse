@@ -664,7 +664,7 @@ func (p *poller) handle(now time.Time, reanchored, loopRestart bool) {
 		// 顺手把同一张专辑里其它还没解析过的曲目也丢到后台解析——用户按专辑顺序一首首听,
 		// 提前解析好等真播到那首歌时大概率不用现等。见 albumprefetch.go。
 		if features.AlbumPrefetch {
-			prefetchAlbumSiblings(p.cur.Artist, p.cur.Title, p.cur.Album)
+			prefetchAlbumSiblings(p.cur.Artist, p.cur.Title, p.cur.Album, p.cur.Bundle)
 		}
 		// LB 的 playing_now 只在"换曲"时更新、同曲存活期内拒绝覆盖,迟到的歌词再也进不去。
 		// 故首条须在 enrich 解析完后再发(那时才知有无歌词、有则带上)。已解析(缓存命中,无论

@@ -30,6 +30,9 @@ type neteaseInfo struct {
 	// 本来就已经查到只是原来没往外传。跟 Artist 不同,这两个字段不做"是否单一歌手"
 	// 之类的过滤,原样如实展示这首歌在网易云曲库里的名字。
 	Title, Album string
+	// AlbumID 是 Album 那张专辑在网易云的 id,0=没拿到。只给同专辑预取用
+	// (见 neteaseAlbumTracks)。跟 Title/Album 一样取自 pick() 选中的 chosen。
+	AlbumID int64
 }
 
 // neteaseCache 是这个文件自己内部的网络请求结果缓存(避免短时间内重复打网易云的接口),
@@ -191,6 +194,11 @@ func resolveNeteaseInfo(artist, title, album string) neteaseInfo {
 		} `json:"artists"`
 		Album struct {
 			Name string `json:"name"`
+			// ID:专辑 id。给"提前解析同专辑其它曲目"用 —— 拿的是 **pick() 选中的这首歌
+			// 自己所属**的专辑,不是拿专辑名去另搜一次,所以天然不会撞上同名专辑/精选集
+			// (实测搜 "Michael Jackson Bad",前三条全是套装:King of Pop 48 首、
+			// The Collection 76 首,原专辑排到第 13 条)。
+			ID int64 `json:"id"`
 		} `json:"album"`
 		// Duration:搜索结果自带的曲长(毫秒)。透传给候选,不参与本文件内的任何挑选逻辑。
 		Duration float64 `json:"duration"`
@@ -351,6 +359,7 @@ func resolveNeteaseInfo(artist, title, album string) neteaseInfo {
 		SongURL:      fmt.Sprintf("https://music.163.com/song?id=%d", id),
 		Title:        chosen.Name,
 		Album:        chosen.Album.Name,
+		AlbumID:      chosen.Album.ID,
 		DurationSecs: chosen.Duration / 1000,
 	}
 	// 只有本地(Apple Music)标签本身就是单一人名(没有 &/、/, 等分隔符)时,才尝试用
@@ -423,4 +432,102 @@ func resolveNeteaseInfo(artist, title, album string) neteaseInfo {
 		info.YRC = fetchYRC(id) // 逐字，无则空串，前端退回行级
 	}
 	return info
+}
+
+// neteaseAlbumTracks 按专辑 id 列出这张专辑的全部曲目,给"提前解析同专辑其它曲目"用。
+//
+// ⚠️ 必须带 Cookie: os=pc。2026-08-14 实测:不带 cookie 时这个端点会**间歇性**返回
+// HTTP 200 + body {"code":-462,"message":"请绑定手机后再试哦~"}(9 次里中 5 次,同一个
+// 专辑 id 有时通有时不通,是反爬闸门不是"这张专辑要登录");带上之后 9/9 全通。HTTP 状态
+// 码始终是 200,所以只看 status 会把拒绝解成"这张专辑零首歌" —— 跟本文件 resolveNeteaseInfo
+// 里那个 code 守卫同一个坑,同一个修法。
+//
+// 备用端点 /api/v1/album/{id} 的 shape 不同(曲目在顶层 songs 而不是 album.songs),两种
+// 都吃。网易云是**按端点分桶**限流的(见 resolveNeteaseInfo 里那段注释),主端点被限时
+// 备用桶往往还通。
+func neteaseAlbumTracks(albumID int64) ([]albumTrack, bool) {
+	if albumID <= 0 {
+		return nil, false
+	}
+	cli := &http.Client{Timeout: 6 * time.Second}
+	type neAlbumSong struct {
+		Name     string  `json:"name"`
+		Duration float64 `json:"duration"` // 毫秒
+		Artists  []struct {
+			Name string `json:"name"`
+		} `json:"artists"`
+	}
+	var payload struct {
+		Code  int `json:"code"`
+		Album struct {
+			Name  string        `json:"name"`
+			Size  int           `json:"size"`
+			Songs []neAlbumSong `json:"songs"`
+		} `json:"album"`
+		Songs []neAlbumSong `json:"songs"` // /api/v1/album/{id} 把曲目放在顶层
+	}
+	fetch := func(u string) bool {
+		req, err := http.NewRequest(http.MethodGet, u, nil)
+		if err != nil {
+			return false
+		}
+		req.Header.Set("Referer", "https://music.163.com/")
+		req.Header.Set("User-Agent", "Mozilla/5.0")
+		req.Header.Set("Cookie", "os=pc") // 见函数注释,少了它会间歇性被 -462 拦掉
+		resp, err := doHTTPTracked(cli, req)
+		if err != nil {
+			return false
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			return false
+		}
+		payload = struct {
+			Code  int `json:"code"`
+			Album struct {
+				Name  string        `json:"name"`
+				Size  int           `json:"size"`
+				Songs []neAlbumSong `json:"songs"`
+			} `json:"album"`
+			Songs []neAlbumSong `json:"songs"`
+		}{}
+		if json.NewDecoder(resp.Body).Decode(&payload) != nil {
+			return false
+		}
+		// code 非 200/0 一律当失败(-462 就走这里),别把限流解成"零首歌"。
+		return payload.Code == 0 || payload.Code == 200
+	}
+	if !fetch(fmt.Sprintf("https://music.163.com/api/album/%d", albumID)) {
+		if !fetch(fmt.Sprintf("https://music.163.com/api/v1/album/%d", albumID)) {
+			return nil, false
+		}
+	}
+	songs := payload.Album.Songs
+	if len(songs) == 0 {
+		songs = payload.Songs
+	}
+	if len(songs) == 0 {
+		return nil, false
+	}
+	out := make([]albumTrack, 0, len(songs))
+	for _, s := range songs {
+		if s.Name == "" {
+			continue
+		}
+		// 合唱曲目 artists 是数组,按 " & " 拼回去 —— 跟本地标签"歌手A & 歌手B"的写法
+		// 对齐,别压缩成第一位(压缩会让 enrich 的 key 跟真播到这首歌时算出来的对不上,
+		// 预取的结果白存)。
+		names := make([]string, 0, len(s.Artists))
+		for _, a := range s.Artists {
+			if a.Name != "" {
+				names = append(names, a.Name)
+			}
+		}
+		out = append(out, albumTrack{
+			title:    s.Name,
+			artist:   strings.Join(names, " & "),
+			duration: s.Duration / 1000, // 网易云给的是毫秒
+		})
+	}
+	return out, len(out) > 0
 }

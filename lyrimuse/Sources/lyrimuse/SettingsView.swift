@@ -338,7 +338,7 @@ private struct LyricsSettingsTab: View {
                 // 副标题原来是把标题重说一遍;? 里原来还提到「歌词在线匹配」开关 —— 那个
                 // 开关 2026-08-10 已经删掉,留着就是条错信息。现在只说一件从界面上看不出来、
                 // 又真的会让人白开开关的事:它只认资料库里的曲目。
-                help: L10n.t("只对资料库里的曲目生效。在 Apple Music 里直接点播、没有添加到资料库的专辑查不到曲目")
+                help: L10n.t("用 Apple Music 时查你的资料库，所以没添加到资料库的专辑查不到；用其它播放器时改从歌词来源查这张专辑的曲目")
             ) {
                 Toggle("", isOn: Binding(
                     get: { features.albumPrefetch },
