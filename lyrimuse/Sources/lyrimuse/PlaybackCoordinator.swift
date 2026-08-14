@@ -24,6 +24,9 @@ final class PlaybackCoordinator: ObservableObject {
     // 联网查过了、明确是纯音乐,见 LocalPlaybackSource 同名属性的注释。
     @Published private(set) var isCurrentTrackInstrumental: Bool = false
     @Published private(set) var currentTrackHasNoLyrics: Bool = false
+    /// collector 报"网络不通,这一轮查不了"(见 CollectorStatus)。只有本地源有这个信号
+    /// —— relay 模式下歌词是别的机器解析好推过来的,本机通不通网跟它无关。
+    @Published private(set) var collectorNetworkDown: Bool = false
     // Spotify 广告插播,见 LocalPlaybackSource 同名属性的注释。
     @Published private(set) var isCurrentTrackAdBreak: Bool = false
     @Published private(set) var anchor: ProgressAnchor?
@@ -383,6 +386,7 @@ final class PlaybackCoordinator: ObservableObject {
             s.$hasLyricsContent.assign(to: \.hasLyricsContent, on: self),
             s.$isCurrentTrackInstrumental.assign(to: \.isCurrentTrackInstrumental, on: self),
             s.$currentTrackHasNoLyrics.assign(to: \.currentTrackHasNoLyrics, on: self),
+            s.$collectorNetworkDown.assign(to: \.collectorNetworkDown, on: self),
             s.$isCurrentTrackAdBreak.assign(to: \.isCurrentTrackAdBreak, on: self),
             s.$currentLineIndex.assign(to: \.currentLineIndex, on: self),
             s.$allLines.assign(to: \.allLines, on: self),

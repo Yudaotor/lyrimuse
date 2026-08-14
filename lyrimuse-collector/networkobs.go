@@ -47,3 +47,28 @@ func networkLooksDown() bool {
 	failures := atomic.LoadInt32(&networkFailureCount)
 	return attempts >= 3 && failures == attempts
 }
+
+// beginNetworkRound 开始一轮观察,返回的函数给出"从这一刻到调用它为止"的网络成败。
+//
+// ⚠️ 上面那个 networkLooksDown() **不能**用在常驻采集器里,只对一次性子命令成立:
+// 它读的是进程启动以来的累计值,而 `failures == attempts` 这个条件只要进程早期有过
+// 任何一次成功就永远不再成立 —— 开机时有网、后来断网,它一路报"网络正常"。
+// 一次性 CLI 跑完就退出,累计值天然等于"这一次的",所以那边没问题。
+//
+// 并发说明:专辑预取会同时解析多首歌,别人的成功会混进这个差值里。方向是安全的 ——
+// 混入成功只会让 failures < attempts,导致**漏报**(该说没网时没说),不会误报
+// (把有网说成没网)。对一个界面提示来说,宁可漏报。
+func beginNetworkRound() func() (attempts, failures int32) {
+	a0 := atomic.LoadInt32(&networkAttemptCount)
+	f0 := atomic.LoadInt32(&networkFailureCount)
+	return func() (int32, int32) {
+		return atomic.LoadInt32(&networkAttemptCount) - a0,
+			atomic.LoadInt32(&networkFailureCount) - f0
+	}
+}
+
+// roundLooksNetworkDown 判断某一轮观察的结果是不是"网络整体不通"。
+// 判据跟 networkLooksDown 一致:至少试过 3 次、且全部失败。
+func roundLooksNetworkDown(attempts, failures int32) bool {
+	return attempts >= 3 && failures == attempts
+}

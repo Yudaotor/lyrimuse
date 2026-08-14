@@ -402,6 +402,19 @@ struct LyricsOverlayView: View {
                 .font(settings.mainFont)
                 .foregroundStyle(poller.displayForegroundColor.opacity(0.5))
                 .lyricsTextStroke(settings.textStrokeEnabled, color: settings.textStrokeColor)
+        } else if poller.collectorNetworkDown && !poller.hasLyricsContent {
+            // 2026-08-15 补上——必须排在下面"搜索歌词中…"**前面**,否则永远到不了这里。
+            //
+            // 断网时 collector 查不到任何东西,而"全空不写缓存"的守卫(见 collector 的
+            // enrich.go)让 hasLyricsContent 永远是 false,于是界面一直显示"搜索歌词中…"
+            // —— 那句话在断网状态下永远不会有下文,是彻头彻尾的误导。
+            //
+            // 排在 currentTrackHasNoLyrics **后面**:那是"查过了,这首歌确实没有",是个
+            // 明确结论;而"现在没网"只说明此刻查不了。两个同时成立时前者更有信息量。
+            Text(L10n.t("网络连接失败"))
+                .font(settings.mainFont)
+                .foregroundStyle(poller.displayForegroundColor.opacity(0.5))
+                .lyricsTextStroke(settings.textStrokeEnabled, color: settings.textStrokeColor)
         } else if poller.isPlayingNow && !poller.hasLyricsContent {
             // 换到一首还没解析过的新歌,collector 后台搜索通常要几秒——这段空窗期跟"这首
             // 歌确实没有歌词/正在间奏"共用同一个 currentLine==nil,但含义完全不同,不能

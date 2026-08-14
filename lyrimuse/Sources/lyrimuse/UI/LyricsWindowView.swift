@@ -998,6 +998,12 @@ struct LyricsWindowView: View {
         if poller.isCurrentTrackInstrumental { return ("waveform", L10n.t("纯音乐")) }
         // 搜完确实没有 → 别再说"搜索中",理由见 poller.currentTrackHasNoLyrics。
         if poller.currentTrackHasNoLyrics { return ("text.badge.xmark", L10n.t("暂无歌词")) }
+        // 断网:collector 什么都查不到,而"全空不写缓存"的守卫让 hasLyricsContent 永远
+        // 是 false —— 不插这一档的话界面会一直显示"搜索歌词中…",而那句话在断网时永远
+        // 不会有下文。排在"暂无歌词"之后:那是明确结论,比"此刻没网"更有信息量。
+        if poller.collectorNetworkDown && !poller.hasLyricsContent {
+            return ("wifi.slash", L10n.t("网络连接失败"))
+        }
         if poller.isPlayingNow && !poller.hasLyricsContent { return ("magnifyingglass", L10n.t("搜索歌词中…")) }
         return ("text.quote", L10n.t("无歌词"))
     }

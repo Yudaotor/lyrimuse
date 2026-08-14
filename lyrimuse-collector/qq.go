@@ -40,7 +40,17 @@ func qqMusicURL(artist, title, album string) string {
 	}
 	// smartbox 无结果/无标题匹配时，退回 QQ 搜索链接：桌面能打开搜索页、绝不串到错歌
 	// (用户自己选)。不缓存，下次提交再试精确解析。
-	return "https://y.qq.com/n/ryqq/search?w=" + neturl.QueryEscape(artist+" "+title)
+	return qqSearchFallbackPrefix + "w=" + neturl.QueryEscape(artist+" "+title)
+}
+
+// qqSearchFallbackPrefix 是上面那个兜底搜索链接的前缀。单独拎出来是因为调用方需要能
+// **认出**这一档:它是纯本地拼接的,不需要任何网络请求就能得到,所以不能被当作"这首歌
+// 解析成功了"的证据(见 enrich.go 里 resolveEnrichAsync 的全空守卫)。
+const qqSearchFallbackPrefix = "https://y.qq.com/n/ryqq/search?"
+
+// isQQSearchFallbackURL 判断一个 QQ 音乐链接是不是"没查到,给个搜索页"的兜底值。
+func isQQSearchFallbackURL(u string) bool {
+	return strings.HasPrefix(u, qqSearchFallbackPrefix)
 }
 
 // qqMusicMatchCached 是 qqMusicURL 的富信息版本——"搜索候选歌词"弹窗展示每条候选

@@ -49,6 +49,13 @@ public final class LocalPlaybackSource: ObservableObject {
     /// 跟 isCurrentTrackInstrumental 互斥:纯音乐是"有依据地确认没有歌词",比这个更精确,
     /// 所以那一档单独判、并且排在前面(见各 View 的分支顺序)。
     @Published public private(set) var currentTrackHasNoLyrics: Bool = false
+
+    /// collector 报告"这一轮什么都没查到,是因为网络不通"(见 CollectorStatus)。
+    ///
+    /// 跟 currentTrackHasNoLyrics 是互补的两半:那个是"查过了,这首歌没有",这个是
+    /// "根本没查成"。没有它的话,断网时界面会一直停在"搜索歌词中…" —— 而那句话在
+    /// 断网状态下永远不会有下文。
+    @Published public private(set) var collectorNetworkDown: Bool = false
     // Spotify 广告插播——2026-08-03 补上:media-control 自己的文档确认广告播放时 album
     // 字段恒为空字符串,靠"当前是 Spotify 在报告 + album 为空"这个信号判断(见
     // apply() 里的计算);跟 isCurrentTrackInstrumental 同一个优先级问题,必须排在
@@ -540,6 +547,11 @@ public final class LocalPlaybackSource: ObservableObject {
         //
         // 代价是可控的:mtime 只是一次 stat,而重新解析只在文件真的被改写时发生 —— 那时候
         // 下一次 lookup() 本来也要重新解析(EnrichCacheReader 自己就是按 mtime 缓存的)。
+        // 跟下面读 enrich cache 的 mtime 挂在同一个节拍上(每次快照,约 2s 一次)。
+        // 成本是一次 stat —— CollectorStatus 自己按 mtime 缓存,文件没变就不会重新解码。
+        let networkDown = CollectorStatus.networkLooksDown
+        if networkDown != collectorNetworkDown { collectorNetworkDown = networkDown }
+
         let enrichMTime = EnrichCacheReader.fileModificationDate
         if trackChanged || !syncEngine.hasContent || enrichMTime != lastEnrichMTime {
             if trackChanged {

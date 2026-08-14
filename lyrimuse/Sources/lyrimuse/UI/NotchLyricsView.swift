@@ -325,6 +325,12 @@ struct NotchLyricsView: View {
                 Text(L10n.t("暂无歌词"))
                     .foregroundStyle(.white.opacity(0.7))
                     .shadow(color: .black.opacity(0.45), radius: 2, y: 1)
+            } else if poller.collectorNetworkDown && !poller.hasLyricsContent {
+                // 顺序理由同 LyricsOverlayView.mainLine 里那段:必须排在"搜索歌词中…"
+                // 之前、"暂无歌词"之后。
+                Text(L10n.t("网络连接失败"))
+                    .foregroundStyle(.white.opacity(0.7))
+                    .shadow(color: .black.opacity(0.45), radius: 2, y: 1)
             } else if poller.isPlayingNow && !poller.hasLyricsContent {
                 // 同 LyricsOverlayView.mainLine 的区分:currentLine==nil 可能是"还没解析
                 // 出这首歌的歌词"(collector 后台搜索中,见 poller.hasLyricsContent 注释),

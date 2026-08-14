@@ -669,10 +669,38 @@ func resolveEnrichAsync(key, artist, title, album string, durationSecs float64) 
 		delete(enrichInflight, key)
 		enrichMu.Unlock()
 	}()
+	// 观察这一轮的网络成败 —— 全空时要能区分"查过了,这首歌没有"和"根本没查成"。
+	// 必须用 per-round 的差值,不能用 networkLooksDown():那个读的是进程启动以来的累计
+	// 值,在常驻采集器里一旦早期有过成功就永远报"正常"(见 networkobs.go)。
+	roundStat := beginNetworkRound()
 	e := resolveTrackEnrichment(artist, title, album, durationSecs)
 	e.TS = time.Now().Unix()
+
+	// 网络结论**独立于**下面写不写缓存来下 —— 别把它挂在守卫分支里。
+	// 挂进去的话,只要有任何一个字段碰巧非空(下面那个搜索链接兜底就是),这条判断就再也
+	// 不会执行,而那恰恰是断网时必然发生的情况。
+	attempts, failures := roundStat()
+	switch {
+	case roundLooksNetworkDown(attempts, failures):
+		// 界面据此把"搜索歌词中…"换成"网络连接失败" —— 不然它会一直转下去,而断网时
+		// 那句话永远不会有下文(见 collectorstatus.go)。
+		markCollectorNetworkDown()
+	case attempts > 0:
+		// 这一轮真发出去过请求、且不是全挂 → 网络是通的。
+		// attempts==0(整轮都命中缓存,一个请求都没发)时什么都不做:它不构成任何证据。
+		clearCollectorNetworkDown()
+	}
+
 	// 只保留"解析到东西"的结果;全空(可能网络抽风)不写入,下次再试,别把偶发失败钉死。
-	if e.CoverURL == "" && e.Lyrics == "" && e.AppleURL == "" && e.QQURL == "" && e.NeteaseURL == "" {
+	//
+	// ⚠️ QQURL 必须排除掉"搜索链接兜底"这一档。qqMusicURL 在 smartbox 查不到时会拼一个
+	// 纯本地的搜索页 URL(见 qq.go,它自己也不缓存这个兜底值)——**它不需要网络就能得到**,
+	// 拿它当"解析到东西"的证据是假的。2026-08-15 实测:断网时这条守卫因此永不成立,于是
+	// 每首歌都会往永久缓存里写一条只有搜索链接、没有任何内容的条目。
+	// SpotifyURL 同样是本地拼的,所以它本来就不在这个判据里 —— 说明当初是想到了这一点的,
+	// 只是漏了 QQURL 也有本地兜底这条路。
+	hasRealQQURL := e.QQURL != "" && !isQQSearchFallbackURL(e.QQURL)
+	if e.CoverURL == "" && e.Lyrics == "" && e.AppleURL == "" && !hasRealQQURL && e.NeteaseURL == "" {
 		return
 	}
 	enrichMu.Lock()
