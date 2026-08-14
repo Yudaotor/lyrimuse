@@ -75,6 +75,12 @@ func main() {
 		runBackfillLastfmCLI(os.Args[2:])
 		return
 	}
+	// `collector healthcheck [-json] [-local-only]`:一次性诊断"歌词为什么不出来"
+	// (见 healthcheckcli.go)。跟上面几个一样,不进入常驻循环。
+	if len(os.Args) > 1 && os.Args[1] == "healthcheck" {
+		runHealthcheckCLI(os.Args[2:])
+		return
+	}
 	// `collector top-artists ...`:合并同名歌手后的 Top 榜(见 topartistscli.go)。
 	if len(os.Args) > 1 && os.Args[1] == "top-artists" {
 		runTopArtistsCLI(os.Args[2:])

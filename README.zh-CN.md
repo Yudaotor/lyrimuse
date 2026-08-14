@@ -135,6 +135,21 @@ QQ 音乐/网易云音乐/Spotify/自动识别这几个播放源支持额外需�
 
 不需要再配置任何其它东西才能看到歌词——上面提到的所有附加功能都是后续在设置里按需开启的。
 
+## 排查
+
+歌词不出来时，直接问 collector：
+
+```sh
+/Applications/Lyrimuse.app/Contents/Resources/collector healthcheck
+/Applications/Lyrimuse.app/Contents/Resources/collector healthcheck -local-only  # 不联网
+/Applications/Lyrimuse.app/Contents/Resources/collector healthcheck -json
+```
+
+它会检查那些**会静默地把链路搞坏**的东西——某个配置字段没解析成功、一个歌词源都没启用、
+缓存文件读不了、歌词导出目录写不进去——然后拿两首真实曲目（一中一英，避免把某个曲库的
+盲区误报成故障）去探五个歌词源。单个源挂掉只报 warn，只有全部挂掉才算 error：还剩四个
+源照样能出歌词。
+
 ## 卸载
 
 把 `Lyrimuse.app` 拖进废纸篓**是不够的**。后台采集服务在 launchd 里注册的是 `KeepAlive`

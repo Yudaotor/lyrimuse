@@ -135,6 +135,23 @@ Open Lyrimuse from `/Applications` — the first-run wizard walks you through pi
 
 You don't need to configure anything else to get lyrics — every optional extra above is configured later, entirely from Settings.
 
+## Troubleshooting
+
+If lyrics stop appearing, ask the collector what is wrong:
+
+```sh
+/Applications/Lyrimuse.app/Contents/Resources/collector healthcheck
+/Applications/Lyrimuse.app/Contents/Resources/collector healthcheck -local-only  # no network
+/Applications/Lyrimuse.app/Contents/Resources/collector healthcheck -json
+```
+
+It checks the things that silently break the pipeline — a config field that
+failed to parse, no lyric sources enabled, an unreadable cache, a lyrics export
+directory that is not writable — and then probes the five lyric sources with two
+real lookups (one Chinese, one English, so that neither catalogue's blind spot
+looks like an outage). A single dead source is a warning; only all of them
+failing is an error, because the other four still produce lyrics.
+
 ## Uninstalling
 
 Dragging `Lyrimuse.app` to the Trash is **not** enough. The background collector is

@@ -66,6 +66,13 @@ screencapture -x -o -l <窗口ID> /tmp/shot.png                   # 只截那一
 它用自己的一次性 job 造出 running / 已退出 / 未注册三种状态，跑完自动注销并核对真实服务
 没被动过。
 
+排查"歌词为什么不出来"先跑这个，别上来就翻日志：
+
+```sh
+/Applications/Lyrimuse.app/Contents/Resources/collector healthcheck -local-only  # 快，不联网
+/Applications/Lyrimuse.app/Contents/Resources/collector healthcheck              # 含五源探测，约 30s
+```
+
 **`lyrimuse/scripts/uninstall.sh` 是这个仓库里唯一会删用户数据的脚本，不要随手跑它。**
 不带参数是只读报告（安全）；`--services` 会真的把 collector 停掉；`--purge` 会删掉歌词
 缓存（含用户手工修正过的内容，不可逆）。改它之后跑 `uninstall_test.sh` ——那个测试搭一套
