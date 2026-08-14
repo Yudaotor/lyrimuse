@@ -90,7 +90,15 @@ func main() {
 
 	cfg, err := loadConfig(*cfgPath)
 	if err != nil {
+		// 走到这儿只剩"文件在但读不出来"(权限/IO)一种情况——内容有问题已经在
+		// loadConfig 里降级成 loadIssues 了,不再打死进程。见 loadConfig 的注释:
+		// KeepAlive 下 Fatal 等于崩溃循环,而核心功能根本不需要配置。
 		log.Fatalf("load config: %v", err)
+	}
+	for _, issue := range cfg.loadIssues {
+		// 这条要显眼:配置没有完整生效,但服务照常在跑,用户看到的是"某个功能不工作"
+		// 而不是"服务挂了",没有这行日志就无从下手。
+		log.Printf("config: %s", issue)
 	}
 	// listenbrainz_token 是可选的:没填也能正常启动,只是不会提交到 ListenBrainz(见
 	// lbClient.submit 里的空 token 直接跳过网络调用)——media-control 采集、歌词/封面

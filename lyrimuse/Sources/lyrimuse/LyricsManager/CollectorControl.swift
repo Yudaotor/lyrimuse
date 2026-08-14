@@ -14,8 +14,25 @@ private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "collec
 public enum CollectorControl {
     public static let label = "com.lyrimuse.collector"
 
+    /// 重启 collector,并**确认新进程真的起来了**才返回 true。
+    ///
+    /// 上面那段注释早就写明 `kickstart -k` 只是给 launchd 递一条控制指令、不等目标进程
+    /// 启动完 —— 可它的退出码一直被当成"应用成功"返回给调用方(歌词管理保存/删除、功能
+    /// 开关保存都拿它当准)。launchd 收下指令之后进程起不起得来是另一回事(二进制被换掉、
+    /// LWCR 约束陈旧、配置让它一启动就退),那些情况下用户看到的是"已保存",实际什么都没
+    /// 生效。
+    ///
+    /// 所以 kickstart 之后轮询真实状态。`-k` 是**先杀再起**,只看到"在跑"还不够——那可能
+    /// 是还没被杀掉的旧进程,得等到 pid 变了才算数。
+    private static let restartConfirmTimeout: TimeInterval = 3
+    private static let restartPollInterval: TimeInterval = 0.15
+
     @discardableResult
     public static func restartAndWait() -> Bool {
+        // 先记下旧 pid,用来判断看到的是不是同一个进程。
+        var previousPid: Int32?
+        if case .running(let pid) = CollectorServiceManager.state { previousPid = pid }
+
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/bin/launchctl")
         process.arguments = ["kickstart", "-k", "gui/\(getuid())/\(label)"]
@@ -26,13 +43,26 @@ public enum CollectorControl {
             return false
         }
         process.waitUntilExit()
-        let ok = process.terminationStatus == 0
-        if ok {
-            logger.info("restarted collector via launchctl kickstart")
-        } else {
+        guard process.terminationStatus == 0 else {
             logger.error("launchctl kickstart exited with status \(process.terminationStatus)")
+            return false
         }
-        return ok
+
+        let deadline = Date().addingTimeInterval(restartConfirmTimeout)
+        while Date() < deadline {
+            Thread.sleep(forTimeInterval: restartPollInterval)
+            let state = CollectorServiceManager.state
+            if case .running(let pid) = state {
+                // pid 没变说明 `-k` 还没把旧进程杀掉,继续等。
+                if let previousPid, pid == previousPid { continue }
+                logger.info("collector restarted and confirmed running (pid \(pid))")
+                return true
+            }
+        }
+
+        // 超时:launchd 收下了指令,但这段时间里始终没看到一个新进程。
+        logger.error("collector did not come back after kickstart — state=\(String(describing: CollectorServiceManager.state), privacy: .public)")
+        return false
     }
 
     // 跟上面 restartAndWait() 是同一个操作,只是挪到后台线程跑——ConfigStore/

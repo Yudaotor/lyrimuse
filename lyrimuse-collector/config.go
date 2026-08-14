@@ -54,6 +54,10 @@ type config struct {
 	// 平台时不会互相污染。
 	DingtalkSignSecret string `json:"dingtalk_sign_secret,omitempty"`
 	FeishuSignSecret   string `json:"feishu_sign_secret,omitempty"`
+
+	// 这次加载中被跳过的字段,给调用方打日志用。小写不导出,json 包不会碰它——
+	// Go 侧从来只读 config.json、不写回(写入方是 Swift 那边的 ConfigStore)。
+	loadIssues []string
 }
 
 // lastfmBridgeAPIKey 解析桥接/听歌报告/Top10 歌手统计这几个只读 Last.fm 调用该用
@@ -67,14 +71,24 @@ func (c *config) lastfmBridgeAPIKey() string {
 	return c.LastfmAPIKey
 }
 
+// loadConfig 读配置。**除了文件真的读不出来,它不会因为内容有问题而失败**。
+//
+// 原来这里是一次严格的 json.Unmarshal,任何一个字段类型写错(手改配置、旧版本写下的
+// 老格式、导入了别的机器的配置)都会让 main.go 的 log.Fatalf 把进程打死;而 collector
+// 挂的是 KeepAlive 的 LaunchAgent,于是变成起来就死的崩溃循环。代价完全不成比例:
+// 采集播放状态、解析歌词、写本地缓存这些**核心功能一个字段都不需要**(main.go 里那句
+// "no listenbrainz_token configured ... still work" 说的就是这件事),坏掉的往往只是
+// 一个通知 webhook。一个字段的格式问题不该让悬浮歌词整个不显示。
+//
+// 所以改成逐字段解:能认的认下来,认不下来的记进 loadIssues 交给调用方打日志。
 func loadConfig(path string) (*config, error) {
 	cfg := &config{}
 	data, err := os.ReadFile(path)
 	if err == nil {
-		if err := json.Unmarshal(data, cfg); err != nil {
-			return nil, fmt.Errorf("parse config %s: %w", path, err)
-		}
+		cfg.loadIssues = decodeConfigPerField(data, cfg)
 	} else if !errors.Is(err, os.ErrNotExist) {
+		// 只有这一种情况仍然是硬失败:文件在那儿但读不了(权限/IO),这跟"内容有问题"
+		// 不同——它意味着我们对配置一无所知,而且重试很可能还是这个结果。
 		return nil, fmt.Errorf("read config %s: %w", path, err)
 	}
 	if v := os.Getenv("LISTENBRAINZ_TOKEN"); v != "" {
@@ -92,4 +106,36 @@ func loadConfig(path string) (*config, error) {
 		cfg.NotificationPlatform = "bark"
 	}
 	return cfg, nil
+}
+
+// decodeConfigPerField 把每个顶层 key 单独解一遍,一个字段的格式问题只影响它自己。
+// 返回被跳过的字段说明(不含字段值——配置里有 token/secret/session key,这些串一个字
+// 都不该出现在日志里)。
+//
+// 单独解的做法是"把这个 key 重新包成只含它的一份 JSON,再 Unmarshal 进 cfg 的副本",
+// 而不是用反射按 tag 找字段:让 encoding/json 自己去做 key→字段 的映射,大小写规则、
+// 内嵌类型、omitempty 这些全都跟一次性解出来时**完全一致**,不会因为手写映射而产生
+// 第二套语义。副本成功了才写回 cfg,失败的那次不会留下半解析的痕迹。
+func decodeConfigPerField(data []byte, cfg *config) []string {
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		// 整份文件的 JSON 语法就是坏的(少个括号、逗号),没有任何字段边界可言,一个也
+		// 救不回来。仍然不失败:带着默认值继续跑,采集/歌词/缓存照常。
+		return []string{fmt.Sprintf("整个配置文件解析失败(%v),本次按默认值运行", err)}
+	}
+	var issues []string
+	for key, rawVal := range raw {
+		single, err := json.Marshal(map[string]json.RawMessage{key: rawVal})
+		if err != nil {
+			issues = append(issues, fmt.Sprintf("%q: %v", key, err))
+			continue
+		}
+		probe := *cfg
+		if err := json.Unmarshal(single, &probe); err != nil {
+			issues = append(issues, fmt.Sprintf("%q 格式不对,已跳过(%v)", key, err))
+			continue
+		}
+		*cfg = probe
+	}
+	return issues
 }
