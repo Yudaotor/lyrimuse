@@ -290,7 +290,11 @@ struct NotchLyricsView: View {
     private var lyricContent: some View {
         Group {
             if let words = poller.currentLine?.words, !words.isEmpty {
-                TimelineView(.animation(paused: !poller.isPlayingNow)) { context in
+                // 帧率上限见 WordKaraokeGradient.refreshInterval。跟悬浮歌词一样,这里也
+                // 保持"TimelineView 包住整行"而不下沉到每个字 —— 外层同样套着
+                // .compositingGroup()+.shadow(),理由见 LyricsOverlayView.mainLine 那段。
+                TimelineView(.animation(minimumInterval: WordKaraokeGradient.refreshInterval,
+                                        paused: !poller.isPlayingNow)) { context in
                     // 加上 currentLyricsOffsetMs,理由跟 LyricsOverlayView.mainLine 同一段
                     // 注释——不加的话"当前词判定"和"填色进度"用的时间基准对不上,会出现填到
                     // 一半就卡住的现象。

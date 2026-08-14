@@ -122,6 +122,10 @@ func main() {
 	if lyricsDir == "" {
 		lyricsDir = filepath.Join(filepath.Dir(*cfgPath), "lyrics")
 	}
+	// 存量 key 归一化,必须夹在这里:要在 importLyricsFromFiles() 之前(否则老文件会按
+	// 旧头部标签把刚合并掉的条目又导回来,而且两份文件抢同一个 key,内容每次重启随机翻转),
+	// 又要在 lyricsDir 定下来之后(它得删掉落选条目的导出文件)。见 enrichkey.go。
+	migrateEnrichKeys()
 	importLyricsFromFiles()
 	// 夹在 import 和 export 之间:见 invalidateStaleTranslations 的注释——前者让
 	// lyrics/ 文件夹赢,后者负责把这里清空的译文同步成删掉对应的 .tr.lrc。

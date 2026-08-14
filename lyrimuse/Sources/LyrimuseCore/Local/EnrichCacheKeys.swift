@@ -42,6 +42,77 @@ public enum EnrichCacheKeys {
     // 跟 collector/lyricsexport.go 的同名变量逐一对应。
     public static let lyricsFileSuffixes = [".lrc", ".tr.lrc", ".roma.lrc", ".yrc"]
 
+    // ---- 缓存 key 的归一化:跟 collector/enrichkey.go 逐条对应 ----
+    //
+    // 两边必须给出**逐字节相同**的 key,否则 collector 按归一化 key 写、这边按原样拼的 key
+    // 查,悬浮窗会直接查不到歌词(而不是显示旧的那份 —— 更难发现)。lyrimuse-selftest 里
+    // 用跟 Go 表驱动测试同一组用例锁死这份对应关系。
+    //
+    // 为什么要归一化,见 enrichkey.go 顶部那段长注释:同一首歌在不同播放器里歌名拼法不同
+    // (`不散的筵席（I Miss You）` vs `不散的筵席`),原样拼 key 会存成两条、各自选中不同的
+    // 歌词源,于是"用哪个播放器听,歌词推进的节奏就不一样"。
+
+    // 括号里出现这些词说明它标的是另一个**录音版本**,不是译名 —— 保留。
+    // 顺序/内容跟 enrichkey.go 的 enrichKeyVersionWords 一致。
+    static let versionWords = [
+        "remix", "mix", "live", "acoustic", "instrumental", "inst", "demo", "cover",
+        "remaster", "version", "ver.", "edit", "extended", "radio", "karaoke",
+        "reprise", "feat", "ft.", "featuring", "session", "mono", "stereo", "dub",
+        "unplugged", "acappella", "a cappella",
+        "interlude", "intro", "outro", "skit", "prelude", "overture",
+        "现场", "伴奏", "翻唱", "重制", "修复", "版", "纯音乐", "前奏", "间奏",
+    ]
+
+    private static let openBrackets: Set<Character> = ["（", "(", "[", "【"]
+    private static let closeBrackets: Set<Character> = ["）", ")", "]", "】"]
+
+    /// collector 的 cleanMediaTag 的 Swift 版:各种不换行/全角空格折成普通空格,零宽字符
+    /// 删掉,连续空白折成一个并去掉首尾。
+    public static func cleanTag(_ s: String) -> String {
+        let mapped = s.map { c -> Character? in
+            switch c {
+            case "\u{00a0}", "\u{2007}", "\u{202f}", "\u{3000}": return " "
+            case "\u{200b}", "\u{200c}", "\u{200d}", "\u{feff}": return nil
+            default: return c
+            }
+        }.compactMap { $0 }
+        return String(mapped).split(separator: " ", omittingEmptySubsequences: true)
+            .joined(separator: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// 反复剥掉歌名结尾的译名括号,碰到版本标记就停手;剥到空串则整个放弃(有些曲目的歌名
+    /// 本身就是一对括号,比如 `(Interlude)`)。只看**结尾**那一组括号,中间的不动。
+    public static func normalizedTitle(_ title: String) -> String {
+        var t = cleanTag(title)
+        while true {
+            let trimmed = t.trimmingCharacters(in: .whitespaces)
+            guard let last = trimmed.last, closeBrackets.contains(last) else { return t }
+            // 往回找最近的开括号;中间不能再夹别的闭括号(跟 Go 那条正则的 [^）)\]】]* 等价)。
+            var idx = trimmed.index(before: trimmed.endIndex)
+            var openIdx: String.Index?
+            while idx > trimmed.startIndex {
+                idx = trimmed.index(before: idx)
+                let c = trimmed[idx]
+                if closeBrackets.contains(c) { return t }
+                if openBrackets.contains(c) { openIdx = idx; break }
+            }
+            guard let openIdx else { return t }
+            let inner = String(trimmed[trimmed.index(after: openIdx)..<trimmed.index(before: trimmed.endIndex)])
+                .lowercased()
+            if versionWords.contains(where: { inner.contains($0) }) { return t }
+            let head = String(trimmed[trimmed.startIndex..<openIdx])
+                .trimmingCharacters(in: .whitespaces)
+            if head.isEmpty { return t }
+            t = head
+        }
+    }
+
+    /// 歌词缓存 key 的唯一构造点(Swift 侧)。跟 collector 的 enrichKey 逐字节一致。
+    public static func normalizedKey(artist: String, title: String, album: String) -> String {
+        cleanTag(artist) + "|" + normalizedTitle(title) + "|" + cleanTag(album)
+    }
+
     // 跟 collector/lyricsexport.go 的 sanitizeLyricsFilename 逐字对应的 Swift 版本:
     // "|" 换成 " - ",再把文件系统不安全的字符转成下划线。两边各自维护而不是让 Swift 调
     // Go 子进程,是因为这纯粹是确定性的字符替换,没有会随时间演进的业务判断。

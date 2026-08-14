@@ -36,7 +36,11 @@ import (
 // albumPrefetchMaxTracks 是安全阀——防止专辑名字段被打上"整个作品集"这类离谱大合集
 // (几十上百首)时,一次性炸出上百个并发解析请求。正常专辑几首到二十来首都远低于这个数,
 // 不会被这个上限影响。
-const albumPrefetchMaxTracks = 60
+// 2026-08-14 从 60 收到 30:闸门从"专辑名必须完全相等"放宽到"宽松包含"之后,这个上限
+// 才真正开始起兜底作用 —— 放进来的可能是同一张专辑的加长版(Bad 25th Anniversary 24 首
+// vs 原版 11 首)。正常专辑几首到二十来首,30 够用;超过的多半是合集,不值得为它一次性
+// 炸出几十个解析请求。
+const albumPrefetchMaxTracks = 30
 
 var (
 	prefetchMu     sync.Mutex
@@ -66,11 +70,15 @@ func prefetchAlbumSiblings(currentArtist, currentTitle, album, bundleID string) 
 			log.Printf("album prefetch: skipping %q (%d tracks, over the %d-track safety cap)", album, len(tracks), albumPrefetchMaxTracks)
 			return
 		}
+		queued := 0
 		for _, t := range tracks {
 			if t.title == "" || (t.title == currentTitle && t.artist == currentArtist) {
 				continue // 当前正在播的这首已经走正常路径解析,不用重复触发
 			}
-			key := t.artist + "|" + t.title + "|" + album
+			// 走 enrichKey 而不是自己拼:这条路径的曲目名来自**歌词平台**(网易云的曲目
+			// 表),跟播放器报的拼法天然不一致 —— 播放器给 `不散的筵席（I Miss You）`、
+			// 网易云给 `不散的筵席`,自己拼就等于每张专辑都预取出一批重复条目。
+			key := enrichKey(t.artist, t.title, album)
 			enrichMu.Lock()
 			_, exists := enrichCache[key]
 			inflight := enrichInflight[key]
@@ -82,8 +90,13 @@ func prefetchAlbumSiblings(currentArtist, currentTitle, album, bundleID string) 
 			if !eligible {
 				continue // 已经解析过、或者已经有别的 goroutine 在解析,不重复起
 			}
+			queued++
 			go resolveEnrichAsync(key, t.artist, t.title, album, t.duration)
 		}
+		// 成功也打一条。原来这个函数**只在超上限被跳过时**才打日志,正常路径一行不打 ——
+		// 于是"预取到底跑没跑"完全不可观测:日志里没记录,既可能是没跑、也可能是跑得好好的,
+		// 分不开。这次排查就卡在这一点上。
+		log.Printf("album prefetch: %q → %d tracks, %d queued", album, len(tracks), queued)
 	}()
 }
 
@@ -103,12 +116,23 @@ func albumTracks(artist, title, album, bundleID string) ([]albumTrack, bool) {
 	if ne.AlbumID <= 0 {
 		return nil, false
 	}
-	// 专辑名必须精确相等才预取。网易云同一张专辑有多个实体(Bad / Bad (Remastered) /
-	// Bad 25th Anniversary 24 首 / Bad (Remix EP)),而 albumScore 的"宽松包含"会把它们
-	// 都算命中 —— 选到 25 周年版就会多解析十几首根本没在放的曲目。宁可不预取。
-	// albumScore 满分 200 = normLoose 后完全相等;100 是"宽松包含",正是会把
-	// "Bad" 和 "Bad 25th Anniversary" 混为一谈的那一档,所以这里要求满分。
-	if albumScore(ne.Album, album) < 200 {
+	// 专辑名至少要"宽松包含"(albumScore >= 100)才预取。
+	//
+	// 2026-08-14 修正过一次:这里原来要求满分 200(normLoose 后完全相等),理由是怕选到
+	// 精选集。把三档分数真的量出来之后,那个担心站不住:
+	//
+	//   albumScore("神经志",                "神經志 The Journal")   = 100  ← 想要的
+	//   albumScore("Bad",                   "Bad 25th Anniversary") = 100  ← 怕的
+	//   albumScore("King of Pop [Box set]", "Bad")                  =   0  ← 最怕的,本来就进不来
+	//
+	// 真正灾难性的那种(76 首的合集、上百首的作品集)名字跟本地专辑毫不沾边,天然是 0 分,
+	// 不需要 200 这道闸去挡。而 200 挡掉的全是"同一张专辑、写法不同"——繁简(normLoose
+	// 已经归一)、带英文副标题、带 (Remastered) 后缀,这些在中文曲库里极其常见。用户实测:
+	// 用 Spotify 放《神經志 The Journal》,每首歌都被这一行拦下,功能等于没上线。
+	//
+	// 100 这档剩下的风险只是"同一张专辑的另一个版本"(25 周年版 24 首 vs 原版 11 首),
+	// 多解析的仍是**同一张专辑里**的歌,由下面的曲目数上限兜底就够了。
+	if albumScore(ne.Album, album) < 100 {
 		log.Printf("album prefetch: netease album %q != local %q, skipping", ne.Album, album)
 		return nil, false
 	}

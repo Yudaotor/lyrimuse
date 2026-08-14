@@ -51,7 +51,14 @@ public struct LyricsColumnWidths: Equatable, Sendable {
         case 0:
             // 边界右移(dx > 0)= 歌名变宽 → 歌手必须变窄,所以是减号。
             // 上限还要保证歌名不低于 minTitle。
-            let room = totalWidth - chrome - minTitle - start.album - start.source
+            //
+            // totalWidth <= 0 = 调用方还没量到可用宽度(首帧、或列表当前一行都没有)。
+            // 这时不能照常算 room:算出来是个负数,clamp 里 hi < lo 就直接返回下限,表现成
+            // "一拖歌手就弹到最窄"。没量到就只受单列上限约束,等量到之后 fitted 会把越界的
+            // 值收敛回来——这一档只在拿不到测量值时走,不是常规路径。
+            let room = totalWidth > 0
+                ? totalWidth - chrome - minTitle - start.album - start.source
+                : maxColumn
             out.artist = clamp(start.artist - dx, minColumn, min(maxColumn, room))
         case 1:
             // 内部边界:歌手 + 专辑 之和不变 → 歌名宽度完全不受影响,不需要看 totalWidth。

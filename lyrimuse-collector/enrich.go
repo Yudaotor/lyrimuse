@@ -200,7 +200,7 @@ func trackEnrichment(artist, title, album, bundleID string, durationSecs float64
 	if isAdBreak(bundleID, album) {
 		return nil
 	}
-	key := artist + "|" + title + "|" + album
+	key := enrichKey(artist, title, album)
 	enrichMu.Lock()
 	e, ok := enrichCache[key]
 	if !ok {

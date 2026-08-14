@@ -367,8 +367,42 @@ struct LyricsWindowView: View {
                 // 平移已经量好的内容。
                 VStack(alignment: .leading, spacing: lyricLineSpacing) {
                     ForEach(Array(poller.allLines.enumerated()), id: \.element.id) { index, item in
-                        lineView(item, distance: distance(for: index), isActive: item.id == activeID)
-                            .id(item.id)
+                        // .equatable():没有它,**每一行**都会跟着整页 body 重算一遍。
+                        //
+                        // 2026-08-14 用 sample 量到的:稳定播放期间主线程有 ~22% 的时间耗在
+                        // NSHostingView.layout → ViewGraphRootValueUpdater.render 里,栈里能
+                        // 看到 ForEachChild.updateValue → lineView,也就是几十行全在重建。
+                        // LyricsWindowView 订阅的是整个 PlaybackCoordinator(二十来个
+                        // @Published),任何一个变动都会重算 body;而行视图带闭包参数
+                        // (onTap/onHover),函数值永远不相等,SwiftUI 自带的结构比较救不了,
+                        // 必须显式给一个只比较**值输入**的 ==。
+                        LyricsLineRow(
+                            item: item,
+                            distance: distance(for: index),
+                            isActive: item.id == activeID,
+                            isHovered: hoveredLineID == item.id,
+                            isPlaying: poller.isPlayingNow,
+                            fontSize: lyricFontSize,
+                            romaFontSize: romaFontSize,
+                            translationFontSize: translationFontSize,
+                            onArtwork: hasArtworkBackground,
+                            showRomanization: settings.showRomanization,
+                            showTranslation: settings.showTranslation,
+                            reduceMotion: reduceMotion,
+                            displayScale: displayScale,
+                            onHover: { inside in
+                                if inside { hoveredLineID = item.id }
+                                else if hoveredLineID == item.id { hoveredLineID = nil }
+                            },
+                            onTap: {
+                                // 减去当前歌词偏移:引擎判定"现在是哪一行"时会把 offsetMs 加到
+                                // 播放位置上(见 activeLine),这里不减回去的话,跳过去之后落在
+                                // 的会是隔壁行。
+                                poller.seek(toMs: max(0, item.timeMs - poller.currentLyricsOffsetMs))
+                            }
+                        )
+                        .equatable()
+                        .id(item.id)
                     }
                 }
                 .padding(.vertical, 88)
@@ -881,28 +915,30 @@ struct LyricsWindowView: View {
 
     // 距当前行的行数差——按下标算,不按内容(副歌重复句内容相同但下标不同,详见
     // LyricsSyncEngine.activeLineIndex 的注释)。nil(还没播到第一句)统一按"远"处理。
+    /// 视觉上真正有区别的最大行距。
+    ///
+    /// 不透明度 `max(0.35, 0.55 - d*0.05)` 到 d=4 就压到下限 0.35,模糊 `min(d*1.1, 4)`
+    /// 到 d≈3.64 就封顶 —— 也就是说 d≥4 的行,**画出来一模一样**。
+    ///
+    /// 夹在这里的收益不是省几次乘法,而是让远处那几十行的 distance **不再变化**:
+    /// LyricsLineRow 是 Equatable 的,输入没变就整行跳过重算,也不会去跑那条
+    /// `.animation(value: distance)`。换行时真正需要重画/重跑动画的从"整表"缩到当前行
+    /// 上下各 4 行。这一步是像素级等价的,不是拿观感换性能。
+    private static let maxVisualDistance = 4
+
     private func distance(for index: Int) -> Int? {
         guard let activeIdx = poller.currentLineIndex else { return nil }
-        return abs(index - activeIdx)
+        return min(abs(index - activeIdx), Self.maxVisualDistance)
     }
 
     // Apple Music 歌词页的景深:当前行完全清晰,其余行统一压到低不透明度、并随距离
     // 加重高斯模糊——非当前行之间的不透明度差异很小(0.50 → 0.35 缓降),远近感主要靠
     // 模糊量区分。nil(还没播到第一句)整页轻虚化,保持可读。
-    private func lineOpacity(forDistance distance: Int?) -> Double {
-        guard let d = distance else { return 0.45 }
-        if d == 0 { return 1 }
-        return max(0.35, 0.55 - Double(d) * 0.05)
-    }
 
     // 距离越远、高斯模糊越重——1.1pt/行、封顶 4pt。2026-08-04 第一版按 1.6pt/行封顶
     // 6pt,用户对照 AM 同曲截图反馈"太糊了,后面几行都失真了"——AM 最远的可见行仍然
     // 认得出字形(模糊半径约为字号的 12~14%,6pt/28pt 是 21%),照它调轻。SwiftUI 的
     // .blur() 本身就是可动画属性,复用调用点已有的 .animation(value: distance)。
-    private func lineBlur(forDistance distance: Int?) -> CGFloat {
-        guard let d = distance else { return 2 }
-        return min(CGFloat(d) * 1.1, 4)
-    }
 
     private var hasArtworkBackground: Bool { poller.artworkData != nil }
 
@@ -954,6 +990,10 @@ struct LyricsWindowView: View {
     // 广告/纯音乐两个分支必须排在"还在搜索中"前面,理由跟 LyricsOverlayView.mainLine
     // 一致,见 poller.isCurrentTrackAdBreak / isCurrentTrackInstrumental 定义处的注释。
     private var emptyStateSpec: (icon: String, text: String) {
+        // 什么都没在放(播放列表放完/播放器退出)—— 这时候写"无歌词"是答非所问:不是这首歌
+        // 没词,是压根没有"这首歌"。判据用曲名为空:停播时 LocalPlaybackSource 会把曲目信息
+        // 一并清掉(见 clearIfWasPlaying),播放中/暂停中它一定非空。
+        if poller.title.isEmpty { return ("music.note", L10n.t("没有在播放")) }
         if poller.isCurrentTrackAdBreak { return ("megaphone", L10n.t("广告中")) }
         if poller.isCurrentTrackInstrumental { return ("waveform", L10n.t("纯音乐")) }
         // 搜完确实没有 → 别再说"搜索中",理由见 poller.currentTrackHasNoLyrics。
@@ -981,86 +1021,139 @@ struct LyricsWindowView: View {
     }
 
     /// 这一行是不是把读音逐词标进正文了(标了就别再单独渲染一整行罗马音)。
-    private func usesPerWordRomanization(_ item: LyricsWindowLine, isActive: Bool) -> Bool {
-        isActive && settings.showRomanization && item.line.wordGroups?.isEmpty == false
+}
+
+// 一行歌词。
+//
+// 2026-08-14 从 LyricsWindowView 的几个 @ViewBuilder 方法里拆出来变成独立的 View struct,
+// 起因是用户反馈"换行滚动时有卡顿/掉帧感"。用 sample 量到的现场:稳定播放期间主线程约
+// 22% 的时间耗在 NSHostingView.layout → ViewGraphRootValueUpdater.render,栈里能看到
+// ForEachChild.updateValue → lineView —— 也就是几十行歌词在跟着整页反复重建。
+//
+// 为什么原来会全表重建:LyricsWindowView 用 @ObservedObject 订阅了整个 PlaybackCoordinator
+// (二十来个 @Published:封面、音量、播放模式、收藏状态、暂停位置…),其中任何一个变动都
+// 会让整个 body 重算;方法形式的行视图没有独立身份,只能跟着一起重建。拆成 struct +
+// Equatable 之后,只有输入真的变了的那几行才会重算 —— 换行时变的是当前行和它的邻居。
+//
+// Equatable 必须**手写**:行视图带 onTap/onHover 两个闭包参数,函数值永远不相等,
+// SwiftUI 自带的结构化比较对带闭包的视图直接失效,只比较值输入才有意义。
+private struct LyricsLineRow: View, Equatable {
+    let item: LyricsWindowLine
+    let distance: Int?
+    let isActive: Bool
+    let isHovered: Bool
+    // 逐字填色的 TimelineView 用它决定要不要暂停。传值而不是在这里再订阅一次
+    // PlaybackCoordinator —— 那样等于把刚拆掉的全量订阅又加回来。
+    let isPlaying: Bool
+    let fontSize: CGFloat
+    let romaFontSize: CGFloat
+    let translationFontSize: CGFloat
+    let onArtwork: Bool
+    let showRomanization: Bool
+    let showTranslation: Bool
+    let reduceMotion: Bool
+    let displayScale: CGFloat
+    let onHover: (Bool) -> Void
+    let onTap: () -> Void
+
+    static func == (a: LyricsLineRow, b: LyricsLineRow) -> Bool {
+        // item 只比 id:id 里带了曲目标识 + 行下标(见 LyricsWindowLine),同 id 必然同内容。
+        a.item.id == b.item.id
+            && a.distance == b.distance
+            && a.isActive == b.isActive
+            && a.isHovered == b.isHovered
+            && a.isPlaying == b.isPlaying
+            && a.fontSize == b.fontSize
+            && a.romaFontSize == b.romaFontSize
+            && a.translationFontSize == b.translationFontSize
+            && a.onArtwork == b.onArtwork
+            && a.showRomanization == b.showRomanization
+            && a.showTranslation == b.showTranslation
+            && a.reduceMotion == b.reduceMotion
+            && a.displayScale == b.displayScale
+    }
+
+    private var secondaryTextColor: Color { onArtwork ? .white.opacity(0.6) : .secondary }
+
+    /// 对唱歌词的左右分栏(见 LyricDuet)。
+    ///
+    /// nil = 这首歌没有演唱者标记(绝大多数歌),按这个窗口原本的排版走 —— 左对齐。
+    private var side: LyricDuet.Side { item.line.side ?? .leading }
+
+    private var alignment: Alignment {
+        switch side {
+        case .leading: return .leading
+        case .trailing: return .trailing
+        case .center: return .center
+        }
+    }
+
+    private var textAlignment: TextAlignment {
+        switch side {
+        case .leading: return .leading
+        case .trailing: return .trailing
+        case .center: return .center
+        }
+    }
+
+    private var rowAlignment: WrapLayout.RowAlignment {
+        switch side {
+        case .leading: return .leading
+        case .trailing: return .trailing
+        case .center: return .center
+        }
+    }
+
+    private var usesPerWordRomanization: Bool {
+        isActive && showRomanization && item.line.wordGroups?.isEmpty == false
             && item.line.words != nil
     }
 
-    /// 正在唱的那个字微微上浮,唱完落回 —— Apple Music 的逐字效果不只是填色,字本身会
-    /// 抬一下,一行看下来像一道波沿着字往右走。
-    ///
-    /// 用 sin(π·进度) 而不是"到了就抬起、过了就落下":那样是两个突变,看起来是在"跳";
-    /// 正弦在 0 和 1 两端的斜率都是 0,抬起和落回都自然收尾,峰值正好落在这个字唱到一半时。
-    /// 幅度跟字号挂钩(7%),不同字号下观感一致;reduceMotion 时整个关掉。
-    /// 字抬起来之后**保持**,直到这一行唱完换下一行才整体落回 —— 唱过的那一截一直浮在
-    /// 上面,像一级台阶跟着演唱往右推。
-    ///
-    /// ⚠️ 不是"抬一下再落回"。2026-08-10 我先按点头式做了一版(sin(π·进度),峰值在字中间、
-    /// 结束落回),用户明确纠正:预期是第一个字抬起后一直不下来,第二个字抬起时第一个仍然
-    /// 浮着,整行结束才一起下去。落回由"这一行不再是当前行"接管 —— 非当前行走的是纯文本
-    /// 分支,本来就没有位移,跟着滚动淡出一起发生,不需要额外补一段落回动画。
-    ///
-    /// 抬升过程用 sin(p·π/2):从 0 平滑升到 1、终点斜率为 0,停住时不会有"撞顶"感;
-    /// 时长取固定 320ms(不超过这个字自己的时长,短音符不被拉长),跟音符按住多久无关。
-    private static let karaokeRiseWindowMs: Double = 320
-
-    private func karaokeRise(_ w: SyncedLyricWord, atMs currentMs: Int) -> CGFloat {
-        guard !reduceMotion else { return 0 }
-        let elapsed = Double(currentMs - w.startMs)
-        guard elapsed > 0 else { return 0 } // 还没唱到这个字
-        let window = min(Self.karaokeRiseWindowMs, Double(max(1, w.durationMs)))
-        let p = min(1, elapsed / window)
-        // 抬到顶之后这个字会**停在那儿好几秒**(抬起来不落回,一直到换行)。原来的幅度是
-        // lyricFontSize * 0.07,28pt 字号下 = 1.96pt —— 在 1x 外接屏上就是停在 1.96 个
-        // 物理像素这种半吊子位置上,整行文字被垂直重采样、边缘糊掉,而且是一直糊着,不是
-        // 动画期间一闪而过。把幅度收到最近的整数个**设备像素**:1x 屏上取 2px、2x 屏上
-        // 仍是 1.96pt(=3.92px→4px/2),视觉幅度几乎没变,但停住时字是压在像素格上的。
-        // 爬升途中依然是连续值 —— 那会儿字本来就在动,没人会盯着一帧看。
-        let scale = max(1, displayScale)
-        let amplitude = (lyricFontSize * 0.07 * scale).rounded() / scale
-        return -sin(p * .pi / 2) * amplitude
+    // Apple Music 歌词页的景深:当前行完全清晰,其余行统一压到低不透明度、并随距离
+    // 加重高斯模糊——非当前行之间的不透明度差异很小(0.50 → 0.35 缓降),远近感主要靠
+    // 模糊量区分。nil(还没播到第一句)整页轻虚化,保持可读。
+    private var lineOpacity: Double {
+        guard let d = distance else { return 0.45 }
+        if d == 0 { return 1 }
+        return max(0.35, 0.55 - Double(d) * 0.05)
     }
 
-    private func karaokeWord(_ w: SyncedLyricWord, atMs currentMs: Int, base: Color) -> some View {
-        let fraction = WordKaraokeGradient.fillFraction(for: w, atMs: currentMs)
-        let band = WordKaraokeGradient.wordEdgeSoftenBand
-        return Text(w.text)
-            .foregroundStyle(WordKaraokeGradient.gradient(
-                fg: base, left: fraction - band, right: fraction + band))
-            // .offset 是渲染期位移,不参与布局 —— 字抬起来不会把整行的排版推歪。
-            .offset(y: karaokeRise(w, atMs: currentMs))
+    // 距离越远、高斯模糊越重——1.1pt/行、封顶 4pt。2026-08-04 第一版按 1.6pt/行封顶
+    // 6pt,用户对照 AM 同曲截图反馈"太糊了,后面几行都失真了"——AM 最远的可见行仍然
+    // 认得出字形(模糊半径约为字号的 12~14%,6pt/28pt 是 21%),照它调轻。SwiftUI 的
+    // .blur() 本身就是可动画属性,复用调用点已有的 .animation(value: distance)。
+    private var lineBlur: CGFloat {
+        guard let d = distance else { return 2 }
+        return min(CGFloat(d) * 1.1, 4)
     }
 
-    @ViewBuilder
-    private func lineView(_ item: LyricsWindowLine, distance: Int?, isActive: Bool) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            mainText(item, isActive: isActive)
+    var body: some View {
+        VStack(alignment: alignment.horizontal, spacing: 6) {
+            mainText
             // 罗马音在**下面**,跟 Apple Music 一致(原来在上面)。当前行如果分得出词组,
             // 读音已经逐词标进 mainText 里了,这里就不再重复一整行。
-            if settings.showRomanization, !usesPerWordRomanization(item, isActive: isActive),
-                let roma = item.line.romanization
-            {
+            if showRomanization, !usesPerWordRomanization, let roma = item.line.romanization {
                 Text(roma)
                     .font(.system(size: romaFontSize, weight: .medium))
                     .foregroundStyle(secondaryTextColor)
             }
-            if settings.showTranslation, let tr = item.line.translation {
+            if showTranslation, let tr = item.line.translation {
                 Text(tr)
                     .font(.system(size: translationFontSize, weight: .semibold))
                     .foregroundStyle(secondaryTextColor)
             }
         }
-        // Apple Music 歌词是左对齐排版,2026-08-04 从居中改过来。
-        .multilineTextAlignment(.leading)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .opacity(hoveredLineID == item.id ? 1 : lineOpacity(forDistance: distance))
+        // Apple Music 歌词是左对齐排版,2026-08-04 从居中改过来。对唱歌词按演唱者分左右
+        // (2026-08-14),不带标记的歌 side 恒为 .leading,跟原来完全一致。
+        .multilineTextAlignment(textAlignment)
+        .frame(maxWidth: .infinity, alignment: alignment)
+        .opacity(isHovered ? 1 : lineOpacity)
         // 模糊跟缩放一样受 reduceMotion 影响时直接关掉——虽然模糊本身不是"位移类"动效,
         // 但它是这套"聚焦感"视觉效果里跟缩放同一批的非必要装饰,减少动态效果的用户大概率
         // 也不想要这层模糊,统一用同一个开关关掉,不单独加一个新设置项。
         // 鼠标悬在哪一行,哪一行就恢复清晰 —— 跟 Apple Music 一样,让你能看清要跳去的是
         // 哪一句,再决定点不点。
-        .blur(radius: (reduceMotion || hoveredLineID == item.id)
-            ? 0 : lineBlur(forDistance: distance))
+        .blur(radius: (reduceMotion || isHovered) ? 0 : lineBlur)
         // 这里原来给当前行挂了 .scaleEffect(1.02)。删掉了 —— .scaleEffect 是**渲染后**
         // 的仿射变换:文字先按原字号栅格化,再整体拉大 1.02 倍,是个非整数倍重采样。在
         // Retina 上看不太出来,在 1x 外接屏上直接把**最该看清的那一行**糊掉:2026-08-10
@@ -1069,84 +1162,194 @@ struct LyricsWindowView: View {
         //
         // 2% 的放大本来就几乎看不出来,而"当前行"的强调其实是另外三样在扛:满不透明度、
         // 零模糊、逐字填色。为了一个看不见的收益去糊掉正文,不划算。
-        //
-        // (想保留"浮起"感的话,正解是让这一行用更大的**字号**渲染而不是缩放位图 —— 但
-        // 字号变化会改变换行、整个列表在切行时重排抖动,那是更糟的毛病。)
-        .animation(Self.lineTransition, value: distance)
-        .animation(.easeOut(duration: 0.16), value: hoveredLineID)
+        .animation(LyricsWindowView.lineTransition, value: distance)
+        .animation(.easeOut(duration: 0.16), value: isHovered)
         // 命中区要盖满整行(含左右空白),否则只有文字上才点得到
         .contentShape(Rectangle())
-        .onHover { inside in
-            if inside { hoveredLineID = item.id }
-            else if hoveredLineID == item.id { hoveredLineID = nil }
-        }
-        .onTapGesture {
-            // 减去当前歌词偏移:引擎判定"现在是哪一行"时会把 offsetMs 加到播放位置上
-            // (见 activeLine),这里不减回去的话,跳过去之后落在的会是隔壁行。
-            poller.seek(toMs: max(0, item.timeMs - poller.currentLyricsOffsetMs))
-        }
+        .onHover(perform: onHover)
+        .onTapGesture(perform: onTap)
     }
 
     @ViewBuilder
-    private func mainText(_ item: LyricsWindowLine, isActive: Bool) -> some View {
+    private var mainText: some View {
         // Apple Music 歌词页所有行同一字号同一字重(远近靠透明度+模糊区分,不靠字号),
         // 当前行的逐字填色也是"同色 35% → 全强度"的同色系渐变,不引入另一个强调色——
         // 2026-08-04 按截图一比一对照改过来(旧版是当前行 accentColor 30pt/其余 24pt)。
         // 有封面背景时这个"同色"是白色;没有封面时退回系统 .primary(白字在浅色外观的
         // 默认窗口背景上不可读,正确性优先),远近区分交给 lineOpacity。
-        let base: Color = hasArtworkBackground ? .white : .primary
+        let base: Color = onArtwork ? .white : .primary
         if isActive, let words = item.line.words {
-            // 逐字高亮用跟悬浮歌词(LyricsOverlayView)同一套软边渐变算法
-            // (WordKaraokeGradient,见该文件顶部注释),TimelineView(.animation)
-            // 按渲染帧频现算,只有当前这一行会挂这个逐帧刷新的 TimelineView,不影响
-            // 列表里其它行。
-            TimelineView(.animation(paused: !poller.isPlayingNow)) { context in
-                // 加上 currentLyricsOffsetMs,理由跟 LyricsOverlayView.mainLine 同一段
-                // 注释——不加的话"当前词判定"和"填色进度"用的时间基准对不上,会出现填到
-                // 一半就卡住的现象。
-                let currentMs = (poller.anchor?.extrapolatedPositionMs(now: context.date) ?? 0) + poller.currentLyricsOffsetMs
-                WrapLayout(rowAlignment: .leading) {
-                    if let groups = item.line.wordGroups, settings.showRomanization {
-                        // 一组一列:上面这一组的字各自逐字填色,下面标这一组的读音,列宽取
-                        // 两者更宽的那个 —— 主文字的间距因此被读音撑开,跟 Apple 一样。
-                        ForEach(groups) { g in
-                            // 组内左对齐:罗马音跟这一组的**第一个字**对齐,不是居中。
-                            // Apple Music 就是这么排的(用户 2026-08-10 截图对照)。
-                            VStack(alignment: .leading, spacing: 0) {
-                                HStack(spacing: 0) {
-                                    ForEach(Array(g.words.enumerated()), id: \.offset) { _, w in
-                                        karaokeWord(w, atMs: currentMs, base: base)
-                                    }
-                                }
-                                if let roma = g.romanization {
-                                    // 读音按**整组**的进度填,不跟着组里单个字跳。
-                                    let pseudo = SyncedLyricWord(
-                                        text: roma, startMs: g.startMs,
-                                        durationMs: max(1, g.endMs - g.startMs))
-                                    let f = WordKaraokeGradient.fillFraction(for: pseudo, atMs: currentMs)
-                                    let b = WordKaraokeGradient.wordEdgeSoftenBand
-                                    Text(roma)
-                                        .font(.system(size: romaFontSize, weight: .medium))
-                                        .foregroundStyle(WordKaraokeGradient.gradient(
-                                            fg: base.opacity(0.75), left: f - b, right: f + b))
-                                        .lineLimit(1)
-                                        .fixedSize()
-                                        .padding(.horizontal, 2)
-                                }
+            KaraokeLineText(
+                words: words,
+                groups: showRomanization ? item.line.wordGroups : nil,
+                base: base,
+                isPlaying: isPlaying,
+                fontSize: fontSize,
+                romaFontSize: romaFontSize,
+                reduceMotion: reduceMotion,
+                displayScale: displayScale,
+                rowAlignment: rowAlignment
+            )
+        } else {
+            Text(item.line.plainText ?? "")
+                .font(.system(size: fontSize, weight: .bold))
+                .foregroundStyle(base)
+        }
+    }
+}
+
+// 当前行的逐字填色。
+//
+// 单独成 struct 的理由跟 LyricsLineRow 是同一个,但更硬:里面那个 TimelineView(.animation)
+// 是**按渲染帧频**刷新的,写在整页视图的方法里,等于让整棵视图树每帧都被牵动一次。拆出来
+// 之后逐帧失效只发生在这一行内部,列表其余几十行完全不参与。
+private struct KaraokeLineText: View {
+    let words: [SyncedLyricWord]
+    let groups: [SyncedLyricWordGroup]?
+    let base: Color
+    let isPlaying: Bool
+    let fontSize: CGFloat
+    let romaFontSize: CGFloat
+    let reduceMotion: Bool
+    let displayScale: CGFloat
+    /// 对唱分栏:换行时行内也要跟着靠左/靠右/居中,否则右侧那句折下来的第二行会飘回左边。
+    var rowAlignment: WrapLayout.RowAlignment = .leading
+
+    /// 正在唱的那个字微微上浮 —— Apple Music 的逐字效果不只是填色,字本身会抬一下,
+    /// 一行看下来像一道波沿着字往右走。
+    ///
+    /// 抬起来之后**保持**,直到这一行不再是当前行才整体落回(非当前行走纯文本分支,本来
+    /// 就没有位移)。2026-08-10 先按"点头式"(抬一下再落回)做过一版,用户明确纠正过。
+    ///
+    /// 抬升过程用 sin(p·π/2):从 0 平滑升到 1、终点斜率为 0,停住时不会有"撞顶"感;
+    /// 时长取固定 320ms(不超过这个字自己的时长,短音符不被拉长),跟音符按住多久无关。
+    private static let riseWindowMs: Double = 320
+
+    private func rise(_ w: SyncedLyricWord, atMs currentMs: Int) -> CGFloat {
+        guard !reduceMotion else { return 0 }
+        let elapsed = Double(currentMs - w.startMs)
+        guard elapsed > 0 else { return 0 } // 还没唱到这个字
+        let window = min(Self.riseWindowMs, Double(max(1, w.durationMs)))
+        let p = min(1, elapsed / window)
+        // 抬到顶之后这个字会**停在那儿好几秒**。幅度收到最近的整数个**设备像素**:
+        // 原来是 lyricFontSize * 0.07,28pt 下 = 1.96pt —— 在 1x 外接屏上就停在 1.96 个
+        // 物理像素这种半吊子位置上,整行文字被垂直重采样、边缘一直糊着。
+        let scale = max(1, displayScale)
+        let amplitude = (fontSize * 0.07 * scale).rounded() / scale
+        return -sin(p * .pi / 2) * amplitude
+    }
+
+    var body: some View {
+        // ⚠️ 逐帧刷新的 TimelineView 挂在**每个字自己**身上,不是包住整行 —— 这是这个窗口
+        // 最贵的一处开销,2026-08-14 用 sample 量出来的:
+        //
+        //   播放中:主线程 91.3% 忙,其中 67.4% 在 NSHostingView.layout,栈顶是
+        //           LayoutEngineBox.sizeThatFits(WrapLayout 这个自定义 Layout)
+        //   暂停后:2.4% 忙 —— TimelineView(.animation) 一停,开销整个消失
+        //
+        // 原因是原来 TimelineView 包在 WrapLayout **外面**:每一帧闭包重跑,整行的
+        // `WrapLayout { ForEach(words) }` 就被重新构造一次,于是 Layout 协议的
+        // sizeThatFits/placeSubviews 对**每一个字**重算一遍 —— 一秒 60~120 次。
+        //
+        // 而逐帧真正在变的只有两样:渐变填色的位置、以及字的上浮量(.offset,渲染期位移,
+        // 不参与布局)。文字/字号/换行结果整行从头到尾都不变。把 TimelineView 下沉到叶子
+        // 之后,WrapLayout 的子视图列表每帧都是同一份,布局不再被推翻,重算范围缩到单个
+        // Text 的样式。
+        WrapLayout(rowAlignment: rowAlignment) {
+            if let groups, !groups.isEmpty {
+                // 一组一列:上面这一组的字各自逐字填色,下面标这一组的读音,列宽取
+                // 两者更宽的那个 —— 主文字的间距因此被读音撑开,跟 Apple 一样。
+                ForEach(groups) { g in
+                    // 组内左对齐:罗马音跟这一组的**第一个字**对齐,不是居中。
+                    VStack(alignment: .leading, spacing: 0) {
+                        HStack(spacing: 0) {
+                            ForEach(Array(g.words.enumerated()), id: \.offset) { _, w in
+                                KaraokeWordText(word: w, base: base, isPlaying: isPlaying,
+                                                fontSize: fontSize, reduceMotion: reduceMotion,
+                                                displayScale: displayScale)
                             }
                         }
-                    } else {
-                        ForEach(Array(words.enumerated()), id: \.offset) { _, w in
-                            karaokeWord(w, atMs: currentMs, base: base)
+                        if let roma = g.romanization {
+                            // 读音按**整组**的进度填,不跟着组里单个字跳:拿整组的起止时间
+                            // 造一个"伪字",复用同一套填色。
+                            KaraokeWordText(
+                                word: SyncedLyricWord(text: roma, startMs: g.startMs,
+                                                      durationMs: max(1, g.endMs - g.startMs)),
+                                base: base.opacity(0.75), isPlaying: isPlaying,
+                                fontSize: romaFontSize, weight: .medium,
+                                reduceMotion: reduceMotion, displayScale: displayScale,
+                                rises: false // 读音不跟着抬,只有正文的字会浮起来
+                            )
+                            .lineLimit(1)
+                            .fixedSize()
+                            .padding(.horizontal, 2)
                         }
                     }
                 }
+            } else {
+                ForEach(Array(words.enumerated()), id: \.offset) { _, w in
+                    KaraokeWordText(word: w, base: base, isPlaying: isPlaying,
+                                    fontSize: fontSize, reduceMotion: reduceMotion,
+                                    displayScale: displayScale)
+                }
             }
-            .font(.system(size: lyricFontSize, weight: .bold))
-        } else {
-            Text(item.line.plainText ?? "")
-                .font(.system(size: lyricFontSize, weight: .bold))
-                .foregroundStyle(base)
+        }
+        .font(.system(size: fontSize, weight: .bold))
+    }
+}
+
+/// 一个逐字填色的字(或一整组的罗马音)。自己挂 TimelineView,自己按帧算填色和上浮量。
+///
+/// 拆到这一层的理由见 KaraokeLineText.body 顶部那段实测记录:逐帧失效必须落在叶子上,
+/// 落在容器上会把整行的自定义 Layout 每帧推翻重算。
+private struct KaraokeWordText: View {
+    let word: SyncedLyricWord
+    let base: Color
+    let isPlaying: Bool
+    let fontSize: CGFloat
+    var weight: Font.Weight = .bold
+    let reduceMotion: Bool
+    let displayScale: CGFloat
+    var rises: Bool = true
+
+    /// 抬升过程用 sin(p·π/2):从 0 平滑升到 1、终点斜率为 0,停住时不会有"撞顶"感;
+    /// 时长取固定 320ms(不超过这个字自己的时长,短音符不被拉长)。抬起来之后**保持**,
+    /// 直到这一行不再是当前行才整体落回(非当前行走纯文本分支,本来就没有位移)。
+    private static let riseWindowMs: Double = 320
+
+    private func rise(atMs currentMs: Int) -> CGFloat {
+        guard rises, !reduceMotion else { return 0 }
+        let elapsed = Double(currentMs - word.startMs)
+        guard elapsed > 0 else { return 0 } // 还没唱到这个字
+        let window = min(Self.riseWindowMs, Double(max(1, word.durationMs)))
+        let p = min(1, elapsed / window)
+        // 幅度收到最近的整数个**设备像素**:原来是字号 * 0.07,28pt 下 = 1.96pt —— 在 1x
+        // 外接屏上就停在 1.96 个物理像素这种半吊子位置上,整行文字被垂直重采样、一直糊着。
+        let scale = max(1, displayScale)
+        let amplitude = (fontSize * 0.07 * scale).rounded() / scale
+        return -sin(p * .pi / 2) * amplitude
+    }
+
+    var body: some View {
+        // 刷新上限(30Hz)和它背后那次实测记在 WordKaraokeGradient.refreshInterval,
+        // 三处逐字视图共用一份 —— 原来这个常量只有这里有,悬浮歌词和灵动岛因此漏掉了。
+        TimelineView(.animation(minimumInterval: WordKaraokeGradient.refreshInterval, paused: !isPlaying)) { context in
+            // 直接读单例而不是 @ObservedObject:这个闭包本来就由 TimelineView 按帧驱动,
+            // 不需要靠 Combine 通知触发;订阅了反而会把 PlaybackCoordinator 上那二十来个
+            // @Published 的每一次变动都变成额外重算。
+            let coordinator = PlaybackCoordinator.shared
+            // 加上 currentLyricsOffsetMs,理由跟 LyricsOverlayView.mainLine 同一段注释 ——
+            // 不加的话"当前词判定"和"填色进度"用的时间基准对不上,会填到一半卡住。
+            let currentMs = (coordinator.anchor?.extrapolatedPositionMs(now: context.date) ?? 0)
+                + coordinator.currentLyricsOffsetMs
+            let fraction = WordKaraokeGradient.fillFraction(for: word, atMs: currentMs)
+            let band = WordKaraokeGradient.wordEdgeSoftenBand
+            Text(word.text)
+                .font(.system(size: fontSize, weight: weight))
+                .foregroundStyle(WordKaraokeGradient.gradient(
+                    fg: base, left: fraction - band, right: fraction + band))
+                // .offset 是渲染期位移,不参与布局 —— 字抬起来不会把整行的排版推歪。
+                .offset(y: rise(atMs: currentMs))
         }
     }
 }

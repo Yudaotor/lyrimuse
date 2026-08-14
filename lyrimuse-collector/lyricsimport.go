@@ -212,7 +212,10 @@ func importLyricsFromFiles() {
 		if !parsed.ok {
 			continue // 整组都缺头(老版本文件),跳过,沿用 JSON 里的旧值
 		}
-		key := parsed.artist + "|" + parsed.title + "|" + parsed.album
+		// 头部标签是导出时按**当时的** key 写进去的,老文件里可能还带着归一化之前的歌名
+		// (`不散的筵席（I Miss You）`)。这里同样走 enrichKey,老文件才不会把一条已经归并
+		// 好的记录又拆回两条。
+		key := enrichKey(parsed.artist, parsed.title, parsed.album)
 
 		e := enrichCache[key] // 不存在时是 enrichEntry{} 零值,TS 自然留 0
 		changed := false

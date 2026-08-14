@@ -464,6 +464,190 @@ do {
     )
 }
 
+// ---- LyricDuet: 对唱歌词的左右分栏(2026-08-14) ----
+//
+// 用例全部照真实数据写:演唱者信息是**塞在正文里的前缀**(男：/女：/合：),而且只有部分行
+// 带标记(《真爱等一下 (feat. 蔡健雅)》65 行里 22 行),其余按"一个标记管到下一个标记"延续。
+do {
+    let D = LyricDuet.self
+
+    // 剥前缀:全角/半角冒号都收
+    expectEqual(D.splitMarker("男：周末守着烤箱").marker, "男", "对唱: 全角冒号识别")
+    expectEqual(D.splitMarker("男：周末守着烤箱").text, "周末守着烤箱", "对唱: 前缀从正文里剥掉")
+    expectEqual(D.splitMarker("女: 偏爱年轻女伴").text, "偏爱年轻女伴", "对唱: 半角冒号+空格")
+    expectEqual(D.splitMarker("合：何时想戒掉流浪").marker, "合", "对唱: 合唱标记")
+    // 长标记优先,否则 "男声" 会被 "男" 先吃掉、剩一个孤零零的 "声"
+    expectEqual(D.splitMarker("男声：测试").text, "测试", "对唱: 长标记优先(男声 不是 男+声)")
+    // 没标记的行原样返回
+    expectEqual(D.splitMarker("情人节也落单").marker, nil, "对唱: 无标记行不动")
+    expectEqual(D.splitMarker("情人节也落单").text, "情人节也落单", "对唱: 无标记行正文不变")
+    // 署名行不能被误判成演唱者(词：/曲： 这类并非全都被署名过滤器滤掉)
+    expectEqual(D.splitMarker("词：葛大为").marker, nil, "对唱: 署名行不算演唱者标记")
+    expectEqual(D.splitMarker("曲：陶喆/蔡健雅").marker, nil, "对唱: 作曲署名不算演唱者标记")
+    // 整行只有标记时不剥 —— 剥成空行会让这一行在界面上凭空消失
+    expectEqual(D.splitMarker("男：").marker, nil, "对唱: 整行只有标记时不剥")
+    // 逐字行的第一个词允许剥成空(调用方据此丢掉那个词)
+    expectEqual(D.splitMarkerAllowingEmpty("男：").marker, "男", "对唱: 逐字首词允许剥成空")
+    expectEqual(D.splitMarkerAllowingEmpty("男：周").text, "周", "对唱: 逐字首词剥完保留第一个字")
+
+    // 标记向后延续 + 按出现顺序分左右(不写死性别)
+    do {
+        let markers: [String?] = [nil, "男", nil, nil, "女", nil, "合", nil, "男"]
+        let sides = D.sides(for: markers)
+        expectEqual(sides[0], nil, "对唱: 第一个标记之前没有对唱信息(不是靠左)")
+        expectEqual(sides[1], .leading, "对唱: 先出现的那位靠左")
+        expectEqual(sides[2], .leading, "对唱: 标记向后延续")
+        expectEqual(sides[3], .leading, "对唱: 标记继续延续")
+        expectEqual(sides[4], .trailing, "对唱: 第二位靠右")
+        expectEqual(sides[5], .trailing, "对唱: 第二位的延续")
+        expectEqual(sides[6], .center, "对唱: 合唱居中")
+        expectEqual(sides[7], .center, "对唱: 合唱也向后延续")
+        expectEqual(sides[8], .leading, "对唱: 回到第一位仍然靠左")
+    }
+    // 女声先开口的歌:靠左的是**她**,不是按性别写死
+    do {
+        let sides = D.sides(for: ["女", "男"])
+        expectEqual(sides[0], .leading, "对唱: 女声先开口时她靠左")
+        expectEqual(sides[1], .trailing, "对唱: 后出现的男声靠右")
+    }
+    // 整首没有标记的歌:全是 nil。这一条是**回归护栏** —— 混成 .leading 的话,悬浮窗上
+    // 每一首普通歌都会从居中变成靠左。
+    do {
+        let sides = D.sides(for: [nil, nil, nil])
+        expectEqual(sides.compactMap { $0 }.isEmpty, true, "对唱: 没有标记的歌全程无对唱信息")
+    }
+    // plan:剥正文 + 定边一次算完
+    do {
+        let plan = D.plan(lineTexts: ["男：周末守着烤箱", "情人节也落单", "女：偏爱年轻女伴"])
+        expectEqual(plan.texts, ["周末守着烤箱", "情人节也落单", "偏爱年轻女伴"], "对唱: plan 剥掉全部前缀")
+        expectEqual(plan.sides, [.leading, .leading, .trailing], "对唱: plan 定边")
+    }
+}
+
+// ---- MusicPlaybackMode: 播放模式档位轮换,按播放器有没有「单曲循环」分两套(2026-08-14) ----
+//
+// Spotify 的 AppleScript 字典里 `repeating` 只是布尔,够不到 repeat-one —— 所以它的按钮
+// 只在 列表 ↔ 随机 两档之间倒。轮换必须**闭合**:不管从哪一档起步,反复点下去都要能回到
+// 原点,否则按钮会卡在一个出不来的档位上。
+do {
+    typealias Mode = MusicPlaybackController.MusicPlaybackMode
+
+    // Apple Music:三档循环
+    expectEqual(Mode.list.next(allowsRepeatOne: true), .shuffle, "播放模式: 列表→随机")
+    expectEqual(Mode.shuffle.next(allowsRepeatOne: true), .repeatOne, "播放模式: 随机→单曲")
+    expectEqual(Mode.repeatOne.next(allowsRepeatOne: true), .list, "播放模式: 单曲→列表")
+
+    // Spotify:跳过单曲那一档
+    expectEqual(Mode.list.next(allowsRepeatOne: false), .shuffle, "播放模式(无单曲): 列表→随机")
+    expectEqual(Mode.shuffle.next(allowsRepeatOne: false), .list, "播放模式(无单曲): 随机→列表")
+    // 起步档位恰好是单曲时(用户在 Apple Music 里开了单曲循环,再切到 Spotify 播放)也要能出来
+    expectEqual(Mode.repeatOne.next(allowsRepeatOne: false), .list, "播放模式(无单曲): 单曲→列表")
+
+    // 轮换闭合:连点下去不能卡在某一档出不来。
+    //
+    // ⚠️ 例外是"单曲档 + 不支持单曲"这一格:那是个**只能离开、回不去**的过渡态(用户在
+    // Apple Music 里开着单曲循环、切到 Spotify 播放时可能读到它),回不去正是设计意图,
+    // 不是卡住 —— 它能一步走掉(上面那条断言)就够了。第一版把它也算进"必须回到原点",
+    // 断言直接红了,是断言写宽了,不是实现错了。
+    for allows in [true, false] {
+        for start in Mode.allCases {
+            var cur = start
+            var seen: [Mode] = []
+            for _ in 0..<4 { cur = cur.next(allowsRepeatOne: allows); seen.append(cur) }
+            let startIsUnreachable = !allows && start == .repeatOne
+            if !startIsUnreachable {
+                expectEqual(seen.contains(start), true,
+                            "播放模式: allowsRepeatOne=\(allows) 从 \(start.rawValue) 起步能转回原点")
+            }
+            if !allows {
+                expectEqual(seen.contains(.repeatOne), false,
+                            "播放模式: allowsRepeatOne=false 时永远不会落到单曲档")
+            }
+        }
+    }
+
+    // 能力表:只有 Apple Music 有单曲循环;QQ音乐/网易云连扩展控制都没有(两个 .app 无 .sdef)
+    expectEqual(MusicPlaybackController.supportsRepeatOne(.appleMusic), true, "能力: Apple Music 有单曲循环")
+    expectEqual(MusicPlaybackController.supportsRepeatOne(.spotify), false, "能力: Spotify 没有单曲循环")
+    expectEqual(MusicPlaybackController.supportsExtendedControls(.appleMusic), true, "能力: Apple Music 支持音量/模式")
+    expectEqual(MusicPlaybackController.supportsExtendedControls(.spotify), true, "能力: Spotify 支持音量/模式")
+    expectEqual(MusicPlaybackController.supportsExtendedControls(.qqMusic), false, "能力: QQ音乐不支持")
+    expectEqual(MusicPlaybackController.supportsExtendedControls(.netease), false, "能力: 网易云不支持")
+}
+
+// ---- EnrichCacheKeys: 缓存 key 归一化,必须跟 collector 逐字节一致(2026-08-14) ----
+//
+// 这组用例跟 collector/enrichkey_test.go 的 TestNormEnrichTitle 是**同一张表**。两边只要
+// 有一处对不上,collector 按归一化 key 写盘、悬浮窗按另一种拼法查,结果不是"显示了旧歌词"
+// 而是**整首歌查不到词**,且只在某些播放器上复现 —— 这种失败最难从现象倒推回来,所以钉死。
+do {
+    let K = EnrichCacheKeys.self
+    let cases: [(String, String, String)] = [
+        // 要修的那一类:中文歌名 + 括号里的英文译名(本机缓存里真实存在过的重复条目)
+        ("全角括号译名", "不散的筵席（I Miss You）", "不散的筵席"),
+        ("全角括号译名2", "神探（The Detective）", "神探"),
+        ("半角括号译名", "小師妹 (Love Triangle)", "小師妹"),
+        // 版本标记必须原样保留:合并了就是把两个不同的录音当成同一首
+        ("remix 保留", "Song (Remix)", "Song (Remix)"),
+        ("live 保留", "告白气球 (Live)", "告白气球 (Live)"),
+        ("remaster 保留", "Bad (2012 Remaster)", "Bad (2012 Remaster)"),
+        ("feat 保留", "爱我的人 (feat. MOE.)", "爱我的人 (feat. MOE.)"),
+        ("instrumental 保留", "Song (Instrumental)", "Song (Instrumental)"),
+        ("interlude 保留", "The Girl In Red (Interlude)", "The Girl In Red (Interlude)"),
+        ("中文版本标记保留", "月亮代表我的心 (现场版)", "月亮代表我的心 (现场版)"),
+        // 边界
+        ("括号就是整个歌名", "(Interlude)", "(Interlude)"),
+        ("括号就是整个歌名2", "（前奏）", "（前奏）"),
+        ("两层括号连剥", "歌名（译名）[Explicit]", "歌名"),
+        ("剥到版本标记停手", "歌名（译名）(Live)", "歌名（译名）(Live)"),
+        ("中间的括号不动", "Song (A) tail", "Song (A) tail"),
+        ("没有括号", "不散的筵席", "不散的筵席"),
+        ("空串", "", ""),
+        ("不换行空格", "Song\u{00a0}(I Miss You)", "Song"),
+        ("零宽字符", "不散\u{200b}的筵席", "不散的筵席"),
+        ("全角空格", "不散的筵席\u{3000}（I Miss You）", "不散的筵席"),
+    ]
+    for (name, input, want) in cases {
+        expectEqual(K.normalizedTitle(input), want, "缓存key: \(name)")
+    }
+    // 不转小写、不折繁简 —— 列表显示的就是 key 拆出来的三段,折了会看到"神经志 the journal"
+    expectEqual(
+        K.normalizedKey(artist: "PRINCE", title: "The Girl In Red (Interlude)", album: "神經志 The Journal"),
+        "PRINCE|The Girl In Red (Interlude)|神經志 The Journal",
+        "缓存key: 不转小写也不折繁简"
+    )
+    // 幂等:迁移每次 collector 启动都会跑一遍
+    let once = K.normalizedKey(artist: "丁世光", title: "不散的筵席（I Miss You）", album: "神經志 The Journal")
+    expectEqual(once, "丁世光|不散的筵席|神經志 The Journal", "缓存key: 三段拼接")
+    expectEqual(K.normalizedTitle("不散的筵席"), "不散的筵席", "缓存key: 归一化过的再算一次不变")
+}
+
+// ---- EnrichCacheReader.artistTitleKey:「最近播放」封面的本机兜底键(2026-08-14) ----
+//
+// 这个键两头用:建索引时喂的是**缓存 key 里已经归一化过**的歌名,查询时喂的是 Last.fm
+// scrobble 里**播放器原样上报**的歌名。两头必须落到同一个字符串,带译名的那类歌名才能
+// 命中本机封面 —— 否则这条兜底对整张《神經志 The Journal》这种"歌名带英文译名"的专辑
+// 全部失效,而那正是 Last.fm 最容易缺图的一类。
+do {
+    let R = EnrichCacheReader.self
+    expectEqual(R.artistTitleKey(artist: "陶喆", title: "聖誕之吻"), "陶喆|聖誕之吻",
+                "封面兜底键: 基本形")
+    // 大小写/首尾空白不算差异(跟 LastfmStatsService.playCountKey 同口径)
+    expectEqual(R.artistTitleKey(artist: "  Prince ", title: " Kiss "), "prince|kiss",
+                "封面兜底键: 去空白转小写")
+    // 关键:两头喂不同拼法要落到同一个键
+    expectEqual(
+        R.artistTitleKey(artist: "丁世光", title: "不散的筵席（I Miss You）"),
+        R.artistTitleKey(artist: "丁世光", title: "不散的筵席"),
+        "封面兜底键: 带译名的原始歌名跟归一化后的歌名落到同一个键"
+    )
+    // 版本标记仍然要区分开 —— 现场版跟录音室版是两首,不该共用封面
+    expectEqual(
+        R.artistTitleKey(artist: "周杰伦", title: "告白气球 (Live)") != R.artistTitleKey(artist: "周杰伦", title: "告白气球"),
+        true, "封面兜底键: 版本标记仍然区分"
+    )
+}
+
 // ---- LyricsColumnWidths: 「歌词管理」可拖拽列宽的夹值逻辑(2026-08-05) ----
 //
 // 三条分隔条语义不对称:第 0 条(歌名|歌手)左边是弹性的歌名列,只能改「歌手」、由歌名被动
@@ -473,7 +657,8 @@ do {
 do {
     let W = LyricsColumnWidths.self
     let d = W.defaults
-    // 表头总宽 630(navigationSplitViewColumnWidth 的 ideal 值),chrome = 12*2 + 8*3 = 48
+    // 一组够宽、好心算的输入。(调用方现在传的是"行内容宽度 + 三个列间距",chrome = 24;
+    // 这里取 48 只是为了让下面几条上下限的算术好对,纯函数对 chrome 取值没有假设。)
     let total: CGFloat = 630, chrome: CGFloat = 48
 
     // 第 0 条:边界右移 = 歌名变宽 → 歌手变窄(减号方向不能搞反)
@@ -505,6 +690,12 @@ do {
     expectEqual(
         W.dragged(from: d, divider: 0, dx: -9999, totalWidth: 200, chrome: chrome).artist >= W.minColumn,
         true, "列宽: 可用宽度过小时不返回小于下限的值"
+    )
+    // 还没量到可用宽度(totalWidth = 0,首帧或列表一行都没有)时仍然要拖得动:照常算
+    // room 会得到负数,clamp 里 hi < lo 直接返回下限,表现成"一拖歌手就弹到最窄"
+    expectEqual(
+        W.dragged(from: d, divider: 0, dx: -20, totalWidth: 0, chrome: chrome).artist,
+        d.artist + 20, "列宽: 尚未量到宽度时第0条仍按位移变宽"
     )
 }
 
@@ -556,6 +747,31 @@ do {
         expectEqual(r, LyricsColumnWidths(artist: W.minColumn, album: W.minColumn, source: W.minSourceColumn),
                     "列宽: 极窄时全部回落到各列下限")
     }
+}
+
+// 「列宽拖不动」的回归(2026-08-14)。
+//
+// 现场:侧栏实际渲染宽度约 725pt、行内容占 [11.5, 725],UserDefaults 里存的是
+// 56 / 137.66796875 / 70,而截图逐像素量出来专辑列只有 56 —— 三列被恒定钳在各自下限,
+// 往哪个方向拖都纹丝不动(拖动其实写进去了,只是渲染这一步把它抹平成同一组常量)。
+//
+// 根因不在这几个纯函数里,而在调用方喂进来的宽度:当时 totalWidth 取自另一个 @State
+// (表头 .background 里 GeometryReader + onChange 量的 headerWidth),它停在首帧的窄值
+// ≤218pt 再没更新过。现在只剩 rowContentBounds 一个几何输入(走 PreferenceKey,布局
+// 每跑一遍都重报)。下面两条把"同一份数据、两种宽度"的结果各自钉死,免得以后再冒出
+// 第二个测量、又悄悄退回这个状态。
+do {
+    let W = LyricsColumnWidths.self
+    let stored = LyricsColumnWidths(artist: 56, album: 137.66796875, source: 70)
+    let floors = LyricsColumnWidths(artist: W.minColumn, album: W.minColumn, source: W.minSourceColumn)
+
+    // 修好之后:宽度取自行内容边界(725 - 11.5 ≈ 713),chrome 只剩三个 8pt 列间距
+    expectEqual(W.fitted(stored, totalWidth: 713, chrome: 8 * 3), stored,
+                "列宽: 按行内容宽度算时,存下来的列宽原样渲染")
+    // 出问题时:宽度停在首帧的 218pt,budget 掉到三列下限之和以下 → 恒定输出下限,
+    // 存进去的值完全影响不了画面,也就是用户看到的"拖不动"
+    expectEqual(W.fitted(stored, totalWidth: 218, chrome: 36), floors,
+                "列宽: 宽度测量失效时会被钳成常量(记录当时的错误现象)")
 }
 
 do {
@@ -642,7 +858,14 @@ do {
     """
     engine.load(lyrics: lrc, lyricsTr: "", lyricsRoma: "", lyricsYRC: "", preferWordLevel: true)
     expectEqual(engine.allLines(idPrefix: "t").count, 5, "署名行(结构): 对唱标签(男/女/合)整份豁免,5 句一句不删")
-    expectEqual(engine.activeLine(atMs: 11000)?.mainText, "男：第一句", "署名行(结构): 对唱句正常展示")
+    // 2026-08-14 起前缀不再画在界面上:它被剥进 side 字段用来做左右分栏(见 LyricDuet)。
+    // 这条断言原来钉的是 "男：第一句" —— 那正是改动之前的行为(标记直接显示成歌词的一部分,
+    // 当前行的逐字填色还会从"男："开始扫)。它保护的"对唱句不能被署名过滤器删掉"这层意思
+    // 没变(上面那条 count == 5 才是),这里只是把展示形态更新到新行为。
+    expectEqual(engine.activeLine(atMs: 11000)?.mainText, "第一句", "署名行(结构): 对唱句正常展示(前缀已剥)")
+    expectEqual(engine.activeLine(atMs: 11000)?.side, .leading, "对唱: 男(先出现)靠左")
+    expectEqual(engine.activeLine(atMs: 21000)?.side, .trailing, "对唱: 女(后出现)靠右")
+    expectEqual(engine.activeLine(atMs: 31000)?.side, .center, "对唱: 合唱居中")
 }
 
 do {

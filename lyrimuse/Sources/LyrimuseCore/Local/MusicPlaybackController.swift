@@ -86,29 +86,78 @@ public enum MusicPlaybackController {
         case shuffle
         case repeatOne
 
-        public var next: MusicPlaybackMode {
+        /// 下一档。allowsRepeatOne=false 时跳过「单曲循环」,只在 列表 ↔ 随机 之间倒。
+        ///
+        /// Spotify 就是这一档:它的 AppleScript 字典里只有 `repeating`(布尔),够不到
+        /// repeat-one —— 它 App 内部虽然有三态,脚本接口只暴露开/关。与其让按钮点到一个
+        /// 落不了地的档位,不如在这个播放器上就只有两档。
+        public func next(allowsRepeatOne: Bool) -> MusicPlaybackMode {
             switch self {
             case .list: return .shuffle
-            case .shuffle: return .repeatOne
+            case .shuffle: return allowsRepeatOne ? .repeatOne : .list
             case .repeatOne: return .list
             }
         }
     }
+
+    /// 这个播放器支不支持「播放模式 / 音量」这两组扩展控制。
+    ///
+    /// Apple Music 和 Spotify 都有可写的 AppleScript 属性;QQ 音乐/网易云音乐两个 .app 里
+    /// 根本没有 .sdef(不可脚本化),而 media-control 走的系统级 MediaRemote 只有播放控制、
+    /// 没有音量和模式的概念 —— 对它们只能不显示这些控件。
+    public static func supportsExtendedControls(_ player: PlaybackPlayer) -> Bool {
+        player == .appleMusic || player == .spotify
+    }
+
+    /// 这个播放器的循环档位里有没有「单曲循环」。见 MusicPlaybackMode.next(allowsRepeatOne:)。
+    public static func supportsRepeatOne(_ player: PlaybackPlayer) -> Bool {
+        player == .appleMusic
+    }
+
+    /// Spotify 的脚本前面都要垫这一句。
+    ///
+    /// ⚠️ `tell application "Spotify" to …` 只要发出任何命令就会**启动** Spotify —— 一个只用
+    /// Apple Music 的用户会被莫名其妙拉起一个播放器。本仓另外两处 Spotify 脚本
+    /// (MediaControlClient.spotifyPlayerPosition、collector 的 spotifyPositionScript)开头
+    /// 都有同样的守卫,同一个理由。读不到时返回空串,上层解析不出来自然就是 nil。
+    private static let spotifyRunningGuard = #"""
+        if application "Spotify" is not running then
+            return ""
+        end if
+
+        """#
 
     /// 读当前播放模式。不是 Apple Music / 没权限 / 读不出来时返回 nil,调用方据此不显示按钮。
     ///
     /// 两个属性一次脚本读回来,不发两趟 —— 每趟都是一个 osascript 子进程。
     ///
     /// 会阻塞到子进程结束,**不要在主线程调用**。
-    public static func playbackMode() -> MusicPlaybackMode? {
-        guard let out = runAppleScriptCapturing(
-            #"tell application "Music" to return (shuffle enabled as text) & "," & (song repeat as text)"#
-        ) else { return nil }
-        let parts = out.trimmingCharacters(in: .whitespacesAndNewlines).split(separator: ",")
-        guard parts.count == 2 else { return nil }
-        if parts[1] == "one" { return .repeatOne }
-        if parts[0] == "true" { return .shuffle }
-        return .list
+    public static func playbackMode(for player: PlaybackPlayer) -> MusicPlaybackMode? {
+        switch player {
+        case .appleMusic:
+            guard let out = runAppleScriptCapturing(
+                #"tell application "Music" to return (shuffle enabled as text) & "," & (song repeat as text)"#
+            ) else { return nil }
+            let parts = out.trimmingCharacters(in: .whitespacesAndNewlines).split(separator: ",")
+            guard parts.count == 2 else { return nil }
+            if parts[1] == "one" { return .repeatOne }
+            if parts[0] == "true" { return .shuffle }
+            return .list
+        case .spotify:
+            // 只读 shuffling:repeating 是布尔,映射不到「单曲循环」,而它开着与否不该影响
+            // 这颗按钮显示的档位(用户可能在 Spotify 里自己开了整张循环,那不是我们这三档
+            // 里的任何一档,按「列表」显示才是诚实的)。
+            guard let out = runAppleScriptCapturing(
+                spotifyRunningGuard + #"tell application "Spotify" to return shuffling as text"#
+            ) else { return nil }
+            switch out.trimmingCharacters(in: .whitespacesAndNewlines) {
+            case "true": return .shuffle
+            case "false": return .list
+            default: return nil // 空串 = Spotify 没在跑
+            }
+        case .qqMusic, .netease, .auto:
+            return nil
+        }
     }
 
     /// 切到某个播放模式。
@@ -125,32 +174,51 @@ public enum MusicPlaybackController {
     /// 把已经画出来的正确图标又覆盖回去,表现成"点了要过一会儿才变"。
     /// 既然退出码已经能回答"指令被接受了吗",成功时就不必再问 Music.app 一遍。
     @discardableResult
-    public static func setPlaybackMode(_ mode: MusicPlaybackMode) -> Bool {
-        let script: String
-        switch mode {
-        case .list:
-            script = #"""
-                tell application "Music"
-                    set shuffle enabled to false
-                    if song repeat is one then set song repeat to off
-                end tell
-                """#
-        case .shuffle:
-            script = #"""
-                tell application "Music"
-                    set shuffle enabled to true
-                    if song repeat is one then set song repeat to off
-                end tell
-                """#
-        case .repeatOne:
-            script = #"""
-                tell application "Music"
-                    set shuffle enabled to false
-                    set song repeat to one
-                end tell
-                """#
+    public static func setPlaybackMode(_ mode: MusicPlaybackMode, for player: PlaybackPlayer) -> Bool {
+        switch player {
+        case .appleMusic:
+            let script: String
+            switch mode {
+            case .list:
+                script = #"""
+                    tell application "Music"
+                        set shuffle enabled to false
+                        if song repeat is one then set song repeat to off
+                    end tell
+                    """#
+            case .shuffle:
+                script = #"""
+                    tell application "Music"
+                        set shuffle enabled to true
+                        if song repeat is one then set song repeat to off
+                    end tell
+                    """#
+            case .repeatOne:
+                script = #"""
+                    tell application "Music"
+                        set shuffle enabled to false
+                        set song repeat to one
+                    end tell
+                    """#
+            }
+            return runAppleScriptCapturing(script) != nil
+        case .spotify:
+            // 只动 shuffling,`repeating` 一概不碰 —— 跟 Apple Music 分支里"不顺手改
+            // song repeat"同一个原则:用户可能在 Spotify 里特意开着整张循环,那是他的设置,
+            // 切随机/顺序不该把它顺手关掉。
+            guard mode != .repeatOne else {
+                // 走不到:UI 的档位轮换在 Spotify 上会跳过这一档(supportsRepeatOne=false)。
+                // 万一真被调到,返回 false 让调用方回读纠正,而不是悄悄按别的档执行。
+                return false
+            }
+            return runAppleScriptCapturing(
+                spotifyRunningGuard
+                    + #"tell application "Spotify" to set shuffling to "#
+                    + (mode == .shuffle ? "true" : "false")
+            ) != nil
+        case .qqMusic, .netease, .auto:
+            return false
         }
-        return runAppleScriptCapturing(script) != nil
     }
 
     /// 读 Music.app 自己的输出音量(0~100)。读不到返回 nil —— 跟"喜欢"同一个约定:
@@ -160,19 +228,37 @@ public enum MusicPlaybackController {
     /// 东西。调它不会影响别的 App 的声音。
     ///
     /// 会阻塞到子进程结束,**不要在主线程调用**。
-    public static func soundVolume() -> Int? {
-        guard let out = runAppleScriptCapturing(#"tell application "Music" to get sound volume"#)
-        else { return nil }
+    public static func soundVolume(for player: PlaybackPlayer) -> Int? {
+        let script: String
+        switch player {
+        case .appleMusic:
+            script = #"tell application "Music" to get sound volume"#
+        case .spotify:
+            // Spotify 的 `sound volume` 也是 0~100 的整数,跟 Music.app 同一个量纲,
+            // 上层的滑杆不需要换算。
+            script = spotifyRunningGuard + #"tell application "Spotify" to get sound volume"#
+        case .qqMusic, .netease, .auto:
+            return nil
+        }
+        guard let out = runAppleScriptCapturing(script) else { return nil }
         return Int(out.trimmingCharacters(in: .whitespacesAndNewlines))
     }
 
     /// 设置 Music.app 的输出音量。超出 0~100 会被夹住 —— AppleScript 那边给越界值会报错,
     /// 报错就整条指令不生效,不如在这里夹好。
     @discardableResult
-    public static func setSoundVolume(_ value: Int) -> Bool {
+    public static func setSoundVolume(_ value: Int, for player: PlaybackPlayer) -> Bool {
         let v = min(100, max(0, value))
-        return runAppleScriptCapturing(
-            #"tell application "Music" to set sound volume to \#(v)"#) != nil
+        switch player {
+        case .appleMusic:
+            return runAppleScriptCapturing(
+                #"tell application "Music" to set sound volume to \#(v)"#) != nil
+        case .spotify:
+            return runAppleScriptCapturing(
+                spotifyRunningGuard + #"tell application "Spotify" to set sound volume to \#(v)"#) != nil
+        case .qqMusic, .netease, .auto:
+            return false
+        }
     }
 
     /// 跳到曲目内的某个位置(秒)。跟上面三个动作走同一套双后端分派:Apple Music 用

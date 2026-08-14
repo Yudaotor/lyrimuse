@@ -385,9 +385,19 @@ public final class LocalPlaybackSource: ObservableObject {
         if newIndex != currentLineIndex { currentLineIndex = newIndex }
     }
 
-    // nil 快照(真的没有任何曲目在加载)和"有曲目但不是 Apple Music"共用同一套清理——
-    // title/artist/album 故意不清空,保留"最近一次 Apple Music 播放"这份信息,跟原有
-    // "暂停"分支的既有行为一致,见两处调用点各自的注释。
+    // nil 快照(真的没有任何曲目在加载)和"有曲目但不是 Apple Music"共用同一套清理。
+    //
+    // ⚠️ 2026-08-14 改:title/artist/album 以前**故意不清**,理由写的是"保留最近一次播放
+    // 的信息,跟暂停分支的既有行为一致"。那个理由站不住 —— **暂停根本不走这条路径**:
+    // 暂停时 media-control 仍然给出一份带曲目的快照(playing=false),走的是 apply(),
+    // 曲目信息本来就留着。能走到这里的只有"真的什么都没在放"。
+    //
+    // 于是一张专辑放完之后,"歌词窗口"会停在一个半吊子状态:曲名歌手还在,封面变回占位
+    // 音符、配色没了、歌词列表空了写着"无歌词" —— 用户报的就是这个,看着像坏了而不是像
+    // 停了。曲目信息一起清掉,各界面才会一致地表达"现在没有在放"。
+    //
+    // 别的界面早就防过空标题:菜单栏那条 `if !coordinator.title.isEmpty` 直接不显示这一行,
+    // 灵动岛 `poller.title.isEmpty ? "♪" : poller.title` 回退成音符,都不需要改。
     //
     // allLines/artworkData 这两个是 2026-08-02 补上的——之前漏清,导致播放彻底停止(不是
     // 暂停,是这两处调用点代表的"真的没有任何曲目在加载"/"当前不是 Apple Music 在报告")
@@ -406,6 +416,15 @@ public final class LocalPlaybackSource: ObservableObject {
             artworkAccentHex = nil
             pausedPositionMs = nil
             currentDurationMs = nil
+            // 曲目本身也清掉,理由见上面那段。跟着一起清的还有"这首歌"的几个判定 ——
+            // 留着的话停播之后空状态会写成「纯音乐」/「广告中」这种明显不对的文案。
+            if !title.isEmpty { title = "" }
+            if !artist.isEmpty { artist = "" }
+            if !album.isEmpty { album = "" }
+            if hasLyricsContent { hasLyricsContent = false }
+            if isCurrentTrackInstrumental { isCurrentTrackInstrumental = false }
+            if currentTrackHasNoLyrics { currentTrackHasNoLyrics = false }
+            if isCurrentTrackAdBreak { isCurrentTrackAdBreak = false }
             // ⚠️ lastKey 必须一起清空,否则上面清掉的 allLines/artworkData 再也回不来。
             //
             // apply() 里重建这两样的两条路径都只在**换歌**时才跑:

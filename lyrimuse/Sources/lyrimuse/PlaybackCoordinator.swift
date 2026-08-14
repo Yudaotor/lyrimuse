@@ -133,6 +133,20 @@ final class PlaybackCoordinator: ObservableObject {
     /// 跟"喜欢""播放模式"同一个约定,界面据此整个不显示这个控件。
     @Published private(set) var soundVolume: Int?
 
+    /// 音量写入的合流状态:同一时刻只允许一次 osascript 在飞,拖动期间新来的值只更新
+    /// pendingVolumeTarget,等在飞的那次回来再补写最后一个值。
+    ///
+    /// ⚠️ 2026-08-14 用户反馈"拖音量条有卡顿感"。根因是滑杆的 DragGesture.onChanged 每来一个
+    /// 鼠标移动事件就调一次 setVolume,而每次 setVolume 都 `Task.detached` 起一个
+    /// **osascript 子进程**(实测单次往返 Music 90ms / Spotify 101ms)。拖一秒钟就是六十到
+    /// 一百多个进程同时在飞,互相抢 CPU,主线程跟着被拖垮 —— 滑块自然跟不上手指。
+    ///
+    /// 为什么用"同一时刻只飞一次"而不是按固定间隔节流:写一次本来就要 ~100ms,这个规则会
+    /// 自然收敛到约 10 次/秒,不需要另外拍一个魔数;而且"回来后若还有新值就再写一次"保证
+    /// **最后松手的那个值一定落地**,不会停在中途某个位置。
+    private var volumeWriteInFlight = false
+    private var pendingVolumeTarget: Int?
+
     /// 静音之前的音量,用来再点一次时还原。
     ///
     /// 2026-08-09 用户反馈"静音键再点一次没反应" —— 原来那个按钮是无条件 setVolume(0),
@@ -147,6 +161,34 @@ final class PlaybackCoordinator: ObservableObject {
     /// 踩过同一个坑并用同一个信号修好了(见 LocalPlaybackSource.seek 里的 resolvedIsAppleMusic)。
     private var isAppleMusicPlayingNow: Bool {
         LocalPlaybackSource.shared.lastResolvedBundleID == PlaybackPlayer.appleMusic.bundleIdentifier
+    }
+
+    /// **这一刻实际在播**的那个播放器。注意不是设置里选的那个 —— 设置可能是"自动识别",
+    /// 而这几个控件要按真正在播的那个 App 发指令。
+    private var currentPlayer: PlaybackPlayer? {
+        let bundleID = LocalPlaybackSource.shared.lastResolvedBundleID
+        return PlaybackPlayer.allCases.first { $0 != .auto && $0.bundleIdentifier == bundleID }
+    }
+
+    /// 能接受「播放模式 / 音量」这两组扩展控制的当前播放器,不能就是 nil(按钮据此不显示)。
+    ///
+    /// 2026-08-14 从"只认 Apple Music"放开到"Apple Music + Spotify":Spotify 的 AppleScript
+    /// 字典里 `sound volume` 和 `shuffling` 都是可写属性,能力是有的,只是当初接 Spotify 时
+    /// 没有把这两处一并接上。QQ 音乐/网易云音乐仍然不行 —— 它们的 .app 里根本没有 .sdef。
+    private var extendedControlPlayer: PlaybackPlayer? {
+        guard let player = currentPlayer,
+              MusicPlaybackController.supportsExtendedControls(player) else { return nil }
+        return player
+    }
+
+    /// Apple Music 走 AppleScript 需要"自动化"权限;这里在后台刷新路径上检查它,**绝不弹窗**。
+    /// Spotify 不走这个检查:本仓没有针对它的权限探测(读播放位置那条路也没有),权限没给时
+    /// 脚本自然失败、读回 nil,按钮不显示 —— 跟"读不出来就不显示"是同一个降级路径。
+    private func extendedControlPlayerForBackgroundRefresh() -> PlaybackPlayer? {
+        guard let player = extendedControlPlayer else { return nil }
+        if player == .appleMusic,
+           !MusicAutomationPermission.check(askIfNeeded: false).isAuthorized { return nil }
+        return player
     }
 
     /// 重新读一次当前曲目的"喜欢"状态。当前在播的不是 Apple Music、或自动化权限还没拿到时
@@ -177,14 +219,13 @@ final class PlaybackCoordinator: ObservableObject {
     /// 按钮同一套(见 LyricsOverlayView.controlButton)。
     /// 重新读一次播放模式。跟 refreshFavorited 同一套前置判断和后台线程约定。
     func refreshPlaybackMode() {
-        guard isAppleMusicPlayingNow,
-              MusicAutomationPermission.check(askIfNeeded: false).isAuthorized else {
+        guard let player = extendedControlPlayerForBackgroundRefresh() else {
             if playbackMode != nil { playbackMode = nil }
             return
         }
         let seq = playbackModeActionSeq
         Task.detached(priority: .utility) {
-            let value = MusicPlaybackController.playbackMode()
+            let value = MusicPlaybackController.playbackMode(for: player)
             await MainActor.run { [weak self] in
                 guard let self, self.playbackModeActionSeq == seq else { return }
                 guard self.playbackMode != value else { return }
@@ -195,14 +236,13 @@ final class PlaybackCoordinator: ObservableObject {
 
     /// 重新读一次 Music.app 的音量。跟 refreshFavorited 同一套前置判断与守卫。
     func refreshVolume() {
-        guard isAppleMusicPlayingNow,
-              MusicAutomationPermission.check(askIfNeeded: false).isAuthorized else {
+        guard let player = extendedControlPlayerForBackgroundRefresh() else {
             if soundVolume != nil { soundVolume = nil }
             return
         }
         let seq = volumeActionSeq
         Task.detached(priority: .utility) {
-            let value = MusicPlaybackController.soundVolume()
+            let value = MusicPlaybackController.soundVolume(for: player)
             await MainActor.run { [weak self] in
                 guard let self, self.volumeActionSeq == seq else { return }
                 guard self.soundVolume != value else { return }
@@ -214,18 +254,45 @@ final class PlaybackCoordinator: ObservableObject {
     /// 拖音量滑杆。跟"喜欢"一样先乐观更新再写回去 —— 滑杆必须跟着手指走,不能等
     /// osascript 往返(实测约 125ms)才动。
     func setVolume(_ value: Int) {
-        guard isAppleMusicPlayingNow else { return }
+        guard let player = extendedControlPlayer else { return }
         let target = min(100, max(0, value))
+        // 先乐观更新:滑杆必须跟着手指走,不能等 osascript 往返(~100ms)才动。
         soundVolume = target
         volumeActionSeq &+= 1
+        // 真正的写入排队,不是每个鼠标事件都起一个子进程 —— 见 pendingVolumeTarget 的注释。
+        pendingVolumeTarget = target
+        pumpVolumeWrite(for: player)
+    }
+
+    /// 把排队的音量值写下去。同一时刻只允许一次在飞;写完如果期间又来了新值,立刻补写一次,
+    /// 保证最后松手的那个值一定落地。
+    private func pumpVolumeWrite(for player: PlaybackPlayer) {
+        guard !volumeWriteInFlight, let target = pendingVolumeTarget else { return }
+        pendingVolumeTarget = nil
+        volumeWriteInFlight = true
         Task.detached(priority: .userInitiated) {
-            guard await MusicAutomationPermission.checkAppleMusicSafely(askIfNeeded: true) else {
-                await MainActor.run { [weak self] in self?.refreshVolume() }
-                return
+            // 权限弹窗只对 Apple Music 弹 —— 这是用户主动点的,该问就问;Spotify 没有对应的
+            // 探测,直接发脚本,失败了走下面的回读纠正。
+            // let(不是 var):var 会被下面的 MainActor.run 闭包捕获,Swift 6 模式下直接是错误。
+            let ok: Bool
+            if player == .appleMusic,
+               await !MusicAutomationPermission.checkAppleMusicSafely(askIfNeeded: true) {
+                ok = false
+            } else {
+                ok = MusicPlaybackController.setSoundVolume(target, for: player)
             }
-            // 跟播放模式同一个道理:写被接受了就别回读,Music.app 的 getter 会滞后。
-            guard !MusicPlaybackController.setSoundVolume(target) else { return }
-            await MainActor.run { [weak self] in self?.refreshVolume() }
+            await MainActor.run { [weak self] in
+                guard let self else { return }
+                self.volumeWriteInFlight = false
+                if self.pendingVolumeTarget != nil {
+                    // 拖动还在继续(或刚结束但最后一个值还没写),补写最新的那个。
+                    self.pumpVolumeWrite(for: player)
+                } else if !ok {
+                    // 只有写没被接受时才回读纠正乐观更新。写成功就**不回读**:Music.app 的
+                    // getter 滞后于 setter,这时候读回来的是旧值,只会把刚画对的抹掉。
+                    self.refreshVolume()
+                }
+            }
         }
     }
 
@@ -244,16 +311,20 @@ final class PlaybackCoordinator: ObservableObject {
 
     /// 点一下切到下一档模式。跟 toggleFavorited 一样先乐观更新再回读,以实际结果为准。
     func cyclePlaybackMode() {
-        guard isAppleMusicPlayingNow else { return }
-        let target = (playbackMode ?? .list).next
+        guard let player = extendedControlPlayer else { return }
+        // Spotify 的档位只有 列表 ↔ 随机:它的脚本字典里 repeating 是布尔,够不到"单曲循环"
+        // (见 MusicPlaybackMode.next(allowsRepeatOne:))。
+        let target = (playbackMode ?? .list)
+            .next(allowsRepeatOne: MusicPlaybackController.supportsRepeatOne(player))
         playbackMode = target
         playbackModeActionSeq &+= 1
         Task.detached(priority: .userInitiated) {
-            guard await MusicAutomationPermission.checkAppleMusicSafely(askIfNeeded: true) else {
+            if player == .appleMusic,
+               await !MusicAutomationPermission.checkAppleMusicSafely(askIfNeeded: true) {
                 await MainActor.run { [weak self] in self?.refreshPlaybackMode() }
                 return
             }
-            let wrote = MusicPlaybackController.setPlaybackMode(target)
+            let wrote = MusicPlaybackController.setPlaybackMode(target, for: player)
             // 写成功就**不回读**:Music.app 的 getter 滞后于 setter(见 setPlaybackMode
             // 的注释),这时候读回来的是旧值,只会把刚画对的图标又抹掉。只有写没被接受时
             // 才需要问一遍真实状态,好把乐观更新纠回去。

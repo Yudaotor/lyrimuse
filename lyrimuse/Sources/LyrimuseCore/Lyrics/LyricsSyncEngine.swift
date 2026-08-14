@@ -51,6 +51,10 @@ public struct SyncedLyricLine: Equatable {
     /// 逐字词按读音分好的组,只有"这一行确实能标罗马音"时才非空。视图可以选择用它做
     /// Apple 那种逐词标注,拿不到时退回 `romanization` 那一整行。
     public let wordGroups: [SyncedLyricWordGroup]?
+    /// 这一行摆在哪一边 —— 对唱歌词的左右分栏,见 LyricDuet。
+    /// **nil = 这首歌没有演唱者标记**(或还没到第一个标记),不是"靠左";各视图按自己的
+    /// 默认排版兜底(歌词窗口 `?? .leading`、悬浮窗 `?? .center`)。
+    public var side: LyricDuet.Side?
 
     // 不关心逐字填色进度、只要这一行的纯文本时用(比如状态栏显示)——mainText/words
     // 两种形态只会有一个非空,按现有的判断顺序(有逐字数据优先逐字)取值。
@@ -80,6 +84,9 @@ public struct LyricsWindowLine: Identifiable, Equatable {
 public final class LyricsSyncEngine {
     private var baseLines: [LyricLine] = []
     private var wordLines: [LyricLineWords] = []
+    // 跟上面两个数组逐行对应的左右分栏结果(对唱歌词)。没有演唱者标记的歌全是 .leading。
+    private var baseSides: [LyricDuet.Side?] = []
+    private var wordSides: [LyricDuet.Side?] = []
     private var romaLines: [LyricLine] = []
     private var trLines: [LyricLine] = []
     private var usingWords = false
@@ -293,11 +300,35 @@ public final class LyricsSyncEngine {
         usingWords = !candidateWords.isEmpty
             && (filteredBase.isEmpty || candidateWords.count * 2 >= filteredBase.count)
         if usingWords {
-            wordLines = candidateWords
+            // 对唱标记(男：/女：/合：)在逐字数据里跟第一个字粘在一起,共享同一个时间戳
+            // ——只能改那个词的文本,不能整个删掉,它扛着第一个字的发声时间。见 LyricDuet。
+            var markers: [String?] = []
+            wordLines = candidateWords.map { ln in
+                guard let first = ln.words.first else {
+                    markers.append(nil)
+                    return ln
+                }
+                let (marker, rest) = LyricDuet.splitMarkerAllowingEmpty(first.text)
+                markers.append(marker)
+                guard marker != nil else { return ln }
+                var words = ln.words
+                if rest.isEmpty {
+                    // 标记单独成一个词,整个丢掉(它只占了标记本身那点时长)。
+                    words.removeFirst()
+                } else {
+                    words[0] = LyricWord(startMs: first.startMs, durationMs: first.durationMs, text: rest)
+                }
+                return LyricLineWords(timeMs: ln.timeMs, words: words)
+            }
+            wordSides = LyricDuet.sides(for: markers)
             baseLines = []
+            baseSides = []
         } else {
+            let plan = LyricDuet.plan(lineTexts: filteredBase.map(\.text))
             wordLines = []
-            baseLines = filteredBase
+            wordSides = []
+            baseLines = zip(filteredBase, plan.texts).map { LyricLine(timeMs: $0.0.timeMs, text: $0.1) }
+            baseSides = plan.sides
         }
         romaLines = LRCParser.parse(lyricsRoma)
         trLines = LRCParser.parse(lyricsTr)
@@ -450,7 +481,8 @@ public final class LyricsSyncEngine {
                 translation: nearestText(trLines, ln.timeMs),
                 mainText: nil,
                 words: words,
-                wordGroups: wordGroups(for: words)
+                wordGroups: wordGroups(for: words),
+                side: wordSides.indices.contains(idx) ? wordSides[idx] : nil
             )
         }
         var idx = -1
@@ -462,7 +494,8 @@ public final class LyricsSyncEngine {
             translation: nearestText(trLines, ln.timeMs),
             mainText: ln.text,
             words: nil,
-            wordGroups: nil
+            wordGroups: nil,
+            side: baseSides.indices.contains(idx) ? baseSides[idx] : nil
         )
     }
 
@@ -503,7 +536,8 @@ public final class LyricsSyncEngine {
                     translation: nearestText(trLines, ln.timeMs),
                     mainText: nil,
                     words: words,
-                    wordGroups: wordGroups(for: words)
+                    wordGroups: wordGroups(for: words),
+                    side: self.wordSides.indices.contains(i) ? self.wordSides[i] : nil
                 )
                 return LyricsWindowLine(id: "\(idPrefix)#\(i)", timeMs: ln.timeMs, line: line)
             }
@@ -514,7 +548,8 @@ public final class LyricsSyncEngine {
                 translation: nearestText(trLines, ln.timeMs),
                 mainText: ln.text,
                 words: nil,
-                wordGroups: nil
+                wordGroups: nil,
+                side: self.baseSides.indices.contains(i) ? self.baseSides[i] : nil
             )
             return LyricsWindowLine(id: "\(idPrefix)#\(i)", timeMs: ln.timeMs, line: line)
         }

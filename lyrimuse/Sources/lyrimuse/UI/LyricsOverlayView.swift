@@ -123,8 +123,39 @@ struct LyricsOverlayView: View {
         .frame(maxHeight: .infinity, alignment: .top)
     }
 
+    /// 对唱歌词的左右分栏(见 LyricDuet)。
+    ///
+    /// nil = 这首歌没有演唱者标记(绝大多数歌),按悬浮窗原本的排版走 —— **居中**。
+    /// 跟歌词窗口的兜底不一样,所以引擎里那个字段是可选的:把"没信息"和"左边那位"混成
+    /// 同一个值,这里每一首普通歌都会莫名从居中变成靠左。
+    private var duetSide: LyricDuet.Side { poller.currentLine?.side ?? .center }
+
+    private var duetAlignment: HorizontalAlignment {
+        switch duetSide {
+        case .leading: return .leading
+        case .trailing: return .trailing
+        case .center: return .center
+        }
+    }
+
+    private var duetTextAlignment: TextAlignment {
+        switch duetSide {
+        case .leading: return .leading
+        case .trailing: return .trailing
+        case .center: return .center
+        }
+    }
+
+    private var duetRowAlignment: WrapLayout.RowAlignment {
+        switch duetSide {
+        case .leading: return .leading
+        case .trailing: return .trailing
+        case .center: return .center
+        }
+    }
+
     private var lyricsCard: some View {
-        VStack(spacing: 4) {
+        VStack(alignment: duetAlignment, spacing: 4) {
             // 有逐词标注(perWordRomanization)时,罗马音改标在每个词的正下方,上面这一整行
             // 就不再重复一遍 —— 那正是 Apple Music 的做法,也是用户要的效果。
             if settings.showRomanization, !usesPerWordRomanization,
@@ -171,7 +202,9 @@ struct LyricsOverlayView: View {
             RoundedRectangle(cornerRadius: overlayBackgroundCornerRadius, style: .continuous)
                 .stroke(poller.displayForegroundColor.opacity(overlayController.isDragArmed ? 0.6 : 0), lineWidth: 2)
         )
-        .multilineTextAlignment(.center)
+        // 对唱歌词按演唱者分左右(2026-08-14)。不带标记的歌 duetSide 恒为 .center,
+        // 跟原来完全一致。
+        .multilineTextAlignment(duetTextAlignment)
     }
 
     private var playbackControls: some View {
@@ -275,12 +308,27 @@ struct LyricsOverlayView: View {
     @ViewBuilder
     private var mainLine: some View {
         if let words = poller.currentLine?.words {
-            // 逐字填色用 TimelineView(.animation) 按渲染帧频直接从 poller.anchor 外推
-            // 播放位置,每帧现算 fillFraction,不经过 @Published 值 + .animation() 插值
-            // ——SwiftUI 对 .linear 这类曲线动画在重新定目标时是矢量相加而不是从当前值
-            // 接续,高频率更新下会造成逐字流转卡顿。暂停时 anchor 会变 nil(见 fastTick
-            // 守卫),TimelineView 的 paused 参数顺带把这个子树的刷新也停下来。
-            TimelineView(.animation(paused: !poller.isPlayingNow)) { context in
+            // 逐字填色用 TimelineView(.animation) 直接从 poller.anchor 外推播放位置,
+            // 每帧现算 fillFraction,不经过 @Published 值 + .animation() 插值 ——SwiftUI 对
+            // .linear 这类曲线动画在重新定目标时是矢量相加而不是从当前值接续,高频率更新
+            // 下会造成逐字流转卡顿。暂停时 anchor 会变 nil(见 fastTick 守卫),
+            // TimelineView 的 paused 参数顺带把这个子树的刷新也停下来。
+            //
+            // 帧率上限见 WordKaraokeGradient.refreshInterval —— 2026-08-14 那次实测(主线程
+            // 跑满 100%)是在歌词窗口上做的,当时只给窗口加了上限,**这里和灵动岛漏了**,
+            // 一直按显示器刷新率(ProMotion 120Hz)全速跑到 2026-08-15。常驻显示的恰恰是
+            // 悬浮窗,所以这处漏掉的代价比窗口那处更大。
+            //
+            // ⚠️ 这里**故意**保持"TimelineView 包住整个 WrapLayout",没有照搬歌词窗口那套
+            // "下沉到每个字自己挂 TimelineView"(见 LyricsWindowView.KaraokeLineText.body
+            // 顶部那段)。区别在于下面紧跟着的 .compositingGroup() + .lyricsTextStroke():
+            // 描边内部是 Canvas + resolveSymbol,会把整行内容整体渲染两遍,只要行内任何一个
+            // 字变了就得重算,下沉救不了它;而下沉之后每个字是**各自独立**的 30Hz 时钟、
+            // tick 时刻互不对齐,外层这两层反而可能被一行里 N 个错开的时刻各触发一次,
+            // 比现在更贵。歌词窗口没有描边也没有 compositingGroup,那边下沉才是纯赚。
+            // 真要在这里继续压成本,得先把描边改成不依赖整行重渲染的做法,不是搬结构。
+            TimelineView(.animation(minimumInterval: WordKaraokeGradient.refreshInterval,
+                                    paused: !poller.isPlayingNow)) { context in
                 // 加上 currentLyricsOffsetMs——activeLine/activeLineIndex(决定"现在是哪一
                 // 行哪个词")内部已经把 offsetMs 加进判断了,这里如果不加同一个偏移量,
                 // "被判定成当前词"用的时间基准跟"这个词该填多满"用的时间基准就对不上:
@@ -290,7 +338,7 @@ struct LyricsOverlayView: View {
                 // 换成会自动换行的 WrapLayout——原来的 HStack(spacing: 0) 从不换行,一行
                 // 装不下所有字时会把每个 Text 压缩到自己出省略号,长的逐字歌词行会直接
                 // "消失"变成一串"…"。见文件底部 WrapLayout 定义。
-                WrapLayout {
+                WrapLayout(rowAlignment: duetRowAlignment) {
                     if let groups = poller.currentLine?.wordGroups, usesPerWordRomanization {
                         // 一组一列:上面是这一组的字(各自逐字填色),下面是这一组的罗马音
                         // (跟着整组的进度填)。列宽由 VStack 取"上下两行里更宽的那个",
@@ -505,7 +553,8 @@ private struct ControlsFramePreferenceKey: PreferenceKey {
 struct WrapLayout: Layout {
     // 行内的水平对齐——悬浮歌词/灵动岛是居中排版(默认值,行为不变);"歌词窗口"2026-08-04
     // 改成 Apple Music 歌词页同款的左对齐排版后传 .leading。
-    enum RowAlignment { case center, leading }
+    // trailing 是 2026-08-14 为对唱歌词的右侧那位加的(见 LyricDuet)。
+    enum RowAlignment { case center, leading, trailing }
 
     var horizontalSpacing: CGFloat = 0
     var verticalSpacing: CGFloat = 2
@@ -535,8 +584,30 @@ struct WrapLayout: Layout {
         return rows
     }
 
-    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        let sizes = subviews.map { $0.sizeThatFits(.unspecified) }
+    // 量一次子视图尺寸就存住,别每次调用都重量一遍。
+    //
+    // 2026-08-14 用 sample 量到的现场:"歌词窗口"播放带逐字歌词的歌时,主线程 90%+ 的时间
+    // 在 NSHostingView.layout,栈顶就是这个 Layout 的 sizeThatFits。原因是逐字填色由
+    // TimelineView 按渲染帧频驱动(60~120Hz),而这里**每次** sizeThatFits/placeSubviews
+    // 都会 `subviews.map { $0.sizeThatFits(.unspecified) }` 把整行每个字重新测一遍 ——
+    // SwiftUI 一个布局回合里本来就会多次询问尺寸,再乘以帧率,就是一秒几千次文字排版。
+    //
+    // 缓存只在"子视图集合真的变了"时重建(updateCache):逐帧变的是填色和 .offset,
+    // 两者都不影响文字尺寸。
+    struct Cache {
+        var sizes: [CGSize]
+    }
+
+    func makeCache(subviews: Subviews) -> Cache {
+        Cache(sizes: subviews.map { $0.sizeThatFits(.unspecified) })
+    }
+
+    func updateCache(_ cache: inout Cache, subviews: Subviews) {
+        cache.sizes = subviews.map { $0.sizeThatFits(.unspecified) }
+    }
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout Cache) -> CGSize {
+        let sizes = cache.sizes
         guard let maxWidth = proposal.width, maxWidth.isFinite else {
             // 没有宽度限制:理论上不会走到——调用方(mainLine)所在的 VStack 总会有一个
             // 有限宽度的提案(悬浮窗宽度固定)。兜底铺成一行,不换行。
@@ -549,12 +620,20 @@ struct WrapLayout: Layout {
         return CGSize(width: maxWidth, height: totalHeight)
     }
 
-    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        let sizes = subviews.map { $0.sizeThatFits(.unspecified) }
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout Cache) {
+        let sizes = cache.sizes
         let rows = computeRows(sizes: sizes, maxWidth: bounds.width)
         var y = bounds.minY
         for row in rows {
-            var x = bounds.minX + (rowAlignment == .center ? max(0, (bounds.width - row.width) / 2) : 0) // 按 rowAlignment 居中/靠左
+            // 按 rowAlignment 居中/靠左/靠右
+            let slack = max(0, bounds.width - row.width)
+            let indent: CGFloat
+            switch rowAlignment {
+            case .center: indent = slack / 2
+            case .leading: indent = 0
+            case .trailing: indent = slack
+            }
+            var x = bounds.minX + indent
             for i in row.indices {
                 let size = sizes[i]
                 subviews[i].place(

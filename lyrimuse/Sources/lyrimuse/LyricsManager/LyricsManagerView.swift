@@ -189,8 +189,6 @@ struct LyricsManagerView: View {
     @State private var persistedYRCForOffset = ""
     // 列宽(可拖拽调节 + 持久化,见 LyricsColumnWidthsStore)。
     @ObservedObject private var columnWidths = LyricsColumnWidthsStore.shared
-    // 表头实际渲染宽度,拖拽夹值要用;首帧还没量到时是 0。
-    @State private var headerWidth: CGFloat = 0
     // 一次拖拽开始那一刻的列宽快照——必须按"起点 + 累计位移"算,不能每次 onChanged 都在
     // 当前值上叠加增量:DragGesture 的 translation 是相对手势起点的累计值,不是帧间增量,
     // 叠加会让列宽以平方速度飞出去。
@@ -462,24 +460,23 @@ struct LyricsManagerView: View {
         }
         .font(.caption2.weight(.semibold))
         .foregroundStyle(.secondary)
-        // 左右内边距跟着 List 里"行内容的实际左右边界"走,而不是写死 12pt。
-        // List(.inset) 给每行加的 inset 跟表头的内边距本来就不相等(实测 leading≈16pt、
-        // trailing≈33pt——后者还含滚动条留白),两边一直是错开的;以前表头没有分隔线,错开
-        // 20pt 看不出来,现在分隔线画的就是列边界,错开就直接可见了。这两个值是 AppKit 给的、
-        // 会随系统版本变,所以运行时量(见 RowContentBoundsKey),不硬编码。
+        // 表头的横向范围**就是**行内容的横向范围([minX, maxX],由行自己上报,见
+        // RowContentBoundsKey)。List(.inset) 给每行加的 inset 跟表头默认的内边距本来就
+        // 不相等(实测 leading≈12pt、trailing 还含滚动条留白),错开的话分隔线就画不在
+        // 列边界上了;这两个值是 AppKit 给的、会随系统版本变,所以运行时量,不硬编码。
+        //
+        // 用"定宽 + 左内边距"钉住右边界,而不是"左右内边距":右内边距只能由
+        // (表头自身宽度 - maxX) 推出来,那就得**另外再量一次表头的宽度**——多出来的那个
+        // 测量正是 2026-08-14 那个 bug 的来源,见 columnAreaWidth 的注释。
+        .frame(width: columnAreaWidth > 0 ? columnAreaWidth : nil, alignment: .leading)
         .padding(.leading, headerLeading)
-        .padding(.trailing, headerTrailing)
+        // 还没量到行内容边界时(首帧/列表为空)退回对称的兜底内边距;量到之后右边界由上面
+        // 的定宽决定,这里不能再加内边距,否则会把表头往左推、跟行错开。
+        .padding(.trailing, columnAreaWidth > 0 ? 0 : Self.fallbackHPadding)
         .padding(.vertical, 5)
-        // 量出表头这一行的实际可用宽度,拖拽时用来算"歌名列还剩多少"(见
-        // LyricsColumnWidths.dragged 的 totalWidth 参数)。放在 .background 里的
-        // GeometryReader 不影响布局,是量宽度又不改版式的标准做法。
-        .background(
-            GeometryReader { g in
-                Color.clear
-                    .onAppear { headerWidth = g.size.width }
-                    .onChange(of: g.size.width) { _, w in headerWidth = w }
-            }
-        )
+        // 定宽之后表头本身不再撑满整栏,补一个"占满、内容靠左"的外框,右键菜单和将来可能
+        // 加的表头背景才覆盖整行宽度。
+        .frame(maxWidth: .infinity, alignment: .leading)
         .contextMenu {
             Button(L10n.t("重置列宽")) { columnWidths.reset() }
         }
@@ -489,19 +486,36 @@ struct LyricsManagerView: View {
     private static let fallbackHPadding: CGFloat = 12
 
     private var headerLeading: CGFloat { rowContentBounds?.minX ?? Self.fallbackHPadding }
-    private var headerTrailing: CGFloat {
-        guard let b = rowContentBounds, headerWidth > 0 else { return Self.fallbackHPadding }
-        return max(0, headerWidth - b.maxX)
+
+    // 四列可以摊开的横向空间 = 行内容的宽度。列宽的收敛(fitted)和拖拽夹值(dragged)都只
+    // 认这一个测量值。
+    //
+    // ⚠️ 2026-08-14 修的就是这里。原来这里用的是另一个 @State headerWidth,由表头
+    // .background 里的 GeometryReader 通过 .onAppear/.onChange(of: g.size.width) 更新——
+    // 而那对回调在首帧拿到一个很窄的宽度之后就**再也没有跟上后续布局**。真机证据:侧栏实际
+    // 渲染宽度约 725pt(表头和每一行都按这个宽度画出来),但 fitted 拿到的宽度 ≤218pt,于是
+    // budget 掉到三列下限之和以下、走进"极窄"分支,把三列**恒定**钳到各自下限(56/56/70)。
+    // 存下来的值当时是 56/137.66/70:专辑存的是 137.66、画出来却是 56 —— 也就是说无论怎么
+    // 拖、往哪个方向拖,存进去的值都被这一步抹平成同一组常量,界面纹丝不动,表现成"列宽根本
+    // 拖不动",而且全程没有任何报错。
+    //
+    // 换成 rowContentBounds 之后只剩这**一个**几何输入,而它走的是 PreferenceKey ——
+    // 布局每跑一遍就重新上报一次(这个文件里表头对齐一直用它,实测始终是准的),不像
+    // GeometryReader 里的 onChange 会漏。少一个测量,就少一个能悄悄失效的东西。
+    private var columnAreaWidth: CGFloat {
+        guard let b = rowContentBounds else { return 0 }
+        return max(0, b.maxX - b.minX)
     }
-    // 表头左右内边距 + 三个 8pt 列间距 = 这一行里不属于任何列的固定开销,算歌名列剩余
-    // 宽度时要先扣掉它(见 LyricsColumnWidths.dragged/fitted 的 chrome 参数)。
-    private var headerChrome: CGFloat { headerLeading + headerTrailing + 8 * 3 }
+    // 三个 8pt 列间距 = 这一行里不属于任何列的固定开销,算歌名列剩余宽度时要先扣掉它
+    // (见 LyricsColumnWidths.dragged/fitted 的 chrome 参数)。左右内边距不在其中——
+    // columnAreaWidth 量的已经是内边距**以内**的那一段。
+    private var headerChrome: CGFloat { 8 * 3 }
 
     // 真正拿去渲染的列宽:窗口/侧栏被拖窄后,用户存下来的列宽可能已经把歌名挤没,fitted
-    // 会临时等比收敛(不改存下来的值)。headerWidth 还没量到(=0)时 fitted 原样返回,
-    // 首帧不会算出奇怪的宽度。
+    // 会临时等比收敛(不改存下来的值)。还没量到宽度(=0)时 fitted 原样返回,首帧不会算出
+    // 奇怪的宽度。
     private var shownWidths: LyricsColumnWidths {
-        LyricsColumnWidths.fitted(columnWidths.widths, totalWidth: headerWidth, chrome: headerChrome)
+        LyricsColumnWidths.fitted(columnWidths.widths, totalWidth: columnAreaWidth, chrome: headerChrome)
     }
 
     private func columnDivider(_ index: Int) -> some View {
@@ -513,7 +527,7 @@ struct LyricsManagerView: View {
                 guard let start = dragStartWidths else { return }
                 columnWidths.widths = LyricsColumnWidths.dragged(
                     from: start, divider: index, dx: dx,
-                    totalWidth: headerWidth, chrome: headerChrome
+                    totalWidth: columnAreaWidth, chrome: headerChrome
                 )
             },
             onDragEnd: { dragStartWidths = nil },

@@ -1,4 +1,5 @@
 import Foundation
+import LyrimuseCore
 import OSLog
 
 private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "lastfm-stats")
@@ -372,6 +373,10 @@ final class LastfmStatsService: ObservableObject {
         trackPlayCounts = snap.trackPlayCounts ?? [:]
         recentTrackCovers = snap.recentTrackCovers ?? [:]
         recentAlbumCovers = snap.recentAlbumCovers ?? [:]
+        // 本机封面兜底不进快照 —— 它是从 enrich 缓存现算的,存下来只会存一份可能已经过期的
+        // 副本。但**必须在这里补算一次**:这条路径不经过 applyRecent,冷启动那一屏就是快照
+        // 里的行,不算的话本机能给出封面的行要一直灰到下一次联网刷新回来才补上。
+        refreshLocalCovers(for: recent)
         // 快照里的图提前解码进内存:否则冷启动第一次打开这一页,每张图都要先画一帧占位符
         // 再从 URLCache 里异步取(见 ImageMemoryCache.prewarm)。
         ImageMemoryCache.shared.prewarm(
@@ -489,15 +494,45 @@ final class LastfmStatsService: ObservableObject {
         return artist.trimmingCharacters(in: .whitespaces).lowercased() + "|" + a.lowercased()
     }
 
-    /// 一行最近记录该用哪张封面:自带的(scrobble 记录里的真图)→ getinfo 纠正后的曲目封面
-    /// → 同专辑兄弟曲目的封面。三级都没有才留空位。
+    /// 一行最近记录该用哪张封面:自带的(scrobble 记录里的真图)→ **本机缓存里 collector
+    /// 解析出的那张** → getinfo 纠正后的曲目封面 → 同专辑兄弟曲目的封面。四级都没有才留空位。
+    ///
+    /// 第二级 2026-08-14 补上。原来四级里没有任何一级来自本机:全是 Last.fm,而 Last.fm 对
+    /// 中文曲库缺图非常常见 —— 用户报的「陶喆 - 聖誕之吻」三级全空(Last.fm 只有那张所有
+    /// 缺图实体共用的白星占位图,被 imageURL() 正确滤掉),而同一张专辑网易云是有图的,
+    /// collector 播放时早就解析并存进 enrich 缓存了,只是这个列表从来没查过。
+    ///
+    /// 放在第二级而不是第一级:scrobble 自带图能用的行就别换了(换了只是徒增变化,26pt
+    /// 的显示尺寸也看不出清晰度差别);但要排在两级 Last.fm 网络兜底**之前** —— 本地
+    /// 命中就不必再为这一行发 getinfo 请求了,见 resolvePlayCounts 里的 hasCover。
     func coverURL(for track: RecentTrack) -> URL? {
         if let own = track.imageURL { return own }
+        if let local = localCovers[Self.playCountKey(artist: track.artist, title: track.title)] {
+            return local
+        }
         if let byTrack = recentTrackCovers[Self.playCountKey(artist: track.artist, title: track.title)] {
             return byTrack
         }
         if let key = Self.albumKey(artist: track.artist, album: track.album) { return recentAlbumCovers[key] }
         return nil
+    }
+
+    /// 本机 enrich 缓存能给出封面的行(键跟 playCountKey 同口径)。
+    ///
+    /// 在 applyRecent 里一次性算好,而不是让视图每行现查:EnrichCacheReader 每次调用都要
+    /// stat 一次缓存文件判 mtime,而这个列表一页 100 行、每 45 秒重绘一轮。
+    private(set) var localCovers: [String: URL] = [:]
+
+    private func refreshLocalCovers(for rows: [RecentTrack]) {
+        var out: [String: URL] = [:]
+        for r in rows {
+            let key = Self.playCountKey(artist: r.artist, title: r.title)
+            guard out[key] == nil else { continue }
+            if let url = EnrichCacheReader.coverURL(artist: r.artist, title: r.title, album: r.album ?? "") {
+                out[key] = url
+            }
+        }
+        localCovers = out
     }
 
     /// 曲目在播放次数表里的键:大小写/首尾空白不算差异(跟红点的宽松比对同一套口径)。
@@ -518,6 +553,8 @@ final class LastfmStatsService: ObservableObject {
         lastAppliedRecentPage = recentPage
         recentUpdatedAt = Date()
         recent = rows
+        // 本机封面兜底跟着这一批行重算一次。放在这里而不是视图里,理由见 localCovers。
+        refreshLocalCovers(for: rows)
         let next = rows.first(where: \.nowPlaying)
         let nextKey = next.map { "\($0.artist)|\($0.title)" }
         let prevKey = apiNowPlaying.map { "\($0.artist)|\($0.title)" }
@@ -546,9 +583,11 @@ final class LastfmStatsService: ObservableObject {
             let key = Self.playCountKey(artist: r.artist, title: r.title)
             // 次数还缺、且没被判定为"那边没有"
             let needsCount = trackPlayCounts[key] == nil && !playCountUnavailable.contains(key)
-            // 封面还缺:三级兜底任一有值就不必为封面发请求 —— 自带图/同专辑兄弟都算数,
-            // 否则封面明明已经显示出来了还在每轮重查(审阅指出的放大器)。
-            let hasCover = r.imageURL != nil || recentTrackCovers[key] != nil
+            // 封面还缺:四级兜底任一有值就不必为封面发请求 —— 自带图/本机缓存/同专辑兄弟
+            // 都算数,否则封面明明已经显示出来了还在每轮重查(审阅指出的放大器)。
+            // localCovers 这一项 2026-08-14 补:漏了它的话本机已经给出封面的行还会继续
+            // 每轮发 getinfo,白烧 Last.fm 的限速额度。
+            let hasCover = r.imageURL != nil || localCovers[key] != nil || recentTrackCovers[key] != nil
                 || Self.albumKey(artist: r.artist, album: r.album).map { recentAlbumCovers[$0] != nil } ?? false
             let needsCover = !hasCover && !coverUnavailable.contains(key)
             guard needsCount || needsCover, !playCountsInFlight.contains(key),
