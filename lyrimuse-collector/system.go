@@ -168,6 +168,24 @@ func expectedPlayerBundleID() string {
 	}
 }
 
+// isAdBreak 判断这条播放是不是 Spotify 的插播广告。
+//
+// 判据是"Spotify + 专辑名为空":media-control 自己的文档确认广告播放时 album 恒为空
+// 字符串(系统级 MediaRemote 就是这么报告的,不是我们没读到),见它 README 的
+// "Skip Spotify ads" 一节。这个信号原来只用在 enrich.go 里挡住"别拿广告标题去搜歌词",
+// 2026-08-14 抽出来复用 —— 用户在网页「最近播放」和 App「最近记录」里看到了
+// "Now Streaming on Hulu." / "BLIZZARD® Double Flip Deal BOGO for 99¢" 这种条目:
+// 广告没被搜歌词,但**照样当成一次收听上送**给了 ListenBrainz / Last.fm,还写进了本地
+// 收听日志,污染听歌历史和统计。
+//
+// ⚠️ 已知的误伤面:Spotify 上**确实没有专辑名**的内容(播客单集、上传的本地文件)会一并
+// 被判成广告、不再上送。取舍是明确的:少记一条播客,好过让广告混进听歌历史 —— 后者是
+// scrobble,落进 Last.fm 之后基本删不掉(只能上网页一条条手删)。这个判据不影响
+// Apple Music / QQ 音乐 / 网易云:那三家的正常曲目本来就带专辑名。
+func isAdBreak(bundleID, album string) bool {
+	return bundleID == spotifyBundleID && album == ""
+}
+
 // isKnownPlayerBundleID 是"自动识别"模式专用的成员判断——playerAuto 下 isTracked()
 // 用它替代 expectedPlayerBundleID() 那种"只认一个固定 bundle id"的判断,因为自动识别
 // 模式下 p.cur.Bundle 可能是这四个已知播放器里的任意一个。

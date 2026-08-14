@@ -500,6 +500,14 @@ type announceOutcome struct {
 // 下一轮 poll 重复触发提交、造成同一次收听被提交两次)；结果由 applySubmitOutcome
 // 统一清除。goroutine 退出时机受 p.ctx 控制,进程退出不会泄漏。
 func (p *poller) submitSingleAsync(sess *playSession, meta snapshot, startedAt int64) {
+	// 广告不算一次收听。挡在这个漏斗上而不是各个调用点:曲终 finalize 和播放中达阈值两条
+	// 闸门都汇到这里,而 applySubmitOutcome 里的 Last.fm 镜像、本地收听日志、网页中继全都
+	// 挂在它的结果后面,挡住这里就一起挡住了。判据和误伤面见 isAdBreak。
+	if isAdBreak(meta.Bundle, meta.Album) {
+		log.Printf("skipping ad break: %q - %q", meta.Artist, meta.Title)
+		sess.listenSent = true // 标记成已处理,免得每一轮 poll 都重新判一次
+		return
+	}
 	lm := lbMeta(meta)
 	go func() {
 		err := p.lb.submit(p.ctx, "single", startedAt, lm)
@@ -575,6 +583,13 @@ func (p *poller) finalize(now time.Time) {
 // 不再能同步拿到"是否成功"。
 func (p *poller) announce(now time.Time, why string) {
 	if p.sess.announcing {
+		return
+	}
+	// 广告同样不宣布"正在播放"。playing_now 也是往 ListenBrainz / Last.fm 上送,而且它直接
+	// 决定网页顶部那张卡显示什么 —— 一个公开页面上写着"正在播放 BLIZZARD® Double Flip Deal
+	// BOGO for 99¢"是纯粹的噪声。挡掉之后广告这几十秒里网页停在上一首,跟"没在放"时的表现
+	// 一致,不会出现假的当前曲目。判据见 isAdBreak。
+	if isAdBreak(p.cur.Bundle, p.cur.Album) {
 		return
 	}
 	p.sess.announcing = true
@@ -995,8 +1010,11 @@ func run(ctx context.Context, cfg *config, lb *lbClient) error {
 			// Best-effort final flush with a fresh context.
 			flushCtx, cancel := context.WithTimeout(context.Background(), submitTimeout)
 			defer cancel()
+			// 这条退出兜底路径直接调 mirrorScrobbleSync/lb.submit,不经过 submitSingleAsync,
+			// 所以广告判据要在这里再挡一次(见 isAdBreak)。
 			if p.sess != nil && !p.sess.listenSent && p.sess.playedSecs >= listenThreshold(p.sess.meta.Duration) &&
-				(p.sess.meta.Duration <= 0 || p.sess.meta.Duration >= minTrackSecs) {
+				(p.sess.meta.Duration <= 0 || p.sess.meta.Duration >= minTrackSecs) &&
+				!isAdBreak(p.sess.meta.Bundle, p.sess.meta.Album) {
 				// Last.fm 镜像:与 LB 解耦,且必须走同步变体 —— 异步 goroutine 活不过
 				// 紧接着的 return(见 mirrorScrobbleSync 注释)。
 				p.mirrorScrobbleSync(flushCtx, p.sess.meta.Artist, p.sess.meta.Title, p.sess.meta.Album, p.sess.startedAt.Unix())

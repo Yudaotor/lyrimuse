@@ -194,15 +194,10 @@ func trackEnrichment(artist, title, album, bundleID string, durationSecs float64
 	if title == "" {
 		return nil
 	}
-	// Spotify 广告插播:media-control 自己的文档确认广告播放时 album 字段恒为空字符串
-	// (系统级 MediaRemote 本身就是这么报告的,不是我们没读到)。不能把广告的标题/歌手
-	// 当成一首正常歌曲丢进下面的五源歌词搜索——qqMusicURL()/e.SpotifyURL 这两路兜底
-	// 链接只要 title!="" 就会给出非空值,导致 resolveEnrichAsync 的"全空不写入"判断
-	// 永远不成立,广告标题会被当成一首"歌"永久写进磁盘缓存,污染"歌词管理"列表,还
-	// 白跑一轮网络搜索。这个信号只在 Spotify 广告上验证过(见 media-control README
-	// "Skip Spotify ads" 一节),不影响 QQ 音乐/网易云音乐——那两个平台的正常曲目本来
-	// 就该有专辑名,不会误伤。
-	if bundleID == spotifyBundleID && album == "" {
+	// 广告不能拿去搜歌词:qqMusicURL()/e.SpotifyURL 这两路兜底链接只要 title!="" 就会给出
+	// 非空值,导致 resolveEnrichAsync 的"全空不写入"判断永远不成立,广告标题会被当成一首
+	// "歌"永久写进磁盘缓存、污染"歌词管理"列表,还白跑一轮网络搜索。判据见 isAdBreak。
+	if isAdBreak(bundleID, album) {
 		return nil
 	}
 	key := artist + "|" + title + "|" + album
