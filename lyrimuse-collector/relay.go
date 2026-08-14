@@ -50,6 +50,12 @@ func relayState(s snapshot, playing bool, device string, listenedAt int64, curre
 		"lyrics": enr["lyrics"], "lyricsTr": enr["lyrics_tr"], "lyricsRoma": enr["lyrics_roma"], "lyricsYRC": enr["lyrics_yrc"],
 		// 封面/歌词实际来自哪个平台("netease"/"qq"/"lrclib"),供网页页脚如实展示。
 		"coverSource": ai["cover_source"], "lyricsSource": ai["lyrics_source"],
+		// 这条 listen 实际是哪个播放器放的("Apple Music (macOS)"/"QQ Music (macOS)"/
+		// "NetEase Cloud Music (macOS)"/"Spotify (macOS)"/"Apple Music (iOS)",见
+		// mediaPlayerLabel)。网页页脚原来写死 "Apple Music",用 QQ 音乐/网易云听歌时
+		// 那一行是错的。这个值早就在 additional_info 里交给 ListenBrainz 了,只是没往
+		// 中继这条路径带。
+		"mediaPlayer": ai["media_player"],
 		"links":      map[string]any{"apple": ai["apple_music_url"], "qq": ai["qq_music_url"], "netease": ai["netease_url"], "spotify": ai["spotify_url"]},
 		"durationMs": ai["duration_ms"], "progressMs": ai["progress_ms"], "progressTs": ai["progress_ts"], "rate": ai["playback_rate"],
 	}
