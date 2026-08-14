@@ -451,7 +451,6 @@
 "比下面的宽度更长时，在状态栏里横向滚动播完整句；开头会先停一下再滚" = "Anything longer than the width below scrolls across the menu bar in full, after a brief pause at the start";
 "超出宽度时截断，不滚动" = "Truncates when it doesn't fit";
 "超出宽度时横向滚动播完" = "Scrolls when it doesn't fit";
-"用 Apple Music 时查你的资料库，所以没添加到资料库的专辑查不到；用其它播放器时改从歌词来源查这张专辑的曲目" = "With Apple Music this reads your library, so an album you never added won't be found. Other players look the album up from wherever the lyrics came from";
 "查看、编辑、重搜已缓存的歌词" = "View, edit and re-search cached lyrics";
 "歌词保存在这里" = "Lyrics are kept here";
 "比下面的宽度更长时截断成「前 N 个字…」，不滚动" = "Truncates to the first N characters when it doesn't fit";
