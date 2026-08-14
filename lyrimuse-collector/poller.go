@@ -409,7 +409,15 @@ func (p *poller) pushRelayState(now time.Time, reanchored bool) {
 	// 显示优先级:Mac 正在放 > iPhone(经 Last.fm)正在放 > Mac 暂停 > 上次播放。
 	// 关键:Mac 只是"有当前曲目但暂停"(没退出 Music)时应让位给 iPhone 正在放的,并如实
 	// 报暂停(playing=false)——否则一首暂停没退出的歌会一直盖住 iPhone 正在放的、且误报在播。
-	macHasTrack := p.isTracked()
+	// 广告不算"Mac 上有曲目"。
+	//
+	// 这条推送路径跟上送(submitSingleAsync)和 now-playing(announce)完全独立 —— 它只看
+	// p.cur 是什么就往中继推什么,所以前两处挡住之后,网页顶部那张卡照样会显示
+	// "他正在播放 We're Here / Instacart"(0:14、暂无同步歌词)。2026-08-14 用户实测反馈。
+	//
+	// 判成 false 之后会顺着下面的 switch 落到 iPhone 正在放 / 上次播放,也就是广告这几十秒
+	// 网页停在上一首,跟"没在放"时的表现一致 —— 不会出现一张假的当前曲目卡。判据见 isAdBreak。
+	macHasTrack := p.isTracked() && !isAdBreak(p.cur.Bundle, p.cur.Album)
 	iphonePlaying := !p.remoteAt.IsZero() && now.Sub(p.remoteAt) < 90*time.Second
 	switch {
 	case macHasTrack && p.cur.Playing: // Mac 正在放 → 最高优先(带进度条)
