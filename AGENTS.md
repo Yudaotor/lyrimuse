@@ -116,6 +116,12 @@ screencapture -x -o -l <窗口ID> /tmp/shot.png                   # 只截那一
 `\t\tstate = `（嵌套）和 `\tjob state = `（另一个字段），`contains` 会读错；`last exit code`
 的值形如 `78: EX_CONFIG` 而不是纯数字。
 
+**某个歌词源整个哑掉时，先分清是「被拦」还是「连不上」**。被反爬拦会正经返回 401 +
+`hint=captcha` 的 JSON；而 2026-08-15 那次 musixmatch 失效是系统 DNS 把域名解析到了别人的
+地址（`apic-appmobile.musixmatch.com` → Facebook 的段），TLS 握手当场失败、一个字节都拿不到。
+判据：`curl --resolve <域名>:443:<DoH 查到的真实IP>` 能不能通。修法见 `doh.go`。
+这类故障的代价不止"少一个源"——每首歌都要把 DNS/TLS 超时白等一遍。
+
 **KeepAlive 的 launchd job 必须 bootout，不能只 kill**——kill 掉 launchd 立刻拉起来。
 
 **Bash 工具跑的是 zsh**：遍历一组东西用数组（`a=(x y z); for i in "${a[@]}"`），

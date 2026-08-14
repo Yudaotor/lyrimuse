@@ -39,6 +39,17 @@ import (
 // 端点在这组 host+app_id 下逐一实测全部通过。两组 host+app_id 分别对应 Musixmatch
 // 桌面网页版/iOS App 客户端,接口形状完全一致,只是反爬策略不同,选哪组纯粹是"哪个
 // 实测不被拦"的问题。
+//
+// ⚠️ 2026-08-15:这个源又哑了一次,但**跟上面那种反爬是两回事**,别按同一个思路去查。
+// 这次是系统 DNS 把 apic-*.musixmatch.com 解析到了不属于 Musixmatch 的地址
+// (apic-appmobile → 31.13.91.6,Facebook 的段;DoH 查到的真实地址是 44.212.146.46 /
+// 52.5.55.223),TLS 握手直接失败("no alternative certificate subject name matches"),
+// 一个字节都拿不到。反爬会正经返回 401 + hint=captcha 的 JSON;这次是连接根本建不起来。
+// 用 curl --resolve 强连真实 IP 立刻 200 + 拿到 token —— 服务器一直好好的。
+// 修法见 doh.go:这个源的 HTTP client 走 DoH 解析,证书仍按域名严格校验。
+//
+// 顺带一提,当时的表现不只是"少一个源":每首歌它都要把 DNS/TLS 超时白等一遍,
+// healthcheck 探两首歌要 29s;修好之后 7s。
 const (
 	musixmatchAppID   = "mac-ios-v2.0"
 	musixmatchBaseURL = "https://apic-appmobile.musixmatch.com/ws/1.1/"
@@ -225,6 +236,22 @@ func musixmatchFetchToken(retry int) string {
 	return token
 }
 
+// musixmatchHTTPClient 是这个源专用的 HTTP client —— 走 DoH 解析(见 doh.go)。
+//
+// 只建一次:http.Transport 自带连接池和 TLS 会话复用,每次请求现造一个等于每次都重新
+// 握手,而这个源一首歌要打 search/subtitle/richsync/translations 好几次。
+var (
+	musixmatchClientOnce sync.Once
+	musixmatchClient     *http.Client
+)
+
+func musixmatchHTTPClient() *http.Client {
+	musixmatchClientOnce.Do(func() {
+		musixmatchClient = dohHTTPClient(8 * time.Second)
+	})
+	return musixmatchClient
+}
+
 // musixmatchDo 发起一次带统一身份参数(app_id/usertoken/t)的请求。action=="token.get"
 // 时不附带 usertoken(避免 musixmatchEnsureToken→musixmatchDo→musixmatchEnsureToken
 // 递归),其余 action 都需要先有一个可用 token。
@@ -241,7 +268,10 @@ func musixmatchDo(action string, params neturl.Values) ([]byte, error) {
 		return nil, err
 	}
 	req.Header.Set("User-Agent", "Mozilla/5.0")
-	resp, err := doHTTPTracked(&http.Client{Timeout: 8 * time.Second}, req)
+	// 走 DoH 解析的 client:这台机器的系统 DNS 把 apic-*.musixmatch.com 解析到了一个
+	// 不属于 Musixmatch 的地址,TLS 握手直接失败,整个源静默失效。详见 doh.go。
+	// 证书仍按域名严格校验,只是拨号目标换成 DoH 查出来的真实 IP。
+	resp, err := doHTTPTracked(musixmatchHTTPClient(), req)
 	if err != nil {
 		return nil, err
 	}
