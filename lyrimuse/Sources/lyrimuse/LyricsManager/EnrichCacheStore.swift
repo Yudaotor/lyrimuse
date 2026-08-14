@@ -410,16 +410,65 @@ public final class EnrichCacheStore: ObservableObject {
         // 目录下,无差别删除也会顺手清掉用户自己丢进去的 .txt 备注、封面图之类。
         // 按后缀白名单过滤(跟导出用的是同一份 EnrichCacheKeys.lyricsFileSuffixes),
         // 认不出来的文件一律不碰。
-        if let urls = try? FileManager.default.contentsOfDirectory(at: Self.lyricsDir, includingPropertiesForKeys: nil) {
-            for url in urls where EnrichCacheKeys.lyricsFileSuffixes.contains(where: { url.lastPathComponent.hasSuffix($0) }) {
-                try? FileManager.default.removeItem(at: url)
-            }
-        }
+        deleteAllLyricsFiles()
         rebuildSummaries()
         totalSizeBytes = 0
         // 整份替换:清空是用户明确的"全清",读-改-写会把盘上一切并回来,正好相反。
         guard persist(replacingEverything: true) else { return }
-        scheduleCollectorRestart()
+
+        // ⚠️ 必须**等重启完成再核一遍**,而且要肯再来一轮。
+        //
+        // 2026-08-14 用户实测:"刚清空了,但是又回来了"。原因是 collector 在我们清完之后、
+        // 被杀掉之前那段窗口里还活着,而它内存里握着完整的一份缓存 —— enrich.go/translate.go
+        // 里有七处会调 saveEnrichCache(),每解析完一首歌、每落一条译文都会把**整份内存缓存**
+        // 写回磁盘,一次就把刚清空的文件填回去了;紧接着 collector 启动时的 exportLyricsFiles()
+        // 又会照着复活的缓存把 .lrc 重新写出来。窗口还不短:launchctl kickstart 在"距上次
+        // 重启不久"时会原地等满 launchd 给这个 LaunchAgent 配的 minimum runtime(实测量到过
+        // 9.02 秒),而用户此刻多半正在听歌,解析随时在发生。
+        //
+        // 为什么再来一轮就能收敛:kickstart -k 杀掉的是**握着旧内存的那个进程**,新进程的
+        // 内存 = 它启动那一刻磁盘上的内容。所以第二轮清空之后再重启,新进程读到的必然是空的,
+        // 不存在第三个"还揣着旧数据"的进程。这里不是无脑重试,是有终止性的两轮。
+        for attempt in 1...2 {
+            _ = await CollectorControl.restartAndWaitAsync()
+            PlaybackCoordinator.shared.refreshLyricsForCurrentTrack()
+            if !cacheFileHasEntries() {
+                return // 盘上确实是空的,清空成功
+            }
+            logger.notice("clearAll: cache came back after restart (attempt \(attempt, privacy: .public)), wiping again")
+            raw = [:]
+            knownKeys = []
+            deleteAllLyricsFiles()
+            guard persist(replacingEverything: true) else { return }
+            rebuildSummaries()
+            totalSizeBytes = 0
+        }
+        if cacheFileHasEntries() {
+            // 两轮都没清干净就如实报错,别让界面显示成"已清空"而磁盘上还在。
+            lastError = L10n.t("清空没有完全生效，请稍后再试一次")
+            await reload()
+        }
+    }
+
+    /// 磁盘上那份缓存文件里还有没有条目。用来核实"清空"是不是真的落地了 ——
+    /// 不看内存里的 raw:内存说空不算数,collector 可能在我们背后把它写回去了。
+    private func cacheFileHasEntries() -> Bool {
+        guard let data = try? Data(contentsOf: Self.cacheURL),
+              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return false // 文件不在/解析不了,都不算"还有条目"
+        }
+        return !obj.isEmpty
+    }
+
+    /// 删掉 lyrics/ 目录下的歌词文件。按后缀白名单过滤,理由见 clearAll 里那段注释
+    /// (这个目录是用户可以自己指定的,无差别删除会波及无关文件)。
+    private func deleteAllLyricsFiles() {
+        guard let urls = try? FileManager.default.contentsOfDirectory(at: Self.lyricsDir, includingPropertiesForKeys: nil) else {
+            return
+        }
+        for url in urls where EnrichCacheKeys.lyricsFileSuffixes.contains(where: { url.lastPathComponent.hasSuffix($0) }) {
+            try? FileManager.default.removeItem(at: url)
+        }
     }
 
     // 跟 collector/lyricsexport.go 的 sanitizeLyricsFilename 逐字对应的 Swift 版本——
