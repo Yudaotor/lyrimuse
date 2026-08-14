@@ -296,6 +296,59 @@ func getNeteaseMusicState(ctx context.Context) (map[string]any, bool) {
 	return matchMediaControlState(ctx, neteaseMusicBundleID)
 }
 
+// spotifyPositionScript 只问 Spotify 一件事:当前播放位置。
+//
+// 为什么需要它:Spotify 的播放状态是经系统级 MediaRemote 读到的,而 MediaRemote 拿到的
+// Spotify 锚点**本身就滞后**。2026-08-14 实测(同一首歌同时在 Apple Music 和 Spotify 放,
+// 对着同一份歌词比):media-control 的 elapsedTimeNow 恒定落后 Spotify 自己报的
+// player position **1.64 秒**,波动只有 ±0.02 —— 是固定偏移,不是抖动也不是漂移,所以
+// 单纯提高轮询频率没有任何用。Apple Music 之所以准,正是因为它走的是 AppleScript 直接
+// 问 Music.app 要 playerPosition,没有中间那层锚点。
+//
+// 只覆盖"位置"这一个字段,曲目identity/播放状态仍旧以 MediaRemote 为准 —— 那一层要负责
+// 判断"系统当前的 Now Playing 到底是不是 Spotify",换成 AppleScript 反而做不到。
+//
+// ⚠️ 必须先 .running() 再碰任何属性:JXA 里 Application('Spotify') 本身不会拉起 App,
+// 但只要访问它的属性就会 —— 一个没开 Spotify 的用户会被这段脚本莫名其妙启动一个播放器。
+// 写法照抄 getStateScript 里 Music.running() 那道守卫。
+const spotifyPositionScript = `(() => {
+    const Spotify = Application('Spotify');
+    try {
+        if (!Spotify.running()) return JSON.stringify(null);
+    } catch (e) {
+        return JSON.stringify(null);
+    }
+    try {
+        const state = Spotify.playerState();
+        if (state !== 'playing' && state !== 'paused') return JSON.stringify(null);
+        return JSON.stringify({ position: Spotify.playerPosition() });
+    } catch (e) {
+        return JSON.stringify(null);
+    }
+})()`
+
+// spotifyPlayerPosition 读 Spotify 自己报的播放位置(秒)。读不到就返回 false,调用方
+// 退回 media-control 的读数 —— 那个虽然慢 1.6 秒,但总比没有强。
+func spotifyPlayerPosition(ctx context.Context) (float64, bool) {
+	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, "/usr/bin/osascript", "-l", "JavaScript", "-e", spotifyPositionScript).Output()
+	if err != nil {
+		return 0, false
+	}
+	trimmed := strings.TrimSpace(string(out))
+	if trimmed == "" || trimmed == "null" {
+		return 0, false
+	}
+	var r struct {
+		Position float64 `json:"position"`
+	}
+	if err := json.Unmarshal([]byte(trimmed), &r); err != nil || r.Position < 0 {
+		return 0, false
+	}
+	return r.Position, true
+}
+
 func getSpotifyState(ctx context.Context) (map[string]any, bool) {
 	return matchMediaControlState(ctx, spotifyBundleID)
 }
@@ -384,6 +437,16 @@ func fetchRawMediaControlState(ctx context.Context) (map[string]any, string, boo
 	elapsed := raw.ElapsedTime
 	if raw.Playing {
 		elapsed = raw.ElapsedTimeNow
+	}
+	// Spotify 的位置改问它自己 —— MediaRemote 那份恒定慢 1.64 秒,见 spotifyPositionScript
+	// 上的实测记录。读不到就沿用上面算好的 elapsed,不比现状差。
+	//
+	// 只在 bundle 确实是 Spotify 时才多跑这一次 osascript:别的播放器不该为此付代价,
+	// 而 Apple Music 本来就走 AppleScript,压根不经过这个函数。
+	if raw.BundleID == spotifyBundleID {
+		if pos, ok := spotifyPlayerPosition(ctx); ok {
+			elapsed = pos
+		}
 	}
 	return map[string]any{
 		// ⚠️ 三个标签必须先洗一遍不可见空白,见 cleanMediaTag —— 这里是本地这条路径唯一的
