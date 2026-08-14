@@ -551,38 +551,13 @@ private struct ControlsFramePreferenceKey: PreferenceKey {
 // 换行,不需要另起一份重复实现——同一个 target 内跨文件访问,行为对这里的悬浮窗
 // 零影响。
 struct WrapLayout: Layout {
-    // 行内的水平对齐——悬浮歌词/灵动岛是居中排版(默认值,行为不变);"歌词窗口"2026-08-04
-    // 改成 Apple Music 歌词页同款的左对齐排版后传 .leading。
-    // trailing 是 2026-08-14 为对唱歌词的右侧那位加的(见 LyricDuet)。
-    enum RowAlignment { case center, leading, trailing }
+    // 换行/对齐的几何计算全在 WrapLayoutMath(LyrimuseCore)里,selftest 够得到;这里只剩
+    // Layout 协议的壳:量尺寸、缓存、把算好的坐标交给 SwiftUI 去 place。
+    typealias RowAlignment = WrapLayoutMath.RowAlignment
 
     var horizontalSpacing: CGFloat = 0
     var verticalSpacing: CGFloat = 2
     var rowAlignment: RowAlignment = .center
-
-    private func computeRows(sizes: [CGSize], maxWidth: CGFloat) -> [(indices: [Int], width: CGFloat, height: CGFloat)] {
-        var rows: [(indices: [Int], width: CGFloat, height: CGFloat)] = []
-        var indices: [Int] = []
-        var width: CGFloat = 0
-        var height: CGFloat = 0
-        for (i, size) in sizes.enumerated() {
-            let spacingIfContinuing = indices.isEmpty ? 0 : horizontalSpacing
-            if !indices.isEmpty && width + spacingIfContinuing + size.width > maxWidth {
-                rows.append((indices, width, height))
-                indices = []
-                width = 0
-                height = 0
-            }
-            let spacing = indices.isEmpty ? 0 : horizontalSpacing
-            width += spacing + size.width
-            height = max(height, size.height)
-            indices.append(i)
-        }
-        if !indices.isEmpty {
-            rows.append((indices, width, height))
-        }
-        return rows
-    }
 
     // 量一次子视图尺寸就存住,别每次调用都重量一遍。
     //
@@ -607,43 +582,25 @@ struct WrapLayout: Layout {
     }
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout Cache) -> CGSize {
-        let sizes = cache.sizes
         guard let maxWidth = proposal.width, maxWidth.isFinite else {
             // 没有宽度限制:理论上不会走到——调用方(mainLine)所在的 VStack 总会有一个
             // 有限宽度的提案(悬浮窗宽度固定)。兜底铺成一行,不换行。
-            let totalWidth = sizes.reduce(0) { $0 + $1.width } + CGFloat(max(0, sizes.count - 1)) * horizontalSpacing
-            let maxHeight = sizes.map(\.height).max() ?? 0
-            return CGSize(width: totalWidth, height: maxHeight)
+            return WrapLayoutMath.unconstrainedSize(
+                sizes: cache.sizes, horizontalSpacing: horizontalSpacing)
         }
-        let rows = computeRows(sizes: sizes, maxWidth: maxWidth)
-        let totalHeight = rows.reduce(0) { $0 + $1.height } + CGFloat(max(0, rows.count - 1)) * verticalSpacing
-        return CGSize(width: maxWidth, height: totalHeight)
+        return WrapLayoutMath.totalSize(
+            sizes: cache.sizes, maxWidth: maxWidth,
+            horizontalSpacing: horizontalSpacing, verticalSpacing: verticalSpacing)
     }
 
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout Cache) {
-        let sizes = cache.sizes
-        let rows = computeRows(sizes: sizes, maxWidth: bounds.width)
-        var y = bounds.minY
-        for row in rows {
-            // 按 rowAlignment 居中/靠左/靠右
-            let slack = max(0, bounds.width - row.width)
-            let indent: CGFloat
-            switch rowAlignment {
-            case .center: indent = slack / 2
-            case .leading: indent = 0
-            case .trailing: indent = slack
-            }
-            var x = bounds.minX + indent
-            for i in row.indices {
-                let size = sizes[i]
-                subviews[i].place(
-                    at: CGPoint(x: x, y: y + (row.height - size.height) / 2),
-                    anchor: .topLeading,
-                    proposal: ProposedViewSize(size)
-                )
-                x += size.width + horizontalSpacing
-            }
-            y += row.height + verticalSpacing
+        for p in WrapLayoutMath.placements(
+            sizes: cache.sizes, bounds: bounds,
+            horizontalSpacing: horizontalSpacing, verticalSpacing: verticalSpacing,
+            rowAlignment: rowAlignment)
+        {
+            subviews[p.index].place(
+                at: p.origin, anchor: .topLeading, proposal: ProposedViewSize(p.size))
         }
     }
 }

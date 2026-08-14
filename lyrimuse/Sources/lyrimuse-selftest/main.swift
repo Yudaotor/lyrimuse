@@ -1538,6 +1538,101 @@ do {
     expectEqual(intensityDesc, true, "KaraokeFill: 强度沿位置单调不增")
 }
 
+// ---- WrapLayoutMath ----
+//
+// 逐字歌词那个自动换行容器的几何。以前长在 LyricsOverlayView 里，改一次就只能盯屏幕看。
+do {
+    func sz(_ w: CGFloat, _ h: CGFloat = 10) -> CGSize { CGSize(width: w, height: h) }
+    func rowIndices(_ rows: [WrapLayoutMath.Row]) -> [[Int]] { rows.map { $0.indices } }
+
+    // 装得下就一行。
+    expectEqual(rowIndices(WrapLayoutMath.rows(sizes: [sz(10), sz(10), sz(10)], maxWidth: 100, horizontalSpacing: 0)),
+                [[0, 1, 2]], "WrapLayout: 装得下就一行")
+
+    // 装不下就换行。
+    expectEqual(rowIndices(WrapLayoutMath.rows(sizes: [sz(60), sz(60), sz(60)], maxWidth: 100, horizontalSpacing: 0)),
+                [[0], [1], [2]], "WrapLayout: 装不下逐个换行")
+
+    // 间距要算进"还装不装得下"里：3 个 30 宽 + 2 个 10 间距 = 110 > 100。
+    expectEqual(rowIndices(WrapLayoutMath.rows(sizes: [sz(30), sz(30), sz(30)], maxWidth: 100, horizontalSpacing: 10)),
+                [[0, 1], [2]], "WrapLayout: 间距要计入换行判断")
+
+    // ⚠️ 单个元素本身就超宽时，必须独占一行且**保留**——这正是"长歌词行整行变成一串
+    // 省略号"那个 bug 的修法。谁要是在这里加个"太宽就跳过"，这条会立刻红。
+    expectEqual(rowIndices(WrapLayoutMath.rows(sizes: [sz(500)], maxWidth: 100, horizontalSpacing: 0)),
+                [[0]], "WrapLayout: 单个超宽元素独占一行,不能被丢掉")
+    expectEqual(rowIndices(WrapLayoutMath.rows(sizes: [sz(10), sz(500), sz(10)], maxWidth: 100, horizontalSpacing: 0)),
+                [[0], [1], [2]], "WrapLayout: 超宽元素夹在中间也不丢")
+
+    // 空输入不该炸，也不该造出一个空行。
+    expectEqual(WrapLayoutMath.rows(sizes: [], maxWidth: 100, horizontalSpacing: 0).count, 0,
+                "WrapLayout: 空输入没有行")
+
+    // 行高取本行最高的那个；总高度 = 各行行高 + 行距。
+    let twoRows = WrapLayoutMath.totalSize(
+        sizes: [sz(60, 20), sz(60, 30)], maxWidth: 100, horizontalSpacing: 0, verticalSpacing: 5)
+    expectEqual(twoRows, CGSize(width: 100, height: 55), "WrapLayout: 两行高度 = 20+30+5 行距")
+
+    // 三种对齐：同一行内容宽 60、容器宽 100，剩 40 的空隙。
+    func firstX(_ alignment: WrapLayoutMath.RowAlignment) -> CGFloat {
+        WrapLayoutMath.placements(
+            sizes: [sz(60)], bounds: CGRect(x: 0, y: 0, width: 100, height: 50),
+            horizontalSpacing: 0, verticalSpacing: 0, rowAlignment: alignment
+        ).first?.origin.x ?? -1
+    }
+    expectEqual(firstX(.leading), 0, "WrapLayout: leading 贴左")
+    expectEqual(firstX(.center), 20, "WrapLayout: center 居中")
+    expectEqual(firstX(.trailing), 40, "WrapLayout: trailing 贴右")
+
+    // bounds 不是从原点开始时，位置要跟着平移（悬浮窗里就不是原点）。
+    let offsetPlacement = WrapLayoutMath.placements(
+        sizes: [sz(60)], bounds: CGRect(x: 7, y: 3, width: 100, height: 50),
+        horizontalSpacing: 0, verticalSpacing: 0, rowAlignment: .leading).first
+    expectEqual(offsetPlacement?.origin.x, 7, "WrapLayout: 位置跟随 bounds.minX")
+
+    // 行内竖直居中：本行高 30，这个元素高 10，应该往下让 10。
+    let vcenter = WrapLayoutMath.placements(
+        sizes: [sz(10, 10), sz(10, 30)], bounds: CGRect(x: 0, y: 0, width: 100, height: 50),
+        horizontalSpacing: 0, verticalSpacing: 0, rowAlignment: .leading)
+    expectEqual(vcenter.first?.origin.y, 10, "WrapLayout: 矮的元素在行内竖直居中")
+
+    // 全局不变式：顺序保持、每个元素都被放置、不会超出 bounds 左边界、y 不倒退。
+    var orderOK = true, allPlaced = true, noLeftOverflow = true, noOverlap = true
+    for count in 1...12 {
+        var sizes: [CGSize] = []
+        for i in 0..<count {
+            let w: CGFloat = CGFloat(20 + (i * 13) % 70)
+            let h: CGFloat = CGFloat(10 + (i * 7) % 20)
+            sizes.append(sz(w, h))
+        }
+        for alignment in [WrapLayoutMath.RowAlignment.leading, .center, .trailing] {
+            let bounds = CGRect(x: 5, y: 5, width: 120, height: 500)
+            let ps = WrapLayoutMath.placements(
+                sizes: sizes, bounds: bounds, horizontalSpacing: 3, verticalSpacing: 2,
+                rowAlignment: alignment)
+            if ps.count != sizes.count { allPlaced = false }
+            let indices: [Int] = ps.map { $0.index }
+            if indices != Array(0..<sizes.count) { orderOK = false }
+            for p in ps where p.origin.x < bounds.minX - 1e-9 { noLeftOverflow = false }
+            // 不许有任何两个元素叠在一起。比"y 单调"强,也比它正确 —— 行内是**竖直
+            // 居中**的,同一行里矮的元素 y 本来就比高的大,逐个比 y 会误判成倒退。
+            for a in 0..<ps.count {
+                for b in (a + 1)..<ps.count {
+                    let ra = CGRect(origin: ps[a].origin, size: ps[a].size)
+                    let rb = CGRect(origin: ps[b].origin, size: ps[b].size)
+                    if ra.insetBy(dx: 1e-6, dy: 1e-6).intersects(rb.insetBy(dx: 1e-6, dy: 1e-6)) {
+                        noOverlap = false
+                    }
+                }
+            }
+        }
+    }
+    expectEqual(allPlaced, true, "WrapLayout: 每个元素都要被放置,一个都不能少")
+    expectEqual(orderOK, true, "WrapLayout: 顺序必须保持")
+    expectEqual(noLeftOverflow, true, "WrapLayout: 不会跑到 bounds 左边界外")
+    expectEqual(noOverlap, true, "WrapLayout: 任意两个元素都不重叠")
+}
+
 if failures == 0 {
     print("\nALL PASS")
 } else {
