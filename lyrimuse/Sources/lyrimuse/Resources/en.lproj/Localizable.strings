@@ -617,3 +617,5 @@
 "正在验证…" = "Checking…";
 "Token 无效，请重新复制一次" = "Invalid token — copy it again";
 "连不上 ListenBrainz，稍后会自动重试" = "Can't reach ListenBrainz — will retry";
+"搜索字体" = "Search fonts";
+"没有匹配的字体" = "No matching fonts";

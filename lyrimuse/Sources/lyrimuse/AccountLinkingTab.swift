@@ -178,7 +178,10 @@ enum AccountDestination: Hashable, CaseIterable, Identifiable {
 func accountIconBadge(_ destination: AccountDestination, size: CGFloat = 22, cornerRadius: CGFloat = 6) -> some View {
     switch destination {
     case .listenBrainz:
-        iconBadge("waveform.circle.fill", tint: .orange, size: size, cornerRadius: cornerRadius)
+        Image(nsImage: listenBrainzBadgeImage)
+            .resizable()
+            .frame(width: size, height: size)
+            .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
     case .lastfm:
         Image(nsImage: lastfmBadgeImage)
             .resizable()
@@ -197,6 +200,23 @@ func accountIconBadge(_ destination: AccountDestination, size: CGFloat = 22, cor
 // menuBarIconImage 同一套加载方式:用 Bundle.main 而不是 Bundle.module(原因见
 // L10n.swift 顶部注释),PNG 由 build.sh 拷进 Contents/Resources/。不设 isTemplate——
 // 这不是状态栏图标,不需要跟随系统明暗色重新上色,品牌色本身就该固定显示红+白。
+// ListenBrainz 官方 logo(左紫右橙的六边形),取代之前拿 SF Symbol 的 waveform.circle.fill
+// 凑数的做法。跟 lastfmBadgeImage 同一套路:矢量描摹官方素材而不是截图抠像素 —— 原始 SVG
+// 取自 MetaBrainz 自己的 design-system 仓库(brand/logos/ListenBrainz/.../logo_icon.svg),
+// 那边原文就是两个多边形(#353070 / #EB743B),照它的坐标重画成 PNG。
+// 底色留透明:官方 logo 本身是双色图形、不是"纯色底+白符号"那种形状,填一层底反而失真,
+// 而透明底在浅色/深色模式下都立得住。
+private let listenBrainzBadgeImage: NSImage = {
+    guard let path = Bundle.main.path(forResource: "ListenBrainzIcon", ofType: "png"),
+          let image = NSImage(contentsOfFile: path) else {
+        // 跟 Last.fm 那支同样的兜底:没走 build.sh 打包时(直接 swift build 跑)找不到资源,
+        // 退回旧的 SF Symbol,别让图标位裸奔成空白。
+        return NSImage(
+            systemSymbolName: "waveform.circle.fill", accessibilityDescription: nil) ?? NSImage()
+    }
+    return image
+}()
+
 private let lastfmBadgeImage: NSImage = {
     guard let path = Bundle.main.path(forResource: "LastfmIcon", ofType: "png"),
           let image = NSImage(contentsOfFile: path) else {

@@ -762,24 +762,6 @@ private struct AppearanceSettingsTab: View {
     @State private var availableScreens: [NSScreen] = NSScreen.screens
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    // 精选常用字体,而不是列出这台机器上全部两百多个已安装字体族——选不过来。清单
-    // 来源是调研结论,不是凭印象挑的:
-    // - 拉丁文/通用部分:Helvetica(现代排版标杆)、Arial(全球装机量/曝光量最高的
-    //   英文字体)、Times New Roman(最常见的衬线字体)、Futura(经典几何无衬线设计)。
-    // - 中文部分:黑体用得最多、宋体次之,楷体屏幕显示效果差故不收;另加 PingFang SC,
-    //   因为它是 macOS/iOS 自 El Capitan 起的实际默认中文字体。
-    // 仍然过一遍 NSFontManager 实际安装列表做交叉核对而不是硬编码假设——理论上都是
-    // macOS 系统自带字体、不会缺失,但跟项目里"字体设置要显式检查装没装、不能隐式
-    // 假设"的既有惯例(见 AppearanceHelpers.swift)保持一致。
-    private static let curatedFontFamilies: [String] = {
-        let candidates = [
-            "Helvetica Neue", "Arial", "Times New Roman", "Futura",
-            "PingFang SC", "Heiti SC", "Songti SC",
-        ]
-        let installed = Set(NSFontManager.shared.availableFontFamilies)
-        return candidates.filter { installed.contains($0) }
-    }()
-
     private func applyColorTheme(_ theme: ColorTheme) {
         // 套用一个具体命名主题就是在明确表态"我要固定色,不要动态色"——顺手关掉
         // "跟随封面"(如果开着),不然套用之后前景色看起来毫无反应,像是这个 Menu
@@ -1170,17 +1152,9 @@ private struct AppearanceSettingsTab: View {
             SettingsCardHeader(title: L10n.t("文字"))
             CardDivider()
             SettingsRow(icon: "character", title: L10n.t("字体")) {
-                Picker("", selection: $settings.fontFamilyName) {
-                    // 这一项原来也叫「跟随系统」,跟语言选择器那一项撞成同一个 L10n key,
-                    // 而 .strings 里一个 key 只能有一个值——改成「系统字体」:key 各自独立,
-                    // 而且在「字体」选择器下这个说法本身就比「跟随系统」准确。
-                    Text(L10n.t("系统字体")).tag("")
-                    ForEach(Self.curatedFontFamilies, id: \.self) { family in
-                        Text(family).tag(family)
-                    }
-                }
-                .pickerStyle(.menu)
-                .fixedSize()
+                // 系统装了什么就能选什么(带搜索、每行用字体自己渲染)。原来是一个只有 7 款的
+                // 精选下拉,想用别的字体完全没出路,见 FontFamilyPicker 顶部注释。
+                FontFamilyPicker(selection: $settings.fontFamilyName)
             }
             CardDivider()
             SettingsRow(icon: "textformat.size", title: L10n.t("字号")) {
