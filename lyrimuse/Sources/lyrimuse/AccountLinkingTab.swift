@@ -537,11 +537,7 @@ struct AccountLinkingTab: View {
 
     private var listenBrainzFields: some View {
         SettingsCard {
-            SettingsRow(
-                icon: "key",
-                title: L10n.t("账户信息"),
-                subtitle: L10n.t("可选，不填不影响悬浮歌词")
-            )
+            SettingsCardHeader(title: L10n.t("账户信息"), subtitle: L10n.t("可选，不填不影响悬浮歌词"))
             CardDivider()
             SettingsRawRow(insetToText: true) {
                 VStack(alignment: .leading, spacing: 8) {
@@ -559,11 +555,7 @@ struct AccountLinkingTab: View {
     @ViewBuilder
     private var stateRelayFields: some View {
         SettingsCard {
-            SettingsRow(
-                icon: "antenna.radiowaves.left.and.right",
-                title: L10n.t("连接信息"),
-                subtitle: L10n.t("填好这两项就会自动推送到网页")
-            )
+            SettingsCardHeader(title: L10n.t("连接信息"), subtitle: L10n.t("填好这两项就会自动推送到网页"))
             CardDivider()
             SettingsRawRow(insetToText: true) {
                 VStack(alignment: .leading, spacing: 8) {
@@ -1166,8 +1158,7 @@ struct AccountLinkingTab: View {
         }
 
         SettingsCard {
-            SettingsRow(
-                icon: "chart.bar.doc.horizontal",
+            SettingsCardHeader(
                 title: L10n.t("提醒开关"),
                 subtitle: L10n.t("数据源留空时自动判定：两个账号都配了优先用 Last.fm，只配了一个就用那个")
             )

@@ -358,6 +358,52 @@ enum SettingsRowMetrics {
     static var textLeadingInset: CGFloat { horizontalPadding + iconWidth + iconTextSpacing }
 }
 
+// MARK: - 卡片标题行
+
+// 卡片顶上那一行标题(「配色」「文字」「菜单栏歌词」这类)。
+//
+// ⚠️ 它跟卡片里的设置行**必须**长得不一样。2026-08-15 之前这里用的就是一个不带尾部控件的
+// SettingsRow —— 同样的 13pt 字号、同样的图标列、同样的行高,于是「配色」和它下面的
+// 「跟随封面取色」「配色主题」在视觉上完全平级,读者只能靠一条分隔线去猜谁是谁的标题。
+// 用户报的原话是"块标题和下面的内容太相似了,没什么区分度"。
+//
+// 改法是把它往"分组标签"的方向拉开(macOS 系统设置里的分组标题也是这个路子):字号压到 12、
+// 字重加到 semibold、颜色降为次要色、字距拉开一点,行本身也更紧凑。
+//
+// **刻意不给图标**:图标列是设置行的视觉锚点,标题一旦也占那一列,两者就又对齐成平级了。
+// 让标题从卡片左边缘直接起排、不参与那一列,层级一眼就分得开 —— 四个候选样式离线渲染
+// 对比过(带小图标的那版图标跟下面的图标列对不齐,反而显得半吊子)。
+struct SettingsCardHeader: View {
+    let title: String
+    // 少数几张卡的标题下面还有一句适用范围说明(比如「自动隐藏」要讲清它对哪几个形态生效)。
+    var subtitle: String?
+    var help: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(spacing: 4) {
+                Text(title)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                    .tracking(0.5)
+                if let help { HelpButton(text: help) }
+                Spacer(minLength: 0)
+            }
+            if let subtitle, !subtitle.isEmpty {
+                Text(subtitle)
+                    .font(.system(size: 11))
+                    // 比标题再淡一档 —— 标题本身已经是次要色,两行同色会糊成一团。
+                    .foregroundStyle(.tertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, SettingsRowMetrics.horizontalPadding)
+        .padding(.top, 10)
+        .padding(.bottom, 7)
+    }
+}
+
 // MARK: - 主行
 
 // 「前导图标 + 标题(+副标题) + 尾部控件」。

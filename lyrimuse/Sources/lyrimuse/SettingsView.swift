@@ -387,11 +387,7 @@ private struct LyricsSettingsTab: View {
     // 就是这个来源的身份色(跟"歌词管理"窗口里来源列的色点是同一套 source.color)。
     private var sourcesAndMatchingCard: some View {
         SettingsCard {
-            SettingsRow(
-                icon: "arrow.down.circle",
-                title: L10n.t("歌词来源"),
-                subtitle: L10n.t("至少需要保留一个歌词来源")
-            )
+            SettingsCardHeader(title: L10n.t("歌词来源"), subtitle: L10n.t("至少需要保留一个歌词来源"))
             CardDivider()
             // 五个来源横排成一排可勾选的胶囊,不再一个来源占一整行 —— 五行开关加上分隔线
             // 把这张卡撑到了半屏高,而这里要表达的只是"哪几个开着"。
@@ -929,7 +925,6 @@ private struct AppearanceSettingsTab: View {
             modeToggleCard(
                 icon: "captions.bubble",
                 title: L10n.t("桌面悬浮歌词"),
-                subtitle: L10n.t("贴在桌面上，支持逐字高亮"),
                 isOn: Binding(
                     get: { settings.classicOverlayEnabled },
                     set: { LyricsOverlayWindowController.shared.setVisible($0) }))
@@ -1022,7 +1017,7 @@ private struct AppearanceSettingsTab: View {
     // 两个方向都走得通,Menu 也回归它本来的职责(选一套固定配色)。
     private var overlayColorCard: some View {
         SettingsCard {
-            SettingsRow(icon: "paintpalette", title: L10n.t("配色"))
+            SettingsCardHeader(title: L10n.t("配色"))
             CardDivider()
             SettingsRow(
                 icon: "photo.on.rectangle.angled",
@@ -1052,19 +1047,23 @@ private struct AppearanceSettingsTab: View {
                 }
                 .fixedSize()
             }
-            CardDivider()
-            SettingsRow(
-                icon: "paintbrush",
-                title: L10n.t("文字颜色"),
-                subtitle: settings.followsCoverArt
-                    ? L10n.t("跟随封面开着，这个颜色只在拿不到封面主色时才用")
-                    : nil
-            ) {
-                ColorPicker("", selection: Binding(
-                    get: { settings.foregroundColor },
-                    set: { settings.foregroundColorHex = $0.hexStringWithAlpha }
-                ), supportsOpacity: false) // 故意关掉——文字颜色允许透明的话,容易把 alpha
-                                           // 拖到 0,悬浮窗整个消失且没有任何视觉提示能定位问题
+            // 「跟随封面取色」开着时,文字颜色由封面主色接管,这一行就收起来 —— 它只剩
+            // "拿不到封面主色时的兜底值"这一点残余作用,为它常占一行、还要配一句解释
+            // 自己为什么半失效的副标题,不如干脆不显示。
+            //
+            // ⚠️ 这跟"展示方式的开关不再跟配置卡联动、关着也能配"不是一回事,别照那条推翻
+            // 这里:那边是**没启用**某个形态时仍要让人能预先配好它;这里是某一项**已经被
+            // 另一项接管**,显示出来只会让人以为改了有用。背景色和描边色不受接管(见
+            // 「跟随封面取色」那一行的副标题),所以照常显示。
+            if !settings.followsCoverArt {
+                CardDivider()
+                SettingsRow(icon: "paintbrush", title: L10n.t("文字颜色")) {
+                    ColorPicker("", selection: Binding(
+                        get: { settings.foregroundColor },
+                        set: { settings.foregroundColorHex = $0.hexStringWithAlpha }
+                    ), supportsOpacity: false) // 故意关掉——文字颜色允许透明的话,容易把 alpha
+                                               // 拖到 0,悬浮窗整个消失且没有任何视觉提示能定位问题
+                }
             }
             CardDivider()
             SettingsRow(icon: "rectangle.fill", title: L10n.t("背景颜色")) {
@@ -1162,7 +1161,7 @@ private struct AppearanceSettingsTab: View {
 
     private var overlayTextCard: some View {
         SettingsCard {
-            SettingsRow(icon: "textformat", title: L10n.t("文字"))
+            SettingsCardHeader(title: L10n.t("文字"))
             CardDivider()
             SettingsRow(icon: "character", title: L10n.t("字体")) {
                 Picker("", selection: $settings.fontFamilyName) {
@@ -1193,7 +1192,7 @@ private struct AppearanceSettingsTab: View {
 
     private var overlayWindowCard: some View {
         SettingsCard {
-            SettingsRow(icon: "macwindow", title: L10n.t("窗口"))
+            SettingsCardHeader(title: L10n.t("窗口"))
             CardDivider()
             SettingsRow(icon: "arrow.left.and.right", title: L10n.t("宽度")) {
                 HStack(spacing: 8) {
@@ -1260,10 +1259,7 @@ private struct AppearanceSettingsTab: View {
     // 某个窗口控制器"生效"——唯一的例外是"宽度",它改的是窗口本身的几何。
     private var notchOverlayCard: some View {
         SettingsCard {
-            SettingsRow(
-                icon: "rectangle.topthird.inset.filled",
-                title: L10n.t("灵动岛歌词"),
-            )
+            SettingsCardHeader(title: L10n.t("灵动岛歌词"))
             CardDivider()
             SettingsRow(icon: "paintbrush.pointed", title: L10n.t("风格")) {
                 Picker("", selection: $settings.notchCardStyle) {
@@ -1337,8 +1333,7 @@ private struct AppearanceSettingsTab: View {
     // 就是这个开关两种状态各自的行为,原来是 Section 正文里一行独立的 caption 文字。
     private var menuBarCard: some View {
         SettingsCard {
-            SettingsRow(
-                icon: "menubar.rectangle",
+            SettingsCardHeader(
                 title: L10n.t("菜单栏歌词"),
                 help: L10n.t("状态栏宽度有限，歌词可能被截断；鼠标悬停在上面永远能看到完整的这一行")
             )
@@ -1376,8 +1371,7 @@ private struct AppearanceSettingsTab: View {
     // 实际在做的事,不管当下开着的是一个还是两个悬浮窗都成立。
     private var autoHideCard: some View {
         SettingsCard {
-            SettingsRow(
-                icon: "eye.slash",
+            SettingsCardHeader(
                 title: L10n.t("自动隐藏"),
                 subtitle: L10n.t("对悬浮歌词和灵动岛生效"),
                 help: L10n.t("以下两项对「桌面悬浮歌词」和「灵动岛歌词」同时生效；菜单栏歌词和歌词窗口不受影响")
@@ -1539,9 +1533,7 @@ private struct PlayerSettingsTab: View {
             }
         } else {
             SettingsCard {
-                SettingsRow(
-                    icon: "checkmark.circle.fill",
-                    iconTint: .green,
+                SettingsCardHeader(
                     title: L10n.t("无需额外授权"),
                     subtitle: String(format: L10n.t("%@ 走系统接口读取播放状态"), features.player.displayName)
                 )
