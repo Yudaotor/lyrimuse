@@ -595,7 +595,7 @@ struct AccountLinkingTab: View {
         SettingsCard {
             SettingsCardHeader(title: L10n.t("账户信息"))
             CardDivider()
-            SettingsRawRow(insetToText: true) {
+            SettingsRawRow(insetToText: true, icon: "key.fill") {
                 VStack(alignment: .leading, spacing: 8) {
                     SecretFieldRow(L10n.t("账户 Token"), value: $config.listenbrainzToken)
                     HStack(spacing: 8) {
@@ -747,10 +747,14 @@ struct AccountLinkingTab: View {
                         systemImage: "tray.full"
                     )
                     .font(.callout)
-                    // 这份日志不是无限攒的:collector 启动时会做一次体量压缩(见
-                    // lyrimuse-collector/listenlog.go 的 listenLogMaxLines)。上限是按**行数**
-                    // 定的,这里换算成用户能感知的时间跨度 —— 数量级取自那边注释里同一套估算。
-                    HelpButton(text: L10n.t("最多保留 4 万条记录，按每天 40 首估算约两年半；超出后从最旧的开始丢弃"))
+                    // 这里有**两个不同方**的限制,只讲一个会误导:
+                    //   1. 我们自己:collector 启动时按行数压缩(listenlog.go 的
+                    //      listenLogMaxLines = 4 万),换算成时间跨度约两年半;
+                    //   2. Last.fm:只接受约两周内的时间戳,更老的会被服务端静默 ignore
+                    //      (backfill.go 的 backfillMaxAge = 13 天,留了一天余量)。
+                    // 后者才是决定"到底能补回多少"的那条 —— 本地攒了两年半,真能补上去的
+                    // 只有最近两周。2026-08-15 第一版 tip 只写了第 1 条,用户当场问出了这个漏洞。
+                    HelpButton(text: L10n.t("本地最多存 4 万条（按每天 40 首约两年半）；但 Last.fm 只收约两周内的记录，更早的补不上去"))
                 }
             }
         }

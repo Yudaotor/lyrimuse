@@ -585,13 +585,35 @@ struct SettingsSubRow<Trailing: View>: View {
 // SettingsRow 一致的内边距,不必每处重复写 padding 数值。
 struct SettingsRawRow<Content: View>: View {
     var insetToText = false
+    // insetToText 的行会空出一整条图标列(那是它跟其它行文字对齐的代价)。给了图标就把那块
+    // 填上,不给就还是空着 —— 空着本身不是 bug,但一张卡里别的行都有图标、唯独这一行留个
+    // 空洞,看起来就像漏画了(2026-08-15 用户指的就是「账户 Token」那一行)。
+    var icon: String?
     @ViewBuilder let content: () -> Content
 
     var body: some View {
-        content()
-            .padding(.leading, insetToText ? SettingsRowMetrics.textLeadingInset : SettingsRowMetrics.horizontalPadding)
-            .padding(.trailing, SettingsRowMetrics.horizontalPadding)
-            .padding(.vertical, SettingsRowMetrics.verticalPadding)
-            .frame(maxWidth: .infinity, alignment: .leading)
+        HStack(alignment: .top, spacing: SettingsRowMetrics.iconTextSpacing) {
+            if insetToText {
+                Group {
+                    if let icon {
+                        Image(systemName: icon)
+                            .font(.system(size: 13))
+                            .foregroundStyle(.secondary)
+                            // 锁拉丁语区,理由同 SettingsRow 里那处注释(SF Symbols 的部分
+                            // 符号有 CJK 变体,中文界面下会被渲染成汉字)。
+                            .environment(\.locale, Locale(identifier: "en"))
+                    }
+                }
+                .frame(width: SettingsRowMetrics.iconWidth, alignment: .center)
+                .padding(.top, 1)
+            }
+            content()
+        }
+        // 图标列自己占了宽度,所以这里一律用卡片内边距 —— 加起来仍然是
+        // horizontalPadding + iconWidth + spacing = textLeadingInset,跟原来的对齐一致。
+        .padding(.leading, SettingsRowMetrics.horizontalPadding)
+        .padding(.trailing, SettingsRowMetrics.horizontalPadding)
+        .padding(.vertical, SettingsRowMetrics.verticalPadding)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }

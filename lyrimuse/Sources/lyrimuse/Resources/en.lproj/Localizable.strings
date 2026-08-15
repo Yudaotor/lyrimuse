@@ -619,3 +619,4 @@
 "连不上 ListenBrainz，稍后会自动重试" = "Can't reach ListenBrainz — will retry";
 "搜索字体" = "Search fonts";
 "没有匹配的字体" = "No matching fonts";
+"本地最多存 4 万条（按每天 40 首约两年半）；但 Last.fm 只收约两周内的记录，更早的补不上去" = "Up to 40,000 entries locally (~2.5 years at 40 tracks a day) — but Last.fm only accepts scrobbles from about the last two weeks; older ones can't be filled in";
