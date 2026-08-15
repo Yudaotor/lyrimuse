@@ -8,6 +8,17 @@ import SwiftUI
 // 纯文字驱动,一眼扫过图标颜色就能分辨状态。
 enum DestinationStatus {
     case disabled                  // 灰:开关关闭,不管凭据填没填都不报错(仅"功能开关"tab 用)
+    // 这是个**可选**功能,而且用户一个字段都没填过 —— 侧边栏不给徽标。
+    //
+    // 2026-08-15:这几项(ListenBrainz / 网页推送 / 推送提醒 / Last.fm)原来都走
+    // .missingCreds,于是侧边栏一排橙色警告三角。但"你没配这个可选功能"根本不是问题,
+    // 拿警告图标去说它,等于让用户在一列感叹号里自己分辨哪个才是真出事了 —— 而真出事
+    // (.error)恰恰长得差不多。没什么要说的时候就什么都不说。
+    //
+    // ⚠️ 跟 .missingCreds 的分界是"碰没碰过":填了一半(网页推送有地址没令牌、
+    // ListenBrainz 有 token 没用户名)仍然是 .missingCreds —— 那种"我明明配过却不工作"
+    // 才是真需要被指出来的。
+    case notConfigured(String)     // 无徽标:可选功能,从没配过
     case missingCreds(String)      // 橙:凭据不全(hint 点名具体缺哪个字段)
     case active(String? = nil)     // 绿:凭据齐全,可选带一句更具体的文案(如"已连接:xxx")
     case error(String)             // 红:硬性错误(ListenBrainz 缺 token / Last.fm 连接失败)
@@ -53,6 +64,10 @@ private struct DestinationStatusLabel: View {
             switch status {
             case .disabled:
                 Label(L10n.t("未启用"), systemImage: "circle").foregroundStyle(.secondary)
+            case .notConfigured(let hint):
+                // 详情页仍然如实说明状态(用户既然点进来了就是想知道),只是外观中性 ——
+                // 空心圆 + 次要色,跟"未启用"一个量级,不是警告。
+                Label(hint, systemImage: "circle").foregroundStyle(.secondary)
             case .missingCreds(let hint):
                 Label(hint, systemImage: "exclamationmark.triangle.fill")
                     .foregroundStyle(dimmed ? Color.primary : Color.orange)
@@ -80,6 +95,9 @@ private struct DestinationStatusIndicator: View {
         switch status {
         case .disabled:
             Image(systemName: "circle").foregroundStyle(.secondary)
+        case .notConfigured:
+            // 侧边栏这一档**什么都不画**。没配一个可选功能不是状态,不需要占一个位置。
+            EmptyView()
         case .missingCreds:
             Image(systemName: "exclamationmark.triangle.fill")
                 .foregroundStyle(dimmed ? Color.primary : Color.orange)
@@ -207,8 +225,10 @@ func destinationStatus(for destination: AccountDestination, config: ConfigStore,
         if config.isListenBrainzConfigured {
             return .missingCreds(L10n.t("还缺用户名，听歌报告用不了"))
         }
-        return .missingCreds(L10n.t("未配置（可选）"))
+        return .notConfigured(L10n.t("未配置（可选）"))
     case .stateRelay:
+        // 一个字段都没填 = 没碰过;填了地址没填令牌 = 真的缺东西,那个仍然报橙色。
+        if config.isStateRelayUntouched { return .notConfigured(L10n.t("未配置（可选）")) }
         if let hint = config.stateRelayMissingHint() { return .missingCreds(hint) }
         return .active()
     case .lastfm:
@@ -216,14 +236,15 @@ func destinationStatus(for destination: AccountDestination, config: ConfigStore,
         // 2026-08-11 起徽标只报"连没连"。旧版把读/写两条链路的组合状态摊给用户
         // ("读取+写入已配置"那一套)——那是在解释用户不需要理解的架构,见 lastfmFields
         // 顶部注释。
-        if config.lastfmScrobbleSessionKey.isEmpty { return .missingCreds(L10n.t("未配置（可选）")) }
+        if config.lastfmScrobbleSessionKey.isEmpty { return .notConfigured(L10n.t("未配置（可选）")) }
         // collector 报告凭据已死(用户在网站上撤销了授权等)——必须压过"已连接":
         // 本地攥着的 session key 是废的,绿标就是在撒谎。
         if LastfmMirrorStatus.current != nil { return .error(L10n.t("授权已失效")) }
         let name = config.lastfmScrobbleUsername.isEmpty ? config.lastfmUser : config.lastfmScrobbleUsername
         return .active(name.isEmpty ? nil : String(format: L10n.t("已连接：%@"), name))
     case .bark:
-        if let hint = config.pushMissingHint() { return .missingCreds(hint) }
+        // 只有一个字段,所以"没填"就等于"没碰过",没有中间态。
+        if let hint = config.pushMissingHint() { return .notConfigured(hint) }
         return .active(config.notificationPlatform.displayName)
     }
 }

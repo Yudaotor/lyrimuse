@@ -200,6 +200,12 @@ public final class ConfigStore: ObservableObject {
     // 两句 hint 都带"（可选）"——网页展示页的"正在播放"/历史这两项基础功能光配
     // ListenBrainz 就够用,state-worker 完全是可选的加分项(留言墙/表情反应/访客计数/
     // Top10 歌手这几个模块才真的依赖它),不该让人误以为不配它是"没配置完"。
+    /// 网页推送一个字段都没填 —— 用户压根没碰过这个可选功能,不是"配错了"。
+    /// 徽标据此决定不显示任何东西(见 DestinationStatus.notConfigured)。
+    public var isStateRelayUntouched: Bool {
+        savedSnapshot.stateRelayURL.isEmpty && savedSnapshot.stateRelayToken.isEmpty
+    }
+
     public func stateRelayMissingHint() -> String? {
         if savedSnapshot.stateRelayURL.isEmpty { return L10n.t("还没填服务地址（可选）") }
         if savedSnapshot.stateRelayToken.isEmpty { return L10n.t("还没填访问令牌（可选）") }
