@@ -87,6 +87,36 @@ final class ScrobbleBackfillService: ObservableObject {
         }
     }
 
+    /// 从本地收听日志里删掉一条(按 uts)。删完顺手刷新清单。
+    ///
+    /// 走 collector 的 `delete-listen` 子命令,不在这边直接改那个 jsonl:那份文件是
+    /// collector 的,它一边还在往里追加(每首播完写一行),格式和折叠语义也都在那边。
+    /// 让 App 去读-改-写一个正在被追加的文件是在自找竞态。
+    func deleteListen(uts: Int64) {
+        guard !busy else { return }
+        busy = true
+        Task { @MainActor in
+            let ok = await Self.runDelete(uts: uts)
+            // 不管成没成都重新拉一次清单 —— 界面显示的必须是磁盘上的真实状态,
+            // 而不是我们以为删掉之后的样子。
+            pending = await Self.run(dryRun: true)
+            busy = false
+            logger.notice("delete listen uts=\(uts, privacy: .public) ok=\(ok, privacy: .public)")
+        }
+    }
+
+    private static func runDelete(uts: Int64) async -> Bool {
+        let path = collectorPath
+        return await Task.detached(priority: .userInitiated) { () -> Bool in
+            // 用 ProcessRunner:带超时,而且 stdout 会被先读空再等退出(见它的注释)。
+            guard let r = ProcessRunner.run(
+                path, ["delete-listen", "-uts", String(uts)], timeout: 15), r.succeeded
+            else { return false }
+            struct Result: Decodable { let deleted: Int }
+            return (try? JSONDecoder().decode(Result.self, from: r.stdout))?.deleted ?? 0 > 0
+        }.value
+    }
+
     private static func run(dryRun: Bool) async -> Outcome? {
         let path = collectorPath
         return await Task.detached(priority: .userInitiated) { () -> Outcome? in

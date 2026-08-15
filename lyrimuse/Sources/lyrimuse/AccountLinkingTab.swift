@@ -293,6 +293,8 @@ struct AccountLinkingTab: View {
     @ObservedObject private var lastfmConnect = LastfmConnectController.shared
     @ObservedObject private var backfill = ScrobbleBackfillService.shared
     @State private var pendingListensExpanded = false
+    /// 待补清单里鼠标停在哪一条上(uts)。删除按钮只在它上面显形 —— 见 pendingListensRow。
+    @State private var hoveredPendingUTS: Int64?
     // 只为了让手动切换语言时这块详情页重新渲染,同 AccountSidebarRow 的理由。
     @ObservedObject private var languageSettings = AppSettings.shared
 
@@ -591,6 +593,7 @@ struct AccountLinkingTab: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 4) {
                         ForEach(items, id: \.uts) { item in
+                            let hovered = hoveredPendingUTS == item.uts
                             HStack(spacing: 6) {
                                 Text(item.title)
                                     .font(.caption)
@@ -604,6 +607,25 @@ struct AccountLinkingTab: View {
                                     .font(.caption2)
                                     .foregroundStyle(.tertiary)
                                     .monospacedDigit()
+                                // 槽位常驻、只改 opacity:按钮跟着 hover 出现/消失的话,
+                                // 整行会跟着变宽变窄,鼠标扫过清单时每一行都在抖。
+                                Button {
+                                    backfill.deleteListen(uts: item.uts)
+                                } label: {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .foregroundStyle(.tertiary)
+                                }
+                                .buttonStyle(.plain)
+                                .font(.caption)
+                                .opacity(hovered ? 1 : 0)
+                                // 藏起来的时候必须同时不接受点击 —— 否则清单右侧会有一条
+                                // 看不见却挡手的区域。
+                                .allowsHitTesting(hovered && !backfill.busy)
+                                .help(L10n.t("从待补提交清单里移除这条（不可恢复）"))
+                            }
+                            .contentShape(Rectangle())
+                            .onHover { inside in
+                                hoveredPendingUTS = inside ? item.uts : nil
                             }
                         }
                     }

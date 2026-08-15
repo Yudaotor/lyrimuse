@@ -596,3 +596,4 @@
 "只对判定为该语言的歌词生效；判定按整首歌进行，混排的歌以出现的假名/谚文/汉字为准。中文默认关闭——中文歌词加拼音对中文读者通常是干扰" = "Applies only to lyrics detected as that language. Detection runs per song, using the kana / hangul / han characters that appear. Chinese is off by default — pinyin over Chinese lyrics is usually a distraction for readers of Chinese";
 "查看已有应用" = "My applications";
 "之前创建过就从这里找回：列表里点应用名，页面上就有 API Key 和 Shared Secret" = "Already created one? Find it here — click the application name and the page shows its API Key and Shared Secret";
+"从待补提交清单里移除这条（不可恢复）" = "Remove this from the backfill queue (cannot be undone)";
