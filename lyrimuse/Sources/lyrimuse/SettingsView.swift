@@ -198,6 +198,7 @@ struct SettingsView: View {
         // idealHeight 给到 640,滚动区就有 ~430pt。minHeight 同步抬到 520,避免有人拖到
         // 极限后滚动区比头部还矮。
         .frame(minWidth: 760, idealWidth: 860, minHeight: 520, idealHeight: 640)
+        .background(SettingsWindowConfigurator())
         // 见 AppActions.pendingSettingsSelection 注释——Onboarding 的 Last.fm 步骤
         // 借这个信箱指定"这次打开设置窗口要直接停在哪个分类",这里读一次就清空,不影响
         // 之后用户正常打开设置窗口(默认还是回到 .tab(.lyrics))。
@@ -2219,3 +2220,38 @@ private struct AboutSettingsTab: View {
         .id(L10n.current)
     }
 }
+
+
+/// 设置窗口的 NSWindow 收尾配置。
+///
+/// SwiftUI 的 Settings scene 给这个窗口打了 `.auxiliary`(实测 collectionBehavior=131584
+/// = auxiliary | fullScreenNone)。`.auxiliary` 的语义是"辅助窗口,跟随 App 的**主窗口**
+/// 跨 Space 和显示器" —— 而 Lyrimuse 是 accessory(没有 Dock 图标,压根不存在主窗口),
+/// 这个窗口于是没有可跟随的对象。用户报的"设置页面没法移动到另一块屏幕上"就是这个状态下
+/// 的表现。改标成 `.primary`:它事实上就是这个 App 唯一的主要窗口。
+///
+/// ⚠️ 只动这一位,不碰 level/styleMask/isMovable —— 实测那几项本来就是正常的
+/// (isMovable=true、level=0、titled=true),问题只在这一个归类标记上。
+struct SettingsWindowConfigurator: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView()
+        // 视图刚建好时还没挂进窗口,拿不到 window,推迟到下一个 runloop。
+        DispatchQueue.main.async {
+            guard let window = view.window else { return }
+            window.collectionBehavior.remove(.auxiliary)
+            window.collectionBehavior.insert(.primary)
+            // 顺带让它能被拖大。SwiftUI 给 Settings scene 的 styleMask 里**没有**
+            // .resizable(实测 32771 = titled|closable|fullSizeContentView),于是上面
+            // 声明的 idealHeight 只决定开出来多大、用户一格也拉不动 —— 而「外观」页顶上
+            // 钉着 205pt 的固定头部,拉不高的话滚动区就一直很憋屈。
+            // ⚠️ scene 修饰符 .windowResizability(.contentMinSize) 对 Settings scene
+            // 无效(实测加上之后 styleMask 纹丝不动),只能在 NSWindow 这一层开。
+            // 缩放下限仍由 SettingsView 上声明的 minWidth/minHeight 兜着。
+            window.styleMask.insert(.resizable)
+        }
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {}
+}
+
