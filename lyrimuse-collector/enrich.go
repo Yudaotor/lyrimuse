@@ -3,6 +3,7 @@
 package main
 
 import (
+	"math"
 	"slices"
 	"encoding/json"
 	"fmt"
@@ -60,6 +61,12 @@ type enrichEntry struct {
 	// 升级重试的节流与上限,见 needsLyricsRetry。
 	LyricsRetryTS    int64 `json:"lyrics_retry_ts,omitempty"`
 	LyricsRetryCount int   `json:"lyrics_retry_count,omitempty"`
+	// 这份歌词是按多少秒的曲目时长校验选出来的(0 = 旧条目/当时不知道时长)。
+	// 存在的理由:专辑预取(albumprefetch.go)拿的是**网易云版本**的时长,跟用户实际
+	// 播放的版本可能是两个版本 —— 2026-08-16 实锤:网易云《梦想家》里 Tango 是 2:44,
+	// Spotify 播的是 ~4:06,预取按 164s 校验选了给短版对轴的歌词(末行 2:01),整首歌
+	// 歌词提前、唱到一半歌词就放完了。真播放时长跟这个值对不上 → 按真实时长重选一次。
+	ResolvedDurationSecs float64 `json:"resolved_duration_secs,omitempty"`
 	// LyricsScoringVersion 记录这条歌词是按哪一版打分规则选出来的(见 lyricsScoringVersion),
 	// LyricsRescoreCount/LyricsRescoreTS 是按新规则重选的已尝试次数与上次尝试时间
 	// (见 needsLyricsRescore)。没有这些字段的老条目会读成 0,一律落后于当前版本 ——
@@ -222,7 +229,7 @@ func trackEnrichment(artist, title, album, bundleID string, durationSecs float64
 		} else if needsLyricsRescore(e) && !enrichInflight[key] {
 			enrichInflight[key] = true
 			go rescoreLyrics(key, artist, title, album, durationSecs)
-		} else if needsLyricsRetry(e) && !enrichInflight[key] {
+		} else if needsLyricsRetry(e, durationSecs) && !enrichInflight[key] {
 			enrichInflight[key] = true
 			go retryLyricsUpgrade(key, artist, title, album, durationSecs)
 		} else if needsTranslationBackfill(e) && !enrichInflight[key] {
@@ -397,7 +404,20 @@ func lyricsUpgradeBaseline(e enrichEntry, scored []scoredLyricCandidateResult) (
 	return 0, false
 }
 
-func needsLyricsRetry(e enrichEntry) bool {
+// durationMismatch:这条歌词当初按 resolved 秒校验,现在真播的版本是 actual 秒 ——
+// 差超过 12% 就当作"给另一个版本选的",值得按真实时长重选。这里只是"要不要重跑一轮"
+// 的闸门,重跑之后选谁仍由打分定;卡太紧会为几秒的标注差异白跑网络。两边都得知道时长
+// 才可比,任一方为 0 不触发(旧条目没这个字段,一律不回溯 —— 别让一次升级把全库歌都
+// 重新解析一遍)。
+func durationMismatch(resolved, actual float64) bool {
+	if resolved <= 0 || actual <= 0 {
+		return false
+	}
+	larger := math.Max(resolved, actual)
+	return math.Abs(resolved-actual)/larger > 0.12
+}
+
+func needsLyricsRetry(e enrichEntry, actualDurationSecs float64) bool {
 	if e.Lyrics == "" {
 		return false
 	}
@@ -416,7 +436,10 @@ func needsLyricsRetry(e enrichEntry) bool {
 	// 实在差,250 分也翻不过来),重试次数上限会兜住,不会没完没了地重搜。
 	nativeMissedOut := nativeLyricSource != "" && e.LyricsSource != nativeLyricSource &&
 		slices.Contains(e.LyricsSourcesSeen, nativeLyricSource)
-	if e.LyricsYRC != "" && !nativeMissedOut {
+	// 版本时长对不上(预取用了另一个版本的时长做校验)跟"同源落选"一样,本身就是重来
+	// 一次的理由,同样要越过下面"已经有逐字就不重试"那道闸。
+	wrongDuration := durationMismatch(e.ResolvedDurationSecs, actualDurationSecs)
+	if e.LyricsYRC != "" && !nativeMissedOut && !wrongDuration {
 		return false
 	}
 	// 用户手改过的绝不自动重搜,理由见 ManualLyrics 字段的注释。这道闸 2026-08-07 补上:
@@ -432,7 +455,7 @@ func needsLyricsRetry(e enrichEntry) bool {
 	// 同源候选当初落选:这本身就是重来一次的理由,不必再要求"有源缺席"。下面那段找的是
 	// "有源当初没答上话",跟这里说的"答了但没选它"是两回事 —— 混在一起会让这条路径
 	// 永远返回 false(这个 bug 2026-08-15 当天就被断言逮住了)。
-	if nativeMissedOut {
+	if nativeMissedOut || wrongDuration {
 		return true
 	}
 	missing := false
@@ -531,6 +554,7 @@ func retryLyricsUpgrade(key, artist, title, album string, durationSecs float64) 
 		e.LyricsSource = picked.Source
 		e.LyricsScore = picked.Score
 		e.LyricsScoringVersion = lyricsScoringVersion
+		e.ResolvedDurationSecs = durationSecs
 		e.LyricsTr, e.LyricsRoma, e.LyricsYRC = picked.LyricsTr, picked.LyricsRoma, picked.LyricsYRC
 		lyricsChanged = true
 		// 译文换人了,描述译文的两个字段必须跟着换:语言(否则拿旧语言判新译文),
@@ -659,6 +683,7 @@ func rescoreLyrics(key, artist, title, album string, durationSecs float64) {
 		// 保留现有歌词不动 —— 有一份存疑的歌词也好过没有 —— 但版本号照盖:结论已经
 		// 在完整信息下得出过了,再重搜一次也是同样的结果。
 		e.LyricsScoringVersion = lyricsScoringVersion
+		e.ResolvedDurationSecs = durationSecs
 		log.Printf("lyrics rescore: %s  no valid candidate under v%d, keeping %s", key, lyricsScoringVersion, e.LyricsSource)
 	default:
 		if picked.Lyrics != e.Lyrics {
@@ -679,6 +704,7 @@ func rescoreLyrics(key, artist, title, album string, durationSecs float64) {
 		e.LyricsSource = picked.Source
 		e.LyricsScore = picked.Score
 		e.LyricsScoringVersion = lyricsScoringVersion
+		e.ResolvedDurationSecs = durationSecs
 	}
 	enrichCache[key] = e
 	enrichDirty = true
@@ -909,6 +935,7 @@ func resolveTrackEnrichment(artist, title, album string, durationSecs float64) e
 		e.LyricsSource = picked.Source
 		e.LyricsScore = picked.Score
 		e.LyricsScoringVersion = lyricsScoringVersion
+		e.ResolvedDurationSecs = durationSecs
 		e.LyricsTr, e.LyricsRoma, e.LyricsYRC = picked.LyricsTr, picked.LyricsRoma, picked.LyricsYRC
 		// 译文换人了,描述译文的两个字段必须跟着换:语言(否则拿旧语言判新译文),
 		// 来源(否则上一轮机翻留下的 "machine" 会让新来的社区译文被标成机翻)。
