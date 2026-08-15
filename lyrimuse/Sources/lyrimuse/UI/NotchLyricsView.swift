@@ -504,7 +504,9 @@ struct NotchLyricsView: View {
 // 顶部两个角是直角、只有底部两个角带圆角的卡片形状——SwiftUI 的 RoundedRectangle
 // 只支持四角统一圆角,`UnevenRoundedRectangle` 又要 macOS 26 起才有(这个项目部署
 // 目标是 14),手写一个 Shape 直接按四段直线+两段圆弧画出这个轮廓,不依赖新 API。
-private struct NotchHangingShape: Shape {
+// 不加 private:「外观」页的灵动岛预览(NotchPreviewBar)要用同一个形状画预览卡,
+// 复制一份轮廓代码只会让两边慢慢漂开。
+struct NotchHangingShape: Shape {
     var bottomCornerRadius: CGFloat
 
     func path(in rect: CGRect) -> Path {

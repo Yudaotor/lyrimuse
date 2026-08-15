@@ -822,8 +822,19 @@ private struct AppearanceSettingsTab: View {
         // 压根不读这一页的字体/颜色字段(见 classicOverlayCard 上那段消费方核对),菜单栏
         // 歌词是纯文字。给它们挂预览会暗示这些设置对它们也有效,那是错的。
         .safeAreaInset(edge: .top, spacing: 0) {
-            if section == .overlay, settings.classicOverlayEnabled {
-                OverlayPreviewBar()
+            // 每一段挂**自己那一段**的预览。
+            //
+            // 2026-08-15:原来只有悬浮歌词有预览,而且还跟开关联动(关着就不显示)。两处都改:
+            //   - 灵动岛/菜单栏各自有了反映自己设置的预览(见 SectionPreviewBars),不再是
+            //     "这两段没什么可预览的"。它们**不能**共用 OverlayPreviewBar —— 那条画的是
+            //     悬浮歌词的字体/颜色,而这两个形态压根不读那些字段。
+            //   - 不再看开关:配置卡现在关着也能调(见 currentSection),预览要是还跟着开关
+            //     藏起来,调的时候就又看不见效果了。
+            switch section {
+            case .overlay: OverlayPreviewBar()
+            case .notch: NotchPreviewBar()
+            case .menuBar: MenuBarPreviewBar()
+            case .other: EmptyView()
             }
         }
         .id(L10n.current)
@@ -886,9 +897,10 @@ private struct AppearanceSettingsTab: View {
                 isOn: Binding(
                     get: { settings.classicOverlayEnabled },
                     set: { LyricsOverlayWindowController.shared.setVisible($0) }))
-            if settings.classicOverlayEnabled {
-                classicOverlayCard.transition(.settingsCard)
-            }
+            // 配置卡**不跟开关联动**(2026-08-15 用户要求):关着也能调。
+            // 理由:把它藏起来只是让"先开、调完、再关"变成必须的操作顺序,并不能阻止
+            // 什么;而想先配好再打开的人会以为这个形态没有可调项。
+            classicOverlayCard
         case .notch:
             modeToggleCard(
                 icon: "rectangle.topthird.inset.filled",
@@ -897,32 +909,20 @@ private struct AppearanceSettingsTab: View {
                 isOn: Binding(
                     get: { settings.notchOverlayEnabled },
                     set: { NotchLyricsWindowController.shared.setVisible($0) }))
-            if settings.notchOverlayEnabled {
-                notchOverlayCard.transition(.settingsCard)
-            }
+            notchOverlayCard
         case .menuBar:
             modeToggleCard(
                 icon: "menubar.rectangle",
                 title: L10n.t("菜单栏歌词"),
                 isOn: $settings.showLyricsInMenuBar)
-            if settings.showLyricsInMenuBar {
-                menuBarCard.transition(.settingsCard)
-            }
+            menuBarCard
         case .other:
             // 自动隐藏是**跨形态**的(悬浮歌词/灵动岛共用同一组规则),所以不能塞进任何一个
             // 单独形态那一段,只能留在这里。两个都没开时它没有作用对象,不显示。
-            if settings.classicOverlayEnabled || settings.notchOverlayEnabled {
-                autoHideCard.transition(.settingsCard)
-            } else {
-                // 2026-08-14「歌词窗口」那张卡从这里移走之后,这一段就只剩"自动隐藏"一张卡,
-                // 而它本身是条件渲染的 —— 两个悬浮窗都关着时整段会变成一块白板,看着像页面
-                // 坏了。补一句说明,把"这里现在没东西"变成"这里为什么没东西"。
-                ContentUnavailableView(
-                    L10n.t("没有可调整的项目"),
-                    systemImage: "slider.horizontal.3",
-                    description: Text(L10n.t("这里的设置对桌面悬浮歌词和灵动岛生效，先开启其中一种"))
-                )
-            }
+            // 同样不再跟开关联动。原来两个悬浮窗都关着时这里会退化成一块
+            // ContentUnavailableView 白板 —— 现在直接把卡片摆出来,想先配好再开的人
+            // 不用先去别的段打开开关。
+            autoHideCard
         }
     }
 
