@@ -268,8 +268,10 @@ public final class LyricsSyncEngine {
 
     public func load(
         lyrics: String, lyricsTr: String, lyricsRoma: String, lyricsYRC: String,
-        preferWordLevel: Bool = true, trackTitle: String = "", trackArtist: String = ""
+        preferWordLevel: Bool = true, trackTitle: String = "", trackArtist: String = "",
+        romanizationScripts: RomanizationScripts = .default
     ) {
+        self.romanizationScripts = romanizationScripts
         let yrc = preferWordLevel ? YRCParser.parse(lyricsYRC) : []
         // 过滤前先把整份的文本取出来判一次(结构化规则是整份粒度的,见
         // shouldApplyStructuralCreditFilter),不能像原来那样逐行独立 filter。
@@ -338,6 +340,9 @@ public final class LyricsSyncEngine {
         // 而不是逐行判断——理由见 Romanizer.looksJapanese 的调用点注释,极少数纯汉字的
         // 日文行不该被局部误判成中文。
         songLooksJapanese = Romanizer.looksJapanese(lyrics) || Romanizer.looksJapanese(lyricsYRC)
+        // 整首歌的文字种类,给"按语言开关罗马音"用。判定粒度跟上面 songLooksJapanese
+        // 完全一致(整首、扫原始字段),不逐行判 —— 同一个理由。
+        songScript = Romanizer.script(of: lyrics.isEmpty ? lyricsYRC : lyrics)
         // 歌词源自带的假名标注(酷狗的 [kana:] 标签)。对不齐时 parse 返回 nil,读音自动
         // 退回形态分析 —— 见 KanaAnnotation 顶部注释里"半对半错比不标更糟"那段。
         kanaAnnotation = KanaAnnotation.parse(lrc: lyrics)
@@ -349,6 +354,15 @@ public final class LyricsSyncEngine {
     }
 
     private var songLooksJapanese = false
+    private var songScript: LyricScript = .other
+    private var romanizationScripts: RomanizationScripts = .default
+
+    /// 这首歌该不该标罗马音 —— 由它的文字种类和用户开关共同决定。
+    /// `.other`(拉丁/泰文/西里尔…)不受管辖,始终允许,保持历来的行为。
+    private var romanizationAllowed: Bool {
+        guard let option = songScript.option else { return true }
+        return romanizationScripts.contains(option)
+    }
     private var kanaAnnotation: KanaAnnotation?
 
     public var hasContent: Bool { usingWords ? !wordLines.isEmpty : !baseLines.isEmpty }
@@ -380,14 +394,23 @@ public final class LyricsSyncEngine {
     private var romanizerFallbackCache: [String: String?] = [:]
 
     private func romanizationText(timeMs: Int, plainText: String) -> String? {
+        // ⚠️ 这道闸必须在**服务端字段之前**。用户关掉某种语言的罗马音,意思是"别给我看",
+        // 不是"别去现算" —— 只拦客户端兜底的话,服务端恰好给了 lyrics_roma 的那些歌照样
+        // 会显示,开关就成了个看运气的东西。
+        guard romanizationAllowed else { return nil }
         if let fromSource = nearestText(romaLines, timeMs) { return fromSource }
         guard romaLines.isEmpty else { return nil }
-        // 2026-08-04 实测排查坐实的真实 bug:含汉字的行只在"整首歌确认是日文"
-        // (songLooksJapanese)时才允许兜底——纯中文歌曲(没有假名)没有这层限制的话,
-        // 汉字会被 ICU 音译成拼音展示,对中文读者是纯噪声(NetEase 本来就不给中文歌曲
-        // 算 lyrics_roma,这本身就是"不需要罗马音"的信号,客户端兜底不该越权覆盖这个
-        // 判断)。不含汉字的行(韩文谚文/泰文/西里尔字母等)没有这层混淆,始终允许。
-        if Romanizer.containsHan(plainText) && !songLooksJapanese { return nil }
+        // 这里原来有一道硬编码的闸:"含汉字、且整首歌不像日文 → 一律不兜底"。
+        // 它解决的是 2026-08-04 那个真实 bug —— 中文歌被 ICU 音译成拼音展示,对中文读者
+        // 是纯噪声(NetEase 本来就不给中文歌算 lyrics_roma,那本身就是"不需要"的信号)。
+        //
+        // 2026-08-15 删掉:那道闸表达的是"我们替用户决定中文不要拼音",而现在这件事由
+        // 用户自己的开关表达(上面的 romanizationAllowed,中文默认关 —— 默认行为跟以前
+        // 一模一样)。留着它的话,用户明明打开了中文罗马音却什么都不会发生:绝大多数中文歌
+        // 没有服务端 lyrics_roma,能出拼音的唯一途径正是这里的客户端兜底。
+        //
+        // songLooksJapanese 仍然要传给 romanize() —— 它决定走日语形态分析还是 ICU 音译,
+        // 那是另一回事(汉字在两种语言里读音完全不同,见 Romanizer.romanize 的注释)。
         if let cached = romanizerFallbackCache[plainText] { return cached }
         let result = Romanizer.romanize(
             plainText, japanese: songLooksJapanese,
@@ -412,8 +435,10 @@ public final class LyricsSyncEngine {
         guard !words.isEmpty else { return nil }
         let line = words.map(\.text).joined()
         if let cached = wordGroupCache[line] { return cached }
+        // 逐词读音只对日文产出(buildWordGroups 里 guard japanese),所以它受同一道
+        // 按语言开关的管辖 —— 关掉日文罗马音之后,逐字歌词下面也不该再标读音。
         let result = Self.buildWordGroups(
-            words: words, line: line, japanese: songLooksJapanese,
+            words: words, line: line, japanese: songLooksJapanese && romanizationAllowed,
             marks: kanaAnnotation?.marks(forLine: line) ?? [])
         wordGroupCache[line] = result
         return result

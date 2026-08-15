@@ -269,3 +269,67 @@ public enum Romanizer {
         return hanPattern.firstMatch(in: text, range: range) != nil
     }
 }
+
+/// 一份歌词整体属于哪种文字。**按整首歌判一次**,不逐行判 —— 理由见 Romanizer 里
+/// looksJapanese 的注释:极少数纯汉字的日文行不该被局部特征误判成中文。
+public enum LyricScript: String, Sendable, CaseIterable {
+    case japanese, korean, chinese
+    /// 拉丁字母、泰文、西里尔字母等等。这些跟汉字没有交集,音译无歧义,历来是无条件
+    /// 允许的,不纳入按语言开关的管辖 —— 用户提的是"汉语/韩语/日语"三选。
+    case other
+
+    var option: RomanizationScripts? {
+        switch self {
+        case .japanese: return .japanese
+        case .korean: return .korean
+        case .chinese: return .chinese
+        case .other: return nil
+        }
+    }
+}
+
+/// 哪几种文字需要标罗马音。用户可以按语言分别开关。
+///
+/// 为什么要分语言:同一个人对不同语言的需求是相反的 —— 听日文歌想要罗马字才跟得上,
+/// 听中文歌却完全不需要拼音(对中文读者是纯噪声,2026-08-04 就是因为这个才把中文歌的
+/// 客户端兜底整个关掉的)。原来只有一个总开关,表达不了这件事。
+public struct RomanizationScripts: OptionSet, Sendable, Codable {
+    public let rawValue: Int
+    public init(rawValue: Int) { self.rawValue = rawValue }
+
+    public static let japanese = RomanizationScripts(rawValue: 1 << 0)
+    public static let korean = RomanizationScripts(rawValue: 1 << 1)
+    public static let chinese = RomanizationScripts(rawValue: 1 << 2)
+
+    /// 默认值刻意等于**改成可配置之前的实际观感**:日文有罗马字、韩文有、中文没有。
+    /// 中文默认关不是随便定的 —— 绝大多数中文歌本来就没有服务端罗马音(网易云不给中文歌
+    /// 算 lyrics_roma,那本身就是"不需要"的信号),客户端也一直不兜底。默认打开会让每首
+    /// 中文歌凭空多出一行拼音,那正是当初修掉的问题。
+    public static let `default`: RomanizationScripts = [.japanese, .korean]
+}
+
+extension Romanizer {
+    // 谚文。跟汉字没有交集,单独一个信号就能确证。
+    private static let hangulPattern = try! NSRegularExpression(
+        pattern: #"\p{Hangul}"#)
+
+    public static func containsHangul(_ text: String) -> Bool {
+        let range = NSRange(text.startIndex..., in: text)
+        return hangulPattern.firstMatch(in: text, range: range) != nil
+    }
+
+    /// 判定一份歌词整体是哪种文字。
+    ///
+    /// 顺序有讲究,不能重排:
+    /// - 假名是日文独有的,一出现就确证日文 —— 必须排在汉字之前,否则日文歌里的汉字会
+    ///   把它判成中文(这正是 2026-08-04 那个 bug 的形状)。
+    /// - 谚文同样是韩文独有的。韩文歌词里夹汉字很少见但存在(人名/成语),所以也排在
+    ///   汉字之前。
+    /// - 剩下含汉字的才是中文。
+    public static func script(of text: String) -> LyricScript {
+        if looksJapanese(text) { return .japanese }
+        if containsHangul(text) { return .korean }
+        if containsHan(text) { return .chinese }
+        return .other
+    }
+}

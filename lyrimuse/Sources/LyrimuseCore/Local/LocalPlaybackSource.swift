@@ -97,6 +97,11 @@ public final class LocalPlaybackSource: ObservableObject {
     @Published public var preferWordLevelKaraoke: Bool = true {
         didSet { reloadCurrentLyrics() }
     }
+    /// 要给哪几种文字标罗马音。改了立刻重新加载当前这首 —— 这道开关同时管服务端字段和
+    /// 客户端兜底(见 LyricsSyncEngine.romanizationText 那道 guard)。
+    @Published public var romanizationScripts: RomanizationScripts = .default {
+        didSet { reloadCurrentLyrics() }
+    }
     /// 歌词正文的简繁偏好。改了立刻重新加载当前这首 —— 转换发生在**送进解析引擎之前**,
     /// 缓存里存的原文一个字节都不动,切回来是无损的。
     @Published public var chineseVariant: ChineseVariant = .off {
@@ -828,7 +833,8 @@ public final class LocalPlaybackSource: ObservableObject {
             preferWordLevel: preferWordLevelKaraoke,
             // 用来认出歌词文件开头那行「曲名 - 歌手」抬头,见 looksLikeHeaderLine。
             trackTitle: snapshot.title ?? "",
-            trackArtist: snapshot.artist ?? ""
+            trackArtist: snapshot.artist ?? "",
+            romanizationScripts: romanizationScripts
         )
         currentOffsetKey = LyricsOffsetStore.trackKey(
             artist: snapshot.artist ?? "",

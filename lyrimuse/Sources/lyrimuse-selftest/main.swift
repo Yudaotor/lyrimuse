@@ -1743,6 +1743,77 @@ do {
     expectEqual(noisyBig?.timedOut, false, "ProcessRunner: stderr 狂写不该超时")
 }
 
+// ---- 罗马音按语言开关 ----
+do {
+    // 文字判定。顺序是有讲究的，不能重排：
+    expectEqual(Romanizer.script(of: "こんにちは"), .japanese, "Script: 假名 → 日文")
+    expectEqual(Romanizer.script(of: "안녕하세요"), .korean, "Script: 谚文 → 韩文")
+    expectEqual(Romanizer.script(of: "你对我笑一次"), .chinese, "Script: 纯汉字 → 中文")
+    expectEqual(Romanizer.script(of: "Hello world"), .other, "Script: 拉丁 → other")
+    // ⚠️ 日文歌里大量夹汉字。假名必须先判，否则整首日文歌会被判成中文 —— 那正是
+    // 2026-08-04 修过的那个 bug 的形状。
+    expectEqual(Romanizer.script(of: "受話器を取った君"), .japanese,
+                "Script: 汉字+假名混排 → 日文,不能判成中文")
+    // 韩文歌词里夹汉字（人名/成语）少见但存在。
+    expectEqual(Romanizer.script(of: "그대 漢字"), .korean, "Script: 谚文+汉字 → 韩文")
+
+    // 默认值必须等于"改成可配置之前的实际观感"：日韩有、中文没有。
+    expectEqual(RomanizationScripts.default.contains(.japanese), true, "默认: 日文开")
+    expectEqual(RomanizationScripts.default.contains(.korean), true, "默认: 韩文开")
+    expectEqual(RomanizationScripts.default.contains(.chinese), false, "默认: 中文关")
+
+    // ---- 引擎级：开关真的能挡住罗马音吗 ----
+    func romanization(
+        lyrics: String, roma: String, scripts: RomanizationScripts
+    ) -> String? {
+        let engine = LyricsSyncEngine()
+        engine.load(lyrics: lyrics, lyricsTr: "", lyricsRoma: roma, lyricsYRC: "",
+                    romanizationScripts: scripts)
+        return engine.activeLine(atMs: 1000)?.romanization
+    }
+
+    let jaLyrics = "[00:01.00]こんにちは"
+    expectEqual(romanization(lyrics: jaLyrics, roma: "", scripts: [.japanese]) != nil, true,
+                "开关: 日文开 → 客户端兜底出罗马音")
+    expectEqual(romanization(lyrics: jaLyrics, roma: "", scripts: [.korean, .chinese]), nil,
+                "开关: 日文关 → 没有罗马音")
+
+    // ⚠️ 最要紧的一条：服务端给了 lyrics_roma 时，开关同样要管得住。
+    // 只拦客户端兜底的话，恰好有服务端罗马音的歌照样会显示，开关就成了看运气的东西。
+    let zhLyrics = "[00:01.00]你对我笑一次"
+    let zhRoma = "[00:01.00]ni dui wo xiao yi ci"
+    expectEqual(romanization(lyrics: zhLyrics, roma: zhRoma, scripts: [.chinese]),
+                "ni dui wo xiao yi ci", "开关: 中文开 → 用服务端给的罗马音")
+    expectEqual(romanization(lyrics: zhLyrics, roma: zhRoma, scripts: [.japanese, .korean]), nil,
+                "开关: 中文关 → 连服务端给的罗马音也不显示")
+
+    // ⚠️ 绝大多数中文歌**没有**服务端 lyrics_roma（网易云不给中文歌算），所以"打开中文"
+    // 能不能出拼音，全看客户端兜底放不放行。2026-08-15 真机验证时就栽在这儿：开关打开了，
+    // 但引擎里另有一道硬编码的闸把中文兜底挡死，用户看到的是"开了等于没开"。
+    let zhFallback = romanization(lyrics: zhLyrics, roma: "", scripts: [.chinese])
+    expectEqual(zhFallback != nil, true, "开关: 中文开 + 服务端没给 → 客户端兜底出拼音")
+    expectEqual(romanization(lyrics: zhLyrics, roma: "", scripts: [.japanese]), nil,
+                "开关: 中文关 + 服务端没给 → 依然没有")
+
+    // 中文默认是关的，所以默认配置下中文歌不该有罗马音（哪怕服务端给了）。
+    expectEqual(romanization(lyrics: zhLyrics, roma: zhRoma, scripts: .default), nil,
+                "开关: 默认配置下中文歌没有罗马音")
+
+    // 韩文。
+    let koLyrics = "[00:01.00]안녕하세요"
+    expectEqual(romanization(lyrics: koLyrics, roma: "", scripts: [.korean]) != nil, true,
+                "开关: 韩文开 → 有罗马音")
+    expectEqual(romanization(lyrics: koLyrics, roma: "", scripts: [.japanese]), nil,
+                "开关: 韩文关 → 没有罗马音")
+
+    // 拉丁/其它文字不受这三个开关管辖，行为跟历来一致（这里原文就是拉丁，
+    // romanize 会因为"音译结果等于原文"返回 nil，不该因为开关而改变）。
+    expectEqual(romanization(lyrics: "[00:01.00]Hello", roma: "", scripts: []), nil,
+                "开关: 拉丁原文本来就没有罗马音")
+    expectEqual(romanization(lyrics: "[00:01.00]Hello", roma: "[00:01.00]Hello", scripts: []),
+                "Hello", "开关: other 文字不受三个语言开关管辖")
+}
+
 if failures == 0 {
     print("\nALL PASS")
 } else {

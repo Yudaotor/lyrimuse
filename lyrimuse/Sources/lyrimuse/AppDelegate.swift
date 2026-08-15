@@ -147,6 +147,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.setActivationPolicy(settings.showInDock ? .regular : .accessory)
         LocalPlaybackSource.shared.preferWordLevelKaraoke = settings.preferWordLevelKaraoke
         LocalPlaybackSource.shared.chineseVariant = settings.lyricsChineseVariant
+        // 跟上面两行同一个理由:LocalPlaybackSource 自己不读 UserDefaults(它在
+        // LyrimuseCore 里,够不到 AppSettings),启动时不推一次的话它会一直用默认值,
+        // 用户的选择要等到下次在设置页里改动才生效。
+        LocalPlaybackSource.shared.romanizationScripts = settings.romanizationScripts
         // Core 见到中文歌词就会置一个粘性标记;这里把它持久化下来,好让"简繁切换"这一项
         // 在下次启动、还没播中文歌之前就已经该露出来(见 SettingsView 里那个条件)。
         if !settings.hasSeenChineseLyrics {

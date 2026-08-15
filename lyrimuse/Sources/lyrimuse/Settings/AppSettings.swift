@@ -28,6 +28,7 @@ final class AppSettings: ObservableObject {
         static let lyricsChineseVariant = "np:lyricsChineseVariant"
         static let hasSeenChineseLyrics = "np:hasSeenChineseLyrics"
         static let showRomanization = "np:showRomanization"
+        static let romanizationScripts = "np:romanizationScripts"
         static let showTranslation = "np:showTranslation"
         static let launchAtLoginEnabled = "np:launchAtLoginEnabled"
         static let launchMusicOnLyrimuseOpen = "np:launchMusicOnLyrimuseOpen"
@@ -111,6 +112,14 @@ final class AppSettings: ObservableObject {
     }
     @Published var showRomanization: Bool {
         didSet { defaults.set(showRomanization, forKey: Keys.showRomanization) }
+    }
+
+    /// 要给哪几种文字标罗马音(日文/韩文/中文各自可开关)。存 OptionSet 的 rawValue。
+    ///
+    /// 跟 showRomanization 是两层:那个是"显不显示罗马音这一行"的总开关,这个决定
+    /// **哪些语言**会产出罗马音。总开关关掉时这里的选择不起作用,但也不会被清掉。
+    @Published var romanizationScripts: RomanizationScripts {
+        didSet { defaults.set(romanizationScripts.rawValue, forKey: Keys.romanizationScripts) }
     }
     @Published var showTranslation: Bool {
         didSet { defaults.set(showTranslation, forKey: Keys.showTranslation) }
@@ -361,6 +370,10 @@ final class AppSettings: ObservableObject {
             .flatMap(ChineseVariant.init(rawValue:)) ?? .off
         hasSeenChineseLyrics = defaults.bool(forKey: Keys.hasSeenChineseLyrics)
         showRomanization = (defaults.object(forKey: Keys.showRomanization) as? Bool) ?? true
+        // 没存过时用 .default(日文/韩文开、中文关)—— 等于改成可配置之前的实际观感,
+        // 老用户升级上来看不出任何变化。
+        romanizationScripts = (defaults.object(forKey: Keys.romanizationScripts) as? Int)
+            .map(RomanizationScripts.init(rawValue:)) ?? .default
         // 默认值跟 App 界面语言联动——译文这几个歌词源(网易云/QQ 音乐)给的固定是
         // 中文翻译,不是"任意语言译文",界面语言不是中文的人默认看到一堆看不懂的
         // 中文字没有意义。L10n.current 直接读 np:appLanguage 这个 UserDefaults key

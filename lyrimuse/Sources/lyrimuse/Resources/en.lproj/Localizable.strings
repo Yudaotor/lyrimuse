@@ -589,3 +589,8 @@
 "这里的设置对桌面悬浮歌词和灵动岛生效，先开启其中一种" = "These settings apply to Desktop Floating Lyrics and Notch Lyrics — turn one of them on first";
 "清空没有完全生效，请稍后再试一次" = "Clearing didn't fully take effect — try again in a moment";
 "立即刷新" = "Refresh now";
+"标注哪些语言" = "Annotate";
+"日语" = "Japanese";
+"韩语" = "Korean";
+"中文" = "Chinese";
+"只对判定为该语言的歌词生效；判定按整首歌进行，混排的歌以出现的假名/谚文/汉字为准。中文默认关闭——中文歌词加拼音对中文读者通常是干扰" = "Applies only to lyrics detected as that language. Detection runs per song, using the kana / hangul / han characters that appear. Chinese is off by default — pinyin over Chinese lyrics is usually a distraction for readers of Chinese";

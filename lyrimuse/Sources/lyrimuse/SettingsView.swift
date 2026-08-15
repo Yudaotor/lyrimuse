@@ -238,6 +238,22 @@ private struct LyricsSettingsTab: View {
     // 在本地播放每次轮询(~2秒一次)更新歌曲信息时跟着白白重渲染一次。用普通引用
     // (class 本身是引用类型,let 一样能改它的属性),不订阅。
     private let local = LocalPlaybackSource.shared
+
+    /// 一种文字的罗马音开关。跟中文繁简那个 Picker 一样**双写**:AppSettings 负责持久化,
+    /// LocalPlaybackSource 负责让当前这首歌立刻重新解析(它的 didSet 会 reload)。
+    /// 只写一边的话,要么关了 App 就忘,要么改了要等下一首歌才生效。
+    private func romanizationToggle(_ title: String, _ option: RomanizationScripts) -> some View {
+        Toggle(title, isOn: Binding(
+            get: { settings.romanizationScripts.contains(option) },
+            set: { on in
+                var next = settings.romanizationScripts
+                if on { next.insert(option) } else { next.remove(option) }
+                settings.romanizationScripts = next
+                local.romanizationScripts = next
+            }
+        ))
+        .toggleStyle(.checkbox)
+    }
     @ObservedObject private var features = FeatureSettingsStore.shared
     @Environment(\.openWindow) private var openWindow
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -598,6 +614,22 @@ private struct LyricsSettingsTab: View {
                 help: L10n.t("这个开关只影响「桌面悬浮歌词」和「歌词窗口」；灵动岛歌词受限于胶囊空间不支持这一项，菜单栏歌词只能显示一行纯文字")
             ) {
                 Toggle("", isOn: $settings.showRomanization)
+            }
+            // 按语言分别开关 —— 同一个人对不同语言的需求常常是相反的:听日文歌要罗马字
+            // 才跟得上,听中文歌完全不需要拼音。总开关关着时这几行没有意义,收起来。
+            if settings.showRomanization {
+                CardDivider()
+                SettingsRow(
+                    icon: "character.book.closed",
+                    title: L10n.t("标注哪些语言"),
+                    help: L10n.t("只对判定为该语言的歌词生效；判定按整首歌进行，混排的歌以出现的假名/谚文/汉字为准。中文默认关闭——中文歌词加拼音对中文读者通常是干扰")
+                ) {
+                    HStack(spacing: 12) {
+                        romanizationToggle(L10n.t("日语"), .japanese)
+                        romanizationToggle(L10n.t("韩语"), .korean)
+                        romanizationToggle(L10n.t("中文"), .chinese)
+                    }
+                }
             }
             CardDivider()
             SettingsRow(
