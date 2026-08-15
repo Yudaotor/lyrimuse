@@ -107,8 +107,42 @@ struct OverlayPreviewBar: View {
         .onReceive(PlaybackCoordinator.shared.$artworkAccentColor.removeDuplicates()) { accent = $0 }
     }
 
+    @ViewBuilder
+    private var desktopUnderlay: some View {
+        if let wallpaper = DesktopWallpaperSample.image {
+            Image(nsImage: wallpaper)
+                .resizable()
+                .scaledToFill()
+        } else {
+            // 拿不到壁纸(读不到文件/没有权限)就退回棋盘格 —— 它至少明确表达了
+            // "这一块是透明的、透出的是底下的东西",不会像纯色那样把人误导成不透明。
+            Canvas { context, size in
+                let cell: CGFloat = 8
+                let cols = Int(size.width / cell) + 1
+                let rows = Int(size.height / cell) + 1
+                for row in 0 ..< rows {
+                    for col in 0 ..< cols where (row + col).isMultiple(of: 2) {
+                        let rect = CGRect(
+                            x: CGFloat(col) * cell, y: CGFloat(row) * cell,
+                            width: cell, height: cell)
+                        context.fill(Path(rect), with: .color(.gray.opacity(0.22)))
+                    }
+                }
+            }
+        }
+    }
+
     private var preview: some View {
         ZStack {
+            // ⚠️ 卡片底下垫的是**真实桌面壁纸**,不是纯色。
+            //
+            // 悬浮歌词的窗口本身是透明的,用户设的"背景颜色"通常带 alpha —— 底下垫纯色的话,
+            // 半透明会被合成成一块不透明的灰,"背景是透明的"这件事在预览里彻底看不出来
+            // (2026-08-15 用户报的原话:"为什么实际背景是透明的,但是预览这里不是")。
+            //
+            // 铺满整个卡片区域(矩形)而不是只铺在圆角背景里面:真窗口的圆角**之外**露出的
+            // 也是桌面,连这一点一起演出来才对得上。
+            desktopUnderlay
             if settings.backgroundIsVisible {
                 RoundedRectangle(cornerRadius: overlayCornerRadius, style: .continuous)
                     .fill(settings.backgroundColor)
@@ -121,6 +155,8 @@ struct OverlayPreviewBar: View {
                 .padding(.horizontal, 20)
         }
         .frame(width: settings.overlayWidth, height: contentHeight)
+        // 只给垫底那层收个小圆角,别让壁纸块直角戳在卡片列里;背景色自己的圆角不受影响。
+        .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
         .scaleEffect(scale, anchor: .center)
         // 缩放不改变布局占位,得显式把外框收到缩放后的尺寸,否则会按原始宽度占位、把整条撑爆。
         .frame(width: settings.overlayWidth * scale, height: contentHeight * scale)
@@ -150,5 +186,41 @@ struct OverlayPreviewBar: View {
         .font(.caption)
         .foregroundStyle(.secondary)
         .monospacedDigit()
+    }
+}
+
+
+/// 预览里垫在悬浮歌词卡底下的那张桌面壁纸。
+///
+/// 只读一次并缩到预览用得着的尺寸:壁纸动辄几千像素,每次渲染都去读原图既慢又占内存。
+/// 代价是换了壁纸要等下次启动才更新 —— 对一个"演示半透明效果"的垫底图来说够用了。
+@MainActor
+enum DesktopWallpaperSample {
+    private static var loaded = false
+    private static var cache: NSImage?
+
+    static var image: NSImage? {
+        if !loaded {
+            loaded = true
+            cache = load()
+        }
+        return cache
+    }
+
+    private static func load() -> NSImage? {
+        guard let screen = NSScreen.main,
+              let url = NSWorkspace.shared.desktopImageURL(for: screen),
+              let original = NSImage(contentsOf: url)
+        else { return nil }
+        // 缩到预览条那么宽就够了(高度按比例)。
+        let targetWidth: CGFloat = 640
+        guard original.size.width > targetWidth else { return original }
+        let scale = targetWidth / original.size.width
+        let size = NSSize(
+            width: targetWidth, height: (original.size.height * scale).rounded())
+        return NSImage(size: size, flipped: false) { rect in
+            original.draw(in: rect)
+            return true
+        }
     }
 }

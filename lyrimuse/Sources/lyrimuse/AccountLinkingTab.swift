@@ -678,11 +678,17 @@ struct AccountLinkingTab: View {
                 }
                 .frame(maxHeight: 180)
             } label: {
-                Label(
-                    String(format: L10n.t("本地已记录 %@ 首，连接后可补提交"), "\(items.count)"),
-                    systemImage: "tray.full"
-                )
-                .font(.callout)
+                HStack(spacing: 4) {
+                    Label(
+                        String(format: L10n.t("本地已记录 %@ 首，连接后可补提交"), "\(items.count)"),
+                        systemImage: "tray.full"
+                    )
+                    .font(.callout)
+                    // 这份日志不是无限攒的:collector 启动时会做一次体量压缩(见
+                    // lyrimuse-collector/listenlog.go 的 listenLogMaxLines)。上限是按**行数**
+                    // 定的,这里换算成用户能感知的时间跨度 —— 数量级取自那边注释里同一套估算。
+                    HelpButton(text: L10n.t("最多保留 4 万条记录，按每天 40 首估算约两年半；超出后从最旧的开始丢弃"))
+                }
             }
         }
     }
