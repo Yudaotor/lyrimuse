@@ -42,7 +42,13 @@ struct MenuBarLabel: View {
                 // 见 MenuBarMarqueeTicker;设置里可关,关掉就退回截断加省略号)——两种模式
                 // 下真正显示哪一段都由 ticker 算好发布,这里只渲染。tooltip 始终给完整
                 // 这一行,滚动/截断都不影响"想看全文就悬停"这条既有出路。
-                Text(marquee.visibleText.isEmpty ? text : marquee.visibleText).help(text)
+                // 需要滚的句子由 ticker 画成一张固定宽度的模板图(见 MenuBarMarqueeRenderer)
+                // 平滑横移;装得下的、以及关掉滚动的,仍旧是普通文字。
+                if let image = marquee.scrollImage {
+                    Image(nsImage: image).help(text)
+                } else {
+                    Text(marquee.visibleText.isEmpty ? text : marquee.visibleText).help(text)
+                }
             } else {
                 Label {
                     Text(L10n.t("Lyrimuse"))

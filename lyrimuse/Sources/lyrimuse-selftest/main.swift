@@ -1814,6 +1814,60 @@ do {
                 "Hello", "开关: other 文字不受三个语言开关管辖")
 }
 
+// ---- 菜单栏跑马灯:像素级偏移 ----
+do {
+    // 一段固定的参数:滚 100pt，每秒 50pt（走完要 2 秒），首尾各停 1 秒。
+    // 于是一个完整周期 = 1 + 2 + 1 = 4 秒。
+    func offset(_ elapsed: Double) -> CGFloat {
+        MenuBarMarquee.scrollOffset(
+            elapsed: elapsed, maxOffset: 100, pointsPerSecond: 50, holdSeconds: 1)
+    }
+
+    // 装得下就不滚。这条最要紧：maxOffset<=0 时若不早退，下面的除法会算出无穷大。
+    expectEqual(
+        MenuBarMarquee.scrollOffset(
+            elapsed: 5, maxOffset: 0, pointsPerSecond: 50, holdSeconds: 1), 0,
+        "像素滚动: 装得下(maxOffset=0)就不滚")
+    expectEqual(
+        MenuBarMarquee.scrollOffset(
+            elapsed: 5, maxOffset: -10, pointsPerSecond: 50, holdSeconds: 1), 0,
+        "像素滚动: maxOffset 为负也不滚")
+    // 速度非正是调用方算错了，退化成不滚，而不是除零。
+    expectEqual(
+        MenuBarMarquee.scrollOffset(
+            elapsed: 5, maxOffset: 100, pointsPerSecond: 0, holdSeconds: 1), 0,
+        "像素滚动: 速度为 0 不除零")
+
+    // 开头停留：这一段是整个设计的重点，一句歌词最该看清的是开头。
+    expectEqual(offset(0), 0, "像素滚动: 第 0 秒停在开头")
+    expectEqual(offset(0.99), 0, "像素滚动: 停留期内一直在开头")
+    // 停留一结束就开始走，且是连续的——按字符那版这里会直接跳一整个字。
+    expectEqual(offset(1.5), 25, "像素滚动: 停留结束后匀速前进")
+    expectEqual(offset(2.0), 50, "像素滚动: 走到一半")
+    // 末尾必须夹住，不能因为浮点乘法多算出一点点而露出右边的空白。
+    expectEqual(offset(3.0), 100, "像素滚动: 走到底正好是 maxOffset")
+    expectEqual(offset(3.5), 100, "像素滚动: 末尾停留期停在最右")
+
+    // 循环：一个周期之后回到开头。歌词通常几秒就换一句、走不完一整轮，这只是兜底，
+    // 但不能卡在末尾不动。
+    expectEqual(offset(4.0), 0, "像素滚动: 满一个周期回到开头")
+    expectEqual(offset(5.5), 25, "像素滚动: 第二轮的位置跟第一轮一致")
+
+    // 时钟回拨/传负数不能跳到奇怪的位置（CACurrentMediaTime 单调，但这函数是纯的，
+    // 不该对调用方的取值做假设）。负数会被归一化到周期内的某个位置，那没问题——
+    // 真正要守的不变式是**偏移永远落在 [0, maxOffset]**：小于 0 会让文字往右跑出窗口，
+    // 大于 maxOffset 会在右边露出一条空白。
+    var offsetOutOfRange = 0
+    for i in -80 ... 400 {
+        let v = offset(Double(i) / 20)
+        if v < 0 || v > 100 { offsetOutOfRange += 1 }
+    }
+    expectEqual(offsetOutOfRange, 0, "像素滚动: 扫全区间(含负数/多个周期)偏移都在 [0,maxOffset]")
+
+    // 同一时刻反复问必须得到同一个答案（这条保证了"偏移没变就不重画"那个优化是安全的）。
+    expectEqual(offset(2.0), offset(2.0), "像素滚动: 纯函数,同输入同输出")
+}
+
 if failures == 0 {
     print("\nALL PASS")
 } else {

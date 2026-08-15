@@ -1,9 +1,11 @@
+import AppKit
 import Combine
 import Foundation
 import LyrimuseCore
+import QuartzCore
 
-// 菜单栏歌词跑马灯的驱动器(2026-08-05 加)——把"现在该露出这一句的哪一段"算好、发布成
-// 一个普通字符串,MenuBarLabel 直接渲染它。
+// 菜单栏歌词跑马灯的驱动器(2026-08-05 加)——把"现在该露出这一句的哪一段"算好、发布给
+// MenuBarLabel 渲染。
 //
 // 为什么需要这么一个独立的驱动器,而不是在 MenuBarLabel 里用动画/TimelineView:
 // MenuBarExtra 默认(.menu)样式的 label 挂不住 SwiftUI 的动画/生命周期修饰符(本会话
@@ -13,23 +15,41 @@ import LyrimuseCore
 // 生命周期完全自持:靠 Combine 订阅 AppSettings/PlaybackCoordinator 自己决定何时开停
 // 计时器,不依赖任何视图的 onAppear/onDisappear(菜单栏 label 的生命周期本身就不可靠,
 // 这是上面那条限制的同一个根源)。
+//
+// 2026-08-15 改成像素级滚动。原来是每 0.25 秒把窗口整体右移**一个字**,用户实测反馈
+// "显得很卡顿" —— 那本质上是个 4fps 的动画,而且窗口按字符数固定、字符宽度却不相等,
+// 每跳一次菜单栏项的宽度也跟着变,右边其它 App 的图标被顶得左右晃。现在需要滚的句子改走
+// 一张固定宽度的模板图(见 MenuBarMarqueeRenderer),偏移按墙钟时间连续算。装得下的句子和
+// 关掉滚动的情况仍旧发布纯文字,一帧图都不画。
 @MainActor
 final class MenuBarMarqueeTicker: ObservableObject {
     static let shared = MenuBarMarqueeTicker()
 
-    // MenuBarLabel 唯一需要读的东西:当前这一拍该显示的文字。整句装得下时就是整句本身、
-    // 恒定不变(不会产生多余刷新)。
+    // 装得下的整句 / 关掉滚动时的截断结果。滚动模式下它保持**整句**,只作 tooltip 和
+    // 图片没画出来时的兜底。
     @Published private(set) var visibleText: String = ""
+    // 需要滚的句子走这张图。nil = 这一句装得下、或者用户关掉了滚动 —— 那两种情况下
+    // label 渲染 visibleText 就够了,不必为一张静止的图每秒醒 30 次。
+    @Published private(set) var scrollImage: NSImage?
 
-    // 每拍间隔 0.25 秒 = 每秒滚过 4 个字。再快中文就跟不上了(一个汉字信息量远大于一个
-    // 拉丁字母),再慢又显得拖沓。
-    private static let tickInterval: TimeInterval = 0.25
-    // 首尾各停 6 拍(1.5 秒)——开头这一停很重要,一句歌词最关键的往往是开头,一上来就
-    // 滚会看不清。
-    private static let holdSteps = 6
+    // 滚动时的帧间隔。30fps 对"一行字缓慢横移"足够平滑,再高只是白烧电。
+    // ⚠️ 这不再是"每拍挪一个字"的节拍器(旧版 0.25 秒一拍),偏移完全按墙钟时间算,
+    // 见 recompute()/MenuBarMarquee.scrollOffset。
+    private static let frameInterval: TimeInterval = 1.0 / 30
+    // 首尾各停 1.5 秒——跟旧版的 6 拍 × 0.25 秒完全一致,这一点观感没变:一句歌词最关键的
+    // 往往是开头,一上来就滚会看不清。
+    private static let holdSeconds: Double = 1.5
+    // 滚动速度:每秒 4 个字,也跟旧版一致(旧版每 0.25 秒挪一个字)。区别只在于这 4 个字的
+    // 宽度现在被摊到 30 帧里连续走完,而不是一格一格跳。
+    private static let charsPerSecond: CGFloat = 4
 
     private var timer: Timer?
-    private var step = 0
+    // 这一句是什么时候开始显示的。偏移按"距这个时刻过去了多久"算,而不是累加帧数——
+    // 计时器回调会被主线程上别的活儿(逐字高亮那套 60fps 重绘)推迟,累加式计帧会把这些
+    // 延迟原样变成忽快忽慢的滚动,那正是"卡顿"的另一半来源。
+    private var lineStartedAt: CFTimeInterval = CACurrentMediaTime()
+    private var lastRenderedOffset: CGFloat = -1
+    private var lastRenderedText: String = ""
     private var cancellables: [AnyCancellable] = []
     private var started = false
 
@@ -52,45 +72,48 @@ final class MenuBarMarqueeTicker: ObservableObject {
         // 下面这几个回调都不用发射值、而是转头去读 AppSettings/PlaybackCoordinator 的
         // 当前状态(syncTimer()/recompute() 内部都这么做),所以直接 sink 会读到旧值:
         // isPlayingNow 从 false 变 true 时 syncTimer() 读到的仍是 false,计时器永远
-        // 启动不起来,表现就是"取窗算对了但 step 恒为 0、完全不滚"。改到下一个 runloop
-        // 循环再跑,属性此时已经落定成新值。
+        // 启动不起来,表现就是"取窗算对了但完全不滚"。改到下一个 runloop 循环再跑,
+        // 属性此时已经落定成新值。
         coordinator.$currentLine
             .map { $0?.plainText ?? "" }
             .removeDuplicates()
             .receive(on: RunLoop.main)
-            .sink { [weak self] _ in
-                self?.step = 0
-                self?.recompute()
-            }
+            .sink { [weak self] _ in self?.restartLine() }
             .store(in: &cancellables)
         // 这几个设置任何一个变了都要立刻重算/重新决定要不要跑计时器。
         settings.$showLyricsInMenuBar.dropFirst().receive(on: RunLoop.main)
             .sink { [weak self] _ in self?.syncTimer() }.store(in: &cancellables)
         settings.$menuBarLyricsScroll.dropFirst().receive(on: RunLoop.main)
-            .sink { [weak self] _ in self?.step = 0; self?.syncTimer() }.store(in: &cancellables)
+            .sink { [weak self] _ in self?.restartLine() }.store(in: &cancellables)
+        // 宽度改了可能从"要滚"变成"装得下"(或者反过来),所以跟换句一样整个重来。
         settings.$menuBarLyricsMaxChars.dropFirst().receive(on: RunLoop.main)
-            .sink { [weak self] _ in self?.recompute() }.store(in: &cancellables)
+            .sink { [weak self] _ in self?.restartLine() }.store(in: &cancellables)
         coordinator.$isPlayingNow.dropFirst().receive(on: RunLoop.main)
             .sink { [weak self] _ in self?.syncTimer() }.store(in: &cancellables)
         syncTimer()
     }
 
-    // 只在真的需要滚的时候才让计时器跑:菜单栏歌词关着、没在播放、或者用户把滚动关了,
-    // 都没必要每 0.25 秒唤醒一次。
+    /// 这一句从头开始滚(换句、改了滚动开关或显示宽度)。
+    private func restartLine() {
+        lineStartedAt = CACurrentMediaTime()
+        lastRenderedOffset = -1
+        lastRenderedText = ""
+        syncTimer()
+    }
+
+    // 只在真的需要滚的时候才让计时器跑:菜单栏歌词关着、没在播放、用户把滚动关了、或者
+    // 当前这句本来就装得下,都没必要每帧唤醒一次。
     private func syncTimer() {
-        let settings = AppSettings.shared
-        let needed = settings.showLyricsInMenuBar
-            && settings.menuBarLyricsScroll
+        let needed = AppSettings.shared.showLyricsInMenuBar
             && PlaybackCoordinator.shared.isPlayingNow
+            && currentScrollPlan() != nil
         if needed {
             if timer == nil {
                 // 必须挂 .common mode,否则菜单打开/拖拽悬浮窗时会停摆——跟
                 // LocalPlaybackSource 的两个计时器同一个理由。
-                let t = Timer(timeInterval: Self.tickInterval, repeats: true) { [weak self] _ in
+                let t = Timer(timeInterval: Self.frameInterval, repeats: true) { [weak self] _ in
                     MainActor.assumeIsolated {
-                        guard let self else { return }
-                        self.step += 1
-                        self.recompute()
+                        self?.recompute()
                     }
                 }
                 RunLoop.main.add(t, forMode: .common)
@@ -99,31 +122,73 @@ final class MenuBarMarqueeTicker: ObservableObject {
         } else {
             timer?.invalidate()
             timer = nil
-            step = 0
         }
         recompute()
+    }
+
+    /// 当前这一句要怎么滚。nil = 不用滚(关掉了、没歌词、或者整句本来就装得下)。
+    private struct ScrollPlan {
+        let text: String
+        /// 窗口宽度 = 前 maxChars 个字的宽度。钉死它,菜单栏项的宽度才不会随内容伸缩。
+        let windowWidth: CGFloat
+        let maxOffset: CGFloat
+        let pointsPerSecond: CGFloat
+    }
+
+    private func currentScrollPlan() -> ScrollPlan? {
+        let settings = AppSettings.shared
+        guard settings.menuBarLyricsScroll else { return nil }
+        let full = PlaybackCoordinator.shared.currentLine?.plainText ?? ""
+        guard !full.isEmpty else { return nil }
+        let maxChars = settings.menuBarLyricsMaxChars
+        guard maxChars > 0, full.count > maxChars else { return nil }
+        let windowWidth = MenuBarMarqueeRenderer.width(of: String(full.prefix(maxChars)))
+        let fullWidth = MenuBarMarqueeRenderer.width(of: full)
+        // 字符数超了不等于像素也超——窗口里那几个字恰好特别宽时就会这样。真正决定要不要滚
+        // 的是像素,差不到半个点就别滚了(滚也看不出来,白费一个 30fps 的计时器)。
+        guard windowWidth > 0, fullWidth > windowWidth + 0.5 else { return nil }
+        let averageCharWidth = fullWidth / CGFloat(full.count)
+        return ScrollPlan(
+            text: full,
+            windowWidth: windowWidth,
+            maxOffset: fullWidth - windowWidth,
+            // 兜一个正数下限:宽度算出 0 的话速度也会是 0,scrollOffset 那边会当成"不滚"。
+            pointsPerSecond: max(1, Self.charsPerSecond * averageCharWidth)
+        )
     }
 
     private func recompute() {
         let settings = AppSettings.shared
         let full = PlaybackCoordinator.shared.currentLine?.plainText ?? ""
-        let next: String
-        if full.isEmpty {
-            next = ""
-        } else if settings.menuBarLyricsScroll {
-            next = MenuBarMarquee.window(
-                text: full,
-                maxChars: settings.menuBarLyricsMaxChars,
-                step: step,
-                holdSteps: Self.holdSteps
-            )
-        } else {
-            // 关掉滚动 → 维持改动之前的行为(超长就截断加省略号)。
-            next = full.count > settings.menuBarLyricsMaxChars
-                ? String(full.prefix(settings.menuBarLyricsMaxChars)) + "…"
-                : full
+        guard let plan = currentScrollPlan() else {
+            // 不用滚:维持改动之前的行为(整句,超长就截断加省略号)。
+            let next: String
+            if full.isEmpty {
+                next = ""
+            } else if full.count > settings.menuBarLyricsMaxChars {
+                next = String(full.prefix(settings.menuBarLyricsMaxChars)) + "…"
+            } else {
+                next = full
+            }
+            // 只在真的变了才发布——装得下的整句不该白白触发菜单栏重渲染。
+            if next != visibleText { visibleText = next }
+            if scrollImage != nil { scrollImage = nil }
+            return
         }
-        // 只在真的变了才发布——装得下的整句/停留阶段的那几拍都不该白白触发菜单栏重渲染。
-        if next != visibleText { visibleText = next }
+        let offset = MenuBarMarquee.scrollOffset(
+            elapsed: CACurrentMediaTime() - lineStartedAt,
+            maxOffset: plan.maxOffset,
+            pointsPerSecond: plan.pointsPerSecond,
+            holdSeconds: Self.holdSeconds
+        )
+        // 首尾停留那两段里偏移一动不动,每帧重画一张一模一样的图纯属浪费,还会让菜单栏
+        // 白刷新一次。半个点以下的位移在屏幕上也看不出来。
+        if plan.text == lastRenderedText, abs(offset - lastRenderedOffset) < 0.25 { return }
+        lastRenderedText = plan.text
+        lastRenderedOffset = offset
+        scrollImage = MenuBarMarqueeRenderer.image(
+            text: plan.text, width: plan.windowWidth, offset: offset)
+        // 滚动模式下 visibleText 保持整句:tooltip 用它,图片万一没画出来也还有东西可显示。
+        if visibleText != plan.text { visibleText = plan.text }
     }
 }

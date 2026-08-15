@@ -195,11 +195,16 @@ struct MenuBarPreviewBar: View {
                 RoundedRectangle(cornerRadius: 6, style: .continuous)
                     .fill(Color(nsColor: .textBackgroundColor))
             )
+            // 三态,别把"会滚动"说成"已截断":超宽时到底是滚还是截,取决于上面那个开关,
+            // 说反了正是让人觉得这个功能"怪怪的"的原因之一。
             Text(
-                truncated
-                    ? String(format: L10n.t("预览 · 上限 %@ 字，本句已截断"),
-                             "\(settings.menuBarLyricsMaxChars)")
-                    : String(format: L10n.t("预览 · 上限 %@ 字"), "\(settings.menuBarLyricsMaxChars)")
+                !truncated
+                    ? String(format: L10n.t("预览 · 上限 %@ 字"), "\(settings.menuBarLyricsMaxChars)")
+                    : settings.menuBarLyricsScroll
+                        ? String(format: L10n.t("预览 · 上限 %@ 字，本句会横向滚动"),
+                                 "\(settings.menuBarLyricsMaxChars)")
+                        : String(format: L10n.t("预览 · 上限 %@ 字，本句已截断"),
+                                 "\(settings.menuBarLyricsMaxChars)")
             )
             .font(.caption)
             .foregroundStyle(.secondary)
