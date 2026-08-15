@@ -242,17 +242,28 @@ private struct LyricsSettingsTab: View {
     /// 一种文字的罗马音开关。跟中文繁简那个 Picker 一样**双写**:AppSettings 负责持久化,
     /// LocalPlaybackSource 负责让当前这首歌立刻重新解析(它的 didSet 会 reload)。
     /// 只写一边的话,要么关了 App 就忘,要么改了要等下一首歌才生效。
-    private func romanizationToggle(_ title: String, _ option: RomanizationScripts) -> some View {
-        Toggle(title, isOn: Binding(
-            get: { settings.romanizationScripts.contains(option) },
-            set: { on in
-                var next = settings.romanizationScripts
-                if on { next.insert(option) } else { next.remove(option) }
-                settings.romanizationScripts = next
-                local.romanizationScripts = next
-            }
-        ))
-        .toggleStyle(.checkbox)
+    ///
+    /// ⚠️ 语言名必须自己摆一个 Text,不能用 Toggle 自带的 label —— 行容器
+    /// (SettingsRow/SettingsSubRow)对 trailing 统一加了 .labelsHidden(),Toggle 自己的
+    /// 标签会被一起吃掉。2026-08-15 之前正是这么写的,屏幕上就是三个光秃秃的复选框,
+    /// 谁也看不出哪个对应哪种语言(用户报的就是这个)。
+    private func romanizationToggle(
+        _ title: String, _ option: RomanizationScripts, help: String
+    ) -> some View {
+        HStack(spacing: 4) {
+            Toggle("", isOn: Binding(
+                get: { settings.romanizationScripts.contains(option) },
+                set: { on in
+                    var next = settings.romanizationScripts
+                    if on { next.insert(option) } else { next.remove(option) }
+                    settings.romanizationScripts = next
+                    local.romanizationScripts = next
+                }
+            ))
+            .toggleStyle(.checkbox)
+            Text(title).font(.system(size: 12))
+        }
+        .help(help)
     }
     @ObservedObject private var features = FeatureSettingsStore.shared
     @Environment(\.openWindow) private var openWindow
@@ -619,15 +630,22 @@ private struct LyricsSettingsTab: View {
             // 才跟得上,听中文歌完全不需要拼音。总开关关着时这几行没有意义,收起来。
             if settings.showRomanization {
                 CardDivider()
-                SettingsRow(
-                    icon: "character.book.closed",
+                // 这一项是"显示罗马音"的附属项,所以用子行(缩进 + 左边那条竖线)而不是主行:
+                // 原来用的是跟上面同款的 SettingsRow,两行长得一模一样,看不出谁属于谁。
+                SettingsSubRow(
                     title: L10n.t("标注哪些语言"),
-                    help: L10n.t("只对判定为该语言的歌词生效；判定按整首歌进行，混排的歌以出现的假名/谚文/汉字为准。中文默认关闭——中文歌词加拼音对中文读者通常是干扰")
+                    subtitle: L10n.t("日语、韩语标成罗马字，中文标成拼音")
                 ) {
                     HStack(spacing: 12) {
-                        romanizationToggle(L10n.t("日语"), .japanese)
-                        romanizationToggle(L10n.t("韩语"), .korean)
-                        romanizationToggle(L10n.t("中文"), .chinese)
+                        romanizationToggle(
+                            L10n.t("日语"), .japanese,
+                            help: L10n.t("只对判定为日语的歌词生效，例如 こんにちは → konnichiwa"))
+                        romanizationToggle(
+                            L10n.t("韩语"), .korean,
+                            help: L10n.t("只对判定为韩语的歌词生效，例如 안녕하세요 → annyeonghaseyo"))
+                        romanizationToggle(
+                            L10n.t("中文"), .chinese,
+                            help: L10n.t("只对判定为中文的歌词生效，例如 你好 → nǐ hǎo；默认关闭，中文歌词加拼音对中文读者通常是干扰"))
                     }
                 }
             }

@@ -450,24 +450,53 @@ struct SettingsNote<Content: View>: View {
 // 表达归属,不再重复一遍图标。
 struct SettingsSubRow<Trailing: View>: View {
     var title: String?
+    // 子行也能带一句说明。像"标注哪些语言"那样光有几个选项名、不说各自会标成什么的行,
+    // 就是需要这个。
+    var subtitle: String?
     // 滑杆这类需要横向铺开的控件给一个宽度,纯下拉菜单不需要。
     var trailingWidth: CGFloat?
     @ViewBuilder let trailing: () -> Trailing
 
+    // 2026-08-15 重排。原来这一行是"Spacer + 标题 + 控件"整体右对齐、左边什么都没有,
+    // 跟主行长得几乎一样,读起来像是并列的另一项 —— 用户报的就是"看不出附属关系"。
+    // 现在靠两样东西表达从属:
+    //   1. 一条淡竖线,画在标题左边;
+    //   2. 标题缩进到**跟主行标题同一列**。主行那一列的左边是图标,子行没有图标,
+    //      这个空位本身就是层级信号(macOS 系统设置里的子项也是这么排的)。
+    // 顺带把标题从右对齐改回左对齐:主行是"标题在左、控件在右",子行跟着同一套结构,
+    // 眼睛才好顺着同一条竖线往下扫。
     var body: some View {
         HStack(spacing: 10) {
-            Spacer(minLength: 0)
-            if let title, !title.isEmpty {
-                Text(title)
-                    .font(.system(size: 13))
+            Rectangle()
+                .fill(Color.secondary.opacity(0.25))
+                .frame(width: 2)
+                .padding(.vertical, 1)
+            VStack(alignment: .leading, spacing: 2) {
+                if let title, !title.isEmpty {
+                    Text(title)
+                        .font(.system(size: 13))
+                }
+                if let subtitle, !subtitle.isEmpty {
+                    Text(subtitle)
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
+            Spacer(minLength: 10)
             trailing()
+                // ⚠️ 跟主行一样统一藏掉控件自带的标签(标题已经在左边了)。所以放在这里的
+                // 控件**不能**指望 Toggle/Picker 自己的 label 显示文字 —— 需要文字就自己
+                // 摆一个 Text,见 SettingsView 里 romanizationToggle 那段注释。
                 .labelsHidden()
                 .toggleStyle(.switch)
                 .settingsGlassButtons()
                 .frame(maxWidth: trailingWidth)
         }
-        .padding(.horizontal, SettingsRowMetrics.horizontalPadding)
+        // 竖线本身 2pt、后面还有 10pt 间距,左内边距取"主行文字左起点 - 12",标题正好
+        // 落回主行标题那一列。
+        .padding(.leading, SettingsRowMetrics.textLeadingInset - 12)
+        .padding(.trailing, SettingsRowMetrics.horizontalPadding)
         .padding(.vertical, SettingsRowMetrics.verticalPadding)
     }
 }
