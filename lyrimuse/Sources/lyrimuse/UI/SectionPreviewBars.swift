@@ -38,7 +38,22 @@ final class NotchPreviewChrome: ObservableObject, NotchChromeSource {
 
     init() { refreshGeometry() }
 
-    func setExpanded(_ expanded: Bool) { isExpanded = expanded }
+    /// 视图内部那个 .onHover 打进来的调用,预览里**故意忽略**(空实现)。
+    ///
+    /// 那个 .onHover 挂在 NotchLyricsView 最外层的 GeometryReader 上,覆盖的是它整个
+    /// 布局 frame。真窗口上这分毫不差 —— 那个 frame 就是窗口本身,鼠标进窗口才叫 hover。
+    /// 但预览是嵌在设置页里的一块,外面还套着定高容器、等比缩放和 safeAreaInset,实测
+    /// 触发范围比肉眼看到的卡片大一圈:鼠标还没真移到卡片上就展开了。
+    ///
+    /// 所以预览不吃这条隐式路径,命中判定改由 NotchPreviewBar 拿精确坐标跟卡片矩形直接
+    /// 比 —— 见那边的 onContinuousHover。
+    func setExpanded(_ expanded: Bool) {}
+
+    /// 预览自己算出来的命中结果,这才是预览里真正生效的那条路。
+    func setExpandedFromPreview(_ expanded: Bool) {
+        guard expanded != isExpanded else { return }
+        isExpanded = expanded
+    }
 
     /// 跟真窗口 recomputeGeometry 取的是同一块屏、同一个公式,预览里的让位宽度/高度才
     /// 会跟真出来的严丝合缝。设置页开着时用户插拔显示器也要跟着变,所以是个可重入方法。
@@ -101,6 +116,21 @@ struct NotchPreviewBar: View {
                 .animation(.easeInOut(duration: 0.18), value: chrome.isExpanded)
                 // 再顶对齐放进固定高的容器 —— 真窗口也是顶边贴死屏幕顶、只向下长。
                 .frame(width: contentWidth, height: fullHeight, alignment: .top)
+                // 命中判定显式做。这一层的局部坐标原点正好落在卡片左上角(卡片顶对齐、
+                // 两者等宽),所以"鼠标在不在卡片上"就是一句 y 的比较,不受外层缩放/
+                // safeAreaInset 的坐标转换影响 —— 理由见 NotchPreviewChrome.setExpanded。
+                //
+                // cardHeight 本身会随展开变高,于是展开后鼠标继续往下移进新长出来的那
+                // 40pt 仍然算在卡片上、维持展开;这跟真窗口"展开时窗口一起变高"是同一个
+                // 行为,展开出来的下一句和进度条才够得着。
+                .onContinuousHover(coordinateSpace: .local) { phase in
+                    switch phase {
+                    case .active(let point):
+                        chrome.setExpandedFromPreview(point.y <= cardHeight)
+                    case .ended:
+                        chrome.setExpandedFromPreview(false)
+                    }
+                }
                 .scaleEffect(scale, anchor: .top)
                 // 缩放不改变布局占位,得显式把外框收到缩放后的尺寸。
                 .frame(width: contentWidth * scale, height: fullHeight * scale)
