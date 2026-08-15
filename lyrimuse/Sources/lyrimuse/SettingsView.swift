@@ -2248,10 +2248,17 @@ struct SettingsWindowConfigurator: NSViewRepresentable {
             // 无效(实测加上之后 styleMask 纹丝不动),只能在 NSWindow 这一层开。
             // 缩放下限仍由 SettingsView 上声明的 minWidth/minHeight 兜着。
             window.styleMask.insert(.resizable)
+            // SwiftUI 还给它设了 .fullScreenNone(不参与全屏)。设置窗口全不全屏无所谓,
+            // 但"非标准的窗口归类"正是这次要排除的东西 —— 一并恢复成普通主窗口的样子。
+            window.collectionBehavior.remove(.fullScreenNone)
+            window.collectionBehavior.insert(.fullScreenPrimary)
+            // 内容铺到了标题栏区域(fullSizeContentView)。实测标题栏那一条 hitTest 命中的
+            // 确实还是 NSTitlebarView、可拖区域没被吃掉,但多这一条只有好处:点在任何
+            // **非交互**的空白上拖,都能直接拖动窗口。
+            window.isMovableByWindowBackground = true
         }
         return view
     }
 
     func updateNSView(_ nsView: NSView, context: Context) {}
 }
-
