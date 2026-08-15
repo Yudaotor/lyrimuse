@@ -1886,6 +1886,24 @@ do {
     expectEqual(engine.activeLine(atMs: 5500)?.mainText, "真正的歌词在这里", "署名行: 真歌词保留")
 }
 
+// ---- 地板量化源的前向棘轮 ----
+do {
+    func ratchet(_ reported: Double, _ predicted: Double, precise: Bool) -> Bool {
+        LocalPlaybackSource.shouldRatchetForward(
+            reported: reported, predicted: predicted, preciseSource: precise)
+    }
+    // QQ 音乐实测的形状：新锚点比外推值靠前 1 秒（旧锚点被向下取整拖晚了）。
+    expectEqual(ratchet(23.1, 22.1, precise: false), true, "棘轮: 前向 1s 立刻采纳")
+    expectEqual(ratchet(22.4, 22.1, precise: false), true, "棘轮: 前向 0.3s(半个字)也采纳")
+    // 反方向分不清是取整噪声还是真实回退，绝不能棘轮 —— 交给原有 EMA 路径。
+    expectEqual(ratchet(21.5, 22.1, precise: false), false, "棘轮: 后向不采纳(交给 EMA)")
+    // 同锚点外推的 ±2ms 漂移不值得重建锚点。
+    expectEqual(ratchet(22.102, 22.1, precise: false), false, "棘轮: 毫米级漂移不触发")
+    // 精确源(Apple Music/Spotify)的读数本来就是真值，不适用"reported ≤ 真实位置"这条
+    // 不等式，走原有 EMA。
+    expectEqual(ratchet(23.1, 22.1, precise: true), false, "棘轮: 精确源不适用")
+}
+
 if failures == 0 {
     print("\nALL PASS")
 } else {

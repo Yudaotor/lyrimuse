@@ -156,6 +156,32 @@ public final class LocalPlaybackSource: ObservableObject {
     private var posErrEMA: Double = 0
     private static let seekJumpToleranceSecs = 2.0
 
+    // 地板量化源的「前向棘轮」阈值。
+    //
+    // 2026-08-16 实测坐实(QQ 音乐,采样 media-control 原始字段 + 程序化暂停/恢复):
+    // QQ 音乐上报给 MediaRemote 的位置**只有整数秒**(6.0/21.0/23.0/25.0),而且锚点翻转
+    // 瞬间 elapsedTimeNow 向前跳了 +1.001s —— 向下取整意味着每个锚点相对真实位置
+    // **只会晚、不会早**(0~1s,平均 0.5s)。用户视角就是"歌词永远比实际唱的慢半个字"。
+    //
+    // 这推翻了 servoDecision 注释里"±1~1.5s 抖动是零均值噪声"的前提:取整偏差是单向的,
+    // EMA 收敛到 -0.5s 左右、永远够不到 1.0s 门槛,于是换歌/恢复播放那一刻播种进来的
+    // 取整滞后**永远不被纠正**。
+    //
+    // 棘轮的依据是一条不等式:对地板量化源,reported = 真实位置 - 取整误差 ≤ 真实位置,
+    // 恒成立。所以只要 reported > predicted,就**证明** predicted 落后于真实位置,立刻
+    // 向前采纳是安全的(不可能冲过头);反方向(reported < predicted)则分不清是"新锚点
+    // 取整得更狠"还是"真实回退",维持原有 EMA 路径不动 —— 前者是单向噪声该忽略,后者
+    // (漏观察的短暂停这类)靠 EMA 持续同号累积去修,跟改动前完全一致。
+    // 0.05s 的下限只为过滤同锚点外推的 ±2ms 漂移,别为它白白重建锚点。
+    private static let flooredForwardSnapEpsilonSecs = 0.05
+
+    /// 见 flooredForwardSnapEpsilonSecs。纯函数,selftest 直接覆盖。
+    public nonisolated static func shouldRatchetForward(
+        reported: Double, predicted: Double, preciseSource: Bool
+    ) -> Bool {
+        !preciseSource && reported - predicted > flooredForwardSnapEpsilonSecs
+    }
+
     // 2026-08-04 实测排查坐实的设计缺陷修复:原来"稳定播放"分支只按墙钟外推、完全不回看
     // 真实读数,任何播种时刻带进来的偏差——App 启动那一拍的读数毛刺、恰好整个落在两次
     // 2 秒轮询之间而完全没被观察到的短暂停(墙钟累加器会把暂停时长也当播放时间加进去)——
@@ -208,6 +234,13 @@ public final class LocalPlaybackSource: ObservableObject {
         let predicted = trackPosSeconds + gap * rate
         if abs(reported - predicted) > Self.seekJumpToleranceSecs {
             // 真实 seek/跳变:直接重锚到这次读数。
+            trackPosSeconds = reported
+            posErrEMA = 0
+            return (trackPosSeconds, true)
+        }
+        if Self.shouldRatchetForward(reported: reported, predicted: predicted, preciseSource: preciseSource) {
+            // 地板量化源(QQ 音乐/网易云)的前向棘轮:reported 恒 ≤ 真实位置,它比外推值
+            // 靠前就证明外推值落后了,立刻向前采纳 —— 理由见 flooredForwardSnapEpsilonSecs。
             trackPosSeconds = reported
             posErrEMA = 0
             return (trackPosSeconds, true)
