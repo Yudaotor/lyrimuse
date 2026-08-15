@@ -110,21 +110,43 @@ public enum CollectorServiceManager {
         run("/bin/launchctl", ["bootout", "gui/\(getuid())/\(label)"])
         guard (try? data.write(to: plistURL)) != nil else { return }
         run("/bin/launchctl", ["bootstrap", "gui/\(getuid())", plistURL.path])
-        run("/bin/launchctl", ["kickstart", "-k", "gui/\(getuid())/\(label)"])
-        Thread.sleep(forTimeInterval: 1)
 
-        if !isRunning {
-            // kickstart 有时会静默失败——launchd 给这个 job 缓存了上一次运行遗留的 LWCR
-            // (Lightweight Code Requirement) codesigning 约束，绑定的是旧二进制的
-            // cdhash；每次重新打包都是新的 ad-hoc 签名，cdhash 必然变化，
-            // bootstrap/kickstart 本身不会刷新这个约束——跟 lyrimuse-collector/build.sh、
-            // lyrimuse/build.sh 里同款自愈逻辑一致，这里复用同一套重试思路，不重新发明。
-            run("/bin/launchctl", ["bootout", "gui/\(getuid())", plistURL.path])
-            Thread.sleep(forTimeInterval: 1)
-            run("/bin/launchctl", ["bootstrap", "gui/\(getuid())", plistURL.path])
-            Thread.sleep(forTimeInterval: 1)
-            run("/bin/launchctl", ["kickstart", "-k", "gui/\(getuid())/\(label)"])
+        // plist 里 RunAtLoad=true,所以 bootstrap 本身就会把进程拉起来 —— 实测 78~102ms
+        // 就是 running。**不要**在这里跟一句 `kickstart -k`。
+        //
+        // 2026-08-15 实测:那句 kickstart 让整个安装从 ~100ms 变成 ~10.1 秒,三次测量
+        // 稳定复现(10114 / 10121 / 10087ms)。`-k` 的意思是"先杀掉正在跑的再启动",而它
+        // 杀的正是 bootstrap 刚刚拉起来的那个新进程;那 10 秒是 launchd 等进程响应 SIGTERM
+        // 的固定宽限期。用户在引导页点"启用"之后盯着转圈,就是在等这个。
+        //
+        // 轮询代替盲等 sleep(1):起来了立刻返回,没起来才逐级升级手段。
+        if waitUntilRunning() { return }
+
+        // 没起来才踢一脚 —— 这时候 kickstart 的代价是值得付的(job 注册了但进程没跑)。
+        run("/bin/launchctl", ["kickstart", "-k", "gui/\(getuid())/\(label)"])
+        if waitUntilRunning() { return }
+
+        // 还是不行:launchd 给这个 job 缓存了上一次运行遗留的 LWCR(Lightweight Code
+        // Requirement) codesigning 约束，绑定的是旧二进制的 cdhash；每次重新打包都是新的
+        // ad-hoc 签名，cdhash 必然变化，bootstrap/kickstart 本身不会刷新这个约束——跟
+        // lyrimuse-collector/build.sh、lyrimuse/build.sh 里同款自愈逻辑一致，这里复用同一套
+        // 重试思路，不重新发明。
+        run("/bin/launchctl", ["bootout", "gui/\(getuid())", plistURL.path])
+        run("/bin/launchctl", ["bootstrap", "gui/\(getuid())", plistURL.path])
+        _ = waitUntilRunning()
+    }
+
+    /// 轮询等这个 job 真的跑起来。等到了返回 true,超时返回 false。
+    ///
+    /// 取代原来的 `Thread.sleep(1)` 盲等:正常情况下 ~100ms 就能确认(实测 78~102ms),
+    /// 盲等 1 秒是白白让用户多看 900ms 转圈;而真出问题时 1 秒又不够。
+    private static func waitUntilRunning(timeout: TimeInterval = 3) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if isRunning { return true }
+            Thread.sleep(forTimeInterval: 0.05)
         }
+        return isRunning
     }
 
     private static func uninstall() {
