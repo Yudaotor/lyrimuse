@@ -156,19 +156,40 @@ extension AnyTransition {
 // 没设置 = "自动",而"自动"的含义是**按输入设备定** —— 接着鼠标就是常驻滚动条、占宽度,
 // 只有纯触控板才是不占宽度的 overlay。所以这事不能靠"默认应该是 overlay"来推断。
 //
-// 修法:在 ScrollView **外面** 用 GeometryReader 量一次宽度,内容按这个宽度铺。滚动条
-// 出现与否都不再改变它。滚动条会盖住右边缘那一小条,但卡片列本身居中、最大 600pt、两侧
-// 还有 20pt padding,盖不到内容。
+// 修法:量一次宽度,内容按这个宽度铺。滚动条出现与否都不再改变它。滚动条会盖住右边缘
+// 那一小条,但卡片列本身居中、最大 600pt、两侧还有 20pt padding,盖不到内容。
+//
+// ⚠️ 2026-08-15 当天的二次修正,这个"量"必须**不改变视图层级**。第一版是把整个
+// ScrollView 包进 GeometryReader(GeometryReader 在外、ScrollView 在内),抖动确实治好了,
+// 但换来一个更糟的回归:GeometryReader 会截断 safe area 的传播,而「外观」页顶上那条预览
+// 正是拿 .safeAreaInset 挂的 —— 两者一叠加,往下滚之后内容的实际位置和点击命中区域就
+// 错开了,表现是"分段选择器看得见却点不动,必须滚回顶部才点得着"。
+//
+// 所以改成 GeometryReader 只待在 .background 里**量**,ScrollView 仍然是这一层的根,
+// safe area 照常传播。量到的是 ScrollView 自己的布局宽度 —— 这个值本来就不随滚动条出现
+// 而变(变的是内容可用宽度),所以钉死内容宽度、防抖的效果一点没丢。
+private struct SettingsPageWidthKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
+}
+
 private struct FixedWidthScrollView<Content: View>: View {
     @ViewBuilder let content: () -> Content
+    @State private var measuredWidth: CGFloat = 0
 
     var body: some View {
-        GeometryReader { proxy in
-            ScrollView {
-                content()
-                    .frame(width: proxy.size.width)
-            }
+        ScrollView {
+            content()
+                // 首帧还没量到,传 nil 让内容自己撑开,别闪一帧 0 宽。
+                .frame(width: measuredWidth > 0 ? measuredWidth : nil)
         }
+        .background(
+            GeometryReader { proxy in
+                Color.clear
+                    .preference(key: SettingsPageWidthKey.self, value: proxy.size.width)
+            }
+        )
+        .onPreferenceChange(SettingsPageWidthKey.self) { measuredWidth = $0 }
     }
 }
 
