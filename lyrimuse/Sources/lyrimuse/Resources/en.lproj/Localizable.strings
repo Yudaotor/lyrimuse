@@ -610,3 +610,10 @@
 "预览 · 上限 %@pt，本句已截断" = "Preview · %@pt limit — this line is truncated";
 "比下面的宽度更长时就截断，末尾加省略号，不滚动" = "Longer than the width below gets cut off with an ellipsis, no scrolling";
 "最多保留 4 万条记录，按每天 40 首估算约两年半；超出后从最旧的开始丢弃" = "Keeps up to 40,000 entries — roughly two and a half years at 40 tracks a day; past that, the oldest go first";
+"把你播放的歌同步到 ListenBrainz" = "Sync what you play to ListenBrainz";
+"接收 Lyrimuse 的推送通知" = "Receive push notifications from Lyrimuse";
+"每天晚上推送当天的听歌情况" = "A nightly push with the day's listening";
+"获取 Token →" = "Get a token →";
+"正在验证…" = "Checking…";
+"Token 无效，请重新复制一次" = "Invalid token — copy it again";
+"连不上 ListenBrainz，稍后会自动重试" = "Can't reach ListenBrainz — will retry";

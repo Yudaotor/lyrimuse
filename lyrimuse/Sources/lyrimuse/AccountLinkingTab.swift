@@ -330,6 +330,7 @@ struct AccountLinkingTab: View {
         let jumpTarget: AccountDestination?
     }
     @State private var missingPrereqAlert: MissingPrereqAlert?
+    @StateObject private var tokenCheck = ListenBrainzTokenCheck()
     // "连接 Last.fm"向导 sheet 开没开——见 lastfmFields 顶部注释,未连接时打开
     // scrobble 开关就是打开它。
     @State private var showLastfmWizard = false
@@ -502,12 +503,10 @@ struct AccountLinkingTab: View {
     private var cardIntroText: String? {
         switch destination {
         case .listenBrainz:
-            // 2026-07-23:之前这里是 EmptyView(),理由是"账户信息" Section 的 footer
-            // 已经有一句话——但那句("可选，不填不影响悬浮歌词")回答的是"要不要填"，
-            // 不是"填了之后 App 会拿它做什么"，用户反馈缺一句跟其它三张卡片一样的
-            // 用途说明，这里补上；下面 Section 的 footer 继续保留，两句话各自负责
-            // 不同的信息，跟其它卡片的结构一致。
-            return L10n.t("这台 Mac 上的播放记录会同步到 ListenBrainz，建立完整的听歌历史；也是网页展示、听歌报告的可选数据来源")
+            // 只说这张卡是干什么的,跟 Last.fm 那句同一个句式。原来这里还捎带讲了
+            // "建立完整听歌历史""也是网页展示/听歌报告的可选数据来源" —— 那些是后果和
+            // 别处的用法,不是这张卡要回答的问题,堆在标题下面只会让人一眼抓不到重点。
+            return L10n.t("把你播放的歌同步到 ListenBrainz")
         case .stateRelay:
             return L10n.t("用来把当前播放状态推送到网页小组件和状态徽章")
         case .lastfm:
@@ -519,7 +518,7 @@ struct AccountLinkingTab: View {
             // stateRelayFields 的 footer 注释)。
             return L10n.t("把你播放的歌记录到 Last.fm")
         case .bark:
-            return L10n.t("用来接收「每周听歌小结」「每日听歌报告」推送")
+            return L10n.t("接收 Lyrimuse 的推送通知")
         }
     }
 
@@ -535,18 +534,62 @@ struct AccountLinkingTab: View {
 
     // MARK: - ListenBrainz
 
+    private func checkListenBrainzToken() {
+        tokenCheck.tokenChanged(config.listenbrainzToken) { user in
+            // 用户名不再由用户手填,但配置里这个字段还在(听歌报告要用),由校验结果回填。
+            if config.listenbrainzUser != user { config.listenbrainzUser = user }
+        }
+    }
+
+
+    // Token 校验的状态显示。
+    //
+    // ⚠️ 这里**没有**"用户名"输入框了。原来除了 Token 还要用户手抄一遍自己的用户名
+    // (标着"听歌报告需要"),而那正是服务端凭 Token 就能告诉我们的东西 —— 抄错了还只会
+    // 在几天后的听歌报告里才暴露。现在填完 Token 当场校验,顺带把用户名取回来写进配置,
+    // 这一行同时兼作"连接成功了没"的反馈,见 ListenBrainzTokenCheck。
+    @ViewBuilder
+    private var listenBrainzTokenStatus: some View {
+        switch tokenCheck.state {
+        case .empty:
+            EmptyView()
+        case .checking:
+            HStack(spacing: 5) {
+                ProgressView().controlSize(.small)
+                Text(L10n.t("正在验证…")).foregroundStyle(.secondary)
+            }
+        case .valid(let user):
+            Label(String(format: L10n.t("已连接：%@"), user), systemImage: "checkmark.circle.fill")
+                .foregroundStyle(.green)
+        case .invalid:
+            Label(L10n.t("Token 无效，请重新复制一次"), systemImage: "exclamationmark.circle.fill")
+                .foregroundStyle(.orange)
+        case .unreachable:
+            // 跟"Token 无效"分开说:连不上不代表 Token 有问题,说成无效会害人白白去重生成。
+            Label(L10n.t("连不上 ListenBrainz，稍后会自动重试"), systemImage: "wifi.slash")
+                .foregroundStyle(.secondary)
+        }
+    }
+
     private var listenBrainzFields: some View {
         SettingsCard {
-            SettingsCardHeader(title: L10n.t("账户信息"), subtitle: L10n.t("可选，不填不影响悬浮歌词"))
+            SettingsCardHeader(title: L10n.t("账户信息"))
             CardDivider()
             SettingsRawRow(insetToText: true) {
                 VStack(alignment: .leading, spacing: 8) {
                     SecretFieldRow(L10n.t("账户 Token"), value: $config.listenbrainzToken)
-                    Link(L10n.t("在 ListenBrainz 网站获取 Token →"), destination: URL(string: "https://listenbrainz.org/settings/")!)
-                        .font(.caption)
-                    TextField(L10n.t("用户名（听歌报告需要）"), text: $config.listenbrainzUser)
+                    HStack(spacing: 8) {
+                        listenBrainzTokenStatus
+                        Spacer(minLength: 0)
+                        Link(
+                            L10n.t("获取 Token →"),
+                            destination: URL(string: "https://listenbrainz.org/settings/")!)
+                    }
+                    .font(.caption)
                 }
             }
+            .onAppear { checkListenBrainzToken() }
+            .onChange(of: config.listenbrainzToken) { _, _ in checkListenBrainzToken() }
         }
     }
 
@@ -1165,8 +1208,7 @@ struct AccountLinkingTab: View {
 
         SettingsCard {
             SettingsCardHeader(
-                title: L10n.t("提醒开关"),
-                subtitle: L10n.t("数据源留空时自动判定：两个账号都配了优先用 Last.fm，只配了一个就用那个")
+                title: L10n.t("提醒开关")
             )
             CardDivider()
             // 数据源可选——Last.fm 的周榜接口(user.getWeeklyTrackChart/getWeeklyArtistChart)
@@ -1179,7 +1221,6 @@ struct AccountLinkingTab: View {
             SettingsRow(
                 icon: "calendar",
                 title: L10n.t("每周听歌小结"),
-                subtitle: L10n.t("Top 歌手 + Top 歌曲各三条 + 总播放次数")
             ) {
                 Toggle("", isOn: Binding(
                     get: { features.weeklyDigest },
@@ -1215,7 +1256,7 @@ struct AccountLinkingTab: View {
             SettingsRow(
                 icon: "sun.max",
                 title: L10n.t("每日听歌报告"),
-                subtitle: L10n.t("本地时间晚上 10 点之后当天第一次检查时推送：当天播放次数、累计时长、听得最多的几首歌")
+                subtitle: L10n.t("每天晚上推送当天的听歌情况")
             ) {
                 Toggle("", isOn: Binding(
                     get: { features.dailyDigest },
