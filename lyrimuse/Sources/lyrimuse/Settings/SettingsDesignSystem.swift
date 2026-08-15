@@ -146,6 +146,32 @@ extension AnyTransition {
 // 卡片列宽度钉在 maxCardColumnWidth 并居中——窗口可以拖得很宽,但一行设置拉到 1000pt
 // 宽会让"标题在最左、控件在最右"两端相距太远,眼睛要来回扫。参考图里 Dropover 也是
 // 让卡片列保持一个固定的舒适宽度、两侧留白。
+// 把内容宽度钉死成"滚动视图外部的宽度",不让滚动条参与决定它。
+//
+// 2026-08-15 用户报的抖动就是这个:展开一个 DisclosureGroup 让内容超过一屏,滚动条出现,
+// **占掉约 15pt 布局宽度**,于是这一列卡片可用的宽度变窄、居中点左移 —— 整页看着往左挤
+// 了一下。收起来时反向再抖一次。
+//
+// ⚠️ 别被 `defaults read -g AppleShowScrollBars` 读不到值骗了(我第一次就是这么误判的):
+// 没设置 = "自动",而"自动"的含义是**按输入设备定** —— 接着鼠标就是常驻滚动条、占宽度,
+// 只有纯触控板才是不占宽度的 overlay。所以这事不能靠"默认应该是 overlay"来推断。
+//
+// 修法:在 ScrollView **外面** 用 GeometryReader 量一次宽度,内容按这个宽度铺。滚动条
+// 出现与否都不再改变它。滚动条会盖住右边缘那一小条,但卡片列本身居中、最大 600pt、两侧
+// 还有 20pt padding,盖不到内容。
+private struct FixedWidthScrollView<Content: View>: View {
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        GeometryReader { proxy in
+            ScrollView {
+                content()
+                    .frame(width: proxy.size.width)
+            }
+        }
+    }
+}
+
 struct SettingsPage<Content: View>: View {
     let title: String
     var subtitle: String?
@@ -160,7 +186,7 @@ struct SettingsPage<Content: View>: View {
     static var maxCardColumnWidth: CGFloat { 600 }
 
     var body: some View {
-        ScrollView {
+        FixedWidthScrollView {
             // spacing 传 0 而不是 14:GlassEffectContainer 的 spacing 是"多近才互相融合"的
             // 阈值,传 14 恰好等于卡片间距,相邻两张卡会**融成一整块玻璃**——间隙也被填成玻璃,
             // 这正是实测到「外观」页卡片间隙是 #F3F3F3(玻璃)而「播放器」页间隙是 #FFFEFF
@@ -223,7 +249,7 @@ struct SettingsPageCustomHeader<Header: View, Content: View>: View {
     @ViewBuilder let content: () -> Content
 
     var body: some View {
-        ScrollView {
+        FixedWidthScrollView {
             // spacing 传 0,理由同 SettingsPage 那一处。
             SettingsGlassContainer(spacing: 0) {
                 VStack(spacing: 14) {
