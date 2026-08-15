@@ -1695,6 +1695,54 @@ do {
                 "OverlayPlacement: 已经在合法位置时不发多余的移动")
 }
 
+// ---- ProcessRunner ----
+//
+// 跑真实子进程（/bin/echo、/bin/sleep、/usr/bin/yes），不是合成数据 —— 这里要验证的
+// 恰恰是跟真实进程/管道打交道时的行为。
+do {
+    // 正常命令。
+    let hello = ProcessRunner.run("/bin/echo", ["hello"], timeout: 5)
+    expectEqual(hello?.status, 0, "ProcessRunner: 正常命令退出码 0")
+    expectEqual(hello?.stdoutText, "hello\n", "ProcessRunner: 拿得到 stdout")
+    expectEqual(hello?.timedOut, false, "ProcessRunner: 正常命令没有超时")
+    expectEqual(hello?.succeeded, true, "ProcessRunner: succeeded")
+
+    // 非零退出：跑了但失败，跟"没跑起来"是两回事。
+    let failed = ProcessRunner.run("/bin/sh", ["-c", "exit 3"], timeout: 5)
+    expectEqual(failed?.status, 3, "ProcessRunner: 非零退出码如实返回")
+    expectEqual(failed?.succeeded, false, "ProcessRunner: 非零退出不算成功")
+
+    // 可执行文件不存在 → nil（"根本没起来"），不是 status 非零。
+    expectEqual(ProcessRunner.run("/nonexistent/binary", [], timeout: 5) == nil, true,
+                "ProcessRunner: 起不来的命令返回 nil")
+
+    // 超时：这是这个类型存在的全部理由。
+    // 不加超时的话这一句会等满 10 秒 —— 而 Music.app 卡住时 osascript 会等 60 秒。
+    let started = Date()
+    let slept = ProcessRunner.run("/bin/sleep", ["10"], timeout: 1)
+    let elapsed = Date().timeIntervalSince(started)
+    expectEqual(slept?.timedOut, true, "ProcessRunner: 超时的命令标记 timedOut")
+    expectEqual(slept?.succeeded, false, "ProcessRunner: 超时不算成功")
+    expectEqual(elapsed < 5, true, "ProcessRunner: 超时后立刻返回,不等命令自己跑完")
+
+    // 大输出不能死锁。管道缓冲区 64KB，写满之后子进程会阻塞在 write 上；如果先
+    // waitUntilExit 再读管道，两边互相等 —— 这正是各调用点原来那个形状的隐患。
+    // 1MB 远超缓冲区。
+    let big = ProcessRunner.run("/bin/sh", ["-c", "/usr/bin/yes ABCDEFGH | /usr/bin/head -c 1000000"], timeout: 20)
+    expectEqual(big?.stdout.count, 1_000_000, "ProcessRunner: 1MB 输出完整读回,不死锁")
+    expectEqual(big?.timedOut, false, "ProcessRunner: 大输出不该触发超时")
+
+    // stderr 不该混进 stdout（丢 nullDevice，也不会因为没人读而把子进程卡住）。
+    let noisy = ProcessRunner.run("/bin/sh", ["-c", "/bin/echo out; /bin/echo err >&2"], timeout: 5)
+    expectEqual(noisy?.stdoutText, "out\n", "ProcessRunner: stderr 不混进 stdout")
+
+    // 子进程往 stderr 狂写也不能卡住 —— nullDevice 不会满。
+    let noisyBig = ProcessRunner.run(
+        "/bin/sh", ["-c", "/usr/bin/yes ERRORLINE | /usr/bin/head -c 500000 >&2; /bin/echo done"], timeout: 20)
+    expectEqual(noisyBig?.stdoutText, "done\n", "ProcessRunner: stderr 狂写不影响 stdout")
+    expectEqual(noisyBig?.timedOut, false, "ProcessRunner: stderr 狂写不该超时")
+}
+
 if failures == 0 {
     print("\nALL PASS")
 } else {

@@ -27,6 +27,12 @@ private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "media-
 //   bundleIdentifier 精确核对确实是当前选定的这个播放器本身在报告,见
 //   PlaybackPlayer.bundleIdentifier。
 public enum MediaControlClient {
+    /// 状态查询的超时。这是 2 秒一轮的热路径,正常几十毫秒就回来;它卡住,悬浮歌词
+    /// 就跟着停住,所以这道闸比别处都要紧。
+    static let snapshotTimeout: TimeInterval = 5
+    /// 取封面的超时给得宽一些 —— 封面 base64 有几百 KB,而且它不在每轮都跑。
+    static let artworkTimeout: TimeInterval = 10
+
 
     public static func fetchSnapshot(player: PlaybackPlayer = PlaybackPlayerPreference.current) -> MediaControlSnapshot? {
         switch player {
@@ -81,21 +87,12 @@ public enum MediaControlClient {
     // 没有权限时 osascript 会返回非零退出码(而不是抛出 Swift 异常),同样落进
     // `guard terminationStatus == 0` 这条分支,不需要单独处理。
     private static func fetchAppleMusicSnapshot() -> MediaControlSnapshot? {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
-        process.arguments = ["-l", "JavaScript", "-e", script]
-        let outPipe = Pipe()
-        process.standardOutput = outPipe
-        process.standardError = Pipe()
-        do {
-            try process.run()
-            let data = outPipe.fileHandleForReading.readDataToEndOfFile()
-            process.waitUntilExit()
-            guard process.terminationStatus == 0 else { return nil }
-            return try? JSONDecoder().decode(MediaControlSnapshot.self, from: data)
-        } catch {
-            return nil
-        }
+        guard let r = ProcessRunner.run(
+            "/usr/bin/osascript", ["-l", "JavaScript", "-e", script],
+            timeout: MusicPlaybackController.appleScriptTimeout),
+            r.succeeded
+        else { return nil }
+        return try? JSONDecoder().decode(MediaControlSnapshot.self, from: r.stdout)
     }
 
     // media-control 的原始输出形状(只取用得到的字段)——跟 MediaControlSnapshot 不能
@@ -288,29 +285,20 @@ public enum MediaControlClient {
     // AppleScript 集成)。
     public static func fetchArtwork(player: PlaybackPlayer = PlaybackPlayerPreference.current) -> (data: Data, mimeType: String)? {
         guard let binaryPath = binaryPath() else { return nil }
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: binaryPath)
-        // 这次不传 --no-artwork——就是为了要这份数据。
-        process.arguments = ["get", "--now"]
-        let outPipe = Pipe()
-        process.standardOutput = outPipe
-        process.standardError = Pipe()
-        do {
-            try process.run()
-            let data = outPipe.fileHandleForReading.readDataToEndOfFile()
-            process.waitUntilExit()
-            guard process.terminationStatus == 0,
-                  let raw = try? JSONDecoder().decode(ArtworkPayload.self, from: data),
-                  let bundleID = raw.bundleIdentifier,
-                  artworkBundleIDMatches(bundleID, player: player),
-                  let base64 = raw.artworkData,
-                  let imageData = Data(base64Encoded: base64) else {
-                return nil
-            }
-            return (imageData, raw.artworkMimeType ?? "image/jpeg")
-        } catch {
+        // 这次不传 --no-artwork——就是为了要这份数据,所以超时给得比状态查询宽:
+        // 封面 base64 有几百 KB。
+        guard let r = ProcessRunner.run(
+            binaryPath, ["get", "--now"], timeout: artworkTimeout),
+            r.succeeded
+        else { return nil }
+        guard let raw = try? JSONDecoder().decode(ArtworkPayload.self, from: r.stdout),
+              let bundleID = raw.bundleIdentifier,
+              artworkBundleIDMatches(bundleID, player: player),
+              let base64 = raw.artworkData,
+              let imageData = Data(base64Encoded: base64) else {
             return nil
         }
+        return (imageData, raw.artworkMimeType ?? "image/jpeg")
     }
 
     // 只取封面相关的这几个字段——跟 RawPayload 是两份独立的 Decodable(理由跟文件顶部
@@ -357,85 +345,70 @@ public enum MediaControlClient {
             }
         })()
         """
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
-        process.arguments = ["-l", "JavaScript", "-e", script]
-        let outPipe = Pipe()
-        process.standardOutput = outPipe
-        process.standardError = Pipe()
-        do {
-            try process.run()
-            let data = outPipe.fileHandleForReading.readDataToEndOfFile()
-            process.waitUntilExit()
-            guard process.terminationStatus == 0 else { return nil }
-            struct Payload: Decodable { let position: Double }
-            guard let p = try? JSONDecoder().decode(Payload.self, from: data), p.position >= 0 else {
-                return nil
-            }
-            return p.position
-        } catch {
+        guard let r = ProcessRunner.run(
+            "/usr/bin/osascript", ["-l", "JavaScript", "-e", script],
+            timeout: MusicPlaybackController.appleScriptTimeout),
+            r.succeeded
+        else { return nil }
+        struct Payload: Decodable { let position: Double }
+        guard let p = try? JSONDecoder().decode(Payload.self, from: r.stdout), p.position >= 0 else {
             return nil
         }
+        return p.position
     }
 
     private static func fetchRawMediaControlSnapshot() -> (MediaControlSnapshot, String)? {
         guard let binaryPath = binaryPath() else { return nil }
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: binaryPath)
         // --now 让工具自己按内部时钟外推出一个不会冻结的 elapsedTimeNow(见文件顶部
         // 注释);--no-artwork 省掉几百 KB 的 base64 封面数据,这里从不使用。
-        process.arguments = ["get", "--now", "--no-artwork"]
-        let outPipe = Pipe()
-        process.standardOutput = outPipe
-        process.standardError = Pipe()
-        do {
-            try process.run()
-            let data = outPipe.fileHandleForReading.readDataToEndOfFile()
-            process.waitUntilExit()
-            // 没有任何 App 在报告 Now Playing 时,media-control 输出字面量 "null",
-            // 退出码仍是 0——JSONDecoder 对着 "null" 解码 RawPayload 会失败,走
-            // `try?` 落到下面的 guard raw != nil,行为跟"没有可报告的正在播放"一致。
-            guard process.terminationStatus == 0,
-                  let raw = try? JSONDecoder().decode(RawPayload.self, from: data),
-                  let bundleID = raw.bundleIdentifier else {
-                return nil
-            }
-            // elapsedTimeNow 只在真的在播放时才可信——实测坐实:一首已经暂停的歌,
-            // elapsedTimeNow 仍然会按暂停前最后一次记录的 playbackRate 继续按真实
-            // 时钟外推(拿到过远超歌曲时长本身的荒谬值),因为暂停这件事本身并没有让
-            // media-control 内部的外推基准归零。暂停时真正正确的位置就是原始
-            // elapsedTime(暂停就是"冻结在这一刻",不需要外推)。
-            var elapsed = (raw.playing == true) ? (raw.elapsedTimeNow ?? raw.elapsedTime) : raw.elapsedTime
-            // Spotify 的位置改问它自己 —— MediaRemote 给 Spotify 的锚点本身就滞后,
-            // 2026-08-14 实测 elapsedTimeNow 恒定落后 Spotify 报的 player position
-            // 1.64 秒(波动仅 ±0.02,是固定偏移不是抖动,所以提高轮询频率没用)。
-            // Apple Music 不受影响是因为它走 AppleScript 直接问 Music.app。
-            //
-            // ⚠️ 采集器(collector/system.go)里有一份**同样的**修正。两边各自独立读
-            // media-control(采集器喂 ListenBrainz/网页,这里喂桌面悬浮窗),改一边只修一半 ——
-            // 上一轮就是只改了采集器,用户反馈"还是有延迟",因为悬浮窗走的正是这条路。
-            if bundleID == PlaybackPlayer.spotify.bundleIdentifier,
-               let truth = spotifyPlayerPosition() {
-                elapsed = truth
-            }
-            let snapshot = MediaControlSnapshot(
-                title: raw.title,
-                artist: raw.artist,
-                album: raw.album,
-                duration: raw.duration,
-                elapsedTime: elapsed,
-                playing: raw.playing,
-                playbackRate: raw.playbackRate,
-                // 复用这个字段原本的语义("这是当前选定播放器的一份有效快照",见
-                // MediaControlSnapshot 注释)——调用方(fetchMediaControlSnapshot/
-                // fetchAutoDetectedSnapshot)已经各自核实过 bundleID 是它关心的那个,
-                // 这里如实置 true。
-                isMusicApp: true,
-                bundleIdentifier: bundleID
-            )
-            return (snapshot, bundleID)
-        } catch {
+        //
+        // 这是 2 秒一轮的热路径 —— 它卡住,悬浮歌词就停住。超时是这里最要紧的东西。
+        guard let r = ProcessRunner.run(
+            binaryPath, ["get", "--now", "--no-artwork"], timeout: snapshotTimeout),
+            r.succeeded
+        else { return nil }
+        let data = r.stdout
+        // 没有任何 App 在报告 Now Playing 时,media-control 输出字面量 "null",
+        // 退出码仍是 0——JSONDecoder 对着 "null" 解码 RawPayload 会失败,走
+        // `try?` 落到下面的 guard raw != nil,行为跟"没有可报告的正在播放"一致。
+        // 退出码已经由上面的 r.succeeded 判过。
+        guard let raw = try? JSONDecoder().decode(RawPayload.self, from: data),
+              let bundleID = raw.bundleIdentifier else {
             return nil
         }
+        // elapsedTimeNow 只在真的在播放时才可信——实测坐实:一首已经暂停的歌,
+        // elapsedTimeNow 仍然会按暂停前最后一次记录的 playbackRate 继续按真实
+        // 时钟外推(拿到过远超歌曲时长本身的荒谬值),因为暂停这件事本身并没有让
+        // media-control 内部的外推基准归零。暂停时真正正确的位置就是原始
+        // elapsedTime(暂停就是"冻结在这一刻",不需要外推)。
+        var elapsed = (raw.playing == true) ? (raw.elapsedTimeNow ?? raw.elapsedTime) : raw.elapsedTime
+        // Spotify 的位置改问它自己 —— MediaRemote 给 Spotify 的锚点本身就滞后,
+        // 2026-08-14 实测 elapsedTimeNow 恒定落后 Spotify 报的 player position
+        // 1.64 秒(波动仅 ±0.02,是固定偏移不是抖动,所以提高轮询频率没用)。
+        // Apple Music 不受影响是因为它走 AppleScript 直接问 Music.app。
+        //
+        // ⚠️ 采集器(collector/system.go)里有一份**同样的**修正。两边各自独立读
+        // media-control(采集器喂 ListenBrainz/网页,这里喂桌面悬浮窗),改一边只修一半 ——
+        // 上一轮就是只改了采集器,用户反馈"还是有延迟",因为悬浮窗走的正是这条路。
+        if bundleID == PlaybackPlayer.spotify.bundleIdentifier,
+           let truth = spotifyPlayerPosition() {
+            elapsed = truth
+        }
+        let snapshot = MediaControlSnapshot(
+            title: raw.title,
+            artist: raw.artist,
+            album: raw.album,
+            duration: raw.duration,
+            elapsedTime: elapsed,
+            playing: raw.playing,
+            playbackRate: raw.playbackRate,
+            // 复用这个字段原本的语义("这是当前选定播放器的一份有效快照",见
+            // MediaControlSnapshot 注释)——调用方(fetchMediaControlSnapshot/
+            // fetchAutoDetectedSnapshot)已经各自核实过 bundleID 是它关心的那个,
+            // 这里如实置 true。
+            isMusicApp: true,
+            bundleIdentifier: bundleID
+        )
+        return (snapshot, bundleID)
     }
 }

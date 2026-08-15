@@ -313,6 +313,16 @@ public enum MusicPlaybackController {
         }
     }
 
+    /// 问播放器要状态的超时上限。
+    ///
+    /// 正常一次往返约 100ms(实测:Music 90ms / Spotify 101ms)。给到 5 秒纯粹是兜底 ——
+    /// 关键在于它**远小于 AppleScript 自己 60 秒的默认超时**:Music.app 一旦无响应
+    /// (大曲库、iCloud 同步时并不罕见),没有这道闸就是整条链路停一分钟,表现为悬浮
+    /// 歌词莫名其妙不动了。
+    static let appleScriptTimeout: TimeInterval = 5
+
+    // ⚠️ 下面两个 runXxx 是**发完就不管**(try? process.run(),不等退出),所以它们不会
+    // 卡住调用方,不需要走 ProcessRunner。改成等待反而会把"发一条播放指令"变成一次阻塞。
     private static func runAppleScript(_ script: String) {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
@@ -326,19 +336,13 @@ public enum MusicPlaybackController {
     ///
     /// 会阻塞到子进程结束,调用方负责别在主线程上调。
     private static func runAppleScriptCapturing(_ script: String) -> String? {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
-        process.arguments = ["-e", script]
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        // stderr 丢掉:属性名不认时 osascript 会往 stderr 打一段编译错误,那是这里预期内的
-        // 兜底路径,不该污染 App 自己的日志。
-        process.standardError = FileHandle.nullDevice
-        do { try process.run() } catch { return nil }
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        process.waitUntilExit()
-        guard process.terminationStatus == 0 else { return nil }
-        return String(data: data, encoding: .utf8)
+        // stderr 由 ProcessRunner 丢进 nullDevice:属性名不认时 osascript 会往 stderr 打
+        // 一段编译错误,那是这里预期内的兜底路径,不该污染 App 自己的日志。
+        guard let r = ProcessRunner.run(
+            "/usr/bin/osascript", ["-e", script], timeout: appleScriptTimeout),
+            r.succeeded
+        else { return nil }
+        return r.stdoutText
     }
 
     // 二进制路径解析复用 MediaControlClient.binaryPath()(同目录,读取状态那条路径
