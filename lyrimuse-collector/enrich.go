@@ -429,6 +429,12 @@ func needsLyricsRetry(e enrichEntry) bool {
 	if e.LyricsRetryCount >= lyricsRetryMaxAttempts {
 		return false
 	}
+	// 同源候选当初落选:这本身就是重来一次的理由,不必再要求"有源缺席"。下面那段找的是
+	// "有源当初没答上话",跟这里说的"答了但没选它"是两回事 —— 混在一起会让这条路径
+	// 永远返回 false(这个 bug 2026-08-15 当天就被断言逮住了)。
+	if nativeMissedOut {
+		return true
+	}
 	missing := false
 	for source, enabled := range features.LyricsSources {
 		if !enabled {
