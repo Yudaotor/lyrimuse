@@ -192,7 +192,7 @@ func loadFeatureFlags(path string) featureFlags {
 		LyricsDir:                 f.LyricsDir,
 		LyricsTranslationLanguage: resolveLyricsTranslationLanguage(f.LyricsTranslationLanguage),
 		LyricsMachineTranslation:  boolOr(f.LyricsMachineTranslation, false),
-		LaunchLyrimuseOnMusicOpen: boolOr(f.LaunchLyrimuseOnMusicOpen, false),
+		LaunchLyrimuseOnMusicOpen: boolOr(f.LaunchLyrimuseOnMusicOpen, true),
 	}
 }
 

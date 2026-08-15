@@ -143,7 +143,6 @@ struct NotchPreviewBar: View {
         .padding(.bottom, 10)
         .frame(maxWidth: .infinity)
         .background(Color(nsColor: .windowBackgroundColor))
-        .overlay(alignment: .bottom) { Divider() }
         .onReceive(
             NotificationCenter.default.publisher(
                 for: NSApplication.didChangeScreenParametersNotification)
@@ -214,7 +213,6 @@ struct MenuBarPreviewBar: View {
         .padding(.bottom, 10)
         .frame(maxWidth: .infinity)
         .background(Color(nsColor: .windowBackgroundColor))
-        .overlay(alignment: .bottom) { Divider() }
         .onReceive(PlaybackCoordinator.shared.$currentLine.removeDuplicates()) { line = $0 }
         .accessibilityHidden(true)
     }

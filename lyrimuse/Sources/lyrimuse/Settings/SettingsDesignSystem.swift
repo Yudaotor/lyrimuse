@@ -265,6 +265,33 @@ struct SettingsPage<Content: View>: View {
 // (见 accountIconBadge —— 它不是 SF Symbol,没法用 SettingsPage 的 title/subtitle/
 // heroImage 三件套表达)。与其把 SettingsPage 的参数扩成一堆互斥的可选项,不如另开一个
 // 只换页头、其余全部共用的容器。
+// 顶部钉一条(分段选择器 / 实时预览),下面才是滚动区。
+//
+// ⚠️ 这里刻意**不用** .safeAreaInset。那个修饰符是"悬浮"语义:被它修饰的 ScrollView 仍然
+// 占着整块区域,内容会滑到那条悬浮层**底下**去。表现出来就是往下滚一段之后,分段选择器和
+// 第一张卡明明还看得见,却既点不动、鼠标放上去连滚都滚不动 —— 用户连报了两次,第二次特意
+// 补了"鼠标放在这个区域里面也不能滚动",正是这个语义的指纹(坐标错位只会影响点击,滚轮
+// 照样该到 ScrollView)。
+//
+// VStack 把固定头部和滚动区真正分成上下两块:滚动区只存在于头部下方,不存在"看得见却够不着"
+// 的夹层,选择器也因此永远点得到,不必先滚回顶部。
+struct SettingsPageWithStickyHeader<Header: View, Page: View>: View {
+    @ViewBuilder let header: () -> Header
+    @ViewBuilder let page: () -> Page
+
+    var body: some View {
+        VStack(spacing: 0) {
+            header()
+                .frame(maxWidth: .infinity)
+                // 头部自带不透明底色 + 一条分隔线。各个预览条原来各画各的 Divider,统一收到
+                // 这里 —— 没有预览的那几段(「其它」/歌词页)才不会缺一条线。
+                .background(Color(nsColor: .windowBackgroundColor))
+                .overlay(alignment: .bottom) { Divider() }
+            page()
+        }
+    }
+}
+
 struct SettingsPageCustomHeader<Header: View, Content: View>: View {
     @ViewBuilder let header: () -> Header
     @ViewBuilder let content: () -> Content

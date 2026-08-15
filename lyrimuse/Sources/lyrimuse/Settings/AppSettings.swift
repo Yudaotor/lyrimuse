@@ -385,7 +385,8 @@ final class AppSettings: ObservableObject {
         launchMusicOnLyrimuseOpen = (defaults.object(forKey: Keys.launchMusicOnLyrimuseOpen) as? Bool) ?? false
         collectorServiceEnabled = (defaults.object(forKey: Keys.collectorServiceEnabled) as? Bool) ?? false
         showInDock = (defaults.object(forKey: Keys.showInDock) as? Bool) ?? true
-        showNextLinePreview = (defaults.object(forKey: Keys.showNextLinePreview) as? Bool) ?? false
+        // 默认开。多显示一句下文对跟读几乎总是有用的,而这一项本身不占额外窗口高度。
+        showNextLinePreview = (defaults.object(forKey: Keys.showNextLinePreview) as? Bool) ?? true
         showLyricsInMenuBar = (defaults.object(forKey: Keys.showLyricsInMenuBar) as? Bool) ?? false
         menuBarLyricsMaxChars = (defaults.object(forKey: Keys.menuBarLyricsMaxChars) as? Int) ?? 60
         menuBarLyricsScroll = (defaults.object(forKey: Keys.menuBarLyricsScroll) as? Bool) ?? true

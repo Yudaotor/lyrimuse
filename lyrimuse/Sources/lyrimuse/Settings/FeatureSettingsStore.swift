@@ -197,7 +197,10 @@ public final class FeatureSettingsStore: ObservableObject {
     // 打开 Apple Music 时顺带唤起 Lyrimuse——默认关闭,理由跟
     // AppSettings.launchMusicOnLyrimuseOpen 一样:"自动启动另一个 App"不该是没问过
     // 用户就默认打开的行为。
-    @Published public var launchLyrimuseOnMusicOpen = false
+    // 默认开:这是「装了就该有的样子」——打开播放器歌词就跟上来,而不是每次还要先
+    // 想起来去菜单栏点一下 Lyrimuse。⚠️ 改默认值必须跟 collector 侧 features.go 的
+    // boolOr(..., true) 一起改,不然 Swift 这边显示「开」而真正执行的 collector 当它是关。
+    @Published public var launchLyrimuseOnMusicOpen = true
 
     @Published public private(set) var lastError: String?
 
@@ -294,7 +297,7 @@ public final class FeatureSettingsStore: ObservableObject {
         lyricsSourceOrder = decodedOrder.count == LyricsSource.allCases.count ? decodedOrder : LyricsSource.allCases
         lyricsDir = f.lyricsDir ?? ""
         lyricsTranslationLanguage = f.lyricsTranslationLanguage.flatMap(MusixmatchTranslationLanguage.init(rawValue:)) ?? .auto
-        launchLyrimuseOnMusicOpen = f.launchLyrimuseOnMusicOpen ?? false
+        launchLyrimuseOnMusicOpen = f.launchLyrimuseOnMusicOpen ?? true
         savedSnapshot = currentSnapshot
     }
 

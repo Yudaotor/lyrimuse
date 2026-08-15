@@ -193,7 +193,11 @@ struct SettingsView: View {
         // 原来是给 TabView 焊死的 440pt 改出来的 minWidth/idealWidth——现在换成
         // NavigationSplitView,多了一列侧边栏,整体相应加宽;同样不设 maxWidth/固定
         // 高度,各分类继续按内容自动撑高。
-        .frame(minWidth: 760, idealWidth: 860, minHeight: 460)
+        // 高度这一档是跟着「外观」页的固定头部定的:那一页顶上钉着分段选择器 + 实时预览,
+        // 实测占 205pt。窗口 460 高时滚动区只剩 255pt,一屏放不下两张卡,滚起来很碎;
+        // idealHeight 给到 640,滚动区就有 ~430pt。minHeight 同步抬到 520,避免有人拖到
+        // 极限后滚动区比头部还矮。
+        .frame(minWidth: 760, idealWidth: 860, minHeight: 520, idealHeight: 640)
         // 见 AppActions.pendingSettingsSelection 注释——Onboarding 的 Last.fm 步骤
         // 借这个信箱指定"这次打开设置窗口要直接停在哪个分类",这里读一次就清空,不影响
         // 之后用户正常打开设置窗口(默认还是回到 .tab(.lyrics))。
@@ -298,17 +302,24 @@ private struct LyricsSettingsTab: View {
     private var section: Section { Section(rawValue: sectionRaw) ?? .fetch }
 
     var body: some View {
-        SettingsPage(
-            title: L10n.t("歌词"),
-            subtitle: L10n.t("让每首歌都有一份对得上的歌词")
-        ) {
+        // 分段选择器钉在顶上,不跟着内容滚 —— 它是这一页的导航,滚下去之后还得先滚回顶部
+        // 才能换段是说不通的。理由详见 SettingsPageWithStickyHeader。
+        SettingsPageWithStickyHeader {
             sectionPicker
-            // 切段用纯淡入淡出,不用卡片那套 .settingsCard(带从顶边缩放):那个是"这一行下面
-            // 长出一张卡"的语义,整页换内容时会像整块东西塌下去。时长也短一截 —— 分段切换
-            // 在用户心里等同于换标签页,该是即时的。
-            currentSection
-                .id(section)
-                .transition(.opacity)
+                .padding(.top, 12)
+                .padding(.bottom, 10)
+        } page: {
+            SettingsPage(
+                title: L10n.t("歌词"),
+                subtitle: L10n.t("让每首歌都有一份对得上的歌词")
+            ) {
+                // 切段用纯淡入淡出,不用卡片那套 .settingsCard(带从顶边缩放):那个是"这一行
+                // 下面长出一张卡"的语义,整页换内容时会像整块东西塌下去。时长也短一截 ——
+                // 分段切换在用户心里等同于换标签页,该是即时的。
+                currentSection
+                    .id(section)
+                    .transition(.opacity)
+            }
         }
         .id(L10n.current)
     }
@@ -819,40 +830,46 @@ private struct AppearanceSettingsTab: View {
         // 方式互不冲突,可以同时开启:桌面悬浮歌词贴在桌面上、支持逐字高亮;灵动岛歌词
         // 紧凑地贴着刘海显示;..." 是**一整段** Section 尾注,四种方式的说明串在一句话里,
         // 读者得自己把每一小段对应回上面第几个开关;现在直接拆成四行各自的副标题。
-        SettingsPage(
-            title: L10n.t("外观"),
-            subtitle: L10n.t("四种展示方式可以同时开启")
-        ) {
-            sectionPicker
-            currentSection
-                .id(section)
-                .transition(.opacity)
-        }
-        // 实时预览钉在页顶,只在"桌面悬浮歌词"这一段、且它确实开着的时候出现。
+        // 分段选择器 + 实时预览一起钉在页顶,下面才是滚动区。
         //
-        // 用 safeAreaInset 而不是塞进 SettingsPage 的 content:content 在 ScrollView 里面,
-        // 往下滚就看不见了 —— 而这一页控件多到本来就要滚,调下半屏的字号时预览滚出视野等于
-        // 白做。safeAreaInset 把它固定在滚动区之上,同时自动把滚动内容顶下去,不会遮住第一
-        // 张卡。⚠️ 预览条必须自带不透明底色(见 OverlayPreviewBar):SettingsPage 的
-        // .background 只铺在 ScrollView 上,盖不到 inset 区域。
+        // 预览必须常驻的理由:这一页控件多到本来就要滚,调下半屏的字号时预览要是滚出视野,
+        // 等于白做。选择器一起钉上来的理由:它是这一页的导航,滚下去之后还得先滚回顶部才能
+        // 换段是说不通的。
         //
-        // 另外三段(灵动岛/菜单栏/其它)不给预览:灵动岛和歌词窗口用的是各自固定的系统配色,
-        // 压根不读这一页的字体/颜色字段(见 classicOverlayCard 上那段消费方核对),菜单栏
-        // 歌词是纯文字。给它们挂预览会暗示这些设置对它们也有效,那是错的。
-        .safeAreaInset(edge: .top, spacing: 0) {
-            // 每一段挂**自己那一段**的预览。
-            //
-            // 2026-08-15:原来只有悬浮歌词有预览,而且还跟开关联动(关着就不显示)。两处都改:
-            //   - 灵动岛/菜单栏各自有了反映自己设置的预览(见 SectionPreviewBars),不再是
-            //     "这两段没什么可预览的"。它们**不能**共用 OverlayPreviewBar —— 那条画的是
-            //     悬浮歌词的字体/颜色,而这两个形态压根不读那些字段。
-            //   - 不再看开关:配置卡现在关着也能调(见 currentSection),预览要是还跟着开关
-            //     藏起来,调的时候就又看不见效果了。
-            switch section {
-            case .overlay: OverlayPreviewBar()
-            case .notch: NotchPreviewBar()
-            case .menuBar: MenuBarPreviewBar()
-            case .other: EmptyView()
+        // ⚠️ 2026-08-15 从 .safeAreaInset 换成真正的固定头部。safeAreaInset 是"悬浮"语义:
+        // ScrollView 仍占着整块区域,内容会滑到那条悬浮层**底下**去 —— 滚过一段之后选择器
+        // 和第一张卡看得见却点不动、鼠标放上去连滚都滚不动。详见
+        // SettingsPageWithStickyHeader 上那段注释。
+        //
+        // 另外一段(「其它」)不给预览:那一段是两个悬浮窗共用的隐藏开关,没有"长什么样"
+        // 可看。灵动岛和菜单栏**不能**共用 OverlayPreviewBar —— 那条画的是悬浮歌词的
+        // 字体/颜色,而这两个形态压根不读那些字段,各自的预览见 SectionPreviewBars。
+        SettingsPageWithStickyHeader {
+            VStack(spacing: 0) {
+                sectionPicker
+                    .padding(.top, 12)
+                    .padding(.bottom, 8)
+                // 每一段挂**自己那一段**的预览。
+                //
+                // 2026-08-15:原来只有悬浮歌词有预览,而且还跟开关联动(关着就不显示)。两处都改:
+                //   - 灵动岛/菜单栏各自有了反映自己设置的预览,不再是"这两段没什么可预览的"。
+                //   - 不再看开关:配置卡现在关着也能调(见 currentSection),预览要是还跟着开关
+                //     藏起来,调的时候就又看不见效果了。
+                switch section {
+                case .overlay: OverlayPreviewBar()
+                case .notch: NotchPreviewBar()
+                case .menuBar: MenuBarPreviewBar()
+                case .other: EmptyView()
+                }
+            }
+        } page: {
+            SettingsPage(
+                title: L10n.t("外观"),
+                subtitle: L10n.t("四种展示方式可以同时开启")
+            ) {
+                currentSection
+                    .id(section)
+                    .transition(.opacity)
             }
         }
         .id(L10n.current)

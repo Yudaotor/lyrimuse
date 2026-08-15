@@ -87,7 +87,6 @@ struct OverlayPreviewBar: View {
         // .background(windowBackgroundColor) 只铺在 ScrollView 上、盖不到 inset 区域 ——
         // 不画底色的话,下面滚动的卡片会从预览条底下透出来。
         .background(Color(nsColor: .windowBackgroundColor))
-        .overlay(alignment: .bottom) { Divider() }
         .onReceive(PlaybackCoordinator.shared.$currentLine.removeDuplicates()) { line = $0 }
         .onReceive(PlaybackCoordinator.shared.$artworkAccentColor.removeDuplicates()) { accent = $0 }
     }
