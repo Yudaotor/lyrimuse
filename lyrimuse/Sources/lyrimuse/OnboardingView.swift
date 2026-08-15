@@ -173,7 +173,7 @@ struct OnboardingView: View {
         VStack(alignment: .leading, spacing: 16) {
             Text(L10n.t("选择播放器"))
                 .font(.title2.bold())
-            Text(L10n.t("Lyrimuse 支持从 Apple Music 或 QQ 音乐读取播放状态——选一个你平时用来听歌的 App，随时可以在设置里重新选择"))
+            Text(L10n.t("Lyrimuse 支持 Apple Music、QQ 音乐、网易云音乐、Spotify，也可以交给「自动识别」——挑一个你平时用来听歌的，随时可以在设置里重新选择"))
                 .foregroundStyle(.secondary)
             Picker(L10n.t("播放器"), selection: Binding(
                 get: { features.player },

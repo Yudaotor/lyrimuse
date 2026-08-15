@@ -337,7 +337,7 @@
 "QQ 音乐" = "QQ Music";
 "播放器" = "Player";
 "选择播放器" = "Choose a Player";
-"Lyrimuse 支持从 Apple Music 或 QQ 音乐读取播放状态——选一个你平时用来听歌的 App，随时可以在设置里重新选择" = "Lyrimuse can read playback state from either Apple Music or QQ Music — pick whichever app you normally listen with. You can change this later in Settings";
+"Lyrimuse 支持 Apple Music、QQ 音乐、网易云音乐、Spotify，也可以交给「自动识别」——挑一个你平时用来听歌的，随时可以在设置里重新选择" = "Lyrimuse works with Apple Music, QQ Music, NetEase Cloud Music and Spotify, or it can detect whichever one is playing — pick the one you normally listen with. You can change this later in Settings";
 "Top 歌手 + Top 歌曲各三条 + 总播放次数" = "Top three artists and tracks, plus total play count";
 "会覆盖当前所有设置，包括已连接的账号和播放数据发往的地址，并立即重启 Lyrimuse" = "Overwrites every current setting, including connected accounts and where your playback data is sent, then restarts Lyrimuse";
 "全局快捷键在任何 App 里都能触发。至少需要搭配 ⌘/⌥/⌃ 中一个（功能键、媒体键除外）" = "Global shortcuts work in any app. Each needs at least one of ⌘/⌥/⌃ (function and media keys excepted)";
