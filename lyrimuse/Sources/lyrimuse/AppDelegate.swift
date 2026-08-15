@@ -94,6 +94,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // 「开机启动」默认是开的(见 AppSettings.init),但那处赋值不触发 didSet,系统层面
+        // 并不会因此注册登录项。这里补一次,让默认值真的算数。SMAppService 的注册是幂等的,
+        // 已经注册过再调一次没有副作用;用户手动关掉之后这里读到 false,也不会偷偷再打开。
+        if AppSettings.shared.launchAtLoginEnabled {
+            LoginItemManager.shared.setEnabled(true)
+        }
         // ⚠️ 必须是这个函数的第一件事:AppSettings 在 init 里一次性把所有属性从 UserDefaults
         // 读进内存(下面第一次访问 AppSettings.shared 时发生),恢复晚了就只落了盘、这次启动
         // 的内存态还是空的。见 AppSettingsMirror.restoreIfPristine 的注释。

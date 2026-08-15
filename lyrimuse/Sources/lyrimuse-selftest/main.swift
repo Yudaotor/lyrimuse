@@ -369,30 +369,16 @@ do {
 
 do {
     // 装得下就原样返回,不滚动。
-    expectEqual(MenuBarMarquee.window(text: "短句", maxChars: 10, step: 0, holdSteps: 6), "短句", "跑马灯: 装得下就整句显示")
-    expectEqual(MenuBarMarquee.window(text: "短句", maxChars: 10, step: 99, holdSteps: 6), "短句", "跑马灯: 装得下时任何一拍都不变")
 
     let text = "0123456789" // 10 字,窗口 4 字 → maxOffset = 6
     // 开头停留阶段:前 holdSteps 拍都停在开头
-    expectEqual(MenuBarMarquee.window(text: text, maxChars: 4, step: 0, holdSteps: 3), "0123", "跑马灯: 第 0 拍停在开头")
-    expectEqual(MenuBarMarquee.window(text: text, maxChars: 4, step: 2, holdSteps: 3), "0123", "跑马灯: 停留阶段末尾仍在开头")
     // 滚动阶段:每拍右移一个字
-    expectEqual(MenuBarMarquee.window(text: text, maxChars: 4, step: 3, holdSteps: 3), "1234", "跑马灯: 停留结束后开始滚动")
-    expectEqual(MenuBarMarquee.window(text: text, maxChars: 4, step: 4, holdSteps: 3), "2345", "跑马灯: 每拍右移一个字")
     // 滚到末尾后停住(不会滚过头露出空白)
-    expectEqual(MenuBarMarquee.window(text: text, maxChars: 4, step: 9, holdSteps: 3), "6789", "跑马灯: 滚到末尾停住")
-    expectEqual(MenuBarMarquee.window(text: text, maxChars: 4, step: 11, holdSteps: 3), "6789", "跑马灯: 末尾停留阶段保持不动")
     // 一个完整周期后回到开头(cycle = 6 + 3*2 = 12)
-    expectEqual(MenuBarMarquee.window(text: text, maxChars: 4, step: 12, holdSteps: 3), "0123", "跑马灯: 一个周期后回到开头")
     // 边界:窗口宽度非法/负数拍都不能崩
-    expectEqual(MenuBarMarquee.window(text: text, maxChars: 0, step: 5, holdSteps: 3), "", "跑马灯: 宽度为 0 返回空串不崩")
-    expectEqual(MenuBarMarquee.window(text: text, maxChars: 4, step: -1, holdSteps: 3).count, 4, "跑马灯: 负数拍也返回合法窗口")
     // 中文/emoji 按字符取窗,不能把一个字切成两半
-    expectEqual(MenuBarMarquee.window(text: "一二三四五六", maxChars: 3, step: 0, holdSteps: 1), "一二三", "跑马灯: 中文按字符取窗")
-    expectEqual(MenuBarMarquee.window(text: "😀😃😄😁😆", maxChars: 2, step: 0, holdSteps: 1), "😀😃", "跑马灯: emoji 不会被切碎")
     // holdSteps 传 0 也必须先露出开头(下限被夹到 1)——不夹的话第 0 拍就跳到 offset 1,
     // 整句第一个字永远看不到。
-    expectEqual(MenuBarMarquee.window(text: "0123456789", maxChars: 4, step: 0, holdSteps: 0), "0123", "跑马灯: holdSteps=0 时开头仍会露出(不漏首字)")
 }
 
 // ---- EnrichCacheKeys: 缓存 key ↔ lyrics/ 导出文件名(2026-08-05) ----

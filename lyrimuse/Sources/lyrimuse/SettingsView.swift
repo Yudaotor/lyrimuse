@@ -1033,6 +1033,11 @@ private struct AppearanceSettingsTab: View {
             CardDivider()
             // 只打包"配色"相关的四个字段(文字/背景/描边颜色 + 描边开关),不含字体/字号 ——
             // 那是排版,跟配色是两回事,不该被同一个"主题"捆在一起改(见 ColorTheme.swift)。
+            // 「跟随封面取色」开着时连这一行也收起来:预设主题的名字("经典黑字"/"经典白字")
+            // 讲的就是文字颜色,而文字颜色已经被封面主色接管,留着只会让人以为选了有用。
+            // 主题里的背景色/描边色确实还生效,但那两项本来就各有独立的一行可以单独调,
+            // 不会因为收起这一行而够不着。
+            if !settings.followsCoverArt {
             SettingsRow(icon: "swatchpalette", title: L10n.t("配色主题")) {
                 Menu(currentColorThemeLabel) {
                     ForEach(ColorTheme.builtInPresets) { theme in
@@ -1046,6 +1051,7 @@ private struct AppearanceSettingsTab: View {
                     }
                 }
                 .fixedSize()
+            }
             }
             // 「跟随封面取色」开着时,文字颜色由封面主色接管,这一行就收起来 —— 它只剩
             // "拿不到封面主色时的兜底值"这一点残余作用,为它常占一行、还要配一句解释
@@ -1346,19 +1352,21 @@ private struct AppearanceSettingsTab: View {
                     : "超出宽度时截断，不滚动"),
                 help: L10n.t(settings.menuBarLyricsScroll
                     ? "比下面的宽度更长时，在状态栏里横向滚动播完整句；开头会先停一下再滚"
-                    : "比下面的宽度更长时截断成「前 N 个字…」，不滚动")
+                    : "比下面的宽度更长时就截断，末尾加省略号，不滚动")
             ) {
                 Toggle("", isOn: $settings.menuBarLyricsScroll)
             }
             CardDivider()
             SettingsSubRow(title: L10n.t(settings.menuBarLyricsScroll ? "显示宽度" : "超过就截断")) {
                 HStack(spacing: 8) {
+                    // 按点(pt)而不是字数 —— 字符宽度差得太远,按字数控不住实际占宽,
+                    // 见 AppSettings.menuBarLyricsMaxWidth。
                     Slider(value: Binding(
-                        get: { Double(settings.menuBarLyricsMaxChars) },
-                        set: { settings.menuBarLyricsMaxChars = Int($0) }
-                    ), in: 20...120, step: 5)
+                        get: { Double(settings.menuBarLyricsMaxWidth) },
+                        set: { settings.menuBarLyricsMaxWidth = CGFloat(($0 / 10).rounded() * 10) }
+                    ), in: 80...600, step: 10)
                     .frame(width: 150)
-                    Text(String(format: L10n.t("%@ 字"), "\(settings.menuBarLyricsMaxChars)"))
+                    Text(String(format: L10n.t("%@pt"), "\(Int(settings.menuBarLyricsMaxWidth))"))
                         .foregroundStyle(.secondary)
                         .monospacedDigit()
                         .frame(width: 46, alignment: .trailing)

@@ -90,7 +90,10 @@ final class MenuBarMarqueeTicker: ObservableObject {
         settings.$menuBarLyricsScroll.dropFirst().receive(on: RunLoop.main)
             .sink { [weak self] _ in self?.restartLine() }.store(in: &cancellables)
         // 宽度改了可能从"要滚"变成"装得下"(或者反过来),所以跟换句一样整个重来。
-        settings.$menuBarLyricsMaxChars.dropFirst().receive(on: RunLoop.main)
+        // ⚠️ 订阅的必须是**现在真正在用的那个**设置(按点计的 maxWidth)。2026-08-15 把宽度
+        // 从字数改成点时这里一度还挂在旧的 maxChars 上,后果是拖宽度滑杆完全不生效 ——
+        // ScrollPlan 是按句缓存的,不 restartLine 就不会重算。
+        settings.$menuBarLyricsMaxWidth.dropFirst().receive(on: RunLoop.main)
             .sink { [weak self] _ in self?.restartLine() }.store(in: &cancellables)
         coordinator.$isPlayingNow.dropFirst().receive(on: RunLoop.main)
             .sink { [weak self] _ in self?.syncTimer() }.store(in: &cancellables)
@@ -152,12 +155,11 @@ final class MenuBarMarqueeTicker: ObservableObject {
         guard settings.menuBarLyricsScroll else { return nil }
         let full = PlaybackCoordinator.shared.currentLine?.plainText ?? ""
         guard !full.isEmpty else { return nil }
-        let maxChars = settings.menuBarLyricsMaxChars
-        guard maxChars > 0, full.count > maxChars else { return nil }
-        let windowWidth = MenuBarMarqueeRenderer.width(of: String(full.prefix(maxChars)))
+        // 窗口宽度就是用户设的那个宽度,不再由"前 N 个字"换算 —— 见
+        // AppSettings.menuBarLyricsMaxWidth 上的注释。
+        let windowWidth = settings.menuBarLyricsMaxWidth
         let fullWidth = MenuBarMarqueeRenderer.width(of: full)
-        // 字符数超了不等于像素也超——窗口里那几个字恰好特别宽时就会这样。真正决定要不要滚
-        // 的是像素,差不到半个点就别滚了(滚也看不出来,白费一个 30fps 的计时器)。
+        // 差不到半个点就别滚了(滚也看不出来,白费一个 30fps 的计时器)。
         guard windowWidth > 0, fullWidth > windowWidth + 0.5 else { return nil }
         let averageCharWidth = fullWidth / CGFloat(full.count)
         return ScrollPlan(
@@ -174,14 +176,9 @@ final class MenuBarMarqueeTicker: ObservableObject {
         let full = PlaybackCoordinator.shared.currentLine?.plainText ?? ""
         guard let plan = currentScrollPlan() else {
             // 不用滚:维持改动之前的行为(整句,超长就截断加省略号)。
-            let next: String
-            if full.isEmpty {
-                next = ""
-            } else if full.count > settings.menuBarLyricsMaxChars {
-                next = String(full.prefix(settings.menuBarLyricsMaxChars)) + "…"
-            } else {
-                next = full
-            }
+            let next = full.isEmpty
+                ? ""
+                : MenuBarMarqueeRenderer.truncate(full, toWidth: settings.menuBarLyricsMaxWidth)
             // 只在真的变了才发布——装得下的整句不该白白触发菜单栏重渲染。
             if next != visibleText { visibleText = next }
             if scrollImage != nil { scrollImage = nil }

@@ -204,19 +204,24 @@ struct MenuBarPreviewBar: View {
         return L10n.t("这里是一句歌词示例")
     }
 
-    /// 复用真实的截断/取窗逻辑,不自己另写一份 —— 两份实现必然漂。
-    /// step 传 0 = 停在开头那一帧(滚动到中段的样子这里没必要演,那需要常驻一个定时器)。
+    /// 复用真实的截断逻辑,不自己另写一份 —— 两份实现必然漂。
+    ///
+    /// 滚动模式演的是开头那一帧(offset 0),也就是"从最左边开始能看到多少" —— 跟截断
+    /// 模式取的是同一段文字,区别只在末尾要不要省略号。滚到中段的样子这里没必要演,
+    /// 那需要常驻一个定时器。
     private var visibleText: String {
+        let limit = settings.menuBarLyricsMaxWidth
         if settings.menuBarLyricsScroll {
-            return MenuBarMarquee.window(
-                text: fullText, maxChars: settings.menuBarLyricsMaxChars, step: 0, holdSteps: 0)
+            let truncatedText = MenuBarMarqueeRenderer.truncate(fullText, toWidth: limit)
+            // 滚动模式不显示省略号(那一段会滚出来,不是被丢掉了)。
+            return truncatedText.hasSuffix("…") ? String(truncatedText.dropLast()) : truncatedText
         }
-        return fullText.count > settings.menuBarLyricsMaxChars
-            ? String(fullText.prefix(settings.menuBarLyricsMaxChars)) + "…"
-            : fullText
+        return MenuBarMarqueeRenderer.truncate(fullText, toWidth: limit)
     }
 
-    private var truncated: Bool { fullText.count > settings.menuBarLyricsMaxChars }
+    private var truncated: Bool {
+        MenuBarMarqueeRenderer.width(of: fullText) > settings.menuBarLyricsMaxWidth
+    }
 
     /// 那一小段仿菜单栏(一行 13pt 字 + 上下各 5pt 内边距 + 圆角条)的高度。
     static var cardHeight: CGFloat { 26 }
@@ -242,12 +247,13 @@ struct MenuBarPreviewBar: View {
             // 说反了正是让人觉得这个功能"怪怪的"的原因之一。
             Text(
                 !truncated
-                    ? String(format: L10n.t("预览 · 上限 %@ 字"), "\(settings.menuBarLyricsMaxChars)")
+                    ? String(format: L10n.t("预览 · 上限 %@pt"),
+                             "\(Int(settings.menuBarLyricsMaxWidth))")
                     : settings.menuBarLyricsScroll
-                        ? String(format: L10n.t("预览 · 上限 %@ 字，本句会横向滚动"),
-                                 "\(settings.menuBarLyricsMaxChars)")
-                        : String(format: L10n.t("预览 · 上限 %@ 字，本句已截断"),
-                                 "\(settings.menuBarLyricsMaxChars)")
+                        ? String(format: L10n.t("预览 · 上限 %@pt，本句会横向滚动"),
+                                 "\(Int(settings.menuBarLyricsMaxWidth))")
+                        : String(format: L10n.t("预览 · 上限 %@pt，本句已截断"),
+                                 "\(Int(settings.menuBarLyricsMaxWidth))")
             )
             .font(.caption)
             .foregroundStyle(.secondary)

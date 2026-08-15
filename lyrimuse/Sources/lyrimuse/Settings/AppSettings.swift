@@ -37,6 +37,7 @@ final class AppSettings: ObservableObject {
         static let showNextLinePreview = "np:showNextLinePreview"
         static let showLyricsInMenuBar = "np:showLyricsInMenuBar"
         static let menuBarLyricsMaxChars = "np:menuBarLyricsMaxChars"
+        static let menuBarLyricsMaxWidth = "np:menuBarLyricsMaxWidth"
         static let menuBarLyricsScroll = "np:menuBarLyricsScroll"
         static let lyricsOffsetStepMs = "np:lyricsOffsetStepMs"
         static let textStrokeEnabled = "np:textStrokeEnabled"
@@ -174,6 +175,16 @@ final class AppSettings: ObservableObject {
     }
     @Published var menuBarLyricsMaxChars: Int {
         didSet { defaults.set(menuBarLyricsMaxChars, forKey: Keys.menuBarLyricsMaxChars) }
+    }
+    // 菜单栏歌词最多占多宽(点)。
+    //
+    // 2026-08-15 从"最多几个字"改成按宽度算。按字数根本不是等宽的:实测同为 10 个字,
+    // 中文 128pt、英文只有 65pt,差了一倍 —— 同一个"20 字"设置,中文歌几乎占满一条,
+    // 英文歌只有一小截,而用户想控制的从来就是"别占太宽"这件事本身。
+    //
+    // 旧的 menuBarLyricsMaxChars 还留在配置文件里(没删,便于回退),但已经没有读取方。
+    @Published var menuBarLyricsMaxWidth: CGFloat {
+        didSet { defaults.set(Double(menuBarLyricsMaxWidth), forKey: Keys.menuBarLyricsMaxWidth) }
     }
     // 悬浮窗背景透明,文字直接叠在桌面内容上——桌面壁纸/其它窗口文字撞色时容易糊在一起,
     // 加个描边提高辨识度。纯展示开关,LyricsOverlayView 每次渲染都直接读这个值,不需要
@@ -381,7 +392,11 @@ final class AppSettings: ObservableObject {
         // 这个开关"的默认值——已经手动开过/关过的人,defaults.object(forKey:) 能读到
         // 已持久化的值,不会被这次改动覆盖。
         showTranslation = (defaults.object(forKey: Keys.showTranslation) as? Bool) ?? Self.userReadsChinese
-        launchAtLoginEnabled = (defaults.object(forKey: Keys.launchAtLoginEnabled) as? Bool) ?? false
+        // 默认开。⚠️ 只改这个兜底值是**不够**的:init() 里的赋值不触发 didSet,而真正去
+        // 注册登录项的是 didSet 里那句 LoginItemManager.setEnabled —— 光改这里会变成
+        // "开关显示开着、系统里其实没注册"的假象。补的那一步在
+        // AppDelegate.applicationDidFinishLaunching 里,两处必须一起看。
+        launchAtLoginEnabled = (defaults.object(forKey: Keys.launchAtLoginEnabled) as? Bool) ?? true
         launchMusicOnLyrimuseOpen = (defaults.object(forKey: Keys.launchMusicOnLyrimuseOpen) as? Bool) ?? false
         collectorServiceEnabled = (defaults.object(forKey: Keys.collectorServiceEnabled) as? Bool) ?? false
         showInDock = (defaults.object(forKey: Keys.showInDock) as? Bool) ?? true
@@ -389,6 +404,10 @@ final class AppSettings: ObservableObject {
         showNextLinePreview = (defaults.object(forKey: Keys.showNextLinePreview) as? Bool) ?? true
         showLyricsInMenuBar = (defaults.object(forKey: Keys.showLyricsInMenuBar) as? Bool) ?? false
         menuBarLyricsMaxChars = (defaults.object(forKey: Keys.menuBarLyricsMaxChars) as? Int) ?? 60
+        // 默认 200pt:大约中文 15 个字、英文 30 个字,菜单栏上占一小条,不至于把右边
+        // 其它 App 的图标挤走。
+        menuBarLyricsMaxWidth = CGFloat(
+            (defaults.object(forKey: Keys.menuBarLyricsMaxWidth) as? Double) ?? 200)
         menuBarLyricsScroll = (defaults.object(forKey: Keys.menuBarLyricsScroll) as? Bool) ?? true
         lyricsOffsetStepMs = (defaults.object(forKey: Keys.lyricsOffsetStepMs) as? Int) ?? 200
         textStrokeEnabled = (defaults.object(forKey: Keys.textStrokeEnabled) as? Bool) ?? ColorTheme.defaultTheme.textStrokeEnabled

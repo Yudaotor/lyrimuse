@@ -26,6 +26,25 @@ enum MenuBarMarqueeRenderer {
         return (text as NSString).size(withAttributes: [.font: font]).width
     }
 
+    /// 把文字按**宽度**截断,超出部分换成省略号。关掉滚动时用它。
+    ///
+    /// 按宽度而不是按字数逐字试,是因为字符宽度差得很远(同为 10 个字,中文 128pt、
+    /// 英文 65pt),按字数截出来的实际长度完全不受控。
+    static func truncate(_ text: String, toWidth limit: CGFloat) -> String {
+        guard limit > 0 else { return "" }
+        guard width(of: text) > limit else { return text }
+        let ellipsis = "…"
+        let ellipsisWidth = width(of: ellipsis)
+        var kept = ""
+        for ch in text {
+            let next = kept + String(ch)
+            if width(of: next) + ellipsisWidth > limit { break }
+            kept = next
+        }
+        // 一个字都放不下时也要给点东西,别返回空串(菜单栏上会变成一块什么都没有的空白)。
+        return kept.isEmpty ? ellipsis : kept + ellipsis
+    }
+
     /// 画一张宽度恒为 `width` 的模板图,文字整体向左偏移 `offset` 点。
     ///
     /// offset 只往左(取值 >= 0):跑马灯是"文字从右往左走过一个固定的窗口",窗口本身不动。

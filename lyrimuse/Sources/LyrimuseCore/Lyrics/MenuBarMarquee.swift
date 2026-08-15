@@ -13,43 +13,11 @@ import Foundation
 //
 // 纯函数、无状态,selftest 直接覆盖。
 public enum MenuBarMarquee {
-    // step 是"第几拍"(由调用方按固定间隔递增,见 MenuBarMarqueeTicker),holdSteps 是
-    // 首尾各停留几拍。返回这一拍应该显示的那一段文字。
-    //
-    // 一个完整周期:开头停 holdSteps 拍(让人先看清开头)→ 每拍右移一个字 → 末尾再停
-    // holdSteps 拍 → 回到开头循环。实际使用中歌词往往几秒就换一句、走不完一整个周期,
-    // 循环只是"万一这一句特别长又停留很久"时的兜底行为,不会卡在末尾不动。
-    //
-    // 按字符(Character)取窗而不是按字节/UTF-16 —— 中文/emoji 一个字符占多个码元,
-    // 按码元切会把一个字切成两半变成乱码。
-    public static func window(text: String, maxChars: Int, step: Int, holdSteps: Int) -> String {
-        guard maxChars > 0 else { return "" }
-        let chars = Array(text)
-        // 装得下就整句显示,不滚动——这时返回值恒定不变,发布端的"只在变化时才发布"
-        // 就天然不会产生任何多余刷新(见 MenuBarMarqueeTicker)。
-        guard chars.count > maxChars else { return text }
-        let maxOffset = chars.count - maxChars
-        // 下限取 1 而不是 0:配 0 的话下面 offset = s - hold + 1 会让第 0 拍就直接是
-        // offset 1,整句的开头永远不会露出来(实测这个边界确实会漏字)。"开头至少露一拍"
-        // 是这个函数的不变量,不接受被参数配没了;真想"不停留直接滚"也只是少停 0.25 秒,
-        // 传 0 和传 1 的观感差异可以忽略。
-        let hold = max(1, holdSteps)
-        let cycle = maxOffset + hold * 2
-        // cycle 恒 > 0(maxOffset >= 1),不用防除零。
-        let s = ((step % cycle) + cycle) % cycle // step 传负数也不会崩
-        let offset: Int
-        if s < hold {
-            offset = 0
-        } else if s < hold + maxOffset {
-            // +1:开头那一段停留(s < hold)本身就是在展示 offset 0,所以停留结束的第一拍
-            // 应该已经移动到 1 了。不 +1 的话 offset 0 会被多显示一拍,"停留 holdSteps
-            // 拍"就名不副实(实际停 holdSteps+1 拍)。
-            offset = s - hold + 1
-        } else {
-            offset = maxOffset
-        }
-        return String(chars[offset ..< offset + maxChars])
-    }
+    // 2026-08-15 删掉了原来那个按**字符**取窗的 window(text:maxChars:step:holdSteps:)。
+    // 它每 0.25 秒整体平移一个字(等于 4fps),而且窗口按字符数固定、字符宽度却差着一倍
+    // (中文 128pt vs 英文 65pt 同为 10 个字),菜单栏项因此跟着内容忽宽忽窄。取代它的是
+    // 按像素连续平移:偏移由下面的 scrollOffset 算,取窗/截断由 MenuBarMarqueeRenderer
+    // 按真实文字宽度做。两份实现不并存 —— 留着那个没人调的旧版只会让人以为还有第二条路。
 
     // ---- 像素级滚动 ----
     //
