@@ -17,6 +17,38 @@ import SwiftUI
 // safeAreaInset 上,高度一动整页就跳)、只订阅要用的那一两个 @Published(别 ObservedObject
 // 整个 PlaybackCoordinator)、自带不透明底色(inset 区域盖不到 ScrollView 的 background)。
 
+// 三段预览栏共用的外层度量。
+//
+// ⚠️ 高度必须**三段统一**。这一条钉在滚动区上方,它一变高变矮,下面整块内容就跟着上下
+// 跳一次 —— 而三条预览的自然高度差得很远(灵动岛那条要给刘海让位、还要给 hover 展开
+// 预留一截;菜单栏那条只有一行字),于是"点来点去整个框架一直在动"(2026-08-15 用户报的
+// 就是这个)。
+//
+// 取三条里最高的那条当基准,其余两条把多出来的空间留白。不写死数字,是因为悬浮歌词那条
+// 的卡片高度跟着字号走(见 OverlayPreviewBar.cardHeight),字号调大到一定程度它就会反超
+// 灵动岛那条。
+@MainActor
+enum SectionPreviewMetrics {
+    static let topPadding: CGFloat = 14
+    static let bottomPadding: CGFloat = 10
+    static let captionSpacing: CGFloat = 6
+    /// caption 那一行(.font(.caption))的行高经验值。
+    static let captionHeight: CGFloat = 15
+
+    /// 卡片之外的固定开销。
+    private static var chromeHeight: CGFloat {
+        topPadding + captionSpacing + captionHeight + bottomPadding
+    }
+
+    static var barHeight: CGFloat {
+        chromeHeight
+            + max(
+                OverlayPreviewBar.cardHeight,
+                NotchPreviewBar.cardHeight,
+                MenuBarPreviewBar.cardHeight)
+    }
+}
+
 /// 灵动岛预览用的 chrome:凑齐 NotchLyricsView 要的那几个属性,但不建窗口、不碰屏幕。
 ///
 /// ⚠️ 这个类存在的唯一理由,就是让预览**不去碰 NotchLyricsWindowController.shared**。
@@ -99,9 +131,16 @@ struct NotchPreviewBar: View {
     }
 
     /// 容器按**展开态**固定高。hover 展开时卡片会长高 40pt,容器高度要是跟着变,这条预览
-    /// 挂在 safeAreaInset 上就会把整页顶一下 —— OverlayPreviewBar 那边记过这个教训。
-    private var fullHeight: CGFloat {
-        chrome.contentTopInset + NotchMetrics.compactRowHeight + NotchMetrics.expandedExtraHeight
+    /// 就会把下面整页顶一下 —— OverlayPreviewBar 那边记过这个教训。
+    private var fullHeight: CGFloat { Self.cardHeight }
+
+    /// 这一条的卡片自然高度,供 SectionPreviewMetrics 取三条的最大值。
+    /// 用 static 是因为要在不构造视图的情况下问出来;刘海让位高度只跟屏幕有关,
+    /// 走的是不碰 .shared 的 static 几何函数(理由见 NotchPreviewChrome)。
+    static var cardHeight: CGFloat {
+        let inset = NotchLyricsWindowController.targetScreen()
+            .map { NotchLyricsWindowController.geometry(for: $0).notchHeight } ?? 32
+        return inset + NotchMetrics.compactRowHeight + NotchMetrics.expandedExtraHeight
     }
 
     // 宽度滑杆能拖到 500,超过预览区就整体等比缩小 —— 这样"宽度"这一项在预览里看得见。
@@ -139,8 +178,10 @@ struct NotchPreviewBar: View {
                 .foregroundStyle(.secondary)
                 .monospacedDigit()
         }
-        .padding(.top, 14)
-        .padding(.bottom, 10)
+        .padding(.top, SectionPreviewMetrics.topPadding)
+        .padding(.bottom, SectionPreviewMetrics.bottomPadding)
+        // 三条预览栏共用一个高度,切段时这一条不能变高变矮(见 SectionPreviewMetrics)。
+        .frame(height: SectionPreviewMetrics.barHeight)
         .frame(maxWidth: .infinity)
         .background(Color(nsColor: .windowBackgroundColor))
         .onReceive(
@@ -177,6 +218,9 @@ struct MenuBarPreviewBar: View {
 
     private var truncated: Bool { fullText.count > settings.menuBarLyricsMaxChars }
 
+    /// 那一小段仿菜单栏(一行 13pt 字 + 上下各 5pt 内边距 + 圆角条)的高度。
+    static var cardHeight: CGFloat { 26 }
+
     var body: some View {
         VStack(spacing: 6) {
             // 仿一小段菜单栏:圆角条 + 音符图标 + 那行字。用系统菜单栏字号(13),
@@ -209,8 +253,11 @@ struct MenuBarPreviewBar: View {
             .foregroundStyle(.secondary)
             .monospacedDigit()
         }
-        .padding(.top, 14)
-        .padding(.bottom, 10)
+        .padding(.top, SectionPreviewMetrics.topPadding)
+        .padding(.bottom, SectionPreviewMetrics.bottomPadding)
+        // 三条预览栏共用一个高度(见 SectionPreviewMetrics)。这一条内容最少,多出来的
+        // 空间留白 —— 留白远好过让下面整页跟着跳。
+        .frame(height: SectionPreviewMetrics.barHeight)
         .frame(maxWidth: .infinity)
         .background(Color(nsColor: .windowBackgroundColor))
         .onReceive(PlaybackCoordinator.shared.$currentLine.removeDuplicates()) { line = $0 }

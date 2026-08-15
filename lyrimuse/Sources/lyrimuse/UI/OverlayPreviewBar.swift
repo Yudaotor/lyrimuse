@@ -39,7 +39,7 @@ struct OverlayPreviewBar: View {
     // 常量,取不到,只能同步一份)。改那边记得改这里。
     private let overlayCornerRadius: CGFloat = 16
     // 预览条允许占用的最大宽度。比卡片列(600)窄一点,两侧留出呼吸。
-    private let maxPreviewWidth: CGFloat = 520
+    private var maxPreviewWidth: CGFloat { Self.maxPreviewWidthShared }
 
     // 真窗口多宽就按多宽画,放不下时整体等比缩小 —— 这样拖"宽度"滑杆在预览里是看得见的。
     private var scale: CGFloat {
@@ -48,7 +48,21 @@ struct OverlayPreviewBar: View {
 
     // 一行主歌词的高度按字号推,不去实测 —— 见类型注释里"高度必须固定"那一段。
     // 1.5 是行高系数,上下各 14 是仿真窗口的内边距。
-    private var contentHeight: CGFloat { settings.fontSize * 1.5 + 28 }
+    private var contentHeight: CGFloat { Self.rawCardHeight }
+
+    /// 缩放前的卡片高度。
+    static var rawCardHeight: CGFloat { AppSettings.shared.fontSize * 1.5 + 28 }
+
+    /// 这一条实际占的卡片高度(已含等比缩小),供 SectionPreviewMetrics 取三条的最大值。
+    /// 它跟着字号走,所以那个统一高度不能写成一个死数字。
+    static var cardHeight: CGFloat {
+        let settings = AppSettings.shared
+        let scale = min(1, maxPreviewWidthShared / max(settings.overlayWidth, 1))
+        return rawCardHeight * scale
+    }
+
+    /// 见下面实例属性 maxPreviewWidth 的注释,同一个值。
+    static let maxPreviewWidthShared: CGFloat = 520
 
     // 没在播放(或这首歌没解析出歌词)时给一句示例,而不是留白:留白的话文字颜色/字体/
     // 描边这几项就全都预览不到了,而那恰恰是最需要预览的几项。
@@ -80,8 +94,10 @@ struct OverlayPreviewBar: View {
             preview
             caption
         }
-        .padding(.top, 14)
-        .padding(.bottom, 10)
+        .padding(.top, SectionPreviewMetrics.topPadding)
+        .padding(.bottom, SectionPreviewMetrics.bottomPadding)
+        // 三条预览栏共用一个高度,切段时这一条不能变高变矮(见 SectionPreviewMetrics)。
+        .frame(height: SectionPreviewMetrics.barHeight)
         .frame(maxWidth: .infinity)
         // ⚠️ 必须自带不透明底色。这块是挂在 safeAreaInset 上的,而 SettingsPage 的
         // .background(windowBackgroundColor) 只铺在 ScrollView 上、盖不到 inset 区域 ——
