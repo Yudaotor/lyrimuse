@@ -308,6 +308,7 @@ const (
 	scoreTermDuration     = "duration"     // 末尾时间戳跟曲长吻合的程度
 	scoreTermCorroborated = "corroborated" // 时长对不上,但别的源印证了同一个结束点
 	scoreTermWordTiming   = "wordTiming"   // 带逐字时间轴
+	scoreTermNativeSource = "nativeSource" // 跟当前播放器同源
 	scoreTermSource       = "source"       // 来源本身的可靠度
 	scoreTermLines        = "lines"        // 行数(封顶 200)
 	scoreTermVersionTags  = "versionTags"  // 版本限定词对不上,重扣
@@ -345,6 +346,28 @@ const (
 	// 常量留着是因为缓存/界面可能还遇得到老数据。
 	scoreRejectDurationMismatch = "rejectDurationMismatch"
 )
+
+// nativeLyricSource 是「当前播放器自家的歌词源」("qq"/"netease"),main() 按
+// features.Player 设一次;识别不出(Apple Music / Spotify / auto)就留空,不加分。
+//
+// 跟 features 同款的包级变量而不是打分函数的参数:打分函数已经有 7 个参数,再加一个
+// 会让每个调用点都得关心一件跟它无关的事。测试里直接赋值即可。
+var nativeLyricSource string
+
+// playerNativeLyricSource 把播放器映射成它自家的歌词源。
+//
+// Apple Music / Spotify 不在此列 —— 它们**不是**这套里的歌词源(我们从没从它们那儿抓过
+// 歌词),没有"同源"可言。auto 同理:识别不出用户在用哪个播放器,就不该瞎猜。
+func playerNativeLyricSource(player string) string {
+	switch player {
+	case playerQQMusic:
+		return "qq"
+	case playerNetease:
+		return "netease"
+	default:
+		return ""
+	}
+}
 
 func scoreLyricCandidate(
 	localArtist, localTitle, localAlbum string, durationSecs float64,
@@ -411,6 +434,26 @@ func scoreLyricCandidateDetailed(
 	}
 	if c.hasWordTiming {
 		add(scoreTermWordTiming, 400) // 跟"一档时长差距"同量级,让带逐字时间轴的候选能逆转
+	}
+	if nativeLyricSource != "" && c.source == nativeLyricSource {
+		// 跟当前播放器同源的歌词加分。
+		//
+		// 理由是**时间轴**,不是内容质量:同一个平台的歌词是对着同一个音频母版对的轴,
+		// 时间戳天然吻合;跨平台的版本差异(前奏长短、母带版本)正是"整句慢半个字"的来源。
+		// 2026-08-15 实测:用户放着 QQ 音乐听周杰伦《太阳之子》,这套打分给他配了酷狗那份
+		// (酷狗有逐字 +400 直接压过 QQ),整行比 QQ 自己的歌词界面慢半个字左右。
+		//
+		// ⚠️ 这**不是**在把 2026-08-09 删掉的那个"按来源加 10~50 分"改头换面加回来。
+		// 那一个是**静态**来源偏好(网易云一律加分),跟用户在放什么无关;这一个是**动态**的
+		// (放 QQ 音乐才偏向 QQ)。更要紧的是两者衡量的维度不同:那次消融实验的判据是
+		// 「跨源内容一致性」,测的是歌词**文本**对不对,而这一项修的是**时间轴对不对齐音频**
+		// —— 那次实验根本没测过这个维度,它的结论(0 次变对/6 次变错)管不到这里。
+		//
+		// 权重取 250 而不是 400:压不过逐字时间轴那一档是**故意的**。同源只说明"轴大概率
+		// 更准",不说明歌词本身完整正确 —— 给到 400 就会让一份行数残缺的同源歌词赢过完整
+		// 的跨源歌词,那正是 08-09 那次翻车的形态。250 的作用是在质量接近时扭转结果,
+		// 不是碾压质量差距。
+		add(scoreTermNativeSource, 250)
 	}
 	// ⚠️ 这里曾经按来源加 10~50 分。2026-08-09 实测把它删掉了 —— 250 首抽样、751 条候选、
 	// 以「跨源内容一致性」为准的消融实验结论:

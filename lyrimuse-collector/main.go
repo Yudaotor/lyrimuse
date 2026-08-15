@@ -122,6 +122,9 @@ func main() {
 	// (没有文件监听,改了要重启才生效,跟 config.json/enrichCache 同一套约定)。放在
 	// loadEnrichCache 之前——下面读 features.LyricsDir 要用到。
 	features = loadFeatureFlags(filepath.Join(filepath.Dir(*cfgPath), clientName+"-features.json"))
+	// 歌词打分要知道"用户在放哪个播放器",好偏向那个平台自家的歌词(时间轴对得上同一个
+	// 音频母版)。跟 features 一样只在启动时设一次 —— 换播放器本来就要重启 collector。
+	nativeLyricSource = playerNativeLyricSource(features.Player)
 	// 曲目元信息缓存落盘在 config 同目录，重启后不重解析同一首歌。
 	loadEnrichCache(filepath.Join(filepath.Dir(*cfgPath), clientName+"-enrich-cache.json"))
 	// 按歌手(不是按曲目)缓存的 MusicBrainz 中文别名查询结果,同目录下单独一份文件——
