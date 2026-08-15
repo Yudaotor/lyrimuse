@@ -630,13 +630,31 @@ struct AccountLinkingTab: View {
                         ForEach(items, id: \.uts) { item in
                             let hovered = hoveredPendingUTS == item.uts
                             HStack(spacing: 6) {
+                                // 三段的布局优先级是**故意**排开的:空间不够时先牺牲专辑,
+                                // 再牺牲歌手,歌名最后才截。清单里有 "愛愛愛 (Acounstic
+                                // Version) - Remix Acoustic Verison" 这种长到离谱的标题,
+                                // 不排优先级的话 SwiftUI 会均摊压缩,几段一起变成省略号。
                                 Text(item.title)
                                     .font(.caption)
                                     .lineLimit(1)
+                                    .layoutPriority(2)
                                 Text(item.artist)
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                                     .lineLimit(1)
+                                    .layoutPriority(1)
+                                // 专辑是**会被真提交给 Last.fm 的字段**(listenLogLine.AL 进
+                                // scrobble 请求),这份清单的作用就是"连上之后会补交什么",
+                                // 所以它该看得见 —— 提交前发现专辑名不对,这里是唯一的机会。
+                                //
+                                // ⚠️ 它帮不了"两条看起来一模一样"的情况:那多半是同一首歌
+                                // 听了两遍,专辑当然也一样,区分它们的只有时间。
+                                if let album = item.album, !album.isEmpty {
+                                    Text(album)
+                                        .font(.caption)
+                                        .foregroundStyle(.tertiary)
+                                        .lineLimit(1)
+                                }
                                 Spacer(minLength: 8)
                                 Text(Self.listenTimeText(item.uts))
                                     .font(.caption2)
