@@ -2222,40 +2222,29 @@ private struct AboutSettingsTab: View {
 }
 
 
-/// 设置窗口的 NSWindow 收尾配置。
+/// 设置窗口的 NSWindow 收尾配置:让它能被拖大。
 ///
-/// SwiftUI 的 Settings scene 给这个窗口打了 `.auxiliary`(实测 collectionBehavior=131584
-/// = auxiliary | fullScreenNone)。`.auxiliary` 的语义是"辅助窗口,跟随 App 的**主窗口**
-/// 跨 Space 和显示器" —— 而 Lyrimuse 是 accessory(没有 Dock 图标,压根不存在主窗口),
-/// 这个窗口于是没有可跟随的对象。用户报的"设置页面没法移动到另一块屏幕上"就是这个状态下
-/// 的表现。改标成 `.primary`:它事实上就是这个 App 唯一的主要窗口。
+/// SwiftUI 给 Settings scene 的 styleMask 里**没有** .resizable(实测 32771 =
+/// titled | closable | fullSizeContentView),所以这个窗口原本一格也拉不动,SettingsView
+/// 上声明的 idealHeight 只决定它开出来多大。而「外观」页顶上钉着 205pt 的固定头部,
+/// 窗口拉不高的话滚动区就一直很憋屈。
 ///
-/// ⚠️ 只动这一位,不碰 level/styleMask/isMovable —— 实测那几项本来就是正常的
-/// (isMovable=true、level=0、titled=true),问题只在这一个归类标记上。
+/// ⚠️ scene 修饰符 .windowResizability(.contentMinSize) 对 Settings scene 无效
+/// (实测加上之后 styleMask 纹丝不动),只能在 NSWindow 这一层开。缩放下限仍由
+/// SettingsView 上声明的 minWidth/minHeight 兜着。
+///
+/// ⚠️ 这里**只**动 styleMask。2026-08-15 排查"设置窗口拖不到另一块屏"时,曾顺手把
+/// collectionBehavior 的 .auxiliary 改成 .primary、.fullScreenNone 改成
+/// .fullScreenPrimary,还开了 isMovableByWindowBackground —— 后来查明那个问题跟这个窗口
+/// 毫无关系(用户那块屏当时有 App 处于全屏,全屏 Space 本来就不接受任何窗口拖入,换别的
+/// App 一样进不去),那几项改动因此全部撤回。留着不痛不痒的改动等于给后来的人埋假线索:
+/// 它们看着像是在解决某个问题,其实什么问题都没解决。
 struct SettingsWindowConfigurator: NSViewRepresentable {
     func makeNSView(context: Context) -> NSView {
         let view = NSView()
         // 视图刚建好时还没挂进窗口,拿不到 window,推迟到下一个 runloop。
         DispatchQueue.main.async {
-            guard let window = view.window else { return }
-            window.collectionBehavior.remove(.auxiliary)
-            window.collectionBehavior.insert(.primary)
-            // 顺带让它能被拖大。SwiftUI 给 Settings scene 的 styleMask 里**没有**
-            // .resizable(实测 32771 = titled|closable|fullSizeContentView),于是上面
-            // 声明的 idealHeight 只决定开出来多大、用户一格也拉不动 —— 而「外观」页顶上
-            // 钉着 205pt 的固定头部,拉不高的话滚动区就一直很憋屈。
-            // ⚠️ scene 修饰符 .windowResizability(.contentMinSize) 对 Settings scene
-            // 无效(实测加上之后 styleMask 纹丝不动),只能在 NSWindow 这一层开。
-            // 缩放下限仍由 SettingsView 上声明的 minWidth/minHeight 兜着。
-            window.styleMask.insert(.resizable)
-            // SwiftUI 还给它设了 .fullScreenNone(不参与全屏)。设置窗口全不全屏无所谓,
-            // 但"非标准的窗口归类"正是这次要排除的东西 —— 一并恢复成普通主窗口的样子。
-            window.collectionBehavior.remove(.fullScreenNone)
-            window.collectionBehavior.insert(.fullScreenPrimary)
-            // 内容铺到了标题栏区域(fullSizeContentView)。实测标题栏那一条 hitTest 命中的
-            // 确实还是 NSTitlebarView、可拖区域没被吃掉,但多这一条只有好处:点在任何
-            // **非交互**的空白上拖,都能直接拖动窗口。
-            window.isMovableByWindowBackground = true
+            view.window?.styleMask.insert(.resizable)
         }
         return view
     }
