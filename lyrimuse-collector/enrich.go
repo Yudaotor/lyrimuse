@@ -3,6 +3,7 @@
 package main
 
 import (
+	"slices"
 	"encoding/json"
 	"fmt"
 	_ "image/jpeg" // 注册 JPEG 解码器
@@ -397,7 +398,25 @@ func lyricsUpgradeBaseline(e enrichEntry, scored []scoredLyricCandidateResult) (
 }
 
 func needsLyricsRetry(e enrichEntry) bool {
-	if e.Lyrics == "" || e.LyricsYRC != "" {
+	if e.Lyrics == "" {
+		return false
+	}
+	// 换了播放器(或同源加权刚上线):这首歌当初**见过**当前播放器自家那个源的候选,却选了
+	// 别家 —— 按新规则它多半该翻盘,给一次重来的机会。
+	//
+	// ⚠️ 这一条必须排在下面"已经有逐字就不重试"**之前**。2026-08-15 实测:用户放 QQ 音乐
+	// 听《太阳之子》,缓存里是酷狗那份、而酷狗那份正好带逐字,于是被那道闸原地挡死 ——
+	// 同源加权对**所有存量歌词**等于没上线,只有以后新解析的歌才享受得到。
+	//
+	// 判据只用缓存里已有的两个字段(LyricsSource + LyricsSourcesSeen),所以**不需要**把
+	// 播放器加进缓存 key。加进 key 的话,换一次播放器全部歌词集体失效、每首都要重打四个源;
+	// 而真正该重来的只是"当初见过同源候选却没选它"的那一小撮。
+	//
+	// 下面的手改保护/重试上限/时间节流照常生效 —— 同源候选要是每次都赢不了(比如它质量
+	// 实在差,250 分也翻不过来),重试次数上限会兜住,不会没完没了地重搜。
+	nativeMissedOut := nativeLyricSource != "" && e.LyricsSource != nativeLyricSource &&
+		slices.Contains(e.LyricsSourcesSeen, nativeLyricSource)
+	if e.LyricsYRC != "" && !nativeMissedOut {
 		return false
 	}
 	// 用户手改过的绝不自动重搜,理由见 ManualLyrics 字段的注释。这道闸 2026-08-07 补上:

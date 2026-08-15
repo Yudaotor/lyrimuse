@@ -58,3 +58,46 @@ func TestPlayerNativeLyricSource(t *testing.T) {
 		}
 	}
 }
+
+// 换播放器后，"当初见过同源候选却没选它"的歌该获得一次重来的机会 —— 哪怕它已经有逐字。
+func TestNeedsLyricsRetry_NativeSourceMissedOut(t *testing.T) {
+	saved := nativeLyricSource
+	t.Cleanup(func() { nativeLyricSource = saved })
+	nativeLyricSource = "qq"
+
+	// 用户那首歌的形态：选了酷狗（带逐字），而 QQ 当初也答过。
+	missed := enrichEntry{
+		Lyrics: "[00:01.00]x", LyricsYRC: "[1,2](1,1,0)x",
+		LyricsSource: "kugou", LyricsSourcesSeen: []string{"kugou", "qq", "lrclib"},
+	}
+	if !needsLyricsRetry(missed) {
+		t.Error("见过同源候选却没选它，该重试（这正是被『有逐字就不重试』挡死的那种）")
+	}
+
+	// 已经就是同源 → 没什么可换的。
+	already := missed
+	already.LyricsSource = "qq"
+	if needsLyricsRetry(already) {
+		t.Error("已经是同源，不该重试")
+	}
+
+	// 同源当初压根没答过 → 重搜也变不出来。
+	unseen := missed
+	unseen.LyricsSourcesSeen = []string{"kugou", "lrclib"}
+	if needsLyricsRetry(unseen) {
+		t.Error("同源没出现过，不该为它重试")
+	}
+
+	// ⚠️ 最要紧：用户手改过的绝不能被这条新路径重搜覆盖掉 —— 那是缓存里唯一不可恢复的东西。
+	manual := missed
+	manual.ManualLyrics = true
+	if needsLyricsRetry(manual) {
+		t.Error("手改过的歌词绝不能重搜")
+	}
+
+	// 识别不出播放器时，行为跟改动前一致（有逐字就不重试）。
+	nativeLyricSource = ""
+	if needsLyricsRetry(missed) {
+		t.Error("没有 native 源时该维持原行为")
+	}
+}
