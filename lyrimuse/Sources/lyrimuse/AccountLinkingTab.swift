@@ -609,7 +609,21 @@ struct AccountLinkingTab: View {
     private var pendingListensRow: some View {
         let items = backfill.pending?.items ?? []
         SettingsRawRow(insetToText: true) {
-            DisclosureGroup(isExpanded: $pendingListensExpanded) {
+            // ⚠️ 展开/收起必须走**显式动画事务**,不能把 $pendingListensExpanded 直接绑上去。
+            //
+            // 直接绑的话,点一下清单瞬间多出一百多 pt,外层那个 GlassEffectContainer
+            // (见 SettingsGlassContainer)的几何随之突变、玻璃折射区域被要求在同一帧内
+            // 重算 —— 用户看到的就是"整个页面抖一下"。
+            //
+            // 包进 withAnimation 之后高度是渐变的,玻璃跟着逐帧重算,没有那一下跳变。
+            // 这也正是本项目已有的约定,见 Animation.settingsCardReveal 的注释:
+            // "必须在改状态那一处用 withAnimation 显式包起来"。这处原来是个例外。
+            DisclosureGroup(isExpanded: Binding(
+                get: { pendingListensExpanded },
+                set: { expanded in
+                    withAnimation(.settingsCardReveal) { pendingListensExpanded = expanded }
+                }
+            )) {
                 // 高度封顶 + 自己滚:清单可能几十上百条,不能让它无限撑高这张卡。
                 ScrollView {
                     VStack(alignment: .leading, spacing: 4) {
