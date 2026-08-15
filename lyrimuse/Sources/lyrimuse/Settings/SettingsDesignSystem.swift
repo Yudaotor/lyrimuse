@@ -283,10 +283,15 @@ struct SettingsPageWithStickyHeader<Header: View, Page: View>: View {
         VStack(spacing: 0) {
             header()
                 .frame(maxWidth: .infinity)
-                // 头部自带不透明底色 + 一条分隔线。各个预览条原来各画各的 Divider,统一收到
-                // 这里 —— 没有预览的那几段(「其它」/歌词页)才不会缺一条线。
+                // 头部自带不透明底色。
                 .background(Color(nsColor: .windowBackgroundColor))
-                .overlay(alignment: .bottom) { Divider() }
+            // 写成 VStack 的子项而不是 header 的 .overlay(alignment: .bottom) —— 两者
+            // 渲染结果实测一致(离线渲染对比过,overlay 里的 Divider 同样是横线,并不会像
+            // 一度怀疑的那样变成竖线),但子项这个写法把"它占一行高度"说清楚了,不用去想
+            // overlay 会不会盖住底下那一行。
+            // 各个预览条原来各画各的 Divider,统一收到这里 —— 没有预览的那几段(「其它」/
+            // 歌词页)才不会缺一条线。
+            Divider()
             page()
         }
     }

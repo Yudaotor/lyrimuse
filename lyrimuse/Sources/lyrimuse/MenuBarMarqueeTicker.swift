@@ -50,6 +50,10 @@ final class MenuBarMarqueeTicker: ObservableObject {
     private var lineStartedAt: CFTimeInterval = CACurrentMediaTime()
     private var lastRenderedOffset: CGFloat = -1
     private var lastRenderedText: String = ""
+    // 这一句的滚动参数算一次就够:它只跟"哪一句 + 显示宽度 + 滚动开关"有关,而那三样一变
+    // 都会走 restartLine()。以前每帧都重算,里面有两次 NSString 文字测量(其中一次量的是
+    // **整句**),30fps 下纯属白烧。
+    private var cachedPlan: ScrollPlan?
     private var cancellables: [AnyCancellable] = []
     private var started = false
 
@@ -95,6 +99,7 @@ final class MenuBarMarqueeTicker: ObservableObject {
 
     /// 这一句从头开始滚(换句、改了滚动开关或显示宽度)。
     private func restartLine() {
+        cachedPlan = nil
         lineStartedAt = CACurrentMediaTime()
         lastRenderedOffset = -1
         lastRenderedText = ""
@@ -136,6 +141,13 @@ final class MenuBarMarqueeTicker: ObservableObject {
     }
 
     private func currentScrollPlan() -> ScrollPlan? {
+        if let cachedPlan { return cachedPlan }
+        let plan = computeScrollPlan()
+        cachedPlan = plan
+        return plan
+    }
+
+    private func computeScrollPlan() -> ScrollPlan? {
         let settings = AppSettings.shared
         guard settings.menuBarLyricsScroll else { return nil }
         let full = PlaybackCoordinator.shared.currentLine?.plainText ?? ""

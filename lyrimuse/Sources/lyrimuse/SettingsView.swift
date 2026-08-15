@@ -303,24 +303,19 @@ private struct LyricsSettingsTab: View {
     private var section: Section { Section(rawValue: sectionRaw) ?? .fetch }
 
     var body: some View {
-        // 分段选择器钉在顶上,不跟着内容滚 —— 它是这一页的导航,滚下去之后还得先滚回顶部
-        // 才能换段是说不通的。理由详见 SettingsPageWithStickyHeader。
-        SettingsPageWithStickyHeader {
+        // 这一页没有预览条,也就不需要固定头部;分段选择器跟「外观」页一样留在滚动区
+        // (理由见那一页 header 上的注释)。
+        SettingsPage(
+            title: L10n.t("歌词"),
+            subtitle: L10n.t("让每首歌都有一份对得上的歌词")
+        ) {
             sectionPicker
-                .padding(.top, 12)
-                .padding(.bottom, 10)
-        } page: {
-            SettingsPage(
-                title: L10n.t("歌词"),
-                subtitle: L10n.t("让每首歌都有一份对得上的歌词")
-            ) {
-                // 切段用纯淡入淡出,不用卡片那套 .settingsCard(带从顶边缩放):那个是"这一行
-                // 下面长出一张卡"的语义,整页换内容时会像整块东西塌下去。时长也短一截 ——
-                // 分段切换在用户心里等同于换标签页,该是即时的。
-                currentSection
-                    .id(section)
-                    .transition(.opacity)
-            }
+            // 切段用纯淡入淡出,不用卡片那套 .settingsCard(带从顶边缩放):那个是"这一行
+            // 下面长出一张卡"的语义,整页换内容时会像整块东西塌下去。时长也短一截 ——
+            // 分段切换在用户心里等同于换标签页,该是即时的。
+            currentSection
+                .id(section)
+                .transition(.opacity)
         }
         .id(L10n.current)
     }
@@ -846,28 +841,33 @@ private struct AppearanceSettingsTab: View {
         // 可看。灵动岛和菜单栏**不能**共用 OverlayPreviewBar —— 那条画的是悬浮歌词的
         // 字体/颜色,而这两个形态压根不读那些字段,各自的预览见 SectionPreviewBars。
         SettingsPageWithStickyHeader {
-            VStack(spacing: 0) {
-                sectionPicker
-                    .padding(.top, 12)
-                    .padding(.bottom, 8)
-                // 每一段挂**自己那一段**的预览。
-                //
-                // 2026-08-15:原来只有悬浮歌词有预览,而且还跟开关联动(关着就不显示)。两处都改:
-                //   - 灵动岛/菜单栏各自有了反映自己设置的预览,不再是"这两段没什么可预览的"。
-                //   - 不再看开关:配置卡现在关着也能调(见 currentSection),预览要是还跟着开关
-                //     藏起来,调的时候就又看不见效果了。
-                switch section {
-                case .overlay: OverlayPreviewBar()
-                case .notch: NotchPreviewBar()
-                case .menuBar: MenuBarPreviewBar()
-                case .other: EmptyView()
-                }
+            // 每一段挂**自己那一段**的预览。
+            //
+            // 2026-08-15:原来只有悬浮歌词有预览,而且还跟开关联动(关着就不显示)。两处都改:
+            //   - 灵动岛/菜单栏各自有了反映自己设置的预览,不再是"这两段没什么可预览的"。
+            //   - 不再看开关:配置卡现在关着也能调(见 currentSection),预览要是还跟着开关
+            //     藏起来,调的时候就又看不见效果了。
+            //
+            // ⚠️ 分段选择器**不能**放进这个固定头部,尽管"页级导航不该跟内容滚"听起来更对。
+            // 2026-08-15 实测(逐层 hitTest 二分):只要这个头部里出现 NotchPreviewBar,
+            // 整个头部的 hitTest 就停在最外层的 NSHostingView 上、不再下钻到 AppKit 控件,
+            // 于是同处一个头部的分段选择器整排点不动。换成等高的纯色块立刻恢复正常,
+            // 逐项排除后指向 NotchPreviewBar 内部那份真实的 NotchLyricsView(它带 .onHover、
+            // 手势和 TimelineView)让 SwiftUI 改变了这一层的事件派发策略 —— 这是 SwiftUI
+            // 内部行为,绕不过去。选择器因此留在滚动区(那边是另一个 hosting view,实测
+            // 命中正常),代价是滚下去之后要滚回顶部才能换段。
+            switch section {
+            case .overlay: OverlayPreviewBar()
+            case .notch: NotchPreviewBar()
+            case .menuBar: MenuBarPreviewBar()
+            case .other: EmptyView()
             }
         } page: {
             SettingsPage(
                 title: L10n.t("外观"),
                 subtitle: L10n.t("四种展示方式可以同时开启")
             ) {
+                sectionPicker
                 currentSection
                     .id(section)
                     .transition(.opacity)
