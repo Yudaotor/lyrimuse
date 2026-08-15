@@ -109,8 +109,15 @@ public final class LyricsSyncEngine {
     // 混音版署名常见,比如"Arranged by："中间夹着"by"的写法要求关键词紧跟冒号的正则会
     // 漏判,导致整行十几个人名被当成一整行歌词展示,词数远超真实歌词,把悬浮窗的动态高度
     // ——见 LyricsOverlayWindowController.updateHeight——撑到远超正常高度)。
+    //
+    // ⚠️ 关键词可以**连写**(那个 `+`),这是 2026-08-15 补的第四轮:「词曲：蔡徐坤 KUN/…」
+    // 一路漏到悬浮窗上。原来的写法要求关键词紧跟冒号,而"词曲"是两个关键词连在一起,
+    // "词"后面是"曲"不是冒号,于是整条不匹配。同形状的还有「作词作曲：」「词 曲 编：」。
+    // 下面那条结构化规则本可以兜住它,但那条只在整份被职员表主导时才启用(见
+    // shouldApplyStructuralCreditFilter),单独几行署名的歌就漏了。
+    // 连写不会扩大误杀面:表里全是明确的角色名,连着出现只会更像署名行,不会更像歌词。
     private static let creditLinePattern = try! NSRegularExpression(
-        pattern: #"^(作词|作曲|编曲|制作人|监制|混音|录音|和声|吉他|贝斯|鼓|键盘|弦乐|词|曲|编|唱|录|混|监|OP|SP|lyrics|music|composed|produced|arranged|mixed|mastered|written)\s*(by\s*)?[:：]"#,
+        pattern: #"^((作词|作曲|编曲|制作人|监制|混音|录音|和声|吉他|贝斯|鼓|键盘|弦乐|词|曲|编|唱|录|混|监|OP|SP|lyrics|music|composed|produced|arranged|mixed|mastered|written)\s*)+(by\s*)?[:：]"#,
         options: [.caseInsensitive]
     )
 

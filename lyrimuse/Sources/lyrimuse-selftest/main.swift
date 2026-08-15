@@ -1868,6 +1868,38 @@ do {
     expectEqual(offset(2.0), offset(2.0), "像素滚动: 纯函数,同输入同输出")
 }
 
+// ---- 署名行:关键词连写 ----
+do {
+    // 2026-08-15 用户实测漏网的形状：「词曲：蔡徐坤 KUN/Marco Bernardis/…」被当歌词
+    // 显示在悬浮窗上。旧正则要求关键词紧跟冒号，而"词曲"是两个关键词连着写。
+    let engine = LyricsSyncEngine()
+    engine.load(
+        lyrics: """
+        [00:01.00]词曲：蔡徐坤 KUN/Marco Bernardis
+        [00:02.00]作词作曲：某某某
+        [00:03.00]词 曲 编：三个连写还带空格
+        [00:04.00]他说：我不走
+        [00:05.00]真正的歌词在这里
+        [00:06.00]又一句歌词
+        [00:07.00]再来一句
+        [00:08.00]还有一句
+        """,
+        lyricsTr: "", lyricsRoma: "", lyricsYRC: "")
+    expectEqual(engine.activeLine(atMs: 1500)?.mainText, nil, "署名行: 「词曲：」连写被过滤")
+    expectEqual(engine.activeLine(atMs: 2500)?.mainText, nil, "署名行: 「作词作曲：」被过滤")
+    expectEqual(engine.activeLine(atMs: 3500)?.mainText, nil, "署名行: 「词 曲 编：」带空格连写被过滤")
+    // ⚠️ 反例最要紧：带冒号的真歌词不能跟着一起被删掉。
+    //
+    // 后面那三句普通歌词是**必须**的，不是凑数：整份粒度的结构化规则(1~8 个汉字 + 冒号)
+    // 在"命中 >= 3 行且过半"时才启用，而「他说：」正好长这个形状。只写 5 行的话署名行
+    // 就把整份主导了，结构化规则一开，这句真歌词会被连坐删掉 —— 那是既有设计的取舍，
+    // 不是这次要测的东西。补足真歌词行让比例回到真实歌曲的样子(一两行署名 + 一堆歌词)，
+    // 这条断言才是在单独考"关键词连写"那一条规则。
+    expectEqual(engine.activeLine(atMs: 4500)?.mainText, "他说：我不走",
+                "署名行: 带冒号的真歌词不被误杀")
+    expectEqual(engine.activeLine(atMs: 5500)?.mainText, "真正的歌词在这里", "署名行: 真歌词保留")
+}
+
 if failures == 0 {
     print("\nALL PASS")
 } else {
