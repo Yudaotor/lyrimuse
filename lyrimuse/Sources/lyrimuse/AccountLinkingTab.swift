@@ -838,14 +838,27 @@ struct AccountLinkingTab: View {
                 Text(L10n.t("下面的「连接」要用这对密钥完成授权：先在 Last.fm 创建一个应用，拿到 API Key 和 Secret"))
                     .font(.callout).foregroundStyle(.secondary)
                 Spacer()
-                // 不是纯 Link:打开申请页的同时展开下面那条"怎么填"。申请页在登录墙
-                // 后面、不支持 URL 参数预填(2026-08-11 实测:未登录 302 到 /login),
-                // 帮用户填表做不到,能做的是把"该填什么"送到眼前。
-                Button(L10n.t("前往申请")) {
-                    NSWorkspace.shared.open(URL(string: "https://www.last.fm/api/account/create")!)
-                    withAnimation { showLastfmApplyHint = true }
+                VStack(alignment: .trailing, spacing: 2) {
+                    // 不是纯 Link:打开申请页的同时展开下面那条"怎么填"。申请页在登录墙
+                    // 后面、不支持 URL 参数预填(2026-08-11 实测:未登录 302 到 /login),
+                    // 帮用户填表做不到,能做的是把"该填什么"送到眼前。
+                    Button(L10n.t("前往申请")) {
+                        NSWorkspace.shared.open(URL(string: "https://www.last.fm/api/account/create")!)
+                        withAnimation { showLastfmApplyHint = true }
+                    }
+                    .buttonStyle(.link)
+                    // 重装/重置配置/换机器之后要重新填这对密钥,而这些人**早就创建过应用**
+                    // 了 —— 只给"前往申请"的话他们只能再建一个重复的。这个入口必须常驻:
+                    // 上面那条"怎么填"的提示要点过「前往申请」才展开,而他们恰恰不会点它。
+                    // /api/accounts 是 Last.fm 的"我的 API 应用"列表(2026-08-15 实测:
+                    // 未登录 302 到 /login,页面存在;/api/account 不带 s 是 404)。
+                    Button(L10n.t("查看已有应用")) {
+                        NSWorkspace.shared.open(URL(string: "https://www.last.fm/api/accounts")!)
+                    }
+                    .buttonStyle(.link)
+                    .font(.caption)
+                    .help(L10n.t("之前创建过就从这里找回：列表里点应用名，页面上就有 API Key 和 Shared Secret"))
                 }
-                .buttonStyle(.link)
             }
             if showLastfmApplyHint {
                 HStack(spacing: 8) {
