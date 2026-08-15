@@ -17,35 +17,94 @@ import SwiftUI
 // safeAreaInset 上,高度一动整页就跳)、只订阅要用的那一两个 @Published(别 ObservedObject
 // 整个 PlaybackCoordinator)、自带不透明底色(inset 区域盖不到 ScrollView 的 background)。
 
-/// 灵动岛那一段的预览:按当前「风格」和「宽度」画一张缩略的刘海卡。
+/// 灵动岛预览用的 chrome:凑齐 NotchLyricsView 要的那几个属性,但不建窗口、不碰屏幕。
+///
+/// ⚠️ 这个类存在的唯一理由,就是让预览**不去碰 NotchLyricsWindowController.shared**。
+/// 见那个文件顶部那条不变量:`.shared` 是 `static let`,哪怕只是拿来读一下属性都会执行
+/// init() 建窗口并立刻 orderFront —— 灵动岛关着的用户,一打开设置页就会在屏幕顶上凭空
+/// 多出一个胶囊。所以刘海几何这里走的是那边不碰实例状态的 static 函数。
+///
+/// 用独立实例还有第二个好处:鼠标划过预览时展开的是**预览这一份**,不会顺手把真窗口
+/// 也撑开。
+@MainActor
+final class NotchPreviewChrome: ObservableObject, NotchChromeSource {
+    @Published private(set) var isExpanded = false
+    @Published private(set) var notchWidth: CGFloat = 0
+    @Published private(set) var contentTopInset: CGFloat = 0
+
+    /// 预览恒为 false。isCollapsed 是真窗口"没在播放就缩回刘海大小、内容整套不渲染"的
+    /// 行为 —— 照搬到设置页就是一片空白,而用户恰恰是来这里看样式的。
+    var isCollapsed: Bool { false }
+
+    init() { refreshGeometry() }
+
+    func setExpanded(_ expanded: Bool) { isExpanded = expanded }
+
+    /// 跟真窗口 recomputeGeometry 取的是同一块屏、同一个公式,预览里的让位宽度/高度才
+    /// 会跟真出来的严丝合缝。设置页开着时用户插拔显示器也要跟着变,所以是个可重入方法。
+    func refreshGeometry() {
+        guard let screen = NotchLyricsWindowController.targetScreen() else { return }
+        let geo = NotchLyricsWindowController.geometry(for: screen)
+        notchWidth = geo.notchWidth
+        contentTopInset = geo.notchHeight
+    }
+}
+
+/// 灵动岛那一段的预览:直接把真窗口那份 NotchLyricsView 搬进设置页渲染。
+///
+/// ⚠️ 这里刻意**不**画简化版的刘海卡。第一版就是手搓的(一个圆角矩形 + 一行居中的字),
+/// 结果是"预览里长这样、真出来完全不是这样":两只耳朵上的歌名和三个播放按钮、歌词行
+/// 尾端的封面缩略图、逐字高亮、hover 展开出来的下一句 + 迷你进度条,一样都没有。设置页
+/// 预览的全部意义就是所见即所得,一份会漂的复刻件比没有预览更糟。
+///
+/// 做法是把 NotchLyricsView 泛型化(见 NotchChromeSource):真窗口拿
+/// NotchLyricsWindowController 当 chrome,预览拿上面那个不建窗口的 NotchPreviewChrome。
+/// 于是这里渲染的是**同一份视图代码**,不存在复刻件漂移;hover 展开、点播放按钮控制播放
+/// 也都照常能用(按钮打的本来就是 PlaybackCoordinator,跟从哪个窗口点的无关)。
 @MainActor
 struct NotchPreviewBar: View {
     @ObservedObject private var settings = AppSettings.shared
-    @State private var line: SyncedLyricLine?
-    @State private var artwork: NSImage?
+    @StateObject private var chrome = NotchPreviewChrome()
 
     // 预览条能给的最大宽度。比卡片列(600)窄一截,两侧留呼吸。
     private let maxPreviewWidth: CGFloat = 460
-    // 真卡片稳态高度(NotchLyricsView.compactRowHeight 44 + 顶部让位 ~32)。
-    private let cardHeight: CGFloat = 76
-    private let cornerRadius: CGFloat = 20
+
+    /// 走真窗口那个公式,不直接用 settings.notchContentWidth —— 宽度调得很小时真窗口会被
+    /// "两只耳朵放得下按钮"的下限顶宽,预览得跟着一起顶,否则这一段恰恰在最容易出岔的
+    /// 区间失真。
+    private var contentWidth: CGFloat {
+        NotchLyricsWindowController.contentWidth(
+            baseWidth: settings.notchContentWidth, notchWidth: chrome.notchWidth)
+    }
+
+    /// 卡片此刻的真实高度,跟真窗口 setFrame 的算法一致(刘海高 + 内容行,展开再加一截)。
+    private var cardHeight: CGFloat {
+        chrome.contentTopInset + NotchMetrics.compactRowHeight
+            + (chrome.isExpanded ? NotchMetrics.expandedExtraHeight : 0)
+    }
+
+    /// 容器按**展开态**固定高。hover 展开时卡片会长高 40pt,容器高度要是跟着变,这条预览
+    /// 挂在 safeAreaInset 上就会把整页顶一下 —— OverlayPreviewBar 那边记过这个教训。
+    private var fullHeight: CGFloat {
+        chrome.contentTopInset + NotchMetrics.compactRowHeight + NotchMetrics.expandedExtraHeight
+    }
 
     // 宽度滑杆能拖到 500,超过预览区就整体等比缩小 —— 这样"宽度"这一项在预览里看得见。
-    private var scale: CGFloat { min(1, maxPreviewWidth / max(settings.notchContentWidth, 1)) }
-
-    private var previewText: String {
-        if let text = line?.plainText, !text.isEmpty { return text }
-        return L10n.t("这里是一句歌词示例")
-    }
+    private var scale: CGFloat { min(1, maxPreviewWidth / max(contentWidth, 1)) }
 
     var body: some View {
         VStack(spacing: 6) {
-            card
-                .frame(width: settings.notchContentWidth, height: cardHeight)
-                .scaleEffect(scale, anchor: .center)
+            NotchLyricsView(controller: chrome)
+                // 先钉当下的真实尺寸:视图内层是 GeometryReader,耳朵宽度按 proxy.size.width
+                // 算,给错尺寸这一层就先失真了。
+                .frame(width: contentWidth, height: cardHeight)
+                .animation(.easeInOut(duration: 0.18), value: chrome.isExpanded)
+                // 再顶对齐放进固定高的容器 —— 真窗口也是顶边贴死屏幕顶、只向下长。
+                .frame(width: contentWidth, height: fullHeight, alignment: .top)
+                .scaleEffect(scale, anchor: .top)
                 // 缩放不改变布局占位,得显式把外框收到缩放后的尺寸。
-                .frame(width: settings.notchContentWidth * scale, height: cardHeight * scale)
-            Text(String(format: L10n.t("预览 · %@pt"), "\(Int(settings.notchContentWidth))"))
+                .frame(width: contentWidth * scale, height: fullHeight * scale)
+            Text(String(format: L10n.t("预览 · %@pt，指向可展开"), "\(Int(contentWidth))"))
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .monospacedDigit()
@@ -55,34 +114,12 @@ struct NotchPreviewBar: View {
         .frame(maxWidth: .infinity)
         .background(Color(nsColor: .windowBackgroundColor))
         .overlay(alignment: .bottom) { Divider() }
-        .onReceive(PlaybackCoordinator.shared.$currentLine.removeDuplicates()) { line = $0 }
-        .onReceive(PlaybackCoordinator.shared.$artworkImage.removeDuplicates()) { artwork = $0 }
-        .accessibilityHidden(true)
-    }
-
-    private var card: some View {
-        ZStack {
-            // 跟真卡片同一套:.coverArt 走封面模糊图,其余三种走 NotchCardStyle.fill。
-            // 没有封面时退回渐变,跟 NotchLyricsView.backgroundLayer 的兜底一致。
-            if settings.notchCardStyle == .coverArt, let artwork {
-                Image(nsImage: artwork)
-                    .resizable()
-                    .scaledToFill()
-                    .frame(width: settings.notchContentWidth, height: cardHeight)
-                    .blur(radius: 20)
-                    .overlay(Color.black.opacity(0.45))
-            } else {
-                Rectangle().fill(settings.notchCardStyle.fill)
-            }
-            Text(previewText)
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(.white)
-                .lineLimit(1)
-                .padding(.horizontal, 16)
-                .shadow(color: .black.opacity(0.45), radius: 2, y: 1)
+        .onReceive(
+            NotificationCenter.default.publisher(
+                for: NSApplication.didChangeScreenParametersNotification)
+        ) { _ in
+            chrome.refreshGeometry()
         }
-        // 顶直角、底圆角 —— 复用真卡片那个形状,不复制轮廓代码。
-        .clipShape(NotchHangingShape(bottomCornerRadius: cornerRadius))
     }
 }
 

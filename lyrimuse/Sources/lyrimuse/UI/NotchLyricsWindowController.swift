@@ -47,7 +47,9 @@ import LyrimuseCore
 // 只是不常显内容、缩到最小,hover 到这一小块区域上依然能重新展开出完整内容(包括
 // 播放按钮,可以用来重新播放)。见 isCollapsed/collapsedFallbackWidth。
 @MainActor
-final class NotchLyricsWindowController: NSWindowController, ObservableObject {
+// 已经有 NotchChromeSource 要的全部四个属性和 setExpanded,只是把这层契约显式写出来
+// —— 这样「外观」页的预览可以拿一个轻量替身装同一份 NotchLyricsView。
+final class NotchLyricsWindowController: NSWindowController, ObservableObject, NotchChromeSource {
     static let shared = NotchLyricsWindowController()
 
     // 真值在 AppSettings.notchOverlayEnabled,这里只是它的镜像(菜单栏要观察这个
@@ -86,7 +88,9 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject {
     private static let collapsedFallbackWidth: CGFloat = 120
     // 常显内容行的固定高度(一行歌词 + 3 个播放控制按钮那一行的高度经验取值)——窗口
     // 总高度 = 刘海本身高度(或兜底高度)+ 这一行高度,让内容行完整落在刘海下方。
-    private static let contentHeight: CGFloat = 44
+    // 数值本身在 NotchMetrics.compactRowHeight —— 视图那边按同一个数字排版,
+    // 两处各写一份 44 迟早会漂。
+    private static var contentHeight: CGFloat { NotchMetrics.compactRowHeight }
     // 宽度是固定值,不随当前歌词文字宽度动态变化——预期是多大就多大,不会随着歌词
     // 发生变化。数值本身(默认 360)以及用户可调的设置项都定义在 AppSettings.
     // notchContentWidth(这里不重复放一份、避免两处数字不同步)。超长歌词交给
@@ -100,7 +104,8 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject {
     // 两样补充信息(更多控制按钮都不如这两样贴合"歌词类产品"的定位)。专辑封面不在这一块
     // ——它常显在歌词行的尾端(见 NotchLyricsView.artworkThumbnail),不需要 hover 才出现,
     // 也不占额外高度。
-    private static let expandedExtraHeight: CGFloat = 40
+    // 同上,单一来源在 NotchMetrics。
+    private static var expandedExtraHeight: CGFloat { NotchMetrics.expandedExtraHeight }
 
     private var isPlayingObserver: AnyCancellable?
     private var screenParamsObserver: NSObjectProtocol?
@@ -111,7 +116,7 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject {
     // 不画,肉眼看起来完全没有展开。直接持有这个引用、在 recomputeGeometry 里手动把它的
     // frame 也显式设一遍(而不是只信任 autoresizingMask 那条隐式路径),能让 SwiftUI 真正
     // 重新布局这一块。
-    private var hostingView: NSHostingView<NotchLyricsView>?
+    private var hostingView: NSHostingView<NotchLyricsView<NotchLyricsWindowController>>?
 
     convenience init() {
         // 初始 contentRect 只是占位——真正的尺寸/位置由下面 recomputeGeometry() 按
@@ -220,7 +225,12 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject {
         if shouldShow { window?.orderFrontRegardless() } else { window?.orderOut(nil) }
     }
 
-    private struct NotchGeometry {
+    // 不加 private:「外观」页的灵动岛预览要用同一套刘海几何。
+    //
+    // ⚠️ 预览**只能**用这个 static 函数,绝不能去读 `.shared` 的属性 —— 见文件顶部那条
+    // 不变量:引用 .shared 会执行 init() 建窗口并立刻 orderFront,灵动岛关着的用户会
+    // 凭空多出一个胶囊。这个函数不碰任何实例状态,拿它算几何是安全的。
+    struct NotchGeometry {
         // 刘海本身(或无刘海屏幕的兜底值)的高度——这一整条永远只留纯黑背景,不放
         // 任何文字/图标,常显内容行从这条高度往下才开始画,见 NotchLyricsView。
         let notchHeight: CGFloat
@@ -235,7 +245,7 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject {
     // 目标是 14,肯定能用)量出刘海左右边界算出的真正中心点——不是简单假设刘海永远
     // 精确居中于整块屏幕,虽然实践中几乎总是如此。没有真刘海的屏幕退到固定兜底高度、
     // 水平居中于整块屏幕。
-    private static func geometry(for screen: NSScreen) -> NotchGeometry {
+    static func geometry(for screen: NSScreen) -> NotchGeometry {
         let notchHeight = screen.safeAreaInsets.top
         if notchHeight > 0,
            let leftArea = screen.auxiliaryTopLeftArea,
@@ -253,7 +263,9 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject {
     // 实测约 179pt)、或者用户把 baseWidth 调得很小,把两只耳朵挤到摆不下按钮时才会
     // 突破 baseWidth(这层下限保护的是"按钮不被裁",不是"给歌词文字腾地方",不跟当前
     // 是哪句歌词、歌词有多长有任何关系)。
-    private static func contentWidth(baseWidth: CGFloat, notchWidth: CGFloat) -> CGFloat {
+    // 不加 private:设置页的灵动岛预览要用同一个公式算宽度,否则设成小宽度时预览
+    // 显示的是设定值、真窗口却被耳朵下限顶宽,两边对不上。
+    static func contentWidth(baseWidth: CGFloat, notchWidth: CGFloat) -> CGFloat {
         let earBasedFloor = notchWidth + minEarWidth * 2 + 20
         return max(baseWidth, earBasedFloor)
     }
@@ -271,7 +283,8 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject {
     // 屏,窗口就一直停在哪块屏。用户的外接屏排在内置屏上方,灵动岛就停在外接屏顶部
     // (CG 坐标 y=-1440)——那块屏还没有刘海,而用户正看着内置屏,怎么找都找不到它,
     // 报的是"开了灵动岛歌词但是不显示"。
-    private static func targetScreen() -> NSScreen? {
+    // 不加 private:设置页预览要跟真窗口取同一块屏(纯静态、不碰实例状态,安全)。
+    static func targetScreen() -> NSScreen? {
         if let pinned = ScreenIdentity.screen(withID: AppSettings.shared.notchScreenID) {
             return pinned
         }

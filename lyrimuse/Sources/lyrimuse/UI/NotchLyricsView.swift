@@ -67,8 +67,44 @@ extension NotchCardStyle {
 // 背景用磨砂玻璃(.thickMaterial,配 NotchLyricsWindow 里固定的 .darkAqua 外观)。刘海
 // 本身所在的那一段空当(顶行中间)物理上不会显示任何像素,渲染成什么都无所谓,不需要跟
 // 其余部分区别对待。
-struct NotchLyricsView: View {
-    @ObservedObject var controller: NotchLyricsWindowController
+/// 灵动岛卡片的固定尺寸。
+///
+/// 放在泛型视图**外面**有两个原因:泛型类型不能有 static stored property(编译器直接
+/// 拒绝);而且预览那边(SectionPreviewBars)要用同样的数值算容器高度,单独一个命名空间
+/// 比从视图里翻出来更直白。
+///
+/// ⚠️ 跟 NotchLyricsWindowController 里的同名常量是同一套几何的两处描述,改一处要改两处。
+enum NotchMetrics {
+    /// 稳态歌词行的高度。
+    static let compactRowHeight: CGFloat = 44
+    /// hover 展开时在下面多出来的那一块。
+    static let expandedExtraHeight: CGFloat = 40
+    // 以下同样是被泛型限制赶出来的固定尺寸(理由见类型注释)。
+    static let minWordDurationMs: Int = 80
+    static let wordEdgeSoftenBand: Double = 0.08
+    static let artworkLyricSpacing: CGFloat = 10
+    static let artworkCornerRadius: CGFloat = 5
+}
+
+/// NotchLyricsView 需要从"承载它的那个东西"那里知道的全部几何/状态 —— 一共就这几项。
+///
+/// 抽成协议是为了让**同一份视图**既能装进真窗口,也能装进「外观」页的预览里。
+/// 预览曾经是另写的一份简化渲染(一个圆角矩形 + 一行居中文字),那跟真实灵动岛差得远:
+/// 真的那个有左耳歌名、右耳三个播放控制、中间给物理刘海让出的空当、歌词行末尾的封面
+/// 缩略图、以及 hover 才展开的第三行。两份渲染必然越漂越远,不如让预览用真的那一份。
+@MainActor
+protocol NotchChromeSource: ObservableObject {
+    /// 收起态(没在播放且没 hover):窗口缩到刘海本身大小,内容整套摘掉。
+    var isCollapsed: Bool { get }
+    var isExpanded: Bool { get }
+    /// 物理刘海的宽度,顶行中间要给它让出空当。无刘海屏幕是 0。
+    var notchWidth: CGFloat { get }
+    var contentTopInset: CGFloat { get }
+    func setExpanded(_ expanded: Bool)
+}
+
+struct NotchLyricsView<Chrome: NotchChromeSource>: View {
+    @ObservedObject var controller: Chrome
     @ObservedObject private var poller = PlaybackCoordinator.shared
     @ObservedObject private var settings = AppSettings.shared
     // 正在拖进度条时手指所在的比例(0~1);没在拖就是 nil。见进度条那段注释。
@@ -81,8 +117,7 @@ struct NotchLyricsView: View {
     // 一致(两个文件都描述同一个窗口的几何,这点数值耦合是设计使然,不值得为两个常量
     // 专门抽一个共享类型)。展开时窗口总高度会多出 expandedExtraHeight,这部分空间全部
     // 交给下面的展开内容,歌词行本身高度不跟着变。
-    private static let compactRowHeight: CGFloat = 44
-    private static let expandedExtraHeight: CGFloat = 40
+
 
     var body: some View {
         GeometryReader { proxy in
@@ -104,7 +139,7 @@ struct NotchLyricsView: View {
                         topRow(earWidth: earWidth)
                             .frame(height: controller.contentTopInset)
                         lyricRow
-                            .frame(height: Self.compactRowHeight)
+                            .frame(height: NotchMetrics.compactRowHeight)
                         if controller.isExpanded {
                             expandedContent
                         }
@@ -213,8 +248,6 @@ struct NotchLyricsView: View {
     }
 
     // 封面小图跟歌词之间的间距。
-    private static let artworkLyricSpacing: CGFloat = 10
-    private static let artworkCornerRadius: CGFloat = 5
 
     // 32pt 是"在 44pt 高的歌词行里上下各留 6pt"倒推出来的观感取值,夹在 [16, 32] 之间:
     // 上限避免歌词行万一变高就把封面撑得比歌词本身还抢眼(歌词才是这个产品的主体),
@@ -248,14 +281,14 @@ struct NotchLyricsView: View {
     // 描边 + 投影是给"卡片背景可能是浅色"兜底:磨砂玻璃风格会透出桌面颜色,浅色壁纸下
     // 一张浅色封面直接贴上去边界会糊成一片,一圈极淡的白描边能把方块轮廓钉住。
     private func artworkThumbnail(_ image: NSImage) -> some View {
-        let side = Self.artworkSide(rowHeight: Self.compactRowHeight)
+        let side = Self.artworkSide(rowHeight: NotchMetrics.compactRowHeight)
         return Image(nsImage: image)
             .resizable()
             .scaledToFill()
             .frame(width: side, height: side)
-            .clipShape(RoundedRectangle(cornerRadius: Self.artworkCornerRadius, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: NotchMetrics.artworkCornerRadius, style: .continuous))
             .overlay(
-                RoundedRectangle(cornerRadius: Self.artworkCornerRadius, style: .continuous)
+                RoundedRectangle(cornerRadius: NotchMetrics.artworkCornerRadius, style: .continuous)
                     .strokeBorder(.white.opacity(0.18), lineWidth: 0.5)
             )
             .shadow(color: .black.opacity(0.35), radius: 1.5, y: 0.5)
@@ -265,7 +298,7 @@ struct NotchLyricsView: View {
     // 重新测量/重新开始滚动,同一句歌词内部逐字变色的高频刷新(TimelineView 那部分)
     // 不应该打断正在进行的滚动。
     private var lyricRow: some View {
-        HStack(spacing: Self.artworkLyricSpacing) {
+        HStack(spacing: NotchMetrics.artworkLyricSpacing) {
             MarqueeText(id: poller.currentLine?.plainText ?? "") {
                 lyricContent
             }
@@ -349,17 +382,15 @@ struct NotchLyricsView: View {
 
     // 逐字时长下限/过渡带宽度跟 LyricsOverlayView 用同一组经验取值(80ms/0.08),这两个
     // 数字本身是"看起来顺眼"的调校结果,不是从歌词数据推导出来的,两处保持一致没有坏处。
-    private static let minWordDurationMs = 80
-    private static let wordEdgeSoftenBand = 0.08
 
     private func fillFraction(for w: SyncedLyricWord, atMs ms: Int) -> Double {
-        let effectiveDuration = max(w.durationMs, Self.minWordDurationMs)
+        let effectiveDuration = max(w.durationMs, NotchMetrics.minWordDurationMs)
         return Double(ms - w.startMs) / Double(effectiveDuration)
     }
 
     private func wordText(_ w: SyncedLyricWord, atMs currentMs: Int) -> some View {
         let fraction = fillFraction(for: w, atMs: currentMs)
-        let band = Self.wordEdgeSoftenBand
+        let band = NotchMetrics.wordEdgeSoftenBand
         return Text(w.text)
             .foregroundStyle(wordGradient(left: fraction - band, right: fraction + band))
     }
@@ -464,7 +495,7 @@ struct NotchLyricsView: View {
         }
         .padding(.horizontal, 16)
         .padding(.bottom, 10)
-        .frame(height: Self.expandedExtraHeight, alignment: .top)
+        .frame(height: NotchMetrics.expandedExtraHeight, alignment: .top)
     }
 
     private var nextLineDisplayText: String {

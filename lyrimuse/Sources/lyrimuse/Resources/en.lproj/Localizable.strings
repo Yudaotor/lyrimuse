@@ -599,3 +599,4 @@
 "从待补提交清单里移除这条（不可恢复）" = "Remove this from the backfill queue (cannot be undone)";
 "预览 · 上限 %@ 字" = "Preview · %@ character limit";
 "预览 · 上限 %@ 字，本句已截断" = "Preview · %@ character limit — this line is truncated";
+"预览 · %@pt，指向可展开" = "Preview · %@pt — hover to expand";
