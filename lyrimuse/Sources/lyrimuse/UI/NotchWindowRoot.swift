@@ -28,9 +28,8 @@ struct NotchWindowRoot: View {
 
     /// 三条弹簧,按"正在做哪件事"选。参数取自 boring.notch 调好的那三组,不是拍脑袋:
     ///
-    ///  - **收起**(播放停了,缩回刘海):`dampingFraction 1.0` —— 临界阻尼、**不回弹**。
-    ///    收起时哪怕一点点回弹,看着都像"没收干净又弹出来一截",特别扎眼;而且收起的终点
-    ///    是要跟物理刘海严丝合缝重合的,过冲会让黑块瞬间比刘海还小、露出一条背景。
+    ///  - **收起**(播放停了,歌词行卷回顶行):`dampingFraction 1.0` —— 临界阻尼、**不回弹**。
+    ///    收起时哪怕一点点回弹,看着都像"没收干净又弹出来一截",特别扎眼。
     ///  - **展开**(hover 进来):`interactiveSpring 0.38 / 0.8` —— 对鼠标的直接反馈,要跟手。
     ///  - **其余**(开始播放弹出、以及 hover 移开收回那一档):`0.42 / 0.8`,留一点点过冲。
     ///
@@ -55,12 +54,16 @@ struct NotchWindowRoot: View {
         return .spring(response: 0.42, dampingFraction: 0.8)
     }
 
-    /// 卡片当前宽度:收起态是物理刘海本身的宽度,其余是设置里那个宽度(过一遍耳朵下限)。
+    /// 卡片宽度**恒定**,收起态也不变窄。
+    ///
+    /// 收起态保留的是顶行(播放指示条 + 歌名 + 三个控制按钮),而那两只"耳朵"分居物理刘海
+    /// 左右两侧 —— 宽度一缩,耳朵就没地方放了。所以收起只收**高度**:歌词行往上卷进顶行,
+    /// 顶行原地不动。
     private var cardWidth: CGFloat {
-        controller.isCollapsed ? controller.collapsedCardWidth : controller.steadyCardWidth
+        controller.steadyCardWidth
     }
 
-    /// 卡片当前高度。收起态只有刘海那一条,稳态多一行歌词,展开再多一块。
+    /// 卡片当前高度。收起态只留顶行那一条,稳态多一行歌词,展开再多一块。
     private var cardHeight: CGFloat {
         if controller.isCollapsed { return controller.contentTopInset }
         return controller.contentTopInset
