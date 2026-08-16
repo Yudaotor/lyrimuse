@@ -295,8 +295,29 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         recomputeGeometry(animate: false)
     }
 
+    /// 这块屏上"收起"本身是不是就等于"隐藏"。
+    ///
+    /// 有真刘海时:收起态的卡片宽高**恰好等于物理刘海**(见 recomputeGeometry 里
+    /// collapsedCardWidth 取 geo.notchWidth),严丝合缝盖在那块本来就不发光的区域上,
+    /// 肉眼完全看不出屏幕上还有个窗口 —— 那已经是"隐藏"了。
+    ///
+    /// 无真刘海时**不成立**:收起态退到 collapsedFallbackWidth(120pt)的黑胶囊,那是块
+    /// 实打实画在桌面顶端的东西,不 orderOut 就会一直杵在那儿。
+    private var collapsesIntoRealNotch: Bool {
+        guard let screen = resolvedScreen() else { return false }
+        return Self.geometry(for: screen).notchWidth > 0
+    }
+
     private func updateActualVisibility(isPlayingNow: Bool) {
-        let shouldShow = isVisible && (!hideWhenNotPlaying || isPlayingNow)
+        // 「暂停/无播放时隐藏」这个设置,在有真刘海的屏上改为**靠收起来实现**,不再 orderOut。
+        //
+        // 2026-08-16 之前是无条件 orderOut:窗口整个消失,于是"缩回刘海"这个动画根本没有
+        // 机会播 —— 用户看到的是啪一下没了、再啪一下冒出来。而收起态本来就跟物理刘海重合,
+        // orderOut 相比收起并不多藏住任何东西,白白牺牲了过渡。
+        //
+        // ⚠️ 只对有真刘海的屏放行。无刘海的外接屏上收起态是个 120pt 的黑胶囊,那必须真的
+        // orderOut,否则用户会看到桌面顶上永远挂着一块黑条 —— 那正是这个设置要解决的问题。
+        let shouldShow = isVisible && (!hideWhenNotPlaying || isPlayingNow || collapsesIntoRealNotch)
         // orderFrontRegardless(),不是 orderFront(nil)——这个 App 是 .accessory 策略、
         // 从不激活成前台 App,参照的真实开源实现(NotchDrop/DynamicNotchKit)贴刘海用的
         // 都是这个,不看"当前是否是活跃 App"这个前提就把窗口调到最前。

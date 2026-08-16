@@ -205,6 +205,7 @@
 "智能算法" = "Smart Matching";
 "智能算法：给每个来源打分（逐字时间轴、语言匹配等），取分最高的。顺序优先：不打分，按下面的顺序取第一个有结果的来源" = "Smart Matching scores every source (word timing, language match, and so on) and takes the highest. Priority Order skips scoring and takes the first source in the list below that returns a result";
 "暂停/无播放时隐藏" = "Hide When Paused or Not Playing";
+"灵动岛会收进刘海里，不是直接消失" = "The notch card retracts into the notch instead of vanishing";
 "更改" = "Change";
 "服务器设置 → 整合(Integrations) → Webhook → 新建 Webhook，选好要发到的频道后复制 Webhook URL" = "Server Settings → Integrations → Webhooks → New Webhook. Pick the channel to post to, then copy the Webhook URL";
 "未启用" = "Not Enabled";

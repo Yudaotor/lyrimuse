@@ -135,9 +135,14 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
             let earWidth = max(0, (proxy.size.width - controller.notchWidth - 20) / 2)
             ZStack(alignment: .top) {
                 backgroundLayer(size: proxy.size)
-                // 收起态(没在播放、没 hover)窗口本身已经缩到刘海大小,这里额外把常显
-                // 内容整套摘掉而不是指望窗口太小自然裁掉——避免文字/按钮在收缩动画过程中
-                // 短暂挤压变形的观感,收起就是纯粹的一块背景,跟真实刘海融为一体。
+                // 收起态(没在播放、没 hover)卡片缩到刘海大小,这里把常显内容整套摘掉而不是
+                // 指望卡片太小自然裁掉——避免文字/按钮在收缩过程中被挤压变形,收起就是纯粹
+                // 一块背景,跟真实刘海融为一体。
+                //
+                // ⚠️ 但"摘掉"不能是硬切。2026-08-16 之前这里没有 transition,内容在收起的
+                // 第一帧就整块消失,而卡片还要再花 0.45 秒缩回去 —— 观感是"字先没了,黑块才
+                // 慢慢收",两段动作对不上。加一个跟卡片同一条弹簧驱动的淡出 + 轻微上缩
+                // (anchor 在顶部,因为卡片是从顶边往上收的),内容就跟着卡片一起"被吸回刘海"。
                 if !controller.isCollapsed {
                     VStack(spacing: 0) {
                         topRow(earWidth: earWidth)
@@ -148,6 +153,9 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
                             expandedContent
                         }
                     }
+                    .transition(
+                        .opacity.combined(with: .scale(scale: 0.94, anchor: .top))
+                    )
                 }
             }
             // 展开态内容(下一句预览+进度条)本身没有另外裁一次形状——如果只让背景那一层
@@ -209,8 +217,29 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
     // 封面),灵动岛这里也会被抹成跟其它封面几乎分不出来的统一深灰色,颜色信息基本损失
     // 殆尽,违背了"跟随封面颜色"这个功能本身的目的。调小到 20——仍然是明显的"模糊",
     // 但能留住封面主色调之间可辨认的差异。
-    @ViewBuilder
+    // 收起态**必须**是纯黑,这一层是为它加的。
+    //
+    // 收起时卡片严丝合缝盖在物理刘海上(实测 x[645.5,824.5]、高 32pt,跟 auxiliaryTopArea
+    // 算出来的刘海完全一致),而物理刘海是屏幕上真实**不发光**的区域 —— 在它上面画任何带
+    // 颜色的东西都会让那一块泛色,一眼就露馅"这儿盖着个窗口"。2026-08-16 实测收起态刘海
+    // 中央像素是 (0.318, 0.216, 0.173),明显偏暖,那是底下那层封面模糊图透上来的。
+    //
+    // 所以垫一层纯黑,再让有颜色的那层在收起时淡到 0(跟着卡片同一条弹簧,见 NotchWindowRoot
+    // 的 animation(value: isCollapsed))。不是"收起时不画封面"——那样会硬切。
     private func backgroundLayer(size: CGSize) -> some View {
+        ZStack {
+            NotchHangingShape(bottomCornerRadius: 20).fill(Color.black)
+            styledBackground(size: size)
+                // ⚠️ 只在**有真刘海**的屏上淡成纯黑。无真刘海的屏收起态是个 120pt 的"假刘海"
+                // 胶囊,那儿没有物理黑区可融,把用户选的磨砂玻璃/渐变风格强行洗成纯黑只是
+                // 平白丢掉他选的样式。判据用 notchWidth > 0,跟 geometry(for:) 里"有没有
+                // 真刘海"同一个口径。
+                .opacity(controller.isCollapsed && controller.notchWidth > 0 ? 0 : 1)
+        }
+    }
+
+    @ViewBuilder
+    private func styledBackground(size: CGSize) -> some View {
         if settings.notchCardStyle == .coverArt, let image = poller.artworkImage {
             Image(nsImage: image)
                 .resizable()

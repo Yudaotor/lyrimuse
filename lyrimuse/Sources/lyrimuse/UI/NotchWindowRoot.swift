@@ -24,6 +24,36 @@ struct NotchWindowRoot: View {
     @ObservedObject var controller: NotchLyricsWindowController
     /// 光标上一次是不是在卡片上 —— 只为了让触觉反馈在"进入"那一下触发一次,不是状态源。
     @State private var hoveringCard = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    /// 三条弹簧,按"正在做哪件事"选。参数取自 boring.notch 调好的那三组,不是拍脑袋:
+    ///
+    ///  - **收起**(播放停了,缩回刘海):`dampingFraction 1.0` —— 临界阻尼、**不回弹**。
+    ///    收起时哪怕一点点回弹,看着都像"没收干净又弹出来一截",特别扎眼;而且收起的终点
+    ///    是要跟物理刘海严丝合缝重合的,过冲会让黑块瞬间比刘海还小、露出一条背景。
+    ///  - **展开**(hover 进来):`interactiveSpring 0.38 / 0.8` —— 对鼠标的直接反馈,要跟手。
+    ///  - **其余**(开始播放弹出、以及 hover 移开收回那一档):`0.42 / 0.8`,留一点点过冲。
+    ///
+    /// ⚠️ 已知的一处名不副实,别照着注释想当然:`.animation(_:value:)` 是在值**变化后**
+    /// 用新状态求值,所以"hover 移开"这一档跑到这里时 isExpanded 已经是 false,落在最后
+    /// 那条 0.42 而不是 interactiveSpring。只看当前状态区分不出"刚从收起弹出"和"hover
+    /// 移开",要分开就得再存一份上一帧的状态。实际差别是 response 0.42 vs 0.38、阻尼相同,
+    /// 0.04 秒,肉眼看不出来 —— 所以没为它引入额外状态,但注释得写实话。
+    ///
+    /// reduceMotion 下返回 nil(直接跳到终态)。这不只是"少点花哨":收起/弹出是**尺寸**动画,
+    /// 前庭敏感的人对这类大面积位移最不适应,而跳变不损失任何信息。跟进度条那处
+    /// (NotchLyricsView.scrubberHeight)的取舍不同 —— 那边变粗是**功能反馈**,必须保留,
+    /// 只去掉补间;这边整段动画本身就是纯观感,可以整个跳过。
+    private var cardAnimation: Animation? {
+        if reduceMotion { return nil }
+        if controller.isCollapsed {
+            return .spring(response: 0.45, dampingFraction: 1.0)
+        }
+        if controller.isExpanded {
+            return .interactiveSpring(response: 0.38, dampingFraction: 0.8)
+        }
+        return .spring(response: 0.42, dampingFraction: 0.8)
+    }
 
     /// 卡片当前宽度:收起态是物理刘海本身的宽度,其余是设置里那个宽度(过一遍耳朵下限)。
     private var cardWidth: CGFloat {
@@ -60,10 +90,11 @@ struct NotchWindowRoot: View {
             // 贴顶 + 水平居中。窗口本身是按刘海中心点摆的,所以"在窗口里居中"就等于
             // "对齐刘海中心",跟改动前 setFrame 算出来的位置是同一个结果。
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-            // 展开/收起用同一条弹簧。response 取得比 hover 的意图延迟(0.2s)还短,
-            // 保证"动画"不会变成"迟钝"——这个卡片的开合是对鼠标的直接反馈。
-            .animation(.interactiveSpring(response: 0.28, dampingFraction: 0.86), value: cardHeight)
-            .animation(.interactiveSpring(response: 0.28, dampingFraction: 0.86), value: cardWidth)
+            // 三种形态切换用三条**不同**的弹簧,理由见 cardAnimation。
+            .animation(cardAnimation, value: cardHeight)
+            .animation(cardAnimation, value: cardWidth)
+            // 收起/弹出时内容整块淡入淡出,由同一条弹簧驱动,跟尺寸变化同步。
+            .animation(cardAnimation, value: controller.isCollapsed)
     }
 
     private func updateHover(inside: Bool) {

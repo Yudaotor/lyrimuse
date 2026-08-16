@@ -1419,7 +1419,16 @@ private struct AppearanceSettingsTab: View {
                 ))
             }
             CardDivider()
-            SettingsRow(icon: "pause.circle", title: L10n.t("暂停/无播放时隐藏")) {
+            // 2026-08-16:这个开关对灵动岛的**实现方式**变了(视觉结果没变) —— 有真刘海的屏上
+            // 不再 orderOut,改成缩回刘海。收起态跟物理刘海严丝合缝重合、且强制纯黑,肉眼跟
+            // "窗口没了"没有区别,但能播一段收缩动画;orderOut 是瞬间消失、没有任何过渡。
+            // 无真刘海的外接屏仍然 orderOut(那儿收起态是块 120pt 的黑胶囊,必须真藏)。
+            // 副标题只说用户能感知的那一面,不解释实现。
+            SettingsRow(
+                icon: "pause.circle",
+                title: L10n.t("暂停/无播放时隐藏"),
+                subtitle: L10n.t("灵动岛会收进刘海里，不是直接消失")
+            ) {
                 Toggle("", isOn: Binding(
                     get: { settings.hideWhenNotPlaying },
                     set: { newValue in
