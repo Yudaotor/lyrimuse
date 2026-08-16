@@ -366,6 +366,8 @@
 "调音量时在灵动岛上短暂显示；系统自带的音量提示不受影响，会同时出现" = "Briefly shown in the notch when you change volume; macOS still shows its own";
 "已静音" = "Muted";
 "歌词偏移" = "Lyrics offset";
+"所有屏幕都显示" = "Show on Every Display";
+"每块屏各显示一个；开启后上面的指定屏幕不再起作用" = "One on each display; the setting above no longer applies";
 "检查更新" = "Check for Updates";
 "自动检查" = "Check Automatically";
 "自动下载并安装" = "Download and Install Automatically";

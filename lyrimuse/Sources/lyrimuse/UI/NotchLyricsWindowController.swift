@@ -131,12 +131,26 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     // 重新布局这一块。
     private var hostingView: NSHostingView<NotchLyricsView<NotchLyricsWindowController>>?
 
-    convenience init() {
+    /// 只有"每块屏各一个"模式下的副本实例才会设(见 NotchMirrorManager),且只在 init
+    /// 里设一次。主实例(`.shared`)恒为 nil,跟着 targetScreen() 走。
+    ///
+    /// ⚠️ 这个字段是主/副实例的**唯一**区别 —— 副本共用同一个类、同一份视图、同一套
+    /// hover/播放订阅,只是钉在别的屏上。多加一个"这是副本"的布尔就会诱使后面的人写
+    /// `if isMirror { ... }` 的分支,那正是两套行为慢慢分叉的起点。
+    private var pinnedScreenID: String?
+
+    /// pinnedScreenID **必须**在这里传进来,不能等构造完再赋值:init() 末尾就会
+    /// recomputeGeometry() 一次、并订阅播放状态(订阅那一瞬间就会触发一次
+    /// updateActualVisibility → orderFront)。晚设一步的话,新建的副本会先按
+    /// targetScreen() 在**主屏**上摆好并显示出来,然后才被挪到它该去的那块屏 ——
+    /// 表现为主屏上闪一下重叠的第二个灵动岛。
+    convenience init(pinnedScreenID: String? = nil) {
         // 初始 contentRect 只是占位——真正的尺寸/位置由下面 recomputeGeometry() 按
         // 当前屏幕几何重新算一遍并 setFrame,这里传什么都会被立刻覆盖掉。
         let placeholder = NSSize(width: AppSettings.shared.notchContentWidth, height: Self.fallbackNotchHeight + Self.contentHeight)
         let panel = NotchLyricsWindow(contentRect: NSRect(origin: .zero, size: placeholder))
         self.init(window: panel)
+        self.pinnedScreenID = pinnedScreenID
 
         let hosting = NSHostingView(rootView: NotchLyricsView(controller: self))
         hosting.frame = NSRect(origin: .zero, size: placeholder)
@@ -336,6 +350,42 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         recomputeGeometry(animate: false)
     }
 
+    /// 这个实例贴哪块屏:副本贴它被钉的那块,主实例走全局的 targetScreen()。
+    ///
+    /// 副本被钉的屏拔掉时返回 nil,recomputeGeometry 直接 return —— 窗口维持原样不动。
+    /// 这是刻意的:真正的清理由 NotchMirrorManager 在屏幕配置变化时做(它会把这个实例
+    /// 整个销毁),这里再自作主张挪一次位置只会让窗口在被销毁前先闪到别的屏上去。
+    private func resolvedScreen() -> NSScreen? {
+        if let pinnedScreenID {
+            return ScreenIdentity.screen(withID: pinnedScreenID)
+        }
+        return Self.targetScreen()
+    }
+
+    /// 把当前偏好重新应用一遍。副本没有自己的设置入口(设置页那些控件只调 `.shared`),
+    /// 所以偏好变化时由 NotchMirrorManager 挨个调这个方法把它们同步过来。
+    func syncStateFromSettings() {
+        let settings = AppSettings.shared
+        isVisible = settings.notchOverlayEnabled
+        hideWhenNotPlaying = settings.hideWhenNotPlaying
+        setHiddenFromCapture(settings.hideDuringScreenCapture)
+        updateActualVisibility(isPlayingNow: PlaybackCoordinator.shared.isPlayingSmoothed)
+        recomputeGeometry(animate: false)
+    }
+
+    /// 副本销毁前调:先把窗口收走,再断掉订阅。
+    func teardown() {
+        window?.orderOut(nil)
+        isPlayingObserver?.cancel()
+        isPlayingObserver = nil
+        if let screenParamsObserver {
+            NotificationCenter.default.removeObserver(screenParamsObserver)
+            self.screenParamsObserver = nil
+        }
+        pendingHoverWork?.cancel()
+        pendingHoverWork = nil
+    }
+
     // 顶边固定贴在屏幕最顶端(screen.frame.maxY)、水平居中对齐刘海中心点、总高度 =
     // 刘海高度 + 内容行高度(+ hover 展开时再加 expandedExtraHeight)、宽度固定(见
     // contentWidth(baseWidth:notchWidth:))。
@@ -344,7 +394,7 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     // 场景(screenParamsObserver/setExpanded/init 本身)都不在那个时序陷阱里,直接读
     // PlaybackCoordinator.shared.isPlayingNow 就是准确的当前值。
     private func recomputeGeometry(animate: Bool, isPlayingOverride: Bool? = nil) {
-        guard let window, let screen = Self.targetScreen() else { return }
+        guard let window, let screen = resolvedScreen() else { return }
         let geo = Self.geometry(for: screen)
         contentTopInset = geo.notchHeight
         notchWidth = geo.notchWidth

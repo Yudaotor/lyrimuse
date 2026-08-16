@@ -70,6 +70,7 @@ final class AppSettings: ObservableObject {
         static let notchScreenID = "np:notchScreenID"
         static let notchShowEqualizer = "np:notchShowEqualizer"
         static let notchVolumeBanner = "np:notchVolumeBanner"
+        static let notchAllScreens = "np:notchAllScreens"
         // 2026-08-05 之前,"这种悬浮歌词要不要显示"这一件事有**两份**独立持久化:上面这两个
         // {classic,notch}OverlayEnabled(设置页那两个 Toggle 读它),外加两个 WindowController
         // 各自私有的这两个 key(菜单栏"显示…"那两项、全局快捷键读它)。两份可以不一致,后果见
@@ -282,6 +283,11 @@ final class AppSettings: ObservableObject {
     // 灵动岛卡片的视觉风格——默认磨砂玻璃。只负责持久化,纯展示用的设置,
     // NotchLyricsView 每次渲染直接读这个值,不需要像 classicOverlayEnabled 那样在
     // didSet 里连带调用某个单例的方法。
+    /// 每块屏都显示一个灵动岛(默认关:绝大多数人只在眼前那块屏上看)。
+    @Published var notchAllScreens: Bool {
+        didSet { defaults.set(notchAllScreens, forKey: Keys.notchAllScreens) }
+    }
+
     /// 调系统音量时在灵动岛上闪一条音量提示。
     ///
     /// 默认关:macOS 自己已经有一个音量 HUD(屏幕中下方那个),开着这个等于同一次按键
@@ -477,6 +483,7 @@ final class AppSettings: ObservableObject {
         // 默认开:它是"正在播放"最直观的一个信号,而且不占几个像素。
         notchShowEqualizer = defaults.object(forKey: Keys.notchShowEqualizer) as? Bool ?? true
         notchVolumeBanner = defaults.bool(forKey: Keys.notchVolumeBanner)
+        notchAllScreens = defaults.bool(forKey: Keys.notchAllScreens)
         notchScreenID = defaults.string(forKey: Keys.notchScreenID) ?? ""
         fontFamilyName = defaults.string(forKey: Keys.fontFamilyName) ?? Self.defaultFontFamilyName
         fontSize = (defaults.object(forKey: Keys.fontSize) as? Double) ?? Self.defaultFontSize

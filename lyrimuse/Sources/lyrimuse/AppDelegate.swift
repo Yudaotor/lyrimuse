@@ -198,6 +198,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         MediaControlHealth.shared.checkInBackground()
         startObservingScreenLock()
         startObservingVolumeBannerPreference()
+        // ⚠️ 只 start(),不在这里判断开关 —— 判断在管理器内部,因为"关着"这条路径必须
+        // 在碰 NotchLyricsWindowController.shared 之前就 return(碰一下就会凭空建出窗口,
+        // 见那个类文件头的不变量)。
+        NotchMirrorManager.start()
         PlaybackCoordinator.shared.start()
         // 菜单栏歌词跑马灯的驱动器——生命周期自持(靠 Combine 自己决定何时开停计时器),
         // 这里只需要在启动时点一次,见 MenuBarMarqueeTicker 顶部注释。

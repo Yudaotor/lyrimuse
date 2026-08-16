@@ -1320,6 +1320,15 @@ private struct AppearanceSettingsTab: View {
                 }
                 .pickerStyle(.menu)
                 .fixedSize()
+                .disabled(settings.notchAllScreens)
+            }
+            SettingsSubRow(
+                title: L10n.t("所有屏幕都显示"),
+                subtitle: L10n.t("每块屏各显示一个；开启后上面的指定屏幕不再起作用")
+            ) {
+                Toggle("", isOn: $settings.notchAllScreens)
+                    .labelsHidden()
+                    .toggleStyle(.switch)
             }
         }
         // 设置页开着的时候插拔显示器,下拉里的选项要跟着变。灵动岛窗口自己也订阅了同一条
