@@ -386,7 +386,7 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
                     .shadow(color: .black.opacity(0.45), radius: 2, y: 1)
             } else {
                 Text(poller.currentLine?.plainText ?? "♪")
-                    .foregroundStyle(.white)
+                    .foregroundStyle(accentOrWhite)
                     .shadow(color: .black.opacity(0.45), radius: 2, y: 1)
             }
         }
@@ -410,9 +410,22 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
 
     // 跟 LyricsOverlayView.wordGradient 同一套算法(前景色固定白色,不像经典悬浮窗那样
     // 可配置)——过渡带真正跟 [0,1] 有交集时才现算混合色,离得够远的字直接算纯色。
+    /// 灵动岛里"已唱过/已播放"部分的颜色。
+    ///
+    /// 复用桌面悬浮歌词那条既有语义:只有「跟随封面取色」开着、且这首歌真的取到了主色时
+    /// 才用它,否则维持原来的白 —— 灵动岛贴在刘海下,底色是纯黑或封面模糊图,白色是那里
+    /// 最稳的选择,不该在用户没要求时擅自换掉。
+    ///
+    /// 取色本身已经保证了亮度下限(见 LocalPlaybackSource.brightenedAccent:近黑兜底成
+    /// 中性灰、提亮同时压饱和),所以这里直接用,不再叠一层亮度处理。
+    private var accentOrWhite: Color {
+        guard settings.followsCoverArt, let accent = poller.artworkAccentColor else { return .white }
+        return accent
+    }
+
     private func wordGradient(left: Double, right: Double) -> LinearGradient {
-        let dim = Color.white.opacity(0.35)
-        let full = Color.white
+        let dim = accentOrWhite.opacity(0.35)
+        let full = accentOrWhite
         if right <= 0 {
             return LinearGradient(colors: [dim, dim], startPoint: .leading, endPoint: .trailing)
         }
@@ -462,7 +475,7 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
                             let fraction = min(1, max(0, Double(currentMs) / Double(anchor.durationMs)))
                             ZStack(alignment: .leading) {
                                 Capsule().fill(.white.opacity(0.18))
-                                Capsule().fill(.white.opacity(0.85))
+                                Capsule().fill(accentOrWhite.opacity(0.85))
                                     .frame(width: proxy.size.width * fraction)
                             }
                         }
