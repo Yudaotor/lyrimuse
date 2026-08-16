@@ -35,7 +35,8 @@ struct LastfmStatsSection: View {
 
     var body: some View {
         statsCard
-        chartCard
+        // 2026-08-16 换位:「最近记录」排在「听得最多」前面 —— 前者是"刚刚听了什么"、
+        // 每次打开都在变,后者是长期榜、几天才动一次,把活的放前面。
         recentCard
         // onAppear/.task 必须挂在**常驻**的卡上。onThisDayCard 是 `if let` 条件视图——
         // 没数据时它根本不在视图层级里,挂它身上的 onAppear 永远不触发,而 onThisDay
@@ -70,6 +71,7 @@ struct LastfmStatsSection: View {
                     stats.refreshBaseline()
                 }
             }
+        chartCard
         onThisDayCard
     }
 

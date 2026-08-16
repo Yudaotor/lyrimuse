@@ -826,14 +826,20 @@ private struct AppearanceSettingsTab: View {
             //   - 不再看开关:配置卡现在关着也能调(见 currentSection),预览要是还跟着开关
             //     藏起来,调的时候就又看不见效果了。
             //
-            // ⚠️ 分段选择器**不能**放进这个固定头部,尽管"页级导航不该跟内容滚"听起来更对。
-            // 2026-08-15 实测(逐层 hitTest 二分):只要这个头部里出现 NotchPreviewBar,
-            // 整个头部的 hitTest 就停在最外层的 NSHostingView 上、不再下钻到 AppKit 控件,
-            // 于是同处一个头部的分段选择器整排点不动。换成等高的纯色块立刻恢复正常,
-            // 逐项排除后指向 NotchPreviewBar 内部那份真实的 NotchLyricsView(它带 .onHover、
-            // 手势和 TimelineView)让 SwiftUI 改变了这一层的事件派发策略 —— 这是 SwiftUI
-            // 内部行为,绕不过去。选择器因此留在滚动区(那边是另一个 hosting view,实测
-            // 命中正常),代价是滚下去之后要滚回顶部才能换段。
+            // ⚠️ 分段选择器**放不进**这个固定头部,尽管"页级导航不该跟内容滚"听起来更对。
+            // 放进来它整排点不动 —— 2026-08-15 试过一次,2026-08-16 应用户要求又试了一次,
+            // 两次都是同一个结果(第二次用 CGEvent 往选择器真实坐标投点击、截图对比选中态,
+            // 确认没有切换;而同一套点击方式点左侧边栏是生效的,排除了"点击没送达")。
+            //
+            // 2026-08-16 顺带订正了上一版注释里的**归因错误**:那次写的是"指向 NotchPreviewBar
+            // 内部那份真实的 NotchLyricsView(它带 .onHover)"。这次复现时当前段是「悬浮歌词」、
+            // 头部里根本没有 NotchPreviewBar,照样点不动;而且给整块预览加 .allowsHitTesting(false)
+            // 也没用。所以跟预览里放的是哪一个、它内部有没有 hover 手势**无关**,是这个
+            // 固定头部结构本身在 SwiftUI 里的事件派发行为。真要做,得把选择器换成
+            // NSViewRepresentable 包的 NSSegmentedControl 绕开 SwiftUI 这一层。
+            //
+            // 选择器因此留在滚动区(那边是另一个 hosting view,实测命中正常),代价是滚下去
+            // 之后要滚回顶部才能换段。
             switch section {
             case .overlay: OverlayPreviewBar()
             case .notch: NotchPreviewBar()
@@ -1199,13 +1205,11 @@ private struct AppearanceSettingsTab: View {
                 }
             }
             CardDivider()
-            // "解锁后长按才能拖动"这个手势不直观(不看说明容易只当成"按住就能拖",或者
-            // 反过来以为"这窗口点不动了"),必须有一句显式说明。挂成这一行的副标题,而不是
-            // 卡片底部的统一说明——它只跟这一个开关有关。
+            // "解锁后长按才能拖动"这个手势不直观,说明放在 help 气泡里(原来副标题和 help
+            // 各写了一遍同一件事,副标题那句还更短更含糊)。
             SettingsRow(
                 icon: "lock",
                 title: L10n.t("锁定位置"),
-                subtitle: L10n.t("解锁后可点击穿透"),
                 help: L10n.t("解锁后鼠标点击会穿到桌面上；长按住悬浮歌词不放才能拖动它")
             ) {
                 Toggle("", isOn: Binding(
@@ -1346,8 +1350,11 @@ private struct AppearanceSettingsTab: View {
         }
     }
 
-    // 菜单栏歌词专属。那句随开关变化的说明挂成"超宽时横向滚动"这一行的副标题——它讲的
-    // 就是这个开关两种状态各自的行为,原来是 Section 正文里一行独立的 caption 文字。
+    // 菜单栏歌词专属。
+    //
+    // 2026-08-16 删掉了「超宽时横向滚动」这个开关:超出宽度就滚是这里唯一合理的行为,
+    // 关掉它只会得到一句被截断的歌词 —— 没人会主动要那个。少一个开关,少一份要跟着
+    // 它变的文案(那一行原来的副标题和 help 都得写两套说辞)。
     private var menuBarCard: some View {
         SettingsCard {
             SettingsCardHeader(
@@ -1355,20 +1362,7 @@ private struct AppearanceSettingsTab: View {
                 help: L10n.t("状态栏宽度有限，歌词可能被截断；鼠标悬停在上面永远能看到完整的这一行")
             )
             CardDivider()
-            SettingsRow(
-                icon: "arrow.left.arrow.right",
-                title: L10n.t("超宽时横向滚动"),
-                subtitle: L10n.t(settings.menuBarLyricsScroll
-                    ? "超出宽度时横向滚动播完"
-                    : "超出宽度时截断，不滚动"),
-                help: L10n.t(settings.menuBarLyricsScroll
-                    ? "比下面的宽度更长时，在状态栏里横向滚动播完整句；开头会先停一下再滚"
-                    : "比下面的宽度更长时就截断，末尾加省略号，不滚动")
-            ) {
-                Toggle("", isOn: $settings.menuBarLyricsScroll)
-            }
-            CardDivider()
-            SettingsSubRow(title: L10n.t(settings.menuBarLyricsScroll ? "显示宽度" : "超过就截断")) {
+            SettingsSubRow(title: L10n.t("显示宽度")) {
                 HStack(spacing: 8) {
                     // 按点(pt)而不是字数 —— 字符宽度差得太远,按字数控不住实际占宽,
                     // 见 AppSettings.menuBarLyricsMaxWidth。
@@ -1419,14 +1413,9 @@ private struct AppearanceSettingsTab: View {
                 ))
             }
             CardDivider()
-            // ⚠️ 副标题这句是必要的:关掉它并不等于"暂停后一直杵着整块卡片"—— 灵动岛会自己
-            // 收成只剩顶行(跟菜单栏齐平、不额外占屏),歌词行卷回去。不写清楚的话,想要那个
-            // 收起效果的人会以为必须开着这个开关,而开着恰恰把整个窗口 orderOut、什么都看不到。
-            SettingsRow(
-                icon: "pause.circle",
-                title: L10n.t("暂停/无播放时隐藏"),
-                subtitle: L10n.t("关掉则暂停时只收起歌词行，保留顶部那一条")
-            ) {
+            // ⚠️ 开着它,灵动岛暂停后是整个 orderOut,看不到"歌词行卷回顶行"那段收起动画
+            // (窗口都没了)。关掉才看得到。这是设置本身的语义,不写进 UI —— 用户试一下就知道。
+            SettingsRow(icon: "pause.circle", title: L10n.t("暂停/无播放时隐藏")) {
                 Toggle("", isOn: Binding(
                     get: { settings.hideWhenNotPlaying },
                     set: { newValue in
@@ -1637,9 +1626,9 @@ private struct PlayerSettingsTab: View {
             SettingsRow(
                 icon: "arrow.down.app",
                 title: features.player == .auto
-                    ? L10n.t("打开任意已知播放器时启动 Lyrimuse")
-                    : String(format: L10n.t("打开 %@ 时启动 Lyrimuse"), features.player.displayName),
-                subtitle: L10n.t("需要后台采集服务在运行")
+                    ? L10n.t("跟随播放器启动")
+                    : String(format: L10n.t("跟随 %@ 启动"), features.player.displayName),
+                help: L10n.t("检测到播放器打开时自动拉起 Lyrimuse；需要后台采集服务在运行")
             ) {
                 Toggle("", isOn: Binding(
                     get: { features.launchLyrimuseOnMusicOpen },

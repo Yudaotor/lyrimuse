@@ -87,8 +87,6 @@ final class MenuBarMarqueeTicker: ObservableObject {
         // 这几个设置任何一个变了都要立刻重算/重新决定要不要跑计时器。
         settings.$showLyricsInMenuBar.dropFirst().receive(on: RunLoop.main)
             .sink { [weak self] _ in self?.syncTimer() }.store(in: &cancellables)
-        settings.$menuBarLyricsScroll.dropFirst().receive(on: RunLoop.main)
-            .sink { [weak self] _ in self?.restartLine() }.store(in: &cancellables)
         // 宽度改了可能从"要滚"变成"装得下"(或者反过来),所以跟换句一样整个重来。
         // ⚠️ 订阅的必须是**现在真正在用的那个**设置(按点计的 maxWidth)。2026-08-15 把宽度
         // 从字数改成点时这里一度还挂在旧的 maxChars 上,后果是拖宽度滑杆完全不生效 ——
@@ -152,7 +150,6 @@ final class MenuBarMarqueeTicker: ObservableObject {
 
     private func computeScrollPlan() -> ScrollPlan? {
         let settings = AppSettings.shared
-        guard settings.menuBarLyricsScroll else { return nil }
         let full = PlaybackCoordinator.shared.currentLine?.plainText ?? ""
         guard !full.isEmpty else { return nil }
         // 窗口宽度就是用户设的那个宽度,不再由"前 N 个字"换算 —— 见

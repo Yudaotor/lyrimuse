@@ -211,11 +211,9 @@ struct MenuBarPreviewBar: View {
     /// 那需要常驻一个定时器。
     private var visibleText: String {
         let limit = settings.menuBarLyricsMaxWidth
-        if settings.menuBarLyricsScroll {
-            let truncatedText = MenuBarMarqueeRenderer.truncate(fullText, toWidth: limit)
-            // 滚动模式不显示省略号(那一段会滚出来,不是被丢掉了)。
-            return truncatedText.hasSuffix("…") ? String(truncatedText.dropLast()) : truncatedText
-        }
+        let truncatedText = MenuBarMarqueeRenderer.truncate(fullText, toWidth: limit)
+        // 不显示省略号:超出的那一段会滚出来,不是被丢掉了。
+        return truncatedText.hasSuffix("…") ? String(truncatedText.dropLast()) : truncatedText
         return MenuBarMarqueeRenderer.truncate(fullText, toWidth: limit)
     }
 
@@ -249,11 +247,8 @@ struct MenuBarPreviewBar: View {
                 !truncated
                     ? String(format: L10n.t("预览 · 上限 %@pt"),
                              "\(Int(settings.menuBarLyricsMaxWidth))")
-                    : settings.menuBarLyricsScroll
-                        ? String(format: L10n.t("预览 · 上限 %@pt，本句会横向滚动"),
-                                 "\(Int(settings.menuBarLyricsMaxWidth))")
-                        : String(format: L10n.t("预览 · 上限 %@pt，本句已截断"),
-                                 "\(Int(settings.menuBarLyricsMaxWidth))")
+                    : String(format: L10n.t("预览 · 上限 %@pt，本句会横向滚动"),
+                             "\(Int(settings.menuBarLyricsMaxWidth))")
             )
             .font(.caption)
             .foregroundStyle(.secondary)

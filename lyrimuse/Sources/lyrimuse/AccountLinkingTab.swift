@@ -618,7 +618,10 @@ struct AccountLinkingTab: View {
     @ViewBuilder
     private var stateRelayFields: some View {
         SettingsCard {
-            SettingsCardHeader(title: L10n.t("连接信息"), subtitle: L10n.t("填好这两项就会自动推送到网页"))
+            SettingsCardHeader(
+                title: L10n.t("连接信息"),
+                help: L10n.t("要先把网页端部署好并拿到访问令牌。部署步骤见项目 README 的「网页端」一节：https://github.com/Yudaotor/lyrimuse#网页端")
+            )
             CardDivider()
             SettingsRawRow(insetToText: true) {
                 VStack(alignment: .leading, spacing: 8) {

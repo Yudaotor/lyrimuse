@@ -161,15 +161,42 @@ public final class LyricsSyncEngine {
         "设计", "封面",
     ]
 
+    /// 标签里允许出现的分隔符。第七轮(2026-08-16)加的:用户报「录音师/录音室：王力宏/
+    /// Homeboy Studios, Taipei, Taiwan」没被滤掉 —— 一个人身兼两职时标签会写成
+    /// "录音师/录音室"、"作词/作曲"、"混音&母带",中间那个符号让"标签全是汉字"这条判定
+    /// 直接失败。把它们剔掉再判,而不是放宽成"允许任意非汉字"(那会把英文场景标签也放进来)。
+    private static let creditLabelSeparators = CharacterSet(charactersIn: "/／、&＆·・和与及,，")
+
     public static func matchesRoleWordCredit(_ text: String) -> Bool {
         guard let colon = text.firstIndex(where: { $0 == ":" || $0 == "：" }) else { return false }
         let label = text[text.startIndex..<colon].trimmingCharacters(in: .whitespaces)
         // 冒号后必须有内容 —— 纯粹以冒号结尾的句子是真歌词里的语气停顿,不算。
         let rest = text[text.index(after: colon)...].trimmingCharacters(in: .whitespaces)
-        guard !rest.isEmpty, (1...8).contains(label.count),
-              label.unicodeScalars.allSatisfy({ $0.properties.isIdeographic })
+        // 长度按**剔掉分隔符之后**算:"录音师/录音室"有 7 个字符,但真正的标签内容是 6 个汉字。
+        let core = label.components(separatedBy: creditLabelSeparators).joined()
+        guard !rest.isEmpty, (1...10).contains(core.count), !core.isEmpty,
+              core.unicodeScalars.allSatisfy({ $0.properties.isIdeographic })
         else { return false }
-        return creditRoleWords.contains { label.contains($0) }
+        return creditRoleWords.contains { core.contains($0) }
+    }
+
+    /// 纯英文的职员表行,**没有冒号**那一类。
+    ///
+    /// 第七轮(2026-08-16)加的:用户报歌曲末尾的「Mixed by Wang Leehom at Homeboy Music
+    /// Studios」没被滤掉。上面两条规则都要求有冒号,而英文署名的习惯写法是
+    /// "Mixed by X" / "Produced by X" / "Recorded at Y",一个冒号都没有。
+    ///
+    /// 收窄到不误杀真歌词:必须**整行以角色词开头**(不是出现在句中),角色词后面必须紧跟
+    /// by 或 at,再后面必须还有内容。英文歌词里"written by"之类出现在行首、且后面跟人名的
+    /// 概率极低;而真出现在句中的("a song written by fate")不会被这条吃掉。
+    private static let englishCreditPattern = try! NSRegularExpression(
+        pattern: #"^\s*(mixed|mastered|produced|written|composed|arranged|recorded|engineered|performed|lyrics|music|vocals?|guitars?|bass|drums|keyboards?|strings|programming|artwork|photography|design)\b[^\n]{0,20}?\s+(by|at)\s+\S"#,
+        options: [.caseInsensitive]
+    )
+
+    public static func matchesEnglishCredit(_ text: String) -> Bool {
+        let range = NSRange(text.startIndex..., in: text)
+        return englishCreditPattern.firstMatch(in: text, range: range) != nil
     }
 
     private static let genericHanCreditLinePattern = try! NSRegularExpression(
@@ -292,6 +319,9 @@ public final class LyricsSyncEngine {
             // 双字角色词判定跟关键词表一样逐行生效(不受"整份主导"闸门管):双字词的
             // 误杀面足够小,见 creditRoleWords 上的注释。
             if matchesRoleWordCredit(text) { return true }
+            // 纯英文、没有冒号的那类("Mixed by X at Y")。同样逐行生效:它要求整行以角色词
+            // 开头且紧跟 by/at,误杀面很小。
+            if matchesEnglishCredit(text) { return true }
             // 抬头只在第一行认 —— 别的位置出现同样的字样多半是真歌词。
             if i == 0, looksLikeHeaderLine(text, trackTitle: trackTitle, trackArtist: trackArtist) {
                 return true

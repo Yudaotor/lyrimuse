@@ -38,7 +38,6 @@ final class AppSettings: ObservableObject {
         static let showLyricsInMenuBar = "np:showLyricsInMenuBar"
         static let menuBarLyricsMaxChars = "np:menuBarLyricsMaxChars"
         static let menuBarLyricsMaxWidth = "np:menuBarLyricsMaxWidth"
-        static let menuBarLyricsScroll = "np:menuBarLyricsScroll"
         static let lyricsOffsetStepMs = "np:lyricsOffsetStepMs"
         static let textStrokeEnabled = "np:textStrokeEnabled"
         static let textStrokeColorHex = "np:textStrokeColorHex"
@@ -173,9 +172,6 @@ final class AppSettings: ObservableObject {
     // 上限而不是写死一个数字。
     // 菜单栏歌词超出宽度时横向滚动(而不是截断成"前 N 个字…")——2026-08-05 加,
     // 见 MenuBarMarquee/MenuBarMarqueeTicker。关掉就完全退回改动之前的截断行为。
-    @Published var menuBarLyricsScroll: Bool {
-        didSet { defaults.set(menuBarLyricsScroll, forKey: Keys.menuBarLyricsScroll) }
-    }
     @Published var menuBarLyricsMaxChars: Int {
         didSet { defaults.set(menuBarLyricsMaxChars, forKey: Keys.menuBarLyricsMaxChars) }
     }
@@ -430,7 +426,6 @@ final class AppSettings: ObservableObject {
         // 其它 App 的图标挤走。
         menuBarLyricsMaxWidth = CGFloat(
             (defaults.object(forKey: Keys.menuBarLyricsMaxWidth) as? Double) ?? 200)
-        menuBarLyricsScroll = (defaults.object(forKey: Keys.menuBarLyricsScroll) as? Bool) ?? true
         lyricsOffsetStepMs = (defaults.object(forKey: Keys.lyricsOffsetStepMs) as? Int) ?? 200
         textStrokeEnabled = (defaults.object(forKey: Keys.textStrokeEnabled) as? Bool) ?? ColorTheme.defaultTheme.textStrokeEnabled
         textStrokeColorHex = defaults.string(forKey: Keys.textStrokeColorHex) ?? ColorTheme.defaultTheme.textStrokeColorHex

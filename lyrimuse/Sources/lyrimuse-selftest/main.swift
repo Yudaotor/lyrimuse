@@ -633,6 +633,27 @@ do {
     )
 }
 
+// ---- 署名行过滤第七轮(2026-08-16):带分隔符的中文标签 + 纯英文无冒号 ----
+do {
+    typealias E = LyricsSyncEngine
+    // 用户报的两行,都出现在歌曲**末尾**
+    expectEqual(E.matchesRoleWordCredit("录音师/录音室：王力宏/Homeboy Studios, Taipei, Taiwan"), true,
+                "署名行: 标签含斜杠(录音师/录音室)")
+    expectEqual(E.matchesEnglishCredit("Mixed by Wang Leehom at Homeboy Music Studios"), true,
+                "署名行: 纯英文无冒号(Mixed by ...)")
+    // 同形态的其它写法
+    expectEqual(E.matchesRoleWordCredit("作词&作曲：某人"), true, "署名行: 标签含 &")
+    expectEqual(E.matchesRoleWordCredit("混音、母带：某人"), true, "署名行: 标签含顿号")
+    expectEqual(E.matchesEnglishCredit("Produced by Someone"), true, "署名行: Produced by")
+    expectEqual(E.matchesEnglishCredit("Recorded at Abbey Road"), true, "署名行: Recorded at")
+
+    // ⚠️ 不能误杀的:这些是真歌词
+    expectEqual(E.matchesEnglishCredit("a song written by fate"), false, "真歌词: written by 出现在句中不算")
+    expectEqual(E.matchesEnglishCredit("Music makes me lose control"), false, "真歌词: 以 Music 开头但没有 by/at")
+    expectEqual(E.matchesRoleWordCredit("他说：我不走"), false, "真歌词: 带冒号的对白")
+    expectEqual(E.matchesRoleWordCredit("曲婉婷："), false, "对唱标签: 冒号后没内容")
+}
+
 // ---- EnrichCacheReader.artistTitleKey:「最近播放」封面的本机兜底键(2026-08-14) ----
 //
 // 这个键两头用:建索引时喂的是**缓存 key 里已经归一化过**的歌名,查询时喂的是 Last.fm
