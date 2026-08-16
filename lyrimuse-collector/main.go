@@ -121,6 +121,13 @@ func main() {
 	// desktop-lyrics"设置"窗口的"功能开关"分组写这份共享文件,collector 启动时读一次
 	// (没有文件监听,改了要重启才生效,跟 config.json/enrichCache 同一套约定)。放在
 	// loadEnrichCache 之前——下面读 features.LyricsDir 要用到。
+	// 常驻路径才加单实例锁(上面的一次性子命令都在更早的分支里 return 了,不受影响)。
+	// 拿不到锁说明已有实例在跑:退出码 0,launchd 的 KeepAlive 会按自己的节流重试,
+	// 等旧实例真退了再接管。
+	if !acquireSingleInstanceLock(filepath.Dir(*cfgPath)) {
+		log.Printf("another collector instance is already running; exiting to avoid clobbering shared caches")
+		os.Exit(0)
+	}
 	features = loadFeatureFlags(filepath.Join(filepath.Dir(*cfgPath), clientName+"-features.json"))
 	// 歌词打分要知道"用户在放哪个播放器",好偏向那个平台自家的歌词(时间轴对得上同一个
 	// 音频母版)。跟 features 一样只在启动时设一次 —— 换播放器本来就要重启 collector。

@@ -3,10 +3,10 @@
 package main
 
 import (
+	"path/filepath"
 	"math"
 	"slices"
 	"encoding/json"
-	"fmt"
 	_ "image/jpeg" // 注册 JPEG 解码器
 	_ "image/png"  // 网易云取色缩略图有时是 PNG(content-type 却谎报 jpg)
 	"log"
@@ -1398,19 +1398,43 @@ func loadEnrichCache(path string) {
 	enrichPath = path
 	data, err := os.ReadFile(path)
 	if err != nil {
+		// 文件不存在是首次启动的正常情况;别的读错误必须喊出来 —— 静默当成空库,
+		// 接下来第一次保存就会把用户攒的整个缓存盖成几条新数据(2026-08-16 实锤:
+		// 204 条被磨到 10 条,用户手工修过的歌词也在里面)。
+		if !os.IsNotExist(err) {
+			log.Printf("load enrich cache: %v — starting empty, existing file left untouched", err)
+		}
 		return
 	}
 	var m map[string]enrichEntry
-	if err := json.Unmarshal(data, &m); err == nil && m != nil {
-		enrichMu.Lock()
-		enrichCache = m
-		enrichMu.Unlock()
-		log.Printf("loaded %d cached track enrichments from %s", len(m), path)
+	if err := json.Unmarshal(data, &m); err != nil || m == nil {
+		// 解析不动就把原文件挪到一边保住,绝不留在原位等着被后续保存覆盖。
+		side := path + ".corrupt"
+		if renameErr := os.Rename(path, side); renameErr == nil {
+			log.Printf("enrich cache unreadable (%v) — moved aside to %s, starting empty", err, side)
+		} else {
+			log.Printf("enrich cache unreadable (%v) and could not move aside (%v)", err, renameErr)
+		}
+		return
 	}
+	enrichMu.Lock()
+	enrichCache = m
+	enrichMu.Unlock()
+	log.Printf("loaded %d cached track enrichments from %s", len(m), path)
 }
 
 // saveEnrichCache atomically writes the cache when dirty (temp file + rename).
+//
+// ⚠️ enrichSaveMu 罩住 marshal→write→rename 全程,两个并发保存**串行**执行。
+// 2026-08-16 实锤过不串行的两种翻车:①两个保存都用 pid 命名的同一个 tmp 文件,
+// 先 rename 的把对方的文件偷走,后 rename 的报 no such file(日志里连着两条);
+// ②更毒的是慢的那个拿着**过期快照**最后落盘,把新数据盖回老状态。tmp 文件也改用
+// os.CreateTemp 的随机名,同名互踩从根上不可能。
+var enrichSaveMu sync.Mutex
+
 func saveEnrichCache() {
+	enrichSaveMu.Lock()
+	defer enrichSaveMu.Unlock()
 	enrichMu.Lock()
 	if !enrichDirty || enrichPath == "" {
 		enrichMu.Unlock()
@@ -1422,14 +1446,24 @@ func saveEnrichCache() {
 	if err != nil {
 		return
 	}
-	// 临时文件名带进程号:固定的 ".tmp" 一旦有两个写入方(collector 自己 + 未来任何别的
-	// 写入者,或同一进程里并发走到这里)就会互相覆盖同一个临时文件,rename 出去的可能是
-	// 半份别人的内容 —— 那样"先写 tmp 再 rename"这套原子性就白做了。
-	tmp := fmt.Sprintf("%s.tmp.%d", enrichPath, os.Getpid())
-	if err := os.WriteFile(tmp, data, 0o644); err != nil {
+	tmp, err := os.CreateTemp(filepath.Dir(enrichPath), filepath.Base(enrichPath)+".tmp.*")
+	if err != nil {
+		log.Printf("save enrich cache: %v", err)
 		return
 	}
-	if err := os.Rename(tmp, enrichPath); err != nil {
+	if _, err := tmp.Write(data); err != nil {
+		tmp.Close()
+		os.Remove(tmp.Name())
+		log.Printf("save enrich cache: %v", err)
+		return
+	}
+	if err := tmp.Close(); err != nil {
+		os.Remove(tmp.Name())
+		log.Printf("save enrich cache: %v", err)
+		return
+	}
+	if err := os.Rename(tmp.Name(), enrichPath); err != nil {
+		os.Remove(tmp.Name())
 		log.Printf("save enrich cache: %v", err)
 	}
 }
