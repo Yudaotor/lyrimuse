@@ -370,6 +370,11 @@ public enum MediaControlClient {
         return p.position
     }
 
+    /// 最近一次成功问到的 Spotify 真值位置(见下面 truth 覆盖那段的失败退路)。
+    /// 轮询线程读写,跟 Apple Music 缓存一样用锁,不引入 Swift Concurrency。
+    private static let spotifyTruthLock = NSLock()
+    private static var lastSpotifyTruth: (position: Double, at: Date, title: String?, playing: Bool)?
+
     private static func fetchRawMediaControlSnapshot() -> (MediaControlSnapshot, String)? {
         guard let binaryPath = binaryPath() else { return nil }
         // --now 让工具自己按内部时钟外推出一个不会冻结的 elapsedTimeNow(见文件顶部
@@ -400,12 +405,53 @@ public enum MediaControlClient {
         // 1.64 秒(波动仅 ±0.02,是固定偏移不是抖动,所以提高轮询频率没用)。
         // Apple Music 不受影响是因为它走 AppleScript 直接问 Music.app。
         //
+        // ⚠️ 2026-08-17 排查"自动切歌后歌词整首偏快"补充的机制认识(实测坐实):Spotify 的
+        // MediaRemote 原始 elapsedTime **恒为 0**——锚点每首歌只打一次(在曲目开始那一刻),
+        // elapsedTimeNow 就是"距锚点时间戳过了多久"。所以它的准确度完全取决于那一下
+        // 时间戳打得准不准,而这是**会话间漂移**的:08-14 量到恒定偏慢 1.64s,08-17 又量到
+        // 偏快 ~0.1s。锚点一旦打早(比如 gapless 预载时刻早于真实出声),elapsedTimeNow 就
+        // **整首歌**偏快,而且这首歌内不会自愈(锚点不重打);手动重播这首歌会重新打锚,
+        // 立刻恢复正常——跟用户报的症状逐条吻合。真值覆盖在,这个漂移就露不出来;
+        // 真值覆盖一旦失败,退回的就是这个不可信的值。所以:
+        //   1. 失败重试一次(osascript 单次 ~100ms,偶发的 Apple Event 抖动值得一次重试);
+        //   2. 两次都失败要**出声**(logger.error),不再静默退回;
+        //   3. 真值跟 elapsedTimeNow 偏差超过 1 秒时记录下来 —— 那正是"锚点打歪了"的
+        //      直接证据,下次用户报"偏快"时 `log show` 一眼可见。
+        //
         // ⚠️ 采集器(collector/system.go)里有一份**同样的**修正。两边各自独立读
         // media-control(采集器喂 ListenBrainz/网页,这里喂桌面悬浮窗),改一边只修一半 ——
         // 上一轮就是只改了采集器,用户反馈"还是有延迟",因为悬浮窗走的正是这条路。
-        if bundleID == PlaybackPlayer.spotify.bundleIdentifier,
-           let truth = spotifyPlayerPosition() {
-            elapsed = truth
+        if bundleID == PlaybackPlayer.spotify.bundleIdentifier {
+            var truth = spotifyPlayerPosition()
+            if truth == nil { truth = spotifyPlayerPosition() } // 失败重试一次,见上
+            if let truth {
+                if let extrapolated = elapsed, abs(extrapolated - truth) > 1.0 {
+                    // .notice(默认档)才会持久化进日志存储;.info 默认只进内存缓冲,
+                    // 事后 `log show` 查不到 —— 这条就是留给事后查的。
+                    logger.notice("spotify anchor skew: elapsedTimeNow=\(extrapolated, format: .fixed(precision: 2)) vs playerPosition=\(truth, format: .fixed(precision: 2)) (\(extrapolated - truth > 0 ? "ahead" : "behind", privacy: .public) by \(abs(extrapolated - truth), format: .fixed(precision: 2))s)")
+                }
+                elapsed = truth
+                spotifyTruthLock.lock()
+                lastSpotifyTruth = (truth, Date(), raw.title, raw.playing == true)
+                spotifyTruthLock.unlock()
+            } else {
+                // 两次都失败:优先按"最近一次成功的真值 + 经过的墙钟时间"外推,而不是退回
+                // elapsedTimeNow —— 后者带着这首歌的锚点误差,一口吞进去就是一次跳变
+                // (LocalPlaybackSource 把 Spotify 当精确源,0.15s 门槛,咬得很紧)。
+                // 缓存只在"同一首歌 + 10 秒内"时可信:换歌了缓存是上一首的位置,过期了
+                // 外推误差也攒大了,都退回 elapsedTimeNow 并大声记日志。
+                spotifyTruthLock.lock()
+                let cached = lastSpotifyTruth
+                spotifyTruthLock.unlock()
+                if let cached, cached.title == raw.title,
+                   case let age = Date().timeIntervalSince(cached.at), age >= 0, age < 10 {
+                    // 播放中按走过的时间外推;暂停时位置冻结,原样用。
+                    elapsed = cached.playing ? cached.position + age : cached.position
+                    logger.notice("spotify playerPosition read failed twice; using cached truth \(cached.position, format: .fixed(precision: 2)) + \(age, format: .fixed(precision: 2))s")
+                } else {
+                    logger.error("spotify playerPosition read failed twice with no usable cache; falling back to elapsedTimeNow=\(elapsed ?? -1, format: .fixed(precision: 2)) which may carry a per-track anchor skew")
+                }
+            }
         }
         let snapshot = MediaControlSnapshot(
             title: raw.title,
