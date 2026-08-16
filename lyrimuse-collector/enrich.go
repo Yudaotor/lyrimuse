@@ -58,6 +58,13 @@ type enrichEntry struct {
 	// 成分 —— 而缓存又是"解析一次永久保留",于是那一瞬间的运气被永久固化。
 	LyricsScore       int      `json:"lyrics_score,omitempty"`
 	LyricsSourcesSeen []string `json:"lyrics_sources_seen,omitempty"`
+	// 这一轮**应答过**的源(哪怕候选被判负分)。跟上面 SourcesSeen 的区别、以及为什么
+	// 两个都要存,见 lyricSourcesResponded 的注释和 decision.go —— "回了烂候选"和
+	// "超时没露面"是两种不同的坏,以前只有前者的口径落盘,事后分不出。
+	LyricsSourcesResponded []string `json:"lyrics_sources_responded,omitempty"`
+	// 最近一次完整评估的决策记录(候选表+得分明细,只存元数据),见 decision.go。
+	// ⚠️ 只写不读:解析逻辑不许拿它当输入。
+	LyricsDecision *lyricsDecision `json:"lyrics_decision,omitempty"`
 	// 升级重试的节流与上限,见 needsLyricsRetry。
 	LyricsRetryTS    int64 `json:"lyrics_retry_ts,omitempty"`
 	LyricsRetryCount int   `json:"lyrics_retry_count,omitempty"`
@@ -613,8 +620,16 @@ func retryLyricsUpgrade(key, artist, title, album string, durationSecs float64) 
 	if len(seen) > 0 {
 		e.LyricsSourcesSeen = seen
 	}
+	if responded := lyricSourcesResponded(scored); len(responded) > 0 {
+		e.LyricsSourcesResponded = responded
+	}
 	baseline, comparable := lyricsUpgradeBaseline(e, scored)
-	if picked != nil && comparable && picked.Score > baseline {
+	upgraded := picked != nil && comparable && picked.Score > baseline
+	// 无论换没换,这一轮完整评估都值得留证(Applied 区分两种含义,见 decision.go)。
+	e.LyricsDecision = buildLyricsDecision(
+		"upgrade", artist, title, album, durationSecs, scored, picked, upgraded)
+	traceLyricsDecision(key, e.LyricsDecision)
+	if upgraded {
 		log.Printf("lyrics upgrade: %s  %s(%d) -> %s(%d)", key, e.LyricsSource, e.LyricsScore, picked.Source, picked.Score)
 		e.Lyrics = picked.Lyrics
 		e.LyricsSource = picked.Source
@@ -739,6 +754,17 @@ func rescoreLyrics(key, artist, title, album string, durationSecs float64) {
 	e.LyricsRescoreTS = time.Now().Unix()
 	if len(seen) > 0 {
 		e.LyricsSourcesSeen = seen
+	}
+	if responded := lyricSourcesResponded(scored); len(responded) > 0 {
+		e.LyricsSourcesResponded = responded
+	}
+	// 不可判(当前源这轮没应答)时不写决策记录 —— 那一轮没有做出任何决定,盖掉上一份
+	// 完整评估的证据反而是损失。可判的两个分支都写(见 decision.go 的 Applied 语义)。
+	if decidable {
+		e.LyricsDecision = buildLyricsDecision(
+			"rescore", artist, title, album, durationSecs, scored, picked,
+			picked != nil && picked.Lyrics != e.Lyrics)
+		traceLyricsDecision(key, e.LyricsDecision)
 	}
 	switch {
 	case !decidable:
@@ -996,7 +1022,16 @@ func resolveTrackEnrichment(artist, title, album string, durationSecs float64) e
 	// 不管选没选中,都记下这一轮到底有哪些源真的给出了可用候选 —— needsLyricsRetry
 	// 靠"有启用的源这轮没露面"来判断这次结果是不是在信息不全的情况下做的决定。
 	e.LyricsSourcesSeen = lyricSourcesWithCandidates(scored)
-	if picked := pickLyricCandidate(scored); picked != nil {
+	e.LyricsSourcesResponded = lyricSourcesResponded(scored)
+	picked := pickLyricCandidate(scored)
+	// 决策固化(见 decision.go):首次解析是最要紧的一份 —— 缓存永久保留,这一刻的运气
+	// 就是这首歌以后一直显示的东西,不记下来事后无从复盘。
+	e.LyricsDecision = buildLyricsDecision(
+		"first-resolve", artist, title, album, durationSecs, scored, picked, picked != nil)
+	// 首次解析这里拿不到 key(它由上层 trackEnrichment 用**未转简体**的原始标签拼),
+	// 用查询词拼一个等价形状 —— trace 是流水账,要的是"能对上是哪首歌",不参与任何查找。
+	traceLyricsDecision(artist+"|"+title+"|"+album, e.LyricsDecision)
+	if picked != nil {
 		e.Lyrics = picked.Lyrics
 		e.LyricsSource = picked.Source
 		e.LyricsScore = picked.Score

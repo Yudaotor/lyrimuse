@@ -105,6 +105,10 @@ type featureFlagsFile struct {
 	// 不在这份共享文件里,是 Swift 侧 AppSettings 自己的纯本地设置,不需要 collector
 	// 知道。
 	LaunchLyrimuseOnMusicOpen *bool `json:"launch_lyrimuse_on_music_open,omitempty"`
+	// LyricsDecisionTrace:歌词解析决策的 append-only NDJSON 流水账,见 lyricstrace.go。
+	// **默认关** —— 纯诊断旁路,平时不该往磁盘攒文件;要排查"为什么选了这份歌词"的
+	// 历史过程时才开。缓存内的决策记录(decision.go)不受这个开关影响,始终会写。
+	LyricsDecisionTrace *bool `json:"lyrics_decision_trace,omitempty"`
 }
 
 // featureFlags is the resolved (never-nil) form consulted at every gate site.
@@ -148,6 +152,8 @@ type featureFlags struct {
 	LyricsMachineTranslation bool
 	// LaunchLyrimuseOnMusicOpen 只被 companionlaunch.go 读取。
 	LaunchLyrimuseOnMusicOpen bool
+	// LyricsDecisionTrace 只被 lyricstrace.go 读取,见那边注释。
+	LyricsDecisionTrace bool
 }
 
 // features is set once in main() before run() starts; every gate site reads
@@ -193,6 +199,7 @@ func loadFeatureFlags(path string) featureFlags {
 		LyricsTranslationLanguage: resolveLyricsTranslationLanguage(f.LyricsTranslationLanguage),
 		LyricsMachineTranslation:  boolOr(f.LyricsMachineTranslation, false),
 		LaunchLyrimuseOnMusicOpen: boolOr(f.LaunchLyrimuseOnMusicOpen, true),
+		LyricsDecisionTrace:       boolOr(f.LyricsDecisionTrace, false),
 	}
 }
 
