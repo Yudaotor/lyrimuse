@@ -4,12 +4,14 @@ import Foundation
 // 菜单栏歌词的跑马灯取窗算法(2026-08-05 加,点子来自 FlowX/Kadxy/FlowX——它的菜单栏
 // 歌词超宽时会横向滚动,而不是像我们原来那样直接截断成"前 N 个字…")。
 //
-// ⚠️ 为什么是"算出该显示哪一段文字"而不是"做一个滚动动画":MenuBarExtra 默认(.menu)
-// 样式的 label 里挂不住 SwiftUI 的动画/生命周期修饰符——本会话早先实测坐实过 `.task`
-// 挂在 MenuBarLabel 上从来不触发(详见当时排查系统翻译兜底那一轮的结论)。但 label 本身
-// 确实会跟着它读的 @Published 值变化重新渲染(菜单栏歌词能跟着换句就是靠这个)。所以
-// 这里反过来做:把"现在该露出哪一段"当成纯数据算出来、由模型层按节奏发布,label 只管
-// 渲染一个普通字符串,完全不依赖任何视图侧的动画能力。
+// ⚠️ 历史(2026-08-05 ~ 08-16):这里原来只有 scrollOffset 一个函数,因为那时菜单栏还是
+// SwiftUI 的 MenuBarExtra —— 它 .menu 样式的 label **挂不住任何动画**(实测坐实 `.task`
+// 从来不触发;后来用探针读出根因:MenuBarExtra 是把 label **快照成一张 NSImage** 塞进
+// NSStatusBarButton.image 的,所以视图侧根本没有活的图层可动)。于是当时只能反过来做:
+// 由模型层每帧算出"此刻该偏移多少"、换一张图,靠 @Published 驱动 label 重渲染。
+//
+// 2026-08-16 菜单栏改成自建 NSStatusItem 之后,滚动交给 Core Animation 在渲染层插值,
+// 主线程每句只干一次活 —— 见下面 scrollKeyframes 和 MenuBarScrollingLabel。
 //
 // 纯函数、无状态,selftest 直接覆盖。
 public enum MenuBarMarquee {
@@ -56,5 +58,42 @@ public enum MenuBarMarquee {
             return min(maxOffset, CGFloat(t - hold) * pointsPerSecond)
         }
         return maxOffset
+    }
+
+    // ---- 同一段运动的**声明式**写法(2026-08-16 加) ----
+    //
+    // 上面 scrollOffset 是"给我一个时刻,我告诉你此刻偏移多少",要有人每帧来问才动得起来。
+    // 2026-08-16 把菜单栏从 MenuBarExtra 换成原生 NSStatusItem 之后,滚动交给 Core Animation
+    // 在渲染层插值(见 MenuBarScrollingLabel),而 CA 要的是另一种形状的输入:整个周期多长、
+    // 在哪几个归一化时刻、各自停在哪个偏移量上。这个函数就是把同一段运动翻译成那个形状。
+    //
+    // 两者**必须**描述同一段运动 —— selftest 里直接拿这里的关键帧做线性插值,逐点跟
+    // scrollOffset 对答案(见"菜单栏跑马灯:关键帧与逐帧采样必须描述同一段运动")。这样
+    // 换驱动方式没有偷偷改变观感,而不是靠"我记得参数抄对了"。
+    //
+    // 保留 scrollOffset 不删:它是这段运动的可读定义,也是关键帧的验收标准。
+    public struct ScrollKeyframes: Equatable, Sendable {
+        /// 一个完整周期的秒数(停 → 滚 → 停)。CA 那边 repeatCount = .infinity。
+        public let duration: Double
+        /// 归一化时刻(0...1),跟 offsets 一一对应。
+        public let keyTimes: [Double]
+        /// 各时刻的偏移量(点,>= 0,越大表示文字越往左走)。
+        public let offsets: [CGFloat]
+    }
+
+    /// nil = 这一句不用滚(装得下,或者调用方把速度算成了非正数)。
+    public static func scrollKeyframes(
+        maxOffset: CGFloat, pointsPerSecond: CGFloat, holdSeconds: Double
+    ) -> ScrollKeyframes? {
+        guard maxOffset > 0, pointsPerSecond > 0 else { return nil }
+        let hold = max(0, holdSeconds)
+        let travel = Double(maxOffset / pointsPerSecond)
+        let cycle = hold * 2 + travel
+        // travel > 0 保证 cycle > 0,不用防除零。
+        return ScrollKeyframes(
+            duration: cycle,
+            keyTimes: [0, hold / cycle, (hold + travel) / cycle, 1],
+            offsets: [0, 0, maxOffset, maxOffset]
+        )
     }
 }

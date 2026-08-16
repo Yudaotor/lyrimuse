@@ -1900,6 +1900,92 @@ do {
     expectEqual(offset(2.0), offset(2.0), "像素滚动: 纯函数,同输入同输出")
 }
 
+// ---- 菜单栏跑马灯:关键帧与逐帧采样必须描述同一段运动 ----
+//
+// 2026-08-16 菜单栏从 MenuBarExtra 换成自建 NSStatusItem 之后，滚动不再由计时器逐帧
+// 驱动，而是把 scrollKeyframes 交给 Core Animation 去插值。换驱动方式最容易出的事故
+// 不是"不动了"（那一眼就看得见），而是**悄悄变了观感**：停留时长、速度、循环点任何
+// 一个抄错，滚动看起来都还挺正常，只是跟以前不一样了。
+//
+// 所以这里不去单独断言关键帧的几个数字，而是拿上面那个已经测透的 scrollOffset 当验收
+// 标准：对关键帧做线性插值（CA 的 .linear 就是这么算的），逐点跟 scrollOffset 对答案。
+do {
+    let maxOffset: CGFloat = 100
+    let pps: CGFloat = 50
+    let hold = 1.0
+
+    /// 验收标准：上面那个已经测透的逐帧采样函数，同一组参数。
+    func offsetReference(_ elapsed: Double) -> CGFloat {
+        MenuBarMarquee.scrollOffset(
+            elapsed: elapsed, maxOffset: maxOffset, pointsPerSecond: pps, holdSeconds: hold)
+    }
+
+    guard let frames = MenuBarMarquee.scrollKeyframes(
+        maxOffset: maxOffset, pointsPerSecond: pps, holdSeconds: hold) else {
+        expectEqual(true, false, "关键帧: 该滚的参数却返回了 nil")
+        fatalError("unreachable")
+    }
+
+    // 周期跟逐帧那版一致：停 1 + 走 2 + 停 1 = 4 秒。
+    expectEqual(frames.duration, 4.0, "关键帧: 一个周期 4 秒")
+    expectEqual(frames.keyTimes.count, frames.offsets.count,
+                "关键帧: keyTimes 与 offsets 一一对应")
+    expectEqual(frames.keyTimes[0], 0, "关键帧: 从 0 开始")
+    expectEqual(frames.keyTimes[frames.keyTimes.count - 1], 1, "关键帧: 到 1 结束")
+    // keyTimes 必须单调不减，否则 CA 的插值结果是未定义的。
+    var monotonic = true
+    for i in 1 ..< frames.keyTimes.count where frames.keyTimes[i] < frames.keyTimes[i - 1] {
+        monotonic = false
+    }
+    expectEqual(monotonic, true, "关键帧: keyTimes 单调不减")
+
+    // CA 的 .linear 插值：给定周期内的时刻，在相邻两个关键帧之间线性取值。
+    func interpolate(_ elapsed: Double) -> CGFloat {
+        var t = elapsed.truncatingRemainder(dividingBy: frames.duration)
+        if t < 0 { t += frames.duration }
+        let normalized = t / frames.duration
+        for i in 1 ..< frames.keyTimes.count {
+            let t0 = frames.keyTimes[i - 1], t1 = frames.keyTimes[i]
+            guard normalized <= t1 else { continue }
+            guard t1 > t0 else { return frames.offsets[i] }
+            let ratio = (normalized - t0) / (t1 - t0)
+            return frames.offsets[i - 1]
+                + (frames.offsets[i] - frames.offsets[i - 1]) * CGFloat(ratio)
+        }
+        return frames.offsets[frames.offsets.count - 1]
+    }
+
+    // 扫两个完整周期，每 0.05 秒一个采样点，逐点跟 scrollOffset 对答案。
+    var worstGap = 0.0
+    var worstAt = 0.0
+    for i in 0 ... 160 {
+        let elapsed = Double(i) / 20
+        let gap = abs(Double(interpolate(elapsed) - offsetReference(elapsed)))
+        if gap > worstGap { worstGap = gap; worstAt = elapsed }
+    }
+    // 允许极小的浮点误差（两条路径的乘除顺序不同），但不能有真实的行为差异。
+    expectEqual(worstGap < 0.001, true,
+                "关键帧: 与逐帧采样处处一致(最大偏差 \(worstGap) 出现在 t=\(worstAt)s)")
+
+    // 装得下 / 速度非正 → 没有可滚的东西，必须是 nil 而不是一条跑不起来的空动画。
+    expectEqual(
+        MenuBarMarquee.scrollKeyframes(maxOffset: 0, pointsPerSecond: 50, holdSeconds: 1) == nil,
+        true, "关键帧: 装得下就没有动画")
+    expectEqual(
+        MenuBarMarquee.scrollKeyframes(maxOffset: 100, pointsPerSecond: 0, holdSeconds: 1) == nil,
+        true, "关键帧: 速度为 0 不生成动画(也不除零)")
+
+    // 不停留(hold=0)时首尾两个关键帧会重合在同一时刻——这是合法的，但 keyTimes 仍然
+    // 必须单调不减，不能出现 0.0 之后跟着一个负数这类会让 CA 插值发疯的输入。
+    guard let noHold = MenuBarMarquee.scrollKeyframes(
+        maxOffset: 100, pointsPerSecond: 50, holdSeconds: 0) else {
+        expectEqual(true, false, "关键帧: hold=0 不该返回 nil")
+        fatalError("unreachable")
+    }
+    expectEqual(noHold.keyTimes, [0, 0, 1, 1], "关键帧: 不停留时首尾各自重合")
+    expectEqual(noHold.duration, 2.0, "关键帧: 不停留时周期就是走完全程的时间")
+}
+
 // ---- 署名行:关键词连写 ----
 do {
     // 2026-08-15 用户实测漏网的形状：「词曲：蔡徐坤 KUN/Marco Bernardis/…」被当歌词

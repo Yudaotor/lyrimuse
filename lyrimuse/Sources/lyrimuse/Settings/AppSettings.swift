@@ -170,8 +170,7 @@ final class AppSettings: ObservableObject {
     }
     // 状态栏歌词行超过这个字数就截断+悬停 tooltip 补全,不超过就整行显示——做成可调的
     // 上限而不是写死一个数字。
-    // 菜单栏歌词超出宽度时横向滚动(而不是截断成"前 N 个字…")——2026-08-05 加,
-    // 见 MenuBarMarquee/MenuBarMarqueeTicker。关掉就完全退回改动之前的截断行为。
+    // ⚠️ 已经没有读取方了,只为兼容老配置文件保留(见下面 menuBarLyricsMaxWidth)。
     @Published var menuBarLyricsMaxChars: Int {
         didSet { defaults.set(menuBarLyricsMaxChars, forKey: Keys.menuBarLyricsMaxChars) }
     }

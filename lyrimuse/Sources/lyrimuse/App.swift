@@ -8,13 +8,15 @@ struct LyrimuseApp: App {
     @ObservedObject private var languageSettings = AppSettings.shared
 
     var body: some Scene {
-        // 用 content:label: 形式而不是固定标题+图标——状态栏显示当前歌词这个设置项
-        // 开着时,label 要能动态换成歌词文字(见 MenuBarLabel)。
-        MenuBarExtra {
-            MenuBarMenu()
-        } label: {
-            MenuBarLabel()
-        }
+        // ⚠️ 这里**没有** MenuBarExtra。状态栏那一项 2026-08-16 改成自建 NSStatusItem 了
+        // (MenuBar/MenuBarStatusItem.swift,由 AppDelegate 启动),因为 MenuBarExtra 是把
+        // label 快照成一张图塞进状态栏按钮的,视图侧没有活的图层可以挂动画,滚动歌词只能
+        // 每帧换图、顺滑度受主线程调度摆布 —— 详见 MenuBarScrollingLabel 顶部那段实测。
+        //
+        // 下面这几扇窗仍然是 SwiftUI 场景,**故意不一起搬走**:Settings 场景顺带提供了
+        // "Lyrimuse ▸ 设置… ⌘," 那个主菜单项(在 Dock 中显示时才有主菜单),Window(id:)
+        // 也白拿了位置/尺寸的自动存档。打开它们需要的环境 action 由一扇隐藏的锚点窗口
+        // 捕获,见 MenuBar/MenuBarSceneActions.swift。
         Settings {
             SettingsView()
         }

@@ -203,9 +203,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // 见那个类文件头的不变量)。
         NotchMirrorManager.start()
         PlaybackCoordinator.shared.start()
-        // 菜单栏歌词跑马灯的驱动器——生命周期自持(靠 Combine 自己决定何时开停计时器),
-        // 这里只需要在启动时点一次,见 MenuBarMarqueeTicker 顶部注释。
-        MenuBarMarqueeTicker.shared.start()
+        // 状态栏那一项(图标/歌词/滚动歌词 + 下拉菜单)。2026-08-16 之前这是 App.swift 里
+        // 的一个 MenuBarExtra 场景,现在是自建的 NSStatusItem,得在这里显式启动。
+        // 生命周期自持(靠 Combine 订阅设置/播放状态),这里只需要点一次。
+        MenuBarStatusItem.shared.start()
+        // 捕获 openSettings/openWindow 这两个环境 action 的隐藏锚点窗口。原来这件事挂在
+        // MenuBarExtra 的 label 上,随 MenuBarExtra 一起没了 —— 见该文件注释。
+        MenuBarSceneActions.install()
 
         // 打开 Lyrimuse 时顺带唤起当前选定的播放器(可选,见 AppSettings.
         // launchMusicOnLyrimuseOpen 注释)。跟着 PlaybackPlayerPreference.current 走,
@@ -222,10 +226,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
 
-        // 首次启动的完整引导向导——触发点在 MenuBarLabel.onAppear,不在这里:
+        // 首次启动的完整引导向导——触发点在 SceneActionRegistrar.onAppear,不在这里:
         // openWindow(id:) 这个 SwiftUI 环境 action 只有挂载的 View 才能拿到,这个时机
-        // (AppDelegate.applicationDidFinishLaunching)早于 MenuBarExtra 的 label 真正
-        // 挂载,这里调用会静默没反应。
+        // (AppDelegate.applicationDidFinishLaunching)早于那扇锚点窗口真正挂载,
+        // 这里调用会静默没反应。
         GlobalHotkeys.registerAll()
 
         // 触发 SparkleUpdaterManager 的懒加载初始化——它的 init() 会以

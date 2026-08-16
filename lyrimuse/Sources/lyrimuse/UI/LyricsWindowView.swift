@@ -6,8 +6,14 @@ import LyrimuseCore
 // Dock)——2026-08-01 实测排查过一整轮,不是这个窗口自己代码的问题:"歌词管理"这个
 // 完全没碰过的既有窗口,按钮同样是 AXZoomButton 而不是 AXFullScreenButton(拿 TextEdit
 // 一个正常支持全屏的窗口对比过,那边点了真的会全屏,AXFullScreen 从 false 变 true;
-// 这两个窗口点了 AXFullScreen 恒为 false),说明这是"MenuBarExtra 作为主 Scene 的这整个
-// App"里所有 Window(id:) 场景共有的表现,不是这一个视图的局部问题。已经验证过并排除的
+// 这两个窗口点了 AXFullScreen 恒为 false),说明这是这个 App 里所有 Window(id:) 场景
+// 共有的表现,不是这一个视图的局部问题。
+//
+// ⚠️ 2026-08-16 订正:当时把原因归到"MenuBarExtra 作为主 Scene 的这整个 App"上,这个
+// 归因是错的。菜单栏那一项这天换成了自建 NSStatusItem、MenuBarExtra 已经从 App.swift
+// 里整个删掉,重新用 AX 查过这扇窗:绿色按钮仍然是 AXZoomButton、没有
+// AXFullScreenButton、AXFullScreen 仍恒为 false。所以 MenuBarExtra 是被排除的第 4 个
+// 假设,真正的原因还没找到。已经验证过并排除的
 // 方向:①window.collectionBehavior 加 .fullScreenPrimary(用 rawValue 位掩码确认过真的
 // 生效,菜单栏"显示"菜单里也确实多出"进入全屏幕"这一项);②NSApp.activationPolicy
 // 切到 .regular(用户自己"在 Dock 中显示"这项本来就是开着的,全程确认过 activationPolicy
