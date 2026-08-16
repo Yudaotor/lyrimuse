@@ -78,6 +78,31 @@ final class PlaybackCoordinator: ObservableObject {
     @Published private(set) var pausedPositionMs: Int?
     @Published private(set) var currentDurationMs: Int?
 
+    /// 当前这一行会显示多久(秒)。nil = 算不出来(还没播到第一句、没有歌词、或者这是
+    /// 最后一句而且连曲目时长都不知道)。
+    ///
+    /// 菜单栏跑马灯拿它配速 —— 让一句歌词在换到下一句**之前**滚完,而不是永远按固定的
+    /// 每秒 4 个字爬(见 MenuBarMarquee.pacing)。
+    ///
+    /// 用两句歌词时间戳之**差**,所以歌词时间轴校准(currentLyricsOffsetMs)不影响它:
+    /// 那个偏移会同时加到两句上,差值不变。
+    var currentLineDwellSeconds: Double? {
+        guard let index = currentLineIndex, allLines.indices.contains(index) else { return nil }
+        let startMs = allLines[index].timeMs
+        let endMs: Int
+        if allLines.indices.contains(index + 1) {
+            endMs = allLines[index + 1].timeMs
+        } else if let duration = currentDurationMs, duration > startMs {
+            // 最后一句:用曲目时长兜底(尾奏通常还有几秒,足够滚完)。
+            endMs = duration
+        } else {
+            return nil
+        }
+        let seconds = Double(endMs - startMs) / 1000
+        // 时间戳异常(乱序/重复)时别返回 0 或负数 —— 调用方会拿它做除数。
+        return seconds > 0.05 ? seconds : nil
+    }
+
     private var cancellables: [AnyCancellable] = []
     private var started = false
 

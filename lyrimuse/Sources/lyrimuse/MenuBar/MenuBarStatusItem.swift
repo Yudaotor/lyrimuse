@@ -124,12 +124,15 @@ final class MenuBarStatusItem: NSObject {
         // "装得下还是要滚"这个判定跟设置页那条预览共用同一个函数,两边不可能漂 ——
         // 见 MenuBarMarqueeRenderer.Presentation。
         switch MenuBarMarqueeRenderer.presentation(
-            for: text, windowWidth: settings.menuBarLyricsMaxWidth) {
+            for: text,
+            windowWidth: settings.menuBarLyricsMaxWidth,
+            // 让长句子在换到下一句之前滚完,而不是永远按固定速度爬。
+            dwellSeconds: coordinator.currentLineDwellSeconds
+        ) {
         case .text(let visible):
             showStaticText(button, visible: visible, full: text)
-        case .scroll(let scrollText, let windowWidth, let pointsPerSecond, let holdSeconds):
-            showScrolling(button, text: scrollText, windowWidth: windowWidth,
-                          pointsPerSecond: pointsPerSecond, holdSeconds: holdSeconds)
+        case .scroll(let scrollText, let windowWidth, let pacing):
+            showScrolling(button, text: scrollText, windowWidth: windowWidth, pacing: pacing)
         }
     }
 
@@ -165,7 +168,7 @@ final class MenuBarStatusItem: NSObject {
 
     /// 这一句装不下:交给 CALayer 滚。
     private func showScrolling(_ button: NSStatusBarButton, text: String, windowWidth: CGFloat,
-                               pointsPerSecond: CGFloat, holdSeconds: Double) {
+                               pacing: MenuBarMarquee.ScrollPacing) {
         // ⚠️ 这张**全透明**的占位图是有用的,不是残留:variableLength 的状态栏项按
         // button.image 的尺寸算自己该占多宽。给它一张宽度正好是 windowWidth 的空图,
         // 算出来的宽度就跟 MenuBarExtra 时代那张模板图**逐点一致** —— 菜单栏项的占位
@@ -180,8 +183,7 @@ final class MenuBarStatusItem: NSObject {
         button.setAccessibilityLabel(text)
 
         scrollingLabel.frame = button.bounds
-        scrollingLabel.present(text: text, windowWidth: windowWidth,
-                               pointsPerSecond: pointsPerSecond, holdSeconds: holdSeconds)
+        scrollingLabel.present(text: text, windowWidth: windowWidth, pacing: pacing)
     }
 
     private func spacerImage(width: CGFloat, height: CGFloat) -> NSImage {

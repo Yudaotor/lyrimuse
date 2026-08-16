@@ -1,4 +1,5 @@
 import AppKit
+import LyrimuseCore
 
 // 菜单栏歌词跑马灯的渲染侧(2026-08-15 加)——把一行歌词画成一整条长图,交给
 // MenuBarScrollingLabel 里的 CALayer 当内容,由 Core Animation 平移。
@@ -54,12 +55,6 @@ enum MenuBarMarqueeRenderer {
 
     // MARK: - 这一句到底怎么显示
 
-    /// 滚动速度:每秒 4 个字。跟 2026-08-05 的初版一致(那时是每 0.25 秒挪一个字),
-    /// 换过两次驱动方式,这个观感参数一直没动。
-    static let scrollCharsPerSecond: CGFloat = 4
-    /// 首尾各停 1.5 秒。一句歌词最关键的往往是开头,一上来就滚会看不清。
-    static let scrollHoldSeconds: Double = 1.5
-
     /// 一行歌词在菜单栏上的两种形态。
     ///
     /// ⚠️ 这个判定**必须**只有一份:菜单栏本体(MenuBarStatusItem)和设置页里那条预览
@@ -70,11 +65,15 @@ enum MenuBarMarqueeRenderer {
         /// 装得下(或者宽度被设得极小、只能截断):按钮直接画这段文字。
         case text(String)
         /// 装不下:交给 MenuBarScrollingLabel 用 Core Animation 平移。
-        case scroll(text: String, windowWidth: CGFloat,
-                    pointsPerSecond: CGFloat, holdSeconds: Double)
+        case scroll(text: String, windowWidth: CGFloat, pacing: MenuBarMarquee.ScrollPacing)
     }
 
-    static func presentation(for text: String, windowWidth: CGFloat) -> Presentation {
+    /// - Parameter dwellSeconds: 这一句会显示多久(到下一句为止)。给了就按它配速 ——
+    ///   让长句子在换句之前滚完,而不是永远按固定速度爬(见 MenuBarMarquee.pacing)。
+    ///   nil 就退回固定速度。
+    static func presentation(
+        for text: String, windowWidth: CGFloat, dwellSeconds: Double?
+    ) -> Presentation {
         let fullWidth = width(of: text)
         // 差不到半个点就别滚了(滚也看不出来)。宽度算成 0 的极端情况也走这条路 ——
         // truncate 会返回空串,跟改动之前的行为一致。
@@ -82,13 +81,14 @@ enum MenuBarMarqueeRenderer {
             return .text(truncate(text, toWidth: windowWidth))
         }
         // 速度按这一句的平均字宽换算,这样中文歌和英文歌"每秒滚过几个字"是一致的。
-        // 兜一个正数下限:宽度算出 0 的话速度也会是 0,关键帧那边会当成"不滚"。
         let averageCharWidth = fullWidth / CGFloat(max(1, text.count))
         return .scroll(
             text: text,
             windowWidth: windowWidth,
-            pointsPerSecond: max(1, scrollCharsPerSecond * averageCharWidth),
-            holdSeconds: scrollHoldSeconds)
+            pacing: MenuBarMarquee.pacing(
+                maxOffset: fullWidth - windowWidth,
+                averageCharWidth: averageCharWidth,
+                dwellSeconds: dwellSeconds))
     }
 
     /// 一句歌词排好版的整条长图。**一句只画一次**,之后每一帧都是 Core Animation 在

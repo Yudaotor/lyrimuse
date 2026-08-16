@@ -40,24 +40,36 @@ public enum MenuBarMarquee {
     // 用「已过去的秒数」而不是「第几帧」当输入,是有意的:计时器回调会被主线程上别的活儿
     // (逐字高亮那套 60fps 的重绘)推迟,累加式计帧会把这些延迟原样变成忽快忽慢的滚动 ——
     // 那正是"卡顿"的另一半来源。按墙钟时间算,延迟只表现为丢帧,节奏始终是匀的。
+    /// 首尾停留时长可以不一样 —— 见 pacing:知道这一句会显示多久时,尾部那一停几乎没有
+    /// 价值(读到末尾之后就该换句了),把时间让给滚动本身。
     public static func scrollOffset(
-        elapsed: Double, maxOffset: CGFloat, pointsPerSecond: CGFloat, holdSeconds: Double
+        elapsed: Double, maxOffset: CGFloat, pointsPerSecond: CGFloat,
+        headHoldSeconds: Double, tailHoldSeconds: Double
     ) -> CGFloat {
         // 装得下(maxOffset<=0)就不滚。速度非正是调用方算错了,同样退化成不滚,不要除零。
         guard maxOffset > 0, pointsPerSecond > 0 else { return 0 }
-        let hold = max(0, holdSeconds)
+        let head = max(0, headHoldSeconds)
+        let tail = max(0, tailHoldSeconds)
         let travel = Double(maxOffset / pointsPerSecond)
-        let cycle = hold * 2 + travel
+        let cycle = head + travel + tail
         // cycle 恒 > 0(travel > 0),不用防除零。
         var t = elapsed.truncatingRemainder(dividingBy: cycle)
         if t < 0 { t += cycle } // elapsed 传负数(时钟回拨)也不会跳到奇怪的位置
-        if t < hold { return 0 }
-        if t < hold + travel {
+        if t < head { return 0 }
+        if t < head + travel {
             // 夹一次上界:浮点乘法在末尾那一帧可能算出比 maxOffset 大一丁点,越界会露出
             // 右边的空白。
-            return min(maxOffset, CGFloat(t - hold) * pointsPerSecond)
+            return min(maxOffset, CGFloat(t - head) * pointsPerSecond)
         }
         return maxOffset
+    }
+
+    /// 首尾等长的便利写法(不知道这句会显示多久时就走它)。
+    public static func scrollOffset(
+        elapsed: Double, maxOffset: CGFloat, pointsPerSecond: CGFloat, holdSeconds: Double
+    ) -> CGFloat {
+        scrollOffset(elapsed: elapsed, maxOffset: maxOffset, pointsPerSecond: pointsPerSecond,
+                     headHoldSeconds: holdSeconds, tailHoldSeconds: holdSeconds)
     }
 
     // ---- 同一段运动的**声明式**写法(2026-08-16 加) ----
@@ -83,17 +95,99 @@ public enum MenuBarMarquee {
 
     /// nil = 这一句不用滚(装得下,或者调用方把速度算成了非正数)。
     public static func scrollKeyframes(
-        maxOffset: CGFloat, pointsPerSecond: CGFloat, holdSeconds: Double
+        maxOffset: CGFloat, pointsPerSecond: CGFloat,
+        headHoldSeconds: Double, tailHoldSeconds: Double
     ) -> ScrollKeyframes? {
         guard maxOffset > 0, pointsPerSecond > 0 else { return nil }
-        let hold = max(0, holdSeconds)
+        let head = max(0, headHoldSeconds)
+        let tail = max(0, tailHoldSeconds)
         let travel = Double(maxOffset / pointsPerSecond)
-        let cycle = hold * 2 + travel
+        let cycle = head + travel + tail
         // travel > 0 保证 cycle > 0,不用防除零。
         return ScrollKeyframes(
             duration: cycle,
-            keyTimes: [0, hold / cycle, (hold + travel) / cycle, 1],
+            keyTimes: [0, head / cycle, (head + travel) / cycle, 1],
             offsets: [0, 0, maxOffset, maxOffset]
         )
+    }
+
+    /// 首尾等长的便利写法。
+    public static func scrollKeyframes(
+        maxOffset: CGFloat, pointsPerSecond: CGFloat, holdSeconds: Double
+    ) -> ScrollKeyframes? {
+        scrollKeyframes(maxOffset: maxOffset, pointsPerSecond: pointsPerSecond,
+                        headHoldSeconds: holdSeconds, tailHoldSeconds: holdSeconds)
+    }
+
+    // ---- 配速:让这一句在换到下一句**之前**滚完 ----
+    //
+    // 2026-08-17 用户反馈:"一句歌词比较长的时候滚动太慢,还没滚到底就切到下一行了"。
+    // 根因是速度一直写死成"每秒 4 个字",跟这一句实际会显示多久**完全脱钩** —— 句子越长,
+    // 走完需要的时间越长,而它能显示的时间并不会跟着变长,于是越长的句子越看不到后半截。
+    //
+    // 现在按这一句的停留时长倒推速度:留出首尾停顿之后,剩下的时间正好把 maxOffset 走完。
+    //
+    // 三条约束:
+    //   1. **只加速,不减速**。停留时间很长的句子仍按原来的每秒 4 个字走,走完就停在末尾 ——
+    //      那是现有观感,没人抱怨,不动它。
+    //   2. **有速度上限**。再快就成了一片糊影,读不到等于没显示。上限取每秒 12 个字
+    //      (中文字幕公认的舒适上限附近,约为基准速度的 3 倍)。撞到上限仍然滚不完的极长句子
+    //      就是滚不完 —— 这是**明知的取舍**:比起把字甩成残影,宁可少看几个字。
+    //   3. **首尾停顿跟着句子时长缩,而且尾部先缩**。一句只显示 3 秒时,首尾各停 1.5 秒
+    //      等于根本没滚;而尾部那一停本来就没什么价值(读到末尾之后马上就该换句了),
+    //      所以尾部只留一点点、把时间全让给滚动本身。开头那一停要保住 —— 一句歌词最该
+    //      看清的就是开头。
+    public struct ScrollPacing: Equatable, Sendable {
+        public let pointsPerSecond: CGFloat
+        public let headHoldSeconds: Double
+        public let tailHoldSeconds: Double
+    }
+
+    /// 基准速度:每秒 4 个字。2026-08-05 初版定的,换过两次驱动方式都没动过。
+    public static let baseCharsPerSecond: CGFloat = 4
+    /// 速度上限:每秒 12 个字。中文字幕的舒适阅读速度公认在每秒 9~12 字附近,再快就只是
+    /// 一片糊影、读不到等于没显示。这是**故意**不为了"滚完"而突破的一道线。
+    public static let maxCharsPerSecond: CGFloat = 12
+    /// 开头那一停:最多这么久。
+    public static let baseHoldSeconds: Double = 1.5
+    /// 开头那一停最多占这一句时长的多少 —— 短句上 1.5 秒会把整句时间吃光。
+    public static let headHoldMaxFraction: Double = 0.25
+    /// 走完之后额外多停一会儿再回到开头。停留时长是**估**出来的(歌词时间轴校准、播放
+    /// 位置外推都有误差),留这点余量,循环就永远不会赶在换句之前发生 —— 否则末尾那几个字
+    /// 会闪一下跳回开头。
+    public static let loopGuardSeconds: Double = 0.5
+
+    /// - Parameter dwellSeconds: 这一句会显示多久。nil = 不知道(没有下一句的时间信息),
+    ///   此时完全维持 2026-08-17 之前的行为(固定速度、首尾各停 1.5 秒)。
+    public static func pacing(
+        maxOffset: CGFloat, averageCharWidth: CGFloat, dwellSeconds: Double?
+    ) -> ScrollPacing {
+        // 兜一个正数下限:字宽算成 0 的话速度也会是 0,关键帧那边会当成"不滚"。
+        let base = max(1, baseCharsPerSecond * averageCharWidth)
+        guard let dwell = dwellSeconds, dwell > 0, maxOffset > 0 else {
+            return ScrollPacing(pointsPerSecond: base,
+                                headHoldSeconds: baseHoldSeconds,
+                                tailHoldSeconds: baseHoldSeconds)
+        }
+        let cap = max(1, maxCharsPerSecond * averageCharWidth)
+        // 两个端点:最慢(基准速度)和最快(上限速度)各要走多久。
+        let travelAtBase = Double(maxOffset / base)
+        let travelAtCap = Double(maxOffset / cap)
+
+        // 开头那一停**按需让路**:时间够就给足,不够就一路让到 0 —— 让"看得到整句"优先于
+        // "看清开头"。这一步是 2026-08-17 第一版漏掉的,当时首停按固定比例扣,长句因此
+        // 白白撞上速度上限、依然滚不完。
+        let head = min(baseHoldSeconds, dwell * headHoldMaxFraction, max(0, dwell - travelAtCap))
+
+        // 剩下的时间全部拿来走。够慢就慢(不比基准速度快,免得短句被无谓地甩快),
+        // 不够就加速,但不越过上限。
+        let travel = min(max(dwell - head, travelAtCap), travelAtBase)
+        let pointsPerSecond = min(cap, max(base, maxOffset / CGFloat(travel)))
+
+        // 走完之后一直停在末尾,直到这一句被换掉 —— 所以一句歌词**只滚一轮**,
+        // 不会在时间充裕时反复从头再来(那样会显得很闹)。
+        let tail = max(0, dwell - head - travel) + loopGuardSeconds
+        return ScrollPacing(pointsPerSecond: pointsPerSecond,
+                            headHoldSeconds: head, tailHoldSeconds: tail)
     }
 }

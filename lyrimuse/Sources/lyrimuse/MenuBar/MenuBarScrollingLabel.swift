@@ -51,8 +51,7 @@ final class MenuBarScrollingLabel: NSView {
     private struct Plan: Equatable {
         var text: String
         var windowWidth: CGFloat
-        var pointsPerSecond: CGFloat
-        var holdSeconds: Double
+        var pacing: MenuBarMarquee.ScrollPacing
     }
 
     private var plan: Plan?
@@ -87,10 +86,8 @@ final class MenuBarScrollingLabel: NSView {
 
     /// 显示(或更新)一句要滚动的歌词。同一句用同样的参数重复调用是空操作 ——
     /// 否则每次 recompute 都会把滚动打回开头,用户永远看不到后半句。
-    func present(text: String, windowWidth: CGFloat,
-                 pointsPerSecond: CGFloat, holdSeconds: Double) {
-        let next = Plan(text: text, windowWidth: windowWidth,
-                        pointsPerSecond: pointsPerSecond, holdSeconds: holdSeconds)
+    func present(text: String, windowWidth: CGFloat, pacing: MenuBarMarquee.ScrollPacing) {
+        let next = Plan(text: text, windowWidth: windowWidth, pacing: pacing)
         guard next != plan else {
             isHidden = false
             return
@@ -192,15 +189,13 @@ final class MenuBarScrollingLabel: NSView {
     struct Representable: NSViewRepresentable {
         let text: String
         let windowWidth: CGFloat
-        let pointsPerSecond: CGFloat
-        let holdSeconds: Double
+        let pacing: MenuBarMarquee.ScrollPacing
 
         func makeNSView(context: Context) -> MenuBarScrollingLabel { MenuBarScrollingLabel() }
 
         func updateNSView(_ view: MenuBarScrollingLabel, context: Context) {
             // present 对"参数没变"是空操作,所以设置页每次重算 body 都不会把滚动打回开头。
-            view.present(text: text, windowWidth: windowWidth,
-                         pointsPerSecond: pointsPerSecond, holdSeconds: holdSeconds)
+            view.present(text: text, windowWidth: windowWidth, pacing: pacing)
         }
     }
 
@@ -210,8 +205,9 @@ final class MenuBarScrollingLabel: NSView {
         let maxOffset = prepared.textWidth - plan.windowWidth
         guard let frames = MenuBarMarquee.scrollKeyframes(
             maxOffset: maxOffset,
-            pointsPerSecond: plan.pointsPerSecond,
-            holdSeconds: plan.holdSeconds)
+            pointsPerSecond: plan.pacing.pointsPerSecond,
+            headHoldSeconds: plan.pacing.headHoldSeconds,
+            tailHoldSeconds: plan.pacing.tailHoldSeconds)
         else {
             // 走到这里说明调用方判断"要滚"和这里算出来的不一致(比如宽度刚好卡在边界)。
             // 静止停在开头,别留一条跑不起来的动画。

@@ -1986,6 +1986,135 @@ do {
     expectEqual(noHold.duration, 2.0, "关键帧: 不停留时周期就是走完全程的时间")
 }
 
+// ---- 菜单栏跑马灯:按这一句的停留时长配速 ----
+//
+// 2026-08-17 用户报的:"一句歌词比较长的时候滚动太慢，还没滚到底就切换到下一行了"。
+// 根因是速度写死成每秒 4 个字，跟这一句实际能显示多久完全脱钩——句子越长越看不到后半截。
+//
+// 下面这组断言把"能不能滚完"这件事本身钉死：不是断言某个速度数字，而是断言
+// **首停 + 走完全程 + 尾停 ≤ 这一句的停留时长**。
+do {
+    /// 一句中文歌词的典型参数：13pt 菜单栏字，一个汉字约 13pt 宽。
+    let charWidth: CGFloat = 13
+    /// 用户设的显示宽度（默认档位附近）。
+    let windowWidth: CGFloat = 80
+
+    /// 这一句画出来有多宽 → 要滚多远。
+    func maxOffset(chars: Int) -> CGFloat { CGFloat(chars) * charWidth - windowWidth }
+
+    /// **滚到末尾**要多久（首停 + 走完全程）。这才是"看不看得到整句"的判据 ——
+    /// 尾停是走完之后停在末尾等着换句，它超出 dwell 是故意的（见 loopGuardSeconds）。
+    func finishTime(chars: Int, dwell: Double?) -> Double {
+        let offset = maxOffset(chars: chars)
+        let p = MenuBarMarquee.pacing(
+            maxOffset: offset, averageCharWidth: charWidth, dwellSeconds: dwell)
+        return p.headHoldSeconds + Double(offset / p.pointsPerSecond)
+    }
+
+    /// 以最快可读速度（上限）走完全程要多久 —— 比这还短的停留时长，物理上就滚不完。
+    func travelAtCap(chars: Int) -> Double {
+        Double(maxOffset(chars: chars) / (MenuBarMarquee.maxCharsPerSecond * charWidth))
+    }
+
+    // 不知道停留多久 → 完全维持改动之前的行为（这条是防回归：菜单栏歌词在拿不到
+    // 歌词时间轴的场景下不该突然变快）。
+    let unknown = MenuBarMarquee.pacing(
+        maxOffset: 300, averageCharWidth: charWidth, dwellSeconds: nil)
+    expectEqual(unknown.pointsPerSecond, MenuBarMarquee.baseCharsPerSecond * charWidth,
+                "配速: 不知道停留时长时用基准速度")
+    expectEqual(unknown.headHoldSeconds, MenuBarMarquee.baseHoldSeconds, "配速: 未知时首停 1.5 秒")
+    expectEqual(unknown.tailHoldSeconds, MenuBarMarquee.baseHoldSeconds, "配速: 未知时尾停 1.5 秒")
+
+    // 用户报的那一类：30 字的长句，只显示 4 秒。
+    //
+    // 改动之前：速度 52pt/s，走完 310pt 要 5.96 秒，加上开头那 1.5 秒共 7.46 秒 ——
+    // 而这一句 4 秒就换掉了，只滚过大约四成，后半截永远看不到。
+    expectEqual(finishTime(chars: 30, dwell: nil) > 4.0, true,
+                "配速: 长句 + 固定速度确实滚不完（这就是被报的 bug）")
+    expectEqual(finishTime(chars: 30, dwell: 4.0) <= 4.0 + 0.001, true,
+                "配速: 30 字长句在 4 秒内滚得完（\(finishTime(chars: 30, dwell: 4.0)) 秒）")
+
+    // 扫一片真实取值范围。判据不是"全都滚得完"——句子长到一定程度、时间短到一定程度，
+    // 在**可读速度上限之内**physically 就是走不完。所以断言的是那条真正的不变式：
+    // **只要在上限速度下走得完，就必须走完**。
+    var missed: [String] = []
+    for chars in [12, 18, 24, 30, 40, 60] {
+        for dwell in [2.0, 2.5, 3.0, 4.0, 5.0, 8.0, 12.0] {
+            guard travelAtCap(chars: chars) <= dwell else { continue } // 物理上不可能，跳过
+            if finishTime(chars: chars, dwell: dwell) > dwell + 0.001 {
+                missed.append("\(chars)字/\(dwell)秒")
+            }
+        }
+    }
+    expectEqual(missed, [], "配速: 只要上限速度内走得完就一定走完")
+
+    // 停留时间很长的句子不该被拖快——那是现有观感，没人抱怨，不动它。
+    let roomy = MenuBarMarquee.pacing(
+        maxOffset: maxOffset(chars: 14), averageCharWidth: charWidth, dwellSeconds: 20)
+    expectEqual(roomy.pointsPerSecond, MenuBarMarquee.baseCharsPerSecond * charWidth,
+                "配速: 时间充裕时仍走基准速度，不会无谓地甩快")
+    // 而且**只滚一轮**：走完就停在末尾等着换句，不会反复从头再来（那样很闹）。
+    expectEqual(roomy.headHoldSeconds + Double(maxOffset(chars: 14) / roomy.pointsPerSecond)
+                    + roomy.tailHoldSeconds >= 20, true,
+                "配速: 时间充裕时一句只滚一轮，不会循环重来")
+
+    // 首尾停顿必须跟着句子时长缩：一句只显示 2 秒时，照搬 1.5+1.5 等于根本没滚。
+    let tight = MenuBarMarquee.pacing(
+        maxOffset: maxOffset(chars: 30), averageCharWidth: charWidth, dwellSeconds: 2.0)
+    expectEqual(tight.headHoldSeconds < 2.0, true, "配速: 短句的开头停顿不会吃光整句时间")
+
+    // 速度有上限，不会为了滚完把字甩成残影。
+    let absurd = MenuBarMarquee.pacing(
+        maxOffset: maxOffset(chars: 120), averageCharWidth: charWidth, dwellSeconds: 2.0)
+    expectEqual(absurd.pointsPerSecond <= MenuBarMarquee.maxCharsPerSecond * charWidth,
+                true, "配速: 速度不超过每秒 12 个字的上限")
+    // 而撞到上限之后它**确实滚不完** —— 这是明知的取舍，钉在这里免得以后被当成 bug 去"修"：
+    // 比起把字甩成一片糊影，宁可少看几个字。
+    expectEqual(finishTime(chars: 120, dwell: 2.0) > 2.0, true,
+                "配速: 极端长句撞上限后滚不完（已知且接受的取舍）")
+    // 这种情况下开头那一停必须让到 0 —— 一秒都不该浪费在"停着"上。
+    expectEqual(absurd.headHoldSeconds, 0, "配速: 时间不够时开头那一停让到 0")
+
+    // 停留时间短到连停顿都塞不下时，不能除以一个≈0 的数算出无穷大速度。
+    let sliver = MenuBarMarquee.pacing(
+        maxOffset: 300, averageCharWidth: charWidth, dwellSeconds: 0.06)
+    expectEqual(sliver.pointsPerSecond.isFinite && sliver.pointsPerSecond > 0, true,
+                "配速: 停留时间极短也算得出有限速度")
+
+    // 关键帧和逐帧采样在**首尾不等长**时也必须描述同一段运动（上一组只验了等长的情况）。
+    let pacing = MenuBarMarquee.pacing(
+        maxOffset: maxOffset(chars: 30), averageCharWidth: charWidth, dwellSeconds: 4.0)
+    let offset = maxOffset(chars: 30)
+    guard let frames = MenuBarMarquee.scrollKeyframes(
+        maxOffset: offset, pointsPerSecond: pacing.pointsPerSecond,
+        headHoldSeconds: pacing.headHoldSeconds, tailHoldSeconds: pacing.tailHoldSeconds) else {
+        expectEqual(true, false, "配速: 该滚的参数却没有关键帧")
+        fatalError("unreachable")
+    }
+    func interpolate(_ elapsed: Double) -> CGFloat {
+        var t = elapsed.truncatingRemainder(dividingBy: frames.duration)
+        if t < 0 { t += frames.duration }
+        let normalized = t / frames.duration
+        for i in 1 ..< frames.keyTimes.count {
+            let t0 = frames.keyTimes[i - 1], t1 = frames.keyTimes[i]
+            guard normalized <= t1 else { continue }
+            guard t1 > t0 else { return frames.offsets[i] }
+            let ratio = (normalized - t0) / (t1 - t0)
+            return frames.offsets[i - 1] + (frames.offsets[i] - frames.offsets[i - 1]) * CGFloat(ratio)
+        }
+        return frames.offsets[frames.offsets.count - 1]
+    }
+    var worst = 0.0
+    for i in 0 ... 200 {
+        let elapsed = Double(i) / 25
+        let reference = MenuBarMarquee.scrollOffset(
+            elapsed: elapsed, maxOffset: offset, pointsPerSecond: pacing.pointsPerSecond,
+            headHoldSeconds: pacing.headHoldSeconds, tailHoldSeconds: pacing.tailHoldSeconds)
+        worst = max(worst, abs(Double(interpolate(elapsed) - reference)))
+    }
+    expectEqual(worst < 0.001, true, "配速: 首尾不等长时关键帧仍与逐帧采样一致(最大偏差 \(worst))")
+}
+
 // ---- 署名行:关键词连写 ----
 do {
     // 2026-08-15 用户实测漏网的形状：「词曲：蔡徐坤 KUN/Marco Bernardis/…」被当歌词

@@ -221,7 +221,14 @@ struct MenuBarPreviewBar: View {
 
     private var presentation: MenuBarMarqueeRenderer.Presentation {
         MenuBarMarqueeRenderer.presentation(
-            for: fullText, windowWidth: settings.menuBarLyricsMaxWidth)
+            for: fullText, windowWidth: settings.menuBarLyricsMaxWidth,
+            // 演的是示例句(没在播放)时没有"这句会显示多久"可言,给 nil 走固定速度。
+            //
+            // ⚠️ 这个值是在 **body 求值时**现读的,不是在上面那个 onReceive 里存下来的。
+            // $currentLine 是 @Published,回调跑在 willSet 时机 —— 那一刻
+            // currentLineIndex/allLines 还可能是旧值(这个项目已经为这个时机踩过两次坑)。
+            // 而 body 求值发生在状态落定之后,读到的必然是同一句歌词对应的那份数据。
+            dwellSeconds: line == nil ? nil : PlaybackCoordinator.shared.currentLineDwellSeconds)
     }
 
     private var willScroll: Bool {
@@ -319,12 +326,10 @@ struct MenuBarPreviewBar: View {
                 .lineLimit(1)
                 .frame(width: settings.menuBarLyricsMaxWidth,
                        height: MenuBarMarqueeRenderer.lineHeight, alignment: .leading)
-        case .scroll(let text, let windowWidth, let pointsPerSecond, let holdSeconds):
+        case .scroll(let text, let windowWidth, let pacing):
             MenuBarScrollingLabel.Representable(
-                text: text, windowWidth: windowWidth,
-                pointsPerSecond: pointsPerSecond, holdSeconds: holdSeconds
-            )
-            .frame(width: windowWidth, height: MenuBarMarqueeRenderer.lineHeight)
+                text: text, windowWidth: windowWidth, pacing: pacing)
+                .frame(width: windowWidth, height: MenuBarMarqueeRenderer.lineHeight)
         }
     }
 }
