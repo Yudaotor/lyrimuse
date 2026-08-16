@@ -92,6 +92,12 @@ func main() {
 		runTopArtistsCLI(os.Args[2:])
 		return
 	}
+	// `collector dedupe-entries [-apply]`:把 enrich 缓存里"其实是同一首歌"的重复条目
+	// 并成一条(见 dedupecli.go)。默认预演,-apply 才真改。
+	if len(os.Args) > 1 && os.Args[1] == "dedupe-entries" {
+		runDedupeEntriesCLI(os.Args[2:])
+		return
+	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		log.Fatalf("resolve home dir: %v", err)
