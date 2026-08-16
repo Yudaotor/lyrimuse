@@ -314,8 +314,17 @@ struct MenuBarPreviewBar: View {
         .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
     }
 
-    /// 歌词那一格:宽度钉死成用户设的上限 —— 跟真菜单栏一样,内容再长这一格也不会变宽
-    /// (那正是这个设置项在管的事)。
+    /// 歌词那一格。
+    ///
+    /// ⚠️ 两条分支的**占位方式不一样**,这不是随意写的,是在照抄真状态栏项的行为:
+    /// 状态栏项是 NSStatusItem.variableLength,宽度由 button 的内容决定 ——
+    ///   * 装得下(button.title 那条路):宽度就是**这句话本身的宽度**,不会预留到上限。
+    ///     实测同一首歌连着三句量到 231 / 145 / 207pt,跟着内容变。
+    ///   * 要滚(靠一张宽度正好是上限的透明占位图撑着):宽度才**钉死**在上限上。
+    ///
+    /// 2026-08-17 修:这里原来两条分支都钉成上限宽,于是把上限拉大之后,预览里短句右边会
+    /// 空出一大片、把 Wi-Fi/电池/时钟推得老远 —— 而真菜单栏上根本不会那样(用户报的就是
+    /// 这个偏差)。上限管的是"最多占多宽",不是"总是占这么宽"。
     @ViewBuilder
     private var lyricsSlot: some View {
         switch presentation {
@@ -324,8 +333,9 @@ struct MenuBarPreviewBar: View {
                 .font(Font(MenuBarMarqueeRenderer.font))
                 .foregroundStyle(Color(nsColor: .labelColor))
                 .lineLimit(1)
-                .frame(width: settings.menuBarLyricsMaxWidth,
-                       height: MenuBarMarqueeRenderer.lineHeight, alignment: .leading)
+                // 按文字自然宽度占位,跟 variableLength 的状态栏项一致。
+                .fixedSize()
+                .frame(height: MenuBarMarqueeRenderer.lineHeight)
         case .scroll(let text, let windowWidth, let pacing):
             MenuBarScrollingLabel.Representable(
                 text: text, windowWidth: windowWidth, pacing: pacing)
