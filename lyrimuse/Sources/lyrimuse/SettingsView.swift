@@ -1405,6 +1405,7 @@ private struct AppearanceSettingsTab: View {
 // 侧面;语言/开机启动/配置备份这些是完全不相干的杂项,继续留在"通用"里,不需要
 // 陪着一起挪(用户反馈原来两类东西挤在一个 tab 里不好找)。
 private struct PlayerSettingsTab: View {
+    @ObservedObject private var mediaControlHealth = MediaControlHealth.shared
     @ObservedObject private var settings = AppSettings.shared
     @ObservedObject private var features = FeatureSettingsStore.shared
     // 只在 .onAppear 和每次操作后重新查一次(askIfNeeded: false,不会弹窗,纯读状态)——
@@ -1553,6 +1554,19 @@ private struct PlayerSettingsTab: View {
                 SettingsNote {
                     Text(L10n.t("启用失败，可能是权限或系统限制导致后台服务没能正常启动，导出诊断信息能看到具体原因，也方便反馈问题"))
                     Button(L10n.t("导出诊断信息…")) { exportDiagnostics() }
+                }
+            }
+            // 私有通道自检失败时明说 —— 这条只影响 QQ 音乐/网易云(它们的播放信息全经
+            // media-control 读),Apple Music/Spotify 走 AppleScript 不受影响。不显示成
+            // 报错红字:用户无法修复它(只能等上游适配),说清受影响范围比制造焦虑有用。
+            if case .unavailable(let message) = mediaControlHealth.state {
+                CardDivider()
+                SettingsNote {
+                    Text(L10n.t("系统的媒体信息通道在这台机器上不可用，QQ 音乐 / 网易云音乐的播放检测会受影响（Apple Music、Spotify 不受影响）"))
+                    Text(message)
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                        .textSelection(.enabled)
                 }
             }
         }

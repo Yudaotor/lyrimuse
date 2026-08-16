@@ -87,6 +87,14 @@ enum DiagnosticsExporter {
         let settings = AppSettings.shared
         let config = ConfigStore.shared
         lines.append("Automation permission: \(MusicAutomationPermission.check(askIfNeeded: false))")
+        // media-control 私有通道的自检结果。QQ 音乐/网易云的一切都经它读,一旦系统更新
+        // 把那套私有 API 改坏,现象是"歌词不动",而这跟"没在放歌"从表象上分不开 ——
+        // 报告里必须有这一行,否则排查会从歌词源一路白查到网络。见 MediaControlHealth。
+        switch MediaControlHealth.shared.state {
+        case .unknown: lines.append("media-control channel: not checked yet")
+        case .healthy: lines.append("media-control channel: healthy")
+        case .unavailable(let message): lines.append("media-control channel: UNAVAILABLE — \(message)")
+        }
         // 「当前认哪个播放器」是排查"检测不到播放/歌词出不来"时第一个要问的问题,而它有两层:
         // 用户在设置里选的(可能是"自动识别"),和这一刻实际被认下来的那个 bundle id。两层
         // 都要报——只报设置值的话,"自动识别"这一档等于什么都没说。

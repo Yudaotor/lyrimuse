@@ -81,7 +81,20 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     // 没有真刘海的屏幕(比如 MacBook Air 全系不带刘海,只有 14"/16" MacBook Pro
     // 2021 起才有)退到的固定兜底高度:不是"关掉整个功能",是换一套不依赖真刘海几何
     // 形状的兜底样式,宽度沿用下面 contentWidth 算出来的常显宽度。
-    private static let fallbackNotchHeight: CGFloat = 32
+    // 无刘海屏幕上"假刘海"的兜底高度下限。真正用的值是那块屏**当前的菜单栏高度**
+    // (见 menuBarHeight(of:)) —— 写死一个数字在外接屏上必然对不齐:菜单栏高度随屏幕
+    // 缩放/分辨率变化(实测这台内建屏 33pt,外接屏常见 24~37pt 不等),黑条比菜单栏矮
+    // 会露出一条桌面、比它高会压住窗口内容。这个常量只在菜单栏被自动隐藏(顶部差为 0)
+    // 时兜底。
+    private static let fallbackNotchHeight: CGFloat = 24
+
+    /// 这块屏当前的菜单栏高度。
+    ///
+    /// ⚠️ 只能看**顶边差**,不能用 frame.height - visibleFrame.height —— 后者把 Dock
+    /// 也算进去了(实测这台机器算出 109pt,而菜单栏其实只有 33pt)。
+    static func menuBarHeight(of screen: NSScreen) -> CGFloat {
+        max(fallbackNotchHeight, screen.frame.maxY - screen.visibleFrame.maxY)
+    }
     // 收起态(没在播放、没 hover)在无真刘海屏幕上退到的兜底宽度——真刘海屏幕收起态
     // 直接用 notchWidth 本身(跟硬件刘海严丝合缝),这个值只在没有真刘海可以贴的场景
     // 才用得到,给一个能装得下一小块胶囊、不会小到近乎看不见的经验值。
@@ -280,7 +293,9 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
             let notchWidth = rightArea.minX - leftArea.maxX
             return NotchGeometry(notchHeight: notchHeight, centerX: centerX, notchWidth: notchWidth)
         }
-        return NotchGeometry(notchHeight: fallbackNotchHeight, centerX: screen.frame.midX, notchWidth: 0)
+        // 无真刘海:黑条高度跟这块屏的菜单栏对齐,视觉上跟系统融为一体。
+        return NotchGeometry(
+            notchHeight: menuBarHeight(of: screen), centerX: screen.frame.midX, notchWidth: 0)
     }
 
     // 用户在设置里调的固定宽度(baseWidth,即 AppSettings.notchContentWidth)+ 耳朵下限

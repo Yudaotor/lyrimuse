@@ -153,7 +153,20 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
         }
         .onHover { hovering in
             controller.setExpanded(hovering)
+            // 触觉反馈:贴刘海的东西离光标很近但没有边框可循,给一下对齐反馈能让"我确实
+            // 停在它上面了"变成可感知的事(Force Touch 触控板才有,其它设备是空操作)。
+            // ⚠️ 放在 onHover 而不是真正展开的那一刻:setExpanded 现在带 0.2s 意图延迟,
+            // 反馈拖到延迟之后就跟手感脱节了。
+            if hovering {
+                NSHapticFeedbackManager.defaultPerformer.perform(
+                    .alignment, performanceTime: .now)
+            }
         }
+        // hover 时给卡片一点投影,让它从桌面/窗口背景上"浮起来"。收起态不给 —— 那时它
+        // 假装自己是刘海的一部分,投影会立刻暴露这是个窗口。
+        .shadow(
+            color: .black.opacity(controller.isExpanded ? 0.35 : 0),
+            radius: controller.isExpanded ? 12 : 0, y: controller.isExpanded ? 4 : 0)
     }
 
     // 2026-08-02 新增"跟随封面"背景——跟"歌词窗口"的 artworkBackground(LyricsWindowView.swift)

@@ -399,7 +399,6 @@
 "歌词源没带译文时补充" = "Fills in where the lyrics source ships none";
 "请提前下载好需要翻译的语言" = "Download the languages you want translated ahead of time";
 "获取" = "Sources";
-"译文" = "Translation";
 "显示" = "Display";
 "管理" = "Library";
 "让每首歌都有一份对得上的歌词" = "Give every track lyrics that actually match it";
@@ -407,7 +406,6 @@
 "不可用：%@" = "Unusable: %@";
 "时长吻合" = "Duration match";
 "其它源印证了结束点" = "End time corroborated";
-"逐字时间轴" = "Word timing";
 "来源可靠度" = "Source";
 "行数" = "Lines";
 "版本限定词不符" = "Version tag mismatch";
@@ -417,7 +415,6 @@
 "取不到最后一句的时间" = "No timestamp on the last line";
 "时长明显对不上，也没有别的源印证" = "Duration is far off and nothing corroborates it";
 "结束点获印证" = "End time corroborated";
-"来源" = "Source";
 "版本不符" = "Version mismatch";
 "总分 %@" = "Total %@";
 "最后一句的时间跟曲长越接近分越高，最多 300" = "The closer the last line's time is to the track length, the higher the score — up to 300";
@@ -620,3 +617,4 @@
 "搜索字体" = "Search fonts";
 "没有匹配的字体" = "No matching fonts";
 "本地最多存 4 万条（按每天 40 首约两年半）；但 Last.fm 只收约两周内的记录，更早的补不上去" = "Up to 40,000 entries locally (~2.5 years at 40 tracks a day) — but Last.fm only accepts scrobbles from about the last two weeks; older ones can't be filled in";
+"系统的媒体信息通道在这台机器上不可用，QQ 音乐 / 网易云音乐的播放检测会受影响（Apple Music、Spotify 不受影响）" = "The system media channel is unavailable on this Mac — playback detection for QQ Music / NetEase Music is affected (Apple Music and Spotify are not)";

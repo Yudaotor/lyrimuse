@@ -194,6 +194,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             NotchLyricsWindowController.shared.setHideWhenNotPlaying(settings.hideWhenNotPlaying)
         }
 
+        // media-control 私有通道的一次性自检。只做归因、不做降级 —— 见 MediaControlHealth。
+        MediaControlHealth.shared.checkInBackground()
         PlaybackCoordinator.shared.start()
         // 菜单栏歌词跑马灯的驱动器——生命周期自持(靠 Combine 自己决定何时开停计时器),
         // 这里只需要在启动时点一次,见 MenuBarMarqueeTicker 顶部注释。

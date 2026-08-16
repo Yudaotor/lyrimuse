@@ -64,6 +64,12 @@ jobs:
       - name: go test
         run: cd lyrimuse-collector && GOTOOLCHAIN="go${{ env.GO_VERSION }}" go test ./...
 
+      - name: Localizable.strings 一致性
+        # 两份手写 .strings 漏改一边不会编译报错,只会在运行时静默 fallback 到 key 本身
+        # (中文界面冒出英文,或反过来)。这个检查把它从肉眼守卫变成机制守卫 —— 第一次跑
+        # 就抓到了 3 对重复 key。
+        run: python3 lyrimuse/scripts/check_strings_parity.py
+
       - name: Swift selftest
         # 用 `swift build` 再直接执行产物，**不要**用 `swift run`。release.yml 里记着实测
         # 结论：runner 上 `swift run lyrimuse-selftest` 会在 exec 刚构建出来的二进制那一刻
