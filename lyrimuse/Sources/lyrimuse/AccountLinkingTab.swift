@@ -555,7 +555,7 @@ struct AccountLinkingTab: View {
     // MARK: - ListenBrainz
 
     private func checkListenBrainzToken() {
-        tokenCheck.tokenChanged(config.listenbrainzToken) { user in
+        tokenCheck.tokenChanged(config.listenbrainzToken, knownUser: config.listenbrainzUser) { user in
             // 用户名不再由用户手填,但配置里这个字段还在(听歌报告要用),由校验结果回填。
             if config.listenbrainzUser != user { config.listenbrainzUser = user }
         }

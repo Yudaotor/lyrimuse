@@ -26,7 +26,12 @@ final class ListenBrainzTokenCheck: ObservableObject {
     private var lastChecked = ""
 
     /// Token 变化时调。自带防抖 —— 输入框每敲一个字符都会来一次,不防抖就是一串废请求。
-    func tokenChanged(_ token: String, onResolvedUser: @escaping (String) -> Void) {
+    ///
+    /// knownUser 传已经持久化下来的用户名(ConfigStore.listenbrainzUser)。有它的话**首次**
+    /// 调用直接认,不转圈也不发请求 —— 这个对象是页面上的 @StateObject,离开设置页再回来
+    /// 就是个新实例、state 退回 .empty,而 Token 一个字都没变。2026-08-16 用户报的正是这个:
+    /// "这个 yudaotor 没有持久化吗,为什么我刚才切进去看的时候还在转圈"。
+    func tokenChanged(_ token: String, knownUser: String = "", onResolvedUser: @escaping (String) -> Void) {
         let trimmed = token.trimmingCharacters(in: .whitespacesAndNewlines)
         task?.cancel()
         guard !trimmed.isEmpty else {
@@ -36,6 +41,28 @@ final class ListenBrainzTokenCheck: ObservableObject {
         }
         // 同一个 Token 已经查过就别再查(切换页面/重绘都会走到这里)。
         if trimmed == lastChecked, case .valid = state { return }
+
+        // 新实例 + 手上已经有存好的用户名:先当它有效,页面立刻是"已连接:xxx"。
+        //
+        // ⚠️ 只在 lastChecked 为空(= 这个实例还没查过任何东西)时才走这条快速路径。用户在
+        // 输入框里改 Token 时 lastChecked 早就被设成旧 Token 了,不会命中,照常走校验 ——
+        // 否则改完 Token 会一直显示旧用户名。
+        if lastChecked.isEmpty, !knownUser.isEmpty {
+            lastChecked = trimmed
+            state = .valid(user: knownUser)
+            // 仍然在后台**静默**复核一次(不置 .checking、不转圈):Token 可能是从别处导进来的,
+            // 跟存着的用户名对不上;真对不上时下面会把 state 纠正过来。
+            task = Task { [weak self] in
+                let outcome = await Self.validate(token: trimmed)
+                guard !Task.isCancelled, let self else { return }
+                if outcome != .valid(user: knownUser) {
+                    self.state = outcome
+                    if case .valid(let user) = outcome { onResolvedUser(user) }
+                }
+            }
+            return
+        }
+
         state = .checking
         task = Task { [weak self] in
             try? await Task.sleep(nanoseconds: 600_000_000)

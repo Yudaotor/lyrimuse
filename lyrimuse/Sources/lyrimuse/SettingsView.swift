@@ -2170,7 +2170,7 @@ private struct AboutSettingsTab: View {
         SettingsPage(
             title: "Lyrimuse",
             subtitle: String(format: L10n.t("版本 %@"), versionString) + "\n"
-                + L10n.t("跟着 Apple Music、QQ 音乐、网易云或 Spotify 播放，实时显示逐字歌词并同步播放记录到 Last.fm"),
+                + L10n.t("Lyric × Muse——把你的歌词交给音乐女神吧"),
             heroImage: appIcon
         ) {
             SettingsCard {
