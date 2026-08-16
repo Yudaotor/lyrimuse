@@ -575,12 +575,29 @@ struct LyricsWindowView: View {
                 ZStack(alignment: .leading) {
                     Capsule().fill(primaryTextColor.opacity(0.25))
                     Capsule().fill(primaryTextColor.opacity(0.85))
-                        // 宽度用 shownFraction(自己驱动)而不是 fraction,补间由下面的
+                        // 进度用 shownFraction(自己驱动)而不是 fraction,补间由下面的
                         // onChange 显式决定 —— 挂 .animation(_:value: fraction) 那一版有两个
                         // 症状:冷启动时 fraction 从 0 一步跳到真实进度,被补成"滑过去";
                         // 缩放窗口时 g.size.width 变了,而这次宽度变化恰好落在每秒一次的
                         // 动画事务里,于是整条也跟着平移。现在这两种情况都直接赋值、不补间。
-                        .frame(width: max(4, g.size.width * shownFraction))
+                        //
+                        // ⚠️ 2026-08-17:这里原来是 `.frame(width: g.size.width * shownFraction)`,
+                        // 也就是让**布局属性**跟着每秒一次的线性补间走 —— 补间是按显示帧
+                        // 插值的,于是每一帧都要把整个 NSHostingView 重新布局一次。实测
+                        // (歌词窗口开着、正在播放)这一条就吃掉了主线程的一大半:
+                        //   双列(有这条进度条)61.4% 忙 / 单列(窄窗,播放器面板整块不显示)9.4% 忙
+                        // 改成整条满宽 + 渲染期横向缩放:scaleEffect 不参与布局,补间只落在
+                        // 变换矩阵上。
+                        //
+                        // 视觉上等价:条高只有 scrubberHeight(≈4pt),胶囊两端的圆头半径是
+                        // 2pt,横向缩放会把圆头压成 x 半径 2f pt 的椭圆 —— 在 4pt 高、2x 屏
+                        // 上这点差别看不出来。下限从 `max(4, …)` 换算成等效的缩放下限,
+                        // 进度为 0 时仍留 4pt 的一小截,不会缩没。
+                        .frame(width: max(4, g.size.width))
+                        .scaleEffect(
+                            x: g.size.width > 0
+                                ? min(1, max(4 / g.size.width, shownFraction)) : 1,
+                            y: 1, anchor: .leading)
                 }
             }
             .frame(height: scrubberHeight)
@@ -1286,6 +1303,54 @@ private struct KaraokeLineText: View {
         // 不参与布局)。文字/字号/换行结果整行从头到尾都不变。把 TimelineView 下沉到叶子
         // 之后,WrapLayout 的子视图列表每帧都是同一份,布局不再被推翻,重算范围缩到单个
         // Text 的样式。
+        //
+        // ---- 2026-08-17 第二轮 ----
+        //
+        // 上面那次修对了"每帧重排版",但留下了另一半:一行十几个字 = 十几个各自独立、
+        // **相位还互不对齐**的 30Hz 时钟,它们的并集几乎盖满每一个显示帧。再量一次
+        // (歌词窗口开着、正在播放):主线程 85.8% 忙,调用链是
+        //   NSDisplayCycleObserver → NSHostingView.layout() → ViewGraphRootValueUpdater
+        //   .render → ViewGraph.beginNextUpdate → AG::Graph::value_set → propagate_dirty
+        // ——beginNextUpdate 就是 TimelineView 的时钟在推进;画图(blur/CoreText/CGContext)
+        // 加起来不到 1%。
+        //
+        // 关键观察:任一时刻**只有一个字在扫**。还没唱到的字填充恒为 0、已经唱过的恒为 1,
+        // 都是静态的,却各自挂着一个满速时钟。所以这一层加一个 4Hz 的**粗时钟**,只用来
+        // 判断每个字此刻是不是"正在扫"(以及给静态的字一个时间基准);只有正在扫的那个字
+        // 才保留 30Hz 的细时钟。
+        //
+        // 粗时钟确实会让 WrapLayout 每秒重排 4 次(正是上面那段说的开销),但那是 4/120,
+        // 换掉的是十几个满速时钟 —— 净赚。
+        TimelineView(.animation(minimumInterval: Self.coarseInterval, paused: !isPlaying)) { coarse in
+            lineContent(coarseDate: coarse.date, coarseMs: currentMs(at: coarse.date))
+        }
+    }
+
+    /// 粗时钟档位。0.25 秒足够判断"这个字是不是快到了/刚过去",而重排版的代价只有
+    /// 满帧的 4/120。
+    private static let coarseInterval: Double = 0.25
+
+    /// 跟 KaraokeWordText 里用同一条公式(含歌词时间轴校准),否则"当前词判定"和"填色进度"
+    /// 的时间基准会对不上。
+    private func currentMs(at date: Date) -> Int {
+        let coordinator = PlaybackCoordinator.shared
+        return (coordinator.anchor?.extrapolatedPositionMs(now: date) ?? 0)
+            + coordinator.currentLyricsOffsetMs
+    }
+
+    /// 这个字此刻要不要保留满速时钟。
+    ///
+    /// 窗口两头各放宽一档粗时钟 + 一点余量:粗时钟最长 0.25 秒才看一次,不放宽的话会
+    /// 在字的开头漏掉最初几帧(表现是这个字"啪"地跳出一截填色而不是扫过去)。
+    /// 末尾要把上浮那 320ms 也算进去 —— 填色满了之后字还在往上浮。
+    private func isLive(_ w: SyncedLyricWord, atMs ms: Int) -> Bool {
+        let margin = Int(Self.coarseInterval * 1000) + 80
+        let end = w.startMs + max(1, w.durationMs) + Int(Self.riseWindowMs)
+        return ms >= w.startMs - margin && ms <= end + margin
+    }
+
+    @ViewBuilder
+    private func lineContent(coarseDate: Date, coarseMs: Int) -> some View {
         WrapLayout(rowAlignment: rowAlignment) {
             if let groups, !groups.isEmpty {
                 // 一组一列:上面这一组的字各自逐字填色,下面标这一组的读音,列宽取
@@ -1296,6 +1361,8 @@ private struct KaraokeLineText: View {
                         HStack(spacing: 0) {
                             ForEach(Array(g.words.enumerated()), id: \.offset) { _, w in
                                 KaraokeWordText(word: w, base: base, isPlaying: isPlaying,
+                                                isLive: isLive(w, atMs: coarseMs),
+                                                staticDate: coarseDate,
                                                 fontSize: fontSize, reduceMotion: reduceMotion,
                                                 displayScale: displayScale)
                             }
@@ -1303,10 +1370,14 @@ private struct KaraokeLineText: View {
                         if let roma = g.romanization {
                             // 读音按**整组**的进度填,不跟着组里单个字跳:拿整组的起止时间
                             // 造一个"伪字",复用同一套填色。
+                            let romaWord = SyncedLyricWord(
+                                text: roma, startMs: g.startMs,
+                                durationMs: max(1, g.endMs - g.startMs))
                             KaraokeWordText(
-                                word: SyncedLyricWord(text: roma, startMs: g.startMs,
-                                                      durationMs: max(1, g.endMs - g.startMs)),
+                                word: romaWord,
                                 base: base.opacity(0.75), isPlaying: isPlaying,
+                                isLive: isLive(romaWord, atMs: coarseMs),
+                                staticDate: coarseDate,
                                 fontSize: romaFontSize, weight: .medium,
                                 reduceMotion: reduceMotion, displayScale: displayScale,
                                 rises: false // 读音不跟着抬,只有正文的字会浮起来
@@ -1320,6 +1391,7 @@ private struct KaraokeLineText: View {
             } else {
                 ForEach(Array(words.enumerated()), id: \.offset) { _, w in
                     KaraokeWordText(word: w, base: base, isPlaying: isPlaying,
+                                    isLive: isLive(w, atMs: coarseMs), staticDate: coarseDate,
                                     fontSize: fontSize, reduceMotion: reduceMotion,
                                     displayScale: displayScale)
                 }
@@ -1337,6 +1409,12 @@ private struct KaraokeWordText: View {
     let word: SyncedLyricWord
     let base: Color
     let isPlaying: Bool
+    /// 这个字此刻是不是"正在被扫过"。false 就把满速时钟停掉 —— 还没唱到的字填充恒为 0、
+    /// 唱过的恒为 1,都是静态画面,没有任何理由每秒醒 30 次(见 KaraokeLineText.body)。
+    let isLive: Bool
+    /// 时钟停着的时候拿它当时间基准。用**粗时钟**的时刻而不是被冻住的 context.date:
+    /// 后者会停在这个字最后一次活跃的瞬间,一旦停早了,填色就会永远卡在 0.97 这种位置上。
+    let staticDate: Date
     let fontSize: CGFloat
     var weight: Font.Weight = .bold
     let reduceMotion: Bool
@@ -1364,14 +1442,19 @@ private struct KaraokeWordText: View {
     var body: some View {
         // 刷新上限(30Hz)和它背后那次实测记在 WordKaraokeGradient.refreshInterval,
         // 三处逐字视图共用一份 —— 原来这个常量只有这里有,悬浮歌词和灵动岛因此漏掉了。
-        TimelineView(.animation(minimumInterval: WordKaraokeGradient.refreshInterval, paused: !isPlaying)) { context in
+        // paused 多了一个 !isLive:没在扫的字不需要时钟(见 isLive 的注释)。整行十几个字
+        // 里通常只有一个是活的,于是每秒的图形更新次数从"字数 × 30"降到"30"。
+        TimelineView(.animation(minimumInterval: WordKaraokeGradient.refreshInterval,
+                                paused: !isPlaying || !isLive)) { context in
             // 直接读单例而不是 @ObservedObject:这个闭包本来就由 TimelineView 按帧驱动,
             // 不需要靠 Combine 通知触发;订阅了反而会把 PlaybackCoordinator 上那二十来个
             // @Published 的每一次变动都变成额外重算。
             let coordinator = PlaybackCoordinator.shared
+            // 时钟停着时用粗时钟的时刻,理由见 staticDate。
+            let date = isLive ? context.date : staticDate
             // 加上 currentLyricsOffsetMs,理由跟 LyricsOverlayView.mainLine 同一段注释 ——
             // 不加的话"当前词判定"和"填色进度"用的时间基准对不上,会填到一半卡住。
-            let currentMs = (coordinator.anchor?.extrapolatedPositionMs(now: context.date) ?? 0)
+            let currentMs = (coordinator.anchor?.extrapolatedPositionMs(now: date) ?? 0)
                 + coordinator.currentLyricsOffsetMs
             let fraction = WordKaraokeGradient.fillFraction(for: word, atMs: currentMs)
             let band = WordKaraokeGradient.wordEdgeSoftenBand
