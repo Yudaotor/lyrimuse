@@ -266,6 +266,10 @@ public final class LocalPlaybackSource: ObservableObject {
     // Music.app 的播放状态变化通知(2026-08-04 加,借鉴 FlowX)——见
     // startObservingPlayerInfoNotification() 的注释。
     private var playerInfoObserver: NSObjectProtocol?
+    private var spotifyInfoObserver: NSObjectProtocol?
+    // media-control 的事件流(QQ 音乐/网易云没有分布式通知,靠它)。见
+    // MediaControlStreamWatcher —— 事件同样只当"提前 poll 一次"的信号。
+    private var streamWatcher: MediaControlStreamWatcher?
     // 通知去抖动:待触发的那次补查(收到新通知就取消重排)——见
     // handlePlayerInfoChanged() 的注释。
     private var pendingNotificationPoll: Task<Void, Never>?
@@ -283,10 +287,13 @@ public final class LocalPlaybackSource: ObservableObject {
 
     public func stop() {
         pollTimer?.invalidate(); pollTimer = nil
-        if let playerInfoObserver {
-            DistributedNotificationCenter.default().removeObserver(playerInfoObserver)
-            self.playerInfoObserver = nil
+        for observer in [playerInfoObserver, spotifyInfoObserver].compactMap({ $0 }) {
+            DistributedNotificationCenter.default().removeObserver(observer)
         }
+        playerInfoObserver = nil
+        spotifyInfoObserver = nil
+        streamWatcher?.stop()
+        streamWatcher = nil
         pendingNotificationPoll?.cancel()
         pendingNotificationPoll = nil
         stopFastTimer()
@@ -307,20 +314,44 @@ public final class LocalPlaybackSource: ObservableObject {
     // 写法让所有状态变更仍然只发生在 apply() 这一条路径上,通知的唯一作用是让那条路径
     // 提早跑一次,已有的世代号防护(见 poll())原样继续生效、不需要任何改动。
     //
-    // 只对 Apple Music 有效——QQ 音乐/网易云音乐/Spotify 不广播这个通知,它们继续靠
-    // 2 秒轮询感知(不是遗漏,是这些播放器没有等价机制)。选了别的播放器时这条订阅只是
-    // 一条永远不触发的空订阅,不需要按 features.player 条件挂载:Music.app 可能同时开着
-    // 但不是当前选定的播放器,那种情况下补查一次 poll() 也完全无害(poll() 自己会核对
-    // bundleIdentifier,见 MediaControlClient.fetchSnapshot 的各条分支)。
+    // Apple Music 和 Spotify 都广播分布式通知,两个都订阅。
+    //
+    // ⚠️ 这里原来写着"Spotify 不广播这个通知……这些播放器没有等价机制",那句话是错的:
+    // Spotify 有自己的 com.spotify.client.PlaybackStateChanged(2026-08-16 审阅
+    // lycrics_notch 时发现,它的 SpotifyController 一直在用),我们却只订阅了 Apple Music
+    // 那条,于是 Spotify 用户白等 2 秒轮询。QQ 音乐/网易云确实没有等价通知,它们靠
+    // media-control 的事件流(见 MediaControlStreamWatcher)。
+    //
+    // 两条订阅都不按 features.player 条件挂载:某个播放器可能开着但不是当前选定的那个,
+    // 那种情况下补查一次 poll() 完全无害(poll() 自己会核对 bundleIdentifier,见
+    // MediaControlClient.fetchSnapshot 的各条分支)。
     private func startObservingPlayerInfoNotification() {
+        startStreamWatcher()
         guard playerInfoObserver == nil else { return }
-        playerInfoObserver = DistributedNotificationCenter.default().addObserver(
-            forName: NSNotification.Name("com.apple.Music.playerInfo"),
-            object: nil,
-            queue: .main
-        ) { [weak self] _ in
+        let center = DistributedNotificationCenter.default()
+        let handler: (Notification) -> Void = { [weak self] _ in
             MainActor.assumeIsolated { self?.handlePlayerInfoChanged() }
         }
+        playerInfoObserver = center.addObserver(
+            forName: NSNotification.Name("com.apple.Music.playerInfo"),
+            object: nil, queue: .main, using: handler)
+        // Spotify 的这条通知同样"一次操作连发多条、且第一条可能还带着旧状态",所以走
+        // 完全相同的 250ms 去抖动补查路径,不需要为它单独调参。
+        spotifyInfoObserver = center.addObserver(
+            forName: NSNotification.Name("com.spotify.client.PlaybackStateChanged"),
+            object: nil, queue: .main, using: handler)
+    }
+
+    // media-control 事件流跟两条分布式通知走**同一条**去抖动补查路径:三个来源都只是
+    // "有动静了"的信号,合并成一次 poll() 正是想要的效果(比如 Spotify 换歌会同时触发
+    // 它自己的通知和 MediaRemote 的事件,合并后只查一次)。
+    private func startStreamWatcher() {
+        guard streamWatcher == nil else { return }
+        let watcher = MediaControlStreamWatcher { [weak self] in
+            MainActor.assumeIsolated { self?.handlePlayerInfoChanged() }
+        }
+        streamWatcher = watcher
+        watcher.start()
     }
 
     // 通知到达 → 去抖动之后补查一次 poll()。
