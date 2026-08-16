@@ -13,7 +13,7 @@ import Sparkle
 // 菜单栏图标提示的进阶定制(那需要额外处理几个 Swift 并发细节,等这套标准流程真的跑
 // 起来、觉得默认弹窗体验不够好再考虑升级)。
 @MainActor
-final class SparkleUpdaterManager {
+final class SparkleUpdaterManager: ObservableObject {
     static let shared = SparkleUpdaterManager()
 
     let controller: SPUStandardUpdaterController
@@ -24,6 +24,32 @@ final class SparkleUpdaterManager {
             updaterDelegate: nil,
             userDriverDelegate: nil
         )
+    }
+
+    // 这两个开关**不**在 AppSettings 里另存一份。Sparkle 自己就把它们持久化在
+    // UserDefaults(SUEnableAutomaticChecks / SUAutomaticallyUpdate),而它内部做周期
+    // 检查时读的是它自己那份 —— 我们再存一份就有了两个真相,UI 显示的和实际生效的迟早
+    // 对不上(比如 Sparkle 首次运行时弹的"要不要自动检查更新"对话框会直接改它那份,
+    // 而我们这份完全不知情)。所以这里只做转发,objectWillChange 手动发一下让 UI 刷新。
+    //
+    // build.sh 写进 Info.plist 的 SUEnableAutomaticChecks 是**默认值**,用户改过之后
+    // 以 UserDefaults 为准,两者不冲突。
+    var automaticallyChecksForUpdates: Bool {
+        get { controller.updater.automaticallyChecksForUpdates }
+        set {
+            objectWillChange.send()
+            controller.updater.automaticallyChecksForUpdates = newValue
+        }
+    }
+
+    /// ⚠️ 只在 automaticallyChecksForUpdates 为 true 时才有意义(Sparkle 的语义:
+    /// 先有周期检查,才谈得上自动下载),UI 上因此把它做成从属行并跟着置灰。
+    var automaticallyDownloadsUpdates: Bool {
+        get { controller.updater.automaticallyDownloadsUpdates }
+        set {
+            objectWillChange.send()
+            controller.updater.automaticallyDownloadsUpdates = newValue
+        }
     }
 
     // 给"关于"页的手动"检查更新"按钮用——sender 传 nil 时 Sparkle 自己处理"检查中/

@@ -102,11 +102,23 @@ enum GlobalHotkeys {
         // 里 LyricsSyncEngine 的匹配位置),随时可用。步长现读 AppSettings(用户在设置里
         // 可调,不是写死的常量),跟 MenuBarMenu.swift 里"歌词时间轴"菜单的两个按钮共用
         // 同一个值,菜单/快捷键两条路径调出来的手感一致。
+        // 改完偏移在灵动岛上闪一条"歌词 +0.5s"。在这之前按这两个键是**完全无反馈**的:
+        // 偏移是否生效只能靠盯着歌词自己感觉,连按几下更是数不清累计到了多少。
+        // ⚠️ 只有灵动岛这一种展示形态会显示(提示条挂在那张卡片上);只开桌面悬浮歌词的
+        // 用户仍然没有反馈,那边没有可以借用的稳态区域,要做得单开一个 HUD 窗口。
         KeyboardShortcuts.onKeyUp(for: .lyricsAdvanceHotkey) {
-            PlaybackCoordinator.shared.nudgeLyricsOffset(by: AppSettings.shared.lyricsOffsetStepMs)
+            showOffsetBanner(PlaybackCoordinator.shared.nudgeLyricsOffset(by: AppSettings.shared.lyricsOffsetStepMs))
         }
         KeyboardShortcuts.onKeyUp(for: .lyricsDelayHotkey) {
-            PlaybackCoordinator.shared.nudgeLyricsOffset(by: -AppSettings.shared.lyricsOffsetStepMs)
+            showOffsetBanner(PlaybackCoordinator.shared.nudgeLyricsOffset(by: -AppSettings.shared.lyricsOffsetStepMs))
         }
+    }
+
+    /// 把毫秒偏移显示成 "+0.50s" / "-0.25s"。正号要显式带上 —— 只有减号的话,用户按了
+    /// "提前"却看到一个没有符号的数字,分不清方向。
+    private static func showOffsetBanner(_ offsetMs: Int) {
+        let seconds = Double(offsetMs) / 1000
+        let text = String(format: "%@ %+.2fs", L10n.t("歌词偏移"), seconds)
+        NotchTransientCenter.shared.show(.init(icon: "timer", text: text, progress: nil))
     }
 }

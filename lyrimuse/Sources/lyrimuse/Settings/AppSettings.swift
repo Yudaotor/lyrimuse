@@ -68,6 +68,8 @@ final class AppSettings: ObservableObject {
         static let notchOverlayEnabled = "np:notchOverlayEnabled"
         static let notchCardStyle = "np:notchCardStyle"
         static let notchScreenID = "np:notchScreenID"
+        static let notchShowEqualizer = "np:notchShowEqualizer"
+        static let notchVolumeBanner = "np:notchVolumeBanner"
         // 2026-08-05 之前,"这种悬浮歌词要不要显示"这一件事有**两份**独立持久化:上面这两个
         // {classic,notch}OverlayEnabled(设置页那两个 Toggle 读它),外加两个 WindowController
         // 各自私有的这两个 key(菜单栏"显示…"那两项、全局快捷键读它)。两份可以不一致,后果见
@@ -280,6 +282,20 @@ final class AppSettings: ObservableObject {
     // 灵动岛卡片的视觉风格——默认磨砂玻璃。只负责持久化,纯展示用的设置,
     // NotchLyricsView 每次渲染直接读这个值,不需要像 classicOverlayEnabled 那样在
     // didSet 里连带调用某个单例的方法。
+    /// 调系统音量时在灵动岛上闪一条音量提示。
+    ///
+    /// 默认关:macOS 自己已经有一个音量 HUD(屏幕中下方那个),开着这个等于同一次按键
+    /// 弹出两个提示。留成可选项而不是直接不做 —— 用眼睛盯着屏幕顶端的人会更喜欢在
+    /// 那里看到反馈。
+    @Published var notchVolumeBanner: Bool {
+        didSet { defaults.set(notchVolumeBanner, forKey: Keys.notchVolumeBanner) }
+    }
+
+    /// 灵动岛左耳歌名前那几根跳动的播放指示条。
+    @Published var notchShowEqualizer: Bool {
+        didSet { defaults.set(notchShowEqualizer, forKey: Keys.notchShowEqualizer) }
+    }
+
     @Published var notchCardStyle: NotchCardStyle {
         didSet { defaults.set(notchCardStyle.rawValue, forKey: Keys.notchCardStyle) }
     }
@@ -458,6 +474,9 @@ final class AppSettings: ObservableObject {
         classicOverlayEnabled = classicOn
         notchOverlayEnabled = notchOn
         notchCardStyle = defaults.string(forKey: Keys.notchCardStyle).flatMap(NotchCardStyle.init(rawValue:)) ?? .coverArt
+        // 默认开:它是"正在播放"最直观的一个信号,而且不占几个像素。
+        notchShowEqualizer = defaults.object(forKey: Keys.notchShowEqualizer) as? Bool ?? true
+        notchVolumeBanner = defaults.bool(forKey: Keys.notchVolumeBanner)
         notchScreenID = defaults.string(forKey: Keys.notchScreenID) ?? ""
         fontFamilyName = defaults.string(forKey: Keys.fontFamilyName) ?? Self.defaultFontFamilyName
         fontSize = (defaults.object(forKey: Keys.fontSize) as? Double) ?? Self.defaultFontSize

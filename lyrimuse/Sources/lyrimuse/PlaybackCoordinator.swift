@@ -108,7 +108,9 @@ final class PlaybackCoordinator: ObservableObject {
 
     // 单曲歌词时间轴微调——转发给 LocalPlaybackSource,UI 层(菜单/快捷键)只认
     // PlaybackCoordinator,不用关心底下具体是谁在跑。
-    func nudgeLyricsOffset(by deltaMs: Int) {
+    /// 返回累加后的新偏移(毫秒),给快捷键那边闪一条提示用;不关心结果的调用方直接忽略。
+    @discardableResult
+    func nudgeLyricsOffset(by deltaMs: Int) -> Int {
         LocalPlaybackSource.shared.nudgeLyricsOffset(by: deltaMs)
     }
 

@@ -1251,6 +1251,26 @@ private struct AppearanceSettingsTab: View {
                 .fixedSize()
             }
             CardDivider()
+            SettingsRow(
+                icon: "waveform",
+                title: L10n.t("播放指示条"),
+                subtitle: L10n.t("歌名前面几根跟着播放跳动的小竖条")
+            ) {
+                Toggle("", isOn: $settings.notchShowEqualizer)
+                    .labelsHidden()
+                    .toggleStyle(.switch)
+            }
+            CardDivider()
+            SettingsRow(
+                icon: "speaker.wave.2",
+                title: L10n.t("音量提示"),
+                subtitle: L10n.t("调音量时在灵动岛上短暂显示；系统自带的音量提示不受影响，会同时出现")
+            ) {
+                Toggle("", isOn: $settings.notchVolumeBanner)
+                    .labelsHidden()
+                    .toggleStyle(.switch)
+            }
+            CardDivider()
             // 跟上面桌面悬浮歌词的"宽度"滑块同一套写法(设置项本身只负责持久化,didSet
             // 不碰 NSWindow,这里的 set 闭包显式调用窗口控制器的方法让改动立刻生效)。
             // 跟桌面悬浮歌词不同的是灵动岛不需要"保持中心点"的增量调整——它的位置从来
@@ -2121,6 +2141,8 @@ private struct ShortcutsSettingsTab: View {
 // 罗列简介/仓库链接/版权)。这几项都是静态文本/链接,不需要任何 @Published 状态或
 // 单例,是这几个 tab 里最简单的一个,只留最基本的身份信息+反馈入口。
 private struct AboutSettingsTab: View {
+    // 只为这两个更新开关订阅 —— 这一页其余内容都是静态的。
+    @ObservedObject private var updater = SparkleUpdaterManager.shared
     // CFBundleIconFile 指向 AppIcon.icns(build.sh 生成的 .app 包本身自带),直接读
     // 系统认的这份"当前 App 图标",不用再手动拼一遍 Bundle 里的文件路径。
     private var appIcon: NSImage { NSApplication.shared.applicationIconImage }
@@ -2146,6 +2168,28 @@ private struct AboutSettingsTab: View {
                     Button(L10n.t("检查更新…")) {
                         SparkleUpdaterManager.shared.checkForUpdates()
                     }
+                }
+                SettingsSubRow(title: L10n.t("自动检查")) {
+                    Toggle("", isOn: Binding(
+                        get: { updater.automaticallyChecksForUpdates },
+                        set: { updater.automaticallyChecksForUpdates = $0 }
+                    ))
+                    .labelsHidden()
+                    .toggleStyle(.switch)
+                }
+                SettingsSubRow(
+                    title: L10n.t("自动下载并安装"),
+                    subtitle: L10n.t("下次启动时生效，不会打断正在播放的歌")
+                ) {
+                    Toggle("", isOn: Binding(
+                        get: { updater.automaticallyDownloadsUpdates },
+                        set: { updater.automaticallyDownloadsUpdates = $0 }
+                    ))
+                    .labelsHidden()
+                    .toggleStyle(.switch)
+                    // 关掉自动检查后这一项在 Sparkle 那边根本不会被读到,置灰而不是藏起来
+                    // —— 藏起来会让人以为设置项没了。
+                    .disabled(!updater.automaticallyChecksForUpdates)
                 }
                 CardDivider()
                 // 这一行的副标题是唯一一处"求 star"的地方,所以用常显 subtitle 而不是

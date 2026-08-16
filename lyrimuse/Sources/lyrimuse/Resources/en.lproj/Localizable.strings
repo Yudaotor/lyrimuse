@@ -360,7 +360,16 @@
 "文字描边" = "Text Outline";
 "无需额外授权" = "No Permission Needed";
 "本地时间晚上 10 点之后当天第一次检查时推送：当天播放次数、累计时长、听得最多的几首歌" = "Pushed on the first check after 10 PM local time: today's play count, total listening time, and your most-played tracks";
+"播放指示条" = "Playback Indicator";
+"歌名前面几根跟着播放跳动的小竖条" = "Small bars beside the title that bounce while playing";
+"音量提示" = "Volume Banner";
+"调音量时在灵动岛上短暂显示；系统自带的音量提示不受影响，会同时出现" = "Briefly shown in the notch when you change volume; macOS still shows its own";
+"已静音" = "Muted";
+"歌词偏移" = "Lyrics offset";
 "检查更新" = "Check for Updates";
+"自动检查" = "Check Automatically";
+"自动下载并安装" = "Download and Install Automatically";
+"下次启动时生效，不会打断正在播放的歌" = "Applied on next launch, never interrupts playback";
 "没有它读不到播放状态" = "Without it, Lyrimuse can't tell what's playing";
 "清除…" = "Erase…";
 "清除所有设置" = "Erase All Settings";

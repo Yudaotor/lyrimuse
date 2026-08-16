@@ -197,6 +197,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // media-control 私有通道的一次性自检。只做归因、不做降级 —— 见 MediaControlHealth。
         MediaControlHealth.shared.checkInBackground()
         startObservingScreenLock()
+        startObservingVolumeBannerPreference()
         PlaybackCoordinator.shared.start()
         // 菜单栏歌词跑马灯的驱动器——生命周期自持(靠 Combine 自己决定何时开停计时器),
         // 这里只需要在启动时点一次,见 MenuBarMarqueeTicker 顶部注释。
@@ -281,4 +282,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+
+    /// 音量提示只在"用户开了它 && 灵动岛本身开着"时才挂 CoreAudio 监听 —— 灵动岛关着的话
+    /// 提示条根本没有地方显示,挂了也只是白监听。
+    ///
+    /// ⚠️ sink 闭包里用的是**参数**而不是回头去读 AppSettings:@Published 在 willSet 时机
+    /// 发布,那一刻属性还是旧值(本项目已实测踩过这个坑)。
+    private func startObservingVolumeBannerPreference() {
+        let settings = AppSettings.shared
+        settings.$notchVolumeBanner
+            .combineLatest(settings.$notchOverlayEnabled)
+            .sink { wantsBanner, notchEnabled in
+                MainActor.assumeIsolated {
+                    VolumeMonitor.apply(enabled: wantsBanner && notchEnabled)
+                }
+            }
+            .store(in: &cancellables)
+    }
 }

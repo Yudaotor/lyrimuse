@@ -107,6 +107,7 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
     @ObservedObject var controller: Chrome
     @ObservedObject private var poller = PlaybackCoordinator.shared
     @ObservedObject private var settings = AppSettings.shared
+    @ObservedObject private var transients = NotchTransientCenter.shared
     // 正在拖进度条时手指所在的比例(0~1);没在拖就是 nil。见进度条那段注释。
     // 用 @GestureState:手势被取消时(拖动中这块条件分支被摘掉)自动复位,@State 会永久卡住。
     @GestureState private var scrubbingFraction: Double?
@@ -234,10 +235,18 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
 
     private func topRow(earWidth: CGFloat) -> some View {
         HStack(spacing: 0) {
-            MarqueeText(id: poller.title) {
-                Text(poller.title.isEmpty ? "♪" : poller.title)
-                    .font(.system(size: 11.5, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.85))
+            // 左耳:播放指示条 + 歌名。指示条放在歌名**左边**是这类界面的通行位置
+            // (Apple Music/Spotify 的列表里正在播的那一行也是这么标的),而且它固定宽度,
+            // 放右边会被跑马灯滚动的歌名推得来回动。
+            HStack(spacing: 5) {
+                if settings.notchShowEqualizer {
+                    EqualizerBars(color: accentOrWhite, isPlaying: poller.isPlayingNow)
+                }
+                MarqueeText(id: poller.title) {
+                    Text(poller.title.isEmpty ? "♪" : poller.title)
+                        .font(.system(size: 11.5, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.85))
+                }
             }
             .frame(width: earWidth)
 
@@ -310,7 +319,22 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
     // 用歌词这一行纯文本(不含逐字填色进度)当 MarqueeText 的 id——换到新的一句歌词才
     // 重新测量/重新开始滚动,同一句歌词内部逐字变色的高频刷新(TimelineView 那部分)
     // 不应该打断正在进行的滚动。
+    // 有瞬态提示(改歌词偏移/调音量)时,这一行让位给提示条,提示到期再换回歌词。
+    // 只盖歌词行、不动卡片高度和顶行控件 —— 提示是"顺带说一句",不该让整块卡片跳一下。
     private var lyricRow: some View {
+        ZStack {
+            if let banner = transients.banner {
+                NotchTransientRow(banner: banner, tint: accentOrWhite)
+                    .transition(.opacity)
+            } else {
+                lyricRowContent
+                    .transition(.opacity)
+            }
+        }
+        .animation(.easeInOut(duration: 0.18), value: transients.banner)
+    }
+
+    private var lyricRowContent: some View {
         HStack(spacing: NotchMetrics.artworkLyricSpacing) {
             MarqueeText(id: poller.currentLine?.plainText ?? "") {
                 lyricContent
