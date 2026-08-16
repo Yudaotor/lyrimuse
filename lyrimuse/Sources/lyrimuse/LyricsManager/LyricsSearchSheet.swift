@@ -359,41 +359,26 @@ struct LyricsSearchSheet: View {
     /// 跟 741 分不是同一个量级上的东西。
     @ViewBuilder
     private func scoreLine(_ c: LyricsSearchService.Candidate, font: Font) -> some View {
-        HStack(spacing: 3) {
-            Text(String(format: L10n.t("分数 %@ · %@ 行"), "\(c.score)", "\(c.lineCount)"))
-            if !c.scoreTerms.isEmpty {
-                Image(systemName: "questionmark.circle")
-                    .foregroundStyle(.tertiary)
+        let label = Text(String(format: L10n.t("分数 %@ · %@ 行"), "\(c.score)", "\(c.lineCount)"))
+        Group {
+            if c.scoreTerms.isEmpty {
+                // 没有可摊开的明细就别摆一个点了什么都没有的问号。
+                label
+            } else {
+                // 悬停(短延迟)或点问号都能弹出明细。原来这里是 .help(),系统 tooltip 要
+                // 悬停约两秒才出、且点击完全没反应 —— 用户报的就是这个(2026-08-17)。
+                QuickHelpLabel(text: scoreExplanation(c)) { label }
             }
         }
         .font(font)
         .foregroundStyle(.secondary)
-        .help(scoreExplanation(c))
     }
 
-    /// 分数说明。一项一行、按贡献从大到小排 —— 用户真正在问的是"它凭什么排第一",
-    /// answer 应该第一行就给出来,而不是让人在一串加号里自己找最大的那个。
-    /// 负的那一项(版本不符 −600)按绝对值排同样会冒到最前,那也正是它该在的位置。
+    /// 分数说明文案本体抽到了 ScoreTerm.explanation(跟"解析决策"弹窗共用),这里只是转发。
+    /// (原来这里还给 "source" 那一项拼来源名 —— 来源先验分 2026-08-09 已从引擎移除,
+    /// 那段是死代码,抽取时一并删了。)
     private func scoreExplanation(_ c: LyricsSearchService.Candidate) -> String {
-        guard let first = c.scoreTerms.first else { return "" }
-        if first.isRejection {
-            let detail = first.detail
-            return String(format: L10n.t("不可用：%@"), first.label)
-                + (detail.isEmpty ? "" : "\n" + detail)
-        }
-        var lines = [String(format: L10n.t("总分 %@"), "\(c.score)")]
-        for term in c.scoreTerms.sorted(by: { abs($0.points) > abs($1.points) }) {
-            let signed = "\(term.points > 0 ? "+" : "")\(term.points)"
-            // 来源那一项额外点名是哪个源:光说"来源 +20"还得自己回去数是谁。
-            var detail = term.detail
-            if term.kind == "source", let known = LyricsSource(rawValue: c.source) {
-                detail = known.displayName + " · " + detail
-            }
-            lines.append(detail.isEmpty
-                ? "\(signed)  \(term.label)"
-                : "\(signed)  \(term.label) · \(detail)")
-        }
-        return lines.joined(separator: "\n")
+        LyricsSearchService.ScoreTerm.explanation(score: c.score, terms: c.scoreTerms)
     }
 
     /// latinIcon:图标必须画成拉丁字母才说得通(「罗马音」),理由见 LatinIconLabel。

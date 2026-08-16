@@ -196,6 +196,7 @@ struct LyricsManagerView: View {
     // List 里一行内容的实际左右边界(由行自己通过 preference 上报,见 RowContentBoundsKey)。
     @State private var rowContentBounds: RowContentBounds?
     @State private var showSearchSheet = false
+    @State private var showDecisionSheet = false
     // 2026-08-02 补上——"保存修改"/"移除逐字时间轴"点了之前完全没有任何肉眼可见的
     // 反馈,跟上面 showRefreshedFeedback("刷新"按钮已有的做法)是同一类问题、同一个
     // 修法:短暂切换成"已保存"/"已移除"+对勾图标,1秒后自动变回去。
@@ -975,6 +976,12 @@ struct LyricsManagerView: View {
         }
         .onAppear { loadDetail(key: key) }
         .onChange(of: key) { _, newKey in loadDetail(key: newKey) }
+        .sheet(isPresented: $showDecisionSheet) {
+            // 按钮只在 decision 非 nil 时出现,这里的 if let 只是把可选值安全解开。
+            if let decision = summary.decision {
+                LyricsDecisionSheet(summary: summary, decision: decision)
+            }
+        }
         .sheet(isPresented: $showSearchSheet) {
             // 采纳候选直接保存,不需要再手动点"保存修改"——避免让人误以为选了就已经
             // 存上了,结果只是填进了编辑框,还得再点一下保存才真正落盘。
@@ -1018,6 +1025,16 @@ struct LyricsManagerView: View {
             // 文字挤到只剩省略号("联网搜..."/"删除本...")。空间不够时优先满足按钮
             // 宽度,歌名那边靠 Text 自然换行让出空间。
             HStack(spacing: 8) {
+                // 「解析决策」:collector 做决定那一刻固化的候选表(见 LyricsDecisionSheet)。
+                // 只在这条真的有存档时显示 —— 老条目没有,摆一个点了没内容的按钮更糟。
+                if summary.decision != nil {
+                    Button {
+                        showDecisionSheet = true
+                    } label: {
+                        Label(L10n.t("解析决策"), systemImage: "list.number")
+                    }
+                    .help(L10n.t("当初为什么选了这份歌词：当时的候选、得分与拒绝原因"))
+                }
                 Button {
                     showSearchSheet = true
                 } label: {
@@ -1259,7 +1276,9 @@ private struct SourceBadge: View {
     }
 }
 
-private struct InfoChip: View {
+// internal 而非 private——「解析决策」弹窗(LyricsDecisionSheet)复用同一个胶囊样式,
+// 跟 sourceColor/sourceDisplayName 放开成 internal 是同一个理由。
+struct InfoChip: View {
     let icon: String
     let text: String
     let tint: Color

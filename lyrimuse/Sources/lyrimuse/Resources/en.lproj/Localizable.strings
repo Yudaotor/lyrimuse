@@ -634,3 +634,20 @@
 "没有匹配的字体" = "No matching fonts";
 "本地最多存 4 万条（按每天 40 首约两年半）；但 Last.fm 只收约两周内的记录，更早的补不上去" = "Up to 40,000 entries locally (~2.5 years at 40 tracks a day) — but Last.fm only accepts scrobbles from about the last two weeks; older ones can't be filled in";
 "系统的媒体信息通道在这台机器上不可用，QQ 音乐 / 网易云音乐的播放检测会受影响（Apple Music、Spotify 不受影响）" = "The system media channel is unavailable on this Mac — playback detection for QQ Music / NetEase Music is affected (Apple Music and Spotify are not)";
+
+// 「解析决策」弹窗(LyricsDecisionSheet,2026-08-17)
+"解析决策" = "Resolution decision";
+"记录的是手动修改之前的最后一次自动评估" = "This records the last automatic evaluation before your manual edit";
+"collector 做决定那一刻的存档，与重新搜索的结果可能不同" = "Archived at the moment the collector decided; a fresh search may rank differently";
+"首次解析" = "First resolve";
+"升级重试" = "Upgrade retry";
+"规则换版重选" = "Rescore after rule change";
+"已采用" = "Applied";
+"评估后维持原状" = "Evaluated, kept current";
+"查询词：%@" = "Query: %@";
+"按 %@ 秒的曲目时长校验" = "Validated against a track length of %@s";
+"本轮应答的源：%@" = "Sources that answered: %@";
+"这一轮没有任何源给出候选" = "No source returned a candidate that round";
+"胜者" = "Winner";
+"逐字" = "Word-timed";
+"当初为什么选了这份歌词：当时的候选、得分与拒绝原因" = "Why these lyrics were chosen: the candidates, scores and rejections at decision time";

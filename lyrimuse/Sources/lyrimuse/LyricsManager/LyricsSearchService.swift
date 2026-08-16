@@ -88,6 +88,28 @@ final class LyricsSearchService {
         }
 
         var isRejection: Bool { kind.hasPrefix("reject") }
+
+        /// 分数说明整段文案。一项一行、按贡献绝对值从大到小排 —— 用户真正在问的是
+        /// "它凭什么排第一",答案该第一行就出现。原来是 LyricsSearchSheet 的私有方法,
+        /// 2026-08-17 抽到这里跟"解析决策"弹窗共用:两处要是各写一份,措辞和排序规则
+        /// 迟早漂开。
+        static func explanation(score: Int, terms: [ScoreTerm]) -> String {
+            guard let first = terms.first else { return "" }
+            if first.isRejection {
+                let detail = first.detail
+                return String(format: L10n.t("不可用：%@"), first.label)
+                    + (detail.isEmpty ? "" : "\n" + detail)
+            }
+            var lines = [String(format: L10n.t("总分 %@"), "\(score)")]
+            for term in terms.sorted(by: { abs($0.points) > abs($1.points) }) {
+                let signed = "\(term.points > 0 ? "+" : "")\(term.points)"
+                let detail = term.detail
+                lines.append(detail.isEmpty
+                    ? "\(signed)  \(term.label)"
+                    : "\(signed)  \(term.label) · \(detail)")
+            }
+            return lines.joined(separator: "\n")
+        }
     }
 
     struct Candidate: Identifiable, Equatable {

@@ -62,6 +62,11 @@ public final class EnrichCacheStore: ObservableObject {
         // 详情页有这一栏、"搜索候选歌词"弹窗也有对应徽章,唯独列表看不出来。
         public let hasRomanization: Bool
         public let hasLyrics: Bool
+        // collector 固化下来的解析决策记录(候选表+得分明细),见 collector/decision.go。
+        // 老条目没有这个字段,为 nil —— 详情页的入口按钮跟着不显示。
+        // internal(无 public):类型里嵌着 internal 的 LyricsSearchService.ScoreTerm,
+        // 而整个 App 本来就是单 target,这里的 public 只是历史惯性。
+        let decision: LyricsResolutionDecision?
     }
 
     @Published public private(set) var summaries: [Summary] = []
@@ -171,6 +176,18 @@ public final class EnrichCacheStore: ObservableObject {
     // key 的拼法是 collector 那边的 "歌手|歌名|专辑"(见 collector/enrich.go:93)。
     // 只按前两个 "|" 分,专辑名里偶尔出现的 "|" 不会把切分打乱(艺人/歌名本身含 "|"
     // 这种更罕见的情况不额外处理)。
+    /// 把缓存条目里的 lyrics_decision 子字典解回结构体。整个文件是 JSONSerialization
+    /// 读进来的字典,这一个字段单独走一遍 JSONDecoder —— 结构嵌套了两层(候选表里还有
+    /// 得分明细),手工逐键取值会写出一屏 as? 阶梯。解不出来(老条目没有/以后格式变了)
+    /// 一律 nil,不影响其余字段。
+    private static func decodeDecision(_ value: Any?) -> LyricsResolutionDecision? {
+        guard let dict = value as? [String: Any],
+              let data = try? JSONSerialization.data(withJSONObject: dict) else { return nil }
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        return try? decoder.decode(LyricsResolutionDecision.self, from: data)
+    }
+
     private static func splitKey(_ key: String) -> (artist: String, title: String, album: String)? {
         let parts = key.split(separator: "|", maxSplits: 2, omittingEmptySubsequences: false).map(String.init)
         guard parts.count == 3 else { return nil }
@@ -195,7 +212,8 @@ public final class EnrichCacheStore: ObservableObject {
                 lyricsTrSource: entry["lyrics_tr_source"] as? String ?? "",
                 hasTranslation: !((entry["lyrics_tr"] as? String ?? "").isEmpty),
                 hasRomanization: !((entry["lyrics_roma"] as? String ?? "").isEmpty),
-                hasLyrics: !lyrics.isEmpty
+                hasLyrics: !lyrics.isEmpty,
+                decision: Self.decodeDecision(entry["lyrics_decision"])
             )
         // 专辑归并键跟展示值分开:同一张专辑偶尔因歌词源候选写法大小写不一致而在
         // s.album 里长得不一样,排序按小写归并键走,才能让同一张专辑的曲目真正排在
@@ -670,5 +688,36 @@ public final class EnrichCacheStore: ObservableObject {
         // 强制重新读一次都无害(不是这首歌的话 key 对不上,syncEngine 内容不变),换来
         // 的是"改完歌词、悬浮窗还停在旧版本"这个问题被修掉,不用等下一次换歌才生效。
         PlaybackCoordinator.shared.refreshLyricsForCurrentTrack()
+    }
+}
+
+// collector 固化的解析决策记录 —— 跟 collector/decision.go 的 lyricsDecision 逐字段对应
+// (snake_case 由 JSONDecoder 的 convertFromSnakeCase 兜),只读展示,永远不写回。
+// 得分明细直接复用 LyricsSearchService.ScoreTerm:collector 两条路径吐的是同一套
+// scoreTerm(kind/points),这边的本地化文案(label/detail)天然通用。
+struct LyricsResolutionDecision: Decodable {
+    let path: String
+    let decidedAt: Int?
+    let scoringVersion: Int?
+    let queryArtist: String?
+    let queryTitle: String?
+    let queryAlbum: String?
+    let durationSecs: Double?
+    let sourcesResponded: [String]?
+    let winner: String?
+    let applied: Bool?
+    let candidates: [Candidate]?
+
+    struct Candidate: Decodable, Identifiable {
+        var id: String { source }
+        let source: String
+        let score: Int
+        let scoreTerms: [LyricsSearchService.ScoreTerm]?
+        let title: String?
+        let artist: String?
+        let album: String?
+        let sourceReportedDurationSecs: Double?
+        let hasWordTiming: Bool?
+        let instrumental: Bool?
     }
 }
