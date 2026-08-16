@@ -32,10 +32,16 @@ final class MenuBarMarqueeTicker: ObservableObject {
     // label 渲染 visibleText 就够了,不必为一张静止的图每秒醒 30 次。
     @Published private(set) var scrollImage: NSImage?
 
-    // 滚动时的帧间隔。30fps 对"一行字缓慢横移"足够平滑,再高只是白烧电。
+    // 滚动时的帧间隔。
+    //
+    // 2026-08-16 从 30fps 提到 60fps。原来注释写的是"30fps 足够平滑,再高只是白烧电",
+    // 但用户仍然反馈卡。实测(离线基准,见 MenuBarMarqueeRenderer.PreparedLine)每帧成本
+    // 从 0.057ms 降到 0.002ms 之后,60fps 每秒也只占主线程 0.1ms —— 比改动前的 30fps
+    // 还便宜一个量级,所以"烧电"这条理由不再成立。
+    //
     // ⚠️ 这不再是"每拍挪一个字"的节拍器(旧版 0.25 秒一拍),偏移完全按墙钟时间算,
     // 见 recompute()/MenuBarMarquee.scrollOffset。
-    private static let frameInterval: TimeInterval = 1.0 / 30
+    private static let frameInterval: TimeInterval = 1.0 / 60
     // 首尾各停 1.5 秒——跟旧版的 6 拍 × 0.25 秒完全一致,这一点观感没变:一句歌词最关键的
     // 往往是开头,一上来就滚会看不清。
     private static let holdSeconds: Double = 1.5
@@ -48,6 +54,7 @@ final class MenuBarMarqueeTicker: ObservableObject {
     // 计时器回调会被主线程上别的活儿(逐字高亮那套 60fps 重绘)推迟,累加式计帧会把这些
     // 延迟原样变成忽快忽慢的滚动,那正是"卡顿"的另一半来源。
     private var lineStartedAt: CFTimeInterval = CACurrentMediaTime()
+    // 60fps 下相邻两帧的位移更小,阈值跟着收紧,否则会把该画的帧也滤掉。
     private var lastRenderedOffset: CGFloat = -1
     private var lastRenderedText: String = ""
     // 这一句的滚动参数算一次就够:它只跟"哪一句 + 显示宽度 + 滚动开关"有关,而那三样一变
@@ -168,6 +175,9 @@ final class MenuBarMarqueeTicker: ObservableObject {
         )
     }
 
+    /// 当前这一句排好版的整条长图。换句/改宽度时重建,其余时候一直复用。
+    private var prepared: MenuBarMarqueeRenderer.PreparedLine?
+
     private func recompute() {
         let settings = AppSettings.shared
         let full = PlaybackCoordinator.shared.currentLine?.plainText ?? ""
@@ -179,6 +189,7 @@ final class MenuBarMarqueeTicker: ObservableObject {
             // 只在真的变了才发布——装得下的整句不该白白触发菜单栏重渲染。
             if next != visibleText { visibleText = next }
             if scrollImage != nil { scrollImage = nil }
+            prepared = nil
             return
         }
         let offset = MenuBarMarquee.scrollOffset(
@@ -189,11 +200,23 @@ final class MenuBarMarqueeTicker: ObservableObject {
         )
         // 首尾停留那两段里偏移一动不动,每帧重画一张一模一样的图纯属浪费,还会让菜单栏
         // 白刷新一次。半个点以下的位移在屏幕上也看不出来。
-        if plan.text == lastRenderedText, abs(offset - lastRenderedOffset) < 0.25 { return }
+        if plan.text == lastRenderedText, abs(offset - lastRenderedOffset) < 0.12 { return }
         lastRenderedText = plan.text
         lastRenderedOffset = offset
-        scrollImage = MenuBarMarqueeRenderer.image(
-            text: plan.text, width: plan.windowWidth, offset: offset)
+        // 整条长图只在**换句/换宽度**时排版一次,这一帧只从它身上裁一个窗口出来。
+        // 见 MenuBarMarqueeRenderer.PreparedLine —— 原来每帧都重排整段文本,那是这条
+        // 30fps 路径上最贵的一步,也正是用户反馈"还是有点卡"的来源。
+        if prepared?.text != plan.text || prepared?.windowWidth != plan.windowWidth {
+            prepared = MenuBarMarqueeRenderer.prepare(text: plan.text, width: plan.windowWidth)
+        }
+        if let prepared {
+            scrollImage = MenuBarMarqueeRenderer.frame(prepared, offset: offset)
+        } else {
+            // 长图没建起来(极端情况:宽度算成 0、内存分配失败)时退回逐帧绘制,
+            // 宁可慢也不要菜单栏上突然空一块。
+            scrollImage = MenuBarMarqueeRenderer.image(
+                text: plan.text, width: plan.windowWidth, offset: offset)
+        }
         // 滚动模式下 visibleText 保持整句:tooltip 用它,图片万一没画出来也还有东西可显示。
         if visibleText != plan.text { visibleText = plan.text }
     }

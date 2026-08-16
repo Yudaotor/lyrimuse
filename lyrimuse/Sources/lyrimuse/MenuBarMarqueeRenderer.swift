@@ -45,9 +45,81 @@ enum MenuBarMarqueeRenderer {
         return kept.isEmpty ? ellipsis : kept + ellipsis
     }
 
+    /// 一句歌词**只画一次**的整条长图,以及从它身上按偏移裁窗口的能力。
+    ///
+    /// 2026-08-16 加。原来是每帧调下面那个 image(text:width:offset:) —— 每一帧都把整段
+    /// 文本重新排版、重新绘制一遍,30fps。而一句歌词**在它自己那几秒里文本根本不变**,
+    /// 变的只有"取哪一段",所以那份排版开销是纯浪费,用户反馈的"菜单栏滚动还是有点卡"
+    /// 就是它。现在整句排版一次,每帧只做 CGImage.cropping —— 那是纯内存操作、共享底层
+    /// 像素、不复制也不重排。
+    ///
+    /// ⚠️ 为什么不能像灵动岛歌名那样交给 Core Animation 插值:那边是真窗口里的 SwiftUI
+    /// 视图,offset 交给渲染层就行;菜单栏这边是 MenuBarExtra 的 label,它挂不住 SwiftUI
+    /// 的动画修饰符(见 MenuBarMarqueeTicker 顶部那段实测),只能靠"模型侧换图、label 跟着
+    /// 重渲染"。所以能省的只有画图这一层 —— 那也正是最贵的一层。
+    struct PreparedLine {
+        let cg: CGImage
+        /// 位图的像素/点比例。裁剪要用像素坐标,这个值不能猜。
+        let scale: CGFloat
+        let pointHeight: CGFloat
+        let text: String
+        let windowWidth: CGFloat
+    }
+
+    static func prepare(text: String, width: CGFloat) -> PreparedLine? {
+        let windowWidth = ceil(width)
+        guard windowWidth > 0, !text.isEmpty else { return nil }
+        let font = Self.font
+        let boxHeight = ceil(font.ascender - font.descender) + 2
+        let attributes: [NSAttributedString.Key: Any] = [
+            .font: font,
+            .foregroundColor: NSColor.black,
+        ]
+        // 长图宽度 = 整句文字宽 + 一个窗口宽的留白。留白是必须的:滚到最后一帧时窗口右半边
+        // 已经越过文字末尾,没有留白就会裁到图外、拿到 nil。
+        let textWidth = ceil((text as NSString).size(withAttributes: attributes).width)
+        let fullWidth = textWidth + windowWidth
+        let scale = NSScreen.main?.backingScaleFactor ?? 2
+        let pxW = Int(fullWidth * scale), pxH = Int(boxHeight * scale)
+        guard pxW > 0, pxH > 0,
+              let ctx = CGContext(
+                data: nil, width: pxW, height: pxH, bitsPerComponent: 8, bytesPerRow: 0,
+                space: CGColorSpaceCreateDeviceRGB(),
+                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
+        else { return nil }
+        ctx.scaleBy(x: scale, y: scale)
+        let ns = NSGraphicsContext(cgContext: ctx, flipped: false)
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = ns
+        (text as NSString).draw(at: NSPoint(x: 0, y: 1), withAttributes: attributes)
+        NSGraphicsContext.restoreGraphicsState()
+        guard let cg = ctx.makeImage() else { return nil }
+        return PreparedLine(cg: cg, scale: scale, pointHeight: boxHeight,
+                            text: text, windowWidth: windowWidth)
+    }
+
+    /// 从整条长图里裁出当前这一帧要显示的窗口。offset 只往左(>= 0)。
+    static func frame(_ line: PreparedLine, offset: CGFloat) -> NSImage? {
+        let s = line.scale
+        let x = Int((max(0, offset) * s).rounded())
+        let w = Int((line.windowWidth * s).rounded())
+        let h = line.cg.height
+        // 夹回图内 —— 越界 cropping 直接返回 nil,那一帧菜单栏就会闪一下空白。
+        let maxX = max(0, line.cg.width - w)
+        let rect = CGRect(x: min(x, maxX), y: 0, width: min(w, line.cg.width), height: h)
+        guard let piece = line.cg.cropping(to: rect) else { return nil }
+        let image = NSImage(cgImage: piece,
+                            size: NSSize(width: line.windowWidth, height: line.pointHeight))
+        image.isTemplate = true
+        return image
+    }
+
     /// 画一张宽度恒为 `width` 的模板图,文字整体向左偏移 `offset` 点。
     ///
     /// offset 只往左(取值 >= 0):跑马灯是"文字从右往左走过一个固定的窗口",窗口本身不动。
+    ///
+    /// ⚠️ 每帧调它就是上面 PreparedLine 要解决的那个开销。留着是因为**预览**那条路只画
+    /// 静止的一帧(SectionPreviewBars),为一帧去建整条长图不划算。
     static func image(text: String, width: CGFloat, offset: CGFloat) -> NSImage? {
         let boxWidth = ceil(width)
         guard boxWidth > 0, !text.isEmpty else { return nil }
