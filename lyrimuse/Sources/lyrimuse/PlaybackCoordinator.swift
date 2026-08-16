@@ -18,6 +18,24 @@ final class PlaybackCoordinator: ObservableObject {
     @Published private(set) var artist: String = ""
     @Published private(set) var album: String = ""
     @Published private(set) var isPlayingNow: Bool = false
+    // isPlayingNow 的"缓收版":开始播放立刻为 true,停止播放要**静默满宽限期**才变 false。
+    //
+    // 给"要不要把悬浮窗/灵动岛收起来"这类决策用,不给歌词显示用 —— 歌词该在暂停的一瞬间
+    // 就停住,而窗口不该。切歌间隙、seek、缓冲都会让 isPlayingNow 短暂掉 false,跟着它走
+    // 就会看到灵动岛缩回刘海再弹出来、悬浮窗闪一下,而用户从头到尾都在听同一首歌。
+    //
+    // 只延后"停",不延后"起":恢复播放必须立刻有反应,那是用户刚刚按下的操作。
+    //
+    // ⚠️ 2026-08-16 实测的一个约束:当前 media-control 路径是 2 秒轮询,而"恢复播放"要
+    // 等下一次轮询才被感知(实测 pause 被感知于 T,grace 于 T+2.0 到期,resume 直到 T+4.0
+    // 才感知到),所以"宽限期内恢复→取消收起"这条路**目前几乎走不到**。真正在起作用的是
+    // 另一半:切歌间隙/seek 这类 isPlayingNow 压根不掉 false 的抖动。等事件驱动
+    // (media-control stream / Spotify 分布式通知)把感知延迟降到亚秒,取消路径才会真正生效
+    // —— 到那时不必调这里的 2 秒,它本来就是按"用户感知得到的一口气"定的。
+    @Published private(set) var isPlayingSmoothed: Bool = false
+    // 2 秒:够盖住换歌间隙和常见的 seek/缓冲,又不至于让"真暂停"迟钝到让人以为没生效。
+    private static let stopGracePeriod: TimeInterval = 2
+    private var stopGraceWork: DispatchWorkItem?
     @Published private(set) var currentLine: SyncedLyricLine?
     @Published private(set) var nextLineText: String?
     @Published private(set) var hasLyricsContent: Bool = false
@@ -377,6 +395,7 @@ final class PlaybackCoordinator: ObservableObject {
             s.$artist.assign(to: \.artist, on: self),
             s.$album.assign(to: \.album, on: self),
             s.$isPlayingNow.assign(to: \.isPlayingNow, on: self),
+            s.$isPlayingNow.sink { [weak self] playing in self?.updateSmoothedPlaying(playing) },
             s.$currentLine.sink { [weak self] line in
                 logger.debug("coordinator currentLine updated: hasLine=\(line != nil) hasWords=\(line?.words != nil) hasMainText=\(line?.mainText != nil)")
                 self?.currentLine = line
@@ -420,5 +439,24 @@ final class PlaybackCoordinator: ObservableObject {
             return accent
         }
         return settings.foregroundColor
+    }
+
+    private func updateSmoothedPlaying(_ playing: Bool) {
+        stopGraceWork?.cancel()
+        stopGraceWork = nil
+        if playing {
+            if !isPlayingSmoothed { isPlayingSmoothed = true }
+            return
+        }
+        // 已经是 false 就不必再排一次(重复的停止事件不该刷新宽限期起点)。
+        guard isPlayingSmoothed else { return }
+        let work = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            self.stopGraceWork = nil
+            // 到期时再核一次当下的真实状态:这段时间里可能已经恢复播放了。
+            if !self.isPlayingNow { self.isPlayingSmoothed = false }
+        }
+        stopGraceWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.stopGracePeriod, execute: work)
     }
 }

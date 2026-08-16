@@ -1012,19 +1012,83 @@ public final class LocalPlaybackSource: ObservableObject {
             bounds: CGRect(x: 0, y: 0, width: 1, height: 1),
             format: .RGBA8, colorSpace: CGColorSpaceCreateDeviceRGB()
         )
-        var r = Double(bitmap[0]) / 255.0
-        var g = Double(bitmap[1]) / 255.0
-        var b = Double(bitmap[2]) / 255.0
-        let luminance = 0.299 * r + 0.587 * g + 0.114 * b
-        if luminance < 0.45 {
-            let boost = 0.55 / max(luminance, 0.05)
-            r = min(1.0, r * boost)
-            g = min(1.0, g * boost)
-            b = min(1.0, b * boost)
-        }
+        let (r, g, b) = brightenedAccent(
+            r: Double(bitmap[0]) / 255.0,
+            g: Double(bitmap[1]) / 255.0,
+            b: Double(bitmap[2]) / 255.0)
         let ri = Int((r * 255).rounded())
         let gi = Int((g * 255).rounded())
         let bi = Int((b * 255).rounded())
         return String(format: "#%02X%02X%02XFF", ri, gi, bi)
+    }
+
+    /// 把封面均值色调整成"能当文字色用"的亮度。纯函数,selftest 直接覆盖。
+    ///
+    /// 2026-08-16 重写。原来是**在 RGB 空间按亮度整体乘一个 boost**,两个毛病:
+    ///  ① 近黑封面(纯黑背景专辑)均值可能只有 (2,1,3)/255,boost 达到 11 倍,于是把
+    ///    JPEG 噪点放大成一个饱和的随机色 —— 同一张黑封面每次取到的颜色都不一样;
+    ///  ② 乘法保持 RGB 比例 = 保持饱和度,一个暗而浓的酒红被提到该亮度后依然浓,
+    ///    贴在歌词上非常刺眼。
+    ///
+    /// 改成 HSB 空间处理(借鉴 boringNotch 的 ensureMinimumBrightness 思路):
+    ///  - 近黑直接兜底成中性灰,不试图从噪点里"抢救"色相;
+    ///  - 提亮多少,就按同一比例压低多少饱和度 —— 被提亮的颜色天然该更淡,这正是
+    ///    人眼对"亮色"的预期,也避免了上面第 ② 条的刺眼。
+    ///
+    /// ⚠️ 手写 RGB↔HSB 而不是用 NSColor:LyrimuseCore 这一层刻意不引入 AppKit
+    /// (见 Package.swift 的单向依赖注释)。
+    nonisolated public static func brightenedAccent(
+        r: Double, g: Double, b: Double, floor: Double = 0.62
+    ) -> (r: Double, g: Double, b: Double) {
+        // 近黑:三个通道都低到这个程度时,色相完全由压缩噪点决定,没有任何可信信息。
+        // 给一个固定的中性灰,至少保证"同一张封面每次结果一样"。
+        if r < 0.03, g < 0.03, b < 0.03 { return (0.72, 0.72, 0.72) }
+
+        let maxC = max(r, max(g, b))
+        let minC = min(r, min(g, b))
+        let brightness = maxC
+        let saturation = maxC <= 0 ? 0 : (maxC - minC) / maxC
+        guard brightness < floor else { return (r, g, b) }
+
+        let ratio = brightness / floor  // < 1
+        return hsbToRGB(
+            hue: hueOf(r: r, g: g, b: b, maxC: maxC, minC: minC),
+            saturation: saturation * ratio,
+            brightness: floor)
+    }
+
+    /// 色相(0~1)。maxC==minC(灰)时色相无意义,返回 0。
+    nonisolated private static func hueOf(
+        r: Double, g: Double, b: Double, maxC: Double, minC: Double
+    ) -> Double {
+        let delta = maxC - minC
+        guard delta > 0 else { return 0 }
+        let h: Double
+        switch maxC {
+        case r: h = (g - b) / delta + (g < b ? 6 : 0)
+        case g: h = (b - r) / delta + 2
+        default: h = (r - g) / delta + 4
+        }
+        return h / 6
+    }
+
+    nonisolated private static func hsbToRGB(
+        hue: Double, saturation: Double, brightness: Double
+    ) -> (r: Double, g: Double, b: Double) {
+        guard saturation > 0 else { return (brightness, brightness, brightness) }
+        let sector = (hue - hue.rounded(.down)) * 6
+        let i = Int(sector)
+        let f = sector - Double(i)
+        let p = brightness * (1 - saturation)
+        let q = brightness * (1 - saturation * f)
+        let t = brightness * (1 - saturation * (1 - f))
+        switch i % 6 {
+        case 0: return (brightness, t, p)
+        case 1: return (q, brightness, p)
+        case 2: return (p, brightness, t)
+        case 3: return (p, q, brightness)
+        case 4: return (t, p, brightness)
+        default: return (brightness, p, q)
+        }
     }
 }

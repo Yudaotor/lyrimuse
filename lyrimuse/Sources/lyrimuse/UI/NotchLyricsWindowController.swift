@@ -148,7 +148,7 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         // isPlayingNow 这个存储属性——@Published 的 willSet 在真正写入新值*之前*就
         // 已经发布,这个时间点读存储属性拿到的是上一次的旧值,细节见
         // LyricsOverlayWindowController.swift 同一处注释,不重复展开。
-        isPlayingObserver = PlaybackCoordinator.shared.$isPlayingNow.sink { [weak self] isPlaying in
+        isPlayingObserver = PlaybackCoordinator.shared.$isPlayingSmoothed.sink { [weak self] isPlaying in
             self?.updateActualVisibility(isPlayingNow: isPlaying)
             // 当前没有在播放(且没 hover 展开)时收缩到刘海本身大小——同一个坑同一个
             // 修法,必须把 sink 参数里的 isPlaying 显式传下去,不能让 recomputeGeometry
@@ -176,14 +176,14 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
             setHiddenFromCapture(AppSettings.shared.hideDuringScreenCapture)
             setHideWhenNotPlaying(AppSettings.shared.hideWhenNotPlaying)
         }
-        updateActualVisibility(isPlayingNow: PlaybackCoordinator.shared.isPlayingNow)
+        updateActualVisibility(isPlayingNow: PlaybackCoordinator.shared.isPlayingSmoothed)
     }
 
     // 跟经典悬浮窗共用同一个"暂停/无播放时隐藏"设置项(AppSettings.hideWhenNotPlaying),
     // 不新增独立开关——两种样式各自独立调用这个方法应用同一个设置值。
     func setHideWhenNotPlaying(_ hide: Bool) {
         hideWhenNotPlaying = hide
-        updateActualVisibility(isPlayingNow: PlaybackCoordinator.shared.isPlayingNow)
+        updateActualVisibility(isPlayingNow: PlaybackCoordinator.shared.isPlayingSmoothed)
     }
 
     // 跟经典悬浮窗共用同一个"截屏/录屏时隐藏"设置项(AppSettings.hideDuringScreenCapture),
@@ -201,10 +201,35 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     // (拖动宽度滑块)这两处用 animate: true,是因为它们是后台状态变化触发的、非用户
     // 直接操作的尺寸调整,平滑过渡观感更好,不需要即时响应。两处需求不同,animate 参数
     // 本来就该不一样,不是遗漏。
+    // hover 意图判定的两个延迟。
+    //
+    // 光标从刘海底下横穿而过(去点菜单栏、去够右上角控制中心)会连着触发 enter+exit,
+    // 没有延迟的话灵动岛就闪一下,很扎眼;反过来光标停在展开态卡片的下边缘时,内容
+    // 高度变化会让 hover 状态在边界上来回抖,收起延迟能把这种抖动吸收掉。
+    //
+    // 值取自 boringNotch 的实测手感(它默认进入 0.3s / 离开 0.1s),这里进入压到 0.2s:
+    // 我们展开出来的是"下一句 + 迷你进度条",是想看就得马上看到的信息,不像它那样
+    // 展开出一整块控制面板。
+    private static let hoverEnterDelay: TimeInterval = 0.2
+    private static let hoverExitDelay: TimeInterval = 0.1
+    private var pendingHoverWork: DispatchWorkItem?
+
     func setExpanded(_ expanded: Bool) {
+        // 每次新的 hover 事件都先撤掉上一次还没兑现的意图 —— "进了又出"必须净效果为零,
+        // 而不是两个延迟各自到期、先展开再收起地闪一下。
+        pendingHoverWork?.cancel()
+        pendingHoverWork = nil
         guard expanded != isExpanded else { return }
-        isExpanded = expanded
-        recomputeGeometry(animate: false)
+        let work = DispatchWorkItem { [weak self] in
+            guard let self, expanded != self.isExpanded else { return }
+            self.pendingHoverWork = nil
+            self.isExpanded = expanded
+            self.recomputeGeometry(animate: false)
+        }
+        pendingHoverWork = work
+        DispatchQueue.main.asyncAfter(
+            deadline: .now() + (expanded ? Self.hoverEnterDelay : Self.hoverExitDelay),
+            execute: work)
     }
 
     // 设置里"灵动岛宽度"滑块调用——跟经典悬浮窗的 setWidth(_:) 不是同一套实现:那个
@@ -308,7 +333,9 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         let geo = Self.geometry(for: screen)
         contentTopInset = geo.notchHeight
         notchWidth = geo.notchWidth
-        let isPlayingNow = isPlayingOverride ?? PlaybackCoordinator.shared.isPlayingNow
+        // 兜底同样读缓收版:收缩判定必须跟上面的可见性判定同一口径,否则会出现
+        // "窗口还在但已经缩成刘海"或反过来的错配。
+        let isPlayingNow = isPlayingOverride ?? PlaybackCoordinator.shared.isPlayingSmoothed
         // 没在播放、也没 hover 展开——收缩到刘海本身大小,常显内容整套不渲染(见
         // NotchLyricsView 里对 controller.isCollapsed 的判断)。是真的缩到刘海本身
         // 大小,不是把常显内容那份宽度缩到下限——下限本身仍然要给两只耳朵留够按钮/

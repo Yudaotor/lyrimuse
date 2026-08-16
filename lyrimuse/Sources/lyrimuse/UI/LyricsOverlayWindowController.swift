@@ -160,7 +160,7 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject 
         // 属性拿到的是*上一次*的旧值。改成从存储属性读会导致每次暂停/恢复播放都要再等
         // 一次轮询周期(本地模式 2 秒、relay 模式最长 60 秒)才纠正过来,悬浮窗不会立即
         // 响应。
-        isPlayingObserver = PlaybackCoordinator.shared.$isPlayingNow.sink { [weak self] isPlaying in
+        isPlayingObserver = PlaybackCoordinator.shared.$isPlayingSmoothed.sink { [weak self] isPlaying in
             self?.updateActualVisibility(isPlayingNow: isPlaying)
         }
     }
@@ -196,7 +196,7 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject 
             // 锁定状态都跟持久化值一致。
             setLocked(AppSettings.shared.lockPosition)
         }
-        updateActualVisibility(isPlayingNow: PlaybackCoordinator.shared.isPlayingNow)
+        updateActualVisibility(isPlayingNow: PlaybackCoordinator.shared.isPlayingSmoothed)
     }
 
     // 暂停/没有任何曲目在播放时,可选让悬浮窗自动隐藏(不是用户手动关掉,窗口重新开始
@@ -205,7 +205,7 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject 
     // 打开且当前没在播放才会被自动隐藏。
     func setHideWhenNotPlaying(_ hide: Bool) {
         hideWhenNotPlaying = hide
-        updateActualVisibility(isPlayingNow: PlaybackCoordinator.shared.isPlayingNow)
+        updateActualVisibility(isPlayingNow: PlaybackCoordinator.shared.isPlayingSmoothed)
     }
 
     // 实际是否显示 = 用户手动偏好(isVisible) AND (没开自动隐藏 OR 当前正在播放)。

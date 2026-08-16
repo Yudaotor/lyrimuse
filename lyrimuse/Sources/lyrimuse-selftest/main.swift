@@ -1949,6 +1949,57 @@ do {
                 "角色词: 拉丁标签不归这条管(有 latin 规则)")
 }
 
+// ---- 封面取色:HSB 提亮 + 压饱和 ----
+do {
+    func accent(_ r: Double, _ g: Double, _ b: Double) -> (r: Double, g: Double, b: Double) {
+        LocalPlaybackSource.brightenedAccent(r: r, g: g, b: b)
+    }
+    func brightness(_ c: (r: Double, g: Double, b: Double)) -> Double { max(c.r, max(c.g, c.b)) }
+    func saturation(_ c: (r: Double, g: Double, b: Double)) -> Double {
+        let mx = max(c.r, max(c.g, c.b)), mn = min(c.r, min(c.g, c.b))
+        return mx <= 0 ? 0 : (mx - mn) / mx
+    }
+
+    // 近黑封面：不再从压缩噪点里"抢救"色相 —— 旧实现会把 (2,1,3)/255 放大 11 倍，
+    // 同一张黑封面每次取到的颜色都不一样。
+    let nearBlack = accent(2/255, 1/255, 3/255)
+    expectEqual(saturation(nearBlack) < 0.01, true, "取色: 近黑封面兜底成中性灰(无色相)")
+    expectEqual(accent(0, 0, 0) == accent(2/255, 1/255, 3/255), true,
+                "取色: 近黑结果稳定,不随噪点变化")
+
+    // 够亮的颜色原样放行。
+    let bright = accent(0.9, 0.4, 0.4)
+    expectEqual(bright.r == 0.9 && bright.g == 0.4, true, "取色: 亮度够就不动它")
+
+    // 暗色被提到下限；关键是饱和度**同时**被按比例压低（旧实现只提亮、饱和度不变，刺眼）。
+    let darkRed = accent(0.30, 0.02, 0.02)
+    expectEqual(abs(brightness(darkRed) - 0.62) < 0.001, true, "取色: 暗色提亮到下限 0.62")
+    expectEqual(saturation(darkRed) < saturation((r: 0.30, g: 0.02, b: 0.02)), true,
+                "取色: 提亮的同时压低饱和度(不刺眼)")
+
+    // 色相必须守住：暗红提亮后仍是红,不能变色。
+    expectEqual(darkRed.r > darkRed.g && darkRed.r > darkRed.b, true, "取色: 色相不漂移(红仍是红)")
+    let darkBlue = accent(0.02, 0.05, 0.30)
+    expectEqual(darkBlue.b > darkBlue.r && darkBlue.b > darkBlue.g, true, "取色: 蓝仍是蓝")
+    let darkGreen = accent(0.03, 0.28, 0.05)
+    expectEqual(darkGreen.g > darkGreen.r && darkGreen.g > darkGreen.b, true, "取色: 绿仍是绿")
+
+    // 灰(无色相)提亮后仍是灰,不能凭空生出颜色。
+    let darkGray = accent(0.2, 0.2, 0.2)
+    expectEqual(saturation(darkGray) < 0.01, true, "取色: 灰提亮后仍是灰")
+
+    // 全区间扫描：输出永远在 [0,1]，且亮度不低于下限。
+    var bad = 0
+    for i in 0 ... 20 {
+        for j in 0 ... 20 {
+            let c = accent(Double(i) / 20, Double(j) / 20, 0.5)
+            if c.r < 0 || c.r > 1 || c.g < 0 || c.g > 1 || c.b < 0 || c.b > 1 { bad += 1 }
+            if brightness(c) < 0.61 { bad += 1 }
+        }
+    }
+    expectEqual(bad, 0, "取色: 全区间扫描输出合法且亮度达标")
+}
+
 if failures == 0 {
     print("\nALL PASS")
 } else {
