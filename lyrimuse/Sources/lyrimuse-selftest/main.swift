@@ -2287,6 +2287,97 @@ do {
     expectEqual(bad, 0, "取色: 全区间扫描输出合法且亮度达标")
 }
 
+// MARK: - 歌词时间轴偏移:全局基准 + 单曲微调
+//
+// 2026-08-17 加全局偏移时补的。真正容易写错的不是那个加法,而是两层之间的**独立性**:
+// 「重置这首歌」绝不能把设备侧的全局基准一起抹掉(那是用户最不希望被连带清掉的东西),
+// 反过来改全局基准也不该动已经调好的单曲值。下面每一条都在守这件事。
+// LyricsOffsetStore 是 @MainActor,而这个文件的顶层代码是 nonisolated 的(所以
+// trackKey 才特意标了 nonisolated,见那边的注释)。顶层代码本来就跑在主线程上,
+// assumeIsolated 把这件事告诉编译器即可,不需要把整个 selftest 改成 async。
+MainActor.assumeIsolated {
+    let store = LyricsOffsetStore.shared
+    let key = LyricsOffsetStore.trackKey(artist: "A", title: "T", lyrics: "[00:01.00]x", lyricsYRC: "")
+    // 起点归零 —— 这个 store 落在 UserDefaults 上,不清的话会读到上一次跑的残留
+    store.setGlobalOffset(0)
+    store.reset(forKey: key)
+    expectEqual(store.effectiveOffset(forKey: key), 0, "偏移: 两层都没调时是 0")
+
+    store.setGlobalOffset(300)
+    expectEqual(store.effectiveOffset(forKey: key), 300, "偏移: 只有全局基准时按它算")
+
+    store.nudge(by: -100, forKey: key)
+    expectEqual(store.offset(forKey: key), -100, "偏移: 单曲微调独立记账")
+    expectEqual(store.effectiveOffset(forKey: key), 200, "偏移: 生效值 = 全局 + 单曲")
+
+    store.reset(forKey: key)
+    expectEqual(store.offset(forKey: key), 0, "偏移: 重置清掉单曲微调")
+    expectEqual(store.globalOffsetMs, 300, "偏移: 重置不动全局基准")
+    expectEqual(store.effectiveOffset(forKey: key), 300, "偏移: 重置后回到全局基准")
+
+    store.setOffset(-250, forKey: key)
+    store.setGlobalOffset(-50)
+    expectEqual(store.offset(forKey: key), -250, "偏移: 改全局基准不动单曲微调")
+    expectEqual(store.effectiveOffset(forKey: key), -300, "偏移: 两个负值相加")
+
+    // 空 key(从没拿到过曲目信息)不该被当成一首歌记账 —— 但全局基准跟曲目无关,照样生效
+    store.setGlobalOffset(120)
+    store.nudge(by: 500, forKey: "||")
+    expectEqual(store.offset(forKey: "||"), 0, "偏移: 空 key 不记账")
+    expectEqual(store.effectiveOffset(forKey: "||"), 120, "偏移: 空 key 下全局基准仍然生效")
+
+    // 收尾:别把测试值留在 UserDefaults 里
+    store.setGlobalOffset(0)
+    store.reset(forKey: key)
+}
+
+// ---- 本地化:两份 Localizable.strings 的键集必须完全一致 ----
+//
+// 吸收自 boring.notch 审阅 B9 的**精神**(它用 xcstrings 单文件 + 每键翻译状态,结构上
+// 不可能漂):我们是 zh-hans/en 两份手写 .strings,靠人肉同步,没有任何守卫 —— 漏一边的
+// 键在运行时是**静默**回退(L10n 查不到就显示原文),永远不会报错。2026-08-17 加
+// "固定宽度"文案时就得用脚本同时插两个文件,这个漂移窗口是真实存在的。
+// 这里不上 xcstrings(要动 L10n.swift 那套手写查找,半天级、且暂无第三语言需求),
+// 先把"漂了立刻红"这一层钉死。
+//
+// 用 #filePath 定位仓库内的资源文件:selftest 从哪个工作目录跑都找得到;文件真不在
+// (比如某天目录挪了)就 FAIL 而不是静默跳过 —— 守卫自身失效也必须看得见。
+do {
+    func stringsKeys(_ path: String) -> [String]? {
+        guard let content = try? String(contentsOfFile: path, encoding: .utf8) else { return nil }
+        var keys: [String] = []
+        // 一行一条 `"key" = "value";`(两份文件的既有格式)。键里允许转义序列。
+        // 用 #/…/# 扩展定界符:裸斜杠正则字面量在 5.9 工具链要开特性开关,扩展定界符不用。
+        let pattern = #/^\s*"((?:[^"\\]|\\.)*)"\s*=/#
+        for line in content.split(separator: "\n", omittingEmptySubsequences: false) {
+            if let m = line.firstMatch(of: pattern) {
+                keys.append(String(m.1))
+            }
+        }
+        return keys
+    }
+    let root = URL(fileURLWithPath: #filePath)          // …/Sources/lyrimuse-selftest/main.swift
+        .deletingLastPathComponent()                    // …/Sources/lyrimuse-selftest
+        .deletingLastPathComponent()                    // …/Sources
+        .appendingPathComponent("lyrimuse/Resources")
+    let zhPath = root.appendingPathComponent("zh-hans.lproj/Localizable.strings").path
+    let enPath = root.appendingPathComponent("en.lproj/Localizable.strings").path
+    if let zh = stringsKeys(zhPath), let en = stringsKeys(enPath) {
+        expectEqual(zh.isEmpty, false, "本地化: zh-hans 解析出键(解析器没坏)")
+        // 各自无重复键:同键后者静默覆盖前者,是排查不出来的那种坑。
+        let zhDup = Dictionary(grouping: zh, by: { $0 }).filter { $0.value.count > 1 }.keys.sorted()
+        let enDup = Dictionary(grouping: en, by: { $0 }).filter { $0.value.count > 1 }.keys.sorted()
+        expectEqual(zhDup, [], "本地化: zh-hans 无重复键")
+        expectEqual(enDup, [], "本地化: en 无重复键")
+        // 键集完全一致:两个方向分别报,谁缺谁一目了然。
+        let zhSet = Set(zh), enSet = Set(en)
+        expectEqual(zhSet.subtracting(enSet).sorted(), [], "本地化: zh-hans 有而 en 缺的键")
+        expectEqual(enSet.subtracting(zhSet).sorted(), [], "本地化: en 有而 zh-hans 缺的键")
+    } else {
+        expectEqual(true, false, "本地化: 找不到 Localizable.strings(路径变了要跟着改这里)")
+    }
+}
+
 if failures == 0 {
     print("\nALL PASS")
 } else {
