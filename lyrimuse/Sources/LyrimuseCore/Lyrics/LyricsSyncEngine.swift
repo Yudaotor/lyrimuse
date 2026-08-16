@@ -144,6 +144,34 @@ public final class LyricsSyncEngine {
     //
     // ⚠️ 不要照抄别人那种 `^.{1,20}\s*[:：]\s*.+` 的宽松写法:`.` 能匹配任何字符,会把
     // "他说:我不走"这类正常带冒号的歌词整行吃掉。
+    // 第六轮(2026-08-16):「数字编辑：Jeff Li」「母带处理：Randy Merrill@Sterling Sound」
+    // 出现在歌曲**末尾**,角色词又是表外的。逐词追注定追不完(见上面"枚举法收敛不了"),
+    // 这条改成**双字角色词包含判定**:标签侧(冒号前)是 1~8 个纯汉字、且包含任何一个
+    // 双字角色词,就是职员表行 —— "数字编辑"包含"编辑"、"母带处理"包含"母带"和"处理",
+    // 以后"XX编辑/XX制作/XX工程"这类组合词全都自动覆盖,不用再等用户报一个补一个。
+    //
+    // 跟上面关键词表的分工:那张表管**精确形态**(单字缩写"词曲编"、拉丁"composed by"、
+    // 连接词串),这条管**组合词**。只收双字词、不收单字,是精度的关键:对唱标签是歌手名
+    // ("曲婉婷："),单字"曲"会误杀它,双字词不会 —— 歌手名里嵌着完整双字角色词的概率
+    // 可以忽略。
+    private static let creditRoleWords: [String] = [
+        "作词", "作曲", "编曲", "编辑", "编程", "制作", "监制", "混音", "母带", "处理",
+        "录音", "录制", "和声", "吉他", "贝斯", "键盘", "弦乐", "乐器", "工程", "企划",
+        "统筹", "发行", "出品", "演奏", "指挥", "后期", "音效", "版权", "鸣谢", "摄影",
+        "设计", "封面",
+    ]
+
+    public static func matchesRoleWordCredit(_ text: String) -> Bool {
+        guard let colon = text.firstIndex(where: { $0 == ":" || $0 == "：" }) else { return false }
+        let label = text[text.startIndex..<colon].trimmingCharacters(in: .whitespaces)
+        // 冒号后必须有内容 —— 纯粹以冒号结尾的句子是真歌词里的语气停顿,不算。
+        let rest = text[text.index(after: colon)...].trimmingCharacters(in: .whitespaces)
+        guard !rest.isEmpty, (1...8).contains(label.count),
+              label.unicodeScalars.allSatisfy({ $0.properties.isIdeographic })
+        else { return false }
+        return creditRoleWords.contains { label.contains($0) }
+    }
+
     private static let genericHanCreditLinePattern = try! NSRegularExpression(
         pattern: #"^\p{Han}{1,8}\s*[:：]\s*\S"#
     )
@@ -261,6 +289,9 @@ public final class LyricsSyncEngine {
         let drop = texts.enumerated().map { i, text -> Bool in
             if matchesKeywordCreditPattern(text) { return true }
             if matchesLatinCreditPattern(text) { return true }
+            // 双字角色词判定跟关键词表一样逐行生效(不受"整份主导"闸门管):双字词的
+            // 误杀面足够小,见 creditRoleWords 上的注释。
+            if matchesRoleWordCredit(text) { return true }
             // 抬头只在第一行认 —— 别的位置出现同样的字样多半是真歌词。
             if i == 0, looksLikeHeaderLine(text, trackTitle: trackTitle, trackArtist: trackArtist) {
                 return true

@@ -1928,6 +1928,27 @@ do {
     expectEqual(engine.activeLine(atMs: 4500)?.mainText, "真正的歌词", "署名行: 真歌词保留")
 }
 
+// ---- 署名行:双字角色词(组合词,首尾都管) ----
+do {
+    expectEqual(LyricsSyncEngine.matchesRoleWordCredit("数字编辑：Jeff Li"), true,
+                "角色词: 数字编辑(含「编辑」)")
+    expectEqual(LyricsSyncEngine.matchesRoleWordCredit("母带处理：Randy Merrill@Sterling Sound"), true,
+                "角色词: 母带处理(含「母带」)")
+    expectEqual(LyricsSyncEngine.matchesRoleWordCredit("弦乐录制工程师：某某"), true,
+                "角色词: 组合词自动覆盖,不用逐词补表")
+    // 反例们:
+    expectEqual(LyricsSyncEngine.matchesRoleWordCredit("他说：我不走"), false,
+                "角色词: 对白式冒号不误杀")
+    expectEqual(LyricsSyncEngine.matchesRoleWordCredit("曲婉婷：好久不见"), false,
+                "角色词: 歌手名标签(对唱)不误杀 —— 只认双字词,单字「曲」不算")
+    expectEqual(LyricsSyncEngine.matchesRoleWordCredit("回忆："), false,
+                "角色词: 冒号后没内容(语气停顿)不算")
+    expectEqual(LyricsSyncEngine.matchesRoleWordCredit("这一句歌词很长很长超过八个字：也不算"), false,
+                "角色词: 标签超过 8 字不像职员表")
+    expectEqual(LyricsSyncEngine.matchesRoleWordCredit("Mixing：某某"), false,
+                "角色词: 拉丁标签不归这条管(有 latin 规则)")
+}
+
 if failures == 0 {
     print("\nALL PASS")
 } else {
