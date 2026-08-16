@@ -262,6 +262,7 @@ public final class LocalPlaybackSource: ObservableObject {
 
     private var pollTimer: Timer?
     private var fastTimer: Timer?
+    private var screenLocked = false
 
     // Music.app 的播放状态变化通知(2026-08-04 加,借鉴 FlowX)——见
     // startObservingPlayerInfoNotification() 的注释。
@@ -397,7 +398,27 @@ public final class LocalPlaybackSource: ObservableObject {
     // 长时间挂起时没有锚点可外推,tick 只会一遍遍把 currentLine/nextLineText 置 nil,
     // 没必要让计时器继续空转。用 fastTimer == nil 判断"已经在跑了"而不是每次 apply()
     // 都无条件重建,避免播放中每 2 秒(poll 周期)就重开一次计时器。
+    /// 屏幕锁上时暂停 20Hz 的逐字 tick。
+    ///
+    /// 锁屏时没有任何人在看歌词,而 fastTick 是这个 App 最热的那条路径(逐字填色要 20Hz)。
+    /// ⚠️ 只停这一条:2 秒 poll 必须继续跑,否则锁屏期间听的歌不会被记录、Last.fm /
+    /// ListenBrainz 提交会整段丢失 —— 那是不可恢复的数据,省一点电不值当。
+    public func setScreenLocked(_ locked: Bool) {
+        guard screenLocked != locked else { return }
+        screenLocked = locked
+        logger.info("screen \(locked ? "locked" : "unlocked", privacy: .public); word-level tick \(locked ? "paused" : "resumed", privacy: .public)")
+        if locked {
+            stopFastTimer()
+        } else if anchor != nil {
+            // 解锁时只在"确实还在播"的前提下恢复,判据跟 apply() 里一致(有锚点才需要外推)。
+            ensureFastTimerRunning()
+            fastTick() // 立刻补一帧,别等下一个 50ms
+        }
+    }
+
     private func ensureFastTimerRunning() {
+        // 锁屏期间一律不起 —— 否则 apply() 每 2 秒会把刚停掉的计时器又拉起来。
+        guard !screenLocked else { return }
         guard fastTimer == nil else { return }
         // 20Hz;必须挂 .common mode,否则菜单打开/拖拽悬浮窗时会停摆。
         let t = Timer(timeInterval: 1.0 / 20.0, repeats: true) { [weak self] _ in

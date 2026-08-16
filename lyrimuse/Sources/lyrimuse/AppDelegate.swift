@@ -196,6 +196,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         // media-control 私有通道的一次性自检。只做归因、不做降级 —— 见 MediaControlHealth。
         MediaControlHealth.shared.checkInBackground()
+        startObservingScreenLock()
         PlaybackCoordinator.shared.start()
         // 菜单栏歌词跑马灯的驱动器——生命周期自持(靠 Combine 自己决定何时开停计时器),
         // 这里只需要在启动时点一次,见 MenuBarMarqueeTicker 顶部注释。
@@ -261,4 +262,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         return .terminateLater
     }
+
+    /// 锁屏/解锁时暂停或恢复 20Hz 的逐字渲染。
+    ///
+    /// ⚠️ 这两个通知在 **DistributedNotificationCenter**,不是 NotificationCenter.default
+    /// 也不是 NSWorkspace 的那个 —— 挂错地方会静默永不触发。
+    /// 只暂停渲染,不碰 2 秒 poll(理由见 LocalPlaybackSource.setScreenLocked)。
+    private func startObservingScreenLock() {
+        let center = DistributedNotificationCenter.default()
+        for (name, locked) in [("com.apple.screenIsLocked", true), ("com.apple.screenIsUnlocked", false)] {
+            center.addObserver(
+                forName: NSNotification.Name(name), object: nil, queue: .main
+            ) { _ in
+                MainActor.assumeIsolated {
+                    LocalPlaybackSource.shared.setScreenLocked(locked)
+                }
+            }
+        }
+    }
+
 }
