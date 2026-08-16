@@ -50,7 +50,7 @@ import LyrimuseCore
 // 已经有 NotchChromeSource 要的全部四个属性和 setExpanded,只是把这层契约显式写出来
 // —— 这样「外观」页的预览可以拿一个轻量替身装同一份 NotchLyricsView。
 final class NotchLyricsWindowController: NSWindowController, ObservableObject, NotchChromeSource {
-    static let shared = NotchLyricsWindowController()
+    static let shared = NotchLyricsWindowController(pinnedScreenID: nil)
 
     // 真值在 AppSettings.notchOverlayEnabled,这里只是它的镜像(菜单栏要观察这个
     // @Published)。只能经 setVisible(_:) 改,那是打开/关闭的唯一入口。
@@ -77,6 +77,12 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     // (recomputeGeometry 里同一份 collapsed 判断)保持单一数据源,不在两处各自算一遍
     // 容易失焦。
     @Published private(set) var isCollapsed: Bool = false
+
+    /// 稳态/展开态卡片的宽度(= contentWidth(baseWidth:notchWidth:) 的结果)。
+    /// 窗口本身常驻这个宽度,卡片在里面按形态变宽变窄,见 NotchWindowRoot。
+    @Published private(set) var steadyCardWidth: CGFloat = 360
+    /// 收起态卡片的宽度:物理刘海本身的宽度,无真刘海的屏幕退到兜底胶囊宽度。
+    @Published private(set) var collapsedCardWidth: CGFloat = collapsedFallbackWidth
 
     // 没有真刘海的屏幕(比如 MacBook Air 全系不带刘海,只有 14"/16" MacBook Pro
     // 2021 起才有)退到的固定兜底高度:不是"关掉整个功能",是换一套不依赖真刘海几何
@@ -129,7 +135,7 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     // 不画,肉眼看起来完全没有展开。直接持有这个引用、在 recomputeGeometry 里手动把它的
     // frame 也显式设一遍(而不是只信任 autoresizingMask 那条隐式路径),能让 SwiftUI 真正
     // 重新布局这一块。
-    private var hostingView: NSHostingView<NotchLyricsView<NotchLyricsWindowController>>?
+    private var hostingView: NSHostingView<NotchWindowRoot>?
 
     /// 只有"每块屏各一个"模式下的副本实例才会设(见 NotchMirrorManager),且只在 init
     /// 里设一次。主实例(`.shared`)恒为 nil,跟着 targetScreen() 走。
@@ -144,7 +150,14 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     /// updateActualVisibility → orderFront)。晚设一步的话,新建的副本会先按
     /// targetScreen() 在**主屏**上摆好并显示出来,然后才被挪到它该去的那块屏 ——
     /// 表现为主屏上闪一下重叠的第二个灵动岛。
-    convenience init(pinnedScreenID: String? = nil) {
+    /// ⚠️ 这个参数**不能**给默认值。给了默认值之后 `NotchLyricsWindowController()` 这个
+    /// 调用就有两个候选:这个 convenience init,和从 NSWindowController 继承来的
+    /// `init()`。Swift 选后者 —— 于是 `.shared` 建出来的是一个**没有窗口、没跑过下面
+    /// 任何一行**的空壳控制器,`updateActualVisibility()` 里的 `window?.orderFrontRegardless()`
+    /// 对 nil 什么都不做,灵动岛就此彻底不出现,而且编译期、运行期都没有任何报错或日志。
+    /// 2026-08-16 加"每块屏各一个"时正是这么写的,灵动岛静默消失了三次构建才查到这里。
+    /// 所以主实例也显式传 nil(见 `shared` 的声明),不留 `()` 这种写法。
+    convenience init(pinnedScreenID: String?) {
         // 初始 contentRect 只是占位——真正的尺寸/位置由下面 recomputeGeometry() 按
         // 当前屏幕几何重新算一遍并 setFrame,这里传什么都会被立刻覆盖掉。
         let placeholder = NSSize(width: AppSettings.shared.notchContentWidth, height: Self.fallbackNotchHeight + Self.contentHeight)
@@ -152,7 +165,7 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         self.init(window: panel)
         self.pinnedScreenID = pinnedScreenID
 
-        let hosting = NSHostingView(rootView: NotchLyricsView(controller: self))
+        let hosting = NSHostingView(rootView: NotchWindowRoot(controller: self))
         hosting.frame = NSRect(origin: .zero, size: placeholder)
         hosting.autoresizingMask = [.width, .height]
         panel.contentView = hosting
@@ -241,7 +254,17 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     private static let hoverExitDelay: TimeInterval = 0.1
     private var pendingHoverWork: DispatchWorkItem?
 
-    func setExpanded(_ expanded: Bool) {
+    /// 协议里那条 hover 入口,窗口这边**故意空实现** —— 跟 NotchPreviewChrome 同一个理由,
+    /// 而且是同一个现象:NotchLyricsView 里那个 .onHover 覆盖的范围比卡片本身大一圈。
+    ///
+    /// 改成"窗口常驻最大尺寸"之后这件事从"无害"变成"有害":以前窗口就是卡片,大一圈也大
+    /// 不到哪去;现在卡片下面有几十 pt 的透明区,鼠标划过那片空白(实际是在用户自己的窗口
+    /// 上面)灵动岛就会展开。2026-08-16 实测:光标停在卡片下方 24pt 的透明处,卡片照样展开。
+    ///
+    /// 所以命中判定改由 NotchWindowRoot 拿精确坐标跟卡片矩形直接比,走 setExpandedFromWindow。
+    func setExpanded(_ expanded: Bool) {}
+
+    func setExpandedFromWindow(_ expanded: Bool) {
         // 每次新的 hover 事件都先撤掉上一次还没兑现的意图 —— "进了又出"必须净效果为零,
         // 而不是两个延迟各自到期、先展开再收起地闪一下。
         pendingHoverWork?.cancel()
@@ -251,7 +274,8 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
             guard let self, expanded != self.isExpanded else { return }
             self.pendingHoverWork = nil
             self.isExpanded = expanded
-            self.recomputeGeometry(animate: false)
+            // 不再 recomputeGeometry:窗口尺寸跟展开与否无关了,展开这件事整个发生在
+            // SwiftUI 那一侧(NotchWindowRoot 的弹簧动画)。
         }
         pendingHoverWork = work
         DispatchQueue.main.asyncAfter(
@@ -266,7 +290,9 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     // 直接把完整的几何计算(位置+尺寸)重新走一遍就行,不用另外单独维护一份"保持居中"
     // 的增量逻辑。
     func applyContentWidthSetting() {
-        recomputeGeometry(animate: true)
+        // animate: false —— 平滑过渡现在由卡片那条弹簧负责(窗口只是个更大的透明容器,
+        // 它自己怎么变没人看得见)。让 NSWindow 也动画反而会跟卡片的弹簧打架。
+        recomputeGeometry(animate: false)
     }
 
     private func updateActualVisibility(isPlayingNow: Bool) {
@@ -405,17 +431,19 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         // NotchLyricsView 里对 controller.isCollapsed 的判断)。是真的缩到刘海本身
         // 大小,不是把常显内容那份宽度缩到下限——下限本身仍然要给两只耳朵留够按钮/
         // 歌名的空间。
-        let collapsed = !isPlayingNow && !isExpanded
-        isCollapsed = collapsed
-        let size: NSSize
-        if collapsed {
-            let collapsedWidth = geo.notchWidth > 0 ? geo.notchWidth : Self.collapsedFallbackWidth
-            size = NSSize(width: collapsedWidth, height: geo.notchHeight)
-        } else {
-            let extra = isExpanded ? Self.expandedExtraHeight : 0
-            let width = Self.contentWidth(baseWidth: AppSettings.shared.notchContentWidth, notchWidth: geo.notchWidth)
-            size = NSSize(width: width, height: geo.notchHeight + Self.contentHeight + extra)
-        }
+        isCollapsed = !isPlayingNow && !isExpanded
+        steadyCardWidth = Self.contentWidth(
+            baseWidth: AppSettings.shared.notchContentWidth, notchWidth: geo.notchWidth)
+        collapsedCardWidth = geo.notchWidth > 0 ? geo.notchWidth : Self.collapsedFallbackWidth
+        // 窗口恒为**最大**形态(展开态)的尺寸,不再随收起/稳态/展开三种形态改。三种形态
+        // 现在是卡片在这个固定窗口里自己变大变小(NotchWindowRoot),窗口只在屏幕几何或
+        // 宽度设置变化时才动。
+        //
+        // ⚠️ 多出来的那片区域必须保持纯透明、不能有任何命中形状 —— 它压在系统菜单栏上,
+        // 详见 NotchWindowRoot 顶部那段(带实测结论)。
+        let size = NSSize(
+            width: steadyCardWidth,
+            height: geo.notchHeight + Self.contentHeight + Self.expandedExtraHeight)
         let frame = NSRect(
             x: geo.centerX - size.width / 2,
             y: screen.frame.maxY - size.height,

@@ -152,17 +152,10 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
             // 这里对整个 ZStack 统一裁一次,保证任何内容都不会越出这个卡片的真实外轮廓。
             .clipShape(NotchHangingShape(bottomCornerRadius: 20))
         }
-        .onHover { hovering in
-            controller.setExpanded(hovering)
-            // 触觉反馈:贴刘海的东西离光标很近但没有边框可循,给一下对齐反馈能让"我确实
-            // 停在它上面了"变成可感知的事(Force Touch 触控板才有,其它设备是空操作)。
-            // ⚠️ 放在 onHover 而不是真正展开的那一刻:setExpanded 现在带 0.2s 意图延迟,
-            // 反馈拖到延迟之后就跟手感脱节了。
-            if hovering {
-                NSHapticFeedbackManager.defaultPerformer.perform(
-                    .alignment, performanceTime: .now)
-            }
-        }
+        // 2026-08-16 删掉了这里原来那个 .onHover。它覆盖的范围比卡片大一圈(预览那边
+        // 早就记录过同一个现象),窗口改成常驻最大尺寸之后这变成了实打实的 bug:鼠标划过
+        // 卡片下方的透明区也会展开。命中判定和触觉反馈都移到 NotchWindowRoot,那里拿
+        // 精确坐标跟卡片矩形直接比;预览那边本来就走自己的 onContinuousHover。
         // hover 时给卡片一点投影,让它从桌面/窗口背景上"浮起来"。收起态不给 —— 那时它
         // 假装自己是刘海的一部分,投影会立刻暴露这是个窗口。
         .shadow(
