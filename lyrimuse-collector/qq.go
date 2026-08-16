@@ -767,7 +767,23 @@ func decryptQRC(hexStr string) string {
 
 // (?s) 让 . 匹配换行——LyricContent 属性值本身是多行文本(内嵌真实的 \n),Go 的 RE2
 // 默认 . 不跨行,不加这个前缀只会匹配到第一行就提前收尾,后面整段内容会被截断丢失。
-var qrcContentRegex = regexp.MustCompile(`(?s)LyricContent="(.*?)"`)
+//
+// ⚠️ `(.*)` 必须是**贪婪**的,并且以 `"/>` 收尾,不能像 2026-08-16 之前那样写成
+// 非贪婪的 `(.*?)"`。原来那版的依据是"XML 属性值里的字面 \" 按规范必须转义成 &quot;,
+// 所以匹配到下一个引号是安全的"—— 这个假设对 QQ 的真实返回**不成立**:实测
+// PRINCE - Little Red Corvette 的正文里有 5 个**字面**双引号、0 个 &quot;
+// (歌词本身就带引号:`And you say "What have I got to lose"`),于是非贪婪匹配在第一个
+// 引号处就收尾,8508 字节的正文只截出 1604 字节 —— 丢掉 81%。
+//
+// 表现是"这首歌明明标着有逐字,前半段有效果、后面就没了":被截断的那份 YRC 仍然非空,
+// 所以 hasWordTiming 判定为真、打分还照拿逐字的加权,只是内容缺了一大半。英文歌里
+// 带引号的对白很常见,所以这不是个别曲目的问题。
+//
+// 贪婪匹配到最后一个 `"/>` 是安全的:实测解密后的 XML 结构是
+// `...<Lyric_1 LyricType="1" LyricContent="…正文…"/>\n</LyricInfo>\n</QrcInfos>`,
+// LyricContent 是最后一个属性、后面紧跟自闭合,而正文里出现字面 `"/>` 三字符序列
+// 需要引号紧挨着 `/>`,歌词里不会有。
+var qrcContentRegex = regexp.MustCompile(`(?s)LyricContent="(.*)"\s*/>`)
 
 // extractQRCLyricContent 从解密后的 XML 里取出 LyricContent 属性值——用正则而非完整
 // XML 解析,因为外层 Lyric_N 标签名是动态的(N=LyricCount,实测目前只见过 1,但不想依赖
