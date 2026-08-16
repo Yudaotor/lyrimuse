@@ -52,6 +52,45 @@ enum MenuBarMarqueeRenderer {
         return kept.isEmpty ? ellipsis : kept + ellipsis
     }
 
+    // MARK: - 这一句到底怎么显示
+
+    /// 滚动速度:每秒 4 个字。跟 2026-08-05 的初版一致(那时是每 0.25 秒挪一个字),
+    /// 换过两次驱动方式,这个观感参数一直没动。
+    static let scrollCharsPerSecond: CGFloat = 4
+    /// 首尾各停 1.5 秒。一句歌词最关键的往往是开头,一上来就滚会看不清。
+    static let scrollHoldSeconds: Double = 1.5
+
+    /// 一行歌词在菜单栏上的两种形态。
+    ///
+    /// ⚠️ 这个判定**必须**只有一份:菜单栏本体(MenuBarStatusItem)和设置页里那条预览
+    /// (MenuBarPreviewBar)都走它。2026-08-16 之前预览是自己另写的一套(自己判断截断、
+    /// 演的是滚动的第一帧),结果预览和实际长得并不一样 —— 用户报的"预览里要真实模拟
+    /// 实际的菜单栏"就是这个。两份实现必然漂,唯一的解法是让它们共用同一个函数。
+    enum Presentation: Equatable {
+        /// 装得下(或者宽度被设得极小、只能截断):按钮直接画这段文字。
+        case text(String)
+        /// 装不下:交给 MenuBarScrollingLabel 用 Core Animation 平移。
+        case scroll(text: String, windowWidth: CGFloat,
+                    pointsPerSecond: CGFloat, holdSeconds: Double)
+    }
+
+    static func presentation(for text: String, windowWidth: CGFloat) -> Presentation {
+        let fullWidth = width(of: text)
+        // 差不到半个点就别滚了(滚也看不出来)。宽度算成 0 的极端情况也走这条路 ——
+        // truncate 会返回空串,跟改动之前的行为一致。
+        guard windowWidth > 0, fullWidth > windowWidth + 0.5 else {
+            return .text(truncate(text, toWidth: windowWidth))
+        }
+        // 速度按这一句的平均字宽换算,这样中文歌和英文歌"每秒滚过几个字"是一致的。
+        // 兜一个正数下限:宽度算出 0 的话速度也会是 0,关键帧那边会当成"不滚"。
+        let averageCharWidth = fullWidth / CGFloat(max(1, text.count))
+        return .scroll(
+            text: text,
+            windowWidth: windowWidth,
+            pointsPerSecond: max(1, scrollCharsPerSecond * averageCharWidth),
+            holdSeconds: scrollHoldSeconds)
+    }
+
     /// 一句歌词排好版的整条长图。**一句只画一次**,之后每一帧都是 Core Animation 在
     /// 渲染层平移这一张图,主线程完全不参与。
     ///

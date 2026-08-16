@@ -1,6 +1,7 @@
 import AppKit
 import LyrimuseCore
 import QuartzCore
+import SwiftUI
 
 // 菜单栏里那一行滚动歌词的**渲染层**(2026-08-16 加)——一句歌词排版成一张长图,交给
 // Core Animation 在渲染层平移。主线程每句只干一次活,之后一帧都不碰。
@@ -181,6 +182,26 @@ final class MenuBarScrollingLabel: NSView {
         textLayer.bounds = CGRect(x: 0, y: 0, width: built.textWidth, height: built.pointHeight)
         CATransaction.commit()
         needsLayout = true
+    }
+
+    /// 把这一层原样搬进 SwiftUI —— 设置页那条菜单栏预览用它。
+    ///
+    /// 预览不再"仿"一遍菜单栏的样子,而是**直接用菜单栏本体这个视图**:同一套字体、同一张
+    /// 长图、同一条 CAKeyframeAnimation。滚动速度/停留时长也来自同一个
+    /// MenuBarMarqueeRenderer.presentation ——想让预览跟实际不一样都难。
+    struct Representable: NSViewRepresentable {
+        let text: String
+        let windowWidth: CGFloat
+        let pointsPerSecond: CGFloat
+        let holdSeconds: Double
+
+        func makeNSView(context: Context) -> MenuBarScrollingLabel { MenuBarScrollingLabel() }
+
+        func updateNSView(_ view: MenuBarScrollingLabel, context: Context) {
+            // present 对"参数没变"是空操作,所以设置页每次重算 body 都不会把滚动打回开头。
+            view.present(text: text, windowWidth: windowWidth,
+                         pointsPerSecond: pointsPerSecond, holdSeconds: holdSeconds)
+        }
     }
 
     private func restartAnimation() {

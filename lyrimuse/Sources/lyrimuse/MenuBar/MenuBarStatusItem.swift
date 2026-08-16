@@ -47,12 +47,6 @@ private let menuBarIconImage: NSImage = {
 final class MenuBarStatusItem: NSObject {
     static let shared = MenuBarStatusItem()
 
-    /// 滚动速度:每秒 4 个字。跟 2026-08-05 的初版一致(那时是每 0.25 秒挪一个字),
-    /// 换过两次驱动方式,这个观感参数一直没动。
-    private static let charsPerSecond: CGFloat = 4
-    /// 首尾各停 1.5 秒。一句歌词最关键的往往是开头,一上来就滚会看不清。
-    private static let holdSeconds: Double = 1.5
-
     private var statusItem: NSStatusItem?
     private let scrollingLabel = MenuBarScrollingLabel()
     private let menuController = MenuBarStatusMenu()
@@ -127,15 +121,16 @@ final class MenuBarStatusItem: NSObject {
             showIcon(button)
             return
         }
-        let windowWidth = settings.menuBarLyricsMaxWidth
-        let fullWidth = MenuBarMarqueeRenderer.width(of: text)
-        // 差不到半个点就别滚了(滚也看不出来)。宽度算成 0 的极端情况也走这条路 ——
-        // truncate 会返回空串,跟改动之前的行为一致。
-        guard windowWidth > 0, fullWidth > windowWidth + 0.5 else {
-            showStaticText(button, text: text, width: windowWidth)
-            return
+        // "装得下还是要滚"这个判定跟设置页那条预览共用同一个函数,两边不可能漂 ——
+        // 见 MenuBarMarqueeRenderer.Presentation。
+        switch MenuBarMarqueeRenderer.presentation(
+            for: text, windowWidth: settings.menuBarLyricsMaxWidth) {
+        case .text(let visible):
+            showStaticText(button, visible: visible, full: text)
+        case .scroll(let scrollText, let windowWidth, let pointsPerSecond, let holdSeconds):
+            showScrolling(button, text: scrollText, windowWidth: windowWidth,
+                          pointsPerSecond: pointsPerSecond, holdSeconds: holdSeconds)
         }
-        showScrolling(button, text: text, windowWidth: windowWidth, fullWidth: fullWidth)
     }
 
     /// 没开菜单栏歌词 / 没在播放 / 还没解析出这一句:固定图标。
@@ -150,7 +145,7 @@ final class MenuBarStatusItem: NSObject {
 
     /// 这一句装得下:普通文字,交给按钮自己画 —— 浅色/深色/菜单打开反白全部由系统处理,
     /// 一行代码都不用写。
-    private func showStaticText(_ button: NSStatusBarButton, text: String, width: CGFloat) {
+    private func showStaticText(_ button: NSStatusBarButton, visible: String, full: String) {
         scrollingLabel.clear()
         button.image = nil
         // imagePosition 是按钮上的**持久**属性,滚动那条路会把它设成 .imageOnly(那边靠
@@ -162,17 +157,15 @@ final class MenuBarStatusItem: NSObject {
         // 渲染结果和按钮宽度完全一样。所以这一行不是在修一个看得见的 bug,是不想把
         // "两个模式之间靠遗留状态碰巧对上"这件事留在代码里。
         button.imagePosition = .noImage
-        // 装得下时 truncate 原样返回;只有宽度被设得极小时才会真的截断。
-        let title = MenuBarMarqueeRenderer.truncate(text, toWidth: width)
-        button.title = title
+        button.title = visible
         // tooltip 始终给完整这一行:"想看全文就悬停"这条出路在三种模式下都在。
-        button.toolTip = text
-        button.setAccessibilityLabel(text)
+        button.toolTip = full
+        button.setAccessibilityLabel(full)
     }
 
     /// 这一句装不下:交给 CALayer 滚。
-    private func showScrolling(_ button: NSStatusBarButton, text: String,
-                               windowWidth: CGFloat, fullWidth: CGFloat) {
+    private func showScrolling(_ button: NSStatusBarButton, text: String, windowWidth: CGFloat,
+                               pointsPerSecond: CGFloat, holdSeconds: Double) {
         // ⚠️ 这张**全透明**的占位图是有用的,不是残留:variableLength 的状态栏项按
         // button.image 的尺寸算自己该占多宽。给它一张宽度正好是 windowWidth 的空图,
         // 算出来的宽度就跟 MenuBarExtra 时代那张模板图**逐点一致** —— 菜单栏项的占位
@@ -186,15 +179,9 @@ final class MenuBarStatusItem: NSObject {
         // 图层上的文字读屏软件读不到,这里显式补上这一行歌词。
         button.setAccessibilityLabel(text)
 
-        // 速度按这一句的平均字宽换算,这样中文歌和英文歌"每秒滚过几个字"是一致的。
-        // 兜一个正数下限:宽度算出 0 的话速度也会是 0,关键帧那边会当成"不滚"。
-        let averageCharWidth = fullWidth / CGFloat(max(1, text.count))
         scrollingLabel.frame = button.bounds
-        scrollingLabel.present(
-            text: text,
-            windowWidth: windowWidth,
-            pointsPerSecond: max(1, Self.charsPerSecond * averageCharWidth),
-            holdSeconds: Self.holdSeconds)
+        scrollingLabel.present(text: text, windowWidth: windowWidth,
+                               pointsPerSecond: pointsPerSecond, holdSeconds: holdSeconds)
     }
 
     private func spacerImage(width: CGFloat, height: CGFloat) -> NSImage {

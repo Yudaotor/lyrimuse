@@ -193,7 +193,22 @@ struct NotchPreviewBar: View {
     }
 }
 
-/// 菜单栏那一段的预览:按当前「最大字数」和「横向滚动」显示这一行会被截成什么样。
+/// 菜单栏那一段的预览。
+///
+/// 2026-08-16 重做:以前这里是"仿"一条菜单栏 —— 圆角条 + 一个现实里根本不存在的音符
+/// 图标 + `.system(size: 13)` 的文字,而且滚动只演开头那一帧(静止的)。跟用户真正看到的
+/// 东西差得远(用户原话:预览里要真实模拟实际的菜单栏)。
+///
+/// 现在这条预览**就是菜单栏本体那套代码**:
+///   * 要不要滚、滚多快、首尾停多久 —— 走 MenuBarMarqueeRenderer.presentation,跟
+///     MenuBarStatusItem 同一个函数,不可能漂;
+///   * 需要滚的句子直接挂 MenuBarScrollingLabel(真窗口里那个 layer-backed NSView),
+///     同一张长图、同一条 CAKeyframeAnimation,**真的会滚**;
+///   * 装得下的句子用 NSFont.menuBarFont(系统菜单栏字体本体),不是 13pt 系统字。
+///
+/// 外框改成一小段仿菜单栏:.bar 材质(就是菜单栏/工具栏那层材质)、内容靠右,右边跟着
+/// 几个常见的状态栏图标和真实时钟 —— 这些只是给"占多宽"一个参照物,让宽度滑杆的效果
+/// 看得出来。歌词那一格的宽度是钉死的,跟真菜单栏上一模一样。
 @MainActor
 struct MenuBarPreviewBar: View {
     @ObservedObject private var settings = AppSettings.shared
@@ -204,50 +219,29 @@ struct MenuBarPreviewBar: View {
         return L10n.t("这里是一句歌词示例")
     }
 
-    /// 复用真实的截断逻辑,不自己另写一份 —— 两份实现必然漂。
-    ///
-    /// 滚动模式演的是开头那一帧(offset 0),也就是"从最左边开始能看到多少" —— 跟截断
-    /// 模式取的是同一段文字,区别只在末尾要不要省略号。滚到中段的样子这里没必要演,
-    /// 那需要常驻一个定时器。
-    private var visibleText: String {
-        let limit = settings.menuBarLyricsMaxWidth
-        let truncatedText = MenuBarMarqueeRenderer.truncate(fullText, toWidth: limit)
-        // 不显示省略号:超出的那一段会滚出来,不是被丢掉了。
-        return truncatedText.hasSuffix("…") ? String(truncatedText.dropLast()) : truncatedText
-        return MenuBarMarqueeRenderer.truncate(fullText, toWidth: limit)
+    private var presentation: MenuBarMarqueeRenderer.Presentation {
+        MenuBarMarqueeRenderer.presentation(
+            for: fullText, windowWidth: settings.menuBarLyricsMaxWidth)
     }
 
-    private var truncated: Bool {
-        MenuBarMarqueeRenderer.width(of: fullText) > settings.menuBarLyricsMaxWidth
+    private var willScroll: Bool {
+        if case .scroll = presentation { return true }
+        return false
     }
 
-    /// 那一小段仿菜单栏(一行 13pt 字 + 上下各 5pt 内边距 + 圆角条)的高度。
-    static var cardHeight: CGFloat { 26 }
+    /// 仿菜单栏那一条的高度。真菜单栏内容区约 22pt,这里取整到 24 留一点呼吸。
+    static var cardHeight: CGFloat { 24 }
 
     var body: some View {
         VStack(spacing: 6) {
-            // 仿一小段菜单栏:圆角条 + 音符图标 + 那行字。用系统菜单栏字号(13),
-            // 因为菜单栏歌词就是系统字,这一页没有字体/颜色可调。
-            HStack(spacing: 6) {
-                Image(systemName: "music.note")
-                Text(visibleText)
-                    .lineLimit(1)
-            }
-            .font(.system(size: 13))
-            .foregroundStyle(Color(nsColor: .labelColor))
-            .padding(.horizontal, 12)
-            .padding(.vertical, 5)
-            .background(
-                RoundedRectangle(cornerRadius: 6, style: .continuous)
-                    .fill(Color(nsColor: .textBackgroundColor))
-            )
-            // 三态,别把"会滚动"说成"已截断":超宽时到底是滚还是截,取决于上面那个开关,
-            // 说反了正是让人觉得这个功能"怪怪的"的原因之一。
+            menuBarStrip
+            // 别把"会滚动"说成"已截断" —— 超宽时到底是滚还是截,由宽度决定,说反了正是
+            // 让人觉得这个功能"怪怪的"的原因之一。
             Text(
-                !truncated
-                    ? String(format: L10n.t("预览 · 上限 %@pt"),
+                willScroll
+                    ? String(format: L10n.t("预览 · 上限 %@pt，本句会横向滚动"),
                              "\(Int(settings.menuBarLyricsMaxWidth))")
-                    : String(format: L10n.t("预览 · 上限 %@pt，本句会横向滚动"),
+                    : String(format: L10n.t("预览 · 上限 %@pt"),
                              "\(Int(settings.menuBarLyricsMaxWidth))")
             )
             .font(.caption)
@@ -263,5 +257,74 @@ struct MenuBarPreviewBar: View {
         .background(Color(nsColor: .windowBackgroundColor))
         .onReceive(PlaybackCoordinator.shared.$currentLine.removeDuplicates()) { line = $0 }
         .accessibilityHidden(true)
+    }
+
+    /// 一小段仿菜单栏。内容靠右,跟真菜单栏上状态栏项的位置一致。
+    private var menuBarStrip: some View {
+        HStack(spacing: 0) {
+            Spacer(minLength: 12)
+            lyricsSlot
+            // 右边这几个只是参照物,让"歌词占了菜单栏多宽"看得出来。用真实时钟而不是
+            // 写死一个时间 —— 假数据会让人下意识觉得这块预览"不是真的"。
+            HStack(spacing: 11) {
+                Image(systemName: "wifi")
+                Image(systemName: "battery.100")
+                Text(Date(), style: .time)
+            }
+            .font(Font(MenuBarMarqueeRenderer.font))
+            .foregroundStyle(Color(nsColor: .labelColor).opacity(0.55))
+            .padding(.leading, 14)
+            .padding(.trailing, 12)
+        }
+        .frame(height: Self.cardHeight)
+        .frame(maxWidth: .infinity)
+        // ⚠️ 只铺 .bar 材质是不够的:那层材质压在设置窗自己的背景上几乎同色,整条读起来
+        // 就是"悬空的文字",完全不像菜单栏(2026-08-16 第一版实拍确认)。真菜单栏之所以
+        // 一眼认得出来,是因为它半透明地压在**桌面壁纸**上。所以这里跟桌面悬浮歌词那条
+        // 预览用同一张真实壁纸垫底(DesktopWallpaperSample),再压 .bar ——
+        // 合成出来的就是菜单栏本来的样子。
+        //
+        // 壁纸顶端对齐:菜单栏在屏幕最上面,透出来的本来就是壁纸的上边缘那一条。
+        .background(alignment: .top) {
+            ZStack(alignment: .top) {
+                if let wallpaper = DesktopWallpaperSample.image {
+                    Image(nsImage: wallpaper)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(height: Self.cardHeight, alignment: .top)
+                        .clipped()
+                } else {
+                    // 读不到壁纸(动态壁纸/没权限/无屏)就退回一块中性深色 —— 它至少还是
+                    // 一条"压在别的东西上的横条",不会退化成跟页面同色的空白。
+                    Color(nsColor: .textColor).opacity(0.14)
+                }
+                // 用 .ultraThinMaterial 而不是 .bar:.bar 在浅色外观下几乎不透明,压上去
+                // 直接把壁纸糊成一块灰(2026-08-16 实拍确认),而真菜单栏的透明度高得多 ——
+                // 深色壁纸下整条菜单栏是深的、文字自动转白,那正是它一眼认得出来的原因。
+                Rectangle().fill(.ultraThinMaterial)
+            }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
+    }
+
+    /// 歌词那一格:宽度钉死成用户设的上限 —— 跟真菜单栏一样,内容再长这一格也不会变宽
+    /// (那正是这个设置项在管的事)。
+    @ViewBuilder
+    private var lyricsSlot: some View {
+        switch presentation {
+        case .text(let visible):
+            Text(visible)
+                .font(Font(MenuBarMarqueeRenderer.font))
+                .foregroundStyle(Color(nsColor: .labelColor))
+                .lineLimit(1)
+                .frame(width: settings.menuBarLyricsMaxWidth,
+                       height: MenuBarMarqueeRenderer.lineHeight, alignment: .leading)
+        case .scroll(let text, let windowWidth, let pointsPerSecond, let holdSeconds):
+            MenuBarScrollingLabel.Representable(
+                text: text, windowWidth: windowWidth,
+                pointsPerSecond: pointsPerSecond, holdSeconds: holdSeconds
+            )
+            .frame(width: windowWidth, height: MenuBarMarqueeRenderer.lineHeight)
+        }
     }
 }
