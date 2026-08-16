@@ -51,7 +51,9 @@ final class MenuBarScrollingLabel: NSView {
     private struct Plan: Equatable {
         var text: String
         var windowWidth: CGFloat
-        var pacing: MenuBarMarquee.ScrollPacing
+        /// nil = 这一句装得下,静止显示。格子宽度照样是 windowWidth(固定宽度,见
+        /// MenuBarMarqueeRenderer.presentation)。
+        var pacing: MenuBarMarquee.ScrollPacing?
     }
 
     private var plan: Plan?
@@ -86,7 +88,7 @@ final class MenuBarScrollingLabel: NSView {
 
     /// 显示(或更新)一句要滚动的歌词。同一句用同样的参数重复调用是空操作 ——
     /// 否则每次 recompute 都会把滚动打回开头,用户永远看不到后半句。
-    func present(text: String, windowWidth: CGFloat, pacing: MenuBarMarquee.ScrollPacing) {
+    func present(text: String, windowWidth: CGFloat, pacing: MenuBarMarquee.ScrollPacing?) {
         let next = Plan(text: text, windowWidth: windowWidth, pacing: pacing)
         guard next != plan else {
             isHidden = false
@@ -189,7 +191,8 @@ final class MenuBarScrollingLabel: NSView {
     struct Representable: NSViewRepresentable {
         let text: String
         let windowWidth: CGFloat
-        let pacing: MenuBarMarquee.ScrollPacing
+        /// nil = 这一句装得下,静止显示(格子宽度照样是 windowWidth)。
+        let pacing: MenuBarMarquee.ScrollPacing?
 
         func makeNSView(context: Context) -> MenuBarScrollingLabel { MenuBarScrollingLabel() }
 
@@ -203,14 +206,16 @@ final class MenuBarScrollingLabel: NSView {
         textLayer.removeAnimation(forKey: Self.scrollAnimationKey)
         guard let plan, let prepared else { return }
         let maxOffset = prepared.textWidth - plan.windowWidth
-        guard let frames = MenuBarMarquee.scrollKeyframes(
-            maxOffset: maxOffset,
-            pointsPerSecond: plan.pacing.pointsPerSecond,
-            headHoldSeconds: plan.pacing.headHoldSeconds,
-            tailHoldSeconds: plan.pacing.tailHoldSeconds)
+        guard let pacing = plan.pacing,
+              let frames = MenuBarMarquee.scrollKeyframes(
+                maxOffset: maxOffset,
+                pointsPerSecond: pacing.pointsPerSecond,
+                headHoldSeconds: pacing.headHoldSeconds,
+                tailHoldSeconds: pacing.tailHoldSeconds)
         else {
-            // 走到这里说明调用方判断"要滚"和这里算出来的不一致(比如宽度刚好卡在边界)。
-            // 静止停在开头,别留一条跑不起来的动画。
+            // 两种情况会走到这儿:这一句本来就装得下(pacing == nil,固定宽度下这是常态),
+            // 或者调用方判断"要滚"和这里算出来的不一致(比如宽度刚好卡在边界)。
+            // 都是静止停在开头,别留一条跑不起来的动画。
             CATransaction.begin()
             CATransaction.setDisableActions(true)
             textLayer.position = CGPoint(x: 0, y: textLayer.position.y)

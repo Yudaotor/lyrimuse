@@ -208,7 +208,8 @@ struct NotchPreviewBar: View {
 ///
 /// 外框改成一小段仿菜单栏:.bar 材质(就是菜单栏/工具栏那层材质)、内容靠右,右边跟着
 /// 几个常见的状态栏图标和真实时钟 —— 这些只是给"占多宽"一个参照物,让宽度滑杆的效果
-/// 看得出来。歌词那一格的宽度是钉死的,跟真菜单栏上一模一样。
+/// 看得出来。歌词那一格的宽度**恒定**(设置里的「显示宽度」),跟真菜单栏上一模一样 ——
+// 长短句来回切都不会伸缩。
 @MainActor
 struct MenuBarPreviewBar: View {
     @ObservedObject private var settings = AppSettings.shared
@@ -221,7 +222,7 @@ struct MenuBarPreviewBar: View {
 
     private var presentation: MenuBarMarqueeRenderer.Presentation {
         MenuBarMarqueeRenderer.presentation(
-            for: fullText, windowWidth: settings.menuBarLyricsMaxWidth,
+            for: fullText, windowWidth: settings.menuBarLyricsWidth,
             // 演的是示例句(没在播放)时没有"这句会显示多久"可言,给 nil 走固定速度。
             //
             // ⚠️ 这个值是在 **body 求值时**现读的,不是在上面那个 onReceive 里存下来的。
@@ -232,7 +233,7 @@ struct MenuBarPreviewBar: View {
     }
 
     private var willScroll: Bool {
-        if case .scroll = presentation { return true }
+        if case .fixed(_, _, let pacing) = presentation { return pacing != nil }
         return false
     }
 
@@ -246,10 +247,10 @@ struct MenuBarPreviewBar: View {
             // 让人觉得这个功能"怪怪的"的原因之一。
             Text(
                 willScroll
-                    ? String(format: L10n.t("预览 · 上限 %@pt，本句会横向滚动"),
-                             "\(Int(settings.menuBarLyricsMaxWidth))")
-                    : String(format: L10n.t("预览 · 上限 %@pt"),
-                             "\(Int(settings.menuBarLyricsMaxWidth))")
+                    ? String(format: L10n.t("预览 · 固定宽度 %@pt，本句会横向滚动"),
+                             "\(Int(settings.menuBarLyricsWidth))")
+                    : String(format: L10n.t("预览 · 固定宽度 %@pt"),
+                             "\(Int(settings.menuBarLyricsWidth))")
             )
             .font(.caption)
             .foregroundStyle(.secondary)
@@ -314,29 +315,27 @@ struct MenuBarPreviewBar: View {
         .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
     }
 
-    /// 歌词那一格。
+    /// 歌词那一格。宽度恒等于设置里的「显示宽度」,跟真状态栏项一致(那边靠一张固定尺寸的
+    /// 透明占位图把 footprint 跟内容脱钩,见 MenuBarStatusItem.showFixedWidth)。
     ///
-    /// ⚠️ 两条分支的**占位方式不一样**,这不是随意写的,是在照抄真状态栏项的行为:
-    /// 状态栏项是 NSStatusItem.variableLength,宽度由 button 的内容决定 ——
-    ///   * 装得下(button.title 那条路):宽度就是**这句话本身的宽度**,不会预留到上限。
-    ///     实测同一首歌连着三句量到 231 / 145 / 207pt,跟着内容变。
-    ///   * 要滚(靠一张宽度正好是上限的透明占位图撑着):宽度才**钉死**在上限上。
+    /// 短句右边空出一块是**正常的**,真菜单栏上就是这样 —— 那正是固定宽度换来的稳定:
+    /// 长短句来回切,这一项和右边的图标都不会动。
     ///
-    /// 2026-08-17 修:这里原来两条分支都钉成上限宽,于是把上限拉大之后,预览里短句右边会
-    /// 空出一大片、把 Wi-Fi/电池/时钟推得老远 —— 而真菜单栏上根本不会那样(用户报的就是
-    /// 这个偏差)。上限管的是"最多占多宽",不是"总是占这么宽"。
+    /// (这一段 2026-08-17 反复过两次:先是两条分支都钉成上限宽 → 那时语义还是"上限",
+    /// 于是预览空一大片而真机不空,是真偏差;改成按文字自然宽度之后语义对上了,但用户
+    /// 随即指出真机上那种伸缩本身就难看,于是把设置改成固定宽度,两边又都钉死了。)
     @ViewBuilder
     private var lyricsSlot: some View {
         switch presentation {
         case .text(let visible):
+            // 退化路径(宽度设成 0):真机上也是交给按钮画一段截断文字。
             Text(visible)
                 .font(Font(MenuBarMarqueeRenderer.font))
                 .foregroundStyle(Color(nsColor: .labelColor))
                 .lineLimit(1)
-                // 按文字自然宽度占位,跟 variableLength 的状态栏项一致。
                 .fixedSize()
                 .frame(height: MenuBarMarqueeRenderer.lineHeight)
-        case .scroll(let text, let windowWidth, let pacing):
+        case .fixed(let text, let windowWidth, let pacing):
             MenuBarScrollingLabel.Representable(
                 text: text, windowWidth: windowWidth, pacing: pacing)
                 .frame(width: windowWidth, height: MenuBarMarqueeRenderer.lineHeight)

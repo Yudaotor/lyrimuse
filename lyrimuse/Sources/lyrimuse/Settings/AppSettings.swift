@@ -37,7 +37,7 @@ final class AppSettings: ObservableObject {
         static let showNextLinePreview = "np:showNextLinePreview"
         static let showLyricsInMenuBar = "np:showLyricsInMenuBar"
         static let menuBarLyricsMaxChars = "np:menuBarLyricsMaxChars"
-        static let menuBarLyricsMaxWidth = "np:menuBarLyricsMaxWidth"
+        static let menuBarLyricsWidth = "np:menuBarLyricsMaxWidth"
         static let lyricsOffsetStepMs = "np:lyricsOffsetStepMs"
         static let textStrokeEnabled = "np:textStrokeEnabled"
         static let textStrokeColorHex = "np:textStrokeColorHex"
@@ -170,19 +170,26 @@ final class AppSettings: ObservableObject {
     }
     // 状态栏歌词行超过这个字数就截断+悬停 tooltip 补全,不超过就整行显示——做成可调的
     // 上限而不是写死一个数字。
-    // ⚠️ 已经没有读取方了,只为兼容老配置文件保留(见下面 menuBarLyricsMaxWidth)。
+    // ⚠️ 已经没有读取方了,只为兼容老配置文件保留(见下面 menuBarLyricsWidth)。
     @Published var menuBarLyricsMaxChars: Int {
         didSet { defaults.set(menuBarLyricsMaxChars, forKey: Keys.menuBarLyricsMaxChars) }
     }
-    // 菜单栏歌词最多占多宽(点)。
+    // 菜单栏歌词**固定**占多宽(点)。
+    //
+    // ⚠️ 2026-08-17 从「最多占多宽」改成「固定占多宽」。原来装得下的句子按自己的宽度
+    // 占位,于是长短句来回切时菜单栏项一直在伸缩,右边其它 App 的图标跟着左右晃
+    // (用户反馈"动来动去,观感不太好")。现在不管装不装得下都占同样宽,footprint 恒定;
+    // 代价是短句右边会空出一块 —— 那是这个诉求本身自带的。实现见
+    // MenuBarStatusItem.showFixedWidth。持久化的 key 没跟着改名(仍是
+    // np:menuBarLyricsMaxWidth),老用户的设置照常读得出来。
     //
     // 2026-08-15 从"最多几个字"改成按宽度算。按字数根本不是等宽的:实测同为 10 个字,
     // 中文 128pt、英文只有 65pt,差了一倍 —— 同一个"20 字"设置,中文歌几乎占满一条,
     // 英文歌只有一小截,而用户想控制的从来就是"别占太宽"这件事本身。
     //
     // 旧的 menuBarLyricsMaxChars 还留在配置文件里(没删,便于回退),但已经没有读取方。
-    @Published var menuBarLyricsMaxWidth: CGFloat {
-        didSet { defaults.set(Double(menuBarLyricsMaxWidth), forKey: Keys.menuBarLyricsMaxWidth) }
+    @Published var menuBarLyricsWidth: CGFloat {
+        didSet { defaults.set(Double(menuBarLyricsWidth), forKey: Keys.menuBarLyricsWidth) }
     }
     // 悬浮窗背景透明,文字直接叠在桌面内容上——桌面壁纸/其它窗口文字撞色时容易糊在一起,
     // 加个描边提高辨识度。纯展示开关,LyricsOverlayView 每次渲染都直接读这个值,不需要
@@ -423,8 +430,8 @@ final class AppSettings: ObservableObject {
         menuBarLyricsMaxChars = (defaults.object(forKey: Keys.menuBarLyricsMaxChars) as? Int) ?? 60
         // 默认 200pt:大约中文 15 个字、英文 30 个字,菜单栏上占一小条,不至于把右边
         // 其它 App 的图标挤走。
-        menuBarLyricsMaxWidth = CGFloat(
-            (defaults.object(forKey: Keys.menuBarLyricsMaxWidth) as? Double) ?? 200)
+        menuBarLyricsWidth = CGFloat(
+            (defaults.object(forKey: Keys.menuBarLyricsWidth) as? Double) ?? 200)
         lyricsOffsetStepMs = (defaults.object(forKey: Keys.lyricsOffsetStepMs) as? Int) ?? 200
         textStrokeEnabled = (defaults.object(forKey: Keys.textStrokeEnabled) as? Bool) ?? ColorTheme.defaultTheme.textStrokeEnabled
         textStrokeColorHex = defaults.string(forKey: Keys.textStrokeColorHex) ?? ColorTheme.defaultTheme.textStrokeColorHex

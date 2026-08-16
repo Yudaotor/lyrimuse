@@ -67,8 +67,8 @@ final class MenuBarStatusItem: NSObject {
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         statusItem = item
         if let button = item.button {
-            // 显示纯文字(这一句装得下)时用的字体,跟滚动那条路画图用的是同一个 ——
-            // 两条路之间切换时字号不能跳。
+            // 退化路径(showStaticText)用按钮自己画文字时的字体,跟图层那条路画图用的是
+            // 同一个 —— 两条路之间切换时字号不能跳。
             button.font = MenuBarMarqueeRenderer.font
             scrollingLabel.frame = button.bounds
             scrollingLabel.autoresizingMask = [.width, .height]
@@ -100,9 +100,9 @@ final class MenuBarStatusItem: NSObject {
             .sink { [weak self] _ in self?.refresh() }.store(in: &cancellables)
         // 宽度改了可能从"要滚"变成"装得下"(或者反过来)。
         //
-        // ⚠️ 订阅的必须是**现在真正在用的那个**设置(按点计的 maxWidth)。2026-08-15 把宽度
-        // 从字数改成点时这里一度还挂在旧的 maxChars 上,后果是拖宽度滑杆完全不生效。
-        settings.$menuBarLyricsMaxWidth.dropFirst().receive(on: RunLoop.main)
+        // ⚠️ 订阅的必须是**现在真正在用的那个**设置。2026-08-15 把宽度从字数改成点时
+        // 这里一度还挂在旧的 maxChars 上,后果是拖宽度滑杆完全不生效。
+        settings.$menuBarLyricsWidth.dropFirst().receive(on: RunLoop.main)
             .sink { [weak self] _ in self?.refresh() }.store(in: &cancellables)
         coordinator.$isPlayingNow.dropFirst().receive(on: RunLoop.main)
             .sink { [weak self] _ in self?.refresh() }.store(in: &cancellables)
@@ -125,14 +125,14 @@ final class MenuBarStatusItem: NSObject {
         // 见 MenuBarMarqueeRenderer.Presentation。
         switch MenuBarMarqueeRenderer.presentation(
             for: text,
-            windowWidth: settings.menuBarLyricsMaxWidth,
+            windowWidth: settings.menuBarLyricsWidth,
             // 让长句子在换到下一句之前滚完,而不是永远按固定速度爬。
             dwellSeconds: coordinator.currentLineDwellSeconds
         ) {
         case .text(let visible):
             showStaticText(button, visible: visible, full: text)
-        case .scroll(let scrollText, let windowWidth, let pacing):
-            showScrolling(button, text: scrollText, windowWidth: windowWidth, pacing: pacing)
+        case .fixed(let lineText, let windowWidth, let pacing):
+            showFixedWidth(button, text: lineText, windowWidth: windowWidth, pacing: pacing)
         }
     }
 
@@ -146,8 +146,8 @@ final class MenuBarStatusItem: NSObject {
         button.setAccessibilityLabel(L10n.t("Lyrimuse"))
     }
 
-    /// 这一句装得下:普通文字,交给按钮自己画 —— 浅色/深色/菜单打开反白全部由系统处理,
-    /// 一行代码都不用写。
+    /// 退化路径:宽度被设成 0 或更小,画不出格子,交给按钮自己画一段截断文字。
+    /// 正常情况走不到这里(滑杆下限 80pt),留着是不想让极端配置变成一块空白。
     private func showStaticText(_ button: NSStatusBarButton, visible: String, full: String) {
         scrollingLabel.clear()
         button.image = nil
@@ -166,13 +166,18 @@ final class MenuBarStatusItem: NSObject {
         button.setAccessibilityLabel(full)
     }
 
-    /// 这一句装不下:交给 CALayer 滚。
-    private func showScrolling(_ button: NSStatusBarButton, text: String, windowWidth: CGFloat,
-                               pacing: MenuBarMarquee.ScrollPacing) {
-        // ⚠️ 这张**全透明**的占位图是有用的,不是残留:variableLength 的状态栏项按
-        // button.image 的尺寸算自己该占多宽。给它一张宽度正好是 windowWidth 的空图,
-        // 算出来的宽度就跟 MenuBarExtra 时代那张模板图**逐点一致** —— 菜单栏项的占位
-        // 和左右间距完全没变,也不用去猜系统给状态栏按钮留了多少内边距。
+    /// 正常路径:这一格恒占 windowWidth,文字画在图层上。装得下就静止(pacing == nil),
+    /// 装不下就交给 Core Animation 滚。
+    ///
+    /// ⚠️ 装得下的句子**也**走这里,不走 button.title —— 这正是"固定宽度"的实现点。
+    /// button.title 那条路的宽度跟着文字走(实测同一首歌连着三句是 231/145/207pt),
+    /// 长短句来回切时菜单栏项就会伸缩、把右边的图标顶得左右晃(2026-08-17 用户反馈)。
+    private func showFixedWidth(_ button: NSStatusBarButton, text: String, windowWidth: CGFloat,
+                                pacing: MenuBarMarquee.ScrollPacing?) {
+        // ⚠️ 这张**全透明**的占位图是整个固定宽度方案的支点,不是残留:variableLength 的
+        // 状态栏项按 button.image 的尺寸算自己该占多宽。给它一张宽度恒为 windowWidth 的
+        // 空图,这一项的 footprint 就跟内容彻底脱钩了,而且不用去猜系统给状态栏按钮留了
+        // 多少内边距(那是算不出来的,只能让 AppKit 自己算)。
         // 图本身没有任何像素,画上去什么都看不见,真正的文字在 scrollingLabel 那一层。
         button.image = spacerImage(
             width: windowWidth, height: MenuBarMarqueeRenderer.lineHeight)

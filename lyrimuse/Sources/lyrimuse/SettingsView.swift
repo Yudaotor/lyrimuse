@@ -1359,19 +1359,19 @@ private struct AppearanceSettingsTab: View {
         SettingsCard {
             SettingsCardHeader(
                 title: L10n.t("菜单栏歌词"),
-                help: L10n.t("状态栏宽度有限，歌词可能被截断；鼠标悬停在上面永远能看到完整的这一行")
+                help: L10n.t("这一格固定占这么宽，不会随歌词长短伸缩；放不下的句子会横向滚动，鼠标悬停也能看到完整的这一行")
             )
             CardDivider()
             SettingsSubRow(title: L10n.t("显示宽度")) {
                 HStack(spacing: 8) {
                     // 按点(pt)而不是字数 —— 字符宽度差得太远,按字数控不住实际占宽,
-                    // 见 AppSettings.menuBarLyricsMaxWidth。
+                    // 见 AppSettings.menuBarLyricsWidth。
                     Slider(value: Binding(
-                        get: { Double(settings.menuBarLyricsMaxWidth) },
-                        set: { settings.menuBarLyricsMaxWidth = CGFloat(($0 / 10).rounded() * 10) }
+                        get: { Double(settings.menuBarLyricsWidth) },
+                        set: { settings.menuBarLyricsWidth = CGFloat(($0 / 10).rounded() * 10) }
                     ), in: 80...600, step: 10)
                     .frame(width: 150)
-                    Text(String(format: L10n.t("%@pt"), "\(Int(settings.menuBarLyricsMaxWidth))"))
+                    Text(String(format: L10n.t("%@pt"), "\(Int(settings.menuBarLyricsWidth))"))
                         .foregroundStyle(.secondary)
                         .monospacedDigit()
                         .frame(width: 46, alignment: .trailing)

@@ -618,6 +618,9 @@
 "预览 · 上限 %@pt" = "Preview · %@pt limit";
 "预览 · 上限 %@pt，本句会横向滚动" = "Preview · %@pt limit — this line scrolls";
 "预览 · 上限 %@pt，本句已截断" = "Preview · %@pt limit — this line is truncated";
+"这一格固定占这么宽，不会随歌词长短伸缩；放不下的句子会横向滚动，鼠标悬停也能看到完整的这一行" = "This slot is always this wide and never resizes with the lyric; lines that don't fit scroll sideways, and hovering shows the line in full";
+"预览 · 固定宽度 %@pt" = "Preview · fixed %@pt";
+"预览 · 固定宽度 %@pt，本句会横向滚动" = "Preview · fixed %@pt — this line scrolls";
 "比下面的宽度更长时就截断，末尾加省略号，不滚动" = "Longer than the width below gets cut off with an ellipsis, no scrolling";
 "最多保留 4 万条记录，按每天 40 首估算约两年半；超出后从最旧的开始丢弃" = "Keeps up to 40,000 entries — roughly two and a half years at 40 tracks a day; past that, the oldest go first";
 "把你播放的歌同步到 ListenBrainz" = "Sync what you play to ListenBrainz";

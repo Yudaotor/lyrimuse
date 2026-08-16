@@ -62,27 +62,33 @@ enum MenuBarMarqueeRenderer {
     /// 演的是滚动的第一帧),结果预览和实际长得并不一样 —— 用户报的"预览里要真实模拟
     /// 实际的菜单栏"就是这个。两份实现必然漂,唯一的解法是让它们共用同一个函数。
     enum Presentation: Equatable {
-        /// 装得下(或者宽度被设得极小、只能截断):按钮直接画这段文字。
+        /// 退化情况:宽度被设成 0 或更小,画不出格子,退回让按钮自己显示一段截断文字。
         case text(String)
-        /// 装不下:交给 MenuBarScrollingLabel 用 Core Animation 平移。
-        case scroll(text: String, windowWidth: CGFloat, pacing: MenuBarMarquee.ScrollPacing)
+        /// 正常情况。这一格的宽度**恒等于**用户设的显示宽度 —— 装得下也一样。
+        /// pacing == nil 表示这一句装得下,静止显示、不滚。
+        case fixed(text: String, windowWidth: CGFloat, pacing: MenuBarMarquee.ScrollPacing?)
     }
 
     /// - Parameter dwellSeconds: 这一句会显示多久(到下一句为止)。给了就按它配速 ——
     ///   让长句子在换句之前滚完,而不是永远按固定速度爬(见 MenuBarMarquee.pacing)。
     ///   nil 就退回固定速度。
+    ///
+    /// ⚠️ 2026-08-17 把这个设置从"最多占多宽"改成"固定占多宽"。原来装得下的句子按自己的
+    /// 宽度占位,于是长短句来回切时菜单栏项一直在伸缩,右边其它 App 的图标跟着左右晃
+    /// (用户反馈"动来动去,观感不太好")。现在两种情况都占同样的宽度,footprint 恒定。
+    /// 代价是短句右边会空出一块 —— 那是"固定宽度"这个诉求本身自带的,躲不掉。
     static func presentation(
         for text: String, windowWidth: CGFloat, dwellSeconds: Double?
     ) -> Presentation {
+        guard windowWidth > 0 else { return .text(truncate(text, toWidth: windowWidth)) }
         let fullWidth = width(of: text)
-        // 差不到半个点就别滚了(滚也看不出来)。宽度算成 0 的极端情况也走这条路 ——
-        // truncate 会返回空串,跟改动之前的行为一致。
-        guard windowWidth > 0, fullWidth > windowWidth + 0.5 else {
-            return .text(truncate(text, toWidth: windowWidth))
+        // 差不到半个点就别滚了(滚也看不出来),但**位置仍然按固定宽度占**。
+        guard fullWidth > windowWidth + 0.5 else {
+            return .fixed(text: text, windowWidth: windowWidth, pacing: nil)
         }
         // 速度按这一句的平均字宽换算,这样中文歌和英文歌"每秒滚过几个字"是一致的。
         let averageCharWidth = fullWidth / CGFloat(max(1, text.count))
-        return .scroll(
+        return .fixed(
             text: text,
             windowWidth: windowWidth,
             pacing: MenuBarMarquee.pacing(
