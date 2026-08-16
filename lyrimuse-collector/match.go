@@ -1343,3 +1343,86 @@ func bilingualTitleEqual(a, b string) bool {
 	}
 	return true
 }
+
+// wordTimingCoverageFloor 是"这份逐字数据算不算数"的下限:YRC 覆盖到的最后时刻,至少要
+// 达到整行歌词最后时刻的这个比例。
+//
+// 为什么需要这道闸:2026-08-16 修 QQ 的 QRC 截断 bug 时发现,**残缺的逐字数据在系统里
+// 长得跟完整的一模一样** —— 只要 YRC 非空,hasWordTiming 就是真、打分照拿逐字加权
+// (scoreLyricCandidate 给 +400),而且 enrich 里"已经有逐字就不再重试"那条也会认它。
+// 于是一份只覆盖前 19% 的残片,既挤掉了别的源、又不会被自愈,用户看到的是"标着有逐字,
+// 前半段有效果后面突然没了"。
+//
+// 阈值 0.5 是照实测数据定的:扫过本机 136 条有逐字的缓存条目,被截断那条覆盖 19.1%,
+// 而**正常**条目最低的一条是 85.4%(netease,差在 LRC 末尾的空行/署名行上),中间隔着
+// 一大段空白,取 0.5 两边都不擦边。
+const wordTimingCoverageFloor = 0.5
+
+// usableWordTiming 判断一份逐字数据是不是完整到可以拿来用。
+//
+// 拿不准就放行(返回 true):任一侧缺时间戳时无从比较,而误杀一份好的逐字比放过一份残片
+// 更亏 —— 逐字是这套打分里最值钱的东西。
+func usableWordTiming(lyrics, yrc string) bool {
+	if yrc == "" {
+		return false
+	}
+	lrcEnd := lastLRCTimestampMs(lyrics)
+	yrcEnd := lastYRCTimestampMs(yrc)
+	if lrcEnd <= 0 || yrcEnd <= 0 {
+		return true
+	}
+	return float64(yrcEnd) >= float64(lrcEnd)*wordTimingCoverageFloor
+}
+
+// usableYRC 是 usableWordTiming 的取值版:残缺就当没有,别把残片带进候选。
+// 留着残片的话它照样会被写进缓存、导出成 .yrc 文件,渲染时前半段有逐字后半段没有。
+func usableYRC(lyrics, yrc string) string {
+	if !usableWordTiming(lyrics, yrc) {
+		return ""
+	}
+	return yrc
+}
+
+// lastLRCTimestampMs 返回整行歌词里最后一个时间戳(毫秒)。
+func lastLRCTimestampMs(lyrics string) int {
+	best := 0
+	for _, line := range strings.Split(lyrics, "\n") {
+		m := lrcLineTimeRegex.FindStringSubmatch(line)
+		if m == nil {
+			continue
+		}
+		mm, _ := strconv.Atoi(m[1])
+		ss, _ := strconv.Atoi(m[2])
+		frac, _ := strconv.Atoi(m[3])
+		ms := (mm*60+ss)*1000 + frac*10
+		if len(m[3]) == 3 {
+			ms = (mm*60+ss)*1000 + frac
+		}
+		if ms > best {
+			best = ms
+		}
+	}
+	return best
+}
+
+// lastYRCTimestampMs 返回逐字数据里最后一行的结束时刻(行首 [起始,时长])。
+func lastYRCTimestampMs(yrc string) int {
+	best := 0
+	for _, line := range strings.Split(yrc, "\n") {
+		m := yrcLineTimeRegex.FindStringSubmatch(line)
+		if m == nil {
+			continue
+		}
+		start, _ := strconv.Atoi(m[1])
+		dur, _ := strconv.Atoi(m[2])
+		if start+dur > best {
+			best = start + dur
+		}
+	}
+	return best
+}
+
+var (
+	lrcLineTimeRegex = regexp.MustCompile(`^\[(\d+):(\d+)[.:](\d+)\]`)
+	yrcLineTimeRegex = regexp.MustCompile(`^\[(\d+),(\d+)\]`)
+)
