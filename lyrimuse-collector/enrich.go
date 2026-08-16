@@ -188,14 +188,51 @@ var (
 // 也就几十微秒。
 //
 // ⚠️ 调用方必须已经持有 enrichMu。
+//
+// 2026-08-16 从"只差大小写"扩到"大小写 + 空格 + 繁简"。起因是用户在「歌词管理」里看到
+// 成对的重复,全库 108 条实测有 14 组 29 条:
+//
+//	陶喆|Susan 说|太平盛世        vs  陶喆|Susan说|太平盛世          (差一个半角空格)
+//	方大同|千纸鹤|回到未來        vs  方大同|千紙鶴|回到未來          (繁简)
+//	孙燕姿|我怀念的|逆光 / 孙燕姿|我懷念的|逆光 / 孫燕姿|我懷念的|逆光  (三条,歌手名也繁简不一)
+//
+// 空格和繁简这两档正好漏在既有的两道防线中间:cleanMediaTag 只统一不可见空白、折叠
+// **连续**空白(单个半角空格既不删也不插),而这里原来只 ToLower(不动任何空白、更不动字形)。
 func canonicalEnrichKey(key string) (string, bool) {
-	lower := strings.ToLower(key)
-	for existing := range enrichCache {
-		if existing != key && strings.ToLower(existing) == lower {
-			return existing, true
+	loose := loosenEnrichKey(key)
+	// ⚠️ 必须挑出**确定的**那一条,不能"遍历时撞见谁就用谁"—— Go 的 map 遍历顺序是随机的,
+	// 而缓存里真的存在一个宽松键对应多条的情况(上面孙燕姿那组是三条)。随机命中的后果是
+	// 同一首歌这次读到 A 的歌词、下次读到 B 的,时间轴还可能不一样,排查起来像见了鬼。
+	// 用 betterEnrichEntry 挑最好的那条 —— 跟迁移合并时的胜者规则同一套,两处结论一致。
+	best := ""
+	for existing, e := range enrichCache {
+		if existing == key || loosenEnrichKey(existing) != loose {
+			continue
+		}
+		if best == "" || betterEnrichEntry(e, enrichCache[best], existing, best) {
+			best = existing
 		}
 	}
-	return "", false
+	if best == "" {
+		return "", false
+	}
+	return best, true
+}
+
+// loosenEnrichKey 把 key 压成"用来判断是不是同一首歌"的宽松形态。
+//
+// ⚠️ 结果**只用于比对**,绝不写进 enrichCache 当 key、绝不用于显示、绝不用于文件名。
+// 这条边界是整个修法的关键:
+//   - 归一化写进 **key**,就要求 Swift 侧 EnrichCacheKeys 逐字节复刻同一套规则,否则两边
+//     算出的 key 对不上,表现是「悬浮窗整首歌没词」(EnrichCacheReader 是纯精确命中,
+//     那边注释自己写过这个后果)。而繁简这一档 Go 走内嵌 OpenCC 词典、Swift 走
+//     CFStringTransform(ICU),两者对部分字本来就不一致,根本复刻不了。
+//   - 归一化只用于**查询兜底**,两侧不一致的后果就温和得多:某个字兜不到,退化成改动前的
+//     行为(多一条重复),而不是查不到歌词。
+//
+// 所以:key 一个字节不改,宽松只活在比对这一层。
+func loosenEnrichKey(key string) string {
+	return strings.ToLower(strings.ReplaceAll(toSimplified(key), " ", ""))
 }
 
 func trackEnrichment(artist, title, album, bundleID string, durationSecs float64) map[string]string {
@@ -212,10 +249,10 @@ func trackEnrichment(artist, title, album, bundleID string, durationSecs float64
 	enrichMu.Lock()
 	e, ok := enrichCache[key]
 	if !ok {
-		// 精确没命中时,再看看已有条目里有没有"只差大小写"的同一首歌 —— 有就复用那个 key,
-		// 别另存一份。理由见 canonicalEnrichKey。
+		// 精确没命中时,再看看已有条目里有没有"只差大小写/空格/繁简"的同一首歌 —— 有就
+		// 复用那个 key,别另存一份。理由见 canonicalEnrichKey。
 		if alt, found := canonicalEnrichKey(key); found {
-			log.Printf("enrich: reusing existing entry %q for %q (case-only difference)", alt, key)
+			log.Printf("enrich: reusing existing entry %q for %q (loose match)", alt, key)
 			key, e, ok = alt, enrichCache[alt], true
 		}
 	}

@@ -188,4 +188,24 @@ public enum EnrichCacheKeys {
     public static func deletionPlan(selected: Set<String>, existing: Set<String>) -> [String] {
         selected.intersection(existing).sorted()
     }
+
+    /// 把 key 压成"用来判断是不是同一首歌"的宽松形态。跟 collector 的 loosenEnrichKey 对应。
+    ///
+    /// ⚠️ 结果**只用于查询兜底**,绝不用来构造 key、绝不用于显示、绝不用于文件名。
+    ///
+    /// 这条边界是整套设计的关键。归一化如果写进 **key**,Go 和 Swift 两侧就必须逐字节算出
+    /// 同一个结果,否则 collector 按一个 key 写盘、这边按另一个 key 查,表现是「悬浮窗整首歌
+    /// 没词」(lookup 是纯精确命中)。而繁简这一档两侧**本来就做不到一致** —— collector 用
+    /// 内嵌的 OpenCC 词典,这边用 CFStringTransform(ICU),对部分字的取舍不同。
+    ///
+    /// 放在兜底这一层,不一致的后果就温和得多:某个字没折对,这次兜不到,退化成 2026-08-16
+    /// 之前的行为(多一条重复条目),而不是查不到歌词。
+    public static func looseKey(_ key: String) -> String {
+        let simplified = NSMutableString(string: key) as CFMutableString
+        CFStringTransform(simplified, nil, "Hant-Hans" as CFString, false)
+        return (simplified as String)
+            .replacingOccurrences(of: " ", with: "")
+            .lowercased()
+    }
+
 }

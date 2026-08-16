@@ -81,6 +81,16 @@ func prefetchAlbumSiblings(currentArtist, currentTitle, album, bundleID string) 
 			key := enrichKey(t.artist, t.title, album)
 			enrichMu.Lock()
 			_, exists := enrichCache[key]
+			if !exists {
+				// 2026-08-16 补上:预取是重复条目最大的产生源 —— 曲目名来自**网易云曲库**,
+				// 跟播放器报的拼法在"中英文之间加不加空格""繁体还是简体"上系统性不一致。
+				// 上面那句"走 enrichKey 而不是自己拼"只挡住了译名括号这一档,挡不住这两档。
+				// 精确没命中时再宽松找一次,已经有等价条目就不预取了(实测那 14 组重复里,
+				// 丁世光/方大同/孙燕姿那批繁简对就是这么来的)。
+				if _, found := canonicalEnrichKey(key); found {
+					exists = true
+				}
+			}
 			inflight := enrichInflight[key]
 			eligible := !exists && !inflight
 			if eligible {

@@ -17,6 +17,15 @@ func expectEqual<T: Equatable>(_ actual: T, _ expected: T, _ label: String) {
     }
 }
 
+func expectNotEqual<T: Equatable>(_ actual: T, _ unexpected: T, _ label: String) {
+    if actual != unexpected {
+        print("ok - \(label)")
+    } else {
+        failures += 1
+        print("FAIL - \(label)\n    两者相等,但期望不同:  \(actual)")
+    }
+}
+
 // ---- LRCParser ----
 
 expectEqual(
@@ -590,6 +599,38 @@ do {
     let once = K.normalizedKey(artist: "丁世光", title: "不散的筵席（I Miss You）", album: "神經志 The Journal")
     expectEqual(once, "丁世光|不散的筵席|神經志 The Journal", "缓存key: 三段拼接")
     expectEqual(K.normalizedTitle("不散的筵席"), "不散的筵席", "缓存key: 归一化过的再算一次不变")
+
+    // ---- looseKey:只用于查询兜底的宽松形态(2026-08-16) ----
+    //
+    // collector 把"其实是同一首歌"的重复条目合并成一条后,缓存里只剩最适合显示的那个写法;
+    // 播放器报的可能是另一个写法,靠这一层才查得到。⚠️ 它**只能**用于兜底,绝不能拿去构造
+    // key —— 繁简这一档两侧本来就不一致(collector 用 OpenCC 词典、这边用 ICU),写进 key
+    // 就是「悬浮窗整首歌没词」。理由完整版见 EnrichCacheKeys.looseKey 的注释。
+    let loosePairs: [(String, String, String)] = [
+        ("半角空格", "陶喆|Susan 说|太平盛世", "陶喆|Susan说|太平盛世"),
+        ("中英之间空格", "陶喆|Sula 与 Lampa 的寓言|太平盛世", "陶喆|Sula 与 Lampa的寓言|太平盛世"),
+        ("歌名繁简", "方大同|千纸鹤|回到未來", "方大同|千紙鶴|回到未來"),
+        ("歌手名繁简", "孙燕姿|我懷念的|逆光", "孫燕姿|我懷念的|逆光"),
+        ("大小写", "PRINCE|Kiss|Parade", "Prince|Kiss|Parade"),
+    ]
+    for (name, a, b) in loosePairs {
+        expectEqual(K.looseKey(a), K.looseKey(b), "looseKey 同组: \(name)")
+    }
+    // 版本/专辑/歌手不同的绝不能被兜到一起 —— 兜底再宽松也不能把两首歌混成一首。
+    let looseDistinct: [(String, String, String)] = [
+        ("版本括号", "陶喆|Susan 说|太平盛世", "陶喆|Susan 说(Music鉴赏版)|太平盛世"),
+        ("不同专辑", "陶喆|Susan 说|太平盛世", "陶喆|Susan 说|黑色柳丁"),
+        ("不同歌手", "陶喆|Susan 说|太平盛世", "王力宏|Susan 说|太平盛世"),
+    ]
+    for (name, a, b) in looseDistinct {
+        expectNotEqual(K.looseKey(a), K.looseKey(b), "looseKey 不同组: \(name)")
+    }
+    // looseKey 绝不能影响 normalizedKey —— 后者是真正落盘/显示用的那个。
+    expectEqual(
+        K.normalizedKey(artist: "孙燕姿", title: "我懷念的", album: "逆光"),
+        "孙燕姿|我懷念的|逆光",
+        "缓存key: looseKey 不污染 normalizedKey"
+    )
 }
 
 // ---- EnrichCacheReader.artistTitleKey:「最近播放」封面的本机兜底键(2026-08-14) ----

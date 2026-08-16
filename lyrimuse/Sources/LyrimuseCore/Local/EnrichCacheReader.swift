@@ -88,7 +88,7 @@ public enum EnrichCacheReader {
         // (`不散的筵席（I Miss You）`)就会**查不到任何歌词**——不是显示旧内容,是整首歌
         // 没词,而且只在部分播放器上复现。
         let key = EnrichCacheKeys.normalizedKey(artist: artist, title: title, album: album)
-        guard let entry = all[key] else { return nil }
+        guard let entry = all[key] ?? looseMatch(key, in: all) else { return nil }
         return EnrichCacheLyrics(
             lyrics: entry.lyrics ?? "",
             lyricsTr: entry.lyricsTr ?? "",
@@ -97,6 +97,28 @@ public enum EnrichCacheReader {
             instrumental: entry.instrumental ?? false,
             resolved: (entry.ts ?? 0) > 0
         )
+    }
+
+    /// 精确 key 没命中时,再按"忽略空格/大小写/繁简"找一次。
+    ///
+    /// 为什么必须有这一层:collector 那边把"其实是同一首歌"的重复条目合并成了一条,保留的是
+    /// **最适合显示**的那个写法(简体、中英文之间带空格)。但播放器报的不一定是那个写法 ——
+    /// QQ 音乐报 `Susan说`、网易云报 `Susan 说`,缓存里现在只剩后者。没有这层兜底,前者就
+    /// 精确 miss,用户看到的是「这首歌整首没有歌词」,而不是「歌词不太对」,更难归因。
+    ///
+    /// ⚠️ 多条候选时必须挑**确定的**那一条:Swift 的 Dictionary 遍历顺序不保证稳定,撞见谁
+    /// 用谁的话,同一首歌这次读到 A 的歌词、下次读到 B 的。按 key 字典序取最小,跟 collector
+    /// 侧合并后只剩一条的常态也不冲突(那时候本来就只有一个候选)。
+    ///
+    /// 成本:只在精确 miss 时才扫,而 miss 只发生在合并过的那些歌上,量级是几百条字符串。
+    private static func looseMatch(_ key: String, in all: [String: EnrichCacheEntry]) -> EnrichCacheEntry? {
+        let loose = EnrichCacheKeys.looseKey(key)
+        var bestKey: String?
+        for k in all.keys where EnrichCacheKeys.looseKey(k) == loose {
+            if bestKey == nil || k < bestKey! { bestKey = k }
+        }
+        guard let bestKey else { return nil }
+        return all[bestKey]
     }
 
     /// 这首歌在本机缓存里有没有封面(collector 从网易云/QQ/Apple 解析出来的那张)。
@@ -118,6 +140,8 @@ public enum EnrichCacheReader {
         guard let all = loadEntries() else { return nil }
         let key = EnrichCacheKeys.normalizedKey(artist: artist, title: title, album: album)
         if let s = all[key]?.coverURL, let url = URL(string: s) { return url }
+        // 跟 lookup 同一个理由:条目可能已经被合并到另一个写法下了。
+        if let s = looseMatch(key, in: all)?.coverURL, let url = URL(string: s) { return url }
         if let s = coverByArtistTitle()[Self.artistTitleKey(artist: artist, title: title)],
            let url = URL(string: s) {
             return url
