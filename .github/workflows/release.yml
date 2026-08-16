@@ -198,6 +198,27 @@ jobs:
       # testappcast_arm64HardwareRequirement.xml) writes it as an element. Spelled as an
       # attribute it parses fine, matches nothing, and silently offers the arm64 build to
       # every Intel client -- exactly the failure it exists to prevent.
+      - name: Extract tag changelog
+        # ⚠️ 必须排在 appcast 生成**之前**:appcast 的 item 要把这段 annotation 当
+        # release notes 内嵌进去(Sparkle 更新弹窗里显示的就是它)。原来这一步在
+        # appcast 之后,于是弹窗里永远是空的 —— 用户升级前看不到这一版改了什么。
+        # 之前的假设是错的:实测坐实 v1.0.0/v1.0.1 的 Release 页面从来没有显示过写进
+        # annotated tag message 里的改动点清单——只有 GitHub 自动生成的 compare 链接。
+        # generate_release_notes:true 在没有显式 body 时会直接把 body 整个替换成自动
+        # 生成的内容,不是"追加在 tag message 后面"。这里显式把这个 tag 自己的
+        # annotation 读出来,喂给下一步的 body 输入,GitHub 那边的规则是 body 在前、
+        # generate_release_notes 的自动内容追加在后,两者都要才凑得齐。
+        if: startsWith(github.ref, 'refs/tags/')
+        id: changelog
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          BODY="$(git for-each-ref "refs/tags/${TAG}" --format='%(contents)')"
+          {
+            echo "body<<CHANGELOG_EOF"
+            echo "$BODY"
+            echo "CHANGELOG_EOF"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Generate signed appcast
         if: startsWith(github.ref, 'refs/tags/')
         id: appcast
@@ -223,6 +244,17 @@ jobs:
           SIGNATURE=$(echo "$SPARKLE_PRIVATE_KEY" | "$SIGN_UPDATE" --ed-key-file - -p "$ZIP")
           DOWNLOAD_URL="https://github.com/${{ github.repository }}/releases/latest/download/${ZIP_NAME}"
           PUB_DATE=$(date -u +"%a, %d %b %Y %H:%M:%S +0000")
+          # tag annotation 原文 → 安全地放进 CDATA。只需处理 "]]>"(它会提前闭合 CDATA,
+          # 拆成两段 CDATA 即可);其余字符在 CDATA 里都是字面量,不需要 HTML 转义。
+          # ⚠️ 这里**不能**内嵌 flush-left 的 python/heredoc —— 那正是本 step 上面那段
+          # 注释警告过的坑:`run: |` 块里任何一行的缩进都不能浅于块本身,顶格的脚本体会
+          # 直接把这个 YAML 文件解析坏(2026-08-16 我第一版就这么写,被 YAML 校验逮住)。
+          # 纯 shell 参数替换就够,不用外部解释器。
+          NOTES_HTML="${{ steps.changelog.outputs.body }}"
+          NOTES_HTML="${NOTES_HTML//]]>/]]]]><![CDATA[>}"
+          if [ -z "${NOTES_HTML//[[:space:]]/}" ]; then
+            NOTES_HTML="See the GitHub release page for details."
+          fi
           # Not a heredoc -- a heredoc's body must stay flush-left to avoid picking up
           # this step's own YAML indentation as literal leading whitespace in every line
           # of the generated file, but flush-left content itself violates the YAML `run: |`
@@ -243,6 +275,13 @@ jobs:
             echo "      <pubDate>${PUB_DATE}</pubDate>"
             echo "      <sparkle:version>${VERSION}</sparkle:version>"
             echo "      <sparkle:shortVersionString>${VERSION}</sparkle:shortVersionString>"
+            # Sparkle 更新弹窗的正文。用 CDATA 包住,里面是 HTML —— annotation 是纯文本,
+            # 交给 <pre> 保留换行/缩进最省事,也不用担心正文里的 & < > 破坏 XML(CDATA 里
+            # 它们都是字面量)。唯一要防的是正文里出现 "]]>" 提前闭合 CDATA,下面用
+            # python 把它拆成两段 CDATA 处理。
+            echo '      <description><![CDATA[<pre>'
+            printf '%s\n' "$NOTES_HTML"
+            echo '      </pre>]]></description>'
             echo '      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>'
             echo '      <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>'
             echo "      <enclosure url=\"${DOWNLOAD_URL}\" sparkle:version=\"${VERSION}\" sparkle:edSignature=\"${SIGNATURE}\" length=\"${LENGTH}\" type=\"application/octet-stream\" />"
@@ -252,24 +291,6 @@ jobs:
           } > appcast.xml
           echo "---- appcast.xml ----"
           cat appcast.xml
-
-      - name: Extract tag changelog
-        # 之前的假设是错的:实测坐实 v1.0.0/v1.0.1 的 Release 页面从来没有显示过写进
-        # annotated tag message 里的改动点清单——只有 GitHub 自动生成的 compare 链接。
-        # generate_release_notes:true 在没有显式 body 时会直接把 body 整个替换成自动
-        # 生成的内容,不是"追加在 tag message 后面"。这里显式把这个 tag 自己的
-        # annotation 读出来,喂给下一步的 body 输入,GitHub 那边的规则是 body 在前、
-        # generate_release_notes 的自动内容追加在后,两者都要才凑得齐。
-        if: startsWith(github.ref, 'refs/tags/')
-        id: changelog
-        run: |
-          TAG="${GITHUB_REF#refs/tags/}"
-          BODY="$(git for-each-ref "refs/tags/${TAG}" --format='%(contents)')"
-          {
-            echo "body<<CHANGELOG_EOF"
-            echo "$BODY"
-            echo "CHANGELOG_EOF"
-          } >> "$GITHUB_OUTPUT"
 
       - name: Create GitHub Release
         if: startsWith(github.ref, 'refs/tags/')

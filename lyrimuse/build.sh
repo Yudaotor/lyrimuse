@@ -365,6 +365,10 @@ cp -R Sources/lyrimuse/Resources/zh-hans.lproj "$APP_DIR/Contents/Resources/zh-h
 cp -R Sources/lyrimuse/Resources/en.lproj "$APP_DIR/Contents/Resources/en.lproj"
 cp Sources/lyrimuse/Resources/MenuBarIconTemplate.png "$APP_DIR/Contents/Resources/MenuBarIconTemplate.png"
 cp Sources/lyrimuse/Resources/ListenBrainzIcon.png "$APP_DIR/Contents/Resources/ListenBrainzIcon.png"
+# 第三方许可证全文随 .app 一起分发。这不是可选的礼貌:打进来的 media-control /
+# mediaremote-adapter 是 BSD-3-Clause,Sparkle 和 KeyboardShortcuts 是 MIT,三者的
+# 二进制分发条款都要求随附版权声明与许可证文本。仓库根那份是唯一来源,这里只拷。
+cp ../THIRD_PARTY_LICENSES "$APP_DIR/Contents/Resources/THIRD_PARTY_LICENSES"
 cp Sources/lyrimuse/Resources/LastfmIcon.png "$APP_DIR/Contents/Resources/LastfmIcon.png"
 printf 'APPL????' > "$APP_DIR/Contents/PkgInfo"
 cat > "$APP_DIR/Contents/Info.plist" <<PLIST
