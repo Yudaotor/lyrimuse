@@ -2331,50 +2331,87 @@ MainActor.assumeIsolated {
     store.reset(forKey: key)
 }
 
-// ---- 本地化:两份 Localizable.strings 的键集必须完全一致 ----
+// ---- 本地化:Localizable.xcstrings 是唯一真源,生成的 .strings 必须与它逐键逐值一致 ----
 //
-// 吸收自 boring.notch 审阅 B9 的**精神**(它用 xcstrings 单文件 + 每键翻译状态,结构上
-// 不可能漂):我们是 zh-hans/en 两份手写 .strings,靠人肉同步,没有任何守卫 —— 漏一边的
-// 键在运行时是**静默**回退(L10n 查不到就显示原文),永远不会报错。2026-08-17 加
-// "固定宽度"文案时就得用脚本同时插两个文件,这个漂移窗口是真实存在的。
-// 这里不上 xcstrings(要动 L10n.swift 那套手写查找,半天级、且暂无第三语言需求),
-// 先把"漂了立刻红"这一层钉死。
+// 2026-08-17 迁移到 String Catalog(吸收自 boring.notch 审阅 B9):词条只在
+// Localization/Localizable.xcstrings 里维护,两份 .lproj/Localizable.strings 是
+// generate-strings.py 的生成物、随仓库一起提交 —— 终端用户 `swift build`/build.sh
+// 完全不需要 Xcode(xcstringstool 只在完整 Xcode 里,CLT 没有)。
+// 这道守卫盯的就是"改了 catalog 忘了重新生成"和"手改了生成物"两种漂移:
+// 任何一边动了而另一边没跟上,这里立刻红,并指名去跑生成脚本。
 //
-// 用 #filePath 定位仓库内的资源文件:selftest 从哪个工作目录跑都找得到;文件真不在
-// (比如某天目录挪了)就 FAIL 而不是静默跳过 —— 守卫自身失效也必须看得见。
+// 用 #filePath 定位仓库内文件:文件真不在(目录挪了)就 FAIL 而不是静默跳过 ——
+// 守卫自身失效也必须看得见。
 do {
-    func stringsKeys(_ path: String) -> [String]? {
+    // 生成物解析:一行一条 `"key" = "value";`。用 #/…/# 扩展定界符 —— 裸斜杠正则
+    // 字面量在 5.9 工具链要开特性开关,扩展定界符不用。
+    func stringsPairs(_ path: String) -> [String: String]? {
         guard let content = try? String(contentsOfFile: path, encoding: .utf8) else { return nil }
-        var keys: [String] = []
-        // 一行一条 `"key" = "value";`(两份文件的既有格式)。键里允许转义序列。
-        // 用 #/…/# 扩展定界符:裸斜杠正则字面量在 5.9 工具链要开特性开关,扩展定界符不用。
-        let pattern = #/^\s*"((?:[^"\\]|\\.)*)"\s*=/#
+        func unescape(_ s: Substring) -> String {
+            s.replacingOccurrences(of: "\\n", with: "\n")
+                .replacingOccurrences(of: "\\t", with: "\t")
+                .replacingOccurrences(of: "\\\"", with: "\"")
+                .replacingOccurrences(of: "\\\\", with: "\\")
+        }
+        var pairs: [String: String] = [:]
+        let pattern = #/^\s*"((?:[^"\\]|\\.)*)"\s*=\s*"((?:[^"\\]|\\.)*)"\s*;/#
         for line in content.split(separator: "\n", omittingEmptySubsequences: false) {
             if let m = line.firstMatch(of: pattern) {
-                keys.append(String(m.1))
+                let key = unescape(m.1)
+                // 同键后者静默覆盖前者,是排查不出来的那种坑 —— 当场红。
+                if pairs[key] != nil { return nil }
+                pairs[key] = unescape(m.2)
             }
         }
-        return keys
+        return pairs
     }
-    let root = URL(fileURLWithPath: #filePath)          // …/Sources/lyrimuse-selftest/main.swift
+    let sourcesDir = URL(fileURLWithPath: #filePath)    // …/Sources/lyrimuse-selftest/main.swift
         .deletingLastPathComponent()                    // …/Sources/lyrimuse-selftest
         .deletingLastPathComponent()                    // …/Sources
-        .appendingPathComponent("lyrimuse/Resources")
-    let zhPath = root.appendingPathComponent("zh-hans.lproj/Localizable.strings").path
-    let enPath = root.appendingPathComponent("en.lproj/Localizable.strings").path
-    if let zh = stringsKeys(zhPath), let en = stringsKeys(enPath) {
-        expectEqual(zh.isEmpty, false, "本地化: zh-hans 解析出键(解析器没坏)")
-        // 各自无重复键:同键后者静默覆盖前者,是排查不出来的那种坑。
-        let zhDup = Dictionary(grouping: zh, by: { $0 }).filter { $0.value.count > 1 }.keys.sorted()
-        let enDup = Dictionary(grouping: en, by: { $0 }).filter { $0.value.count > 1 }.keys.sorted()
-        expectEqual(zhDup, [], "本地化: zh-hans 无重复键")
-        expectEqual(enDup, [], "本地化: en 无重复键")
-        // 键集完全一致:两个方向分别报,谁缺谁一目了然。
-        let zhSet = Set(zh), enSet = Set(en)
-        expectEqual(zhSet.subtracting(enSet).sorted(), [], "本地化: zh-hans 有而 en 缺的键")
-        expectEqual(enSet.subtracting(zhSet).sorted(), [], "本地化: en 有而 zh-hans 缺的键")
+    let catalogPath = sourcesDir.deletingLastPathComponent()
+        .appendingPathComponent("Localization/Localizable.xcstrings").path
+    let resources = sourcesDir.appendingPathComponent("lyrimuse/Resources")
+
+    struct CatalogPairs { var zh: [String: String] = [:]; var en: [String: String] = [:] }
+    func catalogPairs(_ path: String) -> CatalogPairs? {
+        guard let data = FileManager.default.contents(atPath: path),
+              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              obj["sourceLanguage"] as? String == "zh-Hans",
+              let strings = obj["strings"] as? [String: Any], !strings.isEmpty
+        else { return nil }
+        var out = CatalogPairs()
+        for (key, raw) in strings {
+            let localizations = (raw as? [String: Any])?["localizations"] as? [String: Any]
+            func value(_ lang: String) -> String? {
+                (((localizations?[lang] as? [String: Any])?["stringUnit"]) as? [String: Any])?["value"] as? String
+            }
+            // 源语言允许省略(值即键,跟 generate-strings.py 同一条规则);英文缺翻译
+            // 必须红 —— 静默回退成中文正是这套守卫要消灭的事故。
+            out.zh[key] = value("zh-Hans") ?? key
+            guard let en = value("en"), !en.isEmpty else { return nil }
+            out.en[key] = en
+        }
+        return out
+    }
+
+    if let catalog = catalogPairs(catalogPath),
+       let zhGen = stringsPairs(resources.appendingPathComponent("zh-hans.lproj/Localizable.strings").path),
+       let enGen = stringsPairs(resources.appendingPathComponent("en.lproj/Localizable.strings").path) {
+        expectEqual(catalog.zh.isEmpty, false, "本地化: catalog 解析出键")
+        // 逐键逐值一致。两个方向的差集分别报,谁多谁少一目了然;值不同单独报。
+        func diff(_ a: [String: String], _ b: [String: String], _ tag: String) {
+            expectEqual(Set(a.keys).subtracting(b.keys).sorted(), [],
+                        "本地化: catalog 有而 \(tag) 生成物缺的键(跑 Localization/generate-strings.py)")
+            expectEqual(Set(b.keys).subtracting(a.keys).sorted(), [],
+                        "本地化: \(tag) 生成物有而 catalog 缺的键(生成物只能由脚本生成,别手改)")
+            let valueDiff = a.keys.filter { b[$0] != nil && a[$0] != b[$0] }.sorted()
+            expectEqual(valueDiff, [], "本地化: \(tag) 生成物与 catalog 值不一致(跑 generate-strings.py)")
+        }
+        diff(catalog.zh, zhGen, "zh-hans")
+        diff(catalog.en, enGen, "en")
     } else {
-        expectEqual(true, false, "本地化: 找不到 Localizable.strings(路径变了要跟着改这里)")
+        expectEqual(true, false,
+                    "本地化: catalog/生成物读不出来 —— 文件缺失、en 缺翻译、或生成物有重复键")
     }
 }
 
