@@ -46,9 +46,15 @@
 set -euo pipefail
 
 cd "$(dirname "$0")" # lyrimuse/
+ROOT="$PWD"
 DIST="dist"
 STAGE="$(mktemp -d)"
 trap 'rm -rf "$STAGE"' EXIT
+
+# DMG 美化用得到的两样东西。PYTHON_BIN 可以从外面覆盖 —— dmgbuild 常见的装法是装进
+# 某个虚拟环境,而不是系统 Python。
+PYTHON_BIN="${PYTHON_BIN:-python3}"
+DMG_BACKGROUND="$STAGE/dmg-background.tiff"
 
 # 每个变体:名字后缀 | build.sh 参数 | 期望架构集
 # 主包放前面 —— 它是绝大多数人要下的那个,日志里先出现更顺眼。
@@ -124,10 +130,17 @@ for v in "${VARIANTS[@]}"; do
   # (`shasum -a 256 <basename>` 的原样输出),这样用户在同一目录里 `shasum -c` 能直接过。
   (cd "$DIST" && shasum -a 256 "$base.zip" > "$base.zip.sha256")
 
-  # dmg:只用 hdiutil,不驱动 Finder。挂载后那个"带背景图、图标摆好位置"的窗口需要挂一个
-  # 可写镜像再用 AppleScript 让 Finder 设窗口 bounds 和图标坐标,那是有副作用的 GUI 自动化,
-  # 故意不做。现在出的是干净可用的形态:一个普通 Finder 窗口,里面 Lyrimuse.app 和一个指向
-  # /Applications 的替身,拖过去即可。
+  # dmg:优先用 dmgbuild 出"带背景图、图标摆好位置"的窗口,拿不到 dmgbuild 就退回
+  # 纯 hdiutil。
+  #
+  # 2026-08-16 之前这里写的是"美化窗口需要挂可写镜像再用 AppleScript 让 Finder 设窗口
+  # bounds 和图标坐标,那是有副作用的 GUI 自动化,故意不做"。这个前提对 dmgbuild 不成立:
+  # 它自己实现了 .DS_Store 的格式、直接写进镜像,全程不启动 Finder。所以"不驱动 Finder"
+  # 这条底线保住了,美化也能做。
+  #
+  # 退回路径保留而不是硬性要求装 dmgbuild:出 DMG 这件事本身不该因为少一个 Python 包
+  # 就整个失败,而且两条路径的产物在功能上完全等价(同样的 HFS+/UDZO、同样的 app +
+  # Applications 替身),差的只是观感。
   #
   # -format UDZO = 只读 + zlib 压缩,分发用 dmg 的常规格式;-fs HFS+ 而不是 APFS,HFS+ 的
   # 只读压缩镜像兼容面最宽,对一份只用来拖一次的镜像没理由挑 APFS。
@@ -136,13 +149,28 @@ for v in "${VARIANTS[@]}"; do
   # 不会改变用户那边任何行为 —— 下载下来照样带 com.apple.quarantine,拖进 /Applications 的
   # app 会继承这个标记,还是要做 README 里那一次 xattr。与其造成"这个 dmg 是签过的"的错觉,
   # 不如保持跟 zip 一致的诚实状态。
+  # 卷名区分开:两份镜像同名时,同时挂载会被系统加后缀成 "Lyrimuse 1",看不出哪份是哪份。
+  volname="Lyrimuse${suffix:+ (Intel)}"
   dmgstage="$STAGE/dmg$suffix"
   rm -rf "$dmgstage"; mkdir -p "$dmgstage"
   ditto "$app" "$dmgstage/Lyrimuse.app"
-  ln -s /Applications "$dmgstage/Applications"
-  # 卷名区分开:两份镜像同名时,同时挂载会被系统加后缀成 "Lyrimuse 1",看不出哪份是哪份。
-  hdiutil create -volname "Lyrimuse${suffix:+ (Intel)}" -srcfolder "$dmgstage" \
-    -fs HFS+ -format UDZO -ov -quiet "$DIST/$base.dmg"
+
+  if "$PYTHON_BIN" -c "import dmgbuild" >/dev/null 2>&1; then
+    if [ ! -f "$DMG_BACKGROUND" ]; then
+      # 背景图现生成(见那个脚本开头:图形用代码描述比塞一张二进制设计稿进仓库更好审阅)。
+      swift "$ROOT/scripts/make_dmg_background.swift" "$DMG_BACKGROUND"
+    fi
+    LYRIMUSE_DMG_APP="$dmgstage/Lyrimuse.app" \
+    LYRIMUSE_DMG_VOLNAME="$volname" \
+    LYRIMUSE_DMG_BACKGROUND="$DMG_BACKGROUND" \
+      "$PYTHON_BIN" -m dmgbuild -s "$ROOT/scripts/dmg_settings.py" \
+        "$volname" "$DIST/$base.dmg" >/dev/null
+  else
+    echo "    (没装 dmgbuild,退回纯 hdiutil:产物功能一样,只是没有背景图和图标摆位)"
+    ln -s /Applications "$dmgstage/Applications"
+    hdiutil create -volname "$volname" -srcfolder "$dmgstage" \
+      -fs HFS+ -format UDZO -ov -quiet "$DIST/$base.dmg"
+  fi
 
   printf "    %-40s %s\n" "$base.zip" "$(human_size "$DIST/$base.zip")"
   printf "    %-40s %s\n" "$base.zip.sha256" "$(human_size "$DIST/$base.zip.sha256")"

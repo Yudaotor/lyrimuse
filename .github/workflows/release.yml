@@ -150,6 +150,14 @@ jobs:
       # architecture set exactly (missing *or* extra) and `codesign -v --deep --strict`
       # passes. Those are hard failures inside the script, so a green step here means more
       # than the old codesign echo did.
+      # dmgbuild produces the DMG with a background image and fixed icon positions. It
+      # writes the .DS_Store itself instead of driving Finder over AppleScript, so there is
+      # no GUI automation on the runner. package.sh falls back to plain hdiutil when the
+      # module is missing, so a failure here degrades the DMG's looks, never the release.
+      - name: Install dmgbuild
+        run: python3 -m pip install --user --break-system-packages dmgbuild
+        continue-on-error: true
+
       - name: Build + package release assets
         run: |
           LYRIMUSE_VERSION="${{ steps.version.outputs.bundle_version }}" ./lyrimuse/package.sh
