@@ -375,6 +375,77 @@ public enum MediaControlClient {
     private static let spotifyTruthLock = NSLock()
     private static var lastSpotifyTruth: (position: Double, at: Date, title: String?, playing: Bool)?
 
+    // ---- Spotify「gapless 预载」回扣(2026-08-17,用户现行目击 + 双源分叉实锤) ----
+    //
+    // 自动切歌(gapless)时,Spotify 的 playerPosition 时钟**先于真实出声启动**:实测
+    // 《星座》开播那一刻 playerPosition 已经是 1.84s,而 MediaRemote 的新锚点
+    // (elapsedTimeNow)刚从 0.69s 走起 —— 分叉 1.15s,并且**整首歌恒定不收敛**(锚点
+    // 中途被 MediaRemote 重打成 playerPosition 的值,分叉才消失,但那是"两个都偏快"了)。
+    // 用户耳朵是最终裁决:App 忠实跟着 playerPosition(端到端量到 ±0.3s)时,用户听到
+    // "歌词整首偏快约一秒"。手动重播同一首歌没有预载,两源对齐,一切正常 —— 症状齐了。
+    //
+    // 08-14 的"elapsedTimeNow 恒定落后 playerPosition 1.64s"当时被解读为"MediaRemote
+    // 锚点滞后",于是全面改信 playerPosition。现在看,那次量的很可能正是一首 gapless
+    // 预载的歌 —— 方向解读反了:是 playerPosition 超前于声音,不是锚点落后于声音。
+    // (08-14 之前用户报"偏慢"、之后报"偏快",两头的反馈拼起来正好夹住真值。)
+    //
+    // 修法:在**曲目开头**量一次两源分叉 delta = playerPosition − elapsedTimeNow,这一整
+    // 首歌都把 playerPosition 回扣 delta。平滑度仍然来自 playerPosition(逐次读数稳定),
+    // 只是基准挪回"真实出声"那一刻。手动播放/广告后的歌分叉 ≈0,回扣自然为 0,行为不变。
+    //
+    // 取样守卫(全部实测形状,不是拍脑袋):
+    //  * 只在 truth < 15s(曲目刚开始)时取样 —— App 中途启动看到的老歌不回扣;
+    //  * delta 限制在 0.4...5s —— 换歌瞬间 MediaRemote 锚点还挂着**上一首**时,
+    //    elapsedTimeNow 是个大值(实测 30.3 vs 0.02),delta 为负,天然被排除;
+    //    小于 0.4 属于两源正常噪声,不值得动;
+    //  * delta 只会从 0 升级、不反复改 —— 锚点中途重打(收敛到 playerPosition)之后
+    //    分叉消失,不能把已经量到的回扣清掉;
+    //  * 曲内 seek(相邻两次真值差 >5s)把回扣清零 —— seek 是用户动作,音频从目标位置
+    //    真实重放,playerPosition 从此就是真值。
+    private static let spotifyRebaseLock = NSLock()
+    private static var spotifyRebase: (trackKey: String, deltaSecs: Double, lastTruth: Double)?
+
+    /// 取样判定(见 spotifyRebase 的守卫清单)。纯函数,selftest 直接覆盖。
+    /// 返回 nil = 这一拍不构成可信的预载分叉。
+    public static func spotifyPreloadDelta(truth: Double, freshAnchorNow: Double?) -> Double? {
+        guard let anchorNow = freshAnchorNow, truth < 15 else { return nil }
+        let delta = truth - anchorNow
+        return (0.4...5.0).contains(delta) ? delta : nil
+    }
+
+    /// 见 spotifyRebase。返回回扣后的位置;并把这次真值记下来供 seek 检测。
+    private static func rebasedSpotifyPosition(
+        trackKey: String, truth: Double, freshAnchorNow: Double?
+    ) -> Double {
+        spotifyRebaseLock.lock()
+        defer { spotifyRebaseLock.unlock() }
+        var state = spotifyRebase
+        if state?.trackKey != trackKey {
+            state = (trackKey, 0, truth)
+            if let delta = spotifyPreloadDelta(truth: truth, freshAnchorNow: freshAnchorNow) {
+                state!.deltaSecs = delta
+                logger.notice("spotify gapless rebase: playerPosition leads fresh anchor by \(delta, format: .fixed(precision: 2))s at track start; subtracting for this track (\(trackKey, privacy: .public))")
+            }
+        } else if var s = state {
+            if abs(truth - s.lastTruth) > 5 {
+                // 曲内 seek:音频已在目标位置真实重放,预载偏差不复存在。
+                if s.deltaSecs != 0 {
+                    logger.notice("spotify gapless rebase cleared by in-track seek (\(trackKey, privacy: .public))")
+                }
+                s.deltaSecs = 0
+            } else if s.deltaSecs == 0,
+                      let delta = spotifyPreloadDelta(truth: truth, freshAnchorNow: freshAnchorNow) {
+                // 第一拍恰好落在"锚点还挂着上一首"的窗口里没量到,开头几拍内补量。
+                s.deltaSecs = delta
+                logger.notice("spotify gapless rebase (late capture): \(delta, format: .fixed(precision: 2))s (\(trackKey, privacy: .public))")
+            }
+            s.lastTruth = truth
+            state = s
+        }
+        spotifyRebase = state
+        return max(0, truth - (state?.deltaSecs ?? 0))
+    }
+
     private static func fetchRawMediaControlSnapshot() -> (MediaControlSnapshot, String)? {
         guard let binaryPath = binaryPath() else { return nil }
         // --now 让工具自己按内部时钟外推出一个不会冻结的 elapsedTimeNow(见文件顶部
@@ -430,9 +501,15 @@ public enum MediaControlClient {
                     // 事后 `log show` 查不到 —— 这条就是留给事后查的。
                     logger.notice("spotify anchor skew: elapsedTimeNow=\(extrapolated, format: .fixed(precision: 2)) vs playerPosition=\(truth, format: .fixed(precision: 2)) (\(extrapolated - truth > 0 ? "ahead" : "behind", privacy: .public) by \(abs(extrapolated - truth), format: .fixed(precision: 2))s)")
                 }
-                elapsed = truth
+                // gapless 预载回扣:playerPosition 可能整首歌超前于真实出声,见 spotifyRebase。
+                // freshAnchorNow 只在播放中给 —— 暂停时 elapsedTimeNow 还在走(文件顶部注释
+                // 那个实测),不能拿来量分叉。
+                elapsed = rebasedSpotifyPosition(
+                    trackKey: "\(raw.artist ?? "")|\(raw.title ?? "")",
+                    truth: truth,
+                    freshAnchorNow: raw.playing == true ? raw.elapsedTimeNow : nil)
                 spotifyTruthLock.lock()
-                lastSpotifyTruth = (truth, Date(), raw.title, raw.playing == true)
+                lastSpotifyTruth = (elapsed ?? truth, Date(), raw.title, raw.playing == true)
                 spotifyTruthLock.unlock()
             } else {
                 // 两次都失败:优先按"最近一次成功的真值 + 经过的墙钟时间"外推,而不是退回

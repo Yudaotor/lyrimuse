@@ -270,6 +270,32 @@ do {
     expectEqual(keyA == keyBDifferentLyrics, false, "LyricsOffsetStore.trackKey: 同一首歌换了一份不同的歌词内容,key 应该不同")
 }
 
+// ---- MediaControlClient.spotifyPreloadDelta: gapless 预载分叉的取样判定 ----
+// 2026-08-17 用户现行目击坐实:自动切歌(gapless)时 Spotify 的 playerPosition 时钟先于
+// 真实出声启动(实测《星座》开播即 1.84s,MediaRemote 新锚点才 0.69s),整首歌恒偏快;
+// 手动重播两源对齐。修法是在曲目开头量分叉、整首回扣 —— 这里钉死取样守卫。
+do {
+    // 用户目击的那个真实形状:开播时 playerPosition 1.84、新锚点 0.69 → 分叉 1.15,取样。
+    expectEqual(MediaControlClient.spotifyPreloadDelta(truth: 1.84, freshAnchorNow: 0.69),
+                1.84 - 0.69, "预载分叉: 目击的真实形状(1.15s)被取样")
+    // 手动播放:两源对齐,分叉在噪声范围内 → 不取样,行为跟改动前完全一致。
+    expectEqual(MediaControlClient.spotifyPreloadDelta(truth: 1.0, freshAnchorNow: 0.9),
+                nil, "预载分叉: 两源对齐(手动播放)不取样")
+    // 换歌瞬间 MediaRemote 锚点还挂着上一首:elapsedTimeNow 是个大值,分叉为负 → 排除。
+    // (实测形状:playerPosition 0.02 vs 上一首残留的 30.3。)
+    expectEqual(MediaControlClient.spotifyPreloadDelta(truth: 0.02, freshAnchorNow: 30.3),
+                nil, "预载分叉: 陈旧锚点(负分叉)不取样")
+    // App 中途启动看到的老歌:不在曲目开头,不回扣 —— 没有"出声起点"可参照。
+    expectEqual(MediaControlClient.spotifyPreloadDelta(truth: 100, freshAnchorNow: 98.5),
+                nil, "预载分叉: 曲目中段不取样")
+    // 暂停中 elapsedTimeNow 还在走(实测),不能拿来量 → 调用方传 nil。
+    expectEqual(MediaControlClient.spotifyPreloadDelta(truth: 2.0, freshAnchorNow: nil),
+                nil, "预载分叉: 暂停态(无可信锚点)不取样")
+    // 分叉大得离谱(>5s)更像数据错乱,不敢按预载解释。
+    expectEqual(MediaControlClient.spotifyPreloadDelta(truth: 14.0, freshAnchorNow: 2.0),
+                nil, "预载分叉: 超过 5s 的分叉不取样")
+}
+
 // ---- MediaControlClient.ageCompensatedCachedElapsed: 借用后台 AppleScript 缓存 ----
 // 快照前的年龄补偿+合理性核对(2026-08-04 实测排查坐实的回归:缓存值不补偿年龄直接
 // 当"当前位置"用,本地整条展示链慢 ~1.8s,详见该函数注释)。
