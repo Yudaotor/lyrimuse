@@ -116,8 +116,15 @@ public final class LyricsSyncEngine {
     // 下面那条结构化规则本可以兜住它,但那条只在整份被职员表主导时才启用(见
     // shouldApplyStructuralCreditFilter),单独几行署名的歌就漏了。
     // 连写不会扩大误杀面:表里全是明确的角色名,连着出现只会更像署名行,不会更像歌词。
+    //
+    // 2026-08-16 第五轮:角色词之间允许夹**连接词**(和/与/及/、// /&),并允许"所有/全部"
+    // 这类前缀量词 —— 「制作和编曲：方大同」「所有乐器和编程：Soulboy」整行漏到悬浮窗上。
+    // 旧写法只允许角色词紧挨着连写("词曲"),中间一个"和"字就断了;"制作""编程""乐器"
+    // 也一并补进表(此前只有"制作人")。结构分两段:第一个角色词打底,后面每一节是
+    // "可选连接词 + 角色词",空白也当分隔("词 曲 编："仍然命中)。连接词后面必须再跟
+    // 角色词才算数 —— "唱和："这种词后面没有角色词,回退到"唱"+冒号也对不上,不误杀。
     private static let creditLinePattern = try! NSRegularExpression(
-        pattern: #"^((作词|作曲|编曲|制作人|监制|混音|录音|和声|吉他|贝斯|鼓|键盘|弦乐|词|曲|编|唱|录|混|监|OP|SP|lyrics|music|composed|produced|arranged|mixed|mastered|written)\s*)+(by\s*)?[:：]"#,
+        pattern: #"^(所有|全部)?\s*(作词|作曲|编曲|制作人|制作|监制|混音|录音|和声|吉他|贝斯|鼓|键盘|弦乐|乐器|编程|词|曲|编|唱|录|混|监|OP|SP|lyrics|music|composed|produced|arranged|mixed|mastered|written)(\s*(和|与|及|、|/|&|＆)?\s*(作词|作曲|编曲|制作人|制作|监制|混音|录音|和声|吉他|贝斯|鼓|键盘|弦乐|乐器|编程|词|曲|编|唱|录|混|监|OP|SP|lyrics|music|composed|produced|arranged|mixed|mastered|written))*\s*(by\s*)?[:：]"#,
         options: [.caseInsensitive]
     )
 

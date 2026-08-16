@@ -1904,6 +1904,30 @@ do {
     expectEqual(ratchet(23.1, 22.1, precise: true), false, "棘轮: 精确源不适用")
 }
 
+// ---- 署名行:连接词形态 ----
+do {
+    // 2026-08-16 用户实测漏网：「制作和编曲：方大同」「所有乐器和编程：Soulboy」显示在
+    // 悬浮窗上。角色词之间夹着"和"，旧规则要求角色词紧挨连写就断了。
+    // 只放两行署名 + 四行真歌词：结构化规则(要求命中主导整份)在这个比例下不启用，
+    // 这里单独考的是关键词规则。
+    let engine = LyricsSyncEngine()
+    engine.load(
+        lyrics: """
+        [00:01.00]制作和编曲：方大同
+        [00:02.00]所有乐器和编程：Soulboy
+        [00:03.00]他说：我不走
+        [00:04.00]真正的歌词
+        [00:05.00]又一句歌词
+        [00:06.00]再来一句
+        """,
+        lyricsTr: "", lyricsRoma: "", lyricsYRC: "")
+    expectEqual(engine.activeLine(atMs: 1500)?.mainText, nil, "署名行: 「制作和编曲：」被过滤")
+    expectEqual(engine.activeLine(atMs: 2500)?.mainText, nil, "署名行: 「所有乐器和编程：」被过滤")
+    expectEqual(engine.activeLine(atMs: 3500)?.mainText, "他说：我不走",
+                "署名行: 连接词规则不误杀对白式冒号")
+    expectEqual(engine.activeLine(atMs: 4500)?.mainText, "真正的歌词", "署名行: 真歌词保留")
+}
+
 if failures == 0 {
     print("\nALL PASS")
 } else {
