@@ -113,6 +113,9 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
     @GestureState private var scrubbingFraction: Double?
     // 进度条那一块的实际宽度,拖拽换算比例用。
     @State private var scrubWidth: CGFloat = 0
+    /// 光标是否停在进度条那一小条上(只影响它自己的粗细,跟卡片展开无关)。
+    @State private var hoveringScrubber = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     // 稳态歌词行的固定高度——跟 NotchLyricsWindowController.contentSize.height 保持
     // 一致(两个文件都描述同一个窗口的几何,这点数值耦合是设计使然,不值得为两个常量
@@ -238,7 +241,7 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
                 MarqueeText(id: poller.title) {
                     Text(poller.title.isEmpty ? "♪" : poller.title)
                         .font(.system(size: 11.5, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.85))
+                        .foregroundStyle(accentOrWhite.opacity(0.85))
                 }
             }
             .frame(width: earWidth)
@@ -374,32 +377,32 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
                 // 同 LyricsOverlayView.mainLine 的区分,必须排在"还在搜索中"分支前面,
                 // 见 poller.isCurrentTrackAdBreak 定义处的注释。
                 Text(L10n.t("广告中"))
-                    .foregroundStyle(.white.opacity(0.7))
+                    .foregroundStyle(accentOrWhite.opacity(0.7))
                     .shadow(color: .black.opacity(0.45), radius: 2, y: 1)
             } else if poller.isCurrentTrackInstrumental {
                 // 同 LyricsOverlayView.mainLine 的区分,必须排在"还在搜索中"分支前面,
                 // 见 poller.isCurrentTrackInstrumental 定义处的注释。
                 Text(L10n.t("纯音乐"))
-                    .foregroundStyle(.white.opacity(0.7))
+                    .foregroundStyle(accentOrWhite.opacity(0.7))
                     .shadow(color: .black.opacity(0.45), radius: 2, y: 1)
             } else if poller.currentTrackHasNoLyrics {
                 // 搜完了、确实一句都没有,同 LyricsOverlayView.mainLine 的同名分支——
                 // 必须排在下面那个"搜索歌词中…"前面。
                 Text(L10n.t("暂无歌词"))
-                    .foregroundStyle(.white.opacity(0.7))
+                    .foregroundStyle(accentOrWhite.opacity(0.7))
                     .shadow(color: .black.opacity(0.45), radius: 2, y: 1)
             } else if poller.collectorNetworkDown && !poller.hasLyricsContent {
                 // 顺序理由同 LyricsOverlayView.mainLine 里那段:必须排在"搜索歌词中…"
                 // 之前、"暂无歌词"之后。
                 Text(L10n.t("网络连接失败"))
-                    .foregroundStyle(.white.opacity(0.7))
+                    .foregroundStyle(accentOrWhite.opacity(0.7))
                     .shadow(color: .black.opacity(0.45), radius: 2, y: 1)
             } else if poller.isPlayingNow && !poller.hasLyricsContent {
                 // 同 LyricsOverlayView.mainLine 的区分:currentLine==nil 可能是"还没解析
                 // 出这首歌的歌词"(collector 后台搜索中,见 poller.hasLyricsContent 注释),
                 // 不能跟"这首歌真没歌词/正在间奏"共用同一个♪占位符。
                 Text(L10n.t("搜索歌词中…"))
-                    .foregroundStyle(.white.opacity(0.7))
+                    .foregroundStyle(accentOrWhite.opacity(0.7))
                     .shadow(color: .black.opacity(0.45), radius: 2, y: 1)
             } else {
                 Text(poller.currentLine?.plainText ?? "♪")
@@ -425,9 +428,9 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
             .foregroundStyle(wordGradient(left: fraction - band, right: fraction + band))
     }
 
-    // 跟 LyricsOverlayView.wordGradient 同一套算法(前景色固定白色,不像经典悬浮窗那样
-    // 可配置)——过渡带真正跟 [0,1] 有交集时才现算混合色,离得够远的字直接算纯色。
-    /// 灵动岛里"已唱过/已播放"部分的颜色。
+    // 跟 LyricsOverlayView.wordGradient 同一套算法 —— 过渡带真正跟 [0,1] 有交集时才现算
+    // 混合色,离得够远的字直接算纯色。前景色走 accentOrWhite(「跟随封面取色」关着时就是白)。
+    /// 灵动岛里几乎所有前景元素的颜色。
     ///
     /// 复用桌面悬浮歌词那条既有语义:只有「跟随封面取色」开着、且这首歌真的取到了主色时
     /// 才用它,否则维持原来的白 —— 灵动岛贴在刘海下,底色是纯黑或封面模糊图,白色是那里
@@ -435,6 +438,12 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
     ///
     /// 取色本身已经保证了亮度下限(见 LocalPlaybackSource.brightenedAccent:近黑兜底成
     /// 中性灰、提亮同时压饱和),所以这里直接用,不再叠一层亮度处理。
+    ///
+    /// 2026-08-16 补完:此前只有歌词正文和进度条填充吃它,顶行歌名、五种状态占位文字、
+    /// 下一句预览、进度条底槽、时间文字、播放控制按钮全是写死的白。后果不只是"不够统一"
+    /// —— 状态文字跟正常歌词**在同一个 Group 里**,于是同一行会出现"有歌词时跟着封面色、
+    /// 一旦变成「暂无歌词」就突然跳回白"的闪动。现在除了封面缩略图的描边(那处是刻意的,
+    /// 见 artworkThumbnail 注释:磨砂玻璃风格下要给浅色封面兜一圈可见轮廓),其余都走这里。
     private var accentOrWhite: Color {
         guard settings.followsCoverArt, let accent = poller.artworkAccentColor else { return .white }
         return accent
@@ -476,7 +485,7 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
             if !nextLineDisplayText.isEmpty {
                 Text(nextLineDisplayText)
                     .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.5))
+                    .foregroundStyle(accentOrWhite.opacity(0.5))
                     .lineLimit(1)
                     .truncationMode(.tail)
             }
@@ -491,12 +500,15 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
                         GeometryReader { proxy in
                             let fraction = min(1, max(0, Double(currentMs) / Double(anchor.durationMs)))
                             ZStack(alignment: .leading) {
-                                Capsule().fill(.white.opacity(0.18))
+                                Capsule().fill(accentOrWhite.opacity(0.18))
                                 Capsule().fill(accentOrWhite.opacity(0.85))
                                     .frame(width: proxy.size.width * fraction)
                             }
                         }
-                        .frame(height: 3)
+                        .frame(height: scrubberHeight)
+                        // reduceMotion 下仍然变粗(那是功能反馈,不是装饰),只是不补间。
+                        .animation(reduceMotion ? nil : .spring(response: 0.22, dampingFraction: 0.7),
+                                   value: scrubberHeight)
                         // 命中区**只覆盖进度条这一行**,不含下面的时间行——原来挂在整块上,
                         // 点右侧"剩余时间"文字就等于 seek 到 ~94%(把这首歌跳过去)。
                         // 上下各撑 8pt 让 3pt 的条好按,再用等量负 padding 抵消布局:
@@ -512,10 +524,18 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
                                     .onChange(of: g.size.width) { _, w in scrubWidth = w }
                             }
                         )
+                        .onHover { hoveringScrubber = $0 }
                         .gesture(
                             DragGesture(minimumDistance: 0)
                                 .updating($scrubbingFraction) { value, state, _ in
                                     guard scrubWidth > 0 else { return }
+                                    // state 只有**这次手势的第一帧**才是 nil(@GestureState
+                                    // 的初始值),拿它当"刚按下"的边沿信号给一次触觉 ——
+                                    // 放 onChanged 里会每帧都震。
+                                    if state == nil {
+                                        NSHapticFeedbackManager.defaultPerformer.perform(
+                                            .alignment, performanceTime: .now)
+                                    }
                                     state = min(1, max(0, value.location.x / scrubWidth))
                                 }
                                 .onEnded { value in
@@ -530,7 +550,7 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
                             Text("-" + Self.timeString(ms: max(0, anchor.durationMs - currentMs)))
                         }
                         .font(.system(size: 9, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.4))
+                        .foregroundStyle(accentOrWhite.opacity(0.4))
                         .monospacedDigit()
                     }
                 }
@@ -539,6 +559,20 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
         .padding(.horizontal, 16)
         .padding(.bottom, 10)
         .frame(height: NotchMetrics.expandedExtraHeight, alignment: .top)
+    }
+
+    /// 进度条轨道的粗细:悬停变粗一点、真按住再粗一点。
+    ///
+    /// 这条轨道稳态只有 3pt,手指压上去几乎看不见自己有没有抓住 —— 它已经为此配了一圈
+    /// 上下各 8pt 的隐形命中区(见 gesture 那段注释),但那是"能不能按到"的问题,这里补的是
+    /// "有没有按到"的**反馈**。
+    ///
+    /// ⚠️ 幅度必须克制。参考实现是 5→9pt(+4),但那是在一个高得多的面板里;灵动岛展开区
+    /// 总共只有 expandedExtraHeight(40pt),进度条 + 3pt 间距 + 时间行已经占掉大半,
+    /// 再长 4pt 会把时间行往下挤出可见区。3→5→6 是量过余量之后的取值。
+    private var scrubberHeight: CGFloat {
+        if scrubbingFraction != nil { return 6 }
+        return hoveringScrubber ? 5 : 3
     }
 
     private var nextLineDisplayText: String {
@@ -566,7 +600,7 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
         } label: {
             Image(systemName: systemName)
                 .font(.system(size: primary ? 11 : 9.5, weight: .semibold))
-                .foregroundStyle(.white)
+                .foregroundStyle(accentOrWhite)
                 .frame(width: primary ? 18 : 15, height: primary ? 18 : 15)
                 .contentShape(Rectangle())
         }

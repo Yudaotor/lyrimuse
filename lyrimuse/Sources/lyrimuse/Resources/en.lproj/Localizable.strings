@@ -579,6 +579,7 @@
 "配色" = "Color";
 "跟随封面取色" = "Take Color From Artwork";
 "只接管文字颜色；背景色和描边色始终按下面设置的来" = "Only the text color follows the artwork; the background and outline colors always use what you set below";
+"桌面悬浮歌词只接管文字颜色，背景色和描边色始终按下面设置的来；灵动岛整套配色也跟着这个开关" = "Desktop lyrics: text color only — background and outline always follow the settings below. Also tints the whole notch";
 "跟随封面开着，这个颜色只在拿不到封面主色时才用" = "Following the artwork, so this is used only when no color can be read from it";
 "我的配色主题" = "My Themes";
 "存为新主题…" = "Save as Theme…";

@@ -41,6 +41,9 @@ final class NotchTransientCenter: ObservableObject {
 }
 
 /// 提示条本身。刻意跟歌词行同高、同一套排版重量,这样它盖上来/退下去时卡片不会变形。
+///
+/// 图标、文字、进度条全部走 tint(= 调用方传进来的 accentOrWhite),不留写死的白 ——
+/// 否则「跟随封面取色」开着时,提示条盖上来的那一瞬间颜色会跟它顶替掉的歌词行对不上。
 struct NotchTransientRow: View {
     let banner: NotchTransientCenter.Banner
     let tint: Color
@@ -55,12 +58,12 @@ struct NotchTransientRow: View {
                 .frame(width: 16)
             Text(banner.text)
                 .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(.white.opacity(0.9))
+                .foregroundStyle(tint.opacity(0.9))
                 .lineLimit(1)
             if let progress = banner.progress {
                 GeometryReader { proxy in
                     ZStack(alignment: .leading) {
-                        Capsule().fill(.white.opacity(0.18))
+                        Capsule().fill(tint.opacity(0.18))
                         Capsule().fill(tint.opacity(0.85))
                             .frame(width: proxy.size.width * min(1, max(0, progress)))
                     }

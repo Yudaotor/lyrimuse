@@ -179,7 +179,20 @@ public enum MediaControlClient {
             return nil
         }
         guard bundleID == PlaybackPlayer.appleMusic.bundleIdentifier else { return snapshot }
-        refreshAppleMusicSnapshotCacheInBackground()
+        // ⚠️ 只在**正在播放**时才起这个后台 AppleScript 子进程。
+        //
+        // 它唯一的用途是给下面借一个更精确的 elapsedTime,而那次借用必须过
+        // ageCompensatedCachedElapsed 的第一道 guard:`freshPlaying == true,
+        // cachedPlaying == true`。也就是说暂停时刷出来的缓存**在结构上不可能被用到** ——
+        // 位置本来就是冻结的,精度这件事没有意义。
+        //
+        // 改动前这里是无条件调用:挂着 Lyrimuse 但没在听的时段(Music.app 常驻很常见),
+        // 每 2 秒白 fork 一个 osascript。恢复播放后的第一次轮询会因为缓存还是空的而退回
+        // snapshot 自己的 elapsedTime(精度稍低但一定对应当前这首歌,见下面那段注释),
+        // 第二次起就正常了 —— 拿一次轮询的精度换掉整个暂停时段的进程噪声。
+        if snapshot.playing == true {
+            refreshAppleMusicSnapshotCacheInBackground()
+        }
         appleMusicSnapshotCacheLock.lock()
         let cached = cachedAppleMusicSnapshot
         let cachedAt = cachedAppleMusicSnapshotAt

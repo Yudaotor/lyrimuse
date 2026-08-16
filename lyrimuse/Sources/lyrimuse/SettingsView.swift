@@ -966,10 +966,15 @@ private struct AppearanceSettingsTab: View {
 
     // 桌面悬浮歌词(经典悬浮窗)专属的一整套:窗口几何 + 配色与字体。
     //
-    // 配色/字体放在这张卡里的依据:2026-08-05 全仓核对过消费方,确认这些设置确实只对这一种
-    // 展示方式生效——mainFont/romanizationFont/translationFont 和 foregroundColor/
+    // 配色/字体放在这张卡里的依据:2026-08-05 全仓核对过消费方,确认字体和三个颜色确实只对
+    // 这一种展示方式生效——mainFont/romanizationFont/translationFont 和 foregroundColor/
     // backgroundColor/textStrokeColor 的读取点全部落在 LyricsOverlayView.swift 一个文件里
-    // (灵动岛/歌词窗口各自用固定的系统配色,菜单栏歌词是纯文字,都不读这些字段)。
+    // (歌词窗口用固定的系统配色,菜单栏歌词是纯文字,都不读这些字段)。
+    //
+    // ⚠️ 2026-08-16 更正:这段原来把**灵动岛**也算进"都不读这些字段"里,现在不成立了 ——
+    // 「跟随封面取色」(followsCoverArt)这一项被灵动岛读走了(NotchLyricsView.accentOrWhite),
+    // 它是这张卡里唯一一个跨展示方式生效的开关。字体和那三个颜色仍然只对经典悬浮窗生效,
+    // 所以这一项留在这张卡里、只在它自己的副标题上说明作用范围,不为它单开一张卡。
     //
     // 原来第一行是一条没有控件的"身份行"(图标 captions.bubble + 标题「桌面悬浮歌词」),
     // 跟正上方那张总开关卡的图标和标题**一模一样**、相隔 14pt 说了两遍。2026-08-10 把总开关
@@ -1005,10 +1010,13 @@ private struct AppearanceSettingsTab: View {
                 icon: "photo.on.rectangle.angled",
                 title: L10n.t("跟随封面取色"),
                 // 这句必须精确,原来那句挂在"配色主题"行上、暗示下面三个颜色都是备用,是错的:
-                // 实测只有**文字颜色**被接管(PlaybackCoordinator.displayForegroundColor),
-                // 背景色(LyricsOverlayView 的 overlayBackground)和描边色(.lyricsTextStroke)
-                // 任何时候都无条件生效。
-                subtitle: L10n.t("只接管文字颜色；背景色和描边色始终按下面设置的来")
+                // 桌面悬浮歌词这边只有**文字颜色**被接管(PlaybackCoordinator.
+                // displayForegroundColor),背景色(LyricsOverlayView 的 overlayBackground)和
+                // 描边色(.lyricsTextStroke)任何时候都无条件生效。
+                // 2026-08-16 补上后半句:这个开关同时也管灵动岛 —— 那边歌词、歌名、进度条、
+                // 播放指示条、控制按钮整套都会跟着封面走(见 NotchLyricsView.accentOrWhite)。
+                // 不写出来的话,用户在"桌面悬浮歌词"这张卡里根本想不到它会影响灵动岛。
+                subtitle: L10n.t("桌面悬浮歌词只接管文字颜色，背景色和描边色始终按下面设置的来；灵动岛整套配色也跟着这个开关")
             ) {
                 Toggle("", isOn: $settings.followsCoverArt)
             }

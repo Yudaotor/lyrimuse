@@ -213,6 +213,8 @@ struct LyricsWindowView: View {
     @GestureState private var scrubbingFraction: Double?
     // 进度条那一块的实际宽度,拖拽时换算比例用(见 progressBar 里为什么不用 GeometryReader 包)。
     @State private var scrubWidth: CGFloat = 0
+    /// 光标是否停在进度条那一条上。跟灵动岛同一套反馈,只是这个窗口大一些、幅度可以稍大。
+    @State private var hoveringScrubber = false
     /// 封面的实际边长。控制排的图标大小和间距都按它算 —— 封面是随窗口缩放的,而按钮
     /// 原来是写死的字号,窄窗口下整排比左栏还宽、最左边那个模式键直接被裁在窗口外面
     /// (2026-08-09 用户截图),宽窗口下又显得过小、跟封面不成比例。
@@ -575,7 +577,11 @@ struct LyricsWindowView: View {
                         .frame(width: max(4, g.size.width * shownFraction))
                 }
             }
-            .frame(height: 4)
+            .frame(height: scrubberHeight)
+            // reduceMotion 下仍然变粗(功能反馈,不是装饰),只是不补间。
+            .animation(reduceMotion ? nil : .spring(response: 0.22, dampingFraction: 0.7),
+                       value: scrubberHeight)
+            .onHover { hoveringScrubber = $0 }
             .onAppear {
                 shownFraction = fraction
                 // 第一次渲染之后才允许补间:开窗那一下的赋值必须是瞬时的。
@@ -638,6 +644,12 @@ struct LyricsWindowView: View {
                 DragGesture(minimumDistance: 0)
                     .updating($scrubbingFraction) { value, state, _ in
                         guard durationMs > 0, scrubWidth > 0 else { return }
+                        // 只有这次手势的第一帧 state 才是 nil,拿它当"刚按下"的边沿信号
+                        // 给一次触觉;放 onChanged 里会每帧都震。
+                        if state == nil {
+                            NSHapticFeedbackManager.defaultPerformer.perform(
+                                .alignment, performanceTime: .now)
+                        }
                         state = min(1, max(0, value.location.x / scrubWidth))
                     }
                     .onEnded { value in
@@ -766,6 +778,13 @@ struct LyricsWindowView: View {
     /// 样式照着 Apple Music 那个玻璃胶囊做:左边一个静音开关、一条发丝分隔线、中间是
     /// **不带蓝色填充**的轨道加圆头滑块、右边一个跟着音量变的喇叭图标。系统 Slider 的
     /// 蓝色填充和小圆点在这里太"表单化",跟这扇窗口其余部分对不上。
+    /// 进度条轨道粗细:悬停变粗、按住再粗一点。理由见 NotchLyricsView.scrubberHeight;
+    /// 这个窗口没有灵动岛那种 40pt 的高度上限,所以幅度可以比它大 1pt。
+    private var scrubberHeight: CGFloat {
+        if scrubbingFraction != nil { return 7 }
+        return hoveringScrubber ? 6 : 4
+    }
+
     @ViewBuilder
     private var volumeControl: some View {
         if let volume = poller.soundVolume {
