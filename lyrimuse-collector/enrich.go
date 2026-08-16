@@ -219,6 +219,33 @@ func canonicalEnrichKey(key string) (string, bool) {
 	return best, true
 }
 
+// looseInflightKey 在**正在后台解析**的队列里找宽松等价的 key。
+//
+// ⚠️ 光有 canonicalEnrichKey 挡不住重复,这是 2026-08-16 被真实数据打脸后补的:
+// 那天下午刚把 14 组重复合并干净,晚上 19:57 和 19:58 又新长出一对
+// `方大同|春風吹之吹吹風mix|愛愛愛` / `方大同|春风吹之吹吹风mix|愛愛愛`(相隔 18 秒)。
+//
+// 机制是竞态:canonicalEnrichKey 查的是 enrichCache,而第一条这时还**只在
+// enrichInflight 里**、解析没回来、一个字都还没写进 enrichCache。第二条(另一个写入
+// 路径报了另一种拼法)来查,缓存里当然找不到等价条目,于是各自起一路解析、各自写入。
+// 两条路径先后差十几秒,正好落在这个窗口里。
+//
+// 所以"要不要发起解析"的判断必须**同时**宽松地查缓存和在途队列,少一个就还会漏。
+//
+// ⚠️ 调用方必须已经持有 enrichMu。
+func looseInflightKey(key string) (string, bool) {
+	if enrichInflight[key] {
+		return key, true
+	}
+	loose := loosenEnrichKey(key)
+	for k := range enrichInflight {
+		if loosenEnrichKey(k) == loose {
+			return k, true
+		}
+	}
+	return "", false
+}
+
 // loosenEnrichKey 把 key 压成"用来判断是不是同一首歌"的宽松形态。
 //
 // ⚠️ 结果**只用于比对**,绝不写进 enrichCache 当 key、绝不用于显示、绝不用于文件名。
@@ -276,8 +303,10 @@ func trackEnrichment(artist, title, album, bundleID string, durationSecs float64
 		enrichMu.Unlock()
 		return e.fields()
 	}
-	// 从没见过这首歌:首次解析(按 key 去重),不阻塞 poll 循环。
-	if !enrichInflight[key] {
+	// 从没见过这首歌:首次解析,不阻塞 poll 循环。
+	// 去重要连**在途**的一起查(不只是 enrichInflight[key] 这一个精确键)——理由见
+	// looseInflightKey,少这一道就会在十几秒的窗口里长出繁简/空格重复。
+	if _, busy := looseInflightKey(key); !busy {
 		enrichInflight[key] = true
 		go resolveEnrichAsync(key, artist, title, album, durationSecs)
 	}

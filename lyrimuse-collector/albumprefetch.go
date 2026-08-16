@@ -91,7 +91,9 @@ func prefetchAlbumSiblings(currentArtist, currentTitle, album, bundleID string) 
 					exists = true
 				}
 			}
-			inflight := enrichInflight[key]
+			// 在途的也要宽松查:专辑预取一次会排一整批曲目,跟"正在播的那首"几乎同时
+			// 发起,而那首的解析这时还没写进 enrichCache —— 只查精确键会漏。
+			_, inflight := looseInflightKey(key)
 			eligible := !exists && !inflight
 			if eligible {
 				enrichInflight[key] = true
