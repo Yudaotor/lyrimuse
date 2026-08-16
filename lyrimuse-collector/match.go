@@ -532,7 +532,9 @@ func scoreLyricCandidateDetailed(
 // 专辑名核实,繁简转换只影响字符形式)。
 func normLoose(s string) string {
 	var b strings.Builder
-	for _, r := range strings.ToLower(toSimplified(s)) {
+	// 变音折叠跟 toSimplified 同一个下沉位置、同一个理由:在这里做一次,全部源的匹配
+	// 同时受益,而不是让每个调用点各自记得处理(见 fold.go)。
+	for _, r := range foldDiacritics(strings.ToLower(toSimplified(s))) {
 		if unicode.IsLetter(r) || unicode.IsDigit(r) {
 			b.WriteRune(r)
 		}
