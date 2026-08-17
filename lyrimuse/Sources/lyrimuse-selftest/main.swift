@@ -2287,6 +2287,44 @@ do {
     expectEqual(bad, 0, "取色: 全区间扫描输出合法且亮度达标")
 }
 
+// ---- 封面取色:深色背景的感知亮度地板(灵动岛) ----
+// brightenedAccent 保的是 HSB brightness(RGB 最大分量),但人眼三通道敏感度差一个
+// 数量级——饱和纯蓝 brightness 满格、luma 只有 0.07,原样过 0.62 的地板,贴在灵动岛
+// 的深色背景上区分度差。accentForDarkBackdrop 在其结果之上再保一道 Rec.709 luma 下限。
+do {
+    func lift(_ r: Double, _ g: Double, _ b: Double) -> (r: Double, g: Double, b: Double) {
+        LocalPlaybackSource.accentForDarkBackdrop(r: r, g: g, b: b)
+    }
+    func luma(_ c: (r: Double, g: Double, b: Double)) -> Double {
+        0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b
+    }
+
+    // 动机本尊:纯蓝(HSB 亮度满格,旧地板完全不管)必须被提到感知亮度地板,
+    // 且提亮走"混白"方向——蓝仍是最大分量(色相族不变),红绿等量上浮(不偏色)。
+    let blue = lift(0, 0, 1)
+    expectEqual(abs(luma(blue) - 0.62) < 0.001, true, "深背景取色: 纯蓝恰好提到 luma 地板")
+    expectEqual(blue.b > blue.r && abs(blue.r - blue.g) < 0.001, true,
+                "深背景取色: 混白提亮,蓝仍是蓝且不偏色")
+
+    // 已经够亮的原样放行——暖色/浅色封面(luma 本来就高)完全不受这次改动影响。
+    let warm = lift(0.9, 0.7, 0.4)
+    expectEqual(warm == (r: 0.9, g: 0.7, b: 0.4), true, "深背景取色: luma 够高就一动不动")
+    expectEqual(lift(1, 1, 1) == (r: 1.0, g: 1.0, b: 1.0), true, "深背景取色: 纯白不动(不除零)")
+
+    // 全区间扫描:输出永远在 [0,1],且 luma 不低于地板。
+    var bad = 0
+    for i in 0 ... 20 {
+        for j in 0 ... 20 {
+            for k in [0.0, 0.25, 0.5, 0.75, 1.0] {
+                let c = lift(Double(i) / 20, Double(j) / 20, k)
+                if c.r < 0 || c.r > 1 || c.g < 0 || c.g > 1 || c.b < 0 || c.b > 1 { bad += 1 }
+                if luma(c) < 0.619 { bad += 1 }
+            }
+        }
+    }
+    expectEqual(bad, 0, "深背景取色: 全区间扫描输出合法且 luma 达标")
+}
+
 // MARK: - 歌词时间轴偏移:全局基准 + 单曲微调
 //
 // 2026-08-17 加全局偏移时补的。真正容易写错的不是那个加法,而是两层之间的**独立性**:

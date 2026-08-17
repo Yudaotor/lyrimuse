@@ -1109,6 +1109,30 @@ public final class LocalPlaybackSource: ObservableObject {
             brightness: floor)
     }
 
+    /// 在 brightenedAccent 的结果之上,再保一道**感知亮度**(Rec.709 luma)下限——
+    /// 专供永远深色背景的表面(灵动岛:纯黑/深色渐变/封面模糊+压黑,三种风格全是暗的)。
+    ///
+    /// 为什么 brightenedAccent 不够:它保的是 HSB 的 brightness(= RGB 最大分量),
+    /// 而人眼对三个通道的敏感度差一个数量级(绿 0.7152 vs 蓝 0.0722)——一个饱和纯蓝
+    /// brightness 满格 1.0、luma 却只有 0.07,原样通过 0.62 的地板,贴在深色背景上
+    /// 就是"看得见但区分度差"。冷色(蓝/紫/深红)封面全中这一条。
+    ///
+    /// 提法是朝白色线性混合:luma 随混合比例线性上升,可以解析地一步到位;混白天然
+    /// 保色相族、按比例减饱和,跟 brightenedAccent"提亮多少就压淡多少"是同一个哲学。
+    /// 桌面悬浮歌词**不要**用这个——壁纸可能是浅色,朝白提亮反而毁掉那边的对比度。
+    ///
+    /// luma 用 gamma 空间的 Rec.709 加权近似感知明度,对"设一个下限"这个用途足够,
+    /// 不值得为它引入 sRGB 线性化。
+    nonisolated public static func accentForDarkBackdrop(
+        r: Double, g: Double, b: Double, lumaFloor: Double = 0.62
+    ) -> (r: Double, g: Double, b: Double) {
+        let luma = 0.2126 * r + 0.7152 * g + 0.0722 * b
+        guard luma < lumaFloor, luma < 1 else { return (r, g, b) }
+        // luma(c + t*(1-c)) = luma(c) + t*(1-luma(c)),反解出恰好到地板的 t。
+        let t = min(1, max(0, (lumaFloor - luma) / (1 - luma)))
+        return (r + t * (1 - r), g + t * (1 - g), b + t * (1 - b))
+    }
+
     /// 色相(0~1)。maxC==minC(灰)时色相无意义,返回 0。
     nonisolated private static func hueOf(
         r: Double, g: Double, b: Double, maxC: Double, minC: Double

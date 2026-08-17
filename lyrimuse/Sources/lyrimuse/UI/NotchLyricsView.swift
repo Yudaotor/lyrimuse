@@ -446,8 +446,10 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
     /// 才用它,否则维持原来的白 —— 灵动岛贴在刘海下,底色是纯黑或封面模糊图,白色是那里
     /// 最稳的选择,不该在用户没要求时擅自换掉。
     ///
-    /// 取色本身已经保证了亮度下限(见 LocalPlaybackSource.brightenedAccent:近黑兜底成
-    /// 中性灰、提亮同时压饱和),所以这里直接用,不再叠一层亮度处理。
+    /// 用的是 notchAccentColor 而不是 artworkAccentColor:后者只保了 HSB 亮度下限
+    /// (brightenedAccent),饱和冷色(纯蓝 luma 0.07)能原样通过,贴在灵动岛永远深色的
+    /// 背景上区分度差;前者在此之上又保了一道感知亮度下限,专为深色背景调的
+    /// (见 LocalPlaybackSource.accentForDarkBackdrop)。提亮在数据层做完,这里直接用。
     ///
     /// 2026-08-16 补完:此前只有歌词正文和进度条填充吃它,顶行歌名、五种状态占位文字、
     /// 下一句预览、进度条底槽、时间文字、播放控制按钮全是写死的白。后果不只是"不够统一"
@@ -455,7 +457,7 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
     /// 一旦变成「暂无歌词」就突然跳回白"的闪动。现在除了封面缩略图的描边(那处是刻意的,
     /// 见 artworkThumbnail 注释:磨砂玻璃风格下要给浅色封面兜一圈可见轮廓),其余都走这里。
     private var accentOrWhite: Color {
-        guard settings.followsCoverArt, let accent = poller.artworkAccentColor else { return .white }
+        guard settings.followsCoverArt, let accent = poller.notchAccentColor else { return .white }
         return accent
     }
 

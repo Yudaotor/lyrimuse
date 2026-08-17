@@ -69,6 +69,11 @@ final class PlaybackCoordinator: ObservableObject {
     // LocalPlaybackSource.artworkAccentHex 的注释)。供"跟随封面"外观模式用,见
     // displayForegroundColor。
     @Published private(set) var artworkAccentColor: Color?
+    // 同一个封面强调色的"深色背景"变体——在上面那个的基础上再保一道感知亮度下限
+    // (见 LocalPlaybackSource.accentForDarkBackdrop 的注释:HSB 地板拦不住饱和冷色,
+    // 纯蓝 luma 只有 0.07,贴在灵动岛的深色背景上区分度差)。只给灵动岛消费;桌面悬浮
+    // 歌词的壁纸可能是浅色,继续用上面未提亮的 artworkAccentColor。
+    @Published private(set) var notchAccentColor: Color?
     // 当前曲目已生效的歌词时间轴校正值,见 LocalPlaybackSource 同名属性的注释——直接
     // 转发权威值,不在这一层另外拼 key 重新查一遍(2026-08-03 之前这里是一个计算属性,
     // 自己拼了个 "\(artist)|\(title)" 去查 LyricsOffsetStore,跟实际存储用的
@@ -449,6 +454,18 @@ final class PlaybackCoordinator: ObservableObject {
             s.$artworkAccentHex
                 .map { $0.map { Color(hexWithAlpha: $0, fallback: .white) } }
                 .assign(to: \.artworkAccentColor, on: self),
+            // 深色背景变体在同一条源上再派生一份——luma 提亮是纯数学,放在这一层跟
+            // hex→Color 的转换一起做,每首歌只算一次,不在灵动岛 body 里反复算。
+            s.$artworkAccentHex
+                .map { hex -> Color? in
+                    guard let hex, let ns = NSColor(hexStringWithAlpha: hex) else { return nil }
+                    // NSColor(hexStringWithAlpha:) 用 srgbRed 构造,分量可以直接读,
+                    // 不需要再过一次 usingColorSpace。
+                    let lifted = LocalPlaybackSource.accentForDarkBackdrop(
+                        r: ns.redComponent, g: ns.greenComponent, b: ns.blueComponent)
+                    return Color(.sRGB, red: lifted.r, green: lifted.g, blue: lifted.b)
+                }
+                .assign(to: \.notchAccentColor, on: self),
             s.$currentLyricsOffsetMs.assign(to: \.currentLyricsOffsetMs, on: self),
             s.$pausedPositionMs.assign(to: \.pausedPositionMs, on: self),
             s.$currentDurationMs.assign(to: \.currentDurationMs, on: self),
