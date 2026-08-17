@@ -31,11 +31,20 @@ import (
 type lastfmScrobbler struct {
 	apiKey, secret, sk string
 	hc                 *http.Client
-	// dead:session key / API key 已被 Last.fm 判死(error 4/9/10/26)。置位后停止一切
-	// 后续提交 —— 原来这种情况下每首歌照样白打 2 个注定失败的请求,且除了日志刷屏没有
-	// 任何机制让用户知道 scrobble 早就全停了(2026-08-11 审阅确认)。进程重启(保存
-	// 配置/重连账号都会 kickstart collector)自然复位。
+	// dead:session key / API key 已被 Last.fm 判死(error 9/10/26 一击、error 4 两击,
+	// 见 shouldDisable)。置位后停止一切后续提交 —— 原来这种情况下每首歌照样白打 2 个
+	// 注定失败的请求,且除了日志刷屏没有任何机制让用户知道 scrobble 早就全停了
+	// (2026-08-11 审阅确认)。进程重启(保存配置/重连账号都会 kickstart collector)
+	// 自然复位。
 	dead atomic.Bool
+	// suspect4:第一次撞上 error 4(Authentication Failed)的时刻(UnixNano,0=无嫌疑)。
+	// error 4 跟 9/10/26 不同:真撤销授权时它确实会出现,但 Last.fm 服务端不稳时也会
+	// **误报**(2026-08-17 实测:一上午 500/超时/DNS 失败之后来了一发 error 4,授权
+	// 其实完好,进程重启后第一次提交就成功了——不重启的话镜像就永久停在一次误报上)。
+	// 所以单发 error 4 只记嫌疑、不熔断;30s~30min 内再次撞上才坐实。真撤销时每次
+	// 调用都失败,第二击最多半分钟就到,多打的请求屈指可数;换来的是孤立误报不再
+	// 永久杀死镜像。成功一次即洗清嫌疑。
+	suspect4 atomic.Int64
 	// clearStatus:第一次提交成功时删掉上次运行留下的状态文件(有就删,没有白删一次),
 	// sync.Once 保证整个进程生命周期只做一次这个 stat+remove。
 	clearStatus sync.Once
@@ -153,13 +162,39 @@ func (e *lastfmAPIError) Error() string {
 	return fmt.Sprintf("lastfm %s: api error %d: %s", e.Method, e.Code, e.Message)
 }
 
-// fatal:这几个错误码意味着凭据已死,重试只会永远失败 —— 4=Authentication Failed,
-// 9=Invalid session key(用户在网站上撤销了授权),10=Invalid API key,26=API key
-// suspended。其余(服务暂时不可用/限流等)是暂时性的,不熔断。
+// fatal:这几个错误码属于"凭据级"错误 —— 4=Authentication Failed,9=Invalid session
+// key(用户在网站上撤销了授权),10=Invalid API key,26=API key suspended。其余
+// (服务暂时不可用/限流等)是暂时性的,永不熔断。注意 fatal 不直接等于熔断:error 4
+// 需要复发确认(服务端不稳时会误报),裁决在 shouldDisable。
 func (e *lastfmAPIError) fatal() bool {
 	switch e.Code {
 	case 4, 9, 10, 26:
 		return true
+	}
+	return false
+}
+
+// shouldDisable 裁决这次 API 错误要不要熔断镜像:9/10/26 一击致命;4 要两击坐实
+// (间隔 ≥confirmGap 才算第二击 —— 换歌那一刻 nowPlaying+scrobble 几乎同时各失败
+// 一发,那是同一次故障;超过 suspectWindow 的旧嫌疑作废,隔了半天的两次孤立误报
+// 不该累积成死刑)。并发安全:CAS 输了说明别的 goroutine 刚记下同一桩嫌疑,这一发
+// 按 burst 处理返回 false 即可。
+func (s *lastfmScrobbler) shouldDisable(apiErr *lastfmAPIError, now time.Time) bool {
+	if !apiErr.fatal() {
+		return false
+	}
+	if apiErr.Code != 4 {
+		return true
+	}
+	const confirmGap = 30 * time.Second
+	const suspectWindow = 30 * time.Minute
+	prev := s.suspect4.Load()
+	age := time.Duration(now.UnixNano() - prev)
+	if prev != 0 && age >= confirmGap && age <= suspectWindow {
+		return true
+	}
+	if prev == 0 || age > suspectWindow {
+		s.suspect4.CompareAndSwap(prev, now.UnixNano())
 	}
 	return false
 }
@@ -197,19 +232,26 @@ func mirrorAsync(s *lastfmScrobbler, what string, call func(ctx context.Context)
 		defer cancel()
 		err := call(ctx)
 		if err == nil {
+			// 成功即洗清 error 4 的嫌疑(见 suspect4 注释)——能写进去就说明凭据活着。
+			s.suspect4.Store(0)
 			// 干净的一次成功:把上次运行可能留下的"授权失效"状态文件清掉(App 的
 			// Last.fm 卡靠它显示红标),整个进程只查一次。
 			s.clearStatus.Do(func() { os.Remove(lastfmStatusPath) })
 			return
 		}
 		var apiErr *lastfmAPIError
-		if errors.As(err, &apiErr) && apiErr.fatal() {
+		if errors.As(err, &apiErr) && s.shouldDisable(apiErr, time.Now()) {
 			// 只有第一个发现者负责收尾:打一条(且只有一条)显眼日志 + 落状态文件给
 			// App 读。之后 mirrorAsync 在入口处直接短路,不再刷屏、不再白打请求。
 			if s.dead.CompareAndSwap(false, true) {
 				log.Printf("lastfm mirror DISABLED: %v (fatal credential error; reconnect the account in Lyrimuse settings to resume)", apiErr)
 				writeLastfmMirrorStatus(apiErr)
 			}
+			return
+		}
+		if apiErr != nil && apiErr.fatal() {
+			// 单发 error 4:嫌疑已记下,先不熔断 —— 复发才停(见 shouldDisable)。
+			log.Printf("lastfm mirror %s: %v (single error 4 may be transient server flakiness; mirror stays up, disables only on recurrence)", what, apiErr)
 			return
 		}
 		log.Printf("lastfm mirror %s failed: %v", what, err)
