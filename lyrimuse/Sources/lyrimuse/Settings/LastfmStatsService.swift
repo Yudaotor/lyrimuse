@@ -193,6 +193,12 @@ final class LastfmStatsService: ObservableObject {
     /// 换歌那一刻取一次,同一首歌不重取(取晚了这次播放被 scrobble 进去就会多算一)。
     @Published private(set) var nowPlayingCount: Int?
     private var nowPlayingCountKey = ""
+    /// 被「正在记录」实时行**吸收**的那条最近记录的 id。长歌播到 4 分钟/过半时 Last.fm
+    /// 就已收到 scrobble(时间戳=开播时刻),于是同一次播放在列表里出现两行:上面
+    /// "第 5 次听·正在记录"、下面"第 4 次听·4 分钟前"(2026-08-17 用户截图)。由
+    /// LiveScrobbleRow 维护(唯一同时看得到播放进度和最近记录的地方),列表渲染时跳过
+    /// 这一行;播放结束/暂停实时行退场时置回 nil,该行随即以普通历史行身份回归。
+    @Published var liveAbsorbedRecentID: String?
     /// 那年今日:去年(查不到再往前,最多三年)同一天的收听。整天没有记录则为 nil,卡片隐藏。
     @Published private(set) var onThisDay: OnThisDayResult?
 

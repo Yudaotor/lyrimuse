@@ -325,7 +325,12 @@ struct LastfmStatsSection: View {
                     if stats.recentPage == 1 {
                         LiveScrobbleRow()
                     }
-                    ForEach(recentRows, id: \.track.id) { entry in
+                    // 被实时行吸收的那一行(= 当前这次播放的中途 scrobble)不再单独显示,
+                    // 见 LastfmStatsService.liveAbsorbedRecentID。注意只在渲染时跳过、
+                    // 不从 recentRows 的构造里剔除 —— 它下面的同曲历史行算"第几次"仍要
+                    // 把它数进去。
+                    ForEach(recentRows.filter { $0.track.id != stats.liveAbsorbedRecentID },
+                            id: \.track.id) { entry in
                         let t = entry.track
                         Button {
                             if let url = Self.trackURL(artist: t.artist, title: t.title) { NSWorkspace.shared.open(url) }
@@ -729,6 +734,27 @@ private struct LiveScrobbleRow: View {
         return "\(live.remote ? "r" : "l")|\(live.artist)|\(live.title)"
     }
 
+    /// 最近记录里"就是当前这次播放"的那一行。长歌播到 4 分钟/过半时 Last.fm 已收到
+    /// scrobble(时间戳=开播时刻),它会以历史行身份出现在列表顶上,跟实时行并存看着
+    /// 像重复记录(2026-08-17 用户截图:"第 5 次听·正在记录"叠着"第 4 次听·4 分钟前")。
+    /// 判定:最新一条有时间的记录、标题宽松相同、且开播时刻对得上(锚点反推的本次
+    /// 开播时间 ±2 分钟 —— 单曲循环的上一次播放差整整一首歌的时长,不会误伤)。
+    /// 只认本机播放:远端(手机)拿不到精确的开播时刻,宁可维持旧观感也不冒险
+    /// 隐藏一条真实的历史行。
+    ///
+    /// count 是这一行已经落库的次数(含这一次)—— 顶替换歌时取的 nowPlayingCount:
+    /// 那个数是 userplaycount+1,若取数发生在这次 scrobble 落库之后就会多算一
+    /// (正是截图里 5 vs 4 的来源),而这一行的数永远是 scrobble 后的权威值。
+    private var absorbedRecent: (id: String, count: Int?)? {
+        guard let live, !live.remote, let anchor = poller.anchor else { return nil }
+        guard let row = stats.recent.first(where: { $0.date != nil }), let date = row.date,
+              looseSameTitle(row.title, live.title) else { return nil }
+        let playStart = anchor.fetchedAt.addingTimeInterval(-Double(anchor.progressMs) / 1000)
+        guard abs(date.timeIntervalSince(playStart)) < 120 else { return nil }
+        let key = LastfmStatsService.playCountKey(artist: row.artist, title: row.title)
+        return (row.id, stats.trackPlayCounts[key])
+    }
+
     var body: some View {
         Group {
             if let live {
@@ -756,7 +782,9 @@ private struct LiveScrobbleRow: View {
                             Text(live.artist).font(.system(size: 10.5)).foregroundStyle(.secondary).lineLimit(1)
                         }
                         Spacer()
-                        if let n = stats.nowPlayingCount {
+                        // 这次播放已被 scrobble 时用落库的权威次数,否则用换歌时取的
+                        // nowPlayingCount(见 absorbedRecent 注释:后者取晚了会多算一)。
+                        if let n = absorbedRecent?.count ?? stats.nowPlayingCount {
                             // 老歌重逢的小情绪点:"第 208 次听"
                             Text(String(format: L10n.t("第 %@ 次听"), "\(n)"))
                                 .font(.caption).foregroundStyle(.tertiary).monospacedDigit()
@@ -795,10 +823,16 @@ private struct LiveScrobbleRow: View {
         }
         .onAppear {
             if let live { stats.refreshNowPlayingCount(title: live.title, artist: live.artist) }
+            stats.liveAbsorbedRecentID = absorbedRecent?.id
         }
         .onChange(of: liveKey) { _, _ in
             // 本机换歌、远端换歌、来源切换都要重取"第 N 次听"
             if let live { stats.refreshNowPlayingCount(title: live.title, artist: live.artist) }
+        }
+        // 吸收状态是从(播放进度 × 最近记录)算出来的,两个源任何一个动了都可能翻转 ——
+        // onChange 在每次 body 重算时都重评这个值,变了才写回 service(列表靠它隐藏行)。
+        .onChange(of: absorbedRecent?.id) { _, id in
+            if stats.liveAbsorbedRecentID != id { stats.liveAbsorbedRecentID = id }
         }
         .onChange(of: poller.title) { _, _ in
             // 本机换歌 = 上一首刚被 scrobble。给 collector 十秒把记录提交出去,然后无视缓存
