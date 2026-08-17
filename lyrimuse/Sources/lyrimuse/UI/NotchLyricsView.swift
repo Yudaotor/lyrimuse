@@ -222,17 +222,26 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
     @ViewBuilder
     private func backgroundLayer(size: CGSize) -> some View {
         if settings.notchCardStyle == .coverArt, let image = poller.artworkImage {
-            Image(nsImage: image)
-                .resizable()
-                .scaledToFill()
-                .frame(width: size.width, height: size.height)
-                .blur(radius: 20)
-                .overlay(Color.black.opacity(0.45))
-                .clipShape(NotchHangingShape(bottomCornerRadius: 20))
-                // 动画触发键仍然用原始字节 artworkData(Data 是按字节比较的 Equatable),
-                // 保持跟 2026-08-05 加解码缓存之前逐字节相同的判定语义——artworkImage 是
-                // NSObject,== 退化成指针比较,语义上不等价。
-                .animation(.easeInOut(duration: 0.5), value: poller.artworkData)
+            ZStack {
+                // 不透明打底(跟无封面时的深色渐变同款)。.blur() 会把图像**边缘羽化成
+                // 半透明**(高斯核越过图像边界,外侧当透明混合),上面那层 45% 黑也只有
+                // 45% 的不透明度 —— 没有这层底的话,卡片四周约一个模糊半径宽的羽化带
+                // 会把桌面透上来(2026-08-17 用户截图:边缘能看见底下窗口的图标文字),
+                // "跟随封面"就成了半透明卡片。
+                NotchHangingShape(bottomCornerRadius: 20)
+                    .fill(NotchCardStyle.darkGradient.fill)
+                Image(nsImage: image)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: size.width, height: size.height)
+                    .blur(radius: 20)
+                    .overlay(Color.black.opacity(0.45))
+                    .clipShape(NotchHangingShape(bottomCornerRadius: 20))
+                    // 动画触发键仍然用原始字节 artworkData(Data 是按字节比较的 Equatable),
+                    // 保持跟 2026-08-05 加解码缓存之前逐字节相同的判定语义——artworkImage 是
+                    // NSObject,== 退化成指针比较,语义上不等价。
+                    .animation(.easeInOut(duration: 0.5), value: poller.artworkData)
+            }
         } else {
             NotchHangingShape(bottomCornerRadius: 20)
                 .fill(settings.notchCardStyle.fill)
