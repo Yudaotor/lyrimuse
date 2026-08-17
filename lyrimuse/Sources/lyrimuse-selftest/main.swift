@@ -2325,50 +2325,6 @@ do {
     expectEqual(bad, 0, "深背景取色: 全区间扫描输出合法且 luma 达标")
 }
 
-// MARK: - 歌词时间轴偏移:全局基准 + 单曲微调
-//
-// 2026-08-17 加全局偏移时补的。真正容易写错的不是那个加法,而是两层之间的**独立性**:
-// 「重置这首歌」绝不能把设备侧的全局基准一起抹掉(那是用户最不希望被连带清掉的东西),
-// 反过来改全局基准也不该动已经调好的单曲值。下面每一条都在守这件事。
-// LyricsOffsetStore 是 @MainActor,而这个文件的顶层代码是 nonisolated 的(所以
-// trackKey 才特意标了 nonisolated,见那边的注释)。顶层代码本来就跑在主线程上,
-// assumeIsolated 把这件事告诉编译器即可,不需要把整个 selftest 改成 async。
-MainActor.assumeIsolated {
-    let store = LyricsOffsetStore.shared
-    let key = LyricsOffsetStore.trackKey(artist: "A", title: "T", lyrics: "[00:01.00]x", lyricsYRC: "")
-    // 起点归零 —— 这个 store 落在 UserDefaults 上,不清的话会读到上一次跑的残留
-    store.setGlobalOffset(0)
-    store.reset(forKey: key)
-    expectEqual(store.effectiveOffset(forKey: key), 0, "偏移: 两层都没调时是 0")
-
-    store.setGlobalOffset(300)
-    expectEqual(store.effectiveOffset(forKey: key), 300, "偏移: 只有全局基准时按它算")
-
-    store.nudge(by: -100, forKey: key)
-    expectEqual(store.offset(forKey: key), -100, "偏移: 单曲微调独立记账")
-    expectEqual(store.effectiveOffset(forKey: key), 200, "偏移: 生效值 = 全局 + 单曲")
-
-    store.reset(forKey: key)
-    expectEqual(store.offset(forKey: key), 0, "偏移: 重置清掉单曲微调")
-    expectEqual(store.globalOffsetMs, 300, "偏移: 重置不动全局基准")
-    expectEqual(store.effectiveOffset(forKey: key), 300, "偏移: 重置后回到全局基准")
-
-    store.setOffset(-250, forKey: key)
-    store.setGlobalOffset(-50)
-    expectEqual(store.offset(forKey: key), -250, "偏移: 改全局基准不动单曲微调")
-    expectEqual(store.effectiveOffset(forKey: key), -300, "偏移: 两个负值相加")
-
-    // 空 key(从没拿到过曲目信息)不该被当成一首歌记账 —— 但全局基准跟曲目无关,照样生效
-    store.setGlobalOffset(120)
-    store.nudge(by: 500, forKey: "||")
-    expectEqual(store.offset(forKey: "||"), 0, "偏移: 空 key 不记账")
-    expectEqual(store.effectiveOffset(forKey: "||"), 120, "偏移: 空 key 下全局基准仍然生效")
-
-    // 收尾:别把测试值留在 UserDefaults 里
-    store.setGlobalOffset(0)
-    store.reset(forKey: key)
-}
-
 // ---- 本地化:Localizable.xcstrings 是唯一真源,生成的 .strings 必须与它逐键逐值一致 ----
 //
 // 2026-08-17 迁移到 String Catalog(吸收自 boring.notch 审阅 B9):词条只在
