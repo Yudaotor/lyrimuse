@@ -232,7 +232,10 @@ private let lastfmBadgeImage: NSImage = {
 // 两份逻辑。两边各自持有同一对共享单例(ConfigStore.shared/LastfmConnectController.shared)
 // 的 @ObservedObject 引用,传进来算,不做隐式全局访问。
 @MainActor
-func destinationStatus(for destination: AccountDestination, config: ConfigStore, lastfmConnect: LastfmConnectController) -> DestinationStatus {
+/// mirrorInfo 是 collector 落盘的"授权已失效"状态,调用方从 LastfmMirrorStatusWatcher
+/// 取 —— 必须经由观察器而不是在这里直接读文件:文件被删(collector 自愈)不触发任何
+/// SwiftUI 观察,直接读的话红标会滞留到下一次无关的重渲染(2026-08-17 实测)。
+func destinationStatus(for destination: AccountDestination, config: ConfigStore, lastfmConnect: LastfmConnectController, mirrorInfo: LastfmMirrorStatus.Info?) -> DestinationStatus {
     switch destination {
     case .listenBrainz:
         // ListenBrainz 是可选账号(只想用悬浮歌词可以完全不配),未配置不算硬性错误,
@@ -259,7 +262,7 @@ func destinationStatus(for destination: AccountDestination, config: ConfigStore,
         if config.lastfmScrobbleSessionKey.isEmpty { return .notConfigured(L10n.t("未配置（可选）")) }
         // collector 报告凭据已死(用户在网站上撤销了授权等)——必须压过"已连接":
         // 本地攥着的 session key 是废的,绿标就是在撒谎。
-        if LastfmMirrorStatus.current != nil { return .error(L10n.t("授权已失效")) }
+        if mirrorInfo != nil { return .error(L10n.t("授权已失效")) }
         let name = config.lastfmScrobbleUsername.isEmpty ? config.lastfmUser : config.lastfmScrobbleUsername
         return .active(name.isEmpty ? nil : String(format: L10n.t("已连接：%@"), name))
     case .bark:
@@ -286,6 +289,9 @@ struct AccountSidebarRow: View {
 
     @ObservedObject private var config = ConfigStore.shared
     @ObservedObject private var lastfmConnect = LastfmConnectController.shared
+    // "授权已失效"红标的数据源。订阅观察器(而不是渲染时直接读文件)才能让红标在
+    // collector 自愈删掉状态文件后自己消失,见 LastfmMirrorStatusWatcher 注释。
+    @ObservedObject private var mirrorStatus = LastfmMirrorStatusWatcher.shared
     // 只为了让这一行在手动切换语言时重新渲染——这个 View 本身已经嵌在 SettingsView
     // 的 List 里,父视图理论上会因为语言变化重新构造子行,这里独立再观察一份是保险,
     // 不依赖 ForEach 复用行为的具体细节。
@@ -299,7 +305,8 @@ struct AccountSidebarRow: View {
         Label {
             HStack(spacing: 6) {
                 Text(destination.title)
-                destinationStatus(for: destination, config: config, lastfmConnect: lastfmConnect)
+                destinationStatus(for: destination, config: config, lastfmConnect: lastfmConnect,
+                                  mirrorInfo: mirrorStatus.info)
                     .indicator
             }
         } icon: {
@@ -333,6 +340,9 @@ struct AccountLinkingTab: View {
     @ObservedObject private var features = FeatureSettingsStore.shared
     @ObservedObject private var lastfmConnect = LastfmConnectController.shared
     @ObservedObject private var backfill = ScrobbleBackfillService.shared
+    // "Last.fm 拒绝了写入"红条的数据源,订阅理由见 LastfmMirrorStatusWatcher 注释
+    // (collector 自愈删文件后红条要自己消失,熔断落文件后开着的窗口也要自己冒出来)。
+    @ObservedObject private var mirrorStatus = LastfmMirrorStatusWatcher.shared
     @State private var pendingListensExpanded = false
     /// 待补清单里鼠标停在哪一条上(uts)。删除按钮只在它上面显形 —— 见 pendingListensRow。
     @State private var hoveredPendingUTS: Int64?
@@ -857,7 +867,7 @@ struct AccountLinkingTab: View {
                 CardDivider()
                 pendingListensRow
             }
-            if lastfmConnected, LastfmMirrorStatus.current != nil {
+            if lastfmConnected, mirrorStatus.info != nil {
                 CardDivider()
                 SettingsRawRow(insetToText: true) {
                     HStack(spacing: 8) {

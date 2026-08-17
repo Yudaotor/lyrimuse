@@ -42,5 +42,40 @@ enum LastfmMirrorStatus {
         try? FileManager.default.removeItem(at: url)
         cachedMTime = nil
         cached = nil
+        // 红标即时消失,不等观察器的下一跳。两个调用方(重连成功/断开)都在主线程
+        // (LastfmConnectController 是 @MainActor,另一处是视图 action)。
+        LastfmMirrorStatusWatcher.shared.refresh()
+    }
+}
+
+/// 让"授权已失效"红标能**自愈**的观察器。collector 恢复后(重启进程 + 首次提交成功)
+/// 会把状态文件删掉,但"文件被删"不在 SwiftUI 的观察体系里 —— 徽标所在的行没有任何
+/// 被观察对象变化就不重渲染,红标滞留(2026-08-17 实测:Last.fm 误报 error 4 → 熔断
+/// 落文件 → collector 重启自愈删了文件,侧边栏红标继续挂着)。反方向同样成立:App
+/// 开着设置页时 collector 熔断落了文件,红标也该自己冒出来,不用重开窗口。
+///
+/// 每 5 秒重读一次(LastfmMirrorStatus.current 按 mtime 缓存,常态代价是一次 stat),
+/// 值真变了才发布 —— 订阅的视图只在红标该出现/消失的那一刻各重算一次,其余时间
+/// objectWillChange 完全安静。lazy 单例:第一次有视图订阅(打开设置)才开始跳。
+final class LastfmMirrorStatusWatcher: ObservableObject {
+    static let shared = LastfmMirrorStatusWatcher()
+
+    @Published private(set) var info: LastfmMirrorStatus.Info?
+
+    private var timer: Timer?
+
+    private init() {
+        info = LastfmMirrorStatus.current
+        let t = Timer(timeInterval: 5, repeats: true) { [weak self] _ in self?.refresh() }
+        // 差几秒无所谓,让系统合并唤醒。
+        t.tolerance = 2
+        RunLoop.main.add(t, forMode: .common)
+        timer = t
+    }
+
+    /// 立即重读一次。定时器之外,LastfmMirrorStatus.clear()(重连/断开)也调它。
+    func refresh() {
+        let now = LastfmMirrorStatus.current
+        if now != info { info = now }
     }
 }
