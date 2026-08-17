@@ -359,19 +359,16 @@ struct LyricsSearchSheet: View {
     /// 跟 741 分不是同一个量级上的东西。
     @ViewBuilder
     private func scoreLine(_ c: LyricsSearchService.Candidate, font: Font) -> some View {
-        let label = Text(String(format: L10n.t("分数 %@ · %@ 行"), "\(c.score)", "\(c.lineCount)"))
-        Group {
-            if c.scoreTerms.isEmpty {
-                // 没有可摊开的明细就别摆一个点了什么都没有的问号。
-                label
-            } else {
-                // 悬停(短延迟)或点问号都能弹出明细。原来这里是 .help(),系统 tooltip 要
-                // 悬停约两秒才出、且点击完全没反应 —— 用户报的就是这个(2026-08-17)。
-                QuickHelpLabel(text: scoreExplanation(c)) { label }
+        HStack(spacing: 3) {
+            Text(String(format: L10n.t("分数 %@ · %@ 行"), "\(c.score)", "\(c.lineCount)"))
+            if !c.scoreTerms.isEmpty {
+                Image(systemName: "questionmark.circle")
+                    .foregroundStyle(.tertiary)
             }
         }
         .font(font)
         .foregroundStyle(.secondary)
+        .help(scoreExplanation(c))
     }
 
     /// 分数说明文案本体抽到了 ScoreTerm.explanation(跟"解析决策"弹窗共用),这里只是转发。
