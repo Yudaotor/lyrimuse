@@ -69,6 +69,15 @@ public enum EnrichCacheReader {
     private static var cachedEntries: [String: EnrichCacheEntry]?
     // 忽略专辑的封面索引,跟 cachedEntries 同寿命 —— 见 coverByArtistTitle()。
     private static var cachedCoverIndex: [String: String]?
+    // 宽松匹配索引(looseKey → 组内字典序最小的原 key),跟 cachedEntries 同寿命、惰性
+    // 构建 —— 见 looseMatch(2026-08-20 性能审计:原来每次精确 miss 都对全部 ~900 个 key
+    // 逐个现算 ICU 繁简 transform,~7ms 主线程,新歌未解析窗口内每 2s 重复一遍)。
+    private static var cachedLooseIndex: [String: String]?
+    // 后台解码的世代号:kick 时占位,完成回主线程时对得上才采纳(reloadNow 的同步解码
+    // 会推进世代号,把在飞的旧结果作废)。nil = 没有在飞的后台解码。
+    private static var decodeGeneration = 0
+    private static var inFlightGeneration: Int?
+    private static var memoryPressureSource: DispatchSourceMemoryPressure?
 
     /// 缓存文件当前的 mtime,拿不到就是 nil。
     ///
@@ -112,13 +121,29 @@ public enum EnrichCacheReader {
     ///
     /// 成本:只在精确 miss 时才扫,而 miss 只发生在合并过的那些歌上,量级是几百条字符串。
     private static func looseMatch(_ key: String, in all: [String: EnrichCacheEntry]) -> EnrichCacheEntry? {
-        let loose = EnrichCacheKeys.looseKey(key)
-        var bestKey: String?
-        for k in all.keys where EnrichCacheKeys.looseKey(k) == loose {
-            if bestKey == nil || k < bestKey! { bestKey = k }
-        }
-        guard let bestKey else { return nil }
+        // 经 cachedLooseIndex 查表(2026-08-20):原来每次 miss 对全表逐 key 现算 looseKey
+        // (每 key 一次 CFStringTransform 繁简转换),索引把它塌缩成一次 looseKey + 一次
+        // 字典查找。索引**惰性**构建(首次 miss 时,~8ms 一次)——不急切挂在解码后:精确
+        // 命中的曲目今天零成本,collector 预取连环写盘时急切重建反而是新增回归(对抗核实
+        // 指出的坑);"字典序最小 key 胜出"的归并语义原样保留。
+        guard let bestKey = looseIndex(in: all)[EnrichCacheKeys.looseKey(key)] else { return nil }
         return all[bestKey]
+    }
+
+    private static func looseIndex(in all: [String: EnrichCacheEntry]) -> [String: String] {
+        if let cachedLooseIndex { return cachedLooseIndex }
+        var index: [String: String] = [:]
+        index.reserveCapacity(all.count)
+        for k in all.keys {
+            let loose = EnrichCacheKeys.looseKey(k)
+            if let existing = index[loose] {
+                if k < existing { index[loose] = k }
+            } else {
+                index[loose] = k
+            }
+        }
+        cachedLooseIndex = index
+        return index
     }
 
     /// 这首歌在本机缓存里有没有封面(collector 从网易云/QQ/Apple 解析出来的那张)。
@@ -142,11 +167,58 @@ public enum EnrichCacheReader {
         if let s = all[key]?.coverURL, let url = URL(string: s) { return url }
         // 跟 lookup 同一个理由:条目可能已经被合并到另一个写法下了。
         if let s = looseMatch(key, in: all)?.coverURL, let url = URL(string: s) { return url }
-        if let s = coverByArtistTitle()[Self.artistTitleKey(artist: artist, title: title)],
+        if let s = Self.coverURLString(in: coverByArtistTitle(), artist: artist, title: title),
            let url = URL(string: s) {
             return url
         }
         return nil
+    }
+
+    /// 在"忽略专辑"的封面索引里查一行:先精确歌手写法,再退到**合唱 credit 归并**写法。
+    /// 纯函数,selftest 直接覆盖。
+    ///
+    /// 为什么要退这一步(2026-08-20 用户报「最近记录里这几首没封面」):同一次收听会以两种
+    /// 歌手写法存在 —— 本机缓存 key 用的是播放器逐曲 credit(`英雄联盟/Sara Skinner`、
+    /// `Edouard Brenneisen & 英雄联盟`),而 Last.fm 那一行记的是主歌手(`英雄联盟`、
+    /// `Edouard Brenneisen`)。前两级(归一化 key 精确 / looseKey)都救不了:looseKey 只把
+    /// 分隔符变体折成 `&`、不会把合唱者**去掉**。实测那一屏 6 首缺封面的行在这一级下全部
+    /// 命中,而两首本来就有封面的对照行在这一级前就已经命中(所以加这级不会改变它们)。
+    public nonisolated static func coverURLString(in index: [String: String],
+                                                  artist: String, title: String) -> String? {
+        if let s = index[artistTitleKey(artist: artist, title: title)] { return s }
+        let merged = ArtistCredit.mergeArtist(artist)
+        guard merged != artist else { return nil }
+        return index[artistTitleKey(artist: merged, title: title)]
+    }
+
+    /// 把封面 URL 换成"能拿到原图"的形态。
+    ///
+    /// 为什么需要它:collector 存进缓存的网易云封面 URL 尾巴上带着 `?param=600y600`
+    /// (给列表里 26pt 的小图用,省流量)。而网易云那个 param **只降不升** ——
+    /// 2026-08-17 实测:一张原生 800×800 的封面带 `param=600y600` 拿回来就是 600×600
+    /// (`param=1200y1200` 也还是 800,它不上采样);另一张原生 495×495 的,带不带 param
+    /// 都是 495。所以对"要大图"的消费方(歌词窗口那张最大 460pt = 920px 的封面卡),
+    /// 那个 param 是在白扔分辨率,去掉才拿得到原图。
+    ///
+    /// 只对网易云动手:别的图源(Apple/QQ)的查询参数未经核实,不能假定去掉也没事 ——
+    /// 有些图床的尺寸段就藏在参数里,去掉可能直接 404。
+    ///
+    /// nonisolated:纯 URL 换算,不碰任何静态缓存,selftest 要在非主线程上下文里断言它。
+    public nonisolated static func nativeSizedCoverURL(_ url: URL) -> URL {
+        // 真实主机是 p1/p2/p4.music.126.net。判据写成"等于或以 . 分隔的子域",而不是光
+        // hasSuffix("music.126.net") —— 后者连 evilmusic.126.net 都会当成网易云。
+        guard let host = url.host,
+              host == "music.126.net" || host.hasSuffix(".music.126.net")
+        else { return url }
+        guard var comps = URLComponents(url: url, resolvingAgainstBaseURL: false),
+              let items = comps.queryItems, !items.isEmpty
+        else { return url }
+        let kept = items.filter { $0.name != "param" }
+        // 只剩空数组时把整个 query 去掉,而不是留一个尾巴上的 "?" ——
+        // 后者虽然多数服务器也认,但拼出来的字符串跟"没有查询串"不是同一个,
+        // 会让 URLCache/内存缓存把它当成另一个 key。
+        comps.queryItems = kept.isEmpty ? nil : kept
+        return comps.url ?? url
     }
 
     /// "歌手|歌名"(小写、去首尾空白)。跟 LastfmStatsService.playCountKey 同一套口径。
@@ -160,38 +232,180 @@ public enum EnrichCacheReader {
     /// 都重建 —— 「最近播放」一页 100 行,每行都重扫几百条缓存就白烧一遍 CPU。
     private static func coverByArtistTitle() -> [String: String] {
         if let cachedCoverIndex { return cachedCoverIndex }
-        var index: [String: String] = [:]
+        var covers: [String: String] = [:]
         for (key, entry) in cachedEntries ?? [:] {
             guard let cover = entry.coverURL, !cover.isEmpty else { continue }
-            let parts = key.split(separator: "|", maxSplits: 2, omittingEmptySubsequences: false)
-            guard parts.count == 3 else { continue }
-            // 同一首歌出现在多张专辑里时先到先得:都是这首歌的封面,选哪张都不算错。
-            index[Self.artistTitleKey(artist: String(parts[0]), title: String(parts[1]))] = cover
+            covers[key] = cover
         }
+        let index = Self.coverIndexByArtistTitle(covers)
         cachedCoverIndex = index
         return index
     }
 
-    private static func loadEntries() -> [String: EnrichCacheEntry]? {
-        let mtime = (try? FileManager.default.attributesOfItem(atPath: cacheURL.path))?[.modificationDate] as? Date
-        if let mtime, mtime == cachedMTime, let cachedEntries {
-            return cachedEntries
+    /// 从「缓存 key → 封面 URL」建出忽略专辑的封面索引。纯函数,selftest 直接覆盖。
+    ///
+    /// 每个条目进**两个**键:歌手写法原样的精确键,以及合唱 credit 归并到主歌手之后的别名键
+    /// (见 coverURLString 里为什么需要它)。别名只填精确键没占的位置 —— 精确写法永远优先,
+    /// 别让一条合唱条目的封面盖掉同名单人条目自己的封面。
+    ///
+    /// 按 key 排序遍历:同一首歌出现在多张专辑里时"先到先得"(都是这首歌的封面,选哪张都不
+    /// 算错),但 Dictionary 的遍历顺序每次进程启动都不一样 —— 不定序的话同一份缓存在两次
+    /// 启动里可能给出不同的图,是个查起来很费劲的"偶发不一致"。
+    public nonisolated static func coverIndexByArtistTitle(_ covers: [String: String]) -> [String: String] {
+        var index: [String: String] = [:]
+        var aliases: [String: String] = [:]
+        for key in covers.keys.sorted() {
+            guard let cover = covers[key], !cover.isEmpty else { continue }
+            let parts = key.split(separator: "|", maxSplits: 2, omittingEmptySubsequences: false)
+            guard parts.count == 3 else { continue }
+            let artist = String(parts[0]), title = String(parts[1])
+            let exact = artistTitleKey(artist: artist, title: title)
+            if index[exact] == nil { index[exact] = cover }
+            let alias = artistTitleKey(artist: ArtistCredit.mergeArtist(artist), title: title)
+            if alias != exact, aliases[alias] == nil { aliases[alias] = cover }
         }
-        guard let data = try? Data(contentsOf: cacheURL) else {
+        for (key, cover) in aliases where index[key] == nil { index[key] = cover }
+        return index
+    }
+
+    /// 缓存文件的 mtime。给"要不要重算派生表"这类判断用 —— 调用方自己存一份上次的值,
+    /// 变了才重算(见 LastfmStatsService.refreshLocalCoversIfCacheChanged)。
+    public static func cacheModifiedAt() -> Date? {
+        (try? FileManager.default.attributesOfItem(atPath: cacheURL.path))?[.modificationDate] as? Date
+    }
+
+    // ---- 解码调度(2026-08-20 性能审计重构) --------------------------------------
+    //
+    // 问题形状:缓存是全库单文件(现 ~11.6MB/900+ 条,设计上永不清理、单调增长),collector
+    // 给**任何一首歌**写盘(新歌解析/译文回填/重打分/专辑预取最多 30 首逐个落盘)都 bump
+    // mtime——原来 mtime 一变就在 @MainActor 上同步整读+decode,release 实测 32-47ms/次,
+    // 专辑预取期约每 2s 一停,正撞 20Hz tick 和 30Hz 逐字填色,是播放中肉眼可见卡顿的最大
+    // 单一来源。
+    //
+    // 现在:mtime 变化时**立即返回旧缓存**(与歌词本来就异步到达的语义一致),同时起一个
+    // 带世代号的后台解码,完成后回主线程原子替换并经 onContentAdopted 回捅一次 poll ——
+    // 陈旧窗口 ≈ 解码时长(几十 ms)+一次 poll 往返,不是被动等下一拍。调用方
+    // (LocalPlaybackSource.apply)据 decodedContentVersion(**已解码代**的 mtime,不是
+    // 文件即时 mtime)判断"要不要重灌引擎"——后台解码完成让版本推进,下一拍自然触发
+    // reload 并命中新缓存。⚠️ 不能拿文件 mtime 当触发键:stale 返回窗口里 mtime 已变而
+    // 内容未换,拿它触发会把 lastEnrichMTime 提前推进,后台解码完成后再没有任何东西触发
+    // reload,新歌词永远不上屏。
+    //
+    // 两个例外仍走同步解码:①首次(cachedEntries == nil,冷启动/内存压力清空后)——保住
+    // "启动即有词",一次 ~40ms 在启动期无感;②reloadNow()(「歌词管理」保存/删除后的
+    // 强制重读)——用户显式操作,必须立刻读到刚写的内容,50ms 可接受,且推进世代号把
+    // 在飞的旧后台结果作废(对抗核实钉的豁免入口)。
+    // 解码失败(文件损坏/半写状态)保留旧缓存不清空——下一拍 mtime 仍不等,自然重试。
+
+    /// 「当前已解码内容」对应的文件 mtime。给 apply() 当重灌触发键(见上面那段注释)。
+    public static var decodedContentVersion: Date? { cachedMTime }
+
+    /// 每拍 poll 调一次:stat 文件,内容落后时安排解码(首次同步、其余后台)。
+    public static func refreshIfNeeded() {
+        let mtime = fileModificationDate
+        if mtime == cachedMTime { return }
+        guard mtime != nil else {
+            // 文件被删了(几乎只发生在手动清理):同步清空,行为与旧实现一致。
             cachedMTime = nil
             cachedEntries = nil
             cachedCoverIndex = nil
-            return nil
+            cachedLooseIndex = nil
+            return
         }
-        guard let all = try? JSONDecoder().decode([String: EnrichCacheEntry].self, from: data) else {
+        if cachedEntries == nil {
+            decodeSynchronously()
+        } else {
+            kickBackgroundDecode()
+        }
+    }
+
+    /// 同步重读(「歌词管理」保存/删除后由 forceReloadLyricsForCurrentTrack 调)。
+    public static func reloadNow() {
+        decodeGeneration += 1 // 作废在飞的后台解码结果
+        inFlightGeneration = nil
+        decodeSynchronously()
+    }
+
+    private static func decodeSynchronously() {
+        // mtime 取读文件**之前**的:rename 发生在 stat 与 read 之间时,读到的是更新的内容
+        // 而记的是旧 mtime——下一拍会再解一次,方向安全;反过来记新 mtime 配旧内容会把
+        // 一版内容永久漏掉。
+        let mtime = fileModificationDate
+        guard let data = try? Data(contentsOf: cacheURL),
+              let all = try? JSONDecoder().decode([String: EnrichCacheEntry].self, from: data)
+        else {
             cachedMTime = nil
             cachedEntries = nil
             cachedCoverIndex = nil
-            return nil
+            cachedLooseIndex = nil
+            return
         }
+        adopt(entries: all, mtime: mtime)
+    }
+
+    private static func kickBackgroundDecode() {
+        guard inFlightGeneration == nil else { return } // 在飞的完成后,下一拍 poll 自然再 kick(2s 节拍天然节流)
+        decodeGeneration += 1
+        let gen = decodeGeneration
+        inFlightGeneration = gen
+        let url = cacheURL
+        Task.detached(priority: .utility) {
+            let mtime = (try? FileManager.default.attributesOfItem(atPath: url.path))?[.modificationDate] as? Date
+            let decoded: [String: EnrichCacheEntry]? = (try? Data(contentsOf: url))
+                .flatMap { try? JSONDecoder().decode([String: EnrichCacheEntry].self, from: $0) }
+            await MainActor.run {
+                if inFlightGeneration == gen { inFlightGeneration = nil }
+                guard gen == decodeGeneration else { return } // 被 reloadNow/压力清空顶掉
+                guard let decoded else { return }             // 失败保留旧缓存,下一拍重试
+                adopt(entries: decoded, mtime: mtime, notify: true)
+            }
+        }
+    }
+
+    /// 后台解码采纳新内容后的通知钩子(LocalPlaybackSource 注册成"捅一次 poll")——
+    /// 不加它的话,内容推进要等下一拍 poll 才被看见,陈旧窗口是**两拍**(kick 一拍 +
+    /// 发现一拍):播放档 ~4s、暂停档 ~12s,"暂停看这句歌词等译文"这个典型场景感知
+    /// 明显变慢(对抗核实抓出的口径差)。钩子只在真的采纳了新内容时调。
+    public static var onContentAdopted: (() -> Void)?
+
+    private static func adopt(entries: [String: EnrichCacheEntry], mtime: Date?, notify: Bool = false) {
         cachedMTime = mtime
-        cachedEntries = all
-        cachedCoverIndex = nil // 内容换了,索引跟着作废,下次要用时按新内容重建
-        return all
+        cachedEntries = entries
+        cachedCoverIndex = nil  // 内容换了,派生索引跟着作废,下次要用时按新内容重建
+        cachedLooseIndex = nil
+        if notify { onContentAdopted?() }
+    }
+
+    /// 内存压力时把全量缓存让出去(解码后的全曲库歌词字符串常驻 ~21MB,而稳态消费只有
+    /// 当前 1 个 key)。清空 = 回到冷启动态,下一拍 poll 同步重建。⚠️ 如实说明让出的
+    /// 时效(对抗核实订正):**有快照在轮询**的状态下,下一拍(2-10s)就会冷启动式重建,
+    /// 让出只有一拍;真正长效的让出发生在**空闲态**(无播放时 poll 是 10s 档且 lookup
+    /// 不消费)。压力事件罕见,一次 ~40ms 重建换周期性让出仍是划算的。
+    /// 世代号必须一并推进:不推进的话,清空瞬间还在飞的后台解码回来会把刚让出的缓存
+    /// 原样灌回,极端时序(清空→冷路径同步解到新版→更旧的在飞结果后到)还会把内容
+    /// 倒退一版(对抗核实抓出的竞态)。
+    public static func installMemoryPressureRelief() {
+        guard memoryPressureSource == nil else { return }
+        let source = DispatchSource.makeMemoryPressureSource(eventMask: [.warning, .critical], queue: .main)
+        source.setEventHandler {
+            MainActor.assumeIsolated {
+                decodeGeneration += 1
+                inFlightGeneration = nil
+                cachedMTime = nil
+                cachedEntries = nil
+                cachedCoverIndex = nil
+                cachedLooseIndex = nil
+            }
+        }
+        source.resume()
+        memoryPressureSource = source
+    }
+
+    private static func loadEntries() -> [String: EnrichCacheEntry]? {
+        // 常规读取路径不再自己 stat/解码:poll 每拍的 refreshIfNeeded() 负责推进内容。
+        // 这里兜一层"从未加载过"(App 启动后第一次消费先于第一拍 poll,或设置窗的
+        // LastfmStatsService 独立调进来)的同步初始化。
+        if cachedEntries == nil { decodeSynchronously() }
+        return cachedEntries
     }
 }

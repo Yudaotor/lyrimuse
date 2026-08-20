@@ -70,13 +70,36 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     // 迷你进度条这部分补充内容。稳态(false)本身已经是"歌名+控制+当前歌词"完整可用的
     // 一套,这个状态只影响"要不要在下面多展开一块",不影响稳态内容本身是否显示。
     @Published private(set) var isExpanded: Bool = false
+    /// 当前有没有在播放。由 isPlayingObserver 写入,值取 sink 的**参数**——不能回头去读
+    /// PlaybackCoordinator 的存储属性,@Published 在 willSet 时机发布,那一刻读到的还是
+    /// 旧值(本项目已实测踩过两次,见下面 isPlayingObserver 处的注释)。
+    ///
+    /// 单独存一份而不是每次现读,是为了让下面的 isCollapsed 能写成计算属性。
+    @Published private(set) var isPlayingNow: Bool = false
+
     // 当前没有在播放、也没有 hover 展开时为 true——这时窗口收缩到真实刘海本身的大小
     // (无真刘海屏幕退到 collapsedFallbackWidth 那个兜底胶囊宽度),歌名/控制按钮/歌词
     // 这一整套常显内容完全不渲染,单纯是一小块跟屏幕硬件本身融为一体的黑色区域。
-    // NotchLyricsView 读这个属性决定要不要渲染 topRow/lyricRow,跟窗口本身的尺寸
-    // (recomputeGeometry 里同一份 collapsed 判断)保持单一数据源,不在两处各自算一遍
-    // 容易失焦。
-    @Published private(set) var isCollapsed: Bool = false
+    // NotchLyricsView 读这个属性决定要不要渲染 topRow/lyricRow。
+    //
+    // ⚠️ 2026-08-17 从存储属性改成**计算属性**,修的是"暂停时鼠标移上去没反应"这个 bug:
+    // 它原来只在 recomputeGeometry() 里赋值,而 hover 改 isExpanded 的那条路径
+    // (setExpandedFromWindow)刻意不调 recomputeGeometry("窗口尺寸跟展开与否无关了")。
+    // 于是暂停状态下移上去,isExpanded 确实变成了 true、isCollapsed 却还留在 true —— 卡片
+    // 高度走 NotchWindowRoot.cardHeight 的 collapsed 分支原地不动,内容也照样不渲染,
+    // 看着就是"灵动岛对 hover 毫无反应",而文件顶部承诺的"hover 到这一小块上依然能重新
+    // 展开出完整内容(包括播放按钮,可以用来重新播放)"整个落空。
+    //
+    // 原来那版注释说它跟窗口尺寸"保持单一数据源、不在两处各自算一遍" —— 单一数据源确实
+    // 做到了,但**同步**没有:公式只有一份,却挂在一条 hover 时根本不会走的路径上。写成
+    // 计算属性之后,两个输入哪个变它都跟着变,不存在"忘了重算"这回事。
+    // 2026-08-19 加入广告插播维度:Spotify 放广告时同样收起(用户拍板"和暂停一样
+    // 缩回去")——广告没有歌词可展示,歌名位只显示「广告中」(见 NotchLyricsView.topRow),
+    // hover 仍可展开(跟暂停态一致,里面有控制按钮可以切歌跳过广告)。
+    var isCollapsed: Bool { (!isPlayingNow || isAdBreakNow) && !isExpanded }
+
+    /// Spotify 广告插播中。写入规则与 isPlayingNow 相同:只取 sink 参数值。
+    @Published private(set) var isAdBreakNow: Bool = false
 
     /// 稳态/展开态卡片的宽度(= contentWidth(baseWidth:notchWidth:) 的结果)。
     /// 窗口本身常驻这个宽度,卡片在里面按形态变宽变窄,见 NotchWindowRoot。
@@ -127,6 +150,7 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     private static var expandedExtraHeight: CGFloat { NotchMetrics.expandedExtraHeight }
 
     private var isPlayingObserver: AnyCancellable?
+    private var adBreakObserver: AnyCancellable?
     private var screenParamsObserver: NSObjectProtocol?
     // 一个真实的坑:窗口 hover 展开/收起时靠 autoresizingMask 让 NSHostingView
     // 跟着 window.setFrame 自动同步尺寸——AppKit 层面这个同步是真的发生了(window.frame/
@@ -168,6 +192,10 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         let hosting = NSHostingView(rootView: NotchWindowRoot(controller: self))
         hosting.frame = NSRect(origin: .zero, size: placeholder)
         hosting.autoresizingMask = [.width, .height]
+        // 尺寸完全由 recomputeGeometry 手动管理(窗口和 hostingView 的 frame 都是),
+        // 默认 .standardBounds 的 intrinsic 尺寸汇报没有任何消费者 —— 跟悬浮窗
+        // (LyricsOverlayWindowController)同一天落地的同款卫生项。
+        hosting.sizingOptions = []
         panel.contentView = hosting
         hostingView = hosting
 
@@ -177,10 +205,18 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         // (外接显示器基本不会有刘海)——重新算一遍,思路照抄经典悬浮窗
         // LyricsOverlayWindowController.restoredOrigin() 里"配置可能变了、需要重新
         // 夹回可见区域"那段既有处理。系统触发的几何变化不需要过渡动画,直接跳变。
-        screenParamsObserver = NotificationCenter.default.addObserver(
-            forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main
-        ) { [weak self] _ in
-            Task { @MainActor in self?.recomputeGeometry(animate: false) }
+        //
+        // 只有主实例注册 —— 镜像副本的屏幕参数处理统一由 NotchMirrorManager 的同款
+        // 通知驱动(refresh → syncStateFromSettings → recomputeGeometry),副本再注册
+        // 一份就是同一次插拔跑两遍全量几何(2026-08-19 性能审计);副本被钉的屏拔掉时,
+        // 它自己的 observer 也只会按 resolvedScreen()==nil 空转,真正的清理本来就在
+        // manager 那侧。
+        if pinnedScreenID == nil {
+            screenParamsObserver = NotificationCenter.default.addObserver(
+                forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main
+            ) { [weak self] _ in
+                Task { @MainActor in self?.recomputeGeometry(animate: false) }
+            }
         }
 
         // 跟 LyricsOverlayWindowController 同一个坑同一个修法:sink 闭包里必须用参数
@@ -189,12 +225,18 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         // 已经发布,这个时间点读存储属性拿到的是上一次的旧值,细节见
         // LyricsOverlayWindowController.swift 同一处注释,不重复展开。
         isPlayingObserver = PlaybackCoordinator.shared.$isPlayingSmoothed.sink { [weak self] isPlaying in
+            // 收缩与否(isCollapsed)现在是从这个属性算出来的计算属性,写进来就等于生效,
+            // 不用再触发一次几何重算。同一个坑同一个修法:存的必须是 sink 参数里的
+            // isPlaying,不能回头读 PlaybackCoordinator 的存储属性(那一刻还是旧值)。
+            self?.isPlayingNow = isPlaying
             self?.updateActualVisibility(isPlayingNow: isPlaying)
-            // 当前没有在播放(且没 hover 展开)时收缩到刘海本身大小——同一个坑同一个
-            // 修法,必须把 sink 参数里的 isPlaying 显式传下去,不能让 recomputeGeometry
-            // 内部再去读 PlaybackCoordinator.shared.isPlayingNow 这个存储属性本身
-            // (这一刻读到的还是切换前的旧值,原因见上面 isPlayingObserver 声明处注释)。
-            self?.recomputeGeometry(animate: true, isPlayingOverride: isPlaying)
+        }
+
+        // 广告插播 → 收起(isCollapsed 的第三个输入)。同一个 willSet 坑同一个修法:
+        // 存 sink 参数值,绝不回头读 PlaybackCoordinator 的存储属性。写入 @Published
+        // 即生效,几何不用重算(窗口常驻最大尺寸,收起只是内容层的事,同 isPlayingNow)。
+        adBreakObserver = PlaybackCoordinator.shared.$isCurrentTrackAdBreak.sink { [weak self] isAd in
+            self?.isAdBreakNow = isAd
         }
 
         // 宽度固定后,recomputeGeometry 的结果不再跟 currentLine 有任何关系,不需要
@@ -247,10 +289,14 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     // 没有延迟的话灵动岛就闪一下,很扎眼;反过来光标停在展开态卡片的下边缘时,内容
     // 高度变化会让 hover 状态在边界上来回抖,收起延迟能把这种抖动吸收掉。
     //
-    // 值取自 boringNotch 的实测手感(它默认进入 0.3s / 离开 0.1s),这里进入压到 0.2s:
+    // 值取自 boringNotch 的实测手感(它默认进入 0.3s / 离开 0.1s),这里进入先压到 0.2s:
     // 我们展开出来的是"下一句 + 迷你进度条",是想看就得马上看到的信息,不像它那样
-    // 展开出一整块控制面板。
-    private static let hoverEnterDelay: TimeInterval = 0.2
+    // 展开出一整块控制面板。2026-08-17 再压到 0.12s(用户反馈"唤起还是稍微长了点")——
+    // 展开本身还有一条 0.38s 的弹簧,感知延迟是这两段之和,砍在意图判定这一段最划算。
+    //
+    // 不再往下压了:这个延迟唯一的作用就是滤掉"鼠标只是路过刘海下方"的误触发,
+    // 归零的话光标横穿屏幕顶部就会一路把灵动岛捅开。
+    private static let hoverEnterDelay: TimeInterval = 0.12
     private static let hoverExitDelay: TimeInterval = 0.1
     private var pendingHoverWork: DispatchWorkItem?
 
@@ -295,12 +341,19 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         recomputeGeometry(animate: false)
     }
 
+    /// 上一次实际执行的显隐动作,updateActualVisibility 的判等守卫用。nil = 还没执行过。
+    /// orderFrontRegardless 不是免费的(一次 WindowServer 重排序事务),而这个函数挂在
+    /// 播放状态翻转/设置同步/镜像 syncAll 多条路径上,值没变就别重复叫(2026-08-19)。
+    private var lastAppliedShouldShow: Bool?
+
     private func updateActualVisibility(isPlayingNow: Bool) {
         // ⚠️ 开着「暂停/无播放时隐藏」时,暂停就整个 orderOut —— 那样**看不到收起动画**
         // (窗口都没了,还收什么)。灵动岛的收起态本身只占菜单栏那一条高度、不额外占屏,
         // 所以想看到"歌词行卷回顶行"的效果,得把这个设置关掉。这是设置本身的语义,不是 bug:
         // 有人就是要暂停后连那条顶行都别留。
         let shouldShow = isVisible && (!hideWhenNotPlaying || isPlayingNow)
+        guard shouldShow != lastAppliedShouldShow else { return }
+        lastAppliedShouldShow = shouldShow
         // orderFrontRegardless(),不是 orderFront(nil)——这个 App 是 .accessory 策略、
         // 从不激活成前台 App,参照的真实开源实现(NotchDrop/DynamicNotchKit)贴刘海用的
         // 都是这个,不看"当前是否是活跃 App"这个前提就把窗口调到最前。
@@ -335,7 +388,18 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
            rightArea.minX > leftArea.maxX {
             let centerX = (leftArea.maxX + rightArea.minX) / 2
             let notchWidth = rightArea.minX - leftArea.maxX
-            return NotchGeometry(notchHeight: notchHeight, centerX: centerX, notchWidth: notchWidth)
+            // ⚠️ 高度取 safeAreaInsets.top 和**菜单栏条高**里的大者。
+            //
+            // 2026-08-19 实测这台内建屏:safeAreaInsets.top = 32,而菜单栏条
+            // (frame.maxY - visibleFrame.maxY)= **33** —— 系统这两个数差 1pt。收起态那条
+            // 黑带的高度就是这个值,取 32 的话它的底边比刘海/菜单栏的底边高 1pt(retina 上
+            // 是 2 个物理像素的一道发丝),看着就是"比刘海短了一截"。取大者之后底边跟菜单栏
+            // 齐平,黑带和刘海连成一片。
+            //
+            // 只会变大不会变小,所以不会反过来压住窗口内容;contentTopInset 跟着 +1,
+            // 歌词行相应往下 1pt,更稳妥(绝不会被刘海压到)。
+            return NotchGeometry(notchHeight: max(notchHeight, menuBarHeight(of: screen)),
+                                 centerX: centerX, notchWidth: notchWidth)
         }
         // 无真刘海:黑条高度跟这块屏的菜单栏对齐,视觉上跟系统融为一体。
         return NotchGeometry(
@@ -394,57 +458,97 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
 
     /// 把当前偏好重新应用一遍。副本没有自己的设置入口(设置页那些控件只调 `.shared`),
     /// 所以偏好变化时由 NotchMirrorManager 挨个调这个方法把它们同步过来。
-    func syncStateFromSettings() {
+    ///
+    /// ⚠️ 三个参数是给**设置变化的 sink** 用的:@Published 在 willSet 时机发布,sink 里
+    /// 回读 AppSettings 存储属性拿到的是**旧值**(本文件 isPlayingObserver 处同款坑;
+    /// 2026-08-19 核实这里原来就踩着 —— 拖宽度滑杆时镜像恒滞后一档、隐藏开关同步到翻转前
+    /// 的状态)。触发源不在变化中的字段传 nil 回读即可(屏幕插拔/开关翻转这些时机,其余
+    /// 设置的存储值是稳定的)。各写入点判等 —— 原来 6 个 @Published 不判等地全量重写,
+    /// 值没变也广播 objectWillChange。
+    func syncStateFromSettings(
+        notchEnabled: Bool? = nil,
+        hideWhenNotPlaying hide: Bool? = nil,
+        hideDuringCapture: Bool? = nil,
+        contentWidth: CGFloat? = nil
+    ) {
         let settings = AppSettings.shared
-        isVisible = settings.notchOverlayEnabled
-        hideWhenNotPlaying = settings.hideWhenNotPlaying
-        setHiddenFromCapture(settings.hideDuringScreenCapture)
+        let visible = notchEnabled ?? settings.notchOverlayEnabled
+        if isVisible != visible { isVisible = visible }
+        let hideValue = hide ?? settings.hideWhenNotPlaying
+        if hideWhenNotPlaying != hideValue { hideWhenNotPlaying = hideValue }
+        let captureHidden = hideDuringCapture ?? settings.hideDuringScreenCapture
+        let sharing: NSWindow.SharingType = captureHidden ? .none : .readWrite
+        if window?.sharingType != sharing { window?.sharingType = sharing }
         updateActualVisibility(isPlayingNow: PlaybackCoordinator.shared.isPlayingSmoothed)
-        recomputeGeometry(animate: false)
+        recomputeGeometry(animate: false, contentWidth: contentWidth)
     }
 
-    /// 副本销毁前调:先把窗口收走,再断掉订阅。
+    /// 副本销毁前调:先把窗口收走,再断掉订阅,最后**破掉保留环**。
+    ///
+    /// ⚠️ 最后两行不是可选的清理,是释放的前提(2026-08-19 性能审计坐实的真泄漏):
+    /// controller.hostingView 强持 NSHostingView,其 rootView(NotchWindowRoot)的
+    /// @ObservedObject controller 又强持回来 —— 教科书式两节点保留环。NotchMirrorManager
+    /// 把 mirrors[id] 置 nil 后没人再引用这套对象,但环内互持,整套 NSPanel + SwiftUI 树
+    /// (还可能钉着一张旧封面)永久泄漏,且泄漏树仍挂在 PlaybackCoordinator/AppSettings/
+    /// NotchTransientCenter 的 objectWillChange 扇出里;拔屏/合盖/开关「所有屏幕」的
+    /// 插拔循环会无界累积。断开 contentView/hostingView 这一向,环即解体。
+    /// (主实例 .shared 是有意常驻的单例、从不 teardown,不受影响。)
     func teardown() {
         window?.orderOut(nil)
         isPlayingObserver?.cancel()
         isPlayingObserver = nil
+        adBreakObserver?.cancel()
+        adBreakObserver = nil
         if let screenParamsObserver {
             NotificationCenter.default.removeObserver(screenParamsObserver)
             self.screenParamsObserver = nil
         }
         pendingHoverWork?.cancel()
         pendingHoverWork = nil
+        window?.contentView = nil
+        hostingView = nil
     }
 
     // 顶边固定贴在屏幕最顶端(screen.frame.maxY)、水平居中对齐刘海中心点、总高度 =
     // 刘海高度 + 内容行高度(+ hover 展开时再加 expandedExtraHeight)、宽度固定(见
     // contentWidth(baseWidth:notchWidth:))。
-    // isPlayingOverride 只在 isPlayingObserver 的 sink 闭包里传——那个时间点闭包参数
-    // 才是真正的新值,读存储属性本身拿到的还是旧值(见 init() 里那处注释)。其余调用
-    // 场景(screenParamsObserver/setExpanded/init 本身)都不在那个时序陷阱里,直接读
-    // PlaybackCoordinator.shared.isPlayingNow 就是准确的当前值。
-    private func recomputeGeometry(animate: Bool, isPlayingOverride: Bool? = nil) {
+    // 2026-08-17 去掉了 isPlayingOverride 参数:它唯一的用途是算 isCollapsed,而那个已经
+    // 改成计算属性了(见那边的注释)。这个函数现在跟播放状态完全无关,自然也就不再需要
+    // 绕开 @Published willSet 的旧值陷阱。
+    /// contentWidth:非 nil = 调用方正处于 notchContentWidth 的 willSet 窗口(镜像
+    /// sink 那条路),必须用传入值;nil = 回读存储值(设置页滑杆对 .shared 的调用发生在
+    /// 赋值语句之后,以及 init/屏幕插拔这些时机,存储值都是稳定的)。
+    private func recomputeGeometry(animate: Bool, contentWidth: CGFloat? = nil) {
         guard let window, let screen = resolvedScreen() else { return }
         let geo = Self.geometry(for: screen)
-        contentTopInset = geo.notchHeight
-        notchWidth = geo.notchWidth
+        // 四个 @Published 全部判等再写(2026-08-19):这个函数挂在设置同步/屏幕插拔/镜像
+        // syncAll 多条路径上,绝大多数调用几何根本没变,不判等就是每次白发四条
+        // objectWillChange 打醒整卡视图树。
+        if contentTopInset != geo.notchHeight { contentTopInset = geo.notchHeight }
+        if notchWidth != geo.notchWidth { notchWidth = geo.notchWidth }
         // 兜底同样读缓收版:收缩判定必须跟上面的可见性判定同一口径,否则会出现
         // "窗口还在但已经缩成刘海"或反过来的错配。
-        let isPlayingNow = isPlayingOverride ?? PlaybackCoordinator.shared.isPlayingSmoothed
-        // 没在播放、也没 hover 展开——收缩到刘海本身大小,常显内容整套不渲染(见
-        // NotchLyricsView 里对 controller.isCollapsed 的判断)。是真的缩到刘海本身
-        // 大小,不是把常显内容那份宽度缩到下限——下限本身仍然要给两只耳朵留够按钮/
-        // 歌名的空间。
-        isCollapsed = !isPlayingNow && !isExpanded
-        steadyCardWidth = Self.contentWidth(
-            baseWidth: AppSettings.shared.notchContentWidth, notchWidth: geo.notchWidth)
-        collapsedCardWidth = geo.notchWidth > 0 ? geo.notchWidth : Self.collapsedFallbackWidth
+        // 这里不再算 isCollapsed —— 它已经是从 isPlayingNow/isExpanded 现算的计算属性
+        // (2026-08-17 改,理由见那边的注释)。几何重算只管刘海尺寸和卡片宽度。
+        let newSteady = Self.contentWidth(
+            baseWidth: contentWidth ?? AppSettings.shared.notchContentWidth,
+            notchWidth: geo.notchWidth)
+        if steadyCardWidth != newSteady { steadyCardWidth = newSteady }
+        let newCollapsed = geo.notchWidth > 0 ? geo.notchWidth : Self.collapsedFallbackWidth
+        if collapsedCardWidth != newCollapsed { collapsedCardWidth = newCollapsed }
         // 窗口恒为**最大**形态(展开态)的尺寸,不再随收起/稳态/展开三种形态改。三种形态
         // 现在是卡片在这个固定窗口里自己变大变小(NotchWindowRoot),窗口只在屏幕几何或
         // 宽度设置变化时才动。
         //
         // ⚠️ 多出来的那片区域必须保持纯透明、不能有任何命中形状 —— 它压在系统菜单栏上,
         // 详见 NotchWindowRoot 顶部那段(带实测结论)。
+        // 窗口尺寸 = 展开态卡片本身,不留额外余量。
+        //
+        // ⚠️ 2026-08-17 这里短暂加过一圈"投影余量":当时展开态卡片带 .shadow,而窗口跟
+        // 卡片严丝合缝,阴影被窗口的矩形边界硬裁,在底部两个圆角外侧留下两块直角残影。
+        // 留出余量确实修好了那个直角,但阴影完整画出来之后整个卡片外侧糊着一层灰,比原
+        // 来更糟 —— 于是投影整个撤掉(见 NotchLyricsView 的 body 末尾),这圈余量也跟着
+        // 撤回。**要加投影就得同时加回余量**,两件事绑在一起,别只做一半。
         let size = NSSize(
             width: steadyCardWidth,
             height: geo.notchHeight + Self.contentHeight + Self.expandedExtraHeight)
@@ -454,7 +558,10 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
             width: size.width,
             height: size.height
         )
-        window.setFrame(frame, display: true, animate: animate)
-        hostingView?.frame = NSRect(origin: .zero, size: size)
+        // 判等同上:setFrame(display: true) 是一次同步重绘 + WindowServer 事务,几何没变
+        // 时纯属白付(镜像 syncAll 的每次触达都会走到这里)。
+        if window.frame != frame { window.setFrame(frame, display: true, animate: animate) }
+        let hostFrame = NSRect(origin: .zero, size: size)
+        if hostingView?.frame != hostFrame { hostingView?.frame = hostFrame }
     }
 }

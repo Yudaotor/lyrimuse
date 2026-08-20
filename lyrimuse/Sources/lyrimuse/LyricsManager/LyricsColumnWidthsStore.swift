@@ -22,11 +22,27 @@ final class LyricsColumnWidthsStore: ObservableObject {
 
     @Published var widths: LyricsColumnWidths {
         didSet {
-            guard widths != oldValue else { return }
-            defaults.set(Double(widths.artist), forKey: Keys.artist)
-            defaults.set(Double(widths.album), forKey: Keys.album)
-            defaults.set(Double(widths.source), forKey: Keys.source)
+            guard widths != oldValue, !isDragging else { return }
+            persistWidths()
         }
+    }
+
+    /// 拖动列宽期间为 true:@Published 照常发布(可见行要实时按新宽重画),但不再逐个
+    /// 鼠标事件往 UserDefaults 写三笔中间态(2026-08-19 性能审计),松手时 endDragging()
+    /// 一次性落盘。reset() 等非拖拽路径不受影响(isDragging 恒为 false 时 didSet 照写)。
+    private var isDragging = false
+
+    func beginDragging() { isDragging = true }
+
+    func endDragging() {
+        isDragging = false
+        persistWidths()
+    }
+
+    private func persistWidths() {
+        defaults.set(Double(widths.artist), forKey: Keys.artist)
+        defaults.set(Double(widths.album), forKey: Keys.album)
+        defaults.set(Double(widths.source), forKey: Keys.source)
     }
 
     private init() {
@@ -45,5 +61,9 @@ final class LyricsColumnWidthsStore: ObservableObject {
         }
     }
 
-    func reset() { widths = LyricsColumnWidths.defaults }
+    func reset() {
+        // 万一上一次拖拽的 onDragEnd 被手势取消吞掉,别让 isDragging 卡住"永不落盘"。
+        isDragging = false
+        widths = LyricsColumnWidths.defaults
+    }
 }

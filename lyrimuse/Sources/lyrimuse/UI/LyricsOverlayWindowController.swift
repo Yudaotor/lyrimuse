@@ -62,6 +62,7 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject 
     private var screenObserver: NSObjectProtocol?
     private var moveDebounceTimer: Timer?
     private var isPlayingObserver: AnyCancellable?
+    private var shadowObserver: AnyCancellable?
 
     // MARK: - 点击穿透 + 悬停热区 + 长按拖动
     //
@@ -114,13 +115,32 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject 
             },
             onControlsFrameChange: { [weak self] rect in
                 self?.updateControlsHotZone(rect)
+            },
+            onControlRectsChange: { [weak self] rects in
+                self?.updateControlRects(rects)
             }
         ))
         hosting.frame = NSRect(origin: .zero, size: size)
         hosting.autoresizingMask = [.width, .height]
+        // 尺寸完全由这边的显式通道驱动(GeometryReader 报高度 → updateHeight →
+        // setFrameAnimated,hosting 用 autoresizingMask 铺满 contentView),macOS 13+
+        // NSHostingView 默认 .standardBounds 的那套 intrinsic 尺寸测量/失效传播没有任何
+        // 消费者 —— 每次换行/开关译文都白做几档 sizeThatFits,显式声明掐掉整条路径。
+        hosting.sizingOptions = []
         panel.contentView = hosting
 
-        installMouseMonitors()
+        // 鼠标监听器不在这里装死 —— 生命周期跟着"实际可见且未锁定"走,见 syncMouseMonitors:
+        // global monitor 会把全系统的指针移动/拖拽事件经 mach IPC 逐个送进本进程,窗口
+        // 隐藏(orderOut)或锁定位置时这套手势整个用不上,不该继续为每次移动付唤醒钱。
+        // 首次装/卸由下面订阅 isPlayingSmoothed 触发的 updateActualVisibility 顺带完成。
+
+        // 窗口阴影跟着"背景卡片"走:默认无背景模式下内容只有细字形(阴影视觉上不可见,
+        // 却要 WindowServer 在每次高度动画帧按 alpha 轮廓重算);开了背景色时阴影是卡片
+        // 的真实投影,不能一刀切关掉 —— 跟 NotchLyricsWindow 直接 hasShadow=false 的取舍
+        // 不同,这边的背景是用户可开关的。sink 订阅时立即回放当前值,初始状态也走这里。
+        shadowObserver = AppSettings.shared.$backgroundIsVisible.sink { [weak self] visible in
+            self?.window?.hasShadow = visible
+        }
 
         // 显示器配置变了(拔插外接屏、改分辨率、改排列)之后重新确认窗口还看得见。
         //
@@ -143,8 +163,12 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject 
             // 每帧都会触发这个通知,而拖动结束时 handleMouseEvent 的 .leftMouseUp
             // 分支已经显式存过一次最终位置——正在拖动("武装"中)时这里的重复调度
             // 只是白白每帧都 invalidate+新建一个 Timer,跳过它减轻拖动路径上的负担。
+            //
+            // 程序性 resize 动画(setFrameAnimated:换行变高/宽度滑杆)同样每动画帧发
+            // 一次 didMove,同样只是白白重建 Timer —— 动画的目标 frame 本来就是这边自己
+            // 算的,不需要经通知回存;最终落点由 setFrameAnimated 的完成回调统一存一次。
             MainActor.assumeIsolated {
-                guard let self, !self.isDragArmed else { return }
+                guard let self, !self.isDragArmed, self.animatingTargetFrame == nil else { return }
                 self.scheduleSavePosition()
             }
         }
@@ -222,6 +246,7 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject 
     private func updateActualVisibility(isPlayingNow: Bool) {
         let shouldShow = isVisible && (!hideWhenNotPlaying || isPlayingNow)
         if shouldShow { window?.orderFront(nil) } else { window?.orderOut(nil) }
+        syncMouseMonitors()
     }
 
     // 锁定位置:彻底停用长按拖动+悬停控制按钮这整套手势。解锁后不是"正常拦截点击"了
@@ -239,6 +264,9 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject 
         } else {
             maybeShowDragHintOnFirstUnlock()
         }
+        // 锁定 = 悬停/长按/拖动这整套手势彻底停用,监听器留着只是继续为全系统每次指针
+        // 移动付 mach IPC + 进程唤醒的钱;解锁再装回来。见 syncMouseMonitors。
+        syncMouseMonitors()
     }
 
     // 见 hasShownDragHintKey 处的注释——这台机器第一次解锁时,在悬浮窗本身短暂弹一条
@@ -327,6 +355,11 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject 
                 // animatingTargetFrame,那时旧动画的完成回调不该把新目标清掉。
                 guard let self, self.animatingTargetFrame == frame else { return }
                 self.animatingTargetFrame = nil
+                // didMove 观察者对程序性动画整段豁免(见 init() 那条 guard),最终落点在
+                // 这里统一存一次 —— setWidth 是保持中心伸缩的,x 会真的变,不存的话重启
+                // 就会还原到调宽前的位置。scheduleSavePosition 落盘前会跟现值比较,高度
+                // 动画(x/顶边都不变)不会产生多余的写。
+                self.scheduleSavePosition()
             }
         })
     }
@@ -348,7 +381,37 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject 
         setFrameAnimated(window, to: newFrame)
     }
 
+    /// 监听器生命周期 = "窗口实际在屏 且 未锁定位置"(2026-08-19 性能审计落地)。
+    ///
+    /// 原来是 init 装一次、只在 deinit 卸载 —— 而这是个 @MainActor 单例,deinit 永不执行,
+    /// 等于本次运行只要开过一次悬浮歌词,global monitor 就永远挂着:WindowServer 把全系统
+    /// **每一次**指针移动/拖拽经 mach IPC 送进本进程、在主线程调度回调,handleMouseEvent
+    /// 开头那两条 guard(锁定/不可见)只省了回调体内的计算,IPC+唤醒这笔钱在 guard 之前
+    /// 就已经花掉。"锁定"和"已隐藏"两种状态下这套手势系统完全用不上,按状态装/卸。
+    /// 调用点:updateActualVisibility(orderFront/orderOut 之后)与 setLocked。
+    private func syncMouseMonitors() {
+        let needed = (window?.isVisible ?? false) && !isPositionLocked
+        if needed {
+            installMouseMonitors()
+        } else {
+            removeMouseMonitors()
+        }
+    }
+
+    private func removeMouseMonitors() {
+        guard globalMouseMonitor != nil || localMouseMonitor != nil else { return }
+        if let globalMouseMonitor { NSEvent.removeMonitor(globalMouseMonitor) }
+        if let localMouseMonitor { NSEvent.removeMonitor(localMouseMonitor) }
+        globalMouseMonitor = nil
+        localMouseMonitor = nil
+        // 卸载这一刻可能正悬停/长按到一半 —— 跟 setLocked 的清理口径一致,不留残留状态。
+        // 已武装的拖动不受影响:performDrag 是同步阻塞调用,跑着的时候到不了这里。
+        cancelPendingPress()
+        if isHoveringForControls { isHoveringForControls = false }
+    }
+
     private func installMouseMonitors() {
+        guard globalMouseMonitor == nil, localMouseMonitor == nil else { return }
         let mask: NSEvent.EventTypeMask = [.mouseMoved, .leftMouseDown, .leftMouseDragged, .leftMouseUp]
         // AppKit 保证这两个监听器的回调固定在安装时所在的线程上调用(这里是主线程)——
         // 用 MainActor.assumeIsolated 就地同步处理,不再经过 Task { @MainActor in ... }
@@ -369,6 +432,67 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject 
         }
     }
 
+    /// 胶囊里每个按钮的**屏幕**矩形。空 = 当前没显示控制排。
+    private var controlRectsScreen: [OverlayControlID: CGRect] = [:]
+
+    /// 执行某个按钮的动作。
+    ///
+    /// 这五个动作全都不依赖 View 的闭包上下文(播放控制是 MusicPlaybackController 的全局
+    /// static、喜欢在 PlaybackCoordinator.shared、锁定在 AppSettings.shared),所以点击改由
+    /// 控制器分发时**不需要**把 action 闭包穿过 PreferenceKey —— 那本来是这个改动里最脏的
+    /// 一块,结果根本不必做。
+    private func performControlAction(_ id: OverlayControlID) {
+        switch id {
+        case .previous: withMusicPermission { MusicPlaybackController.previousTrack() }
+        case .playPause: withMusicPermission { MusicPlaybackController.playPause() }
+        case .next: withMusicPermission { MusicPlaybackController.nextTrack() }
+        // 不套权限守卫:权限检查和乐观更新都在 toggleFavorited() 里一起做了,再套一层会变成
+        // 查两遍权限(原来 LyricsOverlayView 里也是特意绕开 controlButton 的)。
+        case .favorite: PlaybackCoordinator.shared.toggleFavorited()
+        // 锁定位置跟自动化播放控制完全不搭边,同样不套守卫(理由沿用原 lockButton 注释)。
+        case .lock:
+            AppSettings.shared.lockPosition = true
+            setLocked(true)
+        }
+    }
+
+    /// 播放控制三个动作共用的"点了才校验权限"守卫。
+    ///
+    /// 原来在 LyricsOverlayView.controlButton 里,点击改由控制器分发之后搬过来,行为逐字
+    /// 不变:没问过就顺手弹一次系统授权对话框,已经拒绝过就 NSSound.beep() 给一个"没有
+    /// 生效"的听觉反馈。必须用 checkForCurrentPlayerSafely(异步版),同步版的坑见该方法
+    /// 定义处的注释。
+    private func withMusicPermission(_ action: @escaping () -> Void) {
+        Task { @MainActor in
+            guard await MusicAutomationPermission.checkForCurrentPlayerSafely(askIfNeeded: true) else {
+                NSSound.beep()
+                return
+            }
+            action()
+        }
+    }
+
+    /// 把每个按钮的内容坐标矩形转成屏幕矩形。转换口径跟 updateControlsHotZone 完全一致。
+    private func updateControlRects(_ rects: [OverlayControlID: CGRect]) {
+        guard let window, !rects.isEmpty else {
+            if !controlRectsScreen.isEmpty { controlRectsScreen = [:] }
+            return
+        }
+        var out: [OverlayControlID: CGRect] = [:]
+        for (id, rect) in rects where rect != .zero {
+            let windowLocal = CGRect(
+                x: rect.minX,
+                y: window.frame.height - rect.maxY,
+                width: rect.width,
+                height: rect.height
+            )
+            out[id] = window.convertToScreen(windowLocal)
+        }
+        controlRectsScreen = out
+    }
+
+
+
     // 把 LyricsOverlayView 汇报的 SwiftUI 内容坐标(GeometryReader 相对 overlayContent
     // 命名坐标空间量出来的矩形,左上角原点、y 向下,单位跟窗口点数一致——跟 updateHeight
     // 依赖的"GeometryReader 尺寸==窗口内容尺寸"是同一个已验证过的等价关系)转换成
@@ -388,16 +512,18 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject 
         controlsHotZoneScreen = window.convertToScreen(windowLocal)
     }
 
+
+
+
     private func handleMouseEvent(type: NSEvent.EventType) {
         guard let window, !isPositionLocked else { return }
-        // 窗口当前不在屏幕上时直接不处理。两个鼠标监视器(一个 global、一个 local)是在
-        // convenience init 里装一次、只在 deinit 卸载的(见 installMouseMonitors),隐藏悬浮窗
-        // 走的是 window.orderOut(nil),global 那个照旧在收桌面上的点击(local 只看得到派发给
-        // 本 App 的事件,窗口 orderOut 之后真正还在送进来的就是 global 这一路)——而下面
-        // .leftMouseDown 分支判断"点在窗口里吗"用的是 frame.contains(loc),隐藏窗口的 frame
-        // 还停在原处。于是用户在桌面上那块区域按过 longPressThresholdSecs(0.35s)就能把拖动
-        // "武装"起来,armDragIfStillPressed 把 ignoresMouseEvents
-        // 收回 false 并对一个看不见的窗口发起 performDrag,那次点击被悄悄吞掉。
+        // 窗口当前不在屏幕上时直接不处理。监听器的生命周期虽然已经跟着"实际可见且未锁定"
+        // 装/卸(见 syncMouseMonitors),这道 guard 仍然要留:装/卸发生在 orderOut/orderFront
+        // 的那一拍,而事件可能已经在派发队列里排着 —— 没有它的话,下面 .leftMouseDown 分支
+        // 判断"点在窗口里吗"用的是 frame.contains(loc),隐藏窗口的 frame 还停在原处,用户
+        // 在桌面上那块区域按过 longPressThresholdSecs(0.35s)就能把拖动"武装"起来,
+        // armDragIfStillPressed 把 ignoresMouseEvents 收回 false 并对一个看不见的窗口发起
+        // performDrag,那次点击被悄悄吞掉。
         // 顺便把可能残留的长按判定/悬停态清干净(可能正好在按着的时候被隐藏);已经
         // 武装的情况不碰,交给 performDrag 自己的收尾逻辑。
         guard window.isVisible else {
@@ -421,18 +547,19 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject 
             if isHoveringForControls != insideWindow {
                 isHoveringForControls = insideWindow
             }
-            // 只有真的贴在按钮胶囊那一小块热区,才把点击穿透临时收回去,让 SwiftUI
-            // 按钮能正常收到点击;窗口里其它任何地方(包括歌词文字本身)永远穿透。
-            // 正在拖动("武装"中)时不要在这里改 ignoresMouseEvents——armDragIfStillPressed
-            // 已经为了 performDrag 把它收回 false 了,这里如果因为拖动途中飘出热区之外
-            // 又把它设回 true,会打断正在进行中的原生拖动。
-            guard !isDragArmed else { return }
-            let desiredIgnoresMouseEvents = !(insideWindow && insideHotZone)
-            if window.ignoresMouseEvents != desiredIgnoresMouseEvents {
-                window.ignoresMouseEvents = desiredIgnoresMouseEvents
-            }
+            // 这里**不再**碰 ignoresMouseEvents。它恒为 true,唯一例外是长按拖动武装期间
+            // (armDragIfStillPressed 为 performDrag 临时收回 false)。胶囊上的点击改由下面
+            // .leftMouseDown 分支按各按钮矩形自己分发 —— 理由见本节顶部 2026-08-18 那段:
+            // ignoresMouseEvents 是整窗 × 所有事件的一个布尔量,点击要它 false、滚轮要它
+            // true,同一时刻只能满足一个,按位置翻转必然让其中一方受害。
 
         case .leftMouseDown:
+            // 胶囊上的点击由我们自己分发:窗口常年点击穿透,SwiftUI 收不到任何事件。
+            // 必须排在下面那条 guard 之前 —— 那条会因为 insideHotZone 直接 return。
+            if controlsShown, let id = OverlayControlHitTest.control(at: loc, in: controlRectsScreen) {
+                performControlAction(id)
+                return
+            }
             guard frame.contains(loc), !insideHotZone else { return }
             pressStartLocation = loc
             longPressTimer?.invalidate()
@@ -546,7 +673,12 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject 
         moveDebounceTimer?.invalidate()
         let t = Timer(timeInterval: 0.3, repeats: false) { [weak self] _ in
             guard let frame = self?.window?.frame else { return }
-            UserDefaults.standard.set("\(frame.origin.x),\(frame.maxY)", forKey: overlayPositionKey)
+            let value = "\(frame.origin.x),\(frame.maxY)"
+            // 值没变就别写 —— CFPreferences 的一次写路径不便宜,而高度动画结束后 x/顶边
+            // 恰恰都是不变量,原来每次换行都会落一笔跟盘上完全相同的字符串。
+            if UserDefaults.standard.string(forKey: overlayPositionKey) != value {
+                UserDefaults.standard.set(value, forKey: overlayPositionKey)
+            }
         }
         RunLoop.main.add(t, forMode: .common)
         moveDebounceTimer = t

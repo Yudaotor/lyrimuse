@@ -54,13 +54,21 @@ struct NotchWindowRoot: View {
         return .spring(response: 0.42, dampingFraction: 0.8)
     }
 
-    /// 卡片宽度**恒定**,收起态也不变窄。
+    /// 卡片宽度:收起态(没在播放)缩到「刘海 + 左右各一小段耳朵」。
     ///
-    /// 收起态保留的是顶行(播放指示条 + 歌名 + 三个控制按钮),而那两只"耳朵"分居物理刘海
-    /// 左右两侧 —— 宽度一缩,耳朵就没地方放了。所以收起只收**高度**:歌词行往上卷进顶行,
-    /// 顶行原地不动。
+    /// 此前恒定不缩,理由是"耳朵里有三个控制按钮,宽度一缩没地方放"。2026-08-19 设计
+    /// 评审把三键挪进展开卡、右耳只剩一枚播放键之后,这条理由不复存在 —— 收起态那条
+    /// 全宽黑带的宽度全是死空间(用户:"左右各自保留一点空间即可")。耳宽取
+    /// NotchMetrics.collapsedEarWidth(左耳只放音浪,右耳只放小封面 —— 同日再收窄成
+    /// iPhone 灵动岛式极简,见 collapsedRow),
+    /// +20 对应 topRow 的水平 padding;min 兜底"刘海比用户设的内容宽度还宽"的怪配置。
+    /// 稳态/展开仍是全宽:歌词行和展开区需要空间。宽度变化跟高度同一条弹簧(cardAnimation)。
     private var cardWidth: CGFloat {
-        controller.steadyCardWidth
+        if controller.isCollapsed {
+            return min(controller.steadyCardWidth,
+                       controller.notchWidth + 2 * NotchMetrics.collapsedEarWidth + 20)
+        }
+        return controller.steadyCardWidth
     }
 
     /// 卡片当前高度。收起态只留顶行那一条,稳态多一行歌词,展开再多一块。
@@ -108,7 +116,14 @@ struct NotchWindowRoot: View {
         if inside, !controller.isExpanded, !hoveringCard {
             NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .now)
         }
+        // setExpandedFromWindow 也只在**边沿**上叫(2026-08-19):onContinuousHover 的
+        // .active 对卡片内每次指针移动都回调,原来每个事件都调过去,而那边第一行无条件
+        // cancel 掉还没兑现的 0.12s 展开意图再重排 —— 于是"进入延迟"实际从「指针停下」
+        // 起算而不是「进入」起算(hoverEnterDelay 的调校注释按后者理解),指针在卡片上
+        // 持续移动就一直不展开,顺带每个事件白做一次 WorkItem 取消+分配。边沿触发后
+        // "进了又出净效果为零"的 cancel 语义不受影响(exit 边沿照样撤掉未兑现的 enter)。
+        let changed = inside != hoveringCard
         hoveringCard = inside
-        controller.setExpandedFromWindow(inside)
+        if changed { controller.setExpandedFromWindow(inside) }
     }
 }

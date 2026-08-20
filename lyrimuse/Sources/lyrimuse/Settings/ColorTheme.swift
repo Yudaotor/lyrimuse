@@ -100,7 +100,11 @@ extension ColorTheme {
         ColorTheme(
             id: "builtin-classic-black", name: L10n.t("经典黑字"),
             foregroundColorHex: "#000000FF", backgroundColorHex: "#00000000",
-            textStrokeEnabled: false, textStrokeColorHex: "#000000A6"
+            // 描边色 2026-08-17 从 65% 黑改成**不透明白**(用户要求)。这一款是
+            // defaultTheme,所以它同时就是"全新安装时描边的默认颜色"——而这一款的文字
+            // 本来就是黑的,黑字配黑边等于没有描边,配白边才真的能在深色壁纸上把字托出来。
+            // 描边开关依旧默认关着,这个颜色只是用户手动打开它时的起点。
+            textStrokeEnabled: false, textStrokeColorHex: "#FFFFFFFF"
         )
     }
 
@@ -146,8 +150,8 @@ extension ColorTheme {
         ),
     ] }
 
-    // 全新安装/"恢复默认外观"/"清除所有配置"之后应该长成的样子——AppSettings.init()
-    // 和 SettingsView 的"恢复默认外观"按钮都读这一个值,不再各自硬编码一遍。
+    // 全新安装/"恢复默认文字与配色"/"清除所有配置"之后应该长成的样子——AppSettings.init()
+    // 和 SettingsView 的"恢复默认文字与配色"按钮都读这一个值,不再各自硬编码一遍。
     // 也写成计算属性:眼下几个调用点只读它的十六进制色值(name 从不读),所以冻结与否
     // 不影响现在的行为;但它是 darkCard 的别名,让两者求值语义一致,免得以后有人
     // 读 defaultTheme.name 又踩一次上面那个语言冻结。

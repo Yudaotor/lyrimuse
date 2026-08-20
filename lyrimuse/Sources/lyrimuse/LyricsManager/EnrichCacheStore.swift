@@ -24,7 +24,7 @@ private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "lyrics
 // 歌词部分(lyrics/lyrics_tr/lyrics_roma/lyrics_yrc/lyrics_source/manual_lyrics 这 6 个
 // 字段)另有 ~/.config/lyrimuse/lyrics/ 下的纯文本文件族作为权威源
 // (collector 启动时会读这个文件夹、覆盖对应字段,见 collector/lyricsimport.go)——
-// saveEdit/removeWordTiming/delete 因此在 raw[key] 字典操作之外,还调用
+// saveEdit/delete 因此在 raw[key] 字典操作之外,还调用
 // writeLyricsFiles 同步写/删对应文件,两边由同一次用户操作一起改,靠"改完立刻重启
 // collector"这个机制保持最终一致。
 @MainActor
@@ -62,14 +62,49 @@ public final class EnrichCacheStore: ObservableObject {
         // 详情页有这一栏、"搜索候选歌词"弹窗也有对应徽章,唯独列表看不出来。
         public let hasRomanization: Bool
         public let hasLyrics: Bool
-        // collector 固化下来的解析决策记录(候选表+得分明细),见 collector/decision.go。
-        // 老条目没有这个字段,为 nil —— 详情页的入口按钮跟着不显示。
-        // internal(无 public):类型里嵌着 internal 的 LyricsSearchService.ScoreTerm,
-        // 而整个 App 本来就是单 target,这里的 public 只是历史惯性。
-        let decision: LyricsResolutionDecision?
+        /// collector 联网确证过"这首本来就没有词"(lrclib 的 instrumental 或网易云的
+        /// pureMusic,见 collector 侧 enrichEntry.Instrumental)。
+        ///
+        /// 2026-08-20 接到这个界面上来:值早就存在缓存里(这个类型一直在解码它,见下面
+        /// `instrumental` 那个字段),但列表和详情页都只看 hasLyrics —— 于是一整批
+        /// 确证过的纯音乐(LoL 原声带那些)显示成刺眼的红色「无歌词」,跟"没搜到"混为一谈。
+        /// 悬浮窗/灵动岛/歌词窗口三处一直分得清,唯独这里没有。
+        public let isInstrumental: Bool
+        // 这条有没有 collector 固化的解析决策记录(候选表+得分明细,见 collector/decision.go)。
+        // 只作按钮显隐用 —— 完整结构 2026-08-19 起改**懒解码**(decodedDecision(for:)):
+        // 原来 rebuild 时对每条带该字段的条目都做一轮 JSONSerialization.data + JSONDecoder
+        // 双重编解码,而结果只有打开「解析决策」弹窗那一刻才被消费,全量急算纯属浪费。
+        let hasDecision: Bool
+        // ---- 预计算归一化键(2026-08-19 性能审计) ----
+        // 排序/筛选/归并的热路径原来逐次现算 toSimplified(ICU CFStringTransform)+
+        // lowercased:排序比较器每次比较 4 次、筛选谓词每行最多 4 次、专辑归并字典
+        // 每次重建 N 次 —— 852 条数据一次交互就是上万次 ICU 调用。现在 rebuild 时
+        // 每条算一次存着,热路径只做字符串比较。
+        /// toSimplified(primaryArtist(展示歌手名)).lowercased() —— 歌手筛选/排序用。
+        let normPrimaryArtist: String
+        /// toSimplified(album).lowercased() —— 专辑筛选/排序/归并字典的键。
+        let normAlbum: String
+        /// 搜索谓词用的三个小写副本(搜索框每敲一键全量过滤一遍,别逐行现 lowercased)。
+        let searchArtistLower: String
+        let searchDisplayArtistLower: String
+        let searchTitleLower: String
+
+        /// 列表/详情展示用的歌手名:优先 collector 核实过的官方名(canonicalArtist),
+        /// 合唱曲目/还没解析出来时退回播放器报的原始写法。原在 LyricsManagerView.artistName。
+        var displayArtist: String { canonicalArtist.isEmpty ? artist : canonicalArtist }
     }
 
     @Published public private(set) var summaries: [Summary] = []
+    /// summaries 每重建一次 +1 —— 给视图侧的 filtered 缓存当失效键(见 LyricsManagerView),
+    /// 数组本身没做 Equatable,靠这个代数判断"列表内容换过了没有"。
+    private(set) var summariesGeneration = 0
+    /// 专辑归并展示名:归并键(toSimplified+小写)→ 首见原写法。原来是 LyricsManagerView
+    /// 的计算属性,每次访问全量重建(List 每物化一行就付一次 O(N) 次 ICU 变换 —— 2026-08-19
+    /// 审计里本模块最重的一条),现在随 summaries 重建一次。
+    @Published private(set) var albumDisplayMap: [String: String] = [:]
+    /// 筛选下拉的候选集,同样随 summaries 重建一次,不再每次 body 现算。
+    @Published private(set) var distinctArtists: [String] = []
+    @Published private(set) var distinctAlbums: [String] = []
     @Published public private(set) var lastError: String?
     // 缓存 JSON 文件本身 + lyrics/ 权威源文件夹里所有文件的总大小——"歌词管理"工具栏
     // 展示用,让用户知道这个"解析一次永久保留"的缓存实际占了多少磁盘空间。跟 reload()
@@ -116,17 +151,44 @@ public final class EnrichCacheStore: ObservableObject {
     // 解出来的 [String: [String: Any]] 含 Any,编译器没法证明它是 Sendable,但这里的跨
     // 线程访问本来就有明确的先后顺序(detached task 算完、await 完了才读 box),不是真的
     // 并发写。
-    public func reload() async {
+    /// 上一次成功读盘时缓存文件的 (mtime, size) 指纹 —— onlyIfChanged 的门控依据。
+    private var lastLoadedFingerprint: FileFingerprint?
+
+    struct FileFingerprint: Equatable {
+        var mtime: Date
+        var size: Int64
+    }
+
+    private nonisolated static func fileFingerprint(_ url: URL) -> FileFingerprint? {
+        guard let attrs = try? FileManager.default.attributesOfItem(atPath: url.path),
+              let mtime = attrs[.modificationDate] as? Date else { return nil }
+        return FileFingerprint(mtime: mtime, size: (attrs[.size] as? NSNumber)?.int64Value ?? 0)
+    }
+
+    /// - Parameter onlyIfChanged: true = 缓存文件的 (mtime, size) 指纹没变就什么都不做
+    ///   (2026-08-19 性能审计:App 每次激活都触发一次 reload,而绝大多数激活时文件根本
+    ///   没变,整份 9.4MB 重读+解析+重建+summaries 重发布 → List 全量 diff 全是白跑;
+    ///   同仓 EnrichCacheReader 早有同款 mtime 门控)。开窗 onAppear 和工具栏「刷新」
+    ///   保持默认 false(显式刷新语义)。
+    public func reload(onlyIfChanged: Bool = false) async {
+        let cacheURL = Self.cacheURL
+        if onlyIfChanged,
+           let fp = Self.fileFingerprint(cacheURL),
+           fp == lastLoadedFingerprint {
+            return
+        }
         final class ResultBox: @unchecked Sendable {
             var obj: [String: [String: Any]]?
+            var bundle: SummariesBundle?
+            var fingerprint: FileFingerprint?
             var errorMessage: String?
             var sizeBytes: Int64 = 0
         }
         let box = ResultBox()
-        let cacheURL = Self.cacheURL
         let lyricsDir = Self.lyricsDir
         await Task.detached(priority: .userInitiated) {
             box.sizeBytes = Self.directorySizeBytes(lyricsDir) + Self.fileSizeBytes(cacheURL)
+            box.fingerprint = Self.fileFingerprint(cacheURL)
             guard let data = try? Data(contentsOf: cacheURL) else {
                 box.errorMessage = L10n.t("读取本地记录文件失败")
                 return
@@ -136,23 +198,28 @@ public final class EnrichCacheStore: ObservableObject {
                 return
             }
             box.obj = obj
+            // summaries 的构建+排序也在后台做掉(2026-08-19:原来回 MainActor 同步跑,
+            // 每次开窗/激活吃几十到一二百 ms 主线程),主线程只收结果赋值。
+            box.bundle = Self.buildSummaries(from: obj)
         }.value
         totalSizeBytes = box.sizeBytes
-        if let obj = box.obj {
+        if let obj = box.obj, let bundle = box.bundle {
             raw = obj
             knownKeys = Set(obj.keys)
+            lastLoadedFingerprint = box.fingerprint
             // 这两个集合描述的是"相对上一份快照做了什么改动";快照整个换掉之后它们就失去
             // 参照,留着会让下一次 persist 拿旧意图去盖新内容。所有改动路径都是"改完立刻
             // persist",正常情况下它们此刻本来就是空的 —— 这里只是把不变量写死。
             locallyEditedKeys.removeAll()
             locallyDeletedKeys.removeAll()
             lastError = nil
+            applySummaries(bundle)
         } else {
             raw = [:]
-            summaries = []
+            lastLoadedFingerprint = nil
             lastError = box.errorMessage ?? L10n.t("读取本地记录文件失败")
+            applySummaries(Self.buildSummaries(from: [:]))
         }
-        rebuildSummaries()
     }
 
     // nonisolated——从 reload() 里的 Task.detached 闭包(非 MainActor 上下文)调用,
@@ -188,21 +255,58 @@ public final class EnrichCacheStore: ObservableObject {
         return try? decoder.decode(LyricsResolutionDecision.self, from: data)
     }
 
-    private static func splitKey(_ key: String) -> (artist: String, title: String, album: String)? {
+    // nonisolated:纯字符串切分,buildSummaries 在后台构建线程也要调。
+    private nonisolated static func splitKey(_ key: String) -> (artist: String, title: String, album: String)? {
         let parts = key.split(separator: "|", maxSplits: 2, omittingEmptySubsequences: false).map(String.init)
         guard parts.count == 3 else { return nil }
         return (parts[0], parts[1], parts[2])
     }
 
+    /// summaries 及其派生物(归并字典/筛选下拉候选)的一次性构建结果。
+    private struct SummariesBundle {
+        var summaries: [Summary]
+        var albumDisplayMap: [String: String]
+        var distinctArtists: [String]
+        var distinctAlbums: [String]
+    }
+
+    /// 把一份构建结果发布出去。跟 buildSummaries 拆开:构建是纯函数(reload 时在后台跑,
+    /// 保存/删除时在主线程同步跑 —— 预计算归一化键之后单次只剩字典取值+元组排序,几 ms),
+    /// 发布必须在 MainActor。
+    private func applySummaries(_ bundle: SummariesBundle) {
+        summaries = bundle.summaries
+        summariesGeneration &+= 1
+        albumDisplayMap = bundle.albumDisplayMap
+        distinctArtists = bundle.distinctArtists
+        distinctAlbums = bundle.distinctAlbums
+    }
+
     private func rebuildSummaries() {
-        summaries = raw.keys.compactMap { key -> Summary? in
+        applySummaries(Self.buildSummaries(from: raw))
+    }
+
+    // ⚠️ 排序键必须跟"列表上看到的那套分组"用**同一套归并规则**,否则会出现"显示层合并了、
+    // 排序层还按原始写法把同一张专辑劈成两半"。2026-08-07 用户实测撞到:「春游」这张专辑
+    // 一半曲目排在列表最上面、一半排在最下面 —— 播放器把它们分别报成 "Leah Dou" / "窦靖童"
+    // (歌手)和 "春遊" / "春游"(歌手/专辑繁简),排序键必须 canonical→primaryArtist→
+    // 折简体+小写。归一化键现在在构建时预存进 Summary(normPrimaryArtist/normAlbum),
+    // 比较器只做元组比较 —— 原来每次比较现算 4 次 CFStringTransform,852 条 ≈ 3.3 万次
+    // ICU 调用,预算后只剩每条一次(还叠着 toSimplified 的 memo)。
+    //
+    // 专辑归并键跟展示值分开:同一张专辑偶尔因歌词源候选写法大小写/繁简不一致而在
+    // s.album 里长得不一样,排序/归并按归一化键走;展示名取排序后首见的原写法
+    // (albumDisplayMap),列表/详情/筛选下拉三处共用同一份。
+    private nonisolated static func buildSummaries(from raw: [String: [String: Any]]) -> SummariesBundle {
+        var items = raw.keys.compactMap { key -> Summary? in
             guard let parts = Self.splitKey(key) else { return nil }
             let entry = raw[key] ?? [:]
             let lyrics = entry["lyrics"] as? String ?? ""
+            let canonical = entry["canonical_artist"] as? String ?? ""
+            let display = canonical.isEmpty ? parts.artist : canonical
             return Summary(
                 key: key,
                 artist: parts.artist,
-                canonicalArtist: entry["canonical_artist"] as? String ?? "",
+                canonicalArtist: canonical,
                 durationSecs: entry["duration_secs"] as? Double ?? 0,
                 title: parts.title,
                 album: parts.album,
@@ -213,35 +317,40 @@ public final class EnrichCacheStore: ObservableObject {
                 hasTranslation: !((entry["lyrics_tr"] as? String ?? "").isEmpty),
                 hasRomanization: !((entry["lyrics_roma"] as? String ?? "").isEmpty),
                 hasLyrics: !lyrics.isEmpty,
-                decision: Self.decodeDecision(entry["lyrics_decision"])
+                isInstrumental: entry["instrumental"] as? Bool ?? false,
+                hasDecision: entry["lyrics_decision"] != nil,
+                normPrimaryArtist: toSimplified(primaryArtist(display)).lowercased(),
+                normAlbum: toSimplified(parts.album).lowercased(),
+                searchArtistLower: parts.artist.lowercased(),
+                searchDisplayArtistLower: display.lowercased(),
+                searchTitleLower: parts.title.lowercased()
             )
-        // 专辑归并键跟展示值分开:同一张专辑偶尔因歌词源候选写法大小写不一致而在
-        // s.album 里长得不一样,排序按小写归并键走,才能让同一张专辑的曲目真正排在
-        // 一起,而不是被大小写拆成两组。歌手同理用 primaryArtist(跟艺人筛选下拉复用
-        // 同一个函数)归并——"Scream"这类跟其他人合唱的曲目,artist 字段整段写的是
-        // "Michael Jackson & JANET JACKSON",原始字符串排序会单独归成一组、跟同一张
-        // 专辑里其余单独署名"Michael Jackson"的曲目拆开,不符合"同专辑排一起"的预期。
-        }.sorted { Self.sortKey($0) < Self.sortKey($1) }
+        }
+        items.sort {
+            ($0.normPrimaryArtist, $0.normAlbum, $0.title) < ($1.normPrimaryArtist, $1.normAlbum, $1.title)
+        }
+        // 归并展示名按排序后顺序首见 —— 跟原来"按 summaries 已有顺序取第一次出现"语义一致。
+        var albumMap: [String: String] = [:]
+        var artistMap: [String: String] = [:]
+        for s in items {
+            if !s.album.isEmpty, albumMap[s.normAlbum] == nil { albumMap[s.normAlbum] = s.album }
+            let rawArtist = primaryArtist(s.displayArtist)
+            if !rawArtist.isEmpty, artistMap[s.normPrimaryArtist] == nil {
+                artistMap[s.normPrimaryArtist] = rawArtist
+            }
+        }
+        return SummariesBundle(
+            summaries: items,
+            albumDisplayMap: albumMap,
+            distinctArtists: Array(Set(artistMap.values)).sorted(),
+            distinctAlbums: Array(Set(albumMap.values)).sorted()
+        )
     }
 
-    // ⚠️ 排序键必须跟"列表上看到的那套分组"用**同一套归并规则**,否则会出现"显示层合并了、
-    // 排序层还按原始写法把同一张专辑劈成两半"。2026-08-07 用户实测撞到:「春游」这张专辑
-    // 一半曲目排在列表最上面、一半排在最下面 —— 播放器把它们分别报成 "Leah Dou" / "窦靖童"
-    // (歌手)和 "春遊" / "春游"(专辑繁简),而这里的排序键当时用的是**原始** artist、专辑也
-    // 只 lowercased() 没折简体,两组自然隔得很远。
-    //
-    // 三个分量分别对应:
-    //   歌手 —— 先取 canonical(collector 核实过的官方名,同一个人的不同别名在这里收敛),
-    //           再 primaryArtist 取合唱的第一位,最后折简体+小写;
-    //   专辑 —— 折简体+小写(跟 albumDisplayNames 的归并键一致);
-    //   歌名 —— 原样,同一张专辑内的次序不需要归一化。
-    private static func sortKey(_ s: Summary) -> (String, String, String) {
-        let artist = s.canonicalArtist.isEmpty ? s.artist : s.canonicalArtist
-        return (
-            toSimplified(primaryArtist(artist)).lowercased(),
-            toSimplified(s.album).lowercased(),
-            s.title
-        )
+    /// 懒解码某条的解析决策记录 —— 只在打开「解析决策」弹窗那一刻按 key 解一条,
+    /// 见 Summary.hasDecision 的注释。
+    func decodedDecision(for key: String) -> LyricsResolutionDecision? {
+        Self.decodeDecision(raw[key]?["lyrics_decision"])
     }
 
     // 返回值含 yrc:「歌词管理」的单曲歌词时间轴偏移输入框需要跟 LocalPlaybackSource
@@ -259,7 +368,7 @@ public final class EnrichCacheStore: ObservableObject {
 
     // yrc 默认 nil:纯手改文本框的普通保存路径不传它,完全不碰 lyrics_yrc 字段——这是
     // 有意的("歌词管理"从不提供逐字时间轴的自由文本编辑,格式是嵌套时间戳,手改错了代价
-    // 大,见 removeWordTiming)。只有"联网搜索候选歌词"整条采纳某个候选时才会传非 nil:
+    // 大,「移除逐字时间轴」入口 2026-08-18 已删)。只有"联网搜索候选歌词"整条采纳某个候选时才会传非 nil:
     // 采纳意味着连同逐字时间轴一起换成这个候选的版本(有就设、没有就清空)——否则旧
     // lyrics_yrc 会继续绑定已经被替换掉的旧文本,播放时逐字时间戳和新歌词对不上。
     //
@@ -315,33 +424,27 @@ public final class EnrichCacheStore: ObservableObject {
             source: entry["lyrics_source"] as? String ?? "",
             manual: true
         )
-        await persistAndRestart()
+        // 顺序照 delete(keys:)(2026-08-19 接上):先刷列表(界面立刻反馈),再落盘,重启
+        // 走不阻塞的后台排队 —— 原来这里 await persistAndRestart() 会原地等 collector
+        // 重启,launchctl kickstart 撞上 launchd 的 minimum runtime 时一等就是 ~10 秒,
+        // 「已保存」反馈/offset 输入框/列表徽章全被闷在后面,期间按钮还能重复点。
+        // scheduleCollectorRestart 自带合并/补偿/lastError/refreshLyricsForCurrentTrack。
         rebuildSummaries()
+        guard await persist() else { return }
+        if lastPersistPulledInNewKeys { rebuildSummaries() }
+        scheduleCollectorRestart()
     }
 
-    // 只清掉逐字时间轴,保留整行歌词——用户发现某首歌的逐字对不上、想退回整行显示,
-    // 不用整条删掉重新解析(重新解析很可能又抓到同一份不准的 yrc)。
-    public func removeWordTiming(key: String) async {
-        var entry = raw[key] ?? [:]
-        entry.removeValue(forKey: "lyrics_yrc")
-        raw[key] = entry
-        markLocallyEdited(key)
-        // 只删 .yrc 文件,其它变体文件不动——跟上面 JSON 侧"只清掉这一个字段"的语义对应。
-        // 普通名和带消歧后缀两种形态都要删:这个 key 在碰撞组里时磁盘上只有后一种(理由见
-        // EnrichCacheKeys.exportedFileNames 的注释),只删普通名的话残留的 .yrc 会在
-        // collector 重启时被 importLyricsFromFiles 导回来,逐字时间轴自己长回去。
-        for base in [EnrichCacheKeys.sanitizeFilename(key), EnrichCacheKeys.disambiguatedName(forKey: key)] {
-            try? FileManager.default.removeItem(at: Self.lyricsDir.appendingPathComponent(base + ".yrc"))
-        }
-        await persistAndRestart()
-        rebuildSummaries()
-    }
+    // 「移除逐字时间轴」的实现(removeWordTiming)2026-08-19 删除:按钮 2026-08-18 已按
+    // 用户要求去掉,函数失去唯一调用方之后只是一段每次改保存链路都要陪着改的死代码。
+    // 想恢复见 git 历史 —— JSON 侧清 lyrics_yrc 字段 + 删两种形态的 .yrc 文件,
+    // 加回来时记得走 delete(keys:) 同款的「先刷列表 → 落盘 → 后台排队重启」顺序。
 
     // 删缓存条目的同时一并删掉对应的已导出文件——「歌词管理」里点删除,"删除"在两边
     // 都是真删除,不留一份用户自己都不知道还在的归档文件。
     //
-    // ⚠️ 删文件必须排在 persistAndRestart() 之前——2026-08-02 实测排查坐实:早先这里的
-    // 顺序反了(先重启 collector、后删文件),跟本文件里 saveEdit/removeWordTiming/
+    // ⚠️ 删文件必须排在落盘+重启之前——2026-08-02 实测排查坐实:早先这里的
+    // 顺序反了(先重启 collector、后删文件),跟本文件里 saveEdit/
     // clearAll 建立的"先落盘文件、再重启 collector"顺序正相反。collector
     // main() 每次启动都固定跑 loadEnrichCache → importLyricsFromFiles →
     // exportLyricsFiles;importLyricsFromFiles 只要在 lyrics/ 目录下还看到这个 key 对应
@@ -351,7 +454,7 @@ public final class EnrichCacheStore: ObservableObject {
     // 再听一首歌才触发。现在改成先删文件、让 collector 重启时看到的磁盘状态已经是
     // "没有这个 key"。
     //
-    // 2026-08-05 实测排查坐实的卡顿修复:原来这里是 `await persistAndRestart()` 之后才
+    // 2026-08-05 实测排查坐实的卡顿修复:原来这里是同步等 collector 重启完之后才
     // rebuildSummaries(),也就是列表要等 collector 重启完才更新。实测重启是唯一的大头——
     // JSON 校验+序列化 8.9MB+原子写盘合计只要 26ms,而 `launchctl kickstart` 在"距上次
     // 重启不久"时会原地等满 launchd 给这个 LaunchAgent 配的 `minimum runtime = 10`
@@ -388,7 +491,7 @@ public final class EnrichCacheStore: ObservableObject {
             deleteExportedLyricsFile(forKey: key)
         }
         rebuildSummaries()
-        guard persist() else {
+        guard await persist() else {
             // 写盘失败就把这一批全部放回去——不能让界面显示成"已删除"而磁盘上其实还在。
             // 已经删掉的导出文件不用管:collector 启动时会按缓存内容重新导出一遍。
             for (key, entry) in removed {
@@ -402,6 +505,11 @@ public final class EnrichCacheStore: ObservableObject {
         // 看得到它们。只在真有新增时才重刷:rebuildSummaries 是全量 compactMap + 排序,
         // 白跑一次在几百条规模上是肉眼可见的卡顿(见本函数上方那段注释)。
         if lastPersistPulledInNewKeys { rebuildSummaries() }
+        // 条目删了,「已校准」名单里对应那几条也该跟着走:留着的话,这首歌下次重新解析出来
+        // 的新歌词会莫名其妙一上来就不许后台升级 —— 而它的校正值早就跟着旧内容作废了
+        // (校正值 key 里含内容指纹,见 LyricsPinStore)。刻意放在 persist() 成功**之后**:
+        // 上面写盘失败那条分支会把条目原样放回去,那种情况下 pin 也不该丢。
+        LyricsPinStore.shared.remove(keys: Set(victims))
         scheduleCollectorRestart()
         refreshSizeBytes()
     }
@@ -432,7 +540,7 @@ public final class EnrichCacheStore: ObservableObject {
         rebuildSummaries()
         totalSizeBytes = 0
         // 整份替换:清空是用户明确的"全清",读-改-写会把盘上一切并回来,正好相反。
-        guard persist(replacingEverything: true) else { return }
+        guard await persist(replacingEverything: true) else { return }
 
         // ⚠️ 必须**等重启完成再核一遍**,而且要肯再来一轮。
         //
@@ -457,7 +565,7 @@ public final class EnrichCacheStore: ObservableObject {
             raw = [:]
             knownKeys = []
             deleteAllLyricsFiles()
-            guard persist(replacingEverything: true) else { return }
+            guard await persist(replacingEverything: true) else { return }
             rebuildSummaries()
             totalSizeBytes = 0
         }
@@ -520,7 +628,7 @@ public final class EnrichCacheStore: ObservableObject {
 
     // 找不到文件(比如这条从来没有译文/罗马音/逐字时间轴)是正常情况,静默忽略——这只是
     // 清理可能存在的归档副本,不是这次删除操作的主体,不值得为"文件本来就不存在"这种
-    // 预期内的情况去污染 lastError(那个留给 persistAndRestart 里真正的主体操作失败用)。
+    // 预期内的情况去污染 lastError(那个留给 persist/重启这些真正的主体操作失败用)。
     // lyricsFileSuffixes 全部 4 个后缀都试一遍,跟 writeLyricsFiles 对称——"删除"要
     // 清掉整个歌词文件族,不只是纯歌词那一份。
     private func deleteExportedLyricsFile(forKey key: String) {
@@ -537,7 +645,7 @@ public final class EnrichCacheStore: ObservableObject {
     // 头部格式的两处独立实现(理由同 sanitizeLyricsFilename——纯粹是确定性的字符串拼接,
     // 不属于必须收敛成一份的逻辑)。每个变体单独判断:有内容就写,没内容就删除对应
     // 文件,跟 Go 那边"该有就写、不该有就删"对应。这里不处理 Go 那边"检测大小写文件名
-    // 碰撞、加哈希后缀消歧"那一步——每次调用后紧跟的 persistAndRestart() 会重启
+    // 碰撞、加哈希后缀消歧"那一步——每次调用后紧跟的落盘+排队重启会重启
     // collector,它启动时会重新跑一遍全量 exportLyricsFiles(),那一步本来就会处理好
     // 任何残留的文件名碰撞,不需要在 Swift 这边重复实现一遍。
     private func writeLyricsFiles(key: String, lyrics: String, tr: String, roma: String, yrc: String, source: String, manual: Bool) {
@@ -572,58 +680,105 @@ public final class EnrichCacheStore: ObservableObject {
         }
     }
 
-    // 必须用 restartAndWaitAsync()、不能直接调同步版 restartAndWait():launchd 给这个
-    // LaunchAgent 配了 `minimum runtime = 10`,两次重启间隔太近时 kickstart 会原地等满
-    // 10 秒才返回,如果在 MainActor 上同步等待,期间整个 app(窗口、菜单栏)会彻底冻住
-    // 不响应。
-    // 只负责把 raw 落盘,不碰 collector。实测这一整套(校验+序列化 8.9MB+原子写盘)只要
-    // 26ms,留在 MainActor 上同步做完全没问题,不值得为它多绕一层异步。
-    // 返回是否成功——调用方据此决定要不要回滚内存状态。
-    @discardableResult
+    // persist 串行链:异步化(见 performPersist)之后,await 期间主线程可以继续响应用户
+    // 操作,理论上能出现"上一笔还在写盘、下一笔已经发起"。链式排队让两笔绝不并发读写
+    // 同一个文件(2026-08-14 那次数据磨损事故就是并发保存路径,不能重新引入)。
+    private var persistChain: Task<Bool, Never>?
+
+    /// 把 raw 落盘,不碰 collector。返回是否成功——调用方据此决定要不要回滚内存状态。
+    ///
+    /// 2026-08-19 起整段读-改-写(读盘 9.4MB + 解析 + merge + 序列化 + 原子写)挪到后台
+    /// (照 reload() 的模式):原来同步在 MainActor 上做,:584 老注释说的「26ms 没问题」
+    /// 只量了序列化+写盘那后半段,2026-08-14 加的读-改-写又叠了一次全量读盘+解析
+    /// (本文件顶部自证 30ms+ 且随缓存线性增长),每次保存/删除主线程停 55-80ms,
+    /// 20Hz 悬浮歌词逐字填色跟着顿一拍。
     /// - Parameter replacingEverything: 用户明确要求"整份替换"(清空全部缓存)时传 true,
-    ///   跳过下面的读-改-写合并 —— 那种场景下把盘上内容并回来正是要避免的。
-    private func persist(replacingEverything: Bool = false) -> Bool {
+    ///   跳过读-改-写合并 —— 那种场景下把盘上内容并回来正是要避免的。
+    @discardableResult
+    private func persist(replacingEverything: Bool = false) async -> Bool {
+        let previous = persistChain
+        let task = Task { [weak self] () -> Bool in
+            _ = await previous?.value // 串行化:等上一笔完全落盘再开始
+            guard let self else { return false }
+            return await self.performPersist(replacingEverything: replacingEverything)
+        }
+        persistChain = task
+        return await task.value
+    }
+
+    private func performPersist(replacingEverything: Bool) async -> Bool {
         guard JSONSerialization.isValidJSONObject(raw) else {
             lastError = L10n.t("内部数据不是合法 JSON,已放弃保存")
             logger.error("raw dict is not valid JSON, aborting save")
             return false
         }
-        // 读-改-写:以**盘上此刻的内容**为底,只把用户这次真正动过的 key 盖上去。
-        //
-        // 2026-08-14 之前这里是"整份覆盖 + 只并回没见过的新 key"。那半套只堵住了一半:
-        // raw 只有 reload() 会刷新(开窗 .onAppear 和工具栏「刷新」两处),而"歌词管理"是个
-        // 可以一直开着的窗口,典型用法就是边听边整理。开窗之后 collector 会持续往盘上写 ——
-        // 新歌是**新 key**(旧逻辑救得回来),但给**已有 key 补上机翻译文/逐字时间轴/封面**
-        // 是原地更新,旧逻辑完全不管:内存里那份还是开窗时的样子,窗口里随便一次删除或保存
-        // 都会把它整份写回去,刚补上的译文就没了。用户能看到的症状是"这首歌明明有翻译,
-        // 歌词管理里却不显示译文标记" —— 那还只是显示层,底下是真的在丢数据。
-        //
-        // 顺带一个好处:写完之后 raw 就是盘上最新内容,列表的标记不再停留在开窗那一刻。
-        if !replacingEverything,
-           let disk = try? Data(contentsOf: Self.cacheURL),
-           let diskObj = try? JSONSerialization.jsonObject(with: disk) as? [String: [String: Any]] {
-            // 合并规则本身抽在 LyrimuseCore.EnrichCacheMerge,好让 lyrimuse-selftest 能真的
-            // 测它 —— 这个类是 @MainActor 且直接读写磁盘,测不了,而这段逻辑错了就是静默丢
-            // 用户的歌词。
-            let merged = EnrichCacheMerge.merge(
-                disk: diskObj, memory: raw,
-                edited: locallyEditedKeys, deleted: locallyDeletedKeys)
-            lastPersistPulledInNewKeys = !Set(merged.keys).subtracting(raw.keys).isEmpty
-            raw = merged
-            knownKeys = Set(merged.keys)
-        } else {
-            // 盘读不出来/解析不了,或者调用方明确要求整份替换(清空全部缓存)——直接写 raw。
-            lastPersistPulledInNewKeys = false
-        }
+        // 快照本笔的输入并**立即取走**意图集合 —— 后台写盘期间新发生的编辑/删除会重新
+        // 填这两个集合、由链上排队的下一笔 persist 负责;失败时把本笔意图放回(union)。
+        let memory = raw
+        let edited = locallyEditedKeys
+        let deleted = locallyDeletedKeys
         locallyEditedKeys.removeAll()
         locallyDeletedKeys.removeAll()
-        do {
-            let data = try JSONSerialization.data(withJSONObject: raw)
-            try data.write(to: Self.cacheURL, options: .atomic)
-        } catch {
-            lastError = String(format: L10n.t("写入本地记录文件失败: %@"), error.localizedDescription)
-            logger.error("write failed: \(String(describing: error), privacy: .public)")
+        let cacheURL = Self.cacheURL
+        final class ResultBox: @unchecked Sendable {
+            var merged: [String: [String: Any]]?
+            var pulledNew = false
+            var errorMessage: String?
+            var ok = false
+        }
+        let box = ResultBox()
+        await Task.detached(priority: .userInitiated) {
+            // 读-改-写:以**盘上此刻的内容**为底,只把用户这次真正动过的 key 盖上去。
+            //
+            // 2026-08-14 之前这里是"整份覆盖 + 只并回没见过的新 key"。那半套只堵住了一半:
+            // "歌词管理"是可以一直开着的窗口,开窗之后 collector 会持续往盘上写 —— 新歌是
+            // 新 key,给**已有 key 补机翻译文/逐字时间轴/封面**是原地更新,整份覆盖会把
+            // 它们静默回滚掉。合并规则抽在 LyrimuseCore.EnrichCacheMerge,selftest 覆盖。
+            var target = memory
+            var pulledNew = false
+            if !replacingEverything,
+               let disk = try? Data(contentsOf: cacheURL),
+               let diskObj = try? JSONSerialization.jsonObject(with: disk) as? [String: [String: Any]] {
+                let merged = EnrichCacheMerge.merge(
+                    disk: diskObj, memory: memory, edited: edited, deleted: deleted)
+                pulledNew = !Set(merged.keys).subtracting(memory.keys).isEmpty
+                target = merged
+            }
+            do {
+                let data = try JSONSerialization.data(withJSONObject: target)
+                try data.write(to: cacheURL, options: .atomic)
+                box.merged = target
+                box.pulledNew = pulledNew
+                box.ok = true
+            } catch {
+                box.errorMessage = error.localizedDescription
+            }
+        }.value
+        guard box.ok else {
+            // 失败:把本笔意图放回,让调用方的回滚/下一次保存还带着它们。
+            locallyEditedKeys.formUnion(edited)
+            locallyDeletedKeys.formUnion(deleted)
+            lastError = String(format: L10n.t("写入本地记录文件失败: %@"), box.errorMessage ?? "")
+            logger.error("write failed: \(box.errorMessage ?? "", privacy: .public)")
+            lastPersistPulledInNewKeys = false
             return false
+        }
+        lastPersistPulledInNewKeys = box.pulledNew
+        if let merged = box.merged {
+            if locallyEditedKeys.isEmpty && locallyDeletedKeys.isEmpty {
+                // 常态:后台写盘期间没有新修改,回写整份 merged("写完之后 raw 就是盘上
+                // 最新内容,列表标记不再停留在开窗那一刻"的既有语义)。
+                raw = merged
+                knownKeys = Set(merged.keys)
+            } else {
+                // 罕见:await 窗口里用户又编辑/删除了 —— 整份回写会把那些还没落盘的新
+                // 修改用盘上旧值盖掉(真丢数据)。只并入盘上新增的 key,新意图对应的
+                // 条目保持内存现状,由链上排队的下一笔 persist 落盘。
+                for (k, v) in merged where raw[k] == nil && !locallyDeletedKeys.contains(k) {
+                    raw[k] = v
+                }
+                knownKeys = Set(raw.keys)
+            }
         }
         return true
     }
@@ -670,7 +825,7 @@ public final class EnrichCacheStore: ObservableObject {
             let ok = await CollectorControl.restartAndWaitAsync()
             guard let self else { return }
             self.pendingRestart = nil
-            if !ok { self.lastError = L10n.t("重启 collector 失败") }
+            if !ok { self.lastError = L10n.t("后台采集服务重启失败") }
             PlaybackCoordinator.shared.refreshLyricsForCurrentTrack()
             if self.needsFollowUpRestart {
                 self.needsFollowUpRestart = false
@@ -679,16 +834,6 @@ public final class EnrichCacheStore: ObservableObject {
         }
     }
 
-    private func persistAndRestart() async {
-        guard persist() else { return }
-        if await !CollectorControl.restartAndWaitAsync() {
-            lastError = L10n.t("重启 collector 失败")
-        }
-        // 磁盘已经是最新内容——不管当前悬浮窗显示的是不是被改的这首歌,让播放数据源
-        // 强制重新读一次都无害(不是这首歌的话 key 对不上,syncEngine 内容不变),换来
-        // 的是"改完歌词、悬浮窗还停在旧版本"这个问题被修掉,不用等下一次换歌才生效。
-        PlaybackCoordinator.shared.refreshLyricsForCurrentTrack()
-    }
 }
 
 // collector 固化的解析决策记录 —— 跟 collector/decision.go 的 lyricsDecision 逐字段对应

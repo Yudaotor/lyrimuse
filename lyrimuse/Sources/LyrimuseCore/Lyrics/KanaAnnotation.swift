@@ -73,7 +73,7 @@ public struct KanaAnnotation {
             var i = line.startIndex
             while i < line.endIndex {
                 let ch = line[i]
-                let w = String(ch).utf16.count
+                let w = utf16Width(ch)
                 guard needsAnnotation(ch) else {
                     utf16Pos += w
                     i = line.index(after: i)
@@ -89,7 +89,7 @@ public struct KanaAnnotation {
                 var consumed = 0
                 while i < line.endIndex, consumed < pendingInEntry {
                     let c = line[i]
-                    let cw = String(c).utf16.count
+                    let cw = utf16Width(c)
                     if needsAnnotation(c) { consumed += 1 }
                     length += cw
                     utf16Pos += cw
@@ -116,6 +116,14 @@ public struct KanaAnnotation {
     }
 
     // MARK: - 解析细节
+
+    /// 一个 Character 占几个 UTF-16 码元 —— 原来写 `String(ch).utf16.count`,每个字符都
+    /// 白造一个临时 String(2026-08-20 性能审计,只在带 [kana:] 标注的酷狗日文歌上生效)。
+    private static func utf16Width(_ c: Character) -> Int {
+        var w = 0
+        for scalar in c.unicodeScalars { w += scalar.value > 0xFFFF ? 2 : 1 }
+        return w
+    }
 
     private static func kanaTag(in lrc: String) -> String? {
         for line in lrc.split(separator: "\n", omittingEmptySubsequences: false) {

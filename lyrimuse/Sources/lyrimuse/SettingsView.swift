@@ -5,7 +5,7 @@ import KeyboardShortcuts
 
 // 整个设置窗口是一层真正的 NavigationSplitView:左边一份侧边栏 List,右边显示当前
 // 选中项的详情。"账号连接"没有做成侧边栏里单独可选中的大分类,而是拆成普通账号行,
-// 跟播放/歌词/外观/通用平级放进同一个 List 里——原因是嵌套第二层"看起来像侧边栏"的
+// 跟播放/歌词/歌词显示/通用平级放进同一个 List 里——原因是嵌套第二层"看起来像侧边栏"的
 // 容器(不管是内层再套一个 NavigationSplitView,还是手搭 HStack+List 模拟侧边栏),
 // 都会跟 macOS 只按"一个真正侧边栏列"设计的窗口级 chrome/圆角遮罩打架,导致外层
 // 侧边栏不渲染,或者窗口露出黑色阴影。唯一稳妥的解法是彻底拍平,全窗口只留一层真正的
@@ -28,7 +28,12 @@ enum SettingsTab: Hashable, CaseIterable, Identifiable {
         switch self {
         case .lyrics: return L10n.t("歌词")
         case .player: return L10n.t("播放器")
-        case .appearance: return L10n.t("外观")
+        // 2026-08-17 从「外观」改成这个。原名错在三处:① 这一页的第一层结构是按**展示
+        // 方式**分的四个分段(悬浮歌词/灵动岛/菜单栏/其它),讲的是"歌词显示在哪儿",不是
+        // "外观";② 它**不含** App 真正的外观项 —— 菜单栏图标和 Dock 图标都在「通用」,
+        // 想换图标的人第一下必点「外观」然后找不到;③ 它**含**一堆不是外观的东西:每种形态
+        // 的开关、显示在哪块屏幕、截屏时隐藏、暂停时隐藏、锁定位置。
+        case .appearance: return L10n.t("歌词显示")
         case .shortcuts: return L10n.t("快捷键")
         case .general: return L10n.t("通用")
         case .about: return L10n.t("关于")
@@ -39,7 +44,10 @@ enum SettingsTab: Hashable, CaseIterable, Identifiable {
         switch self {
         case .lyrics: return "text.quote"
         case .player: return "play.circle"
-        case .appearance: return "paintbrush"
+        // 画笔是"外观"的语言,跟着改名一起换掉。rectangle.3.group 读出来是"同一份内容摆在
+        // 好几处",正对上这一页的实际结构(歌词能出现在三个地方);也不跟侧边栏现有的
+        // text.quote/play.circle/keyboard/gearshape/info.circle 撞。
+        case .appearance: return "rectangle.3.group"
         case .shortcuts: return "keyboard"
         case .general: return "gearshape"
         case .about: return "info.circle"
@@ -47,7 +55,7 @@ enum SettingsTab: Hashable, CaseIterable, Identifiable {
     }
 
     // tint 特意避开已经在用的四个账号色(orange/pink/blue/red)和歌词来源色点(red/
-    // green/cyan/purple,见 LyricsManagerView.swift 的 sourceColor)——"外观"尤其不用
+    // green/cyan/purple,见 LyricsManagerView.swift 的 sourceColor)——"歌词显示"尤其不用
     // 青色系,因为默认打开的是"歌词"分类,会跟侧边栏里同屏出现的 LRCLIB 色点(cyan)
     // 太接近;"通用"用灰色齿轮,呼应 macOS 系统设置里"通用"的既有印象;"快捷键"用
     // teal,跟歌词来源色点的 cyan 有区分度、也不撞现有任何一个分类色;"播放器"用
@@ -67,15 +75,110 @@ enum SettingsTab: Hashable, CaseIterable, Identifiable {
 }
 
 // 图标徽标——彩色圆角方块背景 + 白色 SF Symbol,侧边栏行(22pt/圆角6)和账号详情页头
-// (36pt/圆角8)共用同一份渲染逻辑,不各自重复手写一遍。用自由函数而不是新建 View
-// 类型,跟这个项目里 sourceColor/sourceDisplayName 同一个"小工具用自由函数"的既有
-// 习惯保持一致——这里只有两组固定的(size, cornerRadius)组合在用,不是一个需要
-// View 身份/状态的东西。
+// (36pt/圆角8)共用同一份渲染逻辑,不各自重复手写一遍。
+//
+// 2026-08-18:原来这里整个是个自由函数,理由写的是"只有两组固定的(size, cornerRadius)
+// 组合在用,不是一个需要 View 身份/状态的东西"。深色模式压暗色块要读
+// @Environment(\.colorScheme),自由函数拿不到 environment,所以真身改成了 View 类型;
+// 对外仍是同名自由函数,十几个调用点一个都不用改。
 func iconBadge(_ systemName: String, tint: Color, size: CGFloat = 22, cornerRadius: CGFloat = 6) -> some View {
-    Image(systemName: systemName)
-        .foregroundStyle(.white)
-        .frame(width: size, height: size)
-        .background(tint, in: RoundedRectangle(cornerRadius: cornerRadius))
+    IconBadge(systemName: systemName, tint: tint, size: size, cornerRadius: cornerRadius)
+}
+
+private struct IconBadge: View {
+    let systemName: String
+    let tint: Color
+    let size: CGFloat
+    let cornerRadius: CGFloat
+    @Environment(\.colorScheme) private var colorScheme
+
+    /// 符号外接框占整个方块的比例。22pt 方块 × 0.62 = 13.6pt,跟改之前圆形符号
+    /// (play.circle/info.circle)本来的墨迹宽度 13.0pt 基本持平——所以那几个看上去
+    /// 几乎没变,被收窄的只有原本过宽的那几个。
+    private static let glyphRatio: CGFloat = 0.62
+
+    var body: some View {
+        // 2026-08-18 用户反馈「歌词显示」这个徽标"里面的内容都已经大到边框了"。量下来
+        // 属实,而且是整套徽标的系统性问题:原来这里既不设 .font 也不设 .imageScale,
+        // 符号吃环境默认的 13pt,而 SF Symbol 之间是按**大写字母高度**对齐的、不是按
+        // 外接框对齐——同一字号下宽符号必然比圆符号占掉多得多的横向空间。实测 22pt
+        // 方块里的墨迹占比:rectangle.3.group 81%(左右只剩 2.0pt 边距)、
+        // dot.radiowaves.left.and.right 75%、keyboard 73%,而 play.circle / info.circle
+        // 只有 59%(边距 4.5pt)。
+        //
+        // 统一调小字号救不了:那是等比缩,相对差距原样保留(试过 ×0.5,rectangle.3.group
+        // 仍占 69%、边距仍只有 3.25pt,别的图标反而一起变小变弱)。所以改成逐符号归一化
+        // ——resizable + scaledToFit 把每个符号的**外接框**装进同一个内框,过宽的自己缩
+        // 下去,本来就方的几乎不动。
+        //
+        // 同一处顺带修掉一个一直没人报的问题:不设字号 = 符号大小完全不跟 size 走。账号
+        // 详情页头那个 36pt 徽标里的符号一直还是 22pt 那档大小,墨迹只占方块 33%~50%,
+        // 一个小图标飘在大方块中间。现在符号跟着 size 等比,大徽标才真的被填满。
+        //
+        // 代价说清楚:resizable 会连描边粗细一起缩放,严格说破坏了 SF Symbol 跨图标的
+        // 统一线重(Apple 因此不建议对 SF Symbol 用 resizable)。这里换来的是"每个彩色
+        // 方块里的图形占位一致",对一组并排的徽标来说更重要。离线渲染逐档比对过。
+        Image(systemName: systemName)
+            .resizable()
+            .scaledToFit()
+            .frame(width: size * Self.glyphRatio, height: size * Self.glyphRatio)
+            .foregroundStyle(.white)
+            .frame(width: size, height: size)
+            .background(colorScheme == .dark ? SettingsIconTint.dimmedForDarkMode(tint) : tint,
+                        in: RoundedRectangle(cornerRadius: cornerRadius))
+    }
+}
+
+/// 深色模式下给徽标色块的亮度封顶。
+///
+/// 起因(2026-08-18 用户反馈"这些图标在深色模式下会不会太亮"):侧边栏这批 tint 里有几个
+/// 绝对亮度非常高,压在深色底上像在发光——量出来 yellow #FFD600 相对亮度 0.694、
+/// mint #00DAC3 0.541、teal #00D2E0 0.515,而 indigo/blue/red 都只有 0.25~0.28。更实的
+/// 问题是压在色块上的那个**白色 SF Symbol**:白色在 yellow 上只有 1.41:1、mint 1.78:1、
+/// teal 1.86:1,远低于 WCAG 对图形/UI 部件的 3:1。"发光"和"图标糊掉"是同一个根因。
+///
+/// 上限 0.30 不是拍脑袋来的:白色相对亮度是 1.0,要保住 3:1 就要求 (1.0+0.05)/(L+0.05) >= 3,
+/// 解出来 L <= 0.30。也就是"色块最多亮到白图标还合格为止"。
+///
+/// 压暗在**线性光**里做:线性 RGB 三通道同乘一个系数,相对亮度按同一系数线性下降(亮度就是
+/// 三通道线性值的加权和),而三者比例不变 = 色相和饱和度分毫不动。所以有闭式解
+/// k = 上限 / 当前亮度,不需要二分逼近。已经低于上限的色块原样返回——indigo/blue/red 实际
+/// 都不会被动到,gray 只会从 0.316 挪到 0.300(肉眼看不出)。
+///
+/// 只在深色模式下用。浅色模式下白图标压在 yellow 上同样只有 1.51:1,但那边色块不会在亮底上
+/// "发光",而压暗会把黄压成橄榄色、丢掉"黄"的身份;2026-08-18 拿离线渲染把两边并排比过之后
+/// 决定浅色维持原样。要改浅色的话,把 IconBadge 里那个 colorScheme 判断去掉即可。
+enum SettingsIconTint {
+    /// 白图标要保住 3:1,色块相对亮度的上限。
+    static let luminanceCap = 0.30
+
+    static func dimmedForDarkMode(_ tint: Color) -> Color {
+        // 系统色(.yellow/.mint/…)是随外观解析的动态色,必须显式在 darkAqua 下取值——
+        // body 求值时的 currentDrawing 不保证就是深色。
+        var resolved: NSColor?
+        NSAppearance(named: .darkAqua)?.performAsCurrentDrawingAppearance {
+            resolved = NSColor(tint).usingColorSpace(.sRGB)
+        }
+        guard let base = resolved else { return tint }
+        let r = linearized(base.redComponent)
+        let g = linearized(base.greenComponent)
+        let b = linearized(base.blueComponent)
+        let luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b
+        guard luminance > luminanceCap else { return tint }
+        let k = luminanceCap / luminance
+        return Color(nsColor: NSColor(srgbRed: encoded(r * k), green: encoded(g * k),
+                                      blue: encoded(b * k), alpha: base.alphaComponent))
+    }
+
+    private static func linearized(_ c: CGFloat) -> Double {
+        let v = Double(c)
+        return v <= 0.04045 ? v / 12.92 : pow((v + 0.055) / 1.055, 2.4)
+    }
+
+    private static func encoded(_ c: Double) -> CGFloat {
+        let v = c <= 0.0031308 ? c * 12.92 : 1.055 * pow(c, 1 / 2.4) - 0.055
+        return CGFloat(min(max(v, 0), 1))
+    }
 }
 
 enum SettingsSidebarItem: Hashable {
@@ -193,7 +296,7 @@ struct SettingsView: View {
         // 原来是给 TabView 焊死的 440pt 改出来的 minWidth/idealWidth——现在换成
         // NavigationSplitView,多了一列侧边栏,整体相应加宽;同样不设 maxWidth/固定
         // 高度,各分类继续按内容自动撑高。
-        // 高度这一档是跟着「外观」页的固定头部定的:那一页顶上钉着分段选择器 + 实时预览,
+        // 高度这一档是跟着「歌词显示」页的固定头部定的:那一页顶上钉着分段选择器 + 实时预览,
         // 实测占 205pt。窗口 460 高时滚动区只剩 255pt,一屏放不下两张卡,滚起来很碎;
         // idealHeight 给到 640,滚动区就有 ~430pt。minHeight 同步抬到 520,避免有人拖到
         // 极限后滚动区比头部还矮。
@@ -207,6 +310,14 @@ struct SettingsView: View {
                 selection = pending
                 AppActions.shared.pendingSettingsSelection = nil
             }
+        }
+        // 窗口**已经开着**时走这条:上面那个 .onAppear 只在窗口新建那一次跑,不会再有第二次
+        // (见 AppActions.requestSettings)。两条都要,因为反过来也成立 —— 窗口还没建时
+        // subject 发出去没人接,那次得靠信箱。
+        .onReceive(AppActions.shared.selectionRequests) { item in
+            selection = item
+            // 同一次请求在信箱里的那份一并清掉,免得下次新建窗口时又被它顶一次。
+            AppActions.shared.pendingSettingsSelection = nil
         }
         // 见 AuxiliaryWindowActivation 注释——.accessory 策略下临时借一个 Dock 图标,
         // 关掉后(没有别的辅助窗口还开着)还原,不跟"在 Dock 中显示"这个永久偏好打架。
@@ -243,6 +354,10 @@ private struct LyricsSettingsTab: View {
     // 在本地播放每次轮询(~2秒一次)更新歌曲信息时跟着白白重渲染一次。用普通引用
     // (class 本身是引用类型,let 一样能改它的属性),不订阅。
     private let local = LocalPlaybackSource.shared
+    // 这一个反过来要订阅:下面「全局时间轴偏移」那行得实时显示当前值。它只在用户真的
+    // 改这个值时才发通知,不像 local 那样每轮播放轮询都推,所以订阅它不会带来上面那段
+    // 注释里说的白白重渲染。
+    @ObservedObject private var offsets = LyricsOffsetStore.shared
 
     /// 一种文字的罗马音开关。跟中文繁简那个 Picker 一样**双写**:AppSettings 负责持久化,
     /// LocalPlaybackSource 负责让当前这首歌立刻重新解析(它的 didSet 会 reload)。
@@ -289,7 +404,11 @@ private struct LyricsSettingsTab: View {
             switch self {
             case .fetch: return L10n.t("获取")
             case .translation: return L10n.t("译文")
-            case .display: return L10n.t("显示")
+            // 2026-08-17 从「显示」改名:侧边栏另有一个「歌词显示」分类(管三种展示面的
+            // 开关和样式),同一个词出现在两层,想调字体的人会先来这里扑空。这一段管的是
+            // 歌词内容本身的呈现效果(卡拉OK/繁简/罗马音/双行),「效果」不与那边撞名。
+            // rawValue 仍是 display,@AppStorage 存的是 rawValue,改显示名不动持久化。
+            case .display: return L10n.t("效果")
             case .manage: return L10n.t("管理")
             }
         }
@@ -303,7 +422,7 @@ private struct LyricsSettingsTab: View {
     private var section: Section { Section(rawValue: sectionRaw) ?? .fetch }
 
     var body: some View {
-        // 这一页没有预览条,也就不需要固定头部;分段选择器跟「外观」页一样留在滚动区
+        // 这一页没有预览条,也就不需要固定头部;分段选择器跟「歌词显示」页一样留在滚动区
         // (理由见那一页 header 上的注释)。
         SettingsPage(
             title: L10n.t("歌词"),
@@ -347,9 +466,9 @@ private struct LyricsSettingsTab: View {
     private var currentSection: some View {
         switch section {
         case .fetch:
-            parsingCard
-            // 「来源」和「匹配」合成一张卡:它们是同一件事的两半 —— 去哪儿查、查回来怎么挑。
-            // 分成两张卡的时候这一段是三张卡、一屏装不下,而其余三段都只有一张卡,轻重失衡。
+            // 这一段只有一张卡(来源/匹配/预取),跟其余三段的一段一卡对齐。预取原来是
+            // 独立一张卡摆在最前面 —— 用户真正要动的决策(选来源、挑算法)反而被一个
+            // 无感优化开关压在下面,2026-08-17 并进来源卡尾部,主次归位。
             sourcesAndMatchingCard
         case .translation:
             translationCard
@@ -360,34 +479,11 @@ private struct LyricsSettingsTab: View {
         }
     }
 
-    // 播放位置现在通过 AppleScript 问 Music.app(见 MediaControlClient.swift)得到精确值,
-    // 不再有"精确/估算"两条路径可选,所以没有对应开关——自动化权限是显示歌词的必要前提,
-    // 状态统一显示在"播放器"分类的"权限"里。
-    private var parsingCard: some View {
-        SettingsCard {
-            // "解析"(而非"预取")避免被误读成预先加载音频本身,这个开关从不碰音频。
-            SettingsRow(
-                icon: "square.stack",
-                // 不给 ? 提示。这里原来解释的是"它只认资料库里的曲目" —— 那条注意事项
-                // 存在的理由是"开了却什么都没发生";2026-08-14 预取扩展到全部播放器之后,
-                // 那个坑只剩"Apple Music 播非资料库专辑"这一种窄情况,而预取本来就是无感的
-                // (成功与否用户都看不见),为它常驻一个 ? 是拿噪声换不了任何决策。标题本身
-                // 已经说清楚这个开关做什么。
-                title: L10n.t("提前解析同专辑其它曲目")
-            ) {
-                Toggle("", isOn: Binding(
-                    get: { features.albumPrefetch },
-                    set: { features.albumPrefetch = $0; Task { await features.save() } }
-                ))
-            }
-        }
-    }
-
     // 每个来源前面那个彩色圆点用 iconTint 上色——这里的图标不是"行首的视觉锚点",它本身
     // 就是这个来源的身份色(跟"歌词管理"窗口里来源列的色点是同一套 source.color)。
     private var sourcesAndMatchingCard: some View {
         SettingsCard {
-            SettingsCardHeader(title: L10n.t("歌词来源"), subtitle: L10n.t("至少需要保留一个歌词来源"))
+            SettingsCardHeader(title: L10n.t("歌词来源"))
             CardDivider()
             // 五个来源横排成一排可勾选的胶囊,不再一个来源占一整行 —— 五行开关加上分隔线
             // 把这张卡撑到了半屏高,而这里要表达的只是"哪几个开着"。
@@ -407,7 +503,7 @@ private struct LyricsSettingsTab: View {
             SettingsRow(
                 icon: "slider.horizontal.3",
                 title: L10n.t("匹配算法"),
-                help: L10n.t("智能算法：给每个来源打分（逐字时间轴、语言匹配等），取分最高的。顺序优先：不打分，按下面的顺序取第一个有结果的来源")
+                help: L10n.t("智能算法：给每个来源打分（逐字时间轴、语言匹配等），取分最高的\n顺序优先：不打分，按下面的顺序取第一个有结果的来源")
             ) {
                 Picker("", selection: Binding(
                     get: { features.lyricsSourceMode },
@@ -449,6 +545,24 @@ private struct LyricsSettingsTab: View {
                         }
                     }
                 }
+            }
+            CardDivider()
+            // "解析"(而非"预取")避免被误读成预先加载音频本身,这个开关从不碰音频。
+            // 2026-08-09 起它曾独立成卡摆在这一段最前面,2026-08-17 并进来:一个无感优化
+            // 开关不值得占一整张卡,更不该排在来源/匹配这些真正的决策项前面。
+            SettingsRow(
+                icon: "square.stack",
+                // 不给 ? 提示。这里原来解释的是"它只认资料库里的曲目" —— 那条注意事项
+                // 存在的理由是"开了却什么都没发生";2026-08-14 预取扩展到全部播放器之后,
+                // 那个坑只剩"Apple Music 播非资料库专辑"这一种窄情况,而预取本来就是无感的
+                // (成功与否用户都看不见),为它常驻一个 ? 是拿噪声换不了任何决策。标题本身
+                // 已经说清楚这个开关做什么。
+                title: L10n.t("提前解析同专辑其它曲目")
+            ) {
+                Toggle("", isOn: Binding(
+                    get: { features.albumPrefetch },
+                    set: { features.albumPrefetch = $0; Task { await features.save() } }
+                ))
             }
         }
     }
@@ -636,8 +750,7 @@ private struct LyricsSettingsTab: View {
                 // 这一项是"显示罗马音"的附属项,所以用子行(缩进 + 左边那条竖线)而不是主行:
                 // 原来用的是跟上面同款的 SettingsRow,两行长得一模一样,看不出谁属于谁。
                 SettingsSubRow(
-                    title: L10n.t("标注哪些语言"),
-                    subtitle: L10n.t("日语、韩语标成罗马字，中文标成拼音")
+                    title: L10n.t("标注哪些语言")
                 ) {
                     HStack(spacing: 12) {
                         romanizationToggle(
@@ -651,14 +764,60 @@ private struct LyricsSettingsTab: View {
                             help: L10n.t("只对判定为中文的歌词生效，例如 你好 → nǐ hǎo；默认关闭，中文歌词加拼音对中文读者通常是干扰"))
                     }
                 }
+                // 这句原来是常驻副标题,2026-08-17 挪进悬停说明(用户要求)——三个语言
+                // 开关各自已经带了更具体的 help,行上再顶一句概括是重复的噪声。
+                .help(L10n.t("日语、韩语标成罗马字，中文标成拼音"))
             }
             CardDivider()
             SettingsRow(
                 icon: "text.aligncenter",
-                title: L10n.t("双行显示")
+                title: L10n.t("双行显示"),
+                // 旁边的译文/罗马音都标了生效面,唯独这行没有 —— 开着灵动岛的人打开它
+                // 没反应,会以为开关坏了。实际消费方只有 LyricsOverlayView(悬浮歌词)。
+                help: L10n.t("这个开关只影响「桌面悬浮歌词」：在当前句下方预览下一句。歌词窗口本来就显示整份歌词，灵动岛和菜单栏只有一行空间")
             ) {
                 Toggle("", isOn: $settings.showNextLinePreview)
             }
+            CardDivider()
+            // 全局时间轴偏移(2026-08-17 加)。跟菜单栏「歌词时间轴」那个单曲微调是两层:
+            // 这里校的是设备侧的固定延迟(它跟哪首歌无关,换首歌照样偏),那里校的是某一
+            // 份歌词自己的时间轴不准。两者相加才是实际生效的值,见
+            // LyricsOffsetStore.globalOffsetMs。
+            //
+            // 步长固定 0.05 秒,刻意不复用「快捷键」页那个「调整步长」:那个是"每按一次
+            // 键跳多少",属于手感;这里是一次性把设备延迟校准到位,要的是精度。绑在一起
+            // 的话,把步长调到 1 秒的人在这里就没法微调了。
+            SettingsRow(
+                icon: "timer",
+                title: L10n.t("全局时间轴偏移"),
+                subtitle: L10n.t("对所有歌生效；和单曲微调相加"),
+                // help 只留界面上**看不出来**的那一件事:符号往哪边走。用途和叠加关系
+                // 副标题已经说过了,原来那版在这里又重复一遍,四句话堆成一大坨。
+                help: L10n.t("正数＝歌词提前，负数＝歌词延后；常用来抵消蓝牙耳机的声音延迟")
+            ) {
+                HStack(spacing: 8) {
+                    Text("\(AppSettings.signedSeconds(ms: offsets.globalOffsetMs))\(L10n.t("秒"))")
+                        .monospacedDigit()
+                        .foregroundStyle(.secondary)
+                    // 数值必须摆在 Stepper 外面 —— SettingsRow 给尾部控件统一套了
+                    // .labelsHidden(),而 Stepper 是把数值画在 label 里的,放进去会被
+                    // 一并藏掉(「调整步长」那一行踩过,见那边的注释)。
+                    Stepper("", value: Binding(
+                        get: { Double(offsets.globalOffsetMs) / 1000 },
+                        set: { PlaybackCoordinator.shared.setGlobalLyricsOffset(Int(($0 * 1000).rounded())) }
+                    ), in: -5.0...5.0, step: 0.05)
+                    // 只在真的偏移过时才给「重置」:值为 0 时摆一个点了什么都不会变的
+                    // 按钮,跟菜单里那个「重置」同一个道理。
+                    if offsets.globalOffsetMs != 0 {
+                        Button(L10n.t("重置")) {
+                            PlaybackCoordinator.shared.setGlobalLyricsOffset(0)
+                        }
+                    }
+                }
+            }
+            // 「Spotify 时间轴偏移」那一行(2026-08-18 加的按播放器补偿)已于 2026-08-20
+            // 移除:它补的"Spotify 恒偏快"实为自然切歌锚点超前,已在 LocalPlaybackSource
+            // .naturalAdvanceCorrection 按曲精确校正,固定补偿反而不对症。
         }
     }
 
@@ -760,6 +919,9 @@ private struct AppearanceSettingsTab: View {
     // NSScreen.screens:插拔显示器时 SwiftUI 不会因为一个全局数组变了就重算 body,
     // 得靠下面那条 didChangeScreenParameters 通知显式刷新。
     @State private var availableScreens: [NSScreen] = NSScreen.screens
+    /// 「所有屏幕」在那个下拉里的哨兵 tag。屏幕的真实 tag 是 ScreenIdentity 给的 UUID
+    /// 串,不可能撞上这个值;空串已经被「自动」占了。
+    private static let allScreensTag = "__all_screens__"
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private func applyColorTheme(_ theme: ColorTheme) {
@@ -840,16 +1002,25 @@ private struct AppearanceSettingsTab: View {
             //
             // 选择器因此留在滚动区(那边是另一个 hosting view,实测命中正常),代价是滚下去
             // 之后要滚回顶部才能换段。
-            switch section {
-            case .overlay: OverlayPreviewBar()
-            case .notch: NotchPreviewBar()
-            case .menuBar: MenuBarPreviewBar()
-            case .other: EmptyView()
+            // 高度按当前段自己的预览走(2026-08-19,见 SectionPreviewMetrics 头注),
+            // 换段的高度变化用这条动画滑过去,别硬跳 —— 挂 value: sectionRaw,只在换段
+            // 那一刻生效,不会波及预览内部的高频刷新(karaoke/跑马灯)。
+            Group {
+                switch section {
+                case .overlay: OverlayPreviewBar()
+                case .notch: NotchPreviewBar()
+                case .menuBar: MenuBarPreviewBar()
+                case .other: EmptyView()
+                }
             }
+            .animation(.easeOut(duration: 0.18), value: sectionRaw)
         } page: {
             SettingsPage(
-                title: L10n.t("外观"),
-                subtitle: L10n.t("四种展示方式可以同时开启")
+                title: L10n.t("歌词显示"),
+                // 「三种」而不是原来的「四种」:这一页实际只有三个展示方式开关(桌面悬浮
+                // 歌词/灵动岛歌词/菜单栏歌词)。第四种是「歌词窗口」,它压根不在这一页配置
+                // —— 靠快捷键/菜单按需打开,没有开关。原文案让人数着三个开关去找第四个。
+                subtitle: L10n.t("三种展示方式可以同时开启")
             ) {
                 sectionPicker
                 currentSection
@@ -869,6 +1040,11 @@ private struct AppearanceSettingsTab: View {
     /// 分法就按**形态**走 —— 这是这一页天然的结构:先在「总览」里决定开哪几个,再进各自
     /// 那一段调它自己的样子。「自动隐藏」跟着总览走,因为它是**跨形态**的规则(悬浮歌词和
     /// 灵动岛共用),放进任何一个单独形态里都不对。
+    ///
+    /// ⚠️ 前三个的 rawValue 是**跨文件契约**:菜单栏面板那边的「全部设置…」要把这一页直接
+    /// 翻到对应的形态那一段,靠的就是往下面那个 @AppStorage 键写这几个字符串
+    /// (LyrimuseCore.LyricsSurface.appearanceSectionRawValue)。改名字不会编译报错,只会
+    /// 表现成"长按灵动岛、设置窗口却停在悬浮歌词那一段"。
     private enum Section: String, CaseIterable, Identifiable {
         case overlay, notch, menuBar, other
         var id: Self { self }
@@ -882,7 +1058,8 @@ private struct AppearanceSettingsTab: View {
         }
     }
 
-    @AppStorage("settings:appearanceSection") private var sectionRaw = Section.overlay.rawValue
+    // 键名跟菜单栏面板共用同一份常量,别再各写一遍字面量。
+    @AppStorage(LyricsSurface.appearanceSectionStorageKey) private var sectionRaw = Section.overlay.rawValue
     private var section: Section { Section(rawValue: sectionRaw) ?? .overlay }
 
     private var sectionPicker: some View {
@@ -1012,17 +1189,16 @@ private struct AppearanceSettingsTab: View {
         SettingsCard {
             SettingsCardHeader(title: L10n.t("配色"))
             CardDivider()
+            // 标题就把范围说清楚了:桌面悬浮歌词这边被接管的只有**文字颜色**
+            // (PlaybackCoordinator.displayForegroundColor),背景色(LyricsOverlayView 的
+            // overlayBackground)和描边色(.lyricsTextStroke)任何时候都无条件生效。
+            //
+            // ⚠️ 有一件事标题里装不下、副标题又已按用户要求去掉(2026-08-17):这个开关
+            // **同时也管灵动岛**,那边歌词、歌名、进度条、播放指示条、控制按钮整套都跟着
+            // 封面走(见 NotchLyricsView.accentOrWhite)。改这一项时记得它的影响不止这张卡。
             SettingsRow(
                 icon: "photo.on.rectangle.angled",
-                title: L10n.t("跟随封面取色"),
-                // 这句必须精确,原来那句挂在"配色主题"行上、暗示下面三个颜色都是备用,是错的:
-                // 桌面悬浮歌词这边只有**文字颜色**被接管(PlaybackCoordinator.
-                // displayForegroundColor),背景色(LyricsOverlayView 的 overlayBackground)和
-                // 描边色(.lyricsTextStroke)任何时候都无条件生效。
-                // 2026-08-16 补上后半句:这个开关同时也管灵动岛 —— 那边歌词、歌名、进度条、
-                // 播放指示条、控制按钮整套都会跟着封面走(见 NotchLyricsView.accentOrWhite)。
-                // 不写出来的话,用户在"桌面悬浮歌词"这张卡里根本想不到它会影响灵动岛。
-                subtitle: L10n.t("桌面悬浮歌词只接管文字颜色，背景色和描边色始终按下面设置的来；灵动岛整套配色也跟着这个开关")
+                title: L10n.t("文字跟随封面")
             ) {
                 Toggle("", isOn: $settings.followsCoverArt)
             }
@@ -1055,8 +1231,8 @@ private struct AppearanceSettingsTab: View {
             //
             // ⚠️ 这跟"展示方式的开关不再跟配置卡联动、关着也能配"不是一回事,别照那条推翻
             // 这里:那边是**没启用**某个形态时仍要让人能预先配好它;这里是某一项**已经被
-            // 另一项接管**,显示出来只会让人以为改了有用。背景色和描边色不受接管(见
-            // 「跟随封面取色」那一行的副标题),所以照常显示。
+            // 另一项接管**,显示出来只会让人以为改了有用。背景色和描边色不受接管(「文字
+            // 跟随封面」这个名字里的"文字"两个字就是这个意思),所以照常显示。
             if !settings.followsCoverArt {
                 CardDivider()
                 SettingsRow(icon: "paintbrush", title: L10n.t("文字颜色")) {
@@ -1173,7 +1349,17 @@ private struct AppearanceSettingsTab: View {
             CardDivider()
             SettingsRow(icon: "textformat.size", title: L10n.t("字号")) {
                 HStack(spacing: 8) {
-                    Slider(value: $settings.fontSize, in: 14...36, step: 1)
+                    Slider(value: Binding(
+                        get: { settings.fontSize },
+                        set: { newValue in
+                            // 相等守卫:拖动中每个鼠标事件都会调 set,step 量化后大量等值
+                            // 赋值照样广播 objectWillChange,didSet 还会 recomputeFonts()
+                            // 连带重赋 4 个派生字体 @Published(一写五发)——所有观察
+                            // AppSettings 的界面跟着白跑(2026-08-19,同三个宽度滑杆)。
+                            guard newValue != settings.fontSize else { return }
+                            settings.fontSize = newValue
+                        }
+                    ), in: 14...36, step: 1)
                         .frame(width: 150)
                     Text(String(format: L10n.t("%@pt"), "\(Int(settings.fontSize))"))
                         .foregroundStyle(.secondary)
@@ -1193,6 +1379,11 @@ private struct AppearanceSettingsTab: View {
                     Slider(value: Binding(
                         get: { settings.overlayWidth },
                         set: { newValue in
+                            // 相等守卫:Slider 拖动中会按鼠标事件频率重复调 set,值经 step
+                            // 量化后大量重复 —— @Published 是 willSet 语义,等值赋值照样
+                            // 广播 objectWillChange 打醒所有观察 AppSettings 的界面,didSet
+                            // 还会同步写一次 UserDefaults。下面两个宽度滑杆同款。
+                            guard newValue != settings.overlayWidth else { return }
                             settings.overlayWidth = newValue
                             LyricsOverlayWindowController.shared.setWidth(newValue)
                         }
@@ -1263,26 +1454,6 @@ private struct AppearanceSettingsTab: View {
                 .fixedSize()
             }
             CardDivider()
-            SettingsRow(
-                icon: "waveform",
-                title: L10n.t("播放指示条"),
-                subtitle: L10n.t("歌名前面几根跟着播放跳动的小竖条")
-            ) {
-                Toggle("", isOn: $settings.notchShowEqualizer)
-                    .labelsHidden()
-                    .toggleStyle(.switch)
-            }
-            CardDivider()
-            SettingsRow(
-                icon: "speaker.wave.2",
-                title: L10n.t("音量提示"),
-                subtitle: L10n.t("调音量时在灵动岛上短暂显示；系统自带的音量提示不受影响，会同时出现")
-            ) {
-                Toggle("", isOn: $settings.notchVolumeBanner)
-                    .labelsHidden()
-                    .toggleStyle(.switch)
-            }
-            CardDivider()
             // 跟上面桌面悬浮歌词的"宽度"滑块同一套写法(设置项本身只负责持久化,didSet
             // 不碰 NSWindow,这里的 set 闭包显式调用窗口控制器的方法让改动立刻生效)。
             // 跟桌面悬浮歌词不同的是灵动岛不需要"保持中心点"的增量调整——它的位置从来
@@ -1292,6 +1463,8 @@ private struct AppearanceSettingsTab: View {
                     Slider(value: Binding(
                         get: { settings.notchContentWidth },
                         set: { newValue in
+                            // 相等守卫,理由见悬浮歌词"宽度"滑杆同款注释。
+                            guard newValue != settings.notchContentWidth else { return }
                             settings.notchContentWidth = newValue
                             NotchLyricsWindowController.shared.applyContentWidthSetting()
                         }
@@ -1304,19 +1477,33 @@ private struct AppearanceSettingsTab: View {
                 }
             }
             CardDivider()
+            // 「所有屏幕」2026-08-17 从下面一个独立的 Toggle 并进了这个下拉(用户要求)。
+            // 它跟"选哪一块屏"本来就是同一个问题的几个互斥答案 —— 拆成"下拉 + 一个会把
+            // 下拉整个禁用掉的开关"是把一个选择硬掰成了两个控件,还得额外写一句"开启后
+            // 上面的指定屏幕不再起作用"来解释它们的关系。
             SettingsRow(
                 icon: "display",
                 title: L10n.t("显示在哪块屏幕"),
-                help: L10n.t("「自动」选带刘海的那块；指定的屏幕拔掉后自动回到「自动」")
+                help: L10n.t("「自动」选带刘海的那块；「所有屏幕」每块屏各显示一个；指定的屏幕拔掉后自动回到「自动」")
             ) {
-                Picker("", selection: Binding(
-                    get: { settings.notchScreenID },
+                Picker("", selection: Binding<String>(
+                    get: {
+                        settings.notchAllScreens ? Self.allScreensTag : settings.notchScreenID
+                    },
                     set: { newValue in
-                        settings.notchScreenID = newValue
+                        // 两个设置项还是各存各的(notchAllScreens 有自己的订阅方
+                        // NotchMirrorManager),这里只是把它们合成一个选择呈现出来。
+                        // 选具体屏幕时顺手把 allScreens 关掉,否则选了没反应。
+                        settings.notchAllScreens = (newValue == Self.allScreensTag)
+                        if newValue != Self.allScreensTag {
+                            settings.notchScreenID = newValue
+                        }
                         NotchLyricsWindowController.shared.applyScreenSetting()
                     }
                 )) {
                     Text(L10n.t("自动")).tag("")
+                    Text(L10n.t("所有屏幕")).tag(Self.allScreensTag)
+                    Divider()
                     ForEach(availableScreens, id: \.self) { screen in
                         if let id = ScreenIdentity.id(of: screen) {
                             Text(screen.localizedName).tag(id)
@@ -1325,22 +1512,13 @@ private struct AppearanceSettingsTab: View {
                     // 存着的那块屏现在没接着时补一个占位项。Picker 的选中值如果在选项里
                     // 找不到对应 tag,整个控件会显示成空白——那看起来像设置丢了,而实际上
                     // 偏好还在、屏幕插回来就会恢复。
-                    if !settings.notchScreenID.isEmpty,
+                    if !settings.notchAllScreens, !settings.notchScreenID.isEmpty,
                        ScreenIdentity.screen(withID: settings.notchScreenID) == nil {
                         Text(L10n.t("已断开的屏幕")).tag(settings.notchScreenID)
                     }
                 }
                 .pickerStyle(.menu)
                 .fixedSize()
-                .disabled(settings.notchAllScreens)
-            }
-            SettingsSubRow(
-                title: L10n.t("所有屏幕都显示"),
-                subtitle: L10n.t("每块屏各显示一个；开启后上面的指定屏幕不再起作用")
-            ) {
-                Toggle("", isOn: $settings.notchAllScreens)
-                    .labelsHidden()
-                    .toggleStyle(.switch)
             }
         }
         // 设置页开着的时候插拔显示器,下拉里的选项要跟着变。灵动岛窗口自己也订阅了同一条
@@ -1359,16 +1537,42 @@ private struct AppearanceSettingsTab: View {
         SettingsCard {
             SettingsCardHeader(
                 title: L10n.t("菜单栏歌词"),
-                help: L10n.t("这一格固定占这么宽，不会随歌词长短伸缩；放不下的句子会横向滚动，鼠标悬停也能看到完整的这一行")
+                help: L10n.t("放不下的句子会横向滚动，鼠标悬停也能看到完整的这一行")
             )
             CardDivider()
-            SettingsSubRow(title: L10n.t("显示宽度")) {
+            // 「宽度模式」摆在「显示宽度」上面:它决定下面那个宽度对短句意味着什么
+            // (上限还是定值),先读到它再看宽度才讲得通。
+            // 「自适应」打 Beta(2026-08-19 用户要求)。副标题**常显**、不只挂 hover:这是
+            // 一条"选它可能不好用"的警告,藏在 tooltip 里等于没说(用户为面板上那个只在悬停
+            // 才出现的「⋯」提示专门问过一次,教训记在这儿)。
+            // 说明放「?」气泡而不是副标题(2026-08-19 用户要求改成 tip):这段话要讲清
+            // "为什么不建议自适应",写成常显副标题会占两行、把这张卡撑高;而 Beta 标签本身
+            // 已经在按钮上常显着,气泡只负责展开原因。
+            SettingsSubRow(title: L10n.t("宽度模式"), help: L10n.t("只影响装得下的句子。\n\n固定：短句也占满设定宽度，右边留白，菜单栏上的位置不会变。\n\n自适应（不建议）：短句按自己的宽度占位，省下多余空间——代价是每换一句都要重建菜单栏这一项。系统只在项出生那一刻给邻居排位，重建太密时邻居图标会停在旧位置（错位、闪动），左键面板也可能被挤掉。想稳定就用固定。")) {
+                Picker("", selection: $settings.menuBarLyricsWidthMode) {
+                    Text(L10n.t("固定")).tag(MenuBarLyricsWidthMode.fixed)
+                    Text(L10n.t("自适应（Beta）")).tag(MenuBarLyricsWidthMode.adaptive)
+                }
+                .pickerStyle(.segmented)
+                .fixedSize()
+            }
+            // 两种模式的区别整段收进悬停说明,行上不再留副标题。help 挂在**整行**上而不是
+            // 只挂 Picker:悬停标题那一侧同样该出提示,而不是非得压到那两个小分段上。
+            // "只影响装得下的句子"这句原来是副标题,并进来了 —— 去掉副标题不等于丢掉这个
+            // 范围限定,它恰恰是这一项最容易被误解的地方。
+            CardDivider()
+            SettingsSubRow(title: L10n.t("最大宽度")) {
                 HStack(spacing: 8) {
                     // 按点(pt)而不是字数 —— 字符宽度差得太远,按字数控不住实际占宽,
                     // 见 AppSettings.menuBarLyricsWidth。
                     Slider(value: Binding(
                         get: { Double(settings.menuBarLyricsWidth) },
-                        set: { settings.menuBarLyricsWidth = CGFloat(($0 / 10).rounded() * 10) }
+                        set: {
+                            // 相等守卫,理由见悬浮歌词"宽度"滑杆同款注释。
+                            let quantized = CGFloat(($0 / 10).rounded() * 10)
+                            guard quantized != settings.menuBarLyricsWidth else { return }
+                            settings.menuBarLyricsWidth = quantized
+                        }
                     ), in: 80...600, step: 10)
                     .frame(width: 150)
                     Text(String(format: L10n.t("%@pt"), "\(Int(settings.menuBarLyricsWidth))"))
@@ -1499,9 +1703,13 @@ private struct PlayerSettingsTab: View {
 
     // 本地数据源现在通过 AppleScript 直接问 Music.app(见 MediaControlClient.swift),
     // 这个权限因此从"可选、只影响播放进度精度"变成"核心路径必需、没有就完全看不到
-    // 歌词",副标题特意说清楚这一点,别让人以为不给也无所谓。QQ 音乐/网易云/Spotify 走
-    // 系统级 MediaRemote,不需要这个权限——那种情况下不是把这张卡整个撤掉(2026-08-02
-    // 的教训:卡片凭空消失会让人怀疑是不是坏了),而是换成一句明确的"不需要授权"确认。
+    // 歌词",副标题特意说清楚这一点,别让人以为不给也无所谓。
+    //
+    // QQ 音乐/网易云/Spotify 走系统级 MediaRemote,压根不需要这个权限,这张卡整个不出现。
+    // ⚠️ 这里翻过一次:2026-08-02 曾经担心"卡片凭空消失会让人怀疑是不是坏了",改成显示
+    // 一句"无需额外授权"的确认卡;2026-08-17 用户要求撤回 —— 一张只为了说"这里没事"而
+    // 存在的卡片,本身就是噪声,而且它占的篇幅跟真正需要处理的那张一样大,反而稀释了
+    // 页面上真正要人动手的内容。不需要就不显示。
     @ViewBuilder
     private var permissionCard: some View {
         if features.player == .appleMusic {
@@ -1546,13 +1754,6 @@ private struct PlayerSettingsTab: View {
                     isRequestingAutomation = false
                     automationRequestTimedOut = false
                 }
-            }
-        } else {
-            SettingsCard {
-                SettingsCardHeader(
-                    title: L10n.t("无需额外授权"),
-                    subtitle: String(format: L10n.t("%@ 走系统接口读取播放状态"), features.player.displayName)
-                )
             }
         }
     }
@@ -1750,6 +1951,27 @@ private struct PlayerSettingsTab: View {
 
 private struct GeneralSettingsTab: View {
     @ObservedObject private var settings = AppSettings.shared
+
+    private func menuBarIconChoice(_ style: MenuBarIconStyle) -> some View {
+        let selected = settings.menuBarIconStyle == style
+        return Button {
+            settings.menuBarIconStyle = style
+        } label: {
+            // .template 让它跟在菜单栏上一样只按 alpha 上色,而不是画出黑色本体 ——
+            // 否则深色外观下这一格会是一团黑。
+            Image(nsImage: MenuBarIconStyle.cachedImage(for: style))
+                .renderingMode(.template)
+                .foregroundStyle(selected ? Color.white : Color.primary)
+                .frame(width: 42, height: 26)
+                .background(
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(selected ? Color.accentColor : Color.secondary.opacity(0.12)))
+        }
+        .buttonStyle(.plain)
+        .help(style.displayName)
+        .accessibilityLabel(style.displayName)
+    }
+
     @State private var showExportConfigWarning = false
     @State private var showImportConfigConfirm = false
     @State private var showICloudExportWarning = false
@@ -1767,9 +1989,18 @@ private struct GeneralSettingsTab: View {
     var body: some View {
         SettingsPage(
             title: L10n.t("通用"),
-            subtitle: L10n.t("语言、启动方式、Dock 图标，以及把全部设置搬到另一台 Mac")
+            subtitle: L10n.t("语言、启动方式、菜单栏和 Dock 图标，以及把全部设置搬到另一台 Mac")
         ) {
+            // 2026-08-17 这一页从"两张无标题的卡"改成四张带小标题的卡。原来五项挤在同一张
+            // 卡里,其实是两类东西:语言/开机启动讲的是这个 App 怎么跑,Dock/菜单栏图标讲的
+            // 是它在系统 UI 里怎么露面 —— 中间只有一条分隔线,读起来是一串杂项。而且 12 款
+            // 图标那个网格夹在正中间,视觉上本来就已经把那张卡切成了上下两半。
+            //
+            // 另外:这一页原来是全 App 唯一两张卡都没有 SettingsCardHeader 的分类(其它页
+            // 都有:歌词来源/配色/文字/窗口/灵动岛歌词/菜单栏歌词/自动隐藏)。
             SettingsCard {
+                SettingsCardHeader(title: L10n.t("语言与启动"))
+                CardDivider()
                 // 下拉菜单而不是分段控件——分段控件的宽度会随选项数线性变宽,以后再加
                 // 语言(繁体中文/日语等)容易挤爆这一行;下拉菜单不管加多少个选项,这一行
                 // 的宽度都不变。
@@ -1786,13 +2017,49 @@ private struct GeneralSettingsTab: View {
                 SettingsRow(icon: "power", title: L10n.t("开机启动")) {
                     Toggle("", isOn: $settings.launchAtLoginEnabled)
                 }
+            }
+
+            // 这张卡讲的是同一件事的两面:这个 App 在系统 UI 里以什么形态露面 —— Dock 里
+            // 有没有图标、菜单栏那枚长什么样、动不动。三项互相有关,跟上面的语言/开机启动
+            // 没关系,所以分开成卡而不是继续接在同一张里。
+            SettingsCard {
+                SettingsCardHeader(title: L10n.t("菜单栏与 Dock"))
                 CardDivider()
                 SettingsRow(
                     icon: "macwindow",
                     title: L10n.t("在 Dock 中显示"),
-                    subtitle: L10n.t("关闭后只保留菜单栏图标，不占 Dock 位置")
+                    help: L10n.t("关闭后只保留菜单栏图标，不占 Dock 位置")
                 ) {
                     Toggle("", isOn: $settings.showInDock)
+                }
+                CardDivider()
+                // 放在「在 Dock 中显示」后面而不是「菜单栏歌词」那张卡里:这个图标恰恰是
+                // **没有**歌词可显示时才出现的(没在放歌、还没解析出这一句、或者菜单栏歌词
+                // 整个关掉),跟那边的宽度/滚动设置一件都不沾。它跟上面这一行才是同类 ——
+                // 都在说"这个 App 在系统 UI 里长什么样"(2026-08-17 用户指出)。
+                SettingsRow(
+                    icon: "menubar.rectangle",
+                    title: L10n.t("菜单栏图标")
+                ) { EmptyView() }
+                SettingsRawRow(insetToText: true) {
+                    // 直接把图标本身摆出来让人挑,不用文字列表 —— 这一项的全部内容就是
+                    // "长什么样",写成一串名字反而要人先在脑子里翻译一遍。
+                    LazyVGrid(
+                        columns: [GridItem(.adaptive(minimum: 46), spacing: 6, alignment: .leading)],
+                        alignment: .leading, spacing: 6
+                    ) {
+                        ForEach(MenuBarIconStyle.allCases) { style in
+                            menuBarIconChoice(style)
+                        }
+                    }
+                }
+                CardDivider()
+                SettingsRow(
+                    icon: "figure.dance",
+                    title: L10n.t("随播放律动"),
+                    help: L10n.t("播放时图标动起来，暂停即静止")
+                ) {
+                    Toggle("", isOn: $settings.menuBarIconAnimates)
                 }
             }
 
@@ -1806,6 +2073,8 @@ private struct GeneralSettingsTab: View {
             // 的副标题之后,每条只讲它自己那个按钮会发生什么,尤其"会覆盖""无法撤销"这类
             // 后果紧贴着对应的按钮,不用读者自己去对应。
             SettingsCard {
+                SettingsCardHeader(title: L10n.t("设置备份"))
+                CardDivider()
                 // 换电脑用的快捷通道:一键存到 iCloud Drive 的 Lyrimuse 文件夹、在新机器上
                 // 一键读回来。下面的"导出…/导入…"仍然保留 —— 那是通用的存文件路径(存到
                 // U 盘、发给自己、放进别的网盘),不是所有人都用 iCloud。
@@ -1907,14 +2176,6 @@ private struct GeneralSettingsTab: View {
                         NSWorkspace.shared.activateFileViewerSelecting([ConfigPortability.configFolderURL])
                     }
                 }
-                CardDivider()
-                SettingsRow(
-                    icon: "trash",
-                    title: L10n.t("清除所有设置"),
-                    subtitle: L10n.t("只抹掉本机设置，无法撤销；iCloud 和已导出的备份不受影响")
-                ) {
-                    DestructiveButton(title: L10n.t("清除…")) { showClearConfigWarning = true }
-                }
             }
             .onAppear { iCloudSnapshot = ICloudConfigStore.latestSnapshot() }
             .alert(L10n.t("确定要存到 iCloud 吗？"), isPresented: $showICloudExportWarning) {
@@ -1974,6 +2235,21 @@ private struct GeneralSettingsTab: View {
             } message: {
                 Text(L10n.t("这会覆盖当前所有设置，包括已连接的账号和播放数据发往的地址，并立即重启 Lyrimuse 使其生效"))
             }
+
+            // 单独一张卡,不跟上面的备份/恢复挤在一起 —— 这是本页唯一不可撤销的动作,而它
+            // 原来紧贴在「配置文件夹」下面、只隔一条分隔线。「歌词显示」页的「恢复默认文字与
+            // 配色」就是这么单独放的,同类动作按同一套处理。
+            SettingsCard {
+                SettingsRow(
+                    icon: "trash",
+                    title: L10n.t("清除所有设置"),
+                    subtitle: L10n.t("只抹掉本机设置，无法撤销；iCloud 和已导出的备份不受影响")
+                ) {
+                    DestructiveButton(title: L10n.t("清除…")) { showClearConfigWarning = true }
+                }
+            }
+            // 这条 alert 跟着按钮一起搬过来。留在上面那张卡上也能弹(alert 由 @State 驱动,
+            // 锚点只要还在层级里就行),但按钮和它的确认框分居两张卡纯属给人添乱。
             .alert(L10n.t("确定要清除所有设置吗？"), isPresented: $showClearConfigWarning) {
                 Button(L10n.t("取消"), role: .cancel) {}
                 // 同上:clearAllConfig 现在要等常驻服务真的卸载完才返回,不能在它之前 terminate。
@@ -2191,8 +2467,7 @@ private struct AboutSettingsTab: View {
                     .toggleStyle(.switch)
                 }
                 SettingsSubRow(
-                    title: L10n.t("自动下载并安装"),
-                    subtitle: L10n.t("下次启动时生效，不会打断正在播放的歌")
+                    title: L10n.t("自动下载并安装")
                 ) {
                     Toggle("", isOn: Binding(
                         get: { updater.automaticallyDownloadsUpdates },
@@ -2219,7 +2494,7 @@ private struct AboutSettingsTab: View {
                 }
                 CardDivider()
                 SettingsRow(icon: "exclamationmark.bubble", title: L10n.t("反馈问题")) {
-                    Button(L10n.t("打开")) {
+                    Button(L10n.t("前往")) {
                         NSWorkspace.shared.open(URL(string: "https://github.com/Yudaotor/lyrimuse/issues")!)
                     }
                 }
@@ -2267,12 +2542,18 @@ private struct AboutSettingsTab: View {
 }
 
 
-/// 设置窗口的 NSWindow 收尾配置:让它能被拖大。
+/// 设置窗口的 NSWindow 收尾配置:让它能被拖大、能最小化。
 ///
 /// SwiftUI 给 Settings scene 的 styleMask 里**没有** .resizable(实测 32771 =
 /// titled | closable | fullSizeContentView),所以这个窗口原本一格也拉不动,SettingsView
-/// 上声明的 idealHeight 只决定它开出来多大。而「外观」页顶上钉着 205pt 的固定头部,
+/// 上声明的 idealHeight 只决定它开出来多大。而「歌词显示」页顶上钉着 205pt 的固定头部,
 /// 窗口拉不高的话滚动区就一直很憋屈。
+///
+/// 同一个 32771 里也没有 .miniaturizable —— 黄灯是灰的,点不动(2026-08-17 用户问)。
+/// 那是苹果给 Settings scene 定的默认,系统「设置」自己也这样;但这一页很长、内容也不是
+/// "改完就关"的一次性面板(Last.fm 统计、歌词管理入口都在里面),留着能收起来更顺手,
+/// 所以一并开了。收起来之后跟普通窗口一样在 Dock 右侧那段可以点回来,不受这个 App
+/// 是否显示 Dock 图标影响。
 ///
 /// ⚠️ scene 修饰符 .windowResizability(.contentMinSize) 对 Settings scene 无效
 /// (实测加上之后 styleMask 纹丝不动),只能在 NSWindow 这一层开。缩放下限仍由
@@ -2289,7 +2570,7 @@ struct SettingsWindowConfigurator: NSViewRepresentable {
         let view = NSView()
         // 视图刚建好时还没挂进窗口,拿不到 window,推迟到下一个 runloop。
         DispatchQueue.main.async {
-            view.window?.styleMask.insert(.resizable)
+            view.window?.styleMask.insert([.resizable, .miniaturizable])
         }
         return view
     }

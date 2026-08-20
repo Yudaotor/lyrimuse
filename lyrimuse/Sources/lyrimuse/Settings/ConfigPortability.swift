@@ -108,6 +108,10 @@ enum ConfigPortability {
     /// 但 AppSettings.init() 每次启动都还在读它们做一次性迁移,删了会让从老版本升上来的
     /// 用户丢掉迁移结果。
     static let obsoleteDefaultsKeys: Set<String> = [
+        // 2026-08-17 这两个开关整个撤掉了(用户要求),两项功能改成固定开启:音量提示
+        // 跟着灵动岛开关走,播放指示条常驻。留着这两个键只会被导出到新机器再导回来。
+        "np:notchVolumeBanner",
+        "np:notchShowEqualizer",
         "np:dataSourceMode",
         "np:relayBaseURL",
         "np:textShadowColorHex",

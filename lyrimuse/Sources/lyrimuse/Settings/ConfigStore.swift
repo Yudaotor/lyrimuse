@@ -327,7 +327,7 @@ public final class ConfigStore: ObservableObject {
             commitSnapshot()
             return true
         } else {
-            lastError = L10n.t("重启 collector 失败")
+            lastError = L10n.t("后台采集服务重启失败")
             return false
         }
     }

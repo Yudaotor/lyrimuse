@@ -183,10 +183,7 @@ func accountIconBadge(_ destination: AccountDestination, size: CGFloat = 22, cor
             .frame(width: size, height: size)
             .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
     case .lastfm:
-        Image(nsImage: lastfmBadgeImage)
-            .resizable()
-            .frame(width: size, height: size)
-            .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
+        lastfmBadge(size: size, cornerRadius: cornerRadius)
     case .stateRelay:
         iconBadge("dot.radiowaves.left.and.right", tint: .blue, size: size, cornerRadius: cornerRadius)
     case .bark:
@@ -217,7 +214,31 @@ private let listenBrainzBadgeImage: NSImage = {
     return image
 }()
 
-private let lastfmBadgeImage: NSImage = {
+// 不加 private:菜单栏面板底栏那一项(见 MenuBarPanel.footer)也要用同一张品牌图 ——
+// 那儿只有约 105pt 宽,靠"Last.fm"三个字加个泛化符号说不清是哪个服务,品牌图一眼就认得出。
+/// Last.fm 品牌图,**必须**经由这个函数画。
+///
+/// ⚠️ 资源本身四角是**不透明的纯白**:实测 LastfmIcon.png 512×512、`hasAlpha=true` 但
+/// **一个透明像素都没有**,红色圆角方块之外的四角是 R1 G1 B1 A1(圆角半径约边长的 20%)。
+/// 浅色界面上白角混在白底里看不出来,深色模式下就是四个白点 —— 2026-08-19 用户在菜单栏
+/// 面板底栏那一处报的就是这个。
+///
+/// 所以每一处都得按圆角裁一次。半径默认取 **22%**(比美术的 ~20% 略大),宁可切掉一丝红也
+/// 不留白边;调用方要对齐别处的圆角时可以显式传。
+///
+/// 没去改那张 PNG:白角要抠干净得按几何遮罩或从四角泛洪,而图**内部**的"as"字母也是纯白,
+/// 全局键白会把字母一起打穿;裁剪这条路的边缘由 SwiftUI 抗锯齿,更干净也可逆。
+// 不加 @MainActor:accountIconBadge 是 nonisolated 的自由函数,得能调它
+// (它原本就在那里直接访问 lastfmBadgeImage,隔离级别没有变化)。
+func lastfmBadge(size: CGFloat, cornerRadius: CGFloat? = nil) -> some View {
+    Image(nsImage: lastfmBadgeImage)
+        .resizable()
+        .frame(width: size, height: size)
+        .clipShape(RoundedRectangle(cornerRadius: cornerRadius ?? size * 0.22,
+                                    style: .continuous))
+}
+
+let lastfmBadgeImage: NSImage = {
     guard let path = Bundle.main.path(forResource: "LastfmIcon", ofType: "png"),
           let image = NSImage(contentsOfFile: path) else {
         // 找不到就退回泛化符号兜底(比如 swift build 直接跑、没走 build.sh 打包的场景),
@@ -231,6 +252,13 @@ private let lastfmBadgeImage: NSImage = {
 // 详情页头部(AccountLinkingTab.detailHeader)两处都要算同一个目的地的状态,不想维护
 // 两份逻辑。两边各自持有同一对共享单例(ConfigStore.shared/LastfmConnectController.shared)
 // 的 @ObservedObject 引用,传进来算,不做隐式全局访问。
+/// Last.fm 显示用的账号名:scrobble 用户名优先,回落到只读用的用户名(只填了读的那半边时
+/// 仍然报得出名字)。抽出来是因为菜单栏面板底栏也要显示同一个名字 —— 回落顺序只该有一份。
+@MainActor
+func lastfmDisplayName(config: ConfigStore) -> String {
+    config.lastfmScrobbleUsername.isEmpty ? config.lastfmUser : config.lastfmScrobbleUsername
+}
+
 @MainActor
 /// mirrorInfo 是 collector 落盘的"授权已失效"状态,调用方从 LastfmMirrorStatusWatcher
 /// 取 —— 必须经由观察器而不是在这里直接读文件:文件被删(collector 自愈)不触发任何
@@ -263,7 +291,7 @@ func destinationStatus(for destination: AccountDestination, config: ConfigStore,
         // collector 报告凭据已死(用户在网站上撤销了授权等)——必须压过"已连接":
         // 本地攥着的 session key 是废的,绿标就是在撒谎。
         if mirrorInfo != nil { return .error(L10n.t("授权已失效")) }
-        let name = config.lastfmScrobbleUsername.isEmpty ? config.lastfmUser : config.lastfmScrobbleUsername
+        let name = lastfmDisplayName(config: config)
         return .active(name.isEmpty ? nil : String(format: L10n.t("已连接：%@"), name))
     case .bark:
         // 只有一个字段,所以"没填"就等于"没碰过",没有中间态。
@@ -670,9 +698,23 @@ struct AccountLinkingTab: View {
     //     没开"这个死状态(用户以为连上就会记录,实际还差一个开关);断开时同步关掉;
     //   - 手填用户名框删掉:授权成功返回的真实用户名自动回填(LastfmAuthFlow 里已有
     //     该逻辑),桥接/周报读的就是它。
-    /// 未连接时那一栏:本地已记录的收听清单。
+    /// 本地已记录的收听清单。**有待补内容就出现,不分连没连账号。**
     ///
     /// 折起来只占一行(显示条数),展开才是清单 —— 攒到几十首时不该把整页顶开。
+    ///
+    /// 2026-08-18 把出现条件从「未连接」放宽成「有待补内容」。原来界面按 lastfmConnected
+    /// 分岔,而**数据层**攒不攒歌看的是另一个谓词:collector 侧 lastfmScrobblerIfEnabled
+    /// 一见 `!features.LastfmMirrorScrobble` 就返回 nil,于是 `p.lfm == nil` →
+    /// appendListen 开始写(lastfm.go:67 / poller.go:545)。也就是说「已连接、但 Scrobble
+    /// 开关关掉」同样在攒歌,而这条路径下用户只能看到另一行干巴巴的条数、点不开清单 ——
+    /// 用户实测报的正是这个。两个谓词现在对齐:有东西可补就给清单。
+    ///
+    /// 同一天再合并一次:「补提交」按钮原本自己独占一行(标题「补提交历史收听」),放宽条件
+    /// 之后它跟这一行同时出现、说的还是同一个数字,于是按钮搬进这一行的右侧,那一行删掉。
+    ///
+    /// 保留的那条设计决定:回填**必须人工点一下**,不做连接成功自动弹窗。这一步往用户的
+    /// Last.fm 写数据,而 scrobble 落进去基本删不掉(只能在网页上一条条手删);自动弹窗
+    /// 容易被顺手点掉,而顺手的代价是永久污染自己的听歌历史。
     @ViewBuilder
     private var pendingListensRow: some View {
         let items = backfill.pending?.items ?? []
@@ -755,19 +797,39 @@ struct AccountLinkingTab: View {
                 .frame(maxHeight: 180)
             } label: {
                 HStack(spacing: 4) {
-                    Label(
-                        String(format: L10n.t("本地已记录 %@ 首，连接后可补提交"), "\(items.count)"),
-                        systemImage: "tray.full"
-                    )
-                    .font(.callout)
-                    // 这里有**两个不同方**的限制,只讲一个会误导:
-                    //   1. 我们自己:collector 启动时按行数压缩(listenlog.go 的
-                    //      listenLogMaxLines = 4 万),换算成时间跨度约两年半;
-                    //   2. Last.fm:只接受约两周内的时间戳,更老的会被服务端静默 ignore
-                    //      (backfill.go 的 backfillMaxAge = 13 天,留了一天余量)。
-                    // 后者才是决定"到底能补回多少"的那条 —— 本地攒了两年半,真能补上去的
-                    // 只有最近两周。2026-08-15 第一版 tip 只写了第 1 条,用户当场问出了这个漏洞。
-                    HelpButton(text: L10n.t("本地最多存 4 万条（按每天 40 首约两年半）；但 Last.fm 只收约两周内的记录，更早的补不上去"))
+                    VStack(alignment: .leading, spacing: 1) {
+                        HStack(spacing: 4) {
+                            Label(
+                                String(format: L10n.t("本地已记录 %@ 首待补提交"), "\(items.count)"),
+                                systemImage: "tray.full"
+                            )
+                            .font(.callout)
+                            // Last.fm 只接受约两周内的时间戳,更老的会被服务端静默 ignore
+                            // (backfill.go 的 backfillMaxAge = 13 天,留了一天余量)。
+                            //
+                            // 2026-08-18 收窄成只讲这一条。原来还并列讲了"本地最多存 4 万条
+                            // (约两年半)",但那条永远不是决定性的:Last.fm 两周的闸门比它严得多,
+                            // 本地能存多久对"到底能补回什么"毫无影响,并列写反而让人以为有两道
+                            // 需要各自留意的限制。
+                            HelpButton(text: L10n.t("Last.fm 只接受约两周内的记录，更早的补不上去"))
+                        }
+                        if let status = backfillStatusLine() {
+                            Text(status).font(.caption).foregroundStyle(.secondary)
+                        }
+                    }
+                    Spacer(minLength: 8)
+                    // 「补提交」就放在这一行。2026-08-18 之前它自己独占一个 SettingsRow
+                    // (标题「补提交历史收听」+ 副标题「有 N 条本地收听还没提交」),跟这一行
+                    // 说的是同一件事、同一个数字,两行紧挨着摆纯属重复(用户反馈)。合并之后
+                    // 计数、清单、动作都在一处。
+                    //
+                    // 按钮只在连着账号时给:没连账号提交不到任何地方去,那时这一行退化成纯粹的
+                    // "本地攒了些什么"清单。
+                    if lastfmConnected {
+                        if backfill.busy { ProgressView().controlSize(.small) }
+                        Button(L10n.t("补提交")) { backfill.runBackfill() }
+                            .disabled(backfill.busy || items.isEmpty)
+                    }
                 }
             }
         }
@@ -780,30 +842,16 @@ struct AccountLinkingTab: View {
         return formatter.string(from: Date(timeIntervalSince1970: TimeInterval(uts)))
     }
 
-    /// 「补提交历史收听」那一行。数量来自 collector 的 dry-run(不发任何请求)。
-    @ViewBuilder
-    private var backfillRow: some View {
-        let pending = backfill.pending?.eligible ?? 0
-        let tooOld = backfill.pending?.skippedTooOld ?? 0
-        let last = backfill.lastRun
-        SettingsRow(
-            icon: "clock.arrow.circlepath",
-            title: L10n.t("补提交历史收听"),
-            subtitle: backfillSubtitle(pending: pending, tooOld: tooOld, last: last)
-        ) {
-            HStack(spacing: 8) {
-                if backfill.busy { ProgressView().controlSize(.small) }
-                Button(L10n.t("补提交")) { backfill.runBackfill() }
-                    .disabled(backfill.busy || pending == 0)
-            }
-        }
-    }
-
-    private func backfillSubtitle(
-        pending: Int, tooOld: Int, last: ScrobbleBackfillService.Outcome?
-    ) -> String {
+    /// 待补那一行的第二行小字。nil = 没有额外要说的(最常见的情形)。
+    ///
+    /// 这些话原来是「补提交历史收听」那一行的副标题。那一行 2026-08-18 合并进清单行之后,
+    /// 只把**确实还有信息量**的两种情况留了下来:刚跑完的结果、以及有多少条已经太旧。
+    ///
+    /// 原来另外两个分支(pending == 0 时那两句"没有待补的收听…")一并删掉 —— 那一行的
+    /// 出现条件本来就是 `eligible > 0`,pending == 0 永远进不来,是一直没人察觉的死代码。
+    private func backfillStatusLine() -> String? {
         // 刚跑完就报这次的结果,比"还剩几条"更是用户此刻想知道的。
-        if let last, last.accepted + last.ignored + last.quarantined > 0 {
+        if let last = backfill.lastRun, last.accepted + last.ignored + last.quarantined > 0 {
             var parts = [String(format: L10n.t("已补 %@ 条"), "\(last.accepted)")]
             if last.quarantined > 0 {
                 parts.append(String(format: L10n.t("%@ 条状态未知，不会自动重试"), "\(last.quarantined)"))
@@ -813,18 +861,9 @@ struct AccountLinkingTab: View {
             }
             return parts.joined(separator: "，")
         }
-        if pending == 0 {
-            // 没有可补的是最常见的状态(一直连着账号的人永远看到这句),所以这句话要
-            // 解释清楚这栏存在的意义,而不是干巴巴一个"没有"。
-            return tooOld > 0
-                ? String(format: L10n.t("没有待补的收听；%@ 条已超过 Last.fm 能接受的两周期限"), "\(tooOld)")
-                : L10n.t("没连账号时听的歌会记在本地，连上之后可以补提交到 Last.fm")
-        }
-        var s = String(format: L10n.t("有 %@ 条本地收听还没提交"), "\(pending)")
-        if tooOld > 0 {
-            s += String(format: L10n.t("，另有 %@ 条太旧、Last.fm 不再接受"), "\(tooOld)")
-        }
-        return s
+        let tooOld = backfill.pending?.skippedTooOld ?? 0
+        guard tooOld > 0 else { return nil }
+        return String(format: L10n.t("另有 %@ 条太旧、Last.fm 不再接受"), "\(tooOld)")
     }
 
     @ViewBuilder
@@ -859,11 +898,12 @@ struct AccountLinkingTab: View {
                     }
                 ))
             }
-            // 未连接时:把本地已经记下来的歌列出来。
+            // 只要本地攒了东西就把它们列出来 —— 不看连没连账号,理由见 pendingListensRow
+            // 的文档注释(界面原来按 lastfmConnected 分岔,而数据层看的是 Scrobble 开关)。
             //
             // 光说"会记在本地"是空头承诺 —— 用户没法验证到底记了没有、记了什么。列出来
             // 之后这件事就是可核对的,连账号时也能预期"补上去大概是这些"。
-            if !lastfmConnected, (backfill.pending?.eligible ?? 0) > 0 {
+            if (backfill.pending?.eligible ?? 0) > 0 {
                 CardDivider()
                 pendingListensRow
             }
@@ -879,18 +919,6 @@ struct AccountLinkingTab: View {
                         Button(L10n.t("重新连接")) { showLastfmWizard = true }
                     }
                 }
-            }
-            // 补提交历史收听 —— **只在真有东西可补时才出现**。
-            //
-            // 这是个一辈子可能只点一次的操作(先用了一阵、之后才连账号的那段空窗),
-            // 常驻一行"没有待补的收听"纯属占地方。有内容才露出来,没内容就完全不存在。
-            //
-            // 仍然坚持"必须人工点一下"、不做连接成功自动弹窗:这一步往用户的 Last.fm
-            // 写数据,而 scrobble 落进去基本删不掉(只能在网页上一条条手删),自动弹窗
-            // 容易被顺手点掉,而顺手的代价是永久污染自己的听歌历史。
-            if lastfmConnected, (backfill.pending?.eligible ?? 0) > 0 {
-                CardDivider()
-                backfillRow
             }
             if lastfmConnected {
                 CardDivider()
@@ -914,6 +942,29 @@ struct AccountLinkingTab: View {
         // 连接状态一变就重算:刚断开的那一刻要立刻列出本地已记的歌,刚连上的那一刻要立刻
         // 露出补提交那一行。只靠 .onAppear 的话,用户不离开这一页就什么都不会变。
         .onChange(of: lastfmConnected) { _, _ in backfill.refreshPending() }
+        // Scrobble 开关一变也要重算 —— 关掉它就是"开始往本地攒"的那一刻(collector 侧
+        // p.lfm 变 nil),这一页却完全不知道,得等用户离开再回来才刷新。
+        .onChange(of: features.lastfmMirrorScrobble) { _, _ in backfill.refreshPending() }
+        // 页面开着的这段时间里盯住收听日志:每攒进一首,待补数就该跟着涨。
+        //
+        // 2026-08-18 用户实测:关掉开关后停在这一页干等,数字一直是旧的,重新进 tab 才刷新
+        // 出来 —— 因为上面两个 onChange 都只在"状态翻转那一瞬"触发,而后续每首歌播完是
+        // collector 单方面往磁盘追加,界面这边没有任何信号。
+        //
+        // 只 stat mtime、不无脑重跑:算待补数要 spawn 一个 collector 子进程(dry-run),
+        // 按秒轮询它太重;stat 一个文件几乎免费,变了才真去算。busy 时不推进 seen,
+        // 下一拍还会再来一次(refreshPending 自己会因 busy 早退)。
+        .task {
+            var seen = ScrobbleBackfillService.listenLogModifiedAt()
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(5))
+                guard !Task.isCancelled else { break }
+                let now = ScrobbleBackfillService.listenLogModifiedAt()
+                guard now != seen, !backfill.busy else { continue }
+                seen = now
+                backfill.refreshPending()
+            }
+        }
         .sheet(isPresented: $showLastfmWizard) { lastfmWizardSheet }
         .alert(L10n.t("断开 Last.fm？"), isPresented: $showLastfmDisconnectConfirm) {
             Button(L10n.t("取消"), role: .cancel) {}
@@ -1272,7 +1323,7 @@ struct AccountLinkingTab: View {
             }
             if features.weeklyDigest {
                 CardDivider()
-                SettingsSubRow(title: L10n.t("每周数据源")) {
+                SettingsSubRow(title: L10n.t("数据源")) {
                     Picker("", selection: Binding(
                         get: { resolvedDigestSource(preference: features.weeklyDigestSource) },
                         set: { picked in
@@ -1308,7 +1359,7 @@ struct AccountLinkingTab: View {
             }
             if features.dailyDigest {
                 CardDivider()
-                SettingsSubRow(title: L10n.t("每日数据源")) {
+                SettingsSubRow(title: L10n.t("数据源")) {
                     Picker("", selection: Binding(
                         get: { resolvedDigestSource(preference: features.dailyDigestSource) },
                         set: { picked in

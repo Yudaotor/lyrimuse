@@ -200,10 +200,16 @@ public enum EnrichCacheKeys {
     ///
     /// 放在兜底这一层,不一致的后果就温和得多:某个字没折对,这次兜不到,退化成 2026-08-16
     /// 之前的行为(多一条重复条目),而不是查不到歌词。
+    /// 合 credit 的分隔符,跟 collector 的 `isArtistCreditSep`(match.go)同一份。
+    /// 全部折成同一个字符,让 `A/B/C` 和 `A & B & C` 判成同一首歌 —— 2026-08-20 实测:
+    /// 播放器报斜杠式、专辑预取从 Apple Music 曲目表拿到 & 式,缓存里长出 12 组重复。
+    private static let creditSeparators: Set<Character> = ["/", "、", "&", ",", "，"]
+
     public static func looseKey(_ key: String) -> String {
         let simplified = NSMutableString(string: key) as CFMutableString
         CFStringTransform(simplified, nil, "Hant-Hans" as CFString, false)
-        return (simplified as String)
+        let folded = String((simplified as String).map { creditSeparators.contains($0) ? "&" : $0 })
+        return folded
             .replacingOccurrences(of: " ", with: "")
             .lowercased()
     }

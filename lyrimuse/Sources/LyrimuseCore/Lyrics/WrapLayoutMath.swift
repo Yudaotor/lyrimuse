@@ -64,7 +64,16 @@ public enum WrapLayoutMath {
     public static func totalSize(
         sizes: [CGSize], maxWidth: CGFloat, horizontalSpacing: CGFloat, verticalSpacing: CGFloat
     ) -> CGSize {
-        let rows = rows(sizes: sizes, maxWidth: maxWidth, horizontalSpacing: horizontalSpacing)
+        totalSize(
+            rows: rows(sizes: sizes, maxWidth: maxWidth, horizontalSpacing: horizontalSpacing),
+            maxWidth: maxWidth, verticalSpacing: verticalSpacing)
+    }
+
+    /// 带 rows 的版本:调用方(WrapLayout 的 Layout 壳)把换行分组缓存住之后直接喂进来,
+    /// sizeThatFits/placeSubviews 不再各自重算一遍 rows(2026-08-20 性能审计)。
+    public static func totalSize(
+        rows: [Row], maxWidth: CGFloat, verticalSpacing: CGFloat
+    ) -> CGSize {
         let totalHeight = rows.reduce(0) { $0 + $1.height }
             + CGFloat(max(0, rows.count - 1)) * verticalSpacing
         return CGSize(width: maxWidth, height: totalHeight)
@@ -83,7 +92,19 @@ public enum WrapLayoutMath {
         sizes: [CGSize], bounds: CGRect, horizontalSpacing: CGFloat, verticalSpacing: CGFloat,
         rowAlignment: RowAlignment
     ) -> [Placement] {
-        let rows = rows(sizes: sizes, maxWidth: bounds.width, horizontalSpacing: horizontalSpacing)
+        placements(
+            rows: rows(sizes: sizes, maxWidth: bounds.width, horizontalSpacing: horizontalSpacing),
+            sizes: sizes, bounds: bounds,
+            horizontalSpacing: horizontalSpacing, verticalSpacing: verticalSpacing,
+            rowAlignment: rowAlignment)
+    }
+
+    /// 带 rows 的版本,理由见 totalSize(rows:) 注释。
+    public static func placements(
+        rows: [Row], sizes: [CGSize], bounds: CGRect,
+        horizontalSpacing: CGFloat, verticalSpacing: CGFloat,
+        rowAlignment: RowAlignment
+    ) -> [Placement] {
         var result: [Placement] = []
         result.reserveCapacity(sizes.count)
         var y = bounds.minY

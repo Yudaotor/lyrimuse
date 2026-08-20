@@ -34,16 +34,27 @@ enum NotchMirrorManager {
         settings.$notchAllScreens
             .combineLatest(settings.$notchOverlayEnabled)
             .sink { allScreens, notchEnabled in
-                MainActor.assumeIsolated { refresh(enabled: allScreens && notchEnabled) }
+                MainActor.assumeIsolated {
+                    refresh(enabled: allScreens && notchEnabled, notchEnabled: notchEnabled)
+                }
             }
             .store(in: &cancellables)
 
         // 这几项副本没有自己的设置入口,变化时统一重新同步一遍。它们不影响"该不该有副本",
         // 只影响副本的状态,所以不参与上面那个 enabled 的计算。
+        //
+        // ⚠️ 三个参数值都必须显式传下去,不能 `.sink { _, _, _ in syncAll() }` 让下游回读
+        // AppSettings —— 顶上那段 willSet 注释警告的坑,这个 sink 原来就原样踩着
+        // (2026-08-19 核实):@Published 在 willSet 时机同步派发,sink 执行时存储属性还是
+        // 旧值,于是镜像的宽度恒滞后一档、隐藏开关同步到翻转前的状态,直到下一次任一设置
+        // 再变才追上。
         settings.$hideWhenNotPlaying
             .combineLatest(settings.$hideDuringScreenCapture, settings.$notchContentWidth)
-            .sink { _, _, _ in
-                MainActor.assumeIsolated { syncAll() }
+            .sink { hide, capture, width in
+                MainActor.assumeIsolated {
+                    syncAll(hideWhenNotPlaying: hide, hideDuringCapture: capture,
+                            contentWidth: width)
+                }
             }
             .store(in: &cancellables)
 
@@ -58,7 +69,9 @@ enum NotchMirrorManager {
     }
 
     /// 建立/销毁副本,使副本集合恰好等于「所有屏幕 − 主实例占的那块」。
-    static func refresh(enabled: Bool) {
+    /// notchEnabled:触发源是开关 sink 时传参数值(willSet 窗口内回读是旧值,见 start()
+    /// 里的注释);屏幕插拔那条路(通知回调,不在任何 willSet 窗口)回读即可传 nil。
+    static func refresh(enabled: Bool, notchEnabled: Bool? = nil) {
         guard enabled else {
             teardownAll()
             return
@@ -80,12 +93,23 @@ enum NotchMirrorManager {
             // 钉屏 ID 走构造参数,不能建完再设 —— 理由见那个 init 上的注释。
             mirrors[id] = NotchLyricsWindowController(pinnedScreenID: id)
         }
-        syncAll()
+        syncAll(notchEnabled: notchEnabled)
     }
 
-    private static func syncAll() {
+    /// 非 nil 的参数 = 触发源正处于该字段的 willSet 窗口,必须用传入值;nil = 回读当前
+    /// 存储值(安全)。透传给 NotchLyricsWindowController.syncStateFromSettings。
+    private static func syncAll(
+        notchEnabled: Bool? = nil,
+        hideWhenNotPlaying: Bool? = nil,
+        hideDuringCapture: Bool? = nil,
+        contentWidth: CGFloat? = nil
+    ) {
         for mirror in mirrors.values {
-            mirror.syncStateFromSettings()
+            mirror.syncStateFromSettings(
+                notchEnabled: notchEnabled,
+                hideWhenNotPlaying: hideWhenNotPlaying,
+                hideDuringCapture: hideDuringCapture,
+                contentWidth: contentWidth)
         }
     }
 

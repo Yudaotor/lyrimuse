@@ -139,7 +139,14 @@ final class LyricsSearchService {
         // CRLF 换行(酷狗候选常见)会让 split(separator:"\n") 按 Character 比较时把整份
         // 文本当一整行切不开——见 YRCParser/LRCParser.parse 同一处注释,这里先归一化成
         // 纯 "\n" 再切,否则这类候选会显示成"1 行"这种明显错误的行数。
-        var lineCount: Int {
+        //
+        // 存储属性、构造时算一次(2026-08-19 性能审计):原来是计算属性,每次行渲染/
+        // 预览重算都对整首歌词(2-10KB)完整跑两遍 replacingOccurrences + 一遍 split,
+        // 而 lyrics 自构造起不可变,纯属重复计算(sheet 的 body 重算入口很多:三个查询
+        // 输入框每敲一键、每批 NDJSON 到达都整数组替换)。
+        let lineCount: Int
+
+        static func countLines(of lyrics: String) -> Int {
             lyrics.replacingOccurrences(of: "\r\n", with: "\n")
                 .replacingOccurrences(of: "\r", with: "\n")
                 .split(separator: "\n", omittingEmptySubsequences: false).count
@@ -196,6 +203,23 @@ final class LyricsSearchService {
     // MainActor 上执行,调用方可以直接改 @State,不需要自己再跳线程。
     func search(
         artist: String, title: String, album: String, durationSecs: Double = 0,
+        onUpdate: @escaping @MainActor (SearchUpdate) -> Void
+    ) async throws {
+        // withTaskCancellationHandler:调用方的 Task 被取消(.task 随视图消失、或
+        // searchGeneration 换代)时顺手终结子进程 —— 原来没有任何取消接线,sheet 关掉/
+        // 采纳候选后 collector 子进程照跑满(五个源、20 秒兜底),NDJSON 还在往已消失的
+        // 视图里灌,全是无人消费的废工(2026-08-19 性能审计;sheet 侧另有 onDisappear
+        // 兜底,两层都在,谁先到谁生效——cancelRunning 幂等)。
+        try await withTaskCancellationHandler {
+            try await performSearch(artist: artist, title: title, album: album,
+                                    durationSecs: durationSecs, onUpdate: onUpdate)
+        } onCancel: {
+            cancelRunning()
+        }
+    }
+
+    private func performSearch(
+        artist: String, title: String, album: String, durationSecs: Double,
         onUpdate: @escaping @MainActor (SearchUpdate) -> Void
     ) async throws {
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
@@ -271,8 +295,15 @@ final class LyricsSearchService {
                 }
                 readGroup.leave()
             }
+            // stderr 必须在**独立**队列上读(2026-08-19):readQueue 是串行的,原来这条
+            // 任务排在 stdout 的 EOF 循环后面,等于把上面那段注释自防的 64KB 管道死锁在
+            // stderr 侧原样引回 —— 当前 search-lyrics 路径的 stderr 写入量 <2KB 触发不了,
+            // 但将来任何人给搜索路径加 verbose 日志就会无声引爆。两条管道并行排空,
+            // errBuffer 只在这条队列写、terminationHandler 经 readGroup.wait() 后才读,
+            // happens-before 由 group 保证。
+            let stderrQueue = DispatchQueue(label: "me.yudaotor.lyrimuse.search-lyrics.stderr", qos: .utility)
             readGroup.enter()
-            readQueue.async {
+            stderrQueue.async {
                 box.errBuffer = stderrPipe.fileHandleForReading.readDataToEndOfFile()
                 readGroup.leave()
             }
@@ -361,7 +392,8 @@ private extension LyricsSearchService.Candidate {
             title: raw.title ?? "",
             artist: raw.artist ?? "",
             album: raw.album ?? "",
-            coverURL: raw.coverURL.flatMap(URL.init(string:))
+            coverURL: raw.coverURL.flatMap(URL.init(string:)),
+            lineCount: LyricsSearchService.Candidate.countLines(of: raw.lyrics)
         )
     }
 }

@@ -43,14 +43,23 @@ enum MenuBarMarqueeRenderer {
         guard width(of: text) > limit else { return text }
         let ellipsis = "…"
         let ellipsisWidth = width(of: ellipsis)
-        var kept = ""
-        for ch in text {
-            let next = kept + String(ch)
-            if width(of: next) + ellipsisWidth > limit { break }
-            kept = next
+        // 按前缀长度二分,每个探针整段测一次宽(kerning/连字与最终显示完全一致)——原来是
+        // 逐字符累加、每次全量重测前缀,O(n²) 文本排版(2026-08-20 性能审计;此函数目前只在
+        // windowWidth<=0 的退化路径被调、上面第一行 guard 就挡掉了,这是防御性收口:将来
+        // 谁把它用在正常宽度上,一句长歌词就不再是几毫秒级主线程排版)。
+        let chars = Array(text)
+        var lo = 0                // 已知装得下的前缀长度
+        var hi = chars.count      // 已知装不下的前缀长度(全文已被上面 guard 判定装不下)
+        while lo + 1 < hi {
+            let mid = (lo + hi) / 2
+            if width(of: String(chars[0..<mid])) + ellipsisWidth > limit {
+                hi = mid
+            } else {
+                lo = mid
+            }
         }
         // 一个字都放不下时也要给点东西,别返回空串(菜单栏上会变成一块什么都没有的空白)。
-        return kept.isEmpty ? ellipsis : kept + ellipsis
+        return lo == 0 ? ellipsis : String(chars[0..<lo]) + ellipsis
     }
 
     // MARK: - 这一句到底怎么显示
@@ -62,9 +71,11 @@ enum MenuBarMarqueeRenderer {
     /// 演的是滚动的第一帧),结果预览和实际长得并不一样 —— 用户报的"预览里要真实模拟
     /// 实际的菜单栏"就是这个。两份实现必然漂,唯一的解法是让它们共用同一个函数。
     enum Presentation: Equatable {
-        /// 退化情况:宽度被设成 0 或更小,画不出格子,退回让按钮自己显示一段截断文字。
+        /// 让按钮自己画这段文字 —— 这一项的宽度跟着文字走。两种来源:
+        ///  * 自适应模式下这一句装得下(正常路径);
+        ///  * 宽度被设成 0 或更小,画不出格子的退化路径(那时文字是截断过的)。
         case text(String)
-        /// 正常情况。这一格的宽度**恒等于**用户设的显示宽度 —— 装得下也一样。
+        /// 交给图层画,这一格的宽度**恒等于**用户设的显示宽度。
         /// pacing == nil 表示这一句装得下,静止显示、不滚。
         case fixed(text: String, windowWidth: CGFloat, pacing: MenuBarMarquee.ScrollPacing?)
     }
@@ -72,19 +83,30 @@ enum MenuBarMarqueeRenderer {
     /// - Parameter dwellSeconds: 这一句会显示多久(到下一句为止)。给了就按它配速 ——
     ///   让长句子在换句之前滚完,而不是永远按固定速度爬(见 MenuBarMarquee.pacing)。
     ///   nil 就退回固定速度。
+    /// - Parameter widthMode: 装得下的句子占多宽,见 MenuBarLyricsWidthMode。
     ///
-    /// ⚠️ 2026-08-17 把这个设置从"最多占多宽"改成"固定占多宽"。原来装得下的句子按自己的
-    /// 宽度占位,于是长短句来回切时菜单栏项一直在伸缩,右边其它 App 的图标跟着左右晃
-    /// (用户反馈"动来动去,观感不太好")。现在两种情况都占同样的宽度,footprint 恒定。
-    /// 代价是短句右边会空出一块 —— 那是"固定宽度"这个诉求本身自带的,躲不掉。
+    /// ⚠️ 2026-08-17 这个设置先从"最多占多宽"改成"固定占多宽"(原来装得下的句子按自己的
+    /// 宽度占位,长短句来回切时菜单栏项一直伸缩,右边其它 App 的图标跟着左右晃 —— 用户
+    /// 反馈"动来动去,观感不太好"),当天又把它改成**可选**:有人更在意"别占用不需要的
+    /// 空间",那正是被固定宽度换掉的东西。
+    ///
+    /// 两种模式的分岔**只在这一句装得下时**。装不下的路径两边完全一样:占满设定宽度、
+    /// 横向滚动 —— 那时候本来就没有"要不要缩短"可言。
     static func presentation(
-        for text: String, windowWidth: CGFloat, dwellSeconds: Double?
+        for text: String, windowWidth: CGFloat, dwellSeconds: Double?,
+        widthMode: MenuBarLyricsWidthMode
     ) -> Presentation {
         guard windowWidth > 0 else { return .text(truncate(text, toWidth: windowWidth)) }
         let fullWidth = width(of: text)
-        // 差不到半个点就别滚了(滚也看不出来),但**位置仍然按固定宽度占**。
+        // 差不到半个点就别滚了(滚也看不出来)。这一句装得下,占多宽由模式决定。
         guard fullWidth > windowWidth + 0.5 else {
-            return .fixed(text: text, windowWidth: windowWidth, pacing: nil)
+            switch widthMode {
+            case .adaptive:
+                // 按钮自己画,这一项跟着文字缩短。不用截断 —— 已经装得下了。
+                return .text(text)
+            case .fixed:
+                return .fixed(text: text, windowWidth: windowWidth, pacing: nil)
+            }
         }
         // 速度按这一句的平均字宽换算,这样中文歌和英文歌"每秒滚过几个字"是一致的。
         let averageCharWidth = fullWidth / CGFloat(max(1, text.count))

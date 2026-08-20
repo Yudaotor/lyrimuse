@@ -64,6 +64,12 @@ final class MenuBarScrollingLabel: NSView {
         super.init(frame: .zero)
         wantsLayer = true
         clipLayer.masksToBounds = true
+        // 视图自身的 layer 也裁(2026-08-19 错位排查加的硬保证):实测存在一种启动时序,
+        // 文字越过状态栏槽位压到左右邻居的图标上(几何模型日志里 clip 明明是对的,屏上
+        // 却溢出;同一份代码有的启动坏、有的启动好,竞态没钉死)。这一层兜底让任何内容
+        // **物理上**画不出 label 自己的 frame —— frame 由 autoresizing 跟着按钮走,
+        // 最坏情况是文字被裁短,绝不再盖到别人头上。
+        layer?.masksToBounds = true
         // anchorPoint 归零之后 position 就等于左下角,layout/动画里算坐标不用再折算半个尺寸。
         clipLayer.anchorPoint = .zero
         textLayer.anchorPoint = .zero
@@ -94,9 +100,14 @@ final class MenuBarScrollingLabel: NSView {
             isHidden = false
             return
         }
+        // 只有**文字**变了才重排位图(2026-08-19,兑现 PreparedLine.color 注释承诺的那类
+        // 幂等):位图内容只由 text+解析色决定,几何推迟落地这类"同一句只换槽宽/配速"的
+        // 调用(interim → 重建落地)原来会把逐像素相同的长图白排一遍。颜色在本路径不变
+        // (highlighted/appearance 变化各有自己的入口,那两处照旧重画)。
+        let textUnchanged = prepared != nil && plan?.text == next.text
         plan = next
         isHidden = false
-        rebuildImage()
+        if !textUnchanged { rebuildImage() }
         restartAnimation()
         needsLayout = true
     }
@@ -139,11 +150,14 @@ final class MenuBarScrollingLabel: NSView {
         // 可视窗口跟 NSStatusBarButton 画 image 的位置对齐:水平居中 + 垂直居中。
         // 宽度用 plan.windowWidth 而不是 bounds.width —— 按钮比它宽一圈(系统给状态栏项
         // 留的左右内边距),文字必须落在中间那一块,否则会顶到相邻图标上。
-        let x = ((bounds.width - plan.windowWidth) / 2).rounded()
+        // 裁剪窗钳制在自身 bounds 内(2026-08-19):bounds 短暂陈旧(启动竞态/尺寸切换
+        // 的一拍)时,原来的居中公式会算出大负数/大偏移,把可视窗甩到槽位外。
+        let clipW = min(plan.windowWidth, bounds.width)
+        let x = max(0, ((bounds.width - clipW) / 2).rounded())
         let y = ((bounds.height - height) / 2).rounded()
         CATransaction.begin()
         CATransaction.setDisableActions(true)
-        clipLayer.frame = CGRect(x: x, y: y, width: plan.windowWidth, height: height)
+        clipLayer.frame = CGRect(x: x, y: y, width: clipW, height: height)
         // 只写 y。x 由动画接管,这里碰它会跟滚动打架。
         textLayer.position = CGPoint(x: textLayer.position.x, y: 0)
         CATransaction.commit()
@@ -182,6 +196,9 @@ final class MenuBarScrollingLabel: NSView {
         CATransaction.commit()
         needsLayout = true
     }
+
+    // (2026-08-19 错位排查用的 debugGeometryDescription 已删——排查结案、全仓零调用,
+    // 要再看几何直接在这里临时打印,别恢复一个常驻的死函数。)
 
     /// 把这一层原样搬进 SwiftUI —— 设置页那条菜单栏预览用它。
     ///

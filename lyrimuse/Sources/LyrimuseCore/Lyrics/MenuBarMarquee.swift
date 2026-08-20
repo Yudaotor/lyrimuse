@@ -134,9 +134,11 @@ public enum MenuBarMarquee {
     //      (中文字幕公认的舒适上限附近,约为基准速度的 3 倍)。撞到上限仍然滚不完的极长句子
     //      就是滚不完 —— 这是**明知的取舍**:比起把字甩成残影,宁可少看几个字。
     //   3. **首尾停顿跟着句子时长缩,而且尾部先缩**。一句只显示 3 秒时,首尾各停 1.5 秒
-    //      等于根本没滚;而尾部那一停本来就没什么价值(读到末尾之后马上就该换句了),
-    //      所以尾部只留一点点、把时间全让给滚动本身。开头那一停要保住 —— 一句歌词最该
-    //      看清的就是开头。
+    //      等于根本没滚。开头那一停优先保住 —— 一句歌词最该看清的就是开头;句尾那一停
+    //      时间不够时先让路。
+    //      (⚠️ 2026-08-17 第一版把句尾价值判成 0、让滚动恰好在换句那一刻走完 ——
+    //      2026-08-19 用户实测推翻:"一到最后一个字就马上到下一句了",末尾几个字根本
+    //      来不及读。现在句尾按 tailReadSeconds 预留一段读完时间,滚动相应加速。)
     public struct ScrollPacing: Equatable, Sendable {
         public let pointsPerSecond: CGFloat
         public let headHoldSeconds: Double
@@ -152,6 +154,12 @@ public enum MenuBarMarquee {
     public static let baseHoldSeconds: Double = 1.5
     /// 开头那一停最多占这一句时长的多少 —— 短句上 1.5 秒会把整句时间吃光。
     public static let headHoldMaxFraction: Double = 0.25
+    /// 句尾那一停:滚完之后至少让末尾**在换句之前**可见这么久(2026-08-19 用户反馈
+    /// "一到最后一个字就马上到下一句了"——原来滚动被规划成恰好在换句那一刻走完,
+    /// 句尾零停留)。为此滚动会相应加速,但仍不越过 maxCharsPerSecond。
+    public static let tailReadSeconds: Double = 1.0
+    /// 句尾那一停最多占这一句时长的多少 —— 短句给足 1 秒会挤掉滚动本身。
+    public static let tailHoldMaxFraction: Double = 0.2
     /// 走完之后额外多停一会儿再回到开头。停留时长是**估**出来的(歌词时间轴校准、播放
     /// 位置外推都有误差),留这点余量,循环就永远不会赶在换句之前发生 —— 否则末尾那几个字
     /// 会闪一下跳回开头。
@@ -179,9 +187,15 @@ public enum MenuBarMarquee {
         // 白白撞上速度上限、依然滚不完。
         let head = min(baseHoldSeconds, dwell * headHoldMaxFraction, max(0, dwell - travelAtCap))
 
+        // 句尾也预留一段读完时间(2026-08-19):原来 travel 直接吃满 dwell - head,滚动
+        // 恰好在换句那一刻走完、末尾零停留,"一到最后一个字就马上到下一句"。时间不够时
+        // 尾停**先于**首停让路 —— 首停关系到开头能不能读到,尾停只是末尾多看一眼。
+        let tailReserve = min(tailReadSeconds, dwell * tailHoldMaxFraction,
+                              max(0, dwell - head - travelAtCap))
+
         // 剩下的时间全部拿来走。够慢就慢(不比基准速度快,免得短句被无谓地甩快),
         // 不够就加速,但不越过上限。
-        let travel = min(max(dwell - head, travelAtCap), travelAtBase)
+        let travel = min(max(dwell - head - tailReserve, travelAtCap), travelAtBase)
         let pointsPerSecond = min(cap, max(base, maxOffset / CGFloat(travel)))
 
         // 走完之后一直停在末尾,直到这一句被换掉 —— 所以一句歌词**只滚一轮**,

@@ -1,3 +1,4 @@
+import Combine
 import SwiftUI
 
 /// Last.fm 卡的信息展示区(设计方案 A「档案页」,2026-08-11 artifact):三个数字、
@@ -25,6 +26,8 @@ struct LastfmStatsSection: View {
     // baselineFailed。这张卡只在已连接时才挂出来,所以"没有凭据直接 return"那条早退
     // 路径在这里不会发生(否则转圈会停不下来)。
     @State private var recentRefreshing = false
+    /// 档案卡右上角日历按钮弹出的播放热力图(LastfmHeatmapView)。
+    @State private var showHeatmap = false
 
     private var kind: LastfmStatsService.ChartKind {
         .init(rawValue: kindRaw) ?? .artists
@@ -65,6 +68,18 @@ struct LastfmStatsSection: View {
                 while !Task.isCancelled {
                     try? await Task.sleep(nanoseconds: 120_000_000_000)
                     guard !Task.isCancelled else { break }
+                    // 「那年今日」也在这里过一遍,专为**跨零点**:它只在 .onAppear 里拉过
+                    // 一次,而设置窗口开着不动时 .onAppear 不会再触发 —— 页面开到第二天
+                    // 就会一直挂着昨天那份(2026-08-17 用户报)。放在 recentPage 那道
+                    // guard 前面:翻到第二页看历史跟这张卡没有关系,不该把它一起冻住。
+                    //
+                    // 平时的开销是一次字典查找:服务侧同时判 TTL 和日历天,没跨天就直接
+                    // 早退,不会每 2 分钟真发一轮请求(那是三年 ×最多三页的量)。
+                    stats.refreshOnThisDay()
+                    // 本机封面兜底表:enrich 缓存自己变了(collector 解析出封面 / 同专辑
+                    // 预取)不伴随任何 Last.fm 响应,得单独在这里过一遍,否则那些行会一直
+                    // 灰着(见 refreshLocalCoversIfCacheChanged)。mtime 没变就是一次 stat。
+                    stats.refreshLocalCoversIfCacheChanged()
                     // 只自动刷第一页:后面几页是历史,内容不会变,重拉一遍纯属打扰
                     // (正看着的那一屏被替换掉)。
                     guard stats.recentPage == 1 else { continue }
@@ -79,12 +94,31 @@ struct LastfmStatsSection: View {
 
     private var statsCard: some View {
         SettingsCard {
-            HStack(spacing: 0) {
-                statCell(value: stats.overview?.today, label: L10n.t("今天"))
-                Divider().padding(.vertical, 10)
-                statCell(value: stats.overview?.week, label: L10n.t("近 7 天"))
-                Divider().padding(.vertical, 10)
-                statCell(value: stats.overview?.total, label: L10n.t("总 scrobble"))
+            // 热力图入口放这张卡右上角:热力图就是"今天/近7天/总量"这三个数字沿时间轴的
+            // 完整展开,语义同源。⚠️ 按钮必须放在卡片**内容里**(ZStack 角标),不能
+            // .overlay 挂在 SettingsCard 外面——macOS 26 的液态玻璃背景(glassEffect)
+            // 下外挂 overlay 不渲染(2026-08-18 实测:截图里角标整个不出现)。
+            ZStack(alignment: .topTrailing) {
+                HStack(spacing: 0) {
+                    statCell(value: stats.overview?.today, label: L10n.t("今天"))
+                    Divider().padding(.vertical, 10)
+                    statCell(value: stats.overview?.week, label: L10n.t("近 7 天"))
+                    Divider().padding(.vertical, 10)
+                    statCell(value: stats.overview?.total, label: L10n.t("总 scrobble"))
+                }
+                Button {
+                    showHeatmap = true
+                } label: {
+                    Image(systemName: "calendar")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .help(L10n.t("播放热力图"))
+                .padding(8)
+                .popover(isPresented: $showHeatmap, arrowEdge: .bottom) {
+                    LastfmHeatmapView()
+                }
             }
             if stats.baselineFailed {
                 CardDivider()
@@ -279,7 +313,11 @@ struct LastfmStatsSection: View {
 
     private var recentCard: some View {
         SettingsCard {
+            // 表头挂一条门槛说明。2026-08-18 用户问"刚才那首 Welcome 为什么没记" ——
+            // 那是《危险世界》里 7 秒的过场轨,被 minTrackSecs(30 秒)挡掉了。这类
+            // "东西没出现"的疑问在界面上完全没有线索可循,只能主动写出来。
             collapsibleHeader(icon: "clock", title: L10n.t("最近记录"),
+                              help: L10n.t("Last.fm 规则：需长于 30 秒且播完一半（或满 4 分钟）。专辑过场轨常达不到。"),
                               collapsed: $recentCollapsed) {
                 if let at = stats.recentUpdatedAt {
                     // 这一页的数据是轮询来的(远端会话 45 秒一轮、否则两分钟),标一下它
@@ -476,12 +514,18 @@ struct LastfmStatsSection: View {
         Date().timeIntervalSince(date) < 60 ? L10n.t("刚刚") : relative(date)
     }
 
+    /// - Parameter help: 非 nil 时在折叠箭头后面挂一个 "?",悬停 0.5 秒或点一下弹出说明。
+    ///   这个 "?" 必须留在折叠按钮**外面**——放进 Button 的 label 里点它只会折叠卡片,
+    ///   Button 会吃掉 label 内部的 tap,说明根本弹不出来。为此 label 里那个撑满宽度的
+    ///   Spacer 也要一并挪出来(否则 "?" 会被顶到最右边、离标题十万八千里),代价是标题
+    ///   右侧那段空白不再能点着折叠。这个代价只落在传了 help 的那张卡上,其余保持原样。
     private func collapsibleHeader<Trailing: View>(
         icon: String, title: String, subtitle: String? = nil,
+        help: String? = nil,
         collapsed: Binding<Bool>,
         @ViewBuilder trailing: () -> Trailing
     ) -> some View {
-        HStack(alignment: .top, spacing: 12) {
+        HStack(alignment: .top, spacing: help == nil ? 12 : 5) {
             Button {
                 withAnimation(.easeInOut(duration: 0.18)) { collapsed.wrappedValue.toggle() }
             } label: {
@@ -506,12 +550,20 @@ struct LastfmStatsSection: View {
                                 .fixedSize(horizontal: false, vertical: true)
                         }
                     }
-                    Spacer(minLength: 12)
+                    if help == nil { Spacer(minLength: 12) }
                 }
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .help(collapsed.wrappedValue ? L10n.t("展开") : L10n.t("收起"))
+            if let help {
+                // 用 QuickHelpLabel 而不是 .help():后者落到 NSView.toolTip,延迟由系统全局
+                // 控制、又只认悬停,正是 2026-08-17 用户报过"出得太慢、想点一下就出"的那两点。
+                QuickHelpLabel(text: help) { EmptyView() }
+                    .font(.system(size: 11))
+                    .padding(.top, 2)
+                Spacer(minLength: 12)
+            }
             // trailing 一律渲染:收起时要不要藏由各卡自己决定(榜单的分段选择器收起后
             // 没有意义要藏;最近记录的"几分钟前更新"收起时照样有用,不藏)。
             trailing().labelsHidden().settingsGlassButtons()
@@ -605,7 +657,19 @@ struct LastfmStatsSection: View {
                                 format: L10n.t("%1$@ 年前的今天听了 %2$@ 次，最常循环的是这几首"),
                                 "\(o.yearsAgo)", "\(o.total)"),
                         collapsed: $onThisDayCollapsed
-                    ) { EmptyView() }
+                    ) {
+                        if let at = stats.onThisDayUpdatedAt {
+                            // 跟「最近记录」同一个位置、同一套写法。这张卡 6 小时才重拉一次
+                            // (那一天的记录本来也不会变),不标一下的话看着就是一份不知道
+                            // 什么时候来的数据。
+                            //
+                            // 这行相对时间不需要自己的定时器:同一个 section 里最近记录几十秒
+                            // 就刷一次、每次都会重算整个 body,它跟着一起更新。
+                            Text(String(format: L10n.t("%@更新"), Self.coarseRelative(at)))
+                                .font(.caption).foregroundStyle(.tertiary)
+                                .help(String(format: L10n.t("上次刷新:%@"), Self.absolute(at)))
+                        }
+                    }
                     if !onThisDayCollapsed {
                     CardDivider()
                     VStack(spacing: 0) {
@@ -651,15 +715,68 @@ struct LastfmStatsSection: View {
     }
 }
 
-/// 「正在记录」活状态行,独立子视图:全 Section 里唯一订阅 PlaybackCoordinator 的地方,
-/// 歌词逐行推进引发的 20Hz 级发布只重渲染这一行,不再拖着三张卡陪跑(2026-08-11 发散
-/// 采纳)。换歌强刷和「第 N 次听」的取数也一并住在这里 —— 它们的触发源就是播放状态。
+/// Last.fm 的品牌红。**不要"顺手规范化"成 `.red` / `systemRed`** —— 这个值不是随手挑的
+/// 警告红:原来写的 0.84/0.06/0.03,正是 Last.fm logo 红 #D51007 (213,16,7) 归一化后
+/// 四舍五入到两位小数的结果,三个通道全部精确吻合。这一行点下去打开的就是 last.fm 的
+/// 曲目页,拿它的品牌色当来源标识是刻意的,不是"红=出错"那套语义色。
+///
+/// 深色模式换一个更亮的值。品牌红自身相对亮度只有 0.145,压在深色卡片上只有 2.3~2.7:1,
+/// 而这个 Label 连图标带「正在记录」四个 caption 字都吃这个颜色。深色值 #FF2419 跟品牌红
+/// **同色相**(HSV 色相都是 2.6°),只是推到满明度、饱和度降到 0.90,在 #1E1E1E~#343432
+/// 这一带的卡片底色上拿到 3.3~4.4:1。
+///
+/// 为什么不追 4.5:1:红在 WCAG 亮度公式里的系数只有 0.2126,同色相下把饱和度从 1.00 一路
+/// 降到 0.75,相对亮度也只从 0.215 爬到 0.263 —— 任何还看得出是"红"的颜色在深色底上都
+/// 够不到 4.5,Apple 自己的 systemRed 深色版(#FF4245)也只有 3.6~4.2。硬凑 4.5 得稀释成
+/// #E77570 那种浅鲑鱼粉,品牌识别就没了。取 WCAG 对非文本图形/UI 部件的 3:1 门槛。
+private let lastfmBrandRed = Color(nsColor: NSColor(name: "LastfmBrandRed") { appearance in
+    appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+        ? NSColor(srgbRed: 255 / 255, green: 36 / 255, blue: 25 / 255, alpha: 1)  // #FF2419
+        : NSColor(srgbRed: 213 / 255, green: 16 / 255, blue: 7 / 255, alpha: 1)   // #D51007
+})
+
+/// LiveScrobbleRow 的窄订阅代理(2026-08-19 性能审计 #3):这一行只需要下面六个**低频**
+/// 字段,直接 @ObservedObject 整个 PlaybackCoordinator 会让它跟着 currentLine /
+/// currentLineIndex / allLines / anchor 这些歌词级高频源一起重算 body —— 统计页开着时
+/// 每句歌词一次。这里只转发去重后的所需字段,行的重渲染频率降到"换歌/播放态翻转/
+/// 封面到货"。同款教训见「歌词管理 20Hz 过度重渲染」那次。
+///
+/// ⚠️ assign 的是 publisher 发出的**元素值**(新值),不是回头读属性 —— @Published 在
+/// willSet 发射,回读属性拿到的是旧值(项目里实测踩过的坑,见 MenuBarStatusItem 订阅注释)。
+@MainActor
+private final class LiveRowPlayback: ObservableObject {
+    @Published private(set) var title = ""
+    @Published private(set) var artist = ""
+    @Published private(set) var album = ""
+    @Published private(set) var isPlayingNow = false
+    @Published private(set) var isAdBreak = false
+    @Published private(set) var artworkImage: NSImage?
+    private var subs: [AnyCancellable] = []
+
+    init() {
+        let p = PlaybackCoordinator.shared
+        subs = [
+            p.$title.removeDuplicates().sink { [weak self] in self?.title = $0 },
+            p.$artist.removeDuplicates().sink { [weak self] in self?.artist = $0 },
+            p.$album.removeDuplicates().sink { [weak self] in self?.album = $0 },
+            p.$isPlayingNow.removeDuplicates().sink { [weak self] in self?.isPlayingNow = $0 },
+            p.$isCurrentTrackAdBreak.removeDuplicates().sink { [weak self] in self?.isAdBreak = $0 },
+            p.$artworkImage.removeDuplicates(by: { $0 === $1 })
+                .sink { [weak self] in self?.artworkImage = $0 },
+        ]
+    }
+}
+
+/// 「正在记录」活状态行,独立子视图:全 Section 里唯一挂着播放状态订阅的地方(经
+/// LiveRowPlayback 窄化),歌词逐行推进引发的高频发布不再拖着这一行陪跑,更不拖三张卡
+/// (2026-08-11 发散采纳,2026-08-19 再窄化)。换歌强刷和「第 N 次听」的取数也一并住在
+/// 这里 —— 它们的触发源就是播放状态。
 ///
 /// 不播放/开关关着时渲染成零高度占位而不是移出层级:onChange(poller.title) 得一直挂着,
 /// 暂停状态下换歌(手动切曲再播放)也要能触发强刷。
 private struct LiveScrobbleRow: View {
     @ObservedObject private var stats = LastfmStatsService.shared
-    @ObservedObject private var poller = PlaybackCoordinator.shared
+    @StateObject private var playback = LiveRowPlayback()
     @ObservedObject private var features = FeatureSettingsStore.shared
     @State private var hovered = false
     @State private var pendingForceRefresh: Task<Void, Never>?
@@ -671,18 +788,37 @@ private struct LiveScrobbleRow: View {
     private struct LiveSource {
         var title: String
         var artist: String
-        var artwork: NSImage?  // 本机播放才有(直接拿现成的位图,不用再下载)
-        var imageURL: URL?     // 远端来源用 API 给的封面
+        /// 本机播放器现成的位图。**只是兜底** —— 列表里给得出封面时不用它,理由见下面
+        /// LiveSource 的构造处和 LastfmStatsService.liveCoverURL。
+        var artwork: NSImage?
+        var imageURL: URL?     // 跟列表其它行同一张封面(或远端来源时 API 给的那张)
         var confirmed: Bool    // Last.fm 是否已确认收到
         var remote: Bool       // 播放源不是这台 Mac
     }
 
     private var live: LiveSource? {
-        // ① 本机在放、且我们确实在往 Last.fm 记录(开关关着=这首没人在记,不该显示)
-        if features.lastfmMirrorScrobble, poller.isPlayingNow, !poller.title.isEmpty {
-            return LiveSource(title: poller.title, artist: poller.artist,
-                              artwork: poller.artworkImage, imageURL: nil,
-                              confirmed: serverConfirms(poller.title), remote: false)
+        // ① 本机在放、且我们确实在往 Last.fm 记录(开关关着=这首没人在记,不该显示)。
+        // 广告不显示(2026-08-19,两次用户截图的"广告正在播放行"都是**这一行**渲染的
+        // 本机实时行,不是 Last.fm 数据 —— 空心圆=服务器从未确认,collector 侧其实拦住了):
+        // 广告不会被记录,这一行的语义是"正在被 Last.fm 记录的歌",广告不配出现。
+        // 判定来自 LocalPlaybackSource(字段启发式+棘轮+AppleScript 权威),SwiftUI 观察
+        // 该标记,异步确认晚到几百毫秒也会即时把行收掉。
+        if features.lastfmMirrorScrobble, playback.isPlayingNow, !playback.title.isEmpty,
+           !playback.isAdBreak {
+            // 封面优先跟列表里这首歌/这张专辑的历史行**用同一张**,本机位图只在列表给不出
+            // 时兜底(第一次听这首歌 / 这张专辑的第一首)。
+            //
+            // 2026-08-17 改。原来这里无条件用 poller.artworkImage —— 那是 media-control 从
+            // Apple Music 的 Now Playing 会话读到的 600×600 图,跟下面历史行走的
+            // coverURL(for:)(第一级是 Last.fm scrobble 自带的 174px 图)是两条毫不相干的
+            // 链路。同一首歌因此在同一张卡里显示两张不同的图,等它被 scrobble 成历史行才
+            // "变回来"(用户报的现象)。实测这两张不是同一个文件:Prince《1999》,Apple 那版
+            // 偏暗紫、Last.fm 那版偏亮蓝,缩到 26pt 一眼能看出色调不同,不是清晰度差别。
+            let listCover = stats.liveCoverURL(artist: playback.artist, title: playback.title,
+                                               album: playback.album)
+            return LiveSource(title: playback.title, artist: playback.artist,
+                              artwork: playback.artworkImage, imageURL: listCover,
+                              confirmed: serverConfirms(playback.title), remote: false)
         }
         // ② 本机没在放,但 Last.fm 说有一首正在记录 —— 多半在手机/网页/别的设备上放。
         // 它按定义就是服务器确认过的(数据本身就来自服务器),直接红点。
@@ -708,7 +844,7 @@ private struct LiveScrobbleRow: View {
 
     /// 服务端这条 nowplaying 说的是不是本机播放器里当前这首(不论在放还是暂停)。
     private func matchesLocalTrack(_ title: String) -> Bool {
-        !poller.title.isEmpty && looseSameTitle(title, poller.title)
+        !playback.title.isEmpty && looseSameTitle(title, playback.title)
     }
 
     private func looseSameTitle(_ a: String, _ b: String) -> Bool {
@@ -746,7 +882,7 @@ private struct LiveScrobbleRow: View {
     /// 那个数是 userplaycount+1,若取数发生在这次 scrobble 落库之后就会多算一
     /// (正是截图里 5 vs 4 的来源),而这一行的数永远是 scrobble 后的权威值。
     private var absorbedRecent: (id: String, count: Int?)? {
-        guard let live, !live.remote, let anchor = poller.anchor else { return nil }
+        guard let live, !live.remote, let anchor = PlaybackCoordinator.shared.anchor else { return nil }
         guard let row = stats.recent.first(where: { $0.date != nil }), let date = row.date,
               looseSameTitle(row.title, live.title) else { return nil }
         let playStart = anchor.fetchedAt.addingTimeInterval(-Double(anchor.progressMs) / 1000)
@@ -765,12 +901,16 @@ private struct LiveScrobbleRow: View {
                 } label: {
                     HStack(spacing: 10) {
                         Group {
-                            if let img = live.artwork {
-                                Image(nsImage: img).resizable().aspectRatio(contentMode: .fill)
-                            } else if let url = live.imageURL {
+                            // 顺序刻意是 URL 优先、本机位图兜底(2026-08-17 从反过来改成
+                            // 这样):这一行要跟它下面那些历史行长一样,而那些行用的就是
+                            // 这个 URL。本机位图只在列表里找不到参照时才上场 —— 见
+                            // LiveSource.artwork 与 LastfmStatsService.liveCoverURL。
+                            if let url = live.imageURL {
                                 CachedImage(url: url) {
                                     RoundedRectangle(cornerRadius: 5).fill(.quaternary)
                                 }
+                            } else if let img = live.artwork {
+                                Image(nsImage: img).resizable().aspectRatio(contentMode: .fill)
                             } else {
                                 RoundedRectangle(cornerRadius: 5).fill(.quaternary)
                             }
@@ -792,7 +932,7 @@ private struct LiveScrobbleRow: View {
                         if live.confirmed {
                             Label(L10n.t("正在记录"), systemImage: "circle.fill")
                                 .font(.caption)
-                                .foregroundStyle(Color(red: 0.84, green: 0.06, blue: 0.03))
+                                .foregroundStyle(lastfmBrandRed)
                                 .labelStyle(.titleAndIcon)
                                 .imageScale(.small)
                                 .help(live.remote
@@ -834,7 +974,7 @@ private struct LiveScrobbleRow: View {
         .onChange(of: absorbedRecent?.id) { _, id in
             if stats.liveAbsorbedRecentID != id { stats.liveAbsorbedRecentID = id }
         }
-        .onChange(of: poller.title) { _, _ in
+        .onChange(of: playback.title) { _, _ in
             // 本机换歌 = 上一首刚被 scrobble。给 collector 十秒把记录提交出去,然后无视缓存
             // 强刷一次 —— 刚唱完的歌马上出现在列表顶上,顺带把 apiNowPlaying 换成新歌
             // (红点的服务器确认就是靠这次刷新到位的)。
@@ -854,7 +994,7 @@ private struct LiveScrobbleRow: View {
                 guard !Task.isCancelled else { break }
                 // 跟父视图那条 2 分钟轮询同一条守卫:翻到历史页时别把用户正看的那屏
                 // 换掉(强刷会无视 TTL,原来这两条路径都漏了这个判断)。
-                guard stats.recentPage == 1, !poller.isPlayingNow, remoteSessionLikelyActive else { continue }
+                guard stats.recentPage == 1, !playback.isPlayingNow, remoteSessionLikelyActive else { continue }
                 stats.refreshBaseline(force: true)
             }
         }

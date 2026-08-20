@@ -35,11 +35,14 @@ public enum MusicPlaybackController {
     /// 这两个函数不走 dispatch 的双后端分派,只发 AppleScript;调用方负责先确认当前播放器
     /// 确实是 Apple Music、以及自动化权限已经拿到(跟上面几个动作同一个约定)。
     ///
-    /// ⚠️ 属性名在不同 macOS 上不一样,而且**必须分两次调用、不能写在同一段 try 里**。
-    /// 这台 macOS 27 的 Music.app 脚本字典里已经没有 `loved` 了,同一个属性(四字符码都是
-    /// `pLov`)改名成了 `favorited`;而更早的系统上只有 `loved`。AppleScript 是整段先编译
-    /// 再执行的,字典里不存在的属性会让**整段**编译失败,`on error` 根本轮不到执行,所以
-    /// 只能先发一段 favorited 版本、失败了再发一段 loved 版本。
+    /// ⚠️ 属性名在不同 macOS 上不一样。这台 macOS 27 的 Music.app 脚本字典里已经没有
+    /// `loved` 了,同一个属性(四字符码都是 `pLov`)改名成了 `favorited`;而更早的系统上
+    /// 只有 `loved`。
+    /// 订正(2026-08-20 真机实测):这段注释原来断言"字典里不存在的属性会让整段编译失败、
+    /// on error 轮不到执行"——那只对 `shuffle enabled` 这类**多词术语**成立;`favorited`/
+    /// `loved` 这种单字标识符编译期会被当变量放行,错误留到**运行期**(-2753),`try` 接得住。
+    /// 所以 extendedControlsState 的合并脚本能用 try 嵌套一趟搞定双候选;这里的两段式
+    /// 调用保留给单项回读路径,行为不变。
     private static let favoritedPropertyNames = ["favorited", "loved"]
 
     /// 读当前曲目的"喜欢"状态。读不到(不是 Apple Music / 没权限 / 当前没有曲目 / 两个
@@ -126,6 +129,96 @@ public enum MusicPlaybackController {
         end if
 
         """#
+
+    /// 换歌时三项后台回读(喜欢/播放模式/音量)的合并结果。
+    public struct ExtendedControlsState {
+        public let favorited: Bool?
+        public let mode: MusicPlaybackMode?
+        public let volume: Int?
+        public static let empty = ExtendedControlsState(favorited: nil, mode: nil, volume: nil)
+    }
+
+    /// 三项一次脚本读回来(2026-08-20 性能审计):原来换歌要起三个独立的 osascript 子进程
+    /// (喜欢那项的属性候选循环最坏还要两趟)+ 三次 TCC 权限检查,合并后一趟搞定。三段
+    /// 各自包 try:任何一段读不出来(无曲目/属性名不认/老版本)只是那一段为 "nil",不把
+    /// 整个脚本拖垮 —— 语义与三个单项函数各自的失败路径一致。favorited 的
+    /// favorited/loved 双候选也折进脚本里(外层 try 失败退内层),不再需要两趟子进程。
+    ///
+    /// 会阻塞到子进程结束,**不要在主线程调用**。
+    public static func extendedControlsState(
+        for player: PlaybackPlayer, includeFavorited: Bool
+    ) -> ExtendedControlsState {
+        let script: String
+        switch player {
+        case .appleMusic:
+            script = #"""
+                tell application "Music"
+                    set favPart to "nil"
+                    try
+                        set favPart to ((favorited of current track) as text)
+                    on error
+                        try
+                            set favPart to ((loved of current track) as text)
+                        end try
+                    end try
+                    set modePart to "nil"
+                    try
+                        set modePart to (shuffle enabled as text) & ";" & (song repeat as text)
+                    end try
+                    set volPart to "nil"
+                    try
+                        set volPart to (sound volume as text)
+                    end try
+                    return favPart & "|" & modePart & "|" & volPart
+                end tell
+                """#
+        case .spotify:
+            script = spotifyRunningGuard + #"""
+                tell application "Spotify"
+                    set modePart to "nil"
+                    try
+                        set modePart to (shuffling as text)
+                    end try
+                    set volPart to "nil"
+                    try
+                        set volPart to (sound volume as text)
+                    end try
+                    return "nil|" & modePart & "|" & volPart
+                end tell
+                """#
+        case .qqMusic, .netease, .auto:
+            return .empty
+        }
+        guard let out = runAppleScriptCapturing(script) else { return .empty }
+        let parts = out.trimmingCharacters(in: .whitespacesAndNewlines)
+            .components(separatedBy: "|")
+        guard parts.count == 3 else { return .empty } // 空串 = Spotify 没在跑,也落这里
+        var favorited: Bool?
+        if includeFavorited {
+            // "missing value"/"nil" 等一律当读不出来 —— 与 favoritedState 的 default: continue 同口径。
+            if parts[0] == "true" { favorited = true } else if parts[0] == "false" { favorited = false }
+        }
+        var mode: MusicPlaybackMode?
+        switch player {
+        case .appleMusic:
+            // 与 playbackMode(for:) 的解析同一套优先级:单曲循环 > 随机 > 列表。
+            let m = parts[1].split(separator: ";")
+            if m.count == 2 {
+                if m[1] == "one" {
+                    mode = .repeatOne
+                } else if m[0] == "true" {
+                    mode = .shuffle
+                } else {
+                    mode = .list
+                }
+            }
+        case .spotify:
+            if parts[1] == "true" { mode = .shuffle } else if parts[1] == "false" { mode = .list }
+        default:
+            break
+        }
+        return ExtendedControlsState(favorited: favorited, mode: mode, volume: Int(parts[2]))
+    }
 
     /// 读当前播放模式。不是 Apple Music / 没权限 / 读不出来时返回 nil,调用方据此不显示按钮。
     ///

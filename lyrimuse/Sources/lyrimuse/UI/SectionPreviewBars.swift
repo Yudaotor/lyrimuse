@@ -19,14 +19,13 @@ import SwiftUI
 
 // 三段预览栏共用的外层度量。
 //
-// ⚠️ 高度必须**三段统一**。这一条钉在滚动区上方,它一变高变矮,下面整块内容就跟着上下
-// 跳一次 —— 而三条预览的自然高度差得很远(灵动岛那条要给刘海让位、还要给 hover 展开
-// 预留一截;菜单栏那条只有一行字),于是"点来点去整个框架一直在动"(2026-08-15 用户报的
-// 就是这个)。
-//
-// 取三条里最高的那条当基准,其余两条把多出来的空间留白。不写死数字,是因为悬浮歌词那条
-// 的卡片高度跟着字号走(见 OverlayPreviewBar.cardHeight),字号调大到一定程度它就会反超
-// 灵动岛那条。
+// 高度按**当前段自己的卡**算,不再三段统一取最大(2026-08-19 改回)。统一高度是
+// 2026-08-15 为"点来点去整个框架一直在动"定的,但它的代价是矮预览的段常驻一大块留白,
+// 同日灵动岛展开区加高(40→76)后留白涨到几十 pt,用户报"这块太空了,下方内容空间大点"。
+// 两个诉求的调和:高度跟段走 + 换段的高度变化交给动画滑过去(见 SettingsView 挂在
+// 预览 switch 上的 .animation(value: sectionRaw)),不再是硬跳。
+// 灵动岛那条的卡高**仍然包含 hover 展开的余量**(NotchPreviewBar.cardHeight),
+// 段内 hover 展开预览时头部不动 —— 段内零移动这条底线没变。
 @MainActor
 enum SectionPreviewMetrics {
     static let topPadding: CGFloat = 14
@@ -40,12 +39,9 @@ enum SectionPreviewMetrics {
         topPadding + captionSpacing + captionHeight + bottomPadding
     }
 
-    static var barHeight: CGFloat {
-        chromeHeight
-            + max(
-                OverlayPreviewBar.cardHeight,
-                NotchPreviewBar.cardHeight,
-                MenuBarPreviewBar.cardHeight)
+    /// 这一段预览栏的总高:固定开销 + 这一段自己的卡高。
+    static func barHeight(cardHeight: CGFloat) -> CGFloat {
+        chromeHeight + cardHeight
     }
 }
 
@@ -134,7 +130,7 @@ struct NotchPreviewBar: View {
     /// 就会把下面整页顶一下 —— OverlayPreviewBar 那边记过这个教训。
     private var fullHeight: CGFloat { Self.cardHeight }
 
-    /// 这一条的卡片自然高度,供 SectionPreviewMetrics 取三条的最大值。
+    /// 这一条的卡片自然高度(含 hover 展开余量),供预览栏定自己的总高。
     /// 用 static 是因为要在不构造视图的情况下问出来;刘海让位高度只跟屏幕有关,
     /// 走的是不碰 .shared 的 static 几何函数(理由见 NotchPreviewChrome)。
     static var cardHeight: CGFloat {
@@ -180,8 +176,8 @@ struct NotchPreviewBar: View {
         }
         .padding(.top, SectionPreviewMetrics.topPadding)
         .padding(.bottom, SectionPreviewMetrics.bottomPadding)
-        // 三条预览栏共用一个高度,切段时这一条不能变高变矮(见 SectionPreviewMetrics)。
-        .frame(height: SectionPreviewMetrics.barHeight)
+        // 高度按这一段自己的卡算(含展开余量,段内 hover 不动;见 SectionPreviewMetrics)。
+        .frame(height: SectionPreviewMetrics.barHeight(cardHeight: Self.cardHeight))
         .frame(maxWidth: .infinity)
         .background(Color(nsColor: .windowBackgroundColor))
         .onReceive(
@@ -208,8 +204,8 @@ struct NotchPreviewBar: View {
 ///
 /// 外框改成一小段仿菜单栏:.bar 材质(就是菜单栏/工具栏那层材质)、内容靠右,右边跟着
 /// 几个常见的状态栏图标和真实时钟 —— 这些只是给"占多宽"一个参照物,让宽度滑杆的效果
-/// 看得出来。歌词那一格的宽度**恒定**(设置里的「显示宽度」),跟真菜单栏上一模一样 ——
-// 长短句来回切都不会伸缩。
+/// 看得出来。歌词那一格占多宽跟真菜单栏上一模一样 —— 固定模式下恒等于「显示宽度」、
+// 长短句来回切都不伸缩,自适应模式下短句跟着文字缩短(见 MenuBarLyricsWidthMode)。
 @MainActor
 struct MenuBarPreviewBar: View {
     @ObservedObject private var settings = AppSettings.shared
@@ -229,29 +225,40 @@ struct MenuBarPreviewBar: View {
             // $currentLine 是 @Published,回调跑在 willSet 时机 —— 那一刻
             // currentLineIndex/allLines 还可能是旧值(这个项目已经为这个时机踩过两次坑)。
             // 而 body 求值发生在状态落定之后,读到的必然是同一句歌词对应的那份数据。
-            dwellSeconds: line == nil ? nil : PlaybackCoordinator.shared.currentLineDwellSeconds)
+            dwellSeconds: line == nil ? nil : PlaybackCoordinator.shared.currentLineDwellSeconds,
+            widthMode: settings.menuBarLyricsWidthMode)
     }
 
-    private var willScroll: Bool {
-        if case .fixed(_, _, let pacing) = presentation { return pacing != nil }
+    private static func willScroll(_ p: MenuBarMarqueeRenderer.Presentation) -> Bool {
+        if case .fixed(_, _, let pacing) = p { return pacing != nil }
         return false
+    }
+
+    /// 预览下面那行说明。必须跟着宽度模式走 —— 自适应模式下还写"固定宽度"是直接说反了,
+    /// 而这行字的全部作用就是解释上面那一格为什么是这个宽度。
+    /// presentation 由调用方(body)求值一次传进来 —— 它看着像存量属性,实际每次访问都做
+    /// 一趟 NSString 测宽(2026-08-20 性能审计,原来 body 一轮里被求值 2-3 次)。
+    private func previewCaption(_ p: MenuBarMarqueeRenderer.Presentation) -> String {
+        let width = "\(Int(settings.menuBarLyricsWidth))"
+        let base = settings.menuBarLyricsWidthMode == .fixed
+            ? String(format: L10n.t("预览 · 固定宽度 %@pt"), width)
+            : String(format: L10n.t("预览 · 自适应，最宽 %@pt"), width)
+        // 别把"会滚动"说成"已截断" —— 超宽时到底是滚还是截,由宽度决定,说反了正是
+        // 让人觉得这个功能"怪怪的"的原因之一。
+        return Self.willScroll(p) ? base + L10n.t("，本句会横向滚动") : base
     }
 
     /// 仿菜单栏那一条的高度。真菜单栏内容区约 22pt,这里取整到 24 留一点呼吸。
     static var cardHeight: CGFloat { 24 }
 
     var body: some View {
-        VStack(spacing: 6) {
-            menuBarStrip
+        // presentation 一轮 body 只求值一次(caption 和歌词格共用),见 previewCaption 注释。
+        let p = presentation
+        return VStack(spacing: 6) {
+            menuBarStrip(p)
             // 别把"会滚动"说成"已截断" —— 超宽时到底是滚还是截,由宽度决定,说反了正是
             // 让人觉得这个功能"怪怪的"的原因之一。
-            Text(
-                willScroll
-                    ? String(format: L10n.t("预览 · 固定宽度 %@pt，本句会横向滚动"),
-                             "\(Int(settings.menuBarLyricsWidth))")
-                    : String(format: L10n.t("预览 · 固定宽度 %@pt"),
-                             "\(Int(settings.menuBarLyricsWidth))")
-            )
+            Text(previewCaption(p))
             .font(.caption)
             .foregroundStyle(.secondary)
             .monospacedDigit()
@@ -260,7 +267,7 @@ struct MenuBarPreviewBar: View {
         .padding(.bottom, SectionPreviewMetrics.bottomPadding)
         // 三条预览栏共用一个高度(见 SectionPreviewMetrics)。这一条内容最少,多出来的
         // 空间留白 —— 留白远好过让下面整页跟着跳。
-        .frame(height: SectionPreviewMetrics.barHeight)
+        .frame(height: SectionPreviewMetrics.barHeight(cardHeight: Self.cardHeight))
         .frame(maxWidth: .infinity)
         .background(Color(nsColor: .windowBackgroundColor))
         .onReceive(PlaybackCoordinator.shared.$currentLine.removeDuplicates()) { line = $0 }
@@ -268,10 +275,10 @@ struct MenuBarPreviewBar: View {
     }
 
     /// 一小段仿菜单栏。内容靠右,跟真菜单栏上状态栏项的位置一致。
-    private var menuBarStrip: some View {
+    private func menuBarStrip(_ p: MenuBarMarqueeRenderer.Presentation) -> some View {
         HStack(spacing: 0) {
             Spacer(minLength: 12)
-            lyricsSlot
+            lyricsSlot(p)
             // 右边这几个只是参照物,让"歌词占了菜单栏多宽"看得出来。用真实时钟而不是
             // 写死一个时间 —— 假数据会让人下意识觉得这块预览"不是真的"。
             HStack(spacing: 11) {
@@ -325,10 +332,11 @@ struct MenuBarPreviewBar: View {
     /// 于是预览空一大片而真机不空,是真偏差;改成按文字自然宽度之后语义对上了,但用户
     /// 随即指出真机上那种伸缩本身就难看,于是把设置改成固定宽度,两边又都钉死了。)
     @ViewBuilder
-    private var lyricsSlot: some View {
+    private func lyricsSlot(_ presentation: MenuBarMarqueeRenderer.Presentation) -> some View {
         switch presentation {
         case .text(let visible):
-            // 退化路径(宽度设成 0):真机上也是交给按钮画一段截断文字。
+            // 自适应模式下装得下的句子(以及宽度设成 0 的退化路径)。真机上这两种都是
+            // 交给按钮自己画文字,宽度跟着文字走 —— 这里的 fixedSize() 就是那个行为。
             Text(visible)
                 .font(Font(MenuBarMarqueeRenderer.font))
                 .foregroundStyle(Color(nsColor: .labelColor))

@@ -167,6 +167,28 @@ do {
     expectEqual(engine.activeLine(atMs: 27000)?.words?.map(\.text), ["la ", "la "], "SyncEngine(YRC): 真歌词行不受影响")
 }
 
+// ---- 间奏点(2026-08-19,歌词窗口的 Apple Music 式「•••」) ----
+do {
+    let engine = LyricsSyncEngine()
+    // 逐字:前奏 8s(≥5s → 标);第一句唱到 9s、第二句 25s 开始(静默 16s ≥ 6s → 标);
+    // 第二句唱到 26s、第三句 28s 开始(静默 2s → 不标)。
+    let yrc = "[8000,1000](8000,500,0)aa (8500,500,0)bb \n"
+        + "[25000,1000](25000,500,0)cc (25500,500,0)dd \n"
+        + "[28000,1000](28000,500,0)ee (28500,500,0)ff \n"
+    engine.load(lyrics: "", lyricsTr: "", lyricsRoma: "", lyricsYRC: yrc, preferWordLevel: true)
+    expectEqual(engine.gapMarkers().map(\.index), [-1, 0],
+                "间奏点: 前奏 + 第一句后各一个,静默太短的不标")
+    expectEqual(engine.activeGapIndex(atMs: 3000), -1, "间奏点: 前奏进行中")
+    expectEqual(engine.activeGapIndex(atMs: 8200), nil, "间奏点: 唱着的时候不算间奏(词尾余量)")
+    expectEqual(engine.activeGapIndex(atMs: 15000), 0, "间奏点: 第一句唱完后的静默段")
+    expectEqual(engine.activeGapIndex(atMs: 24700), nil, "间奏点: 下一句开始前 leadMs 先熄灭")
+    // 行级 LRC 不知道一行唱多久:两句起点差 ≥15s 才标(宁可漏合,别在普通句间闪点)。
+    let engine2 = LyricsSyncEngine()
+    let lrc = "[00:01.00]aa\n[00:13.00]bb\n[00:40.00]cc\n"
+    engine2.load(lyrics: lrc, lyricsTr: "", lyricsRoma: "", lyricsYRC: "", preferWordLevel: false)
+    expectEqual(engine2.gapMarkers().map(\.index), [1], "间奏点(LRC): 只有 ≥15s 的起点差才标")
+}
+
 // ---- LyricsSyncEngine: 单曲歌词时间轴微调(offsetMs) ----
 
 do {
@@ -260,6 +282,55 @@ do {
     expectEqual(engine.activeLineIndex(atMs: 20500), 1, "SyncEngine.activeLineIndex(YRC): 逐字歌词同样按时间戳扫下标")
 }
 
+// ---- LyricsSyncEngine: 热路径记忆化(2026-08-19 性能审计落地) ----
+// activeLine/upcomingLineText 按行下标缓存构建结果(20Hz 的 fastTick 约 99% 的调用命中
+// 同一行)。这里钉住两条不变量:①记忆化不改变语义 —— 行内反复查询、跨行、倒回都跟
+// 无缓存时逐字一致;②load() 换歌词内容后缓存必须失效 —— 新歌同一个下标是完全不同的
+// 内容,忘了失效会把上一首歌的行返回出去。
+
+do {
+    let engine = LyricsSyncEngine()
+    let lrc = "[00:10.00]第一句\n[00:20.00]第二句\n"
+    engine.load(lyrics: lrc, lyricsTr: "", lyricsRoma: "", lyricsYRC: "", preferWordLevel: true)
+    expectEqual(engine.activeLine(atMs: 12000)?.mainText, "第一句", "SyncEngine(记忆化): 首次查询正常构建")
+    expectEqual(engine.activeLine(atMs: 13000)?.mainText, "第一句", "SyncEngine(记忆化): 同一行内反复查询命中缓存,内容不变")
+    expectEqual(engine.activeLine(atMs: 21000)?.mainText, "第二句", "SyncEngine(记忆化): 跨到下一行后缓存随下标失效")
+    expectEqual(engine.activeLine(atMs: 5000)?.mainText, nil, "SyncEngine(记忆化): 倒回第一句之前(下标 -1)同样正确")
+    expectEqual(engine.upcomingLineText(afterMs: 12000), "第二句", "SyncEngine(记忆化): 下一行预览正常")
+    expectEqual(engine.upcomingLineText(afterMs: 21000), nil, "SyncEngine(记忆化): 最后一行之后没有下一句")
+    expectEqual(engine.upcomingLineText(afterMs: 12000), "第二句", "SyncEngine(记忆化): 倒回后下一行缓存随下标失效")
+}
+
+do {
+    let engine = LyricsSyncEngine()
+    engine.load(lyrics: "[00:10.00]旧歌词\n", lyricsTr: "", lyricsRoma: "", lyricsYRC: "", preferWordLevel: true)
+    expectEqual(engine.activeLine(atMs: 15000)?.mainText, "旧歌词", "SyncEngine(记忆化): 换歌前正常")
+    expectEqual(engine.upcomingLineText(afterMs: 5000), "旧歌词", "SyncEngine(记忆化): 换歌前下一行预览正常")
+    engine.load(lyrics: "[00:10.00]新歌词\n", lyricsTr: "", lyricsRoma: "", lyricsYRC: "", preferWordLevel: true)
+    expectEqual(engine.activeLine(atMs: 15000)?.mainText, "新歌词", "SyncEngine(记忆化): load 换内容后同一下标的行缓存必须失效")
+    expectEqual(engine.upcomingLineText(afterMs: 5000), "新歌词", "SyncEngine(记忆化): load 换内容后下一行缓存同样失效")
+}
+
+// ---- KaraokeFill.lineFillSettledMs: 整行填色定格时刻(悬浮歌词行尾停表用) ----
+// 阈值 = startMs + 有效时长 × (1 + wordEdgeSoftenBand),整行取所有词/组的最大值。
+// 词:(1000, 500) → 1000 + ceil(500×1.08) = 1540;极短词吃 minWordDurationMs(80)地板:
+// (1000, 10) → 1000 + ceil(80×1.08) = 1087;逐词罗马音按整组伪词(跨度可能远大于单词)
+// 填色,组也要算进最大值,否则罗马音还在填、行就被提前定格。
+
+do {
+    let w1 = SyncedLyricWord(text: "aa", startMs: 1000, durationMs: 500)
+    let w2 = SyncedLyricWord(text: "bb", startMs: 1500, durationMs: 500)
+    expectEqual(KaraokeFill.lineFillSettledMs(words: [w1], groups: nil), 1540,
+                "lineFillSettledMs: 单词阈值 = start + 时长×(1+软化带)")
+    expectEqual(KaraokeFill.lineFillSettledMs(words: [SyncedLyricWord(text: "a", startMs: 1000, durationMs: 10)], groups: nil), 1087,
+                "lineFillSettledMs: 极短词按 minWordDurationMs 地板算")
+    expectEqual(KaraokeFill.lineFillSettledMs(words: [w1, w2], groups: nil), 2040,
+                "lineFillSettledMs: 整行取所有词的最大值")
+    let group = SyncedLyricWordGroup(id: 0, words: [w1, w2], romanization: "aabb")
+    expectEqual(KaraokeFill.lineFillSettledMs(words: [w1, w2], groups: [group]), 2080,
+                "lineFillSettledMs: 整组伪词(跨度 1000)的阈值 2080 盖过词级最大值 2040")
+}
+
 // ---- LyricsOffsetStore: 校正值 key 要按"歌词内容"区分,不能只按歌手/歌名 ----
 
 do {
@@ -270,30 +341,111 @@ do {
     expectEqual(keyA == keyBDifferentLyrics, false, "LyricsOffsetStore.trackKey: 同一首歌换了一份不同的歌词内容,key 应该不同")
 }
 
-// ---- MediaControlClient.spotifyPreloadDelta: gapless 预载分叉的取样判定 ----
-// 2026-08-17 用户现行目击坐实:自动切歌(gapless)时 Spotify 的 playerPosition 时钟先于
-// 真实出声启动(实测《星座》开播即 1.84s,MediaRemote 新锚点才 0.69s),整首歌恒偏快;
-// 手动重播两源对齐。修法是在曲目开头量分叉、整首回扣 —— 这里钉死取样守卫。
+// ---- 最近记录的封面兜底:合唱 credit 要能对上主歌手写法(2026-08-20) ----
+//
+// 同一次收听以两种歌手写法存在:本机缓存 key 用播放器的逐曲 credit(`英雄联盟/Sara Skinner`),
+// Last.fm 那一行记主歌手(`英雄联盟`)。前两级查找(归一化 key 精确 / looseKey)都救不了 ——
+// looseKey 只把分隔符变体折成 `&`,不会把合唱者去掉。下面这批是用户 2026-08-20 报的那一屏
+// (英雄联盟原声带)里真实的 key 与真实的行,逐条从缓存里抄出来的。
 do {
-    // 用户目击的那个真实形状:开播时 playerPosition 1.84、新锚点 0.69 → 分叉 1.15,取样。
-    expectEqual(MediaControlClient.spotifyPreloadDelta(truth: 1.84, freshAnchorNow: 0.69),
-                1.84 - 0.69, "预载分叉: 目击的真实形状(1.15s)被取样")
-    // 手动播放:两源对齐,分叉在噪声范围内 → 不取样,行为跟改动前完全一致。
-    expectEqual(MediaControlClient.spotifyPreloadDelta(truth: 1.0, freshAnchorNow: 0.9),
-                nil, "预载分叉: 两源对齐(手动播放)不取样")
-    // 换歌瞬间 MediaRemote 锚点还挂着上一首:elapsedTimeNow 是个大值,分叉为负 → 排除。
-    // (实测形状:playerPosition 0.02 vs 上一首残留的 30.3。)
-    expectEqual(MediaControlClient.spotifyPreloadDelta(truth: 0.02, freshAnchorNow: 30.3),
-                nil, "预载分叉: 陈旧锚点(负分叉)不取样")
-    // App 中途启动看到的老歌:不在曲目开头,不回扣 —— 没有"出声起点"可参照。
-    expectEqual(MediaControlClient.spotifyPreloadDelta(truth: 100, freshAnchorNow: 98.5),
-                nil, "预载分叉: 曲目中段不取样")
-    // 暂停中 elapsedTimeNow 还在走(实测),不能拿来量 → 调用方传 nil。
-    expectEqual(MediaControlClient.spotifyPreloadDelta(truth: 2.0, freshAnchorNow: nil),
-                nil, "预载分叉: 暂停态(无可信锚点)不取样")
-    // 分叉大得离谱(>5s)更像数据错乱,不敢按预载解释。
-    expectEqual(MediaControlClient.spotifyPreloadDelta(truth: 14.0, freshAnchorNow: 2.0),
-                nil, "预载分叉: 超过 5s 的分叉不取样")
+    typealias R = EnrichCacheReader
+    let covers = [
+        "Sebastien Najand/英雄联盟|PROJECT: Ashe|PROJECT: Ashe": "https://cover/ashe",
+        "英雄联盟/Sara Skinner|Bring Home The Glory|Bring Home The Glory": "https://cover/glory",
+        "英雄联盟/Against the Current|Legends Never Die|Legends Never Die": "https://cover/legends",
+        "英雄联盟 & The Crystal Method|Senna, the Redeemer|Senna, the Redeemer": "https://cover/senna",
+        "英雄联盟 & Mako & The Word Alive & The Glitch Mob|RISE|RISE": "https://cover/rise",
+        "Edouard Brenneisen & 英雄联盟|Jhin, the Virtuoso|Jhin, the Virtuoso": "https://cover/jhin",
+        // 对照:单人写法,本来就命中,这一级之前就该返回
+        "Imagine Dragons|Warriors|Warriors (Official Anthem of League of Legends 2014 World Championship)": "https://cover/warriors",
+        "英雄联盟|Aphelios, the Weapon of the Faithful|Aphelios, the Weapon of the Faithful": "https://cover/aphelios",
+    ]
+    let index = R.coverIndexByArtistTitle(covers)
+    func cover(_ artist: String, _ title: String) -> String? {
+        R.coverURLString(in: index, artist: artist, title: title)
+    }
+    // 截图里那 6 行(Last.fm 报的是主歌手写法)
+    expectEqual(cover("Sebastien Najand", "PROJECT: Ashe"), "https://cover/ashe", "封面兜底: 斜杠合唱归主歌手")
+    expectEqual(cover("英雄联盟", "Bring Home The Glory"), "https://cover/glory", "封面兜底: 主歌手在前的斜杠合唱")
+    expectEqual(cover("英雄联盟", "Legends Never Die"), "https://cover/legends", "封面兜底: 同上,另一首")
+    expectEqual(cover("英雄联盟", "Senna, the Redeemer"), "https://cover/senna", "封面兜底: & 号合唱")
+    expectEqual(cover("英雄联盟", "RISE"), "https://cover/rise", "封面兜底: 四人 & 号合唱")
+    // 大小写差异(行里是 The、缓存里是 the)由 artistTitleKey 折小写兜住
+    expectEqual(cover("Edouard Brenneisen", "Jhin, The Virtuoso"), "https://cover/jhin", "封面兜底: 合唱 + 歌名大小写不一致")
+    // 对照行不受影响
+    expectEqual(cover("Imagine Dragons", "Warriors"), "https://cover/warriors", "封面兜底: 单人写法照旧命中")
+    expectEqual(cover("英雄联盟", "Aphelios, the Weapon of the Faithful"), "https://cover/aphelios",
+                "封面兜底: 单人写法照旧命中(同一个主歌手下的另一首)")
+    // 反方向:行里是完整合唱写法、缓存里只有主歌手 —— 查询侧也归并一次
+    let single = R.coverIndexByArtistTitle(["Daniel Caesar|Toronto 2014|NEVER ENOUGH": "https://cover/toronto"])
+    expectEqual(R.coverURLString(in: single, artist: "Daniel Caesar & Mustafa", title: "Toronto 2014"),
+                "https://cover/toronto", "封面兜底: 反方向(行是合唱、缓存是单人)也要命中")
+    // 精确写法优先:别让合唱条目的图盖掉同名单人条目自己的图
+    let both = R.coverIndexByArtistTitle([
+        "英雄联盟|RISE|The Music of League of Legends": "https://cover/exact",
+        "英雄联盟 & Mako|RISE|RISE": "https://cover/collab",
+    ])
+    expectEqual(R.coverURLString(in: both, artist: "英雄联盟", title: "RISE"), "https://cover/exact",
+                "封面兜底: 精确歌手写法优先于合唱别名")
+    // K/DA 那类名字自带斜杠的不能被劈开(mergeArtist 已有守卫,这里守住它别被绕过)
+    let kda = R.coverIndexByArtistTitle(["K/DA|POP/STARS|POP/STARS": "https://cover/kda"])
+    expectEqual(R.coverURLString(in: kda, artist: "K/DA", title: "POP/STARS"), "https://cover/kda",
+                "封面兜底: K/DA 不会被斜杠劈成 K")
+}
+
+// ---- LyricsOffsetStore.trackKey:歌手/歌名必须归一化(2026-08-20 修的真 bug) ----
+//
+// 播放侧传播放器报的**原始**歌手/歌名,「歌词管理」传缓存 key 拆出来的(已归一化)那两段。
+// trackKey 不自己归一化的话,同一首歌就有两个身份:在管理页敲的偏移播放时查不到、菜单栏
+// 调的值在管理页看不见、「重置」也清不掉。实测这台机器 2483 首里 111 首(4.5%)落在这个
+// 差异上 —— 全是歌名结尾带译名括号/`(with X)` 的那类。
+do {
+    let lrc = "[00:10.00]句\n"
+    func key(_ artist: String, _ title: String) -> String {
+        LyricsOffsetStore.trackKey(artist: artist, title: title, lyrics: lrc, lyricsYRC: "")
+    }
+    // 这一条就是 bug 本体:带译名括号的原始歌名 vs 缓存里那个剥过的歌名,必须同一个 key。
+    expectEqual(key("丁世光", "不散的筵席（I Miss You）"), key("丁世光", "不散的筵席"),
+                "trackKey: 结尾译名括号剥不剥都是同一首歌")
+    expectEqual(key("Ari Lennox", "Queen Space (with Summer Walker)"), key("Ari Lennox", "Queen Space"),
+                "trackKey: (with X) 同理")
+    // 幂等:管理页传进来的本来就是归一化过的值,再过一遍不能变。
+    expectEqual(key("丁世光", "不散的筵席"), key("丁世光", "不散的筵席"), "trackKey: 归一化是幂等的")
+    // 版本标记不能剥 —— 那是另一个录音,合并了就是把两首不同的音频当成同一首。
+    expectEqual(key("宇多田ヒカル", "Automatic (Remastered 2014)") == key("宇多田ヒカル", "Automatic"),
+                false, "trackKey: (Remastered 2014) 是版本标记,不能剥")
+    // 全角空格/零宽字符走 cleanTag,跟 enrich 缓存 key 同一套。
+    expectEqual(key("Hikaru Utada", "Gold\u{3000}～また逢う日まで～"),
+                key("Hikaru Utada", "Gold ～また逢う日まで～"),
+                "trackKey: 全角空格折成普通空格")
+}
+
+// ---- 存量 key 搬迁:老记录留在旧形态下会永久查不到 ----
+do {
+    let fp = "abc123def456"
+    let legacy = "丁世光|不散的筵席（I Miss You）|\(fp)"
+    let canonical = "丁世光|不散的筵席|\(fp)"
+
+    // 旧形态搬到新形态,值原样保留
+    let moved = LyricsOffsetStore.migratedOffsetKeys([legacy: 1800])
+    expectEqual(moved, [canonical: 1800], "key 搬迁: 旧形态被搬到归一化形态,值不变")
+
+    // 已经是归一化形态的原样不动
+    let untouched = LyricsOffsetStore.migratedOffsetKeys([canonical: 700])
+    expectEqual(untouched, [canonical: 700], "key 搬迁: 已归一化的记录原样不动")
+
+    // 撞车:两种拼法同时存在(指纹相同=同一份内容),让"本来就是归一化形态"那条赢 ——
+    // 它是新形态下唯一查得到的身份,拿旧形态的值盖掉它等于把用户正在用的换成更旧的。
+    let collided = LyricsOffsetStore.migratedOffsetKeys([legacy: 1800, canonical: 700])
+    expectEqual(collided, [canonical: 700], "key 搬迁: 撞车时归一化形态那条胜出")
+
+    // 段数不对的 key(不是这个仓库写出来的)原样保留,不猜
+    let weird = LyricsOffsetStore.migratedOffsetKeys(["没有分隔符": 1, "只有一个|分隔符": 2])
+    expectEqual(weird, ["没有分隔符": 1, "只有一个|分隔符": 2], "key 搬迁: 段数不对的 key 不动")
+
+    // 空指纹段(歌词还没解析出来时调过偏移)也要能搬,不能崩
+    let emptyFp = LyricsOffsetStore.migratedOffsetKeys(["丁世光|不散的筵席（I Miss You）|": 300])
+    expectEqual(emptyFp, ["丁世光|不散的筵席|": 300], "key 搬迁: 指纹段为空也照搬")
 }
 
 // ---- MediaControlClient.ageCompensatedCachedElapsed: 借用后台 AppleScript 缓存 ----
@@ -330,6 +482,223 @@ do {
     expectEqual(zeroRate.map { abs($0 - 101.8) < 0.001 }, true, "ageCompensatedCachedElapsed: 播放中速率报 0 按 1 计")
 }
 
+// ---- 歌词噪声过滤:日文标注 / 繁体自动识别 / 纯符号行 ----
+// 2026-08-18 调研 LyricsX 的默认过滤表之后补的。它把繁简两种写法都手工列进表里(有「作詞」
+// 也有「作词」,但「録音」就只列了简体),我们改成转孪生写法再比一次,表不必双写。
+// 日文汉字标注(収録/主題歌/片頭曲)本地缓存里一条样本都没有,是照它那份真实数据提前补的坑。
+
+do {
+    // 日文源常见的头部标注(汉字形态)。
+    expectEqual(LyricsSyncEngine.matchesRoleWordCredit("主題歌：LiSA"), true,
+                "日文标注: 主題歌")
+    expectEqual(LyricsSyncEngine.matchesRoleWordCredit("片頭曲：藍井エイル"), true,
+                "日文标注: 片頭曲")
+    expectEqual(LyricsSyncEngine.matchesRoleWordCredit("収録：ベストアルバム"), true,
+                "日文标注: 収録")
+    expectEqual(LyricsSyncEngine.matchesRoleWordCredit("挿入歌：花澤香菜"), true,
+                "日文标注: 挿入歌")
+    // 繁体标签不再需要在表里双写一份 —— 靠 HanScript 转孪生写法比对。
+    expectEqual(LyricsSyncEngine.matchesRoleWordCredit("作詞：林夕"), true,
+                "繁体自动识别: 作詞(表里只有简体「作词」)")
+    expectEqual(LyricsSyncEngine.matchesRoleWordCredit("編曲：陳建騏"), true,
+                "繁体自动识别: 編曲")
+    expectEqual(LyricsSyncEngine.matchesRoleWordCredit("錄音：李振權"), true,
+                "繁体自动识别: 錄音")
+    expectEqual(LyricsSyncEngine.matchesRoleWordCredit("歌手：周杰伦"), true,
+                "新增角色词: 歌手")
+    // 反例:说话人标签仍然要豁免,别被新词带塌了。
+    expectEqual(LyricsSyncEngine.matchesRoleWordCredit("他说：我不走"), false,
+                "反例: 对白式冒号不是署名行")
+    expectEqual(LyricsSyncEngine.matchesRoleWordCredit("曲婉婷：好久不见"), false,
+                "反例: 歌手名当说话人标签不是署名行")
+}
+
+do {
+    // 整行只有符号:实测库里存在单独一行 `-`。
+    expectEqual(LyricsSyncEngine.isSymbolOnlyLine("-"), true, "纯符号行: 单个连字符")
+    expectEqual(LyricsSyncEngine.isSymbolOnlyLine("——"), true, "纯符号行: 破折号")
+    expectEqual(LyricsSyncEngine.isSymbolOnlyLine("......"), true, "纯符号行: 省略号")
+    expectEqual(LyricsSyncEngine.isSymbolOnlyLine("~ * ~"), true, "纯符号行: 混合符号")
+    // 反例:括号里有字的**不能**当纯符号删 —— 库里 `(開心啊)` 是真歌词。
+    expectEqual(LyricsSyncEngine.isSymbolOnlyLine("(開心啊)"), false,
+                "纯符号行(反向): 括号里有字的是真歌词")
+    expectEqual(LyricsSyncEngine.isSymbolOnlyLine("Oh"), false, "纯符号行(反向): 短英文语气词")
+    expectEqual(LyricsSyncEngine.isSymbolOnlyLine(""), false, "纯符号行(反向): 空行不算")
+}
+
+// ---- 歌词噪声过滤:抬头 / 版权声明 / 新补角色词 ----
+// 用例全部取自 2026-08-18 对用户真实缓存(490 首、29390 行)的全量扫描:改之前首/末行有
+// 45 条抬头、10 条版权声明、5 条短标签冒号漏网,改之后分别剩 3 / 0 / 0,且 29390 行里零误伤。
+
+do {
+    // ① 简繁:本地标签是繁体,抬头写简体。
+    expectEqual(LyricsSyncEngine.looksLikeHeaderLine("小步舞曲 - 陈绮贞",
+                trackTitle: "小步舞曲", trackArtist: "陳綺貞"), true,
+                "抬头: 简繁不一致也要认出来")
+    // ② 多歌手:标签用 & 拼接,抬头用 / 且每个名字后面夹着英文名 —— 整串拼起来连不成一段。
+    expectEqual(LyricsSyncEngine.looksLikeHeaderLine(
+                "无所谓 (Explicit) - 方大同 (Khalil Fong)/张靓颖 (Jane Zhang)",
+                trackTitle: "无所谓", trackArtist: "方大同 & 张靓颖"), true,
+                "抬头: 多歌手且中间夹英文名")
+    // ③ 标签里有抬头没写的合作者。
+    expectEqual(LyricsSyncEngine.looksLikeHeaderLine("电子羊 - 某幻君",
+                trackTitle: "电子羊", trackArtist: "某幻君 & 王瀚哲 (中国BOY)"), true,
+                "抬头: 标签比抬头多一个合作者")
+    // ④ 双语歌名:标签是「日出 The Dawn」,抬头只写中文段。
+    expectEqual(LyricsSyncEngine.looksLikeHeaderLine("丁世光 - 日出",
+                trackTitle: "日出 The Dawn", trackArtist: "丁世光"), true,
+                "抬头: 双语歌名只写中文段")
+    // ⑤ 短歌名走形状约束那条分支(歌名一两个字,长度下限挡不住它)。
+    expectEqual(LyricsSyncEngine.looksLikeHeaderLine("GF - 方大同",
+                trackTitle: "GF", trackArtist: "方大同"), true, "抬头: 两字母短歌名")
+    expectEqual(LyricsSyncEngine.looksLikeHeaderLine("追 - 陶喆 (David Zee Tao)",
+                trackTitle: "追", trackArtist: "陶喆"), true, "抬头: 单字歌名")
+    // ⑥ 反序、无空格。
+    expectEqual(LyricsSyncEngine.looksLikeHeaderLine("陳柏宇-最後的擁抱",
+                trackTitle: "最后的拥抱", trackArtist: "陈柏宇"), true,
+                "抬头: 歌手在前、无空格、且繁体")
+}
+
+do {
+    // 反向用例:这些**不能**被当成抬头删掉。
+    // 真歌词里念自己名字(蛋堡《经典!》的实际歌词,库里存在)。
+    expectEqual(LyricsSyncEngine.looksLikeHeaderLine("新的经典 蛋堡 x Jabberloop",
+                trackTitle: "经典!", trackArtist: "蛋堡"), false,
+                "抬头(反向): 歌词里念自己名字不算抬头")
+    // 第一句歌词恰好就是歌名 —— 缺歌手名,不该删(注释里原本就点明的场景)。
+    expectEqual(LyricsSyncEngine.looksLikeHeaderLine("First Love",
+                trackTitle: "First Love", trackArtist: "宇多田ヒカル"), false,
+                "抬头(反向): 只有歌名、没有歌手名")
+    // 短歌名那条分支要求"整行就是两段",句中带连字符的真歌词不该命中。
+    expectEqual(LyricsSyncEngine.looksLikeHeaderLine("我 - 你 - 他都在等",
+                trackTitle: "我", trackArtist: "某人"), false,
+                "抬头(反向): 多个连字符不算两段形状")
+}
+
+do {
+    // 版权/免责声明:没有冒号,所有"角色+冒号"规则都够不着,所以单独一条。
+    expectEqual(LyricsSyncEngine.matchesCopyrightNotice("未经著作权人许可不得翻录翻唱或使用"),
+                true, "版权声明: 郭顶整张专辑末行的实测形态")
+    expectEqual(LyricsSyncEngine.matchesCopyrightNotice("未经著作权人许可 不得翻录翻唱或使用"),
+                true, "版权声明: 中间带空格的变体")
+    expectEqual(LyricsSyncEngine.matchesCopyrightNotice("（未经许可,不得翻唱或使用）"),
+                true, "版权声明: 带括号的短变体")
+    expectEqual(LyricsSyncEngine.matchesCopyrightNotice("All Rights Reserved"),
+                true, "版权声明: 英文成句写法")
+    // 反向:光有"未经"不够,必须成对出现法务词,否则真歌词会被吞。
+    expectEqual(LyricsSyncEngine.matchesCopyrightNotice("未经允许的心动"), false,
+                "版权声明(反向): 只有「未经」的真歌词不算")
+    expectEqual(LyricsSyncEngine.matchesCopyrightNotice("我不得不承认"), false,
+                "版权声明(反向): 只有「不得」的真歌词不算")
+}
+
+// ---- OverlayControlHitTest: 悬浮窗按钮的命中测试 ----
+// (2026-08-18 结构性改动:悬浮窗改成常年 ignoresMouseEvents=true,胶囊上五个按钮的点击
+// 由控制器拿全局鼠标监听的屏幕坐标比对矩形自己分发。这段判定是整条链路上唯一能脱离
+// 窗口/事件系统单独验证的部分。)
+
+do {
+    // 按 HStack 排开的五个按钮:26/30/26 宽,间距 18,y 都一样。
+    let rects: [OverlayControlID: CGRect] = [
+        .previous: CGRect(x: 100, y: 200, width: 26, height: 26),
+        .playPause: CGRect(x: 144, y: 198, width: 30, height: 30),
+        .next: CGRect(x: 192, y: 200, width: 26, height: 26),
+        .favorite: CGRect(x: 236, y: 200, width: 26, height: 26),
+        .lock: CGRect(x: 299, y: 200, width: 26, height: 26),
+    ]
+    expectEqual(OverlayControlHitTest.control(at: CGPoint(x: 113, y: 213), in: rects), .previous,
+                "命中测试: 上一首中心")
+    expectEqual(OverlayControlHitTest.control(at: CGPoint(x: 159, y: 213), in: rects), .playPause,
+                "命中测试: 播放/暂停中心")
+    expectEqual(OverlayControlHitTest.control(at: CGPoint(x: 311, y: 213), in: rects), .lock,
+                "命中测试: 锁定中心")
+    // 按钮之间的空隙(间距 18)不该命中任何一个 —— 否则点在缝里会误触发相邻按钮。
+    expectEqual(OverlayControlHitTest.control(at: CGPoint(x: 135, y: 213), in: rects) == nil, true,
+                "命中测试: 两个按钮之间的空隙不命中")
+    // 胶囊之外(比如歌词文字上)一律不命中 —— 那里要留给长按拖动。
+    expectEqual(OverlayControlHitTest.control(at: CGPoint(x: 400, y: 300), in: rects) == nil, true,
+                "命中测试: 胶囊之外不命中")
+    // 空表(控制排没显示)不命中 —— 控制器靠这个避免"看不见却挡手"。
+    expectEqual(OverlayControlHitTest.control(at: CGPoint(x: 113, y: 213), in: [:]) == nil, true,
+                "命中测试: 没显示控制排时一个都不命中")
+}
+
+do {
+    // 重叠时取面积最小的那个,而且结果必须**稳定** —— 字典遍历顺序不确定,"取第一个命中的"
+    // 会让重叠情形随机命中,是最难查的一类 bug。跑多次断言结果一致。
+    let overlapping: [OverlayControlID: CGRect] = [
+        .previous: CGRect(x: 0, y: 0, width: 100, height: 100),
+        .next: CGRect(x: 10, y: 10, width: 20, height: 20),
+    ]
+    var results = Set<OverlayControlID?>()
+    for _ in 1...50 {
+        results.insert(OverlayControlHitTest.control(at: CGPoint(x: 15, y: 15), in: overlapping))
+    }
+    expectEqual(results.count, 1, "命中测试: 重叠情形下结果必须稳定,不随字典顺序变")
+    expectEqual(results.first ?? nil, .next, "命中测试: 重叠时命中面积更小的那个")
+}
+
+// ---- MediaControlClient.livePositionSeconds: rate 缺失时别信 elapsedTimeNow ----
+// (2026-08-18 实测坐实:Spotify 暂停后恢复播放,上报的 playbackRate 变成 null,而
+// media-control 的 --now 外推是 elapsed + (now-ts)*rate —— rate 缺失时增量为 0,
+// elapsedTimeNow 15 秒纹丝不动。那个恒定值喂进伺服会把位置一路拽回去、歌词冻在一行。)
+
+do {
+    let ts = Date(timeIntervalSince1970: 1_000_000)
+    // rate 正常:优先用 media-control 自己的外推(实测比自算准一个量级)。
+    let healthy = MediaControlClient.livePositionSeconds(
+        playing: true, elapsedTime: 170.866, elapsedTimeNow: 176.21,
+        playbackRate: 1, timestamp: ts, now: ts.addingTimeInterval(6.0))
+    expectEqual(healthy.map { ($0 * 100).rounded() / 100 }, 176.21,
+                "livePositionSeconds: rate 正常时用 elapsedTimeNow")
+
+    // rate 缺失(恢复播放后的实测形态):elapsedTimeNow 已经退化成 elapsedTime,
+    // 必须自己按 rate=1 补算,否则位置恒定不动。
+    let stalled = MediaControlClient.livePositionSeconds(
+        playing: true, elapsedTime: 178.604, elapsedTimeNow: 178.604,
+        playbackRate: nil, timestamp: ts, now: ts.addingTimeInterval(16.0))
+    expectEqual(stalled.map { ($0 * 1000).rounded() / 1000 }, 194.604,
+                "livePositionSeconds: rate 缺失时按墙钟自己补算,不能停在 178.604")
+
+    // 同一份输入连采两次必须给出**不同**的位置 —— 这条才是这个 bug 的直接断言。
+    let a = MediaControlClient.livePositionSeconds(
+        playing: true, elapsedTime: 178.604, elapsedTimeNow: 178.604,
+        playbackRate: nil, timestamp: ts, now: ts.addingTimeInterval(2))
+    let b = MediaControlClient.livePositionSeconds(
+        playing: true, elapsedTime: 178.604, elapsedTimeNow: 178.604,
+        playbackRate: nil, timestamp: ts, now: ts.addingTimeInterval(15))
+    expectEqual((a ?? 0) < (b ?? 0), true,
+                "livePositionSeconds: rate 缺失时位置必须随时间前进(暂停后恢复的冻结 bug)")
+
+    // 暂停态:elapsedTimeNow 在暂停期间照样涨(实测拿到过远超曲长的值),必须用原始 elapsedTime。
+    let paused = MediaControlClient.livePositionSeconds(
+        playing: false, elapsedTime: 104.948, elapsedTimeNow: 108.428,
+        playbackRate: 1, timestamp: ts, now: ts.addingTimeInterval(30))
+    expectEqual(paused, 104.948, "livePositionSeconds: 暂停时用冻结的 elapsedTime,不外推")
+
+    // rate 为 0 跟缺失同义(media-control 恢复播放后也报过 0)。
+    let zeroRate = MediaControlClient.livePositionSeconds(
+        playing: true, elapsedTime: 10, elapsedTimeNow: 10,
+        playbackRate: 0, timestamp: ts, now: ts.addingTimeInterval(5))
+    expectEqual(zeroRate, 15, "livePositionSeconds: rate=0 与缺失同义,同样自己补算")
+
+    // 时钟回拨/时间戳解析异常时不倒推。
+    let backwards = MediaControlClient.livePositionSeconds(
+        playing: true, elapsedTime: 50, elapsedTimeNow: 50,
+        playbackRate: nil, timestamp: ts, now: ts.addingTimeInterval(-10))
+    expectEqual(backwards, 50, "livePositionSeconds: 时间戳在未来时不倒推位置")
+}
+
+do {
+    // timestamp 解析:media-control 实测给不带小数秒的 Z 形式,也要兼容带小数秒的。
+    expectEqual(MediaControlClient.parseTimestamp("2026-08-18T08:51:46Z") != nil, true,
+                "parseTimestamp: 不带小数秒的 ISO8601 能解")
+    expectEqual(MediaControlClient.parseTimestamp("2026-08-18T08:51:46.123Z") != nil, true,
+                "parseTimestamp: 带小数秒的 ISO8601 能解")
+    expectEqual(MediaControlClient.parseTimestamp(nil) == nil, true,
+                "parseTimestamp: nil 进 nil 出")
+}
+
 // ---- LocalPlaybackSource.servoDecision: 播放位置外推的"锁死偏差"伺服校正 ----
 // (2026-08-04 实测排查坐实:稳定播放分支只按墙钟外推、不回看真实读数,播种偏差/漏观察
 // 的短暂停会造成小于 seek 容差的永久锁死,详见该函数注释。)
@@ -341,7 +710,7 @@ do {
     var rounds = 0
     for _ in 1...5 {
         rounds += 1
-        let (newEMA, snap) = LocalPlaybackSource.servoDecision(errEMA: ema, error: -1.2, preciseSource: true)
+        let (newEMA, snap) = LocalPlaybackSource.servoDecision(errEMA: ema, error: -1.2, tier: .precise)
         ema = newEMA
         if snap { snapped = true; break }
     }
@@ -354,7 +723,7 @@ do {
     var ema = 0.0
     var snapped = false
     for _ in 1...10 {
-        let (newEMA, snap) = LocalPlaybackSource.servoDecision(errEMA: ema, error: 0.205, preciseSource: true)
+        let (newEMA, snap) = LocalPlaybackSource.servoDecision(errEMA: ema, error: 0.205, tier: .precise)
         ema = newEMA
         if snap { snapped = true; break }
     }
@@ -367,7 +736,7 @@ do {
     var falseSnap = false
     for i in 1...50 {
         let err = i % 2 == 0 ? 0.06 : -0.06
-        let (newEMA, snap) = LocalPlaybackSource.servoDecision(errEMA: ema, error: err, preciseSource: true)
+        let (newEMA, snap) = LocalPlaybackSource.servoDecision(errEMA: ema, error: err, tier: .precise)
         ema = newEMA
         if snap { falseSnap = true; break }
     }
@@ -381,7 +750,7 @@ do {
     var falseSnap = false
     for i in 1...50 {
         let err = i % 2 == 0 ? 1.5 : -1.5
-        let (newEMA, snap) = LocalPlaybackSource.servoDecision(errEMA: ema, error: err, preciseSource: false)
+        let (newEMA, snap) = LocalPlaybackSource.servoDecision(errEMA: ema, error: err, tier: .noisyFloored)
         ema = newEMA
         if snap { falseSnap = true; break }
     }
@@ -393,11 +762,130 @@ do {
     var ema = 0.0
     var snapped = false
     for _ in 1...10 {
-        let (newEMA, snap) = LocalPlaybackSource.servoDecision(errEMA: ema, error: 1.5, preciseSource: false)
+        let (newEMA, snap) = LocalPlaybackSource.servoDecision(errEMA: ema, error: 1.5, tier: .noisyFloored)
         ema = newEMA
         if snap { snapped = true; break }
     }
     expectEqual(snapped, true, "servoDecision(噪声源): 持续 1.5s 锁死偏差应最终被校正")
+}
+
+// ---- servoDecision 第三档:Spotify(cleanExtrapolated,2026-08-18 拆档) ----
+//
+// 背景(实测 140+ 样本):Spotify 的 elapsedTimeNow 稳态偏差 ±0.05s、比 QQ 音乐干净
+// 一个量级,但换歌头几秒 MediaRemote 报数是脏的(最高 +1.32s)。播种进 <1.0s 的超前值
+// 后,老的 noisyFloored 1.0s 门槛让它整曲不被纠正——"Spotify 歌词经常偏快"的主因。
+do {
+    // 换歌脏窗口播种 +0.8s 超前(老门槛下整曲锁死)——应在 3 轮(~6 秒)内校正。
+    var ema = 0.0
+    var snapped = false
+    var rounds = 0
+    for _ in 1...5 {
+        rounds += 1
+        let (newEMA, snap) = LocalPlaybackSource.servoDecision(errEMA: ema, error: -0.8, tier: .cleanExtrapolated)
+        ema = newEMA
+        if snap { snapped = true; break }
+    }
+    expectEqual(snapped, true, "servoDecision(Spotify): 0.8s 播种超前应触发校正")
+    expectEqual(rounds <= 3, true, "servoDecision(Spotify): 校正应在 3 轮内发生,实际 \(rounds) 轮")
+}
+
+do {
+    // 暂停/切换瞬间的单发陈旧读数(实测 -1.27s)不该触发回跳——EMA 只到 -0.38,低于门槛。
+    let (ema1, snap1) = LocalPlaybackSource.servoDecision(errEMA: 0, error: -1.27, tier: .cleanExtrapolated)
+    expectEqual(snap1, false, "servoDecision(Spotify): 单发 -1.27s 陈旧读数不回跳")
+    // 下一轮恢复干净读数,EMA 衰减、依旧不触发。
+    let (_, snap2) = LocalPlaybackSource.servoDecision(errEMA: ema1, error: -0.05, tier: .cleanExtrapolated)
+    expectEqual(snap2, false, "servoDecision(Spotify): 陈旧读数后一轮即衰减不触发")
+}
+
+do {
+    // 稳态 ±0.05s 抖动(实测量级)绝不该误触发。
+    var ema = 0.0
+    var falseSnap = false
+    for i in 1...50 {
+        let err = i % 2 == 0 ? 0.05 : -0.05
+        let (newEMA, snap) = LocalPlaybackSource.servoDecision(errEMA: ema, error: err, tier: .cleanExtrapolated)
+        ema = newEMA
+        if snap { falseSnap = true; break }
+    }
+    expectEqual(falseSnap, false, "servoDecision(Spotify): ±0.05s 稳态抖动不误触发")
+}
+
+// ---- 自然切歌锚点超前校正(2026-08-20):Spotify gapless 整曲偏快的根修 ----
+//
+// 实测(Forever Love→在那遙遠的地方,0.25s 采样):自然切歌时元数据/新锚点先于真声
+// 0.837s 打好,整曲 elapsedTimeNow 恒定超前 +0.888s±0.009 且锚点从不重打——伺服对
+// "每笔读数与外推步调一致的常量偏置"结构性失明,必须在换歌那拍用旧曲连续外推当真值
+// 把偏置量出来、之后逐笔扣除。机制详见 LocalPlaybackSource.naturalAdvanceCorrection。
+do {
+    // 实测样本:首笔原始读数 0.048、旧曲连续外推越界 -0.837(真声还剩 0.837s)。
+    let corr = LocalPlaybackSource.naturalAdvanceCorrection(reported: 0.048, overrun: -0.837)
+    expectEqual(corr != nil, true, "naturalAdvance: 实测切歌样本应被校正")
+    if let corr {
+        expectEqual(abs(corr.seed - (-0.837)) < 1e-9, true, "naturalAdvance: 播种=越界量(允许为负,UI 钳 0 等真声)")
+        expectEqual(abs(corr.bias - 0.885) < 1e-9, true, "naturalAdvance: 偏置=读数-越界量")
+    }
+}
+
+do {
+    // 元数据晚于真声切换(越界为正):真值=越界量,同样成立。
+    let corr = LocalPlaybackSource.naturalAdvanceCorrection(reported: 1.5, overrun: 0.6)
+    expectEqual(corr?.seed == 0.6 && corr?.bias == 0.9, true, "naturalAdvance: 晚切元数据也按连续性播种")
+}
+
+do {
+    // 四类不校正:手动跳歌(窗口外)/噪声级偏置/陈旧读数(08-18 实测换歌瞬间还挂上一首的
+    // 30.3)/负偏置(模型外)。返回 nil = 按原逻辑采信读数(改动前行为)。
+    expectEqual(LocalPlaybackSource.naturalAdvanceCorrection(reported: 0.3, overrun: -188) == nil, true, "naturalAdvance: 手动跳歌不校正")
+    expectEqual(LocalPlaybackSource.naturalAdvanceCorrection(reported: 0.3, overrun: 0.28) == nil, true, "naturalAdvance: 噪声级偏置不校正")
+    expectEqual(LocalPlaybackSource.naturalAdvanceCorrection(reported: 30.3, overrun: -0.5) == nil, true, "naturalAdvance: 陈旧首笔读数不校正")
+    expectEqual(LocalPlaybackSource.naturalAdvanceCorrection(reported: 0.1, overrun: 0.9) == nil, true, "naturalAdvance: 负偏置不校正")
+}
+
+do {
+    // 误判伤害上限:偏置守卫把"手动跳歌恰好发生在结尾窗口内"的错误校正钉死在 ≤2.5s。
+    let corr = LocalPlaybackSource.naturalAdvanceCorrection(reported: 3.2, overrun: 0.2)
+    expectEqual(corr == nil, true, "naturalAdvance: 超过 \(LocalPlaybackSource.naturalAdvanceMaxBiasSecs)s 的偏置不采信")
+}
+
+// ---- 冻结守卫(2026-08-18):曲目/广告结尾 Spotify 锚点冻住 ----
+//
+// 实测(边界探针):广告结尾 elapsedTimeNow 卡死 6 秒,真声一路走到落后 8 秒。不拦的话
+// 冻结值几秒后超过 2s seek 容差,位置被"重锚"回冻结值,歌尾歌词整段倒回去 —— 用户报
+// "自动切歌之后变慢"的主要成分。
+do {
+    typealias L = LocalPlaybackSource
+    expectEqual(L.isFrozenReport(reportedAdvance: 0.0, gap: 2.0, rate: 1, tier: .cleanExtrapolated),
+                true, "冻结守卫: 报告值 2 秒没动判冻结")
+    expectEqual(L.isFrozenReport(reportedAdvance: 2.0, gap: 2.0, rate: 1, tier: .cleanExtrapolated),
+                false, "冻结守卫: 正常推进不误判")
+    expectEqual(L.isFrozenReport(reportedAdvance: -8.0, gap: 2.0, rate: 1, tier: .cleanExtrapolated),
+                false, "冻结守卫: 向后 seek 是大负数,不误判(判的是几乎没动)")
+    expectEqual(L.isFrozenReport(reportedAdvance: 8.2, gap: 2.0, rate: 1, tier: .cleanExtrapolated),
+                false, "冻结守卫: 解冻大步前跳不拦,落回 seek 分支瞬间追上")
+    expectEqual(L.isFrozenReport(reportedAdvance: 0.02, gap: 0.3, rate: 1, tier: .cleanExtrapolated),
+                false, "冻结守卫: 事件触发的短间隔补查不判(正常前进量也接近 0)")
+    expectEqual(L.isFrozenReport(reportedAdvance: 0.0, gap: 2.0, rate: 1, tier: .noisyFloored),
+                false, "冻结守卫: QQ/网易云档不启用")
+    // 冻结的**第一拍**检测还认不出(只有一次大负偏差),靠单样本限幅兜住:
+    // 0.3×(-1.74) = -0.52 本会冲过 0.4 门槛把歌词拖回半秒,限幅后只到 -0.225。
+    let (_, snap) = L.servoDecision(errEMA: 0, error: -1.74, tier: .cleanExtrapolated)
+    expectEqual(snap, false, "冻结守卫: 第一拍大负偏差被限幅拦住,不回拖")
+}
+
+// ---- bundleID → 数据源档位映射 ----
+do {
+    typealias L = LocalPlaybackSource
+    expectEqual(L.positionSourceTier(forBundleID: "com.apple.Music") == .precise, true,
+                "档位映射: Apple Music → precise")
+    expectEqual(L.positionSourceTier(forBundleID: "com.spotify.client") == .cleanExtrapolated, true,
+                "档位映射: Spotify → cleanExtrapolated")
+    expectEqual(L.positionSourceTier(forBundleID: "com.tencent.QQMusicMac") == .noisyFloored, true,
+                "档位映射: QQ 音乐 → noisyFloored")
+    expectEqual(L.positionSourceTier(forBundleID: "com.netease.163music") == .noisyFloored, true,
+                "档位映射: 网易云 → noisyFloored")
+    expectEqual(L.positionSourceTier(forBundleID: nil) == .noisyFloored, true,
+                "档位映射: 未知播放器保守归 noisyFloored")
 }
 
 // ---- EnrichCacheKeys: 缓存 key ↔ lyrics/ 导出文件名(2026-08-05) ----
@@ -657,6 +1145,138 @@ do {
         "孙燕姿|我懷念的|逆光",
         "缓存key: looseKey 不污染 normalizedKey"
     )
+}
+
+// ---- HanScript:繁简孪生写法(2026-08-18) ----
+//
+// Last.fm 统计页「第 N 次听」的前提:scrobble 是本机播放的原样镜像,同一首歌从不同
+// 播放器放、报的歌名一繁一简,Last.fm 就记成两个曲目实体、两本分开的账(《我不是农人》
+// 11 次/《我不是農人》3 次,2026-08-18 用户截图坐实)。显示端拿孪生写法再查一次求和,
+// 这里锁死孪生写法的推导规则。⚠️ 它只用于发起查询,绝不用于显示或构造 key。
+do {
+    typealias H = HanScript
+    let t = H.siblingPair(artist: "方大同", title: "我不是農人")
+    expectEqual(t?.artist ?? "", "方大同", "孪生写法: 繁→简 歌手同形不动")
+    expectEqual(t?.title ?? "", "我不是农人", "孪生写法: 繁→简 歌名")
+    let s = H.siblingPair(artist: "方大同", title: "我不是农人")
+    expectEqual(s?.title ?? "", "我不是農人", "孪生写法: 简→繁(ICU 挑的候选)")
+    let a = H.siblingPair(artist: "陳奕迅", title: "富士山下")
+    expectEqual(a?.artist ?? "", "陈奕迅", "孪生写法: 歌手名也跟着转")
+    expectEqual(a?.title ?? "", "富士山下", "孪生写法: 同形歌名不动")
+    expectEqual(H.siblingPair(artist: "Taylor Swift", title: "Style") == nil, true,
+                "孪生写法: 纯拉丁没有孪生")
+    expectEqual(H.sibling("方大同|我不是農人") ?? "", "方大同|我不是农人",
+                "孪生写法: 拼好的 key 整串转,分隔符不动")
+}
+
+// ---- PlayCountVariants:「第 N 次听」的写法孪生族(2026-08-18,括号风格分裂实测) ----
+//
+// 丁世光《神经志》实测:`一口（The Day You Left Me）`全角 2 次/`一口(The Day You Left
+// Me)`半角无空格 25 次/`一口`1 次——Last.fm 按写法各记各的账,合并要把整族都问到。
+do {
+    typealias V = PlayCountVariants
+    let full = V.siblings(artist: "丁世光", title: "一口（The Day You Left Me）").map(\.title)
+    expectEqual(full.contains("一口(The Day You Left Me)"), true, "写法族: 全角→半角无空格")
+    expectEqual(full.contains("一口 (The Day You Left Me)"), true, "写法族: 全角→半角带空格")
+    expectEqual(full.contains("一口"), true, "写法族: 全角→纯中文名")
+    expectEqual(full.contains("一口（The Day You Left Me）"), false, "写法族: 不含本尊")
+    expectEqual(full.count <= 6, true, "写法族: 封顶 6 个,实际 \(full.count)")
+    // 半角无空格(历史大头写法)反向也要能生成全角
+    let half = V.siblings(artist: "丁世光", title: "一口(The Day You Left Me)").map(\.title)
+    expectEqual(half.contains("一口（The Day You Left Me）"), true, "写法族: 半角→全角")
+    // 纯 ASCII 歌名(E.T./Simon)从不分裂,零候选零请求
+    expectEqual(V.siblings(artist: "丁世光", title: "E.T.").isEmpty, true, "写法族: 纯 ASCII 零候选")
+    expectEqual(V.siblings(artist: "丁世光", title: "Simon").isEmpty, true, "写法族: Simon 零候选")
+    // 纯英文 feat 副题:只补一个「去副题」候选,不生成全角/半角括号族(那套只为
+    // 含汉字歌名)。(2026-08-19 第二波推翻了此前"各来源写法一致、零候选"的假设 ——
+    // 实测同一首歌带/不带 feat 后缀两本账,见 isCatalogNoiseSubtitle。)
+    let featSibs = V.siblings(artist: "MJ", title: "Scream (feat. Janet Jackson)")
+    expectEqual(featSibs.map(\.title), ["Scream"], "写法族: 纯英文 feat 副题只给去副题候选")
+    // 无副题的繁体歌名仍然给繁简孪生
+    let han = V.siblings(artist: "方大同", title: "我不是農人")
+    expectEqual(han.first?.title ?? "", "我不是农人", "写法族: 无副题繁体名→繁简孪生")
+    // 繁体+副题:括号族 + 繁简孪生都要在(封顶 6 装得下)
+    let mixed = V.siblings(artist: "丁世光", title: "小師妹（Love Triangle）")
+    expectEqual(mixed.count, 4, "写法族: 小師妹给 4 个候选")
+    expectEqual(mixed.map(\.title).contains("小師妹(Love Triangle)"), true, "写法族: 半角无空格优先在列")
+    expectEqual(mixed.map(\.title).contains("小师妹（Love Triangle）"), true, "写法族: 繁简孪生也在列")
+    // 字形变体(麼 U+9EBC/麽 U+9EBD,2026-08-18 实测:70 条 scrobble 记在麽形下,
+    // 括号/繁简候选全扑空——ICU t2s 两个都折到「么」,s2t 永远只生成「麼」,必须显式列表)
+    let mo = V.siblings(artist: "丁世光", title: "愛在什麼地方都有（Love Is Everywhere）").map(\.title)
+    expectEqual(mo.contains("愛在什麽地方都有(Love Is Everywhere)"), true,
+                "写法族: 麼→麽 字形变体×半角括号(实测大头写法)")
+    expectEqual(mo.count <= 6, true, "写法族: 麽族封顶 6,实际 \(mo.count)")
+    expectEqual(V.siblings(artist: "X", title: "為你我受冷風吹").map(\.title).contains("爲你我受冷風吹"),
+                true, "写法族: 无副题歌名也给字形变体(為/爲)")
+}
+
+// ---- PlayCountFold:写法索引的折叠键(2026-08-19,数据驱动合并的地基) ----
+//
+// 把历史上真实出现过的写法按这个键归族,查次数时按族查——取代猜枚举。断言覆盖实测
+// 见过的全部分裂维度;「括号副题不折」是刻意取舍(括号常携带 Live/Remaster 版本信息)。
+do {
+    typealias F = PlayCountFold
+    // 实测三形合一:全角麼 / 半角麽 / 简体小写半角(丁世光《愛在什麼地方都有》分裂案)
+    let a = F.key(artist: "丁世光", title: "愛在什麼地方都有（Love Is Everywhere）")
+    expectEqual(a, F.key(artist: "丁世光", title: "愛在什麽地方都有(Love Is Everywhere)"),
+                "折叠键: 全角麼形 == 半角麽形")
+    expectEqual(a, F.key(artist: "丁世光", title: "爱在什么地方都有(love is everywhere)"),
+                "折叠键: == 简体小写半角形")
+    // 双语拼接(R1):实测《月食 The Weeping Woman》30 次 vs《月食》6 次两族
+    expectEqual(F.key(artist: "丁世光", title: "月食 The Weeping Woman"),
+                F.key(artist: "丁世光", title: "月食"), "折叠键: CJK+拉丁双语拼接取 CJK 段")
+    expectEqual(F.key(artist: "X", title: "P.S. 我愛你"),
+                F.key(artist: "X", title: "我爱你"), "折叠键: 拉丁在前 CJK 在后也收敛")
+    // 括号副题不折(版本信息)—— 与导出脚本同取舍
+    expectNotEqual(F.foldTitle("一口(The Day You Left Me)"), F.foldTitle("一口"),
+                   "折叠键: 括号副题不折")
+    expectNotEqual(F.foldTitle("好的一天 (Live)"), F.foldTitle("好的一天"),
+                   "折叠键: Live 版不并")
+    // 空格/大小写/歌手繁简
+    expectEqual(F.key(artist: "陶喆", title: "Susan 说"),
+                F.key(artist: "陶喆", title: "susan说"), "折叠键: 空格与大小写")
+    expectEqual(F.key(artist: "陳奕迅", title: "富士山下"),
+                F.key(artist: "陈奕迅", title: "富士山下"), "折叠键: 歌手名繁简")
+    // 段落交错的双语名不收敛(宁可漏合不错合)
+    expectNotEqual(F.foldTitle("月食 The 月食 Woman"), F.foldTitle("月食"),
+                   "折叠键: CJK/拉丁交错不折")
+
+    // 再版噪音副题折叠(2026-08-19 用户实测:宇多田ヒカル Automatic 两本账)——
+    // remaster 家族是同一份录音的目录学差异,折;真版本(Live/Remix)照旧分开。
+    expectEqual(F.key(artist: "宇多田ヒカル", title: "Automatic (Remastered 2014)"),
+                F.key(artist: "宇多田ヒカル", title: "Automatic"),
+                "折叠键: (Remastered 2014) 并入本尊")
+    expectEqual(F.foldTitle("Song (2014 Remaster)"), F.foldTitle("Song"),
+                "折叠键: 年份在前的 Remaster 也并")
+    expectEqual(F.foldTitle("Song (Remastered Version)"), F.foldTitle("Song"),
+                "折叠键: Remastered Version 也并")
+    expectEqual(F.foldTitle("月食 (Remastered)"), F.foldTitle("月食"),
+                "折叠键: 中文歌名的再版噪音同样并")
+    expectNotEqual(F.foldTitle("Song (Remix)"), F.foldTitle("Song"),
+                   "折叠键: Remix 是真版本,不并")
+    expectNotEqual(F.foldTitle("Song (Live 2014 Remaster)"), F.foldTitle("Song"),
+                   "折叠键: 混着 Live 的副题不并(宁可漏合)")
+    // 猜枚举兜底(索引未建成时)也要给纯拉丁歌名补「去副题」候选
+    let autoSibs = PlayCountVariants.siblings(artist: "宇多田ヒカル",
+                                              title: "Automatic (Remastered 2014)")
+    expectEqual(autoSibs.contains { $0.title == "Automatic" }, true,
+                "写法族: 纯拉丁 + 再版噪音副题给出去副题候选")
+
+    // feat 客串署名家族(2026-08-19 第二波用户实测:王力宏《盖世英雄 (feat. 欧阳靖 &
+    // 李岩)》第 2 次 vs《蓋世英雄》几十次)—— 署名是歌手信息不是版本,并入本尊。
+    expectEqual(F.key(artist: "王力宏", title: "盖世英雄 (feat. 欧阳靖 & 李岩)"),
+                F.key(artist: "王力宏", title: "蓋世英雄"),
+                "折叠键: (feat. …) 并入本尊(含繁简)")
+    expectEqual(F.foldTitle("完美的互动 (feat J-Lim & Rain)"), F.foldTitle("完美的互動"),
+                "折叠键: 无点号的 feat 也并")
+    expectEqual(F.foldTitle("Song (featuring X)"), F.foldTitle("Song"),
+                "折叠键: featuring 全拼也并")
+    expectEqual(F.foldTitle("Song (ft. X)"), F.foldTitle("Song"),
+                "折叠键: ft. 缩写也并")
+    expectNotEqual(F.foldTitle("Song (Feathers)"), F.foldTitle("Song"),
+                   "折叠键: feat 开头的普通词不并")
+    expectNotEqual(F.foldTitle("Song (feat.)"), F.foldTitle("Song"),
+                   "折叠键: 空署名不并")
 }
 
 // ---- 署名行过滤第七轮(2026-08-16):带分隔符的中文标签 + 纯英文无冒号 ----
@@ -2074,6 +2694,18 @@ do {
     }
     expectEqual(missed, [], "配速: 只要上限速度内走得完就一定走完")
 
+    // 句尾预留(2026-08-19 用户反馈"一到最后一个字就马上到下一句了"):时间允许时,
+    // 滚动必须比换句**提前** tailReadSeconds 走完,让末尾几个字来得及读。
+    // 30 字 / 6 秒:改动前 travel 吃满 dwell - head,恰好 6.0 秒走完、尾停为 0。
+    expectEqual(finishTime(chars: 30, dwell: 6.0)
+                    <= 6.0 - MenuBarMarquee.tailReadSeconds + 0.001, true,
+                "配速: 时间允许时提前 \(MenuBarMarquee.tailReadSeconds) 秒滚完,句尾留得住"
+                    + "(\(finishTime(chars: 30, dwell: 6.0)) 秒)")
+    // 时间紧时尾停先让路(先于首停),整句可见仍然优先:2.1 秒里 30 字撞着上限刚好
+    // 走得完,不能为了句尾预留把滚动挤到滚不完。
+    expectEqual(finishTime(chars: 30, dwell: 2.1) <= 2.1 + 0.001, true,
+                "配速: 时间紧时尾停让路,不挤掉滚动本身")
+
     // 停留时间很长的句子不该被拖快——那是现有观感，没人抱怨，不动它。
     let roomy = MenuBarMarquee.pacing(
         maxOffset: maxOffset(chars: 14), averageCharWidth: charWidth, dwellSeconds: 20)
@@ -2175,20 +2807,25 @@ do {
 
 // ---- 地板量化源的前向棘轮 ----
 do {
-    func ratchet(_ reported: Double, _ predicted: Double, precise: Bool) -> Bool {
+    typealias Tier = LocalPlaybackSource.PositionSourceTier
+    func ratchet(_ reported: Double, _ predicted: Double, tier: Tier) -> Bool {
         LocalPlaybackSource.shouldRatchetForward(
-            reported: reported, predicted: predicted, preciseSource: precise)
+            reported: reported, predicted: predicted, tier: tier)
     }
     // QQ 音乐实测的形状：新锚点比外推值靠前 1 秒（旧锚点被向下取整拖晚了）。
-    expectEqual(ratchet(23.1, 22.1, precise: false), true, "棘轮: 前向 1s 立刻采纳")
-    expectEqual(ratchet(22.4, 22.1, precise: false), true, "棘轮: 前向 0.3s(半个字)也采纳")
+    expectEqual(ratchet(23.1, 22.1, tier: .noisyFloored), true, "棘轮: 前向 1s 立刻采纳")
+    expectEqual(ratchet(22.4, 22.1, tier: .noisyFloored), true, "棘轮: 前向 0.3s(半个字)也采纳")
     // 反方向分不清是取整噪声还是真实回退，绝不能棘轮 —— 交给原有 EMA 路径。
-    expectEqual(ratchet(21.5, 22.1, precise: false), false, "棘轮: 后向不采纳(交给 EMA)")
+    expectEqual(ratchet(21.5, 22.1, tier: .noisyFloored), false, "棘轮: 后向不采纳(交给 EMA)")
     // 同锚点外推的 ±2ms 漂移不值得重建锚点。
-    expectEqual(ratchet(22.102, 22.1, precise: false), false, "棘轮: 毫米级漂移不触发")
-    // 精确源(Apple Music/Spotify)的读数本来就是真值，不适用"reported ≤ 真实位置"这条
+    expectEqual(ratchet(22.102, 22.1, tier: .noisyFloored), false, "棘轮: 毫米级漂移不触发")
+    // 精确源(Apple Music)的读数本来就是真值，不适用"reported ≤ 真实位置"这条
     // 不等式，走原有 EMA。
-    expectEqual(ratchet(23.1, 22.1, precise: true), false, "棘轮: 精确源不适用")
+    expectEqual(ratchet(23.1, 22.1, tier: .precise), false, "棘轮: 精确源不适用")
+    // Spotify(cleanExtrapolated)的读数恒略**超前**真值(2026-08-18 实测),棘轮前提
+    // 正好反着——只往前吸附会把位置锁在抖动上包络,2026-08-18 拆档时明确排除。
+    expectEqual(ratchet(23.1, 22.1, tier: .cleanExtrapolated), false,
+                "棘轮: Spotify 干净外推源不适用")
 }
 
 // ---- 署名行:连接词形态 ----
@@ -2223,6 +2860,9 @@ do {
                 "角色词: 母带处理(含「母带」)")
     expectEqual(LyricsSyncEngine.matchesRoleWordCredit("弦乐录制工程师：某某"), true,
                 "角色词: 组合词自动覆盖,不用逐词补表")
+    expectEqual(LyricsSyncEngine.matchesRoleWordCredit("演唱：Jeremy McKinnon (A Day To Remember)、MAX、henry 刘宪华"), true,
+                "角色词: 演唱(第八轮,2026-08-17 用户报的漏网)")
+    expectEqual(LyricsSyncEngine.matchesRoleWordCredit("原唱：张学友"), true, "角色词: 原唱")
     // 反例们:
     expectEqual(LyricsSyncEngine.matchesRoleWordCredit("他说：我不走"), false,
                 "角色词: 对白式冒号不误杀")
@@ -2325,6 +2965,587 @@ do {
     expectEqual(bad, 0, "深背景取色: 全区间扫描输出合法且 luma 达标")
 }
 
+// ---- 封面取图:载荷曲目标识比对(2026-08-17) ----
+//
+// 用户报网易云云盘歌"沿用上一首的封面":切歌瞬间 get --now 可能整条还是上一首(旧标题+
+// 旧封面),原实现拿到非 nil 就定案,把上一首的封面错挂到新歌上。修法是封面载荷带上自己的
+// artist/title 算 trackKey,跟当前曲目对不上就按"系统侧还没更新完"重试。
+do {
+    // 推导必须跟快照那份逐字符一致——两处各写一份的话,一旦漂移,每首歌都会被误判成
+    // "别的歌的封面"而永远显示占位。
+    expectEqual(MediaControlSnapshot.trackKey(artist: "周杰伦", title: "以父之名"),
+                "周杰伦|以父之名", "封面标识: trackKey 推导 artist|title")
+    expectEqual(MediaControlSnapshot.trackKey(artist: nil, title: nil), "|",
+                "封面标识: 字段缺失时退化为空段,不崩")
+
+    expectEqual(LocalPlaybackSource.artworkKeyMatches("周杰伦|以父之名", "周杰伦|以父之名"),
+                true, "封面标识: 同一首歌匹配")
+    expectEqual(LocalPlaybackSource.artworkKeyMatches("周杰伦|以父之名", "周杰伦|一路向北"),
+                false, "封面标识: 上一首的载荷必须判不匹配")
+    // 大小写不敏感:media-control 对同一首歌报过大小写不一致的元数据("2 Bad"/"Scream"
+    // 在 enrich 缓存踩过同源的坑),按敏感比对会把这类歌误判成别的歌、永远显示占位。
+    expectEqual(LocalPlaybackSource.artworkKeyMatches("Michael Jackson|2 BAD", "Michael Jackson|2 Bad"),
+                true, "封面标识: 大小写偏差算同一首")
+}
+
+// ---- 封面取色:桌面悬浮歌词按"跟描边够对比"调(2026-08-17) ----
+//
+// 这一组是为一次真实回归补的:08-16 把近黑封面兜底成 0.72 浅灰(为灵动岛的深色背景调的),
+// 桌面悬浮歌词一起吃了这条规则,用户又开着不透明白描边 —— 浅灰字被白描边吃掉,压在浅色
+// 窗口上几乎看不见(实测屏幕上最暗的不透明像素 #ADABA6,相对亮度 0.671,而描边是纯白)。
+// 所以这里断言的核心不是"输出多亮",而是**输出跟描边的对比度达标**,以及"本来就达标的
+// 颜色一动不动"——后者才是"别擅自改用户看惯的颜色"这条约束。
+do {
+    func fit(_ c: (Double, Double, Double), stroke: (Double, Double, Double),
+             minContrast: Double = 3.0) -> (r: Double, g: Double, b: Double) {
+        LocalPlaybackSource.accentAgainstStroke(
+            r: c.0, g: c.1, b: c.2,
+            strokeR: stroke.0, strokeG: stroke.1, strokeB: stroke.2,
+            minContrast: minContrast)
+    }
+    func lum(_ c: (r: Double, g: Double, b: Double)) -> Double {
+        LocalPlaybackSource.relativeLuminance(r: c.r, g: c.g, b: c.b)
+    }
+    func contrastWith(_ c: (r: Double, g: Double, b: Double),
+                      _ stroke: (Double, Double, Double)) -> Double {
+        LocalPlaybackSource.contrastRatio(
+            lum(c), LocalPlaybackSource.relativeLuminance(r: stroke.0, g: stroke.1, b: stroke.2))
+    }
+
+    let white = (1.0, 1.0, 1.0)
+    let black = (0.0, 0.0, 0.0)
+
+    // 动机本尊:0.72 中性灰 + 不透明白描边,正是用户屏幕上那一幕。必须被压暗到达标。
+    let grey = fit((0.72, 0.72, 0.72), stroke: white)
+    expectEqual(contrastWith(grey, white) >= 2.99, true, "描边取色: 浅灰配白描边被压到达标")
+    expectEqual(lum(grey) < LocalPlaybackSource.relativeLuminance(r: 0.72, g: 0.72, b: 0.72),
+                true, "描边取色: 白描边下是往暗的方向调")
+
+    // 近黑封面:噪点色相要被抹掉(三通道相等),但"它很暗"这个真信息要保留 ——
+    // 不能像 brightenedAccent 那样连亮度一起换成固定浅灰。配白描边时本来就够对比,不动。
+    let nearBlack = fit((2 / 255.0, 1 / 255.0, 3 / 255.0), stroke: white)
+    expectEqual(abs(nearBlack.r - nearBlack.g) < 1e-9 && abs(nearBlack.g - nearBlack.b) < 1e-9,
+                true, "描边取色: 近黑抹掉噪点色相变中性灰")
+    expectEqual(nearBlack.r < 0.03, true, "描边取色: 近黑保留自己的暗度,不被抬成浅灰")
+
+    // 够对比的颜色一动不动 —— 绝大多数封面走这条,不该擅自改色。
+    let deep = (0.15, 0.10, 0.30)
+    let untouched = fit(deep, stroke: white)
+    expectEqual(untouched == (r: deep.0, g: deep.1, b: deep.2), true,
+                "描边取色: 已经够对比就原样返回")
+
+    // 描边反过来是黑的:该往亮的方向调,而不是继续压暗。
+    let darkOnBlack = fit((0.12, 0.10, 0.08), stroke: black)
+    expectEqual(contrastWith(darkOnBlack, black) >= 2.99, true, "描边取色: 暗色配黑描边被提亮到达标")
+    expectEqual(lum(darkOnBlack) > LocalPlaybackSource.relativeLuminance(r: 0.12, g: 0.10, b: 0.08),
+                true, "描边取色: 黑描边下是往亮的方向调")
+
+    // 两侧都够不到时取端点里更好的那个,而不是返回一个"差一点点"的中间值。
+    //
+    // ⚠️ 默认的 3.0 **触发不到**这条分支:要两侧都够不到得同时满足 sl < 0.05(mc−1) 和
+    // sl > 1.05/mc − 0.05,有解的条件是 mc > √21 ≈ 4.58。所以这里显式传 7.0 去测那条
+    // 分支,别改回默认值——改回去这个断言会退化成在测另一条路径(第一版就是这么写错的)。
+    let midStroke = (0.5, 0.5, 0.5)
+    let onMid = fit((0.55, 0.52, 0.50), stroke: midStroke, minContrast: 7.0)
+    let bestEndpoint = max(contrastWith((r: 0, g: 0, b: 0), midStroke),
+                           contrastWith((r: 1, g: 1, b: 1), midStroke))
+    expectEqual(abs(contrastWith(onMid, midStroke) - bestEndpoint) < 0.01, true,
+                "描边取色: 够不到目标时取对比更好的端点")
+
+    // 全区间扫描:输出永远合法,且只要目标可达就一定达标。
+    var bad = 0, unreachable = 0
+    for si in [0.0, 0.25, 0.5, 0.75, 1.0] {
+        let stroke = (si, si, si)
+        let sl = LocalPlaybackSource.relativeLuminance(r: si, g: si, b: si)
+        // 目标可达 = 黑或白至少有一个能跟这个描边拉到 3.0。
+        let reachable = max(LocalPlaybackSource.contrastRatio(sl, 0),
+                            LocalPlaybackSource.contrastRatio(sl, 1)) >= 3.0
+        for i in 0 ... 12 {
+            for j in 0 ... 12 {
+                for k in [0.0, 0.5, 1.0] {
+                    let c = fit((Double(i) / 12, Double(j) / 12, k), stroke: stroke)
+                    if c.r < 0 || c.r > 1 || c.g < 0 || c.g > 1 || c.b < 0 || c.b > 1 { bad += 1 }
+                    if reachable, contrastWith(c, stroke) < 2.99 { unreachable += 1 }
+                }
+            }
+        }
+    }
+    expectEqual(bad, 0, "描边取色: 全区间扫描输出在 [0,1] 内")
+    expectEqual(unreachable, 0, "描边取色: 全区间扫描只要够得到就一定达标")
+}
+
+// ---- 封面 URL:要原图时去掉网易云的 param(2026-08-17) ----
+//
+// 用户报「歌词窗口里封面非常模糊」。根因是系统 Now Playing 给的封面只有 100×100
+// (网易云客户端的限制),而那张卡最大 920px。替代图取自 collector 缓存的 cover_url,
+// 但那个 URL 尾巴上带着给小图用的 `?param=600y600` —— 网易云那个参数**只降不升**,
+// 实测原生 800×800 的封面带上它就变 600×600。所以要原图必须把它摘掉。
+//
+// 断言重点是"只对网易云动手":别的图源的查询参数没核实过,乱摘可能直接 404。
+do {
+    func native(_ s: String) -> String {
+        EnrichCacheReader.nativeSizedCoverURL(URL(string: s)!).absoluteString
+    }
+
+    // 网易云:param 摘掉,且整个查询串一起消失(不留一个尾巴上的 "?" ——
+    // 那会让缓存把它当成另一个 key)。
+    expectEqual(
+        native("https://p1.music.126.net/abc==/1099.jpg?param=600y600"),
+        "https://p1.music.126.net/abc==/1099.jpg",
+        "封面URL: 网易云去掉 param")
+    // 不同的 p1/p2/p4 子域都要认 —— 缓存里同一张图两种子域都出现过。
+    expectEqual(
+        native("https://p2.music.126.net/abc==/1099.jpg?param=300y300"),
+        "https://p2.music.126.net/abc==/1099.jpg",
+        "封面URL: p2 子域同样处理")
+    // 本来就没有 param 的原样返回。
+    expectEqual(
+        native("https://p1.music.126.net/abc==/1099.jpg"),
+        "https://p1.music.126.net/abc==/1099.jpg",
+        "封面URL: 网易云本来没 param 就不动")
+    // 还有别的参数时只摘 param,其余保留。
+    expectEqual(
+        native("https://p1.music.126.net/abc==/1099.jpg?param=600y600&x=1"),
+        "https://p1.music.126.net/abc==/1099.jpg?x=1",
+        "封面URL: 只摘 param，别的查询参数留着")
+
+    // 非网易云:一个字都不许改,包括名字恰好也叫 param 的。
+    expectEqual(
+        native("https://is1-ssl.mzstatic.com/image/thumb/a.jpg/600x600bb.jpg"),
+        "https://is1-ssl.mzstatic.com/image/thumb/a.jpg/600x600bb.jpg",
+        "封面URL: Apple 图源不动")
+    expectEqual(
+        native("https://y.qq.com/music/photo_new/T002R500x500M000.jpg?param=600y600"),
+        "https://y.qq.com/music/photo_new/T002R500x500M000.jpg?param=600y600",
+        "封面URL: QQ 图源即使带 param 也不动")
+    // host 后缀匹配不能被"看着像"的域名骗过去。
+    expectEqual(
+        native("https://evil-music.126.net.example.com/a.jpg?param=600y600"),
+        "https://evil-music.126.net.example.com/a.jpg?param=600y600",
+        "封面URL: 仿冒域名不算网易云")
+    // 判据必须是"等于或以 . 分隔的子域":光 hasSuffix("music.126.net") 会把这个也算进去。
+    expectEqual(
+        native("https://evilmusic.126.net/a.jpg?param=600y600"),
+        "https://evilmusic.126.net/a.jpg?param=600y600",
+        "封面URL: 拼在一起的同后缀域名不算网易云")
+}
+
+// ---- 按日历天定义的缓存:跨零点必须作废(2026-08-17) ----
+//
+// 用户报「那年今日」昨天和今天显示同一份。根因是那张卡用 6 小时 TTL 判缓存,而 TTL 只
+// 知道过了多少秒、不知道跨没跨过零点 —— 22:00 取到 8/16 那份,次日 02:00 再看 TTL 还没
+// 到期,昨天那份就被挂在"今天"上。App 是常驻服务、跨天不重启,缓存时间戳又只在内存里,
+// 所以这条一定会发生。这里盯住的就是"跨天优先于 TTL"这一点。
+do {
+    var cal = Calendar(identifier: .gregorian)
+    // 固定时区,否则这组断言的结果会跟跑测试的机器在哪个时区有关。
+    cal.timeZone = TimeZone(identifier: "Asia/Shanghai")!
+    func at(_ month: Int, _ day: Int, _ hour: Int, _ minute: Int = 0) -> Date {
+        cal.date(from: DateComponents(year: 2026, month: month, day: day,
+                                      hour: hour, minute: minute))!
+    }
+    let sixHours: TimeInterval = 6 * 3600
+    func needs(fetched: Date?, day: Date?, now: Date) -> Bool {
+        DailyRefreshGate.needsRefresh(lastFetchedAt: fetched, cachedDay: day,
+                                      now: now, ttl: sixHours, calendar: cal)
+    }
+
+    expectEqual(needs(fetched: nil, day: nil, now: at(8, 17, 10)), true,
+                "跨天缓存: 从没取过要拉")
+
+    // 同一天内 TTL 照常生效 —— 别把这条改坏了,不然每次露面都真发一轮请求
+    // (那是三年 × 最多三页的量)。
+    expectEqual(needs(fetched: at(8, 17, 10), day: at(8, 17, 10), now: at(8, 17, 14)), false,
+                "跨天缓存: 同一天且 TTL 内不拉")
+    expectEqual(needs(fetched: at(8, 17, 3), day: at(8, 17, 3), now: at(8, 17, 10)), true,
+                "跨天缓存: 同一天但 TTL 到期要拉")
+
+    // 本次修的就是这一条:只差 4 小时、TTL 远没到期,但已经是第二天了。
+    expectEqual(needs(fetched: at(8, 16, 22), day: at(8, 16, 22), now: at(8, 17, 2)), true,
+                "跨天缓存: 跨过零点即使 TTL 没到期也要拉")
+    // 边界:同一天的 23:59 → 次日 00:00,只隔一分钟也算跨天。
+    expectEqual(needs(fetched: at(8, 16, 23, 59), day: at(8, 16, 23, 59), now: at(8, 17, 0, 0)),
+                true, "跨天缓存: 零点前后只差一分钟也算跨天")
+    // 反向边界:同一天最早和最晚,不算跨天(只由 TTL 说了算)。
+    expectEqual(needs(fetched: at(8, 17, 0, 0), day: at(8, 17, 0, 0), now: at(8, 17, 5, 59)),
+                false, "跨天缓存: 同一天跨度再大也不算跨天")
+
+    // 防御:两个字段本该同生同死,单独有一个时按"没有缓存"处理。
+    expectEqual(needs(fetched: at(8, 17, 10), day: nil, now: at(8, 17, 11)), true,
+                "跨天缓存: 缺 cachedDay 当作没缓存")
+    expectEqual(needs(fetched: nil, day: at(8, 17, 10), now: at(8, 17, 11)), true,
+                "跨天缓存: 缺 lastFetchedAt 当作没缓存")
+}
+
+// MARK: - 歌词时间轴偏移:全局基准 + 单曲微调
+//
+// 2026-08-17 加全局偏移时补的。真正容易写错的不是那个加法,而是两层之间的**独立性**:
+// 「重置这首歌」绝不能把设备侧的全局基准一起抹掉(那是用户最不希望被连带清掉的东西),
+// 反过来改全局基准也不该动已经调好的单曲值。下面每一条都在守这件事。
+// LyricsOffsetStore 是 @MainActor,而这个文件的顶层代码是 nonisolated 的(所以
+// trackKey 才特意标了 nonisolated,见那边的注释)。顶层代码本来就跑在主线程上,
+// assumeIsolated 把这件事告诉编译器即可,不需要把整个 selftest 改成 async。
+MainActor.assumeIsolated {
+    let store = LyricsOffsetStore.shared
+    let key = LyricsOffsetStore.trackKey(artist: "A", title: "T", lyrics: "[00:01.00]x", lyricsYRC: "")
+    // 起点归零 —— 这个 store 落在 UserDefaults 上,不清的话会读到上一次跑的残留
+    store.setGlobalOffset(0)
+    store.reset(forKey: key, pinKey: "")
+    expectEqual(store.effectiveOffset(forKey: key), 0, "偏移: 各层都没调时是 0")
+
+    store.setGlobalOffset(300)
+    expectEqual(store.effectiveOffset(forKey: key), 300, "偏移: 只有全局基准时按它算")
+
+    store.nudge(by: -100, forKey: key, pinKey: "")
+    expectEqual(store.offset(forKey: key), -100, "偏移: 单曲微调独立记账")
+    expectEqual(store.effectiveOffset(forKey: key), 200, "偏移: 生效值 = 全局 + 单曲")
+
+    store.reset(forKey: key, pinKey: "")
+    expectEqual(store.offset(forKey: key), 0, "偏移: 重置清掉单曲微调")
+    expectEqual(store.globalOffsetMs, 300, "偏移: 重置不动全局基准")
+    expectEqual(store.effectiveOffset(forKey: key), 300, "偏移: 重置后回到全局基准")
+
+    store.setOffset(-250, forKey: key, pinKey: "")
+    store.setGlobalOffset(-50)
+    expectEqual(store.offset(forKey: key), -250, "偏移: 改全局基准不动单曲微调")
+    expectEqual(store.effectiveOffset(forKey: key), -300, "偏移: 两个负值相加")
+
+    // 空 key(从没拿到过曲目信息)不该被当成一首歌记账 —— 但全局基准跟曲目无关,照样生效
+    store.setGlobalOffset(120)
+    store.nudge(by: 500, forKey: "||", pinKey: "")
+    expectEqual(store.offset(forKey: "||"), 0, "偏移: 空 key 不记账")
+    expectEqual(store.effectiveOffset(forKey: "||"), 120, "偏移: 空 key 下全局基准仍然生效")
+
+    // 「按播放器补偿」第三层(2026-08-18 加)的断言已随该层一并移除(2026-08-20):
+    // 它补的偏差实为自然切歌锚点超前,由 naturalAdvanceCorrection 按曲校正(见上方
+    // naturalAdvance 断言组);存量 UserDefaults 键由 LyricsOffsetStore.init 清理。
+
+    // 收尾:别把测试值留在 UserDefaults 里
+    store.setGlobalOffset(0)
+    store.reset(forKey: key, pinKey: "")
+}
+
+// ---- 「已校准」名单:调过时间轴的歌不再被后台换歌词源(2026-08-20) ----
+//
+// 这个名单是 collector 侧 needsLyricsRescore/needsLyricsRetry 的第一道闸(见
+// collector/lyricspins.go)。要守三件事:
+//  ① 校正值非零就自动钉住、归零就自动解钉 —— 没有任何"记得手动打开开关"的步骤;
+//  ② pin 的身份是**归一化 enrich key**、不含歌词内容指纹 —— 拿含指纹的 key 当身份等于
+//     "内容一换 pin 也失效",正好把这条闸要防的事情放过去;
+//  ③ 「清空全部时间轴校正」只清单曲这一层,全局基准不受连带。
+MainActor.assumeIsolated {
+    // ⚠️ 先把 pin 文件重定向到临时目录:它的真实路径跟正在运行的 App 共用同一份,而下面
+    // 要覆盖 clearAllTrackOffsets()(内部会 removeAll)—— 不隔离就是把用户真实的已校准
+    // 名单抹掉。必须排在任何一次 LyricsPinStore.shared 访问之前。
+    let tmp = FileManager.default.temporaryDirectory
+        .appendingPathComponent("lyrimuse-selftest-pins-\(ProcessInfo.processInfo.processIdentifier).json")
+    LyricsPinStore.redirectForTesting(to: tmp)
+    defer { try? FileManager.default.removeItem(at: tmp) }
+
+    let store = LyricsOffsetStore.shared
+    let pins = LyricsPinStore.shared
+    let pinKey = "已校准测试歌手|已校准测试歌名|已校准测试专辑"
+    let keyA = LyricsOffsetStore.trackKey(
+        artist: "已校准测试歌手", title: "已校准测试歌名", lyrics: "[00:01.00]甲", lyricsYRC: "")
+    let keyB = LyricsOffsetStore.trackKey(
+        artist: "已校准测试歌手", title: "已校准测试歌名", lyrics: "[00:02.00]乙", lyricsYRC: "")
+    expectEqual(keyA == keyB, false, "已校准: 两份不同歌词内容的 offset key 本来就不同")
+    expectEqual(pins.isPinned(pinKey), false, "已校准: 起点是干净的")
+
+    store.nudge(by: 300, forKey: keyA, pinKey: pinKey)
+    expectEqual(pins.isPinned(pinKey), true, "已校准: 调过偏移就自动钉住,不需要另外开开关")
+
+    // 关键一条:同一首歌换了一份歌词内容 → 旧校正值查不到(这是既有设计,内容指纹变了),
+    // 但 pin 仍然在 —— 它认的是"这首歌",不是"这一份内容"。pin 要是也跟着失效,后台就会
+    // 继续换源、把用户下一次校准的成果再作废一次,这条闸等于没装。
+    expectEqual(store.offset(forKey: keyB), 0, "已校准: 换内容后旧校正值查不到(既有设计)")
+    expectEqual(pins.isPinned(pinKey), true, "已校准: 换歌词内容不该让 pin 失效")
+
+    store.reset(forKey: keyA, pinKey: pinKey)
+    expectEqual(pins.isPinned(pinKey), false, "已校准: 偏移归零就自动解钉")
+
+    // 空 pinKey(拿不到 enrich key)时什么都不该钉 —— 否则会长出一条谁都匹配不上的记录。
+    store.nudge(by: 100, forKey: keyA, pinKey: "")
+    expectEqual(pins.count, 0, "已校准: 空 pinKey 不写名单")
+
+    // 存量补钉:上一步刻意造出了「有校正值但没 pin」这个状态(等价于 pin 机制上线之前
+    // 用户已经调好的那些歌)。播放到它时必须补上,否则最该保护的那批一条都不受保护。
+    expectEqual(store.offset(forKey: keyA), 100, "补钉: 前提——这首有非零校正值却没 pin")
+    store.backfillPinIfNeeded(forKey: keyA, pinKey: pinKey)
+    expectEqual(pins.isPinned(pinKey), true, "补钉: 存量非零校正值会被补上 pin")
+
+    // 校正值是 0 的歌绝不该被补钉 —— 那样全库每首歌都会进名单、后台升级整个停摆。
+    store.reset(forKey: keyA, pinKey: pinKey)
+    store.backfillPinIfNeeded(forKey: keyA, pinKey: pinKey)
+    expectEqual(pins.count, 0, "补钉: 校正值为 0 不补钉")
+
+    // ---- 「清空全部时间轴校正」----
+    store.setGlobalOffset(700)
+    store.setOffset(-900, forKey: keyA, pinKey: pinKey)
+    expectEqual(store.trackOffsetCount, 1, "清空: 计数跟着写入走")
+    expectEqual(pins.isPinned(pinKey), true, "清空: 前提——这首已经钉住了")
+
+    // 跨语言契约:这份文件由 Swift 写、由 collector(Go)读(lyricsPinsFile 的
+    // `json:"version"` / `json:"pins"`)。字段名在 Swift 侧一改,Go 那边就静默读到空名单、
+    // 整条闸失效而且没有任何报错 —— 所以这里对**磁盘上的原文**断言,不是对内存态。
+    let onDisk = (try? String(contentsOf: tmp, encoding: .utf8)) ?? ""
+    expectEqual(onDisk.contains("\"version\""), true, "已校准: 落盘 JSON 带 version 字段(Go 侧靠它)")
+    expectEqual(onDisk.contains("\"pins\""), true, "已校准: 落盘 JSON 带 pins 字段(Go 侧靠它)")
+    expectEqual(onDisk.contains(pinKey), true, "已校准: 落盘 JSON 里就是归一化的 enrich key")
+
+    store.clearAllTrackOffsets()
+    expectEqual(store.offset(forKey: keyA), 0, "清空: 单曲校正值被清掉")
+    expectEqual(store.trackOffsetCount, 0, "清空: 计数归零")
+    expectEqual(pins.count, 0, "清空: pin 名单一并清掉(没有校正值就没有要保护的东西)")
+    expectEqual(store.globalOffsetMs, 700, "清空: 绝不连带清掉全局基准(设备侧延迟)")
+
+    // 收尾
+    store.setGlobalOffset(0)
+}
+
+// ---- 署名行:双语标签「汉字角色词 + 英文对照」(2026-08-19) ----
+//
+// 用户报陶喆《Stupid Pop Song》开头 13 行职员表一条都没滤掉。原因:label 取的是冒号前的
+// 整段("制作人 Producer"),而原规则要求剔掉分隔符后**全是汉字**,拉丁字母一进来整条就
+// 失败;而结构化那道闸(只在"整份被职员表主导"时才开)对这首也不成立 —— 13 行职员表
+// 配三十多行真歌词,占不到半数。下面这批用的就是酷狗那份的原文。
+
+do {
+    let real = [
+        "制作人 Producer：陶喆 David Tao",
+        "曲 Composer：陶喆 David Tao",
+        "词 Lyricist：陶喆 David Tao/葛大为",
+        "编曲 Arrangement and programming：DT",
+        "鼓 Drums：Ash Soan",
+        "低音吉他 Bass：Paul Bushnell",
+        "和声 Background vocals by：DT",
+        "制作协力 Production Assistant：陈震豪 Evan Chen",
+        "录音室 Recording Studio：新歌录音室 New Song Studios (Taipei)/The Windmill Studio, Norfolk (England)",
+        "录音工程师 Recording Engineer：陈震豪 Evan Chen",
+        "混音工程师 Mixing Engineer：Mick Guzauski",
+        "混音录音室 Mixing Studio：Barking Doctor",
+        "母带后期处理工程 Mastering Engineer：CB",
+    ]
+    for line in real {
+        expectEqual(LyricsSyncEngine.matchesRoleWordCredit(line), true,
+                    "双语署名: \(line.prefix(12))…")
+    }
+
+    // 单字汉字头(「曲」「词」「鼓」)只有在**旁边有英文角色名**时才算 —— 把它们加进
+    // creditRoleWords 会把真歌词里的对白吃掉(2026-08-16 踩过并回滚)。
+    let notCredits = [
+        "他：我不走",                       // 对白,单字说话人
+        "妈妈 Mom：吃饭了",                  // 双语但英文不是角色名
+        "我爱你 I love you：再见",            // 同上
+        "爱情 Love Story：一场游戏",           // "Story" 不在角色名表里
+        "曲：我们一起唱",                     // 汉字单字 + 没有英文对照 → 不认
+    ]
+    for line in notCredits {
+        expectEqual(LyricsSyncEngine.matchesRoleWordCredit(line), false,
+                    "双语署名(不该命中): \(line.prefix(10))…")
+    }
+
+    // ---- 免词表的双语形状(第二轮:用户报「西塔琴 Coral sitar: Jamie Wilson」)----
+    //
+    // 乐器/职能名是开放集合,词表打不完。改成认形状,但要求整份 ≥2 行才生效。
+    let shapeOnly = [
+        "西塔琴 Coral sitar：Jamie Wilson",   // 用户报的原文
+        "中提琴 Viola：Istvan Loga",
+        "竖琴Harp：Michael Maganuco",
+        "富鲁格号 Flugehorn: Gary Alesbrook",
+        "电钢琴与管风琴 Keys/Organ：丁世光 Dean Ting",
+        "词OP：北京大石音乐版权有限公司",
+        "画 Painting by：叶喜儿 Ashlee Yip",
+    ]
+    for line in shapeOnly {
+        expectEqual(LyricsSyncEngine.matchesBilingualCreditShape(line), true,
+                    "双语形状: \(line.prefix(12))…")
+    }
+    // ⚠️ 真歌词反例(全库扫出来的唯一一类):行内注解 `(SL:` 让第一个冒号落在括号里,
+    // 「冒号前」被当成标签。靠"标签里不许有括号 + 拉丁尾必须字母开头"两道守卫排掉。
+    for line in [
+        "我们让彼此难过(SL:那些到底算是谁的错) 都别争了",
+        "那些伤害人的话(SL:那些只是气话其实我) 都别说了",
+    ] {
+        expectEqual(LyricsSyncEngine.matchesBilingualCreditShape(line), false,
+                    "双语形状(真歌词不许命中): \(line.prefix(10))…")
+    }
+    // 对唱标注豁免:「男 Male:」这种真实存在,不能当署名删
+    expectEqual(LyricsSyncEngine.matchesBilingualCreditShape("男 Male：我不走"), false,
+                "双语形状: 说话人标签豁免")
+    // 落单不算 —— 闸在 strippingCreditLines 那边,这里单独验形状函数本身照旧返回 true,
+    // 端到端那一组负责验"只有 1 行时不会被删"。
+    do {
+        let lone = LyricsSyncEngine()
+        lone.load(lyrics: "[00:01.00]妈妈 Mom：吃饭了\n[00:05.00]真的歌词一句\n[00:09.00]真的歌词两句\n",
+                  lyricsTr: "", lyricsRoma: "", lyricsYRC: "", preferWordLevel: true)
+        expectEqual(lone.allLines(idPrefix: "x").count, 3,
+                    "双语形状: 整份只有 1 行这种形状时不删(闸门 ≥2)")
+    }
+
+    // 端到端:整份走一遍展示过滤,只剩真歌词那两句
+    let engine = LyricsSyncEngine()
+    var lrc = "[00:00.00]Stupid Pop Song - 陶喆\n"
+    for (i, line) in real.enumerated() {
+        lrc += "[00:\(String(format: "%02d", i + 1)).00]\(line)\n"
+    }
+    lrc += "[00:28.61]This is a stupid pop song 我想唱给你听\n"
+    lrc += "[00:33.00]谁在乎明天会怎样\n"
+    // 抬头那一行要靠曲名/歌手比对才认得出(见 looksLikeHeaderLine),所以这里必须把它们
+    // 传进去 —— 真实调用路径也是这么传的。
+    engine.load(lyrics: lrc, lyricsTr: "", lyricsRoma: "", lyricsYRC: "", preferWordLevel: true,
+                trackTitle: "Stupid Pop Song", trackArtist: "陶喆")
+    let kept = engine.allLines(idPrefix: "t").compactMap { $0.line.mainText }
+    expectEqual(kept, ["This is a stupid pop song 我想唱给你听", "谁在乎明天会怎样"],
+                "双语署名: 端到端只剩两句真歌词(抬头 + 13 行职员表全滤掉)")
+}
+
+// ---- 末字填色必须在换行前填满(2026-08-19) ----
+//
+// 用户报「主动调过某首歌的歌词延迟之后,每句歌词最后一点不走完就下一句」。查下来跟偏移
+// 无关(引擎判行和四处填色加的是同一个 offsetMs),是歌词数据本身:"填满"的时刻是
+// 字.start+字.duration,"换行"的时刻是下一行的 timeMs,两个独立的数字。全库实测
+// 667 首/37610 行:25.9% 正好相等、3.0% 真越过、12.2% 余量不足 120ms —— 合计约四成。
+
+do {
+    let lead = KaraokeFill.lineTailLeadMs      // 140
+    let floorMs = KaraokeFill.minTailFillMs    // 120
+    func words(_ specs: [(String, Int, Int)]) -> [SyncedLyricWord] {
+        specs.map { SyncedLyricWord(text: $0.0, startMs: $0.1, durationMs: $0.2) }
+    }
+    func tail(_ ws: [SyncedLyricWord], _ next: Int?) -> [Int] {
+        KaraokeFill.tailClamped(ws, nextLineStartMs: next).map(\.durationMs)
+    }
+
+    // 余量为 0(占全库 25.9%):末字填满与换行同一毫秒 → 压到换行前 lead
+    expectEqual(tail(words([("a", 0, 500), ("b", 1000, 500)]), 1500), [500, 500 - lead],
+                "末字: 余量为 0 的行压到换行前 \(lead)ms 填满")
+    // 真越过(3.0%,中位 295ms):同样压到换行前 lead
+    expectEqual(tail(words([("a", 1000, 1000)]), 1500), [1500 - lead - 1000],
+                "末字: 越过下一行开始的照样压回来")
+    // 越过太多:按下限兜住,不做成"啪"地跳满
+    expectEqual(tail(words([("a", 1000, 1000)]), 1050), [floorMs],
+                "末字: 压不下去时按 \(floorMs)ms 下限兜住")
+    // 余量充足:一个字都不动
+    expectEqual(tail(words([("a", 1000, 300)]), 2000), [300],
+                "末字: 余量充足时原样不动")
+    // 整首最后一句:没有"换行"这回事
+    expectEqual(tail(words([("a", 1000, 5000)]), nil), [5000],
+                "末字: 最后一句不压(没有下一行)")
+    // 只动最后一个字,前面的一律不碰
+    expectEqual(tail(words([("a", 0, 900), ("b", 900, 900), ("c", 1800, 900)]), 2700),
+                [900, 900, 2700 - lead - 1800],
+                "末字: 只压最后一个字,前面的原样")
+    // duration 为 0 的极短词(英文歌词常见)走 minWordDurationMs,压缩不该把它压更短
+    expectEqual(tail(words([("a", 1000, 0)]), 9000), [0],
+                "末字: 零时长词余量充足时不动(填色本来就按 80ms 下限走)")
+    // 空行不炸
+    expectEqual(tail([], 1000), [], "末字: 空词数组安全返回")
+
+    // 压完之后填色必须真的能到 1.0,而且比换行早
+    let clamped = KaraokeFill.tailClamped(words([("a", 1000, 500)]), nextLineStartMs: 1500)
+    let w = clamped[0]
+    expectEqual(KaraokeFill.fillFraction(for: w, atMs: 1500 - lead) >= 1.0, true,
+                "末字: 换行前 \(lead)ms 时填色已经到 1.0")
+    expectEqual(KaraokeFill.fillFraction(for: w, atMs: 1500 - lead - 60) < 1.0, true,
+                "末字: 再早 60ms 时还没填满(不是提前一大截就满)")
+}
+
+// ---- 歌词行状态的判定顺序(2026-08-19) ----
+//
+// 这条链的三处硬约束原本只写在三个 View 的注释里,誊了三遍还各自内联了一份实现。
+// 顺序错了不编译报错、不崩,只会长期显示一句似是而非的状态(纯音乐永远"搜索歌词中…"),
+// 所以拿断言钉住。
+
+do {
+    func d(words: Bool = false, line: Bool = false, ad: Bool = false, inst: Bool = false,
+           noLyrics: Bool = false, netDown: Bool = false, content: Bool = false,
+           playing: Bool = true) -> LyricsLineDisplay {
+        LyricsLineDisplay.resolve(
+            hasWordTiming: words, hasCurrentLine: line, isAdBreak: ad, isInstrumental: inst,
+            hasNoLyrics: noLyrics, networkDown: netDown, hasLyricsContent: content,
+            isPlaying: playing)
+    }
+
+    expectEqual(d(words: true, line: true, content: true), .words, "歌词行: 有逐字数据就唱")
+    expectEqual(d(line: true, content: true), .plain, "歌词行: 只有整行文本走 plain")
+    expectEqual(d(), .searching, "歌词行: 在放但还没有任何歌词 = 搜索中")
+    expectEqual(d(playing: false), .idle, "歌词行: 没在放就什么都不显示")
+    expectEqual(d(line: true, content: true, playing: false), .plain,
+                "歌词行: 暂停时仍显示当前这一句")
+
+    // 三条"必须排在谁前面"的硬约束
+    expectEqual(d(inst: true), .instrumental, "歌词行: 纯音乐排在「搜索中」前(否则永远转圈)")
+    expectEqual(d(ad: true), .adBreak, "歌词行: 广告排在「搜索中」前")
+    expectEqual(d(noLyrics: true, netDown: true), .noLyrics,
+                "歌词行: 「暂无歌词」排在「网络失败」前(搜完了确实没有)")
+    expectEqual(d(netDown: true), .networkDown, "歌词行: 「网络失败」排在「搜索中」前")
+
+    // 有词优先于一切状态 —— 跟另外三处展示面保持同一口径
+    expectEqual(d(words: true, line: true, ad: true, inst: true, noLyrics: true), .words,
+                "歌词行: 已经有逐字数据时状态位不抢戏")
+    // 网络断了但歌词已经在手 = 照常显示,不该报错
+    expectEqual(d(line: true, netDown: true, content: true), .plain,
+                "歌词行: 歌词已在手时网络断了不影响显示")
+}
+
+// ---- 圆钮块的短按 / 长按 / 右键判定(2026-08-19) ----
+//
+// 菜单栏面板里那三个「歌词展示形态」的格子:短按 = 开关,长按或右键 = 展开它自己的快捷
+// 设置。真正容易写错的只有一点 —— **长按已经触发过之后,松手不能再当短按用一次**
+// (SwiftUI Button 的 action 认的就是松手,这也是那些格子不再用 Button 的原因)。
+
+do {
+    func run(_ events: [TilePressState.Event]) -> [TilePressState.Action] {
+        var state = TilePressState()
+        return events.map { state.handle($0) }
+    }
+
+    expectEqual(run([.down, .up]), [.none, .primary], "钮块: 按下松开 = 主动作")
+    expectEqual(run([.down, .holdElapsed]), [.none, .secondary], "钮块: 按住到点 = 快捷设置")
+    expectEqual(run([.down, .holdElapsed, .up]), [.none, .secondary, .none],
+                "钮块: 长按之后松手不再补一次主动作")
+    expectEqual(run([.secondaryClick]), [.secondary], "钮块: 右键直接进快捷设置")
+    expectEqual(run([.down, .secondaryClick, .up]), [.none, .secondary, .none],
+                "钮块: 左键按着时右键 = 只出快捷设置")
+    expectEqual(run([.down, .dragOutside, .up]), [.none, .none, .none],
+                "钮块: 拖出格子再松手什么都不做")
+    expectEqual(run([.down, .dragOutside, .holdElapsed]), [.none, .none, .none],
+                "钮块: 拖出去之后晚到的长按计时器不算")
+    expectEqual(run([.down, .dragOutside, .dragInside, .up]), [.none, .none, .none, .primary],
+                "钮块: 拖出去又拖回来,松手仍算主动作(跟原生按钮一致)")
+    expectEqual(run([.down, .up, .up]), [.none, .primary, .none],
+                "钮块: 同一轮不会放出两次主动作")
+    expectEqual(run([.down, .up, .down, .up]), [.none, .primary, .none, .primary],
+                "钮块: 下一轮按下重新计数")
+
+    // 按压态视觉:按下亮、拖出去灭、拖回来又亮、长按到点即灭(此时快捷设置已经顶上来了)。
+    var visual = TilePressState()
+    _ = visual.handle(.down)
+    expectEqual(visual.isPressing, true, "钮块: 按下进按压态")
+    _ = visual.handle(.dragOutside)
+    expectEqual(visual.isPressing, false, "钮块: 拖出格子退出按压态")
+    _ = visual.handle(.dragInside)
+    expectEqual(visual.isPressing, true, "钮块: 拖回格子重回按压态")
+    _ = visual.handle(.holdElapsed)
+    expectEqual(visual.isPressing, false, "钮块: 长按触发后退出按压态")
+}
+
+// ---- 「歌词显示」页分段的跨文件契约(2026-08-19) ----
+//
+// 菜单栏面板的「全部设置…」靠往一个 UserDefaults 键写这几个字符串,把设置窗口直接翻到
+// 对应那一段。键名和取值必须跟 SettingsView 里 AppearanceSettingsTab.Section 的 rawValue
+// 对得上 —— 对不上不会编译报错,只会表现成"长按灵动岛、设置窗口却停在悬浮歌词那一段"。
+// 这里能钉住的是本侧这一半;另一半在那个 enum 上留了 ⚠️ 注释。
+
+expectEqual(LyricsSurface.allCases.map(\.rawValue), ["overlay", "notch", "menuBar"],
+            "形态: 三个取值与设置页分段一致")
+expectEqual(LyricsSurface.appearanceSectionStorageKey, "settings:appearanceSection",
+            "形态: 分段存储键名")
+expectEqual(LyricsSurface.notch.appearanceSectionRawValue, "notch", "形态: 灵动岛 → notch 段")
+expectEqual(LyricsSurface(rawValue: "menuBar"), .menuBar, "形态: rawValue 往回认得出来")
+expectEqual(LyricsSurface(rawValue: "other"), nil, "形态: 「其它」段不属于任何一个形态")
+
 // ---- 本地化:Localizable.xcstrings 是唯一真源,生成的 .strings 必须与它逐键逐值一致 ----
 //
 // 2026-08-17 迁移到 String Catalog(吸收自 boring.notch 审阅 B9):词条只在
@@ -2407,6 +3628,533 @@ do {
         expectEqual(true, false,
                     "本地化: catalog/生成物读不出来 —— 文件缺失、en 缺翻译、或生成物有重复键")
     }
+}
+
+// ---- 2026-08-20 歌词引擎性能审计落地的行为守卫 ----
+do {
+    // ① load() 入参指纹早退:同参第二次装载返回 false(整段跳过、缓存保住),任一参数
+    //    变化恢复 true。
+    let engine = LyricsSyncEngine()
+    let lrc = "[00:01.00] hello world\n[00:05.00] second line\n[00:09.00] third line"
+    expectEqual(engine.load(lyrics: lrc, lyricsTr: "", lyricsRoma: "", lyricsYRC: ""),
+                true, "load 指纹: 首次装载返回 true")
+    expectEqual(engine.load(lyrics: lrc, lyricsTr: "", lyricsRoma: "", lyricsYRC: ""),
+                false, "load 指纹: 同参重复装载早退返回 false")
+    expectEqual(engine.hasContent, true, "load 指纹: 早退后引擎内容原样保留")
+    expectEqual(engine.load(lyrics: lrc, lyricsTr: "[00:01.00] 译文", lyricsRoma: "", lyricsYRC: ""),
+                true, "load 指纹: 任一入参变化恢复全量装载")
+    expectEqual(engine.load(lyrics: lrc, lyricsTr: "[00:01.00] 译文", lyricsRoma: "", lyricsYRC: "",
+                            preferWordLevel: false),
+                true, "load 指纹: preferWordLevel 变化也算内容变化")
+
+    // ② tickQuery 与四个独立入口逐位一致(含单调推进和倒退 seek 两个方向 —— 单调窗口
+    //    记忆化的验证失败路径必须正确回退全扫)。
+    let engine2 = LyricsSyncEngine()
+    engine2.load(
+        lyrics: "[00:01.00] alpha\n[00:10.00] beta\n[00:30.00] gamma",
+        lyricsTr: "", lyricsRoma: "", lyricsYRC: "")
+    // 采样点覆盖:第一句之前 / 各句内 / 长间奏(10s→30s 之间,gapWindow 会亮)/ 倒退。
+    for ms in [0, 500, 1_500, 9_999, 12_000, 20_000, 31_000, 2_000, 500, 31_000, 1_500] {
+        let r = engine2.tickQuery(atMs: ms)
+        expectEqual(r.line, engine2.activeLine(atMs: ms), "tickQuery(\(ms)): line 与 activeLine 一致")
+        expectEqual(r.nextText, engine2.upcomingLineText(afterMs: ms),
+                    "tickQuery(\(ms)): nextText 与 upcomingLineText 一致")
+        expectEqual(r.index, engine2.activeLineIndex(atMs: ms),
+                    "tickQuery(\(ms)): index 与 activeLineIndex 一致")
+        expectEqual(r.gapIndex, engine2.activeGapIndex(atMs: ms),
+                    "tickQuery(\(ms)): gapIndex 与 activeGapIndex 一致")
+    }
+    expectEqual(engine2.tickQuery(atMs: 1_500).line?.plainText, "alpha", "tickQuery: 命中第一句")
+    expectEqual(engine2.tickQuery(atMs: 12_000).line?.plainText, "beta", "tickQuery: 命中第二句")
+    expectEqual(engine2.tickQuery(atMs: 0).index, nil, "tickQuery: 第一句之前 index 为 nil")
+
+    // ③ nearestText(经 allLines 的译文贴合观察)改二分后的并列语义与旧线性扫一致:
+    //    同距并列取时间戳更晚的那条;同时间戳重复取排在最后的那条。
+    let engine3 = LyricsSyncEngine()
+    engine3.load(
+        lyrics: "[00:01.00] main line",
+        // 300ms 与 1700ms 距 1000ms 同为 700(都在容差上),旧扫描后见者胜 → 取 late。
+        lyricsTr: "[00:00.30] early\n[00:01.70] late",
+        lyricsRoma: "", lyricsYRC: "")
+    expectEqual(engine3.allLines(idPrefix: "t").first?.line.translation, "late",
+                "nearestText 并列: 同距取时间戳更晚的那条(旧线性扫语义)")
+    let engine4 = LyricsSyncEngine()
+    engine4.load(
+        lyrics: "[00:01.00] main line",
+        lyricsTr: "[00:01.20] first\n[00:01.20] second",
+        lyricsRoma: "", lyricsYRC: "")
+    expectEqual(engine4.allLines(idPrefix: "t").first?.line.translation, "second",
+                "nearestText 重复时间戳: 取排在最后的那条(旧线性扫语义)")
+    let engine5 = LyricsSyncEngine()
+    engine5.load(
+        lyrics: "[00:01.00] main line",
+        lyricsTr: "[00:02.50] too far",
+        lyricsRoma: "", lyricsYRC: "")
+    expectEqual(engine5.allLines(idPrefix: "t").first?.line.translation, nil,
+                "nearestText 容差: 超过 700ms 不贴")
+
+    // ④ plainText 存储化后语义不变:两种形态、以及"引擎构造时预拼"与"默认推导"一口径。
+    let wordLine = SyncedLyricLine(
+        romanization: nil, translation: nil, mainText: nil,
+        words: [SyncedLyricWord(text: "ab", startMs: 0, durationMs: 100),
+                SyncedLyricWord(text: "cd", startMs: 100, durationMs: 100)],
+        wordGroups: nil, side: nil)
+    expectEqual(wordLine.plainText, "abcd", "plainText 存储化: words 形态默认推导拼接")
+    let mainLine2 = SyncedLyricLine(
+        romanization: nil, translation: nil, mainText: "hello",
+        words: nil, wordGroups: nil, side: nil)
+    expectEqual(mainLine2.plainText, "hello", "plainText 存储化: mainText 形态原样")
+
+    // ⑤ 整行读音与逐词分组共用同一次分词后,两条管线仍然等价:
+    //    readingFromSegments(japaneseSegments(x)) ≡ romanize(x, japanese: true)。
+    for text in ["今はまだ悲しい", "受話器を取った君", "明日の朝"] {
+        let viaSegments = Romanizer.readingFromSegments(
+            Romanizer.japaneseSegments(text), original: text)
+        expectEqual(viaSegments, Romanizer.romanize(text, japanese: true),
+                    "分词管线合一: \(text) 两条管线读音一致")
+    }
+
+    // ⑥ WrapLayoutMath 带 rows 的重载与原入口逐位一致(WrapLayout 壳缓存 rows 后走的
+    //    是新重载,两条路径必须描述同一套排布)。
+    let sizes = [CGSize(width: 40, height: 10), CGSize(width: 40, height: 12),
+                 CGSize(width: 40, height: 10), CGSize(width: 90, height: 10)]
+    let rows = WrapLayoutMath.rows(sizes: sizes, maxWidth: 100, horizontalSpacing: 2)
+    expectEqual(
+        WrapLayoutMath.totalSize(rows: rows, maxWidth: 100, verticalSpacing: 3),
+        WrapLayoutMath.totalSize(sizes: sizes, maxWidth: 100, horizontalSpacing: 2, verticalSpacing: 3),
+        "WrapLayoutMath: totalSize(rows:) 与原入口一致")
+    expectEqual(
+        WrapLayoutMath.placements(rows: rows, sizes: sizes,
+                                  bounds: CGRect(x: 0, y: 0, width: 100, height: 100),
+                                  horizontalSpacing: 2, verticalSpacing: 3, rowAlignment: .center),
+        WrapLayoutMath.placements(sizes: sizes,
+                                  bounds: CGRect(x: 0, y: 0, width: 100, height: 100),
+                                  horizontalSpacing: 2, verticalSpacing: 3, rowAlignment: .center),
+        "WrapLayoutMath: placements(rows:) 与原入口一致")
+
+    // ⑥b wordGroupCache 按"首词时间戳+行文本"做 key:副歌重复句(同文本、不同时间)各自
+    //    拿到自己的时间轴,不再共享第一次出现的词组(2026-08-20 对抗审查抓出的预存在 bug)。
+    let engineDup = LyricsSyncEngine()
+    engineDup.load(
+        lyrics: "",
+        lyricsTr: "", lyricsRoma: "",
+        lyricsYRC: "[10000,2000](10000,500,0)い(10500,500,0)つ(11000,500,0)か\n"
+            + "[30000,2000](30000,500,0)い(30500,500,0)つ(31000,500,0)か")
+    let dupLines = engineDup.allLines(idPrefix: "dup")
+    expectEqual(dupLines.count, 2, "重复句词组: 两行都在")
+    expectEqual(dupLines.first?.line.wordGroups?.first?.startMs, 10000,
+                "重复句词组: 第一次出现用自己的时间轴")
+    expectEqual(dupLines.last?.line.wordGroups?.first?.startMs, 30000,
+                "重复句词组: 第二次出现不再借用第一次的时间轴")
+
+    // ⑥c parseTimestamp(2026-08-20 播放核心审计):formatter 静态化+顺序换成先试无小数秒
+    //    (实测 media-control 恒无小数秒)后,两种形态都仍解析正确、垃圾串仍返回 nil。
+    expectEqual(MediaControlClient.parseTimestamp("2026-08-20T10:00:00Z") != nil, true,
+                "parseTimestamp: 无小数秒(常态)解析成功")
+    expectEqual(MediaControlClient.parseTimestamp("2026-08-20T10:00:00.123Z") != nil, true,
+                "parseTimestamp: 带小数秒兜底解析成功")
+    expectEqual(MediaControlClient.parseTimestamp("not a date"), nil,
+                "parseTimestamp: 垃圾串返回 nil")
+    expectEqual(MediaControlClient.parseTimestamp(nil), nil, "parseTimestamp: nil 入参")
+    expectEqual(MediaControlClient.parseTimestamp("2026-08-20T10:00:00Z"),
+                MediaControlClient.parseTimestamp("2026-08-20T10:00:00.000Z"),
+                "parseTimestamp: 两种写法的同一时刻解析相等")
+
+    // ⑦ KaraokeFill 纯色快路径改静态常量后语义不变;裸起止版 fillFraction 与词版一致。
+    expectEqual(KaraokeFill.stops(left: 1.2, right: 1.4), KaraokeFill.allSungStops,
+                "KaraokeFill: left>=1 走全唱常量")
+    expectEqual(KaraokeFill.stops(left: -0.4, right: -0.2), KaraokeFill.allUnsungStops,
+                "KaraokeFill: right<=0 走未唱常量")
+    let w = SyncedLyricWord(text: "x", startMs: 1000, durationMs: 40) // 40 < minWordDurationMs
+    expectEqual(KaraokeFill.fillFraction(for: w, atMs: 1040),
+                KaraokeFill.fillFraction(startMs: 1000, durationMs: 40, atMs: 1040),
+                "KaraokeFill: 裸起止版 fillFraction 与词版一致(含短词下限)")
+}
+
+// MARK: - 合唱 credit 归并(ArtistCredit,2026-08-20)
+//
+// 起因:同一首《Toronto 2014》两次收听在 Last.fm 上成了两个实体 —— Mac 照抄 Apple Music
+// 的逐曲 credit「Daniel Caesar & Mustafa」,手机(iPhone→Last.fm→桥接)报的是主歌手
+// 「Daniel Caesar」。后果是次数各记一本(两行都「第 1 次听」)、封面各挂一张(合唱实体挂
+// 单曲封面)。这两组断言钉住用来归并的两条口径。
+do {
+    // ① 主歌手拆分:能拆才返回值,单人返回 nil(nil = "没有主歌手这回事")
+    expectEqual(ArtistCredit.primary("Daniel Caesar & Mustafa"), "Daniel Caesar",
+                "合唱 credit: & 分隔取第一位")
+    expectEqual(ArtistCredit.primary("陶喆、卢广仲"), "陶喆", "合唱 credit: 顿号分隔")
+    expectEqual(ArtistCredit.primary("UMI, 金泰亨"), "UMI", "合唱 credit: 逗号分隔")
+    expectEqual(ArtistCredit.primary("Daniel Caesar feat. Mustafa"), "Daniel Caesar",
+                "合唱 credit: feat. 也算多人")
+    expectEqual(ArtistCredit.primary("Doja Cat (feat. SZA)"), "Doja Cat",
+                "合唱 credit: 括号里的 feat. 一并切掉")
+    expectEqual(ArtistCredit.primary("Daniel Caesar"), nil, "单人 credit: 返回 nil")
+    expectEqual(ArtistCredit.primary(""), nil, "空串: 返回 nil")
+    // 名字本身带 & 的组合不该被拆空(拆出来是空串时按"没有主歌手"处理)
+    expectEqual(ArtistCredit.primary("& Friends"), nil, "以分隔符开头: 不返回空串")
+    // `/` 单独一档:网易云式合 credit 要切,名字自带斜杠的不许切
+    expectEqual(ArtistCredit.primary("陶喆/卢广仲"), "陶喆", "斜杠: 中文合 credit 要切")
+    expectEqual(ArtistCredit.primary("K/DA, Madison Beer & (G)I-DLE"), "K/DA",
+                "斜杠: 逗号先命中,K/DA 保持完整(真实历史里的一例)")
+    expectEqual(ArtistCredit.primary("AC/DC"), nil, "斜杠: AC/DC 是一个艺人,不许劈成 AC")
+    expectEqual(ArtistCredit.primary("K/DA"), nil, "斜杠: K/DA 同理不许劈成 K")
+    // 归并键:多人归到第一位,单人原样
+    expectEqual(ArtistCredit.mergeArtist("Daniel Caesar & Mustafa"), "Daniel Caesar",
+                "归并歌手: 多人归第一位")
+    expectEqual(ArtistCredit.mergeArtist("Daniel Caesar"), "Daniel Caesar",
+                "归并歌手: 单人原样")
+    // 两种 credit 写法必须落到同一个专辑共识键
+    expectEqual(ArtistCredit.albumConsensusKey(artist: "Daniel Caesar & Mustafa",
+                                               album: "NEVER ENOUGH (Bonus Version)"),
+                ArtistCredit.albumConsensusKey(artist: "Daniel Caesar",
+                                               album: "never enough (bonus version)"),
+                "共识键: 合唱/主歌手两种写法 + 大小写差异折到同一个键")
+    expectEqual(ArtistCredit.albumConsensusKey(artist: "Daniel Caesar", album: nil), nil,
+                "共识键: 没有专辑名就没有共识(空专辑不共享封面)")
+
+    // ② 同专辑共识封面:真实形态复刻 —— 4 行同专辑,3 行挂专辑封面、1 行(合唱实体)挂单曲封面
+    let albumArt = URL(string: "https://lastfm.example/album.jpg")!
+    let singleArt = URL(string: "https://lastfm.example/single.jpg")!
+    let album = "NEVER ENOUGH (Bonus Version)"
+    let rows: [(artist: String, album: String?, image: URL?)] = [
+        ("Daniel Caesar & Mustafa", album, singleArt),
+        ("Daniel Caesar", album, albumArt),
+        ("Daniel Caesar", album, albumArt),
+        ("Daniel Caesar", album, albumArt),
+    ]
+    let consensus = ArtistCredit.albumConsensusCovers(rows: rows)
+    expectEqual(consensus[ArtistCredit.albumConsensusKey(artist: "Daniel Caesar", album: album)!],
+                albumArt, "共识封面: 少数派(单曲封面)那一行被多数派纠正")
+    // 每行各一张(合辑/逐曲封面)→ 没有共识,不许乱纠正
+    let noConsensus = ArtistCredit.albumConsensusCovers(rows: [
+        ("V.A.", "Compilation", URL(string: "https://lastfm.example/a.jpg")!),
+        ("V.A.", "Compilation", URL(string: "https://lastfm.example/b.jpg")!),
+    ])
+    expectEqual(noConsensus.isEmpty, true, "共识封面: 一行一张时不产生共识")
+    // 只有一行的专辑也不算共识(要求 ≥2 行一致)
+    let single = ArtistCredit.albumConsensusCovers(rows: [("Solo", "One Track", albumArt)])
+    expectEqual(single.isEmpty, true, "共识封面: 只有一行时不产生共识")
+    // 没有图的行不参与
+    let withNil = ArtistCredit.albumConsensusCovers(rows: [
+        ("Daniel Caesar", album, nil),
+        ("Daniel Caesar", album, albumArt),
+        ("Daniel Caesar", album, albumArt),
+    ])
+    expectEqual(withNil.count, 1, "共识封面: 没有图的行不参与投票")
+}
+
+// MARK: - 缓存 key:结尾副题必须被剥掉(2026-08-20「歌词管理不自动定位」的根因)
+//
+// 用户报「进歌词管理不会自动定位到正在播的曲目」。实测:Apple Music 把这首报成
+// 「Dynasties and Dystopia (from the series Arcane League of Legends)」,而缓存里那条 key
+// 是剥掉副题的「Dynasties and Dystopia」(collector 的 enrichKey 剥的)。定位函数当时手拼
+// "artist|title|album",精确匹配落空;而 looseKey 只折大小写/空格/繁简,**折不掉**这段副题,
+// 兜底也接不住 —— 于是静默返回。这两条断言把"镜像函数必须剥、looseKey 必须剥不掉"钉住。
+do {
+    let artist = "Denzel Curry/GIZZLE/Bren Joy"
+    let title = "Dynasties and Dystopia (from the series Arcane League of Legends)"
+    let album = "Arcane League of Legends (Soundtrack from the Animated Series)"
+    expectEqual(EnrichCacheKeys.normalizedKey(artist: artist, title: title, album: album),
+                "Denzel Curry/GIZZLE/Bren Joy|Dynasties and Dystopia|"
+                    + "Arcane League of Legends (Soundtrack from the Animated Series)",
+                "缓存 key: 歌名结尾的 (from the series …) 副题被剥掉,专辑名原样保留")
+    // looseKey 接不住这个差异 —— 这正是"必须用 normalizedKey 而不是手拼 + looseKey"的理由
+    expectEqual(EnrichCacheKeys.looseKey("\(artist)|\(title)|\(album)")
+                    == EnrichCacheKeys.looseKey(
+                        EnrichCacheKeys.normalizedKey(artist: artist, title: title, album: album)),
+                false,
+                "缓存 key: looseKey 折不掉结尾副题(所以手拼 key 连兜底都命不中)")
+    // 版本限定词(Live/Remix 等)必须**保留** —— 那是另一次录音,不是副题噪音
+    expectEqual(EnrichCacheKeys.normalizedTitle("Purple Rain (Live)"), "Purple Rain (Live)",
+                "缓存 key: 版本限定词不剥")
+}
+
+// MARK: - looseKey 必须折平合 credit 分隔符(跟 collector 的 loosenEnrichKey 同步)
+//
+// 2026-08-20 用户报「歌词管理里同一首歌有两条」。根因:同一次播放里两条路径对多歌手串的
+// 写法系统性不同 —— 播放器报 `A/B/C`,专辑预取从 Apple Music 曲目表拿到 `A & B & C`。
+// 两侧的宽松键都得折平这一档,否则 collector 那边不再长重复条目,而这边(EnrichCacheReader
+// 的兜底、歌词管理的定位)仍然对不上存量里的另一种写法。
+do {
+    expectEqual(
+        EnrichCacheKeys.looseKey("VALORANT/Grabbitz/bbno$|Ticking Away|Ticking Away"),
+        EnrichCacheKeys.looseKey("VALORANT & Grabbitz & bbno$|Ticking Away|Ticking Away"),
+        "looseKey: 斜杠式与 & 式多歌手串判为同一首")
+    expectEqual(
+        EnrichCacheKeys.looseKey("陶喆、卢广仲|某首歌|某专辑"),
+        EnrichCacheKeys.looseKey("陶喆/卢广仲|某首歌|某专辑"),
+        "looseKey: 顿号与斜杠同折")
+    // 原有两档(空格 / 繁简)不能被这次改动破坏
+    expectEqual(
+        EnrichCacheKeys.looseKey("丁世光|無名花香|背面是我"),
+        EnrichCacheKeys.looseKey("丁世光|无名花香|背面是我"),
+        "looseKey: 繁简仍然同折")
+    // 折平分隔符不能把真的不同的歌并到一起
+    expectEqual(
+        EnrichCacheKeys.looseKey("K/DA|POP/STARS|POP/STARS")
+            == EnrichCacheKeys.looseKey("K/DA|MORE|MORE"),
+        false, "looseKey: 不同歌名仍然分开")
+}
+
+// MARK: - 中文歌不该因为署名行里的日文人名被判成日文(2026-08-20)
+//
+// 用户报「为什么中文歌也给我出罗马音,我没有开中文的,而且有些字有有些字没有」。
+// 实测那首是泠鸢yousa《神的随波逐流》(中文翻唱),整首歌唯一的假名是这两行署名:
+//   [00:07.69]词：れるりり
+//   [00:15.38]曲：れるりり
+// 而语言判定原来扫的是**原始** lyrics 字段(署名行也算),于是整首被判成日文 → 用户关着的
+// 「中文」开关根本没机会说话(闸看的是整首歌的语言)→ 每行中文都被标东西:日语分词器
+// 给得出读音的出日文读音(词典外的字原样留着,就是"有些字有有些字没有"),给不出的退到
+// ICU 音译出拼音。下面用真实歌词片段钉住:开关只开日/韩时,这首歌一行罗马音都不该有。
+do {
+    let lyrics = """
+    [00:00.00]泠鸢yousa - 神的随波逐流
+    [00:07.69]词：れるりり
+    [00:15.38]曲：れるりり
+    [00:23.08]不知最近为什么总是不随心意
+    [00:27.00]但我听说这是我最为珍贵的一个小特长
+    [00:31.00]化作无穷的力量
+    """
+    let jaKoOnly: RomanizationScripts = [.japanese, .korean]
+
+    let engine = LyricsSyncEngine()
+    _ = engine.load(lyrics: lyrics, lyricsTr: "", lyricsRoma: "", lyricsYRC: "",
+                    trackTitle: "神的随波逐流", trackArtist: "泠鸢yousa",
+                    romanizationScripts: jaKoOnly)
+    let line = engine.activeLine(atMs: 27_500)
+    expectEqual(line?.plainText, "但我听说这是我最为珍贵的一个小特长",
+                "中文翻唱: 取到的是正文那一行(署名行已被过滤)")
+    expectEqual(line?.romanization, nil,
+                "中文翻唱: 署名行里的日文人名不该让整首歌变成日文 —— 中文开关关着就一行罗马音都没有")
+
+    // 用户把「中文」也打开时,拼音照常出来(这条是设置本来的语义,不能被上面那道修复顺手关掉)。
+    let engineZh = LyricsSyncEngine()
+    _ = engineZh.load(lyrics: lyrics, lyricsTr: "", lyricsRoma: "", lyricsYRC: "",
+                      trackTitle: "神的随波逐流", trackArtist: "泠鸢yousa",
+                      romanizationScripts: [.japanese, .korean, .chinese])
+    expectEqual(engineZh.activeLine(atMs: 31_500)?.romanization != nil, true,
+                "中文翻唱: 用户主动打开中文罗马音时照样给")
+
+    // 真正的日文歌不能被这次改动误伤:正文里有假名,照旧判成日文、照旧给读音。
+    let jpLyrics = """
+    [00:00.00]作词：れるりり
+    [00:05.00]火曜日の朝は
+    [00:10.00]受話器を取った君
+    """
+    let jpEngine = LyricsSyncEngine()
+    _ = jpEngine.load(lyrics: jpLyrics, lyricsTr: "", lyricsRoma: "", lyricsYRC: "",
+                      trackTitle: "test", trackArtist: "test",
+                      romanizationScripts: jaKoOnly)
+    expectEqual(jpEngine.activeLine(atMs: 5_500)?.romanization != nil, true,
+                "日文歌: 正文有假名,照旧判成日文并给读音")
+}
+
+// MARK: - 署名行第十轮:「标签 + 冒号 + 名字串」形状(2026-08-20)
+//
+// 用户报赵雷《成都》头部 13 行职员表里有 4 行漏到展示面上:
+//   [00:09.28]钢琴：柳森    [00:10.60]箱琴：赵雷/喜子
+//   [00:11.93]笛子：祝子    [00:17.23]童声：朵朵/天天
+// 这几个乐器词不在 creditRoleWords 里,而结构化规则被"整份过半"那道闸拦着(13 行署名 vs
+// 三十多行正文)。新规则收紧的是**冒号右边**:必须像人名/团名(不含虚词、每段 2~8 字),
+// 而不是像已撤销的那次那样放宽位置 —— 那次正是被下面这些对白反例打回来的。
+do {
+    typealias E = LyricsSyncEngine
+    // 正面:这四行就是用户截图里漏网的
+    expectEqual(E.matchesNameListCreditShape("钢琴：柳森"), true, "名字串形状: 钢琴：柳森")
+    expectEqual(E.matchesNameListCreditShape("箱琴：赵雷/喜子"), true, "名字串形状: 一个角色两个人")
+    expectEqual(E.matchesNameListCreditShape("笛子：祝子"), true, "名字串形状: 笛子：祝子")
+    expectEqual(E.matchesNameListCreditShape("童声：朵朵/天天"), true, "名字串形状: 童声：朵朵/天天")
+    expectEqual(E.matchesNameListCreditShape("弦乐：亚洲爱乐国际乐团"), true, "名字串形状: 团体名(8 字)")
+    expectEqual(E.matchesNameListCreditShape("弦乐编写：柳森"), true, "名字串形状: 四字组合标签")
+    // 反面:全是历史上真被这条形状误杀过/差点误杀的真歌词
+    expectEqual(E.matchesNameListCreditShape("他说：我不走"), false, "名字串形状: 对白(含「我」「不」)不认")
+    expectEqual(E.matchesNameListCreditShape("她说：不走"), false, "名字串形状: 对白(含「不」)不认")
+    expectEqual(E.matchesNameListCreditShape("我说：算了"), false, "名字串形状: 对白(含「了」)不认")
+    expectEqual(E.matchesNameListCreditShape("他说：走"), false, "名字串形状: 右边只有一个字不认")
+    expectEqual(E.matchesNameListCreditShape("曲婉婷：好久不见"), false, "名字串形状: 对唱标签+真歌词不认")
+    expectEqual(E.matchesNameListCreditShape("男：亲爱的"), false, "名字串形状: 说话人标签豁免")
+    expectEqual(E.matchesNameListCreditShape("Verse 1: hello"), false, "名字串形状: 拉丁标签不认")
+    expectEqual(E.matchesNameListCreditShape("1、2、3：走"), false, "名字串形状: 数字标签不认")
+
+    // 端到端:真实的《成都》头部(13 行职员表 + 真歌词),四行漏网的必须消失、真歌词必须留下
+    let engine = LyricsSyncEngine()
+    _ = engine.load(lyrics: """
+    [00:00.00]成都 - 赵雷
+    [00:01.32]词：赵雷
+    [00:02.65]曲：赵雷
+    [00:03.97]编曲：赵雷/喜子
+    [00:05.30]制作人：赵雷/喜子/姜北生
+    [00:06.63]BASS：张岭
+    [00:07.95]鼓：贝贝
+    [00:09.28]钢琴：柳森
+    [00:10.60]箱琴：赵雷/喜子
+    [00:11.93]笛子：祝子
+    [00:13.26]弦乐编写：柳森
+    [00:14.58]弦乐：亚洲爱乐国际乐团
+    [00:15.91]和声：朱奇迹/赵雷/旭东
+    [00:17.23]童声：朵朵/天天
+    [00:24.00]让我掉下眼泪的
+    [00:27.00]不止昨夜的酒
+    [00:30.00]让我依依不舍的
+    [00:33.00]不止你的温柔
+    """, lyricsTr: "", lyricsRoma: "", lyricsYRC: "",
+    trackTitle: "成都", trackArtist: "赵雷")
+    let kept = engine.allLines(idPrefix: "cd").compactMap { $0.line.plainText }
+    expectEqual(kept.count, 4, "成都: 13 行职员表 + 抬头全被过滤,只剩 4 句真歌词")
+    expectEqual(kept.first, "让我掉下眼泪的", "成都: 第一句真歌词是它")
+    expectEqual(kept.contains(where: { $0.contains("钢琴") || $0.contains("箱琴")
+                    || $0.contains("笛子") || $0.contains("童声") }), false,
+                "成都: 四行漏网的乐器署名已经过滤掉")
+}
+
+// MARK: - 署名行过滤:全库语料回归(2026-08-20)
+//
+// 语料 = 用户本机 enrich 缓存里的 **935 首 / 47626 行正文**,用 creditLineDropDecisions 全量
+// 跑过一遍,再按"家族"抽样固化成下面两张表。
+//
+// 为什么要这套:署名行过滤今天已经补到第十轮,每一轮都是"为了多滤掉一类署名"而放宽判据,
+// 而放宽的代价**从来不体现在被滤掉的行上,只体现在被误杀的正文上** —— 不测就没人发现。
+// 这次跑语料当场抓到一整类真误杀:拉丁字母的说话人标签(Rain：/S:/A:/SL：/N.Chen：/Rap:)
+// 连着后面的真歌词被整行删掉,29 行。
+//
+// ⚠️ 判据用 creditLineDropDecisions(整份进、每行出),不是单个匹配函数:整份闸门
+// (双语 ≥2 行、名字串 ≥2 行、结构化 ≥3 行且过半)是这套规则的一半,只测单行函数测不到。
+// 每条样本都放在**最恶劣但真实**的上下文里:旁边摆一段能同时打开"双语形状"和"名字串形状"
+// 两道闸的署名块,再配 8 行普通歌词把"整份主导"那道闸关上(真实歌曲就是这个比例)。
+do {
+    typealias E = LyricsSyncEngine
+    // 这四行既是真署名(自己都会被删),又把**两道整份闸同时打开** —— 故意的:
+    //   前两行标签混着拉丁字母 → 打开"双语形状"闸;
+    //   后两行标签是纯汉字     → 打开"名字串形状"闸(混拉丁的标签过不了它的纯汉字要求)。
+    // 真实署名块本来就是两种写法混在一起,这也让下面每条 must-keep 都在"两道闸全开"的
+    // 最恶劣环境里受检。
+    // ⚠️ 后两行必须是**双字**标签:名字串那条规则要求标签至少两个汉字(单字是说话人标签的
+    // 地盘),用「词：」「曲：」当 opener 打不开它的整份闸,断言会假绿/假红。
+    let openers = ["词 Lyrics：某某某", "曲 Composer：某某某", "作词：某某某", "作曲：某某某"]
+    let fillers = [
+        "让我掉下眼泪的", "不止昨夜的酒", "余路还要走多久", "你攥着我的手",
+        "分开总是在雨天", "一杯凉水一根烟", "谁能凭爱意要富士山私有", "夜色如水淹没了街",
+    ]
+    /// 把一行放进"真实歌曲"里,返回它删不删。
+    func verdict(_ line: String) -> Bool {
+        // 目标行放**最后**:第一行有专门的抬头规则(looksLikeHeaderLine),会污染判定。
+        let doc = openers + fillers + [line]
+        let drop = E.creditLineDropDecisions(doc, trackTitle: "测试曲", trackArtist: "测试歌手")
+        return drop[doc.count - 1]
+    }
+
+    // ① 必须留下 —— 全库语料里真实出现过的正文/对唱/口白行(第二列是它在语料里出现的次数)
+    let mustKeep: [(String, Int)] = [
+        ("男：无所谓", 24),
+        ("女：无所谓", 6),
+        ("合：无所谓", 9),
+        ("合：Hey hey ho ho", 8),
+        ("合：因为我真的无所谓", 3),
+        ("男：多少话也说不出", 3),
+        ("女：有时想也想不通", 3),
+        ("女：我真的Bae", 3),
+        ("男：Khalil", 2),
+        ("合：犯错", 2),
+        ("钧：迫不及待看见我的未来", 18),
+        ("宏：看见我的", 14),
+        ("徐：我说男生的无所谓都是自以为", 4),
+        ("岩：霸气傲中原 王者扬烽烟", 4),
+        ("李：一个人的夜晚 谁和谁陪伴", 3),
+        ("华：失去你的我比乞丐落魄", 2),
+        ("方：是我闯祸 还是每个月的亲戚害了我", 2),
+        ("黄：You are the apple of my eye", 2),
+        ("王：不小心", 2),
+        ("靖：我们大家的心声", 1),
+        ("宏：呦 一位盖世英雄要上台了", 1),
+        ("宏：Yeah come on come on", 2),
+        ("Rain：给我大声地说我爱你", 12),
+        ("Rain：정말 자신 있겠지", 2),
+        ("S:只会让我不小心", 2),
+        ("S:好想问你", 1),
+        ("Rap:欢迎来到我的房间", 1),
+        ("SL：啊把日期(給它)撕掉，", 1),
+        ("N.Chen：（聽不懂...），", 1),
+        ("A: one..two..three…..four", 2),
+        ("B: Wu~", 4),
+        ("A.B.C.D: Nananana nananana", 5),
+        ("我们让彼此难过(SL:那些到底算是谁的错) 都别争了", 1),
+        ("（女：Woo I'm sorry Woo So sorry）", 3),
+        // 下面两条不是语料原文,是**为收漏网这一轮专门补的防误杀哨兵**:那一轮要放宽
+        // "冒号右边是英文名"的长度上限,而英文句子跟英文人名在形状上极像,必须钉住。
+        ("他说：I don't wanna go", 0),
+        ("Rain：Baby I love you so much", 0),
+        // 这两条是**第十一轮跑全库语料当场抓到的新误杀**:放宽"英文名段最长 30 字"之后,
+        // 单字说话人标签 + 英文短句(里面没有停用词)被当成署名删掉。护栏是"名字串规则
+        // 要求标签至少两个汉字",见 matchesNameListCreditShape。
+        ("王：Hey hey ho ho", 2),
+        ("靖：All yours baby", 2),
+        // 下面 5 条同样来自第十一轮的全库 diff:它们在**第十轮**就已经被吃掉了
+        // (单字说话人标签 + 干净短语,当时的 must-keep 样本没覆盖到这个形态),
+        // 靠"标签至少两个汉字"这道护栏救回来。一并钉住。
+        ("方：开个玩笑", 2), ("宏：盖世英雄到来", 2), ("王：Oh yeah", 2),
+        ("华：喔 喔", 1), ("张：回到拉萨", 1),
+    ]
+    for (line, seen) in mustKeep {
+        expectEqual(verdict(line), false, "语料回归(必须留下, 语料 \(seen) 次): \(line)")
+    }
+
+    // ② 必须删掉 —— 各家族的真实署名行(第二列是它属于哪一类,方便日后定位是哪条规则退化了)
+    let mustDrop: [(String, String)] = [
+        ("词：方大同", "中文单字标签"),
+        ("曲：陶喆", "中文单字标签"),
+        ("作曲 : 方大同", "半角冒号 + 空格"),
+        ("编曲：陶喆", "中文双字标签"),
+        ("制作人：赵雷/喜子/姜北生", "一个角色多个人"),
+        ("钢琴：柳森", "乐器(第十轮补)"),
+        ("箱琴：赵雷/喜子", "乐器(第十轮补)"),
+        ("笛子：祝子", "乐器(第十轮补)"),
+        ("童声：朵朵/天天", "乐器(第十轮补)"),
+        ("弦乐：亚洲爱乐国际乐团", "团体名"),
+        ("和声：朱奇迹/赵雷/旭东", "多人"),
+        ("鼓：贝贝", "单字乐器"),
+        ("BASS：张岭", "拉丁标签 + 全角冒号"),
+        ("制作人 Producer：陶喆 David Tao", "双语标签"),
+        ("曲 Composer：陶喆 David Tao", "双语标签(汉字头是单字)"),
+        ("混音工程师 Mixing Engineer：Mick Guzauski", "双语组合词"),
+        ("母带后期处理工程师 : Dave Collins", "长组合词 + 半角冒号"),
+        ("制作协力 Production Assistant：陈震豪 Evan Chen", "双语组合词"),
+        ("OP：月球唱片Retro Records CO LTD.", "版权归属"),
+        ("SP：SMAP(BEIJING) CO.,LTD.", "版权归属"),
+        ("Written by：Prince", "英文 by 写法"),
+        ("Produced by：Sebastien Najand", "英文 by 写法"),
+        ("Mixed by：Riot Games", "英文 by 写法"),
+        ("Guitar：秋山浩徳", "拉丁角色名 + 日文人名"),
+        ("未经著作权人许可不得翻录翻唱或使用", "版权声明(无冒号)"),
+        ("版权声明：未经著作权人书面许可，任何人不得以任何方式使用（包括翻唱、翻录等）", "版权声明(带冒号)"),
+        // ↓ 2026-08-20 第十一轮:上一轮拿全库语料统计出来的**仍然漏网**的 56 行,按家族收干净
+        ("P - Line: 2016 北京享耳音乐文化有限公司Sure Recordings Culture Co., Ltd", "℗/© 版权行"),
+        ("C - Line: 2016 北京享耳音乐文化有限公司Sure Recordings Culture Co., Ltd", "℗/© 版权行"),
+        ("Protools编辑：Derrick Sepnio/Edward Chan/Kelvin Au/King Kong/Tsam Chan/Nick Wong", "标签混拉丁字母"),
+        ("副唱：Bekuh BOOM", "表外角色 + 英文名"),
+        ("竖琴：Michael Maganuco", "表外乐器 + 英文名"),
+        ("长号：Matt Roberts", "表外乐器 + 英文名"),
+        ("键盘乐器 DX7 and synths：Jeff Babko", "双语标签带型号"),
+        ("键盘乐器 Keyboards (Piano and synth) by：吴庆隆 Goh Kheng Long", "双语标签带括号和 by"),
+        ("中音萨克斯/次中音萨克斯/上低音萨克斯：孟庆泽", "一人身兼多职的长标签"),
+        ("合作艺人：(G)I-DLE/Bea Miller/Wolftyla", "表外角色 + 多个英文名"),
+        ("主唱：SOYEON of (G)I-DLE/MIYEON of (G)I-DLE/Bea Miller/Wolftyla", "表外角色 + 超长名单"),
+        ("Additional Vocal Production by：Oscar Free", "英文角色短语 + by"),
+    ]
+    for (line, family) in mustDrop {
+        expectEqual(verdict(line), true, "语料回归(必须删掉, \(family)): \(line)")
+    }
+
+    // ③ 抬头行单独测:它只在**第一行**生效,而且要求同时含曲名和歌手名
+    let headerDoc = ["成都 - 赵雷"] + fillers
+    expectEqual(E.creditLineDropDecisions(headerDoc, trackTitle: "成都", trackArtist: "赵雷").first,
+                true, "语料回归: 抬头行「曲名 - 歌手」在第一行被删")
+    let notHeaderDoc = fillers + ["成都 - 赵雷"]
+    expectEqual(E.creditLineDropDecisions(notHeaderDoc, trackTitle: "成都", trackArtist: "赵雷").last,
+                false, "语料回归: 同样的字样出现在中间不当抬头(多半是真歌词)")
+
+    // ④ 永不删空:整份都长成署名的极端输入,一行都不许删(宁可漏治,不可整片空白)
+    let allCredits = ["词：某某", "曲：某某", "编曲：某某", "制作人：某某"]
+    expectEqual(E.creditLineDropDecisions(allCredits).contains(true), false,
+                "语料回归: 整份都是署名时一行都不删(兜底闸门)")
 }
 
 if failures == 0 {

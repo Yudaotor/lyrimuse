@@ -112,14 +112,18 @@ public enum Romanizer {
     /// 拼法是"标注段用标注的假名、空档处保留原字":「明日の」里 明日 换成 あした、の 原样
     /// 留着 → あしたの,再整体音译成罗马字。纯假名走 ICU 的 toLatin 是确定的、无歧义的
     /// (汉字才有拼音那个坑,见 romanize 的注释),所以这一步安全。
+    /// `unitsHint`:调用方已物化好的整行 UTF-16 数组。japaneseSegments 对一行的每个 token
+    /// 都要调进来,原来每个 token 各自 `Array(text.utf16)` 重新物化整行(2026-08-20 性能
+    /// 审计,只在带假名标注的酷狗日文歌上生效)。不传时自己物化,行为不变。
     static func annotatedReading(
-        in text: String, utf16Start: Int, utf16Length: Int, marks: [KanaAnnotation.Mark]
+        in text: String, utf16Start: Int, utf16Length: Int, marks: [KanaAnnotation.Mark],
+        unitsHint: [UTF16.CodeUnit]? = nil
     ) -> String? {
         let end = utf16Start + utf16Length
         let hits = marks.filter { $0.utf16Start < end && $0.utf16End > utf16Start }
             .sorted { $0.utf16Start < $1.utf16Start }
         guard !hits.isEmpty else { return nil }
-        let units = Array(text.utf16)
+        let units = unitsHint ?? Array(text.utf16)
         guard end <= units.count else { return nil }
         var kana = ""
         var cursor = utf16Start
@@ -150,6 +154,24 @@ public enum Romanizer {
         mergeSokuon(pieces).joined(separator: " ")
     }
 
+    /// 从一份已分好词的片段直接派生整行读音 —— 语义等价于 `japaneseReading(text)`
+    /// (两条管线的片段级优先级一致:particleLatin > 假名标注 > 分词器转写 > 原文,
+    /// 尾部同走 mergeSokuon+join),给 LyricsSyncEngine 复用 segmentsCache 用:同一行
+    /// 的整行读音和逐词分组共用**同一次** CFStringTokenizer,不再各分一遍(2026-08-20
+    /// 性能审计)。返回 nil 的口径也对齐 romanize:片段为空(=分不出词)或读音跟原文
+    /// 一模一样(没有信息增量)都算"没有读音",调用方照 romanize 的原语义退 ICU 音译。
+    public static func readingFromSegments(
+        _ segs: [JapaneseSegment], original text: String
+    ) -> String? {
+        guard !segs.isEmpty else { return nil }
+        let joined = joinLatin(segs.map(\.latin))
+        // 刻意允许返回空串(整行只有促音「っ」这类病态行,归并后读音为空):旧路径
+        // romanize(japanese:true) 对它返回 "" 而不落 ICU —— 落 ICU 会产出字面垃圾
+        // "~tsu" 被展示出来。只有"读音跟原文一模一样"才算没有信息增量、交还 ICU 路径。
+        guard joined != text else { return nil }
+        return joined
+    }
+
     public static func japaneseSegments(
         _ text: String, marks: [KanaAnnotation.Mark] = []
     ) -> [JapaneseSegment] {
@@ -157,6 +179,9 @@ public enum Romanizer {
         let range = CFRangeMake(0, CFStringGetLength(cf))
         let tokenizer = CFStringTokenizerCreate(
             nil, cf, range, kCFStringTokenizerUnitWordBoundary, japaneseLocale)
+        // 整行 UTF-16 只物化一次,供 annotatedReading 的每个 token 共用(没有标注时它
+        // 用不到,不白建)。
+        let units: [UTF16.CodeUnit]? = marks.isEmpty ? nil : Array(text.utf16)
         var out: [JapaneseSegment] = []
         while CFStringTokenizerAdvanceToNextToken(tokenizer) != [] {
             let r = CFStringTokenizerGetCurrentTokenRange(tokenizer)
@@ -165,7 +190,8 @@ public enum Romanizer {
                 tokenizer, kCFStringTokenizerAttributeLatinTranscription) as? String ?? ""
             // 歌词源自带的假名标注优先于分词器 —— 多音词该念哪个,标注说了算。
             if let annotated = annotatedReading(
-                in: text, utf16Start: r.location, utf16Length: r.length, marks: marks)
+                in: text, utf16Start: r.location, utf16Length: r.length, marks: marks,
+                unitsHint: units)
             {
                 latin = annotated
             }

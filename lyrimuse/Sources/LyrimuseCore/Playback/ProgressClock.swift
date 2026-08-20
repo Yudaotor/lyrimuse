@@ -22,21 +22,9 @@ public struct ProgressAnchor {
         self.fresh = fresh
     }
 
-    // 只在"当前正在播放、且有时长/进度可外推"时才构造锚点,否则(暂停/无数据)返回 nil。
-    public static func from(_ state: NowPlayingState, fetchedAt: Date) -> ProgressAnchor? {
-        guard state.playing == true,
-              let duration = state.durationMs, duration > 0,
-              let progressMs = state.progressMs else { return nil }
-        return ProgressAnchor(
-            durationMs: duration,
-            progressMs: progressMs,
-            rate: state.rate ?? 1,
-            progressTs: state.progressTs,
-            baseAgeMs: state.ageMs,
-            fetchedAt: fetchedAt,
-            fresh: state.source == "kv"
-        )
-    }
+    // from(_ state: NowPlayingState, fetchedAt:) 工厂方法已删(2026-08-20):它与
+    // NowPlayingState/NowPlayingClient 是远程模式的遗留,全仓零调用方,一起清掉。
+    // 本地模式的锚点由 LocalPlaybackSource 直接用 memberwise init 构造。
 
     public func extrapolatedPositionMs(now: Date = Date()) -> Int {
         let ageMs: Double

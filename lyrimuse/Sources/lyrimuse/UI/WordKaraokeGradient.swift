@@ -46,4 +46,49 @@ enum WordKaraokeGradient {
         }
         return LinearGradient(stops: stops, startPoint: .leading, endPoint: .trailing)
     }
+
+    /// 一种前景色对应的**跨帧稳定**渐变素材(2026-08-20 性能审计)。
+    ///
+    /// 问题形状:三个整行 TimelineView 展示面(悬浮窗/灵动岛/菜单栏面板)每帧对每个词
+    /// 现造 stops 数组 + LinearGradient(+AnyShapeStyle 装箱),而一行里任一时刻只有 ~1 个
+    /// 词的过渡带真跟 [0,1] 相交 —— 其余词全是纯色态,输出与上一帧逐位相同。LinearGradient/
+    /// AnyShapeStyle 含堆引用,SwiftUI 对 foregroundStyle 的判等走 memcmp,每帧新分配的
+    /// 实例必不相等,~95% 的纯色词因此每帧被迫重走样式失效。这里把 dim(全未唱)/full
+    /// (全唱过)两个纯色渐变按 fg 缓存成**同一份实例**跨帧复用,引用相等直接走快路径;
+    /// 只有真在过渡带里的那个词才现算渐变。
+    struct Palette {
+        let fg: Color
+        let dimStyle: AnyShapeStyle
+        let fullStyle: AnyShapeStyle
+
+        init(fg: Color) {
+            self.fg = fg
+            let dim = fg.opacity(WordKaraokeGradient.dimOpacity)
+            dimStyle = AnyShapeStyle(LinearGradient(
+                colors: [dim, dim], startPoint: .leading, endPoint: .trailing))
+            fullStyle = AnyShapeStyle(LinearGradient(
+                colors: [fg, fg], startPoint: .leading, endPoint: .trailing))
+        }
+
+        /// 纯色两端复用缓存实例,过渡带现算 —— 判据与 KaraokeFill.stops 的快路径完全一致。
+        func style(left: Double, right: Double) -> AnyShapeStyle {
+            if right <= 0 { return dimStyle }
+            if left >= 1 { return fullStyle }
+            return AnyShapeStyle(WordKaraokeGradient.gradient(fg: fg, left: left, right: right))
+        }
+    }
+
+    // 小容量线性缓存,按 fg 相等命中(Color 不 Hashable,条目也就三五个:悬浮窗前景色、
+    // 其 75% 罗马音色、灵动岛 accent、面板 .primary)。主线程专用(所有调用点都在
+    // 视图 body/TimelineView 闭包里)。
+    @MainActor private static var paletteCache: [Palette] = []
+
+    @MainActor static func palette(fg: Color) -> Palette {
+        if let hit = paletteCache.first(where: { $0.fg == fg }) { return hit }
+        let p = Palette(fg: fg)
+        paletteCache.append(p)
+        // 换色场景(封面取色逐曲变)会让旧条目失去引用价值,别让它无限长。
+        if paletteCache.count > 8 { paletteCache.removeFirst() }
+        return p
+    }
 }

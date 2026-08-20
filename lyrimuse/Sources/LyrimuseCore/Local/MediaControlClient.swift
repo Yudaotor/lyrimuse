@@ -109,6 +109,9 @@ public enum MediaControlClient {
         let elapsedTimeNow: Double?
         let playing: Bool?
         let playbackRate: Double?
+        /// elapsedTime 是"在这一刻"的位置。ISO8601(带 Z),用来在 elapsedTimeNow 不可信时
+        /// 自己补算 —— 见 livePositionSeconds。
+        let timestamp: String?
     }
 
     // media-control 不是单个独立二进制——可执行文件靠相对路径找同一次 Homebrew 安装
@@ -296,7 +299,12 @@ public enum MediaControlClient {
     // AppleScript 的 track.artworks() 去拿封面(那条路要把二进制图片数据想办法序列化过
     // JSON,明显更麻烦,而且完全没必要碰这个项目里唯一对播放位置精度敏感、已经调好的
     // AppleScript 集成)。
-    public static func fetchArtwork(player: PlaybackPlayer = PlaybackPlayerPreference.current) -> (data: Data, mimeType: String)? {
+    // trackKey:这份封面在 get --now 载荷里对应的曲目标识(跟 MediaControlSnapshot.trackKey
+    // 同一套推导)。切歌瞬间系统侧 Now Playing 可能还没更新完,这一把抓到的会是**上一首**的
+    // 完整条目(旧标题+旧封面)——载荷自己的 artist/title 是识别这种情况的唯一依据,调用方
+    // 拿它跟当前曲目比对,不匹配就当"还没更新好"重试,而不是把上一首的封面错挂到新歌上
+    // (2026-08-17 用户报网易云云盘歌"沿用上一首的封面"后补上)。
+    public static func fetchArtwork(player: PlaybackPlayer = PlaybackPlayerPreference.current) -> (data: Data, mimeType: String, trackKey: String)? {
         guard let binaryPath = binaryPath() else { return nil }
         // 这次不传 --no-artwork——就是为了要这份数据,所以超时给得比状态查询宽:
         // 封面 base64 有几百 KB。
@@ -311,16 +319,20 @@ public enum MediaControlClient {
               let imageData = Data(base64Encoded: base64) else {
             return nil
         }
-        return (imageData, raw.artworkMimeType ?? "image/jpeg")
+        return (imageData, raw.artworkMimeType ?? "image/jpeg",
+                MediaControlSnapshot.trackKey(artist: raw.artist, title: raw.title))
     }
 
     // 只取封面相关的这几个字段——跟 RawPayload 是两份独立的 Decodable(理由跟文件顶部
     // RawPayload 的注释一致:各自只镜像自己关心的那一部分 media-control 输出,不是
-    // 简单的一比一字段映射)。
+    // 简单的一比一字段映射)。title/artist 不是多余:它们标识这份封面属于哪首歌,见
+    // fetchArtwork 返回值 trackKey 的注释。
     private struct ArtworkPayload: Decodable {
         let bundleIdentifier: String?
         let artworkData: String?
         let artworkMimeType: String?
+        let title: String?
+        let artist: String?
     }
 
     // .auto 没有唯一固定的目标 bundle id,核对规则跟 fetchAutoDetectedSnapshot 一致:
@@ -334,116 +346,75 @@ public enum MediaControlClient {
         return bundleID == player.bundleIdentifier
     }
 
-    /// 直接问 Spotify 自己要当前播放位置(秒)。读不到返回 nil,调用方沿用 media-control
-    /// 的读数 —— 那个虽然慢 1.6 秒,但总比没有强。
+
+    /// 从 media-control 的原始字段推出"当前播放位置"(秒)。纯函数,selftest 直接覆盖。
     ///
-    /// ⚠️ 必须先 `.running()` 再碰任何属性:JXA 里 `Application('Spotify')` 本身不会拉起
-    /// App,但访问它的属性就会 —— 没开 Spotify 的用户会被莫名其妙启动一个播放器。守卫写法
-    /// 跟本文件 Apple Music 那段脚本一致。
-    private static func spotifyPlayerPosition() -> Double? {
-        let script = """
-        (() => {
-            const Spotify = Application('Spotify');
-            try {
-                if (!Spotify.running()) return JSON.stringify(null);
-            } catch (e) {
-                return JSON.stringify(null);
-            }
-            try {
-                const state = Spotify.playerState();
-                if (state !== 'playing' && state !== 'paused') return JSON.stringify(null);
-                return JSON.stringify({ position: Spotify.playerPosition() });
-            } catch (e) {
-                return JSON.stringify(null);
-            }
-        })()
-        """
-        guard let r = ProcessRunner.run(
-            "/usr/bin/osascript", ["-l", "JavaScript", "-e", script],
-            timeout: MusicPlaybackController.appleScriptTimeout),
-            r.succeeded
-        else { return nil }
-        struct Payload: Decodable { let position: Double }
-        guard let p = try? JSONDecoder().decode(Payload.self, from: r.stdout), p.position >= 0 else {
-            return nil
-        }
-        return p.position
+    /// ## 为什么不能直接用 elapsedTimeNow
+    ///
+    /// media-control 的 `--now` 是它自己按 `elapsedTime + (now − timestamp) × playbackRate`
+    /// 外推出来的。**rate 缺失(或为 0)时这个增量就是 0**,elapsedTimeNow 退化成
+    /// elapsedTime 本身、一动不动。
+    ///
+    /// 2026-08-18 实测坐实这不是理论风险:Spotify **暂停后恢复播放**,上报里的
+    /// playbackRate 变成 null 且再也不回来,于是
+    ///
+    /// ```
+    /// 16:55:27  playing=true rate=None elapsed=178.604 elapsedNow=178.60   (Spotify 真实 178.72)
+    /// 16:55:42  playing=true rate=None elapsed=178.604 elapsedNow=178.60   (Spotify 真实 194.64)
+    /// ```
+    ///
+    /// —— 15 秒里 elapsedNow 纹丝不动。这个恒定值喂进 LocalPlaybackSource 的伺服
+    /// (cleanExtrapolated 档、门槛 0.4s)之后,每一拍 reported−predicted 都在扩大、每一拍
+    /// 都触发 snap 把位置往回拽,最终把位置钉死在 178.6 —— 用户看到的就是"暂停再播放之后
+    /// 歌词卡在一句话上不往下走",而逐字填色还会轻微倒退(被拽回去的指纹)。
+    ///
+    /// ## 修法
+    ///
+    /// rate 缺失时按 1 补,自己套同一个公式算。实测这条路径误差是 **+0.35s 的恒定偏移**
+    /// (自算 179.07/182.23/…/194.99 对 Spotify 178.72/181.88/…/194.64),常量偏移正是
+    /// 伺服和 lyricsOffset 本来就能吸收的东西,比冻死好得多。
+    ///
+    /// rate 正常(>0)时仍然优先用 elapsedTimeNow:实测它误差 +0.03s,比自算的 +0.72s 更准
+    /// (media-control 内部用的时钟基准比我们从 ISO8601 字符串反解的更精确)。
+    public nonisolated static func livePositionSeconds(
+        playing: Bool?, elapsedTime: Double?, elapsedTimeNow: Double?,
+        playbackRate: Double?, timestamp: Date?, now: Date
+    ) -> Double? {
+        // 暂停态不外推:elapsedTimeNow 在暂停期间**照样**按暂停前的 rate 继续涨(拿到过
+        // 远超曲长的荒谬值),因为暂停本身没让 media-control 的外推基准归零。暂停时正确的
+        // 位置就是原始 elapsedTime("冻结在这一刻")。
+        guard playing == true else { return elapsedTime }
+        // rate 正常时信 media-control 自己的外推(更准)。
+        if let rate = playbackRate, rate > 0, let now = elapsedTimeNow { return now }
+        // rate 缺失/为 0:elapsedTimeNow 已经退化成 elapsedTime,自己按 rate=1 补算。
+        guard let base = elapsedTime, let timestamp else { return elapsedTimeNow ?? elapsedTime }
+        let aged = now.timeIntervalSince(timestamp)
+        // 负数(时钟回拨/时区解析出错)时不倒推,老老实实用基准值。
+        return aged > 0 ? base + aged : base
     }
 
-    /// 最近一次成功问到的 Spotify 真值位置(见下面 truth 覆盖那段的失败退路)。
-    /// 轮询线程读写,跟 Apple Music 缓存一样用锁,不引入 Swift Concurrency。
-    private static let spotifyTruthLock = NSLock()
-    private static var lastSpotifyTruth: (position: Double, at: Date, title: String?, playing: Bool)?
+    private static let timestampFormatter: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f
+    }()
 
-    // ---- Spotify「gapless 预载」回扣(2026-08-17,用户现行目击 + 双源分叉实锤) ----
-    //
-    // 自动切歌(gapless)时,Spotify 的 playerPosition 时钟**先于真实出声启动**:实测
-    // 《星座》开播那一刻 playerPosition 已经是 1.84s,而 MediaRemote 的新锚点
-    // (elapsedTimeNow)刚从 0.69s 走起 —— 分叉 1.15s,并且**整首歌恒定不收敛**(锚点
-    // 中途被 MediaRemote 重打成 playerPosition 的值,分叉才消失,但那是"两个都偏快"了)。
-    // 用户耳朵是最终裁决:App 忠实跟着 playerPosition(端到端量到 ±0.3s)时,用户听到
-    // "歌词整首偏快约一秒"。手动重播同一首歌没有预载,两源对齐,一切正常 —— 症状齐了。
-    //
-    // 08-14 的"elapsedTimeNow 恒定落后 playerPosition 1.64s"当时被解读为"MediaRemote
-    // 锚点滞后",于是全面改信 playerPosition。现在看,那次量的很可能正是一首 gapless
-    // 预载的歌 —— 方向解读反了:是 playerPosition 超前于声音,不是锚点落后于声音。
-    // (08-14 之前用户报"偏慢"、之后报"偏快",两头的反馈拼起来正好夹住真值。)
-    //
-    // 修法:在**曲目开头**量一次两源分叉 delta = playerPosition − elapsedTimeNow,这一整
-    // 首歌都把 playerPosition 回扣 delta。平滑度仍然来自 playerPosition(逐次读数稳定),
-    // 只是基准挪回"真实出声"那一刻。手动播放/广告后的歌分叉 ≈0,回扣自然为 0,行为不变。
-    //
-    // 取样守卫(全部实测形状,不是拍脑袋):
-    //  * 只在 truth < 15s(曲目刚开始)时取样 —— App 中途启动看到的老歌不回扣;
-    //  * delta 限制在 0.4...5s —— 换歌瞬间 MediaRemote 锚点还挂着**上一首**时,
-    //    elapsedTimeNow 是个大值(实测 30.3 vs 0.02),delta 为负,天然被排除;
-    //    小于 0.4 属于两源正常噪声,不值得动;
-    //  * delta 只会从 0 升级、不反复改 —— 锚点中途重打(收敛到 playerPosition)之后
-    //    分叉消失,不能把已经量到的回扣清掉;
-    //  * 曲内 seek(相邻两次真值差 >5s)把回扣清零 —— seek 是用户动作,音频从目标位置
-    //    真实重放,playerPosition 从此就是真值。
-    private static let spotifyRebaseLock = NSLock()
-    private static var spotifyRebase: (trackKey: String, deltaSecs: Double, lastTruth: Double)?
+    /// media-control 的 timestamp 实测形如 "2026-08-18T08:51:46Z"(可能带小数秒),
+    /// 两种都要能解 —— 带小数秒的 formatOptions 解不了不带的,所以退一次。
+    /// 无小数秒的兜底 formatter。static 一份(2026-08-20 性能审计:原来每次 fallback 都
+    /// 现建一个 ISO8601DateFormatter,而实测 media-control 的时间戳**恒无小数秒**——带
+    /// 小数秒的那份 static 永远解不中,等于每 2s 轮询各白建一个 formatter)。顺序也换成
+    /// 先试无小数秒(实测的常态),miss 再试带小数秒的,别让常态路径恒走两次解析。
+    private nonisolated static let plainTimestampFormatter: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime]
+        return f
+    }()
 
-    /// 取样判定(见 spotifyRebase 的守卫清单)。纯函数,selftest 直接覆盖。
-    /// 返回 nil = 这一拍不构成可信的预载分叉。
-    public static func spotifyPreloadDelta(truth: Double, freshAnchorNow: Double?) -> Double? {
-        guard let anchorNow = freshAnchorNow, truth < 15 else { return nil }
-        let delta = truth - anchorNow
-        return (0.4...5.0).contains(delta) ? delta : nil
-    }
-
-    /// 见 spotifyRebase。返回回扣后的位置;并把这次真值记下来供 seek 检测。
-    private static func rebasedSpotifyPosition(
-        trackKey: String, truth: Double, freshAnchorNow: Double?
-    ) -> Double {
-        spotifyRebaseLock.lock()
-        defer { spotifyRebaseLock.unlock() }
-        var state = spotifyRebase
-        if state?.trackKey != trackKey {
-            state = (trackKey, 0, truth)
-            if let delta = spotifyPreloadDelta(truth: truth, freshAnchorNow: freshAnchorNow) {
-                state!.deltaSecs = delta
-                logger.notice("spotify gapless rebase: playerPosition leads fresh anchor by \(delta, format: .fixed(precision: 2))s at track start; subtracting for this track (\(trackKey, privacy: .public))")
-            }
-        } else if var s = state {
-            if abs(truth - s.lastTruth) > 5 {
-                // 曲内 seek:音频已在目标位置真实重放,预载偏差不复存在。
-                if s.deltaSecs != 0 {
-                    logger.notice("spotify gapless rebase cleared by in-track seek (\(trackKey, privacy: .public))")
-                }
-                s.deltaSecs = 0
-            } else if s.deltaSecs == 0,
-                      let delta = spotifyPreloadDelta(truth: truth, freshAnchorNow: freshAnchorNow) {
-                // 第一拍恰好落在"锚点还挂着上一首"的窗口里没量到,开头几拍内补量。
-                s.deltaSecs = delta
-                logger.notice("spotify gapless rebase (late capture): \(delta, format: .fixed(precision: 2))s (\(trackKey, privacy: .public))")
-            }
-            s.lastTruth = truth
-            state = s
-        }
-        spotifyRebase = state
-        return max(0, truth - (state?.deltaSecs ?? 0))
+    public nonisolated static func parseTimestamp(_ s: String?) -> Date? {
+        guard let s else { return nil }
+        if let d = plainTimestampFormatter.date(from: s) { return d }
+        return timestampFormatter.date(from: s)
     }
 
     private static func fetchRawMediaControlSnapshot() -> (MediaControlSnapshot, String)? {
@@ -470,66 +441,18 @@ public enum MediaControlClient {
         // 时钟外推(拿到过远超歌曲时长本身的荒谬值),因为暂停这件事本身并没有让
         // media-control 内部的外推基准归零。暂停时真正正确的位置就是原始
         // elapsedTime(暂停就是"冻结在这一刻",不需要外推)。
-        var elapsed = (raw.playing == true) ? (raw.elapsedTimeNow ?? raw.elapsedTime) : raw.elapsedTime
-        // Spotify 的位置改问它自己 —— MediaRemote 给 Spotify 的锚点本身就滞后,
-        // 2026-08-14 实测 elapsedTimeNow 恒定落后 Spotify 报的 player position
-        // 1.64 秒(波动仅 ±0.02,是固定偏移不是抖动,所以提高轮询频率没用)。
-        // Apple Music 不受影响是因为它走 AppleScript 直接问 Music.app。
-        //
-        // ⚠️ 2026-08-17 排查"自动切歌后歌词整首偏快"补充的机制认识(实测坐实):Spotify 的
-        // MediaRemote 原始 elapsedTime **恒为 0**——锚点每首歌只打一次(在曲目开始那一刻),
-        // elapsedTimeNow 就是"距锚点时间戳过了多久"。所以它的准确度完全取决于那一下
-        // 时间戳打得准不准,而这是**会话间漂移**的:08-14 量到恒定偏慢 1.64s,08-17 又量到
-        // 偏快 ~0.1s。锚点一旦打早(比如 gapless 预载时刻早于真实出声),elapsedTimeNow 就
-        // **整首歌**偏快,而且这首歌内不会自愈(锚点不重打);手动重播这首歌会重新打锚,
-        // 立刻恢复正常——跟用户报的症状逐条吻合。真值覆盖在,这个漂移就露不出来;
-        // 真值覆盖一旦失败,退回的就是这个不可信的值。所以:
-        //   1. 失败重试一次(osascript 单次 ~100ms,偶发的 Apple Event 抖动值得一次重试);
-        //   2. 两次都失败要**出声**(logger.error),不再静默退回;
-        //   3. 真值跟 elapsedTimeNow 偏差超过 1 秒时记录下来 —— 那正是"锚点打歪了"的
-        //      直接证据,下次用户报"偏快"时 `log show` 一眼可见。
-        //
-        // ⚠️ 采集器(collector/system.go)里有一份**同样的**修正。两边各自独立读
-        // media-control(采集器喂 ListenBrainz/网页,这里喂桌面悬浮窗),改一边只修一半 ——
-        // 上一轮就是只改了采集器,用户反馈"还是有延迟",因为悬浮窗走的正是这条路。
-        if bundleID == PlaybackPlayer.spotify.bundleIdentifier {
-            var truth = spotifyPlayerPosition()
-            if truth == nil { truth = spotifyPlayerPosition() } // 失败重试一次,见上
-            if let truth {
-                if let extrapolated = elapsed, abs(extrapolated - truth) > 1.0 {
-                    // .notice(默认档)才会持久化进日志存储;.info 默认只进内存缓冲,
-                    // 事后 `log show` 查不到 —— 这条就是留给事后查的。
-                    logger.notice("spotify anchor skew: elapsedTimeNow=\(extrapolated, format: .fixed(precision: 2)) vs playerPosition=\(truth, format: .fixed(precision: 2)) (\(extrapolated - truth > 0 ? "ahead" : "behind", privacy: .public) by \(abs(extrapolated - truth), format: .fixed(precision: 2))s)")
-                }
-                // gapless 预载回扣:playerPosition 可能整首歌超前于真实出声,见 spotifyRebase。
-                // freshAnchorNow 只在播放中给 —— 暂停时 elapsedTimeNow 还在走(文件顶部注释
-                // 那个实测),不能拿来量分叉。
-                elapsed = rebasedSpotifyPosition(
-                    trackKey: "\(raw.artist ?? "")|\(raw.title ?? "")",
-                    truth: truth,
-                    freshAnchorNow: raw.playing == true ? raw.elapsedTimeNow : nil)
-                spotifyTruthLock.lock()
-                lastSpotifyTruth = (elapsed ?? truth, Date(), raw.title, raw.playing == true)
-                spotifyTruthLock.unlock()
-            } else {
-                // 两次都失败:优先按"最近一次成功的真值 + 经过的墙钟时间"外推,而不是退回
-                // elapsedTimeNow —— 后者带着这首歌的锚点误差,一口吞进去就是一次跳变
-                // (LocalPlaybackSource 把 Spotify 当精确源,0.15s 门槛,咬得很紧)。
-                // 缓存只在"同一首歌 + 10 秒内"时可信:换歌了缓存是上一首的位置,过期了
-                // 外推误差也攒大了,都退回 elapsedTimeNow 并大声记日志。
-                spotifyTruthLock.lock()
-                let cached = lastSpotifyTruth
-                spotifyTruthLock.unlock()
-                if let cached, cached.title == raw.title,
-                   case let age = Date().timeIntervalSince(cached.at), age >= 0, age < 10 {
-                    // 播放中按走过的时间外推;暂停时位置冻结,原样用。
-                    elapsed = cached.playing ? cached.position + age : cached.position
-                    logger.notice("spotify playerPosition read failed twice; using cached truth \(cached.position, format: .fixed(precision: 2)) + \(age, format: .fixed(precision: 2))s")
-                } else {
-                    logger.error("spotify playerPosition read failed twice with no usable cache; falling back to elapsedTimeNow=\(elapsed ?? -1, format: .fixed(precision: 2)) which may carry a per-track anchor skew")
-                }
-            }
-        }
+        let elapsed = Self.livePositionSeconds(
+            playing: raw.playing, elapsedTime: raw.elapsedTime, elapsedTimeNow: raw.elapsedTimeNow,
+            playbackRate: raw.playbackRate, timestamp: Self.parseTimestamp(raw.timestamp), now: Date())
+        // ⚠️ 这里**不再**对 Spotify 做 JXA 直查真值的覆盖(2026-08-18 用户拍板移除)。
+        // 那条路 08-14 上线、连修三轮(1.64s 恒定偏移、gapless 预载回扣、真值缓存外推)
+        // 仍"经常进度不准"——osascript 往返本身有抖动,Spotify 的 playerPosition 在
+        // gapless/预载场景又有自己的时钟分叉,两个噪声源叠着调,不如放弃。现在 Spotify
+        // 跟 QQ 音乐/网易云走完全相同的通用路径:media-control 外推读数 + LocalPlaybackSource
+        // 的 EMA 平滑/高门槛伺服(alpha 0.3、1.0s)。代价是 MediaRemote 锚点自带的
+        // 固定滞后(~1.6s 量级、会话间漂移)只能靠平滑吸收,换来的是行为可预期、无子进程
+        // 依赖。若要重走"问播放器拿真值"的路线,先读 git 历史里被删掉的
+        // spotifyPlayerPosition/spotifyRebase 全套注释再动手。
         let snapshot = MediaControlSnapshot(
             title: raw.title,
             artist: raw.artist,

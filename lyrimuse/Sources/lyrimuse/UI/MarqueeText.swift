@@ -16,6 +16,13 @@ let marqueeHoldDuration: Double = 1.1
 
 struct MarqueeText<Content: View>: View {
     let id: AnyHashable
+    /// **没溢出时**内容靠容器哪一边。溢出时一律 .leading,不受这个参数影响 —— 滚动是
+    /// "从头开始往左推",内容比容器宽时靠右摆等于一上来就把开头几个字挂在容器外面。
+    ///
+    /// 2026-08-20 加。灵动岛右耳的歌手名原来是 `Spacer() + Text`(靠右贴着音浪),换成
+    /// 跑马灯之后 GeometryReader 会占满可用宽度,短名字(绝大多数情况)就从右边跳到了
+    /// 左边、跟音浪之间空出一大段。默认值保持 .leading,已有调用点行为不变。
+    var restingAlignment: Alignment = .leading
     @ViewBuilder let content: () -> Content
 
     @State private var contentWidth: CGFloat = 0
@@ -65,8 +72,9 @@ struct MarqueeText<Content: View>: View {
                 // 那样 restart() 里那次"关掉动画的归零"就等于没发生。
                 .animation(nil, value: generation)
                 // 垂直居中——GeometryReader 默认把内容摆在自己左上角,不居中的话文字
-                // 会紧贴着这一整行的顶边。
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+                // 会紧贴着这一整行的顶边。横向见 restingAlignment。
+                .frame(maxWidth: .infinity, maxHeight: .infinity,
+                       alignment: isOverflowing ? .leading : restingAlignment)
                 // 容器变宽变窄(用户拖灵动岛/悬浮窗的宽度滑块)同样要重算,不然原来溢出的
                 // 内容拖宽之后还在滚、或者反过来拖窄了不滚。
                 .onChange(of: outerProxy.size.width) { _, w in
@@ -81,6 +89,14 @@ struct MarqueeText<Content: View>: View {
         .clipped()
         .onDisappear { scrollTask?.cancel() }
     }
+
+    /// 内容比容器宽出多少(负数=装得下)。
+    private var overflow: CGFloat { contentWidth - containerWidth }
+
+    /// 值得滚吗。4pt 的死区是留给测量误差的:差这么一点点滚起来只是抖一下,不如不动。
+    /// restart() 的启动判据和上面的对齐判据必须是同一份 —— 两处各写一遍就会出现
+    /// "在滚但按没溢出对齐"这种自相矛盾的状态。
+    private var isOverflowing: Bool { containerWidth > 0 && overflow > 4 }
 
     private func apply(content: CGFloat, container: CGFloat) {
         guard content != contentWidth || container != containerWidth else { return }
@@ -112,8 +128,8 @@ struct MarqueeText<Content: View>: View {
             offset = 0
             generation &+= 1
         }
-        let distance = contentWidth - containerWidth
-        guard distance > 4, containerWidth > 0 else { return }
+        guard isOverflowing else { return }
+        let distance = overflow
         let travelDuration = Double(distance) / marqueePixelsPerSecond
         scrollTask = Task { @MainActor in
             while !Task.isCancelled {

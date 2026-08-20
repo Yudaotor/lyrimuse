@@ -46,7 +46,13 @@ struct EqualizerBars: View {
                 }
             }
             .frame(width: Self.width, height: Self.maxHeight, alignment: .bottom)
-            .animation(.easeInOut(duration: Self.interval), value: tick)
+            // 补间时长只取间隔的一半(2026-08-19 性能审计):原来 duration == interval,
+            // 上一次高度补间刚结束下一 tick 就到,首尾相接零空档 —— 播放期间这 4 根
+            // 胶囊的尺寸动画 100% 时间在跑,把整个灵动岛窗口钉死在持续动画/持续合成
+            // 状态(body 重算确实被 minimumInterval 压到了 3.6Hz,但合成频率仍是满帧)。
+            // 减半后每个周期有一半时间完全静止,合成循环能间歇 idle;观感仍是跳动的条,
+            // 只是每跳快一点、停一下 —— 反而更像"拍点"。
+            .animation(.easeInOut(duration: Self.interval * 0.5), value: tick)
             .animation(.easeInOut(duration: Self.interval), value: isPlaying)
         }
         .frame(width: Self.width, height: Self.maxHeight)

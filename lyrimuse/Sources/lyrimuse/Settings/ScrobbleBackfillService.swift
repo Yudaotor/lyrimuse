@@ -4,18 +4,24 @@ import OSLog
 
 private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "backfill")
 
-/// 「补提交历史收听」这张卡的状态机 —— 驱动 collector 的 `backfill-lastfm` 子命令。
+/// 「待补提交的历史收听」那一行的状态机 —— 驱动 collector 的 `backfill-lastfm` 子命令。
+/// (2026-08-18 之前界面上确实有个标题叫「补提交历史收听」的独立行,已合并掉,见下。)
 ///
-/// ## 界面上有两种形态
+/// ## 界面上只有一行
 ///
-/// - **没连账号时**:Last.fm 卡片里列出本地已经记下来的歌(折叠,展开才是清单)。光说
-///   "会记在本地"是空头承诺 —— 列出来用户才能核对到底记了什么。
-/// - **已连账号时**:只有真有待补内容时才露出"补提交"那一行;没有就完全不显示。这是个
-///   一辈子可能只点一次的操作,常驻一行"没有待补的收听"纯属占地方。
+/// Last.fm 卡片里那一行:条数 +(展开后的)清单 + 「补提交」按钮,三者合在一处。只要本地
+/// 攒了东西它就出现,**不分连没连账号**;按钮只在连着账号时给(没连提交不到任何地方去),
+/// 那时它退化成纯粹的"本地攒了些什么"清单。光说"会记在本地"是空头承诺 —— 列出来用户
+/// 才能核对到底记了什么。
 ///
-/// 两种形态都坚持**必须人工点一下**、不做连接成功自动弹窗:回填往用户的 Last.fm 账号写
-/// 数据,而 scrobble 落进去之后基本删不掉(只能在网页上一条条手删)。自动弹窗容易被顺手
-/// 点掉,而顺手的代价是永久污染自己的听歌历史。
+/// 两次演化都记一下,免得被拆回去:2026-08-18 之前清单的出现条件写的是"没连账号",漏掉了
+/// "已连接、但 Scrobble 开关关着"这条同样在攒歌的路径(数据层看的是
+/// features.LastfmMirrorScrobble,不是连没连);放宽之后它一度跟「补提交历史收听」并列成
+/// 两行、说的是同一个数字,当天合并成一行。
+///
+/// 坚持**必须人工点一下**、不做连接成功自动弹窗:回填往用户的 Last.fm 账号写数据,而
+/// scrobble 落进去之后基本删不掉(只能在网页上一条条手删)。自动弹窗容易被顺手点掉,
+/// 而顺手的代价是永久污染自己的听歌历史。
 ///
 /// ## 两次调用,一次是空跑
 ///
@@ -59,6 +65,18 @@ final class ScrobbleBackfillService: ObservableObject {
         Bundle.main.bundleURL.appendingPathComponent("Contents/Resources/collector").path
     }
 
+    /// collector 那份本地收听日志被写过的时刻。nil = 文件还不存在(从来没攒过)。
+    ///
+    /// 给界面当**廉价的变更信号**用:待补数只能靠 dry-run 算出来,而那要 spawn 一个子进程,
+    /// 按秒轮询它是不像话的;stat 一个文件几乎免费,所以页面开着时盯 mtime,只在真的又攒进
+    /// 一首那一刻才重跑 dry-run。路径跟 collector 那边 initListenLog 传进去的一致
+    /// (main.go:178,配置目录 + clientName + "-listens.jsonl")。
+    static func listenLogModifiedAt() -> Date? {
+        let url = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".config/lyrimuse/lyrimuse-listens.jsonl")
+        return (try? FileManager.default.attributesOfItem(atPath: url.path))?[.modificationDate] as? Date
+    }
+
     /// 刷新"有多少条可补"。空跑,不发任何网络请求,可以随便调。
     func refreshPending() {
         guard !busy else { return }
@@ -84,6 +102,15 @@ final class ScrobbleBackfillService: ObservableObject {
                 ignored=\(out?.ignored ?? -1, privacy: .public) \
                 quarantined=\(out?.quarantined ?? -1, privacy: .public)
                 """)
+            // 真的有条目补进了 Last.fm → 统计页手里的缓存全过时了(2026-08-18 用户报
+            // "补提交后最近记录没刷新"):最近记录/今天/近7天立刻强刷,不等 2 分钟 TTL
+            // 或下次换歌;热力图的增量水位拨回回填窗口起点,不拨的话补进历史那些天会被
+            // 增量同步永远漏掉(见 rewindDailySyncForBackfill 注释)。accepted == 0
+            // (全被忽略/隔离)时 Last.fm 侧什么都没变,不白发请求。
+            if let out, out.accepted > 0 {
+                LastfmStatsService.shared.refreshBaseline(force: true)
+                LastfmStatsService.shared.rewindDailySyncForBackfill()
+            }
         }
     }
 

@@ -55,23 +55,33 @@ public enum LyricDuet {
         split(text, allowEmptyRest: true)
     }
 
-    private static func split(_ text: String, allowEmptyRest: Bool) -> (marker: String?, text: String) {
-        let trimmed = text.trimmingCharacters(in: .whitespaces)
-        // 长的先试,否则 "男" 会先命中 "男声" 的前半截,剩下一个孤零零的 "声" 留在正文里。
+    /// 预生成的「前缀 → 标记」表(标记 × 全/半角冒号,按标记长度降序):split() 对每行调用,
+    /// 原来每次都重新拼接+排序这张表(2026-08-20 性能审计,一次 load 全曲 ~200 次纯重复)。
+    /// 长的先试的语义保留 —— 否则 "男" 会先命中 "男声" 的前半截,剩下孤零零的 "声" 在正文里。
+    private static let orderedMarkerPrefixes: [(prefix: String, marker: String)] = {
+        var out: [(String, String)] = []
         for marker in (groupMarkers + soloMarkers).sorted(by: { $0.count > $1.count }) {
             for colon in ["：", ":"] {
-                let prefix = marker + colon
-                guard trimmed.hasPrefix(prefix) else { continue }
-                let rest = String(trimmed.dropFirst(prefix.count))
-                    .trimmingCharacters(in: .whitespaces)
-                if rest.isEmpty && !allowEmptyRest { return (nil, text) }
-                return (marker, rest)
+                out.append((marker + colon, marker))
             }
+        }
+        return out
+    }()
+
+    private static func split(_ text: String, allowEmptyRest: Bool) -> (marker: String?, text: String) {
+        let trimmed = text.trimmingCharacters(in: .whitespaces)
+        for (prefix, marker) in orderedMarkerPrefixes {
+            guard trimmed.hasPrefix(prefix) else { continue }
+            let rest = String(trimmed.dropFirst(prefix.count))
+                .trimmingCharacters(in: .whitespaces)
+            if rest.isEmpty && !allowEmptyRest { return (nil, text) }
+            return (marker, rest)
         }
         return (nil, text)
     }
 
-    private static func isGroup(_ marker: String) -> Bool { groupMarkers.contains(marker) }
+    private static let groupMarkerSet = Set(groupMarkers)
+    private static func isGroup(_ marker: String) -> Bool { groupMarkerSet.contains(marker) }
 
     /// 给整首歌逐行定边。
     ///

@@ -1,4 +1,5 @@
 import AppKit
+import CoreImage
 import Foundation
 import Combine
 import LyrimuseCore
@@ -33,8 +34,17 @@ final class PlaybackCoordinator: ObservableObject {
     // (media-control stream / Spotify 分布式通知)把感知延迟降到亚秒,取消路径才会真正生效
     // —— 到那时不必调这里的 2 秒,它本来就是按"用户感知得到的一口气"定的。
     @Published private(set) var isPlayingSmoothed: Bool = false
-    // 2 秒:够盖住换歌间隙和常见的 seek/缓冲,又不至于让"真暂停"迟钝到让人以为没生效。
-    private static let stopGracePeriod: TimeInterval = 2
+    // 0.5 秒。2026-08-17 从 2 秒压到这里(用户反馈"暂停后缩回去太慢,一暂停就该缩")。
+    //
+    // 2 秒当初是按"盖住换歌间隙和常见的 seek/缓冲"取的,但收起动画本身还有 0.45 秒,
+    // 加起来接近 2.5 秒 —— 用户按下暂停之后要盯着一个没在动的灵动岛等两秒多,明显像
+    // 卡住了。0.5 秒仍然能吸收掉亚秒级的抖动(播放器切歌那一下的空档),而人对这个量级
+    // 的延迟基本无感,观感就是"一暂停就收"。
+    //
+    // ⚠️ 别直接归零:归零意味着 isPlayingNow 任何一次瞬时 false 都会立刻触发收起/隐藏,
+    // 换歌、seek、缓冲时就会看到灵动岛缩回去再弹出来。真要再快,先确认那些抖动在你的
+    // 播放器上不存在。
+    private static let stopGracePeriod: TimeInterval = 0.5
     private var stopGraceWork: DispatchWorkItem?
     @Published private(set) var currentLine: SyncedLyricLine?
     @Published private(set) var nextLineText: String?
@@ -51,6 +61,12 @@ final class PlaybackCoordinator: ObservableObject {
     // "歌词窗口"(完整可滚动歌词列表)用,见 LocalPlaybackSource 同名属性的注释。
     @Published private(set) var currentLineIndex: Int?
     @Published private(set) var allLines: [LyricsWindowLine] = []
+    // 歌词间奏点(歌词窗口的「•••」),见 LocalPlaybackSource 同名属性的注释。
+    @Published private(set) var lyricsGapMarkers: [LyricsGapMarker] = []
+    @Published private(set) var currentGapIndex: Int?
+    // 当前行逐字填色是否已定格(悬浮歌词的 TimelineView 停表条件),见 LocalPlaybackSource
+    // 同名属性的注释。
+    @Published private(set) var currentLineFillSettled: Bool = true
     // "歌词窗口"背景用的模糊封面图,见 LocalPlaybackSource 同名属性的注释。
     @Published private(set) var artworkData: Data?
     // 上面那份原始字节解码出来的位图,只在封面数据真的变了的时候解一次。
@@ -64,21 +80,61 @@ final class PlaybackCoordinator: ObservableObject {
     // 放在这一层而不是 LocalPlaybackSource:跟 artworkAccentColor 同一个分层理由——
     // LyrimuseCore 那一层不引入 AppKit/SwiftUI,类型转换只能在这一层做。
     @Published private(set) var artworkImage: NSImage?
-    // 从封面算出来的动态高亮色(已经从 LocalPlaybackSource 转发的十六进制字符串转成
-    // Color——LyrimuseCore 那一层不引入 SwiftUI,转换只能在这一层做,见
-    // LocalPlaybackSource.artworkAccentHex 的注释)。供"跟随封面"外观模式用,见
-    // displayForegroundColor。
+    /// 上面那张的**高清替代**,只在系统给的那份实在太小时才有值(否则 nil,消费方退回
+    /// artworkImage)。给歌词窗口那张最大 460pt(Retina 下 920px)的封面卡用。
+    ///
+    /// 为什么需要:系统 Now Playing 的封面分辨率由播放器决定,而网易云 macOS 客户端只给
+    /// **100×100**(2026-08-17 实测:7.3KB 的 JPEG,`get` 和 `get --now`、自带和 homebrew
+    /// 两份 media-control 四种组合全都是这个尺寸,media-control 也没有"要大图"的参数)。
+    /// 放到 920px 去显示等于放大 9 倍,就是用户报的"封面非常模糊"。
+    ///
+    /// 替代图来自 collector 已经存在缓存里的 `cover_url`(网易云/Apple/QQ 解析歌词时顺手
+    /// 记下的),实测同两首歌能拿到 495×495 和 800×800。
+    ///
+    /// ⚠️ 只在系统那份 < lowResArtworkThreshold 时才替。系统那份才是"正在播的这一项"的
+    /// 权威图;缓存里那张是按歌手/歌名/专辑匹配出来的,同名不同版本时可能是另一张封面。
+    /// 播放器本来就给大图时(Apple Music)完全不碰这条路。
+    @Published private(set) var highResArtworkImage: NSImage?
+    /// 灵动岛 coverArt 背景用的**预烘焙模糊图**(2026-08-19 性能审计落地)。视图层原来
+    /// 直接挂 `.blur(radius: 20)` —— 那是合成期实时滤镜,而灵动岛窗口播放期间因逐字填色/
+    /// 音浪/跑马灯几乎永动,GPU 每次重合成都对同一张封面重算同一个模糊结果,封面每首歌
+    /// 才换一次。改成封面到货时离线烘焙一次(见 rebakeBlurredArtwork),视图直接铺静态图。
+    /// 源取 highResArtworkImage ?? artworkImage,跟视图层原来的取图口径一致;nil = 还没
+    /// 烘出来/没有封面,视图回落深色渐变。
+    @Published private(set) var blurredArtworkImage: NSImage?
+    /// 「歌词窗口」背景用的第二份烘焙(同一次审计,同一根因):那扇窗原来挂的是
+    /// `.saturation(1.5).blur(radius: 72)` 活滤镜,画布 ~2040px、播放期因逐字填色/滚动
+    /// 几乎每帧重合成。参数跟灵动岛那份对不上(那份等效 20pt 半径、无饱和度处理),
+    /// 所以单独烘:720px 宽、saturation 1.5、sigma ≈ 51 —— 烘焙图被 scaledToFill 拉到
+    /// 典型 ~2040px 画布时模糊量等比放大,视觉等价于原来的 72pt 活滤镜(窗口宽度偏离
+    /// 典型值时略糊/略锐,背景本来就是重糊,可接受)。压黑 22% 仍留在视图层。
+    @Published private(set) var windowBlurredArtworkImage: NSImage?
+    /// 上面那张高清替代的均值色(十六进制,格式同 LocalPlaybackSource.artworkAverageHex)。
+    /// 有高清图时两个"跟随封面"强调色必须按它算:系统那份可能是网易云的灰底音符占位图,
+    /// 界面上实际显示的是高清替代,强调色还按占位图算就是一团跟画面无关的灰。nil = 没有
+    /// 高清替代,强调色回落到系统那份的均值(见下面两条管线的 highResHex ?? systemHex)。
+    @Published private(set) var highResAverageHex: String?
+    // 从封面均值算出来的动态高亮色,**桌面悬浮歌词专用**(已经从 LocalPlaybackSource
+    // 转发的十六进制字符串转成 Color——LyrimuseCore 那一层不引入 SwiftUI,转换只能在
+    // 这一层做,见 LocalPlaybackSource.artworkAverageHex 的注释)。供"跟随封面"外观模式
+    // 用,见 displayForegroundColor。
+    //
+    // 这一侧的背景是壁纸/任意窗口,不能假定深浅,所以判据是"跟描边色够对比"而不是
+    // "够亮"(见 LocalPlaybackSource.accentAgainstStroke);描边关着时才退回"够亮"。
+    // ⚠️ 因此它依赖描边那两项设置——改描边颜色/开关会连带重算这个色,这是有意的。
     @Published private(set) var artworkAccentColor: Color?
-    // 同一个封面强调色的"深色背景"变体——在上面那个的基础上再保一道感知亮度下限
-    // (见 LocalPlaybackSource.accentForDarkBackdrop 的注释:HSB 地板拦不住饱和冷色,
-    // 纯蓝 luma 只有 0.07,贴在灵动岛的深色背景上区分度差)。只给灵动岛消费;桌面悬浮
-    // 歌词的壁纸可能是浅色,继续用上面未提亮的 artworkAccentColor。
+    // 同一份封面均值的"深色背景"变体:先过 HSB 亮度地板(brightenedAccent),再补一道
+    // 感知亮度下限(见 LocalPlaybackSource.accentForDarkBackdrop 的注释:HSB 地板拦不住
+    // 饱和冷色,纯蓝 luma 只有 0.07,贴在灵动岛的深色背景上区分度差)。只给灵动岛消费 ——
+    // 它的三种风格底色全是暗的,越亮越好;桌面那一侧正好相反,见上面。
     @Published private(set) var notchAccentColor: Color?
     // 当前曲目已生效的歌词时间轴校正值,见 LocalPlaybackSource 同名属性的注释——直接
     // 转发权威值,不在这一层另外拼 key 重新查一遍(2026-08-03 之前这里是一个计算属性,
     // 自己拼了个 "\(artist)|\(title)" 去查 LyricsOffsetStore,跟实际存储用的
     // key(LyricsOffsetStore.trackKey,多一段内容指纹)对不上,查出来的永远是 0)。
     @Published private(set) var currentLyricsOffsetMs: Int = 0
+    // 上面那个总偏移里只属于当前这首歌的那一半,见 LocalPlaybackSource 同名属性的注释。
+    @Published private(set) var trackLyricsOffsetMs: Int = 0
     // "歌词窗口"进度条的暂停态冻结位置/时长,见 LocalPlaybackSource 同名属性的注释。
     @Published private(set) var pausedPositionMs: Int?
     @Published private(set) var currentDurationMs: Int?
@@ -136,6 +192,56 @@ final class PlaybackCoordinator: ObservableObject {
         return "unknown (\(id))"
     }
 
+    // 菜单栏面板「正在播放」卡右上角的来源角标(2026-08-19):此刻实际被认下来的播放器
+    // 的人话名。认不出来/还没有任何快照给 nil,角标整个不显示 —— 别摆一个「未知」。
+    // 不用单独发布:播放器切换必然伴随曲目/播放态变化,面板反正会跟着那些 @Published 重渲染。
+    var resolvedPlayerDisplayName: String? {
+        guard let id = LocalPlaybackSource.shared.lastResolvedBundleID else { return nil }
+        return PlaybackPlayer.allCases.first { $0 != .auto && $0.bundleIdentifier == id }?.displayName
+    }
+
+    /// 上面那个的图标版(2026-08-19 用户拍板改图标):取**已安装播放器的真实 App 图标**
+    /// (NSWorkspace 按 bundleID 找到 .app 再取图标)——最好认,还不用自带任何商标素材。
+    /// 面板 body 会随歌词行高频重渲染,而 NSWorkspace 两连查不便宜,按 bundleID 缓存;
+    /// App 图标在进程生命周期内不变,缓存不需要失效。没装(理论上不可能:它正在放)/
+    /// 认不出来给 nil,角标不显示。
+    private var playerIconCache: [String: NSImage] = [:]
+    var resolvedPlayerIcon: NSImage? {
+        guard let id = LocalPlaybackSource.shared.lastResolvedBundleID else { return nil }
+        if let cached = playerIconCache[id] { return cached }
+        guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: id) else { return nil }
+        let icon = NSWorkspace.shared.icon(forFile: url.path)
+        playerIconCache[id] = icon
+        return icon
+    }
+
+    /// 点面板右上角的来源角标(2026-08-19 用户要求):把正在播放的那个播放器唤到前台。
+    ///
+    /// ⚠️ 第一版用 NSRunningApplication.activate()(在跑就激活、没在跑才 openApplication),
+    /// 用户实测点了毫无反应:macOS 14 起的**协作式激活**会把「后台 accessory App 请求
+    /// 激活别的 App」静默拒绝 —— 不报错、不打日志、就是不动。NSWorkspace.openApplication
+    /// 是系统认可的路径:对已在跑的 App 等价于"带到前台"(open -b 同款行为),没在跑就
+    /// 顺便启动,一条路两件事。
+    func openResolvedPlayerApp() {
+        guard let id = LocalPlaybackSource.shared.lastResolvedBundleID else {
+            logger.notice("openResolvedPlayerApp: no resolved player")
+            return
+        }
+        guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: id) else {
+            logger.notice("openResolvedPlayerApp: no app for \(id, privacy: .public)")
+            return
+        }
+        let configuration = NSWorkspace.OpenConfiguration()
+        configuration.activates = true
+        NSWorkspace.shared.openApplication(at: url, configuration: configuration) { _, error in
+            if let error {
+                logger.notice("openResolvedPlayerApp: \(id, privacy: .public) failed: \(String(describing: error), privacy: .public)")
+            } else {
+                logger.notice("openResolvedPlayerApp: activated \(id, privacy: .public)")
+            }
+        }
+    }
+
     // 单曲歌词时间轴微调——转发给 LocalPlaybackSource,UI 层(菜单/快捷键)只认
     // PlaybackCoordinator,不用关心底下具体是谁在跑。
     /// 返回累加后的新偏移(毫秒),给快捷键那边闪一条提示用;不关心结果的调用方直接忽略。
@@ -153,6 +259,17 @@ final class PlaybackCoordinator: ObservableObject {
     // 这首歌,立刻就能看到效果,不用等下次换歌。
     func refreshLyricsOffsetForCurrentTrack() {
         LocalPlaybackSource.shared.refreshOffsetFromStore()
+    }
+
+    // 全局歌词时间轴基准 —— 对所有歌生效,跟上面那个单曲微调叠加(见
+    // LyricsOffsetStore.globalOffsetMs)。设置页那个控件走这里。
+    var globalLyricsOffsetMs: Int { LyricsOffsetStore.shared.globalOffsetMs }
+
+    /// 写走这里而不是直接写 store:改完要让**正在播的这首**立刻用上新值,那一步在
+    /// LocalPlaybackSource 里(见 setGlobalLyricsOffset)。读则直接观察
+    /// LyricsOffsetStore.shared —— 它是 ObservableObject,没在放歌时也能刷新界面。
+    func setGlobalLyricsOffset(_ ms: Int) {
+        LocalPlaybackSource.shared.setGlobalLyricsOffset(ms)
     }
 
     // 「喜欢」(Apple Music 的 favorited)只有 Apple Music 有:QQ 音乐/网易云音乐没有
@@ -244,6 +361,41 @@ final class PlaybackCoordinator: ObservableObject {
         return player
     }
 
+    /// 换歌时的三项后台回读(喜欢/播放模式/音量)——合并成**一次** osascript 子进程
+    /// (2026-08-20 性能审计:原来三个独立 fork + 三次 TCC 检查,喜欢那项的属性候选循环
+    /// 最坏还要两趟)。三个 seq 守卫原样保留:期间用户点了喜欢/切了模式/拖了音量,对应
+    /// 项的回读结果单独作废,不牵连另两项。
+    func refreshExtendedControls() {
+        let includeFavorited = isAppleMusicPlayingNow
+            && MusicAutomationPermission.check(askIfNeeded: false).isAuthorized
+        guard let player = extendedControlPlayerForBackgroundRefresh() else {
+            if isFavorited != nil { isFavorited = nil }
+            if playbackMode != nil { playbackMode = nil }
+            if soundVolume != nil { soundVolume = nil }
+            return
+        }
+        let favSeq = favoritedActionSeq
+        let modeSeq = playbackModeActionSeq
+        let volSeq = volumeActionSeq
+        Task.detached(priority: .utility) {
+            let state = MusicPlaybackController.extendedControlsState(
+                for: player, includeFavorited: includeFavorited && player == .appleMusic)
+            await MainActor.run { [weak self] in
+                guard let self else { return }
+                if self.favoritedActionSeq == favSeq {
+                    let value = includeFavorited ? state.favorited : nil
+                    if self.isFavorited != value { self.isFavorited = value }
+                }
+                if self.playbackModeActionSeq == modeSeq, self.playbackMode != state.mode {
+                    self.playbackMode = state.mode
+                }
+                if self.volumeActionSeq == volSeq, self.soundVolume != state.volume {
+                    self.soundVolume = state.volume
+                }
+            }
+        }
+    }
+
     /// 重新读一次当前曲目的"喜欢"状态。当前在播的不是 Apple Music、或自动化权限还没拿到时
     /// 置 nil(按钮据此整个不显示)。
     ///
@@ -310,7 +462,12 @@ final class PlaybackCoordinator: ObservableObject {
         guard let player = extendedControlPlayer else { return }
         let target = min(100, max(0, value))
         // 先乐观更新:滑杆必须跟着手指走,不能等 osascript 往返(~100ms)才动。
-        soundVolume = target
+        // 相等守卫:@Published 是 willSet 语义,赋相同的值照样广播 objectWillChange。拖动中
+        // 相邻鼠标事件量化到同一个整数(慢速微调/抖动/拖出 0~100 两端被 clamp)时,这些纯
+        // 重复赋值会白白打醒 coordinator 的全部观察面 —— 下面的合流机制只保护 osascript
+        // 那一半,@Published 这一半靠这里。三条 refresh 回读路径早就有同款守卫,唯独这条
+        // 用户手指驱动的最高频写入漏了。
+        if soundVolume != target { soundVolume = target }
         volumeActionSeq &+= 1
         // 真正的写入排队,不是每个鼠标事件都起一个子进程 —— 见 pendingVolumeTarget 的注释。
         pendingVolumeTarget = target
@@ -369,7 +526,26 @@ final class PlaybackCoordinator: ObservableObject {
         // (见 MusicPlaybackMode.next(allowsRepeatOne:))。
         let target = (playbackMode ?? .list)
             .next(allowsRepeatOne: MusicPlaybackController.supportsRepeatOne(player))
-        playbackMode = target
+        setPlaybackMode(target)
+    }
+
+    /// 当前播放器够不够得到「单曲循环」档(Spotify 的脚本接口只有 repeating 布尔,够不到)。
+    /// 歌词窗口的「循环」按钮读不到这一档时整颗不显示,别摆一个落不了地的开关。
+    var playbackModeSupportsRepeatOne: Bool {
+        guard let player = extendedControlPlayer else { return false }
+        return MusicPlaybackController.supportsRepeatOne(player)
+    }
+
+    /// 直接设到某一档(2026-08-19 歌词窗口按 Apple Music 排布把三态拆成「随机/循环」两颗
+    /// 互斥按钮,要的是"点谁设谁"而不是循环下一档)。乐观更新/权限检查/写成功不回读,
+    /// 跟 cyclePlaybackMode 完全同一套取舍。
+    func setPlaybackMode(_ target: MusicPlaybackController.MusicPlaybackMode) {
+        guard let player = extendedControlPlayer else { return }
+        // 播放器够不到的档位静默降为列表,别让乐观更新画出一个永远写不进去的图标。
+        let resolved: MusicPlaybackController.MusicPlaybackMode =
+            (target == .repeatOne && !MusicPlaybackController.supportsRepeatOne(player))
+            ? .list : target
+        playbackMode = resolved
         playbackModeActionSeq &+= 1
         Task.detached(priority: .userInitiated) {
             if player == .appleMusic,
@@ -377,7 +553,7 @@ final class PlaybackCoordinator: ObservableObject {
                 await MainActor.run { [weak self] in self?.refreshPlaybackMode() }
                 return
             }
-            let wrote = MusicPlaybackController.setPlaybackMode(target, for: player)
+            let wrote = MusicPlaybackController.setPlaybackMode(resolved, for: player)
             // 写成功就**不回读**:Music.app 的 getter 滞后于 setter(见 setPlaybackMode
             // 的注释),这时候读回来的是旧值,只会把刚画对的图标又抹掉。只有写没被接受时
             // 才需要问一遍真实状态,好把乐观更新纠回去。
@@ -411,6 +587,9 @@ final class PlaybackCoordinator: ObservableObject {
         guard !started else { return }
         started = true
         let s = LocalPlaybackSource.shared
+        // 桌面悬浮歌词那份封面取色要跟着描边设置一起算(见下面 artworkAccentColor 那条
+        // 订阅),所以这里也要拿到 AppSettings。
+        let settings = AppSettings.shared
         s.start()
         cancellables = [
             s.$title.assign(to: \.title, on: self),
@@ -420,9 +599,9 @@ final class PlaybackCoordinator: ObservableObject {
                 .map { "\($0)|\($1)" }
                 .removeDuplicates()
                 .sink { [weak self] _ in
-                    self?.refreshFavorited()
-                    self?.refreshPlaybackMode()
-                    self?.refreshVolume()
+                    // 三项合并成一次 osascript 回读(2026-08-20 性能审计),见
+                    // refreshExtendedControls;单项 refresh 保留给写后回读/视图 onAppear。
+                    self?.refreshExtendedControls()
                 },
             s.$artist.assign(to: \.artist, on: self),
             s.$album.assign(to: \.album, on: self),
@@ -441,6 +620,9 @@ final class PlaybackCoordinator: ObservableObject {
             s.$isCurrentTrackAdBreak.assign(to: \.isCurrentTrackAdBreak, on: self),
             s.$currentLineIndex.assign(to: \.currentLineIndex, on: self),
             s.$allLines.assign(to: \.allLines, on: self),
+            s.$lyricsGapMarkers.assign(to: \.lyricsGapMarkers, on: self),
+            s.$currentGapIndex.assign(to: \.currentGapIndex, on: self),
+            s.$currentLineFillSettled.assign(to: \.currentLineFillSettled, on: self),
             s.$artworkData.assign(to: \.artworkData, on: self),
             // 解码在这里做一次,消费方(灵动岛顶行小封面/模糊背景)直接拿 NSImage,不在
             // view body 里反复解同一张图,见 artworkImage 声明处的注释。@Published 的
@@ -449,27 +631,209 @@ final class PlaybackCoordinator: ObservableObject {
             s.$artworkData
                 .map { $0.flatMap { NSImage(data: $0) } }
                 .assign(to: \.artworkImage, on: self),
-            // 十六进制字符串在这一层转成 Color——LocalPlaybackSource 所在的
-            // LyrimuseCore 不引入 SwiftUI,见该属性定义处的注释。
-            s.$artworkAccentHex
-                .map { $0.map { Color(hexWithAlpha: $0, fallback: .white) } }
-                .assign(to: \.artworkAccentColor, on: self),
-            // 深色背景变体在同一条源上再派生一份——luma 提亮是纯数学,放在这一层跟
-            // hex→Color 的转换一起做,每首歌只算一次,不在灵动岛 body 里反复算。
-            s.$artworkAccentHex
-                .map { hex -> Color? in
-                    guard let hex, let ns = NSColor(hexStringWithAlpha: hex) else { return nil }
-                    // NSColor(hexStringWithAlpha:) 用 srgbRed 构造,分量可以直接读,
-                    // 不需要再过一次 usingColorSpace。
-                    let lifted = LocalPlaybackSource.accentForDarkBackdrop(
-                        r: ns.redComponent, g: ns.greenComponent, b: ns.blueComponent)
+            // 高清封面:换歌或换封面之后重找一次,见 highResArtworkImage 的注释。
+            //
+            // ⚠️ debounce 不是为了省请求,是为了**避开 @Published 的 willSet 时机**:
+            // 这四个属性各自的订阅回调都跑在"值还没落库"的那一刻,回调里读 self 的其它
+            // 属性可能读到上一首的值(这个项目为这个时机踩过两次坑)。等 300ms 之后所有
+            // willSet 都已落定,refreshHighResCover() 再去读一份自洽的快照。
+            // 这 300ms 用户看不见 —— 系统那张小图在第一帧就已经显示了。
+            Publishers.CombineLatest4(s.$title, s.$artist, s.$album, s.$artworkData)
+                .debounce(for: .milliseconds(300), scheduler: RunLoop.main)
+                .sink { [weak self] _, _, _, _ in self?.refreshHighResCover() },
+            // 两个消费面各自从**同一份原始均值**派生自己那一版,处理都是纯数学,放在这一层
+            // 跟 hex→Color 的转换一起做,每首歌只算一次,不在两边的 body 里反复算。
+            // (十六进制字符串必须在这一层才转得成 Color——LocalPlaybackSource 所在的
+            // LyrimuseCore 不引入 SwiftUI,见该属性定义处的注释。)
+            //
+            // 桌面悬浮歌词:背景未知,判据是"跟描边色够对比",所以要跟着描边设置一起算。
+            // 两条管线都优先吃高清替代的均值(highResHex ?? systemHex),理由见
+            // highResAverageHex 的注释:强调色要跟实际显示的那张图对上。
+            Publishers.CombineLatest4(
+                s.$artworkAverageHex,
+                $highResAverageHex,
+                settings.$textStrokeEnabled,
+                settings.$textStrokeColorHex
+            )
+            .map { systemHex, highResHex, strokeOn, strokeHex -> Color? in
+                guard let hex = highResHex ?? systemHex,
+                      let ns = NSColor(hexStringWithAlpha: hex) else { return nil }
+                // NSColor(hexStringWithAlpha:) 用 srgbRed 构造,分量可以直接读,
+                // 不需要再过一次 usingColorSpace。
+                let (r, g, b) = (ns.redComponent, ns.greenComponent, ns.blueComponent)
+                // 描边关着(或者淡到基本不存在)时字直接压在未知背景上,没有"跟谁对比"
+                // 可言 —— 退回那条保证够亮的老规则,这也是这个场景 2026-08-17 之前的行为。
+                // 0.5 这个门槛是取舍不是测量:半透明描边的实际观感取决于它背后是什么,
+                // 而那正是这一层不知道的东西。
+                guard strokeOn,
+                      let stroke = NSColor(hexStringWithAlpha: strokeHex),
+                      stroke.alphaComponent >= 0.5
+                else {
+                    let lifted = LocalPlaybackSource.brightenedAccent(r: r, g: g, b: b)
                     return Color(.sRGB, red: lifted.r, green: lifted.g, blue: lifted.b)
                 }
+                let fitted = LocalPlaybackSource.accentAgainstStroke(
+                    r: r, g: g, b: b,
+                    strokeR: stroke.redComponent,
+                    strokeG: stroke.greenComponent,
+                    strokeB: stroke.blueComponent)
+                return Color(.sRGB, red: fitted.r, green: fitted.g, blue: fitted.b)
+            }
+            // 输出去重(2026-08-20):四个输入里任何一个抖动(高清 hex 的 nil 重赋值是
+            // 常客)都会重发,而算出来的颜色多数时候没变——Color? 是 Equatable,挡在
+            // assign 前面,别让 coordinator 的全部观察面白挨一轮 objectWillChange。
+            .removeDuplicates()
+            .assign(to: \.artworkAccentColor, on: self),
+            // 灵动岛:背景永远深色,判据是"够亮"——先过 HSB 亮度地板,再补一道感知亮度
+            // 下限(饱和冷色 HSB 地板拦不住,见 accentForDarkBackdrop)。
+            Publishers.CombineLatest(s.$artworkAverageHex, $highResAverageHex)
+                .map { systemHex, highResHex -> Color? in
+                    guard let hex = highResHex ?? systemHex,
+                          let ns = NSColor(hexStringWithAlpha: hex) else { return nil }
+                    let base = LocalPlaybackSource.brightenedAccent(
+                        r: ns.redComponent, g: ns.greenComponent, b: ns.blueComponent)
+                    let lifted = LocalPlaybackSource.accentForDarkBackdrop(
+                        r: base.r, g: base.g, b: base.b)
+                    return Color(.sRGB, red: lifted.r, green: lifted.g, blue: lifted.b)
+                }
+                .removeDuplicates() // 同 artworkAccentColor 那条的理由
                 .assign(to: \.notchAccentColor, on: self),
             s.$currentLyricsOffsetMs.assign(to: \.currentLyricsOffsetMs, on: self),
+            s.$trackLyricsOffsetMs.assign(to: \.trackLyricsOffsetMs, on: self),
             s.$pausedPositionMs.assign(to: \.pausedPositionMs, on: self),
             s.$currentDurationMs.assign(to: \.currentDurationMs, on: self),
+            // 灵动岛 coverArt 背景的模糊图,封面(系统份或高清替代)一变就重烘一次 ——
+            // 见 blurredArtworkImage 声明处的注释。sink 用参数值,不回读属性(willSet 时机)。
+            Publishers.CombineLatest($artworkImage, $highResArtworkImage)
+                .map { system, high in high ?? system }
+                // 恒等去重(2026-08-20 性能审计):高清封面刷新路径会对 highResArtworkImage
+                // 反复赋 nil(每次换歌 1-2 次),CombineLatest 每次都发——源图引用没变时
+                // 重烘两份 720px 高斯模糊纯属白做,还白触发下游 0.5s 交叉淡入。
+                .removeDuplicates(by: { $0 === $1 })
+                .sink { [weak self] source in self?.rebakeBlurredArtwork(from: source) },
         ]
+    }
+
+    private var blurBakeTask: Task<Void, Never>?
+    // CIContext 创建不便宜且线程安全,进程级复用一个(只在下面的后台烘焙里用)。
+    nonisolated(unsafe) private static let blurBakeContext = CIContext()
+
+    private func rebakeBlurredArtwork(from source: NSImage?) {
+        blurBakeTask?.cancel()
+        blurBakeTask = nil
+        guard let source,
+              let cg = source.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
+            if blurredArtworkImage != nil { blurredArtworkImage = nil }
+            if windowBlurredArtworkImage != nil { windowBlurredArtworkImage = nil }
+            return
+        }
+        blurBakeTask = Task { [weak self] in
+            // CoreImage 渲染放后台,跟 refreshHighResCover 里算均值色同一套写法。
+            // 两份一起烘(灵动岛 + 歌词窗口,参数见各自 @Published 的注释),共享一次
+            // 源图解码;单次烘焙毫秒级,合在一个任务里不值得再拆。
+            let baked = await Task.detached(priority: .utility) {
+                (notch: Self.bakeBackgroundBlur(cgImage: cg, targetWidth: 720, sigma: 40, saturation: nil),
+                 window: Self.bakeBackgroundBlur(cgImage: cg, targetWidth: 720, sigma: 51, saturation: 1.5))
+            }.value
+            guard let self, !Task.isCancelled else { return }
+            if let notch = baked.notch { self.blurredArtworkImage = notch }
+            if let window = baked.window { self.windowBlurredArtworkImage = window }
+        }
+    }
+
+    /// 背景模糊的离线烘焙(2026-08-19 性能审计:替代视图层的合成期活滤镜)。
+    /// 先把源图缩到 targetWidth(模糊本来就抹掉细节,更高分辨率纯属浪费);可选先拉
+    /// 饱和度(歌词窗口要 1.5);clampedToExtent 让边缘像素外延再裁回原框 —— 视图层的
+    /// .blur 会把边缘羽化成半透明,烘焙版边缘实心。
+    nonisolated private static func bakeBackgroundBlur(
+        cgImage: CGImage, targetWidth: CGFloat, sigma: Double, saturation: Double?
+    ) -> NSImage? {
+        var image = CIImage(cgImage: cgImage)
+        let scale = targetWidth / max(1, image.extent.width)
+        image = image.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
+        if let saturation {
+            image = image.applyingFilter("CIColorControls", parameters: [kCIInputSaturationKey: saturation])
+        }
+        let blurred = image.clampedToExtent()
+            .applyingGaussianBlur(sigma: sigma)
+            .cropped(to: image.extent)
+        guard let out = blurBakeContext.createCGImage(blurred, from: blurred.extent) else { return nil }
+        // size 用 pt(像素 /2):这张图是 2x 烘的,视图端 resizable 只关心宽高比,
+        // 给个符合语义的点尺寸即可。
+        return NSImage(cgImage: out, size: NSSize(width: blurred.extent.width / 2,
+                                                  height: blurred.extent.height / 2))
+    }
+
+    /// 系统那份封面的边长低于这个像素数,才去缓存里找高清替代。300 的依据:歌词窗口那张
+    /// 封面卡最大 460pt,Retina 下 920px —— 300px 已经是 3 倍放大、肉眼能看出软,再小就
+    /// 明显糊了;而正常给图的播放器(Apple Music)都远在这条线之上,一次都不会触发。
+    private static let lowResArtworkThreshold = 300
+
+    private var highResCoverTask: Task<Void, Never>?
+
+    /// 给当前曲目找一张比系统那份更大的封面。见 highResArtworkImage 的注释。
+    private func refreshHighResCover() {
+        highResCoverTask?.cancel()
+        highResCoverTask = nil
+        // 刻意重新从数据源读,而不是用订阅回调的参数:那几个值来自 willSet 时机,
+        // 彼此可能不是同一首歌的(见调用点注释)。
+        let s = LocalPlaybackSource.shared
+        let (title, artist, album) = (s.title, s.artist, s.album)
+        // @Published 是 willSet 语义,给已是 nil 的属性再赋 nil 照样广播——四条清空路径
+        // 每次换歌至少走一条,不加闸就是每换歌 1-2 轮白广播,还会穿透下游按 === 去重的
+        // 订阅(2026-08-20 性能审计)。撤掉旧图的语义不变,只是已经空了就别再赋。
+        func clearHighRes() {
+            if highResArtworkImage != nil { highResArtworkImage = nil }
+            if highResAverageHex != nil { highResAverageHex = nil }
+        }
+        guard !title.isEmpty else {
+            clearHighRes()
+            return
+        }
+        let systemPixels = Self.pixelWidth(of: s.artworkData)
+        // 系统那份够大(或者压根没有封面 —— 那时该显示占位音符,不该悄悄换成缓存里
+        // 匹配到的另一张图)就不动。
+        guard systemPixels > 0, systemPixels < Self.lowResArtworkThreshold else {
+            clearHighRes()
+            return
+        }
+        guard let cached = EnrichCacheReader.coverURL(artist: artist, title: title, album: album) else {
+            clearHighRes()
+            return
+        }
+        let url = EnrichCacheReader.nativeSizedCoverURL(cached)
+        // 上一首的高清图必须立刻撤掉:留着的话换歌后到新图下载完之间会显示上一首的封面,
+        // 比"先小图后变清晰"糟得多。均值色跟图同进退。
+        clearHighRes()
+        highResCoverTask = Task { [weak self] in
+            // 走 App 已有的那套内存缓存(同 URL 并发只发一次请求、命中不闪占位符)。
+            // 原图档:这张要给歌词窗口 920pt@2x 的封面卡当高清替代,不能吃缩略降采样。
+            guard let image = await ImageMemoryCache.shared.load(url, variant: .original),
+                  !Task.isCancelled else { return }
+            // 下载期间可能已经换歌了 —— 这张是上一首的,丢掉。
+            guard LocalPlaybackSource.shared.title == title else { return }
+            // 拿回来的还不如系统那份大就不值得换(缓存里可能存着一张同样小的图)。
+            guard Int(image.size.width.rounded()) > systemPixels else { return }
+            // 均值色跟图一起给(理由见 highResAverageHex 的注释)。CIAreaAverage 放到
+            // 后台算,跟 LocalPlaybackSource 取图那条路的做法一致,不挡主线程。
+            var hex: String?
+            if let cg = image.cgImage(forProposedRect: nil, context: nil, hints: nil) {
+                hex = await Task.detached { LocalPlaybackSource.computeAverageHex(cgImage: cg) }.value
+            }
+            guard !Task.isCancelled, LocalPlaybackSource.shared.title == title else { return }
+            self?.highResArtworkImage = image
+            self?.highResAverageHex = hex
+        }
+    }
+
+    /// 封面原始字节的像素宽度。用 CGImageSource 只读图头,不解码整张图。
+    private static func pixelWidth(of data: Data?) -> Int {
+        guard let data,
+              let src = CGImageSourceCreateWithData(data as CFData, nil),
+              let props = CGImageSourceCopyPropertiesAtIndex(src, 0, nil) as? [CFString: Any],
+              let w = props[kCGImagePropertyPixelWidth] as? Int
+        else { return 0 }
+        return w
     }
 
     // 悬浮歌词实际显示用的前景色——"跟随封面"外观模式开着且这首歌已经算出动态高亮色

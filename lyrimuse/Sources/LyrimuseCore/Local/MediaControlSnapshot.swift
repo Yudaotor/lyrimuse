@@ -22,5 +22,12 @@ public struct MediaControlSnapshot: Decodable {
     // 检测),不参与 trackKey/既有逻辑,纯附加信息。
     public let bundleIdentifier: String?
 
-    public var trackKey: String { "\(artist ?? "")|\(title ?? "")" }
+    public var trackKey: String { Self.trackKey(artist: artist, title: title) }
+
+    // 抽成静态函数是给封面取图那条路复用的:fetchArtwork() 的返回里要带上"这份封面
+    // 属于哪首歌"(用 get --now 载荷里自己的 artist/title 算),LocalPlaybackSource
+    // 拿它跟当前曲目的 trackKey 比对,推导方式必须跟这里逐字符一致,不能各写一份。
+    public static func trackKey(artist: String?, title: String?) -> String {
+        "\(artist ?? "")|\(title ?? "")"
+    }
 }

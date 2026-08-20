@@ -69,7 +69,7 @@ extension View {
     /// 行尾控件里的按钮统一套玻璃按钮样式。
     ///
     /// ⚠️ 它是挂在**祖先**上的:调用点自己显式写了 .buttonStyle(.link) 的按钮
-    /// (「将当前配色存为新主题…」「恢复默认外观」这类文字链接)不会被它盖掉——SwiftUI 里
+    /// (「将当前配色存为新主题…」「恢复默认文字与配色」这类文字链接)不会被它盖掉——SwiftUI 里
     /// 离 Button 更近的那个 buttonStyle 胜出,这正是我们想要的:它们本来就该是链接样式。
     @ViewBuilder
     func settingsGlassButtons() -> some View {
@@ -533,6 +533,10 @@ struct SettingsSubRow<Trailing: View>: View {
     var subtitle: String?
     // 滑杆这类需要横向铺开的控件给一个宽度,纯下拉菜单不需要。
     var trailingWidth: CGFloat?
+    /// 标题右边那个「?」气泡(点了/悬停展开一段说明)。跟 SettingsCardHeader 用同一个
+    /// HelpButton —— 需要写一段话而不是一句副标题时用它:副标题是常显的,长文案会把整张卡
+    /// 撑成一堵墙(2026-08-19「宽度模式」那一行就是这么从副标题改过来的)。
+    var help: String?
     @ViewBuilder let trailing: () -> Trailing
 
     // 2026-08-15 重排。原来这一行是"Spacer + 标题 + 控件"整体右对齐、左边什么都没有,
@@ -551,8 +555,11 @@ struct SettingsSubRow<Trailing: View>: View {
                 .padding(.vertical, 1)
             VStack(alignment: .leading, spacing: 2) {
                 if let title, !title.isEmpty {
-                    Text(title)
-                        .font(.system(size: 13))
+                    HStack(spacing: 4) {
+                        Text(title)
+                            .font(.system(size: 13))
+                        if let help { HelpButton(text: help) }
+                    }
                 }
                 if let subtitle, !subtitle.isEmpty {
                     Text(subtitle)

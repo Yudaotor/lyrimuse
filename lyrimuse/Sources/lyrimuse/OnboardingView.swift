@@ -413,7 +413,7 @@ struct OnboardingView: View {
             Text(L10n.t("连上之后，你播放的每一首歌都会自动 scrobble 到 Last.fm"))
                 .foregroundStyle(.secondary)
             Button(L10n.t("现在去设置里连接")) {
-                AppActions.shared.pendingSettingsSelection = .account(.lastfm)
+                AppActions.shared.requestSettings(.account(.lastfm))
                 NSApp.activate(ignoringOtherApps: true)
                 openSettings()
             }

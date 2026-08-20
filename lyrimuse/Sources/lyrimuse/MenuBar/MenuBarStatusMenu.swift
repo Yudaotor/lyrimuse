@@ -36,7 +36,8 @@ final class MenuBarStatusMenu: NSObject, NSMenuDelegate {
         // 自己控制启用状态,不走 AppKit 那套"按 target 能不能响应 action"的自动判定 ——
         // 这里每一项都是常驻可点的,没有需要变灰的场景。
         menu.autoenablesItems = false
-        rebuild(menu)
+        // 这里**不**先 rebuild 一遍(2026-08-19):弹出前 AppKit 必然回调 menuNeedsUpdate,
+        // 那里会构建 —— 原来这行让整棵菜单每次弹出都构建两遍,第一遍是白做的。
         return menu
     }
 
@@ -102,7 +103,9 @@ final class MenuBarStatusMenu: NSObject, NSMenuDelegate {
                                   selector: #selector(nudgeEarlier)))
             offset.addItem(action(nudgeTitle(L10n.t("延后")), symbol: "goforward",
                                   selector: #selector(nudgeLater)))
-            if coordinator.currentLyricsOffsetMs != 0 {
+            // 「重置」清的是这首歌的微调,所以按它出现,不看总和(全局基准非 0、这首歌
+            // 没调过时,摆一个点了什么都不会变的「重置」才是真的坏)。
+            if coordinator.trackLyricsOffsetMs != 0 {
                 offset.addItem(.separator())
                 offset.addItem(action(L10n.t("重置"), symbol: "arrow.counterclockwise",
                                       selector: #selector(resetOffset)))
@@ -177,7 +180,10 @@ final class MenuBarStatusMenu: NSObject, NSMenuDelegate {
     // 菜单标题里直接带上当前校准值(比如"歌词时间轴(+0.6s)"),不用另开一个 HUD 或者
     // 禁用态文字行专门显示这个数字。
     private var offsetMenuTitle: String {
-        let ms = PlaybackCoordinator.shared.currentLyricsOffsetMs
+        // 只显示**这首歌**那部分,不含全局基准(2026-08-17 加全局偏移时改)。显示总和的
+        // 话,用户看到"歌词时间轴(+0.8s)"、点了下面的「重置」却只回到 +0.5s(全局基准
+        // 还在),数字跟操作对不上。全局基准在设置里调,也在那里显示。
+        let ms = PlaybackCoordinator.shared.trackLyricsOffsetMs
         guard ms != 0 else { return L10n.t("歌词时间轴") }
         // 跟两个按钮共用同一份格式化(AppSettings.formattedSeconds)——不然步长设成
         // 比如 0.15s 时,按钮显示"0.15"、这里的累计值却按 %.1f 四舍五入成"0.2"。
@@ -240,7 +246,7 @@ final class MenuBarStatusMenu: NSObject, NSMenuDelegate {
     @objc private func openAbout() {
         // 直接跳到设置窗口的"关于"分类,复用 Onboarding 的 Last.fm 步骤已经在用的同一套
         // 一次性信箱(AppActions.pendingSettingsSelection),不用再点一次侧边栏。
-        AppActions.shared.pendingSettingsSelection = .tab(.about)
+        AppActions.shared.requestSettings(.tab(.about))
         AppActions.shared.openSettings?()
     }
 

@@ -18,6 +18,20 @@ enum NotchCardStyle: String, Codable, Hashable, CaseIterable {
     case coverArt
 }
 
+// 菜单栏歌词那一格怎么占位。两种模式**只在这一句比设定宽度短时**才有区别 ——
+// 装不下的句子两边一模一样:占满设定宽度、横向滚动。
+//
+// fixed(2026-08-17 起的默认):短句也占满设定宽度,右边空一块。好处是这一项的
+// footprint 恒定,换句时右边其它 App 的图标不会被顶得左右晃(用户反馈"动来动去,
+// 观感不太好",当时是直接写死成这个行为的)。
+//
+// adaptive:短句按自己的宽度占位,菜单栏项跟着缩短,不占用不需要的空间 —— 代价正是
+// 上面那条:长短句来回切会伸缩。菜单栏图标本来就多的人更在意这个。
+enum MenuBarLyricsWidthMode: String, Codable, Hashable, CaseIterable {
+    case fixed
+    case adaptive
+}
+
 // UserDefaults 支撑的设置存储。
 @MainActor
 final class AppSettings: ObservableObject {
@@ -38,6 +52,9 @@ final class AppSettings: ObservableObject {
         static let showLyricsInMenuBar = "np:showLyricsInMenuBar"
         static let menuBarLyricsMaxChars = "np:menuBarLyricsMaxChars"
         static let menuBarLyricsWidth = "np:menuBarLyricsMaxWidth"
+        static let menuBarLyricsWidthMode = "np:menuBarLyricsWidthMode"
+        static let menuBarIconStyle = "np:menuBarIconStyle"
+        static let menuBarIconAnimates = "np:menuBarIconAnimates"
         static let lyricsOffsetStepMs = "np:lyricsOffsetStepMs"
         static let textStrokeEnabled = "np:textStrokeEnabled"
         static let textStrokeColorHex = "np:textStrokeColorHex"
@@ -67,8 +84,6 @@ final class AppSettings: ObservableObject {
         static let notchOverlayEnabled = "np:notchOverlayEnabled"
         static let notchCardStyle = "np:notchCardStyle"
         static let notchScreenID = "np:notchScreenID"
-        static let notchShowEqualizer = "np:notchShowEqualizer"
-        static let notchVolumeBanner = "np:notchVolumeBanner"
         static let notchAllScreens = "np:notchAllScreens"
         // 2026-08-05 之前,"这种悬浮歌词要不要显示"这一件事有**两份**独立持久化:上面这两个
         // {classic,notch}OverlayEnabled(设置页那两个 Toggle 读它),外加两个 WindowController
@@ -86,8 +101,10 @@ final class AppSettings: ObservableObject {
     }
 
     // 字体/字号的默认值,跟配色四项(见下方 init())一样单独给一个有名字的默认值:
-    // init() 和 SettingsView"恢复默认外观"按钮都读这两个,不再各自硬编码一遍数字/字符串。
-    static let defaultFontFamilyName = "PingFang SC"
+    // init() 和 SettingsView"恢复默认文字与配色"按钮都读这两个,不再各自硬编码一遍数字/字符串。
+    // 2026-08-17 默认字体从 PingFang SC 改成跟随系统(用户要求)。空字符串就是"跟随
+    // 系统"的表示法,见 fontFamilyName 那条属性和 FontFamilyPicker。
+    static let defaultFontFamilyName = ""
     static let defaultFontSize = 31.0
 
     private let defaults = UserDefaults.standard
@@ -191,6 +208,23 @@ final class AppSettings: ObservableObject {
     @Published var menuBarLyricsWidth: CGFloat {
         didSet { defaults.set(Double(menuBarLyricsWidth), forKey: Keys.menuBarLyricsWidth) }
     }
+    // 上面那个宽度对**装得下的句子**意味着什么 —— 2026-08-17 加,把原来写死的行为变成可选。
+    //
+    // 两种模式只在"这一句比设定宽度短"时才有区别;装不下的句子两边完全一样(占满设定
+    // 宽度并横向滚动)。所以这个设置真正决定的是:短句要不要把多出来的地方让出去。
+    @Published var menuBarLyricsWidthMode: MenuBarLyricsWidthMode {
+        didSet { defaults.set(menuBarLyricsWidthMode.rawValue, forKey: Keys.menuBarLyricsWidthMode) }
+    }
+    // 菜单栏那个图标长什么样。它只在**没在显示歌词**时出现(没在放歌、还没解析出这一句、
+    // 或者菜单栏歌词整个关掉),所以它跟上面那些宽度设置是两回事,不受它们影响。
+    @Published var menuBarIconStyle: MenuBarIconStyle {
+        didSet { defaults.set(menuBarIconStyle.rawValue, forKey: Keys.menuBarIconStyle) }
+    }
+    // 播放时菜单栏图标是否律动(音条跳动/卡拉OK扫色/声波流动/其余轻微摇摆,见
+    // MenuBarLiveIconView)。暂停/无播放永远静止,这个开关只管"播放时动不动"。
+    @Published var menuBarIconAnimates: Bool {
+        didSet { defaults.set(menuBarIconAnimates, forKey: Keys.menuBarIconAnimates) }
+    }
     // 悬浮窗背景透明,文字直接叠在桌面内容上——桌面壁纸/其它窗口文字撞色时容易糊在一起,
     // 加个描边提高辨识度。纯展示开关,LyricsOverlayView 每次渲染都直接读这个值,不需要
     // 像 lockPosition/hideDuringScreenCapture 那样额外调用某个单例的方法"生效"。
@@ -290,19 +324,10 @@ final class AppSettings: ObservableObject {
         didSet { defaults.set(notchAllScreens, forKey: Keys.notchAllScreens) }
     }
 
-    /// 调系统音量时在灵动岛上闪一条音量提示。
-    ///
-    /// 默认关:macOS 自己已经有一个音量 HUD(屏幕中下方那个),开着这个等于同一次按键
-    /// 弹出两个提示。留成可选项而不是直接不做 —— 用眼睛盯着屏幕顶端的人会更喜欢在
-    /// 那里看到反馈。
-    @Published var notchVolumeBanner: Bool {
-        didSet { defaults.set(notchVolumeBanner, forKey: Keys.notchVolumeBanner) }
-    }
-
-    /// 灵动岛左耳歌名前那几根跳动的播放指示条。
-    @Published var notchShowEqualizer: Bool {
-        didSet { defaults.set(notchShowEqualizer, forKey: Keys.notchShowEqualizer) }
-    }
+    // 2026-08-17 删掉了 notchVolumeBanner / notchShowEqualizer 两个开关(用户要求),
+    // 两者都固定开启:音量提示随灵动岛开关走(见 AppDelegate
+    // .startObservingVolumeBannerPreference),播放指示条常驻(见 NotchLyricsView)。
+    // 两个旧的 UserDefaults key 已登记进 ConfigPortability.obsoleteDefaultsKeys 就地清理。
 
     @Published var notchCardStyle: NotchCardStyle {
         didSet { defaults.set(notchCardStyle.rawValue, forKey: Keys.notchCardStyle) }
@@ -432,6 +457,13 @@ final class AppSettings: ObservableObject {
         // 其它 App 的图标挤走。
         menuBarLyricsWidth = CGFloat(
             (defaults.object(forKey: Keys.menuBarLyricsWidth) as? Double) ?? 200)
+        // 默认 fixed:2026-08-17 到加这个开关之间,固定宽度是写死的唯一行为,默认值
+        // 保持它,升级上来的用户看不出任何变化。
+        menuBarLyricsWidthMode = defaults.string(forKey: Keys.menuBarLyricsWidthMode)
+            .flatMap(MenuBarLyricsWidthMode.init(rawValue:)) ?? .fixed
+        menuBarIconStyle = defaults.string(forKey: Keys.menuBarIconStyle)
+            .flatMap(MenuBarIconStyle.init(rawValue:)) ?? .default
+        menuBarIconAnimates = (defaults.object(forKey: Keys.menuBarIconAnimates) as? Bool) ?? true
         lyricsOffsetStepMs = (defaults.object(forKey: Keys.lyricsOffsetStepMs) as? Int) ?? 200
         textStrokeEnabled = (defaults.object(forKey: Keys.textStrokeEnabled) as? Bool) ?? ColorTheme.defaultTheme.textStrokeEnabled
         textStrokeColorHex = defaults.string(forKey: Keys.textStrokeColorHex) ?? ColorTheme.defaultTheme.textStrokeColorHex
@@ -482,8 +514,6 @@ final class AppSettings: ObservableObject {
         notchOverlayEnabled = notchOn
         notchCardStyle = defaults.string(forKey: Keys.notchCardStyle).flatMap(NotchCardStyle.init(rawValue:)) ?? .coverArt
         // 默认开:它是"正在播放"最直观的一个信号,而且不占几个像素。
-        notchShowEqualizer = defaults.object(forKey: Keys.notchShowEqualizer) as? Bool ?? true
-        notchVolumeBanner = defaults.bool(forKey: Keys.notchVolumeBanner)
         notchAllScreens = defaults.bool(forKey: Keys.notchAllScreens)
         notchScreenID = defaults.string(forKey: Keys.notchScreenID) ?? ""
         fontFamilyName = defaults.string(forKey: Keys.fontFamilyName) ?? Self.defaultFontFamilyName
@@ -523,5 +553,12 @@ final class AppSettings: ObservableObject {
         while text.hasSuffix("0") { text.removeLast() }
         if text.hasSuffix(".") { text += "0" }
         return text
+    }
+
+    /// 带符号的秒数文案("+0.5" / "-0.2" / "0.0")。给"这个值是提前还是延后"这类双向
+    /// 调整的地方用 —— formattedSeconds 只管把数字格式干净,正负号由调用方决定要不要带。
+    static func signedSeconds(ms: Int) -> String {
+        guard ms != 0 else { return formattedSeconds(ms: 0) }
+        return (ms > 0 ? "+" : "-") + formattedSeconds(ms: abs(ms))
     }
 }

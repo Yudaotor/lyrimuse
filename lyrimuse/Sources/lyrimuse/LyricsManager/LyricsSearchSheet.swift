@@ -28,8 +28,10 @@ struct LyricsSearchSheet: View {
     let onApply: (LyricsSearchService.Candidate) -> Void
 
     @Environment(\.dismiss) private var dismiss
-    // 只为了让这个弹窗在手动切换语言时重新渲染,同 LyricsManagerView 的理由。
-    @ObservedObject private var languageSettings = AppSettings.shared
+    // 只为了让这个弹窗在手动切换语言时重新渲染,同 LyricsManagerView 的理由 ——
+    // 经 AppLanguageObserver 窄代理,不整对象订阅 AppSettings(2026-08-19,那样设置页
+    // 拖任何滑杆/色轮都会打醒这个 sheet 的整个 body,含候选列表和预览面板)。
+    @ObservedObject private var languageSettings = AppLanguageObserver.shared
     // candidates/isSearching 分开存,而不是揉进一个"loading/loaded/failed"三态 enum——
     // 现在结果是陆续到达的(collector 那边改成 NDJSON 流式输出,谁先查完谁先展示,见
     // LyricsSearchService.search 的 onUpdate),搜索"进行中"和"目前已经有哪些候选"是
@@ -122,6 +124,11 @@ struct LyricsSearchSheet: View {
         }
         .frame(minWidth: 720, minHeight: 480)
         .task { await load() }
+        // 关闭/采纳/Esc 任何一条退出路径都把还在跑的 collector 子进程停掉 —— 不停的话
+        // 它会继续对五个源发请求直到 20 秒兜底,NDJSON 还在往已消失的视图里灌
+        // (2026-08-19 性能审计;search() 内的 withTaskCancellationHandler 是第二层,
+        // cancelRunning 幂等,两层谁先到都行)。
+        .onDisappear { LyricsSearchService.shared.cancelRunning() }
     }
 
     // 三个可编辑的查询维度——默认展示这首歌本身的元数据,.task { await load() } 直接
@@ -359,16 +366,19 @@ struct LyricsSearchSheet: View {
     /// 跟 741 分不是同一个量级上的东西。
     @ViewBuilder
     private func scoreLine(_ c: LyricsSearchService.Candidate, font: Font) -> some View {
-        HStack(spacing: 3) {
-            Text(String(format: L10n.t("分数 %@ · %@ 行"), "\(c.score)", "\(c.lineCount)"))
-            if !c.scoreTerms.isEmpty {
-                Image(systemName: "questionmark.circle")
-                    .foregroundStyle(.tertiary)
+        let label = Text(String(format: L10n.t("分数 %@ · %@ 行"), "\(c.score)", "\(c.lineCount)"))
+        Group {
+            if c.scoreTerms.isEmpty {
+                // 没有可摊开的明细就别摆一个点了什么都没有的问号。
+                label
+            } else {
+                // 悬停(短延迟)或点问号都能弹出明细。原来这里是 .help(),系统 tooltip 要
+                // 悬停约两秒才出、且点击完全没反应 —— 用户报的就是这个(2026-08-17)。
+                QuickHelpLabel(text: scoreExplanation(c)) { label }
             }
         }
         .font(font)
         .foregroundStyle(.secondary)
-        .help(scoreExplanation(c))
     }
 
     /// 分数说明文案本体抽到了 ScoreTerm.explanation(跟"解析决策"弹窗共用),这里只是转发。

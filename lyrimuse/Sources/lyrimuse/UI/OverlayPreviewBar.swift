@@ -97,7 +97,7 @@ struct OverlayPreviewBar: View {
         .padding(.top, SectionPreviewMetrics.topPadding)
         .padding(.bottom, SectionPreviewMetrics.bottomPadding)
         // 三条预览栏共用一个高度,切段时这一条不能变高变矮(见 SectionPreviewMetrics)。
-        .frame(height: SectionPreviewMetrics.barHeight)
+        .frame(height: SectionPreviewMetrics.barHeight(cardHeight: Self.cardHeight))
         .frame(maxWidth: .infinity)
         // ⚠️ 必须自带不透明底色。这块是挂在 safeAreaInset 上的,而 SettingsPage 的
         // .background(windowBackgroundColor) 只铺在 ScrollView 上、盖不到 inset 区域 ——
