@@ -172,10 +172,11 @@ func itunesLookupTracks(collectionID int64, country string) []itunesResult {
 	}
 	var out struct {
 		Results []struct {
-			WrapperType   string `json:"wrapperType"`
-			TrackName     string `json:"trackName"`
-			TrackViewURL  string `json:"trackViewUrl"`
-			ArtworkURL100 string `json:"artworkUrl100"`
+			WrapperType    string `json:"wrapperType"`
+			TrackName      string `json:"trackName"`
+			CollectionName string `json:"collectionName"`
+			TrackViewURL   string `json:"trackViewUrl"`
+			ArtworkURL100  string `json:"artworkUrl100"`
 		} `json:"results"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
@@ -186,7 +187,14 @@ func itunesLookupTracks(collectionID int64, country string) []itunesResult {
 		if r.WrapperType != "track" {
 			continue
 		}
-		tracks = append(tracks, itunesResult{TrackName: r.TrackName, TrackViewURL: r.TrackViewURL, ArtworkURL100: r.ArtworkURL100})
+		// CollectionName 2026-08-20 补上:少了它,resolveAppleMusicMatchViaAlbum 返回的
+		// appleMusicMatch.album 恒为空,而封面选源现在要拿它算 albumScore
+		// (见 enrich.go 的 preferAppleCoverOverNetease)—— 空的话这条路径给出的封面
+		// 会被当成"专辑不详"、白白错过一次本该顶替的机会。
+		tracks = append(tracks, itunesResult{
+			TrackName: r.TrackName, CollectionName: r.CollectionName,
+			TrackViewURL: r.TrackViewURL, ArtworkURL100: r.ArtworkURL100,
+		})
 	}
 	return tracks
 }

@@ -56,6 +56,9 @@ const (
 
 func main() {
 	log.SetFlags(log.LstdFlags)
+	// 凭据不进日志。必须在这里、在任何子命令分流之前 —— 子命令各自 loadConfig、
+	// 不走下面的主流程,漏了它们同样会把 api_key 写进日志。见 logscrub.go。
+	installLogScrubbing()
 	// `collector search-lyrics ...`:一次性子命令,desktop-lyrics 的"歌词管理"窗口靠
 	// Process 调用它来手动重新搜索候选歌词(见 searchcli.go)——检查放在 flag.Parse()
 	// 之前,不然位置参数 "search-lyrics" 会被当成未知 flag 报错。
@@ -96,6 +99,18 @@ func main() {
 	// 并成一条(见 dedupecli.go)。默认预演,-apply 才真改。
 	if len(os.Args) > 1 && os.Args[1] == "dedupe-entries" {
 		runDedupeEntriesCLI(os.Args[2:])
+		return
+	}
+	// `collector recheck-cover [-apply] "歌手|歌名|专辑" ...`:对指定条目重新解析一次封面
+	// (见 covercli.go)。默认预演,-apply 才真改、且要求常驻实例已停。
+	if len(os.Args) > 1 && os.Args[1] == "recheck-cover" {
+		runRecheckCoverCLI(os.Args[2:])
+		return
+	}
+	// `collector recheck-instrumental [-apply] "歌手|歌名|专辑" ...`:给缺「纯音乐」标记的
+	// 条目补上这个结论(见 covercli.go)。默认预演,-apply 才真改、且要求常驻实例已停。
+	if len(os.Args) > 1 && os.Args[1] == "recheck-instrumental" {
+		runRecheckInstrumentalCLI(os.Args[2:])
 		return
 	}
 	home, err := os.UserHomeDir()
@@ -143,6 +158,14 @@ func main() {
 	// 按歌手(不是按曲目)缓存的 MusicBrainz 中文别名查询结果,同目录下单独一份文件——
 	// 见 musicbrainz.go 顶部注释。
 	loadArtistAliasCache(filepath.Join(filepath.Dir(*cfgPath), clientName+"-artist-alias-cache.json"))
+	// 用户校准过歌词时间轴的曲目名单(App 侧写、这边只读),见 lyricspins.go。刻意不在
+	// 这里读一次就完 —— lyricsPinned 每次按 mtime 自己判断要不要重读。
+	lyricsPinsPath = filepath.Join(filepath.Dir(*cfgPath), clientName+"-lyrics-pins.json")
+	// MB 主名(本名 ↔ 艺名)那份缓存,见 musicBrainzPrimaryArtistName。
+	loadMBPrimaryNameCache(filepath.Join(filepath.Dir(*cfgPath), clientName+"-artist-primary-cache.json"))
+	// 歌手身份缓存(mbid+中文名),给 Top 歌手榜归并当第三合并信号——见 musicbrainz.go
+	// mbArtistIdentity 注释。与 top-artists CLI 共用同一份文件。
+	loadArtistIdentityCache(filepath.Join(filepath.Dir(*cfgPath), clientName+"-artist-identity-cache.json"))
 	// 歌词部分(lyrics/lyrics_tr/lyrics_roma/lyrics_yrc/lyrics_source/manual_lyrics)以
 	// lyrics/ 文件夹为权威源,不只是 enrichCache 的只读存档——顺序很重要:先
 	// importLyricsFromFiles() 用文件夹内容覆盖刚从 JSON 缓存加载出来的内存态(文件
@@ -166,6 +189,10 @@ func main() {
 	// 夹在 import 和 export 之间:见 invalidateStaleTranslations 的注释——前者让
 	// lyrics/ 文件夹赢,后者负责把这里清空的译文同步成删掉对应的 .tr.lrc。
 	invalidateStaleTranslations()
+	// 逐字歌词的空白词条清洗(2026-08-19,Musixmatch richsync 存量,见 yrcwhitespace.go)。
+	// 必须夹在 import(权威内容已从 lyrics/ 文件夹导回缓存)与 export(把修好的内容写回
+	// 导出文件)之间,顺序错了修的就是马上要被覆盖的那一份。
+	migrateYRCWhitespaceTokens()
 	exportLyricsFiles()
 	// 本地收听日志:刻意**不带** lastfm-/lb- 这类账号域前缀 —— 这份日志存在的全部意义
 	// 就是"不依赖任何账号",挂上某个账号的名字就说反了。

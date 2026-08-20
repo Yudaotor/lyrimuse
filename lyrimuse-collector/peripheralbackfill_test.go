@@ -66,7 +66,7 @@ func TestNeedsPeripheralBackfill(t *testing.T) {
 		},
 	}
 	for _, c := range cases {
-		if got := needsPeripheralBackfill(c.e, c.artist); got != c.want {
+		if got := needsPeripheralBackfill(c.e, c.artist, ""); got != c.want {
 			t.Errorf("%s: needsPeripheralBackfill = %v, want %v", c.name, got, c.want)
 		}
 	}
@@ -89,18 +89,18 @@ func TestPeripheralThrottleDoesNotDelayLyricsRetry(t *testing.T) {
 		LyricsSourcesSeen: []string{"netease"},
 		TS:                longAgo,
 	}
-	if !needsLyricsRetry(e, 0) {
+	if !needsLyricsRetry(e, 0, false) {
 		t.Fatal("间隔已过、又确实缺源,本来就该重搜")
 	}
 
 	// 外围补全刚跑过一次(只推它自己的时间戳)。歌词重搜不该因此被推迟。
 	e.PeripheralTS = time.Now().Unix()
 	e.PeripheralRetryCount++
-	if !needsLyricsRetry(e, 0) {
+	if !needsLyricsRetry(e, 0, false) {
 		t.Error("补了一次外围字段就把歌词重搜挡掉了 —— 两个节流又耦合回去了")
 	}
 	// 而外围补全自己的节流要照常生效。
-	if needsPeripheralBackfill(e, "someone") {
+	if needsPeripheralBackfill(e, "someone", "") {
 		t.Error("外围补全刚跑过,10 分钟内不该再来")
 	}
 }

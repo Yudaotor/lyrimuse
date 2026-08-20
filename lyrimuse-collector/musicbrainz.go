@@ -134,6 +134,106 @@ func containsHan(s string) bool {
 	return cjkRatio(s) > 0
 }
 
+// ---- 歌手身份缓存(mbid+中文名),给 Top 歌手榜的通用归并用 ----
+//
+// 跟上面 artistAliasCache(只存中文别名字符串,给 canonical_artist 链路)是两份缓存:
+// 归并需要的是**身份**(mbid)——"Leah Dou"和"窦靖童"名字键完全不同、Last.fm 又只给
+// 其中一条 mbid,只有把两个名字各自解析到同一个 MusicBrainz 艺人,并查集才连得上
+// (2026-08-18 用户核对 Top100 导出,坐实 8 对这类漏合并)。中文名(Zh)顺手一起存:
+// 榜单里只有罗马名的中文歌手("Ronghao Li")靠它显示成中文。
+//
+// 缓存语义与 artistAliasCache 一致:查一次永久生效,零值也是合法缓存("查过,没结果"),
+// 想重查只能手动删缓存文件里的 key。
+type mbArtistIdentity struct {
+	Mbid string `json:"mbid,omitempty"`
+	Zh   string `json:"zh,omitempty"`
+}
+
+var (
+	artistIdentityMu    sync.Mutex
+	artistIdentityCache = map[string]mbArtistIdentity{}
+	artistIdentityPath  string // 空 = 只用内存不持久化(单测)
+	artistIdentityDirty bool
+)
+
+func loadArtistIdentityCache(path string) {
+	artistIdentityPath = path
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return
+	}
+	var m map[string]mbArtistIdentity
+	if err := json.Unmarshal(data, &m); err == nil && m != nil {
+		artistIdentityMu.Lock()
+		artistIdentityCache = m
+		artistIdentityMu.Unlock()
+		log.Printf("loaded %d cached artist identities from %s", len(m), path)
+	}
+}
+
+func saveArtistIdentityCache() {
+	artistIdentityMu.Lock()
+	if !artistIdentityDirty || artistIdentityPath == "" {
+		artistIdentityMu.Unlock()
+		return
+	}
+	data, err := json.Marshal(artistIdentityCache)
+	artistIdentityDirty = false
+	artistIdentityMu.Unlock()
+	if err != nil {
+		return
+	}
+	tmp := artistIdentityPath + ".tmp"
+	if err := os.WriteFile(tmp, data, 0o644); err != nil {
+		return
+	}
+	if err := os.Rename(tmp, artistIdentityPath); err != nil {
+		log.Printf("save artist identity cache: %v", err)
+	}
+}
+
+func cachedArtistIdentity(name string) (mbArtistIdentity, bool) {
+	artistIdentityMu.Lock()
+	defer artistIdentityMu.Unlock()
+	id, ok := artistIdentityCache[name]
+	return id, ok
+}
+
+// resolveArtistIdentityMB 联网解析一个歌手名的身份并写缓存。knownMbid 非空时(Last.fm
+// 已给出 mbid)跳过搜索、只在需要中文名时补一次别名查询;否则先搜(置信度门槛与
+// canonical_artist 那条链同一个 musicbrainzMinScore)。中文名只对"名字本身不含汉字"的
+// 条目去查——已是中文名的,归并展示直接用它,不必多花一次请求。
+// 每次调用最多 2 个 MusicBrainz 请求,受 musicbrainzThrottle 全局限速。
+func resolveArtistIdentityMB(name, knownMbid string) mbArtistIdentity {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return mbArtistIdentity{}
+	}
+	id := mbArtistIdentity{Mbid: knownMbid}
+	if id.Mbid == "" {
+		musicbrainzThrottle()
+		var search mbSearchResponse
+		searchURL := "https://musicbrainz.org/ws/2/artist/?query=" + neturl.QueryEscape(name) + "&fmt=json&limit=5"
+		if err := mbGetJSON(searchURL, &search); err == nil && len(search.Artists) > 0 &&
+			search.Artists[0].Score >= musicbrainzMinScore {
+			id.Mbid = search.Artists[0].ID
+		}
+	}
+	if id.Mbid != "" && !containsHan(name) {
+		musicbrainzThrottle()
+		var withAliases mbArtistWithAliases
+		aliasURL := "https://musicbrainz.org/ws/2/artist/" + neturl.PathEscape(id.Mbid) + "?inc=aliases&fmt=json"
+		if err := mbGetJSON(aliasURL, &withAliases); err == nil {
+			id.Zh = pickChineseAlias(withAliases.Aliases, withAliases.Country)
+		}
+	}
+	artistIdentityMu.Lock()
+	artistIdentityCache[name] = id
+	artistIdentityDirty = true
+	artistIdentityMu.Unlock()
+	return id
+}
+
 // mbSearchResponse/mbArtistWithAliases 只取用得到的字段,完整字段列表见 MusicBrainz
 // API 文档(https://musicbrainz.org/doc/MusicBrainz_API)。
 type mbSearchResponse struct {
@@ -147,11 +247,20 @@ type mbSearchResponse struct {
 type mbAlias struct {
 	Name   string `json:"name"`
 	Locale string `json:"locale"`
+	// Type 用来挡"不是艺名"的别名(2026-08-18):MusicBrainz 给艺名歌手也登记
+	// 中文**法定名**(实测 ØZI 有一条 type="Legal name" 的「陳奕凡」),拿它当显示名
+	// 等于把艺人改叫回身份证名。只拒绝确定不该用的类型(Legal name/Search hint),
+	// 不做"只收 Artist name"的白名单——真实数据里 type 可能缺失(卢广仲那条连 locale
+	// 都没有),白名单会把这类合法别名一并误杀。
+	Type string `json:"type"`
 }
 
 type mbArtistWithAliases struct {
 	// Country 是这次收紧判定的关键字段(2026-08-05 加,见 pickChineseAlias 注释)。
-	Country string    `json:"country"`
+	Country string `json:"country"`
+	// Name 是这位歌手在 MusicBrainz 上的**主名**(艺人页标题那个)。2026-08-20 加,
+	// 给 musicBrainzPrimaryArtistName 用 —— 本名/艺名互换那一类问题要的正是它。
+	Name    string    `json:"name"`
 	Aliases []mbAlias `json:"aliases"`
 }
 
@@ -181,6 +290,10 @@ func pickChineseAlias(aliases []mbAlias, country string) string {
 	for _, al := range aliases {
 		// 仍然排除明确标了日文 locale 的别名(日文汉字别名不是中文名)。
 		if al.Locale == "ja" {
+			continue
+		}
+		// 法定名/搜索提示不是艺名,理由见 mbAlias.Type 的注释。
+		if al.Type == "Legal name" || al.Type == "Search hint" {
 			continue
 		}
 		if containsHan(al.Name) {
@@ -223,6 +336,177 @@ func lookupMusicBrainzChineseAlias(rawArtist string) string {
 		return ""
 	}
 	return pickChineseAlias(withAliases.Aliases, withAliases.Country)
+}
+
+// ---- MB 主名:本名 ↔ 艺名互换的通用解法 ----
+
+var (
+	mbPrimaryNameMu    sync.Mutex
+	mbPrimaryNameCache = map[string]string{}
+	mbPrimaryNamePath  string // 空 = 只用内存不持久化(单测/一次性子命令)
+	mbPrimaryNameDirty bool
+)
+
+// loadMBPrimaryNameCache/saveMBPrimaryNameCache 跟 loadArtistAliasCache 同一套持久化
+// 模式(整份 map 序列化、临时文件+原子改名),但有一条**关键差别**:
+//
+// ⚠️ 只落盘**查到了**的条目,查空的一律只留在内存里。
+//
+// 理由是这条路径的失败几乎都是暂时性的:MusicBrainz 限速是按 IP、1 req/s,而
+// musicbrainzThrottle() 是**进程内**的节流 —— 常驻 collector、手动搜索那个一次性 CLI、
+// 还有跑测试的进程各自计时,谁都不知道别人刚打过。撞上限速就是 503,lookup 返回空。
+// 要是把这个空也永久写进文件(artistAliasCache 就是那么做的,见它注释里"想重查只能手动
+// 删缓存文件里的 key"),一次偶发限速会把这位歌手**永久**钉死在"没有别名"上,而这条兜底
+// 恰恰是"五个源一条候选都没有"时最后的救命绳。
+//
+// 2026-08-20 实测反馈坐实了这个形态:同一首歌手动搜索第一遍 0 条、原样再搜一遍就出 5 条。
+func loadMBPrimaryNameCache(path string) {
+	mbPrimaryNamePath = path
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return
+	}
+	var m map[string]string
+	if err := json.Unmarshal(data, &m); err == nil && m != nil {
+		mbPrimaryNameMu.Lock()
+		mbPrimaryNameCache = m
+		mbPrimaryNameMu.Unlock()
+		log.Printf("loaded %d cached MusicBrainz primary names from %s", len(m), path)
+	}
+}
+
+func saveMBPrimaryNameCache() {
+	mbPrimaryNameMu.Lock()
+	if !mbPrimaryNameDirty || mbPrimaryNamePath == "" {
+		mbPrimaryNameMu.Unlock()
+		return
+	}
+	// 只序列化非空值 —— 见上面那段 ⚠️。
+	keep := make(map[string]string, len(mbPrimaryNameCache))
+	for k, v := range mbPrimaryNameCache {
+		if v != "" {
+			keep[k] = v
+		}
+	}
+	data, err := json.Marshal(keep)
+	mbPrimaryNameDirty = false
+	mbPrimaryNameMu.Unlock()
+	if err != nil {
+		return
+	}
+	tmp := mbPrimaryNamePath + ".tmp"
+	if err := os.WriteFile(tmp, data, 0o644); err != nil {
+		return
+	}
+	if err := os.Rename(tmp, mbPrimaryNamePath); err != nil {
+		log.Printf("save musicbrainz primary name cache: %v", err)
+	}
+}
+
+// musicBrainzPrimaryArtistName 给出"MusicBrainz 上这位歌手的主名",仅当本地这个标签
+// 确实是同一位歌手登记过的写法、而主名跟它不同名时才给;够不到条件一律返回空串。
+//
+// 2026-08-20 加。修的是这个实测案例:Apple Music 把《Hurry Up Tomorrow》整张专辑的歌手
+// 标成 **Abel Tesfaye**(他 2025 年起用本名发行),而五个歌词源全部按 **The Weeknd**
+// 索引 —— 原样查 0 条候选,换成 The Weeknd 五个源全有(最高 1162 分)。
+//
+// 现有两条兜底都够不到:artistAliasTable 是手工表(没登记就没有);
+// canonicalArtistViaMusicBrainz 走的是**同一次** MB 查询,却只从别名里挑中文名、而且
+// 要求 country ∈ CN/TW/HK/MO/SG(The Weeknd 是 CA)—— 那条规则是给"中文歌手的罗马化
+// 写法"准备的,跟"本名 ↔ 艺名"是两件事。而那次查询本来就已经把主名拿回来了(搜索首条
+// name="The Weeknd"、score=100),只是被丢掉没用。
+//
+// 为什么敢用搜索的首条命中:除了 musicbrainzMinScore(90)这道原有门槛,这里**额外**
+// 要求本地标签逐字(normLoose)命中该艺人的主名或任一别名 —— 把"模糊搜到的第一个人"
+// 收紧成"MB 明确登记过这个写法就是这个人"。差一点都返回空:闸门层的 artistMatches 在
+// 别名轮里比的是**别名串**,拦不住"换成另一个人的名字、于是收下另一个人的同名歌"。
+//
+// 缓存:查到的落盘(自己一份 artist-primary-cache.json,不挤进 artist-alias-cache.json
+// 的 map[string]string 或 artist-identity-cache.json 的语义里),查空的只留在内存。
+// 为什么这么分,见 loadMBPrimaryNameCache 上面那段 ⚠️ —— 一次偶发的 MusicBrainz 限速
+// 不该把一位歌手永久钉死在"没有别名"上。
+func musicBrainzPrimaryArtistName(rawArtist string) string {
+	raw := strings.TrimSpace(rawArtist)
+	if raw == "" {
+		return ""
+	}
+	mbPrimaryNameMu.Lock()
+	if v, ok := mbPrimaryNameCache[raw]; ok {
+		mbPrimaryNameMu.Unlock()
+		return v
+	}
+	mbPrimaryNameMu.Unlock()
+
+	resolved := lookupMusicBrainzPrimaryName(raw)
+
+	mbPrimaryNameMu.Lock()
+	mbPrimaryNameCache[raw] = resolved
+	// 查空不算脏 —— 空值不落盘,下一个进程还能再试一次(见 saveMBPrimaryNameCache)。
+	if resolved != "" {
+		mbPrimaryNameDirty = true
+	}
+	mbPrimaryNameMu.Unlock()
+	saveMBPrimaryNameCache()
+	return resolved
+}
+
+func lookupMusicBrainzPrimaryName(raw string) string {
+	musicbrainzThrottle()
+	var search mbSearchResponse
+	searchURL := "https://musicbrainz.org/ws/2/artist/?query=" + neturl.QueryEscape(raw) + "&fmt=json&limit=5"
+	if err := mbGetJSON(searchURL, &search); err != nil || len(search.Artists) == 0 {
+		return ""
+	}
+	top := search.Artists[0]
+	if top.Score < musicbrainzMinScore {
+		return ""
+	}
+	// 主名就是本地这个写法 → 没什么可换的,省掉第二次请求。
+	if normLoose(top.Name) == normLoose(raw) {
+		return ""
+	}
+	musicbrainzThrottle()
+	var withAliases mbArtistWithAliases
+	aliasURL := "https://musicbrainz.org/ws/2/artist/" + neturl.PathEscape(top.ID) + "?inc=aliases&fmt=json"
+	if err := mbGetJSON(aliasURL, &withAliases); err != nil {
+		return ""
+	}
+	primary := withAliases.Name
+	if strings.TrimSpace(primary) == "" {
+		primary = top.Name // 详情接口没给 name 时退回搜索结果里的那个
+	}
+	return mbPrimaryNameForRetry(primary, withAliases.Aliases, raw)
+}
+
+// mbPrimaryNameForRetry 是上面那个网络查询的**判据部分**,拆出来是为了能单测:
+// 主名非空、跟本地标签不同名、且本地标签逐字命中主名或某条别名,才认。
+//
+// 别名的 type 在这里**不过滤**(Legal name / Search hint 一样算)—— 这跟
+// pickChineseAlias 刻意排除它们不矛盾:那边是在挑"拿来当展示名的别名",身份证名当艺名
+// 显示是错的;这边只是找证据回答"MB 认不认识这个写法就是这个人",登记成法定名/搜索提示
+// 同样能作证(Abel Tesfaye 这案 MB 同时登了 Artist name「Abel Tesfaye」和 Legal name
+// 「Abel Makkonen Tesfaye」,后者也该算命中)。
+func mbPrimaryNameForRetry(primary string, aliases []mbAlias, raw string) string {
+	primary = strings.TrimSpace(primary)
+	raw = strings.TrimSpace(raw)
+	if primary == "" || raw == "" {
+		return ""
+	}
+	target := normLoose(raw)
+	if normLoose(primary) == target {
+		return ""
+	}
+	matched := false
+	for _, al := range aliases {
+		if normLoose(al.Name) == target {
+			matched = true
+			break
+		}
+	}
+	if !matched {
+		return ""
+	}
+	return primary
 }
 
 func mbGetJSON(url string, v any) error {

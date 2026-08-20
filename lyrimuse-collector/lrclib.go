@@ -216,7 +216,10 @@ const lrclibSearchDurationTolerance = 0.25
 //
 //	双向子串包含在这一级会把同歌手的近似曲名当成本曲);
 //
-// ③ 歌手要对得上(artistMatches,它对多人合 credit 做了拆分比较,比子串包含严);
+// ③ 歌手要对得上(lyricSourceArtistMatches:artistMatches 的拆分比较 + 两侧多人
+//
+//	合credit 的段集交集档,仍比子串包含严,见 match.go 那边的防仿冒注释);
+//
 // ④ 版本限定词不能相反(versionTagsMismatch)——搜 "Song" 很容易返回 "Song (Live)",
 //
 //	那是另一次录音、时间轴对不上,见 match.go 里那段注释。
@@ -234,7 +237,7 @@ func pickLRCLIBSearchResult(items []lrclibSearchItem, artist, title, album strin
 			continue
 		}
 		if !lyricTitleAccepted(it.TrackName, title) ||
-			!artistMatches(it.ArtistName, artist) {
+			!lyricSourceArtistMatches(it.ArtistName, artist) {
 			continue
 		}
 		// 专辑名一起看:限定词常常只写在专辑上(见 versionTagsMismatch 的注释)。

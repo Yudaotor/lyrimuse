@@ -45,6 +45,15 @@ func TestPickChineseAlias(t *testing.T) {
 		{"日文 locale 别名跳过", []mbAlias{{Name: "日本語名", Locale: "ja"}}, "HK", ""},
 		{"没有任何含汉字别名", []mbAlias{{Name: "Some Latin Name", Locale: "en"}}, "HK", ""},
 		{"空别名列表", nil, "HK", ""},
+		// 2026-08-18 实测翻车:ØZI(TW)在 MusicBrainz 有一条 type="Legal name" 的
+		// 「陳奕凡」,拿它当显示名等于把艺人改叫回身份证名。法定名/搜索提示要跳过,
+		// 但后面正经的艺名别名照常采纳。
+		{"法定名别名跳过", []mbAlias{{Name: "陳奕凡", Locale: "zh_Hant", Type: "Legal name"}}, "TW", ""},
+		{"搜索提示别名跳过", []mbAlias{{Name: "某搜索词", Type: "Search hint"}}, "TW", ""},
+		{"跳过法定名后仍采纳后面的艺名", []mbAlias{
+			{Name: "陳奕凡", Locale: "zh_Hant", Type: "Legal name"},
+			{Name: "街巷", Locale: "zh_Hant", Type: "Artist name"},
+		}, "TW", "街巷"},
 	}
 	for _, c := range cases {
 		if got := pickChineseAlias(c.aliases, c.country); got != c.want {

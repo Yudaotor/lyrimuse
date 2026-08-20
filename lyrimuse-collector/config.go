@@ -105,6 +105,9 @@ func loadConfig(path string) (*config, error) {
 		// 不需要用户重新选一遍。
 		cfg.NotificationPlatform = "bark"
 	}
+	// 把这份配置里的凭据登记进日志脱敏表。放在 loadConfig 里而不是各个调用方那边:
+	// 每个子命令都会自己 loadConfig,登记在这里就一个都漏不掉(见 logscrub.go)。
+	rememberConfigSecrets(cfg)
 	return cfg, nil
 }
 

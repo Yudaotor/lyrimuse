@@ -79,7 +79,7 @@ func TestNeedsLyricsRescore(t *testing.T) {
 		},
 	}
 	for _, c := range cases {
-		if got := needsLyricsRescore(c.e); got != c.want {
+		if got := needsLyricsRescore(c.e, false); got != c.want {
 			t.Errorf("%s: needsLyricsRescore = %v, want %v", c.name, got, c.want)
 		}
 	}

@@ -70,34 +70,34 @@ func TestNeedsLyricsRetry_NativeSourceMissedOut(t *testing.T) {
 		Lyrics: "[00:01.00]x", LyricsYRC: "[1,2](1,1,0)x",
 		LyricsSource: "kugou", LyricsSourcesSeen: []string{"kugou", "qq", "lrclib"},
 	}
-	if !needsLyricsRetry(missed, 0) {
+	if !needsLyricsRetry(missed, 0, false) {
 		t.Error("见过同源候选却没选它，该重试（这正是被『有逐字就不重试』挡死的那种）")
 	}
 
 	// 已经就是同源 → 没什么可换的。
 	already := missed
 	already.LyricsSource = "qq"
-	if needsLyricsRetry(already, 0) {
+	if needsLyricsRetry(already, 0, false) {
 		t.Error("已经是同源，不该重试")
 	}
 
 	// 同源当初压根没答过 → 重搜也变不出来。
 	unseen := missed
 	unseen.LyricsSourcesSeen = []string{"kugou", "lrclib"}
-	if needsLyricsRetry(unseen, 0) {
+	if needsLyricsRetry(unseen, 0, false) {
 		t.Error("同源没出现过，不该为它重试")
 	}
 
 	// ⚠️ 最要紧：用户手改过的绝不能被这条新路径重搜覆盖掉 —— 那是缓存里唯一不可恢复的东西。
 	manual := missed
 	manual.ManualLyrics = true
-	if needsLyricsRetry(manual, 0) {
+	if needsLyricsRetry(manual, 0, false) {
 		t.Error("手改过的歌词绝不能重搜")
 	}
 
 	// 识别不出播放器时，行为跟改动前一致（有逐字就不重试）。
 	nativeLyricSource = ""
-	if needsLyricsRetry(missed, 0) {
+	if needsLyricsRetry(missed, 0, false) {
 		t.Error("没有 native 源时该维持原行为")
 	}
 }
@@ -114,26 +114,26 @@ func TestNeedsLyricsRetry_DurationMismatch(t *testing.T) {
 		LyricsSource: "kugou", LyricsSourcesSeen: []string{"kugou", "qq"},
 		ResolvedDurationSecs: 164,
 	}
-	if !needsLyricsRetry(entry, 246) {
+	if !needsLyricsRetry(entry, 246, false) {
 		t.Error("164s 校验的歌词碰上 246s 的真实版本，该重选（哪怕有逐字）")
 	}
-	if needsLyricsRetry(entry, 166) {
+	if needsLyricsRetry(entry, 166, false) {
 		t.Error("差 2 秒是标注抖动，不该白跑网络")
 	}
 	// 旧条目没记校验时长 → 一律不回溯，别让一次升级把全库重新解析一遍。
 	legacy := entry
 	legacy.ResolvedDurationSecs = 0
-	if needsLyricsRetry(legacy, 246) {
+	if needsLyricsRetry(legacy, 246, false) {
 		t.Error("没记录校验时长的旧条目不触发")
 	}
 	// 真实时长未知（预取路径自己查缓存时）同样不触发。
-	if needsLyricsRetry(entry, 0) {
+	if needsLyricsRetry(entry, 0, false) {
 		t.Error("真实时长未知不触发")
 	}
 	// 手改保护永远最高优先。
 	manual := entry
 	manual.ManualLyrics = true
-	if needsLyricsRetry(manual, 246) {
+	if needsLyricsRetry(manual, 246, false) {
 		t.Error("手改过的歌词绝不能被时长错配重搜")
 	}
 }

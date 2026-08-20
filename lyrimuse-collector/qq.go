@@ -376,7 +376,11 @@ func qqArtistOK(strict bool, singer, artist string) bool {
 		return true
 	}
 	if strict {
-		return artistMatches(singer, artist)
+		// strict 档从 artistMatches 换成 lyricSourceArtistMatches(2026-08-20):QQ 的
+		// 合唱署名用斜杠("UMI/V"),本地标签 "UMI & 金泰亨" 在原闸下两档全拒——loose 的
+		// looseContains("umiv","umi金泰亨") 同样不含。段集交集档正好补这个洞,防仿冒
+		// 守卫见 lyricSourceArtistMatches 注释。
+		return lyricSourceArtistMatches(singer, artist)
 	}
 	return looseContains(singer, artist)
 }

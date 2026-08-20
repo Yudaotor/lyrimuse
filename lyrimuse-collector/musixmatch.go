@@ -349,7 +349,7 @@ func musixmatchSearchTrackOnce(artist, queryTitle, localTitle string) (musixmatc
 		if t.Track.HasSubtitles != 1 {
 			continue
 		}
-		if lyricTitleAccepted(t.Track.TrackName, localTitle) && artistMatches(t.Track.ArtistName, artist) {
+		if lyricTitleAccepted(t.Track.TrackName, localTitle) && lyricSourceArtistMatches(t.Track.ArtistName, artist) {
 			return musixmatchTrackMatch{
 				trackID: t.Track.TrackID,
 				title:   t.Track.TrackName,
@@ -456,19 +456,43 @@ func richsyncToYRC(lines []musixmatchRichsyncLine) string {
 		if lineEndMs < lineStartMs {
 			lineEndMs = lineStartMs
 		}
+		// 纯空白词条不独立成词(2026-08-19 用户报"有些单词没有读条直接填满"):
+		// richsync 把空格作为**独立计时条目**,而空格占走了前一个词的绝大部分演唱时长
+		// (实测《Ocho Rios》"In" 23ms + 空格 165ms)——词长按"到下一个条目"反推时,
+		// 短词全被空格掏空,悬浮窗 20~50ms 填完一个词,观感就是"瞬间填满"。归并规则:
+		// 空白条目的文本并入前一个词尾部,词长反推自然改成"到下一个**非空白**词条";
+		// 行首就是空白的(理论情形)给下一个词当前缀。存量缓存的同款清洗见
+		// yrcMergeWhitespaceTokens(yrcwhitespace.go)。
+		type mergedWord struct {
+			startMs int64
+			text    string
+		}
+		words := make([]mergedWord, 0, len(ln.L))
+		prefix := ""
+		for _, w := range ln.L {
+			if strings.TrimSpace(w.C) == "" {
+				if n := len(words); n > 0 {
+					words[n-1].text += w.C
+				} else {
+					prefix += w.C
+				}
+				continue
+			}
+			words = append(words, mergedWord{lineStartMs + int64(w.O*1000), prefix + w.C})
+			prefix = ""
+		}
 		fmt.Fprintf(&b, "[%d,%d]", lineStartMs, lineEndMs-lineStartMs)
-		for j, w := range ln.L {
-			wordStartMs := lineStartMs + int64(w.O*1000)
+		for j, w := range words {
 			var wordEndMs int64
-			if j+1 < len(ln.L) {
-				wordEndMs = lineStartMs + int64(ln.L[j+1].O*1000)
+			if j+1 < len(words) {
+				wordEndMs = words[j+1].startMs
 			} else {
 				wordEndMs = lineEndMs
 			}
-			if wordEndMs < wordStartMs {
-				wordEndMs = wordStartMs
+			if wordEndMs < w.startMs {
+				wordEndMs = w.startMs
 			}
-			fmt.Fprintf(&b, "(%d,%d,0)%s", wordStartMs, wordEndMs-wordStartMs, w.C)
+			fmt.Fprintf(&b, "(%d,%d,0)%s", w.startMs, wordEndMs-w.startMs, w.text)
 		}
 		b.WriteByte('\n')
 	}

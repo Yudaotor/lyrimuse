@@ -24,15 +24,26 @@ type neteaseInfo struct {
 	// 避免把本地"歌手A & 歌手B"的联合署名压缩成只剩其中一个)。用于统一同一歌手在历史
 	// 记录里时而中文时而英文、时而全大写的写法(如 PRINCE/Prince、David Tao/陶喆)。
 	Artist string
-	// Title/Album 是这首歌在网易云曲库里实际匹配到的歌名/专辑名——纯粹给"搜索候选
-	// 歌词"弹窗展示用(用户想知道这个候选具体对应哪首歌/哪张专辑,不是只看"netease"
-	// 这个来源名),不参与任何匹配/打分逻辑,取自 pick() 选中的 chosen(候选 neSong)、
-	// 本来就已经查到只是原来没往外传。跟 Artist 不同,这两个字段不做"是否单一歌手"
-	// 之类的过滤,原样如实展示这首歌在网易云曲库里的名字。
+	// Title/Album 是这首歌在网易云曲库里实际匹配到的歌名/专辑名,取自 pick() 选中的
+	// chosen(候选 neSong)。主要给"搜索候选歌词"弹窗展示用(用户想知道这个候选具体
+	// 对应哪首歌/哪张专辑,不是只看"netease"这个来源名);Album 另外**参与封面选源**
+	// (见 enrich.go 的 preferAppleCoverOverNetease:网易云这张封面属于另一次发行时,
+	// 改用 Apple 那张对得上专辑的)—— 但两者都不参与 pick() 自己的匹配/打分。
+	// 跟 Artist 不同,这两个字段不做"是否单一歌手"之类的过滤,原样如实展示网易云曲库
+	// 里的名字。
 	Title, Album string
 	// AlbumID 是 Album 那张专辑在网易云的 id,0=没拿到。只给同专辑预取用
 	// (见 neteaseAlbumTracks)。跟 Title/Album 一样取自 pick() 选中的 chosen。
 	AlbumID int64
+	// PureMusic:网易云明确说这首歌是**纯音乐**。2026-08-20 加。
+	//
+	// 歌词接口对纯音乐会在顶层给 `pureMusic: true`,正文则是「作曲 : X」+
+	// 「纯音乐,请欣赏」两行占位(实测 LoL 原声带 id=30431011)。这两行过不了
+	// isTimedLRC 的三行门槛,所以 Lyrics 留空、网易云连一条候选都不产生 —— 而
+	// "查过了、确实没有词"和"这首本来就没有词"在 UI 上是两句不同的话(「无歌词」vs
+	// 「纯音乐」)。这个字段就是把后者那个明确结论带出来,跟 lrclib 的 instrumental
+	// 标记汇到同一处(见 enrich.go 的 instrumentalMarker)。
+	PureMusic bool
 }
 
 // neteaseCache 是这个文件自己内部的网络请求结果缓存(避免短时间内重复打网易云的接口),
@@ -115,6 +126,38 @@ func neteaseSearch(get func(string, any) error, q string, out any) error {
 		return nil
 	}
 	return get("https://music.163.com/api/search/get?type=1&limit=30&s="+escaped, out)
+}
+
+// isNeteasePureMusicLyric 判断这份 lrc 是不是"纯音乐占位"而不是真歌词。
+//
+// 顶层 pureMusic 标记是主判据,这个是**备份**:网易云自己的数据不齐,实测同一批曲目里
+// 有的条目只有正文占位、没有那个顶层字段。
+//
+// 占位文案复用 match.go 已有的 neteaseInstrumentalPlaceholderMarker(那边的
+// isCreditOnlyLRC 拿它判"这份不是真歌词"、直接判废)—— 同一个事实两处别各写一份。
+// 这里做的是**另一件事**:把"判废"升级成"得出结论"。判据刻意收紧成「整份只有占位 +
+// 可选的署名行」,任何一句真歌词都让它不成立,免得把歌词里恰好唱到"纯音乐"的句子误判。
+func isNeteasePureMusicLyric(lrc string) bool {
+	if strings.TrimSpace(lrc) == "" {
+		return false
+	}
+	hasPlaceholder := false
+	for _, line := range strings.Split(lrc, "\n") {
+		body := strings.TrimSpace(lrcTimestampRe.ReplaceAllString(line, ""))
+		if body == "" {
+			continue
+		}
+		if strings.Contains(body, neteaseInstrumentalPlaceholderMarker) {
+			hasPlaceholder = true
+			continue
+		}
+		// 署名行(作曲/作词/编曲…)允许共存 —— 纯音乐条目基本都带一行作曲。
+		if isCreditLine(body) {
+			continue
+		}
+		return false // 有真正的歌词内容
+	}
+	return hasPlaceholder
 }
 
 func resolveNeteaseInfo(artist, title, album string) neteaseInfo {
@@ -390,7 +433,7 @@ func resolveNeteaseInfo(artist, title, album string) neteaseInfo {
 	// 带时间轴的 LRC 歌词，网页跟实时进度条同步高亮滚动。一次老接口就能拿齐原文(lrc)+
 	// 中文翻译(tlyric)+罗马音(romalrc)，三者时间轴对齐；逐字(yrc，词级)走 v1 接口、只有
 	// 部分歌有。只在确有时间戳时带上；同一首歌各版本歌词相同，选中版本无词时退到其它同名版本。
-	fetchBundle := func(songID int64) (lrc, tr, roma string) {
+	fetchBundle := func(songID int64) (lrc, tr, roma string, pureMusic bool) {
 		var r struct {
 			Lrc struct {
 				Lyric string `json:"lyric"`
@@ -401,11 +444,14 @@ func resolveNeteaseInfo(artist, title, album string) neteaseInfo {
 			Romalrc struct {
 				Lyric string `json:"lyric"`
 			} `json:"romalrc"`
+			// 纯音乐标记,见 neteaseInfo.PureMusic。2026-08-20 补上 —— 在此之前这个字段
+			// 压根不在结构体里,信号在解码那一步就丢了。
+			PureMusic bool `json:"pureMusic"`
 		}
 		if err := get(fmt.Sprintf("https://music.163.com/api/song/lyric?id=%d&lv=-1&kv=-1&tv=-1&rv=-1", songID), &r); err != nil {
-			return "", "", ""
+			return "", "", "", false
 		}
-		return r.Lrc.Lyric, r.Tlyric.Lyric, r.Romalrc.Lyric
+		return r.Lrc.Lyric, r.Tlyric.Lyric, r.Romalrc.Lyric, r.PureMusic
 	}
 	fetchYRC := func(songID int64) string {
 		var r struct {
@@ -421,7 +467,11 @@ func resolveNeteaseInfo(artist, title, album string) neteaseInfo {
 		}
 		return ""
 	}
-	if lrc, tr, roma := fetchBundle(id); isTimedLRC(lrc) {
+	lrc, tr, roma, pureMusic := fetchBundle(id)
+	// 纯音乐这个结论跟"有没有可用歌词"分开记:占位正文过不了 isTimedLRC,Lyrics 会留空,
+	// 而"留空"本身分不出"这首没词"和"没查到词"。见 neteaseInfo.PureMusic。
+	info.PureMusic = pureMusic || isNeteasePureMusicLyric(lrc)
+	if isTimedLRC(lrc) {
 		info.Lyrics = lrc
 		if isTimedLRC(tr) {
 			info.Trans = tr

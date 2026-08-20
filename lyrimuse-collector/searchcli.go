@@ -61,6 +61,10 @@ func runSearchLyricsCLI(args []string) {
 		// artistAliasPath 为空的话这份缓存既不读也不写 —— 每开一次"搜索候选歌词"
 		// 弹窗都要重新打一次 MusicBrainz(它自己还有节流,直接体现为用户多等)。
 		loadArtistAliasCache(filepath.Join(filepath.Dir(cfgPath), clientName+"-artist-alias-cache.json"))
+		// 同理,MB 主名那份也要读 —— 这条 CLI 每次都是新进程,不读的话每开一次弹窗都要
+		// 重打一次 MusicBrainz,撞上限速(1 req/s 按 IP,而节流是进程内的)就等于这轮
+		// 别名兜底整个失效:表现是"同一首歌第一遍搜 0 条、再搜一遍就有"。
+		loadMBPrimaryNameCache(filepath.Join(filepath.Dir(cfgPath), clientName+"-artist-primary-cache.json"))
 	}
 
 	// 跟 enrich.go 的 resolveTrackEnrichment 同一个理由:NetEase/QQ/酷狗/LRCLIB 的

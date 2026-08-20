@@ -195,8 +195,11 @@ func resolveKugouLyric(artist, title string, durationSecs float64) kugouResult {
 			s := &sr.Data.Info[i]
 			// 判定用的始终是**本地原样标题** title,不是当前这轮的搜索词 q——放宽的只是
 			// "拿什么去搜",不是"什么算匹配"。
+			// 歌手闸用 lyricSourceArtistMatches:酷狗的合唱署名固定用顿号("UMI、V"),
+			// 本地标签是 "&" 或换了合作者语言写法("UMI & 金泰亨")时 artistMatches 会把
+			// 服务端明明召回成功的正主原地拒掉——酷狗没有 loose 兜底,这一闸拒完整源就空了。
 			if s.Hash == "" || !lyricTitleAccepted(s.SongName, title) ||
-				!artistMatches(s.SingerName, artist) {
+				!lyricSourceArtistMatches(s.SingerName, artist) {
 				continue
 			}
 			chosen = s

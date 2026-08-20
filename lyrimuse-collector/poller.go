@@ -28,6 +28,11 @@ type playSession struct {
 	// 返回时(LB 慢时 single 类型最长可达约 24s)被下一轮 5s poll 重复触发一次提交。
 	submitting bool
 	announcing bool
+	// 会话级广告标记(2026-08-19):开播时判一次(字段启发式 + Spotify AppleScript 权威,
+	// 见 detectAdAtSessionStart),同曲期间字段任一拍判中就往 true 棘轮、绝不回落。
+	// 动机:实测广告字段会**闪变**(开播 album 空、几拍后补齐,Blinds.com 实锤漏成
+	// Last.fm nowplaying),announce 的门若按"当下字段"逐拍重判,任何一拍看走眼就漏。
+	isAd bool
 }
 
 func listenThreshold(duration float64) float64 {
@@ -91,6 +96,24 @@ type poller struct {
 	trackKey   string
 	prevElapse float64
 	prevWall   time.Time
+	// Spotify gapless 自然切歌锚点超前校正(2026-08-20,与 App 侧 LocalPlaybackSource
+	// 同批改——两侧位置逻辑必须一致,只改一边就是"采集器和悬浮窗各说各话"的老坑)。
+	// 实测:自然切歌时 Spotify 在旧曲真声还剩 ~0.84s 时就打好新曲锚点,此后整首歌
+	// elapsedTimeNow 恒定超前真声(+0.888s±0.009,锚点从不重打)——稳定播放期间我们
+	// 只按墙钟累加、从不回看读数,所以播种时刻的超前量整首锁死。修法:换歌那一拍用
+	// "旧曲自己的连续外推越过时长的量"(overrun)当真值播种(允许为负=旧曲真声未完,
+	// 发布口钳到 0),量出偏置 posBias;之后凡直接采信 media-control 读数的分支(暂停
+	// 冻结值)都扣掉它;真实 seek 会让 Spotify 重打对齐真声的新锚点,偏置清零。
+	posBias      float64 // 当前曲目锚点超前量(秒),仅 Spotify 自然切歌时非零
+	prevDuration float64 // 上一轮快照的曲目时长(自然切歌判定用"旧曲"时长)
+	prevPlaying  bool    // 上一轮快照是否在播(gapless 判定要求旧曲正在播)
+	prevBundle   string  // 上一轮快照的播放器 bundle(旧曲真值必须同样来自 Spotify)
+	// 上一轮是否触发了 loopRestart(单曲循环归位)——回绕分两拍被观察到时,第二拍的
+	// 偏置重估要以"已归位的新一遍位置"为真值基准,见 updatePosition 里回绕形态 (a)。
+	prevLoopRestart bool
+	// 本轮 p.cur 是否是上一轮的陈旧残留(getState 读取失败/瞬时 null 未达清空门槛)。
+	// poll() 每轮设置;updatePosition 靠它拒绝让陈旧 Elapsed 走 seek 分支。
+	snapshotStale bool
 
 	// 自建状态中继:每轮把"网页该显示的当前状态"推到 /push(Mac 在放优先,否则 iPhone
 	// 镜像,否则上次播放)。按状态变化 + 心跳去重。remoteTrack/lastListen 由 bridge/
@@ -339,12 +362,39 @@ const (
 	// 偏差是否超出容差"。2 秒容差:大于轮询间隔的正常抖动(进程调度/AppleScript 调用
 	// 往返延迟),小于真实 seek/跳曲通常至少几秒的跳变量。
 	seekJumpToleranceSecs = 2.0
+
+	// Spotify 自然切歌锚点校正的守卫(机制见 poller 结构体 posBias 一带的注释)。
+	// 窗口要吞下 pollInterval(5s,采集器没有事件通知,发现换歌最晚滞后一整拍)+
+	// 元数据提前量 ~1s + 余量;App 侧(2s 轮询+通知,延迟 ~0.3s)对应值是 4.0。
+	naturalAdvanceWindowSecs = 6.5
+	// 偏置可信区间:下限滤测量噪声;上限之外视为陈旧读数/模型失效,放弃校正退回原样
+	// 采信(=改动前行为)。实测真实偏置 0.69~1.32s;上限同时把"手动跳歌恰好发生在结尾
+	// 窗口内"这种误判的伤害钉死在 ≤2.5s(仅那一首、且是偏慢,比整首偏快的现状轻)。
+	naturalAdvanceMaxBiasSecs = 2.5
+	naturalAdvanceMinBiasSecs = 0.05
 )
+
+// naturalAdvanceCorrection 自然切歌锚点偏置估计,纯函数(与 App 侧
+// LocalPlaybackSource.naturalAdvanceCorrection 同一套判据,常量除窗口外一致)。
+// reported=新曲第一笔原始读数;overrun=换歌被观察到那一刻旧曲连续外推位置−旧曲时长
+// (负=真声还没放完)。ok=false 表示窗口外/偏置不可信,按原逻辑采信读数。
+func naturalAdvanceCorrection(reported, overrun float64) (seed, bias float64, ok bool) {
+	if math.Abs(overrun) > naturalAdvanceWindowSecs {
+		return 0, 0, false
+	}
+	bias = reported - overrun
+	if bias <= naturalAdvanceMinBiasSecs || bias > naturalAdvanceMaxBiasSecs {
+		return 0, 0, false
+	}
+	return overrun, bias, true
+}
 
 func (p *poller) updatePosition(now time.Time) (reanchor bool, loopRestart bool) {
 	key := p.cur.key()
 	if key == "" { // nothing playing
 		p.trackKey, p.prevWall = "", time.Time{}
+		p.posBias, p.prevDuration, p.prevPlaying, p.prevBundle = 0, 0, false, ""
+		p.prevLoopRestart = false
 		p.cur.Position, p.cur.AnchorTS = 0, now
 		return false, false
 	}
@@ -352,32 +402,114 @@ func (p *poller) updatePosition(now time.Time) (reanchor bool, loopRestart bool)
 	prevTrackPos := p.trackPos
 	gap := now.Sub(p.prevWall).Seconds()
 	reanchor = true
+	// 切歌/加载瞬间会短暂报 rate=0(playing 仍 true),按 1 计(与 lb.go 的 reconcile
+	// 规则、seedPosition 内部一致)。不归一的话 predicted 停走,下一拍正常前进的读数会
+	// 被误判成 seek 跳变,顺手清掉自然切歌偏置(2026-08-20 对抗审查抓出)。
+	rate := p.cur.Rate
+	if p.cur.Playing && rate <= 0 {
+		rate = 1
+	}
+	if p.cur.Bundle != spotifyBundleID && p.posBias != 0 {
+		// 同 key 跨播放器接续(同一首歌换了源):偏置只对打歪的 Spotify 锚点有意义。
+		p.posBias = 0
+	}
 	seedFromMC := func() float64 { return seedPosition(p.cur.Elapsed, p.cur.Rate, p.cur.Playing, p.cur.McTS, now) }
+	// 单曲循环(repeat-one)的 gapless 回绕:key 不变、走不到换歌分支,但与跨曲自然切歌
+	// 是同一机制(引擎驱动的自然过渡,新锚点先于真声打好)——不识别的话会落进 seek 分支
+	// 把量准的偏置清掉,循环第 2 遍起整曲回到偏快(2026-08-20 对抗审查抓出)。签名=外推
+	// 已过曲尾窗口且按"回绕真值=越界量"估出的偏置可信(稳定播放到曲尾时原始读数是大值,
+	// 估出的偏置≈整曲时长,天然不命中)。命中后下方 loopRestart 连续性判定照常触发,
+	// 收听计数不受影响。
+	// 回绕有两种观察形态(5s 轮询下都常见):
+	// (b) 同一拍观察到——上一拍外推还在结尾前,这一拍原始读数已回绕:真值=越界量,
+	//     交给 naturalAdvanceCorrection(与跨曲自然切歌同一套守卫);
+	// (a) 分两拍观察到——上一拍外推先越过时长、下方 loopRestart 启发式已把 trackPos
+	//     归到新一遍(prevTrackPos 已是新一遍真值),这一拍原始读数才回绕:真值=
+	//     prevTrackPos+gap,只需按偏置可信区间守卫,不再套 |越界|窗口(那是跨界拍的语义)。
+	wrapSeed, wrapBias := 0.0, 0.0
+	wrapOK := false
+	if sameTrackAsBefore && !p.snapshotStale && p.cur.Playing && p.prevPlaying &&
+		p.cur.Bundle == spotifyBundleID && p.prevBundle == spotifyBundleID && p.prevDuration > 0 {
+		if p.prevLoopRestart { // (a)
+			base := prevTrackPos + gap*rate
+			if b := seedFromMC() - base; b > naturalAdvanceMinBiasSecs && b <= naturalAdvanceMaxBiasSecs {
+				wrapSeed, wrapBias, wrapOK = base, b, true
+			}
+		} else { // (b)
+			wrapSeed, wrapBias, wrapOK = naturalAdvanceCorrection(seedFromMC(), prevTrackPos+gap*rate-p.prevDuration)
+		}
+	}
 	switch {
+	case p.snapshotStale && sameTrackAsBefore:
+		// 这一轮没拿到新快照(读取失败/瞬时 null),p.cur 还是上一轮的陈旧值——绝不能让
+		// 陈旧的 Elapsed 走 seek 分支"重锚回过去"、顺手清掉自然切歌偏置(2026-08-20
+		// 对抗审查抓出)。播放中按墙钟推进、暂停维持冻结,等下一轮新鲜快照。
+		if p.cur.Playing {
+			p.trackPos += gap * rate
+			// Elapsed 也同步外推:函数末尾会把它记进 prevElapse@prevWall=now 这对
+			// 基准里,不外推的话这对基准彼此错位一拍,下一轮新鲜读数会被 seek 判据
+			// 误判成跳变(又把偏置清了)。外推值 = media-control 若读取成功本会给的
+			// elapsedTimeNow,语义一致;真在陈旧窗口里发生的 seek/暂停,下一轮新鲜
+			// 读数照常从各自分支兜住。
+			p.cur.Elapsed += gap * rate
+		}
+		reanchor = false
 	case key != p.trackKey: // new track / 重启首见 → 用 media-control 锚点补齐真实位置
+		// Spotify gapless 自然切歌(旧曲在播且已连续外推到结尾附近):锚点先于真声,
+		// 按旧曲连续性播种并量出整曲偏置——机制/守卫见 posBias 与 naturalAdvanceCorrection。
+		// 旧曲真值必须同样来自 Spotify 的连续外推(prevBundle 门):auto 模式跨播放器
+		// 切歌时,拿 QQ/网易云整秒地板或 Apple Music 播放头的外推当旧曲真值是错的。
+		p.posBias = 0
 		p.trackPos = seedFromMC()
+		if p.cur.Bundle == spotifyBundleID && p.prevBundle == spotifyBundleID &&
+			p.cur.Playing && p.prevPlaying && p.prevDuration > 0 && !p.prevWall.IsZero() {
+			overrun := prevTrackPos + gap*rate - p.prevDuration
+			if seed, bias, ok := naturalAdvanceCorrection(p.trackPos, overrun); ok {
+				log.Printf("natural advance: seed %.3fs, anchor leads audio by %.3fs (raw %.3f)", seed, bias, p.trackPos)
+				p.trackPos, p.posBias = seed, bias
+			}
+		}
 	case !p.cur.Playing: // paused → media-control's frozen elapsed is the true position
-		p.trackPos = p.cur.Elapsed
+		// (扣掉自然切歌偏置:冻结值带着同一个超前锚点的值)
+		// 暂停中用户在播放器里拖了进度条:冻结值跳变 = Spotify 已重打对齐真声的锚点,
+		// 旧偏置作废——不清的话恢复播放后整曲反向偏慢一个旧偏置(2026-08-20 对抗审查抓出)。
+		if !p.prevPlaying && p.posBias != 0 &&
+			math.Abs(p.cur.Elapsed-p.prevElapse) > seekJumpToleranceSecs {
+			p.posBias = 0
+		}
+		p.trackPos = p.cur.Elapsed - p.posBias
 		// 暂停后位置冻结不变,不该每轮都当"重新锚定"处理——那会让 pushRelayState
 		// 的"变化才写"节流失效,暂停多久就以 pollInterval 频率写多久 KV(实测烧穿
 		// 1000写/天配额)。暂停这个事件本身已经通过 key 从 mac|X 变成 macpause|X
 		// 触发过一次写入,不需要这里再帮它每轮强制重写。
 		reanchor = false
-	case math.Abs(p.cur.Elapsed-(p.prevElapse+gap*p.cur.Rate)) > seekJumpToleranceSecs: // seek/resume: actual position diverges from what steady playback alone would predict → re-anchor to it (补 McTS→now)
+	case !p.prevPlaying: // 暂停→恢复(同曲):偏置继承,冻结值扣偏置就是恢复点
+		// 不能落进下面的 seek 分支——那会把仍然有效的偏置清掉、位置前跳一个偏置量,
+		// 且与 App 侧"暂停⇄恢复继承偏置"的语义相反(2026-08-20 对抗审查抓出,high)。
+		// 恢复时 Spotify 重打的锚点值来自仍超前的内部计数器,偏置继续成立。
+		p.trackPos = p.cur.Elapsed - p.posBias
+	case wrapOK: // repeat-one gapless 回绕(见上方 wrapOK 注释)
+		log.Printf("repeat-one wrap: seed %.3fs, anchor leads audio by %.3fs", wrapSeed, wrapBias)
+		p.trackPos, p.posBias = wrapSeed, wrapBias
+	case math.Abs(p.cur.Elapsed-(p.prevElapse+gap*rate)) > seekJumpToleranceSecs: // seek: actual position diverges from what steady playback alone would predict → re-anchor to it (补 McTS→now);原始值对原始值,自然切歌偏置在差里天然消掉
+		// 真实 seek 会让 Spotify 重打与真声对齐的新锚点——偏置作废,改信原始读数。
+		p.posBias = 0
 		p.trackPos = seedFromMC()
 	case p.prevWall.IsZero(): // first observation → best guess from media-control's own anchor
+		p.posBias = 0
 		p.trackPos = seedFromMC()
 	case gap > 3*pollInterval.Seconds(): // big gap (sleep/App Nap) → trust frozen elapsed, don't count the gap
+		p.posBias = 0
 		p.trackPos = p.cur.Elapsed
 	default: // steady play → advance by real elapsed wall time
-		p.trackPos += gap * p.cur.Rate
+		p.trackPos += gap * rate
 		reanchor = false
 	}
 	// 单曲循环重新起播判定,见上面常量注释——用 prevTrackPos/p.trackPos 的连续性判断,
 	// 不看是哪个分支算出来的。命中时从余数重新起播(而不是硬归零),减少跨越边界这一轮的
 	// 外推误差;并强制 reanchor=true,让这次重置立刻推一次 relay,网页进度条不用等到
 	// 下次心跳才刷新。
-	if sameTrackAsBefore && p.cur.Playing && p.cur.Duration > 0 &&
+	if sameTrackAsBefore && !p.snapshotStale && p.cur.Playing && p.cur.Duration > 0 &&
 		prevTrackPos >= p.cur.Duration*loopRestartMinElapsedFrac &&
 		(p.trackPos >= p.cur.Duration || p.trackPos <= loopRestartMaxNewElapsedSecs) {
 		loopRestart = true
@@ -389,11 +521,24 @@ func (p *poller) updatePosition(now time.Time) (reanchor bool, loopRestart bool)
 	if p.cur.Duration > 0 && p.trackPos > p.cur.Duration {
 		p.trackPos = p.cur.Duration
 	}
-	if p.trackPos < 0 {
-		p.trackPos = 0
-	}
 	p.trackKey, p.prevElapse, p.prevWall = key, p.cur.Elapsed, now
-	p.cur.Position, p.cur.AnchorTS = p.trackPos, now
+	p.prevDuration, p.prevPlaying, p.prevBundle = p.cur.Duration, p.cur.Playing, p.cur.Bundle
+	p.prevLoopRestart = loopRestart
+	// 负位置只对内部连续性有意义(自然切歌播种时=旧曲真声还没放完,或暂停冻结值扣完
+	// 偏置后略负),对外发布钳到 0。
+	// ⚠️ 内部 p.trackPos 不再钳 0:钳了的话播种的负值立刻丢失,稳定播放分支从 0 起
+	// 累加,整首歌就会超前 |播种值|,校正白做。
+	pub := p.trackPos
+	pubAt := now
+	if pub < 0 {
+		// 发布"位置 0 @ 未来 |trackPos| 秒"而不是"位置 0 @ 现在":网页外推是
+		// pos = progress + age×rate 且 age>0 才加(web frame()/ProgressClock 同一套
+		// 钳位),未来锚点让进度自然停在曲首等真声;锚在"现在"的话,relay 写入按变化
+		// 去重、最长 4 分钟不重写,网页会整段超前 |播种值|(2026-08-20 对抗审查抓出)。
+		pubAt = now.Add(time.Duration(-pub * float64(time.Second)))
+		pub = 0
+	}
+	p.cur.Position, p.cur.AnchorTS = pub, pubAt
 	return reanchor, loopRestart
 }
 
@@ -417,7 +562,8 @@ func (p *poller) pushRelayState(now time.Time, reanchored bool) {
 	//
 	// 判成 false 之后会顺着下面的 switch 落到 iPhone 正在放 / 上次播放,也就是广告这几十秒
 	// 网页停在上一首,跟"没在放"时的表现一致 —— 不会出现一张假的当前曲目卡。判据见 isAdBreak。
-	macHasTrack := p.isTracked() && !isAdBreak(p.cur.Bundle, p.cur.Album)
+	macHasTrack := p.isTracked() && !isAdBreak(p.cur.Bundle, p.cur.Artist, p.cur.Title, p.cur.Album) &&
+		!(p.sess != nil && p.sess.isAd)
 	iphonePlaying := !p.remoteAt.IsZero() && now.Sub(p.remoteAt) < 90*time.Second
 	switch {
 	case macHasTrack && p.cur.Playing: // Mac 正在放 → 最高优先(带进度条)
@@ -511,7 +657,7 @@ func (p *poller) submitSingleAsync(sess *playSession, meta snapshot, startedAt i
 	// 广告不算一次收听。挡在这个漏斗上而不是各个调用点:曲终 finalize 和播放中达阈值两条
 	// 闸门都汇到这里,而 applySubmitOutcome 里的 Last.fm 镜像、本地收听日志、网页中继全都
 	// 挂在它的结果后面,挡住这里就一起挡住了。判据和误伤面见 isAdBreak。
-	if isAdBreak(meta.Bundle, meta.Album) {
+	if sess.isAd || isAdBreak(meta.Bundle, meta.Artist, meta.Title, meta.Album) {
 		log.Printf("skipping ad break: %q - %q", meta.Artist, meta.Title)
 		sess.listenSent = true // 标记成已处理,免得每一轮 poll 都重新判一次
 		return
@@ -589,6 +735,20 @@ func (p *poller) finalize(now time.Time) {
 // 歌词,未就绪时挂起等 enrich(见 handle)。同一个 session 在结果返回前重复调用会被
 // 去重(sess.announcing)；lastPN/pnPending 的变更挪到 applyAnnounceOutcome,调用方
 // 不再能同步拿到"是否成功"。
+// detectAdAtSessionStart 开播时的广告判定:字段启发式(isAdBreak)先行;是 Spotify 且
+// 字段没判中时,再向 Spotify 本尊要一次权威判据 —— AppleScript 的 `spotify url` 对广告
+// 返回 "spotify:ad:…"(字段启发式打不完地鼠:广告可以带全 artist/title/album)。
+// 每次换曲最多一次 osascript(~50ms),失败静默退回字段启发式,不劣于旧状。
+func (p *poller) detectAdAtSessionStart() bool {
+	if isAdBreak(p.cur.Bundle, p.cur.Artist, p.cur.Title, p.cur.Album) {
+		return true
+	}
+	if p.cur.Bundle == spotifyBundleID {
+		return spotifyCurrentTrackIsAd(p.ctx)
+	}
+	return false
+}
+
 func (p *poller) announce(now time.Time, why string) {
 	if p.sess.announcing {
 		return
@@ -597,7 +757,7 @@ func (p *poller) announce(now time.Time, why string) {
 	// 决定网页顶部那张卡显示什么 —— 一个公开页面上写着"正在播放 BLIZZARD® Double Flip Deal
 	// BOGO for 99¢"是纯粹的噪声。挡掉之后广告这几十秒里网页停在上一首,跟"没在放"时的表现
 	// 一致,不会出现假的当前曲目。判据见 isAdBreak。
-	if isAdBreak(p.cur.Bundle, p.cur.Album) {
+	if p.sess.isAd || isAdBreak(p.cur.Bundle, p.cur.Artist, p.cur.Title, p.cur.Album) {
 		return
 	}
 	p.sess.announcing = true
@@ -658,6 +818,7 @@ func (p *poller) handle(now time.Time, reanchored, loopRestart bool) {
 			if p.cur.Playing {
 				p.sess.lastSeen = now
 			}
+			p.sess.isAd = p.detectAdAtSessionStart()
 		}
 		p.recentFinalized = nil
 		log.Printf("now playing: %s - %s", p.cur.Artist, p.cur.Title)
@@ -690,6 +851,7 @@ func (p *poller) handle(now time.Time, reanchored, loopRestart bool) {
 		if p.cur.Playing {
 			p.sess.lastSeen = now
 		}
+		p.sess.isAd = p.detectAdAtSessionStart()
 		log.Printf("loop restart: %s - %s", p.cur.Artist, p.cur.Title)
 		if len(trackEnrichment(p.cur.Artist, p.cur.Title, p.cur.Album, p.cur.Bundle, p.cur.Duration)) > 0 {
 			p.announce(now, "loop restart")
@@ -697,6 +859,12 @@ func (p *poller) handle(now time.Time, reanchored, loopRestart bool) {
 			p.sess.pnPending = true
 		}
 		return
+	}
+
+	// 广告标记棘轮:同曲期间任一拍字段判中就永久置位(字段会闪变,见 playSession.isAd)。
+	if !p.sess.isAd && isAdBreak(p.cur.Bundle, p.cur.Artist, p.cur.Title, p.cur.Album) {
+		p.sess.isAd = true
+		log.Printf("ad break detected mid-session: %q - %q", p.cur.Artist, p.cur.Title)
 	}
 
 	// Same track: on a play/pause transition, re-announce immediately so the
@@ -926,15 +1094,22 @@ func (p *poller) applyBridgeResult(r bridgeFetchResult) {
 // track is playing; treat a lone null as a glitch (keep the last state), and
 // only declare playback stopped after a few consecutive nulls.
 func (p *poller) poll() {
+	// snapshotStale:这一轮 p.cur 是否还是上一轮的陈旧残留——getState 直接失败,或
+	// 瞬时 null 未达 3 连清空门槛时,p.cur 原样保留,但它的 Elapsed 已经落后墙钟一整拍,
+	// updatePosition 不能把它当新鲜读数用(会误判 seek、清掉自然切歌偏置,2026-08-20
+	// 对抗审查抓出)。真空态(3 连 null 清空)是新信息,不算陈旧。
+	p.snapshotStale = true
 	if state, ok := getState(p.ctx); ok {
 		if len(state) == 0 { // "null" — nothing playing, or a transient read glitch
 			p.nullStreak++
 			if p.nullStreak >= 3 {
 				p.cur = snapshot{}
+				p.snapshotStale = false
 			}
 		} else {
 			p.nullStreak = 0
 			p.cur = extract(state)
+			p.snapshotStale = false
 		}
 	}
 	now := time.Now()
@@ -1022,7 +1197,7 @@ func run(ctx context.Context, cfg *config, lb *lbClient) error {
 			// 所以广告判据要在这里再挡一次(见 isAdBreak)。
 			if p.sess != nil && !p.sess.listenSent && p.sess.playedSecs >= listenThreshold(p.sess.meta.Duration) &&
 				(p.sess.meta.Duration <= 0 || p.sess.meta.Duration >= minTrackSecs) &&
-				!isAdBreak(p.sess.meta.Bundle, p.sess.meta.Album) {
+				!p.sess.isAd && !isAdBreak(p.sess.meta.Bundle, p.sess.meta.Artist, p.sess.meta.Title, p.sess.meta.Album) {
 				// Last.fm 镜像:与 LB 解耦,且必须走同步变体 —— 异步 goroutine 活不过
 				// 紧接着的 return(见 mirrorScrobbleSync 注释)。
 				p.mirrorScrobbleSync(flushCtx, p.sess.meta.Artist, p.sess.meta.Title, p.sess.meta.Album, p.sess.startedAt.Unix())

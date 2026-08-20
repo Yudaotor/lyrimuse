@@ -31,6 +31,7 @@ func runTopArtistsCLI(args []string) {
 	// 四档并发取数在 Go 里只是四个 goroutine —— 一次 spawn,切时段零等待(2026-08-11
 	// 发散采纳)。
 	allPeriods := fs.Bool("all-periods", false, "fetch 7day/1month/12month/overall in one run")
+	mbBudget := fs.Int("mb-budget", 0, "resolve up to N uncached artist identities via MusicBrainz (0 = cache only)")
 	if err := fs.Parse(args); err != nil {
 		log.Fatalf("top-artists: %v", err)
 	}
@@ -56,6 +57,12 @@ func runTopArtistsCLI(args []string) {
 	if cfg.LastfmUser == "" || cfg.lastfmBridgeAPIKey() == "" {
 		log.Fatal("top-artists: lastfm_user / api key not configured")
 	}
+	// 身份缓存(mbid+中文名)与常驻进程共用同一份文件;默认预算 0 = 只读缓存不联网,
+	// App 统计页那条调用路径保持毫秒级。手动导出想现场解析就传 -mb-budget(每个未缓存
+	// 名字 ≤2 次 MusicBrainz 请求、全局 1.1s 限速,预算大时耐心等)。
+	loadArtistIdentityCache(filepath.Join(home, ".config", clientName, clientName+"-artist-identity-cache.json"))
+	resolve := budgetedArtistIdentity(*mbBudget)
+	defer saveArtistIdentityCache()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
@@ -86,7 +93,7 @@ func runTopArtistsCLI(args []string) {
 				log.Printf("top-artists: period %s failed: %v", r.period, r.err)
 				continue
 			}
-			merged := mergeAliasedArtists(r.entries)
+			merged := mergeAliasedArtistsResolved(r.entries, resolve)
 			if len(merged) > *limit {
 				merged = merged[:*limit]
 			}
@@ -112,7 +119,7 @@ func runTopArtistsCLI(args []string) {
 	if err != nil {
 		log.Fatalf("top-artists: fetch: %v", err)
 	}
-	merged := mergeAliasedArtists(entries)
+	merged := mergeAliasedArtistsResolved(entries, resolve)
 	if len(merged) > *limit {
 		merged = merged[:*limit]
 	}

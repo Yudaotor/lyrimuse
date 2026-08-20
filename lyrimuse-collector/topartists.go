@@ -126,16 +126,25 @@ func artistMergeNameKey(name string) string {
 	return strings.ToLower(toSimplified(first))
 }
 
-// artistMergeDisplayName 是展示用的名字——步骤跟 artistMergeNameKey 前两步一致(合唱
-// 取第一位、已知别名换成中文名),但不做 toSimplified/大小写折叠:那两步只是"判断是否
-// 同一个人"内部用的归一化,不代表要悄悄篡改这个人在库里原本的书写(繁体来源就展示繁体,
-// 不强制转简体)。
+// artistMergeDisplayName 是展示用的名字——只做"已知别名换成中文名"这一步,不做
+// toSimplified/大小写折叠:那两步只是"判断是否同一个人"内部用的归一化,不代表要悄悄篡改
+// 这个人在库里原本的书写(繁体来源就展示繁体,不强制转简体)。
+//
+// ⚠️ 2026-08-17 去掉了原来第一步的 firstCreditedArtist(从合credit 串里猜第一个歌手)。
+// 那一步会**凭空造出一个数据里根本没出现过的名字**:`firstCreditedArtist` 按分隔符切段,
+// 而 `/` 既是常见分隔符、又可能是人名自身的一部分,于是 "K/DA" 被切成 ["K","DA"]、
+// 显示成 **"K"** —— 一个不存在的歌手。实测(用户报):Top 榜里 "K/DA" 和
+// "K/DA/Madison Beer/(G)I-DLE/Jaira Burns" 的**合并本身是对的**(两者的 nameKey 都塌缩
+// 成 "k",次数正确相加),错的只有这个显示名。
+//
+// 现在的做法见 mergeAliasedArtists:显示名从**这一桶里真实出现过的成员名字**里挑
+// (合credit 段数最少的那个),不再猜。合credit 串"不单独占一个歌手名额"这个目的由
+// artistMergeNameKey(合并键)承担,跟显示名是两件事,那边照旧。
 func artistMergeDisplayName(name string) string {
-	first := firstCreditedArtist(name)
-	if alias := knownArtistAlias(first); alias != "" {
+	if alias := knownArtistAlias(name); alias != "" {
 		return alias
 	}
-	return first
+	return name
 }
 
 // mergeAliasedArtists 把 Last.fm 统计里"同一个真人被拆成多条"的记录合并成一条,播放
@@ -150,11 +159,79 @@ func artistMergeDisplayName(name string) string {
 //
 // 合并后按播放次数重新降序排列——合并可能改变名次,比如两条各自排第 6/7 名,合并后播放
 // 次数相加就可能前移到第 4 名。
+// artistIdentityFn 把一个歌手名解析成 MusicBrainz 身份(mbid+中文名)。归并逻辑通过它
+// 拿第三个合并信号,不关心背后是缓存还是联网——单测注入假函数,生产两档见
+// cacheOnlyArtistIdentity / budgetedArtistIdentity。
+type artistIdentityFn func(name, knownMbid string) mbArtistIdentity
+
+// cacheOnlyArtistIdentity 只读缓存、绝不联网——给所有对延迟敏感的调用方
+// (poll 循环里的 topArtistsDigest、App 统计页背后的 CLI 默认档)。缓存由
+// warmArtistIdentityCache / 带预算的手动导出慢慢填,归并逐日收敛。
+func cacheOnlyArtistIdentity(name, _ string) mbArtistIdentity {
+	id, _ := cachedArtistIdentity(strings.TrimSpace(name))
+	return id
+}
+
+// budgetedArtistIdentity 允许最多 budget 个**未缓存**名字走真实 MusicBrainz 解析
+// (每个 ≤2 次请求、全局 1.1s 限速),超出预算的这一轮只吃缓存。并发安全:CLI 的
+// -all-periods 模式四个时段共享同一份预算。
+func budgetedArtistIdentity(budget int) artistIdentityFn {
+	var mu sync.Mutex
+	remaining := budget
+	return func(name, knownMbid string) mbArtistIdentity {
+		name = strings.TrimSpace(name)
+		if name == "" {
+			return mbArtistIdentity{}
+		}
+		if id, ok := cachedArtistIdentity(name); ok {
+			return id
+		}
+		mu.Lock()
+		if remaining <= 0 {
+			mu.Unlock()
+			return mbArtistIdentity{}
+		}
+		remaining--
+		mu.Unlock()
+		return resolveArtistIdentityMB(name, knownMbid)
+	}
+}
+
+// warmArtistIdentityCache 后台预热身份缓存:按榜单顺序(播放次数降序,高频歌手优先)
+// 解析前 budget 个未缓存的名字并落盘。给 topArtistsDigest 用——它在 poll 循环里同步跑,
+// 绝不能被 MusicBrainz 限速卡住(每个名字最多 2×1.1s),所以归并本体只读缓存,预热放
+// goroutine 里慢慢做,次日的归并自然吃到。
+func warmArtistIdentityCache(entries []lastfmChartEntry, budget int) {
+	resolve := budgetedArtistIdentity(budget)
+	for _, e := range entries {
+		first := firstCreditedArtist(e.Name)
+		mbid := ""
+		if strings.EqualFold(strings.TrimSpace(first), strings.TrimSpace(e.Name)) {
+			// Last.fm 的 mbid 属于整条 credit 串;只有单人条目才能把它当作
+			// 这个名字的已知身份传下去,合唱串的 mbid 不属于第一位歌手。
+			mbid = e.Mbid
+		}
+		resolve(first, mbid)
+	}
+	saveArtistIdentityCache()
+}
+
 func mergeAliasedArtists(entries []lastfmChartEntry) []lastfmChartEntry {
+	return mergeAliasedArtistsResolved(entries, cacheOnlyArtistIdentity)
+}
+
+func mergeAliasedArtistsResolved(entries []lastfmChartEntry, resolve artistIdentityFn) []lastfmChartEntry {
 	n := len(entries)
 	nameKeys := make([]string, n)
+	ids := make([]mbArtistIdentity, n)
 	for i, e := range entries {
 		nameKeys[i] = artistMergeNameKey(e.Name)
+		first := firstCreditedArtist(e.Name)
+		mbid := ""
+		if strings.EqualFold(strings.TrimSpace(first), strings.TrimSpace(e.Name)) {
+			mbid = e.Mbid // 理由见 warmArtistIdentityCache 里同款判断
+		}
+		ids[i] = resolve(first, mbid)
 	}
 
 	parent := make([]int, n)
@@ -174,29 +251,78 @@ func mergeAliasedArtists(entries []lastfmChartEntry) []lastfmChartEntry {
 			parent[ra] = rb
 		}
 	}
-	for i := 0; i < n; i++ {
-		for j := i + 1; j < n; j++ {
-			sameName := nameKeys[i] != "" && nameKeys[i] == nameKeys[j]
-			sameMbid := entries[i].Mbid != "" && entries[i].Mbid == entries[j].Mbid
-			if sameName || sameMbid {
-				union(i, j)
-			}
+	// 三个信号,任一相同即并(链式传递):①名字键(合唱取第一位+别名表+繁简+大小写);
+	// ②mbid——Last.fm 自带的,或身份解析补上的("Leah Dou"和"窦靖童"名字键连不上、
+	// Last.fm 只给了一边 mbid,只有两边都解析到同一个 MusicBrainz 艺人才并得上);
+	// ③解析出的中文名的名字键——兜"A 解析出中文名、B 本来就用中文名"的组合。
+	groups := map[string][]int{}
+	addKey := func(k string, i int) {
+		if k != "" {
+			groups[k] = append(groups[k], i)
+		}
+	}
+	for i, e := range entries {
+		if nameKeys[i] != "" {
+			addKey("n:"+nameKeys[i], i)
+		}
+		mbid := e.Mbid
+		if mbid == "" {
+			mbid = ids[i].Mbid
+		}
+		if mbid != "" {
+			addKey("m:"+mbid, i)
+		}
+		if ids[i].Zh != "" {
+			addKey("n:"+strings.ToLower(toSimplified(ids[i].Zh)), i)
+		}
+	}
+	for _, idxs := range groups {
+		for k := 1; k < len(idxs); k++ {
+			union(idxs[0], idxs[k])
 		}
 	}
 
+	// 每一桶的显示名从**桶里真实出现过的成员名字**里挑,挑"合credit 段数最少"的那个:
+	// 同一个人常常同时以"本名"和"某首合唱的完整 credit 串"两种形态出现在榜单里
+	// ("K/DA" 和 "K/DA/Madison Beer/(G)I-DLE/Jaira Burns"),段数最少的那个就是本名。
+	// 段数相同就保持先遇到的那个 —— 输入按播放次数降序,等于取次数更多的那份写法。
+	//
+	// ⚠️ 刻意**不**从字符串里猜第一个歌手(原来 artistMergeDisplayName 干的事,见那边
+	// 注释):`/` 既是分隔符又可能是人名的一部分,猜出来的 "K" 是个数据里不存在的名字。
+	// 从成员里挑最坏情况也只是显示一个完整的合credit 串(那一桶里恰好没有本名条目时),
+	// 而那至少是真实出现过的写法。
 	type bucket struct {
 		name      string
+		nameParts int    // 上面那个名字的 artistCreditParts 段数,用来比较谁更像"本名"
+		hanName   string // 桶里第一个(=播放最多的)单人中文成员名,见下面挑选注释
+		zh        string // 身份解析给出的中文名(桶里没有任何中文成员名时的显示兜底)
 		playCount int
 	}
 	buckets := make(map[int]*bucket, n)
 	order := make([]int, 0, n)
 	for i, e := range entries {
 		root := find(i)
+		display := artistMergeDisplayName(e.Name)
+		parts := len(artistCreditParts(e.Name))
 		b, ok := buckets[root]
 		if !ok {
-			b = &bucket{name: artistMergeDisplayName(e.Name)}
+			b = &bucket{name: display, nameParts: parts}
 			buckets[root] = b
 			order = append(order, root)
+		} else if parts < b.nameParts {
+			b.name, b.nameParts = display, parts
+		}
+		// 中文成员名单独一条挑选轨:这个库的主体是华语音乐,同一个人有中文写法时
+		// 中文就是"本库常用名"(2026-08-18 用户核对 Top100 的直接反馈——"窦靖童"和
+		// "Leah Dou"合并后该显示前者)。⚠️ 只认**单人**写法(credit 段数 1):不加这个
+		// 限制,"Michael Jackson"会被桶里一条 2 次播放的"Michael Jackson & 克里夫兰
+		// 管弦乐团"顶掉——含汉字的合唱串说明不了这个人常用中文名,只说明某张发行的
+		// 合作方是中文写法(首版实测翻车)。平手先到者(=播放多的写法)优先。
+		if parts == 1 && containsHan(display) && b.hanName == "" {
+			b.hanName = display
+		}
+		if b.zh == "" && ids[i].Zh != "" {
+			b.zh = ids[i].Zh
 		}
 		b.playCount += e.PlayCount
 	}
@@ -204,7 +330,15 @@ func mergeAliasedArtists(entries []lastfmChartEntry) []lastfmChartEntry {
 	out := make([]lastfmChartEntry, 0, len(order))
 	for _, root := range order {
 		b := buckets[root]
-		out = append(out, lastfmChartEntry{Name: b.name, PlayCount: b.playCount})
+		name := b.name
+		// 显示名优先级:桶里真实出现过的中文成员名 > 身份解析的中文名(桶里全是罗马
+		// 写法时,如 "Ronghao Li"→"李荣浩") > 主轨挑出的名字。
+		if b.hanName != "" {
+			name = b.hanName
+		} else if b.zh != "" {
+			name = b.zh
+		}
+		out = append(out, lastfmChartEntry{Name: name, PlayCount: b.playCount})
 	}
 	// SliceStable:平分的歌手保持合并前的相对次序(合并前列表来自 Last.fm,本身有序),
 	// sort.Slice 的不稳定性会让平分名次每次刷新随机跳(审阅指出)。
@@ -290,6 +424,10 @@ func (p *poller) topArtistsDigest(now time.Time) {
 	if err != nil || len(entries) == 0 {
 		return
 	}
+	// 身份缓存预热放后台:这个函数在 poll 循环里**同步**跑(见下面头像那段注释),
+	// MusicBrainz 全局 1.1s 限速、整池预热要 ~1 分钟,绝不能在这里等。归并本体只读
+	// 缓存,今天没预热到的名字明天这一轮自然吃到——榜单一天才推一次,晚一天收敛无感。
+	go warmArtistIdentityCache(entries, topArtistsFetchPool)
 	merged := mergeAliasedArtists(entries)
 	if len(merged) > topArtistsN {
 		merged = merged[:topArtistsN]

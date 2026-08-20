@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"unicode"
+	"unicode/utf8"
 )
 
 var lrcTimestampRe = regexp.MustCompile(`\[\d{1,2}:\d{2}[.:]\d{1,3}\]`)
@@ -620,6 +621,11 @@ func artistMatches(a, b string) bool {
 				return true
 			}
 		}
+		// 逐段相等之外再放一档:连续若干段拼回去也算(人名自身含分隔符的情况),
+		// 见 artistCreditRunMatches。
+		if artistCreditRunMatches(na, nb) {
+			return true
+		}
 	}
 	if pb := artistCreditParts(nb); len(pb) >= 2 {
 		for _, part := range pb {
@@ -627,8 +633,145 @@ func artistMatches(a, b string) bool {
 				return true
 			}
 		}
+		if artistCreditRunMatches(nb, na) {
+			return true
+		}
 	}
 	return false
+}
+
+// artistCreditRunMatches reports whether needle 作为**分隔符界定的连续片段**出现在 hay
+// 里。两个参数都要求调用方已经归一化(小写、去首尾空白)。
+//
+// 为什么需要它:artistCreditParts 按分隔符把合credit 串切段,而 `/` 既是常见分隔符、
+// 又可能是**人名自身的一部分**(K/DA、AC/DC)。"K/DA/Madison Beer/(G)I-DLE/Jaira Burns"
+// 切出来是 ["k" "da" "madison beer" "(g)i-dle" "jaira burns"] —— `"k/da"` 永远不是其中
+// 任何一段,于是 artistMatches("K/DA", 那一串) 是 false:**真正的歌手过不了闸,而一个
+// 根本不存在的"K"反而能过**。
+//
+// 2026-08-17 用户报的现象就是这个:「联网搜索候选歌词」用播放器给的完整歌手串只搜到
+// 两条候选,把歌手手工截短成 "K/DA" 之后变成三条 —— Musixmatch 的采纳条件里有
+// artistMatches(它返回的 artist_name 正是 "K/DA"),哪怕 API 把正确那条返回了也会被
+// 原地拒掉;而且 netease/lrclib 两条本来就找得到的候选也因为歌手项没拿到分、各低了整
+// 100 分,导致 app 退而用了没有逐字时间轴的那份。
+//
+// 把"连续若干段拼回去"也算一种匹配就补上了这个洞:`k/da` 正是 [k, da] 这两段按原分隔符
+// 拼回去的结果,也就是 hay 里一个分隔符界定的片段。
+//
+// ⚠️ 判据**不能**退化成任意子串匹配:那样 "an" 会命中 "anna"、"da" 会命中 "dave"。
+// 要求命中处两侧要么是字符串边界、要么(跳过空白之后)紧邻一个分隔符 —— 这正是
+// "整段或整几段"的含义。
+//
+// ⚠️ 调用方必须保留 `len(parts) >= 2` 那道守卫,不能把这个函数单独拿出来用:
+// artistMatches("周杰伦", "周杰伦、") 现在是 false,而那是**故意的** —— 网易云出现过
+// 艺人字段就是 "周杰伦、" 的仿冒条目,尾随分隔符本身就是仿冒特征(见 artistCreditParts
+// 和 neteaseImpersonatorRiddenArtists 的注释)。少了那道守卫,这条防线会被顺手拆掉。
+func artistCreditRunMatches(hay, needle string) bool {
+	if hay == "" || needle == "" || len(needle) > len(hay) {
+		return false
+	}
+	for off := 0; off+len(needle) <= len(hay); {
+		i := strings.Index(hay[off:], needle)
+		if i < 0 {
+			return false
+		}
+		i += off
+		if artistCreditBoundaryBefore(hay[:i]) && artistCreditBoundaryAfter(hay[i+len(needle):]) {
+			return true
+		}
+		off = i + 1
+	}
+	return false
+}
+
+// artistCreditBoundaryBefore:命中处左侧要么只剩空白(等于字符串开头),要么最后一个
+// 非空白字符是分隔符。空白本身**不算**边界 —— 否则 "the" 会命中 "the revolution"。
+func artistCreditBoundaryBefore(s string) bool {
+	s = strings.TrimRight(s, " \t")
+	if s == "" {
+		return true
+	}
+	r, _ := utf8.DecodeLastRuneInString(s)
+	return isArtistCreditSep(r)
+}
+
+// artistCreditBoundaryAfter:同上,方向相反。
+func artistCreditBoundaryAfter(s string) bool {
+	s = strings.TrimLeft(s, " \t")
+	if s == "" {
+		return true
+	}
+	r, _ := utf8.DecodeRuneInString(s)
+	return isArtistCreditSep(r)
+}
+
+// lyricSourceArtistMatches 是**歌词源候选采纳闸**专用的歌手匹配:在 artistMatches 之上
+// 多放一档"两侧都是多人合credit 时,拆段后有任意一段相等即通过"。
+//
+// 为什么需要它(2026-08-20,「wherever u r」实测坐实):本地标签 "UMI & 金泰亨" 查酷狗,
+// 服务端召回其实是成功的——正主排第 1、署名 "UMI、V"——却被 artistMatches 原地拒掉:
+// 它只做"一方的段 == 另一方整串"和连续段拼回,两侧**各自**拆段后的交集(umi 明明两边
+// 都有)永远不被比较;连纯英文 "UMI & V" 对 "UMI、V" 都过不了(分隔符不同,整串不等、
+// 段对整串也不等)。跨服务的合唱署名本来就会换分隔符、换合作者的语言写法(V ↔ 金泰亨),
+// 要求整串对上等于要求两边曲库用同一套署名习惯。
+//
+// 只用在歌词候选的采纳闸(kugou/qq strict 档/lrclib search/musixmatch),**不替换**
+// artistMatches 本身——后者还服务于身份判定/防仿冒(nameOnlyMatch、canonical 统一
+// 拼写),那些场景放宽会扩大仿冒面。防仿冒守卫在这里同样保留:交集档要求**两侧都**
+// 真正切出 ≥2 段(artistCreditParts 的 len<2 约定),"周杰伦、"这种尾随分隔符的仿冒
+// 写法只切出 1 段,永远进不了交集档;段与段之间仍是字节相等(小写/去空白后),不做
+// normLoose/子串,"周杰伦-" 冒充 "周杰伦" 的老洞不会被重新打开。
+func lyricSourceArtistMatches(candidate, query string) bool {
+	if artistMatches(candidate, query) {
+		return true
+	}
+	pc, pq := artistCreditParts(candidate), artistCreditParts(query)
+	if len(pc) < 2 || len(pq) < 2 {
+		return false
+	}
+	for _, c := range pc {
+		for _, q := range pq {
+			if c == q {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// featCreditSepRe 匹配歌手串里词级的 feat 类分隔("feat."/"feat"/"ft."/"ft"/
+// "featuring",大小写不敏感,可带一个左括号)。只收这几个词:它们作为艺名成分几乎
+// 不存在,而 "with"/"x" 都是真实艺名的常见组成部分(Sleeping With Sirens、Charli xcx),
+// 收进来会把单一乐队名错砍成半截。⚠️ 这套词级切分**只用于生成检索变体**
+// (lyricPrimaryQueryArtist),不并入 isArtistCreditSep——那份 rune 级分隔符集被
+// artistMatches/防仿冒判定共用,动它会改变身份判定语义。
+var featCreditSepRe = regexp.MustCompile(`(?i)\s*[(（]?\s*\b(?:feat\.|feat\b|ft\.|ft\b|featuring\b)`)
+
+// lyricPrimaryQueryArtist 从多人合credit 的歌手串里取出首歌手,作为歌词检索的**查询
+// 变体**(不是身份改写)。不是多人合credit(切不出第二段、也没有 feat 类分隔)时返回
+// 空串,表示没有变体可言。返回值只该用来发检索请求和过各源的采纳闸,**绝不能**回写
+// canonical_artist / 展示字段——把 "A & B" 缩窄成 "A" 正是 2026-07-10 那次回归
+// (project_nowplaying_canonical_artist_multi_credit_regression)的形态。
+//
+// 为什么值得存在(2026-08-20 实测):LRCLIB 的 artist_name 是服务端结构化匹配,
+// "UMI & 金泰亨" 直接 404,"UMI" 就能回 20 条;网易云对不同歌手串会选中不同版本的
+// 条目。闸门层的坑由 lyricSourceArtistMatches 补,召回层的坑只能换检索词。
+func lyricPrimaryQueryArtist(artist string) string {
+	trimmed := strings.TrimSpace(artist)
+	if trimmed == "" {
+		return ""
+	}
+	base := trimmed
+	if loc := featCreditSepRe.FindStringIndex(base); loc != nil {
+		base = strings.TrimSpace(base[:loc[0]])
+	}
+	primary := strings.TrimSpace(firstCreditedArtist(base))
+	// primary 为空(整串就是 "FT Island" 这类被 feat 词误伤的名字被砍空)或跟原串
+	// 规整后没差别(本来就是单人)都算"没有变体",宁可不试也不发一个错的检索词。
+	if primary == "" || normLoose(primary) == normLoose(trimmed) {
+		return ""
+	}
+	return primary
 }
 
 // artistAliasTable 是极小的、手工登记的"已知英文/罗马化艺名 → 本库常用中文名"
@@ -644,6 +787,33 @@ var artistAliasTable = map[string]string{
 	"kun":        "蔡徐坤",
 	"dean ting":  "丁世光",
 	"crowd lu":   "卢广仲",
+	// 2026-08-18 批量补充:用户逐条核对 Last.fm Top100 导出坐实的同人异名(值是本库
+	// 常用名,不一定是中文——Utada 的常用名就是日文)。这些同时喂三处:歌词检索的
+	// 别名重试(retryArtistIdentities)、canonical_artist 兜底、Top 歌手榜归并
+	// (artistMergeNameKey/artistMergeDisplayName)。MusicBrainz 身份解析
+	// (resolveArtistIdentityMB)是这类问题的通用防线,这张表兜住它查不到/被
+	// country 门槛挡掉的确证个案(如曲婉婷 country=CA)。
+	"leah dou":    "窦靖童",
+	"soft lipa":   "蛋堡",
+	"diana wang":  "王诗安",
+	"a si":        "阿肆",
+	"eve ai":      "艾怡良",
+	"nicky lee":   "李玖哲",
+	"utada":       "宇多田ヒカル",
+	"wanting":     "曲婉婷",
+	"ronghao li":  "李荣浩",
+	"matt lv":     "吕彦良",
+	"pei-yu hung": "洪佩瑜",
+	"lexie liu":   "刘柏辛",
+	// 第二轮(同日,MB 通用层解析不到中文名的确证补充——不在 MusicBrainz 或没登记中文别名)。
+	"sodagreen":      "苏打绿",
+	"zhang yu sheng": "张雨生",
+	// 第三轮(同日,专辑导出核对时发现这两个英文艺名也真实出现在库的歌手标签里)。
+	"khalil fong": "方大同",
+	"jay chou":    "周杰伦",
+	// 第四轮(同日,歌曲导出核对):宇多田三写法并存,英文名和中文名都折到日文常用名。
+	"hikaru utada": "宇多田ヒカル",
+	"宇多田光":         "宇多田ヒカル",
 }
 
 // retryArtistIdentities 给出"第一轮没查到可用候选时,还值得换个名字再搜一遍"的歌手名,
@@ -677,6 +847,11 @@ func retryArtistIdentities(artist string) []string {
 	}
 	add(knownArtistAlias(artist))
 	add(canonicalArtistViaMusicBrainz(artist))
+	// 第三条(2026-08-20):MB 上这位歌手的**主名**。前两条都是"中文名"取向 —— 手工表
+	// 登记的是中文常用名,canonical 那条只在中文圈艺人身上出结果 —— 而"本名 ↔ 艺名"
+	// (Abel Tesfaye ↔ The Weeknd)跟中文毫无关系,以前整个类别没人管。
+	// 排在最后:它是纯自动推断,让人工登记和跨服务核实过的结果先试。
+	add(musicBrainzPrimaryArtistName(artist))
 	return out
 }
 
@@ -851,15 +1026,62 @@ func stripParens(s string) string {
 //
 // ⚠️ 搜回来的候选照旧要过 lyricTitleAccepted 那一关,判定用的始终是**本地原样标题**。
 // 放宽的只是"拿什么去搜",不是"什么算匹配" —— 换了搜索词不会让另一个版本混进来。
+// ⚠️ 2026-08-17 起去装饰有**两种**形态(去括号 + 去结构性前缀,见
+// stripStructuralTitlePrefix),不再只有去括号一种。两者都只是"拿什么去搜",判定照旧
+// 走 lyricTitleAccepted。刻意**不**把两种去装饰叠起来再多加一个变体:那是没有实测依据的
+// 推测,而每多一个变体就是每个源在"一无所获"那条路上多打一次请求 —— 按这个仓库一贯的
+// 做法,等真踩到 "Medley: X (Remastered)" 这种形状再加。
 func searchTitleVariants(title string) []string {
-	bare := stripParens(title)
-	if bare == "" || bare == title {
+	// 去装饰的形态,去重、丢掉跟原样标题相同的。
+	var stripped []string
+	seen := map[string]bool{title: true}
+	add := func(s string) {
+		if s == "" || seen[s] {
+			return
+		}
+		seen[s] = true
+		stripped = append(stripped, s)
+	}
+	add(stripStructuralTitlePrefix(title))
+	add(stripParens(title))
+
+	if len(stripped) == 0 {
 		return []string{title}
 	}
 	if len(titleVersionTags(title)) > 0 {
-		return []string{title, bare}
+		return append([]string{title}, stripped...)
 	}
-	return []string{bare, title}
+	return append(stripped, title)
+}
+
+// structuralTitlePrefixes 是曲目名前面那种**结构性标签**:Apple Music 这类平台会给串烧/
+// 间奏曲加上 "Medley: " / "Interlude: " 前缀,而歌词源的曲库里通常只有裸曲名。
+//
+// 2026-08-17 实测(用户报「这首歌找不到歌词」):D'Angelo 的 Voodoo 专辑里那首,Apple
+// Music 报的标题是 "Medley: Greatdayndamornin' / Booty",而各源曲库里就叫
+// "Greatdayndamornin'/Booty"。带前缀去搜 **五个源全部 0 条**;去掉前缀(歌手和专辑一个字
+// 不动)**五个源全部命中**,最高分 1270。
+//
+// 白名单而不是"冒号前面一律砍掉":后者会把 "Foo: Bar" 这种本来就带冒号的正常曲名切掉半截,
+// 跟另一首叫 "Bar" 的歌混为一谈。跟这个仓库里 distinctRecordingVersionTags /
+// neteaseImpersonatorRiddenArtists 一个路子 —— 只收歧义极小的,新的按实际踩坑追加。
+var structuralTitlePrefixes = []string{"medley", "interlude"}
+
+// stripStructuralTitlePrefix 去掉 "Medley: " 这类结构性前缀,不认识的前缀原样返回。
+// 要求冒号前面的那一段**整体**等于白名单里的词(所以 "Medleys: X" 不算),避免把正常
+// 曲名切掉。
+func stripStructuralTitlePrefix(title string) string {
+	i := strings.Index(title, ":")
+	if i <= 0 {
+		return title
+	}
+	label := strings.ToLower(strings.TrimSpace(title[:i]))
+	for _, p := range structuralTitlePrefixes {
+		if label == p {
+			return strings.TrimSpace(title[i+1:])
+		}
+	}
+	return title
 }
 
 // titleMatches reports whether a NetEase result name refers to the same song as
@@ -1031,6 +1253,17 @@ func lyricTitleAccepted(candidateTitle, localTitle string) bool {
 	}
 	sc, sl := normLoose(stripParens(candidateTitle)), normLoose(stripParens(localTitle))
 	if sc != "" && sl != "" && sc == sl {
+		return true
+	}
+	// ④ 结构性前缀:本地标签给串烧/间奏曲加了 "Medley: " 这类前缀,歌词源曲库里是裸曲名
+	// (见 stripStructuralTitlePrefix 的实测记录)。
+	//
+	// ⚠️ 这一条**没有**违反上面那句"绝不认任意的双向子串包含":去掉一个白名单里的结构性
+	// 前缀之后做的仍然是**相等**判定,不是包含。"Real Love" 依旧不会命中 "Real Love Baby"
+	// —— 那两个串谁都没有这种前缀,砍不掉任何东西,相等判定照旧不成立。
+	fc := normLoose(stripStructuralTitlePrefix(stripParens(candidateTitle)))
+	fl := normLoose(stripStructuralTitlePrefix(stripParens(localTitle)))
+	if fc != "" && fl != "" && fc == fl {
 		return true
 	}
 	// ③ 双语标题(去括号后的形态上比,让「起源 Origin (Live)」这类叠加形态也能走到这里;
