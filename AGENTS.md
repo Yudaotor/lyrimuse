@@ -21,7 +21,7 @@ cd lyrimuse-collector && GOTOOLCHAIN=go1.24.4 go vet ./...
 cd lyrimuse-collector && gofmt -l .
 ```
 
-**Go 必须带 `GOTOOLCHAIN=go1.24.4`**，跟 `build.sh:137` 保持一致。原因 `build.sh:123`
+**Go 的工具链已在 `lyrimuse-collector/go.mod` 里用 `toolchain go1.24.4` 钉住**（2026-08-20 加），所以裸跑 `go test ./...` 也会自动切到 1.24.4。下面这些命令仍显式带 `GOTOOLCHAIN=go1.24.4`，跟 `build.sh:137` 保持一致——它是 belt-and-suspenders：`GOTOOLCHAIN=local` 会绕过 go.mod 那一行。原因 `build.sh:123`
 的注释里写着：系统那个 Go 1.21 产出的二进制缺 `LC_UUID`，AMFI 会拒签。表现是先报
 `missing LC_UUID load command`；加 `-ldflags=-linkmode=external` 绕过之后变成启动即
 被 SIGKILL、日志一个字节都没有。
@@ -137,3 +137,16 @@ screencapture -x -o -l <窗口ID> /tmp/shot.png                   # 只截那一
 - 分支策略：新功能推 `dev`；`main` 只在发版时推进（默认分支仍是 `main`，打 tag 前
   先把 `dev` 以 fast-forward 合进 `main`）。
 - 发 release 时日志要手写改动清单（中英双语），不要只依赖 GitHub 自动生成的 notes。
+
+---
+
+## 功能现状文档（docs/features/）
+
+`docs/features/` 是全项目的功能现状文档（as-built spec）：15 章按功能域覆盖每个功能的
+行为、交互点、边界与代码锚点，索引见 `docs/features/README.md`。
+
+- **改任何功能前**：先读对应章确认现状（哪些行为是刻意设计、有哪些交互点会被牵动）。
+- **改完行为后**：同一次改动里更新对应章的相关小节，并刷新章头「最后核对」日期与基线
+  commit。只改实现不改行为的重构不用动文档（锚点失效除外）。
+- 新功能归入最相关的章；确实是新领域再开新章并在索引登记。
+- 文档里只写现状：不留 TODO/计划；拿不准的行为标 `⚠️待核对`，绝不臆测。

@@ -1,0 +1,110 @@
+# 14. 设置、配置与本地化
+
+> 最后核对：2026-08-18 · 基线：2a2bf8b+工作树
+
+## 定位
+
+设置窗口的信息架构、两套配置存储机制（App 偏好 vs collector 功能开关）、配置的备份/搬家、全局快捷键、开机启动、更新、首启引导、双语本地化。
+
+## 入口与展示面
+
+- 设置窗口：菜单栏菜单「设置…」、快捷键（可自定义）、`openSettingsHotkey`。
+- 首启引导：首次启动自动弹 `OnboardingView`；菜单栏「重新运行引导…」可重来。
+- 配置文件夹：设置 → 通用 → 配置文件夹（访达打开 `~/.config/lyrimuse`）。
+
+## 行为规格
+
+### 1. 设置窗口信息架构（侧边栏 7 类）
+
+| 分类 | 图标/色 | 内容 |
+|---|---|---|
+| 歌词（indigo） | text.quote | 四段：**获取**（歌词来源五源勾选＋匹配算法智能/顺序优先＋顺序列表＋提前解析同专辑）/**译文**（显示译文→译文语言→系统兜底翻译→语言包）/**效果**（卡拉OK效果、中文繁简切换[按语言条件显示]、显示罗马音＋日韩中分语言勾选、双行显示、全局时间轴偏移±5s步长0.05）/**管理**（歌词管理入口＋歌词文件夹）。分段选择器记忆上次停留段（`@AppStorage settings:lyricsSection`） |
+| 播放器（mint） | play.circle | 播放器选择（Apple Music/QQ音乐/网易云/Spotify/自动）、Apple Music 自动化权限状态、后台采集服务状态 |
+| 歌词显示（yellow） | rectangle.3.group | 四段按展示面分：**悬浮歌词**（开关＋配色[跟随封面/主题/文字色/背景色/描边/我的配色主题]＋文字[字体/字号]＋窗口[宽度/锁定位置/恢复默认]）/**灵动岛**（开关＋风格＋宽度＋显示在哪块屏幕）/**菜单栏**（开关＋宽度模式＋最大宽度）/**其它**（自动隐藏、截屏/录屏时隐藏、暂停/无播放时隐藏）。歌词窗口刻意不在此页配置（按需打开的窗口，非常驻展示面） |
+| 快捷键（teal） | keyboard | 全部 10 个全局快捷键的录制行 + 调整步长 |
+| 通用（gray） | gearshape | 语言与启动（语言/开机启动）、菜单栏与 Dock（在 Dock 中显示、菜单栏图标 12 款网格、随播放律动）、设置备份（导出/导入/配置文件夹/清除所有设置） |
+| 关于（blue） | info.circle | 检查更新（Sparkle）＋自动检查/自动下载、GitHub 仓库、反馈问题、导出诊断信息 |
+| 账号 | — | `AccountLinkingTab`（见第 12 章） |
+
+「歌词」与「歌词显示」的边界：前者管歌词**数据与内容**（哪来、什么语言、什么效果、存哪），后者管**展示形态**（显示在哪、长什么样、何时隐藏）。
+
+### 2. 两套配置存储 + 镜像
+
+- **`AppSettings`**（UserDefaults，`np:` 前缀，48 个 @Published）：App 自身偏好（外观/窗口/图标/开关），`didSet` 里同步写 defaults，**立即生效**。部分项**双写**到 `LocalPlaybackSource`（如繁简转换、卡拉OK、罗马音语言集），让当前这首歌立刻重新解析——只写一边的话要么关 App 就忘、要么等下一首才生效。
+- **`FeatureSettingsStore`**（`~/.config/lyrimuse/lyrimuse-features.json`）：需要 collector 参与的功能开关（player/lyricsSources/lyricsSourceMode+Order/lyricsDir/lyricsTranslationLanguage/albumPrefetch/lyricsMachineTranslation/lastfmMirrorScrobble/daily+weeklyDigest(+source)/launchLyrimuseOnMusicOpen）。`save()` = 立即 `persistFile()` + **0.5s 去抖的 collector 重启**（连续快速切多个开关只重启一次；`launchctl kickstart -k` 被 launchd 节流约 10s，去抖前实测会造成推送反复中断）。所有等待中的 save 调用共享同一次重启结果。枚举 rawValue 与 collector `features.go` 常量逐字对应（共享 JSON 的契约）。
+- **`AppSettingsMirror`**：App 偏好一变就镜像成配置文件夹里的 JSON——让「拷走整个 `~/.config/lyrimuse` 文件夹」这条搬家路径不再静默丢掉 UserDefaults 那一半（2026-08-13 用户指出的裂缝）。
+
+### 3. 全局快捷键（GlobalHotkeys，KeyboardShortcuts 库）
+
+10 个：显示/隐藏悬浮歌词、锁定/解锁位置、打开歌词管理、打开歌词窗口、打开设置、播放/暂停、下一首、上一首、歌词提前、歌词延后。歌词提前/延后按「调整步长」设置的幅度改**单曲**偏移（与菜单栏「歌词时间轴」同一个值；全局偏移在设置页单独校，步长固定 0.05s，两者相加生效——见第 08 章）。要求至少搭配 ⌘/⌥/⌃ 之一。绑定存 UserDefaults `KeyboardShortcuts_` 前缀。
+
+### 4. 配置备份与搬家（ConfigPortability / ICloudConfigStore）
+
+- **导出**：config.json（含账号 token **原文**）+ features.json + UserDefaults（`np:` + `KeyboardShortcuts_` 前缀）合成一份 JSON。UI 警示「包含账号密钥，不要分享」——与诊断导出刻意相反（那个绝不含 token）。
+- **排除键**：`hasCompletedOnboarding`/`hasShownAutomationOnboarding`/`hasOfferedICloudImport`/`hasShownOverlayDragHint` 等「机器状态」不随人走（新机器该自己走引导/授权）；导出导入用同一个排除集合，旧文件里的这些键导入时也被挡。
+- **iCloud**：ad-hoc 签名用不了官方 iCloud API（无 entitlement），走第三条路——把 `~/Library/Mobile Documents/com~apple~CloudDocs/Lyrimuse/` 当普通路径读写。**只做搬家不做持续同步**（iCloud Drive 冲突可能静默挑版本，对带 token 的配置不可接受）。新机器首启探测到备份会问一次要不要导入（`hasOfferedICloudImport` 只问一次）。
+- **清除所有设置**：只抹本机（defaults + 配置文件），iCloud 与已导出备份不动；确认弹窗防误触。
+
+### 5. 开机启动 / Dock / 更新 / 引导
+
+- **开机启动**（LoginItemManager）：不用 SMAppService，直接写经典 LaunchAgent plist 到 `~/Library/LaunchAgents`（label `me.yudaotor.lyrimuse`），`RunAtLoad=true` **无** KeepAlive（前台 GUI 工具，Cmd-Q 退出后不该被拉活）。指向 build.sh 安装的 `.app` 路径，开发调试路径不写入。
+- **在 Dock 中显示**：切换 NSApp activationPolicy（accessory ↔ regular）；关闭后只留菜单栏图标。accessory 策略下打开任何窗口都要先 `NSApp.activate` 否则 openWindow 静默无效（多处调用点共用这个坑的修法）。
+- **更新**（SparkleUpdaterManager）：Sparkle 标准流程（SPUStandardUpdaterController，startingUpdater:true 按 Info.plist SUFeedURL/SUEnableAutomaticChecks 周期检查），标准模态弹窗，无 gentle-reminder 定制。关于页有手动「检查更新」+自动检查/自动下载开关。
+- **首启引导**（OnboardingView）：分步向导，每步直接绑定 AppSettings/FeatureSettingsStore **立即生效**（不做最后统一确认）；步数按所选播放器动态算（选 QQ 音乐则跳过 Apple Music 自动化权限步）；关窗=稍后再说（下次启动再问），走完最后一步才算完成。
+
+### 6. 本地化（L10n）
+
+- 中/英两档。**不用** SwiftUI 自动语言协商——SwiftPM 纯 `swift build` 打包会把 `zh-Hans.lproj` 目录名强制小写，Apple 的协商精确匹配大小写导致永远落到 en；`L10n.t()` 自己读 `Locale.preferredLanguages`（`np:appLanguage` 可手动覆盖，运行期切换即时生效）定位 `.lproj` 手查。查找起点 `Bundle.main`（`Bundle.module` 在别人机器上会 fatalError）。
+- **工作流**：改 `Localization/Localizable.xcstrings`（唯一真源，JSON：sort_keys/indent2/`': '` 分隔）→ 跑 `python3 Localization/generate-strings.py` → 两份 `.strings` 生成物一起入库。selftest 有双向一致性守卫。生成物入库是因为 xcstringstool 只在完整 Xcode 里。
+- UI 文案约定：不加句尾句号。
+
+### 7. 诊断导出（DiagnosticsExporter）
+
+汇总 collector 日志（`~/Library/Logs/lyrimuse.log`）+ App 系统日志 + 关键状态（权限/服务/各功能是否已配置）成一份文本，设计给贴公开 issue。两道防泄密：状态段只用 ConfigStore 的只读布尔判断；日志正文统一过 `LogRedactor` 脱敏（2026-08-13 前该约束是破的——Go `*url.Error` 会把 api_key 连 URL 原样打进日志）。
+
+## 设置项
+
+本章即设置项总表（见行为规格 §1）。
+
+## 与其它功能的交互
+
+- FeatureSettingsStore.save() 的 kickstart 会让 collector 重启（歌词解析/推送短暂中断），去抖是为保护「正在播放」推送。
+- 「歌词来源被禁用仍会抓取、只在挑选时过滤」——所以改来源勾选不触发重搜（第 09 章）。
+- 双写模式的另一半在 `LocalPlaybackSource` 各属性的 `didSet`（改了立刻 reload 当前歌，第 08 章）。
+- 语言切换即时生效靠各视图 `.id(L10n.current)` 强制重建。
+
+## 数据与文件
+
+- UserDefaults：`np:*`（AppSettings + 各处 @AppStorage）、`KeyboardShortcuts_*`。
+- `~/.config/lyrimuse/`：`config.json`（账号凭据，ConfigStore）、`lyrimuse-features.json`、App 偏好镜像 JSON、enrich 缓存等（清单见第 01 章）。
+- iCloud：`~/Library/Mobile Documents/com~apple~CloudDocs/Lyrimuse/`。
+- LaunchAgent：`~/Library/LaunchAgents/me.yudaotor.lyrimuse.plist`。
+
+## 代码锚点
+
+| 主题 | 位置 |
+|---|---|
+| 设置窗口/各 tab | lyrimuse/SettingsView.swift `SettingsTab` `LyricsSettingsTab` `AppearanceSettingsTab` `GeneralSettingsTab` 等 |
+| App 偏好 | Settings/AppSettings.swift；镜像 Settings/AppSettingsMirror.swift |
+| 功能开关 | Settings/FeatureSettingsStore.swift `save()`；collector 侧 lyrimuse-collector/features.go |
+| 快捷键 | Settings/GlobalHotkeys.swift、Settings/ShortcutRecorder.swift |
+| 备份/iCloud | Settings/ConfigPortability.swift、Settings/ICloudConfigStore.swift、Settings/ICloudConfigImportPrompt.swift、LyrimuseCore/Util/BackupDiscovery.swift |
+| 凭据存储 | Settings/ConfigStore.swift、LyrimuseCore/Util/SecretFileWrite.swift |
+| 开机启动 | Settings/LoginItemManager.swift |
+| 更新 | Settings/SparkleUpdaterManager.swift |
+| 引导 | lyrimuse/OnboardingView.swift |
+| 本地化 | lyrimuse/L10n.swift、Localization/generate-strings.py、Localizable.xcstrings |
+| 诊断 | Settings/DiagnosticsExporter.swift、LyrimuseCore/Diagnostics/LogRedactor.swift |
+
+## 设计决策与已知坑
+
+1. `Bundle.module` 在非开发机必崩（fatalError），本地化必须走 `Bundle.main` + 手动 .lproj 查找。
+2. SwiftPM 会把 .lproj 目录名小写化，破坏 Apple 语言协商——这是自建 L10n 的根本原因。
+3. features.json 的 save 必须去抖重启 collector：launchd 对连续 kickstart 节流 ~10s，逐开关重启会反复打断推送。
+4. 配置「导出/导入」与「诊断导出」安全取向刻意相反：前者必须带 token 原文（搬家），后者绝不能带（贴公开 issue）。
+5. iCloud 只做搬家不做同步：iCloud Drive 冲突会静默挑版本，带 token 的配置不能接受静默丢数据。
+6. 机器状态键（引导完成/已问过 iCloud 导入等）绝不随备份走，否则新机器不弹该弹的引导。
+7. accessory 激活策略下 `openWindow` 前必须 `NSApp.activate`，否则静默无效。
+8. 设置页每行一个设置是通用版式；行首 ? 号（HelpButton）只放「界面上看不出来」的信息，重复副标题的一律删。
+9. ad-hoc 签名限制了 iCloud entitlement 与 SMAppService 等官方路径——搬家/启动项都走文件系统方案。
+10. 改 `Localizable.xcstrings` 后忘跑 generate-strings.py 会被 selftest 拦下（红灯信息直接写明跑哪条命令）。

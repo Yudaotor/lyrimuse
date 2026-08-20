@@ -71,6 +71,40 @@ Every extra above lives under Settings → **Add-on Features**, and each account
 
 Lyrimuse ships ad-hoc signed — same as it's always been — so there's no Apple Developer account involved with any option below. That also means Gatekeeper will flag it as "from an unidentified developer" the first time it's opened, downloaded any way except Option A below (which clears it automatically) — that's expected, not a bug, and Option B covers the one-time manual fix.
 
+### Option 0: Hand the install to an AI
+
+Running an AI agent that can use the terminal on your Mac (Claude Code, Codex CLI, Gemini CLI, …)? Paste the block below into it as-is, and it will do everything in Options A/B for you. The instructions only let it install this one app — no `sudo`, no touching system-wide security settings:
+
+```text
+Please install Lyrimuse — an open-source macOS menu-bar lyrics app
+(https://github.com/Yudaotor/lyrimuse) — on this Mac, following these rules exactly:
+
+1. Preferred path (if `brew` exists):
+     brew tap yudaotor/lyrimuse
+     brew trust --cask yudaotor/lyrimuse/lyrimuse
+     brew install --cask lyrimuse
+   If this Homebrew doesn't know the `trust` subcommand, skip that line — older
+   versions don't need it.
+2. If Homebrew is not installed, do NOT install Homebrew. Instead: check the CPU
+   with `uname -m`, download the latest release asset from
+   https://github.com/Yudaotor/lyrimuse/releases — `Lyrimuse-<version>-macos.zip`
+   for arm64, `Lyrimuse-<version>-macos-intel.zip` for x86_64 — verify it against
+   its `.sha256` file (`shasum -c`), unzip, move `Lyrimuse.app` into
+   /Applications, then clear the Gatekeeper quarantine flag on that one app only:
+     xattr -dr com.apple.quarantine /Applications/Lyrimuse.app
+3. Safety rails: no `sudo` anywhere (nothing here needs it); never run
+   `spctl --master-disable` or otherwise weaken Gatekeeper system-wide; never
+   remove the quarantine flag from anything except /Applications/Lyrimuse.app.
+4. Do not build from source unless I explicitly ask.
+5. Launch it (`open -a Lyrimuse`) and verify it is running (`pgrep -x Lyrimuse`
+   prints a PID).
+6. A first-run wizard will appear — that part is mine to click through. Tell me
+   it will ask me to pick a music player, to grant Automation access to
+   Music.app (only if I pick Apple Music), and to enable the background
+   collector service — then hand control back to me.
+Finally, report what you did and anything that failed.
+```
+
 ### Option A: Install via Homebrew (recommended)
 
 ```bash
@@ -177,6 +211,7 @@ This repo is the app:
 
 - [`lyrimuse/`](lyrimuse) — the app itself (Swift, SwiftUI + AppKit)
 - [`lyrimuse-collector/`](lyrimuse-collector) — the background engine that resolves lyrics/artwork and feeds them to the app (Go); built and bundled into the app automatically
+- [`docs/features/`](docs/features/README.md) — the as-built feature spec: 15 chapters covering every feature's current behavior, interactions, and code anchors (read the relevant chapter before changing anything)
 
 The optional web experience lives in two sibling repos, so you can fork either without touching the app:
 

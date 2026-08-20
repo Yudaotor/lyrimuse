@@ -71,6 +71,37 @@ Lyrimuse 常驻在菜单栏里，跟着当前播放弹出一个悬浮歌词窗�
 
 Lyrimuse 一直都是 ad-hoc 签名——不管用下面哪种方式拿到，都不涉及 Apple 开发者账号。也因为这样，除了下面的方案 A（会自动清掉这一步），其它方式第一次打开时 Gatekeeper 都会提示"来自身份不明的开发者"——这是预期行为，不是 bug，方案 B 里有一次性手动解决办法。
 
+### 方案 0：把安装丢给 AI
+
+如果你的 Mac 上跑着能执行终端命令的 AI 助手（Claude Code、Codex CLI、Gemini CLI 等），把下面这段话**原样**贴给它，方案 A/B 的所有步骤它都会替你做完。这段话术只允许它装这一个应用——全程不用 `sudo`，也不碰系统级安全设置：
+
+```text
+请在这台 Mac 上安装 Lyrimuse——一个开源的 macOS 菜单栏歌词应用
+（https://github.com/Yudaotor/lyrimuse），严格按以下规则执行：
+
+1. 首选路径（如果有 `brew`）：
+     brew tap yudaotor/lyrimuse
+     brew trust --cask yudaotor/lyrimuse/lyrimuse
+     brew install --cask lyrimuse
+   如果这台机器的 Homebrew 没有 trust 子命令，跳过那一行——旧版本不需要。
+2. 没装 Homebrew 的话，不要替我安装 Homebrew。改走手动路径：先用 `uname -m`
+   确认芯片架构，去 https://github.com/Yudaotor/lyrimuse/releases 下载最新版本
+   对应的文件——arm64 下 `Lyrimuse-<版本>-macos.zip`，x86_64 下
+   `Lyrimuse-<版本>-macos-intel.zip`——用同处提供的 `.sha256` 文件校验
+   （`shasum -c`），解压后把 `Lyrimuse.app` 移进 /Applications，然后只对这
+   一个 app 清除 Gatekeeper 隔离标记：
+     xattr -dr com.apple.quarantine /Applications/Lyrimuse.app
+3. 安全红线：全程不用 `sudo`（这里没有任何一步需要它）；绝不执行
+   `spctl --master-disable` 或任何全局关闭 Gatekeeper 的操作；除
+   /Applications/Lyrimuse.app 外不得对任何东西清除隔离标记。
+4. 除非我明确要求，不要从源码构建。
+5. 启动它（`open -a Lyrimuse`），并确认在运行（`pgrep -x Lyrimuse` 能打出 PID）。
+6. 首次启动会弹出引导向导——那部分由我自己点：告诉我它会让我选播放器、
+   （只在选 Apple Music 时）授权对 Music.app 的「自动化」访问、以及启用后台
+   采集服务，然后把控制权交还给我。
+最后用中文汇报你做了什么、有没有失败的步骤。
+```
+
 ### 方案 A：用 Homebrew 安装（推荐）
 
 ```bash
@@ -173,6 +204,7 @@ lyrimuse/scripts/uninstall.sh --purge      # 连配置、缓存、日志一起�
 
 - [`lyrimuse/`](lyrimuse) —— App 本体（Swift，SwiftUI + AppKit）
 - [`lyrimuse-collector/`](lyrimuse-collector) —— 后台引擎，负责解析歌词/封面并喂给 App（Go）；构建时自动打包进 App
+- [`docs/features/`](docs/features/README.md) —— 功能现状文档：15 章覆盖每个功能的当前行为、交互点与代码锚点（改任何功能前先读对应章）
 
 可选的网页体验拆在两个独立的兄弟仓库里，想 fork 哪个都不用碰 App：
 
