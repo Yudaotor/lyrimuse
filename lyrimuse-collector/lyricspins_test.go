@@ -31,10 +31,10 @@ func TestPinBlocksAutomaticLyricsReselection(t *testing.T) {
 		Lyrics: "[00:01.00]x", LyricsYRC: "[1,2](1,1,0)x",
 		LyricsSource: "kugou", LyricsSourcesSeen: []string{"kugou", "qq"},
 	}
-	if !needsLyricsRetry(missed, 0, false) {
+	if !needsLyricsRetry(missed, false, false) {
 		t.Fatal("前提不成立：同源落选的条目本来就该重试，测试用例失效")
 	}
-	if needsLyricsRetry(missed, 0, true) {
+	if needsLyricsRetry(missed, false, true) {
 		t.Error("已校准的条目不该被 retry 换掉歌词（哪怕是同源落选这条越闸路径）")
 	}
 
@@ -44,10 +44,16 @@ func TestPinBlocksAutomaticLyricsReselection(t *testing.T) {
 		Lyrics: "[00:01.00]x", LyricsYRC: "[1,2](1,1,0)x",
 		LyricsSource: "kugou", ResolvedDurationSecs: 300,
 	}
-	if !needsLyricsRetry(wrongDur, 200, false) {
-		t.Fatal("前提不成立：时长差 33% 本来就该重试，测试用例失效")
+	// wrongDuration 标志由 trackEnrichment 用 durationMismatch + observeWrongDuration
+	// 算好传入(签名 2026-08-22 改),这里沿用 durationMismatch 保住它的直接覆盖。
+	confirmedMismatch := durationMismatch(wrongDur.ResolvedDurationSecs, 200)
+	if !confirmedMismatch {
+		t.Fatal("前提不成立：时长差 33% 该判为 mismatch，测试用例失效")
 	}
-	if needsLyricsRetry(wrongDur, 200, true) {
+	if !needsLyricsRetry(wrongDur, confirmedMismatch, false) {
+		t.Fatal("前提不成立：确认过的时长不匹配本来就该重试，测试用例失效")
+	}
+	if needsLyricsRetry(wrongDur, confirmedMismatch, true) {
 		t.Error("已校准的条目不该被「时长对不上」这条路径换掉歌词")
 	}
 

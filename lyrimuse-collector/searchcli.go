@@ -38,6 +38,16 @@ func runSearchLyricsCLI(args []string) {
 	title := fs.String("title", "", "track title")
 	album := fs.String("album", "", "track album")
 	duration := fs.Float64("duration", 0, "track duration in seconds (for duration-match scoring)")
+	// -pick:除了候选列表,再按**自动解析那一套规则**(pickLyricCandidate)选出冠军,附在最后
+	// 那行 stdout 的 pick 字段里。给「歌词管理」的「重新自动匹配」按钮用 —— 冠军必须由 Go
+	// 这边算:pickLyricCandidate 带一个设置分支(顺序优先模式取的是"配置顺序里第一个
+	// Score>=0",不是最高分),在 Swift 侧自己取 max(score) 会跟自动决策给出不同答案,于是
+	// 手动匹配的结果会被下一轮自愈路径换掉 —— 自己跟自己打架。
+	pick := fs.Bool("pick", false, "also decide a winner with the automatic resolve rules (pickLyricCandidate)")
+	// -current-source:这首歌眼下生效的歌词源。只给 -pick 用,复刻 rescoreDecidable 那道闸:
+	// 当前源这一轮没应答时不敢下结论(它可能本来就是最优的,只是这次超时了),避免一次偶发的
+	// 部分应答把用户降级到更差的一份。
+	currentSource := fs.String("current-source", "", "the lyric source in effect now (for the -pick decidability guard)")
 	if err := fs.Parse(args); err != nil {
 		log.Fatalf("search-lyrics: %v", err)
 	}
@@ -65,6 +75,14 @@ func runSearchLyricsCLI(args []string) {
 		// 重打一次 MusicBrainz,撞上限速(1 req/s 按 IP,而节流是进程内的)就等于这轮
 		// 别名兜底整个失效:表现是"同一首歌第一遍搜 0 条、再搜一遍就有"。
 		loadMBPrimaryNameCache(filepath.Join(filepath.Dir(cfgPath), clientName+"-artist-primary-cache.json"))
+		// ⚠️ 2026-08-21 补:main() 在 loadFeatureFlags 之后紧跟着有这一行,而这条 CLI 子命令
+		// 在那之前就 return 了 —— 于是 match.go 里那个包级 nativeLyricSource 一直是空串,
+		// "与当前播放器同源 +250"(match.go 的 sameSourceAsPlayer 档)在手动搜索里**恒为 0**。
+		// 后果不是"少一点分"而是排序口径不同:冠亚军分差中位只有 22 分、74% 的歌 ≤40 分,
+		// 250 分足以翻盘(qq 与 kugou 的分差常年只有 9 分)。所以在此之前,「联网搜索候选歌词」
+		// 展示的名次跟 collector 自动决策的名次对不上,用 QQ/网易云/酷狗 听歌的用户尤其明显。
+		// -pick 要拿这套规则选冠军,这个差异必须先补掉。
+		nativeLyricSource = playerNativeLyricSource(features.Player)
 	}
 
 	// 跟 enrich.go 的 resolveTrackEnrichment 同一个理由:NetEase/QQ/酷狗/LRCLIB 的
@@ -75,6 +93,9 @@ func runSearchLyricsCLI(args []string) {
 	sArtist, sTitle, sAlbum := toSimplified(*artist), toSimplified(*title), toSimplified(*album)
 	enc := json.NewEncoder(os.Stdout)
 	var appleTitle, appleAlbum string
+	// 只在最后那行带上(赋值发生在收尾的 emit 之前),流式的中间行不带 —— 冠军要等所有源
+	// 都到齐才有意义。
+	var finalPick *searchLyricsPick
 	emit := func(_ neteaseInfo, results []scoredLyricCandidateResult, done, total int) {
 		// networkLooksDown() 2026-08-02 补上——之前每行 stdout 只是候选数组本身,五个源
 		// 都没查到时 desktop-lyrics 只能显示一句笼统的"都没找到",分不清是这首歌真的没有
@@ -87,6 +108,7 @@ func runSearchLyricsCLI(args []string) {
 			SourcesTotal:     total,
 			AppleTitle:       appleTitle,
 			AppleAlbum:       appleAlbum,
+			Pick:             finalPick,
 		}
 		for _, r := range results {
 			if r.Instrumental {
@@ -104,6 +126,40 @@ func runSearchLyricsCLI(args []string) {
 	// 这两个字段是给下一轮评测攒的数据,缺一次无妨,不值得让用户等。
 	appleMatch := appleMusicMatchCachedOnly(sArtist, sTitle, sAlbum)
 	appleTitle, appleAlbum = appleMatch.title, appleMatch.album
+	if *pick {
+		// 跟 rescoreLyrics(enrich.go)逐行对齐:同一个 pickLyricCandidate、同一个
+		// rescoreDecidable、同一份 seen/responded、同一个 buildLyricsDecision。调用方按
+		// 这些字段写缓存,写出来的形状就跟自动 rescore 写的一模一样(那条路径是这个仓库
+		// 里唯一经受过考验的"重新选一次歌词"实现)。
+		picked := pickLyricCandidate(results)
+		p := &searchLyricsPick{
+			ScoringVersion:       lyricsScoringVersion,
+			Decidable:            rescoreDecidable(results, *currentSource),
+			SourcesSeen:          lyricSourcesWithCandidates(results),
+			SourcesResponded:     lyricSourcesResponded(results),
+			ResolvedDurationSecs: *duration,
+			Mode:                 features.LyricsSourceMode,
+		}
+		if picked != nil {
+			p.Winner = picked.Source
+			p.WinnerScore = picked.Score
+		}
+		// 决策存档:只在"可判"时写,理由跟 rescoreLyrics 里那段一样 —— 当前源没应答的那一轮
+		// 没有做出任何决定,拿它盖掉上一份完整评估的证据是纯损失。
+		//
+		// ⚠️ Applied 这里给的是**近似值**:CLI 看不到缓存里的正文,只能按"冠军是否换了源"判,
+		// 于是"同源但换了内容"会被算成 false。调用方(EnrichCacheStore 那条采纳路径)知道真相,
+		// **必须覆写它** —— 不覆写的话「解析决策」弹窗会把 false 渲染成「评估后维持原状」,
+		// 跟结果行说的"已换成一份"直接打架(2026-08-21 用户实测撞到过)。
+		if p.Decidable {
+			d := buildLyricsDecision(lyricsDecisionPathManualRematch, sArtist, sTitle, sAlbum, *duration,
+				results, picked, picked != nil && picked.Source != *currentSource)
+			if raw, err := json.Marshal(d); err == nil {
+				p.DecisionJSON = string(raw)
+			}
+		}
+		finalPick = p
+	}
 	// 保底再打印一次最终结果——通常这跟 emit 在最后一个源到达时已经打过的那一行内容
 	// 完全一样(纯防御性的重复),唯一真正需要它的场景是:20 秒兜底超时在第一个源都还
 	// 没回来时就已经触发(五个源全部异常缓慢),这种极端情况下循环里的 emit 一次都没
@@ -132,6 +188,39 @@ type searchLyricsUpdate struct {
 	AppleTitle         string `json:"appleTitle,omitempty"`
 	AppleAlbum         string `json:"appleAlbum,omitempty"`
 	LrclibInstrumental bool   `json:"lrclibInstrumental,omitempty"`
+	// 只有 -pick 且只有最后那行才有(见 searchLyricsPick)。
+	Pick *searchLyricsPick `json:"pick,omitempty"`
+}
+
+// searchLyricsPick 是 -pick 模式下"按自动解析规则重选一次"的结论,给「歌词管理」的
+// 「重新自动匹配」按钮用。字段是照 rescoreLyrics 实际写进 enrichEntry 的那一套挑的,
+// 调用方(EnrichCacheStore.rematchAdopt)按它写缓存,写出来的形状跟自动 rescore 一致。
+//
+// 为什么冠军非要 Go 这边算:pickLyricCandidate 有设置分支 —— 顺序优先模式取的是"用户
+// 配置顺序里第一个 Score>=0 的源",不是最高分;而且它还要过 features.LyricsSources 的
+// 启用过滤、跳掉 Score<0 的废候选(五源全废时自动路径一个字都不写)。这三条在 Swift 侧
+// 复制一遍就是第二份会漂的决策规则,而漂的表现是"手动匹配完,下一拍自愈路径又给换了"。
+type searchLyricsPick struct {
+	// 冠军的源;空串 = 一个能用的候选都没有(全被判废/全没搜到),调用方**不许**退回
+	// "取第一条",那会把一份明确不可用的歌词写进去。
+	Winner      string `json:"winner,omitempty"`
+	WinnerScore int    `json:"winnerScore"`
+	// 写进 lyrics_scoring_version:不写这个,下次播放时 needsLyricsRescore 会立刻再跑一遍
+	// (首次判定不受 1 小时节流约束)。必须跟 lyrics_score 成对写 —— 只写版本不写分数,
+	// retry 的比较基准会变成 0,"严格更高才替换"那道闸等于被拆掉。
+	ScoringVersion int `json:"scoringVersion"`
+	// 复刻 rescoreDecidable:当前源这一轮没应答时为 false,调用方应当**什么都不改**并如实
+	// 告诉用户"这轮 X 源没应答,没有换"。
+	Decidable            bool     `json:"decidable"`
+	SourcesSeen          []string `json:"sourcesSeen,omitempty"`
+	SourcesResponded     []string `json:"sourcesResponded,omitempty"`
+	ResolvedDurationSecs float64  `json:"resolvedDurationSecs,omitempty"`
+	// smart / priority —— 结果文案如实说明这轮按哪套规则选的(设置页那个「匹配算法」)。
+	Mode string `json:"mode,omitempty"`
+	// lyricsDecision 的 JSON 原文。传字符串而不是嵌套对象:调用方要把它原样塞进
+	// enrich-cache.json 的 lyrics_decision 字段,走字符串就不需要在 Swift 侧再镜像一遍
+	// 这个结构(镜像就会漂),解析成 [String: Any] 直接写回即可。
+	DecisionJSON string `json:"decisionJSON,omitempty"`
 }
 
 // filterEnabledLyricSources drops candidates from sources the user disabled via

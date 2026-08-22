@@ -365,6 +365,10 @@ func playerNativeLyricSource(player string) string {
 		return "qq"
 	case playerNetease:
 		return "netease"
+	case playerKugou:
+		// 酷狗**本来就是**这个项目的五个歌词源之一(kugou.go),所以接入播放器顺带把同源
+		// 加权也接上了:用酷狗听歌时优先选酷狗自己的歌词,时间轴跟它的音频母版对得上。
+		return "kugou"
 	default:
 		return ""
 	}

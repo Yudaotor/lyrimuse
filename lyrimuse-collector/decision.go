@@ -19,6 +19,16 @@ import "time"
 //     变成"影响行为",复盘价值就没了(lyra 用 result-unchanged 断言守同一条线)。
 //  3. 手动改过的条目(ManualLyrics)不更新 —— 三个写入站点本来就对 ManualLyrics 早退,
 //     人工覆盖之前那份自动决策的记录就地保留,说明"自动选出来的曾经是什么"。
+//
+// 缓存里存**两槽**(2026-08-22 分槽,三条铁律对两槽同样生效):
+//   - lyrics_decision:最近一次评估 —— 可能维持原状,甚至输入本身是脏的(换曲窗口的
+//     串扰时长,见 observeWrongDuration);
+//   - lyrics_decision_applied:当前歌词的出处 —— 最近一次"胜者内容成为(或确认仍是)
+//     当前歌词"的评估。
+//
+// 分槽的直接起因:一轮脏输入的 upgrade 评估把 first-resolve 的存档盖掉,「解析决策」
+// 弹窗展示的记录跟生效歌词对不上号,用户拿它跟手动重搜一比更懵。字段注释见
+// enrichEntry.LyricsDecisionApplied。
 type lyricsDecision struct {
 	// Path:这份记录来自哪条决策路径 —— "first-resolve"(首次解析)/"upgrade"(升级重试)/
 	// "rescore"(打分规则换版后重选)。
@@ -61,6 +71,31 @@ type lyricsDecisionCandidate struct {
 
 // buildLyricsDecision 把一轮完整评估固化成决策记录。picked 传 nil 表示没选出;
 // applied 表示这次评估的胜者有没有真的写进缓存(见 lyricsDecision.Applied)。
+// 决策存档的 path 取值全集。
+//
+// ⚠️ 新增一条**必须同时**在 App 侧 LyricsDecisionSheet.pathLabel 那个 switch 里补中文译名 ——
+// 那边 default 分支是"原样显示原始值",漏了就是界面上直接印一个英文串给用户看。2026-08-21
+// 加 manual-rematch 时就这么漏过一次(用户截图反馈「这里的文案是否没做好中文的」)。
+// lyricsDecisionPaths 那个测试守着这份清单,改了要一起改。
+const (
+	lyricsDecisionPathFirstResolve  = "first-resolve"  // 首次解析
+	lyricsDecisionPathUpgrade       = "upgrade"        // 升级重试(本来有、想换更好的)
+	lyricsDecisionPathRefill        = "refill"         // 补搜缺失歌词(本来一条都没搜到)
+	lyricsDecisionPathRescore       = "rescore"        // 规则换版重选
+	lyricsDecisionPathManualRematch = "manual-rematch" // 用户点「重新自动匹配」那一次
+)
+
+// lyricsDecisionPaths 是上面那五条的清单,给测试用(见 lyricsdecisionpath_test.go)。
+func lyricsDecisionPaths() []string {
+	return []string{
+		lyricsDecisionPathFirstResolve,
+		lyricsDecisionPathUpgrade,
+		lyricsDecisionPathRefill,
+		lyricsDecisionPathRescore,
+		lyricsDecisionPathManualRematch,
+	}
+}
+
 func buildLyricsDecision(
 	path, artist, title, album string, durationSecs float64,
 	scored []scoredLyricCandidateResult, picked *scoredLyricCandidateResult, applied bool,

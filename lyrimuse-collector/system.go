@@ -84,6 +84,8 @@ func getState(ctx context.Context) (map[string]any, bool) {
 		return getNeteaseMusicState(ctx)
 	case playerSpotify:
 		return getSpotifyState(ctx)
+	case playerKugou:
+		return getKugouMusicState(ctx)
 	case playerAuto:
 		return getAutoDetectedState(ctx)
 	default:
@@ -148,12 +150,13 @@ const (
 	qqMusicBundleID      = "com.tencent.QQMusicMac"
 	neteaseMusicBundleID = "com.netease.163music"
 	spotifyBundleID      = "com.spotify.client"
+	kugouMusicBundleID   = "com.kugou.mac.Music"
 )
 
 // expectedPlayerBundleID 是当前选定播放器(features.Player)自己会报告的 bundle id——
 // 供 poller.go 的 isTracked() 兜底判断用,见其注释。playerAuto("自动识别")没有唯一
 // 固定的目标,不在这里处理——isTracked() 对 playerAuto 走单独一条分支(核对是不是
-// isKnownPlayerBundleID 覆盖的四个已知播放器之一),永远不会调用到这个函数,这里的
+// isKnownPlayerBundleID 覆盖的五个已知播放器之一),永远不会调用到这个函数,这里的
 // switch 因此不需要、也不应该加 playerAuto 这个 case。
 func expectedPlayerBundleID() string {
 	switch features.Player {
@@ -163,6 +166,8 @@ func expectedPlayerBundleID() string {
 		return neteaseMusicBundleID
 	case playerSpotify:
 		return spotifyBundleID
+	case playerKugou:
+		return kugouMusicBundleID
 	default:
 		return "com.apple.Music"
 	}
@@ -211,14 +216,62 @@ func isAdBreak(bundleID, artist, title, album string) bool {
 
 // isKnownPlayerBundleID 是"自动识别"模式专用的成员判断——playerAuto 下 isTracked()
 // 用它替代 expectedPlayerBundleID() 那种"只认一个固定 bundle id"的判断,因为自动识别
-// 模式下 p.cur.Bundle 可能是这四个已知播放器里的任意一个。
+// 模式下 p.cur.Bundle 可能是这五个已知播放器里的任意一个。
 func isKnownPlayerBundleID(bundleID string) bool {
 	switch bundleID {
-	case "com.apple.Music", qqMusicBundleID, neteaseMusicBundleID, spotifyBundleID:
+	case "com.apple.Music", qqMusicBundleID, neteaseMusicBundleID, spotifyBundleID, kugouMusicBundleID:
 		return true
 	default:
 		return false
 	}
+}
+
+// trustedPlaybackNotASong:一条来自**用户信任的未知播放器**的播放,歌手名或专辑名是空的
+// —— 判成"这不是一首歌",整条丢掉(既不解析歌词、也不打卡)。
+//
+// 判据跟 isAdBreak 完全一致(`album == "" || artist == ""`),区别只在作用域:那个只服务
+// Spotify 广告(第一行就 `if bundleID != spotifyBundleID { return false }`),这个服务信任
+// 列表。信任列表的意义因此从"靠用户选对"变成"选错了也有兜底"。
+//
+// 2026-08-21 全靠真实样本定的,四份实测:
+//   - 酷狗音乐   artist=周杰伦          album=七里香            → 是歌
+//   - Apple Music artist=方大同         album=Soulboy/100种生活 → 是歌
+//   - Spotify     artist=方大同         album=Soulboy           → 是歌
+//   - Arc 放视频  artist=""/频道名      album=**恒为空**        → 不是歌
+//
+// **album 是这四份样本里唯一 100% 分对的字段**。artist 单独不够:YouTube 会把**频道名**
+// 塞进 artist(实测 `Dream in reality` / `VEILLE + JOUR J de la rentrée 2024`,时长 925 秒
+// 的法语 vlog),从数据形状上跟"歌手 - 歌名"无法区分;而它的 album 两次都是空的。
+// 代价:电台/单曲场景下真音乐 App 若不报专辑名会被误挡 —— 2026-08-21 用户拍板接受这个
+// 取舍(宁可漏认,不要把视频写进永久收听历史)。
+//
+// mediaType 这条路走不通,顺手记下别再试:酷狗压根不报这个字段,Arc 也不报(不是报 Video,
+// 是没有这个键),只有 Apple Music 有。
+//
+// 内置五个播放器不走这条 —— 它们各有既有守卫(Spotify 广告走 isAdBreak),不在范围内。
+func trustedPlaybackNotASong(bundleID, artist, album string) bool {
+	if isKnownPlayerBundleID(bundleID) {
+		return false
+	}
+	if _, trusted := features.TrustedPlayers[bundleID]; !trusted {
+		return false
+	}
+	return strings.TrimSpace(artist) == "" || strings.TrimSpace(album) == ""
+}
+
+// isAcceptedPlayerBundleID 是"自动识别"下真正的成员判断:五个内置播放器,**加上**用户
+// 显式信任的未知播放器(features.TrustedPlayers,见那个字段的注释)。
+//
+// 内置和信任两者同权 —— 一旦用户点过"加入信任列表",这个 App 的播放就跟 QQ 音乐一样
+// 参与显示**和**打卡。两者分开成两个函数而不是塞进一个:isKnownPlayerBundleID 回答的是
+// "这是这个项目内置支持的播放器吗"(mediaPlayerLabel 那类固定映射要它),这个回答的是
+// "这一条播放该不该被采纳"。
+func isAcceptedPlayerBundleID(bundleID string) bool {
+	if isKnownPlayerBundleID(bundleID) {
+		return true
+	}
+	_, trusted := features.TrustedPlayers[bundleID]
+	return trusted
 }
 
 // mediaPlayerLabelIPhone 是 iPhone 桥接路径(poller.go 两处 "source"]="iphone" 附近)
@@ -243,7 +296,18 @@ func mediaPlayerLabel(bundleID string) string {
 			return "NetEase Cloud Music (macOS)"
 		case spotifyBundleID:
 			return "Spotify (macOS)"
+		case kugouMusicBundleID:
+			return "KuGou Music (macOS)"
 		default:
+			// 用户信任的未知播放器:用它自己的 App 名(Swift 侧反查后写进共享文件),
+			// 反查不到就退回 bundle id —— 总比谎报"Apple Music"好,那会让
+			// ListenBrainz 上的来源统计彻底失真。
+			if name, trusted := features.TrustedPlayers[bundleID]; trusted {
+				if name != "" {
+					return name + " (macOS)"
+				}
+				return bundleID + " (macOS)"
+			}
 			return "Apple Music (macOS)"
 		}
 	}
@@ -254,6 +318,8 @@ func mediaPlayerLabel(bundleID string) string {
 		return "NetEase Cloud Music (macOS)"
 	case playerSpotify:
 		return "Spotify (macOS)"
+	case playerKugou:
+		return "KuGou Music (macOS)"
 	default:
 		return "Apple Music (macOS)"
 	}
@@ -304,7 +370,9 @@ type mediaControlRawState struct {
 	ElapsedTime    float64 `json:"elapsedTime"`
 	ElapsedTimeNow float64 `json:"elapsedTimeNow"`
 	Playing        bool    `json:"playing"`
-	PlaybackRate   float64 `json:"playbackRate"`
+	// 锚点时间戳 —— 算"这份 elapsedTime 有多旧"用,见 mediaControlAnchorAge。
+	Timestamp    string  `json:"timestamp"`
+	PlaybackRate float64 `json:"playbackRate"`
 }
 
 // getQQMusicState/getNeteaseMusicState/getSpotifyState 都是 getMediaControlState 的
@@ -321,6 +389,10 @@ func getNeteaseMusicState(ctx context.Context) (map[string]any, bool) {
 
 func getSpotifyState(ctx context.Context) (map[string]any, bool) {
 	return matchMediaControlState(ctx, spotifyBundleID)
+}
+
+func getKugouMusicState(ctx context.Context) (map[string]any, bool) {
+	return matchMediaControlState(ctx, kugouMusicBundleID)
 }
 
 // matchMediaControlState 核对 media-control 报的 bundle id 是不是 expectedBundleID——
@@ -360,11 +432,21 @@ func getAutoDetectedState(ctx context.Context) (map[string]any, bool) {
 		return raw, true
 	}
 	switch bundleID {
-	case qqMusicBundleID, neteaseMusicBundleID, spotifyBundleID:
+	case qqMusicBundleID, neteaseMusicBundleID, spotifyBundleID, kugouMusicBundleID:
 		return raw, true
 	default:
+		// 用户显式信任过的未知播放器跟内置的完全同权(见 features.TrustedPlayers),
+		// 但要多过一道"这是不是一首歌"的守卫 —— 见 trustedPlaybackNotASong。
+		if _, trusted := features.TrustedPlayers[bundleID]; trusted {
+			artist, _ := raw["artist"].(string)
+			album, _ := raw["album"].(string)
+			if trustedPlaybackNotASong(bundleID, artist, album) {
+				return map[string]any{}, true
+			}
+			return raw, true
+		}
 		// 空字符串(没有任何 App 在报告 Now Playing)或者别的不相关 App(网页视频/
-		// Safari/另一个不受支持的播放器)——统一按"没有可报告的正在播放"处理。
+		// Safari/另一个还没被信任的播放器)——统一按"没有可报告的正在播放"处理。
 		return map[string]any{}, true
 	}
 }
@@ -404,9 +486,17 @@ func fetchRawMediaControlState(ctx context.Context) (map[string]any, string, boo
 	// (拿到过 1381 秒这种远超歌曲时长本身的荒谬值),因为暂停这件事本身并没有让
 	// media-control 内部的外推基准归零。暂停时真正正确的位置就是这个原始 elapsedTime
 	// (暂停就是"冻结在这一刻",不需要外推),只有 playing=true 时才用 elapsedTimeNow。
+	// 暂停那一支不再无条件用原始 elapsedTime —— 锚点冻结的源(网页播放器)那个值恒为 0,
+	// 直接用会让位置在暂停瞬间归零。见 pausedPositionSecs(与 Swift 侧同一套规则)。
+	trackKey := raw.Artist + "|" + raw.Title
 	elapsed := raw.ElapsedTime
 	if raw.Playing {
 		elapsed = raw.ElapsedTimeNow
+		rememberPlayingPosition(trackKey, elapsed)
+	} else {
+		age, hasAge := mediaControlAnchorAge(raw.Timestamp, time.Now())
+		last, hasLast := rememberedPlayingPosition(trackKey)
+		elapsed = pausedPositionSecs(raw.ElapsedTime, age, hasAge, last, hasLast)
 	}
 	// ⚠️ 不再对 Spotify 做 JXA 直查覆盖(2026-08-18 与 App 侧同批移除,决策注释见
 	// lyrimuse MediaControlClient.fetchRawMediaControlSnapshot):三轮修补仍"经常进度

@@ -74,14 +74,63 @@ var (
 // It"…), so picking songs[0] blindly grabs the wrong cover. Cached per
 // artist|title|album; only cached once the song id is found.
 func neteaseLookup(artist, title, album string) neteaseInfo {
-	if title == "" {
-		return neteaseInfo{}
+	return withholdImpersonatorRiddenIdentity(artist, neteaseLookupAll(artist, title, album))
+}
+
+// withholdImpersonatorRiddenIdentity 对"版权整体下架、曲库里只剩仿冒号"的艺人
+// (见 isNeteaseImpersonatorRidden)只保留**歌词族**字段,把身份/封面/跳转链接/专辑 id
+// 全部扣下 —— 净效果跟这道防线原来那种"整源跳过"逐条一致(Cover 空 → 不写
+// CoverSource/CoverAlbum;AlbumID=0 → 专辑预取早退;SongURL 空 → 不写 NeteaseURL;
+// Artist 空 → canonical_artist 走其它链路),唯一的差别是歌词照常进入五源打分。
+//
+// 为什么身份/封面照旧不信:仿冒号能把歌名、专辑名、时长一字不差地抄成目标曲目,
+// pick() 的标题/歌手名校验对这类艺人天然拦不住(见 isNeteaseImpersonatorRidden 注释)。
+// 采信它的署名就等于把仿冒号的名字写进 canonical_artist,采信它的封面就是挂错图。
+//
+// 为什么歌词可以放行:歌词是按 songID 挂在网易云**歌词库**上的,跟"这条曲目记录是谁传的"
+// 是两回事;而歌词候选另有一整套跟来源无关的防线(lyricTitleAccepted + 歌手闸 +
+// 版本限定词 -600 + 时长 -700/-500 + 语言闸 + creditOnly 闸 + 跨源共识),错版本的歌词
+// 在打分层就会掉下去,不需要靠"整源不看"这种粒度的封锁 —— 那个粒度的代价是:这位艺人
+// 的每一首歌都**先天少一个源**,而网易云恰好是五源里唯一同时供逐字 YRC、社区译文和
+// 罗马音的那个。
+//
+// 2026-08-22 实测(用户报「开不了口 (Live) 歌词不准」):本地在放《周杰伦地表最强世界
+// 巡回演唱会 (Live)》里的「开不了口 (Live)」(272.973s)。整源跳过之下,五个源里 QQ 的
+// smartbox 首个查询只回一条署名"周杰伦微博台"的仿冒条目(被歌手闸拒)、酷狗只有 2010
+// 超时代演唱会那版(399s,错版本)、musixmatch 空,只剩 LRCLIB 一条 509 分的候选,而那份
+// 的时间轴相对录音室版从 +1.0s 一路漂到 +11.5s、只有 34 行、末句比录音室版还早,根本
+// 不是这次现场的时间轴。网易云上**有**对版的那份:歌名「开不了口 (Live)」、专辑
+// 「周杰伦地表最强世界巡回演唱会」、自报时长 272.973 与本地逐位一致、正文带这次现场
+// 特有的返场段(「我就是开不了口 / 我只能够远远的看着你 / 开不了口」),逐行比对相对
+// 录音室版是**恒定** -10.7s 偏移(前奏短了 10.7 秒,之后每一句都严丝合缝),而且带 YRC
+// 逐字。它经 pick() 的严格档(标题精确 + artistMatches + 多候选要求专辑分>0)能被唯一
+// 锁定 —— 唯一挡住它的就是这里的整源跳过。
+func withholdImpersonatorRiddenIdentity(artist string, info neteaseInfo) neteaseInfo {
+	if !isNeteaseImpersonatorRidden(artist) {
+		return info
 	}
-	// 版权已从网易云整体下架、曲库里只剩仿冒号的艺人(见 isNeteaseImpersonatorRidden 注释)——
-	// 这类艺人的搜索结果哪怕标题、歌手名字面都"匹配"上了也必然是仿冒号(真人官方版本根本
-	// 不在库里),pick() 的标题/歌手名校验拦不住这种情况。这里直接整个跳过网易云、不发任何
-	// 请求,让上层 enrich.go 退到 QQ 音乐兜底(QQ 侧要求歌手名双重精确匹配,不受此影响)。
-	if isNeteaseImpersonatorRidden(artist) {
+	// Title/Album/DurationSecs 一并留下:它们是这条候选的**自证元数据**,正是版本限定词
+	// (versionTagsMismatch)、专辑亲和(albumScore)、时长吻合那几道打分闸的输入 —— 扣掉
+	// 它们等于把放行歌词之后唯一的把关依据也一起拿走。Album 虽然也参与封面选源,但那条
+	// 路径以 Cover 非空为前提(见 enrich.go 里 e.CoverAlbum 的写入),Cover 已经扣掉了。
+	//
+	// PureMusic 不留:纯音乐标记是"这首歌本来就没词"的结论,由它写进条目会挡掉后续重搜
+	// (见 needsLyricsFirstFill),而这类艺人的曲库记录本身就不可信,不该拿它下这种结论。
+	return neteaseInfo{
+		Lyrics:       info.Lyrics,
+		Trans:        info.Trans,
+		Roma:         info.Roma,
+		YRC:          info.YRC,
+		Title:        info.Title,
+		Album:        info.Album,
+		DurationSecs: info.DurationSecs,
+	}
+}
+
+// neteaseLookupAll 是不分艺人、如实返回网易云这一趟查到的全部字段的内层实现。
+// 调用方一律走 neteaseLookup(它在出口按艺人扣字段),不要直接调这个。
+func neteaseLookupAll(artist, title, album string) neteaseInfo {
+	if title == "" {
 		return neteaseInfo{}
 	}
 	key := artist + "|" + title + "|" + album

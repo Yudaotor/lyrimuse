@@ -66,7 +66,7 @@ func TestNeedsLyricsRetry(t *testing.T) {
 		},
 	}
 	for _, c := range cases {
-		if got := needsLyricsRetry(c.e, 0, false); got != c.want {
+		if got := needsLyricsRetry(c.e, false, false); got != c.want {
 			t.Errorf("%s: needsLyricsRetry = %v, want %v", c.name, got, c.want)
 		}
 	}
@@ -81,7 +81,7 @@ func TestNeedsLyricsRetryIgnoresDisabledSources(t *testing.T) {
 	long := time.Now().Unix() - int64(lyricsRetryInterval/time.Second) - 1
 
 	e := enrichEntry{Lyrics: "x", LyricsSourcesSeen: []string{"lrclib"}, TS: long}
-	if needsLyricsRetry(e, 0, false) {
+	if needsLyricsRetry(e, false, false) {
 		t.Error("只有被禁用的 netease 缺席,不该触发重试")
 	}
 }

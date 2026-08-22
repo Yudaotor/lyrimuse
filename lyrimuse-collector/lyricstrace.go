@@ -11,7 +11,8 @@ import (
 // 歌词解析决策 trace(2026-08-17 加,吸收自对 lyra 的对比审阅 C1)。
 //
 // 跟 decision.go 的缓存内决策记录是同一份数据的两个去处:缓存里只留**最近一次**评估
-// (后一次覆盖前一次),trace 是 append-only 的**流水账** —— 想看"这首歌三次重试分别
+// 和**当前歌词出处**两槽(lyrics_decision / lyrics_decision_applied,后一次同类写入
+// 覆盖前一次),trace 是 append-only 的**流水账** —— 想看"这首歌三次重试分别
 // 发生了什么"只能靠它。默认关(features.json 的 lyrics_decision_trace),开着时每次
 // 评估追加一行 NDJSON。
 //

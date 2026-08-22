@@ -72,6 +72,13 @@ type enrichEntry struct {
 	// 最近一次完整评估的决策记录(候选表+得分明细,只存元数据),见 decision.go。
 	// ⚠️ 只写不读:解析逻辑不许拿它当输入。
 	LyricsDecision *lyricsDecision `json:"lyrics_decision,omitempty"`
+	// **当前生效歌词的出处**:最近一次"胜者内容成为(或确认仍是)当前歌词"的那轮评估。
+	// 跟上面 LyricsDecision(最近一次评估,可能维持原状、甚至输入本身是脏的)分槽存,
+	// 详情页才能永远解释"现在这份词是谁、凭什么选的"。2026-08-22 实测坐实必须分槽:
+	// 一轮被换曲窗口串扰时长(见 observeWrongDuration)的 upgrade 评估把 first-resolve
+	// 的存档盖掉了,用户在「解析决策」里看到的记录跟生效歌词完全对不上号。
+	// 同样只写不读。
+	LyricsDecisionApplied *lyricsDecision `json:"lyrics_decision_applied,omitempty"`
 	// 升级重试的节流与上限,见 needsLyricsRetry。
 	LyricsRetryTS    int64 `json:"lyrics_retry_ts,omitempty"`
 	LyricsRetryCount int   `json:"lyrics_retry_count,omitempty"`
@@ -325,6 +332,12 @@ func trackEnrichment(artist, title, album, bundleID string, durationSecs float64
 		// (见 lyricspins.go)。放在这里而不是各自函数里面:那两个判定要保持纯函数,
 		// 好让单测不碰文件系统就能覆盖"被 pin 住就不重选"。
 		pinned := lyricsPinned(key)
+		// 「时长对不上」的原始观察值先过稳定性去抖再交给重试判定 —— 换曲/预载窗口里的
+		// 混合快照(当前标题 + 下一首的时长)是一次性的脏值,直接当真会白烧重试预算、
+		// 还把决策记录盖掉,见 observeWrongDuration。每次进来都要喂一口(包括时长又对上
+		// 的观察,它负责清零),所以放在分支链外面。
+		wrongDuration := observeWrongDuration(key,
+			durationMismatch(e.ResolvedDurationSecs, durationSecs), durationSecs, time.Now().Unix())
 		// 一次只跑一路后台任务(都会重新取锁改同一条记录),下次播放时轮到下一个。
 		// 重选排在升级重试前面:后者用旧分做"严格更高"的比较,而版本落后的条目那个旧分
 		// 本来就作废了,先按新规则重选一次再谈升级才有意义。
@@ -340,7 +353,7 @@ func trackEnrichment(artist, title, album, bundleID string, durationSecs float64
 		} else if needsLyricsRescore(e, pinned) && !enrichInflight[key] {
 			enrichInflight[key] = true
 			go rescoreLyrics(key, artist, title, album, durationSecs)
-		} else if needsLyricsRetry(e, durationSecs, pinned) && !enrichInflight[key] {
+		} else if needsLyricsRetry(e, wrongDuration, pinned) && !enrichInflight[key] {
 			enrichInflight[key] = true
 			go retryLyricsUpgrade(key, artist, title, album, durationSecs, false)
 		} else if needsTranslationBackfill(e) && !enrichInflight[key] {
@@ -643,7 +656,66 @@ func durationMismatch(resolved, actual float64) bool {
 	return math.Abs(resolved-actual)/larger > 0.12
 }
 
-func needsLyricsRetry(e enrichEntry, actualDurationSecs float64, pinned bool) bool {
+// observeWrongDuration:「时长对不上」这个观察值必须**同值稳定满一个窗口**才可信。
+//
+// 2026-08-22 实测坐实的串扰:换曲/预载窗口里 media-control 会把**下一首**的时长和当前
+// 曲目的标题拼进同一份快照 ——「开不了口 (Live)」(272.973s)开播 6 秒后,relay 推送的
+// 快照携带同专辑下一首「床边故事 (Live)」的 220.23899841308594s,跟那条缓存里的时长
+// **逐位一致**。这样一次性的脏观察值直接喂给 durationMismatch 就会白烧一轮升级重试
+// (3 次预算之一),重跑时所有候选按错误时长全吃 durationOvershoot -700,还把决策记录
+// 盖掉(那次事故正是用户问"决策记录怎么跟手动搜索对不上"的根源)。
+//
+// 判定规则:mismatch 消失(时长又对上了)就清掉观察记录;换了个不同的脏值、或观察断流
+// 超过 wrongDurationObsMaxGapSecs(记录已陈旧,见下)就重新计时;同一个脏值(±1s)持续
+// 观察满 wrongDurationConfirmSecs 才确认为真。确认放行的同时也清掉记录 —— 这一轮重试
+// 如果没换成(ResolvedDurationSecs 不变),下一次要重新攒满窗口才会再触发,不会每次调用
+// 连发重试把预算一口气烧光。
+//
+// nowUnix 由调用方传入而不是自己取 time.Now():去抖语义全靠时间差,单测要能钉死。
+func observeWrongDuration(key string, mismatch bool, actualDurationSecs float64, nowUnix int64) bool {
+	if !mismatch {
+		delete(wrongDurationSeen, key)
+		return false
+	}
+	obs, ok := wrongDurationSeen[key]
+	if !ok || math.Abs(obs.durationSecs-actualDurationSecs) > 1.0 ||
+		nowUnix-obs.lastSeen > wrongDurationObsMaxGapSecs {
+		wrongDurationSeen[key] = wrongDurationObs{durationSecs: actualDurationSecs, firstSeen: nowUnix, lastSeen: nowUnix}
+		return false
+	}
+	obs.lastSeen = nowUnix
+	wrongDurationSeen[key] = obs
+	if nowUnix-obs.firstSeen < wrongDurationConfirmSecs {
+		return false
+	}
+	delete(wrongDurationSeen, key)
+	return true
+}
+
+// 串扰通常几秒内自愈(下一次 poll/relay 快照就恢复了),30 秒足以把它筛掉;真正的版本
+// 时长差在整首播放期间恒定,代价只是把重试推迟半分钟。
+const wrongDurationConfirmSecs = 30
+
+// 观察断流的陈旧上限。堵的是"跨播放残留"(2026-08-22 审阅指出):脏快照落在曲目**切出**
+// 侧(标题还是当前曲、时长已被预载成下一首)时,切歌后该 key 再收不到清零观察,记录
+// 会一直挂着;几天后重放同曲若第一口又是同值脏观察,拿着陈旧 firstSeen 一步就凑满
+// 30 秒窗口。上限必须盖过稳定播放期的正常喂食间隔 —— trackEnrichment 在同曲存活期
+// 的调用来自 relay 心跳(≤4 分钟)和 LB 的 playing_now/listen 提交(≤4 分钟),不是每拍
+// poll 都调,取 60 秒会把合法确认饿死,5 分钟刚好双覆盖。残余风险(有意接受):切出侧
+// 恰好被心跳采到脏值(尾窗几秒,概率很低)且几分钟内快速重放同曲、第一口又是同值脏
+// 观察 —— 代价有界(白烧一轮重试,Applied 槽已保住决策记录)。
+const wrongDurationObsMaxGapSecs = 300
+
+type wrongDurationObs struct {
+	durationSecs float64
+	firstSeen    int64
+	lastSeen     int64
+}
+
+// wrongDurationSeen 只在 enrichMu 临界区内读写(trackEnrichment 是唯一调用方)。
+var wrongDurationSeen = map[string]wrongDurationObs{}
+
+func needsLyricsRetry(e enrichEntry, wrongDuration, pinned bool) bool {
 	if e.Lyrics == "" {
 		return false
 	}
@@ -669,8 +741,11 @@ func needsLyricsRetry(e enrichEntry, actualDurationSecs float64, pinned bool) bo
 	nativeMissedOut := nativeLyricSource != "" && e.LyricsSource != nativeLyricSource &&
 		slices.Contains(e.LyricsSourcesSeen, nativeLyricSource)
 	// 版本时长对不上(预取用了另一个版本的时长做校验)跟"同源落选"一样,本身就是重来
-	// 一次的理由,同样要越过下面"已经有逐字就不重试"那道闸。
-	wrongDuration := durationMismatch(e.ResolvedDurationSecs, actualDurationSecs)
+	// 一次的理由,同样要越过下面"已经有逐字就不重试"那道闸。wrongDuration 由调用方
+	// (trackEnrichment)算好传进来:durationMismatch 的原始观察值必须先过
+	// observeWrongDuration 的稳定性确认 —— 换曲/预载窗口里 media-control 会把下一首的
+	// 时长和当前曲目的标题拼进同一份快照,一次性的脏观察值不能直接当真(这个函数保持
+	// 纯函数,时间态的去抖状态留在调用方那层,单测才不用碰包级状态)。
 	if e.LyricsYRC != "" && !nativeMissedOut && !wrongDuration {
 		return false
 	}
@@ -796,14 +871,23 @@ func retryLyricsUpgrade(key, artist, title, album string, durationSecs float64, 
 	}
 	baseline, comparable := lyricsUpgradeBaseline(e, scored)
 	upgraded := picked != nil && comparable && picked.Score > baseline
-	path := "upgrade"
+	path := lyricsDecisionPathUpgrade
 	if firstFill {
-		path = "refill"
+		path = lyricsDecisionPathRefill
 	}
 	// 无论换没换,这一轮完整评估都值得留证(Applied 区分两种含义,见 decision.go)。
 	e.LyricsDecision = buildLyricsDecision(
 		path, artist, title, album, durationSecs, scored, picked, upgraded)
 	traceLyricsDecision(key, e.LyricsDecision)
+	// 换上了新的、或胜者就是现存这份(分数没严格更高所以没"升级",但等于再次确认了当前
+	// 选择):两种都算"当前歌词的出处"(分槽语义见 LyricsDecisionApplied)。注意此刻
+	// e.Lyrics/e.LyricsSource 还是旧值,判的是"胜者=现存"。刻意源+正文双比(跟
+	// lyricsUpgradeBaseline 同一口径):LRCLIB 镜像别家正文逐字节相同很常见,只比正文
+	// 会让出处槽的 Winner 记成另一个源、跟缓存 lyrics_source 对不上号 —— 那正是分槽
+	// 要消除的那类困惑(2026-08-22 审阅指出)。
+	if upgraded || (picked != nil && picked.Source == e.LyricsSource && picked.Lyrics == e.Lyrics) {
+		e.LyricsDecisionApplied = e.LyricsDecision
+	}
 	if upgraded {
 		log.Printf("lyrics upgrade: %s  %s(%d) -> %s(%d)", key, e.LyricsSource, e.LyricsScore, picked.Source, picked.Score)
 		e.Lyrics = picked.Lyrics
@@ -955,9 +1039,14 @@ func rescoreLyrics(key, artist, title, album string, durationSecs float64) {
 	// 完整评估的证据反而是损失。可判的两个分支都写(见 decision.go 的 Applied 语义)。
 	if decidable {
 		e.LyricsDecision = buildLyricsDecision(
-			"rescore", artist, title, album, durationSecs, scored, picked,
+			lyricsDecisionPathRescore, artist, title, album, durationSecs, scored, picked,
 			picked != nil && picked.Lyrics != e.Lyrics)
 		traceLyricsDecision(key, e.LyricsDecision)
+		// rescore 可判且有胜者:无论内容换没换,这一轮之后当前歌词就是 picked 那份
+		// (见下面 default 分支),它就是新的出处(分槽语义见 LyricsDecisionApplied)。
+		if picked != nil {
+			e.LyricsDecisionApplied = e.LyricsDecision
+		}
 	}
 	switch {
 	case !decidable:
@@ -1244,11 +1333,13 @@ func resolveTrackEnrichment(artist, title, album string, durationSecs float64) e
 	// 决策固化(见 decision.go):首次解析是最要紧的一份 —— 缓存永久保留,这一刻的运气
 	// 就是这首歌以后一直显示的东西,不记下来事后无从复盘。
 	e.LyricsDecision = buildLyricsDecision(
-		"first-resolve", artist, title, album, durationSecs, scored, picked, picked != nil)
+		lyricsDecisionPathFirstResolve, artist, title, album, durationSecs, scored, picked, picked != nil)
 	// 首次解析这里拿不到 key(它由上层 trackEnrichment 用**未转简体**的原始标签拼),
 	// 用查询词拼一个等价形状 —— trace 是流水账,要的是"能对上是哪首歌",不参与任何查找。
 	traceLyricsDecision(artist+"|"+title+"|"+album, e.LyricsDecision)
 	if picked != nil {
+		// 首次解析选中了 → 这一轮就是当前歌词的出处(分槽语义见 LyricsDecisionApplied)。
+		e.LyricsDecisionApplied = e.LyricsDecision
 		e.Lyrics = picked.Lyrics
 		e.LyricsSource = picked.Source
 		e.LyricsScore = picked.Score

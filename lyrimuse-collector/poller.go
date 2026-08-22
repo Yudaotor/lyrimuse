@@ -292,7 +292,7 @@ func (p *poller) isTracked() bool {
 	// 拿 expectedPlayerBundleID() 那种"只认一个固定值"的判断(会把除了默认兜底值以外
 	// 的其它三个播放器误判成"不是我关心的来源")。
 	if features.Player == playerAuto {
-		return isKnownPlayerBundleID(p.cur.Bundle)
+		return isAcceptedPlayerBundleID(p.cur.Bundle)
 	}
 	return p.cur.Bundle == expectedPlayerBundleID()
 }

@@ -55,7 +55,13 @@ const (
 	playerQQMusic    = "qq_music"
 	playerNetease    = "netease_music"
 	playerSpotify    = "spotify"
-	playerAuto       = "auto"
+	// 酷狗音乐(2026-08-21 接入)。它是个 Mac Catalyst 应用(主二进制链的是
+	// /System/iOSSupport/.../MediaPlayer.framework),自己把播放状态发布进系统级
+	// MediaRemote,所以跟 QQ/网易云/Spotify 走同一条 media-control 路径,不需要新代码路径。
+	// 跟 QQ/网易云一样没有 AppleScript 字典(`Info.plist` 里没有 NSAppleScriptEnabled、
+	// Resources 下也没有 .sdef,2026-08-21 核实),所以扩展控件(喜欢/音量/播放模式)一律没有。
+	playerKugou = "kugou_music"
+	playerAuto  = "auto"
 )
 
 // lyricsSourceDefaultOrder 是"顺序优先"模式缺省的顺序——照抄 enrich.go
@@ -105,6 +111,19 @@ type featureFlagsFile struct {
 	// 不在这份共享文件里,是 Swift 侧 AppSettings 自己的纯本地设置,不需要 collector
 	// 知道。
 	LaunchLyrimuseOnMusicOpen *bool `json:"launch_lyrimuse_on_music_open,omitempty"`
+	// TrustedPlayers:用户显式信任的"未知播放器"—— bundle id → 界面显示名。
+	//
+	// 「自动识别」原来只认写死的五个播放器,别的 App 在报 Now Playing 一律当"没有可关心
+	// 的播放"。这道白名单不只挡显示,**也挡打卡**(poller.go 的 isTracked):放开它等于
+	// 让 YouTube 视频、播客、网课被当成收听写进用户的 Last.fm/ListenBrainz 永久历史,
+	// 还会往"设计上永不清理"的歌词缓存里灌垃圾条目、白烧五个歌词源的查询。而想靠内容
+	// 形状分辨也不可靠 —— 浏览器里的网页播放器能通过 MediaSession API 自己填
+	// title/artist/artwork,一个 YouTube 音乐视频跟一首歌长得一模一样。
+	//
+	// 所以口径是**用户显式同意**:设置页发现未知播放器就提示,用户点一下加进这里,之后
+	// 它跟五个内置播放器完全同权(显示 + 打卡)。这样任何 App 都能接(包括这个项目从没
+	// 听说过的),而默认状态下一条垃圾都进不来。
+	TrustedPlayers map[string]string `json:"trusted_players,omitempty"`
 	// LyricsDecisionTrace:歌词解析决策的 append-only NDJSON 流水账,见 lyricstrace.go。
 	// **默认关** —— 纯诊断旁路,平时不该往磁盘攒文件;要排查"为什么选了这份歌词"的
 	// 历史过程时才开。缓存内的决策记录(decision.go)不受这个开关影响,始终会写。
@@ -132,10 +151,14 @@ type featureFlags struct {
 	DailyDigest          bool
 	WeeklyDigestSource   string
 	DailyDigestSource    string
-	// 只被 pickLyricCandidate(enrich.go)读取,自动解析路径专用——手动的
-	// `collector search-lyrics` CLI 子命令故意不看这三个字段(见 pickLyricCandidate
-	// 注释),该子命令的 main() 分支也从不调用 loadFeatureFlags,这三个字段在那条
-	// 路径上永远是零值,不会被误用。
+	// pickLyricCandidate(enrich.go)读这三个字段决定冠军。
+	//
+	// ⚠️ 2026-08-21 订正:原注释说 `collector search-lyrics` 子命令"从不调用
+	// loadFeatureFlags、这三个字段在那条路径上永远是零值",**这是错的** —— searchcli.go
+	// 一直自己加载一遍(不然 LyricsSources 是 nil map,过滤时五个源全被误判成"没启用"、
+	// 直接返回空列表)。LyricsSources 早就被 filterEnabledLyricSources 实际读取着;
+	// LyricsSourceMode/Order 在 -pick 模式下也被读(冠军要按用户选的「匹配算法」算)。
+	// 这条错注释误导过一轮设计评审,别再照它推结论。
 	LyricsSources     map[string]bool
 	LyricsSourceMode  string
 	LyricsSourceOrder []string
@@ -154,6 +177,9 @@ type featureFlags struct {
 	LaunchLyrimuseOnMusicOpen bool
 	// LyricsDecisionTrace 只被 lyricstrace.go 读取,见那边注释。
 	LyricsDecisionTrace bool
+	// TrustedPlayers 是已经清洗过的形态(见 resolveTrustedPlayers):键一定非空、一定不是
+	// 五个内置播放器之一;值可能是空字符串(反查不到 App 名),此时标签退回 bundle id。
+	TrustedPlayers map[string]string
 }
 
 // features is set once in main() before run() starts; every gate site reads
@@ -186,6 +212,7 @@ func loadFeatureFlags(path string) featureFlags {
 	}
 	return featureFlags{
 		Player:                    resolvePlayer(f.Player),
+		TrustedPlayers:            resolveTrustedPlayers(f.TrustedPlayers),
 		AlbumPrefetch:             boolOr(f.AlbumPrefetch, true),
 		LastfmMirrorScrobble:      boolOr(f.LastfmMirrorScrobble, false),
 		WeeklyDigest:              boolOr(f.WeeklyDigest, false),
@@ -208,10 +235,37 @@ func loadFeatureFlags(path string) featureFlags {
 // 采集器实际在问的那个会不是同一个)。理由见 PlaybackPlayer.swift 上那段注释:写死
 // Apple Music 会让只用 Spotify/QQ 音乐/网易云的新用户对着一个永远空白的界面。
 func resolvePlayer(p string) string {
-	if p == playerQQMusic || p == playerNetease || p == playerSpotify || p == playerAuto {
+	if p == playerQQMusic || p == playerNetease || p == playerSpotify || p == playerKugou || p == playerAuto {
 		return p
 	}
 	return playerAuto
+}
+
+// resolveTrustedPlayers 清洗用户信任列表:去掉空 bundle id、去掉首尾空白、去掉五个
+// 内置播放器(它们本来就认,留在这里只会让"已信任"列表看起来莫名多几条)。
+//
+// 返回 nil(而不是空 map)是刻意的:调用方一律用 `m[k]` 取值,对 nil map 取值是合法的
+// 零值读取,不需要在每个调用点判空。
+func resolveTrustedPlayers(m map[string]string) map[string]string {
+	if len(m) == 0 {
+		return nil
+	}
+	builtin := map[string]bool{
+		"com.apple.Music": true, qqMusicBundleID: true,
+		neteaseMusicBundleID: true, spotifyBundleID: true, kugouMusicBundleID: true,
+	}
+	out := make(map[string]string, len(m))
+	for bundleID, name := range m {
+		id := strings.TrimSpace(bundleID)
+		if id == "" || builtin[id] {
+			continue
+		}
+		out[id] = strings.TrimSpace(name)
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }
 
 func resolveLyricsSources(list []string) map[string]bool {
