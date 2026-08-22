@@ -141,6 +141,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             at: FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".config/lyrimuse"),
             withIntermediateDirectories: true)
 
+        // collector 的 launchd job 对账。必须在启动路径上跑,这是 Sparkle 自动更新 /
+        // Homebrew cask upgrade / 手动拖 .app 覆盖这三条路唯一的兜底 —— 它们都不经过
+        // build.sh,而换掉 collector 二进制会让 launchd 缓存的 LWCR 失效、KeepAlive 一直
+        // 拉不起来(完整机理见 CollectorServiceManager.reconcileAfterLaunch 的注释)。
+        // 内部自己判断该不该动、并且整段跑在后台串行队列上,这里不会阻塞启动。
+        CollectorServiceManager.reconcileAfterLaunch()
+
         // 这一句决定 App 是普通应用(占 Dock + 进 Cmd-Tab)还是菜单栏专属应用。
         //
         // ⚠️ 2026-08-13 更正:这段原来写"默认(没碰过'在 Dock 中显示'这个设置的人)是

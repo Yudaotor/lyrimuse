@@ -88,6 +88,11 @@ enum ConfigPortability {
         // 的 LaunchAgent",而不是用户的偏好。带过去的话,新机器上服务其实还没装,界面却
         // 显示"已启用",用户找不到那个能把它真正装上的开关。
         "np:collectorServiceEnabled",
+        // 「这台机器上现在装进 launchd 的是哪个 collector 二进制」(路径+大小+mtime,见
+        // CollectorServiceManager.installedFingerprintKey)。跟上面那条同类,而且带过去更糟:
+        // 新机器上的二进制必然是另一个文件,却因为指纹"对得上"而跳过启动时那次本该做的重装,
+        // 正好把这条兜底关掉。
+        CollectorServiceManager.installedFingerprintKey,
         // 备份文件夹的路径(见 ICloudConfigStore.customFolderKey)。同样是"这台机器上的一个
         // 路径"——新机器上那个目录多半不存在,带过去只会让备份这一块指向一个不存在的地方。
         ICloudConfigStore.customFolderKey,

@@ -1,5 +1,6 @@
 import Foundation
 import LyrimuseCore
+import OSLog
 
 // 装/卸/查询 collector 这个后台常驻服务的 LaunchAgent。跟 LoginItemManager 管这个 App
 // 自己的 LaunchAgent是同一种模式，但目标不同：LoginItemManager 装的是"这个 App 要不要
@@ -26,6 +27,87 @@ public enum CollectorServiceManager {
     }
     private static let configDir = FileManager.default.homeDirectoryForCurrentUser
         .appendingPathComponent(".config/lyrimuse")
+
+    private static let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "collector-service")
+
+    /// 上一次 install() 成功时,装进 launchd 的那个 collector 二进制的身份。
+    ///
+    /// 机器本地状态,**必须**进 `ConfigPortability.machineLocalDefaultsKeys`:它描述的是
+    /// "这台机器上现在装着哪个二进制",跟着备份搬到新机器只会让新机器误以为"没变过"、
+    /// 跳过那次本来必须做的重装。
+    static let installedFingerprintKey = "np:collectorInstalledFingerprint"
+
+    /// 用户意图开关的 key。这里直读 UserDefaults 而不是碰 `AppSettings.shared` ——
+    /// 这个类型不是 @MainActor(见类型注释),reconcile 整段跑在 operationQueue 上。
+    private static let enabledKey = "np:collectorServiceEnabled"
+
+    /// 当前 bundle 里那个 collector 二进制的身份指纹:路径 + 大小 + mtime。
+    ///
+    /// 为什么不算 cdhash:`codesign -dvvv` 要 fork 一个进程、读整个二进制算哈希,而这里只
+    /// 需要回答"跟上次装的是不是同一个文件"。每次打包都是重新 `cp` + 重新 ad-hoc 签名,
+    /// mtime 必变;大小和路径再兜一层。stat 一次就够,启动路径上零感知。
+    ///
+    /// 拿不到(文件不存在——比如直接 `swift build` 跑、没走 build.sh 打包)时返回 nil,
+    /// 调用方据此退回"只看服务在不在跑"。
+    private static func currentBinaryFingerprint() -> String? {
+        let path = bundledCollectorPath
+        guard let attrs = try? FileManager.default.attributesOfItem(atPath: path),
+              let size = attrs[.size] as? Int,
+              let mtime = attrs[.modificationDate] as? Date else { return nil }
+        return "\(path)|\(size)|\(Int(mtime.timeIntervalSince1970 * 1000))"
+    }
+
+    /// 启动时对账一次:collector 该跑而没跑、或者它的二进制被换过,就重装这个 job。
+    ///
+    /// **这是 Sparkle 自动更新之后唯一的兜底。** 没有它的后果是坐实过的(记录在
+    /// `lyrimuse/build.sh` 里 COLLECTOR_LABEL 那段注释):
+    ///   1. 更新把 `Contents/Resources/collector` 换成新的 ad-hoc 签名二进制,cdhash 必变;
+    ///   2. 正在跑的老 collector 因为二进制被换掉,下次缺页时被 SIGKILL;
+    ///   3. launchd(KeepAlive=true)想拉起新的,但它给这个 job 缓存的 LWCR(Lightweight
+    ///      Code Requirement)还绑在**旧** cdhash 上 —— 新二进制被内核直接拒绝,崩溃报告写
+    ///      "CODESIGNING / Launch Constraint Violation + SIGKILL (Code Signature Invalid)",
+    ///      launchctl 那边是 exit 78 EX_CONFIG / spawn failed;
+    ///   4. KeepAlive 一直重试一直失败(实测抓到时 runs 已 127 次),collector 就此永久躺平
+    ///      —— 歌词解析、scrobble、relay 全停,而 App 本身活得好好的,表现成"这首歌一直
+    ///      没歌词",极难联想到是"刚才那次自动更新"。
+    /// build.sh 为本地构建做了这个自愈(bootout+bootstrap),但 Sparkle / Homebrew cask /
+    /// 手动拖 .app 覆盖这三条路都不经过 build.sh。`install()` 本身就是完整的
+    /// bootout→写 plist→bootstrap 三级自愈,这里缺的只是一个启动时的触发点。
+    ///
+    /// 判据用**二进制指纹**而不是"服务在不在跑":更新之后老进程往往还活着(要等下一次缺页
+    /// 才被 SIGKILL),那一刻 isRunning 仍是 true,只看运行状态会整个错过这次更新,而等它
+    /// 真死掉时 App 早就启动完了、没有人再检查。
+    ///
+    /// 不阻塞启动:整段扔进已有的串行队列(它同时保证不会跟设置页/引导页的装卸并发)。
+    public static func reconcileAfterLaunch() {
+        operationQueue.async {
+            // 用户自己关掉了后台服务就什么都不做 —— 这里是修"该跑却跑不起来",不是替用户
+            // 决定要不要跑。默认值 false 与 AppSettings 一致(没装过就是没装)。
+            guard UserDefaults.standard.bool(forKey: enabledKey) else { return }
+
+            let fingerprint = currentBinaryFingerprint()
+            let recorded = UserDefaults.standard.string(forKey: installedFingerprintKey)
+            // fingerprint 为 nil(拿不到二进制)时不当成"变了" —— 那是 `swift build` 直跑
+            // 这类没有 bundle 的场景,重装也装不出东西来,退回只看运行状态。
+            let binaryChanged = fingerprint != nil && fingerprint != recorded
+            let running = isRunning
+            guard binaryChanged || !running else { return }
+
+            logger.notice(
+                "collector reconcile on launch: binaryChanged=\(binaryChanged, privacy: .public) running=\(running, privacy: .public) — reinstalling job")
+            install()
+        }
+    }
+
+    /// install() 结束时记账。只有真的跑起来了才写指纹 —— 装完仍起不来时把它清掉,下次启动
+    /// 会再试一遍,而不是因为"指纹对得上"就再也不管了。
+    private static func recordInstalledFingerprint() {
+        if isRunning, let fingerprint = currentBinaryFingerprint() {
+            UserDefaults.standard.set(fingerprint, forKey: installedFingerprintKey)
+        } else {
+            UserDefaults.standard.removeObject(forKey: installedFingerprintKey)
+        }
+    }
 
     // 服务的真实状态——不是看 AppSettings 里持久化的"用户意图"，是直接问 launchd。
     // Settings 页面和引导页面的状态展示都靠这个。
@@ -84,6 +166,9 @@ public enum CollectorServiceManager {
     }
 
     private static func install() {
+        // 三条成功路径(bootstrap 直接起来 / kickstart 之后起来 / LWCR 重试之后起来)各自
+        // early return,记账放 defer 里一处收口,免得漏掉哪一条。
+        defer { recordInstalledFingerprint() }
         // ConfigStore/FeatureSettingsStore 写配置文件、collector 自己写歌词/封面缓存，
         // 都假设这个目录已经存在——AppDelegate 启动时也会保证一次，这里是第二道保险
         // （谁先跑到都行，createDirectory 本身是幂等的）。
@@ -152,6 +237,9 @@ public enum CollectorServiceManager {
     private static func uninstall() {
         run("/bin/launchctl", ["bootout", "gui/\(getuid())/\(label)"])
         try? FileManager.default.removeItem(at: plistURL)
+        // 卸了就别留指纹:留着的话,用户下次开启服务前如果 App 更新过,reconcile 会拿一个
+        // "上次装的是谁"的陈旧记录去比,徒增一次判断歧义。
+        UserDefaults.standard.removeObject(forKey: installedFingerprintKey)
     }
 
     @discardableResult
