@@ -101,6 +101,16 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     /// Spotify 广告插播中。写入规则与 isPlayingNow 相同:只取 sink 参数值。
     @Published private(set) var isAdBreakNow: Bool = false
 
+    /// 展开区要不要给"下一句歌词预览"留高度(= 这首歌有没有歌词)。写入规则同
+    /// isPlayingNow:只取 sink 参数值,绝不回头读 PlaybackCoordinator 的存储属性。
+    @Published private(set) var expandedShowsLyricPreview: Bool = false
+    /// 展开区要不要给迷你进度条留高度(= 这首歌有没有时长)。同上。
+    @Published private(set) var expandedShowsScrubber: Bool = false
+
+    /// 此刻有没有一首曲目 —— 决定歌词行整行占不占那 44pt(见协议 NotchChromeSource.hasTrack)。
+    /// 由 CombineLatest3 一次给全三个值,不存在"回头读存储属性拿到旧值"那个坑。
+    @Published private(set) var hasTrack: Bool = false
+
     /// 稳态/展开态卡片的宽度(= contentWidth(baseWidth:notchWidth:) 的结果)。
     /// 窗口本身常驻这个宽度,卡片在里面按形态变宽变窄,见 NotchWindowRoot。
     @Published private(set) var steadyCardWidth: CGFloat = 360
@@ -147,10 +157,16 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     // ——它常显在歌词行的尾端(见 NotchLyricsView.artworkThumbnail),不需要 hover 才出现,
     // 也不占额外高度。
     // 同上,单一来源在 NotchMetrics。
-    private static var expandedExtraHeight: CGFloat { NotchMetrics.expandedExtraHeight }
+    // 窗口恒按**最大**形态开(卡片在里面自己变大变小,见 NotchWindowRoot)——所以这里
+    // 用 Max,不用那个按内容算的函数。用后者会让"没歌词的歌"把窗口也缩掉,而窗口一缩,
+    // 后面换到有歌词的歌时卡片就没地方长了(会被窗口边界硬裁)。
+    private static var expandedExtraHeight: CGFloat { NotchMetrics.expandedExtraHeightMax }
 
     private var isPlayingObserver: AnyCancellable?
     private var adBreakObserver: AnyCancellable?
+    private var lyricPresenceObserver: AnyCancellable?
+    private var durationObserver: AnyCancellable?
+    private var trackPresenceObserver: AnyCancellable?
     private var screenParamsObserver: NSObjectProtocol?
     // 一个真实的坑:窗口 hover 展开/收起时靠 autoresizingMask 让 NSHostingView
     // 跟着 window.setFrame 自动同步尺寸——AppKit 层面这个同步是真的发生了(window.frame/
@@ -237,6 +253,30 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         // 即生效,几何不用重算(窗口常驻最大尺寸,收起只是内容层的事,同 isPlayingNow)。
         adBreakObserver = PlaybackCoordinator.shared.$isCurrentTrackAdBreak.sink { [weak self] isAd in
             self?.isAdBreakNow = isAd
+        }
+
+        // 有没有曲目(2026-08-21,修"没曲目时歌词行 44pt 全空还占着")。三个输入必须
+        // **同时**拿到才能算,所以用 CombineLatest3 而不是三个独立 sink —— 独立 sink 里
+        // 只能拿到自己那一个参数,另外两个得回头读存储属性,而那正是这个文件反复踩过的
+        // @Published willSet 旧值坑。
+        trackPresenceObserver = Publishers.CombineLatest3(
+            PlaybackCoordinator.shared.$title,
+            PlaybackCoordinator.shared.$artist,
+            PlaybackCoordinator.shared.$isCurrentTrackAdBreak
+        ).sink { [weak self] title, artist, isAd in
+            self?.hasTrack = !title.isEmpty || !artist.isEmpty || isAd
+        }
+
+        // 展开区的两个"要不要留高度"标志(2026-08-21,修"没歌词时展开卡一大片空白")。
+        // 刻意订阅**曲目级**信号而不是"此刻有没有下一句"——理由见
+        // NotchMetrics.expandedExtraHeight 的注释(后者会让最后一句唱完时卡片抽动)。
+        // 同一个 willSet 坑同一个修法:存 sink 参数值。写入 @Published 即生效,窗口尺寸
+        // 不用重算(窗口恒为最大形态,卡片高度是内容层的事)。
+        lyricPresenceObserver = PlaybackCoordinator.shared.$hasLyricsContent.sink { [weak self] has in
+            self?.expandedShowsLyricPreview = has
+        }
+        durationObserver = PlaybackCoordinator.shared.$currentDurationMs.sink { [weak self] ms in
+            self?.expandedShowsScrubber = (ms ?? 0) > 0
         }
 
         // 宽度固定后,recomputeGeometry 的结果不再跟 currentLine 有任何关系,不需要
@@ -499,6 +539,12 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         isPlayingObserver = nil
         adBreakObserver?.cancel()
         adBreakObserver = nil
+        lyricPresenceObserver?.cancel()
+        lyricPresenceObserver = nil
+        durationObserver?.cancel()
+        durationObserver = nil
+        trackPresenceObserver?.cancel()
+        trackPresenceObserver = nil
         if let screenParamsObserver {
             NotificationCenter.default.removeObserver(screenParamsObserver)
             self.screenParamsObserver = nil

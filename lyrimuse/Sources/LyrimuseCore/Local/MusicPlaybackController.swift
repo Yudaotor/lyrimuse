@@ -79,15 +79,224 @@ public enum MusicPlaybackController {
         return false
     }
 
+    /// 把当前曲目加进资料库。Apple Music 专属(调用方约定同 setFavorited:先确认播放器
+    /// 是 Apple Music、权限已拿到)。流媒体曲目唯一可行的路 = `duplicate current track
+    /// to source 1`(2026-08-22 实机验证:对正在播的订阅曲目成功入库;命令不返回新副本
+    /// 的引用,这里也不需要)。个别内容类型在部分系统上要退到 library playlist(用类引用
+    /// `library playlist 1`,不能用名字 "Library"——中文系统叫「资料库」),try 兜底一趟。
+    /// 2026-08-22 补充实测:来自共享播放列表源的 `shared track` 走 source 1 会报
+    /// -10006,由 library playlist 1 兜底接住;曲目已在资料库时整个 duplicate 是
+    /// **静默 no-op**(不报错、不产生重复条目)。所以返回 true ≠ 真的新增了 ——
+    /// 要确认"点完之后确实在库",用 currentTrackIsInLibrary() 读回。
+    ///
+    /// 会阻塞到子进程结束,**不要在主线程调用**。
+    @discardableResult
+    public static func addCurrentTrackToLibrary() -> Bool {
+        runAppleScriptCapturing(#"""
+        tell application "Music"
+            try
+                duplicate current track to source 1
+            on error
+                duplicate current track to library playlist 1
+            end try
+            return "ok"
+        end tell
+        """#) != nil
+    }
+
+    /// 当前曲目是否已在资料库(只读)。Music 的 AppleScript 对流媒体 current track 没有
+    /// "是否在库"的直连属性,按元数据在 library playlist 1 里数匹配是唯一可行路:
+    /// 歌名+歌手+专辑(专辑空则退成 歌名+歌手)。专辑参与匹配是为了不把"同曲不同专辑
+    /// 版本"误判成已在库 —— AM 自己把它们当两条曲目。whose 子句只认字符串变量,
+    /// 不能内联 `name of t`(2026-08-22 实测报 -1728)。
+    /// nil = 查不出来(无曲目/权限被拒/超时)。Apple Music 专属;不要在主线程调用。
+    public static func currentTrackIsInLibrary() -> Bool? {
+        guard let out = runAppleScriptCapturing(#"""
+        tell application "Music"
+            set t to current track
+            set tName to name of t
+            set tArtist to artist of t
+            set tAlbum to album of t
+            if tAlbum is not "" then
+                return (count of (every track of library playlist 1 whose name is tName and artist is tArtist and album is tAlbum)) > 0
+            end if
+            return (count of (every track of library playlist 1 whose name is tName and artist is tArtist)) > 0
+        end tell
+        """#) else { return nil }
+        if out.contains("true") { return true }
+        if out.contains("false") { return false }
+        return nil
+    }
+
+    /// 把当前曲目从资料库删除。匹配口径与 currentTrackIsInLibrary() 完全同一套
+    /// (歌名+歌手+专辑,专辑空退两字段),删匹配的第一条 —— delete 作用在 library
+    /// playlist 上就是从资料库整个移除(区别于从普通歌单移除)。没匹配时脚本报错→
+    /// 返回 false。Apple Music 专属,调用方约定同上;不要在主线程调用。
+    @discardableResult
+    public static func removeCurrentTrackFromLibrary() -> Bool {
+        runAppleScriptCapturing(#"""
+        tell application "Music"
+            set t to current track
+            set tName to name of t
+            set tArtist to artist of t
+            set tAlbum to album of t
+            set matches to {}
+            if tAlbum is not "" then
+                set matches to (every track of library playlist 1 whose name is tName and artist is tArtist and album is tAlbum)
+            end if
+            if (count of matches) is 0 then
+                set matches to (every track of library playlist 1 whose name is tName and artist is tArtist)
+            end if
+            if (count of matches) is 0 then error "not in library"
+            delete (item 1 of matches)
+            return "ok"
+        end tell
+        """#) != nil
+    }
+
+    /// 待播清单条目(「播放队列」面板用)。
+    public struct UpNextItem: Sendable {
+        public let index: Int      // 在 current playlist 里的 1-based 下标(跳播用)
+        public let title: String
+        public let artist: String
+        public let isCurrent: Bool
+    }
+
+    /// 待播清单 ≈ current playlist 从当前曲目起的一段(2026-08-22 实机验证:资料库播放
+    /// 时 current playlist=「资料库」、index of current track 可取、逐条读名称/歌手全
+    /// 可行)。⚠️ Music 的真「Up Next」队列(手动插队的 Play Next)AppleScript 拿不到,
+    /// 电台/自动播放时 current playlist 会报错 → nil,面板显示「无法获取」。
+    /// ⚠️ 逐条必须 try(2026-08-22 实机踩雷):队列上下文里会混 URL track(«class cURT»),
+    /// 其 name 是 missing value,一条坏的会把**整段脚本**炸掉 → 面板永远「无法获取」;
+    /// 坏条目跳过、artist 缺省空。当前曲下标由头部 CUR 行显式回传 —— 坏的恰好是当前曲
+    /// 时"第一行=当前"的假设不成立。
+    /// Apple Music 专属;不要在主线程调用。
+    public static func upNextQueue(maxCount: Int = 25) -> [UpNextItem]? {
+        guard let out = runAppleScriptCapturing(#"""
+        tell application "Music"
+            set cp to current playlist
+            set curIdx to index of current track
+            set n to count of tracks of cp
+            set endIdx to curIdx + \#(maxCount - 1)
+            if endIdx > n then set endIdx to n
+            set out to "CUR" & tab & curIdx & linefeed
+            repeat with i from curIdx to endIdx
+                try
+                    set t to track i of cp
+                    set tn to (name of t) as text
+                    set ta to ""
+                    try
+                        set ta to (artist of t) as text
+                    end try
+                    set out to out & i & tab & tn & tab & ta & linefeed
+                end try
+            end repeat
+            return out
+        end tell
+        """#) else { return nil }
+        var items: [UpNextItem] = []
+        var currentIndex: Int?
+        for line in out.split(separator: "\n") {
+            let parts = line.split(separator: "\t", maxSplits: 2, omittingEmptySubsequences: false)
+            if parts.count == 2, parts[0] == "CUR" { currentIndex = Int(parts[1]); continue }
+            guard parts.count == 3, let idx = Int(parts[0]) else { continue }
+            items.append(UpNextItem(index: idx, title: String(parts[1]),
+                                    artist: String(parts[2]), isCurrent: idx == currentIndex))
+        }
+        return items
+    }
+
+    /// 跳播到 current playlist 的第 index 首(待播清单行点击)。Apple Music 专属;
+    /// 不要在主线程调用。
+    @discardableResult
+    public static func playTrackInCurrentPlaylist(index: Int) -> Bool {
+        runAppleScriptCapturing(
+            #"tell application "Music" to play track \#(index) of current playlist"#
+        ) != nil
+    }
+
+    /// 恢复播放(歌词窗口欢迎态「继续播放」,Apple Music)。⚠️ 裸 `play` 对空队列是
+    /// **静默 no-op**(2026-08-22 实测:stopped 态发 play,state 仍 stopped——Music 停播/
+    /// 重启后队列是空的,没有"上次上下文"可恢复)。三段式:①裸 play(接住"有队列只是
+    /// 停了");②读回仍没在播 → 在资料库找上次播的那首(调用方从 UserDefaults 记录里给)
+    /// 直接播,资料库上下文会自然续播后面的歌;③都不行返回 false,调用方兜底激活 App。
+    /// 曲名/歌手是外部数据,拼进 AppleScript 前必须转义引号/反斜杠。不要在主线程调用。
+    public static func resumePlayback(lastTitle: String?, lastArtist: String?) -> Bool {
+        _ = runAppleScriptCapturing(#"tell application "Music" to play"#)
+        if let state = runAppleScriptCapturing(#"tell application "Music" to player state as text"#),
+           state.contains("playing") {
+            return true
+        }
+        guard let title = lastTitle, !title.isEmpty else { return false }
+        func esc(_ s: String) -> String {
+            s.replacingOccurrences(of: "\\", with: "\\\\")
+                .replacingOccurrences(of: "\"", with: "\\\"")
+        }
+        var whose = "name is \"\(esc(title))\""
+        if let artist = lastArtist, !artist.isEmpty {
+            whose += " and artist is \"\(esc(artist))\""
+        }
+        return runAppleScriptCapturing("""
+        tell application "Music"
+            play (first track of library playlist 1 whose \(whose))
+            return "ok"
+        end tell
+        """) != nil
+    }
+
+    /// Spotify 的「继续播放」:它的 `play` 自带恢复上次上下文(重启后也能续),一条就够。
+    /// 首次调用会触发一次对 Spotify 的自动化授权弹窗。不要在主线程调用。
+    @discardableResult
+    public static func resumeSpotifyPlayback() -> Bool {
+        runAppleScriptCapturing(#"tell application "Spotify" to play"#) != nil
+    }
+
+    /// 「减少推荐」。UI 里的 Suggest Less 就是老的 Dislike,AppleScript 属性一直叫
+    /// `disliked`(iTunes 12.5 起,2026-08-22 实机验证可写)。Apple Music 专属,
+    /// 调用方约定同上;不要在主线程调用。
+    @discardableResult
+    public static func setDisliked(_ value: Bool) -> Bool {
+        runAppleScriptCapturing(
+            #"tell application "Music" to set disliked of current track to \#(value)"#
+        ) != nil
+    }
+
+    /// 「减少推荐」当前值(只读,给菜单状态行回显用)。nil = 查不出来。
+    /// Apple Music 专属;不要在主线程调用。
+    public static func currentTrackDisliked() -> Bool? {
+        guard let out = runAppleScriptCapturing(
+            #"tell application "Music" to get disliked of current track"#
+        ) else { return nil }
+        if out.contains("true") { return true }
+        if out.contains("false") { return false }
+        return nil
+    }
+
+    /// 在 Music.app 里定位并选中当前曲目(reveal),顺带把 Music 带到前台 —— 「在 Music
+    /// 中显示」。流媒体曲目实测可用(2026-08-22)。Apple Music 专属;不要在主线程调用。
+    @discardableResult
+    public static func revealCurrentTrack() -> Bool {
+        runAppleScriptCapturing(#"""
+        tell application "Music"
+            reveal current track
+            activate
+        end tell
+        """#) != nil
+    }
+
     /// 播放模式。Music.app 那边是**两个互相独立的属性** —— `shuffle enabled`(布尔)和
     /// `song repeat`(off/one/all)。这里把它们收成用户熟悉的一个三档循环。
     ///
-    /// 六种组合都得能读出一档来:用户完全可能绕过我们、直接在 Music.app 里调那两个开关,
-    /// 所以 current 是个**全函数**,优先级 单曲循环 > 随机 > 列表。
+    /// 所有组合都得能读出一档来:用户完全可能绕过我们、直接在 Music.app 里调那两个开关,
+    /// 所以 current 是个**全函数**,优先级 单曲循环 > 随机 > 列表循环 > 列表。
     public enum MusicPlaybackMode: String, CaseIterable, Sendable {
         case list
         case shuffle
         case repeatOne
+        /// 列表循环(Music.app `song repeat = all`)。2026-08-21 补上:AM 的循环键是三态
+        /// 关→全部→单曲,此前这一档被解析塌缩成 list —— 用户在 Music.app 开着整张循环,
+        /// 我们的循环键却是灰的,还没法从 UI 点出这一档。
+        case repeatAll
 
         /// 下一档。allowsRepeatOne=false 时跳过「单曲循环」,只在 列表 ↔ 随机 之间倒。
         ///
@@ -99,6 +308,8 @@ public enum MusicPlaybackController {
             case .list: return .shuffle
             case .shuffle: return allowsRepeatOne ? .repeatOne : .list
             case .repeatOne: return .list
+            // 顺 AM 循环键语义:全部 → 单曲(够不到单曲的播放器直接回列表)。
+            case .repeatAll: return allowsRepeatOne ? .repeatOne : .list
             }
         }
     }
@@ -186,7 +397,7 @@ public enum MusicPlaybackController {
                     return "nil|" & modePart & "|" & volPart
                 end tell
                 """#
-        case .qqMusic, .netease, .auto:
+        case .qqMusic, .netease, .kugou, .auto:
             return .empty
         }
         guard let out = runAppleScriptCapturing(script) else { return .empty }
@@ -201,13 +412,15 @@ public enum MusicPlaybackController {
         var mode: MusicPlaybackMode?
         switch player {
         case .appleMusic:
-            // 与 playbackMode(for:) 的解析同一套优先级:单曲循环 > 随机 > 列表。
+            // 与 playbackMode(for:) 的解析同一套优先级:单曲循环 > 随机 > 列表循环 > 列表。
             let m = parts[1].split(separator: ";")
             if m.count == 2 {
                 if m[1] == "one" {
                     mode = .repeatOne
                 } else if m[0] == "true" {
                     mode = .shuffle
+                } else if m[1] == "all" {
+                    mode = .repeatAll
                 } else {
                     mode = .list
                 }
@@ -235,6 +448,7 @@ public enum MusicPlaybackController {
             guard parts.count == 2 else { return nil }
             if parts[1] == "one" { return .repeatOne }
             if parts[0] == "true" { return .shuffle }
+            if parts[1] == "all" { return .repeatAll }
             return .list
         case .spotify:
             // 只读 shuffling:repeating 是布尔,映射不到「单曲循环」,而它开着与否不该影响
@@ -248,7 +462,7 @@ public enum MusicPlaybackController {
             case "false": return .list
             default: return nil // 空串 = Spotify 没在跑
             }
-        case .qqMusic, .netease, .auto:
+        case .qqMusic, .netease, .kugou, .auto:
             return nil
         }
     }
@@ -293,15 +507,25 @@ public enum MusicPlaybackController {
                         set song repeat to one
                     end tell
                     """#
+            case .repeatAll:
+                // 列表循环(2026-08-21 补档):跟 repeatOne 同一个互斥约定 —— 点亮循环就
+                // 关掉随机。
+                script = #"""
+                    tell application "Music"
+                        set shuffle enabled to false
+                        set song repeat to all
+                    end tell
+                    """#
             }
             return runAppleScriptCapturing(script) != nil
         case .spotify:
             // 只动 shuffling,`repeating` 一概不碰 —— 跟 Apple Music 分支里"不顺手改
             // song repeat"同一个原则:用户可能在 Spotify 里特意开着整张循环,那是他的设置,
             // 切随机/顺序不该把它顺手关掉。
-            guard mode != .repeatOne else {
-                // 走不到:UI 的档位轮换在 Spotify 上会跳过这一档(supportsRepeatOne=false)。
-                // 万一真被调到,返回 false 让调用方回读纠正,而不是悄悄按别的档执行。
+            guard mode != .repeatOne, mode != .repeatAll else {
+                // 走不到:UI 的循环键在 Spotify 上整颗不显示(supportsRepeatOne=false;
+                // repeating 布尔虽能写但读不回,乐观态会漂)。万一真被调到,返回 false
+                // 让调用方回读纠正,而不是悄悄按别的档执行。
                 return false
             }
             return runAppleScriptCapturing(
@@ -309,7 +533,7 @@ public enum MusicPlaybackController {
                     + #"tell application "Spotify" to set shuffling to "#
                     + (mode == .shuffle ? "true" : "false")
             ) != nil
-        case .qqMusic, .netease, .auto:
+        case .qqMusic, .netease, .kugou, .auto:
             return false
         }
     }
@@ -330,7 +554,7 @@ public enum MusicPlaybackController {
             // Spotify 的 `sound volume` 也是 0~100 的整数,跟 Music.app 同一个量纲,
             // 上层的滑杆不需要换算。
             script = spotifyRunningGuard + #"tell application "Spotify" to get sound volume"#
-        case .qqMusic, .netease, .auto:
+        case .qqMusic, .netease, .kugou, .auto:
             return nil
         }
         guard let out = runAppleScriptCapturing(script) else { return nil }
@@ -349,7 +573,7 @@ public enum MusicPlaybackController {
         case .spotify:
             return runAppleScriptCapturing(
                 spotifyRunningGuard + #"tell application "Spotify" to set sound volume to \#(v)"#) != nil
-        case .qqMusic, .netease, .auto:
+        case .qqMusic, .netease, .kugou, .auto:
             return false
         }
     }

@@ -17,7 +17,7 @@ enum WordKaraokeGradient {
         KaraokeFill.fillFraction(for: w, atMs: ms)
     }
 
-    /// 逐字填色的刷新上限,三处逐字视图(悬浮歌词/灵动岛/歌词窗口)共用。
+    /// 逐字填色的刷新上限,逐帧重算式的逐字视图(悬浮歌词/灵动岛)共用。
     ///
     /// 不用裸 `.animation`(=显示器刷新率,这台机器上是 ProMotion 120Hz):2026-08-14 用
     /// sample 实测,播一首有逐字歌词的歌时主线程**跑满 100%**(idle 采样数为 0),全部耗在
@@ -33,10 +33,22 @@ enum WordKaraokeGradient {
     /// LyricsOverlayView.mainLine 里对应的那段注释。
     static let refreshInterval: Double = 1.0 / 30.0
 
+    /// 歌词窗口专用档:60Hz(2026-08-21 五轮定稿)。这台面板 60Hz,窗口字号大(~50pt),
+    /// 30Hz 下扫色边缘每步 ~10px 可感知;窗口的失效面经多轮审计已收窄到单个活跃词的叶子
+    /// (见 LyricsWindowView.KaraokeWordText),60Hz 的代价约为悬浮窗整行 30Hz 的一小部分。
+    /// ⚠️ 排程式(withAnimation 交给渲染管线插值)在 macOS 上实测**不可用**:SCK 逐帧探针
+    /// 量得窗口只以 ~20Hz 提交(系统对长时程慢动画自动降档,无 API 干预;对照组悬浮窗
+    /// TimelineView 30Hz 准点)——20Hz×14px 步进正是"卡顿感"本体。TimelineView 的频率
+    /// 受控、实测准点,所以窗口回到逐帧重算,只是档位开到面板满刷新率。
+    static let windowRefreshInterval: Double = 1.0 / 60.0
+
     // 已唱过的部分是 fg 全强度,未唱到的部分是同一个 fg 的 35% 透明度,没有单独的
     // "进度色"参数。用渐变整体当文字颜色,而不是叠两层 Text + GeometryReader 手算裁剪
     // 宽度——渐变的 stop 位置直接由调用方每帧算出的真实进度决定,不需要额外插值。
-    private static let dimOpacity: Double = 0.35
+    // 非 private(2026-08-21):歌词窗口的排程式填色(两层 Text + mask,见
+    // LyricsWindowView.KaraokeWordText)不再用这里的渐变,但暗色档必须跟这三处保持
+    // 同一个数,直接引用同一份常量。
+    static let dimOpacity: Double = 0.35
 
     static func gradient(fg: Color, left: Double, right: Double) -> LinearGradient {
         let stops = KaraokeFill.stops(left: left, right: right).map { stop in

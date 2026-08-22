@@ -3,7 +3,7 @@ import Foundation
 // Lyrimuse 读取"本地正在播放"状态的目标 App——rawValue 必须跟 collector/features.go 的
 // playerXxx 常量逐字对应,这是两侧通过共享 json 文件("player" 字段)交换的字符串。四个
 // 具体 App 对应两条完全不同的读取路径(见 MediaControlClient.swift/collector/system.go
-// 的注释):Apple Music 走 AppleScript 直接问 Music.app 要;QQ 音乐/网易云音乐都没有
+// 的注释):Apple Music 走 AppleScript 直接问 Music.app 要;QQ 音乐/网易云音乐/酷狗音乐都没有
 // AppleScript 支持(用 `sdef`/PlistBuddy 核实过,两者都压根没有 .sdef、也没开
 // NSAppleScriptEnabled),共用同一条系统级 MediaRemote 路径(经内置的 media-control
 // 二进制读,不需要用户单独安装任何东西),只是各自的 bundleIdentifier 不同。Spotify
@@ -21,12 +21,19 @@ import Foundation
 // 按"没有唯一确定的目标 App"处理,比如"打开 Lyrimuse 时唤起播放器"这类需要一个具体
 // App 才有意义的联动直接跳过),真正的检测逻辑在 MediaControlClient.fetchSnapshot/
 // collector 的 getState() 里:问 media-control 当前是谁在报告 Now Playing,核对是不是
-// 这四个已知播放器之一,是 Apple Music 的话还会额外走一次 AppleScript 拿更精确的播放
+// 这五个已知播放器之一,是 Apple Music 的话还会额外走一次 AppleScript 拿更精确的播放
 // 位置(拿不到权限就退回 media-control 本身的读数,不会整个放弃)。
 public enum PlaybackPlayer: String, CaseIterable, Identifiable, Codable {
     case appleMusic = "apple_music"
     case qqMusic = "qq_music"
     case netease = "netease_music"
+    // 酷狗音乐(2026-08-21 接入)。跟 QQ/网易云同一条路径,不需要新代码分支:它是个 Mac
+    // Catalyst 应用(主二进制链的是 /System/iOSSupport/.../MediaPlayer.framework),自己把
+    // 播放状态发布进系统级 MediaRemote;同样没有 AppleScript 字典(Info.plist 里没有
+    // NSAppleScriptEnabled、Resources 下也没有 .sdef,2026-08-21 核实),所以扩展控件
+    // (喜欢/音量/播放模式)一律没有。顺带白捡一项:酷狗本来就是这个项目的五个歌词源之一,
+    // 接入播放器等于把「同源加权」也接上了(见 collector 的 playerNativeLyricSource)。
+    case kugou = "kugou_music"
     case spotify = "spotify"
     case auto = "auto"
 
@@ -43,6 +50,7 @@ public enum PlaybackPlayer: String, CaseIterable, Identifiable, Codable {
         case .appleMusic: return "com.apple.Music"
         case .qqMusic: return "com.tencent.QQMusicMac"
         case .netease: return "com.netease.163music"
+        case .kugou: return "com.kugou.mac.Music"
         case .spotify: return "com.spotify.client"
         case .auto: return ""
         }

@@ -84,6 +84,33 @@ public enum EnrichCacheReader {
     /// 给调用方判断"collector 是不是又写过了"。同一首歌播放中途补出来的译文/换上来的更好
     /// 的歌词,在这一侧唯一的外部体现就是这个文件被重写 —— collector 那边的重推通知只走
     /// relay,本地模式压根不看。一次 stat,比重新解析几 MB 的 JSON 便宜得多。
+    /// 当前曲目的歌词/封面来源(2026-08-22,歌词窗口「显示简介」面板)。entry 里这两个
+    /// 字段一直解码着但没往外传,这里补一个只读口;沿用 lookup 同款的 精确 key → 宽松
+    /// key 两级匹配。首次调用要解析整份缓存 JSON,别在主线程调。
+    public struct SourceInfo: Sendable {
+        public let lyricsSource: String?
+        public let coverSource: String?
+    }
+
+    public static func sourceInfo(artist: String, title: String, album: String) -> SourceInfo? {
+        guard let all = loadEntries() else { return nil }
+        let key = EnrichCacheKeys.normalizedKey(artist: artist, title: title, album: album)
+        guard let entry = all[key] ?? looseMatch(key, in: all) else { return nil }
+        return SourceInfo(lyricsSource: entry.lyricsSource, coverSource: entry.coverSource)
+    }
+
+    /// 当前曲目在缓存里的**实际条目 key**(2026-08-22,歌词窗口「搜索歌词」写回用):
+    /// 精确命中用精确 key;宽松命中返回缓存里真实存在的那条 key —— 播放器报法与缓存
+    /// 写法有 空格/大小写/繁简 出入时(见 looseMatch 注释),写回必须落在读取路径命中的
+    /// 同一条上,否则读写分家、改了不生效。两级都没有返回 nil,调用方退回 normalizedKey
+    /// 新建条目。首次调用要解析整份缓存 JSON,别在主线程调。
+    public static func resolvedKey(artist: String, title: String, album: String) -> String? {
+        guard let all = loadEntries() else { return nil }
+        let key = EnrichCacheKeys.normalizedKey(artist: artist, title: title, album: album)
+        if all[key] != nil { return key }
+        return looseIndex(in: all)[EnrichCacheKeys.looseKey(key)]
+    }
+
     public static var fileModificationDate: Date? {
         (try? FileManager.default.attributesOfItem(atPath: cacheURL.path))?[.modificationDate]
             as? Date

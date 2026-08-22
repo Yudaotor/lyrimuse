@@ -11,10 +11,36 @@ import SwiftUI
 // 也就不存在"从存档采纳"这种操作。
 struct LyricsDecisionSheet: View {
     let summary: EnrichCacheStore.Summary
-    let decision: LyricsResolutionDecision
+    /// 展示页签:「当前歌词的出处」在前、「最近一次评估」在后;同一轮只留一份(见 init)。
+    private let records: [(label: String, record: LyricsResolutionDecision)]
+    @State private var selectedRecord = 0
     @Environment(\.dismiss) private var dismiss
 
-    private var pathLabel: String {
+    /// - latest: lyrics_decision(最近一次评估 —— 可能维持原状,甚至输入本身是脏的,比如
+    ///   换曲窗口串扰进来的错误时长那轮);
+    /// - applied: lyrics_decision_applied(当前歌词的出处)。collector 2026-08-22 起分槽,
+    ///   老条目没有后者:退回"最近评估恰好 applied"那份 —— 单槽时代它就是出处。
+    /// 两份是同一轮(decidedAt+path 一致)就只展示一份,免得多出一个内容相同的页签。
+    init(summary: EnrichCacheStore.Summary,
+         latest: LyricsResolutionDecision?,
+         applied: LyricsResolutionDecision?) {
+        self.summary = summary
+        let origin = applied ?? ((latest?.applied == true) ? latest : nil)
+        var tabs: [(label: String, record: LyricsResolutionDecision)] = []
+        if let origin {
+            tabs.append((L10n.t("当前歌词的出处"), origin))
+        }
+        if let latest, origin == nil || origin?.decidedAt != latest.decidedAt || origin?.path != latest.path {
+            tabs.append((L10n.t("最近一次评估"), latest))
+        }
+        self.records = tabs
+    }
+
+    private var decision: LyricsResolutionDecision? {
+        records.isEmpty ? nil : records[min(selectedRecord, records.count - 1)].record
+    }
+
+    private func pathLabel(_ decision: LyricsResolutionDecision) -> String {
         switch decision.path {
         case "first-resolve": return L10n.t("首次解析")
         case "upgrade": return L10n.t("升级重试")
@@ -23,6 +49,12 @@ struct LyricsDecisionSheet: View {
         // needsLyricsFirstFill)。跟「升级重试」分开显示:那个是"本来有、想换更好的",
         // 这个是"本来没有、这次才填上"。
         case "refill": return L10n.t("补搜缺失歌词")
+        // 用户在详情页点「重新自动匹配」那一次(collector search-lyrics -pick 写下的存档)。
+        // 跟上面三条自动路径分开显示:它是手动触发的,但用的是**同一套**自动决策规则。
+        case "manual-rematch": return L10n.t("手动重新匹配")
+        // 兜底显示原始值:collector 那边新增一条路径、这边忘了补译名时,至少还看得出是哪条
+        // (而不是空白)。但那就是漏了 —— 这张表跟 collector 里 buildLyricsDecision 的 path
+        // 取值必须成对改,2026-08-21 的 manual-rematch 就是这么漏出来一个英文串的。
         default: return decision.path
         }
     }
@@ -33,8 +65,23 @@ struct LyricsDecisionSheet: View {
             Divider()
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
-                    metaSection
-                    candidateSection
+                    if records.count > 1 {
+                        // 「出处」解释现状,「最近一次评估」解释后来又评过什么、为什么没换
+                        // (比如一轮维持原状的升级重试)。正是这两份对不上号让用户困惑
+                        // (2026-08-22:一轮被换曲窗口串扰时长的重试盖掉了首解存档,记录
+                        // 跟生效歌词说不到一块去),所以两份并排都给看,不再只剩最后一轮。
+                        Picker("", selection: $selectedRecord) {
+                            ForEach(records.indices, id: \.self) { i in
+                                Text(records[i].label).tag(i)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+                        .labelsHidden()
+                    }
+                    if let decision {
+                        metaSection(decision)
+                        candidateSection(decision)
+                    }
                 }
                 .padding(16)
             }
@@ -83,7 +130,22 @@ struct LyricsDecisionSheet: View {
         var lines: [String] = []
         lines.append("\(summary.title) — \(summary.artist)")
         if !summary.album.isEmpty { lines.append(summary.album) }
-        var head = [pathLabel]
+        // 两槽都有就都拷 —— 这份文本的用途是复盘,"出处"和"最近评估"对不上号本身往往就是
+        // 要复盘的问题,只拷当前页签会丢掉另一半证据。
+        for (i, item) in records.enumerated() {
+            if records.count > 1 {
+                if i > 0 { lines.append("") }
+                lines.append("== \(item.label) ==")
+            }
+            lines.append(contentsOf: dumpLines(item.record))
+        }
+        return lines.joined(separator: "\n")
+    }
+
+    /// 单份决策记录的纯文本行(plainTextDump 按页签逐份拼接)。
+    private func dumpLines(_ decision: LyricsResolutionDecision) -> [String] {
+        var lines: [String] = []
+        var head = [pathLabel(decision)]
         if let applied = decision.applied {
             head.append(applied ? L10n.t("已采用") : L10n.t("评估后维持原状"))
         }
@@ -116,14 +178,14 @@ struct LyricsDecisionSheet: View {
                 lines.append(LyricsSearchService.ScoreTerm.explanation(score: c.score, terms: terms))
             }
         }
-        return lines.joined(separator: "\n")
+        return lines
     }
 
     @ViewBuilder
-    private var metaSection: some View {
+    private func metaSection(_ decision: LyricsResolutionDecision) -> some View {
         VStack(alignment: .leading, spacing: 5) {
             HStack(spacing: 8) {
-                InfoChip(icon: "clock.arrow.circlepath", text: pathLabel, tint: .blue)
+                InfoChip(icon: "clock.arrow.circlepath", text: pathLabel(decision), tint: .blue)
                 if let applied = decision.applied {
                     InfoChip(icon: applied ? "checkmark.circle" : "equal.circle",
                              text: applied ? L10n.t("已采用") : L10n.t("评估后维持原状"),
@@ -161,7 +223,7 @@ struct LyricsDecisionSheet: View {
     }
 
     @ViewBuilder
-    private var candidateSection: some View {
+    private func candidateSection(_ decision: LyricsResolutionDecision) -> some View {
         let candidates = decision.candidates ?? []
         if candidates.isEmpty {
             Text(L10n.t("这一轮没有任何源给出候选"))
@@ -171,14 +233,14 @@ struct LyricsDecisionSheet: View {
         } else {
             VStack(alignment: .leading, spacing: 10) {
                 ForEach(candidates) { c in
-                    candidateRow(c)
+                    candidateRow(c, winner: decision.winner)
                 }
             }
         }
     }
 
-    private func candidateRow(_ c: LyricsResolutionDecision.Candidate) -> some View {
-        let isWinner = c.source == decision.winner
+    private func candidateRow(_ c: LyricsResolutionDecision.Candidate, winner: String?) -> some View {
+        let isWinner = c.source == winner
         return VStack(alignment: .leading, spacing: 5) {
             HStack(spacing: 8) {
                 Text(sourceDisplayName(c.source))

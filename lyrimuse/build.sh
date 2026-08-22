@@ -398,6 +398,14 @@ cat > "$APP_DIR/Contents/Info.plist" <<PLIST
     <true/>
     <key>NSHighResolutionCapable</key>
     <true/>
+    <!-- 「发现新播放器」那条通知带两个按钮(加入信任列表/忽略),而默认的 banner 样式
+         5 秒就自动消失、按钮要悬停才露出来。alert 样式常驻不走、按钮直接可见。
+         这是 legacy NSUserNotification 时代的键、只决定该 App 通知样式的**初始默认值**
+         (用户在系统设置里改过就以他的为准);对现代 UNUserNotificationCenter 是否仍生效
+         没有实测坐实,成本近乎零所以加上 —— 最坏情况是个 no-op。
+         ⚠️ 本地通知不需要任何其它 Info.plist 键,也不需要 entitlements。 -->
+    <key>NSUserNotificationAlertStyle</key>
+    <string>alert</string>
     <!-- 2026-07-23 实测坐实：这个 key 缺失时,OnboardingView 第一步"请求权限"按钮
          调 MusicAutomationPermission.check(askIfNeeded: true)在全新安装的机器上
          (TCC 数据库对这个 App 完全没有历史记录)系统直接静默拒绝弹出授权对话框、

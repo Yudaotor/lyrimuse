@@ -41,6 +41,58 @@ public enum OverlayPlacement {
         return origin
     }
 
+    /// 这个窗口**自己落在**哪块屏上 —— 与它相交面积最大的那块屏的可见区域。一块都不相交
+    /// 时返回 nil(调用方据此选择"那就不夹了")。
+    ///
+    /// 存在的理由:窗口自身的尺寸钳制(高度上限、宽度重定中心)必须以**它所在的那块屏**为
+    /// 准。调用方原来写的是 `window.screen?.visibleFrame ?? NSScreen.main?.visibleFrame`,
+    /// 而 NSScreen.main 是"当前有键盘焦点的那块屏",跟这个窗口在哪儿毫无关系 —— 窗口在副屏、
+    /// 焦点在主屏,且 window.screen 恰好拿不到值(刚 orderOut 过、或整块屏在重新枚举中)的
+    /// 那一刻,钳制就会按主屏的边界去算,把副屏上的窗口往主屏方向推。
+    public static func hostVisibleFrame(of frame: CGRect, screens: [CGRect]) -> CGRect? {
+        var best: (frame: CGRect, area: CGFloat)?
+        for screen in screens {
+            let inter = screen.intersection(frame)
+            if inter.isNull || inter.isEmpty { continue }
+            let area = inter.width * inter.height
+            if let b = best, b.area >= area { continue }
+            best = (screen, area)
+        }
+        return best?.frame
+    }
+
+    /// 启动还原时,存下来的那个位置该怎么摆。
+    ///
+    /// `wasRescued == true` 表示这个落点**不是**用户存的那个:存的位置在当前显示器配置下一块
+    /// 屏都看不见(窗口停在已经拔掉/已经休眠的外接屏上),只好临时借主屏显示。调用方据此把
+    /// 这次落点标记成"借来的",不许写回磁盘 —— 否则拔屏这一下就把用户拖出来的位置永久改写
+    /// 成主屏坐标,外接屏插回来也回不去了。
+    ///
+    /// 关键:位置**看得见就原样保留**,不再无条件夹进主屏。原来 `restoredOrigin` 里那两行
+    /// 无条件 clamp 是"悬浮歌词经常在主屏和副屏之间来回跳"的根因 —— 实测:外接屏
+    /// (-526,956,2560,1440)上的锚点 x=849/顶边=1202、窗口 900×120,被夹成 (570,803) 整个
+    /// 落回内置屏(0,70,1470,853);用户拖回去,下次启动再被夹走一次。
+    public struct RestoredPlacement: Equatable {
+        public let origin: CGPoint
+        public let wasRescued: Bool
+        public init(origin: CGPoint, wasRescued: Bool) {
+            self.origin = origin
+            self.wasRescued = wasRescued
+        }
+    }
+
+    /// `screens` 的第一个元素同样约定为主屏(见 `repositionIfOffscreen`)。
+    public static func restored(frame: CGRect, screens: [CGRect]) -> RestoredPlacement {
+        if isSufficientlyVisible(frame: frame, screens: screens) {
+            return RestoredPlacement(origin: frame.origin, wasRescued: false)
+        }
+        // 一块屏都没有(理论上不会发生)时原样返回,别把窗口摆到凭空算出来的坐标上。
+        guard let primary = screens.first else {
+            return RestoredPlacement(origin: frame.origin, wasRescued: false)
+        }
+        return RestoredPlacement(origin: clamped(frame: frame, into: primary), wasRescued: true)
+    }
+
     /// 屏幕配置变化后该把窗口挪到哪儿。`nil` = 不用动。
     ///
     /// `screens` 的第一个元素约定为主屏(调用方传 `NSScreen.main` 优先的那份列表)——窗口

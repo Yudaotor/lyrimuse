@@ -354,7 +354,7 @@ private struct LyricsSettingsTab: View {
     // 在本地播放每次轮询(~2秒一次)更新歌曲信息时跟着白白重渲染一次。用普通引用
     // (class 本身是引用类型,let 一样能改它的属性),不订阅。
     private let local = LocalPlaybackSource.shared
-    // 这一个反过来要订阅:下面「全局时间轴偏移」那行得实时显示当前值。它只在用户真的
+    // 这一个反过来要订阅:下面「时间轴偏移」那行得实时显示当前值。它只在用户真的
     // 改这个值时才发通知,不像 local 那样每轮播放轮询都推,所以订阅它不会带来上面那段
     // 注释里说的白白重渲染。
     @ObservedObject private var offsets = LyricsOffsetStore.shared
@@ -418,6 +418,81 @@ private struct LyricsSettingsTab: View {
     // 一次。存 rawValue 而不是枚举:@AppStorage 只吃基础类型。
     /// 鼠标悬在哪个来源上(只为悬停底色,不影响任何配置)。
     @State private var hoveredSource: LyricsSource?
+
+    // MARK: - 时间轴偏移那一行的「作用于哪个播放器」(2026-08-21 加)
+
+    /// 空串 = 「全部播放器」(就是既有的全局那层,存储上没有"全部"这个哨兵);否则是某个播放器
+    /// 的 bundle id。**故意只是 @State、不持久化**:绝大多数人只需要动「全部」那一档,每次打开
+    /// 设置页从它开始最省事;落进 @AppStorage 还会多一个 np: 键(而 np: 前缀是配置导出的白
+    /// 名单,等于把一个纯界面状态搬去新机器)。
+    @State private var offsetScope = ""
+    /// 下拉里标「正在播放」用。**必须拿播放态兜一道**:LocalPlaybackSource 从不清 lastSnapshot,
+    /// 停播之后 lastResolvedBundleID 是"陈旧但非 nil"的,直接用会一直指着最后那个播放器说
+    /// 它正在放。
+    @State private var nowPlayingBundleID: String?
+
+    private func refreshNowPlayingPlayer() {
+        let coordinator = PlaybackCoordinator.shared
+        nowPlayingBundleID = coordinator.isPlayingSmoothed ? coordinator.resolvedPlayerBundleID : nil
+    }
+
+    /// 下拉框的候选,四组并集(顺序即展示顺序):
+    ///  1. 内置播放器 —— **不含「自动识别」**:它的 bundleIdentifier 是空串,存进去会被
+    ///     `setPlayerOffset` 静默丢掉(用户调了半天没反应);"自动"这层语义本来就由「全部
+    ///     播放器」承担。
+    ///  2. 用户信任的未知播放器(浏览器就在这一组 —— 这个功能的动机)。
+    ///  3. **已经配过偏移的** —— 哪怕它已经不在信任名单里(取消信任了、App 卸了)也必须列出来,
+    ///     否则那个非零偏移会变成看不见、改不动的隐形值。2026-08-18 那版按播放器偏移正是这么
+    ///     翻的车(见 LyricsOffsetStore.playerOffsets 的注释)。
+    ///  4. 此刻正在放的那个 —— 可能是还没加进信任名单的 App,用户往往正是为它才来调这个。
+    private var offsetScopeOptions: [String] {
+        // 并集/去重/排序的规则连同那三条不变量都在 LyrimuseCore.LyricsOffsetScope 里(纯函数,
+        // selftest 覆盖)—— 混在 View 里的话,「配过偏移但已不在信任名单」这类只在特定用户状态
+        // 下才暴露的分支除了肉眼盯下拉框以外没法验证。
+        LyricsOffsetScope.options(
+            trusted: features.trustedPlayers,
+            configured: Set(offsets.playerOffsets.keys),
+            nowPlaying: nowPlayingBundleID
+        )
+    }
+
+    /// bundle id → 人看得懂的名字。内置的用枚举自带的显示名,信任项用当初存下来的那份(空串时
+    /// 现查一次 NSWorkspace),都查不到就退回 bundle id 本身 —— 退回也比显示空白好。
+    private func playerDisplayName(_ bundleID: String) -> String {
+        if let builtin = PlaybackPlayer.allCases.first(where: { $0 != .auto && $0.bundleIdentifier == bundleID }) {
+            return builtin.displayName
+        }
+        if let trusted = features.trustedPlayers[bundleID], !trusted.isEmpty { return trusted }
+        return FeatureSettingsStore.appDisplayName(forBundleID: bundleID) ?? bundleID
+    }
+
+    /// 下拉项的文字:名字 + 一个状态后缀。「已调」那个后缀是为了让"哪些播放器配过"一眼可见 ——
+    /// 不然用户得逐个点开才知道,而看不见的非零偏移正是这层要避免的事。
+    private func offsetScopeLabel(_ bundleID: String) -> String {
+        let name = playerDisplayName(bundleID)
+        if bundleID == nowPlayingBundleID { return name + L10n.t("（正在播放）") }
+        if offsets.playerOffset(forBundleID: bundleID) != 0 { return name + L10n.t("（已调）") }
+        return name
+    }
+
+    /// 当前作用域那一档的值。两个作用域各读各的存储,切换下拉时数字**不跟着带过去** ——
+    /// 那会让人以为在改同一个数,实际是往两层各写一份、相加成双倍校正。
+    private var scopedOffsetMs: Int {
+        offsetScope.isEmpty ? offsets.globalOffsetMs : offsets.playerOffset(forBundleID: offsetScope)
+    }
+
+    private func setScopedOffset(_ ms: Int) {
+        if offsetScope.isEmpty {
+            PlaybackCoordinator.shared.setGlobalLyricsOffset(ms)
+        } else {
+            PlaybackCoordinator.shared.setPlayerLyricsOffset(ms, forBundleID: offsetScope)
+        }
+    }
+
+    // 标题/副标题/help 都是**固定文案**,不跟着下拉框选中项变(2026-08-21 用户要求:「列表里选了
+    // 也不要变前面的文案,始终一个就好」)。原来那版会把标题换成「Apple Music 的时间轴偏移」、
+    // 副标题换成「只在 X 放歌时额外叠加」—— 每换一次选中项整行文案跳一次,而且"额外叠加"那句
+    // 在语义改成二选一之后本身就错了。
     @AppStorage("settings:lyricsSection") private var sectionRaw = Section.fetch.rawValue
     private var section: Section { Section(rawValue: sectionRaw) ?? .fetch }
 
@@ -779,7 +854,7 @@ private struct LyricsSettingsTab: View {
                 Toggle("", isOn: $settings.showNextLinePreview)
             }
             CardDivider()
-            // 全局时间轴偏移(2026-08-17 加)。跟菜单栏「歌词时间轴」那个单曲微调是两层:
+            // 时间轴偏移(2026-08-17 加,2026-08-21 加播放器维度)。跟菜单栏「歌词时间轴」那个单曲微调是两档:
             // 这里校的是设备侧的固定延迟(它跟哪首歌无关,换首歌照样偏),那里校的是某一
             // 份歌词自己的时间轴不准。两者相加才是实际生效的值,见
             // LyricsOffsetStore.globalOffsetMs。
@@ -787,37 +862,67 @@ private struct LyricsSettingsTab: View {
             // 步长固定 0.05 秒,刻意不复用「快捷键」页那个「调整步长」:那个是"每按一次
             // 键跳多少",属于手感;这里是一次性把设备延迟校准到位,要的是精度。绑在一起
             // 的话,把步长调到 1 秒的人在这里就没法微调了。
+            // 2026-08-21:这一行加了「作用于哪个播放器」的下拉框。跟 2026-08-18 那个写死的
+            // 「Spotify 时间轴偏移」行**不是一回事** —— 那个是代码内部替用户猜的补偿(界面上
+            // 看不见、重置不了,后来查明它要补的偏差是自然切歌锚点超前、已由
+            // naturalAdvanceCorrection 按曲根修,于是 08-20 连值一起删了)。这个下拉框是用户
+            // 自己选播放器、自己调,默认全 0,谁都看得见改得动。
+            //
+            // 真正需要它的是**浏览器**:Arc/Chrome 这类只在切歌时报一次播放位置,之后
+            // elapsedTime 再也不刷新,只能按墙钟外推(PositionSourceTier.cleanExtrapolated),
+            // 进度会系统性偏慢;而 Apple Music 那条路径是精确的、一点都不该补。偏差落在
+            // "播放器"这个维度上,不在"歌"上。
+            //
+            // 两档是**二选一、不相加**(2026-08-21 用户拍板):单独配过的播放器只用自己那档,
+            // 「全部播放器」对它不生效;调回 0 就撤掉单独设置、重新跟随「全部」。合成规则在
+            // LyricsOffsetStore.baseOffsetMs,selftest 有断言钉住(含一条变异测试验证过的
+            // "不许退回相加")。
+            // 标题/help 都是**固定文案**、不跟着下拉框选中项变(2026-08-21 用户要求:「列表里选了
+            // 也不要变前面的文案,始终一个就好」);副标题整条去掉、help 只留"符号往哪边走 + 典型
+            // 用途"这一句(同一次要求:那两段解释语义的长文案都删掉)。
+            //
+            // 也就是说「两档二选一、调回 0 就跟随全部」这些规则**界面上不写** —— 它们记在
+            // LyricsOffsetStore.baseOffsetMs 的注释和 docs/features/08 里。改这一行的人注意:
+            // 别再往这里加解释性文案,那是用户明确否掉过两次的东西。
             SettingsRow(
                 icon: "timer",
                 title: L10n.t("全局时间轴偏移"),
-                subtitle: L10n.t("对所有歌生效；和单曲微调相加"),
-                // help 只留界面上**看不出来**的那一件事:符号往哪边走。用途和叠加关系
-                // 副标题已经说过了,原来那版在这里又重复一遍,四句话堆成一大坨。
                 help: L10n.t("正数＝歌词提前，负数＝歌词延后；常用来抵消蓝牙耳机的声音延迟")
             ) {
                 HStack(spacing: 8) {
-                    Text("\(AppSettings.signedSeconds(ms: offsets.globalOffsetMs))\(L10n.t("秒"))")
+                    Picker("", selection: $offsetScope) {
+                        // 「全部播放器」= 既有的全局那层,tag 用空串(bundle id 不可能是空串)。
+                        Text(L10n.t("全部播放器")).tag("")
+                        ForEach(offsetScopeOptions, id: \.self) { bundleID in
+                            Text(offsetScopeLabel(bundleID)).tag(bundleID)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    .fixedSize()
+                    Text("\(AppSettings.signedSeconds(ms: scopedOffsetMs))\(L10n.t("秒"))")
                         .monospacedDigit()
                         .foregroundStyle(.secondary)
                     // 数值必须摆在 Stepper 外面 —— SettingsRow 给尾部控件统一套了
                     // .labelsHidden(),而 Stepper 是把数值画在 label 里的,放进去会被
                     // 一并藏掉(「调整步长」那一行踩过,见那边的注释)。
                     Stepper("", value: Binding(
-                        get: { Double(offsets.globalOffsetMs) / 1000 },
-                        set: { PlaybackCoordinator.shared.setGlobalLyricsOffset(Int(($0 * 1000).rounded())) }
+                        get: { Double(scopedOffsetMs) / 1000 },
+                        set: { setScopedOffset(Int(($0 * 1000).rounded())) }
                     ), in: -5.0...5.0, step: 0.05)
                     // 只在真的偏移过时才给「重置」:值为 0 时摆一个点了什么都不会变的
                     // 按钮,跟菜单里那个「重置」同一个道理。
-                    if offsets.globalOffsetMs != 0 {
-                        Button(L10n.t("重置")) {
-                            PlaybackCoordinator.shared.setGlobalLyricsOffset(0)
-                        }
+                    if scopedOffsetMs != 0 {
+                        Button(L10n.t("重置")) { setScopedOffset(0) }
                     }
                 }
             }
-            // 「Spotify 时间轴偏移」那一行(2026-08-18 加的按播放器补偿)已于 2026-08-20
-            // 移除:它补的"Spotify 恒偏快"实为自然切歌锚点超前,已在 LocalPlaybackSource
-            // .naturalAdvanceCorrection 按曲精确校正,固定补偿反而不对症。
+            // 「正在播放」那个标记要跟着播放状态走。2 秒一跳,跟这个设置页里其它几处轮询同一个
+            // 节奏;读的是存储属性而不是订阅 —— 这个 Tab 刻意不订阅 local/coordinator(每轮播放
+            // 轮询都推,会让整页白重渲染,见文件顶部 `local` 那条注释)。
+            .onReceive(Timer.publish(every: 2, on: .main, in: .common).autoconnect()) { _ in
+                refreshNowPlayingPlayer()
+            }
+            .onAppear { refreshNowPlayingPlayer() }
         }
     }
 
@@ -1561,6 +1666,13 @@ private struct AppearanceSettingsTab: View {
             // "只影响装得下的句子"这句原来是副标题,并进来了 —— 去掉副标题不等于丢掉这个
             // 范围限定,它恰恰是这一项最容易被误解的地方。
             CardDivider()
+            SettingsSubRow(
+                title: L10n.t("逐字染色"),
+                help: L10n.t("跟着演唱进度把已唱到的部分染成系统强调色。只在这首歌有逐字时间轴时生效；打开菜单反白期间暂不染色")
+            ) {
+                Toggle("", isOn: $settings.menuBarLyricsKaraoke)
+            }
+            CardDivider()
             SettingsSubRow(title: L10n.t("最大宽度")) {
                 HStack(spacing: 8) {
                     // 按点(pt)而不是字数 —— 字符宽度差得太远,按字数控不住实际占宽,
@@ -1665,6 +1777,13 @@ private struct PlayerSettingsTab: View {
     // 没启动起来"时才为真,切走这个 tab 就清掉,不会把上一次失败的提示一直留着误导下一次
     // 操作。
     @State private var collectorEnableFailed = false
+    // 「检测到未知播放器」那张卡的数据源。MediaControlClient 那份观察是普通静态变量、
+    // 不是 @Published(它在 LyrimuseCore、每 2 秒轮询里顺手记的一笔,不该为了一张设置卡
+    // 背上发布语义),所以这里自己按拍取一次。
+    @State private var ungatedNowPlaying: MediaControlClient.UngatedNowPlaying?
+    /// 通知授权是不是被拒了。系统**不会**把权限变化推给你,所以 onAppear 查一次、
+    /// 回到前台再查一次(用户可能刚去系统设置里改过)。
+    @State private var notificationsDenied = false
 
     var body: some View {
         SettingsPage(
@@ -1672,11 +1791,44 @@ private struct PlayerSettingsTab: View {
             subtitle: L10n.t("选择读取哪个 App 的播放状态")
         ) {
             playerCard
+            unknownPlayerCard
+            notificationDeniedCard
+            trustedPlayersCard
             permissionCard
             collectorCard
             companionCard
         }
         .id(L10n.current)
+        .onAppear { refreshUngatedNowPlaying(); refreshNotificationStatus() }
+        .onReceive(NotificationCenter.default.publisher(
+            for: NSApplication.didBecomeActiveNotification)) { _ in
+            refreshNotificationStatus()
+        }
+        // 2 秒一拍跟主轮询同频 —— 这里只是**读**一个已经被填好的静态变量,不起任何子进程
+        // (记录那一笔挂在 LocalPlaybackSource 既有的 media-control 调用上,见
+        // MediaControlClient.recordUngatedNowPlaying)。
+        .onReceive(Timer.publish(every: 2, on: .main, in: .common).autoconnect()) { _ in
+            refreshUngatedNowPlaying()
+        }
+    }
+
+    /// 取一次"系统此刻在报谁"。**带陈旧过滤**:播放停了之后那笔观察还挂在静态变量上,
+    /// 不过滤的话卡片会一直挂着一个早就不放了的 App,用户点了信任却完全看不出效果。
+    /// 15 秒 = 主轮询周期(2s)的七倍多,足够容忍一次卡顿,又不至于把停播后的残影留太久。
+    private func refreshUngatedNowPlaying() {
+        guard let seen = MediaControlClient.lastUngatedNowPlaying,
+              Date().timeIntervalSince(seen.at) < 15 else {
+            if ungatedNowPlaying != nil { ungatedNowPlaying = nil }
+            return
+        }
+        if ungatedNowPlaying != seen { ungatedNowPlaying = seen }
+    }
+
+    private func refreshNotificationStatus() {
+        Task {
+            let denied = await UnknownPlayerNotifier.authorizationStatus() == .denied
+            if notificationsDenied != denied { notificationsDenied = denied }
+        }
     }
 
     // 切换后台采集服务(收集器只在启动时读一次这个设置)需要重启才生效,跟这个 store
@@ -1699,6 +1851,107 @@ private struct PlayerSettingsTab: View {
                 .fixedSize()
             }
         }
+    }
+
+    // 「检测到未知播放器」——「自动识别」不再限死内置那几个 App 的入口。
+    //
+    // 为什么是"发现 + 一键信任"而不是"一律接受":那道白名单不只挡显示,**也挡打卡**
+    // (collector 的 poller.isTracked)。一律接受等于让 YouTube 视频、播客、网课被当成
+    // 收听写进 Last.fm / ListenBrainz 的**永久历史**,还会往"设计上永不清理"的歌词缓存里
+    // 灌垃圾条目。而靠内容形状分辨也不可靠 —— 浏览器里的网页播放器能用 MediaSession API
+    // 自己填 title/artist/artwork,一个 YouTube 音乐视频跟一首歌长得一模一样。所以口径是
+    // 用户显式同意:这里只负责把"系统正在报一个我们没见过的 App"这件事**如实告诉用户**,
+    // 点不点由他定。详见 LyrimuseCore/TrustedPlayers。
+    @ViewBuilder
+    private var unknownPlayerCard: some View {
+        // 只在「自动识别」下出现:选了具体播放器时,系统在报谁跟这个 App 无关,提示只是噪声。
+        // 只提议"看起来像一首歌"的 —— 判据必须跟 TrustedPlayers.notASong 完全一致
+        // (歌手名和专辑名都非空),否则会摆出一张"点了必定没反应"的卡片:YouTube 视频就是
+        // artist 有(频道名)、album 空这个形状,信任之后照样会被那道守卫丢掉。
+        // 判据下沉到 LyrimuseCore.UnknownPlayerAlert.shouldOffer(2026-08-22):通知那条路
+        // 必须用**同一套**门槛,不然会出现「通知让你去信任,点进来这张卡却不在」。
+        // 顺带修掉一个既有 bug:原来写的是裸 `!seen.album.isEmpty`,而 TrustedPlayers.notASong
+        // 是 trim 后判空 —— album = " " 的播放能过这张卡、过不了那道守卫。
+        if let seen = ungatedNowPlaying,
+           UnknownPlayerAlert.shouldOffer(
+               bundleID: seen.bundleID, artist: seen.artist, album: seen.album,
+               observedAt: seen.at, isAutoDetect: features.player == .auto, now: Date(),
+               isAccepted: { TrustedPlayers.isAccepted($0) }) {
+            SettingsCard {
+                SettingsRow(
+                    icon: "questionmark.app.dashed",
+                    title: FeatureSettingsStore.appDisplayName(forBundleID: seen.bundleID) ?? seen.bundleID,
+                    subtitle: unknownPlayerSubtitle(seen),
+                    help: L10n.t("信任之后它跟内置播放器完全同权:显示歌词，也会记进收听历史")
+                ) {
+                    Button(L10n.t("加入信任列表")) {
+                        Task { await features.trust(bundleID: seen.bundleID) }
+                    }
+                }
+            }
+        }
+    }
+
+    /// 通知权限被拒时说出来。
+    ///
+    /// 用户 2026-08-22 明确选了「只做系统通知,不要菜单栏兜底」—— 权限被拒时这个功能会
+    /// **完全静默**,而用户会把它理解成「它没检测到新播放器」。这一行是唯一能说清
+    /// "不是没检测到,是通知被关了"的地方。只在真的 .denied 时出现,不占常态版面。
+    @ViewBuilder
+    private var notificationDeniedCard: some View {
+        if features.player == .auto, notificationsDenied {
+            SettingsCard {
+                SettingsRow(
+                    icon: "bell.slash",
+                    title: L10n.t("检测到新的播放器"),
+                    subtitle: L10n.t("系统通知已关闭，发现新播放器时不会主动提醒你"),
+                    help: L10n.t("信任之后它跟内置播放器完全同权:显示歌词，也会记进收听历史")
+                ) {
+                    Button(L10n.t("打开系统设置")) {
+                        if let url = URL(string:
+                            "x-apple.systempreferences:com.apple.Notifications-Settings.extension") {
+                            NSWorkspace.shared.open(url)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// 未知播放器卡的副标题:bundle id + 它此刻在放什么。放什么这件事很重要 —— 用户得靠它
+    /// 判断"这是我的播放器"还是"某个网页视频"。
+    private func unknownPlayerSubtitle(_ seen: MediaControlClient.UngatedNowPlaying) -> String {
+        let what = [seen.artist, seen.title].filter { !$0.isEmpty }.joined(separator: " - ")
+        if what.isEmpty { return seen.bundleID }
+        return seen.bundleID + " · " + String(format: L10n.t("正在放：%@"), what)
+    }
+
+    @ViewBuilder
+    private var trustedPlayersCard: some View {
+        if !features.trustedPlayers.isEmpty {
+            SettingsCard {
+                // 按 bundle id 排序,别让列表顺序随 Dictionary 遍历顺序每次启动乱跳。
+                ForEach(features.trustedPlayers.keys.sorted(), id: \.self) { bundleID in
+                    if bundleID != features.trustedPlayers.keys.sorted().first { CardDivider() }
+                    SettingsRow(
+                        icon: "checkmark.seal",
+                        title: displayNameForTrusted(bundleID),
+                        subtitle: bundleID
+                    ) {
+                        Button(L10n.t("移除")) {
+                            Task { await features.untrust(bundleID: bundleID) }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// 已信任项的显示名:优先用当初存下来的那份(collector 也用它当 ListenBrainz 标签),
+    /// 空串(当初反查不到)时现查一次,还是查不到就退回 bundle id。
+    private func displayNameForTrusted(_ bundleID: String) -> String {
+        if let stored = features.trustedPlayers[bundleID], !stored.isEmpty { return stored }
+        return FeatureSettingsStore.appDisplayName(forBundleID: bundleID) ?? bundleID
     }
 
     // 本地数据源现在通过 AppleScript 直接问 Music.app(见 MediaControlClient.swift),
@@ -1804,7 +2057,24 @@ private struct PlayerSettingsTab: View {
                 }
             }
         }
-        .onAppear { collectorState = CollectorServiceManager.state }
+        // ⚠️ 不能只在 onAppear 读一次(2026-08-21 用户报"怎么变成未知了")。
+        //
+        // 实际发生的事:collector 的 job 在 bootout→bootstrap 中途,`launchctl print` 会
+        // 退出码 0 但输出里认不出 state 字段 → 解析成 .unknown(见 LaunchdPrintParser:
+        // "我读不懂"跟"我知道它没跑"刻意分开两档)。而 build.sh 的重装顺序恰好制造这个窗口:
+        // **先** kickstart App(设置窗口恢复、onAppear 读一次状态)、**再** reload collector
+        // 的 job。于是这一次读正好落在中间态上,之后再没人重读,卡片就永久挂着一个橙色警告
+        // 和一颗本不该出现的「启用」按钮 —— 而服务其实一直在跑。
+        //
+        // 修法是让它自愈:每拍重读一次(`launchctl print` 实测 4ms,只在这一页显示着时跑),
+        // 外加切回 App 时重读一次(跟上面 permissionCard 的既有做法一致)。
+        .onAppear { refreshCollectorState() }
+        .onReceive(Timer.publish(every: 2, on: .main, in: .common).autoconnect()) { _ in
+            refreshCollectorState()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            refreshCollectorState()
+        }
     }
 
     // 两个开关的文案跟着 features.player 走(Apple Music/QQ 音乐/...)——这两个联动本身
@@ -1829,7 +2099,7 @@ private struct PlayerSettingsTab: View {
                 title: features.player == .auto
                     ? L10n.t("跟随播放器启动")
                     : String(format: L10n.t("跟随 %@ 启动"), features.player.displayName),
-                help: L10n.t("检测到播放器打开时自动拉起 Lyrimuse；需要后台采集服务在运行")
+                help: L10n.t("检测到播放器打开时自动拉起 Lyrimuse")
             ) {
                 Toggle("", isOn: Binding(
                     get: { features.launchLyrimuseOnMusicOpen },
@@ -1928,6 +2198,16 @@ private struct PlayerSettingsTab: View {
         }
     }
 
+    /// 重读一次后台采集服务的真实状态。
+    ///
+    /// 只在真的变了时才赋值 —— 这是每 2 秒一拍的路径,而 collectorState 驱动整张卡片的
+    /// 图标/文案/按钮;无条件赋值会让 SwiftUI 每拍重算一遍这张卡(值没变也算变化)。
+    /// LaunchdJobState 是 Equatable,比较是零成本的。
+    private func refreshCollectorState() {
+        let latest = CollectorServiceManager.state
+        if latest != collectorState { collectorState = latest }
+    }
+
     private func enableCollectorService() {
         isTogglingCollectorService = true
         collectorEnableFailed = false
@@ -1981,6 +2261,12 @@ private struct GeneralSettingsTab: View {
     @State private var iCloudBusy = false
     @State private var iCloudMessage: String?
     @State private var pendingImportData: Data?
+    /// 待导入配置包**旁边**那份歌词归档(同名、-Config- 换成 -Lyrics-)。nil = 这份备份不带
+    /// 歌词(老备份,或用户只导出了设置)—— 那就一个歌词文件都不许动,绝不能当成"空歌词库"
+    /// 去清掉本机现有的。
+    @State private var pendingImportLyrics: Data?
+    /// 上面那份里有多少个歌词文件,只用于导入前那句确认文案报数(异步 peek 出来)。
+    @State private var pendingImportLyricsCount = 0
     // 这次待确认的导入来自哪个**备份目录**。从任意文件选进来的那条路径是 nil ——
     // 那可能只是下载目录里的一份临时文件,不该因此把它当成今后的备份落点。
     @State private var pendingImportFolder: URL?
@@ -2158,7 +2444,19 @@ private struct GeneralSettingsTab: View {
                            let data = try? Data(contentsOf: url) {
                             pendingImportData = data
                             pendingImportFolder = nil
+                            // 同目录下的兄弟歌词包(同名、-Config- 换成 -Lyrics-)。没有就是
+                            // 一份老备份或用户只想恢复设置 —— 那就什么都不动,绝不能当成
+                            // "空歌词库"去清掉本机现有的。
+                            let sidecar = url.deletingLastPathComponent().appendingPathComponent(
+                                LyricsBackupArchive.sidecarName(forConfigName: url.lastPathComponent))
+                            pendingImportLyrics = try? Data(contentsOf: sidecar)
+                            pendingImportLyricsCount = 0
                             showImportConfigConfirm = true
+                            if let lyrics = pendingImportLyrics {
+                                Task { @MainActor in
+                                    pendingImportLyricsCount = await LyricsBackupStore.peek(lyrics)?.files ?? 0
+                                }
+                            }
                         }
                     }
                 }
@@ -2181,16 +2479,29 @@ private struct GeneralSettingsTab: View {
             .alert(L10n.t("确定要存到 iCloud 吗？"), isPresented: $showICloudExportWarning) {
                 Button(L10n.t("取消"), role: .cancel) {}
                 Button(L10n.t("存到 iCloud")) {
-                    guard let data = ConfigPortability.buildExportData() else { return }
-                    if ICloudConfigStore.write(
-                        data, filename: ConfigPortability.suggestedFilename()) != nil
-                    {
+                    // Task 包一层:歌词归档要读几千个文件 + 压缩,不能卡在 alert 的按钮里
+                    // (buildArchive 内部已经把重活扔进 detached task,这里只是别同步等)。
+                    Task { @MainActor in
+                        guard let data = ConfigPortability.buildExportData() else { return }
+                        let name = ConfigPortability.suggestedFilename()
+                        guard ICloudConfigStore.write(data, filename: name) != nil else {
+                            iCloudMessage = L10n.t("写入 iCloud 失败，可以改用下面的「导出…」存成文件")
+                            return
+                        }
+                        // 歌词库单独一份 sidecar(同名同时间戳,只把 -Config- 换成 -Lyrics-)。
+                        // 失败**不算整体失败**:配置已经存好了,歌词那份下次再存就行,所以
+                        // 只在下面那行小字里如实说一句。
+                        var note: String?
+                        if let archive = await LyricsBackupStore.buildArchive() {
+                            let lyricsName = LyricsBackupArchive.sidecarName(forConfigName: name)
+                            if ICloudConfigStore.write(archive, filename: lyricsName) == nil {
+                                note = L10n.t("设置已存好，但歌词库那一份没写成功")
+                            }
+                        }
                         // 不弹"已存好"——副标题会立刻换成刚写进去那份的时间,按钮也从
                         // "存到 iCloud"变成"更新",反馈已经在界面上了。
                         iCloudSnapshot = ICloudConfigStore.latestSnapshot()
-                        iCloudMessage = nil
-                    } else {
-                        iCloudMessage = L10n.t("写入 iCloud 失败，可以改用下面的「导出…」存成文件")
+                        iCloudMessage = note
                     }
                 }
             }
@@ -2209,6 +2520,14 @@ private struct GeneralSettingsTab: View {
                     if panel.runModal() == .OK, let url = panel.url {
                         // 导出包里带着全部凭据(上面那句警告文案说的就是它)。
                         try? data.writeSecurely(to: url)
+                        // 歌词库那份写在**紧邻的同名文件**旁边 —— 导入时就是靠这个位置关系
+                        // 找到它的(NSSavePanel 只能给一个落点,所以是"兄弟文件"而不是两次面板)。
+                        Task { @MainActor in
+                            guard let archive = await LyricsBackupStore.buildArchive() else { return }
+                            let sidecar = url.deletingLastPathComponent().appendingPathComponent(
+                                LyricsBackupArchive.sidecarName(forConfigName: url.lastPathComponent))
+                            try? archive.writeSecurely(to: sidecar)
+                        }
                     }
                 }
             } message: {
@@ -2223,6 +2542,12 @@ private struct GeneralSettingsTab: View {
                     if let data = pendingImportData {
                         Task { @MainActor in
                             await ConfigPortability.importData(data)
+                            // ⚠️ 歌词必须排在 importData **之后**:歌词目录是
+                            // features.lyricsDir(用户可自定义的绝对路径),而那个文件正是
+                            // importData 刚写的 —— 先铺后导会铺到旧机器那个目录里去。
+                            if let lyrics = pendingImportLyrics {
+                                await LyricsBackupStore.restore(from: lyrics)
+                            }
                             // 必须排在 importData 之后:备份目录这个键在导入排除表里、
                             // 不会被导入的包覆盖,但顺序反了会先被写、再被这一句改回来。
                             if let folder = pendingImportFolder {
@@ -2233,7 +2558,14 @@ private struct GeneralSettingsTab: View {
                     }
                 }
             } message: {
-                Text(L10n.t("这会覆盖当前所有设置，包括已连接的账号和播放数据发往的地址，并立即重启 Lyrimuse 使其生效"))
+                // 歌词那句只在真有 sidecar 时才加 —— 没有的时候提一句"不含歌词"只会让人
+                // 以为哪里出错了。两句都是完整句子,不在运行时拼半句。
+                if pendingImportLyrics != nil {
+                    Text(String(format: L10n.t("这会覆盖当前所有设置，包括已连接的账号和播放数据发往的地址；同一份备份里的 %@ 个歌词文件也会一并恢复（同名的会被覆盖）。完成后立即重启 Lyrimuse 使其生效"),
+                                "\(pendingImportLyricsCount)"))
+                } else {
+                    Text(L10n.t("这会覆盖当前所有设置，包括已连接的账号和播放数据发往的地址，并立即重启 Lyrimuse 使其生效"))
+                }
             }
 
             // 单独一张卡,不跟上面的备份/恢复挤在一起 —— 这是本页唯一不可撤销的动作,而它
@@ -2324,6 +2656,15 @@ private struct GeneralSettingsTab: View {
             }
             pendingImportData = data
             pendingImportFolder = snap.folderURL
+            // 兄弟歌词包也要从 iCloud 拉一次(它可能同样还是个未下载的占位符)。**失败不
+            // 阻断**:配置照样能导,歌词那份下次再说 —— 6 MB 的下载不该拦住"换机器"这件事。
+            let sidecarURL = snap.url.deletingLastPathComponent().appendingPathComponent(
+                LyricsBackupArchive.sidecarName(forConfigName: snap.url.lastPathComponent))
+            pendingImportLyrics = await ICloudConfigStore.read(sidecarURL)
+            pendingImportLyricsCount = 0
+            if let lyrics = pendingImportLyrics {
+                pendingImportLyricsCount = await LyricsBackupStore.peek(lyrics)?.files ?? 0
+            }
             showImportConfigConfirm = true
         }
     }

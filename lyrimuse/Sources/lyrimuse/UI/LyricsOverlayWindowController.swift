@@ -17,7 +17,7 @@ import LyrimuseCore
 // 顶边是这个窗口真正稳定的锚:updateHeight 固定的是它,用户拖窗口时看的也是它。存顶边之后
 // 高度怎么变都不影响还原结果。
 private let overlayPositionKey = "np:overlayPositionTop" // "x,顶边y" 字符串
-// 旧键只读不写,给一次性迁移用(见 restoredOrigin)。
+// 旧键只读不写,给一次性迁移用(见 savedAnchor)。
 private let overlayPositionLegacyOriginKey = "np:overlayPositionOrigin" // 旧:"x,左下角y"
 // isVisible 的持久化在 2026-08-05 并进了 AppSettings.classicOverlayEnabled(原来这里有
 // 一个私有的 np:overlayVisible,跟设置页那个开关是同一件事的两个真值,详见 setVisible(_:)
@@ -60,6 +60,26 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject 
 
     private var moveObserver: NSObjectProtocol?
     private var screenObserver: NSObjectProtocol?
+    /// "现在这个落点是借来的" —— 用户存的位置在当前显示器配置下一块屏都看不见(窗口停在
+    /// 已经拔掉/已经休眠的那块外接屏上),只好临时借主屏显示。
+    ///
+    /// 为真期间 `scheduleSavePosition(_:)` **不写盘**:否则拔屏/息屏这一下就把用户拖出来的位置
+    /// 永久改写成主屏坐标,外接屏插回来也回不去了 —— 这正是"悬浮歌词经常在主屏和副屏之间来回
+    /// 跳"的第二条路径(第一条是启动时无条件夹回主屏,见 restoredPlacement)。那块屏回来时
+    /// reconcilePlacementWithScreens() 按盘上的锚点把窗口送回去、清掉这个标记;用户自己拖过
+    /// 窗口也清(拖动是新的、明确的意图,见 armDragIfStillPressed 末尾)。
+    private var isBorrowingScreen = false
+
+    /// 一次"存位置"的来源。必须区分,因为**「锁定位置」开着时用户根本挪不动窗口**——手势整套
+    /// 停用(`setLocked` → `syncMouseMonitors` 连鼠标监听器都卸了,`handleMouseEvent` 开头也
+    /// 直接 return)。那种状态下收到的 `didMove` 只可能来自我们自己、或者**系统**:显示器消失
+    /// 时 macOS 会自行把窗口搬到剩下那块屏。把系统的这一次搬家当成用户意图存进锚点,就等于让
+    /// 一次息屏永久改写用户拖好的位置 —— 这是"悬浮歌词经常在主屏和副屏之间切换"的最后一环
+    /// (前两条:启动时无条件夹回主屏、救援落位回存)。
+    ///
+    /// `programmaticResize`(换行变高 / 宽度滑杆)不受这条限制:变高守恒锚点(x + 顶边都不动),
+    /// 改宽是用户自己在设置里拖的、本来就该记住。
+    private enum PositionSaveSource { case windowMoved, programmaticResize }
     private var moveDebounceTimer: Timer?
     private var isPlayingObserver: AnyCancellable?
     private var shadowObserver: AnyCancellable?
@@ -99,9 +119,12 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject 
 
     convenience init() {
         let size = NSSize(width: AppSettings.shared.overlayWidth, height: overlayDefaultHeight)
-        let rect = NSRect(origin: Self.restoredOrigin(size: size), size: size)
-        let panel = LyricsOverlayWindow(contentRect: rect)
+        let placement = Self.restoredPlacement(size: size)
+        let panel = LyricsOverlayWindow(contentRect: NSRect(origin: placement.origin, size: size))
         self.init(window: panel)
+        // 存的位置在当前显示器配置下一块屏都看不见(外接屏拔了/睡了)时,上面那个落点是临时
+        // 借主屏摆的 —— 标记成"借来的",这次运行不许把它写回磁盘,那块屏回来自己回去。
+        isBorrowingScreen = placement.wasRescued
 
         // 拖动改由长按手势接管(见 handleGlobalMouseEvent),原生"点背景就拖"不再使用;
         // 点击穿透常年开启,只有悬停到播放控制按钮胶囊那个热区时才会被临时收回。
@@ -142,16 +165,17 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject 
             self?.window?.hasShadow = visible
         }
 
-        // 显示器配置变了(拔插外接屏、改分辨率、改排列)之后重新确认窗口还看得见。
+        // 显示器配置变了(拔插外接屏、改分辨率、改排列、外接屏睡醒)之后对一次账:该救的救、
+        // 该送回去的送回去,好端端在屏上的一概不动。详见 reconcilePlacementWithScreens()。
         //
-        // restoredOrigin(size:) 里本来就有这套 clamp,注释也写着"显示器配置可能变了(比如
-        // 拔了外接屏)"——但它只在上面那行 convenience init 里跑一次。App 跑着的时候拔掉
-        // 外接屏,窗口就停在一个不存在的坐标上,用户看不见,也没有任何自我纠正机制。
+        // 启动落位(restoredPlacement)只在 convenience init 里跑一次,App 跑着的时候拔掉外接
+        // 屏,窗口就停在一个不存在的坐标上,用户看不见、也没有任何自我纠正机制 —— 这个观察者
+        // 就是为它准备的。
         screenObserver = NotificationCenter.default.addObserver(
             forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main
         ) { [weak self] _ in
             MainActor.assumeIsolated {
-                self?.repositionIfOffscreen()
+                self?.reconcilePlacementWithScreens()
             }
         }
 
@@ -169,7 +193,7 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject 
             // 算的,不需要经通知回存;最终落点由 setFrameAnimated 的完成回调统一存一次。
             MainActor.assumeIsolated {
                 guard let self, !self.isDragArmed, self.animatingTargetFrame == nil else { return }
-                self.scheduleSavePosition()
+                self.scheduleSavePosition(.windowMoved)
             }
         }
 
@@ -304,12 +328,15 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject 
         // 顶边固定、向下增高的同时,不能让底边超出当前屏幕可见区域——2026-08-02 实测
         // 排查坐实:早先这里只保证"不小于默认高度"这一层下限,极端情况下(罗马音+译文+
         // 下一句预览都开着、又遇上长歌词多行换行)可能把窗口下半部分撑到 Dock 后面甚至
-        // 屏幕外,用户看不到、也没有任何自我纠正机制。跟 restoredOrigin(size:) 里"显示器
-        // 配置可能变了,夹回可见区域"是同一个思路,这里对称地夹一下高度上限——最多只
+        // 屏幕外,用户看不到、也没有任何自我纠正机制。跟 restoredPlacement() 里"存的位置在
+        // 一块屏上都看不见就救回来"是同一个思路,这里对称地夹一下高度上限——最多只
         // 长到"顶边到屏幕可见区域底边"这么高,同时仍然保证不低于默认高度(用户内容真的
         // 需要更多空间时优先满足默认下限,不能反过来让默认高度本身失效)。
-        let visibleFrame = window.screen?.visibleFrame ?? NSScreen.main?.visibleFrame ?? current
-        let newHeight = min(rawHeight, max(overlayDefaultHeight, top - visibleFrame.minY))
+        // 依据的是**窗口自己落在**的那块屏,不是 NSScreen.main(那是"有键盘焦点的屏",跟这个
+        // 窗口在哪儿无关;window.screen 又会在刚 orderOut 过等时刻拿不到值)。一块屏都不沾时
+        // 干脆不夹 —— 没有可信的边界可用,硬按主屏算只会把副屏上的窗口往主屏方向推。
+        let maxHeight = Self.hostVisibleFrame(of: current).map { max(overlayDefaultHeight, top - $0.minY) }
+        let newHeight = min(rawHeight, maxHeight ?? rawHeight)
         guard abs(newHeight - current.height) >= 0.5 else { return } // 避免亚像素抖动反复触发
         let newFrame = NSRect(x: current.origin.x, y: top - newHeight, width: current.width, height: newHeight)
         setFrameAnimated(window, to: newFrame)
@@ -359,7 +386,7 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject 
                 // 这里统一存一次 —— setWidth 是保持中心伸缩的,x 会真的变,不存的话重启
                 // 就会还原到调宽前的位置。scheduleSavePosition 落盘前会跟现值比较,高度
                 // 动画(x/顶边都不变)不会产生多余的写。
-                self.scheduleSavePosition()
+                self.scheduleSavePosition(.programmaticResize)
             }
         })
     }
@@ -375,8 +402,12 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject 
         // 早先这里没做这层钳制,宽度滑块调到接近上限(1000pt)且窗口当前位置偏向屏幕
         // 一侧时,新边界可能超出屏幕,跟上面 updateHeight 是同一类"极端设置下窗口跑出
         // 可见区域、且没有自我纠正"的问题,同一个思路一起修。
-        let visibleFrame = window.screen?.visibleFrame ?? NSScreen.main?.visibleFrame ?? current
-        let newX = min(max(centerX - width / 2, visibleFrame.minX), visibleFrame.maxX - width)
+        // 同 updateHeight:按窗口自己所在那块屏夹,不沾任何屏就不夹。夹取本身复用
+        // OverlayPlacement.clamped —— 它处理了"窗口比屏还宽时先 max 再 min 会把窗口推出右
+        // 边界"那个顺序问题,原来这里手写的两层 min/max 没处理。
+        let wanted = NSRect(x: centerX - width / 2, y: current.origin.y, width: width, height: current.height)
+        let newX = Self.hostVisibleFrame(of: wanted)
+            .map { OverlayPlacement.clamped(frame: wanted, into: $0).x } ?? wanted.origin.x
         let newFrame = NSRect(x: newX, y: current.origin.y, width: width, height: current.height)
         setFrameAnimated(window, to: newFrame)
     }
@@ -444,7 +475,8 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject 
     private func performControlAction(_ id: OverlayControlID) {
         switch id {
         case .previous: withMusicPermission { MusicPlaybackController.previousTrack() }
-        case .playPause: withMusicPermission { MusicPlaybackController.playPause() }
+        // 乐观回声版:歌词窗封面缩放/图标点击即动(见 userTogglePlayPause)。
+        case .playPause: withMusicPermission { PlaybackCoordinator.shared.userTogglePlayPause() }
         case .next: withMusicPermission { MusicPlaybackController.nextTrack() }
         // 不套权限守卫:权限检查和乐观更新都在 toggleFavorited() 里一起做了,再套一层会变成
         // 查两遍权限(原来 LyricsOverlayView 里也是特意绕开 controlButton 的)。
@@ -462,7 +494,7 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject 
     /// 不变:没问过就顺手弹一次系统授权对话框,已经拒绝过就 NSSound.beep() 给一个"没有
     /// 生效"的听觉反馈。必须用 checkForCurrentPlayerSafely(异步版),同步版的坑见该方法
     /// 定义处的注释。
-    private func withMusicPermission(_ action: @escaping () -> Void) {
+    private func withMusicPermission(_ action: @escaping @MainActor () -> Void) {
         Task { @MainActor in
             guard await MusicAutomationPermission.checkForCurrentPlayerSafely(askIfNeeded: true) else {
                 NSSound.beep()
@@ -636,6 +668,9 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject 
         ) else { return }
 
         window.performDrag(with: syntheticDown)
+        // 用户亲手把窗口拖到了哪儿,那就是新的锚点 —— 哪怕这次是在借来的屏上拖的,也从此
+        // 以它为准(清掉标记,下面这次写盘才生效)。
+        isBorrowingScreen = false
         // performDrag 返回 = 这次拖动已经结束(正常松手,或者被系统提前打断),把
         // 最终落点存下来——原来"武装期间跳过 moveObserver 里的 scheduleSavePosition"
         // 那条 guard(见 init() 里的 didMoveNotification 观察者)在这里同样适用,拖动
@@ -652,24 +687,54 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject 
         isDragArmed = false
     }
 
-    // 屏幕配置变化后重新落位。判断/夹取的几何都在 OverlayPlacement(LyrimuseCore)里,
-    // selftest 覆盖 —— 这台机器只有一块内置屏,"拔掉两块屏中的一块"没法真机复现,单元测试
-    // 是唯一能覆盖它的手段。
-    private func repositionIfOffscreen() {
+    // 屏幕配置变化后对一次账。判断/夹取的几何都在 OverlayPlacement(LyrimuseCore)里,
+    // selftest 覆盖 —— 这台机器插着一块外接屏,但"拔掉/插回"这个瞬间没法在单测外复现,纯
+    // 函数是唯一能覆盖它的手段。
+    //
+    // 两个方向,顺序要紧:
+    // ① 盘上那个锚点现在**看得见**,而窗口不在那儿 → 送回去。两种情形合并成一支:
+    //    · 正在借屏显示(外接屏插回来/睡醒了);
+    //    · 「锁定位置」开着 —— 那时位置由锚点唯一决定,窗口偏离了只可能是系统在显示器消失
+    //      时替我们搬的家(用户挪不动,见 PositionSaveSource),搬回来。
+    // ② 当前位置看不见了(那块屏刚被拔掉)→ 借主屏显示,但**不写盘**(见 isBorrowingScreen)。
+    //
+    // 不做的事:未锁定、也没在借屏,而窗口好端端待在某块屏上时,一律不动它 —— 不"归位"、
+    // 不跟焦点跑、不按主屏重排。用户主诉的"经常在主屏和副屏之间切换位置"就是这类自动搬家
+    // 累积出来的。
+    private func reconcilePlacementWithScreens() {
         guard let window else { return }
-        // 主屏排在第一个:窗口无处可去时的落脚点(见 OverlayPlacement 的约定)。
-        var screens: [CGRect] = []
-        if let main = NSScreen.main { screens.append(main.visibleFrame) }
-        for s in NSScreen.screens where s != NSScreen.main { screens.append(s.visibleFrame) }
+        let screens = Self.allVisibleFrames()
+
+        if let home = Self.homeFrame(size: window.frame.size),
+           OverlayPlacement.isSufficientlyVisible(frame: home, screens: screens) {
+            // 锁定态的纠正判据故意收得很紧:**只有"窗口现在待的屏跟锚点那块屏不是同一块"**
+            // 才搬。同屏内几个 pt 的偏差(别处的动画/钳制留下的)一律不管 —— 用户抱怨的是
+            // 跨屏搬家,为了对齐锚点去发一次无谓的位移只会制造新的跳动。
+            let movedToAnotherScreen =
+                OverlayPlacement.hostVisibleFrame(of: window.frame, screens: screens)
+                    != OverlayPlacement.hostVisibleFrame(of: home, screens: screens)
+            if isBorrowingScreen || (isPositionLocked && movedToAnotherScreen) {
+                isBorrowingScreen = false
+                window.setFrameOrigin(home.origin)
+                return
+            }
+        }
+
         guard let target = OverlayPlacement.repositionIfOffscreen(frame: window.frame, screens: screens) else {
             return
         }
+        isBorrowingScreen = true
         window.setFrameOrigin(target)
-        // 新位置要存下来,否则下次启动 restoredOrigin 又会读到那个已经失效的坐标。
-        // setFrameOrigin 会发 didMoveNotification,由那边的观察者去调度保存。
+        // 这个落点故意不落盘(scheduleSavePosition 在借屏期间直接返回):磁盘上留着的仍是用户
+        // 自己拖出来的那个锚点,那块屏回来时上面 ① 那一支照它把窗口送回去。
     }
 
-    private func scheduleSavePosition() {
+    private func scheduleSavePosition(_ source: PositionSaveSource) {
+        // 借屏落位不是用户的意图,不许改写盘上的锚点(见 isBorrowingScreen)。程序性 resize
+        // 动画的完成回调也走这条路,所以这层守卫必须放在最外面。
+        guard !isBorrowingScreen else { return }
+        // 锁定着还被挪了 = 不是用户挪的(见 PositionSaveSource)。不采纳为新锚点。
+        if source == .windowMoved, isPositionLocked { return }
         moveDebounceTimer?.invalidate()
         let t = Timer(timeInterval: 0.3, repeats: false) { [weak self] _ in
             guard let frame = self?.window?.frame else { return }
@@ -684,34 +749,68 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject 
         moveDebounceTimer = t
     }
 
-    private static func restoredOrigin(size: NSSize) -> NSPoint {
-        let screenFrame = NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
-        let defaultOrigin = NSPoint(x: screenFrame.midX - size.width / 2, y: screenFrame.maxY - size.height - 40)
-        // 新键存的是顶边;没有新键时读一次旧键(左下角 origin)做迁移。
-        //
-        // 迁移换算成"顶边"用的是 overlayDefaultHeight 而不是传进来的 size.height:旧值是被
-        // 上一次运行的**某个**高度污染过的左下角坐标,而这个函数只在 convenience init() 里被
-        // 调用一次、那时 size.height 就等于 overlayDefaultHeight —— 用它换算出的顶边,恰好
-        // 等于旧代码这次启动本来就会摆出的位置。也就是说迁移这一步**视觉上完全无感**:窗口
-        // 停在旧逻辑会摆的地方,只是从此以后不再继续往下漂。
+    // 主屏排在第一个:窗口无处可去时的落脚点(见 OverlayPlacement 里的约定)。
+    private static func allVisibleFrames() -> [CGRect] {
+        var screens: [CGRect] = []
+        if let main = NSScreen.main { screens.append(main.visibleFrame) }
+        for s in NSScreen.screens where s != NSScreen.main { screens.append(s.visibleFrame) }
+        return screens
+    }
+
+    // 这个 frame **自己落在**的那块屏的可见区域(相交面积最大的那块);一块都不沾时 nil。
+    private static func hostVisibleFrame(of frame: NSRect) -> NSRect? {
+        OverlayPlacement.hostVisibleFrame(of: frame, screens: allVisibleFrames())
+    }
+
+    /// 盘上存着的锚点("x,顶边")。新键没有时读一次旧键(左下角 origin)做迁移。
+    ///
+    /// 迁移换算成"顶边"用的是 overlayDefaultHeight 而不是当次的窗口高度:旧值是被上一次运行的
+    /// **某个**高度污染过的左下角坐标,而读它的时机(convenience init)窗口高度恰好就等于
+    /// overlayDefaultHeight —— 用它换算出的顶边,正好等于旧代码这次启动本来就会摆出的位置。
+    /// 也就是说迁移这一步**视觉上完全无感**:窗口停在旧逻辑会摆的地方,只是从此以后不再继续
+    /// 往下漂。
+    private static func savedAnchor() -> (x: Double, top: Double)? {
         func parsePair(_ key: String) -> (x: Double, y: Double)? {
             guard let saved = UserDefaults.standard.string(forKey: key) else { return nil }
             let parts = saved.split(separator: ",").compactMap { Double($0) }
             guard parts.count == 2 else { return nil }
             return (parts[0], parts[1])
         }
-        let anchor: (x: Double, top: Double)
-        if let p = parsePair(overlayPositionKey) {
-            anchor = (p.x, p.y) // 新键:第二个分量就是顶边
-        } else if let p = parsePair(overlayPositionLegacyOriginKey) {
-            anchor = (p.x, p.y + Double(overlayDefaultHeight)) // 旧键:左下角 → 换算成顶边
-        } else {
-            return defaultOrigin
+        if let p = parsePair(overlayPositionKey) { return (p.x, p.y) } // 新键:第二个分量就是顶边
+        if let p = parsePair(overlayPositionLegacyOriginKey) {
+            return (p.x, p.y + Double(overlayDefaultHeight)) // 旧键:左下角 → 换算成顶边
         }
-        var origin = NSPoint(x: anchor.x, y: anchor.top - Double(size.height))
-        // 显示器配置可能变了(比如拔了外接屏):夹回当前可见区域内,避免悬浮窗跑到看不见的地方。
-        origin.x = min(max(origin.x, screenFrame.minX), screenFrame.maxX - size.width)
-        origin.y = min(max(origin.y, screenFrame.minY), screenFrame.maxY - size.height)
-        return origin
+        return nil
+    }
+
+    /// 盘上锚点 + 当前窗口尺寸 = 窗口"应该在"的那个 frame(顶边对齐锚点)。没存过锚点时 nil。
+    private static func homeFrame(size: NSSize) -> NSRect? {
+        guard let anchor = savedAnchor() else { return nil }
+        return NSRect(x: anchor.x, y: anchor.top - Double(size.height),
+                      width: size.width, height: size.height)
+    }
+
+    /// 启动时把窗口摆在哪儿。
+    ///
+    /// 2026-08-21:这里**不再**把存下来的位置无条件夹进 NSScreen.main.visibleFrame —— 那是
+    /// "悬浮歌词经常在主屏和副屏之间切换位置"的根因。实测这台机器:外接屏 LS27B61x 的
+    /// visibleFrame 是 (-526,956,2560,1440),窗口 900×120 的锚点存的是 x=849/顶边=1202(好端端
+    /// 在外接屏上),而内置屏的 visibleFrame 是 (0,70,1470,853) —— 旧代码那两行 clamp 把它算成
+    /// x=min(max(849,0),1470-900)=570、y=min(max(1082,70),923-120)=803,窗口整个被拽回内置屏。
+    /// 用户拖回外接屏,下次启动再被拽走一次,反复如此(旧键 np:overlayPositionOrigin 里那个
+    /// "602.0,803.0" 的 y 就是这条钳制留下的化石)。
+    ///
+    /// 改成:位置在**任何**一块屏上看得见就原样保留;一块都看不见(窗口停在已经拔掉的外接屏
+    /// 上)才夹回主屏,并且由调用方把这次落点标记成"借来的"、不写回磁盘。
+    private static func restoredPlacement(size: NSSize) -> OverlayPlacement.RestoredPlacement {
+        let screens = allVisibleFrames()
+        guard let frame = homeFrame(size: size) else {
+            let screenFrame = screens.first ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
+            return .init(
+                origin: NSPoint(x: screenFrame.midX - size.width / 2, y: screenFrame.maxY - size.height - 40),
+                wasRescued: false
+            )
+        }
+        return OverlayPlacement.restored(frame: frame, screens: screens)
     }
 }

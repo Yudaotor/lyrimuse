@@ -77,7 +77,8 @@ enum GlobalHotkeys {
                     NSSound.beep()
                     return
                 }
-                MusicPlaybackController.playPause()
+                // 乐观回声版:歌词窗封面缩放/图标点击即动(见 userTogglePlayPause)。
+                PlaybackCoordinator.shared.userTogglePlayPause()
             }
         }
         KeyboardShortcuts.onKeyUp(for: .nextTrackHotkey) {

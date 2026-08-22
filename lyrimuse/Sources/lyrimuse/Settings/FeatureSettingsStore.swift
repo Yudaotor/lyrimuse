@@ -66,6 +66,7 @@ extension PlaybackPlayer {
         case .appleMusic: return "Apple Music"
         case .qqMusic: return L10n.t("QQ 音乐")
         case .netease: return L10n.t("网易云音乐")
+        case .kugou: return L10n.t("酷狗音乐")
         case .spotify: return "Spotify"
         case .auto: return L10n.t("自动识别")
         }
@@ -123,6 +124,10 @@ struct FeatureFlagsFile: Codable, Equatable {
     // collector/companionlaunch.go。反方向("打开 Lyrimuse 时唤起 Music")不需要
     // 这份共享文件,直接是 AppSettings.launchMusicOnLyrimuseOpen 一个纯 Swift 侧设置。
     var launchLyrimuseOnMusicOpen: Bool?
+    /// 用户显式信任的「未知播放器」:bundle id → 界面显示名(反查不到 App 名时是空串)。
+    /// 语义见 LyrimuseCore 的 TrustedPlayers —— 为什么是"信任列表"而不是"一律接受",
+    /// 那份注释里写了(白名单同时挡着打卡,一律接受会把视频/播客写进永久收听历史)。
+    var trustedPlayers: [String: String]?
 
     /// CaseIterable 是为了让 `knownFileKeys` 能自动跟着字段增删走 —— 手工维护第二份
     /// 键名清单迟早会跟这里对不上,而对不上的后果正是下面要修的那种静默丢数据。
@@ -141,6 +146,7 @@ struct FeatureFlagsFile: Codable, Equatable {
         case lyricsDir = "lyrics_dir"
         case lyricsTranslationLanguage = "lyrics_translation_language"
         case launchLyrimuseOnMusicOpen = "launch_lyrimuse_on_music_open"
+        case trustedPlayers = "trusted_players"
     }
 
     /// 这个版本认识的全部 JSON 键。见 FeatureSettingsStore.unknownFileKeys 的注释。
@@ -201,6 +207,9 @@ public final class FeatureSettingsStore: ObservableObject {
     // 想起来去菜单栏点一下 Lyrimuse。⚠️ 改默认值必须跟 collector 侧 features.go 的
     // boolOr(..., true) 一起改,不然 Swift 这边显示「开」而真正执行的 collector 当它是关。
     @Published public var launchLyrimuseOnMusicOpen = true
+    /// 见 FeatureFlagsFile.trustedPlayers。改它一律走 trust/untrust 两个方法,别直接赋值
+    /// —— 那两个方法负责反查 App 名并立刻落盘(collector 按 mtime 重读,不需要重启)。
+    @Published public private(set) var trustedPlayers: [String: String] = [:]
 
     @Published public private(set) var lastError: String?
 
@@ -221,8 +230,50 @@ public final class FeatureSettingsStore: ObservableObject {
             lyricsSourceOrder: lyricsSourceOrder.map(\.rawValue),
             lyricsDir: lyricsDir.isEmpty ? nil : lyricsDir,
             lyricsTranslationLanguage: lyricsTranslationLanguage.rawValue,
-            launchLyrimuseOnMusicOpen: launchLyrimuseOnMusicOpen
+            launchLyrimuseOnMusicOpen: launchLyrimuseOnMusicOpen,
+            trustedPlayers: trustedPlayers.isEmpty ? nil : trustedPlayers
         )
+    }
+
+    /// 把一个未知播放器加进信任列表。
+    ///
+    /// 显示名在这里就地反查并一起存下来,不是每次显示时现查:collector(Go)也要用它当
+    /// ListenBrainz 的 media_player 标签,而 Go 那边没有 NSWorkspace 可用 —— 名字必须由
+    /// Swift 侧写进共享文件。反查不到就存空串,标签退回 bundle id(总比谎报成
+    /// "Apple Music"好,那会让来源统计彻底失真)。
+    public func trust(bundleID: String) async {
+        let id = bundleID.trimmingCharacters(in: .whitespaces)
+        guard !id.isEmpty, trustedPlayers[id] == nil else { return }
+        // 内置播放器本来就认,加进来只会让"已信任"列表看起来莫名多几条(collector 侧
+        // resolveTrustedPlayers 也会把它们剔掉,这里提前挡住,别让界面先显示后消失)。
+        guard !PlaybackPlayer.allCases.contains(where: { $0 != .auto && $0.bundleIdentifier == id }) else { return }
+        trustedPlayers[id] = Self.appDisplayName(forBundleID: id) ?? ""
+        _ = await save()
+    }
+
+    public func untrust(bundleID: String) async {
+        guard trustedPlayers.removeValue(forKey: bundleID) != nil else { return }
+        _ = await save()
+    }
+
+    /// bundle id → App 的本地化显示名。查不到返回 nil(App 被删了/从没装过)。
+    ///
+    /// 优先 `CFBundleDisplayName`(本地化名,中文系统上「酷狗音乐」这种)再退
+    /// `CFBundleName`,最后退文件名去掉 .app —— 三级都落空才 nil。
+    public static func appDisplayName(forBundleID bundleID: String) -> String? {
+        guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) else {
+            return nil
+        }
+        if let info = Bundle(url: url)?.infoDictionary {
+            for key in ["CFBundleDisplayName", "CFBundleName"] {
+                if let name = info[key] as? String,
+                   !name.trimmingCharacters(in: .whitespaces).isEmpty {
+                    return name
+                }
+            }
+        }
+        let base = url.deletingPathExtension().lastPathComponent
+        return base.isEmpty ? nil : base
     }
 
     // 供 EnrichCacheStore("歌词管理"窗口的文件读写)和 Settings 里的"打开歌词文件夹"
@@ -295,6 +346,7 @@ public final class FeatureSettingsStore: ObservableObject {
         // 也不是用户真实排过的四不像顺序。
         let decodedOrder = (f.lyricsSourceOrder ?? []).compactMap(LyricsSource.init(rawValue:))
         lyricsSourceOrder = decodedOrder.count == LyricsSource.allCases.count ? decodedOrder : LyricsSource.allCases
+        trustedPlayers = f.trustedPlayers ?? [:]
         lyricsDir = f.lyricsDir ?? ""
         lyricsTranslationLanguage = f.lyricsTranslationLanguage.flatMap(MusixmatchTranslationLanguage.init(rawValue:)) ?? .auto
         launchLyrimuseOnMusicOpen = f.launchLyrimuseOnMusicOpen ?? true

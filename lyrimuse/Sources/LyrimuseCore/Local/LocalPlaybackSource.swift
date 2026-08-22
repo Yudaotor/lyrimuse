@@ -147,6 +147,12 @@ public final class LocalPlaybackSource: ObservableObject {
     @Published public private(set) var anchor: ProgressAnchor?
     private var lastKey = ""
     private var lastSnapshot: MediaControlSnapshot?
+    /// 上一拍的播放器 bundle id —— 只为「按播放器偏移」那一层服务(见 apply() 里那处判断)。
+    /// 不能靠 lastSnapshot 反推:apply() 第一行就把它换成新快照了,等走到判断处已经比不出来。
+    private var lastAppliedBundleID: String?
+    /// 已落 UserDefaults 的「最后播放器/最后曲目」内存镜像(去重用,见 apply() 里的写点)。
+    private var lastPersistedPlayerBundleID: String?
+    private var lastPersistedTrackTitle: String?
 
     /// 最近一次快照实际来自哪个播放器的 bundle id,拿不到就是 nil。给「导出诊断信息」用——
     /// 用户在设置里选的可能是"自动识别",那一档只报设置值等于什么都没说,必须同时报出
@@ -218,9 +224,17 @@ public final class LocalPlaybackSource: ObservableObject {
     public enum PositionSourceTier {
         /// Apple Music:AppleScript 播放头,读数精确到 ~0.1s。
         case precise
-        /// Spotify:media-control 外推,稳态读数干净(±0.05s)但换歌初期锚点可能带
-        /// 常量超前 —— 门槛要小到能把播种偏差拉回来,又别被暂停/切换瞬间的单发陈旧
+        /// Spotify / 酷狗音乐:media-control 外推,稳态读数干净(±0.05s)但换歌初期锚点
+        /// 可能带常量超前 —— 门槛要小到能把播种偏差拉回来,又别被暂停/切换瞬间的单发陈旧
         /// 读数(实测 -1.27s 一类)骗出回跳。
+        ///
+        /// 酷狗归这一档是 2026-08-21 实测定的,不是猜的:它**播放期间根本不刷新锚点**
+        /// (`elapsedTime` 和 `timestamp` 21 秒纹丝不动,恒为开播那一刻的值),位置全靠
+        /// `--now` 的墙钟外推。所以读数天然连续、无量化:实测 23.115s 墙钟对应 23.116s
+        /// 读数(累计偏差 +0.0011s,单步 ±0.011s 以内,小数位 .467/.550/.620 完全连续)。
+        /// 这跟 QQ/网易云那种"整秒下取整 + ±1~1.5s 抖动"是两种完全不同的画像 —— 按
+        /// noisyFloored 处理会给它挂上前向棘轮,而棘轮的前提("reported ≤ 真实位置")
+        /// 对一个纯外推源根本不成立。
         case cleanExtrapolated
         /// QQ 音乐/网易云:整秒下取整 + ±1~1.5s 抖动,大门槛 + 前向棘轮。
         case noisyFloored
@@ -229,8 +243,23 @@ public final class LocalPlaybackSource: ObservableObject {
     /// bundleID → 数据源画像。纯函数,selftest 直接覆盖。
     public nonisolated static func positionSourceTier(forBundleID bundleID: String?) -> PositionSourceTier {
         if bundleID == PlaybackPlayer.appleMusic.bundleIdentifier { return .precise }
-        if bundleID == PlaybackPlayer.spotify.bundleIdentifier { return .cleanExtrapolated }
-        return .noisyFloored
+        // 2026-08-21 把默认档从 noisyFloored 翻成 cleanExtrapolated,并把真正"整秒下取整 +
+        // 大抖动"的那两个显式列出来。
+        //
+        // 理由是实测:noisyFloored 那一档的两样东西(1.0s 大门槛 + 前向棘轮)都只对**整秒
+        // 量化**的源成立 —— 棘轮的前提是"报告值 ≤ 真实位置"(下取整才恒成立)。而所有走
+        // media-control 的源实测都是**纯墙钟外推、无量化**:酷狗(2026-08-21 实测 23 秒
+        // 累计偏差 +0.0011s)、Arc(同款,小数位完全连续)。也就是说 noisyFloored 是**少数
+        // 派**,把它当默认档等于让每一个没被显式登记的源都套上一副不适用的参数,而 1.0s
+        // 门槛意味着 1 秒以内的固定偏差永远修不掉。
+        //
+        // bundleID 为 nil(压根没有来源信息)也走这一档:所谓"保守"应该是"别用前提不成立的
+        // 棘轮",而不是"选那个门槛最大的"。
+        if bundleID == PlaybackPlayer.qqMusic.bundleIdentifier
+            || bundleID == PlaybackPlayer.netease.bundleIdentifier {
+            return .noisyFloored
+        }
+        return .cleanExtrapolated
     }
 
     /// 见 flooredForwardSnapEpsilonSecs。纯函数,selftest 直接覆盖。
@@ -1001,6 +1030,19 @@ public final class LocalPlaybackSource: ObservableObject {
         if newAlbum != album { album = newAlbum }
         let newIsPlayingNow = snapshot.playing == true
         if newIsPlayingNow != isPlayingNow { isPlayingNow = newIsPlayingNow }
+        // 停播欢迎态的「继续播放/打开 XX」要知道停播前在用谁、放的什么 —— 停播时快照
+        // 整个清空,这里是唯一还记得的地方(见 LyricsWindowView.idleWelcomeView)。落
+        // UserDefaults,只在值变化时写,2 秒轮询不刷盘。
+        let bid = snapshot.bundleIdentifier ?? ""
+        if !bid.isEmpty, !newTitle.isEmpty, bid != lastPersistedPlayerBundleID {
+            UserDefaults.standard.set(bid, forKey: "np:lastPlayerBundleID")
+            lastPersistedPlayerBundleID = bid
+        }
+        if !newTitle.isEmpty, newTitle != lastPersistedTrackTitle {
+            UserDefaults.standard.set(newTitle, forKey: "np:lastTrackTitle")
+            UserDefaults.standard.set(newArtist, forKey: "np:lastTrackArtist")
+            lastPersistedTrackTitle = newTitle
+        }
         // Spotify 广告插播判断(2026-08-19 重做:字段启发式 + 同曲棘轮 + AppleScript 权威)。
         // 老版本每一拍按"当下字段"重判 —— 实测广告字段会**闪变**(开播 album 空、几拍后
         // 补齐,Blinds.com 实锤),看走眼的那几拍 UI 会退回"歌名 + 搜索歌词中"。现在:
@@ -1050,6 +1092,20 @@ public final class LocalPlaybackSource: ObservableObject {
             lastEnrichMTime = enrichMTime
             reloadCurrentLyrics()
         }
+        // 换了播放器也要重算偏移 —— 上面那个 reload 的触发条件是「换歌 / 没内容 / 缓存变了」,
+        // **不含**"播放器变了"。而 trackKey 只由 歌手|歌名 决定:.auto 档下焦点在两个 App 之间
+        // 切、或两个播放器放同名曲目时,曲目没"变"、内容也在,于是 applyOffsets 不跑,新播放器
+        // 会继续套用**上一个播放器**那一档 —— 正是"把浏览器的补偿套到 Apple Music 上"这个
+        // effectiveOffset 注释里明写要防的形态(2026-08-21 加播放器维度时发现)。
+        //
+        // 放在 reload 判断之后:换歌那一支已经经 reloadCurrentLyrics → applyOffsets 算过一遍,
+        // 这里只补"没换歌但换了播放器"这一种情况,不重复跑。
+        let bundleID = snapshot.bundleIdentifier
+        if bundleID != lastAppliedBundleID {
+            lastAppliedBundleID = bundleID
+            if !trackChanged, syncEngine.hasContent { applyOffsets() }
+        }
+
         if trackChanged {
             // ⚠️ 换歌时**不再**立即清空上一首歌的封面。
             //
@@ -1325,11 +1381,19 @@ public final class LocalPlaybackSource: ObservableObject {
         applyOffsets()
     }
 
-    // 「按播放器补偿」入口(setPlayerLyricsOffset,2026-08-18 加)已于 2026-08-20 随
-    // LyricsOffsetStore 的播放器层一起移除——它补的偏差实为自然切歌锚点超前,已由
-    // naturalAdvanceCorrection 按曲精确校正。
+    /// 改某个播放器那档(设置页那个下拉框选中具体播放器时的控件)。只有当前正在播的**恰好
+    /// 就是它**时才需要立刻重算 —— 改别的播放器的档位对眼下这首歌没有任何影响,白跑一次
+    /// applyOffsets 会顺带把两个 @Published 推一遍。
+    ///
+    /// 2026-08-18 那个同名入口是内部为 Spotify 写死的补偿,08-20 随根修一起删了;这次是
+    /// 用户显式配置的那一层,语义不同(见 LyricsOffsetStore.playerOffsets)。
+    public func setPlayerLyricsOffset(_ ms: Int, forBundleID bundleID: String) {
+        LyricsOffsetStore.shared.setPlayerOffset(ms, forBundleID: bundleID)
+        guard lastSnapshot?.bundleIdentifier == bundleID else { return }
+        applyOffsets()
+    }
 
-    /// 把「全局基准 + 这首歌的微调」算出来灌进引擎,并把两个对外属性刷成一致。
+    /// 把「全局基准 + 这个播放器那档 + 这首歌的微调」算出来灌进引擎,并把两个对外属性刷成一致。
     ///
     /// 所有入口(换歌词内容、nudge、reset、改全局基准/从 store 重读)都走这里。
     /// 原来它们各自赋两次值,加了全局基准之后每处都要多算一步 —— 分散写迟早漏掉一处,而
@@ -1339,7 +1403,11 @@ public final class LocalPlaybackSource: ObservableObject {
         // 存量补钉 —— pin 机制上线前调好的歌在这里才第一次被钉住(见那个方法的注释)。
         // 幂等,已经钉住时是纯内存判断。
         LyricsOffsetStore.shared.backfillPinIfNeeded(forKey: currentOffsetKey, pinKey: currentPinKey)
-        let effective = LyricsOffsetStore.shared.effectiveOffset(forKey: currentOffsetKey)
+        // 播放器那层按**这一刻真正在播的那个 App** 算。拿不到身份(还没有快照)时传 nil,
+        // 那层就按 0 算 —— 绝不能猜一个,否则会把浏览器的补偿套到 Apple Music 上。
+        let effective = LyricsOffsetStore.shared.effectiveOffset(
+            forKey: currentOffsetKey, bundleID: lastSnapshot?.bundleIdentifier
+        )
         syncEngine.offsetMs = effective
         // 只在真的变了时才赋值:这两个都是 @Published,每次赋值都会推着订阅者重渲染,
         // 而 reloadCurrentLyrics 在"歌词还没解析出来"时会被反复调用(见那边的注释)。

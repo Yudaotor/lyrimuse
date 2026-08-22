@@ -53,6 +53,7 @@ final class AppSettings: ObservableObject {
         static let menuBarLyricsMaxChars = "np:menuBarLyricsMaxChars"
         static let menuBarLyricsWidth = "np:menuBarLyricsMaxWidth"
         static let menuBarLyricsWidthMode = "np:menuBarLyricsWidthMode"
+        static let menuBarLyricsKaraoke = "np:menuBarLyricsKaraoke"
         static let menuBarIconStyle = "np:menuBarIconStyle"
         static let menuBarIconAnimates = "np:menuBarIconAnimates"
         static let lyricsOffsetStepMs = "np:lyricsOffsetStepMs"
@@ -214,6 +215,12 @@ final class AppSettings: ObservableObject {
     // 宽度并横向滚动)。所以这个设置真正决定的是:短句要不要把多出来的地方让出去。
     @Published var menuBarLyricsWidthMode: MenuBarLyricsWidthMode {
         didSet { defaults.set(menuBarLyricsWidthMode.rawValue, forKey: Keys.menuBarLyricsWidthMode) }
+    }
+    // 菜单栏歌词逐字染色(2026-08-22,用户点名"像酷狗菜单栏歌词"):已唱到的部分染成
+    // 系统强调色,边界按逐字时间轴连续推进(实现见 MenuBarScrollingLabel 的填色层)。
+    // 只对带逐字时间轴的歌词生效,LRC 整行歌词维持纯色 —— 没有可信的字级进度就不假装有。
+    @Published var menuBarLyricsKaraoke: Bool {
+        didSet { defaults.set(menuBarLyricsKaraoke, forKey: Keys.menuBarLyricsKaraoke) }
     }
     // 菜单栏那个图标长什么样。它只在**没在显示歌词**时出现(没在放歌、还没解析出这一句、
     // 或者菜单栏歌词整个关掉),所以它跟上面那些宽度设置是两回事,不受它们影响。
@@ -461,6 +468,9 @@ final class AppSettings: ObservableObject {
         // 保持它,升级上来的用户看不出任何变化。
         menuBarLyricsWidthMode = defaults.string(forKey: Keys.menuBarLyricsWidthMode)
             .flatMap(MenuBarLyricsWidthMode.init(rawValue:)) ?? .fixed
+        // 默认开:这是把"当前唱到哪"带进菜单栏的增量信息,且只在有逐字数据时出现;
+        // 菜单栏歌词本身默认关着,不存在"谁都没选就改变观感"的问题。
+        menuBarLyricsKaraoke = (defaults.object(forKey: Keys.menuBarLyricsKaraoke) as? Bool) ?? true
         menuBarIconStyle = defaults.string(forKey: Keys.menuBarIconStyle)
             .flatMap(MenuBarIconStyle.init(rawValue:)) ?? .default
         menuBarIconAnimates = (defaults.object(forKey: Keys.menuBarIconAnimates) as? Bool) ?? true

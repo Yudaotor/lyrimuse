@@ -12,6 +12,15 @@ public enum ChineseVariant: String, CaseIterable, Sendable {
     ///
     /// 用 ICU 的 Simplified-Traditional。实测它不是无脑逐字:头发→頭髮、干净→乾淨、
     /// 后来→後來 都对,「只有你」也没被误转成「隻」;日文/拉丁字符完全不动。
+    ///
+    /// ⚠️ 但 ICU(以及 OpenCC)只管**繁简**,不管**异体字**,转简体时必须再补一层
+    /// `HanVariants` —— 2026-08-22 用户报「开了简体还是看到繁体」,实例是《开不了口 (Live)》:
+    /// ICU 把那首歌 37 种字符全转对了,只剩「妳」没动而它出现 21 次,整屏都是。「妳」不是
+    /// 「你」的繁体,是大陆已淘汰、港台仍在用的异体字,所以两边的繁简表里都没有它。
+    /// 完整判据和收录标准见 HanVariants。
+    ///
+    /// 反方向(转繁体)**刻意不做**异体字映射:简体只有「你」,转繁体时无从判断该写「你」
+    /// 还是「妳」,那要猜被称呼者的性别。
     public func converted(_ text: String) -> String {
         guard self != .off, !text.isEmpty else { return text }
         guard !Romanizer.looksJapanese(text) else { return text }
@@ -19,7 +28,8 @@ public enum ChineseVariant: String, CaseIterable, Sendable {
             self == .traditional
             ? StringTransform("Simplified-Traditional")
             : StringTransform("Traditional-Simplified")
-        return text.applyingTransform(transform, reverse: false) ?? text
+        let icu = text.applyingTransform(transform, reverse: false) ?? text
+        return self == .simplified ? HanVariants.normalizeToSimplified(icu) : icu
     }
 }
 

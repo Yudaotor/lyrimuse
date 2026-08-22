@@ -1,3 +1,4 @@
+import LyrimuseCore
 import SwiftUI
 
 // 超长文字(歌名/歌词)靠自动滚动展示全部内容,而不是硬截断/省略号。测量内容真实宽度
@@ -23,6 +24,14 @@ struct MarqueeText<Content: View>: View {
     /// 跑马灯之后 GeometryReader 会占满可用宽度,短名字(绝大多数情况)就从右边跳到了
     /// 左边、跟音浪之间空出一大段。默认值保持 .leading,已有调用点行为不变。
     var restingAlignment: Alignment = .leading
+    /// 内容溢出、而且此刻**停在开头**时,右端渐隐带的宽度(0 = 不渐隐,默认)。
+    ///
+    /// 2026-08-22 加。为什么需要它、为什么只在"停在开头"时给、为什么传宽度而不是
+    /// gradient 的 stop —— 三条理由都写在 `MarqueeMath.trailingFadeWidth` 上,不重复。
+    /// 目前只有灵动岛的**歌词行**传非 0:那一行右边紧挨一枚 32pt 封面,只隔 10pt,硬切口
+    /// 落在那里肉眼分不清"被裁掉"和"被封面盖住"。顶行的歌名/歌手同样是硬切,但它们旁边
+    /// 是刘海/音浪而不是封面,没有同样的误读风险,保持原样(要开就在调用点传值即可)。
+    var edgeFadeWidth: CGFloat = 0
     @ViewBuilder let content: () -> Content
 
     @State private var contentWidth: CGFloat = 0
@@ -87,16 +96,44 @@ struct MarqueeText<Content: View>: View {
                 }
         }
         .clipped()
+        // ⚠️ 无条件挂,不写成 `if fadeWidth > 0 { .mask(...) }`:那样渐隐带宽度归零的
+        // 那一刻视图身份会变、整棵子树重建,正在跑的滚动动画会被打断。宽度为 0 时
+        // gradient 那一段本身就是零宽,等效于没有 mask。
+        .mask(fadeMask)
         .onDisappear { scrollTask?.cancel() }
     }
 
-    /// 内容比容器宽出多少(负数=装得下)。
-    private var overflow: CGFloat { contentWidth - containerWidth }
+    /// 内容比容器宽出多少(负数=装得下)。判据本体在 Core(MarqueeMath),这里只转发 ——
+    /// 分层边界的理由见 AGENTS.md「XxxxView.swift 里不放几何/数学」。
+    private var overflow: CGFloat {
+        MarqueeMath.overflow(contentWidth: contentWidth, containerWidth: containerWidth)
+    }
 
-    /// 值得滚吗。4pt 的死区是留给测量误差的:差这么一点点滚起来只是抖一下,不如不动。
-    /// restart() 的启动判据和上面的对齐判据必须是同一份 —— 两处各写一遍就会出现
-    /// "在滚但按没溢出对齐"这种自相矛盾的状态。
-    private var isOverflowing: Bool { containerWidth > 0 && overflow > 4 }
+    /// 值得滚吗。restart() 的启动判据和下面的对齐判据必须是同一份 —— 两处各写一遍就会
+    /// 出现"在滚但按没溢出对齐"这种自相矛盾的状态。
+    private var isOverflowing: Bool {
+        MarqueeMath.isOverflowing(contentWidth: contentWidth, containerWidth: containerWidth)
+    }
+
+    /// 右端渐隐带当前宽度。offset 是**模型值**,这正是想要的:归零走
+    /// `disablesAnimations` 的事务(渐隐带瞬时出现,跟文字瞬时归位同步),起步走
+    /// `withAnimation(.linear)`(渐隐带跟着平滑收掉)。
+    private var fadeWidth: CGFloat {
+        MarqueeMath.trailingFadeWidth(configured: edgeFadeWidth,
+                                      contentWidth: contentWidth,
+                                      containerWidth: containerWidth,
+                                      offset: offset)
+    }
+
+    /// 遮罩:左边一整块不透明 + 右端一条 black→clear 的渐隐带。渐隐带是 `.frame(width:)`
+    /// 而不是 gradient 的 stop 位置,这样宽度变化可动画(理由见 MarqueeMath)。
+    private var fadeMask: some View {
+        HStack(spacing: 0) {
+            Rectangle().fill(Color.black)
+            LinearGradient(colors: [.black, .clear], startPoint: .leading, endPoint: .trailing)
+                .frame(width: fadeWidth)
+        }
+    }
 
     private func apply(content: CGFloat, container: CGFloat) {
         guard content != contentWidth || container != containerWidth else { return }

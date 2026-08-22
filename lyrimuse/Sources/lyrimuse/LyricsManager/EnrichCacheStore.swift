@@ -318,7 +318,7 @@ public final class EnrichCacheStore: ObservableObject {
                 hasRomanization: !((entry["lyrics_roma"] as? String ?? "").isEmpty),
                 hasLyrics: !lyrics.isEmpty,
                 isInstrumental: entry["instrumental"] as? Bool ?? false,
-                hasDecision: entry["lyrics_decision"] != nil,
+                hasDecision: entry["lyrics_decision"] != nil || entry["lyrics_decision_applied"] != nil,
                 normPrimaryArtist: toSimplified(primaryArtist(display)).lowercased(),
                 normAlbum: toSimplified(parts.album).lowercased(),
                 searchArtistLower: parts.artist.lowercased(),
@@ -347,10 +347,26 @@ public final class EnrichCacheStore: ObservableObject {
         )
     }
 
+    /// 这条当初解析时用的时长(`resolved_duration_secs`)。只给「重新自动匹配」当兜底 ——
+    /// Summary 里的 durationSecs 是真实播放时长(`duration_secs`),那个才是首选;老条目两个
+    /// 都可能是 0,那就只能不带时长跑一轮(打分会跳过整个时长档,结果不代表自动决策)。
+    public func resolvedDurationSecs(for key: String) -> Double {
+        raw[key]?["resolved_duration_secs"] as? Double ?? 0
+    }
+
     /// 懒解码某条的解析决策记录 —— 只在打开「解析决策」弹窗那一刻按 key 解一条,
     /// 见 Summary.hasDecision 的注释。
     func decodedDecision(for key: String) -> LyricsResolutionDecision? {
         Self.decodeDecision(raw[key]?["lyrics_decision"])
+    }
+
+    /// 「当前歌词的出处」那一槽(lyrics_decision_applied,collector 2026-08-22 起分槽写入)。
+    /// 跟上面的 lyrics_decision(最近一次评估,可能维持原状、甚至输入是脏的)是两份记录:
+    /// 一轮没采纳的评估会盖掉 lyrics_decision,但不动这一槽 ——「解析决策」弹窗靠它才能
+    /// 永远解释"现在这份词是谁、凭什么选的"。老条目(分槽前写入)没有这一槽,弹窗侧有
+    /// "最近评估恰好 applied 就当出处"的退路(见 LyricsDecisionSheet.init)。
+    func decodedAppliedDecision(for key: String) -> LyricsResolutionDecision? {
+        Self.decodeDecision(raw[key]?["lyrics_decision_applied"])
     }
 
     // 返回值含 yrc:「歌词管理」的单曲歌词时间轴偏移输入框需要跟 LocalPlaybackSource
@@ -376,7 +392,26 @@ public final class EnrichCacheStore: ObservableObject {
     // onApply),准确反映刚采纳的这份内容真实来自哪个平台;纯手改文本框(source 留 nil)
     // 则清空这个字段——手改之后已经不再是任何平台的原文,继续挂着旧的平台徽章比"无
     // 来源"更容易误导人,跟"人工修正"徽章(isManual)搭配显示才诚实。
-    public func saveEdit(key: String, lyrics: String, tr: String, roma: String, yrc: String? = nil, source: String? = nil) async {
+    /// - markManual: 默认 true(手动编辑/手动采纳候选都是人工修正)。**「重新自动匹配」传
+    ///   false** —— `manual_lyrics` 是 collector 侧所有自愈路径的一票否决闸(firstFill /
+    ///   rescore / retry 三条的第一行都看它),一个"按算法重算"的动作把它置真,等于点一下
+    ///   就把这首歌永久冻结、以后算法改进也再也不许碰它,而界面上还打「人工修正」徽章 ——
+    ///   那是假话。传 false 时**主动清掉**这个标记(连带导出的 .lrc 头里那行 `[manual:1]`,
+    ///   否则 collector 下次启动 importLyricsFromFiles 会拿文件头把它改回来)。
+    /// - score / scoringVersion: 必须**成对**传。只写版本不写分数,collector 那边
+    ///   `lyricsUpgradeBaseline` 会拿 0 当基准,"必须严格更高分才替换"那道闸等于被拆掉,
+    ///   一次运气差的后台重试就能把刚匹配好的结果换掉;只写分数不写版本,`needsLyricsRescore`
+    ///   会在下次播放时立刻再跑一轮(首次判定不受 1 小时节流约束)。
+    /// - sourcesSeen / sourcesResponded / resolvedDurationSecs / decision: 照 collector 的
+    ///   `rescoreLyrics` 实际写进 enrichEntry 的那一套。少写 sourcesSeen 会让 retry 的
+    ///   `nativeMissedOut` 拿上一轮的名单算;少写 resolvedDuration 会让 `wrongDuration`
+    ///   凭空为真;不写 decision,「解析决策」弹窗展示的就还是被替换掉那份歌词的存档。
+    public func saveEdit(key: String, lyrics: String, tr: String, roma: String, yrc: String? = nil,
+                         source: String? = nil, markManual: Bool = true,
+                         score: Int? = nil, scoringVersion: Int? = nil,
+                         resolvedDurationSecs: Double? = nil,
+                         sourcesSeen: [String]? = nil, sourcesResponded: [String]? = nil,
+                         decision: [String: Any]? = nil) async {
         var entry = raw[key] ?? [:]
         // 译文换了内容 → 描述译文的那两个字段(lyrics_tr_lang / lyrics_tr_source)不再
         // 描述它,必须一起清掉。跟 collector 侧 importLyricsFromFiles 是同一条规矩:
@@ -403,7 +438,32 @@ public final class EnrichCacheStore: ObservableObject {
         entry["lyrics"] = lyrics
         entry["lyrics_tr"] = tr
         entry["lyrics_roma"] = roma
-        entry["manual_lyrics"] = true
+        if markManual {
+            entry["manual_lyrics"] = true
+        } else {
+            entry.removeValue(forKey: "manual_lyrics")
+        }
+        // 打分留痕:成对写(理由见上面的参数注释)。传 nil 就一个都不动 —— 手动编辑改的是
+        // 正文,旧分数虽然已经不描述新内容了,但那条路径靠 manual_lyrics 整个关掉了自愈,
+        // 不会有人拿这个分数去做比较。
+        if let score, let scoringVersion {
+            entry["lyrics_score"] = score
+            entry["lyrics_scoring_version"] = scoringVersion
+        }
+        if let resolvedDurationSecs, resolvedDurationSecs > 0 {
+            entry["resolved_duration_secs"] = resolvedDurationSecs
+        }
+        if let sourcesSeen, !sourcesSeen.isEmpty { entry["lyrics_sources_seen"] = sourcesSeen }
+        if let sourcesResponded, !sourcesResponded.isEmpty {
+            entry["lyrics_sources_responded"] = sourcesResponded
+        }
+        // 两槽一起写:decision 只在「重新自动匹配」**采纳**那条路径传进来(finishRematch
+        // 已把 applied 覆写成 true),采纳即"当前歌词的出处",跟 collector 侧三个自动
+        // 写入站点的分槽规则一致(见 collector/decision.go 的两槽说明)。
+        if let decision {
+            entry["lyrics_decision"] = decision
+            entry["lyrics_decision_applied"] = decision
+        }
         if let yrc {
             if yrc.isEmpty {
                 entry.removeValue(forKey: "lyrics_yrc")
@@ -422,7 +482,7 @@ public final class EnrichCacheStore: ObservableObject {
             key: key, lyrics: lyrics, tr: tr, roma: roma,
             yrc: entry["lyrics_yrc"] as? String ?? "",
             source: entry["lyrics_source"] as? String ?? "",
-            manual: true
+            manual: markManual
         )
         // 顺序照 delete(keys:)(2026-08-19 接上):先刷列表(界面立刻反馈),再落盘,重启
         // 走不阻塞的后台排队 —— 原来这里 await persistAndRestart() 会原地等 collector
@@ -555,6 +615,12 @@ public final class EnrichCacheStore: ObservableObject {
         // 为什么再来一轮就能收敛:kickstart -k 杀掉的是**握着旧内存的那个进程**,新进程的
         // 内存 = 它启动那一刻磁盘上的内容。所以第二轮清空之后再重启,新进程读到的必然是空的,
         // 不存在第三个"还揣着旧数据"的进程。这里不是无脑重试,是有终止性的两轮。
+        // 「已校准」名单跟着一起清(2026-08-21 补)。这个入口清掉的是**全部**歌词内容 ——
+        // 名单里那些 key 对应的条目都不在了,留着它就是一份孤儿名单:collector 继续一票否决
+        // 这些歌的自动重选,而它保护的东西(用户手调出来的时间轴)随着条目一起没了。
+        // 注意这跟「清空全部时间轴校正」是两个入口:那个清校正值(并连带清名单),这个清内容。
+        LyricsPinStore.shared.removeAll()
+
         for attempt in 1...2 {
             _ = await CollectorControl.restartAndWaitAsync()
             PlaybackCoordinator.shared.refreshLyricsForCurrentTrack()

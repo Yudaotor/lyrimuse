@@ -101,6 +101,29 @@ public final class LyricsPinStore: ObservableObject {
         persist()
     }
 
+    /// 把一份外来名单**并进来**(恢复歌词库备份时用)。
+    ///
+    /// 合并而不是替换:本机自己钉的那些也是用户一句句听出来的,不能因为"恢复了一份备份"就
+    /// 被抹掉。同一个 key 两边都有时保留**更早**那个时间戳 —— 这个数只用来记"什么时候钉的",
+    /// 早的那个才是真的那一次。
+    ///
+    /// 返回真正新增的条数,给恢复结果那句话报数用。
+    @discardableResult
+    public func merge(_ incoming: [String: Int]) -> Int {
+        var added = 0
+        for (key, ts) in incoming where !key.isEmpty {
+            if let existing = pins[key] {
+                if ts < existing { pins[key] = ts }
+            } else {
+                pins[key] = ts
+                added += 1
+            }
+        }
+        guard added > 0 || !incoming.isEmpty else { return 0 }
+        persist()
+        return added
+    }
+
     private func persist() {
         let file = File(version: Self.fileVersion, pins: pins)
         guard let data = try? JSONEncoder().encode(file) else { return }

@@ -75,8 +75,14 @@ struct NotchWindowRoot: View {
     private var cardHeight: CGFloat {
         if controller.isCollapsed { return controller.contentTopInset }
         return controller.contentTopInset
-            + NotchMetrics.compactRowHeight
-            + (controller.isExpanded ? NotchMetrics.expandedExtraHeight : 0)
+            // 没有曲目时歌词行整行不渲染(见 NotchChromeSource.hasTrack),高度也别留 ——
+            // 留了就是用户报的那 44pt 空白。
+            + (controller.hasTrack ? NotchMetrics.compactRowHeight : 0)
+            + (controller.isExpanded
+               ? NotchMetrics.expandedExtraHeight(
+                   hasLyricPreview: controller.expandedShowsLyricPreview,
+                   hasScrubber: controller.expandedShowsScrubber)
+               : 0)
     }
 
     var body: some View {

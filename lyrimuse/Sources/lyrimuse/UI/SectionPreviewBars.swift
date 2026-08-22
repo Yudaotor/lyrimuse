@@ -64,6 +64,13 @@ final class NotchPreviewChrome: ObservableObject, NotchChromeSource {
     /// 行为 —— 照搬到设置页就是一片空白,而用户恰恰是来这里看样式的。
     var isCollapsed: Bool { false }
 
+    /// 预览恒按**最完整**形态画(有歌词预览、有进度条)—— 用户来这里是看样式的,给他一个
+    /// 因为"此刻这首歌没歌词"而缩掉一截的样张没有意义。跟 isCollapsed 恒 false 同一个理由。
+    var expandedShowsLyricPreview: Bool { true }
+    var expandedShowsScrubber: Bool { true }
+    /// 预览恒按"有曲目"画,理由同 isCollapsed 恒 false:用户来这儿是看样式的。
+    var hasTrack: Bool { true }
+
     init() { refreshGeometry() }
 
     /// 视图内部那个 .onHover 打进来的调用,预览里**故意忽略**(空实现)。
@@ -123,7 +130,7 @@ struct NotchPreviewBar: View {
     /// 卡片此刻的真实高度,跟真窗口 setFrame 的算法一致(刘海高 + 内容行,展开再加一截)。
     private var cardHeight: CGFloat {
         chrome.contentTopInset + NotchMetrics.compactRowHeight
-            + (chrome.isExpanded ? NotchMetrics.expandedExtraHeight : 0)
+            + (chrome.isExpanded ? NotchMetrics.expandedExtraHeightMax : 0)
     }
 
     /// 容器按**展开态**固定高。hover 展开时卡片会长高 40pt,容器高度要是跟着变,这条预览
@@ -136,7 +143,7 @@ struct NotchPreviewBar: View {
     static var cardHeight: CGFloat {
         let inset = NotchLyricsWindowController.targetScreen()
             .map { NotchLyricsWindowController.geometry(for: $0).notchHeight } ?? 32
-        return inset + NotchMetrics.compactRowHeight + NotchMetrics.expandedExtraHeight
+        return inset + NotchMetrics.compactRowHeight + NotchMetrics.expandedExtraHeightMax
     }
 
     // 宽度滑杆能拖到 500,超过预览区就整体等比缩小 —— 这样"宽度"这一项在预览里看得见。

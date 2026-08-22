@@ -154,12 +154,15 @@ extension NotchCardStyle {
 enum NotchMetrics {
     /// 稳态歌词行的高度。
     static let compactRowHeight: CGFloat = 44
-    /// hover 展开时在下面多出来的那一块。
-    // 40 → 72 → 76(2026-08-19):展开区从「预览 + 进度条」加了一排完整三键(设计评审把
-    // 控制从右耳挪进展开卡),按 预览13 + 间距4 + 进度条槽6+3+时间行11 + 间距4 + 三键22 +
-    // 底边距10 累出来的;进度条布局槽后来钉成恒定 6pt(悬停变粗不再推邻居)多占了 3pt,
-    // 一并加上余量。alignment .top 下不够高会直接裁掉最下面的三键。
-    static let expandedExtraHeight: CGFloat = 76
+    /// 展开区的最大高度 / 按内容算的实际高度 —— 实现在 LyrimuseCore 的
+    /// NotchExpandedMetrics(那边有完整的推导注释和 selftest 断言),这里只是转发,
+    /// 让调用点仍然只需要认识 NotchMetrics 这一个入口。
+    static var expandedExtraHeightMax: CGFloat { NotchExpandedMetrics.maxHeight }
+
+    static func expandedExtraHeight(hasLyricPreview: Bool, hasScrubber: Bool) -> CGFloat {
+        NotchExpandedMetrics.height(hasLyricPreview: hasLyricPreview, hasScrubber: hasScrubber)
+    }
+
     // 收起态(没在播放)单侧耳宽:左耳只放音浪(约 14pt 宽)、右耳只放一枚小封面
     // (2026-08-19 用户拍板的 iPhone 灵动岛式极简形态,歌名/播放键都收进 hover 展开卡),
     // 34 = 内容 + 两侧呼吸空间。用在 NotchWindowRoot.cardWidth 的收起分支。
@@ -168,6 +171,12 @@ enum NotchMetrics {
     // minWordDurationMs/wordEdgeSoftenBand 已随 wordGradient 收编进 WordKaraokeGradient
     // (2026-08-20)——别在这里再留一份"看着在生效"的死常量,将来改 KaraokeFill 会静默失真。
     static let artworkLyricSpacing: CGFloat = 10
+    /// 歌词行右端渐隐带的宽度(2026-08-22 加,用户报「歌词有时候被封面挡住」)。
+    ///
+    /// 跟 artworkLyricSpacing 同为 10pt 不是巧合:渐隐带的作用就是把"硬切口紧贴封面"
+    /// 这 10pt 间隙里的突变摊开成一段过渡。13pt 半粗体下约合 1.5 个拉丁字符,再宽会开始
+    /// 吃掉能读的内容。完整判据(为什么只在停在开头时给)见 MarqueeMath.trailingFadeWidth。
+    static let lyricEdgeFadeWidth: CGFloat = 10
     static let artworkCornerRadius: CGFloat = 5
     /// 两只耳朵**朝刘海那一侧**的内缩(2026-08-20 用户要求"歌手不要那么紧贴真实刘海")。
     ///
@@ -193,6 +202,18 @@ protocol NotchChromeSource: ObservableObject {
     /// 物理刘海的宽度,顶行中间要给它让出空当。无刘海屏幕是 0。
     var notchWidth: CGFloat { get }
     var contentTopInset: CGFloat { get }
+    /// 展开区里那行"下一句歌词预览"会不会渲染 —— 决定要不要给它留高度。
+    /// 曲目级信号(这首歌有没有歌词),不是"此刻有没有下一句",理由见
+    /// NotchMetrics.expandedExtraHeight 的注释。
+    var expandedShowsLyricPreview: Bool { get }
+    /// 展开区里那条迷你进度条会不会渲染(= 这首歌有没有时长)。
+    var expandedShowsScrubber: Bool { get }
+    /// 此刻有没有一首曲目(有歌名/歌手,或者正在放广告)。
+    ///
+    /// 决定歌词行整行要不要渲染 —— 压根没有曲目时那一行是**全空**的(两个占位 ♪ 已经
+    /// 按同一个判据留白了),44pt 白占着正是用户 2026-08-21 说的"占用空间"。
+    /// 刻意不看"在不在播":暂停中仍然有曲目,歌名/歌词/封面都该照常显示。
+    var hasTrack: Bool { get }
     func setExpanded(_ expanded: Bool)
 }
 
@@ -251,7 +272,12 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
                             .frame(height: controller.contentTopInset)
                     }
                     // 歌词行和 hover 展开区才是"收进去"的部分。
-                    if !controller.isCollapsed {
+                    //
+                    // ⚠️ hasTrack 这一条(2026-08-21)必须跟 NotchWindowRoot.cardHeight 里
+                    // 那个同款判断成对出现:压根没有曲目时这一行是**全空**的(两个占位 ♪ 已按
+                    // 同一判据留白),44pt 白占着就是用户报的"占用空间"。一处改一处不改的
+                    // 表现是"行不见了高度还留着"或反过来把行裁掉半截。
+                    if !controller.isCollapsed && controller.hasTrack {
                         lyricRow
                             .frame(height: NotchMetrics.compactRowHeight)
                         if controller.isExpanded {
@@ -398,6 +424,12 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
         .padding(.horizontal, 10)
     }
 
+    /// 压根没有曲目。读 controller 那一份而不是自己再从 playback 算一遍 —— 卡片高度
+    /// (NotchWindowRoot.cardHeight)也要用同一个判据决定歌词行占不占 44pt,两处各算一遍
+    /// 必然漂,而漂的表现是"行不见了但高度还留着"或反过来把行裁掉半截。
+    /// 跟菜单栏面板的同名属性是同一套语义(MenuBarPanel.isIdleNoTrack)。
+    private var isIdleNoTrack: Bool { !controller.hasTrack }
+
     private func topRow(earWidth: CGFloat) -> some View {
         HStack(spacing: 0) {
             // 左耳:歌名。播放指示条(音浪)原在歌名左边,2026-08-19 用户拍板挪到右耳
@@ -408,7 +440,11 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
                 // 2026-08-19)。MarqueeText 的 id 也用显示串——切进/切出广告要重置跑马灯。
                 let displayTitle = playback.isCurrentTrackAdBreak ? L10n.t("广告中") : playback.title
                 MarqueeText(id: displayTitle) {
-                    Text(displayTitle.isEmpty ? "♪" : displayTitle)
+                    // 压根没有曲目时**留白**,不摆 ♪(2026-08-21 用户要求"那个无意义的音符
+                    // 不要占位置")。这里的 ♪ 其实只在"没有曲目"这一种情况下才到得了 ——
+                    // 有曲目就有歌名,广告插播也被上面那行换成了「广告中」—— 所以它从来
+                    // 没有"代表一首歌"的语义,纯粹是一个占位。
+                    Text(isIdleNoTrack ? "" : (displayTitle.isEmpty ? "♪" : displayTitle))
                         .font(.system(size: 11.5, weight: .semibold))
                         .foregroundStyle(accentOrWhite.opacity(0.85))
                 }
@@ -524,7 +560,8 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
 
     private var lyricRowContent: some View {
         HStack(spacing: NotchMetrics.artworkLyricSpacing) {
-            MarqueeText(id: playback.currentLine?.plainText ?? "") {
+            MarqueeText(id: playback.currentLine?.plainText ?? "",
+                        edgeFadeWidth: NotchMetrics.lyricEdgeFadeWidth) {
                 lyricContent
             }
             .font(.system(size: 13, weight: .semibold))
@@ -545,6 +582,32 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
             }
         }
         .padding(.horizontal, 16)
+        // ⚠️ 封面**在场性**的变化必须是瞬时的,不能落进任何补间 —— 这是用户报的
+        // 「歌词被封面挡住」里真·遮挡的那一半(2026-08-22,最小复现对照实验坐实)。
+        //
+        // 机制:封面是这个 HStack 的**条件兄弟**。它从不在场变在场时,SwiftUI 把它当结构性
+        // 插入 —— 新插入的视图**一帧就落在终态位置**;而歌词那一侧的 frame(以及跟着 frame
+        // 走的 MarqueeText 内部那个 .clipped() 边界)是被**动画平滑收缩**的,要花整条弹簧
+        // 才从"没有封面时"的宽度收到"有封面时"的宽度。这段时间里歌词被裁到更靠右的旧边界,
+        // 那一截字正好画在已经就位的封面**底下** —— HStack 里靠后的兄弟盖在前面的上面。
+        //
+        // 独立最小复现(SwiftUI,同构的 HStack + GeometryReader/.clipped 弹性子 + 32pt 定宽
+        // 兄弟,弹簧刻意放慢到 3s 便于逐帧抓):封面到位那一帧文字右边界仍停在旧位置(623px),
+        // 要 4 帧才收到终态 603px,90 帧里 25 帧文字被压在封面底下;加上这一行 .animation(nil,)
+        // 之后同样 90 帧 **0** 帧遮挡,四次插入全部一帧到位。
+        //
+        // 触发窗口:必须"封面在场性变化"和某条活动动画落进**同一次** SwiftUI 更新 —— 把两者
+        // 错开 300ms 的第三版复现同样是 0/90。现实里够得着这个窗口的有两处:
+        // NotchWindowRoot 挂在整棵子树上的三条 .animation(cardAnimation, value:)
+        // (cardWidth/cardHeight/isCollapsed),以及 NotchTransientHost 自己那条 0.18s。
+        // 而封面确实会真的离场再回来:换歌后取图迟迟不来时 LocalPlaybackSource 的
+        // scheduleArtworkStaleTimeout 会在 3s 后把 artworkData 清成 nil,重试成功再填回来。
+        //
+        // 为什么不用别的修法:给封面留永久占位能根治,但那要一直吃掉 42pt 歌词宽度,与
+        // artworkThumbnail 上面那段"没有封面就连位置一起不占"的决定直接冲突;给它加
+        // .transition 淡入也不行 —— 淡入到不透明的过程中 clip 边界照旧滞后,只是把遮挡
+        // 从"实心"变成"半透明"。封面出现/消失本来就是一次宽度**跳变**,补间只会制造不同步。
+        .animation(nil, value: (playback.highResArtworkImage ?? playback.artworkImage) == nil)
     }
 
     private var lyricContent: some View {
@@ -613,7 +676,11 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
                     .foregroundStyle(accentOrWhite.opacity(0.7))
                     .shadow(color: .black.opacity(0.45), radius: 2, y: 1)
             } else {
-                Text(playback.currentLine?.plainText ?? "♪")
+                // ♪ 是**间奏**占位符(在播、有歌词、只是这一刻不在任何一句上)—— 那种
+                // 情况下它是有意义的,保留。但压根没有曲目时它什么都不代表,留白
+                // (2026-08-21 用户要求)。上面那一长串 else-if 已经把广告/纯音乐/无歌词/
+                // 断网/搜索中都各自接走了,能落到这里的空态只剩"没有曲目"。
+                Text(playback.currentLine?.plainText ?? (isIdleNoTrack ? "" : "♪"))
                     .foregroundStyle(accentOrWhite)
                     .shadow(color: .black.opacity(0.45), radius: 2, y: 1)
             }
@@ -687,7 +754,8 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
                 }
                 controlButton(playback.isPlayingNow ? "pause.fill" : "play.fill",
                               glyphSize: 14, hitSize: 22) {
-                    MusicPlaybackController.playPause()
+                    // 乐观回声版:歌词窗封面缩放/图标点击即动(见 userTogglePlayPause)。
+                    PlaybackCoordinator.shared.userTogglePlayPause()
                 }
                 controlButton("forward.fill", glyphSize: 11.5, hitSize: 22) {
                     MusicPlaybackController.nextTrack()
@@ -708,7 +776,12 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
         // (分两个 .frame:maxWidth 走的是弹性那个重载,height 走固定尺寸那个,
         // 混在一次调用里编译不过。)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .frame(height: NotchMetrics.expandedExtraHeight, alignment: .top)
+        // 高度跟 NotchWindowRoot.cardHeight **走同一个函数、同一组入参**(都读 controller
+        // 上那两个曲目级标志)—— 两处各自判断的话必然漂,而漂的表现是卡片和内容差一截:
+        // 要么底部多一条空隙,要么最下面那排三键被裁掉。
+        .frame(height: NotchMetrics.expandedExtraHeight(
+            hasLyricPreview: controller.expandedShowsLyricPreview,
+            hasScrubber: controller.expandedShowsScrubber), alignment: .top)
     }
 
     private var nextLineDisplayText: String {

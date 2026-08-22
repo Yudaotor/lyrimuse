@@ -8,6 +8,49 @@ import os
 
 private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "coordinator")
 
+/// 「歌词窗口」AM 式动画背景的一套预烘焙图层(烘焙见 PlaybackCoordinator
+/// .bakeWindowBackgroundLayers,消费见 LyricsWindowView.WindowAnimatedBackground)。
+/// class 而非 struct:视图用实例身份(===)当换歌交叉淡入/动画重启的触发键,
+/// Equatable 按身份实现正是为了配 `.animation(value:)`。
+final class WindowBackgroundLayers: Equatable {
+    /// 暗底:封面压暗+重模糊,静态铺满。AM 背景的"黑位下限"来自这层。
+    let base: NSImage
+    /// 光斑层:各自取封面不同区域、径向羽化,与 poses 一一对应。
+    let glows: [NSImage]
+    /// 每层的确定性姿态/动画参数(seed 来自曲目标识,同一首歌永远同一布局)。
+    struct GlowPose {
+        let initialAngle: Double   // 初始角(度)
+        let spinDuration: Double   // 转一整圈的周期(秒),负值反向
+        let anchor: UnitPoint      // 旋转锚点(偏心,转动才带出"漂移"感)
+        let scale: CGFloat         // scaledToFill 之上的额外放大
+    }
+    let poses: [GlowPose]
+    /// 背景均色的色相/饱和度(2026-08-21):左栏次级元素(副行/时间/进度已播段)要做
+    /// AM 式 vibrancy 染色 —— 从太阳之子截图逐通道反解,AM 的次级文字不是半透明白
+    /// (那样三通道等效 α 应相等,实测 r0.74/g0.58/b0.49),而是**背景色相的亮化低饱和
+    /// 版**。这里存烘焙后 base 的 CIAreaAverage(再乘 0.15 遮罩)转 HSB 的 h/s,亮度
+    /// 各元素自定。
+    let tintHue: Double
+    let tintSaturation: Double
+    /// 背景均色的**亮度**(已含视图层 0.15 黑遮罩的 ×0.85,即屏幕见到的亮度)。
+    /// 2026-08-22 从"没人用的 v"转正:固定亮度档的 vibrancy 染色在亮封面(金色 bgV≈0.7)
+    /// 上会撞上背景亮度直接隐形,文字类调用要靠它做最小对比度自适应(见 amVibrantColor)。
+    /// 0 = 未知(取色失败),调用方按旧行为处理。
+    let tintBrightness: Double
+
+    init(base: NSImage, glows: [NSImage], poses: [GlowPose],
+         tintHue: Double = 0, tintSaturation: Double = 0, tintBrightness: Double = 0) {
+        self.base = base
+        self.glows = glows
+        self.poses = poses
+        self.tintHue = tintHue
+        self.tintSaturation = tintSaturation
+        self.tintBrightness = tintBrightness
+    }
+
+    static func == (l: WindowBackgroundLayers, r: WindowBackgroundLayers) -> Bool { l === r }
+}
+
 // 目前只有本地 media-control 一个数据源,这个类退化成 LocalPlaybackSource 的一层薄
 // 转发,但还是留着这一层不直接让 UI 碰 LocalPlaybackSource.shared——万一以后又要接
 // 别的数据源,UI 层不用跟着改。
@@ -46,6 +89,8 @@ final class PlaybackCoordinator: ObservableObject {
     // 播放器上不存在。
     private static let stopGracePeriod: TimeInterval = 0.5
     private var stopGraceWork: DispatchWorkItem?
+    /// userTogglePlayPause 乐观翻转后的对账定时(见那边注释)。
+    private var optimisticReconcileWork: DispatchWorkItem?
     @Published private(set) var currentLine: SyncedLyricLine?
     @Published private(set) var nextLineText: String?
     @Published private(set) var hasLyricsContent: Bool = false
@@ -102,13 +147,13 @@ final class PlaybackCoordinator: ObservableObject {
     /// 源取 highResArtworkImage ?? artworkImage,跟视图层原来的取图口径一致;nil = 还没
     /// 烘出来/没有封面,视图回落深色渐变。
     @Published private(set) var blurredArtworkImage: NSImage?
-    /// 「歌词窗口」背景用的第二份烘焙(同一次审计,同一根因):那扇窗原来挂的是
-    /// `.saturation(1.5).blur(radius: 72)` 活滤镜,画布 ~2040px、播放期因逐字填色/滚动
-    /// 几乎每帧重合成。参数跟灵动岛那份对不上(那份等效 20pt 半径、无饱和度处理),
-    /// 所以单独烘:720px 宽、saturation 1.5、sigma ≈ 51 —— 烘焙图被 scaledToFill 拉到
-    /// 典型 ~2040px 画布时模糊量等比放大,视觉等价于原来的 72pt 活滤镜(窗口宽度偏离
-    /// 典型值时略糊/略锐,背景本来就是重糊,可接受)。压黑 22% 仍留在视图层。
-    @Published private(set) var windowBlurredArtworkImage: NSImage?
+    /// 「歌词窗口」AM 式动画背景的一套预烘焙图层(2026-08-20 第四轮重做,按反向工程的
+    /// AM 真实架构替换此前的单张静态合成图,依据 Priva28 gist + AMLL,详见
+    /// docs/features/07):暗底 + 3 份封面**不同区域**取色的羽化光斑,视图层 lighten
+    /// (变亮)混合 + 慢速 GPU 旋转——lighten 让封面亮色区变成浮在暗底上的光斑(普通
+    /// 叠加会把亮暗平均掉,怎么调都"平"),动画让背景像 AM 一样缓慢流动。烘焙仍是
+    /// 离线一次,视图层只做变换动画,无合成期滤镜,性能纪律不破。
+    @Published private(set) var windowBackgroundLayers: WindowBackgroundLayers?
     /// 上面那张高清替代的均值色(十六进制,格式同 LocalPlaybackSource.artworkAverageHex)。
     /// 有高清图时两个"跟随封面"强调色必须按它算:系统那份可能是网易云的灰底音符占位图,
     /// 界面上实际显示的是高清替代,强调色还按占位图算就是一团跟画面无关的灰。nil = 没有
@@ -271,6 +316,21 @@ final class PlaybackCoordinator: ObservableObject {
     func setGlobalLyricsOffset(_ ms: Int) {
         LocalPlaybackSource.shared.setGlobalLyricsOffset(ms)
     }
+
+    // 「按播放器」那一层(2026-08-21 加)—— 同一个控件上的下拉框选中具体播放器时,改的是这层。
+    // 读写各走哪边的理由跟上面全局那层完全一致。
+    func playerLyricsOffsetMs(forBundleID bundleID: String) -> Int {
+        LyricsOffsetStore.shared.playerOffset(forBundleID: bundleID)
+    }
+
+    func setPlayerLyricsOffset(_ ms: Int, forBundleID bundleID: String) {
+        LocalPlaybackSource.shared.setPlayerLyricsOffset(ms, forBundleID: bundleID)
+    }
+
+    /// 这一刻真正在播的那个 App 的 bundle id —— 设置页拿它在下拉框里标出"正在播放"那一项,
+    /// 用户不用自己猜"我现在这首是哪个 App 在放"。故意不做成 @Published(理由见
+    /// LocalPlaybackSource.lastResolvedBundleID):设置页本来就有 2 秒的轮询在跑。
+    var resolvedPlayerBundleID: String? { LocalPlaybackSource.shared.lastResolvedBundleID }
 
     // 「喜欢」(Apple Music 的 favorited)只有 Apple Music 有:QQ 音乐/网易云音乐没有
     // AppleScript 支持,media-control 走的系统级 MediaRemote 也只有播放控制、没有收藏这个
@@ -542,8 +602,10 @@ final class PlaybackCoordinator: ObservableObject {
     func setPlaybackMode(_ target: MusicPlaybackController.MusicPlaybackMode) {
         guard let player = extendedControlPlayer else { return }
         // 播放器够不到的档位静默降为列表,别让乐观更新画出一个永远写不进去的图标。
+        // (repeatAll 跟 repeatOne 同一道闸:Spotify 的 repeating 布尔写得进读不回。)
         let resolved: MusicPlaybackController.MusicPlaybackMode =
-            (target == .repeatOne && !MusicPlaybackController.supportsRepeatOne(player))
+            ((target == .repeatOne || target == .repeatAll)
+                && !MusicPlaybackController.supportsRepeatOne(player))
             ? .list : target
         playbackMode = resolved
         playbackModeActionSeq &+= 1
@@ -724,27 +786,282 @@ final class PlaybackCoordinator: ObservableObject {
         guard let source,
               let cg = source.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
             if blurredArtworkImage != nil { blurredArtworkImage = nil }
-            if windowBlurredArtworkImage != nil { windowBlurredArtworkImage = nil }
+            if windowBackgroundLayers != nil { windowBackgroundLayers = nil }
             return
         }
+        // 光斑取区/姿态的种子:同一首歌每次烘出同一布局(烘焙里不允许真随机——换歌
+        // 交叉淡入的触发键是图层实例,布局还随机跳会被看成"背景闪变")。跨进程稳定,
+        // 用 FNV 而不是 hashValue(SipHash 每次启动换 key)。
+        let s = LocalPlaybackSource.shared
+        let seed = Self.stableSeed("\(s.artist)|\(s.title)")
         blurBakeTask = Task { [weak self] in
             // CoreImage 渲染放后台,跟 refreshHighResCover 里算均值色同一套写法。
             // 两份一起烘(灵动岛 + 歌词窗口,参数见各自 @Published 的注释),共享一次
             // 源图解码;单次烘焙毫秒级,合在一个任务里不值得再拆。
             let baked = await Task.detached(priority: .utility) {
                 (notch: Self.bakeBackgroundBlur(cgImage: cg, targetWidth: 720, sigma: 40, saturation: nil),
-                 window: Self.bakeBackgroundBlur(cgImage: cg, targetWidth: 720, sigma: 51, saturation: 1.5))
+                 window: Self.bakeWindowBackgroundLayers(cgImage: cg, seed: seed))
             }.value
             guard let self, !Task.isCancelled else { return }
             if let notch = baked.notch { self.blurredArtworkImage = notch }
-            if let window = baked.window { self.windowBlurredArtworkImage = window }
+            if let window = baked.window { self.windowBackgroundLayers = window }
         }
     }
 
-    /// 背景模糊的离线烘焙(2026-08-19 性能审计:替代视图层的合成期活滤镜)。
-    /// 先把源图缩到 targetWidth(模糊本来就抹掉细节,更高分辨率纯属浪费);可选先拉
-    /// 饱和度(歌词窗口要 1.5);clampedToExtent 让边缘像素外延再裁回原框 —— 视图层的
-    /// .blur 会把边缘羽化成半透明,烘焙版边缘实心。
+    nonisolated private static func stableSeed(_ s: String) -> UInt64 {
+        var h: UInt64 = 0xcbf2_9ce4_8422_2325
+        for b in s.utf8 { h = (h ^ UInt64(b)) &* 0x0000_0100_0000_01b3 }
+        return h
+    }
+
+    /// 「歌词窗口」AM 式动画背景的图层烘焙(2026-08-21 第六轮:同封面同屏对拍定稿)。
+    /// 机理(五轮真机对照+一次同屏定量对拍逐步坐实):**AM 的背景 ≈ 封面的宏观色彩布局,
+    /// 但明度布局被抹平** —— 同一封面(破气球/100种生活)同屏对拍量出 AM 四采样区 V50 全在
+    /// 0.22~0.31(封面本身左暗右亮),色相却逐区各异;我们此前保留明度布局,表现为"左缘
+    /// 死黑 + 黄斑突兀"(黄斑区局部幅度 0.114 vs AM 0.043,左缘 V50 0.157 vs 0.306,
+    /// 调 EV 根本够不着)。固化的选择:
+    /// - 宏观场 = 6×6 面积平均降采样 + **逐格乘法亮度归一化**(RGB × mean/L,homog 0.55
+    ///   部分归一,系数夹 [0.4, 3.5] 防近黑格爆噪)再放大,σ35 高斯只融格边。乘法保
+    ///   色相/饱和 —— 加法提黑会灰掉(AM 暗区 S 仍有 0.62);纯高斯的老两难照旧:σ 大
+    ///   混泥、σ 小见人形,所以仍是"降采样出场、高斯只融边"。
+    /// - 逐格**饱和度**归一 + 少数派**色相**收拢(2026-08-22 Addison 亮封面五轮对拍,
+    ///   详见各段落内注释):S 抬到 p75×1.5(cap 0.95)防白纱/留白灰化;偏主色相(S²
+    ///   加权圆均值)>60° 的格子夹回 ±60°(青 logo 格→橄榄,AM 的场=一个主色系+近亲
+    ///   点缀);灰阶封面两步都自动 no-op。
+    /// - 成场后 CIVibrance 0.4 + **闭环饱和度乘子**(= satTarget ÷ 融合后场的实测均值 S,
+    ///   clamp [0.6, 2.2]):σ35 融合互混+光斑 lighten 会磨掉 ~30% 饱和,固定乘子对
+    ///   混合结构不同的封面不可能都对 —— 08-21 对拍量出 AM S50 0.42~0.72、定 0.85;
+    ///   08-22 亮封面上同一个 0.85 只到 0.50~0.65(AM 0.63~0.97)。闭环后鲜艳均匀
+    ///   封面乘子自动 <1(接管 0.85 的职责),灰化结构自动 >1。
+    /// - 底色 EV −0.15:旧 −1.2 是"保留明度布局"时代为压亮斑留的,归一化后只需轻压。
+    /// - 光斑仍锚**原始**最亮格(归一化前的亮度),羽化外沿 0.7W(旧 0.40 有可见轮廓,
+    ///   AM 没有独立光斑,只有柔和的色场渐变)。
+    /// - 视图层 3 层 lighten α0.25 摆动照旧(对拍显示 α 在归一化的平场上影响很小)。
+    /// 定量:四区 V5/V50/V95/S50/H50 加权 loss 从旧参数 1.41 → 0.79(工具 scratchpad
+    /// bgbake6 + sweep_pair6)。残余主要是 AM 各区内部还有 0.10~0.21 的柔和起伏(其动画
+    /// 瞬间的相位),我们单帧偏平 —— 由摆动动画在时间维上补。
+    nonisolated private static func bakeWindowBackgroundLayers(cgImage: CGImage, seed: UInt64) -> WindowBackgroundLayers? {
+        let W: CGFloat = 720
+        let frame = CGRect(x: 0, y: 0, width: W, height: W)
+
+        // 6×6 面积平均降采样 + 逐格乘法亮度归一化(见函数头注释)。CGContext 自管缓冲
+        // (data: nil),draw 之后直接原位改写像素再 makeImage —— 别用 data: &数组 那种
+        // 临时指针写法(仅初始化调用期间有效,后续使用是未定义行为)。
+        guard let cs = CGColorSpace(name: CGColorSpace.sRGB),
+              let cgctx = CGContext(data: nil, width: 6, height: 6, bitsPerComponent: 8,
+                                    bytesPerRow: 6 * 4, space: cs,
+                                    bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
+        else { return nil }
+        cgctx.interpolationQuality = .medium
+        cgctx.draw(cgImage, in: CGRect(x: 0, y: 0, width: 6, height: 6))
+        guard let data = cgctx.data else { return nil }
+        let px = data.bindMemory(to: UInt8.self, capacity: 36 * 4)
+        // 归一化用的亮度取**归一化前**的原始格亮度;光斑锚点也用它(场归一化之后
+        // "最亮格"就没意义了)。
+        var cellLuma = [Double](repeating: 0, count: 36)
+        for i in 0..<36 {
+            let o = i * 4
+            cellLuma[i] = (0.299 * Double(px[o]) + 0.587 * Double(px[o + 1]) + 0.114 * Double(px[o + 2])) / 255
+        }
+        let meanLuma = cellLuma.reduce(0, +) / 36
+        let homog = 0.55
+        for i in 0..<36 {
+            let f0 = meanLuma / max(0.02, cellLuma[i])
+            let f = (1 - homog) + homog * min(3.5, max(0.4, f0))
+            for ch in 0..<3 {
+                px[i * 4 + ch] = UInt8(min(255, Double(px[i * 4 + ch]) * f))
+            }
+            px[i * 4 + 3] = 255
+        }
+        // 逐格**饱和度**归一化(2026-08-22,Addison 亮封面同帧对拍):AM 的背景饱和度
+        // 跟随封面的**鲜艳端**而不是面积均值 —— 白纱/留白参与 6×6 平均会把格子灰化
+        // (实测 AM 各区 S50 0.63~0.97,我们 0.13~0.65,左上区整个发灰)。与上面的亮度
+        // 归一化对称:各格 S 向全场 p75 鲜艳端部分归一(satHomog 0.6),保 H/V
+        // (c' = max−(max−c)×k 只放大与 max 的距离)。灰阶封面 p75 本身≈0 → 自动
+        // 不动,不伤黑白封面;中饱和封面 p75≈均值 → 变化很小,不动摇 08-21 的对拍校准。
+        var cellSat = [Double](repeating: 0, count: 36)
+        for i in 0..<36 {
+            let o = i * 4
+            let mx = Double(max(px[o], max(px[o + 1], px[o + 2])))
+            let mn = Double(min(px[o], min(px[o + 1], px[o + 2])))
+            cellSat[i] = mx > 0 ? (mx - mn) / mx : 0
+        }
+        // 少数派色相向主色相收拢(2026-08-22 五轮实拍):封面小块青色 logo 的格子被下面
+        // 的饱和归一放大成刺眼纯绿斑 —— AM 的场是"一个主色系 + 近亲色点缀",同帧对拍
+        // 它同区是暖橄榄绿。主色相 = S² 加权圆均值;偏离 >60° 的格子夹回主色相 ±60°
+        // (青→橄榄,保留点缀、不抹掉),S/V 不动。单色/灰阶封面各格本就贴着主色相或
+        // S≈0 被跳过,自动 no-op;真双色封面被拉向均值 —— AM 的场本来就读作一个色系。
+        func rgbToHSV(_ r: Double, _ g: Double, _ b: Double) -> (h: Double, s: Double, v: Double) {
+            let mx = Swift.max(r, g, b), mn = Swift.min(r, g, b), d = mx - mn
+            var h = 0.0
+            if d > 0 {
+                if mx == r { h = (g - b) / d } else if mx == g { h = (b - r) / d + 2 } else { h = (r - g) / d + 4 }
+                h *= 60
+                if h < 0 { h += 360 }
+            }
+            return (h, mx > 0 ? d / mx : 0, mx)
+        }
+        func hsvToRGB(_ h: Double, _ s: Double, _ v: Double) -> (r: Double, g: Double, b: Double) {
+            let hh = (h.truncatingRemainder(dividingBy: 360) + 360).truncatingRemainder(dividingBy: 360) / 60
+            let i = Int(hh), f = hh - Double(i)
+            let p = v * (1 - s), q = v * (1 - s * f), t = v * (1 - s * (1 - f))
+            switch i {
+            case 0: return (v, t, p)
+            case 1: return (q, v, p)
+            case 2: return (p, v, t)
+            case 3: return (p, q, v)
+            case 4: return (t, p, v)
+            default: return (v, p, q)
+            }
+        }
+        var hueSin = 0.0, hueCos = 0.0
+        for i in 0..<36 where cellSat[i] > 0.05 {
+            let o = i * 4
+            let (h, s, _) = rgbToHSV(Double(px[o]) / 255, Double(px[o + 1]) / 255, Double(px[o + 2]) / 255)
+            hueSin += sin(h * .pi / 180) * s * s
+            hueCos += cos(h * .pi / 180) * s * s
+        }
+        if hueSin != 0 || hueCos != 0 {
+            let hDom = atan2(hueSin, hueCos) * 180 / .pi
+            for i in 0..<36 where cellSat[i] > 0.05 {
+                let o = i * 4
+                let (h, s, v) = rgbToHSV(Double(px[o]) / 255, Double(px[o + 1]) / 255, Double(px[o + 2]) / 255)
+                var d = h - hDom
+                while d > 180 { d -= 360 }
+                while d < -180 { d += 360 }
+                guard abs(d) > 60 else { continue }
+                let (r, g, b) = hsvToRGB(hDom + (d > 0 ? 60 : -60), s, v)
+                px[o] = UInt8(min(255, max(0, r * 255)))
+                px[o + 1] = UInt8(min(255, max(0, g * 255)))
+                px[o + 2] = UInt8(min(255, max(0, b * 255)))
+            }
+        }
+        let satP75 = cellSat.sorted()[26]
+        // 目标 = p75 × 1.5(2026-08-22 三轮实拍收敛):p75 归一(0.6 部分/1.0 完全)只到
+        // S50 0.40~0.59 —— 白纱盖全脸的封面连最鲜艳的格子也被面积平均稀释到 ~0.6,
+        // p75 本身够不着 AM 的 0.63~0.97;AM 的背景饱和度**超过**封面面积均值的鲜艳端
+        // (取主色而非均值)。×1.5 后经下游损耗实拍落到 AM 带内;灰阶封面 p75≈0 → 目标
+        // 仍≈0,自动 no-op。
+        let satTarget = min(0.95, satP75 * 1.5)
+        for i in 0..<36 where cellSat[i] > 0.01 && cellSat[i] < satTarget {
+            let target = satTarget
+            let k = target / cellSat[i]
+            let o = i * 4
+            let mx = Double(max(px[o], max(px[o + 1], px[o + 2])))
+            for ch in 0..<3 {
+                let c = Double(px[o + ch])
+                px[o + ch] = UInt8(min(255, max(0, mx - (mx - c) * k)))
+            }
+        }
+        guard let fieldCG = cgctx.makeImage() else { return nil }
+
+        func clamp(_ img: CIImage) -> CIImage {
+            img.applyingFilter("CIColorClamp", parameters: [
+                "inputMinComponents": CIVector(x: 0, y: 0, z: 0, w: 0),
+                "inputMaxComponents": CIVector(x: 1, y: 1, z: 1, w: 1),
+            ])
+        }
+        func render(_ img: CIImage) -> NSImage? {
+            guard let out = blurBakeContext.createCGImage(img, from: frame) else { return nil }
+            return NSImage(cgImage: out, size: NSSize(width: frame.width / 2, height: frame.height / 2))
+        }
+
+        let field = CIImage(cgImage: fieldCG)
+            .transformed(by: CGAffineTransform(scaleX: W / 6, y: W / 6))
+            .clampedToExtent()
+            .applyingGaussianBlur(sigma: 35)
+            .cropped(to: frame)
+        // 闭环饱和度乘子(2026-08-22 四轮实拍收敛):格级归一后 σ35 融合(相邻异色相格
+        // 互混)+光斑 lighten 还会磨掉 ~30%,固定 0.85 让最终 S50 只到 0.50~0.65
+        // (AM 0.63~0.97)。按融合后场的实测均值闭环 —— 场内部再怎么互混,出场饱和度
+        // 都贴住 satTarget;鲜艳均匀封面 fieldS 超标时乘子自动 <1 回落(接管 08-21
+        // 定的 0.85 的职责:那轮量出 AM 比未归一的旧场更淡)。灰阶封面 target≈0,
+        // 乘子落到下限也只是把 ≈0 的饱和再压一点,视觉 no-op。
+        var satMul = 0.85
+        let fieldAvg = field.applyingFilter("CIAreaAverage", parameters: [
+            kCIInputExtentKey: CIVector(cgRect: frame),
+        ])
+        if let avgCG = blurBakeContext.createCGImage(fieldAvg, from: CGRect(x: 0, y: 0, width: 1, height: 1)),
+           let d = avgCG.dataProvider?.data as Data?, d.count >= 3 {
+            let mx = Double(max(d[0], max(d[1], d[2])))
+            let mn = Double(min(d[0], min(d[1], d[2])))
+            let fieldS = mx > 0 ? (mx - mn) / mx : 0
+            if fieldS > 0.02 { satMul = min(2.2, max(0.6, satTarget / fieldS)) }
+        }
+        let vivified = field
+            .applyingFilter("CIVibrance", parameters: ["inputAmount": 0.4])
+            .applyingFilter("CIColorControls", parameters: [kCIInputSaturationKey: satMul])
+
+        let baseImage = clamp(vivified
+            .applyingFilter("CIExposureAdjust", parameters: ["inputEV": -0.15]))
+        guard let base = render(baseImage) else { return nil }
+
+        // 背景均色 → HSB 的 h/s(见 WindowBackgroundLayers.tintHue 注释)。均色取烘焙
+        // 后的 base(就是屏幕上那层),亮度再乘 0.85 对齐视图层的 0.15 黑遮罩 —— 不过
+        // 只取 h/s,乘不乘只影响没人用的 v,留个心眼而已。
+        var tintHue: Double = 0
+        var tintSat: Double = 0
+        var tintBright: Double = 0
+        let avg = baseImage.applyingFilter("CIAreaAverage", parameters: [
+            kCIInputExtentKey: CIVector(cgRect: frame),
+        ])
+        if let avgCG = blurBakeContext.createCGImage(avg, from: CGRect(x: 0, y: 0, width: 1, height: 1)),
+           let data = avgCG.dataProvider?.data as Data?, data.count >= 3 {
+            let color = NSColor(
+                red: CGFloat(data[0]) / 255, green: CGFloat(data[1]) / 255,
+                blue: CGFloat(data[2]) / 255, alpha: 1)
+            var h: CGFloat = 0, s: CGFloat = 0, v: CGFloat = 0
+            color.usingColorSpace(.sRGB)?.getHue(&h, saturation: &s, brightness: &v, alpha: nil)
+            tintHue = Double(h)
+            tintSat = Double(s)
+            // ×0.85 对齐视图层的 0.15 黑遮罩,存的是屏幕实际见到的背景亮度。
+            tintBright = Double(v) * 0.85
+        }
+
+        // 光斑锚在**原始**最亮格(归一化前):lighten 原位补一点暖亮渐变(对拍里 AM 的
+        // B 区比周边亮 ~0.05 就是这类柔和抬升)。CGContext 缓冲行 0 是图像顶行,
+        // CIImage y 向上,坐标要翻转。
+        let brightest = (0..<36).max(by: { cellLuma[$0] < cellLuma[$1] }) ?? 14
+        let bx = (Double(brightest % 6) + 0.5) / 6.0
+        let by = 1.0 - (Double(brightest / 6) + 0.5) / 6.0
+        guard let mask = CIFilter(name: "CIRadialGradient", parameters: [
+            "inputCenter": CIVector(x: bx * frame.width, y: by * frame.height),
+            "inputRadius0": frame.width * 0.08,
+            "inputRadius1": frame.width * 0.7,
+            "inputColor0": CIColor(red: 1, green: 1, blue: 1, alpha: 1),
+            "inputColor1": CIColor(red: 1, green: 1, blue: 1, alpha: 0),
+        ])?.outputImage?.cropped(to: frame) else { return nil }
+        let glowImage = clamp(vivified.applyingFilter("CIBlendWithAlphaMask", parameters: [
+            kCIInputMaskImageKey: mask,
+            kCIInputBackgroundImageKey: CIImage(color: .clear).cropped(to: frame),
+        ]))
+        guard let glow = render(glowImage) else { return nil }
+
+        var state = seed == 0 ? 0x9e37_79b9_7f4a_7c15 : seed
+        func next() -> Double {
+            state = state &* 6_364_136_223_846_793_005 &+ 1_442_695_040_888_963_407
+            return Double(state >> 11) / Double(UInt64(1) << 53)
+        }
+        // 三层共用同一张光斑图,姿态微差;周期错开、视图端做 ±小角度往复摆动。
+        let periods: [Double] = [55, 75, 95]
+        var poses: [WindowBackgroundLayers.GlowPose] = []
+        for i in 0..<3 {
+            poses.append(WindowBackgroundLayers.GlowPose(
+                initialAngle: (next() - 0.5) * 30,
+                spinDuration: periods[i],
+                anchor: UnitPoint(x: 0.4 + next() * 0.2, y: 0.4 + next() * 0.2),
+                scale: 1.0 + next() * 0.25
+            ))
+        }
+        return WindowBackgroundLayers(base: base, glows: [glow, glow, glow], poses: poses,
+                                      tintHue: tintHue, tintSaturation: tintSat,
+                                      tintBrightness: tintBright)
+    }
+
+    /// 背景模糊的离线烘焙(2026-08-19 性能审计:替代视图层的合成期活滤镜)——灵动岛用,
+    /// 歌词窗口那份走上面的 bakeWindowBackground(多副本合成)。先把源图缩到 targetWidth
+    /// (模糊本来就抹掉细节,更高分辨率纯属浪费);可选先拉饱和度;clampedToExtent 让边缘
+    /// 像素外延再裁回原框 —— 视图层的 .blur 会把边缘羽化成半透明,烘焙版边缘实心。
     nonisolated private static func bakeBackgroundBlur(
         cgImage: CGImage, targetWidth: CGFloat, sigma: Double, saturation: Double?
     ) -> NSImage? {
@@ -847,6 +1164,33 @@ final class PlaybackCoordinator: ObservableObject {
             return accent
         }
         return settings.foregroundColor
+    }
+
+    /// 播放/暂停 —— 各 UI 面(歌词窗/灵动岛/悬浮层热键/菜单栏面板/全局快捷键)都走这里,
+    /// 不直接调 MusicPlaybackController.playPause():发命令的同时**乐观翻转**观感层
+    /// isPlayingSmoothed,封面缩放/播放图标点击即动。真实链路(命令→播放器切状态→分布式
+    /// 通知→250ms 去抖→poll 子进程→apply)实测要 0.5~1s,等它回读再动画,对比 AM 的即时
+    /// 反馈明显迟钝(2026-08-21 用户反馈"扩大延迟太久")。
+    ///
+    /// 只翻观感层、不碰 isPlayingNow 真值:进度时钟/歌词填色仍由 poll 链路驱动,状态机
+    /// 不引入第二条写路径。万一命令没落地(播放器没开/权限没给),真值不会来"纠正"它
+    /// (updateSmoothedPlaying 只在 isPlayingNow **变化**时被调),所以 2.5s 后对账一次、
+    /// 拨回真值 —— 有 grace 定时在跑说明真值正在按老路径收敛,那种情况不抢。
+    func userTogglePlayPause() {
+        MusicPlaybackController.playPause()
+        stopGraceWork?.cancel()
+        stopGraceWork = nil
+        isPlayingSmoothed = !isPlayingNow
+        optimisticReconcileWork?.cancel()
+        let work = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            self.optimisticReconcileWork = nil
+            if self.isPlayingSmoothed != self.isPlayingNow, self.stopGraceWork == nil {
+                self.isPlayingSmoothed = self.isPlayingNow
+            }
+        }
+        optimisticReconcileWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5, execute: work)
     }
 
     private func updateSmoothedPlaying(_ playing: Bool) {

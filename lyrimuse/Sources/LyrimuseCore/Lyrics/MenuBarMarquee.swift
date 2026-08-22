@@ -165,6 +165,98 @@ public enum MenuBarMarquee {
     /// 会闪一下跳回开头。
     public static let loopGuardSeconds: Double = 0.5
 
+    // ---- 逐字染色:填色边界的声明式运动(2026-08-22 加,用户点名"像酷狗菜单栏歌词") ----
+    //
+    // 跟上面滚动完全同一套哲学:把"填色边界此刻在哪个 x"编成一条 CA 关键帧,装好之后
+    // 主线程一帧都不碰 —— 逐帧驱动那条路(20/30Hz 改遮罩宽度)正是 2026-08-16 被实测
+    // 判死的驱动方式(帧间隔受主线程调度摆布),不重蹈。
+    //
+    // 输入拆成两半:词的时间轴(SyncedLyricWord,来自歌词引擎)在这里,词画出来的横向
+    // 边界(要测字宽)只能在 AppKit 侧(MenuBarMarqueeRenderer.wordEndXs)——所以路径
+    // 构造函数收测好的累计宽度数组,本身保持纯函数,selftest 直接覆盖。
+
+    /// 填色边界路径上的一个点:播放到 ms 时,已染色区域的右边界应该在 x(点,内容坐标系,
+    /// 0 = 整句长图的左缘)。点之间线性插值;词与词之间的时间空隙表现为一段平的保持。
+    public struct KaraokeFillPoint: Equatable, Sendable {
+        public let ms: Int
+        public let x: CGFloat
+
+        public init(ms: Int, x: CGFloat) {
+            self.ms = ms
+            self.x = x
+        }
+    }
+
+    /// 把一行的逐字时间轴翻译成填色边界路径。
+    /// - Parameter wordEndXs: 第 i 个词画完时的累计宽度(点)。必须按**前缀整段测宽**
+    ///   (kerning 与最终渲染一致),跟 words 一一对应。
+    /// 脏数据防御:时间戳乱序/重叠钳成严格递增(CA keyTimes 不许相等),x 钳成单调不减。
+    public static func karaokeFillPath(
+        words: [SyncedLyricWord], wordEndXs: [CGFloat]
+    ) -> [KaraokeFillPoint] {
+        guard !words.isEmpty, words.count == wordEndXs.count else { return [] }
+        var points: [KaraokeFillPoint] = []
+        points.reserveCapacity(words.count * 2)
+        var prevMs = Int.min
+        var prevX: CGFloat = 0
+        func append(ms rawMs: Int, x rawX: CGFloat) {
+            let ms = prevMs == Int.min ? rawMs : max(rawMs, prevMs + 1)
+            let x = max(rawX, prevX)
+            points.append(KaraokeFillPoint(ms: ms, x: x))
+            prevMs = ms
+            prevX = x
+        }
+        var startX: CGFloat = 0
+        for (i, w) in words.enumerated() {
+            // 词起点:边界停在上一个词的末端(词间空隙=平的保持段,由这两点自然构成)。
+            append(ms: w.startMs, x: startX)
+            append(ms: w.startMs + max(1, w.durationMs), x: wordEndXs[i])
+            startX = wordEndXs[i]
+        }
+        return points
+    }
+
+    /// 播放到 ms 时填色边界在哪(线性插值;路径外两端取端点值)。
+    /// 静态取值用(暂停/已唱完/装动画前的初值),动画期间由 CA 自己插值、不走这里。
+    public static func karaokeFillX(atMs ms: Int, path: [KaraokeFillPoint]) -> CGFloat {
+        guard let first = path.first, let last = path.last else { return 0 }
+        if ms <= first.ms { return first.x }
+        if ms >= last.ms { return last.x }
+        for i in 1..<path.count where ms < path[i].ms {
+            let a = path[i - 1], b = path[i]
+            let t = Double(ms - a.ms) / Double(b.ms - a.ms) // b.ms > a.ms(构造时钳过)
+            return a.x + CGFloat(t) * (b.x - a.x)
+        }
+        return last.x
+    }
+
+    /// 从"此刻"起、到这行唱完为止的剩余填色关键帧。
+    public struct KaraokeFillFrames: Equatable, Sendable {
+        /// 各时刻的边界 x(点),第一个值就是此刻的位置。
+        public let widths: [CGFloat]
+        /// 归一化时刻(0...1),严格递增,跟 widths 一一对应。
+        public let keyTimes: [Double]
+        /// 整段剩余动画的秒数(已按播放速率折算)。
+        public let duration: Double
+    }
+
+    /// nil = 没有可动的余量:这行已经唱完(边界停在末端)、速率非正(暂停),或路径为空 ——
+    /// 调用方直接静置在 karaokeFillX 的取值上。
+    public static func karaokeFillKeyframes(
+        path: [KaraokeFillPoint], nowMs: Int, rate: Double
+    ) -> KaraokeFillFrames? {
+        guard rate > 0, let last = path.last, nowMs < last.ms else { return nil }
+        let total = Double(last.ms - nowMs)
+        var widths: [CGFloat] = [karaokeFillX(atMs: nowMs, path: path)]
+        var keyTimes: [Double] = [0]
+        for p in path where p.ms > nowMs {
+            widths.append(p.x)
+            keyTimes.append(Double(p.ms - nowMs) / total)
+        }
+        return KaraokeFillFrames(widths: widths, keyTimes: keyTimes,
+                                 duration: total / 1000 / rate)
+    }
+
     /// - Parameter dwellSeconds: 这一句会显示多久。nil = 不知道(没有下一句的时间信息),
     ///   此时完全维持 2026-08-17 之前的行为(固定速度、首尾各停 1.5 秒)。
     public static func pacing(

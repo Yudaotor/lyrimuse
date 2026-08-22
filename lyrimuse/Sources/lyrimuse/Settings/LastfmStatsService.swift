@@ -334,6 +334,10 @@ final class LastfmStatsService: ObservableObject {
             var total = results[0]?.count
             var identities = Set<String>()
             if let id = results[0]?.identity { identities.insert(id) }
+            // 注:下面求和完之后会把这个新鲜总数写回 trackPlayCounts(见 adoptFreshTotal)
+            // —— 那是历史行用的同一张表,而它自己只在"页内出现次数变多"时才作废,
+            // 连播同一首歌时会冻结(2026-08-21 用户报的 15 vs 21)。这次取数本来就付过了,
+            // 顺手刷新是白捡的。
             for i in sibs.indices {
                 guard let r = results[i + 1], let c = r.count, let id = r.identity,
                       identities.insert(id).inserted else { continue }
@@ -341,6 +345,8 @@ final class LastfmStatsService: ObservableObject {
             }
             guard nowPlayingCountKey == key else { return }
             if let total {
+                // 顺手把这个**新鲜的合并总数**写回历史行用的那张表(见 adoptFreshTotal)。
+                adoptFreshTotal(total, artist: artist, title: title, siblings: sibs)
                 // userplaycount 是**过去**的次数,这一次还没被记进去 —— 所以 +1
                 nowPlayingCount = total + 1
             }
@@ -681,13 +687,40 @@ final class LastfmStatsService: ObservableObject {
 
     /// 往派生索引里塞一条写法(按 歌手|歌名 小写键去重),加载与增量收割共用。
     private static func insertForm(_ form: TitleForm, into index: inout [String: [TitleForm]]) {
-        let key = PlayCountFold.key(artist: ArtistCredit.mergeArtist(form.artist), title: form.title)
+        let key = PlayCountFold.familyKey(artist: form.artist, title: form.title)
         let raw = playCountKey(artist: form.artist, title: form.title)
         var fam = index[key] ?? []
         guard !fam.contains(where: { playCountKey(artist: $0.artist, title: $0.title) == raw })
         else { return }
         fam.append(form)
         index[key] = fam
+    }
+
+    /// 把实时行刚取到的**新鲜合并总数**写进历史行用的 trackPlayCounts。
+    ///
+    /// 2026-08-21 用户报「第 15 次听下面紧跟着第 21 次听」查出来的:两条路径用的是两份数据 ——
+    /// 实时行每次换歌**现取**(refreshNowPlayingCount),历史行读缓存,而那份缓存只在"页内
+    /// 出现次数变多"时作废、连播同一首歌时会冻结。这次取数本来就付过了,顺手刷新是白捡的。
+    ///
+    /// 写本尊 + 全部孪生键:这张表存的就是**合并后的总数**、孪生行显示同一个数(见
+    /// resolvePlayCounts 里那段注释),所以整族写同一个值才是自洽的。
+    ///
+    /// 语义对得上:trackPlayCounts 存"已落库的总次数",而 total 正是 userplaycount 的合并值
+    /// (这次播放还没落库 —— 那 +1 是实时行自己加的,不写进表里)。
+    ///
+    /// 同时把 newestPlaySeen 里这一族的基线清掉:这次播放随后落库时,那条"出现了更新的
+    /// 同曲收听"判据才会认出它、把这个数再刷一次。不清的话新落库那条会被当成"已经算过了"。
+    private func adoptFreshTotal(_ total: Int, artist: String, title: String,
+                                 siblings: [(artist: String, title: String)]) {
+        var keys = [Self.playCountKey(artist: artist, title: title)]
+        keys += siblings.map { Self.playCountKey(artist: $0.artist, title: $0.title) }
+        for k in Set(keys) {
+            trackPlayCounts[k] = total
+            newestPlaySeen[k] = nil
+            // 之前被判"那边没有这一项"的,拿到真数就该解除 —— 否则它永远不再取。
+            playCountUnavailable.remove(k)
+        }
+        scheduleSnapshotSave()
     }
 
     /// 「第 N 次听」的孪生实体候选。索引就绪 → 历史真实写法族(去掉本尊,封顶 8);
@@ -701,7 +734,7 @@ final class LastfmStatsService: ObservableObject {
         // 查的是派生索引:同一首歌的"A & B"和"A"两种 credit 落在同一个桶里,两边都能
         // 看见对方,于是两行显示的次数是同一个合计数(不会一行 2 次、一行 1 次)。
         let family = primaryCreditFamilies[
-            PlayCountFold.key(artist: ArtistCredit.mergeArtist(artist), title: title)] ?? []
+            PlayCountFold.familyKey(artist: artist, title: title)] ?? []
         return family
             .filter { Self.playCountKey(artist: $0.artist, title: $0.title) != selfKey }
             .prefix(8)
@@ -840,7 +873,12 @@ final class LastfmStatsService: ObservableObject {
         var trackPlayCounts: [String: Int]?
         var recentTrackCovers: [String: URL]?
         var recentAlbumCovers: [String: URL]?
-        /// 次数表的口径版本:6 = 目录学噪音副题折叠扩到 feat 客串署名家族(盖世英雄
+        /// 次数表的口径版本:11 = 第三批的修正(裸场次标记不归一等,见 foldVersion 注释);
+        /// 10 = 同日第三批(**用户拍板**:R1 守卫套到原串 + 版本尾缀分隔符
+        /// 归一 + 罗马字歌手名别名归一);9 = 同日第二批(破折号版本尾缀 `Bad - 2012 Remaster` + with
+        /// 头词黑名单);8 = 目录学噪音口径补齐到参考实现(with 客串署名 + bonus track
+        /// + explicit,2026-08-22 用户报《一路向北 (bonus track)》第 2 次 vs《一路向北》14 次);
+        /// 7 = 合唱 credit 归并(2026-08-20);6 = 目录学噪音副题折叠扩到 feat 客串署名家族(盖世英雄
         /// (feat. 欧阳靖 & 李岩) 并入 蓋世英雄,2026-08-19 第二波);5 = 写法索引合并 +
         /// remaster 噪音折叠(Automatic (Remastered 2014) 并入 Automatic,2026-08-19);
         /// 4 = 按写法索引(历史真实写法族,PlayCountFold)合并后的总数(2026-08-19)。
@@ -867,10 +905,13 @@ final class LastfmStatsService: ObservableObject {
         artistAvatars = snap.artistAvatars
         trackCovers = snap.trackCovers
         // 旧口径的次数不端上桌 —— 见 mergedCountsVersion 字段注释
+        // 10 = R1 守卫套到原串 + 版本尾缀分隔符归一 + 罗马字歌手别名(2026-08-22 第三批);
+        // 9 = 破折号版本尾缀 + with 头词黑名单(2026-08-22 第二批);
+        // 8 = 目录学噪音补齐到参考实现(with/bonus track/explicit,2026-08-22);
         // 7 = 合唱 credit 归并(2026-08-20 加,见 primaryCreditFamilies);6 = 索引口径 +
         // 目录学噪音折叠。⚠️ 改动合并口径必须 +1,否则存量缓存里按旧口径算出来的数会一直
         // 端上桌 —— 实测《Toronto 2014》两本账各存着 1,不作废就永远显示「第 1 次听」。
-        trackPlayCounts = snap.mergedCountsVersion == 7 ? (snap.trackPlayCounts ?? [:]) : [:]
+        trackPlayCounts = snap.mergedCountsVersion == 11 ? (snap.trackPlayCounts ?? [:]) : [:]
         recentTrackCovers = snap.recentTrackCovers ?? [:]
         recentAlbumCovers = snap.recentAlbumCovers ?? [:]
         // 本机封面兜底不进快照 —— 它是从 enrich 缓存现算的,存下来只会存一份可能已经过期的
@@ -920,7 +961,7 @@ final class LastfmStatsService: ObservableObject {
                 charts: charts, artistAvatars: artistAvatars, trackCovers: trackCovers,
                 trackPlayCounts: keptCounts,
                 recentTrackCovers: keptCovers, recentAlbumCovers: keptAlbumCovers,
-                mergedCountsVersion: 7)
+                mergedCountsVersion: 11)
             // 编码 + 落盘挪出主线程:这个类是 @MainActor,Task{} 会继承它的隔离,原来
             // JSONEncoder 和同步的 atomic 写(临时文件 + rename)全压在主线程上(审阅指出)。
             let url = Self.snapshotURL
@@ -1198,7 +1239,24 @@ final class LastfmStatsService: ObservableObject {
                 let k = Self.playCountKey(artist: r.artist, title: r.title)
                 if sample[k] == nil { sample[k] = r }
             }
-            for (key, n) in countByKey(rows) where n > (before[key] ?? 0) {
+            // ⚠️ 只看"页内出现次数变多"会漏掉一整类情况(2026-08-21 用户报「第 15 次听下面
+            // 紧跟着第 21 次听」)。countByKey 数的是**当前这一页里出现了几次**,而连着重播
+            // 同一首歌时这一页很快被它占满 —— 新的挤进来、旧的挤出去,页内次数**不再增长**,
+            // 于是这个条件永远为假、缓存总数永久冻结,而真实次数一路往上爬。用户那次实测:
+            // 缓存冻在 15,真实合计 22(园游会 10 + 園遊會 12 两个 Last.fm 实体)。
+            //
+            // 所以再加一条判据:**这首歌最新一条收听的时刻往前走了**就说明多听了一次。
+            // 这一条不会随页面占满而失效。两条并存 —— 老快照(没有 newestPlaySeen 基线)
+            // 仍按原来那条走,不留行为空档。
+            var staleKeys = Set(countByKey(rows).compactMap { key, n in
+                n > (before[key] ?? 0) ? key : nil
+            })
+            for (key, newest) in Self.newestPlayByKey(rows) {
+                defer { newestPlaySeen[key] = newest }
+                guard let seen = newestPlaySeen[key], newest > seen else { continue }
+                staleKeys.insert(key)
+            }
+            for key in staleKeys {
                 trackPlayCounts[key] = nil
                 // 次数表里存的是写法孪生**合并后**的总数:这边多了一次,孪生行缓存的
                 // 总数同样过期,一并作废。变体生成落空时退化成等那行自己的 key 被作废
@@ -1225,6 +1283,24 @@ final class LastfmStatsService: ObservableObject {
         apiNowPlaying = next
         resolvePlayCounts(for: rows)
     }
+
+    /// 每个 key 在这一批行里**最新**那条收听的时刻。给上面那条"多听了一次"的作废判据用 ——
+    /// 它不像"页内出现次数"那样会随页面被同一首歌占满而饱和。
+    ///
+    /// nowPlaying 那条不算:它还没落库,不在 userplaycount 里(实时行自己 +1)。
+    /// 纯函数,selftest 直接覆盖。
+    /// 纯算术在 LyrimuseCore.PlayCountRecency(selftest 直接覆盖那一份),这里只负责
+    /// 把行映射成 (key, date) —— 顺手滤掉 nowPlaying 那条(还没落库,不在 userplaycount 里)。
+    nonisolated static func newestPlayByKey(_ rows: [RecentTrack]) -> [String: Date] {
+        PlayCountRecency.newest(rows.filter { !$0.nowPlaying }.map {
+            (key: playCountKey(artist: $0.artist, title: $0.title), date: $0.date)
+        })
+    }
+
+    /// 上一次 applyRecent 时,每个 key 已知的最新收听时刻。只在内存里 —— 重启后第一次
+    /// applyRecent 只是把基线记下来(不作废),之后新增的收听才触发。不持久化是刻意的:
+    /// 持久化它意味着重启即判"全部过期",一页 100 行会一次性打出 100 个 getinfo 撞限速。
+    private var newestPlaySeen: [String: Date] = [:]
 
     private func countByKey(_ rows: [RecentTrack]) -> [String: Int] {
         var out: [String: Int] = [:]

@@ -94,6 +94,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         LastfmConnectController.shared.handleAuthCallback()
     }
 
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         // 「开机启动」默认是开的(见 AppSettings.init),但那处赋值不触发 didSet,系统层面
         // 并不会因此注册登录项。这里补一次,让默认值真的算数。SMAppService 的注册是幂等的,
@@ -153,6 +154,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // 显式按持久化的值应用一次。
         NSApp.setActivationPolicy(settings.showInDock ? .regular : .accessory)
         LocalPlaybackSource.shared.preferWordLevelKaraoke = settings.preferWordLevelKaraoke
+
         LocalPlaybackSource.shared.chineseVariant = settings.lyricsChineseVariant
         // 跟上面两行同一个理由:LocalPlaybackSource 自己不读 UserDefaults(它在
         // LyrimuseCore 里,够不到 AppSettings),启动时不推一次的话它会一直用默认值,
@@ -209,6 +211,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // 的一个 MenuBarExtra 场景,现在是自建的 NSStatusItem,得在这里显式启动。
         // 生命周期自持(靠 Combine 订阅设置/播放状态),这里只需要点一次。
         MenuBarStatusItem.shared.start()
+        // 「发现新播放器」的系统通知(2026-08-22 用户报「没有通知机制」)。
+        // registerCategory 必须在**投递之前**调:setNotificationCategories 是整表替换,
+        // 投递时 categoryIdentifier 查不到的话通知照样显示但**按钮不出现**、而且不报错;
+        // delegate 设晚了,冷启动时用户点按钮的回调会丢。授权**不**在这里请求 ——
+        // 那只有一次机会,见 UnknownPlayerNotifier.ensureAuthorized。
+        UnknownPlayerNotifier.shared.registerCategory()
+        UnknownPlayerNotifier.shared.start()
         // 捕获 openSettings/openWindow 这两个环境 action 的隐藏锚点窗口。原来这件事挂在
         // MenuBarExtra 的 label 上,随 MenuBarExtra 一起没了 —— 见该文件注释。
         MenuBarSceneActions.install()
@@ -242,17 +251,80 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     // 这个 App 没有传统意义上的"主窗口"(内容是菜单栏图标+悬浮歌词窗口+按需打开的
-    // 设置窗口),不实现这个 delegate 方法的话,点 Dock 图标(只在"showInDock"开着、
-    // 走 .regular 激活策略时才会有 Dock 图标)完全没有默认行为。参考同类"菜单栏常驻+
-    // 可选 Dock 图标"工具(Bartender/iStat Menus)的通行做法,把设置窗口当成这个 App
-    // 唯一的"主窗口"——hasVisibleWindows 为 false 时才主动打开,已有可见窗口时让系统
-    // 默认的"带到前台"行为接管。openSettings() 是 SwiftUI 环境 action,AppDelegate
-    // 不在 View 上下文里拿不到,借道 AppActions 这个桥(见该文件注释)。
+    // 设置/歌词窗口),不实现这个 delegate 方法的话,点 Dock 图标(只在"showInDock"开着、
+    // 走 .regular 激活策略时才会有 Dock 图标)完全没有默认行为。
+    //
+    // 2026-08-21 按用户要求:点 Dock 图标**只**弹歌词窗口,任何情况下都不弹设置。
+    // (原来那版参照 Bartender/iStat Menus 这类纯配置型工具"把设置页当唯一主窗口"的做法
+    // —— 那类工具除了设置页没有别的可看,这里不一样;设置另有 ⌘, / 菜单栏菜单 / 主菜单
+    // 三个入口,不缺这一个。)
+    //
+    // 两处刻意的写法,都是为了"不要冒出设置窗":
+    //
+    // ① **不再退回 openSettings**。歌词窗口那个 action 是 SwiftUI 环境 action,由一个隐藏
+    //    锚点视图捕获进 AppActions(见 MenuBarSceneActions)。它理论上启动就捕获了,但在
+    //    "刚重启、锚点视图还没挂上"那一瞬是 nil —— 上一版在那种情况下退回设置窗口,于是
+    //    "点 Dock 弹出设置"照样会发生。宁可这一下什么都不发生(下一下就正常),也不要弹出
+    //    用户明确说不想看的窗。
+    //
+    // ② **返回 false,不给 AppKit 默认行为**。返回 true 等于告诉 AppKit"按你的老规矩来",
+    //    而它的老规矩是"把这个 App 的窗口恢复/带回前台" —— 包括用户之前关掉的设置窗
+    //    (SwiftUI 的 Settings 场景关掉之后 NSWindow 对象仍然活着,只是 orderOut,实测
+    //    `check-windows` 能看到它 onscreen=false 地挂在那儿)。返回 false = "这次 reopen
+    //    我自己处理完了",AppKit 不再多做动作,于是只有歌词窗口会出来。
+    //
+    // 不分 hasVisibleWindows:openWindow(id:) 对已经开着的窗口就是把它带到前台,语义正好
+    // 是"点 Dock 我想看歌词",不需要再分两种情况。
+    /// 见 applicationShouldHandleReopen —— 延后开歌词窗口的那个任务。
+    private var reopenLyricsTask: Task<Void, Never>?
+    private let reopenLogger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "reopen")
+
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
-        if !flag {
-            AppActions.shared.openSettings?()
+        // ⚠️ **点系统通知也会走到这里** —— 系统激活 App 时就会触发 reopen,而那时用户要的是
+        // 设置页,不是歌词窗口(2026-08-22 用户报「点击通知怎么还打开了歌词窗口」)。
+        //
+        // 两次踩坑的教训都写在这儿,别再走回去:
+        //  ① 第一版只做「延后 0.3 秒开窗、通知回调来了就取消」—— 只堵了"reopen 先到"
+        //     那一半。实测真实顺序是反的:didReceive 10:48:46.878 → reopen 10:48:47.171,
+        //     取消跑在前面、扑了个空。
+        //  ② 第二版加了抑制窗口,但通知回调是用 `(NSApp.delegate as? AppDelegate)?.…`
+        //     来设的 —— 那个转型在 SwiftUI 的 @NSApplicationDelegateAdaptor 下**拿不到**
+        //     我们的 AppDelegate,**无声失败**(日志里那行 suppressed 从来没出现过就是证据;
+        //     那也是全仓唯一一处 NSApp.delegate 用法,本来就没有先例可参照)。
+        //
+        // 现在的形态:标记放 AppActions(那个单例存在的意义就是这类桥接),**同一个判据
+        // 查两次** —— 进来时查一次、延后任务真要开窗前再查一次。一个机制盖住两种顺序,
+        // 通知那边只管设标记、不需要反过来调我们。
+        //
+        // 顺手记这次 reopen 的发起方:哪天想换成"按发起方精确区分"就有依据。
+        // ⚠️ 实测 `open -b`(Dock 点击发的同一个事件)拿到的是 `(no AE)`,取不到发起方,
+        // 所以**别**指望靠它区分 —— 这条路试过,走不通。
+        let aeSender = NSAppleEventManager.shared().currentAppleEvent?
+            .attributeDescriptor(forKeyword: AEKeyword(keyAddressAttr))?
+            .stringValue ?? "(no AE)"
+        reopenLogger.notice("reopen: hasVisibleWindows=\(flag, privacy: .public) from=\(aeSender, privacy: .public)")
+        if isLyricsOnReopenSuppressed() {
+            reopenLogger.notice("reopen: lyrics window suppressed (immediate)")
+            return false
         }
-        return true
+        reopenLyricsTask?.cancel()
+        reopenLyricsTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 300_000_000)
+            guard !Task.isCancelled else { return }
+            // 第二道:通知回调可能在这 0.3 秒里才把标记设上(reopen 先到的那种顺序)
+            if self.isLyricsOnReopenSuppressed() {
+                self.reopenLogger.notice("reopen: lyrics window suppressed (deferred)")
+                return
+            }
+            self.reopenLogger.notice("reopen: opening lyrics window")
+            AppActions.shared.openLyricsWindow?()
+        }
+        return false
+    }
+
+    private func isLyricsOnReopenSuppressed() -> Bool {
+        guard let until = AppActions.shared.suppressLyricsOnReopenUntil else { return false }
+        return Date() < until
     }
 
     // Cmd+Q / 菜单"退出 Lyrimuse"的正常退出路径——2026-08-02 补上:AccountLinkingTab

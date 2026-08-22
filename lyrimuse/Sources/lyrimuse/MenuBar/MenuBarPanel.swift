@@ -336,69 +336,97 @@ private struct MenuBarPanelView: View {
         playback.isCurrentTrackAdBreak ? "" : playback.album
     }
 
-    private var nowPlayingCard: some View {
-        VStack(spacing: 8) {
-            HStack(alignment: .top, spacing: 9) {
-                // 点封面 → 打开歌词窗口(2026-08-19 用户要求,跟灵动岛上两处封面同一动作);
-                // 先收面板再开窗,同「歌词窗口」块的顺序。
-                Button {
-                    close()
-                    AppActions.shared.openLyricsWindow?()
-                } label: {
-                    coverView
-                }
-                .buttonStyle(.plain)
-                .help(L10n.t("打开歌词窗口"))
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(displayTitle)
-                        .font(.system(size: 12, weight: .semibold))
-                        .lineLimit(1)
-                    // 2026-08-19 去掉了这一行右边的「● 记录中」标识(用户要求)。原来是
-                    // 红点 + 文案跟在歌手后面,靠一个 HStack 拼起来;去掉之后这里只剩歌手
-                    // 一个 Text,外层那层 HStack 也一并拆掉,不留空壳容器。
-                    //
-                    // 顺带清掉了只服务它的 recording 计算属性,以及只被 recording 用到的
-                    // features(FeatureSettingsStore)订阅 —— 留着的话这张面板会因为任何
-                    // 无关的功能开关变化白重渲染一次。
-                    Text(displayArtist)
+    /// 压根没有曲目(不是"没有封面"):没歌名、没歌手,而且不是广告插播。
+    ///
+    /// 用于把上半张卡整块收掉,见 nowPlayingCard 里那段注释。刻意不看 isPlayingNow ——
+    /// 暂停中仍然有一首曲目,那时候封面/歌名/歌词都该照常显示。
+    private var isIdleNoTrack: Bool {
+        playback.title.isEmpty && playback.artist.isEmpty && !playback.isCurrentTrackAdBreak
+    }
+
+    /// 卡片上半部分:封面 + 歌名/歌手/专辑 + 右上角来源角标。
+    /// 抽成独立属性只为了让上面那个 `if` 能整块开关它(没抽的话那段 55 行要整体缩进)。
+    private var trackHeader: some View {
+        HStack(alignment: .top, spacing: 9) {
+            // 点封面 → 打开歌词窗口(2026-08-19 用户要求,跟灵动岛上两处封面同一动作);
+            // 先收面板再开窗,同「歌词窗口」块的顺序。
+            Button {
+                close()
+                AppActions.shared.openLyricsWindow?()
+            } label: {
+                coverView
+            }
+            .buttonStyle(.plain)
+            .help(L10n.t("打开歌词窗口"))
+            VStack(alignment: .leading, spacing: 2) {
+                Text(displayTitle)
+                    .font(.system(size: 12, weight: .semibold))
+                    .lineLimit(1)
+                // 2026-08-19 去掉了这一行右边的「● 记录中」标识(用户要求)。原来是
+                // 红点 + 文案跟在歌手后面,靠一个 HStack 拼起来;去掉之后这里只剩歌手
+                // 一个 Text,外层那层 HStack 也一并拆掉,不留空壳容器。
+                //
+                // 顺带清掉了只服务它的 recording 计算属性,以及只被 recording 用到的
+                // features(FeatureSettingsStore)订阅 —— 留着的话这张面板会因为任何
+                // 无关的功能开关变化白重渲染一次。
+                Text(displayArtist)
+                    .font(.system(size: 10.5))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                // 专辑行(2026-08-19 用户要求)。只在真有专辑名时才渲染 —— Spotify 常常
+                // 不上报专辑,占一个空行会让卡片凭空高一截、看着像排版错了。
+                //
+                // 用 .tertiary 而不是 .secondary:标题(primary)→ 歌手(secondary)→
+                // 专辑(tertiary)三级递减,跟「最近记录」列表里专辑列的处理一致。
+                // 加上这一行之后文字块约 45pt,正好跟 44pt 的封面齐平(原来只有两行、
+                // 比封面矮一截),所以卡片总高几乎不变。
+                if !displayAlbum.isEmpty {
+                    Text(displayAlbum)
                         .font(.system(size: 10.5))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(.tertiary)
                         .lineLimit(1)
-                    // 专辑行(2026-08-19 用户要求)。只在真有专辑名时才渲染 —— Spotify 常常
-                    // 不上报专辑,占一个空行会让卡片凭空高一截、看着像排版错了。
-                    //
-                    // 用 .tertiary 而不是 .secondary:标题(primary)→ 歌手(secondary)→
-                    // 专辑(tertiary)三级递减,跟「最近记录」列表里专辑列的处理一致。
-                    // 加上这一行之后文字块约 45pt,正好跟 44pt 的封面齐平(原来只有两行、
-                    // 比封面矮一截),所以卡片总高几乎不变。
-                    if !displayAlbum.isEmpty {
-                        Text(displayAlbum)
-                            .font(.system(size: 10.5))
-                            .foregroundStyle(.tertiary)
-                            .lineLimit(1)
-                    }
-                }
-                Spacer(minLength: 0)
-                // 来源角标:右上角放播放器的真实 App 图标(2026-08-19 用户拍板,比文字
-                // 胶囊更好认更安静),悬停给名字。放卡片内容内部而不是 .overlay ——
-                // 设置页实测过卡片背景吞外挂 overlay 的坑,别再赌。
-                // 2026-08-19 加点击(用户要求):点角标把这个播放器唤到前台,顺手收面板
-                // (跳去别的 App 了,面板留着也只会被失焦监视器收掉,不如主动收干净)。
-                if let icon = PlaybackCoordinator.shared.resolvedPlayerIcon {
-                    Button {
-                        PlaybackCoordinator.shared.openResolvedPlayerApp()
-                        close()
-                    } label: {
-                        Image(nsImage: icon)
-                            .resizable()
-                            .aspectRatio(contentMode: .fit)
-                            .frame(width: 18, height: 18)
-                    }
-                    .buttonStyle(.plain)
-                    .help(PlaybackCoordinator.shared.resolvedPlayerDisplayName ?? "")
                 }
             }
-            lyricLine
+            Spacer(minLength: 0)
+            // 来源角标:右上角放播放器的真实 App 图标(2026-08-19 用户拍板,比文字
+            // 胶囊更好认更安静),悬停给名字。放卡片内容内部而不是 .overlay ——
+            // 设置页实测过卡片背景吞外挂 overlay 的坑,别再赌。
+            // 2026-08-19 加点击(用户要求):点角标把这个播放器唤到前台,顺手收面板
+            // (跳去别的 App 了,面板留着也只会被失焦监视器收掉,不如主动收干净)。
+            if let icon = PlaybackCoordinator.shared.resolvedPlayerIcon {
+                Button {
+                    PlaybackCoordinator.shared.openResolvedPlayerApp()
+                    close()
+                } label: {
+                    Image(nsImage: icon)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(width: 18, height: 18)
+                }
+                .buttonStyle(.plain)
+                .help(PlaybackCoordinator.shared.resolvedPlayerDisplayName ?? "")
+            }
+    }
+    }
+
+    private var nowPlayingCard: some View {
+        VStack(spacing: 8) {
+            // 什么都没在放时,这上半张卡整块不渲染(2026-08-21 用户要求"那个无意义的音符
+            // 不要占位置")。
+            //
+            // 只藏掉音符占位图不够:藏了之后原地还剩两行**空文本**(歌名/歌手,见
+            // displayTitle 的注释——那两行是刻意留白的)和 VStack 给它们的间距,以及一条
+            // 同样空着的定高歌词行(lyricContent 的 .idle 分支画的是 Text(""))。
+            // 所以整块一起收,留下的是真有用的那部分:进度条(没时长时自己不渲染)+ 三键
+            // (可以按播放键把上一首接着放)。
+            //
+            // ⚠️ 判据是"压根没有曲目"而不是"没有封面":播放中拿不到封面的曲目(播客/取图
+            // 失败)照旧要显示那个渐变占位图 —— 那时候占位图是有意义的(它代表一首真的歌),
+            // 而卡片右边还有歌名/歌手撑着。广告插播也照旧显示(标题是「广告中」,有东西在放)。
+            if !isIdleNoTrack {
+                trackHeader
+                lyricLine
+            }
             // 进度条独立成 PanelProgressSection 子视图(2026-08-19 性能审计):拖动/悬停
             // 状态自持,拖一次 seek 不再整面板逐指针事件重估。
             PanelProgressSection(
@@ -410,7 +438,8 @@ private struct MenuBarPanelView: View {
             HStack(spacing: 28) {
                 controlButton("backward.fill", size: 13) { MusicPlaybackController.previousTrack() }
                 controlButton(playback.isPlayingNow ? "pause.fill" : "play.fill", size: 18) {
-                    MusicPlaybackController.playPause()
+                    // 乐观回声版:歌词窗封面缩放/图标点击即动(见 userTogglePlayPause)。
+                    PlaybackCoordinator.shared.userTogglePlayPause()
                 }
                 controlButton("forward.fill", size: 13) { MusicPlaybackController.nextTrack() }
             }

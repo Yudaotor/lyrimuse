@@ -90,9 +90,16 @@ final class MenuBarStatusItem: NSObject {
         // isPlayingNow 从 false 变 true 时 refresh() 读到的仍是 false,菜单栏永远不显示
         // 歌词。挪到下一个 runloop 循环再跑,属性此时已经落定成新值。
         coordinator.$currentLine
-            .map { $0?.plainText ?? "" }
-            // 同一句内部会因为逐字填色之外的原因被重新赋值,纯文本一样就不算换句 ——
-            // 不去重的话滚动会被反复打回开头。
+            // 同一句内部会因为逐字之外的原因被重新赋值(译文/罗马音中途补上),去重掉 ——
+            // 不去重的话滚动会被反复打回开头。⚠️ 去重键是「首词时间戳#纯文本」,不能只看
+            // 纯文本(2026-08-22 审阅抓出):副歌里相邻两行**同词不同时**,只看文本第二行
+            // 的换行事件会被吞掉,菜单栏挂着第一行的填色路径 —— 第一行唱完动画停在全填,
+            // 第二行一出场就整句强调色。同理「先无逐字、解析中途补上」(words nil→非 nil)
+            // 也必须算换句,否则这句到换行前都不会开始染色。
+            .map { line -> String in
+                guard let line else { return "" }
+                return "\(line.words?.first?.startMs ?? -1)#\(line.plainText ?? "")"
+            }
             .removeDuplicates()
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in self?.refresh() }
@@ -124,8 +131,51 @@ final class MenuBarStatusItem: NSObject {
             .sink { [weak self] _ in self?.refresh() }.store(in: &cancellables)
         coordinator.$isPlayingNow.dropFirst().receive(on: RunLoop.main)
             .sink { [weak self] _ in self?.refresh() }.store(in: &cancellables)
+        // 逐字染色开关:用户就是盯着菜单栏拨的,当前句要立刻上色/褪色。
+        settings.$menuBarLyricsKaraoke.dropFirst().receive(on: RunLoop.main)
+            .sink { [weak self] _ in self?.refresh() }.store(in: &cancellables)
+        // 逐字染色的对表通道:锚点(每次 poll ~2s 重发一次 + seek/暂停/恢复)、暂停位置、
+        // 时间轴偏移任一变化都重新对一次表。这条**不走 refresh**(不涉及槽位/内容,只是
+        // 时钟),标签内部有 250ms 漂移门,逐 poll 的锚点更新几乎都被无声吸收,不会打断
+        // 正在跑的填色动画。偏移微调(默认步长 200ms)在漂移门之下,必须 force 立即生效。
+        coordinator.$anchor.receive(on: RunLoop.main)
+            .sink { [weak self] _ in self?.syncKaraokeClock() }.store(in: &cancellables)
+        coordinator.$pausedPositionMs.receive(on: RunLoop.main)
+            .sink { [weak self] _ in self?.syncKaraokeClock() }.store(in: &cancellables)
+        coordinator.$currentLyricsOffsetMs.receive(on: RunLoop.main)
+            .sink { [weak self] _ in self?.syncKaraokeClock(force: true) }.store(in: &cancellables)
 
         refresh()
+    }
+
+    /// 把播放时钟(外推位置 + 歌词时间轴校准)喂给标签的填色动画。位置公式与歌词窗口
+    /// KaraokeWordText 逐字填色完全同一条:anchor 外推 ?? 暂停位置,再加偏移校准。
+    private func syncKaraokeClock(force: Bool = false) {
+        let coordinator = PlaybackCoordinator.shared
+        let raw: Int?
+        if let anchor = coordinator.anchor {
+            raw = anchor.extrapolatedPositionMs(now: Date())
+        } else {
+            raw = coordinator.pausedPositionMs
+        }
+        scrollingLabel.updateKaraokeClock(
+            positionMs: raw.map { $0 + coordinator.currentLyricsOffsetMs },
+            rate: coordinator.anchor?.rate ?? 0,
+            playing: coordinator.isPlayingNow,
+            force: force)
+    }
+
+    /// 当前句的逐字填色路径。nil = 不染:开关关着、这句没有逐字数据、或标签文本跟逐字
+    /// 数据对不上号(理论上 plainText 就是 words 拼接,这层守卫防的是两者在换句瞬间
+    /// 读到不同代的数据 —— 对不上宁可不染,染错位置比不染难看得多)。
+    private func karaokeFillPath(for text: String) -> [MenuBarMarquee.KaraokeFillPoint]? {
+        guard AppSettings.shared.menuBarLyricsKaraoke else { return nil }
+        guard let line = PlaybackCoordinator.shared.currentLine,
+              let words = line.words, !words.isEmpty,
+              line.plainText == text else { return nil }
+        let path = MenuBarMarquee.karaokeFillPath(
+            words: words, wordEndXs: MenuBarMarqueeRenderer.wordEndXs(for: words))
+        return path.isEmpty ? nil : path
     }
 
     /// 把按钮的全套装配(字体/两个内容子视图/点击路由)应用到一个状态栏项上。
@@ -364,14 +414,27 @@ final class MenuBarStatusItem: NSObject {
             // 自适应态:槽宽跟着这一句的文字宽走 —— 每次变宽都是一次重建
             // (macOS 26 下这是唯一能让邻居让位的做法,见 present 头注)。
             let w = MenuBarMarqueeRenderer.width(of: visible) + Self.fixedSlotPadding
-            present(class: "text", length: w, collapseDelay: 0,
-                    interim: { [weak self] in self?.renderInterimLyrics($0, text: text) }) {
-                showStaticText($0, visible: visible, full: text)
+            if let fillPath = karaokeFillPath(for: text), visible == text {
+                // 逐字染色画不进 button.title(那条路是 AppKit 自绘的单色文字,没有图层
+                // 可以叠强调色) —— 改走图层渲染,窗口宽就取文字自身宽:槽宽公式跟上面
+                // 完全一致,footprint 逐像素不变,只是画的人从按钮换成了 scrollingLabel。
+                // visible != text 只发生在 windowWidth<=0 的截断退化路径,那里不染。
+                present(class: "text", length: w, collapseDelay: 0,
+                        interim: { [weak self] in self?.renderInterimLyrics($0, text: text) }) {
+                    showFixedWidth($0, text: text, windowWidth: w - Self.fixedSlotPadding,
+                                   pacing: nil, fillPath: fillPath)
+                }
+            } else {
+                present(class: "text", length: w, collapseDelay: 0,
+                        interim: { [weak self] in self?.renderInterimLyrics($0, text: text) }) {
+                    showStaticText($0, visible: visible, full: text)
+                }
             }
         case .fixed(let lineText, let windowWidth, let pacing):
             present(class: "fixed", length: windowWidth + Self.fixedSlotPadding, collapseDelay: 0,
                     interim: { [weak self] in self?.renderInterimLyrics($0, text: text) }) {
-                showFixedWidth($0, text: lineText, windowWidth: windowWidth, pacing: pacing)
+                showFixedWidth($0, text: lineText, windowWidth: windowWidth, pacing: pacing,
+                               fillPath: karaokeFillPath(for: lineText))
             }
         }
     }
@@ -395,7 +458,10 @@ final class MenuBarStatusItem: NSObject {
         case .text(let visible):
             showStaticText(button, visible: visible, full: text)
         case .fixed(let lineText, let win, let pacing):
-            showFixedWidth(button, text: lineText, windowWidth: win, pacing: pacing)
+            // 过渡渲染同样带上填色 —— 自适应模式逐句都有一段几何推迟窗(最多 3s),
+            // 不带的话每句开头 3 秒都没有染色、槽宽落地那一刻才突然上色。
+            showFixedWidth(button, text: lineText, windowWidth: win, pacing: pacing,
+                           fillPath: karaokeFillPath(for: lineText))
         }
     }
 
@@ -453,7 +519,8 @@ final class MenuBarStatusItem: NSObject {
     /// button.title 那条路的宽度跟着文字走(实测同一首歌连着三句是 231/145/207pt),
     /// 长短句来回切时菜单栏项就会伸缩、把右边的图标顶得左右晃(2026-08-17 用户反馈)。
     private func showFixedWidth(_ button: NSStatusBarButton, text: String, windowWidth: CGFloat,
-                                pacing: MenuBarMarquee.ScrollPacing?) {
+                                pacing: MenuBarMarquee.ScrollPacing?,
+                                fillPath: [MenuBarMarquee.KaraokeFillPoint]? = nil) {
         liveIconView.clear()
         // ⚠️ 这张**全透明**的占位图是整个固定宽度方案的支点,不是残留:variableLength 的
         // 状态栏项按 button.image 的尺寸算自己该占多宽。给它一张宽度恒为 windowWidth 的
@@ -469,7 +536,10 @@ final class MenuBarStatusItem: NSObject {
         button.setAccessibilityLabel(text)
 
         scrollingLabel.frame = button.bounds
-        scrollingLabel.present(text: text, windowWidth: windowWidth, pacing: pacing)
+        scrollingLabel.present(text: text, windowWidth: windowWidth, pacing: pacing,
+                               fillPath: fillPath)
+        // 换句后立刻对一次表,填色从此刻的真实播放位置起步,不等下一次锚点更新(~2s)。
+        if fillPath != nil { syncKaraokeClock(force: true) }
     }
 
     private func spacerImage(width: CGFloat, height: CGFloat) -> NSImage {

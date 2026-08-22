@@ -29,8 +29,28 @@ struct LyrimuseApp: App {
         // .automatic 走,开关/位置/尺寸全部交给 SwiftUI+macOS 的窗口自动存档机制,
         // 不需要额外持久化代码。
         Window(L10n.t("歌词窗口"), id: "lyrics-window") {
-            LyricsWindowView()
+            // 原生全屏「坏着」的真根因(2026-08-21 探针实验坐实):**SwiftUI Window
+            // 默认禁了全屏** —— 同一进程里纯 AppKit 探针窗绿键是 AXFullScreenButton、
+            // 能真进全屏 Space,这扇 SwiftUI 窗却是 AXZoomButton。当年证伪的四个假设
+            // (collectionBehavior/activationPolicy/LSUIElement/MenuBarExtra)都没碰到
+            // 这层。
+            // ⚠️ 这个修饰符在当前 SwiftUI 上**实测没生效**(挂上之后绿键仍是
+            // AXZoomButton)——真正起效的是 AppKit 层对 collectionBehavior 的持续守护
+            // (LyricsWindowController.enforceFullScreenCapability + didUpdate 观察,
+            // SwiftUI 每个更新周期都会把标志复写掉,设一次不够)。修饰符仍保留:它是
+            // 官方语义的表达,哪个版本 SwiftUI 修好了就能少一层对抗。
+            if #available(macOS 15.0, *) {
+                LyricsWindowView().windowFullScreenBehavior(.enabled)
+            } else {
+                LyricsWindowView()
+            }
         }
+        // AM 式顶部(2026-08-21 用户对照 AM 要求):无标题白条,背景一直通到窗顶、
+        // 红绿灯悬浮在背景上。hiddenTitleBar = 标题栏透明 + 隐藏标题 + 内容全尺寸,
+        // 一个修饰符抵三行 NSWindow 配置,而且在窗口显示前就生效(不闪白条)。
+        // 伪全屏的进出逻辑相应简化:标题栏状态成了常驻,它只管红绿灯显隐和窗口帧
+        // (见 LyricsWindowController.enter/exit)。
+        .windowStyle(.hiddenTitleBar)
         // 固定尺寸的一次性向导,不需要用户手动拖拽调整——.windowResizability(.contentSize)
         // 让窗口尺寸完全跟着 OnboardingView 自己声明的 .frame(width:height:) 走。
         Window(L10n.t("欢迎使用 Lyrimuse"), id: "onboarding") {

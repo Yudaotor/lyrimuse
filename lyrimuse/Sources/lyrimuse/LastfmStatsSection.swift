@@ -1,4 +1,5 @@
 import Combine
+import LyrimuseCore
 import SwiftUI
 
 /// Last.fm 卡的信息展示区(设计方案 A「档案页」,2026-08-11 artifact):三个数字、
@@ -477,8 +478,17 @@ struct LastfmStatsSection: View {
         var newerSame: [String: Int] = [:]
         return recentHistory.map { row in
             let key = LastfmStatsService.playCountKey(artist: row.artist, title: row.title)
-            let newer = newerSame[key, default: 0]
-            newerSame[key] = newer + 1
+            // ⚠️ 取数用 playCountKey(表就是按它存的),但「更新的同曲收听」必须按**折叠族**
+            // 数(2026-08-22 修):表里存的是整族合并后的总数,而这里原来用同一个 playCountKey
+            // (只 trim+小写)去数 —— 同一首歌的两种写法是两个不同的 playCountKey,跨写法的
+            // 更新收听一次都减不掉,于是同页两行显示同一个 N。用户 2026-08-21 报的
+            // 「第 15 次听下面紧跟着第 21 次听」就是这个形状;2026-08-22 放宽折叠口径
+            // (bonus track / with / explicit / 破折号尾缀)后同页撞上两种写法的概率更高,
+            // 《一路向北》与《一路向北 (bonus track)》同页时两行都会是「第 16 次听」。
+            // 键要跟 LastfmStatsService.playCountSiblings 查族用的那个**完全一致**。
+            let familyKey = PlayCountFold.familyKey(artist: row.artist, title: row.title)
+            let newer = newerSame[familyKey, default: 0]
+            newerSame[familyKey] = newer + 1
             guard let total = stats.trackPlayCounts[key] else { return (row, nil) }
             let n = total - newer
             // 竞态(刚多了一次收听、总数还没重取)时宁可不显示,不显示错的
@@ -816,7 +826,8 @@ private struct LiveScrobbleRow: View {
             // 偏暗紫、Last.fm 那版偏亮蓝,缩到 26pt 一眼能看出色调不同,不是清晰度差别。
             let listCover = stats.liveCoverURL(artist: playback.artist, title: playback.title,
                                                album: playback.album)
-            return LiveSource(title: playback.title, artist: playback.artist,
+            return LiveSource(title: playback.title,
+                              artist: canonicalLiveArtist(localArtist: playback.artist),
                               artwork: playback.artworkImage, imageURL: listCover,
                               confirmed: serverConfirms(playback.title), remote: false)
         }
@@ -843,6 +854,21 @@ private struct LiveScrobbleRow: View {
     }
 
     /// 服务端这条 nowplaying 说的是不是本机播放器里当前这首(不论在放还是暂停)。
+    /// 实时行的歌手名:优先用 Last.fm 认的规范写法。
+    ///
+    /// 2026-08-21 用户截图:实时行写「周杰伦」(Apple Music 的本地标签)、紧接着的历史行全是
+    /// 「周杰倫」(Last.fm 规范名),同一首歌两种写法上下并排。本机标签只说明"我们这台机器
+    /// 怎么写",而这一行的语义是"**Last.fm 正在记录的**那首歌"(见 LiveSource 的注释),
+    /// 用它自己的写法才自洽 —— 而且下面历史行迟早会以规范名出现,提前统一就不会看着像
+    /// 两首歌。
+    ///
+    /// 只在服务器那条 nowplaying 确实是同一首(标题对得上)时才换,否则退回本机写法,不猜。
+    private func canonicalLiveArtist(localArtist: String) -> String {
+        guard let np = stats.apiNowPlaying, !np.artist.isEmpty,
+              matchesLocalTrack(np.title) else { return localArtist }
+        return np.artist
+    }
+
     private func matchesLocalTrack(_ title: String) -> Bool {
         !playback.title.isEmpty && looseSameTitle(title, playback.title)
     }

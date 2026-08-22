@@ -32,9 +32,24 @@ public enum ArtistCredit {
         // 直接在原串上做 .caseInsensitive 查找,不拿 lowercased() 的下标去索引原串 ——
         // 小写化对某些字符会改变长度(ß→ss),跨串用下标是错的。
         for marker in featMarkers {
-            guard let r = trimmed.range(of: marker, options: [.caseInsensitive]) else { continue }
-            let cut = String(trimmed[trimmed.startIndex..<r.lowerBound])
-            if cut.count < head.count { head = cut }
+            var from = trimmed.startIndex
+            while let r = trimmed.range(of: marker, options: [.caseInsensitive],
+                                        range: from..<trimmed.endIndex) {
+                from = r.upperBound
+                // 左词边界(2026-08-22 补):marker 必须是**独立的词**,前面得是空白或开括号。
+                // 少了这道守卫,`ft ` 会在词中命中 —— 实测蛋堡的罗马字名 `Soft Lipa` 被切成
+                // `So`(「So|ft |Lipa」),于是它的歌手段落成 `so`、跟 `蛋堡` 永远合不上。
+                // 同类还有 Daft Punk / Left Boy / Craft Spells。这跟
+                // PlayCountVariants.isCatalogNoiseSubtitle 里挡 `(Feathers)` 的是同一类守卫,
+                // 那边一开始就做了、这边漏了。
+                if r.lowerBound > trimmed.startIndex {
+                    let prev = trimmed[trimmed.index(before: r.lowerBound)]
+                    guard prev.isWhitespace || "([（".contains(prev) else { continue }
+                }
+                let cut = String(trimmed[trimmed.startIndex..<r.lowerBound])
+                if cut.count < head.count { head = cut }
+                break
+            }
         }
         head = head.trimmingCharacters(in: CharacterSet(charactersIn: " ([（"))
             .trimmingCharacters(in: .whitespaces)

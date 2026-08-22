@@ -26,6 +26,11 @@ public final class LyricsOffsetStore: ObservableObject {
 
     private static let defaultsKey = "np:lyricsOffsetsByTrackJSON"
     private static let globalDefaultsKey = "np:lyricsGlobalOffsetMs"
+    // 「按播放器」那层的键。**故意不复用** 2026-08-18 那个 np:lyricsPlayerOffsetsJSON:
+    // 那一版是为了补"Spotify 时钟恒偏快",而那个偏差后来查明是自然切歌锚点超前、已由
+    // naturalAdvanceCorrection 按曲精确校正,于是 08-20 连值一起清掉了(见 init)。复用同一个
+    // 键会把那些为已修好的 bug 调出来的旧值重新激活,反把歌词拖慢;换个新键从零开始。
+    private static let playerDefaultsKey = "np:lyricsOffsetsByPlayerJSON"
 
     private var offsets: [String: Int]
 
@@ -38,10 +43,11 @@ public final class LyricsOffsetStore: ObservableObject {
         trackOffsetCount = offsets.count
         // 没存过就是 0(integer(forKey:) 对缺失键返回 0),正好是"不偏移"。
         globalOffsetMs = UserDefaults.standard.integer(forKey: Self.globalDefaultsKey)
-        // 「按播放器偏移」层已整体移除(2026-08-20,随 Spotify 自然切歌锚点根修下线,
-        // 见 LocalPlaybackSource.naturalAdvanceCorrection):把存量值从 UserDefaults 里
-        // 一并清掉,不能只删读取代码——用户若调过非零值,根修上线后这个隐形偏移会反把
-        // 歌词拖慢,而界面上已经没有任何地方能看到/重置它。
+        playerOffsets = Self.loadPlayerOffsets()
+        // 2026-08-18 那一版「按播放器偏移」(np:lyricsPlayerOffsetsJSON)的存量值继续清掉。
+        // 它是内部补偿、界面上看不见也重置不了,而它要补的偏差已经被根修(见
+        // LocalPlaybackSource.naturalAdvanceCorrection);2026-08-21 重新引入的这一层是**用户
+        // 显式配置**、在设置页看得见改得动,换了新键,跟那些旧值互不相干。
         UserDefaults.standard.removeObject(forKey: "np:lyricsPlayerOffsetsJSON")
         // persist() 是实例方法,得等所有存储属性都初始化完才能调 —— 所以搬迁结果在这里
         // 才落盘,而不是紧跟上面那次搬迁。
@@ -71,19 +77,71 @@ public final class LyricsOffsetStore: ObservableObject {
         UserDefaults.standard.set(ms, forKey: Self.globalDefaultsKey)
     }
 
-    // 「按播放器偏移」第三层(2026-08-18 加,playerOffsets/np:lyricsPlayerOffsetsJSON)
-    // 已于 2026-08-20 整体移除:当时它补的"Spotify 时钟恒比出声超前"实为自然切歌锚点
-    // 超前(+0.85s 量级、每首抽签),已在 LocalPlaybackSource.naturalAdvanceCorrection
-    // 按曲精确校正 —— 一个固定的手调补偿对"每首不一样、手动点播又没有"的偏差本来就
-    // 不对症。init 里顺手清掉了存量 UserDefaults 键。
+    // MARK: - 按播放器偏移
 
-    /// 这首歌实际该用的偏移 = 全局基准 + 这首歌的微调。
+    /// bundle id → 偏移(毫秒)。第三层,2026-08-21 按用户要求加回来 —— 但语义跟 08-18 那版
+    /// **不是一回事**:那版是代码内部为 Spotify 写死的补偿(用户看不见、重置不了,后来被根修
+    /// 取代),这版是设置页那个下拉框里用户自己选播放器、自己调的值。
+    ///
+    /// **语义是「要么全部、要么单个」,不是相加**(2026-08-21 用户拍板):某个播放器单独配过,
+    /// 那它就**只用**自己这一档,「全部播放器」那档对它完全不生效;没单独配过才用「全部」。
+    /// 零值不落盘,所以"配过"和"非零"是同一件事 —— 把某个播放器调回 0(或点「重置」)就是
+    /// 撤掉它的单独设置、重新跟随「全部」。
+    ///
+    /// 为什么这层有存在价值(而"全局 + 单曲"两层不够):偏差的成因分三类,各自的作用域不同 ——
+    ///  - **设备侧**(蓝牙耳机/声卡缓冲):跟播放器、歌都无关 → 全局那层;
+    ///  - **播放器侧**:某个 App 报的播放位置本身就系统性地不准。最硬的例子是浏览器:
+    ///    Arc/Chrome 这类只在切歌时报一次锚点、之后 elapsedTime 再也不刷新
+    ///    (`PositionSourceTier.cleanExtrapolated`),我们只能按墙钟外推,而那一次锚点的
+    ///    时间戳本身只有整秒精度(见 MediaControlClient.estimatedAnchorInstant)。这类偏差
+    ///    **换首歌照旧、换个播放器就没了**,正好落在"播放器"这个维度上;
+    ///  - **这份歌词自己**的时间轴不准 → 单曲那层(key 里带内容指纹)。
+    ///
+    /// 零值一律**不落盘**(见 setPlayerOffset):字典里留着的就是"用户真的配过的播放器",
+    /// 设置页那个下拉框据此把它们全列出来 —— 哪怕这个 App 已经不在受信任名单里了,也不能让
+    /// 一个非零偏移变成看不见、改不动的隐形值(08-18 那版正是这么翻的车)。
+    @Published public private(set) var playerOffsets: [String: Int]
+
+    /// 这个播放器**自己那一档的原始值**(设置页显示/编辑的就是它),没配过是 0。
+    ///
+    /// ⚠️ 这不是"生效值" —— 生效的基准走 `baseOffsetMs(forBundleID:)`(二选一)。两者的区别在
+    /// "没配过"这种情况上:这里返回 0,而生效基准会退回「全部播放器」那档。
+    public func playerOffset(forBundleID bundleID: String?) -> Int {
+        guard let bundleID, !bundleID.isEmpty else { return 0 }
+        return playerOffsets[bundleID] ?? 0
+    }
+
+    public func setPlayerOffset(_ ms: Int, forBundleID bundleID: String) {
+        guard !bundleID.isEmpty else { return }
+        guard playerOffsets[bundleID] ?? 0 != ms else { return }
+        if ms == 0 {
+            playerOffsets.removeValue(forKey: bundleID)
+        } else {
+            playerOffsets[bundleID] = ms
+        }
+        persistPlayerOffsets()
+    }
+
+    /// 这一刻该用的**基准**偏移:这个播放器单独配过就用它那档,否则用「全部播放器」那档。
+    ///
+    /// 二选一、**不相加**(2026-08-21 用户拍板的语义)。零值不落盘,所以"字典里没有这个 key"
+    /// 就是"没单独配过",退回「全部」。
+    ///
+    /// `bundleID` 为 nil / 空串(relay 中继模式没有播放器身份、或者还没拿到第一份快照)时用
+    /// 「全部」那档 —— 那是唯一有意义的兜底:绝不能"猜一个播放器",把浏览器的补偿套到
+    /// Apple Music 上去。
+    public func baseOffsetMs(forBundleID bundleID: String?) -> Int {
+        if let bundleID, !bundleID.isEmpty, let own = playerOffsets[bundleID] { return own }
+        return globalOffsetMs
+    }
+
+    /// 这首歌实际该用的偏移 = 基准(全部 / 这个播放器,二选一) + 这首歌的微调。
     ///
     /// 唯一的合成点。调用方(LocalPlaybackSource.applyOffsets)只认它,不要在别处
     /// 自己写 `global + track` —— 多处各加一次就是双倍校正,而那种 bug 只在
     /// "两条路径都跑过"的特定顺序下才露出来。
-    public func effectiveOffset(forKey key: String) -> Int {
-        globalOffsetMs + offset(forKey: key)
+    public func effectiveOffset(forKey key: String, bundleID: String? = nil) -> Int {
+        baseOffsetMs(forBundleID: bundleID) + offset(forKey: key)
     }
 
     // 统一在这里拼 key,调用方(LocalPlaybackSource)不用各自实现一遍哈希
@@ -240,6 +298,25 @@ public final class LyricsOffsetStore: ObservableObject {
         if !pinKey.isEmpty {
             LyricsPinStore.shared.setPinned(ms != 0, forKey: pinKey)
         }
+    }
+
+    private func persistPlayerOffsets() {
+        guard
+            let data = try? JSONEncoder().encode(playerOffsets),
+            let json = String(data: data, encoding: .utf8)
+        else { return }
+        UserDefaults.standard.set(json, forKey: Self.playerDefaultsKey)
+    }
+
+    private static func loadPlayerOffsets() -> [String: Int] {
+        guard
+            let json = UserDefaults.standard.string(forKey: playerDefaultsKey),
+            let data = json.data(using: .utf8),
+            let decoded = try? JSONDecoder().decode([String: Int].self, from: data)
+        else { return [:] }
+        // 零值理论上进不来(setPlayerOffset 不写零),真读到就顺手滤掉 —— 否则下拉框会
+        // 列出一个"配过但其实是 0"的播放器。
+        return decoded.filter { $0.value != 0 }
     }
 
     private func persist() {

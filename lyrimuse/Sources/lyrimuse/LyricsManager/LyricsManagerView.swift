@@ -237,6 +237,48 @@ struct LyricsManagerView: View {
     // List 里一行内容的实际左右边界(由行自己通过 preference 上报,见 RowContentBoundsKey)。
     @State private var rowContentBounds: RowContentBounds?
     @State private var showSearchSheet = false
+
+    // MARK: - 「重新自动匹配」(2026-08-21)
+    //
+    // 跟隔壁「联网搜索候选歌词」的区别:那个是把候选摆出来让人挑,这个是**按 collector 自动
+    // 解析那一套规则直接选冠军**(collector search-lyrics -pick,冠军由 Go 侧 pickLyricCandidate
+    // 算 —— 那个函数带「匹配算法:智能/顺序优先」的设置分支,在 Swift 侧自己取最高分会跟自动
+    // 决策给出不同答案,于是刚匹配好的结果又被后台自愈路径换掉)。
+    //
+    // 所有状态都带 key:详情页的状态是 View 级 @State、靠 onChange(of: key) 重载,不带 key 的话
+    // A 歌跑出来的结果会画在 B 歌的页面上。
+    @State private var rematchRunningKey: String?
+    @State private var rematchDone = 0
+    @State private var rematchTotal = 0
+    @State private var rematchResult: RematchOutcome?
+    /// 单调换代:回调和收尾都 guard 它,防"上一轮的收尾把新一轮的进行中状态关掉"
+    /// (照抄 LyricsSearchSheet.load 里 searchGeneration 那套)。
+    @State private var rematchGeneration = 0
+
+    private struct RematchOutcome {
+        enum Kind { case changed, unchanged, kept, empty, failed }
+        let key: String
+        let kind: Kind
+        let text: String
+
+        var icon: String {
+            switch kind {
+            case .changed: return "checkmark.circle.fill"
+            case .unchanged: return "equal.circle"
+            case .kept: return "hand.raised.fill"
+            case .empty: return "text.badge.xmark"
+            case .failed: return "exclamationmark.triangle.fill"
+            }
+        }
+
+        var tint: Color {
+            switch kind {
+            case .changed: return .green
+            case .unchanged: return .secondary
+            case .kept, .empty, .failed: return .orange
+            }
+        }
+    }
     @State private var showDecisionSheet = false
     // 2026-08-02 补上——"保存修改"点了之前完全没有任何肉眼可见的反馈,跟上面
     // showRefreshedFeedback("刷新"按钮已有的做法)是同一类问题、同一个修法:短暂切换成
@@ -1054,6 +1096,11 @@ struct LyricsManagerView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 header(summary)
+                // 故意**不**放进 headerActions 那排胶囊里:header 用的是
+                // ViewThatFits(in: .horizontal),而它比的是理想宽度 —— 一句长文案会把"标题和
+                // 按钮同一行"那个候选的理想宽度撑爆,按钮排从此永久掉到第二行,而且转圈
+                // 出现/消失会让整个顶部跳一下。放在 header 外面只影响竖向高度。
+                rematchStatusRow(key: key, summary: summary)
                 infoStrip(summary)
                 offsetSection(summary)
 
@@ -1076,12 +1123,26 @@ struct LyricsManagerView: View {
             .padding(20)
         }
         .onAppear { loadDetail(key: key) }
-        .onChange(of: key) { _, newKey in loadDetail(key: newKey) }
+        .onChange(of: key) { _, newKey in
+            loadDetail(key: newKey)
+            // 换歌就把上一首的进行中/结果状态收掉,并把子进程停掉(它的结果已经没人要了)。
+            // rematchGeneration 换代顺带让在飞的那一轮的回调和收尾全部失效。
+            if rematchRunningKey != nil {
+                rematchGeneration += 1
+                rematchRunningKey = nil
+                LyricsSearchService.shared.cancelRunning()
+            }
+            rematchResult = nil
+        }
         .sheet(isPresented: $showDecisionSheet) {
             // 按钮只在 hasDecision 时出现;完整结构懒解码 —— 只在打开弹窗这一刻按 key
-            // 解一条(2026-08-19,原来 rebuild 时全量急算,见 Summary.hasDecision 注释)。
-            if let decision = store.decodedDecision(for: key) {
-                LyricsDecisionSheet(summary: summary, decision: decision)
+            // 解(2026-08-19,原来 rebuild 时全量急算,见 Summary.hasDecision 注释)。
+            // 两槽都解:latest=最近一次评估,applied=当前歌词的出处(分槽语义见
+            // collector/decision.go;老条目只有前者,弹窗 init 里自己退化)。
+            let latest = store.decodedDecision(for: key)
+            let applied = store.decodedAppliedDecision(for: key)
+            if latest != nil || applied != nil {
+                LyricsDecisionSheet(summary: summary, latest: latest, applied: applied)
             }
         }
         .sheet(isPresented: $showSearchSheet) {
@@ -1170,11 +1231,26 @@ struct LyricsManagerView: View {
                     }
                     .help(L10n.t("当初为什么选了这份歌词：当时的候选、得分与拒绝原因"))
                 }
+                // 「重新自动匹配」——按自动解析那套规则重跑一轮、直接采用算法选出的那一份。
+                // 文案刻意不写「智能」:「智能算法」在这个产品里是设置页「匹配算法」的一个具体
+                // 档位(另一档是「顺序优先」),写上去对选了顺序优先的用户就是在说谎(真正的
+                // 冠军由 collector 按他选的那一档算,见 searchLyricsPick)。
+                Button {
+                    Task { await runRematch(key: summary.key, summary: summary) }
+                } label: {
+                    Label(L10n.t("重新自动匹配"), systemImage: "wand.and.stars")
+                }
+                .disabled(rematchRunningKey != nil)
+                .help(L10n.t("重新联网跑一遍匹配，直接采用算法选出的那一份，不用自己挑；跟设置里的「匹配算法」一致"))
                 Button {
                     showSearchSheet = true
                 } label: {
                     Label(L10n.t("联网搜索候选歌词"), systemImage: "magnifyingglass")
                 }
+                // 同一时刻只允许一个 collector 子进程(LyricsSearchService 每次 performSearch
+                // 开头无条件 cancelRunning)。自动匹配飞行途中打开这个弹窗会把它杀掉,自动那边
+                // 收到非零退出码、误报"搜索失败" —— 索性挡住。
+                .disabled(rematchRunningKey != nil)
                 // 跟工具栏按钮、右键菜单走同一条 requestDelete → 侧栏那个确认弹窗的路径:
                 // 只留一处弹窗,文案/统计/快照逻辑不会两处漂移。N==1 时 batchDeleteTitle 会
                 // 自动用带歌名的那条既有文案,跟改动之前一模一样。
@@ -1330,6 +1406,171 @@ struct LyricsManagerView: View {
             // EnrichCacheStore.removeWordTiming 暂时留着(见那边注释),没有调用方。
 
             Spacer()
+        }
+    }
+
+    // MARK: - 「重新自动匹配」实现
+
+    @ViewBuilder
+    private func rematchStatusRow(key: String, summary: EnrichCacheStore.Summary) -> some View {
+        if rematchRunningKey == key {
+            HStack(spacing: 6) {
+                ProgressView().controlSize(.small)
+                Text(rematchTotal > 0
+                     ? String(format: L10n.t("正在重新匹配…（%1$@/%2$@）"), "\(rematchDone)", "\(rematchTotal)")
+                     : L10n.t("正在重新匹配…"))
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
+        } else if let result = rematchResult, result.key == key {
+            Label(result.text, systemImage: result.icon)
+                .font(.caption)
+                .foregroundStyle(result.tint)
+        }
+    }
+
+    /// 跑一轮"按自动解析规则重选"。冠军由 collector 算(-pick),这里只负责:决定要不要采纳、
+    /// 采纳时把 collector 自动路径会写的那一整套字段一起写、以及如实告诉用户发生了什么。
+    private func runRematch(key: String, summary: EnrichCacheStore.Summary) async {
+        rematchGeneration += 1
+        let generation = rematchGeneration
+        rematchRunningKey = key
+        rematchResult = nil
+        rematchDone = 0
+        rematchTotal = 0
+        // 歌词打分对时长极其敏感(时长档 +100~300 / overshoot -700,还是源内选歌的输入):
+        // 实测同一首歌传 0 时 qq 482 第一、传真实 270.8s 时是 Musixmatch 962 胜出。所以优先
+        // 用真实播放时长,老条目没有才退到 resolved(它可能是专辑预取时抓到的错版本时长)。
+        let duration = summary.durationSecs > 0 ? summary.durationSecs : store.resolvedDurationSecs(for: key)
+        var last: LyricsSearchService.SearchUpdate?
+        do {
+            try await LyricsSearchService.shared.search(
+                artist: summary.artist, title: summary.title, album: summary.album,
+                durationSecs: duration, pickWinner: true, currentSource: summary.lyricsSource
+            ) { update in
+                guard generation == rematchGeneration else { return }
+                last = update
+                rematchDone = update.sourcesDone
+                rematchTotal = update.sourcesTotal
+            }
+        } catch {
+            guard generation == rematchGeneration else { return }
+            rematchRunningKey = nil
+            rematchResult = RematchOutcome(key: key, kind: .failed, text: error.localizedDescription)
+            return
+        }
+        guard generation == rematchGeneration else { return }
+        rematchRunningKey = nil
+        await finishRematch(key: key, summary: summary, update: last)
+    }
+
+    private func finishRematch(key: String, summary: EnrichCacheStore.Summary,
+                               update: LyricsSearchService.SearchUpdate?) async {
+        func done(_ kind: RematchOutcome.Kind, _ text: String) {
+            rematchResult = RematchOutcome(key: key, kind: kind, text: text)
+        }
+        guard let update, let pick = update.pick else {
+            done(.failed, L10n.t("这一轮没拿到结论，可以再点一次"))
+            return
+        }
+        let currentName = sourceDisplayName(summary.lyricsSource)
+        let winner = update.candidates.first(where: { $0.source == pick.winner })
+        let detail = store.detail(for: key)
+        // 五条分支的判定全在 LyrimuseCore.LyricsRematchDecision(纯函数,selftest 覆盖)——
+        // 其中"不可判"和"逐字保护"两条是**不该动**的分支,它们失效时的表现是"用户看得见的
+        // 东西被悄悄弄没了"、不是报错,靠反复点按钮碰运气验证不了。
+        let outcome = LyricsRematchDecision.decide(
+            decidable: pick.decidable,
+            winnerSource: winner == nil ? "" : pick.winner,
+            currentHasWordTiming: summary.hasWordTiming,
+            winnerHasWordTiming: !(winner?.lyricsYRC.isEmpty ?? true),
+            sameSource: winner?.source == summary.lyricsSource,
+            sameLyrics: winner?.lyrics == detail.lyrics,
+            sameWordTiming: winner?.lyricsYRC == detail.yrc
+        )
+        switch outcome {
+        case .keptNotDecidable:
+            done(.kept, String(format: L10n.t("这一轮「%@」没应答，没有换（避免误降级），可以再点一次"), currentName))
+            return
+        case .keptNoCandidate:
+            // 三种成因分开说 —— 自动路径此时也是一个字都不写。
+            if update.instrumental {
+                done(.empty, L10n.t("有源明确说这首是纯音乐，没有可用的歌词候选"))
+            } else if update.networkLooksDown {
+                done(.empty, L10n.t("网络似乎不通，这一轮没搜到任何候选"))
+            } else {
+                done(.empty, L10n.t("这一轮没有一个能用的候选，保留现有的"))
+            }
+            return
+        case .keptWouldLoseWordTiming:
+            done(.kept, String(format: L10n.t("这一轮没搜到逐字歌词，保留现有的「%@」（逐字）——换过去会丢掉逐字时间轴"), currentName))
+            return
+        case .unchanged:
+            done(.unchanged, String(format: L10n.t("已重新匹配：仍然是「%1$@」（%2$@ 分），没有更好的"),
+                                    sourceDisplayName(pick.winner), "\(pick.winnerScore)"))
+            return
+        case .adopt:
+            break
+        }
+        guard let winner else {
+            done(.failed, L10n.t("这一轮没拿到结论，可以再点一次"))
+            return
+        }
+        let winnerName = sourceDisplayName(winner.source)
+        // 采纳。markManual: false 是这颗按钮跟「采纳候选」最本质的区别 —— 这是算法自己的选择,
+        // 不该被标成人工修正、更不该因此把这首歌永久排除在后续自动升级之外(见 saveEdit 的
+        // 参数注释)。打分留痕那几个字段照 collector rescoreLyrics 写的那一套一起写。
+        var decision: [String: Any]?
+        if let data = pick.decisionJSON.data(using: .utf8),
+           var obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            // ⚠️ 覆写 applied:collector 那边**看不到缓存里的正文**,只能拿"冠军是否换了源"近似
+            // (searchLyricsPick 里写明了这是近似值)。同源换内容时它会算成 false,而「解析决策」
+            // 弹窗把 false 渲染成「评估后维持原状」—— 跟结果行直接打架(2026-08-21 用户实测
+            // 撞到:结果行说"换了一份"、存档说"维持原状")。走到这里就是真的采纳了,只有采纳
+            // 这一条路径会写存档,所以无条件置 true。
+            obj["applied"] = true
+            decision = obj
+        }
+        editedLyrics = winner.lyrics
+        editedTr = winner.lyricsTr
+        editedRoma = winner.lyricsRoma
+        await store.saveEdit(
+            key: key, lyrics: winner.lyrics, tr: winner.lyricsTr, roma: winner.lyricsRoma,
+            yrc: winner.lyricsYRC, source: winner.source, markManual: false,
+            score: pick.winnerScore, scoringVersion: pick.scoringVersion,
+            resolvedDurationSecs: pick.resolvedDurationSecs,
+            sourcesSeen: pick.sourcesSeen, sourcesResponded: pick.sourcesResponded,
+            decision: decision
+        )
+        refreshOffsetState(artist: summary.artist, title: summary.title,
+                           lyrics: winner.lyrics, yrc: winner.lyricsYRC)
+        guard store.lastError == nil else {
+            // 落盘/重启失败不在这里重复报:store.lastError 那条红字横幅已经在说了。
+            rematchResult = nil
+            return
+        }
+        if winner.source == summary.lyricsSource {
+            // 别说"更新的一份" —— 代码只知道"内容不一样",不知道哪份更新:同一个源完全可能
+            // 这一轮匹配到**另一个版本**(不同 song id / 重新上传过的歌词)。实测坐实同源两轮
+            // 返回的东西会变:周杰伦《I Do》点按钮那轮酷狗带逐字(wordTiming 400 分),十分钟后
+            // 同一首同一个源一个逐字都不返回。所以如实说"哪里不一样",让用户自己判断。
+            //
+            // 三句完整句子而不是拼接:中文的"都"和英文的语序都拼不出来(同 batchDeleteMessage
+            // 那条注释)。
+            let textChanged = winner.lyrics != detail.lyrics
+            let timingChanged = winner.lyricsYRC != detail.yrc
+            let template: String
+            if textChanged && timingChanged {
+                template = L10n.t("已重新匹配：还是「%1$@」，但正文和逐字时间轴都跟原来那份不一样，已换成这一轮抓到的（%2$@ 分）")
+            } else if timingChanged {
+                template = L10n.t("已重新匹配：还是「%1$@」，但逐字时间轴跟原来那份不一样，已换成这一轮抓到的（%2$@ 分）")
+            } else {
+                template = L10n.t("已重新匹配：还是「%1$@」，但正文跟原来那份不一样，已换成这一轮抓到的（%2$@ 分）")
+            }
+            done(.changed, String(format: template, winnerName, "\(pick.winnerScore)"))
+        } else {
+            done(.changed, String(format: L10n.t("已换成「%1$@」（%2$@ 分），原来是「%3$@」"),
+                                  winnerName, "\(pick.winnerScore)", currentName))
         }
     }
 

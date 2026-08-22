@@ -42,5 +42,15 @@ final class AppActions {
         selectionRequests.send(item)
     }
 
+    /// 「这段时间内的 reopen 别开歌词窗口」—— 点系统通知时用。
+    ///
+    /// 2026-08-22:点通知会连带弹出歌词窗口(applicationShouldHandleReopen 是为「点 Dock
+    /// 图标开歌词窗口」写的,系统激活 App 时也会走到它)。第一版试过在通知回调里
+    /// `(NSApp.delegate as? AppDelegate)?.cancel...` —— **实测无声失败**,那是全仓唯一一处
+    /// NSApp.delegate 用法,SwiftUI 的 @NSApplicationDelegateAdaptor 下这个转型拿不到我们的
+    /// AppDelegate(日志里那行 suppressed 从来没出现过就是证据)。所以状态放这里 ——
+    /// 这个单例存在的意义本来就是"reopen 处理器和别处互相到不了"这类桥接。
+    var suppressLyricsOnReopenUntil: Date?
+
     private init() {}
 }

@@ -33,6 +33,19 @@ enum MenuBarMarqueeRenderer {
         return ceil(f.ascender - f.descender) + 2
     }
 
+    /// 逐字染色用:第 i 个词画完时的累计宽度(点)。
+    /// ⚠️ 必须按**前缀整段**测宽,不能各词单测再累加 —— 词边界处的 kerning/连字会让
+    /// "部分之和"跟整句渲染对不上,填色边界就会逐词漂移。prepare() 画的是 words 拼接后的
+    /// plainText(引擎侧保证 plainText = words.map(\.text).joined()),同一份字符串、
+    /// 同一个字体,这里量出来的前缀宽度天然落在长图的同一坐标系上。
+    static func wordEndXs(for words: [SyncedLyricWord]) -> [CGFloat] {
+        var prefix = ""
+        return words.map { w in
+            prefix += w.text
+            return width(of: prefix)
+        }
+    }
+
     /// 把文字按**宽度**截断,超出部分换成省略号。装得下的句子不走这里,只有极端情况
     /// (宽度小到连滚都没意义)才用得上。
     ///

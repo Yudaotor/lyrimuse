@@ -74,6 +74,10 @@ enum ConfigPortability {
         "np:hasShownAutomationOnboarding",
         "np:hasOfferedICloudImport",
         "np:hasShownOverlayDragHint",
+        // 「这台机器上哪些 App 已经提示过新播放器」—— 跟上面几条是同一类机器状态。
+        // 跟着备份搬去新机器的后果是:新机器上装了同一个播放器却永不提示,而新机器
+        // 恰恰最需要提示(浏览器的 bundle id 还可能不一样)。
+        "np:unknownPlayerNotices",
         "np:overlayStyle",
         "np:overlayPositionTop",
         "np:overlayPositionOrigin",
@@ -378,6 +382,12 @@ enum ConfigPortability {
         // 镜像也要删。留着它下次启动就会被 restoreIfPristine 原样恢复回来 —— 用户点的
         // 那个"恢复到刚装完时的样子"等于白点。
         AppSettingsMirror.remove()
+        // 「已校准」名单跟着一起清(2026-08-21 补)。上面那轮把三个偏移键(全局/按播放器/
+        // 单曲)都清了,而这份名单是**独立文件**、不在 np: 前缀里 —— 不一起清就会留下一份
+        // 孤儿名单:collector 继续拒绝给这些歌自动升级歌词,而它保护的校正值早已不存在,
+        // 用户在界面上完全看不到原因。它跟校正值是成对的东西(LyricsOffsetStore
+        // .clearAllTrackOffsets 也是这么配对的)。
+        await LyricsPinStore.shared.removeAll()
         logger.info("clearAllConfig: cleared \(clearedCount) UserDefaults keys, filesRemovedOK=\(ok)")
 
         // 卸 LaunchAgent 并停掉进程。放在清 UserDefaults **之后**:uninstall 只做 launchctl
