@@ -20,7 +20,7 @@
 |---|---|---|
 | 歌词（indigo） | text.quote | 四段：**获取**（歌词来源五源勾选＋匹配算法智能/顺序优先＋顺序列表＋提前解析同专辑）/**译文**（显示译文→译文语言→系统兜底翻译→语言包）/**效果**（卡拉OK效果、中文繁简切换[按语言条件显示]、显示罗马音＋日韩中分语言勾选、双行显示、时间轴偏移±5s步长0.05＋作用于哪个播放器的下拉框）/**管理**（歌词管理入口＋歌词文件夹）。分段选择器记忆上次停留段（`@AppStorage settings:lyricsSection`） |
 | 播放器（mint） | play.circle | 播放器选择（Apple Music/QQ音乐/网易云/Spotify/自动）、Apple Music 自动化权限状态、后台采集服务状态 |
-| 歌词显示（yellow） | rectangle.3.group | 四段按展示面分：**悬浮歌词**（开关＋配色[跟随封面/主题/文字色/背景色/描边/我的配色主题]＋文字[字体/字号]＋窗口[宽度/锁定位置/恢复默认]）/**灵动岛**（开关＋风格＋宽度＋显示在哪块屏幕）/**菜单栏**（开关＋宽度模式＋最大宽度）/**其它**（自动隐藏、截屏/录屏时隐藏、暂停/无播放时隐藏）。歌词窗口刻意不在此页配置（按需打开的窗口，非常驻展示面） |
+| 歌词显示（yellow） | rectangle.3.group | 四段按展示面分：**悬浮歌词**（开关＋配色[跟随封面/主题/文字色/背景色/描边/我的配色主题]＋文字[字体/字号]＋窗口[宽度/锁定位置/恢复默认]）/**灵动岛**（开关＋风格＋宽度＋显示在哪块屏幕）/**菜单栏**（开关＋宽度模式＋最大宽度）/**其它**（自动隐藏：暂停/无播放时隐藏、截屏/录屏时隐藏、别的 App 全屏时隐藏）；悬浮歌词段另有「指针划过时让开」。歌词窗口刻意不在此页配置（按需打开的窗口，非常驻展示面） |
 | 快捷键（teal） | keyboard | 全部 10 个全局快捷键的录制行 + 调整步长 |
 | 通用（gray） | gearshape | 语言与启动（语言/开机启动）、菜单栏与 Dock（在 Dock 中显示、菜单栏图标 12 款网格、随播放律动）、设置备份（导出/导入/配置文件夹/清除所有设置） |
 | 关于（blue） | info.circle | 检查更新（Sparkle）＋自动检查/自动下载、GitHub 仓库、反馈问题、导出诊断信息 |
@@ -41,7 +41,7 @@
 ### 4. 配置备份与搬家（ConfigPortability / ICloudConfigStore）
 
 - **导出**：config.json（含账号 token **原文**）+ features.json + UserDefaults（`np:` + `KeyboardShortcuts_` 前缀）合成一份 JSON。UI 警示「包含账号密钥，不要分享」——与诊断导出刻意相反（那个绝不含 token）。
-- **排除键**：`hasCompletedOnboarding`/`hasShownAutomationOnboarding`/`hasOfferedICloudImport`/`hasShownOverlayDragHint` 等「机器状态」不随人走（新机器该自己走引导/授权）；**`np:collectorInstalledFingerprint`（2026-08-22 加）同属此类**——它记的是「这台机器上现在装进 launchd 的是哪个 collector 二进制」，新机器上必然是另一个文件，带过去会让启动对账误以为「没变过」而跳过那次本该做的重装，正好把 Sparkle 更新的兜底关掉（机理见第 15 章 §2）；**悬浮窗位置 `np:overlayPositionTop`/`np:overlayPositionOrigin` 同属机器本地键**（存的是绝对屏幕坐标，新机器显示器尺寸/排布不同，搬过去只会把窗口摆到看不见的地方——同 05 章 `notchScreenID` 的判据），见 `ConfigPortability.machineLocalDefaultsKeys`；导出导入用同一个排除集合，旧文件里的这些键导入时也被挡。
+- **排除键**：`hasCompletedOnboarding`/`hasShownAutomationOnboarding`/`hasOfferedICloudImport`/`hasShownOverlayDragHint` 等「机器状态」不随人走（新机器该自己走引导/授权）；**`np:collectorInstalledFingerprint`、`np:lyricsWindowFrame`、`np:lyricsWindowScreenID`（均 2026-08-22 加）同属此类**——它记的是「这台机器上现在装进 launchd 的是哪个 collector 二进制」，新机器上必然是另一个文件，带过去会让启动对账误以为「没变过」而跳过那次本该做的重装，正好把 Sparkle 更新的兜底关掉（机理见第 15 章 §2）；后两个是歌词窗口的位置/尺寸与它所在那块屏幕的 UUID，判据跟 `np:overlayPosition*` 一字不差（绝对屏幕坐标 + 一块具体显示器，新机器的排布和 UUID 全不一样，见第 07 章）；**悬浮窗位置 `np:overlayPositionTop`/`np:overlayPositionOrigin` 同属机器本地键**（存的是绝对屏幕坐标，新机器显示器尺寸/排布不同，搬过去只会把窗口摆到看不见的地方——同 05 章 `notchScreenID` 的判据），见 `ConfigPortability.machineLocalDefaultsKeys`；导出导入用同一个排除集合，旧文件里的这些键导入时也被挡。
 - **歌词库走 sidecar，不进配置包**（2026-08-21 加）：每次「存到 iCloud」/「导出…」都在配置包**旁边**多写一份同名同时间戳的 `Lyrimuse-Lyrics-<时间戳>.json.z`（`-Config-` 换成 `-Lyrics-`），内容 = `lyrics/` 文件族（歌词六字段的权威源）+「已校准」名单，zlib 压缩（实测 14.5 MB → 6.1 MB）。导入时按这个位置关系找兄弟文件；找不到就**一个歌词文件都不动**（老备份/只导设置，绝不能当成"空歌词库"去清本机的）。
   - **为什么不塞进配置包本体**（三条硬约束，任一条都足以否掉）：① `ICloudConfigStore.latestSnapshot()` 为取 `exportedAt`/`deviceName` 会在**主线程整份读+解析**配置包，而它挂在设置页 `.onAppear` 等多处 —— 包变大就是每次进设置页卡一下；② `write` 每次点都新写一份带时间戳的文件，**没有大小上限也没有"只保留 N 份"清理**，旧份永不被读 —— 几十 MB × N = iCloud 黑洞；③ 新机首启那条自动询问只给 8s 下载超时且**静默**跳过。sidecar 一并绕开三条，且 `BackupDiscovery` 只认 `Lyrimuse-Config-*.json`，天然不会把 sidecar 误认成配置包。
   - **为什么备份 `lyrics/` 文件族而不是 17 MB 的 enrich 缓存**：文件族是六字段权威源，collector 每次启动跑 `importLyricsFromFiles`（文件赢、只增不删、缓存里没有那个 key 也会新建条目），所以文件铺回去歌词自己会长回缓存；反过来直接盖写 `lyrimuse-enrich-cache.json` 会撞上"collector 内存整份写回"的竞态（`EnrichCacheStore.clearAll` 那两轮实测的坑）。缓存里其余字段（封面/链接/mbid/打分/决策存档）都是可重新解析的派生数据。**顺带保住单曲校正值**：它的 key 含歌词内容指纹，走文件族恢复正文逐字节不变，那批校正值到新机器才真的还有效。

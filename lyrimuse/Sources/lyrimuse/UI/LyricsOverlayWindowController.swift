@@ -268,9 +268,18 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject 
     // 当前值即可(如果做成默认参数,默认值表达式在 Swift 6 严格并发模式下是 nonisolated
     // 上下文,访问 @MainActor 单例会报错,所以强制显式传参而不是偷懒用默认值)。
     private func updateActualVisibility(isPlayingNow: Bool) {
+        // 「别的 App 全屏时隐藏」是第三个与项(2026-08-22)。跟另外两个自动隐藏一样,
+        // 不碰 isVisible 本身 —— 那是纯粹的"用户手动想不想看见"。开关关着时
+        // FullscreenAppMonitor 不监听、isFullscreenAppPresent 恒为 false,这一项等于常真。
         let shouldShow = isVisible && (!hideWhenNotPlaying || isPlayingNow)
+            && !FullscreenAppMonitor.shared.isFullscreenAppPresent
         if shouldShow { window?.orderFront(nil) } else { window?.orderOut(nil) }
         syncMouseMonitors()
+    }
+
+    /// 全屏状态变化时重新过一遍可见性闸。由 AppDelegate 订阅 FullscreenAppMonitor 后调。
+    func refreshVisibilityForFullscreenChange() {
+        updateActualVisibility(isPlayingNow: PlaybackCoordinator.shared.isPlayingSmoothed)
     }
 
     // 锁定位置:彻底停用长按拖动+悬停控制按钮这整套手势。解锁后不是"正常拦截点击"了
@@ -420,8 +429,25 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject 
     /// 开头那两条 guard(锁定/不可见)只省了回调体内的计算,IPC+唤醒这笔钱在 guard 之前
     /// 就已经花掉。"锁定"和"已隐藏"两种状态下这套手势系统完全用不上,按状态装/卸。
     /// 调用点:updateActualVisibility(orderFront/orderOut 之后)与 setLocked。
+    /// 「指针划过时让开」开关切换后调一次。
+    ///
+    /// 必须有这个入口:这个开关进了 `syncMouseMonitors` 的判据,而那个函数原来只在
+    /// 可见性变化和 setLocked 时被调 —— 不在这里补一次的话,用户在设置页打开它之后,
+    /// 要等到下次显示/隐藏或锁定切换才真正装上监听器,表现成"开了没反应"。
+    func setFadeOnHover(_ enabled: Bool) {
+        syncMouseMonitors()
+        // 关掉的一刻指针可能正停在窗口上。留着 true 不会让它一直淡着(视图层同时读开关),
+        // 但会让下次开启时凭一个陈旧的悬停态直接淡下去 —— 清掉更干净。
+        if !enabled, isHoveringForControls { isHoveringForControls = false }
+    }
+
     private func syncMouseMonitors() {
-        let needed = (window?.isVisible ?? false) && !isPositionLocked
+        // ⚠️「划过让开」(overlayFadeOnHover)必须一起进这个判据 —— 它靠的正是
+        // handleMouseEvent 的 .mouseMoved 分支维护 isHoveringForControls,而「锁定位置 +
+        // 划过让开」恰恰是最常见的组合(位置钉死了的用户才更需要它临时让开)。只按
+        // !isPositionLocked 装卸的话,一锁定监听器就整个卸掉,这个开关当场变成死的。
+        let needed = (window?.isVisible ?? false)
+            && (!isPositionLocked || AppSettings.shared.overlayFadeOnHover)
         if needed {
             installMouseMonitors()
         } else {
@@ -548,7 +574,11 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject 
 
 
     private func handleMouseEvent(type: NSEvent.EventType) {
-        guard let window, !isPositionLocked else { return }
+        guard let window else { return }
+        // 锁定位置 = 停用整套手势(悬停控制排 + 长按拖动)。但 .mouseMoved 要放行:
+        // 「划过让开」需要它维护 isHoveringForControls,而那件事跟"能不能拖动窗口"无关。
+        // 控制排不会因此露出来 —— 下面 controlsShown 那行有 `&& !lockPosition` 守着。
+        if isPositionLocked, type != .mouseMoved { return }
         // 窗口当前不在屏幕上时直接不处理。监听器的生命周期虽然已经跟着"实际可见且未锁定"
         // 装/卸(见 syncMouseMonitors),这道 guard 仍然要留:装/卸发生在 orderOut/orderFront
         // 的那一拍,而事件可能已经在派发队列里排着 —— 没有它的话,下面 .leftMouseDown 分支

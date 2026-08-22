@@ -34,6 +34,8 @@ private final class OverlayPlayback: ObservableObject {
     @Published private(set) var displayForegroundColor: Color = .white
     // ---- 来自 AppSettings(只挑悬浮窗读的这一小片) ----
     @Published private(set) var lockPosition = false
+    /// 指针划过时让开(见 AppSettings.overlayFadeOnHover)。
+    @Published private(set) var fadeOnHover = false
     @Published private(set) var showRomanization = true
     @Published private(set) var showTranslation = false
     @Published private(set) var showNextLinePreview = true
@@ -66,6 +68,7 @@ private final class OverlayPlayback: ObservableObject {
                 .removeDuplicates()
                 .sink { [weak self] in self?.displayForegroundColor = $0 },
             s.$lockPosition.removeDuplicates().sink { [weak self] in self?.lockPosition = $0 },
+            s.$overlayFadeOnHover.removeDuplicates().sink { [weak self] in self?.fadeOnHover = $0 },
             s.$showRomanization.removeDuplicates().sink { [weak self] in self?.showRomanization = $0 },
             s.$showTranslation.removeDuplicates().sink { [weak self] in self?.showTranslation = $0 },
             s.$showNextLinePreview.removeDuplicates().sink { [weak self] in self?.showNextLinePreview = $0 },
@@ -130,6 +133,16 @@ struct LyricsOverlayView: View {
         overlayController.isHoveringForControls && !playback.lockPosition
     }
 
+    /// 「指针划过时让开」的当前不透明度。
+    ///
+    /// 做成淡到 15% 而不是整窗 orderOut:orderOut 会打断 `updateActualVisibility` 那套
+    /// 状态机(它同时被"暂停时隐藏""截屏时隐藏""手动开关"三方驱动),而这里要的只是
+    /// "临时看一眼下面",不该跟那三个真正的可见性来源抢同一个开关。留 15% 也让用户知道
+    /// 窗口还在那儿、不是消失了。
+    private var hoverFadeOpacity: Double {
+        playback.fadeOnHover && overlayController.isHoveringForControls ? 0.15 : 1
+    }
+
     var body: some View {
         // ⚠️ 按钮排在**歌词卡片上方**,而且**槽位常驻**(不显示时只是透明+不接受点击),两点缺一
         // 不可,原因分别是:
@@ -182,6 +195,11 @@ struct LyricsOverlayView: View {
         .onPreferenceChange(ControlRectsPreferenceKey.self) { onControlRectsChange($0) }
         .animation(.easeOut(duration: 0.16), value: controlsVisible)
         .animation(.easeOut(duration: 0.3), value: overlayController.showDragHint)
+        // 「指针划过时让开」。挂在**测量之后** —— opacity 不改布局,所以放哪一层都不影响上面
+        // 那三条 preference 报出去的高度/热区;放这里只是让它和上面两条动画归在一起看得清。
+        // 淡出比淡入慢一点(0.18 vs 0.12):指针扫过去要立刻让开才有用,回来时慢一点更从容。
+        .opacity(hoverFadeOpacity)
+        .animation(.easeOut(duration: hoverFadeOpacity < 1 ? 0.12 : 0.18), value: hoverFadeOpacity)
         // 控制排每次露出来时重读一次"喜欢"状态。这条状态不跟着 2 秒轮询走(每次读要起一个
         // osascript 子进程,为一个几乎不变的布尔值那么干不值当),换歌时刷一次之外,就靠这里
         // ——正好覆盖"用户刚在 Music.app 里自己点了心、回头来看悬浮窗"这种情况。

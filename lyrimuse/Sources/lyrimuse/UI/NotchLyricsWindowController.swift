@@ -303,6 +303,11 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
 
     // 跟经典悬浮窗共用同一个"暂停/无播放时隐藏"设置项(AppSettings.hideWhenNotPlaying),
     // 不新增独立开关——两种样式各自独立调用这个方法应用同一个设置值。
+    /// 全屏状态变化时重新过一遍可见性闸。由 AppDelegate 订阅 FullscreenAppMonitor 后调。
+    func refreshVisibilityForFullscreenChange() {
+        updateActualVisibility(isPlayingNow: PlaybackCoordinator.shared.isPlayingSmoothed)
+    }
+
     func setHideWhenNotPlaying(_ hide: Bool) {
         hideWhenNotPlaying = hide
         updateActualVisibility(isPlayingNow: PlaybackCoordinator.shared.isPlayingSmoothed)
@@ -391,7 +396,11 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         // (窗口都没了,还收什么)。灵动岛的收起态本身只占菜单栏那一条高度、不额外占屏,
         // 所以想看到"歌词行卷回顶行"的效果,得把这个设置关掉。这是设置本身的语义,不是 bug:
         // 有人就是要暂停后连那条顶行都别留。
+        // 「别的 App 全屏时隐藏」是第三个与项(2026-08-22)。跟另外两个自动隐藏一样,
+        // 不碰 isVisible 本身 —— 那是纯粹的"用户手动想不想看见"。开关关着时
+        // FullscreenAppMonitor 不监听、isFullscreenAppPresent 恒为 false,这一项等于常真。
         let shouldShow = isVisible && (!hideWhenNotPlaying || isPlayingNow)
+            && !FullscreenAppMonitor.shared.isFullscreenAppPresent
         guard shouldShow != lastAppliedShouldShow else { return }
         lastAppliedShouldShow = shouldShow
         // orderFrontRegardless(),不是 orderFront(nil)——这个 App 是 .accessory 策略、

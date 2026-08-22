@@ -11,7 +11,13 @@
 - **全局快捷键**:设置页快捷键分区「打开歌词窗口」(`openLyricsWindowHotkey`)。默认**不预置**按键,必须用户自己录制才生效。
 - 两条路径都汇到 `AppActions.shared.openLyricsWindow`,由一扇隐藏锚点窗口(`MenuBarSceneActions`)捕获的 `openWindow(id:)` 环境 action 执行,调用前先 `NSApp.activate(ignoringOtherApps: true)`(accessory 策略下不激活的话 openWindow 静默没反应)。
 - 打开期间若「在 Dock 中显示」是关的,会**临时借一个 Dock 图标**(`AuxiliaryWindowActivation` 计数器,与设置/歌词管理/引导窗口共用),全部辅助窗口关完才还原成无 Dock 图标。
-- 窗口尺寸约束 `minWidth 520 / idealWidth 1020 / minHeight 480 / idealHeight 660`;位置/尺寸交给 SwiftUI+macOS 的窗口自动存档机制,无自写持久化代码。⚠️待核对:退出 App 重启后这扇窗口是否会随系统状态恢复自动重开(代码只声明交给系统存档,未见显式处理,未实测)。
+- 窗口尺寸约束 `minWidth 520 / idealWidth 1020 / minHeight 480 / idealHeight 660`。
+- **位置/尺寸/所在屏幕自己持久化**(2026-08-22,此前完全靠 SwiftUI `Window(id:)` 的系统状态恢复):`LyricsWindowController` 在 `attach` 时先 `restorePersistedFrame` 恢复一次,再挂 `didMove`/`didResize` 观察者(两者要存的东西一样,拖边角会同时来,合用一个回调),400ms 去抖后写 `np:lyricsWindowFrame` + `np:lyricsWindowScreenID`。
+  - **系统那套的问题不在"存不存",在它不认识屏幕**:多显示器下拔插一次或换个分辨率,窗口经常回到主屏、或落在一块已经不存在的屏幕的坐标上(表现是"打开了但看不见")。悬浮歌词早就为同一类问题写了 `OverlayPlacement`(04 章),这里是把同样的不变量补给歌词窗口。
+  - **恢复时先认屏幕**:存过的那块屏(按 `ScreenIdentity` 的显示器 UUID)还接着才按存的 frame 放,不在了就整个放弃、交回系统默认——绝不拿旧坐标往现有屏幕上硬摆。放之前还要夹进那块屏的 `visibleFrame`(接同一块屏但改了缩放时,不夹会有一截挂在屏幕外)。
+  - **伪全屏/原生全屏期间一律不存**:那时的 frame 是撑满屏幕的临时值,存下去等于把"全屏尺寸"当成用户想要的窗口大小,退出全屏再开就是一扇满屏的窗。
+  - 两个键都是**机器本地状态**,在 `ConfigPortability.machineLocalDefaultsKeys` 里——判据跟 `np:overlayPosition*` 一字不差(绝对屏幕坐标 + 一块具体显示器的 UUID,新机器全不一样)。
+  - 「置顶」仍然**不**持久化(每次重新打开都从"不置顶"开始),那是另一件事,见下面「窗口动作胶囊」。
 - Dock 图标点击(reopen)**只**打开这扇歌词窗口,任何情况下都不弹设置(2026-08-21 按用户要求从「设置窗口」改过来:Dock 图标是「我想看这个 App」的入口,而这个 App 让人想看的是歌词;设置另有 ⌘, / 菜单栏菜单 / 主菜单三个入口)。实现在 `AppDelegate.applicationShouldHandleReopen`,两处刻意的写法都是为了「不要冒出设置窗」:
   - **不退回 `openSettings`**:`AppActions.openLyricsWindow` 是环境 action、由隐藏锚点视图捕获(见 `MenuBarSceneActions`),在「刚重启、锚点还没挂上」那一瞬是 nil。上一版那时候退回设置窗,于是「点 Dock 弹设置」照样发生。宁可这一下什么都不做(下一下就正常)。
   - **返回 `false`**:返回 true = 让 AppKit 执行默认的「恢复/带回本 App 窗口」行为,而 SwiftUI 的 Settings 场景关掉之后 NSWindow 对象仍然活着(只是 orderOut,`check-windows` 能看到它 `onscreen=false` 挂着),默认行为会把它一起端出来。返回 false = 「这次 reopen 我自己处理完了」。
@@ -165,7 +171,8 @@
 
 ## 数据与文件
 
-- **磁盘文件**:本窗口自身不直接读写任何文件。窗口位置/尺寸由系统窗口状态恢复机制存档(SwiftUI `Window(id:)` 默认行为)。
+- **磁盘文件**:本窗口自身不直接读写任何文件。
+- **UserDefaults**:`np:lyricsWindowFrame`(`NSStringFromRect`)+ `np:lyricsWindowScreenID`(显示器 UUID),见「入口与展示面」那条;两者都在配置备份的排除表里。
 - **UserDefaults**:只经 `AppSettings` 间接读(showRomanization/showTranslation/showInDock 等);置顶/伪全屏状态**刻意不持久化**。
 - **进程边界**:播放控制与音量/模式/喜欢的读写经 osascript 子进程(AppleScript → Music.app/Spotify)或 media-control(MediaRemote → QQ/网易云);单次往返 ~100ms,全部在后台线程/Task 发起。
 - **网络**:高清封面替代按 collector 缓存记录的 cover_url 下载(链路在 PlaybackCoordinator/LocalPlaybackSource,本窗口只消费解码好的 NSImage)。

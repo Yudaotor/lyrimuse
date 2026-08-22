@@ -8,6 +8,12 @@ import SwiftUI
 // 没进编译清单,实际画的也是随机动画 —— 这里不重复那种宣称,注释和 UI 文案都只说"播放
 // 指示",不说"频谱"。
 //
+// 2026-08-22:条高的**振幅**改由逐字歌词时间轴调制(`amplitude` 闭包),所以它现在确实
+// 跟着歌在动 —— 但驱动它的是"这一刻有没有字正在唱",不是音频。这是 lyrimuse 相对那类
+// 抓音频的实现的便宜之处:逐字时间轴本来就在手上(LyricsSyncEngine 解析出的 words 带
+// 真实起止毫秒),等于白拿一个跟人声同步的包络,零权限、零新数据源、零常驻音频线程。
+// 形状(哪根跳多高)仍是伪随机 —— 那部分本来就不该假装有物理意义。
+//
 // 性能:用 .animation(minimumInterval:) 而不是裸的 .animation。后者是每帧(60/120Hz)重算
 // 一次 body,而这个视图常驻在屏幕顶端 —— 这个 App 已经有一条 20Hz 的逐字填色热路径了,
 // 不该再挂一条更热的纯装饰路径上去。给了 minimumInterval 之后 0.28 秒才重算一次、换一个
@@ -17,6 +23,15 @@ import SwiftUI
 struct EqualizerBars: View {
     var color: Color
     var isPlaying: Bool
+    /// 这一刻的"人声强度",0...1。在 TimelineView 的每个 tick 上求值一次(不是每帧 ——
+    /// tick 频率仍是 `interval`,见下面的性能注释,**不要**为了更跟手去提高它)。
+    ///
+    /// 闭包而不是值:值只会在父 body 重算时更新,而父 body 的重算时机跟这个视图自己的
+    /// tick 完全对不上,表现就是"唱了一整行条子的幅度纹丝不动"。闭包让它在 tick 那一刻
+    /// 直读当下的播放状态,跟逐字填色那几处"闭包直读协调器、不经代理订阅"是同一个模式。
+    ///
+    /// 默认 `{ _ in 1 }` = 满幅,等价于加这个参数之前的行为。
+    var amplitude: (Date) -> Double = { _ in 1 }
 
     /// 换一次高度的间隔。0.28s 是试出来的:再快就显得毛躁、跟音乐没关系的抖动感很强,
     /// 再慢就不像在"跳"。
@@ -38,11 +53,13 @@ struct EqualizerBars: View {
             // paused 期间不保证按时给点,自增计数器会随之漂移;从时间戳推则任何时候重建
             // 视图都能接上同一条序列。
             let tick = Int(context.date.timeIntervalSinceReferenceDate / Self.interval)
+            // 每个 tick 求一次,四根条子共用 —— 它描述的是"此刻",跟是哪根条子无关。
+            let amp = amplitude(context.date)
             HStack(alignment: .bottom, spacing: Self.spacing) {
                 ForEach(0..<Self.barCount, id: \.self) { i in
                     Capsule()
                         .fill(color)
-                        .frame(width: Self.barWidth, height: height(bar: i, tick: tick))
+                        .frame(width: Self.barWidth, height: height(bar: i, tick: tick, amplitude: amp))
                 }
             }
             .frame(width: Self.width, height: Self.maxHeight, alignment: .bottom)
@@ -66,7 +83,7 @@ struct EqualizerBars: View {
     /// body 的时机不由我们控制(父视图任何状态变化都可能带着重算一次),表现出来就是条子
     /// 在两次 tick 之间无缘无故抽一下。按 (bar, tick) 哈希出来的值则是纯函数,重算多少次
     /// 都是同一个高度。
-    private func height(bar: Int, tick: Int) -> CGFloat {
+    private func height(bar: Int, tick: Int, amplitude: Double) -> CGFloat {
         guard isPlaying else { return Self.minHeight }
         var h = UInt64(bitPattern: Int64(tick &* 31 &+ bar &* 7919))
         // splitmix64 的 finalizer——比取模/线性同余散得开,相邻 tick 不会连着出相近的值
@@ -77,6 +94,9 @@ struct EqualizerBars: View {
         h = h &* 0x94d0_49bb_1331_11eb
         h ^= h >> 31
         let unit = Double(h % 1000) / 1000.0
-        return Self.minHeight + (Self.maxHeight - Self.minHeight) * CGFloat(unit)
+        // 振幅只压缩"能跳多高",不动地板 —— minHeight 那条线永远在,间奏/纯音乐时条子
+        // 收敛成小幅晃动而不是趴平。趴平的观感是"坏了",而这个元件的职责是"告诉你还在放"。
+        let scaled = unit * max(0, min(1, amplitude))
+        return Self.minHeight + (Self.maxHeight - Self.minHeight) * CGFloat(scaled)
     }
 }

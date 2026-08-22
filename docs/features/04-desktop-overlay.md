@@ -106,6 +106,8 @@
 
 - 「锁定位置」一个开关管两件事:锁定 = 彻底停用悬停控制排+长按拖动整套手势;解锁 ≠ 拦截点击——`ignoresMouseEvents` 常年为 true(点击真穿透到下层),只有鼠标悬停到播放控制按钮胶囊那一小块热区时才临时收回。
 - **滚轮永远穿透**(2026-08-18):热区收回穿透是整窗、所有鼠标事件一刀切的,滚轮曾跟着被吞——悬浮窗叠在别的窗口上时,热区那一小块里下层窗口滚不动(用户报:设置窗「最近记录」列表)。现在 `LyricsOverlayWindow.scrollWheel` 收到滚轮立即把穿透设回 true 并丢弃该事件(第一格无感),同一手势后续滚动直接派给下层;指针再移动时 mouseMoved 照常重新收回穿透,胶囊按钮可点性不受影响。拖动武装(performDrag)期间不碰穿透,原样放行。
+- ⚠️ **本节上面两条描述过时了**(代码 2026-08-18 就改了,文档没跟上,2026-08-22 修):`ignoresMouseEvents` 现在**恒为 true**,没有"悬停到热区临时收回穿透"这回事,胶囊上的点击改由 `.leftMouseDown` 分支按各按钮矩形自己分发(`OverlayControlHitTest.control(at:in:)`);配套的 `scrollWheel` 覆写和 `isDragArmedProvider`/`onScrollWheelSwallowed` 两条接线也一并删了 —— 窗口压根收不到滚轮,WindowServer 直接派给下层。原因见 `LyricsOverlayWindow` 类注释:`ignoresMouseEvents` 是整窗 × 所有事件的一个布尔量,点击要它 false、滚轮要它 true,按位置翻转必然让其中一方受害。唯一的例外仍是长按拖动武装期间(`armDragIfStillPressed` 为 `performDrag` 临时收回 false)。
+- **「指针划过时让开」改了鼠标监听器的生命周期**(2026-08-22):`syncMouseMonitors()` 的判据从 `visible && !isPositionLocked` 改成 `visible && (!isPositionLocked || overlayFadeOnHover)`,`handleMouseEvent` 开头那条锁定 guard 也对 `.mouseMoved` 放行。理由是「锁定位置 + 划过让开」恰恰是最常见的组合(位置钉死了的用户才更需要它临时让开),而锁定原本会把监听器整个卸掉、让这个开关当场变成死的。控制排不会因此露出来——`controlsShown` 那行有 `&& !lockPosition` 守着。开关切换后必须调 `setFadeOnHover(_:)` 重新装卸一次,否则要等到下次显示/隐藏才生效。
 - 因为窗口收不到原生事件,悬停/长按/拖动全靠 global+local 两个 NSEvent 监听器旁观鼠标自己算(`handleMouseEvent`);热区矩形由视图层 GeometryReader 经 PreferenceKey 上报再换算成屏幕坐标。监听器生命周期 =「窗口实际在屏 且 未锁定」(2026-08-19,`syncMouseMonitors`,挂在 setLocked/updateActualVisibility 的状态迁移上)——global monitor 会把全系统每次指针移动经 mach IPC 送进本进程,锁定/隐藏时这套手势用不上,不再装死到进程退出。
 - 长按拖动:解锁状态下按住窗口区域 0.35s(期间移动 ≤4pt)即"武装"(卡片描边高亮提示),随后合成 mouseDown 交给 `NSWindow.performDrag` 原生拖动(自算 delta 那条路实测卡顿);移动超容差判为"想操作下层 App 的普通手势",取消长按。
 - 首次解锁时窗口上短暂弹「长按即可拖动位置」4 秒,一台机器只弹一次(`np:hasShownOverlayDragHint`)。
@@ -118,6 +120,8 @@
 | 手动显示/隐藏 | `setVisible` 写 `classicOverlayEnabled`,窗口 orderFront/orderOut | 各自独立开关 |
 | 暂停/无播放时隐藏 | `hideWhenNotPlaying`;实际可见 = 手动开 AND (未开自动隐藏 OR 正在播)。跟的是 `isPlayingSmoothed`(停止侧带 0.5s 宽限,吸收换歌/seek 抖动;恢复播放立即响应),恢复播放自动重新显示,不改手动开关本身 | **共享同一设置项**,设置页"自动隐藏"卡一个 Toggle 同时下发给两个控制器(只发给当下开着的那个) |
 | 截屏/录屏时隐藏 | `hideDuringScreenCapture` → `window.sharingType = .none`:截图/录屏/会议共享拍不到,用户自己仍看得见 | 同上,共享设置项 |
+| 别的 App 全屏时隐藏(2026-08-22) | `hideWhenFullscreenApp`;判定在 `FullscreenAppMonitor`(**只用公开 API**:`NSWorkspace` 的 activeSpace/didActivate/didTerminate 三个通知触发,`CGWindowListCopyWindowInfo` 找 `kCGWindowLayer == 0`、owner 不是自己、bounds 覆盖某块屏**整个 frame**(不是 visibleFrame——那会把"最大化但没进全屏"也算进来)的窗口)。开关关着时整个不监听;通知到达后延 350ms 再查(全屏是一段动画,通知到时窗口还没铺满,立刻查会读到"没人全屏") | 同上,共享设置项;两个控制器各有一个 `refreshVisibilityForFullscreenChange()` 接 AppDelegate 的订阅 |
+| 指针划过时让开(2026-08-22) | `overlayFadeOnHover`;复用现成的 `isHoveringForControls`,在 `LyricsOverlayView` 顶层挂 `.opacity`(淡到 15%,**不是** orderOut——那会跟上面三个真正的可见性来源抢同一个开关)。淡入 0.18s 比淡出 0.12s 慢:扫过去要立刻让开才有用,回来从容点更好 | **只对悬浮歌词生效**;灵动岛贴刘海、hover 是它展开的手势,让开会跟展开打架 |
 
 `setVisible(true)` 时会把三个已配置偏好(capture-hide / pause-hide / lockPosition)重新应用一遍,保证从菜单栏/快捷键打开时状态与持久化一致;App 启动时 AppDelegate 只在 `classicOverlayEnabled` 为真时才触碰控制器单例做同样的应用(避免凭空构造窗口)。
 
@@ -136,9 +140,11 @@
 | 字体 / 字号 | 主行字体族与字号;罗马音/译文/预览按 0.65x/0.7x 派生 |
 | 宽度 | 窗口宽度 420~1000pt,实时生效 |
 | 锁定位置 | 停用悬停控制排与长按拖动 |
+| 指针划过时让开 | `overlayFadeOnHover`;指针在窗口上时整窗淡到 15%,离开恢复。只对悬浮歌词生效 |
 | 恢复默认文字与配色 | 重置跟随封面+字体字号+四个颜色字段,不含宽度/锁定 |
 | 截屏/录屏时隐藏(「其它」段) | sharingType;与灵动岛共享 |
 | 暂停/无播放时隐藏(「其它」段) | 自动隐藏;与灵动岛共享 |
+| 别的 App 全屏时隐藏(「其它」段) | 自动隐藏;与灵动岛共享。治的是「音乐在放 + 全屏看视频/演示」——那个组合「暂停时隐藏」完全够不着 |
 | 显示罗马音 / 罗马音语言(「歌词」页) | 罗马音行与逐词注音的显隐、按语言过滤 |
 | 显示译文(「歌词」页) | 译文行显隐 |
 | 双行显示下一句(「歌词」页) | 预览行显隐 |

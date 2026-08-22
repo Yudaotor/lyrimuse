@@ -141,6 +141,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             at: FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".config/lyrimuse"),
             withIntermediateDirectories: true)
 
+        // 「别的 App 全屏时隐藏」:按持久化的开关决定要不要装监听器(关着就完全不监听,
+        // 见 FullscreenAppMonitor 的装卸原则),再把状态变化接到两个悬浮窗的可见性闸上。
+        // 订阅无条件挂:开关后来才被打开时,监听器一装就会发第一次值,那时才需要它。
+        FullscreenAppMonitor.shared.setEnabled(settings.hideWhenFullscreenApp)
+        FullscreenAppMonitor.shared.$isFullscreenAppPresent
+            .removeDuplicates()
+            .sink { _ in
+                // 只碰确实启用了的那个(些)控制器 —— 碰 .shared 会把窗口凭空构造出来,
+                // 见 NotchLyricsWindowController 顶部注释的那条不变量。
+                if AppSettings.shared.classicOverlayEnabled {
+                    LyricsOverlayWindowController.shared.refreshVisibilityForFullscreenChange()
+                }
+                if AppSettings.shared.notchOverlayEnabled {
+                    NotchLyricsWindowController.shared.refreshVisibilityForFullscreenChange()
+                }
+            }
+            .store(in: &cancellables)
+
         // collector 的 launchd job 对账。必须在启动路径上跑,这是 Sparkle 自动更新 /
         // Homebrew cask upgrade / 手动拖 .app 覆盖这三条路唯一的兜底 —— 它们都不经过
         // build.sh,而换掉 collector 二进制会让 launchd 缓存的 LWCR 失效、KeepAlive 一直

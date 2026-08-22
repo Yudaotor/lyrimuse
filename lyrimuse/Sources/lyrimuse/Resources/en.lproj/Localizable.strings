@@ -95,7 +95,7 @@
 "从待补提交清单里移除这条（不可恢复）" = "Remove this from the backfill queue (cannot be undone)";
 "从自动备份恢复" = "Restore from Auto Backup";
 "从资料库删除" = "Delete from Library";
-"以下两项对「桌面悬浮歌词」和「灵动岛歌词」同时生效；菜单栏歌词和歌词窗口不受影响" = "Both settings below apply to Desktop Floating Lyrics and Notch Lyrics; Menu Bar Lyrics and the Lyrics Window are unaffected";
+"以下几项对「桌面悬浮歌词」和「灵动岛歌词」同时生效；菜单栏歌词和歌词窗口不受影响" = "These apply to both the desktop floating lyrics and the notch lyrics; the menu bar lyrics and the lyrics window are unaffected.";
 "企业微信" = "WeCom";
 "会把当前的文字颜色、背景颜色、描边颜色存成一个可以随时再套用的主题" = "Saves the current text, background, and stroke colors as a theme you can reapply anytime";
 "会覆盖当前所有设置，包括已连接的账号和播放数据发往的地址，并立即重启 Lyrimuse" = "Overwrites every current setting, including connected accounts and where your playback data is sent, then restarts Lyrimuse";
@@ -107,6 +107,7 @@
 "光盘" = "Disc";
 "全局快捷键在任何 App 里都能触发。至少需要搭配 ⌘/⌥/⌃ 中一个（功能键、媒体键除外）" = "Global shortcuts work in any app. Each needs at least one of ⌘/⌥/⌃ (function and media keys excepted)";
 "全局时间轴偏移" = "Global Timing Offset";
+"全屏看视频、演示时让开" = "Gets out of the way during full-screen video and presentations";
 "全选 %@ 首" = "Select All (%@)";
 "全部" = "All";
 "全部专辑" = "All Albums";
@@ -144,6 +145,7 @@
 "删除这个配色主题？" = "Delete this theme?";
 "删除选中的 %@ 条" = "Delete %@ Songs";
 "别人看不到，你仍看得见" = "Hidden from others, still visible to you";
+"别的 App 全屏时隐藏" = "Hide When Another App Is Full Screen";
 "刷新" = "Refresh";
 "前往" = "Visit";
 "前往专辑" = "Go to Album";
@@ -334,6 +336,7 @@
 "拷贝" = "Copy";
 "拷贝名称" = "Copy Name";
 "拷贝歌词" = "Copy Lyrics";
+"指针划过时让开" = "Move Aside on Hover";
 "按 %@ 秒的曲目时长校验" = "Validated against a track length of %@s";
 "按当前这首歌记忆校准值，下次再放这首歌自动生效" = "Remembered per song; applies automatically next time that song plays";
 "换文件夹后，旧文件不会自动搬过去" = "Existing files aren't moved to the new folder";
@@ -452,6 +455,7 @@
 "检查更新…" = "Check for Updates…";
 "检测到播放器打开时自动拉起 Lyrimuse" = "Starts Lyrimuse automatically when your player opens";
 "检测到新的播放器" = "New player detected";
+"检测到有别的 App 铺满整块屏幕时隐藏；退出全屏自动恢复。「暂停时隐藏」管不到这种情况——音乐正放着" = "Hides when another app fills a whole screen, and comes back when it leaves full screen. “Hide when paused” cannot cover this case — the music is still playing.";
 "次" = "plays";
 "欢迎使用 Lyrimuse" = "Welcome to Lyrimuse";
 "歌名" = "Title";
@@ -790,6 +794,7 @@
 "首次解析" = "First resolve";
 "麦克风" = "Microphone";
 "黑胶唱片" = "Vinyl";
+"鼠标移到悬浮歌词上时它会淡下去，移开恢复；只对悬浮歌词生效" = "The floating lyrics fade out while the pointer is over them and come back when it leaves. Floating lyrics only.";
 "（已调）" = " (adjusted)";
 "（正在播放）" = " (now playing)";
 "，本句会横向滚动" = " — this line scrolls";

@@ -417,7 +417,8 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
                 .frame(width: controller.notchWidth)
 
             HStack {
-                EqualizerBars(color: accentOrWhite, isPlaying: playback.isPlayingNow)
+                EqualizerBars(color: accentOrWhite, isPlaying: playback.isPlayingNow,
+                              amplitude: Self.vocalAmplitude(at:))
             }
             .frame(width: earWidth)
         }
@@ -482,7 +483,8 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
                         .foregroundStyle(accentOrWhite.opacity(0.6))
                         .lineLimit(1)
                 }
-                EqualizerBars(color: accentOrWhite, isPlaying: playback.isPlayingNow)
+                EqualizerBars(color: accentOrWhite, isPlaying: playback.isPlayingNow,
+                              amplitude: Self.vocalAmplitude(at:))
             }
             .padding(.leading, NotchMetrics.earNotchInset) // 理由同左耳,见 earNotchInset
             .frame(width: earWidth)
@@ -719,6 +721,44 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
     /// —— 状态文字跟正常歌词**在同一个 Group 里**,于是同一行会出现"有歌词时跟着封面色、
     /// 一旦变成「暂无歌词」就突然跳回白"的闪动。现在除了封面缩略图的描边(那处是刻意的,
     /// 见 artworkThumbnail 注释:磨砂玻璃风格下要给浅色封面兜一圈可见轮廓),其余都走这里。
+    /// 灵动岛音浪的振幅:这一刻有没有字正在唱。
+    ///
+    /// 输入全部直读 `PlaybackCoordinator.shared`,**不经窄代理订阅** —— 跟同文件里逐字填色
+    /// 那个 TimelineView 闭包同一个取舍(见 lyricRow 里 currentMs 那段注释):锚点重建会打醒
+    /// 整卡 body,而这里只需要"调用那一刻的快照"。
+    ///
+    /// 三档,刻意不做连续包络:
+    ///   - 正落在某个字的发声区间里 → 满幅;
+    ///   - 有逐字数据但此刻是字与字之间的空档(换气/行尾)→ `gapAmplitude`,明显收一下;
+    ///   - 压根没有逐字数据(整行模式/纯音乐/还没解析出来)→ `idleAmplitude`,退回加这个
+    ///     机制之前的观感。
+    /// 做成连续包络(按字的已唱比例插值)试过更"高级",但 tick 只有 3.6Hz,插出来的中间值
+    /// 在两拍之间根本体现不出来,只是让每一跳的高度更平均、反而**更不像**跟着人声。
+    private static func vocalAmplitude(at date: Date) -> Double {
+        let coordinator = PlaybackCoordinator.shared
+        guard let words = coordinator.currentLine?.words, !words.isEmpty else {
+            return idleAmplitude
+        }
+        // 位置口径必须跟逐字填色完全一致(锚点外推 → 暂停冻结值兜底 → 叠加生效偏移),
+        // 否则条子跟高亮的字对不上,那比不跟着动更奇怪。
+        let posMs = (coordinator.anchor?.extrapolatedPositionMs(now: date)
+            ?? coordinator.pausedPositionMs ?? 0)
+            + coordinator.currentLyricsOffsetMs
+        for word in words where posMs >= word.startMs && posMs < word.startMs + word.durationMs {
+            return 1
+        }
+        return gapAmplitude
+    }
+
+    /// 字与字之间的空档。收到六成:听感上换气确实是"弱"而不是"停"。
+    /// ⚠️ 计算属性而不是 `static let` —— `NotchLyricsView` 是泛型类型(chrome 源可替换,
+    /// 见类型定义),Swift 不允许泛型类型有 static 存储属性。
+    private static var gapAmplitude: Double { 0.6 }
+    /// 没有逐字数据时的默认幅度 —— 取 1 是刻意的:那正是加这个机制之前的行为,整行模式
+    /// 和纯音乐不该因为"拿不到字"就显得比有词的时候更蔫。
+    private static var idleAmplitude: Double { 1 }
+
+
     private var accentOrWhite: Color {
         // 组合逻辑(「跟随封面」开关 × 动态主色)已下沉进 NotchPlayback.accent 预组合去重,
         // 这里只是个语义化的别名,语义与历史版本逐字一致。

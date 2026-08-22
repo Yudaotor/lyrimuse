@@ -1565,19 +1565,19 @@
         }
       }
     },
-    "以下两项对「桌面悬浮歌词」和「灵动岛歌词」同时生效；菜单栏歌词和歌词窗口不受影响" : {
+    "以下几项对「桌面悬浮歌词」和「灵动岛歌词」同时生效；菜单栏歌词和歌词窗口不受影响" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Both settings below apply to Desktop Floating Lyrics and Notch Lyrics; Menu Bar Lyrics and the Lyrics Window are unaffected"
+            "value" : "These apply to both the desktop floating lyrics and the notch lyrics; the menu bar lyrics and the lyrics window are unaffected."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "以下两项对「桌面悬浮歌词」和「灵动岛歌词」同时生效；菜单栏歌词和歌词窗口不受影响"
+            "value" : "以下几项对「桌面悬浮歌词」和「灵动岛歌词」同时生效；菜单栏歌词和歌词窗口不受影响"
           }
         }
       }
@@ -1765,6 +1765,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "全局时间轴偏移"
+          }
+        }
+      }
+    },
+    "全屏看视频、演示时让开" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gets out of the way during full-screen video and presentations"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "全屏看视频、演示时让开"
           }
         }
       }
@@ -2394,6 +2411,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "别人看不到，你仍看得见"
+          }
+        }
+      }
+    },
+    "别的 App 全屏时隐藏" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hide When Another App Is Full Screen"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "别的 App 全屏时隐藏"
           }
         }
       }
@@ -5628,6 +5662,23 @@
         }
       }
     },
+    "指针划过时让开" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Move Aside on Hover"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "指针划过时让开"
+          }
+        }
+      }
+    },
     "按 %@ 秒的曲目时长校验" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -7630,6 +7681,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "检测到新的播放器"
+          }
+        }
+      }
+    },
+    "检测到有别的 App 铺满整块屏幕时隐藏；退出全屏自动恢复。「暂停时隐藏」管不到这种情况——音乐正放着" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hides when another app fills a whole screen, and comes back when it leaves full screen. “Hide when paused” cannot cover this case — the music is still playing."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "检测到有别的 App 铺满整块屏幕时隐藏；退出全屏自动恢复。「暂停时隐藏」管不到这种情况——音乐正放着"
           }
         }
       }
@@ -13376,6 +13444,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "黑胶唱片"
+          }
+        }
+      }
+    },
+    "鼠标移到悬浮歌词上时它会淡下去，移开恢复；只对悬浮歌词生效" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The floating lyrics fade out while the pointer is over them and come back when it leaves. Floating lyrics only."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "鼠标移到悬浮歌词上时它会淡下去，移开恢复；只对悬浮歌词生效"
           }
         }
       }

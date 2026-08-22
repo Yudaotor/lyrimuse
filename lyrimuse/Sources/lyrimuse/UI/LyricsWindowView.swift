@@ -150,6 +150,73 @@ private final class LyricsWindowController: ObservableObject {
     private var exitFullScreenObserver: NSObjectProtocol?
     private var nativeFullScreenEscapeMonitor: Any?
     private var fullScreenCapabilityObserver: NSObjectProtocol?
+    private var frameObserver: NSObjectProtocol?
+    private var resizeObserver: NSObjectProtocol?
+    /// 落盘去抖。拖动窗口期间 didMove 每帧都来,不去抖就是每帧一次 UserDefaults 写 ——
+    /// 跟「歌词管理」列宽拖动那次性能审计(2026-08-19,松手才落盘)同一个坑,同一个修法。
+    private var persistFrameTask: Task<Void, Never>?
+
+    // MARK: - 窗口位置/尺寸/所在屏幕的持久化
+    //
+    // 2026-08-22 之前这扇窗完全靠 SwiftUI `Window(id:)` 的系统状态恢复,07 章第 14 行为此
+    // 标着 ⚠️待核对。系统那套的问题不在"存不存",而在**它不认识屏幕**:多显示器下拔插一次
+    // 或换个分辨率,窗口经常回到主屏、或者落在一块已经不存在的屏幕的坐标上(表现是"打开了
+    // 但看不见")。悬浮歌词早就为同一类问题写了 `OverlayPlacement` 那一套(04 章),这里是
+    // 把同样的不变量补给歌词窗口。
+    //
+    // 存两个键:frame(绝对屏幕坐标)+ 所在屏幕的稳定 ID。恢复时**先认屏幕**:那块屏还接着
+    // 就按存的 frame 放,不在了就整个放弃、交回系统默认 —— 绝不拿旧坐标往现有屏幕上硬摆。
+    private static let frameKey = "np:lyricsWindowFrame"
+    private static let screenKey = "np:lyricsWindowScreenID"
+
+    /// 拖动/缩放停下来之后再落盘。
+    private func schedulePersistFrame() {
+        persistFrameTask?.cancel()
+        persistFrameTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(400))
+            guard !Task.isCancelled else { return }
+            self?.persistFrame()
+        }
+    }
+
+    /// 存一次。**伪全屏/原生全屏期间一律不存** —— 那时的 frame 是撑满屏幕的临时值,存下去
+    /// 等于把"全屏尺寸"当成用户想要的窗口大小,退出全屏再开就是一扇满屏的窗。
+    private func persistFrame() {
+        guard let window, !isActive, !isNativeFullScreen else { return }
+        // 窗口还没真正上屏时 frame 可能是 SwiftUI 给的中间值,不足为据。
+        guard window.isVisible else { return }
+        let defaults = UserDefaults.standard
+        defaults.set(NSStringFromRect(window.frame), forKey: Self.frameKey)
+        // 屏幕认不出来(极少数情况 window.screen 为 nil)时把旧值清掉,而不是留一个跟这次
+        // frame 对不上的屏幕 ID —— 下次恢复会拿错屏幕做校验。
+        if let screen = window.screen, let id = ScreenIdentity.id(of: screen) {
+            defaults.set(id, forKey: Self.screenKey)
+        } else {
+            defaults.removeObject(forKey: Self.screenKey)
+        }
+    }
+
+    /// 首次 attach 时恢复一次。返回是否真的摆过 —— 只是给调用点读着清楚。
+    @discardableResult
+    private func restorePersistedFrame(_ window: NSWindow) -> Bool {
+        let defaults = UserDefaults.standard
+        guard let raw = defaults.string(forKey: Self.frameKey) else { return false }
+        let saved = NSRectFromString(raw)
+        guard saved.width > 0, saved.height > 0 else { return false }
+        // 认屏幕:存过 ID 就必须那块屏还在。不在 = 用户换了显示器配置,旧坐标没有任何意义。
+        guard let id = defaults.string(forKey: Self.screenKey),
+              let screen = ScreenIdentity.screen(withID: id) else { return false }
+        // 夹进那块屏的可见区。存的时候屏幕分辨率可能跟现在不同(接同一块屏但改了缩放),
+        // 不夹的话窗口会有一部分挂在屏幕外 —— 跟悬浮窗 `repositionIfOffscreen` 同一个理由。
+        let visible = screen.visibleFrame
+        var frame = saved
+        frame.size.width = min(frame.width, visible.width)
+        frame.size.height = min(frame.height, visible.height)
+        frame.origin.x = min(max(frame.minX, visible.minX), visible.maxX - frame.width)
+        frame.origin.y = min(max(frame.minY, visible.minY), visible.maxY - frame.height)
+        window.setFrame(frame, display: false)
+        return true
+    }
 
     /// 缺才写(写入后自身即满足条件,不会自激);见 attach() 里的守护注释。
     private static func enforceFullScreenCapability(_ window: NSWindow) {
@@ -230,6 +297,21 @@ private final class LyricsWindowController: ObservableObject {
         // 才写,写入本身也满足守卫条件,不会自激。
         Self.enforceFullScreenCapability(window)
         enforceTrafficLightPosition(window)
+        // 位置/尺寸/所在屏幕:先恢复一次,再挂上观察者。顺序要紧 —— 反过来的话我们自己那次
+        // setFrame 会立刻触发 didMove/didResize、把刚读出来的值原样再写一遍(无害但没意义),
+        // 更糟的是恢复失败(屏幕不在了)时会把系统摆的那个默认位置当成用户意图存下来。
+        restorePersistedFrame(window)
+        if let frameObserver { NotificationCenter.default.removeObserver(frameObserver) }
+        // didMove 和 didResize 合用一个回调:两者要存的东西完全一样,而拖动窗口边角同时
+        // 产生这两个通知 —— 分开挂只会写两遍。
+        let persist: @Sendable (Notification) -> Void = { [weak self] _ in
+            MainActor.assumeIsolated { self?.schedulePersistFrame() }
+        }
+        frameObserver = NotificationCenter.default.addObserver(
+            forName: NSWindow.didMoveNotification, object: window, queue: .main, using: persist)
+        if let resizeObserver { NotificationCenter.default.removeObserver(resizeObserver) }
+        resizeObserver = NotificationCenter.default.addObserver(
+            forName: NSWindow.didResizeNotification, object: window, queue: .main, using: persist)
         if let fullScreenCapabilityObserver { NotificationCenter.default.removeObserver(fullScreenCapabilityObserver) }
         fullScreenCapabilityObserver = NotificationCenter.default.addObserver(
             forName: NSWindow.didUpdateNotification, object: window, queue: .main
@@ -3094,6 +3176,27 @@ private struct WindowProgressSection: View {
     }
 }
 
+/// 挡住"拖音量滑杆把整扇窗一起拖走"的坑(2026-08-22 用户实测报的 bug):这扇窗
+/// `.windowStyle(.hiddenTitleBar)`(见 App.swift),标题栏只是**透明**、红绿灯悬浮在
+/// 背景上,原生标题栏那条高度区间本身仍然"一拖就挪窗口"——这是 AppKit 对该区域的
+/// 默认行为,跟 `NSWindow.isMovableByWindowBackground` 是两回事,SwiftUI 的
+/// `DragGesture` 不会让它让位。音量胶囊恰好落在这条区间里,于是同一次按下拖动同时被
+/// 两边认领:SwiftUI 改音量、AppKit 挪窗口。旁边的置顶/展开/静音/AirPlay 键不受影响,
+/// 是因为它们是**点按**(松开时才触发,不含移动),原生拖窗口只在鼠标真的位移后才启动;
+/// 只有这颗滑杆是 `DragGesture(minimumDistance: 0)`,一动手就两边都在响应。
+///
+/// 真正拦得住的办法是垫一层**真实 NSView**、覆写 `mouseDownCanMoveWindow` 返回
+/// false —— AppKit 判断"这次按下要不要顺带挪窗口"是对着点击处命中测试到的那个
+/// NSView 问这个属性,SwiftUI 的手势系统够不到这一层。`NSHostingView` 本身没被覆写、
+/// 默认在这条区间里就是会挪窗口,所以只能自己垫一个刚好盖住滑杆命中区的空视图。
+private struct WindowDragBlocker: NSViewRepresentable {
+    final class BlockerView: NSView {
+        override var mouseDownCanMoveWindow: Bool { false }
+    }
+    func makeNSView(context: Context) -> BlockerView { BlockerView() }
+    func updateNSView(_ nsView: BlockerView, context: Context) {}
+}
+
 // MARK: - 音量胶囊(2026-08-19 性能审计拆出:soundVolume 只在这里订阅)
 
 private struct WindowVolumeCapsule: View {
@@ -3168,6 +3271,7 @@ private struct WindowVolumeCapsule: View {
                 // 挤得整颗胶囊比 AM 宽 7pt)。
                 volumeSlider(volume: volume)
                     .frame(width: 114, height: 22)
+                    .background(WindowDragBlocker())
                 Button {
                     PlaybackCoordinator.shared.toggleMute()
                 } label: {

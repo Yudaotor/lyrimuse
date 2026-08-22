@@ -75,6 +75,8 @@ final class AppSettings: ObservableObject {
         static let lockPosition = "np:lockPosition"
         static let hideDuringScreenCapture = "np:hideDuringScreenCapture"
         static let hideWhenNotPlaying = "np:hideWhenNotPlaying"
+        static let overlayFadeOnHover = "np:overlayFadeOnHover"
+        static let hideWhenFullscreenApp = "np:hideWhenFullscreenApp"
         // 跟 L10n.swift 里的 languageOverrideKey 必须是同一个字符串——那边只读、这里
         // 只写(负责持久化+驱动"通用"tab 的语言 Picker),两处各自独立实现,不要互相
         // import,理由见 L10n.swift 顶部注释(L10n 不依赖 @MainActor 的 AppSettings)。
@@ -290,6 +292,27 @@ final class AppSettings: ObservableObject {
     @Published var hideWhenNotPlaying: Bool {
         didSet { defaults.set(hideWhenNotPlaying, forKey: Keys.hideWhenNotPlaying) }
     }
+    // 指针划过悬浮歌词时让它淡下去,离开再恢复。**只对桌面悬浮歌词生效**(灵动岛贴在刘海
+    // 上、hover 是它展开的手势,让开会互相打架)。
+    //
+    // 它跟「点击穿透」解的是同一个痛点的两半:穿透保证"点得到下层",这个保证"看得到下层"。
+    // 开了背景卡片或把字号调大之后,悬浮窗仍会实打实盖住下面窗口的内容,而穿透对此无能为力。
+    //
+    // ⚠️ 开着它会改变鼠标监听器的生命周期:见 LyricsOverlayWindowController.syncMouseMonitors
+    // ——「锁定位置」原本会把监听器整个卸掉,而"锁定位置 + 划过让开"恰恰是最常见的组合。
+    // 只负责持久化,"生效"在 controller 那边(它直读这个开关)。默认 false,保留原有行为。
+    @Published var overlayFadeOnHover: Bool {
+        didSet { defaults.set(overlayFadeOnHover, forKey: Keys.overlayFadeOnHover) }
+    }
+    // 别的 App 处于全屏时,把两个悬浮窗都藏起来。跟 hideWhenNotPlaying/hideDuringScreenCapture
+    // 并列,是「自动隐藏」那张卡的第三项,**悬浮歌词和灵动岛共用**。
+    //
+    // 治的是「音乐在放 + 全屏看视频/演讲」这个组合:那时灵动岛压在画面顶部,而既有的
+    // 「暂停时隐藏」完全够不着(音乐正放着)。判定在 FullscreenAppMonitor,只用公开 API。
+    // 只负责持久化,"生效"由 AppDelegate(启动)和 SettingsView 的 Toggle 手动下发。
+    @Published var hideWhenFullscreenApp: Bool {
+        didSet { defaults.set(hideWhenFullscreenApp, forKey: Keys.hideWhenFullscreenApp) }
+    }
     // "system"(跟随系统语言,默认)/"zh-hans"/"en"——手动覆盖 L10n 的语言解析。这是个
     // @Published 属性而不是简单写完 UserDefaults 就完事,是因为要让所有观察
     // AppSettings.shared 的界面在切换的一瞬间就重新渲染成新语言,不用重启 App
@@ -495,6 +518,8 @@ final class AppSettings: ObservableObject {
         textStrokeEnabled = (defaults.object(forKey: Keys.textStrokeEnabled) as? Bool) ?? ColorTheme.defaultTheme.textStrokeEnabled
         textStrokeColorHex = defaults.string(forKey: Keys.textStrokeColorHex) ?? ColorTheme.defaultTheme.textStrokeColorHex
         lockPosition = (defaults.object(forKey: Keys.lockPosition) as? Bool) ?? false
+        overlayFadeOnHover = (defaults.object(forKey: Keys.overlayFadeOnHover) as? Bool) ?? false
+        hideWhenFullscreenApp = (defaults.object(forKey: Keys.hideWhenFullscreenApp) as? Bool) ?? false
         hideDuringScreenCapture = (defaults.object(forKey: Keys.hideDuringScreenCapture) as? Bool) ?? false
         hideWhenNotPlaying = (defaults.object(forKey: Keys.hideWhenNotPlaying) as? Bool) ?? false
         appLanguage = defaults.string(forKey: Keys.appLanguage) ?? "system"
