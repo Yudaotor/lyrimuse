@@ -102,50 +102,6 @@
 
 > ⚠️ 别把旧 bundle id 域里的值当证据:`np:overlayPositionOrigin = "602.0,803.0"` 躺在**已废弃**的 `com.chenyuhao.lyrimuse`(和 `desktop-lyrics` 等)域里,当前二进制只读 `me.yudaotor.lyrimuse`,那个域里**没有**这个旧键;`803 = 923−120` 同时也是"顶边贴着内置屏菜单栏"的自然手动摆位,本身没有鉴别力。
 
-### 全屏判定(FullscreenGeometry,2026-08-22 第二版)
-
-「别的 App 全屏时隐藏」靠它。第一版只认「盖住整块物理屏」,当天就发现两处漏,这是修完的口径。
-
-**一块屏被判成"有人全屏"要同时满足四条**:宽度顶格、左边缘对齐、**底边探到屏幕最底**、
-顶边落在三个合法位置之一(容差 2pt)。三个顶边对应三种真实形态:
-
-| 顶边 | 形态 | 说明 |
-|---|---|---|
-| 屏幕顶 | 原生全屏,内容延伸进刘海两侧 | App 没开安全区兼容模式 |
-| **刘海下沿**(`safeAreaInsets.top`) | 原生全屏,内容避开刘海 | 刘海区留黑。**第一版漏的就是这一种** |
-| 菜单栏下沿 | 「伪全屏」 | App 自己的全屏按钮(微信视频通话、部分播放器)不走 macOS 原生全屏 API,不新建 Space、菜单栏也不收起 |
-
-- **为什么「刘海下沿」必须单列**:原生全屏时菜单栏已被系统收起,`menuBarHeight` 变成 0,
-  于是「菜单栏下沿」这一档塌回屏幕顶,跟实际的刘海下沿差一整个刘海高(本机 32pt),直接漏判。
-  桌面态下这两档只差 1pt(本机 32 vs 33)看着像同一条 —— 但那 1pt 是本机实测特例、不是系统契约。
-  第三方实现 Lyriam(`NotchPanel.isFrontmostFullScreen`)的注释一语中的:「CGWindow bounds are
-  unreliable on notched displays because full-screen content sits below the notch」,它因此改用
-  「菜单栏是否被收起」当判据 —— 那条对单屏有效,但它自己没兜住「用户开了自动隐藏菜单栏 → 恒判全屏」
-  和「多屏时 NSScreen.main 是有键盘焦点那块屏」两个坑,所以这里没有照搬,只取了它的洞察。
-- **「底边探到屏幕最底」是把标准最大化挡在外面的关键一条**:绿键 zoom 铺的是 `visibleFrame`,
-  底边停在 Dock 的保留区上方。本机实测(2026-08-22 桌面态):音乐/Lyrimuse (0,33,1470,858) 底边 891、
-  Arc 884、Code/Edge/Otty 878,屏幕高 956 —— 全部不命中;微信视频通话伪全屏 (0,33,1470,923)
-  底边正好 956,命中。
-  ⚠️ **已知不可判定的边界**:用户把 Dock 设成自动隐藏时,最大化窗口底边也会探到屏幕最底,
-  那时它跟伪全屏在公开 API 下几何完全同构、分不开。**刻意接受这个误判方向** —— 代价只是浮层
-  临时让开(移开窗口即恢复),而反方向(漏判)是用户已经报过的「全屏时隐藏根本不生效」。
-- **坐标系全程留在 CG**(原点主屏左上、y 向下):屏幕矩形用 `CGDisplayBounds(displayID)`
-  (`ScreenIdentity.displayID(of:)`),跟 `CGWindowListCopyWindowInfo` 报的 bounds **同源**。
-  第一版是手工拿 `NSScreen.frame` 翻 y,而 `lyrimuse/scripts/check-windows.swift` 文件头记着
-  2026-08-21 实测:**外接屏上 CGWindowList 报的 bounds 与 NSWindow.frame 差 0.98 倍**(900→882、
-  120→118)。±1pt 的等值判据在这种换算差下必然失败,外接屏上的真全屏大概率一直是漏判的。
-- **触发源四条 + 一条兜底轮询**:`activeSpaceDidChange`(原生全屏进出的主力)/`didActivateApplication`
-  /`didTerminateApplication`/`didChangeScreenParametersNotification`(屏幕增删或分辨率变化会让
-  算好的屏幕矩形作废;⚠️ 这条挂在 `NotificationCenter.default`,不在 NSWorkspace 那个 center,
-  摘的时候两边都要摘)。
-  ⚠️ **伪全屏一个通知都不发** —— 不新建 Space、不切前台 App、不改屏幕参数,四条全静默,
-  所以另有一条 2s 的兜底 `Timer`(挂 `.common` mode,否则拖窗口/开菜单时停摆)。没有它的话
-  伪全屏那一档要等一次**无关的** App 切换才会被跑到,表现是「点了全屏浮层过很久才让开、甚至不让开」。
-- **判据是纯函数**,住在 `LyrimuseCore/Util/FullscreenGeometry`,由 selftest 无屏覆盖 17 条
-  (三种形态各一 + 四个实测最大化窗口 + 容差边界 + 副屏原点)。⚠️ 「形态②」那条断言**必须**用
-  `menuBarHeight = 0` 构造:拿桌面态的 33 去测,它跟刘海下沿 32 只差 1pt、在容差内会蒙混过关,
-  测不出这个 bug —— 这个盲点是做变异测试时当场暴露的(删掉②之后断言竟然还是绿的)。
-
 ### 锁定位置与点击穿透(合并开关)
 
 - 「锁定位置」一个开关管两件事:锁定 = 彻底停用悬停控制排+长按拖动整套手势;解锁 ≠ 拦截点击——`ignoresMouseEvents` 常年为 true(点击真穿透到下层),只有鼠标悬停到播放控制按钮胶囊那一小块热区时才临时收回。
@@ -164,7 +120,6 @@
 | 手动显示/隐藏 | `setVisible` 写 `classicOverlayEnabled`,窗口 orderFront/orderOut | 各自独立开关 |
 | 暂停/无播放时隐藏 | `hideWhenNotPlaying`;实际可见 = 手动开 AND (未开自动隐藏 OR 正在播)。跟的是 `isPlayingSmoothed`(停止侧带 0.5s 宽限,吸收换歌/seek 抖动;恢复播放立即响应),恢复播放自动重新显示,不改手动开关本身 | **共享同一设置项**,设置页"自动隐藏"卡一个 Toggle 同时下发给两个控制器(只发给当下开着的那个) |
 | 截屏/录屏时隐藏 | `hideDuringScreenCapture` → `window.sharingType = .none`:截图/录屏/会议共享拍不到,用户自己仍看得见 | 同上,共享设置项 |
-| 别的 App 全屏时隐藏(2026-08-22) | `hideWhenFullscreenApp`;判定在 `FullscreenAppMonitor`,几何判据在 `LyrimuseCore/Util/FullscreenGeometry`(**只用公开 API**)。详见下面「全屏判定」一节 | 同上,共享设置项;两个控制器各有一个 `refreshVisibilityForFullscreenChange()` 接 AppDelegate 的订阅 |
 | 指针划过时让开(2026-08-22) | `overlayFadeOnHover`;复用现成的 `isHoveringForControls`,在 `LyricsOverlayView` 顶层挂 `.opacity`(淡到 15%,**不是** orderOut——那会跟上面三个真正的可见性来源抢同一个开关)。淡入 0.18s 比淡出 0.12s 慢:扫过去要立刻让开才有用,回来从容点更好 | **只对悬浮歌词生效**;灵动岛贴刘海、hover 是它展开的手势,让开会跟展开打架 |
 
 `setVisible(true)` 时会把三个已配置偏好(capture-hide / pause-hide / lockPosition)重新应用一遍,保证从菜单栏/快捷键打开时状态与持久化一致;App 启动时 AppDelegate 只在 `classicOverlayEnabled` 为真时才触碰控制器单例做同样的应用(避免凭空构造窗口)。
@@ -188,7 +143,6 @@
 | 恢复默认文字与配色 | 重置跟随封面+字体字号+四个颜色字段,不含宽度/锁定 |
 | 截屏/录屏时隐藏(「其它」段) | sharingType;与灵动岛共享 |
 | 暂停/无播放时隐藏(「其它」段) | 自动隐藏;与灵动岛共享 |
-| 别的 App 全屏时隐藏(「其它」段) | 自动隐藏;与灵动岛共享。治的是「音乐在放 + 全屏看视频/演示」——那个组合「暂停时隐藏」完全够不着 |
 | 显示罗马音 / 罗马音语言(「歌词」页) | 罗马音行与逐词注音的显隐、按语言过滤 |
 | 显示译文(「歌词」页) | 译文行显隐 |
 | 双行显示下一句(「歌词」页) | 预览行显隐 |

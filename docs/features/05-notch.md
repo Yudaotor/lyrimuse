@@ -123,7 +123,6 @@
 | 外观 → 桌面悬浮歌词 → 配色 | 文字跟随封面 | `followsCoverArt` | **跨形态**:开着时灵动岛全套前景走封面强调色 |
 | 外观 → 其它 → 自动隐藏 | 暂停/无播放时隐藏 | `hideWhenNotPlaying` | 共用:暂停整窗隐藏(牺牲收起动画) |
 | 外观 → 其它 → 自动隐藏 | 截屏/录屏时隐藏 | `hideDuringScreenCapture` | 共用:sharingType = .none |
-| 外观 → 其它 → 自动隐藏 | 别的 App 全屏时隐藏 | `hideWhenFullscreenApp` | 共用(2026-08-22 加):判定在 `FullscreenAppMonitor`,只用公开 API,机制见 04 章「隐藏行为」表。灵动岛在 `.screenSaver` 层,不加这一档就必然压在全屏视频顶部那一条上,而且指针移到屏幕顶端想唤菜单栏时会先撞进它的 hover 命中区把卡片展开 |
 | (间接)歌词偏移步长 | `lyricsOffsetStepMs` | 快捷键横幅里显示的增减量随它走 |
 
 已删除的开关(2026-08-17,固定开启):音量提示(`notchVolumeBanner`)、播放指示条(`notchShowEqualizer`);「显示专辑封面」开关 2026-08-10 已删(有封面就显示)。

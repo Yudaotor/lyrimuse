@@ -131,6 +131,11 @@ enum ConfigPortability {
         "np:textShadowColorHex",
         "np:textShadowEnabled",
         "np:useSystemTranslationFallback",
+        // 2026-08-22:「别的 App 全屏时隐藏」当天加、当天整个撤掉(用户拍板)。判据在刘海屏上
+        // 反复出问题——原生全屏时菜单栏被系统收起,窗口顶边落在刘海下沿而不是屏幕顶;而
+        // 「伪全屏」(App 自己的全屏按钮)又一个系统通知都不发,只能靠轮询兜。收益抵不过
+        // 这些复杂度。留着这个键只会被导出到新机器再导回来。
+        "np:hideWhenFullscreenApp",
     ]
 
     /// 导出/导入都要跳过的键 = 机器专属的 + 已经死掉的。

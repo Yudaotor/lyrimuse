@@ -76,7 +76,6 @@ final class AppSettings: ObservableObject {
         static let hideDuringScreenCapture = "np:hideDuringScreenCapture"
         static let hideWhenNotPlaying = "np:hideWhenNotPlaying"
         static let overlayFadeOnHover = "np:overlayFadeOnHover"
-        static let hideWhenFullscreenApp = "np:hideWhenFullscreenApp"
         static let debugHUDEnabled = "np:debugHUD"
         // 跟 L10n.swift 里的 languageOverrideKey 必须是同一个字符串——那边只读、这里
         // 只写(负责持久化+驱动"通用"tab 的语言 Picker),两处各自独立实现,不要互相
@@ -305,15 +304,6 @@ final class AppSettings: ObservableObject {
     @Published var overlayFadeOnHover: Bool {
         didSet { defaults.set(overlayFadeOnHover, forKey: Keys.overlayFadeOnHover) }
     }
-    // 别的 App 处于全屏时,把两个悬浮窗都藏起来。跟 hideWhenNotPlaying/hideDuringScreenCapture
-    // 并列,是「自动隐藏」那张卡的第三项,**悬浮歌词和灵动岛共用**。
-    //
-    // 治的是「音乐在放 + 全屏看视频/演讲」这个组合:那时灵动岛压在画面顶部,而既有的
-    // 「暂停时隐藏」完全够不着(音乐正放着)。判定在 FullscreenAppMonitor,只用公开 API。
-    // 只负责持久化,"生效"由 AppDelegate(启动)和 SettingsView 的 Toggle 手动下发。
-    @Published var hideWhenFullscreenApp: Bool {
-        didSet { defaults.set(hideWhenFullscreenApp, forKey: Keys.hideWhenFullscreenApp) }
-    }
     // 调试 HUD:在悬浮歌词角落显示实测帧率(FrameRateProbe)。
     //
     // **刻意不进设置界面** —— 它是给开发/排障用的,不是功能。开:
@@ -529,7 +519,6 @@ final class AppSettings: ObservableObject {
         textStrokeColorHex = defaults.string(forKey: Keys.textStrokeColorHex) ?? ColorTheme.defaultTheme.textStrokeColorHex
         lockPosition = (defaults.object(forKey: Keys.lockPosition) as? Bool) ?? false
         overlayFadeOnHover = (defaults.object(forKey: Keys.overlayFadeOnHover) as? Bool) ?? false
-        hideWhenFullscreenApp = (defaults.object(forKey: Keys.hideWhenFullscreenApp) as? Bool) ?? false
         debugHUDEnabled = (defaults.object(forKey: Keys.debugHUDEnabled) as? Bool) ?? false
         hideDuringScreenCapture = (defaults.object(forKey: Keys.hideDuringScreenCapture) as? Bool) ?? false
         hideWhenNotPlaying = (defaults.object(forKey: Keys.hideWhenNotPlaying) as? Bool) ?? false

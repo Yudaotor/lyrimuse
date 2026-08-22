@@ -268,18 +268,9 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject 
     // 当前值即可(如果做成默认参数,默认值表达式在 Swift 6 严格并发模式下是 nonisolated
     // 上下文,访问 @MainActor 单例会报错,所以强制显式传参而不是偷懒用默认值)。
     private func updateActualVisibility(isPlayingNow: Bool) {
-        // 「别的 App 全屏时隐藏」是第三个与项(2026-08-22)。跟另外两个自动隐藏一样,
-        // 不碰 isVisible 本身 —— 那是纯粹的"用户手动想不想看见"。开关关着时
-        // FullscreenAppMonitor 不监听、isFullscreenAppPresent 恒为 false,这一项等于常真。
         let shouldShow = isVisible && (!hideWhenNotPlaying || isPlayingNow)
-            && !FullscreenAppMonitor.shared.isFullscreenAppPresent
         if shouldShow { window?.orderFront(nil) } else { window?.orderOut(nil) }
         syncMouseMonitors()
-    }
-
-    /// 全屏状态变化时重新过一遍可见性闸。由 AppDelegate 订阅 FullscreenAppMonitor 后调。
-    func refreshVisibilityForFullscreenChange() {
-        updateActualVisibility(isPlayingNow: PlaybackCoordinator.shared.isPlayingSmoothed)
     }
 
     // 锁定位置:彻底停用长按拖动+悬停控制按钮这整套手势。解锁后不是"正常拦截点击"了

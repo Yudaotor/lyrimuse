@@ -1565,7 +1565,7 @@
         }
       }
     },
-    "以下几项对「桌面悬浮歌词」和「灵动岛歌词」同时生效；菜单栏歌词和歌词窗口不受影响" : {
+    "以下两项对「桌面悬浮歌词」和「灵动岛歌词」同时生效；菜单栏歌词和歌词窗口不受影响" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
@@ -1577,7 +1577,7 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "以下几项对「桌面悬浮歌词」和「灵动岛歌词」同时生效；菜单栏歌词和歌词窗口不受影响"
+            "value" : "以下两项对「桌面悬浮歌词」和「灵动岛歌词」同时生效；菜单栏歌词和歌词窗口不受影响"
           }
         }
       }
@@ -1765,23 +1765,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "全局时间轴偏移"
-          }
-        }
-      }
-    },
-    "全屏看视频、演示时让开" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Gets out of the way during full-screen video and presentations"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "全屏看视频、演示时让开"
           }
         }
       }
@@ -2411,23 +2394,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "别人看不到，你仍看得见"
-          }
-        }
-      }
-    },
-    "别的 App 全屏时隐藏" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Hide When Another App Is Full Screen"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "别的 App 全屏时隐藏"
           }
         }
       }
@@ -7698,23 +7664,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "检测到新的播放器"
-          }
-        }
-      }
-    },
-    "检测到有别的 App 铺满整块屏幕时隐藏；退出全屏自动恢复。「暂停时隐藏」管不到这种情况——音乐正放着" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Hides when another app fills a whole screen, and comes back when it leaves full screen. “Hide when paused” cannot cover this case — the music is still playing."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "检测到有别的 App 铺满整块屏幕时隐藏；退出全屏自动恢复。「暂停时隐藏」管不到这种情况——音乐正放着"
           }
         }
       }

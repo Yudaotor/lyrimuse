@@ -1766,33 +1766,8 @@ private struct AppearanceSettingsTab: View {
             SettingsCardHeader(
                 title: L10n.t("自动隐藏"),
                 subtitle: L10n.t("对悬浮歌词和灵动岛生效"),
-                help: L10n.t("以下几项对「桌面悬浮歌词」和「灵动岛歌词」同时生效；菜单栏歌词和歌词窗口不受影响")
+                help: L10n.t("以下两项对「桌面悬浮歌词」和「灵动岛歌词」同时生效；菜单栏歌词和歌词窗口不受影响")
             )
-            CardDivider()
-            // 排在最前面:另外两项(截屏时隐藏/暂停时隐藏)是"别人看不到"和"没在放就别占地方",
-            // 这一项是"我自己此刻在看别的东西",触发得最频繁。
-            SettingsRow(
-                icon: "rectangle.inset.filled.and.person.filled",
-                title: L10n.t("别的 App 全屏时隐藏"),
-                subtitle: L10n.t("全屏看视频、演示时让开"),
-                help: L10n.t("检测到有别的 App 铺满整块屏幕时隐藏；退出全屏自动恢复。「暂停时隐藏」管不到这种情况——音乐正放着")
-            ) {
-                Toggle("", isOn: Binding(
-                    get: { settings.hideWhenFullscreenApp },
-                    set: { newValue in
-                        settings.hideWhenFullscreenApp = newValue
-                        FullscreenAppMonitor.shared.setEnabled(newValue)
-                        // 关掉时 monitor 会把状态归位,但那次归位早于这里 —— 两个控制器
-                        // 需要各自再过一遍闸才会真的显示回来。
-                        if settings.classicOverlayEnabled {
-                            LyricsOverlayWindowController.shared.refreshVisibilityForFullscreenChange()
-                        }
-                        if settings.notchOverlayEnabled {
-                            NotchLyricsWindowController.shared.refreshVisibilityForFullscreenChange()
-                        }
-                    }
-                ))
-            }
             CardDivider()
             SettingsRow(
                 icon: "camera.viewfinder",
