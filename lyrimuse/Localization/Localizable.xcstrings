@@ -7430,6 +7430,23 @@
         }
       }
     },
+    "来源已选定：%@" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Source pinned: %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "来源已选定：%@"
+          }
+        }
+      }
+    },
     "染色颜色" : {
       "extractionState" : "manual",
       "localizations" : {

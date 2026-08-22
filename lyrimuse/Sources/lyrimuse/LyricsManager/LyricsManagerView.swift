@@ -1238,7 +1238,20 @@ struct LyricsManagerView: View {
                 editedTr = candidate.lyricsTr
                 editedRoma = candidate.lyricsRoma
                 Task {
-                    await store.saveEdit(key: key, lyrics: candidate.lyrics, tr: candidate.lyricsTr, roma: candidate.lyricsRoma, yrc: candidate.lyricsYRC, source: candidate.source)
+                    // markManual: false + sourceChoice(2026-08-22 改)。
+                    //
+                    // 以前这里走默认的 markManual: true —— 而「采纳一条候选」和「我手工改过
+                    // 正文」是两件事,压成同一个标记的代价是**这首歌从此永久冻结**:以后打分
+                    // 规则改进、这个源后来开始给逐字时间轴,都再也不会被采纳,而用户当初只是
+                    // 想换个源。现在只记下"选了哪个源",自愈路径照常跑但被约束在该源内
+                    // (collector 侧 pickLyricCandidatePreferring)。
+                    //
+                    // ⚠️ 直接编辑正文那条路径(「保存修改」)**仍然**置 manual_lyrics —— 那份
+                    // 内容删了就找不回来,自动逻辑没有任何理由觉得自己比人工更懂。
+                    await store.saveEdit(key: key, lyrics: candidate.lyrics, tr: candidate.lyricsTr,
+                                         roma: candidate.lyricsRoma, yrc: candidate.lyricsYRC,
+                                         source: candidate.source, markManual: false,
+                                         sourceChoice: candidate.source)
                     // 采纳的候选歌词内容跟原来不一样,offset 的 key(内容指纹)也跟着变——
                     // 输入框要显示"新内容对应的偏移值",不能继续显示采纳前那份内容的值。
                     refreshOffsetState(artist: summary.artist, title: summary.title, lyrics: candidate.lyrics, yrc: candidate.lyricsYRC)
@@ -1362,6 +1375,17 @@ struct LyricsManagerView: View {
             )
             if summary.isManual {
                 InfoChip(icon: "pencil.circle.fill", text: L10n.t("人工修正"), tint: .orange)
+            }
+            // 「来源已选定」= 用户在「联网搜索候选歌词」里挑过一次源(2026-08-22)。跟
+            // 「人工修正」分开显示,因为它们的约束强度差一个量级:那个一票否决全部自动路径,
+            // 这个只把重选**约束在这个源内** —— 打分改进、这个源后来给出逐字,照样能升上来。
+            // 之所以也必须标出来,理由跟「已校准」一样:它同样是一个看不见的约束,不说清楚
+            // 的话"为什么这首歌一直是这个源"查不出来。解除办法是那颗「重新自动匹配」。
+            if !summary.sourceChoice.isEmpty {
+                InfoChip(icon: "pin.circle.fill",
+                         text: String(format: L10n.t("来源已选定：%@"),
+                                      sourceDisplayName(summary.sourceChoice)),
+                         tint: .indigo)
             }
             // 「已校准」= 用户手动调过这首歌的时间轴偏移。必须显式标出来,因为它带一个
             // **看不见的副作用**:collector 从此不再自动给这首歌重选歌词源(见
@@ -1622,6 +1646,10 @@ struct LyricsManagerView: View {
         await store.saveEdit(
             key: key, lyrics: winner.lyrics, tr: winner.lyricsTr, roma: winner.lyricsRoma,
             yrc: winner.lyricsYRC, source: winner.source, markManual: false,
+            // 空串 = 显式清掉「用户选定的源」(2026-08-22)。这颗按钮的语义就是**完全**交回
+            // 算法管理:留着 choice 的话,以后的自愈会被约束在"上次手动选的那个源"里,而用户
+            // 刚刚明确说了"按算法重算一次"。它跟 manual_lyrics 一起被清,两个标记同进同出。
+            sourceChoice: "",
             score: pick.winnerScore, scoringVersion: pick.scoringVersion,
             resolvedDurationSecs: pick.resolvedDurationSecs,
             sourcesSeen: pick.sourcesSeen, sourcesResponded: pick.sourcesResponded,

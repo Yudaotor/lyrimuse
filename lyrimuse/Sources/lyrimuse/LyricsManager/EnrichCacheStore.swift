@@ -54,6 +54,9 @@ public final class EnrichCacheStore: ObservableObject {
         public let lyricsSource: String
         public let hasWordTiming: Bool
         public let isManual: Bool
+        /// 用户在「联网搜索候选歌词」里选定的源(collector 侧 `lyrics_source_choice`)。
+        /// 空 = 没选过,由算法自由选。跟 `isManual` 是两件独立的事,详情页各显示各的徽章。
+        public let sourceChoice: String
         // 译文是机翻补的(见 collector 的 translate.go)还是歌词源自带的社区翻译。
         // 空 = 社区翻译(老条目没有这个字段,读成空正是事实)。
         public let lyricsTrSource: String
@@ -318,6 +321,7 @@ public final class EnrichCacheStore: ObservableObject {
                 lyricsSource: entry["lyrics_source"] as? String ?? "",
                 hasWordTiming: !(entry["lyrics_yrc"] as? String ?? "").isEmpty,
                 isManual: entry["manual_lyrics"] as? Bool ?? false,
+                sourceChoice: entry["lyrics_source_choice"] as? String ?? "",
                 lyricsTrSource: entry["lyrics_tr_source"] as? String ?? "",
                 hasTranslation: !((entry["lyrics_tr"] as? String ?? "").isEmpty),
                 hasRomanization: !((entry["lyrics_roma"] as? String ?? "").isEmpty),
@@ -411,8 +415,13 @@ public final class EnrichCacheStore: ObservableObject {
     ///   `rescoreLyrics` 实际写进 enrichEntry 的那一套。少写 sourcesSeen 会让 retry 的
     ///   `nativeMissedOut` 拿上一轮的名单算;少写 resolvedDuration 会让 `wrongDuration`
     ///   凭空为真;不写 decision,「解析决策」弹窗展示的就还是被替换掉那份歌词的存档。
+    /// - Parameter sourceChoice: 「用户选定了哪个源」。传非空字符串 = 记下这个选择;传空
+    ///   字符串 = **显式清掉**(交回算法自由选源);传 nil = 不动这个字段。
+    ///   语义见 collector 侧 `enrichEntry.LyricsSourceChoice` 的注释:它跟 `markManual`
+    ///   是两件事 —— 那个说"我改过正文,别碰",这个只说"我要这个源的词"。
     public func saveEdit(key: String, lyrics: String, tr: String, roma: String, yrc: String? = nil,
                          source: String? = nil, markManual: Bool = true,
+                         sourceChoice: String? = nil,
                          score: Int? = nil, scoringVersion: Int? = nil,
                          resolvedDurationSecs: Double? = nil,
                          sourcesSeen: [String]? = nil, sourcesResponded: [String]? = nil,
@@ -447,6 +456,19 @@ public final class EnrichCacheStore: ObservableObject {
             entry["manual_lyrics"] = true
         } else {
             entry.removeValue(forKey: "manual_lyrics")
+        }
+        // 用户选定的源。**必须在 markManual 分支之外** —— 这条机制的整个要点就是
+        // 「采纳一条候选」不再置 manual_lyrics(那会永久冻结这首歌),而是只记下选了哪个源,
+        // 所以它恰恰是在 markManual == false 的那条路径上写的。写在 if 里面等于永远写不到。
+        //
+        // nil = 不动这个字段(普通的保存/编辑不该悄悄改它);空串 = 显式清掉(「交回算法」)。
+        // 见 saveEdit 的参数注释与 collector 侧 enrichEntry.LyricsSourceChoice。
+        if let sourceChoice {
+            if sourceChoice.isEmpty {
+                entry.removeValue(forKey: "lyrics_source_choice")
+            } else {
+                entry["lyrics_source_choice"] = sourceChoice
+            }
         }
         // 打分留痕:成对写(理由见上面的参数注释)。传 nil 就一个都不动 —— 手动编辑改的是
         // 正文,旧分数虽然已经不描述新内容了,但那条路径靠 manual_lyrics 整个关掉了自愈,

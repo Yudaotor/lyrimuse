@@ -440,6 +440,7 @@
 "机器翻译" = "Machine translation";
 "来源" = "Source";
 "来源可靠度" = "Source";
+"来源已选定：%@" = "Source pinned: %@";
 "染色颜色" = "Fill color";
 "查看、编辑、重搜已缓存的歌词" = "View, edit and re-search cached lyrics";
 "查看官方文档 →" = "View Official Docs →";

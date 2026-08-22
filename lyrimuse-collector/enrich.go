@@ -134,6 +134,20 @@ type enrichEntry struct {
 	// 唯一删了就找不回来的东西(重新解析只会又抓到当初那份不准的),自动逻辑没有任何理由
 	// 觉得自己比人工更懂。
 	ManualLyrics bool `json:"manual_lyrics,omitempty"`
+	// LyricsSourceChoice 记「用户在「联网搜索候选歌词」里选定了哪个源」——**只是选源,
+	// 不是手改内容**。2026-08-22 加。
+	//
+	// 加它是为了把此前压在 ManualLyrics 一个标记上的两件事拆开:
+	//   - "我手工改过正文" → 一票否决所有自动路径(那份内容删了就找不回来,自动逻辑没有
+	//     任何理由觉得自己比人工更懂)—— 这才是 ManualLyrics 的本意;
+	//   - "我不同意这次自动选择,换个源" → 只该约束**选哪个源**。
+	// 采纳一条候选就置 ManualLyrics 的代价是:这首歌从此永久冻结,以后打分规则改进、
+	// 那个源后来开始给逐字时间轴,都再也不会被采纳 —— 而用户当初只是想换个源。
+	//
+	// 语义:非空时,自愈路径(升级重试 / rescore)**照常跑**,但重选被约束在这个源内
+	// (pickLyricCandidatePreferring)。于是"同一个源给出了更好的内容"仍然能升上来,
+	// "被换成另一个源"不会发生。那个源这一轮没给出候选时就不换,而不是退回全局最优。
+	LyricsSourceChoice string `json:"lyrics_source_choice,omitempty"`
 	// Instrumental 标记"联网查过了,至少一个源(lrclib 的 instrumental,或网易云的
 	// pureMusic / 纯音乐占位正文)明确说这首歌是纯音乐"——
 	// 跟"Lyrics 为空"要分开看:后者也可能是"五个源都没查到、真的没搜到"这种更含糊的
@@ -811,8 +825,13 @@ func retryLyricsUpgrade(key, artist, title, album string, durationSecs float64, 
 		delete(enrichInflight, key)
 		enrichMu.Unlock()
 	}()
+	enrichMu.Lock()
+	sourceChoice := enrichCache[key].LyricsSourceChoice
+	enrichMu.Unlock()
+
 	_, scored := scoredLyricCandidates(artist, title, album, durationSecs)
-	picked := pickLyricCandidate(scored)
+	// 用户选定过源就只在那个源内重选,见 LyricsSourceChoice 字段注释。
+	picked := pickLyricCandidatePreferring(scored, sourceChoice)
 	seen := lyricSourcesWithCandidates(scored)
 
 	enrichMu.Lock()
@@ -979,10 +998,12 @@ func rescoreLyrics(key, artist, title, album string, durationSecs float64) {
 	}()
 	enrichMu.Lock()
 	currentSource := enrichCache[key].LyricsSource
+	sourceChoice := enrichCache[key].LyricsSourceChoice
 	enrichMu.Unlock()
 
 	_, scored := scoredLyricCandidates(artist, title, album, durationSecs)
-	picked := pickLyricCandidate(scored)
+	// 用户选定过源就只在那个源内重选,见 LyricsSourceChoice 字段注释。
+	picked := pickLyricCandidatePreferring(scored, sourceChoice)
 	decidable := rescoreDecidable(scored, currentSource)
 	seen := lyricSourcesWithCandidates(scored)
 
@@ -1370,6 +1391,31 @@ func resolveTrackEnrichment(artist, title, album string, durationSecs float64) e
 // 不是只要一个赢家),但对"启用哪些源"这条设置口径一致——两条路径都只看你在设置里开着
 // 的那几个源,只是手动搜索用的是 searchcli.go 里单独的 filterEnabledLyricSources,
 // 不是直接调这个函数。
+// pickLyricCandidatePreferring 是 pickLyricCandidate 的"用户选定过源"版本。
+//
+// sourceChoice 为空时逐字等价于 pickLyricCandidate。非空时**只在那个源的候选里选**:
+// 用户明确说过"这首歌我要这个源的词",自愈路径就不该把它换掉,但仍然可以在同一个源
+// 内升级(那个源这一轮给出了逐字/更完整的正文时照样能换上来)。
+//
+// 那个源这一轮一条候选都没有时返回 nil = **不换**,而不是退回全局最优 —— 退回去就等于
+// 悄悄推翻用户的选择,而"这一轮没应答"最常见的原因只是超时或限流。
+//
+// 用户后来在设置里禁用了那个源时,过滤出来的候选会被 pickLyricCandidate 自己的
+// features.LyricsSources 闸挡掉,同样落到"不换"。保守是对的:那是两个独立的意图,
+// 不该由这里替用户合并。
+func pickLyricCandidatePreferring(scored []scoredLyricCandidateResult, sourceChoice string) *scoredLyricCandidateResult {
+	if sourceChoice == "" {
+		return pickLyricCandidate(scored)
+	}
+	filtered := make([]scoredLyricCandidateResult, 0, len(scored))
+	for _, c := range scored {
+		if c.Source == sourceChoice {
+			filtered = append(filtered, c)
+		}
+	}
+	return pickLyricCandidate(filtered)
+}
+
 func pickLyricCandidate(scored []scoredLyricCandidateResult) *scoredLyricCandidateResult {
 	if features.LyricsSourceMode == lyricsModePriority {
 		for _, source := range features.LyricsSourceOrder {
@@ -1492,7 +1538,13 @@ func scoredLyricCandidatesStreaming(artist, title, album string, durationSecs fl
 	// 了 -1(不是逐行时间戳、语言对不上、整份只有署名行……)时,results 非空,于是重试根本
 	// 不触发,最后拿一堆废候选收场。而这恰恰是最该换个歌手名再试一次的情形。
 	if !hasUsableLyricCandidate(results) {
-		for _, alt := range retryArtistIdentities(artist) {
+		// Apple 目录锚点给的权威署名排在手工别名表/MusicBrainz **前面**:它是这首歌
+		// 自己的元数据(而不是"这位歌手一般叫什么"),证据强度更高,而且专辑署名恰好覆盖
+		// 手工表和 MB 都够不到的那一类——演唱会嘉宾/群星合辑/客串曲目。见
+		// appleCatalogSearchIdentities。两边的名字去重,免得同一个名字查两轮。
+		for _, alt := range dedupeArtistIdentities(
+			appleCatalogSearchIdentities(artist, title, album),
+			retryArtistIdentities(artist)) {
 			altNe, altResults := fetchScoredLyricCandidatesStreaming(alt, title, album, durationSecs, onUpdate)
 			if hasUsableLyricCandidate(altResults) {
 				log.Printf("lyrics: artist alias fallback succeeded: original_artist=%q alias=%q title=%q candidates=%d",
