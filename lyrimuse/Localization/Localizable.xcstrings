@@ -5883,6 +5883,23 @@
         }
       }
     },
+    "收听次数：%@" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Plays: %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "收听次数：%@"
+          }
+        }
+      }
+    },
     "收起" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -11727,23 +11744,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "这台 Mac 没有刘海，会显示在屏幕顶部正中"
-          }
-        }
-      }
-    },
-    "这次播放已计入收听记录" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "This play has been counted as a listen"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "这次播放已计入收听记录"
           }
         }
       }

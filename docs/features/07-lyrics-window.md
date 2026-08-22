@@ -129,8 +129,7 @@
 
 全部按 `LastfmStatsService.isConnected` 显隐 —— 没连账号时窗口与此前逐像素一致。五个新子视图各自 @ObservedObject 服务单例但都限制在小子树内,主 body 的窄代理纪律不破。
 
-- **「第 N 次听」徽章**(#1):歌手行下的小胶囊,`nowPlayingCount`(track.getinfo userplaycount+1,孪生合并/防刚 scrobble 查回 0 都在服务侧);取数由徽章容器的 onAppear/onChange(键=「歌手|歌名」)触发,容器永远在场防"没数字→不渲染→永不取数"死锁。
-- **计次刻度与「已记录」**(#6):进度条上 3pt 圆点标计次位置(`ScrobbleRule.thresholdFraction`,复刻 collector 的 min(时长/2, 240s)、<30s 不计,selftest 钉死),播放头过线后圆点隐去、时间行右侧亮 checkmark 对勾(help 说明)。⚠️ 按「位置过线」近似,collector 数的是实际播放秒数,往后拖进度条时两者短暂不一致 —— 展示层刻意接受(见 ScrobbleRule 注释)。
+- **「收听次数」徽标**(#1,2026-08-22 改版):挪到时间行正中央 —— AM 在这个位置放的是「高解析度无损」这类音质标签,这里复用同一份 AM 染色(见 `WindowProgressSection.secondaryTextColor` 注释),纯文字、无底色胶囊。`nowPlayingCount`(track.getinfo userplaycount+1,孪生合并/防刚 scrobble 查回 0 都在服务侧);取数由徽标容器的 onAppear/onChange(键=「歌手|歌名」)触发,容器永远在场防"没数字→不渲染→永不取数"死锁。⚠️ 首发版本(#1)是歌手行下的独立小胶囊,另配一套进度条计次刻度 + 时间行 checkmark 对勾(#6,`ScrobbleRule.thresholdFraction`,复刻 collector 的 min(时长/2, 240s)、<30s 不计);用户反馈刻度点/对勾太打扰,改成只留这一枚居中徽标。`ScrobbleRule` 本身连同 selftest 断言原样保留,只是眼下没有 UI 消费方。
 - **收听档案**(#5):「显示简介」面板加 累计/首次听/上次听 三行。首次/上次来自 `user.getTrackScrobbles`(limit=1 首页取最近+total,翻到末页取最早;**本地 listens.jsonl 靠不住** —— 它只在没连账号时才记,见 collector/listenlog.go 2026-08-13 收窄),面板打开那一刻才发这两个请求。
 - **欢迎态统计**(#2/#3/#4):停播页加「今天听了 N 首 · 本周 M 首」(overview)+「那年今日」(onThisDay,循环最多那首)+ 近 12 周迷你热力图(MiniHeatmapStrip 直读 dailyCounts;完整年历仍在设置统计页)。`.task` 3 分钟轮询三个刷新(各自带 TTL/单飞,重复调用是空操作),欢迎态退场时任务随视图取消。
 - **「你的常听」面板**(#7):「⋯」菜单新行,同锚点第三块玻璃面板(ChartsPanelView):种类(歌曲/专辑/歌手)×周期(近7天/近30天/近一年/全部)segmented + Top 10,数据走 `refreshChart`(15 分钟 TTL);点条目经 iTunes Search 解析后 music:// 跳 Apple Music(与「前往专辑/艺人」同一条管线)。

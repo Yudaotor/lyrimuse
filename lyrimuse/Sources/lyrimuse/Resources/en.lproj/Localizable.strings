@@ -349,6 +349,7 @@
 "播放时图标动起来，暂停即静止" = "Icons come alive while playing, still when paused";
 "播放热力图" = "Listening Heatmap";
 "播放用的是逐字时间轴,改「歌词(LRC)」不生效。要手改主歌词,先用「联网搜索候选歌词」换一份不带逐字的;译文/罗马音不受影响" = "Playback uses the word-level timing, so editing Lyrics (LRC) has no effect. To hand-edit the main lyrics, use 「Search Online for Lyric Candidates」 to swap in a candidate without word-level timing; translation and romanization edits still apply.";
+"收听次数：%@" = "Plays: %@";
 "收起" = "Collapse";
 "收起面板后生效" = "Takes effect after this panel closes";
 "改回 iCloud" = "Switch Back to iCloud";
@@ -693,7 +694,6 @@
 "这几种可以同时开着，先挑你现在想用的——之后随时能在设置里单独开关" = "These can all be on at once — pick what you want for now and change it any time in Settings";
 "这台 Mac 上的播放记录会同步到 ListenBrainz，建立完整的听歌历史；也是网页展示、听歌报告的可选数据来源" = "Syncs this Mac's playback to ListenBrainz, building a complete listening history — also an optional data source for the web page and listening digests";
 "这台 Mac 没有刘海，会显示在屏幕顶部正中" = "No notch on this Mac, so it sits at the top center";
-"这次播放已计入收听记录" = "This play has been counted as a listen";
 "这次请求耗时有点久。如果你已经看到系统弹窗，请去处理它；找不到弹窗的话，可以直接去系统设置里手动开启" = "This is taking longer than usual. If a system dialog appeared, respond to it there. If you don't see one, you can turn this on in System Settings instead";
 "这里是一句歌词示例" = "A line of lyrics looks like this";
 "这里的设置对桌面悬浮歌词和灵动岛生效，先开启其中一种" = "These settings apply to Desktop Floating Lyrics and Notch Lyrics — turn one of them on first";

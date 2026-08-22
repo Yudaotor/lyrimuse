@@ -1119,7 +1119,9 @@ struct LyricsWindowView: View {
                 pausedPositionMs: playback.pausedPositionMs,
                 durationMs: playback.currentDurationMs,
                 onArtwork: hasArtworkBackground,
-                backgroundLayers: playback.windowBackgroundLayers)
+                backgroundLayers: playback.windowBackgroundLayers,
+                title: playback.title,
+                artist: playback.artist)
                 .padding(.top, 19)
             playbackControls
                 .padding(.top, 17)
@@ -1226,11 +1228,6 @@ struct LyricsWindowView: View {
                     .foregroundStyle(secondaryTextColor)
             }
             .frame(height: 22)
-            // 「第 N 次听」徽章(2026-08-22,Last.fm 系列 #1):连着账号且拿到数字才出现。
-            // 出现时多占一行,下方进度条会往下顶一截 —— 先给用户看效果的版本,嫌挤可撤。
-            NowPlayingCountBadge(title: playback.title, artist: playback.artist,
-                                 onArtwork: hasArtworkBackground,
-                                 layers: playback.windowBackgroundLayers)
         }
     }
 
@@ -2871,6 +2868,9 @@ private struct WindowProgressSection: View {
     let durationMs: Int?
     let onArtwork: Bool
     let backgroundLayers: WindowBackgroundLayers?
+    /// 收听次数徽标要用的曲目标识(2026-08-22 从 trackInfoTexts 挪到时间行正中央)。
+    let title: String
+    let artist: String
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     // 正在拖进度条时手指所在的比例(0~1);没在拖就是 nil。拖动期间进度条和时间文字都显示
@@ -2980,19 +2980,6 @@ private struct WindowProgressSection: View {
                         .offset(x: -ProgressFillGeometry.leadingOffset(
                             containerWidth: g.size.width, fraction: shownFraction))
                         .clipShape(Capsule())
-                    // 计次刻度(2026-08-22,Last.fm 系列 #6):过了这个点这次播放就会被
-                    // 记录(规则复刻 collector,见 ScrobbleRule 的注释,含"位置≠实际播放
-                    // 秒数"的近似说明)。过线后刻度隐去,时间行右侧亮一个小对勾接棒。
-                    // 判定用真实位置(positionMs),不用拖动预览值 —— 拖过线不等于听过线。
-                    if durationMs > 0,
-                       let tick = ScrobbleRule.thresholdFraction(durationMs: durationMs),
-                       Double(positionMs) < Double(durationMs) * tick {
-                        Circle()
-                            .fill(primaryTextColor.opacity(0.55))
-                            .frame(width: 3, height: 3)
-                            .offset(x: g.size.width * tick - 1.5)
-                            .allowsHitTesting(false)
-                    }
                 }
             }
             .frame(height: scrubberHeight)
@@ -3075,20 +3062,15 @@ private struct WindowProgressSection: View {
             HStack {
                 Text(Self.formatTime(ms: shownMs))
                 Spacer()
-                // 「已记录」对勾(2026-08-22,Last.fm 系列 #6):播放头过了计次点就亮,
-                // 接上面进度条上那颗隐去的刻度点。
-                if durationMs > 0,
-                   let tick = ScrobbleRule.thresholdFraction(durationMs: durationMs),
-                   Double(positionMs) >= Double(durationMs) * tick {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 10))
-                        .padding(.trailing, 2)
-                        .help(L10n.t("这次播放已计入收听记录"))
-                        .transition(.opacity)
-                }
                 // 右侧显示**总时长**而不是剩余时间(2026-08-21 布局对齐 AM:它的歌词页
                 // 时间行是「0:20 ··· 3:12」)。
                 Text(Self.formatTime(ms: durationMs))
+            }
+            .overlay {
+                // 收听次数徽标(2026-08-22 改版,用户反馈计次刻度/对勾太打扰):挪到
+                // AM「高解析度无损」标签的原位——时间行正中央,复用同一份 AM 染色配方
+                // (见 secondaryTextColor 注释),不再挤占标题下方独立一行。
+                NowPlayingCountBadge(title: title, artist: artist, textColor: secondaryTextColor)
             }
             .font(.system(size: 11))
             .monospacedDigit()
@@ -3606,30 +3588,25 @@ private struct WindowAnimatedBackground: View {
 /// nowPlayingCount(track.getinfo userplaycount+1,孪生写法合并、防"刚 scrobble 查回 0"
 /// 的坑都在服务侧)。刻意订阅整个服务单例但只在这棵小子树上 —— 主窗 body 的窄代理纪律
 /// 不破(见文件头注),服务的其它 @Published 变动最多重算这一个胶囊。
+///
+/// 2026-08-22 改版:从标题下方独立一行挪到时间行正中央 —— AM 在这个位置放的是
+/// 「高解析度无损」这类音质标签,纯文字、无底色胶囊。颜色直接吃调用方
+/// (WindowProgressSection.secondaryTextColor)算好的同一份 AM 染色,这里不再自己
+/// 重算 onArtwork/layers。
 private struct NowPlayingCountBadge: View {
     let title: String
     let artist: String
-    let onArtwork: Bool
-    let layers: WindowBackgroundLayers?
+    let textColor: Color
     @ObservedObject private var stats = LastfmStatsService.shared
 
     var body: some View {
         // 容器必须永远在场:onAppear/onChange 是取数的唯一触发点,挂在条件内容上会
         // 陷入"没数字→不渲染→永远不取数"的死锁。
-        VStack(alignment: .leading, spacing: 0) {
+        Group {
             if stats.isConnected, !title.isEmpty, let n = stats.nowPlayingCount {
-                Text(String(format: L10n.t("第 %@ 次听"), "\(n)"))
-                    .font(.system(size: 10.5, weight: .semibold).monospacedDigit())
-                    .foregroundStyle(onArtwork
-                        ? amVibrantColor(layers: layers, satScale: 0.5, satCap: 0.4,
-                                         brightness: 0.85, fallback: .white.opacity(0.65),
-                                         minContrastToBackground: 0.25)
-                        : .secondary)
-                    .padding(.horizontal, 7)
-                    .padding(.vertical, 2.5)
-                    .background(Capsule().fill(
-                        onArtwork ? Color.white.opacity(0.10) : Color.primary.opacity(0.06)))
-                    .padding(.top, 7)
+                Text(String(format: L10n.t("收听次数：%@"), "\(n)"))
+                    .font(.system(size: 11, weight: .medium).monospacedDigit())
+                    .foregroundStyle(textColor)
                     .transition(.opacity)
             }
         }
