@@ -61,7 +61,16 @@ collector 二进制打包在 `.app/Contents/Resources/` 内，由 `Bundle.main` 
 
 CoreAudio 属性监听（不拦音量键不轮询 osascript），系统输出音量变化时在灵动岛闪音量横幅（经 NotchTransientCenter，第 05 章）。
 
-### 7. 测试（selftest）
+### 7. 卸载（uninstall.sh）
+
+`lyrimuse/scripts/uninstall.sh`，三档：默认只报告 / `--services` 只注销两个 launchd job（不碰数据）/ `--purge` 注销 + 删配置缓存日志 + **删偏好设置项**（必须手输 `yes`）。
+
+- **`--purge` 会 `defaults delete <bundle id>`**（2026-08-22 加）。不删的后果是把重装引向一条**不可自愈的死路**：purge 已经删掉 LaunchAgent（collector 没装），而 `np:hasCompletedOnboarding` 还是 true → 重装后首启引导永不出现，而那扇引导页是把 collector 服务装回去的主要入口；用户看到的是桌面永久停在「搜索歌词中…」，界面上没有任何线索指向「后台服务没装」。`OnboardingView` 顶部注释记的就是这条死路，只是这次从卸载路径绕了回来。整个 domain 一起删而不是挑几个 key：purge 的语义就是「当它没装过」，挑 key 既不完整（`np:*` 之外还有 `KeyboardShortcuts_*`），又要跟着代码里的 key 表走样。
+- ⚠️ **`defaults read` 不能当「域还在不在」的判据**：`defaults delete <domain>` 成功之后 `defaults read <domain>` **仍然退出 0**，只打印一个空字典 `{}`（cfprefsd 里那个 domain 的空壳还挂着）。拿退出码判等于恒为真，表现是删干净了却报「❌ 仍然存在」。脚本里的 `has_defaults()` 判的是读出来有没有内容，测试侧同一个坑同样修法。
+- ⚠️ **「App 还在跑」只能当提醒，不能当前置闸**：跑卸载脚本的人多半 App 还开着（他刚决定不要它了），做成「在跑就跳过删除」等于永远不删；而且那个判据看的是全局有没有 `lyrimuse` 进程，跟 `$APP_LABEL` 这个 domain 没有对应关系——`uninstall_test.sh` 把 label 覆盖成 probe 域，却会被真实 App 的运行状态挡住（加这段时被那条测试当场抓出来）。现在是**先删、再核实、最后如实提醒 cfprefsd 可能写回**，三件事各归各的。
+- **测试**：`lyrimuse/scripts/uninstall_test.sh`（这是仓库里唯一会 `rm -rf` 用户数据的东西，改了必须跑）。它靠 `LYRIMUSE_UNINSTALL_PREFIX` + 两个可覆盖的 label 走**完全相同的代码路径**，不开旁路；偏好域用的是 probe label，setup 时种一条、cleanup 时删掉。第 6 节「全程没碰真实环境」现在多一条：真实偏好域的 key 行数前后必须不变——万一哪天有人把 domain 写死成真实 bundle id，这一行会当场把「测试把我自己的全部设置删了」抓出来。
+
+### 8. 测试（selftest）
 
 无 XCTest（无完整 Xcode）。`swift run lyrimuse-selftest` 跑手写 `expectEqual` 断言（歌词引擎/取色/偏移/本地化守卫等）；Go 侧 `GOTOOLCHAIN=go1.24.4 go test ./...`（默认 go 1.21 编译产物会被 AMFI 拒签、启动即死，repo CLAUDE.md 硬规则）。真机界面验证用只读方式：`swift lyrimuse/scripts/check-windows.swift` + `screencapture -l <窗口ID>`，**禁止** AppleScript/System Events 驱动界面（毁过用户数据）。
 
@@ -90,7 +99,8 @@ CoreAudio 属性监听（不拦音量键不轮询 osascript），系统输出音
 
 | 主题 | 位置 |
 |---|---|
-| 构建部署 | lyrimuse/build.sh |
+| 构建部署 | lyrimuse/build.sh；打包 lyrimuse/package.sh；发布 .github/workflows/release.yml |
+| 卸载 | lyrimuse/scripts/uninstall.sh（`has_defaults` / purge 段）、lyrimuse/scripts/uninstall_test.sh |
 | 服务管理 | Settings/CollectorServiceManager.swift（`install` / `reconcileAfterLaunch` / `recordInstalledFingerprint` / `currentBinaryFingerprint`）、LyricsManager/CollectorControl.swift、LyrimuseCore/Local/LaunchdJobState.swift、CollectorStatus.swift |
 | 单实例 | lyrimuse-collector/singleinstance.go |
 | 联动唤起 | lyrimuse-collector/companionlaunch.go |

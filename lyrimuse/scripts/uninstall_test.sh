@@ -22,6 +22,8 @@ cleanup() {
   for l in "$PROBE_A" "$PROBE_B"; do
     /bin/launchctl bootout "gui/$UID_/$l" >/dev/null 2>&1
   done
+  # probe 偏好域写在真实 cfprefs 里（domain 不受 FAKE_HOME 管），必须自己收干净。
+  /usr/bin/defaults delete "$PROBE_B" >/dev/null 2>&1
   /bin/rm -rf "$FAKE_HOME"
 }
 trap cleanup EXIT INT TERM
@@ -32,6 +34,14 @@ fail() { echo "  FAIL - $1"; FAILURES=$((FAILURES + 1)) }
 # 真实的东西在测试前后都必须原样不动。
 REAL_CONFIG_BEFORE=$(/usr/bin/find "$HOME/.config/lyrimuse" -type f 2>/dev/null | /usr/bin/wc -l | /usr/bin/tr -d ' ')
 REAL_COLLECTOR_BEFORE=$(/bin/launchctl print "gui/$UID_/com.lyrimuse.collector" >/dev/null 2>&1 && echo yes || echo no)
+# 2026-08-22 加：--purge 开始真的 `defaults delete` 之后，这条对账就不再是形式主义 ——
+# 脚本删的 domain 取自 $APP_LABEL，测试把它覆盖成一次性 probe label；万一哪天有人把
+# domain 写死成真实 bundle id，这一行会当场把"测试把我自己的全部设置删了"抓出来。
+# 数 key 的条数而不是只看 domain 在不在：真实域几乎必然存在，条数才对得出差异。
+real_defaults_count() {
+  /usr/bin/defaults read me.yudaotor.lyrimuse 2>/dev/null | /usr/bin/wc -l | /usr/bin/tr -d ' '
+}
+REAL_DEFAULTS_BEFORE=$(real_defaults_count)
 
 setup_fake_home() {
   /bin/rm -rf "$FAKE_HOME"
@@ -40,6 +50,11 @@ setup_fake_home() {
   echo '{}' > "$FAKE_HOME/.config/lyrimuse/lyrimuse-enrich-cache.json"
   echo '[00:01.00]假歌词' > "$FAKE_HOME/.config/lyrimuse/lyrics/测试 - 歌.lrc"
   echo 'log line' > "$FAKE_HOME/Library/Logs/lyrimuse.log"
+  # probe 偏好域：--purge 会对 $APP_LABEL(= $PROBE_B) 跑 defaults delete，先种一个进去，
+  # 否则 HAS_DEFAULTS 恒为 no、那条分支根本走不到，等于没测。
+  # ⚠️ defaults 的 domain 不受 LYRIMUSE_UNINSTALL_PREFIX 管辖（它写的是真实用户的
+  # cfprefs），所以这里种的必须是 probe label 而不是真实 bundle id，cleanup 里也要删掉。
+  /usr/bin/defaults write "$PROBE_B" probeKey -string probeValue 2>/dev/null
   for l in "$PROBE_A" "$PROBE_B"; do
     p="$FAKE_HOME/Library/LaunchAgents/$l.plist"
     {
@@ -95,6 +110,12 @@ echo "yes" | run_uninstall --purge >/dev/null 2>&1
 [[ -d "$FAKE_HOME/.config/lyrimuse" ]] && fail "配置目录没删" || ok "配置目录已删"
 [[ -f "$FAKE_HOME/Library/Logs/lyrimuse.log" ]] && fail "日志没删" || ok "日志已删"
 /bin/launchctl print "gui/$UID_/$PROBE_A" >/dev/null 2>&1 && fail "job 没注销" || ok "job 已注销"
+# purge 必须连偏好设置项一起删 —— 不删的话重装会走进"引导不弹 + 服务没装"的死路
+# （见 uninstall.sh 里那段注释）。
+# 同一个坑：`defaults read` 对已删的 domain 照样退出 0（打印空字典），判据只能看内容。
+probe_defaults_left=$(/usr/bin/defaults read "$PROBE_B" 2>/dev/null | /usr/bin/tr -d '[:space:]')
+[[ -z "$probe_defaults_left" || "$probe_defaults_left" == "{}" ]] \
+  && ok "偏好设置项已删" || fail "偏好设置项没删（残留: $probe_defaults_left）"
 
 echo
 echo "=== 6. 全程没碰真实环境 ==="
@@ -106,6 +127,10 @@ REAL_COLLECTOR_AFTER=$(/bin/launchctl print "gui/$UID_/com.lyrimuse.collector" >
 [[ "$REAL_COLLECTOR_BEFORE" == "$REAL_COLLECTOR_AFTER" ]] \
   && ok "真实 collector 服务状态不变（$REAL_COLLECTOR_BEFORE）" \
   || fail "真实 collector 被动了：$REAL_COLLECTOR_BEFORE -> $REAL_COLLECTOR_AFTER"
+REAL_DEFAULTS_AFTER=$(real_defaults_count)
+[[ "$REAL_DEFAULTS_BEFORE" == "$REAL_DEFAULTS_AFTER" ]] \
+  && ok "真实偏好设置项不变（$REAL_DEFAULTS_BEFORE 行）" \
+  || fail "真实偏好被动了：$REAL_DEFAULTS_BEFORE -> $REAL_DEFAULTS_AFTER 行"
 
 echo
 if (( FAILURES == 0 )); then

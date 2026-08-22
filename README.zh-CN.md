@@ -189,14 +189,16 @@ QQ 音乐/网易云音乐/酷狗音乐/Spotify/自动识别这几个播放源支
 ```sh
 lyrimuse/scripts/uninstall.sh              # 只看：报告当前装了什么
 lyrimuse/scripts/uninstall.sh --services   # 注销两个 launchd job，数据一律保留
-lyrimuse/scripts/uninstall.sh --purge      # 连配置、缓存、日志一起删
+lyrimuse/scripts/uninstall.sh --purge      # 连配置、缓存、日志、偏好设置一起删
 ```
 
 不带参数运行不会改动任何东西，只是告诉你系统里现在有什么。`--purge` 会先把要删的东西
-逐个列出来、提醒你其中有多少个已导出的 `.lrc` 歌词文件，并且要求手动输入 `yes` 才继续。
+逐个列出来、提醒你其中有多少个已导出的歌词文件，并且要求手动输入 `yes` 才继续。
 
-两种方式都不会碰你的偏好设置——想彻底清干净的话执行
-`defaults delete me.yudaotor.lyrimuse`。
+`--services` 不碰偏好设置；`--purge` 会连偏好设置一起删（`defaults delete
+me.yudaotor.lyrimuse`）。留着它会把重装引向一条死路：LaunchAgent 已经删了、collector
+没装，而 App 仍然认为引导走完过——于是那扇能把服务装回去的引导页永远不出现，桌面就
+一直停在「搜索歌词中…」。
 
 ## 项目结构
 

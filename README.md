@@ -195,15 +195,18 @@ launchd keeps trying to start a binary that is no longer there.
 ```sh
 lyrimuse/scripts/uninstall.sh              # report only — shows what is installed
 lyrimuse/scripts/uninstall.sh --services   # unregister both launchd jobs, keep your data
-lyrimuse/scripts/uninstall.sh --purge      # also delete config, caches and logs
+lyrimuse/scripts/uninstall.sh --purge      # also delete config, caches, logs and settings
 ```
 
 Running it with no arguments changes nothing; it just tells you what is on your
 system. `--purge` lists everything it is about to delete, warns you how many exported
-`.lrc` files are among them, and requires you to type `yes`.
+lyrics files are among them, and requires you to type `yes`.
 
-Your settings live in `defaults` and are left alone either way — remove them with
-`defaults delete me.yudaotor.lyrimuse` if you want a completely clean slate.
+`--services` leaves your settings alone. `--purge` also removes them
+(`defaults delete me.yudaotor.lyrimuse`), because leaving them behind puts a
+reinstall into a dead end: the LaunchAgent is gone, so the collector is not
+installed, but the app still thinks onboarding is done — so the wizard that would
+install it never appears, and the desktop just sits at "searching for lyrics".
 
 ## Project Layout
 
