@@ -1,3 +1,4 @@
+import Foundation
 import SwiftUI
 
 // 灵动岛左耳歌名前面那几根"跳动的均衡条"——纯装饰性的播放指示器,不是真的频谱。
@@ -33,10 +34,23 @@ struct EqualizerBars: View {
     /// 默认 `{ _ in 1 }` = 满幅,等价于加这个参数之前的行为。
     var amplitude: (Date) -> Double = { _ in 1 }
 
-    /// 换一次高度的间隔。0.28s 是试出来的:再快就显得毛躁、跟音乐没关系的抖动感很强,
-    /// 再慢就不像在"跳"。
-    private static let interval: TimeInterval = 0.28
+    /// 求一次高度的间隔。
+    ///
+    /// 2026-08-23 从 0.28 降到 0.10(用户反馈"跳动比较机械感,能不能顺滑一点、频率快一些")。
+    /// 旧注释说"再快就显得毛躁、跟音乐没关系的抖动感很强" —— 那个结论是**跟旧的随机高度
+    /// 绑在一起**的:相邻 tick 的目标值互不相关,越快抖得越凶。换成下面的连续函数之后,
+    /// 快反而是顺滑的前提(采样越密,越贴近那条连续曲线)。
+    ///
+    /// ⚠️ 这**没有**推翻 2026-08-19 的性能结论。那条说的是"补间时长不能等于间隔,否则
+    /// 尺寸动画 100% 时间在跑、把窗口钉死在持续合成状态";这里补间仍然只占半个周期
+    /// (见 body 末尾),每个周期照样有一半时间完全静止,合成循环该 idle 还是 idle。变的
+    /// 只是**求值频率**:3.6Hz → 10Hz,仍远低于逐字填色那条 30Hz 的热路径。
+    private static let interval: TimeInterval = 0.10
     private static let barCount = 4
+    /// 四根条子的相位偏移,刻意取无理数间距(非 2π 的简单分数)——等分相位会让四根条子
+    /// 呈现出肉眼可辨的"波浪依次推过去"的规律感,那是另一种机械感。
+    /// 跟菜单栏图标那套音条(`MenuBarLiveIconView.barPhases`)同一个思路。
+    private static let barPhases: [Double] = [0, 1.9, 3.4, 5.1]
     private static let barWidth: CGFloat = 2
     private static let spacing: CGFloat = 1.5
     private static let maxHeight: CGFloat = 10
@@ -49,17 +63,18 @@ struct EqualizerBars: View {
 
     var body: some View {
         TimelineView(.animation(minimumInterval: Self.interval, paused: !isPlaying)) { context in
-            // 从时间戳算 tick 而不是自己维护一个自增计数器:TimelineView 在窗口不可见/
-            // paused 期间不保证按时给点,自增计数器会随之漂移;从时间戳推则任何时候重建
-            // 视图都能接上同一条序列。
-            let tick = Int(context.date.timeIntervalSinceReferenceDate / Self.interval)
-            // 每个 tick 求一次,四根条子共用 —— 它描述的是"此刻",跟是哪根条子无关。
+            // 直接用**连续**的时间戳,不再取整成 tick。高度现在是时间的连续函数(见 height),
+            // 取整反而会把曲线切成阶梯。仍然从时间戳推而不是自己维护累加器:TimelineView 在
+            // 窗口不可见/paused 期间不保证按时给点,累加器会漂,时间戳则任何时候重建视图都
+            // 接得上同一条曲线。
+            let t = context.date.timeIntervalSinceReferenceDate
+            // 每次求一次,四根条子共用 —— 它描述的是"此刻",跟是哪根条子无关。
             let amp = amplitude(context.date)
             HStack(alignment: .bottom, spacing: Self.spacing) {
                 ForEach(0..<Self.barCount, id: \.self) { i in
                     Capsule()
                         .fill(color)
-                        .frame(width: Self.barWidth, height: height(bar: i, tick: tick, amplitude: amp))
+                        .frame(width: Self.barWidth, height: height(bar: i, time: t, amplitude: amp))
                 }
             }
             .frame(width: Self.width, height: Self.maxHeight, alignment: .bottom)
@@ -69,7 +84,18 @@ struct EqualizerBars: View {
             // 状态(body 重算确实被 minimumInterval 压到了 3.6Hz,但合成频率仍是满帧)。
             // 减半后每个周期有一半时间完全静止,合成循环能间歇 idle;观感仍是跳动的条,
             // 只是每跳快一点、停一下 —— 反而更像"拍点"。
-            .animation(.easeInOut(duration: Self.interval * 0.5), value: tick)
+            // ⚠️ `value:` 必须是随时间变的那个量。以前是离散的 tick,现在没有 tick 了,
+            // 改用"第一根条子此刻的高度"当变化信号 —— 它每次求值都不同,等价于每个周期
+            // 触发一次补间。
+            //
+            // 曲线从 easeInOut 换成 linear:目标值本身已经是连续曲线上的采样点,再套
+            // ease 会在每个采样点两端各加一次加减速,反而把平滑的正弦啃成一段段的"顿挫"
+            // —— 那正是"机械感"的另一半来源。linear 把相邻采样点直连,10Hz 下就是这条
+            // 曲线的分段线性逼近,肉眼即连续。
+            //
+            // 时长仍是半个周期(0.05s),不是整个周期 —— 见 interval 注释里对 2026-08-19
+            // 那条性能结论的说明。
+            .animation(.linear(duration: Self.interval * 0.5), value: height(bar: 0, time: t, amplitude: amp))
             .animation(.easeInOut(duration: Self.interval), value: isPlaying)
         }
         .frame(width: Self.width, height: Self.maxHeight)
@@ -77,23 +103,29 @@ struct EqualizerBars: View {
         .accessibilityHidden(true)
     }
 
-    /// 确定性的伪随机高度。
+    /// 条高 = 双正弦叠加的连续函数 × 振幅。
     ///
-    /// 不用 Double.random:那样同一个 tick 每次重算 body 都会得到不同结果,而 SwiftUI 重算
-    /// body 的时机不由我们控制(父视图任何状态变化都可能带着重算一次),表现出来就是条子
-    /// 在两次 tick 之间无缘无故抽一下。按 (bar, tick) 哈希出来的值则是纯函数,重算多少次
-    /// 都是同一个高度。
-    private func height(bar: Int, tick: Int, amplitude: Double) -> CGFloat {
+    /// **为什么不再用伪随机**(2026-08-23 换掉):旧实现按 (bar, tick) 做 splitmix64 散列,
+    /// 相邻两个 tick 的目标值完全无关 —— 于是每 0.28s 硬跳到一个不相干的高度,补间再怎么
+    /// 调都是"抽一下、停一下",这就是用户说的机械感。散列当时解决的是另一个问题
+    /// (`Double.random` 会让同一个 tick 每次重算 body 得到不同结果,导致无缘无故抽动),
+    /// 而连续函数天然也是纯函数、同样没有那个问题,顺便把机械感一起解决了。
+    ///
+    /// **为什么是双正弦**:单个正弦四根条子会整齐地波浪推过去,一眼看出是假的;两个频率
+    /// 不成简单整数比的正弦叠加,周期长到肉眼认不出重复。这跟菜单栏图标那套音条
+    /// (`MenuBarLiveIconView.buildEqualizer`,注释原文「双正弦打破机械感」)是同一个手法,
+    /// 保持两处观感一致。
+    ///
+    /// 频率取 1.7/2.9 Hz 附近并按条序错开:整体节奏接近中速歌曲的拍点,又不跟任何真实
+    /// 节拍同步(它本来就与音频无关,装成对得上反而是虚假承诺)。
+    private func height(bar: Int, time: Double, amplitude: Double) -> CGFloat {
         guard isPlaying else { return Self.minHeight }
-        var h = UInt64(bitPattern: Int64(tick &* 31 &+ bar &* 7919))
-        // splitmix64 的 finalizer——比取模/线性同余散得开,相邻 tick 不会连着出相近的值
-        // (那看起来就是几根条子一起慢慢升降,而不是各跳各的)。
-        h ^= h >> 30
-        h = h &* 0xbf58_476d_1ce4_e5b9
-        h ^= h >> 27
-        h = h &* 0x94d0_49bb_1331_11eb
-        h ^= h >> 31
-        let unit = Double(h % 1000) / 1000.0
+        let phase = Self.barPhases[bar % Self.barPhases.count]
+        let f1 = 1.7 + Double(bar) * 0.31
+        let f2 = 2.9 + Double(bar) * 0.23
+        let raw = 0.62 * sin(time * f1 + phase) + 0.38 * sin(time * f2 + phase * 1.7)
+        // raw ∈ [-1, 1] → [0, 1]
+        let unit = (raw + 1) / 2
         // 振幅只压缩"能跳多高",不动地板 —— minHeight 那条线永远在,间奏/纯音乐时条子
         // 收敛成小幅晃动而不是趴平。趴平的观感是"坏了",而这个元件的职责是"告诉你还在放"。
         let scaled = unit * max(0, min(1, amplitude))
