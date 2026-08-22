@@ -126,6 +126,10 @@ struct LyricsOverlayView: View {
     // 用户一开背景色看到的是个生硬的直角矩形;两个参考的开源实现里圆角都不是用户可调项。
     private let overlayBackgroundCornerRadius: CGFloat = 16
     private let overlayCoordSpaceName = "overlayContent"
+    /// 调试 HUD 的帧率探针。@State 而不是 @StateObject:它是纯值类型,而且**只在 HUD 开着
+    /// 时**才被 tick —— 关着的时候这里恒为初始值,不产生任何开销。
+    @State private var frameProbe = FrameRateProbe()
+    @State private var debugFPS: Double?
 
     // 播放控制排该不该显示:悬停中、且没锁定位置。抽成计算属性是因为下面有三处要用同一个
     // 判断(可见性、是否接受点击、热区要不要上报),散开写容易改漏其中一处。
@@ -200,6 +204,21 @@ struct LyricsOverlayView: View {
         // 淡出比淡入慢一点(0.18 vs 0.12):指针扫过去要立刻让开才有用,回来时慢一点更从容。
         .opacity(hoverFadeOpacity)
         .animation(.easeOut(duration: hoverFadeOpacity < 1 ? 0.12 : 0.18), value: hoverFadeOpacity)
+        // 调试 HUD(隐藏开关 np:debugHUD,不进设置界面)。挂 overlay 而不是塞进 VStack:
+        // 它绝不能改变布局 —— 上面三条 preference 报出去的高度/热区是窗口几何的输入,
+        // HUD 一旦占位就会把窗口撑高,量到的就不是原来那套渲染了。
+        .overlay(alignment: .topTrailing) {
+            if AppSettings.shared.debugHUDEnabled {
+                Text(debugFPS.map { String(format: "%.0f fps", $0) } ?? "-- fps")
+                    .font(.system(size: 9, weight: .medium).monospacedDigit())
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 4)
+                    .padding(.vertical, 1)
+                    .background(.black.opacity(0.6), in: RoundedRectangle(cornerRadius: 3))
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
+            }
+        }
         // 控制排每次露出来时重读一次"喜欢"状态。这条状态不跟着 2 秒轮询走(每次读要起一个
         // osascript 子进程,为一个几乎不变的布尔值那么干不值当),换歌时刷一次之外,就靠这里
         // ——正好覆盖"用户刚在 Music.app 里自己点了心、回头来看悬浮窗"这种情况。
@@ -465,6 +484,16 @@ struct LyricsOverlayView: View {
                     ?? PlaybackCoordinator.shared.pausedPositionMs ?? 0)
                     + PlaybackCoordinator.shared.currentLyricsOffsetMs
                 karaokeLineContent(words: words, atMs: currentMs)
+                    // 调试 HUD 的帧率取样。挂在**这个**闭包里是刻意的:它就是逐字填色的
+                    // 那条热路径,量的正是"这个 App 最贵的那段渲染实际拿到多少帧",而不是
+                    // 另起一个 TimelineView 去量一个跟它无关的数字(那样量出来的是
+                    // SwiftUI 愿意给一个空闲视图多少帧,毫无意义)。
+                    // 开关关着时整段不执行,零成本。
+                    .onChange(of: context.date) { _, date in
+                        guard AppSettings.shared.debugHUDEnabled else { return }
+                        frameProbe.tick(at: date)
+                        debugFPS = frameProbe.fps
+                    }
             }
             .font(playback.mainFont)
             // 描边的剪影 mask 用**静态副本**当 Canvas symbol(2026-08-19 性能审计落地):

@@ -68,7 +68,13 @@
 
 ### 7. 诊断导出（DiagnosticsExporter）
 
-汇总 collector 日志（`~/Library/Logs/lyrimuse.log`）+ App 系统日志 + 关键状态（权限/服务/各功能是否已配置）成一份文本，设计给贴公开 issue。两道防泄密：状态段只用 ConfigStore 的只读布尔判断；日志正文统一过 `LogRedactor` 脱敏（2026-08-13 前该约束是破的——Go `*url.Error` 会把 api_key 连 URL 原样打进日志）。
+汇总 collector 日志（`~/Library/Logs/lyrimuse.log`）+ App 系统日志 + 关键状态（权限/服务/各功能是否已配置）+ **播放时钟**成一份文本，设计给贴公开 issue。
+
+**播放时钟段（2026-08-22 加）**：`positionSourceTier` / 伺服误差 EMA / `posReportedBiasSecs` / 锚点的 rate·fresh·年龄 / 生效歌词偏移与其中来自 LRC `[offset:]` 的那一层 / `currentLineFillSettled`。数据源是 `LocalPlaybackSource.clockSnapshot`（只读快照，全是内存里已有的字段，零热路径成本；刻意不做成 `@Published`——诊断导出是"点一下读一次"，发布属性会让每次伺服调整都推着订阅者重渲染）。
+加它的理由：「歌词慢半拍」是最常被报也最难复现的一类问题，而它至少有四种成因、修法完全不同——帧率掉了 / tier 判错 / 伺服在反复 snap / 自然切歌偏置估歪。此前报告里没有任何一项能把这四种区分开。这一段不含任何用户内容（没有曲名/歌手/歌词），天然不需要过 `LogRedactor`。
+
+**调试 HUD（隐藏开关，不进设置界面）**：`defaults write me.yudaotor.lyrimuse np:debugHUD -bool true` 后重开悬浮歌词，右上角显示实测帧率。取样器是 `LyrimuseCore/Playback/FrameRateProbe.swift`（纯值类型，selftest 无屏覆盖 6 条），挂在**逐字填色那个既有的 `TimelineView` 闭包**里——量的正是这个 App 最贵的那段渲染实际拿到多少帧，而不是另起一个 TimelineView 去量一个无关的数字。HUD 用 `.overlay` 挂而**不**塞进 VStack：它绝不能改变布局，否则会把窗口撑高、量到的就不是原来那套渲染了。
+背景：项目最贵的两个渲染结论（07 章 #13 的 ~20Hz 提交、04 章 #2 的 30Hz 上限）都靠一次性搭的 ScreenCaptureKit 探针量出来，量完就没了，而 07 章还写着「将来重试排程式填色，先用探针核实提交频率再谈」。两道防泄密：状态段只用 ConfigStore 的只读布尔判断；日志正文统一过 `LogRedactor` 脱敏（2026-08-13 前该约束是破的——Go `*url.Error` 会把 api_key 连 URL 原样打进日志）。
 
 ## 设置项
 

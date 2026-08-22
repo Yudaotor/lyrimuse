@@ -77,6 +77,7 @@ final class AppSettings: ObservableObject {
         static let hideWhenNotPlaying = "np:hideWhenNotPlaying"
         static let overlayFadeOnHover = "np:overlayFadeOnHover"
         static let hideWhenFullscreenApp = "np:hideWhenFullscreenApp"
+        static let debugHUDEnabled = "np:debugHUD"
         // 跟 L10n.swift 里的 languageOverrideKey 必须是同一个字符串——那边只读、这里
         // 只写(负责持久化+驱动"通用"tab 的语言 Picker),两处各自独立实现,不要互相
         // import,理由见 L10n.swift 顶部注释(L10n 不依赖 @MainActor 的 AppSettings)。
@@ -313,6 +314,15 @@ final class AppSettings: ObservableObject {
     @Published var hideWhenFullscreenApp: Bool {
         didSet { defaults.set(hideWhenFullscreenApp, forKey: Keys.hideWhenFullscreenApp) }
     }
+    // 调试 HUD:在悬浮歌词角落显示实测帧率(FrameRateProbe)。
+    //
+    // **刻意不进设置界面** —— 它是给开发/排障用的,不是功能。开:
+    //     defaults write me.yudaotor.lyrimuse np:debugHUD -bool true
+    // 然后重开悬浮歌词(或重启 App)。理由见 FrameRateProbe 的类型注释:这个项目最贵的两个
+    // 渲染结论都靠一次性外部探针量出来,量完就没了,以后重试排程式填色还得再搭一次。
+    @Published var debugHUDEnabled: Bool {
+        didSet { defaults.set(debugHUDEnabled, forKey: Keys.debugHUDEnabled) }
+    }
     // "system"(跟随系统语言,默认)/"zh-hans"/"en"——手动覆盖 L10n 的语言解析。这是个
     // @Published 属性而不是简单写完 UserDefaults 就完事,是因为要让所有观察
     // AppSettings.shared 的界面在切换的一瞬间就重新渲染成新语言,不用重启 App
@@ -520,6 +530,7 @@ final class AppSettings: ObservableObject {
         lockPosition = (defaults.object(forKey: Keys.lockPosition) as? Bool) ?? false
         overlayFadeOnHover = (defaults.object(forKey: Keys.overlayFadeOnHover) as? Bool) ?? false
         hideWhenFullscreenApp = (defaults.object(forKey: Keys.hideWhenFullscreenApp) as? Bool) ?? false
+        debugHUDEnabled = (defaults.object(forKey: Keys.debugHUDEnabled) as? Bool) ?? false
         hideDuringScreenCapture = (defaults.object(forKey: Keys.hideDuringScreenCapture) as? Bool) ?? false
         hideWhenNotPlaying = (defaults.object(forKey: Keys.hideWhenNotPlaying) as? Bool) ?? false
         appLanguage = defaults.string(forKey: Keys.appLanguage) ?? "system"

@@ -125,6 +125,39 @@ enum DiagnosticsExporter {
         lines.append("Push notification configured: \(config.pushMissingHint() == nil)")
         lines.append("")
 
+        // ---- 播放时钟(2026-08-22 加)----
+        //
+        // 「歌词慢半拍」是最常被报、也最难复现的一类问题,而它至少有四种成因、修法完全不同:
+        // 帧率掉了 / positionSourceTier 判错 / 伺服在反复 snap / 自然切歌偏置估歪。此前这一段
+        // 完全不存在,报告里没有任何一项能把这四种区分开,只能靠猜加翻 collector 日志。
+        //
+        // 全是内存里已有的字段(LocalPlaybackSource.clockSnapshot),读一次的成本可以忽略;
+        // 不含任何用户内容(没有曲名/歌手/歌词),天然不需要过 LogRedactor。
+        let clock = LocalPlaybackSource.shared.clockSnapshot
+        lines.append("== Playback clock ==")
+        lines.append("Playing: \(clock.isPlaying)  |  has lyrics: \(clock.hasLyrics)")
+        // tier 决定伺服用哪一组常数,判错的表现正是"这个播放器的歌词一直偏"。
+        lines.append("Position source tier: \(clock.tier)")
+        // 伺服误差的指数滑动平均。持续非零 = 预测位置跟播放器报的对不上,在反复拉回。
+        lines.append(String(format: "Servo error EMA: %.3fs", clock.posErrEMASecs))
+        // 自然切歌锚点超前的按曲校正(见 02 章)。非零时这首歌整体被拉过多少。
+        lines.append(String(format: "Reported bias: %.3fs", clock.reportedBiasSecs))
+        if let rate = clock.anchorRate, let fresh = clock.anchorFresh, let age = clock.anchorAgeSecs {
+            // 锚点年龄大得离谱 = 位置在长时间纯墙钟外推(浏览器那类只在切歌时报一次的源)。
+            lines.append(String(format: "Anchor: rate=%.2f fresh=%@ age=%.1fs",
+                                rate, fresh ? "yes" : "no", age))
+        } else {
+            lines.append("Anchor: none (paused or no track)")
+        }
+        // 两层分开报:总偏移里有多少是用户自己调的、有多少是歌词文件自带的 [offset:]。
+        // 用户报"歌词偏了"时,这两个数直接指向该去改哪一个。
+        lines.append("Lyrics offset (effective): \(clock.effectiveLyricsOffsetMs)ms"
+                     + "  |  from LRC [offset:]: \(clock.lrcOffsetMs)ms")
+        // 当前行填色是否已定格 —— 四个展示面 TimelineView 的停表条件,恒为 false 意味着
+        // 有一条动画路径在空转。
+        lines.append("Current line fill settled: \(clock.fillSettled)")
+        lines.append("")
+
         return lines
     }
 
