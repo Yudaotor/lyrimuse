@@ -2,6 +2,7 @@ import AppKit
 import Combine
 import LyrimuseCore
 import os
+import SwiftUI
 
 private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "menubar-item")
 
@@ -134,6 +135,16 @@ final class MenuBarStatusItem: NSObject {
         // 逐字染色开关:用户就是盯着菜单栏拨的,当前句要立刻上色/褪色。
         settings.$menuBarLyricsKaraoke.dropFirst().receive(on: RunLoop.main)
             .sink { [weak self] _ in self?.refresh() }.store(in: &cancellables)
+        // 两个自定义颜色:refreshColors 管图层渲染那条路(只换位图,不打断滚动/填色动画),
+        // refresh 管自适应模式 button.title 那条退化路(颜色进的是 attributedTitle,
+        // 得重画标题;对图层路径它是 present 同参数空操作,无副作用)。
+        settings.$menuBarLyricsTextColorHex.dropFirst().receive(on: RunLoop.main)
+            .sink { [weak self] _ in
+                self?.scrollingLabel.refreshColors()
+                self?.refresh()
+            }.store(in: &cancellables)
+        settings.$menuBarLyricsFillColorHex.dropFirst().receive(on: RunLoop.main)
+            .sink { [weak self] _ in self?.scrollingLabel.refreshColors() }.store(in: &cancellables)
         // 逐字染色的对表通道:锚点(每次 poll ~2s 重发一次 + seek/暂停/恢复)、暂停位置、
         // 时间轴偏移任一变化都重新对一次表。这条**不走 refresh**(不涉及槽位/内容,只是
         // 时钟),标签内部有 250ms 漂移门,逐 poll 的锚点更新几乎都被无声吸收,不会打断
@@ -506,7 +517,19 @@ final class MenuBarStatusItem: NSObject {
         // 渲染结果和按钮宽度完全一样。所以这一行不是在修一个看得见的 bug,是不想把
         // "两个模式之间靠遗留状态碰巧对上"这件事留在代码里。
         button.imagePosition = .noImage
-        button.title = visible
+        // 自定义文字颜色走 attributedTitle(button.title 由 AppKit 按系统外观自动上色,
+        // 塞不进自定义色);没自定义就设 title —— 它会顺带清掉之前可能设过的富文本,
+        // 两种写法互相收拾干净,不靠遗留状态。
+        let textHex = AppSettings.shared.menuBarLyricsTextColorHex
+        if textHex.isEmpty {
+            button.title = visible
+        } else {
+            button.attributedTitle = NSAttributedString(string: visible, attributes: [
+                .font: MenuBarMarqueeRenderer.font,
+                .foregroundColor: NSColor(Color(hexWithAlpha: textHex,
+                                                fallback: Color(nsColor: .labelColor))),
+            ])
+        }
         // tooltip 始终给完整这一行:"想看全文就悬停"这条出路在三种模式下都在。
         button.toolTip = full
         button.setAccessibilityLabel(full)

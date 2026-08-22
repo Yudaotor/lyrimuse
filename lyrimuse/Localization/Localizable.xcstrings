@@ -970,6 +970,23 @@
         }
       }
     },
+    "上次听" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Last listened"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "上次听"
+          }
+        }
+      }
+    },
     "下一步" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1463,6 +1480,23 @@
         }
       }
     },
+    "今天听了 %1$@ 首 · 本周 %2$@ 首" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ plays today · %2$@ this week"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "今天听了 %1$@ 首 · 本周 %2$@ 首"
+          }
+        }
+      }
+    },
     "从待补提交清单里移除这条（不可恢复）" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1561,6 +1595,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "会覆盖当前所有设置，包括已连接的账号和播放数据发往的地址，并立即重启 Lyrimuse"
+          }
+        }
+      }
+    },
+    "你的常听" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your top plays"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你的常听"
           }
         }
       }
@@ -3112,6 +3163,23 @@
         }
       }
     },
+    "在 Apple Music 中打开" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open in Apple Music"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在 Apple Music 中打开"
+          }
+        }
+      }
+    },
     "在 Apple Music 播放任意歌曲，歌词会自动出现" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -4081,6 +4149,23 @@
         }
       }
     },
+    "已唱到部分的颜色。默认跟随系统强调色（深色菜单栏自动提亮）；自定义后原样使用、不再自动提亮" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Color of the sung portion. Defaults to the system accent color (auto-brightened on dark menu bars); a custom color is used as-is without brightening"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已唱到部分的颜色。默认跟随系统强调色（深色菜单栏自动提亮）；自定义后原样使用、不再自动提亮"
+          }
+        }
+      }
+    },
     "已在浏览器打开 Last.fm 授权页面。请在浏览器里点击「Yes, allow access」完成授权，授权完会自动跳回 Lyrimuse 继续；如果浏览器没有自动跳转，也可以回来手动点下面的按钮" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -4791,6 +4876,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "循环播放"
+          }
+        }
+      }
+    },
+    "循环最多：《%1$@》— %2$@（%3$@ 次）" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Most played: %1$@ — %2$@ (%3$@ plays)"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "循环最多：《%1$@》— %2$@（%3$@ 次）"
           }
         }
       }
@@ -6580,6 +6682,23 @@
         }
       }
     },
+    "暂无数据" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No data yet"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "暂无数据"
+          }
+        }
+      }
+    },
     "暂无歌词" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -6903,6 +7022,23 @@
         }
       }
     },
+    "未唱到部分的文字颜色。默认跟随系统：浅色/深色菜单栏自动适配，打开菜单时自动反白" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Color of the not-yet-sung text. Defaults to system: adapts to light/dark menu bars and inverts while the menu is open"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未唱到部分的文字颜色。默认跟随系统：浅色/深色菜单栏自动适配，打开菜单时自动反白"
+          }
+        }
+      }
+    },
     "未授权" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -7120,6 +7256,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "来源可靠度"
+          }
+        }
+      }
+    },
+    "染色颜色" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fill color"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "染色颜色"
           }
         }
       }
@@ -9266,6 +9419,23 @@
         }
       }
     },
+    "累计" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "All-time"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "累计"
+          }
+        }
+      }
+    },
     "繁体" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -11000,6 +11170,23 @@
         }
       }
     },
+    "近 12 周的收听热力（完整年历在设置的统计页）" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Listening heatmap for the last 12 weeks (full calendar lives in Settings → stats)"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "近 12 周的收听热力（完整年历在设置的统计页）"
+          }
+        }
+      }
+    },
     "近 30 天" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -11540,6 +11727,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "这台 Mac 没有刘海，会显示在屏幕顶部正中"
+          }
+        }
+      }
+    },
+    "这次播放已计入收听记录" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This play has been counted as a listen"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这次播放已计入收听记录"
           }
         }
       }
@@ -12101,6 +12305,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "那年今日"
+          }
+        }
+      }
+    },
+    "那年今日 · %1$@ 年前听了 %2$@ 首" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "On this day · %2$@ plays %1$@ year(s) ago"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "那年今日 · %1$@ 年前听了 %2$@ 首"
           }
         }
       }
@@ -12951,6 +13172,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "飞书"
+          }
+        }
+      }
+    },
+    "首次听" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "First listened"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "首次听"
           }
         }
       }

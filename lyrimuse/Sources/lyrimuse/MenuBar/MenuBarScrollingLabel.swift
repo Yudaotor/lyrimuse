@@ -255,20 +255,36 @@ final class MenuBarScrollingLabel: NSView {
 
     private var tintColor: NSColor {
         // 菜单打开时状态栏项整块反白,文字得跟着变 —— 这正是以前用模板图时系统免费
-        // 帮我们做的那件事,自己拿图层之后要自己做。
-        highlighted ? .selectedMenuItemTextColor : .labelColor
+        // 帮我们做的那件事,自己拿图层之后要自己做。反白优先于自定义色:选中蓝底上
+        // 什么自定义色都可能看不清。
+        if highlighted { return .selectedMenuItemTextColor }
+        let hex = AppSettings.shared.menuBarLyricsTextColorHex
+        guard !hex.isEmpty else { return .labelColor }
+        return NSColor(Color(hexWithAlpha: hex, fallback: Color(nsColor: .labelColor)))
     }
 
-    /// 染色用的强调色。跟随用户在系统设置里挑的颜色,但**深色菜单栏上向白提亮四成** ——
-    /// 系统强调色按浅底设计,直接压在深底上亮度低于旁边的白色基础字,染过的反而更难读
-    /// (2026-08-22 用户截图实测"看不清文字")。浅色菜单栏保持原样:深色文字旁边的饱和
-    /// 强调色本来就够跳。动态色,必须在 performAsCurrentDrawingAppearance 里取值。
+    /// 染色用的颜色。用户设了自定义色(设置 › 菜单栏 › 染色颜色)就**原样用**;没设则跟随
+    /// 系统强调色,但**深色菜单栏上向白提亮四成** —— 系统强调色按浅底设计,直接压在深底上
+    /// 亮度低于旁边的白色基础字,染过的反而更难读(2026-08-22 用户截图实测"看不清文字")。
+    /// 浅色菜单栏保持原样:深色文字旁边的饱和强调色本来就够跳。动态色,必须在
+    /// performAsCurrentDrawingAppearance 里取值。
     private var karaokeFillColor: NSColor {
+        let hex = AppSettings.shared.menuBarLyricsFillColorHex
+        if !hex.isEmpty {
+            return NSColor(Color(hexWithAlpha: hex, fallback: Color(nsColor: .controlAccentColor)))
+        }
         let accent = NSColor.controlAccentColor
         guard effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua else {
             return accent
         }
         return accent.blended(withFraction: 0.4, of: .white) ?? accent
+    }
+
+    /// 颜色设置(文字色/染色色)变了:重排位图 + 重放填色几何,**不碰**滚动动画 ——
+    /// 跟 setHighlighted 同一套安全边界。
+    func refreshColors() {
+        rebuildImage()
+        applyKaraokeFill()
     }
 
     /// 按当前颜色重排这一句。**不重启动画**:图片尺寸只跟文字+字体有关,颜色变了尺寸不变,
@@ -332,6 +348,9 @@ final class MenuBarScrollingLabel: NSView {
         func updateNSView(_ view: MenuBarScrollingLabel, context: Context) {
             // present 对"参数没变"是空操作,所以设置页每次重算 body 都不会把滚动打回开头。
             view.present(text: text, windowWidth: windowWidth, pacing: pacing)
+            // 预览实例不在 MenuBarStatusItem 的颜色订阅覆盖范围内,靠宿主 body 重算带一次
+            // 重排 —— 用户在旁边拖「文字颜色」色轮时预览才跟手(重排一句位图 sub-ms 级)。
+            view.refreshColors()
         }
     }
 

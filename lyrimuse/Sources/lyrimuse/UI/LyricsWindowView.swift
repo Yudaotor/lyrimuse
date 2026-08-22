@@ -456,6 +456,17 @@ struct LyricsWindowView: View {
     @State private var showsMoreMenu = false
     /// 「显示简介」面板(2026-08-22,「⋯」菜单项之一):与菜单同锚点、同玻璃样式。
     @State private var showsInfoPanel = false
+    /// 「你的常听」榜单面板(2026-08-22,Last.fm 系列 #7)。
+    @State private var showsChartsPanel = false
+    /// 「⋯」按钮锚点矩形的**快照**(2026-08-22「菜单开着很卡」排查)。面板定位改读它、
+    /// 不再在 overlayPreferenceValue 闭包里直接消费 geo[anchor]:实测抓到过一次亚稳态
+    /// 布局风暴 —— 菜单面板开着时主线程 2472/2485 采样全忙,每个显示周期整窗
+    /// NSHostingView.layout + AttributeGraph churn,热路径穿过「锚令牌 → geo 解析 →
+    /// 面板 ZStack 布局」这条依赖边(菜单一关立即回全闲;独立 harness 证明锚定浮层
+    /// 本身无辜,但真窗的组合会进入自持循环且不可稳定复现)。快照定位把面板从几何
+    /// 依赖链上摘下来:锚点矩形经 onChange 落进 @State(变了才写),面板走普通
+    /// .overlay,只随真实状态变化重建,不再被每帧几何重算连坐。
+    @State private var moreAnchorRect: CGRect = .zero
     /// 右下角「翻译与发音」菜单(2026-08-22,对照 AM 歌词页右下角同位按钮):开关的是
     /// 设置里现成的 showTranslation/showRomanization 两个总开关,这里只是快捷入口。
     @State private var showsTranslationMenu = false
@@ -512,7 +523,10 @@ struct LyricsWindowView: View {
     @State private var lyricsViewportHeight: CGFloat = 0
 
     var body: some View {
-        ScrollViewReader { scrollProxy in
+        // 诊断探针(2026-08-22「菜单开着很卡」排查,debug 级、不 log stream 时零成本):
+        // 打出每次主 body 重算的触发属性。定位结束后可删。
+        let _ = { if #available(macOS 14.1, *) { Self._logChanges() } }()
+        return ScrollViewReader { scrollProxy in
             GeometryReader { geo in
                 // 2026-08-04 按 Apple Music 歌词页一比一重做:左列是封面卡片+曲目信息+
                 // 进度条+播放控制,右列是左对齐的大字歌词。左列只在窗口够宽时显示——
@@ -609,9 +623,24 @@ struct LyricsWindowView: View {
                 // 「…」的 AM 式自绘菜单:锚在按钮上方、右缘对齐按钮右缘(AM 的菜单就悬在
                 // 那两颗圆钮上方)。放在**窗级** overlay 而不是按钮的 overlay:面板要浮在
                 // 歌词列表之上,且"点面板外任何地方关掉"需要一层全窗捕手。
+                //
+                // ⚠️ 这一块只是锚点矩形的**搬运工**(2026-08-22「菜单开着很卡」排查,理由
+                // 详见 moreAnchorRect 的注释):面板本体不再挂在这个闭包里 —— 直接消费
+                // geo[anchor] 会把整块玻璃面板焊在几何依赖链上,实测抓到过一次开着菜单时
+                // 主线程 2472/2485 采样全忙的整窗逐帧重排。矩形取整后经 onChange 落进
+                // @State,没动就一个字节都不写,面板在下面的普通 .overlay 里只随真实状态
+                // 重建。
                 .overlayPreferenceValue(MoreMenuButtonBoundsKey.self) { anchor in
-                    if showsMoreMenu, let anchor {
-                        let r = geo[anchor]
+                    if let anchor {
+                        let r = geo[anchor].integral
+                        Color.clear
+                            .allowsHitTesting(false)
+                            .onAppear { moreAnchorRect = r }
+                            .onChange(of: r) { _, v in moreAnchorRect = v }
+                    }
+                }
+                .overlay {
+                    if showsMoreMenu, moreAnchorRect != .zero {
                         ZStack(alignment: .bottomTrailing) {
                             // 全窗点击捕手(透明但可命中),点哪都只是关菜单。
                             Color.black.opacity(0.001)
@@ -622,8 +651,8 @@ struct LyricsWindowView: View {
                                 .transition(.opacity)
                             moreMenuPanel
                                 .fixedSize()
-                                .padding(.trailing, max(8, geo.size.width - r.maxX))
-                                .padding(.bottom, max(8, geo.size.height - r.minY + 8))
+                                .padding(.trailing, max(8, geo.size.width - moreAnchorRect.maxX))
+                                .padding(.bottom, max(8, geo.size.height - moreAnchorRect.minY + 8))
                                 // 缩放锚在面板右下角 —— 正好是贴着「…」按钮的那个角,
                                 // 观感是从按钮上长出来(AM 同款)。
                                 .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: .bottomTrailing)))
@@ -631,9 +660,8 @@ struct LyricsWindowView: View {
                     }
                 }
                 // 「显示简介」面板(2026-08-22):从「⋯」菜单点出,与菜单同锚点同样式。
-                .overlayPreferenceValue(MoreMenuButtonBoundsKey.self) { anchor in
-                    if showsInfoPanel, let anchor {
-                        let r = geo[anchor]
+                .overlay {
+                    if showsInfoPanel, moreAnchorRect != .zero {
                         ZStack(alignment: .bottomTrailing) {
                             Color.black.opacity(0.001)
                                 .contentShape(Rectangle())
@@ -643,8 +671,34 @@ struct LyricsWindowView: View {
                                 .transition(.opacity)
                             trackInfoPanel
                                 .fixedSize()
-                                .padding(.trailing, max(8, geo.size.width - r.maxX))
-                                .padding(.bottom, max(8, geo.size.height - r.minY + 8))
+                                .padding(.trailing, max(8, geo.size.width - moreAnchorRect.maxX))
+                                .padding(.bottom, max(8, geo.size.height - moreAnchorRect.minY + 8))
+                                .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: .bottomTrailing)))
+                        }
+                    }
+                }
+                // 「你的常听」面板(2026-08-22,Last.fm 系列 #7):同锚点同样式的第三块面板。
+                .overlay {
+                    if showsChartsPanel, moreAnchorRect != .zero {
+                        ZStack(alignment: .bottomTrailing) {
+                            Color.black.opacity(0.001)
+                                .contentShape(Rectangle())
+                                .onTapGesture {
+                                    withAnimation(.easeOut(duration: 0.12)) { showsChartsPanel = false }
+                                }
+                                .transition(.opacity)
+                            ChartsPanelView()
+                                .fixedSize(horizontal: false, vertical: true)
+                                .frame(width: 300)
+                                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                        .strokeBorder(Color.white.opacity(0.10), lineWidth: 1)
+                                )
+                                .shadow(color: .black.opacity(0.35), radius: 24, y: 10)
+                                .environment(\.colorScheme, hasArtworkBackground ? .dark : colorScheme)
+                                .padding(.trailing, max(8, geo.size.width - moreAnchorRect.maxX))
+                                .padding(.bottom, max(8, geo.size.height - moreAnchorRect.minY + 8))
                                 .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: .bottomTrailing)))
                         }
                     }
@@ -1172,6 +1226,11 @@ struct LyricsWindowView: View {
                     .foregroundStyle(secondaryTextColor)
             }
             .frame(height: 22)
+            // 「第 N 次听」徽章(2026-08-22,Last.fm 系列 #1):连着账号且拿到数字才出现。
+            // 出现时多占一行,下方进度条会往下顶一截 —— 先给用户看效果的版本,嫌挤可撤。
+            NowPlayingCountBadge(title: playback.title, artist: playback.artist,
+                                 onArtwork: hasArtworkBackground,
+                                 layers: playback.windowBackgroundLayers)
         }
     }
 
@@ -1266,6 +1325,13 @@ struct LyricsWindowView: View {
             MoreMenuRow(title: L10n.t("显示简介")) {
                 closeMoreMenu()
                 openInfoPanel()
+            }
+            // 「你的常听」(2026-08-22,Last.fm 系列 #7):榜单面板,连着账号才有这一行。
+            if LastfmStatsService.shared.isConnected {
+                MoreMenuRow(title: L10n.t("你的常听")) {
+                    closeMoreMenu()
+                    withAnimation(.easeOut(duration: 0.12)) { showsChartsPanel = true }
+                }
             }
             if !playback.title.isEmpty {
                 MoreMenuRow(title: L10n.t("搜索歌词…")) {
@@ -1710,6 +1776,11 @@ struct LyricsWindowView: View {
             if let source = infoLyricsSource, !source.isEmpty {
                 InfoPanelRow(label: L10n.t("来源"), value: sourceDisplayName(source))
             }
+            // 收听档案(2026-08-22,Last.fm 系列 #5):累计次数 + 首次/上次听。连着账号
+            // 才有;首次/上次是面板打开那一刻才发的两个请求(user.getTrackScrobbles),
+            // 到货前这几行整体缺席,面板高度随之长一截 —— 面板本来就是 fixedSize 浮层,
+            // 长高不顶别人。
+            InfoPanelListeningRows(title: playback.title, artist: playback.artist)
         }
         .padding(12)
         .frame(minWidth: 240, maxWidth: 360, alignment: .leading)
@@ -2212,6 +2283,10 @@ struct LyricsWindowView: View {
                 }
             }
             .padding(.top, 20)
+            // Last.fm 统计(2026-08-22,系列 #2/#3/#4):今日/本周计数、那年今日、
+            // 迷你热力图。连着账号才有;没连时这块整体缺席,欢迎态跟原来一模一样。
+            IdleLastfmSection()
+                .padding(.top, 26)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -2905,6 +2980,19 @@ private struct WindowProgressSection: View {
                         .offset(x: -ProgressFillGeometry.leadingOffset(
                             containerWidth: g.size.width, fraction: shownFraction))
                         .clipShape(Capsule())
+                    // 计次刻度(2026-08-22,Last.fm 系列 #6):过了这个点这次播放就会被
+                    // 记录(规则复刻 collector,见 ScrobbleRule 的注释,含"位置≠实际播放
+                    // 秒数"的近似说明)。过线后刻度隐去,时间行右侧亮一个小对勾接棒。
+                    // 判定用真实位置(positionMs),不用拖动预览值 —— 拖过线不等于听过线。
+                    if durationMs > 0,
+                       let tick = ScrobbleRule.thresholdFraction(durationMs: durationMs),
+                       Double(positionMs) < Double(durationMs) * tick {
+                        Circle()
+                            .fill(primaryTextColor.opacity(0.55))
+                            .frame(width: 3, height: 3)
+                            .offset(x: g.size.width * tick - 1.5)
+                            .allowsHitTesting(false)
+                    }
                 }
             }
             .frame(height: scrubberHeight)
@@ -2987,6 +3075,17 @@ private struct WindowProgressSection: View {
             HStack {
                 Text(Self.formatTime(ms: shownMs))
                 Spacer()
+                // 「已记录」对勾(2026-08-22,Last.fm 系列 #6):播放头过了计次点就亮,
+                // 接上面进度条上那颗隐去的刻度点。
+                if durationMs > 0,
+                   let tick = ScrobbleRule.thresholdFraction(durationMs: durationMs),
+                   Double(positionMs) >= Double(durationMs) * tick {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 10))
+                        .padding(.trailing, 2)
+                        .help(L10n.t("这次播放已计入收听记录"))
+                        .transition(.opacity)
+                }
                 // 右侧显示**总时长**而不是剩余时间(2026-08-21 布局对齐 AM:它的歌词页
                 // 时间行是「0:20 ··· 3:12」)。
                 Text(Self.formatTime(ms: durationMs))
@@ -3498,5 +3597,310 @@ private struct WindowAnimatedBackground: View {
             .compositingGroup()
         }
         .onAppear { if !reduceMotion { spinning = true } }
+    }
+}
+
+// MARK: - Last.fm 系列(2026-08-22,用户点单 #1~#7,先做出来看效果再增删)
+
+/// 「第 N 次听」小胶囊(系列 #1),挂在歌手行下面。数字来自 LastfmStatsService 的
+/// nowPlayingCount(track.getinfo userplaycount+1,孪生写法合并、防"刚 scrobble 查回 0"
+/// 的坑都在服务侧)。刻意订阅整个服务单例但只在这棵小子树上 —— 主窗 body 的窄代理纪律
+/// 不破(见文件头注),服务的其它 @Published 变动最多重算这一个胶囊。
+private struct NowPlayingCountBadge: View {
+    let title: String
+    let artist: String
+    let onArtwork: Bool
+    let layers: WindowBackgroundLayers?
+    @ObservedObject private var stats = LastfmStatsService.shared
+
+    var body: some View {
+        // 容器必须永远在场:onAppear/onChange 是取数的唯一触发点,挂在条件内容上会
+        // 陷入"没数字→不渲染→永远不取数"的死锁。
+        VStack(alignment: .leading, spacing: 0) {
+            if stats.isConnected, !title.isEmpty, let n = stats.nowPlayingCount {
+                Text(String(format: L10n.t("第 %@ 次听"), "\(n)"))
+                    .font(.system(size: 10.5, weight: .semibold).monospacedDigit())
+                    .foregroundStyle(onArtwork
+                        ? amVibrantColor(layers: layers, satScale: 0.5, satCap: 0.4,
+                                         brightness: 0.85, fallback: .white.opacity(0.65),
+                                         minContrastToBackground: 0.25)
+                        : .secondary)
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 2.5)
+                    .background(Capsule().fill(
+                        onArtwork ? Color.white.opacity(0.10) : Color.primary.opacity(0.06)))
+                    .padding(.top, 7)
+                    .transition(.opacity)
+            }
+        }
+        .onAppear { refresh() }
+        .onChange(of: "\(artist)|\(title)") { refresh() }
+    }
+
+    private func refresh() {
+        guard !title.isEmpty, LastfmStatsService.shared.isConnected else { return }
+        LastfmStatsService.shared.refreshNowPlayingCount(title: title, artist: artist)
+    }
+}
+
+/// 「显示简介」里的收听档案三行(系列 #5):累计次数 + 首次/上次听。首次/上次的两个
+/// 请求(user.getTrackScrobbles)只在面板打开那一刻发,见服务侧 refreshNowPlayingSpan。
+private struct InfoPanelListeningRows: View {
+    let title: String
+    let artist: String
+    @ObservedObject private var stats = LastfmStatsService.shared
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            if stats.isConnected {
+                if let n = stats.nowPlayingCount {
+                    InfoPanelRow(label: L10n.t("累计"),
+                                 value: String(format: L10n.t("第 %@ 次听"), "\(n)"))
+                }
+                if let span = stats.nowPlayingSpan, span.total > 0 {
+                    if let first = span.first {
+                        InfoPanelRow(label: L10n.t("首次听"),
+                                     value: first.formatted(date: .abbreviated, time: .omitted))
+                    }
+                    if let last = span.last {
+                        InfoPanelRow(label: L10n.t("上次听"),
+                                     value: last.formatted(.relative(presentation: .named)))
+                    }
+                }
+            }
+        }
+        .onAppear { refresh() }
+        // 面板开着跨曲(自然播完切歌)时也要重取:参数跟着 playback 变了、onAppear 却不再
+        // 触发,span 的 key 还是旧曲 →「首次/上次听」显示上一首的档案,跟同面板里新曲的
+        // 歌名混排(2026-08-22 审阅抓出的张冠李戴)。
+        .onChange(of: "\(artist)|\(title)") { refresh() }
+    }
+
+    private func refresh() {
+        guard !title.isEmpty, stats.isConnected else { return }
+        stats.refreshNowPlayingCount(title: title, artist: artist)
+        stats.refreshNowPlayingSpan(title: title, artist: artist)
+    }
+}
+
+/// 欢迎态(停播页)的 Last.fm 统计块(系列 #2/#3/#4):今日/本周计数、那年今日、迷你
+/// 热力图。没连账号整块缺席,欢迎态与原版逐像素一致。
+private struct IdleLastfmSection: View {
+    @ObservedObject private var stats = LastfmStatsService.shared
+
+    var body: some View {
+        if stats.isConnected {
+            VStack(spacing: 12) {
+                if let o = stats.overview {
+                    Text(String(format: L10n.t("今天听了 %1$@ 首 · 本周 %2$@ 首"),
+                                "\(o.today)", "\(o.week)"))
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                }
+                if let day = stats.onThisDay, let top = day.top.first {
+                    VStack(spacing: 3) {
+                        Text(String(format: L10n.t("那年今日 · %1$@ 年前听了 %2$@ 首"),
+                                    "\(day.yearsAgo)", "\(day.total)"))
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                        Text(String(format: L10n.t("循环最多：《%1$@》— %2$@（%3$@ 次）"),
+                                    top.track.title, top.track.artist, "\(top.count)"))
+                            .font(.system(size: 12))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                }
+                MiniHeatmapStrip(dailyCounts: stats.dailyCounts)
+            }
+            .frame(maxWidth: 420)
+            .task {
+                // 欢迎态可能一挂几小时,只靠 onAppear 一次会让"今天 N 首"越挂越旧 ——
+                // 3 分钟轮一次;baseline/onThisDay 自带 TTL,重复调用是空操作。
+                // refreshDailyCounts 只有单飞**没有 TTL**(每次都真发请求+落盘,审阅 #7),
+                // 热力图按天变化,这里每 20 轮(约 1 小时)才带它一次。
+                var tick = 0
+                while !Task.isCancelled {
+                    stats.refreshBaseline()
+                    stats.refreshOnThisDay()
+                    if tick % 20 == 0 { stats.refreshDailyCounts() }
+                    tick += 1
+                    try? await Task.sleep(nanoseconds: 180_000_000_000)
+                }
+            }
+        }
+    }
+}
+
+/// 近 12 周迷你热力图(系列 #4):列=周(旧→新)、行=周一到周日,数据直接读服务的
+/// dailyCounts 天粒度桶(完整年历版在设置的统计页,LastfmHeatmapView)。
+private struct MiniHeatmapStrip: View {
+    let dailyCounts: [String: Int]
+    private static let weeks = 12
+
+    var body: some View {
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+        let weekday = cal.component(.weekday, from: today) // 1=周日 … 7=周六
+        let daysSinceMonday = (weekday + 5) % 7
+        let thisMonday = cal.date(byAdding: .day, value: -daysSinceMonday, to: today) ?? today
+        HStack(alignment: .top, spacing: 2) {
+            ForEach(0..<Self.weeks, id: \.self) { w in
+                let monday = cal.date(byAdding: .day, value: (w - Self.weeks + 1) * 7,
+                                      to: thisMonday) ?? thisMonday
+                VStack(spacing: 2) {
+                    ForEach(0..<7, id: \.self) { d in
+                        let day = cal.date(byAdding: .day, value: d, to: monday) ?? monday
+                        cell(for: day, future: day > today)
+                    }
+                }
+            }
+        }
+        .help(L10n.t("近 12 周的收听热力（完整年历在设置的统计页）"))
+    }
+
+    private func cell(for day: Date, future: Bool) -> some View {
+        let n = future ? 0 : (dailyCounts[LastfmStatsService.dayKey(day)] ?? 0)
+        return RoundedRectangle(cornerRadius: 1.5, style: .continuous)
+            .fill(future ? Color.clear : Color.accentColor.opacity(intensity(for: n)))
+            .frame(width: 7, height: 7)
+    }
+
+    private func intensity(for n: Int) -> Double {
+        switch n {
+        case 0: return 0.08
+        case 1...2: return 0.3
+        case 3...5: return 0.5
+        case 6...9: return 0.72
+        default: return 0.95
+        }
+    }
+}
+
+/// 「你的常听」榜单面板(系列 #7):种类(歌曲/专辑/歌手)×周期(近7天/近30天/近一年/全部)
+/// 的 Top 10,数据/缓存/单飞全在 LastfmStatsService.refreshChart(15 分钟 TTL)。点条目
+/// 经 iTunes Search 解析后用 music:// 跳 Apple Music(与「前往专辑/艺人」同一条管线)。
+/// 玻璃容器样式由调用处(overlay 那块)统一给,跟简介面板一致。
+private struct ChartsPanelView: View {
+    @ObservedObject private var stats = LastfmStatsService.shared
+    @State private var kind: LastfmStatsService.ChartKind = .tracks
+    @State private var period: LastfmStatsService.Period = .week
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(L10n.t("你的常听"))
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 4)
+            Picker("", selection: $kind) {
+                ForEach(LastfmStatsService.ChartKind.allCases) { k in
+                    Text(k.displayName).tag(k)
+                }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            Picker("", selection: $period) {
+                ForEach(LastfmStatsService.Period.allCases) { p in
+                    Text(p.displayName).tag(p)
+                }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            content
+        }
+        .padding(10)
+        .onAppear { stats.refreshChart(kind: kind, period: period) }
+        .onChange(of: kind) { _, k in stats.refreshChart(kind: k, period: period) }
+        .onChange(of: period) { _, p in stats.refreshChart(kind: kind, period: p) }
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        if let entries = stats.chart(kind, period), !entries.isEmpty {
+            VStack(spacing: 0) {
+                ForEach(entries.prefix(10)) { entry in
+                    row(entry)
+                }
+            }
+        } else if stats.chartLoading(kind, period) {
+            ProgressView().controlSize(.small)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 14)
+        } else if stats.chartFailed(kind, period) {
+            Button(L10n.t("重试")) { stats.refreshChart(kind: kind, period: period) }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 10)
+        } else {
+            Text(L10n.t("暂无数据"))
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 14)
+        }
+    }
+
+    private func row(_ entry: LastfmStatsService.ChartEntry) -> some View {
+        Button {
+            open(entry)
+        } label: {
+            HStack(spacing: 8) {
+                Text("\(entry.rank)")
+                    .font(.system(size: 11, weight: .semibold).monospacedDigit())
+                    .foregroundStyle(.secondary)
+                    .frame(width: 18, alignment: .trailing)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(entry.name)
+                        .font(.system(size: 12.5))
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+                    if !entry.detail.isEmpty {
+                        Text(entry.detail)
+                            .font(.system(size: 10.5))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                }
+                Spacer(minLength: 8)
+                Text(String(format: L10n.t("%@ 次"), "\(entry.playcount)"))
+                    .font(.system(size: 11).monospacedDigit())
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, 6)
+            .padding(.vertical, 4)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(L10n.t("在 Apple Music 中打开"))
+    }
+
+    /// 与 openCatalogPage 同一条跳转管线:iTunes Search 解析 → music:// 原生跳页。
+    private func open(_ entry: LastfmStatsService.ChartEntry) {
+        let kind = kind
+        Task.detached(priority: .userInitiated) {
+            let storefront = Locale.current.region?.identifier.lowercased() ?? "us"
+            let title: String
+            let artist: String
+            switch kind {
+            case .tracks, .albums:
+                title = entry.name
+                artist = entry.detail
+            case .artists:
+                // 传 artist 而不是 title:搜索 term 拼出来一样,但 pickBest 的"只歌手匹配"
+                // 分支才会激活,优先挑该歌手演唱的歌再取 artistViewUrl —— 传 title 的话
+                // 两个优选分支全死路、退化成拿第一条,恰好以歌手名为歌名的别人的歌会把
+                // 跳转带偏(2026-08-22 审阅)。
+                title = ""
+                artist = entry.name
+            }
+            guard let item = await MusicCatalogSearch.resolve(
+                title: title, artist: artist, storefront: storefront) else { return }
+            let https: String?
+            switch kind {
+            case .tracks: https = item.trackViewUrl
+            case .albums: https = item.collectionViewUrl ?? item.trackViewUrl
+            case .artists: https = item.artistViewUrl
+            }
+            guard let url = MusicCatalogSearch.musicSchemeURL(https) else { return }
+            await MainActor.run { NSWorkspace.shared.open(url) }
+        }
     }
 }

@@ -60,6 +60,7 @@
 "上一首" = "Previous Track";
 "上次保存：%@ · 采集器已重启" = "Last saved: %@ · Collector restarted";
 "上次刷新:%@" = "Last refreshed: %@";
+"上次听" = "Last listened";
 "下一步" = "Next";
 "下一页" = "Next";
 "下一首" = "Next Track";
@@ -89,12 +90,14 @@
 "仅逐字" = "Word Timing Only";
 "今天" = "Today";
 "今天 %@ 次" = "%@ today";
+"今天听了 %1$@ 首 · 本周 %2$@ 首" = "%1$@ plays today · %2$@ this week";
 "从待补提交清单里移除这条（不可恢复）" = "Remove this from the backfill queue (cannot be undone)";
 "从资料库删除" = "Delete from Library";
 "以下两项对「桌面悬浮歌词」和「灵动岛歌词」同时生效；菜单栏歌词和歌词窗口不受影响" = "Both settings below apply to Desktop Floating Lyrics and Notch Lyrics; Menu Bar Lyrics and the Lyrics Window are unaffected";
 "企业微信" = "WeCom";
 "会把当前的文字颜色、背景颜色、描边颜色存成一个可以随时再套用的主题" = "Saves the current text, background, and stroke colors as a theme you can reapply anytime";
 "会覆盖当前所有设置，包括已连接的账号和播放数据发往的地址，并立即重启 Lyrimuse" = "Overwrites every current setting, including connected accounts and where your playback data is sent, then restarts Lyrimuse";
+"你的常听" = "Your top plays";
 "例如 https://yourdomain.com/api/state" = "e.g. https://yourdomain.com/api/state";
 "保存" = "Save";
 "保存修改" = "Save Changes";
@@ -186,6 +189,7 @@
 "固定" = "Fixed";
 "在 %@ 中显示" = "Show in %@";
 "在 %@ 播放任意歌曲，歌词会自动出现" = "Play something in %@ and lyrics will appear here";
+"在 Apple Music 中打开" = "Open in Apple Music";
 "在 Apple Music 播放任意歌曲，歌词会自动出现" = "Play something in Apple Music and lyrics will appear here";
 "在 Dock 中显示" = "Show in Dock";
 "在 Last.fm 打开" = "Open on Last.fm";
@@ -243,6 +247,7 @@
 "已减少推荐" = "Suggested Less";
 "已删除" = "Deleted";
 "已刷新" = "Refreshed";
+"已唱到部分的颜色。默认跟随系统强调色（深色菜单栏自动提亮）；自定义后原样使用、不再自动提亮" = "Color of the sung portion. Defaults to the system accent color (auto-brightened on dark menu bars); a custom color is used as-is without brightening";
 "已在浏览器打开 Last.fm 授权页面。请在浏览器里点击「Yes, allow access」完成授权，授权完会自动跳回 Lyrimuse 继续；如果浏览器没有自动跳转，也可以回来手动点下面的按钮" = "Last.fm's authorization page is open in your browser. Click “Yes, allow access” there to finish, and you'll be sent back to Lyrimuse automatically. If your browser doesn't come back on its own, use the button below";
 "已在资料库" = "In Library";
 "已安装但未运行" = "Installed but not running";
@@ -285,6 +290,7 @@
 "当前歌词的出处" = "Where the current lyrics came from";
 "待播清单" = "Playing Next";
 "循环播放" = "Repeat";
+"循环最多：《%1$@》— %2$@（%3$@ 次）" = "Most played: %1$@ — %2$@ (%3$@ plays)";
 "快捷键" = "Keyboard Shortcuts";
 "快速开关" = "Quick Toggles";
 "总 scrobble" = "Total scrobbles";
@@ -390,6 +396,7 @@
 "智能算法" = "Smart Matching";
 "智能算法：给每个来源打分（逐字时间轴、语言匹配等），取分最高的\n顺序优先：不打分，按下面的顺序取第一个有结果的来源" = "Smart: scores every source (word-level timing, language match, etc.) and takes the highest\nIn order: no scoring — takes the first source below that returns anything";
 "暂停/无播放时隐藏" = "Hide When Paused or Not Playing";
+"暂无数据" = "No data yet";
 "暂无歌词" = "No Lyrics Found";
 "暖黄" = "Warm Yellow";
 "更多" = "More";
@@ -409,6 +416,7 @@
 "服务器设置 → 整合(Integrations) → Webhook → 新建 Webhook，选好要发到的频道后复制 Webhook URL" = "Server Settings → Integrations → Webhooks → New Webhook. Pick the channel to post to, then copy the Webhook URL";
 "未下载" = "Not downloaded";
 "未启用" = "Not Enabled";
+"未唱到部分的文字颜色。默认跟随系统：浅色/深色菜单栏自动适配，打开菜单时自动反白" = "Color of the not-yet-sung text. Defaults to system: adapts to light/dark menu bars and inverts while the menu is open";
 "未授权" = "Not Requested";
 "未知错误" = "no reason given";
 "未运行" = "Not Running";
@@ -422,6 +430,7 @@
 "机器翻译" = "Machine translation";
 "来源" = "Source";
 "来源可靠度" = "Source";
+"染色颜色" = "Fill color";
 "查看、编辑、重搜已缓存的歌词" = "View, edit and re-search cached lyrics";
 "查看官方文档 →" = "View Official Docs →";
 "查看已有应用" = "My applications";
@@ -548,6 +557,7 @@
 "系统通知已关闭，发现新播放器时不会主动提醒你" = "Notifications are off — you won't be alerted when a new player is detected";
 "紧凑地贴着屏幕顶部的刘海" = "Tucked beside the notch at the top";
 "紧凑地贴着屏幕顶部的刘海显示" = "Tucked compactly beside the notch at the top of the screen";
+"累计" = "All-time";
 "繁体" = "Traditional";
 "纯音乐" = "Instrumental";
 "纯黑" = "Solid Black";
@@ -650,6 +660,7 @@
 "跳动音条" = "Dancing Bars";
 "跳过" = "Skip";
 "运行中" = "Running";
+"近 12 周的收听热力（完整年历在设置的统计页）" = "Listening heatmap for the last 12 weeks (full calendar lives in Settings → stats)";
 "近 30 天" = "Past 30 days";
 "近 7 天" = "Past 7 days";
 "近一年" = "Past year";
@@ -682,6 +693,7 @@
 "这几种可以同时开着，先挑你现在想用的——之后随时能在设置里单独开关" = "These can all be on at once — pick what you want for now and change it any time in Settings";
 "这台 Mac 上的播放记录会同步到 ListenBrainz，建立完整的听歌历史；也是网页展示、听歌报告的可选数据来源" = "Syncs this Mac's playback to ListenBrainz, building a complete listening history — also an optional data source for the web page and listening digests";
 "这台 Mac 没有刘海，会显示在屏幕顶部正中" = "No notch on this Mac, so it sits at the top center";
+"这次播放已计入收听记录" = "This play has been counted as a listen";
 "这次请求耗时有点久。如果你已经看到系统弹窗，请去处理它；找不到弹窗的话，可以直接去系统设置里手动开启" = "This is taking longer than usual. If a system dialog appeared, respond to it there. If you don't see one, you can turn this on in System Settings instead";
 "这里是一句歌词示例" = "A line of lyrics looks like this";
 "这里的设置对桌面悬浮歌词和灵动岛生效，先开启其中一种" = "These settings apply to Desktop Floating Lyrics and Notch Lyrics — turn one of them on first";
@@ -715,6 +727,7 @@
 "通知平台" = "Notification Platform";
 "那天最后一次:%@" = "Last played that day: %@";
 "那年今日" = "On This Day";
+"那年今日 · %1$@ 年前听了 %2$@ 首" = "On this day · %2$@ plays %1$@ year(s) ago";
 "配置文件夹" = "Config Folder";
 "配色" = "Color";
 "配色主题" = "Color Theme";
@@ -765,6 +778,7 @@
 "预览 · 自适应，最宽 %@pt" = "Preview · adaptive, max %@pt";
 "风格" = "Style";
 "飞书" = "Feishu";
+"首次听" = "First listened";
 "首次解析" = "First resolve";
 "麦克风" = "Microphone";
 "黑胶唱片" = "Vinyl";

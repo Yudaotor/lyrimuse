@@ -54,6 +54,8 @@ final class AppSettings: ObservableObject {
         static let menuBarLyricsWidth = "np:menuBarLyricsMaxWidth"
         static let menuBarLyricsWidthMode = "np:menuBarLyricsWidthMode"
         static let menuBarLyricsKaraoke = "np:menuBarLyricsKaraoke"
+        static let menuBarLyricsTextColorHex = "np:menuBarLyricsTextColorHex"
+        static let menuBarLyricsFillColorHex = "np:menuBarLyricsFillColorHex"
         static let menuBarIconStyle = "np:menuBarIconStyle"
         static let menuBarIconAnimates = "np:menuBarIconAnimates"
         static let lyricsOffsetStepMs = "np:lyricsOffsetStepMs"
@@ -221,6 +223,19 @@ final class AppSettings: ObservableObject {
     // 只对带逐字时间轴的歌词生效,LRC 整行歌词维持纯色 —— 没有可信的字级进度就不假装有。
     @Published var menuBarLyricsKaraoke: Bool {
         didSet { defaults.set(menuBarLyricsKaraoke, forKey: Keys.menuBarLyricsKaraoke) }
+    }
+    // 菜单栏歌词的自定义颜色(2026-08-22 用户要的配置项)。**空串 = 跟随系统**:
+    // 文字=labelColor(浅深自适应+菜单打开反白),染色=系统强调色(深色菜单栏提亮四成,
+    // 见 MenuBarScrollingLabel.karaokeFillColor)。设了自定义色就**原样用**,不再做任何
+    // 自动提亮/反白换色(用户挑的就是最终效果;唯一例外是菜单打开的反白态,文字仍换
+    // selectedMenuItemTextColor —— 选中蓝底上什么自定义色都可能看不清)。
+    // 只存 hex 不缓存 Color:消费方是 AppKit 位图渲染(MenuBarScrollingLabel),要的是
+    // NSColor;跟 foregroundColorHex 那套"didSet 缓存 Color"服务的 SwiftUI 场景不同。
+    @Published var menuBarLyricsTextColorHex: String {
+        didSet { defaults.set(menuBarLyricsTextColorHex, forKey: Keys.menuBarLyricsTextColorHex) }
+    }
+    @Published var menuBarLyricsFillColorHex: String {
+        didSet { defaults.set(menuBarLyricsFillColorHex, forKey: Keys.menuBarLyricsFillColorHex) }
     }
     // 菜单栏那个图标长什么样。它只在**没在显示歌词**时出现(没在放歌、还没解析出这一句、
     // 或者菜单栏歌词整个关掉),所以它跟上面那些宽度设置是两回事,不受它们影响。
@@ -471,6 +486,8 @@ final class AppSettings: ObservableObject {
         // 默认开:这是把"当前唱到哪"带进菜单栏的增量信息,且只在有逐字数据时出现;
         // 菜单栏歌词本身默认关着,不存在"谁都没选就改变观感"的问题。
         menuBarLyricsKaraoke = (defaults.object(forKey: Keys.menuBarLyricsKaraoke) as? Bool) ?? true
+        menuBarLyricsTextColorHex = defaults.string(forKey: Keys.menuBarLyricsTextColorHex) ?? ""
+        menuBarLyricsFillColorHex = defaults.string(forKey: Keys.menuBarLyricsFillColorHex) ?? ""
         menuBarIconStyle = defaults.string(forKey: Keys.menuBarIconStyle)
             .flatMap(MenuBarIconStyle.init(rawValue:)) ?? .default
         menuBarIconAnimates = (defaults.object(forKey: Keys.menuBarIconAnimates) as? Bool) ?? true

@@ -204,6 +204,19 @@ final class LastfmStatsService: ObservableObject {
     /// 换歌那一刻取一次,同一首歌不重取(取晚了这次播放被 scrobble 进去就会多算一)。
     @Published private(set) var nowPlayingCount: Int?
     private var nowPlayingCountKey = ""
+    /// 当前曲目的收听跨度(首次/上次听),歌词窗口「显示简介」的收听档案用(2026-08-22)。
+    /// 数据来自 user.getTrackScrobbles(这首歌在这个账号下的全部 scrobble,带时间、可分页;
+    /// 本地 listens.jsonl 靠不住 —— 它只在没连账号时才记,见 collector/listenlog.go)。
+    /// ⚠️ total 是**未合并孪生写法**的原始计数,可能略低于 nowPlayingCount 的合并口径,
+    /// 两个数字刻意不混用:徽章说"第 N 次"用合并数,档案的首次/上次是时间点、不受影响。
+    @Published private(set) var nowPlayingSpan: TrackScrobbleSpan?
+    private var nowPlayingSpanKey = ""
+
+    struct TrackScrobbleSpan: Equatable {
+        let total: Int
+        let first: Date?
+        let last: Date?
+    }
     /// 被「正在记录」实时行**吸收**的那条最近记录的 id。长歌播到 4 分钟/过半时 Last.fm
     /// 就已收到 scrobble(时间戳=开播时刻),于是同一次播放在列表里出现两行:上面
     /// "第 5 次听·正在记录"、下面"第 4 次听·4 分钟前"(2026-08-17 用户截图)。由
@@ -355,6 +368,56 @@ final class LastfmStatsService: ObservableObject {
                 // userplaycount 是**过去**的次数,这一次还没被记进去 —— 所以 +1
                 nowPlayingCount = total + 1
             }
+        }
+    }
+
+    /// 当前曲目的首次/上次听(user.getTrackScrobbles):limit=1 的第一页给最近一次 +
+    /// @attr.total,首次听按 total 翻到最后一页再取一条 —— 共两个请求,只在「显示简介」
+    /// 打开那一刻才取(refreshNowPlayingCount 那种换歌即取对这两个请求是纯浪费)。
+    /// key 守卫语义同 refreshNowPlayingCount:晚到的响应不写到下一首头上、同曲不重取。
+    func refreshNowPlayingSpan(title: String, artist: String) {
+        let key = "\(artist)|\(title)"
+        guard key != nowPlayingSpanKey else { return }
+        nowPlayingSpanKey = key
+        nowPlayingSpan = nil
+        guard !title.isEmpty, let cred = credentials else { return }
+        Task {
+            func page(_ n: Int) async -> (dates: [Date], total: Int)? {
+                // user 参数由 request 统一注入,extra 里不重复给。
+                guard let json = await request(
+                    method: "user.gettrackscrobbles", cred: cred,
+                    extra: ["artist": artist, "track": title, "limit": "1", "page": "\(n)"])
+                else { return nil }
+                // 响应根节点是 trackscrobbles;这个方法文档化程度低,留一个 recenttracks
+                // 的兜底键名,两个都不认就当失败。
+                guard let rt = (json["trackscrobbles"] ?? json["recenttracks"]) as? [String: Any]
+                else { return nil }
+                let total = ((rt["@attr"] as? [String: Any])?["total"] as? String)
+                    .flatMap { Int($0) } ?? 0
+                // Last.fm 的怪癖(同 refreshDailyCounts):只有一条时 track 是对象不是数组。
+                var tracks = (rt["track"] as? [[String: Any]]) ?? []
+                if tracks.isEmpty, let single = rt["track"] as? [String: Any] { tracks = [single] }
+                let dates = tracks.compactMap { t -> Date? in
+                    guard let d = t["date"] as? [String: Any],
+                          let uts = (d["uts"] as? String).flatMap({ TimeInterval($0) })
+                    else { return nil }
+                    return Date(timeIntervalSince1970: uts)
+                }
+                return (dates, total)
+            }
+            guard let head = await page(1) else { return }
+            var first = head.dates.first
+            var last = head.dates.first
+            if head.total > 1 {
+                // 尾页失败时 first 置 nil(那一行整体缺席),**不能**回落成头页日期 ——
+                // 一首听了几年的歌显示「首次听=今天」比不显示误导得多(2026-08-22 审阅)。
+                first = (await page(head.total))?.dates.first
+            }
+            // 排序兜底:getTrackScrobbles 按新→旧返回是与 recenttracks 家族一致的观察,
+            // 但官方没写死 —— 万一哪天倒过来,交换一下也只是标签回正,不会显示错日期。
+            if let f = first, let l = last, f > l { swap(&first, &last) }
+            guard nowPlayingSpanKey == key else { return }
+            nowPlayingSpan = TrackScrobbleSpan(total: head.total, first: first, last: last)
         }
     }
 
@@ -997,6 +1060,11 @@ final class LastfmStatsService: ObservableObject {
         guard !user.isEmpty, !key.isEmpty else { return nil }
         return (user, key)
     }
+
+    /// 有没有可用的 Last.fm 账号 —— 歌词窗口那些统计元素(第N次听徽章/欢迎态统计/
+    /// 常听面板,2026-08-22)按它显隐。非 @Published:凭据变化本来就伴随设置页操作,
+    /// 消费方随下一次 body 重算取到新值就够了。
+    var isConnected: Bool { credentials != nil }
 
     // MARK: - 拉取
 

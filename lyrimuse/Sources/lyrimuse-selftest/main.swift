@@ -3173,6 +3173,20 @@ do {
                 "Hello", "开关: other 文字不受三个语言开关管辖")
 }
 
+// ---- 计次规则(ScrobbleRule):必须与 collector 的 listenThreshold/minTrackSecs 一致 ----
+do {
+    // 短于 30s 不计次(minTrackSecs)。
+    expectEqual(ScrobbleRule.thresholdFraction(durationMs: 29_000), nil, "计次: 29s 的曲目不计次")
+    expectEqual(ScrobbleRule.thresholdFraction(durationMs: 0), nil,
+                "计次: 时长未知画不出刻度(collector 仍会在 240s 计,见 ScrobbleRule 注释)")
+    // 普通长度:一半处计次。
+    expectEqual(ScrobbleRule.thresholdFraction(durationMs: 200_000), 0.5, "计次: 200s 的歌在一半处计次")
+    // 长歌封顶 240s(capSecs):600s 的歌在 240/600 = 0.4 处计次,不用等一半。
+    expectEqual(ScrobbleRule.thresholdFraction(durationMs: 600_000), 0.4, "计次: 长歌 4 分钟封顶")
+    // 恰好 480s 是两条规则的分界:min(240, 240) 都是 0.5。
+    expectEqual(ScrobbleRule.thresholdFraction(durationMs: 480_000), 0.5, "计次: 480s 处两规则相等")
+}
+
 // ---- 菜单栏跑马灯:像素级偏移 ----
 do {
     // 一段固定的参数:滚 100pt，每秒 50pt（走完要 2 秒），首尾各停 1 秒。

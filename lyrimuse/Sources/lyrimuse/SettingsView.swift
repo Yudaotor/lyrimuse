@@ -1672,6 +1672,52 @@ private struct AppearanceSettingsTab: View {
             ) {
                 Toggle("", isOn: $settings.menuBarLyricsKaraoke)
             }
+            // 两个颜色项(2026-08-22 用户要的配置)。默认都"跟随系统",设过自定义色才出现
+            // 「跟随系统」按钮 —— ColorPicker 自己表达不了"回到自动"这个状态,得有个显式
+            // 出口,不然一旦点过颜色就再也回不去自适应了。
+            CardDivider()
+            SettingsSubRow(
+                title: L10n.t("文字颜色"),
+                help: L10n.t("未唱到部分的文字颜色。默认跟随系统：浅色/深色菜单栏自动适配，打开菜单时自动反白")
+            ) {
+                HStack(spacing: 8) {
+                    if !settings.menuBarLyricsTextColorHex.isEmpty {
+                        Button(L10n.t("跟随系统")) { settings.menuBarLyricsTextColorHex = "" }
+                    }
+                    ColorPicker("", selection: Binding(
+                        get: {
+                            settings.menuBarLyricsTextColorHex.isEmpty
+                                ? Color(nsColor: .labelColor)
+                                : Color(hexWithAlpha: settings.menuBarLyricsTextColorHex,
+                                        fallback: Color(nsColor: .labelColor))
+                        },
+                        set: { settings.menuBarLyricsTextColorHex = $0.hexStringWithAlpha }
+                    ), supportsOpacity: false) // 理由同悬浮窗文字颜色:允许透明容易把 alpha
+                                               // 拖到 0,菜单栏歌词凭空消失且无从定位
+                }
+            }
+            if settings.menuBarLyricsKaraoke {
+                CardDivider()
+                SettingsSubRow(
+                    title: L10n.t("染色颜色"),
+                    help: L10n.t("已唱到部分的颜色。默认跟随系统强调色（深色菜单栏自动提亮）；自定义后原样使用、不再自动提亮")
+                ) {
+                    HStack(spacing: 8) {
+                        if !settings.menuBarLyricsFillColorHex.isEmpty {
+                            Button(L10n.t("跟随系统")) { settings.menuBarLyricsFillColorHex = "" }
+                        }
+                        ColorPicker("", selection: Binding(
+                            get: {
+                                settings.menuBarLyricsFillColorHex.isEmpty
+                                    ? Color(nsColor: .controlAccentColor)
+                                    : Color(hexWithAlpha: settings.menuBarLyricsFillColorHex,
+                                            fallback: Color(nsColor: .controlAccentColor))
+                            },
+                            set: { settings.menuBarLyricsFillColorHex = $0.hexStringWithAlpha }
+                        ), supportsOpacity: false)
+                    }
+                }
+            }
             CardDivider()
             SettingsSubRow(title: L10n.t("最大宽度")) {
                 HStack(spacing: 8) {
