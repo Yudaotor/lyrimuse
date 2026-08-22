@@ -1841,7 +1841,7 @@ func fetchScoredLyricCandidatesStreaming(artist, title, album string, durationSe
 		resultsCh <- sourceResult{source: "qq", lyr: lyr, yrc: yrc, matchTitle: match.title, matchArtist: match.artist, matchAlbum: match.album, srcDur: qqDur}
 	}()
 	go func() {
-		r := kugouLyric(artist, title, durationSecs)
+		r := kugouLyric(artist, title, album, durationSecs)
 		resultsCh <- sourceResult{source: "kugou", lyr: r.lrc, yrc: r.yrc, matchTitle: r.title, matchArtist: r.artist, matchAlbum: r.album, srcDur: r.durationSecs}
 	}()
 	go func() {

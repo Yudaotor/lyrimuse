@@ -743,6 +743,89 @@ func lyricSourceArtistMatches(candidate, query string) bool {
 	return false
 }
 
+const (
+	// lyricRecordingTriangleDurationTolerance:三角验证对时长吻合度的要求(1%)。
+	// 比打分层的 durationFitTolerance(25%)严 25 倍,因为量的根本不是同一样东西:
+	// 打分层量"LRC 末句时间戳 vs 曲长"(被前奏/尾奏/返场系统性带偏,必须宽松),这里量
+	// 两边**各自自报的曲目时长**——同一次录音跨平台只会差在取整。实测本案例
+	// 119.213(Apple) vs 119.21(网易云/酷狗),ratio 0.0000252。
+	lyricRecordingTriangleDurationTolerance = 0.01
+	// lyricRecordingTriangleAlbumWidthRatio:专辑名只是"宽松包含"(albumScore=100)而非
+	// 逐字相等时,额外要求候选专辑名归一后的长度不低于本地专辑名的这个比例。
+	// 为什么需要:albumScore 的包含档对**短通用串**几乎免检——实测同一批酷狗搜索结果里
+	// 「炸小肉丸 / album="周杰伦" / 62s」也拿到 100 分(「周杰伦」正好是「周杰伦地表最强
+	// 世界巡回演唱会live」的子串),真正挡住它的只有时长那一条。加这道长度可比性要求,
+	// 把"抄一个短热词当专辑名"排除掉,别让整条防线单靠时长撑着。
+	lyricRecordingTriangleAlbumWidthRatio = 0.6
+)
+
+// lyricRecordingTriangleMatches 是歌手闸之外的**第二条歌词候选采纳依据**:歌手名跨平台
+// 对不上,但"标题逐字同名 + 专辑对得上 + 时长紧密吻合"三者同时成立时,判定为同一次录音。
+//
+// 为什么需要它(2026-08-22 实测坐实):歌手署名的跨平台分歧不止"换分隔符 / 换合作者语言
+// 写法"那两类(它们已由 lyricSourceArtistMatches 的段集交集档吃掉),还有一类是**同一个人
+// 的不同称呼**——艺名↔本名、乐队名↔成员名,而且中文署名经常连分隔符都没有。案例:Apple
+// Music 把《周杰伦地表最强世界巡回演唱会 (Live)》第 14 首「枫+退后+搁浅 (Live)」署名成
+// 「南拳妈妈弹头」(乐队名和成员名直接粘在一起),而网易云/QQ/酷狗三家都署名「宋健彰」
+// (弹头的本名)。artistCreditParts 对这两串都只切出 1 段(isArtistCreditSep 只认
+// / 、 & , ，五个字符,这里一个都没有),段集交集档的 len>=2 前置条件不成立;
+// artistAliasTable 没这条;MusicBrainz 那两条路(中文别名 / 主名)实测都返回空。
+// 于是三个**明明有这首歌**的源全部在闸门原地把正主拒掉,整首歌零候选——酷狗那条更是
+// 已经排在搜索结果第 1 位、时长 119 与本地逐位吻合、还带 YRC 逐字。
+//
+// 为什么这不是把 netease pick() 当年刻意删掉的 byAlbum 兜底装回来:那条被删的理由是
+// "专辑名字段能被仿冒号无成本抄成任意值"(见 netease.go:resolveNeteaseInfo 里 pick 的
+// 注释)。这里多要两样仿冒号抄不动的东西——
+//   - **时长**必须落在 1% 以内。专辑名是一个可以随手填的字符串,时长是音频本身的属性;
+//   - 标题必须**逐字同名**,不接受 lyricTitleAccepted 的剥括号档/双语档(那两档本身就是
+//     放宽,跟"歌手名不可信"叠加就是双重放宽)。
+//
+// 并且这条档位**只放行歌词候选,绝不放行身份/封面** —— 沿用 2026-08-22
+// withholdImpersonatorRiddenIdentity 那次确立的分层:歌词按曲目挂在各家的歌词库上,跟
+// "这条曲目记录是谁传的"是两回事;而歌词候选另有一整套跟来源无关的防线(标题闸 +
+// 版本限定词 -600 + 时长 -700/-500 + 语言闸 + creditOnly 闸 + 跨源共识),错版本在打分层
+// 就会掉下去。
+//
+// ⚠️ 绝不可用于 netease 的 pick() / nameOnlyMatch / qqCoverFallback —— 那三处判的是
+// **身份**(封面给谁、canonical_artist 写谁、链接指向谁),在那里放宽等于直接采信仿冒号的
+// 署名,正是当年删掉 byAlbum 兜底要防的东西。
+//
+// ⚠️ 也不参与打分:artist 从来不是 scoreLyricCandidateDetailed 的输入项(14 个 scoreTerm
+// 里没有歌手项),所以放宽歌手闸不需要 lyricsScoringVersion +1。
+func lyricRecordingTriangleMatches(candTitle, candAlbum string, candDurationSecs float64,
+	localTitle, localAlbum string, localDurationSecs float64) bool {
+	// ① 标题:逐字同名。
+	nct, nlt := normLoose(candTitle), normLoose(localTitle)
+	if nct == "" || nlt == "" || nct != nlt {
+		return false
+	}
+	// ② 时长:两边都得有,且差在容差内。这是仿冒号抄不动的那一样,整条防线的主力。
+	if candDurationSecs <= 0 || localDurationSecs <= 0 {
+		return false
+	}
+	if math.Abs(candDurationSecs-localDurationSecs)/localDurationSecs > lyricRecordingTriangleDurationTolerance {
+		return false
+	}
+	// ③ 专辑:本地没有专辑标签就无从判断"对不对版",一律不给这条档位(跟
+	// preferAppleCoverOverNetease 里"本地没有专辑标签时这条例外一律不生效"同一个理由)。
+	if strings.TrimSpace(candAlbum) == "" || strings.TrimSpace(localAlbum) == "" {
+		return false
+	}
+	switch sc := albumScore(candAlbum, localAlbum); {
+	case sc >= 200: // 归一后逐字相等,最强证据
+	case sc >= 100: // 宽松包含 → 追加长度可比性要求
+		nca, nla := utf8.RuneCountInString(normLoose(candAlbum)), utf8.RuneCountInString(normLoose(localAlbum))
+		if nla == 0 || float64(nca) < lyricRecordingTriangleAlbumWidthRatio*float64(nla) {
+			return false
+		}
+	default: // 只有 albumTokens 重叠(<100)不够格
+		return false
+	}
+	// ④ 版本限定词冲突(live/demo/remix 等)一律否决:这条档位专治"同一次录音、署名写法
+	// 不同",不是拿来跨版本认亲的。
+	return !versionTagsMismatch(localTitle, localAlbum, candTitle, candAlbum)
+}
+
 // featCreditSepRe 匹配歌手串里词级的 feat 类分隔("feat."/"feat"/"ft."/"ft"/
 // "featuring",大小写不敏感,可带一个左括号)。只收这几个词:它们作为艺名成分几乎
 // 不存在,而 "with"/"x" 都是真实艺名的常见组成部分(Sleeping With Sirens、Charli xcx),

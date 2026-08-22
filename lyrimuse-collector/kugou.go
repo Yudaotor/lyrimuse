@@ -11,6 +11,7 @@ import (
 	_ "image/jpeg" // 注册 JPEG 解码器
 	_ "image/png"  // 网易云取色缩略图有时是 PNG(content-type 却谎报 jpg)
 	"io"
+	"log"
 	"net/http"
 	neturl "net/url"
 	"regexp"
@@ -40,11 +41,14 @@ var (
 	kugouCache = map[string]kugouResult{}
 )
 
-func kugouLyric(artist, title string, durationSecs float64) kugouResult {
+func kugouLyric(artist, title, album string, durationSecs float64) kugouResult {
 	if title == "" {
 		return kugouResult{}
 	}
-	key := artist + "|" + title
+	// album 进 key:它现在参与采纳判定(见 resolveKugouLyric 里的
+	// lyricRecordingTriangleMatches 档),同一个 (artist,title) 配不同专辑标签可能得出
+	// 不同结果,不能共用一份缓存。
+	key := artist + "|" + title + "|" + album
 	kugouMu.Lock()
 	if v, ok := kugouCache[key]; ok {
 		kugouMu.Unlock()
@@ -52,7 +56,7 @@ func kugouLyric(artist, title string, durationSecs float64) kugouResult {
 	}
 	kugouMu.Unlock()
 
-	r := resolveKugouLyric(artist, title, durationSecs)
+	r := resolveKugouLyric(artist, title, album, durationSecs)
 	if r.lrc != "" {
 		kugouMu.Lock()
 		kugouCache[key] = r
@@ -175,7 +179,7 @@ func kugouGet(u string, v any) error {
 // 同一个 id/accesskey,只是 fmt 参数不同)。lrc 失败则整体放弃;krc 单独失败不影响 lrc
 // (逐字数据本来就是"有更好、没有也不影响整行可用"的加分项)。任何一步
 // 失败/拿不到都直接放弃,不重试(下次 enrich 短 TTL 到期自然再试)。
-func resolveKugouLyric(artist, title string, durationSecs float64) kugouResult {
+func resolveKugouLyric(artist, title, album string, durationSecs float64) kugouResult {
 	// 搜索词逐个 variant 试,先命中先用(顺序由 searchTitleVariants 定,跟设置走)。带括号的标题在酷狗
 	// 上不会返回空、而是回一串该歌手的热门歌,所以"搜砸了"表现为下面的循环一条都收不下,
 	// 不是 kugouGet 报错——必须靠 chosen==nil 才能发现,不能只在 err != nil 时才换词。
@@ -198,9 +202,21 @@ func resolveKugouLyric(artist, title string, durationSecs float64) kugouResult {
 			// 歌手闸用 lyricSourceArtistMatches:酷狗的合唱署名固定用顿号("UMI、V"),
 			// 本地标签是 "&" 或换了合作者语言写法("UMI & 金泰亨")时 artistMatches 会把
 			// 服务端明明召回成功的正主原地拒掉——酷狗没有 loose 兜底,这一闸拒完整源就空了。
-			if s.Hash == "" || !lyricTitleAccepted(s.SongName, title) ||
-				!lyricSourceArtistMatches(s.SingerName, artist) {
+			if s.Hash == "" || !lyricTitleAccepted(s.SongName, title) {
 				continue
+			}
+			if !lyricSourceArtistMatches(s.SingerName, artist) {
+				// 歌手闸不过 → 还有第二条依据:标题逐字同名 + 专辑对得上 + 时长紧密吻合
+				// = 同一次录音。修的是"艺名↔本名 / 乐队名↔成员名"这类连分隔符都没有、
+				// 段集交集档和别名轮都够不到的署名分歧(实测案例见
+				// lyricRecordingTriangleMatches 的注释)。酷狗是五源里唯一**已经把正主
+				// 排在搜索结果第 1 位、只差这一闸**的源,而且它带 YRC 逐字。
+				if !lyricRecordingTriangleMatches(s.SongName, s.AlbumName, s.Duration,
+					title, album, durationSecs) {
+					continue
+				}
+				log.Printf("lyrics: kugou accepted %q by recording triangle (local artist %q vs source %q; album %q vs %q; dur %.3f vs %.3f)",
+					s.SongName, artist, s.SingerName, album, s.AlbumName, durationSecs, s.Duration)
 			}
 			chosen = s
 			break

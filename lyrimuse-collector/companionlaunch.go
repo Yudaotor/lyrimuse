@@ -142,11 +142,18 @@ func companionLaunchProcessNames() []string {
 	return []string{playerProcessName()}
 }
 
-// knownPlayerProcessNames 是全部四个已知播放器的可执行文件名——QQ音乐.app 是
-// QQMusic、网易云音乐.app 是 NeteaseMusic、Spotify.app 是 Spotify(都用 PlistBuddy
-// 核实过),Music.app 是 Music。playerProcessName() 按 features.Player 从这份列表里
-// 挑一个出来给手动选定的场景用;playerAuto 直接用整份列表。
-var knownPlayerProcessNames = []string{"Music", "QQMusic", "NeteaseMusic", "Spotify"}
+// knownPlayerProcessNames 是全部五个已知播放器的可执行文件名——QQ音乐.app 是
+// QQMusic、网易云音乐.app 是 NeteaseMusic、Spotify.app 是 Spotify、酷狗音乐.app 是
+// **中文的**「酷狗音乐」(都用 PlistBuddy 读 CFBundleExecutable 核实过),Music.app 是
+// Music。playerProcessName() 按 features.Player 从这份列表里挑一个出来给手动选定的
+// 场景用;playerAuto 直接用整份列表。
+//
+// ⚠️ 酷狗那一项是非 ASCII 的,2026-08-22 实测确认两件事都成立才敢这么写:
+//   1. `pgrep -x 酷狗音乐` 能匹配到 comm 为中文的进程(拿一个中文名符号链接起进程验过);
+//   2. UTF-8 下「酷狗音乐」是 12 字节,没超过内核 p_comm 的 16 字节上限(pgrep 比的就是
+//      这个被截断过的名字)——再长两个汉字就会被截断、`-x` 精确匹配当场失效。往这份列表
+//      里加新播放器时这条限制要一起核。
+var knownPlayerProcessNames = []string{"Music", "QQMusic", "NeteaseMusic", "Spotify", "酷狗音乐"}
 
 // playerProcessName 是当前选定播放器(features.Player)的可执行文件名,给手动选定的
 // 场景用,见 knownPlayerProcessNames 注释。
@@ -158,6 +165,8 @@ func playerProcessName() string {
 		return "NeteaseMusic"
 	case playerSpotify:
 		return "Spotify"
+	case playerKugou:
+		return "酷狗音乐"
 	default:
 		return "Music"
 	}
