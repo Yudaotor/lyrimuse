@@ -1,5 +1,5 @@
 # 04. 桌面悬浮歌词
-> 最后核对:2026-08-18 · 基线:2a2bf8b+工作树
+> 最后核对:2026-08-21 · 基线:05767ae+工作树
 
 ## 定位
 
@@ -41,7 +41,7 @@
 - 由 `TimelineView(.animation(minimumInterval: WordKaraokeGradient.refreshInterval, paused: !playback.isPlayingNow || playback.currentLineFillSettled))` 驱动,刷新上限 30Hz(三处逐字视图共用这个常量),每帧从 `PlaybackCoordinator.shared.anchor.extrapolatedPositionMs(now:) + currentLyricsOffsetMs` 现算播放位置——不经过 @Published 值 + SwiftUI 补间动画(那条路是历史上逐字卡顿的结构性根源)。paused 的第二个条件(2026-08-19):行填完之后到下一行开始之前(行尾/间奏/曲末)视觉零变化,把表停掉,不再每 tick 白构造整行 LinearGradient;`currentLineFillSettled` 由 20Hz fastTick 按 `KaraokeFill.lineFillSettledMs` 阈值维护,每行至多翻转两次。
 - 每个字的进度 = `KaraokeFill.fillFraction`:`(currentMs - startMs) / max(durationMs, 80)`。80ms 是词时长下限,只影响该词自己的填色速度,不改起点。fraction **故意不夹到 [0,1]**,裁剪在 `KaraokeFill.stops` 里按过渡带与 [0,1] 是否有交集分情况处理。
 - 颜色映射在 `WordKaraokeGradient.gradient`:已唱部分 = 前景色全强度,未唱部分 = 同色 35% 不透明度,边界有 ±0.08 的软化过渡带,整体作为 LinearGradient 直接当 Text 的 foregroundStyle。
-- 时间基准必须加 `currentLyricsOffsetMs`(全局基准+单曲微调之和)——引擎判定"当前行/当前词"时已内含该偏移,填色不加就会出现"填一半卡住、跳下一个词从 0 开始"。
+- 时间基准必须加 `currentLyricsOffsetMs`(基准[全部 / 按播放器,二选一] + 单曲微调)——引擎判定"当前行/当前词"时已内含该偏移,填色不加就会出现"填一半卡住、跳下一个词从 0 开始"。
 - 「当前是哪一行」由 LocalPlaybackSource 的 20Hz `fastTick` 决定(只在真的换行时才给 `currentLine` 赋值);填色平滑度与它无关。锁屏时 20Hz tick 停掉。
 - ⚠️待核对:暂停瞬间 `anchor` 被置 nil,若 `paused` 参数生效前 TimelineView 还有一帧重算,`currentMs` 会按 0 计算、整行填色可能瞬间退回全未唱;代码上存在此窗口,未实测过暂停瞬间的视觉表现。
 
@@ -84,11 +84,23 @@
 
 ### 窗口几何与位置记忆
 
-- 宽度:设置滑块 420~1000pt(默认 640),`setWidth` 保持中心点不变左右对称伸缩,新边界夹回屏幕可见区域。
-- 高度:不是设置项。默认/最小 120pt,内容(换行、多行开关)需要更多时由视图上报实际高度、`updateHeight` **顶边固定向下增高**,上限夹到"顶边到屏幕可见区底边";高度不持久化。窗口尺寸动画走 `animator()` 异步执行,连续调用以"上一次目标 frame"为基准防中间帧累积。
+- 宽度:设置滑块 420~1000pt(默认 640),`setWidth` 保持中心点不变左右对称伸缩,新边界夹回**窗口自己所在那块屏**的可见区域(`hostVisibleFrame`,不是 `NSScreen.main`;复用 `OverlayPlacement.clamped`,顺带修好"窗口比屏还宽时被推出右边界")。
+- 高度:不是设置项。默认/最小 120pt,内容(换行、多行开关)需要更多时由视图上报实际高度、`updateHeight` **顶边固定向下增高**,上限夹到"顶边到**所在那块屏**可见区底边"(同 `hostVisibleFrame`,一块屏都不沾时干脆不夹);高度不持久化。窗口尺寸动画走 `animator()` 异步执行,连续调用以"上一次目标 frame"为基准防中间帧累积。
 - 位置:持久化为 `"x,顶边y"` 字符串(UserDefaults `np:overlayPositionTop`)。存顶边而非左下角是修"每次重启往下漂"的关键;旧键 `np:overlayPositionOrigin` 只读一次做迁移。移动经 0.3s 防抖保存;长按拖动结束时在 `armDragIfStillPressed` 里直接存一次最终位置。
-- 多屏:运行中显示器配置变化(拔屏/改分辨率)触发 `repositionIfOffscreen`——只要窗口在任意一块屏上还露出 ≥60×30pt 就不动(用户故意把窗口拖到屏幕边缘是正常用法),真看不见了才夹回主屏。判断逻辑在 `OverlayPlacement`(纯几何,selftest 覆盖,因为开发机只有一块屏无法真机复现)。
-- ⚠️待核对:启动还原(`restoredOrigin`)是按**主屏** visibleFrame 夹取的,照代码推断"把悬浮窗放在副屏 → 重启 App"会被拉回主屏范围;无多屏真机验证过。
+#### 多屏:窗口只待在你拖它去的那块屏(2026-08-21 修)
+
+不变量:**位置只由用户拖动决定**。启动、插拔显示器、息屏唤醒、改分辨率、改排列,一律不许把窗口搬到另一块屏,也不许改写盘上那个锚点。
+
+- 启动还原 `restoredPlacement()`:锚点还原出的 frame 只要在**任意一块**屏上够得着(≥60×30pt)就**原样保留**;一块屏都看不见才夹回主屏,并把这次落点标记成"借来的"(`isBorrowingScreen`)。
+- 运行中显示器配置变化 → `reconcilePlacementWithScreens()`,两个方向:① 正在借屏显示、盘上锚点又看得见了(外接屏插回来/睡醒)→ 送回去、清标记;② 当前位置看不见了 → 借主屏显示。窗口好端端在某块屏上时**什么都不做**。
+- **锁定位置开着时,位置由锚点唯一决定**:那时用户根本挪不动窗口(`setLocked` → `syncMouseMonitors` 把鼠标监听器整个卸掉、`handleMouseEvent` 开头直接 return),所以收到的 `didMove` 只可能来自我们自己或**系统**——显示器消失时 macOS 会自行把窗口搬到剩下那块屏。`scheduleSavePosition(_:)` 按来源区分(`PositionSaveSource.windowMoved` / `.programmaticResize`):锁定期间的 `.windowMoved` **不采纳为新锚点**;下一次屏幕参数变化时,**只有"窗口现在待的屏跟锚点那块屏不是同一块"**才按锚点搬回去(同屏内几个 pt 的偏差一律不管——抱怨的是跨屏搬家,为对齐锚点发一次无谓位移只会制造新的跳动)。`.programmaticResize`(换行变高守恒锚点、宽度滑杆是用户主动改的)照常写盘。
+- 借屏期间 `scheduleSavePosition(_:)` 直接返回,**不写盘**——否则拔屏这一下就把用户拖出来的位置永久改写成主屏坐标,插回来也回不去。用户亲手拖过窗口 = 新的明确意图,`armDragIfStillPressed` 末尾清掉标记后照常写盘。
+- 窗口自身的尺寸钳制(高度上限、宽度重定中心)全部依据 `OverlayPlacement.hostVisibleFrame`(与窗口相交面积最大的那块屏);**不再回落 `NSScreen.main`**——那是"有键盘焦点的屏",跟窗口在哪儿无关,而 `window.screen` 会在刚 `orderOut` 过等时刻拿不到值。
+- 纯几何都在 `OverlayPlacement`(`restored` / `hostVisibleFrame` / `repositionIfOffscreen` / `isSufficientlyVisible`),selftest 覆盖——"拔掉/插回外接屏"那一瞬没法在单测外复现。
+
+**根因(用户报"悬浮歌词经常在主屏幕和副屏幕之间切换位置",此前是本节的 ⚠️待核对项,已坐实)**:旧 `restoredOrigin` 把锚点无条件夹进 `NSScreen.main.visibleFrame`。实测这台机器:内置屏可见区 `(0,70,1470,853)`、外接屏 `(-526,956,2560,1440)`,盘上锚点 `np:overlayPositionTop = "849.0,1202.0"`(好端端在外接屏上)、窗口 900×120 → 被夹成 `x=min(max(849,0),1470-900)=570`、`y=min(max(1082,70),923-120)=803`,整个窗口被拽回内置屏。关键在于 `NSScreen.main` 是"**当前有键盘焦点的那块屏**"、不是内置屏:同一个锚点,启动那一刻焦点在内置屏就被夹到内置屏,焦点在外接屏则两行 clamp 全是 no-op、窗口留在外接屏——**不需要用户拖任何一下,窗口就会随每次启动在两块屏之间来回**(本机 `np:lockPosition = true`,用户其实根本拖不动它,所以观察到的每一次位移都只能是程序或系统造成的)。夹出来的落点还会被首帧歌词渲染触发的 `updateHeight` → `setFrameAnimated` 完成回调写回磁盘,把用户那个锚点冲掉。
+
+> ⚠️ 别把旧 bundle id 域里的值当证据:`np:overlayPositionOrigin = "602.0,803.0"` 躺在**已废弃**的 `com.chenyuhao.lyrimuse`(和 `desktop-lyrics` 等)域里,当前二进制只读 `me.yudaotor.lyrimuse`,那个域里**没有**这个旧键;`803 = 923−120` 同时也是"顶边贴着内置屏菜单栏"的自然手动摆位,本身没有鉴别力。
 
 ### 锁定位置与点击穿透(合并开关)
 
@@ -138,7 +150,7 @@
 - **歌词处理管线共享**:署名行过滤(`strippingCreditLines`)、简繁转换(`lyricsChineseVariant`)、逐字/整行选择(`preferWordLevelKaraoke` + 覆盖率判据)都在引擎/数据源层完成,悬浮窗、灵动岛、歌词窗口、菜单栏看到的是同一份结果。署名行过滤直接影响悬浮窗动态高度(漏判的长职员表行曾把窗口撑爆)。
 - **与灵动岛**:开关互相独立可同开;共享 `hideWhenNotPlaying`、`hideDuringScreenCapture` 两个设置项和 `WordKaraokeGradient`(30Hz 上限+渐变算法);「文字跟随封面」开关也被灵动岛读走(NotchLyricsView.accentOrWhite),但两边用的强调色变体不同(悬浮窗按"与描边对比/够亮",灵动岛按"深底够亮")。
 - **与歌词窗口**:共享 `showRomanization/showTranslation/showNextLinePreview` 三个开关、`WrapLayout`、`KaraokeFill`、LyricDuet;但字体/字号/三个颜色**只**对悬浮窗生效,歌词窗口用固定系统配色;对唱 nil 兜底两边不同(悬浮窗居中、窗口靠左)。
-- **与歌词时间轴校正**:`LyricsOffsetStore` 的全局基准+单曲微调合成 `currentLyricsOffsetMs`,同时作用于"当前行判定"(引擎内)和"逐字填色基准"(视图内显式相加)。
+- **与歌词时间轴校正**:`LyricsOffsetStore` 的基准(全部 / 按播放器,二选一)+ 单曲微调合成 `currentLyricsOffsetMs`,同时作用于"当前行判定"(引擎内)和"逐字填色基准"(视图内显式相加)。
 - **与设置页预览**:`OverlayPreviewBar` 是刻意维护的第二份渲染实现,复用 `settings.mainFont`/`backgroundColor`/`displayForegroundColor` 规则和 `lyricsTextStroke`(为此放开成 internal);不复制逐字填色/罗马音译文行;圆角 16 是手抄的常量,改视图记得改预览。
 - **与播放控制/权限**:控制排按钮和全局快捷键共用 MusicAutomationPermission「点了才校验、拒了 beep」的策略;「喜欢」只对 Apple Music 出现,乐观更新+回读纠正。
 - **与「歌词管理」**:那边保存/删除歌词后调 `PlaybackCoordinator.refreshLyricsForCurrentTrack()` 强制重读磁盘,悬浮窗立即反映。
@@ -168,9 +180,9 @@
 | 假名标注 | `lyrimuse/Sources/LyrimuseCore/Lyrics/KanaAnnotation.swift` · `KanaAnnotation.parse` |
 | 行构造/逐词分组/署名过滤 | `lyrimuse/Sources/LyrimuseCore/Lyrics/LyricsSyncEngine.swift` · `activeLine` / `buildWordGroups` / `strippingCreditLines` |
 | 窗口本体 | `lyrimuse/Sources/lyrimuse/UI/LyricsOverlayWindow.swift` · `LyricsOverlayWindow` |
-| 窗口控制器(显隐/几何/手势/持久化) | `lyrimuse/Sources/lyrimuse/UI/LyricsOverlayWindowController.swift` · `setVisible` / `setLocked` / `updateHeight` / `setWidth` / `handleMouseEvent` / `armDragIfStillPressed` / `restoredOrigin` / `scheduleSavePosition` |
+| 窗口控制器(显隐/几何/手势/持久化) | `lyrimuse/Sources/lyrimuse/UI/LyricsOverlayWindowController.swift` · `setVisible` / `setLocked` / `updateHeight` / `setWidth` / `handleMouseEvent` / `armDragIfStillPressed` / `restoredPlacement` / `savedAnchor` / `reconcilePlacementWithScreens` / `scheduleSavePosition` |
 | 隐藏行为 | 同上 · `setHideWhenNotPlaying` / `setHiddenFromCapture` / `updateActualVisibility` |
-| 屏幕落位纯几何 | `lyrimuse/Sources/LyrimuseCore/Local/OverlayPlacement.swift` · `repositionIfOffscreen` / `isSufficientlyVisible` |
+| 屏幕落位纯几何 | `lyrimuse/Sources/LyrimuseCore/Local/OverlayPlacement.swift` · `restored` / `hostVisibleFrame` / `repositionIfOffscreen` / `isSufficientlyVisible` / `clamped` |
 | 状态/前景色来源 | `lyrimuse/Sources/lyrimuse/PlaybackCoordinator.swift` · `displayForegroundColor` / `isPlayingSmoothed` / `artworkAccentColor` |
 | 进度外推 | `lyrimuse/Sources/LyrimuseCore/Playback/ProgressClock.swift` · `ProgressAnchor.extrapolatedPositionMs` |
 | 20Hz 行定位 | `lyrimuse/Sources/LyrimuseCore/Local/LocalPlaybackSource.swift` · `fastTick` / `resolveLinesForPausedPosition` |

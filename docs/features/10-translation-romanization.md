@@ -37,7 +37,7 @@
 
 ### 4. 中文繁简转换（相邻功能，见第 08 章）
 
-`ChineseVariant.converted` 只影响**显示**不动缓存原文；有假名判日文一律原样返回（防把日文新字体转坏：学→學）；用 ICU Simplified-Traditional 词级转换。
+`ChineseVariant.converted` 只影响**显示**不动缓存原文；有假名判日文一律原样返回（防把日文新字体转坏：学→學）；用 ICU Simplified-Traditional 词级转换，**转简体时再叠一层 `HanVariants` 异体字表**（ICU 和 OpenCC 的繁简字典都不含「妳/祂/牠」这类异体字，详见 08-lyrics-engine）。
 
 ## 设置项
 

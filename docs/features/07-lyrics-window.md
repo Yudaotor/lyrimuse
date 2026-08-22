@@ -12,14 +12,18 @@
 - 两条路径都汇到 `AppActions.shared.openLyricsWindow`,由一扇隐藏锚点窗口(`MenuBarSceneActions`)捕获的 `openWindow(id:)` 环境 action 执行,调用前先 `NSApp.activate(ignoringOtherApps: true)`(accessory 策略下不激活的话 openWindow 静默没反应)。
 - 打开期间若「在 Dock 中显示」是关的,会**临时借一个 Dock 图标**(`AuxiliaryWindowActivation` 计数器,与设置/歌词管理/引导窗口共用),全部辅助窗口关完才还原成无 Dock 图标。
 - 窗口尺寸约束 `minWidth 520 / idealWidth 1020 / minHeight 480 / idealHeight 660`;位置/尺寸交给 SwiftUI+macOS 的窗口自动存档机制,无自写持久化代码。⚠️待核对:退出 App 重启后这扇窗口是否会随系统状态恢复自动重开(代码只声明交给系统存档,未见显式处理,未实测)。
-- Dock 图标点击(reopen)只打开**设置**窗口,不会打开歌词窗口。
+- Dock 图标点击(reopen)**只**打开这扇歌词窗口,任何情况下都不弹设置(2026-08-21 按用户要求从「设置窗口」改过来:Dock 图标是「我想看这个 App」的入口,而这个 App 让人想看的是歌词;设置另有 ⌘, / 菜单栏菜单 / 主菜单三个入口)。实现在 `AppDelegate.applicationShouldHandleReopen`,两处刻意的写法都是为了「不要冒出设置窗」:
+  - **不退回 `openSettings`**:`AppActions.openLyricsWindow` 是环境 action、由隐藏锚点视图捕获(见 `MenuBarSceneActions`),在「刚重启、锚点还没挂上」那一瞬是 nil。上一版那时候退回设置窗,于是「点 Dock 弹设置」照样发生。宁可这一下什么都不做(下一下就正常)。
+  - **返回 `false`**:返回 true = 让 AppKit 执行默认的「恢复/带回本 App 窗口」行为,而 SwiftUI 的 Settings 场景关掉之后 NSWindow 对象仍然活着(只是 orderOut,`check-windows` 能看到它 `onscreen=false` 挂着),默认行为会把它一起端出来。返回 false = 「这次 reopen 我自己处理完了」。
+  - 不分 `hasVisibleWindows`:`openWindow(id:)` 对已经开着的窗口就是带到前台,正好是「点 Dock 我想看歌词」的语义。
 
 ## 行为规格
 
 ### 布局:双列/单列
 
-- 窗口宽 ≥ 640pt 时是双列:左列播放器面板(宽 = min(窗口宽 × 0.42, 460pt)),右列歌词列表;宽 < 640pt 退化成只有歌词的单列——与 Apple Music 把窗口拖窄时的行为一致。老用户从旧版竖长窗口存档尺寸(~460pt)升级上来,第一次打开就是单列。
-- 右上角浮着两个玻璃胶囊(音量 + 窗口动作),是 `.overlay(alignment: .topTrailing)` 浮层而**不是** `.toolbar` 项——工具栏本身是玻璃,玻璃采样不到玻璃,放进去会退化成不透明灰块(Liquid Glass 规则,macOS 26 的 `.clear` 材质,见 `SettingsDesignSystem.clearGlassCapsule`)。
+- 窗口宽 ≥ 640pt 时是双列(2026-08-21 按用户红框标注对 AM 截图逐项量比、一比一对齐):封面左缘 0.111W、封面宽 min(0.279W, 460pt)(面板列宽=封面宽,内边距为零),歌词文字左缘 0.515W、右缘留 0.06W——AM 是「左右两半、各自大留白」的重心;此前面板贴左缘(3%W)、歌词 0.34W 就开始,整体偏左。时间行右侧同步改为**总时长**(AM 是「0:20 ··· 3:12」,不是剩余时间)。宽 < 640pt 退化成只有歌词的单列(歌词左缘退回固定 44pt)——与 Apple Music 把窗口拖窄时的行为一致。老用户从旧版竖长窗口存档尺寸(~460pt)升级上来,第一次打开就是单列。
+- 第二轮逐像素对拍(2026-08-22,用户给同尺寸 1470×858 的 AM 参考图逐区域量差):①左列**垂直居中基准=整窗**——hiddenTitleBar 下内容区仍有 ~28pt 顶部 safe inset,在内容区内居中会整列压低半个 inset(渲染 offset −safeTop/2−2 校正);②三段间距 封面→歌名 19 / 歌名块→进度条 19 / 进度条块→播控 17;③播控字号档位 上/下一首 0.060、播放 0.079(帧宽 0.10)、随机/循环 0.043,随机/循环的**占位定宽=字号+8**(字形在框内居中,这个框才是它们横向落点的旋钮);④主三键间距 0.116;⑤右上只留音量胶囊(贴右缘 5pt、垂直 padding 7 → 总高 36、中心 26pt 与红绿灯同心,红绿灯下移 10、close 中心 x 26);⑥置顶/全屏胶囊挪到**左上**(AM 同位是 X/画中画那颗:左缘 102pt、内衬 12/图标框 18/间距 14 → 总宽 ~72.5pt);⑦音量滑杆 114pt、滑块 23×14、已填充段白 0.80、AirPlay 字号 17。验证方法:reopen 事件(applicationShouldHandleReopen 直通开窗)+ screencapture -l 窗口截图 + 自适应阈值(逐行取列间局部背景)量 bbox,与 AM 参考图同尺寸逐像素比对,终态各锚点差 1~5px@2x。
+- 两个玻璃胶囊(右上=音量、左上=置顶/全屏,2026-08-22 对拍后分居两角,AM 同布局)都是 `.overlay` 浮层而**不是** `.toolbar` 项——工具栏本身是玻璃,玻璃采样不到玻璃,放进去会退化成不透明灰块(Liquid Glass 规则,macOS 26 的 `.clear` 材质,见 `SettingsDesignSystem.clearGlassCapsule`)。
 
 ### 歌词列表:自动滚动与当前行
 
@@ -27,17 +31,17 @@
 - 当前行由 `PlaybackCoordinator.currentLineIndex` 决定;每次换行,`ScrollViewReader.scrollTo` 把当前行滚到窗口**从上往下 35% 处**(`activeLineAnchor`,不是正中——上面留已唱过的行,下面留更多将唱的行)。
 - 滚动与行样式变化用**同一条**动画曲线 `lineTransition = .smooth(duration: 0.45)`(无回弹弹簧),两套动画节奏一致,不会"一顿一顿"。
 - **没有"手动滚动暂停跟随"机制**:自动跟随永远生效,用户往回翻歌词后,下一次换行会被拉回当前行;想主动回去点右上角胶囊里的「回到当前播放」(location.fill 图标)。这个取舍是刻意的(照抄歌词管理窗口 `focusCurrentlyPlaying` 已验证过的简单方案,不做 `scrollPosition(id:)` 侦测)。
-- 换歌/歌词重载(`onChange(of: poller.allLines)`)后无动画直接跳到新歌当前行;还没唱到第一句时 activeID 为 nil,不滚动,列表停在顶部。窗口刚打开(onAppear)同样无动画定位一次。
+- 换歌/歌词重载(`onChange(of: poller.allLines)`)后无动画直接跳到新歌当前行;还没唱到第一句且有前奏点时**滚第一句、锚 0.52**——效果=「•••」落在 41% 锚位、第一句在窗高 ~52%(AM 实测 51.8%),开场从窗口中部开始而不是停顶(2026-08-21)。⚠️ 这个需求连修三版才对:①不能直接 scrollTo「•••」那行——gapDotsRow 不活跃时整行不渲染(id 未注册,scrollTo 静默无效),激活的同一事务里滚也解析不到;也不能加零高占位行(VStack 会为它多算一段行距);②**真根因是列表的顶/底留白**——固定 88pt 时第一句物理上到不了窗口中部,scrollTo 超出内容可滚范围被钳回 offset 0,修 id/时序全是白修。现在顶 0.395h/底 0.55h 按视口比例留白:offset 0 本身=AM 开场版式(不依赖 scrollTo),最后一句也能锚到 41%(此前每首歌头几句/尾几句的锚定其实都被钳)。intro 激活的 onChange(currentGapIndex==-1) 走 scrollToActiveLine 并 async 延一拍。窗口刚打开(onAppear)同样无动画定位一次。
 - 列表用 `VStack` 而非 `LazyVStack`:歌词只有几十行,lazy 反而让带动画的 scrollTo 卡(目标行没渲染过就没尺寸)。
 - 列表上下边缘有渐隐 mask(顶部 0~7.5% 全透明、20% 处全显,底部 90%→100% 渐隐):顶部渐隐让歌词滚到胶囊底下之前就淡掉,不糊在胶囊上;底部渐隐避免被窗口边缘直切一刀。
 
 ### 行的景深样式(Apple Music 式)
 
-- 所有行同字号同字重,远近**不靠字号**区分:当前行不透明度 1、零模糊;其余行不透明度 `max(0.35, 0.55 - 0.05×行距)`、高斯模糊 `min(行距 × 1.1pt, 4pt)`。
+- 所有行同字号同字重,远近**不靠字号**区分:当前行不透明度 1、零模糊;其余行不透明度 `max(0.22, 0.42 - 0.10×max(0, 行距-2))`(d1/d2≈0.42 几乎不衰减,d3 起快掉)、高斯模糊 `0.0148×(行距+1)×字号`(d1≈3%字号、d4≈7.4%,行距本身封顶 4 无需另设上限)。这组数字是 2026-08-21 第五版,**从 AM 截图拟合**而非目测:同文行(「无敌铁金刚」出现在多个距离上)的墨量总和是高斯模糊的不变量,比值即不透明度;特写图拿 d0 行加 σ 扫描逐像素拟合各距离行,解出 σ=1.5×(d+1)px(字号 101px)。历史:固定 1.6pt"远行失真"→1.1pt"不够糊"→目测 9%/22%"太糊"→6%/15%"还是有点糊"——前四版都在猜,拟合版 d1 比 6% 版轻一半。
 - 行距按下标算并**夹到 4**(`maxVisualDistance`):d≥4 的行画出来一模一样,输入不变就整行跳过重算(`LyricsLineRow` 是手写 `Equatable` 的——行视图带 onTap/onHover 闭包参数,SwiftUI 自带结构比较对闭包失效,必须只比值输入)。
-- 还没唱到第一句(currentLineIndex 为 nil)时整页统一不透明度 0.45、轻模糊 2pt。
+- 还没唱到第一句(currentLineIndex 为 nil)时整页统一不透明度 0.45、轻模糊 3%字号。
 - 系统「减少动态效果」(reduceMotion)开启时模糊整个关掉(与缩放同一批"聚焦感"装饰,统一走系统开关,不单加设置项)。
-- 字号随歌词栏宽度缩放:主行 `clamp(22, 栏宽 × 0.072, 56)`pt bold(系数是量 Apple Music 截图反推的),罗马音 0.54 倍、译文 0.61 倍、行间距 1.14 倍。
+- 字号双锚缩放(2026-08-21 从 AM 整窗截图 1470×845pt 量出:当前行墨高 89px ÷ PingFang 粗体墨高比 0.88 = 字号 50.6pt):`max(22, min(栏高 × 0.0598, 栏宽 × 0.0564))`pt bold——两锚在 AM 自身纵横比下相等,偏矮窗口由高度锚接管(锁住"一屏约 7 行":行距 218px 占窗高 12.9%),偏窄由宽度锚接管防长句疯狂折行;上界不再夹死(旧 56,AM 全屏能到 68pt+)。罗马音 0.54 倍、译文 0.61 倍。行间距 0.98 倍字号(AM 行距 2.156em − 单行 Text 视图高 1.175em,ImageRenderer 离线标定;旧 1.14em 比 AM 松 8%)。当前行滚动锚点在窗高 41% 处(AM 量出 40.9%,旧 35%)。
 - **对唱歌词**:行带演唱者标记(`LyricDuet.Side`)时按左/右/中分栏对齐;没有标记的歌 side 为 nil,本窗口兜底 `.leading`(悬浮窗兜底是 `.center`,两边不同)。
 
 ### 行交互:悬停与点击跳转
@@ -49,12 +53,15 @@
 
 ### 逐字高亮(卡拉OK)
 
-- 只有**当前行**且该行有逐字数据(`line.words` 非空)时走 `KaraokeLineText` 逐字填色;非当前行(以及无逐字数据的当前行)渲染纯文本。
-- 填色是"同色 35% → 全强度"的同色系渐变(有封面背景时同色=白,无封面时=系统 primary),不引入强调色;渐变数值算法在 `KaraokeFill`(LyrimuseCore,带自测断言),UI 侧 `WordKaraokeGradient` 只负责转成 LinearGradient。
-- 正在唱的字**上浮**:sin 缓动、固定 320ms 窗口(不超过该字自身时长)、幅度 = 字号×0.07 **对齐到整设备像素**(1x 外接屏防重采样发糊);抬起后保持,直到整行不再是当前行才落回。「点头式」(抬了再落)被用户明确否掉过。
-- 刷新时钟是两级结构(2026-08-17 定稿):行级 4Hz 粗时钟(`coarseInterval = 0.25s`)只判断每个字"此刻是否正在被扫"(`isLive`,两头各放宽一档粗时钟+80ms 余量);只有正在扫的那个字保留 30Hz 细时钟(`WordKaraokeGradient.refreshInterval`,三处逐字视图共用)。暂停(`!isPlaying`)时全部时钟挂起,开销归零。行尾/间奏/曲末由 `currentLineFillSettled` 停表(2026-08-19,四个逐字展示面同款):粗时钟 paused 并入它,**且必须同时喂给 isLive 判定**——只停粗时钟的话 isLive 冻结在 true,最后一个字的 30Hz 细时钟反而在整段 outro 永动(对抗核实抓出的陷阱);settled 只传给当前行(非当前行恒 false,避免翻转时全表行重算)。时间基准带 `?? pausedPositionMs` 兜底(同日修的暂停 bug:原来 `?? 0` 让暂停触发的重渲染把当前行整行画回"未唱"态,四个展示面同款漏配一起修)。
-- 罗马音逐词标注:开着「显示罗马音」且该行有 `wordGroups` 时,读音**逐词**标在正文每组字底下(组内左对齐、读音按整组起止时间填色、不跟着抬升),这时不再单独渲染整行罗马音;拿不到词组时退回正文下方一整行罗马音。
-- 时间基准统一为 `anchor.extrapolatedPositionMs(now:) + currentLyricsOffsetMs`——"当前词判定"和"填色进度"必须同基准,否则填到一半卡住。
+- 有逐字数据(`line.words` 非空)的行**不论活跃与否**都走 `KaraokeLineText`(结构统一,见已知坑 #11);无逐字数据的行渲染纯文本。
+- **驱动方式定稿 = 逐帧重算 TimelineView @ 60Hz**(2026-08-21 五轮拉锯后,勿再翻烧饼):填色几何与**悬浮歌词逐像素同款**(渐变中心=人声位置、软边=±8%词宽同一个 `KaraokeFill.wordEdgeSoftenBand`,用户点名的观感基准),唯一差别是刷新档位 `WordKaraokeGradient.windowRefreshInterval = 1/60`(悬浮窗 30Hz;这台面板 60Hz,窗口字号大,30Hz 步进可感知)。同日第三轮曾整体改成**排程式**(fillFraction 对时间线性→一次性排 .linear 显式动画交渲染管线插值,LyricsX/AMLL 同架构)——CPU 是零逐帧代码,但 **SCK 逐帧探针实测 macOS 只以 ~20Hz 提交这些动画**(系统对长时程慢动画自动降档、无 API 干预;对照组悬浮窗 TimelineView 30Hz 准点),20Hz×14px 步进正是"卡顿感"本体,故回退。逐帧的开销结构由既有三件套压住:字级叶子时钟+4Hz 粗时钟只养活"正在扫的字"+WrapLayout contentKey 缓存+Palette 纯色跨帧复用。
+- 视觉参数弯路记录(二/三轮按 AMLL 逆向参数"改良"、全被用户否掉):②羽化放大到 0.55×字号→光晕横跨大半个字,**字内的人声位置信号被洗掉**("全都是一个速度");③尖端对齐→相邻字光晕不跨界搭接,每字边界"熄灭再重生"("更机械了")。结论:**软边必须骑在人声位置上**,字内位置信号(边缘贴人声爬行)才是"流动感",不是宽光晕。
+- 排程式那轮留下的三个真修复保留:①行激活瞬间 forceFilled→按时间 的取值跳变会被行级 `.animation(value: distance)` 插值成"全亮再褪色"(=「下一行先亮一下再从头逐字」bug)→ 字级叶子挂 `.transaction { $0.animation = nil }` 禁掉一切外来动画事务;②定格全填色的 fraction 必须取 **1+band**(取 1.0 走不到纯色快路径,右缘 band 段被淡到半强度);③上浮参数:幅度 0.05em(从 0.07 调低,用户定稿)、时长 **min(词长, 1000ms)**(七轮定稿,两头都有用户实测背书——上界防长词亚像素颤抖:长词按词长爬完整词=每帧 ~0.05 物理像素,字形抗锯齿持续重采样,"长音字上下抖动";下界跟词长对齐:"染色结束=上浮结束",短词随染色利落收尾;isLive 的存活窗口要把它算进去。AMLL 的 max(1000,词长) 没颤抖问题是 DOM 合成器插值,不是逐帧重排字形)。
+- **行级动画屏障**(七轮,60fps 胶片实锤):①的 `.transaction` 拦截对"值作用域 .animation 祖先"实测**失效**(新行前几个字仍先全亮、亮暗边界 ~100ms 从右往左回撤),真正有效的是在行内容与 opacity/blur 之间插 `.animation(nil, value: distance)`/`.animation(nil, value: isHovered)` 屏障——内层 .animation(value:) 覆盖外层是文档化行为,景深动画只够到屏障之上的 opacity/blur。叶子 .transaction 保留作命令式 withAnimation 事务的兜底。
+- 正在唱的字**上浮**:sin(p·π/2) 平滑到顶、抬起后保持、行退场落回(「点头式」被否掉过);幅度对齐到整设备像素(1x 外接屏防重采样发糊)。
+- **定格即钉死**(2026-08-22 九轮):fillSettled 停表后 staticDate 冻结在最后一次粗 tick(最多陈旧 250ms),若恰好早于末字完成时刻,末字渐变被算回"没填完"——用户实测"行尾最后一两个字染完又退去染色","有时候"=停表与粗 tick 的相位差。修法=`lineSettled` 直传词级视图,定格时直接渲染终态(填满+浮定满幅),不再依赖任何时间基准——定格语义本来就保证所有词已填满、所有 rise 已完成(rise 窗口 min(词长,1000) 必然早于 1.08×词长的定格点)。顺带取代了旧注释"行尾短词上浮冻在九成处,接受"——现在钉在满幅。教训:**停表类优化的显示值必须改为常量,不能继续依赖被冻结的时间基准**。
+- 罗马音逐词标注:开着「显示罗马音」且该行有 `wordGroups` 时,读音**逐词**标在正文每组字底下(组内左对齐、读音按整组起止时间的伪词填色、不跟着抬升),这时不再单独渲染整行罗马音;拿不到词组时退回正文下方一整行罗马音。
+- 时间基准统一为 `anchor.extrapolatedPositionMs(now:) + currentLyricsOffsetMs`,暂停带 `?? pausedPositionMs` 兜底(2026-08-19 的暂停 bug:`?? 0` 会把当前行画回"未唱"态)。
 
 ### 译文/罗马音行
 
@@ -65,14 +72,29 @@
 ### 左列:封面卡与曲目信息
 
 - 封面卡 1:1 方形、圆角 12、投影;图片优先用**高清替代** `highResArtworkImage`(只在系统 Now Playing 那份实在太小时才有值——网易云客户端只给 100×100,替代图来自 collector 缓存里解析歌词时顺手记下的 cover_url),否则用系统那份 `artworkImage`;都没有时显示灰底音符占位。换图交叉淡入 0.5s,动画收在 overlay 内容上而不是整卡最外层(否则会把别的布局变化 animate 成"进度条从上面飘下来")。
-- 曲目两行:歌名(semibold)、「歌手 — 专辑」(专辑缺失只显示歌手),放不下**不截断**而是走 `MarqueeText` 跑马灯(停在开头→匀速滚到底→停住→瞬时回开头)。
+- 封面随播放状态缩放(仿 AM):播放满幅、暂停缩到 **73.2%**(2026-08-22 第二轮对拍用户给的 AM 整窗参考图:暂停态封面 599px@2x ÷ 满幅 0.279W=818px;此前 78% 让暂停态封面大 6%。渲染变换,不影响下方各行的布局位置),spring(0.5/0.72)。驱动信号是观感层 `isPlayingSmoothed`(缓收版,吸掉切歌间隙/seek 的真值抖动);从我们自己的 UI 点播放/暂停时它被 `userTogglePlayPause()` **乐观翻转**、点击即动(2026-08-21,见「播放控制排」),从播放器 App 里操作时仍走通知快路径(~0.5s)。
+- 曲目两行:歌名(semibold)、「歌手 — 专辑」(专辑缺失只显示歌手),放不下**不截断**而是走 `MarqueeText` 跑马灯(停在开头→匀速滚到底→停住→瞬时回开头)。`MarqueeText.edgeFadeWidth`(2026-08-22 加的右端渐隐带)在这里保持默认 0 = 关:那一条是给灵动岛歌词行"硬切口紧贴封面"的观感准备的,这边曲目两行右边没有紧挨的元素,硬切不会被误读成被挡住。
+- **左栏次级元素做 AM 式 vibrancy 染色**(2026-08-21,`amVibrantColor`):副行、时间行/无损标签、进度条已播段不是半透明白,而是**背景色相的亮化低饱和版**——太阳之子截图逐通道反解坐实(纯白 alpha 三通道等效透明度应相等,实测副行 r0.74/g0.58/b0.49 暖倾斜)。h/s 来自烘焙背景 base 的 CIAreaAverage(存在 WindowBackgroundLayers.tintHue/tintSaturation),档位:副行 s×0.5/v0.85、时间行 s×0.62/v0.68、进度已播 s×0.5/v0.92;歌名/主控制键保持近纯白(AM 同)。背景层未到时回退半透明白;无封面背景回退系统色。⚠️ 亮封面自适应(2026-08-22 两轮:先是"时间行看不清"、后是"字颜色没统一"):固定 v 档是从**暗封面**反解的,背景亮到 bgV≈0.7 时 v0.68 的标签撞上背景亮度直接隐形 —— 烘焙时把均色 v(×0.85 对齐 0.15 黑遮罩)存进 `tintBrightness`,文字类调用(副行/时间行)传 `minContrastToBackground: 0.25`,对比不足时**提亮**到 min(0.97, bgV+0.25)。方向以同帧对拍 AM 为准:亮橙背景上它的歌手行 S0.27 V1.00、时间行 S0.39 V0.94、播控近白 —— **次级元素清一色淡奶油、全部比背景亮**,对比度靠 文字淡 vs 背景艳 的饱和度差(前提=背景饱和,背景灰化 bug 修掉后成立)。第一版压暗成 V0.42 深棕被用户抓出"没统一"。唯一压暗分支:背景又亮又淡(bgV>0.75 且 tintSat<0.5,近白封面)提不出奶油对比,退 bgV−0.32 深色(AM 白封面同款)。进度条已播段是控件,不传。
 - 控制排/按钮尺寸全部按封面实际边长比例算并夹进区间(`ctrl(ratio, lo, hi)`)——封面随窗口缩放,按钮写死尺寸会在窄窗口溢出被裁、宽窗口下不成比例。
+
+### 「⋯」菜单与曲目动作(2026-08-22,对照 AM 同位菜单逐项评估后落地)
+
+- 菜单结构(自绘玻璃面板,机制见已知坑 #12;2026-08-22 二批定稿):Apple Music 播放时 = 添加到资料库 / 减少推荐 / ─ / 前往专辑 / 前往艺人 / 在 Music 中显示 / ─ / 显示简介 / 搜索歌词…(有曲目才显示) / 歌词时间轴(内联控件行);其它播放器只有后半段,「在 %@ 中显示」标题随 `resolvedPlayerDisplayName` 变。「歌词管理…」「拷贝歌词」按用户要求移除(管理入口保留在菜单栏菜单)。
+- **AppleScript 动作**(`MusicPlaybackController`,全部 2026-08-22 实机验证):添加到资料库=`duplicate current track to source 1`(流媒体曲目唯一可行路;不返回引用;fallback `library playlist 1`——不能用名字 "Library",中文系统叫「资料库」;共享播放列表源的 `shared track` 走 source 1 报 -10006、靠 fallback 接住);减少推荐=`disliked` 布尔(UI 的 Suggest Less 就是老 Dislike);在 Music 中显示=`reveal current track`+activate。统一走 `runAppleMusicMenuAction` 外壳(权限确认+后台线程,失败静默)。
+- **资料库/减少推荐两行是有状态行**(2026-08-22 三批后补,起因=用户实测"点了没反应"——那首歌 7 月就已在库,`duplicate` 对已在库曲目是**静默 no-op**,不报错不重复入库,加上行点完即关面板,成功/已在库/失败三种结局零差别):开菜单 `onAppear` 异步只读回查(`currentTrackIsInLibrary()` 按 歌名+歌手+专辑 在 library playlist 1 里数匹配,专辑空退两字段;`currentTrackDisliked()`;查询用 `askIfNeeded: false`,授权弹窗只该出现在显式动作上),已在库→行变成可点的「**从资料库删除**」(AM 同款切换;`removeCurrentTrackFromLibrary()` 删匹配第一条,匹配口径与回查同一套,删完读回确认→行翻回「添加到资料库」即反馈,失败态「删除失败」可重试);点添加**不关菜单**,行内走 添加中…→已添加 ✓/添加失败(可点重试)。⚠️ 成败判定**不信 duplicate 返回值**(no-op 也报 ok),点完重新读回资料库才算,读回失败(nil)才退回信命令返回值。减少推荐=勾选切换(再点撤销,乐观更新)。AppleScript `whose` 子句只认字符串变量,内联 `name of t` 报 -1728。**三道竞态守卫**(审阅轮抓出后补):① 状态机带**代际计数**(每次刷新 +1,在途异步结果落地前核对代际、过期即弃)——防「关菜单→换曲→重开」后上一首的结局贴到新曲行上;② 菜单开着期间换曲由 `.onChange(of: 标题|歌手|专辑拼串)` 触发重刷 —— 两个状态行描述的是曲目,不跟着换就会把撤销打在新曲上;③ 回查结果不许覆盖用户在查询期间手动点过的勾(`suggestLessUserToggled`),「减少推荐」连点走**串行链**(每次写 await 上一次)防乱序终态反转。残余已知边界:点击→AppleScript 执行之间换曲仍可能加错歌(窗口亚秒级,AppleScript 层无廉价 pinning);慢网下 duplicate 超 5s 被杀但 Music 仍会完成入库,短暂误报「添加失败」、重开菜单自愈。
+- **前往专辑/艺人**:AppleScript 拿不到流媒体曲目的目录 ID(URL track 连 address 都没有)→ `MusicCatalogSearch`(LyrimuseCore,纯函数被 selftest 钉住)用 iTunes Search API 按 歌名+歌手+系统店面 解析 artistViewUrl/collectionViewUrl,改写成 **music:// scheme** 经 NSWorkspace 打开 = Music.app 原生跳页。⚠️ **绝不能用 AppleScript `open location`**:它把 URL 当音频流加载、清掉整个播放队列(实机踩雷验证)。
+- **显示简介**:同锚点玻璃面板,行=歌名/歌手/专辑/时长/播放器/歌词形态(逐字·译文·罗马音 从 allLines 推)/来源(EnrichCacheReader.sourceInfo 新只读口,异步取,复用歌词管理的 sourceDisplayName 中文名)。不发 AppleScript(简介不该有可感知等待)。
+- **歌词时间轴行**:内联控件(标签+当前值+提前/延后/重置 三小钮),点按**不关菜单**(校准要边听边连按)。动作/步长/显示口径与菜单栏「歌词时间轴」子菜单完全同源(nudgeLyricsOffset±lyricsOffsetStepMs / resetLyricsOffset;值只显示**这首歌**的微调 trackLyricsOffsetMs、不含全局基准;重置按需出现)。trackLyricsOffsetMs 补进 WindowPlayback 窄订阅。
+- **搜索歌词…**(2026-08-22 二批):歌词管理的联网搜索面板(`LyricsSearchSheet`,自包含)独立调起。点击瞬间快照曲目字段(sheet(item:) 的身份即快照,弹窗期间换歌不串)、后台解析**写回 key**(`EnrichCacheReader.resolvedKey` 新只读口,精确→宽松两级——播放器报法与缓存写法有空格/繁简出入时写回必须落在读取路径命中的同一条上,否则读写分家改了不生效;缓存无条目退 normalizedKey 新建)+当前来源。onApply 写回三步:`EnrichCacheStore.reload(onlyIfChanged: true)` 兜「store 未加载」(空 raw 上 saveEdit 会丢条目其它字段如 cover_url)→ `saveEdit` → `refreshLyricsForCurrentTrack()` 即时刷新播放侧(不等 2s mtime 轮询)。
+- 评估时确认**搬不动**的:创建电台/分享电台(sdef 无电台对象、URL scheme 只能开既有电台);「分享歌曲」可行(Search API trackViewUrl+NSSharingServicePicker)但本轮用户未选。
 
 ### 进度条与拖拽跳转
 
 - 三态:**播放中**(有 `anchor`)用 1 秒一档的 `TimelineView(.periodic)` 从锚点外推位置;**暂停**显示 `pausedPositionMs` 冻结位置;**什么数据都没有**时渲染同尺寸的 `.hidden()` 占位(不占位的话 anchor 到达时整个左栏重排,被封面淡入动画拖成"进度条从上面飘下来")。
 - 画出来的进度 `shownFraction` 与算出来的 fraction 分离,补间自己驱动:正常推进用 `.linear(duration: 1)` 补间到 **pos(t+1)**——补间终点提前一秒是修"恒定落后 1 秒"的关键(插值当外推用的经典错误);冷启动/拖动中/reduceMotion 直接赋值不补间。
-- 已播条是满宽胶囊 + `scaleEffect(x:)` 横向缩放,**不是**改 frame 宽度——补间落在变换矩阵上,不触发逐帧布局(实测把双列播放中的主线程忙碌从 61.4% 降回单列水平 9.4%);进度 0 时仍留约 4pt 一小截。
+- 已播条是满宽胶囊 + `.offset(x:)` 向左移出 + 外层固定满宽胶囊裁剪,**不是**改 frame 宽度——补间落在变换矩阵上,不触发逐帧布局(实测把双列播放中的主线程忙碌从 61.4% 降回单列水平 9.4%);移出量由 `ProgressFillGeometry.leadingOffset` 算,进度 0 时仍留 4pt 一小截(一个圆点)。
+  - ⚠️ 这里换过两版画法,**都是几何判断出错**,也正是「View 里不放几何」这条纪律的活教材。第一版 `.frame(width: w*f)` 是性能问题(上面那个 61.4%);第二版换成 `.scaleEffect(x: f)` 性能对了,但横向缩放把胶囊两端的圆头一起压扁成 x 半径 `(h/2)·f` 的椭圆,而当时的注释断言"这么矮的条上看不出来"——**那句只在 f 接近 1 时成立**。用户 2026-08-22 报「进度条有时候变成方的,不是弧形」,离线渲染逐列量覆盖高度坐实(条高 48px、右端 12 列的有色行数):`f=1.00 → 42,40,38,36,36,34,30,28,26,22,16,10`(正常圆头)/ `f=0.50 → 48,48,46,46,44,42,40,38,34,30,24,14`(已压扁)/ `f=0.02 → 48,48,…,48`(**纯矩形**)。一首 3 分钟的歌播到 0:04 就是 f≈0.02,所以现象是"进度靠前时方、靠后才圆",不是偶发竞态。
+  - 现在的画法两端的圆各有出处,因此与 f 无关:**左端**来自 clipShape 那个胶囊的左圆头(裁剪框不随 f 动,只有内容在动)、**右端**来自填充自己的右圆头(被 offset 平移到 f·w 处)。同一份离线测量里 f 从 0.02 到 1.00 右端剖面恒为 `42,40,38,36,36,34,30,28,26,22,16,10`。
 - 条高 4pt,悬停 6pt、按住 7pt(弹簧动画;reduceMotion 下仍变粗但不补间——变粗是功能反馈不是装饰)。
 - 拖拽:`DragGesture(minimumDistance: 0)`(点一下就跳),拖动中显示手指位置而非真实播放位置,**松手才发 seek**;按下第一帧给一次触觉反馈(`NSHapticFeedbackManager` .alignment)。拖动状态存 `@GestureState`(手势被系统取消时自动复位,`@State` 会永久卡住)。
 - 命中区上下各外扩 9pt 再用负 padding 抵回布局高度,且**只覆盖进度条这一行**——不含下面时间行(原来点"剩余时间"文字等于 seek 到 ~95%)。
@@ -82,8 +104,9 @@
 ### 播放控制排
 
 - 五键左右对称:播放模式 | 上一首 | 播放/暂停 | 下一首 | 喜欢。播放/暂停图标宽度固定,防两侧按钮跳动;模式键和心两侧**等宽占位**(各自异步读出,不占位会错开一瞬)。
-- 上一首/播放暂停/下一首:直接调 `MusicPlaybackController`(Apple Music 走 AppleScript、QQ/网易云走 media-control 的系统级 MediaRemote 指令),**不做权限预检查**,失败静默(与全局快捷键 B 组不同——那边按下前会 checkForCurrentPlayerSafely、失败 beep)。⚠️待核对:自动化权限从未授权时,点这几个按钮是否会触发系统授权弹窗(osascript 子进程的 TCC 归因行为未实测)。
-- **播放模式**(列表→随机→单曲循环,点一下切下一档,图标即当前模式):只在 `poller.playbackMode` 非 nil 时显示——支持范围是 Apple Music + Spotify(`extendedControlPlayer`,Spotify 够不到"单曲循环",只在列表↔随机间切);QQ/网易云无 AppleScript 字典,整个不显示。乐观更新,写失败才回读纠正(写成功不回读——Music.app 的 getter 滞后于 setter)。
+- 上一首/播放暂停/下一首:上一首/下一首直接调 `MusicPlaybackController`(Apple Music 走 AppleScript、QQ/网易云走 media-control 的系统级 MediaRemote 指令);**播放/暂停走 `PlaybackCoordinator.userTogglePlayPause()` 乐观回声版**(2026-08-21):发命令的同时立即翻转观感层 `isPlayingSmoothed`,封面缩放/播放图标点击即动,不等"命令→播放器切状态→分布式通知→250ms 去抖→poll 子进程→apply"这条实测 0.5~1s 的回读链(用户对照 AM 反馈"扩大延迟太久")。真值 isPlayingNow 不碰;命令没落地时 2.5s 对账拨回(grace 定时在跑时不抢)。全部五个 playPause 调用面(歌词窗/灵动岛/悬浮层控制条/菜单栏面板/全局快捷键)都路由到它。播放/暂停**图标**也跟 isPlayingSmoothed 走,顺带吸掉切歌间隙图标闪一下的毛病。**不做权限预检查**,失败静默(与全局快捷键 B 组不同——那边按下前会 checkForCurrentPlayerSafely、失败 beep)。⚠️待核对:自动化权限从未授权时,点这几个按钮是否会触发系统授权弹窗(osascript 子进程的 TCC 归因行为未实测)。
+- **点按动画**(2026-08-21 用户对照 AM 要求):整排五键套 `TransportButtonStyle`——按下 0.1s easeOut 快缩到 0.8,松手 spring(response 0.32, damping 0.55) 带过冲弹回;reduceMotion 下不做过渡但保留按压缩小(功能反馈,非纯装饰)。
+- **播放模式**:随机/循环两颗互斥按钮(AM 排布)。循环键**三态**(2026-08-21 对齐 AM):关 → 列表循环(`song repeat=all`,亮 repeat)→ 单曲循环(亮 repeat.1)→ 关——此前只有 关↔单曲 两态,且 all 被解析塌缩成「列表」(用户在 Music.app 开着整张循环、键却是灰的)。`MusicPlaybackMode` 四档 list/shuffle/repeatOne/repeatAll,解析优先级 单曲>随机>列表循环>列表;repeatAll 是 next() 老轮换**产不出**的过渡态(产出它的是循环键自己的 switch),selftest 闭合环断言把它列为例外。只在 `poller.playbackMode` 非 nil 时显示——支持范围 Apple Music + Spotify(`extendedControlPlayer`;Spotify 的 repeating 布尔写得进读不回,循环键整颗不显示、只在列表↔随机间切);QQ/网易云无 AppleScript 字典,整个不显示。乐观更新,写失败才回读纠正(写成功不回读——Music.app 的 getter 滞后于 setter)。
 - **喜欢**(心,红色实心=已喜欢):只有 Apple Music 有(`poller.isFavorited` 非 nil 才显示;判定看**实际在播**的 bundle id 而非设置选项,"自动识别"下也能出现)。与悬浮窗那颗心是**同一份状态、同一个开关**(`PlaybackCoordinator.isFavorited/toggleFavorited`),乐观更新 + 动作序号守卫(在途旧读数不覆盖刚点出来的新状态)。属性名兼容 `favorited`/`loved` 两代系统。
 
 ### 音量胶囊
@@ -96,7 +119,7 @@
 ### 窗口动作胶囊:置顶 / 伪全屏 / 回到当前
 
 - **置顶**(pin 图标):`window.level = .floating` 切换。**不持久化**——每次重开窗口从"不置顶"开始,tooltip 明确写了"这个状态只在本次打开这扇窗口期间有效"。
-- **伪全屏**(扩/缩箭头图标):不是原生全屏(原生全屏机制在这个 App 里坏着,见"已知坑")。进入 = 保存当前 frame → 隐藏标题栏/红黄绿按钮 → `NSApp.presentationOptions = [.autoHideMenuBar, .autoHideDock]`(两个必须一起设才生效)→ `setFrame` 撑满**整个**屏幕(含菜单栏/Dock 区域)。退出 = 全部复原 + 恢复保存的 frame。同样不持久化。
+- **伪全屏**(扩/缩箭头图标):不是原生全屏(原生全屏机制在这个 App 里坏着,见"已知坑")。进入 = 保存当前 frame → 隐藏红黄绿按钮(标题栏透明/隐藏已是 .hiddenTitleBar 常驻态)→ `NSApp.presentationOptions = [.autoHideMenuBar, .autoHideDock]`(两个必须一起设才生效)→ `setFrame` 撑满**整个**屏幕(含菜单栏/Dock 区域)。⚠️ 第一次 setFrame 可能被钳:presentationOptions 刚设、菜单栏还没让位时 WindowServer 把 normal 层级窗口压到菜单栏之下,顶上留一条空(2026-08-21 用户实测)——0.05s/0.35s 两拍重校 frame 兜底。退出 = 全部复原 + 恢复保存的 frame。同样不持久化。
 - 伪全屏三条退出路径:再点一次按钮 / **Esc**(App 级 local monitor,keyCode 53,只在本窗是 key window 时拦截并消费,否则放行给别的窗口)/ 窗口关闭或**失去 key 状态**时强制退出(`forceExit`,无动画)——`presentationOptions` 是进程级全局状态,不清理会让菜单栏/Dock 在别的窗口/别的 App 下继续藏着。
 - 置顶和伪全屏不互斥,可同时开。reduceMotion 下进出全屏不做 frame 动画。
 - **回到当前播放**(location.fill):带动画滚到当前行;没有当前行(还没唱到第一句)时不做任何事。
@@ -121,30 +144,7 @@
 ### 文字颜色策略
 
 - 判据一条:`hasArtworkBackground`(= `poller.artworkData != nil`)。有封面 → 全窗固定白色系(主文字白、次级白 60%、胶囊图标白 90%),**不跟随系统深浅色**;没封面 → 系统 `.primary`/`.secondary` 自动跟随。不会出现"有时看得清有时看不清"的中间态。
-- 背景:铺 PlaybackCoordinator 预烘焙的模糊图 `windowBlurredArtworkImage`(2026-08-19:原来是 `.saturation(1.5).blur(72, opaque:)` 活滤镜,~2040px 画布播放期几乎每帧重跑;烘焙参数 720px/sat 1.5/sigma 51,scaledToFill 拉伸后视觉等价,与灵动岛那份共用参数化的 bakeBackgroundBlur 管线)+ 视图层压 22% 黑(对照 Apple Music 逐像素取样校准,故意**不做**亮度自适应,网页端才需要那套),换歌交叉淡入 0.5s(触发键 = 烘焙图实例)。**不加** `.ignoresSafeArea()`——铺到标题栏底下会让系统标题栏文字撞色。
-
-### 状态刷新时机
-
-「喜欢」「播放模式」「音量」不跟 2 秒轮询走(每读一次起一个 osascript 子进程不值当),刷新时机:窗口打开时一次、App 每次重新变成前台一次(`didBecomeActiveNotification`,覆盖"切去 Music.app 点了心再切回来")、换歌时由 PlaybackCoordinator 刷一次。后台刷新路径检查权限用 `askIfNeeded: false`,绝不弹授权框。
-
-## 设置项
-
-本窗口自身**没有专属设置项**(设置页「歌词显示」明确写了它"压根不在这一页配置,靠快捷键/菜单按需打开");受以下共享设置影响:
-
-| 设置项(位置) | 影响 |
-|---|---|
-| 显示译文(歌词内容 → 译文卡) | 每行下方译文行显示与否 |
-| 译文语言 / 无译文时兜底(同卡) | 影响上游译文数据,间接决定行里有没有 `translation` |
-| 显示罗马音 + 按语言分开关(歌词内容) | 罗马音行/逐词标注显示与否;语言分开关影响数据侧生成 |
-| 打开歌词窗口(快捷键页) | 录制全局快捷键,默认空 |
-| 在 Dock 中显示(通用) | 开着时不走"临时借 Dock 图标"逻辑 |
-| 歌词偏移步长 lyricsOffsetStepMs(快捷键/菜单共用) | 不改本窗口 UI,但偏移值影响当前行判定与点击跳转补偿 |
-| 系统「减少动态效果」 | 关掉行模糊、逐字抬升、滚动/进度补间、全屏 frame 动画 |
-
-悬浮窗/灵动岛的外观设置(前景色、描边、字体、字号、宽度)、「自动隐藏」两项(截屏时隐藏/暂停时隐藏)对本窗口**均不生效**。
-
-## 与其它功能的交互
-
+- 背景(2026-08-21 第六轮:**同封面同屏对拍定稿**,AM 式动画背景):第五轮六锚点网格搜索之后,同一封面(破气球/100种生活)两边同屏截图的分位数对拍暴露了结构性缺口——**AM 把宏观场的明度布局抹平了**(四采样区 V50 全在 0.22~0.31 而封面本身左暗右亮;我们保留明度布局,表现为左缘死黑 0.157、黄斑突兀 0.114 幅度 vs AM 0.043,调 EV 够不着)。管线(`bakeWindowBackgroundLayers`):宏观场=**6×6 面积平均降采样 + 逐格乘法亮度归一化**(RGB × mean/L,homog 0.55 部分归一、系数夹 [0.4,3.5];**乘法**保色相饱和——加法提黑会灰掉,AM 暗区 S 仍有 0.62)再放大 + σ35 融格边(纯高斯两难照旧:σ大混泥/σ小见人)→ 成场后 CIVibrance(0.4)+sat0.85(对拍 AM S50 0.42~0.72,旧 1.0/1.15 全面偏高)→ 底色 EV−0.15(旧 −1.2 是保留明度布局时代压亮斑用的)→ 光斑=锚**原始**最亮格(CG 行序要翻转;居中会摊灰暗区)、羽化 0.08/0.7·W(旧 0.40 有可见轮廓,AM 无独立光斑);视图层(`WindowAnimatedBackground`)3 层光斑 lighten+α0.25、±12° 往复摆动(55/75/95s 错开)+0.15 遮罩;换歌按图层实例 `.id` 重建、0.5s 交叉淡入;reduceMotion 静止;seed=曲目标识 FNV。定量:四区 V5/V50/V95/S50/H50 加权 loss 旧参数 1.41 → 0.79(工具 scratchpad bgbake6+sweep_pair6);残余=AM 各区内部 0.10~0.21 的柔和起伏(动画相位),单帧偏平由摆动动画补。第七轮(2026-08-22,Addison 亮封面同帧对拍,用户"怎么会差距这么大"):白纱盖全脸的封面被 6×6 面积平均**灰化**(实测我们 S50 0.13~0.65 vs AM 0.63~0.97,左上区整个发灰),三步修齐 —— ①逐格**饱和度归一**(S 抬到 p75×1.5、cap 0.95:AM 的背景饱和度跟封面的鲜艳端走,连我们最鲜艳的格子都被格内白纱稀释,p75 本身够不着);②少数派**色相收拢**(主色相=S² 加权圆均值,偏离 >60° 的格子夹回 ±60°——封面小块青 logo 格被饱和归一放大成刺眼纯绿斑,AM 同区是暖橄榄绿:一个主色系+近亲点缀);③sat 乘子 0.85 改**闭环**(= satTarget ÷ 融合后场的 CIAreaAverage 实测 S,clamp [0.6,2.2]:σ35 互混+光斑 lighten 磨掉 ~30%,固定乘子对不同混合结构不可能都对;鲜艳均匀封面自动 <1 接管旧 0.85)。灰阶封面三步全自动 no-op(p75≈0/无主色相/target≈0)。终态实拍 S50 0.70~0.81、V50 0.63~0.79,均落 AM 带内。历史:①只压亮度"平"→②静态多副本→③大角度旋转副本(绿被烘黄)→④局部放大+主导色(推翻删除)→⑤6×6宏观场+锚最亮格(六锚点网格)→⑥亮度归一化(同屏对拍)→⑦饱和度归一+色相收拢+闭环乘子(亮封面对拍)。反向工程参考:[Priva28 gist](https://gist.github.com/Priva28/22fbae9dbe04a08fadf748793dd23d00)、AMLL。
 - **数据同源**:歌词解析结果、当前行判定、进度锚点全部来自 `PlaybackCoordinator`(底下是 `LocalPlaybackSource` + `LyricsSyncEngine`),与悬浮歌词/灵动岛/菜单栏歌词四种形态共享同一份;本窗口独占消费的字段是 `allLines`/`currentLineIndex`/`pausedPositionMs`/`currentDurationMs`(专为它加的)。订阅经 `WindowPlayback` 窄代理(2026-08-19,五个展示面最后一个接上;这窗口实读面大,代理的收益在滤掉 currentLine/nextLineText 等每句白打醒 2~3 次的未读源 + 逐条去重);`soundVolume` 刻意不进代理——音量胶囊(WindowVolumeCapsule)自持订阅,拖音量只失效小胶囊;进度条(WindowProgressSection)自持五个拖动/补间瞬态,1Hz 推进与拖动不再击穿整窗;App 激活的三连 osascript 回读加了窗口可见性守卫(Window 场景关窗后视图树保活)。
 - **歌词偏移**:菜单/全局快捷键/歌词管理改的单曲与全局偏移,实时影响本窗口的当前行判定、逐字填色基准和点击跳转补偿;但偏移调整的"歌词 +0.5s"反馈横幅只在灵动岛显示,本窗口无反馈。
 - **喜欢/播放模式/音量**:与悬浮歌词控制排是同一份状态和同一套写入路径(乐观更新+序号守卫都在 coordinator),两处点哪个都一样。
@@ -187,13 +187,17 @@
 
 ## 设计决策与已知坑
 
-1. **原生全屏在这个 App 里坏着,根因未明**:绿色按钮是 AXZoomButton 而非 AXFullScreenButton,`AXFullScreen` 恒 false,连菜单「进入全屏幕」命令也不生效;collectionBehavior/.regular 策略/LSUIElement/MenuBarExtra 四个假设逐一真机证伪。伪全屏是用户拍板的替代方案(`LyricsWindowView.swift` 文件头注释)。
+1. **原生全屏(已修复,2026-08-21)**:真根因=**SwiftUI Window 默认禁全屏**——探针实验坐实:同一进程里纯 AppKit NSWindow 绿键是 AXFullScreenButton、能真进全屏 Space,SwiftUI 这扇窗却是 AXZoomButton;当年证伪的四个假设(collectionBehavior/.regular/LSUIElement/MenuBarExtra)都没碰到场景宿主这层。修复分两层:`.windowFullScreenBehavior(.enabled)`(macOS 15+ View 修饰符)**实测没生效**、仅留作官方语义表达;真正起效的是 **AppKit 层 collectionBehavior 持续守护**(`enforceFullScreenCapability`:去掉 fullScreenNone/Auxiliary、插 fullScreenPrimary;挂窗口 didUpdate 通知每个绘制周期查一位、缺才写不自激——**设一次不够**,SwiftUI 每个更新周期会把标志复写掉,实测右上角按钮 toggle 前刚补过就能进、绿键读系统当下标志就不行)。全屏按钮在 15+ 直接 `toggleFullScreen`(didEnter/didExit 维护 isNativeFullScreen 换图标,全屏中 Esc 退出);伪全屏整套保留作老系统兜底(`LyricsWindowView.swift` 文件头注释)。当年的排查手法也值得记:**同进程 AppKit 探针窗对照**一发定位到宿主层。
 2. **`presentationOptions` 是进程级全局状态**:必须 willClose + didResignKey 双兜底清理,否则伪全屏残留会让别的窗口/别的 App 找不到菜单栏。
 3. **Esc local monitor 是"发给本 App 任意窗口"级钩子**:早先注释声称按窗口过滤但回调没做,吞掉了设置页弹窗的 Esc;现在显式判 `isKeyWindow`,与 didResignKey 兜底是两道独立防线。
 4. **进度条"恒定落后 1 秒"**:补间终点必须取 pos(t+1) 而不是刚算出的当前位置——两档采样间做插值画出来的永远是过去(把插值当外推用)。
-5. **进度条填充用 scaleEffect 不用 frame 宽度**:布局属性跟着每秒线性补间走会逐帧重布局整个 NSHostingView(实测双列 61.4% 忙 vs 单列 9.4%)。
-6. **逐字时钟两级化**:TimelineView 必须下沉到字级叶子(挂在行容器上会每帧推翻 WrapLayout 重算),再叠 4Hz 粗时钟 + 只给"正在扫的那个字"留 30Hz 细时钟(一行十几个相位不齐的满速时钟并集盖满每个显示帧,主线程 85.8% 忙的根因)。
+5. **进度条填充只让渲染变换随进度走,不改 frame 宽度**:布局属性跟着每秒线性补间走会逐帧重布局整个 NSHostingView(实测双列 61.4% 忙 vs 单列 9.4%)。但那个变换**不能是 `scaleEffect(x:)`** —— 横向缩放会把胶囊圆头一起压扁,f 小时变成直角(用户报的「进度条变成方的」);正解是 `.offset(x:)` 移出 + 固定胶囊裁剪,几何算在 `ProgressFillGeometry`(Core)里、有 selftest 钉住。
+6. **逐字时钟两级化(现役机制,2026-08-21 五轮验证)**:TimelineView 下沉到字级叶子(挂行容器上每帧推翻 WrapLayout 重算,主线程 91% 忙)、4Hz 粗时钟+只给"正在扫的字"留满速细时钟(相位不齐的满速时钟并集盖满每个显示帧,85.8% 忙)。同日曾以"fillFraction 对时间线性→不用逐帧重算"为由整体改排程式,又因 macOS 对长时程慢动画只以 ~20Hz 提交(SCK 探针实测、无 API 干预)而回退——**TimelineView 的频率受控可验,排程式的提交节奏系统说了算**,这是两级时钟活下来的根本理由;窗口档位 60Hz、悬浮歌词/灵动岛 30Hz。
 7. **`LyricsLineRow` 的 Equatable 必须手写**:带闭包参数的视图 SwiftUI 结构比较直接失效;配合 `maxVisualDistance = 4` 让远处行输入不变,换行重算范围从整表缩到当前行上下各 4 行。
 8. **当前行的 scaleEffect(1.02) 已删除**:渲染后仿射变换在 1x 外接屏上把最该看清的一行糊掉(字形边缘过渡宽度实测 1.48px vs 1.14~1.25px),而强调感实际由满不透明度/零模糊/逐字填色扛着。
 9. **拖动状态用 @GestureState 不用 @State**:手势被系统取消(进度条所在条件分支被摘掉)时不会调 onEnded,@State 会永久卡住拖动值、冻结进度条。
-10. **背景不 ignoresSafeArea、玻璃胶囊不进 toolbar**:前者会顶到标题栏底下让系统标题栏文字撞色;后者是"玻璃采样不到玻璃",toolbar 里的 Liquid Glass 胶囊退化成不透明灰块。
+10. **玻璃胶囊不进 toolbar**:"玻璃采样不到玻璃",toolbar 里的 Liquid Glass 胶囊退化成不透明灰块。(旧的另一半"背景不 ignoresSafeArea——防标题栏文字撞色"已随 2026-08-21 AM 式顶部作废:scene 挂 `.windowStyle(.hiddenTitleBar)`,无标题文字,背景显式 `.ignoresSafeArea()` 通到窗顶、红绿灯悬浮其上;伪全屏的 enter/exit 相应只管红黄绿显隐和窗口帧,不再来回切标题栏状态。)
+11. **行激活不能切换渲染结构**(2026-08-21):原来非当前行渲染单个 Text、变成当前行时整棵子树替换成 WrapLayout+逐词 KaraokeLineText——SwiftUI 对结构替换只能淡出淡入,叠上行级 blur/opacity 动画,表现为"新行有一个虚化重新构建的过程"(只有带逐字时间轴的歌触发,纯行级歌词两态都是 Text——"有时候"的来源)。修法=统一结构:有 words 的行恒走 KaraokeLineText,`isActive` 参数化,非活跃行定格全填色、不排动画、字不上浮。逐词读音(groups)仍只在活跃时挂(占位会撑行高)。
+    统一结构当天引出第二个坑:**取值参数化之后,取值的跳变会被外层作用域动画捕获**——激活瞬间词的填色从"定格全色"跳到"按时间≈0",这个 diff 落在行级 `.animation(value: distance)` 的作用域里,渐变 stop 被从 1 **插值**回 0、画整段 0.45s 褪色(未唱到的字时钟停着,没有下一帧掰正)——用户报的"下一行先全部亮一下、再从头逐字"。排程式重构后从机制上根治:取值变化只发生在 sync() 自己 `disablesAnimations` 的事务里。顺带修掉的隐藏 bug:旧 forceFilled 用 fraction=1.0 算渐变,left=1−band<1 走不到纯色快路径,非活跃词右缘 band 段一直被淡到半强度;定格值应取 1+band。
+12. **`Menu`(.borderlessButton)会压平自定义 label 并接管其颜色**:「…」圆钮的圆底(2026-08-19「没有外面的圈」)和白色字形(2026-08-21「圈里应该是白点」)都被这机制丢过,实际热区还只有 label 固有尺寸那一点(2026-08-21「只有点按钮中心才有效」)。**最终解法:整个弃用 Menu**,换成普通 Button + 自绘 AM 式面板(`moreMenuPanel`,深色玻璃圆角白字、悬停行高亮;anchorPreference 取按钮窗内坐标 → 窗级 overlayPreferenceValue 定位在按钮上方右对齐,全窗透明捕手点外即关,面板从贴按钮的右下角缩放长出)。ImageRenderer 不支持 Menu(渲出黄色占位)——换掉之后这个按钮终于能离屏验了。plain Button 的行要整行可点必须 `.contentShape(Rectangle())`(默认只有非透明像素可命中)。
+13. **排程式填色已废弃(2026-08-21 当日往返,防再犯)**:曾把填色改成"snap+一次性 .linear 显式动画交渲染管线插值"(LyricsX/AMLL 同架构)——CPU 上确实零逐帧代码,但 SCK 逐帧探针实测 **macOS 对这类长时程慢动画只以 ~20Hz 提交**(系统自动降档、无 API 干预;对照组悬浮窗 TimelineView 30Hz 准点投递),20Hz×14px 边缘步进=用户报的"卡顿感",遂回退到两级时钟逐帧重算(见 #6)。若将来重试排程式,先用 SCK 探针核实提交频率再谈;当时趟出的坑(对表完备性要含字号/屏缩放、倍速除进时长、additive 动画同值赋值取消不掉要加盖板)记录于 durable note `swiftui-karaoke-fill-schedule-linear-animation-not-per-frame`。

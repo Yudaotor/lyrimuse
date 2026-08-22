@@ -4,7 +4,7 @@
 
 # Lyrimuse
 
-**Real-time, word-synced lyrics for Apple Music, QQ Music, NetEase Cloud Music, or Spotify — right on your Mac desktop.**
+**Real-time, word-synced lyrics for Apple Music, QQ Music, NetEase Cloud Music, Kugou Music, or Spotify — right on your Mac desktop.**
 
 **Language / 语言:** **English** | [简体中文](README.zh-CN.md)
 
@@ -16,7 +16,7 @@
 
 </div>
 
-Lyrimuse sits quietly in your menu bar and shows a floating lyrics window that follows whatever's playing — Apple Music, QQ Music, NetEase Cloud Music, or Spotify, your choice (or just let it auto-detect) — word by word, in sync, always on top, across every Space. Think of the "desktop lyrics" experience from NetEase Cloud Music, but native to macOS.
+Lyrimuse sits quietly in your menu bar and shows a floating lyrics window that follows whatever's playing — Apple Music, QQ Music, NetEase Cloud Music, Kugou Music, or Spotify, your choice (or just let it auto-detect) — word by word, in sync, always on top, across every Space. Think of the "desktop lyrics" experience from NetEase Cloud Music, but native to macOS.
 
 <div align="center">
 
@@ -39,7 +39,7 @@ Lyrimuse sits quietly in your menu bar and shows a floating lyrics window that f
 - **Works fully offline** in local mode — no network round-trip needed to show lyrics that are already cached
 
 ### Show it your way
-- **Choose your player, or let it auto-detect**: reads what's playing from Apple Music (via Automation access), or QQ Music / NetEase Cloud Music / Spotify (via macOS's system-level MediaRemote — no permission needed); pick once during onboarding, switch anytime in Settings, or leave it on auto-detect to follow whichever app macOS currently considers "Now Playing"
+- **Choose your player, or let it auto-detect**: reads what's playing from Apple Music (via Automation access), or QQ Music / NetEase Cloud Music / Kugou Music / Spotify (via macOS's system-level MediaRemote — no permission needed); pick once during onboarding, switch anytime in Settings, or leave it on auto-detect to follow whichever app macOS currently considers "Now Playing"
 - **Three ways to display it**: a classic desktop overlay, a Dynamic-Island-style capsule docked at the top of the screen (optionally showing the album artwork, and blurring it behind the capsule), or a resizable Lyrics Window modelled on the Apple Music lyrics page — two columns, a blurred cover backdrop, and the full sheet auto-scrolling to the current line — turn on any combination, or none
 - **Menu bar text mode** — read the current line directly from the status bar instead of a floating window; long lines scroll rather than getting cut off mid-sentence (truncating is still one toggle away)
 - **Playback controls** (play/pause, next, previous) built right into the overlay, working with whichever player you've selected — plus a heart to favorite the current track when Apple Music is what's playing
@@ -161,11 +161,11 @@ cd lyrimuse/lyrimuse
 
 `build.sh` ends by listing the architectures of every binary in the bundle and flags anything that does not match the target — a missing slice or an extra one. Don't assemble release assets by hand: `./package.sh` builds each architecture once and produces a zip + sha256 + dmg for each, refusing to package if the architectures are wrong.
 
-QQ Music / NetEase Cloud Music / Spotify / auto-detect support additionally needs [ungive/media-control](https://github.com/ungive/media-control) — `build.sh` installs it via Homebrew automatically if it's missing, so this isn't a step you need to do yourself either.
+QQ Music / NetEase Cloud Music / Kugou Music / Spotify / auto-detect support additionally needs [ungive/media-control](https://github.com/ungive/media-control) — `build.sh` installs it via Homebrew automatically if it's missing, so this isn't a step you need to do yourself either.
 
 ### After any option
 
-Open Lyrimuse from `/Applications` — the first-run wizard walks you through picking a player (Apple Music, QQ Music, NetEase Cloud Music, Spotify, or auto-detect), granting Automation access to Music.app if you picked Apple Music (the others need no extra permission), and enabling its background collector service (so lyrics/artwork keep resolving even when the window's closed). Complete the wizard and lyrics will appear right away (see [lyrimuse/README.md](lyrimuse/README.md) for more build options).
+Open Lyrimuse from `/Applications` — the first-run wizard walks you through picking a player (Apple Music, QQ Music, NetEase Cloud Music, Kugou Music, Spotify, or auto-detect), granting Automation access to Music.app if you picked Apple Music (the others need no extra permission), and enabling its background collector service (so lyrics/artwork keep resolving even when the window's closed). Complete the wizard and lyrics will appear right away (see [lyrimuse/README.md](lyrimuse/README.md) for more build options).
 
 You don't need to configure anything else to get lyrics — every optional extra above is configured later, entirely from Settings.
 

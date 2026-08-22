@@ -1,6 +1,6 @@
 # 06. 菜单栏:歌词、图标与菜单
 
-> 最后核对:2026-08-19 · 基线:2a2bf8b+工作树
+> 最后核对:2026-08-21 · 基线:05767ae+工作树
 
 ## 定位
 
@@ -57,10 +57,20 @@
   - 实际尾停 = 剩余时间 + 0.5s loopGuard,所以时间充裕时一句**只滚一轮**、停在末尾,不反复从头再来;
   - dwell 算不出来(没歌词/最后一句无时长)→ 固定速度、首尾各停 1.5s;
   - 速度按这一句的**平均字宽**换算成 pt/s,中文歌和英文歌「每秒滚过几个字」一致。
-- **换句判定**:`$currentLine` 的 plainText `removeDuplicates()` 去重——同一句因逐字填色被反复赋值不算换句,否则滚动会被反复打回开头。推论:**连续两行文本完全相同的歌词不会重启滚动**。`present()` 对相同参数也是空操作,同理。
+- **换句判定**:`$currentLine` 按「首词时间戳#纯文本」`removeDuplicates()` 去重——同一句因译文/罗马音中途补上被重新赋值不算换句,否则滚动会被反复打回开头。⚠️ 2026-08-22 起去重键**带行身份**,不再只看纯文本:副歌里相邻两行同词不同时,只看文本会吞掉第二行的换行事件,逐字染色挂着第一行的路径、第二行一出场整句全染(审阅抓出);「先无逐字、中途补上」同理。推论变更:连续两行文本相同的歌词现在**会**重启滚动(它们本来就是两句,各按各的 dwell 配速)。`present()` 对相同参数仍是空操作。
 - **暂停再恢复**:暂停回落图标时 `scrollingLabel.clear()` 清掉 plan,恢复播放同一句会**从头重新滚**。
 - **反白与换色**:菜单打开时状态栏项整块反白,文字色从 `labelColor` 换成 `selectedMenuItemTextColor`(`setHighlighted`,由 `MenuBarStatusMenu` 的 menuWillOpen/menuDidClose 转达);系统切浅色/深色也重画。换色只重画位图 contents,**绝不打断正在跑的滚动动画**——点开菜单看一眼再关掉,歌词该滚到哪儿还在哪儿。动态颜色必须在按钮当前 `effectiveAppearance` 下解析,否则深色菜单栏画出几乎看不见的深色字。
 - **退场**:必须把 `repeatCount = .infinity` 的动画真的摘掉,不留在隐藏图层上让渲染层空转。
+
+### 逐字染色(2026-08-22,用户点名"像酷狗菜单栏歌词")
+
+- **开关**:设置 › 歌词显示 › 菜单栏 ›「逐字染色」,默认开;只对带逐字时间轴(YRC)的歌词生效,LRC 整行歌词维持纯色(没有可信的字级进度就不假装有)。
+- **驱动方式**:跟滚动同一哲学 —— 基础色长图上叠一张**强调色**(系统 controlAccentColor)长图,外面套一层 masksToBounds 的 `fillClipLayer`,它的 `bounds.size.width` 就是"已唱到哪个像素";整行填色进程按逐字时间轴一次性编成 **一条 CAKeyframeAnimation**(`MenuBarMarquee.karaokeFillPath` / `karaokeFillKeyframes`,纯函数,selftest 覆盖),装好后主线程一帧都不碰。填色层挂在滚动的 contentLayer 里,滚动时天然跟文字焊在一起。词边界像素必须按**前缀整段测宽**(`MenuBarMarqueeRenderer.wordEndXs`),各词单测再累加会被词界 kerning 带漂。
+- **时钟**:位置公式与歌词窗口逐字填色同一条(anchor 外推 ?? 暂停位置,+ 时间轴校准)。对表走独立通道(`syncKaraokeClock`,订阅 $anchor/$pausedPositionMs/$currentLyricsOffsetMs),**不触发槽位 refresh**;标签内部有 **250ms 漂移门** —— 锚点每 ~2s 的例行重发被无声吸收、不打断动画,seek 必然超门重锚,时间轴偏移微调(默认步长 200ms 在门下)走 force 立即生效。暂停静置在当刻边界,恢复从真实位置续染。
+- **自适应宽度模式**下装得下的句子原走 `button.title`(AppKit 自绘,没有图层可叠色)——染色时改走图层渲染,槽宽公式不变(文字宽+18),footprint 逐像素一致。宽度 ≤0 的截断退化路径不染。
+- **反白期间**(菜单/面板开着)填色整个隐掉:基础字已换成选中色,强调色叠在选中背景上要么撞色要么看不清,关掉恢复。
+- 设置页预览(MenuBarPreviewBar)暂不演示染色(没有播放时钟可对)。
+- 离线验证:真实 `MenuBarScrollingLabel`+renderer 编成独立 harness 离屏渲染四个静态时刻,逐像素核对边界位置(scratchpad mbkaraoke,2026-08-22 全过)。
 
 ### 图标体系(MenuBarIconStyle,12 款)
 
@@ -111,7 +121,7 @@
 行为细节:
 
 - **构建路径的不变量**:重建菜单时只读 `AppSettings`,绝不碰 `LyricsOverlayWindowController.shared` / `NotchLyricsWindowController.shared`——两个控制器是 `static let shared`,碰一下就会 init 建窗并按当下状态显示一次,等于「点开一次菜单把用户关掉的悬浮窗凭空建出来」。唯一例外是「锁定位置」读 `isPositionLocked`,它只在 `classicOverlayEnabled` 为真(控制器必然已存在)时构建。action 里可以碰——那是用户主动操作。
-- **歌词时间轴的方向语义**:「提前」= `nudgeLyricsOffset(by: +步长)`,正偏移让歌词提前出现(引擎里 `posMs = rawPosMs + offsetMs`);「延后」传负值。微调只对当前这首歌生效、立即生效(不等换歌);无曲目信息时静默不做。「重置」只清这首歌的微调,**不动全局基准**(那是设备侧固定延迟,在设置页调)。菜单里 nudge 没有即时反馈条(快捷键那条路才有灵动岛提示),但下次点开菜单标题上的累计值会更新。
+- **歌词时间轴的方向语义**:「提前」= `nudgeLyricsOffset(by: +步长)`,正偏移让歌词提前出现(引擎里 `posMs = rawPosMs + offsetMs`);「延后」传负值。微调只对当前这首歌生效、立即生效(不等换歌);无曲目信息时静默不做。「重置」只清这首歌的微调,**不动全局基准、也不动按播放器那层**(那两层一个是设备侧固定延迟、一个是播放器侧系统性偏差,都在设置页调)。菜单里 nudge 没有即时反馈条(快捷键那条路才有灵动岛提示),但下次点开菜单标题上的累计值会更新。
 - **打开窗口的动作**都走 `AppActions` 里注册的闭包(闭包内已带 `NSApp.activate(ignoringOtherApps:)`——`.accessory` 策略下少了这步窗口打不开)。闭包由 `MenuBarSceneActions` 在一扇永不显示的 1×1 锚点窗口里从 SwiftUI 环境捕获;其中「设置…」还要多绕一圈:场景树外 `openSettings()` 是静默空操作,唯一实测有效的是直接触发主菜单里 SwiftUI 自己那条「设置… ⌘,」(按 ⌘, 识别,不按标题/私有 selector 名)。
 - **关于 Lyrimuse** = 打开设置窗口并经 `AppActions.pendingSettingsSelection` 直接跳到「关于」分类。「检查更新…」先手动激活 App 再调 Sparkle,否则 `.accessory` 下点了没反应。
 - **菜单开合回调**同时转达给滚动歌词层和活体图标层做反白换色。
@@ -126,14 +136,14 @@
 | 通用 › 菜单栏与 Dock | 菜单栏图标(12 款网格) | `np:menuBarIconStyle` | classic | 未显示歌词时那枚图标的样式,点选立即生效 |
 | 通用 › 菜单栏与 Dock | 随播放律动(开关) | `np:menuBarIconAnimates` | 开 | 播放时图标动不动;暂停永远静止 |
 | 快捷键 › 调整步长 | 调整步长(50~2000ms) | `np:lyricsOffsetStepMs` | 200ms | 菜单「提前/延后」和两个快捷键每按一次调多少,菜单项文案跟着变 |
-| 歌词 › 全局时间轴偏移 | Stepper ±5s,步长固定 0.05s | (LyricsOffsetStore 全局 key) | 0 | 对所有歌生效的设备侧基准,与单曲微调**相加**;不显示在菜单标题里 |
+| 歌词 › 时间轴偏移 | 播放器下拉框 + Stepper ±5s,步长固定 0.05s | (LyricsOffsetStore 全局 key / 按播放器字典) | 0 | 下拉「全部播放器」= 对所有歌生效的设备侧基准;选具体播放器 = 那个播放器**取代**共用那档的值(二选一,不叠加)。基准再与单曲微调相加;两者都不显示在菜单标题里 |
 
 另:`np:menuBarLyricsMaxChars` 是 2026-08-15 之前「按字数」时代的旧 key,已无读取方,仅为兼容老配置保留。
 
 ## 与其它功能的交互
 
 - **数据来源**:当前句文本、播放态、句停留时长、曲目微调值全部来自 `PlaybackCoordinator`(它是 `LocalPlaybackSource` 的转发层);配速依赖的 `currentLineDwellSeconds` 用相邻两句时间戳之差,所以歌词时间轴校准不影响它。
-- **歌词时间轴三处入口共享**:菜单「提前/延后」、全局快捷键(`GlobalHotkeys`,快捷键那条路会在**灵动岛**闪一条「歌词偏移 +0.50s」提示,只开悬浮歌词的人无反馈)、「歌词管理」窗口的偏移输入框,底层都是 `LyricsOffsetStore`;步长与菜单文案共用 `lyricsOffsetStepMs`。设置页「全局时间轴偏移」是叠加的另一层。
+- **歌词时间轴三处入口共享**:菜单「提前/延后」、全局快捷键(`GlobalHotkeys`,快捷键那条路会在**灵动岛**闪一条「歌词偏移 +0.50s」提示,只开悬浮歌词的人无反馈)、「歌词管理」窗口的偏移输入框,底层都是 `LyricsOffsetStore`;步长与菜单文案共用 `lyricsOffsetStepMs`。设置页那一行时间轴偏移是叠加的另**两**层(「全部播放器」= 全局基准,选具体播放器 = 按播放器那层)。
 - **快速开关联动**:悬浮歌词/灵动岛的开关经各自 WindowController 的 `setVisible`(与设置页、全局快捷键同一入口);「锁定位置」= 持久化 `lockPosition` + `setLocked` 两步,与快捷键处逻辑一致;「开机启动」直接翻 `launchAtLoginEnabled`。
 - **设置页预览**(`MenuBarPreviewBar`):不是仿品,直接复用菜单栏本体——同一个 `presentation` 判定、同一个 `MenuBarScrollingLabel`(经 `Representable` 包装)、同一套菜单栏字体;正在播放时预览演真实当前句和真实配速,没播放时演示例句(dwell 给 nil 走固定速度)。垫底用真实桌面壁纸 + `.ultraThinMaterial` 合成菜单栏质感。
 - **窗口打开链路**:菜单的「设置/歌词管理/歌词窗口/引导」四个动作依赖 `MenuBarSceneActions.install()` 建的锚点窗口先注册好 `AppActions` 闭包(AppDelegate 里紧跟 `start()` 之后);首次启动的引导向导也从那个锚点延迟 0.5s 拉起。

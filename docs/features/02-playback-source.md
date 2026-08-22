@@ -1,10 +1,10 @@
 # 02. 播放数据源与播放器支持
 
-> 最后核对:2026-08-18 · 基线:2a2bf8b+工作树
+> 最后核对:2026-08-22 · 基线:05767ae+工作树
 
 ## 定位
 
-App 怎么知道"现在在放什么":从本地播放器读出 曲目元数据 + 播放/暂停状态 + 播放位置,喂给所有展示面(桌面悬浮歌词、灵动岛、歌词窗口、菜单栏)。支持 Apple Music、QQ 音乐、网易云音乐、Spotify 四个播放器,外加"自动识别"。核心是 `LocalPlaybackSource`(单例,2 秒轮询 + 事件加速 + 位置平滑),数据全部本地读取、零网络。
+App 怎么知道"现在在放什么":从本地播放器读出 曲目元数据 + 播放/暂停状态 + 播放位置,喂给所有展示面(桌面悬浮歌词、灵动岛、歌词窗口、菜单栏)。支持 Apple Music、QQ 音乐、网易云音乐、酷狗音乐、Spotify 五个播放器,外加"自动识别"。核心是 `LocalPlaybackSource`(单例,2 秒轮询 + 事件加速 + 位置平滑),数据全部本地读取、零网络。
 
 ## 入口与展示面
 
@@ -24,10 +24,11 @@ App 怎么知道"现在在放什么":从本地播放器读出 曲目元数据 + 
 | Apple Music | `apple_music` | com.apple.Music | AppleScript(JXA)直接问 Music.app | `playerPosition` 精确到 ~0.1s(precise) |
 | QQ 音乐 | `qq_music` | com.tencent.QQMusicMac | media-control(系统级 MediaRemote) | `elapsedTimeNow` 外推,±1~1.5s 抖动 + 整数秒地板量化 |
 | 网易云音乐 | `netease_music` | com.netease.163music | 同 QQ 音乐 | 同 QQ 音乐 |
+| 酷狗音乐 | `kugou_music` | com.kugou.mac.Music | 同 QQ 音乐 | `elapsedTimeNow` 外推,**无量化、极干净**(2026-08-21 实测:23.115s 墙钟↔23.116s 读数,累计偏差 +0.0011s)→ 归 `cleanExtrapolated` 档 |
 | Spotify | `spotify` | com.spotify.client | media-control(与 QQ/网易云同路径) | 外推读数,稳态干净 ±0.05s(cleanExtrapolated 档) |
 | 自动识别 | `auto` | 空字符串(无固定目标) | 见下节 | 取决于检测到谁 |
 
-- QQ 音乐/网易云**完全没有 AppleScript 支持**(经 `sdef`/PlistBuddy 核实:无 .sdef、未开 NSAppleScriptEnabled),只能走 media-control。Spotify 虽有 AppleScript,但位置直查路线已于 2026-08-18 移除(见下节),现在全程 media-control。
+- QQ 音乐/网易云/酷狗**完全没有 AppleScript 支持**(经 `sdef`/PlistBuddy 核实:无 .sdef、未开 NSAppleScriptEnabled),只能走 media-control。酷狗是个 **Mac Catalyst 应用**(主二进制链的是 `/System/iOSSupport/.../MediaPlayer.framework`),靠 Catalyst 的 `MPNowPlayingInfoCenter` 把播放状态发布进系统级 MediaRemote —— 所以它零新增代码路径,只是多一个 bundle id。接入顺带白捡一项:酷狗本来就是五个**歌词源**之一,于是「同源加权」也一并生效(`playerNativeLyricSource` → `kugou`),用酷狗听歌时优先选酷狗自己的歌词,时间轴跟它的音频母版对得上。Spotify 虽有 AppleScript,但位置直查路线已于 2026-08-18 移除(见下节),现在全程 media-control。
 - media-control 二进制由 build.sh 打进 app bundle(`Contents/Resources/media-control/`,含 Perl 适配脚本 + MediaRemoteAdapter.framework 的整棵相对路径子树);直接 `swift build` 跑时拿不到,退化为纯 AppleScript(Apple Music)可用、其余播放器不可用,事件流也不启动。
 - 设置值经 `PlaybackPlayerPreference.current` 读取(每次轮询现读共享 JSON 文件,不缓存);文件不存在/解析失败/值认不出,**兜底 `auto`**(2026-08-13 从 appleMusic 改过来:老默认让纯 Spotify/QQ/网易云用户界面永远空白且看不出原因)。
 
@@ -35,10 +36,63 @@ App 怎么知道"现在在放什么":从本地播放器读出 曲目元数据 + 
 
 `MediaControlClient.fetchAutoDetectedSnapshot`:
 
-1. 问 media-control 当前系统级 Now Playing 是谁;bundle id 不是四个已知播放器之一(网页视频、Safari 等)→ 视为"没有可关心的正在播放"。
+1. 问 media-control 当前系统级 Now Playing 是谁;bundle id 既不是五个内置播放器、也不在**用户信任列表**里(网页视频、Safari 等)→ 视为"没有可关心的正在播放"。判定是 `TrustedPlayers.isAccepted`,跟 collector 的 `isAcceptedPlayerBundleID` 同一套语义,两侧必须同时改。
 2. 检测到 Apple Music 时,**不在本次调用里同步跑 AppleScript**(那样单次轮询耗时翻倍、扩大乱序竞态窗口),而是后台异步刷一份 AppleScript 快照缓存,下一轮轮询借用它更精确的 `elapsedTime`——精度提升晚一个周期(~2s)体现。
 3. 借用缓存有三道守卫(`ageCompensatedCachedElapsed`,纯函数):缓存必须是同一首歌(标题+歌手都对上);双方都在播放(暂停不借:冻结的 elapsedTime 本身就精确);缓存值按"读数年龄 × 播放速率"外推到当下后,跟这次的新鲜读数差 ≤2s 才可信(超过说明缓存跨越了 seek/单曲循环重启)。任何一道不过就退回 media-control 自己的读数——精度让位于正确性。
 4. 后台缓存刷新只在**正在播放**时发起(暂停时刷出来的缓存结构上不可能被借用,白 fork osascript)。
+
+### 信任列表:自动识别不限死内置 App(2026-08-21)
+
+- **要解决的问题**:`.auto` 原来只认写死的那几个 bundle id,任何别的播放器(Foobar、AlgerMusicPlayer、第三方客户端、以后出现的新 App)在放都被当成"没有可关心的播放"。
+- **为什么不是"一律接受"**:那道白名单**同时挡着打卡**(`poller.isTracked`)。一律接受 = YouTube 视频、播客、网课被当成收听写进 Last.fm / ListenBrainz 的**永久历史**,并往"设计上永不清理"的歌词缓存灌垃圾条目、白烧五源查询。而"靠内容形状分辨是不是音乐"不可靠:浏览器里的网页播放器能用 MediaSession API 自己填 title/artist/artwork,一个 YouTube 音乐视频跟一首歌长得一模一样;`mediaType` 也指望不上(实测酷狗压根不报这个字段)。
+- **口径 = 用户显式同意**:设置 → 播放器 在 `.auto` 下检测到未知 App 在报 Now Playing,就显示一张卡(App 真实名 + bundle id + **它此刻在放什么**,后者是用户判断"这是我的播放器还是某个网页视频"的关键),点「加入信任列表」写进 `features.json` 的 `trusted_players`(bundle id → 显示名)。之后它跟内置播放器**完全同权**:显示 + 打卡。
+- **显示名在信任那一刻就地反查并存下来**(`NSWorkspace.urlForApplication` → `CFBundleDisplayName` → `CFBundleName` → 文件名),不是每次现查:collector(Go)也要用它当 ListenBrainz 的 `media_player` 标签,而 Go 那边没有 NSWorkspace。反查不到就存空串,标签退回 bundle id —— 绝不谎报成 "Apple Music"(那会让来源统计彻底失真)。
+- **不需要 mtime 重读**:`FeatureSettingsStore.save()` 本来就会去抖重启 collector,所以点完信任 Go 侧立刻拿到新名单。Swift 侧每轮轮询重读 `features.json`(不加缓存,理由同 `PlaybackPlayerPreference`)。
+- **发现卡的数据源**:`MediaControlClient.lastUngatedNowPlaying` —— 在**过闸之前**顺手记的一笔,挂在既有那唯一一次 media-control 子进程调用上(设置页开着时不额外 fork)。带 15 秒陈旧过滤,否则播放停了卡片还挂着一个早就不放的 App。
+- **「这不是一首歌」守卫**(`trustedPlaybackNotASong` / `TrustedPlayers.notASong`,2026-08-21):信任的未知播放器上报**空歌手名或空专辑名**时整条丢掉(不解析歌词、不打卡)。判据跟 `isAdBreak` 完全一致(`album == "" || artist == ""`),区别只在作用域 —— 那个只服务 Spotify 广告(第一行就 `if bundleID != spotifyBundleID`),这个服务信任列表。全靠真实样本定的,四份实测:
+
+  | 来源 | artist | album | 判定 |
+  |---|---|---|---|
+  | 酷狗音乐 | 周杰伦 | 七里香 | 是歌 |
+  | Apple Music | 卢广仲 | 100种生活 | 是歌 |
+  | Spotify | 方大同 | Soulboy | 是歌 |
+  | Arc 放视频① | `""` | `""` | 不是歌 |
+  | Arc 放 YouTube② | `Dream in reality`(**频道名**) | `""` | 不是歌 |
+
+  **album 是这四份样本里唯一 100% 分对的字段**。②(时长 925 秒的法语 vlog)正是"只卡 artist 不够"的证据:YouTube 把频道名塞进 artist,数据形状跟"歌手 - 歌名"无法区分。代价是电台/单曲场景真音乐 App 若不报专辑名会被误挡 —— 2026-08-21 用户拍板接受(宁可漏认,不要把视频写进永久收听历史)。`mediaType` 这条路走不通,记下别再试:酷狗压根不报这个字段、Arc 也不报(**不是报 Video,是没有这个键**),只有 Apple Music 有。内置五个播放器不走这条(各有既有守卫)。发现卡用**同一套判据**(`UngatedNowPlaying` 因此也带上 album)—— 否则会摆出一张"点了必定没反应"的卡片。信任列表的意义因此从"靠用户选对"变成"选错了也有兜底"。
+- **发现通知(macOS 系统通知,2026-08-22)**:用户报「识别到新的播放器,但我自己不知道要去这里信任,目前没有一个通知机制」—— 发现卡只在设置页、而且只在那个播放器**此刻正在报 Now Playing** 时才出现,不主动打开设置页就永远看不到。用户拍板**只做系统通知,不要菜单栏那部分**;发现卡保留作兜底。
+  - **判据下沉**:原来那套门槛写在 View 的 `if` 里,通知那条路必然要再抄一份、抄漏是必然的。现在拆成两层放进 `LyrimuseCore/Local/UnknownPlayerAlert.swift`(纯函数,selftest 33 条断言):`shouldOffer` **卡片与通知共用**(自动识别 / 观察不陈旧 15s / artist 与 album **trim 后**都非空 / 未被接受);`shouldAnnounce` 是通知专属的更高门槛(静音名单 / 反查得到 App 名 / 稳定 ≥6 秒且 ≥3 次 / 次数上限与冷却)。**顺带修掉一个既有 bug**:卡片原来写裸 `!album.isEmpty`,而 `notASong` 是 trim 后判空 —— `album = " "` 的播放能过卡片、过不了守卫,即"点了必定没反应"。
+  - **通知门槛为什么比卡片高**:通知是我们主动打扰。①静音名单 `mutedForAnnounce`(播客/TV/图书/新闻/信息/FaceTime/QuickTime/预览/照片/语音备忘录/WebKit.GPU/控制中心/微信)—— 播客的 artist=节目名、album 常常非空,能过 artist/album 那道门槛,信任之后就会被当歌打卡进**永久收听历史**;微信语音/视频号是实测这台机器上真正"天天来一次"的那个。⚠️ 刻意**不**写成"整个 `com.apple.*` 静音":Safari 放网页音乐跟 Chrome 一样正当。名单**只影响要不要弹通知,不影响能不能信任** —— 真想信任播客的人在卡上照样点得到,这正是"卡片保留作兜底"的价值。②`appDisplayName` 反查不到的不弹(`com.apple.WebKit.GPU` 这种,标题只能摆一串 bundle id)。③稳定性门槛:实测 `mediaremoted` 日志里 12 分钟有 4 组**亚秒级**焦点往返(Music ⇄ Chrome),不设门会为一个只抢了两秒焦点的 App 烧掉它的提醒机会。
+  - **提醒次数**:同一 bundle id 最多 3 次、每次至少隔 24 小时,不是"一辈子一次"。理由是实测这台机器**当时就开着专注模式**(`com.apple.focus.work` 的 assertion 从 01:36 起没有失效记录),还有 App 启动触发的 DND 和每天 00:00 的定时 DND —— DND 下横幅根本不弹、静默进通知中心,被一次「清除全部」就永久丢失。信任成功后 `shouldOffer` 天然不再成立,自动停。记录存 UserDefaults 的 `np:unknownPlayerNotices`(JSON 字符串,`defaults read` 看得懂),**已登记进 `ConfigPortability.machineLocalDefaultsKeys`** —— 它跟 `np:hasShownOverlayDragHint` 是同一类机器状态,跟着备份搬去新机器的后果是新机器上永不提示。
+  - **这个 bundle 能不能发通知(2026-08-22 实测取证)**:三个可疑条件叠在一起 —— ad-hoc 签名(`Signature=adhoc`、`TeamIdentifier=not set`)、launchd **直接 exec** `Contents/MacOS/lyrimuse`(不经 `open`)、`LSUIElement=true`。结论**可行**,证据:①这台机器上 JetBrains Toolbox 的 LaunchAgent plist 跟 Lyrimuse 逐字段同形(同样直接 exec `Contents/MacOS/`),通知授权 `auth=7`;②Chromium / chrome-for-testing 都是 ad-hoc、TeamIdentifier 未设,同样 `auth=7`;③`lsappinfo info <pid>` 对活着的 Lyrimuse 进程能拿到 bundleID + bundle path + **checkin time**,这正是 `bundleProxyForCurrentProcess` 需要的,而且不是靠 `open` 拿到的。本地通知不走 APNs,**不需要**开发者证书/公证/entitlements,Info.plist 也不需要任何键。落地后铁证:`~/Library/Group Containers/group.com.apple.usernoted/db2/db` 的 `app` 表出现 `me.yudaotor.lyrimuse`、`categories` 表出现同名一行 185 字节 —— 改动前这两张表都没有它。
+  - ⚠️ **`interruptionLevel` 的 `.timeSensitive` / `.critical` 用不了**:要 entitlement,ad-hoc 拿不到。默认 `.active` 够用,别写。
+  - **通知上只放一个 action**(2026-08-22 用户报「这里可以直接把按钮选项放在外面吗,不要在选项里面点进去了」):macOS 的规则是 **1 个 action 直接渲染成可见按钮,2 个及以上折叠成「选项 ∨」下拉**。原来还有个「忽略」按钮,处理逻辑本来就是空的(纯 dismiss),而划掉/点通知上的 × 一样能关 —— 去掉零功能损失,换来「加入信任列表」直接可点。⚠️ 想再加第二个动作之前先想清楚:那会把这个按钮重新折进「选项」里。
+  - **点通知连带弹出歌词窗口(2026-08-22,修了三轮)**:`applicationShouldHandleReopen` 是为「点 Dock 图标开歌词窗口」写的,而**系统激活 App 时也会触发它** —— 点通知就连带弹歌词窗口。三次踩的坑都值得记下:①只做「延后 0.3 秒开窗 + 通知回调来了就取消」→ 只堵了"reopen 先到"那一半,而实测真实顺序是反的(`didReceive 10:48:46.878` → `reopen 10:48:47.171`),取消跑在前面扑了个空;②改用抑制窗口,但标记是靠 `(NSApp.delegate as? AppDelegate)?.…` 设的 → 那个转型在 SwiftUI 的 `@NSApplicationDelegateAdaptor` 下**拿不到**我们的 AppDelegate、**无声失败**(证据链:设置页开在了正确的栏,而那行代码在 `MainActor.run` 块**之后** → 块跑了;块里唯一的语句的日志一行没出 → 转型是 nil。那也是全仓唯一一处 `NSApp.delegate` 用法,本来就没有先例);③想靠「reopen 的发起方」精确区分 Dock 与通知 → 实测 `open -b`(Dock 点击发的同一个事件)拿到的是 `(no AE)`,取不到,这条路走不通。**最终形态**:抑制标记放 `AppActions`(那个单例存在的意义就是这类桥接),**同一个判据查两次** —— 进 `reopen` 时查一次、延后任务真要开窗前再查一次,一个机制盖住两种顺序,通知那边只管设标记。
+  - ⚠️ **诊断日志必须用 `.notice` 不能用 `.info`**:`Logger.info` 是内存缓冲、**不落盘**的,`log show --last 30m` 查不到而 `--last 20m` 有(实测,一度让我以为事件没发生)。另外 `willPresent` / `didReceive` 里**必须**有日志 —— 头两轮排查最大的盲区就是那两处一行日志都没有,看不出 delegate 到底跑没跑。
+  - **几个必须这么写的点**:`registerCategory()` 要在启动阶段调 —— `setNotificationCategories` 是**整表替换**,投递时 `categoryIdentifier` 查不到的话通知照样显示但**按钮不出现、而且不报错**;delegate 设晚了冷启动点按钮的回调会丢。必须实现 `willPresent` 返回 `[.banner, .list, .sound]` —— Info.plist 写着 `LSUIElement=true`,但 `AppDelegate:155` 运行时按 `showInDock`(默认开)把 activationPolicy 翻成了 `.regular`,**App 默认是前台的**,少了这个方法"用户正开着设置页找这个功能"时反而收不到。点通知**正文**要 `AppActions.shared.requestSettings(.tab(.player))` **先**调、再 `NSApp.activate` + `openSettings?()` —— 只调 `openSettings()` 的话窗口是开了但落在上次那一栏(用户 2026-08-22 报「点击通知之后应该自动跳到这个页面」);`requestSettings` 晚于 `openSettings` 也不行,它的信箱那条路靠 `SettingsView` 的 `.onAppear` 消费,赶不上就白设。处理按钮时 bundle id **必须**从 `userInfo` 读,绝不能回头读 `MediaControlClient.lastUngatedNowPlaying` —— 通知可能在通知中心躺了几小时,读现值会「点 Chrome 的旧通知结果信任了 QuickTime」。
+  - **授权时机**:第一次真的有东西要通知的那一刻才请求,**不在启动时**。授权只有一次机会(状态一旦 `.denied`,后续 `requestAuthorization` 立刻返回、再也不弹框),启动时无脑请求会让用户在完全不知道这是干什么用的时候随手点「不允许」,功能就永久废了。代价:第一次命中会被授权对话框吃掉,通知本身等下一拍。
+  - **权限被拒必须说出来**:用户选了"不要菜单栏兜底",权限被拒时这个功能**完全静默**,而用户会理解成"它没检测到"。设置页因此多一行(只在 `.denied` 时出现)指向 系统设置 → 通知。
+  - **只在 Swift App 一处发**:collector(Go)是独立的 `KeepAlive` job、又各自独立轮询 media-control,两侧都发就是双份;而且 Go 侧只能 `osascript display notification`,通知会署名 Script Editor、没有按钮。
+  - ⚠️ 已知小瑕疵:category 的按钮标题在启动时按当时语言注册一次,启动后切语言要重启才更新(按钮文案会停在旧语言)。
+  - ⚠️ 文案上**不要**出现"推送"二字:设置页已有的「推送提醒」/「通知平台」指的是 Bark/飞书/钉钉/企业微信 webhook,跟 macOS 本地通知毫无关系,混用会让用户以为要先配 webhook。
+- **位置档位**:未知/信任的 App 落 `positionSourceTier` 的默认档 `noisyFloored`(大门槛 + 前向棘轮)。对纯外推源棘轮基本不会触发(reported 与 predicted 同步前进),而万一某个 App 真是整秒量化,这一档正好对 —— 保守方向选的是"慢一点纠正",不是"可能锁死"。
+
+### 锚点冻结的源(网页播放器)三件事(2026-08-21)
+
+用户报「用 Arc 播放音乐时歌词进度比较慢」查出来的一组问题。**先说清测量结论**:歌词引擎跟得很准 —— 同一瞬间 `media-control` 报 42.52s、缓存 LRC 的当前句是 `[42.46]`、桌面悬浮歌词显示的正是那一句,差 0.06s。滞后**不在我们的位置管线里**。
+
+- **病征**:Arc 这类网页播放器(页面**没调** `mediaSession.setPositionState()`)的锚点是**冻结**的 —— 实测 8 次采样 `elapsedTime` 恒等于 0、`timestamp` 恒等于开播那一刻,位置全靠 media-control 按墙钟外推的 `elapsedTimeNow`。于是 `报告位置 = 墙钟 − T0`,而 T0 是**会话创建时刻**,比音频真实起点晚一截(页面先出声、后注册元信息)→ 整首恒偏小 → 歌词慢一个固定值。
+- **不能按"是浏览器"加默认偏移**:①决定权在**页面**不在浏览器 —— 调了 `setPositionState` 的站点锚点准确、还会在 seek/暂停时刷新;②**连正负号都不固定** —— 页面先注册后缓冲出声时 T0 偏早,歌词会变**快**;③幅度等于站点 JS/网络耗时,不是常数。写死 `+X` 会把另一半站点推得更歪。固定偏差只能靠**按播放器记一个用户校准值**(默认 0)—— 2026-08-21 已经这么做了:设置页那一行时间轴偏移多了个播放器下拉框,按 bundleID 存一档(跟共用那档**二选一、不叠加**),见 08-lyrics-engine.md 的时间轴偏移一节。
+- **修 1:暂停归零**(`pausedPositionSeconds` / Go 侧 `pausedPositionSecs`)。既有规则"暂停时用原始 `elapsedTime`"**只对会刷新锚点的源成立**(QQ/网易云/Apple Music 暂停时会带新时间戳重发一次,那个值就是暂停位置);对 Arc 那个恒为 0 的值,一按暂停位置直接归零 —— 用户视角是"在浏览器里一按暂停,歌词跳回第一句"。现在改成:**锚点陈旧(`now − timestamp > 2s`)且报告值比"播放中最后一次位置"低 >3s** 时,用最后已知位置。两个条件各挡一种误判 —— 前者把会刷新锚点的源整个排除(也就保住了"向后 seek 之后暂停"这种合法大幅回退),后者保证正常暂停(两者只差一拍)不被改写。位置**按曲目**记,换歌自动作废。两侧同一套规则,必须同时改。
+- **修 2:默认档翻面**(`positionSourceTier`)。`noisyFloored` 的两样东西(1.0s 大门槛 + 前向棘轮)只对**整秒量化**的源成立 —— 棘轮前提是"报告值 ≤ 真实位置"。而实测所有走 media-control 的源都是纯外推、无量化(酷狗 23 秒累计偏差 +0.0011s;Arc 小数位 .467/.550/.620 完全连续)。所以量化源(QQ/网易云)是**少数派**,现在显式登记它们,其余(含 `nil`)走 `cleanExtrapolated`。⚠️ 这条修的是正确性,**不解决上面那个滞后** —— EMA 拿"我们的外推"跟"报告值"比,两者共享同一个偏差,源头偏了伺服校不出来。
+- **修 3:整秒时间戳的相位订正**(`estimatedAnchorInstant`,2026-08-21)。`timestamp` **恒无小数秒**,而它就是 `elapsedTimeNow` 的外推基准 —— `ts = floor(真实时刻)`,于是 `位置 + (now − ts)` **恒偏快 frac 秒**,且锚点冻结时锁死一整首歌。用 Apple Music 的 AppleScript 播放头当独立真值实测(12 样本):偏差 **+0.824s、极差仅 0.042s**(同一锚点上稳如磐石 —— 顺带发现 Apple Music 的 media-control 锚点也冻结了 51 秒没刷新,它没暴露问题只因为走 AppleScript 直读)。
+  - **订正靠夹逼**:τ ∈ [`ts`, min(`ts+1`, 首见时刻)],取中点 → `ts + min(1, 首见−ts)/2`。三条界分别来自 floor 语义、frac<1、以及"我们不可能在它发布前看到它"。这个式子**永远不会比现状差**:即时发现 → 订正量小、误差 ≤ 间隔一半;只靠 2 秒轮询发现 → 退化成 `ts+0.5`,最坏 ±0.5s(仍是现状 [0,1) 的一半)。订正量恒在 [0, 0.5]。
+  - **实测收益**(同一真值口径):平均绝对误差 **0.653s → 0.163s,降低 75%**;稳态样本从恒 +0.49 变成 −0.007。
+  - **只在锚点冻结时接手**(age > 2s):每拍都刷新锚点的源(QQ/网易云/Spotify)不碰 —— 它们 frac 每拍重掷、且自身的位置量化还会部分抵消,那条路径的参数是按实测调出来的(见 `noisyFloored` 那档注释),不该被顺带改掉。
+- **为什么"学一个偏移"不可行**(2026-08-21 实测否掉的方案):用户提议"识别到浏览器就自动学一个偏移、按浏览器+根网站生效"。两个否决理由 —— ①**MediaRemote 不给站点信息**(13 个字段里没有任何 url/domain/tab;Arc 虽有 AppleScript 字典能问 `active tab` 的 URL,但要新增自动化权限,且"正在播的标签页 ≠ 活动标签页");②**没有可学的常数**:连续播放期间两个真锚点的 `Δ位置 − Δts` 实测 7 个样本 −0.896 ~ +0.134、**极差 1.03s**,正是整秒量化本身。固定偏移只在运气好的锚点上对 —— 每次换歌/暂停恢复都重新掷骰。用户观察到的"暂停恢复后就准了"是重掷了一次好骰子,不是校正。
+
+  ⚠️ 别把这条读成「按播放器加偏移已经被否掉了」:被否掉的是**自动学**、**按浏览器+根站点**;做进去的是**用户手调**、**按播放器(bundleID)**、默认 0、界面上看得见改得动(08-lyrics-engine.md 的时间轴偏移一节)。同一件事的两个不同形态,分界线就在"谁定这个数"。
+- **`mediaType` 这条路走不通**,记下别再试:酷狗压根不报这个字段、Arc 也不报(不是报 Video,是没有这个键),只有 Apple Music 有。
 
 ### 轮询、事件加速与去抖动
 
@@ -180,6 +234,8 @@ nil 快照(Music.app stopped/退出、播放列表放完、.auto 或 media-contr
 | 设置页播放器 tab | `lyrimuse/SettingsView.swift` · `PlayerSettingsTab` |
 | UI 转发层 | `lyrimuse/PlaybackCoordinator.swift` · `PlaybackCoordinator.start` |
 | collector 侧独立取数 | `lyrimuse-collector/system.go` · `getState`/`appleMusicPosition`;`lyrimuse-collector/poller.go` · `updatePosition` |
+| `LyrimuseCore/Local/UnknownPlayerAlert.swift` | 「发现新播放器」的两层判据(纯函数):`shouldOffer` 卡片与通知共用、`shouldAnnounce` 通知专属 |
+| `lyrimuse/Settings/UnknownPlayerNotifier.swift` | 系统通知管道:5s 轮询 + 稳定性计数 + 授权 + 投递 + 按钮回调 + `np:unknownPlayerNotices` 落盘 |
 
 ## 设计决策与已知坑
 

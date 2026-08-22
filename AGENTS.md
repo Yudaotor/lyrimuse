@@ -56,6 +56,25 @@ screencapture -x -o -l <窗口ID> /tmp/shot.png                   # 只截那一
 `screencapture -l <窗口ID>` 是**强制**的：按坐标截屏会把别的窗口拍进去，2026-08-14 曾因此
 截到用户的聊天软件窗口（同事姓名和消息）。窗口 ID 从上面那个脚本拿。
 
+**但它会整机失效，别把它当唯一验证手段。** 2026-08-22 实测：`screencapture -l` 对**本机
+所有**窗口一律报 `could not create image from window`，而 `check-windows.swift` 明明报
+`onscreen=true`、`kCGWindowSharingState=2`（可被截图），同一条命令二十分钟前还成功过，连
+自己临时起的探针窗口也一样截不到——跟被截的 App 和当次改动都无关。
+
+**是 WindowServer 的状态问题，会自愈，别去改代码找它。** 同一天后来自己恢复了，而且有个
+现成的判据：`check-windows.swift` 印的窗口 ID **从 98xxx 掉回 900 那一档**，说明 WindowServer
+重启过（同时 CGWindowList 的 bounds 读数也会开始/停止带那个 ~2% 缩放偏差，见上面那段）。
+所以撞到这个错误时先看窗口 ID 的量级，再决定是等一等重试还是走下面的退路——两条退路：
+
+- 自己写 ScreenCaptureKit 工具**走不通**：`swift xx.swift` 解释模式下撞
+  `Assertion failed: (did_initialize), CGS_REQUIRE_INIT`（没有 WindowServer 连接，得
+  `swiftc` 编译并 `_ = NSApplication.shared`）；编译过了又是 `SCStreamErrorDomain
+  Code=-3811`——临时二进制没有 bundle identity，拿不到屏幕录制权限。
+- **能用的是 `ImageRenderer` 离线渲染**（`project_nowplaying_swiftui_offline_render_verification`
+  那条路）：纯进程内渲染成 CGImage，不需要任何屏幕权限，还能**构造**真机上抓不到的状态、
+  跑同一视图的 A/B 对照。代价是渲染不出动画中间帧、也不触发 `onAppear`（靠 GeometryReader
+  回写 `@State` 的东西量不到），那部分改用"把判据下沉进 Core + selftest 钉死"来覆盖。
+
 **不要碰真实的 launchd 服务**（`com.lyrimuse.collector` / `me.yudaotor.lyrimuse`）来做
 实验——停掉 collector 就没有歌词了。要验证 launchd 行为用：
 
@@ -99,6 +118,12 @@ screencapture -x -o -l <窗口ID> /tmp/shot.png                   # 只截那一
 
 ## 容易踩的具体坑
 
+**新增 `np:` UserDefaults 键**：会**自动**进配置导出 / iCloud 搬家镜像 —— 那是**前缀白名单**制，
+不是逐键登记（见 `ConfigPortability.exportableAppSettings`）。也就是说加一个键 = 默认把它搬去新
+机器。落键前判一次「这是这个人的偏好，还是这台机器的状态」：后者（屏幕坐标、LaunchAgent 安装态、
+一次性引导标记这类）才写进 `machineLocalDefaultsKeys`；删键时写进 `obsoleteDefaultsKeys`。判错
+不报错，表现是新机器上「界面在说一件不成立的事」。
+
 **本地化**：`Localizable.strings` 里**中文原文就是 key**。只加中文那份、忘了英文那份，
 英文界面会静默显示中文，编译不报错。改完用 key 集合对比两份文件确认没有一边独有的。
 
@@ -134,8 +159,12 @@ screencapture -x -o -l <窗口ID> /tmp/shot.png                   # 只截那一
 - commit message 用英文，正文写清"为什么"，不只是"改了什么"。
 - 提交前跑一遍：`swift build`、`swift run lyrimuse-selftest`、
   `GOTOOLCHAIN=go1.24.4 go test ./...`、`gofmt -l`。
-- 分支策略：新功能推 `dev`；`main` 只在发版时推进（默认分支仍是 `main`，打 tag 前
-  先把 `dev` 以 fast-forward 合进 `main`）。
+- 分支策略：**本地所有改动直接做在 `dev` 上、直接提交到 `dev`** —— 不要为一次改动新建
+  feature 分支，也不要开 `worktree-*` 分支（2026-08-22 定）。这条是给 AI 会话的：不少
+  harness 默认「动手前先隔离到一个新分支/worktree」，结果改动落在一个作者根本不看的分支上，
+  还平白多出一次合并，而这个仓库本来就只有作者一个人在 `dev` 上推进。需要临时隔离时可以用
+  worktree，但收尾必须把改动落回 `dev` 再提交、别把分支留下。`main` 只在发版时推进（默认
+  分支仍是 `main`，打 tag 前先把 `dev` 以 fast-forward 合进 `main`）。
 - 发 release 时日志要手写改动清单（中英双语），不要只依赖 GitHub 自动生成的 notes。
 
 ---

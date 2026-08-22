@@ -4,7 +4,7 @@
 
 # Lyrimuse
 
-**跟着 Apple Music、QQ 音乐、网易云音乐或 Spotify 播放，在 Mac 桌面上实时显示逐字同步歌词。**
+**跟着 Apple Music、QQ 音乐、网易云音乐、酷狗音乐或 Spotify 播放，在 Mac 桌面上实时显示逐字同步歌词。**
 
 **语言 / Language:** [English](README.md) | **简体中文**
 
@@ -16,7 +16,7 @@
 
 </div>
 
-Lyrimuse 常驻在菜单栏里，跟着当前播放弹出一个悬浮歌词窗口——Apple Music、QQ 音乐、网易云音乐或 Spotify，你自己选（也可以交给自动识别）——逐字同步、常驻置顶、跨 Space 显示。就是网易云音乐桌面客户端那种"桌面歌词"体验，只不过是原生 macOS 版本。
+Lyrimuse 常驻在菜单栏里，跟着当前播放弹出一个悬浮歌词窗口——Apple Music、QQ 音乐、网易云音乐、酷狗音乐或 Spotify，你自己选（也可以交给自动识别）——逐字同步、常驻置顶、跨 Space 显示。就是网易云音乐桌面客户端那种"桌面歌词"体验，只不过是原生 macOS 版本。
 
 <div align="center">
 
@@ -39,7 +39,7 @@ Lyrimuse 常驻在菜单栏里，跟着当前播放弹出一个悬浮歌词窗�
 - **本地模式完全离线**——已经缓存好的歌词不需要联网也能显示
 
 ### 想怎么看，你说了算
-- **自选播放器，或者交给自动识别**：读 Apple Music（走「自动化」权限）、QQ 音乐、网易云音乐或 Spotify（都走 macOS 系统级 MediaRemote，不需要任何权限）的播放状态——首次启动引导选一次，之后随时在设置里切换，也可以直接留在自动识别，跟随 macOS 当前系统级 Now Playing 焦点
+- **自选播放器，或者交给自动识别**：读 Apple Music（走「自动化」权限）、QQ 音乐、网易云音乐、酷狗音乐或 Spotify（都走 macOS 系统级 MediaRemote，不需要任何权限）的播放状态——首次启动引导选一次，之后随时在设置里切换，也可以直接留在自动识别，跟随 macOS 当前系统级 Now Playing 焦点
 - **三种展示方式**：经典桌面悬浮窗、贴着屏幕顶部刘海的灵动岛胶囊（可选显示专辑封面，背景也能跟着封面模糊），或者一个仿 Apple Music 歌词页的可缩放「歌词窗口」——双栏布局、封面模糊铺底、完整歌词自动滚动到当前行——任意组合开启，或者都不开
 - **菜单栏文字模式**——不想要悬浮窗，直接在状态栏看当前这一行歌词；太长的句子会横向滚动播完，而不是截成半句（想要截断也留着开关）
 - **悬浮窗自带播放控制**（播放/暂停、上一首、下一首），跟你选的播放器一致生效；正在放的是 Apple Music 时还多一颗「喜欢」，一下收藏当前这首
@@ -158,11 +158,11 @@ cd lyrimuse/lyrimuse
 
 `build.sh` 最后会把包里每个二进制的架构列出来，跟目标不符（缺一半、或多带了一份）都会报出来。发布资产不要手工打——用 `./package.sh`，它自己会把两种架构各构建一次、各出一套 zip + sha256 + dmg，架构不符直接拒绝打包。
 
-QQ 音乐/网易云音乐/Spotify/自动识别这几个播放源支持额外需要 [ungive/media-control](https://github.com/ungive/media-control)——本机没装的话 `build.sh` 会自动用 Homebrew 装一次，这一步也不需要你自己动手。
+QQ 音乐/网易云音乐/酷狗音乐/Spotify/自动识别这几个播放源支持额外需要 [ungive/media-control](https://github.com/ungive/media-control)——本机没装的话 `build.sh` 会自动用 Homebrew 装一次，这一步也不需要你自己动手。
 
 ### 不管选哪种方案
 
-从 `/Applications` 打开 Lyrimuse——首次启动的引导向导会带你完成：选一个播放器（Apple Music、QQ 音乐、网易云音乐、Spotify，或者自动识别），选了 Apple Music 的话再允许它以「自动化」方式读取 Music.app 当前播放的歌曲信息（其它几个都不需要额外权限），以及启用它的后台常驻采集服务（这样就算把窗口关掉，歌词/封面也会持续解析）。走完引导歌词马上就会显示出来（更多构建选项见 [lyrimuse/README.md](lyrimuse/README.md)）。
+从 `/Applications` 打开 Lyrimuse——首次启动的引导向导会带你完成：选一个播放器（Apple Music、QQ 音乐、网易云音乐、酷狗音乐、Spotify，或者自动识别），选了 Apple Music 的话再允许它以「自动化」方式读取 Music.app 当前播放的歌曲信息（其它几个都不需要额外权限），以及启用它的后台常驻采集服务（这样就算把窗口关掉，歌词/封面也会持续解析）。走完引导歌词马上就会显示出来（更多构建选项见 [lyrimuse/README.md](lyrimuse/README.md)）。
 
 不需要再配置任何其它东西才能看到歌词——上面提到的所有附加功能都是后续在设置里按需开启的。
 

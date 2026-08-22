@@ -1,5 +1,5 @@
 # 08. 歌词同步引擎(App 侧消费链)
-> 最后核对:2026-08-20 · 基线:2a2bf8b+工作树
+> 最后核对:2026-08-21 · 基线:05767ae+工作树
 
 ## 定位
 
@@ -13,7 +13,7 @@ App 侧「从磁盘缓存到屏幕」的整条歌词处理链:collector(独立 G
 - **灵动岛**(`NotchLyricsView`):当前行(逐字或整行)。
 - **歌词窗口**(`LyricsWindowView`):整份歌词列表(`allLines`)+ 当前行高亮定位(`currentLineIndex`),点击某行可 seek。
 - **菜单栏歌词**(`MenuBarStatusItem`):当前行纯文本(`plainText`),跑马灯用 `currentLineDwellSeconds` 配速。
-- **设置页**「歌词 → 显示」分组:卡拉OK效果、中文繁简、罗马音语言开关、双行显示、全局时间轴偏移。
+- **设置页**「歌词 → 显示」分组:卡拉OK效果、中文繁简、罗马音语言开关、双行显示、时间轴偏移(下拉框选作用于哪个播放器 + Stepper)。
 - **菜单栏状态菜单**「歌词时间轴」子菜单:单曲提前/延后/重置;全局快捷键也能触发同一组动作(`GlobalHotkeys`)。
 - **歌词管理窗口**:偏移输入框直接写 `LyricsOffsetStore`,保存/删除歌词后强制让引擎重读。
 
@@ -114,17 +114,28 @@ PlaybackCoordinator (UI 层唯一入口) → 各展示面
 ### 简繁转换(ChineseVariant)
 
 - 三档:不转换/简体/繁体。转换发生在 `reloadCurrentLyrics()` **送进引擎之前**,正文、译文、逐字数据都转(YRC 整串转安全——时间戳是数字),罗马音不转;缓存原文一个字节不动,切回无损。
-- **日文歌一律原样返回**:判据「有假名就是日文」——日文新字体(学/国)被简繁转换改掉不是转换,是写坏。用 ICU `Simplified-Traditional`,非无脑逐字(头发→頭髮 正确)。
+- **日文歌一律原样返回**:判据「有假名就是日文」——日文新字体(学/国)被简繁转换改掉不是转换,是写坏。用 ICU `Simplified-Traditional`,非无脑逐字(头发→頭髮 正确)。本机 1487 条缓存实测:42 首被这道守卫拦下,**全部是真日文歌**(Sou / 米津玄師 / タイナカ彩智 …),没有中文歌被误拦。
+- **转简体时必须再补一层异体字规范化**(`HanVariants`,2026-08-22 用户报「明明开了简体,歌词里还是看到繁体」):ICU 只管**繁简**,不管**异体字**。实例《开不了口 (Live)》——ICU 把那首歌 37 种字符全转对了(沒→没、煩→烦、開→开、讓→让…),**只剩「妳」没动,而它出现 21 次**,整屏都是,看着就是"压根没转"。
+  - 根因不是 ICU 有 bug:「妳」不是「你」的繁体,是大陆《第一批异体字整理表》淘汰、港台仍在用的**异体字**,不在繁简转换的范畴里。**换 OpenCC 也一样** —— collector 用的 gocc,它的 `TSCharacters` / `TWVariantsRev` / `HKVariantsRev` 三张字典全库 grep 过,「妳」「祂」「牠」**零条目**。这一层只能项目自己维护。
+  - 现表 6 字(本机缓存实测词频):妳→你 149 次 / 祂→他 50 / 濛→蒙 28 / 牠→它 2 / 痲→麻 1 / 痺→痹 2,覆盖 21 首曲目、230 处字符。收录标准见 `HanVariants` 的注释:① ICU 确实不转它 ② 大陆规范有明确取代字 ③ 歌词语境无歧义。第三条否掉了「祇」(神祇 vs 只)、「乾」(乾坤,ICU 已按上下文正确保留)和粤语字「嘅咁哋冇」(不是异体字,转了才错)。
+  - **只在转简体方向生效,绝不反推**:简体只有「你」,转繁体时无从判断该写「你」还是「妳」——那要猜被称呼者的性别。
+  - ⚠️ 排查这类问题时**别拿 ICU 去检查 ICU 自己的输出**:第一版扫描用的判据是「某字单独能转、整串却没转」,那只能发现 ICU 的上下文漏字(全库仅 3 个「著」),发现不了 ICU 压根不认的字,于是漏掉了正主。有效的过滤器是「`Hant-Hans(c)==c` 且 `Hans-Hant(c)==c`」——ICU 双向都不动的"通用字",高频的是正常字、低频端才是异体字候选(3742 种汉字缩到 2466 个,妳/祂/牠/痲 全落在里面)。
 - **设置项条件显示**:`sawChineseLyrics`(LocalPlaybackSource 上的粘性标记,判据「有汉字且无假名」,只置不清)→ AppDelegate 首次见到时持久化为 `AppSettings.hasSeenChineseLyrics`;设置页在「系统读中文 || 见过中文歌词 || 已不是默认值」时才露出这一项。最后半边是硬要求:开关正在起作用时绝不能消失。
 
-### 时间轴偏移三层(LyricsOffsetStore)
+### 时间轴偏移:基准(全部 / 按播放器,二选一)+ 单曲微调(LyricsOffsetStore)
 
-- **全局偏移**(`globalOffsetMs`):设备侧固定延迟(蓝牙耳机等),对所有歌生效,裸 Int 存 UserDefaults。设置页「全局时间轴偏移」Stepper(±5s、步长固定 0.05s,刻意不复用快捷键页的「调整步长」)。
-- ~~按播放器补偿~~(`playerOffsets`,2026-08-18 加、**2026-08-20 整层移除**):当时以为"Spotify 播放时钟恒比出声超前"是播放器固有属性、加了手调的固定补偿;后经实测定性为**自然切歌锚点超前**(+0.85s 量级、每首抽签、手动点播没有),已由 `LocalPlaybackSource.naturalAdvanceCorrection` 按曲精确校正(见 02-playback-source.md)——固定补偿对这种偏差不对症(手动点播的歌反被带偏)。移除范围:store 的 playerOffsets 层、PlaybackCoordinator/LocalPlaybackSource 的 setPlayerLyricsOffset、设置页「Spotify 时间轴偏移」行、存量 UserDefaults 键 `np:lyricsPlayerOffsetsJSON`(init 一次性清掉,不能留隐形偏移)。
+- **全局偏移**(`globalOffsetMs`):设备侧固定延迟(蓝牙耳机等),对所有歌生效,裸 Int 存 UserDefaults。设置页那一行选「全部播放器」时改的就是它(Stepper ±5s、步长固定 0.05s,刻意不复用快捷键页的「调整步长」)。存储层**没有**「全部」这个哨兵 —— 那个下拉框只是作用域选择器,在既有两层之间切,不是第三份存储。
+- **按播放器偏移**(`playerOffsets`,2026-08-21 按用户要求加):`bundleID → 毫秒` 字典,存 `np:lyricsOffsetsByPlayerJSON`。设置页那一行的下拉框选中具体播放器时改的是这层。它对症的是**播放器侧**的系统性偏差:浏览器(Arc/Chrome 这类)只在切歌时报一次播放位置、之后 `elapsedTime` 再也不刷新,只能按墙钟外推(`PositionSourceTier.cleanExtrapolated`),进度会系统性偏慢;而 Apple Music 那条路径精确、一点都不该补。这类偏差**换首歌照旧、换个播放器就没了**,正好落在播放器这个维度上。
+  - **维度只能是 bundleID,不能是 `PlaybackPlayer` 枚举**:功能动机里那个 Arc 压根不在枚举里(枚举只有 Apple Music/QQ/网易云/酷狗/Spotify/自动),它靠 `TrustedPlayers` 那份 features.json 的 bundleID→名字映射进来。改成枚举「更类型安全」就是把浏览器挡在门外。
+  - **零值不落盘**(`setPlayerOffset` 归零即删、`loadPlayerOffsets` 再滤一遍):字典里留着的就是「用户真的配过的播放器」,下拉框据此把它们全列出来 —— 哪怕这个 App 已经不在受信任名单里(取消信任/卸载)也必须列出,否则那个非零偏移会变成看不见、改不动的隐形值。
+  - **`.auto`(自动识别)不进下拉框**:它的 `bundleIdentifier` 是空串,`setPlayerOffset` 对空串静默 no-op(调了没反应、也没报错);「自动」这层语义由「全部播放器」承担。
+  - **换播放器要重算**:`applyOffsets` 的原触发条件只有「换歌 / 没内容 / 缓存变了」,`LocalPlaybackSource.apply()` 里额外记一份 `lastAppliedBundleID`、变了就补算一次。不补的话 `.auto` 档下在两个 App 间切、或两个播放器放同名曲目时(trackKey 只由 歌手\|歌名 决定),新播放器会继续套用**上一个播放器**那一档。
+- ~~按播放器补偿(第一版)~~(`np:lyricsPlayerOffsetsJSON`,2026-08-18 加、**2026-08-20 整层移除**):当时以为"Spotify 播放时钟恒比出声超前"是播放器固有属性、加了**代码内部替用户猜**的固定补偿(界面上看不见、也重置不了);后经实测定性为**自然切歌锚点超前**(+0.85s 量级、每首抽签、手动点播没有),已由 `LocalPlaybackSource.naturalAdvanceCorrection` 按曲精确校正(见 02-playback-source.md)——固定补偿对这种偏差不对症(手动点播的歌反被带偏)。**08-21 这版故意换了新键**:复用旧键会把那些为已经修好的 bug 调出来的旧值重新激活、反把歌词拖慢,而旧键的 `removeObject` 清理仍留在 `LyricsOffsetStore.init` 里。两版的分界线是「用户看得见改得动」。
 - **单曲微调**:按 `trackKey = "归一化歌手|归一化歌名|内容指纹"` 存(指纹 = lyrics+lyricsYRC 的 SHA256 前 12 hex;前两段走 `EnrichCacheKeys.cleanTag`/`normalizedTitle`,跟 enrich 缓存 key 同一套)——歌词内容换了(重新匹配/手动编辑/换源)key 自然变,旧校正值查不到而不是误用;旧记录不清理(量小)。值为 0 时从字典删除。菜单栏「歌词时间轴」提前/延后按 `lyricsOffsetStepMs`(默认 200ms,快捷键页可调)nudge,「重置」只清单曲不动全局;全局快捷键同一组动作。歌词管理窗口的输入框直接 `setOffset` 绝对值。
-- **唯一合成点** `effectiveOffset(forKey:) = global + track`,由 `LocalPlaybackSource.applyOffsets()` 灌进 `syncEngine.offsetMs`(入口:换歌词内容/nudge/reset/改全局,全走这一处,防「两处各加一次 = 双倍校正」)。正数 = 歌词整体提前显示。
-- **两个对外属性**:`currentLyricsOffsetMs` = 实际生效总和(所有「歌词时间轴 ↔ 播放位置」换算用它,如歌词窗口点行 seek 时 `item.timeMs - currentLyricsOffsetMs` 反算);`trackLyricsOffsetMs` = 只属于这首歌的那半(菜单标题「歌词时间轴(+0.6s)」和「重置」按钮认它——显示总和会出现「点了重置数字却不归零」)。
-- 存储:两层都在 UserDefaults(`np:lyricsOffsetsByTrackJSON` 存 JSON 字符串方便 `defaults read` 调试;`np:lyricsGlobalOffsetMs`),**故意不放进** EnrichCacheStore 的「清空全部缓存」波及范围——校正值是用户手动调出来的个人偏好。清它有**单独**的入口:歌词管理工具栏那个「占用」菜单里的「清空全部时间轴校正」(`clearAllTrackOffsets`),只清单曲这一层,全局基准不受连带。
+- **唯一合成点** `effectiveOffset(forKey:bundleID:) = baseOffsetMs(forBundleID:) + track`,而 `baseOffsetMs` 是**二选一**:这个 bundleID 在 `playerOffsets` 里有值就用它,否则用 `globalOffsetMs`。**两档不相加**(2026-08-21 用户拍板:「不要和那个全部相加,只有要么全部,要么单个」)。零值不落盘,所以"配过"="非零",把某个播放器调回 0 就是撤掉它的单独设置、重新跟随「全部」。
+  由 `LocalPlaybackSource.applyOffsets()` 灌进 `syncEngine.offsetMs`(入口:换歌词内容/nudge/reset/改基准/改播放器那档/换播放器,全走这一处,防「两处各加一次 = 双倍校正」)。正数 = 歌词整体提前显示。`bundleID` 省略或为 nil(relay 中继模式没有播放器身份、或还没拿到第一份快照)时用「全部」那档 —— 那是唯一有意义的兜底,**绝不猜一个播放器**(猜错的形态就是把浏览器的补偿套到 Apple Music 上)。selftest 有一条变异测试验证过的断言组钉住"不许退回相加"。
+- **两个对外属性**:`currentLyricsOffsetMs` = 实际生效总和(所有「歌词时间轴 ↔ 播放位置」换算用它,如歌词窗口点行 seek 时 `item.timeMs - currentLyricsOffsetMs` 反算);`trackLyricsOffsetMs` = **只属于这首歌那一层**(菜单标题「歌词时间轴(+0.6s)」和「重置」按钮认它——显示总和会出现「点了重置数字却不归零」)。全局与按播放器两层都只进 `currentLyricsOffsetMs`、不进 `trackLyricsOffsetMs`;代价是它们在菜单里完全不可见(跟全局那层的既有现状一致),只在设置页那一行看得到。
+- 存储:三份值都在 UserDefaults(`np:lyricsOffsetsByTrackJSON` 与 `np:lyricsOffsetsByPlayerJSON` 存 JSON 字符串方便 `defaults read` 调试;`np:lyricsGlobalOffsetMs` 是裸 Int),**故意不放进** EnrichCacheStore 的「清空全部缓存」波及范围——校正值是用户手动调出来的个人偏好。清它有**单独**的入口:歌词管理工具栏那个「占用」菜单里的「清空全部时间轴校正」(`clearAllTrackOffsets`),只清单曲那一份,「全部」基准和按播放器那份都不受连带(selftest 各有断言钉住)。
 
 ### key 前两段必须归一化(2026-08-20 修的真 bug)
 
@@ -168,7 +179,7 @@ PlaybackCoordinator (UI 层唯一入口) → 各展示面
 | 设置 → 歌词 → 显示 | 中文繁简切换(`lyricsChineseVariant`) | 不转换/简体/繁体,只影响显示不动缓存;条件显示(见行为规格);立刻 reload |
 | 设置 → 歌词 → 显示 | 显示罗马音(japanese/korean/chinese 三个复选框,`romanizationScripts`) | 按整首歌文字种类开关罗马音(服务端字段+客户端兜底一起管);只影响悬浮窗和歌词窗口;立刻 reload |
 | 设置 → 歌词 → 显示 | 双行显示(`showNextLinePreview`) | 悬浮窗在当前句下方显示 `nextLineText` 预览;只影响悬浮窗 |
-| 设置 → 歌词 → 显示 | 全局时间轴偏移(Stepper ±5s,步长 0.05s) | `LyricsOffsetStore.globalOffsetMs`,对所有歌生效,与单曲微调相加 |
+| 设置 → 歌词 → 显示 | 时间轴偏移(播放器下拉框 + Stepper ±5s,步长 0.05s) | 下拉选「全部播放器」→ `LyricsOffsetStore.globalOffsetMs`;选具体播放器 → `playerOffsets[bundleID]`。两档**二选一不相加**,再与单曲微调相加;标题/副标题/help 是**固定文案**、不随选中项变;下拉框选中态是纯 `@State`、**不持久化** |
 | 设置 → 快捷键 | 调整步长(`lyricsOffsetStepMs`,默认 200ms) | 菜单/快捷键每次 nudge 的幅度(不影响设置页全局偏移的 0.05s 步长) |
 | 菜单栏 → 歌词时间轴 | 提前/延后/重置 | 单曲微调 nudge ±step / 清零;菜单标题显示单曲部分的累计值 |
 
@@ -192,6 +203,7 @@ PlaybackCoordinator (UI 层唯一入口) → 各展示面
 | UserDefaults `np:lyricsOffsetsByTrackJSON` | 读写 | 单曲偏移字典的 JSON 字符串(key 含内容指纹) |
 | `~/.config/lyrimuse/lyrimuse-lyrics-pins.json` | App 写(collector 只读) | 已校准名单:归一化 enrich key → 记下这条 pin 的 unix 秒。collector 靠它一票否决自动重选歌词源 |
 | UserDefaults `np:lyricsGlobalOffsetMs` | 读写 | 全局偏移(裸 Int,缺失即 0) |
+| UserDefaults `np:lyricsOffsetsByPlayerJSON` | 读写 | 按播放器偏移字典的 JSON 字符串(key 是 bundleID;零值不落盘,所以字典里就是真的配过的那几个播放器) |
 | UserDefaults `np:preferWordLevelKaraoke` / `np:romanizationScripts` / `np:hasSeenChineseLyrics` / `np:lyricsOffsetStepMs` | 读写(经 AppSettings) | 显示相关设置持久化;繁简档位同为 AppSettings 持久化(`lyricsChineseVariant`) |
 
 进程边界:collector(Go,launchd 常驻)负责联网解析并写缓存;App 进程只读缓存 + 读 `CollectorStatus`(网络状态)。引擎全链在主线程(@MainActor),缓存文件读取本身同步(mtime 缓存把代价压到只有文件变了才解析)。
@@ -205,8 +217,10 @@ PlaybackCoordinator (UI 层唯一入口) → 各展示面
 | 行/词数据模型 | 同上 — `SyncedLyricWord`、`SyncedLyricWordGroup`、`SyncedLyricLine`、`LyricsWindowLine` |
 | LRC 解析(含 CRLF) | `LyrimuseCore/Lyrics/LRCParser.swift` — `LRCParser.parse` |
 | YRC 解析(含畸形元组) | `LyrimuseCore/Lyrics/YRCParser.swift` — `YRCParser.parse`、`wordRegex`、`malformedTupleRegex` |
-| 偏移两层存储 | `LyrimuseCore/Lyrics/LyricsOffsetStore.swift` — `LyricsOffsetStore.trackKey/effectiveOffset/globalOffsetMs/nudge/setOffset` |
+| 偏移存储与合成 | `LyrimuseCore/Lyrics/LyricsOffsetStore.swift` — `LyricsOffsetStore.trackKey/baseOffsetMs/effectiveOffset/globalOffsetMs/playerOffsets/playerOffset/setPlayerOffset/nudge/setOffset` |
+| 偏移作用域下拉框候选 | `LyrimuseCore/Lyrics/LyricsOffsetScope.swift` — `LyricsOffsetScope.options/allPlayersTag`(纯函数,selftest 覆盖三条不变量:排除 `.auto`、配过偏移的必列、顺序稳定无重复) |
 | 罗马音/语言判定/简繁 | `LyrimuseCore/Lyrics/Romanizer.swift` — `Romanizer.romanize/japaneseSegments/looksJapanese/script`、`ChineseVariant.converted`、`RomanizationScripts` |
+| 异体字规范化表(繁简之外的一层,有 selftest) | `LyrimuseCore/Lyrics/HanVariants.swift` — `toSimplified`、`normalizeToSimplified` |
 | 假名标注 | `LyrimuseCore/Lyrics/KanaAnnotation.swift` — `KanaAnnotation.parse/marks` |
 | 对唱分栏 | `LyrimuseCore/Lyrics/LyricDuet.swift` — `LyricDuet.plan/sides/splitMarkerAllowingEmpty` |
 | 缓存直读 | `LyrimuseCore/Local/EnrichCacheReader.swift` — `EnrichCacheReader.lookup/looseMatch/fileModificationDate/coverURL/nativeSizedCoverURL` |
@@ -227,8 +241,11 @@ PlaybackCoordinator (UI 层唯一入口) → 各展示面
 5. **罗马音兜底必须按行缓存**:activeLine 每 tick 重新构造,不缓存时纯英文歌每秒 20 次 ICU 音译,表现为本地歌词进度可见地慢于网页端。
 6. **日文汉字不能走 Any-Latin**:假名出罗马字、汉字出拼音混一行;整首粒度判日文(局部纯汉字日文行会被误判中文),日文读音吃上下文所以整行分词再按 UTF-16 对回。
 7. **偏移 key 必须含内容指纹**:曾有消费方自己拼 `"artist|title"` 查 store,跟实际存储 key 对不上,「提前」生效了但菜单永远显示 0;现在统一转发 LocalPlaybackSource 的权威值,合成只在 `effectiveOffset` 一处(两处各加一次 = 双倍校正)。
-8. **繁简折叠绝不进 key**:Go(OpenCC)和 Swift(ICU)对部分字取舍不一致,进 key 是整首没词,放查询兜底层折不对只是多一条重复条目(`EnrichCacheKeys.looseKey` 注释)。
-9. **@Published 值变才赋值**是全链纪律:SwiftUI/Combine 不比较新旧值,fastTick 的三个字段、apply 的曲目字段、reload 的 allLines 全部先比较再赋值——违反任意一处就是每秒 20 次(或每 2 秒一次)的全 body 重算。
-10. **暂停 ≠ 清空**:「停止推进」和「清空显示」是两回事;暂停按冻结位置解行,且 apply/fastTick 必须共用同一份逻辑(曾错开:暂停下拖进度条行被清、要等 2s 轮询才回来)。
+8. **同一个功能删了又加回来,必须换新键**:按播放器偏移 08-18 加 → 08-20 因根修下线**并清掉存量值** → 08-21 按用户要求以不同语义(用户显式配置、界面可见可重置)加回。复用旧键 = 把那些为已经修好的 bug 调出来的旧值重新激活,而回归的表现是「歌词莫名被拖慢」、界面上完全看不出来。selftest 有一条落盘原文断言钉住旧键始终为空。
+9. **繁简折叠绝不进 key**:Go(OpenCC)和 Swift(ICU)对部分字取舍不一致,进 key 是整首没词,放查询兜底层折不对只是多一条重复条目(`EnrichCacheKeys.looseKey` 注释)。
+10. **@Published 值变才赋值**是全链纪律:SwiftUI/Combine 不比较新旧值,fastTick 的三个字段、apply 的曲目字段、reload 的 allLines 全部先比较再赋值——违反任意一处就是每秒 20 次(或每 2 秒一次)的全 body 重算。
+11. **暂停 ≠ 清空**:「停止推进」和「清空显示」是两回事;暂停按冻结位置解行,且 apply/fastTick 必须共用同一份逻辑(曾错开:暂停下拖进度条行被清、要等 2s 轮询才回来)。
 
-本章无「⚠️待核对」项:上述行为均以当前工作树代码及其注释为准核对过。
+⚠️**待核对**:按播放器偏移对浏览器**实际有多少用**,仓内没有实测记录。02-playback-source.md 记着两条相关实测:一是「没有可学的常数」(Δ位置−Δts 七个样本极差 1.03s,所以自动学一个偏移不可行),二是时间戳相位订正已把平均绝对误差从 0.653s 压到 0.163s。残余偏差是否真接近常数、用户手调一个固定值能不能明显改善 Arc 的观感,**都还没量过**。这一层的正确性(存储、分层、不串台)有 selftest 钉住,「有效性」是待核对的。
+
+其余行为均以当前工作树代码及其注释为准核对过。

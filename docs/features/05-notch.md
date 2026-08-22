@@ -25,6 +25,7 @@
   - **Spotify 广告插播也收起**(2026-08-19 用户拍板"和暂停一样缩回去"):广告期间歌名位显示「广告中」而不是广告物料名(`NotchLyricsView.topRow` 的 displayTitle,MarqueeText id 用显示串以便切进/切出广告时重置跑马灯),歌词行随收起不渲染;hover 仍可展开(控制按钮可切歌跳过广告)。`isAdBreakNow` 由 `$isCurrentTrackAdBreak` 的 sink 写入,同 `isPlayingNow` 的 willSet 坑同一修法:只取 sink 参数值。
 - **稳态**(播放中、没 hover):顶行 + 歌词行(44pt,`NotchMetrics.compactRowHeight`)。
 - **展开**(hover):在下面再长出 40pt(`NotchMetrics.expandedExtraHeight`):下一句歌词预览(有才显示)+ 迷你进度条 + 时间行。
+- **展开区高度按内容算**（`NotchExpandedMetrics.height(hasLyricPreview:hasScrubber:)`，2026-08-21 用户报「没有歌词的时候这块太大、很多空的地方」）：展开区原来恒高 76pt 且 `alignment: .top`，而三样内容里两样是条件渲染的——下一句歌词预览（没歌词就没有）、迷你进度条（没时长就没有，见 `NotchScrubber` 的两个分支）。两样都缺时里面只剩一排三键，剩下 **41pt 全是底部空白**。现在按段累加：三键+底边距+余量 35（恒有）／预览行 17／进度条 24 → 三样齐仍是 **76，跟改动前逐字相等**（有歌词有时长时布局一点没动），只有预览 52，只有进度条 59，都没有 35。⚠️ 两个入参刻意是**曲目级**信号（这首歌有没有歌词／有没有时长），不是“此刻有没有下一句”——后者会让最后一句唱完时卡片突然矮 17pt、下一首又长回来，肉眼是抽动；代价是“有歌词但此刻恰好没下一句”时那 17pt 是空的，稳定压倒紧凑。**窗口和设置页预览容器仍用 `maxHeight`**：窗口恒按最大形态开（卡片在里面变大变小），跟着内容缩会让后面换到有歌词的歌时卡片被窗口边界硬裁。卡片高度（`NotchWindowRoot.cardHeight`）和展开区自己的定高**走同一个函数、同一组入参**，两处各自判断必然漂，而漂的表现是底部多一条空隙或最下面那排三键被裁掉。
 
 形态切换动画(`NotchWindowRoot.cardAnimation`)分三条弹簧:收起 0.45s 临界阻尼(不回弹);hover 展开 `interactiveSpring(0.38, 0.8)`(跟手);其余(开始播放弹出等)`spring(0.42, 0.8)`。系统开了"减弱动态效果"(reduceMotion)时全部直接跳变。已知名不副实的一档:"hover 移开"实际落在 0.42 那条而不是 interactiveSpring(`.animation(_:value:)` 用变化后的新状态求值),差 0.04s、肉眼不可辨,刻意没为它加状态。
 
@@ -43,6 +44,9 @@
 ### 歌词行
 
 `NotchLyricsView.lyricRow`:歌词跑马灯占满剩余宽度,尾端(卡片右下角)是 32pt 见方的专辑封面小图。
+
+- **右端渐隐带**(2026-08-22,用户报「灵动岛歌词有时候被封面挡住」):歌词跑马灯**溢出、而且此刻停在开头**时,右端给一条 10pt 的渐隐带(`NotchMetrics.lyricEdgeFadeWidth`,判据在 `MarqueeMath.trailingFadeWidth`,`MarqueeText.edgeFadeWidth` 传进去)。为什么需要它:歌词区右边界离封面只有 `artworkLyricSpacing`(10pt),长句停在开头 hold 的那 1.1 秒里末端被**硬切**在那条窄缝上,肉眼分不清"文字被裁掉了"和"文字被封面盖住了"——真机连拍坐实(截图里 `of Sunset Boul` 硬切,右边紧邻封面)。条件是精确的而非保守:滚到末端的 hold **不能**淡(那时文字末尾正好抵着边界,淡出会吃掉真正的最后一个字,是信息损失);滚动途中不淡也无所谓(文字在动,观感是滚过去而不是被挡)。渐隐带做成 `.frame(width:)` 的子视图而不是改 gradient 的 stop 位置 —— `LinearGradient` 不是 Animatable,改 stop 会突变;做成宽度就自然跟着跑马灯的 `withAnimation` 平滑收掉、跟着 `disablesAnimations` 的归零瞬时出现。mask **无条件**挂(宽度 0 时等效没有),不写成 `if width > 0`:那样归零的一刻视图身份变、子树重建,会打断正在跑的滚动。只有歌词行传非 0,顶行歌名/歌手同样是硬切但旁边是刘海/音浪而不是封面,没有同样的误读风险。
+- **封面在场性变化必须瞬时**(同日,同一份用户报告里真·遮挡的那一半):封面是歌词行 HStack 的**条件兄弟**,`if let image = highResArtworkImage ?? artworkImage`。它从不在场变在场时 SwiftUI 当结构性插入 —— 新插入的视图**一帧就落在终态位置**,而歌词那侧的 frame(连同跟着 frame 走的 `MarqueeText` 内部 `.clipped()` 边界)是被动画平滑收缩的,整条弹簧的时长里歌词被裁到"没有封面时"的旧边界,那一截字正好画在已就位的封面**底下**(HStack 里靠后的兄弟盖在前面的上面)。修法是在那个 HStack 上挂 `.animation(nil, value: 封面是否为 nil)`。独立最小复现(同构 HStack、弹簧放慢到 3s 逐帧抓):封面到位那一帧文字右边界仍停在旧位置 623px,要 4 帧才收到终态 603px,90 帧里 25 帧文字被压在封面底下;加上那一行之后同样 90 帧 **0** 帧遮挡。触发窗口很窄——必须"封面在场性变化"和某条活动动画落进**同一次** SwiftUI 更新,把两者错开 300ms 的第三版复现同样 0/90;现实里够得着的活动动画有 `NotchWindowRoot` 那三条 `.animation(cardAnimation, value:)` 和 `NotchTransientHost` 的 0.18s。封面确实会真的离场再回来:换歌后取图迟迟不来时 `LocalPlaybackSource.scheduleArtworkStaleTimeout` 会在 3s 后把 `artworkData` 清成 nil,重试成功再填回来。
 
 - **逐字高亮**:当前行有逐字数据时,`TimelineView` 按 `WordKaraokeGradient.refreshInterval` 帧率现算每个字的填色比例(词最短时长下限 80ms、过渡带 0.08,与桌面悬浮歌词同一组经验值),时间基准 = 锚点外推位置 + `currentLyricsOffsetMs`(不加会填到一半卡住;anchor/offset 由闭包直读 PlaybackCoordinator,不经窄代理订阅)。整行套 `compositingGroup + shadow`。paused 条件是 `!isPlayingNow || currentLineFillSettled`(2026-08-19,与悬浮窗同款):行填完到下一行开始之前(行尾/间奏/曲末)视觉零变化,表停掉不再空转。
 - **无逐字数据时的占位文字**,分支顺序固定(先特殊后一般):`广告中` → `纯音乐` → `暂无歌词` → `网络连接失败`(collector 网络不通且无歌词)→ `搜索歌词中…`(播放中但歌词还没解析回来)→ 整行纯文本 / "♪"。
@@ -159,7 +163,8 @@
 | 设置页灵动岛卡 + 屏幕下拉 | `lyrimuse/Sources/lyrimuse/SettingsView.swift` — `notchOverlayCard`、`autoHideCard` |
 | 设置页预览 | `lyrimuse/Sources/lyrimuse/UI/SectionPreviewBars.swift` — `NotchPreviewChrome`、`NotchPreviewBar` |
 | 横幅生产者 | `lyrimuse/Sources/lyrimuse/Settings/GlobalHotkeys.swift` — `showOffsetBanner`;`lyrimuse/Sources/lyrimuse/Settings/VolumeMonitor.swift` — `VolumeMonitor.apply` |
-| 播放指示条 / 跑马灯 | `lyrimuse/Sources/lyrimuse/UI/EqualizerBars.swift`;`lyrimuse/Sources/lyrimuse/UI/MarqueeText.swift` |
+| 播放指示条 / 跑马灯 | `lyrimuse/Sources/lyrimuse/UI/EqualizerBars.swift`;`lyrimuse/Sources/lyrimuse/UI/MarqueeText.swift` — `edgeFadeWidth`、`fadeMask` |
+| 跑马灯溢出判定 / 渐隐带宽度(纯几何,有 selftest) | `lyrimuse/Sources/LyrimuseCore/Lyrics/MarqueeMath.swift` — `isOverflowing`、`trailingFadeWidth` |
 | 菜单栏开关 / 启动恢复 | `lyrimuse/Sources/lyrimuse/MenuBar/MenuBarStatusMenu.swift` — `toggleNotchOverlay`;`lyrimuse/Sources/lyrimuse/AppDelegate.swift` — `startObservingVolumeBannerPreference` |
 
 ## 设计决策与已知坑
@@ -173,4 +178,5 @@
 7. **Combine sink 必须用参数值**:`@Published` 在 willSet 时机发布,闭包里回头读存储属性拿到的是旧值——本功能相关代码(isPlayingObserver、NotchMirrorManager、VolumeMonitor)处处遵守,项目已实测踩过多次。
 8. **`isCollapsed` 必须是计算属性**:公式只有一份但挂在 hover 不会走的赋值路径上,导致"暂停时 hover 没反应"(isExpanded 变了 isCollapsed 没跟上);2026-08-17 改计算属性后两个输入哪个变都即时生效。
 9. **`hasShadow = false` 是刻意的**:AppKit 给无边框透明窗口自动算的阴影会在贴死屏幕顶边的窗口里内嵌出一圈淡灰,破坏"与屏幕边缘融为一体"。
-10. **模糊半径不能照搬**:歌词窗口的 60pt 模糊在灵动岛的矮宽画布上会把所有封面抹成同一块深灰,"跟随封面"失去意义;20 是实测保留主色调差异的取值。
+10. **歌词行的"硬切"和"真遮挡"是两个不同的问题,别拿一个的修法去解释另一个**(2026-08-22):稳态下 HStack 的两个兄弟**永不重叠**,clip 边界恒在封面左边 10pt —— 这一条经真机连拍 60 帧逐像素核过(封面左侧那条 spacing 带里 0 个文字像素)。用户报的「被封面挡住」主要是那个**硬切口紧贴封面**的观感,修法是渐隐带。真正的像素级重叠只发生在"封面在场性变化 + 活动动画同一次更新"这个窄窗口里,修法是 `.animation(nil, value:)`。两者独立,缺一个另一个都还在。
+11. **模糊半径不能照搬**:歌词窗口的 60pt 模糊在灵动岛的矮宽画布上会把所有封面抹成同一块深灰,"跟随封面"失去意义;20 是实测保留主色调差异的取值。

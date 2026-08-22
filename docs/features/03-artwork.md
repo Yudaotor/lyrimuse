@@ -82,7 +82,7 @@
 
 1. **灵动岛封面小图**(`NotchLyricsView.artworkThumbnail`):歌词行尾端(卡片右下角),边长 `max(16, min(32, 行高-12))` = 32pt,圆角 5pt + 极淡白描边 + 小投影(给磨砂玻璃风格下的浅色封面兜轮廓)。没有封面数据**整个不占位**(不画空方块)——换歌时旧图留到新图到货,只有「启动后第一首」和「这首歌真没封面」才发生一次宽度增减。这枚小图无开关(2026-08-10 删掉「显示专辑封面」开关,固定有图就显示)。
 2. **灵动岛「跟随封面」背景**(`NotchLyricsView.backgroundLayer`):`notchCardStyle == .coverArt` 且有图时,封面 scaledToFill + blur 20 + 45% 黑,底下先铺一层不透明的 darkGradient 打底(blur 会把图像边缘羽化成半透明,没有打底卡片四周会透出桌面)。模糊半径 20 远小于歌词窗口的 72——灵动岛 4.7:1 又矮又宽,照搬大半径会把任何封面抹成统一深灰。没图(或风格不是 coverArt)退回所选固定风格的填充。
-3. **歌词窗口模糊背景**(`LyricsWindowView.artworkBackground`):`saturation(1.5)` + `blur(72, opaque: true)` + 22% 黑——22% 是拿两类封面跟 Apple Music 逐像素校准出来的固定档(试过按封面亮度自适应,比 AM 明显更暗已回退;网页端因封面源不同才自适应,两边故意不同)。故意不 `.ignoresSafeArea()`——铺到标题栏底下会撞坏系统标题栏文字的对比度。
+3. **歌词窗口动画背景**(`LyricsWindowView.artworkBackground`):AM 式「暗底+lighten 光斑+慢旋转」,图层预烘焙(`bakeWindowBackgroundLayers`:暗底 + 3 张分区取色羽化光斑,seed 确定性),视图层仅 GPU 变换动画 + 0.15 遮罩——细节与四轮校准史见 07-lyrics-window.md。
 4. **歌词窗口封面卡**(`LyricsWindowView.artworkCard`):左栏 1:1 方图(Color.clear 撑框 + scaledToFill),最大 460pt;没图画灰底 music.note 占位。卡片实际宽度回写 `artworkWidth`,整排播放控制按钮按它缩放。0.5s 交叉淡入动画收在 overlay 内容上而不是卡片最外层(挂外层会把同事务里的布局位移一起 animate 成「进度条从上面飘下来」)。
 
 **共同细节**:换图动画的触发键有两个——原始字节 `poller.artworkData`(Data 按字节比较,保持跟加解码缓存之前逐字节相同的判定语义;`artworkImage` 是 NSObject,== 退化成指针比较,语义不等价)和 `poller.highResArtworkImage`(这里指针比较反而是对的:每次到货都是新解码的实例)。灵动岛背景和小图的 `.scaledToFill()` 之后、`.clipShape` 之前必须显式钉一次 `.frame(width:height:)`——scaledToFill 会向布局系统请求比可见区更大的 frame,clipShape 按紧邻上一个 View 的 frame 算圆角,不钉的话圆角落在偏大矩形的边缘,可见区域实际是直角(像素级采样验证过,肉眼会被模糊骗)。
