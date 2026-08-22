@@ -125,6 +125,16 @@
 - **回到当前播放**(location.fill):带动画滚到当前行;没有当前行(还没唱到第一句)时不做任何事。
 - 真实 NSWindow 由 `LyricsWindowCapture`(NSViewRepresentable)捕获交给 `LyricsWindowController`(每个视图实例自有,非单例;窗口场景本身是 App 内单例)。
 
+### Last.fm 系列(2026-08-22,用户点单 7 项先做出来看效果,增删待用户实测反馈)
+
+全部按 `LastfmStatsService.isConnected` 显隐 —— 没连账号时窗口与此前逐像素一致。五个新子视图各自 @ObservedObject 服务单例但都限制在小子树内,主 body 的窄代理纪律不破。
+
+- **「第 N 次听」徽章**(#1):歌手行下的小胶囊,`nowPlayingCount`(track.getinfo userplaycount+1,孪生合并/防刚 scrobble 查回 0 都在服务侧);取数由徽章容器的 onAppear/onChange(键=「歌手|歌名」)触发,容器永远在场防"没数字→不渲染→永不取数"死锁。
+- **计次刻度与「已记录」**(#6):进度条上 3pt 圆点标计次位置(`ScrobbleRule.thresholdFraction`,复刻 collector 的 min(时长/2, 240s)、<30s 不计,selftest 钉死),播放头过线后圆点隐去、时间行右侧亮 checkmark 对勾(help 说明)。⚠️ 按「位置过线」近似,collector 数的是实际播放秒数,往后拖进度条时两者短暂不一致 —— 展示层刻意接受(见 ScrobbleRule 注释)。
+- **收听档案**(#5):「显示简介」面板加 累计/首次听/上次听 三行。首次/上次来自 `user.getTrackScrobbles`(limit=1 首页取最近+total,翻到末页取最早;**本地 listens.jsonl 靠不住** —— 它只在没连账号时才记,见 collector/listenlog.go 2026-08-13 收窄),面板打开那一刻才发这两个请求。
+- **欢迎态统计**(#2/#3/#4):停播页加「今天听了 N 首 · 本周 M 首」(overview)+「那年今日」(onThisDay,循环最多那首)+ 近 12 周迷你热力图(MiniHeatmapStrip 直读 dailyCounts;完整年历仍在设置统计页)。`.task` 3 分钟轮询三个刷新(各自带 TTL/单飞,重复调用是空操作),欢迎态退场时任务随视图取消。
+- **「你的常听」面板**(#7):「⋯」菜单新行,同锚点第三块玻璃面板(ChartsPanelView):种类(歌曲/专辑/歌手)×周期(近7天/近30天/近一年/全部)segmented + Top 10,数据走 `refreshChart`(15 分钟 TTL);点条目经 iTunes Search 解析后 music:// 跳 Apple Music(与「前往专辑/艺人」同一条管线)。
+
 ### 占位态(无歌词/解析中)
 
 `allLines` 为空时整个右列换成占位(`emptyStateSpec`),按优先级取第一个命中:
@@ -187,6 +197,7 @@
 
 ## 设计决策与已知坑
 
+0. **锚定浮层不许直接消费 geo[anchor](2026-08-22「菜单开着很卡」)**:「⋯」菜单开着时实测抓到一次**亚稳态布局风暴**——主线程 2472/2485 采样全忙,每个显示周期整窗 NSHostingView.layout + AttributeGraph churn(热栈里 DefaultCombiningAnimation/SpringState 表明有动画被逐帧重触发、永不排干),菜单一关立即回全闲;后续同条件多轮开关不再复现(队列面板同场景全程无辜、独立 harness 模拟同结构也复现不出——是组合亚稳态,不是稳定必现)。热路径穿过「anchorPreference 锚令牌 → overlayPreferenceValue 闭包里 geo[anchor] 解析 → 面板 ZStack/材质布局」这条依赖边,且闭包每次重跑都新建 MoreMenuRow 闭包、diff 必失败=全量重建放大器。修法=**锚点矩形快照**:preference 闭包降级成搬运工(取整后 onChange 写进 `moreAnchorRect` @State,不变不写),面板本体挪进普通 `.overlay`、只随真实状态重建。⋯菜单/简介/常听三块已改;队列/翻译/音频输出面板仍是旧模式(实测无辜,再犯同症状照此修)。主 body 顶部留有 `Self._logChanges()` 探针(debug 级,不 `log stream` 时零成本),复发时先抓它。
 1. **原生全屏(已修复,2026-08-21)**:真根因=**SwiftUI Window 默认禁全屏**——探针实验坐实:同一进程里纯 AppKit NSWindow 绿键是 AXFullScreenButton、能真进全屏 Space,SwiftUI 这扇窗却是 AXZoomButton;当年证伪的四个假设(collectionBehavior/.regular/LSUIElement/MenuBarExtra)都没碰到场景宿主这层。修复分两层:`.windowFullScreenBehavior(.enabled)`(macOS 15+ View 修饰符)**实测没生效**、仅留作官方语义表达;真正起效的是 **AppKit 层 collectionBehavior 持续守护**(`enforceFullScreenCapability`:去掉 fullScreenNone/Auxiliary、插 fullScreenPrimary;挂窗口 didUpdate 通知每个绘制周期查一位、缺才写不自激——**设一次不够**,SwiftUI 每个更新周期会把标志复写掉,实测右上角按钮 toggle 前刚补过就能进、绿键读系统当下标志就不行)。全屏按钮在 15+ 直接 `toggleFullScreen`(didEnter/didExit 维护 isNativeFullScreen 换图标,全屏中 Esc 退出);伪全屏整套保留作老系统兜底(`LyricsWindowView.swift` 文件头注释)。当年的排查手法也值得记:**同进程 AppKit 探针窗对照**一发定位到宿主层。
 2. **`presentationOptions` 是进程级全局状态**:必须 willClose + didResignKey 双兜底清理,否则伪全屏残留会让别的窗口/别的 App 找不到菜单栏。
 3. **Esc local monitor 是"发给本 App 任意窗口"级钩子**:早先注释声称按窗口过滤但回调没做,吞掉了设置页弹窗的 Esc;现在显式判 `isKeyWindow`,与 didResignKey 兜底是两道独立防线。

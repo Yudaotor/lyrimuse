@@ -11,7 +11,7 @@
 - **状态栏本体**:自建 `NSStatusItem`(2026-08-16 起,不再是 SwiftUI `MenuBarExtra`),`AppDelegate.applicationDidFinishLaunching` 里调一次 `MenuBarStatusItem.shared.start()` 启动,从启动到退出一直都在,生命周期靠 Combine 订阅自持,不依赖任何视图的 onAppear。
 - **下拉菜单**:点状态栏项弹出,`MenuBarStatusMenu` 手写的 `NSMenu`(不用 `NSHostingMenu`,那要 macOS 14.4,App 下限 14.0)。
 - **设置入口**(两处,见「设置项」):
-  - 设置 › 歌词显示 › 「菜单栏」分段:菜单栏歌词开关、宽度模式、最大宽度,顶部固定一条实时预览(`MenuBarPreviewBar`);
+  - 设置 › 歌词显示 › 「菜单栏」分段:菜单栏歌词开关、宽度模式、最大宽度、逐字染色开关、文字/染色两个颜色项,顶部固定一条实时预览(`MenuBarPreviewBar`,预览反映文字色、暂不演示染色);
   - 设置 › 通用 › 「菜单栏与 Dock」卡:12 款图标网格、「随播放律动」开关。
 
 ## 行为规格
@@ -65,7 +65,8 @@
 ### 逐字染色(2026-08-22,用户点名"像酷狗菜单栏歌词")
 
 - **开关**:设置 › 歌词显示 › 菜单栏 ›「逐字染色」,默认开;只对带逐字时间轴(YRC)的歌词生效,LRC 整行歌词维持纯色(没有可信的字级进度就不假装有)。
-- **驱动方式**:跟滚动同一哲学 —— 基础色长图上叠一张**强调色**(系统 controlAccentColor)长图,外面套一层 masksToBounds 的 `fillClipLayer`,它的 `bounds.size.width` 就是"已唱到哪个像素";整行填色进程按逐字时间轴一次性编成 **一条 CAKeyframeAnimation**(`MenuBarMarquee.karaokeFillPath` / `karaokeFillKeyframes`,纯函数,selftest 覆盖),装好后主线程一帧都不碰。填色层挂在滚动的 contentLayer 里,滚动时天然跟文字焊在一起。词边界像素必须按**前缀整段测宽**(`MenuBarMarqueeRenderer.wordEndXs`),各词单测再累加会被词界 kerning 带漂。
+- **驱动方式**:跟滚动同一哲学 —— 基础色/强调色两张同字形长图做**互补裁剪**(fillClip 露出已唱区 [0,边界]、baseClip 露出未唱区 [边界,句尾],KTV 式硬切边界);整行填色进程按逐字时间轴一次性编成 **三条共享 beginTime/keyTimes 的 CAKeyframeAnimation**(fillClip 宽 + baseClip 的 position.x/bounds;数学在 `MenuBarMarquee.karaokeFillPath` / `karaokeFillKeyframes`,纯函数,selftest 覆盖),装好后主线程一帧都不碰。两个裁剪层挂在滚动的 contentLayer 里,滚动时天然跟文字焊在一起。词边界像素必须按**前缀整段测宽**(`MenuBarMarqueeRenderer.wordEndXs`),各词单测再累加会被词界 kerning 带漂。⚠️ **不能做成"强调色叠在基础色上面"**(第一版,当天被用户截图打回"染色后有白边"):两张图字形抗锯齿覆盖率相同,叠着画时边缘半透明像素让底下的基础色透出来,深色菜单栏上蓝字四周镶一圈白晕;互补裁剪让每个区域的字形只与背景合成一次。离线 harness 有「已染区白色像素=0」专项断言。
+- **染色颜色**:系统 controlAccentColor;**深色菜单栏上向白提亮四成**(`karaokeFillColor`)——强调色按浅底设计,直接压深底上亮度低于旁边的白色基础字,染过的反而更难读(同批用户实测"看不清文字");浅色菜单栏原样。
 - **时钟**:位置公式与歌词窗口逐字填色同一条(anchor 外推 ?? 暂停位置,+ 时间轴校准)。对表走独立通道(`syncKaraokeClock`,订阅 $anchor/$pausedPositionMs/$currentLyricsOffsetMs),**不触发槽位 refresh**;标签内部有 **250ms 漂移门** —— 锚点每 ~2s 的例行重发被无声吸收、不打断动画,seek 必然超门重锚,时间轴偏移微调(默认步长 200ms 在门下)走 force 立即生效。暂停静置在当刻边界,恢复从真实位置续染。
 - **自适应宽度模式**下装得下的句子原走 `button.title`(AppKit 自绘,没有图层可叠色)——染色时改走图层渲染,槽宽公式不变(文字宽+18),footprint 逐像素一致。宽度 ≤0 的截断退化路径不染。
 - **反白期间**(菜单/面板开着)填色整个隐掉:基础字已换成选中色,强调色叠在选中背景上要么撞色要么看不清,关掉恢复。
@@ -133,6 +134,9 @@
 | 歌词显示 › 菜单栏 | 菜单栏歌词(开关) | `np:showLyricsInMenuBar` | 关 | 关=永远只显示图标 |
 | 歌词显示 › 菜单栏 | 宽度模式(固定/自适应) | `np:menuBarLyricsWidthMode` | fixed | 只影响装得下的句子怎么占位(见上) |
 | 歌词显示 › 菜单栏 | 最大宽度(滑杆 80~600pt,步进 10) | `np:menuBarLyricsMaxWidth` | 200pt | 歌词格宽度;fixed 模式下即恒定占宽(UI 标题仍叫「最大宽度」) |
+| 歌词显示 › 菜单栏 | 逐字染色(开关) | `np:menuBarLyricsKaraoke` | 开 | 见「逐字染色」一节;只对带逐字时间轴的歌生效 |
+| 歌词显示 › 菜单栏 | 文字颜色(色轮+「跟随系统」) | `np:menuBarLyricsTextColorHex` | 空=跟随系统 | 未唱部分/整行的文字色。空串=labelColor 自适应+反白;自定义色原样用(反白态仍换选中色);自适应 button.title 退化路走 attributedTitle |
+| 歌词显示 › 菜单栏 | 染色颜色(色轮+「跟随系统」,仅逐字染色开着时显示) | `np:menuBarLyricsFillColorHex` | 空=跟随系统 | 已唱部分的颜色。空串=系统强调色+深色菜单栏提亮四成;自定义色**原样用、不再自动提亮** |
 | 通用 › 菜单栏与 Dock | 菜单栏图标(12 款网格) | `np:menuBarIconStyle` | classic | 未显示歌词时那枚图标的样式,点选立即生效 |
 | 通用 › 菜单栏与 Dock | 随播放律动(开关) | `np:menuBarIconAnimates` | 开 | 播放时图标动不动;暂停永远静止 |
 | 快捷键 › 调整步长 | 调整步长(50~2000ms) | `np:lyricsOffsetStepMs` | 200ms | 菜单「提前/延后」和两个快捷键每按一次调多少,菜单项文案跟着变 |

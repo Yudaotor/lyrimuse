@@ -1,6 +1,6 @@
 # 09. 歌词解析决策（collector）
 
-> 最后核对：2026-08-22 · 基线：05767ae+工作树
+> 最后核对：2026-08-22 · 基线：675f87a+工作树
 
 ## 定位
 
@@ -45,6 +45,8 @@ collector 的核心：一首歌播放时，去五个歌词源检索候选、校�
 | musixmatch | 不参与 | richsync→YRC | **可选语言** | 无 | 500px | DoH 防 DNS 污染；匿名 token 双缓存；richsync 把**空格当独立计时条目**、掏空短词的读条时长（实测 "In" 23ms＋空格 165ms，悬浮窗观感"没有读条直接填满"）——`richsyncToYRC` 归并空白条目进前词（2026-08-19），存量缓存由启动迁移 `migrateYRCWhitespaceTokens`（yrcwhitespace.go，夹在 import 与 export 之间、幂等）原地清洗，无需重新联网解析 |
 
 所有源共用两道身份闸：`lyricTitleAccepted`（归一相等/剥括号相等/双语前缀，**绝不认任意子串包含**）+ 歌手闸。歌手闸 2026-08-20 起分两套：**歌词候选采纳**（kugou/qq strict 档/lrclib search/musixmatch）用 `lyricSourceArtistMatches` = `artistMatches` + 「两侧都是多人合credit 时段集有交集即过」——跨服务合唱署名会换分隔符、换合作者语言写法（「UMI、V」vs「UMI & 金泰亨」），要求整串对上等于要求两边曲库同一套署名习惯，实测酷狗服务端召回明明成功、正主却死在客户端闸上；交集档仍要求两侧各切出 ≥2 段（「周杰伦、」进不了）、段间字节相等（「周杰伦-」不认）。**身份判定/防仿冒**（netease 的 nameOnlyMatch、canonical 统一拼写、qqCoverFallback）仍用原 `artistMatches`（多人 credit 逐段精确相等 + 连续段拼回救 K/DA 类名字，拒绝「周杰伦、」式仿冒尾巴），刻意不放宽。
+
+**第三档（`lyricRecordingTriangleMatches`，2026-08-22 加，只挂在 kugou 一处）**：歌手闸不过时，再看「标题逐字同名 + 专辑对得上 + 时长紧密吻合」——三者同时成立就判定为同一次录音、放行歌词候选。四道判据都必须过：①`normLoose` 标题**逐字**相等（不接受`lyricTitleAccepted` 的剥括号档/双语档，那两档本身就是放宽，跟「歌手名不可信」叠加就是双重放宽）；②两边自报时长差 ≤**1%**（比打分层的 25% 严 25 倍——那一层量的是「LRC 末句 vs 曲长」、被前奏尾奏系统性带偏所以必须宽松，这里量的是两边各自自报的曲目时长，同一次录音跨平台只差在取整）；③`albumScore ≥ 200`，或 `≥ 100` 且候选专辑名归一后长度 ≥ 本地的 60%（本地专辑没标签一律不给）；④`versionTagsMismatch` 为假。**只放行歌词，绝不放行身份/封面**——沿用已知坑 12 那次确立的分层。`lyricrecordingtriangle_test.go` 里有一个扫 netease.go/qq.go 源码的守卫测试，防它被顺手推广到那两处的身份判定上。
 
 ### 4. 资格守卫
 
@@ -146,6 +148,7 @@ collector 的核心：一首歌播放时，去五个歌词源检索候选、校�
 | 打分 | match.go `scoreLyricCandidateDetailed`（版本 `lyricsScoringVersion`） |
 | 挑选 | enrich.go `pickLyricCandidate` |
 | 守卫 | match.go `isTimedLRC` `isProbablyWrongLanguageLyrics` `isCreditOnlyLRC` `usableWordTiming` |
+| 歌手闸三档 | match.go `artistMatches` / `lyricSourceArtistMatches` / `lyricRecordingTriangleMatches`（第三档只在 kugou.go `resolveKugouLyric` 调用） |
 | 重试/重打分 | enrich.go `needsLyricsRetry` `retryLyricsUpgrade` `needsLyricsRescore` `rescoreLyrics` |
 | 已校准一票否决 | lyricspins.go `lyricsPinned` `readLyricsPins`;Swift 侧 `LyricsPinStore` |
 | 决策留痕 | decision.go `buildLyricsDecision`；lyricstrace.go |
@@ -195,3 +198,52 @@ collector 的核心：一首歌播放时，去五个歌词源检索候选、校�
     QQ 整源交出 0 候选——而裸标题变体从没被试过。2026-08-22 未改：对这首歌而言裸标题只会
     带回《范特西》录音室版（错版本，靠 −600 版本词扣分兜住），修了反而多一份错版本候选；
     但换一首「带括号查不到、裸标题才查得到」的歌，这就是实打实的漏检，记在这里备查。
+14. **署名分歧的第三类：艺名↔本名 / 乐队名↔成员名，连分隔符都没有**（2026-08-22，
+    「枫+退后+搁浅 (Live)」案）。Apple Music 把《周杰伦地表最强世界巡回演唱会 (Live)》
+    第 14 首署名成 **「南拳妈妈弹头」**（乐队名和成员名直接粘在一起），而网易云 / QQ / 酷狗
+    三家都署名 **「宋健彰」**（弹头的本名）。后果是**五源零候选、整首歌一个字都没有**，
+    而这首歌在三个源上明明都有、时长还跟本地逐位吻合（119.21 vs 119.213）。
+    每一条既有救援机制都够不到它，逐条实测过：
+    - `artistCreditParts` 对两串都只切出 **1 段**（`isArtistCreditSep` 只认 `/ 、 & , ，`
+      五个字符，这里一个都没有）→ 段集交集档的 `len ≥ 2` 前置条件不成立；
+    - `artistAliasTable` 没这条（那张表的语义是「英文/罗马化艺名 → 中文名」，是另一类）；
+    - MusicBrainz 两条路（中文别名 / 主名）实测都返回空串；
+    - `lyricPrimaryQueryArtist("南拳妈妈弹头")` = `""`（单人名切不出第二段）→ **首歌手变体轮
+      根本不触发**；`retryArtistIdentities` 返回 nil → **别名轮也不触发**。实测表现是
+      `search-lyrics` 的 `sourcesDone` 只从 1 数到 5 一遍，压根没有第二轮抓取。
+
+    **五个源死在两个不同的环节**（这是修法为什么只挂一处的依据）：
+
+    | 源 | 死在哪 | 实测 |
+    |---|---|---|
+    | netease | **查询 + 闸门** | 4 条查询词全带歌手前缀，目标不在 30 条结果里；去掉歌手的 `裸标题`/`裸标题+专辑` → 目标排第 1。即便召回到了，`pick()` 的 `artistMatches` 仍会拒 |
+    | kugou | **只有闸门** | 变体②`南拳妈妈弹头 枫+退后+搁浅` 把目标排在第 1 位（`kugouLookup` 只在 `chosen != nil` 时 break，所以这条一定会被跑到），然后被 `lyricSourceArtistMatches` 原地拒掉 |
+    | qq | **只有闸门** | 它有第二段纯裸标题兜底，确实拿到了目标（mid=000wV3ml0W0RBm），被 `qqArtistOK` 两档（strict + `looseContains`）都拒 |
+    | musixmatch | 查询 + 闸门 | — |
+    | lrclib | 源上真没有 | `search`/`get` 全 0 条/404 |
+
+    修法只在 **kugou** 一处开第三档，理由是范围最小而收益已经够：它是唯一「正主已经排在
+    搜索结果第 1 位、只差这一闸」的源，而且带 YRC 逐字。刻意**不**推广到另两处：
+    - **netease**：它的 `pick()` 同时决定歌词和封面/`canonical_artist`/链接指向，一个函数一个
+      返回值，放宽就等于连身份一起放宽——那正是当年删掉 byAlbum 兜底要防的东西。要救它得先
+      照 `withholdImpersonatorRiddenIdentity` 的样子做一层「放行歌词、扣掉身份字段」的包装，
+      而且**还得同时**改查询词（它在查询阶段就召回不到），是两处改动，另算。
+    - **qq**：smartbox 的条目**既不带专辑也不带时长**（专辑要另发 `qqSongAlbum(mid)` 一次请求，
+      时长压根拿不到），三角验证在那里无法评估。
+
+    **专辑名那道长度可比性闸的来历**：`albumScore` 的「宽松包含」档对**短通用串**几乎免检——
+    同一批酷狗结果里「炸小肉丸 / album=`周杰伦` / 62s」也拿到 100 分（`周杰伦` 正好是
+    `周杰伦地表最强世界巡回演唱会live` 的子串），真正挡住它的只有时长那一条。加长度可比性
+    要求，是不让整条防线单靠时长撑着。
+
+    **不需要 `lyricsScoringVersion` +1**：artist 从来不是打分输入（14 个 `scoreTerm` 里没有
+    歌手项），放宽的是采纳闸不是打分。
+
+    **实测数字**：改后该曲从 0 候选变成 kugou **799 分**（时长 177 + 逐字 400 + 行数 27 +
+    专辑 75 + 标题 120）、带 YRC 逐字。消融实验：对 **174 首**真实曲库样本跑 **207 次**酷狗
+    搜索、扫 **261 行**结果，第三档**只开火 1 次**——就是这首歌，放进来的正是正主，零附带影响。
+    `go test ./...` 全绿。
+
+    ⚠️ 存量条目不会立刻自己好：`needsLyricsFirstFill` 的退避是 **24 小时起步**（`lyricsFillCount`
+    每次翻倍），要马上生效得用「歌词管理」→「重新自动匹配」。
+
