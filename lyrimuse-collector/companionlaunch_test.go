@@ -37,3 +37,50 @@ func TestShouldCompanionLaunch(t *testing.T) {
 		}
 	}
 }
+
+// 2026-08-22 加的回归测试:酷狗当初接进 collector 时(system.go / features.go 都补了
+// playerKugou)漏了 companionLaunch 这一路 —— playerProcessName() 的 switch 没有 kugou
+// 分支,落进 `default: return "Music"`,于是**选了酷狗的用户,这个联动实际在盯 Music.app**:
+// 打开酷狗不会唤起 Lyrimuse,反倒是打开 Apple Music 会。knownPlayerProcessNames 同样漏了
+// 它,连"自动识别"档也盖不住。
+//
+// 这条测试钉的是"每个受支持的播放器都必须有自己的进程名,而且不能悄悄退化成 Music" ——
+// 以后再加播放器时漏接同一处会当场失败。
+func TestPlayerProcessNameCoversEveryPlayer(t *testing.T) {
+	original := features.Player
+	defer func() { features.Player = original }()
+
+	cases := []struct{ player, want string }{
+		{playerAppleMusic, "Music"},
+		{playerQQMusic, "QQMusic"},
+		{playerNetease, "NeteaseMusic"},
+		{playerSpotify, "Spotify"},
+		// 可执行文件名是中文:/Applications/酷狗音乐.app 的 CFBundleExecutable 就是这个
+		// (PlistBuddy 实测)。UTF-8 下 12 字节,没超过内核 p_comm 的 16 字节上限,
+		// `pgrep -x` 能精确匹配(2026-08-22 拿中文名进程实测过)。
+		{playerKugou, "酷狗音乐"},
+	}
+	for _, c := range cases {
+		features.Player = c.player
+		if got := playerProcessName(); got != c.want {
+			t.Errorf("playerProcessName(%s) = %q, want %q", c.player, got, c.want)
+		}
+	}
+
+	// 手动选定的每一个播放器,它的进程名都必须在"自动识别"那份列表里 —— 否则
+	// playerAuto 档会盖不住某个明明支持的播放器(酷狗当初就是这么漏的)。
+	features.Player = playerAuto
+	auto := companionLaunchProcessNames()
+	for _, c := range cases {
+		found := false
+		for _, name := range auto {
+			if name == c.want {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("knownPlayerProcessNames 缺 %q(%s),playerAuto 档会漏掉这个播放器", c.want, c.player)
+		}
+	}
+}
