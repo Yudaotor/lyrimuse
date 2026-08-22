@@ -287,6 +287,9 @@ final class LastfmStatsService: ObservableObject {
         playCountsInFlight = []
         playCountFetchedAt = [:]
         newestPlaySeen = [:]
+        catalogCovers = [:]
+        catalogCoverUnavailable = []
+        catalogCoversInFlight = []
         artistCorrections = [:]
         artistCorrectionTasks.values.forEach { $0.cancel() }
         artistCorrectionTasks = [:]
@@ -875,6 +878,9 @@ final class LastfmStatsService: ObservableObject {
         var trackPlayCounts: [String: Int]?
         var recentTrackCovers: [String: URL]?
         var recentAlbumCovers: [String: URL]?
+        /// 第⑤级(Apple Music 目录)查回来的封面。查一次要一个 iTunes 请求,不持久化的话
+        /// 每次冷启动整页缺图的行都要重查一轮。
+        var catalogCovers: [String: URL]?
         /// 次数表的口径版本:11 = 第三批的修正(裸场次标记不归一等,见 foldVersion 注释);
         /// 10 = 同日第三批(**用户拍板**:R1 守卫套到原串 + 版本尾缀分隔符
         /// 归一 + 罗马字歌手名别名归一);9 = 同日第二批(破折号版本尾缀 `Bad - 2012 Remaster` + with
@@ -916,6 +922,7 @@ final class LastfmStatsService: ObservableObject {
         trackPlayCounts = snap.mergedCountsVersion == 11 ? (snap.trackPlayCounts ?? [:]) : [:]
         recentTrackCovers = snap.recentTrackCovers ?? [:]
         recentAlbumCovers = snap.recentAlbumCovers ?? [:]
+        catalogCovers = snap.catalogCovers ?? [:]
         // 本机封面兜底不进快照 —— 它是从 enrich 缓存现算的,存下来只会存一份可能已经过期的
         // 副本。但**必须在这里补算一次**:这条路径不经过 applyRecent,冷启动那一屏就是快照
         // 里的行,不算的话本机能给出封面的行要一直灰到下一次联网刷新回来才补上。
@@ -926,7 +933,7 @@ final class LastfmStatsService: ObservableObject {
         // 再从 URLCache 里异步取(见 ImageMemoryCache.prewarm)。
         ImageMemoryCache.shared.prewarm(
             Array(artistAvatars.values) + Array(recentTrackCovers.values)
-                + Array(recentAlbumCovers.values)
+                + Array(recentAlbumCovers.values) + Array(catalogCovers.values)
                 + charts.values.flatMap { $0.compactMap(\.imageURL) }
                 + recent.compactMap(\.imageURL))
         // fetchedAt 刻意留空:所有刷新照常发生,快照只是首屏的底
@@ -948,10 +955,12 @@ final class LastfmStatsService: ObservableObject {
             var keptCounts: [String: Int] = [:]
             var keptCovers: [String: URL] = [:]
             var keptAlbumCovers: [String: URL] = [:]
+            var keptCatalogCovers: [String: URL] = [:]
             for r in rows {
                 let key = Self.playCountKey(artist: r.artist, title: r.title)
                 if let n = trackPlayCounts[key] { keptCounts[key] = n }
                 if let c = recentTrackCovers[key] { keptCovers[key] = c }
+                if let c = catalogCovers[key] { keptCatalogCovers[key] = c }
                 if let ak = Self.albumKey(artist: r.artist, album: r.album), let c = recentAlbumCovers[ak] {
                     keptAlbumCovers[ak] = c
                 }
@@ -963,6 +972,7 @@ final class LastfmStatsService: ObservableObject {
                 charts: charts, artistAvatars: artistAvatars, trackCovers: trackCovers,
                 trackPlayCounts: keptCounts,
                 recentTrackCovers: keptCovers, recentAlbumCovers: keptAlbumCovers,
+                catalogCovers: keptCatalogCovers,
                 mergedCountsVersion: 11)
             // 编码 + 落盘挪出主线程:这个类是 @MainActor,Task{} 会继承它的隔离,原来
             // JSONEncoder 和同步的 atomic 写(临时文件 + rename)全压在主线程上(审阅指出)。
@@ -1075,9 +1085,33 @@ final class LastfmStatsService: ObservableObject {
         if let byTrack = recentTrackCovers[Self.playCountKey(artist: track.artist, title: track.title)] {
             return byTrack
         }
-        if let key = Self.albumKey(artist: track.artist, album: track.album) { return recentAlbumCovers[key] }
-        return nil
+        if let key = Self.albumKey(artist: track.artist, album: track.album),
+           let byAlbum = recentAlbumCovers[key] { return byAlbum }
+        // 第⑤级:Apple Music 目录(iTunes Search)。2026-08-22 加 —— 前四级里只有本机
+        // enrich 缓存覆盖得了「Last.fm 对中文曲库缺图」这一大类,而那一级**只有本机播过
+        // 才有数据**:iPhone 听的歌、翻历史页看到的老歌天生在它的盲区里。实测抽样 205 首
+        // 里 25% 缺图,其中 getinfo(第③级)只救回 20%、同专辑兄弟(第④级)一张都救不到
+        // (整张 live 专辑都没图时没有兄弟可参照)。
+        // 排最后:前四级任一命中就不发这个请求,且匹配不上时留空位而不是硬塞一张,
+        // 挑选规则见 MusicCatalogSearch.pickArtwork。
+        return catalogCovers[Self.playCountKey(artist: track.artist, title: track.title)]
     }
+
+    /// 第⑤级:Apple Music 目录查回来的封面(键跟 playCountKey 同口径)。
+    ///
+    /// 跟前四级的分工:①行自带图、③getinfo、④同专辑兄弟 都来自 Last.fm,②来自本机
+    /// collector 解析。这一级是唯一「Last.fm 没有、本机也没播过」时还能出图的来源。
+    /// 进快照持久化 —— 查一次要一个 iTunes 请求,翻页来回不该重查。
+    @Published private(set) var catalogCovers: [String: URL] = [:]
+    /// 问过 Apple Music、那边也匹配不上的行。**匹配不上就留空位**,不退回搜索结果第一条
+    /// (实测那样会给《微醺卡带 - 情非得已 (微醺版)》配上完全无关的封面)。
+    /// 只在请求**成功返回**但挑不出条目时才记,超时/限流留给下次重试。
+    private var catalogCoverUnavailable = Set<String>()
+    private var catalogCoversInFlight = Set<String>()
+    /// 每一轮最多为几行查 Apple Music。iTunes Search 没有公开配额,社区实测约 20 次/分钟,
+    /// 而缺图的行可能占满一整页 —— 分几轮慢慢补,别一次把额度打光(封面是锦上添花,
+    /// 拖几轮没关系)。
+    private static let catalogCoverBatch = 6
 
     /// 本机 enrich 缓存能给出封面的行(键跟 playCountKey 同口径)。
     ///
@@ -1302,6 +1336,8 @@ final class LastfmStatsService: ObservableObject {
         }
         apiNowPlaying = next
         resolvePlayCounts(for: rows)
+        // 第⑤级排在最后,内部靠 coverUnavailable 自己等前四级落定(见 resolveCatalogCovers)。
+        resolveCatalogCovers(for: rows)
     }
 
     /// 每个 key 在这一批行里**最新**那条收听的时刻。给上面那条"多听了一次"的作废判据用 ——
@@ -1325,6 +1361,73 @@ final class LastfmStatsService: ObservableObject {
     /// 基线被重设成「当下」,那首歌不再被播一次的话,盘上冻住的旧数字永远等不到作废。判据③
     /// (contradictedPlayCountKeys)是专门补这个洞的,别把它当可有可无的加强项删掉。
     private var newestPlaySeen: [String: Date] = [:]
+
+    /// 第⑤级封面兜底:给前四级全空的行去 Apple Music 目录查一张。
+    ///
+    /// ⚠️ 触发条件里的 `coverUnavailable.contains(key)` 是**时序闸**,不是可有可无的优化:
+    /// 第③级(getinfo)是异步的,页面刚打开那一瞬间 recentTrackCovers / recentAlbumCovers
+    /// 都还空着,这时判"四级全空"会把整页都算进来、白发一屏 iTunes 请求。等 getinfo 回来
+    /// 并把这一行记进 coverUnavailable(= 那边确实没有)才动手,前四级就已经落定了。
+    /// 代价是比 getinfo 晚一轮出图,换来的是不抢跑、不浪费额度。
+    private func resolveCatalogCovers(for rows: [RecentTrack]) {
+        let storefront = Locale.current.region?.identifier.lowercased() ?? "us"
+        var seen = Set<String>()
+        let all = rows.compactMap { r -> (key: String, artist: String, title: String, album: String?)? in
+            guard !r.nowPlaying, !r.artist.isEmpty, !r.title.isEmpty else { return nil }
+            let key = Self.playCountKey(artist: r.artist, title: r.title)
+            guard coverURL(for: r) == nil,          // 前四级(含第⑤级自身)都没有
+                  coverUnavailable.contains(key),   // getinfo 已经问过、那边确实没有
+                  !catalogCoverUnavailable.contains(key),
+                  !catalogCoversInFlight.contains(key),
+                  seen.insert(key).inserted
+            else { return nil }
+            return (key, r.artist, r.title, r.album)
+        }
+        // 收成 Array 再截:下面的 addNext 按 0 起的下标取,ArraySlice 的下标随起点走 ——
+        // 这里的 prefix 恰好从头开始所以等价,但别把这个巧合留给下一次改动。
+        let targets = Array(all.prefix(Self.catalogCoverBatch))
+        guard !targets.isEmpty else { return }
+        targets.forEach { catalogCoversInFlight.insert($0.key) }
+        Task {
+            defer { targets.forEach { catalogCoversInFlight.remove($0.key) } }
+            var found: [String: URL] = [:]
+            var missed = Set<String>()
+            // 并发 2:比 getinfo 那边(4)更保守 —— iTunes Search 的限流比 Last.fm 紧,
+            // 而这是最后一级兜底,慢一点没有代价。
+            await withTaskGroup(of: (String, MusicCatalogSearch.ArtworkMatch?, Bool).self) { group in
+                var index = 0
+                func addNext() {
+                    guard index < targets.count else { return }
+                    let item = targets[index]
+                    index += 1
+                    group.addTask {
+                        let hit = await MusicCatalogSearch.resolveArtwork(
+                            title: item.title, artist: item.artist, album: item.album,
+                            storefront: storefront)
+                        return (item.key, hit, true)
+                    }
+                }
+                for _ in 0..<min(2, targets.count) { addNext() }
+                for await (key, hit, ok) in group {
+                    if let hit {
+                        found[key] = hit.url
+                        logger.notice("catalog cover: \(hit.confidence.rawValue, privacy: .public) for \(key, privacy: .public)")
+                    } else if ok {
+                        // 成功返回但挑不出能对上的条目 = 那边确实没有这一首,别每轮重问。
+                        missed.insert(key)
+                    }
+                    addNext()
+                }
+            }
+            if !found.isEmpty {
+                catalogCovers.merge(found) { _, new in new }
+                // 实时行复用的那两张索引由 coverURL(for:) 派生,这一级填了要跟着重建
+                rebuildRecentCoverIndex()
+                scheduleSnapshotSave()
+            }
+            catalogCoverUnavailable.formUnion(missed)
+        }
+    }
 
     /// 每个 key 上一次真的问过 Last.fm 要次数的时刻。给判据③做节流。
     ///
@@ -1387,6 +1490,7 @@ final class LastfmStatsService: ObservableObject {
             // localCovers 这一项 2026-08-14 补:漏了它的话本机已经给出封面的行还会继续
             // 每轮发 getinfo,白烧 Last.fm 的限速额度。
             let hasCover = r.imageURL != nil || localCovers[key] != nil || recentTrackCovers[key] != nil
+                || catalogCovers[key] != nil
                 || Self.albumKey(artist: r.artist, album: r.album).map { recentAlbumCovers[$0] != nil } ?? false
             let needsCover = !hasCover && !coverUnavailable.contains(key)
             guard needsCount || needsCover, !playCountsInFlight.contains(key),
@@ -1507,6 +1611,10 @@ final class LastfmStatsService: ObservableObject {
                     let stamp = Date()
                     for key in countFetched { playCountFetchedAt[key] = stamp }
                 }
+                // coverUnavailable 刚更新 = 第⑤级的时序闸刚放行,立刻给它一次机会。
+                // 不在这里调的话要等下一轮 applyRecent(110s),首次出图白等两分钟。
+                // resolveCatalogCovers 自带 inFlight/unavailable 守卫,重复调用无害。
+                if !noCover.isEmpty { resolveCatalogCovers(for: rows) }
                 // 有行刚补上封面 → 实时行复用的那两张索引跟着作废重建
                 if !covers.isEmpty || !albumCovers.isEmpty { rebuildRecentCoverIndex() }
             }
