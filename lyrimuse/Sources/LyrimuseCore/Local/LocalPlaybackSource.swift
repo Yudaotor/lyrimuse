@@ -378,6 +378,47 @@ public final class LocalPlaybackSource: ObservableObject {
     /// 当前曲目的锚点超前量(秒)——resolvePositionSeconds 对每笔原始读数先扣掉它。
     /// 只在 Spotify(cleanExtrapolated)自然切歌时非零。
     private var posReportedBiasSecs: Double = 0
+
+    /// 播放时钟的只读快照,给「导出诊断信息」用(第 14 章 §7)。
+    ///
+    /// 为什么需要它:「歌词慢半拍」是这个 App 最难复现、也最常被报的一类问题,而它至少有
+    /// 四种成因,修法完全不同 —— 帧率掉了 / `positionSourceTier` 判错(把精确源当成外推源)/
+    /// 伺服在反复 snap(位置读数抖)/ 自然切歌偏置估歪。在此之前诊断报告里**一行播放时钟
+    /// 状态都没有**,这四种在报障里长得一模一样,只能靠猜加翻 collector 日志。
+    ///
+    /// 这些全是本来就在内存里的字段,这里只是把它们读出来 —— 零热路径成本,不新增任何计算。
+    /// 刻意做成一次性快照而不是 @Published:诊断导出是"点一下读一次"的动作,做成发布属性
+    /// 会让每次伺服调整都推着订阅者重渲染。
+    public struct ClockSnapshot: Sendable {
+        public var tier: String
+        public var posErrEMASecs: Double
+        public var reportedBiasSecs: Double
+        public var anchorRate: Double?
+        public var anchorFresh: Bool?
+        public var anchorAgeSecs: Double?
+        public var effectiveLyricsOffsetMs: Int
+        public var lrcOffsetMs: Int
+        public var fillSettled: Bool
+        public var hasLyrics: Bool
+        public var isPlaying: Bool
+    }
+
+    public var clockSnapshot: ClockSnapshot {
+        let tier = Self.positionSourceTier(forBundleID: lastSnapshot?.bundleIdentifier)
+        return ClockSnapshot(
+            tier: String(describing: tier),
+            posErrEMASecs: posErrEMA,
+            reportedBiasSecs: posReportedBiasSecs,
+            anchorRate: anchor?.rate,
+            anchorFresh: anchor?.fresh,
+            anchorAgeSecs: anchor.map { Date().timeIntervalSince($0.fetchedAt) },
+            effectiveLyricsOffsetMs: currentLyricsOffsetMs,
+            lrcOffsetMs: syncEngine.lrcOffsetMs,
+            fillSettled: currentLineFillSettled,
+            hasLyrics: hasLyricsContent,
+            isPlaying: isPlayingNow
+        )
+    }
     /// 上一轮快照的曲目时长(秒)——自然切歌判定要用"旧曲"的时长,而 resolve 被调用时
     /// snapshot 已经是新曲的了。apply() 每轮末尾更新(与 posTrackingKey 同批)。
     private var posPrevDurationSecs: Double = 0
@@ -1409,9 +1450,18 @@ public final class LocalPlaybackSource: ObservableObject {
             forKey: currentOffsetKey, bundleID: lastSnapshot?.bundleIdentifier
         )
         syncEngine.offsetMs = effective
+        // 对外报的是**引擎真正在用的那个数**,含这份歌词自己带的 `[offset:]`
+        // (`syncEngine.lrcOffsetMs`,见 LRCParser.parseOffsetMs)。
+        //
+        // ⚠️ 必须含它:这个属性的唯一用途是"把歌词时间轴换算到播放位置",而歌词窗口点某一行
+        // 反算 seek 目标用的就是 `行时间 − currentLyricsOffsetMs`。漏掉 LRC 那一层的话,带
+        // 非零 offset 的歌点行会跳到隔壁行 —— 正是这个属性当初存在的理由(注释见上面)。
+        // 用户可见的那两个数(设置页的基准、菜单里的单曲值)都不含它,那是对的:LRC offset
+        // 不是用户调出来的,不该出现在"你调了多少"里。
+        let effectiveWithLRC = effective + syncEngine.lrcOffsetMs
         // 只在真的变了时才赋值:这两个都是 @Published,每次赋值都会推着订阅者重渲染,
         // 而 reloadCurrentLyrics 在"歌词还没解析出来"时会被反复调用(见那边的注释)。
-        if currentLyricsOffsetMs != effective { currentLyricsOffsetMs = effective }
+        if currentLyricsOffsetMs != effectiveWithLRC { currentLyricsOffsetMs = effectiveWithLRC }
         if trackLyricsOffsetMs != track { trackLyricsOffsetMs = track }
     }
 

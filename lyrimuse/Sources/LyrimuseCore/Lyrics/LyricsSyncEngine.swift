@@ -145,6 +145,19 @@ public final class LyricsSyncEngine {
     // 这件事,换歌时只要换一次 offsetMs 就对新歌词生效。
     public var offsetMs: Int = 0
 
+    /// 这份歌词**自己带的** `[offset:]`(LRC 格式标准的字段,见 `LRCParser.parseOffsetMs`),
+    /// load() 时从内容里解析,用户碰不到。
+    ///
+    /// 跟 `offsetMs` **分开存**而不是加进去:那个是用户手调的值(全局/按播放器/单曲三层的
+    /// 合成结果,由 LyricsOffsetStore 灌进来),这个是歌词内容的属性。混在一起的后果是换一份
+    /// 歌词时旧的 LRC offset 会残留在用户那层里,而且用户在设置页看到的数字会莫名其妙多出
+    /// 几百毫秒。分开之后还有一个实际好处:万一某个源的符号约定跟规范相反,用户用单曲微调
+    /// 抵消掉即可,不需要我们去猜哪个源该取反。
+    public private(set) var lrcOffsetMs: Int = 0
+
+    /// 实际用于定位的总偏移。**所有**查询入口都必须用它,不能再直接用 `offsetMs`。
+    public var effectiveOffsetMs: Int { offsetMs + lrcOffsetMs }
+
     // 署名/制作人员这类噪声行(作词/作曲/编曲/制作人等,常见于 LRC 开头几秒)在喂进
     // 同步引擎之前(而不是显示时)就剔除——这样歌曲刚开始播放、真歌词还没开始的那几秒
     // 会正确判定成"还没到第一句真歌词"(退回♪占位符,双行预览提前露出第一句真歌词),
@@ -926,6 +939,13 @@ public final class LyricsSyncEngine {
         // 判据是**覆盖率**而不是"YRC 是否为空":逐字行数不到整行歌词的一半就认为它没覆盖
         // 这首歌,退回整行模式(整行歌词是完整的,只是没有逐字填色)。LRC 本身为空时没得选,
         // 仍然用逐字数据。
+        // 这份歌词自己带的 [offset:]。先看 LRC 正文,为 0 再看 YRC —— 酷狗那两首非零的
+        // 实测里,.lrc 和 .yrc 两份文件头部都带着同一个值(KRC 母版转出来的两种形态),
+        // 所以逐字模式同样要吃它;整行为空、只有逐字的条目也才有得可取。
+        lrcOffsetMs = {
+            let fromBase = LRCParser.parseOffsetMs(lyrics)
+            return fromBase != 0 ? fromBase : LRCParser.parseOffsetMs(lyricsYRC)
+        }()
         let parsedBase = LRCParser.parse(lyrics)
         let baseDrop = Self.strippingCreditLines(
             parsedBase.map(\.text), trackTitle: trackTitle, trackArtist: trackArtist)
@@ -1277,7 +1297,7 @@ public final class LyricsSyncEngine {
     }
 
     public func activeLine(atMs rawPosMs: Int) -> SyncedLyricLine? {
-        lineAt(activeIndexCorrected(rawPosMs + offsetMs))
+        lineAt(activeIndexCorrected(rawPosMs + effectiveOffsetMs))
     }
 
     /// activeLine 的按下标本体(记忆化缓存所在)。tickQuery 与 activeLine 共用。
@@ -1335,7 +1355,7 @@ public final class LyricsSyncEngine {
     }
 
     public func tickQuery(atMs rawPosMs: Int) -> TickResolution {
-        let posMs = rawPosMs + offsetMs
+        let posMs = rawPosMs + effectiveOffsetMs
         let idx = activeIndexCorrected(posMs)
         let gap: Int?
         if let window = gapWindow(after: idx), posMs >= window.start, posMs < window.end {
@@ -1356,7 +1376,7 @@ public final class LyricsSyncEngine {
     // 更常见(署名行被剔除、真歌词往往要再等几十秒才开始),这时候提前露出第一句歌词
     // 比干等着更有用。
     public func upcomingLineText(afterMs rawPosMs: Int) -> String? {
-        nextTextAt(activeIndexCorrected(rawPosMs + offsetMs) + 1)
+        nextTextAt(activeIndexCorrected(rawPosMs + effectiveOffsetMs) + 1)
     }
 
     /// upcomingLineText 的按下标本体(记忆化缓存所在)。tickQuery 与 upcomingLineText 共用。
@@ -1422,7 +1442,7 @@ public final class LyricsSyncEngine {
     // 内容的下标"这种实现,副歌重复句会有多个内容相同的行,内容匹配选不准具体是哪一次
     // 出现,必须像这里一样直接按时间戳扫下标。
     public func activeLineIndex(atMs rawPosMs: Int) -> Int? {
-        let posMs = rawPosMs + offsetMs
+        let posMs = rawPosMs + effectiveOffsetMs
         let idx = activeIndexCorrected(posMs)
         return idx >= 0 ? idx : nil
     }
@@ -1494,7 +1514,7 @@ public final class LyricsSyncEngine {
     /// 此刻在不在某个间奏里(返回间奏点的 index,-1 = 前奏)。offsetMs 校正跟
     /// activeLine 同一处、同一方向 —— 这里已经加过,内部不能再调 activeLineIndex。
     public func activeGapIndex(atMs rawPosMs: Int) -> Int? {
-        let posMs = rawPosMs + offsetMs
+        let posMs = rawPosMs + effectiveOffsetMs
         let idx = activeIndexCorrected(posMs)
         guard let window = gapWindow(after: idx) else { return nil }
         return (posMs >= window.start && posMs < window.end) ? idx : nil

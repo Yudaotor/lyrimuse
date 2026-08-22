@@ -52,6 +52,91 @@ expectEqual(
     "LRC: 一行多个时间戳(副歌重复)各生成一条"
 )
 
+// --- FrameRateProbe (2026-08-22) ---
+//
+// 拆成纯值类型放 Core 就是为了能无屏测它(同 KaraokeFill/MarqueeMath)。
+do {
+    var probe = FrameRateProbe()
+    let t0 = Date(timeIntervalSinceReferenceDate: 1000)
+    expectEqual(probe.fps == nil, true, "帧率探针: 第一帧还没有样本")
+    probe.tick(at: t0)
+    expectEqual(probe.fps == nil, true, "帧率探针: 只有一帧仍算不出间隔")
+    // 稳定 30fps 喂 200 帧,EMA 该收敛到 30 附近。
+    var t = t0
+    for _ in 0..<200 {
+        t = t.addingTimeInterval(1.0 / 30)
+        probe.tick(at: t)
+    }
+    let fps = probe.fps ?? 0
+    expectEqual(abs(fps - 30) < 0.5, true, "帧率探针: 稳定 30fps 收敛到 30(实测 \(fps))")
+    // 长空档(暂停/停表)必须重新起算,不能把那个间隔算进平均值 —— 否则恢复播放后
+    // 读数会长时间失真。
+    probe.tick(at: t.addingTimeInterval(5))
+    expectEqual(probe.fps == nil, true, "帧率探针: 超过不连续阈值后重新起算")
+    // 时钟回拨/同一帧调两次不该污染平均值。
+    var probe2 = FrameRateProbe()
+    let s0 = Date(timeIntervalSinceReferenceDate: 2000)
+    probe2.tick(at: s0)
+    probe2.tick(at: s0)
+    expectEqual(probe2.fps == nil, true, "帧率探针: 零间隔被丢弃")
+    probe2.tick(at: s0.addingTimeInterval(-1))
+    expectEqual(probe2.fps == nil, true, "帧率探针: 负间隔被丢弃")
+}
+
+// --- LRC 自带的 [offset:] (2026-08-22) ---
+//
+// 这个字段此前全链路无人消费:parse() 把它当元信息行整个跳过,于是"歌词源明确告诉了我们
+// 要偏多少"这件事被静默丢掉。本机 114 条缓存实测:酷狗 50 条里 30 条带这个标签(2 条非零,
+// 242 / 600ms)、QQ 12 条全部带(恰好都是 0),网易云/Musixmatch 从不带 —— 不是单个源的
+// 特性,所以处理放在通用解析层。
+expectEqual(LRCParser.parseOffsetMs("[offset:242]\n[00:01.00]x\n"), 242, "LRC offset: 正数")
+expectEqual(LRCParser.parseOffsetMs("[offset:+500]\n"), 500, "LRC offset: 显式带加号")
+expectEqual(LRCParser.parseOffsetMs("[offset:-300]\n"), -300, "LRC offset: 负数")
+expectEqual(LRCParser.parseOffsetMs("[offset: 600 ]\n"), 600, "LRC offset: 冒号后/数字后允许空格")
+expectEqual(LRCParser.parseOffsetMs("[offset:0]\n"), 0, "LRC offset: 零就是没有偏移")
+expectEqual(LRCParser.parseOffsetMs("[ti:x]\n[00:01.00]y\n"), 0, "LRC offset: 没有这个标签返回 0")
+// 量级闸:见过畸形数据把整份歌词推到几十秒开外,那种"修正"比不修正糟得多。
+expectEqual(LRCParser.parseOffsetMs("[offset:99999]\n"), 0, "LRC offset: 超出可信上限一律不采纳")
+expectEqual(LRCParser.parseOffsetMs("[offset:-99999]\n"), 0, "LRC offset: 负向超限同样不采纳")
+expectEqual(LRCParser.parseOffsetMs("[offset:10000]\n"), 10000, "LRC offset: 上限本身仍然采纳")
+// 多个标签取第一个:文件头部才是元信息区,正文里再出现同形状的东西不该当成全局设置。
+expectEqual(LRCParser.parseOffsetMs("[offset:100]\n[offset:900]\n"), 100, "LRC offset: 多个取第一个")
+// parse() 的行为一点没变 —— offset 行仍然不产出歌词行。
+expectEqual(
+    LRCParser.parse("[offset:242]\n[00:01.00]x\n"),
+    [LyricLine(timeMs: 1000, text: "x")],
+    "LRC offset: 标签行不会被当成一句歌词"
+)
+
+// 引擎侧:LRC offset 与用户偏移是**两层**,相加后才是定位用的总偏移。
+// 分开存的理由见 LyricsSyncEngine.lrcOffsetMs 的注释(换歌词时旧值不会残留在用户那层,
+// 且符号约定万一相反时用户能用单曲微调抵消)。
+do {
+    let engine = LyricsSyncEngine()
+    _ = engine.load(lyrics: "[offset:400]\n[00:10.00]a\n[00:20.00]b\n",
+                    lyricsTr: "", lyricsRoma: "", lyricsYRC: "")
+    expectEqual(engine.lrcOffsetMs, 400, "引擎: 从歌词内容解析出 LRC offset")
+    expectEqual(engine.effectiveOffsetMs, 400, "引擎: 用户偏移为 0 时总偏移=LRC offset")
+    engine.offsetMs = 250
+    expectEqual(engine.effectiveOffsetMs, 650, "引擎: 两层相加")
+    // 正数=提前显示:第二行时间戳 20000,总偏移 650 时播放到 19400 就该切过去了。
+    expectEqual(engine.activeLine(atMs: 19400)?.plainText, "b", "引擎: 正偏移让下一行提前出现")
+    expectEqual(engine.activeLine(atMs: 19300)?.plainText, "a", "引擎: 差 100ms 还没到")
+    // 换一份不带 offset 的歌词,那一层必须归零(不能残留)。
+    _ = engine.load(lyrics: "[00:10.00]c\n", lyricsTr: "", lyricsRoma: "", lyricsYRC: "")
+    expectEqual(engine.lrcOffsetMs, 0, "引擎: 换成不带 offset 的歌词后该层归零")
+    expectEqual(engine.effectiveOffsetMs, 250, "引擎: 归零后只剩用户那层")
+}
+
+// 只有逐字数据、整行为空时,从 YRC 里取 —— 酷狗那两首非零的实测里 .lrc/.yrc 头部
+// 带的是同一个值(KRC 母版转出来的两种形态)。
+do {
+    let engine = LyricsSyncEngine()
+    _ = engine.load(lyrics: "", lyricsTr: "", lyricsRoma: "",
+                    lyricsYRC: "[offset:600]\n[10000,2000](10000,2000,0)a\n")
+    expectEqual(engine.lrcOffsetMs, 600, "引擎: 整行为空时从 YRC 取 offset")
+}
+
 expectEqual(
     LRCParser.parse("[ti:Test Song]\n[by:Someone]\n[00:00.00]actual line\n"),
     [LyricLine(timeMs: 0, text: "actual line")],

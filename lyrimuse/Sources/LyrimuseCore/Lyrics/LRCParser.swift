@@ -14,6 +14,40 @@ public struct LyricLine: Equatable {
 public enum LRCParser {
     private static let tagRegex = try! NSRegularExpression(pattern: #"\[(\d{1,2}):(\d{2})(?:[.:](\d{1,3}))?\]"#)
     private static let bracketRegex = try! NSRegularExpression(pattern: #"\[[^\]]*\]"#)
+    private static let offsetRegex = try! NSRegularExpression(pattern: #"\[offset:\s*([+-]?\d+)\s*\]"#)
+
+    /// LRC 格式标准里的 `[offset:±毫秒]` 标签 —— 「这份歌词的全部时间戳整体偏移多少」。
+    /// 打轴的人发现自己整份早了/晚了就写一个 offset,而不是逐行改几百个时间戳。
+    ///
+    /// `parse(_:)` 会把它当元信息行整个跳过(去掉 `[...]` 后正文为空),所以在此之前
+    /// **这个字段全链路无人消费** —— 歌词源明确告诉了我们要偏多少,而我们没听。
+    ///
+    /// 符号约定跟 LRC 规范一致、也跟 `LyricsSyncEngine.offsetMs` 同号:**正数 = 歌词整体
+    /// 提前显示**。规范原文是 "+ shifts the lyrics earlier";换算过来 `显示时刻 = 时间戳 −
+    /// offset`,而引擎那边是「查询位置 = 播放位置 + offsetMs」再扫 `timeMs <= 查询位置`,
+    /// 两者等价,所以可以直接相加、不用取反。
+    ///
+    /// 实测(2026-08-22,本机 114 条缓存):**不是只有某一个源会带**——酷狗 50 条里 30 条带
+    /// 这个标签(2 条非零:242 / 600),QQ 12 条**全部**带(本机恰好都是 0)。网易云/Musixmatch
+    /// 从不带,lrclib 样本只有 1 条不足为据(而它是社区上传的纯 LRC,格式上最有可能带)。
+    /// 所以这件事必须放在通用解析层,不能对某个源特判。
+    ///
+    /// 找不到/解析不出返回 0。多个 offset 标签取**第一个** —— 那是文件头部的元信息区,
+    /// 正文里再出现同样形状的东西不该被当成全局设置。
+    public static func parseOffsetMs(_ text: String) -> Int {
+        let ns = text as NSString
+        guard let m = offsetRegex.firstMatch(in: text, range: NSRange(location: 0, length: ns.length)),
+              let value = Int(ns.substring(with: m.range(at: 1)))
+        else { return 0 }
+        // 夹一个量级闸:正常的 offset 是几百毫秒到一两秒。见过畸形数据把整份歌词推到几十秒
+        // 开外的形态,那种"修正"比不修正糟得多,宁可当它不存在。
+        guard abs(value) <= maxOffsetMs else { return 0 }
+        return value
+    }
+
+    /// `[offset:]` 的可信上限。10 秒:比任何真实的打轴误差都大一个量级,又不至于把
+    /// 少数确实偏得多的社区歌词一并否掉。
+    public static let maxOffsetMs = 10_000
 
     public static func parse(_ text: String) -> [LyricLine] {
         var out: [LyricLine] = []
