@@ -285,6 +285,8 @@ final class LastfmStatsService: ObservableObject {
         playCountUnavailable = []
         coverUnavailable = []
         playCountsInFlight = []
+        playCountFetchedAt = [:]
+        newestPlaySeen = [:]
         artistCorrections = [:]
         artistCorrectionTasks.values.forEach { $0.cancel() }
         artistCorrectionTasks = [:]
@@ -1228,43 +1230,61 @@ final class LastfmStatsService: ObservableObject {
         for r in rows where !r.artist.isEmpty && !r.title.isEmpty {
             harvestTitleForm(artist: r.artist, title: r.title)
         }
-        // 同一首歌在窗口里多出一次收听 → 它的总数已经变了,作废让它重取。只在窗口大小
-        // 没变时判(翻页那一下换的是完全不同的一批行,那个比较没有意义)。
+        // 同一首歌在窗口里多出一次收听 → 它的总数已经变了,作废让它重取。三条判据,
+        // 前两条跟上一轮比、第三条只看当下这一页,理由分别见下。
+        //
+        // key → 任一行:作废孪生键要用行上的原始 歌手/歌名 生成变体(key 已折小写,
+        // 但变体生成对大小写不敏感,folded 键一致即可)。
+        var sample: [String: RecentTrack] = [:]
+        for r in rows where !r.nowPlaying {
+            let k = Self.playCountKey(artist: r.artist, title: r.title)
+            if sample[k] == nil { sample[k] = r }
+        }
+        let newestNow = Self.newestPlayByKey(rows)
+        var staleKeys = Set<String>()
+        // 判据①②要跟**上一轮**比,只在窗口大小没变时成立(翻页那一下换的是完全不同的
+        // 一批行,那个比较没有意义)。
         if lastAppliedRecentPage == recentPage {
             let before = countByKey(recent)
-            // key → 任一行:作废孪生键要用行上的原始 歌手/歌名 生成变体(key 已折小写,
-            // 但变体生成对大小写不敏感,folded 键一致即可)。
-            var sample: [String: RecentTrack] = [:]
-            for r in rows where !r.nowPlaying {
-                let k = Self.playCountKey(artist: r.artist, title: r.title)
-                if sample[k] == nil { sample[k] = r }
-            }
-            // ⚠️ 只看"页内出现次数变多"会漏掉一整类情况(2026-08-21 用户报「第 15 次听下面
-            // 紧跟着第 21 次听」)。countByKey 数的是**当前这一页里出现了几次**,而连着重播
-            // 同一首歌时这一页很快被它占满 —— 新的挤进来、旧的挤出去,页内次数**不再增长**,
-            // 于是这个条件永远为假、缓存总数永久冻结,而真实次数一路往上爬。用户那次实测:
-            // 缓存冻在 15,真实合计 22(园游会 10 + 園遊會 12 两个 Last.fm 实体)。
+            // ① 页内出现次数变多。
             //
-            // 所以再加一条判据:**这首歌最新一条收听的时刻往前走了**就说明多听了一次。
-            // 这一条不会随页面占满而失效。两条并存 —— 老快照(没有 newestPlaySeen 基线)
-            // 仍按原来那条走,不留行为空档。
-            var staleKeys = Set(countByKey(rows).compactMap { key, n in
+            // ⚠️ 只有这一条会漏掉一整类情况(2026-08-21 用户报「第 15 次听下面紧跟着第 21
+            // 次听」)。countByKey 数的是**当前这一页里出现了几次**,而连着重播同一首歌时
+            // 这一页很快被它占满 —— 新的挤进来、旧的挤出去,页内次数**不再增长**,于是这个
+            // 条件永远为假、缓存总数永久冻结,而真实次数一路往上爬。用户那次实测:缓存冻在
+            // 15,真实合计 22(园游会 10 + 園遊會 12 两个 Last.fm 实体)。
+            staleKeys.formUnion(countByKey(rows).compactMap { key, n in
                 n > (before[key] ?? 0) ? key : nil
             })
-            for (key, newest) in Self.newestPlayByKey(rows) {
-                defer { newestPlaySeen[key] = newest }
+            // ② 这首歌最新一条收听的时刻往前走了 = 多听了一次。这一条不会随页面被同一首歌
+            // 占满而失效。两条并存 —— 老快照(没有 newestPlaySeen 基线)仍按①走,不留空档。
+            for (key, newest) in newestNow {
                 guard let seen = newestPlaySeen[key], newest > seen else { continue }
                 staleKeys.insert(key)
             }
-            for key in staleKeys {
-                trackPlayCounts[key] = nil
-                // 次数表里存的是写法孪生**合并后**的总数:这边多了一次,孪生行缓存的
-                // 总数同样过期,一并作废。变体生成落空时退化成等那行自己的 key 被作废
-                // —— 尽力而为,不影响正确性。
-                if let r = sample[key] {
-                    for sib in playCountSiblings(artist: r.artist, title: r.title) {
-                        trackPlayCounts[Self.playCountKey(artist: sib.artist, title: sib.title)] = nil
-                    }
+        }
+        // ③ 页内自相矛盾(2026-08-22)。①②都依赖跨轮次的内存基线,而次数表是**持久化**的
+        // —— App 重启、或统计页关着的那段时间之后基线被重设成「当下」,只要那首歌不再被播
+        // 一次,盘上冻住的旧数字就永远不会被作废。这一条不跟历史比、无状态,重启后第一轮
+        // 就生效,专门补这个稳态盲区。翻页时同样成立(它不依赖"上一轮是同一页")。
+        staleKeys.formUnion(contradictedPlayCountKeys(rows, now: Date()))
+        // 基线**无条件**记下 —— 它只是"我上次看到这个 key 的最新收听是什么时候",跟这一轮
+        // 判不判作废无关。原来这行埋在上面那个 if 里,于是重启后第一轮(lastAppliedRecentPage
+        // 还是 0)整段被跳过、连基线都没记上,要到第三轮才真正开始作废,比注释里写的"第一次
+        // 只记基线"多了一轮。
+        // 取 max 而不是直接覆盖:翻到历史页时那一页的"最新"是很老的时刻,直接覆盖会把基线
+        // **调低**,翻回第一页就凭空多判一次过期(无害,但白发一轮请求)。
+        for (key, newest) in newestNow where (newestPlaySeen[key] ?? .distantPast) < newest {
+            newestPlaySeen[key] = newest
+        }
+        for key in staleKeys {
+            trackPlayCounts[key] = nil
+            // 次数表里存的是写法孪生**合并后**的总数:这边多了一次,孪生行缓存的
+            // 总数同样过期,一并作废。变体生成落空时退化成等那行自己的 key 被作废
+            // —— 尽力而为,不影响正确性。
+            if let r = sample[key] {
+                for sib in playCountSiblings(artist: r.artist, title: r.title) {
+                    trackPlayCounts[Self.playCountKey(artist: sib.artist, title: sib.title)] = nil
                 }
             }
         }
@@ -1300,7 +1320,46 @@ final class LastfmStatsService: ObservableObject {
     /// 上一次 applyRecent 时,每个 key 已知的最新收听时刻。只在内存里 —— 重启后第一次
     /// applyRecent 只是把基线记下来(不作废),之后新增的收听才触发。不持久化是刻意的:
     /// 持久化它意味着重启即判"全部过期",一页 100 行会一次性打出 100 个 getinfo 撞限速。
+    ///
+    /// ⚠️ 它只在内存、而 trackPlayCounts 是持久化的,这个错配留下一个**稳态**盲区:重启后
+    /// 基线被重设成「当下」,那首歌不再被播一次的话,盘上冻住的旧数字永远等不到作废。判据③
+    /// (contradictedPlayCountKeys)是专门补这个洞的,别把它当可有可无的加强项删掉。
     private var newestPlaySeen: [String: Date] = [:]
+
+    /// 每个 key 上一次真的问过 Last.fm 要次数的时刻。给判据③做节流。
+    ///
+    /// ⚠️ **刻意不持久化**,跟 newestPlaySeen 相反的理由:这里要的就是"重启后为空",
+    /// 好让盘上那个可能已经冻住的旧数字在第一轮就被质疑一次。持久化它等于把盲区又焊回去。
+    private var playCountFetchedAt: [String: Date] = [:]
+
+    /// 判据③命中后的重查节流。Last.fm 的 userplaycount 本身滞后几分钟(见
+    /// playCountZeroGraceSecs),刚 scrobble 完重取回来还是同一个数、下一轮又矛盾 ——
+    /// 不节流就是每轮刷新(baselineTTL 110s)都白发一个请求、永不收敛。
+    private static let playCountContradictionRecheckSecs: TimeInterval = 5 * 60
+
+    /// 判据③:这一页自己就能证伪缓存的那些 key。推导见 PlayCountRecency.contradicted。
+    ///
+    /// 按**折叠族**数页内收听数,不按 playCountKey 数 —— trackPlayCounts 存的是整族合并
+    /// 总数,LastfmStatsSection.recentRows 的减法也按族数,三处必须同一把尺子。
+    private func contradictedPlayCountKeys(_ rows: [RecentTrack], now: Date) -> Set<String> {
+        var onPage: [String: Int] = [:]
+        for r in rows where !r.nowPlaying {
+            onPage[PlayCountFold.familyKey(artist: r.artist, title: r.title), default: 0] += 1
+        }
+        var out = Set<String>()
+        for r in rows where !r.nowPlaying {
+            let key = Self.playCountKey(artist: r.artist, title: r.title)
+            guard let cached = trackPlayCounts[key], !out.contains(key) else { continue }
+            let family = PlayCountFold.familyKey(artist: r.artist, title: r.title)
+            guard PlayCountRecency.contradicted(
+                    onPage: onPage[family] ?? 0, cachedTotal: cached,
+                    lastFetched: playCountFetchedAt[key], now: now,
+                    recheckAfter: Self.playCountContradictionRecheckSecs)
+            else { continue }
+            out.insert(key)
+        }
+        return out
+    }
 
     private func countByKey(_ rows: [RecentTrack]) -> [String: Int] {
         var out: [String: Int] = [:]
@@ -1414,10 +1473,14 @@ final class LastfmStatsService: ObservableObject {
                 var albumCovers: [String: URL] = [:]
                 var noCount = Set<String>()
                 var noCover = Set<String>()
+                var countFetched = Set<String>()
                 for _ in 0..<min(maxConcurrent, missing.count) { addNext() }
                 for await (key, artist, album, ok, n, cover, wantsCount, zeroIsFinal) in group {
                     // wantsCount 守卫:只为补封面的那趟不碰次数表,理由见上面元组注释。
                     if wantsCount {
+                        // 判据③的节流基准:记的是"为它问过一次次数",不是"问到了" ——
+                        // 只有请求真的成功返回才算(超时/限流不该顶着节流让下一轮不敢重试)。
+                        if ok { countFetched.insert(key) }
                         if let n, n > 0 {
                             counts[key] = n
                         } else if ok, zeroIsFinal {
@@ -1440,6 +1503,10 @@ final class LastfmStatsService: ObservableObject {
                 if !albumCovers.isEmpty { recentAlbumCovers.merge(albumCovers) { _, new in new } }
                 playCountUnavailable.formUnion(noCount)
                 coverUnavailable.formUnion(noCover)
+                if !countFetched.isEmpty {
+                    let stamp = Date()
+                    for key in countFetched { playCountFetchedAt[key] = stamp }
+                }
                 // 有行刚补上封面 → 实时行复用的那两张索引跟着作废重建
                 if !covers.isEmpty || !albumCovers.isEmpty { rebuildRecentCoverIndex() }
             }
@@ -1807,14 +1874,19 @@ final class LastfmStatsService: ObservableObject {
     private func request(method: String, cred: (user: String, key: String),
                          extra: [String: String] = [:]) async -> [String: Any]? {
         var comps = URLComponents(string: "https://ws.audioscrobbler.com/2.0/")!
-        var items = [
-            URLQueryItem(name: "method", value: method),
-            URLQueryItem(name: "user", value: cred.user),
-            URLQueryItem(name: "api_key", value: cred.key),
-            URLQueryItem(name: "format", value: "json"),
+        var pairs: [(name: String, value: String)] = [
+            ("method", method),
+            ("user", cred.user),
+            ("api_key", cred.key),
+            ("format", "json"),
         ]
-        for (k, v) in extra { items.append(URLQueryItem(name: k, value: v)) }
-        comps.queryItems = items
+        // extra 是字典,遍历顺序每次都不同 —— 排一下,同一组参数才会拼出同一个 URL
+        // (抓包/日志比对时不至于每次长得不一样)。Last.fm 读接口不签名,顺序不影响结果。
+        for k in extra.keys.sorted() { pairs.append((k, extra[k]!)) }
+        // ⚠️ 不用 comps.queryItems:它按 urlQueryAllowed 编码,那套集合**放行 `+`**,
+        // 而这个端点会把 query value 多解一次码、把 `+` 当成空格 —— 含加号的歌名
+        // (《夜曲+窃爱 (Live)》)于是永远 error 6。完整推导和实测见 LastfmQuery。
+        comps.percentEncodedQuery = LastfmQuery.queryString(pairs)
         guard let url = comps.url else { return nil }
         var req = URLRequest(url: url)
         req.timeoutInterval = 10

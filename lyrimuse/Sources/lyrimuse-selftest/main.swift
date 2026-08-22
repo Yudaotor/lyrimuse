@@ -1309,6 +1309,71 @@ do {
                 "次数作废: 两个写法各自一条")
 }
 
+// ---- 「第 N 次听」判据③:页内自相矛盾(2026-08-22) ----
+//
+// 判据①②都要跟上一轮比,而基线只在内存、次数表却持久化 —— App 重启后基线被重设成
+// 「当下」,那首歌不再被播一次就永远等不到作废。用户实测:缓存冻在 3、真实 12,那一页有
+// 11 行《开不了口 (live)》,视图侧减法把后 8 行全算成 ≤0,整片空白且不自愈。
+// 这一条只看当下这一页站不站得住,无状态,重启后第一轮就生效。
+do {
+    typealias R = PlayCountRecency
+    func at(_ e: Double) -> Date { Date(timeIntervalSince1970: e) }
+    let now = at(10_000)
+    let throttle: TimeInterval = 300
+
+    // 用户那一幕:页内 11 行 vs 缓存 3 → 缓存必错。本进程还没问过(nil)→ 立刻作废,
+    // 这正是"重启后第一轮就质疑一次"。
+    expectEqual(R.contradicted(onPage: 11, cachedTotal: 3, lastFetched: nil,
+                               now: now, recheckAfter: throttle), true,
+                "判据③: 页内 11 行 > 缓存 3 且从没问过 → 作废")
+    // 页内数 <= 缓存总数 = 没有矛盾。等号也不算 —— 缓存里是"到此刻为止的总数",
+    // 页内正好看见这么多次是完全自洽的。
+    expectEqual(R.contradicted(onPage: 3, cachedTotal: 3, lastFetched: nil,
+                               now: now, recheckAfter: throttle), false,
+                "判据③: 页内 3 行 = 缓存 3 → 自洽,不作废")
+    expectEqual(R.contradicted(onPage: 2, cachedTotal: 12, lastFetched: nil,
+                               now: now, recheckAfter: throttle), false,
+                "判据③: 页内比缓存少 → 不作废")
+    // 节流:Last.fm 自己的 userplaycount 滞后几分钟,刚问过就再问是每轮白发请求
+    expectEqual(R.contradicted(onPage: 11, cachedTotal: 3, lastFetched: at(9_800),
+                               now: now, recheckAfter: throttle), false,
+                "判据③: 200s 前刚问过(< 300s 节流) → 这一轮不重取")
+    expectEqual(R.contradicted(onPage: 11, cachedTotal: 3, lastFetched: at(9_700),
+                               now: now, recheckAfter: throttle), true,
+                "判据③: 距上次 300s 到点 → 重取")
+    // 节流只在真有矛盾时才轮得到判 —— 没矛盾的话多久没问过都不该作废
+    expectEqual(R.contradicted(onPage: 1, cachedTotal: 99, lastFetched: at(0),
+                               now: now, recheckAfter: throttle), false,
+                "判据③: 无矛盾时,再久没问过也不作废")
+}
+
+// ---- Last.fm GET query 的双重编码(2026-08-22) ----
+//
+// 端点会对 query value 多解一次码(第二遍是 form-urlencoded 口径,`+` 当空格),所以
+// `+` 和 `%` 必须各多编一层。实测:track=…%2B… → error 6 Track not found;
+// track=…%252B… → 命中 userplaycount=2。用真实存在的乐队 `+44` 独立验证过是端点级行为。
+// URLComponents.queryItems 走的 urlQueryAllowed **放行 `+`**,正是这个坑的入口。
+do {
+    typealias Q = LastfmQuery
+    expectEqual(Q.escape("夜曲+窃爱 (Live)"),
+                "%E5%A4%9C%E6%9B%B2%252B%E7%AA%83%E7%88%B1%20%28Live%29",
+                "lastfm query: 加号编成 %252B(实测这一串才命中)")
+    expectEqual(Q.escape("+44"), "%252B44", "lastfm query: 乐队名 +44")
+    // 百分号同理要多编一层:服务端解两遍才还原成字面 %
+    expectEqual(Q.escape("100%"), "100%2525", "lastfm query: 百分号编成 %2525")
+    // 顺序守卫:先换 % 再换 + —— 反过来的话 %2B 里的 % 会被再啃一遍变成 %2525 2B
+    expectEqual(Q.escape("a+b%c"), "a%252Bb%2525c", "lastfm query: 加号与百分号同时出现")
+    // 不含这两个字符的 value 必须跟标准编码逐字节相同 —— 这是"对既有请求零影响"的依据
+    expectEqual(Q.escape("开不了口 (live)"),
+                "%E5%BC%80%E4%B8%8D%E4%BA%86%E5%8F%A3%20%28live%29",
+                "lastfm query: 不含 +/% 时与标准编码一致")
+    expectEqual(Q.escape("Beyond"), "Beyond", "lastfm query: 纯 ASCII 原样")
+    // 空格用 %20 而不是 +(用 + 会被第二遍解码当成空格,结果碰巧也对,但两侧口径要一致)
+    expectEqual(Q.escape("a b").contains("+"), false, "lastfm query: 空格不编成加号")
+    expectEqual(Q.queryString([("method", "track.getinfo"), ("track", "+44")]),
+                "method=track.getinfo&track=%252B44", "lastfm query: 拼串按传入顺序")
+}
+
 // ---- 播放器身份契约:rawValue / bundle id 必须跟 collector 逐字对应 ----
 //
 // rawValue 是两侧通过共享 features.json 的 "player" 字段交换的字符串(Go 侧 features.go 的

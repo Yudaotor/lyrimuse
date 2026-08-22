@@ -140,7 +140,11 @@ func (c *lastfmArtistCollapser) isCatalogued(ctx context.Context, artist, track 
 	if base == "" {
 		base = "https://ws.audioscrobbler.com/2.0/"
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, base+"?"+q.Encode(), nil)
+	// ⚠️ 不用 q.Encode():标准编码把 `+` 写成 `%2B`,而 Last.fm 的 GET 端点会对 query
+	// value **多解一次码**(第二遍是 form-urlencoded 口径,`+` 当空格),于是含加号的歌名
+	// 一律 error 6。这里 error 6 的语义是"编目里没有这个条目 → 判定为影子条目、折叠歌手串"
+	// ——一个不可逆的写侧动作,查错了就是把正规合体署名折坏。见 lastfmGetQuery。
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, base+"?"+lastfmGetQuery(q), nil)
 	if err != nil {
 		return false, fmt.Errorf("build request: %w", err)
 	}
