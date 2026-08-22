@@ -302,6 +302,11 @@ struct LyricsManagerView: View {
     // 互不连带 —— 校正值是用户一句句听出来的,比歌词内容宝贵得多(见 LyricsOffsetStore
     // 类型注释里"故意跟 EnrichCacheStore 彻底分开存"那一段)。
     @State private var showClearOffsetsConfirm = false
+    // 「从自动备份恢复」用的三个状态。快照列表在 Menu 打开那一刻现读(autoSnapshots() 只
+    // stat 目录,廉价),不常驻 @State —— 常驻的话清空之后新打的那份不会出现在菜单里。
+    @State private var pendingRestoreSnapshot: LyricsBackupStore.Snapshot?
+    @State private var showRestoreSnapshotConfirm = false
+    @State private var restoreSnapshotResult: String?
     // "这次开窗还没有自动定位过当前播放的歌"。⚠️ 不能靠"selectedKeys 是空的"来判断这是不是
     // 一次全新的开窗——2026-08-07 实测坐实(加文件日志抓到 `focus bail: selection not empty`,
     // 第二次开窗时 sel=1):SwiftUI 的 Window scene 关掉之后**并不销毁根视图**,@State 原样
@@ -812,6 +817,33 @@ struct LyricsManagerView: View {
                                 Text(String(format: L10n.t("已校准 %d 首歌的歌词时间轴"),
                                             offsets.trackOffsetCount))
                             }
+                            // 清空/批量删除之前自动打的快照,就地给一个恢复入口。
+                            //
+                            // 为什么必须在**同一个菜单**里:这两个不可撤销的按钮就在上面两段,
+                            // 手滑之后第一反应是回到刚才点错的地方找后悔药。放进设置页的
+                            // 「配置备份」里(那是"换机器"的语境)等于让人在最慌的时候去猜。
+                            //
+                            // 列表现读、不缓存:上面那颗「清空全部缓存」刚打的那份必须立刻
+                            // 出现在这里。
+                            let snapshots = LyricsBackupStore.autoSnapshots()
+                            if !snapshots.isEmpty {
+                                Section {
+                                    ForEach(snapshots) { snapshot in
+                                        Button {
+                                            pendingRestoreSnapshot = snapshot
+                                            showRestoreSnapshotConfirm = true
+                                        } label: {
+                                            // 纯排版,不进 L10n —— 两侧都是已本地化好的
+                                            // 片段(DateFormatter / ByteCountFormatter),
+                                            // 加一条只有括号的翻译条目没有意义。
+                                            Label("\(Self.snapshotDateText(snapshot.date))（\(Self.byteText(snapshot.bytes))）",
+                                                  systemImage: "clock.arrow.circlepath")
+                                        }
+                                    }
+                                } header: {
+                                    Text(L10n.t("从自动备份恢复"))
+                                }
+                            }
                         } label: {
                             Label(cacheSizeText, systemImage: "internaldrive")
                                 .labelStyle(.titleAndIcon)
@@ -848,7 +880,11 @@ struct LyricsManagerView: View {
                     }
                     Button(L10n.t("取消"), role: .cancel) {}
                 } message: {
-                    Text(String(format: L10n.t("这会删除当前全部 %d 条本地记录,包括你手动编辑、联网搜索采纳过的内容,已导出到本地的歌词文件也会一并删除,且无法撤销。下次播放会重新走一遍匹配解析"), store.summaries.count))
+                    // 文案从"无法撤销"改成"会先自动备份":2026-08-22 起 clearAll 动手之前
+                    // 一定先打一份快照(EnrichCacheStore.clearAll)。⚠️ 不能改成"随时可以
+                    // 恢复"——快照只保留最近 3 份、库本来是空的时候压根打不出来,承诺过头
+                    // 比不承诺更危险。
+                    Text(String(format: L10n.t("这会删除当前全部 %d 条本地记录,包括你手动编辑、联网搜索采纳过的内容,已导出到本地的歌词文件也会一并删除。清空之前会自动备份一份,能从这个菜单里的「从自动备份恢复」找回来。下次播放会重新走一遍匹配解析"), store.summaries.count))
                 }
             }
         } detail: {
@@ -876,6 +912,37 @@ struct LyricsManagerView: View {
             Button(L10n.t("取消"), role: .cancel) {}
         } message: {
             Text(String(format: L10n.t("这会清掉你为 %d 首歌手动调出来的歌词时间轴校正值,无法撤销。歌词内容本身不受影响;设置里的全局偏移和按播放器补偿也不会被清掉。清掉之后,这些歌会重新交给后台自动更新歌词源"), offsets.trackOffsetCount))
+        }
+        // 恢复确认。跟上面两个确认弹窗一样各挂各的层级,不叠在同一条修饰符链上。
+        .confirmationDialog(
+            L10n.t("确定要从这份备份恢复歌词库吗?"),
+            isPresented: $showRestoreSnapshotConfirm,
+            titleVisibility: .visible
+        ) {
+            // key 用「从备份恢复」而不是复用已有的「恢复」—— 那条的英文是 "Reset"
+            // (「恢复默认」语境),这里是 restore,复用直接翻错。
+            Button(L10n.t("从备份恢复")) {
+                guard let snapshot = pendingRestoreSnapshot else { return }
+                Task {
+                    restoreSnapshotResult = await store.restoreFromAutoSnapshot(snapshot)
+                        ?? L10n.t("这份备份读不出来")
+                    pendingRestoreSnapshot = nil
+                }
+            }
+            Button(L10n.t("取消"), role: .cancel) { pendingRestoreSnapshot = nil }
+        } message: {
+            // 说清楚它**不是**"回到那一刻的状态":铺文件是覆盖+新增,不删除备份里没有的
+            // 条目(restore 走的是 LyricsBackupArchive.plan,只有 added/overwritten 两类)。
+            // 用户以为是整体回滚、结果发现之后新解析的歌还在,那是另一种惊吓。
+            Text(L10n.t("备份里的歌词文件会铺回歌词文件夹：同名的覆盖，缺的补上；备份之后新解析出来的歌不会被删掉。恢复完 collector 会重启一次，把它们重新读进缓存"))
+        }
+        .alert(L10n.t("恢复歌词库"), isPresented: Binding(
+            get: { restoreSnapshotResult != nil },
+            set: { if !$0 { restoreSnapshotResult = nil } }
+        )) {
+            Button(L10n.t("好")) { restoreSnapshotResult = nil }
+        } message: {
+            Text(restoreSnapshotResult ?? "")
         }
         // 见 AuxiliaryWindowActivation 注释——.accessory 策略下临时借一个 Dock 图标。
         .onAppear { AuxiliaryWindowActivation.windowDidAppear() }
@@ -1016,6 +1083,24 @@ struct LyricsManagerView: View {
         let formatter = ByteCountFormatter()
         formatter.countStyle = .file
         return formatter.string(fromByteCount: store.totalSizeBytes)
+    }
+
+    // 自动备份那一行的两段文字。static 是因为它们在 Menu 的 ForEach 里被调,不碰任何
+    // 实例状态;跟 cacheSizeText 同一套 ByteCountFormatter 口径,免得同一个菜单里两种写法。
+    //
+    // 日期用 .short + .short:这几份快照全是"刚刚/今天"的量级(只留 3 份),用户要分辨的是
+    // "哪一次操作",精确到分钟就够,写全年月日反而把菜单撑宽。
+    private static func snapshotDateText(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .short
+        formatter.timeStyle = .short
+        return formatter.string(from: date)
+    }
+
+    private static func byteText(_ bytes: Int) -> String {
+        let formatter = ByteCountFormatter()
+        formatter.countStyle = .file
+        return formatter.string(fromByteCount: Int64(bytes))
     }
 
     // 选中并滚动到当前正在播放的这首歌(如果它已经被缓存过)——开窗时自动跑一次

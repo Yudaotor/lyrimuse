@@ -136,4 +136,98 @@ enum LyricsBackupStore {
         logger.notice("restore: +\(result.added) ~\(result.overwritten) !\(result.failed) x\(result.rejected) pins+\(result.pinsAdded)")
         return result
     }
+
+    // MARK: - 破坏性操作前的自动快照
+
+    /// 自动快照落点。放在 `~/.config/lyrimuse/` 下面而不是 iCloud 备份文件夹:这是"手滑
+    /// 之后马上要用"的东西,不该受"用户有没有配 iCloud / 那个目录还在不在"的影响,也不该
+    /// 每次清空都往用户的云盘里塞几 MB。`uninstall.sh --purge` 删整个 CONFIG_DIR,顺带
+    /// 把它收走,不用另外维护一条清理路径。
+    static var autoSnapshotDir: URL {
+        FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".config/lyrimuse/lyrics-backups")
+    }
+
+    /// 只保留最近这么多份。歌词库实测 14.5 MB → 压缩后 6.1 MB,三份约 18 MB —— 够覆盖
+    /// "清空 → 发现不对"这个窗口,又不至于在用户不知情的地方长成一个无上限的黑洞
+    /// (那正是配置包 sidecar 当初被否掉进 iCloud 的理由之一,见 14 章 §4)。
+    static let autoSnapshotKeepCount = 3
+
+    struct Snapshot: Identifiable, Hashable {
+        var url: URL
+        var date: Date
+        var bytes: Int
+        var id: URL { url }
+    }
+
+    /// 在破坏性操作**之前**打一份快照。返回落点;没有歌词文件(没什么可备份的)或写盘失败
+    /// 时返回 nil —— 调用方据此决定要不要如实告诉用户"这次没有备份"。
+    ///
+    /// 为什么必须有它:`EnrichCacheStore.clearAll()` 走的是 `removeItem`(不是废纸篓)+
+    /// 整份替换落盘,一旦执行没有任何可恢复层。docs/features/11 已知坑 7 记的那次
+    /// 「833 条手工修正丢失」,在加这个之前的代码上会一字不差地重演一遍。
+    ///
+    /// `reason` 只进文件名,给用户在 Finder 里认得出是哪一次操作(clear / delete)。
+    static func writeAutoSnapshot(reason: String) async -> URL? {
+        guard let data = await buildArchive() else {
+            logger.notice("autoSnapshot(\(reason, privacy: .public)): nothing to back up")
+            return nil
+        }
+        let dir = autoSnapshotDir
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd-HHmmss"
+        let url = dir.appendingPathComponent("auto-\(reason)-\(formatter.string(from: Date())).lyrimusebak")
+        do {
+            // writeSecurely:跟配置包同一条路径,权限 0600(歌词内容本身不敏感,但没必要比
+            // 旁边那份宽)。
+            try data.writeSecurely(to: url)
+        } catch {
+            logger.error("autoSnapshot(\(reason, privacy: .public)): write failed: \(error.localizedDescription, privacy: .public)")
+            return nil
+        }
+        logger.notice("autoSnapshot(\(reason, privacy: .public)): wrote \(data.count) bytes to \(url.lastPathComponent, privacy: .public)")
+        pruneAutoSnapshots()
+        return url
+    }
+
+    /// 现有的自动快照,**按时间倒序**(最新的在前)——恢复入口默认就该指向刚刚那一份。
+    static func autoSnapshots() -> [Snapshot] {
+        let dir = autoSnapshotDir
+        guard let urls = try? FileManager.default.contentsOfDirectory(
+            at: dir, includingPropertiesForKeys: [.contentModificationDateKey, .fileSizeKey])
+        else { return [] }
+        return urls
+            .filter { $0.pathExtension == "lyrimusebak" }
+            .compactMap { url -> Snapshot? in
+                guard let values = try? url.resourceValues(forKeys: [.contentModificationDateKey, .fileSizeKey]),
+                      let date = values.contentModificationDate else { return nil }
+                return Snapshot(url: url, date: date, bytes: values.fileSize ?? 0)
+            }
+            .sorted { $0.date > $1.date }
+    }
+
+    /// 轮转:超出 `autoSnapshotKeepCount` 的旧快照删掉。
+    ///
+    /// ⚠️ 这里**逐个删确切的 URL**,不用任何通配 —— 这个目录理论上只有我们自己写的东西,
+    /// 但 `autoSnapshots()` 已经按扩展名筛过一遍,删的必须是那份筛出来的清单里的元素,
+    /// 不能对目录做 removeItem。
+    private static func pruneAutoSnapshots() {
+        let snapshots = autoSnapshots()
+        guard snapshots.count > autoSnapshotKeepCount else { return }
+        for snapshot in snapshots[autoSnapshotKeepCount...] {
+            try? FileManager.default.removeItem(at: snapshot.url)
+            logger.notice("autoSnapshot: pruned \(snapshot.url.lastPathComponent, privacy: .public)")
+        }
+    }
+
+    /// 从一份自动快照恢复。走的就是配置导入那条 `restore(from:)`,不另开一套铺盘逻辑
+    /// (路径安全那两道闸必须共用)。
+    static func restoreAutoSnapshot(_ snapshot: Snapshot) async -> RestoreResult? {
+        guard let data = try? Data(contentsOf: snapshot.url) else {
+            logger.error("restoreAutoSnapshot: cannot read \(snapshot.url.lastPathComponent, privacy: .public)")
+            return nil
+        }
+        return await restore(from: data)
+    }
 }

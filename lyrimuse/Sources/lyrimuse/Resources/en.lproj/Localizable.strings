@@ -91,7 +91,9 @@
 "今天" = "Today";
 "今天 %@ 次" = "%@ today";
 "今天听了 %1$@ 首 · 本周 %2$@ 首" = "%1$@ plays today · %2$@ this week";
+"从备份恢复" = "Restore";
 "从待补提交清单里移除这条（不可恢复）" = "Remove this from the backfill queue (cannot be undone)";
+"从自动备份恢复" = "Restore from Auto Backup";
 "从资料库删除" = "Delete from Library";
 "以下两项对「桌面悬浮歌词」和「灵动岛歌词」同时生效；菜单栏歌词和歌词窗口不受影响" = "Both settings below apply to Desktop Floating Lyrics and Notch Lyrics; Menu Bar Lyrics and the Lyrics Window are unaffected";
 "企业微信" = "WeCom";
@@ -208,8 +210,10 @@
 "声波" = "Waveform";
 "备份到「%@」，还没存过" = "Backing up to “%@” — nothing saved yet";
 "备份文件夹" = "Backup Folder";
+"备份里的歌词文件会铺回歌词文件夹：同名的覆盖，缺的补上；备份之后新解析出来的歌不会被删掉。恢复完 collector 会重启一次，把它们重新读进缓存" = "The lyrics files in the backup are written back into the lyrics folder: same-named files are overwritten, missing ones are added. Songs resolved after the backup was made are not removed. The collector restarts once afterwards to read them back into the cache.";
 "多" = "More";
 "套用" = "Apply";
+"好" = "OK";
 "好的" = "OK";
 "字体" = "Font";
 "字号" = "Font Size";
@@ -254,6 +258,7 @@
 "已安装但未运行（上次退出码 %d）" = "Installed but not running (last exit code %d)";
 "已导出到本地的歌词文件也会一并删除,下次播放这首歌会重新走一遍匹配解析,不保证一定能找到一样的歌词" = "Its exported .lrc file is deleted too. The next time this song plays, Lyrimuse searches for lyrics again and may not find the same ones";
 "已导出到本地的歌词文件也会一并删除,且无法撤销。下次播放这些歌会重新走一遍匹配解析,不保证能找到一样的歌词" = "Their exported .lrc files are deleted too, and this can't be undone. The next time you play these songs, Lyrimuse searches again and may not find the same lyrics";
+"已恢复 %d 个歌词文件（新增 %d、覆盖 %d）" = "Restored %d lyrics files (%d added, %d overwritten)";
 "已拒绝" = "Denied";
 "已换成「%1$@」（%2$@ 分），原来是「%3$@」" = "Switched to “%1$@” (%2$@ pts), was “%3$@”";
 "已授权" = "Authorized";
@@ -297,6 +302,7 @@
 "总分 %@" = "Total %@";
 "恢复" = "Reset";
 "恢复原信息" = "Restore Original Info";
+"恢复歌词库" = "Restore Lyrics Library";
 "恢复默认位置" = "Restore Default Location";
 "恢复默认文字与配色" = "Reset Text and Color";
 "悬浮歌词" = "Floating Lyrics";
@@ -531,6 +537,7 @@
 "用来把当前播放状态推送到网页小组件和状态徽章" = "Pushes the current playback status to the web widget and status badge";
 "用来接收「每周听歌小结」「每日听歌报告」推送" = "Used to receive “Weekly Listening Digest” and “Daily Listening Report” notifications";
 "申请页基本只需要填「应用名称」，其余留空即可；提交后页面会直接显示 API Key 和 Shared Secret" = "The form only needs an application name; leave everything else blank. Your API Key and Shared Secret appear as soon as you submit it";
+"确定要从这份备份恢复歌词库吗?" = "Restore the lyrics library from this backup?";
 "确定要删除「%@ - %@」的本地记录吗?" = "Delete the saved lyrics for “%@ — %@”?";
 "确定要删除选中的 %@ 条本地记录吗?" = "Delete %@ selected entries?";
 "确定要存到 iCloud 吗？" = "Save your settings to iCloud?";
@@ -685,8 +692,9 @@
 "这个时段还没有记录" = "No scrobbles in this period";
 "这个源匹配到的专辑跟本地专辑一致，版本大概率对（最多 150）" = "The album this source matched agrees with the local album, so the version is likely right (up to 150)";
 "这个状态只在本次打开这扇窗口期间有效，下次重新打开会恢复默认" = "Applies only while this window is open; reopening resets it";
+"这份备份读不出来" = "This backup could not be read";
 "这份备份还没从 iCloud 下载下来，等一会儿再试" = "This backup hasn't finished downloading from iCloud — try again in a moment";
-"这会删除当前全部 %d 条本地记录,包括你手动编辑、联网搜索采纳过的内容,已导出到本地的歌词文件也会一并删除,且无法撤销。下次播放会重新走一遍匹配解析" = "This deletes all cached records (%d in total), including anything you've edited by hand or picked from an online search. Any lyrics files already exported locally are deleted too, and this can't be undone. The next playback searches again from scratch";
+"这会删除当前全部 %d 条本地记录,包括你手动编辑、联网搜索采纳过的内容,已导出到本地的歌词文件也会一并删除。清空之前会自动备份一份,能从这个菜单里的「从自动备份恢复」找回来。下次播放会重新走一遍匹配解析" = "This deletes all %d local records, including anything you edited by hand or picked from an online search, and the exported lyrics files go with them. A backup is taken automatically beforehand — you can get it back from “Restore from Auto Backup” in this menu. The next time a song plays it goes through matching and resolution again.";
 "这会清掉你为 %d 首歌手动调出来的歌词时间轴校正值,无法撤销。歌词内容本身不受影响;设置里的全局偏移和按播放器补偿也不会被清掉。清掉之后,这些歌会重新交给后台自动更新歌词源" = "This clears the timing offsets you tuned by hand for %d songs and cannot be undone. The lyrics themselves are untouched, and the global offset and per-player compensation in Settings are not cleared either. Afterwards these songs go back to having their lyrics source updated automatically.";
 "这会清除本机所有账号 token、密钥和个人设置，恢复到刚装完时的样子（下次启动会重新走一遍引导向导），且无法撤销。iCloud 里那份备份和已经导出的文件都不受影响；两样都没有的话，建议先备份一份" = "This erases every account token, key, and personal setting on this Mac, restoring Lyrimuse to a fresh install (the setup guide runs again on next launch). This can't be undone. The copy in iCloud and any files you exported are untouched; if you have neither, back up first";
 "这会覆盖当前所有设置，包括已连接的账号和播放数据发往的地址，并立即重启 Lyrimuse 使其生效" = "This overwrites every current setting, including connected accounts and where your playback data is sent, then restarts Lyrimuse right away";

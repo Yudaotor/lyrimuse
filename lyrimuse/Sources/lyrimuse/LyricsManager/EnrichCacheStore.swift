@@ -111,6 +111,11 @@ public final class EnrichCacheStore: ObservableObject {
     // 同一次磁盘扫描顺带算出来,不为这一个数字单独再打开一轮文件 I/O。
     @Published public private(set) var totalSizeBytes: Int64 = 0
 
+    /// 最近一次破坏性操作(清空/批量删除)之前打的那份自动快照落在哪。nil = 这次没打成
+    /// (库本来就是空的,或者写盘失败)。UI 据此如实告诉用户"能不能撤回",绝不能默认
+    /// 有备份 —— 那比没有备份更危险。
+    @Published private(set) var lastAutoSnapshotURL: URL?
+
     private static let cacheURL = FileManager.default.homeDirectoryForCurrentUser
         .appendingPathComponent(".config/lyrimuse/lyrimuse-enrich-cache.json")
     // 读 FeatureSettingsStore 的计算属性,而不是编译期定死的 static let——用户可在
@@ -542,6 +547,15 @@ public final class EnrichCacheStore: ObservableObject {
         // 别处删过),让它们混进来不会删错东西,但会让"删了 N 条"这个数字虚高。
         let victims = EnrichCacheKeys.deletionPlan(selected: keys, existing: Set(raw.keys))
         guard !victims.isEmpty else { return }
+        // 批量删除同样先打快照,阈值以上才打。
+        //
+        // 为什么设阈值而不是每次都打:打一份要读几千个小文件 + 压缩 14.5 MB(实测几百毫秒到
+        // 一秒级),删一条歌就付这个代价不合算,而删一条本来也够不上"手滑毁一片"。阈值以上
+        // 才是真正会让人后悔的那种操作 —— 跟「清空全部」同一类。
+        // 单条删除的兜底是下面的废纸篓(deleteExportedLyricsFile),不是快照。
+        if victims.count >= Self.autoSnapshotDeleteThreshold {
+            lastAutoSnapshotURL = await LyricsBackupStore.writeAutoSnapshot(reason: "delete")
+        }
         var removed: [String: [String: Any]] = [:]
         removed.reserveCapacity(victims.count)
         for key in victims {
@@ -579,6 +593,14 @@ public final class EnrichCacheStore: ObservableObject {
     // 内容,这份缓存设计上没有"哪些是临时的、哪些是用户产出"的区分,清空就是全清)。
     // destructive 程度需要在 UI 侧用强提示词说清楚,这里只负责真正执行。
     public func clearAll() async {
+        // ⚠️ 快照必须排在**最前面**,在 raw 被清空、文件被删掉之前 —— buildArchive 读的是
+        // 磁盘上的 lyrics/ 文件族,晚一步就什么都读不到了。
+        //
+        // 为什么非要有这一层:docs/features/11 已知坑 7 那次「833 条手工修正丢失」,在此之前
+        // 的代码上会一字不差地重演 —— 确认弹窗只是提示,落地动作(整份替换落盘 +
+        // deleteAllLyricsFiles)没有任何可恢复层。清空还会连带 LyricsPinStore.removeAll(),
+        // 用户一句句听出来的时间轴对应的 pin 也一起没,而快照里正好带着 pins。
+        lastAutoSnapshotURL = await LyricsBackupStore.writeAutoSnapshot(reason: "clear")
         raw = [:]
         // 清空是用户明确要求的"全清",不能让 persist() 的读-改-写把刚清掉的东西从盘上并回来
         // ——「歌词管理」是可以一直开着的窗口,开窗之后 collector 每解析出一首新歌都会往盘上
@@ -652,6 +674,47 @@ public final class EnrichCacheStore: ObservableObject {
         return !obj.isEmpty
     }
 
+    /// 批量删除到几条起,值得先打一份自动快照。见 delete(keys:) 里那段注释。
+    static let autoSnapshotDeleteThreshold = 5
+
+    /// 从一份自动快照把歌词库铺回去,并让 collector 把它重新读进缓存。
+    ///
+    /// 顺序不能动:
+    ///   1. 先铺文件 —— `lyrics/` 文件族是歌词六字段的**权威源**;
+    ///   2. 再重启 collector —— 它启动时跑 `importLyricsFromFiles`(文件赢),照着刚铺回去的
+    ///      文件重建缓存条目。这一步是恢复真正生效的地方,不是"顺手刷新一下";
+    ///   3. 最后 reload 列表 + 让当前播放的那首重读歌词。
+    /// 反过来先重启再铺文件的话,collector 读到的是还没恢复的目录,等于白铺。
+    ///
+    /// 返回给用户看的一句结果;nil 表示读不出这份快照。
+    func restoreFromAutoSnapshot(_ snapshot: LyricsBackupStore.Snapshot) async -> String? {
+        guard let result = await LyricsBackupStore.restoreAutoSnapshot(snapshot) else { return nil }
+        _ = await CollectorControl.restartAndWaitAsync()
+        await reload()
+        PlaybackCoordinator.shared.refreshLyricsForCurrentTrack()
+        refreshSizeBytes()
+        return String(format: L10n.t("已恢复 %d 个歌词文件（新增 %d、覆盖 %d）"),
+                      result.total, result.added, result.overwritten)
+    }
+
+    /// 删一个歌词文件。**走废纸篓,不是永久删。**
+    ///
+    /// 这些文件是 `lyrics/` 文件族 —— 歌词六字段的权威源,里面有用户手工修正过的内容,
+    /// 而 `lyricsDir` 还是用户可以在设置里自己指定的目录。进废纸篓意味着"删错了还能捞
+    /// 回来",代价只是用户偶尔要去清一下废纸篓。
+    ///
+    /// trashItem 失败时退回 removeItem:目标卷可能压根没有废纸篓(外置卷、网络卷、某些
+    /// 同步盘),那时候仍然要把文件删掉 —— 否则残留文件会在 collector 下次启动
+    /// `importLyricsFromFiles`(文件赢)时把刚删掉的条目整个复活回来,表现成"删了又回来"。
+    /// 正确性优先于可恢复性,但只在拿不到废纸篓时才降级。
+    private static func trashOrRemove(_ url: URL) {
+        do {
+            try FileManager.default.trashItem(at: url, resultingItemURL: nil)
+        } catch {
+            try? FileManager.default.removeItem(at: url)
+        }
+    }
+
     /// 删掉 lyrics/ 目录下的歌词文件。按后缀白名单过滤,理由见 clearAll 里那段注释
     /// (这个目录是用户可以自己指定的,无差别删除会波及无关文件)。
     private func deleteAllLyricsFiles() {
@@ -659,7 +722,7 @@ public final class EnrichCacheStore: ObservableObject {
             return
         }
         for url in urls where EnrichCacheKeys.lyricsFileSuffixes.contains(where: { url.lastPathComponent.hasSuffix($0) }) {
-            try? FileManager.default.removeItem(at: url)
+            Self.trashOrRemove(url)
         }
     }
 
@@ -699,7 +762,11 @@ public final class EnrichCacheStore: ObservableObject {
     // 清掉整个歌词文件族,不只是纯歌词那一份。
     private func deleteExportedLyricsFile(forKey key: String) {
         for name in EnrichCacheKeys.exportedFileNames(forKey: key) {
-            try? FileManager.default.removeItem(at: Self.lyricsDir.appendingPathComponent(name))
+            let url = Self.lyricsDir.appendingPathComponent(name)
+            // 文件不存在是常态(这条从来没有译文/罗马音/逐字),先看一眼再动手 —— 否则
+            // trashItem 会对每一个不存在的路径抛一次错、白走一遍降级分支。
+            guard FileManager.default.fileExists(atPath: url.path) else { continue }
+            Self.trashOrRemove(url)
         }
     }
 

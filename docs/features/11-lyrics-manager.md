@@ -20,6 +20,14 @@
 - 筛选：文本搜索 + 歌手/专辑下拉（归并键=toSimplified+小写，繁简/大小写不敏感）。**性能口径（2026-08-19 审计落地）**：繁简归一化键/搜索小写副本在 `Summary` 构建时预存（`normPrimaryArtist`/`normAlbum`/`search*Lower`），排序比较器只做元组比较；歌手/专辑归并展示名与下拉候选下沉进 store 随 summaries 重建一次（原来是视图计算属性，List 每物化一行就全量重建一次 O(N) 归并字典）；`filtered` 经缓存盒按 (filterToken, summariesGeneration) 记忆化（一次 body 被 4~5 处独立求值）；`toSimplified` 本体按原串 memoize。summaries 的构建+排序在 reload 的后台 task 里做，主线程只收结果。
 - 「回到当前播放」：`focusCurrentlyPlaying` 滚动定位到正在播的条目（开窗时自动跑一次，`pendingAutoFocus` 闸 + `onDisappear` 复位；工具栏按钮手动跑）。⚠️ 匹配用的 key **必须**走 `EnrichCacheKeys.normalizedKey`（Swift 侧缓存 key 的唯一构造点，逐字节镜像 collector 的 `enrichKey`），不能手拼 `artist|title|album`：手拼会漏掉 `cleanTag`（各类空格/零宽字符）和 `normalizedTitle`（循环剥结尾括号副题）两道清洗。2026-08-20 用户报「进歌词管理不会自动定位」就是这条：Apple Music 报 `Dynasties and Dystopia (from the series Arcane League of Legends)`，缓存里那条 key 是剥掉副题的 `Dynasties and Dystopia`——精确匹配落空，而 `looseKey` 只折大小写/空格/繁简、折不掉副题，兜底也接不住，函数**静默返回**（设计如此：开窗自动定位不该弹提示），表现成压根没定位。现在的候选顺序是 归一化 key → 原样拼的 key（key 归一化上线前入库的老条目）→ 两者各自的 `looseKey`。悬浮窗/灵动岛一直没这个问题，因为 `EnrichCacheReader` 本来就走 `normalizedKey`。
 - 支持多选批量删除（`delete(keys: Set)`）与「清空全部」（`clearAll`，破坏性操作）。
+- **破坏性操作有可恢复层**（2026-08-22 补，之前完全没有）：
+  - 「清空全部缓存」**动手之前**必打一份自动快照；批量删除到 `EnrichCacheStore.autoSnapshotDeleteThreshold`（5）条起同样打。快照走的就是配置备份那份 sidecar 归档（`LyricsBackupStore.buildArchive`，含 `lyrics/` 文件族 + 「已校准」名单），落到 `~/.config/lyrimuse/lyrics-backups/auto-<clear|delete>-<时间戳>.lyrimusebak`，只留最近 `autoSnapshotKeepCount`（3）份。⚠️ 快照必须排在 `raw = [:]` 和删文件**之前** —— `buildArchive` 读的是磁盘上的文件族，晚一步就什么都读不到。
+  - 单条删除**不打**快照（读几千个小文件 + 压缩 14.5MB 实测几百毫秒到一秒级，删一条付这个代价不合算，而删一条也够不上「手滑毁一片」）；它的兜底是下面那条废纸篓。
+  - 歌词文件的删除从 `removeItem` 换成 `trashItem`（`EnrichCacheStore.trashOrRemove`，单条/批量/清空三条路共用）。trashItem 失败（外置卷/网络卷没有废纸篓）时**退回 `removeItem`**：残留文件会在 collector 下次启动 `importLyricsFromFiles`（文件赢）时把刚删的条目整个复活，表现成「删了又回来」——正确性优先于可恢复性，但只在拿不到废纸篓时才降级。
+  - 恢复入口在**同一个「占用」菜单**的第三段「从自动备份恢复」，列出现有快照（时间 + 体积），点一份走 `EnrichCacheStore.restoreFromAutoSnapshot`。放这里而不是设置页的「配置备份」：那两个不可撤销的按钮就在同一个菜单的上面两段，手滑之后第一反应是回到点错的地方找后悔药。菜单里的列表**现读不缓存**（`LyricsBackupStore.autoSnapshots()` 只 stat 目录），否则刚打的那份不会出现。
+  - 恢复的顺序不能动：**铺文件 → 重启 collector → reload 列表 + 让当前曲目重读**。`lyrics/` 文件族是权威源，collector 启动时 `importLyricsFromFiles` 照着刚铺回去的文件重建缓存条目——那一步才是恢复真正生效的地方。反过来先重启再铺等于白铺。
+  - 恢复**不是整体回滚**：走 `LyricsBackupArchive.plan`，只有 added/overwritten 两类，备份之后新解析出来的歌不会被删掉。确认弹窗里明写了这一点（以为是回滚、结果发现新歌还在，是另一种惊吓）。
+  - 清空确认文案随之从「且无法撤销」改成「清空之前会自动备份一份」。⚠️ **不能**写成「随时可以恢复」——只留 3 份、库本来是空的时候压根打不出快照（`writeAutoSnapshot` 返回 nil，记在 `EnrichCacheStore.lastAutoSnapshotURL`），承诺过头比不承诺更危险。
 - 工具栏「占用」菜单里是**两段独立**的清理入口：「清空全部缓存」清歌词内容（缓存 JSON + `lyrics/` 文件夹），「清空全部时间轴校正」只清**单曲那一份**的偏移值（UserDefaults 里的按曲目字典 + 已校准名单）——全局基准和按播放器那两层各有自己的入口（设置页那一行），不受连带（第 08 章有 selftest 断言钉住）。两者互不连带 —— 存储位置本来就不同，而校正值是一句句听出来的，比"下次播放会自动重新解析"的歌词内容宝贵。**2026-08-21 补**：「清空全部缓存」现在也会 `LyricsPinStore.removeAll()` —— 内容都没了，留着名单就是一份孤儿（collector 继续一票否决这些歌的自动重选，而它保护的东西已经随条目一起没了）。
 - 歌词内容和「已校准」名单现在会随配置备份走（sidecar 归档，见第 14 章 §4）：备份的是 `lyrics/` 文件族而不是 enrich 缓存，因为文件族是六字段权威源、collector 启动时会据它重建缓存条目。确认弹窗挂在最外层 `NavigationSplitView`（删除挂 List、清缓存挂侧栏链，三个层级分开，避免同链叠多个呈现修饰符互相顶掉）。
 - 详情页「已校准」徽章（`timer` 图标）标出这首歌调过时间轴偏移。必须显式标出来，因为它带一个看不见的副作用：collector 从此不再自动给这首歌重选歌词源（见第 8 章）。偏移区下面那行小字说明后果与解除办法（改回 0）。
@@ -90,6 +98,7 @@
 
 - `~/.config/lyrimuse/lyrimuse-enrich-cache.json`（原始字典级读写）。
 - `~/.config/lyrimuse/lyrics/`（或用户自选目录）：`<artist> - <title>[#hash].lrc/.tr.lrc/.roma.lrc/.yrc`。
+- `~/.config/lyrimuse/lyrics-backups/`：破坏性操作前的自动快照 `auto-<clear|delete>-<时间戳>.lyrimusebak`（最多 3 份）。刻意放在 `~/.config/lyrimuse/` 下而不是 iCloud 备份文件夹——这是「手滑之后马上要用」的东西，不该受「用户有没有配 iCloud」影响，也不该每次清空往云盘塞几 MB；`uninstall.sh --purge` 删整个 CONFIG_DIR 时顺带收走，不用另维护清理路径。
 - UserDefaults：列宽三键。
 
 ## 代码锚点
@@ -97,7 +106,8 @@
 | 主题 | 位置 |
 |---|---|
 | 窗口主视图 | LyricsManager/LyricsManagerView.swift（列表/筛选/focusCurrentlyPlaying/sourceDisplayName/sourceColor） |
-| 数据层 | LyricsManager/EnrichCacheStore.swift `saveEdit` `delete` `clearAll` `splitKey` `buildSummaries` `persist`(后台+串行链) `reload(onlyIfChanged:)` |
+| 数据层 | LyricsManager/EnrichCacheStore.swift `saveEdit` `delete` `clearAll` `splitKey` `buildSummaries` `persist`(后台+串行链) `reload(onlyIfChanged:)` `trashOrRemove` `restoreFromAutoSnapshot` `autoSnapshotDeleteThreshold` |
+| 自动快照 | Settings/LyricsBackupStore.swift `writeAutoSnapshot` `autoSnapshots` `pruneAutoSnapshots` `restoreAutoSnapshot` `autoSnapshotDir` `autoSnapshotKeepCount`；归档格式在 LyrimuseCore/Lyrics/LyricsBackupArchive.swift |
 | 联网搜索 | LyricsManager/LyricsSearchSheet.swift、LyricsSearchService.swift；collector 侧 searchcli.go |
 | 决策弹窗 | LyricsManager/LyricsDecisionSheet.swift；数据 decision.go |
 | collector 重启 | LyricsManager/CollectorControl.swift（launchctl kickstart -k + 真实退出码检查） |
@@ -113,6 +123,7 @@
 5. 决策弹窗只读是刻意的：存档无正文，「从存档采纳」这种操作在数据上就不存在。
 6. 搜索子进程必须可中断，否则连点重搜会积压 20s 的幽灵轮。
 7. 「清空全部」曾在一次脚本化 GUI 验证中被误触发导致 833 条手工修正丢失——对这个窗口做任何自动化操作前必须备份缓存与 lyrics 文件夹（repo CLAUDE.md 硬规则）。
+   **2026-08-22 补上了代码层的可恢复层**（§1 那条）：清空/批量删除前自动快照、删除走废纸篓、菜单里就地给恢复入口。在此之前那次事故在当时的代码上会一字不差地重演——确认弹窗只是提示，落地动作（整份替换落盘 + `deleteAllLyricsFiles` 的 `removeItem`）没有任何回头路，而清空还连带 `LyricsPinStore.removeAll()`，用户一句句听出来的时间轴对应的 pin 也一起没。**但 CLAUDE.md 那条硬规则不因此放松**：快照只覆盖 `lyrics/` 文件族 + pins，挡不住脚本误触别的破坏性控件，也挡不住「快照本身没打成」（库为空/写盘失败）。
 8. ⚠️ **「当前源这一轮没应答」那道闸有个死锁盲点**（2026-08-22 实测）：它假设「没应答」是
    偶发超时，但当前源如果是**恒定**搜不到这首歌，这个条件就永远为真，按钮永远停在
    「这一轮「X」没应答，没有换（避免误降级）」——而 `.keptNotDecidable` 分支是直接 return、

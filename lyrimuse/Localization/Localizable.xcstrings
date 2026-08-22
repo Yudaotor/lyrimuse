@@ -1497,6 +1497,23 @@
         }
       }
     },
+    "从备份恢复" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Restore"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "从备份恢复"
+          }
+        }
+      }
+    },
     "从待补提交清单里移除这条（不可恢复）" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1510,6 +1527,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "从待补提交清单里移除这条（不可恢复）"
+          }
+        }
+      }
+    },
+    "从自动备份恢复" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Restore from Auto Backup"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "从自动备份恢复"
           }
         }
       }
@@ -3486,6 +3520,23 @@
         }
       }
     },
+    "备份里的歌词文件会铺回歌词文件夹：同名的覆盖，缺的补上；备份之后新解析出来的歌不会被删掉。恢复完 collector 会重启一次，把它们重新读进缓存" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The lyrics files in the backup are written back into the lyrics folder: same-named files are overwritten, missing ones are added. Songs resolved after the backup was made are not removed. The collector restarts once afterwards to read them back into the cache."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "备份里的歌词文件会铺回歌词文件夹：同名的覆盖，缺的补上；备份之后新解析出来的歌不会被删掉。恢复完 collector 会重启一次，把它们重新读进缓存"
+          }
+        }
+      }
+    },
     "多" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -3516,6 +3567,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "套用"
+          }
+        }
+      }
+    },
+    "好" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OK"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "好"
           }
         }
       }
@@ -4268,6 +4336,23 @@
         }
       }
     },
+    "已恢复 %d 个歌词文件（新增 %d、覆盖 %d）" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Restored %d lyrics files (%d added, %d overwritten)"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已恢复 %d 个歌词文件（新增 %d、覆盖 %d）"
+          }
+        }
+      }
+    },
     "已拒绝" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -4995,6 +5080,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "恢复原信息"
+          }
+        }
+      }
+    },
+    "恢复歌词库" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Restore Lyrics Library"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "恢复歌词库"
           }
         }
       }
@@ -8977,6 +9079,23 @@
         }
       }
     },
+    "确定要从这份备份恢复歌词库吗?" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Restore the lyrics library from this backup?"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "确定要从这份备份恢复歌词库吗?"
+          }
+        }
+      }
+    },
     "确定要删除「%@ - %@」的本地记录吗?" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -11595,6 +11714,23 @@
         }
       }
     },
+    "这份备份读不出来" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This backup could not be read"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这份备份读不出来"
+          }
+        }
+      }
+    },
     "这份备份还没从 iCloud 下载下来，等一会儿再试" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -11612,19 +11748,19 @@
         }
       }
     },
-    "这会删除当前全部 %d 条本地记录,包括你手动编辑、联网搜索采纳过的内容,已导出到本地的歌词文件也会一并删除,且无法撤销。下次播放会重新走一遍匹配解析" : {
+    "这会删除当前全部 %d 条本地记录,包括你手动编辑、联网搜索采纳过的内容,已导出到本地的歌词文件也会一并删除。清空之前会自动备份一份,能从这个菜单里的「从自动备份恢复」找回来。下次播放会重新走一遍匹配解析" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "This deletes all cached records (%d in total), including anything you've edited by hand or picked from an online search. Any lyrics files already exported locally are deleted too, and this can't be undone. The next playback searches again from scratch"
+            "value" : "This deletes all %d local records, including anything you edited by hand or picked from an online search, and the exported lyrics files go with them. A backup is taken automatically beforehand — you can get it back from “Restore from Auto Backup” in this menu. The next time a song plays it goes through matching and resolution again."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "这会删除当前全部 %d 条本地记录,包括你手动编辑、联网搜索采纳过的内容,已导出到本地的歌词文件也会一并删除,且无法撤销。下次播放会重新走一遍匹配解析"
+            "value" : "这会删除当前全部 %d 条本地记录,包括你手动编辑、联网搜索采纳过的内容,已导出到本地的歌词文件也会一并删除。清空之前会自动备份一份,能从这个菜单里的「从自动备份恢复」找回来。下次播放会重新走一遍匹配解析"
           }
         }
       }
