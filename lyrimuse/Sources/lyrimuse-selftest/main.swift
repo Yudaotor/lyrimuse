@@ -52,6 +52,87 @@ expectEqual(
     "LRC: 一行多个时间戳(副歌重复)各生成一条"
 )
 
+// --- FullscreenGeometry (2026-08-22) ---
+//
+// 「别的 App 全屏时隐藏」的判据。全部数字取自本机实测(1470x956 内置刘海屏,
+// safeAreaInsets.top=32、菜单栏条高 33、Dock 保留区让 visibleFrame 只有 858)。
+//
+// 这组断言钉的是三件事,每一件都对应一次真实的错判:
+//   ① 三种全屏形态都要认出来 —— 尤其形态②(原生全屏但内容避开刘海),第三方实现 Lyriam 的
+//      注释指出过「CGWindow bounds 在刘海屏上不可靠,全屏内容坐在刘海下方」,而改动之前
+//      lyrimuse 正是漏掉这一种;
+//   ② 标准最大化窗口**绝不能**算成全屏 —— 靠「底边探到屏幕最底」区分;
+//   ③ 刘海下沿(32)与菜单栏下沿(33)只差 1pt,容差 2pt 要能同时容下,但又不能大到
+//      把普通大窗口放进来。
+do {
+    let screen = CGRect(x: 0, y: 0, width: 1470, height: 956)
+    let tops = FullscreenGeometry.legalTops(screen: screen, safeAreaTop: 32, menuBarHeight: 33)
+    expectEqual(tops, [0, 32, 33], "全屏几何: 三个合法顶边(屏幕顶/刘海下沿/菜单栏下沿)")
+
+    func covers(_ r: CGRect) -> Bool {
+        FullscreenGeometry.covers(window: r, screen: screen, legalTops: tops)
+    }
+    // 形态①:原生全屏,内容延伸进刘海两侧。
+    expectEqual(covers(CGRect(x: 0, y: 0, width: 1470, height: 956)), true,
+                "全屏几何: 形态①盖满整块物理屏")
+    // 形态②:原生全屏但避开刘海。改动之前就是漏在这一种上。
+    //
+    // ⚠️ 这一条**必须**用「菜单栏已被收起」(menuBarHeight = 0)来构造 —— 原生全屏时系统
+    // 本来就把菜单栏收了,那才是真实场景。拿桌面态的 33 来测是**测不出**这个 bug 的:
+    // 33 与刘海下沿 32 只差 1pt,在 2pt 容差内会蒙混过关,把「②这一档存在」和「靠③的
+    // 1pt 巧合」混为一谈。这个盲点是 2026-08-22 做变异测试时当场暴露的 —— 删掉②之后
+    // 这条断言竟然还是绿的,改用 menuBarHeight=0 之后才真正咬住。
+    let fullscreenTops = FullscreenGeometry.legalTops(screen: screen, safeAreaTop: 32, menuBarHeight: 0)
+    expectEqual(fullscreenTops, [0, 32, 0], "全屏几何: 全屏时菜单栏已收起,③塌回屏幕顶")
+    expectEqual(FullscreenGeometry.covers(window: CGRect(x: 0, y: 32, width: 1470, height: 924),
+                                          screen: screen, legalTops: fullscreenTops), true,
+                "全屏几何: 形态②内容坐在刘海下方(此前漏判的那种)")
+    // 同一份顶边下,盖满整块物理屏的形态①照样认。
+    expectEqual(FullscreenGeometry.covers(window: CGRect(x: 0, y: 0, width: 1470, height: 956),
+                                          screen: screen, legalTops: fullscreenTops), true,
+                "全屏几何: 全屏态下形态①同样认")
+    // 形态③:伪全屏(微信视频通话实测形状)。
+    expectEqual(covers(CGRect(x: 0, y: 33, width: 1470, height: 923)), true,
+                "全屏几何: 形态③伪全屏(顶边卡菜单栏下沿、底边到屏幕最底)")
+
+    // 标准最大化:本机实测的四个真实窗口,底边都停在 Dock 保留区上方,一个都不许命中。
+    expectEqual(covers(CGRect(x: 0, y: 33, width: 1470, height: 858)), false,
+                "全屏几何: 最大化(音乐/Lyrimuse,底边 891)不算全屏")
+    expectEqual(covers(CGRect(x: 0, y: 33, width: 1470, height: 851)), false,
+                "全屏几何: 最大化(Arc,底边 884)不算全屏")
+    expectEqual(covers(CGRect(x: 0, y: 33, width: 1470, height: 845)), false,
+                "全屏几何: 最大化(Code/Edge/Otty,底边 878)不算全屏")
+
+    // 宽度不顶格 / 不左对齐的窗口一律不算(实测的 Safari 半屏、企业微信)。
+    expectEqual(covers(CGRect(x: 118, y: 33, width: 1324, height: 845)), false,
+                "全屏几何: 宽度不顶格不算")
+    expectEqual(covers(CGRect(x: 0, y: 33, width: 1309, height: 923)), false,
+                "全屏几何: 左对齐但宽度不够不算")
+
+    // 顶边落在三个合法位置之外:底边到底、宽度也顶格,但顶边悬在半空 → 不算。
+    expectEqual(covers(CGRect(x: 0, y: 100, width: 1470, height: 856)), false,
+                "全屏几何: 顶边不在任何一个合法位置不算")
+
+    // 容差边界:±2 之内认,超出不认。
+    expectEqual(covers(CGRect(x: 0, y: 34, width: 1470, height: 922)), true,
+                "全屏几何: 顶边差 1pt 仍在容差内")
+    expectEqual(covers(CGRect(x: 0, y: 36, width: 1470, height: 920)), false,
+                "全屏几何: 顶边差 3pt 超出容差")
+
+    // 副屏没有菜单栏(menuBarHeight = 0)时,第③个顶边塌回屏幕顶,不该多认出什么。
+    let ext = CGRect(x: 1470, y: 0, width: 1920, height: 1080)
+    let extTops = FullscreenGeometry.legalTops(screen: ext, safeAreaTop: 0, menuBarHeight: 0)
+    expectEqual(extTops, [0, 0, 0], "全屏几何: 无刘海无菜单栏的副屏三个顶边重合")
+    expectEqual(FullscreenGeometry.covers(window: CGRect(x: 1470, y: 0, width: 1920, height: 1080),
+                                          screen: ext, legalTops: extTops), true,
+                "全屏几何: 副屏上盖满整块屏算全屏")
+    // ⚠️ 副屏的坐标原点不是 0 —— 拿主屏的 y 去比会整片错(这正是改用 CGDisplayBounds
+    // 而不是手工翻 NSScreen.frame 的理由)。
+    expectEqual(FullscreenGeometry.covers(window: CGRect(x: 0, y: 0, width: 1920, height: 1080),
+                                          screen: ext, legalTops: extTops), false,
+                "全屏几何: 副屏判定要用副屏自己的原点")
+}
+
 // --- FrameRateProbe (2026-08-22) ---
 //
 // 拆成纯值类型放 Core 就是为了能无屏测它(同 KaraokeFill/MarqueeMath)。

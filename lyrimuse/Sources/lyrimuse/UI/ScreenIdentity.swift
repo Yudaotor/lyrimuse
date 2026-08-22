@@ -14,6 +14,19 @@ import CoreGraphics
 // CGDisplayCreateUUIDFromDisplayID 给的是显示器自身的 UUID,正是为"跨会话记住某一块
 // 具体屏幕"准备的。数组下标同样不能用:插拔顺序会变。
 enum ScreenIdentity {
+    /// 这块屏的 CGDirectDisplayID。
+    ///
+    /// 单独抽出来是因为有第二个消费方:`FullscreenAppMonitor` 要用 `CGDisplayBounds(displayID)`
+    /// 拿**CG 坐标系**下的屏幕矩形,好跟 `CGWindowListCopyWindowInfo` 报的窗口 bounds 同源比较。
+    /// ⚠️ 这个 ID 本身**不能**持久化(见下面 id(of:) 的注释:它是本次会话临时分配的),
+    /// 只能当场用。
+    static func displayID(of screen: NSScreen) -> CGDirectDisplayID? {
+        guard let number = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber else {
+            return nil
+        }
+        return CGDirectDisplayID(number.uint32Value)
+    }
+
     static func id(of screen: NSScreen) -> String? {
         guard let number = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber else {
             return nil
