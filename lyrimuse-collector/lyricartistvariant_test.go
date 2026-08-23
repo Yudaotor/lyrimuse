@@ -66,9 +66,14 @@ func TestLyricPrimaryQueryArtist(t *testing.T) {
 		{"Softest Hard", ""},
 		// 整串被 feat 词砍空(F.T. Island 这类):宁可不试也不发错词。
 		{"FT Island", ""},
-		// 人名自含分隔符(K/DA 案的形态):会产出 "K" 变体——只作检索词,采纳仍要过
-		// 标题/时长/歌手闸,且只在可用来源 <2 时才发出去。
-		{"K/DA", "K"},
+		// 人名自含分隔符(K/DA 案的形态)。2026-08-23 起不再产出 "K":那是 Last.fm 上
+		// 一个**真实存在的无关歌手**,拿它当检索词本来就搜不到 K/DA 的歌,正撞上上面
+		// "宁可不试也不发一个错的检索词"那条。见 firstCreditedArtist 的斜杠守卫。
+		{"K/DA", ""},
+		// 反过来,真的是合唱串时现在能产出正确的首歌手 —— 2026-08-17 用户实测过:
+		// 用完整串只搜到两条候选,手工截短成 "K/DA" 才搜到三条(多一条带逐字轴、
+		// 分数最高的 Musixmatch)。那次只能手工截,现在这一步自己就给出 K/DA。
+		{"K/DA/Madison Beer/(G)I-DLE/Jaira Burns", "K/DA"},
 	}
 	for _, c := range cases {
 		if got := lyricPrimaryQueryArtist(c.artist); got != c.want {

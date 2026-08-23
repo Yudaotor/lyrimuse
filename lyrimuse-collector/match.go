@@ -642,25 +642,110 @@ func isArtistCreditSep(r rune) bool {
 	return r == '/' || r == '、' || r == '&' || r == ',' || r == '，'
 }
 
-// firstCreditedArtist 把"多人合credit"字符串(如"Prince & The Revolution"、
-// "陶喆、卢广仲")按 artistCreditParts 同一套分隔符拆开,取第一位——歌手统计类场景(见
-// topartists.go 的 mergeAliasedArtists)要求这类合唱/feat.credit 全部算到"第一个人"
-// 头上,不单独占一个歌手名额。只有真正切出 ≥2 段才当作合唱处理,跟 artistCreditParts
-// 同一个理由(防止"周杰伦、"这种只有一个人、结尾恰好带分隔符的写法被误判成合唱)。返回
-// 原始大小写/原始文字(不像 artistCreditParts 那样统一转小写——那是给"判断是否同一个人"
-// 这一步比较用的,这里要的是展示用的原始名字)。
-func firstCreditedArtist(s string) string {
-	trimmed := strings.TrimSpace(s)
+// isArtistCreditPrimarySep 是"取第一位艺人"时的**主分隔符档**。刻意**不含 `/`** ——
+// 理由见 slashHeadPlausible。跟 isArtistCreditSep 分成两个函数而不是共用一份:那一份是
+// 给 artistCreditParts(判断"是否同一个人")用的,它把 K/DA 切开是**有意的**,靠
+// artistCreditRunMatches 再把连续段拼回去(见 artistcreditrun_test.go)。两处需求相反,
+// 硬共用一份才是坑的来源。
+func isArtistCreditPrimarySep(r rune) bool {
+	return r == '、' || r == '&' || r == ',' || r == '，'
+}
+
+// firstCreditedField 按 sep 切,只有真切出 ≥2 段才算"这是个合credit 串"。
+func firstCreditedField(s string, sep func(rune) bool) (string, bool) {
 	var parts []string
-	for _, p := range strings.FieldsFunc(trimmed, isArtistCreditSep) {
+	for _, p := range strings.FieldsFunc(s, sep) {
 		if p = strings.TrimSpace(p); p != "" {
 			parts = append(parts, p)
 		}
 	}
 	if len(parts) >= 2 {
-		return parts[0]
+		return parts[0], true
+	}
+	return "", false
+}
+
+// slashHeadPlausible 判断"只有 `/` 一个分隔符时,切出来的头部像不像一个真的艺人名"。
+//
+// `/` 是双面刃:网易云式合 credit 常写成 `陶喆/卢广仲`(该切),而 `K/DA`、`AC/DC` 里的
+// 斜杠是名字自带的(切了就把一个人劈成「K」「AC」)。判据用长度,按书写系统分档:含汉字的
+// 两个字就是完整名字,纯拉丁两个字母几乎只可能是缩写的前半截,要求 ≥3。判不准时**不切**
+// —— 少归并一次只是维持现状,切错是往 Last.fm 写错数据、不可逆。
+//
+// ⚠️ 与 Swift 侧 LyrimuseCore/Models/ArtistCredit.swift 的 slashHeadIsPlausible
+// **必须逐字同规则**,两边一起改。2026-08-23 修的正是"只修了一半"造成的事故:那道守卫
+// 2026-08-20 只加在 Swift 侧(只管显示),而 Go 侧这条路径才是 lastfmcollapse 真正改写
+// scrobble 歌手名的写侧 —— 实测把 `K/DA/Madison Beer/i-dle/Jaira Burns` 折成了 `K`,
+// 4 次播放记到了 Last.fm 上一个**真实存在的无关歌手**「K」(10.8 万听众)名下,而 K/DA
+// 名下 0 次。Last.fm 的纠错库已冻结,这种写错全局补不回来。
+func slashHeadPlausible(head string) bool {
+	if head == "" {
+		return false
+	}
+	hasHan := false
+	for _, r := range head {
+		if r >= 0x4E00 && r <= 0x9FFF {
+			hasHan = true
+			break
+		}
+	}
+	min := 3
+	if hasHan {
+		min = 2
+	}
+	return utf8.RuneCountInString(head) >= min
+}
+
+// firstCreditedArtist 把"多人合credit"字符串(如"Prince & The Revolution"、
+// "陶喆、卢广仲")拆开取第一位——歌手统计类场景(见 topartists.go 的 mergeAliasedArtists)
+// 要求这类合唱/feat.credit 全部算到"第一个人"头上,不单独占一个歌手名额。只有真正切出
+// ≥2 段才当作合唱处理(防止"周杰伦、"这种只有一个人、结尾恰好带分隔符的写法被误判成合唱)。
+// 返回原始大小写/原始文字(不像 artistCreditParts 那样统一转小写——那是给"判断是否同一个
+// 人"这一步比较用的,这里要的是展示用的原始名字)。
+//
+// 分两档切,顺序本身就是守卫:`K/DA, Madison Beer & i-dle` 先撞上逗号,切出来的是完整的
+// 「K/DA」;只有全串一个逗号/顿号/& 都没有时才退到 `/` 档,且要过 slashHeadPlausible。
+func firstCreditedArtist(s string) string {
+	trimmed := strings.TrimSpace(s)
+	if head, ok := firstCreditedField(trimmed, isArtistCreditPrimarySep); ok {
+		return head
+	}
+	if head, ok := firstSlashCredit(trimmed); ok {
+		return head
 	}
 	return trimmed
+}
+
+// firstSlashCredit 处理"全串只有 `/` 一种分隔符"的情况。
+//
+// 光靠"头部判不准就整串不切"是**不够**的:`K/DA/Madison Beer/i-dle/Jaira Burns` 确实
+// 是个合credit 串,第一位是 `K/DA` —— 整串不切会让它跟榜上的 `K/DA` 条目合不到一起
+// (topartistsdisplay_test 那两条正是这个期望:30 + 12 要并成 42、显示 `K/DA`)。
+// 所以头部判不准时**往后再吃一段**再判:`K` ✗ → `K/DA` ✓。
+//
+// 吃到整串仍不成立 = 整串大概本来就是一个名字(`AC/DC`),返回不切。
+//
+// 已知取舍:全是单字母段的名字(`M/A/R/R/S` 这种)会被切成 `M/A`。这类写法极罕见(真名
+// 通常用竖线),而反过来"一律不切"会牺牲掉 K/DA 这类主流情况;判据本来就是启发式,宁可
+// 在罕见形态上退化,也不要在常见形态上劈错。
+func firstSlashCredit(s string) (string, bool) {
+	var parts []string
+	for _, p := range strings.FieldsFunc(s, func(r rune) bool { return r == '/' }) {
+		if p = strings.TrimSpace(p); p != "" {
+			parts = append(parts, p)
+		}
+	}
+	if len(parts) < 2 {
+		return "", false
+	}
+	head := parts[0]
+	for i := 1; i < len(parts); i++ {
+		if slashHeadPlausible(head) {
+			return head, true
+		}
+		head += "/" + parts[i]
+	}
+	return "", false
 }
 
 // artistMatches reports whether two artist names refer to the same person/act.

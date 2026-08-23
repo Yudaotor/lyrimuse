@@ -36,6 +36,13 @@
 - **熔断语义（`shouldDisable`）**：error 9/10/26（token 失效/API key 问题）一击致命——写 mirror 状态文件、UI 红感叹号；error 4（Authentication Failed）会被服务端不稳**误报**，改为**两击坐实**：首击只记嫌疑（30s 内的连击不算第二击，30 分钟窗口内再击才熔断），任何一次成功清零嫌疑。
 - 状态文件由 App 侧 `LastfmMirrorStatusWatcher`（5s timer，值变才发布）盯着：熔断→红标即时出现；用户重连成功→红标自愈消失。
 - 授权走 `LastfmAuthFlow`（浏览器 OAuth 拿 session key）。
+- **合唱串折叠（`lastfmcollapse.go`）**：播放器报的多人 credit 在 Last.fm 编目里查不到（无 mbid 且听众 < 500）就折成第一位艺人再提交，免得造出只有你一个听众的影子艺人。判定结果按 `歌手串\n歌名` 缓存 30 天。**这是写侧、不可逆**——Last.fm 的纠错库已冻结（官方 FAQ：New corrections CANNOT be added），折错了全局补不回来。
+  - **`/` 必须跟逗号/顿号/`&` 分档，不能平级**（2026-08-23 用户报「播放记录里 K/DA 的歌手怎么是 K」）。`firstCreditedArtist` 原来用 `isArtistCreditSep` 无条件取第一段，于是 `K/DA/Madison Beer/i-dle/Jaira Burns` 被劈成 `K`。后果：**`K` 在 Last.fm 上是一个真实存在的无关歌手**（10.8 万听众），4 次播放全记到人家名下，而 K/DA（84.8 万听众）名下 0 次。
+  - **教训比 bug 本身重要：同一道守卫 2026-08-20 就加过了，但只加在 Swift 侧 `ArtistCredit.slashHeadIsPlausible`（那边只管显示），没回头修这条写侧路径**，于是无害的一半修了、不可逆的一半留着又写坏了三天。改任一侧都要问一句「另一侧是不是同一个坑」。
+  - 现在的规则（`firstCreditedArtist` / `firstSlashCredit` / `slashHeadPlausible`）：先按 `、&,，` 切，全串没有这几个才退到 `/` 档；`/` 档切出的头部要过长度判据（含汉字 ≥2、纯拉丁 ≥3），**判不准就往后再吃一段**再判——`K` ✗ → `K/DA` ✓。吃到整串仍不成立（`AC/DC`）就不切。已知取舍：全单字母段的名字（`M/A/R/R/S`）会退化成 `M/A`，有断言钉着，别顺手"修"成一律不切、把 K/DA 又搭进去。
+  - ⚠️ **不能改 `isArtistCreditSep` 本身**：那一份是给 `artistCreditParts`（判断"是否同一个人"）用的，它把 `K/DA` 切开是**有意的**，靠 `artistCreditRunMatches` 把连续段拼回去（`artistcreditrun_test.go`）。两处需求相反，硬共用一份正是坑的来源。
+  - 顺带修好了歌词检索：`lyricPrimaryQueryArtist("K/DA")` 不再产出错误检索词 `K`，而合唱串现在能给出 `K/DA`——正是 2026-08-17 用户手工截短才搜到那条带逐字轴候选的写法。
+  - 折叠**只作用在 Last.fm 镜像这条路径**，ListenBrainz 提交的是原始串（见 `listenlog.go` 注释），LB 侧没被污染。
 
 ### 5. iPhone 桥接（poller bridge）
 
@@ -121,6 +128,7 @@ iPhone 端由 FastScrobbler 直接写 Last.fm；collector 周期拉 `lastfmRecen
 | 次数写法孪生合并 | LyrimuseCore/Local/HanScript.swift `HanScript` `PlayCountVariants` `PlayCountFold`；Settings/LastfmStatsService.swift `playCountSiblings` `ensureTitleFormsIndex` `harvestTitleForm` `userPlayCount` `mergedCountsVersion` |
 | 合唱 credit 归并 / 同专辑封面共识 | LyrimuseCore/Models/ArtistCredit.swift `primary` `mergeArtist` `albumConsensusKey` `albumConsensusCovers`；Settings/LastfmStatsService.swift `primaryCreditFamilies` `rebuildPrimaryCreditFamilies` `albumConsensusCovers` `coverURL(for:)` |
 | 封面兜底认合唱 credit | LyrimuseCore/Local/EnrichCacheReader.swift `coverIndexByArtistTitle` `coverURLString` |
+| 合唱串折叠(写侧,不可逆) | lyrimuse-collector/lastfmcollapse.go `isCatalogued` `collapse`；match.go `firstCreditedArtist` `firstSlashCredit` `slashHeadPlausible` `isArtistCreditPrimarySep`；Swift 侧同规则在 LyrimuseCore/Models/ArtistCredit.swift `slashHeadIsPlausible` |
 | 封面第⑤级(Apple Music 目录) | LyrimuseCore/Local/MusicCatalogSearch.swift `pickArtwork` `upscaleArtwork` `resolveArtwork` `ArtworkConfidence`；Settings/LastfmStatsService.swift `catalogCovers` `resolveCatalogCovers` `catalogCoverBatch` `coverURL(for:)` |
 | 次数缓存作废三判据 | Settings/LastfmStatsService.swift `applyRecent` `contradictedPlayCountKeys` `newestPlaySeen` `playCountFetchedAt`；LyrimuseCore/Models/PlayCountRecency.swift `newest` `contradicted` |
 | Last.fm GET query 双重编码 | LyrimuseCore/Networking/LastfmQuery.swift `escape` `queryString`；Settings/LastfmStatsService.swift `request`；lyrimuse-collector/lastfmquery.go `lastfmGetQuery` `lastfmEscape`（`lastfmcollapse.go` `isCatalogued` 调用） |
