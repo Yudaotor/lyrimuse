@@ -17,6 +17,9 @@ import LyrimuseCore
 /// 重锚/校准这类事件多打醒一次整个 body(同 LiveRowPlayback 对 anchor 的处理)。
 @MainActor
 private final class OverlayPlayback: ObservableObject {
+    /// lyricsCard 的水平内边距。算可用宽度要减掉它,所以提成常量、别在两处各写一遍 20。
+    static let cardHorizontalPadding: CGFloat = 20
+
     // ---- 来自 PlaybackCoordinator ----
     @Published private(set) var currentLine: SyncedLyricLine?
     @Published private(set) var nextLineText: String?
@@ -47,6 +50,9 @@ private final class OverlayPlayback: ObservableObject {
     @Published private(set) var textStrokeColor: Color = .black.opacity(0.65)
     @Published private(set) var backgroundIsVisible = false
     @Published private(set) var backgroundColor: Color = .clear
+    /// 对唱行两侧留白的基准量(见 LyricDuetLayout)。窗宽和字号都会影响它,所以在这里
+    /// 预组合成一个去重值 —— 免得视图为了算这一个数字去订阅两个高频设置。
+    @Published private(set) var duetInsetUnit: CGFloat = 0
     private var subs: [AnyCancellable] = []
 
     init() {
@@ -80,6 +86,17 @@ private final class OverlayPlayback: ObservableObject {
             s.$textStrokeColor.removeDuplicates().sink { [weak self] in self?.textStrokeColor = $0 },
             s.$backgroundIsVisible.removeDuplicates().sink { [weak self] in self?.backgroundIsVisible = $0 },
             s.$backgroundColor.removeDuplicates().sink { [weak self] in self?.backgroundColor = $0 },
+            // 内缩基准:可用宽度 = 窗宽 − 两侧 20pt 内边距(见 lyricsCard 的 padding)。
+            s.$overlayWidth.combineLatest(s.$fontSize)
+                .map { width, font in
+                    LyricDuetLayout.insets(
+                        for: .leading,
+                        availableWidth: CGFloat(width) - Self.cardHorizontalPadding * 2,
+                        fontSize: CGFloat(font)
+                    ).trailing
+                }
+                .removeDuplicates()
+                .sink { [weak self] in self?.duetInsetUnit = $0 },
         ]
     }
 }
@@ -94,6 +111,8 @@ struct LyricsOverlayView: View {
     // 不直接 @ObservedObject 整个 PlaybackCoordinator/AppSettings —— 见 OverlayPlayback
     // 的注释,那两个单例上与悬浮窗无关的高频写入会打醒整个 body。
     @StateObject private var playback = OverlayPlayback()
+    /// 逐字行文字实际矩形的旁路,见 WrapContentRectSink。@State 保证视图重建时是同一个实例。
+    @State private var wrapContentSink = WrapContentRectSink()
     // 悬停展示控制按钮/长按拖动这套手势整个搬到了 WindowController 用全局鼠标监听器
     // 实现(背景常年点击穿透,原生 .onHover 收不到事件),这里只读它算出来的结果
     // (isHoveringForControls/isDragArmed)展示对应视觉效果,不再自己维护 @State。
@@ -121,6 +140,9 @@ struct LyricsOverlayView: View {
     /// SwiftUI 收不到鼠标事件,点击由控制器按这些矩形自己分发 —— 见
     /// LyricsOverlayWindowController.performControlAction。
     var onControlRectsChange: ([OverlayControlID: CGRect]) -> Void = { _ in }
+    /// 歌词**文字**实际占据的矩形(overlayContent 命名坐标空间,多元素并集)。
+    /// 给「指针划过时让开」当命中判据 —— 见 LyricsTextRectPreferenceKey。
+    var onLyricsTextRectChange: (CGRect) -> Void = { _ in }
 
     // 固定值,不是设置项——加一个圆角纯粹是给"背景颜色"这个设置配套的实现细节,免得
     // 用户一开背景色看到的是个生硬的直角矩形;两个参考的开源实现里圆角都不是用户可调项。
@@ -144,7 +166,7 @@ struct LyricsOverlayView: View {
     /// "临时看一眼下面",不该跟那三个真正的可见性来源抢同一个开关。留 15% 也让用户知道
     /// 窗口还在那儿、不是消失了。
     private var hoverFadeOpacity: Double {
-        playback.fadeOnHover && overlayController.isHoveringForControls ? 0.15 : 1
+        playback.fadeOnHover && overlayController.isHoveringLyrics ? 0.15 : 1
     }
 
     var body: some View {
@@ -197,6 +219,7 @@ struct LyricsOverlayView: View {
         .onPreferenceChange(ContentHeightPreferenceKey.self) { onContentHeightChange($0) }
         .onPreferenceChange(ControlsFramePreferenceKey.self) { onControlsFrameChange($0) }
         .onPreferenceChange(ControlRectsPreferenceKey.self) { onControlRectsChange($0) }
+        .onPreferenceChange(LyricsTextRectPreferenceKey.self) { onLyricsTextRectChange($0) }
         .animation(.easeOut(duration: 0.16), value: controlsVisible)
         .animation(.easeOut(duration: 0.3), value: overlayController.showDragHint)
         // 「指针划过时让开」。挂在**测量之后** —— opacity 不改布局,所以放哪一层都不影响上面
@@ -269,6 +292,61 @@ struct LyricsOverlayView: View {
         }
     }
 
+    /// 给 `.frame(maxWidth:alignment:)` 用的二维对齐。
+    ///
+    /// 为什么需要它:VStack 的宽度 = 最宽子视图的宽度,而行级(无逐字)歌词那一支是裸
+    /// `Text`,宽度就是文字自己的宽度 —— 外层 `.frame(maxWidth: .infinity)` 不写
+    /// alignment 时默认居中,于是整块内容被摆回正中,VStack 里的 duetAlignment 根本
+    /// 没有发挥余地,leading/trailing/center 三种 side 渲染出来一模一样。
+    /// 逐字那一支侥幸生效,只是因为 WrapLayout 恒声明占满被提议的整宽。
+    /// (2026-08-23 修:在此之前行级歌词的对唱分栏 100% 失效,而且前缀已被剥掉,
+    /// 屏幕上比不做这个功能时信息更少。)
+    private var duetFrameAlignment: Alignment {
+        switch duetSide {
+        case .leading: return .leading
+        case .trailing: return .trailing
+        case .center: return .center
+        }
+    }
+
+    /// 把这个视图的 frame 报进歌词文字矩形的并集(见 LyricsTextRectPreferenceKey)。
+    private func reportingTextRect<V: View>(_ v: V) -> some View {
+        v.background(
+            GeometryReader { proxy in
+                Color.clear.preference(
+                    key: LyricsTextRectPreferenceKey.self,
+                    value: proxy.frame(in: .named(overlayCoordSpaceName)))
+            })
+    }
+
+    /// 主歌词那一支单独走:逐字行是 WrapLayout,它**撑满整宽**,直接拿 frame 会把左右两片
+    /// 空白也算成歌词。用布局阶段写进 sink 的"文字实际矩形"(相对 WrapLayout 原点)去修正;
+    /// 行级歌词那一支是裸 Text、frame 本身就是文字范围,sink 为 .zero 时按整 frame 走。
+    private func reportingMainLineRect<V: View>(_ v: V) -> some View {
+        v.background(
+            GeometryReader { proxy in
+                let f = proxy.frame(in: .named(overlayCoordSpaceName))
+                let local = wrapContentSink.rect
+                let rect = local == .zero
+                    ? f
+                    : CGRect(x: f.minX + local.minX, y: f.minY + local.minY,
+                             width: local.width, height: local.height)
+                return Color.clear.preference(key: LyricsTextRectPreferenceKey.self, value: rect)
+            })
+    }
+
+    private var duetInsets: (leading: CGFloat, trailing: CGFloat) {
+        // 只有真的有声部信息才留白:playback.currentLine?.side 为 nil 时(普通歌、
+        // 以及对唱歌第一个标记之前的前奏)两边都是 0。注意这里**不能**用 duetSide,
+        // 它已经把 nil 兜底成了 .center,那样每一首普通歌都会凭空缩进两边。
+        guard let side = playback.currentLine?.side else { return (0, 0) }
+        switch side {
+        case .leading: return (0, playback.duetInsetUnit)
+        case .trailing: return (playback.duetInsetUnit, 0)
+        case .center: return (playback.duetInsetUnit, playback.duetInsetUnit)
+        }
+    }
+
     private var duetRowAlignment: WrapLayout.RowAlignment {
         switch duetSide {
         case .leading: return .leading
@@ -279,7 +357,7 @@ struct LyricsOverlayView: View {
 
     private var lyricsCard: some View {
         VStack(alignment: duetAlignment, spacing: 4) {
-            mainLine
+            reportingMainLineRect(mainLine)
             // 罗马音在**歌词下面、译文上面**。2026-08-17 从歌词上面挪下来 —— 歌词窗口
             // (LyricsWindowView)早就是这个顺序了,这里是漏改的那一处,同一首歌只要解析不出
             // 词组就会跳到上面显示,四种组合里唯一的异类。
@@ -301,40 +379,49 @@ struct LyricsOverlayView: View {
             if playback.showRomanization, !usesPerWordRomanization,
                 let roma = playback.currentLine?.romanization
             {
-                Text(roma)
-                    .font(playback.romanizationFont)
-                    .foregroundStyle(playback.displayForegroundColor.opacity(0.6))
-                    .fixedSize(horizontal: false, vertical: true) // 允许换行时如实撑高,不被裁掉
-                    .lyricsTextStroke(playback.textStrokeEnabled, color: playback.textStrokeColor)
+                reportingTextRect(
+                    Text(roma)
+                        .font(playback.romanizationFont)
+                        .foregroundStyle(playback.displayForegroundColor.opacity(0.6))
+                        .fixedSize(horizontal: false, vertical: true) // 允许换行时如实撑高,不被裁掉
+                        .lyricsTextStroke(playback.textStrokeEnabled, color: playback.textStrokeColor))
             }
             if playback.showTranslation, let tr = playback.currentLine?.translation {
-                Text(tr)
-                    .font(playback.translationFont)
-                    .foregroundStyle(playback.displayForegroundColor.opacity(0.75))
-                    .fixedSize(horizontal: false, vertical: true)
-                    .lyricsTextStroke(playback.textStrokeEnabled, color: playback.textStrokeColor)
+                reportingTextRect(
+                    Text(tr)
+                        .font(playback.translationFont)
+                        .foregroundStyle(playback.displayForegroundColor.opacity(0.75))
+                        .fixedSize(horizontal: false, vertical: true)
+                        .lyricsTextStroke(playback.textStrokeEnabled, color: playback.textStrokeColor))
             }
             if playback.showNextLinePreview, let next = playback.nextLineText {
-                Text(next)
-                    .font(playback.previewFont)
-                    .foregroundStyle(playback.displayForegroundColor.opacity(0.4))
-                    .fixedSize(horizontal: false, vertical: true)
-                    .lyricsTextStroke(playback.textStrokeEnabled, color: playback.textStrokeColor)
+                reportingTextRect(
+                    Text(next)
+                        .font(playback.previewFont)
+                        .foregroundStyle(playback.displayForegroundColor.opacity(0.4))
+                        .fixedSize(horizontal: false, vertical: true)
+                        .lyricsTextStroke(playback.textStrokeEnabled, color: playback.textStrokeColor))
             }
             // 2026-08-02 补上——第一次解锁「锁定位置」时短暂弹一次的手势提示,4 秒后
             // 自动消失,只弹一次(见 LyricsOverlayWindowController.hasShownDragHintKey
             // 处的注释)。放在播放控制按钮上面同一个位置,不额外占用固定空间。
             if overlayController.showDragHint {
-                Text(L10n.t("长按即可拖动位置"))
+                Text(AppSettings.shared.overlayDragNeedsLongPress
+                        ? L10n.t("长按即可拖动位置")
+                        : L10n.t("按住歌词即可拖动位置"))
                     .font(.caption)
                     .foregroundStyle(playback.displayForegroundColor.opacity(0.8))
                     .lyricsTextStroke(playback.textStrokeEnabled, color: playback.textStrokeColor)
                     .transition(.opacity)
             }
         }
-        .padding(.horizontal, 20)
+        // 对唱行的两侧留白 —— 让左右真的读成两栏,而不是只靠字的落点(见 LyricDuetLayout)。
+        // 没有对唱信息的行(普通歌的每一行)insets 恒为 0,排版逐像素不变。
+        .padding(.leading, duetInsets.leading)
+        .padding(.trailing, duetInsets.trailing)
+        .padding(.horizontal, OverlayPlayback.cardHorizontalPadding)
         .padding(.vertical, 14)
-        .frame(maxWidth: .infinity)
+        .frame(maxWidth: .infinity, alignment: duetFrameAlignment)
         .background(overlayBackground)
         // 长按拖动"武装"后的视觉提示——一圈跟前景色同色的高亮描边,松手/取消立刻淡出。
         .overlay(
@@ -596,7 +683,8 @@ struct LyricsOverlayView: View {
         // 见文件底部 WrapLayout 定义。contentKey:行身份+字体+罗马音开关 —— 都没变就跳过
         // 逐词重新测宽(见 WrapLayout.Cache 的守卫注释)。
         WrapLayout(rowAlignment: duetRowAlignment,
-                   contentKey: overlayLineLayoutKey) {
+                   contentKey: overlayLineLayoutKey,
+                   contentRectSink: wrapContentSink) {
             if let groups = playback.currentLine?.wordGroups, usesPerWordRomanization {
                 // 一组一列:上面是这一组的字(各自逐字填色),下面是这一组的罗马音
                 // (跟着整组的进度填)。列宽由 VStack 取"上下两行里更宽的那个",
@@ -743,7 +831,25 @@ private struct OptionalTextStroke<MaskSource: View>: ViewModifier {
                                     }
                                 }
                             } symbols: {
+                                // ⚠️ 这里的 .padding 必须跟上面 content 那道**一模一样**。
+                                //
+                                // Canvas 把剪影按居中绘制,只有"剪影与 content 在 canvas 里
+                                // 占据同一块矩形"时才逐点对齐。content 是 `.padding(width*2)`
+                                // 之后才被 background 包住的,所以 canvas 的尺寸 = 正文 + 这圈
+                                // padding;而 symbols 拿到的提议宽度是 canvas 的**整宽**。
+                                //
+                                // 对普通 Text 无所谓 —— 它按自然宽度收缩,剪影比 canvas 窄一圈
+                                // padding,居中绘制正好补回来。但逐字行是 WrapLayout,它**撑满
+                                // 被提议的宽度**:content 撑满的是 padding 内的宽度、剪影撑满的
+                                // 是 canvas 整宽,两者相差正好一圈 padding。
+                                //
+                                // 居中对齐时(非对唱歌)两边各差一半、正好抵消,看不出来;一旦
+                                // 按 leading/trailing 靠边(对唱歌的左右声部),文字就分别贴在
+                                // 各自矩形的边上 —— 偏移 width*2 = 2.4pt,而描边本身只有 1.2pt,
+                                // 于是整圈描边甩到一侧。2026-08-23 用户报的「对唱歌词描边偏了」
+                                // 就是这个。
                                 symbolSource(content: content)
+                                    .padding(width * 2)
                                     .tag(symbolID)
                                     .blur(radius: width)
                             }
@@ -779,6 +885,23 @@ extension View {
         _ enabled: Bool, color: Color, @ViewBuilder maskSource: () -> M
     ) -> some View {
         modifier(OptionalTextStroke(enabled: enabled, color: color, maskSource: maskSource()))
+    }
+}
+
+/// 歌词**文字**实际占据的矩形(悬浮窗坐标空间),多行/多元素取并集。
+///
+/// 给「指针划过时让开」用:原来的判据是整个窗口矩形,而窗口比文字大得多 —— 上下有卡片
+/// 内边距和播放控制槽位、左右是 WrapLayout 撑满留下的空白,于是指针在歌词**附近**就触发
+/// 了淡出(2026-08-23 用户报的正是这个)。
+///
+/// reduce 必须**合并**、且跳过零矩形:树里没设过这个 key 的分支(测高度那些 Color.clear)
+/// 会贡献 .zero,覆盖式写法会把真实矩形冲掉 —— 同 ControlRectsPreferenceKey 那个坑。
+private struct LyricsTextRectPreferenceKey: PreferenceKey {
+    static let defaultValue: CGRect = .zero
+    static func reduce(value: inout CGRect, nextValue: () -> CGRect) {
+        let next = nextValue()
+        guard next != .zero, next.width > 0, next.height > 0 else { return }
+        value = value == .zero ? next : value.union(next)
     }
 }
 
@@ -826,6 +949,19 @@ private struct ControlsFramePreferenceKey: PreferenceKey {
 // 任何其它状态,"歌词窗口"(UI/LyricsWindowView.swift)复用它给当前行的逐字高亮做
 // 换行,不需要另起一份重复实现——同一个 target 内跨文件访问,行为对这里的悬浮窗
 // 零影响。
+/// WrapLayout 排完之后文字**真正占据**的那块矩形,相对它自己 bounds 的原点。
+///
+/// 为什么要它、为什么是引用类型:「鼠标划过歌词才让开」需要知道文字的真实范围,而
+/// WrapLayout 的布局尺寸是**撑满整宽**的(对唱左右对齐要靠这个)。Layout 协议里没法写
+/// PreferenceKey,而给逐字行的每个字挂 GeometryReader 会把几何依赖拖进 60fps 填色热路径
+/// (这个坑项目里踩过,见 durable note swiftui-geometry-anchor-token-drags-panel-into-
+/// per-frame-rebuild)。所以走一个纯引用的旁路:布局阶段写进来,AppKit 侧的鼠标事件
+/// 处理直接读 —— 不经过 SwiftUI 的渲染循环,零重建成本。
+final class WrapContentRectSink {
+    /// 相对 WrapLayout bounds 原点的矩形。`.zero` = 还没排过 / 没有内容。
+    var rect: CGRect = .zero
+}
+
 struct WrapLayout: Layout {
     // 换行/对齐的几何计算全在 WrapLayoutMath(LyrimuseCore)里,selftest 够得到;这里只剩
     // Layout 协议的壳:量尺寸、缓存、把算好的坐标交给 SwiftUI 去 place。
@@ -840,6 +976,9 @@ struct WrapLayout: Layout {
     /// 保持"每回合全量重测"的旧行为(冷调用点不用改)。
     /// ⚠️ 漏掉一个影响尺寸的输入 = 拿陈旧尺寸错误换行,宁可多进 key 也别少。
     var contentKey: AnyHashable? = nil
+    /// 可选:把"文字实际占据的矩形"写到这里,给鼠标命中判定用(见 WrapContentRectSink)。
+    /// 不传就完全不参与,布局行为逐位不变。
+    var contentRectSink: WrapContentRectSink? = nil
 
     // 量一次子视图尺寸就存住,别每次调用都重量一遍。
     //
@@ -907,8 +1046,18 @@ struct WrapLayout: Layout {
     }
 
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout Cache) {
+        let rows = cachedRows(&cache, maxWidth: bounds.width)
+        if let sink = contentRectSink {
+            // 记的是**相对 bounds 原点**的矩形:bounds 的绝对位置取决于父容器,而调用方
+            // (LyricsOverlayView)另有一条 GeometryReader 报 WrapLayout 自己在悬浮窗坐标
+            // 空间里的位置,两者在控制器侧相加。
+            let local = WrapLayoutMath.contentBounds(
+                rows: rows, bounds: CGRect(origin: .zero, size: bounds.size),
+                verticalSpacing: verticalSpacing, rowAlignment: rowAlignment)
+            sink.rect = local
+        }
         for p in WrapLayoutMath.placements(
-            rows: cachedRows(&cache, maxWidth: bounds.width),
+            rows: rows,
             sizes: cache.sizes, bounds: bounds,
             horizontalSpacing: horizontalSpacing, verticalSpacing: verticalSpacing,
             rowAlignment: rowAlignment)

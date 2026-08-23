@@ -32,6 +32,10 @@ const (
 	lyricSourceKugou      = "kugou"
 	lyricSourceMusixmatch = "musixmatch"
 	lyricSourceLRCLIB     = "lrclib"
+	// amll-ttml-db 社区库(见 amllttml.go)。它跟前五个源的区别是**格式本身**能携带
+	// 演唱者归属(TTML 的 ttm:agent),命中即拿到真·结构化对唱,不用靠行首前缀的启发式。
+	// 覆盖率有限(实测约 6%),所以是"锦上添花"的一档,不是主力源。
+	lyricSourceAMLL = "amll"
 )
 
 const (
@@ -66,7 +70,13 @@ const (
 
 // lyricsSourceDefaultOrder 是"顺序优先"模式缺省的顺序——照抄 enrich.go
 // scoredLyricCandidates 里 candidates 列表本来的 append 顺序,不是这里凭空定的。
-var lyricsSourceDefaultOrder = []string{lyricSourceNetease, lyricSourceQQ, lyricSourceKugou, lyricSourceMusixmatch, lyricSourceLRCLIB}
+// ⚠️ 顺序必须与 Swift 侧 LyricsSource.allCases 的**声明顺序**一致 —— 那边的
+// lyricsSourceOrder 默认值就是 allCases,两边对不上会让"顺序优先"模式在首次写盘前后
+// 表现不同。amll 放最后:它覆盖率最低(实测约 6%),想让它优先由用户自己在设置里拖。
+var lyricsSourceDefaultOrder = []string{
+	lyricSourceNetease, lyricSourceQQ, lyricSourceKugou, lyricSourceMusixmatch, lyricSourceLRCLIB,
+	lyricSourceAMLL,
+}
 
 type featureFlagsFile struct {
 	// Player："apple_music"(默认,缺省/认不出的值都按这个处理)、"qq_music" 或
@@ -87,6 +97,14 @@ type featureFlagsFile struct {
 	// LyricsSources：启用的歌词源集合(lyricSourceXxx 常量的子集)。nil/缺失 = 全部
 	// 启用,维持这个字段加之前的既有行为不变。
 	LyricsSources []string `json:"lyrics_sources,omitempty"`
+	// AMLLLyrics：**迁移标记,不是开关**。amll 的启用状态跟其余五源一样记在 LyricsSources 里。
+	//
+	// 它只解决一件事:LyricsSources 是白名单,而老配置写的时候 amll 这个源还不存在,列表里
+	// 不可能有它 —— 按白名单办等于对所有老用户默认关闭,而"没列出"在这里的真实含义是
+	// "当时没这个选项"。缺失 ⇒ 老配置,补进启用集合(只补这一次);一旦 App 保存过设置,
+	// 这个字段就落盘,从此完全以 LyricsSources 为准。与 Swift 侧 FeatureFlagsFile.amllLyrics
+	// 一一对应,改一边必须改另一边。
+	AMLLLyrics *bool `json:"amll_lyrics,omitempty"`
 	// LyricsSourceMode："smart"(默认,五源全查+打分取最高分,见 enrich.go 的
 	// scoredLyricCandidates/pickLyricCandidate)或"priority"(按 LyricsSourceOrder
 	// 的顺序,取第一个通过质量校验(score>=0)的源,不比较分数高低)。空值按 smart 处理。
@@ -219,7 +237,7 @@ func loadFeatureFlags(path string) featureFlags {
 		DailyDigest:               boolOr(f.DailyDigest, false),
 		WeeklyDigestSource:        f.WeeklyDigestSource,
 		DailyDigestSource:         f.DailyDigestSource,
-		LyricsSources:             resolveLyricsSources(f.LyricsSources),
+		LyricsSources:             resolveLyricsSources(f.LyricsSources, f.AMLLLyrics),
 		LyricsSourceMode:          resolveLyricsSourceMode(f.LyricsSourceMode),
 		LyricsSourceOrder:         resolveLyricsSourceOrder(f.LyricsSourceOrder),
 		LyricsDir:                 f.LyricsDir,
@@ -268,18 +286,31 @@ func resolveTrustedPlayers(m map[string]string) map[string]string {
 	return out
 }
 
-func resolveLyricsSources(list []string) map[string]bool {
+func resolveLyricsSources(list []string, amllSeen *bool) map[string]bool {
 	if len(list) == 0 {
 		return map[string]bool{
 			lyricSourceNetease: true, lyricSourceQQ: true, lyricSourceKugou: true,
 			lyricSourceMusixmatch: true, lyricSourceLRCLIB: true,
+			lyricSourceAMLL: true,
 		}
 	}
-	m := make(map[string]bool, len(list))
+	m := make(map[string]bool, len(list)+1)
 	for _, s := range list {
 		m[s] = true
 	}
+	// 老配置的一次性迁移,见 featureFlagsFile.AMLLLyrics。
+	if amllSeen == nil {
+		m[lyricSourceAMLL] = true
+	}
 	return m
+}
+
+// lyricSourceEnabled 是"这个歌词源开着吗"的**唯一**判据。判定原先散在六处、形式还不
+// 完全一致(有的带 len==0 兜底、有的不带),统一到这里。
+// 注:resolveLyricsSources 在列表为空时返回全集,所以 LyricsSources 永远非 nil,
+// 那些 len==0 的兜底其实是历史冗余,留着不碍事。
+func lyricSourceEnabled(source string) bool {
+	return len(features.LyricsSources) == 0 || features.LyricsSources[source]
 }
 
 func resolveLyricsSourceMode(mode string) string {

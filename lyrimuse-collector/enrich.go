@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -43,7 +44,7 @@ type enrichEntry struct {
 	// 就是这么标的，天然贴合"能识别就用中文名"的诉求，不需要额外维护中英文对照表)。
 	// 识别不出时留空，lbMeta 原样使用本地(Apple Music)标签，不瞎猜。
 	CanonicalArtist string `json:"canonical_artist,omitempty"`
-	// CoverSource/LyricsSource 记录封面/歌词实际来自哪个平台("netease"/"qq"/"lrclib"),
+	// CoverSource/LyricsSource 记录封面/歌词实际来自哪个平台("netease"/"qq"/"lrclib"/"amll"…),
 	// 供网页页脚如实展示(而不是写死"来自网易云"——封面/歌词各自可能来自不同平台,或者
 	// 干脆哪个平台都没有)。
 	CoverSource  string `json:"cover_source,omitempty"`
@@ -565,7 +566,7 @@ func rescoreDecidable(scored []scoredLyricCandidateResult, currentSource string,
 	if noCurrentLyrics {
 		return true
 	}
-	if currentSource != "" && features.LyricsSources[currentSource] {
+	if currentSource != "" && lyricSourceEnabled(currentSource) {
 		return containsString(lyricSourcesResponded(scored), currentSource)
 	}
 	return allEnabledLyricSourcesResponded(scored)
@@ -1447,7 +1448,7 @@ func pickLyricCandidatePreferring(scored []scoredLyricCandidateResult, sourceCho
 func pickLyricCandidate(scored []scoredLyricCandidateResult) *scoredLyricCandidateResult {
 	if features.LyricsSourceMode == lyricsModePriority {
 		for _, source := range features.LyricsSourceOrder {
-			if !features.LyricsSources[source] {
+			if !lyricSourceEnabled(source) {
 				continue
 			}
 			for i := range scored {
@@ -1461,7 +1462,7 @@ func pickLyricCandidate(scored []scoredLyricCandidateResult) *scoredLyricCandida
 	var picked *scoredLyricCandidateResult
 	bestScore := -1
 	for i := range scored {
-		if !features.LyricsSources[scored[i].Source] {
+		if !lyricSourceEnabled(scored[i].Source) {
 			continue
 		}
 		if scored[i].Score < 0 || scored[i].Score <= bestScore {
@@ -1695,7 +1696,7 @@ func usableLyricSourceCount(scored []scoredLyricCandidateResult) int {
 	seen := map[string]bool{}
 	for _, c := range scored {
 		if c.Score >= 0 && !c.Instrumental &&
-			(len(features.LyricsSources) == 0 || features.LyricsSources[c.Source]) {
+			lyricSourceEnabled(c.Source) {
 			seen[c.Source] = true
 		}
 	}
@@ -1869,14 +1870,14 @@ type lyricSearchUpdateFunc func(ne neteaseInfo, results []scoredLyricCandidateRe
 
 // lyricSourceNames 是五个歌词源的名字,顺序无关紧要,只用来数进度分母。
 // applecover 不在里面 —— 它查的是封面。
-var lyricSourceNames = []string{"netease", "qq", "kugou", "lrclib", "musixmatch"}
+var lyricSourceNames = []string{"netease", "qq", "kugou", "lrclib", "musixmatch", "amll"}
 
 // enabledLyricSourceCount 数"用户开着的歌词源"有几个。features.LyricsSources 为空
 // 表示还没配置过 = 全开(跟 filterEnabledLyricSources 同一条约定)。
 func enabledLyricSourceCount() int {
 	n := 0
 	for _, s := range lyricSourceNames {
-		if len(features.LyricsSources) == 0 || features.LyricsSources[s] {
+		if lyricSourceEnabled(s) {
 			n++
 		}
 	}
@@ -1894,11 +1895,26 @@ func fetchScoredLyricCandidatesStreaming(artist, title, album string, durationSe
 		// instrumental:"这首歌是纯音乐"这个**明确结论**。三个源会给:lrclib 的结构化字段、
 		// 网易云的 pureMusic/占位正文、QQ 的占位正文(2026-08-22 加,见 qqLyricResult)。
 		instrumental bool
+		// amll:amll-ttml-db 那一档的三件套(见 amllttml.go)。它跟别的源不同,一次就带回
+		// 整行+逐字+译文,所以单独放一个结构而不是复用上面的 lyr/yrc/tr。
+		amll amllResult
 	}
-	resultsCh := make(chan sourceResult, 6)
+	resultsCh := make(chan sourceResult, 7)
+
+	// amll-ttml-db 按**平台音乐 ID**取歌词,所以它得等网易云/QQ 先把 ID 搜出来。
+	// 用两个带缓冲的 channel 把 ID 递过去,而不是把查询塞进那两个 goroutine 里 ——
+	// 那样会把 amll 的网络耗时串到它们头上,拖慢主力源的到达时间。
+	neteaseIDCh := make(chan string, 1)
+	qqIDCh := make(chan string, 1)
 
 	go func() {
-		resultsCh <- sourceResult{source: "netease", ne: neteaseLookup(artist, title, album)}
+		info := neteaseLookup(artist, title, album)
+		if info.SongID > 0 {
+			neteaseIDCh <- strconv.FormatInt(info.SongID, 10)
+		} else {
+			neteaseIDCh <- ""
+		}
+		resultsCh <- sourceResult{source: "netease", ne: info}
 	}()
 	go func() {
 		// qqMusicMatchCached 本身也是一次网络请求(smartbox 搜索,6秒超时,按
@@ -1922,7 +1938,15 @@ func fetchScoredLyricCandidatesStreaming(artist, title, album string, durationSe
 			// 评测数据,不值得为它在歌词主路径上多挂一次最多 6s 的请求(2026-08-12 审阅)。
 			qqDur = qqSongMetaCachedOnly(qqMid).interval
 		}
+		qqIDCh <- qqMid
 		resultsCh <- sourceResult{source: "qq", lyr: lyr, yrc: yrc, matchTitle: match.title, matchArtist: match.artist, matchAlbum: match.album, srcDur: qqDur, instrumental: qqInstrumental}
+	}()
+	go func() {
+		// 等两个 ID 都到齐再查。两个 goroutine 都是无条件启动的(启用与否在后面
+		// filterEnabledLyricSources 那步过滤),所以这两个 channel 一定会收到值,
+		// 不会在这里挂死。
+		neteaseID, qqID := <-neteaseIDCh, <-qqIDCh
+		resultsCh <- sourceResult{source: "amll", amll: amllLyric(neteaseID, qqID)}
 	}()
 	go func() {
 		r := kugouLyric(artist, title, album, durationSecs)
@@ -1951,6 +1975,7 @@ func fetchScoredLyricCandidatesStreaming(artist, title, album string, durationSe
 	var qqInstrumental bool
 	var mxLyr, mxYRC, mxTr, mxTitle, mxArtist, mxAlbum, mxCover string
 	var mxDur float64
+	var amll amllResult
 	var appleCover string
 	// scoreAndSort 用目前为止已经到手的原始结果重新构建候选、算 corroboratedEndings、
 	// 打分、排序——每次有新结果到达都会重新跑一遍(而不是缓存增量),因为一份候选的
@@ -1987,6 +2012,18 @@ func fetchScoredLyricCandidatesStreaming(artist, title, album string, durationSe
 		}
 		if lrclibLyr != "" {
 			candidates = append(candidates, lyricCandidate{source: "lrclib", lyrics: lrclibLyr, sourceReportedDurationSecs: lrclibDur, title: lrclibTitle, artist: lrclibArtist, album: lrclibAlbum, cover: coverOrFallback("")})
+		}
+		if !amll.empty() {
+			// 身份是确定的 —— 这份 TTML 是按网易云/QQ 的音乐 ID 直接取回来的,不是搜出来的,
+			// 所以 title/artist/album 直接沿用本地曲目信息,不会在标题/歌手/专辑那几项上
+			// 被扣分。它没有自报时长,sourceReportedDurationSecs 留 0(= 该项不参与打分)。
+			amllTr, _ := usableValueAdd(amll.lrc, amll.tr, features.LyricsTranslationLanguage, "", features.LyricsTranslationLanguage)
+			candidates = append(candidates, lyricCandidate{
+				source: "amll", lyrics: amll.lrc,
+				wordTimingYRC: usableYRC(amll.lrc, amll.yrc), hasWordTiming: usableWordTiming(amll.lrc, amll.yrc),
+				hasUsableTranslation: amllTr,
+				title:                title, artist: artist, album: album, cover: coverOrFallback(""),
+			})
 		}
 		corroborated := corroboratedEndings(candidates, durationSecs)
 		// v3:跨源正文共识,整批统一算(理由同 corroboratedEndings——peers 随后到的源变化,
@@ -2072,18 +2109,20 @@ func fetchScoredLyricCandidatesStreaming(artist, title, album string, durationSe
 	enabledDone := func() int {
 		n := 0
 		for _, s := range lyricSourceNames {
-			if doneSources[s] && (len(features.LyricsSources) == 0 || features.LyricsSources[s]) {
+			if doneSources[s] && lyricSourceEnabled(s) {
 				n++
 			}
 		}
 		return n
 	}
 collect:
-	for i := 0; i < 6; i++ {
+	for i := 0; i < 7; i++ {
 		select {
 		case r := <-resultsCh:
 			doneSources[r.source] = true
 			switch r.source {
+			case "amll":
+				amll = r.amll
 			case "netease":
 				ne = r.ne
 			case "qq":

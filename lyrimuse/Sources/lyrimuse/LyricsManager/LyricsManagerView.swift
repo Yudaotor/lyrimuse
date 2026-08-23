@@ -27,7 +27,7 @@ private enum SourceFilter: Hashable, Identifiable {
     case named(String)
     case none
 
-    static let all_: [SourceFilter] = [.all, .named("netease"), .named("qq"), .named("kugou"), .named("musixmatch"), .named("lrclib"), .none]
+    static let all_: [SourceFilter] = [.all, .named("amll"), .named("netease"), .named("qq"), .named("kugou"), .named("musixmatch"), .named("lrclib"), .none]
 
     var id: String { label }
     var label: String {
@@ -108,6 +108,7 @@ func sourceColor(_ source: String) -> Color {
     case "kugou": return .cyan
     case "musixmatch": return .indigo
     case "lrclib": return .purple
+    case "amll": return .orange
     default: return .secondary
     }
 }
@@ -122,6 +123,9 @@ func sourceDisplayName(_ source: String) -> String {
     case "kugou": return L10n.t("酷狗音乐")
     case "musixmatch": return "Musixmatch"
     case "lrclib": return "LRCLIB"
+    // amll-ttml-db 是社区维护的 TTML 歌词库(github.com/amll-dev/amll-ttml-db),
+    // 跟 Musixmatch/LRCLIB 一样是没有中文名的项目名,保留原名。
+    case "amll": return "AMLL"
     case "": return L10n.t("无来源")
     default: return source
     }

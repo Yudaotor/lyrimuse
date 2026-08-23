@@ -33,9 +33,9 @@ collector 的核心：一首歌播放时，去五个歌词源检索候选、校�
 - **Apple 目录锚点给的权威署名**（2026-08-22）：五源全无可用候选时，`scoredLyricCandidatesStreaming` 先试 `appleCatalogSearchIdentities`（**排在手工别名表/MusicBrainz 前面**——它是这首歌自己的元数据，不是「这位歌手一般叫什么」，证据强度更高），再走 `retryArtistIdentities`，两边按 `normLoose` 去重（`dedupeArtistIdentities`）免得同一个查询词白跑一轮五源抓取。给出的两个名字里 **`collectionArtistName`（专辑署名）排前面**：iTunes 只在它与曲目署名不同时才给这个字段，所以它非空本身就是「这首歌的署名跟专辑主人不是一个人」的信号——演唱会嘉宾 / 群星合辑 / 客串曲目，恰好是本地署名最容易跟各家歌词库对不上的那批，也恰好是手工表和 MusicBrainz 都够不到的一类。实测：「枫+退后+搁浅 (Live)」本地署名「南拳妈妈弹头」时网易云 4 条查询词一条都召回不到目标，换专辑署名「周杰伦」查、目标排第 1。只当**检索身份**用，绝不回写 `canonical_artist`／展示字段（同 `lyricPrimaryQueryArtist` 的纪律）。锚点本身的守卫/自校验/缓存见第 02 章「Apple 目录锚点」。⚠️ 索引由播放路径填，所以只对**本进程见过**的曲目有效；`search-lyrics` 那个一次性 CLI 读同一份磁盘缓存但索引是空的，手动搜索这一路暂时用不上它。
 - **首歌手变体轮**（2026-08-20，「wherever u r」案）：可用候选的**启用源数** < min(2, 启用源总数) 且歌手串是多人合credit 时，用 `lyricPrimaryQueryArtist`（词级剥 feat./ft./featuring + `firstCreditedArtist`）截出首歌手再查一轮，仍不够再试首歌手的别名/MB 中文名（最多 3 轮）。变体轮结果**合并**进原串轮而非替换（`mergeLyricCandidateRounds`：按源去重、原串轮可用者优先、判废才顶替，合并后按**原串**统一重打分——变体串只作检索词和源内采纳闸，绝不进打分，防语言闸误杀）；变体轮的 `ne` 只许补封面/跳转链接（Album/AlbumID 跟着封面一起走，保 CoverAlbum 配对），**绝不采用其 Artist**——防 canonical_artist 把「A & B」缩窄成「A」（2026-07-10 回归形态）。触发判据数的是**启用**源（禁用源不算「信息够了」），单源配置封顶为 1、该源已成功时不多跑。别名重试触发时机的教训：网易云一条可用候选就能把整个重试短路，酷狗/QQ 的逐字候选永远没机会被看见——「有一条可用」不等于「信息够了」。
 
-### 3. 五源并发收集（总截止 20 秒）
+### 3. 六源并发收集（总截止 20 秒）
 
-5 歌词源 + Apple 封面共 6 路 goroutine 并发（`fetchScoredLyricCandidatesStreaming`），到点未回的源本轮作废（由「升级重试」事后补救）。
+6 歌词源 + Apple 封面共 7 路 goroutine 并发（`fetchScoredLyricCandidatesStreaming`），到点未回的源本轮作废（由「升级重试」事后补救）。amll 那一路要等 netease/qq 把音乐 ID 搜出来（用两个带缓冲 channel 递过去），所以它总是最后回。
 
 | 源 | 专辑参与检索 | 逐字 | 译文 | 罗马音 | 封面 | 特殊点 |
 |---|---|---|---|---|---|---|
@@ -43,11 +43,20 @@ collector 的核心：一首歌播放时，去五个歌词源检索候选、校�
 | qq | 前 4 条补查专辑 | QRC→YRC | 无 | 无 | 走独立兜底路 | QRC 3DES+zlib 解密；贪婪正则防双引号截断 |
 | kugou | **不参与** | KRC→YRC（相对转绝对） | 无 | 无 | 无 | 空格必须 %20 |
 | lrclib | 仅精确档（三级降级） | 无 | 无 | 无 | 无 | 带纯音乐（instrumental）标记 |
+| amll | **不检索**（按 ID 直取） | TTML→YRC | 内嵌 `x-translation` | 无 | 无 | 见下 |
 | musixmatch | 不参与 | richsync→YRC | **可选语言** | 无 | 500px | DoH 防 DNS 污染；匿名 token 双缓存；richsync 把**空格当独立计时条目**、掏空短词的读条时长（实测 "In" 23ms＋空格 165ms，悬浮窗观感"没有读条直接填满"）——`richsyncToYRC` 归并空白条目进前词（2026-08-19），存量缓存由启动迁移 `migrateYRCWhitespaceTokens`（yrcwhitespace.go，夹在 import 与 export 之间、幂等）原地清洗，无需重新联网解析 |
 
 所有源共用两道身份闸：`lyricTitleAccepted`（归一相等/剥括号相等/双语前缀，**绝不认任意子串包含**）+ 歌手闸。歌手闸 2026-08-20 起分两套：**歌词候选采纳**（kugou/qq strict 档/lrclib search/musixmatch）用 `lyricSourceArtistMatches` = `artistMatches` + 「两侧都是多人合credit 时段集有交集即过」——跨服务合唱署名会换分隔符、换合作者语言写法（「UMI、V」vs「UMI & 金泰亨」），要求整串对上等于要求两边曲库同一套署名习惯，实测酷狗服务端召回明明成功、正主却死在客户端闸上；交集档仍要求两侧各切出 ≥2 段（「周杰伦、」进不了）、段间字节相等（「周杰伦-」不认）。**身份判定/防仿冒**（netease 的 nameOnlyMatch、canonical 统一拼写、qqCoverFallback）仍用原 `artistMatches`（多人 credit 逐段精确相等 + 连续段拼回救 K/DA 类名字，拒绝「周杰伦、」式仿冒尾巴），刻意不放宽。
 
 **第三档（`lyricRecordingTriangleMatches`，2026-08-22 加，只挂在 kugou 一处）**：歌手闸不过时，再看「标题逐字同名 + 专辑对得上 + 时长紧密吻合」——三者同时成立就判定为同一次录音、放行歌词候选。四道判据都必须过：①`normLoose` 标题**逐字**相等（不接受`lyricTitleAccepted` 的剥括号档/双语档，那两档本身就是放宽，跟「歌手名不可信」叠加就是双重放宽）；②两边自报时长差 ≤**1%**（比打分层的 25% 严 25 倍——那一层量的是「LRC 末句 vs 曲长」、被前奏尾奏系统性带偏所以必须宽松，这里量的是两边各自自报的曲目时长，同一次录音跨平台只差在取整）；③`albumScore ≥ 200`，或 `≥ 100` 且候选专辑名归一后长度 ≥ 本地的 60%（本地专辑没标签一律不给）；④`versionTagsMismatch` 为假。**只放行歌词，绝不放行身份/封面**——沿用已知坑 12 那次确立的分层。`lyricrecordingtriangle_test.go` 里有一个扫 netease.go/qq.go 源码的守卫测试，防它被顺手推广到那两处的身份判定上。
+
+**amll（amll-ttml-db，2026-08-23 加）** 跟其余五源是两种东西：
+
+- **不搜索、按平台音乐 ID 直取** `raw.githubusercontent.com/amll-dev/amll-ttml-db/main/{ncm|qq}-lyrics/{id}.ttml`，404 即没有。ID 来自 netease 的 `SongID` 和 qq 的 `songmid`，所以它的身份确定性等同于那两个源；候选的 title/artist/album 直接沿用本地曲目信息，不会在那几项上被扣分，也不自报时长（该项不参与打分）。
+- **格式本身能携带演唱者归属**：`<ttm:agent type="person|group" xml:id="v1">` + 每行 `ttm:agent="v1"`。落盘时转成行首前缀（person 按出现顺序编号成 `v1：`/`v2：`，group 一律 `合：`，**只有一位演唱者时不写前缀**），复用 `LyricDuet` 那条现成管线 —— `v1`/`v2` 收在 `anonymousMarkers` 里直通整份闸，因为 agent 是上游人工标注的权威信息，不该再拿为民间夹带设计的启发式去二次判它。
+- **背景人声（`ttm:role="x-bg"`）整枝跳过**：它跟主歌词时间轴重叠，并进去会让逐字填色同一时刻两个词在亮，而我们还没有这个显示概念。
+- **开关不在 `lyrics_sources` 里**，走独立的 `amll_lyrics`（三态：缺失=开、显式 false=关）。理由：`lyrics_sources` 非空即白名单，而老配置是在这个源存在之前写的，并进去等于对所有老用户默认关闭；无条件补齐又会让「用户主动取消勾选」永远生效不了。启用判定统一收进 `lyricSourceEnabled()`（此前散在六处、形式还不一致）。
+- ⚠️ **覆盖率有限**：实测（2026-08-23）对 439 首曲库严格命中 **17 首（3.9%）**——口径是「歌名一字不差 + 只算 ncm/qq」（只有这两个平台的音乐 ID 我们拿得到）。**别用「去括号再比」的宽松口径估这个数**：那样会把《告白气球 (Live)》算成录音室版的命中，而按 ID 直取时 Live 版有自己的 songID、amll 里没有，实测 404。库的重心是游戏音乐 / V 家 / 欧美新流行（HOYO-MiX 841 条、Shawn Mendes & Camila Cabello 各 510、Taylor Swift 418、原子邦妮 395、GARNiDELiA 332），华语主要是周杰伦（176）和邓紫棋，跟华语老歌重合度低。接它的理由是命中那些歌的**歌词质量**（人工校对 + 逐字 + 内嵌译文），不是对唱兼容率 —— 15 首对唱歌它只有 3 首，而那 3 首现有解析已经能处理。
 
 ### 4. 资格守卫
 
@@ -73,7 +82,7 @@ collector 的核心：一首歌播放时，去五个歌词源检索候选、校�
 | 版本限定词错配 | -600 | 歌名∪专辑名比对；词表 2026-08-22 补了 `club mix`/`radio mix`/`house mix`/`dub mix`/`dance mix`/`vocal mix`/`club edit` |
 | 专辑亲和 | +150/+75/+40 | 只加不减（专辑对不上是零证据非负证据） |
 | 标题吻合梯度 | +120/+60/+30 | 精确/剥括号带版本词/双语 |
-| 跨源正文共识 | +250（2 家）/+150（1 家） | 3-gram Jaccard ≥0.55、正文 ≥30 rune；时长不吻合/overshoot 者共识清零 |
+| 跨源正文共识 | +250（2 家）/+150（1 家） | 3-gram Jaccard ≥0.55、正文 ≥30 rune；时长不吻合/overshoot 者共识清零。⚠️ 归一时**演唱者标签行只剥前缀、保留正文**（见 `lyricspeaker.go`）——2026-08-23 之前是整行丢掉，导致「每句都带『男：』」的候选被摘成残缺正文、跟不带标记的同一首歌对不上，拿不到这 150~250 分；而冠亚军分差中位只有 22 分，等于在选源层系统性淘汰带对唱标注的版本 |
 | 可用译文 / 罗马音 | +50 / +30 | 语言、时间轴、覆盖率均有资格闸 |
 
 负分统一夹到 1（重扣=「差」，负分只留给否决）。**没有静态来源加分**——2026-08-09 被 250 首消融实验删除（改变 69 首冠军、0 次变对/6 次变错，删掉后一致性 93%→96%）。
@@ -146,7 +155,9 @@ collector 的核心：一首歌播放时，去五个歌词源检索候选、校�
 |---|---|
 | 入口/缓存判定/自愈调度 | lyrimuse-collector/enrich.go `trackEnrichment` `resolveEnrichAsync` |
 | key 推导 | enrichkey.go `enrichKey` `normEnrichTitle`；迁移 `migrateEnrichKeys` |
-| 五源并发/流式 | enrich.go `fetchScoredLyricCandidatesStreaming` |
+| 六源并发/流式 | enrich.go `fetchScoredLyricCandidatesStreaming` |
+| amll-ttml-db 源 | amllttml.go `amllLyric` `parseAMLLTTML` `amllSpeakerPrefixes`;开关 features.go `lyricSourceEnabled` |
+| 演唱者标签(Go 侧) | lyricspeaker.go `lyricSpeakerLabels` `lyricSplitLabel` `isCreditLineWithSpeakers` —— 与 Swift 侧 `LyricDuet` 同口径,改一边必须改另一边 |
 | 打分 | match.go `scoreLyricCandidateDetailed`（版本 `lyricsScoringVersion`） |
 | 挑选 | enrich.go `pickLyricCandidate` |
 | 守卫 | match.go `isTimedLRC` `isProbablyWrongLanguageLyrics` `isCreditOnlyLRC` `usableWordTiming` |

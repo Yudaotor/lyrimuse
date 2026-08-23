@@ -1058,6 +1058,16 @@ struct LyricsWindowView: View {
         return max(22, min(h * 0.0598, w * 0.0564))
     }
     // 罗马音/译文跟正文保持原来的比例(15/28、17/28)。
+    /// 对唱行两侧留白的基准量(见 LyricDuetLayout)。在父视图算一次传下去 —— 每一行
+    /// 自己去算的话,窗口拖动时整表行都要重跑同一个式子。
+    private var duetInsetUnit: CGFloat {
+        LyricDuetLayout.insets(
+            for: .leading,
+            availableWidth: lyricsColumnWidth,
+            fontSize: lyricFontSize
+        ).trailing
+    }
+
     private var romaFontSize: CGFloat { lyricFontSize * 0.54 }
     private var translationFontSize: CGFloat { lyricFontSize * 0.61 }
     /// 行间距:AM 行距(基线到基线)218px / 字号 101px = 2.156em;单行 Text 视图高
@@ -1110,6 +1120,7 @@ struct LyricsWindowView: View {
                             fontSize: lyricFontSize,
                             romaFontSize: romaFontSize,
                             translationFontSize: translationFontSize,
+                            duetInsetUnit: duetInsetUnit,
                             onArtwork: hasArtworkBackground,
                             showRomanization: playback.showRomanization,
                             showTranslation: playback.showTranslation,
@@ -1592,6 +1603,11 @@ struct LyricsWindowView: View {
 
     /// 前往专辑/前往艺人:iTunes Search API 按 歌名+歌手+系统店面 解析目录链接,经
     /// music:// scheme 让 Music.app 原生跳页(机制与踩坑见 MusicCatalogSearch 注释)。
+    ///
+    /// ⚠️ Music.app 没在跑时,必须先 `ensureMusicAppRunning()` 等它真正启动完再发
+    /// music:// URL——直接对着一个还没起来的 Music.app 发深链会被冷启动流程吞掉,
+    /// 用户看到的是"打开了 Music.app,但没跳到点的这个页面"(2026-08-23 用户实测反馈,
+    /// 见 MusicAutomationPermission.ensureMusicAppRunning 注释)。
     private func openCatalogPage(album: Bool) {
         let title = playback.title
         let artist = playback.artist
@@ -1601,6 +1617,7 @@ struct LyricsWindowView: View {
                 title: title, artist: artist, storefront: storefront) else { return }
             let https = album ? (item.collectionViewUrl ?? item.trackViewUrl) : item.artistViewUrl
             guard let url = MusicCatalogSearch.musicSchemeURL(https) else { return }
+            await MusicAutomationPermission.ensureMusicAppRunning()
             await MainActor.run { NSWorkspace.shared.open(url) }
         }
     }
@@ -1875,26 +1892,26 @@ struct LyricsWindowView: View {
             return String(format: "%d:%02d", s / 60, s % 60)
         }
         return VStack(alignment: .leading, spacing: 6) {
-            InfoPanelRow(label: L10n.t("歌名"), value: playback.title)
-            InfoPanelRow(label: L10n.t("歌手"), value: playback.artist)
+            InfoPanelRow(label: L10n.t("歌名"), value: playback.title, onArtwork: hasArtworkBackground)
+            InfoPanelRow(label: L10n.t("歌手"), value: playback.artist, onArtwork: hasArtworkBackground)
             if !playback.album.isEmpty {
-                InfoPanelRow(label: L10n.t("专辑"), value: playback.album)
+                InfoPanelRow(label: L10n.t("专辑"), value: playback.album, onArtwork: hasArtworkBackground)
             }
             if let durationText {
-                InfoPanelRow(label: L10n.t("时长"), value: durationText)
+                InfoPanelRow(label: L10n.t("时长"), value: durationText, onArtwork: hasArtworkBackground)
             }
             if let player = PlaybackCoordinator.shared.resolvedPlayerDisplayName {
-                InfoPanelRow(label: L10n.t("播放器"), value: player)
+                InfoPanelRow(label: L10n.t("播放器"), value: player, onArtwork: hasArtworkBackground)
             }
-            InfoPanelRow(label: L10n.t("歌词"), value: lyricsKind)
+            InfoPanelRow(label: L10n.t("歌词"), value: lyricsKind, onArtwork: hasArtworkBackground)
             if let source = infoLyricsSource, !source.isEmpty {
-                InfoPanelRow(label: L10n.t("来源"), value: sourceDisplayName(source))
+                InfoPanelRow(label: L10n.t("来源"), value: sourceDisplayName(source), onArtwork: hasArtworkBackground)
             }
             // 收听档案(2026-08-22,Last.fm 系列 #5):累计次数 + 首次/上次听。连着账号
             // 才有;首次/上次是面板打开那一刻才发的两个请求(user.getTrackScrobbles),
             // 到货前这几行整体缺席,面板高度随之长一截 —— 面板本来就是 fixedSize 浮层,
             // 长高不顶别人。
-            InfoPanelListeningRows(title: playback.title, artist: playback.artist)
+            InfoPanelListeningRows(title: playback.title, artist: playback.artist, onArtwork: hasArtworkBackground)
         }
         .padding(12)
         .frame(minWidth: 240, maxWidth: 360, alignment: .leading)
@@ -2239,15 +2256,24 @@ struct LyricsWindowView: View {
 
     /// 三颗呼吸圆点。不活跃时**整行不渲染**(零高度零开销,VStack 也不会为它多出一段
     /// 行距);间奏进行中在原位展开,三颗点随间奏进度依次点亮 —— 活跃判定在数据层
-    /// (LocalPlaybackSource 20Hz 发布 currentGapIndex,进出间奏才变),同一时刻至多
-    /// 一行在跑 TimelineView(0.5s 一档,足够点亮的节奏感,填色那种帧率在这里是浪费)。
+    /// (LocalPlaybackSource 20Hz 发布 currentGapIndex,进出间奏才变)。
+    ///
+    /// 帧率(2026-08-23 第四次修正,用户反馈"鼓起来的时候卡顿,一点都不流畅"):原来是
+    /// 0.5s 一档的粗时钟,靠 `.animation(value:)` 在两次采样之间补间——采样点之间 pos
+    /// 一跳就是 500ms,对应呼吸周期里 ~7% 的相位跳变,补间引擎只是在两个离散样本之间
+    /// 插值,cos² 曲线鼓起来最快的那一段(相位变化率最大)恰恰最需要密集采样,0.5s 一档
+    /// 明显不够、看着一格一格跳。这跟本文件"逐字时钟两级化"那条已知坑是同一个病根:
+    /// 用粗时钟采样再补间,只在被采样的量本身接近匀速/线性时才顺滑,鼓包这种非线性曲线
+    /// 会露馅。改用 `.animation(paused:)` 不设 minimumInterval——跟着显示器刷新率走,
+    /// 每帧直接算真值而不是采样旧值再补间,补间修饰符也一并去掉(值本身逐帧连续,不需要
+    /// 动画引擎再帮忙插值)。三颗点加起来就是几次三角函数+几个 Circle,帧预算跟逐字填色
+    /// 那种要做整行 WrapLayout 重排的场景完全不是一个量级,全速率不算浪费。
     @ViewBuilder
     private func gapDotsRow(_ marker: LyricsGapMarker, id: String) -> some View {
         if playback.currentGapIndex == marker.index {
-            // .animation(minimumInterval:paused:) 替代 .periodic(2026-08-19):节奏一样是
-            // 0.5s 一档,但暂停时把表停掉 —— 暂停在间奏中时圆点亮度本来就定格(闭包里的
+            // 暂停时把表停掉——暂停在间奏中时圆点亮度/大小本来就该定格(闭包里的
             // pausedPositionMs 兜底),表继续走只是白跑。
-            TimelineView(.animation(minimumInterval: 0.5, paused: !playback.isPlayingNow)) { context in
+            TimelineView(.animation(paused: !playback.isPlayingNow)) { context in
                 // 跟逐字填色同一套时间基准:外推位置 + 当前歌词偏移(间奏窗口是歌词
                 // 原始时间轴,见 LyricsGapMarker 注释)。暂停时 anchor 为 nil,退回
                 // 冻结位置,点就停在当下的亮度上。
@@ -2256,6 +2282,20 @@ struct LyricsWindowView: View {
                     + PlaybackCoordinator.shared.currentLyricsOffsetMs
                 let span = max(1, marker.endMs - marker.startMs)
                 let progress = min(1, max(0, Double(pos - marker.startMs) / Double(span)))
+                // 呼吸(2026-08-23 第三次修正,真机对拍 AM 后订正节奏):AM 的三点是
+                // **整体同步**放大缩小——同一帧一起到最大、同一帧一起到最小,不是错峰的
+                // 打字提示器波浪(第一版猜错方向);**暂停播放时呼吸整个冻结**,不是独立
+                // 于播放进度的 wall-clock 循环,所以共享同一个由 `pos`(跟点亮进度同一套
+                // 外推时间基准,暂停时天然冻结)算出来的值,不再各开一份 State/Animation——
+                // 共享同一个数就是同步本身。周期 7~8 秒是拿时间戳标定连拍量出来的,且不是
+                // 匀速正弦:约 44% 的周期停在小尺寸附近几乎不怎么变,鼓到最大再落回去只占
+                // 中间那一小段,是"停留久、鼓得快"的心跳感,不是均匀呼吸。用 raised-cosine
+                // 的平方去逼近这个"多数时间贴地、中段快速隆起"的形状(指数越大,贴在低点的
+                // 时间占比越大);振幅 ±28%(阈值化的像素计数本来就会低估真实边缘的缩放量)。
+                let breathePeriodMs = 7000.0
+                let breathePhase = Double(pos).truncatingRemainder(dividingBy: breathePeriodMs) / breathePeriodMs
+                let breatheRaised = pow(0.5 - 0.5 * cos(2 * .pi * breathePhase), 2)
+                let breathe = reduceMotion ? 1 : 0.72 + 0.56 * breatheRaised
                 HStack(spacing: lyricFontSize * 0.3) {
                     ForEach(0 ..< 3, id: \.self) { i in
                         Circle()
@@ -2263,10 +2303,9 @@ struct LyricsWindowView: View {
                             .frame(width: lyricFontSize * 0.32, height: lyricFontSize * 0.32)
                             // 第 i 颗在间奏进行到 i/3 之后点亮,亮度平滑爬升。
                             .opacity(0.22 + 0.78 * min(1, max(0, progress * 3 - Double(i))))
+                            .scaleEffect(breathe)
                     }
                 }
-                // 亮度变化按 0.5s 步进到货,补一段柔和过渡就是"呼吸"。
-                .animation(.easeInOut(duration: 0.45), value: Int(progress * 24))
             }
             .frame(height: lyricFontSize * 0.5)
             .id(id)
@@ -2508,6 +2547,8 @@ private struct LyricsLineRow: View, Equatable {
     let fontSize: CGFloat
     let romaFontSize: CGFloat
     let translationFontSize: CGFloat
+    /// 对唱行两侧留白的基准量,父视图按列宽和字号算好(见 LyricDuetLayout)。
+    let duetInsetUnit: CGFloat
     let onArtwork: Bool
     let showRomanization: Bool
     let showTranslation: Bool
@@ -2527,6 +2568,7 @@ private struct LyricsLineRow: View, Equatable {
             && a.fontSize == b.fontSize
             && a.romaFontSize == b.romaFontSize
             && a.translationFontSize == b.translationFontSize
+            && a.duetInsetUnit == b.duetInsetUnit
             && a.onArtwork == b.onArtwork
             && a.showRomanization == b.showRomanization
             && a.showTranslation == b.showTranslation
@@ -2562,6 +2604,17 @@ private struct LyricsLineRow: View, Equatable {
         case .leading: return .leading
         case .trailing: return .trailing
         case .center: return .center
+        }
+    }
+
+    /// ⚠️ 这里用 `item.line.side` 而不是上面那个 `side` —— 后者已经把 nil 兜底成
+    /// `.leading` 了,拿它算留白会让**每一首普通歌**的每一行都凭空缩进右边。
+    private var duetInsets: (leading: CGFloat, trailing: CGFloat) {
+        guard let s = item.line.side else { return (0, 0) }
+        switch s {
+        case .leading: return (0, duetInsetUnit)
+        case .trailing: return (duetInsetUnit, 0)
+        case .center: return (duetInsetUnit, duetInsetUnit)
         }
     }
 
@@ -2612,6 +2665,11 @@ private struct LyricsLineRow: View, Equatable {
         // Apple Music 歌词是左对齐排版,2026-08-04 从居中改过来。对唱歌词按演唱者分左右
         // (2026-08-14),不带标记的歌 side 恒为 .leading,跟原来完全一致。
         .multilineTextAlignment(textAlignment)
+        // 对唱行的两侧留白(2026-08-23,见 LyricDuetLayout)。光靠对齐不够 —— 这一列
+        // 按比例算只放得下约 12 个汉字,顶满整宽的行左对齐和右对齐渲染完全相同。
+        // 留白在 frame 之内、撑宽之前:先把可用宽度收窄,再在收窄后的范围里按 side 对齐。
+        .padding(.leading, duetInsets.leading)
+        .padding(.trailing, duetInsets.trailing)
         .frame(maxWidth: .infinity, alignment: alignment)
         // 动画屏障(2026-08-21 七轮,60fps 逐帧胶片实测抓包):下面那两条行级
         // .animation(value:) 本意只给 opacity/blur 的景深过渡用,但它们的作用域是整棵
@@ -3585,15 +3643,25 @@ private struct LyricsSearchContext: Identifiable {
 }
 
 /// 「显示简介」面板的一行:次级色标签 + 主色值,值可换行(长歌名/长专辑名)。
+///
+/// 标签固定用 `.secondary` 曾经在浅色封面上糊成一片(2026-08-23 用户反馈"这里这个字
+/// 都看不清"):这块面板背景是 `.ultraThinMaterial`,故意让封面底色透上来(跟「…」菜单
+/// 同一个设计意图,见 trackInfoPanel 注释),但 `.secondary` 那点暗淡的灰度差,在封面
+/// 恰好是浅色/白色区域(挡在材质后面透出来)时几乎被完全吃掉——`.primary` 的值列因为
+/// 是接近纯白的高对比度,同样的浅色背景下还扛得住,才只有标签列出问题。改成有封面背景
+/// 时固定用不透明度收着点的白 + 一圈深色阴影(阴影是让白字在任意亮度背景上都读得出来
+/// 的标准手法,悬浮歌词的文字阴影设置同一个道理),没有封面背景时原样退回 `.secondary`。
 private struct InfoPanelRow: View {
     let label: String
     let value: String
+    var onArtwork: Bool = false
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 10) {
             Text(label)
                 .font(.system(size: 12))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(onArtwork ? Color.white.opacity(0.75) : Color.secondary)
+                .shadow(color: onArtwork ? .black.opacity(0.5) : .clear, radius: 1.5)
                 .frame(width: 52, alignment: .leading)
             Text(value)
                 .font(.system(size: 13, weight: .medium))
@@ -3725,10 +3793,24 @@ private struct NowPlayingCountBadge: View {
         // 陷入"没数字→不渲染→永远不取数"的死锁。
         Group {
             if stats.isConnected, !title.isEmpty, let n = stats.nowPlayingCount {
-                Text(String(format: L10n.t("收听次数：%@"), "\(n)"))
-                    .font(.system(size: 11, weight: .medium).monospacedDigit())
-                    .foregroundStyle(textColor)
-                    .transition(.opacity)
+                // 点这行字直接跳设置的 Last.fm 详情页(2026-08-23 用户要求)——这个数字
+                // 本来就来自 Last.fm scrobble 记录,点它去看/管理那份连接是最直接的落点。
+                // 跳转机制跟 OnboardingView 的"现在去设置里连接"同一套:请求信箱/subject
+                // 两条路都要发(见 AppActions.requestSettings 注释),窗口未建/已开着都能对;
+                // 这颗视图不在 Settings 场景里,openSettings 走 AppActions 那份桥接,不额外
+                // 加一份 @Environment(\.openSettings)。
+                Button {
+                    AppActions.shared.requestSettings(.account(.lastfm))
+                    NSApp.activate(ignoringOtherApps: true)
+                    AppActions.shared.openSettings?()
+                } label: {
+                    Text(String(format: L10n.t("收听次数：%@"), "\(n)"))
+                        .font(.system(size: 11, weight: .medium).monospacedDigit())
+                        .foregroundStyle(textColor)
+                }
+                .buttonStyle(.plain)
+                .help(L10n.t("在设置中查看 Last.fm"))
+                .transition(.opacity)
             }
         }
         .onAppear { refresh() }
@@ -3746,6 +3828,7 @@ private struct NowPlayingCountBadge: View {
 private struct InfoPanelListeningRows: View {
     let title: String
     let artist: String
+    var onArtwork: Bool = false
     @ObservedObject private var stats = LastfmStatsService.shared
 
     var body: some View {
@@ -3753,16 +3836,16 @@ private struct InfoPanelListeningRows: View {
             if stats.isConnected {
                 if let n = stats.nowPlayingCount {
                     InfoPanelRow(label: L10n.t("累计"),
-                                 value: String(format: L10n.t("第 %@ 次听"), "\(n)"))
+                                 value: String(format: L10n.t("第 %@ 次听"), "\(n)"), onArtwork: onArtwork)
                 }
                 if let span = stats.nowPlayingSpan, span.total > 0 {
                     if let first = span.first {
                         InfoPanelRow(label: L10n.t("首次听"),
-                                     value: first.formatted(date: .abbreviated, time: .omitted))
+                                     value: first.formatted(date: .abbreviated, time: .omitted), onArtwork: onArtwork)
                     }
                     if let last = span.last {
                         InfoPanelRow(label: L10n.t("上次听"),
-                                     value: last.formatted(.relative(presentation: .named)))
+                                     value: last.formatted(.relative(presentation: .named)), onArtwork: onArtwork)
                     }
                 }
             }
@@ -3998,6 +4081,8 @@ private struct ChartsPanelView: View {
             case .artists: https = item.artistViewUrl
             }
             guard let url = MusicCatalogSearch.musicSchemeURL(https) else { return }
+            // Music.app 没在跑时先等它真正启动完,理由见 openCatalogPage 同一处注释。
+            await MusicAutomationPermission.ensureMusicAppRunning()
             await MainActor.run { NSWorkspace.shared.open(url) }
         }
     }

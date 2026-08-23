@@ -160,7 +160,13 @@ enum MusicAutomationPermission {
         }
     }
 
-    private static func ensureMusicAppRunning() async {
+    /// 不再是 private(2026-08-23):「前往专辑/艺人」「你的常听」那两条 music:// 深链
+    /// 跳转也需要同一件事——Music.app 没在跑时直接 `NSWorkspace.shared.open(music://…)`
+    /// 会被吞:LaunchServices 把"启动 App"和"打开这个 URL"两件事一起扔过去,冷启动流程
+    /// 走到能接 Apple Event 那一步之前 URL 就丢了,用户看到的是"App 打开了,但停在上次
+    /// 退出时的页面"而不是跳到链接指的那一页(2026-08-23 用户实测反馈)。跟这里已经解决
+    /// 过的"TCC 查权限前必须先让 Music.app 存在"是同一个根因,直接复用。
+    static func ensureMusicAppRunning() async {
         guard !NSWorkspace.shared.runningApplications.contains(where: { $0.bundleIdentifier == musicBundleID }) else {
             return
         }

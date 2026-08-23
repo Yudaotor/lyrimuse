@@ -417,7 +417,7 @@ private struct LyricsSettingsTab: View {
     // 记住上次看的是哪一段 —— 每次重开设置都跳回第一段的话,连着调同一段的两项就要多点
     // 一次。存 rawValue 而不是枚举:@AppStorage 只吃基础类型。
     /// 鼠标悬在哪个来源上(只为悬停底色,不影响任何配置)。
-    @State private var hoveredSource: LyricsSource?
+    @State private var hoveredSource: String?
 
     // MARK: - 时间轴偏移那一行的「作用于哪个播放器」(2026-08-21 加)
 
@@ -661,10 +661,18 @@ private struct LyricsSettingsTab: View {
     /// 其余全是白底卡片 + 行,一排彩色药丸是外来物。悬停时才给一层极淡的底,只为了说明
     /// "这里能点"。
     private func sourceCheckbox(_ source: LyricsSource) -> some View {
-        let on = features.lyricsSources.contains(source)
-        let hovered = hoveredSource == source
+        sourceCheckbox(
+            id: source.rawValue, name: source.displayName, color: source.color,
+            on: features.lyricsSources.contains(source),
+            toggle: { setSource(source, enabled: $0) })
+    }
+
+    private func sourceCheckbox(
+        id: String, name: String, color: Color, on: Bool, toggle: @escaping (Bool) -> Void
+    ) -> some View {
+        let hovered = hoveredSource == id
         return Button {
-            setSource(source, enabled: !on)
+            toggle(!on)
         } label: {
             HStack(spacing: 6) {
                 // 勾要留着 —— 只画一个实心圆点的话,五个来源全开时这一排看上去就是一条
@@ -672,7 +680,7 @@ private struct LyricsSettingsTab: View {
                 // 说各的,不再重复。
                 ZStack {
                     Circle()
-                        .fill(on ? source.color : .clear)
+                        .fill(on ? color : .clear)
                         .overlay(
                             Circle().strokeBorder(
                                 on ? .clear : Color.secondary.opacity(0.4), lineWidth: 1.5))
@@ -683,7 +691,7 @@ private struct LyricsSettingsTab: View {
                     }
                 }
                 .frame(width: 15, height: 15)
-                Text(source.displayName)
+                Text(name)
                     .font(.system(size: 13))
                     .foregroundStyle(on ? Color.primary : Color.secondary)
             }
@@ -696,7 +704,7 @@ private struct LyricsSettingsTab: View {
             .contentShape(RoundedRectangle(cornerRadius: 6))
         }
         .buttonStyle(.plain)
-        .onHover { hoveredSource = $0 ? source : (hoveredSource == source ? nil : hoveredSource) }
+        .onHover { hoveredSource = $0 ? id : (hoveredSource == id ? nil : hoveredSource) }
         .animation(.easeOut(duration: 0.12), value: hovered)
         .accessibilityAddTraits(on ? [.isSelected] : [])
     }
@@ -1501,12 +1509,12 @@ private struct AppearanceSettingsTab: View {
                 }
             }
             CardDivider()
-            // "解锁后长按才能拖动"这个手势不直观,说明放在 help 气泡里(原来副标题和 help
-            // 各写了一遍同一件事,副标题那句还更短更含糊)。
+            // 手势不直观,说明放在 help 气泡里(原来副标题和 help 各写了一遍同一件事,
+            // 副标题那句还更短更含糊)。怎么拖由下面那个「拖动前先长按」决定,这里不写死。
             SettingsRow(
                 icon: "lock",
                 title: L10n.t("锁定位置"),
-                help: L10n.t("解锁后鼠标点击会穿到桌面上；长按住悬浮歌词不放才能拖动它")
+                help: L10n.t("解锁后鼠标点击会穿到桌面上；拖动方式见下面「拖动前先长按」")
             ) {
                 Toggle("", isOn: Binding(
                     get: { settings.lockPosition },
@@ -1517,13 +1525,30 @@ private struct AppearanceSettingsTab: View {
                 ))
             }
             CardDivider()
+            // 紧挨着「锁定位置」放:它决定"解锁之后怎么拖"。
+            //
+            // 关掉(默认)= 按住歌词文字直接拖,四周空白照旧穿透 —— 靠的是 2026-08-23 那套
+            // 精准歌词热区(lyricsHotZoneLocal)。打开 = 旧行为:窗口范围内长按 0.35s 才武装,
+            // 期间点哪儿都能穿透。
+            SettingsRow(
+                icon: "hand.tap",
+                title: L10n.t("拖动前先长按"),
+                subtitle: L10n.t("关闭时按住歌词就能拖；打开则要长按 0.35 秒")
+            ) {
+                Toggle("", isOn: Binding(
+                    get: { settings.overlayDragNeedsLongPress },
+                    set: { settings.overlayDragNeedsLongPress = $0 }
+                ))
+            }
+            CardDivider()
             // 紧挨着「锁定位置」放:两者解的是同一个痛点的两半 —— 那个让点击穿到下层,
-            // 这个让视线看到下层。副标题点明"只对悬浮歌词生效",因为这一页上下都是
-            // 跨形态共用的项(截屏时隐藏、暂停时隐藏),不说清会被当成也管灵动岛。
+            // 这个让视线看到下层。这张卡本身就在「窗口」标题下、整卡只讲悬浮歌词,不用
+            // 在这一行里重复交代"只对悬浮歌词生效"(那句是给跨形态共用项准备的免责声明,
+            // 这一项从不跨形态)。
             SettingsRow(
                 icon: "cursorarrow.motionlines",
-                title: L10n.t("指针划过时让开"),
-                subtitle: L10n.t("鼠标移到悬浮歌词上时它会淡下去，移开恢复；只对悬浮歌词生效")
+                title: L10n.t("划过让开"),
+                subtitle: L10n.t("鼠标移到悬浮歌词上时它会淡下去，移开恢复")
             ) {
                 Toggle("", isOn: Binding(
                     get: { settings.overlayFadeOnHover },

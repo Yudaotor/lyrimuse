@@ -58,7 +58,11 @@ PlaybackCoordinator (UI 层唯一入口) → 各展示面
 
 1. LRC 和 YRC **各自**解析并各自过署名行过滤(不是「有 YRC 就一定用 YRC」)。
 2. **覆盖率判据**:`usingWords = 过滤后逐字非空 && (整行为空 || 逐字行数*2 >= 整行行数)`。逐字行数不到整行的一半就认为这份 YRC 是退化的(真实案例:某歌 YRC 只有 10 行、9 行是署名,过滤后剩 1 行,整首歌卡在那一行不动),退回整行模式。LRC 本身为空时没得选,仍用逐字。
-3. **对唱标记剥离**:逐字模式下标记(男：/女：/合：)跟第一个字粘在同一个时间戳里,只改那个词的文本、不能删词(它扛着第一个字的发声时间);标记单独成词时才整个删掉(`LyricDuet.splitMarkerAllowingEmpty`)。整行模式走 `LyricDuet.plan`。左右按标记**首次出现顺序**分(先出现靠左),合唱类居中;第一个标记之前的行 side 为 nil(= 没有对唱信息,各视图自己兜底:歌词窗口 `?? .leading`、悬浮窗 `?? .center`)。
+3. **对唱标记剥离**(2026-08-23 重写,见 `LyricDuet`):
+   - **先认身份、再过滤署名、最后剥离**,顺序不能反 —— 「每句都带标记」的对唱歌天然满足署名过滤"命中 ≥3 行且过半"的闸门,先过滤就是整首被删空。`LyricDuet.speakers(in:)` 的结果作为 `speakerExemptions` 喂给 `strippingCreditLines`,在所有规则**最前面**放行。
+   - **两条路径分别认**:整行走 `LyricDuet.plan`、逐字走 `LyricDuet.planWords`。逐字侧判定必须在**整行词拼起来**的文本上做 —— 真实 YRC 里标记的切分形态不固定(`男：周` / `男`+`：` / `周`+`杰`+`伦`+`：`),只看第一个词会漏掉绝大多数(重写前 13 首带标记的歌里 11 首因此归零)。剥离按**字符数**从词序列前端剥,剥到一半的词改文本、保留时间戳。
+   - **独占一行的标记整行丢掉**(`dropped`):它带着自己的时间戳,不丢就是屏幕上凭空多出一句词。⚠️ 过滤 `sides` 只能 filter+map,不能 compactMap —— 元素本身是 `Side?`,nil 是正常值,compactMap 会把它们连同被丢的行一起摘掉、整条归属错位一格。
+   - 左右按标记**首次出现顺序**分(先出现靠左),合唱类居中且**不参与交替状态机**(否则「男-合-女」会把侧算反);同一位歌手的不同写法(男/男声/男合)先归并成同一身份再排席位。第一个标记之前的行 side 为 nil(= 没有对唱信息,各视图自己兜底:歌词窗口 `?? .leading`、悬浮窗 `?? .center`)。
 4. `romaLines`/`trLines` 独立解析,**不过署名行过滤、不做简繁转换**(罗马音是拉丁字母;译文的转换在送进来之前已由 LocalPlaybackSource 做了)。
 5. 整首粒度判一次 `songLooksJapanese` 和 `songScript`(japanese/korean/chinese/other,给按语言的罗马音开关用);解析酷狗 `[kana:]` 假名标注(对不齐就整份弃用);清空罗马音/词组两个按行缓存。
    ⚠️ 判定样本是**过滤掉署名行之后的正文**(`filteredBase`/`candidateWords`),不是原始 lyrics/lyricsYRC —— 2026-08-20 改。原来刻意把署名行算进去(理由写的是「一首歌出现过假名就确证日文」),而**中文翻唱的署名行带日文原作者名是常态**:实测泠鸢yousa《神的随波逐流》整首歌唯一的假名就是「词：れるりり」「曲：れるりり」两行,正文全中文,却被判成日文 —— 于是用户关着的「中文」罗马音开关根本没机会说话(闸看的是整首歌的语言),每行中文都被标上东西:日语分词器给得出读音的出日文读音(词典外的字原样留着,表现为「有些字有有些字没有」),给不出的退到 ICU 音译出拼音,同一首歌两种形态混着出。署名行说的是「谁写的」,本来就不是「这首歌唱的是什么语言」的证据;真日文歌正文假名遍地,判定结果不变。两份正文都空时退回原始字段。selftest 用真实歌词片段钉了四条:署名行被过滤、中文关着时一行罗马音都没有、用户主动开中文时照样给、真日文歌不受误伤。
@@ -203,7 +207,7 @@ LRC 格式标准里的 `[offset:±毫秒]` = 「这份歌词的全部时间戳�
 - **collector(进程边界)**:歌词内容的唯一生产方,独立进程写 `lyrimuse-enrich-cache.json`;App 侧靠 mtime 感知重写(同一首歌中途补译文/换歌词自动生效)。key 归一化两侧必须逐字节一致,selftest 锁死。署名行过滤跟 collector 侧 `match.go` 是同一条结构正则、不同爆炸半径(那边整份拒收计数、这边逐行展示过滤),规则**不能原样搬**。
 - **歌词管理窗口**:保存/删除歌词后调 `PlaybackCoordinator.refreshLyricsForCurrentTrack()` 强制重读(默认只在换歌时 reload);偏移输入框直接写 `LyricsOffsetStore.setOffset`,再调 `refreshLyricsOffsetForCurrentTrack()`;它算 offset key 用的是**磁盘持久化后**的歌词内容(内容指纹要跟引擎读到的一致)。用户在歌词管理里换/改歌词 → 内容指纹变 → 该歌旧微调自动失效(查不到即 0)。
 - **播放进度链(第 07 章方向)**:本章的行定位完全依赖 `anchor`/`pausedPositionMs`(位置平滑、伺服校正、seek 陈旧读数拒收都在 LocalPlaybackSource 位置侧);逐字填色是 View 层拿 anchor + `SyncedLyricWord` 时间戳现算,不经过 currentLine。歌词窗口点行 seek 用 `timeMs - currentLyricsOffsetMs` 反算目标——必须用引擎实际生效的总偏移。
-- **对唱分栏(LyricDuet)**:`SyncedLyricLine.side` 由 load 时算好,悬浮窗/歌词窗口按 side 排版,nil 各自兜底。
+- **对唱分栏(LyricDuet)**:`SyncedLyricLine.side` 由 load 时算好,悬浮窗/歌词窗口按 side 排版并叠加 `LyricDuetLayout` 的两侧内缩,nil 各自兜底、且不吃内缩。灵动岛/菜单栏面板/菜单栏状态项**刻意不做**对唱(单行显示靠对齐表达不了,2026-08-23 产品决定)。
 - **封面链**:`EnrichCacheReader.coverURL/nativeSizedCoverURL` 被 `PlaybackCoordinator.refreshHighResCover()`(系统封面 <300px 时找高清替代)和 `LastfmStatsService`(最近播放列表封面兜底)消费——歌词缓存文件同时是封面数据源。
 - **菜单栏跑马灯**:`currentLineDwellSeconds` 配速;菜单栏歌词只消费 `plainText`。
 - **诊断导出**:`lastResolvedBundleID`/`resolvedPlayerDescription` 报实际在播的播放器(与歌词无直接关系,但同在这条转发层)。
@@ -235,7 +239,7 @@ LRC 格式标准里的 `[offset:±毫秒]` = 「这份歌词的全部时间戳�
 | 罗马音/语言判定/简繁 | `LyrimuseCore/Lyrics/Romanizer.swift` — `Romanizer.romanize/japaneseSegments/looksJapanese/script`、`ChineseVariant.converted`、`RomanizationScripts` |
 | 异体字规范化表(繁简之外的一层,有 selftest) | `LyrimuseCore/Lyrics/HanVariants.swift` — `toSimplified`、`normalizeToSimplified` |
 | 假名标注 | `LyrimuseCore/Lyrics/KanaAnnotation.swift` — `KanaAnnotation.parse/marks` |
-| 对唱分栏 | `LyrimuseCore/Lyrics/LyricDuet.swift` — `LyricDuet.plan/sides/splitMarkerAllowingEmpty` |
+| 对唱分栏 | `LyrimuseCore/Lyrics/LyricDuet.swift` — `speakers/plan/planWords/sides/identity`;两侧内缩在 `LyricDuetLayout.swift` |
 | 缓存直读 | `LyrimuseCore/Local/EnrichCacheReader.swift` — `EnrichCacheReader.lookup/looseMatch/fileModificationDate/coverURL/nativeSizedCoverURL` |
 | key 归一化/宽松键 | `LyrimuseCore/Local/EnrichCacheKeys.swift` — `EnrichCacheKeys.normalizedKey/normalizedTitle/cleanTag/looseKey` |
 | 消费链宿主/20Hz | `LyrimuseCore/Local/LocalPlaybackSource.swift` — `reloadCurrentLyrics/fastTick/resolveLinesForPausedPosition/applyOffsets/apply/clearIfWasPlaying`、`currentOffsetKey`、`sawChineseLyrics` |

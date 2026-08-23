@@ -33,6 +33,9 @@ type neteaseInfo struct {
 	// 跟 Artist 不同,这两个字段不做"是否单一歌手"之类的过滤,原样如实展示网易云曲库
 	// 里的名字。
 	Title, Album string
+	// SongID 是这首歌在网易云的 id,0=没拿到。给 amll-ttml-db 按 ID 直取歌词用
+	// (见 amllttml.go)——那个库的目录就是按平台音乐 ID 命名的。
+	SongID int64
 	// AlbumID 是 Album 那张专辑在网易云的 id,0=没拿到。只给同专辑预取用
 	// (见 neteaseAlbumTracks)。跟 Title/Album 一样取自 pick() 选中的 chosen。
 	AlbumID int64
@@ -117,11 +120,17 @@ func withholdImpersonatorRiddenIdentity(artist string, info neteaseInfo) netease
 	//
 	// PureMusic 不留:纯音乐标记是"这首歌本来就没词"的结论,由它写进条目会挡掉后续重搜
 	// (见 needsLyricsFirstFill),而这类艺人的曲库记录本身就不可信,不该拿它下这种结论。
+	//
+	// SongID 留下:它跟 Lyrics/Trans/Roma/YRC 同属**歌词族**。这个函数开头那段注释自己
+	// 写了理由 —— "歌词是按 songID 挂在网易云歌词库上的,跟这条曲目记录是谁传的是两回事"。
+	// 它的唯一用途是拿去 amll-ttml-db 按 ID 直取(见 amllttml.go),而那边命不命中由那个
+	// 库自己说了算:仿冒条目的 id 在人工提交的 amll 库里查不到,直接 404。
 	return neteaseInfo{
 		Lyrics:       info.Lyrics,
 		Trans:        info.Trans,
 		Roma:         info.Roma,
 		YRC:          info.YRC,
+		SongID:       info.SongID,
 		Title:        info.Title,
 		Album:        info.Album,
 		DurationSecs: info.DurationSecs,
@@ -522,6 +531,7 @@ func resolveNeteaseInfo(artist, title, album string) neteaseInfo {
 		}
 		return ""
 	}
+	info.SongID = id
 	lrc, tr, roma, pureMusic := fetchBundle(id)
 	// 纯音乐这个结论跟"有没有可用歌词"分开记:占位正文过不了 isTimedLRC,Lyrics 会留空,
 	// 而"留空"本身分不出"这首没词"和"没查到词"。见 neteaseInfo.PureMusic。

@@ -48,7 +48,7 @@ func relayState(s snapshot, playing bool, device string, listenedAt int64, curre
 		"title": meta.TrackName, "artist": meta.ArtistName, "album": meta.ReleaseName,
 		"artwork": ai["cover_url"], "accent": ai["accent_color"], "device": device,
 		"lyrics": enr["lyrics"], "lyricsTr": enr["lyrics_tr"], "lyricsRoma": enr["lyrics_roma"], "lyricsYRC": enr["lyrics_yrc"],
-		// 封面/歌词实际来自哪个平台("netease"/"qq"/"lrclib"),供网页页脚如实展示。
+		// 封面/歌词实际来自哪个平台("netease"/"qq"/"lrclib"/"amll"…),供网页页脚如实展示。
 		"coverSource": ai["cover_source"], "lyricsSource": ai["lyrics_source"],
 		// 这条 listen 实际是哪个播放器放的("Apple Music (macOS)"/"QQ Music (macOS)"/
 		// "NetEase Cloud Music (macOS)"/"Spotify (macOS)"/"Apple Music (iOS)",见

@@ -100,11 +100,13 @@ func isCreditOnlyLRC(lrc string) bool {
 	if strings.Contains(lrc, neteaseInstrumentalPlaceholderMarker) {
 		return true
 	}
-	lines := strings.Split(lrc, "\n")
+	// 演唱者标签行不算 credit(2026-08-23,见 lyricspeaker.go):一首每句都带「男：/女：」
+	// 行内前缀的对唱歌,逐行看每一行都命中结构正则,不豁免就会被整份判废。
+	speakers := lyricSpeakerLabels(lrc)
 	nonCredit := 0
-	for _, l := range lines {
+	for _, l := range splitLyricLines(lrc) {
 		text := strings.TrimSpace(lrcTimestampRe.ReplaceAllString(l, ""))
-		if text == "" || isCreditLine(text) {
+		if text == "" || isCreditLineWithSpeakers(text, speakers) {
 			continue
 		}
 		nonCredit++
@@ -141,7 +143,7 @@ func lastLRCTimestampSecs(lrc string) (float64, bool) {
 
 // lyricCandidate 是某个歌词源解析出的一份候选结果,连同来源标记。
 type lyricCandidate struct {
-	source        string // "netease" | "qq" | "kugou" | "musixmatch" | "lrclib"
+	source        string // "netease" | "qq" | "kugou" | "musixmatch" | "lrclib" | "amll"
 	lyrics        string
 	wordTimingYRC string // 该候选归一化成 YRCParser 语法后的逐字数据,没有则空串(netease/qq/kugou 都可能有,lrclib 恒无)
 	hasWordTiming bool   // = wordTimingYRC != "",构造候选时直接算好,见 enrich.go
@@ -1531,10 +1533,26 @@ func lyricTitleAccepted(candidateTitle, localTitle string) bool {
 // lyricConsensusBody 把一份 LRC 归一成"可跨源比对的正文":逐行去时间戳、丢署名行与
 // 空行,每行 normLoose 后拼接。给 contentConsensusPeers 的 3-gram 比对用。
 func lyricConsensusBody(lyrics string) string {
+	// 演唱者标签行留下(2026-08-23,见 lyricspeaker.go),但只留**冒号后的正文** ——
+	// 跨源比对要的是"唱了什么",标签本身是这一份的格式细节,别的源没有它。
+	// 不这么做的话:《好好说再见》53 行里 40 行「男：/女：」被整行摘掉,剩 13 行去跟
+	// 网易云那份完整的 53 行比 3-gram,相似度垫底、拿不到 150~250 分的共识分,而冠亚军
+	// 分差中位只有 22 分 —— 于是带对唱标注的那一版在选源时被系统性淘汰。
+	speakers := lyricSpeakerLabels(lyrics)
 	var b strings.Builder
-	for _, line := range strings.Split(lyrics, "\n") {
+	for _, line := range splitLyricLines(lyrics) {
 		text := strings.TrimSpace(lrcTimestampRe.ReplaceAllString(line, ""))
-		if text == "" || isCreditLine(text) {
+		if text == "" {
+			continue
+		}
+		if label, rest, ok := lyricSplitLabel(text); ok && speakers[label] {
+			// 独占一行的标记(rest 为空)对正文没有贡献,跳过。
+			if rest != "" {
+				b.WriteString(normLoose(rest))
+			}
+			continue
+		}
+		if isCreditLine(text) {
 			continue
 		}
 		b.WriteString(normLoose(text))

@@ -94,8 +94,12 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject 
     // 播放控制按钮热区、ignoresMouseEvents 被临时收回 false,窗口就开始"本地"收到
     // 事件,这时只有 local 能看到——单独装 global 会在这个切换点彻底看不到"什么时候
     // 移出热区"。播放控制按钮胶囊的真实屏幕矩形由 LyricsOverlayView 通过 GeometryReader
-    // 汇报上来(controlsHotZoneScreen)。
+    // 汇报上来(controlsHotZoneLocal)。
     @Published private(set) var isHoveringForControls: Bool = false
+    /// 指针是否落在**歌词文字**上。只给「指针划过时让开」用 —— 播放控制按钮的显示照旧
+    /// 走 isHoveringForControls(整窗判定):想点按钮时指针常常先落在窗口边缘,那一侧
+    /// 收紧成"必须压在字上"反而不好点。
+    @Published private(set) var isHoveringLyrics: Bool = false
     // 长按拖动是否已经"武装"(用于 View 层画一圈高亮提示"现在可以拖了")。
     @Published private(set) var isDragArmed: Bool = false
     // 见 hasShownDragHintKey 处的注释——只在第一次解锁时短暂为 true,几秒后自动收回。
@@ -110,7 +114,12 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject 
     private var pressStartLocation: NSPoint?
     // 播放控制按钮胶囊的实时屏幕矩形,由 LyricsOverlayView 汇报;nil = 当前没有显示
     // 这排按钮(锁定中,或还没悬停出来)。
-    private var controlsHotZoneScreen: CGRect?
+    // ⚠️ 这三个存的都是**窗口本地坐标**(左下原点),不是屏幕坐标 —— 窗口一移动屏幕坐标
+    // 就过期了,而 SwiftUI 布局没变、PreferenceKey 不会重发,于是按钮和热区当场失效
+    // (2026-08-23 用户报的「移动之后按钮会失效」)。判定时把鼠标点转成窗口本地再比。
+    private var controlsHotZoneLocal: CGRect?
+    /// 歌词文字矩形(窗口本地),「指针划过时让开」的命中判据(见 updateLyricsHotZone)。
+    private var lyricsHotZoneLocal: CGRect?
 
     private let longPressThresholdSecs: TimeInterval = 0.35
     // 按下之后到长按计时器触发之前,鼠标移动超过这个距离就当成"这是想让点击/拖拽
@@ -141,6 +150,9 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject 
             },
             onControlRectsChange: { [weak self] rects in
                 self?.updateControlRects(rects)
+            },
+            onLyricsTextRectChange: { [weak self] rect in
+                self?.updateLyricsHotZone(rect)
             }
         ))
         hosting.frame = NSRect(origin: .zero, size: size)
@@ -430,6 +442,7 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject 
         // 关掉的一刻指针可能正停在窗口上。留着 true 不会让它一直淡着(视图层同时读开关),
         // 但会让下次开启时凭一个陈旧的悬停态直接淡下去 —— 清掉更干净。
         if !enabled, isHoveringForControls { isHoveringForControls = false }
+        if !enabled, isHoveringLyrics { isHoveringLyrics = false }
     }
 
     private func syncMouseMonitors() {
@@ -481,7 +494,7 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject 
     }
 
     /// 胶囊里每个按钮的**屏幕**矩形。空 = 当前没显示控制排。
-    private var controlRectsScreen: [OverlayControlID: CGRect] = [:]
+    private var controlRectsLocal: [OverlayControlID: CGRect] = [:]
 
     /// 执行某个按钮的动作。
     ///
@@ -524,20 +537,15 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject 
     /// 把每个按钮的内容坐标矩形转成屏幕矩形。转换口径跟 updateControlsHotZone 完全一致。
     private func updateControlRects(_ rects: [OverlayControlID: CGRect]) {
         guard let window, !rects.isEmpty else {
-            if !controlRectsScreen.isEmpty { controlRectsScreen = [:] }
+            if !controlRectsLocal.isEmpty { controlRectsLocal = [:] }
             return
         }
         var out: [OverlayControlID: CGRect] = [:]
         for (id, rect) in rects where rect != .zero {
-            let windowLocal = CGRect(
-                x: rect.minX,
-                y: window.frame.height - rect.maxY,
-                width: rect.width,
-                height: rect.height
-            )
-            out[id] = window.convertToScreen(windowLocal)
+            out[id] = OverlayControlHitTest.windowLocalRect(
+                swiftUI: rect, windowHeight: window.frame.height)
         }
-        controlRectsScreen = out
+        controlRectsLocal = out
     }
 
 
@@ -547,18 +555,27 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject 
     // 依赖的"GeometryReader 尺寸==窗口内容尺寸"是同一个已验证过的等价关系)转换成
     // AppKit 的窗口本地坐标(左下角原点、y 向上)再转屏幕坐标,供 handleMouseEvent 直接
     // 用 NSEvent.mouseLocation 做包含判断。
-    private func updateControlsHotZone(_ rect: CGRect) {
+    /// 同 updateControlsHotZone 的坐标换算,只是换算的是歌词文字那块矩形。
+    ///
+    /// 为什么单独一套而不复用窗口 frame:窗口比文字大得多 —— 上下有卡片内边距和播放控制
+    /// 槽位、左右是 WrapLayout 撑满留下的空白。原来「划过让开」用 window.frame.contains,
+    /// 指针在歌词**附近**(上下左右的空白处)就会触发淡出,2026-08-23 用户报的正是这个。
+    private func updateLyricsHotZone(_ rect: CGRect) {
         guard let window, rect != .zero else {
-            controlsHotZoneScreen = nil
+            lyricsHotZoneLocal = nil
             return
         }
-        let windowLocal = CGRect(
-            x: rect.minX,
-            y: window.frame.height - rect.maxY,
-            width: rect.width,
-            height: rect.height
-        )
-        controlsHotZoneScreen = window.convertToScreen(windowLocal)
+        lyricsHotZoneLocal = OverlayControlHitTest.windowLocalRect(
+            swiftUI: rect, windowHeight: window.frame.height)
+    }
+
+    private func updateControlsHotZone(_ rect: CGRect) {
+        guard let window, rect != .zero else {
+            controlsHotZoneLocal = nil
+            return
+        }
+        controlsHotZoneLocal = OverlayControlHitTest.windowLocalRect(
+            swiftUI: rect, windowHeight: window.frame.height)
     }
 
 
@@ -583,22 +600,33 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject 
             if !isDragArmed {
                 cancelPendingPress()
                 if isHoveringForControls { isHoveringForControls = false }
+                if isHoveringLyrics { isHoveringLyrics = false }
             }
             return
         }
         let loc = NSEvent.mouseLocation
         let frame = window.frame
+        // 鼠标点转成窗口本地坐标 —— 三个热区都以本地坐标存着(见它们的声明处:存屏幕坐标
+        // 会在窗口移动后过期)。窗口本地坐标跟 AppKit 一致:左下原点、y 向上。
+        let localPoint = window.convertPoint(fromScreen: loc)
         // 热区矩形现在是**无条件**上报的(见 LyricsOverlayView 里那段注释:让它兼表可见性会
         // 被 preference 归约冲掉),所以"按钮到底显示着没有"这一层判断放在这里。槽位是常驻的,
         // 不加这层的话没显示时那块区域也会挡住点击穿透 —— 变成"看不见却挡手"。
         let controlsShown = isHoveringForControls && !AppSettings.shared.lockPosition
-        let insideHotZone = controlsShown && (controlsHotZoneScreen?.contains(loc) ?? false)
+        let insideHotZone = controlsShown && (controlsHotZoneLocal?.contains(localPoint) ?? false)
 
         switch type {
         case .mouseMoved:
             let insideWindow = frame.contains(loc)
             if isHoveringForControls != insideWindow {
                 isHoveringForControls = insideWindow
+            }
+            // 歌词命中是**独立**的一套:窗口内 + 压在文字矩形上才算。热区还没上报上来
+            // (刚显示、或者这一轮没有任何文字)时退回窗口判定,别让功能整个失灵。
+            let insideLyrics = insideWindow
+                && (lyricsHotZoneLocal.map { $0.contains(localPoint) } ?? true)
+            if isHoveringLyrics != insideLyrics {
+                isHoveringLyrics = insideLyrics
             }
             // 这里**不再**碰 ignoresMouseEvents。它恒为 true,唯一例外是长按拖动武装期间
             // (armDragIfStillPressed 为 performDrag 临时收回 false)。胶囊上的点击改由下面
@@ -609,13 +637,24 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject 
         case .leftMouseDown:
             // 胶囊上的点击由我们自己分发:窗口常年点击穿透,SwiftUI 收不到任何事件。
             // 必须排在下面那条 guard 之前 —— 那条会因为 insideHotZone 直接 return。
-            if controlsShown, let id = OverlayControlHitTest.control(at: loc, in: controlRectsScreen) {
+            if controlsShown, let id = OverlayControlHitTest.control(at: localPoint, in: controlRectsLocal) {
                 performControlAction(id)
                 return
             }
             guard frame.contains(loc), !insideHotZone else { return }
             pressStartLocation = loc
             longPressTimer?.invalidate()
+            // 「拖动前先长按」关掉时:压在**歌词文字**上就立刻武装,压在四周空白上什么都不做
+            // (那次点击照旧穿透到桌面)。长按这道门原本是必须的 —— 窗口常年点击穿透,
+            // "按下就拖"会让整个窗口区域都吃掉点击;精准歌词热区(lyricsHotZoneLocal)落地后
+            // 有了更准的判据,不必再用时长去区分"想拖窗口"和"想点桌面"。
+            // 热区还没上报上来时(刚显示/这一轮没有文字)退回长按,别让"按下就拖"覆盖整窗。
+            if !AppSettings.shared.overlayDragNeedsLongPress,
+               let zone = lyricsHotZoneLocal, zone.contains(localPoint)
+            {
+                armDragIfStillPressed()
+                return
+            }
             let timer = Timer(timeInterval: longPressThresholdSecs, repeats: false) { [weak self] _ in
                 MainActor.assumeIsolated { self?.armDragIfStillPressed() }
             }

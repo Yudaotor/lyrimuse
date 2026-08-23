@@ -1180,24 +1180,82 @@ do {
 do {
     let D = LyricDuet.self
 
-    // 剥前缀:全角/半角冒号都收
-    expectEqual(D.splitMarker("男：周末守着烤箱").marker, "男", "对唱: 全角冒号识别")
-    expectEqual(D.splitMarker("男：周末守着烤箱").text, "周末守着烤箱", "对唱: 前缀从正文里剥掉")
-    expectEqual(D.splitMarker("女: 偏爱年轻女伴").text, "偏爱年轻女伴", "对唱: 半角冒号+空格")
-    expectEqual(D.splitMarker("合：何时想戒掉流浪").marker, "合", "对唱: 合唱标记")
-    // 长标记优先,否则 "男声" 会被 "男" 先吃掉、剩一个孤零零的 "声"
-    expectEqual(D.splitMarker("男声：测试").text, "测试", "对唱: 长标记优先(男声 不是 男+声)")
-    // 没标记的行原样返回
-    expectEqual(D.splitMarker("情人节也落单").marker, nil, "对唱: 无标记行不动")
-    expectEqual(D.splitMarker("情人节也落单").text, "情人节也落单", "对唱: 无标记行正文不变")
-    // 署名行不能被误判成演唱者(词：/曲： 这类并非全都被署名过滤器滤掉)
-    expectEqual(D.splitMarker("词：葛大为").marker, nil, "对唱: 署名行不算演唱者标记")
-    expectEqual(D.splitMarker("曲：陶喆/蔡健雅").marker, nil, "对唱: 作曲署名不算演唱者标记")
-    // 整行只有标记时不剥 —— 剥成空行会让这一行在界面上凭空消失
-    expectEqual(D.splitMarker("男：").marker, nil, "对唱: 整行只有标记时不剥")
-    // 逐字行的第一个词允许剥成空(调用方据此丢掉那个词)
-    expectEqual(D.splitMarkerAllowingEmpty("男：").marker, "男", "对唱: 逐字首词允许剥成空")
-    expectEqual(D.splitMarkerAllowingEmpty("男：周").text, "周", "对唱: 逐字首词剥完保留第一个字")
+    // ---- splitLabel: 只认形状,不判断这个标签是不是演唱者 ----
+    expectEqual(D.splitLabel("男：周末守着烤箱")?.label, "男", "对唱: 全角冒号识别")
+    expectEqual(D.splitLabel("男：周末守着烤箱")?.rest, "周末守着烤箱", "对唱: 前缀从正文里剥掉")
+    expectEqual(D.splitLabel("女: 偏爱年轻女伴")?.rest, "偏爱年轻女伴", "对唱: 半角冒号+空格")
+    expectEqual(D.splitLabel("合：何时想戒掉流浪")?.label, "合", "对唱: 合唱标记")
+    expectEqual(D.splitLabel("男声：测试")?.rest, "测试", "对唱: 标签整段取到冒号(男声 不是 男+声)")
+    expectEqual(D.splitLabel("情人节也落单") == nil, true, "对唱: 无冒号的行没有标签")
+    // 标签里不许有空白/标点 —— 这是"标签"跟"带冒号的歌词句子"唯一的形状差别
+    expectEqual(D.splitLabel("Baby, I said: hello") == nil, true, "对唱: 含标点的长句不是标签")
+    expectEqual(D.splitLabel("Chris Tucker: Oh man") == nil, true, "对唱: 含空格的全名不当标签(已知取舍)")
+    expectEqual(D.splitLabel("一二三四五六七八九十一：x") == nil, true, "对唱: 标签超过 10 字不认")
+    // prefixCount 以**原串**为准(逐字路径按它跨词剥),含冒号和冒号后的空格
+    expectEqual(D.splitLabel("男：周末")?.prefixCount, 2, "对唱: prefixCount 含冒号")
+    expectEqual(D.splitLabel("女: 偏爱")?.prefixCount, 3, "对唱: prefixCount 含冒号后空格")
+
+    // ---- speakers(in:): 整份判定,已知声部词直通、人名要过闸 ----
+    // 已知声部词单独出现就算数
+    expectEqual(D.speakers(in: ["男：一", "女：二"]), Set(["男", "女"]), "对唱: 男/女 直接算演唱者")
+    // 署名行不算 —— 「词/曲」既不是已知声部词,也过不了下面那道闸
+    expectEqual(D.speakers(in: ["词：葛大为", "曲：陶喆/蔡健雅", "真歌词"]).isEmpty, true,
+                "对唱: 一次性的署名标签不算演唱者")
+    // 人名标记:≥2 个不同 + 合计 ≥3 处 + 至少一个重复,三条都满足才算
+    do {
+        // 《圣诞星》的真实形态:周杰伦 x2 + 杨瑞代 x1
+        let s = D.speakers(in: ["周杰伦：", "一", "杨瑞代：", "二", "周杰伦：", "三"])
+        expectEqual(s, Set(["周杰伦", "杨瑞代"]), "对唱: 人名标记过闸(2 个/3 处/有重复)")
+    }
+    do {
+        // 《好走不见》的真实形态:Rap x1 + Rap2 x1 —— 段落标记,只有 2 处,不该算
+        let s = D.speakers(in: ["Rap：", "一", "Rap2：", "二"])
+        expectEqual(s.isEmpty, true, "对唱: 只有 2 处的一次性标记不算")
+    }
+    do {
+        // 《红尘客栈》的真实形态:5 个标签各 1 次 —— 职员表,每个角色只出现一次
+        let s = D.speakers(in: ["执行制作：甲", "录音师：乙", "混音师：丙", "录音室：丁", "混音室：戊", "歌词"])
+        expectEqual(s.isEmpty, true, "对唱: 都不重复的多标签是职员表,不是对唱")
+    }
+    do {
+        // 《Wonderful Tonight》译文的真实形态:「我说」x3 +「然后她问我」x2 —— 计数够,
+        // 但它们是叙事句不是名字,靠 nonNameCharacters 挡住
+        let s = D.speakers(in: ["我说：是的", "然后她问我：好吗", "我说：好", "然后她问我：真的", "我说：真的"])
+        expectEqual(s.isEmpty, true, "对唱: 含代词/动词的叙事标签不是演唱者")
+    }
+    do {
+        // 漏网的乐器署名:计数可能凑够,但词根挡住
+        let s = D.speakers(in: ["小号：涂", "小打击乐器组：Joni", "小号：涂"])
+        expectEqual(s.isEmpty, true, "对唱: 乐器/职能词根不是演唱者")
+    }
+    do {
+        // 串烧 Live 的真实形态(《大笨钟+暗号+彩虹+龙卷风 (Live)》):每首各带一份署名,
+        // 于是「词」x4「曲」x4 —— 计数三条全过,只能靠 exactCreditLabels 在形状这层拦。
+        // 这条是回归护栏:2026-08-23 第一版漏了单字署名词,全库扫描当场抓到两首串烧被误判。
+        let s = D.speakers(in: [
+            "词：方文山", "曲：周杰伦", "歌词一",
+            "词：方文山", "曲：周杰伦", "歌词二",
+            "词：黄俊郎", "曲：周杰伦", "歌词三",
+            "词：方文山", "曲：周杰伦", "歌词四",
+        ])
+        expectEqual(s.isEmpty, true, "对唱: 串烧 Live 里重复出现的单字署名词不是演唱者")
+    }
+    do {
+        // 反例:单字署名词只能**等值**排除 ——「曲」是姓,「曲婉婷」得照样认出来
+        let s = D.speakers(in: ["曲婉婷：一", "李健：二", "曲婉婷：三"])
+        expectEqual(s, Set(["曲婉婷", "李健"]), "对唱: 姓「曲」的人名不被单字署名词误杀")
+    }
+    do {
+        // 整份闸是全份一起过的:真演唱者把门槛顶开之后,同一份里的署名残余不能跟着被收编。
+        // 收编 = 拿到署名过滤豁免 = 那行既不被删、又被剥掉前缀,变成一行假歌词「某某」。
+        // 2026-08-23 审查发现的活回归,回归护栏。
+        let s = D.speakers(in: [
+            "周杰伦：", "一", "阿信：", "二", "周杰伦：", "三",
+            "和声：陈某某", "监制：李某某", "母带处理：王某某",
+        ])
+        expectEqual(s, Set(["周杰伦", "阿信"]),
+                    "对唱: 真演唱者顶开门槛后,同份里的署名残余不被连带收编")
+    }
 
     // 标记向后延续 + 按出现顺序分左右(不写死性别)
     do {
@@ -1219,17 +1277,172 @@ do {
         expectEqual(sides[0], .leading, "对唱: 女声先开口时她靠左")
         expectEqual(sides[1], .trailing, "对唱: 后出现的男声靠右")
     }
+    // 同义归并:同一位歌手的两种写法必须始终同侧(amll-ttml-db 提交规范的硬要求)
+    do {
+        expectEqual(D.identity(of: "男声"), "男", "对唱身份: 男声 归并成 男")
+        expectEqual(D.identity(of: "男合"), "男", "对唱身份: 男合 归并成 男")
+        expectEqual(D.identity(of: "Female"), "女", "对唱身份: Female 归并成 女")
+        expectEqual(D.identity(of: "周杰伦"), "周杰伦", "对唱身份: 人名原样")
+        let sides = D.sides(for: ["男", "男声", "女"])
+        expectEqual(sides[0], .leading, "对唱身份: 男 靠左")
+        expectEqual(sides[1], .leading, "对唱身份: 男声 跟 男 同一个人,还是靠左")
+        expectEqual(sides[2], .trailing, "对唱身份: 女 才是第二位,靠右")
+    }
+    // 补齐 speakerLabels 缺的那 12 个 —— 它们此前既不被删也不被认,原样显示成脏行
+    do {
+        let s = D.speakers(in: ["旁白：从前有座山", "男：一", "女：二", "口白：完"])
+        expectEqual(s.contains("旁白"), true, "对唱: 旁白 是认得的声部词")
+        expectEqual(s.contains("口白"), true, "对唱: 口白 是认得的声部词")
+        let sides = D.sides(for: ["旁白", "男", "女"])
+        expectEqual(sides[0], .center, "对唱: 口白类居中,不占左右席位")
+        expectEqual(sides[1], .leading, "对唱: 口白之后 男 仍是第一位")
+        expectEqual(sides[2], .trailing, "对唱: 女 是第二位")
+    }
+    // 身份数下限:少于两个能分左右的身份,整首不判左右(丢行/剥前缀照旧,那是另一件事)
+    do {
+        expectEqual(D.sides(for: ["合", nil, "合"]).compactMap { $0 }.isEmpty, true,
+                    "对唱: 只有合唱标记时没有左右可言")
+        expectEqual(D.sides(for: ["男", nil, "男"]).compactMap { $0 }.isEmpty, true,
+                    "对唱: 只有一位歌手时不判左右(否则单人歌在悬浮窗上会从居中变靠左)")
+        expectEqual(D.sides(for: ["男", "合", "男"]).compactMap { $0 }.isEmpty, true,
+                    "对唱: 一位歌手 + 合唱仍然不够两个身份")
+        expectEqual(D.sides(for: ["v1", nil, "v2"])[2], .trailing,
+                    "对唱: TTML 的匿名声部 v1/v2 是认得的身份")
+        expectEqual(D.speakers(in: ["v1：一", "v2：二"]), Set(["v1", "v2"]),
+                    "对唱: 匿名声部直通整份闸(agent 是上游权威标注)")
+    }
+    // 剥离与定边是两件事:身份不够也照样剥前缀、丢独占行
+    do {
+        let plan = D.plan(lineTexts: ["合：", "何时想戒掉流浪", "普通一行"])
+        expectEqual(plan.dropped, [true, false, false], "对唱: 身份不够也照样丢掉独占标记行")
+        expectEqual(plan.sides.compactMap { $0 }.isEmpty, true, "对唱: 但不判左右")
+    }
+    // group 不参与左右交替(AMLL 同款):「男-合-女」不能因为中间的合唱把侧算反
+    do {
+        let sides = D.sides(for: ["男", "合", "女", "合", "男"])
+        expectEqual(sides[0], .leading, "对唱: 男 靠左")
+        expectEqual(sides[1], .center, "对唱: 合 居中")
+        expectEqual(sides[2], .trailing, "对唱: 合唱不打乱交替,女 仍是第二位靠右")
+        expectEqual(sides[4], .leading, "对唱: 回到男 仍靠左")
+    }
     // 整首没有标记的歌:全是 nil。这一条是**回归护栏** —— 混成 .leading 的话,悬浮窗上
     // 每一首普通歌都会从居中变成靠左。
     do {
         let sides = D.sides(for: [nil, nil, nil])
         expectEqual(sides.compactMap { $0 }.isEmpty, true, "对唱: 没有标记的歌全程无对唱信息")
     }
-    // plan:剥正文 + 定边一次算完
+    // plan:剥正文 + 定边 + 标出该丢的行,一次算完
     do {
         let plan = D.plan(lineTexts: ["男：周末守着烤箱", "情人节也落单", "女：偏爱年轻女伴"])
         expectEqual(plan.texts, ["周末守着烤箱", "情人节也落单", "偏爱年轻女伴"], "对唱: plan 剥掉全部前缀")
         expectEqual(plan.sides, [.leading, .leading, .trailing], "对唱: plan 定边")
+        expectEqual(plan.dropped, [false, false, false], "对唱: 行内前缀不丢行")
+    }
+    // 独占一行的标记(《说好不哭》的真实形态):剥完为空 → 整行丢掉,但**归属照样延续**
+    do {
+        let plan = D.plan(lineTexts: ["周杰伦：", "没有了联络", "阿信：", "电话开始躲", "周杰伦：", "你什么都没有"])
+        expectEqual(plan.dropped, [true, false, true, false, true, false], "对唱: 独占标记行整行丢掉")
+        expectEqual(plan.sides, [.leading, .leading, .trailing, .trailing, .leading, .leading],
+                    "对唱: 独占标记的归属延续到下一个标记")
+        expectEqual(plan.texts[1], "没有了联络", "对唱: 独占标记的下一行正文不受影响")
+    }
+
+    // ---- planWords: 逐字路径。标记在真实 YRC 里会被拆成好几个词 ----
+    func w(_ start: Int, _ dur: Int, _ t: String) -> LyricWord {
+        LyricWord(startMs: start, durationMs: dur, text: t)
+    }
+    do {
+        // 《好好说再见》的真实形态:`(881,30)男` `(911,40)：` `(951,..)我` ——
+        // 标记独立成词、冒号又是另一个词。旧实现只看第一个词,"男" 匹配不上 "男："。
+        let lines = [
+            LyricLineWords(timeMs: 881, words: [w(881, 30, "男"), w(911, 40, "："), w(951, 200, "我"), w(1151, 200, "爱")]),
+            LyricLineWords(timeMs: 31038, words: [w(31038, 170, "女"), w(31208, 170, "："), w(31378, 200, "时"), w(31578, 200, "间")]),
+        ]
+        let plan = D.planWords(lines)
+        expectEqual(plan.lines[0].words.map(\.text), ["我", "爱"], "对唱逐字: 标记独立成词也能剥掉")
+        expectEqual(plan.lines[0].words[0].startMs, 951, "对唱逐字: 剥完首词的时间戳是真正第一个字的")
+        expectEqual(plan.sides, [.leading, .trailing], "对唱逐字: 定边")
+        expectEqual(plan.dropped, [false, false], "对唱逐字: 有正文的行不丢")
+    }
+    do {
+        // 粘连形态:`男：周` 是一个词,扛着「周」的发声时间 —— 只能改文本,不能删词
+        let lines = [
+            LyricLineWords(timeMs: 21155, words: [w(21155, 180, "男：周"), w(21335, 320, "末")]),
+            LyricLineWords(timeMs: 40310, words: [w(40310, 180, "女：偏"), w(40490, 320, "爱")]),
+        ]
+        let plan = D.planWords(lines)
+        expectEqual(plan.lines[0].words.map(\.text), ["周", "末"], "对唱逐字: 粘连形态只改文本不删词")
+        expectEqual(plan.lines[0].words[0].startMs, 21155, "对唱逐字: 粘连词保留原时间戳")
+        expectEqual(plan.lines[0].words[0].durationMs, 180, "对唱逐字: 粘连词保留原时长")
+    }
+    do {
+        // 人名逐字拆开 + 独占一行:`周` `杰` `伦` `：` 整行剥空 → 丢掉
+        let lines = [
+            LyricLineWords(timeMs: 24838, words: [w(24838, 154, "周"), w(24992, 204, "杰"), w(25196, 205, "伦"), w(25401, 255, "：")]),
+            LyricLineWords(timeMs: 26499, words: [w(26499, 203, "没"), w(26702, 255, "有")]),
+            LyricLineWords(timeMs: 113700, words: [w(113700, 200, "阿"), w(113900, 200, "信"), w(114100, 200, "：")]),
+            LyricLineWords(timeMs: 114800, words: [w(114800, 200, "电"), w(115000, 200, "话")]),
+            LyricLineWords(timeMs: 172200, words: [w(172200, 154, "周"), w(172354, 204, "杰"), w(172558, 205, "伦"), w(172763, 255, "：")]),
+            LyricLineWords(timeMs: 173500, words: [w(173500, 200, "你"), w(173700, 200, "什")]),
+        ]
+        let plan = D.planWords(lines)
+        expectEqual(plan.dropped, [true, false, true, false, true, false], "对唱逐字: 独占标记行整行丢掉")
+        expectEqual(plan.sides, [.leading, .leading, .trailing, .trailing, .leading, .leading],
+                    "对唱逐字: 人名标记的归属延续")
+        expectEqual(plan.lines[1].words.map(\.text), ["没", "有"], "对唱逐字: 正文行不受影响")
+    }
+    do {
+        // 回归护栏:普通歌(没有任何标记)逐字路径一个词都不能少
+        let lines = [
+            LyricLineWords(timeMs: 1000, words: [w(1000, 200, "情"), w(1200, 200, "人")]),
+            LyricLineWords(timeMs: 2000, words: [w(2000, 200, "节"), w(2200, 200, "也")]),
+        ]
+        let plan = D.planWords(lines)
+        expectEqual(plan.lines.map { $0.words.map(\.text) }, [["情", "人"], ["节", "也"]], "对唱逐字: 普通歌原样不动")
+        expectEqual(plan.dropped, [false, false], "对唱逐字: 普通歌一行不丢")
+        expectEqual(plan.sides.compactMap { $0 }.isEmpty, true, "对唱逐字: 普通歌没有对唱信息")
+    }
+}
+
+// ---- LyricDuetLayout: 对唱行的两侧内缩(2026-08-23) ----
+do {
+    let L = LyricDuetLayout.self
+    // 没有对唱信息的行一律 0 —— 普通歌的排版必须逐像素不变,这是回归护栏
+    do {
+        let i = L.insets(for: nil, availableWidth: 400, fontSize: 30)
+        expectEqual(i.leading, 0, "对唱内缩: 无声部信息不留白(leading)")
+        expectEqual(i.trailing, 0, "对唱内缩: 无声部信息不留白(trailing)")
+    }
+    // 左声部只在右边留白,右声部反过来
+    do {
+        let i = L.insets(for: .leading, availableWidth: 400, fontSize: 200)
+        expectEqual(i.leading, 0, "对唱内缩: 左声部左边不留")
+        expectEqual(i.trailing, 60, "对唱内缩: 左声部右边留 15%")
+    }
+    do {
+        let i = L.insets(for: .trailing, availableWidth: 400, fontSize: 200)
+        expectEqual(i.leading, 60, "对唱内缩: 右声部左边留 15%")
+        expectEqual(i.trailing, 0, "对唱内缩: 右声部右边不留")
+    }
+    // 合唱两边都留 —— 它既不属于左也不属于右
+    do {
+        let i = L.insets(for: .center, availableWidth: 400, fontSize: 200)
+        expectEqual(i.leading, 60, "对唱内缩: 合唱左边也留")
+        expectEqual(i.trailing, 60, "对唱内缩: 合唱右边也留")
+    }
+    // 字号封顶接管:窗口很宽时 15% 会变成一大片空白,4 个字宽就够读出偏向了
+    do {
+        let i = L.insets(for: .leading, availableWidth: 4000, fontSize: 30)
+        expectEqual(i.trailing, 120, "对唱内缩: 宽窗口下由 4 字宽封顶接管(不是 600)")
+    }
+    // 退化输入不产生负值/NaN
+    do {
+        expectEqual(L.insets(for: .leading, availableWidth: 0, fontSize: 30).trailing, 0,
+                    "对唱内缩: 宽度为 0 时不留白")
+        expectEqual(L.insets(for: .leading, availableWidth: -100, fontSize: 30).trailing, 0,
+                    "对唱内缩: 负宽度不产生负内缩")
+        expectEqual(L.insets(for: .leading, availableWidth: 400, fontSize: 0).trailing, 0,
+                    "对唱内缩: 字号为 0 时封顶为 0")
     }
 }
 
@@ -2963,6 +3176,32 @@ do {
     expectEqual(intensityDesc, true, "KaraokeFill: 强度沿位置单调不增")
 }
 
+// ---- OverlayControlHitTest.windowLocalRect:SwiftUI 矩形 → AppKit 窗口本地 ----
+//
+// 2026-08-23 抽出来的:这套换算原先在控制器里抄了三遍(按钮矩形/控制热区/歌词热区),
+// 而且三处都把结果**直接转成屏幕坐标存起来** —— 窗口一移动,SwiftUI 布局没变、
+// PreferenceKey 不重发,存的屏幕坐标就还停在旧位置,按钮和热区当场失效
+// (用户报的「移动之后按钮会失效」)。现在只存窗口本地坐标,判定时把鼠标点转进来。
+do {
+    let H = OverlayControlHitTest.self
+    // y 翻转:SwiftUI 的 y 从顶部往下,AppKit 从底部往上
+    expectEqual(H.windowLocalRect(swiftUI: CGRect(x: 10, y: 0, width: 30, height: 20), windowHeight: 100),
+                CGRect(x: 10, y: 80, width: 30, height: 20), "窗口本地: 贴顶的矩形翻到贴顶(y=80)")
+    expectEqual(H.windowLocalRect(swiftUI: CGRect(x: 10, y: 80, width: 30, height: 20), windowHeight: 100),
+                CGRect(x: 10, y: 0, width: 30, height: 20), "窗口本地: 贴底的矩形翻到 y=0")
+    // x 和尺寸不动
+    expectEqual(H.windowLocalRect(swiftUI: CGRect(x: 7, y: 30, width: 13, height: 5), windowHeight: 60).minX,
+                7, "窗口本地: x 不变")
+    expectEqual(H.windowLocalRect(swiftUI: CGRect(x: 7, y: 30, width: 13, height: 5), windowHeight: 60).width,
+                13, "窗口本地: 宽不变")
+    // 翻两次回到原处 —— 换算是自逆的
+    do {
+        let a = CGRect(x: 4, y: 12, width: 20, height: 8)
+        let once = H.windowLocalRect(swiftUI: a, windowHeight: 50)
+        expectEqual(H.windowLocalRect(swiftUI: once, windowHeight: 50), a, "窗口本地: 翻两次回到原处")
+    }
+}
+
 // ---- WrapLayoutMath ----
 //
 // 逐字歌词那个自动换行容器的几何。以前长在 LyricsOverlayView 里，改一次就只能盯屏幕看。
@@ -3056,6 +3295,48 @@ do {
     expectEqual(orderOK, true, "WrapLayout: 顺序必须保持")
     expectEqual(noLeftOverflow, true, "WrapLayout: 不会跑到 bounds 左边界外")
     expectEqual(noOverlap, true, "WrapLayout: 任意两个元素都不重叠")
+
+    // ---- contentBounds:文字真正占据的矩形(给「指针划过歌词才让开」当命中判据) ----
+    //
+    // 跟 totalSize 是两回事:那个恒返回 maxWidth(撑满是刻意的,对唱左右对齐要靠它),
+    // 这个返回内容自己的包围盒。原来 hover 判据是整个窗口矩形,指针在歌词**附近**的
+    // 空白处就触发淡出(2026-08-23 用户报的)。
+    do {
+        let bounds = CGRect(x: 0, y: 0, width: 200, height: 40)
+        // 单行、宽 60:三种对齐分别贴左 / 居中 / 贴右
+        let one = WrapLayoutMath.rows(sizes: [sz(60, 20)], maxWidth: 200, horizontalSpacing: 0)
+        expectEqual(
+            WrapLayoutMath.contentBounds(rows: one, bounds: bounds, verticalSpacing: 2, rowAlignment: .leading),
+            CGRect(x: 0, y: 0, width: 60, height: 20), "内容矩形: 靠左时贴左缘")
+        expectEqual(
+            WrapLayoutMath.contentBounds(rows: one, bounds: bounds, verticalSpacing: 2, rowAlignment: .center),
+            CGRect(x: 70, y: 0, width: 60, height: 20), "内容矩形: 居中时两边等分")
+        expectEqual(
+            WrapLayoutMath.contentBounds(rows: one, bounds: bounds, verticalSpacing: 2, rowAlignment: .trailing),
+            CGRect(x: 140, y: 0, width: 60, height: 20), "内容矩形: 靠右时贴右缘")
+        // 多行:宽度取最宽那行,高度含行距
+        let two = WrapLayoutMath.rows(sizes: [sz(120, 20), sz(120, 20)], maxWidth: 150, horizontalSpacing: 0)
+        expectEqual(two.count, 2, "内容矩形: 前置条件——两个 120 宽在 150 里装不下,折成两行")
+        expectEqual(
+            WrapLayoutMath.contentBounds(rows: two, bounds: CGRect(x: 0, y: 0, width: 150, height: 50),
+                                         verticalSpacing: 2, rowAlignment: .leading),
+            CGRect(x: 0, y: 0, width: 120, height: 42), "内容矩形: 多行取最宽行 + 行距计入高度")
+        // bounds 原点非零时跟着平移
+        expectEqual(
+            WrapLayoutMath.contentBounds(rows: one, bounds: CGRect(x: 30, y: 7, width: 200, height: 40),
+                                         verticalSpacing: 2, rowAlignment: .leading),
+            CGRect(x: 30, y: 7, width: 60, height: 20), "内容矩形: 跟随 bounds 原点平移")
+        // 退化输入不产生垃圾矩形
+        expectEqual(
+            WrapLayoutMath.contentBounds(rows: [], bounds: bounds, verticalSpacing: 2, rowAlignment: .center),
+            .zero, "内容矩形: 没有行时返回 zero")
+        // 内容比容器宽时钳到容器宽(不往外溢出,否则热区会盖到窗口之外)
+        let wide = WrapLayoutMath.rows(sizes: [sz(300, 20)], maxWidth: 200, horizontalSpacing: 0)
+        expectEqual(
+            WrapLayoutMath.contentBounds(rows: wide, bounds: bounds, verticalSpacing: 2, rowAlignment: .leading).width,
+            200, "内容矩形: 单个超宽子视图不让矩形溢出容器")
+    }
+
 }
 
 // ---- OverlayPlacement ----
@@ -4857,11 +5138,29 @@ do {
         lyrics: "", lyricsTr: "[02:01.93]人群的咆哮充满了气氛\n[02:05.85]提醒我，游戏不仅仅是规则",
         lyricsRoma: "", lyricsYRC: tagYRC, preferWordLevel: true)
     let tagLines = engineTag.allLines(idPrefix: "t")
-    expectEqual(tagLines[1].line.plainText, "合：", "说话人标签: YRC 逐字拼出「合：」独立成行")
-    expectEqual(tagLines[1].line.translation, nil,
-                "说话人标签: 空标签行不该抢下一句的译文(旧 bug 会贴出「提醒我，游戏不仅仅是规则」)")
-    expectEqual(tagLines[2].line.translation, "提醒我，游戏不仅仅是规则",
-                "说话人标签: 真歌词行(时间戳几乎重合)照常拿到属于自己的译文")
+    // 2026-08-23 晚些时候改:这一行现在**根本不进歌词流**。
+    //
+    // 上面那段注释描述的是同一个 bug 的下游症状(标签行抢走了近邻译文),当时的修法是
+    // isBareSpeakerTag —— 让它别抢,但那一行照样显示。真正的问题是它压根不是一句歌词:
+    // 它带着自己的时间戳,到点就在屏幕上顶掉真歌词(全库实测 157 处,《等你下课》里
+    // 一行「Gary」挂 23.3 秒)。现在 LyricDuet.planWords 认出"剥完为空"直接整行丢掉,
+    // 抢译文的问题跟着一起没了。
+    //
+    // isBareSpeakerTag 保留不动,当第二道防线:LyricDuet 的整份判据认不出的标签
+    // (比如整首只出现一次的人名),那一行仍会留在流里,那时还得靠它别去抢译文。
+    expectEqual(tagLines.count, 2, "说话人标签: 「合：」独立成行不是歌词,整行丢掉")
+    expectEqual(tagLines[0].line.plainText, "Crowds roaring fills the atmosphere ",
+                "说话人标签: 标签前的真歌词不受影响")
+    expectEqual(tagLines[1].line.plainText, "Reminds me that games are more than rules",
+                "说话人标签: 标签后的真歌词补上原来标签行的位置")
+    expectEqual(tagLines[1].line.translation, "提醒我，游戏不仅仅是规则",
+                "说话人标签: 真歌词行照常拿到属于自己的译文")
+    // side 是 nil 而不是 .center —— 这三行里只有「合」一个标记,认不出第二个身份,
+    // 就没有"左右"可言(见 LyricDuet.hasEnoughIdentities)。丢行和定边是两件事:
+    // 标记行照样丢掉(上面 count == 2),但整首退回"没有对唱信息"、各视图用自己的兜底。
+    // 不这么做的话,只有一个合唱标记的歌会全程居中 —— 悬浮窗兜底本来就是居中(白做),
+    // 歌词窗口却会从左对齐凭空变成居中(动了排版)。
+    expectEqual(tagLines[1].line.side, nil, "说话人标签: 只认出一个身份时不判左右")
 
     // 反例:标签后面跟着真内容的行(「合：Hey hey ho ho」)不受影响,该有译文照样有——
     // isBareSpeakerTag 只认"冒号后完全没内容"这一种形状。
@@ -5471,6 +5770,15 @@ do {
     expectEqual(S.pickBest([item("A", "B")], title: "轨迹", artist: "周杰伦")?.trackName, "A",
                 "pickBest: 再退第一条")
     expectEqual(S.pickBest([], title: "x", artist: "y") == nil, true, "pickBest: 空结果为 nil")
+    // 「你的常听·歌手」跳转 title 传空串,只有"只歌手"分支在起作用——2026-08-23 用户
+    // 实测点"Prince"跳到了"Prince & The Revolution",根因是旧版对艺人名也用互相包含
+    // 的松匹配,单人艺人名恰好是合作艺人名的前缀。精确匹配必须优先于松匹配命中。
+    let princeItems = [item("Purple Rain", "Prince & The Revolution"), item("Kiss", "Prince")]
+    expectEqual(S.pickBest(princeItems, title: "", artist: "Prince")?.artistName, "Prince",
+                "pickBest: 艺人精确匹配优先于松匹配(Prince 不应被 Prince & The Revolution 抢先)")
+    let noExactMatch = [item("Purple Rain", "Prince & The Revolution")]
+    expectEqual(S.pickBest(noExactMatch, title: "", artist: "Prince")?.artistName, "Prince & The Revolution",
+                "pickBest: 精确匹配落空时仍退回松匹配")
     // ③ scheme 改写:只认 music.apple.com,其余拒绝(别把任意 https 泛化成 music://)
     expectEqual(S.musicSchemeURL("https://music.apple.com/cn/album/536108118")?.absoluteString,
                 "music://music.apple.com/cn/album/536108118", "musicSchemeURL 改写")

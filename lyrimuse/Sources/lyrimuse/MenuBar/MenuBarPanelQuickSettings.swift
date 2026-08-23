@@ -276,7 +276,7 @@ struct PanelQuickSettings: View {
                 }
             ), range: 420...1000, step: 10)
             toggleRow(L10n.t("锁定位置"),
-                      help: L10n.t("解锁后鼠标点击会穿到桌面上；长按住悬浮歌词不放才能拖动它"),
+                      help: L10n.t("解锁后鼠标点击会穿到桌面上；拖动方式见设置里的「拖动前先长按」"),
                       isOn: Binding(
                         get: { settings.lockPosition },
                         set: { newValue in

@@ -230,8 +230,8 @@ func runHealthcheckCLI(args []string) {
 // enabledLyricSourceNames 返回当前设置里启用的歌词源,顺序固定,便于比对输出。
 func enabledLyricSourceNames() []string {
 	var out []string
-	for _, name := range []string{"netease", "qq", "kugou", "lrclib", "musixmatch"} {
-		if features.LyricsSources == nil || features.LyricsSources[name] {
+	for _, name := range lyricSourceNames {
+		if lyricSourceEnabled(name) {
 			out = append(out, name)
 		}
 	}

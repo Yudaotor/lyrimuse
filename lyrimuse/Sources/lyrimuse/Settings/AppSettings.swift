@@ -76,6 +76,7 @@ final class AppSettings: ObservableObject {
         static let hideDuringScreenCapture = "np:hideDuringScreenCapture"
         static let hideWhenNotPlaying = "np:hideWhenNotPlaying"
         static let overlayFadeOnHover = "np:overlayFadeOnHover"
+        static let overlayDragNeedsLongPress = "np:overlayDragNeedsLongPress"
         static let debugHUDEnabled = "np:debugHUD"
         // 跟 L10n.swift 里的 languageOverrideKey 必须是同一个字符串——那边只读、这里
         // 只写(负责持久化+驱动"通用"tab 的语言 Picker),两处各自独立实现,不要互相
@@ -304,6 +305,18 @@ final class AppSettings: ObservableObject {
     @Published var overlayFadeOnHover: Bool {
         didSet { defaults.set(overlayFadeOnHover, forKey: Keys.overlayFadeOnHover) }
     }
+    /// 拖动悬浮歌词前要不要先长按 0.35 秒。
+    ///
+    /// 长按这道门原本是**必须**的:窗口常年点击穿透,而"按下就拖"会让整个窗口区域都吃掉
+    /// 点击、点不到下面的东西。2026-08-23 精准歌词热区落地后这个前提变了 —— 关掉它时
+    /// 只有**压在歌词文字上**才立刻武装拖动,四周空白照旧穿透,所以不再需要用时长去区分
+    /// "想拖窗口"和"想点桌面"。
+    ///
+    /// 默认 false(按住歌词直接拖)。代价说清楚:压在字上的那一次点击会被窗口吃掉,
+    /// 穿不到下层 —— 想保留"点哪儿都能穿透、只有长按才拖"的旧行为就打开它。
+    @Published var overlayDragNeedsLongPress: Bool {
+        didSet { defaults.set(overlayDragNeedsLongPress, forKey: Keys.overlayDragNeedsLongPress) }
+    }
     // 调试 HUD:在悬浮歌词角落显示实测帧率(FrameRateProbe)。
     //
     // **刻意不进设置界面** —— 它是给开发/排障用的,不是功能。开:
@@ -519,6 +532,8 @@ final class AppSettings: ObservableObject {
         textStrokeColorHex = defaults.string(forKey: Keys.textStrokeColorHex) ?? ColorTheme.defaultTheme.textStrokeColorHex
         lockPosition = (defaults.object(forKey: Keys.lockPosition) as? Bool) ?? false
         overlayFadeOnHover = (defaults.object(forKey: Keys.overlayFadeOnHover) as? Bool) ?? false
+        overlayDragNeedsLongPress =
+            (defaults.object(forKey: Keys.overlayDragNeedsLongPress) as? Bool) ?? false
         debugHUDEnabled = (defaults.object(forKey: Keys.debugHUDEnabled) as? Bool) ?? false
         hideDuringScreenCapture = (defaults.object(forKey: Keys.hideDuringScreenCapture) as? Bool) ?? false
         hideWhenNotPlaying = (defaults.object(forKey: Keys.hideWhenNotPlaying) as? Bool) ?? false

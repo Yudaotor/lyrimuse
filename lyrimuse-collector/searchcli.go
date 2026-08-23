@@ -282,7 +282,7 @@ func filterEnabledLyricSources(results []scoredLyricCandidateResult) []scoredLyr
 		if r.Instrumental {
 			continue
 		}
-		if len(features.LyricsSources) > 0 && !features.LyricsSources[r.Source] {
+		if !lyricSourceEnabled(r.Source) {
 			continue
 		}
 		filtered = append(filtered, r)

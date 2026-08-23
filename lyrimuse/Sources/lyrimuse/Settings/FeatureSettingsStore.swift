@@ -10,7 +10,7 @@ private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "featur
 // LyricsManagerView.swift 已有的 sourceDisplayName/sourceColor(那两个函数今天也在给
 // "歌词管理"窗口的来源筛选/列表用),不重复维护第二份名字/颜色映射。
 public enum LyricsSource: String, CaseIterable, Identifiable, Codable, Hashable {
-    case netease, qq, kugou, musixmatch, lrclib
+    case netease, qq, kugou, musixmatch, lrclib, amll
     public var id: Self { self }
     public var displayName: String { sourceDisplayName(rawValue) }
     public var color: Color { sourceColor(rawValue) }
@@ -113,6 +113,16 @@ struct FeatureFlagsFile: Codable, Equatable {
     var weeklyDigestSource: String?
     var dailyDigestSource: String?
     var lyricsSources: [String]?
+    /// **迁移标记,不是开关**。amll 的启用状态跟其余五源一样记在 lyricsSources 里。
+    ///
+    /// 它存在只为解决一件事:lyrics_sources 是白名单,而老配置写的时候 amll 这个源还不
+    /// 存在,列表里不可能有它 —— 直接按白名单办等于对所有老用户默认关闭,而"没列出"在
+    /// 这里的真实含义是"当时没这个选项",不是"用户排除了它"。
+    ///
+    /// 所以:缺失 ⇒ 这是一份老配置,加载时把 amll 补进启用集合(只补这一次);一旦保存过,
+    /// 这个字段就落盘,从此完全以 lyricsSources 为准,用户取消勾选能正常生效。
+    /// 与 collector 侧 featureFlagsFile.AMLLLyrics 一一对应。
+    var amllLyrics: Bool?
     var lyricsSourceMode: String?
     var lyricsSourceOrder: [String]?
     var lyricsDir: String?
@@ -141,6 +151,7 @@ struct FeatureFlagsFile: Codable, Equatable {
         case weeklyDigestSource = "weekly_digest_source"
         case dailyDigestSource = "daily_digest_source"
         case lyricsSources = "lyrics_sources"
+        case amllLyrics = "amll_lyrics"
         case lyricsSourceMode = "lyrics_source_mode"
         case lyricsSourceOrder = "lyrics_source_order"
         case lyricsDir = "lyrics_dir"
@@ -226,6 +237,9 @@ public final class FeatureSettingsStore: ObservableObject {
             weeklyDigestSource: weeklyDigestSource.isEmpty ? nil : weeklyDigestSource,
             dailyDigestSource: dailyDigestSource.isEmpty ? nil : dailyDigestSource,
             lyricsSources: lyricsSources.map(\.rawValue).sorted(),
+            // 只要保存过一次就落这个字段,值如实反映集合状态。它的作用是让上面那条
+            // "老配置补 amll"的迁移**只生效一次** —— 之后用户取消勾选才不会被补回来。
+            amllLyrics: lyricsSources.contains(.amll),
             lyricsSourceMode: lyricsSourceMode.rawValue,
             lyricsSourceOrder: lyricsSourceOrder.map(\.rawValue),
             lyricsDir: lyricsDir.isEmpty ? nil : lyricsDir,
@@ -339,7 +353,14 @@ public final class FeatureSettingsStore: ObservableObject {
         // 缺失/空数组(旧配置文件没这个字段,或者曾经被清空过)都按"全部启用"处理,跟
         // collector 侧 resolveLyricsSources 的兜底规则一致。
         let decodedSources = (f.lyricsSources ?? []).compactMap(LyricsSource.init(rawValue:))
-        lyricsSources = decodedSources.isEmpty ? Set(LyricsSource.allCases) : Set(decodedSources)
+        var enabled = Set(decodedSources)
+        if enabled.isEmpty {
+            enabled = Set(LyricsSource.allCases)
+        } else if f.amllLyrics == nil {
+            // 老配置(写的时候还没有这个源)——见 FeatureFlagsFile.amllLyrics。只补这一次。
+            enabled.insert(.amll)
+        }
+        lyricsSources = enabled
         lyricsSourceMode = f.lyricsSourceMode.flatMap(LyricsSourceMode.init(rawValue:)) ?? .smart
         // 必须是全部 4 个源的完整排列——数量对不上(文件被手动改坏/缺字段)就整体
         // 退回默认顺序,不做"缺的补在末尾"这种部分修复,避免搞出一份既不是默认顺序、

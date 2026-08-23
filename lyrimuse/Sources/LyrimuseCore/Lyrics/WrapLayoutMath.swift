@@ -79,6 +79,36 @@ public enum WrapLayoutMath {
         return CGSize(width: maxWidth, height: totalHeight)
     }
 
+    /// 排完之后**文字真正占据**的那块矩形(在 bounds 坐标系里)。
+    ///
+    /// 跟 totalSize 是两回事:那个返回的是**布局尺寸**,宽度恒等于容器给的 maxWidth
+    /// (撑满是刻意的 —— 对唱左右对齐要靠它才有地方可对)。这个返回的是内容自己的
+    /// 包围盒,宽度 = 最宽那一行的宽度。
+    ///
+    /// 给"鼠标划过歌词才让开"用(2026-08-23):原来的判据是整个窗口矩形
+    /// `window.frame.contains(鼠标)`,而窗口比文字大得多 —— 上下有卡片内边距和播放
+    /// 控制槽位、左右是 WrapLayout 撑满留下的空白,于是指针在歌词**附近**就触发了淡出。
+    ///
+    /// 每一行各自按 rowAlignment 对齐,所以并集的宽度就是最宽行的宽度、位置随对齐方式:
+    /// 靠左时贴 bounds.minX、靠右时贴 bounds.maxX、居中时两边等分。
+    public static func contentBounds(
+        rows: [Row], bounds: CGRect, verticalSpacing: CGFloat, rowAlignment: RowAlignment
+    ) -> CGRect {
+        guard !rows.isEmpty else { return .zero }
+        let widest = rows.reduce(CGFloat(0)) { max($0, $1.width) }
+        let height = rows.reduce(0) { $0 + $1.height }
+            + CGFloat(max(0, rows.count - 1)) * verticalSpacing
+        guard widest > 0, height > 0 else { return .zero }
+        let slack = max(0, bounds.width - widest)
+        let x: CGFloat
+        switch rowAlignment {
+        case .leading: x = bounds.minX
+        case .trailing: x = bounds.minX + slack
+        case .center: x = bounds.minX + slack / 2
+        }
+        return CGRect(x: x, y: bounds.minY, width: min(widest, bounds.width), height: height)
+    }
+
     /// 没有宽度约束时的兜底尺寸:全部铺成一行。理论上走不到——调用方所在的 VStack 总会
     /// 给一个有限宽度。
     public static func unconstrainedSize(sizes: [CGSize], horizontalSpacing: CGFloat) -> CGSize {

@@ -705,7 +705,9 @@ public final class LyricsSyncEngine {
     }
 
 
-    private static func matchesKeywordCreditPattern(_ text: String) -> Bool {
+    /// internal(不是 private):LyricDuet 拿它来否决"长得像角色名"的说话人标签,
+    /// 复用同一张词表,免得两边各维护一份还对不齐。
+    static func matchesKeywordCreditPattern(_ text: String) -> Bool {
         creditLinePattern.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)) != nil
     }
 
@@ -723,14 +725,20 @@ public final class LyricsSyncEngine {
         "男声", "女声", "合唱", "伴唱",
     ]
 
-    private static func matchesStructuralCreditPattern(_ text: String) -> Bool {
+    private static func matchesStructuralCreditPattern(
+        _ text: String, exemptions: Set<String> = []
+    ) -> Bool {
         guard genericHanCreditLinePattern.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)) != nil else {
             return false
         }
         // 命中形状之后再看标签本身是不是说话人标签——是就豁免(既不算 hits、也不会被删)。
+        //
+        // exemptions 是**这一首歌**认出来的演唱者标签(LyricDuet.speakers),跟上面那份写死的
+        // speakerLabels 是两回事:那份管「男/女/合」这类通用声部词,这份管人名/艺名 ——
+        // 「巨炮：」「杭盖：」形状跟职员表一模一样,只有放在整首歌里数过才知道它在唱歌。
         guard let sep = text.firstIndex(where: { $0 == ":" || $0 == "：" }) else { return false }
         let label = text[text.startIndex..<sep].trimmingCharacters(in: .whitespaces)
-        return !speakerLabels.contains(label)
+        return !speakerLabels.contains(label) && !exemptions.contains(String(label))
     }
 
     /// 结构化规则该不该对**这一整份**歌词生效。
@@ -745,9 +753,14 @@ public final class LyricsSyncEngine {
     /// 都是这个形状**;而正常歌曲里的对白冒号只是零星一两句。所以要求命中行既达到绝对下限
     /// (≥3 行,一两句对白够不着),又占到半数以上(整份被主导)。两个条件缺一不可:只看比例,
     /// 一首只有 2 句歌词的短曲里一句对白就过半;只看行数,一首 50 行的歌里 3 句对白就被误杀。
-    private static func shouldApplyStructuralCreditFilter(_ texts: [String]) -> Bool {
+    private static func shouldApplyStructuralCreditFilter(
+        _ texts: [String], exemptions: Set<String> = []
+    ) -> Bool {
         guard !texts.isEmpty else { return false }
-        let hits = texts.filter(matchesStructuralCreditPattern).count
+        // 豁免行既不被删、也**不算 hits**。两者缺一不可:只做前者的话,一首「每句都带人名
+        // 标记」的对唱歌(《好好说再见》53 行里 40 行)会靠这些行把闸门顶过线,连累同一份里
+        // 真正长成这个形状的**歌词**句子(selftest 里那句「他说：我不走」)跟着被删。
+        let hits = texts.filter { matchesStructuralCreditPattern($0, exemptions: exemptions) }.count
         return hits >= 3 && hits * 2 > texts.count
     }
 
@@ -826,17 +839,21 @@ public final class LyricsSyncEngine {
     /// 过滤造成的(2026-08-20 拿全库 925 首做回归语料时踩到,误判出上百条"被误杀的真歌词")。
     /// 直接曝光这一层,语料统计和单测都拿它当唯一判据。
     public static func creditLineDropDecisions(
-        _ texts: [String], trackTitle: String = "", trackArtist: String = ""
+        _ texts: [String], trackTitle: String = "", trackArtist: String = "",
+        speakerExemptions: Set<String> = []
     ) -> [Bool] {
-        strippingCreditLines(texts, trackTitle: trackTitle, trackArtist: trackArtist)
+        strippingCreditLines(
+            texts, trackTitle: trackTitle, trackArtist: trackArtist,
+            speakerExemptions: speakerExemptions)
     }
 
     /// 过滤掉署名/职员表行。关键词表逐行生效(它枚举的都是明确的角色名,误判空间很小);
     /// 结构化规则只在整份被主导时才生效,见 shouldApplyStructuralCreditFilter。
     private static func strippingCreditLines(
-        _ texts: [String], trackTitle: String = "", trackArtist: String = ""
+        _ texts: [String], trackTitle: String = "", trackArtist: String = "",
+        speakerExemptions: Set<String> = []
     ) -> [Bool] {
-        let useStructural = shouldApplyStructuralCreditFilter(texts)
+        let useStructural = shouldApplyStructuralCreditFilter(texts, exemptions: speakerExemptions)
         // 免词表的双语形状:整份 ≥2 行才认(理由见 matchesBilingualCreditShape)。
         let bilingualHits = texts.filter(matchesBilingualCreditShape).count
         let useBilingualShape = bilingualHits >= 2
@@ -844,6 +861,15 @@ public final class LyricsSyncEngine {
         let nameListHits = texts.filter(matchesNameListCreditShape).count
         let useNameListShape = nameListHits >= 2
         let drop = texts.enumerated().map { i, text -> Bool in
+            // 演唱者标签行一律放行(2026-08-23)。放在所有规则**最前面**,而不是只补进
+            // 结构化那一条:人名标签同时够得着好几条规则,逐条打补丁迟早漏。
+            //
+            // 独占一行的标记(`周杰伦：` 后面什么都没有)也走这里保留下来 —— 它确实不该
+            // 显示,但该由 LyricDuet 按"剥完为空"丢掉,不是由署名过滤删:两者判据不同,
+            // 让署名过滤兼这个职,等于把"这行是不是署名"和"这行有没有正文"混成一件事。
+            if let (label, _, _) = LyricDuet.splitLabel(text), speakerExemptions.contains(label) {
+                return false
+            }
             if useBilingualShape, matchesBilingualCreditShape(text) { return true }
             if useNameListShape, matchesNameListCreditShape(text) { return true }
             if matchesKeywordCreditPattern(text) { return true }
@@ -863,7 +889,7 @@ public final class LyricsSyncEngine {
             if i == 0, looksLikeHeaderLine(text, trackTitle: trackTitle, trackArtist: trackArtist) {
                 return true
             }
-            return useStructural && matchesStructuralCreditPattern(text)
+            return useStructural && matchesStructuralCreditPattern(text, exemptions: speakerExemptions)
         }
         // 兜底闸门:展示过滤**永远不把整份删空**。走到这一步说明判据出了我没预料到的偏差
         // (某种全篇都长成职员表形状、但其实是真歌词的写法),此时"整片空白/一直显示♪"对用户
@@ -947,48 +973,50 @@ public final class LyricsSyncEngine {
             return fromBase != 0 ? fromBase : LRCParser.parseOffsetMs(lyricsYRC)
         }()
         let parsedBase = LRCParser.parse(lyrics)
+        // 演唱者标签要在署名过滤**之前**认出来,再回头当豁免喂给它 —— 顺序不能反:
+        // 「每句都带标记」的对唱歌天然满足署名过滤"命中 ≥3 行且过半"的闸门,先过滤就是
+        // 整首被删空(这也正是 speakerLabels 那份写死名单当初存在的理由,现在人名走同一条路)。
+        let baseTexts = parsedBase.map(\.text)
+        let baseSpeakers = LyricDuet.speakers(in: baseTexts)
         let baseDrop = Self.strippingCreditLines(
-            parsedBase.map(\.text), trackTitle: trackTitle, trackArtist: trackArtist)
+            baseTexts, trackTitle: trackTitle, trackArtist: trackArtist,
+            speakerExemptions: baseSpeakers)
         let filteredBase = zip(parsedBase, baseDrop).compactMap { $0.1 ? nil : $0.0 }
         var candidateWords: [LyricLineWords] = []
         if !yrc.isEmpty {
+            // 逐字侧单独认一遍:同一首歌 .lrc 和 .yrc 的标记未必一致(实测《说好不哭》
+            // 两份都有,但也见过只有一份带标记的)。
             let texts = yrc.map { $0.words.map(\.text).joined() }
             let drop = Self.strippingCreditLines(
-                texts, trackTitle: trackTitle, trackArtist: trackArtist)
+                texts, trackTitle: trackTitle, trackArtist: trackArtist,
+                speakerExemptions: LyricDuet.speakers(in: texts))
             candidateWords = zip(yrc, drop).compactMap { $0.1 ? nil : $0.0 }
         }
         usingWords = !candidateWords.isEmpty
             && (filteredBase.isEmpty || candidateWords.count * 2 >= filteredBase.count)
+        // 对唱标记的剥离(见 LyricDuet)。两条路径都会剥掉行首标记、给出每行摆哪一边,
+        // 并且把**独占一行的标记**(`[00:24.83]周杰伦：` 这种,剥完什么都不剩)整行丢掉 ——
+        // 它带着自己的时间戳,不丢就是屏幕上凭空多出一句词(实测《等你下课》里一行「Gary」
+        // 会挂 23.3 秒)。
+        //
+        // ⚠️ 过滤 sides 只能 filter+map,**不能用 compactMap**:元素本身就是 `Side?`,
+        // 「第一个标记之前的行」正常值就是 nil,compactMap 会把它们连同被丢掉的行一起
+        // 摘掉,sides 就比 lines 短一截、整条对唱归属集体错位一格。
         if usingWords {
-            // 对唱标记(男：/女：/合：)在逐字数据里跟第一个字粘在一起,共享同一个时间戳
-            // ——只能改那个词的文本,不能整个删掉,它扛着第一个字的发声时间。见 LyricDuet。
-            var markers: [String?] = []
-            wordLines = candidateWords.map { ln in
-                guard let first = ln.words.first else {
-                    markers.append(nil)
-                    return ln
-                }
-                let (marker, rest) = LyricDuet.splitMarkerAllowingEmpty(first.text)
-                markers.append(marker)
-                guard marker != nil else { return ln }
-                var words = ln.words
-                if rest.isEmpty {
-                    // 标记单独成一个词,整个丢掉(它只占了标记本身那点时长)。
-                    words.removeFirst()
-                } else {
-                    words[0] = LyricWord(startMs: first.startMs, durationMs: first.durationMs, text: rest)
-                }
-                return LyricLineWords(timeMs: ln.timeMs, words: words)
-            }
-            wordSides = LyricDuet.sides(for: markers)
+            let plan = LyricDuet.planWords(candidateWords)
+            let kept = zip(zip(plan.lines, plan.sides), plan.dropped).filter { !$0.1 }
+            wordLines = kept.map { $0.0.0 }
+            wordSides = kept.map { $0.0.1 }
             baseLines = []
             baseSides = []
         } else {
             let plan = LyricDuet.plan(lineTexts: filteredBase.map(\.text))
             wordLines = []
             wordSides = []
-            baseLines = zip(filteredBase, plan.texts).map { LyricLine(timeMs: $0.0.timeMs, text: $0.1) }
-            baseSides = plan.sides
+            let kept = zip(zip(zip(filteredBase, plan.texts), plan.sides), plan.dropped)
+                .filter { !$0.1 }
+            baseLines = kept.map { LyricLine(timeMs: $0.0.0.0.timeMs, text: $0.0.0.1) }
+            baseSides = kept.map { $0.0.1 }
         }
         romaLines = LRCParser.parse(lyricsRoma)
         trLines = LRCParser.parse(lyricsTr)
