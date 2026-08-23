@@ -75,6 +75,10 @@ func runSearchLyricsCLI(args []string) {
 		// 重打一次 MusicBrainz,撞上限速(1 req/s 按 IP,而节流是进程内的)就等于这轮
 		// 别名兜底整个失效:表现是"同一首歌第一遍搜 0 条、再搜一遍就有"。
 		loadMBPrimaryNameCache(filepath.Join(filepath.Dir(cfgPath), clientName+"-artist-primary-cache.json"))
+		// Apple 目录锚点那份也读:手动搜索走的是独立进程,不读的话
+		// appleCatalogSearchIdentities 恒为空,「联网搜索候选歌词」拿不到常驻实例已经
+		// 攒下的权威署名,名次又会跟自动决策对不上(跟 nativeLyricSource 那个坑同型)。
+		loadAppleCatalogCache(filepath.Join(filepath.Dir(cfgPath), clientName+"-apple-catalog-cache.json"))
 		// ⚠️ 2026-08-21 补:main() 在 loadFeatureFlags 之后紧跟着有这一行,而这条 CLI 子命令
 		// 在那之前就 return 了 —— 于是 match.go 里那个包级 nativeLyricSource 一直是空串,
 		// "与当前播放器同源 +250"(match.go 的 sameSourceAsPlayer 档)在手动搜索里**恒为 0**。
@@ -112,7 +116,8 @@ func runSearchLyricsCLI(args []string) {
 		}
 		for _, r := range results {
 			if r.Instrumental {
-				update.LrclibInstrumental = true
+				update.Instrumental = true
+				update.LegacyLrclibInstrumental = true // 过渡期,见字段注释
 			}
 		}
 		if err := enc.Encode(update); err != nil {
@@ -126,6 +131,14 @@ func runSearchLyricsCLI(args []string) {
 	// 这两个字段是给下一轮评测攒的数据,缺一次无妨,不值得让用户等。
 	appleMatch := appleMusicMatchCachedOnly(sArtist, sTitle, sAlbum)
 	appleTitle, appleAlbum = appleMatch.title, appleMatch.album
+	// 只在 -pick 时才去读缓存文件:另一颗按钮(纯搜索候选)用不到这个事实。
+	noCurrentLyrics := false
+	if *pick && home != "" {
+		cachePath := filepath.Join(home, ".config", clientName, clientName+"-enrich-cache.json")
+		if empty, known := lyricsEmptyInCacheFile(cachePath, *artist, *title, *album); known {
+			noCurrentLyrics = empty
+		}
+	}
 	if *pick {
 		// 跟 rescoreLyrics(enrich.go)逐行对齐:同一个 pickLyricCandidate、同一个
 		// rescoreDecidable、同一份 seen/responded、同一个 buildLyricsDecision。调用方按
@@ -133,8 +146,22 @@ func runSearchLyricsCLI(args []string) {
 		// 里唯一经受过考验的"重新选一次歌词"实现)。
 		picked := pickLyricCandidate(results)
 		p := &searchLyricsPick{
-			ScoringVersion:       lyricsScoringVersion,
-			Decidable:            rescoreDecidable(results, *currentSource),
+			ScoringVersion: lyricsScoringVersion,
+			// ⚠️ 这里**必须去缓存里读真相**,不能用 `*currentSource == ""` 推断
+			// "这条没有歌词"。2026-08-22 对抗性复核抓到的反例:
+			// EnrichCacheStore.saveEdit 的 source 参数默认 nil,而「歌词管理」里那颗
+			// 「保存修改」正是 `saveEdit(key:lyrics:tr:roma:)`(不传 source)——它会
+			// `removeValue(forKey: "lyrics_source")`,导出的 .lrc 也不带 [source:],
+			// 于是**每一条用户手改过的条目**都是「有歌词 + lyrics_source 为空」,
+			// summary.lyricsSource 传过来就是空串。照推断走的话,这道闸会对手改条目
+			// 一律放行,让冠军覆盖掉人工修正过的正文(那份内容删了找不回来)。
+			//
+			// 当初那个"294 条里 0 例外"的测量取样取错了:现役缓存里手改条目是 0 条 ——
+			// 因为老库那 33 条手改记录同一天早些时候刚被移走。在一个恰好没有反例的
+			// 数据集上做的测量,证明不了不变量。
+			//
+			// 读不出来(known=false)时按最保守的那一支走,行为等同改动之前。
+			Decidable:            rescoreDecidable(results, *currentSource, noCurrentLyrics),
 			SourcesSeen:          lyricSourcesWithCandidates(results),
 			SourcesResponded:     lyricSourcesResponded(results),
 			ResolvedDurationSecs: *duration,
@@ -183,11 +210,24 @@ type searchLyricsUpdate struct {
 	// 2026-08-12 起的透传字段,给下一轮打分维度评测攒数据(Swift 端不认识就忽略,无影响):
 	// AppleTitle/AppleAlbum:iTunes(第六方,不与五歌词源共享曲库)匹配到的歌名/专辑名,
 	// 只在最终那行输出上带(拿的是搜索过程中 applecover goroutine 已写热的同 key 缓存,
-	// 不多打网络);LrclibInstrumental:lrclib 明确说这首歌是纯音乐(独立字段,不再只靠
+	// 不多打网络);Instrumental:有源明确说这首歌是纯音乐(独立字段,不再只靠
 	// Score:-1 哨兵行传递,消费端能与普通 reject 可靠区分)。
-	AppleTitle         string `json:"appleTitle,omitempty"`
-	AppleAlbum         string `json:"appleAlbum,omitempty"`
-	LrclibInstrumental bool   `json:"lrclibInstrumental,omitempty"`
+	AppleTitle string `json:"appleTitle,omitempty"`
+	AppleAlbum string `json:"appleAlbum,omitempty"`
+	// Instrumental:有源明确断言"这首本来就没有词"。2026-08-22 从 lrclibInstrumental 改名 ——
+	// 这个信号的来源早就不只 lrclib 了:2026-08-20 加了网易云的 pureMusic/占位正文,
+	// 2026-08-22 又加了 QQ 的占位断言(见第 09 章「纯音乐标记的三个来源」),字段名一直没跟上。
+	Instrumental bool `json:"instrumental,omitempty"`
+	// LegacyLrclibInstrumental 是**过渡期**的同值别名,只为兜住一件事:collector 和 App 是
+	// 两个独立部署的二进制(lyrimuse-collector/build.sh 只换 collector、不重建 App),所以
+	// 换了 collector 之后跑的可能还是旧 App —— 旧 App 只认 lrclibInstrumental 这个 key,
+	// 单方面改名会让「有源明确说这首是纯音乐」这类文案在重建 App 之前静默退化成
+	// 「这一轮没有一个能用的候选」。
+	//
+	// ⚠️ **删除条件**:App 侧带着「优先读 instrumental、缺失才退回 lrclibInstrumental」那段
+	// 解码(LyricsSearchService.RawSearchUpdate)重新构建并安装之后,这个字段就可以删掉。
+	// 它是唯一的存在理由,别让它长住。
+	LegacyLrclibInstrumental bool `json:"lrclibInstrumental,omitempty"`
 	// 只有 -pick 且只有最后那行才有(见 searchLyricsPick)。
 	Pick *searchLyricsPick `json:"pick,omitempty"`
 }
@@ -248,4 +288,33 @@ func filterEnabledLyricSources(results []scoredLyricCandidateResult) []scoredLyr
 		filtered = append(filtered, r)
 	}
 	return filtered
+}
+
+// lyricsEmptyInCacheFile 只读地回答一句:enrich 缓存里这首歌现在**有没有歌词**。
+//
+// 为什么不复用 loadEnrichCache:那个会设 enrichPath(等于给这个一次性进程开了写权限)、
+// 解析失败时还会把用户的缓存文件改名成 .corrupt。这条路径只想读一个字段,不该有任何
+// 副作用。
+//
+// 返回 known=false 表示"问不出来"(文件读不了/解析不动),调用方必须按**最保守**的那一支走。
+// key 不存在算 empty=true:那就是一首还没被解析过的新歌,本来就没有歌词。
+//
+// ⚠️ key 用**原样**标签算(enrichKey 内部只做 cleanMediaTag/normEnrichTitle,不做繁简转换),
+// 所以这里传的必须是命令行原参数,不是 toSimplified 之后那三个。
+func lyricsEmptyInCacheFile(path, artist, title, album string) (empty bool, known bool) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return false, false
+	}
+	var m map[string]struct {
+		Lyrics string `json:"lyrics"`
+	}
+	if err := json.Unmarshal(data, &m); err != nil || m == nil {
+		return false, false
+	}
+	e, ok := m[enrichKey(artist, title, album)]
+	if !ok {
+		return true, true
+	}
+	return e.Lyrics == "", true
 }

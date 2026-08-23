@@ -8,6 +8,7 @@ import (
 	_ "image/jpeg" // 注册 JPEG 解码器
 	_ "image/png"  // 网易云取色缩略图有时是 PNG(content-type 却谎报 jpg)
 	"log"
+	"math"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -147,6 +148,7 @@ end tell`
 // lyrimuse 侧 MediaControlClient.swift 同名常量/结构体的注释——同一套设计,两边
 // 分别用 Swift/Go 实现一遍。
 const (
+	appleMusicBundleID   = "com.apple.Music"
 	qqMusicBundleID      = "com.tencent.QQMusicMac"
 	neteaseMusicBundleID = "com.netease.163music"
 	spotifyBundleID      = "com.spotify.client"
@@ -373,6 +375,15 @@ type mediaControlRawState struct {
 	// 锚点时间戳 —— 算"这份 elapsedTime 有多旧"用,见 mediaControlAnchorAge。
 	Timestamp    string  `json:"timestamp"`
 	PlaybackRate float64 `json:"playbackRate"`
+	// TrackNumber:这首歌在专辑里的序号。只给 Apple 目录锚点做自校验用 —— 同一张专辑上
+	// 完全同名的兄弟轨(实测 XSCAPE (Deluxe) 上 #1 和 #17 都叫「Love Never Felt So Good」)
+	// 靠曲目名和专辑名分不开,序号能。
+	TrackNumber int `json:"trackNumber"`
+	// UniqueIdentifier:MediaRemote 的 kMRMediaRemoteNowPlayingInfoUniqueIdentifier。
+	// 放 Apple Music **目录**曲目时它就是 Apple 的目录曲目 ID,一次 iTunes lookup 就能
+	// 换到权威元数据;本地导入的文件放的是任意 64 位持久 ID(可以是负数)。所有消费方
+	// 都必须先过 appleCatalogAnchor 的守卫+自校验,别直接信这个数——见 applecatalog.go。
+	UniqueIdentifier int64 `json:"uniqueIdentifier"`
 }
 
 // getQQMusicState/getNeteaseMusicState/getSpotifyState 都是 getMediaControlState 的
@@ -502,11 +513,39 @@ func fetchRawMediaControlState(ctx context.Context) (map[string]any, string, boo
 	// lyrimuse MediaControlClient.fetchRawMediaControlSnapshot):三轮修补仍"经常进度
 	// 不准",回归与 QQ 音乐/网易云一致的 media-control 外推。两侧必须同批改——只改
 	// 一边就是"采集器和悬浮窗各说各话"的老坑。
+	// ⚠️ 三个标签必须先洗一遍不可见空白,见 cleanMediaTag —— 这里是本地这条路径唯一的
+	// 元数据入口,洗在这里,下游(缓存 key / 导出文件名 / ListenBrainz / 网页中继)全都干净。
+	title, artistTag, album := cleanMediaTag(raw.Title), cleanMediaTag(raw.Artist), cleanMediaTag(raw.Album)
+	// Apple 目录锚点:拿得到已校验的锚点时,时长用 Apple 目录的权威值,不用这份快照报的。
+	//
+	// ⚠️ **适用范围比字面看起来窄**(2026-08-22 对抗性复核订正,原注释夸大了):这个覆盖只
+	// 作用在 media-control 这份快照上,而 Apple Music 在 `player=auto` 下走的是
+	// getAutoDetectedState —— 它拿到 AppleScript 的 state 就 `return state`,把这里改过的
+	// raw 整份丢掉;`player` 手动选成 Apple Music 时更是连 fetchRawMediaControlState 都不调。
+	// 所以对 Apple Music 而言,这行覆盖只在**AppleScript 那条路不可用**时才真正生效。
+	//
+	// 这不是位置放错了:要治的"脏快照"(下一首的时长拼进当前曲目)是 **media-control 专属**
+	// 的形态,AppleScript 直接问 Music.app 要 duration of current track 不会串;而且
+	// AppleScript 给的精度还更高(实测 289.7659912109375 vs 目录 289.766),拿目录值去盖
+	// 反而是降精度。覆盖就该待在产生那个 bug 的那份快照上。
+	// 锚点的**另一半**(appleCatalogByTrack 索引 → 歌词检索身份)不受影响:它在这个函数里
+	// 就写好了,auto 模式下照常建立。
+	// 正常情况两者逐位相等(实测 208.293 对 208.293),只有撞上 media-control 的"脏快照"
+	// (换曲预载窗口里把**下一首**的时长拼进当前曲目的快照,见 enrich.go 的
+	// observeWrongDuration)才会差开——而那正是这个锚点最值钱的时候:锚点的自校验要求
+	// 曲目名对得上,所以它给的一定是**当前这首**的时长。校验不过就原样退回快照值,不会更差。
+	// 时长是这里唯一被覆盖的字段:标签本身没有"脏"的已知形态,而且换掉它会牵动缓存 key。
+	duration := raw.Duration
+	if anchor, ok := appleCatalogAnchor(raw.BundleID, raw.UniqueIdentifier, raw.TrackNumber, title, album); ok && anchor.DurationSecs > 0 {
+		if math.Abs(anchor.DurationSecs-duration) > appleCatalogDurationLogThreshold {
+			log.Printf("apple catalog anchor overrode duration for %q: media-control %.3fs -> catalog %.3fs (track id %d)",
+				title, duration, anchor.DurationSecs, raw.UniqueIdentifier)
+		}
+		duration = anchor.DurationSecs
+	}
 	return map[string]any{
-		// ⚠️ 三个标签必须先洗一遍不可见空白,见 cleanMediaTag —— 这里是本地这条路径唯一的
-		// 元数据入口,洗在这里,下游(缓存 key / 导出文件名 / ListenBrainz / 网页中继)全都干净。
-		"title": cleanMediaTag(raw.Title), "artist": cleanMediaTag(raw.Artist), "album": cleanMediaTag(raw.Album),
-		"duration": raw.Duration, "elapsedTime": elapsed,
+		"title": title, "artist": artistTag, "album": album,
+		"duration": duration, "elapsedTime": elapsed,
 		"playing": raw.Playing, "playbackRate": raw.PlaybackRate,
 		"isMusicApp": true, "bundleIdentifier": raw.BundleID,
 	}, raw.BundleID, true

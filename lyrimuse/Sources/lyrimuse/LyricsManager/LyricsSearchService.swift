@@ -40,9 +40,15 @@ final class LyricsSearchService {
             case "duration": return L10n.t("时长吻合")
             case "corroborated": return L10n.t("结束点获印证")
             case "wordTiming": return L10n.t("逐字时间轴")
+            // 2026-08-22 补:这一项自 2026-08-15 就在打分里,却一直没有译名 ——
+            // 是新加的 scoretermlabel_test.go 守卫测试当场逮出来的既有漏网。
+            case "nativeSource": return L10n.t("与当前播放器同源")
             case "lines": return L10n.t("行数")
             case "versionTags": return L10n.t("版本不符")
             case "durationOff": return L10n.t("时长不符")
+            // v4(2026-08-22):跟 durationOff 量的不是同一样东西,文案必须分得开 ——
+            // 那个是「歌词铺到哪儿 vs 曲长」,这个是「源自己说这首歌多长 vs 本地多长」。
+            case "sourceDurationOff": return L10n.t("源自报曲长不符")
             // v3(2026-08-12)新维度,与 collector match.go 的 scoreTerm kind 一一对应。
             // 旧 "source" case 已删:来源先验分 2026-08-09 从引擎移除后,score_terms 只来自
             // 实时搜索(不落缓存),不存在还带着旧字段的数据,这个分支是死代码。
@@ -71,6 +77,7 @@ final class LyricsSearchService {
             case "duration": return L10n.t("最后一句的时间跟曲长越接近分越高，最多 300")
             case "corroborated": return L10n.t("时长对不上，但别的源也在这个时间结束，改信这个印证")
             case "wordTiming": return L10n.t("带逐字（卡拉OK）时间轴，是歌词质量最直接的证据")
+            case "nativeSource": return L10n.t("这个源就是你正在用的播放器，时间轴对着同一份音频母版（+250）")
             case "lines": return L10n.t("一行 1 分，最多 200")
             case "durationOvershoot": return L10n.t("最后一句比歌曲结束还晚 5 秒以上，多半是完整版歌词配了精简版曲目")
             case "album": return L10n.t("这个源匹配到的专辑跟本地专辑一致，版本大概率对（最多 150）")
@@ -78,7 +85,9 @@ final class LyricsSearchService {
             case "consensus": return L10n.t("歌词内容跟其它来源高度一致（2 家以上 250 · 1 家 150），串版本的拿不到")
             case "translation": return L10n.t("自带可用的中文译文，同水平候选间优先")
             case "romanization": return L10n.t("日文歌词自带罗马音，同水平候选间优先")
-            case "versionTags": return L10n.t("括号里的 Live / Remix / Demo 等跟本地曲名对不上")
+            case "versionTags": return L10n.t("括号里的 Live / Remix / Demo / Club Mix 等跟本地曲名对不上")
+            case "sourceDurationOff":
+                return L10n.t("这个源自己声明的曲目时长跟本地差了 12% 以上，多半挂在另一次录音上")
             case "durationOff":
                 return L10n.t("最后一句的时间跟曲长差了 25% 以上；仍可选用，但会排在所有时长对得上的后面")
             case "rejectDurationMismatch":
@@ -322,7 +331,9 @@ final class LyricsSearchService {
                         // 可选 + 兜底 0:字段缺失不该让整行解码失败、把这一批候选整批丢掉。
                         sourcesDone: raw.sourcesDone ?? 0,
                         sourcesTotal: raw.sourcesTotal ?? 0,
-                        instrumental: raw.lrclibInstrumental ?? false,
+                        // 优先新 key,缺失才退回旧 key —— 两个二进制各自独立部署,可能
+                        // 出现「新 App + 旧 collector」(只重建了 App 没换 collector)。
+                        instrumental: raw.instrumental ?? raw.lrclibInstrumental ?? false,
                         pick: raw.pick)
                     Task { @MainActor in onUpdate(update) }
                 }
@@ -395,8 +406,15 @@ private struct RawSearchUpdate: Decodable {
     let networkLooksDown: Bool
     let sourcesDone: Int?
     let sourcesTotal: Int?
-    /// collector 一直在输出这个字段,Swift 侧 2026-08-21 才开始接:它把"一个候选都没有"
+    /// collector 一直在输出这个信号,Swift 侧 2026-08-21 才开始接:它把"一个候选都没有"
     /// 分成"这首歌本来就没词"和"真的谁都没搜到"两种,「重新自动匹配」的结果文案要区分。
+    ///
+    /// 2026-08-22 起 collector 输出的正名是 `instrumental` —— 这个信号的来源早就不只 lrclib
+    /// (网易云的 pureMusic、QQ 的占位断言),旧名字名不副实。两个 key 都读:
+    /// 新 App + 旧 collector 时只有旧 key,旧 App + 新 collector 时靠 collector 那边的
+    /// 同值别名兜住(见 searchcli.go 的 LegacyLrclibInstrumental,含删除条件)。
+    let instrumental: Bool?
+    /// 旧名,只为兼容尚未重建的 collector。collector 那边的同值别名删掉之后,这个也可以删。
     let lrclibInstrumental: Bool?
     /// 只有 -pick 且只有最后那行才有。
     let pick: LyricsSearchService.Pick?

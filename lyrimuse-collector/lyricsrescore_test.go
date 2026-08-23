@@ -138,24 +138,56 @@ func TestRescoreDecidable(t *testing.T) {
 		{Source: "netease", Score: 173},
 		{Source: "qq", Score: 582},
 	}
-	if !rescoreDecidable(partial, "netease") {
+	if !rescoreDecidable(partial, "netease", false) {
 		t.Error("手上这份来自 netease、它这轮回来了:够格重选,不该因为 musixmatch 缺席就推迟")
 	}
-	if rescoreDecidable(partial, "musixmatch") {
+	if rescoreDecidable(partial, "musixmatch", false) {
 		t.Error("手上这份来自 musixmatch、它这轮没回来:什么都不该动")
 	}
 	// 来源已被用户关掉 / 老条目压根没记来源:无从判断"手上这份"参没参与,退回严格口径。
 	// 这一轮缺了 musixmatch,所以两种都不够格。
-	if rescoreDecidable(partial, "kugou") {
+	if rescoreDecidable(partial, "kugou", false) {
 		t.Error("来源已被关掉时退回严格口径,而这一轮缺了 musixmatch,不该够格")
 	}
-	if rescoreDecidable(partial, "") {
+	if rescoreDecidable(partial, "", false) {
 		t.Error("老条目没记来源时退回严格口径,而这一轮缺了 musixmatch,不该够格")
 	}
 
 	full := append(append([]scoredLyricCandidateResult{}, partial...),
 		scoredLyricCandidateResult{Source: "musixmatch", Score: -1})
-	if !rescoreDecidable(full, "") {
+	if !rescoreDecidable(full, "", false) {
 		t.Error("没记来源、但这一轮所有启用的源都回来了:够格")
+	}
+}
+
+// TestRescoreDecidableNoCurrentLyrics 锁住 2026-08-22 加的那一支:手上压根没有歌词时,
+// 这道闸没有东西可保护,直接放行。
+//
+// 用户可见的 bug 是「手动搜索能搜到,点『重新自动匹配』却搜不到」——「枫+退后+搁浅 (Live)」
+// 只有酷狗一个源收录(799 分、带逐字),旧口径要求"所有启用的源都回来了",而另外几个源
+// 永远不会出现在 responded 里,于是 Decidable 恒为 false、这颗按钮永远不可能成功,
+// 文案还渲染成主语为空的「这一轮「」没应答」。
+//
+// ⚠️ 同时钉住**另一半**:自动 rescore 那条路(noCurrentLyrics=false)的口径一字未动 ——
+// 那条路的前置 needsLyricsRescore 要求 e.Lyrics != "",空串在那边只可能是"老条目有歌词
+// 但没记来源",必须保持严格。同一个空串在两条路径上语义不同,所以做成参数而不是就地推断。
+func TestRescoreDecidableNoCurrentLyrics(t *testing.T) {
+	saved := features
+	defer func() { features = saved }()
+	features.LyricsSources = map[string]bool{"netease": true, "qq": true, "musixmatch": true, "kugou": true}
+
+	// 复刻「枫+退后+搁浅 (Live)」:五个启用源里只有酷狗给出候选
+	onlyKugou := []scoredLyricCandidateResult{{Source: "kugou", Score: 799}}
+	if !rescoreDecidable(onlyKugou, "", true) {
+		t.Error("手上没有歌词时,只要有候选就该放行 —— 否则这颗按钮对'只有一个源收录'的歌永远失败")
+	}
+	// 一条候选都没有时同样放行(可判 != 有东西可采纳):有没有东西采纳由下游 Winner=="" 那道
+	// 闸负责,这里放行才能让「这一轮真的什么都没搜到」被如实记进决策存档。
+	if !rescoreDecidable(nil, "", true) {
+		t.Error("手上没有歌词时,即便这轮空手也该判可判 —— 采纳与否交给下游 Winner 那道闸")
+	}
+	// 对照:同一批部分应答的结果,自动路径口径(false)照旧不够格
+	if rescoreDecidable(onlyKugou, "", false) {
+		t.Error("自动 rescore 口径必须一字未动:部分应答 + 没记来源 = 不够格")
 	}
 }

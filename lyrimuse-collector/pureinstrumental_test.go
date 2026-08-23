@@ -50,8 +50,8 @@ func TestIsNeteasePureMusicLyric(t *testing.T) {
 		{name: "只有空白", lrc: "\n  \n", want: false},
 	}
 	for _, c := range cases {
-		if got := isNeteasePureMusicLyric(c.lrc); got != c.want {
-			t.Errorf("%s: isNeteasePureMusicLyric = %v, want %v", c.name, got, c.want)
+		if got := isInstrumentalPlaceholderLyric(c.lrc); got != c.want {
+			t.Errorf("%s: isInstrumentalPlaceholderLyric = %v, want %v", c.name, got, c.want)
 		}
 	}
 }
@@ -84,5 +84,38 @@ func TestMergeKeepsNeteaseInstrumentalMarkerBySource(t *testing.T) {
 		if r.Instrumental {
 			t.Error("网易云已经给出真歌词候选,纯音乐标记不该保留")
 		}
+	}
+}
+
+// TestQQInstrumentalPlaceholderSurvivesTimedLRCFilter 是 2026-08-22 那个 bug 的回归测试:
+// QQ 对纯音乐曲目回的占位文案只有**一行**带时间戳,过不了 isTimedLRC 的「≥3 行且过半」,
+// 而 resolveQQLyric 原来是先过 isTimedLRC 再返回 —— 于是这个**明确结论**在那一步就被当成
+// 「没歌词」扔掉,曲目落在「无歌词」而不是「纯音乐」,界面上像失败,还要每 24 小时
+// (退避后翻倍)白搜一轮五个源。
+//
+// 实测案例:蛋堡《收敛水》第 1 轨「关键字: Intro」(114s)。五源口径 ——
+// 网易云只有一行署名 `[00:00.00-1] 作曲 : 蛋堡`(没有 pureMusic 字段)、酷狗找到 hash 但
+// KRC 候选 0 条、LRCLIB 404、**只有 QQ 明确说了这句话**。
+func TestQQInstrumentalPlaceholderSurvivesTimedLRCFilter(t *testing.T) {
+	// QQ 真实返回(2026-08-22 实测 mid=001v88Gp1qx5yM)
+	const qqPlaceholder = "[00:00:00]此歌曲为没有填词的纯音乐，请您欣赏"
+
+	// ① 前提:它确实过不了 isTimedLRC —— 所以先过那道闸就必然丢掉结论
+	if isTimedLRC(qqPlaceholder) {
+		t.Errorf("前提变了:这行占位居然过了 isTimedLRC,那这个 bug 的成因描述要重写")
+	}
+	// ② 占位判定必须认得它
+	if !isInstrumentalPlaceholderLyric(qqPlaceholder) {
+		t.Errorf("isInstrumentalPlaceholderLyric 必须认出 QQ 的纯音乐占位:%q", qqPlaceholder)
+	}
+	// ③ 网易云那一行署名**不该**被当成纯音乐占位(它只是署名,不是"没有词"的断言)
+	const neteaseCreditOnly = "[00:00.00-1] 作曲 : 蛋堡"
+	if isInstrumentalPlaceholderLyric(neteaseCreditOnly) {
+		t.Errorf("只有署名行不等于纯音乐,不该判 true:%q", neteaseCreditOnly)
+	}
+	// ④ 真歌词不能被误判
+	real := "[00:01.00]第一句\n[00:05.00]第二句\n[00:09.00]第三句\n"
+	if isInstrumentalPlaceholderLyric(real) {
+		t.Errorf("真歌词不该被判成纯音乐占位")
 	}
 }

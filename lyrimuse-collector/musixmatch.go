@@ -64,6 +64,10 @@ type musixmatchResult struct {
 	// (本来就已经查到,只是原来没往外传)。cover 用 500x500 这档,跟网易云封面挑的
 	// 尺寸量级接近,不用最大的 800x800(候选列表里的小图不需要)。
 	title, artist, album, cover string
+	// durationSecs:musixmatch 自报的曲长(秒),0=没给。透传给
+	// lyricCandidate.sourceReportedDurationSecs 参与打分,见 match.go 的
+	// sourceDurationMismatchPenalty。
+	durationSecs float64
 }
 
 var (
@@ -108,7 +112,7 @@ func resolveMusixmatchLyric(artist, title string, durationSecs float64, trLang s
 	}
 	yrc := musixmatchRichsync(match.trackID)
 	tr := musixmatchTranslationLRC(match.trackID, lrc, trLang)
-	return musixmatchResult{lrc: lrc, yrc: yrc, tr: tr, title: match.title, artist: match.artist, album: match.album, cover: match.cover}
+	return musixmatchResult{lrc: lrc, yrc: yrc, tr: tr, title: match.title, artist: match.artist, album: match.album, cover: match.cover, durationSecs: match.durationSecs}
 }
 
 // musixmatchEnsureToken 返回一个可用的 usertoken——已缓存且未过期直接复用,否则重新
@@ -288,6 +292,7 @@ func musixmatchDo(action string, params neturl.Values) ([]byte, error) {
 type musixmatchTrackMatch struct {
 	trackID                     int64
 	title, artist, album, cover string
+	durationSecs                float64 // musixmatch 自报的曲长,0=没给
 }
 
 // musixmatchSearchTrack 按歌手+歌名分字段搜索(q_artist/q_track,不是拼成一个字符串的
@@ -337,6 +342,15 @@ func musixmatchSearchTrackOnce(artist, queryTitle, localTitle string) (musixmatc
 						AlbumName            string `json:"album_name"`
 						AlbumCoverart500x500 string `json:"album_coverart_500x500"`
 						HasSubtitles         int    `json:"has_subtitles"`
+						// TrackLength:musixmatch 自报的曲长(秒)。2026-08-22 补上解析。
+						// 在此之前五个源里只有它的候选永远没有 sourceReportedDurationSecs,
+						// 于是新增的 sourceDurationOff(-400)对它**系统性免罚** —— 而它恰恰
+						// 是五源里匹配最松的一个(这个函数只查 title+artist+has_subtitles,
+						// 既不看专辑也不看时长,resolveMusixmatchLyric 第一行还把 durationSecs
+						// 直接丢掉)。对抗性复核实测:52 个"musixmatch 有有效候选"的缓存条目里,
+						// 按 max() 口径偏差 >12% 的有 7 条(13.5%),其余四源合计 4.3%。
+						// 字段本来就在响应里 —— 那不是"没有证据",是证据没被读。
+						TrackLength int `json:"track_length"`
 					} `json:"track"`
 				} `json:"track_list"`
 			} `json:"body"`
@@ -351,11 +365,12 @@ func musixmatchSearchTrackOnce(artist, queryTitle, localTitle string) (musixmatc
 		}
 		if lyricTitleAccepted(t.Track.TrackName, localTitle) && lyricSourceArtistMatches(t.Track.ArtistName, artist) {
 			return musixmatchTrackMatch{
-				trackID: t.Track.TrackID,
-				title:   t.Track.TrackName,
-				artist:  t.Track.ArtistName,
-				album:   t.Track.AlbumName,
-				cover:   t.Track.AlbumCoverart500x500,
+				trackID:      t.Track.TrackID,
+				title:        t.Track.TrackName,
+				artist:       t.Track.ArtistName,
+				album:        t.Track.AlbumName,
+				cover:        t.Track.AlbumCoverart500x500,
+				durationSecs: float64(t.Track.TrackLength),
 			}, true
 		}
 	}

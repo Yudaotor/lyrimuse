@@ -538,7 +538,33 @@ func allEnabledLyricSourcesResponded(scored []scoredLyricCandidateResult) bool {
 //
 // 兜底:老条目可能压根没记 lyrics_source,或者那个源后来被用户关掉了 —— 这种情况下无从
 // 判断"手上这份"参没参与,退回原来那条更严的"所有启用的源都回来了"。
-func rescoreDecidable(scored []scoredLyricCandidateResult, currentSource string) bool {
+//
+// noCurrentLyrics:调用方明确知道"手上压根没有歌词"时传 true,这道闸直接放行。
+//
+// 为什么需要它(2026-08-22,用户报「手动搜索能搜到,点『重新自动匹配』却搜不到」):这道闸
+// 存在的意义是"别把手上这份好的换成更差的"。**手上什么都没有时,它保护的是虚空**,而退回
+// "所有启用的源都回来了"的后果是:一首歌只要有任何一个源永远不收录它(五源里有几个源
+// 确实没有某些冷门/串烧曲目,那个源就永远不会出现在 responded 里),这颗按钮就**永远**
+// 不可能成功——用户看到的是「这一轮「」没应答」这种主语为空的话。实测案例
+// 「枫+退后+搁浅 (Live)」:酷狗给出 799 分带逐字的正确候选,只有它一个源应答,
+// Decidable 恒为 false,App 按约定什么都不改。
+//
+// 同一个洞见这个文件里早就写过一遍,只是 rescoreDecidable 没享受到 ——
+// 见 lyricsUpgradeBaseline 对空歌词条目那一支:「没有旧分要保护,任何真候选都是改进」。
+//
+// **刻意做成参数而不是就地推断** `currentSource == ""`:同一个空串在两条调用路径上语义
+// 不同。自动 rescore 那条路(rescoreLyrics)的前置 needsLyricsRescore 第一行就要求
+// `e.Lyrics != ""`,所以那里的空串只可能是"老条目有歌词但没记来源",必须保持严格;而手动
+// `-pick` 那条路(searchcli.go)的空串就是"这条没有歌词"。做成参数,两条路各自说清自己
+// 的处境,不靠巧合。(顺带实测过:294 条去重缓存条目里,"有歌词但没记 lyrics_source" 是
+// **0 条** —— 那条兜底分支在现实数据里已经是死路,但保留它不花钱。)
+//
+// 放行之后仍有两道下游闸挡着,不是无保护:冠军为空时 App 走 keptNoCandidate 什么都不写;
+// 现有这份有逐字而冠军没有时走 keptWouldLoseWordTiming(见 LyricsRematchDecision)。
+func rescoreDecidable(scored []scoredLyricCandidateResult, currentSource string, noCurrentLyrics bool) bool {
+	if noCurrentLyrics {
+		return true
+	}
 	if currentSource != "" && features.LyricsSources[currentSource] {
 		return containsString(lyricSourcesResponded(scored), currentSource)
 	}
@@ -1004,7 +1030,9 @@ func rescoreLyrics(key, artist, title, album string, durationSecs float64) {
 	_, scored := scoredLyricCandidates(artist, title, album, durationSecs)
 	// 用户选定过源就只在那个源内重选,见 LyricsSourceChoice 字段注释。
 	picked := pickLyricCandidatePreferring(scored, sourceChoice)
-	decidable := rescoreDecidable(scored, currentSource)
+	// 传 false:走到这里的前置是 needsLyricsRescore,它第一行就要求 e.Lyrics != "",
+	// 所以自动 rescore 永远不是"手上没歌词"的处境,这一支的口径一字不变。
+	decidable := rescoreDecidable(scored, currentSource, false)
 	seen := lyricSourcesWithCandidates(scored)
 
 	enrichMu.Lock()
@@ -1863,7 +1891,9 @@ func fetchScoredLyricCandidatesStreaming(artist, title, album string, durationSe
 		matchTitle, matchArtist string
 		matchAlbum, matchCover  string
 		srcDur                  float64 // 源自己声明的曲长(秒),0=没给。见 lyricCandidate.sourceReportedDurationSecs
-		instrumental            bool    // 目前只有 lrclib 这个源会给出这个信号,见 lrclibResult 注释
+		// instrumental:"这首歌是纯音乐"这个**明确结论**。三个源会给:lrclib 的结构化字段、
+		// 网易云的 pureMusic/占位正文、QQ 的占位正文(2026-08-22 加,见 qqLyricResult)。
+		instrumental bool
 	}
 	resultsCh := make(chan sourceResult, 6)
 
@@ -1880,8 +1910,10 @@ func fetchScoredLyricCandidatesStreaming(artist, title, album string, durationSe
 		qqMid := qqMidFromURL(match.url)
 		var lyr, yrc string
 		var qqDur float64
+		var qqInstrumental bool
 		if qqMid != "" {
-			lyr = qqLyric(qqMid)
+			qqLyr := qqLyric(qqMid)
+			lyr, qqInstrumental = qqLyr.lrc, qqLyr.instrumental
 			// 逐字(QRC)是完全独立的一套接口/密钥,自己失败不影响上面整行歌词——
 			// 见 qq.go 顶部注释。
 			yrc = qqQRCLyric(qqMid, artist, title, album, durationSecs)
@@ -1890,7 +1922,7 @@ func fetchScoredLyricCandidatesStreaming(artist, title, album string, durationSe
 			// 评测数据,不值得为它在歌词主路径上多挂一次最多 6s 的请求(2026-08-12 审阅)。
 			qqDur = qqSongMetaCachedOnly(qqMid).interval
 		}
-		resultsCh <- sourceResult{source: "qq", lyr: lyr, yrc: yrc, matchTitle: match.title, matchArtist: match.artist, matchAlbum: match.album, srcDur: qqDur}
+		resultsCh <- sourceResult{source: "qq", lyr: lyr, yrc: yrc, matchTitle: match.title, matchArtist: match.artist, matchAlbum: match.album, srcDur: qqDur, instrumental: qqInstrumental}
 	}()
 	go func() {
 		r := kugouLyric(artist, title, album, durationSecs)
@@ -1902,7 +1934,7 @@ func fetchScoredLyricCandidatesStreaming(artist, title, album string, durationSe
 	}()
 	go func() {
 		r := musixmatchLyric(artist, title, durationSecs, features.LyricsTranslationLanguage)
-		resultsCh <- sourceResult{source: "musixmatch", lyr: r.lrc, yrc: r.yrc, tr: r.tr, matchTitle: r.title, matchArtist: r.artist, matchAlbum: r.album, matchCover: r.cover}
+		resultsCh <- sourceResult{source: "musixmatch", lyr: r.lrc, yrc: r.yrc, tr: r.tr, matchTitle: r.title, matchArtist: r.artist, matchAlbum: r.album, matchCover: r.cover, srcDur: r.durationSecs}
 	}()
 	go func() {
 		// 跟 resolveTrackEnrichment 里 e.AppleURL = appleMatch.url 共用同一份
@@ -1916,7 +1948,9 @@ func fetchScoredLyricCandidatesStreaming(artist, title, album string, durationSe
 	var kugouLyr, kugouYRC, kugouTitle, kugouArtist, kugouAlbum string
 	var lrclibLyr, lrclibTitle, lrclibArtist, lrclibAlbum string
 	var lrclibInstrumental bool
+	var qqInstrumental bool
 	var mxLyr, mxYRC, mxTr, mxTitle, mxArtist, mxAlbum, mxCover string
+	var mxDur float64
 	var appleCover string
 	// scoreAndSort 用目前为止已经到手的原始结果重新构建候选、算 corroboratedEndings、
 	// 打分、排序——每次有新结果到达都会重新跑一遍(而不是缓存增量),因为一份候选的
@@ -1949,7 +1983,7 @@ func fetchScoredLyricCandidatesStreaming(artist, title, album string, durationSe
 		}
 		if mxLyr != "" {
 			mxUsableTr, _ := usableValueAdd(mxLyr, mxTr, features.LyricsTranslationLanguage, "", features.LyricsTranslationLanguage)
-			candidates = append(candidates, lyricCandidate{source: "musixmatch", lyrics: mxLyr, wordTimingYRC: usableYRC(mxLyr, mxYRC), hasWordTiming: usableWordTiming(mxLyr, mxYRC), hasUsableTranslation: mxUsableTr, title: mxTitle, artist: mxArtist, album: mxAlbum, cover: coverOrFallback(mxCover)})
+			candidates = append(candidates, lyricCandidate{source: "musixmatch", lyrics: mxLyr, wordTimingYRC: usableYRC(mxLyr, mxYRC), hasWordTiming: usableWordTiming(mxLyr, mxYRC), hasUsableTranslation: mxUsableTr, sourceReportedDurationSecs: mxDur, title: mxTitle, artist: mxArtist, album: mxAlbum, cover: coverOrFallback(mxCover)})
 		}
 		if lrclibLyr != "" {
 			candidates = append(candidates, lyricCandidate{source: "lrclib", lyrics: lrclibLyr, sourceReportedDurationSecs: lrclibDur, title: lrclibTitle, artist: lrclibArtist, album: lrclibAlbum, cover: coverOrFallback("")})
@@ -1964,6 +1998,15 @@ func fetchScoredLyricCandidatesStreaming(artist, title, album string, durationSe
 		var instrumentalMarker *scoredLyricCandidateResult
 		if lrclibLyr == "" && lrclibInstrumental {
 			instrumentalMarker = &scoredLyricCandidateResult{Source: "lrclib", Score: -1, Instrumental: true}
+		} else if qqLyr == "" && qqInstrumental {
+			// QQ 那一路(2026-08-22 加)。实测案例:蛋堡《收敛水》第 1 轨「关键字: Intro」
+			// (114s 的专辑 intro)——网易云只有一行署名(没有 pureMusic 字段)、酷狗
+			// KRC 候选 0 条、LRCLIB 404,**只有 QQ 明确回了**「此歌曲为没有填词的纯音乐」。
+			// 在此之前那句话在 resolveQQLyric 末尾的 isTimedLRC(要求 ≥3 行带戳)那里就被
+			// 当成"不是歌词"扔掉了,于是这类曲目落在「无歌词」而不是「纯音乐」:界面上看起来
+			// 像失败,还要每 24 小时(退避后翻倍)白搜一轮五个源。
+			// 排在网易云之前只是因为 QQ 这句话是**明文断言**、语义比"正文只有占位"更硬。
+			instrumentalMarker = &scoredLyricCandidateResult{Source: "qq", Score: -1, Instrumental: true}
 		} else if ne.Lyrics == "" && ne.PureMusic {
 			// 网易云那一路同款(2026-08-20 加)。用户报「一堆条目显示无歌词、其实都是
 			// 纯音乐」(LoL 原声带 The Music of League of Legends Vol.1 十几首):
@@ -2045,13 +2088,14 @@ collect:
 				ne = r.ne
 			case "qq":
 				qqLyr, qqYRC, qqTitle, qqArtist, qqAlbum, qqDur = r.lyr, r.yrc, r.matchTitle, r.matchArtist, r.matchAlbum, r.srcDur
+				qqInstrumental = r.instrumental
 			case "kugou":
 				kugouLyr, kugouYRC, kugouTitle, kugouArtist, kugouAlbum, kugouDur = r.lyr, r.yrc, r.matchTitle, r.matchArtist, r.matchAlbum, r.srcDur
 			case "lrclib":
 				lrclibLyr, lrclibTitle, lrclibArtist, lrclibAlbum, lrclibDur = r.lyr, r.matchTitle, r.matchArtist, r.matchAlbum, r.srcDur
 				lrclibInstrumental = r.instrumental
 			case "musixmatch":
-				mxLyr, mxYRC, mxTr, mxTitle, mxArtist, mxAlbum, mxCover = r.lyr, r.yrc, r.tr, r.matchTitle, r.matchArtist, r.matchAlbum, r.matchCover
+				mxLyr, mxYRC, mxTr, mxTitle, mxArtist, mxAlbum, mxCover, mxDur = r.lyr, r.yrc, r.tr, r.matchTitle, r.matchArtist, r.matchAlbum, r.matchCover, r.srcDur
 			case "applecover":
 				appleCover = r.matchCover
 			}

@@ -18,7 +18,8 @@ import (
 type neteaseInfo struct {
 	Cover, SongURL, Lyrics, Trans, Roma, YRC string
 	// DurationSecs:网易云曲库里这首歌自报的时长(秒),0=没拿到。2026-08-12 起透传给
-	// 候选(sourceReportedDurationSecs),不参与打分,先攒评测数据。
+	// 候选(sourceReportedDurationSecs);2026-08-22 起参与打分,见
+	// match.go:sourceDurationMismatchPenalty。
 	DurationSecs float64
 	// Artist 是网易云曲库里这首歌的官方歌手名(单一歌手才填,合唱/多歌手曲目留空——
 	// 避免把本地"歌手A & 歌手B"的联合署名压缩成只剩其中一个)。用于统一同一歌手在历史
@@ -177,7 +178,12 @@ func neteaseSearch(get func(string, any) error, q string, out any) error {
 	return get("https://music.163.com/api/search/get?type=1&limit=30&s="+escaped, out)
 }
 
-// isNeteasePureMusicLyric 判断这份 lrc 是不是"纯音乐占位"而不是真歌词。
+// isInstrumentalPlaceholderLyric 判断这份 lrc 是不是"纯音乐占位"而不是真歌词。
+//
+// ⚠️ 2026-08-22 从 isNeteasePureMusicLyric 改名成来源中立:它对 **QQ 音乐**的占位文案
+// 逐字适用 —— QQ 对纯音乐曲目回的是单行 `[00:00:00]此歌曲为没有填词的纯音乐,请您欣赏`,
+// 正文含 neteaseInstrumentalPlaceholderMarker、除它之外没有别的正文行,这个函数直接判 true。
+// 同一个事实两处别各写一份判定。
 //
 // 顶层 pureMusic 标记是主判据,这个是**备份**:网易云自己的数据不齐,实测同一批曲目里
 // 有的条目只有正文占位、没有那个顶层字段。
@@ -186,7 +192,7 @@ func neteaseSearch(get func(string, any) error, q string, out any) error {
 // isCreditOnlyLRC 拿它判"这份不是真歌词"、直接判废)—— 同一个事实两处别各写一份。
 // 这里做的是**另一件事**:把"判废"升级成"得出结论"。判据刻意收紧成「整份只有占位 +
 // 可选的署名行」,任何一句真歌词都让它不成立,免得把歌词里恰好唱到"纯音乐"的句子误判。
-func isNeteasePureMusicLyric(lrc string) bool {
+func isInstrumentalPlaceholderLyric(lrc string) bool {
 	if strings.TrimSpace(lrc) == "" {
 		return false
 	}
@@ -519,7 +525,7 @@ func resolveNeteaseInfo(artist, title, album string) neteaseInfo {
 	lrc, tr, roma, pureMusic := fetchBundle(id)
 	// 纯音乐这个结论跟"有没有可用歌词"分开记:占位正文过不了 isTimedLRC,Lyrics 会留空,
 	// 而"留空"本身分不出"这首没词"和"没查到词"。见 neteaseInfo.PureMusic。
-	info.PureMusic = pureMusic || isNeteasePureMusicLyric(lrc)
+	info.PureMusic = pureMusic || isInstrumentalPlaceholderLyric(lrc)
 	if isTimedLRC(lrc) {
 		info.Lyrics = lrc
 		if isTimedLRC(tr) {

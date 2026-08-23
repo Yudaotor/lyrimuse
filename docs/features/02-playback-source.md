@@ -1,6 +1,6 @@
 # 02. 播放数据源与播放器支持
 
-> 最后核对:2026-08-22 · 基线:05767ae+工作树
+> 最后核对:2026-08-22 · 基线:675f87a+工作树
 
 ## 定位
 
@@ -178,6 +178,60 @@ nil 快照(Music.app stopped/退出、播放列表放完、.auto 或 media-contr
 
 `MediaControlHealth`:启动时后台跑一次 `media-control test`(8s 超时),**只做归因、不做降级**——私有 MediaRemote 通道被系统更新弄坏时,"歌词不动了"跟"没在放歌/没歌词/collector 挂了"表象上分不开。失败时设置页「后台采集服务」卡下方显示说明(只影响 QQ 音乐/网易云;Apple Music/Spotify 走 AppleScript 不受影响),不显示成红字报错(用户无法修复)。
 
+### Apple 目录锚点(2026-08-22)
+
+media-control 快照里的 `uniqueIdentifier` 字段一直被丢掉。实测坐实:放 **Apple Music 目录曲目**
+时它就是 **Apple 的目录曲目 ID**——`uniqueIdentifier=1485220325` → iTunes lookup 回
+trackNumber=18 的「印地安老斑鸠 (Live)」、`collectionId=1485220306`、`trackTimeMillis=208293`,
+而同一份快照的 `duration` 是 208.293,逐位一致。collector 现在解析这个字段,一次
+`itunes.apple.com/lookup` 换到这条曲目的权威元数据(曲目署名、专辑署名、专辑 ID、权威时长),
+按曲目 ID 永久缓存(ID 是不变映射,没有 TTL,只落盘查到了的条目)。
+
+**两道守卫 + 一道自校验**,缺一不可:
+
+1. `bundleIdentifier` 必须是 `com.apple.Music`;
+2. ID 必须落在合理范围(`> 0` 且 `< 10^12`)。**用户自己导入/购买的文件不是目录曲目**,它的
+   `uniqueIdentifier` 是任意 64 位本地持久 ID——实测同一张本地导入专辑上两首歌分别拿到
+   `-3446272063698972557`(负数,直接 lookup 是 HTTP 400、取绝对值是 0 results)和
+   `2764576100379992737`(**正数**)。所以光判 `> 0` 不够:那个正数会让每首本地导入曲目都白发一次
+   iTunes 请求,上界那一半就是为它设的(现役目录 ID 是 10 位数量级,留三个数量级余量);
+3. 拿回来的结果要**自校验**:曲目名**逐字同名**(`normLoose` 相等)+ 专辑名 `albumScore ≥ 100`
+   (本地没有专辑标签时只校曲目名)+ **音轨号**(两边都拿得到时必须相等)。
+   ⚠️ 曲目名这一条 2026-08-22 从 `lyricTitleAccepted` **收紧**成逐字同名(对抗性复核订正):
+   那个函数的第二档会把双方各自 `stripParens` 之后再判相等,于是**同一张专辑上的括号兄弟轨
+   互相判等**,专辑名又必然相同,锚点照样「成立」——把差 40~47% 的时长当成权威值。实测(全部
+   来自用户自己的资料库):`XSCAPE (Deluxe)` #8「Xscape」244.9s vs #16「Xscape (Original
+   Version)」344.4s;`BADモード` #13「Face My Fears (English Version)」219.1s vs
+   #14「(A. G. Cook Remix)」322.0s。音轨号那一条则是给**完全同名**的兄弟轨准备的
+   (同专辑 #1 与 #17 都叫「Love Never Felt So Good」,234.9s / 245.7s)。锚点是按 ID 认身份的,
+   压根不需要歌词检索那套宽松匹配。残余风险:本地拿不到音轨号时完全同名那一对仍会放行
+   (时长差通常只有几个百分点,远小于括号兄弟轨那 40%+)。
+
+**它治的是什么**(⚠️ 适用范围 2026-08-22 订正,原文夸大了):锚点成立时,`duration` 用 Apple 目录的
+权威值,不用这份快照报的 —— **但这行覆盖只作用在 media-control 这份快照上**。Apple Music 在
+`player=auto` 下走 `getAutoDetectedState`,它拿到 AppleScript 的 state 就 `return state`,把这里
+改过的 `raw` 整份丢掉;`player` 手动选成 Apple Music 时更是连 `fetchRawMediaControlState` 都不调
+(那种模式下**连锚点索引都不建**,歌词检索那半边也一起失效)。所以对 Apple Music 而言,时长覆盖
+只在 AppleScript 那条路不可用时才真正生效。
+
+这不是位置放错了:要治的「脏快照」是 **media-control 专属**的形态(AppleScript 直接问 Music.app
+要 `duration of current track`,不会串),而且 AppleScript 给的精度还更高(实测 289.7659912109375
+vs 目录 289.766),拿目录值去盖反而是降精度。覆盖就该待在产生那个 bug 的那份快照上。
+
+正常情况两者逐位相等,只有撞上 media-control 的**脏快照**才会差开——换曲/预载窗口里它会把**下一首**的时长
+和当前曲目的标题拼进同一份快照(第 09 章「升级重试」那段记的实锤:「开不了口 (Live)」272.973s
+开播 6 秒后快照携带下一首「床边故事 (Live)」的 220.239s)。而自校验要求曲目名对得上,所以锚点
+给的一定是**当前这首**的时长:实测 Apple 目录里「开不了口 (Live)」= 272.973、「床边故事 (Live)」
+= 220.24,脏时长在源头就被顶掉了。两种走向都安全——`uniqueIdentifier` 跟着当前曲目 → 校验通过
+→ 顶掉脏值;跟着下一首 → 曲目名对不上 → 锚点作废、退回现状(第 09 章那道 30 秒同值去抖照旧兜底)。
+
+**时长是唯一被覆盖的字段**:标签本身没有"脏"的已知形态,而且换掉它会牵动缓存 key。
+
+**缓存没命中时不阻塞**:poll 主循环(5 秒一轮,同时负责播放位置跟踪)只读缓存,没命中就发一次
+后台补取、本轮按现状走,下一轮就热了。在这条路径上同步等一次对外 HTTP 等于把网络抖动直接变成
+"进度卡住"——这个项目已经为同一个理由把 `poll()` 的对外提交异步化过一次。同一个 ID 查空
+3 次之后不再试(计数只在内存里,不落盘)。
+
 ## 设置项
 
 | 设置页位置 | 项 | 改什么行为 |
@@ -208,6 +262,7 @@ nil 快照(Music.app stopped/退出、播放列表放完、.auto 或 media-contr
 | 播放器选择等 features | `~/.config/lyrimuse/lyrimuse-features.json` 的 `player` 字段 | App 侧 `FeatureSettingsStore` 写(原子写)、`PlaybackPlayerPreference` 每轮轮询读;collector `features.go` 启动时读 |
 | media-control 工具链 | app bundle `Contents/Resources/media-control/`(bin/lib/Frameworks 相对路径子树) | `MediaControlClient.binaryPath()` 解析,读状态/封面/事件流/控制指令共用 |
 | 歌词缓存 | collector 维护的 enrich 缓存文件(经 `EnrichCacheReader`,按 mtime 判变化) | 只读(本章视角) |
+| Apple 目录锚点缓存 | `~/.config/lyrimuse/lyrimuse-apple-catalog-cache.json`(曲目 ID → 权威元数据,永久,只存查到了的) | collector `applecatalog.go` 读写;`search-lyrics` 子命令只读 |
 | 子进程 | `/usr/bin/osascript`(JXA/AppleScript)、`media-control get/stream/test/seek/toggle-play-pause/...` | fork-per-call;stream 是常驻子进程 |
 | TCC 自动化权限 | 系统 TCC 数据库(Lyrimuse→Music.app 一条;collector 另一条独立记录) | `MusicAutomationPermission` 查/请求 |
 | App 联动开关 | `AppSettings`(UserDefaults)`launchMusicOnLyrimuseOpen` | App 侧读写 |
@@ -234,6 +289,7 @@ nil 快照(Music.app stopped/退出、播放列表放完、.auto 或 media-contr
 | 设置页播放器 tab | `lyrimuse/SettingsView.swift` · `PlayerSettingsTab` |
 | UI 转发层 | `lyrimuse/PlaybackCoordinator.swift` · `PlaybackCoordinator.start` |
 | collector 侧独立取数 | `lyrimuse-collector/system.go` · `getState`/`appleMusicPosition`;`lyrimuse-collector/poller.go` · `updatePosition` |
+| Apple 目录锚点 | `lyrimuse-collector/applecatalog.go` · `appleCatalogAnchor`/`appleCatalogLookup`/`appleCatalogPlausibleID`/`appleCatalogSearchIdentities`;消费点 `system.go` · `fetchRawMediaControlState` |
 | `LyrimuseCore/Local/UnknownPlayerAlert.swift` | 「发现新播放器」的两层判据(纯函数):`shouldOffer` 卡片与通知共用、`shouldAnnounce` 通知专属 |
 | `lyrimuse/Settings/UnknownPlayerNotifier.swift` | 系统通知管道:5s 轮询 + 稳定性计数 + 授权 + 投递 + 按钮回调 + `np:unknownPlayerNotices` 落盘 |
 
@@ -249,5 +305,6 @@ nil 快照(Music.app stopped/退出、播放列表放完、.auto 或 media-contr
 8. **AEDeterminePermissionToAutomateTarget 主线程可能永久挂起**(系统级已知问题),且 Music.app 没在运行时弹窗根本不出现——所有请求走后台竞速+预先后台拉起 Music.app;播放控制入口还要避免"按个暂停却悄悄启动 Music.app"的副作用(不拉起)。
 9. **Spotify 脚本必须 running 守卫**:JXA 访问属性会启动 Spotify,三处脚本(本文件位置直查、播放控制、collector)都垫同一道守卫。
 10. **锁屏只停渲染不停轮询**:锁屏期间的收听记录是不可恢复数据,省电不值当。
+11. **`uniqueIdentifier` 只对 Apple Music 目录曲目是目录 ID**,本地导入/购买的文件放的是任意 64 位持久 ID(实测负数)。所以 Apple 目录锚点对自己导入的曲库天然无效——这不是 bug,是这个字段的语义边界。别的播放器在这个字段里放什么也没有保证,理论上可能撞上一个真实的目录 ID,所以除了 bundle id 守卫,拿回来的结果一律要过曲目名+专辑名自校验。
 
 ⚠️待核对:设置为「自动识别」且实际在播 Apple Music 时,playPause/上一首/下一首经 `MusicPlaybackController.dispatch` 走 media-control(只有 seek 有 `preferAppleScript` 覆盖)——代码注释断言 media-control 控制指令对系统 Now Playing 焦点生效、应可控制 Music.app,但仓内未见对这一具体组合的实测记录。

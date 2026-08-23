@@ -127,7 +127,7 @@ type albumTrack struct {
 
 // albumTracks 按当前播放器挑一个"这张专辑有哪些曲目"的来源,见文件头注释。
 func albumTracks(artist, title, album, bundleID string) ([]albumTrack, bool) {
-	if bundleID == "com.apple.Music" {
+	if bundleID == appleMusicBundleID {
 		return albumTracksFromMusicApp(album)
 	}
 	// 复用解析歌词时那次搜索的结果 —— neteaseLookup 带 30 天缓存,当前这首歌刚解析过,

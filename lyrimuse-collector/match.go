@@ -153,8 +153,9 @@ type lyricCandidate struct {
 	hasUsableTranslation  bool
 	hasUsableRomanization bool
 	// sourceReportedDurationSecs:源自己声明的这首歌时长(秒),0=该源没给。2026-08-12 起
-	// 透传(qq interval/kugou duration/lrclib duration/netease duration),暂不参与打分——
-	// 它是"源报版本同一性"的干净信号(不被长尾奏带偏),先攒数据供下一轮消融评测。
+	// 透传(qq interval/kugou duration/lrclib duration/netease duration);2026-08-22 起
+	// **参与打分**——它是"源报版本同一性"的干净信号(不被长尾奏带偏),消融评测的结论见
+	// sourceDurationMismatchPenalty 的注释。
 	sourceReportedDurationSecs float64
 	// title/artist/album/cover 是这个源实际匹配到的歌名/歌手/专辑/封面,给"搜索候选歌词"
 	// 弹窗展示("这个候选到底对应哪首歌/哪个版本")。不同源可能匹配到同一首歌的不同版本
@@ -292,7 +293,7 @@ const lyricOvershootToleranceSecs = 5.0
 //   - 标题吻合梯度(+120/+60/+30):精确同名不再与"剥括号才相等"平权;
 //   - 增值内容决胜(译文+50/罗马音+30,带资格闸):同质候选间带可用增值内容者优先;
 //   - overshoot 独立档(−700):歌词末句超过曲长 5s 是物理矛盾,不再吃跨源印证豁免。
-const lyricsScoringVersion = 3
+const lyricsScoringVersion = 4
 
 // scoreTerm 是打分里的一项。只带**机器可读的类型**和分值,文案交给界面本地化 ——
 // App 有中英两套界面,从这里吐中文字符串会让英文用户看到一串中文。
@@ -321,7 +322,25 @@ const (
 	scoreTermConsensus         = "consensus"         // 跨源正文共识(与其它源的歌词内容互证)
 	scoreTermTranslation       = "translation"       // 自带可用的目标语言译文
 	scoreTermRoma              = "romanization"      // 日文形态歌词自带罗马音
+	// v4 新增(2026-08-22):
+	scoreTermSourceDurationOff = "sourceDurationOff" // 源自报曲长与本地明显不符 = 另一次录音
 )
+
+// lyricScoreTermKinds 是**会出现在 score_terms 里**的全部 kind。存在的唯一理由是给
+// scoretermlabel_test.go 那个「Swift 侧必须有中文译名」的守卫测试当清单用 ——
+// 跟 lyricsDecisionPaths() 是同一个路子、同一个教训:2026-08-21 加 manual-rematch 时
+// Go 这边新写了一条 path、忘了补 Swift 译名,界面上直接印了个英文串给用户看;
+// 2026-08-22 加 sourceDurationOff 时**照样又漏了一次**(那边 default 是 `return kind`),
+// 所以这一类也得钉死。新增打分项时把常量加进这个清单,忘了补译名就直接红。
+func lyricScoreTermKinds() []string {
+	return []string{
+		scoreTermDuration, scoreTermCorroborated, scoreTermWordTiming,
+		scoreTermNativeSource, scoreTermLines, scoreTermVersionTags,
+		scoreTermDurationOff, scoreTermDurationOvershoot, scoreTermAlbum,
+		scoreTermTitleMatch, scoreTermConsensus, scoreTermTranslation,
+		scoreTermRoma, scoreTermSourceDurationOff,
+	}
+}
 
 // durationMismatchPenalty:时长明显对不上时扣多少。
 //
@@ -336,6 +355,40 @@ const (
 // 代价说清楚:真正串错版本的候选(这道闸门当初就是为它设的)现在会在「只有它一条」时被
 // 选中,也就是「宁可显示错的,不要没有」。数据支持这个取舍 —— 误杀是 5:1,但它确实是个取舍。
 const durationMismatchPenalty = 500
+
+// sourceDurationMismatchPenalty / sourceDurationMismatchTolerance:候选**自报的曲目时长**
+// 跟本地明显对不上时扣多少。
+//
+// ⚠️ 跟上面那一项量的**不是同一样东西**,别混为一谈:
+//   - durationMismatchPenalty 量的是「LRC 末句时间戳 vs 曲长」,是个**代理**指标,被前奏/
+//     尾奏系统性带偏(尾奏越长,越是完整正确的歌词越"不吻合");
+//   - 这一项量的是两个**曲目时长**的直接比对,回答的是「这份歌词挂在哪一次录音上」。
+//
+// 2026-08-22 落地的实测依据(用户报「Stranger in Moscow (Tee's In-House Club Mix) 配了
+// 正常版歌词」):本地是 414.32s 的俱乐部混音,冠军 qq 那条自报 **344s**(偏 17%)——它自己
+// 的元数据就写着"我是另一次录音",而代理指标反而给了它 +147(它的 LRC 末句在 335s、偏 19%,
+// 落在 25% 容差内);真正对版的酷狗混音版末句在 304.9s、偏 26.4%,**刚好越线吃 -500**。
+// 也就是说错的那份在时长项上赢了对的那份,纯粹因为 335 比 304.9 离 414 近一点 —— 这个代理
+// 在带长尾奏的混音/加长版上就是噪声,而直接测量一直躺在同一条决策记录里没人用
+// (sourceReportedDurationSecs 自 2026-08-12 起就在透传,注释写着"先攒评测数据")。
+//
+// **只扣分、不加分**,这是消融实验选出来的:对 202 条真实缓存条目里 34 条可评样本
+// (有 ≥2 个候选 + 至少一个源自报了时长)跑参数网格 ——
+//
+//	只扣 -400 @>12% → 冠军变化 **1** 处;只扣 -400 @>15%/>20% → 0 处;
+//	只加 +300 @<=2% → 2 处;加分+扣分 → 2 处。
+//
+// 唯一那处变化是同专辑的「Earth Song」(本地 475.55s 的 Hani's Club Experience 混音),
+// 老冠军是 405s 的正常版、新冠军是对版专辑那条 475s 的混音版 —— **改对了**,是同一个 bug
+// 的兄弟案例。加分档多出来的那处(Morphine)则是中性偏坏:musixmatch 那条专辑名逐字对上、
+// 只因为没自报时长就被有自报时长的 qq/kugou 挤掉,还可能连带丢掉译文。所以不加分。
+//
+// 阈值 12% 复用 enrich.go:wrongDuration 那条既有口径(「差超 12% 就当作给另一个版本选的」),
+// 分母同样取两者中较大的那个,不新造一个数。
+const (
+	sourceDurationMismatchPenalty   = 400
+	sourceDurationMismatchTolerance = 0.12
+)
 
 // 直接判定为"不可用"(分数 -1)的原因。这几种不是"分低",是压根不能用。
 const (
@@ -435,6 +488,16 @@ func scoreLyricCandidateDetailed(
 		default:
 			// 不再一票否决,见 durationMismatchPenalty 的注释。
 			add(scoreTermDurationOff, -durationMismatchPenalty)
+		}
+	}
+	// 源自报曲长这一项**独立于**上面那一档:上面判的是"这份歌词的时间轴铺得够不够长"
+	// (代理),这里判的是"这份歌词挂在哪一次录音上"(直接测量)。两者都成立时会叠加扣分,
+	// 这是有意的 —— 那种候选既没铺满又自报是别的录音,证据是相互印证的,不是重复计罚。
+	// 源没自报时长(0)一律不扣:没有证据不等于反面证据。
+	if durationSecs > 0 && c.sourceReportedDurationSecs > 0 {
+		larger := math.Max(c.sourceReportedDurationSecs, durationSecs)
+		if math.Abs(c.sourceReportedDurationSecs-durationSecs)/larger > sourceDurationMismatchTolerance {
+			add(scoreTermSourceDurationOff, -sourceDurationMismatchPenalty)
 		}
 	}
 	if c.hasWordTiming {
@@ -814,8 +877,16 @@ func lyricRecordingTriangleMatches(candTitle, candAlbum string, candDurationSecs
 	switch sc := albumScore(candAlbum, localAlbum); {
 	case sc >= 200: // 归一后逐字相等,最强证据
 	case sc >= 100: // 宽松包含 → 追加长度可比性要求
+		// ⚠️ 必须**双向**比(2026-08-22 对抗性复核订正)。原来写的是
+		// `nca < ratio*nla`,只约束了「本地 ⊇ 候选」那半边;一旦是「候选 ⊇ 本地」
+		// (nca ≥ nla),判据恒真、一件东西都拦不掉 —— 而那半边恰恰是巡演/合辑/精选/Live
+		// 专辑那一整类。实测:本地专辑 "Editorial"(9 rune)对候选
+		// "one-man tour 2021-2022 -Editorial-@さいたまスーパーアリーナ"(62 rune)宽度比 6.9,
+		// 老写法照过,于是三角档拒掉了对版的单曲行、选中了巡演 Live 专辑那一行。
+		// 改成 min/max 之后两个方向同一把尺子。
 		nca, nla := utf8.RuneCountInString(normLoose(candAlbum)), utf8.RuneCountInString(normLoose(localAlbum))
-		if nla == 0 || float64(nca) < lyricRecordingTriangleAlbumWidthRatio*float64(nla) {
+		lo, hi := min(nca, nla), max(nca, nla)
+		if hi == 0 || float64(lo) < lyricRecordingTriangleAlbumWidthRatio*float64(hi) {
 			return false
 		}
 	default: // 只有 albumTokens 重叠(<100)不够格
@@ -1181,13 +1252,25 @@ func stripStructuralTitlePrefix(title string) string {
 // 这一类:它们指的是同一次录音的不同发行/母带,时间轴基本一致,拿来用没问题,收进来只会
 // 制造大量假不匹配(本地标签和各源标签在这类后缀上本来就经常不一致)。
 //
-// 也故意只收多词短语或歧义极小的单词:单独一个 "edit"/"mix"/"version" 太容易命中正常
-// 曲目名,所以只认 "radio edit"/"extended"/"original version" 这类完整说法。
+// 也故意只收多词短语或歧义极小的单词:单独一个 "edit"/"mix"/"version"/"dub"/"club" 太
+// 容易命中正常曲目名,所以只认 "radio edit"/"extended"/"club mix" 这类完整说法。
+//
+// ⚠️ 「club」这个裸词有一个**实测过的**反例,别手滑加进来:同一张专辑上的「Earth Song」,
+// 本地标题就叫 "Earth Song"(Apple 没给它任何混音标记)、抽不出限定词,而正确候选是
+// "Earth Song (Hani's club experience)"。收了裸「club」的话,正确的那条反而会被判成
+// 「本地没标记 / 候选有标记」的版本不符,吃 -600 —— 把唯一对的答案打下去。
 var distinctRecordingVersionTags = []string{
 	"demo", "original version", "album version", "single version",
 	"live", "unplugged", "acoustic", "instrumental", "karaoke",
 	"remix", "extended", "radio edit", "alternate", "alternative version",
 	"rehearsal", "reprise", "a cappella", "acapella",
+	// 2026-08-22 补的「…mix」家族(用户报「Stranger in Moscow (Tee's In-House Club Mix)
+	// 配了正常版的歌词」)。这些是舞曲混音的标准叫法,跟 remix 是一回事、只是不带 re-。
+	// 词表漏掉它们的后果是**两处**、不是一处:titleVersionTags 抽不出限定词,于是
+	// ①searchTitleVariants 走「裸标题优先」——酷狗第一条查询 "Michael Jackson Stranger
+	// in Moscow" 拿回正常版、通过校验就 break,而**排在第 1 位的混音版原样条目从没被看到**;
+	// ②versionTagsMismatch 判两边都是空集、-600 不触发,正常版稳稳留在榜首。
+	"club mix", "radio mix", "house mix", "dub mix", "dance mix", "vocal mix", "club edit",
 }
 
 // titleVersionTags 抽出歌名里的版本限定词。**只在"限定词该出现的位置"里找**——括号/方括号

@@ -1,6 +1,6 @@
 # 09. 歌词解析决策（collector）
 
-> 最后核对：2026-08-22 · 基线：675f87a+工作树
+> 最后核对：2026-08-22 · 基线：652927c+工作树
 
 ## 定位
 
@@ -11,7 +11,7 @@ collector 的核心：一首歌播放时，去五个歌词源检索候选、校�
 - **自动路径**：poller 换歌/循环重启时经 `trackEnrichment` 判缓存，未命中异步起 `resolveEnrichAsync`。用户无感，结果出现在所有歌词展示面。
 - **手动路径**：「歌词管理」窗口有两颗，底层是同一个 `collector search-lyrics` CLI 子命令（复用自动解析同一套检索+打分，都不自动落盘）：
   - 「联网搜索候选歌词」→ 保留完整候选列表交用户挑；
-  - 「重新自动匹配」（2026-08-21）→ 加 `-pick`，让 collector 顺便按 `pickLyricCandidate`（**自动解析那一套规则**，含「匹配算法：智能/顺序优先」的分支）选出冠军，App 侧直接采纳。冠军必须由 Go 这边算：顺序优先模式取的是「配置顺序里第一个 `Score>=0` 的源」而不是最高分，在 Swift 侧自己取 max(score) 就是第二份会漂的决策规则，漂的表现是「手动匹配完、下一拍自愈路径又给换回去」。
+  - 「重新自动匹配」（2026-08-21）→ 加 `-pick`，让 collector 顺便按 `pickLyricCandidate`（**自动解析那一套规则**，含「匹配算法：智能/顺序优先」的分支）选出冠军，App 侧直接采纳。冠军必须由 Go 这边算：顺序优先模式取的是「配置顺序里第一个 `Score>=0` 的源」而不是最高分，在 Swift 侧自己取 max(score) 就是第二份会漂的决策规则，漂的表现是「手动匹配完、下一拍自愈路径又给换回去」。App 侧拿到 `pick` 之后还要过 `LyricsRematchDecision.decide` 的五条分支（不可判 / 无候选 / 会丢逐字 / 完全没变 / 采纳）。⚠️ 其中「不可判」那条闸（`rescoreDecidable`）**对空歌词条目 2026-08-22 起放行** —— 它保护的是「手上这份」，手上什么都没有时它保护的是虚空，而不放行的后果是这颗按钮对「只有一个源收录了它」的歌**永远**不可能成功（见已知坑 16）。
   - ⚠️ **2026-08-21 修的口径 bug**：`search-lyrics` 一直漏了 `nativeLyricSource = playerNativeLyricSource(features.Player)`（main() 里有、CLI 那条提前分支跑不到），于是「与当前播放器同源 +250」在**所有手动搜索里恒为 0**。冠亚军分差中位只有 22 分、74% 的歌 ≤40 分，250 分足以翻盘 —— 在此之前「联网搜索候选歌词」展示的名次跟自动决策的名次对不上，用 QQ/网易云/酷狗听歌的用户尤其明显。
 - **设置入口**：设置 → 歌词 → 获取段（歌词来源勾选、匹配算法、提前解析同专辑）。
 
@@ -30,6 +30,7 @@ collector 的核心：一首歌播放时，去五个歌词源检索候选、校�
 - key = `cleanMediaTag(artist)|normEnrichTitle(title)|cleanMediaTag(album)`：清洗各类空格/零宽字符、循环剥结尾括号里的译名副标题（括号内容命中 34 词版本表则保留）；**不折**大小写/繁简——宽松归一只活在比对层（`loosenEnrichKey`），保证 Swift 侧能逐字复刻 key。比对层折三档：空格、繁简、**合 credit 分隔符**（`/ 、 & , ，` 全折成一个字符，分隔符集合复用 match.go 的 `isArtistCreditSep`；2026-08-20 加）。第三档修的是一类真实重复：同一次播放里两条路径对多歌手串的写法系统性不同——播放器（media-control）报 `VALORANT/Grabbitz/bbno$`，而**专辑预取**从 Apple Music 自己的曲目表（AppleScript `artist of t`）拿到的是 `VALORANT & Grabbitz & bbno$`，两条相隔 2~8 秒各建一条。预取本来有 `canonicalEnrichKey` + `looseInflightKey` 两道宽松查重，但它们都建立在 `loosenEnrichKey` 上，折不平分隔符就一起失效；预取的「跳过正在播的这首」也从两个字段逐字节相等改成按宽松键比（曲目表和播放器在括号/空格/繁简/分隔符上系统性不一致，逐字节比几乎必然漏）。存量用 `dedupe-entries -apply` 清了一次：875 → 862（13 组，删 30 个导出文件），存活条目的歌词内容零改动。
 - 搜索词变体 `searchTitleVariants`：括号是「另一次录音」词（live/demo/remix 等 16 词）→ 先原样后裸标题；其它括号 → 先裸后原样。网易云不走这套（实测无收益），自建 4 条查询序列。
 - **歌手别名重试**：五源全无可用候选时按 `retryArtistIdentities` 换名重查，三条依次试——①手工表 `artistAliasTable`；②MusicBrainz 中文别名（置信度 ≥90 且艺人属 CN/TW/HK/MO/SG 才采纳，限速 1.1s/次；含汉字的整串直接返回空，`containsHan` 守卫，所以「拉丁名 & 中文名」混合串靠不上这条）；③**MusicBrainz 主名**（`musicBrainzPrimaryArtistName`，2026-08-20 加）。第三条修的是「本名 ↔ 艺名」这一整类：前两条都是中文名取向，而 Apple Music 把《Hurry Up Tomorrow》标成 `Abel Tesfaye`（本名）、五个歌词源全按 `The Weeknd` 索引时它们一条都给不出——实测原样查 0 条候选、换名后五源全有（最高 1162）。用的是同一次 MB 搜索早就取回、原来被丢掉的首条 `name`；额外一道守卫：本地标签必须逐字（`normLoose`）命中该艺人的主名或任一别名（别名 type 不过滤，法定名/搜索提示同样算证据——这里问的是「MB 认不认识这个写法」，不是挑展示名），部分命中（如只写姓氏 `Tesfaye`）一律不认。结果只当检索身份用，不写 `canonical_artist`。**缓存只落盘「查到了」的条目**（自己一份 `artist-primary-cache.json`），查空的只留内存：MusicBrainz 限速按 IP、1 req/s，而 `musicbrainzThrottle` 是**进程内**节流——常驻 collector、手动搜索那个一次性 CLI、跑测试的进程各自计时，互不知情，撞上 503 就返回空。把空也永久写进文件（`artistAliasCache` 正是那么做的）会让一次偶发限速把这位歌手永久钉死在「没有别名」上。2026-08-20 实测坐实这个形态：同一首歌手动搜索第一遍 0 条、原样再搜一遍就出 5 条；落盘之后第三遍不再碰 MB，2 秒出结果。
+- **Apple 目录锚点给的权威署名**（2026-08-22）：五源全无可用候选时，`scoredLyricCandidatesStreaming` 先试 `appleCatalogSearchIdentities`（**排在手工别名表/MusicBrainz 前面**——它是这首歌自己的元数据，不是「这位歌手一般叫什么」，证据强度更高），再走 `retryArtistIdentities`，两边按 `normLoose` 去重（`dedupeArtistIdentities`）免得同一个查询词白跑一轮五源抓取。给出的两个名字里 **`collectionArtistName`（专辑署名）排前面**：iTunes 只在它与曲目署名不同时才给这个字段，所以它非空本身就是「这首歌的署名跟专辑主人不是一个人」的信号——演唱会嘉宾 / 群星合辑 / 客串曲目，恰好是本地署名最容易跟各家歌词库对不上的那批，也恰好是手工表和 MusicBrainz 都够不到的一类。实测：「枫+退后+搁浅 (Live)」本地署名「南拳妈妈弹头」时网易云 4 条查询词一条都召回不到目标，换专辑署名「周杰伦」查、目标排第 1。只当**检索身份**用，绝不回写 `canonical_artist`／展示字段（同 `lyricPrimaryQueryArtist` 的纪律）。锚点本身的守卫/自校验/缓存见第 02 章「Apple 目录锚点」。⚠️ 索引由播放路径填，所以只对**本进程见过**的曲目有效；`search-lyrics` 那个一次性 CLI 读同一份磁盘缓存但索引是空的，手动搜索这一路暂时用不上它。
 - **首歌手变体轮**（2026-08-20，「wherever u r」案）：可用候选的**启用源数** < min(2, 启用源总数) 且歌手串是多人合credit 时，用 `lyricPrimaryQueryArtist`（词级剥 feat./ft./featuring + `firstCreditedArtist`）截出首歌手再查一轮，仍不够再试首歌手的别名/MB 中文名（最多 3 轮）。变体轮结果**合并**进原串轮而非替换（`mergeLyricCandidateRounds`：按源去重、原串轮可用者优先、判废才顶替，合并后按**原串**统一重打分——变体串只作检索词和源内采纳闸，绝不进打分，防语言闸误杀）；变体轮的 `ne` 只许补封面/跳转链接（Album/AlbumID 跟着封面一起走，保 CoverAlbum 配对），**绝不采用其 Artist**——防 canonical_artist 把「A & B」缩窄成「A」（2026-07-10 回归形态）。触发判据数的是**启用**源（禁用源不算「信息够了」），单源配置封顶为 1、该源已成功时不多跑。别名重试触发时机的教训：网易云一条可用候选就能把整个重试短路，酷狗/QQ 的逐字候选永远没机会被看见——「有一条可用」不等于「信息够了」。
 
 ### 3. 五源并发收集（总截止 20 秒）
@@ -57,18 +58,19 @@ collector 的核心：一首歌播放时，去五个歌词源检索候选、校�
   - `rejectNoLastTimestamp`：提不出末句时间戳。
 - **逐字覆盖率守卫** `usableWordTiming`：YRC 末时刻 < LRC 末时刻 ×0.5 就当没有逐字（防 QQ 截断残片骗 +400 又被「已有逐字不重试」钉死；阈值实测依据：残片覆盖 19.1%、正常最低 85.4%）。
 
-### 5. 打分（`lyricsScoringVersion = 3`）
+### 5. 打分（`lyricsScoringVersion = 4`）
 
 | 项 | 分值 | 条件 |
 |---|---|---|
 | 时长吻合 | +100~+300 连续衰减 | 偏差 ≤25% 且末句不超曲长 5s |
 | 末句超曲长 5s | **-700** | 物理矛盾档，不吃印证豁免 |
 | 跨源末尾印证 | +100 | ±5s，且仅当批内无人时长吻合 |
-| 时长明显不符 | -500 | 原一票否决，实测误杀 5:1 后改重扣 |
+| 时长明显不符 | -500 | 原一票否决，实测误杀 5:1 后改重扣。量的是「LRC 末句 vs 曲长」这个**代理** |
+| **源自报曲长不符** | **-400** | v4 新增。量的是两个**曲目时长**的直接比对（`sourceReportedDurationSecs` vs 本地），偏差 >12%（分母取较大者，复用 `wrongDuration` 的口径）。**只扣不加**，源没自报（0）不扣 |
 | 逐字时间轴 | **+400** | 过覆盖率守卫 |
 | 与当前播放器同源 | +250 | 放 QQ 音乐偏向 QQ 词（理由是时间轴对齐，非内容质量） |
 | 行数 | +1/行，封顶 200 | |
-| 版本限定词错配 | -600 | 歌名∪专辑名比对 |
+| 版本限定词错配 | -600 | 歌名∪专辑名比对；词表 2026-08-22 补了 `club mix`/`radio mix`/`house mix`/`dub mix`/`dance mix`/`vocal mix`/`club edit` |
 | 专辑亲和 | +150/+75/+40 | 只加不减（专辑对不上是零证据非负证据） |
 | 标题吻合梯度 | +120/+60/+30 | 精确/剥括号带版本词/双语 |
 | 跨源正文共识 | +250（2 家）/+150（1 家） | 3-gram Jaccard ≥0.55、正文 ≥30 rune；时长不吻合/overshoot 者共识清零 |
@@ -83,7 +85,7 @@ collector 的核心：一首歌播放时，去五个歌词源检索候选、校�
 - **被禁用的源照样会查**（五路无条件并发），过滤只发生在挑选步——切换设置不用重搜。
 - 歌词/译文/罗马音/逐字**整体跟着冠军走**，不存在跨源拼装。唯一的独立补充是机翻译文（见第 10 章）。
 - 全部源空：不写歌词但照记决策；**纯音乐标记**透传给 UI；条目所有字段全空则整条不落盘（防断网钉死失败）。
-- **纯音乐标记的两个来源**（2026-08-20 从只有 lrclib 扩成两个）：①lrclib 响应里的结构化 `instrumental`；②网易云歌词接口的顶层 `pureMusic`，或正文只有「纯音乐」占位 + 署名行（`isNeteasePureMusicLyric`，占位文案复用 `neteaseInstrumentalPlaceholderMarker`）。两者都以 `Score:-1 / Instrumental:true` 的搭车标记进 results，不参与打分/挑选；`mergeLyricCandidateRounds` 保留标记的条件按**标记自己的源**判（原来写死 lrclib）。起因是用户报「一堆条目显示无歌词、其实都是纯音乐」（LoL 原声带 12 首）：lrclib 压根没有这批曲目（五源全空），而网易云匹配上了歌、歌词接口明确回 `pureMusic=true`，但那个字段**不在解码结构体里**、占位正文又过不了 `isTimedLRC` 的三行门槛，于是结论在解码那一步就丢了。
+- **纯音乐标记的三个来源**（2026-08-20 从只有 lrclib 扩成两个，2026-08-22 加上 QQ）：①lrclib 响应里的结构化 `instrumental`；②网易云歌词接口的顶层 `pureMusic`，或正文只有「纯音乐」占位 + 署名行（`isInstrumentalPlaceholderLyric`，占位文案复用 `neteaseInstrumentalPlaceholderMarker`）；③**QQ 的占位正文**——它对纯音乐曲目回的是单行 `[00:00:00]此歌曲为没有填词的纯音乐，请您欣赏`，语义上是三者里最硬的**明文断言**，所以 `scoreAndSort` 里排在网易云之前（判定复用同一个 `isInstrumentalPlaceholderLyric`，它对这句话逐字适用——那个函数 2026-08-22 从 `isNeteasePureMusicLyric` 改名成来源中立就是为此）。两者都以 `Score:-1 / Instrumental:true` 的搭车标记进 results，不参与打分/挑选；`mergeLyricCandidateRounds` 保留标记的条件按**标记自己的源**判（原来写死 lrclib）。起因是用户报「一堆条目显示无歌词、其实都是纯音乐」（LoL 原声带 12 首）：lrclib 压根没有这批曲目（五源全空），而网易云匹配上了歌、歌词接口明确回 `pureMusic=true`，但那个字段**不在解码结构体里**、占位正文又过不了 `isTimedLRC` 的三行门槛，于是结论在解码那一步就丢了。
 - ⚠️ 同一次修复补了第三个漏点：`retryLyricsUpgrade`（升级重试 / 补空重试）**从来不写** `instrumental`——只有 first-resolve 那条路径写。于是「当初那轮没有这个信号、后来有了」的条目永远拿不到标记，还要每 24 小时（退避后翻倍）白搜一轮。现在两条路径都写，标记落地后 `needsLyricsFirstFill` 直接 return，重搜也省了。
 - 存量条目补标记用 `collector recheck-instrumental [-apply] "歌手|歌名|专辑" ...`：只写 `instrumental` 一个字段（这轮真搜到歌词就交回补空路径，一次性命令不碰歌词），dry-run 默认、`-apply` 要求常驻实例已停。
 
@@ -107,7 +109,7 @@ collector 的核心：一首歌播放时，去五个歌词源检索候选、校�
 
 1. **外围补全**：封面主色/平台链接/canonical_artist 缺失，**或封面属于哪张专辑对不上/不详**（`coverNeedsAlbumCheck`，只查 `cover_source=netease` 那档）才补；10 分钟节流、上限 5 次；不碰歌词。真要换封面还得过 `coverSwapAllowed`——跨源替换要求「这一轮网易云真的应答过 + 新封面对得上专辑」，否则网易云一次限流（HTTP 200 + body code 405）就能把一张对版、国内加载得出来的封面换成 mzstatic 的。
 2. **rescore**：打分规则版本落后时按新规则重选（**不比大小**）；1 小时节流、上限 3 次；要求当前歌词的源本轮也应答了才够格推翻。
-3. **升级重试**（`needsLyricsRetry`）：当初有启用的源没赶上 20s 截止才重搜；6 小时节流、上限 3 次；新分**严格更高**才替换（跨打分版本用 `lyricsUpgradeBaseline` 换同尺度基准）。已有逐字不重试，两个例外可翻盘：「同源候选当初落选」（换播放器场景）与「时长差 >12%」。⚠️ 时长差这条的原始观察值必须先过 `observeWrongDuration` 的 **30 秒同值去抖**（2026-08-22）：换曲/预载窗口里 media-control 会把**下一首**的时长和当前曲目的标题拼进同一份快照（实锤：「开不了口 (Live)」272.973s 开播 6 秒后，relay 快照携带同专辑下一首「床边故事 (Live)」的 220.239s，逐位一致），一次性脏观察直接当真会白烧一轮重试、所有候选按错误时长吃 -700、还把决策记录盖掉。同一脏值（±1s）稳定满 30 秒才触发；时长又对上即清零；观察断流超 5 分钟按陈旧重计（防"切出侧脏值残留 + 几天后重放同曲第一口又是脏值"拿旧 firstSeen 一步凑满窗口；上限须盖过稳定播放期的正常喂食间隔——relay 心跳/LB 提交都是 ≤4 分钟一次）；确认放行同时清记录（下一轮重新攒，不会连发烧光预算）。
+3. **升级重试**（`needsLyricsRetry`）：当初有启用的源没赶上 20s 截止才重搜；6 小时节流、上限 3 次；新分**严格更高**才替换（跨打分版本用 `lyricsUpgradeBaseline` 换同尺度基准）。已有逐字不重试，两个例外可翻盘：「同源候选当初落选」（换播放器场景）与「时长差 >12%」。⚠️ **Apple Music 现在多了一道上游防线**：Apple 目录锚点成立时，时长直接用 Apple 目录的权威值，脏快照在进入这条链路之前就被顶掉了（见第 02 章）。锚点对用户自己导入的曲库和别的播放器无效，所以下面这道去抖仍是必需的。⚠️ 时长差这条的原始观察值必须先过 `observeWrongDuration` 的 **30 秒同值去抖**（2026-08-22）：换曲/预载窗口里 media-control 会把**下一首**的时长和当前曲目的标题拼进同一份快照（实锤：「开不了口 (Live)」272.973s 开播 6 秒后，relay 快照携带同专辑下一首「床边故事 (Live)」的 220.239s，逐位一致），一次性脏观察直接当真会白烧一轮重试、所有候选按错误时长吃 -700、还把决策记录盖掉。同一脏值（±1s）稳定满 30 秒才触发；时长又对上即清零；观察断流超 5 分钟按陈旧重计（防"切出侧脏值残留 + 几天后重放同曲第一口又是脏值"拿旧 firstSeen 一步凑满窗口；上限须盖过稳定播放期的正常喂食间隔——relay 心跳/LB 提交都是 ≤4 分钟一次）；确认放行同时清记录（下一轮重新攒，不会连发烧光预算）。
 4. **机翻补译文**：见第 10 章。
 
 `ManualLyrics`（用户手改）对一切自动路径一票否决。**已校准**（用户手动调过这首歌的歌词时间轴偏移）同样一票否决 rescore 与升级重试——名单在 `~/.config/lyrimuse/lyrimuse-lyrics-pins.json`，由 App 写、`lyricspins.go` 按 mtime 重读（不需要重启 collector）。理由：校正值绑在歌词内容指纹上，换一份内容就等于让它静默作废（详见第 8 章「已校准即锁定歌词源」）。
@@ -149,10 +151,13 @@ collector 的核心：一首歌播放时，去五个歌词源检索候选、校�
 | 挑选 | enrich.go `pickLyricCandidate` |
 | 守卫 | match.go `isTimedLRC` `isProbablyWrongLanguageLyrics` `isCreditOnlyLRC` `usableWordTiming` |
 | 歌手闸三档 | match.go `artistMatches` / `lyricSourceArtistMatches` / `lyricRecordingTriangleMatches`（第三档只在 kugou.go `resolveKugouLyric` 调用） |
+| Apple 目录锚点 | applecatalog.go `appleCatalogAnchor` `appleCatalogSearchIdentities` `dedupeArtistIdentities`（详见第 02 章） |
 | 重试/重打分 | enrich.go `needsLyricsRetry` `retryLyricsUpgrade` `needsLyricsRescore` `rescoreLyrics` |
 | 已校准一票否决 | lyricspins.go `lyricsPinned` `readLyricsPins`;Swift 侧 `LyricsPinStore` |
 | 决策留痕 | decision.go `buildLyricsDecision`；lyricstrace.go |
+| 手动重匹配的可判定性闸 | enrich.go `rescoreDecidable`（第三参 `noCurrentLyrics`）；Swift 侧 `LyricsRematchDecision.decide` |
 | 各源 | netease.go / qq.go / kugou.go / lrclib.go / musixmatch.go |
+| 纯音乐占位判定 | netease.go `isInstrumentalPlaceholderLyric`；qq.go `resolveQQLyric`→`qqLyricResult`；enrich.go `scoreAndSort` 的 `instrumentalMarker` 三分支 |
 | 封面选源 | enrich.go `preferAppleCoverOverNetease` `coverNeedsAlbumCheck` `coverSwapAllowed`；apple.go `searchAppleMusicMatch` `resolveAppleMusicMatchViaAlbum` |
 | 专辑预取 | albumprefetch.go `prefetchAlbumSiblings` |
 | 手动搜索 | searchcli.go `runSearchLyricsCLI` |
@@ -231,6 +236,15 @@ collector 的核心：一首歌播放时，去五个歌词源检索候选、校�
     - **qq**：smartbox 的条目**既不带专辑也不带时长**（专辑要另发 `qqSongAlbum(mid)` 一次请求，
       时长压根拿不到），三角验证在那里无法评估。
 
+    ⚠️ **2026-08-22 对抗性复核订正：长度可比性闸原来是单向的。** 原写法 `nca < ratio*nla` 只约束
+    「本地 ⊇ 候选」那半边；一旦是「候选 ⊇ 本地」（nca ≥ nla），判据恒真、一件东西都拦不掉——而那半边
+    恰恰是巡演/合辑/精选/Live 专辑那一整类。实测：本地专辑 `Editorial`（9 rune）对候选
+    `one-man tour 2021-2022 -Editorial-@さいたまスーパーアリーナ`（62 rune）宽度比 6.9，老写法照过，
+    于是三角档**拒掉了对版的单曲行、选中了巡演 Live 专辑那一行**（两行歌词正文一致、时间戳差 <1s，
+    所以没造成用户可见的错词，是潜在缺陷不是已发生的破坏）。已改成 `min/max` 双向同一把尺子。
+    同一次复核的正面结论：对 ~2650 首真实曲目实测，三角档放行 112 处、**0 处误配**；其中 6 处
+    「抢在原本会被选中的行前面」的，6 处全是改对了。
+
     **专辑名那道长度可比性闸的来历**：`albumScore` 的「宽松包含」档对**短通用串**几乎免检——
     同一批酷狗结果里「炸小肉丸 / album=`周杰伦` / 62s」也拿到 100 分（`周杰伦` 正好是
     `周杰伦地表最强世界巡回演唱会live` 的子串），真正挡住它的只有时长那一条。加长度可比性
@@ -246,4 +260,170 @@ collector 的核心：一首歌播放时，去五个歌词源检索候选、校�
 
     ⚠️ 存量条目不会立刻自己好：`needsLyricsFirstFill` 的退避是 **24 小时起步**（`lyricsFillCount`
     每次翻倍），要马上生效得用「歌词管理」→「重新自动匹配」。
+15. **「…Mix」不带 re- 的舞曲混音,当初不在版本限定词表里**（2026-08-22，
+    「Stranger in Moscow (Tee's In-House Club Mix)」案）。`distinctRecordingVersionTags` 收了
+    `remix` 却没收 `club mix` 这一族，而 `Tee's In-House Club Mix` 归一后是
+    `teesinhouseclubmix`、不含 `remix`，于是 `titleVersionTags` 抽出**空集**。
+    一个词表漏洞造成**两处**后果，这是这次误判的全部成因：
+
+    - **检索层**：`searchTitleVariants` 用的是同一个 `titleVersionTags`。抽不出限定词 →
+      走「裸标题优先」→ 酷狗第一条查询 `Michael Jackson Stranger in Moscow` 拿回正常版、
+      过了 `lyricTitleAccepted` 就 `break`，而**原样标题下排在第 1 位的混音版条目从没被看到**。
+      QQ、Musixmatch 同理。
+    - **打分层**：`versionTagsMismatch` 判两边都是空集 → -600 不触发，正常版稳居榜首。
+
+    **但补词表并不足以修好这首歌**，这是最值得记下来的一点。补完之后正常版 1027-600=427，
+    而真正对版的酷狗混音版只有 235（`durationOff -500`：它末句在 304.9s、曲长 414.32s，
+    偏 26.4%，**刚好越过 25% 容差**）——错的那份反而在时长项上赢了对的那份（正常版末句
+    335s、偏 19.1%，拿 +147），纯粹因为 335 比 304.9 离 414 近一点。俱乐部混音有约 110 秒
+    纯器乐尾奏，「LRC 末句 vs 曲长」这个代理在这类曲目上就是噪声。
+
+    真正的根因是：**打分打的是代理，却无视了早就采集回来、躺在同一条决策记录里的直接测量**
+    ——冠军自己的 `source_reported_duration_secs` 白纸黑字写着 **344s**（本地 414.32s，偏 17%），
+    也就是「我是另一次录音」。这个字段自 2026-08-12 起就在透传，注释写着「先攒评测数据」。
+    v4 把它接进打分（见 `sourceDurationMismatchPenalty` 的注释，含参数网格消融数据）。
+
+    **实测结果**：该曲五源重跑 → 冠军从 qq(1027，正常版) 变成 **musixmatch 582**，
+    标题 `Stranger in Moscow (Tee's In-House Club Mix)`、**首句 31.9s / 末句 387.71s**
+    —— 俱乐部混音开头就是约 32 秒纯器乐前奏，只有这一份带对了偏移（lrclib 是**同一份歌词
+    文本**但首句在 66.72s，酷狗/QQ 首句都在 0.x s，全是标准版的轴）。原冠军 qq 掉到 1 分
+    （`sourceDurationOff -400` + `versionTags -600` 双杀）。
+
+    ⚠️ **2026-08-22 对抗性复核补的三条订正**：
+    - `musixmatch` 当时是五源里唯一**永远不上报时长**的，于是这道 −400 对它**系统性免罚**——
+      而它恰恰是匹配最松的一个（`musixmatchSearchTrackOnce` 只查 title+artist+has_subtitles，
+      既不看专辑也不看时长）。实测 52 个「musixmatch 有有效候选」的条目里，按 max() 口径偏差
+      >12% 的有 7 条（13.5%），其余四源合计 4.3%。**`track_length` 本来就在它的 track.search
+      响应里**，只差一个结构体字段——那不是「没有证据」，是证据没被读。已补齐并透传；补齐后重跑
+      消融，冠军变化 **0 处**，纯粹把这道闸补对称。
+    - 我最初那份消融脚本有两处方法问题：分母用了 `/local` 而上线代码用 `math.Max`，且拿被夹到 1
+      的 `score` 当基线。按「`score_terms` 求和还原未夹原始分 + max() 分母」重跑，可评样本从
+      34 条扩到 **117 条**，结论不变：冠军变化仍然只有 Earth Song 这 1 处。
+    - 词表变大自带一个结构性副作用：`versionTagsMismatch` 判的是**集合完全相等**，而新收的 7 个
+      短语彼此重叠（club/dub/dance/vocal/house/radio × mix），于是「Vocal Mix」vs「Vocal Club Mix」
+      从「两边空集不罚」变成「两个不同单元素集合 −600」。机制已验证，但在本机 734 条标题里
+      **没有找到真实撞上的曲目**，故暂不做「同族折叠」——记在这里，真踩到再改。
+
+    ⚠️ **裸「club」绝不能进词表**，有实测反例：同一张专辑的「Earth Song」本地标题就叫
+    `Earth Song`（Apple 没给任何混音标记）、抽不出限定词，而正确候选是
+    `Earth Song (Hani's club experience)`。收了裸 club 的话，本地空集 vs 候选有标记 =
+    版本不符，-600 会打在**唯一正确**的那条上。`sourceduration_test.go` 里有守卫测试。
+    这首歌也说明版本限定词这条路有天花板——本地标签压根没有混音标记时它无能为力，
+    只有源自报曲长那一项救得了（消融里唯一那处冠军变化正是它，且改对了）。
+
+    **存量条目怎么恢复**：`lyricsScoringVersion` 3→4 之后 `needsLyricsRescore` 会自动收编
+    （版本落后即触发，1 小时节流 / 3 次上限，要求当前歌词的源本轮也应答）——不用等
+    `needsLyricsFirstFill` 那 24 小时，也不用手动重搜。
+16. **「重新自动匹配」对「压根没有歌词」的条目永远失败**（2026-08-22，用户报「手动搜索能
+    搜到，点『重新自动匹配』却搜不到」）。两颗按钮走同一个 `search-lyrics` CLI、同一套检索
+    打分，唯一差别是 `-pick` 那条路多过一道 `rescoreDecidable`：
+
+    ```go
+    if currentSource != "" && features.LyricsSources[currentSource] {
+        return containsString(lyricSourcesResponded(scored), currentSource)
+    }
+    return allEnabledLyricSourcesResponded(scored)   // ← 要求所有启用的源都应答
+    ```
+
+    App 传的 `-current-source` 是 `summary.lyricsSource`；条目没有歌词时它是空串 → 落进
+    else 分支 → 要求**五个源全部应答**。而「枫+退后+搁浅 (Live)」只有酷狗收录（799 分、
+    带逐字），另外几个源永远不会出现在 `responded` 里 —— `Decidable` 恒为 `false`，App 按
+    约定 `keptNotDecidable` 什么都不改，文案还渲染成主语为空的「这一轮「」没应答」
+    （`sourceDisplayName("")`）。
+
+    **方向是反的**：这道闸存在的意义是「别把手上这份好的换成更差的」，手上什么都没有时它
+    保护的是虚空。同一个洞见 `enrich.go` 里早就写过一遍，只是这里没享受到 ——
+    `lyricsUpgradeBaseline` 对空歌词条目那一支：「没有旧分要保护，任何真候选都是改进」。
+    而且**自动路径比手动路径宽**：空条目走的是 `needsLyricsFirstFill` → `retryLyricsUpgrade`，
+    那条路压根没有可判定性要求。手动按钮反而更严，是纯粹的不一致。
+
+    修法是给 `rescoreDecidable` 加第三个参数 `noCurrentLyrics`，**刻意不就地推断
+    `currentSource == ""`** —— 同一个空串在两条调用路径上语义不同：
+    - 自动 `rescoreLyrics`：前置 `needsLyricsRescore` 第一行就要求 `e.Lyrics != ""`，
+      所以空串只可能是「老条目有歌词但没记来源」，**必须保持严格**，传 `false`，口径一字未动；
+    - 手动 `-pick`：空串就是「这条没有歌词」，传 `*currentSource == ""`。
+
+    ⚠️ **2026-08-22 对抗性复核推翻了「用空串推断」这一步，已改成去缓存里读真相。**
+    `EnrichCacheStore.saveEdit` 的 `source` 参数默认 nil，而「歌词管理」里那颗「保存修改」正是
+    `saveEdit(key:lyrics:tr:roma:)`（不传 source）——它 `removeValue(forKey: "lyrics_source")`，
+    `writeLyricsFiles` 跟着写出不带 `[source:]` 的 .lrc，collector 再按「六字段权威源」把
+    `LyricsSource` 灌回空。于是**每一条用户手改过的条目**都是「有歌词 + 来源为空」。照推断走的话，
+    这道闸会对手改条目一律放行，让冠军覆盖掉人工修正过的正文——那份内容删了找不回来。
+
+    我当初那个「294 条里 0 例外」的测量**取样取错了**：现役缓存手改条目是 0 条，因为老库那 33 条
+    手改记录同一天早些时候刚被移走。在一个恰好没有反例的数据集上做的测量，证明不了不变量。
+
+    现在 `searchcli.go` 用 `lyricsEmptyInCacheFile` **只读**地问缓存文件要事实（自己解析、不走
+    `loadEnrichCache`——那个会设 `enrichPath`、解析失败还会把用户缓存改名成 `.corrupt`）。
+    读不出来时 `known=false`，按最保守的那一支走，行为等同改动之前。
+    `lyricsemptylookup_test.go` 覆盖四种形态，并断言这条路径**没有任何副作用**。
+
+    ⚠️ 另有一个**先于这次改动就存在**的问题，需要产品决策、这次没动：「重新自动匹配」采纳时走的是
+    `saveEdit(..., markManual: false)`，也就是说它会清掉 `manual_lyrics` 并覆盖手改正文——
+    在所有启用的源都应答的场合（很常见），改动前也一样会发生。`LyricsRematchDecision.decide` 的五条
+    分支里没有任何一条看 `manual_lyrics`。那颗按钮的语义注释写的是「完全交回算法管理」，所以这可能
+    是有意的；但没有任何确认提示，而同一个文件里另一处注释写着「那份内容删了就找不回来，自动逻辑
+    没有任何理由觉得自己比人工更懂」。要不要加确认，留给产品判断。
+
+    放行不等于无保护，下游还有两道闸：冠军为空 → `keptNoCandidate` 什么都不写；现有这份有
+    逐字而冠军没有 → `keptWouldLoseWordTiming`。`lyricsrescore_test.go` 里
+    `TestRescoreDecidableNoCurrentLyrics` 同时钉住新分支**和**「自动路径口径一字未动」。
+
+17. **QQ 的「纯音乐」明文断言被 `isTimedLRC` 在源头扔掉**（2026-08-22，用户报「蛋堡《收敛水》
+    的「关键字: Intro」搜出来没歌词」）。这首 114 秒的专辑 intro **本来就是纯音乐**，五个源
+    口径完全一致：
+
+    | 源 | 实测 |
+    |---|---|
+    | netease | 找到了（id=76873，专辑第 1 轨、114.0s），但 `lrc` 只有 21 字符：`[00:00.00-1] 作曲 : 蛋堡`；**没有** `pureMusic` 字段；tlyric/romalrc/klyric/yrc 全空 |
+    | kugou | 搜到了 hash（rank 1，`关键字：Intro`/全角冒号/114s），但 **KRC 候选 0 条** |
+    | lrclib | `get` 404、`search` 0 条 |
+    | **qq** | 搜到 mid，歌词接口明确回 **`[00:00:00]此歌曲为没有填词的纯音乐，请您欣赏`** |
+    | musixmatch | 无候选 |
+
+    所以「为什么搜不到」本身不是 bug。真正的缺陷是**它该显示「纯音乐」而不是「无歌词」**：
+    唯一给出结论的那个源，结论在 `resolveQQLyric` 的最后一行就被丢掉了 ——
+
+    ```go
+    if l := out.Lyric; isTimedLRC(l) { return l }
+    return ""          // ← 占位只有一行带戳，过不了「≥3 行且过半」，结论在这里蒸发
+    ```
+
+    后果两条：①界面上落在「无歌词 / 无来源」，跟真正的失败长得一模一样；
+    ②`needsLyricsFirstFill` 会每 24 小时（退避后翻倍，上限 16 天）**白搜一轮五个源** ——
+    而 `instrumental` 一旦落地，`needsLyricsFirstFill` 第一行就 return，这轮就省了。
+
+    修法：占位判定挪到 `isTimedLRC` **之前**，`qqLyric` 的返回值从 `string` 换成
+    `qqLyricResult{lrc, instrumental}`，一路透传到 `sourceResult.instrumental` 与
+    `scoreAndSort` 的第三个 `instrumentalMarker` 分支。判定函数复用现成的那个（顺手从
+    `isNeteasePureMusicLyric` 改名成 `isInstrumentalPlaceholderLyric`，它现在服务三个源）。
+
+    **注意它对网易云那一行署名仍判 false**，这是对的：「只有署名行」不等于「没有词」，
+    那是含糊状态；QQ 那句话才是断言。`pureinstrumental_test.go` 把这条区别一起钉住，
+    并断言「占位过不了 `isTimedLRC`」这个前提本身（前提变了就该重写成因描述）。
+
+    **规模**：当前缓存 161 条里只有这 1 条受影响；拿废纸篓里那份 619 条老库量了一遍，
+    12 条无歌词条目里有 **3 条**（卢广仲「PAZ」、方大同「Over (Reprise)」、陶喆「愿主怜悯」）
+    能被这条断言救出来——约四分之一。另外 8 条探针报「QQ 搜不到」，但那是探针用
+    `歌手 歌名` 打 smartbox 太糙（英文曲目常返回 0 条），真实比例可能更高，**未验证**。
+
+    **字段改名（同日补做）**：这个信号传给 App 的 key 原来叫 `lrclibInstrumental`
+    （`searchLyricsUpdate`），2026-08-20 加网易云那次就已经名不副实，现在更是三个源共用。
+    已改成 `instrumental`，并**保留一个同值别名过渡**——理由是 collector 和 App 是两个
+    **独立部署**的二进制：`lyrimuse-collector/build.sh` 只换 collector、不重建 App，所以换了
+    collector 之后跑的可能还是旧 App，而旧 App 只认旧 key；单方面改名会让「有源明确说这首是
+    纯音乐」这类文案在重建 App 之前**静默退化**成「这一轮没有一个能用的候选」。两个方向都兜住：
+    Go 侧同时输出 `instrumental` 与 `lrclibInstrumental`（`LegacyLrclibInstrumental`，`omitempty`，
+    非纯音乐时两个 key 都不出现），Swift 侧 `RawSearchUpdate` 按
+    `raw.instrumental ?? raw.lrclibInstrumental ?? false` 读（兜住「新 App + 旧 collector」）。
+
+    ⚠️ **别让别名长住**：App 带着新解码重新构建并安装之后，`LegacyLrclibInstrumental`
+    和 Swift 侧的 `lrclibInstrumental` 都可以删掉——那是它们唯一的存在理由，删除条件写在
+    `searchcli.go` 那个字段的注释里。
+
+    ⚠️ 注意 Swift 的**对外**类型（`SearchUpdate.instrumental`）一直就叫对了，只有解码用的
+    raw 结构体沿用旧名，所以这次改动面只有 Go 一个字段 + Swift 两处。
+
+
+
 

@@ -487,15 +487,30 @@ func qqMidFromURL(u string) string {
 
 var (
 	qqLyricMu    sync.Mutex
-	qqLyricCache = map[string]string{}
+	qqLyricCache = map[string]qqLyricResult{}
 )
 
 // qqLyric returns QQ Music's time-tagged LRC for a songmid — the fallback lyric
 // source when NetEase has none (the two catalogs differ). Cached per mid; only
 // successes cached. Empty unless the response has real timestamps.
-func qqLyric(mid string) string {
+// qqLyricResult 把"整行歌词"和"这首歌是纯音乐"分开带出来。
+//
+// 为什么要多这个 bool(2026-08-22,用户报「蛋堡《收敛水》的「关键字: Intro」搜出来没歌词」):
+// QQ 对纯音乐曲目回的是单行占位 `[00:00:00]此歌曲为没有填词的纯音乐,请您欣赏`,而
+// resolveQQLyric 末尾那道 isTimedLRC(要求 ≥3 行带戳)会把它判成"不是歌词"直接返回空串 ——
+// **信号在那一步就被扔了**,后面谁都读不到。于是这类曲目落在「无歌词」而不是「纯音乐」,
+// 界面上看起来像失败,还要被 needsLyricsFirstFill 每 24 小时(退避后翻倍)白搜一轮。
+// 实测该曲五源口径一致:网易云只有一行署名(没有 pureMusic 字段)、酷狗 KRC 候选 0 条、
+// LRCLIB 404、**只有 QQ 明确说了这句话**。文档第 09 章原来写「纯音乐标记的两个来源」,
+// 这是第三个。
+type qqLyricResult struct {
+	lrc          string
+	instrumental bool
+}
+
+func qqLyric(mid string) qqLyricResult {
 	if mid == "" {
-		return ""
+		return qqLyricResult{}
 	}
 	qqLyricMu.Lock()
 	if v, ok := qqLyricCache[mid]; ok {
@@ -504,7 +519,7 @@ func qqLyric(mid string) string {
 	}
 	qqLyricMu.Unlock()
 	l := resolveQQLyric(mid)
-	if l != "" {
+	if l.lrc != "" || l.instrumental {
 		qqLyricMu.Lock()
 		qqLyricCache[mid] = l
 		qqLyricMu.Unlock()
@@ -512,42 +527,47 @@ func qqLyric(mid string) string {
 	return l
 }
 
-func resolveQQLyric(mid string) string {
+func resolveQQLyric(mid string) qqLyricResult {
 	u := "https://c.y.qq.com/lyric/fcgi-bin/fcg_query_lyric_new.fcg?format=json&nobase64=1&g_tk=5381&songmid=" + neturl.QueryEscape(mid)
 	req, err := http.NewRequest(http.MethodGet, u, nil)
 	if err != nil {
-		return ""
+		return qqLyricResult{}
 	}
 	req.Header.Set("Referer", "https://y.qq.com/") // 反爬要求带 y.qq.com 来源
 	req.Header.Set("User-Agent", qqUA)
 	resp, err := doHTTPTracked(&http.Client{Timeout: 6 * time.Second}, req)
 	if err != nil {
-		return ""
+		return qqLyricResult{}
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return ""
+		return qqLyricResult{}
 	}
 	raw, err := io.ReadAll(io.LimitReader(resp.Body, 64*1024))
 	if err != nil {
-		return ""
+		return qqLyricResult{}
 	}
 	// 响应可能被 jsonp 包裹(MusicJsonCallback({...}))：截第一个 { 到最后一个 }。
 	s := string(raw)
 	i, j := strings.IndexByte(s, '{'), strings.LastIndexByte(s, '}')
 	if i < 0 || j <= i {
-		return ""
+		return qqLyricResult{}
 	}
 	var out struct {
 		Lyric string `json:"lyric"`
 	}
 	if err := json.Unmarshal([]byte(s[i:j+1]), &out); err != nil {
-		return ""
+		return qqLyricResult{}
+	}
+	// ⚠️ 顺序要紧:占位判定必须在 isTimedLRC **之前**。QQ 的纯音乐占位只有一行带戳,
+	// 过不了"≥3 行且过半"那道门槛,先过 isTimedLRC 的话这个明确结论就被当成"没歌词"扔掉了。
+	if isInstrumentalPlaceholderLyric(out.Lyric) {
+		return qqLyricResult{instrumental: true}
 	}
 	if l := out.Lyric; isTimedLRC(l) {
-		return l
+		return qqLyricResult{lrc: l}
 	}
-	return ""
+	return qqLyricResult{}
 }
 
 // ---- QQ音乐逐字(QRC)歌词 ----
