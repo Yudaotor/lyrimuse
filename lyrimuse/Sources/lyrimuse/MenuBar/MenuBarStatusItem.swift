@@ -90,7 +90,12 @@ final class MenuBarStatusItem: NSObject {
         // PlaybackCoordinator 的当前状态(refresh() 内部这么做),直接 sink 会读到旧值:
         // isPlayingNow 从 false 变 true 时 refresh() 读到的仍是 false,菜单栏永远不显示
         // 歌词。挪到下一个 runloop 循环再跑,属性此时已经落定成新值。
-        coordinator.$currentLine
+        // ⚠️ 这里订阅的是 compactLine(决定**显示哪一句**);下面另有一条 currentLine 的
+        // 订阅,那条管的是"逐字填色路径此刻可不可用" —— 提前量窗口里显示的是下一句、但它
+        // 还没开唱,karaokeFillPath 那道 `line.plainText == text` 守卫会不给路径(正确:
+        // 没唱就不该有填色);等真的开唱时 currentLine 才变,那一下要重画一次把填色挂上。
+        // 两个事件在短间隙里相差不到一秒,文本相同 → 槽宽相同 → 不触发状态项重建。
+        coordinator.$compactLine
             // 同一句内部会因为逐字之外的原因被重新赋值(译文/罗马音中途补上),去重掉 ——
             // 不去重的话滚动会被反复打回开头。⚠️ 去重键是「首词时间戳#纯文本」,不能只看
             // 纯文本(2026-08-22 审阅抓出):副歌里相邻两行**同词不同时**,只看文本第二行
@@ -101,6 +106,14 @@ final class MenuBarStatusItem: NSObject {
                 guard let line else { return "" }
                 return "\(line.words?.first?.startMs ?? -1)#\(line.plainText ?? "")"
             }
+            .removeDuplicates()
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in self?.refresh() }
+            .store(in: &cancellables)
+        // 见上面那段:开唱那一刻要重画一次,好把逐字填色路径挂上。只关心"有没有词可染",
+        // 所以去重键只取首词时间戳。
+        coordinator.$currentLine
+            .map { $0?.words?.first?.startMs ?? -1 }
             .removeDuplicates()
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in self?.refresh() }
@@ -395,7 +408,14 @@ final class MenuBarStatusItem: NSObject {
         guard started else { return }
         let settings = AppSettings.shared
         let coordinator = PlaybackCoordinator.shared
-        let text = coordinator.currentLine?.plainText ?? ""
+        // 单行展示面取 compactLine(唱完就切走,见 CompactLyricLead)。
+        //
+        // ⚠️ 长间奏中段 compactLine 是 nil,这里**必须**给一个非空的 ♪ 而不是空串:空串会
+        // 落进下面那条 `guard ... lyricsActive` 把整个歌词槽收回成小图标(一次状态项重建),
+        // 而长间奏动辄十几秒 —— 表现就是菜单栏歌词塌掉、过一会儿又弹回来。给 ♪ 则槽位留着,
+        // 视觉上也跟灵动岛那边的占位一致。
+        let text = coordinator.compactLine?.plainText
+            ?? (coordinator.compactShowsPlaceholder ? "♪" : "")
         let lyricsActive = coordinator.isPlayingNow && !text.isEmpty
 
         // 没开菜单栏歌词 / 没在播放 / 当前句为空:收回小图标槽。槽宽 = 当前图标款式的
@@ -418,7 +438,11 @@ final class MenuBarStatusItem: NSObject {
             for: text,
             windowWidth: settings.menuBarLyricsWidth,
             // 让长句子在换到下一句之前滚完,而不是永远按固定速度爬。
-            dwellSeconds: coordinator.currentLineDwellSeconds,
+            // compactDwellSeconds 而不是 currentLineDwellSeconds:显示窗口变了(唱完就
+            // 切走),用旧口径会把 dwell 算大 —— 长句后面接长间奏时按偏大的 dwell 配速,
+            // 句子会在只滚出开头一小截时就被换掉,比改动前更糟。见 CompactLyricLead
+            // .displayDurationMs。
+            dwellSeconds: coordinator.compactDwellSeconds,
             widthMode: settings.menuBarLyricsWidthMode
         ) {
         case .text(let visible):
@@ -463,7 +487,7 @@ final class MenuBarStatusItem: NSObject {
         // 按固定宽语义排版;等重建后 refresh 会按用户真实的模式/宽度重画。
         switch MenuBarMarqueeRenderer.presentation(
             for: text, windowWidth: usable,
-            dwellSeconds: PlaybackCoordinator.shared.currentLineDwellSeconds,
+            dwellSeconds: PlaybackCoordinator.shared.compactDwellSeconds,
             widthMode: .fixed
         ) {
         case .text(let visible):

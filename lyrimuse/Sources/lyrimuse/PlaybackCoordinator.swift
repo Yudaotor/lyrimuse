@@ -105,6 +105,12 @@ final class PlaybackCoordinator: ObservableObject {
     @Published private(set) var anchor: ProgressAnchor?
     // "歌词窗口"(完整可滚动歌词列表)用,见 LocalPlaybackSource 同名属性的注释。
     @Published private(set) var currentLineIndex: Int?
+    // 歌词窗口滚动锚(AM 式"滚动先于染色"),见 LocalPlaybackSource 同名属性的注释。
+    @Published private(set) var scrollLineIndex: Int?
+    // 单行展示面(灵动岛/菜单栏)专用的三个值,见 LocalPlaybackSource 同名属性与 CompactLyricLead。
+    @Published private(set) var compactLine: SyncedLyricLine?
+    @Published private(set) var compactShowsPlaceholder: Bool = false
+    @Published private(set) var compactDwellMs: Int?
     @Published private(set) var allLines: [LyricsWindowLine] = []
     // 歌词间奏点(歌词窗口的「•••」),见 LocalPlaybackSource 同名属性的注释。
     @Published private(set) var lyricsGapMarkers: [LyricsGapMarker] = []
@@ -192,6 +198,15 @@ final class PlaybackCoordinator: ObservableObject {
     ///
     /// 用两句歌词时间戳之**差**,所以歌词时间轴校准(currentLyricsOffsetMs)不影响它:
     /// 那个偏移会同时加到两句上,差值不变。
+    /// 单行展示面(灵动岛/菜单栏)的配速用时长:compactLine **总共会显示多久**。
+    ///
+    /// 算不出来时退回 currentLineDwellSeconds —— 主要是**最后一句**:引擎不知道曲目时长,
+    /// 而那边有(用曲目时长兜底,尾奏通常还有几秒够滚完)。
+    var compactDwellSeconds: Double? {
+        if let ms = compactDwellMs, ms > 50 { return Double(ms) / 1000 }
+        return currentLineDwellSeconds
+    }
+
     var currentLineDwellSeconds: Double? {
         guard let index = currentLineIndex, allLines.indices.contains(index) else { return nil }
         let startMs = allLines[index].timeMs
@@ -681,6 +696,10 @@ final class PlaybackCoordinator: ObservableObject {
             s.$collectorNetworkDown.assign(to: \.collectorNetworkDown, on: self),
             s.$isCurrentTrackAdBreak.assign(to: \.isCurrentTrackAdBreak, on: self),
             s.$currentLineIndex.assign(to: \.currentLineIndex, on: self),
+            s.$scrollLineIndex.assign(to: \.scrollLineIndex, on: self),
+            s.$compactLine.assign(to: \.compactLine, on: self),
+            s.$compactShowsPlaceholder.assign(to: \.compactShowsPlaceholder, on: self),
+            s.$compactDwellMs.assign(to: \.compactDwellMs, on: self),
             s.$allLines.assign(to: \.allLines, on: self),
             s.$lyricsGapMarkers.assign(to: \.lyricsGapMarkers, on: self),
             s.$currentGapIndex.assign(to: \.currentGapIndex, on: self),
@@ -890,7 +909,18 @@ final class PlaybackCoordinator: ObservableObject {
         // 的饱和归一放大成刺眼纯绿斑 —— AM 的场是"一个主色系 + 近亲色点缀",同帧对拍
         // 它同区是暖橄榄绿。主色相 = S² 加权圆均值;偏离 >60° 的格子夹回主色相 ±60°
         // (青→橄榄,保留点缀、不抹掉),S/V 不动。单色/灰阶封面各格本就贴着主色相或
-        // S≈0 被跳过,自动 no-op;真双色封面被拉向均值 —— AM 的场本来就读作一个色系。
+        // S≈0 被跳过,自动 no-op。
+        //
+        // ⚠️ 2026-08-22 用户实测反例推翻了当时"真双色封面被拉向均值,AM 的场本来就读作
+        // 一个色系"这条假设:圣米歇尔山封面(蓝天+暖色古堡+倒影,两大色系面积相当)被
+        // 拉成一片脏绿,AM 参考图是天空蓝到暖棕的自然过渡,并没有被拉成同一色系。离屏
+        // 复现实测坐实——hDom≈185°(蓝天,S² 权重占优),暖色城堡格(H22~41°)全部被夹到
+        // 124°(纯绿),因为"偏离 >60° 就夹"这条判据只看角度、不看这批离群格子占的权重
+        // 有多大:小块 logo 杂色天然只占总权重几个百分点,但这张封面的暖色区占了到
+        // ~27%——早就不是"少数派",是构图里第二个真实色系。加一道"离群到底占多少权重"
+        // 的判据:只有离群权重明显是小头(<20%)时才当杂色拉回来;逼近对半分的两大色系
+        // 直接放行,交给下面 σ35 高斯模糊做自然的空间过渡(蓝→绿→棕,而不是硬夹出一片
+        // 假色),这也更贴近圣米歇尔山这类反例里 AM 自己的观感。
         func rgbToHSV(_ r: Double, _ g: Double, _ b: Double) -> (h: Double, s: Double, v: Double) {
             let mx = Swift.max(r, g, b), mn = Swift.min(r, g, b), d = mx - mn
             var h = 0.0
@@ -921,28 +951,124 @@ final class PlaybackCoordinator: ObservableObject {
             hueSin += sin(h * .pi / 180) * s * s
             hueCos += cos(h * .pi / 180) * s * s
         }
+        // 1 = 色相一致、正常走既有的饱和度放大;越接近 0 越是"噪声凑巧不为零",
+        // 下面 satTarget/satMul/CIVibrance 按它收着放大,见下方大段注释。
+        var hueCoherenceScale = 1.0
         if hueSin != 0 || hueCos != 0 {
             let hDom = atan2(hueSin, hueCos) * 180 / .pi
+            // 色相一致度(2026-08-22,窦靖童《春游》灰阶反例坐实):S² 加权圆均值向量的
+            // 合成模长 / 总权重——多格色相互相印证(同一色系)时接近 1,多格色相彼此
+            // 抵消(蓝天一点、暖灰一点,方向各异)时接近 0。上面这套 hDom/offHueFraction
+            // 只管"要不要把离群格子夹回来",没管"这个 hDom 本身有多可信"——一张几乎
+            // 无彩的封面(几格发蓝、多格发暖灰,S 全在 0.06~0.22)也能算出一个看似成立
+            // 的 hDom,但那只是噪声方向凑巧不为零,不代表真有这个颜色。实测这张灰阶
+            // 鹅照 coherence≈0.27,远低于圣米歇尔山(两大真实色系)的 0.47 和 MJ 红棕
+            // 封面(单一色系)的 0.59——三者离屏复现坐实这条线能分开"真的没有主色"和
+            // "有两个/一个真主色"。低于参考值时按比例收着后面的饱和度放大,别把噪声级别
+            // 的偏色也当真色去放大(下面 satTarget/satMul/CIVibrance 三处一起收)。
+            var totalHueWeight = 0.0, offHueWeight = 0.0
             for i in 0..<36 where cellSat[i] > 0.05 {
                 let o = i * 4
-                let (h, s, v) = rgbToHSV(Double(px[o]) / 255, Double(px[o + 1]) / 255, Double(px[o + 2]) / 255)
+                let (h, s, _) = rgbToHSV(Double(px[o]) / 255, Double(px[o + 1]) / 255, Double(px[o + 2]) / 255)
                 var d = h - hDom
                 while d > 180 { d -= 360 }
                 while d < -180 { d += 360 }
-                guard abs(d) > 60 else { continue }
-                let (r, g, b) = hsvToRGB(hDom + (d > 0 ? 60 : -60), s, v)
-                px[o] = UInt8(min(255, max(0, r * 255)))
-                px[o + 1] = UInt8(min(255, max(0, g * 255)))
-                px[o + 2] = UInt8(min(255, max(0, b * 255)))
+                totalHueWeight += s * s
+                // 只把"够近、值得拉回来"的离群格子计入这道占比闸——上限 120° 见下面
+                // clamp 循环同一道判据的注释(色轮对面的真补色本来就不进这套机制,不该
+                // 因为它占比大就反过来拦住"该拉的近似色"被拉)。
+                if abs(d) > 60 && abs(d) <= 120 { offHueWeight += s * s }
+            }
+            let offHueFraction = totalHueWeight > 0 ? offHueWeight / totalHueWeight : 0
+            if totalHueWeight > 0 {
+                let resultantMag = (hueSin * hueSin + hueCos * hueCos).squareRoot()
+                let coherenceLinear = min(1, (resultantMag / totalHueWeight) / 0.4)
+                hueCoherenceScale = coherenceLinear * coherenceLinear
+            }
+            if offHueFraction < 0.2 {
+                for i in 0..<36 where cellSat[i] > 0.05 {
+                    let o = i * 4
+                    let (h, s, v) = rgbToHSV(Double(px[o]) / 255, Double(px[o + 1]) / 255, Double(px[o + 2]) / 255)
+                    var d = h - hDom
+                    while d > 180 { d -= 360 }
+                    while d < -180 { d += 360 }
+                    // 上限 120°(2026-08-23 用户截图坐实的第二个反例):《你瞒我瞒》雪山蓝天
+                    // (离主色相约 150~156°,offHueFraction 算出 19.8%——刚好卡在 20% 那条
+                    // 线内侧一点点,仍然触发了collapse)被 ±60 硬夹成刺眼的桃红/紫红——
+                    // "偏离 60°就等距拉近 60°"这套位移量本来是照着"小块 logo 杂色"标定的
+                    // (原注释的例子是青色 logo 拉成暖橄榄绿,两者本就是同一色系的近亲,
+                    // 相隔本该不远);对色轮对面的真补色(蓝 vs 暖棕,>120°)套用同一个
+                    // 固定位移,新色相落在哪全看 d 的正负号,跟原色、跟主色相都不沾边,
+                    // 输出的是一个随机撞上的颜色,不是"往回拉近"。只处理 60°~120° 这个
+                    // "近似色被饱和归一放大跑偏"的窗口,超过 120° 的真补色原样放行,交给
+                    // σ35 高斯模糊做自然过渡(跟 offHueFraction≥20% 那条分支一个道理)。
+                    guard abs(d) > 60, abs(d) <= 120 else { continue }
+                    let (r, g, b) = hsvToRGB(hDom + (d > 0 ? 60 : -60), s, v)
+                    px[o] = UInt8(min(255, max(0, r * 255)))
+                    px[o + 1] = UInt8(min(255, max(0, g * 255)))
+                    px[o + 2] = UInt8(min(255, max(0, b * 255)))
+                }
             }
         }
         let satP75 = cellSat.sorted()[26]
-        // 目标 = p75 × 1.5(2026-08-22 三轮实拍收敛):p75 归一(0.6 部分/1.0 完全)只到
-        // S50 0.40~0.59 —— 白纱盖全脸的封面连最鲜艳的格子也被面积平均稀释到 ~0.6,
-        // p75 本身够不着 AM 的 0.63~0.97;AM 的背景饱和度**超过**封面面积均值的鲜艳端
-        // (取主色而非均值)。×1.5 后经下游损耗实拍落到 AM 带内;灰阶封面 p75≈0 → 目标
-        // 仍≈0,自动 no-op。
-        let satTarget = min(0.95, satP75 * 1.5)
+        // ⚠️⚠️ 2026-08-23 推翻重标:上面这些"×1.5"系的注释、以及为了压住它反复打的三个
+        // 补丁(少数派色相收拢/角度上限/hueCoherenceScale)全都是在给一个**方向错了**的
+        // 基础倍率止血。真根因直到这天才找到——用户要求"自己去多播几首歌,把 Apple
+        // Music 原生「播放中」窗口的背景跟我们的取色结果对比着截图",于是这轮直接控制
+        // 真机 Music.app(菜单「窗口→播放中」能调出跟 AM 一模一样的原生沉浸态)播了 5 首
+        // 色彩特征完全不同的歌(你瞒我瞒/黑夜/Get on the Boat/Earth Song/The Beautiful
+        // Ones),把 AM 真实截图和这份 6×6 算法各自跑出来的饱和度做了正面比对:
+        //
+        //   封面           源图 satP75   AM 真实输出 p75    比值(AM÷源)
+        //   你瞒我瞒         0.236         0.14              0.593
+        //   黑夜             0.577         0.25              0.433
+        //   Get on the Boat  0.769         0.51              0.663
+        //   Earth Song       0.458         0.21              0.459
+        //   Beautiful Ones   0.380         0.24              0.632
+        //                                            均值 ≈ 0.56
+        //
+        // AM 的背景饱和度是源图鲜艳端的**一半左右**,不是 1.5 倍——"×1.5"这个方向从
+        // 一开始就反了,这也是本条注释历史上四次打补丁(发绿→发粉→夹错色相→依然偏
+        // 鲜艳)始终按下葫芦浮起瓢的原因:补丁全在压一个基数过大 3 倍的放大器,压得住
+        // 一张封面就压不住下一张。
+        //
+        // ⚠️ 上面那版比值(均值 0.55)是拿"整张背景的**单点面积均值**"(CIAreaAverage,
+        // 一张图揉成一个色)去跟 AM 截图的均值比;换成跟人眼实际观感更接近的**网格
+        // 采样**(在 AM 截图和我们自己烘焙的图上各打 25 个点算 p75)重新核对,发现
+        // 0.55 仍然让个别封面(你瞒我瞒、Beautiful Ones)的网格 p75 比 AM 真实值高
+        // 出 1.5~2 倍——单点均值天然会被"两个色系互相稀释"拉低,不能代表人眼真正
+        // 盯着看的那一小片区域有多鲜艳。改用网格 p75 重新拟合,并统一把下面 satMul
+        // 的上下限也按同一幅度收下来(0.6~2.2 → 0.35~1.6,那两个数同样是照着旧的
+        // ×1.5 基线定的,基数变了它们也该跟着变,不然只压这一处、卡在 satMul 那道
+        // 上下限里的封面照样纹丝不动)。0.35 是 5 组真实封面网格比对后取的折中值——
+        // 单一参数拟合不出每张封面的精确比例(源图饱和度与 AM 输出并非严格线性,
+        // 越浓烈的封面 AM 相对给得越足),折中值让 5 张里 4 张落在 AM 真实值的
+        // 0.8~1.5 倍以内,只有你瞒我瞒因为下面高斯模糊在蓝棕两色交界处生成的过渡色
+        // (structural 问题,不是这个系数能治的)仍偏高一截。灰阶封面 satP75≈0 → 目标
+        // 仍≈0,这条 no-op 性质不变。
+        //
+        // ⚠️⚠️⚠️ 2026-08-23 第九轮,固定倍率 0.35 本身又被推翻——用户这轮批量拉了
+        // 23 组真机 AM×我们 的同封面对拍截图并逐组给"差别大/还好/可以接受"判断,
+        // 对每组用同一条左侧背景取样带(避开封面卡片与歌词文字)做网格 p75 定量,
+        // 结果坐实:被判"差别大"的 7 组里有 5 组(P. Control/Babygirl/谁稀罕/Sign O'
+        // The Times/小镇姑娘)根子不在色相、就是纯饱和度差——这 5 组源图 satP75 全在
+        // 0.65~0.96(封面本身极浓烈),AM 真机输出 p75 也跟着到 0.76~1.00(AM 几乎
+        // **不怎么压**这类封面,AM/源 比值 0.98~1.20,不是"减半"是"原样甚至更浓"),
+        // 而固定 0.35 倍无论源图多浓都只给 0.23~0.34,砍掉了七成还多,肉眼看就是"浓烈
+        // 橙红→浑浊灰棕"。全部 23 组按 (源 satP75, AM 真机 p75) 作对数-对数回归得
+        // 幂函数 AM_p75 ≈ 0.94 × satP75^1.45(R²≈0.77)——固定倍率模型的本质缺陷是
+        // "把 AM 的处理看成线性缩放",而真机数据是一条**凸曲线**:源图越浓烈,AM 保留
+        // 的比例反而越高,不是越低。换成这条幂函数重新烘焙同一批 23 张封面,7 组"差别
+        // 大"里那 5 组纯饱和度问题的(网格 p75 target vs 实测)误差从均值 0.39 收到
+        // 0.13(P. Control 0.41→0.03,小镇姑娘 0.58→0.05,详细数字见
+        // docs/features/07-lyrics-window.md 第九轮记录);其余 15 组"还好/可以接受"
+        // 的均值误差基本没变(0.133→0.142,在噪声范围内)。剩下 2 组"差别大"(黑夜/
+        // Get on the Boat)复测 hueCoherenceScale 都是 1.0(算法判定色相完全一致、
+        // 没有触发任何色相纠偏),说明它们的偏差另有病灶(大概率出在色相本身而不是
+        // 饱和度量级),这条幂函数**修不了它们**,留给下一轮专门查色相。0.94/1.45
+        // 两个数字是 23 组回归系数,不是拍脑袋——想再收紧就该在这批数据上重新拟合,
+        // 不要凭感觉调。
+        let satTarget = min(0.95, 0.94 * pow(satP75, 1.45)) * hueCoherenceScale
         for i in 0..<36 where cellSat[i] > 0.01 && cellSat[i] < satTarget {
             let target = satTarget
             let k = target / cellSat[i]
@@ -971,12 +1097,25 @@ final class PlaybackCoordinator: ObservableObject {
             .clampedToExtent()
             .applyingGaussianBlur(sigma: 35)
             .cropped(to: frame)
-        // 闭环饱和度乘子(2026-08-22 四轮实拍收敛):格级归一后 σ35 融合(相邻异色相格
-        // 互混)+光斑 lighten 还会磨掉 ~30%,固定 0.85 让最终 S50 只到 0.50~0.65
-        // (AM 0.63~0.97)。按融合后场的实测均值闭环 —— 场内部再怎么互混,出场饱和度
-        // 都贴住 satTarget;鲜艳均匀封面 fieldS 超标时乘子自动 <1 回落(接管 08-21
-        // 定的 0.85 的职责:那轮量出 AM 比未归一的旧场更淡)。灰阶封面 target≈0,
-        // 乘子落到下限也只是把 ≈0 的饱和再压一点,视觉 no-op。
+        // 闭环饱和度乘子:格级归一后 σ35 融合(相邻异色相格互混)+光斑 lighten 还会
+        // 磨掉一截饱和度,按融合后场的实测均值闭环拉回 satTarget —— 场内部再怎么互混,
+        // 出场饱和度都贴住目标;鲜艳均匀封面 fieldS 超标时乘子自动 <1 回落。
+        //
+        // ⚠️ "AM S50 0.63~0.97"这条 2026-08-21/22 写下的校准基准是错的,2026-08-23
+        // 拿真机 Apple Music 原生「播放中」窗口实测 5 张不同封面推翻——AM 真实背景
+        // 网格采样的 S 中位数普遍落在 0.08~0.42,p75 也就 0.14~0.51,从没到过 0.6+;
+        // 当时"S50 0.63~0.97"的样本来源已不可考,大概率是拿了个位数张偏鲜艳的封面就
+        // 定了基准,没跟真机对照过更大范围的封面。satTarget 的具体倍率与来源见上面
+        // satTarget 声明处的注释。
+        //
+        // ⚠️ 2026-08-23 第九轮:satTarget 换成幂函数后数值整体变大,但**这里的上下限
+        // 刻意没跟着抬**——23 组真机回归数据里只有 1 组(I Wanna Be Your Lover,蓝底
+        // +人像肤色两大色系反差大)顶到过 1.6 那个上限,而且顶到上限也治不好它:这张
+        // 封面 σ35 模糊后 fieldS 崩得极狠(0.56→0.15),就算把上限抬到 2.2/3.5,网格
+        // p75 依然从 0.37 的目标冲到 0.8~1.0(实测过,见 07-lyrics-window.md 第九轮)
+        // ——根子是"闭环乘子按面积均值 fieldS 算、但目标 satTarget 是按网格 p75 校准"
+        // 这个本来就存在的口径错位(旧版本用小基数掩盖了它),抬上限只会把这类高反差
+        // 封面推向过饱和,不抬上限则维持"跟旧版本一样欠一截"——两害相权,不抬。
         var satMul = 0.85
         let fieldAvg = field.applyingFilter("CIAreaAverage", parameters: [
             kCIInputExtentKey: CIVector(cgRect: frame),
@@ -986,10 +1125,17 @@ final class PlaybackCoordinator: ObservableObject {
             let mx = Double(max(d[0], max(d[1], d[2])))
             let mn = Double(min(d[0], min(d[1], d[2])))
             let fieldS = mx > 0 ? (mx - mn) / mx : 0
-            if fieldS > 0.02 { satMul = min(2.2, max(0.6, satTarget / fieldS)) }
+            // 上下限 0.35~1.6(2026-08-23 随 satTarget 基数一起收窄,原先 0.6~2.2 是
+            // 照着 ×1.5 那版基线定的——基数缩小了三分之一还留着旧上下限,等于只压住了
+            // "目标"没压住"最终能打多高/压多低",一部分封面(尤其源图本身饱和度就很
+            // 高、fieldS 天然大的)会被旧上限重新顶回高饱和)。上限也按 hueCoherenceScale
+            // 收,给一致色相封面留够放大空间(coherenceScale=1 时上限不变)。
+            if fieldS > 0.02 {
+                satMul = min(1.6 * max(0.4, hueCoherenceScale), max(0.35 * hueCoherenceScale, satTarget / fieldS))
+            }
         }
         let vivified = field
-            .applyingFilter("CIVibrance", parameters: ["inputAmount": 0.4])
+            .applyingFilter("CIVibrance", parameters: ["inputAmount": 0.4 * hueCoherenceScale])
             .applyingFilter("CIColorControls", parameters: [kCIInputSaturationKey: satMul])
 
         let baseImage = clamp(vivified

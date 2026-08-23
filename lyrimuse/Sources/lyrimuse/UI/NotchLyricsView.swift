@@ -22,6 +22,10 @@ private final class NotchPlayback: ObservableObject {
     @Published private(set) var artist = ""
     @Published private(set) var isPlayingNow = false
     @Published private(set) var currentLine: SyncedLyricLine?
+    /// 单行展示面取这一行(唱完就切走,提前亮出下一句给跟唱用),不是 currentLine。
+    /// 规则见 CompactLyricLead。currentLine 仍然保留 —— 均衡器条子跟的是"此刻在唱哪个字",
+    /// 那是 currentLine 的语义,不能跟"屏幕上显示哪一句"混。
+    @Published private(set) var compactLine: SyncedLyricLine?
     @Published private(set) var nextLineText: String?
     @Published private(set) var hasLyricsContent = false
     @Published private(set) var isCurrentTrackInstrumental = false
@@ -52,6 +56,7 @@ private final class NotchPlayback: ObservableObject {
             p.$artist.removeDuplicates().sink { [weak self] in self?.artist = $0 },
             p.$isPlayingNow.removeDuplicates().sink { [weak self] in self?.isPlayingNow = $0 },
             p.$currentLine.removeDuplicates().sink { [weak self] in self?.currentLine = $0 },
+            p.$compactLine.removeDuplicates().sink { [weak self] in self?.compactLine = $0 },
             p.$nextLineText.removeDuplicates().sink { [weak self] in self?.nextLineText = $0 },
             p.$hasLyricsContent.removeDuplicates().sink { [weak self] in self?.hasLyricsContent = $0 },
             p.$isCurrentTrackInstrumental.removeDuplicates().sink { [weak self] in self?.isCurrentTrackInstrumental = $0 },
@@ -562,7 +567,7 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
 
     private var lyricRowContent: some View {
         HStack(spacing: NotchMetrics.artworkLyricSpacing) {
-            MarqueeText(id: playback.currentLine?.plainText ?? "",
+            MarqueeText(id: playback.compactLine?.plainText ?? "",
                         edgeFadeWidth: NotchMetrics.lyricEdgeFadeWidth) {
                 lyricContent
             }
@@ -614,7 +619,7 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
 
     private var lyricContent: some View {
         Group {
-            if let words = playback.currentLine?.words, !words.isEmpty {
+            if let words = playback.compactLine?.words, !words.isEmpty {
                 // 帧率上限见 WordKaraokeGradient.refreshInterval。跟悬浮歌词一样,这里也
                 // 保持"TimelineView 包住整行"而不下沉到每个字 —— 外层同样套着
                 // .compositingGroup()+.shadow(),理由见 LyricsOverlayView.mainLine 那段。
@@ -682,7 +687,9 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
                 // 情况下它是有意义的,保留。但压根没有曲目时它什么都不代表,留白
                 // (2026-08-21 用户要求)。上面那一长串 else-if 已经把广告/纯音乐/无歌词/
                 // 断网/搜索中都各自接走了,能落到这里的空态只剩"没有曲目"。
-                Text(playback.currentLine?.plainText ?? (isIdleNoTrack ? "" : "♪"))
+                // compactLine 为 nil 的两种成因这里天然合流:长间奏中段(唱完了、下一句
+                // 还早)和"这一刻不在任何一句上",都该是 ♪。
+                Text(playback.compactLine?.plainText ?? (isIdleNoTrack ? "" : "♪"))
                     .foregroundStyle(accentOrWhite)
                     .shadow(color: .black.opacity(0.45), radius: 2, y: 1)
             }

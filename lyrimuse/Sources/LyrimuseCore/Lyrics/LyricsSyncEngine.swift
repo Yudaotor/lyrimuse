@@ -1040,6 +1040,8 @@ public final class LyricsSyncEngine {
         cachedActiveLine = nil
         cachedNextIdx = Int.min
         cachedNextText = nil
+        cachedLeadIdx = Int.min
+        cachedLeadLine = nil
         lastScanIdx = Int.min
         return true
     }
@@ -1058,6 +1060,27 @@ public final class LyricsSyncEngine {
 
     public var hasContent: Bool { usingWords ? !wordLines.isEmpty : !baseLines.isEmpty }
 
+    /// 说话人标签独立成行、冒号后没有真内容(如「合：」,YRC 里逐字数据把标签拆成
+    /// 「合」+「：」两个字、共享同一个时间戳,见 usingWords 分支的注释)——2026-08-23
+    /// 用户截图坐实的真 bug:这类标签行往往只有一百多毫秒,紧挨着后面那句真歌词(同一次
+    /// "合唱开始"标注),`nearestText` 的 700ms 容差下两行都会独立地就近认领同一条翻译/
+    /// 罗马音,视觉上连续两行显示同一句中文——真正拥有这条词条的是后面那句真歌词
+    /// (时间戳几乎重合,天然更近),标签行本身在译文/罗马音源文件里根本没有对应词条。
+    /// 复用 speakerLabels(职员表过滤那份豁免名单,同一个"合/男/女/…"集合),但这里用途
+    /// 相反:那边判定"这行该不该被当署名删掉",这里判定"这行有没有资格去抢一条近邻词条"。
+    private static func isBareSpeakerTag(_ text: String) -> Bool {
+        guard let sep = text.firstIndex(where: { $0 == ":" || $0 == "：" }) else { return false }
+        let label = text[text.startIndex..<sep].trimmingCharacters(in: .whitespaces)
+        let rest = text[text.index(after: sep)...].trimmingCharacters(in: .whitespaces)
+        return rest.isEmpty && speakerLabels.contains(String(label))
+    }
+
+    /// nearestText(trLines,...) 的统一入口——四处直接调用点全部改走这里,理由见
+    /// isBareSpeakerTag 的注释。
+    private func translationText(timeMs: Int, plainText: String) -> String? {
+        guard !Self.isBareSpeakerTag(plainText) else { return nil }
+        return nearestText(trLines, timeMs)
+    }
 
     private func nearestText(_ arr: [LyricLine], _ t: Int, tolerance: Int = 700) -> String? {
         // 数组按 timeMs 升序(LRCParser.parse 尾部 sorted),二分找插入点、只比较左右邻居 ——
@@ -1111,6 +1134,9 @@ public final class LyricsSyncEngine {
         // 不是"别去现算" —— 只拦客户端兜底的话,服务端恰好给了 lyrics_roma 的那些歌照样
         // 会显示,开关就成了个看运气的东西。
         guard romanizationAllowed else { return nil }
+        // 同一个"标签行抢近邻词条"的坑,见 isBareSpeakerTag 的注释——罗马音跟译文共用
+        // 同一套 nearestText+700ms 容差,症状对称。
+        guard !Self.isBareSpeakerTag(plainText) else { return nil }
         if let fromSource = nearestText(romaLines, timeMs) { return fromSource }
         guard romaLines.isEmpty else { return nil }
         // 这里原来有一道硬编码的闸:"含汉字、且整首歌不像日文 → 一律不兜底"。
@@ -1263,6 +1289,13 @@ public final class LyricsSyncEngine {
     private var cachedActiveLine: SyncedLyricLine?
     private var cachedNextIdx = Int.min
     private var cachedNextText: String?
+    // 单行展示面的「领先行」独立占一个槽(2026-08-23):它跟 activeIdx 只在提前量窗口里
+    // 不同(下标差 1),共用一个槽的话那段时间里两个下标每 tick 互相踢缓存,上面那段注释
+    // 描述的塌缩("约 99% 的 tick 构建完即被丢弃")就整个失效 —— 而 lineAt 的构建正是
+    // tailClamped + wordGroups + 两次最近邻扫描,20Hz 跑两遍是这个仓库栽过的那类
+    // 热路径回归。失效点跟上面两组一致(load() 里一起清)。
+    private var cachedLeadIdx = Int.min
+    private var cachedLeadLine: SyncedLyricLine?
 
     /// 最后一个 timeMs <= posMs 的行下标,没有则 -1。数组必须按 timeMs 升序。
     private static func lastIndex(atOrBefore posMs: Int, times: (Int) -> Int, count: Int) -> Int {
@@ -1303,6 +1336,25 @@ public final class LyricsSyncEngine {
     /// activeLine 的按下标本体(记忆化缓存所在)。tickQuery 与 activeLine 共用。
     private func lineAt(_ idx: Int) -> SyncedLyricLine? {
         if idx == cachedActiveIdx { return cachedActiveLine }
+        let line = buildLine(idx)
+        cachedActiveIdx = idx
+        cachedActiveLine = line
+        return line
+    }
+
+    /// 单行展示面的「领先行」取词(见 CompactLyricLead)。绝大多数时刻它等于 activeIdx,
+    /// 直接吃 active 那个槽;只有在提前量窗口里才落到自己的槽上。
+    private func leadLineAt(_ idx: Int) -> SyncedLyricLine? {
+        if idx == cachedActiveIdx { return cachedActiveLine }
+        if idx == cachedLeadIdx { return cachedLeadLine }
+        let line = buildLine(idx)
+        cachedLeadIdx = idx
+        cachedLeadLine = line
+        return line
+    }
+
+    /// lineAt / leadLineAt 共用的构建本体(不碰缓存)。
+    private func buildLine(_ idx: Int) -> SyncedLyricLine? {
         let line: SyncedLyricLine?
         if idx < 0 {
             line = nil
@@ -1320,7 +1372,7 @@ public final class LyricsSyncEngine {
             let joined = words.map(\.text).joined()
             line = SyncedLyricLine(
                 romanization: romanizationText(timeMs: ln.timeMs, plainText: joined),
-                translation: nearestText(trLines, ln.timeMs),
+                translation: translationText(timeMs: ln.timeMs, plainText: joined),
                 mainText: nil,
                 words: words,
                 wordGroups: wordGroups(for: words, line: joined),
@@ -1331,7 +1383,7 @@ public final class LyricsSyncEngine {
             let ln = baseLines[idx]
             line = SyncedLyricLine(
                 romanization: romanizationText(timeMs: ln.timeMs, plainText: ln.text),
-                translation: nearestText(trLines, ln.timeMs),
+                translation: translationText(timeMs: ln.timeMs, plainText: ln.text),
                 mainText: ln.text,
                 words: nil,
                 wordGroups: nil,
@@ -1339,17 +1391,35 @@ public final class LyricsSyncEngine {
                 plainText: ln.text
             )
         }
-        cachedActiveIdx = idx
-        cachedActiveLine = line
         return line
     }
 
     /// fastTick(20Hz)的打包查询:当前行/下一句预览/行下标/间奏下标要的是同一个 posMs 的
     /// 同一次定位,原来四个入口各自独立调 activeIndexCorrected 从头扫一遍(2026-08-20
-    /// 审计:同一 tick 内 3/4 是纯重复)。这里下标只算一次,四个值一起返回。
+    /// 审计:同一 tick 内 3/4 是纯重复)。这里下标只算一次,几个值一起返回。
     public struct TickResolution {
         public let index: Int?
+        /// 歌词窗口的**滚动锚**下标 —— AM 的滚动先于染色(2026-08-22 用户对拍):一句
+        /// 唱完、下一句还没开始的空档里,页面已经滚到下一句的位置,只是还没给它染色。
+        /// 染色/加粗/虚化仍看 index,滚动看这个;非空档时刻两者相等。语义见
+        /// scrollLeadIndex(activeIdx:posMs:)。
+        public let scrollIndex: Int?
         public let line: SyncedLyricLine?
+        /// 单行展示面(灵动岛 / 菜单栏)该显示的那一行 —— 跟 line 的区别是**唱完就切走**:
+        /// 本行唱完之后它指向下一句(提前量,给跟唱用),长间奏中段则是 nil。规则与两条
+        /// 保守边界见 CompactLyricLead。
+        ///
+        /// ⚠️ 跟 scrollIndex 不是一回事,别合并:那个服务多行列表(间奏里有「•••」可停靠,
+        /// 所以窗口结束前才领先),这个服务单行(没地方停,已经唱完的句子不该继续占着)。
+        public let compactLine: SyncedLyricLine?
+        /// compactLine == nil 的两种成因要分开:这个为 true 表示"本行唱完了、下一句还早"
+        /// (调用方画 ♪);为 false 表示压根还没有可显示的行(还没到第一句/没歌词),那种
+        /// 空态由调用方各自既有的分支接管(搜索中/无歌词/广告…)。
+        public let compactPlaceholder: Bool
+        /// compactLine **总共会显示多久**(毫秒),nil = 算不出来。菜单栏跑马灯拿它配速 ——
+        /// 显示窗口跟 currentLineDwellSeconds 那套不一样了,用错会让长句在长间奏前滚不完
+        /// (比改动前更糟)。算法与理由见 CompactLyricLead.displayDurationMs。
+        public let compactDwellMs: Int?
         public let nextText: String?
         public let gapIndex: Int?
     }
@@ -1363,11 +1433,64 @@ public final class LyricsSyncEngine {
         } else {
             gap = nil
         }
+        // 单行展示面的取词:跟上面的 index/scrollIndex 共用同一次定位,不再扫一遍数组。
+        let compact = CompactLyricLead.resolve(
+            activeIdx: idx, posMs: posMs,
+            lineEndMs: gapLineEndMs(at: idx),
+            nextStartMs: gapLineStartMs(at: idx + 1))
+        let compactLine: SyncedLyricLine?
+        let compactPlaceholder: Bool
+        let compactDwellMs: Int?
+        switch compact {
+        case .line(let i):
+            compactLine = leadLineAt(i)
+            compactPlaceholder = false
+            // fallbackEndMs 传 nil:引擎不知道曲目时长。最后一句因此算不出 dwell,
+            // 由 PlaybackCoordinator.compactDwellSeconds 退回既有公式(那边有曲目时长)。
+            compactDwellMs = gapLineStartMs(at: i).flatMap { start in
+                CompactLyricLead.displayDurationMs(
+                    prevLineEndMs: gapLineEndMs(at: i - 1),
+                    startMs: start,
+                    lineEndMs: gapLineEndMs(at: i),
+                    nextStartMs: gapLineStartMs(at: i + 1),
+                    fallbackEndMs: nil)
+            }
+        case .placeholder:
+            compactLine = nil
+            compactPlaceholder = true
+            compactDwellMs = nil
+        }
         return TickResolution(
             index: idx >= 0 ? idx : nil,
+            scrollIndex: scrollLeadIndex(activeIdx: idx, posMs: posMs),
             line: lineAt(idx),
+            compactLine: compactLine,
+            compactPlaceholder: compactPlaceholder,
+            compactDwellMs: compactDwellMs,
             nextText: nextTextAt(idx + 1),
             gapIndex: gap)
+    }
+
+    /// 滚动锚下标(TickResolution.scrollIndex 的本体):空档里指向下一行,其余时刻等于
+    /// activeIdx。三种空档:
+    /// ① 短间隙(没有「•••」间奏点):逐字歌词知道这一行唱到几点(最后一个词的结束),
+    ///    唱完即滚。行级 LRC 不知道一行唱多久,不抢跑 —— 维持"下一句开始才滚"的既有行为。
+    /// ② 长间奏(有「•••」):点亮期间滚动停在「•••」那排(由 gapIndex 驱动,这里锚
+    ///    不动),窗口结束(下一句前 leadMs)才指向下一句 —— AM 的点先收起、下一句移到
+    ///    常规锚位、开唱时只染色不再滚动。
+    /// ③ 前奏(-1 号间奏点):同②,倒计时结束先把第一句从开场位(0.52)挪到常规锚位。
+    ///    没有 -1 号间奏点的歌(前奏 <5s)不抢跑,第一句开始时正常滚。
+    private func scrollLeadIndex(activeIdx idx: Int, posMs: Int) -> Int? {
+        if idx < 0 {
+            if let w = gapWindow(after: -1), posMs >= w.end, gapLineCount > 0 { return 0 }
+            return nil
+        }
+        guard idx + 1 < gapLineCount else { return idx }
+        if let w = gapWindow(after: idx) {
+            return posMs >= w.end ? idx + 1 : idx
+        }
+        if let end = gapLineEndMs(at: idx), posMs >= end { return idx + 1 }
+        return idx
     }
 
     // 双行显示用:当前行的下一行纯文本预览,不需要逐字高亮细节(还没轮到它,不用算填色)。
@@ -1413,7 +1536,7 @@ public final class LyricsSyncEngine {
                 let joined = words.map(\.text).joined()
                 let line = SyncedLyricLine(
                     romanization: romanizationText(timeMs: ln.timeMs, plainText: joined),
-                    translation: nearestText(trLines, ln.timeMs),
+                    translation: translationText(timeMs: ln.timeMs, plainText: joined),
                     mainText: nil,
                     words: words,
                     wordGroups: wordGroups(for: words, line: joined),
@@ -1426,7 +1549,7 @@ public final class LyricsSyncEngine {
         return baseLines.enumerated().map { i, ln in
             let line = SyncedLyricLine(
                 romanization: romanizationText(timeMs: ln.timeMs, plainText: ln.text),
-                translation: nearestText(trLines, ln.timeMs),
+                translation: translationText(timeMs: ln.timeMs, plainText: ln.text),
                 mainText: ln.text,
                 words: nil,
                 wordGroups: nil,

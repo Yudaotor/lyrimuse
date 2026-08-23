@@ -24,6 +24,9 @@ private final class PanelPlayback: ObservableObject {
     @Published private(set) var album = ""
     @Published private(set) var isPlayingNow = false
     @Published private(set) var currentLine: SyncedLyricLine?
+    /// 单行展示面取这一行,见 CompactLyricLead。面板那一格也是**定高单行**,跟灵动岛/
+    /// 菜单栏文字同一处境,所以一起走这套。
+    @Published private(set) var compactLine: SyncedLyricLine?
     @Published private(set) var hasLyricsContent = false
     @Published private(set) var isCurrentTrackInstrumental = false
     @Published private(set) var currentTrackHasNoLyrics = false
@@ -51,6 +54,7 @@ private final class PanelPlayback: ObservableObject {
             p.$album.removeDuplicates().sink { [weak self] in self?.album = $0 },
             p.$isPlayingNow.removeDuplicates().sink { [weak self] in self?.isPlayingNow = $0 },
             p.$currentLine.removeDuplicates().sink { [weak self] in self?.currentLine = $0 },
+            p.$compactLine.removeDuplicates().sink { [weak self] in self?.compactLine = $0 },
             p.$hasLyricsContent.removeDuplicates().sink { [weak self] in self?.hasLyricsContent = $0 },
             p.$isCurrentTrackInstrumental.removeDuplicates().sink { [weak self] in self?.isCurrentTrackInstrumental = $0 },
             p.$currentTrackHasNoLyrics.removeDuplicates().sink { [weak self] in self?.currentTrackHasNoLyrics = $0 },
@@ -462,7 +466,7 @@ private struct MenuBarPanelView: View {
     private var lyricLine: some View {
         // id 用**纯文本**而不是带填色进度的东西:同一句里逐字变色是每秒 30 次的高频刷新,
         // 拿它当 id 会把正在进行的滚动一直打回开头(MarqueeText 头注说的就是这件事)。
-        MarqueeText(id: playback.currentLine?.plainText ?? "") {
+        MarqueeText(id: playback.compactLine?.plainText ?? "") {
             lyricContent
         }
         .font(.system(size: 11.5, weight: .medium))
@@ -474,8 +478,10 @@ private struct MenuBarPanelView: View {
         // 判定链(以及那三处"必须排在谁前面"的坑)在 LyrimuseCore.LyricsLineDisplay 里,
         // selftest 钉着;这里只负责把结果画出来。
         switch LyricsLineDisplay.resolve(
-            hasWordTiming: !(playback.currentLine?.words ?? []).isEmpty,
-            hasCurrentLine: playback.currentLine != nil,
+            // 喂 compactLine:长间奏中段它是 nil,判定链自然落到 .idle —— 那一档的
+            // 注释本来就写着「间奏、还没开始」,不用改判定链。
+            hasWordTiming: !(playback.compactLine?.words ?? []).isEmpty,
+            hasCurrentLine: playback.compactLine != nil,
             isAdBreak: playback.isCurrentTrackAdBreak,
             isInstrumental: playback.isCurrentTrackInstrumental,
             hasNoLyrics: playback.currentTrackHasNoLyrics,
@@ -484,10 +490,10 @@ private struct MenuBarPanelView: View {
             isPlaying: playback.isPlayingNow
         ) {
         case .words:
-            karaokeLine(playback.currentLine?.words ?? [])
+            karaokeLine(playback.compactLine?.words ?? [])
         case .plain:
             // 行级 LRC(没有逐字数据)—— 整行一个颜色,不假装有进度。
-            Text(playback.currentLine?.plainText ?? "").foregroundStyle(.primary).lineLimit(1)
+            Text(playback.compactLine?.plainText ?? "").foregroundStyle(.primary).lineLimit(1)
         case .adBreak:
             // 这一格**故意留空**:广告时卡片标题已经是「广告中」了(见 displayTitle),
             // 正下方再说一遍是同一件事说两遍。另外三个展示面没有标题行,才需要自己说。

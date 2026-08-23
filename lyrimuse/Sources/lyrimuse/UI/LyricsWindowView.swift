@@ -20,6 +20,9 @@ private final class WindowPlayback: ObservableObject {
     @Published private(set) var isPlayingNow = false
     @Published private(set) var isPlayingSmoothed = false
     @Published private(set) var currentLineIndex: Int?
+    /// 滚动锚(AM 式"滚动先于染色",2026-08-22):滚动看它,染色/加粗/虚化仍看
+    /// currentLineIndex。空档语义见 LyricsSyncEngine.scrollLeadIndex。
+    @Published private(set) var scrollLineIndex: Int?
     @Published private(set) var currentGapIndex: Int?
     @Published private(set) var allLines: [LyricsWindowLine] = []
     @Published private(set) var lyricsGapMarkers: [LyricsGapMarker] = []
@@ -56,6 +59,7 @@ private final class WindowPlayback: ObservableObject {
             p.$isPlayingNow.removeDuplicates().sink { [weak self] in self?.isPlayingNow = $0 },
             p.$isPlayingSmoothed.removeDuplicates().sink { [weak self] in self?.isPlayingSmoothed = $0 },
             p.$currentLineIndex.removeDuplicates().sink { [weak self] in self?.currentLineIndex = $0 },
+            p.$scrollLineIndex.removeDuplicates().sink { [weak self] in self?.scrollLineIndex = $0 },
             p.$currentGapIndex.removeDuplicates().sink { [weak self] in self?.currentGapIndex = $0 },
             p.$allLines.removeDuplicates().sink { [weak self] in self?.allLines = $0 },
             p.$lyricsGapMarkers.removeDuplicates().sink { [weak self] in self?.lyricsGapMarkers = $0 },
@@ -688,12 +692,27 @@ struct LyricsWindowView: View {
                     // 贴右缘 5pt(2026-08-22 第二轮对拍:AM 胶囊亮缘离窗缘 8px@2x,
                     // 布局缘取 5 让亮缘落到同位)。
                     .padding(.trailing, 5)
-                    // 与红绿灯同一行(2026-08-22 第二轮对拍 AM 整窗参考图):胶囊
-                    // y16-87px@2x → 顶 8pt+高 36/2 → 中心 26,与红绿灯(下移 10 后
-                    // 中心 26)同心。⚠️ 必须减掉 safeAreaInsets.top:hiddenTitleBar 下
-                    // 内容区顶部仍有一段标题栏高度的 safe inset,"top 0" 只是内容区顶,
-                    // 第一版就是因此整体低了约 28pt(用户截图实锤"明显没有在同一行")。
-                    .offset(y: -geo.safeAreaInsets.top + 8)
+                    // ⚠️ 2026-08-22 用户实测报"拖音量键把窗口一起拖走"、两轮修复后仍在:
+                    // 根因是 hiddenTitleBar 窗口顶部那一段 safe-area 高度(geo.safeAreaInsets.top,
+                    // 与真实 NSTitlebarContainerView 等高)在系统层面**无条件**认领拖动 ——
+                    // 不是 isMovableByWindowBackground,也不是"谁的 mouseDownCanMoveWindow
+                    // 返回什么":实测挂 NSViewRepresentable 覆写 mouseDownCanMoveWindow、
+                    // 直接 addSubview 到 contentView 绕开 SwiftUI 树、自定义 NSWindow 子类
+                    // 覆写 sendEvent 整段吞掉再手动转发、同步 nextEvent tracking loop(仿
+                    // NSControl 内部机制)——五种技术方案在独立 harness 里逐一验证,只要
+                    // 起手点的 y 落在这段区间内,拖动就会被 WindowServer 直接接管挪窗口,
+                    // 应用进程收到的 NSEvent 序列完全不受影响,没有任何应用层介入点。唯一
+                    // 能验证有效的办法是**不落在这段区间里**:同一批 harness 测试里,y 越过
+                    // 这段高度的那一刻,挪窗口行为不多不少精确消失。旁边的置顶/全屏/静音/
+                    // AirPlay 键不受影响,是因为它们是**点按**、没有拖动位移,与这条区间
+                    // 无关(纯点击不会被系统认作拖动手势,不管点在哪)。
+                    //
+                    // 因此**不再**做"减去 safeAreaInsets.top 再加 8 去对齐红绿灯"这套——
+                    // 那正是把胶囊往危险区间里怼。现在让胶囊留在 safe-area 自然让出的位置
+                    // (= 危险区间正下方)之后只再下移 8pt 留个观感缓冲,牺牲"与红绿灯同一行"
+                    // 的对齐(AM 参考图是这样,但那条约束与"拖动不能挪窗口"这条硬约束冲突,
+                    // 后者优先)。
+                    .offset(y: 8)
                 }
                 .overlay(alignment: .topLeading) {
                     // 置顶/全屏胶囊(2026-08-22 第二轮对拍挪到左上:AM 同位是 X/画中画
@@ -897,7 +916,12 @@ struct LyricsWindowView: View {
                     }
                 }
             }
-            .onChange(of: playback.currentLineIndex) {
+            // 滚动跟 scrollLineIndex 走而不是 currentLineIndex(2026-08-22 用户对拍 AM):
+            // AM 的滚动**先于**染色 —— 一句唱完、下一句还没开始的空档里页面已经滚到下一句
+            // 的位置,开唱那一刻只染色、不再滚动。scrollLineIndex 在空档里提前指向下一行
+            // (逐字歌词才知道"唱完"是几点;行级 LRC 不抢跑,两个下标恒等,行为跟改前
+            // 一致),染色/加粗/虚化仍全部看 currentLineIndex。
+            .onChange(of: playback.scrollLineIndex) {
                 scrollToActiveLine(scrollProxy: scrollProxy, animated: true)
             }
             .onChange(of: playback.currentGapIndex) {
@@ -972,8 +996,12 @@ struct LyricsWindowView: View {
         }
     }
 
+    /// 滚动目标行的 id —— 用滚动锚 scrollLineIndex 而不是 currentLineIndex(空档里
+    /// 提前指向下一行,见上面 onChange 的注释);兜底 currentLineIndex 只是防御性写法,
+    /// 两者同一 tick 一起赋值,正常不会一有一无。
     private var activeID: String? {
-        guard let idx = playback.currentLineIndex, playback.allLines.indices.contains(idx) else { return nil }
+        guard let idx = playback.scrollLineIndex ?? playback.currentLineIndex,
+              playback.allLines.indices.contains(idx) else { return nil }
         return playback.allLines[idx].id
     }
 
@@ -1069,9 +1097,16 @@ struct LyricsWindowView: View {
                             isActive: item.id == activeID && playback.currentGapIndex == nil,
                             isHovered: hoveredLineID == item.id,
                             isPlaying: playback.isPlayingNow,
-                            // 只给**当前行**传真实值,其余行恒 false —— settled 每行翻转
+                            // 只给**染色当前行**传真实值,其余行恒 false —— settled 每行翻转
                             // 两次,全表行都跟着比较变化的话,一次翻转就是整表行重算。
-                            fillSettled: item.id == activeID && playback.currentLineFillSettled,
+                            // ⚠️ 按 currentLineIndex 配对而不是 activeID(2026-08-23 像素采样
+                            // 抓包):currentLineFillSettled 是引擎按**染色当前行**算的;滚动
+                            // 锚提前后,空档里 activeID 已指向还没开唱的下一句,把上一句的
+                            // settled=true 挂它身上,KaraokeWordText 会按「整行定格」渲染成
+                            // 全填色终态 —— 实测锚位行 top2% 亮度 255(=已染色),正是
+                            // "滚到位时该清晰但未染色"的反面。
+                            fillSettled: index == playback.currentLineIndex
+                                && playback.currentLineFillSettled,
                             fontSize: lyricFontSize,
                             romaFontSize: romaFontSize,
                             translationFontSize: translationFontSize,
@@ -2171,7 +2206,11 @@ struct LyricsWindowView: View {
     private static let maxVisualDistance = 4
 
     private func distance(for index: Int) -> Int? {
-        guard let activeIdx = playback.currentLineIndex else { return nil }
+        // 景深(不透明度/模糊)跟**滚动锚**走,不跟染色下标(2026-08-22 用户对拍 AM
+        // 第二轮):滚动落位的那一刻下一句就该已经清晰 —— 原来钉在 currentLineIndex 上,
+        // 页面先滚过去、下一句却还挂着 d=1 的暗度和模糊,开唱才"对焦",正好比 AM 慢
+        // 一拍。染色(逐字填色)仍看 currentLineIndex/词时间轴,这里只管清晰度。
+        guard let activeIdx = playback.scrollLineIndex ?? playback.currentLineIndex else { return nil }
         // 间奏进行中整体退一档:此刻的"当前"是那排「•••」,唱完的那一行不该再保持
         // 全亮 —— Apple Music 间奏时上一句同样是退暗的。
         let gapPenalty = playback.currentGapIndex != nil ? 1 : 0
@@ -3176,27 +3215,6 @@ private struct WindowProgressSection: View {
     }
 }
 
-/// 挡住"拖音量滑杆把整扇窗一起拖走"的坑(2026-08-22 用户实测报的 bug):这扇窗
-/// `.windowStyle(.hiddenTitleBar)`(见 App.swift),标题栏只是**透明**、红绿灯悬浮在
-/// 背景上,原生标题栏那条高度区间本身仍然"一拖就挪窗口"——这是 AppKit 对该区域的
-/// 默认行为,跟 `NSWindow.isMovableByWindowBackground` 是两回事,SwiftUI 的
-/// `DragGesture` 不会让它让位。音量胶囊恰好落在这条区间里,于是同一次按下拖动同时被
-/// 两边认领:SwiftUI 改音量、AppKit 挪窗口。旁边的置顶/展开/静音/AirPlay 键不受影响,
-/// 是因为它们是**点按**(松开时才触发,不含移动),原生拖窗口只在鼠标真的位移后才启动;
-/// 只有这颗滑杆是 `DragGesture(minimumDistance: 0)`,一动手就两边都在响应。
-///
-/// 真正拦得住的办法是垫一层**真实 NSView**、覆写 `mouseDownCanMoveWindow` 返回
-/// false —— AppKit 判断"这次按下要不要顺带挪窗口"是对着点击处命中测试到的那个
-/// NSView 问这个属性,SwiftUI 的手势系统够不到这一层。`NSHostingView` 本身没被覆写、
-/// 默认在这条区间里就是会挪窗口,所以只能自己垫一个刚好盖住滑杆命中区的空视图。
-private struct WindowDragBlocker: NSViewRepresentable {
-    final class BlockerView: NSView {
-        override var mouseDownCanMoveWindow: Bool { false }
-    }
-    func makeNSView(context: Context) -> BlockerView { BlockerView() }
-    func updateNSView(_ nsView: BlockerView, context: Context) {}
-}
-
 // MARK: - 音量胶囊(2026-08-19 性能审计拆出:soundVolume 只在这里订阅)
 
 private struct WindowVolumeCapsule: View {
@@ -3271,7 +3289,6 @@ private struct WindowVolumeCapsule: View {
                 // 挤得整颗胶囊比 AM 宽 7pt)。
                 volumeSlider(volume: volume)
                     .frame(width: 114, height: 22)
-                    .background(WindowDragBlocker())
                 Button {
                     PlaybackCoordinator.shared.toggleMute()
                 } label: {

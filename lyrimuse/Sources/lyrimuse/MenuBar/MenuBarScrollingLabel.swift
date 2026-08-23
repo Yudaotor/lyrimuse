@@ -342,15 +342,29 @@ final class MenuBarScrollingLabel: NSView {
         let windowWidth: CGFloat
         /// nil = 这一句装得下,静止显示(格子宽度照样是 windowWidth)。
         let pacing: MenuBarMarquee.ScrollPacing?
+        /// 逐字染色边界路径(2026-08-22 加,给设置页预览用):nil = 这句不染
+        /// (开关关着 / 没有逐字数据)。含义、构造方式跟 MenuBarStatusItem.karaokeFillPath
+        /// 完全一样 —— 调用方(MenuBarPreviewBar)只在真的在播放且当前句有逐字数据时
+        /// 才传非 nil,不为空闲时的示例句编造假时间轴(那样会跟其它预览的既有原则相悖,
+        /// 见 OverlayPreviewBar 头注"预览只画整行的最终颜色")。
+        let fillPath: [MenuBarMarquee.KaraokeFillPoint]?
+        /// 染色对表用的播放时钟快照,含义同 MenuBarStatusItem.syncKaraokeClock 的三个参数。
+        let karaokePositionMs: Int?
+        let karaokeRate: Double
+        let karaokePlaying: Bool
 
         func makeNSView(context: Context) -> MenuBarScrollingLabel { MenuBarScrollingLabel() }
 
         func updateNSView(_ view: MenuBarScrollingLabel, context: Context) {
             // present 对"参数没变"是空操作,所以设置页每次重算 body 都不会把滚动打回开头。
-            view.present(text: text, windowWidth: windowWidth, pacing: pacing)
+            view.present(text: text, windowWidth: windowWidth, pacing: pacing, fillPath: fillPath)
             // 预览实例不在 MenuBarStatusItem 的颜色订阅覆盖范围内,靠宿主 body 重算带一次
             // 重排 —— 用户在旁边拖「文字颜色」色轮时预览才跟手(重排一句位图 sub-ms 级)。
             view.refreshColors()
+            // 对表同理:预览没有自己的 anchor/pausedPositionMs 订阅链,靠宿主 body 重算
+            // 把最新播放时钟带进来 —— 内部漂移门保证这不会打断正在跑的填色动画。
+            view.updateKaraokeClock(positionMs: karaokePositionMs, rate: karaokeRate,
+                                    playing: karaokePlaying)
         }
     }
 

@@ -8,3 +8,4 @@ node_modules/
 .dev.vars
 lyrimuse/.build/
 lyrimuse/dist/
+__pycache__/

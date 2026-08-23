@@ -274,6 +274,33 @@ do {
     expectEqual(engine2.gapMarkers().map(\.index), [1], "间奏点(LRC): 只有 ≥15s 的起点差才标")
 }
 
+// ---- 滚动先于染色(2026-08-22,歌词窗口 AM 式提前滚动,tickQuery.scrollIndex) ----
+do {
+    // 同上面间奏点块的时间轴:前奏 8s(标 -1、窗口熄于 7200);第一句 8~9s 唱完,
+    // 第二句 25s 开始(长间奏,标 0、窗口 10200~24200);第二句 25~26s 唱完,
+    // 第三句 28s 开始(短间隙 2s,不标)。
+    let engine = LyricsSyncEngine()
+    let yrc = "[8000,1000](8000,500,0)aa (8500,500,0)bb \n"
+        + "[25000,1000](25000,500,0)cc (25500,500,0)dd \n"
+        + "[28000,1000](28000,500,0)ee (28500,500,0)ff \n"
+    engine.load(lyrics: "", lyricsTr: "", lyricsRoma: "", lyricsYRC: yrc, preferWordLevel: true)
+    expectEqual(engine.tickQuery(atMs: 3000).scrollIndex, nil, "提前滚动: 前奏「•••」亮着时还不滚第一句")
+    expectEqual(engine.tickQuery(atMs: 7500).scrollIndex, 0, "提前滚动: 前奏收尾 leadMs 先把第一句挪到常规锚位")
+    expectEqual(engine.tickQuery(atMs: 8500).scrollIndex, 0, "提前滚动: 唱着的时候滚动锚=当前行")
+    expectEqual(engine.tickQuery(atMs: 15000).scrollIndex, 0, "提前滚动: 长间奏点亮期间滚动停在「•••」,锚不动")
+    expectEqual(engine.tickQuery(atMs: 24500).scrollIndex, 1, "提前滚动: 长间奏收尾 leadMs 先滚向下一句")
+    expectEqual(engine.tickQuery(atMs: 25500).scrollIndex, 1, "提前滚动: 第二句唱着时锚=第二句")
+    expectEqual(engine.tickQuery(atMs: 26500).scrollIndex, 2, "提前滚动: 短间隙里一唱完就滚向下一句")
+    expectEqual(engine.tickQuery(atMs: 26500).index, 1, "提前滚动: 同一时刻染色下标还停在唱完的那行")
+    expectEqual(engine.tickQuery(atMs: 28500).scrollIndex, 2, "提前滚动: 最后一行没有下一句,锚=当前行")
+    // 行级 LRC 不知道一行唱到几点,短间隙不抢跑(两个下标恒等,行为与改动前一致)。
+    let engine2 = LyricsSyncEngine()
+    let lrc = "[00:01.00]aa\n[00:05.00]bb\n"
+    engine2.load(lyrics: lrc, lyricsTr: "", lyricsRoma: "", lyricsYRC: "", preferWordLevel: false)
+    expectEqual(engine2.tickQuery(atMs: 3000).scrollIndex, 0, "提前滚动(LRC): 行级不知道唱完时刻,不抢跑")
+    expectEqual(engine2.tickQuery(atMs: 3000).index, 0, "提前滚动(LRC): 两个下标一致")
+}
+
 // ---- LyricsSyncEngine: 单曲歌词时间轴微调(offsetMs) ----
 
 do {
@@ -4817,6 +4844,34 @@ do {
     expectEqual(engine5.allLines(idPrefix: "t").first?.line.translation, nil,
                 "nearestText 容差: 超过 700ms 不贴")
 
+    // ③.5 说话人标签空行不抢近邻译文/罗马音(2026-08-23 用户截图坐实的真 bug):
+    // 陶喆《All for Joy》原始数据实拍——「合：」独立成行(逐字里是「合」+「：」两个词,
+    // 共享同一时间戳)、178ms 后紧跟真歌词行,译文只有一条、几乎贴着真歌词的时间戳
+    // (6ms)但同样落在标签行的 700ms 容差内(174ms)。旧行为:两行各自"就近"命中同一条
+    // 译文,连续两行显示同一句中文。
+    let engineTag = LyricsSyncEngine()
+    let tagYRC = "[121936,3302](121936,443,0)Crowds (122379,513,0)roaring (122892,173,0)fills (123065,485,0)the (123550,1688,0)atmosphere \n"
+        + "[125676,178](125676,51,0)合(125727,127,0)：\n"
+        + "[125856,6271](125856,967,0)Reminds (126823,275,0)me (127098,656,0)that (127754,733,0)games (128487,585,0)are (129072,794,0)more (129866,741,0)than (130607,1520,0)rules\n"
+    engineTag.load(
+        lyrics: "", lyricsTr: "[02:01.93]人群的咆哮充满了气氛\n[02:05.85]提醒我，游戏不仅仅是规则",
+        lyricsRoma: "", lyricsYRC: tagYRC, preferWordLevel: true)
+    let tagLines = engineTag.allLines(idPrefix: "t")
+    expectEqual(tagLines[1].line.plainText, "合：", "说话人标签: YRC 逐字拼出「合：」独立成行")
+    expectEqual(tagLines[1].line.translation, nil,
+                "说话人标签: 空标签行不该抢下一句的译文(旧 bug 会贴出「提醒我，游戏不仅仅是规则」)")
+    expectEqual(tagLines[2].line.translation, "提醒我，游戏不仅仅是规则",
+                "说话人标签: 真歌词行(时间戳几乎重合)照常拿到属于自己的译文")
+
+    // 反例:标签后面跟着真内容的行(「合：Hey hey ho ho」)不受影响,该有译文照样有——
+    // isBareSpeakerTag 只认"冒号后完全没内容"这一种形状。
+    let engineTaggedContent = LyricsSyncEngine()
+    engineTaggedContent.load(
+        lyrics: "[00:01.00]合：真的歌词内容", lyricsTr: "[00:01.20]真实的翻译",
+        lyricsRoma: "", lyricsYRC: "")
+    expectEqual(engineTaggedContent.allLines(idPrefix: "t").first?.line.translation, "真实的翻译",
+                "说话人标签反例: 冒号后有真内容的行不受影响,照常匹配译文")
+
     // ④ plainText 存储化后语义不变:两种形态、以及"引擎构造时预拼"与"默认推导"一口径。
     let wordLine = SyncedLyricLine(
         romanization: nil, translation: nil, mainText: nil,
@@ -5577,6 +5632,82 @@ do {
         expectEqual(V.simplified.converted(String(k)), String(HanVariants.toSimplified[k]!),
                     "\(k) 单字过完整链路应得到规范字")
     }
+}
+
+// MARK: - CompactLyricLead:单行展示面「唱完就切到下一句」
+//
+// 2026-08-23 用户要求:灵动岛/菜单栏原来是"下一句开始才换行",想改成"这句唱完就切走",
+// 好提前看到下一句跟唱。这套规则跟歌词窗口的 scrollLeadIndex **不是同一套**(那个服务
+// 多行列表、间奏里有「•••」可停靠),两者的差别正是这些断言要钉住的东西。
+do {
+    typealias L = CompactLyricLead
+    let reveal = L.revealMs   // 5000
+
+    // ① 还在唱这一句 → 显示本行
+    expectEqual(L.resolve(activeIdx: 3, posMs: 9_000, lineEndMs: 10_000, nextStartMs: 12_000),
+                .line(3), "还没唱完:显示本行")
+
+    // ② 短间隙(2s < reveal):唱完那一刻立刻切到下一句 —— 这就是用户要的主场景。
+    //    实测该用户曲库里 97.7% 的行间隙 < 6s,绝大多数落这一档。
+    expectEqual(L.resolve(activeIdx: 3, posMs: 10_000, lineEndMs: 10_000, nextStartMs: 12_000),
+                .line(4), "短间隙:唱完即切到下一句")
+    expectEqual(L.resolve(activeIdx: 3, posMs: 9_999, lineEndMs: 10_000, nextStartMs: 12_000),
+                .line(3), "边界:差 1ms 还不算唱完")
+
+    // ③ 长间奏(30s):唱完先切成 ♪,离下一句 reveal 毫秒时才亮出它。
+    //    ——单行面没有「•••」那种可停靠的东西,已经唱完的句子不该继续占着那一行冒充"在唱"。
+    expectEqual(L.resolve(activeIdx: 3, posMs: 10_000, lineEndMs: 10_000, nextStartMs: 40_000),
+                .placeholder, "长间奏中段:♪")
+    expectEqual(L.resolve(activeIdx: 3, posMs: 40_000 - reveal - 1, lineEndMs: 10_000, nextStartMs: 40_000),
+                .placeholder, "边界:提前量窗口外还是 ♪")
+    expectEqual(L.resolve(activeIdx: 3, posMs: 40_000 - reveal, lineEndMs: 10_000, nextStartMs: 40_000),
+                .line(4), "边界:进入提前量窗口就亮出下一句")
+
+    // ④ 保守边界 1:行级 LRC 不知道一行唱多久 → 一律不抢跑(维持"下一句开始才换"的旧行为)。
+    //    猜早了会在人还在唱这句的时候把它换掉,比现状更糟。
+    expectEqual(L.resolve(activeIdx: 3, posMs: 30_000, lineEndMs: nil, nextStartMs: 40_000),
+                .line(3), "行级 LRC:不抢跑")
+
+    // ⑤ 保守边界 2:最后一句(没有下一句)唱完也不切走 —— 切成 ♪ 只会让尾奏变空屏。
+    expectEqual(L.resolve(activeIdx: 9, posMs: 99_000, lineEndMs: 10_000, nextStartMs: nil),
+                .line(9), "最后一句:唱完仍显示它")
+
+    // ⑥ 还没到第一句:维持现状(前奏里刻意不提前亮出第一句,那是另一个场景)
+    expectEqual(L.resolve(activeIdx: -1, posMs: 500, lineEndMs: nil, nextStartMs: 3_000),
+                .line(-1), "前奏:不动")
+
+    // ⑦ displayDurationMs:菜单栏跑马灯的配速依据。
+    //    这一项**必须**跟着显示窗口走 —— 沿用旧的「本句时间戳→下句时间戳」会在
+    //    "长句 + 后面接长间奏"时把 dwell 算大,MenuBarMarquee.pacing 按它配速,
+    //    句子会只滚出开头一小截就被换掉(比改动前更糟)。
+    //    上一句 8s 唱完、本句 10s 开始、13s 唱完、下一句 40s 开始:
+    //      出现 = max(8000, 10000-5000) = 8000;消失 = 13000(唱完即下场)→ 5000ms
+    expectEqual(L.displayDurationMs(prevLineEndMs: 8_000, startMs: 10_000,
+                                    lineEndMs: 13_000, nextStartMs: 40_000, fallbackEndMs: nil),
+                5_000, "长间奏在后:窗口到唱完为止,不能算到下一句开始")
+    //    短间隙:上一句 9.8s 唱完、本句 10s 开始、13s 唱完 → 出现 9800、消失 13000
+    expectEqual(L.displayDurationMs(prevLineEndMs: 9_800, startMs: 10_000,
+                                    lineEndMs: 13_000, nextStartMs: 14_000, fallbackEndMs: nil),
+                3_200, "短间隙:出现于上一句唱完那一刻")
+    //    长间奏在前:上一句 2s 就唱完、本句 10s 开始 → 出现被 reveal 夹在 5000
+    expectEqual(L.displayDurationMs(prevLineEndMs: 2_000, startMs: 10_000,
+                                    lineEndMs: 13_000, nextStartMs: 14_000, fallbackEndMs: nil),
+                8_000, "长间奏在前:出现时刻被 revealMs 夹住,不会早于此")
+    //    脏数据:上一句"唱完"比本句开始还晚 → 出现时刻不能算成晚于本句开始
+    expectEqual(L.displayDurationMs(prevLineEndMs: 11_000, startMs: 10_000,
+                                    lineEndMs: 13_000, nextStartMs: 14_000, fallbackEndMs: nil),
+                3_000, "时间戳交叠:出现时刻夹到本句开始")
+    //    行级 LRC:不知道唱完时刻 → 退回"下一句开始"
+    expectEqual(L.displayDurationMs(prevLineEndMs: nil, startMs: 10_000,
+                                    lineEndMs: nil, nextStartMs: 14_000, fallbackEndMs: nil),
+                4_000, "行级 LRC:窗口退回下一句开始")
+    //    最后一句:引擎不知道曲长,给 nil → 由 PlaybackCoordinator 退回既有公式
+    expectEqual(L.displayDurationMs(prevLineEndMs: 9_000, startMs: 10_000,
+                                    lineEndMs: 13_000, nextStartMs: nil, fallbackEndMs: nil),
+                nil, "最后一句:引擎算不出,交给上层用曲目时长兜底")
+    expectEqual(L.displayDurationMs(prevLineEndMs: 9_000, startMs: 10_000,
+                                    lineEndMs: 13_000, nextStartMs: nil, fallbackEndMs: 30_000),
+                21_000, "最后一句:给了曲末兜底就用它")
 }
 
 if failures == 0 {

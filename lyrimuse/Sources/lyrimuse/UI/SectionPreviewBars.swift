@@ -209,6 +209,12 @@ struct NotchPreviewBar: View {
 ///     同一张长图、同一条 CAKeyframeAnimation,**真的会滚**;
 ///   * 装得下的句子用 NSFont.menuBarFont(系统菜单栏字体本体),不是 13pt 系统字。
 ///
+/// 逐字染色(2026-08-22 补齐):正在播放且当前句有逐字(YRC)数据时,染色跟真菜单栏一样
+/// 走 MenuBarScrollingLabel 的填色图层,时钟公式也是 MenuBarStatusItem.syncKaraokeClock
+/// 那一条(anchor 外推/暂停位置 + 时间轴偏移)——不是另开一套。没在播放时的示例句刻意
+/// 不染:那是编不出真实时间轴的场景,跟 OverlayPreviewBar 不为示例句假装播放进度是同一个
+/// 原则(见该文件头注)。
+///
 /// 外框改成一小段仿菜单栏:.bar 材质(就是菜单栏/工具栏那层材质)、内容靠右,右边跟着
 /// 几个常见的状态栏图标和真实时钟 —— 这些只是给"占多宽"一个参照物,让宽度滑杆的效果
 /// 看得出来。歌词那一格占多宽跟真菜单栏上一模一样 —— 固定模式下恒等于「显示宽度」、
@@ -217,10 +223,40 @@ struct NotchPreviewBar: View {
 struct MenuBarPreviewBar: View {
     @ObservedObject private var settings = AppSettings.shared
     @State private var line: SyncedLyricLine?
+    // 逐字染色对表用的播放时钟快照(2026-08-22 加)。这几个跟 line 一样是
+    // PlaybackCoordinator 的镜像,靠各自的 onReceive 保持新鲜 —— 不新开一份状态管理,
+    // 只是把 MenuBarStatusItem.syncKaraokeClock 那套对表逻辑搬到宿主 body 里重算一遍。
+    @State private var anchor: ProgressAnchor?
+    @State private var pausedPositionMs: Int?
+    @State private var lyricsOffsetMs = 0
+    @State private var isPlayingNow = false
 
     private var fullText: String {
         if let text = line?.plainText, !text.isEmpty { return text }
         return L10n.t("这里是一句歌词示例")
+    }
+
+    /// 当前句的逐字填色路径。跟 MenuBarStatusItem.karaokeFillPath 同一份判定:
+    /// 只在真的在播放、这句确实有逐字(YRC)数据、且没跟标签文本代际错位时才染。
+    ///
+    /// ⚠️ 没在播放时的示例句("这里是一句歌词示例")**刻意不**编一份假时间轴去演示染色 ——
+    /// OverlayPreviewBar 那边为同一个问题定过调子(见其头注"预览只画整行的最终颜色,
+    /// 不为了演示效果假装有一份不存在的播放进度"):假数据会让预览在没放歌的大多数时候
+    /// 显得像在骗人。真的在放歌且这句有逐字数据时,这里给的是**完全真实**的数据,不是演示。
+    private var karaokeFillPath: [MenuBarMarquee.KaraokeFillPoint]? {
+        guard settings.menuBarLyricsKaraoke,
+              let line, let words = line.words, !words.isEmpty,
+              line.plainText == fullText else { return nil }
+        let path = MenuBarMarquee.karaokeFillPath(
+            words: words, wordEndXs: MenuBarMarqueeRenderer.wordEndXs(for: words))
+        return path.isEmpty ? nil : path
+    }
+
+    /// 位置公式跟 MenuBarStatusItem.syncKaraokeClock 完全同一条:anchor 外推 ??
+    /// 暂停位置,再加歌词时间轴偏移校准。
+    private var karaokePositionMs: Int? {
+        let raw = anchor?.extrapolatedPositionMs(now: Date()) ?? pausedPositionMs
+        return raw.map { $0 + lyricsOffsetMs }
     }
 
     private var presentation: MenuBarMarqueeRenderer.Presentation {
@@ -278,6 +314,13 @@ struct MenuBarPreviewBar: View {
         .frame(maxWidth: .infinity)
         .background(Color(nsColor: .windowBackgroundColor))
         .onReceive(PlaybackCoordinator.shared.$currentLine.removeDuplicates()) { line = $0 }
+        // 逐字染色对表通道,跟 MenuBarStatusItem.syncKaraokeClock 订阅的是同四个源
+        // (锚点/暂停位置/时间轴偏移/播放态),搬到这里重算是因为预览没有自己的
+        // MenuBarStatusItem 实例可以复用那份订阅。
+        .onReceive(PlaybackCoordinator.shared.$anchor) { anchor = $0 }
+        .onReceive(PlaybackCoordinator.shared.$pausedPositionMs) { pausedPositionMs = $0 }
+        .onReceive(PlaybackCoordinator.shared.$currentLyricsOffsetMs) { lyricsOffsetMs = $0 }
+        .onReceive(PlaybackCoordinator.shared.$isPlayingNow) { isPlayingNow = $0 }
         .accessibilityHidden(true)
     }
 
@@ -344,15 +387,31 @@ struct MenuBarPreviewBar: View {
         case .text(let visible):
             // 自适应模式下装得下的句子(以及宽度设成 0 的退化路径)。真机上这两种都是
             // 交给按钮自己画文字,宽度跟着文字走 —— 这里的 fixedSize() 就是那个行为。
-            Text(visible)
-                .font(Font(MenuBarMarqueeRenderer.font))
-                .foregroundStyle(Color(nsColor: .labelColor))
-                .lineLimit(1)
-                .fixedSize()
-                .frame(height: MenuBarMarqueeRenderer.lineHeight)
+            //
+            // ⚠️ 跟真机同一条岔路(见 MenuBarStatusItem.refresh 的 .text 分支):这句
+            // 真有逐字数据要染时,button.title 画不出叠色,改走跟 .fixed 一样的图层渲染,
+            // 窗口宽就取文字自身宽 —— footprint 跟 Text(visible).fixedSize() 逐像素一致。
+            // visible != fullText 只发生在宽度设成 0 的截断退化路径,那里不染(跟真机一致)。
+            if let fillPath = karaokeFillPath, visible == fullText {
+                let w = MenuBarMarqueeRenderer.width(of: visible)
+                MenuBarScrollingLabel.Representable(
+                    text: visible, windowWidth: w, pacing: nil, fillPath: fillPath,
+                    karaokePositionMs: karaokePositionMs,
+                    karaokeRate: anchor?.rate ?? 0, karaokePlaying: isPlayingNow)
+                    .frame(width: w, height: MenuBarMarqueeRenderer.lineHeight)
+            } else {
+                Text(visible)
+                    .font(Font(MenuBarMarqueeRenderer.font))
+                    .foregroundStyle(Color(nsColor: .labelColor))
+                    .lineLimit(1)
+                    .fixedSize()
+                    .frame(height: MenuBarMarqueeRenderer.lineHeight)
+            }
         case .fixed(let text, let windowWidth, let pacing):
             MenuBarScrollingLabel.Representable(
-                text: text, windowWidth: windowWidth, pacing: pacing)
+                text: text, windowWidth: windowWidth, pacing: pacing,
+                fillPath: karaokeFillPath, karaokePositionMs: karaokePositionMs,
+                karaokeRate: anchor?.rate ?? 0, karaokePlaying: isPlayingNow)
                 .frame(width: windowWidth, height: MenuBarMarqueeRenderer.lineHeight)
         }
     }

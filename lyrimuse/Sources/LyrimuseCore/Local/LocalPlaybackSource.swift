@@ -23,6 +23,21 @@ public final class LocalPlaybackSource: ObservableObject {
     // 算出来,只在真的换了行时才重新赋值(见 fastTick())。allLines 换歌时才重新构造一次
     // (reloadCurrentLyrics()),不需要每 tick 重算——歌词内容本身在同一首歌播放期间不变。
     @Published public private(set) var currentLineIndex: Int?
+    /// 歌词窗口的滚动锚(2026-08-22,AM 式"滚动先于染色"):一句唱完、下一句还没开始的
+    /// 空档里先指向下一行,染色仍看 currentLineIndex。语义与三种空档的划分见
+    /// LyricsSyncEngine.scrollLeadIndex;这里跟 currentLineIndex 同一套 tick、同一条
+    /// "只在真的变化时才赋值"纪律。
+    @Published public private(set) var scrollLineIndex: Int?
+    /// 单行展示面(灵动岛 / 菜单栏)该显示的那一行(2026-08-23 用户要求「唱完就切到下一句,
+    /// 好提前看到歌词跟唱」)。跟 currentLine 的区别是**唱完就切走**;长间奏中段为 nil,
+    /// 由 compactShowsPlaceholder 区分成因。规则见 CompactLyricLead —— 它跟歌词窗口的
+    /// scrollLineIndex 是两套,别混(多行有「•••」可停靠,单行没有)。
+    @Published public private(set) var compactLine: SyncedLyricLine?
+    /// compactLine == nil 的成因:true = 唱完了、下一句还早(画 ♪);false = 压根还没有
+    /// 可显示的行(交给各展示面既有的空态分支:搜索中 / 无歌词 / 广告 / 纯音乐…)。
+    @Published public private(set) var compactShowsPlaceholder: Bool = false
+    /// compactLine 总共会显示多久(毫秒),给菜单栏跑马灯配速。见 CompactLyricLead.displayDurationMs。
+    @Published public private(set) var compactDwellMs: Int?
     @Published public private(set) var allLines: [LyricsWindowLine] = []
     // 歌词间奏点(歌词窗口的「•••」,2026-08-19):整首歌的间奏位置换歌时算一次;
     // "此刻在不在间奏里"跟 currentLineIndex 一样只在真的变化时赋值(20Hz tick 判定)。
@@ -853,6 +868,10 @@ public final class LocalPlaybackSource: ObservableObject {
             if currentLine != nil { currentLine = nil }
             if nextLineText != nil { nextLineText = nil }
             if currentLineIndex != nil { currentLineIndex = nil }
+            if scrollLineIndex != nil { scrollLineIndex = nil }
+            if compactLine != nil { compactLine = nil }
+            if compactShowsPlaceholder { compactShowsPlaceholder = false }
+            if compactDwellMs != nil { compactDwellMs = nil }
             // 没有可显示的行,间奏点和"填色未定格"也一并归位 —— 别让上一首歌的残留值
             // 挂着(fillSettled 归 true:没有行就没有可动的填色,表该停着)。
             if currentGapIndex != nil { currentGapIndex = nil }
@@ -863,8 +882,12 @@ public final class LocalPlaybackSource: ObservableObject {
         // (2026-08-20 性能审计,见 LyricsSyncEngine.tickQuery)。
         let r = syncEngine.tickQuery(atMs: frozen)
         if r.line != currentLine { currentLine = r.line }
+        if r.compactLine != compactLine { compactLine = r.compactLine }
+        if r.compactPlaceholder != compactShowsPlaceholder { compactShowsPlaceholder = r.compactPlaceholder }
+        if r.compactDwellMs != compactDwellMs { compactDwellMs = r.compactDwellMs }
         if r.nextText != nextLineText { nextLineText = r.nextText }
         if r.index != currentLineIndex { currentLineIndex = r.index }
+        if r.scrollIndex != scrollLineIndex { scrollLineIndex = r.scrollIndex }
         if r.gapIndex != currentGapIndex { currentGapIndex = r.gapIndex }
         updateLineFillSettled(line: r.line, atRawMs: frozen)
     }
@@ -888,8 +911,12 @@ public final class LocalPlaybackSource: ObservableObject {
         // 是否相等,只要赋值就会通知订阅者重新渲染,而绝大多数 tick 其实还是同一行。
         let r = syncEngine.tickQuery(atMs: pos)
         if r.line != currentLine { currentLine = r.line }
+        if r.compactLine != compactLine { compactLine = r.compactLine }
+        if r.compactPlaceholder != compactShowsPlaceholder { compactShowsPlaceholder = r.compactPlaceholder }
+        if r.compactDwellMs != compactDwellMs { compactDwellMs = r.compactDwellMs }
         if r.nextText != nextLineText { nextLineText = r.nextText }
         if r.index != currentLineIndex { currentLineIndex = r.index }
+        if r.scrollIndex != scrollLineIndex { scrollLineIndex = r.scrollIndex }
         if r.gapIndex != currentGapIndex { currentGapIndex = r.gapIndex }
         updateLineFillSettled(line: r.line, atRawMs: pos)
     }
@@ -945,6 +972,10 @@ public final class LocalPlaybackSource: ObservableObject {
             currentLine = nil
             nextLineText = nil
             currentLineIndex = nil
+            scrollLineIndex = nil
+            compactLine = nil
+            compactShowsPlaceholder = false
+            compactDwellMs = nil
             allLines = []
             lyricsGapMarkers = []
             currentGapIndex = nil
