@@ -97,15 +97,25 @@ func chunkForTranslation(texts []string) [][]string {
 	return chunks
 }
 
-// looksLikeTargetLanguage 判断这份歌词是不是已经就是目标语言,是的话整个跳过 —— 既躲开
-// 上面那个 sentinel,也省配额。只做目标语言为中文这一种判断:那是这个功能唯一的实际用途
-// (外语歌配中文译文),其它目标语言宁可多翻一次也不瞎猜。
-func looksLikeTargetLanguage(lyrics, target string) bool {
-	if !strings.HasPrefix(strings.ToLower(target), "zh") {
-		return false
-	}
-	return looksChinese(lyrics)
-}
+// 【已删除】looksLikeTargetLanguage(2026-08-23)
+//
+// 它做的是"整首歌是不是已经就是目标语言,是的话整个跳过"。判据是 looksChinese ——
+// 汉字占多数就算中文,而且注释明确写着"中英混排的华语歌也应该判成中文"。
+//
+// 那句话对**它原本要判的东西**是对的:looksChinese 是用来认"已有译文是什么语言"的
+// (translationUsable 里那三处),一份中英混排的中文译文当然算中文译文。
+// 但用它来判"正文要不要翻"就错了 —— 华语歌里整行英文的副歌很常见,
+// 《方大同 - 月亮代表我的心》44 行里 35 行中文、8 行 "It represent my heart!",
+// 汉字占多数 ⇒ 判成"已经是中文" ⇒ 整首跳过,那 8 行英文永远等不到译文
+// (2026-08-23 用户报的就是这个)。
+//
+// 两处调用都删了,改由**逐行**判定接管:
+//   - needsTranslationBackfill 靠 anyLineNeedsTranslation(有任何一行需要翻才起 goroutine,
+//     省配额的意图一样达到,而且更准);
+//   - machineTranslateLRCWithBase 内部本来就是逐行挑行、翻完按下标散回去的
+//     (没送去翻的行留空串),那套逻辑一直是对的,只是被这道整首闸挡在门外没机会跑。
+// 逐行判据是 dominantScript:「我们的时光 baby 一起走过」主体是汉字 ⇒ 不翻;
+// 「It represent my heart!」主体是拉丁 ⇒ 翻。行内混排和整行外语,这才分得开。
 
 // looksChinese 判断一段文本是不是中文。只认中文这一种语言 —— 判别只是个兜底,用在
 // 没记语言的老条目上,而"是不是中文"恰好是唯一需要判、也判得准的一种(会自带译文的
@@ -298,18 +308,29 @@ func machineTranslateLRCWithBase(ctx context.Context, hc *http.Client, baseURL, 
 	if lyrics == "" || target == "" {
 		return translationResult{}, nil
 	}
-	if looksLikeTargetLanguage(lyrics, target) {
-		return translationResult{}, nil
-	}
 	lines := parseLRCLines(lyrics)
 	if len(lines) == 0 {
 		return translationResult{}, nil
 	}
 	// 只把"跟目标语言不是同一套文字"的行送去翻,理由见 dominantScript 那一段。
 	// idx 记住它们在原文里的下标,翻完再按位置散回去。
+	//
+	// 署名行先剔掉(2026-08-23):`[00:02.000] 编曲 : Edward Chan/方大同` 这种行拉丁字母
+	// 比汉字多,dominantScript 判成 latin,于是被当歌词送去翻。三个后果:展示端本来就会
+	// 用 creditLinePattern 把它过滤掉(白翻)、退到 MyMemory 的机器白烧配额、而且它会拉高
+	// 下面 assembleTranslationLRC 的 attempted 分母 —— 署名行占比高的短歌可能因此撞上
+	// "written*3 < attempted" 那道阈值、整份译文被判作废。
+	//
+	// ⚠️ 用 isCreditLineWithSpeakers 而不是 isCreditLine:后者含 genericHanCreditLineRe
+	// 那条纯结构正则(短汉字 + 冒号),「男：It represent my heart!」会被它命中 —— 那是
+	// 真歌词,剔掉就等于对唱歌的英文行永远没译文。带上这一份的说话人标签当豁免才分得开。
+	speakers := lyricSpeakerLabels(lyrics)
 	idx := make([]int, 0, len(lines))
 	texts := make([]string, 0, len(lines))
 	for i, l := range lines {
+		if isCreditLineWithSpeakers(strings.TrimSpace(l.text), speakers) {
+			continue
+		}
 		if !lineNeedsTranslation(l.text, target) {
 			continue
 		}
@@ -550,13 +571,12 @@ func needsTranslationBackfill(e enrichEntry) bool {
 	if sameTarget && e.TranslationRetryCount >= translationBackfillMaxAttempts {
 		return false
 	}
-	// 歌词本来就是目标语言时连 goroutine 都不用起 —— machineTranslateLRC 里也有同一道
-	// 判断兜底,但那时已经白占了一次 inflight 和一次尝试次数。
-	if looksLikeTargetLanguage(e.Lyrics, target) {
-		return false
-	}
-	// 逐行看:一行都不需要翻(整首都已经是目标语言那套文字)时同样别起 —— 否则会一次次
-	// 翻出空结果、把三次重试额度白白烧完,之后这首歌就算真该翻也不会再试了。
+	// 逐行看:一行都不需要翻(整首都已经是目标语言那套文字)时别起 goroutine —— 否则会
+	// 一次次翻出空结果、把三次重试额度白白烧完,之后这首歌就算真该翻也不会再试了。
+	//
+	// ⚠️ 这里曾经还有一道 looksLikeTargetLanguage 的**整首**判定排在前面,它把
+	// "汉字占多数"的歌整首跳过,于是华语歌里整行英文的副歌永远等不到译文。
+	// 已删除,理由见文件上方那段【已删除】注释 —— 下面这条逐行判定完全覆盖它的意图。
 	if !anyLineNeedsTranslation(e.Lyrics, target) {
 		return false
 	}

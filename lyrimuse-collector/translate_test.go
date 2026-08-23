@@ -76,21 +76,103 @@ func TestChunkForTranslationOversizedSingleLine(t *testing.T) {
 	}
 }
 
-func TestLooksLikeTargetLanguage(t *testing.T) {
+// 逐行判定取代了原来的整首判定(looksLikeTargetLanguage,2026-08-23 删,理由见
+// translate.go 那段【已删除】注释)。这组用例保留原来那些场景,并补上它判错的那一类:
+// **整行外语**。
+func TestLineNeedsTranslation(t *testing.T) {
 	cases := []struct {
-		name, lyrics, target string
-		want                 bool
+		name, text, target string
+		want               bool
 	}{
-		{"纯中文歌 + 目标中文:跳过", "我们的时光 一起走过的日子", "zh-CN", true},
-		{"中英混排的华语歌也算中文", "我们的时光 baby 一起走过", "zh-CN", true},
-		{"纯英文歌:要翻", "The painful youth I've had", "zh-CN", false},
-		{"日文歌:要翻(假名不是汉字,汉字不占多数)", "君のことが好きだから", "zh-CN", false},
-		{"目标不是中文时一律不判,宁可多翻一次", "我们的时光", "en", false},
-		{"空歌词", "", "zh-CN", false},
+		{"中文行 + 目标中文:不用翻", "我们的时光 一起走过的日子", "zh-CN", false},
+		// 行内混排:这一行主体是汉字,翻它只会把已经看得懂的一行再抄一遍
+		{"行内混排、主体中文:不用翻", "我们的时光 baby 一起走过", "zh-CN", false},
+		// ⚠️ 这条是这次修的那个 bug 的核心:整行英文必须翻。原来的整首判定看的是
+		// "汉字占全曲多数",于是华语歌里这样的副歌整首被跳过。
+		{"整行英文:要翻", "It represent my heart!", "zh-CN", true},
+		{"纯英文行:要翻", "The painful youth I've had", "zh-CN", true},
+		{"日文行:要翻(假名不是汉字)", "君のことが好きだから", "zh-CN", true},
+		{"纯符号/数字:没什么可翻", "♪ 1 2 3 —— ", "zh-CN", false},
+		{"目标是英文时,英文行不用翻", "It represent my heart!", "en", false},
+		{"目标是英文时,中文行要翻", "我们的时光", "en", true},
 	}
 	for _, c := range cases {
-		if got := looksLikeTargetLanguage(c.lyrics, c.target); got != c.want {
-			t.Errorf("%s: = %v, want %v", c.name, got, c.want)
+		if got := lineNeedsTranslation(c.text, c.target); got != c.want {
+			t.Errorf("%s: lineNeedsTranslation(%q, %q) = %v, want %v",
+				c.name, c.text, c.target, got, c.want)
+		}
+	}
+}
+
+// 整首层面的门:只要**有一行**需要翻就得放行 —— 这是华语歌夹英文副歌那一类的护栏。
+func TestAnyLineNeedsTranslationMixedSong(t *testing.T) {
+	// 照《方大同 - 月亮代表我的心》的真实构成写:大部分中文 + 几行纯英文副歌。
+	mixed := "[00:16.73]你问我爱你有多深\n" +
+		"[00:21.30]我爱你有几分\n" +
+		"[00:24.71]我的情也真我的爱也真\n" +
+		"[00:29.31]月亮代表我的心\n" +
+		"[01:02.00]It represent my heart!\n" +
+		"[01:06.00]It represent my heart!\n"
+	if !anyLineNeedsTranslation(mixed, "zh-CN") {
+		t.Error("华语歌夹整行英文副歌:应当放行去翻那几行英文" +
+			"(2026-08-23 之前被 looksLikeTargetLanguage 整首跳过)")
+	}
+	// 反面:整首都是中文,别白起 goroutine 烧配额
+	allZh := "[00:01.00]你问我爱你有多深\n[00:05.00]月亮代表我的心\n"
+	if anyLineNeedsTranslation(allZh, "zh-CN") {
+		t.Error("整首中文不该触发翻译")
+	}
+	// 行内混排、且**汉字仍占多数**时不该触发
+	inline := "[00:01.00]我们的时光 baby 一起走过\n[00:05.00]我的情也真 oh 我的爱也真\n"
+	if anyLineNeedsTranslation(inline, "zh-CN") {
+		t.Error("行内混排(每行汉字仍占多数)不该触发翻译")
+	}
+	// ⚠️ 已知边界(不是 bug,是 dominantScript 的口径):混排行里**拉丁字母比汉字还多**时
+	// 会被判成需要翻,比如「说好不哭 oh yeah」(4 汉字 vs 6 字母)。翻出来是把已经看得懂的
+	// 中文再抄一遍,略显冗余但不影响原文;要治得给 dominantScript 换更细的判据(比如按
+	// 词而不是按字符计权),那是另一件事。这里把行为钉住,免得以后当成回归改错方向。
+	latinHeavy := "[00:01.00]说好不哭 oh yeah\n"
+	if !anyLineNeedsTranslation(latinHeavy, "zh-CN") {
+		t.Error("拉丁字母多于汉字的混排行:当前口径是判成需要翻(见上面注释)")
+	}
+}
+
+// 署名行不该被送去翻译:它们拉丁字母常比汉字多(「编曲 : Edward Chan/方大同」),
+// dominantScript 会判成 latin。展示端本来就会过滤掉这些行,翻它们等于白烧配额,
+// 还会拉高 assembleTranslationLRC 的 attempted 分母、把整份译文推向"作废"阈值。
+//
+// 同时守住反面:说话人标签后面跟的是**真歌词**,不能一起剔掉 —— 那会让对唱歌的
+// 英文行永远没译文。靠 isCreditLineWithSpeakers 的豁免名单分开。
+func TestTranslationSkipsCreditLinesButKeepsSpeakerLines(t *testing.T) {
+	lyrics := "[00:00.00] 作词 : 孙仪\n" +
+		"[00:02.00] 编曲 : Edward Chan/方大同\n" +
+		"[00:16.73]你问我爱你有多深\n" +
+		"[01:02.00]It represent my heart!\n" +
+		"[01:06.00]男：It represent my heart!\n" +
+		"[01:10.00]女：你问我爱你有多深\n"
+	speakers := lyricSpeakerLabels(lyrics)
+	if !speakers["男"] || !speakers["女"] {
+		t.Fatalf("前置条件:应认出男/女两个说话人标签,实际 %v", speakers)
+	}
+	type want struct {
+		text string
+		send bool // 是否该送去翻(target=zh-CN)
+	}
+	cases := []want{
+		{"作词 : 孙仪", false},                 // 署名行,而且汉字为主
+		{"编曲 : Edward Chan/方大同", false},    // 署名行,拉丁为主 —— 这条是本次修的
+		{"你问我爱你有多深", false},                // 中文歌词,不用翻
+		{"It represent my heart!", true},   // 英文歌词,要翻
+		{"男：It represent my heart!", true}, // 说话人标签 + 英文歌词,要翻
+		{"女：你问我爱你有多深", false},              // 说话人标签 + 中文歌词,不用翻
+	}
+	for _, c := range cases {
+		isCredit := isCreditLineWithSpeakers(c.text, speakers)
+		needs := lineNeedsTranslation(c.text, "zh-CN")
+		got := !isCredit && needs
+		if got != c.send {
+			t.Errorf("%q: 送翻=%v(credit=%v needs=%v), 期望 %v",
+				c.text, got, isCredit, needs, c.send)
 		}
 	}
 }
