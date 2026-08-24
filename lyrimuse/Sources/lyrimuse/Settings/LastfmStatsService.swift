@@ -202,8 +202,19 @@ final class LastfmStatsService: ObservableObject {
     @Published private(set) var apiNowPlayingSince: Date?
     /// 「这是你第 N 次听」:track.getinfo 带 username 的 userplaycount + 1。
     /// 换歌那一刻取一次,同一首歌不重取(取晚了这次播放被 scrobble 进去就会多算一)。
+    ///
+    /// ⚠️ 只取一次意味着这个数**没有任何自愈机制**——跟 trackPlayCounts(历史行用)不是
+    /// 一回事,那张表有三条作废判据会持续纠正(尤其判据③,页内自相矛盾)。用户实测
+    /// (2026-08-24《Controversy》)：换歌那一刻取到 16(显示 17),而同一时刻 Last.fm 的
+    /// 真实值已经是 27(显示 28)——差 11,且当天只新增了这一次收听，不是"還沒并计进去"
+    /// 那种几分钟延迟能解释的量级；根因没能确定到具体是哪一层(Last.fm 接口本身返回了
+    /// 陈旧值？),但现象很干脆：这一次 track.getinfo 就是拿到了一个明显偏低的数，取完
+    /// 之后再没人管过它。见 reconcileNowPlayingCount 的自愈补丁。
     @Published private(set) var nowPlayingCount: Int?
     private var nowPlayingCountKey = ""
+    /// nowPlayingCountKey 的 playCountKey 形态，给 reconcileNowPlayingCount 直接查
+    /// trackPlayCounts 用——避免每次都重新拼一遍、也避免两处归一化逻辑不一致。
+    private var nowPlayingCountPlayCountKey = ""
     /// 当前曲目的收听跨度(首次/上次听),歌词窗口「显示简介」的收听档案用(2026-08-22)。
     /// 数据来自 user.getTrackScrobbles(这首歌在这个账号下的全部 scrobble,带时间、可分页;
     /// 本地 listens.jsonl 靠不住 —— 它只在没连账号时才记,见 collector/listenlog.go)。
@@ -274,6 +285,7 @@ final class LastfmStatsService: ObservableObject {
         apiNowPlayingSince = nil
         nowPlayingCount = nil
         nowPlayingCountKey = ""
+        nowPlayingCountPlayCountKey = ""
         onThisDay = nil
         onThisDayUpdatedAt = nil
         onThisDayDay = nil
@@ -323,6 +335,7 @@ final class LastfmStatsService: ObservableObject {
         let key = "\(artist)|\(title)"
         guard key != nowPlayingCountKey else { return }
         nowPlayingCountKey = key
+        nowPlayingCountPlayCountKey = Self.playCountKey(artist: artist, title: title)
         nowPlayingCount = nil
         guard !title.isEmpty, let cred = credentials else { return }
         Task {
@@ -369,6 +382,26 @@ final class LastfmStatsService: ObservableObject {
                 nowPlayingCount = total + 1
             }
         }
+    }
+
+    /// 让 nowPlayingCount 追上 trackPlayCounts 的后续修正(2026-08-24)。
+    ///
+    /// nowPlayingCount 只在换歌那一刻取一次(见 refreshNowPlayingCount 的守卫),取完之后
+    /// 不会自己再重取 —— trackPlayCounts 却会持续被 resolvePlayCounts 刷新、被三条作废
+    /// 判据纠正。用户实测(《Controversy》):换歌那一刻取到 16(显示 17),trackPlayCounts
+    /// 那边随后追到了 27(显示 28),而 nowPlayingCount 永远停在 17,直到下一次换歌。
+    ///
+    /// 只在这里(resolvePlayCounts 每次合并新取到的 counts 时)调用就够:trackPlayCounts
+    /// 的写入方只有这里和 adoptFreshTotal(nowPlayingCount 自己那次取数),后者跟当下
+    /// 显示的数是同一个数,没有"追上"可言。取舍见 PlayCountRecency.reconciledNowPlayingCount
+    /// 的注释——只能涨、不能跌,且接受一个刻意权衡过的窄边界。
+    private func reconcileNowPlayingCount(with freshCounts: [String: Int]) {
+        guard !nowPlayingCountPlayCountKey.isEmpty,
+              let fresh = freshCounts[nowPlayingCountPlayCountKey],
+              let updated = PlayCountRecency.reconciledNowPlayingCount(
+                current: nowPlayingCount, freshTotal: fresh)
+        else { return }
+        nowPlayingCount = updated
     }
 
     /// 当前曲目的首次/上次听(user.getTrackScrobbles):limit=1 的第一页给最近一次 +
@@ -1670,7 +1703,10 @@ final class LastfmStatsService: ObservableObject {
                     }
                     addNext()
                 }
-                if !counts.isEmpty { trackPlayCounts.merge(counts) { _, new in new } }
+                if !counts.isEmpty {
+                    trackPlayCounts.merge(counts) { _, new in new }
+                    reconcileNowPlayingCount(with: counts)
+                }
                 if !covers.isEmpty { recentTrackCovers.merge(covers) { _, new in new } }
                 if !albumCovers.isEmpty { recentAlbumCovers.merge(albumCovers) { _, new in new } }
                 playCountUnavailable.formUnion(noCount)

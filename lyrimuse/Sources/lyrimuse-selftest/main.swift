@@ -1672,6 +1672,30 @@ do {
                 "判据③: 无矛盾时,再久没问过也不作废")
 }
 
+// ---- nowPlayingCount 追赶 trackPlayCounts(2026-08-24) ----
+//
+// 用户实测(《Controversy》):换歌那一刻 nowPlayingCount 取到 16(显示 17),trackPlayCounts
+// 随后追到 27(显示 28)——nowPlayingCount 没有任何自愈机制,永远停在 17,直到下一次换歌。
+// 这组用例钉住"只能涨、不能跌"的取舍。
+do {
+    typealias R = PlayCountRecency
+    // 正题:trackPlayCounts 学到了更高的总数 → 采纳,+1 换算成显示值
+    expectEqual(R.reconciledNowPlayingCount(current: 17, freshTotal: 27), 28,
+                "nowPlayingCount 追赶: 27+1=28,比当前 17 高 → 采纳")
+    // 还没显示过(nil,理论上不该发生在这条路径,但当 0 处理不炸)
+    expectEqual(R.reconciledNowPlayingCount(current: nil, freshTotal: 5), 6,
+                "nowPlayingCount 追赶: current 为 nil 时按 0 比较")
+    // ⚠️ 只能涨、不能跌 —— 新数字更低时必须按兵不动,不能让显示的数字倒退
+    expectEqual(R.reconciledNowPlayingCount(current: 17, freshTotal: 10), nil,
+                "nowPlayingCount 追赶: 新总数更低 → 不采纳,返回 nil")
+    // 等于当前值:没有新信息,不该触发一次无意义的写入(SwiftUI 不必要的重渲染)
+    expectEqual(R.reconciledNowPlayingCount(current: 17, freshTotal: 16), nil,
+                "nowPlayingCount 追赶: 换算后与当前相等 → 不采纳")
+    // 差 1 也要涨 —— 阈值判断用的是 > 不是 >=,别把等于的情况错判成"该涨"
+    expectEqual(R.reconciledNowPlayingCount(current: 17, freshTotal: 17), 18,
+                "nowPlayingCount 追赶: 新总数比换算前的 total 还高一点 → 仍要涨")
+}
+
 // ---- 封面第⑤级:Apple Music 目录匹配守卫(2026-08-22) ----
 //
 // 前四级封面兜底里只有「本机 enrich 缓存」覆盖得了 Last.fm 对中文曲库缺图,而那一级只有

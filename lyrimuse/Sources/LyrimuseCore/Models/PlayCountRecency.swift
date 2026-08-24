@@ -54,4 +54,29 @@ public enum PlayCountRecency {
         guard let lastFetched else { return true }
         return now.timeIntervalSince(lastFetched) >= recheckAfter
     }
+
+    /// 「正在记录」nowPlayingCount 的追赶判据(2026-08-24)。
+    ///
+    /// nowPlayingCount 只在换歌那一刻取一次(取晚了这次播放被 scrobble 进去就会多算一,
+    /// 见 LastfmStatsService.refreshNowPlayingCount),取完之后**没有任何自愈机制**——
+    /// 跟 trackPlayCounts(历史行用)完全不是一回事,那张表有三条作废判据持续纠正。
+    /// 用户实测(《Controversy》):换歌那一刻取到 16(显示 17),同一时刻历史行经
+    /// trackPlayCounts 刷新已经追到 27(显示 28)——这个数字自己永远追不上去,直到下一次
+    /// 换歌才会重新取一次全新的。
+    ///
+    /// 判据很朴素:trackPlayCounts 每次刷新都可能带来一个更新的总数,只要它比当前显示的
+    /// 高就该采纳——**只能涨、不能跌**,理由跟原有「换歌那一刻取一次」的设计初衷一致:
+    /// userplaycount 是过去的次数、只会越查越大(删除历史记录是极端例外,不在这个自愈的
+    /// 处理范围内),跌下去只可能是缓存态一时不一致,采纳了反而会闪烁。
+    ///
+    /// ⚠️ 已知的窄边界(刻意接受,不是漏想):如果这次追赶发生在**当前这次播放自己**已经
+    /// 越过 scrobble 门槛、且 Last.fm 已经把它计进 userplaycount 之后,新总数会连这次
+    /// 播放也算进去,+1 之后偶发多算一。跟"完全冻结、整段会话数字长期错到离谱"（用户
+    /// 实测过的 17 vs 28,差 11）相比,这个窗口窄得多、代价小得多——歌一换就会用全新的
+    /// 换歌取数覆盖掉，不会带到下一首歌头上。两害相权取其轻，不是没考虑过就选的。
+    public static func reconciledNowPlayingCount(current: Int?, freshTotal: Int) -> Int? {
+        let candidate = freshTotal + 1
+        guard candidate > (current ?? 0) else { return nil }
+        return candidate
+    }
 }
