@@ -1,5 +1,5 @@
 # 07. 歌词窗口
-> 最后核对:2026-08-24 · 基线:42ef515+工作树
+> 最后核对:2026-08-25 · 基线:7c579ca+工作树
 
 ## 定位
 
@@ -87,6 +87,7 @@
 ### 「⋯」菜单与曲目动作(2026-08-22,对照 AM 同位菜单逐项评估后落地)
 
 - 菜单结构(自绘玻璃面板,机制见已知坑 #12;2026-08-22 二批定稿):Apple Music 播放时 = 添加到资料库 / 减少推荐 / ─ / 前往专辑 / 前往艺人 / 在 Music 中显示 / ─ / 显示简介 / 搜索歌词…(有曲目才显示) / 歌词时间轴(内联控件行);其它播放器只有后半段,「在 %@ 中显示」标题随 `resolvedPlayerDisplayName` 变。「歌词管理…」「拷贝歌词」按用户要求移除(管理入口保留在菜单栏菜单)。
+- **标题右侧新增「设置」圆钮**(2026-08-25,`titleSideButtons`):跟收藏(星)/更多(…)同一排、同一个 `circleIcon` 样式,排在「…」右边——用户明确要求就放在"三个点旁边",不是塞进「…」的下拉菜单里。这扇窗口本身没有右键菜单/工具栏,原来只能从菜单栏图标右键或 Dock 才够得着设置,是真实的空白。动作 `AppActions.shared.openSettings?()`,与菜单栏右键菜单「设置…」同一条路径(已经带 `NSApp.activate`,`.accessory` 策略下必需,见 `MenuBarStatusMenu.openSettings` 同款注释),不经 `requestSettings` 指定分类,沿用用户上次停留的设置页。`.help` 文案复用同一句「设置…」,同一个本地化键,不必新增翻译条目。
 - **AppleScript 动作**(`MusicPlaybackController`,全部 2026-08-22 实机验证):添加到资料库=`duplicate current track to source 1`(流媒体曲目唯一可行路;不返回引用;fallback `library playlist 1`——不能用名字 "Library",中文系统叫「资料库」;共享播放列表源的 `shared track` 走 source 1 报 -10006、靠 fallback 接住);减少推荐=`disliked` 布尔(UI 的 Suggest Less 就是老 Dislike);在 Music 中显示=`reveal current track`+activate。统一走 `runAppleMusicMenuAction` 外壳(权限确认+后台线程,失败静默)。
 - **资料库/减少推荐两行是有状态行**(2026-08-22 三批后补,起因=用户实测"点了没反应"——那首歌 7 月就已在库,`duplicate` 对已在库曲目是**静默 no-op**,不报错不重复入库,加上行点完即关面板,成功/已在库/失败三种结局零差别):开菜单 `onAppear` 异步只读回查(`currentTrackIsInLibrary()` 按 歌名+歌手+专辑 在 library playlist 1 里数匹配,专辑空退两字段;`currentTrackDisliked()`;查询用 `askIfNeeded: false`,授权弹窗只该出现在显式动作上),已在库→行变成可点的「**从资料库删除**」(AM 同款切换;`removeCurrentTrackFromLibrary()` 删匹配第一条,匹配口径与回查同一套,删完读回确认→行翻回「添加到资料库」即反馈,失败态「删除失败」可重试);点添加**不关菜单**,行内走 添加中…→已添加 ✓/添加失败(可点重试)。⚠️ 成败判定**不信 duplicate 返回值**(no-op 也报 ok),点完重新读回资料库才算,读回失败(nil)才退回信命令返回值。减少推荐=勾选切换(再点撤销,乐观更新)。AppleScript `whose` 子句只认字符串变量,内联 `name of t` 报 -1728。**三道竞态守卫**(审阅轮抓出后补):① 状态机带**代际计数**(每次刷新 +1,在途异步结果落地前核对代际、过期即弃)——防「关菜单→换曲→重开」后上一首的结局贴到新曲行上;② 菜单开着期间换曲由 `.onChange(of: 标题|歌手|专辑拼串)` 触发重刷 —— 两个状态行描述的是曲目,不跟着换就会把撤销打在新曲上;③ 回查结果不许覆盖用户在查询期间手动点过的勾(`suggestLessUserToggled`),「减少推荐」连点走**串行链**(每次写 await 上一次)防乱序终态反转。残余已知边界:点击→AppleScript 执行之间换曲仍可能加错歌(窗口亚秒级,AppleScript 层无廉价 pinning);慢网下 duplicate 超 5s 被杀但 Music 仍会完成入库,短暂误报「添加失败」、重开菜单自愈。
 - **前往专辑/艺人**:AppleScript 拿不到流媒体曲目的目录 ID(URL track 连 address 都没有)→ `MusicCatalogSearch`(LyrimuseCore,纯函数被 selftest 钉住)用 iTunes Search API 按 歌名+歌手+系统店面 解析 artistViewUrl/collectionViewUrl,改写成 **music:// scheme** 经 NSWorkspace 打开 = Music.app 原生跳页。⚠️ **绝不能用 AppleScript `open location`**:它把 URL 当音频流加载、清掉整个播放队列(实机踩雷验证)。
@@ -353,6 +354,25 @@
 13. **排程式填色已废弃(2026-08-21 当日往返,防再犯)**:曾把填色改成"snap+一次性 .linear 显式动画交渲染管线插值"(LyricsX/AMLL 同架构)——CPU 上确实零逐帧代码,但 SCK 逐帧探针实测 **macOS 对这类长时程慢动画只以 ~20Hz 提交**(系统自动降档、无 API 干预;对照组悬浮窗 TimelineView 30Hz 准点投递),20Hz×14px 边缘步进=用户报的"卡顿感",遂回退到两级时钟逐帧重算(见 #6)。若将来重试排程式,先用 SCK 探针核实提交频率再谈;当时趟出的坑(对表完备性要含字号/屏缩放、倍速除进时长、additive 动画同值赋值取消不掉要加盖板)记录于 durable note `swiftui-karaoke-fill-schedule-linear-animation-not-per-frame`。
 14. **`.hiddenTitleBar` 标题栏拖窗区是 WindowServer 级判定,进程内无正规手段拦截**(2026-08-22,拖音量胶囊带着整窗跑):实测五种进程内拦截手段全部失效——SwiftUI `.background()` 挂载的自定义 NSView,命中测试根本进不去外层 NSHostingView 判定拖拽的路径;改用 `addSubview` 直接挂上 NSHostingView(绕开 SwiftUI 树,`hitTest` 验证确实命中了)窗口依旧跟着拖;自定义 NSWindow 子类覆写 `sendEvent(_:)` 吞掉再手动转发,窗口照样被拖且手动转发的事件从未真正送达 SwiftUI;仿 `NSControl` 内部同步 `mouseDown` 追踪循环(假设异步分发才是差异根源),循环里同样收不到任何事件。结论:标题栏拖拽区域的判定发生在比任何单个 view 的 `mouseDownCanMoveWindow`/事件转发策略更底层的地方,进程内没有正规手段覆盖。**修法是几何规避,不是代码修复**:把音量胶囊从"贴住标题栏那一行、跟红绿灯对齐"的固定偏移(`-geo.safeAreaInsets.top + 8`)改成"退到 safe area 之外再加 8pt 边距"(`offset(y: 8)`),牺牲跟 AM 同排对齐的视觉细节换取拖动不再连累整窗;置顶/全屏那颗胶囊是纯点击、没有这个问题,原样保留在标题栏行内的旧偏移。
 15. **"三个点要呼吸"排查两轮才找对目标,根因是从没让用户确认过指的是哪颗**(2026-08-23):用户原话"这个三个点…不会和 applemusic 那样变大变小呼吸,帮我加上"+一张只有三个点的截图,没有更多上下文。**凭截图猜了「…」更多菜单按钮**(标题栏星形收藏旁那颗、SF Symbol `ellipsis` 字形),两轮都在这颗按钮上打转:①第一版用系统 SF Symbols API(`.symbolEffect(.breathe.byLayer)`,理由是 `ellipsis` 标注了三点独立层),自测(截图间隔采样白色像素数)一度误判已生效,被用户反证"没有大小波动"后改用**星形收藏按钮当同帧静态对照**重测(星形像素数全程纹丝不动=对照有效,「…」却是在 0 和满值间硬切,不是平滑波形)才发现真相——另起隔离测试 App 证实 `.breathe` 在 60pt 下平滑、缩到生产尺寸(14pt 字形)就崩成硬切,遂改用本文件 `idleWelcomeView` 已验证好看的手写方案(`@State`+`.scaleEffect`/`.opacity`+`.animation(...repeatForever, value:)`),星形对照法重测确认这颗按钮**真的**变成了平滑正弦波(36→68→36)。②**部署后用户第二次说"还是没效果"**,这时候才每贴一张**带红色箭头标注**的截图——箭头精确指向的其实是完全不同的元素:歌词区上方、间奏/前奏时出现的「•••」进度指示点(`gapDotsRow`,随间奏进度依次点亮亮度,但从没做过大小动画),跟「…」菜单按钮毫无关系,从会话最初的一张模糊截图起就理解错了。当场撤销「…」按钮上的改动(用户明确说过不是这里,不能留着一个没人要的效果),转头给 `gapDotsRow` 的三颗点加同款相位错开呼吸(`.scaleEffect` 0.82↔1.18,每颗 `.delay(i*0.16s)`,复用同一验证过的动画写法,不碰原有的按进度点亮的透明度逻辑),用「暂停播放冻结间奏帧、脱离播放推进/滚动的干扰」的方法重新截取验证(而不是追着转瞬即逝的间奏窗口抢拍)确认三颗点确实带相位差地忽大忽小。教训:①**用户给的是"哪个东西"而不是"哪类东西"的单张截图、且第一直觉的匹配对象在代码里存在但语境薄弱(没有相邻的星形/歌名等锚点辅助确认)时,应该先用一句话向用户确认定位("是指标题栏星形旁边那颗'…'菜单按钮吗"),而不是径直动手改——两轮返工的成本远高于一次确认的成本**;②同一个诊断/自测方法论用对了目标才有意义,方法论本身没错(星形对照、隔离测试、暂停冻结取帧)在两个目标上都复现了同样有效的结论,说明problem不在"怎么验证",而在"验证的是不是用户真正想要的那个东西";③一旦发现改错了目标,**要先撤销错误改动**,不能在错误目标上留一个将错就错的"顺手也不错"的效果。
+16. ⚠️ **这扇窗最小化之后从 Dock 图标右键菜单/「Window」菜单里消失**(2026-08-25 用户报
+   "Dock 右键菜单里只有'设置',没有'歌词窗口'",已修)。现场用 Accessibility API 探针
+   (`AXUIElementCopyAttributeValue` 查 `kAXSubroleAttribute`/`kAXMinimizedAttribute`,
+   读的是真实运行中的进程,不点不发键)实测坐实:这扇窗最小化前 `AXSubrole=AXStandardWindow`,
+   最小化后变成 **`AXSubrole=AXDialog`**;同一时刻「设置」「歌词管理」两扇窗(没有本文件
+   这套标题栏定制)最小化状态下仍是 `AXStandardWindow`——三扇正经标题栏窗口里只有这一扇
+   会这样。AppKit 自动填充「Window」菜单、以及 Dock 据此生成的窗口列表,都会把 AXDialog
+   归类成次要/临时窗口过滤掉。病根大概率是 `enforceTrafficLightPosition`(见 #14 之前那条,
+   直接用 `setFrameOrigin` 搬动标题栏三个原生按钮的 frame,整个项目里独一份的操作)干扰了
+   AppKit 判断"这是不是一扇标准窗口"的内部启发式,但没能在代码层面反向坐实到具体是哪一步
+   ——排查预算花在"验证现象真实存在"上,没有再花在"逐步注释掉 enforceTrafficLightPosition
+   /enforceFullScreenCapability/hiddenTitleBar 三者、重新最小化重测"这类隔离实验上,想动
+   这块前先把预算留出来。修法不去纠正 AXSubrole 本身(没找到能纠正它的正规 API),而是
+   绕开它:`attach()` 里新增 `addToWindowsMenu(_:)`,显式 `NSApp.addWindowsItem` 把这扇窗
+   塞进「Window」菜单——菜单项在不在从此跟 AXSubrole 无关;`willCloseNotification` 里对称
+   `removeWindowsItem`,窗口关掉不留死项。⚠️ `addWindowsItem` 不是"缺才写"的幂等操作,
+   只能在 `attach()` 里调一次,不能塞进 `enforceFullScreenCapability`/
+   `enforceTrafficLightPosition` 那套"挂 didUpdate、每帧查一位、缺了才写"的持续守护——
+   那套模式的前提是目标操作本身幂等,搬到这里每帧调一次会往菜单里堆出一整排重复项。
 
 ## 专项:背景取色逼近 Apple Music(进行中,2026-08-23 开新会话延续)
 

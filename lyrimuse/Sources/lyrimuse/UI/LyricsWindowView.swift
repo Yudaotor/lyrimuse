@@ -222,6 +222,27 @@ private final class LyricsWindowController: ObservableObject {
         return true
     }
 
+    /// 手动把这扇窗挂进「Window」菜单(= Dock 图标右键菜单里的窗口列表),别指望 AppKit
+    /// 自动做这件事——只在 attach() 里调一次,不进 didUpdate 那套持续守护:
+    /// `NSApp.addWindowsItem` 不是"缺才写"的幂等操作,每帧调一次会往菜单里堆出一排重复项。
+    ///
+    /// 2026-08-25 实测坐实(用户反馈"Dock 右键菜单里只有'设置',没有'歌词窗口'"):
+    /// 「设置」「歌词管理」两扇窗是最小化后 `AXSubrole` 仍报 `AXStandardWindow`,而**这扇
+    /// 窗最小化之后 `AXSubrole` 会变成 `AXDialog`**(现场探针实测:最小化前
+    /// `subrole=AXStandardWindow`,最小化后 `subrole=AXDialog`,同一扇窗、同一次会话,
+    /// 且是这个 App 三扇正经标题栏窗口里唯一一扇有这个现象的)。AppKit 自动填充"Window"
+    /// 菜单、以及 Dock 据此生成的窗口列表,都会把 AXDialog 当成次要/临时窗口过滤掉。病根
+    /// 大概率是 `enforceTrafficLightPosition` 直接搬动了标题栏三个原生按钮的 frame(整个
+    /// 项目里独一份的操作),干扰了 AppKit 判断"这是不是一扇标准窗口"的内部启发式,但没能
+    /// 在代码层面反向坐实到具体是哪一步——这个函数不去纠正 AXSubrole 本身,而是绕开它:
+    /// 不管 AppKit 认不认,直接把这扇窗**显式**塞进菜单,菜单项在不在从此跟 AXSubrole
+    /// 无关。窗口关闭时对称地 `removeWindowsItem`(见 attach() 里 closeObserver 那段),
+    /// 免得关掉之后菜单里留一条点了没反应的死项。
+    private func addToWindowsMenu(_ window: NSWindow) {
+        window.isExcludedFromWindowsMenu = false
+        NSApp.addWindowsItem(window, title: window.title, filename: false)
+    }
+
     /// 缺才写(写入后自身即满足条件,不会自激);见 attach() 里的守护注释。
     private static func enforceFullScreenCapability(_ window: NSWindow) {
         var behavior = window.collectionBehavior
@@ -301,6 +322,7 @@ private final class LyricsWindowController: ObservableObject {
         // 才写,写入本身也满足守卫条件,不会自激。
         Self.enforceFullScreenCapability(window)
         enforceTrafficLightPosition(window)
+        addToWindowsMenu(window)
         // 位置/尺寸/所在屏幕:先恢复一次,再挂上观察者。顺序要紧 —— 反过来的话我们自己那次
         // setFrame 会立刻触发 didMove/didResize、把刚读出来的值原样再写一遍(无害但没意义),
         // 更糟的是恢复失败(屏幕不在了)时会把系统摆的那个默认位置当成用户意图存下来。
@@ -329,8 +351,13 @@ private final class LyricsWindowController: ObservableObject {
         if let closeObserver { NotificationCenter.default.removeObserver(closeObserver) }
         closeObserver = NotificationCenter.default.addObserver(
             forName: NSWindow.willCloseNotification, object: window, queue: .main
-        ) { [weak self] _ in
-            MainActor.assumeIsolated { self?.forceExit() }
+        ) { [weak self] note in
+            MainActor.assumeIsolated {
+                self?.forceExit()
+                // addToWindowsMenu 手动加的那条,窗口关掉后手动摘掉——不摘的话菜单里会
+                // 留一条指向已释放窗口的死项。
+                if let win = note.object as? NSWindow { NSApp.removeWindowsItem(win) }
+            }
         }
         if let resignKeyObserver { NotificationCenter.default.removeObserver(resignKeyObserver) }
         resignKeyObserver = NotificationCenter.default.addObserver(
