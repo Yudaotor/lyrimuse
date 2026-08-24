@@ -14,7 +14,7 @@ final class LyricsSearchService {
     static let shared = LyricsSearchService()
 
     /// 上一次还在跑的搜索子进程。2026-08-09 把「重新搜索」按钮在搜索途中也放开之后需要它:
-    /// 不杀掉的话,旧那一轮会继续跑满(最长 20 秒兜底超时),白占五个源的网络请求 —— 结果
+    /// 不杀掉的话,旧那一轮会继续跑满(最长 20 秒兜底超时),白占六个源的网络请求 —— 结果
     /// 反正会被调用方的 searchGeneration 判定作废、一行都不会显示。
     /// 用锁而不是 @MainActor:search() 的进程收尾在后台队列上,两边都要碰这个引用。
     private let processLock = NSLock()
@@ -162,8 +162,8 @@ final class LyricsSearchService {
         }
     }
 
-    // 2026-08-02 补上——之前 onUpdate 只传候选数组,五个源都没查到候选时,弹窗只能显示
-    // 一句笼统的"都没找到",分不清是这首歌真的没有网络歌词,还是网络整体不通导致五个源
+    // 2026-08-02 补上——之前 onUpdate 只传候选数组,六个源都没查到候选时,弹窗只能显示
+    // 一句笼统的"都没找到",分不清是这首歌真的没有网络歌词,还是网络整体不通导致六个源
     // 的请求全部发不出去。networkLooksDown 由 collector 侧统计"这一轮联网搜索期间发出
     // 的请求有没有全部失败"算出来(见 networkobs.go 的 networkLooksDown()),这里原样
     // 转发给调用方决定展示哪种空状态文案。
@@ -250,7 +250,7 @@ final class LyricsSearchService {
     ) async throws {
         // withTaskCancellationHandler:调用方的 Task 被取消(.task 随视图消失、或
         // searchGeneration 换代)时顺手终结子进程 —— 原来没有任何取消接线,sheet 关掉/
-        // 采纳候选后 collector 子进程照跑满(五个源、20 秒兜底),NDJSON 还在往已消失的
+        // 采纳候选后 collector 子进程照跑满(六个源、20 秒兜底),NDJSON 还在往已消失的
         // 视图里灌,全是无人消费的废工(2026-08-19 性能审计;sheet 侧另有 onDisappear
         // 兜底,两层都在,谁先到谁生效——cancelRunning 幂等)。
         try await withTaskCancellationHandler {

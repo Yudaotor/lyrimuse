@@ -58,7 +58,7 @@ struct LyricsSearchSheet: View {
     // 让它自己跑完、结果丢掉即可,搜索本身没有副作用)。
     @State private var searchGeneration = 0
     @State private var loadError: String?
-    // 2026-08-02 补上——五个源都没查到候选时,原来只有一句笼统的"都没找到",分不清是
+    // 2026-08-02 补上——六个源都没查到候选时,原来只有一句笼统的"都没找到",分不清是
     // 这首歌真的没有网络歌词还是网络整体不通。collector 侧统计"这一轮请求是否全部
     // 失败"算出这个信号,见 LyricsSearchService.SearchUpdate 的注释。
     @State private var networkLooksDown = false
@@ -125,7 +125,7 @@ struct LyricsSearchSheet: View {
         .frame(minWidth: 720, minHeight: 480)
         .task { await load() }
         // 关闭/采纳/Esc 任何一条退出路径都把还在跑的 collector 子进程停掉 —— 不停的话
-        // 它会继续对五个源发请求直到 20 秒兜底,NDJSON 还在往已消失的视图里灌
+        // 它会继续对六个源发请求直到 20 秒兜底,NDJSON 还在往已消失的视图里灌
         // (2026-08-19 性能审计;search() 内的 withTaskCancellationHandler 是第二层,
         // cancelRunning 幂等,两层谁先到都行)。
         .onDisappear { LyricsSearchService.shared.cancelRunning() }
@@ -160,7 +160,7 @@ struct LyricsSearchSheet: View {
 
     // candidates 陆续到达、isSearching 才是"是否还没结束"的唯一依据——不能用
     // "candidates.isEmpty"反过来判断有没有搜索完:目前为止一个候选都还没到手,不代表
-    // 五个源已经查完了(可能只是跑得快的那几个还没轮到),那样会把"还在搜"误判成
+    // 六个源已经查完了(可能只是跑得快的那几个还没轮到),那样会把"还在搜"误判成
     // "查完了、真的什么都没有",提前弹出"没找到候选"的空状态提示。
     @ViewBuilder
     private var content: some View {
@@ -189,13 +189,13 @@ struct LyricsSearchSheet: View {
                 ContentUnavailableView {
                     Label(L10n.t("网络似乎不通"), systemImage: "wifi.slash")
                 } description: {
-                    Text(L10n.t("五个源的请求全部失败，很可能是网络连接有问题，不是这首歌真的没有歌词——检查网络后可以点下面的「重试」"))
+                    Text(L10n.t("六个源的请求全部失败，很可能是网络连接有问题，不是这首歌真的没有歌词——检查网络后可以点下面的「重试」"))
                 } actions: {
                     Button(L10n.t("重试")) { Task { await load() } }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                ContentUnavailableView(L10n.t("五个源都没找到可用的候选"), systemImage: "text.badge.xmark")
+                ContentUnavailableView(L10n.t("六个源都没找到可用的候选"), systemImage: "text.badge.xmark")
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         } else {

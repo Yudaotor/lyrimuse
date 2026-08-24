@@ -107,3 +107,35 @@ func TestSwiftSourceDisplayNameCoversAllSources(t *testing.T) {
 		}
 	}
 }
+
+// 「搜索候选歌词」弹窗两句空状态文案里硬编码的中文数字("六个源都没找到可用的候选"/
+// "六个源的请求全部失败…")必须跟源的实际数量一致——2026-08-24 加 amll 之后这两句
+// 曾经停在"五个源"没跟上,纯靠人肉截图发现,而上面几个 Test 都不会替它报警(它们守的是
+// "某个源漏挂在某个清单里",不是"某句文案里的数字过期了")。同一份文件里,零个/一个
+// 数字不用写死中文数字表——已知会用到的范围窄,给 5~9 手写映射即可,超出直接报错提醒
+// 去扩表,而不是默默算错。
+func TestSwiftSearchEmptyStateCountMatchesSourceCount(t *testing.T) {
+	chineseDigits := map[int]string{5: "五", 6: "六", 7: "七", 8: "八", 9: "九"}
+	n := len(allLyricSourceConstants())
+	digit, ok := chineseDigits[n]
+	if !ok {
+		t.Fatalf("源数量是 %d,没有对应的中文数字——请在 chineseDigits 里补上再跑这个测试", n)
+	}
+
+	const p = "../lyrimuse/Sources/lyrimuse/LyricsManager/LyricsSearchSheet.swift"
+	raw, err := os.ReadFile(p)
+	if err != nil {
+		t.Skipf("读不到 %s: %v", p, err)
+	}
+	body := string(raw)
+	needles := []string{
+		digit + `个源都没找到可用的候选`,
+		digit + `个源的请求全部失败`,
+	}
+	for _, needle := range needles {
+		if !strings.Contains(body, needle) {
+			t.Errorf("在 %s 里没找到 %q——源数量是 %d(%s个),这两句空状态文案的数字要跟着改",
+				p, needle, n, digit)
+		}
+	}
+}

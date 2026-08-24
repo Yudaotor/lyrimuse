@@ -56,6 +56,7 @@ collector 的核心：一首歌播放时，去五个歌词源检索候选、校�
 - **格式本身能携带演唱者归属**：`<ttm:agent type="person|group" xml:id="v1">` + 每行 `ttm:agent="v1"`。落盘时转成行首前缀（person 按出现顺序编号成 `v1：`/`v2：`，group 一律 `合：`，**只有一位演唱者时不写前缀**），复用 `LyricDuet` 那条现成管线 —— `v1`/`v2` 收在 `anonymousMarkers` 里直通整份闸，因为 agent 是上游人工标注的权威信息，不该再拿为民间夹带设计的启发式去二次判它。
 - **背景人声（`ttm:role="x-bg"`）整枝跳过**：它跟主歌词时间轴重叠，并进去会让逐字填色同一时刻两个词在亮，而我们还没有这个显示概念。
 - **开关不在 `lyrics_sources` 里**，走独立的 `amll_lyrics`（三态：缺失=开、显式 false=关）。理由：`lyrics_sources` 非空即白名单，而老配置是在这个源存在之前写的，并进去等于对所有老用户默认关闭；无条件补齐又会让「用户主动取消勾选」永远生效不了。启用判定统一收进 `lyricSourceEnabled()`（此前散在六处、形式还不一致）。
+- ⚠️ **词间空白必须按文档顺序读**（2026-08-24 修）：amll-ttml-db 里两种写法并存 ——`<span>What</span> <span>a</span> <span>ride</span>`（空格在 span **之间**，属于 `<p>` 自己的 chardata）和 `<span>How </span><span>it </span><span>goes</span>`（空格在 span **内部**）。初版用 Go 的声明式 tag（`Spans []ttmlSpan` + `,chardata`）解析，而 `encoding/xml` 会把一个元素的**全部**直接文本合并成一个字符串、顺序全丢，于是前一种写法拼成了 `Whataride`。用户报的症状是**「这些歌词没有翻译」**：粘住的假词翻译器原样返回，`translate.go` 那道「没翻动的行不写进译文」（`t == l.text`）把整行丢掉——《What a Day》78 行只出了 32 行译文。实测用户库 4 首 amll 来源的歌**全中**，每首 26~42 行粘连。修法是自己实现 `UnmarshalXML` 走 token 流（`decodeTTMLKids`），把词间空白挂到**前一个词**的尾巴上——这样 `words.joined()` 恒等于整行文本，Swift 侧 `plainText == words.joined()` 那道逐字守卫才过得去。⚠️ **别用「干脆用空格 join」偷懒**：同一行里可能既有不带空白的音节切分（`ka`+`raoke`）又有带空白的词边界，空格 join 会把音节也拆开（回归测试 `TestParseAMLLTTMLWordSpacing` 第 5 行专门钉这个）。中文逐字写法（`<span>没</span><span>有</span>`）span 之间本来就没有空白，不受影响。
 - ⚠️ **覆盖率有限**：实测（2026-08-23）对 439 首曲库严格命中 **17 首（3.9%）**——口径是「歌名一字不差 + 只算 ncm/qq」（只有这两个平台的音乐 ID 我们拿得到）。**别用「去括号再比」的宽松口径估这个数**：那样会把《告白气球 (Live)》算成录音室版的命中，而按 ID 直取时 Live 版有自己的 songID、amll 里没有，实测 404。库的重心是游戏音乐 / V 家 / 欧美新流行（HOYO-MiX 841 条、Shawn Mendes & Camila Cabello 各 510、Taylor Swift 418、原子邦妮 395、GARNiDELiA 332），华语主要是周杰伦（176）和邓紫棋，跟华语老歌重合度低。接它的理由是命中那些歌的**歌词质量**（人工校对 + 逐字 + 内嵌译文），不是对唱兼容率 —— 15 首对唱歌它只有 3 首，而那 3 首现有解析已经能处理。
 
 ### 4. 资格守卫
@@ -147,7 +148,7 @@ collector 的核心：一首歌播放时，去五个歌词源检索候选、校�
 - `~/.config/lyrimuse/lyrimuse-enrich-cache.json`：主缓存，无 TTL 永久保留，原子写（temp+rename）+ 互斥锁；损坏文件挪 `.corrupt` 旁路。
 - `~/.config/lyrimuse/lyrimuse-lyrics-decision-trace.ndjson`：可选流水账。
 - `~/.config/lyrimuse/lyrimuse-artist-primary-cache.json`：MB 主名（本名 ↔ 艺名）缓存，只存查到的条目，见「歌手别名重试」。
-- 各源自有内存/磁盘缓存（网易云 30 天/10 分钟分级、musixmatch token 9 分钟等）。
+- 各源自有内存/磁盘缓存（网易云 30 天/10 分钟分级、musixmatch token 9 分钟等）。⚠️ **musixmatch 换 token 必须单飞**（2026-08-24 修）：批量解析（相册预取/批量导入一次触发十几首歌并发解析）时，原来每个 goroutine 独立判定「没有可用 token」就各自发一次 `token.get`，而 apic 那台机器实测把除第一个之外的并发请求全按反爬拒掉（401 hint=captcha），被拒的按官方样例退避 10 秒重试一次——但 20 秒的搜索预算扛不住 N 个 goroutine 各跑一遍「发请求→等 10 秒→重试」。实测（用户库）批量解析场景 musixmatch 交出候选的比例只有约 20%，单首/大规模顺序扫描能到 65%~90%，量出来的正是这个：一次 16 首并发解析里 musixmatch 是 0/16。修法：`musixmatchTokenFetchMu` 单飞锁包住「读磁盘 + 必要时发网络请求」整段，其余 goroutine 排队等它做完、拿锁后**必须**重新查一遍缓存（前一个持锁者可能已经换好了），不能各自再抢一次网络。`musixmatchCachedToken()` 让 token 仍在有效期内的调用完全绕开这把锁——它只在真的需要刷新时才有意义。回归测试 `musixmatch_test.go` 用 `musixmatchDoFetchToken` 这个缝（nil=用真实实现）验证并发场景，不碰网络。
 
 ## 代码锚点
 
