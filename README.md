@@ -4,7 +4,7 @@
 
 # Lyrimuse
 
-**Real-time, word-synced lyrics for Apple Music, QQ Music, NetEase Cloud Music, Kugou Music, or Spotify — right on your Mac desktop.**
+**Real-time, word-synced lyrics on your Mac desktop — plus a Last.fm listening profile and on-device translation — for Apple Music, QQ Music, NetEase Cloud Music, Kugou Music, or Spotify.**
 
 **Language / 语言:** **English** | [简体中文](README.zh-CN.md)
 
@@ -32,8 +32,10 @@ Lyrimuse sits quietly in your menu bar and shows a floating lyrics window that f
 
 ### Lyrics that just work
 - **Word-by-word synced highlighting**, following playback in real time
-- **Five lyrics sources checked automatically** — NetEase Cloud Music, QQ Music, Kugou, Musixmatch, and LRCLIB — always picks the best match, no manual searching required
-- **Romanization and translation**, shown alongside the original lyrics — translation language is configurable when the Musixmatch source has a community translation available; romanization only fires on Japanese lyrics, so Chinese never gets pinyin it didn't ask for
+- **Six lyrics sources checked automatically** — NetEase Cloud Music, QQ Music, Kugou, Musixmatch, LRCLIB, and AMLL (a hand-curated, word-by-word lyrics database) — always picks the best match, no manual searching required
+- **Romanization and translation**, shown alongside the original lyrics — translation comes from the source's own community translation when one exists, otherwise from on-device machine translation (Apple's Translation framework — lyrics never leave your Mac) with an online fallback, in any of 18 target languages; romanization is judged per line, so a Chinese song quoting one Japanese line only gets a reading on that line, not pinyin sprinkled over the rest
+- **Duet and multi-singer lyrics show each part separately**, when the source (or an AMLL entry) marks who's singing which line, instead of interleaving both voices into one confusing block
+- **Simplified/Traditional Chinese**, switchable for the lyrics text independent of the app's own UI language
 - **Instrumental tracks say so**, instead of sitting on "searching for lyrics…" forever
 - **A full Lyrics Manager window** — browse, hand-edit, delete, or re-search lyrics for any track, with multi-select batch delete, resizable columns, and per-track timing offset if the sync ever drifts
 - **Works fully offline** in local mode — no network round-trip needed to show lyrics that are already cached
@@ -44,6 +46,7 @@ Lyrimuse sits quietly in your menu bar and shows a floating lyrics window that f
 - **Menu bar text mode** — read the current line directly from the status bar instead of a floating window; long lines scroll rather than getting cut off mid-sentence (truncating is still one toggle away)
 - **Playback controls** (play/pause, next, previous) built right into the overlay, working with whichever player you've selected — plus a heart to favorite the current track when Apple Music is what's playing
 - **Drag the progress bar to seek** — the bars in the Lyrics Window and the notch are controls, not just indicators
+- **When nothing's playing, the Lyrics Window shows a listening overview instead of an empty screen** — today/this-week totals, an on-this-day card, and a full recently-played list with covers, each one jumping straight to its Apple Music album/artist page
 - **Click-through by default, drag with a long-press** — the classic overlay never blocks clicks meant for whatever's behind it; press and hold it to reposition it, or lock its position entirely from the menu bar
 - **Fully customizable look**: font (or follow the system), size, text/background/shadow colors with savable custom themes or a color pulled from the current album art, overlay width
 - **Hide during screenshots, recordings, or screen shares** — stays visible to you, invisible to everyone else
@@ -54,7 +57,7 @@ Lyrimuse sits quietly in your menu bar and shows a floating lyrics window that f
 - **Global keyboard shortcuts** for every action, all left unbound by default so you decide
 - **Menu-bar only by design** — doesn't clutter your Dock (optionally toggle Dock visibility if you want it there)
 - **Checks for updates on its own** (or on demand from the menu bar) — no need to keep revisiting the Releases page
-- **Scrobble to Last.fm**, connected in one click right from the main Accounts section — no manual token juggling
+- **Scrobble to Last.fm**, connected in one click right from the main Accounts section — no manual token juggling — and once connected, see your own listening profile right there: today/7-day/all-time totals, a Top Artists/Albums/Tracks chart, and an on-this-day look back
 - **Optional companion launch** with your chosen player, in either direction — launch one when the other opens
 - **Export or import your whole configuration** to move to a new Mac, plus a one-click diagnostics export for troubleshooting
 
@@ -181,10 +184,10 @@ If lyrics stop appearing, ask the collector what is wrong:
 
 It checks the things that silently break the pipeline — a config field that
 failed to parse, no lyric sources enabled, an unreadable cache, a lyrics export
-directory that is not writable — and then probes the five lyric sources with two
-real lookups (one Chinese, one English, so that neither catalogue's blind spot
-looks like an outage). A single dead source is a warning; only all of them
-failing is an error, because the other four still produce lyrics.
+directory that is not writable — and then probes the enabled lyric sources with
+two real lookups (one Chinese, one English, so that neither catalogue's blind
+spot looks like an outage). A single dead source is a warning; only all of them
+failing is an error, because the others still produce lyrics.
 
 ## Uninstalling
 
