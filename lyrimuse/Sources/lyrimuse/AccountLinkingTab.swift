@@ -698,6 +698,70 @@ struct AccountLinkingTab: View {
     //     没开"这个死状态(用户以为连上就会记录,实际还差一个开关);断开时同步关掉;
     //   - 手填用户名框删掉:授权成功返回的真实用户名自动回填(LastfmAuthFlow 里已有
     //     该逻辑),桥接/周报读的就是它。
+
+    // Last.fm 详情页的分段(2026-08-23,跟「歌词显示」页同一个范式,见
+    // SettingsView.LyricsSettingsTab.Section 的注释):这一页原来是"连接卡 + 统计/
+    // 最近记录/榜单/那年今日四张卡"顺序平铺的一条长滚动,拆成并列 tab——一次只关心
+    // 其中一件事时不用先滚过其它几件。
+    //
+    // ⚠️ 「统计」和「最近记录」合并成一段(用户实测反馈拆开后这两个数字/列表本来就是
+    // 连着看的一件事,原来的长滚动里它们也确实紧挨着,见 LastfmStatsSection.body 里
+    // `.stats` 分支同时画 statsCard + recentCard)。
+    //
+    // ⚠️ 「连接」**不是**一个 tab(2026-08-23 用户要求撤掉):Scrobble 开关/连接状态
+    // 是这一页唯一"不看哪个 tab 都该一直看得见"的东西——开关本来就该常驻在最上面,
+    // 塞进某一个 tab 里等于只有点开那个 tab 才碰得到它。做法是 lastfmConnectionCard
+    // 挪到 tab 选择器**外面**、无条件渲染;下面这三段只负责"已连接之后想细看的几件事"。
+    private enum LastfmSection: String, CaseIterable, Identifiable {
+        case stats, chart, onThisDay
+        var id: Self { self }
+        var title: String {
+            switch self {
+            case .stats: return L10n.t("统计")
+            case .chart: return L10n.t("榜单")
+            case .onThisDay: return L10n.t("那年今日")
+            }
+        }
+    }
+
+    @AppStorage("np:lastfmDetailSection") private var lastfmSectionRaw = LastfmSection.stats.rawValue
+    private var lastfmSection: LastfmSection { LastfmSection(rawValue: lastfmSectionRaw) ?? .stats }
+
+    // ⚠️ 切换**不**包 withAnimation(2026-08-23 用户实测反馈"有时候一进去会并在一起"
+    // 抓到的根因):「榜单」段的分段选择器(歌手/专辑/歌曲)和时段菜单都是 AppKit 桥接
+    // 控件(NSSegmentedControl/NSPopUpButton),被 withAnimation 包住的状态变化会让
+    // SwiftUI 用隐式的 opacity 过渡去插值这次 case 切换——这类控件在淡入过程里还没
+    // 拿到最终 frame 就先合成了一帧,肉眼看到的就是"两个控件暂时叠在一起"。改成不包
+    // withAnimation 之后切 tab 是硬切,不再有这个过渡窗口。
+    private var lastfmSectionPicker: some View {
+        Picker(
+            "",
+            selection: Binding(
+                get: { lastfmSection },
+                set: { next in lastfmSectionRaw = next.rawValue }
+            )
+        ) {
+            ForEach(LastfmSection.allCases) { s in
+                Text(s.title).tag(s)
+            }
+        }
+        .pickerStyle(.segmented)
+        .labelsHidden()
+        .fixedSize()
+        .padding(.bottom, 2)
+    }
+
+    /// `lastfmSection` 换算成 LastfmStatsSection 认的 tab——两边现在是同一套三段,
+    /// 单独留这一层只是让 LastfmStatsSection 不用依赖 AccountLinkingTab 私有的
+    /// LastfmSection 类型。
+    private var lastfmStatsTab: LastfmStatsSection.Tab {
+        switch lastfmSection {
+        case .stats: return .stats
+        case .chart: return .chart
+        case .onThisDay: return .onThisDay
+        }
+    }
+
     /// 本地已记录的收听清单。**有待补内容就出现,不分连没连账号。**
     ///
     /// 折起来只占一行(显示条数),展开才是清单 —— 攒到几十首时不该把整页顶开。
@@ -868,12 +932,35 @@ struct AccountLinkingTab: View {
 
     @ViewBuilder
     private var lastfmFields: some View {
-        // ⚠️ refreshPending 必须挂在**总会渲染**的这张卡上,不能挂在下面那两行里。
-        //
-        // 2026-08-13 用户实测"断开听了几首、回来什么都没有"抓到的死锁:那两行的显示条件都是
-        // `eligible > 0`,而 eligible 又只有 refreshPending 跑过才不是 0 —— 把刷新挂在它们
-        // 自己的 .onAppear 上,就成了"不显示 → 不刷新 → 永远是 0 → 永远不显示"。
-        // 当时数据层是完全正确的(日志里躺着 3 条待补),纯粹是界面永远不去问一次。
+        // 连接状态常驻在 tab 选择器**外面**,不随下面三段切换——理由见 LastfmSection
+        // 头注:开关这种"一直该碰得到"的东西不该只在点开某一个 tab 时才看得见。
+        lastfmConnectionCard
+        if lastfmConnected {
+            lastfmSectionPicker
+            // LastfmStatsSection 自己的刷新逻辑靠的是这个 View 不因为切 tab 被卸载
+            // 重建(见它的类型头注),这里整段只在断开时才不挂载,不随三段切换隐藏。
+            LastfmStatsSection(selected: lastfmStatsTab)
+        } else {
+            // 未连接时没有数据可看,给一句预告而不是一段空 tab。
+            lastfmStatsPlaceholderCard
+        }
+    }
+
+    /// 「连接」段:Scrobble 开关、待补清单、熔断红条、已连接状态/断开。
+    ///
+    /// ⚠️ refreshPending 必须挂在**这整张卡**上,不能挂在下面 pendingListensRow /
+    /// 熔断红条那两行里。
+    //
+    // 2026-08-13 用户实测"断开听了几首、回来什么都没有"抓到的死锁:那两行的显示条件都是
+    // `eligible > 0`,而 eligible 又只有 refreshPending 跑过才不是 0 —— 把刷新挂在它们
+    // 自己的 .onAppear 上,就成了"不显示 → 不刷新 → 永远是 0 → 永远不显示"。
+    // 当时数据层是完全正确的(日志里躺着 3 条待补),纯粹是界面永远不去问一次。
+    //
+    // 2026-08-23 拆 tab 之后这张卡改成只在「连接」段选中时才挂载,onAppear/task 因此
+    // 只在这一段活跃时跑——这没问题:它们喂的 backfill.pending 只喂这张卡自己的
+    // pendingListensRow,不像 LastfmStatsSection 的刷新要跨 4 个 tab 共用,离开这一段
+    // 不会让别的 tab 变旧,回来再 onAppear 一次就补齐。
+    private var lastfmConnectionCard: some View {
         SettingsCard {
             SettingsRow(
                 icon: "arrow.up.circle",
@@ -972,18 +1059,16 @@ struct AccountLinkingTab: View {
         } message: {
             Text(L10n.t("重新连接需要再走一次浏览器授权"))
         }
+    }
 
-        // 信息展示区(方案 A「档案页」):已连接才有数据可看;未连接给一句预告,
-        // 不画一页空骨架。
-        if lastfmConnected {
-            LastfmStatsSection()
-        } else {
-            SettingsCard {
-                Text(L10n.t("连接后这里会展示你的听歌档案"))
-                    .font(.callout).foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 18)
-            }
+    /// 未连接时,「统计/最近记录/榜单/那年今日」四段都还没有数据可看,给一句预告
+    /// 而不是空白 tab。
+    private var lastfmStatsPlaceholderCard: some View {
+        SettingsCard {
+            Text(L10n.t("连接后这里会展示你的听歌档案"))
+                .font(.callout).foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 18)
         }
     }
 
@@ -992,9 +1077,20 @@ struct AccountLinkingTab: View {
     /// 断开的完整不变量集:清凭据、清"授权失效"红标(描述的是刚扔掉的旧钥匙)、
     /// 统计归零(数字/榜单/头像都是这个账号的,重连别人不该看到前任数据)、关掉
     /// scrobble 开关(断开后一定发不出去,不留假状态)。
+    ///
+    /// ⚠️ `lastfmUser` 2026-08-24 补进来 —— 在此之前这个不变量集**不完整**,用户实测
+    /// 「断开了怎么还有」:清掉的只是**写**那一侧(session key + 授权返回的用户名),而
+    /// `lastfmUser` 是**授权流程自己写的**(LastfmAuthFlow),它加上任一 api key 就是一副
+    /// 完整可用的**只读**凭据(Last.fm 的读接口只要用户名 + key、不需要 session)。
+    /// 于是 `LastfmStatsService.credentials` 逐字段回退时拼出 (lastfmUser, scrobbleAPIKey),
+    /// `isConnected` 仍为真 —— 下面 resetAll() 刚把统计清空,轮询下一拍就原样拉回来了。
+    /// 顺带这对凭据也是 collector 那条桥接(手机播放镜像进 LB / 每日小结 / 艺人名归并)的
+    /// 唯一开关,不清等于「断开了 Last.fm,后台还在读你的 Last.fm」。
+    /// 只清用户名、不动 api key:key 是应用级的,清了重连要重新配;没有用户名它已经拉不到任何东西。
     private func performLastfmDisconnect() {
         config.lastfmScrobbleSessionKey = ""
         config.lastfmScrobbleUsername = ""
+        config.lastfmUser = ""
         LastfmMirrorStatus.clear()
         LastfmStatsService.shared.resetAll()
         features.lastfmMirrorScrobble = false
@@ -1056,12 +1152,17 @@ struct AccountLinkingTab: View {
                     // 上面那条"怎么填"的提示要点过「前往申请」才展开,而他们恰恰不会点它。
                     // /api/accounts 是 Last.fm 的"我的 API 应用"列表(2026-08-15 实测:
                     // 未登录 302 到 /login,页面存在;/api/account 不带 s 是 404)。
+                    // ⚠️ 2026-08-23 用户实测(带自己账号真实登录态查的):这份列表页现在
+                    // **只显示 API Key,不显示 Secret**,每行也没有能点进去的应用详情页
+                    // (原来那句"点应用名,页面上就有 API Key 和 Shared Secret"已经对不上
+                    // Last.fm 现在的页面了,大概率是对方后来改版收紧的——Secret 大概率只在
+                    // 创建那一刻显示一次)。所以旧 Secret 丢了从这里找不回来,只能新建一个。
                     Button(L10n.t("查看已有应用")) {
                         NSWorkspace.shared.open(URL(string: "https://www.last.fm/api/accounts")!)
                     }
                     .buttonStyle(.link)
                     .font(.caption)
-                    .help(L10n.t("之前创建过就从这里找回：列表里点应用名，页面上就有 API Key 和 Shared Secret"))
+                    .help(L10n.t("这里能看到已创建的应用和它们的 API Key，但看不到 Secret；Secret 丢了的话，用上面「前往申请」再建一个新的就好"))
                 }
             }
             if showLastfmApplyHint {

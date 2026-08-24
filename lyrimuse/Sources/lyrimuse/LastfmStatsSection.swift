@@ -4,7 +4,31 @@ import SwiftUI
 
 /// Last.fm 卡的信息展示区(设计方案 A「档案页」,2026-08-11 artifact):三个数字、
 /// 一张分段榜单卡、最近记录。只在已连接时由 AccountLinkingTab 挂出来。
+///
+/// 2026-08-23 从"四张卡顺序平铺"改成"AccountLinkingTab 那个 tab 选择器里的三段"
+/// (「连接」不是 tab,常驻在 AccountLinkingTab 那边的选择器外面,见那边 LastfmSection
+/// 头注)。⚠️ **这个 View 本身必须始终挂载,不能塞进外层按 tab 切换的 switch/if 分支
+/// 里**——`selected` 只决定 `body` 画哪张卡,下面那段 onAppear/.task 常驻刷新逻辑
+/// (数字/榜单/最近记录/那年今日共用同一轮拉取)靠的正是这个 View **从不因为切 tab 被
+/// 卸载重建**——AccountLinkingTab 侧因此让它跟三段 tab 选择器同级、自己不套任何条件
+/// 分支(仅在整体断开连接时不挂载,那时确实什么都不用刷)。早前的写法是四张卡一次性
+/// 全部平铺,`.onAppear`/`.task` 挂在其中"常驻"的那张卡(`recentCard`)身上就够;
+/// 拆 tab 之后同一个前提("这个锚点不会被拆掉重建")改由整个 View 的挂载/卸载来保证,
+/// 不能再指望"其中一张卡"。
+///
+/// 「统计」段同时画 statsCard + recentCard(2026-08-23 用户反馈拆开后这两个数字/列表
+/// 本来就是连着看的一件事,合回一段;原来的长滚动里它们也确实紧挨着)。
 struct LastfmStatsSection: View {
+    /// 各段的 tab 标识,跟 AccountLinkingTab.LastfmSection 一一对应。
+    enum Tab: String, CaseIterable, Identifiable {
+        case stats, chart, onThisDay
+        var id: Self { self }
+    }
+
+    /// 这一刻要画哪张卡。AccountLinkingTab 只在已连接时才挂这个 View,所以这里
+    /// 不需要"没有选中项"这一态。
+    var selected: Tab
+
     @ObservedObject private var stats = LastfmStatsService.shared
     // 刻意**不**订阅 PlaybackCoordinator:它在放歌时每个歌词行边界都发布一次,整个
     // Section(三张卡、最多一百多行)跟着白白重算。所有跟播放状态相关的东西(正在记录行、
@@ -38,57 +62,63 @@ struct LastfmStatsSection: View {
     }
 
     var body: some View {
-        statsCard
-        // 2026-08-16 换位:「最近记录」排在「听得最多」前面 —— 前者是"刚刚听了什么"、
-        // 每次打开都在变,后者是长期榜、几天才动一次,把活的放前面。
-        recentCard
-        // onAppear/.task 必须挂在**常驻**的卡上。onThisDayCard 是 `if let` 条件视图——
-        // 没数据时它根本不在视图层级里,挂它身上的 onAppear 永远不触发,而 onThisDay
-        // 的数据又只能靠这里的刷新去拉,整个区会死锁在"一个请求都没发过"的骨架态
-        // (2026-08-11 实测踩坑:档案数字全是"—"、榜单永远骨架、快照文件不生成)。
-            .onAppear {
-                stats.refreshBaseline()
-                // 榜单收起时不查(那是一次 collector 进程+网络请求);展开那一下由
-                // onChange 补上。「那年今日」照常查:它的那句概述留在表头,收起来也要显示。
-                if !chartCollapsed { stats.refreshChart(kind: kind, period: period) }
+        Group {
+            switch selected {
+            case .stats:
+                statsCard
+                recentCard
+            case .chart: chartCard
+            case .onThisDay: onThisDayCard
+            }
+        }
+        // onAppear/.task 必须挂在**这整个 View**上,不能挂在 switch 里的某一张卡上——
+        // 那样切 tab 就相当于把它卸载重挂,详见类型头注。
+        //
+        // onThisDayCard 是 `if let` 条件视图——没数据时它根本不在视图层级里,挂它身上的
+        // onAppear 永远不触发,而 onThisDay 的数据又只能靠这里的刷新去拉,整个区会死锁在
+        // "一个请求都没发过"的骨架态(2026-08-11 实测踩坑:档案数字全是"—"、榜单永远骨架、
+        // 快照文件不生成)。
+        .onAppear {
+            stats.refreshBaseline()
+            // 榜单收起时不查(那是一次 collector 进程+网络请求);展开那一下由
+            // onChange 补上。「那年今日」照常查:它的那句概述留在表头,收起来也要显示。
+            if !chartCollapsed { stats.refreshChart(kind: kind, period: period) }
+            stats.refreshOnThisDay()
+            pageInput = "\(stats.recentPage)"
+        }
+        .onChange(of: stats.recentPage) { _, page in pageInput = "\(page)" }
+        // 页面开着不该是一张死快照:每 2 分钟刷一轮档案数字和最近记录(服务侧
+        // baselineTTL 同为 2 分钟,正好放行),recent 重新赋值触发重渲染,"6 小时前"
+        // 这些相对时间跟着重算。
+        //
+        // 用 .task 而不是 .onReceive(Timer.publish(...)):后者的 publisher 内联在
+        // body 里,每次重渲染都是新实例,SwiftUI 会掐掉旧订阅重新订阅,倒计时清零 ——
+        // 而本视图订阅着 PlaybackCoordinator,放歌时歌词每推进一句就重渲染一次,
+        // 120 秒永远数不满,定时刷新恰恰在放歌时(最需要活数据时)静默失效
+        // (2026-08-11 审阅确认)。.task 的生命周期跟视图在场与否走,不受重渲染影响,
+        // 视图移出层级自动取消。
+        .task {
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 120_000_000_000)
+                guard !Task.isCancelled else { break }
+                // 「那年今日」也在这里过一遍,专为**跨零点**:它只在 .onAppear 里拉过
+                // 一次,而设置窗口开着不动时 .onAppear 不会再触发 —— 页面开到第二天
+                // 就会一直挂着昨天那份(2026-08-17 用户报)。放在 recentPage 那道
+                // guard 前面:翻到第二页看历史跟这张卡没有关系,不该把它一起冻住。
+                //
+                // 平时的开销是一次字典查找:服务侧同时判 TTL 和日历天,没跨天就直接
+                // 早退,不会每 2 分钟真发一轮请求(那是三年 ×最多三页的量)。
                 stats.refreshOnThisDay()
-                pageInput = "\(stats.recentPage)"
+                // 本机封面兜底表:enrich 缓存自己变了(collector 解析出封面 / 同专辑
+                // 预取)不伴随任何 Last.fm 响应,得单独在这里过一遍,否则那些行会一直
+                // 灰着(见 refreshLocalCoversIfCacheChanged)。mtime 没变就是一次 stat。
+                stats.refreshLocalCoversIfCacheChanged()
+                // 只自动刷第一页:后面几页是历史,内容不会变,重拉一遍纯属打扰
+                // (正看着的那一屏被替换掉)。
+                guard stats.recentPage == 1 else { continue }
+                stats.refreshBaseline()
             }
-            .onChange(of: stats.recentPage) { _, page in pageInput = "\(page)" }
-            // 页面开着不该是一张死快照:每 2 分钟刷一轮档案数字和最近记录(服务侧
-            // baselineTTL 同为 2 分钟,正好放行),recent 重新赋值触发重渲染,"6 小时前"
-            // 这些相对时间跟着重算。
-            //
-            // 用 .task 而不是 .onReceive(Timer.publish(...)):后者的 publisher 内联在
-            // body 里,每次重渲染都是新实例,SwiftUI 会掐掉旧订阅重新订阅,倒计时清零 ——
-            // 而本视图订阅着 PlaybackCoordinator,放歌时歌词每推进一句就重渲染一次,
-            // 120 秒永远数不满,定时刷新恰恰在放歌时(最需要活数据时)静默失效
-            // (2026-08-11 审阅确认)。.task 的生命周期跟视图在场与否走,不受重渲染影响,
-            // 视图移出层级自动取消。
-            .task {
-                while !Task.isCancelled {
-                    try? await Task.sleep(nanoseconds: 120_000_000_000)
-                    guard !Task.isCancelled else { break }
-                    // 「那年今日」也在这里过一遍,专为**跨零点**:它只在 .onAppear 里拉过
-                    // 一次,而设置窗口开着不动时 .onAppear 不会再触发 —— 页面开到第二天
-                    // 就会一直挂着昨天那份(2026-08-17 用户报)。放在 recentPage 那道
-                    // guard 前面:翻到第二页看历史跟这张卡没有关系,不该把它一起冻住。
-                    //
-                    // 平时的开销是一次字典查找:服务侧同时判 TTL 和日历天,没跨天就直接
-                    // 早退,不会每 2 分钟真发一轮请求(那是三年 ×最多三页的量)。
-                    stats.refreshOnThisDay()
-                    // 本机封面兜底表:enrich 缓存自己变了(collector 解析出封面 / 同专辑
-                    // 预取)不伴随任何 Last.fm 响应,得单独在这里过一遍,否则那些行会一直
-                    // 灰着(见 refreshLocalCoversIfCacheChanged)。mtime 没变就是一次 stat。
-                    stats.refreshLocalCoversIfCacheChanged()
-                    // 只自动刷第一页:后面几页是历史,内容不会变,重拉一遍纯属打扰
-                    // (正看着的那一屏被替换掉)。
-                    guard stats.recentPage == 1 else { continue }
-                    stats.refreshBaseline()
-                }
-            }
-        chartCard
-        onThisDayCard
+        }
     }
 
     // MARK: - 三个数字
@@ -469,31 +499,18 @@ struct LastfmStatsSection: View {
     /// 当前总数 − 比这一行**更新**的同曲收听次数。列表是最近 N 条、按时间倒序,所以比
     /// 这一行更新的同曲收听必然也在这个窗口里,这个减法在窗口内精确、不需要额外请求。
     ///
-    /// ⚠️ 整段**一次线性扫描**算完,不要写成"每行现算":那样每行都要重跑一遍 recentHistory
-    /// 的全表 filter、还要对它前面所有行重建归一化键,20 行就是 21 次数组分配 + 210 次
-    /// 字符串归一化,而这段是 SwiftUI body 的同步路径(2026-08-12 性能审阅坐实)。
-    ///
     /// 正在播放那条不参与:它还没被 scrobble,不在 userplaycount 里(实时行自己 +1)。
+    ///
+    /// ⚠️ 换算本体 2026-08-24 **下沉到 Core**(`RecentPlayOrdinal.ordinals`):停播页的
+    /// 「最近听过」是第二个消费方,而这段里有两把不同的尺子(取总数用 playCountKey、数
+    /// 「更新的同曲收听」用 PlayCountFold.familyKey 的折叠族),复制一份就等于把用户
+    /// 2026-08-21 报的「第 15 次听下面紧跟第 21 次听」的成因复制一份。细节与理由见那边的注释。
     private var recentRows: [(track: LastfmStatsService.RecentTrack, count: Int?)] {
-        var newerSame: [String: Int] = [:]
-        return recentHistory.map { row in
-            let key = LastfmStatsService.playCountKey(artist: row.artist, title: row.title)
-            // ⚠️ 取数用 playCountKey(表就是按它存的),但「更新的同曲收听」必须按**折叠族**
-            // 数(2026-08-22 修):表里存的是整族合并后的总数,而这里原来用同一个 playCountKey
-            // (只 trim+小写)去数 —— 同一首歌的两种写法是两个不同的 playCountKey,跨写法的
-            // 更新收听一次都减不掉,于是同页两行显示同一个 N。用户 2026-08-21 报的
-            // 「第 15 次听下面紧跟着第 21 次听」就是这个形状;2026-08-22 放宽折叠口径
-            // (bonus track / with / explicit / 破折号尾缀)后同页撞上两种写法的概率更高,
-            // 《一路向北》与《一路向北 (bonus track)》同页时两行都会是「第 16 次听」。
-            // 键要跟 LastfmStatsService.playCountSiblings 查族用的那个**完全一致**。
-            let familyKey = PlayCountFold.familyKey(artist: row.artist, title: row.title)
-            let newer = newerSame[familyKey, default: 0]
-            newerSame[familyKey] = newer + 1
-            guard let total = stats.trackPlayCounts[key] else { return (row, nil) }
-            let n = total - newer
-            // 竞态(刚多了一次收听、总数还没重取)时宁可不显示,不显示错的
-            return (row, n > 0 ? n : nil)
-        }
+        let counts = RecentPlayOrdinal.ordinals(
+            rows: recentHistory.map { (artist: $0.artist, title: $0.title) },
+            totals: stats.trackPlayCounts,
+            playCountKey: { LastfmStatsService.playCountKey(artist: $0, title: $1) })
+        return zip(recentHistory, counts).map { (track: $0, count: $1) }
     }
 
     // MARK: - 小件
