@@ -1047,12 +1047,16 @@ public final class LyricsSyncEngine {
             if !contentWordSample.isEmpty { return contentWordSample }
             return lyrics.isEmpty ? lyricsYRC : lyrics
         }()
-        songLooksJapanese = Romanizer.looksJapanese(contentSample)
-            || Romanizer.looksJapanese(contentWordSample)
+        // ⚠️ 判据是**含假名的行占比**,不是"出现过假名没有"(2026-08-24 改,理由见
+        // Romanizer 里「整首歌 vs 一行」那段:中文歌引用一个日文词就会被整首判成日文,
+        // 于是每行汉字都出日文音读)。这个整首歌级别的标记**只**给纯汉字行兜底用。
+        songLooksJapanese = Romanizer.looksJapaneseSong(contentSample)
+            || Romanizer.looksJapaneseSong(contentWordSample)
             || (contentSample.isEmpty && contentWordSample.isEmpty
-                && (Romanizer.looksJapanese(lyrics) || Romanizer.looksJapanese(lyricsYRC)))
-        // 整首歌的文字种类,给"按语言开关罗马音"用。粒度/样本跟上面完全一致。
-        songScript = Romanizer.script(of: scriptSample)
+                && (Romanizer.looksJapaneseSong(lyrics) || Romanizer.looksJapaneseSong(lyricsYRC)))
+        // 整首歌的文字种类,给"按语言开关罗马音"兜底用(逐行判不出来的纯汉字行)。
+        // 粒度/样本跟上面完全一致。
+        songScript = Romanizer.songScript(of: scriptSample)
         // 歌词源自带的假名标注(酷狗的 [kana:] 标签)。对不齐时 parse 返回 nil,读音自动
         // 退回形态分析 —— 见 KanaAnnotation 顶部注释里"半对半错比不标更糟"那段。
         kanaAnnotation = KanaAnnotation.parse(lrc: lyrics)
@@ -1078,10 +1082,18 @@ public final class LyricsSyncEngine {
     private var songScript: LyricScript = .other
     private var romanizationScripts: RomanizationScripts = .default
 
-    /// 这首歌该不该标罗马音 —— 由它的文字种类和用户开关共同决定。
+    /// **这一行**该不该标罗马音 —— 由它的文字种类和用户开关共同决定。
     /// `.other`(拉丁/泰文/西里尔…)不受管辖,始终允许,保持历来的行为。
-    private var romanizationAllowed: Bool {
-        guard let option = songScript.option else { return true }
+    ///
+    /// ⚠️ 2026-08-24 从"按整首歌"改成"按行":一首中文歌里引用的日文行(《这样吧》里的
+    /// 「サヨナラ」)该按**日文**开关走、出罗马字,而同一首歌的中文行该按**中文**开关走
+    /// (默认关 → 不显示)。按整首歌判做不到这件事,只能二选一:要么中文行被塞注音
+    /// (用户报的就是这个),要么中日混唱歌(陶喆《My Anata》,41% 的行是日文)的日文行
+    /// 一起丢掉罗马音。判定本身在 Romanizer.script(ofLine:song:)。
+    private func romanizationAllowed(for line: String) -> Bool {
+        guard let option = Romanizer.script(ofLine: line, song: songScript).option else {
+            return true
+        }
         return romanizationScripts.contains(option)
     }
     private var kanaAnnotation: KanaAnnotation?
@@ -1161,7 +1173,7 @@ public final class LyricsSyncEngine {
         // ⚠️ 这道闸必须在**服务端字段之前**。用户关掉某种语言的罗马音,意思是"别给我看",
         // 不是"别去现算" —— 只拦客户端兜底的话,服务端恰好给了 lyrics_roma 的那些歌照样
         // 会显示,开关就成了个看运气的东西。
-        guard romanizationAllowed else { return nil }
+        guard romanizationAllowed(for: plainText) else { return nil }
         // 同一个"标签行抢近邻词条"的坑,见 isBareSpeakerTag 的注释——罗马音跟译文共用
         // 同一套 nearestText+700ms 容差,症状对称。
         guard !Self.isBareSpeakerTag(plainText) else { return nil }
@@ -1187,8 +1199,13 @@ public final class LyricsSyncEngine {
         // 两者一致的断言。派生不出读音(整行拉丁/读音等于原文)时照 romanize 的原语义退到
         // ICU 音译。
         let result: String?
-        if songLooksJapanese,
-            Romanizer.looksJapanese(plainText) || Romanizer.containsHan(plainText),
+        // ⚠️ 两个条件是**或**的关系,不是"整首歌像日文"再判行(2026-08-24 改):
+        //   · 行内有假名 → 这一行确证是日文,不管整首歌是什么(中文歌里引用的日文行);
+        //   · 纯汉字行 → 中日读音歧义,只有这种行才看整首歌的标记。
+        // 原来写成 `songLooksJapanese && (looksJapanese || containsHan)`,于是中文歌一旦
+        // 被整首判成日文,它的**纯中文行**就靠 containsHan 一路走进日语形态分析。
+        if Romanizer.looksJapanese(plainText)
+            || (songLooksJapanese && Romanizer.containsHan(plainText)),
             let reading = Romanizer.readingFromSegments(
                 cachedJapaneseSegments(for: plainText), original: plainText)
         {
@@ -1240,7 +1257,10 @@ public final class LyricsSyncEngine {
         if let cached = wordGroupCache[key] { return cached }
         // 逐词读音只对日文产出(buildWordGroups 里 guard japanese),所以它受同一道
         // 按语言开关的管辖 —— 关掉日文罗马音之后,逐字歌词下面也不该再标读音。
-        let japanese = songLooksJapanese && romanizationAllowed
+        // 逐词读音只对**行内有假名**的行产出(buildWordGroups 里那道 looksJapanese(line)
+        // 的 guard),所以这里只需要按行过一遍语言开关 —— 中文歌里引用的日文行照样能标,
+        // 而中文行进不了 buildWordGroups。
+        let japanese = romanizationAllowed(for: line)
         // 分词结果与 romanizationText 共用 segmentsCache;门先于分词,门不开就不白分。
         let segments: [Romanizer.JapaneseSegment]? =
             (japanese && Romanizer.looksJapanese(line)) ? cachedJapaneseSegments(for: line) : nil
@@ -1448,11 +1468,22 @@ public final class LyricsSyncEngine {
         /// 显示窗口跟 currentLineDwellSeconds 那套不一样了,用错会让长句在长间奏前滚不完
         /// (比改动前更糟)。算法与理由见 CompactLyricLead.displayDurationMs。
         public let compactDwellMs: Int?
+        /// compactLine **出现之后、开唱之前**那段"已显示但还没染色"的提前量(毫秒),
+        /// nil = 没有可显示的行。菜单栏跑马灯拿它当"起步前至少等多久" —— 没染色就不该滚,
+        /// 算法与理由见 CompactLyricLead.leadInMs。跟 compactDwellMs 同一个"出现"原点。
+        public let compactLeadInMs: Int?
         public let nextText: String?
         public let gapIndex: Int?
     }
 
-    public func tickQuery(atMs rawPosMs: Int) -> TickResolution {
+    /// - Parameter trackEndMs: 这首歌有多长(毫秒)。**只**给最后一句的显示窗口兜底 ——
+    ///   引擎自己不知道曲长,不给的话最后一句的 compactDwellMs 恒为 nil,得由上层退回
+    ///   `currentLineDwellSeconds`。那条退路有两个毛病(2026-08-24 审出):① 它按
+    ///   `currentLineIndex` 取行,而提前量窗口里那是**已经唱完的上一句** —— 拿错基数;
+    ///   ② 它的值在开唱那一刻(currentLineIndex 前进)会**突变**,于是 pacing 变、
+    ///   plan 变、滚动被重装 —— 而首停含提前量,重装等于把提前量再等一遍,最后一句可能
+    ///   整段唱完都不滚。喂进曲长之后最后一句的窗口也是行常量,这两件事一起消失。
+    public func tickQuery(atMs rawPosMs: Int, trackEndMs: Int? = nil) -> TickResolution {
         let posMs = rawPosMs + effectiveOffsetMs
         let idx = activeIndexCorrected(posMs)
         let gap: Int?
@@ -1469,24 +1500,30 @@ public final class LyricsSyncEngine {
         let compactLine: SyncedLyricLine?
         let compactPlaceholder: Bool
         let compactDwellMs: Int?
+        let compactLeadInMs: Int?
         switch compact {
         case .line(let i):
             compactLine = leadLineAt(i)
             compactPlaceholder = false
-            // fallbackEndMs 传 nil:引擎不知道曲目时长。最后一句因此算不出 dwell,
-            // 由 PlaybackCoordinator.compactDwellSeconds 退回既有公式(那边有曲目时长)。
+            // fallbackEndMs 只在最后一句用得上(见 displayDurationMs 的 vanish 三级兜底)。
+            // 调用方给了曲长就用它 —— 见 trackEndMs 那段:不给的话最后一句要走上层那条
+            // 错基数、还会在开唱那一刻突变的退路。
             compactDwellMs = gapLineStartMs(at: i).flatMap { start in
                 CompactLyricLead.displayDurationMs(
                     prevLineEndMs: gapLineEndMs(at: i - 1),
                     startMs: start,
                     lineEndMs: gapLineEndMs(at: i),
                     nextStartMs: gapLineStartMs(at: i + 1),
-                    fallbackEndMs: nil)
+                    fallbackEndMs: trackEndMs)
+            }
+            compactLeadInMs = gapLineStartMs(at: i).map { start in
+                CompactLyricLead.leadInMs(prevLineEndMs: gapLineEndMs(at: i - 1), startMs: start)
             }
         case .placeholder:
             compactLine = nil
             compactPlaceholder = true
             compactDwellMs = nil
+            compactLeadInMs = nil
         }
         return TickResolution(
             index: idx >= 0 ? idx : nil,
@@ -1495,6 +1532,7 @@ public final class LyricsSyncEngine {
             compactLine: compactLine,
             compactPlaceholder: compactPlaceholder,
             compactDwellMs: compactDwellMs,
+            compactLeadInMs: compactLeadInMs,
             nextText: nextTextAt(idx + 1),
             gapIndex: gap)
     }

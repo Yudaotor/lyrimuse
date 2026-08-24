@@ -38,6 +38,9 @@ public final class LocalPlaybackSource: ObservableObject {
     @Published public private(set) var compactShowsPlaceholder: Bool = false
     /// compactLine 总共会显示多久(毫秒),给菜单栏跑马灯配速。见 CompactLyricLead.displayDurationMs。
     @Published public private(set) var compactDwellMs: Int?
+    /// compactLine 出现之后、开唱之前那段"已显示但还没染色"的提前量(毫秒)。菜单栏跑马灯
+    /// 拿它当"起步前至少等多久" —— 没染色就不该滚。见 CompactLyricLead.leadInMs。
+    @Published public private(set) var compactLeadInMs: Int?
     @Published public private(set) var allLines: [LyricsWindowLine] = []
     // 歌词间奏点(歌词窗口的「•••」,2026-08-19):整首歌的间奏位置换歌时算一次;
     // "此刻在不在间奏里"跟 currentLineIndex 一样只在真的变化时赋值(20Hz tick 判定)。
@@ -872,6 +875,7 @@ public final class LocalPlaybackSource: ObservableObject {
             if compactLine != nil { compactLine = nil }
             if compactShowsPlaceholder { compactShowsPlaceholder = false }
             if compactDwellMs != nil { compactDwellMs = nil }
+            if compactLeadInMs != nil { compactLeadInMs = nil }
             // 没有可显示的行,间奏点和"填色未定格"也一并归位 —— 别让上一首歌的残留值
             // 挂着(fillSettled 归 true:没有行就没有可动的填色,表该停着)。
             if currentGapIndex != nil { currentGapIndex = nil }
@@ -880,11 +884,12 @@ public final class LocalPlaybackSource: ObservableObject {
         }
         // 打包查询:四个值要的是同一个 posMs 的同一次定位,原来四个入口各自从头扫一遍
         // (2026-08-20 性能审计,见 LyricsSyncEngine.tickQuery)。
-        let r = syncEngine.tickQuery(atMs: frozen)
+        let r = syncEngine.tickQuery(atMs: frozen, trackEndMs: currentDurationMs)
         if r.line != currentLine { currentLine = r.line }
         if r.compactLine != compactLine { compactLine = r.compactLine }
         if r.compactPlaceholder != compactShowsPlaceholder { compactShowsPlaceholder = r.compactPlaceholder }
         if r.compactDwellMs != compactDwellMs { compactDwellMs = r.compactDwellMs }
+        if r.compactLeadInMs != compactLeadInMs { compactLeadInMs = r.compactLeadInMs }
         if r.nextText != nextLineText { nextLineText = r.nextText }
         if r.index != currentLineIndex { currentLineIndex = r.index }
         if r.scrollIndex != scrollLineIndex { scrollLineIndex = r.scrollIndex }
@@ -909,11 +914,12 @@ public final class LocalPlaybackSource: ObservableObject {
         // 但 tickQuery 让下标只算一次、还带单调窗口记忆化,调用方也从四行收敛成一次调用)。
         // "只在真的变化时才赋值"的规则原样保留 —— 这四个是 @Published,SwiftUI 不管新旧值
         // 是否相等,只要赋值就会通知订阅者重新渲染,而绝大多数 tick 其实还是同一行。
-        let r = syncEngine.tickQuery(atMs: pos)
+        let r = syncEngine.tickQuery(atMs: pos, trackEndMs: currentDurationMs)
         if r.line != currentLine { currentLine = r.line }
         if r.compactLine != compactLine { compactLine = r.compactLine }
         if r.compactPlaceholder != compactShowsPlaceholder { compactShowsPlaceholder = r.compactPlaceholder }
         if r.compactDwellMs != compactDwellMs { compactDwellMs = r.compactDwellMs }
+        if r.compactLeadInMs != compactLeadInMs { compactLeadInMs = r.compactLeadInMs }
         if r.nextText != nextLineText { nextLineText = r.nextText }
         if r.index != currentLineIndex { currentLineIndex = r.index }
         if r.scrollIndex != scrollLineIndex { scrollLineIndex = r.scrollIndex }
@@ -976,6 +982,7 @@ public final class LocalPlaybackSource: ObservableObject {
             compactLine = nil
             compactShowsPlaceholder = false
             compactDwellMs = nil
+            compactLeadInMs = nil
             allLines = []
             lyricsGapMarkers = []
             currentGapIndex = nil
@@ -1113,6 +1120,10 @@ public final class LocalPlaybackSource: ObservableObject {
         if !newTitle.isEmpty, newTitle != lastPersistedTrackTitle {
             UserDefaults.standard.set(newTitle, forKey: "np:lastTrackTitle")
             UserDefaults.standard.set(newArtist, forKey: "np:lastTrackArtist")
+            // 专辑 2026-08-24 才补上(停播页的唱片 hero 要显示「歌手 · 专辑」)。它跟着
+            // 曲名一起写、不单独判变化:同一首歌的专辑不会中途变,而换歌必然触发这个分支。
+            // 旧安装第一次打开新版停播页时这个键还不存在 —— 消费方按「空就只显示歌手」处理。
+            UserDefaults.standard.set(newAlbum, forKey: "np:lastTrackAlbum")
             lastPersistedTrackTitle = newTitle
         }
         // Spotify 广告插播判断(2026-08-19 重做:字段启发式 + 同曲棘轮 + AppleScript 权威)。
@@ -1156,6 +1167,9 @@ public final class LocalPlaybackSource: ObservableObject {
         // 会提前吃掉这次变化,后台解码完成后就再没有东西触发 reload 了(2026-08-20)。
         EnrichCacheReader.refreshIfNeeded()
         let enrichMTime = EnrichCacheReader.decodedContentVersion
+        // 先无条件推进对外那个信号 —— 它的消费方(高清封面重查)关心的是"缓存内容变了",
+        // 跟下面那个 reload 是否触发无关(reload 还看 trackChanged/hasContent)。
+        if enrichContentVersion != enrichMTime { enrichContentVersion = enrichMTime }
         if trackChanged || !syncEngine.hasContent || enrichMTime != lastEnrichMTime {
             if trackChanged {
                 logger.info("track changed: \(snapshot.artist ?? "", privacy: .public) - \(snapshot.title ?? "", privacy: .public)")
@@ -1520,6 +1534,20 @@ public final class LocalPlaybackSource: ObservableObject {
     /// 上一次读缓存时那个文件的 mtime。变了就说明 collector 又写过,当前这首歌的内容可能
     /// 已经不是手上这一份了(见 apply() 里那段注释)。
     private var lastEnrichMTime: Date?
+
+    /// enrich 缓存**已解码那一代**的版本(= `EnrichCacheReader.decodedContentVersion`)。
+    ///
+    /// 为什么要把它 @Published 出去(2026-08-24):collector 解析一首没听过的歌要**好几秒**
+    /// (实测「七月上」13:52:52 开播、13:53:00 才把 cover_url 写进缓存,晚 8 秒),而
+    /// `PlaybackCoordinator.refreshHighResCover()` 原来**只**由 曲目/封面字节 的变化触发、
+    /// 换歌后 300ms 查一次就完 —— 那一刻缓存里还没有这首歌,于是 clearHighRes() 之后
+    /// **永不重试**,整首歌都停在系统那张 100×100 上(用户报「网易云封面依然很糊」的真根因;
+    /// 之前那轮只修了 QQ 的边界判据,没碰到这条)。
+    /// 这个信号让"缓存里多了东西"也能成为一个重查触发点 —— 判据跟歌词重载用的是**同一代**
+    /// 版本号,不会出现"歌词换上了、封面没跟上"的偏差。
+    ///
+    /// 只在**变化**时赋值:@Published 是 willSet 语义,同值重复赋会白广播一轮下游订阅。
+    @Published public private(set) var enrichContentVersion: Date?
 
     /// reloadCurrentLyrics 的**全部**会影响引擎装载/派生状态的输入快照。相等 ⇒ 整段重算
     /// (简繁转换×3 + 引擎 load + allLines/gapMarkers 重建)可以跳过。

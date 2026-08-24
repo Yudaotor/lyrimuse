@@ -368,4 +368,66 @@ extension Romanizer {
         if containsHan(text) { return .chinese }
         return .other
     }
+
+    // MARK: - 整首歌 vs 一行:两个不同粒度的判断(2026-08-24 重做)
+    //
+    // 2026-08-24 用户报「怎么中文也注音了」:《这样吧》(群星/动力火车翻唱)是一首中文歌,
+    // 但它引用了三次「サヨナラ」。原来的判据是**「整首歌出现过一个假名字符就算日文」**,
+    // 于是整首歌被判成日文,每一行汉字都去走日语形态分析 ——「就从明天开始吧」的罗马音
+    // 出成了「就从 mei ten 开始 吧」(mei ten 是「明天」的日文音读)。
+    //
+    // 那个判据的原始理由是对的:假名是日文独有、中文完全没有,所以**一行里有假名**足以
+    // 确证这一行是日文。错的是把它从「一行」放大到「整首歌」——引用外语词太常见了。
+    //
+    // 现在分成两层:
+    //   · 一行里有假名/谚文 → 按这一行自己的文字算(确证,不看整首歌);
+    //   · **纯汉字**的行才有中日歧义(同一个汉字两种读音),这种行退回整首歌的判断;
+    //   · 整首歌的判断改成**含假名的行占比**,而不是「出现过没有」。
+    //
+    // 实测用户曲库 647 首有歌词的歌里只有 3 首出现过假名,含假名行占比分别是:
+    //   Michael Jackson《Keep the Faith》 1/156  =  0.6%(夹了一行日文)
+    //   群星《这样吧》                     3/75   =  4.0%(就是这次报的)
+    //   陶喆《My Anata》                  18/44  = 40.9%(真·中日混唱)
+    // ⚠️ 这批数据里**没有一首纯日文歌**,所以阈值的正向一侧不是从数据拟合的,是从正字法
+    // 推的:日语正字法离不开假名(助词 は/が/を/の、动词词尾、送り仮名),真正的日文歌
+    // 几乎每一行都含假名、占比接近 100%。取 50% 两边都留着很宽的余量。
+
+    /// 「整首歌是日文歌」的阈值:含假名的**行**占非空行的比例。
+    public static let japaneseSongKanaLineRatio = 0.5
+
+    /// 含假名的行占非空行的比例。没有非空行时返回 0。
+    public static func kanaLineRatio(_ text: String) -> Double {
+        var total = 0
+        var kana = 0
+        for raw in text.split(separator: "\n", omittingEmptySubsequences: false) {
+            let line = raw.trimmingCharacters(in: .whitespaces)
+            if line.isEmpty { continue }
+            total += 1
+            if looksJapanese(line) { kana += 1 }
+        }
+        guard total > 0 else { return 0 }
+        return Double(kana) / Double(total)
+    }
+
+    /// 整首歌是不是日文歌。**只**用来给纯汉字行的读音做兜底判断,行内有假名的一律按行算。
+    public static func looksJapaneseSong(_ text: String) -> Bool {
+        kanaLineRatio(text) >= japaneseSongKanaLineRatio
+    }
+
+    /// 整首歌的文字种类。跟 script(of:) 的唯一区别是日文那一档按**行占比**判。
+    public static func songScript(of text: String) -> LyricScript {
+        if looksJapaneseSong(text) { return .japanese }
+        if containsHangul(text) { return .korean }
+        if containsHan(text) { return .chinese }
+        return .other
+    }
+
+    /// **一行**的文字种类。行内有假名/谚文就按行自己算(确证);只有纯汉字行才有中日歧义,
+    /// 那种行退回整首歌的判断。
+    public static func script(ofLine line: String, song: LyricScript) -> LyricScript {
+        if looksJapanese(line) { return .japanese }
+        if containsHangul(line) { return .korean }
+        if containsHan(line) { return song == .japanese ? .japanese : .chinese }
+        return .other
+    }
 }

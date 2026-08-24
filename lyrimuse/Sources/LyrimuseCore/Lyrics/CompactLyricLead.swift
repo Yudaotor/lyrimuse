@@ -79,14 +79,7 @@ public enum CompactLyricLead {
     public static func displayDurationMs(prevLineEndMs: Int?, startMs: Int,
                                          lineEndMs: Int?, nextStartMs: Int?,
                                          fallbackEndMs: Int?) -> Int? {
-        // 出现时刻:夹在 (本行开始 - revealMs) 和 本行开始 之间 —— 上一行结束得晚
-        // (时间戳交叠/脏数据)时不能算成"比本行开始还晚出现"。
-        let appear: Int
-        if let prevEnd = prevLineEndMs {
-            appear = min(startMs, max(prevEnd, startMs - revealMs))
-        } else {
-            appear = startMs
-        }
+        let appear = appearMs(prevLineEndMs: prevLineEndMs, startMs: startMs)
         let vanish: Int?
         if let end = lineEndMs, nextStartMs != nil {
             vanish = end
@@ -97,5 +90,30 @@ public enum CompactLyricLead {
         }
         guard let v = vanish, v > appear else { return nil }
         return v - appear
+    }
+
+    /// 这一行在单行展示面上**出现**的时刻(窗口定义见 displayDurationMs)。
+    ///
+    /// 单独抽出来只为一件事:displayDurationMs 和 leadInMs 必须用**同一个**"出现",
+    /// 各写一遍必然漂 —— 一个算窗口长度、一个算窗口前半段,漂了就是"提前量比整个窗口还长"。
+    static func appearMs(prevLineEndMs: Int?, startMs: Int) -> Int {
+        // 夹在 (本行开始 - revealMs) 和 本行开始 之间 —— 上一行结束得晚(时间戳交叠/
+        // 脏数据)时不能算成"比本行开始还晚出现"。
+        guard let prevEnd = prevLineEndMs else { return startMs }
+        return min(startMs, max(prevEnd, startMs - revealMs))
+    }
+
+    /// 这一行**出现之后、开唱之前**那段"已经显示、但还没染色"的提前量(毫秒)。
+    ///
+    /// 菜单栏跑马灯拿它当"起步前至少要等多久"。2026-08-24 用户反馈:「已经到下一行了,
+    /// 但是还没开始染色的时候不需要滚动,现在是会滚」—— 提前量最长 revealMs(5 秒),
+    /// 而滚动的首停最多 baseHoldSeconds(1.5 秒),超出的那一截就表现为**一句还没开唱的
+    /// 歌词自己先滚起来**。实测这段提前量平均 0.90s、p90 1.75s、p95 3.03s(用户曲库
+    /// 12893 个行间隙,见 docs/features/06-menubar.md),并不是边缘情况。
+    ///
+    /// 0 = 出现即开唱。行级 LRC 恒为 0 —— resolve 对它从不抢跑(见「保守边界 1」),
+    /// 所以"没有逐字数据的歌反而被推迟滚动"这种事不会发生。
+    public static func leadInMs(prevLineEndMs: Int?, startMs: Int) -> Int {
+        max(0, startMs - appearMs(prevLineEndMs: prevLineEndMs, startMs: startMs))
     }
 }

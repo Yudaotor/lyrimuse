@@ -96,6 +96,11 @@ enum MenuBarMarqueeRenderer {
     /// - Parameter dwellSeconds: 这一句会显示多久(到下一句为止)。给了就按它配速 ——
     ///   让长句子在换句之前滚完,而不是永远按固定速度爬(见 MenuBarMarquee.pacing)。
     ///   nil 就退回固定速度。
+    /// - Parameter leadInSeconds: 这一句**出现之后、开唱之前**那段还没染色的提前量
+    ///   (`PlaybackCoordinator.compactLeadInSeconds`)。传下去让滚动在开唱之后才起步,
+    ///   见 MenuBarMarquee.pacing 约束 4。
+    ///   ⚠️ **故意不给默认值**:三个调用方(菜单栏本体、几何推迟期的过渡渲染、设置页预览)
+    ///   都得自己交代"这一句到底开唱了没有",漏掉一个就又是"还没染色却已经在滚"。
     /// - Parameter widthMode: 装得下的句子占多宽,见 MenuBarLyricsWidthMode。
     ///
     /// ⚠️ 2026-08-17 这个设置先从"最多占多宽"改成"固定占多宽"(原来装得下的句子按自己的
@@ -107,7 +112,7 @@ enum MenuBarMarqueeRenderer {
     /// 横向滚动 —— 那时候本来就没有"要不要缩短"可言。
     static func presentation(
         for text: String, windowWidth: CGFloat, dwellSeconds: Double?,
-        widthMode: MenuBarLyricsWidthMode
+        leadInSeconds: Double, widthMode: MenuBarLyricsWidthMode
     ) -> Presentation {
         guard windowWidth > 0 else { return .text(truncate(text, toWidth: windowWidth)) }
         let fullWidth = width(of: text)
@@ -129,7 +134,8 @@ enum MenuBarMarqueeRenderer {
             pacing: MenuBarMarquee.pacing(
                 maxOffset: fullWidth - windowWidth,
                 averageCharWidth: averageCharWidth,
-                dwellSeconds: dwellSeconds))
+                dwellSeconds: dwellSeconds,
+                leadInSeconds: leadInSeconds))
     }
 
     /// 一句歌词排好版的整条长图。**一句只画一次**,之后每一帧都是 Core Animation 在

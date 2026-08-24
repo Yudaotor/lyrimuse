@@ -443,6 +443,9 @@ final class MenuBarStatusItem: NSObject {
             // 句子会在只滚出开头一小截时就被换掉,比改动前更糟。见 CompactLyricLead
             // .displayDurationMs。
             dwellSeconds: coordinator.compactDwellSeconds,
+            // 提前量窗口里这一句已经显示、但还没开唱(所以也还没染色)——滚动得等它走完
+            // 才准起步,否则就是用户 2026-08-24 报的"还没染色就已经在滚"。
+            leadInSeconds: coordinator.compactLeadInSeconds,
             widthMode: settings.menuBarLyricsWidthMode
         ) {
         case .text(let visible):
@@ -488,6 +491,9 @@ final class MenuBarStatusItem: NSObject {
         switch MenuBarMarqueeRenderer.presentation(
             for: text, windowWidth: usable,
             dwellSeconds: PlaybackCoordinator.shared.compactDwellSeconds,
+            // 过渡渲染画的是同一句,提前量口径也必须同一份 —— 这里给 0 的话,几何推迟期间
+            // (自适应模式下逐句都有,最多 3s)那一句又会在开唱前先滚起来。
+            leadInSeconds: PlaybackCoordinator.shared.compactLeadInSeconds,
             widthMode: .fixed
         ) {
         case .text(let visible):

@@ -162,10 +162,22 @@ final class MenuBarScrollingLabel: NSView {
         // fillPath 的**有无**参与判定(强调色那张图要不要排),路径数值本身不影响位图。
         let bitmapsUnchanged = prepared != nil && plan?.text == next.text
             && (plan?.fillPath != nil) == (next.fillPath != nil)
+        // 滚动动画只在**滚动参数**(文字/槽宽/配速)真的变了时才重启。fillPath 从 nil 变成
+        // 非 nil **不算** —— 那是"开唱那一刻把逐字填色挂上"(菜单栏订了 compactLine 和
+        // currentLine 两条流,后者就管这一下,见 MenuBarStatusItem)。2026-08-24 之前它会
+        // 连带把滚动打回开头:提前量窗口里那一句本来已经静止等着了(head 以提前量为下限),
+        // 开唱那一下再从零起一遍首停,等于把提前量白等两遍,长句更滚不完。
+        let scrollUnchanged = prepared != nil && (plan.map {
+            $0.text == next.text && $0.windowWidth == next.windowWidth && $0.pacing == next.pacing
+        } ?? false)
         plan = next
         isHidden = false
         if !bitmapsUnchanged { rebuildImage() }
-        restartAnimation()
+        // 自愈那一半:参数没变但动画不在(首次装上、clear 之后、或者这一句本来就不用滚)
+        // 照样得跑一趟 restartAnimation —— 它对"不用滚"的情况就是把位置复位到开头。
+        if !scrollUnchanged || contentLayer.animation(forKey: Self.scrollAnimationKey) == nil {
+            restartAnimation()
+        }
         // 换句/换路径后按存底时钟重装填色(时钟按墙钟外推,不用等下一次对表)。
         applyKaraokeFill()
         needsLayout = true

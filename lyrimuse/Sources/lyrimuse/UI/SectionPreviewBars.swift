@@ -269,6 +269,9 @@ struct MenuBarPreviewBar: View {
             // currentLineIndex/allLines 还可能是旧值(这个项目已经为这个时机踩过两次坑)。
             // 而 body 求值发生在状态落定之后,读到的必然是同一句歌词对应的那份数据。
             dwellSeconds: line == nil ? nil : PlaybackCoordinator.shared.currentLineDwellSeconds,
+            // 预览镜像的是 currentLine(**正在唱**的那一句),不是菜单栏本体用的 compactLine
+            // (它会提前亮出下一句)—— 所以这里的句子按定义总是已经开唱了,提前量恒为 0。
+            leadInSeconds: 0,
             widthMode: settings.menuBarLyricsWidthMode)
     }
 

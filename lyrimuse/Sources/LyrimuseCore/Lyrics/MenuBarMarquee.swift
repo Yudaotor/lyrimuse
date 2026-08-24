@@ -139,6 +139,14 @@ public enum MenuBarMarquee {
     //      (⚠️ 2026-08-17 第一版把句尾价值判成 0、让滚动恰好在换句那一刻走完 ——
     //      2026-08-19 用户实测推翻:"一到最后一个字就马上到下一句了",末尾几个字根本
     //      来不及读。现在句尾按 tailReadSeconds 预留一段读完时间,滚动相应加速。)
+    //   4. **开唱之前不滚**(2026-08-24 加)。单行展示面会在上一句唱完、本句还没开唱
+    //      之前就把本句亮出来(提前量,见 CompactLyricLead.revealMs),那段时间里它是
+    //      **没有染色**的。原来 head 只看 baseHoldSeconds(最多 1.5 秒),提前量一超过它,
+    //      一句还没开唱的歌词就自己先滚了起来 —— 用户 2026-08-24 报的就是这个。
+    //      现在 head 以提前量为下限(leadInSeconds),滚动永远从"开始染色"那一刻才起步。
+    //      因为 travel 本来就是从 dwell 里扣掉 head 算的,抬高 head **自动**把不能滚的
+    //      那段时间从行程里去掉了,不会重蹈 2026-08-17 那个"按偏大的 dwell 配速、
+    //      长句只滚出开头一小截"的坑。
     public struct ScrollPacing: Equatable, Sendable {
         public let pointsPerSecond: CGFloat
         public let headHoldSeconds: Double
@@ -259,14 +267,22 @@ public enum MenuBarMarquee {
 
     /// - Parameter dwellSeconds: 这一句会显示多久。nil = 不知道(没有下一句的时间信息),
     ///   此时完全维持 2026-08-17 之前的行为(固定速度、首尾各停 1.5 秒)。
+    /// - Parameter leadInSeconds: 这一句**出现之后、开唱之前**那段还没染色的提前量
+    ///   (`CompactLyricLead.leadInMs`)。滚动不得在它走完之前起步 —— 见上面约束 4。
+    ///   0(默认)= 出现即开唱,也就是 2026-08-24 之前的行为。
     public static func pacing(
-        maxOffset: CGFloat, averageCharWidth: CGFloat, dwellSeconds: Double?
+        maxOffset: CGFloat, averageCharWidth: CGFloat, dwellSeconds: Double?,
+        leadInSeconds: Double = 0
     ) -> ScrollPacing {
         // 兜一个正数下限:字宽算成 0 的话速度也会是 0,关键帧那边会当成"不滚"。
         let base = max(1, baseCharsPerSecond * averageCharWidth)
+        // 提前量钳在 revealMs 以内:按构造它不可能更长(那是单行展示面亮出下一句的
+        // 上限),真更长就是上游时钟/时间轴出了错 —— 而 head 是**死等**,不钳的话一次
+        // 脏数据就能把跑马灯钉住不动。
+        let lead = min(max(0, leadInSeconds), Double(CompactLyricLead.revealMs) / 1000)
         guard let dwell = dwellSeconds, dwell > 0, maxOffset > 0 else {
             return ScrollPacing(pointsPerSecond: base,
-                                headHoldSeconds: baseHoldSeconds,
+                                headHoldSeconds: max(baseHoldSeconds, lead),
                                 tailHoldSeconds: baseHoldSeconds)
         }
         let cap = max(1, maxCharsPerSecond * averageCharWidth)
@@ -277,7 +293,12 @@ public enum MenuBarMarquee {
         // 开头那一停**按需让路**:时间够就给足,不够就一路让到 0 —— 让"看得到整句"优先于
         // "看清开头"。这一步是 2026-08-17 第一版漏掉的,当时首停按固定比例扣,长句因此
         // 白白撞上速度上限、依然滚不完。
-        let head = min(baseHoldSeconds, dwell * headHoldMaxFraction, max(0, dwell - travelAtCap))
+        // 提前量是硬下限,三个上限那一拨管不了它:那三个管的是"自愿多停一会儿",
+        // 而提前量里根本**不允许**滚。也因此 headHoldMaxFraction 那道 25% 封顶在提前量
+        // 很长的句子上会被穿过 —— 是对的:封顶防的是"短句被首停吃光时间",而提前量
+        // 不是被吃掉的时间,它从一开始就不可用。
+        let head = max(lead, min(baseHoldSeconds, dwell * headHoldMaxFraction,
+                                 max(0, dwell - travelAtCap)))
 
         // 句尾也预留一段读完时间(2026-08-19):原来 travel 直接吃满 dwell - head,滚动
         // 恰好在换句那一刻走完、末尾零停留,"一到最后一个字就马上到下一句"。时间不够时

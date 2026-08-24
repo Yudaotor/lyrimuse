@@ -49,15 +49,17 @@
 
 - **驱动方式**:一句歌词排版成一整条长图(`MenuBarMarqueeRenderer.prepare`,一句只画一次),交给 `MenuBarScrollingLabel` 的 `textLayer` 当 contents,滚动是一条 `CAKeyframeAnimation`(position.x),Core Animation 在渲染层插值——主线程每句只干一次活,之后一帧都不碰。这是 2026-08-16 实测定论:此前 MenuBarExtra + 逐帧换图那条路,卡顿根因在驱动方式(每帧要等主线程调度),不在画图性能。
 - **运动周期**:开头停(headHold)→ 匀速滚过 `textWidth - windowWidth` → 末尾停(tailHold)→ 循环。关键帧由 `MenuBarMarquee.scrollKeyframes` 生成,与逐帧版 `scrollOffset` 描述同一段运动(selftest 逐点对答案)。
-- **配速**(`MenuBarMarquee.pacing`,2026-08-17 加):按「这一句会显示多久」(`PlaybackCoordinator.compactDwellSeconds`,2026-08-23 从 `currentLineDwellSeconds` 换过来)倒推速度。⚠️ **换口径是必须的,不是顺手**:「唱完就切」之后显示窗口不再是「本句时间戳→下句时间戳」——长句后面接一段长间奏时,旧口径会把 dwell 算大,句子却在**唱完那一刻**就被换走,结果是只滚出开头一小截就没了,**比改动前更糟**。新口径 = 实际显示窗口(`CompactLyricLead.displayDurationMs`:出现于上一句唱完 / 本句开始前 5 秒中较晚者,消失于本句唱完);算不出来时(最后一句 —— 引擎不知道曲目时长)退回旧公式,让长句在换句之前滚完。规则:
+- **配速**(`MenuBarMarquee.pacing`,2026-08-17 加):按「这一句会显示多久」(`PlaybackCoordinator.compactDwellSeconds`,2026-08-23 从 `currentLineDwellSeconds` 换过来)倒推速度。⚠️ **换口径是必须的,不是顺手**:「唱完就切」之后显示窗口不再是「本句时间戳→下句时间戳」——长句后面接一段长间奏时,旧口径会把 dwell 算大,句子却在**唱完那一刻**就被换走,结果是只滚出开头一小截就没了,**比改动前更糟**。新口径 = 实际显示窗口(`CompactLyricLead.displayDurationMs`:出现于上一句唱完 / 本句开始前 5 秒中较晚者,消失于本句唱完);**2026-08-24 起最后一句也由引擎算**:曲长经 `tickQuery(trackEndMs:)` 喂进去当 `displayDurationMs` 的曲末兜底,所以 `compactDwellMs` 对整首歌每一句都是**行常量**。这不是顺手优化 —— 原来最后一句退回 `currentLineDwellSeconds`,那条退路 ① 按 `currentLineIndex` 取行,而提前量窗口里那是**已经唱完的上一句**(错基数);② 它的值在开唱那一刻(`currentLineIndex` 前进)会**突变** → `plan.pacing` 变 → 滚动被重装,而首停含提前量,重装等于把提前量**再等一遍**(最长 5 秒),最后一句可能整段唱完都不滚。剩下那条退路只在「连曲长都不知道」时可达,且**刻意不**在它上面叠提前量(错基数上算得更精细没有意义)。规则:
   - 基准每秒 4 个字(`baseCharsPerSecond`),**只加速不减速**;
   - 上限每秒 12 个字(`maxCharsPerSecond`,中文字幕舒适上限附近),撞上限仍滚不完的极长句就是滚不完——明知的取舍,不把字甩成残影;
   - 开头那一停最多 1.5s、且不超过句长的 25%,时间不够就一路让到 0(看得到整句 > 看清开头);
   - **句尾预留**(`tailReadSeconds`,2026-08-19 加):时间允许时滚动比换句**提前 1s 走完**(短句按句长 20% 封顶),末尾几个字来得及读,滚动为此相应加速(仍不越上限);时间紧时尾停**先于**首停让路。此前 travel 直接吃满 dwell − head、恰好在换句那一刻走完,用户实测"一到最后一个字就马上到下一句了";
+  - **开唱之前不滚**(`leadInSeconds`,2026-08-24 用户报「已经到下一行了,但是还没开始染色的时候不需要滚动,现在是会滚」):提前量窗口里这一句**已经显示、但还没开唱**,也就还没染色,滚动必须等它走完才起步 —— 首停以提前量为**下限**(`CompactLyricLead.leadInMs` → `PlaybackCoordinator.compactLeadInSeconds` → `MenuBarMarquee.pacing`)。原来首停只看那 1.5s 上限,提前量一超过它(实测平均 0.90s、p90 1.75s、p95 3.03s,上限 5s),一句还没开唱的歌词就自己先滚起来了。⚠️ 抬高首停**不会**重蹈上面那个「按偏大 dwell 配速」的坑:travel 本来就是 `dwell − head − tail` 算的,head 一抬,不能滚的那段时间**自动**从行程里扣掉了(selftest 钉了「扣掉提前量之后能滚完的就一定滚完」这条不变式)。提前量按 `revealMs` 钳上界 —— 首停是死等,上游时钟脏数据不钳的话能把跑马灯钉死不动;
   - 实际尾停 = 剩余时间 + 0.5s loopGuard,所以时间充裕时一句**只滚一轮**、停在末尾,不反复从头再来;
   - dwell 算不出来(没歌词/最后一句无时长)→ 固定速度、首尾各停 1.5s;
   - 速度按这一句的**平均字宽**换算成 pt/s,中文歌和英文歌「每秒滚过几个字」一致。
 - **换句判定**:`$currentLine` 按「首词时间戳#纯文本」`removeDuplicates()` 去重——同一句因译文/罗马音中途补上被重新赋值不算换句,否则滚动会被反复打回开头。⚠️ 2026-08-22 起去重键**带行身份**,不再只看纯文本:副歌里相邻两行同词不同时,只看文本会吞掉第二行的换行事件,逐字染色挂着第一行的路径、第二行一出场整句全染(审阅抓出);「先无逐字、中途补上」同理。推论变更:连续两行文本相同的歌词现在**会**重启滚动(它们本来就是两句,各按各的 dwell 配速)。`present()` 对相同参数仍是空操作。
+- **开唱那一下不重启滚动**(2026-08-24):菜单栏订了两条歌词流(见下面「唱完就切到下一句」和踩坑记录 12),开唱那一刻 `currentLine` 变化会重画一次、把逐字填色挂上。`MenuBarScrollingLabel.present` 因此只在**滚动参数**(文字 / 槽宽 / 配速)真的变了时才 `restartAnimation`;`fillPath` 由 nil 变非 nil **不算**滚动参数变化。原来它算 plan 变化、会把滚动打回开头 —— 提前量窗口里那一句本来已经静止等着了,开唱那一下再从零起一遍首停,等于把提前量**白等两遍**,长句更滚不完。参数没变但动画不在(首次装上 / `clear()` 之后 / 这句本来不用滚)仍会跑一趟,那是自愈的一半。
 - **暂停再恢复**:暂停回落图标时 `scrollingLabel.clear()` 清掉 plan,恢复播放同一句会**从头重新滚**。
 - **反白与换色**:菜单打开时状态栏项整块反白,文字色从 `labelColor` 换成 `selectedMenuItemTextColor`(`setHighlighted`,由 `MenuBarStatusMenu` 的 menuWillOpen/menuDidClose 转达);系统切浅色/深色也重画。换色只重画位图 contents,**绝不打断正在跑的滚动动画**——点开菜单看一眼再关掉,歌词该滚到哪儿还在哪儿。动态颜色必须在按钮当前 `effectiveAppearance` 下解析,否则深色菜单栏画出几乎看不见的深色字。
 - **退场**:必须把 `repeatCount = .infinity` 的动画真的摘掉,不留在隐藏图层上让渲染层空转。
@@ -84,6 +86,11 @@
 
 染色/均衡器条子仍看 `currentLine`(那是"此刻在唱哪个字"),**只有"显示哪一句"改看
 `compactLine`** —— 提前量窗口里显示的是下一句、填色为 0,开唱时自然开始填。
+
+菜单栏跑马灯**在这段提前量里不滚**(2026-08-24 补):没染色就是还没开唱,滚动等到开唱才
+起步。量化口径是 `CompactLyricLead.leadInMs`,它跟 `displayDurationMs` **共用同一个
+`appearMs`**(出现时刻)—— 一个算窗口有多长、一个算窗口前半段有多长,各写一遍必然漂成
+"提前量比整个窗口还长"。落地细节见上面「滚动规则」里那条「开唱之前不滚」。
 
 ### 逐字染色(2026-08-22,用户点名"像酷狗菜单栏歌词")
 
@@ -189,7 +196,8 @@
 | 状态栏总控、三态判定、透明占位图 | `lyrimuse/Sources/lyrimuse/MenuBar/MenuBarStatusItem.swift` · `MenuBarStatusItem`(`refresh` / `showIcon` / `showStaticText` / `showFixedWidth` / `spacerImage`) |
 | 装得下/要滚的唯一判定、长图排版、按宽截断 | `lyrimuse/Sources/lyrimuse/MenuBar/MenuBarMarqueeRenderer.swift` · `MenuBarMarqueeRenderer`(`presentation` / `Presentation` / `prepare` / `truncate`) |
 | 滚动图层、反白换色不打断动画 | `lyrimuse/Sources/lyrimuse/MenuBar/MenuBarScrollingLabel.swift` · `MenuBarScrollingLabel`(`present` / `rebuildImage` / `restartAnimation` / `Representable`) |
-| 关键帧、配速算法、速度上下限常量 | `lyrimuse/Sources/LyrimuseCore/Lyrics/MenuBarMarquee.swift` · `MenuBarMarquee`(`scrollKeyframes` / `pacing` / `ScrollPacing`) |
+| 关键帧、配速算法、速度上下限常量 | `lyrimuse/Sources/LyrimuseCore/Lyrics/MenuBarMarquee.swift` · `MenuBarMarquee`(`scrollKeyframes` / `pacing`(含 `leadInSeconds`) / `ScrollPacing`) |
+| 单行展示面显示哪一句、显示窗口、开唱前的提前量 | `lyrimuse/Sources/LyrimuseCore/Lyrics/CompactLyricLead.swift` · `CompactLyricLead`(`resolve` / `appearMs` / `displayDurationMs` / `leadInMs`) |
 | 12 款图标枚举、静态帧绘制、缓存 | `lyrimuse/Sources/lyrimuse/MenuBar/MenuBarIconStyle.swift` · `MenuBarIconStyle`(`cachedImage` / `makeImage` / `classicArtwork` 等各款 artwork) |
 | 图标活体动画(CA 驱动、裸层、染色) | `lyrimuse/Sources/lyrimuse/MenuBar/MenuBarLiveIconView.swift` · `MenuBarLiveIconView`(`present` / `build*` 各款 / `applyColor` / `tintedContents`) |
 | 下拉菜单结构与全部动作 | `lyrimuse/Sources/lyrimuse/MenuBar/MenuBarStatusMenu.swift` · `MenuBarStatusMenu`(`rebuild` / `offsetMenuTitle` / 各 `@objc` action) |
@@ -213,5 +221,5 @@
 9. **摆针款退场要把 anchorPoint 归位**,否则下一款绕中心转的盘会继承歪轴;waveform 符号效果不显式给 repeat 选项会流动一轮就冻住。
 10. **持久化 key 不随语义改名**:宽度从「最多占多宽」改成「固定占多宽」时 key 仍是 `np:menuBarLyricsMaxWidth`,老用户设置照常读出;旧 `menuBarLyricsMaxChars` 留在配置里但无读取方。
 11. **长间奏的 ♪ 必须是非空文本,不能是空串**(2026-08-23):`refresh()` 里 `text` 为空会落进 `guard ... lyricsActive` 那条,把整个歌词槽 `present(class:"icon")` 收回成小图标 —— 那是一次状态项重建,而长间奏动辄十几秒(实测单次平均 10.1 秒),表现就是菜单栏歌词塌掉、过一会儿又弹回来。所以 `compactShowsPlaceholder` 时给字面的 `♪` 把槽位留住,视觉上也跟灵动岛一致。
-12. **菜单栏订阅了两个歌词流,各管一件事**(2026-08-23):`$compactLine` 管**显示哪一句**,`$currentLine` 管**逐字填色路径此刻可不可用** —— 提前量窗口里显示的是下一句但它还没开唱,`karaokeFillPath` 那道 `line.plainText == text` 守卫不给路径(正确:没唱就不该有填色),等真开唱时 `currentLine` 才变,那一下要重画一次把填色挂上。两个事件在短间隙里相差不到一秒,文本相同 → 槽宽相同 → 不触发状态项重建。
+12. **菜单栏订阅了两个歌词流,各管一件事**(2026-08-23):`$compactLine` 管**显示哪一句**,`$currentLine` 管**逐字填色路径此刻可不可用** —— 提前量窗口里显示的是下一句但它还没开唱,`karaokeFillPath` 那道 `line.plainText == text` 守卫不给路径(正确:没唱就不该有填色),等真开唱时 `currentLine` 才变,那一下要重画一次把填色挂上。两个事件在短间隙里相差不到一秒,文本相同 → 槽宽相同 → 不触发状态项重建。**2026-08-24 补**:第二个事件也**不再重启滚动动画** —— `fillPath` 由 nil 变非 nil 不算滚动参数变化(见「滚动规则」里那条「开唱那一下不重启滚动」),否则提前量会被白等两遍。
 13. **macOS 26 状态栏项重建不能连发,且 AX 验证会说谎**(2026-08-19,错位第六轮定案):两次重建相隔 ~1s(实测 1.1s)会把邻居的**像素**晾在旧位置——AX 账面已更新(全图无重叠、看着完全健康),屏幕像素却是旧布局,歌词压到邻居残影上且**保持不自愈**;单次从容的重建从未观察到排坏。所以:重建节流(<3s 推迟合并)+收缩观察窗(见「三态判定」);验证必须**截图像素**对照 AX,只信 AX 等于白验(前五轮多次"AX 验证通过"后用户仍复现,就是这个原因);重建/推迟落 notice 日志(info 级不落盘,事后取不到现场)。宽度滑杆的订阅换成 `debounce 250ms`(拖动过程每个中间值都排队重建没有意义)。曾按「重建偶发有毒、只能压次数」的中间结论把 fixed 模式改成暂停/广告恒占歌词槽,当天按用户预期退回,由观察窗方案替代。

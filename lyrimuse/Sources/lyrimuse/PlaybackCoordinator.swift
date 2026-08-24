@@ -111,6 +111,8 @@ final class PlaybackCoordinator: ObservableObject {
     @Published private(set) var compactLine: SyncedLyricLine?
     @Published private(set) var compactShowsPlaceholder: Bool = false
     @Published private(set) var compactDwellMs: Int?
+    /// compactLine 出现之后、开唱之前那段还没染色的提前量(毫秒)。见 CompactLyricLead.leadInMs。
+    @Published private(set) var compactLeadInMs: Int?
     @Published private(set) var allLines: [LyricsWindowLine] = []
     // 歌词间奏点(歌词窗口的「•••」),见 LocalPlaybackSource 同名属性的注释。
     @Published private(set) var lyricsGapMarkers: [LyricsGapMarker] = []
@@ -138,11 +140,15 @@ final class PlaybackCoordinator: ObservableObject {
     /// **100×100**(2026-08-17 实测:7.3KB 的 JPEG,`get` 和 `get --now`、自带和 homebrew
     /// 两份 media-control 四种组合全都是这个尺寸,media-control 也没有"要大图"的参数)。
     /// 放到 920px 去显示等于放大 9 倍,就是用户报的"封面非常模糊"。
+    /// **QQ 音乐客户端给 300×300**(2026-08-24 实测:27202 字节的 JPEG)—— 同一个毛病的
+    /// 另一档,恰好卡在阈值边界上,见 lowResArtworkThreshold 里那条 ⚠️。
     ///
     /// 替代图来自 collector 已经存在缓存里的 `cover_url`(网易云/Apple/QQ 解析歌词时顺手
-    /// 记下的),实测同两首歌能拿到 495×495 和 800×800。
+    /// 记下的),实测同两首歌能拿到 495×495 和 800×800;取用前还会过一遍
+    /// `EnrichCacheReader.nativeSizedCoverURL` 把图源自己的尺寸档顶到最大(网易云摘 param、
+    /// QQ 提到 800、Apple 提到 1200),否则 QQ 源那张存的也只有 300、白替一趟。
     ///
-    /// ⚠️ 只在系统那份 < lowResArtworkThreshold 时才替。系统那份才是"正在播的这一项"的
+    /// ⚠️ 只在系统那份 ≤ lowResArtworkThreshold 时才替。系统那份才是"正在播的这一项"的
     /// 权威图;缓存里那张是按歌手/歌名/专辑匹配出来的,同名不同版本时可能是另一张封面。
     /// 播放器本来就给大图时(Apple Music)完全不碰这条路。
     @Published private(set) var highResArtworkImage: NSImage?
@@ -204,7 +210,21 @@ final class PlaybackCoordinator: ObservableObject {
     /// 而那边有(用曲目时长兜底,尾奏通常还有几秒够滚完)。
     var compactDwellSeconds: Double? {
         if let ms = compactDwellMs, ms > 50 { return Double(ms) / 1000 }
+        // 这条退路 2026-08-24 起**几乎不可达**:曲长已经喂进引擎(见 tickQuery 的
+        // trackEndMs),最后一句的窗口也算得出来了,只剩"连曲长都不知道"这一种。
+        //
+        // ⚠️ 刻意**不**在它上面叠 compactLeadInSeconds:它按 currentLineIndex 取行,而
+        // 提前量窗口里那是**已经唱完的上一句** —— 基数本来就错的,再补一段提前量只是把
+        // 错数字算得更精细。真正的修法是上面那条(让引擎算得出来),不是修饰这条。
         return currentLineDwellSeconds
+    }
+
+    /// compactLine 出现之后、开唱之前那段还没染色的提前量(秒)。菜单栏跑马灯拿它当
+    /// "起步前至少等多久" —— 没染色就不该滚,见 MenuBarMarquee.pacing 约束 4。
+    /// 0 = 出现即开唱(行级 LRC 恒为 0,它从不抢跑)。
+    var compactLeadInSeconds: Double {
+        guard let ms = compactLeadInMs, ms > 0 else { return 0 }
+        return Double(ms) / 1000
     }
 
     var currentLineDwellSeconds: Double? {
@@ -700,6 +720,7 @@ final class PlaybackCoordinator: ObservableObject {
             s.$compactLine.assign(to: \.compactLine, on: self),
             s.$compactShowsPlaceholder.assign(to: \.compactShowsPlaceholder, on: self),
             s.$compactDwellMs.assign(to: \.compactDwellMs, on: self),
+            s.$compactLeadInMs.assign(to: \.compactLeadInMs, on: self),
             s.$allLines.assign(to: \.allLines, on: self),
             s.$lyricsGapMarkers.assign(to: \.lyricsGapMarkers, on: self),
             s.$currentGapIndex.assign(to: \.currentGapIndex, on: self),
@@ -722,6 +743,22 @@ final class PlaybackCoordinator: ObservableObject {
             Publishers.CombineLatest4(s.$title, s.$artist, s.$album, s.$artworkData)
                 .debounce(for: .milliseconds(300), scheduler: RunLoop.main)
                 .sink { [weak self] _, _, _, _ in self?.refreshHighResCover() },
+            // 第二个触发点(2026-08-24):**缓存里多了东西**也要补查一次。
+            //
+            // 上面那条只在 曲目/封面字节 变化时跑,而 collector 解析一首没听过的歌要好几秒
+            // (实测「七月上」13:52:52 开播、13:53:00 才写进 cover_url,晚 8 秒)—— 换歌后
+            // 300ms 那一次必然查空,然后**永不重试**,整首歌都停在系统那张 100×100 上。
+            // 这就是用户 2026-08-24 报「网易云这个封面依然很糊」的真根因(那之前修的是 QQ
+            // 恰好卡在 300px 阈值边界那个**另一个**问题,两者独立)。对照组:同一张专辑里
+            // 被"同专辑预取"提前解析好的曲目,换歌后 1 秒就抓到了 640px 那张、是清晰的。
+            //
+            // ⚠️ 必须 onlyIfMissing —— refreshHighResCover 开头会 clearHighRes(),已经拿到
+            // 高清图时再跑一遍就是"清空→重设",而 highResArtworkImage 挂着 0.5s 交叉淡入,
+            // 表现成封面每隔几秒闪一下。而 collector 写缓存是常态(每解析一首歌都写)。
+            s.$enrichContentVersion
+                .dropFirst() // 启动时那一次不是"新解析出来的",换歌那条路已经覆盖
+                .debounce(for: .milliseconds(300), scheduler: RunLoop.main)
+                .sink { [weak self] _ in self?.refreshHighResCover(onlyIfMissing: true) },
             // 两个消费面各自从**同一份原始均值**派生自己那一版,处理都是纯数学,放在这一层
             // 跟 hex→Color 的转换一起做,每首歌只算一次,不在两边的 body 里反复算。
             // (十六进制字符串必须在这一层才转得成 Color——LocalPlaybackSource 所在的
@@ -1227,15 +1264,26 @@ final class PlaybackCoordinator: ObservableObject {
                                                   height: blurred.extent.height / 2))
     }
 
-    /// 系统那份封面的边长低于这个像素数,才去缓存里找高清替代。300 的依据:歌词窗口那张
-    /// 封面卡最大 460pt,Retina 下 920px —— 300px 已经是 3 倍放大、肉眼能看出软,再小就
-    /// 明显糊了;而正常给图的播放器(Apple Music)都远在这条线之上,一次都不会触发。
+    /// 系统那份封面的边长**不超过**这个像素数,才去缓存里找高清替代。300 的依据:歌词窗口
+    /// 那张封面卡最大 460pt,Retina 下 920px —— 300px 已经是 3 倍放大、肉眼能看出软,再小
+    /// 就明显糊了;而正常给图的播放器(Apple Music)都远在这条线之上,一次都不会触发。
+    ///
+    /// ⚠️ 判据是"≤ 300"而不是"< 300"(2026-08-24 修)。原来写的是严格小于,而 **QQ 音乐
+    /// 客户端往系统 Now Playing 报的封面恰好就是 300×300**(实测:27202 字节的 JPEG,
+    /// 300×300),于是这条自愈路径对 QQ 音乐**一次都没触发过** —— 300px 顶到 820px 的封面
+    /// 卡上是 2.73 倍放大,正是用户报的"QQ 音乐这个封面很模糊"。恰好落在边界上的那一档
+    /// 本来就是这个阈值的注释自己在说"3 倍放大、肉眼能看出软"的那一档,该替。
     private static let lowResArtworkThreshold = 300
 
     private var highResCoverTask: Task<Void, Never>?
 
     /// 给当前曲目找一张比系统那份更大的封面。见 highResArtworkImage 的注释。
-    private func refreshHighResCover() {
+    ///
+    /// onlyIfMissing:给"缓存内容变了"那条补查路用 —— 已经拿到高清图就直接不动,别走下面
+    /// 那条 clearHighRes()→重下 的路(会让封面闪一下,理由见调用点)。换歌那条路传 false:
+    /// 上一首的高清图**必须**立刻撤掉。
+    private func refreshHighResCover(onlyIfMissing: Bool = false) {
+        if onlyIfMissing, highResArtworkImage != nil { return }
         highResCoverTask?.cancel()
         highResCoverTask = nil
         // 刻意重新从数据源读,而不是用订阅回调的参数:那几个值来自 willSet 时机,
@@ -1256,11 +1304,14 @@ final class PlaybackCoordinator: ObservableObject {
         let systemPixels = Self.pixelWidth(of: s.artworkData)
         // 系统那份够大(或者压根没有封面 —— 那时该显示占位音符,不该悄悄换成缓存里
         // 匹配到的另一张图)就不动。
-        guard systemPixels > 0, systemPixels < Self.lowResArtworkThreshold else {
+        guard systemPixels > 0, systemPixels <= Self.lowResArtworkThreshold else {
             clearHighRes()
             return
         }
         guard let cached = EnrichCacheReader.coverURL(artist: artist, title: title, album: album) else {
+            // 这条分支就是「第一次听的歌封面一直糊」的现场:collector 还没解析完。
+            // 现在缓存写入会再触发一次补查(见订阅处),所以这里不再是终点。
+            logger.debug("highres: no cached cover yet for \(title, privacy: .public) (system=\(systemPixels, privacy: .public)px)")
             clearHighRes()
             return
         }
@@ -1284,6 +1335,7 @@ final class PlaybackCoordinator: ObservableObject {
                 hex = await Task.detached { LocalPlaybackSource.computeAverageHex(cgImage: cg) }.value
             }
             guard !Task.isCancelled, LocalPlaybackSource.shared.title == title else { return }
+            logger.debug("highres: swapped in \(Int(image.size.width), privacy: .public)px for \(title, privacy: .public) (system=\(systemPixels, privacy: .public)px)")
             self?.highResArtworkImage = image
             self?.highResAverageHex = hex
         }
