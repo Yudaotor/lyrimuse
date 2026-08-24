@@ -9,3 +9,4 @@ node_modules/
 lyrimuse/.build/
 lyrimuse/dist/
 __pycache__/
+.playwright-mcp/
