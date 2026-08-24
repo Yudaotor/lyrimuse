@@ -232,6 +232,12 @@ jobs:
         id: appcast
         env:
           SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+          # 通过 env 传入,而不是在 run 脚本里直接写 ${{ steps.changelog.outputs.body }} --
+          # 那种写法是 GitHub Actions 在脚本文本层面做字符串替换,tag annotation 原文
+          # 里只要出现 " ` $( 这类 shell 语法字符就会破坏脚本甚至被当命令执行(这个
+          # step 的环境里还带着 SPARKLE_PRIVATE_KEY)。env 传参这条路径里,shell 只会
+          # 把它当一个变量值读,不会重新解析成语法。
+          NOTES_RAW: ${{ steps.changelog.outputs.body }}
         run: |
           # lyrimuse/build.sh 一开头就 `cd "$(dirname "$0")"` 切到 lyrimuse/ 目录,
           # 所以 swift build 的 .build/ 产物实际生成在 lyrimuse/.build/ 下——不是
@@ -258,7 +264,7 @@ jobs:
           # 注释警告过的坑:`run: |` 块里任何一行的缩进都不能浅于块本身,顶格的脚本体会
           # 直接把这个 YAML 文件解析坏(2026-08-16 我第一版就这么写,被 YAML 校验逮住)。
           # 纯 shell 参数替换就够,不用外部解释器。
-          NOTES_HTML="${{ steps.changelog.outputs.body }}"
+          NOTES_HTML="$NOTES_RAW"
           NOTES_HTML="${NOTES_HTML//]]>/]]]]><![CDATA[>}"
           if [ -z "${NOTES_HTML//[[:space:]]/}" ]; then
             NOTES_HTML="See the GitHub release page for details."
