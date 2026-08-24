@@ -589,6 +589,9 @@ struct LyricsWindowView: View {
     /// 核对自己出发时的代际,不同代际=过期结果直接丢弃 —— 防止上一首歌的在途结果
     /// 贴到新曲的菜单上(审阅抓的跨曲竞态)。
     @State private var moreMenuStateGeneration = 0
+    /// 这首歌在各平台的跳转目标(2026-08-24)。零网络,全是 collector 早就存进 enrich 缓存的
+    /// 字段;开菜单/换曲时后台读一次(首次要解析整份缓存 JSON,不能在主线程)。
+    @State private var platformLinks: PlatformLinks?
     /// 本次菜单会话内用户是否已手动切过「减少推荐」:切过之后,后到的回查结果不许再
     /// 覆盖它(回查读的是开菜单那一刻的旧值,覆盖=抹掉用户刚点的勾)。
     @State private var suggestLessUserToggled = false
@@ -635,10 +638,30 @@ struct LyricsWindowView: View {
                 // 没有内容的双列骨架(占位封面+悬空「⋯」+光杆播放键)。判据与
                 // emptyStateSpec 第一档同源:停播时 LocalPlaybackSource 清曲目,title 空。
                 let isIdle = playback.title.isEmpty
+                // 停播页宽窄断点。背景里柔光的锚点也吃它(宽窗唱片在左栏、窄窗居中),
+                // 所以必须是同一个变量、不能两处各写一遍 860。
+                let idleWide = geo.size.width >= 860
                 Group {
                 if isIdle {
-                    idleWelcomeView
-                        .offset(y: -geo.safeAreaInsets.top / 2)
+                    // 三区版停播页(2026-08-24 用户按选型册定的排布:左上收听总览、左下上次
+                    // 那首 + 一句歌词、右列通高最近听过)。只在**窗口够宽**时用,窄窗仍走原来
+                    // 的居中欢迎态 —— 与播放态那条 640pt 双列断点同一个思路,硬塞两列会挤成
+                    // 一团。未连 Last.fm 时 IdleStandbyView 自己退化成「只有唱片 hero 居中」。
+                    if idleWide {
+                        IdleStandbyView(
+                            player: idlePlayer,
+                            onResume: { resumeFromIdle(player: idlePlayer) },
+                            onOpenPlayer: { openIdlePlayerApp(idlePlayer) },
+                            onOpenAlbum: { title, artist in
+                                openCatalogPage(title: title, artist: artist, target: .album)
+                            },
+                            onOpenTrack: { title, artist in
+                                openCatalogPage(title: title, artist: artist, target: .track)
+                            })
+                    } else {
+                        idleWelcomeView
+                            .offset(y: -geo.safeAreaInsets.top / 2)
+                    }
                 } else {
                 HStack(spacing: 0) {
                     if showPlayerPane {
@@ -671,7 +694,18 @@ struct LyricsWindowView: View {
                 // ignoresSafeArea:AM 式顶部(.hiddenTitleBar)下背景要一直通到窗顶、
                 // 红绿灯悬浮其上。旧的"不 ignoresSafeArea"是为了避开系统标题栏文字
                 // 撞色——标题已隐藏,那个约束不存在了。
-                .background(artworkBackground.ignoresSafeArea())
+                .background(
+                    ZStack {
+                        artworkBackground
+                        // 停播页背景(V2 中心柔光)。叠在 artworkBackground **之上**而不是
+                        // 二选一:停播时那边本来什么都不画(windowBackgroundLayers 为 nil),
+                        // 所以不是白画一层。用 opacity 而不是 if/else 是为了拿到一次交叉
+                        // 淡入 —— 从「柔光底」硬切到「封面光斑场」很突兀。
+                        IdleStandbyBackground(wide: idleWide)
+                            .opacity(isIdle ? 1 : 0)
+                    }
+                    .animation(.easeInOut(duration: 0.45), value: isIdle)
+                    .ignoresSafeArea())
                 // ⚠️ 音量胶囊必须**浮在内容之上**,不能放进 .toolbar。
                 //
                 // 2026-08-09 用户反馈"这个玻璃效果好垃圾",对比 Apple Music 那个能透出背景
@@ -1266,7 +1300,8 @@ struct LyricsWindowView: View {
             .aspectRatio(1, contentMode: .fit)
             .overlay {
                 // 优先用高清替代:这张卡最大 460pt(Retina 下 920px),而系统 Now Playing
-                // 给的封面可能只有 100×100(网易云客户端就是),放大 9 倍会明显糊。
+                // 给的封面可能只有 100×100(网易云客户端)或 300×300(QQ 音乐客户端),
+                // 分别是 9 倍和 2.7 倍放大,都明显糊。
                 // highResArtworkImage 只在系统那份确实太小时才有值,见它的注释。
                 if let nsImage = playback.highResArtworkImage ?? playback.artworkImage {
                     Image(nsImage: nsImage)
@@ -1435,6 +1470,33 @@ struct LyricsWindowView: View {
                     openCatalogPage(album: false)
                 }
             }
+            // ---- QQ 音乐 / 网易云的目录动作(2026-08-24)。AM 有自己那套(上面这块) ----
+            //
+            // 只给**当前播放器**那一个平台,不把三个平台全铺进菜单 —— 全平台入口放在
+            // 「显示简介」面板里(那边一行放得下,而菜单每多一行都在变长)。
+            //
+            // 文案统一写「…页」而不是「在 XX 中打开」:这些**全部落在浏览器**。QQ 音乐没有
+            // associated-domains 授权(y.qq.com 不会被 App 接走),它注册的 qqmusicmac://
+            // 命令表只有 playsong/downloadsong、没有"打开这一页"的语义(而 playsong 会把
+            // 正在放的这首从头重播,不是我们要的)。详见 PlatformLinks 的头注。
+            if !platformMenuRows.isEmpty {
+                ForEach(platformMenuRows) { row in
+                    // 标题带 ↗:这三项**落在浏览器**,不是在客户端里打开。2026-08-24 用户
+                    // 实测问过「这三个不能在客户端打开吗」——不能,而且是查透了的:QQ 音乐
+                    // 整个 bundle 只注册一个 scheme(qqmusicmac),而它的协议处理器
+                    // (QMTenProtocolHandler.mm)完整字符串簇只有三个命令 playsong /
+                    // downloadsong / CODE(登录回调),**没有任何"打开某一页"的命令**;
+                    // qmusic:// 是它自己 webview 的 JS 桥(紧挨着 GeneralWebview
+                    // openUrlString:),外部用不了;也没有 associated-domains。
+                    // 连 `open -a QQ音乐 <y.qq.com URL>` 都实测过:只把 App 拉到前台、
+                    // 窗口数不变、URL 被忽略。所以 ↗ 不是装饰,是如实告知落点。
+                    MoreMenuRow(title: row.title + " ↗") {
+                        closeMoreMenu()
+                        NSWorkspace.shared.open(row.url)
+                    }
+                }
+                menuDivider
+            }
             // 「在 XX 中显示」:标题随当前播放器变;Apple Music 走 reveal(在 Music 里
             // 定位选中当前曲目,2026-08-22 实测流媒体曲目可用),其它播放器没有 reveal
             // 能力,退化为激活该 App(原「在播放器中打开」的行为)。
@@ -1484,6 +1546,30 @@ struct LyricsWindowView: View {
     }
 
     /// 菜单状态行绑定的曲目身份(标题|歌手|专辑拼串,只用于变更检测)。
+    private struct PlatformMenuRow: Identifiable {
+        let id: String
+        let title: String
+        let url: URL
+    }
+
+    /// 当前播放器那一个平台的目录入口。AM 走它自己那套(前往专辑/前往艺人,经 iTunes
+    /// Search),所以这里只管非 AM;酷狗没有任何已存的链接,自然是空数组。
+    private var platformMenuRows: [PlatformMenuRow] {
+        guard !isAppleMusicPlayer, let links = platformLinks else { return [] }
+        let bundleID = PlaybackCoordinator.shared.resolvedPlayerBundleID
+        var out: [PlatformMenuRow] = []
+        if bundleID == PlaybackPlayer.qqMusic.bundleIdentifier {
+            if let u = links.qqSong { out.append(.init(id: "qq-song", title: L10n.t("QQ 音乐歌曲页"), url: u)) }
+            if let u = links.qqAlbum { out.append(.init(id: "qq-album", title: L10n.t("QQ 音乐专辑页"), url: u)) }
+            if let u = links.qqArtist { out.append(.init(id: "qq-artist", title: L10n.t("QQ 音乐歌手页"), url: u)) }
+        } else if bundleID == PlaybackPlayer.netease.bundleIdentifier {
+            // 网易云只白捡歌曲页:collector 解出过专辑 ID,但它只活在内存里给同专辑预取用,
+            // 没有落进 enrich 缓存(要加得动 collector,与 QQ 那两个 mid 同一条路)。
+            if let u = links.neteaseSong { out.append(.init(id: "ne-song", title: L10n.t("网易云音乐歌曲页"), url: u)) }
+        }
+        return out
+    }
+
     private var moreMenuTrackIdentity: String {
         "\(playback.title)|\(playback.artist)|\(playback.album)"
     }
@@ -1522,6 +1608,20 @@ struct LyricsWindowView: View {
         libraryAddState = .idle
         suggestLessApplied = false
         suggestLessUserToggled = false
+        // ⚠️ 平台链接的加载必须放在下面那道 `isAppleMusicPlayer` 早退**之前** ——
+        // 非 AM 播放器(QQ/网易云)正是要用它的那一档,放在早退之后等于永远不加载。
+        platformLinks = nil
+        let linkArtist = playback.artist, linkTitle = playback.title, linkAlbum = playback.album
+        if !linkTitle.isEmpty {
+            Task.detached(priority: .userInitiated) {
+                let links = EnrichCacheReader.platformLinks(
+                    artist: linkArtist, title: linkTitle, album: linkAlbum)
+                await MainActor.run {
+                    guard generation == moreMenuStateGeneration else { return }
+                    platformLinks = links
+                }
+            }
+        }
         guard isAppleMusicPlayer else { return }
         Task.detached(priority: .userInitiated) {
             guard await MusicAutomationPermission.checkAppleMusicSafely(askIfNeeded: false) else { return }
@@ -1608,15 +1708,32 @@ struct LyricsWindowView: View {
     /// music:// URL——直接对着一个还没起来的 Music.app 发深链会被冷启动流程吞掉,
     /// 用户看到的是"打开了 Music.app,但没跳到点的这个页面"(2026-08-23 用户实测反馈,
     /// 见 MusicAutomationPermission.ensureMusicAppRunning 注释)。
+    /// 目录页跳转的去处。原来只有「专辑 / 艺人」两种,停播页「最近听过」行点击要的是
+    /// **曲目页**,补第三档。
+    private enum CatalogTarget { case album, artist, track }
+
     private func openCatalogPage(album: Bool) {
-        let title = playback.title
-        let artist = playback.artist
+        openCatalogPage(title: playback.title, artist: playback.artist,
+                        target: album ? .album : .artist)
+    }
+
+    /// 任意 (歌名, 歌手) 的目录页跳转 —— 停播页那几块要跳的不是「当前播放」而是历史行,
+    /// 所以曲目字段必须由调用方传进来,不能像上面那样从 playback 现读(停播时它是空的)。
+    private func openCatalogPage(title: String, artist: String, target: CatalogTarget) {
+        guard !title.isEmpty || !artist.isEmpty else { return }
         Task.detached(priority: .userInitiated) {
             let storefront = Locale.current.region?.identifier.lowercased() ?? "us"
             guard let item = await MusicCatalogSearch.resolve(
                 title: title, artist: artist, storefront: storefront) else { return }
-            let https = album ? (item.collectionViewUrl ?? item.trackViewUrl) : item.artistViewUrl
+            let https: String?
+            switch target {
+            case .album: https = item.collectionViewUrl ?? item.trackViewUrl
+            case .artist: https = item.artistViewUrl
+            case .track: https = item.trackViewUrl ?? item.collectionViewUrl
+            }
             guard let url = MusicCatalogSearch.musicSchemeURL(https) else { return }
+            // Music.app 没在跑时直接 open(music://…) 会被 LaunchServices 吞掉(冷启动走到
+            // 能接 Apple Event 之前 URL 就丢了),表现成「App 打开了但停在上次退出的页面」。
             await MusicAutomationPermission.ensureMusicAppRunning()
             await MainActor.run { NSWorkspace.shared.open(url) }
         }
@@ -1629,8 +1746,14 @@ struct LyricsWindowView: View {
         // 放后台取,取到再补进面板。
         let artist = playback.artist, title = playback.title, album = playback.album
         Task.detached(priority: .userInitiated) {
+            // 一次缓存读同时供两处用(来源 + 各平台链接):都走 EnrichCacheReader,
+            // mtime 没变时是 µs 级,不值得拆成两个 task。
             let info = EnrichCacheReader.sourceInfo(artist: artist, title: title, album: album)
-            await MainActor.run { infoLyricsSource = info?.lyricsSource }
+            let links = EnrichCacheReader.platformLinks(artist: artist, title: title, album: album)
+            await MainActor.run {
+                infoLyricsSource = info?.lyricsSource
+                platformLinks = links
+            }
         }
     }
 
@@ -1906,6 +2029,11 @@ struct LyricsWindowView: View {
             InfoPanelRow(label: L10n.t("歌词"), value: lyricsKind, onArtwork: hasArtworkBackground)
             if let source = infoLyricsSource, !source.isEmpty {
                 InfoPanelRow(label: L10n.t("来源"), value: sourceDisplayName(source), onArtwork: hasArtworkBackground)
+            }
+            // 「网页」行(2026-08-24):把 collector 早就存好的各平台链接摆出来。菜单里只给
+            // **当前播放器**那一个平台,这里给全部 —— 一行 chips 放得下,而菜单每多一行都在变长。
+            if let links = platformLinks, !links.isEmpty {
+                InfoPanelLinksRow(links: links, onArtwork: hasArtworkBackground)
             }
             // 收听档案(2026-08-22,Last.fm 系列 #5):累计次数 + 首次/上次听。连着账号
             // 才有;首次/上次是面板打开那一刻才发的两个请求(user.getTrackScrobbles),
@@ -3667,6 +3795,47 @@ private struct InfoPanelRow: View {
                 .font(.system(size: 13, weight: .medium))
                 .foregroundStyle(.primary)
                 .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+}
+
+/// 简介面板的「网页」行:把 collector 早就存好的各平台链接摆成一排可点的短标签。
+///
+/// ⚠️ 标签写「网页」而不是「打开」:这里面只有 Apple Music 那个会**进 App**(music:// ),
+/// QQ 音乐和网易云都只能落到**浏览器**(理由见 PlatformLinks 头注)。所以 Apple Music 那一项
+/// 单独标了个 ↗ 之外的区别不做 —— 与其在一行里解释两种落点,不如统一说"网页"、把唯一的
+/// 例外(AM 进 App)当成惊喜。
+private struct InfoPanelLinksRow: View {
+    let links: PlatformLinks
+    var onArtwork: Bool = false
+
+    private var items: [(String, URL)] {
+        var out: [(String, URL)] = []
+        if let u = links.qqSong { out.append((L10n.t("QQ 音乐"), u)) }
+        if let u = links.neteaseSong { out.append((L10n.t("网易云音乐"), u)) }
+        if let u = links.appleMusic { out.append((L10n.t("Apple Music"), u)) }
+        return out
+    }
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+            Text(L10n.t("网页"))
+                .font(.system(size: 12))
+                .foregroundStyle(onArtwork ? Color.white.opacity(0.75) : Color.secondary)
+                .shadow(color: onArtwork ? .black.opacity(0.5) : .clear, radius: 1.5)
+                .frame(width: 52, alignment: .leading)
+            HStack(spacing: 12) {
+                ForEach(items, id: \.0) { name, url in
+                    Button {
+                        NSWorkspace.shared.open(url)
+                    } label: {
+                        Text(name + " ↗")
+                            .font(.system(size: 13, weight: .medium))
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(Color.accentColor)
+                }
+            }
         }
     }
 }

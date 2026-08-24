@@ -3564,6 +3564,77 @@ do {
                 "开关: 拉丁原文本来就没有罗马音")
     expectEqual(romanization(lyrics: "[00:01.00]Hello", roma: "[00:01.00]Hello", scripts: []),
                 "Hello", "开关: other 文字不受三个语言开关管辖")
+
+    // ---- 「整首歌 vs 一行」:中文歌引用日文词不该让整首歌都出日文注音(2026-08-24) ----
+    //
+    // 用户报「怎么中文也注音了」:《这样吧》是中文歌,但引用了三次「サヨナラ」。原来的
+    // 判据是"整首歌出现过一个假名就算日文",于是每行汉字都走日语形态分析 ——
+    // 「就从明天开始吧」出成了「就从 mei ten 开始 吧」(mei ten = 明天的日文音读)。
+
+    // 判据本身:含假名的**行**占比。
+    expectEqual(Romanizer.kanaLineRatio("你好\n世界"), 0, "行占比: 纯中文 0%")
+    expectEqual(Romanizer.kanaLineRatio("你好\nサヨナラ\n世界\n再见"), 0.25, "行占比: 4 行里 1 行有假名")
+    // 空行不计入分母(歌词里空行很多)。
+    expectEqual(Romanizer.kanaLineRatio("你好\n\n   \nサヨナラ"), 0.5, "行占比: 空行不进分母")
+    expectEqual(Romanizer.kanaLineRatio(""), 0, "行占比: 空文本 0,不除零")
+
+    // 真实形状:《这样吧》75 行里 3 行含假名(4.0%)→ 不是日文歌。
+    let zhWithJa = (Array(repeating: "就从明天开始吧", count: 72) + Array(repeating: "サヨナラ", count: 3))
+        .joined(separator: "\n")
+    expectEqual(Romanizer.looksJapanese(zhWithJa), true, "旧判据: 出现过假名 → 会误判成日文")
+    expectEqual(Romanizer.looksJapaneseSong(zhWithJa), false, "新判据: 4% 的行有假名 → 不是日文歌")
+    expectEqual(Romanizer.songScript(of: zhWithJa), .chinese, "整首: 引用日文词的中文歌仍是中文")
+    // 真·中日混唱(陶喆《My Anata》18/44 = 40.9%)同样不算日文歌 —— 它的日文行靠**按行**
+    // 判定拿到罗马字,不需要把整首歌算成日文(那会连中文行一起注音)。
+    let mixed = (Array(repeating: "我的あなた", count: 18) + Array(repeating: "你对我笑一次", count: 26))
+        .joined(separator: "\n")
+    expectEqual(Romanizer.looksJapaneseSong(mixed), false, "整首: 41% 的行有假名仍不算日文歌")
+    // 真日文歌:几乎每行都含假名。
+    let jaSong = Array(repeating: "こんにちは世界", count: 30).joined(separator: "\n")
+    expectEqual(Romanizer.looksJapaneseSong(jaSong), true, "整首: 日文歌行行有假名 → 是日文歌")
+    expectEqual(Romanizer.songScript(of: jaSong), .japanese, "整首: 日文歌 → japanese")
+
+    // 按行判定:有假名/谚文的行按自己算,**纯汉字**行才退回整首歌。
+    expectEqual(Romanizer.script(ofLine: "サヨナラ", song: .chinese), .japanese,
+                "按行: 中文歌里的假名行仍是日文")
+    expectEqual(Romanizer.script(ofLine: "就从明天开始吧", song: .chinese), .chinese,
+                "按行: 中文歌里的纯汉字行是中文")
+    expectEqual(Romanizer.script(ofLine: "明日", song: .japanese), .japanese,
+                "按行: 日文歌里的纯汉字行退回整首歌的判断(汉字读音中日歧义)")
+    expectEqual(Romanizer.script(ofLine: "안녕", song: .japanese), .korean, "按行: 谚文行是韩文")
+    expectEqual(Romanizer.script(ofLine: "Hello", song: .japanese), .other, "按行: 拉丁行不受管辖")
+
+    // ---- 引擎级端到端:同一首歌里两种行各按各的开关 ----
+    func romanizationAt(
+        _ ms: Int, lyrics: String, scripts: RomanizationScripts
+    ) -> String? {
+        let engine = LyricsSyncEngine()
+        engine.load(lyrics: lyrics, lyricsTr: "", lyricsRoma: "", lyricsYRC: "",
+                    romanizationScripts: scripts)
+        return engine.activeLine(atMs: ms)?.romanization
+    }
+    // 《这样吧》的形状:大量中文行 + 三行「サヨナラ」。默认配置(日文开、中文关)。
+    var songLines: [String] = []
+    for i in 0..<24 {
+        songLines.append(String(format: "[%02d:%02d.00]就从明天开始吧", i / 60, i % 60))
+    }
+    songLines.append("[00:30.00]サヨナラ")
+    let zhSongWithJa = songLines.joined(separator: "\n")
+    // 中文行:默认配置下中文关 → 一个字都不该注音(改动前它会出「就从 mei ten 开始 吧」)。
+    expectEqual(romanizationAt(1_000, lyrics: zhSongWithJa, scripts: .default), nil,
+                "端到端: 中文歌的中文行不注音(哪怕歌里引用了日文词)")
+    // 同一首歌的日文行:日文开 → 照样出罗马字。这是「按行判」相对「按整首歌判」的全部价值。
+    let jaLineRoma = romanizationAt(30_000, lyrics: zhSongWithJa, scripts: .default)
+    expectEqual(jaLineRoma != nil, true, "端到端: 同一首歌里引用的日文行仍出罗马字")
+    expectEqual(jaLineRoma?.contains("sayonara") ?? false, true,
+                "端到端: 那一行的罗马字是 sayonara(实际 \(jaLineRoma ?? "nil"))")
+    // 把中文也打开时,中文行出的必须是**拼音**、不是日文音读。
+    let zhLineRoma = romanizationAt(1_000, lyrics: zhSongWithJa,
+                                    scripts: [.japanese, .korean, .chinese])
+    expectEqual(zhLineRoma?.contains("mei") ?? true, false,
+                "端到端: 中文行开了注音也是拼音,不是日文音读 mei ten(实际 \(zhLineRoma ?? "nil"))")
+    expectEqual(zhLineRoma?.contains("m\u{00ED}ng") ?? false, true,
+                "端到端: 中文行的注音是带声调的拼音 m\u{00ED}ng(实际 \(zhLineRoma ?? "nil"))")
 }
 
 // ---- 计次规则(ScrobbleRule):必须与 collector 的 listenThreshold/minTrackSecs 一致 ----
@@ -3936,6 +4007,165 @@ do {
         worst = max(worst, abs(Double(interpolate(elapsed) - reference)))
     }
     expectEqual(worst < 0.001, true, "配速: 首尾不等长时关键帧仍与逐帧采样一致(最大偏差 \(worst))")
+
+    // ---- 提前量:开唱之前一步都不许滚(2026-08-24) ----
+    //
+    // 用户报的:「已经到下一行了,但是还没开始染色的时候不需要滚动,现在是会滚」。单行展示面
+    // 会在上一句唱完、本句还没开唱之前就把本句亮出来(CompactLyricLead.revealMs,最长 5 秒),
+    // 那段时间它是**没有染色**的;而 head 原来只看 baseHoldSeconds(1.5 秒),提前量一超过它,
+    // 一句还没开唱的歌词就自己先滚起来了。实测提前量平均 0.90s、p90 1.75s、p95 3.03s
+    // (12893 个行间隙),所以这不是边缘情况。
+    //
+    // 下面这组断言钉的是三件事:① 提前量之内绝不滚;② 提前量为 0 时逐字段维持旧行为;
+    // ③ 扣掉提前量之后"能滚完就必须滚完"(提前量不能变成放弃滚完的借口)。
+
+    /// 滚到末尾要多久(首停 + 走完全程),带提前量的版本。
+    func finishTimeLed(chars: Int, dwell: Double?, lead: Double) -> Double {
+        let offset = maxOffset(chars: chars)
+        let p = MenuBarMarquee.pacing(
+            maxOffset: offset, averageCharWidth: charWidth, dwellSeconds: dwell,
+            leadInSeconds: lead)
+        return p.headHoldSeconds + Double(offset / p.pointsPerSecond)
+    }
+
+    // ① 首停必须**至少**盖住提前量 —— 这就是"开唱之前不滚"落到参数上的形状。
+    //    取值覆盖实测分布(中位 0.22、均值 0.90、p90 1.75、p95 3.03)和上限 5.0。
+    var scrolledTooEarly: [String] = []
+    var loopedTooSoon: [String] = []
+    for lead in [0.0, 0.22, 0.9, 1.75, 3.03, 5.0] {
+        for dwell in [2.0, 3.0, 4.0, 6.0, 12.0, 30.0] where dwell > lead {
+            for chars in [12, 30, 60, 120] {
+                let p = MenuBarMarquee.pacing(
+                    maxOffset: maxOffset(chars: chars), averageCharWidth: charWidth,
+                    dwellSeconds: dwell, leadInSeconds: lead)
+                if p.headHoldSeconds + 1e-9 < lead {
+                    scrolledTooEarly.append("\(chars)字/\(dwell)秒/提前\(lead)秒"
+                        + "→首停\(p.headHoldSeconds)")
+                }
+                // 顺手钉住"一轮盖住整个显示窗口":提前量是折进首停的,而滚动动画
+                // repeatCount = .infinity —— 一旦周期短于显示窗口,第二轮会在句子还在唱
+                // 的时候把首停(现在含提前量,最长 5 秒)**再停一遍**,末尾几个字闪一下跳回
+                // 开头。loopGuardSeconds 那条老约束在带提前量时同样不能破。
+                let cycle = p.headHoldSeconds
+                    + Double(maxOffset(chars: chars) / p.pointsPerSecond) + p.tailHoldSeconds
+                if cycle + 1e-9 < dwell + MenuBarMarquee.loopGuardSeconds {
+                    loopedTooSoon.append("\(chars)字/\(dwell)秒/提前\(lead)秒→周期\(cycle)")
+                }
+            }
+        }
+    }
+    expectEqual(scrolledTooEarly, [], "配速: 提前量之内一步都不滚(首停 >= 提前量)")
+    expectEqual(loopedTooSoon, [], "配速: 带提前量时一轮仍盖住显示窗口,不会在句中循环重停")
+
+    // ② 提前量为 0 时必须跟改动前**逐字段**一致 —— 绝大多数换行(中位间隙 0.22s)靠这条
+    //    保证观感没被顺手改掉;行级 LRC 的提前量恒为 0,整条也走这一档。
+    var drifted: [String] = []
+    for chars in [12, 30, 60] {
+        for dwell in [nil, 2.0, 4.0, 8.0, 20.0] as [Double?] {
+            let before = MenuBarMarquee.pacing(
+                maxOffset: maxOffset(chars: chars), averageCharWidth: charWidth,
+                dwellSeconds: dwell)
+            let after = MenuBarMarquee.pacing(
+                maxOffset: maxOffset(chars: chars), averageCharWidth: charWidth,
+                dwellSeconds: dwell, leadInSeconds: 0)
+            if before != after { drifted.append("\(chars)字/\(String(describing: dwell))") }
+        }
+    }
+    expectEqual(drifted, [], "配速: 提前量为 0 时跟改动前逐字段一致")
+
+    // ③ 扣掉提前量之后只要走得完就必须走完 —— 抬高 head 之后 travel 是从 dwell 里扣掉
+    //    head 算的,所以不能滚的那段时间是**自动**从行程里去掉的,不会重蹈 2026-08-17
+    //    那个"按偏大的 dwell 配速、长句只滚出开头一小截"的坑。
+    var missedWithLead: [String] = []
+    for chars in [12, 18, 24, 30, 40] {
+        for lead in [0.22, 0.9, 1.75, 3.0] {
+            for dwell in [3.0, 4.0, 6.0, 8.0, 12.0] {
+                guard lead + travelAtCap(chars: chars) <= dwell else { continue } // 物理上不可能
+                if finishTimeLed(chars: chars, dwell: dwell, lead: lead) > dwell + 0.001 {
+                    missedWithLead.append("\(chars)字/\(dwell)秒/提前\(lead)秒")
+                }
+            }
+        }
+    }
+    expectEqual(missedWithLead, [], "配速: 扣掉提前量之后能滚完的就一定滚完")
+
+    // 一整轮(首停+行程+尾停)仍然覆盖整个显示窗口 —— 否则换句之前会先循环回开头,
+    // 末尾几个字闪一下就跳走(loopGuardSeconds 那条老约束,提前量不能把它破掉)。
+    let led = MenuBarMarquee.pacing(
+        maxOffset: maxOffset(chars: 30), averageCharWidth: charWidth,
+        dwellSeconds: 8.0, leadInSeconds: 5.0)
+    expectEqual(led.headHoldSeconds, 5.0, "配速: 提前量 5 秒时首停就是 5 秒")
+    expectEqual(led.headHoldSeconds + Double(maxOffset(chars: 30) / led.pointsPerSecond)
+                    + led.tailHoldSeconds >= 8.0, true,
+                "配速: 带提前量时一整轮仍覆盖显示窗口,不会在换句前循环回开头")
+
+    // 不知道停留多久那条路(最后一句/拿不到时间轴)也要等到开唱 —— 它原来固定 1.5 秒。
+    let unknownLed = MenuBarMarquee.pacing(
+        maxOffset: 300, averageCharWidth: charWidth, dwellSeconds: nil, leadInSeconds: 3.0)
+    expectEqual(unknownLed.headHoldSeconds, 3.0, "配速: 停留时长未知时也要等到开唱才滚")
+
+    // 脏数据:提前量比 revealMs 还长(上游时钟/时间轴出错)。head 是**死等**,不钳住的话
+    // 一次脏数据就能把跑马灯钉死不动。
+    let overlong = MenuBarMarquee.pacing(
+        maxOffset: 300, averageCharWidth: charWidth, dwellSeconds: 2.0, leadInSeconds: 9.0)
+    expectEqual(overlong.headHoldSeconds, Double(CompactLyricLead.revealMs) / 1000,
+                "配速: 提前量超出 revealMs 被钳住,不会把跑马灯钉死")
+    expectEqual(overlong.pointsPerSecond.isFinite && overlong.pointsPerSecond > 0
+                    && overlong.tailHoldSeconds >= 0, true,
+                "配速: 提前量脏数据下参数仍然有限且非负")
+    // 负数(时钟回拨)按 0 处理,不能算出负的首停。
+    expectEqual(MenuBarMarquee.pacing(maxOffset: 300, averageCharWidth: charWidth,
+                                      dwellSeconds: 4.0, leadInSeconds: -3.0),
+                MenuBarMarquee.pacing(maxOffset: 300, averageCharWidth: charWidth,
+                                      dwellSeconds: 4.0),
+                "配速: 提前量为负(时钟回拨)时按 0 处理")
+
+    // 带提前量的关键帧同样必须跟逐帧采样描述同一段运动 —— 上面两组只验了提前量为 0 的情况,
+    // 而 CA 那边真正跑的就是这条关键帧。
+    /// 关键帧线性插值(CA 的 .linear 就是这么算的)。刻意不跟上面那个同名 helper 合并:
+    /// 它捕获的是上面那组 frames,而**同一个文件里已经有两个 interpolate**了,再抽一层
+    /// 公共函数只会让"这条断言在验哪一组关键帧"更难看清。
+    func interpolateLed(_ frames: MenuBarMarquee.ScrollKeyframes, _ elapsed: Double) -> CGFloat {
+        var t = elapsed.truncatingRemainder(dividingBy: frames.duration)
+        if t < 0 { t += frames.duration }
+        let normalized = t / frames.duration
+        for i in 1 ..< frames.keyTimes.count {
+            let t0 = frames.keyTimes[i - 1], t1 = frames.keyTimes[i]
+            guard normalized <= t1 else { continue }
+            guard t1 > t0 else { return frames.offsets[i] }
+            let ratio = (normalized - t0) / (t1 - t0)
+            return frames.offsets[i - 1] + (frames.offsets[i] - frames.offsets[i - 1]) * CGFloat(ratio)
+        }
+        return frames.offsets[frames.offsets.count - 1]
+    }
+    guard let ledFrames = MenuBarMarquee.scrollKeyframes(
+        maxOffset: maxOffset(chars: 30), pointsPerSecond: led.pointsPerSecond,
+        headHoldSeconds: led.headHoldSeconds, tailHoldSeconds: led.tailHoldSeconds) else {
+        expectEqual(true, false, "配速: 带提前量该滚的参数却没有关键帧")
+        fatalError("unreachable")
+    }
+    var ledWorst = 0.0
+    for i in 0 ... 400 {
+        let elapsed = Double(i) / 25
+        let reference = MenuBarMarquee.scrollOffset(
+            elapsed: elapsed, maxOffset: maxOffset(chars: 30),
+            pointsPerSecond: led.pointsPerSecond,
+            headHoldSeconds: led.headHoldSeconds, tailHoldSeconds: led.tailHoldSeconds)
+        ledWorst = max(ledWorst, abs(Double(interpolateLed(ledFrames, elapsed) - reference)))
+    }
+    expectEqual(ledWorst < 0.001, true,
+                "配速: 带提前量时关键帧仍与逐帧采样一致(最大偏差 \(ledWorst))")
+    // 提前量走完之前偏移必须**恒为 0**(这是"没染色不滚"最直接的形状)。
+    var movedEarly: [String] = []
+    for i in 0 ... 50 {
+        let elapsed = 5.0 * Double(i) / 50
+        let offset = MenuBarMarquee.scrollOffset(
+            elapsed: elapsed, maxOffset: maxOffset(chars: 30),
+            pointsPerSecond: led.pointsPerSecond,
+            headHoldSeconds: led.headHoldSeconds, tailHoldSeconds: led.tailHoldSeconds)
+        if offset != 0 { movedEarly.append("\(elapsed)s→\(offset)") }
+    }
+    expectEqual(movedEarly, [], "配速: 提前量 5 秒之内偏移恒为 0")
 }
 
 // ---- 署名行:关键词连写 ----
@@ -4239,14 +4469,20 @@ do {
     expectEqual(unreachable, 0, "描边取色: 全区间扫描只要够得到就一定达标")
 }
 
-// ---- 封面 URL:要原图时去掉网易云的 param(2026-08-17) ----
+// ---- 封面 URL:三个图源各自顶到最大那一档(2026-08-17 网易云 / 2026-08-24 QQ+Apple) ----
 //
-// 用户报「歌词窗口里封面非常模糊」。根因是系统 Now Playing 给的封面只有 100×100
-// (网易云客户端的限制),而那张卡最大 920px。替代图取自 collector 缓存的 cover_url,
-// 但那个 URL 尾巴上带着给小图用的 `?param=600y600` —— 网易云那个参数**只降不升**,
-// 实测原生 800×800 的封面带上它就变 600×600。所以要原图必须把它摘掉。
+// 2026-08-17:用户报「歌词窗口里封面非常模糊」。根因是系统 Now Playing 给的封面只有
+// 100×100(网易云客户端的限制),而那张卡最大 920px。替代图取自 collector 缓存的
+// cover_url,但那个 URL 尾巴上带着给小图用的 `?param=600y600` —— 网易云那个参数
+// **只降不升**,实测原生 800×800 的封面带上它就变 600×600。所以要原图必须把它摘掉。
 //
-// 断言重点是"只对网易云动手":别的图源的查询参数没核实过,乱摘可能直接 404。
+// 2026-08-24:用户报「QQ 音乐这个封面很模糊」。QQ 音乐客户端报的系统封面是 300×300,
+// 缓存里那张替代图当时也只有 300(QQ 源)/600(Apple 源)—— 顶到 820px 的卡上是 2.73×
+// 和 1.37× 放大。这两个图源的尺寸档不在查询串里而在**路径**里,所以改路径:QQ 提到 800
+// (实测天花板,1000/2000 都 404),Apple 提到 1200(实测要多大给多大)。
+//
+// 断言重点从"只对网易云动手"改成"只对**实测过**的形状动手":每个图源认死自己那一种
+// URL 形状,形状对不上一个字都不许改 —— 改错了是 404、整张封面消失,比"软一点"糟得多。
 do {
     func native(_ s: String) -> String {
         EnrichCacheReader.nativeSizedCoverURL(URL(string: s)!).absoluteString
@@ -4274,15 +4510,74 @@ do {
         "https://p1.music.126.net/abc==/1099.jpg?x=1",
         "封面URL: 只摘 param，别的查询参数留着")
 
-    // 非网易云:一个字都不许改,包括名字恰好也叫 param 的。
+    // ---- QQ 音乐:路径里的尺寸档提到 800(2026-08-24) ----
     expectEqual(
-        native("https://is1-ssl.mzstatic.com/image/thumb/a.jpg/600x600bb.jpg"),
-        "https://is1-ssl.mzstatic.com/image/thumb/a.jpg/600x600bb.jpg",
-        "封面URL: Apple 图源不动")
+        native("https://y.qq.com/music/photo_new/T002R300x300M0000017AN4b0vdUG1.jpg"),
+        "https://y.qq.com/music/photo_new/T002R800x800M0000017AN4b0vdUG1.jpg",
+        "封面URL: QQ 300 提到 800")
+    expectEqual(
+        native("https://y.qq.com/music/photo_new/T002R500x500M0000017AN4b0vdUG1.jpg"),
+        "https://y.qq.com/music/photo_new/T002R800x800M0000017AN4b0vdUG1.jpg",
+        "封面URL: QQ 500 提到 800")
+    // 已经到顶就不动 —— 800 之上是 404,不许再往上试。
+    expectEqual(
+        native("https://y.qq.com/music/photo_new/T002R800x800M0000017AN4b0vdUG1.jpg"),
+        "https://y.qq.com/music/photo_new/T002R800x800M0000017AN4b0vdUG1.jpg",
+        "封面URL: QQ 已经 800 就不动")
+    // 比 800 还大的档(理论上不该出现)也不许被降回来。
+    expectEqual(
+        native("https://y.qq.com/music/photo_new/T002R1000x1000M000abc.jpg"),
+        "https://y.qq.com/music/photo_new/T002R1000x1000M000abc.jpg",
+        "封面URL: QQ 超过 800 的档不降回来")
+    // 只换尺寸段,查询串一个字不碰(证明改的是路径、不是 param 那套)。
     expectEqual(
         native("https://y.qq.com/music/photo_new/T002R500x500M000.jpg?param=600y600"),
-        "https://y.qq.com/music/photo_new/T002R500x500M000.jpg?param=600y600",
-        "封面URL: QQ 图源即使带 param 也不动")
+        "https://y.qq.com/music/photo_new/T002R800x800M000.jpg?param=600y600",
+        "封面URL: QQ 只换尺寸段、查询串照留")
+    // 歌手头像那个域名同一套规则(T001 前缀,实测也给 800)。
+    expectEqual(
+        native("https://y.gtimg.cn/music/photo_new/T001R300x300M000004UdEhN3Hb7vN_3.jpg"),
+        "https://y.gtimg.cn/music/photo_new/T001R800x800M000004UdEhN3Hb7vN_3.jpg",
+        "封面URL: QQ 歌手头像域名同样处理")
+    // QQ 域名但不是图床路径 —— 不许动(歌曲页链接被误改就跳不过去了)。
+    expectEqual(
+        native("https://y.qq.com/n/ryqq/songDetail/000FTx4w1obE49"),
+        "https://y.qq.com/n/ryqq/songDetail/000FTx4w1obE49",
+        "封面URL: QQ 非图床路径不动")
+    // 图床路径但没有尺寸段 —— 形状对不上就不动。
+    expectEqual(
+        native("https://y.qq.com/music/photo_new/mystery.jpg"),
+        "https://y.qq.com/music/photo_new/mystery.jpg",
+        "封面URL: QQ 图床但没有尺寸段就不动")
+
+    // ---- Apple:末段 600x600bb.jpg 提到 1200(2026-08-24) ----
+    expectEqual(
+        native("https://is1-ssl.mzstatic.com/image/thumb/a.jpg/600x600bb.jpg"),
+        "https://is1-ssl.mzstatic.com/image/thumb/a.jpg/1200x1200bb.jpg",
+        "封面URL: Apple 600 提到 1200")
+    expectEqual(
+        native("https://is1-ssl.mzstatic.com/image/thumb/a.jpg/1200x1200bb.jpg"),
+        "https://is1-ssl.mzstatic.com/image/thumb/a.jpg/1200x1200bb.jpg",
+        "封面URL: Apple 已经 1200 就不动")
+    // 比目标档更大的不许降回来 —— 那是白扔已经拿到的分辨率。
+    expectEqual(
+        native("https://is1-ssl.mzstatic.com/image/thumb/a.jpg/2000x2000bb.jpg"),
+        "https://is1-ssl.mzstatic.com/image/thumb/a.jpg/2000x2000bb.jpg",
+        "封面URL: Apple 2000 不降回 1200")
+    // 末段不是 `<W>x<H>bb.<jpg|png>` 这一种形状的一律不动 —— 没实测过,改了可能 404。
+    expectEqual(
+        native("https://is1-ssl.mzstatic.com/image/thumb/a.jpg/600x600sr.jpg"),
+        "https://is1-ssl.mzstatic.com/image/thumb/a.jpg/600x600sr.jpg",
+        "封面URL: Apple 非 bb 末段不动")
+    expectEqual(
+        native("https://is1-ssl.mzstatic.com/image/thumb/a.jpg/600x600bb-60.jpg"),
+        "https://is1-ssl.mzstatic.com/image/thumb/a.jpg/600x600bb-60.jpg",
+        "封面URL: Apple 带裁切后缀的末段不动")
+    // 仿冒 host 不算 Apple(判据是"等于或以 . 分隔的子域",同网易云那条)。
+    expectEqual(
+        native("https://evilmzstatic.com/image/thumb/a.jpg/600x600bb.jpg"),
+        "https://evilmzstatic.com/image/thumb/a.jpg/600x600bb.jpg",
+        "封面URL: 仿冒 Apple 域名不动")
     // host 后缀匹配不能被"看着像"的域名骗过去。
     expectEqual(
         native("https://evil-music.126.net.example.com/a.jpg?param=600y600"),
@@ -6016,6 +6311,270 @@ do {
     expectEqual(L.displayDurationMs(prevLineEndMs: 9_000, startMs: 10_000,
                                     lineEndMs: 13_000, nextStartMs: nil, fallbackEndMs: 30_000),
                 21_000, "最后一句:给了曲末兜底就用它")
+
+    // ⑧ leadInMs(2026-08-24):这一行**出现之后、开唱之前**那段"已显示但还没染色"的提前量。
+    //    菜单栏跑马灯拿它当"起步前至少等多久" —— 用户报的「还没开始染色的时候不需要滚动,
+    //    现在是会滚」就是这段时间里滚了。用例跟上面 ⑦ 一一对应,因为两者**必须**用同一个
+    //    "出现"(appearMs):一个算窗口有多长、一个算窗口前半段有多长,漂了就是"提前量比
+    //    整个窗口还长"。
+    expectEqual(L.leadInMs(prevLineEndMs: 8_000, startMs: 10_000), 2_000,
+                "提前量:上一句 8s 唱完、本句 10s 开唱 → 提前 2s")
+    expectEqual(L.leadInMs(prevLineEndMs: 9_800, startMs: 10_000), 200,
+                "提前量:短间隙就是那点间隙本身")
+    expectEqual(L.leadInMs(prevLineEndMs: 2_000, startMs: 10_000), reveal,
+                "提前量:长间奏在前时被 revealMs 夹住")
+    expectEqual(L.leadInMs(prevLineEndMs: 11_000, startMs: 10_000), 0,
+                "提前量:时间戳交叠(上一句'唱完'比本句开始还晚)时为 0,不出负数")
+    expectEqual(L.leadInMs(prevLineEndMs: nil, startMs: 10_000), 0,
+                "提前量:行级 LRC 恒为 0(resolve 对它从不抢跑),不会被无谓地推迟滚动")
+
+    //    不变式:提前量 + 开唱到下场那段 == 整个显示窗口。两者共用 appearMs 就是为了这条。
+    for (prevEnd, start, end) in [(8_000, 10_000, 13_000), (9_800, 10_000, 13_000),
+                                  (2_000, 10_000, 13_000), (11_000, 10_000, 13_000)] {
+        let window = L.displayDurationMs(prevLineEndMs: prevEnd, startMs: start,
+                                         lineEndMs: end, nextStartMs: 40_000, fallbackEndMs: nil)
+        expectEqual(L.leadInMs(prevLineEndMs: prevEnd, startMs: start) + (end - start), window,
+                    "提前量 + 开唱到下场 == 整个显示窗口(prevEnd=\(prevEnd))")
+    }
+}
+
+// MARK: - 提前量经引擎出到 TickResolution(2026-08-24)
+//
+// 上面那组只测了 CompactLyricLead 这个纯函数,测不到引擎**喂给它什么**。而 tickQuery 里
+// 那句 `prevLineEndMs: gapLineEndMs(at: i - 1)` 的 `i - 1` 正是最容易写错的地方 ——
+// 写成 `i` 编译一样过、纯函数断言一条都不会红,但提前量会恒等于 0(拿本行的结束当上一行的
+// 结束),整个修复静默失效。所以这里从 YRC 一路测到 TickResolution。
+do {
+    // 三行逐字:第 0 行 10.0~11.0s、第 1 行 13.0~14.0s(与上一行隔 2.0s = 提前量)、
+    // 第 2 行 30.0s(第 1 行后面接一段长间奏,所以第 1 行唱完就下场)。
+    let yrc = "[10000,1000](10000,500,0)aa (10500,500,0)bb \n"
+        + "[13000,1000](13000,500,0)cc (13500,500,0)dd \n"
+        + "[30000,1000](30000,500,0)ee (30500,500,0)ff \n"
+    let engine = LyricsSyncEngine()
+    engine.load(lyrics: "", lyricsTr: "", lyricsRoma: "", lyricsYRC: yrc, preferWordLevel: true)
+
+    // 第 0 行还在唱:显示本行,它前面没有行 → 提前量 0(不能因为"没有上一行"就算出负数)。
+    let singing = engine.tickQuery(atMs: 10_500)
+    expectEqual(singing.compactLine?.plainText, "aa bb ", "引擎提前量: 还在唱时显示本行")
+    expectEqual(singing.compactLeadInMs, 0, "引擎提前量: 第一行没有上一行 → 0")
+
+    // 第 0 行唱完(11.0s)→ 短间隙,立刻亮出第 1 行,但它 13.0s 才开唱 → 提前量 2000ms。
+    // ⚠️ 这条就是 `i - 1` 的照妖镜:取成 `i` 会算成 leadInMs(prevEnd: 14000, start: 13000) = 0。
+    let lead = engine.tickQuery(atMs: 11_500)
+    expectEqual(lead.compactLine?.plainText, "cc dd ", "引擎提前量: 唱完即切到下一句")
+    expectEqual(lead.compactLeadInMs, 2_000, "引擎提前量: 上一行 11.0s 唱完、本行 13.0s 开唱 → 2000ms")
+    // 提前量是这一行**显示窗口的属性**,不是"还剩多久开唱" —— 窗口里任意时刻都是同一个值,
+    // 否则 pacing 会随每次 refresh 变、把跑马灯反复打回开头。
+    expectEqual(engine.tickQuery(atMs: 12_999).compactLeadInMs, 2_000,
+                "引擎提前量: 窗口内恒定,不随播放位置递减")
+    // 跟 dwell 同一个"出现"原点:2000(提前) + 1000(开唱到唱完) = 3000(整个显示窗口)。
+    expectEqual(lead.compactDwellMs, 3_000, "引擎提前量: 显示窗口 = 提前量 + 开唱到下场")
+
+    // 长间奏中段(第 1 行 14.0s 唱完、第 2 行 30.0s 才开始):♪ 占位,没有行也就没有提前量。
+    let idle = engine.tickQuery(atMs: 20_000)
+    expectEqual(idle.compactLine == nil && idle.compactPlaceholder, true, "引擎提前量: 长间奏中段是 ♪")
+    expectEqual(idle.compactLeadInMs, nil, "引擎提前量: 没有可显示的行时为 nil")
+
+    // 长间奏尾段(第 2 行开始前 5s 内)→ 亮出第 2 行,提前量被 revealMs 夹住。
+    let capped = engine.tickQuery(atMs: 26_000)
+    expectEqual(capped.compactLine?.plainText, "ee ff ", "引擎提前量: 进入提前量窗口亮出下一句")
+    expectEqual(capped.compactLeadInMs, CompactLyricLead.revealMs,
+                "引擎提前量: 长间奏在前时被 revealMs 夹住")
+
+    // ---- 最后一句:曲长喂进来之后窗口也是**行常量**(2026-08-24) ----
+    //
+    // 不喂曲长时最后一句的 compactDwellMs 恒为 nil,上层退回 currentLineDwellSeconds ——
+    // 那个值按 currentLineIndex 取行,提前量窗口里指的是**已唱完的上一句**(错基数),
+    // 而且开唱那一刻 currentLineIndex 前进 → 值突变 → pacing 变 → 滚动被重装。首停含
+    // 提前量,重装就等于把提前量**再等一遍**(最长 5 秒),最后一句可能整段唱完都不滚。
+    // 所以这两条断言钉的是「同一句在开唱前后拿到同一个窗口」——它才是"不重装"的前提。
+    let last = engine.tickQuery(atMs: 26_000, trackEndMs: 40_000)   // 第 2 行的提前量窗口内
+    let lastSinging = engine.tickQuery(atMs: 30_500, trackEndMs: 40_000) // 同一行,已开唱
+    // 出现 = max(第 1 行唱完 14000, 30000 − reveal 5000) = 25000;消失 = 曲末 40000。
+    expectEqual(last.compactDwellMs, 15_000, "引擎提前量: 最后一句用曲末兜底算出窗口")
+    expectEqual(lastSinging.compactDwellMs, last.compactDwellMs,
+                "引擎提前量: 最后一句的窗口在开唱前后**不变**(否则 pacing 变→滚动重装→提前量白等两遍)")
+    expectEqual(lastSinging.compactLeadInMs, last.compactLeadInMs,
+                "引擎提前量: 最后一句的提前量在开唱前后也不变")
+    // 不给曲长仍然退回 nil —— 这是上层兜底存在的唯一理由,别让它悄悄消失。
+    expectEqual(engine.tickQuery(atMs: 26_000).compactDwellMs, nil,
+                "引擎提前量: 不给曲长时最后一句仍算不出窗口(交给上层兜底)")
+    // 非最后一句跟曲长无关,喂了也一样。
+    expectEqual(engine.tickQuery(atMs: 11_500, trackEndMs: 40_000).compactDwellMs, 3_000,
+                "引擎提前量: 非最后一句的窗口不受曲长影响")
+
+    // 行级 LRC 一律不抢跑 → 提前量恒为 0,滚动行为一字不变。
+    let lineLevel = LyricsSyncEngine()
+    lineLevel.load(lyrics: "[00:10.00]aabb\n[00:13.00]ccdd\n", lyricsTr: "", lyricsRoma: "",
+                   lyricsYRC: "")
+    let lrcTick = lineLevel.tickQuery(atMs: 11_500)
+    expectEqual(lrcTick.compactLine?.plainText, "aabb", "引擎提前量: 行级 LRC 不抢跑")
+    expectEqual(lrcTick.compactLeadInMs, 0, "引擎提前量: 行级 LRC 提前量恒为 0")
+}
+
+// MARK: - 停播页:最近记录「第 N 次听」的换算(RecentPlayOrdinal,2026-08-24 从 UI 下沉)
+do {
+    // 站位的 playCountKey:跟真实那个(LastfmStatsService.playCountKey)同口径 —— 只
+    // trim + 小写,**不折叠任何写法变体**。这正是测试的重点:表是按这把「不折叠」的尺子
+    // 建的,而「比这一行更新的同曲收听」必须按 familyKey 的折叠族数,两把尺子不能混用。
+    let key: (String, String) -> String = { a, t in
+        (a.trimmingCharacters(in: .whitespaces) + "|" + t.trimmingCharacters(in: .whitespaces))
+            .lowercased()
+    }
+
+    // 同一首歌连着听三次(列表倒序:最新在前),总数 10 → 10 / 9 / 8
+    let three = [(artist: "方大同", title: "月亮代表我的心"),
+                 (artist: "方大同", title: "月亮代表我的心"),
+                 (artist: "方大同", title: "月亮代表我的心")]
+    expectEqual(RecentPlayOrdinal.ordinals(rows: three,
+                                           totals: [key("方大同", "月亮代表我的心"): 10],
+                                           playCountKey: key),
+                [10, 9, 8], "第 N 次听:同一首连听三次逐次递减")
+
+    // 回归用户 2026-08-21 报的「第 15 次听下面紧跟第 21 次听」:同一首歌的两种写法在
+    // 表里是两个不同的 playCountKey(各自存着**整族合并后**的同一个总数),但它们属于同
+    // 一个折叠族 —— 按 playCountKey 去数「更新的同曲收听」会一次都减不掉,两行显示同一
+    // 个 N。必须按 familyKey 数,后面那行才会 −1。
+    let twoForms = [(artist: "周杰倫", title: "一路向北"),
+                    (artist: "周杰伦", title: "一路向北")]
+    expectEqual(RecentPlayOrdinal.ordinals(
+        rows: twoForms,
+        totals: [key("周杰倫", "一路向北"): 16, key("周杰伦", "一路向北"): 16],
+        playCountKey: key),
+                [16, 15], "第 N 次听:繁简两种写法同页时按折叠族递减,不是两行同一个 N")
+
+    // 查不到总数 → nil(宁可不显示)
+    expectEqual(RecentPlayOrdinal.ordinals(rows: [(artist: "无名", title: "无此曲")],
+                                           totals: [:], playCountKey: key),
+                [nil], "第 N 次听:表里没有这首就不显示")
+
+    // 竞态:窗口里的同族收听比总数还多 → 算出 ≤0 的位置一律 nil,不显示「第 0 次」
+    expectEqual(RecentPlayOrdinal.ordinals(rows: three,
+                                           totals: [key("方大同", "月亮代表我的心"): 2],
+                                           playCountKey: key),
+                [2, 1, nil], "第 N 次听:算出 ≤0 时留空,不显示错的")
+}
+
+// MARK: - 停播页:收听总览的派生算术(IdleListeningStats,2026-08-24)
+do {
+    let cal = Calendar.current
+    let fmt = DateFormatter()
+    fmt.dateFormat = "yyyy-MM-dd"
+    let dayKey: (Date) -> String = { fmt.string(from: $0) }
+    // 固定时刻,断言不随运行日漂移
+    let today = Date(timeIntervalSince1970: 1_787_000_000)
+    func off(_ n: Int) -> String { dayKey(cal.date(byAdding: .day, value: n, to: today)!) }
+
+    let counts = [off(0): 5, off(-1): 3, off(-3): 7]
+    expectEqual(IdleListeningStats.series(dailyCounts: counts, endingAt: today, days: 5,
+                                          calendar: cal, dayKey: dayKey),
+                [0, 7, 0, 3, 5], "走势序列:正序、缺的天补 0(桶只存非零天)")
+
+    // 环比:前一个 7 天 100 → 最近 7 天 113
+    let wow = IdleListeningStats.weekOverWeekDelta(
+        dailyCounts: [off(-13): 100, off(-6): 113], today: today, calendar: cal, dayKey: dayKey)
+    expectEqual(wow.map { Int(($0 * 100).rounded()) } ?? -999, 13, "环比:113 比 100 = +13%")
+    expectEqual(IdleListeningStats.weekOverWeekDelta(
+        dailyCounts: [off(-2): 5], today: today, calendar: cal, dayKey: dayKey) == nil,
+                true, "环比:上一个 7 天为 0 时不给百分比(不显示 ∞/0%)")
+
+    expectEqual(IdleListeningStats.dailyAverage(dailyCounts: ["a": 1, "b": 4])?.average, 3,
+                "日均:5 ÷ 2 四舍五入")
+    expectEqual(IdleListeningStats.dailyAverage(dailyCounts: ["a": 1, "b": 4])?.days, 2,
+                "有记录天数 = 桶里的键数")
+    expectEqual(IdleListeningStats.dailyAverage(dailyCounts: [:]) == nil, true,
+                "空桶:算不出日均")
+
+    // 走势图要按下标反查「这一根是哪天」(标峰值日期 / 悬停读数)。日期序列必须跟 series
+    // **同一套对齐口径**,否则图上第 N 根和报出来的日期会错位。
+    let ds = IdleListeningStats.days(endingAt: today, days: 5, calendar: cal)
+    expectEqual(ds.count, 5, "日期序列:长度与 series 一致")
+    expectEqual(ds.map(dayKey), (-4 ... 0).map(off), "日期序列:正序、末位是今天,与 series 对齐")
+
+}
+
+// MARK: - 停播页:选句(LyricQuotePicker,2026-08-24 用户报「经常只显示半句」后重做)
+do {
+    func L(_ ms: Int, _ t: String) -> LyricQuotePicker.Line {
+        LyricQuotePicker.Line(timeMs: ms, text: t)
+    }
+    typealias Q = LyricQuotePicker
+
+    // 核心回归:一句话被拆到两行上时必须并回来。单摆「我们」没有任何意义,
+    // 这正是用户报的形状(LRC 的行是打轴单位、不是句子单位)。
+    expectEqual(Q.phrases([L(20_000, "我们"), L(20_800, "都有难忘的回忆"),
+                           L(28_000, "这一句自己就能站住不必再并")]),
+                [["我们", "都有难忘的回忆"], ["这一句自己就能站住不必再并"]],
+                "选句:碎片行并回整句,本身成话的行不动它")
+
+    // 以悬挂词(在)结尾的行,并上下一行之后就完整了 —— 这是「修好」而不是「弃用」
+    expectEqual(Q.phrases([L(0, "我把所有的回忆都留在"), L(9_000, "另一个夏天的午后阳光里")]),
+                [["我把所有的回忆都留在", "另一个夏天的午后阳光里"]],
+                "选句:悬挂结尾能并到下一行就并,不直接丢")
+
+    // 并不上(整首只有这一行)时宁可整条弃用,绝不摆一句以「在」结尾的半句
+    expectEqual(Q.phrases([L(0, "我把所有的回忆都留在")]), [],
+                "选句:修不好的悬挂结尾整条弃用")
+
+    // 以附着成分开头 = 这是被切下来的尾巴
+    expectEqual(Q.phrases([L(0, "的时候我们都还很年轻啊")]), [],
+                "选句:以「的」开头的尾巴不摆")
+
+    // 噪音:段落标记 / 字符复读 / 整行括号伴唱
+    expectEqual(Q.phrases([L(0, "Rap2："), L(1_000, "面面面面面"),
+                           L(2_000, "（和声重复的伴唱）"), L(3_000, "这一句是正常的歌词内容")]),
+                [["这一句是正常的歌词内容"]],
+                "选句:段落标记/复读/括号伴唱全部挡掉")
+
+    // 「歌名 - 歌手」被当正文存进来的抬头行。判据收得很窄:整行归一化后**正好等于**
+    // 歌名+歌手才算,不能用「包含歌名」——那会把《成都》里「如果你正好在成都」一起杀掉。
+    expectEqual(Q.phrases([L(0, "天气先生 - 方大同"), L(4_000, "这一句是正常的歌词内容")],
+                          trackTitle: "天气先生", trackArtist: "方大同"),
+                [["这一句是正常的歌词内容"]], "选句:抬头行挡掉,正常歌词留下")
+    expectEqual(Q.phrases([L(0, "如果你正好在成都的街头走一走")], trackTitle: "成都"),
+                [["如果你正好在成都的街头走一走"]], "选句:含歌名的正常歌词不能被误杀")
+
+    // ⚠️ 一行带多个时间戳(副歌复用)时 LRCParser 按**文件顺序**各生成一条,数组并不按时间
+    // 有序。不先排序,行间时间差会算出负数、断句全乱 —— 这条断言钉的就是「已经排过序」。
+    expectEqual(Q.phrases([L(90_000, "副歌这一句在第二次出现"),
+                           L(10_000, "开头这一句才是最早的"),
+                           L(11_000, "紧跟着的短句")]),
+                [["开头这一句才是最早的", "紧跟着的短句"], ["副歌这一句在第二次出现"]],
+                "选句:先按时间排序再断句(多时间戳行不是有序的)")
+
+    // 同一句在不同时间重复出现只留一条
+    expectEqual(Q.phrases([L(0, "重复出现的同一句歌词"), L(20_000, "重复出现的同一句歌词")]),
+                [["重复出现的同一句歌词"]], "选句:同文本去重")
+}
+
+// MARK: - 各平台跳转链接的纯判据(PlatformLinks,2026-08-24)
+do {
+    typealias P = PlatformLinks
+    // 搜索兜底 vs 真·歌曲页。判据与 collector 的 isQQSearchFallbackURL 同源(qq.go:49-54)——
+    // 把兜底链接当"这首歌的页面"给出去,用户点了会被丢到搜索结果页还得再点一次。
+    expectEqual(P.isQQSearchFallback("https://y.qq.com/n/ryqq/search?w=%E7%A8%BB%E9%A6%99"), true,
+                "QQ 链接:搜索兜底认得出来")
+    expectEqual(P.isQQSearchFallback("https://y.qq.com/n/ryqq/songDetail/000FTx4w1obE49"), false,
+                "QQ 链接:真·歌曲页不算兜底")
+    expectEqual(P.isQQSearchFallback(""), false, "QQ 链接:空串不算兜底")
+
+    expectEqual(P.qqAlbumURL(mid: "002B4bAK3AC0Cw")?.absoluteString,
+                "https://y.qq.com/n/ryqq/albumDetail/002B4bAK3AC0Cw", "QQ 专辑页 URL")
+    expectEqual(P.qqArtistURL(mid: "0025NhlN2yWrP4")?.absoluteString,
+                "https://y.qq.com/n/ryqq/singer/0025NhlN2yWrP4", "QQ 歌手页 URL")
+    expectEqual(P.qqAlbumURL(mid: "") == nil, true, "缺 mid 就不给链接(调用方据此隐藏入口)")
+
+    // mid 形状闸。y.qq.com 是 SPA 空壳、**假 mid 也会 302**,服务端不校验 —— 链接对不对
+    // 没有任何远端反馈,只能在本地把明显不是 mid 的东西挡掉。
+    expectEqual(P.isPlausibleQQMid("002B4bAK3AC0Cw"), true, "mid 闸:正常 mid 通过")
+    expectEqual(P.isPlausibleQQMid("abc/def"), false, "mid 闸:带斜杠的路径片段挡掉")
+    expectEqual(P.isPlausibleQQMid("abc?x=1"), false, "mid 闸:带查询串挡掉")
+    expectEqual(P.isPlausibleQQMid(String(repeating: "a", count: 33)), false, "mid 闸:超长挡掉")
+    expectEqual(P.isPlausibleQQMid("a_b-c"), true, "mid 闸:下划线与短横线是合法字符")
+
+    expectEqual(PlatformLinks(appleMusic: nil, qqSong: nil, qqAlbum: nil,
+                              qqArtist: nil, neteaseSong: nil).isEmpty, true,
+                "一个链接都没有时 isEmpty")
 }
 
 if failures == 0 {
