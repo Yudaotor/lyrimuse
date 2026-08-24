@@ -1,6 +1,6 @@
 # 11. 歌词管理窗口
 
-> 最后核对：2026-08-22 · 基线：05767ae+工作树
+> 最后核对：2026-08-24 · 基线：97c56bd+工作树
 
 ## 定位
 
@@ -118,6 +118,8 @@
 | 决策弹窗 | LyricsManager/LyricsDecisionSheet.swift；数据 decision.go |
 | collector 重启 | LyricsManager/CollectorControl.swift（launchctl kickstart -k + 真实退出码检查） |
 | 列宽 | LyricsManager/LyricsColumnWidthsStore.swift + LyrimuseCore/Lyrics/LyricsColumnLayout.swift |
+| 窗口几何持久化 | LyricsManagerView.swift `LyricsManagerWindowFramePersistence` / `LyricsManagerWindowCapture`（frame + 屏幕稳定 ID，恢复时先认屏再夹进可见区） |
+| 详情页顶部三种排法 | LyricsManagerView.swift `header` 的 `ViewThatFits` + `headerActions` / `headerActionsWrapped` |
 | 文件导出/导入 | collector 侧 lyricsexport.go / lyricsimport.go |
 
 ## 设计决策与已知坑
@@ -141,3 +143,27 @@
    走 first-resolve，或用「联网搜索候选歌词」直接采纳（代价是又写一次 `manual_lyrics`）。
    没有就地改这道闸，是因为它防的降级是真的（第 09 章 §9 的实测依据）；要修得先能区分
    「这一轮超时」和「这个源根本没有这首歌」这两件事，而现在的返回值里没有这个信息。
+
+9. **窗口位置/尺寸自己存**（2026-08-24 补，姐妹窗口「歌词窗口」2026-08-22 就修过、这扇当时漏了）。
+   只靠 SwiftUI `Window(id:)` 的系统状态恢复不够：系统那套存了坐标却**不认屏幕**，多显示器拔插
+   一次或改一次缩放，窗口会落在一块已经不存在的屏幕坐标上。`LyricsManagerWindowFramePersistence`
+   存 frame + `ScreenIdentity` 的稳定屏幕 ID，恢复时那块屏没了就整个放弃交回系统默认，认得出但
+   分辨率变了就夹进它当前的 `visibleFrame`；落盘去抖 400ms（跟列宽拖动同一个修法）。
+10. ⚠️ **英文界面下整页错位**（2026-08-24 用户报，已修）。表象：左边歌名列被窗口左边界**硬切**
+   且没有省略号、表头与列表行整体错开、右边详情栏的说明文字和按钮被右边界切掉；中文完全正常。
+   病根是 `header` 的 `ViewThatFits` **两个候选都含整排 `.fixedSize()` 的 `headerActions`** —— 
+   两个候选的最小宽度因此是同一个数，"装不下"那一档等于不存在，详情栏有了一个压不下去的硬下限。
+   离屏实测（`NSHostingController.sizeThatFits`）这一排的最小宽度：中文 527pt、**英文 684pt**，
+   加 `detailView` 的 20pt 内边距 ≈ 724pt。这个下限还会被 AppKit 的 `NSSplitView` autosave
+   （UserDefaults 里 `NSSplitView Subview Frames lyrics-manager, SidebarNavigationSplitView`，
+   存的是**绝对**子视图 frame、不认窗口现在多宽）固化下来：这台机器上实测存的是「侧栏 948 +
+   详情 723 = 1671」，而窗口只有 1328pt，两栏各往外溢出 180pt——量到的错位正好就是 180pt。
+   修法是给 `ViewThatFits` 补第三个候选 `headerActionsWrapped`（按钮折两排，**故意不加**
+   `.fixedSize()`——最后一个候选是"都装不下也得用它"的兜底，给它固定尺寸就等于没有兜底）：
+   最小宽度降到 77pt、理想宽度 EN 365 / ZH 284，中文那两档候选照旧先命中、观感不变。
+   ⚠️ 走过的弯路：先试过在 `LyricsManagerWindowFramePersistence` 里加一段"子视图宽度求和 >
+   bounds 就 `adjustSubviews()`"的 AppKit 兜底，**离屏样例当场证伪**——SwiftUI 托管的那个
+   `NSSplitView` 的 `subviews` 有 8 个（`[1328, 698, 630, 12, 630, 0.5, 15, 15]`，原点还互相
+   重叠），求和判据在健康布局上也会命中（2973.5 > 1328），而 `adjustSubviews()` 调了根本不动。
+   要再碰分栏几何，先写离屏样例验证，别照"两栏两个 subview"这个直觉写。
+

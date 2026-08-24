@@ -195,12 +195,125 @@ private struct ColumnDividerHandle: View {
     }
 }
 
+// 窗口位置/尺寸/所在屏幕的持久化(2026-08-24 补——「歌词窗口」2026-08-22 修过同一类
+// 问题,这扇姐妹窗口当时漏补)。这扇窗完全靠 SwiftUI `Window(id:)` 的系统状态恢复,而
+// 系统那套的问题不在"存不存",在**它不认识屏幕**:多显示器下拔插一次或换个分辨率,
+// 窗口经常回到主屏、或者落在一块已经不存在的屏幕的坐标上——用户 2026-08-24 报的
+// "歌词管理打开是这样的,左边都不展示了"正是这个:表格标题列被从左边硬切、且各行掉的
+// 字符数不一样、没有省略号,跟 SwiftUI 自己"行内容超宽时右边省略号截断"的行为对不上,
+// 唯一解释是窗口有一截落在了当前屏幕看不见的地方。
+//
+// 不复制 LyricsWindowView.swift 里 LyricsWindowController 整个类——那个还带置顶/
+// 伪全屏/红绿灯重定位,跟这扇窗口无关;这里只抽最小的一份:存 frame(绝对屏幕坐标)+
+// 所在屏幕的稳定 ID,恢复时先认屏幕,那块屏没了就整个放弃、交回系统默认,绝不拿旧坐标
+// 往现有屏幕上硬摆;认得出屏幕但分辨率/缩放变了就把 frame 夹进它当前的可见区。
+// 两把 key 用独立命名空间,不跟歌词窗口那两把混。
+@MainActor
+private final class LyricsManagerWindowFramePersistence: ObservableObject {
+    private static let frameKey = "np:lyricsManagerWindowFrame"
+    private static let screenKey = "np:lyricsManagerWindowScreenID"
+
+    private weak var window: NSWindow?
+    private var frameObserver: NSObjectProtocol?
+    private var resizeObserver: NSObjectProtocol?
+    private var persistFrameTask: Task<Void, Never>?
+
+    /// 首次(以及每次 SwiftUI 重新求值 NSViewRepresentable 时)调用,只在真的换了一个
+    /// 窗口实例时才重新挂观察者——同一扇窗口重复 attach 是空操作。
+    func attach(_ window: NSWindow) {
+        guard self.window !== window else { return }
+        self.window = window
+        // 先恢复再挂观察者:顺序反过来的话,恢复这一次 setFrame 会立刻触发 didMove/
+        // didResize、把刚读出来的值原样再写一遍(无害但没意义),更糟的是恢复失败
+        // (屏幕不在了)时会把系统摆的那个默认位置当成用户意图存下来。
+        restorePersistedFrame(window)
+        if let frameObserver { NotificationCenter.default.removeObserver(frameObserver) }
+        if let resizeObserver { NotificationCenter.default.removeObserver(resizeObserver) }
+        // didMove 和 didResize 合用一个回调:两者要存的东西完全一样,而拖动窗口边角同时
+        // 产生这两个通知,分开挂只会写两遍。
+        let persist: @Sendable (Notification) -> Void = { [weak self] _ in
+            MainActor.assumeIsolated { self?.schedulePersistFrame() }
+        }
+        frameObserver = NotificationCenter.default.addObserver(
+            forName: NSWindow.didMoveNotification, object: window, queue: .main, using: persist)
+        resizeObserver = NotificationCenter.default.addObserver(
+            forName: NSWindow.didResizeNotification, object: window, queue: .main, using: persist)
+    }
+
+    /// 拖动/缩放停下来之后再落盘,不去抖的话拖动期间每帧一次 UserDefaults 写
+    /// (跟这个窗口里列宽拖动那次性能审计,2026-08-19,松手才落盘,同一个坑同一个修法)。
+    private func schedulePersistFrame() {
+        persistFrameTask?.cancel()
+        persistFrameTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(400))
+            guard !Task.isCancelled else { return }
+            self?.persistFrame()
+        }
+    }
+
+    private func persistFrame() {
+        // 窗口还没真正上屏时 frame 可能是 SwiftUI 给的中间值,不足为据。
+        guard let window, window.isVisible else { return }
+        let defaults = UserDefaults.standard
+        defaults.set(NSStringFromRect(window.frame), forKey: Self.frameKey)
+        // 屏幕认不出来(极少数情况 window.screen 为 nil)时把旧值清掉,而不是留一个跟
+        // 这次 frame 对不上的屏幕 ID——下次恢复会拿错屏幕做校验。
+        if let screen = window.screen, let id = ScreenIdentity.id(of: screen) {
+            defaults.set(id, forKey: Self.screenKey)
+        } else {
+            defaults.removeObject(forKey: Self.screenKey)
+        }
+    }
+
+    @discardableResult
+    private func restorePersistedFrame(_ window: NSWindow) -> Bool {
+        let defaults = UserDefaults.standard
+        guard let raw = defaults.string(forKey: Self.frameKey) else { return false }
+        let saved = NSRectFromString(raw)
+        guard saved.width > 0, saved.height > 0 else { return false }
+        // 认屏幕:存过 ID 就必须那块屏还在。不在 = 用户换了显示器配置,旧坐标没有
+        // 任何意义。
+        guard let id = defaults.string(forKey: Self.screenKey),
+              let screen = ScreenIdentity.screen(withID: id) else { return false }
+        // 夹进那块屏的可见区。存的时候屏幕分辨率可能跟现在不同(接同一块屏但改了缩放),
+        // 不夹的话窗口会有一部分挂在屏幕外。
+        let visible = screen.visibleFrame
+        var frame = saved
+        frame.size.width = min(frame.width, visible.width)
+        frame.size.height = min(frame.height, visible.height)
+        frame.origin.x = min(max(frame.minX, visible.minX), visible.maxX - frame.width)
+        frame.origin.y = min(max(frame.minY, visible.minY), visible.maxY - frame.height)
+        window.setFrame(frame, display: false)
+        return true
+    }
+}
+
+/// 用一个零尺寸的 NSView 拿到真实 NSWindow 交给 controller——跟 LyricsWindowView.swift
+/// 的 LyricsWindowCapture 同一个套路。
+private struct LyricsManagerWindowCapture: NSViewRepresentable {
+    let controller: LyricsManagerWindowFramePersistence
+
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView(frame: .zero)
+        DispatchQueue.main.async {
+            if let window = view.window { controller.attach(window) }
+        }
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        if let window = nsView.window { controller.attach(window) }
+    }
+}
+
 // 歌词管理窗口:浏览目前 collector 缓存了哪些歌的歌词、来源是什么,支持手动纠正内容、
 // 联网重新搜索候选歌词(见 LyricsSearchSheet/LyricsSearchService)、
 // 或整条删除(强制下次播放重新解析)。改动通过 EnrichCacheStore 落盘+踢一脚重启
 // collector 生效(见该文件顶部注释,解释为什么必须这么做而不是直接改内存)。
 struct LyricsManagerView: View {
     @ObservedObject private var store = EnrichCacheStore.shared
+    // 窗口位置/尺寸/所在屏幕的持久化,见 LyricsManagerWindowFramePersistence 类头注。
+    @StateObject private var windowFrame = LyricsManagerWindowFramePersistence()
     // 只为了让这个独立窗口(跟 SettingsView 不在同一棵视图树里)在手动切换语言时
     // 重新渲染。经 AppLanguageObserver 窄代理(见文件顶部),不整对象订阅 AppSettings。
     @ObservedObject private var languageSettings = AppLanguageObserver.shared
@@ -901,6 +1014,9 @@ struct LyricsManagerView: View {
             }
         }
         .frame(minWidth: 780, idealWidth: 1040, minHeight: 540, idealHeight: 640)
+        // 零尺寸探针拿真实 NSWindow 交给 windowFrame——放哪一层都行(只借视图树把
+        // NSView 挂进窗口,不参与布局),挂在这里离上面 .frame 最近,读起来是同一件事。
+        .background(LyricsManagerWindowCapture(controller: windowFrame).frame(width: 0, height: 0))
         // 刻意挂在最外层 NavigationSplitView 上 —— 跟侧栏那条链上的「清空全部缓存」、
         // List 上的「删除」分处三个不同层级。同一条修饰符链上叠多个呈现修饰符历史上有
         // 互相顶掉的问题(见那两处各自的注释),分层挂就不用去论证"这个版本会不会冲突"。
@@ -1289,6 +1405,16 @@ struct LyricsManagerView: View {
     /// ⚠️ ViewThatFits 比的是各候选的**理想尺寸**,而 Text 的理想宽度是整串不换行的宽度
     /// (`lineLimit` 不影响它)。所以歌名一长就会直接落到第二种布局,而不是先把标题挤到
     /// 换行 —— 这正是想要的效果,别把它当成"判断得不准"去修。
+    ///
+    /// 2026-08-24 补第三种布局(按钮折两排)。原来两种候选**都**含整排 `.fixedSize()` 的
+    /// headerActions,所以两个候选的最小宽度是同一个数 —— 等于这一栏有一个压不下去的硬
+    /// 下限,"装不下"那一档根本不存在。离屏实测(NSHostingController.sizeThatFits)这一排
+    /// 的最小宽度:中文 527pt、英文 **684pt**("Resolution decision / Auto re-match /
+    /// Search Online for Lyrics / Delete Saved Lyrics" 逐个都比中文长一截),加上
+    /// detailView 的 20pt 内边距 ≈ 724pt。用户 2026-08-24 报的"英文下这页全错位"就是它:
+    /// 详情栏缩不到 724 以下,跟侧栏加起来超出窗口宽度,两栏各往外溢出一半(实测各 180pt)
+    /// —— 左边歌名被窗口边界硬切(不是截断,没有省略号,因为它画到了窗口外面)、右边说明
+    /// 文字和按钮被切掉、表头还跟列表行错开同样的 180pt。
     private func header(_ summary: EnrichCacheStore.Summary) -> some View {
         ViewThatFits(in: .horizontal) {
             HStack(alignment: .top) {
@@ -1299,6 +1425,10 @@ struct LyricsManagerView: View {
             VStack(alignment: .leading, spacing: 10) {
                 headerTitleBlock(summary)
                 headerActions(summary)
+            }
+            VStack(alignment: .leading, spacing: 10) {
+                headerTitleBlock(summary)
+                headerActionsWrapped(summary)
             }
         }
     }
@@ -1318,51 +1448,90 @@ struct LyricsManagerView: View {
         }
     }
 
-    private func headerActions(_ summary: EnrichCacheStore.Summary) -> some View {
-        // 常用操作挪到顶部,不用翻到页面最下面才能点。`.fixedSize()` 留着:两种布局下它都
-        // 该按完整宽度渲染("联网搜..."/"删除本..."这种半截文案没意义),而"空间不够"现在
-        // 由上面 ViewThatFits 换行来解决,不再靠压缩谁。
-        HStack(spacing: 8) {
-                // 「解析决策」:collector 做决定那一刻固化的候选表(见 LyricsDecisionSheet)。
-                // 只在这条真的有存档时显示 —— 老条目没有,摆一个点了没内容的按钮更糟。
-                if summary.hasDecision {
-                    Button {
-                        showDecisionSheet = true
-                    } label: {
-                        Label(L10n.t("解析决策"), systemImage: "list.number")
-                    }
-                    .help(L10n.t("当初为什么选了这份歌词：当时的候选、得分与拒绝原因"))
-                }
-                // 「重新自动匹配」——按自动解析那套规则重跑一轮、直接采用算法选出的那一份。
-                // 文案刻意不写「智能」:「智能算法」在这个产品里是设置页「匹配算法」的一个具体
-                // 档位(另一档是「顺序优先」),写上去对选了顺序优先的用户就是在说谎(真正的
-                // 冠军由 collector 按他选的那一档算,见 searchLyricsPick)。
-                Button {
-                    Task { await runRematch(key: summary.key, summary: summary) }
-                } label: {
-                    Label(L10n.t("重新自动匹配"), systemImage: "wand.and.stars")
-                }
-                .disabled(rematchRunningKey != nil)
-                .help(L10n.t("重新联网跑一遍匹配，直接采用算法选出的那一份，不用自己挑；跟设置里的「匹配算法」一致"))
-                Button {
-                    showSearchSheet = true
-                } label: {
-                    Label(L10n.t("联网搜索候选歌词"), systemImage: "magnifyingglass")
-                }
-                // 同一时刻只允许一个 collector 子进程(LyricsSearchService 每次 performSearch
-                // 开头无条件 cancelRunning)。自动匹配飞行途中打开这个弹窗会把它杀掉,自动那边
-                // 收到非零退出码、误报"搜索失败" —— 索性挡住。
-                .disabled(rematchRunningKey != nil)
-                // 跟工具栏按钮、右键菜单走同一条 requestDelete → 侧栏那个确认弹窗的路径:
-                // 只留一处弹窗,文案/统计/快照逻辑不会两处漂移。N==1 时 batchDeleteTitle 会
-                // 自动用带歌名的那条既有文案,跟改动之前一模一样。
-                Button(role: .destructive) {
-                    requestDelete([summary.key])
-                } label: {
-                    Label(L10n.t("删除本地记录"), systemImage: "trash")
-                }
+    // 四颗按钮拆成各自的 builder:同一组要在「一排」和「折成两排」两种排法里各用一次
+    // (见 header 的 ViewThatFits),拆开才不用把 label / disabled / help 抄两份 —— 抄两份
+    // 就是迟早只改一边的那种漂移。
+    @ViewBuilder
+    private func decisionButton(_ summary: EnrichCacheStore.Summary) -> some View {
+        // 「解析决策」:collector 做决定那一刻固化的候选表(见 LyricsDecisionSheet)。
+        // 只在这条真的有存档时显示 —— 老条目没有,摆一个点了没内容的按钮更糟。
+        if summary.hasDecision {
+            Button {
+                showDecisionSheet = true
+            } label: {
+                Label(L10n.t("解析决策"), systemImage: "list.number")
             }
-            .fixedSize()
+            .help(L10n.t("当初为什么选了这份歌词：当时的候选、得分与拒绝原因"))
+        }
+    }
+
+    private func rematchButton(_ summary: EnrichCacheStore.Summary) -> some View {
+        // 「重新自动匹配」——按自动解析那套规则重跑一轮、直接采用算法选出的那一份。
+        // 文案刻意不写「智能」:「智能算法」在这个产品里是设置页「匹配算法」的一个具体
+        // 档位(另一档是「顺序优先」),写上去对选了顺序优先的用户就是在说谎(真正的
+        // 冠军由 collector 按他选的那一档算,见 searchLyricsPick)。
+        Button {
+            Task { await runRematch(key: summary.key, summary: summary) }
+        } label: {
+            Label(L10n.t("重新自动匹配"), systemImage: "wand.and.stars")
+        }
+        .disabled(rematchRunningKey != nil)
+        .help(L10n.t("重新联网跑一遍匹配，直接采用算法选出的那一份，不用自己挑；跟设置里的「匹配算法」一致"))
+    }
+
+    private func searchButton(_ summary: EnrichCacheStore.Summary) -> some View {
+        Button {
+            showSearchSheet = true
+        } label: {
+            Label(L10n.t("联网搜索候选歌词"), systemImage: "magnifyingglass")
+        }
+        // 同一时刻只允许一个 collector 子进程(LyricsSearchService 每次 performSearch
+        // 开头无条件 cancelRunning)。自动匹配飞行途中打开这个弹窗会把它杀掉,自动那边
+        // 收到非零退出码、误报"搜索失败" —— 索性挡住。
+        .disabled(rematchRunningKey != nil)
+    }
+
+    private func deleteButton(_ summary: EnrichCacheStore.Summary) -> some View {
+        // 跟工具栏按钮、右键菜单走同一条 requestDelete → 侧栏那个确认弹窗的路径:
+        // 只留一处弹窗,文案/统计/快照逻辑不会两处漂移。N==1 时 batchDeleteTitle 会
+        // 自动用带歌名的那条既有文案,跟改动之前一模一样。
+        Button(role: .destructive) {
+            requestDelete([summary.key])
+        } label: {
+            Label(L10n.t("删除本地记录"), systemImage: "trash")
+        }
+    }
+
+    private func headerActions(_ summary: EnrichCacheStore.Summary) -> some View {
+        // 常用操作挪到顶部,不用翻到页面最下面才能点。`.fixedSize()` 留着:这一排要么按
+        // 完整宽度渲染,要么整个让位给下面 headerActionsWrapped 那种折两排的排法
+        // ("联网搜..."/"删除本..."这种半截文案没意义)。
+        HStack(spacing: 8) {
+            decisionButton(summary)
+            rematchButton(summary)
+            searchButton(summary)
+            deleteButton(summary)
+        }
+        .fixedSize()
+    }
+
+    /// 同一组按钮折成两排 —— ViewThatFits 的**最后一个**候选。
+    ///
+    /// 故意**不**加 `.fixedSize()`:最后一个候选的语义是"前面都装不下时也得用它",给它固定
+    /// 尺寸等于这一栏又有了一个压不下去的硬下限,兜底就白做了(2026-08-24 那个 bug 的病根
+    /// 正是"两个候选都 fixedSize",见 header 的注释)。真到了连两排都放不下的宽度,按钮文字
+    /// 被截断也好过整栏溢出到窗口外面。
+    private func headerActionsWrapped(_ summary: EnrichCacheStore.Summary) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                decisionButton(summary)
+                rematchButton(summary)
+            }
+            HStack(spacing: 8) {
+                searchButton(summary)
+                deleteButton(summary)
+            }
+        }
     }
 
     private func infoStrip(_ summary: EnrichCacheStore.Summary) -> some View {
