@@ -188,7 +188,7 @@ enum SettingsSidebarItem: Hashable {
 
 struct SettingsView: View {
     // 只用来在语言手动切换时让侧边栏/详情页的整棵子树重新渲染(sidebarLabel/
-    // navigationTitle 这些顶层 chrome 文字不属于任何一个具体 tab,原来没有任何一处
+    // selectedCategoryTitle 这些顶层 chrome 文字不属于任何一个具体 tab,原来没有任何一处
     // @ObservedObject,加了才会响应 AppSettings.appLanguage 的变化)——本身不在 body
     // 里读它的其它字段。
     @ObservedObject private var languageSettings = AppSettings.shared
@@ -291,7 +291,15 @@ struct SettingsView: View {
                 case nil: ContentUnavailableView(L10n.t("选择左侧的设置分类"), systemImage: "gearshape")
                 }
             }
-            .navigationTitle(navigationTitle)
+            // 2026-08-25 拆开:窗口**标题**钉死成「设置」,当前分类改用副标题。原来标题栏
+            // 跟着选中的分类走(仿系统"系统设置"那套"标题=当前面板名"的做法),但那套设计
+            // 假设这扇窗口有自己独占的 Dock 图标——这个 App 的 Dock/Window 菜单是"设置"/
+            // "歌词管理"/"歌词窗口"四扇窗共用的**同一个**图标,右键菜单里蹦出一条"通用"或
+            // "外观",完全看不出它是设置窗口(用户 2026-08-25 反馈"想在 Dock 里认出哪扇是
+            // 哪扇")。副标题只出现在标题栏、不会进 Window 菜单/Dock 右键列表,分类上下文
+            // 照样留得住,只是不再顶替窗口的身份。
+            .navigationTitle(L10n.t("设置"))
+            .navigationSubtitle(selectedCategoryTitle)
         }
         // 原来是给 TabView 焊死的 440pt 改出来的 minWidth/idealWidth——现在换成
         // NavigationSplitView,多了一列侧边栏,整体相应加宽;同样不设 maxWidth/固定
@@ -336,7 +344,7 @@ struct SettingsView: View {
         .tag(SettingsSidebarItem.tab(tab))
     }
 
-    private var navigationTitle: String {
+    private var selectedCategoryTitle: String {
         switch selection {
         case .tab(let tab): return tab.title
         case .account(let destination): return destination.title

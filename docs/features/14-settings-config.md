@@ -57,6 +57,7 @@
 
 - **开机启动**（LoginItemManager）：不用 SMAppService，直接写经典 LaunchAgent plist 到 `~/Library/LaunchAgents`（label `me.yudaotor.lyrimuse`），`RunAtLoad=true` **无** KeepAlive（前台 GUI 工具，Cmd-Q 退出后不该被拉活）。指向 build.sh 安装的 `.app` 路径，开发调试路径不写入。
 - **在 Dock 中显示**：切换 NSApp activationPolicy（accessory ↔ regular）；关闭后只留菜单栏图标。accessory 策略下打开任何窗口都要先 `NSApp.activate` 否则 openWindow 静默无效（多处调用点共用这个坑的修法）。
+- **这个永久偏好关着时，辅助窗口自己借一个 Dock 图标**（`AuxiliaryWindowActivation.swift`，2026-08-04）：「设置」/「歌词管理」/「歌词窗口」/「欢迎使用」四扇窗各自的根视图在 `.onAppear`/`.onDisappear` 里报到，用一个开关计数器 `openCount`——只要还有任意一扇开着就借 `.regular`，全部关掉才还原成 `.accessory`，不跟上面那条永久偏好打架（用户手动开了永久显示的话，这边全程不用管）。目的是这几扇窗打开期间能进 Cmd-Tab、能靠 Dock 图标切回来，不用非得先回菜单栏点。
 - **更新**（SparkleUpdaterManager）：Sparkle 标准流程（SPUStandardUpdaterController，startingUpdater:true 按 Info.plist SUFeedURL/SUEnableAutomaticChecks 周期检查），标准模态弹窗，无 gentle-reminder 定制。关于页有手动「检查更新」+自动检查/自动下载开关。
 - **首启引导**（OnboardingView）：分步向导，每步直接绑定 AppSettings/FeatureSettingsStore **立即生效**（不做最后统一确认）；步数按所选播放器动态算（选 QQ 音乐则跳过 Apple Music 自动化权限步）；关窗=稍后再说（下次启动再问），走完最后一步才算完成。
 
@@ -141,3 +142,10 @@
    顺带一提：直接拿 `json.load`+`json.dumps` 重写 catalog 会把整个文件的分隔符
    （`" : "` 而不是 `": "`）和键序全改掉，一次改两个词条能产生九千行 diff——要就地插键请做
    文本级的定点插入，并保持 code-point 键序。
+13. **设置窗口的标题钉死成「设置」，当前分类另开副标题**（2026-08-25 改，用户反馈"想在 Dock
+   里认出哪扇是哪扇"）。原来 `.navigationTitle` 绑的是选中分类（`selectedCategoryTitle`：
+   「通用」「外观」……），仿的是系统"系统设置"那套"标题=当前面板名"——但那套设计成立的
+   前提是这扇窗口有自己独占的 Dock 图标，而这个 App 的 Dock/Window 菜单是「设置」/
+   「歌词管理」/「歌词窗口」四扇窗**共用同一个**图标，右键菜单里冒出一条「通用」完全看不出
+   它是设置窗口。副标题（`.navigationSubtitle`）只出现在标题栏本身，不进 Window 菜单/Dock
+   右键列表，分类上下文照样留得住，只是不再顶替窗口的身份。
