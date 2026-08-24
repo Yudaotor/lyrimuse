@@ -362,6 +362,17 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
             self.isExpanded = expanded
             // 不再 recomputeGeometry:窗口尺寸跟展开与否无关了,展开这件事整个发生在
             // SwiftUI 那一侧(NotchWindowRoot 的弹簧动画)。
+            // 触觉反馈跟着卡片**真正展开**的这一刻给,不再抢在意图延迟兑现之前
+            // (2026-08-23 用户反馈"震动跟展开动作脱节、感觉时机不对"——原来在
+            // NotchWindowRoot.updateHover 里一进卡片边界就发,比这里晚 hoverEnterDelay
+            // (0.12s)才真正展开;这段间隔虽短,手感上却是"震动先于视觉动作到达",不像
+            // 一次反馈)。同时把反馈模式从 .alignment 换成 .generic:前者是给拖拽吸附
+            // 设计的短促双击感,压在"只是把鼠标移过去"这种被动 hover 上偏硬(用户反馈
+            // "震动太强/太突兀");.generic 是苹果给不涉及精确吸附场景用的中性单击感。
+            // 只在展开时给,收起不给——跟原来的行为一致。
+            if expanded {
+                NSHapticFeedbackManager.defaultPerformer.perform(.generic, performanceTime: .now)
+            }
         }
         pendingHoverWork = work
         DispatchQueue.main.asyncAfter(

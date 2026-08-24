@@ -115,14 +115,12 @@ struct NotchWindowRoot: View {
     }
 
     private func updateHover(inside: Bool) {
-        // 触觉反馈:贴刘海的东西离光标很近但没有边框可循,给一下对齐反馈能让"我确实停在
-        // 它上面了"变成可感知的事(Force Touch 触控板才有,其它设备是空操作)。
-        // ⚠️ 在**进入的那一刻**就给,不等 setExpandedFromWindow 里那 0.2s 意图延迟兑现 ——
-        // 拖到延迟之后就跟手感脱节了。所以这里自己记一下上一次的状态,只在边沿触发。
-        if inside, !controller.isExpanded, !hoveringCard {
-            NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .now)
-        }
-        // setExpandedFromWindow 也只在**边沿**上叫(2026-08-19):onContinuousHover 的
+        // 触觉反馈(2026-08-23 挪走):不再在这里"一进卡片边界就发",改到
+        // NotchLyricsWindowController.setExpandedFromWindow 里卡片**真正展开**的那一刻
+        // 才给——原来提前 hoverEnterDelay(0.12s)发,用户反馈"震动跟展开动作脱节、
+        // 时机不对、还太强太突兀";现在跟视觉展开同步,反馈模式也换成更柔和的 .generic。
+        //
+        // setExpandedFromWindow 只在**边沿**上叫(2026-08-19):onContinuousHover 的
         // .active 对卡片内每次指针移动都回调,原来每个事件都调过去,而那边第一行无条件
         // cancel 掉还没兑现的 0.12s 展开意图再重排 —— 于是"进入延迟"实际从「指针停下」
         // 起算而不是「进入」起算(hoverEnterDelay 的调校注释按后者理解),指针在卡片上
