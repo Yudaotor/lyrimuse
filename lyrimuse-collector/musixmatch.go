@@ -74,10 +74,44 @@ var (
 	musixmatchMu    sync.Mutex
 	musixmatchCache = map[string]musixmatchResult{} // artist|title|trLang -> result
 
-	musixmatchTokenMu     sync.Mutex
+	musixmatchTokenMu     sync.Mutex // 只保护下面两个值本身,不跨 I/O 持有
 	musixmatchToken       string
 	musixmatchTokenExpiry time.Time
+
+	// musixmatchTokenFetchMu 是单飞锁:同一时刻只允许一个 goroutine 真的去换 token
+	// (读磁盘 + 必要时发网络请求),其余排队等它做完再复查缓存。2026-08-24 用户报"批量
+	// 解析时 musixmatch 交出候选的比例只有 20% 上下,而单首/大规模扫描能到 65%~90%"——
+	// 量出来的根因:相册预取/批量导入触发很多首歌同时解析时,原来每个 goroutine 独立
+	// 判定"没有可用 token"就各自发一次 token.get,而 apic 那台机器实测把除第一个之外的
+	// 并发请求全按反爬拒掉(401 hint=captcha);被拒的按官方样例退避 10 秒重试一次,但
+	// 20 秒的搜索预算根本扛不住 N 个 goroutine 各自跑一遍"发请求→等 10 秒→重试"。持有
+	// 这把锁横跨"读磁盘 + 必要时发网络请求"整段,其余 goroutine 直接排队,而不是各自
+	// 再抢一次网络——16 个并发请求因此变成至多 1~2 次真实的 token.get。
+	musixmatchTokenFetchMu sync.Mutex
 )
+
+// musixmatchDoFetchToken 是"真的去换一个新 token"这一步,musixmatchEnsureToken 在单飞锁
+// 里调它。nil(默认)= 用真正的实现 musixmatchFetchToken。声明成变量是给测试留的缝——
+// TestMusixmatchEnsureTokenSingleFlight 换成一个不碰网络、只计次的桩,验证单飞锁本身
+// 生效(这台机器的网络/反爬状态是不确定的,拿它当测试前提会让用例变得不可复现)。
+//
+// ⚠️ 不能写成 `var musixmatchDoFetchToken = func() string { return musixmatchFetchToken(0) }`——
+// 那样会形成一条初始化环:该变量的初始化表达式引用 musixmatchFetchToken,
+// 它调 musixmatchDo,musixmatchDo 又调 musixmatchEnsureToken,
+// 而 musixmatchEnsureToken 引用回这个变量,`go build` 直接报
+// "initialization cycle"。留空、调用处判 nil 就没有这个环。
+var musixmatchDoFetchToken func() string
+
+// musixmatchCachedToken 只读当前内存里的 token,不碰磁盘/网络。命中就直接返回,让绝大多数
+// 调用(token 仍在有效期内)完全绕开下面的单飞锁——那把锁只在需要真的刷新时才有意义。
+func musixmatchCachedToken() string {
+	musixmatchTokenMu.Lock()
+	defer musixmatchTokenMu.Unlock()
+	if musixmatchToken != "" && time.Now().Before(musixmatchTokenExpiry) {
+		return musixmatchToken
+	}
+	return ""
+}
 
 func musixmatchLyric(artist, title string, durationSecs float64, trLang string) musixmatchResult {
 	if title == "" {
@@ -118,17 +152,25 @@ func resolveMusixmatchLyric(artist, title string, durationSecs float64, trLang s
 // musixmatchEnsureToken 返回一个可用的 usertoken——已缓存且未过期直接复用,否则重新
 // 获取。10 分钟官方有效期,提前 1 分钟当作过期主动换新,避免临界点上请求刚发出就失效。
 func musixmatchEnsureToken() string {
-	musixmatchTokenMu.Lock()
-	if musixmatchToken != "" && time.Now().Before(musixmatchTokenExpiry) {
-		t := musixmatchToken
-		musixmatchTokenMu.Unlock()
+	if t := musixmatchCachedToken(); t != "" {
 		return t
 	}
-	musixmatchTokenMu.Unlock()
+	// 单飞:见 musixmatchTokenFetchMu 的注释。排队等这把锁的这段时间里,前一个持锁者
+	// 可能已经把 token 换好了,所以拿到锁之后**必须**重新查一遍缓存,不能想当然地
+	// 认为"轮到我就说明还没人换过"——那样会让排在后面的 goroutine 也各发一次网络请求,
+	// 单飞锁就白加了。
+	musixmatchTokenFetchMu.Lock()
+	defer musixmatchTokenFetchMu.Unlock()
+	if t := musixmatchCachedToken(); t != "" {
+		return t
+	}
 	// 内存里没有就先看磁盘 —— 见 musixmatchTokenPath 的注释:一次性的 search-lyrics CLI
 	// 每次都是新进程,只靠内存缓存等于每次都要重新 token.get,而那个接口一被拒整个源就哑了。
 	if t := musixmatchLoadTokenFile(); t != "" {
 		return t
+	}
+	if musixmatchDoFetchToken != nil {
+		return musixmatchDoFetchToken()
 	}
 	return musixmatchFetchToken(0)
 }
