@@ -54,8 +54,8 @@ public enum MusicCatalogSearch {
         return c?.url
     }
 
-    /// 结果挑选:歌名+歌手都松匹配 > 只歌手匹配 > 第一条。松匹配=去空格小写后互相
-    /// 包含(标题常带 feat./版本后缀,搜索端和曲库端谁长谁短不一定)。
+    /// 结果挑选:歌名+歌手都松匹配 > 歌手精确匹配 > 只歌手松匹配 > 第一条。松匹配=
+    /// 去空格小写后互相包含(标题常带 feat./版本后缀,搜索端和曲库端谁长谁短不一定)。
     public static func pickBest(_ items: [Item], title: String, artist: String) -> Item? {
         func norm(_ s: String?) -> String {
             (s ?? "").lowercased().replacingOccurrences(of: " ", with: "")
@@ -68,6 +68,14 @@ public enum MusicCatalogSearch {
         if let hit = items.first(where: {
             looseContains(norm($0.trackName), t) && looseContains(norm($0.artistName), a)
         }) { return hit }
+        // 歌手精确匹配优先于歌手松匹配(2026-08-23 用户实测坐实):「你的常听·歌手」
+        // 跳转时 title 传空串,只有这条"只歌手"分支在起作用,而互相包含对艺人名是危险的
+        // 松匹配——单人艺人名常常正好是另一个合作/乐队艺人名的前缀(点"Prince"却跳到
+        // "Prince & The Revolution",点"陈奕迅"可能跳到某场合唱的联合署名艺人页),
+        // 跟标题那边"版本后缀谁长谁短不一定"的场景不是一回事,不能用同一把尺子。
+        // 精确相等命中不了才退回松匹配(比如源数据本身就是"周杰伦 (Jay Chou)"这类夹带,
+        // 松匹配好歹还能命中同一个人)。
+        if let hit = items.first(where: { norm($0.artistName) == a }) { return hit }
         if let hit = items.first(where: { looseContains(norm($0.artistName), a) }) { return hit }
         return items.first
     }

@@ -50,9 +50,12 @@ func resolveDominantColor(coverURL string) string {
 		}
 		small += "?param=64y64" // 网易云 CDN 支持按需缩图,省流量
 	} else if strings.Contains(coverURL, "qq.com") {
-		// QQ 音乐图床按 Referer 防盗链;T002R300x300 路径本身已是缩略图,不用再拼缩放参数
-		// (网易云那套 ?param=WxH 对 QQ 域名无效,会被原样忽略、多下点流量但不影响正确性,
-		// Referer 给错了才可能被拒)。见 qqCoverFallback:网易云曲库缺失该艺人时的兜底封面。
+		// 网易云那套 ?param=WxH 对 QQ 域名无效(会被原样忽略),QQ 的尺寸档在**路径**里 ——
+		// 所以降采样要改路径,见 qqCoverAtEdge。2026-08-24 起存下来的 QQ 封面是 800x800
+		// (歌词窗口那张大卡要的),而取一个主色用不着 800:降回 300 少下 150KB。
+		// Referer 一并给上:QQ 音乐图床按 Referer 防盗链,给错了才可能被拒。
+		// 见 qqCoverFallback:网易云曲库缺失该艺人时的兜底封面。
+		small = qqCoverAtEdge(small, "300")
 		referer = "https://y.qq.com/"
 	}
 	cli := &http.Client{Timeout: 4 * time.Second}

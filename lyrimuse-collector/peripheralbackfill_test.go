@@ -54,6 +54,38 @@ func TestNeedsPeripheralBackfill(t *testing.T) {
 			}(),
 			artist: "窦靖童", want: false,
 		},
+		// 以下三条 2026-08-24 补:QQ 的专辑/歌手 mid 进了触发条件,而"搜索兜底链接"
+		// 以前压根不算缺(判据只有 QQURL == "")—— 本机实测 565 条里 40 条卡在那一档、
+		// 永远不会再被补一次,「前往专辑/前往艺人」对它们也就永远做不了。
+		{
+			name: "QQ 链接还是搜索兜底:补(以前永远不补)",
+			e: func() enrichEntry {
+				e := full
+				e.QQURL = qqSearchFallbackPrefix + "w=x"
+				return e
+			}(),
+			artist: "窦靖童", want: true,
+		},
+		{
+			name: "有真·歌曲页但缺专辑 mid:补",
+			e: func() enrichEntry {
+				e := full
+				e.QQURL = "https://y.qq.com/n/ryqq/songDetail/000FTx4w1obE49"
+				e.QQSingerMid = "s"
+				return e
+			}(),
+			artist: "窦靖童", want: true,
+		},
+		{
+			name: "真·歌曲页且两个 mid 都在:不补",
+			e: func() enrichEntry {
+				e := full
+				e.QQURL = "https://y.qq.com/n/ryqq/songDetail/000FTx4w1obE49"
+				e.QQAlbumMid, e.QQSingerMid = "a", "s"
+				return e
+			}(),
+			artist: "窦靖童", want: false,
+		},
 		{
 			name: "差一次到上限:还补",
 			e: func() enrichEntry {

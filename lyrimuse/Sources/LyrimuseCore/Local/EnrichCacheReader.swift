@@ -28,6 +28,13 @@ public struct EnrichCacheEntry: Decodable {
     // 于是"条目存在"可能只代表封面补好了、歌词还在查 —— 拿它当"搜完了"会让 UI 提前
     // 认输。ts 是那一轮搜索真正结束的凭据。
     let ts: Int64?
+    // 各平台跳转目标(2026-08-24)。collector 早就把这几个落进缓存了,Swift 侧此前一个
+    // 都没解码 —— 见 PlatformLinks 的头注。
+    let appleMusicURL: String?
+    let qqMusicURL: String?
+    let neteaseURL: String?
+    let qqAlbumMid: String?
+    let qqSingerMid: String?
 
     enum CodingKeys: String, CodingKey {
         case lyrics
@@ -39,6 +46,11 @@ public struct EnrichCacheEntry: Decodable {
         case coverURL = "cover_url"
         case instrumental
         case ts
+        case appleMusicURL = "apple_music_url"
+        case qqMusicURL = "qq_music_url"
+        case neteaseURL = "netease_url"
+        case qqAlbumMid = "qq_album_mid"
+        case qqSingerMid = "qq_singer_mid"
     }
 }
 
@@ -104,6 +116,27 @@ public enum EnrichCacheReader {
     /// 写法有 空格/大小写/繁简 出入时(见 looseMatch 注释),写回必须落在读取路径命中的
     /// 同一条上,否则读写分家、改了不生效。两级都没有返回 nil,调用方退回 normalizedKey
     /// 新建条目。首次调用要解析整份缓存 JSON,别在主线程调。
+    /// 这首歌在各平台的跳转目标。**零网络** —— 全是 collector 早就存好的字段,
+    /// 首次调用要解析整份缓存 JSON(之后靠 mtime 缓存是 µs 级),别在主线程调。
+    /// 沿用 lookup/sourceInfo 同款的 精确 key → 宽松 key 两级匹配。
+    public static func platformLinks(artist: String, title: String, album: String) -> PlatformLinks? {
+        guard let all = loadEntries() else { return nil }
+        let key = EnrichCacheKeys.normalizedKey(artist: artist, title: title, album: album)
+        guard let entry = all[key] ?? looseMatch(key, in: all) else { return nil }
+        let rawQQ = entry.qqMusicURL ?? ""
+        // 搜索兜底链接不当"歌曲页"给出去,理由见 PlatformLinks.isQQSearchFallback
+        let qqSong = (!rawQQ.isEmpty && !PlatformLinks.isQQSearchFallback(rawQQ))
+            ? URL(string: rawQQ) : nil
+        let links = PlatformLinks(
+            // https://music.apple.com/… → music://(进 App)。非 AM 链接会被这个函数拒掉。
+            appleMusic: MusicCatalogSearch.musicSchemeURL(entry.appleMusicURL),
+            qqSong: qqSong,
+            qqAlbum: PlatformLinks.qqAlbumURL(mid: entry.qqAlbumMid ?? ""),
+            qqArtist: PlatformLinks.qqArtistURL(mid: entry.qqSingerMid ?? ""),
+            neteaseSong: (entry.neteaseURL?.isEmpty == false) ? URL(string: entry.neteaseURL!) : nil)
+        return links.isEmpty ? nil : links
+    }
+
     public static func resolvedKey(artist: String, title: String, album: String) -> String? {
         guard let all = loadEntries() else { return nil }
         let key = EnrichCacheKeys.normalizedKey(artist: artist, title: title, album: album)
@@ -218,34 +251,102 @@ public enum EnrichCacheReader {
         return index[artistTitleKey(artist: merged, title: title)]
     }
 
-    /// 把封面 URL 换成"能拿到原图"的形态。
+    /// 把封面 URL 换成"能拿到最大那一档"的形态。
     ///
-    /// 为什么需要它:collector 存进缓存的网易云封面 URL 尾巴上带着 `?param=600y600`
-    /// (给列表里 26pt 的小图用,省流量)。而网易云那个 param **只降不升** ——
-    /// 2026-08-17 实测:一张原生 800×800 的封面带 `param=600y600` 拿回来就是 600×600
-    /// (`param=1200y1200` 也还是 800,它不上采样);另一张原生 495×495 的,带不带 param
-    /// 都是 495。所以对"要大图"的消费方(歌词窗口那张最大 460pt = 920px 的封面卡),
+    /// 三个图源三套机制,都是实测量出来的,不是照文档猜的:
+    ///
+    /// ① **网易云**:collector 存进缓存的 URL 尾巴上带着 `?param=600y600`(给列表里 26pt
+    /// 的小图用,省流量)。那个 param **只降不升** —— 2026-08-17 实测:一张原生 800×800
+    /// 的封面带 `param=600y600` 拿回来就是 600×600(`param=1200y1200` 也还是 800,它不
+    /// 上采样);另一张原生 495×495 的,带不带 param 都是 495。所以对"要大图"的消费方,
     /// 那个 param 是在白扔分辨率,去掉才拿得到原图。
     ///
-    /// 只对网易云动手:别的图源(Apple/QQ)的查询参数未经核实,不能假定去掉也没事 ——
-    /// 有些图床的尺寸段就藏在参数里,去掉可能直接 404。
+    /// ② **QQ 音乐**:尺寸档写在**路径**里(`T002R300x300M000<mid>.jpg`),换个数字就换
+    /// 一档。2026-08-24 实测两个不同的 album mid:300/500/800 都 200,1000 与 2000 都
+    /// **404** —— 所以 `qqCoverMaxEdge = 800` 是这个图床的天花板,不是随手挑的数。不带
+    /// Referer 也照给(实测 200),而 App 这边发图片请求没有 Referer,所以能直接用。
+    ///
+    /// ③ **Apple**:thumb 管线要多大给多大(2026-08-24 实测同一张图 600/1000/1200/2000/
+    /// 3000 全 200,999999 才 400)。取 1200 而不是更大:歌词窗口那张卡最大 460pt =
+    /// 920px,1200 够用还有余量,2000 那一档一张就 1MB。
+    ///
+    /// 为什么 2026-08-24 开始要动 QQ/Apple(原来这两个源写的是"一个字都不许改"):用户
+    /// 报 QQ 音乐的封面很模糊。QQ 音乐客户端往系统 Now Playing 报的封面就是 **300×300**
+    /// (实测,见 PlaybackCoordinator.lowResArtworkThreshold),而缓存里那张高清替代图
+    /// 当时也只有 300(QQ 源)/600(Apple 源)—— 顶到 820px 的封面卡上分别是 2.73× 和
+    /// 1.37× 放大。光把替代路径打通不够,替代图本身也得先真的变大。
     ///
     /// nonisolated:纯 URL 换算,不碰任何静态缓存,selftest 要在非主线程上下文里断言它。
     public nonisolated static func nativeSizedCoverURL(_ url: URL) -> URL {
+        if let u = neteaseNativeCoverURL(url) { return u }
+        if let u = qqUpscaledCoverURL(url) { return u }
+        if let u = appleUpscaledCoverURL(url) { return u }
+        return url
+    }
+
+    /// QQ 音乐图床的最大边长 —— 再往上是 404,见 nativeSizedCoverURL 的注释。
+    private static let qqCoverMaxEdge = 800
+    /// Apple 图床取的那一档。它要多大给多大,所以这是"够用",不是"上限"。
+    private static let appleCoverTargetEdge = 1200
+
+    /// 摘掉网易云的 `?param=WxH`。nil = 不是网易云,或本来就没有那个参数。
+    private nonisolated static func neteaseNativeCoverURL(_ url: URL) -> URL? {
         // 真实主机是 p1/p2/p4.music.126.net。判据写成"等于或以 . 分隔的子域",而不是光
         // hasSuffix("music.126.net") —— 后者连 evilmusic.126.net 都会当成网易云。
         guard let host = url.host,
               host == "music.126.net" || host.hasSuffix(".music.126.net")
-        else { return url }
+        else { return nil }
         guard var comps = URLComponents(url: url, resolvingAgainstBaseURL: false),
               let items = comps.queryItems, !items.isEmpty
-        else { return url }
+        else { return nil }
         let kept = items.filter { $0.name != "param" }
+        guard kept.count != items.count else { return nil } // 没有 param 可摘,原样返回
         // 只剩空数组时把整个 query 去掉,而不是留一个尾巴上的 "?" ——
         // 后者虽然多数服务器也认,但拼出来的字符串跟"没有查询串"不是同一个,
         // 会让 URLCache/内存缓存把它当成另一个 key。
         comps.queryItems = kept.isEmpty ? nil : kept
-        return comps.url ?? url
+        return comps.url
+    }
+
+    /// 把 QQ 图床路径里的尺寸档提到 800。nil = 不是 QQ 图床,或已经到顶。
+    private nonisolated static func qqUpscaledCoverURL(_ url: URL) -> URL? {
+        // 专辑封面在 y.qq.com、歌手头像在 y.gtimg.cn,两个域名同一套路径规则(都实测过
+        // 800 给图)。判据用"等于"而不是 hasSuffix,理由同网易云那条。
+        guard let host = url.host, host == "y.qq.com" || host == "y.gtimg.cn" else { return nil }
+        guard url.path.hasPrefix("/music/photo_new/") else { return nil }
+        let s = url.absoluteString
+        // 尺寸段形如 T002R300x300M —— 只换这一段的数字,mid/扩展名/查询串一律照原样。
+        guard let seg = s.range(of: "T[0-9]+R[0-9]+x[0-9]+M", options: .regularExpression),
+              let size = s[seg].range(of: "[0-9]+x[0-9]+", options: .regularExpression)
+        else { return nil }
+        let edge = Int(s[size].prefix { $0.isNumber }) ?? 0
+        guard edge > 0, edge < qqCoverMaxEdge else { return nil }
+        return URL(string: s.replacingCharacters(in: size,
+                                                 with: "\(qqCoverMaxEdge)x\(qqCoverMaxEdge)"))
+    }
+
+    /// 把 Apple 图床末段的 `600x600bb.jpg` 提到 1200。nil = 不是 Apple 图床 / 末段不是
+    /// 那个形状 / 已经不小于目标档(2000 那种更大的档**不降**回来)。
+    private nonisolated static func appleUpscaledCoverURL(_ url: URL) -> URL? {
+        guard let host = url.host,
+              host == "mzstatic.com" || host.hasSuffix(".mzstatic.com")
+        else { return nil }
+        // 只认 `<W>x<H>bb.<jpg|png>` 这一种末段 —— 本机缓存里 82 条 Apple 封面清一色是
+        // `600x600bb.jpg`(2026-08-24 清点)。别的变体(`-999`、`sr`、裁切后缀)没实测过,
+        // 一律不动:改错了是直接 404、整张封面消失,比"稍微软一点"糟得多。
+        let last = url.lastPathComponent
+        guard last.range(of: "^[0-9]+x[0-9]+bb\\.(jpg|png)$", options: .regularExpression) != nil
+        else { return nil }
+        let edge = Int(last.prefix { $0.isNumber }) ?? 0
+        guard edge > 0, edge < appleCoverTargetEdge else { return nil }
+        let ext = last.hasSuffix(".png") ? "png" : "jpg"
+        let bumped = "\(appleCoverTargetEdge)x\(appleCoverTargetEdge)bb.\(ext)"
+        // 用字面量倒查末段再替换,而不是 deletingLastPathComponent()+append ——
+        // 后者对带查询串的 URL 行为没实测过。⚠️ .backwards 不能跟 .regularExpression
+        // 同用(会被静默忽略),这里是纯字面量查找,所以是对的。
+        let s = url.absoluteString
+        guard let r = s.range(of: last, options: .backwards) else { return nil }
+        return URL(string: s.replacingCharacters(in: r, with: bumped))
     }
 
     /// "歌手|歌名"(小写、去首尾空白)。跟 LastfmStatsService.playCountKey 同一套口径。

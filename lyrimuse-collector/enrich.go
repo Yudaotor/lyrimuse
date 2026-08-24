@@ -33,6 +33,12 @@ type enrichEntry struct {
 	NeteaseURL  string `json:"netease_url,omitempty"`
 	AppleURL    string `json:"apple_music_url,omitempty"`
 	QQURL       string `json:"qq_music_url,omitempty"`
+	// QQ 音乐的 专辑 mid / 首位歌手 mid(2026-08-24,歌词窗口「前往专辑/前往艺人」在
+	// 播放器是 QQ 音乐时那一档;页面路由见 qqSongCatalogMids)。
+	// ⚠️ 刻意**不进** fields() —— 那张 map 是发给 relay/LB 的载荷、有字节预算,而桌面端
+	// 直接读这份缓存文件,不需要经它绕一圈。
+	QQAlbumMid  string `json:"qq_album_mid,omitempty"`
+	QQSingerMid string `json:"qq_singer_mid,omitempty"`
 	SpotifyURL  string `json:"spotify_url,omitempty"`
 	Lyrics      string `json:"lyrics,omitempty"`
 	LyricsTr    string `json:"lyrics_tr,omitempty"`   // 中文翻译(逐行 LRC)
@@ -408,7 +414,15 @@ func needsPeripheralBackfill(e enrichEntry, artist, album string) bool {
 	// 记录就再也没机会补上。实测撞到过:同一张专辑里一半曲目报 "Leah Dou"、一半报"窦靖童",
 	// 而前者靠 canonical 归一成功、后者其中两条 canonical 是空的。
 	missingCanonical := e.CanonicalArtist == "" && len(artistCreditParts(artist)) <= 1
+	// QQ 的专辑/歌手 mid 是 2026-08-24 才加的字段,存量条目一个都没有 —— 靠这一条把它们
+	// 纳进自愈。只在**已经拿到真·歌曲页链接**时才算缺:搜索兜底链接里没有 songmid、
+	// 压根查不出 mid,把它算成缺只会让那批条目白重试 5 次。
+	missingQQMids := qqMidFromURL(e.QQURL) != "" && (e.QQAlbumMid == "" || e.QQSingerMid == "")
+	// 搜索兜底链接本身也该继续争取升级成真·歌曲页。原来这里只判 `QQURL == ""`,而兜底
+	// URL 非空 —— 于是那批条目**永远不会**再被补一次(本机实测 565 条里 40 条卡在这一档),
+	// 「前往专辑/前往艺人」对它们也就永远做不了。
 	missing := e.AccentColor == "" || e.AppleURL == "" || e.QQURL == "" || e.NeteaseURL == "" ||
+		isQQSearchFallbackURL(e.QQURL) || missingQQMids ||
 		missingCanonical || coverNeedsAlbumCheck(e, album)
 	if !missing {
 		return false
@@ -1222,11 +1236,34 @@ func backfillPeripheralFields(key, artist, title, album string, durationSecs flo
 		e.CoverURL, e.CoverSource, e.CoverAlbum, e.AccentColor =
 			fresh.CoverURL, fresh.CoverSource, fresh.CoverAlbum, fresh.AccentColor
 	}
+	// 存量 QQ 封面提档(2026-08-24):2026-08-24 之前拼的 QQ 封面 URL 写死 300x300,
+	// 而同一个 mid 换个路径段就能拿到 800(见 qqCoverAtEdge)。这是**同一张图的另一档**、
+	// 不是换封面 —— 所以刻意放在 coverSwapAllowed 之外,也不动 CoverSource/CoverAlbum/
+	// AccentColor(主色从缩略图算,跟档位无关)。纯字符串换算,不发任何请求。
+	e.CoverURL = qqCoverAtEdge(e.CoverURL, qqCoverMaxEdge)
 	if fresh.AppleURL != "" {
 		e.AppleURL = fresh.AppleURL
 	}
 	if fresh.QQURL != "" {
-		e.QQURL = fresh.QQURL
+		// 只在这一轮**真的升级了**(拿到真·歌曲页)时才覆盖:兜底搜索链接不该把已经存下来
+		// 的真链接冲掉(fresh 可能因为一次网络抖动退化成兜底)。
+		if !isQQSearchFallbackURL(fresh.QQURL) || isQQSearchFallbackURL(e.QQURL) {
+			e.QQURL = fresh.QQURL
+		}
+	}
+	// 专辑/歌手 mid:按**最终生效**的那个 QQURL 里的 songmid 现查一次(它可能来自这一轮的
+	// fresh,也可能是之前就存下来的)。只在缺的时候查,不给已经有值的条目白发请求。
+	if e.QQAlbumMid == "" || e.QQSingerMid == "" {
+		if songMid := qqMidFromURL(e.QQURL); songMid != "" {
+			if albumMid, singerMid := qqSongCatalogMids(songMid); albumMid != "" || singerMid != "" {
+				if e.QQAlbumMid == "" {
+					e.QQAlbumMid = albumMid
+				}
+				if e.QQSingerMid == "" {
+					e.QQSingerMid = singerMid
+				}
+			}
+		}
 	}
 	if fresh.SpotifyURL != "" {
 		e.SpotifyURL = fresh.SpotifyURL
@@ -1371,6 +1408,9 @@ func resolveTrackEnrichment(artist, title, album string, durationSecs float64) e
 	// 不用再单独调一次 appleMusicURL。
 	e.AppleURL = appleMatch.url
 	e.QQURL = qqMusicURL(artist, title, album)
+	// 顺手把专辑/歌手 mid 一起拿到,不用等下一轮外围回填(首次解析本来就在打一堆请求,
+	// 多这一个不影响体感;拿不到就留空,菜单那两行自己会隐藏)。
+	e.QQAlbumMid, e.QQSingerMid = qqSongCatalogMids(qqMidFromURL(e.QQURL))
 	if title != "" {
 		e.SpotifyURL = "https://open.spotify.com/search/" + neturl.QueryEscape(artist+" "+title)
 	}

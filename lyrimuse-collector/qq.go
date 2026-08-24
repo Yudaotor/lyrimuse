@@ -193,7 +193,12 @@ func qqSingerAvatar(name string) (string, bool) {
 	// 接口给的是 150x150 缩略图(跟 qqSongCoverAndSinger 拼专辑封面同一个 CDN 套路),把
 	// 分辨率前缀换成 300x300、协议换成 https 同一个 mid 也能取到更清晰的图;页面本身全程
 	// https,混合内容图片在部分浏览器/CSP 下有被拦截风险,统一升级更稳妥。
-	pic = strings.Replace(pic, "R150x150", "R300x300", 1)
+	//
+	// 走 qqCoverAtEdge 而不是原来那句写死的 `Replace("R150x150","R300x300")`:接口哪天
+	// 换成别的档(200/240…)那句就静默不生效、留着一张小图。这里仍然只提到 300 —— 这个
+	// URL 的消费方是网页「历史播放 Top10 歌手」那排小头像,不是歌词窗口那张大卡,
+	// 提到 800 只是白烧流量。
+	pic = qqCoverAtEdge(pic, "300")
 	pic = strings.Replace(pic, "http://", "https://", 1)
 	return pic, true
 }
@@ -231,6 +236,43 @@ func qqSongAlbum(mid string) string {
 		return ""
 	}
 	return out.Data[0].Album.Name
+}
+
+// QQ 音乐图床的尺寸档写在**路径**里(`T002R300x300M000<mid>.jpg`),换个数字就换一档。
+// 800 是天花板:2026-08-24 对两个不同的 album mid 各测一轮,300/500/800 都 200,
+// 1000 与 2000 都 404。不带 Referer 也照给(实测 200)。
+//
+// 原来这里写死 300x300,而歌词窗口那张封面卡满幅是 820px(0.279×1470pt 窗宽 ×2),
+// 300px 顶上去是 2.73 倍放大 —— 用户报的"QQ 音乐这个封面很模糊"。
+const qqCoverMaxEdge = "800"
+
+// qqCoverSizeRe 匹配 QQ 图床路径里的那一段尺寸档。T001 是歌手头像、T002 是专辑封面,
+// 两种前缀同一套规则(都实测过 800 给图),所以只认 `T<数字>R` 这个形状、不写死前缀。
+var qqCoverSizeRe = regexp.MustCompile(`(T[0-9]+R)[0-9]+x[0-9]+(M)`)
+
+// qqCoverAtEdge 把一条 QQ 图床 URL 的尺寸档换成 edge。不是 QQ 图床、或路径里没有那一段
+// 时原样返回 —— 判 host 而不是光看形状:别的图源万一路径里也有类似片段,改了就是 404。
+func qqCoverAtEdge(raw, edge string) string {
+	if raw == "" || edge == "" {
+		return raw
+	}
+	if !strings.Contains(raw, "y.qq.com/music/photo_new/") &&
+		!strings.Contains(raw, "y.gtimg.cn/music/photo_new/") {
+		return raw
+	}
+	if !qqCoverSizeRe.MatchString(raw) {
+		return raw
+	}
+	return qqCoverSizeRe.ReplaceAllString(raw, "${1}"+edge+"x"+edge+"${2}")
+}
+
+// qqAlbumCoverURL 按专辑 mid 拼封面 URL,取图床能给的最大一档(见 qqCoverMaxEdge)。
+func qqAlbumCoverURL(albumMid string) string {
+	if albumMid == "" {
+		return ""
+	}
+	return "https://y.qq.com/music/photo_new/T002R" + qqCoverMaxEdge + "x" + qqCoverMaxEdge +
+		"M000" + albumMid + ".jpg"
 }
 
 // qqSongCoverAndSinger returns (album cover URL, primary singer name) for a QQ
@@ -273,7 +315,55 @@ func qqSongCoverAndSinger(mid string) (cover, singer string) {
 	if len(d.Singer) > 0 {
 		singer = d.Singer[0].Name
 	}
-	return "https://y.qq.com/music/photo_new/T002R300x300M000" + d.Album.Mid + ".jpg", singer
+	return qqAlbumCoverURL(d.Album.Mid), singer
+}
+
+// qqSongCatalogMids 取一首歌的 专辑 mid 与 首位歌手 mid —— 歌词窗口「前往专辑/前往艺人」
+// 在播放器是 QQ 音乐时要的就是这两个,页面路由分别是 y.qq.com/n/ryqq/albumDetail/<mid>
+// 与 /n/ryqq/singer/<mid>(实测都 302 到 /n/ryqq_v2/…,与代码在用的 songDetail 同族)。
+//
+// 打的是跟 qqSongCoverAndSinger 同一个 single-song 详情接口 —— 那边只拿 album.mid 拼了
+// 封面 URL、把 singer 的 mid 丢掉了,所以这里单独要一次,不复用它的返回值。
+//
+// 多歌手只取第一位:QQ 的歌手页是一人一页,合唱曲目没有"这首歌的歌手页"这种东西,
+// 取主歌手是唯一说得通的选择(与 CanonicalArtist 只在单一歌手时才给值同一个取向)。
+func qqSongCatalogMids(mid string) (albumMid, singerMid string) {
+	if mid == "" {
+		return "", ""
+	}
+	u := "https://c.y.qq.com/v8/fcg-bin/fcg_play_single_song.fcg?format=json&platform=yqq&inCharset=utf8&outCharset=utf-8&songmid=" + neturl.QueryEscape(mid)
+	req, err := http.NewRequest(http.MethodGet, u, nil)
+	if err != nil {
+		return "", ""
+	}
+	req.Header.Set("Referer", "https://y.qq.com/")
+	req.Header.Set("User-Agent", qqUA)
+	resp, err := doHTTPTracked(&http.Client{Timeout: 6 * time.Second}, req)
+	if err != nil {
+		return "", ""
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return "", ""
+	}
+	var out struct {
+		Data []struct {
+			Album struct {
+				Mid string `json:"mid"`
+			} `json:"album"`
+			Singer []struct {
+				Mid string `json:"mid"`
+			} `json:"singer"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil || len(out.Data) == 0 {
+		return "", ""
+	}
+	d := out.Data[0]
+	if len(d.Singer) > 0 {
+		singerMid = d.Singer[0].Mid
+	}
+	return d.Album.Mid, singerMid
 }
 
 // qqCoverFallback finds an official-artist cover via QQ Music for when
