@@ -112,9 +112,9 @@ func TestUpdatePosition_PauseDoesNotReanchor(t *testing.T) {
 
 func TestNaturalAdvanceCorrection(t *testing.T) {
 	cases := []struct {
-		name             string
-		reported, overrun float64
-		wantOK           bool
+		name               string
+		reported, overrun  float64
+		wantOK             bool
 		wantSeed, wantBias float64
 	}{
 		// 实测样本(Forever Love→在那遙遠的地方):元数据提前 0.837s,首笔读数 0.048,

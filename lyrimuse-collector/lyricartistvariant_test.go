@@ -85,9 +85,9 @@ func TestLyricPrimaryQueryArtist(t *testing.T) {
 func TestUsableLyricSourceCount(t *testing.T) {
 	scored := []scoredLyricCandidateResult{
 		{Source: "netease", Score: 462},
-		{Source: "netease", Score: 52}, // 同源第二条不重复计数
-		{Source: "qq", Score: -1},      // 判废不算
-		{Source: "kugou", Score: 0},    // 0 分也算可用(Score>=0)
+		{Source: "netease", Score: 52},                    // 同源第二条不重复计数
+		{Source: "qq", Score: -1},                         // 判废不算
+		{Source: "kugou", Score: 0},                       // 0 分也算可用(Score>=0)
 		{Source: "lrclib", Score: -1, Instrumental: true}, // 纯音乐标记不算
 	}
 	if got := usableLyricSourceCount(scored); got != 2 {

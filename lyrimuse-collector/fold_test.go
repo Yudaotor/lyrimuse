@@ -20,17 +20,17 @@ func TestFoldDiacritics(t *testing.T) {
 		"Straße": "Strasse",
 		"Søren":  "Soren",
 		// 不该动的：中日韩、ASCII、数字、符号
-		"周杰伦":         "周杰伦",
-		"宇多田ヒカル":      "宇多田ヒカル",
+		"周杰伦":          "周杰伦",
+		"宇多田ヒカル":       "宇多田ヒカル",
 		"Taylor Swift": "Taylor Swift",
 		"2Pac":         "2Pac",
 		"AC/DC":        "AC/DC",
 		"":             "",
 		// 大写形式：第一版漏了整组大写，靠这几条守住
-		"Æther":  "AEther",
+		"Æther":     "AEther",
 		"ÅKERFELDT": "AKERFELDT",
-		"ÑOÑO":   "NONO",
-		"Ø":      "O",
+		"ÑOÑO":      "NONO",
+		"Ø":         "O",
 	}
 	for in, want := range cases {
 		if got := foldDiacritics(in); got != want {

@@ -20,7 +20,7 @@ func TestMergeAliasedArtistsDisplayName(t *testing.T) {
 			{Name: "Madison Beer", PlayCount: 20},
 		})
 		want := []lastfmChartEntry{
-			{Name: "K/DA", PlayCount: 42},        // 30 + 12,显示本名
+			{Name: "K/DA", PlayCount: 42},         // 30 + 12,显示本名
 			{Name: "Madison Beer", PlayCount: 20}, // 联合署名的第二位不该被并进去
 		}
 		assertChart(t, got, want)

@@ -67,15 +67,15 @@ func TestArtistCreditRunMatches(t *testing.T) {
 		hay, needle string
 		want        bool
 	}{
-		{"k/da/madison beer", "k/da", true},          // 开头
-		{"madison beer/k/da", "k/da", true},          // 结尾
-		{"a/k/da/b", "k/da", true},                   // 中间
-		{"k/da & madison beer", "k/da", true},        // 分隔符两侧带空格
-		{"prince & the revolution", "the", false},    // 空白不是边界
-		{"anna", "an", false},                        // 纯子串
-		{"dave/eve", "da", false},                    // 段的前缀
-		{"k/da", "k/da", true},                       // 整串
-		{"k/da", "k/da/x", false},                    // needle 比 hay 长
+		{"k/da/madison beer", "k/da", true},       // 开头
+		{"madison beer/k/da", "k/da", true},       // 结尾
+		{"a/k/da/b", "k/da", true},                // 中间
+		{"k/da & madison beer", "k/da", true},     // 分隔符两侧带空格
+		{"prince & the revolution", "the", false}, // 空白不是边界
+		{"anna", "an", false},                     // 纯子串
+		{"dave/eve", "da", false},                 // 段的前缀
+		{"k/da", "k/da", true},                    // 整串
+		{"k/da", "k/da/x", false},                 // needle 比 hay 长
 		{"", "k", false},
 		{"k", "", false},
 	}

@@ -87,13 +87,13 @@ func TestNeedsLyricsFirstFill(t *testing.T) {
 // 退避是"没有次数上限、但浪费随时间衰减"的关键,单独钉住它的形状。
 func TestLyricsFillBackoff(t *testing.T) {
 	want := []time.Duration{
-		24 * time.Hour,       // 0 次
-		48 * time.Hour,       // 1
-		96 * time.Hour,       // 2
-		8 * 24 * time.Hour,   // 3
-		16 * 24 * time.Hour,  // 4
-		16 * 24 * time.Hour,  // 5 起封顶
-		16 * 24 * time.Hour,  // 99
+		24 * time.Hour,      // 0 次
+		48 * time.Hour,      // 1
+		96 * time.Hour,      // 2
+		8 * 24 * time.Hour,  // 3
+		16 * 24 * time.Hour, // 4
+		16 * 24 * time.Hour, // 5 起封顶
+		16 * 24 * time.Hour, // 99
 	}
 	counts := []int{0, 1, 2, 3, 4, 5, 99}
 	for i, c := range counts {
