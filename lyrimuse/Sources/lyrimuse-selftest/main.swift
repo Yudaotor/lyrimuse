@@ -2788,6 +2788,26 @@ do {
                 "只有前后缀、没有时间戳的不算导出产物")
 }
 
+do {
+    // 上面那组的另一半:名字认出来之后,还要判断"这份现在能不能直接读"。这一档判错的
+    // 代价是 2026-08-24 用户在另一台机器上报的 bug —— 备份还没从 iCloud 下载下来时点
+    // 「导入」,提示"等一会儿再试",但下载**从来没被发起过**,等多久都没用。
+    print("\n== iCloud 备份能不能直接读(换机链路的另一半) ==")
+    typealias R = ICloudFileReadiness
+    expectEqual(R.isReadyToRead(downloadingStatus: .current, realPathExists: true), true,
+                "已经是最新的本地副本 → 直接读")
+    expectEqual(R.isReadyToRead(downloadingStatus: .notDownloaded, realPathExists: true), false,
+                "dataless 占位(真名路径在、但还没下载)→ 先下载")
+    expectEqual(R.isReadyToRead(downloadingStatus: .downloaded, realPathExists: true), false,
+                "本地有旧副本、云端有更新 → 仍然先等最新那份")
+    // ↓ 这条就是修的那一档。`.<真名>.icloud` 形态下真名路径压根不存在,查状态会抛错,
+    //   原来无条件当"能读",于是跳过 startDownloadingUbiquitousItem、读一个不存在的路径。
+    expectEqual(R.isReadyToRead(downloadingStatus: nil, realPathExists: false), false,
+                "查不到状态且真名路径不存在 = iCloud 占位符,必须先下载")
+    expectEqual(R.isReadyToRead(downloadingStatus: nil, realPathExists: true), true,
+                "查不到状态但文件就在那儿 = 普通本地文件(Dropbox/手动拷贝),能直接读")
+}
+
 // ---- LogRedactor(诊断包脱敏) ----
 //
 // 这一组断言守的是一条会被贴进公开 GitHub issue 的输出:2026-08-13 实测坐实,诊断报告

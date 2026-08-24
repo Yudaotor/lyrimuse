@@ -2735,11 +2735,21 @@ private struct GeneralSettingsTab: View {
         iCloudBusy = true
         iCloudMessage = nil
         Task {
-            // 新机器上这份文件很可能还只是个未下载的占位符,read 会先触发下载再等它到位。
-            let data = await ICloudConfigStore.read(snap.url)
+            // 新机器上这份文件很可能还只是个未下载的占位符,readOutcome 会先触发下载再等
+            // 它到位。分档提示:超时那档下载是**真的已经在跑**了,叫用户再点一次才有意义;
+            // 而"连下载都没发起"是另一回事,不能也让他干等(2026-08-24 用户报的就是这两种
+            // 被压成同一句话,病根见 ICloudFileReadiness)。
+            let outcome = await ICloudConfigStore.readOutcome(snap.url)
             iCloudBusy = false
-            guard let data else {
-                iCloudMessage = L10n.t("这份备份还没从 iCloud 下载下来，等一会儿再试")
+            let data: Data
+            switch outcome {
+            case .data(let d):
+                data = d
+            case .downloading:
+                iCloudMessage = L10n.t("正在从 iCloud 下载这份备份，下载完再点一次「导入」")
+                return
+            case .unavailable:
+                iCloudMessage = L10n.t("读不到这份备份：可能没开 iCloud Drive，或者这个文件夹不在同步")
                 return
             }
             pendingImportData = data

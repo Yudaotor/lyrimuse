@@ -1,6 +1,6 @@
 # 14. 设置、配置与本地化
 
-> 最后核对：2026-08-21 · 基线：05767ae+工作树
+> 最后核对：2026-08-24 · 基线：64a0e37+工作树
 
 ## 定位
 
@@ -102,7 +102,7 @@
 | App 偏好 | Settings/AppSettings.swift；镜像 Settings/AppSettingsMirror.swift |
 | 功能开关 | Settings/FeatureSettingsStore.swift `save()`；collector 侧 lyrimuse-collector/features.go |
 | 快捷键 | Settings/GlobalHotkeys.swift、Settings/ShortcutRecorder.swift |
-| 备份/iCloud | Settings/ConfigPortability.swift、Settings/ICloudConfigStore.swift、Settings/ICloudConfigImportPrompt.swift、LyrimuseCore/Util/BackupDiscovery.swift |
+| 备份/iCloud | Settings/ConfigPortability.swift、Settings/ICloudConfigStore.swift（`readOutcome`/`isMaterialized`）、Settings/ICloudConfigImportPrompt.swift、LyrimuseCore/Util/BackupDiscovery.swift、LyrimuseCore/Util/ICloudFileReadiness.swift |
 | 凭据存储 | Settings/ConfigStore.swift、LyrimuseCore/Util/SecretFileWrite.swift |
 | 开机启动 | Settings/LoginItemManager.swift |
 | 更新 | Settings/SparkleUpdaterManager.swift |
@@ -122,3 +122,22 @@
 8. 设置页每行一个设置是通用版式；行首 ? 号（HelpButton）只放「界面上看不出来」的信息，重复副标题的一律删。
 9. ad-hoc 签名限制了 iCloud entitlement 与 SMAppService 等官方路径——搬家/启动项都走文件系统方案。
 10. 改 `Localizable.xcstrings` 后忘跑 generate-strings.py 会被 selftest 拦下（红灯信息直接写明跑哪条命令）。
+11. ⚠️ **备份还没从 iCloud 下载下来时点「导入」，下载根本不会被触发**（2026-08-24 用户在另一台
+   机器上报，已修）。表象：提示「这份备份还没从 iCloud 下载下来，等一会儿再试」，但等多久都
+   没用，只能自己去 Finder 把那个文件夹点下来。链路是这样断的——`BackupDiscovery` 把目录项
+   `.<真名>.icloud` 还原成**真名**交给 `ICloudConfigStore.read()`（这一步是对的，见
+   `ConfigSnapshotName`），而占位符形态下真名路径在本机**根本不存在**，
+   `resourceValues(forKeys: [.ubiquitousItemDownloadingStatusKey])` 因此抛错；
+   `isMaterialized` 原来把「拿不到状态」一律当成「能读」（本意是照顾 Dropbox／手动拷进来的
+   普通文件），于是 `read()` 直接跳过 `startDownloadingUbiquitousItem`、去读一个不存在的路径、
+   失败返回 nil。**下载从头到尾没有被发起过**。判据抽成了 `ICloudFileReadiness.isReadyToRead`
+   （拿不到状态时改看真名路径在不在：在＝普通文件能读，不在＝占位符必须先下载），放 LyrimuseCore
+   是为了让 selftest 覆盖到——跟 `ConfigSnapshotName` 是同一个故事的两半。同时 `read` 拆出
+   `readOutcome`，把「已经在下、超时了」和「连下载都没能发起」分开：原来两种都返回 nil、
+   界面一律劝人干等，而后一种等到天荒地老也不会好。
+12. 改本地化**只能改 `Localization/Localizable.xcstrings`**，然后跑
+   `python3 Localization/generate-strings.py`；两份 `.lproj/Localizable.strings` 是生成物。
+   手改生成物会被 selftest 的四条 catalog↔生成物对拍当场拦下（第 10 条说的就是这道闸）。
+   顺带一提：直接拿 `json.load`+`json.dumps` 重写 catalog 会把整个文件的分隔符
+   （`" : "` 而不是 `": "`）和键序全改掉，一次改两个词条能产生九千行 diff——要就地插键请做
+   文本级的定点插入，并保持 code-point 键序。

@@ -270,16 +270,17 @@ enum ICloudConfigStore {
 
     /// 这个文件现在能不能直接读,而**不会**触发下载。
     ///
-    /// 拿不到状态就当能读 —— 那说明它不是 iCloud 在管的文件(比如用户手动往这个文件夹里
-    /// 拷进来的本地文件),读它本来就是立即返回。
+    /// 判据本身(尤其"拿不到状态时怎么算"那一档,2026-08-24 修的就是它)是纯逻辑,抽在
+    /// `ICloudFileReadiness` 里由自测覆盖 —— 这里只负责把两个事实查出来喂给它。
     static func isMaterialized(_ url: URL) -> Bool {
         var probe = url
         // 资源属性是带缓存的,轮询时不清缓存会一直读到第一次那个旧状态
         probe.removeCachedResourceValue(forKey: .ubiquitousItemDownloadingStatusKey)
-        guard let status = (try? probe.resourceValues(
+        let status = (try? probe.resourceValues(
             forKeys: [.ubiquitousItemDownloadingStatusKey]))?.ubiquitousItemDownloadingStatus
-        else { return true }
-        return status == .current
+        return ICloudFileReadiness.isReadyToRead(
+            downloadingStatus: status,
+            realPathExists: FileManager.default.fileExists(atPath: url.path))
     }
 
     // MARK: - 读
@@ -297,13 +298,33 @@ enum ICloudConfigStore {
     /// 超时就放弃并返回 nil(调用方据此提示"iCloud 还没同步下来,过一会再试"),不无限等
     /// —— iCloud 卡住是常态,不能让用户对着一个转不完的圈。
     static func read(_ url: URL, timeout: TimeInterval = 20) async -> Data? {
-        if isMaterialized(url) { return await loadOffCallerThread(url) }
+        if case .data(let data) = await readOutcome(url, timeout: timeout) { return data }
+        return nil
+    }
+
+    /// `read` 的完整结果。分出 `.downloading` 这一档是为了让界面能说实话:
+    /// "已经在下了,等它下完"和"根本没能开始下"对用户是两件完全不同的事,而原来这两种
+    /// 都返回 nil、界面一律提示"等一会儿再试" —— 后一种等到天荒地老也不会好
+    /// (2026-08-24 用户在另一台机器上报的正是这个,病根见 `ICloudFileReadiness`)。
+    enum ReadOutcome {
+        case data(Data)
+        /// 本机还没有这份文件,下载**已经发起**,但超时之前没下完。再点一次就行。
+        case downloading
+        /// 连下载都没能发起:没开 iCloud Drive、文件真的不在、或者这个目录不归 iCloud 管。
+        case unavailable
+    }
+
+    static func readOutcome(_ url: URL, timeout: TimeInterval = 20) async -> ReadOutcome {
+        if isMaterialized(url) {
+            guard let data = await loadOffCallerThread(url) else { return .unavailable }
+            return .data(data)
+        }
 
         do {
             try FileManager.default.startDownloadingUbiquitousItem(at: url)
         } catch {
             logger.notice("read: startDownloading failed: \(error.localizedDescription, privacy: .public)")
-            return nil
+            return .unavailable
         }
 
         // 先等状态变成"已下载"再读,而不是直接读着等它物化 —— 直接读会把调用线程按在
@@ -311,10 +332,13 @@ enum ICloudConfigStore {
         let deadline = Date().addingTimeInterval(timeout)
         while Date() < deadline {
             try? await Task.sleep(nanoseconds: 400_000_000)
-            if isMaterialized(url) { return await loadOffCallerThread(url) }
+            if isMaterialized(url) {
+                guard let data = await loadOffCallerThread(url) else { return .unavailable }
+                return .data(data)
+            }
         }
         logger.notice("read: timed out waiting for iCloud download")
-        return nil
+        return .downloading
     }
 
     /// 把真正读盘那一下挪离调用者所在的线程。

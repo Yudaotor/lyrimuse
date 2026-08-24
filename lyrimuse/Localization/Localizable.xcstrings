@@ -8518,6 +8518,23 @@
         }
       }
     },
+    "正在从 iCloud 下载这份备份，下载完再点一次「导入」" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Downloading this backup from iCloud — click Import again once it finishes"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在从 iCloud 下载这份备份，下载完再点一次「导入」"
+          }
+        }
+      }
+    },
     "正在同步…" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -11476,6 +11493,23 @@
         }
       }
     },
+    "读不到这份备份：可能没开 iCloud Drive，或者这个文件夹不在同步" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Can’t read this backup — iCloud Drive may be off, or this folder isn’t syncing"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "读不到这份备份：可能没开 iCloud Drive，或者这个文件夹不在同步"
+          }
+        }
+      }
+    },
     "读取播放状态、抓歌词和封面" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -12390,23 +12424,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "这份备份读不出来"
-          }
-        }
-      }
-    },
-    "这份备份还没从 iCloud 下载下来，等一会儿再试" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "This backup hasn't finished downloading from iCloud — try again in a moment"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "这份备份还没从 iCloud 下载下来，等一会儿再试"
           }
         }
       }
