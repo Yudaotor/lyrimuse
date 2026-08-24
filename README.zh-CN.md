@@ -18,15 +18,29 @@
 
 Lyrimuse 常驻在菜单栏里，跟着当前播放弹出一个悬浮歌词窗口——Apple Music、QQ 音乐、网易云音乐、酷狗音乐或 Spotify，你自己选（也可以交给自动识别）——逐字同步、常驻置顶、跨 Space 显示。就是网易云音乐桌面客户端那种"桌面歌词"体验，只不过是原生 macOS 版本。
 
-<div align="center">
-
-<img src="docs/images/app-desktop-lyrics.png" width="420" alt="经典桌面悬浮歌词"><br>
-<sub>经典悬浮窗</sub>
-
-<img src="docs/images/app-dynamic-island.png" width="420" alt="灵动岛样式歌词"><br>
-<sub>灵动岛样式胶囊（没有物理刘海也能用）</sub>
-
-</div>
+<table>
+<tr>
+<td align="center" width="33%"><img src="docs/images/app-desktop-lyrics.png" width="260" alt="经典桌面悬浮歌词"><br><sub>经典悬浮窗</sub></td>
+<td align="center" width="33%"><img src="docs/images/app-dynamic-island.png" width="260" alt="灵动岛样式歌词"><br><sub>灵动岛样式胶囊（没有物理刘海也能用）</sub></td>
+<td align="center" width="33%"><img src="docs/images/app-menu-bar-lyrics.png" width="260" alt="菜单栏歌词"><br><sub>菜单栏文字模式，带卡拉OK式染色</sub></td>
+</tr>
+<tr>
+<td align="center"><img src="docs/images/app-lyrics-window.png" width="380" alt="歌词窗口"><br><sub>歌词窗口，仿 Apple Music 歌词页</sub></td>
+<td align="center"><img src="docs/images/app-idle-standby.png" width="380" alt="歌词窗口听歌总览"><br><sub>同一个窗口，没有歌在放时的听歌总览</sub></td>
+</tr>
+<tr>
+<td align="center"><img src="docs/images/app-lastfm-profile.png" width="380" alt="Last.fm 听歌档案"><br><sub>Last.fm 听歌档案——数字统计与最近记录</sub></td>
+<td align="center"><img src="docs/images/app-lastfm-charts.png" width="380" alt="Last.fm 榜单"><br><sub>Last.fm 档案——歌手 / 专辑 / 歌曲榜单</sub></td>
+</tr>
+<tr>
+<td align="center"><img src="docs/images/app-menu-bar-dropdown.png" width="380" alt="菜单栏下拉菜单"><br><sub>菜单栏下拉菜单，什么都摸得到</sub></td>
+<td align="center"><img src="docs/images/app-settings.png" width="380" alt="设置页"><br><sub>设置页，改哪项都有实时预览</sub></td>
+</tr>
+<tr>
+<td align="center"><img src="docs/images/app-lyrics-manager.png" width="380" alt="歌词管理"><br><sub>歌词管理——浏览、手改、重新匹配任意一首歌的歌词</sub></td>
+<td align="center"><img src="docs/images/app-lyrics-search.png" width="380" alt="搜索歌词"><br><sub>每个候选都打了分、标了来源，选错版本一眼就能看出来</sub></td>
+</tr>
+</table>
 
 ## 功能特性
 
@@ -36,18 +50,22 @@ Lyrimuse 常驻在菜单栏里，跟着当前播放弹出一个悬浮歌词窗�
 - **罗马音 + 翻译**，跟原文一起显示——歌词源自带社区翻译时优先用它，没有的话走端上机器翻译（Apple 系统翻译，歌词不出本机），翻不了再退联网兜底，译文语言可选 18 种；罗马音按行判断，中日双语歌只有日文行会标注读音，不会连中文一起标上拼音
 - **对唱/多人合唱歌词分开显示**，只要来源（或 AMLL 词条）标出了是谁在唱哪一句，就不会把两个人的声部糊成一团
 - **简繁中文切换**，独立于 App 界面语言，只管歌词文字本身用哪种写法
-- **纯音乐就明说是纯音乐**，不会一直卡在"搜索歌词中…"
 - **完整的「歌词管理」窗口**——浏览、手改、删除、重新搜索任意一首歌的歌词，支持多选批量删除、列宽随手拖，遇到不同步还能单独调整这首歌的时间轴偏移
 - **本地模式完全离线**——已经缓存好的歌词不需要联网也能显示
+
+### 你的听歌档案
+- **一份真正的听歌档案，不只是同步播放记录**——在主设置的"账号"分类里一键连接 Last.fm（不用自己手动换 token），就能看到今天/近 7 天/总量数字、一行实时的"正在记录"提示，还有带封面的实时最近播放列表
+- **歌手/专辑/歌曲榜单**，可按时段筛选（近 7 天/近 30 天/近一年/全部），外加「那年今日」——回顾往年这天你在听什么
+- **每次播放都会先记在本地**，就算你还没连 Last.fm——之后连上，之前攒下的记录会通过补传队列自动补上
+- **这份本地历史同样会出现在歌词窗口里**——没有歌在放的时候，它会变成一块听歌总览面板，而不是一片空白（下面还会细说）
 
 ### 想怎么看，你说了算
 - **自选播放器，或者交给自动识别**：读 Apple Music（走「自动化」权限）、QQ 音乐、网易云音乐、酷狗音乐或 Spotify（都走 macOS 系统级 MediaRemote，不需要任何权限）的播放状态——首次启动引导选一次，之后随时在设置里切换，也可以直接留在自动识别，跟随 macOS 当前系统级 Now Playing 焦点
 - **三种展示方式**：经典桌面悬浮窗、贴着屏幕顶部刘海的灵动岛胶囊（可选显示专辑封面，背景也能跟着封面模糊），或者一个仿 Apple Music 歌词页的可缩放「歌词窗口」——双栏布局、封面模糊铺底、完整歌词自动滚动到当前行——任意组合开启，或者都不开
 - **菜单栏文字模式**——不想要悬浮窗，直接在状态栏看当前这一行歌词；太长的句子会横向滚动播完，而不是截成半句（想要截断也留着开关）
-- **悬浮窗自带播放控制**（播放/暂停、上一首、下一首），跟你选的播放器一致生效；正在放的是 Apple Music 时还多一颗「喜欢」，一下收藏当前这首
 - **进度条拖着就能跳**——歌词窗口和灵动岛的进度条都能拖动跳转，不只是给你看进度
+- **一键跳到当前歌曲的页面**——在「⋯」菜单或简介面板里点一下，Apple Music 直接在 App 内打开，QQ 音乐、网易云音乐会打开对应歌曲/专辑/歌手的网页；不用自己搜，链接是查歌词那会儿就顺手解析好的
 - **没有歌在放的时候，歌词窗口会变成一块听歌总览面板**，而不是一片空白——今天/本周听了多少、「那年今日」，外加一份带封面的完整最近播放列表，点开直接跳到对应的 Apple Music 专辑/艺人页
-- **默认点击穿透，长按才能拖动**——经典悬浮窗不会挡住你点它下面的内容；长按住不放可以拖动位置，也可以在菜单栏里把位置整个锁定
 - **外观完全自定义**：字体（也可以跟随系统）、字号、文字/背景/阴影颜色（可以存成配色主题反复用，也可以让文字颜色跟着当前专辑封面走）、悬浮窗宽度
 - **截屏/录屏/共享屏幕时自动隐藏**——只有你自己在这台 Mac 上还能看见
 - **暂停时自动收起**，不会占着桌面空转
@@ -55,9 +73,7 @@ Lyrimuse 常驻在菜单栏里，跟着当前播放弹出一个悬浮歌词窗�
 ### 一个懂事的 Mac 应用该有的样子
 - **中英文界面**，切换立即生效，不用重启
 - **全局快捷键**，覆盖每一个常用动作，默认都不绑定任何按键，交给你自己决定
-- **只待在菜单栏里**，不占 Dock（想显示在 Dock 里也可以在设置里打开）
 - **自动检查更新**（也可以随时在菜单栏里手动检查）——不用自己老回 Releases 页面看
-- **同步播放记录到 Last.fm**，在主设置的"账号"分类里一键连接，不用自己手动换 token——连上之后就能在这里看到自己的听歌档案：今天/近 7 天/总量数字、歌手/专辑/歌曲榜单，还有「那年今日」回顾
 - **可选的双向联动启动**，跟你选的播放器之间——打开一个的时候顺带拉起另一个
 - **导出/导入完整配置**，方便换到新 Mac；还有一键导出诊断信息，方便排查问题
 
@@ -169,6 +185,29 @@ QQ 音乐/网易云音乐/酷狗音乐/Spotify/自动识别这几个播放源支
 
 不需要再配置任何其它东西才能看到歌词——上面提到的所有附加功能都是后续在设置里按需开启的。
 
+## 常见问题
+
+**装这个需要 Apple 开发者账号吗？**
+不需要。Lyrimuse 一直都是 ad-hoc 签名——你不需要开发者账号，这个项目本身也没有。上面「快速开始」里那个一次性的 Gatekeeper 解锁步骤就是这个原因。
+
+**只支持 Apple Music 吗，Spotify、QQ 音乐、网易云音乐能用吗？**
+都支持，外加酷狗音乐，一共五个播放器，也可以交给自动识别，跟随 macOS 当前认为的「正在播放」。Apple Music 走「自动化」权限读取；其它四个完全不需要任何额外权限，走的是 macOS 系统级 MediaRemote。
+
+**这跟网易云音乐自带的桌面歌词是一回事吗？**
+思路一样，不是同一个 App——Lyrimuse 把「桌面悬浮歌词」这套体验带给五个播放器（不只是网易云自己的客户端），原生 macOS，还多了灵动岛样式和一个仿 Apple Music 的完整歌词窗口，不只是经典悬浮窗一种形态。
+
+**没有网络能看歌词吗？**
+一首歌的歌词只要解析过一次，之后就能——本地模式直接显示已缓存的歌词，不用联网。第一次查询（以及需要机器翻译的时候）还是要联网的。
+
+**我的数据会传到外面吗？**
+解析歌词本身要查公开的歌词接口（网易云、QQ、酷狗、Musixmatch、LRCLIB、AMLL）——这是这个功能本身决定的。翻译默认走端上（Apple 系统翻译），只有退到网络翻译时才会联网。其余的——本地收听历史、缓存的歌词、设置——都只存在你 Mac 本地的文件里，除非你主动去连 Last.fm、ListenBrainz，或者那个可选的网页中继。
+
+**能标日语/韩语罗马音，或者翻中文吗？**
+可以——罗马音按行判断（中日双语混唱的歌不会整首被判错），翻译来自歌词源自带的社区翻译，或者端上/联网机器翻译，译文语言可选 18 种。
+
+**支持 Intel Mac 吗？**
+支持，走单独的 universal 包（见上面方案 B）——App 内自动更新只服务 Apple Silicon，Intel 用户请直接去 [Releases 页面](https://github.com/Yudaotor/lyrimuse/releases) 看有没有新版本。
+
 ## 排查
 
 歌词不出来时，直接问 collector：
@@ -224,4 +263,4 @@ me.yudaotor.lyrimuse`）。留着它会把重装引向一条死路：LaunchAgent
 
 ## 致谢
 
-灵动岛样式悬浮歌词窗口的设计和技术思路参考了 [boring.notch](https://github.com/TheBoredTeam/boring.notch)、[NotchDrop](https://github.com/Lakr233/NotchDrop) 和 [DynamicNotchKit](https://github.com/MrKai77/DynamicNotchKit)；桌面歌词这个概念本身则要归功于 [LyricsX](https://github.com/ddddxxx/LyricsX)。
+桌面歌词这个概念要归功于 [LyricsX](https://github.com/ddddxxx/LyricsX)。
