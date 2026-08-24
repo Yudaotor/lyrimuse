@@ -3,13 +3,16 @@
    然后跑 python3 Localization/generate-strings.py 重新生成,两个文件一起提交。
    selftest 会校验 catalog 与生成物一致。 */
 
+"%1$@ · %2$@ 首" = "%1$@ · %2$@ plays";
 "%1$@ · 来自 %2$@" = "%1$@ · from %2$@";
 "%1$@ 年 %2$@ 月 %3$@ 日" = "%1$@-%2$@-%3$@";
 "%1$@ 年共 %2$@ 次" = "%2$@ plays in %1$@";
 "%1$@ 年前的今天听了 %2$@ 次，循环最多的是《%3$@》" = "%1$@ years ago today: %2$@ plays, most on repeat: %3$@";
 "%1$@ 年前的今天听了 %2$@ 次，最常循环的是这几首" = "%1$@ years ago today: %2$@ plays, most on repeat";
 "%@ / %@ 首" = "%@ of %@";
+"%@ 分钟前更新" = "Updated %@ min ago";
 "%@ 字" = "%@ characters";
+"%@ 小时前更新" = "Updated %@ h ago";
 "%@ 月" = "%@";
 "%@ 条状态未知，不会自动重试" = "%@ with unknown status — not retried automatically";
 "%@ 条被 Last.fm 拒绝" = "%@ rejected by Last.fm";
@@ -18,6 +21,7 @@
 "%@更新" = "Updated %@";
 "%d 次" = "×%d";
 "/ %@ 页" = "of %@";
+"Apple Music" = "Apple Music";
 "Apple Music 自动化" = "Apple Music Automation";
 "Apple Music 自动化权限（必需）" = "Apple Music Automation Access (Required)";
 "GitHub 仓库" = "GitHub Repository";
@@ -32,6 +36,9 @@
 "Lyrimuse 需要一个后台程序常驻运行，负责读取播放状态、解析歌词/封面并写入本地缓存——没有它，悬浮歌词/灵动岛同样无法显示任何内容。点下面的按钮即可启用，之后开机会自动运行，不用再管" = "Lyrimuse needs a background service running at all times to read playback state, resolve lyrics and artwork, and cache them locally. Without it, the floating lyrics and the notch have nothing to show. Click Enable below; it then starts automatically at login and needs no further attention";
 "Lyrimuse 需要这个权限来读取 Apple Music 当前正在播放的歌曲信息——没有它，悬浮歌词完全没法显示任何内容。点下面的按钮会弹出系统授权对话框，选择「允许」即可；随时可以在设置里重新打开这一步" = "Lyrimuse reads what's playing in Apple Music through this permission — without it, the floating lyrics have nothing to show. Click Request Access, then choose “Allow” when macOS asks. You can come back to this step in Settings at any time";
 "QQ 音乐" = "QQ Music";
+"QQ 音乐专辑页" = "QQ Music album page";
+"QQ 音乐歌手页" = "QQ Music artist page";
+"QQ 音乐歌曲页" = "QQ Music song page";
 "QQ音乐" = "QQ Music";
 "Scrobble 到 Last.fm" = "Scrobble to Last.fm";
 "Server酱" = "ServerChan";
@@ -71,6 +78,7 @@
 "不支持" = "Not supported";
 "不是带时间戳的歌词" = "Not timestamped lyrics";
 "不转换" = "As-is";
+"与当前播放器同源" = "Platform match";
 "专辑" = "Album";
 "专辑吻合" = "Album match";
 "中文" = "Chinese";
@@ -114,12 +122,17 @@
 "全部来源" = "All Sources";
 "全部歌手" = "All Artists";
 "全部设置…" = "All Settings…";
+"六个源的请求全部失败，很可能是网络连接有问题，不是这首歌真的没有歌词——检查网络后可以点下面的「重试」" = "None of the six sources responded. That usually means a network problem rather than a song with no lyrics. Check your connection, then click Retry below";
+"六个源都没找到可用的候选" = "No Lyrics from Any Source";
 "共 %d 条，占用 %@" = "Cached: %d · %@ on disk";
 "关于" = "About";
 "关于 Lyrimuse" = "About Lyrimuse";
 "关掉则暂停时只收起歌词行，保留顶部那一条" = "When off, pausing collapses just the lyric row and keeps the top bar";
 "关闭" = "Close";
 "关闭后只保留菜单栏图标，不占 Dock 位置" = "Turn off to show only the menu bar icon and keep Lyrimuse out of the Dock";
+"关闭后按在歌词文字上的那一次点击会被悬浮窗接住、不再穿到下层；歌词四周的空白处不受影响" = "When off, a click on the lyrics text is caught by the overlay instead of passing through; the empty space around the lyrics is unaffected";
+"关闭时按住歌词就能拖；打开则要长按 0.35 秒" = "Off: hold the lyrics to drag. On: long-press for 0.35s";
+"关闭时按住歌词就能拖；打开则要长按 0.35 秒，期间点击照旧穿透" = "Off: hold the lyrics to drag. On: long-press for 0.35s, and clicks pass through until then";
 "其中 %@ 条是你手动修正过的,删掉之后找不回来。已导出到本地的歌词文件也会一并删除,且无法撤销。下次播放这些歌会重新走一遍匹配解析,不保证能找到一样的歌词" = "Manually edited lyrics for %@ of these songs can't be recovered. The exported .lrc files are deleted too, and this can't be undone. The next time you play these songs, Lyrimuse searches again and may not find the same lyrics";
 "其中含 %@ 个歌词文件，会一并恢复。" = "It contains %@ lyrics files, which will be restored too. ";
 "其它" = "Other";
@@ -133,8 +146,11 @@
 "写入本地记录文件失败: %@" = "Couldn't save to the lyrics cache: %@";
 "减少推荐" = "Suggest Less";
 "分数 %@ · %@ 行" = "Score %@ · %@ lines";
+"划过让开" = "Move Aside on Hover";
 "列表播放" = "Play in Order";
 "刚刚" = "just now";
+"刚刚更新" = "Just updated";
+"刚才在听" = "Last played";
 "删除" = "Delete";
 "删除 %@ 条" = "Delete %@";
 "删除中…" = "Removing…";
@@ -203,6 +219,7 @@
 "在其他设备上播放，Last.fm 已收到" = "Playing on another device; Last.fm has received it";
 "在播放器中打开" = "Show in Player";
 "在浅色或杂乱的桌面背景上把字撑出来" = "Keeps text readable on light or busy desktop backgrounds";
+"在设置中查看 Last.fm" = "View Last.fm in Settings";
 "在访达中显示" = "Show in Finder";
 "在钉钉群里：群设置 → 智能群助手 → 添加机器人 → 自定义，创建后复制 Webhook 地址。安全设置建议选「加签」，把生成的密钥填进下面的「加签密钥」" = "In your DingTalk group: Group Settings → Group Assistant → Add Robot → Custom, then copy the webhook URL after creating it. For security, choose “Signature” and put the generated secret in the “Signing Secret” field below";
 "在飞书群里：设置 → 群机器人 → 添加机器人 → 自定义机器人，创建后复制 Webhook 地址。想加一层校验可以开启「签名校验」，把密钥填进下面的「签名密钥」" = "In your Feishu group: Settings → Group Bots → Add Bot → Custom Bot, then copy the webhook URL after creating it. For an extra layer of verification, enable “Signature Verification” and enter the secret in the “Signature Secret” field below";
@@ -330,13 +347,16 @@
 "把你播放的歌同步到 ListenBrainz" = "Sync what you play to ListenBrainz";
 "把你播放的歌记录到 Last.fm" = "Records what you play to Last.fm";
 "把整份决策记录拷到剪贴板（纯文本）" = "Copy the whole decision record to the clipboard as plain text";
-"括号里的 Live / Remix / Demo 等跟本地曲名对不上" = "A Live / Remix / Demo tag in parentheses doesn't match the local title";
+"拖动前先长按" = "Long-press before dragging";
+"括号里的 Live / Remix / Demo / Club Mix 等跟本地曲名对不上" = "A Live / Remix / Demo / Club Mix tag in parentheses doesn't match the local title";
 "拷贝" = "Copy";
 "拷贝名称" = "Copy Name";
 "拷贝歌词" = "Copy Lyrics";
 "指针划过时让开" = "Move Aside on Hover";
 "按 %@ 秒的曲目时长校验" = "Validated against a track length of %@s";
+"按住歌词即可拖动位置" = "Hold the lyrics to reposition";
 "按当前这首歌记忆校准值，下次再放这首歌自动生效" = "Remembered per song; applies automatically next time that song plays";
+"换一句" = "Another line";
 "换文件夹后，旧文件不会自动搬过去" = "Existing files aren't moved to the new folder";
 "授权已失效" = "Authorization expired";
 "接收 Lyrimuse 的推送通知" = "Receive push notifications from Lyrimuse";
@@ -379,6 +399,7 @@
 "无歌词" = "No Lyrics";
 "无歌词 %@ 首" = "%@ without lyrics";
 "无法获取待播清单" = "Queue Unavailable";
+"日均 %1$@ · %2$@ 天" = "%1$@/day · %2$@ days";
 "日文歌词自带罗马音，同水平候选间优先" = "Japanese lyrics with romanization; preferred among otherwise-equal candidates";
 "日语" = "Japanese";
 "日语、韩语标成罗马字，中文标成拼音" = "Japanese and Korean get romaji, Chinese gets pinyin";
@@ -388,6 +409,7 @@
 "时长对不上，但别的源也在这个时间结束，改信这个印证" = "The duration is off, but another source ends at the same time, so this candidate is trusted anyway";
 "时长明显对不上，也没有别的源印证" = "Duration is far off and nothing corroborates it";
 "时间轴" = "Timing";
+"昨天" = "Yesterday";
 "显示/隐藏悬浮歌词" = "Show/Hide Floating Lyrics";
 "显示发音" = "Show Pronunciation";
 "显示在哪块屏幕" = "Show On";
@@ -419,6 +441,7 @@
 "最大宽度" = "Max Width";
 "最大音量" = "Full volume";
 "最近一次评估" = "Latest evaluation";
+"最近听过" = "Recently played";
 "最近记录" = "Recent Scrobbles";
 "有源明确说这首是纯音乐，没有可用的歌词候选" = "A source says this track is instrumental; there is no usable lyric candidate";
 "服务器设置 → 整合(Integrations) → Webhook → 新建 Webhook，选好要发到的频道后复制 Webhook URL" = "Server Settings → Integrations → Webhooks → New Webhook. Pick the channel to post to, then copy the Webhook URL";
@@ -454,6 +477,7 @@
 "检查更新…" = "Check for Updates…";
 "检测到播放器打开时自动拉起 Lyrimuse" = "Starts Lyrimuse automatically when your player opens";
 "检测到新的播放器" = "New player detected";
+"榜单" = "Charts";
 "次" = "plays";
 "欢迎使用 Lyrimuse" = "Welcome to Lyrimuse";
 "歌名" = "Title";
@@ -481,7 +505,9 @@
 "歌词缓存文件，加上已导出的 .lrc 歌词文件夹，合计占用的磁盘空间" = "Total disk space used by the lyrics cache file plus the exported .lrc folder";
 "歌词超出曲长" = "Lyrics overshoot track length";
 "正在同步…" = "Syncing…";
+"正在同步历史" = "Syncing history";
 "正在同步历史（%1$@/%2$@ 页）" = "Syncing history (page %1$@ of %2$@)";
+"正在同步历史（%@）" = "Syncing history (%@)";
 "正在播放" = "Playing";
 "正在放：%@" = "Now playing: %@";
 "正在查询网易云 / QQ音乐 / 酷狗 / Musixmatch / LRCLIB…" = "Searching NetEase Cloud Music / QQ Music / Kugou Music / Musixmatch / LRCLIB…";
@@ -503,6 +529,7 @@
 "比下面的宽度更长时，在状态栏里横向滚动播完整句；开头会先停一下再滚" = "Anything longer than the width below scrolls across the menu bar in full, after a brief pause at the start";
 "汇总 App/采集器日志和权限、常驻服务等关键状态，保存成一份文本文件，不会包含任何账号 token 或密钥的原始内容" = "Bundles App/collector logs plus key state (permissions, background service, etc.) into a text file — never includes any account tokens or secrets";
 "没在显示歌词时，菜单栏上的那个图标" = "The icon shown in the menu bar when no lyrics are displayed";
+"没拉到最近记录" = "Couldn't load recent scrobbles";
 "没有匹配的字体" = "No matching fonts";
 "没有可调整的项目" = "Nothing to adjust here";
 "没有在播放" = "Not Playing";
@@ -522,6 +549,7 @@
 "清除快捷键" = "Clear Shortcut";
 "清除所有设置" = "Erase All Settings";
 "清除筛选" = "Clear Filters";
+"源自报曲长不符" = "Source duration mismatch";
 "灵动岛" = "Notch";
 "灵动岛歌词" = "Notch Lyrics";
 "点击归零" = "Click to reset";
@@ -555,6 +583,7 @@
 "立即刷新" = "Refresh now";
 "第" = "Page";
 "第 %1$@ / %2$@ 页" = "Page %1$@ of %2$@";
+"第 %@ 次" = "Play #%@";
 "第 %@ 次听" = "Play #%@";
 "等待 Last.fm 确认（通常几秒内）" = "Waiting for Last.fm to acknowledge (usually a few seconds)";
 "签名密钥（可选）" = "Signature Secret (Optional)";
@@ -580,9 +609,11 @@
 "继续播放" = "Resume";
 "网易云 50 · QQ 30 · 酷狗 20 · Musixmatch 15 · LRCLIB 10" = "NetEase 50 · QQ 30 · Kugou 20 · Musixmatch 15 · LRCLIB 10";
 "网易云音乐" = "NetEase Cloud Music";
+"网易云音乐歌曲页" = "NetEase Music song page";
 "网络似乎不通" = "Couldn't Reach Any Source";
 "网络似乎不通，这一轮没搜到任何候选" = "The network looks down; no candidate came back this round";
 "网络连接失败" = "No network connection";
+"网页" = "Web";
 "网页推送" = "Web Push";
 "罗马音" = "Romanization";
 "置于最顶层" = "Always on Top";
@@ -621,7 +652,8 @@
 "解析决策" = "Resolution decision";
 "解析本地记录文件失败" = "Couldn't read the lyrics cache — the file looks damaged";
 "解锁后可点击穿透" = "Unlocked: clicks pass through";
-"解锁后鼠标点击会穿到桌面上；长按住悬浮歌词不放才能拖动它" = "When unlocked, clicks pass through to whatever is behind; click and hold the lyrics to drag them";
+"解锁后鼠标点击会穿到桌面上；拖动方式见下面「拖动前先长按」" = "Unlocked: clicks pass through to the desktop. How dragging works is set by 'Long-press before dragging' below";
+"解锁后鼠标点击会穿到桌面上；拖动方式见设置里的「拖动前先长按」" = "Unlocked: clicks pass through to the desktop. How dragging works is set by 'Long-press before dragging' in Settings";
 "让每首歌都有一份对得上的歌词" = "Give every track lyrics that actually match it";
 "记录的是手动修改之前的最后一次自动评估" = "This records the last automatic evaluation before your manual edit";
 "设置" = "Settings";
@@ -669,7 +701,9 @@
 "跟随系统语言" = "Follow System Language";
 "跳动音条" = "Dancing Bars";
 "跳过" = "Skip";
+"较上周 %@" = "%@ vs last week";
 "运行中" = "Running";
+"近 %1$@ 天 · 最高 %2$@（%3$@）" = "Last %1$@ days · peak %2$@ (%3$@)";
 "近 12 周的收听热力（完整年历在设置的统计页）" = "Listening heatmap for the last 12 weeks (full calendar lives in Settings → stats)";
 "近 30 天" = "Past 30 days";
 "近 7 天" = "Past 7 days";
@@ -680,6 +714,7 @@
 "还没填服务地址（可选）" = "Server URL not set yet (optional)";
 "还没填访问令牌（可选）" = "Access token not set yet (optional)";
 "还没有 scrobble 记录" = "No scrobbles yet";
+"还没有收听记录" = "No scrobbles yet";
 "还没连接 Last.fm 账号" = "Last.fm account isn't connected yet";
 "还缺用户名" = "Username missing";
 "还缺用户名，听歌报告用不了" = "Username missing — listening digests can't run";
@@ -693,6 +728,8 @@
 "这个开关只影响「桌面悬浮歌词」：在当前句下方预览下一句。歌词窗口本来就显示整份歌词，灵动岛和菜单栏只有一行空间" = "This setting only affects Desktop Floating Lyrics: it previews the next line beneath the current one. The Lyrics Window already shows the full lyrics, and Notch and Menu Bar Lyrics only have room for a single line";
 "这个时段还没有记录" = "No scrobbles in this period";
 "这个源匹配到的专辑跟本地专辑一致，版本大概率对（最多 150）" = "The album this source matched agrees with the local album, so the version is likely right (up to 150)";
+"这个源就是你正在用的播放器，时间轴对着同一份音频母版（+250）" = "This source is the platform you're actually playing on — its timing lines up with the exact same master (+250)";
+"这个源自己声明的曲目时长跟本地差了 12% 以上，多半挂在另一次录音上" = "This source's own reported track length is off from the local one by more than 12% — likely a different recording";
 "这个状态只在本次打开这扇窗口期间有效，下次重新打开会恢复默认" = "Applies only while this window is open; reopening resets it";
 "这份备份读不出来" = "This backup could not be read";
 "这份备份还没从 iCloud 下载下来，等一会儿再试" = "This backup hasn't finished downloading from iCloud — try again in a moment";
@@ -707,10 +744,13 @@
 "这次请求耗时有点久。如果你已经看到系统弹窗，请去处理它；找不到弹窗的话，可以直接去系统设置里手动开启" = "This is taking longer than usual. If a system dialog appeared, respond to it there. If you don't see one, you can turn this on in System Settings instead";
 "这里是一句歌词示例" = "A line of lyrics looks like this";
 "这里的设置对桌面悬浮歌词和灵动岛生效，先开启其中一种" = "These settings apply to Desktop Floating Lyrics and Notch Lyrics — turn one of them on first";
+"这里能看到已创建的应用和它们的 API Key，但看不到 Secret；Secret 丢了的话，用上面「前往申请」再建一个新的就好" = "This shows apps you've already created and their API Key, but not the Secret. If you've lost the Secret, use 'Get an API account' above to create a new one instead";
 "这首歌在你 Last.fm 上的第几次收听" = "Which play of this track this was in your Last.fm history";
 "进入全屏" = "Enter Full Screen";
 "连上之后，你播放的每一首歌都会自动 scrobble 到 Last.fm" = "Once connected, every track you play is scrobbled to Last.fm automatically";
+"连上之后，你播放的每一首歌都会自动 scrobble 到 Last.fm，还能在这里看到你专属的听歌档案" = "Once connected, every track you play is scrobbled to Last.fm automatically, and you'll get your own listening profile here too";
 "连不上 ListenBrainz，稍后会自动重试" = "Can't reach ListenBrainz — will retry";
+"连接" = "Connection";
 "连接 Last.fm" = "Connect Last.fm";
 "连接 Last.fm 账号" = "Connect Last.fm Account";
 "连接信息" = "Connection Info";
@@ -792,6 +832,7 @@
 "首次解析" = "First resolve";
 "麦克风" = "Microphone";
 "黑胶唱片" = "Vinyl";
+"鼠标移到悬浮歌词上时它会淡下去，移开恢复" = "The floating lyrics fade out while the pointer is over them and come back when it leaves.";
 "鼠标移到悬浮歌词上时它会淡下去，移开恢复；只对悬浮歌词生效" = "The floating lyrics fade out while the pointer is over them and come back when it leaves. Floating lyrics only.";
 "（已调）" = " (adjusted)";
 "（正在播放）" = " (now playing)";
