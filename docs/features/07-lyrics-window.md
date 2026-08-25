@@ -358,15 +358,15 @@
    "Dock 右键菜单里只有'设置',没有'歌词窗口'",已修)。现场用 Accessibility API 探针
    (`AXUIElementCopyAttributeValue` 查 `kAXSubroleAttribute`/`kAXMinimizedAttribute`,
    读的是真实运行中的进程,不点不发键)实测坐实:这扇窗最小化前 `AXSubrole=AXStandardWindow`,
-   最小化后变成 **`AXSubrole=AXDialog`**;同一时刻「设置」「歌词管理」两扇窗(没有本文件
-   这套标题栏定制)最小化状态下仍是 `AXStandardWindow`——三扇正经标题栏窗口里只有这一扇
-   会这样。AppKit 自动填充「Window」菜单、以及 Dock 据此生成的窗口列表,都会把 AXDialog
-   归类成次要/临时窗口过滤掉。病根大概率是 `enforceTrafficLightPosition`(见 #14 之前那条,
-   直接用 `setFrameOrigin` 搬动标题栏三个原生按钮的 frame,整个项目里独一份的操作)干扰了
-   AppKit 判断"这是不是一扇标准窗口"的内部启发式,但没能在代码层面反向坐实到具体是哪一步
-   ——排查预算花在"验证现象真实存在"上,没有再花在"逐步注释掉 enforceTrafficLightPosition
-   /enforceFullScreenCapability/hiddenTitleBar 三者、重新最小化重测"这类隔离实验上,想动
-   这块前先把预算留出来。修法不去纠正 AXSubrole 本身(没找到能纠正它的正规 API),而是
+   最小化后变成 **`AXSubrole=AXDialog`**。⚠️ **中途误判过一次,已订正**:第一轮只测到这扇窗
+   出这个现象,当时「设置」「歌词管理」凑巧都没被抓到真正最小化的瞬间,便以为是本文件这套
+   标题栏定制(`enforceTrafficLightPosition` 搬动原生按钮 frame)独有的病;第二轮把「设置」
+   「歌词管理」也在真正最小化的状态下测了一遍,**三扇窗最小化后全都是 `AXDialog`**——是这个
+   App 里 `Window(id:)` 场景的窗口普遍现象,不是这扇窗独有的(细节见第 11 章已知坑「Dock
+   右键菜单消失」那条)。「设置」(`Settings { }` 场景,不是 `Window(id:)`)反而全程没出现
+   这个毛病,猜测是 SwiftUI/AppKit 对 `Settings` 场景走了不同的窗口菜单登记路径,没有深究。
+   AppKit 自动填充「Window」菜单、以及 Dock 据此生成的窗口列表,都会把 AXDialog 归类成
+   次要/临时窗口过滤掉。修法不去纠正 AXSubrole 本身(没找到能纠正它的正规 API),而是
    绕开它:`attach()` 里新增 `addToWindowsMenu(_:)`,显式 `NSApp.addWindowsItem` 把这扇窗
    塞进「Window」菜单——菜单项在不在从此跟 AXSubrole 无关;`willCloseNotification` 里对称
    `removeWindowsItem`,窗口关掉不留死项。⚠️ `addWindowsItem` 不是"缺才写"的幂等操作,

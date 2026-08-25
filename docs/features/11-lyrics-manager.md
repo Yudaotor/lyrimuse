@@ -1,6 +1,6 @@
 # 11. 歌词管理窗口
 
-> 最后核对：2026-08-24 · 基线：97c56bd+工作树
+> 最后核对：2026-08-25 · 基线：f07e5df+工作树
 
 ## 定位
 
@@ -166,4 +166,16 @@
    `NSSplitView` 的 `subviews` 有 8 个（`[1328, 698, 630, 12, 630, 0.5, 15, 15]`，原点还互相
    重叠），求和判据在健康布局上也会命中（2973.5 > 1328），而 `adjustSubviews()` 调了根本不动。
    要再碰分栏几何，先写离屏样例验证，别照"两栏两个 subview"这个直觉写。
+14. ⚠️ **这扇窗最小化之后从 Dock 图标右键菜单/「Window」菜单里消失**（2026-08-25 用户报
+   "开着设置/歌词管理/歌词窗口三扇窗，Dock 右键菜单里只有'设置'"，已修）。用 Accessibility
+   API 现场探针实测：这扇窗（以及姐妹窗口「歌词窗口」）最小化后 `AXSubrole` 会变成
+   `AXDialog`，AppKit 自动填充「Window」菜单、Dock 据此生成的窗口列表都会把 `AXDialog`
+   归类成次要/临时窗口过滤掉。⚠️ 排查过程中的一次误判：先只测到「歌词窗口」出这个现象，
+   一度以为是它标题栏定制（见第 07 章已知坑）独有的；这次把「设置」也一起在真正最小化的
+   状态下测了一遍，三扇窗最小化后全都是 `AXDialog`——是这个 App 里 `Window(id:)` 场景的
+   窗口普遍现象，不是某一扇窗独有的。「设置」（`Settings { }` 场景）反而全程没出现这个
+   毛病，猜测是 SwiftUI/AppKit 对 `Settings` 场景走了不同的窗口菜单登记路径，没有深究。
+   修法跟第 07 章一致：`LyricsManagerWindowFramePersistence.attach()` 里显式
+   `NSApp.addWindowsItem` 把窗口塞进「Window」菜单，`willCloseNotification` 里对称
+   `removeWindowsItem`，菜单里在不在从此跟 AppKit 怎么分类这扇窗无关。
 

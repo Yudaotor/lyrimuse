@@ -216,6 +216,7 @@ private final class LyricsManagerWindowFramePersistence: ObservableObject {
     private weak var window: NSWindow?
     private var frameObserver: NSObjectProtocol?
     private var resizeObserver: NSObjectProtocol?
+    private var closeObserver: NSObjectProtocol?
     private var persistFrameTask: Task<Void, Never>?
 
     /// 首次(以及每次 SwiftUI 重新求值 NSViewRepresentable 时)调用,只在真的换了一个
@@ -227,6 +228,21 @@ private final class LyricsManagerWindowFramePersistence: ObservableObject {
         // didResize、把刚读出来的值原样再写一遍(无害但没意义),更糟的是恢复失败
         // (屏幕不在了)时会把系统摆的那个默认位置当成用户意图存下来。
         restorePersistedFrame(window)
+        // 手动挂进「Window」菜单(= Dock 图标右键菜单里的窗口列表)——理由见姐妹窗口
+        // LyricsWindowView.swift 的 LyricsWindowController.addToWindowsMenu 那段注释:
+        // 2026-08-25 用户反馈"Dock 右键菜单里没有'歌词管理'",现场探针实测这扇窗最小化后
+        // AXSubrole 也是 AXDialog(这次连「设置」「歌词窗口」一起测,三扇窗最小化后全都是
+        // AXDialog——之前只测到「歌词窗口」时误以为是它独有的,其实是这个 App 的窗口普遍
+        // 现象,「设置」当时凑巧没被抓到真正最小化的状态)。既然 AppKit 的自动"Window"菜单
+        // 填充信不过,不管三扇窗谁是谁非,统一手动登记。
+        window.isExcludedFromWindowsMenu = false
+        NSApp.addWindowsItem(window, title: window.title, filename: false)
+        if let closeObserver { NotificationCenter.default.removeObserver(closeObserver) }
+        closeObserver = NotificationCenter.default.addObserver(
+            forName: NSWindow.willCloseNotification, object: window, queue: .main
+        ) { note in
+            if let win = note.object as? NSWindow { NSApp.removeWindowsItem(win) }
+        }
         if let frameObserver { NotificationCenter.default.removeObserver(frameObserver) }
         if let resizeObserver { NotificationCenter.default.removeObserver(resizeObserver) }
         // didMove 和 didResize 合用一个回调:两者要存的东西完全一样,而拖动窗口边角同时
