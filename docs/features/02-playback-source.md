@@ -1,6 +1,6 @@
 # 02. 播放数据源与播放器支持
 
-> 最后核对:2026-08-25 · 基线:545be1c+工作树
+> 最后核对:2026-08-25 · 基线:f4e685e+工作树
 
 ## 定位
 
@@ -282,7 +282,7 @@ vs 目录 289.766),拿目录值去盖反而是降精度。覆盖就该待在产�
 | 快照结构与 trackKey | `LyrimuseCore/Local/MediaControlSnapshot.swift` · `MediaControlSnapshot` |
 | 播放器枚举与设置读取 | `LyrimuseCore/Local/PlaybackPlayer.swift` · `PlaybackPlayer`/`PlaybackPlayerPreference` |
 | 播放器展示名/品牌色/占位符号 | `lyrimuse/Settings/FeatureSettingsStore.swift` · `extension PlaybackPlayer`(`displayName`/`tintColor`/`fallbackSymbolName`) |
-| 引导页图标卡片 | `lyrimuse/OnboardingView.swift` · `PlayerChoiceCard` |
+| 引导页图标卡片 | `lyrimuse/OnboardingView.swift` · `PlayerChoiceCard` / `MorePlayersComingCard` |
 | 引导页图标网格顺序 | `lyrimuse/Settings/FeatureSettingsStore.swift` · `PlaybackPlayer.onboardingDisplayOrder`;判据 `lyrimuse/Settings/AppSettings.swift` · `AppSettings.userReadsSimplifiedChinese` |
 | 事件流常驻子进程 | `LyrimuseCore/Local/MediaControlStreamWatcher.swift` · `MediaControlStreamWatcher` |
 | 通道健康自检 | `LyrimuseCore/Local/MediaControlHealth.swift` · `MediaControlHealth` |
@@ -311,6 +311,8 @@ vs 目录 289.766),拿目录值去盖反而是降精度。覆盖就该待在产�
 11. **`uniqueIdentifier` 只对 Apple Music 目录曲目是目录 ID**,本地导入/购买的文件放的是任意 64 位持久 ID(实测负数)。所以 Apple 目录锚点对自己导入的曲库天然无效——这不是 bug,是这个字段的语义边界。别的播放器在这个字段里放什么也没有保证,理论上可能撞上一个真实的目录 ID,所以除了 bundle id 守卫,拿回来的结果一律要过曲目名+专辑名自校验。
 12. ⚠️ **离屏 harness 窗口截不了图,只能截"真身份"App 的窗口**(2026-08-25 排查坐实,验证 `PlayerChoiceCard` 网格排版时踩到):`swiftc` 现编现跑的裸 Mach-O 二进制自己开一扇 `NSWindow`,即使 `onscreen=true`(CGWindowList 确认过),`screencapture -l <id>` 一律报 `could not create image from window`——跟这台机器上 `AXIsProcessTrusted()` 恒为 `false`(这个 shell/调用进程没有拿到「辅助功能」信任,给哪个新编译的二进制都一样)大概率是同一类限制:没有正式签名/bundle 身份的进程,窗口内容拿不到。真机验证只能对着 `build.sh` 装出来的、真正签过名的 `Lyrimuse.app` 截——而它自己的窗口如果被另一扇窗口完全遮住,同一个 `-l` 调用也会报同样的错(实测「引导」窗被「设置」窗完全盖住时截不出来,挪开/换到没被挡的窗口就正常)。这条链路上没有不涉及点击的解法:AX 拿不到信任、装了新二进制也拿不到,唯一稳的路是让目标窗口本来就没被挡。这次的图标网格排版靠人工核算(卡片高度×2行+文案行高)过了预算,没能拿到一张真实截图收尾,已经请用户自己开一次引导页确认——**用户随后截图确认排版正常,2 行 3 列没有跟底部「上一步/下一步」重叠**,人工核算这次是准的。
 
-13. **引导页图标网格的摆放顺序按系统语言排,不是按 `PlaybackPlayer.allCases` 的声明顺序**(2026-08-25 用户要求,`PlaybackPlayer.onboardingDisplayOrder`):Apple Music 恒排第一、「自动识别」恒垫底,中间四个按 `AppSettings.userReadsSimplifiedChinese` 二选一——简体中文语境国内三家(QQ/网易云/酷狗)排在 Spotify 前面,非简体中文(含繁体中文、英文等)反过来。判据是系统**首选语言列表第一项**的字符串前缀/子串匹配(跟 `L10n.current` 同一套朴素写法,不依赖 `Locale.Language.script` 这类新 API 在不同系统版本上是否可靠),不是这批"读不读中文"的 `AppSettings.userReadsChinese`——那个繁简不分,会把台/港/澳用户也并进"排国内播放器优先"这一档,而这批用户对国内三家的使用率其实更接近英文用户。只改了这一个网格的展示顺序,`allCases` 本身和别处(设置页播放器 `Picker`)都没动,省得改一处波及一片。文案末尾加了个「……」(用户要求),暗示这份名单还会陆续接入新播放器,不是封顶的。
+13. **引导页图标网格的摆放顺序按系统语言排,不是按 `PlaybackPlayer.allCases` 的声明顺序**(2026-08-25 用户要求,`PlaybackPlayer.onboardingDisplayOrder`):Apple Music 恒排第一、「自动识别」恒垫底,中间四个按 `AppSettings.userReadsSimplifiedChinese` 二选一——简体中文语境国内三家(QQ/网易云/酷狗)排在 Spotify 前面,非简体中文(含繁体中文、英文等)反过来。判据是系统**首选语言列表第一项**的字符串前缀/子串匹配(跟 `L10n.current` 同一套朴素写法,不依赖 `Locale.Language.script` 这类新 API 在不同系统版本上是否可靠),不是这批"读不读中文"的 `AppSettings.userReadsChinese`——那个繁简不分,会把台/港/澳用户也并进"排国内播放器优先"这一档,而这批用户对国内三家的使用率其实更接近英文用户。只改了这一个网格的展示顺序,`allCases` 本身和别处(设置页播放器 `Picker`)都没动,省得改一处波及一片。
+
+14. **"陆续支持中"的提示是网格里第 7 张卡,不是文案**(2026-08-25,一次返工才落到位):用户第一次说"在最后面加几个点标识陆续支持中"时,理解成文案末尾加「……」,改完发截图纠正——指的是六张真选项排完 2 行后网格自己空出来的第三行第一格。改法:`playerChoiceStep` 的 `LazyVGrid` 在 `ForEach(PlaybackPlayer.onboardingDisplayOrder)` 后面紧跟一张 `MorePlayersComingCard`(不用 `Button` 包、没有选中态描边/底色,虚线框+三个点跟六张真选项区分开,不会被当成"点了没反应的坏按钮"),`LazyVGrid` 按声明顺序自然往下排,不用另外指定网格坐标。
 
 ⚠️待核对:设置为「自动识别」且实际在播 Apple Music 时,playPause/上一首/下一首经 `MusicPlaybackController.dispatch` 走 media-control(只有 seek 有 `preferAppleScript` 覆盖)——代码注释断言 media-control 控制指令对系统 Now Playing 焦点生效、应可控制 Music.app,但仓内未见对这一具体组合的实测记录。

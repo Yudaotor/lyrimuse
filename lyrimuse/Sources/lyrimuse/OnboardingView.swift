@@ -174,13 +174,15 @@ struct OnboardingView: View {
             Text(L10n.t("选择播放器"))
                 .font(.title2.bold())
             // 2026-08-25 用户反馈"把支持的播放器都写全"——这句原来漏了酷狗音乐
-            // (2026-08-21 才接入,这句文案没跟着补)。末尾的「……」是用户接着要求加的:
-            // 这份名单不是封顶的,后面还会陆续接入新播放器。
-            Text(L10n.t("Lyrimuse 支持 Apple Music、QQ 音乐、网易云音乐、酷狗音乐、Spotify……，也可以交给「自动识别」——挑一个你平时用来听歌的，随时可以在设置里重新选择"))
+            // (2026-08-21 才接入,这句文案没跟着补)。"陆续支持中"的提示挪到网格里那张
+            // MorePlayersComingCard 卡片上了(用户第一次说"加几个点"时以为是指这句文案
+            // 末尾,截图纠正过来——指的是网格空出来那格,见下面 MorePlayersComingCard)。
+            Text(L10n.t("Lyrimuse 支持 Apple Music、QQ 音乐、网易云音乐、酷狗音乐、Spotify，也可以交给「自动识别」——挑一个你平时用来听歌的，随时可以在设置里重新选择"))
                 .foregroundStyle(.secondary)
             // 原来是一个纯文字下拉菜单,认不出图标、也看不出到底支持哪几家。换成一排
-            // 图标卡片,理由和取图标的办法见 PlayerChoiceCard 类头注。三列正好把六个选项
-            // (五个播放器 + 自动识别)摆成 2 行,不用横向滚动、也不会显得稀疏。
+            // 图标卡片,理由和取图标的办法见 PlayerChoiceCard 类头注。三列把六个选项
+            // (五个播放器 + 自动识别)摆成 2 行,第三行留出一格给下面的
+            // MorePlayersComingCard——不用横向滚动、也不会显得稀疏。
             //
             // 顺序不用 PlaybackPlayer.allCases 的声明顺序,走 onboardingDisplayOrder——
             // 2026-08-25 用户要求按系统语言排:简体中文语境国内三家排在 Spotify 前面,
@@ -192,6 +194,9 @@ struct OnboardingView: View {
                         Task { await features.save() }
                     }
                 }
+                // 六个真选项排满 2 行之后,第三行第一格摆这张——ForEach 之后紧跟着的
+                // 这一个视图会被 LazyVGrid 自然接着往下排,不需要另外指定位置。
+                MorePlayersComingCard()
             }
         }
     }
@@ -256,6 +261,33 @@ struct OnboardingView: View {
                   let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: player.bundleIdentifier)
             else { return }
             installedIcon = NSWorkspace.shared.icon(forFile: url.path)
+        }
+    }
+
+    /// 网格里第三行第一格那张占位卡——用户 2026-08-25 明确要求摆在这个位置(截图纠正过来
+    /// 的:第一次说"加几个点"以为是指上面那句文案的末尾,其实指的是六个真选项排完之后
+    /// 网格自己留出来的这一格)。不用 Button 包、没有选中态的描边/底色——虚线框 + 三个点
+    /// 的视觉语言故意跟六张真选项卡区分开,不会被当成"点了没反应的坏按钮"。
+    private struct MorePlayersComingCard: View {
+        var body: some View {
+            VStack(spacing: 6) {
+                Text("•••")
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundStyle(.tertiary)
+                    .frame(width: 26, height: 26)
+                Text(L10n.t("陆续支持中"))
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 8)
+            .overlay(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .strokeBorder(Color.secondary.opacity(0.25), style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
+            )
+            .accessibilityElement(children: .combine)
         }
     }
 

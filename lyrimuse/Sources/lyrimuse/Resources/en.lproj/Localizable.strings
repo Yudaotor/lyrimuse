@@ -32,7 +32,7 @@
 "Last.fm 返回错误: %@" = "Last.fm returned an error: %@";
 "Lyric × Muse——把你的歌词交给音乐女神吧" = "Lyric × Muse — hand your lyrics to the Muse";
 "Lyrimuse" = "Lyrimuse";
-"Lyrimuse 支持 Apple Music、QQ 音乐、网易云音乐、酷狗音乐、Spotify……，也可以交给「自动识别」——挑一个你平时用来听歌的，随时可以在设置里重新选择" = "Lyrimuse works with Apple Music, QQ Music, NetEase Cloud Music, Kugou Music, Spotify, and more…, or it can detect whichever one is playing — pick the one you normally listen with. You can change this later in Settings";
+"Lyrimuse 支持 Apple Music、QQ 音乐、网易云音乐、酷狗音乐、Spotify，也可以交给「自动识别」——挑一个你平时用来听歌的，随时可以在设置里重新选择" = "Lyrimuse works with Apple Music, QQ Music, NetEase Cloud Music, Kugou Music, and Spotify, or it can detect whichever one is playing — pick the one you normally listen with. You can change this later in Settings";
 "Lyrimuse 需要一个后台程序常驻运行，负责读取播放状态、解析歌词/封面并写入本地缓存——没有它，悬浮歌词/灵动岛同样无法显示任何内容。点下面的按钮即可启用，之后开机会自动运行，不用再管" = "Lyrimuse needs a background service running at all times to read playback state, resolve lyrics and artwork, and cache them locally. Without it, the floating lyrics and the notch have nothing to show. Click Enable below; it then starts automatically at login and needs no further attention";
 "Lyrimuse 需要这个权限来读取 Apple Music 当前正在播放的歌曲信息——没有它，悬浮歌词完全没法显示任何内容。点下面的按钮会弹出系统授权对话框，选择「允许」即可；随时可以在设置里重新打开这一步" = "Lyrimuse reads what's playing in Apple Music through this permission — without it, the floating lyrics have nothing to show. Click Request Access, then choose “Allow” when macOS asks. You can come back to this step in Settings at any time";
 "QQ 音乐" = "QQ Music";
@@ -800,6 +800,7 @@
 "锁定位置" = "Lock Position";
 "长按即可拖动位置" = "Click and hold to drag";
 "长按或右键打开设置" = "Click and hold or right-click for settings";
+"陆续支持中" = "More coming";
 "随播放律动" = "Move with the Music";
 "随机播放" = "Shuffle";
 "隐藏发音" = "Hide Pronunciation";
