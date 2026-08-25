@@ -189,6 +189,35 @@ final class LyricsSearchService {
         /// lyricsDecision 的 JSON 原文,原样写进 enrich-cache 的 lyrics_decision。走字符串是
         /// 为了不在 Swift 侧再镜像一遍那个结构(镜像就会漂)。
         var decisionJSON: String = ""
+
+        // 2026-08-25 改成手写 init(from:)——原来的合成 Decodable 表面上给每个属性都设了
+        // 默认值,但 Swift 的自动合成解码器**不会**在 key 缺失时退回属性默认值,缺 key 会
+        // 直接 throw(实测验证过,不是猜的)。而 searchLyricsPick 在 Go 那边几乎每个字段都
+        // 带 `omitempty`——winner 在"没有可用候选"时是空串会被省略、sourcesSeen/
+        // sourcesResponded 在"啥都没应答"时是空切片会被省略、resolvedDurationSecs 在
+        // "浏览历史缓存条目、没有可靠真实时长"时是 0 会被省略、decisionJSON 在
+        // **decidable==false 这个完全正常的分支**(当前源这轮没应答)时干脆整个不写。
+        // 于是"这一轮没拿到结论"这句本该保底的兜底文案,实际上吞掉了好几种明确该有专属
+        // 文案的正常结局("这轮没应答没有换""这轮没有能用的候选"等)——因为那一行 JSON
+        // 解码直接整行失败被跳过,调用方拿到的是上一条流式更新(pick 恒为 nil)。改成显式
+        // decodeIfPresent + ?? 默认值,跟 Go 的 omitempty 语义对齐。
+        private enum CodingKeys: String, CodingKey {
+            case winner, winnerScore, scoringVersion, decidable
+            case sourcesSeen, sourcesResponded, resolvedDurationSecs, mode, decisionJSON
+        }
+
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            winner = try c.decodeIfPresent(String.self, forKey: .winner) ?? ""
+            winnerScore = try c.decodeIfPresent(Int.self, forKey: .winnerScore) ?? 0
+            scoringVersion = try c.decodeIfPresent(Int.self, forKey: .scoringVersion) ?? 0
+            decidable = try c.decodeIfPresent(Bool.self, forKey: .decidable) ?? false
+            sourcesSeen = try c.decodeIfPresent([String].self, forKey: .sourcesSeen) ?? []
+            sourcesResponded = try c.decodeIfPresent([String].self, forKey: .sourcesResponded) ?? []
+            resolvedDurationSecs = try c.decodeIfPresent(Double.self, forKey: .resolvedDurationSecs) ?? 0
+            mode = try c.decodeIfPresent(String.self, forKey: .mode) ?? ""
+            decisionJSON = try c.decodeIfPresent(String.self, forKey: .decisionJSON) ?? ""
+        }
     }
 
     struct SearchUpdate {

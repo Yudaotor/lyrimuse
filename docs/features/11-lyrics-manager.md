@@ -1,6 +1,6 @@
 # 11. 歌词管理窗口
 
-> 最后核对：2026-08-25 · 基线：5e54146+工作树
+> 最后核对：2026-08-25 · 基线：f34eaa7+工作树
 
 ## 定位
 
@@ -180,4 +180,28 @@
    修法跟第 07 章一致：`LyricsManagerWindowFramePersistence.attach()` 里显式
    `NSApp.addWindowsItem` 把窗口塞进「Window」菜单，`willCloseNotification` 里对称
    `removeWindowsItem`，菜单里在不在从此跟 AppKit 怎么分类这扇窗无关。
+15. ⚠️ **`Pick`（`LyricsSearchService.swift`）曾经把 Swift 属性默认值当成"key 缺失时的
+   兜底"，但合成 `Decodable` 根本不认这回事**（2026-08-25 用户报"点重新自动匹配总说'这一轮
+   没拿到结论'"，已修）：`struct Pick: Decodable` 给每个属性都写了 `= 默认值`，直觉上应该是
+   "JSON 缺这个 key 就用默认值"，但 Swift 自动合成的 `init(from:)` 对缺失 key 一律 `throw
+   keyNotFound`，**完全不看属性默认值**（写过一个最小复现验证，不是猜的）。而 collector 侧
+   `searchLyricsPick` 的 JSON 字段几乎全带 `omitempty`：`winner` 在"没有可用候选"时是空串
+   会被整个省略、`sourcesSeen`/`sourcesResponded` 在"没人应答"时是空切片会被省略、
+   `resolvedDurationSecs` 在"浏览历史缓存条目、没有可靠真实时长"（传 `duration=0`）时会被
+   省略、`decisionJSON` 在 **`decidable==false` 这个完全正常的分支**（当前源这一轮没应答，
+   见已知坑 8 相关的 `.keptNotDecidable`）时干脆整个不写。任何一个字段被省略，
+   `JSONDecoder().decode(RawSearchUpdate.self, ...)` 就整行解码失败（`LyricsSearchService.
+   performSearch` 的 `drainCompleteLines` 里 `try? decode` 静默跳过、只写一行 error log），
+   调用方（`LyricsManagerView.finishRematch`）拿到的 `last` 停在上一条流式候选更新（`pick`
+   恒为 nil），于是保底兜底文案「这一轮没拿到结论，可以再点一次」吞掉了好几种**本该有专属
+   文案**的正常结局（"这轮 X 源没应答，没有换"、"这一轮没有一个能用的候选"……）——用户点
+   「重新自动匹配」看到这句时，常常不是真的"没拿到结论"，是最后一行 JSON 解码失败被整行
+   丢弃。修法：`Pick` 改成手写 `init(from:)`，每个字段显式 `decodeIfPresent(...) ?? 默认值`，
+   跟 Go 的 `omitempty` 语义对齐；不改 `Pick` 对外暴露的属性形状，下游
+   （`LyricsManagerView`/`EnrichCacheStore`）零改动。这个坑是 `LyricsSearchService.swift`
+   独有的——同文件里 `RawSearchUpdate` 早就按这个正确模式写（`sourcesDone: Int?` 之类显式
+   Optional + `?? 0`），`Pick` 当初漏做了同样的处理。⚠️ selftest 覆盖不到这条：`Pick` 定义在
+   App 主 target（`lyrimuse`），而 `lyrimuse-selftest` 只链 LyrimuseCore（见本文件顶部惯例），
+   验证只能靠独立写的解码脚本手动跑（已跑过，覆盖 winner/sourcesSeen/sourcesResponded/
+   resolvedDurationSecs/decisionJSON 五个字段各自缺失的场景，全部通过），不是自动化回归。
 
