@@ -95,6 +95,20 @@ extension PlaybackPlayer {
         default: return "music.note"
         }
     }
+
+    /// 引导页图标网格的摆放顺序(2026-08-25 用户要求按系统语言排)——只影响这一个网格,
+    /// 不改 `allCases` 本身:设置页那颗播放器 `Picker` 之类别处仍按原来的枚举声明顺序
+    /// 走,不跟着这条语言判断联动,省得改一处波及一片。
+    ///
+    /// Apple Music 两种语境下都排第一(系统自带、认知成本最低),「自动识别」恒定垫底
+    /// (它不是一个具体播放器,当兜底选项摆最后符合直觉)。中间四个按这批用户的实际
+    /// 使用习惯排:简体中文语境下国内三家排在 Spotify 前面;非简体中文(含繁体中文/
+    /// 英文等)语境反过来,Spotify 排到国内三家前面。
+    public static var onboardingDisplayOrder: [PlaybackPlayer] {
+        AppSettings.userReadsSimplifiedChinese
+            ? [.appleMusic, .qqMusic, .netease, .kugou, .spotify, .auto]
+            : [.appleMusic, .spotify, .qqMusic, .netease, .kugou, .auto]
+    }
 }
 
 // "智能算法"=四源全查+打分取最高分(现有行为,见 collector/enrich.go 的

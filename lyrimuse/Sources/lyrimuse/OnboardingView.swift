@@ -174,14 +174,19 @@ struct OnboardingView: View {
             Text(L10n.t("选择播放器"))
                 .font(.title2.bold())
             // 2026-08-25 用户反馈"把支持的播放器都写全"——这句原来漏了酷狗音乐
-            // (2026-08-21 才接入,这句文案没跟着补)。
-            Text(L10n.t("Lyrimuse 支持 Apple Music、QQ 音乐、网易云音乐、酷狗音乐、Spotify，也可以交给「自动识别」——挑一个你平时用来听歌的，随时可以在设置里重新选择"))
+            // (2026-08-21 才接入,这句文案没跟着补)。末尾的「……」是用户接着要求加的:
+            // 这份名单不是封顶的,后面还会陆续接入新播放器。
+            Text(L10n.t("Lyrimuse 支持 Apple Music、QQ 音乐、网易云音乐、酷狗音乐、Spotify……，也可以交给「自动识别」——挑一个你平时用来听歌的，随时可以在设置里重新选择"))
                 .foregroundStyle(.secondary)
             // 原来是一个纯文字下拉菜单,认不出图标、也看不出到底支持哪几家。换成一排
             // 图标卡片,理由和取图标的办法见 PlayerChoiceCard 类头注。三列正好把六个选项
             // (五个播放器 + 自动识别)摆成 2 行,不用横向滚动、也不会显得稀疏。
+            //
+            // 顺序不用 PlaybackPlayer.allCases 的声明顺序,走 onboardingDisplayOrder——
+            // 2026-08-25 用户要求按系统语言排:简体中文语境国内三家排在 Spotify 前面,
+            // 非简体中文反过来。只影响这一个网格,见该属性类头注。
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3), spacing: 10) {
-                ForEach(PlaybackPlayer.allCases) { player in
+                ForEach(PlaybackPlayer.onboardingDisplayOrder) { player in
                     PlayerChoiceCard(player: player, isSelected: features.player == player) {
                         features.player = player
                         Task { await features.save() }
