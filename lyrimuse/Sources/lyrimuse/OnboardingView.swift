@@ -173,18 +173,84 @@ struct OnboardingView: View {
         VStack(alignment: .leading, spacing: 16) {
             Text(L10n.t("选择播放器"))
                 .font(.title2.bold())
-            Text(L10n.t("Lyrimuse 支持 Apple Music、QQ 音乐、网易云音乐、Spotify，也可以交给「自动识别」——挑一个你平时用来听歌的，随时可以在设置里重新选择"))
+            // 2026-08-25 用户反馈"把支持的播放器都写全"——这句原来漏了酷狗音乐
+            // (2026-08-21 才接入,这句文案没跟着补)。
+            Text(L10n.t("Lyrimuse 支持 Apple Music、QQ 音乐、网易云音乐、酷狗音乐、Spotify，也可以交给「自动识别」——挑一个你平时用来听歌的，随时可以在设置里重新选择"))
                 .foregroundStyle(.secondary)
-            Picker(L10n.t("播放器"), selection: Binding(
-                get: { features.player },
-                set: { features.player = $0; Task { await features.save() } }
-            )) {
+            // 原来是一个纯文字下拉菜单,认不出图标、也看不出到底支持哪几家。换成一排
+            // 图标卡片,理由和取图标的办法见 PlayerChoiceCard 类头注。三列正好把六个选项
+            // (五个播放器 + 自动识别)摆成 2 行,不用横向滚动、也不会显得稀疏。
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3), spacing: 10) {
                 ForEach(PlaybackPlayer.allCases) { player in
-                    Text(player.displayName).tag(player)
+                    PlayerChoiceCard(player: player, isSelected: features.player == player) {
+                        features.player = player
+                        Task { await features.save() }
+                    }
                 }
             }
-            .pickerStyle(.menu)
-            .labelsHidden()
+        }
+    }
+
+    // 一张"选它"的图标卡片。真图标优先——已安装就用 NSWorkspace 按 bundleIdentifier
+    // 查到的真实 App 图标(跟"正在播放"面板来源角标同一个理由:2026-08-19 用户拍板
+    // "最好认,还不用自带任何商标素材",见 PlaybackCoordinator.resolvedPlayerIcon);
+    // 引导阶段大概率大部分播放器都还没装,查不到就退回 PlaybackPlayer.tintColor +
+    // fallbackSymbolName 这套占位,不留空白方块。选中态是强调色描边+浅色底,跟这个
+    // 向导别处(displayModeRow 的 Toggle)统一靠颜色/开关状态表达选中,不额外叠一个
+    // 对号图标。
+    private struct PlayerChoiceCard: View {
+        let player: PlaybackPlayer
+        let isSelected: Bool
+        let onSelect: () -> Void
+        @State private var installedIcon: NSImage?
+
+        var body: some View {
+            Button(action: onSelect) {
+                VStack(spacing: 6) {
+                    iconView
+                    Text(player.displayName)
+                        .font(.caption)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.85)
+                        .foregroundStyle(.primary)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 8)
+                .background(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(isSelected ? Color.accentColor.opacity(0.14) : Color.primary.opacity(0.05))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .strokeBorder(isSelected ? Color.accentColor : Color.clear, lineWidth: 1.5)
+                )
+            }
+            .buttonStyle(.plain)
+            .onAppear(perform: loadRealIconIfInstalled)
+        }
+
+        @ViewBuilder
+        private var iconView: some View {
+            if let installedIcon {
+                Image(nsImage: installedIcon)
+                    .resizable()
+                    .frame(width: 26, height: 26)
+            } else {
+                Image(systemName: player.fallbackSymbolName)
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(.white)
+                    .frame(width: 26, height: 26)
+                    .background(player.tintColor, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+            }
+        }
+
+        // .auto 没有对应的 App,不用查。查到的图标不需要缓存——这张卡片只在向导这一步
+        // 存在的这一小段时间里画一次,不是"正在播放"面板那种高频重渲染的场景。
+        private func loadRealIconIfInstalled() {
+            guard player != .auto,
+                  let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: player.bundleIdentifier)
+            else { return }
+            installedIcon = NSWorkspace.shared.icon(forFile: url.path)
         }
     }
 

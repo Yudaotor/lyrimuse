@@ -71,6 +71,30 @@ extension PlaybackPlayer {
         case .auto: return L10n.t("自动识别")
         }
     }
+
+    // 引导页"选择播放器"那一步的图标卡片用(2026-08-25)。真图标优先——已安装就用
+    // NSWorkspace 按 bundleIdentifier 查到的真实 App 图标去画,这两个只是**没装时**的
+    // 占位:引导阶段大概率大部分播放器都还没装,不能什么都不画。品牌色跟"歌词来源"
+    // 那套复用同一份(sourceColor,LyricsManagerView.swift)——QQ音乐/网易云音乐/酷狗音乐
+    // 本来就是同一批 App,没理由维护第二份配色映射;Apple Music/Spotify/自动识别这三个
+    // 不在歌词来源清单里,单独给。
+    public var tintColor: Color {
+        switch self {
+        case .appleMusic: return Color(red: 0.98, green: 0.20, blue: 0.35)
+        case .qqMusic: return sourceColor("qq")
+        case .netease: return sourceColor("netease")
+        case .kugou: return sourceColor("kugou")
+        case .spotify: return Color(red: 0.11, green: 0.73, blue: 0.33)
+        case .auto: return .secondary
+        }
+    }
+
+    public var fallbackSymbolName: String {
+        switch self {
+        case .auto: return "wand.and.stars"
+        default: return "music.note"
+        }
+    }
 }
 
 // "智能算法"=四源全查+打分取最高分(现有行为,见 collector/enrich.go 的

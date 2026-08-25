@@ -1,6 +1,6 @@
 # 02. 播放数据源与播放器支持
 
-> 最后核对:2026-08-22 · 基线:675f87a+工作树
+> 最后核对:2026-08-25 · 基线:170ca99+工作树
 
 ## 定位
 
@@ -9,7 +9,7 @@ App 怎么知道"现在在放什么":从本地播放器读出 曲目元数据 + 
 ## 入口与展示面
 
 - **设置 → 播放器 tab**(`SettingsView.swift` 的 `PlayerSettingsTab`):播放器 Picker、「Apple Music 自动化」权限卡(仅选 Apple Music 时出现)、「后台采集服务」卡(含 media-control 通道自检失败提示)、两个 App 联动开关。
-- **引导页**(`OnboardingView.swift` 的 `playerChoiceStep` / `automationStep`):首次启动时选播放器;自动化权限步只在选中 Apple Music 时出现在 steps 里。
+- **引导页**(`OnboardingView.swift` 的 `playerChoiceStep` / `automationStep`):首次启动时选播放器;自动化权限步只在选中 Apple Music 时出现在 steps 里。2026-08-25 把 `playerChoiceStep` 从纯文字下拉换成图标卡片网格(`PlayerChoiceCard`,3 列 2 行):优先取**已安装播放器的真实 App 图标**(`NSWorkspace.urlForApplication(withBundleIdentifier:)` + `.icon(forFile:)`,跟"正在播放"面板来源角标——`PlaybackCoordinator.resolvedPlayerIcon`——同一个套路,理由也一样:最好认,不用自带商标素材),没装就退回 `PlaybackPlayer.tintColor` + `fallbackSymbolName` 这套占位色块(QQ音乐/网易云音乐/酷狗音乐复用 `sourceColor`——跟"歌词来源"是同一批 App,不维护第二份配色映射)。文案顺带补全:原来的说明句漏了酷狗音乐(2026-08-21 才接入,文案没跟上)。
 - 数据本身没有独立窗口——通过 `PlaybackCoordinator`(`LocalPlaybackSource` 的薄转发层)流向悬浮歌词(`LyricsOverlayView`)、灵动岛(`NotchLyricsView`)、歌词窗口(`LyricsWindowView`)、菜单栏(`MenuBarStatusItem`)。
 - 「导出诊断信息」会带上 `lastResolvedBundleID`(这一刻实际被认下来的播放器,选"自动识别"时只报设置值等于什么都没说)。
 
@@ -281,6 +281,8 @@ vs 目录 289.766),拿目录值去盖反而是降精度。覆盖就该待在产�
 | 封面取图(含曲目标识核对) | 同上 · `fetchArtwork`;`LocalPlaybackSource.fetchArtworkForCurrentTrack` |
 | 快照结构与 trackKey | `LyrimuseCore/Local/MediaControlSnapshot.swift` · `MediaControlSnapshot` |
 | 播放器枚举与设置读取 | `LyrimuseCore/Local/PlaybackPlayer.swift` · `PlaybackPlayer`/`PlaybackPlayerPreference` |
+| 播放器展示名/品牌色/占位符号 | `lyrimuse/Settings/FeatureSettingsStore.swift` · `extension PlaybackPlayer`(`displayName`/`tintColor`/`fallbackSymbolName`) |
+| 引导页图标卡片 | `lyrimuse/OnboardingView.swift` · `PlayerChoiceCard` |
 | 事件流常驻子进程 | `LyrimuseCore/Local/MediaControlStreamWatcher.swift` · `MediaControlStreamWatcher` |
 | 通道健康自检 | `LyrimuseCore/Local/MediaControlHealth.swift` · `MediaControlHealth` |
 | 播放控制写路径 | `LyrimuseCore/Local/MusicPlaybackController.swift` · `MusicPlaybackController`(`dispatch`/`seek`/`setPlaybackMode`/`supportsExtendedControls`) |
@@ -306,5 +308,6 @@ vs 目录 289.766),拿目录值去盖反而是降精度。覆盖就该待在产�
 9. **Spotify 脚本必须 running 守卫**:JXA 访问属性会启动 Spotify,三处脚本(本文件位置直查、播放控制、collector)都垫同一道守卫。
 10. **锁屏只停渲染不停轮询**:锁屏期间的收听记录是不可恢复数据,省电不值当。
 11. **`uniqueIdentifier` 只对 Apple Music 目录曲目是目录 ID**,本地导入/购买的文件放的是任意 64 位持久 ID(实测负数)。所以 Apple 目录锚点对自己导入的曲库天然无效——这不是 bug,是这个字段的语义边界。别的播放器在这个字段里放什么也没有保证,理论上可能撞上一个真实的目录 ID,所以除了 bundle id 守卫,拿回来的结果一律要过曲目名+专辑名自校验。
+12. ⚠️ **离屏 harness 窗口截不了图,只能截"真身份"App 的窗口**(2026-08-25 排查坐实,验证 `PlayerChoiceCard` 网格排版时踩到):`swiftc` 现编现跑的裸 Mach-O 二进制自己开一扇 `NSWindow`,即使 `onscreen=true`(CGWindowList 确认过),`screencapture -l <id>` 一律报 `could not create image from window`——跟这台机器上 `AXIsProcessTrusted()` 恒为 `false`(这个 shell/调用进程没有拿到「辅助功能」信任,给哪个新编译的二进制都一样)大概率是同一类限制:没有正式签名/bundle 身份的进程,窗口内容拿不到。真机验证只能对着 `build.sh` 装出来的、真正签过名的 `Lyrimuse.app` 截——而它自己的窗口如果被另一扇窗口完全遮住,同一个 `-l` 调用也会报同样的错(实测「引导」窗被「设置」窗完全盖住时截不出来,挪开/换到没被挡的窗口就正常)。这条链路上没有不涉及点击的解法:AX 拿不到信任、装了新二进制也拿不到,唯一稳的路是让目标窗口本来就没被挡。这次的图标网格排版靠人工核算(卡片高度×2行+文案行高)过了预算,没能拿到一张真实截图收尾,已经请用户自己开一次引导页确认。
 
 ⚠️待核对:设置为「自动识别」且实际在播 Apple Music 时,playPause/上一首/下一首经 `MusicPlaybackController.dispatch` 走 media-control(只有 seek 有 `preferAppleScript` 覆盖)——代码注释断言 media-control 控制指令对系统 Now Playing 焦点生效、应可控制 Music.app,但仓内未见对这一具体组合的实测记录。

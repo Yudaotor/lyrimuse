@@ -494,19 +494,19 @@
         }
       }
     },
-    "Lyrimuse 支持 Apple Music、QQ 音乐、网易云音乐、Spotify，也可以交给「自动识别」——挑一个你平时用来听歌的，随时可以在设置里重新选择" : {
+    "Lyrimuse 支持 Apple Music、QQ 音乐、网易云音乐、酷狗音乐、Spotify，也可以交给「自动识别」——挑一个你平时用来听歌的，随时可以在设置里重新选择" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Lyrimuse works with Apple Music, QQ Music, NetEase Cloud Music and Spotify, or it can detect whichever one is playing — pick the one you normally listen with. You can change this later in Settings"
+            "value" : "Lyrimuse works with Apple Music, QQ Music, NetEase Cloud Music, Kugou Music, and Spotify, or it can detect whichever one is playing — pick the one you normally listen with. You can change this later in Settings"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Lyrimuse 支持 Apple Music、QQ 音乐、网易云音乐、Spotify，也可以交给「自动识别」——挑一个你平时用来听歌的，随时可以在设置里重新选择"
+            "value" : "Lyrimuse 支持 Apple Music、QQ 音乐、网易云音乐、酷狗音乐、Spotify，也可以交给「自动识别」——挑一个你平时用来听歌的，随时可以在设置里重新选择"
           }
         }
       }
