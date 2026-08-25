@@ -16,6 +16,12 @@ import AppKit
 enum AuxiliaryWindowActivation {
     private static var openCount = 0
 
+    // 给 AppDelegate.applicationShouldHandleReopen 用:"这几扇辅助窗口里有没有任意一扇
+    // 还开着"——`.onDisappear` 只在窗口真正**关闭**时触发,最小化不算关闭,所以这个计数器
+    // 天然就是"开着"而不是"当前可见",拿来判断"该不该顺便开歌词窗口"正合适,不用另起一套
+    // 窗口枚举逻辑。
+    static var hasAnyOpen: Bool { openCount > 0 }
+
     // 挂在每个辅助窗口根视图的 .onAppear。
     static func windowDidAppear() {
         openCount += 1

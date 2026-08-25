@@ -280,8 +280,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     //    `check-windows` 能看到它 onscreen=false 地挂在那儿)。返回 false = "这次 reopen
     //    我自己处理完了",AppKit 不再多做动作,于是只有歌词窗口会出来。
     //
-    // 不分 hasVisibleWindows:openWindow(id:) 对已经开着的窗口就是把它带到前台,语义正好
-    // 是"点 Dock 我想看歌词",不需要再分两种情况。
+    // 不看 hasVisibleWindows(系统给的这个参数只反映"当前有没有窗口**可见**",最小化的
+    // 窗口会让它变 false,不足以回答"这几扇窗口有没有任意一扇还开着"),改看
+    // AuxiliaryWindowActivation.hasAnyOpen——2026-08-25 用户进一步收窄了这条规则:
+    // 只有在设置/歌词管理/歌词窗口/引导这四扇窗**一扇都没开着**时,才顺便开歌词窗口;
+    // 只要还有任意一扇开着(哪怕被最小化到 Dock 里),就交还给 AppKit 的默认 reopen 行为
+    // (还原被最小化的窗口、把已有窗口带到前台),不再额外抢开歌词窗口。这不会重新踩上面
+    // ②警告过的坑:那个坑是"用户明确关掉的设置窗被系统默认行为带回来";而 hasAnyOpen
+    // 为 true 时,意味着确实还有窗口**没被关掉**(`.onDisappear` 只在真正关闭时触发,
+    // AuxiliaryWindowActivation 的 Dock 图标借用/还原逻辑早就在依赖这条),不会误判"已关闭"
+    // 为"开着"。
     /// 见 applicationShouldHandleReopen —— 延后开歌词窗口的那个任务。
     private var reopenLyricsTask: Task<Void, Never>?
     private let reopenLogger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "reopen")
@@ -313,6 +321,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if isLyricsOnReopenSuppressed() {
             reopenLogger.notice("reopen: lyrics window suppressed (immediate)")
             return false
+        }
+        // 设置/歌词管理/歌词窗口/引导四扇里只要还有一扇开着(哪怕被最小化),就交还给
+        // AppKit 的默认 reopen 行为——还原被最小化的窗口、把已有窗口带到前台;只有一扇
+        // 都没开时才顺便开歌词窗口。理由见上面 applicationShouldHandleReopen 声明前那段注释。
+        if AuxiliaryWindowActivation.hasAnyOpen {
+            reopenLogger.notice("reopen: auxiliary window(s) already open, deferring to AppKit default")
+            return true
         }
         reopenLyricsTask?.cancel()
         reopenLyricsTask = Task { @MainActor in

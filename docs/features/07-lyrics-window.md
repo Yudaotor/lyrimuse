@@ -18,10 +18,9 @@
   - **伪全屏/原生全屏期间一律不存**:那时的 frame 是撑满屏幕的临时值,存下去等于把"全屏尺寸"当成用户想要的窗口大小,退出全屏再开就是一扇满屏的窗。
   - 两个键都是**机器本地状态**,在 `ConfigPortability.machineLocalDefaultsKeys` 里——判据跟 `np:overlayPosition*` 一字不差(绝对屏幕坐标 + 一块具体显示器的 UUID,新机器全不一样)。
   - 「置顶」仍然**不**持久化(每次重新打开都从"不置顶"开始),那是另一件事,见下面「窗口动作胶囊」。
-- Dock 图标点击(reopen)**只**打开这扇歌词窗口,任何情况下都不弹设置(2026-08-21 按用户要求从「设置窗口」改过来:Dock 图标是「我想看这个 App」的入口,而这个 App 让人想看的是歌词;设置另有 ⌘, / 菜单栏菜单 / 主菜单三个入口)。实现在 `AppDelegate.applicationShouldHandleReopen`,两处刻意的写法都是为了「不要冒出设置窗」:
+- Dock 图标点击(reopen)**只在设置/歌词管理/歌词窗口/引导四扇辅助窗口一扇都没开着时**才打开这扇歌词窗口(2026-08-21 先定的规则是"点 Dock 只弹歌词窗口、任何情况下都不弹设置",2026-08-25 用户进一步收窄:只要还有任意一扇辅助窗口开着——哪怕被最小化——就交还给 AppKit 的默认 reopen 行为,不再额外抢开歌词窗口)。判据是 `AuxiliaryWindowActivation.hasAnyOpen`(那个计数器本来就在追踪"这几扇窗口有没有任意一扇还开着",给 reopen 用不需要另起逻辑)——不用 `hasVisibleWindows`,那个系统参数只反映"当前有没有窗口**可见**",窗口被最小化时它也是 false,分不出"关掉了"和"最小化了"。实现在 `AppDelegate.applicationShouldHandleReopen`,几处刻意的写法都是为了"不要冒出设置窗"以及"不误判已关闭窗口为开着":
   - **不退回 `openSettings`**:`AppActions.openLyricsWindow` 是环境 action、由隐藏锚点视图捕获(见 `MenuBarSceneActions`),在「刚重启、锚点还没挂上」那一瞬是 nil。上一版那时候退回设置窗,于是「点 Dock 弹设置」照样发生。宁可这一下什么都不做(下一下就正常)。
-  - **返回 `false`**:返回 true = 让 AppKit 执行默认的「恢复/带回本 App 窗口」行为,而 SwiftUI 的 Settings 场景关掉之后 NSWindow 对象仍然活着(只是 orderOut,`check-windows` 能看到它 `onscreen=false` 挂着),默认行为会把它一起端出来。返回 false = 「这次 reopen 我自己处理完了」。
-  - 不分 `hasVisibleWindows`:`openWindow(id:)` 对已经开着的窗口就是带到前台,正好是「点 Dock 我想看歌词」的语义。
+  - **`hasAnyOpen` 为 false 时才返回 `false`**:返回 true = 让 AppKit 执行默认的「恢复/带回本 App 窗口」行为,而 SwiftUI 的 Settings 场景关掉之后 NSWindow 对象仍然活着(只是 orderOut,`check-windows` 能看到它 `onscreen=false` 挂着)——这正是 2026-08-21 那版要避开的坑(默认行为会把用户明确关掉的设置窗一起端出来)。`hasAnyOpen` 靠的是 `.onDisappear`(只在窗口真正**关闭**时触发,不会被"关掉的 NSWindow 对象仍然活着"这个 SwiftUI 细节骗到),所以窗口真关掉时 `hasAnyOpen` 仍是 false,不会重新踩这个坑;只有真的还有窗口开着(minimized 也算)才会返回 true。
 
 ## 行为规格
 
