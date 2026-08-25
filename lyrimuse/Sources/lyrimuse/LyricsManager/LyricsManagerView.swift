@@ -19,6 +19,29 @@ final class AppLanguageObserver: ObservableObject {
     }
 }
 
+/// 只转发"当前播放的是哪首歌"的窄代理,同上面 AppLanguageObserver 一个套路。
+///
+/// 2026-08-25 用户报"歌词管理开着的时候换了首歌,高亮的还是开窗那一刻的旧歌"——原来
+/// 只在开窗那一刻(`pendingAutoFocus`)和点「回到当前播放」按钮时定位一次,窗口开着期间
+/// 换歌不会跟着动。这个窗口特意**不**整对象订阅 `PlaybackCoordinator`(见 detailView
+/// 顶部注释:那个单例还同时发布 currentLine/anchor,播放中每秒 20 次刷新,订阅整对象会
+/// 把这个窗口的 body 拖进 20Hz 重渲染),所以要单独开一条窄管道,只转发 artist/title/album
+/// 这三个"换歌才变一次"的属性,合成一个去重后的签名串,给 `.onChange` 当触发信号用——
+/// 真正的 key 匹配逻辑仍然读 `PlaybackCoordinator.shared` 的快照(见 focusCurrentlyPlaying),
+/// 这里只负责"该不该再跑一次"。
+@MainActor
+final class LyricsManagerNowPlayingObserver: ObservableObject {
+    @Published private(set) var trackSignature = ""
+    private var sub: AnyCancellable?
+    init() {
+        let p = PlaybackCoordinator.shared
+        sub = Publishers.CombineLatest3(p.$artist, p.$title, p.$album)
+            .map { artist, title, album in "\(artist)|\(title)|\(album)" }
+            .removeDuplicates()
+            .sink { [weak self] in self?.trackSignature = $0 }
+    }
+}
+
 // 歌词来源筛选——collector 只会写入这五种(见 collector/enrich.go 的 lyricCandidate
 // source 取值),"无来源"对应老缓存(lyrics_source 字段是后来才加的,更早解析的
 // 条目永久没有这个值,除非重新解析)。
@@ -333,6 +356,8 @@ struct LyricsManagerView: View {
     // 只为了让这个独立窗口(跟 SettingsView 不在同一棵视图树里)在手动切换语言时
     // 重新渲染。经 AppLanguageObserver 窄代理(见文件顶部),不整对象订阅 AppSettings。
     @ObservedObject private var languageSettings = AppLanguageObserver.shared
+    // 窗口开着期间跟着换歌自动重新定位,见 LyricsManagerNowPlayingObserver 类头注。
+    @StateObject private var nowPlaying = LyricsManagerNowPlayingObserver()
     @State private var searchText = ""
     // 多选。原来是单选的 `String?`,那种绑定下 List 完全不响应 Cmd 点选/Shift 连选。
     // 三态由 selectedKeys.count 决定:0 = 空占位,1 = 原来的单曲详情页,≥2 = 批量操作面板。
@@ -1018,6 +1043,15 @@ struct LyricsManagerView: View {
                     // 恢复"——快照只保留最近 3 份、库本来是空的时候压根打不出来,承诺过头
                     // 比不承诺更危险。
                     Text(String(format: L10n.t("这会删除当前全部 %d 条本地记录,包括你手动编辑、联网搜索采纳过的内容,已导出到本地的歌词文件也会一并删除。清空之前会自动备份一份,能从这个菜单里的「从自动备份恢复」找回来。下次播放会重新走一遍匹配解析"), store.summaries.count))
+                }
+                // 窗口开着期间换歌就跟着重新定位——不然停留在"开窗那一刻播的那首",见
+                // LyricsManagerNowPlayingObserver 类头注。首次挂载时 trackSignature 已经是
+                // 当前播放那首(CombineLatest3 订阅即发一次),不会跟 pendingAutoFocus 那次
+                // 开窗定位重复触发;这里只在**后续**换歌时才会再跑一次。挂在这里(还在
+                // ScrollViewReader 的 scrollProxy 作用域内)而不是外层 NavigationSplitView
+                // 的修饰符链上——那边已经出了 scrollProxy 的可见范围。
+                .onChange(of: nowPlaying.trackSignature) { _, _ in
+                    focusCurrentlyPlaying(scrollProxy: scrollProxy)
                 }
             }
         } detail: {

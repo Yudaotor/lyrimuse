@@ -1,6 +1,6 @@
 # 11. 歌词管理窗口
 
-> 最后核对：2026-08-25 · 基线：f07e5df+工作树
+> 最后核对：2026-08-25 · 基线：5e54146+工作树
 
 ## 定位
 
@@ -18,7 +18,8 @@
 - 四列表头：歌名/歌手/专辑/来源（来源列中文名：网易云音乐/QQ音乐/酷狗音乐，LRCLIB/Musixmatch 保留英文；色点=来源身份色，与设置页「歌词来源」同一套 `sourceColor`）。
 - 列宽可拖并持久化（`LyricsColumnWidthsStore`：@Published+didSet 落 UserDefaults，夹值算术是纯函数、selftest 覆盖）。拖动中只更新内存值（beginDragging/endDragging，2026-08-19），松手一次性落盘——原来每个鼠标事件写三笔 UserDefaults 中间态。
 - 筛选：文本搜索 + 歌手/专辑下拉（归并键=toSimplified+小写，繁简/大小写不敏感）。**性能口径（2026-08-19 审计落地）**：繁简归一化键/搜索小写副本在 `Summary` 构建时预存（`normPrimaryArtist`/`normAlbum`/`search*Lower`），排序比较器只做元组比较；歌手/专辑归并展示名与下拉候选下沉进 store 随 summaries 重建一次（原来是视图计算属性，List 每物化一行就全量重建一次 O(N) 归并字典）；`filtered` 经缓存盒按 (filterToken, summariesGeneration) 记忆化（一次 body 被 4~5 处独立求值）；`toSimplified` 本体按原串 memoize。summaries 的构建+排序在 reload 的后台 task 里做，主线程只收结果。
-- 「回到当前播放」：`focusCurrentlyPlaying` 滚动定位到正在播的条目（开窗时自动跑一次，`pendingAutoFocus` 闸 + `onDisappear` 复位；工具栏按钮手动跑）。⚠️ 匹配用的 key **必须**走 `EnrichCacheKeys.normalizedKey`（Swift 侧缓存 key 的唯一构造点，逐字节镜像 collector 的 `enrichKey`），不能手拼 `artist|title|album`：手拼会漏掉 `cleanTag`（各类空格/零宽字符）和 `normalizedTitle`（循环剥结尾括号副题）两道清洗。2026-08-20 用户报「进歌词管理不会自动定位」就是这条：Apple Music 报 `Dynasties and Dystopia (from the series Arcane League of Legends)`，缓存里那条 key 是剥掉副题的 `Dynasties and Dystopia`——精确匹配落空，而 `looseKey` 只折大小写/空格/繁简、折不掉副题，兜底也接不住，函数**静默返回**（设计如此：开窗自动定位不该弹提示），表现成压根没定位。现在的候选顺序是 归一化 key → 原样拼的 key（key 归一化上线前入库的老条目）→ 两者各自的 `looseKey`。悬浮窗/灵动岛一直没这个问题，因为 `EnrichCacheReader` 本来就走 `normalizedKey`。
+- 「回到当前播放」：`focusCurrentlyPlaying` 滚动定位到正在播的条目——**三个触发点**：开窗时自动跑一次（`pendingAutoFocus` 闸 + `onDisappear` 复位）、工具栏按钮手动跑、**窗口开着期间换歌自动跑一次**（2026-08-25 加，见下条）。⚠️ 匹配用的 key **必须**走 `EnrichCacheKeys.normalizedKey`（Swift 侧缓存 key 的唯一构造点，逐字节镜像 collector 的 `enrichKey`），不能手拼 `artist|title|album`：手拼会漏掉 `cleanTag`（各类空格/零宽字符）和 `normalizedTitle`（循环剥结尾括号副题）两道清洗。2026-08-20 用户报「进歌词管理不会自动定位」就是这条：Apple Music 报 `Dynasties and Dystopia (from the series Arcane League of Legends)`，缓存里那条 key 是剥掉副题的 `Dynasties and Dystopia`——精确匹配落空，而 `looseKey` 只折大小写/空格/繁简、折不掉副题，兜底也接不住，函数**静默返回**（设计如此：开窗自动定位不该弹提示），表现成压根没定位。现在的候选顺序是 归一化 key → 原样拼的 key（key 归一化上线前入库的老条目）→ 两者各自的 `looseKey`。悬浮窗/灵动岛一直没这个问题，因为 `EnrichCacheReader` 本来就走 `normalizedKey`。
+- **窗口开着期间换歌不会自动跟着高亮**（2026-08-25 用户报，已修）：原来只在开窗那一刻和点「回到当前播放」按钮时定位一次，窗口开着期间换歌高亮不会动，看起来像是"卡在开窗那一刻播的那首"。修法是 `LyricsManagerNowPlayingObserver`——只转发 `PlaybackCoordinator.artist/title/album` 这三个"换歌才变一次"的属性、去重合成一个签名串，`LyricsManagerView` 用 `.onChange(of:)` 订阅这个签名串再跑一次 `focusCurrentlyPlaying`。⚠️ 不能整对象订阅 `PlaybackCoordinator`：那个单例同时发布 `currentLine`/`anchor`，播放中每秒 20 次刷新，整对象订阅会把这个窗口的 body 拖进 20Hz 重渲染（跟 `AppLanguageObserver` 转发 `appLanguage` 是同一个窄代理套路，同一段顶部注释里能看到理由）。这个 `.onChange` 必须挂在 `ScrollViewReader { scrollProxy in ... }` 闭包**内部**（`focusCurrentlyPlaying` 要用 `scrollProxy`）——`NavigationSplitView` 外层那条修饰符链（`.frame`/`.background`/几个 `.confirmationDialog`）已经出了 `scrollProxy` 的可见范围,挂错层会直接编译报错「cannot find 'scrollProxy' in scope」（实测踩过一次）。
 - 支持多选批量删除（`delete(keys: Set)`）与「清空全部」（`clearAll`，破坏性操作）。
 - **破坏性操作有可恢复层**（2026-08-22 补，之前完全没有）：
   - 「清空全部缓存」**动手之前**必打一份自动快照；批量删除到 `EnrichCacheStore.autoSnapshotDeleteThreshold`（5）条起同样打。快照走的就是配置备份那份 sidecar 归档（`LyricsBackupStore.buildArchive`，含 `lyrics/` 文件族 + 「已校准」名单），落到 `~/.config/lyrimuse/lyrics-backups/auto-<clear|delete>-<时间戳>.lyrimusebak`，只留最近 `autoSnapshotKeepCount`（3）份。⚠️ 快照必须排在 `raw = [:]` 和删文件**之前** —— `buildArchive` 读的是磁盘上的文件族，晚一步就什么都读不到。
@@ -119,6 +120,7 @@
 | collector 重启 | LyricsManager/CollectorControl.swift（launchctl kickstart -k + 真实退出码检查） |
 | 列宽 | LyricsManager/LyricsColumnWidthsStore.swift + LyrimuseCore/Lyrics/LyricsColumnLayout.swift |
 | 窗口几何持久化 | LyricsManagerView.swift `LyricsManagerWindowFramePersistence` / `LyricsManagerWindowCapture`（frame + 屏幕稳定 ID，恢复时先认屏再夹进可见区） |
+| 换歌自动重定位 | LyricsManagerView.swift `LyricsManagerNowPlayingObserver`（只转发 artist/title/album 的窄代理） |
 | 详情页顶部三种排法 | LyricsManagerView.swift `header` 的 `ViewThatFits` + `headerActions` / `headerActionsWrapped` |
 | 文件导出/导入 | collector 侧 lyricsexport.go / lyricsimport.go |
 
