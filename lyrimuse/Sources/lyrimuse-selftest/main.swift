@@ -4990,6 +4990,17 @@ do {
     // nowPlaying 传空串(拿不到身份)不该塞一个空项进去。
     let blank = LyricsOffsetScope.options(trusted: [:], configured: [], nowPlaying: "")
     expectEqual(blank.count, builtinCount, "偏移作用域: nowPlaying 为空串时不入列")
+
+    // builtInOrder 参数(2026-08-25 加,给设置页传 PlaybackPlayer.displayOrder 用——
+    // 跟"选择播放器"图标网格同一套按系统语言排的顺序,同一批播放器在这个下拉框里不该是
+    // 另一个顺序)。这里不依赖 displayOrder 本身(那是 App target 里读 AppSettings 的属性,
+    // selftest 只链 LyrimuseCore,够不到),只验证参数**确实生效**:传一个跟 allCases
+    // 不同的顺序,输出要跟着换,而不是内部悄悄还是按 allCases 排。
+    let reordered = [PlaybackPlayer.spotify, .kugou, .netease, .qqMusic, .appleMusic, .auto]
+    let customOrder = LyricsOffsetScope.options(builtInOrder: reordered, trusted: [:], configured: [], nowPlaying: nil)
+    expectEqual(customOrder.first, PlaybackPlayer.spotify.bundleIdentifier,
+                "偏移作用域: builtInOrder 参数生效,内置那组按传入的顺序排,不是 allCases 的声明顺序")
+    expectEqual(customOrder.count, builtinCount, "偏移作用域: 换个顺序不影响内置那组的数量(.auto 仍被排除)")
 }
 
 // ---- 「已校准」名单:调过时间轴的歌不再被后台换歌词源(2026-08-20) ----

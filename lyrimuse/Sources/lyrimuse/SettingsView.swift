@@ -445,7 +445,8 @@ private struct LyricsSettingsTab: View {
     }
 
     /// 下拉框的候选,四组并集(顺序即展示顺序):
-    ///  1. 内置播放器 —— **不含「自动识别」**:它的 bundleIdentifier 是空串,存进去会被
+    ///  1. 内置播放器,按 `PlaybackPlayer.displayOrder`(按系统语言排,跟"选择播放器"图标
+    ///     网格同一套顺序)—— **不含「自动识别」**:它的 bundleIdentifier 是空串,存进去会被
     ///     `setPlayerOffset` 静默丢掉(用户调了半天没反应);"自动"这层语义本来就由「全部
     ///     播放器」承担。
     ///  2. 用户信任的未知播放器(浏览器就在这一组 —— 这个功能的动机)。
@@ -457,7 +458,13 @@ private struct LyricsSettingsTab: View {
         // 并集/去重/排序的规则连同那三条不变量都在 LyrimuseCore.LyricsOffsetScope 里(纯函数,
         // selftest 覆盖)—— 混在 View 里的话,「配过偏移但已不在信任名单」这类只在特定用户状态
         // 下才暴露的分支除了肉眼盯下拉框以外没法验证。
+        //
+        // builtInOrder 传 PlaybackPlayer.displayOrder(2026-08-25 用户要求)——跟"选择播放器"
+        // 图标网格用同一套按系统语言排的顺序,同一批播放器在这个下拉框里不该是另一个顺序。
+        // LyricsOffsetScope 自己在 LyrimuseCore,够不到 displayOrder(App target 里依赖
+        // AppSettings 的属性),所以顺序从这里传进去,见该函数参数注释。
         LyricsOffsetScope.options(
+            builtInOrder: PlaybackPlayer.displayOrder,
             trusted: features.trustedPlayers,
             configured: Set(offsets.playerOffsets.keys),
             nowPlaying: nowPlayingBundleID

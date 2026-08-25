@@ -13,19 +13,27 @@ public enum LyricsOffsetScope {
 
     /// 候选 bundle id,顺序即展示顺序。
     ///
+    /// - `builtInOrder`: 第 1 组内置播放器要按哪个顺序摆——默认是 `PlaybackPlayer.allCases`
+    ///   的枚举声明顺序(纯 LyrimuseCore 类型,这个默认值不越层)。2026-08-25 起,设置页
+    ///   "全局时间轴偏移"那一行的下拉调用点改传 `PlaybackPlayer.displayOrder`(按系统语言排,
+    ///   跟"选择播放器"图标网格用同一套顺序,用户要求两处一致)——那个属性定义在 App 主
+    ///   target 的 `FeatureSettingsStore.swift`(依赖 `AppSettings`/`L10n`),LyrimuseCore
+    ///   不能反向依赖它,所以顺序作为参数从外面传进来,而不是这个函数自己在内部读。
     /// - `trusted`: 用户信任的未知播放器(`TrustedPlayers.current`,bundleID → 显示名)。
     /// - `configured`: 已经配过非零偏移的 bundleID(`LyricsOffsetStore.playerOffsets.keys`)。
     /// - `nowPlaying`: 此刻真正在放的那个,没有就传 nil。
     ///
-    /// 四组并集,每组内部按 bundle id 排序(字典遍历顺序不稳定,不排会每次启动乱跳):
-    ///  1. 内置播放器 —— 按枚举声明顺序,**排除 `.auto`**:它的 bundleIdentifier 是空串,
+    /// 四组并集,每组内部按 bundle id 排序(字典遍历顺序不稳定,不排会每次启动乱跳),
+    /// 唯一例外是第 1 组——它的顺序就是 `builtInOrder` 给的那个顺序:
+    ///  1. 内置播放器 —— 按 `builtInOrder`,**排除 `.auto`**:它的 bundleIdentifier 是空串,
     ///     存进去会被 `setPlayerOffset` 静默丢掉(用户调了没反应也没报错),而「自动」这层
     ///     语义本来就由「全部播放器」承担。
     ///  2. 信任的未知播放器 —— 浏览器就在这一组,是这个功能的动机。
     ///  3. **已经配过偏移的** —— 哪怕它既不是内置、也已经不在信任名单里(取消信任了、App
     ///     卸了)也必须列出来,否则那个非零偏移会变成看不见、改不动的隐形值。
     ///  4. 此刻正在放的那个 —— 可能是还没加进信任名单的 App,用户往往正是为它才来调。
-    public static func options(trusted: [String: String],
+    public static func options(builtInOrder: [PlaybackPlayer] = PlaybackPlayer.allCases,
+                              trusted: [String: String],
                               configured: Set<String>,
                               nowPlaying: String?) -> [String] {
         var ids: [String] = []
@@ -33,7 +41,7 @@ public enum LyricsOffsetScope {
             guard !id.isEmpty, !ids.contains(id) else { return }
             ids.append(id)
         }
-        for player in PlaybackPlayer.allCases where player != .auto {
+        for player in builtInOrder where player != .auto {
             append(player.bundleIdentifier)
         }
         for id in trusted.keys.sorted() { append(id) }

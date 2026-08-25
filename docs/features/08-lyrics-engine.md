@@ -1,5 +1,5 @@
 # 08. 歌词同步引擎(App 侧消费链)
-> 最后核对:2026-08-21 · 基线:05767ae+工作树
+> 最后核对:2026-08-25 · 基线:bd02c85+工作树
 
 ## 定位
 
@@ -235,7 +235,7 @@ LRC 格式标准里的 `[offset:±毫秒]` = 「这份歌词的全部时间戳�
 | LRC 解析(含 CRLF) | `LyrimuseCore/Lyrics/LRCParser.swift` — `LRCParser.parse` |
 | YRC 解析(含畸形元组) | `LyrimuseCore/Lyrics/YRCParser.swift` — `YRCParser.parse`、`wordRegex`、`malformedTupleRegex` |
 | 偏移存储与合成 | `LyrimuseCore/Lyrics/LyricsOffsetStore.swift` — `LyricsOffsetStore.trackKey/baseOffsetMs/effectiveOffset/globalOffsetMs/playerOffsets/playerOffset/setPlayerOffset/nudge/setOffset` |
-| 偏移作用域下拉框候选 | `LyrimuseCore/Lyrics/LyricsOffsetScope.swift` — `LyricsOffsetScope.options/allPlayersTag`(纯函数,selftest 覆盖三条不变量:排除 `.auto`、配过偏移的必列、顺序稳定无重复) |
+| 偏移作用域下拉框候选 | `LyrimuseCore/Lyrics/LyricsOffsetScope.swift` — `LyricsOffsetScope.options/allPlayersTag`(纯函数,selftest 覆盖四条不变量:排除 `.auto`、配过偏移的必列、顺序稳定无重复、`builtInOrder` 参数生效) |
 | 罗马音/语言判定/简繁 | `LyrimuseCore/Lyrics/Romanizer.swift` — `Romanizer.romanize/japaneseSegments/looksJapanese/script`、`ChineseVariant.converted`、`RomanizationScripts` |
 | 异体字规范化表(繁简之外的一层,有 selftest) | `LyrimuseCore/Lyrics/HanVariants.swift` — `toSimplified`、`normalizeToSimplified` |
 | 假名标注 | `LyrimuseCore/Lyrics/KanaAnnotation.swift` — `KanaAnnotation.parse/marks` |
@@ -262,6 +262,7 @@ LRC 格式标准里的 `[offset:±毫秒]` = 「这份歌词的全部时间戳�
 9. **繁简折叠绝不进 key**:Go(OpenCC)和 Swift(ICU)对部分字取舍不一致,进 key 是整首没词,放查询兜底层折不对只是多一条重复条目(`EnrichCacheKeys.looseKey` 注释)。
 10. **@Published 值变才赋值**是全链纪律:SwiftUI/Combine 不比较新旧值,fastTick 的三个字段、apply 的曲目字段、reload 的 allLines 全部先比较再赋值——违反任意一处就是每秒 20 次(或每 2 秒一次)的全 body 重算。
 11. **暂停 ≠ 清空**:「停止推进」和「清空显示」是两回事;暂停按冻结位置解行,且 apply/fastTick 必须共用同一份逻辑(曾错开:暂停下拖进度条行被清、要等 2s 轮询才回来)。
+12. **`LyricsOffsetScope.options` 的内置播放器顺序是调用方传进来的参数,不是它自己认的**(2026-08-25):新增 `builtInOrder: [PlaybackPlayer] = PlaybackPlayer.allCases` 参数,默认值保持旧行为(枚举声明顺序),但设置页"全局时间轴偏移"那一行的下拉框调用点显式传 `PlaybackPlayer.displayOrder`(按系统语言排,跟"选择播放器"图标网格——见 02-playback-source.md——同一套顺序,用户要求两处一致)。**为什么不让这个函数自己去读 `displayOrder`**:`LyricsOffsetScope` 在 LyrimuseCore,而 `displayOrder` 定义在 App 主 target 的 `FeatureSettingsStore.swift`(依赖 `AppSettings.userReadsSimplifiedChinese`),LyrimuseCore 不能反向依赖 App target(AGENTS.md 的分层约定)——顺序只能作为参数从外面传入,这也是这个仓库里"纯函数 + 依赖注入"处理跨层顺序需求的标准做法。
 
 ⚠️**待核对**:按播放器偏移对浏览器**实际有多少用**,仓内没有实测记录。02-playback-source.md 记着两条相关实测:一是「没有可学的常数」(Δ位置−Δts 七个样本极差 1.03s,所以自动学一个偏移不可行),二是时间戳相位订正已把平均绝对误差从 0.653s 压到 0.163s。残余偏差是否真接近常数、用户手调一个固定值能不能明显改善 Arc 的观感,**都还没量过**。这一层的正确性(存储、分层、不串台)有 selftest 钉住,「有效性」是待核对的。
 
