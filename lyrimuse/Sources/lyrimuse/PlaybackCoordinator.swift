@@ -280,19 +280,12 @@ final class PlaybackCoordinator: ObservableObject {
         return PlaybackPlayer.allCases.first { $0 != .auto && $0.bundleIdentifier == id }?.displayName
     }
 
-    /// 上面那个的图标版(2026-08-19 用户拍板改图标):取**已安装播放器的真实 App 图标**
-    /// (NSWorkspace 按 bundleID 找到 .app 再取图标)——最好认,还不用自带任何商标素材。
-    /// 面板 body 会随歌词行高频重渲染,而 NSWorkspace 两连查不便宜,按 bundleID 缓存;
-    /// App 图标在进程生命周期内不变,缓存不需要失效。没装(理论上不可能:它正在放)/
-    /// 认不出来给 nil,角标不显示。
-    private var playerIconCache: [String: NSImage] = [:]
+    /// 上面那个的图标版(2026-08-19 用户拍板改图标):取**已安装播放器的真实 App 图标**。
+    /// 查找/缓存逻辑收在 `AppIconResolver`(2026-08-25,跟另外两处消费点共用一份缓存,
+    /// 见那个类型的类头注)。没装(理论上不可能:它正在放)/认不出来给 nil,角标不显示。
     var resolvedPlayerIcon: NSImage? {
         guard let id = LocalPlaybackSource.shared.lastResolvedBundleID else { return nil }
-        if let cached = playerIconCache[id] { return cached }
-        guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: id) else { return nil }
-        let icon = NSWorkspace.shared.icon(forFile: url.path)
-        playerIconCache[id] = icon
-        return icon
+        return AppIconResolver.icon(forBundleID: id)
     }
 
     /// 点面板右上角的来源角标(2026-08-19 用户要求):把正在播放的那个播放器唤到前台。

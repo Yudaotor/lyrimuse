@@ -184,11 +184,11 @@ struct OnboardingView: View {
             // (五个播放器 + 自动识别)摆成 2 行,第三行留出一格给下面的
             // MorePlayersComingCard——不用横向滚动、也不会显得稀疏。
             //
-            // 顺序不用 PlaybackPlayer.allCases 的声明顺序,走 onboardingDisplayOrder——
-            // 2026-08-25 用户要求按系统语言排:简体中文语境国内三家排在 Spotify 前面,
-            // 非简体中文反过来。只影响这一个网格,见该属性类头注。
+            // 顺序不用 PlaybackPlayer.allCases 的声明顺序,走 displayOrder——2026-08-25
+            // 用户要求按系统语言排:简体中文语境国内三家排在 Spotify 前面,非简体中文
+            // 反过来。设置页"播放器"卡后来也用同一个顺序,见该属性类头注。
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3), spacing: 10) {
-                ForEach(PlaybackPlayer.onboardingDisplayOrder) { player in
+                ForEach(PlaybackPlayer.displayOrder) { player in
                     PlayerChoiceCard(player: player, isSelected: features.player == player) {
                         features.player = player
                         Task { await features.save() }
@@ -201,95 +201,9 @@ struct OnboardingView: View {
         }
     }
 
-    // 一张"选它"的图标卡片。真图标优先——已安装就用 NSWorkspace 按 bundleIdentifier
-    // 查到的真实 App 图标(跟"正在播放"面板来源角标同一个理由:2026-08-19 用户拍板
-    // "最好认,还不用自带任何商标素材",见 PlaybackCoordinator.resolvedPlayerIcon);
-    // 引导阶段大概率大部分播放器都还没装,查不到就退回 PlaybackPlayer.tintColor +
-    // fallbackSymbolName 这套占位,不留空白方块。选中态是强调色描边+浅色底,跟这个
-    // 向导别处(displayModeRow 的 Toggle)统一靠颜色/开关状态表达选中,不额外叠一个
-    // 对号图标。
-    private struct PlayerChoiceCard: View {
-        let player: PlaybackPlayer
-        let isSelected: Bool
-        let onSelect: () -> Void
-        @State private var installedIcon: NSImage?
-
-        var body: some View {
-            Button(action: onSelect) {
-                VStack(spacing: 6) {
-                    iconView
-                    Text(player.displayName)
-                        .font(.caption)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.85)
-                        .foregroundStyle(.primary)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 8)
-                .background(
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .fill(isSelected ? Color.accentColor.opacity(0.14) : Color.primary.opacity(0.05))
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .strokeBorder(isSelected ? Color.accentColor : Color.clear, lineWidth: 1.5)
-                )
-            }
-            .buttonStyle(.plain)
-            .onAppear(perform: loadRealIconIfInstalled)
-        }
-
-        @ViewBuilder
-        private var iconView: some View {
-            if let installedIcon {
-                Image(nsImage: installedIcon)
-                    .resizable()
-                    .frame(width: 26, height: 26)
-            } else {
-                Image(systemName: player.fallbackSymbolName)
-                    .font(.system(size: 15, weight: .medium))
-                    .foregroundStyle(.white)
-                    .frame(width: 26, height: 26)
-                    .background(player.tintColor, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
-            }
-        }
-
-        // .auto 没有对应的 App,不用查。查到的图标不需要缓存——这张卡片只在向导这一步
-        // 存在的这一小段时间里画一次,不是"正在播放"面板那种高频重渲染的场景。
-        private func loadRealIconIfInstalled() {
-            guard player != .auto,
-                  let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: player.bundleIdentifier)
-            else { return }
-            installedIcon = NSWorkspace.shared.icon(forFile: url.path)
-        }
-    }
-
-    /// 网格里第三行第一格那张占位卡——用户 2026-08-25 明确要求摆在这个位置(截图纠正过来
-    /// 的:第一次说"加几个点"以为是指上面那句文案的末尾,其实指的是六个真选项排完之后
-    /// 网格自己留出来的这一格)。不用 Button 包、没有选中态的描边/底色——虚线框 + 三个点
-    /// 的视觉语言故意跟六张真选项卡区分开,不会被当成"点了没反应的坏按钮"。
-    private struct MorePlayersComingCard: View {
-        var body: some View {
-            VStack(spacing: 6) {
-                Text("•••")
-                    .font(.system(size: 15, weight: .bold))
-                    .foregroundStyle(.tertiary)
-                    .frame(width: 26, height: 26)
-                Text(L10n.t("陆续支持中"))
-                    .font(.caption)
-                    .foregroundStyle(.tertiary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.85)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 8)
-            .overlay(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .strokeBorder(Color.secondary.opacity(0.25), style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
-            )
-            .accessibilityElement(children: .combine)
-        }
-    }
+    // PlayerChoiceCard/MorePlayersComingCard 2026-08-25 挪进独立文件
+    // (Settings/PlayerChoiceCard.swift)——设置页"播放器"那张卡后来也换成了同一套图标
+    // 网格,两处共用同一个组件,不重复维护。
 
     private var automationStep: some View {
         VStack(alignment: .leading, spacing: 16) {

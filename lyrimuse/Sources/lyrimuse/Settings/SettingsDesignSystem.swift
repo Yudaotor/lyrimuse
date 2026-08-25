@@ -416,6 +416,11 @@ struct SettingsRow<Trailing: View>: View {
     // 表达状态的地方才传色:"权限已授权/已拒绝"、"后台服务运行中/未运行"这类绿勾红叉,
     // 以及歌词来源前面那个代表来源的彩色圆点。
     var iconTint: Color?
+    // 用真实 App 图标代替 SF Symbol(2026-08-25,设置页"已信任的其它播放器"列表用得到:
+    // "Arc"这类第三方 App 显示它自己的图标,比一个通用的"checkmark.seal"更认得出是谁)。
+    // 跟 `icon` 二选一,给了它就不再画 `icon`——顺序上优先判它,原有全部调用点都不传这个
+    // 参数,行为不变。
+    var iconImage: NSImage?
     let title: String
     var subtitle: String?
     // 说明文字里需要放"?"气泡这类交互元素时用它替代纯文本 subtitle。两者只用其一。
@@ -427,7 +432,11 @@ struct SettingsRow<Trailing: View>: View {
             // 即使这一行没有图标也占住同宽的位置——同一张卡里有的行有图标、有的没有时,
             // 标题必须仍然对齐在同一条竖线上。
             Group {
-                if let icon {
+                if let iconImage {
+                    Image(nsImage: iconImage)
+                        .resizable()
+                        .frame(width: SettingsRowMetrics.iconWidth, height: SettingsRowMetrics.iconWidth)
+                } else if let icon {
                     Image(systemName: icon)
                         .font(.system(size: 13))
                         .foregroundStyle(iconTint ?? Color.secondary)
@@ -478,8 +487,8 @@ struct SettingsRow<Trailing: View>: View {
 
 // 没有尾部控件的纯说明/纯标题行。
 extension SettingsRow where Trailing == EmptyView {
-    init(icon: String? = nil, iconTint: Color? = nil, title: String, subtitle: String? = nil, help: String? = nil) {
-        self.init(icon: icon, iconTint: iconTint, title: title, subtitle: subtitle, help: help) { EmptyView() }
+    init(icon: String? = nil, iconTint: Color? = nil, iconImage: NSImage? = nil, title: String, subtitle: String? = nil, help: String? = nil) {
+        self.init(icon: icon, iconTint: iconTint, iconImage: iconImage, title: title, subtitle: subtitle, help: help) { EmptyView() }
     }
 }
 

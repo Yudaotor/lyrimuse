@@ -1,6 +1,6 @@
 # 02. 播放数据源与播放器支持
 
-> 最后核对:2026-08-25 · 基线:f4e685e+工作树
+> 最后核对:2026-08-25 · 基线:c7d96f5+工作树
 
 ## 定位
 
@@ -8,8 +8,8 @@ App 怎么知道"现在在放什么":从本地播放器读出 曲目元数据 + 
 
 ## 入口与展示面
 
-- **设置 → 播放器 tab**(`SettingsView.swift` 的 `PlayerSettingsTab`):播放器 Picker、「Apple Music 自动化」权限卡(仅选 Apple Music 时出现)、「后台采集服务」卡(含 media-control 通道自检失败提示)、两个 App 联动开关。
-- **引导页**(`OnboardingView.swift` 的 `playerChoiceStep` / `automationStep`):首次启动时选播放器;自动化权限步只在选中 Apple Music 时出现在 steps 里。2026-08-25 把 `playerChoiceStep` 从纯文字下拉换成图标卡片网格(`PlayerChoiceCard`,3 列 2 行):优先取**已安装播放器的真实 App 图标**(`NSWorkspace.urlForApplication(withBundleIdentifier:)` + `.icon(forFile:)`,跟"正在播放"面板来源角标——`PlaybackCoordinator.resolvedPlayerIcon`——同一个套路,理由也一样:最好认,不用自带商标素材),没装就退回 `PlaybackPlayer.tintColor` + `fallbackSymbolName` 这套占位色块(QQ音乐/网易云音乐/酷狗音乐复用 `sourceColor`——跟"歌词来源"是同一批 App,不维护第二份配色映射)。文案顺带补全:原来的说明句漏了酷狗音乐(2026-08-21 才接入,文案没跟上)。
+- **设置 → 播放器 tab**(`SettingsView.swift` 的 `PlayerSettingsTab`):「播放器」卡、「Apple Music 自动化」权限卡(仅选 Apple Music 时出现)、「已信任的其它播放器」卡(有信任项才出现)、「后台采集服务」卡(含 media-control 通道自检失败提示)、两个 App 联动开关。2026-08-25「播放器」卡跟引导页换成同一套图标网格(`PlayerChoiceCard`,用户要求两处排版和谐一致),包在 `SettingsCardHeader` + `SettingsRawRow` 里,融入这页"卡片+发丝描边"的既有语言,不是裸摆一个网格;顺带把「已信任的其它播放器」卡里每一行的图标从通用的 `checkmark.seal` SF Symbol 换成这个 App 自己的真图标(`SettingsRow` 新增的 `iconImage: NSImage?` 参数,跟 `icon` 二选一,原有全部调用点不传就不受影响),补了一个同款 `SettingsCardHeader` 标题——两张卡挨在一起时是"姐妹卡",不是"一张换新一张没换"。
+- **引导页**(`OnboardingView.swift` 的 `playerChoiceStep` / `automationStep`):首次启动时选播放器;自动化权限步只在选中 Apple Music 时出现在 steps 里。2026-08-25 把 `playerChoiceStep` 从纯文字下拉换成图标卡片网格(`PlayerChoiceCard`,3 列 2 行,后来也被设置页复用,挪进了独立文件 `Settings/PlayerChoiceCard.swift`):优先取**已安装播放器的真实 App 图标**(`AppIconResolver`,跟"正在播放"面板来源角标——`PlaybackCoordinator.resolvedPlayerIcon`——同一份取图标逻辑/缓存,理由也一样:最好认,不用自带商标素材),没装就退回 `PlaybackPlayer.tintColor` + `fallbackSymbolName` 这套占位色块(QQ音乐/网易云音乐/酷狗音乐复用 `sourceColor`——跟"歌词来源"是同一批 App,不维护第二份配色映射)。文案顺带补全:原来的说明句漏了酷狗音乐(2026-08-21 才接入,文案没跟上)。
 - 数据本身没有独立窗口——通过 `PlaybackCoordinator`(`LocalPlaybackSource` 的薄转发层)流向悬浮歌词(`LyricsOverlayView`)、灵动岛(`NotchLyricsView`)、歌词窗口(`LyricsWindowView`)、菜单栏(`MenuBarStatusItem`)。
 - 「导出诊断信息」会带上 `lastResolvedBundleID`(这一刻实际被认下来的播放器,选"自动识别"时只报设置值等于什么都没说)。
 
@@ -282,8 +282,9 @@ vs 目录 289.766),拿目录值去盖反而是降精度。覆盖就该待在产�
 | 快照结构与 trackKey | `LyrimuseCore/Local/MediaControlSnapshot.swift` · `MediaControlSnapshot` |
 | 播放器枚举与设置读取 | `LyrimuseCore/Local/PlaybackPlayer.swift` · `PlaybackPlayer`/`PlaybackPlayerPreference` |
 | 播放器展示名/品牌色/占位符号 | `lyrimuse/Settings/FeatureSettingsStore.swift` · `extension PlaybackPlayer`(`displayName`/`tintColor`/`fallbackSymbolName`) |
-| 引导页图标卡片 | `lyrimuse/OnboardingView.swift` · `PlayerChoiceCard` / `MorePlayersComingCard` |
-| 引导页图标网格顺序 | `lyrimuse/Settings/FeatureSettingsStore.swift` · `PlaybackPlayer.onboardingDisplayOrder`;判据 `lyrimuse/Settings/AppSettings.swift` · `AppSettings.userReadsSimplifiedChinese` |
+| 图标卡片(引导页 + 设置页共用) | `lyrimuse/Settings/PlayerChoiceCard.swift` · `PlayerChoiceCard` / `MorePlayersComingCard`(后者只在引导页用) |
+| 图标网格摆放顺序 | `lyrimuse/Settings/FeatureSettingsStore.swift` · `PlaybackPlayer.displayOrder`;判据 `lyrimuse/Settings/AppSettings.swift` · `AppSettings.userReadsSimplifiedChinese` |
+| 真实 App 图标解析(共享缓存) | `lyrimuse/Settings/AppIconResolver.swift` · `AppIconResolver.icon(forBundleID:)` |
 | 事件流常驻子进程 | `LyrimuseCore/Local/MediaControlStreamWatcher.swift` · `MediaControlStreamWatcher` |
 | 通道健康自检 | `LyrimuseCore/Local/MediaControlHealth.swift` · `MediaControlHealth` |
 | 播放控制写路径 | `LyrimuseCore/Local/MusicPlaybackController.swift` · `MusicPlaybackController`(`dispatch`/`seek`/`setPlaybackMode`/`supportsExtendedControls`) |
@@ -311,8 +312,9 @@ vs 目录 289.766),拿目录值去盖反而是降精度。覆盖就该待在产�
 11. **`uniqueIdentifier` 只对 Apple Music 目录曲目是目录 ID**,本地导入/购买的文件放的是任意 64 位持久 ID(实测负数)。所以 Apple 目录锚点对自己导入的曲库天然无效——这不是 bug,是这个字段的语义边界。别的播放器在这个字段里放什么也没有保证,理论上可能撞上一个真实的目录 ID,所以除了 bundle id 守卫,拿回来的结果一律要过曲目名+专辑名自校验。
 12. ⚠️ **离屏 harness 窗口截不了图,只能截"真身份"App 的窗口**(2026-08-25 排查坐实,验证 `PlayerChoiceCard` 网格排版时踩到):`swiftc` 现编现跑的裸 Mach-O 二进制自己开一扇 `NSWindow`,即使 `onscreen=true`(CGWindowList 确认过),`screencapture -l <id>` 一律报 `could not create image from window`——跟这台机器上 `AXIsProcessTrusted()` 恒为 `false`(这个 shell/调用进程没有拿到「辅助功能」信任,给哪个新编译的二进制都一样)大概率是同一类限制:没有正式签名/bundle 身份的进程,窗口内容拿不到。真机验证只能对着 `build.sh` 装出来的、真正签过名的 `Lyrimuse.app` 截——而它自己的窗口如果被另一扇窗口完全遮住,同一个 `-l` 调用也会报同样的错(实测「引导」窗被「设置」窗完全盖住时截不出来,挪开/换到没被挡的窗口就正常)。这条链路上没有不涉及点击的解法:AX 拿不到信任、装了新二进制也拿不到,唯一稳的路是让目标窗口本来就没被挡。这次的图标网格排版靠人工核算(卡片高度×2行+文案行高)过了预算,没能拿到一张真实截图收尾,已经请用户自己开一次引导页确认——**用户随后截图确认排版正常,2 行 3 列没有跟底部「上一步/下一步」重叠**,人工核算这次是准的。
 
-13. **引导页图标网格的摆放顺序按系统语言排,不是按 `PlaybackPlayer.allCases` 的声明顺序**(2026-08-25 用户要求,`PlaybackPlayer.onboardingDisplayOrder`):Apple Music 恒排第一、「自动识别」恒垫底,中间四个按 `AppSettings.userReadsSimplifiedChinese` 二选一——简体中文语境国内三家(QQ/网易云/酷狗)排在 Spotify 前面,非简体中文(含繁体中文、英文等)反过来。判据是系统**首选语言列表第一项**的字符串前缀/子串匹配(跟 `L10n.current` 同一套朴素写法,不依赖 `Locale.Language.script` 这类新 API 在不同系统版本上是否可靠),不是这批"读不读中文"的 `AppSettings.userReadsChinese`——那个繁简不分,会把台/港/澳用户也并进"排国内播放器优先"这一档,而这批用户对国内三家的使用率其实更接近英文用户。只改了这一个网格的展示顺序,`allCases` 本身和别处(设置页播放器 `Picker`)都没动,省得改一处波及一片。
+13. **图标网格的摆放顺序按系统语言排,不是按 `PlaybackPlayer.allCases` 的声明顺序**(2026-08-25 用户要求,`PlaybackPlayer.displayOrder`):Apple Music 恒排第一、「自动识别」恒垫底,中间四个按 `AppSettings.userReadsSimplifiedChinese` 二选一——简体中文语境国内三家(QQ/网易云/酷狗)排在 Spotify 前面,非简体中文(含繁体中文、英文等)反过来。判据是系统**首选语言列表第一项**的字符串前缀/子串匹配(跟 `L10n.current` 同一套朴素写法,不依赖 `Locale.Language.script` 这类新 API 在不同系统版本上是否可靠),不是这批"读不读中文"的 `AppSettings.userReadsChinese`——那个繁简不分,会把台/港/澳用户也并进"排国内播放器优先"这一档,而这批用户对国内三家的使用率其实更接近英文用户。`displayOrder` 只影响引导页和设置页这两处图标网格,`allCases` 本身及别的消费点(按 bundle id 查找,不关心顺序)都没动。
 
-14. **"陆续支持中"的提示是网格里第 7 张卡,不是文案**(2026-08-25,一次返工才落到位):用户第一次说"在最后面加几个点标识陆续支持中"时,理解成文案末尾加「……」,改完发截图纠正——指的是六张真选项排完 2 行后网格自己空出来的第三行第一格。改法:`playerChoiceStep` 的 `LazyVGrid` 在 `ForEach(PlaybackPlayer.onboardingDisplayOrder)` 后面紧跟一张 `MorePlayersComingCard`(不用 `Button` 包、没有选中态描边/底色,虚线框+三个点跟六张真选项区分开,不会被当成"点了没反应的坏按钮"),`LazyVGrid` 按声明顺序自然往下排,不用另外指定网格坐标。
+14. **"陆续支持中"的提示是网格里第 7 张卡,不是文案**(2026-08-25,一次返工才落到位):用户第一次说"在最后面加几个点标识陆续支持中"时,理解成文案末尾加「……」,改完发截图纠正——指的是六张真选项排完 2 行后网格自己空出来的第三行第一格。改法:`playerChoiceStep` 的 `LazyVGrid` 在 `ForEach(PlaybackPlayer.displayOrder)` 后面紧跟一张 `MorePlayersComingCard`(不用 `Button` 包、没有选中态描边/底色,虚线框+三个点跟六张真选项区分开,不会被当成"点了没反应的坏按钮"),`LazyVGrid` 按声明顺序自然往下排,不用另外指定网格坐标。**只在引导页用**——设置页那张卡六个选项正好铺满 2 行,不需要它。
+15. **图标网格从引导页搬到设置页时,连带把"已信任的其它播放器"卡也一起改了**(2026-08-25 用户要求"和谐"):这张卡跟"播放器"卡紧挨着,原来每一行的图标是通用的 `checkmark.seal` SF Symbol,跟旁边六个内置播放器清一色真图标放在一起会显得脱节。给 `SettingsRow` 加了一个新的可选参数 `iconImage: NSImage?`(跟已有的 `icon: String?` 二选一,优先判 `iconImage`),让"已信任的其它播放器"列表也能显示这些第三方 App(比如 Arc 浏览器)自己的真图标——原有全部调用点没传这个新参数,行为不受影响。顺带给这张卡也加了一个 `SettingsCardHeader` 标题("已信任的其它播放器"),跟"播放器"卡的标题成对,不是"一张有标题一张没有"。图标查找收拢进 `AppIconResolver`(见代码锚点),同一份缓存三处共用(此前"正在播放"面板角标和 `PlayerChoiceCard` 各自维护过一份)。
 
 ⚠️待核对:设置为「自动识别」且实际在播 Apple Music 时,playPause/上一首/下一首经 `MusicPlaybackController.dispatch` 走 media-control(只有 seek 有 `preferAppleScript` 覆盖)——代码注释断言 media-control 控制指令对系统 Now Playing 焦点生效、应可控制 Music.app,但仓内未见对这一具体组合的实测记录。

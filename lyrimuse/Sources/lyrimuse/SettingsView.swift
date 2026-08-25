@@ -1927,24 +1927,26 @@ private struct PlayerSettingsTab: View {
         }
     }
 
-    // 切换后台采集服务(收集器只在启动时读一次这个设置)需要重启才生效,跟这个 store
-    // 其它开关一样"保存即重启"。
+    // 2026-08-25 从纯文字 Picker 换成图标卡片网格——跟引导页"选择播放器"那一步换成
+    // 同一套组件(PlayerChoiceCard,见 Settings/PlayerChoiceCard.swift),用户要求两处
+    // 排版和谐一致。用 SettingsCardHeader + SettingsRawRow 而不是直接把网格摆在页面上:
+    // 这页所有分组都是"卡片+发丝描边+统一内边距"的语言(见 SettingsDesignSystem.swift),
+    // 网格如果裸摆会跟旁边"Arc"信任列表、"后台采集服务"这些卡片脱节。六个选项(五个
+    // 播放器+自动识别)正好铺满 3 列 2 行,不需要引导页那张"陆续支持中"占位卡——这里
+    // 不是第一印象页,不需要强调"还在长"这件事。
     private var playerCard: some View {
         SettingsCard {
-            SettingsRow(
-                icon: "music.note.list",
-                title: L10n.t("播放器")
-            ) {
-                Picker("", selection: Binding(
-                    get: { features.player },
-                    set: { features.player = $0; Task { await features.save() } }
-                )) {
-                    ForEach(PlaybackPlayer.allCases) { player in
-                        Text(player.displayName).tag(player)
+            SettingsCardHeader(title: L10n.t("播放器"))
+            SettingsRawRow {
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3), spacing: 10) {
+                    ForEach(PlaybackPlayer.displayOrder) { player in
+                        PlayerChoiceCard(player: player, isSelected: features.player == player) {
+                            features.player = player
+                            Task { await features.save() }
+                        }
                     }
                 }
-                .pickerStyle(.menu)
-                .fixedSize()
+                .frame(maxWidth: .infinity)
             }
         }
     }
@@ -2026,11 +2028,21 @@ private struct PlayerSettingsTab: View {
     private var trustedPlayersCard: some View {
         if !features.trustedPlayers.isEmpty {
             SettingsCard {
+                // 2026-08-25 补标题:playerCard 换成图标网格之后有了自己的
+                // SettingsCardHeader,紧跟着一张没有标题的卡在视觉上不成对,补一个让两张
+                // 卡看起来是同一套设计语言里的姐妹卡。
+                SettingsCardHeader(title: L10n.t("已信任的其它播放器"))
                 // 按 bundle id 排序,别让列表顺序随 Dictionary 遍历顺序每次启动乱跳。
                 ForEach(features.trustedPlayers.keys.sorted(), id: \.self) { bundleID in
                     if bundleID != features.trustedPlayers.keys.sorted().first { CardDivider() }
+                    // 2026-08-25 图标从通用的"checkmark.seal"换成这个 App 自己的真图标
+                    // (跟 playerCard 那套图标网格同一份取图标逻辑,AppIconResolver)——
+                    // 一张卡里六个内置播放器都亮出真图标,紧接着这张卡却清一色一个通用
+                    // 印章图标,两张卡放在一起会显得不搭。查不到(理论上不太可能:它刚被
+                    // 检测到在跑,必然装着)才退回原来的印章图标,不留空白。
                     SettingsRow(
                         icon: "checkmark.seal",
+                        iconImage: AppIconResolver.icon(forBundleID: bundleID),
                         title: displayNameForTrusted(bundleID),
                         subtitle: bundleID
                     ) {

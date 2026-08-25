@@ -265,6 +265,7 @@
 "已下载" = "Downloaded";
 "已下载 %@ / %@" = "%@ of %@ downloaded";
 "已保存" = "Saved";
+"已信任的其它播放器" = "Trusted third-party players";
 "已减少推荐" = "Suggested Less";
 "已删除" = "Deleted";
 "已刷新" = "Refreshed";
