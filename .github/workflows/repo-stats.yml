@@ -1,0 +1,31 @@
+name: Repo Stats
+
+# GitHub's own Insights -> Traffic tab (views/clones) only keeps a 14-day rolling window.
+# jgehrcke/github-repo-stats pulls that traffic API once a day and commits the raw data plus
+# a rendered HTML/PDF report to the `github-repo-stats` branch, so the history survives past
+# 14 days. That data branch must exist beforehand (created once via the GitHub API, not by
+# this workflow) -- see the setup notes in the PR/commit that introduced this file.
+#
+# IMPORTANT: the `schedule:` trigger below only ever fires from this file's state on the
+# repo's *default* branch (main), never from `dev`, even though `dev` is where this repo's
+# code normally lives. Until this file reaches `main`, the cron won't run on its own --
+# trigger it manually from the Actions tab (workflow_dispatch works from any branch) in the
+# meantime.
+on:
+  schedule:
+    - cron: "0 23 * * *"
+  workflow_dispatch:
+
+jobs:
+  repo-stats:
+    name: Fetch and archive repo stats
+    runs-on: ubuntu-latest
+    steps:
+      - name: run-ghrs
+        # Pinned to a commit SHA, not a tag: upstream hasn't cut a release tag since v1.4.2
+        # (Dec 2022) despite ongoing commits on main, so the latest tag is stale relative to
+        # main. This SHA was main's HEAD as of 2026-08-26.
+        uses: jgehrcke/github-repo-stats@ff48771cbb4324c3b77490bbfc26d6a5f3831cdb
+        with:
+          repository: Yudaotor/lyrimuse
+          ghtoken: ${{ secrets.GHRS_GITHUB_API_TOKEN }}
