@@ -163,7 +163,7 @@ func (c *lbClient) submitOnce(ctx context.Context, body []byte, timeout time.Dur
 	}
 	req.Header.Set("Authorization", "Token "+c.token)
 	req.Header.Set("Content-Type", "application/json")
-	resp, err := c.hc.Do(req)
+	resp, err := doHTTPTracked(c.hc, req)
 	if err != nil {
 		return 0, err
 	}

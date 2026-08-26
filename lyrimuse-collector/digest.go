@@ -142,7 +142,7 @@ func lbListensBefore(ctx context.Context, root, user string, fromUnix, maxTs int
 	if err != nil {
 		return nil, 0, err
 	}
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := doHTTPTracked(http.DefaultClient, req)
 	if err != nil {
 		return nil, 0, err
 	}

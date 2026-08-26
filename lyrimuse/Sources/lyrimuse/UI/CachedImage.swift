@@ -1,4 +1,5 @@
 import AppKit
+import LyrimuseCore
 import SwiftUI
 
 /// 已经解好码的图片的内存缓存。
@@ -182,8 +183,17 @@ struct CachedImage<Placeholder: View>: View {
     /// 尺寸,不把原图整张解出来再缩(那样峰值内存/CPU 还是原图的);拿不到缩略图
     /// (罕见格式)退回整图解码,行为不变。
     private static func load(_ url: URL, maxPixel: CGFloat?) async -> NSImage? {
+        // ⚠️ 这里记的是"这个函数被调用了几次",不是"真的上网发了几次请求"——命中
+        // URLCache.shared 时字节从本地缓存出、根本不上网,而 URLSession 的这个便捷 API
+        // 不暴露"这次是不是缓存命中"的信号(要拿到得换成带 URLSessionTaskDelegate 的
+        // session,收 URLSessionTaskMetrics.resourceFetchType,对这一个调用点不值得
+        // 换掉整套写法)。所以这条审计线是"这个来源被访问过"的上界,不是精确的网络流量。
+        let start = Date()
         do {
-            let (data, _) = try await URLSession.shared.data(from: url)
+            let (data, resp) = try await URLSession.shared.data(from: url)
+            let status = (resp as? HTTPURLResponse)?.statusCode
+            NetworkAuditLog.record(service: "image", operation: "image", host: url.host ?? "unknown",
+                                   statusCode: status, durationMs: Date().timeIntervalSince(start) * 1000, error: nil)
             if let maxPixel,
                let src = CGImageSourceCreateWithData(data as CFData, nil),
                let cg = CGImageSourceCreateThumbnailAtIndex(src, 0, [
@@ -195,6 +205,8 @@ struct CachedImage<Placeholder: View>: View {
             }
             return NSImage(data: data)
         } catch {
+            NetworkAuditLog.record(service: "image", operation: "image", host: url.host ?? "unknown",
+                                   statusCode: nil, durationMs: Date().timeIntervalSince(start) * 1000, error: error)
             return nil
         }
     }

@@ -1,6 +1,6 @@
 # 15. 运行、部署与后台任务
 
-> 最后核对：2026-08-22 · 基线：05767ae+工作树
+> 最后核对：2026-08-26 · 基线：05767ae+工作树
 
 ## 定位
 
@@ -42,7 +42,7 @@ collector 二进制打包在 `.app/Contents/Resources/` 内，由 `Bundle.main` 
 - **companionLaunch**：打开所选播放器时顺带唤起 Lyrimuse（`features.launchLyrimuseOnMusicOpen`，默认开）；反方向（开 Lyrimuse 唤起播放器）在 App 侧。检测走 `pgrep -x <可执行文件名>`（不碰 AppleScript/自动化权限，所以对没有 AppleScript 支持的播放器同样生效），名字表在 `knownPlayerProcessNames`：`Music` / `QQMusic` / `NeteaseMusic` / `Spotify` / **`酷狗音乐`**（中文，`CFBundleExecutable` 实测值）。
   ⚠️ 酷狗这一项 2026-08-22 才补上——它接进 collector 时（`system.go`/`features.go` 都加了 `playerKugou`）漏了这一路，`playerProcessName()` 的 switch 没有 kugou 分支、落进 `default: return "Music"`，于是**选了酷狗的用户这个联动实际在盯 Music.app**：打开酷狗不会唤起 Lyrimuse，反倒打开 Apple Music 会；`knownPlayerProcessNames` 同样漏了它，「自动识别」档也盖不住。回归测试 `TestPlayerProcessNameCoversEveryPlayer` 双向钉住（每个播放器都有自己的名字 + 都在 auto 那份列表里），做过变异测试。
   ⚠️ 往名字表里加新播放器时要一起核**两件事**：① `pgrep -x` 能匹配非 ASCII 的 comm（拿中文名进程实测过，可以）；② UTF-8 字节数不超过内核 `p_comm` 的 16 字节上限（「酷狗音乐」是 12 字节，再长两个汉字就会被截断、`-x` 精确匹配当场失效）。
-- 网络观察（networkobs）：解析全空时标记「网络不通」状态给 UI（歌词区显示网络提示而非「没歌词」）。
+- 网络观察（networkobs）：解析全空时标记「网络不通」状态给 UI（歌词区显示网络提示而非「没歌词」）；`doHTTPTracked` 同时是（2026-08-26 起）collector 侧**所有对外请求**的统一审计日志出口，见第 14 章「对外请求审计日志」——一并接进来的调用点覆盖 Last.fm/ListenBrainz/七个歌词源/推送/状态中继/翻译/取色/MusicBrainz/iTunes，只有 DNS-over-HTTPS（`doh.go`）刻意排除在外（不是"联系了哪个外部服务"，是基础设施调用，理由跟它不参与 `networkLooksDown()` 统计一致）。
 
 ### 4. 日报/周报推送（可选，默认关）
 
@@ -108,7 +108,7 @@ CoreAudio 属性监听（不拦音量键不轮询 osascript），系统输出音
 | 推送通道 | notify.go `buildNotifyPayload`、alerter.go |
 | 健康检查 | healthcheckcli.go；App 侧 MediaControlHealth.swift |
 | 音量横幅 | Settings/VolumeMonitor.swift |
-| 网络观察 | networkobs.go |
+| 网络观察 / 对外请求审计 | networkobs.go（`doHTTPTracked`）、networkobs_test.go |
 | 自测 | Sources/lyrimuse-selftest/main.swift；scripts/check-windows.swift |
 
 ## 设计决策与已知坑

@@ -149,9 +149,20 @@ public enum MusicCatalogSearch {
         else { return nil }
         var req = URLRequest(url: url)
         req.timeoutInterval = 8
-        guard let (data, resp) = try? await URLSession.shared.data(for: req),
-              (resp as? HTTPURLResponse)?.statusCode == 200,
-              let decoded = try? JSONDecoder().decode(Response.self, from: data)
+        let start = Date()
+        let data: Data
+        let resp: URLResponse
+        do {
+            (data, resp) = try await URLSession.shared.data(for: req)
+        } catch {
+            NetworkAuditLog.record(service: "itunes", operation: "itunes.search", host: url.host ?? "itunes.apple.com",
+                                   statusCode: nil, durationMs: Date().timeIntervalSince(start) * 1000, error: error)
+            return nil
+        }
+        let status = (resp as? HTTPURLResponse)?.statusCode
+        NetworkAuditLog.record(service: "itunes", operation: "itunes.search", host: url.host ?? "itunes.apple.com",
+                               statusCode: status, durationMs: Date().timeIntervalSince(start) * 1000, error: nil)
+        guard status == 200, let decoded = try? JSONDecoder().decode(Response.self, from: data)
         else { return nil }
         return pickArtwork(decoded.results, title: title, artist: artist, album: album)
     }
@@ -169,9 +180,20 @@ public enum MusicCatalogSearch {
         guard let url = searchURL(title: title, artist: artist, storefront: storefront) else { return nil }
         var req = URLRequest(url: url)
         req.timeoutInterval = 8
-        guard let (data, resp) = try? await URLSession.shared.data(for: req),
-              (resp as? HTTPURLResponse)?.statusCode == 200,
-              let decoded = try? JSONDecoder().decode(Response.self, from: data)
+        let start = Date()
+        let data: Data
+        let resp: URLResponse
+        do {
+            (data, resp) = try await URLSession.shared.data(for: req)
+        } catch {
+            NetworkAuditLog.record(service: "itunes", operation: "itunes.search", host: url.host ?? "itunes.apple.com",
+                                   statusCode: nil, durationMs: Date().timeIntervalSince(start) * 1000, error: error)
+            return nil
+        }
+        let status = (resp as? HTTPURLResponse)?.statusCode
+        NetworkAuditLog.record(service: "itunes", operation: "itunes.search", host: url.host ?? "itunes.apple.com",
+                               statusCode: status, durationMs: Date().timeIntervalSince(start) * 1000, error: nil)
+        guard status == 200, let decoded = try? JSONDecoder().decode(Response.self, from: data)
         else { return nil }
         return pickBest(decoded.results, title: title, artist: artist)
     }

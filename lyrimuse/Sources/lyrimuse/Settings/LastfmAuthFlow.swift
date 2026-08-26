@@ -2,6 +2,7 @@ import Foundation
 import CryptoKit
 import AppKit
 import OSLog
+import LyrimuseCore
 
 // 这个 logger 只记"发生了哪一步、失败原因是什么"，绝不记 api_key/secret/session key
 // 这些凭据原文本身(跟 ConfigStore.swift 顶部同一条纪律)——DiagnosticsExporter 导出的
@@ -57,12 +58,31 @@ enum LastfmAuthFlow {
         return comps.url!
     }
 
+    // 这两个函数是 App 侧仅有的两处绕开 LastfmStatsService.request() 单一出口、自己
+    // 直连 Last.fm 的地方(连接账号只发生一次,不值得为它接进那套带限速/重试的机制)。
+    // 收进这一个小 helper,统一记一笔 NetworkAuditLog——理由和记什么见该类型头部注释,
+    // 这里不重复。
+    private static func auditedGet(_ url: URL, operation: String) async throws -> Data {
+        let start = Date()
+        do {
+            let (data, resp) = try await URLSession.shared.data(from: url)
+            let status = (resp as? HTTPURLResponse)?.statusCode
+            NetworkAuditLog.record(service: "lastfm", operation: operation, host: url.host ?? "ws.audioscrobbler.com",
+                                   statusCode: status, durationMs: Date().timeIntervalSince(start) * 1000, error: nil)
+            return data
+        } catch {
+            NetworkAuditLog.record(service: "lastfm", operation: operation, host: url.host ?? "ws.audioscrobbler.com",
+                                   statusCode: nil, durationMs: Date().timeIntervalSince(start) * 1000, error: error)
+            throw error
+        }
+    }
+
     // Last.fm 的错误(比如 api_key 无效)经常仍然是 HTTP 200、body 里带 message 字段,
     // 不总是用非 200 状态码表达——这里不看 HTTP 状态,只看 body 能不能解析出预期字段,
     // 更贴近 Last.fm 实际行为。
     static func requestToken(apiKey: String) async throws -> String {
         let url = buildURL(["method": "auth.gettoken", "api_key": apiKey, "format": "json"])
-        let (data, _) = try await URLSession.shared.data(from: url)
+        let data = try await auditedGet(url, operation: "auth.gettoken")
         struct Resp: Decodable { let token: String?; let message: String? }
         guard let decoded = try? JSONDecoder().decode(Resp.self, from: data) else { throw LastfmAuthError.parse }
         if let token = decoded.token, !token.isEmpty { return token }
@@ -90,7 +110,7 @@ enum LastfmAuthFlow {
             "method": "auth.getsession", "api_key": apiKey, "token": token,
             "api_sig": signed, "format": "json",
         ])
-        let (data, _) = try await URLSession.shared.data(from: url)
+        let data = try await auditedGet(url, operation: "auth.getsession")
         struct Resp: Decodable {
             struct Session: Decodable { let name: String; let key: String }
             let session: Session?
@@ -189,6 +209,9 @@ final class LastfmConnectController: ObservableObject {
                 // 可能连的是另一个账号:上一个账号的统计/头像/榜单全部作废,让信息页
                 // 按新身份重拉(审阅指出旧账号数据会一直挂着)。
                 LastfmStatsService.shared.resetAll()
+                // 首次连接就开始后台引导同步(2026-08-25),不等用户点进某个 tab ——
+                // 见 LastfmStatsService.ensureFirstSyncBootstrap 的注释。
+                LastfmStatsService.shared.ensureFirstSyncBootstrap()
                 // 桥接用的"用户名"字段自动回填——只在还没手动填过时才带过去,不覆盖用户
                 // 已经显式填的值(理论上极少见:桥接一个跟镜像不同的 Last.fm 账号)。
                 if ConfigStore.shared.lastfmUser.isEmpty {

@@ -212,7 +212,7 @@ func (s *lastfmScrobbler) callBatch(ctx context.Context, method string, params m
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("User-Agent", clientName)
-	resp, err := s.hc.Do(req)
+	resp, err := doHTTPTracked(s.hc, req)
 	if err != nil {
 		// 网络错误/超时:**发出去了但不知道结果**。绝不重发(重发是最大的自造重复源),
 		// 交给调用方把整批标成隔离。

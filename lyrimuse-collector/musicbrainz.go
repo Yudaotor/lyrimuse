@@ -518,7 +518,7 @@ func mbGetJSON(url string, v any) error {
 	// 这个头容易被限流/拒绝,见上面 Rate Limiting 文档链接。
 	req.Header.Set("User-Agent", fmt.Sprintf("%s/%s (+https://github.com/Yudaotor/lyrimuse)", clientName, clientVersion))
 	client := &http.Client{Timeout: 6 * time.Second}
-	resp, err := client.Do(req)
+	resp, err := doHTTPTracked(client, req)
 	if err != nil {
 		return err
 	}

@@ -115,7 +115,7 @@ func (s *lastfmScrobbler) call(ctx context.Context, method string, params map[st
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("User-Agent", clientName)
-	resp, err := s.hc.Do(req)
+	resp, err := doHTTPTracked(s.hc, req)
 	if err != nil {
 		return err
 	}
@@ -302,7 +302,7 @@ func lastfmRecent(ctx context.Context, user, apiKey string) (nowPlaying *lastfmT
 		log.Printf("lastfmRecent: build request: %v", err)
 		return nil, nil, false
 	}
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := doHTTPTracked(http.DefaultClient, req)
 	if err != nil {
 		log.Printf("lastfmRecent: request failed: %v", err)
 		return nil, nil, false

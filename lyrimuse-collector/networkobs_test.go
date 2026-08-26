@@ -3,9 +3,12 @@
 package main
 
 import (
+	"bytes"
+	"log"
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -75,6 +78,77 @@ func TestDoHTTPTracked_TransportErrorCountsAsFailure(t *testing.T) {
 	}
 	if got := failureDelta(failuresBefore); got != 1 {
 		t.Fatalf("expected exactly 1 new failure recorded, got %d", got)
+	}
+}
+
+// 2026-08-26 用户要求"所有软件发出的对外请求全部都给我记录下日志",doHTTPTracked
+// 从这时起是全局的审计日志出口,不只是网络计数器。这两个测试钉住这一层:①正常/失败
+// 两条路径都真的写了一行日志;②日志行**不带 query string**——凭据(比如这里模拟的
+// api_key)不应该出现在里面,这是这条功能的核心安全承诺,比单纯"格式对不对"更重要。
+// 用 log.SetOutput 换成内存 buffer 是 Go 测试里安全捕获 log 包输出的标准做法——
+// installLogScrubbing() 只在真实运行时的 main() 里调用,go test 不会跑到它,这里
+// 换输出目标不会跟它打架;defer 换回去,不影响其它测试。
+func TestDoHTTPTracked_LogsSuccessWithoutQueryString(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	var buf bytes.Buffer
+	prev := log.Writer()
+	log.SetOutput(&buf)
+	defer log.SetOutput(prev)
+
+	req, err := http.NewRequest(http.MethodGet, srv.URL+"/2.0/?method=track.getinfo&api_key=SECRET1234567890", nil)
+	if err != nil {
+		t.Fatalf("build request: %v", err)
+	}
+	resp, err := doHTTPTracked(&http.Client{Timeout: 2 * time.Second}, req)
+	if err != nil {
+		t.Fatalf("expected no transport error, got: %v", err)
+	}
+	resp.Body.Close()
+
+	logged := buf.String()
+	if !strings.Contains(logged, "200") {
+		t.Fatalf("expected the status code to appear in the log line, got: %q", logged)
+	}
+	if !strings.Contains(logged, "method=track.getinfo") {
+		t.Fatalf("expected the safe 'method' query param to be surfaced, got: %q", logged)
+	}
+	if strings.Contains(logged, "SECRET1234567890") || strings.Contains(logged, "api_key") {
+		t.Fatalf("api_key must never appear in the audit log line, got: %q", logged)
+	}
+}
+
+func TestDoHTTPTracked_LogsFailure(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	addr := ln.Addr().String()
+	ln.Close()
+
+	var buf bytes.Buffer
+	prev := log.Writer()
+	log.SetOutput(&buf)
+	defer log.SetOutput(prev)
+
+	req, err := http.NewRequest(http.MethodGet, "http://"+addr+"/submit-listens?token=SECRETTOKEN1234", nil)
+	if err != nil {
+		t.Fatalf("build request: %v", err)
+	}
+	_, err = doHTTPTracked(&http.Client{Timeout: 2 * time.Second}, req)
+	if err == nil {
+		t.Fatalf("expected a transport-level error connecting to a closed port")
+	}
+
+	logged := buf.String()
+	if !strings.Contains(logged, "FAILED") {
+		t.Fatalf("expected the failure path to be logged as FAILED, got: %q", logged)
+	}
+	if strings.Contains(logged, "SECRETTOKEN1234") {
+		t.Fatalf("token must never appear in the audit log line, got: %q", logged)
 	}
 }
 

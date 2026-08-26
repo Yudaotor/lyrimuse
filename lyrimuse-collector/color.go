@@ -65,7 +65,7 @@ func resolveDominantColor(coverURL string) string {
 	}
 	req.Header.Set("Referer", referer)
 	req.Header.Set("User-Agent", "Mozilla/5.0")
-	resp, err := cli.Do(req)
+	resp, err := doHTTPTracked(cli, req)
 	if err != nil {
 		return ""
 	}

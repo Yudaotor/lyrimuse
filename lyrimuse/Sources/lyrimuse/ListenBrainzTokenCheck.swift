@@ -1,4 +1,5 @@
 import Foundation
+import LyrimuseCore
 
 // 拿 Token 反查用户名 —— 用户不用再手抄一遍自己的用户名。
 //
@@ -82,12 +83,16 @@ final class ListenBrainzTokenCheck: ObservableObject {
         var request = URLRequest(url: url)
         request.timeoutInterval = 10
         request.setValue("Token \(token)", forHTTPHeaderField: "Authorization")
+        let start = Date()
         do {
             let (data, response) = try await URLSession.shared.data(for: request)
+            let status = (response as? HTTPURLResponse)?.statusCode
+            NetworkAuditLog.record(service: "listenbrainz", operation: "validate-token", host: url.host ?? "api.listenbrainz.org",
+                                   statusCode: status, durationMs: Date().timeIntervalSince(start) * 1000, error: nil)
             // ⚠️ 实测(2026-08-15 直接打这个接口核对过):Token 不对时服务端回的是
             // **HTTP 200 + {"valid":false}**,不是 401。所以真正的判据是下面那个 valid 字段,
             // 这一行只是兜底 —— 万一哪天它改成标准的鉴权失败,也别把 401 当成"网络没问到"。
-            if let http = response as? HTTPURLResponse, http.statusCode == 401 { return .invalid }
+            if status == 401 { return .invalid }
             guard
                 let object = try JSONSerialization.jsonObject(with: data) as? [String: Any]
             else { return .unreachable }
@@ -98,6 +103,8 @@ final class ListenBrainzTokenCheck: ObservableObject {
             }
             return .valid(user: user)
         } catch {
+            NetworkAuditLog.record(service: "listenbrainz", operation: "validate-token", host: url.host ?? "api.listenbrainz.org",
+                                   statusCode: nil, durationMs: Date().timeIntervalSince(start) * 1000, error: error)
             return .unreachable
         }
     }

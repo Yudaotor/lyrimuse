@@ -83,7 +83,7 @@ func postRelay(ctx context.Context, cfg *config, path string, payload any) error
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("x-token", cfg.StateRelayToken)
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := doHTTPTracked(http.DefaultClient, req)
 	if err != nil {
 		return err
 	}

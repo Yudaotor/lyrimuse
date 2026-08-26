@@ -46,7 +46,7 @@ func (a *alerter) push(title, body string) {
 		return
 	}
 	req.Header.Set("Content-Type", contentType)
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := doHTTPTracked(http.DefaultClient, req)
 	if err != nil {
 		log.Printf("notify push failed (platform=%s): %v", a.platform, err)
 		return

@@ -447,7 +447,7 @@ func translateChunk(ctx context.Context, hc *http.Client, baseURL string, lines 
 	if err != nil {
 		return nil, false, fmt.Errorf("build request: %w", err)
 	}
-	resp, err := hc.Do(req)
+	resp, err := doHTTPTracked(hc, req)
 	if err != nil {
 		return nil, false, fmt.Errorf("translate: %w", err)
 	}

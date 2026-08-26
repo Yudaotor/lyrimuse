@@ -162,7 +162,7 @@ func itunesLookupTracks(collectionID int64, country string) []itunesResult {
 	if err != nil {
 		return nil
 	}
-	resp, err := cli.Do(req)
+	resp, err := doHTTPTracked(cli, req)
 	if err != nil {
 		return nil
 	}
@@ -214,7 +214,7 @@ func itunesSearch(q, country string) []itunesResult {
 	if err != nil {
 		return nil
 	}
-	resp, err := cli.Do(req)
+	resp, err := doHTTPTracked(cli, req)
 	if err != nil {
 		return nil
 	}

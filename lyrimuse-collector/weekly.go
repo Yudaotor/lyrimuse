@@ -78,7 +78,7 @@ func lastfmAPIGet(ctx context.Context, params neturl.Values, out any) error {
 	if err != nil {
 		return err
 	}
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := doHTTPTracked(http.DefaultClient, req)
 	if err != nil {
 		return err
 	}

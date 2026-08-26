@@ -381,7 +381,7 @@ func deezerArtistAvatar(ctx context.Context, name string) (string, bool) {
 	if err != nil {
 		return "", false
 	}
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := doHTTPTracked(http.DefaultClient, req)
 	if err != nil {
 		return "", false
 	}

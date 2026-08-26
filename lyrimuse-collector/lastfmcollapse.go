@@ -148,7 +148,7 @@ func (c *lastfmArtistCollapser) isCatalogued(ctx context.Context, artist, track 
 	if err != nil {
 		return false, fmt.Errorf("build request: %w", err)
 	}
-	resp, err := c.hc.Do(req)
+	resp, err := doHTTPTracked(c.hc, req)
 	if err != nil {
 		return false, fmt.Errorf("get track info: %w", err)
 	}

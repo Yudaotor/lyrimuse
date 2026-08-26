@@ -1,6 +1,6 @@
 # 14. 设置、配置与本地化
 
-> 最后核对：2026-08-24 · 基线：64a0e37+工作树
+> 最后核对：2026-08-26 · 基线：64a0e37+工作树
 
 ## 定位
 
@@ -74,6 +74,10 @@
 **播放时钟段（2026-08-22 加）**：`positionSourceTier` / 伺服误差 EMA / `posReportedBiasSecs` / 锚点的 rate·fresh·年龄 / 生效歌词偏移与其中来自 LRC `[offset:]` 的那一层 / `currentLineFillSettled`。数据源是 `LocalPlaybackSource.clockSnapshot`（只读快照，全是内存里已有的字段，零热路径成本；刻意不做成 `@Published`——诊断导出是"点一下读一次"，发布属性会让每次伺服调整都推着订阅者重渲染）。
 加它的理由：「歌词慢半拍」是最常被报也最难复现的一类问题，而它至少有四种成因、修法完全不同——帧率掉了 / tier 判错 / 伺服在反复 snap / 自然切歌偏置估歪。此前报告里没有任何一项能把这四种区分开。这一段不含任何用户内容（没有曲名/歌手/歌词），天然不需要过 `LogRedactor`。
 
+**对外请求审计日志（2026-08-26 加）**：用户明确要求"所有软件发出的对外请求全部都给我记录下日志"之后补的一整条能力，两侧各有一个统一出口——App 侧 `LyrimuseCore/Diagnostics/NetworkAuditLog.swift`（6 个 `URLSession` 调用点：`LastfmStatsService.request`/`LastfmAuthFlow` 两处/`ListenBrainzTokenCheck.validate`/`CachedImage.load`/`MusicCatalogSearch` 两处，各自调一次）；collector 侧是既有的 `networkobs.go` `doHTTPTracked`（原来只累加"网络通不通"的原子计数器，这次扩成同时写审计日志，十几个原本没接进这个出口的调用点——`lastfm.go`/`lastfmcollapse.go`/`backfill.go`/`lb.go`/`alerter.go`/`relay.go`/`weekly.go`/`digest.go`/`topartists.go`/`translate.go`/`color.go`/`musicbrainz.go`/`apple.go`/`amllttml.go`——一并接进来）。每条日志只记方法+host+path(+Last.fm 的 `method` 参数,它标识调用的哪个接口、不是凭据)+状态码/错误+耗时，**故意不带 query string**——凭据就是拼在 query string/path 里的，从源头不记录比"记了再指望 `LogRedactor`/collector 侧 `logscrub.go` 兜底"更彻底(两道现有脱敏机制仍然保留、继续保护其它已存在的、可能带 URL 的旧日志正文，不是被这个新出口取代)。App 侧新分类叫 `network-audit`(跟 `lastfm-stats`/`lastfm-connect` 等分开)，`recentAppLogLines()` 按 subsystem 查询、自动收进导出报告，不用额外接线。
+
+刻意排除在外的两类：DNS-over-HTTPS 查询(`doh.go`，那是给别的请求解析域名用的基础设施调用，不是"联系了哪个外部服务"，跟 `networkLooksDown()` 的既有统计口径一致)；App 自动更新检查(Sparkle 框架，请求整个发生在框架内部，拿不到方法/网址/状态码/耗时这些细粒度信息，只能挂一个粗粒度生命周期回调，价值跟其它请求不对等，需要时再补)。
+
 **调试 HUD（隐藏开关，不进设置界面）**：`defaults write me.yudaotor.lyrimuse np:debugHUD -bool true` 后重开悬浮歌词，右上角显示实测帧率。取样器是 `LyrimuseCore/Playback/FrameRateProbe.swift`（纯值类型，selftest 无屏覆盖 6 条），挂在**逐字填色那个既有的 `TimelineView` 闭包**里——量的正是这个 App 最贵的那段渲染实际拿到多少帧，而不是另起一个 TimelineView 去量一个无关的数字。HUD 用 `.overlay` 挂而**不**塞进 VStack：它绝不能改变布局，否则会把窗口撑高、量到的就不是原来那套渲染了。
 背景：项目最贵的两个渲染结论（07 章 #13 的 ~20Hz 提交、04 章 #2 的 30Hz 上限）都靠一次性搭的 ScreenCaptureKit 探针量出来，量完就没了，而 07 章还写着「将来重试排程式填色，先用探针核实提交频率再谈」。两道防泄密：状态段只用 ConfigStore 的只读布尔判断；日志正文统一过 `LogRedactor` 脱敏（2026-08-13 前该约束是破的——Go `*url.Error` 会把 api_key 连 URL 原样打进日志）。
 
@@ -110,6 +114,7 @@
 | 引导 | lyrimuse/OnboardingView.swift |
 | 本地化 | lyrimuse/L10n.swift、Localization/generate-strings.py、Localizable.xcstrings |
 | 诊断 | Settings/DiagnosticsExporter.swift、LyrimuseCore/Diagnostics/LogRedactor.swift |
+| 对外请求审计 | LyrimuseCore/Diagnostics/NetworkAuditLog.swift（App 侧 6 个调用点）；collector 侧见第 15 章「网络观察」 |
 
 ## 设计决策与已知坑
 

@@ -483,7 +483,11 @@ func amllFetch(platformDir, musicID string) (string, bool) {
 	}
 	url := fmt.Sprintf("%s/%s/%s.ttml", amllRawBase, platformDir, musicID)
 	client := &http.Client{Timeout: amllHTTPTimeout}
-	resp, err := client.Get(url)
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return "", false
+	}
+	resp, err := doHTTPTracked(client, req)
 	if err != nil {
 		return "", false
 	}
