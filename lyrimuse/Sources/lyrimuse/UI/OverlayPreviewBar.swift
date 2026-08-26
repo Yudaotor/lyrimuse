@@ -14,12 +14,20 @@ import SwiftUI
 // PlaybackCoordinator.displayForegroundColor(它才是"跟随封面"真正生效的地方),以及
 // LyricsOverlayView 里那个 .lyricsTextStroke(为此把它从 private 放开成 internal)。
 //
-// 刻意**不**复制的东西,以及理由:
-//   - 逐字卡拉OK填色:那是随播放进度连续变化的,预览要 60fps 跟着跑才不假,而这一页
-//     不值得为此常驻一个高频重绘。预览只画整行的最终颜色。
+// **逐字卡拉OK填色**(2026-08-26 用户要求,原来这里只画整行最终颜色):真在播放、且当前
+// 这一行有逐字数据(`currentLine.words`)时,用跟悬浮窗完全同一套算法
+// (WordKaraokeGradient/KaraokeFill,LyricsOverlayView.mainLine 那段的镜像写法,连
+// TimelineView 的驱动方式、播放位置的取法、paused 条件都逐字照抄)按真实播放进度逐字
+// 填色——不是另起一份假动画,数据源就是同一个 PlaybackCoordinator。没在播放/这一行
+// 没有逐字数据时,退回原来"只画整行最终颜色"的静态样子(那种情况下也没有真实进度可跟)。
+//
+// 刻意**仍不**复制的东西,以及理由:
 //   - 罗马音/译文/下一句:它们各有独立的字体和显隐开关,画全了预览条会高得挤掉正文,
 //     而这一页调的是主歌词那一行的字体和配色。
 //   - 窗口圆角以外的窗口行为(点击穿透、拖动、随屏幕定位):跟外观无关。
+//   - 逐字行的自动换行(`WrapLayout`):预览条的高度是固定的(见下方"高度必须固定"那段),
+//     长行只裁切不换行,跟静态文本原来的 `.lineLimit(1)` 一样只求"看得出配色效果",
+//     不追求跟真窗口逐像素一致的换行表现。
 //
 // 高度是**固定**的(按字号算出来),不跟着内容变:它挂在 safeAreaInset 上,高度一变整页
 // 内容就会跳一下,拖字号滑杆时会变成整页抖动。
@@ -34,6 +42,10 @@ struct OverlayPreviewBar: View {
     // 或封面主色真的变了才动一次。
     @State private var line: SyncedLyricLine?
     @State private var accent: Color?
+    // 逐字填色只在真的在播放时才跟——没在播时 anchor 是 nil,连"当前进度"这个概念都不
+    // 存在,跟静态文字比没有意义。同样只订阅这一个布尔,不整对象订阅 PlaybackCoordinator
+    // (理由见上面 line/accent 那段注释)。
+    @State private var isPlayingNow = false
 
     // 真窗口的圆角(LyricsOverlayView 里的 overlayBackgroundCornerRadius,那是个 private
     // 常量,取不到,只能同步一份)。改那边记得改这里。
@@ -105,6 +117,7 @@ struct OverlayPreviewBar: View {
         .background(Color(nsColor: .windowBackgroundColor))
         .onReceive(PlaybackCoordinator.shared.$currentLine.removeDuplicates()) { line = $0 }
         .onReceive(PlaybackCoordinator.shared.$artworkAccentColor.removeDuplicates()) { accent = $0 }
+        .onReceive(PlaybackCoordinator.shared.$isPlayingNow.removeDuplicates()) { isPlayingNow = $0 }
     }
 
     @ViewBuilder
@@ -147,12 +160,18 @@ struct OverlayPreviewBar: View {
                 RoundedRectangle(cornerRadius: overlayCornerRadius, style: .continuous)
                     .fill(settings.backgroundColor)
             }
-            Text(previewText)
-                .font(settings.mainFont)
-                .foregroundStyle(foreground)
-                .lyricsTextStroke(settings.textStrokeEnabled, color: settings.textStrokeColor)
-                .lineLimit(1)
-                .padding(.horizontal, 20)
+            Group {
+                if isPlayingNow, let words = line?.words, !words.isEmpty {
+                    karaokeContent(words)
+                } else {
+                    Text(previewText)
+                        .foregroundStyle(foreground)
+                        .lyricsTextStroke(settings.textStrokeEnabled, color: settings.textStrokeColor)
+                        .lineLimit(1)
+                }
+            }
+            .font(settings.mainFont)
+            .padding(.horizontal, 20)
         }
         .frame(width: settings.overlayWidth, height: contentHeight)
         // 只给垫底那层收个小圆角,别让壁纸块直角戳在卡片列里;背景色自己的圆角不受影响。
@@ -174,6 +193,37 @@ struct OverlayPreviewBar: View {
                 .fill(backdrop)
         )
         .accessibilityHidden(true)
+    }
+
+    /// 逐字填色本体——跟 LyricsOverlayView.mainLine 的 TimelineView 那段是镜像写法,连
+    /// 播放位置的取法(anchor 外推 → 暂停位置 → 0,再加偏移量)、paused 条件都一样,只是
+    /// 排版从会换行的 `WrapLayout` 简化成不换行的 `HStack`(见类型头部注释"仍不复制"
+    /// 那一条)。故意**不**下沉到"每个字自己挂 TimelineView"——整行一个表跟真窗口的取舍
+    /// 理由相同,这里访问量还小得多,没必要比真窗口更精细。
+    private func karaokeContent(_ words: [SyncedLyricWord]) -> some View {
+        TimelineView(.animation(minimumInterval: WordKaraokeGradient.refreshInterval,
+                                paused: !isPlayingNow || PlaybackCoordinator.shared.currentLineFillSettled)) { context in
+            let currentMs = (PlaybackCoordinator.shared.anchor?.extrapolatedPositionMs(now: context.date)
+                ?? PlaybackCoordinator.shared.pausedPositionMs ?? 0)
+                + PlaybackCoordinator.shared.currentLyricsOffsetMs
+            let palette = WordKaraokeGradient.palette(fg: foreground)
+            HStack(spacing: 0) {
+                ForEach(words.indices, id: \.self) { i in
+                    wordText(words[i], atMs: currentMs, palette: palette)
+                }
+            }
+            .lineLimit(1)
+        }
+        .lyricsTextStroke(settings.textStrokeEnabled, color: settings.textStrokeColor)
+    }
+
+    /// 单字的填色渐变,跟 LyricsOverlayView.wordText 同一套算法(WordKaraokeGradient/
+    /// KaraokeFill),这里不需要描边剪影分支——整行的描边统一挂在 karaokeContent 外层。
+    private func wordText(_ w: SyncedLyricWord, atMs currentMs: Int, palette: WordKaraokeGradient.Palette) -> some View {
+        let fraction = WordKaraokeGradient.fillFraction(for: w, atMs: currentMs)
+        let band = WordKaraokeGradient.wordEdgeSoftenBand
+        let style = palette.style(left: fraction - band, right: fraction + band)
+        return Text(w.text).foregroundStyle(style)
     }
 
     private var caption: some View {

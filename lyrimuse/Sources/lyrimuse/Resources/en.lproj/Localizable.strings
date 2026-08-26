@@ -429,7 +429,6 @@
 "暂停/无播放时隐藏" = "Hide When Paused or Not Playing";
 "暂无数据" = "No data yet";
 "暂无歌词" = "No Lyrics Found";
-"暖黄" = "Warm Yellow";
 "更多" = "More";
 "更换备份文件夹…" = "Change Backup Folder…";
 "更改" = "Change";
@@ -569,6 +568,7 @@
 "用来把当前播放状态推送到网页小组件和状态徽章" = "Pushes the current playback status to the web widget and status badge";
 "用来接收「每周听歌小结」「每日听歌报告」推送" = "Used to receive “Weekly Listening Digest” and “Daily Listening Report” notifications";
 "申请页基本只需要填「应用名称」，其余留空即可；提交后页面会直接显示 API Key 和 Shared Secret" = "The form only needs an application name; leave everything else blank. Your API Key and Shared Secret appear as soon as you submit it";
+"白字描边" = "White Text with Outline";
 "确定要从这份备份恢复歌词库吗?" = "Restore the lyrics library from this backup?";
 "确定要删除「%@ - %@」的本地记录吗?" = "Delete the saved lyrics for “%@ — %@”?";
 "确定要删除选中的 %@ 条本地记录吗?" = "Delete %@ selected entries?";
@@ -690,7 +690,6 @@
 "账户信息" = "Account Info";
 "贴在桌面上" = "Sits on your desktop";
 "贴在桌面上，支持逐字高亮" = "Sits on your desktop, with word-by-word highlighting";
-"赛博青" = "Cyber Cyan";
 "超出宽度时截断，不滚动" = "Truncates when it doesn't fit";
 "超出宽度时横向滚动播完" = "Scrolls when it doesn't fit";
 "超宽时横向滚动" = "Scroll When Too Long";
@@ -834,6 +833,7 @@
 "首次听" = "First listened";
 "首次解析" = "First resolve";
 "麦克风" = "Microphone";
+"黑字描边" = "Black Text with Outline";
 "黑胶唱片" = "Vinyl";
 "鼠标移到悬浮歌词上时它会淡下去，移开恢复" = "The floating lyrics fade out while the pointer is over them and come back when it leaves.";
 "鼠标移到悬浮歌词上时它会淡下去，移开恢复；只对悬浮歌词生效" = "The floating lyrics fade out while the pointer is over them and come back when it leaves. Floating lyrics only.";

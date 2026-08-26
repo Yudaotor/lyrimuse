@@ -1,5 +1,5 @@
 # 04. 桌面悬浮歌词
-> 最后核对:2026-08-21 · 基线:05767ae+工作树
+> 最后核对:2026-08-27 · 基线:0bb53e6+工作树
 
 ## 定位
 
@@ -84,7 +84,8 @@
 - 前景色:`PlaybackCoordinator.displayForegroundColor`——「文字跟随封面」开着且已算出封面强调色时用动态色,否则用手选固定色。动态色从封面均值色派生:描边开着且描边色 alpha≥0.5 时按"与描边色够对比"算,否则按"够亮"提升;封面过小时用 collector 缓存里的高清替代图均值。**只接管文字颜色**,背景色/描边色始终生效。
 - 背景色:alpha > 0.02 才画(圆角 16 固定值);默认全透明,此时垫一层 `Color.black.opacity(0.001)` 保证拖拽手势能命中。
 - 文字描边:开关+颜色可调,粗细固定 1.2pt。实现是 blur+alphaThreshold 剪影垫底(`OptionalTextStroke`),整行套一次、开销不随描边粗细变化。逐字行的剪影 mask 用**静态副本**当 Canvas symbol(2026-08-19:`lyricsTextStroke(maskSource:)`,同排版纯色版 `karaokeLineContent(atMs: nil)`)——原来 symbol 是内容本身,填色渐变每 tick 一变整行就重跑 blur+threshold,而剪影只由文字/字体/换行决定,一行存续期内不变。历史上的 `.compositingGroup()` 已删除:它是给早已移除的每字阴影合并用的,当前树里只剩离屏渲染开销。⚠️ **剪影必须跟 content 吃同一道 `.padding(width*2)`**(2026-08-23 修):Canvas 是**居中**绘制剪影的,只有两者在 canvas 里占同一块矩形才逐点对齐。普通 Text 按自然宽度收缩、居中能补回来;但逐字行的 `WrapLayout` **撑满被提议的宽度** —— content 撑满 padding 内的宽度、剪影撑满 canvas 整宽,差正好一圈 padding。居中排版时两边各差一半抵消掉(所以非对唱歌看不出),一旦按 leading/trailing 靠边(对唱左右声部)就偏 2.4pt,而描边本身才 1.2pt,整圈甩到一侧。源码守卫在 collector 的 `strokemaskpadding_test.go`(纯 SwiftUI 布局行为,selftest 覆盖不了)。
-- 配色主题:内置预设 + 用户自存主题(只打包文字/背景/描边四字段,不含字体字号);「恢复默认文字与配色」重置七个字段但不碰宽度和锁定。
+- 配色主题:内置预设 + 用户自存主题(只打包文字/背景/描边四字段,不含字体字号);「恢复默认文字与配色」重置七个字段但不碰宽度和锁定。内置预设(`ColorTheme.builtInPresets`)现在是六款:经典白字/白字描边/经典黑字/黑字描边/深色卡片/浅色卡片——2026-08-26 去掉了"暖黄"/"赛博青"，换成"白字描边"/"黑字描边"(经典白字/黑字各自的加描边版本,前景/背景色不变,只是把描边开关打开,描边色沿用各自"手动打开描边时"本来就带的那个默认值,不是新配的颜色)。
+- **全新安装/「恢复默认文字与配色」/「清除所有配置」之后的默认样子**(2026-08-26 改):`ColorTheme.defaultTheme` 从 `classicBlack`(不描边)换成 `classicBlackStroke`(黑字描边预设的同款字段:黑字+透明底+白色描边)+ `AppSettings.defaultFollowsCoverArt` 从 `false` 改成 `true`——用户把自己实际在用的这套(跟随封面取色 + 打开文字描边)定为新默认。两处默认值各自独立(`followsCoverArt` 不是 `ColorTheme` 的字段),但都在 `AppSettings.init()` 的 UserDefaults 缺省分支和「恢复默认文字与配色」按钮里同步生效,不会只改一处漏改另一处。`applyColorTheme(_:)`(从下拉菜单套用某个具体主题)不受影响,仍然无条件把 `followsCoverArt` 关掉——套用一个固定命名主题本来就是在明确表态"要固定色、不要动态色"，跟"默认初始化长什么样"是两件事。
 
 ### 窗口几何与位置记忆
 
@@ -170,7 +171,7 @@
 - **与灵动岛**:开关互相独立可同开;共享 `hideWhenNotPlaying`、`hideDuringScreenCapture` 两个设置项和 `WordKaraokeGradient`(30Hz 上限+渐变算法);「文字跟随封面」开关也被灵动岛读走(NotchLyricsView.accentOrWhite),但两边用的强调色变体不同(悬浮窗按"与描边对比/够亮",灵动岛按"深底够亮")。
 - **与歌词窗口**:共享 `showRomanization/showTranslation/showNextLinePreview` 三个开关、`WrapLayout`、`KaraokeFill`、LyricDuet;但字体/字号/三个颜色**只**对悬浮窗生效,歌词窗口用固定系统配色;对唱 nil 兜底两边不同(悬浮窗居中、窗口靠左)。
 - **与歌词时间轴校正**:`LyricsOffsetStore` 的基准(全部 / 按播放器,二选一)+ 单曲微调合成 `currentLyricsOffsetMs`,同时作用于"当前行判定"(引擎内)和"逐字填色基准"(视图内显式相加)。
-- **与设置页预览**:`OverlayPreviewBar` 是刻意维护的第二份渲染实现,复用 `settings.mainFont`/`backgroundColor`/`displayForegroundColor` 规则和 `lyricsTextStroke`(为此放开成 internal);不复制逐字填色/罗马音译文行;圆角 16 是手抄的常量,改视图记得改预览。
+- **与设置页预览**:`OverlayPreviewBar` 是刻意维护的第二份渲染实现,复用 `settings.mainFont`/`backgroundColor`/`displayForegroundColor` 规则和 `lyricsTextStroke`(为此放开成 internal)。**逐字填色也复用**(2026-08-26 用户要求,原来这里不复制)——真在播放且当前行有逐字数据时,用同一套 `WordKaraokeGradient`/`KaraokeFill` 算法、同一个播放位置来源(`PlaybackCoordinator.anchor`/`pausedPositionMs`/`currentLyricsOffsetMs`)按真实进度逐字填色,`karaokeContent`/`wordText` 是 `LyricsOverlayView.mainLine`/`wordText` 的镜像写法;没在播放或这一行没有逐字数据时退回原来"整行最终颜色"的静态样子。仍不复制的是逐字行的自动换行(`WrapLayout`,预览高度固定、长行只裁切)和罗马音/译文行;圆角 16 是手抄的常量,改视图记得改预览。
 - **与播放控制/权限**:控制排按钮和全局快捷键共用 MusicAutomationPermission「点了才校验、拒了 beep」的策略;「喜欢」只对 Apple Music 出现,乐观更新+回读纠正。
 - **与「歌词管理」**:那边保存/删除歌词后调 `PlaybackCoordinator.refreshLyricsForCurrentTrack()` 强制重读磁盘,悬浮窗立即反映。
 

@@ -7243,23 +7243,6 @@
         }
       }
     },
-    "暖黄" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Warm Yellow"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "暖黄"
-          }
-        }
-      }
-    },
     "更多" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -9623,6 +9606,23 @@
         }
       }
     },
+    "白字描边" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "White Text with Outline"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "白字描边"
+          }
+        }
+      }
+    },
     "确定要从这份备份恢复歌词库吗?" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -11676,23 +11676,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "贴在桌面上，支持逐字高亮"
-          }
-        }
-      }
-    },
-    "赛博青" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Cyber Cyan"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "赛博青"
           }
         }
       }
@@ -14124,6 +14107,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "麦克风"
+          }
+        }
+      }
+    },
+    "黑字描边" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Black Text with Outline"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "黑字描边"
           }
         }
       }

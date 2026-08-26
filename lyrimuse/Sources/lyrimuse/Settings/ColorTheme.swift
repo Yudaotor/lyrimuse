@@ -81,9 +81,8 @@ extension ColorTheme {
     // id 用固定字符串(不是随手 UUID())——内置预设每次启动都是同一份字面量构造出来的
     // 新实例,固定 id 才能让"当前配色是不是正好等于某个内置预设"这类比较(如果以后需要)
     // 有意义;用户自己存的自定义主题才用随机 UUID(见 SettingsView 里"存为新主题"那处)。
-    // 六个内置预设的 textStrokeEnabled 都是 false(textStrokeColorHex 留着一个合理默认值,
-    // 单纯是给用户手动重新打开描边开关时有个还算顺眼的起始值,不影响预设本身的观感)。
-    // "经典黑字"跟"经典白字"对称。defaultTheme 现在指向的是"深色卡片"(见下方)。
+    // "经典黑字"跟"经典白字"对称;"白字描边"/"黑字描边"是它们各自打开描边开关的变体
+    // (2026-08-26 加)。defaultTheme 现在指向 `classicBlackStroke`(见下方)。
     /// 白字 + 七成不透明黑底。被定为 `defaultTheme`(见下方)—— 全新安装长这个样子。
     ///
     /// 跟 classicBlack 一样单独命名而不是只躺在 builtInPresets 里:defaultTheme 要引用它,
@@ -100,11 +99,26 @@ extension ColorTheme {
         ColorTheme(
             id: "builtin-classic-black", name: L10n.t("经典黑字"),
             foregroundColorHex: "#000000FF", backgroundColorHex: "#00000000",
-            // 描边色 2026-08-17 从 65% 黑改成**不透明白**(用户要求)。这一款是
-            // defaultTheme,所以它同时就是"全新安装时描边的默认颜色"——而这一款的文字
-            // 本来就是黑的,黑字配黑边等于没有描边,配白边才真的能在深色壁纸上把字托出来。
-            // 描边开关依旧默认关着,这个颜色只是用户手动打开它时的起点。
+            // 描边色 2026-08-17 从 65% 黑改成**不透明白**(用户要求)——这一款的文字本来
+            // 就是黑的,黑字配黑边等于没有描边,配白边才真的能在深色壁纸上把字托出来。
+            // 描边开关依旧关着,这个颜色只是用户手动打开它时的起点。
             textStrokeEnabled: false, textStrokeColorHex: "#FFFFFFFF"
+        )
+    }
+
+    /// "经典黑字"打开描边开关的变体——跟 `builtInPresets` 里的"黑字描边"是同一份配色,
+    /// 单独命名出来是因为 `defaultTheme`(见下方)要引用它,理由跟 `classicBlack`/
+    /// `darkCard` 单独命名的理由一样:"默认配色"和"预设列表里第 N 项"是两件事,不该靠
+    /// 数组下标耦合。
+    ///
+    /// 2026-08-26 定为 `defaultTheme`(用户要求把自己手动调好的这套——跟随封面 + 描边——
+    /// 定为新的默认初始化配色):前景/背景直接复用 `classicBlack` 的字段,只把描边打开,
+    /// 两者的前景/背景色天然保持同步。
+    public static var classicBlackStroke: ColorTheme {
+        ColorTheme(
+            id: "builtin-classic-black-stroke", name: L10n.t("黑字描边"),
+            foregroundColorHex: classicBlack.foregroundColorHex, backgroundColorHex: classicBlack.backgroundColorHex,
+            textStrokeEnabled: true, textStrokeColorHex: classicBlack.textStrokeColorHex
         )
     }
 
@@ -130,12 +144,17 @@ extension ColorTheme {
             foregroundColorHex: "#FFFFFFFF", backgroundColorHex: "#00000000",
             textStrokeEnabled: false, textStrokeColorHex: "#000000A6"
         ),
-        classicBlack,
+        // "经典白字"加描边(2026-08-26 用户要求,去掉"暖黄"/"赛博青"换成这两款)——
+        // 前景/背景跟"经典白字"完全一样,只是把描边开关打开;描边色沿用"经典白字"
+        // 本来就带的那个"手动打开描边时的默认色"(#000000A6),两款不是巧合重复,
+        // 是同一份配色的"描边关/描边开"两个变体。
         ColorTheme(
-            id: "builtin-warm", name: L10n.t("暖黄"),
-            foregroundColorHex: "#FFE29AFF", backgroundColorHex: "#00000000",
-            textStrokeEnabled: false, textStrokeColorHex: "#000000CC"
+            id: "builtin-classic-white-stroke", name: L10n.t("白字描边"),
+            foregroundColorHex: "#FFFFFFFF", backgroundColorHex: "#00000000",
+            textStrokeEnabled: true, textStrokeColorHex: "#000000A6"
         ),
+        classicBlack,
+        classicBlackStroke,
         darkCard,
         // 跟"深色卡片"对称的浅色版本——同样的卡片不透明度(0xB3),前景/背景黑白对调。
         ColorTheme(
@@ -143,32 +162,31 @@ extension ColorTheme {
             foregroundColorHex: "#000000FF", backgroundColorHex: "#FFFFFFB3",
             textStrokeEnabled: false, textStrokeColorHex: "#FFFFFFA6"
         ),
-        ColorTheme(
-            id: "builtin-cyan", name: L10n.t("赛博青"),
-            foregroundColorHex: "#7DF9FFFF", backgroundColorHex: "#00000000",
-            textStrokeEnabled: false, textStrokeColorHex: "#001A1ACC"
-        ),
     ] }
 
     // 全新安装/"恢复默认文字与配色"/"清除所有配置"之后应该长成的样子——AppSettings.init()
     // 和 SettingsView 的"恢复默认文字与配色"按钮都读这一个值,不再各自硬编码一遍。
     // 也写成计算属性:眼下几个调用点只读它的十六进制色值(name 从不读),所以冻结与否
-    // 不影响现在的行为;但它是 darkCard 的别名,让两者求值语义一致,免得以后有人
-    // 读 defaultTheme.name 又踩一次上面那个语言冻结。
+    // 不影响现在的行为;但它是 classicBlackStroke 的别名,让两者求值语义一致,免得以后
+    // 有人读 defaultTheme.name 又踩一次上面那个语言冻结。
     //
-    // 2026-08-13 从 classicBlack 换成 card。桌面悬浮歌词是全新安装唯一默认可见的界面,
-    // 而 classicBlack 是"不透明黑字 + 全透明背景 + 不描边"—— 深色壁纸上基本看不见,
-    // 新用户会以为悬浮歌词没工作。card 是白字 + 七成不透明黑底,任何壁纸上都读得清。
+    // 2026-08-13 从 classicBlack 换成 card,2026-08-15 从 darkCard 换回 classicBlack,
+    // 2026-08-26 从 classicBlack 换成 classicBlackStroke(用户要求把自己实际在用的那套——
+    // 跟随封面 + 打开文字描边——定为新的默认初始化配色;`followsCoverArt` 不是 `ColorTheme`
+    // 的字段,默认值改在 `AppSettings.defaultFollowsCoverArt`,两处各自改各自的字段,理由
+    // 见那边注释)。
     /// 首次安装、以及任何没有显式配过色的用户看到的配色。
     ///
-    /// 2026-08-15 从 darkCard 改成 classicBlack(用户要求)。
-    /// ⚠️ 这两个的可读性策略完全不同,换的时候要知道自己在换什么:
-    ///   darkCard      白字 + 70% 黑底 —— 自带底衬,任何壁纸上都读得清
-    ///   classicBlack  纯黑字 + **全透明**背景、且默认不描边 —— 完全依赖桌面本身够浅,
-    ///                 深色壁纸上会看不见
+    /// ⚠️ 历史上这几个候选的可读性策略完全不同,换的时候要知道自己在换什么:
+    ///   darkCard            白字 + 70% 黑底 —— 自带底衬,任何壁纸上都读得清
+    ///   classicBlack         纯黑字 + **全透明**背景、不描边 —— 完全依赖桌面本身够浅,
+    ///                       深色壁纸上会看不见
+    ///   classicBlackStroke  跟 classicBlack 同一份前景/背景,但打开了白色描边 —— 深色
+    ///                       壁纸上靠描边托字,比 classicBlack 更能兜底,但仍不如 darkCard
+    ///                       那种自带底衬的卡片可靠
     /// 配色随时能在「外观」里改,描边也能单独打开,所以这是个偏好问题而非缺陷;
     /// 但如果以后有新用户反馈"装上看不见歌词",先想到这里。
-    public static var defaultTheme: ColorTheme { classicBlack }
+    public static var defaultTheme: ColorTheme { classicBlackStroke }
 
     // 跟"是不是同一个主题"(id/name)无关,只比较四个真正影响观感的字段——用来判断
     // "当前配色是不是正好等于某个预设/自定义主题",给菜单标签当"当前生效哪个"的

@@ -113,6 +113,13 @@ final class AppSettings: ObservableObject {
     static let defaultFontFamilyName = ""
     static let defaultFontSize = 31.0
 
+    // 「跟随封面」不是 ColorTheme 的字段(那份只打包配色四项,见该类型注释),默认值
+    // 单独放这里——跟配色四项同一个理由:init() 和"恢复默认文字与配色"按钮都读它,
+    // 不再各自硬编码一遍(2026-08-26 之前两处各自硬编码的是 false,现在都改成读这个值)。
+    // 2026-08-26 从 false 改成 true(用户要求把自己实际在用的配置——跟随封面 + 打开
+    // 文字描边——定为新的默认初始化配色,见 ColorTheme.defaultTheme 的注释)。
+    static let defaultFollowsCoverArt = true
+
     private let defaults = UserDefaults.standard
 
     @Published var preferWordLevelKaraoke: Bool {
@@ -604,7 +611,7 @@ final class AppSettings: ObservableObject {
         notchContentWidth = (defaults.object(forKey: Keys.notchContentWidth) as? Double) ?? 360
         foregroundColorHex = defaults.string(forKey: Keys.foregroundColorHex) ?? ColorTheme.defaultTheme.foregroundColorHex
         backgroundColorHex = defaults.string(forKey: Keys.backgroundColorHex) ?? ColorTheme.defaultTheme.backgroundColorHex
-        followsCoverArt = (defaults.object(forKey: Keys.followsCoverArt) as? Bool) ?? false
+        followsCoverArt = (defaults.object(forKey: Keys.followsCoverArt) as? Bool) ?? Self.defaultFollowsCoverArt
         if let json = defaults.string(forKey: Keys.customColorThemesJSON),
            let data = json.data(using: .utf8),
            let themes = try? JSONDecoder().decode([ColorTheme].self, from: data) {

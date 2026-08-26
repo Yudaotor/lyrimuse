@@ -1588,7 +1588,10 @@ private struct AppearanceSettingsTab: View {
                 subtitle: L10n.t("不含宽度和锁定位置")
             ) {
                 Button(L10n.t("恢复")) {
-                    settings.followsCoverArt = false
+                    // 2026-08-26 从硬编码 false 改成读 defaultFollowsCoverArt——这颗按钮的
+                    // 名字就是"恢复默认",默认值现在是"跟随封面开着",硬编码 false 会让它
+                    // 跟"全新安装长什么样"不一致(点了"恢复默认"却恢复不出默认的样子)。
+                    settings.followsCoverArt = AppSettings.defaultFollowsCoverArt
                     settings.fontFamilyName = AppSettings.defaultFontFamilyName
                     settings.fontSize = AppSettings.defaultFontSize
                     settings.foregroundColorHex = ColorTheme.defaultTheme.foregroundColorHex
