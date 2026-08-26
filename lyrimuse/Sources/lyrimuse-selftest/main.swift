@@ -1772,6 +1772,73 @@ do {
                 .trackOnly, "封面⑤: 行缺专辑名时退成中置信")
 }
 
+// ---- LastfmRecentTracksPage:合并历史扫描的分页解析(2026-08-25) ----
+//
+// ensureTitleFormsIndex(写法索引)和 refreshDailyCounts(热力图)原来各自写了一遍这段
+// 解析,合并成一次扫描后收成一份纯函数。这组用例钉住合并前两处分别覆盖到的行为:
+// 单条时 track 是对象不是数组的怪癖、nowPlaying 行没有 uts 但仍要产出 Row(供写法
+// 索引收割)、totalPages 解析、响应形状不对时返回 nil。
+do {
+    typealias P = LastfmRecentTracksPage
+
+    func trackObj(name: String, artist: String, uts: String? = nil, nowPlaying: Bool = false) -> [String: Any] {
+        var t: [String: Any] = ["name": name, "artist": ["#text": artist]]
+        if nowPlaying {
+            t["@attr"] = ["nowplaying": "true"]
+        } else if let uts {
+            t["date"] = ["uts": uts]
+        }
+        return t
+    }
+
+    func page(_ tracks: Any, totalPages: String = "1") -> [String: Any] {
+        ["recenttracks": ["@attr": ["totalPages": totalPages], "track": tracks]]
+    }
+
+    // 多条:正常数组
+    do {
+        let json = page([
+            trackObj(name: "开不了口", artist: "周杰倫", uts: "1700000000"),
+            trackObj(name: "夜曲", artist: "周杰倫", nowPlaying: true),
+        ], totalPages: "5")
+        let result = P.parse(json)
+        expectEqual(result?.totalPages, 5, "历史扫描解析: totalPages")
+        expectEqual(result?.rows.count, 2, "历史扫描解析: 两行都产出 Row")
+        expectEqual(result?.rows[0], .init(artist: "周杰倫", title: "开不了口", uts: 1_700_000_000),
+                    "历史扫描解析: 落库的行带 uts")
+        expectEqual(result?.rows[1].uts, nil,
+                    "历史扫描解析: nowPlaying 行 uts 为 nil,但仍产出 Row(供写法索引收割)")
+    }
+
+    // 单条:Last.fm 的怪癖——track 是对象不是数组
+    do {
+        let json = page(trackObj(name: "十年", artist: "陳奕迅", uts: "1600000000"))
+        let result = P.parse(json)
+        expectEqual(result?.rows.count, 1, "历史扫描解析: 单条 track 是对象也要解出来")
+        expectEqual(result?.rows.first?.title, "十年", "历史扫描解析: 单条对象的字段对得上")
+    }
+
+    // 畸形行:有 date 但 uts 不是合法数字 —— 仍产出 Row(供收割),uts 为 nil
+    do {
+        let json = page([["name": "畸形", "artist": ["#text": "X"], "date": ["uts": "not-a-number"]]])
+        let result = P.parse(json)
+        expectEqual(result?.rows.first?.uts, nil, "历史扫描解析: uts 解析失败时为 nil,不是整行丢弃")
+        expectEqual(result?.rows.first?.artist, "X", "历史扫描解析: 畸形行仍保留 artist/title 供收割")
+    }
+
+    // 响应形状不对:调用方应视为这一页失败
+    expectEqual(P.parse(["unexpected": 1]) == nil, true, "历史扫描解析: 缺 recenttracks 返回 nil")
+    expectEqual(P.parse(["recenttracks": ["track": []]]) == nil, true, "历史扫描解析: 缺 @attr 返回 nil")
+
+    // 空列表(账号没有任何 scrobble):不是错误,是"这一页零行"
+    let empty = P.parse(page([]))
+    expectEqual(empty?.rows.count, 0, "历史扫描解析: 空 track 数组产出零行,不是 nil")
+
+    // 缺 name/artist 的行整条丢弃,不产出半残的 Row
+    let missingField = P.parse(page([["artist": ["#text": "只有歌手没有歌名"]]]))
+    expectEqual(missingField?.rows.count, 0, "历史扫描解析: 缺 name 的行整条丢弃")
+}
+
 // ---- Last.fm GET query 的双重编码(2026-08-22) ----
 //
 // 端点会对 query value 多解一次码(第二遍是 form-urlencoded 口径,`+` 当空格),所以

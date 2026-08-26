@@ -151,6 +151,17 @@ struct LastfmStatsSection: View {
                     LastfmHeatmapView()
                 }
             }
+            // 首次连接的后台引导同步(2026-08-25)。数字/最近记录本身不依赖这轮扫描
+            // (轻请求,见 LastfmStatsService 的说明),这里只是说明"热力图/次数合并
+            // 还在补全中",不是遮挡整卡的阻塞态。total > 3 跟 syncHistoryIfNeeded 里
+            // dailySyncProgress 的既有分界线一致,日常 1-3 页 top-up 不弹这行字。
+            if case .syncing(_, let total) = stats.bootstrapState, total > 3 {
+                CardDivider()
+                Text(L10n.t("首次同步历史中，稍候完整数据会自动出现"))
+                    .font(.caption).foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 10)
+            }
             if stats.baselineFailed {
                 CardDivider()
                 retryRow { stats.refreshBaseline() }
@@ -421,6 +432,14 @@ struct LastfmStatsSection: View {
                                 Text(String(format: L10n.t("第 %@ 次听"), "\(n)"))
                                     .font(.caption).foregroundStyle(.tertiary).monospacedDigit()
                                     .help(L10n.t("这首歌在你 Last.fm 上的第几次收听"))
+                            } else if !stats.isPlayCountUnavailable(artist: t.artist, title: t.title) {
+                                // 安静的占位(不转、不闪):次数还没解析出来,不是没有——
+                                // 用户反馈"翻到新页这里空一截,看着像坏了"。跟已确定没有
+                                // 次数的曲目分开判断,不然这个占位会在极少数确实查不到
+                                // 次数的行上永远挂着,变成一个说谎的"正在加载"。
+                                Text("···")
+                                    .font(.caption).foregroundStyle(.quaternary).monospacedDigit()
+                                    .help(L10n.t("次数还在解析中"))
                             }
                             if let date = t.date {
                                 Text(Self.relative(date))

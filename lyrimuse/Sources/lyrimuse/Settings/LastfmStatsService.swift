@@ -25,6 +25,11 @@ final class LastfmStatsService: ObservableObject {
 
     private init() {
         loadSnapshot()
+        // 前几页最近记录的翻页缓存也在启动时**主动**加载(不像 titleForms/dailySnapshot
+        // 那样惰性、等第一次用到才读)——这份缓存存在的意义就是"翻页那一刻立刻有内容",
+        // 等到 goToPage 被调用才去读盘,首次翻页依然会有一次同步 IO 的空档,不如跟
+        // loadSnapshot 一样在启动时就做掉(2026-08-25)。
+        loadRecentPageCache()
     }
 
     // MARK: - 模型
@@ -126,6 +131,172 @@ final class LastfmStatsService: ObservableObject {
     /// 最近记录最后一次**成功**拉到内容的时刻。给卡片头显示"几分钟前更新"。
     /// 刻意不从快照恢复:那是上次会话的数据,标成"刚刚更新"是撒谎;首次刷新落地后才有值。
     @Published private(set) var recentUpdatedAt: Date?
+
+    /// 每页最近记录的本地缓存(2026-08-25 用户报"翻页要转圈、翻回去也要重新翻页")。
+    /// `goToPage` 原来**没有任何缓存**——包括翻回刚刚看过的那一页,每次都是一次全新的
+    /// `user.getrecenttracks` 请求。只缓存原始行(`RecentTrack`),不缓存"第 N 次听"
+    /// 这类衍生值——那些是 `recentRows` 从 `trackPlayCounts` 现算的,缓存的是原始行,
+    /// 数字永远反映当下真实状态,不会因为翻页缓存而显示过期次数。
+    ///
+    /// ⚠️ 取舍:分页是"最新 N 条"上的偏移量,新增 scrobble 会让所有页码整体下移一格——
+    /// 缓存的历史页因此不是绝对精确的"某一页永远长这样",而是"上次看到的样子"。这跟
+    /// "宁可翻回去时转一圈也要保证逐字精确"比,明显该选前者:用户翻页浏览历史时几乎
+    /// 不会在两次访问之间产生大量新 scrobble 去挪动页码边界,而"每次翻页都转圈"是
+    /// 每天都会撞上的真实体验问题。
+    private var recentPageCache: [Int: [RecentTrack]] = [:]
+    /// recentPageCache 的新鲜度窗口。比 baselineTTL(110s,给"正在看的这一页"用)更长——
+    /// 历史页比"当下"稳定得多,翻回去时没必要按同一把尺子频繁作废。
+    private static let recentPageCacheTTL: TimeInterval = 5 * 60
+    /// 主动预取 + 落盘的页数(2026-08-25 用户要求)。只覆盖"前几页"而不是全部历史——
+    /// 跟今天的历史全量扫描同一个取舍:分页浏览的页数可能上千,没必要也不该把每一页都
+    /// 构造成完整 RecentTrack(封面/次数解析是按需的,提前对几千页做这件事就是重新造出
+    /// "一次性打爆请求量"的问题,只是换了个触发点)。10 页覆盖"刚连上账号就随手往前翻
+    /// 几页看看"这个最常见的场景,足够也不过度。
+    private static let recentPagePrefetchCount = 10
+    private var recentPageCacheLoaded = false
+    private var recentPagesPrefetching = false
+    private var recentPageCacheSaveTask: Task<Void, Never>?
+
+    private struct RecentPageCacheSnapshot: Codable {
+        var username: String
+        /// 键用字符串——JSONEncoder 对 `[Int: T]` 的编码格式不直观(取决于 Foundation
+        /// 版本,不是稳定的"数字字符串键"对象),不如显式转成 String,跟 charts 用
+        /// 复合字符串键同一个理由。
+        var pages: [String: [RecentTrack]]
+        /// 「第 N 次听」次数,范围限定在 `pages` 里实际出现过的曲目(2026-08-26 用户
+        /// 反馈:每次重开 App,前几页的次数都要重新问一遍 Last.fm,哪怕上次已经问过——
+        /// 根因是这份次数原来完全没有跨重启持久化,只在内存里活一次进程的生命周期)。
+        /// 老快照文件没有这个字段,解码时为 nil,视作空——不是错误。
+        var playCounts: [String: Int]?
+        /// 已经问过、确认"那边没有次数"的曲目(同样限定在 `pages` 范围内)——没有这份
+        /// 名单的话,这批曲目每次重启都要重新问一遍才能再得出同一个"没有"的结论,一样是
+        /// 白白的重复请求。
+        var playCountUnavailable: [String]?
+    }
+
+    private static let recentPageCacheURL = FileManager.default.homeDirectoryForCurrentUser
+        .appendingPathComponent(".config/lyrimuse/lyrimuse-lastfm-recent-pages.json")
+
+    /// 惰性加载,跟 loadTitleForms/loadDailySnapshot 同一套模式——按 username 校验,
+    /// 换账号不吃旧缓存。⚠️ 刻意**不**恢复对应的 fetchedAt:磁盘上写的是"上次退出时的
+    /// 样子",不代表"现在还新鲜"。让它走 goToPage 里的 stale-while-revalidate——
+    /// 缓存内容立刻可用(不转圈),该不该在背后悄悄重取交给新鲜度判断,不是"永远信任
+    /// 磁盘上次写的时刻"。
+    private func loadRecentPageCache() {
+        recentPageCacheLoaded = true
+        guard let cred = credentials,
+              let data = try? Data(contentsOf: Self.recentPageCacheURL),
+              let snap = try? JSONDecoder().decode(RecentPageCacheSnapshot.self, from: data),
+              snap.username == cred.user
+        else { return }
+        for (k, v) in snap.pages {
+            guard let page = Int(k) else { continue }
+            recentPageCache[page] = v
+        }
+        // 用 merge/formUnion 而不是直接赋值:主快照(loadSnapshot,只覆盖第一页)已经
+        // 先加载过,这里只补它没有的键,不拿这份(可能更旧一点的)数据倒退已经更新的值——
+        // 两者理论上不会真的冲突,但这个方向的合并成本为零,不需要争论"会不会撞上"。
+        if let counts = snap.playCounts, !counts.isEmpty {
+            trackPlayCounts.merge(counts) { current, _ in current }
+        }
+        if let unavailable = snap.playCountUnavailable, !unavailable.isEmpty {
+            playCountUnavailable.formUnion(unavailable)
+        }
+    }
+
+    /// 防抖落盘,同 scheduleTitleFormsSave 的取舍。只落盘前 recentPagePrefetchCount 页——
+    /// 翻到再深的历史页留在内存缓存(本次运行期间有效)就够,没必要让磁盘占用跟着"翻过
+    /// 多少页历史"无界增长。
+    ///
+    /// 「第 N 次听」次数/"确认没有次数"名单跟着这份快照一起落盘,但限定在 `capped` 实际
+    /// 覆盖的曲目范围内——跟 pages 本身一样有界,不会随"这个账号一共听过多少歌"无界
+    /// 增长(2026-08-12 那次审阅对 pages 提过的顾虑,同样适用于这两份新加的数据,这里
+    /// 靠"只收当前 10 页里出现过的 key"天然维持同一条边界,不需要另开一套裁剪逻辑)。
+    private func scheduleRecentPageCacheSave() {
+        recentPageCacheSaveTask?.cancel()
+        recentPageCacheSaveTask = Task {
+            try? await Task.sleep(nanoseconds: 2_000_000_000)
+            guard !Task.isCancelled, let cred = credentials else { return }
+            let capped = recentPageCache.filter { $0.key >= 1 && $0.key <= Self.recentPagePrefetchCount }
+            var scopedKeys = Set<String>()
+            for rows in capped.values {
+                for r in rows { scopedKeys.insert(Self.playCountKey(artist: r.artist, title: r.title)) }
+            }
+            let scopedCounts = trackPlayCounts.filter { scopedKeys.contains($0.key) }
+            let scopedUnavailable = playCountUnavailable.intersection(scopedKeys)
+            let snap = RecentPageCacheSnapshot(
+                username: cred.user,
+                pages: Dictionary(uniqueKeysWithValues: capped.map { (String($0.key), $0.value) }),
+                playCounts: scopedCounts,
+                playCountUnavailable: Array(scopedUnavailable))
+            let url = Self.recentPageCacheURL
+            await Task.detached(priority: .utility) {
+                guard let data = try? JSONEncoder().encode(snap) else { return }
+                try? data.write(to: url, options: .atomic)
+            }.value
+        }
+    }
+
+    /// 主动把前 10 页补齐(缺哪页补哪页,不是"全有全无")。触发点两处:①首次全量扫描
+    /// 收尾(见 syncHistoryIfNeeded 的 full 分支),覆盖"新账号首次连接";②
+    /// ensureFirstSyncBootstrap 的"已经同步过"快速路径,覆盖"老账号补装这个功能"——
+    /// 两者共用同一个幂等函数,谁触发都行,缺什么补什么,不会因为历史扫描已经跑过就
+    /// 永远跳过这一步。
+    ///
+    /// 只请求原始分页 JSON、存行数据,**不调** `applyRecent`——那个函数会把 `recent =
+    /// rows` 直接写成"当前正在显示的那一页",对着一个此刻没人在看的预取页调它,会把真正
+    /// 显示的那一页内容整个换掉,是个真正的正确性问题,不只是"浪费额度"。
+    ///
+    /// 2026-08-26 用户实测反馈:翻到还没手动看过的页,「第 N 次听」那一列要等好几秒才
+    /// 填出来——根因是这一列的数据(`resolvePlayCounts`,一首一个 track.getinfo)原来
+    /// 完全没有跟着这次预取一起做,翻页那一刻现发。既然这 10 页本来就是"大概率会被翻到"
+    /// 才值得预取(见上面 recentPagePrefetchCount 的注释),在这里顺手用 `.background`
+    /// 优先级把这一批请求提前排上就是同一个取舍的自然延伸——不跟前台交互抢限速队列的
+    /// 优先位置,真正被翻到时大概率已经解析完,不用等。这跟上一段"不调 applyRecent"并不
+    /// 矛盾:`resolvePlayCounts` 只写 `trackPlayCounts`/`recentTrackCovers` 这些按曲目
+    /// 索引的全局字典,不碰 `recent`/`recentPage` 这些描述"当前显示的是哪一页"的状态。
+    /// ⚠️ 对**已经缓存过原始行**的页同样要跑 `resolvePlayCounts`,不能只对这次新抓到的
+    /// 页跑:这个函数每次 `ensureFirstSyncBootstrap` 触发都会被调一次(三处 UI 的
+    /// onAppear 都会走到),而 10 页原始行一旦补齐,后续调用里"缺原始行的页"就是空集——
+    /// 如果只对缺原始行的那部分顺带解析次数,已经缓存过原始行、但还没被人工翻到触发过
+    /// `applyRecent` 的那些页就永远没有机会补次数(这正是本次修复要解决的场景:上一轮
+    /// 会话已经把 10 页原始行都预取并落盘了,但用户还没手动翻到第 2-10 页,次数因此从未
+    /// 解析过)。所以这里改成对 1...N 全部扫一遍,原始行缺就先取、不缺就直接拿缓存,
+    /// 拿到手之后一律调一次 `resolvePlayCounts`——它自己按 `trackPlayCounts`/
+    /// `playCountsInFlight` 去重,对已经解析过的行重复调是免费的 no-op,不需要在这里
+    /// 自己维护一份"哪些页已经解析过次数"的额外状态,也不会因为重复调用而多发请求。
+    private func prefetchRecentPagesIfNeeded() {
+        guard let cred = credentials, !recentPagesPrefetching else { return }
+        if !recentPageCacheLoaded { loadRecentPageCache() }
+        recentPagesPrefetching = true
+        Task {
+            defer { recentPagesPrefetching = false }
+            var totalPages = recentTotalPages
+            var fetchedAny = false
+            for page in 1...Self.recentPagePrefetchCount {
+                // 总页数比预取范围还小(账号历史很短)时,后面的页码根本不存在,不用再问。
+                if totalPages > 0, page > totalPages { break }
+                if let cached = recentPageCache[page] {
+                    resolvePlayCounts(for: cached, priority: .background)
+                    continue
+                }
+                guard let json = await request(method: "user.getrecenttracks", cred: cred,
+                                               extra: ["limit": String(Self.recentPageSize),
+                                                       "page": String(page)],
+                                               priority: .background)
+                else { continue } // 单页失败跳过,不拖累其它页;下次触发时这一页仍是"缺的"
+                if let s = dig(json, "recenttracks", "@attr", "totalPages") as? String, let n = Int(s), n > 0 {
+                    totalPages = n
+                }
+                let rows = parseRecent(json)
+                recentPageCache[page] = rows
+                fetchedAny = true
+                resolvePlayCounts(for: rows, priority: .background)
+            }
+            if fetchedAny { scheduleRecentPageCacheSave() }
+        }
+    }
+
     /// kind|period → 榜单。切分段/时段时旧内容还在,不闪空。
     @Published private(set) var charts: [String: [ChartEntry]] = [:]
     /// 正在拉取/拉取失败的榜单键(kind|period)。原来是两个全局布尔 —— 歌手榜和歌曲榜
@@ -294,10 +465,27 @@ final class LastfmStatsService: ObservableObject {
         titleForms = [:]
         titleFormsSyncedThrough = 0
         titleFormsLoaded = false
-        titleFormsSyncing = false
         titleFormsLastTopUp = nil
         titleFormsSaveTask?.cancel()
         try? FileManager.default.removeItem(at: Self.titleFormsURL)
+        primaryCreditFamilies = [:]
+        // ⚠️ 这几行是本次(2026-08-25)补的:换账号/断开时原来完全没清理热力图子系统——
+        // dailyCounts 等字段一个都没重置,loadDailySnapshot 又靠 dailyLoaded 守卫"只加载
+        // 一次",不清它的话磁盘上的 username 校验形同虚设(根本不会再读盘),上一个账号
+        // 的热力图数据会在内存里挂到下次 App 重启为止,跟本方法开头"把一切归零"的
+        // 注释自相矛盾。合并两条全量扫描时顺手修掉。
+        dailyCounts = [:]
+        dailySyncedThrough = 0
+        dailyLoaded = false
+        dailySyncing = false
+        dailySyncFailed = false
+        dailySyncProgress = nil
+        pendingDailyRewind = nil
+        try? FileManager.default.removeItem(at: Self.dailyURL)
+        historyCheckpoint = nil
+        historyCheckpointLoaded = false
+        try? FileManager.default.removeItem(at: Self.historyCheckpointURL)
+        bootstrapState = .notStarted
         charts = [:]
         artistAvatars = [:]
         trackCovers = [:]
@@ -326,6 +514,11 @@ final class LastfmStatsService: ObservableObject {
         recentPage = 1
         recentTotalPages = 1
         recentUpdatedAt = nil
+        recentPageCache = [:]
+        recentPageCacheLoaded = false
+        recentPagesPrefetching = false
+        recentPageCacheSaveTask?.cancel()
+        try? FileManager.default.removeItem(at: Self.recentPageCacheURL)
         fetchedAt = [:]
     }
 
@@ -458,12 +651,14 @@ final class LastfmStatsService: ObservableObject {
     /// count nil = 请求失败,或那边没有这个实体/没记过次数;identity nil = 请求失败。
     /// identity 用来识别「孪生查询被 autocorrect 折回了同一个实体」—— 见调用处。
     private func userPlayCount(artist: String, title: String,
-                               cred: (user: String, key: String))
+                               cred: (user: String, key: String),
+                               priority: LastfmRateLimiter.Priority = .interactive)
         async -> (count: Int?, identity: String?)
     {
         let json = await request(method: "track.getinfo", cred: cred,
                                  extra: ["artist": artist, "track": title,
-                                         "autocorrect": "1", "username": cred.user])
+                                         "autocorrect": "1", "username": cred.user],
+                                 priority: priority)
         guard let json else { return (nil, nil) }
         let count = (dig(json, "track", "userplaycount") as? String).flatMap { Int($0) }
         var identity: String?
@@ -613,6 +808,85 @@ final class LastfmStatsService: ObservableObject {
     /// `dailySyncedThrough = syncStartedAt` 盖回去,记下来等收尾时应用。
     private var pendingDailyRewind: TimeInterval?
 
+    // MARK: - 历史全量扫描断点(2026-08-25)
+    //
+    // ensureTitleFormsIndex(写法索引)和 refreshDailyCounts(热力图)原来是两条完全
+    // 独立、互不知情的 user.getrecenttracks 全量分页扫描——同一个接口、同样的分页
+    // 方式,新账号首次连接时两条同时跑,请求量翻倍还容易撞 Last.fm 限速。合并成一次
+    // 扫描(syncHistoryIfNeeded),一页数据同时喂给两个消费者,收尾时两个水位
+    // (titleFormsSyncedThrough / dailySyncedThrough)**一起**推进,不会再各自漂移。
+    //
+    // 这里额外记的断点续传检查点,跟那两个水位是两回事:水位记的是"这个消费者的数据
+    // 完整到什么时候",这里记的是"首次全量这一轮扫描本身进行到第几页"——网络抖动/
+    // App 被杀之后接着扫,不是从头重来(两万条 scrobble ≈ 110 页,从头重来代价很高)。
+    // 只在"首次全量、尚未完成"期间有意义,完成后清空。
+    private struct HistorySyncCheckpoint: Codable {
+        var username: String
+        var page: Int
+        var from: TimeInterval
+        var startedAt: TimeInterval
+    }
+
+    private static let historyCheckpointURL = FileManager.default.homeDirectoryForCurrentUser
+        .appendingPathComponent(".config/lyrimuse/lyrimuse-lastfm-history-checkpoint.json")
+    private var historyCheckpoint: HistorySyncCheckpoint?
+    private var historyCheckpointLoaded = false
+
+    private func loadHistoryCheckpoint() {
+        historyCheckpointLoaded = true
+        guard let cred = credentials,
+              let data = try? Data(contentsOf: Self.historyCheckpointURL),
+              let cp = try? JSONDecoder().decode(HistorySyncCheckpoint.self, from: data),
+              cp.username == cred.user
+        else { return }
+        historyCheckpoint = cp
+    }
+
+    private func saveHistoryCheckpoint() {
+        guard let cp = historyCheckpoint, let data = try? JSONEncoder().encode(cp) else {
+            try? FileManager.default.removeItem(at: Self.historyCheckpointURL)
+            return
+        }
+        try? data.write(to: Self.historyCheckpointURL, options: .atomic)
+    }
+
+    // MARK: - 首次连接后台引导(bootstrap,2026-08-25)
+
+    enum BootstrapState: Equatable {
+        case notStarted
+        case syncing(page: Int, totalPages: Int)
+        case done
+        case failed
+    }
+
+    /// 三处 UI(设置账号页、歌词窗口常听面板、待机页)按它决定是显示"首次同步中"占位
+    /// 还是照常渲染。纯内存,不持久化——它是 titleFormsSyncedThrough/dailySyncedThrough
+    /// 这两个已有水位的观感包装,不是新的持久化状态。「是否完成过首次同步」直接从
+    /// min(两个水位) > 0 派生(见 ensureFirstSyncBootstrap),这样老用户升级后(之前
+    /// 已经手动触发过全量扫描的)不会被强迫重新走一遍"首次同步中"UI。
+    @Published private(set) var bootstrapState: BootstrapState = .notStarted
+
+    /// 账号连接成功后调用一次(LastfmAuthFlow);也是 refreshBaseline 的兜底——App
+    /// 重启/中途被杀导致首次全量没跑完时,下次打开账号页自动接着跑,不需要重新走一遍
+    /// 认证。真正的扫描、进度更新、.done/.failed 收尾都在 syncHistoryIfNeeded 内部——
+    /// 那边无论从这个入口触发还是三处 UI 直接调 refreshDailyCounts 触发,都会同样
+    /// 更新 bootstrapState,不会有"正在扫但界面不知道"的空窗。
+    func ensureFirstSyncBootstrap() {
+        guard credentials != nil else { return }
+        if !titleFormsLoaded { loadTitleForms() }
+        if !dailyLoaded { loadDailySnapshot() }
+        if min(titleFormsSyncedThrough, dailySyncedThrough) > 0 {
+            bootstrapState = .done
+            // 历史全量扫描早就跑过(可能是这次改动上线前的老账号),但"前几页翻页缓存"
+            // 是这次才加的新东西——补一次,不然只有"刚连账号的新用户"能享受到,老账号
+            // 永远缺这一块(2026-08-25)。prefetchRecentPagesIfNeeded 内部按"缺哪页补
+            // 哪页"幂等,重复调用无害。
+            prefetchRecentPagesIfNeeded()
+            return
+        }
+        syncHistoryIfNeeded()
+    }
+
     /// 回填(补提交)成功后调用:把每日计数的增量水位拨回回填窗口起点。
     ///
     /// 为什么必须拨(2026-08-18 用户报"补提交后没刷新"时顺带发现的隐患):回填把
@@ -643,88 +917,165 @@ final class LastfmStatsService: ObservableObject {
         }
     }
 
-    /// 打开热力图时调用。单飞;增量从"最后已同步那天的零点"重拉——那一天上次可能只
-    /// 覆盖到中途,整天作废重算,天粒度桶不存在半天拼接的口径问题。
-    ///
-    /// ⚠️ 同步过程不动 dailyCounts,全部页拉完才一次性合并替换——中途失败(断网/限流)
-    /// 时旧数据原样保留,失败态只是一个可重试的标记,不是数据丢失。
+    /// 打开热力图时调用。实现见 syncHistoryIfNeeded——跟写法索引首次建索引是**同一次**
+    /// 分页扫描(2026-08-25 合并),这里保留独立的函数名/签名,三处 UI 调用点不用改。
     func refreshDailyCounts() {
+        syncHistoryIfNeeded()
+    }
+
+    /// 合并扫描:ensureTitleFormsIndex(写法索引)+ refreshDailyCounts(热力图)原来是
+    /// 两条完全独立、互不知情的 user.getrecenttracks 全量分页扫描,新账号首次连接时
+    /// 两条同时跑,请求量翻倍还容易撞 Last.fm 限速(2026-08-25 用户报"新电脑第一次
+    /// 连接卡爆")。现在一次分页扫描,同一页数据同时喂给两个消费者,两个水位
+    /// (titleFormsSyncedThrough / dailySyncedThrough)在收尾时**一起**推进——从此不会
+    /// 再各自漂移。共用 dailySyncing 当单飞守卫(原来 ensureTitleFormsIndex 自己另有
+    /// 一个 titleFormsSyncing,合并后只需要一个)。
+    ///
+    /// 两种模式:
+    /// - **首次全量**(两个水位都还是 0):边扫边把 dailyCounts/写法索引写进去、每 10 页
+    ///   落一次断点(historyCheckpoint),网络抖动/App 被杀之后从断点续跑,不用从头重来
+    ///   ——这是本次改动解决"卡、失败要反复刷新"的核心,110+ 页的扫描经不起从头重来。
+    /// - **增量 top-up**(水位 > 0):保留原有"全部页成功才合并替换,失败原样保留旧数据"
+    ///   的策略。这条路径通常只有 1-3 页,重跑成本低,不值得为它引入检查点复杂度;
+    ///   更重要的是这条策略对热力图"绝不展示不完整数据"的语义很关键,别顺手把它也
+    ///   改成断点续传那一套(会重新引入"半途失败导致热力图缺最近几天数据却不报错"
+    ///   的隐患)。15 分钟节流,复用原 ensureTitleFormsIndex 的 titleFormsLastTopUp。
+    private func syncHistoryIfNeeded() {
         guard !dailySyncing else { return }
         guard let cred = credentials else { return }
         if !dailyLoaded { loadDailySnapshot() }
+        if !titleFormsLoaded { loadTitleForms() }
+        if !historyCheckpointLoaded { loadHistoryCheckpoint() }
+
+        // 两个水位取较早的那个作为"这次该从哪开始"的判据:正常情况下两者本该同步
+        // 推进(本函数是唯一写入方),取较早值只是防御性的——万一因为老版本遗留数据
+        // 分叉了,宁可多扫一点重叠窗口也不漏扫历史。
+        let priorWatermark = min(titleFormsSyncedThrough, dailySyncedThrough)
+        let full = priorWatermark <= 0
+        if !full, let last = titleFormsLastTopUp, Date().timeIntervalSince(last) < 15 * 60 { return }
+
         dailySyncing = true
         dailySyncFailed = false
+        titleFormsLastTopUp = Date()
         let syncStartedAt = Date().timeIntervalSince1970
         var from: TimeInterval = 1
         var wipeFromDay: String?
-        if dailySyncedThrough > 0 {
+        if !full {
             let lastDayStart = Calendar.current.startOfDay(
-                for: Date(timeIntervalSince1970: dailySyncedThrough))
+                for: Date(timeIntervalSince1970: priorWatermark))
             from = lastDayStart.timeIntervalSince1970
             wipeFromDay = Self.dayKey(lastDayStart)
+        } else if let cp = historyCheckpoint, cp.username == cred.user {
+            // 断点续传:接着上次成功落盘的那一页继续,不从头来。
+            from = cp.from
         }
+
         Task {
-            var fresh: [String: Int] = [:]
-            var page = 1
+            defer { dailySyncing = false }
+            var page = (full ? historyCheckpoint?.page : nil).map { $0 + 1 } ?? 1
             var totalPages = 1
             var failed = false
+            var fresh: [String: Int] = [:] // 只有增量(!full)分支用:攒够了再一次性合并
+
             // 400 页 = 8 万条,远超当前量级的安全上限,防 totalPages 异常时打穿。
             while page <= totalPages && page <= 400 {
                 guard let obj = await request(
                     method: "user.getrecenttracks", cred: cred,
-                    extra: ["limit": "200", "page": "\(page)", "from": "\(Int(from))"]),
-                    let rt = obj["recenttracks"] as? [String: Any],
-                    let attr = rt["@attr"] as? [String: Any]
+                    extra: ["limit": "200", "page": "\(page)", "from": "\(Int(from))"],
+                    priority: .background),
+                    let (rows, pages) = LastfmRecentTracksPage.parse(obj)
                 else {
                     failed = true
                     break
                 }
-                totalPages = Int((attr["totalPages"] as? String) ?? "1") ?? 1
-                // Last.fm 的怪癖:只有一条时 track 是对象不是数组。
-                var tracks = (rt["track"] as? [[String: Any]]) ?? []
-                if tracks.isEmpty, let single = rt["track"] as? [String: Any] {
-                    tracks = [single]
+                totalPages = pages
+                var pageCounts: [String: Int] = [:]
+                for row in rows {
+                    // 顺手收割写法索引(nowplaying 行/畸形行也是真实写法,一并收)。
+                    harvestTitleForm(artist: row.artist, title: row.title)
+                    guard let uts = row.uts else { continue }
+                    pageCounts[Self.dayKey(Date(timeIntervalSince1970: uts)), default: 0] += 1
                 }
-                for t in tracks {
-                    // 顺手收割写法索引(nowplaying 行也是真实写法,一并收)
-                    if let name = t["name"] as? String,
-                       let art = (t["artist"] as? [String: Any])?["#text"] as? String {
-                        harvestTitleForm(artist: art, title: name)
-                    }
-                    // 正在播放的行没有 date,跳过(它还不是一条落库的 scrobble)。
-                    if let a = t["@attr"] as? [String: Any],
-                       (a["nowplaying"] as? String) == "true" { continue }
-                    guard let dateObj = t["date"] as? [String: Any],
-                          let utsS = dateObj["uts"] as? String,
-                          let uts = TimeInterval(utsS) else { continue }
-                    fresh[Self.dayKey(Date(timeIntervalSince1970: uts)), default: 0] += 1
+                if full {
+                    for (k, v) in pageCounts { dailyCounts[k, default: 0] += v }
+                } else {
+                    for (k, v) in pageCounts { fresh[k, default: 0] += v }
                 }
                 if totalPages > 3 {
                     dailySyncProgress = String(
                         format: L10n.t("正在同步历史（%1$@/%2$@ 页）"), "\(page)", "\(totalPages)")
                 }
-                page += 1
-                if page <= totalPages {
-                    try? await Task.sleep(nanoseconds: 150_000_000) // 对 API 客气一点
+                // bootstrapState 只在**首次全量**时更新——增量 top-up 不是"首次同步"这件事。
+                // 无论这次扫描是从哪个入口触发的(ensureFirstSyncBootstrap 还是三处 UI
+                // 直接调 refreshDailyCounts),都在这里统一更新,不然热力图先于账号页触发
+                // 扫描时,界面会"正在扫但不知道"(2026-08-25 审阅指出的风险点)。
+                if full { bootstrapState = .syncing(page: page, totalPages: totalPages) }
+                if full {
+                    // 每 10 页落一次断点+当前 dailyCounts:中断后最多重扫 10 页,
+                    // 不是从头重来 110+ 页。不做成每页都存——那是 110+ 次同步磁盘 I/O,
+                    // 换来的精度对"断点续传"这个目标没有意义。
+                    if page % 10 == 0 {
+                        historyCheckpoint = HistorySyncCheckpoint(
+                            username: cred.user, page: page, from: from, startedAt: syncStartedAt)
+                        saveHistoryCheckpoint()
+                        saveDailySnapshot()
+                    }
                 }
+                page += 1
+                // 节流已经收进 LastfmRateLimiter(全局 4 req/s),这里不再自己 sleep——
+                // 留着的话跟全局限速叠加,会变成每页至少 400ms(2026-08-25)。
             }
             dailySyncProgress = nil
-            dailySyncing = false
             if failed {
                 dailySyncFailed = true
+                if full {
+                    // 首次全量失败在半途:落一次断点,下次从这里接着扫,不回到第 1 页。
+                    // page 此刻是"正要扫但失败了"的那一页,退一格才是"已确认成功"的页。
+                    if page > 1 {
+                        historyCheckpoint = HistorySyncCheckpoint(
+                            username: cred.user, page: page - 1, from: from, startedAt: syncStartedAt)
+                        saveHistoryCheckpoint()
+                    }
+                    saveDailySnapshot()
+                    bootstrapState = .failed
+                }
                 applyPendingDailyRewind() // 同步期间来过回填:失败也要把水位拨回去
                 return
             }
-            var days = dailyCounts
-            if let wipe = wipeFromDay {
-                // "yyyy-MM-dd" 字典序即时间序,直接字符串比较。
-                for k in days.keys where k >= wipe { days.removeValue(forKey: k) }
+            if !full {
+                var days = dailyCounts
+                if let wipe = wipeFromDay {
+                    // "yyyy-MM-dd" 字典序即时间序,直接字符串比较。
+                    for k in days.keys where k >= wipe { days.removeValue(forKey: k) }
+                }
+                for (k, v) in fresh { days[k, default: 0] += v }
+                dailyCounts = days
             }
-            for (k, v) in fresh { days[k, default: 0] += v }
-            dailyCounts = days
             dailySyncedThrough = syncStartedAt
+            titleFormsSyncedThrough = syncStartedAt
+            scheduleTitleFormsSave()
             applyPendingDailyRewind() // 同步期间来过回填:水位不能停在 syncStartedAt
             saveDailySnapshot()
+            if full {
+                historyCheckpoint = nil
+                saveHistoryCheckpoint()
+                // 索引首次就绪:此前猜枚举口径的总数已经落后 —— 整表作废,按写法族重取
+                trackPlayCounts = [:]
+                playCountUnavailable = []
+                resolvePlayCounts(for: recent)
+                // bootstrap 收尾:历史扫描是最耗请求量的部分,完成后顺手把 overview/最近
+                // 记录/12 组常听榜单都预取一遍——不用等用户切到某个 tab 才发现要转圈。
+                // fire-and-forget:.done 只代表"历史扫描完成",不等这些小请求也落地
+                // (它们本身代价小、不阻塞,见 refreshBaseline/refreshChart 各自的 TTL)。
+                refreshBaseline(force: true)
+                for kind in ChartKind.allCases {
+                    for period in Period.allCases { refreshChart(kind: kind, period: period) }
+                }
+                // 前几页翻页缓存(2026-08-25 用户要求)——refreshBaseline 上面那行只会
+                // 落地 recentPage(默认 1)这一页,第 2-10 页要单独补。
+                prefetchRecentPagesIfNeeded()
+                bootstrapState = .done
+            }
         }
     }
 
@@ -858,48 +1209,6 @@ final class LastfmStatsService: ObservableObject {
         // 重新加载才能参与合并。
         Self.insertForm(form, into: &primaryCreditFamilies)
         scheduleTitleFormsSave()
-    }
-
-    /// 索引冷启动/增量补漏。全部页成功才推进水位;任一页失败保持原水位,下次再来。
-    private func ensureTitleFormsIndex() {
-        if !titleFormsLoaded { loadTitleForms() }
-        guard let cred = credentials, !titleFormsSyncing else { return }
-        let full = titleFormsSyncedThrough <= 0
-        if !full, let last = titleFormsLastTopUp, Date().timeIntervalSince(last) < 15 * 60 { return }
-        titleFormsSyncing = true
-        titleFormsLastTopUp = Date()
-        let from = full ? 1 : Int(titleFormsSyncedThrough)
-        let startedAt = Date().timeIntervalSince1970
-        Task {
-            defer { titleFormsSyncing = false }
-            var page = 1
-            var totalPages = 1
-            while page <= totalPages && page <= 400 {
-                guard let obj = await request(method: "user.getrecenttracks", cred: cred,
-                                              extra: ["limit": "200", "page": "\(page)", "from": "\(from)"]),
-                      let rt = obj["recenttracks"] as? [String: Any],
-                      let attr = rt["@attr"] as? [String: Any]
-                else { return }
-                totalPages = Int((attr["totalPages"] as? String) ?? "1") ?? 1
-                var tracks = (rt["track"] as? [[String: Any]]) ?? []
-                if tracks.isEmpty, let single = rt["track"] as? [String: Any] { tracks = [single] }
-                for t in tracks {
-                    guard let name = t["name"] as? String,
-                          let art = (t["artist"] as? [String: Any])?["#text"] as? String else { continue }
-                    harvestTitleForm(artist: art, title: name)
-                }
-                page += 1
-                if page <= totalPages { try? await Task.sleep(nanoseconds: 150_000_000) }
-            }
-            titleFormsSyncedThrough = startedAt
-            scheduleTitleFormsSave()
-            if full {
-                // 索引首次就绪:此前猜枚举口径的总数已经落后 —— 整表作废,按写法族重取
-                trackPlayCounts = [:]
-                playCountUnavailable = []
-                resolvePlayCounts(for: recent)
-            }
-        }
     }
 
     private func loadTitleForms() {
@@ -1101,24 +1410,50 @@ final class LastfmStatsService: ObservableObject {
 
     // MARK: - 拉取
 
+    /// 给 SwiftUI `.refreshable`(下拉刷新手势)用:跟 `refreshBaseline` 做同一件事,
+    /// 但等到真正拉完(成功/失败/超时)才返回。`refreshBaseline` 本身是即发即忘的——
+    /// 内部自己起一个 `Task`,函数一调用就返回——直接塞进 `.refreshable` 的闭包会让
+    /// 系统的下拉转圈立刻收起,实际请求其实还在飞,手感是"松手就没反应"。用
+    /// `recentUpdatedAt`(成功路径,见 `applyRecent`)/`baselineFailed`(失败路径)的
+    /// 变化当完成信号,而不是重新实现一遍 `refreshBaseline` 的请求逻辑——避免两份并行
+    /// 维护、行为分裂。超时上限比 `request()` 单次请求的 10s 超时留一点余量,不然真撞上
+    /// 慢网络时转圈会比实际请求提前收起。
+    func refreshBaselineAndWait(force: Bool = true) async {
+        let before = recentUpdatedAt
+        refreshBaseline(force: force)
+        guard credentials != nil else { return } // 没连账号,refreshBaseline 什么都没做
+        let deadline = Date().addingTimeInterval(12)
+        while Date() < deadline {
+            if baselineFailed || recentUpdatedAt != before { return }
+            try? await Task.sleep(nanoseconds: 150_000_000)
+        }
+    }
+
     /// 档案数字 + 最近记录。TTL 内重复调用是空操作;force 无视 TTL(换歌触发的
     /// 刷新用 —— 刚唱完的那首就该马上出现,不该被缓存挡两分钟)。
     func refreshBaseline(force: Bool = false) {
-        // 写法索引的冷启动/增量补漏挂在这条页面主刷新路径上(内部自带单飞+节流)
-        ensureTitleFormsIndex()
+        // 历史全量扫描(写法索引+热力图合并后的引导同步)的冷启动/增量补漏/断点续跑
+        // 兜底,都挂在这条页面主刷新路径上(内部自带单飞+节流)——这也是"App 重启/
+        // 中途被杀导致首次全量没跑完"的兜底:不需要重新走一遍认证,下次打开账号页
+        // 自动接着扫(2026-08-25)。
+        ensureFirstSyncBootstrap()
         if force { fetchedAt["baseline"] = nil }
         guard fresh("baseline", ttl: baselineTTL) == false else { return }
         guard let cred = credentials else { return }
         fetchedAt["baseline"] = Date()
         baselineGen += 1
         let gen = baselineGen
+        // 捕获此刻的页码作为缓存键——响应回来前 recentPage 理论上可能被 goToPage 改掉
+        // (下面 guard gen == baselineGen 会挡掉那种情况让整批作废,但缓存键仍然按
+        // "这次到底请求的是哪一页"来记,不跟着显示状态漂)。
+        let requestedPage = recentPage
         Task {
             baselineFailed = false
             // 总数不用单独打 user.getinfo:下面拉最近记录那次(不带 from)的 @attr.total
             // 本来就是全量 scrobble 数,一个请求两用,4 个请求并成 3 个(审阅指出)。
             async let recentJSON = request(method: "user.getrecenttracks", cred: cred,
                                            extra: ["limit": String(Self.recentPageSize),
-                                                   "page": String(recentPage)])
+                                                   "page": String(requestedPage)])
             // 两个计数:recenttracks 带 from 时,@attr.total 就是区间内的条数,limit=1
             // 让响应体最小。
             let dayStart = Calendar.current.startOfDay(for: Date())
@@ -1138,8 +1473,13 @@ final class LastfmStatsService: ObservableObject {
                 today: attrTotal(t),
                 week: attrTotal(w)
             )
-            applyRecent(parseRecent(r))
+            let rows = parseRecent(r)
+            applyRecent(rows)
             applyRecentPaging(r) // 总页数只在响应里,首次加载这条路径也得取(翻页控件靠它才出现)
+            // 顺手更新 recentPageCache——periodic 刷新原来"看的哪页刷哪页"这条既有行为,
+            // 现在也让 goToPage 翻回来时受益,不必让它自己再打一次一模一样的请求。
+            recentPageCache[requestedPage] = rows
+            fetchedAt[Self.recentPageCacheKey(requestedPage)] = Date()
             scheduleSnapshotSave()
         }
     }
@@ -1339,6 +1679,12 @@ final class LastfmStatsService: ObservableObject {
     nonisolated static func playCountKey(artist: String, title: String) -> String {
         artist.trimmingCharacters(in: .whitespaces).lowercased()
             + "|" + title.trimmingCharacters(in: .whitespaces).lowercased()
+    }
+
+    /// 给"第 N 次听"那一列的占位态用:区分"还没问出结果"(该显示"正在解析"占位)和
+    /// "已经问过、确定没有"(该显示什么都不显示,不能让占位看起来像永远转不完)。
+    func isPlayCountUnavailable(artist: String, title: String) -> Bool {
+        playCountUnavailable.contains(Self.playCountKey(artist: artist, title: title))
     }
 
     private func applyRecent(_ rows: [RecentTrack]) {
@@ -1576,7 +1922,11 @@ final class LastfmStatsService: ObservableObject {
     /// 给最近记录里还没有次数的曲目补 userplaycount。一首一个 track.getinfo(Last.fm 没有
     /// 批量接口),故并发压到 4 —— 展开到 100 条时这是一百个请求,放开跑会撞限速(约 5 req/s),
     /// 而这些数字是锦上添花,不值得为它把整页的额度吃掉。失败静默:那一行不显示次数即可。
-    private func resolvePlayCounts(for rows: [RecentTrack]) {
+    ///
+    /// - Parameter priority: 默认 `.interactive`——正常路径是 `applyRecent` 给当前正在看
+    ///   的这一页补数据。`prefetchRecentPagesIfNeeded` 会显式传 `.background`,给还没人看的
+    ///   预取页提前把这一批请求排上,不跟前台交互抢限速队列的优先位置。
+    private func resolvePlayCounts(for rows: [RecentTrack], priority: LastfmRateLimiter.Priority = .interactive) {
         guard let cred = credentials else { return }
         var seen = Set<String>()
         let now = Date()
@@ -1624,7 +1974,8 @@ final class LastfmStatsService: ObservableObject {
                         }
                         let json = await self.request(method: "track.getinfo", cred: cred,
                                                       extra: ["artist": item.artist, "track": item.title,
-                                                              "autocorrect": "1", "username": cred.user])
+                                                              "autocorrect": "1", "username": cred.user],
+                                                      priority: priority)
                         guard let json else {
                             return (item.key, item.artist, item.album, false, nil, nil,
                                     item.wantsCount, item.zeroIsFinal)
@@ -1653,7 +2004,7 @@ final class LastfmStatsService: ObservableObject {
                             if let id = parsed.2 { identities.insert(id) }
                             for sib in await self.playCountSiblings(artist: item.artist, title: item.title) {
                                 let twin = await self.userPlayCount(artist: sib.artist, title: sib.title,
-                                                                    cred: cred)
+                                                                    cred: cred, priority: priority)
                                 guard let tc = twin.count, let tid = twin.identity,
                                       identities.insert(tid).inserted else { continue }
                                 count = (count ?? 0) + tc
@@ -1664,7 +2015,7 @@ final class LastfmStatsService: ObservableObject {
                         var cover = parsed.1
                         if cover == nil {
                             cover = await self.coverByCorrectedArtist(
-                                artist: item.artist, title: item.title, cred: cred)
+                                artist: item.artist, title: item.title, cred: cred, priority: priority)
                         }
                         return (item.key, item.artist, item.album, true, count, cover,
                                 item.wantsCount, item.zeroIsFinal)
@@ -1703,6 +2054,9 @@ final class LastfmStatsService: ObservableObject {
                     }
                     addNext()
                 }
+                // 观测用:这一批一共问了多少首、成功拿到几个次数——之前排查"预取到底有没有
+                // 真的在解析"全靠猜,留一条轻量日志比重新加临时诊断代码划算。
+                logger.notice("resolvePlayCounts: resolved \(counts.count, privacy: .public)/\(missing.count, privacy: .public) counts")
                 if !counts.isEmpty {
                     trackPlayCounts.merge(counts) { _, new in new }
                     reconcileNowPlayingCount(with: counts)
@@ -1711,6 +2065,12 @@ final class LastfmStatsService: ObservableObject {
                 if !albumCovers.isEmpty { recentAlbumCovers.merge(albumCovers) { _, new in new } }
                 playCountUnavailable.formUnion(noCount)
                 coverUnavailable.formUnion(noCover)
+                // 新学到的次数/"确认没有"结论跟着落一次盘(recentPageCache 那份快照,
+                // 内部按当前 10 页的曲目范围裁剪),不然只留在这次进程的内存里——下次
+                // 重开 App 又要把这些已经问过的曲目重新问一遍,正是用户反馈的"每次都要
+                // 等"的根因之一。translatePage/goToPage 那些"新抓到一页原始行"的路径
+                // 已经在调它,这里补的是"次数变了、但原始行没变"的这条路径。
+                if !counts.isEmpty || !noCount.isEmpty { scheduleRecentPageCacheSave() }
                 if !countFetched.isEmpty {
                     let stamp = Date()
                     for key in countFetched { playCountFetchedAt[key] = stamp }
@@ -1746,24 +2106,27 @@ final class LastfmStatsService: ObservableObject {
     /// ⚠️ 只取封面,**不取** userplaycount:两个实体的次数是分开记的(实测 David Tao 那边
     /// 25 次、陶喆那边 11 次),拿纠正后的数字覆盖会把「第 N 次听」显示错。
     private func coverByCorrectedArtist(artist: String, title: String,
-                                        cred: (user: String, key: String)) async -> URL? {
-        let corrected = await correctedArtistName(artist, cred: cred)
+                                        cred: (user: String, key: String),
+                                        priority: LastfmRateLimiter.Priority = .interactive) async -> URL? {
+        let corrected = await correctedArtistName(artist, cred: cred, priority: priority)
         guard !corrected.isEmpty, corrected != artist else { return nil }
         guard let json = await request(method: "track.getinfo", cred: cred,
                                        extra: ["artist": corrected, "track": title,
-                                               "autocorrect": "1"])
+                                               "autocorrect": "1"],
+                                       priority: priority)
         else { return nil }
         return imageURL(dig(json, "track", "album", "image"))
     }
 
     private func correctedArtistName(_ artist: String,
-                                     cred: (user: String, key: String)) async -> String {
+                                     cred: (user: String, key: String),
+                                     priority: LastfmRateLimiter.Priority = .interactive) async -> String {
         if let cached = artistCorrections[artist] { return cached }
         if let running = artistCorrectionTasks[artist] { return await running.value }
         let task = Task { [weak self] () -> String in
             guard let self else { return "" }
             let json = await self.request(method: "artist.getcorrection", cred: cred,
-                                          extra: ["artist": artist])
+                                          extra: ["artist": artist], priority: priority)
             guard let json else { return "" }
             return self.dig(json, "corrections", "correction", "artist", "name") as? String ?? ""
         }
@@ -1792,9 +2155,33 @@ final class LastfmStatsService: ObservableObject {
 
     /// 翻到第 page 页(1 起)。页码在成功后才算数:失败回滚,不让翻页控件停在一个
     /// 内容根本没换过的页码上(沿用 expandRecent 那次审阅定下的规矩)。
+    ///
+    /// 命中 recentPageCache 时**同步**完成,不经过 Task、不设 recentPaging——翻回刚看过
+    /// 的页、或者翻到已经被 prefetchRecentPagesIfNeeded 预取好的前几页,都不该有转圈这
+    /// 一拍(2026-08-25)。仍然整段调用 applyRecent:它内部的 resolvePlayCounts/
+    /// resolveCatalogCovers 会先查"这一行是不是已经有次数/封面"才发请求,缓存页的行
+    /// 本来就是已经处理过的,这两个函数在这里大多数时候是空转,不会因为"调用了
+    /// applyRecent"就多打一轮网络请求——用同一条代码路径远比另写一套"缓存专用精简版"
+    /// 更不容易漏同步状态(lastAppliedRecentPage/本机封面索引等)。
+    ///
+    /// ⚠️ stale-while-revalidate:缓存命中但已经过了新鲜度窗口(包括"App 刚启动、
+    /// 磁盘上加载来的缓存,本次运行还一次都没验证过"这种情况——fetchedAt 不持久化,
+    /// 见 loadRecentPageCache 的注释)时,**先原样展示缓存**,再在背后悄悄发一次真实
+    /// 请求刷新——用户看到的永远是"立刻有内容",新旧只是内容本身会不会在几百毫秒后
+    /// 悄悄变一下,不会看到转圈。跟 StatsSnapshot 冷启动"先端上桌、刷新照常在后台跑"
+    /// 是同一个思路。
     func goToPage(_ page: Int) {
         let target = max(1, min(page, max(recentTotalPages, 1)))
         guard target != recentPage, !recentPaging else { return }
+        if !recentPageCacheLoaded { loadRecentPageCache() }
+        if let cached = recentPageCache[target] {
+            recentPage = target
+            applyRecent(cached)
+            if !fresh(Self.recentPageCacheKey(target), ttl: Self.recentPageCacheTTL) {
+                revalidateRecentPage(target)
+            }
+            return
+        }
         let prev = recentPage
         recentPage = target
         recentPaging = true
@@ -1811,12 +2198,42 @@ final class LastfmStatsService: ObservableObject {
                 return
             }
             guard gen == baselineGen else { return }
-            applyRecent(parseRecent(json))
+            let rows = parseRecent(json)
+            applyRecent(rows)
             applyRecentPaging(json)
+            recentPageCache[target] = rows
+            fetchedAt[Self.recentPageCacheKey(target)] = Date()
             scheduleSnapshotSave()
+            scheduleRecentPageCacheSave()
             fetchedAt["baseline"] = Date() // 刚拉过,定时器下一拍不用再拉一遍
         }
     }
+
+    /// goToPage 缓存命中但已过期时的背后静默刷新。不设 recentPaging(不转圈,用户已经
+    /// 看到缓存内容了),只在完成时**仍然停在这一页**才把新数据摆上去——用户可能这几百
+    /// 毫秒里已经翻到别的页,那样就只更新缓存,不打扰当前显示(靠 baselineGen 判断,
+    /// 跟 goToPage 主路径同一套"发起之后来一代新的就整批作废"的规矩)。
+    private func revalidateRecentPage(_ target: Int) {
+        guard let cred = credentials else { return }
+        baselineGen += 1
+        let gen = baselineGen
+        Task {
+            guard let json = await request(method: "user.getrecenttracks", cred: cred,
+                                           extra: ["limit": String(Self.recentPageSize),
+                                                   "page": String(target)])
+            else { return }
+            let rows = parseRecent(json)
+            recentPageCache[target] = rows
+            fetchedAt[Self.recentPageCacheKey(target)] = Date()
+            scheduleRecentPageCacheSave()
+            guard gen == baselineGen, recentPage == target else { return }
+            applyRecent(rows)
+            applyRecentPaging(json)
+            scheduleSnapshotSave()
+        }
+    }
+
+    private static func recentPageCacheKey(_ page: Int) -> String { "recent-page-\(page)" }
 
     /// 从响应的 @attr 里取总页数。缺字段就保持原值,不把它当 1(那会让翻页按钮消失)。
     private func applyRecentPaging(_ json: [String: Any]) {
@@ -2083,8 +2500,12 @@ final class LastfmStatsService: ObservableObject {
         return Date().timeIntervalSince(at) < (overrideTTL ?? ttl)
     }
 
+    /// - Parameter priority: 排队优先级,见 LastfmRateLimiter.Priority。默认 `.interactive`,
+    ///   全文所有调用点因此不用改一行——只有历史全量扫描(LastfmHistorySync)显式传
+    ///   `.background`,不抢占用户当下在等的操作。
     private func request(method: String, cred: (user: String, key: String),
-                         extra: [String: String] = [:]) async -> [String: Any]? {
+                         extra: [String: String] = [:],
+                         priority: LastfmRateLimiter.Priority = .interactive) async -> [String: Any]? {
         var comps = URLComponents(string: "https://ws.audioscrobbler.com/2.0/")!
         var pairs: [(name: String, value: String)] = [
             ("method", method),
@@ -2102,24 +2523,57 @@ final class LastfmStatsService: ObservableObject {
         guard let url = comps.url else { return nil }
         var req = URLRequest(url: url)
         req.timeoutInterval = 10
-        do {
-            let (data, resp) = try await URLSession.shared.data(for: req)
-            guard (resp as? HTTPURLResponse)?.statusCode == 200 else {
-                logger.notice("\(method, privacy: .public): http \((resp as? HTTPURLResponse)?.statusCode ?? -1)")
+
+        // 429/error 29(Rate Limit Exceeded)的退避重试(2026-08-25)。命中就让
+        // LastfmRateLimiter 的全局队列一起冷却,再本地有限次重试——重试仍然经过
+        // acquire(),不绕开限速(否则退避形同虚设)。退避时长本身就是冷却期,不需要
+        // 额外再睡一次:continue 回到循环顶部重新 acquire 时,pump() 会自然等到冷却期过。
+        // ⚠️ 总重试次数不能设太多:resolvePlayCounts/resolveTrackCovers 是 withTaskGroup
+        // 批量调用,一个任务卡在这里重试会拖慢整批 for await 收敛。3 次、1s→2s→4s 递增
+        // 冷却,封顶在 10 秒量级——这几个数字没有实测依据,先用保守值,上线后按日志调优。
+        let backoffCooldowns: [TimeInterval] = [1, 2, 4]
+        for attempt in 0...backoffCooldowns.count {
+            await LastfmRateLimiter.shared.acquire(priority: priority)
+            // 每一次实际发出去的请求(含重试)都单独记一笔——见 NetworkAuditLog 头部
+            // 注释,这是用户明确要求的"所有对外请求都要记日志"里的一个调用点。
+            let requestStart = Date()
+            do {
+                let (data, resp) = try await URLSession.shared.data(for: req)
+                let status = (resp as? HTTPURLResponse)?.statusCode ?? -1
+                NetworkAuditLog.record(service: "lastfm", operation: method, host: url.host ?? "ws.audioscrobbler.com",
+                                       statusCode: status, durationMs: Date().timeIntervalSince(requestStart) * 1000, error: nil)
+                if status == 429 {
+                    logger.notice("\(method, privacy: .public): http 429, backing off (attempt \(attempt, privacy: .public))")
+                    await LastfmRateLimiter.shared.reportThrottled(cooldown: backoffCooldowns[min(attempt, backoffCooldowns.count - 1)])
+                    if attempt < backoffCooldowns.count { continue }
+                    return nil
+                }
+                guard status == 200 else {
+                    logger.notice("\(method, privacy: .public): http \(status)")
+                    return nil
+                }
+                let obj = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+                // Last.fm 的错误多以 200 + {"error":N} 返回(API key 失效就是这形态)。不识别
+                // 它的话,失效的 key 会让页面显示"0 scrobble/还没有记录"——一套看起来很确定、
+                // 实际全错的数据,比失败态糟糕得多(审阅确认)。
+                if let errCode = obj?["error"] as? Int {
+                    if errCode == 29 {
+                        logger.notice("\(method, privacy: .public): api error 29 (rate limit), backing off (attempt \(attempt, privacy: .public))")
+                        await LastfmRateLimiter.shared.reportThrottled(cooldown: backoffCooldowns[min(attempt, backoffCooldowns.count - 1)])
+                        if attempt < backoffCooldowns.count { continue }
+                        return nil
+                    }
+                    logger.notice("\(method, privacy: .public): api error \(errCode) \((obj?["message"] as? String) ?? "", privacy: .public)")
+                    return nil
+                }
+                return obj
+            } catch {
+                NetworkAuditLog.record(service: "lastfm", operation: method, host: url.host ?? "ws.audioscrobbler.com",
+                                       statusCode: nil, durationMs: Date().timeIntervalSince(requestStart) * 1000, error: error)
+                logger.notice("\(method, privacy: .public) failed: \(error.localizedDescription, privacy: .public)")
                 return nil
             }
-            let obj = try JSONSerialization.jsonObject(with: data) as? [String: Any]
-            // Last.fm 的错误多以 200 + {"error":N} 返回(API key 失效就是这形态)。不识别
-            // 它的话,失效的 key 会让页面显示"0 scrobble/还没有记录"——一套看起来很确定、
-            // 实际全错的数据,比失败态糟糕得多(审阅确认)。
-            if let errCode = obj?["error"] as? Int {
-                logger.notice("\(method, privacy: .public): api error \(errCode) \((obj?["message"] as? String) ?? "", privacy: .public)")
-                return nil
-            }
-            return obj
-        } catch {
-            logger.notice("\(method, privacy: .public) failed: \(error.localizedDescription, privacy: .public)")
-            return nil
         }
+        return nil
     }
 }
