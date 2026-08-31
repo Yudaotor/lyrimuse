@@ -93,10 +93,14 @@ final class PlaybackCoordinator: ObservableObject {
     private var optimisticReconcileWork: DispatchWorkItem?
     @Published private(set) var currentLine: SyncedLyricLine?
     @Published private(set) var nextLineText: String?
+    // 下一句摆哪一边,见 LocalPlaybackSource 同名属性的注释。
+    @Published private(set) var nextLineSide: LyricDuet.Side?
     @Published private(set) var hasLyricsContent: Bool = false
     // 联网查过了、明确是纯音乐,见 LocalPlaybackSource 同名属性的注释。
     @Published private(set) var isCurrentTrackInstrumental: Bool = false
     @Published private(set) var currentTrackHasNoLyrics: Bool = false
+    // 没有时间戳的纯文本歌词兜底,见 LocalPlaybackSource 同名属性的注释。
+    @Published private(set) var currentTrackPlainLyrics: String = ""
     /// collector 报"网络不通,这一轮查不了"(见 CollectorStatus)。只有本地源有这个信号
     /// —— relay 模式下歌词是别的机器解析好推过来的,本机通不通网跟它无关。
     @Published private(set) var collectorNetworkDown: Bool = false
@@ -702,10 +706,12 @@ final class PlaybackCoordinator: ObservableObject {
                 self?.currentLine = line
             },
             s.$nextLineText.assign(to: \.nextLineText, on: self),
+            s.$nextLineSide.assign(to: \.nextLineSide, on: self),
             s.$anchor.assign(to: \.anchor, on: self),
             s.$hasLyricsContent.assign(to: \.hasLyricsContent, on: self),
             s.$isCurrentTrackInstrumental.assign(to: \.isCurrentTrackInstrumental, on: self),
             s.$currentTrackHasNoLyrics.assign(to: \.currentTrackHasNoLyrics, on: self),
+            s.$currentTrackPlainLyrics.assign(to: \.currentTrackPlainLyrics, on: self),
             s.$collectorNetworkDown.assign(to: \.collectorNetworkDown, on: self),
             s.$isCurrentTrackAdBreak.assign(to: \.isCurrentTrackAdBreak, on: self),
             s.$currentLineIndex.assign(to: \.currentLineIndex, on: self),
@@ -797,14 +803,27 @@ final class PlaybackCoordinator: ObservableObject {
             .assign(to: \.artworkAccentColor, on: self),
             // 灵动岛:背景永远深色,判据是"够亮"——先过 HSB 亮度地板,再补一道感知亮度
             // 下限(饱和冷色 HSB 地板拦不住,见 accentForDarkBackdrop)。
-            Publishers.CombineLatest(s.$artworkAverageHex, $highResAverageHex)
-                .map { systemHex, highResHex -> Color? in
+            //
+            // ⚠️ 2026-08-27 补 notchCardStyle 进来:上面两步假设背景永远接近纯黑,对纯黑/
+            // 深色渐变两种风格成立,但 coverArt 风格的背景亮度正比于封面本身的亮度——亮
+            // 封面（比如实测坐实的一张黄底专辑封面）叠 45% 黑之后依然不暗,固定的文字亮度
+            // 地板量不出这种情况,文字会跟背景撞色(实测 WCAG 对比度只有 2.78,灵动岛字号
+            // 9~13.5pt 按 WCAG 够不上大号文字那档,门槛该是 4.5)。只在这个风格下多算一步
+            // accentForCoverArtBackground,纯黑/深色渐变两种风格背景是真的暗,不需要、也
+            // 不该多算(那两种风格下这步会是无操作,加了也不影响,但没必要多算一次)。
+            Publishers.CombineLatest3(s.$artworkAverageHex, $highResAverageHex, settings.$notchCardStyle)
+                .map { systemHex, highResHex, cardStyle -> Color? in
                     guard let hex = highResHex ?? systemHex,
                           let ns = NSColor(hexStringWithAlpha: hex) else { return nil }
-                    let base = LocalPlaybackSource.brightenedAccent(
-                        r: ns.redComponent, g: ns.greenComponent, b: ns.blueComponent)
-                    let lifted = LocalPlaybackSource.accentForDarkBackdrop(
+                    let rawR = ns.redComponent, rawG = ns.greenComponent, rawB = ns.blueComponent
+                    let base = LocalPlaybackSource.brightenedAccent(r: rawR, g: rawG, b: rawB)
+                    var lifted = LocalPlaybackSource.accentForDarkBackdrop(
                         r: base.r, g: base.g, b: base.b)
+                    if cardStyle == .coverArt {
+                        lifted = LocalPlaybackSource.accentForCoverArtBackground(
+                            r: lifted.r, g: lifted.g, b: lifted.b,
+                            rawR: rawR, rawG: rawG, rawB: rawB)
+                    }
                     return Color(.sRGB, red: lifted.r, green: lifted.g, blue: lifted.b)
                 }
                 .removeDuplicates() // 同 artworkAccentColor 那条的理由
@@ -974,8 +993,23 @@ final class PlaybackCoordinator: ObservableObject {
             default: return (v, p, q)
             }
         }
+        // 近黑格的饱和度读数不可信(2026-08-27 第十一轮,Random Access Memories 等
+        // "大面积纯黑+一小块铬合金反光"封面坐实):肉眼看着纯黑的一大片背景,原始 RGB
+        // 往往不是正好 (0,0,0),而是带一丝几乎不可见的偏色(摄影黑位/JPEG 压缩常见)。
+        // 这个偏色的**比值**(HSV 饱和度)在近黑处可以量出跟中高亮度区域一样高的数字,
+        // 但那只是分母(亮度)极小时比值被放大的假象——`--verbose` 实测 Random Access
+        // Memories 有 8/36 格(22%)原始亮度 ≈0.047 却读出 s=0.36,把整张图的主色相都
+        // 拖偏(hDom 算成蓝色,而实际是黑底+金属高光,几乎无色);上面的亮度归一化会把
+        // 这片近黑背景等比放大到看得见的亮度(homog 设计本就要抹平明暗布局,这一步不
+        // 能去掉),但放大只保留原有比值、不产生新色相——所以问题根子不在放大,而在
+        // "多暗才算暗到不该信它的颜色"这道判据一直没有,导致这类噪声跟真实色块权重相同
+        // 地参与 hueDom/satP75/satTarget 的计算。用**归一化前**的原始格亮度(`cellLuma`,
+        // 光斑锚点也用它,同一份数据)设一道下限:低于它的格子不参与色相判定与 p75 统计,
+        // 也不参与下面把欠饱和格子拉向 satTarget 的那次修正——0.08 是从这批实测(伪影格
+        // ≈0.047、正常调用中合理暗色内容普遍 >0.1)取的经验值,不是精确阈值。
+        let darkLumaFloor = 0.08
         var hueSin = 0.0, hueCos = 0.0
-        for i in 0..<36 where cellSat[i] > 0.05 {
+        for i in 0..<36 where cellSat[i] > 0.05 && cellLuma[i] > darkLumaFloor {
             let o = i * 4
             let (h, s, _) = rgbToHSV(Double(px[o]) / 255, Double(px[o + 1]) / 255, Double(px[o + 2]) / 255)
             hueSin += sin(h * .pi / 180) * s * s
@@ -997,7 +1031,7 @@ final class PlaybackCoordinator: ObservableObject {
             // "有两个/一个真主色"。低于参考值时按比例收着后面的饱和度放大,别把噪声级别
             // 的偏色也当真色去放大(下面 satTarget/satMul/CIVibrance 三处一起收)。
             var totalHueWeight = 0.0, offHueWeight = 0.0
-            for i in 0..<36 where cellSat[i] > 0.05 {
+            for i in 0..<36 where cellSat[i] > 0.05 && cellLuma[i] > darkLumaFloor {
                 let o = i * 4
                 let (h, s, _) = rgbToHSV(Double(px[o]) / 255, Double(px[o + 1]) / 255, Double(px[o + 2]) / 255)
                 var d = h - hDom
@@ -1016,7 +1050,7 @@ final class PlaybackCoordinator: ObservableObject {
                 hueCoherenceScale = coherenceLinear * coherenceLinear
             }
             if offHueFraction < 0.2 {
-                for i in 0..<36 where cellSat[i] > 0.05 {
+                for i in 0..<36 where cellSat[i] > 0.05 && cellLuma[i] > darkLumaFloor {
                     let o = i * 4
                     let (h, s, v) = rgbToHSV(Double(px[o]) / 255, Double(px[o + 1]) / 255, Double(px[o + 2]) / 255)
                     var d = h - hDom
@@ -1040,7 +1074,18 @@ final class PlaybackCoordinator: ObservableObject {
                 }
             }
         }
-        let satP75 = cellSat.sorted()[26]
+        // satP75 同样排除近黑格(见上面 darkLumaFloor 的注释)——不然"大面积纯黑+一角
+        // 高光"这类封面,近黑格的伪饱和度会直接顶到排序里的 p75 位置,把 satTarget 算
+        // 得远高于封面实际观感。样本太暗、亮格不够 9 个(排序后 p75 位置会落空/退化)时
+        // 退回全 36 格——这类封面本来就该给低 satTarget,不筛也没问题。
+        let brightIdx = (0..<36).filter { cellLuma[$0] > darkLumaFloor }
+        let satP75: Double
+        if brightIdx.count >= 9 {
+            let sats = brightIdx.map { cellSat[$0] }.sorted()
+            satP75 = sats[min(sats.count - 1, Int(Double(sats.count) * 26.0 / 36.0))]
+        } else {
+            satP75 = cellSat.sorted()[26]
+        }
         // ⚠️⚠️ 2026-08-23 推翻重标:上面这些"×1.5"系的注释、以及为了压住它反复打的三个
         // 补丁(少数派色相收拢/角度上限/hueCoherenceScale)全都是在给一个**方向错了**的
         // 基础倍率止血。真根因直到这天才找到——用户要求"自己去多播几首歌,把 Apple
@@ -1098,8 +1143,26 @@ final class PlaybackCoordinator: ObservableObject {
         // 饱和度量级),这条幂函数**修不了它们**,留给下一轮专门查色相。0.94/1.45
         // 两个数字是 23 组回归系数,不是拍脑袋——想再收紧就该在这批数据上重新拟合,
         // 不要凭感觉调。
-        let satTarget = min(0.95, 0.94 * pow(satP75, 1.45)) * hueCoherenceScale
-        for i in 0..<36 where cellSat[i] > 0.01 && cellSat[i] < satTarget {
+        // 2026-08-27 第十轮:系数从 0.94/1.45 refit 到 1.029/1.433——用户又批量甩来 14
+        // 组新的真机对拍(方大同/The Weeknd/Janet Jackson/Weezer/NEXZ/薛凯琪等,横跨
+        // 暖色人像/金属质感/高对比封面),样本从第九轮的 23 组涨到 36 组。同时验证并
+        // **推翻**了一个中途冒出来的假说:批量样本里连续几张暖色调(爱我吧/20 Y.O./
+        // Say Yes/自由的夜/Twisted Elegance)都明显比公式预测更浓,一度怀疑"AM 对暖色
+        // /金棕色相(15°~55°)额外加成",遂在 36 组全量数据上做了 `AM_p75 = a×satP75^b
+        // ×(1+c×warmScore)` 的二变量回归——**加了色相项后 R²只从 0.754 升到 0.762,
+        // 提升在噪声量级,而且逐条看是拆东墙补西墙**:改善了 20 Y.O./Say Yes/Twisted
+        // Elegance 这几张,却让原本拟合得很好的 P.Control(误差 0.018→0.098)、黑夜、
+        // Get on the Boat、NEXZLoco 全部变差——色相不是这堆"暖色发灰"案例背后的真正
+        // 变量(反例:玩乐是绿色封面残差 2.16、Controversy 是品红封面残差 1.68,比任何
+        // 暖色案例都离谱)。结论:**不采纳色相项**,只用全量 36 组重新拟合单变量幂函数
+        // (对数-对数回归,系数从 0.94/1.45 微调到 1.029/1.433,R²=0.754,MAE 从
+        // 0.135 降到 0.125,验证用 13 张新增封面离屏复现、satMul 无一顶到 1.6 上限,
+        // 不需要跟着抬)。Say Yes(Weezer 金属压纹封面,AM 给到源图 1.51 倍、refit 后
+        // 仍有 0.365 的误差,全数据集里最大)是最突出的残余反例,真正原因待查——候选
+        // 方向不是色相,可能是材质/金属反光这类构图特征,留给下一轮。完整 36 组数据表
+        // 见 docs/features/07-lyrics-window.md 第十轮记录。
+        let satTarget = min(0.95, 1.029 * pow(satP75, 1.433)) * hueCoherenceScale
+        for i in 0..<36 where cellSat[i] > 0.01 && cellSat[i] < satTarget && cellLuma[i] > darkLumaFloor {
             let target = satTarget
             let k = target / cellSat[i]
             let o = i * 4
@@ -1301,7 +1364,14 @@ final class PlaybackCoordinator: ObservableObject {
             clearHighRes()
             return
         }
-        guard let cached = EnrichCacheReader.coverURL(artist: artist, title: title, album: album) else {
+        // ⚠️ 用 albumMatchedCoverURL,不是 coverURL:后者会退到"忽略专辑"的兜底,同一首歌
+        // 换了个专辑版本(比如这次报的是「JTW 西游记 (Gold) [Explicit]」,缓存里还留着更早
+        // 一版「JTW西游记」的旧记录)时可能凑出一张**别的版本**的封面。系统这份的专辑名来自
+        // Now Playing、就是当前真正在播的这一版,没有必要也不应该退这一步——2026-08-26
+        // 用户报的「方大同 - 放不过自己」封面对不上就是这个兜底级别选错版本导致的,而且错的
+        // 图会被下面 enrichContentVersion 补查路的 onlyIfMissing 焊死到换歌之前,详见
+        // albumMatchedCoverURL 的注释。
+        guard let cached = EnrichCacheReader.albumMatchedCoverURL(artist: artist, title: title, album: album) else {
             // 这条分支就是「第一次听的歌封面一直糊」的现场:collector 还没解析完。
             // 现在缓存写入会再触发一次补查(见订阅处),所以这里不再是终点。
             logger.debug("highres: no cached cover yet for \(title, privacy: .public) (system=\(systemPixels, privacy: .public)px)")

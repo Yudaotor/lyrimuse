@@ -55,6 +55,27 @@ public enum PlayCountRecency {
         return now.timeIntervalSince(lastFetched) >= recheckAfter
     }
 
+    /// 判据④(2026-08-29):不看"页内次数",只问"距离上次真验证过去了多久"——超过
+    /// `maxAge` 就无条件判定过期,不管页内出没出现矛盾。
+    ///
+    /// 补的是判据③的一个盲点:`contradicted` 的第一道闸是 `onPage > cachedTotal`,只能
+    /// 抓"缓存明显偏小"的情况。真实案例:方大同《ORANGe MOON》缓存冻结在 1,Last.fm 服务端
+    /// 真实是 31——这首歌很久没被主动播放/浏览到,①②(依赖上一轮内存基线)从来没机会
+    /// 比对,这次它只是又被听了一次重新出现在页面上,`onPage=1` 恰好没有超过冻住的旧值 `1`,
+    /// `contradicted` 直接判"没问题"、永远不会触发重新验证。这类"好久没被翻到、这次只是
+    /// 随手又听一次"的老歌都会踩中同一个盲区,不是罕见的边界情况。
+    ///
+    /// - Parameters:
+    ///   - lastFetched: 上一次真的验证过这个 key 的时刻;`nil` = 从没验证过(老快照没有
+    ///     这条记录,或者这个 key 是第一次出现)——无条件判定过期,宁可多查一次,不留
+    ///     "从来没验证过"的空白。
+    ///   - maxAge: 过期阈值,由调用方决定(见 LastfmStatsService.playCountStaleAfter 的
+    ///     取值理由)。
+    public static func stale(lastFetched: Date?, now: Date, maxAge: TimeInterval) -> Bool {
+        guard let lastFetched else { return true }
+        return now.timeIntervalSince(lastFetched) >= maxAge
+    }
+
     /// 「正在记录」nowPlayingCount 的追赶判据(2026-08-24)。
     ///
     /// nowPlayingCount 只在换歌那一刻取一次(取晚了这次播放被 scrobble 进去就会多算一,

@@ -108,6 +108,15 @@ private struct SceneActionRegistrar: View {
                     NSApp.activate(ignoringOtherApps: true)
                     openWindowAction(id: "lyrics-window")
                 }
+                AppActions.shared.openLyricsQuickSearch = {
+                    NSApp.activate(ignoringOtherApps: true)
+                    openWindowAction(id: "lyrics-quick-search")
+                    // 窗口已经开着(没被真关掉)时,上面这行只是把它带到前台,不会让
+                    // LyricsQuickSearchWindow 的 .task 重跑——靠这一下 send 补上"点一次
+                    // 就该看到当前这首歌"这个诉求,见 AppActions.quickSearchRefreshRequests
+                    // 的注释。
+                    AppActions.shared.quickSearchRefreshRequests.send()
+                }
                 AppActions.shared.openOnboarding = {
                     NSApp.activate(ignoringOtherApps: true)
                     openWindowAction(id: "onboarding")

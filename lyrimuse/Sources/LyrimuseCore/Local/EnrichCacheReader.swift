@@ -35,6 +35,16 @@ public struct EnrichCacheEntry: Decodable {
     let neteaseURL: String?
     let qqAlbumMid: String?
     let qqSingerMid: String?
+    // 这首歌的语种真值(collector/enrich.go 的 enrichEntry.SongLanguage,取值
+    // "yue"=粤语/"cmn"=普通话/空=没判出来),给粤拼罗马音开关用——光看歌词文字认不出
+    // 粤语和普通话(汉字一样),得靠 collector 那边已经判出来的这个字段。2026-08-29 起
+    // 才第一次被 Swift 侧读取,此前完全没人解码它。
+    let songLanguage: String?
+    // plainLyrics:2026-08-30 起才被读取——"搜索候选歌词"弹窗采纳一条"仅纯文本"候选时
+    // (见 lyrimuse target 的 EnrichCacheStore.savePlainTextEdit)写的独立字段,跟 lyrics
+    // 不是一回事:这个没有时间戳,只给"歌词窗口"当静态兜底用。collector 侧
+    // enrichEntry.PlainLyrics 头注解释了为什么必须分开存。
+    let plainLyrics: String?
 
     enum CodingKeys: String, CodingKey {
         case lyrics
@@ -51,8 +61,14 @@ public struct EnrichCacheEntry: Decodable {
         case neteaseURL = "netease_url"
         case qqAlbumMid = "qq_album_mid"
         case qqSingerMid = "qq_singer_mid"
+        case songLanguage = "song_language"
+        case plainLyrics = "plain_lyrics"
     }
 }
+
+// collector 那边 songLanguageCantonese 的取值("yue"),两边必须完全一致——match.go/enrich.go
+// 那份常量的注释就说了它是 lyricCandidate.language 与 enrichEntry.SongLanguage 共用的取值。
+private let songLanguageCantonese = "yue"
 
 public struct EnrichCacheLyrics {
     public let lyrics: String
@@ -64,6 +80,13 @@ public struct EnrichCacheLyrics {
     /// 它为 true 而 lyrics 为空,就是"搜过了,确实没有"——UI 靠这个区别把
     /// "搜索歌词中…"换成"暂无歌词",而不是无限期转圈。
     public let resolved: Bool
+    /// 这首歌是不是粤语——给"标注哪些语言"的粤拼开关用(见 Romanizer.LyricScript.cantonese)。
+    /// 判据是 collector 判定的 SongLanguage 真值,不是看歌词文字(汉字认不出粤语/普通话)。
+    public let isCantonese: Bool
+    /// 没有时间戳的纯文本兜底——只在 lyrics 为空、这首歌又确实采纳过一条"仅纯文本"候选时
+    /// 才非空(见 EnrichCacheEntry.plainLyrics 头注)。「歌词窗口」用它决定要不要走静态
+    /// 展示;桌面悬浮歌词/灵动岛这些依赖时间戳的展示面不读这个字段,继续如实显示"无歌词"。
+    public let plainLyrics: String
 }
 
 @MainActor
@@ -164,7 +187,9 @@ public enum EnrichCacheReader {
             lyricsRoma: entry.lyricsRoma ?? "",
             lyricsYRC: entry.lyricsYRC ?? "",
             instrumental: entry.instrumental ?? false,
-            resolved: (entry.ts ?? 0) > 0
+            resolved: (entry.ts ?? 0) > 0,
+            isCantonese: entry.songLanguage == songLanguageCantonese,
+            plainLyrics: entry.plainLyrics ?? ""
         )
     }
 
@@ -206,6 +231,35 @@ public enum EnrichCacheReader {
         return index
     }
 
+    /// 这首歌在本机缓存里有没有封面(collector 从网易云/QQ/Apple 解析出来的那张),
+    /// 只走**认专辑**的两级查找,不退到忽略专辑的兜底。
+    ///
+    /// 给"当前正在播的这首歌"用(PlaybackCoordinator.refreshHighResCover):同一首歌在
+    /// 不同专辑版本下封面经常是真的不一样(2026-08-26 用户报的「方大同 - 放不过自己」
+    /// 就是实锤 —— `JTW 西游记 (Gold) [Explicit]` 是金底半脸特写,更早听过的
+    /// `JTW西游记` 是黑底站姿,两张图完全不同)。这个调用点手里的专辑名来自系统 Now
+    /// Playing、跟当前真正在播的这一版**必然对得上**,不像「最近播放」列表那边的 scrobble
+    /// 专辑名可能跟本机播放器不一致——换句话说,这里没有"忽略专辑退一步"的必要性,
+    /// 退了反而是拿错版本的风险。
+    ///
+    /// 两级查找同 coverURL:精确 key 命中,或退到"忽略空格/大小写/繁简"但**仍然认专辑**
+    /// 的 looseMatch。
+    ///
+    /// ⚠️ 不要在这里加回 coverByArtistTitle() 那级兜底:换新专辑名的歌,collector 解析
+    /// 完精确条目前的那几秒查空是**预期行为**,交给 refreshHighResCover 的
+    /// enrichContentVersion 补查路(2026-08-24)在解析完后自动纠正 —— 那条路径的
+    /// `onlyIfMissing: true` 只在"已经拿到精确匹配的图"时才安全跳过;一旦这里退到
+    /// 忽略专辑的兜底给出一张**可能是别的版本**的图,onlyIfMissing 会把这张错图焊死到
+    /// 换歌之前,后面精确条目写好了也不会被拿去纠正(这正是 2026-08-26 那次误封面的
+    /// 根因)。
+    public static func albumMatchedCoverURL(artist: String, title: String, album: String) -> URL? {
+        guard let all = loadEntries() else { return nil }
+        let key = EnrichCacheKeys.normalizedKey(artist: artist, title: title, album: album)
+        if let s = all[key]?.coverURL, let url = URL(string: s) { return url }
+        if let s = looseMatch(key, in: all)?.coverURL, let url = URL(string: s) { return url }
+        return nil
+    }
+
     /// 这首歌在本机缓存里有没有封面(collector 从网易云/QQ/Apple 解析出来的那张)。
     ///
     /// 给「最近播放」列表当 Last.fm 之外的兜底用:那个列表的封面本来**全部**来自 Last.fm
@@ -213,7 +267,7 @@ public enum EnrichCacheReader {
     /// 常见 —— 2026-08-14 用户报的「陶喆 - 聖誕之吻」就是三级全空(Last.fm 只给它那张所有
     /// 缺图实体共用的白星占位图,被 imageURL() 正确滤掉),而同一张专辑网易云是有图的。
     ///
-    /// 两级查找:
+    /// 三级查找(比 albumMatchedCoverURL 多退一步):
     ///  1. 归一化 key 精确命中 —— scrobble 本来就是本机 collector 上报的,三段字符串跟缓存
     ///     key 同源,这一级就能中。
     ///  2. 退到"歌手+歌名"(忽略专辑、忽略大小写)—— 手机端桥接过来的 scrobble 专辑名可能
@@ -221,12 +275,15 @@ public enum EnrichCacheReader {
     ///
     /// 刻意不做繁简折叠:本机播放写进缓存的和上报给 Last.fm 的是**同一批字符串**,折了也
     /// 不多命中一条,反而可能把两首真的不同名的歌并到一起。
+    ///
+    /// ⚠️ 这一级"忽略专辑"的兜底只适合"专辑名本来就不可信/拿不到精确对照"的消费方
+    /// (这里,以及 IdleStandbyView 的"上一首"占位图)。当前正在播的这首歌请用
+    /// albumMatchedCoverURL——原因见它的注释。
     public static func coverURL(artist: String, title: String, album: String) -> URL? {
+        if let url = albumMatchedCoverURL(artist: artist, title: title, album: album) {
+            return url
+        }
         guard let all = loadEntries() else { return nil }
-        let key = EnrichCacheKeys.normalizedKey(artist: artist, title: title, album: album)
-        if let s = all[key]?.coverURL, let url = URL(string: s) { return url }
-        // 跟 lookup 同一个理由:条目可能已经被合并到另一个写法下了。
-        if let s = looseMatch(key, in: all)?.coverURL, let url = URL(string: s) { return url }
         if let s = Self.coverURLString(in: coverByArtistTitle(), artist: artist, title: title),
            let url = URL(string: s) {
             return url

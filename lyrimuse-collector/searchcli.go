@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -79,6 +80,13 @@ func runSearchLyricsCLI(args []string) {
 		// appleCatalogSearchIdentities 恒为空,「联网搜索候选歌词」拿不到常驻实例已经
 		// 攒下的权威署名,名次又会跟自动决策对不上(跟 nativeLyricSource 那个坑同型)。
 		loadAppleCatalogCache(filepath.Join(filepath.Dir(cfgPath), clientName+"-apple-catalog-cache.json"))
+		// 同理,Apple 各商店曲目署名那份也要读——道理跟上面 MB 主名那段一样,这条 CLI
+		// 每次都是新进程,不读的话每次开弹窗都要重新打几次 iTunes Search。
+		loadAppleStorefrontArtistCache(filepath.Join(filepath.Dir(cfgPath), clientName+"-apple-storefront-artist-cache.json"))
+		// 同理,QQ 音乐歌手搜索建议那份缓存也要读——retryArtistIdentities/
+		// resolveGenericArtistCanonicalName 都会用到,不读的话每次开弹窗都要重新打一次
+		// QQ smartbox。
+		loadQQArtistNameCache(filepath.Join(filepath.Dir(cfgPath), clientName+"-qq-artist-name-cache.json"))
 		// ⚠️ 2026-08-21 补:main() 在 loadFeatureFlags 之后紧跟着有这一行,而这条 CLI 子命令
 		// 在那之前就 return 了 —— 于是 match.go 里那个包级 nativeLyricSource 一直是空串,
 		// "与当前播放器同源 +250"(match.go 的 sameSourceAsPlayer 档)在手动搜索里**恒为 0**。
@@ -95,6 +103,28 @@ func runSearchLyricsCLI(args []string) {
 	// 歌词"功能唯一的数据来源,不经过 resolveTrackEnrichment,必须单独转换一遍,不能
 	// 指望那边的修复覆盖到这里。
 	sArtist, sTitle, sAlbum := toSimplified(*artist), toSimplified(*title), toSimplified(*album)
+	// 2026-08-30 真实bug(方大同《Lovers Policy》案):这条 CLI 拿到的 -duration 来自
+	// 调用方(Swift 侧「歌词管理」列表的 Summary.durationSecs),而那个值只在**这首歌
+	// 已经成功解析过一次**时才有——一首从来没成功过的歌(比如这首,「关键字」反查轮几次
+	// bug 修复之前一直卡在 0 候选)缓存里压根没有 duration_secs/resolved_duration_secs
+	// 字段,传进来的就是 0。而时长偏偏是 scoreLyricCandidateDetailed 打分、以及标题反查轮
+	// (retryTitleFromAlbumDetailed/retryTitleFromArtistSearchDetailed,两者开头都是
+	// `durationSecs <= 0` 直接返回 false)**唯二**用来判定"网易云专辑里这条曲目是不是
+	// 我们要找的这首"的硬信号——duration=0 会让这一整套机制全体失效,不是"差一点找不到"
+	// 而是"这条路直接被堵死",症状是弹窗每次都显示"七个源都没找到可用的候选"、无论重试
+	// 多少次都一样(这正是本例的真实症状,反复排查了好几轮才在这里发现根子)。
+	//
+	// 修法:duration 缺失时,问一次 Apple 目录要一个真实时长兜底——resolveAppleMusicMatch
+	// 本来就会因为「App 联动跳转链接」「搜索候选歌词弹窗的通用封面」这两个目的对几乎每首
+	// 歌都查一遍(CN+US 两个商店,按专辑名精确定位那条兜底本就在查曲目表、天然带着
+	// trackTimeMillis),这里只是多读一个之前没读的字段,不多发请求。
+	effectiveDuration := *duration
+	if effectiveDuration <= 0 {
+		if m := appleMusicMatchCached(context.Background(), sArtist, sTitle, sAlbum); m.durationSecs > 0 {
+			log.Printf("search-lyrics: duration missing from caller, recovered %.3fs from Apple catalog", m.durationSecs)
+			effectiveDuration = m.durationSecs
+		}
+	}
 	enc := json.NewEncoder(os.Stdout)
 	var appleTitle, appleAlbum string
 	// 只在最后那行带上(赋值发生在收尾的 emit 之前),流式的中间行不带 —— 冠军要等所有源
@@ -106,13 +136,14 @@ func runSearchLyricsCLI(args []string) {
 		// 网络歌词,还是网络整体不通导致五个源的请求全部发不出去。见 networkobs.go 的
 		// 注释,这里额外带上这个信号,让前端能区分这两种情况、给出不同的提示文案。
 		update := searchLyricsUpdate{
-			Candidates:       filterEnabledLyricSources(results),
-			NetworkLooksDown: networkLooksDown(),
-			SourcesDone:      done,
-			SourcesTotal:     total,
-			AppleTitle:       appleTitle,
-			AppleAlbum:       appleAlbum,
-			Pick:             finalPick,
+			Candidates:           filterEnabledLyricSources(results),
+			NetworkLooksDown:     networkLooksDown(),
+			SourcesDone:          done,
+			SourcesTotal:         total,
+			AppleTitle:           appleTitle,
+			AppleAlbum:           appleAlbum,
+			SourceFailureReasons: lyricSourceFailureReasons(results),
+			Pick:                 finalPick,
 		}
 		for _, r := range results {
 			if r.Instrumental {
@@ -124,7 +155,8 @@ func runSearchLyricsCLI(args []string) {
 			log.Fatalf("search-lyrics: encode results: %v", err)
 		}
 	}
-	_, results := scoredLyricCandidatesStreaming(sArtist, sTitle, sAlbum, *duration, emit)
+	// 一次性 CLI 命令,没有可以取消它的交互界面,context.Background() 就够。
+	_, results := scoredLyricCandidatesStreaming(context.Background(), sArtist, sTitle, sAlbum, effectiveDuration, emit)
 	// 苹果侧元数据:搜索里的 applecover goroutine 用同一组关键词查过、通常已写热
 	// appleURLCache(同 key)。这里**只读缓存**——查无此歌时它不写缓存,真去查会在
 	// "这轮搜索结束了"那行之前同步重跑一整轮 CN+US 搜索,把收尾挂住几秒(2026-08-12 审阅);
@@ -164,7 +196,7 @@ func runSearchLyricsCLI(args []string) {
 			Decidable:            rescoreDecidable(results, *currentSource, noCurrentLyrics),
 			SourcesSeen:          lyricSourcesWithCandidates(results),
 			SourcesResponded:     lyricSourcesResponded(results),
-			ResolvedDurationSecs: *duration,
+			ResolvedDurationSecs: effectiveDuration,
 			Mode:                 features.LyricsSourceMode,
 		}
 		if picked != nil {
@@ -179,7 +211,7 @@ func runSearchLyricsCLI(args []string) {
 		// **必须覆写它** —— 不覆写的话「解析决策」弹窗会把 false 渲染成「评估后维持原状」,
 		// 跟结果行说的"已换成一份"直接打架(2026-08-21 用户实测撞到过)。
 		if p.Decidable {
-			d := buildLyricsDecision(lyricsDecisionPathManualRematch, sArtist, sTitle, sAlbum, *duration,
+			d := buildLyricsDecision(lyricsDecisionPathManualRematch, sArtist, sTitle, sAlbum, effectiveDuration,
 				results, picked, picked != nil && picked.Source != *currentSource)
 			if raw, err := json.Marshal(d); err == nil {
 				p.DecisionJSON = string(raw)
@@ -214,6 +246,13 @@ type searchLyricsUpdate struct {
 	// Score:-1 哨兵行传递,消费端能与普通 reject 可靠区分)。
 	AppleTitle string `json:"appleTitle,omitempty"`
 	AppleAlbum string `json:"appleAlbum,omitempty"`
+	// SourceFailureReasons:哪些没给出候选的源,查得到具体失败原因——只覆盖
+	// neteaseLastFailureReasonNow/musixmatchLastFailureReasonNow/ytmusicLastFailureReasonNow
+	// 这三个已经接了诊断旁路的源(2026-08-31,给 test-lyric-sources 用的同一套旁路,见
+	// testlyricsourcescli.go 的排查记录),qq/kugou/lrclib/amll 目前没有对应信号、不在这个
+	// map 里出现——Swift 侧对没出现的源如实显示"未给出候选"，不编一个没核实过的理由。
+	// key 是源名(跟 candidates 里的 source 同一套),value 是给用户看的中文说明。
+	SourceFailureReasons map[string]string `json:"sourceFailureReasons,omitempty"`
 	// Instrumental:有源明确断言"这首本来就没有词"。2026-08-22 从 lrclibInstrumental 改名 ——
 	// 这个信号的来源早就不只 lrclib 了:2026-08-20 加了网易云的 pureMusic/占位正文,
 	// 2026-08-22 又加了 QQ 的占位断言(见第 09 章「纯音乐标记的三个来源」),字段名一直没跟上。
@@ -288,6 +327,41 @@ func filterEnabledLyricSources(results []scoredLyricCandidateResult) []scoredLyr
 		filtered = append(filtered, r)
 	}
 	return filtered
+}
+
+// lyricSourceFailureReasons 给"搜索候选歌词"弹窗的"歌词源可用情况"明细用(2026-08-31,
+// 用户反馈"能不能说明未给出候选的源具体是为什么")——对每一个**这一轮没给出候选**的源,
+// 查一下有没有已知的具体失败原因,查得到才放进返回的 map。
+//
+// 只覆盖三个已经接了诊断旁路的源:netease/musixmatch/lyricfind(见各自 xxxLastFailureReasonNow
+// 的头注,2026-08-31 起给 test-lyric-sources 用的同一条只读旁路,这里复用,不重新发明)。
+// qq/kugou/lrclib/amll 目前没有对应信号——它们没出现在返回的 map 里不代表"没有原因",
+// 只是这个仓库目前还没有实测复现过、能稳定识别的具体失败信号,宁可让 Swift 侧照实显示
+// "未给出候选"(没有更多信息),也不编一个没核实过的理由。
+//
+// ⚠️ 这几个 xxxLastFailureReasonNow 读的是**进程级**"这次进程生命周期里最近一次识别出的
+// 失败原因",不是专门为"这一轮搜索"重新打点的——但 search-lyrics 本来就是一次性短命进程
+// (每次手动搜索都是全新进程),这次搜索期间对该源发起的请求要是真的撞上了已识别的失败
+// 模式,原因会在这次进程里被设置一次,读到的就是这次搜索本身的真实原因,不是别的进程/
+// 别的时间点残留下来的陈旧值。
+func lyricSourceFailureReasons(results []scoredLyricCandidateResult) map[string]string {
+	responded := lyricSourcesResponded(results)
+	reasons := make(map[string]string)
+	check := func(source string, reasonFn func() string) {
+		if containsString(responded, source) {
+			return
+		}
+		if r := reasonFn(); r != "" {
+			reasons[source] = r
+		}
+	}
+	check("netease", neteaseLastFailureReasonNow)
+	check("musixmatch", musixmatchLastFailureReasonNow)
+	check("lyricfind", ytmusicLastFailureReasonNow)
+	if len(reasons) == 0 {
+		return nil
+	}
+	return reasons
 }
 
 // lyricsEmptyInCacheFile 只读地回答一句:enrich 缓存里这首歌现在**有没有歌词**。

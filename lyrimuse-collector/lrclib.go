@@ -3,6 +3,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	_ "image/jpeg" // 注册 JPEG 解码器
 	_ "image/png"  // 网易云取色缩略图有时是 PNG(content-type 却谎报 jpg)
@@ -32,6 +33,18 @@ type lrclibResult struct {
 	// durationSecs:LRCLIB 自报的这首歌时长(秒),0=没给。透传用,见 lyricCandidate 同名字段。
 	durationSecs float64
 	instrumental bool
+	// plainOnly:2026-08-30 加,"只有纯文本歌词,没有带时间戳的版本"这个明确结论——真实案例
+	// 海龟先生《Porn Star》,网易云/QQ 的搜索接口把标题里的敏感词整体过滤掉(HTTP 200 但
+	// body 是空结果,不是真的没收录),LRCLIB 却精确命中、内容和时长都对得上,只是这首歌
+	// 在 LRCLIB 自己库里就只有 plainLyrics、没有 syncedLyrics。以前遇到这种情况直接判定
+	// "没查到"整个丢弃(lyrics 留空),没人能看到内容,哪怕是不能同步显示的纯文本也比什么
+	// 都没有强(见"歌词窗口"新增的纯文本静态展示、"搜索候选歌词"弹窗新增的"无时间戳"标签)。
+	// true 时 lyrics 装的是**纯文本**(没有 [mm:ss] 前缀),不是 isTimedLRC 判定链路能吃的
+	// 东西——调用方(match.go 的 scoreLyricCandidateDetailed)看到这个标记要绕开"不是带
+	// 时间戳的歌词就判废"那条闸,改判一个专门的、明确写着"仅纯文本"的理由,但**分数依旧
+	// 钉死在 -1**——绝不能让它被 pickLyricCandidate/自动路径当成可用候选选中,只有"搜索
+	// 候选歌词"弹窗里用户自己明确点选"采用此候选"才能用它。
+	plainOnly bool
 }
 
 var (
@@ -39,7 +52,7 @@ var (
 	lrclibCache = map[string]lrclibResult{} // artist|title|album -> result
 )
 
-func lrclibLyric(artist, title, album string, durationSecs float64) lrclibResult {
+func lrclibLyric(ctx context.Context, artist, title, album string, durationSecs float64) lrclibResult {
 	if title == "" {
 		return lrclibResult{}
 	}
@@ -53,7 +66,7 @@ func lrclibLyric(artist, title, album string, durationSecs float64) lrclibResult
 	}
 	lrclibMu.Unlock()
 
-	r := resolveLRCLIBLyric(artist, title, album, durationSecs)
+	r := resolveLRCLIBLyric(ctx, artist, title, album, durationSecs)
 	if r.lyrics != "" || r.instrumental {
 		lrclibMu.Lock()
 		lrclibCache[key] = r
@@ -85,21 +98,21 @@ func lrclibLyric(artist, title, album string, durationSecs float64) lrclibResult
 // 之后就不再读 resultsCh、也不再调 onUpdate,晚到的结果整轮丢弃。所以三级串行的总预算必须
 // 塞进 20s 里——超出去等于这一源白跑,前两级的收益也一起没了。(第一级从 10s 收到 8s 是为了
 // 给后两级腾时间;lrclib.net 慢,但 8s 仍然远超它的正常响应。)
-func resolveLRCLIBLyric(artist, title, album string, durationSecs float64) lrclibResult {
-	if r := lrclibGet(artist, title, album, 8*time.Second); r.lyrics != "" || r.instrumental {
+func resolveLRCLIBLyric(ctx context.Context, artist, title, album string, durationSecs float64) lrclibResult {
+	if r := lrclibGet(ctx, artist, title, album, 8*time.Second); r.lyrics != "" || r.instrumental {
 		return r
 	}
 	if album != "" {
-		if r := lrclibGet(artist, title, "", 5*time.Second); r.lyrics != "" || r.instrumental {
+		if r := lrclibGet(ctx, artist, title, "", 5*time.Second); r.lyrics != "" || r.instrumental {
 			return r
 		}
 	}
-	return lrclibSearch(artist, title, album, durationSecs, 5*time.Second)
+	return lrclibSearch(ctx, artist, title, album, durationSecs, 5*time.Second)
 }
 
 // lrclibRequest 是三级共用的请求执行 + JSON 解码,out 传指针。
-func lrclibRequest(url string, timeout time.Duration, out any) bool {
-	req, err := http.NewRequest(http.MethodGet, url, nil)
+func lrclibRequest(ctx context.Context, url string, timeout time.Duration, out any) bool {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return false
 	}
@@ -116,23 +129,28 @@ func lrclibRequest(url string, timeout time.Duration, out any) bool {
 	return json.NewDecoder(resp.Body).Decode(out) == nil
 }
 
-func lrclibGet(artist, title, album string, timeout time.Duration) lrclibResult {
+func lrclibGet(ctx context.Context, artist, title, album string, timeout time.Duration) lrclibResult {
 	u := "https://lrclib.net/api/get?artist_name=" + neturl.QueryEscape(artist) +
 		"&track_name=" + neturl.QueryEscape(title)
 	if album != "" {
 		u += "&album_name=" + neturl.QueryEscape(album)
 	}
 	var out lrclibSearchItem
-	if !lrclibRequest(u, timeout, &out) {
+	if !lrclibRequest(ctx, u, timeout, &out) {
 		return lrclibResult{}
 	}
 	if out.Instrumental {
 		return lrclibResult{instrumental: true}
 	}
-	if !isTimedLRC(out.SyncedLyrics) {
-		return lrclibResult{}
+	if isTimedLRC(out.SyncedLyrics) {
+		return lrclibResult{lyrics: out.SyncedLyrics, durationSecs: out.Duration, title: out.TrackName, artist: out.ArtistName, album: out.AlbumName}
 	}
-	return lrclibResult{lyrics: out.SyncedLyrics, durationSecs: out.Duration, title: out.TrackName, artist: out.ArtistName, album: out.AlbumName}
+	// 没有带时间戳的版本——退而求其次看有没有纯文本(plainOnly 的头注)。仍然要求非空,
+	// 空字符串谈不上"有份纯文本",跟"整个没查到"没区别。
+	if out.PlainLyrics != "" {
+		return lrclibResult{lyrics: out.PlainLyrics, plainOnly: true, durationSecs: out.Duration, title: out.TrackName, artist: out.ArtistName, album: out.AlbumName}
+	}
+	return lrclibResult{}
 }
 
 // lrclibSearchItem 同时用于 /api/get 的单条响应和 /api/search 的数组元素——两个端点
@@ -145,20 +163,23 @@ type lrclibSearchItem struct {
 	Duration     float64 `json:"duration"`
 	Instrumental bool    `json:"instrumental"`
 	SyncedLyrics string  `json:"syncedLyrics"`
+	// PlainLyrics:2026-08-30 起才读——见 lrclibResult.plainOnly 头注,只在没有 syncedLyrics
+	// 时当兜底用,不参与任何"这条候选算不算数"的正常判定。
+	PlainLyrics string `json:"plainLyrics"`
 }
 
 // lrclibSearchItems 只取一次 /api/search 的候选数组,不做挑选。
-func lrclibSearchItems(artist, title string, timeout time.Duration) []lrclibSearchItem {
+func lrclibSearchItems(ctx context.Context, artist, title string, timeout time.Duration) []lrclibSearchItem {
 	u := "https://lrclib.net/api/search?artist_name=" + neturl.QueryEscape(artist) +
 		"&track_name=" + neturl.QueryEscape(title)
 	var items []lrclibSearchItem
-	if !lrclibRequest(u, timeout, &items) {
+	if !lrclibRequest(ctx, u, timeout, &items) {
 		return nil
 	}
 	return items
 }
 
-func lrclibSearch(artist, title, album string, durationSecs float64, timeout time.Duration) lrclibResult {
+func lrclibSearch(ctx context.Context, artist, title, album string, durationSecs float64, timeout time.Duration) lrclibResult {
 	// 原样标题和去括号裸标题各搜一次,**并发**跑,合并候选后统一挑一条。
 	//
 	// 为什么并发而不是再串一级降级:上面 resolveLRCLIBLyric 的三级已经吃掉 8+5+5=18s,
@@ -176,7 +197,7 @@ func lrclibSearch(artist, title, album string, durationSecs float64, timeout tim
 		wg.Add(1)
 		go func(idx int, query string) {
 			defer wg.Done()
-			lists[idx] = lrclibSearchItems(artist, query, timeout)
+			lists[idx] = lrclibSearchItems(ctx, artist, query, timeout)
 		}(i, q)
 	}
 	wg.Wait()
@@ -187,11 +208,22 @@ func lrclibSearch(artist, title, album string, durationSecs float64, timeout tim
 	// 挑选判定用的始终是**本地原样标题** title,裸标题只是搜索词——放宽的是"拿什么去搜",
 	// 不是"什么算匹配"。合并顺序跟着 searchTitleVariants 走(忽略括号档裸标题在前、严格档
 	// 原样在前),时长同样接近时排在前面的那一档优先(pick 的并列取先到者)。
-	best := pickLRCLIBSearchResult(items, artist, title, album, durationSecs)
+	//
+	// 带时间戳的候选优先(allowPlainOnly=false,跟旧行为一致);一条都挑不出来才退一步
+	// 认纯文本兜底——不是"两档一起扫、纯文本也能跟带时间戳的候选抢"，是"带时间戳的确实
+	// 一条都没有,才轮到纯文本"(见 lrclibResult.plainOnly 头注)。
+	best, plainOnly := pickLRCLIBSearchResultDetailed(items, artist, title, album, durationSecs, false)
+	if best == nil {
+		best, plainOnly = pickLRCLIBSearchResultDetailed(items, artist, title, album, durationSecs, true)
+	}
 	if best == nil {
 		return lrclibResult{}
 	}
-	return lrclibResult{lyrics: best.SyncedLyrics, durationSecs: best.Duration, title: best.TrackName, artist: best.ArtistName, album: best.AlbumName}
+	lyrics := best.SyncedLyrics
+	if plainOnly {
+		lyrics = best.PlainLyrics
+	}
+	return lrclibResult{lyrics: lyrics, plainOnly: plainOnly, durationSecs: best.Duration, title: best.TrackName, artist: best.ArtistName, album: best.AlbumName}
 }
 
 // 曲名判定统一走 match.go 的 lyricTitleAccepted。
@@ -229,11 +261,25 @@ const lrclibSearchDurationTolerance = 0.25
 // 盲取第一条就会拿它。本地时长未知(durationSecs<=0)时退回"取第一个过门的",此时没有
 // 任何信号能分辨,交给下游 scoreLyricCandidate 继续把关。
 func pickLRCLIBSearchResult(items []lrclibSearchItem, artist, title, album string, durationSecs float64) *lrclibSearchItem {
-	var best *lrclibSearchItem
+	best, _ := pickLRCLIBSearchResultDetailed(items, artist, title, album, durationSecs, false)
+	return best
+}
+
+// pickLRCLIBSearchResultDetailed 是 pickLRCLIBSearchResult 的完整版本——2026-08-30 加
+// allowPlainOnly 这道口子(见 lrclibResult.plainOnly 头注):false 时跟旧版逐字节一致
+// (只认 isTimedLRC),true 时"没有带时间戳的版本"不再直接判废,退一步认"至少有纯文本"。
+// 第二个返回值标出选中的这条究竟是不是靠纯文本兜底选出来的,调用方据此决定要不要给
+// lrclibResult 打上 plainOnly 标记。
+//
+// ⚠️ allowPlainOnly 只放宽"要不要带时间戳"这一道门,其余判定(曲名/歌手/版本限定词/
+// 时长容差)原样保留——纯文本候选跟带时间戳的候选面对的是同一套"这条到底是不是这首歌"
+// 的身份核验,没有理由放松,松了就是在瞎猜。
+func pickLRCLIBSearchResultDetailed(items []lrclibSearchItem, artist, title, album string, durationSecs float64, allowPlainOnly bool) (best *lrclibSearchItem, plainOnly bool) {
 	bestDiff := -1.0
 	for i := range items {
 		it := &items[i]
-		if !isTimedLRC(it.SyncedLyrics) {
+		timed := isTimedLRC(it.SyncedLyrics)
+		if !timed && !(allowPlainOnly && it.PlainLyrics != "") {
 			continue
 		}
 		if !lyricTitleAccepted(it.TrackName, title) ||
@@ -246,7 +292,7 @@ func pickLRCLIBSearchResult(items []lrclibSearchItem, artist, title, album strin
 		}
 		if durationSecs <= 0 {
 			if best == nil {
-				best = it
+				best, plainOnly = it, !timed
 			}
 			continue
 		}
@@ -258,8 +304,8 @@ func pickLRCLIBSearchResult(items []lrclibSearchItem, artist, title, album strin
 			continue
 		}
 		if bestDiff < 0 || diff < bestDiff {
-			best, bestDiff = it, diff
+			best, bestDiff, plainOnly = it, diff, !timed
 		}
 	}
-	return best
+	return best, plainOnly
 }

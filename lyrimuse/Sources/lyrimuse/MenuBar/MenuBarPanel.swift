@@ -93,6 +93,10 @@ final class MenuBarPanelController {
     private var outsideClickMonitor: Any?
     /// cmd-tab 这类不带点击的失焦也要收 —— App 真的活跃过时靠这个通知兜住。
     private var resignActiveObserver: NSObjectProtocol?
+    /// 切 Space 也要收 —— 面板现在会出现在每个 Space 上(见 toggle 里 collectionBehavior
+    /// 那段),不收的话切走之后它还挂在那儿。⚠️ 挂在 NSWorkspace 的通知中心,不是
+    /// NotificationCenter.default,拆的时候也要从那边拆。
+    private var spaceChangeObserver: NSObjectProtocol?
     /// 面板开/关 —— 状态栏那行滚动歌词要跟着反白,跟 NSMenu 的 delegate 回调同一件事。
     var onVisibilityChange: ((Bool) -> Void)?
 
@@ -138,8 +142,41 @@ final class MenuBarPanelController {
         ) { [weak pop] _ in
             Task { @MainActor in pop?.performClose(nil) }
         }
+        // 切 Space 也要收起。这是下面 collectionBehavior 连带出来的:面板从此会跟着用户
+        // 出现在**每个** Space 上,切走之后它还挂在那儿就成了甩不掉的残影。而已有的两道
+        // 监视器都接不住这种情况——切 Space 既不是"点到别的 App 上"(没有鼠标按下),
+        // App 也从来没活跃过(所以不会 resign)。
+        spaceChangeObserver = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.activeSpaceDidChangeNotification, object: nil, queue: .main
+        ) { [weak pop] _ in
+            Task { @MainActor in pop?.performClose(nil) }
+        }
         onVisibilityChange?(true)
         pop.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+        // ⚠️ 2026-08-31 修「别的 App 全屏时面板打不开」(用户报)。
+        //
+        // 真实症状不是"点了没反应",而是**面板弹在了桌面 Space 上**:日志里
+        // `panel opened` 照常打出来(说明点击到位、popover 也 show 了),用户在全屏里看不见,
+        // 于是再点一下——第二下走 toggle 开头 `popover.isShown` 那个分支把它关掉。日志上就是
+        // 一对间隔一两秒的 opened/closed(17:22:28→17:22:30、17:22:57→17:22:58 实测)。
+        //
+        // 成因:NSPopover 自建的窗口 collectionBehavior 是默认的"受管",进不了别的 App 的
+        // 全屏 Space;而这个面板刻意**不** NSApp.activate()(理由见下面 FirstMouseHostingView
+        // 那段注释),没有激活就不会切 Space,窗口只能落在桌面 Space 上。别家菜单栏 App 没这个
+        // 毛病,多半是它们 activate 了——代价是把用户正在用的全屏 App 顶掉,这里不接受。
+        //
+        // 用的是跟 LyricsOverlayWindow.swift:26 / NotchLyricsWindow.swift:47 同一套 flag 里
+        // 相关的那两位:.fullScreenAuxiliary 给"能进别人全屏 Space"的许可,.canJoinAllSpaces
+        // 让它落在**当前**这个 Space 上,两个缺一不可。刻意不带那边另外两位:.stationary 是给
+        // 常驻悬浮窗防 Mission Control 搬动的,套在一个活几秒的 popover 上反而像卡住的残影;
+        // .ignoresCycle 管 Cmd-` 轮转,popover 窗口本来就不在那张表里。
+        //
+        // ⚠️ 只能放在 show **之后**:那个窗口是 show 内部现建的,willShow 时
+        // `contentViewController?.view.window` 还是 nil。也不需要像 LyricsWindowView 那样
+        // 持续守护——每次 toggle 都是全新的 NSPopover(didClose 里置 nil),AppKit 不会回写,
+        // 跟着每次弹出设一次就够。formUnion 而不是直接赋值:别把 AppKit 自己塞的位覆盖掉。
+        pop.contentViewController?.view.window?.collectionBehavior
+            .formUnion([.canJoinAllSpaces, .fullScreenAuxiliary])
     }
 
     private func teardownDismissWatchers() {
@@ -147,6 +184,10 @@ final class MenuBarPanelController {
         outsideClickMonitor = nil
         if let resignActiveObserver { NotificationCenter.default.removeObserver(resignActiveObserver) }
         resignActiveObserver = nil
+        if let spaceChangeObserver {
+            NSWorkspace.shared.notificationCenter.removeObserver(spaceChangeObserver)
+        }
+        spaceChangeObserver = nil
     }
 }
 

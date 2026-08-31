@@ -57,6 +57,11 @@ public final class EnrichCacheStore: ObservableObject {
         /// 用户在「联网搜索候选歌词」里选定的源(collector 侧 `lyrics_source_choice`)。
         /// 空 = 没选过,由算法自由选。跟 `isManual` 是两件独立的事,详情页各显示各的徽章。
         public let sourceChoice: String
+        /// 这份歌词当前的时间轴校正值(毫秒),权威源是 LyricsOffsetStore——这里存的是
+        /// buildSummaries 那一刻按内容指纹查出来的快照,不是实时值(见该函数的
+        /// offsetsSnapshot 参数注释)。内容一换查出来的指纹就变,自然会变回 0,不需要
+        /// 显式失效。
+        public let offsetMs: Int
         // 译文是机翻补的(见 collector 的 translate.go)还是歌词源自带的社区翻译。
         // 空 = 社区翻译(老条目没有这个字段,读成空正是事实)。
         public let lyricsTrSource: String
@@ -73,6 +78,18 @@ public final class EnrichCacheStore: ObservableObject {
         /// 确证过的纯音乐(LoL 原声带那些)显示成刺眼的红色「无歌词」,跟"没搜到"混为一谈。
         /// 悬浮窗/灵动岛/歌词窗口三处一直分得清,唯独这里没有。
         public let isInstrumental: Bool
+        /// 有没有 plain_lyrics(没有时间戳的纯文本兜底,见 collector 侧 enrichEntry.PlainLyrics
+        /// 头注)——2026-08-30 加,理由跟 isInstrumental 那次接入一样:值早就存在缓存里
+        /// (「歌词窗口」已经在读它做静态展示),但列表和详情页都只看 hasLyrics,于是这批
+        /// "至少有纯文字可读"的条目显示成刺眼的红色「无歌词」,跟"什么都没有"混为一谈。
+        public let hasPlainTextFallback: Bool
+        /// true = 这一行不是缓存里真实存在的条目,是"这首歌正在联网搜歌词、collector
+        /// 还没写出任何结论"这段窗口期的占位行(见 `LyricsManagerView.refreshPlaceholder`)。
+        /// 2026-08-27 用户反馈"歌一直在放、还在首次搜歌词的时候,歌词管理里完全看不到
+        /// 这一行"——根因是这个列表**只**读 collector 写的缓存文件,搜索还没出结论那段
+        /// 时间文件里压根没有这个 key,不是"有但没显示"。这一行不对应 `raw` 里任何 key,
+        /// 编辑/删除/重新自动匹配这些操作对它都没有意义,消费方必须先判断这个字段。
+        public let isSearching: Bool
         // 这条有没有 collector 固化的解析决策记录(候选表+得分明细,见 collector/decision.go)。
         // 只作按钮显隐用 —— 完整结构 2026-08-19 起改**懒解码**(decodedDecision(for:)):
         // 原来 rebuild 时对每条带该字段的条目都做一轮 JSONSerialization.data + JSONDecoder
@@ -87,17 +104,31 @@ public final class EnrichCacheStore: ObservableObject {
         let normPrimaryArtist: String
         /// toSimplified(album).lowercased() —— 专辑筛选/排序/归并字典的键。
         let normAlbum: String
-        /// 搜索谓词用的三个小写副本(搜索框每敲一键全量过滤一遍,别逐行现 lowercased)。
+        /// 搜索谓词用的四个小写副本(搜索框每敲一键全量过滤一遍,别逐行现 lowercased)。
         let searchArtistLower: String
         let searchDisplayArtistLower: String
         let searchTitleLower: String
+        let searchAlbumLower: String
 
-        /// 列表/详情展示用的歌手名:优先 collector 核实过的官方名(canonicalArtist),
-        /// 合唱曲目/还没解析出来时退回播放器报的原始写法。原在 LyricsManagerView.artistName。
+        /// ⚠️ 只给排序/筛选归并用(normPrimaryArtist、EnrichCacheStore.artistMap→
+        /// distinctArtists→筛选下拉),**不再**用于列表逐行渲染的文字——2026-08-28 改掉:
+        /// 同一个人如果原始标签一时中文一时英文(如"方大同"/"Khalil Fong"),会各自落进
+        /// 独立的缓存条目(key 用原始写法拼),优先展示统一名会让两条本该能分清楚的记录在
+        /// 列表里长得一模一样、用户区分不出这是两条不同记录(2026-08-28 用户报的真实案例:
+        /// 《Gotta Make A Change》两条记录只有大小写和歌手语言不同,列表里完全没法区分)。
+        /// 筛选依然按这个统一名归并(选"方大同"两条都要出来),只是"这一列具体显示哪个
+        /// 字符串"改成如实展示每条记录自己的原始写法。
         var displayArtist: String { canonicalArtist.isEmpty ? artist : canonicalArtist }
     }
 
     @Published public private(set) var summaries: [Summary] = []
+    /// reload() 正在飞——给视图层判断"这是首次打开、summaries 还没有任何内容"用,好
+    /// 展示一个"正在加载"占位而不是一片空白的 List(2026-08-26,用户反馈"打开歌词管理
+    /// 页面列表会白一会")。真正原因是缓存文件从上线时的 852 条/9.4MB 长到现在 1700+
+    /// 条/22MB,JSONSerialization 解析这一份实测要 250ms+(见 reload() 内部注释),早就
+    /// 挪到后台线程、不再卡住主线程,但"完全没内容可看"的这段等待时间本身还在,只是
+    /// 之前一直显示成一片空白、看着像卡住了。
+    @Published public private(set) var isLoading = false
     /// summaries 每重建一次 +1 —— 给视图侧的 filtered 缓存当失效键(见 LyricsManagerView),
     /// 数组本身没做 Equatable,靠这个代数判断"列表内容换过了没有"。
     private(set) var summariesGeneration = 0
@@ -185,17 +216,25 @@ public final class EnrichCacheStore: ObservableObject {
            fp == lastLoadedFingerprint {
             return
         }
+        // "缓存占用"这个数字只是工具栏一个菜单标签,不是 List 要渲染的内容——原来跟
+        // JSON 解析捆在同一个 detached task 里,summaries 白白多等一轮 lyrics/ 目录扫描
+        // (2026-08-26 实测约 18ms,数量小但完全没必要挡在关键路径上)。改用已有的
+        // refreshSizeBytes()(delete 完刷新占用数字用的同一条路径),独立算、独立更新,
+        // 不再等它。
+        refreshSizeBytes()
+        isLoading = summaries.isEmpty
+        defer { isLoading = false }
         final class ResultBox: @unchecked Sendable {
             var obj: [String: [String: Any]]?
             var bundle: SummariesBundle?
             var fingerprint: FileFingerprint?
             var errorMessage: String?
-            var sizeBytes: Int64 = 0
         }
         let box = ResultBox()
-        let lyricsDir = Self.lyricsDir
+        // 在进 Task.detached 之前取快照:LyricsOffsetStore 是 @MainActor 单例,detached
+        // 闭包跑在后台线程,不能在里面同步访问它——纯字典拷贝,提前拿一份传进去即可。
+        let offsetsSnapshot = LyricsOffsetStore.shared.offsetsSnapshot
         await Task.detached(priority: .userInitiated) {
-            box.sizeBytes = Self.directorySizeBytes(lyricsDir) + Self.fileSizeBytes(cacheURL)
             box.fingerprint = Self.fileFingerprint(cacheURL)
             guard let data = try? Data(contentsOf: cacheURL) else {
                 box.errorMessage = L10n.t("读取本地记录文件失败")
@@ -208,9 +247,8 @@ public final class EnrichCacheStore: ObservableObject {
             box.obj = obj
             // summaries 的构建+排序也在后台做掉(2026-08-19:原来回 MainActor 同步跑,
             // 每次开窗/激活吃几十到一二百 ms 主线程),主线程只收结果赋值。
-            box.bundle = Self.buildSummaries(from: obj)
+            box.bundle = Self.buildSummaries(from: obj, offsetsSnapshot: offsetsSnapshot)
         }.value
-        totalSizeBytes = box.sizeBytes
         if let obj = box.obj, let bundle = box.bundle {
             raw = obj
             knownKeys = Set(obj.keys)
@@ -226,7 +264,7 @@ public final class EnrichCacheStore: ObservableObject {
             raw = [:]
             lastLoadedFingerprint = nil
             lastError = box.errorMessage ?? L10n.t("读取本地记录文件失败")
-            applySummaries(Self.buildSummaries(from: [:]))
+            applySummaries(Self.buildSummaries(from: [:], offsetsSnapshot: offsetsSnapshot))
         }
     }
 
@@ -289,8 +327,11 @@ public final class EnrichCacheStore: ObservableObject {
         distinctAlbums = bundle.distinctAlbums
     }
 
-    private func rebuildSummaries() {
-        applySummaries(Self.buildSummaries(from: raw))
+    // public:「歌词管理」详情页调过/重置过时间轴偏移之后也要调这个——那份改动只落在
+    // LyricsOffsetStore(不是这里的 raw 字典),summaries 里预算好的 offsetMs 不会自己
+    // 跟着变,得靠调用方显式喊一次重建(见 LyricsManagerView.applyOffsetEdit)。
+    public func rebuildSummaries() {
+        applySummaries(Self.buildSummaries(from: raw, offsetsSnapshot: LyricsOffsetStore.shared.offsetsSnapshot))
     }
 
     // ⚠️ 排序键必须跟"列表上看到的那套分组"用**同一套归并规则**,否则会出现"显示层合并了、
@@ -304,35 +345,83 @@ public final class EnrichCacheStore: ObservableObject {
     // 专辑归并键跟展示值分开:同一张专辑偶尔因歌词源候选写法大小写/繁简不一致而在
     // s.album 里长得不一样,排序/归并按归一化键走;展示名取排序后首见的原写法
     // (albumDisplayMap),列表/详情/筛选下拉三处共用同一份。
-    private nonisolated static func buildSummaries(from raw: [String: [String: Any]]) -> SummariesBundle {
+    /// - Parameter offsetsSnapshot: LyricsOffsetStore 整份字典的一次性快照(调用方在
+    ///   MainActor 上下文取好再传进来,见两处调用点的注释)——这个函数本身要能在后台线程跑,
+    ///   不能在这里同步访问那个 @MainActor 单例。
+    private nonisolated static func buildSummaries(from raw: [String: [String: Any]], offsetsSnapshot: [String: Int]) -> SummariesBundle {
+        // offsetsSnapshot 几乎永远很小(这台机器实测 1756 条缓存里只有 7 条调过偏移),
+        // 但 trackKey 要在 artist|title 之后拼一段**对整首歌词+YRC 正文取 SHA256** 的内容
+        // 指纹(见 LyricsOffsetStore.contentFingerprint)——2026-08-26 实测坐实:对全部
+        // 1760 条无条件算这个指纹,单这一步就要 250ms+,比读盘解析整份 JSON 还贵,而其中
+        // 99% 以上注定查不到东西(offsetsSnapshot 里根本没有对应的 artist|title)。
+        //
+        // 先把 offsetsSnapshot 的 key 反过来切一遍,取"最后一个 | 之前"那一截(= artist|title,
+        // 指纹段本身不含 |,用 .backwards 找最后一个分隔符总能切对,不受 artist/title 自己
+        // 含 | 影响)存成一个小集合——只有几个元素,后面每条曲目只需要用**同一套(cleanTag/
+        // normalizedTitle)归一化过的 artist|title** 去比对这个小集合是否包含,包含了才值得
+        // 付一次真正的 SHA256;不包含直接判定这首歌没有校正值,省掉整段哈希。命中率不变、
+        // 结果逐位不变,只是把"注定查不到"的那 99% 提前挡在开销最大的那一步之前。
+        let offsetPrefixes: Set<String> = Set(offsetsSnapshot.keys.compactMap { key in
+            guard let sep = key.range(of: "|", options: .backwards) else { return nil }
+            return String(key[..<sep.lowerBound])
+        })
         var items = raw.keys.compactMap { key -> Summary? in
             guard let parts = Self.splitKey(key) else { return nil }
             let entry = raw[key] ?? [:]
             let lyrics = entry["lyrics"] as? String ?? ""
+            let lyricsYRC = entry["lyrics_yrc"] as? String ?? ""
             let canonical = entry["canonical_artist"] as? String ?? ""
             let display = canonical.isEmpty ? parts.artist : canonical
+            // trackKey 要用播放时真正生效的那份内容指纹,所以拿这条原始 artist/title(跟
+            // 播放侧同一套归一化,见 LyricsOffsetStore.trackKey 内部的说明),不是展示名。
+            let offsetPrefix = "\(EnrichCacheKeys.cleanTag(parts.artist))|\(EnrichCacheKeys.normalizedTitle(parts.title))"
+            let offsetMs: Int
+            if offsetPrefixes.contains(offsetPrefix) {
+                let offsetKey = LyricsOffsetStore.trackKey(artist: parts.artist, title: parts.title,
+                                                            lyrics: lyrics, lyricsYRC: lyricsYRC)
+                offsetMs = offsetsSnapshot[offsetKey] ?? 0
+            } else {
+                offsetMs = 0
+            }
             return Summary(
                 key: key,
                 artist: parts.artist,
                 canonicalArtist: canonical,
-                durationSecs: entry["duration_secs"] as? Double ?? 0,
+                // 2026-08-30 从「优先 duration_secs」改成「优先 resolved_duration_secs」——
+                // 真实 bug 坐实(海龟先生《男孩别哭》):duration_secs 是 collector 那边
+                // "只在当前为 0 才写"的粘性字段(enrich.go:1428 `if e.DurationSecs <= 0`),
+                // 一旦第一次解析时凑巧读到一个错的时长(这首歌是 210.86s,真实时长
+                // 306.94s),就永远冻结在那个错值上,后续任何一次成功的自动重新匹配都不会
+                // 更新它。而 resolved_duration_secs 恰恰相反——每次自动匹配换上更好的候选
+                // 都会同步刷新(enrich.go:1063/1233/1256),永远反映"当前这份歌词是按多少秒
+                // 校验选出来的",天然自愈。这条 Summary 喂给"搜索候选歌词"弹窗当打分依据,
+                // 用冻结的错值会让全部候选在时长匹配这两档(durationOff/sourceDurationOff)
+                // 同时被重扣、分数全部跌到系统兜底的 1 分——内容其实都没问题。
+                // resolved_duration_secs 缺失(老条目/从没成功匹配过)才退回 duration_secs,
+                // 两个都没有就是 0(打分跳过整个时长档,而不是被错误时长带偏)。
+                durationSecs: (entry["resolved_duration_secs"] as? Double).flatMap { $0 > 0 ? $0 : nil }
+                    ?? entry["duration_secs"] as? Double ?? 0,
                 title: parts.title,
                 album: parts.album,
                 lyricsSource: entry["lyrics_source"] as? String ?? "",
-                hasWordTiming: !(entry["lyrics_yrc"] as? String ?? "").isEmpty,
+                hasWordTiming: !lyricsYRC.isEmpty,
                 isManual: entry["manual_lyrics"] as? Bool ?? false,
                 sourceChoice: entry["lyrics_source_choice"] as? String ?? "",
+                offsetMs: offsetMs,
                 lyricsTrSource: entry["lyrics_tr_source"] as? String ?? "",
                 hasTranslation: !((entry["lyrics_tr"] as? String ?? "").isEmpty),
                 hasRomanization: !((entry["lyrics_roma"] as? String ?? "").isEmpty),
                 hasLyrics: !lyrics.isEmpty,
                 isInstrumental: entry["instrumental"] as? Bool ?? false,
+                hasPlainTextFallback: !((entry["plain_lyrics"] as? String ?? "").isEmpty),
+                isSearching: false, // 这一条来自 raw,真实存在;占位行的构造点在 LyricsManagerView
                 hasDecision: entry["lyrics_decision"] != nil || entry["lyrics_decision_applied"] != nil,
                 normPrimaryArtist: toSimplified(primaryArtist(display)).lowercased(),
                 normAlbum: toSimplified(parts.album).lowercased(),
                 searchArtistLower: parts.artist.lowercased(),
                 searchDisplayArtistLower: display.lowercased(),
-                searchTitleLower: parts.title.lowercased()
+                searchTitleLower: parts.title.lowercased(),
+                searchAlbumLower: parts.album.lowercased()
             )
         }
         items.sort {
@@ -356,11 +445,36 @@ public final class EnrichCacheStore: ObservableObject {
         )
     }
 
-    /// 这条当初解析时用的时长(`resolved_duration_secs`)。只给「重新自动匹配」当兜底 ——
-    /// Summary 里的 durationSecs 是真实播放时长(`duration_secs`),那个才是首选;老条目两个
-    /// 都可能是 0,那就只能不带时长跑一轮(打分会跳过整个时长档,结果不代表自动决策)。
+    /// 这条最近一次自动匹配成功时用的时长(`resolved_duration_secs`)。给「重新自动匹配」
+    /// 当兜底——Summary.durationSecs 现在本身已经优先取这个字段(2026-08-30 起,见
+    /// buildSummaries 里那段注释),这里多数情况下会跟 summary.durationSecs 相等,只在
+    /// 两个时长字段都还没写过(老条目/从没成功解析过)时才会一起是 0,那就只能不带时长
+    /// 跑一轮(打分会跳过整个时长档,结果不代表自动决策)。
     public func resolvedDurationSecs(for key: String) -> Double {
         raw[key]?["resolved_duration_secs"] as? Double ?? 0
+    }
+
+    /// 缓存里有没有这个 key——给"正在搜索"占位行判断"collector 是不是已经写出结论了"用
+    /// (`LyricsManagerView.refreshPlaceholder`):有就说明真实那一行已经存在于 `summaries`
+    /// 里,占位行该让位了;没有就说明还在搜。只暴露"存不存在"这一个布尔,不直接开放 `raw`
+    /// 本身——那份原始字典的字典级读写是这个类型自己的事,消费方不该绕过 Summary 这层接口。
+    ///
+    /// ⚠️ 2026-08-30 真实bug(蛋堡《嘶! Bamboo Holla》,专辑"收斂水"/"收敛水"繁简两种写法):
+    /// 原来只做精确字典查找,而占位行的 key 是**当下这一刻**播放器实时上报的
+    /// artist/title/album 拼出来的(EnrichCacheKeys.normalizedKey,不含繁简折算)——
+    /// collector 那条 enrichKey 同样不折算(必须跟 Apple Music/播放器原始标签逐字节一致,
+    /// 见 enrich.go 那段注释),于是同一首歌只要播放器这次上报的专辑名繁简写法跟当初解析
+    /// 那次不一样,拼出来的 key 就对不上已经写盘的那一条——即便磁盘里其实早就有真实的、
+    /// 带着完整歌词的记录,这里也会永远判"没有",占位行"正在搜索…"就卡死不会让位(其它
+    /// 视图能正常显示歌词,是因为它们走的是 EnrichCacheReader 的宽松匹配,那边已经在用
+    /// EnrichCacheKeys.looseKey 折算繁简,只有这条独立维护的精确查找漏了这一层)。
+    /// 精确命中优先(常见情况,零额外开销),精确查不到才退化成宽松扫描——这条只在"正在
+    /// 搜索"占位行还没让位时才会被调用(5 秒轮询一次,见 refreshPlaceholder 调用点的
+    /// 注释),不是热路径,线性扫一遍 raw 的 key 完全负担得起。
+    public func hasEntry(forKey key: String) -> Bool {
+        if raw[key] != nil { return true }
+        let loose = EnrichCacheKeys.looseKey(key)
+        return raw.keys.contains { EnrichCacheKeys.looseKey($0) == loose }
     }
 
     /// 懒解码某条的解析决策记录 —— 只在打开「解析决策」弹窗那一刻按 key 解一条,
@@ -516,6 +630,54 @@ public final class EnrichCacheStore: ObservableObject {
         // 重启,launchctl kickstart 撞上 launchd 的 minimum runtime 时一等就是 ~10 秒,
         // 「已保存」反馈/offset 输入框/列表徽章全被闷在后面,期间按钮还能重复点。
         // scheduleCollectorRestart 自带合并/补偿/lastError/refreshLyricsForCurrentTrack。
+        rebuildSummaries()
+        guard await persist() else { return }
+        if lastPersistPulledInNewKeys { rebuildSummaries() }
+        scheduleCollectorRestart()
+    }
+
+    /// 采纳一条"仅纯文本"候选(LyricsSearchService.Candidate.isPlainTextOnly,「搜索候选
+    /// 歌词」弹窗里点"采纳为静态文本")——2026-08-30 加,刻意**不走** saveEdit:
+    ///
+    /// - 不写 lyrics/lyrics_tr/lyrics_roma/lyrics_yrc 这几个"带时间戳"专用字段,改写
+    ///   独立的 plain_lyrics(collector 侧 enrichEntry.PlainLyrics 头注解释了为什么必须
+    ///   分开存,不能塞进 lyrics 冒充一份)——桌面悬浮歌词/灵动岛这些依赖时间戳的展示面
+    ///   因此会继续如实显示"无歌词",只有「歌词窗口」会认这个新字段、走静态展示。
+    /// - 不置 manual_lyrics:跟 saveEdit 里"采纳候选不算手动编辑"是同一个理由,这样以后
+    ///   如果这首歌哪个源出了带时间戳的版本,自动匹配仍然能接手升级,不会被这次的纯文本
+    ///   兜底永久冻结。
+    /// - 不导出 .lrc 文件:plain_lyrics 没有时间戳,不是 EnrichCacheKeys.lyricsFileSuffixes
+    ///   那几种导出格式能装的东西,导出该以后有真需求时再单独做,不是这次的范围。
+    public func savePlainTextEdit(key: String, plainLyrics: String, source: String) async {
+        var entry = raw[key] ?? [:]
+        entry["plain_lyrics"] = plainLyrics
+        if source.isEmpty {
+            entry.removeValue(forKey: "plain_lyrics_source")
+        } else {
+            entry["plain_lyrics_source"] = source
+        }
+        raw[key] = entry
+        markLocallyEdited(key)
+        rebuildSummaries()
+        guard await persist() else { return }
+        if lastPersistPulledInNewKeys { rebuildSummaries() }
+        scheduleCollectorRestart()
+    }
+
+    /// 「重新自动匹配」按钮查到"至少一个源明确说这首是纯音乐、没有可用候选"时调用
+    /// (2026-08-30 加,蛋堡《收敛水》「关键字: Intro」案)——collector 侧 rescoreLyrics
+    /// 在同样的"picked == nil 但有源给出 Instrumental 标记"局面下早就会把这个结论写进
+    /// 缓存(见 enrich.go 那段"纯音乐结论也要在这条路径上落地"的注释),但这颗按钮走的是
+    /// 独立的手动 -pick 路径,finishRematch 只弹了句"有源明确说这首是纯音乐"的 toast 就
+    /// return——从没把这个结论写回缓存。表现:toast 说得清清楚楚,「歌词管理」列表却
+    /// 死死钉在刺眼的红色「无歌词」上,永远不会自己变成「纯音乐」,除非哪天这首歌被
+    /// 完整播放一遍触发后台首次解析重新走一遍(而这首歌八天前就是那条路径写的坏结论)。
+    /// 只置一个字段、不碰 lyrics/manual_lyrics/source 这些——跟 collector 侧的写法一样窄。
+    public func markInstrumental(key: String) async {
+        var entry = raw[key] ?? [:]
+        entry["instrumental"] = true
+        raw[key] = entry
+        markLocallyEdited(key)
         rebuildSummaries()
         guard await persist() else { return }
         if lastPersistPulledInNewKeys { rebuildSummaries() }

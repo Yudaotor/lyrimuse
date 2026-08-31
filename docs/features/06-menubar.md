@@ -10,6 +10,7 @@
 
 - **状态栏本体**:自建 `NSStatusItem`(2026-08-16 起,不再是 SwiftUI `MenuBarExtra`),`AppDelegate.applicationDidFinishLaunching` 里调一次 `MenuBarStatusItem.shared.start()` 启动,从启动到退出一直都在,生命周期靠 Combine 订阅自持,不依赖任何视图的 onAppear。
 - **下拉菜单**:点状态栏项弹出,`MenuBarStatusMenu` 手写的 `NSMenu`(不用 `NSHostingMenu`,那要 macOS 14.4,App 下限 14.0)。
+- **Dock 右键菜单**(2026-08-26 新增,仅「在 Dock 中显示」开着、`.regular` 激活策略时才有 Dock 图标可右键):`AppDelegate.applicationDockMenu(_:)` 返回 `DockMenuController.makeMenu()` 的结果,固定四项——设置…/歌词管理…/歌词窗口…/Last.fm,点了分别跳对应窗口/设置页。这四项由 AppKit 摆在它自动追加的那部分(当前开着的窗口列表、「选项」子菜单、显示所有窗口/隐藏/退出)**上面**,`DockMenuController` 不需要重复画那些系统默认项。见「设计决策与已知坑」第 14 条。
 - **设置入口**(两处,见「设置项」):
   - 设置 › 歌词显示 › 「菜单栏」分段:菜单栏歌词开关、宽度模式、最大宽度、逐字染色开关、文字/染色两个颜色项,顶部固定一条实时预览(`MenuBarPreviewBar`,反映文字色;正在播放且这句有逐字数据时也演真实染色,没播放的示例句不演,见「逐字染色」一节);
   - 设置 › 通用 › 「菜单栏与 Dock」卡:12 款图标网格、「随播放律动」开关。
@@ -100,7 +101,7 @@
 - **时钟**:位置公式与歌词窗口逐字填色同一条(anchor 外推 ?? 暂停位置,+ 时间轴校准)。对表走独立通道(`syncKaraokeClock`,订阅 $anchor/$pausedPositionMs/$currentLyricsOffsetMs),**不触发槽位 refresh**;标签内部有 **250ms 漂移门** —— 锚点每 ~2s 的例行重发被无声吸收、不打断动画,seek 必然超门重锚,时间轴偏移微调(默认步长 200ms 在门下)走 force 立即生效。暂停静置在当刻边界,恢复从真实位置续染。
 - **自适应宽度模式**下装得下的句子原走 `button.title`(AppKit 自绘,没有图层可叠色)——染色时改走图层渲染,槽宽公式不变(文字宽+18),footprint 逐像素一致。宽度 ≤0 的截断退化路径不染。
 - **反白期间**(菜单/面板开着)填色整个隐掉:基础字已换成选中色,强调色叠在选中背景上要么撞色要么看不清,关掉恢复。
-- 设置页预览(MenuBarPreviewBar,2026-08-22 补齐):正在播放且当前句有逐字(YRC)数据时,预览走跟本体完全一样的填色图层与对表公式(`MenuBarScrollingLabel.Representable` 新增 `fillPath`/`karaokePositionMs`/`karaokeRate`/`karaokePlaying`,由预览自己订阅 `$anchor`/`$pausedPositionMs`/`$currentLyricsOffsetMs`/`$isPlayingNow` 重算,搬的是 `MenuBarStatusItem.syncKaraokeClock` 那套公式,不是另一份判定);没在播放时演的示例句刻意不染——编不出真实时间轴,染了就是假动画(与 `OverlayPreviewBar` 同一条原则)。
+- 设置页预览(MenuBarPreviewBar,2026-08-22 补齐):正在播放且当前句有逐字(YRC)数据时,预览走跟本体完全一样的填色图层与对表公式(`MenuBarScrollingLabel.Representable` 新增 `fillPath`/`karaokePositionMs`/`karaokeRate`/`karaokePlaying`,由预览自己订阅 `$anchor`/`$pausedPositionMs`/`$currentLyricsOffsetMs`/`$isPlayingNow` 重算,搬的是 `MenuBarStatusItem.syncKaraokeClock` 那套公式,不是另一份判定);没在播放时演的示例句刻意不染——编不出真实时间轴,染了就是假动画(全仓预览共用的原则,记在 `SectionPreviewBars.swift` 文件头「不为示例句编造进度」那一段)。
 - 离线验证:真实 `MenuBarScrollingLabel`+renderer 编成独立 harness 离屏渲染四个静态时刻,逐像素核对边界位置(scratchpad mbkaraoke,2026-08-22 全过)。
 
 ### 图标体系(MenuBarIconStyle,12 款)
@@ -201,6 +202,7 @@
 | 12 款图标枚举、静态帧绘制、缓存 | `lyrimuse/Sources/lyrimuse/MenuBar/MenuBarIconStyle.swift` · `MenuBarIconStyle`(`cachedImage` / `makeImage` / `classicArtwork` 等各款 artwork) |
 | 图标活体动画(CA 驱动、裸层、染色) | `lyrimuse/Sources/lyrimuse/MenuBar/MenuBarLiveIconView.swift` · `MenuBarLiveIconView`(`present` / `build*` 各款 / `applyColor` / `tintedContents`) |
 | 下拉菜单结构与全部动作 | `lyrimuse/Sources/lyrimuse/MenuBar/MenuBarStatusMenu.swift` · `MenuBarStatusMenu`(`rebuild` / `offsetMenuTitle` / 各 `@objc` action) |
+| Dock 右键菜单四个跳转项 | `lyrimuse/Sources/lyrimuse/MenuBar/DockMenu.swift` · `DockMenuController`(`makeMenu` / 各 `@objc` action);挂载点 `AppDelegate.applicationDockMenu(_:)` |
 | 环境 action 锚点窗口、设置窗打开的特殊路径 | `lyrimuse/Sources/lyrimuse/MenuBar/MenuBarSceneActions.swift` · `MenuBarSceneActions`(`install` / `presentSettings`)、`SceneActionRegistrar` |
 | 句停留时长、偏移转发 | `lyrimuse/Sources/lyrimuse/PlaybackCoordinator.swift` · `currentLineDwellSeconds` / `nudgeLyricsOffset` / `trackLyricsOffsetMs` |
 | 偏移的真正执行与叠加 | `lyrimuse/Sources/LyrimuseCore/Local/LocalPlaybackSource.swift` · `nudgeLyricsOffset` / `resetLyricsOffset` / `applyOffsets` |
@@ -223,3 +225,4 @@
 11. **长间奏的 ♪ 必须是非空文本,不能是空串**(2026-08-23):`refresh()` 里 `text` 为空会落进 `guard ... lyricsActive` 那条,把整个歌词槽 `present(class:"icon")` 收回成小图标 —— 那是一次状态项重建,而长间奏动辄十几秒(实测单次平均 10.1 秒),表现就是菜单栏歌词塌掉、过一会儿又弹回来。所以 `compactShowsPlaceholder` 时给字面的 `♪` 把槽位留住,视觉上也跟灵动岛一致。
 12. **菜单栏订阅了两个歌词流,各管一件事**(2026-08-23):`$compactLine` 管**显示哪一句**,`$currentLine` 管**逐字填色路径此刻可不可用** —— 提前量窗口里显示的是下一句但它还没开唱,`karaokeFillPath` 那道 `line.plainText == text` 守卫不给路径(正确:没唱就不该有填色),等真开唱时 `currentLine` 才变,那一下要重画一次把填色挂上。两个事件在短间隙里相差不到一秒,文本相同 → 槽宽相同 → 不触发状态项重建。**2026-08-24 补**:第二个事件也**不再重启滚动动画** —— `fillPath` 由 nil 变非 nil 不算滚动参数变化(见「滚动规则」里那条「开唱那一下不重启滚动」),否则提前量会被白等两遍。
 13. **macOS 26 状态栏项重建不能连发,且 AX 验证会说谎**(2026-08-19,错位第六轮定案):两次重建相隔 ~1s(实测 1.1s)会把邻居的**像素**晾在旧位置——AX 账面已更新(全图无重叠、看着完全健康),屏幕像素却是旧布局,歌词压到邻居残影上且**保持不自愈**;单次从容的重建从未观察到排坏。所以:重建节流(<3s 推迟合并)+收缩观察窗(见「三态判定」);验证必须**截图像素**对照 AX,只信 AX 等于白验(前五轮多次"AX 验证通过"后用户仍复现,就是这个原因);重建/推迟落 notice 日志(info 级不落盘,事后取不到现场)。宽度滑杆的订阅换成 `debounce 250ms`(拖动过程每个中间值都排队重建没有意义)。曾按「重建偶发有毒、只能压次数」的中间结论把 fixed 模式改成暂停/广告恒占歌词槽,当天按用户预期退回,由观察窗方案替代。
+14. **Dock 右键菜单是单独一个类,不复用 `MenuBarStatusMenu`**(2026-08-26):对照用户给的 Apple Music Dock 菜单截图新增。两者形似(都是手写 `NSMenu` + `@objc` action + `AppActions` 转发)但触发形态不同——下拉菜单靠 `NSMenuDelegate.menuNeedsUpdate` 在打开前重建,而 `applicationDockMenu(_:)` 本身就是 AppKit 每次右键都重新问 delegate 要一份,不需要再接 delegate;菜单项也少得多(没有状态开关/子菜单那一整套),硬凑成一份反而让两边互相牵制,故拆成独立的 `DockMenuController`。**「设置…/歌词管理…/歌词窗口…」三项直接走 `AppActions.shared.open*?()`**(内部已含 `NSApp.activate`,调用处不用再激活一次,跟 `MenuBarStatusMenu` 同名 action 同一个理由);**「Last.fm」不判断是否已连接**,固定走 `requestSettings(.account(.lastfm)) + openSettings?()` 跳设置里的 Last.fm 那一页——没连的话那页本身就有「连接 Last.fm」引导,不需要在 Dock 菜单这一层再分支。图标用 `NSImage(systemSymbolName:)`(三个窗口项)和 `lastfmBadgeImage`(Last.fm 品牌图,跟菜单栏面板底栏、设置页账号卡片同一张 PNG,见 `AccountLinkingTab.swift`)喂给 `NSMenuItem.image`,但**实测这几个图标在 Dock 右键菜单里不显示**(截图核实,`选项`/`显示所有窗口`这几个系统项本来也没有图标)——跟参考的 Apple Music 截图一致(那边「重复播放」「随机播放」等项同样没有前置图标),判定为 Dock 菜单这一层级本身不渲染 `NSMenuItem.image`(main menu bar 同理不显示图标),不是这里的图片资源或加载路径有问题,`image` 赋值原样保留(便于将来 AppKit 行为变化时自动生效,没有坏处)。不实现这个类的话,右键 Dock 图标能看到的只是系统自动附加的那部分(当前开着的窗口列表 + 「选项」子菜单 + 显示所有窗口/隐藏/退出),这几项跟自定义菜单是两回事——AppKit 自动把自定义菜单摆在它们上面,`DockMenuController` 不需要也不应该重复画。

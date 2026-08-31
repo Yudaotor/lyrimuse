@@ -42,6 +42,8 @@ private final class WindowPlayback: ObservableObject {
     @Published private(set) var hasLyricsContent = false
     @Published private(set) var isCurrentTrackInstrumental = false
     @Published private(set) var currentTrackHasNoLyrics = false
+    // 没有时间戳的纯文本歌词兜底,见 LocalPlaybackSource 同名属性的注释。
+    @Published private(set) var currentTrackPlainLyrics = ""
     @Published private(set) var collectorNetworkDown = false
     @Published private(set) var isCurrentTrackAdBreak = false
     // ---- 来自 AppSettings(只挑本窗口实读的两项) ----
@@ -80,6 +82,7 @@ private final class WindowPlayback: ObservableObject {
             p.$hasLyricsContent.removeDuplicates().sink { [weak self] in self?.hasLyricsContent = $0 },
             p.$isCurrentTrackInstrumental.removeDuplicates().sink { [weak self] in self?.isCurrentTrackInstrumental = $0 },
             p.$currentTrackHasNoLyrics.removeDuplicates().sink { [weak self] in self?.currentTrackHasNoLyrics = $0 },
+            p.$currentTrackPlainLyrics.removeDuplicates().sink { [weak self] in self?.currentTrackPlainLyrics = $0 },
             p.$collectorNetworkDown.removeDuplicates().sink { [weak self] in self?.collectorNetworkDown = $0 },
             p.$isCurrentTrackAdBreak.removeDuplicates().sink { [weak self] in self?.isCurrentTrackAdBreak = $0 },
             s.$showRomanization.removeDuplicates().sink { [weak self] in self?.showRomanization = $0 },
@@ -587,10 +590,18 @@ struct LyricsWindowView: View {
     /// (AM 同款)。会话内状态,不持久化。仅双列模式可关 —— 单列窗口整个就是歌词,
     /// 关了剩一片空白(生效判断见 body 的 lyricsPaneVisible)。
     @State private var showsLyricsPane = true
-    /// 「播放队列」面板(2026-08-22,AM 右下角「列表」钮):内容=current playlist 从
-    /// 当前曲目起的一段(nil=加载中,空=拿不到)。
-    @State private var showsQueuePanel = false
-    @State private var queueItems: [MusicPlaybackController.UpNextItem]?
+    /// 「播放记录」面板是否在替代右侧歌词栏(2026-08-27,取代原来 AM 右下角「列表」钮
+    /// 打开的「待播清单」)。原来那个功能靠 AppleScript 读 `current playlist` 模拟队列,
+    /// 用户 2026-08-25/26 两次报"明明在放专辑却拿不到"——查到根因是这个属性只在**从
+    /// 本地资料库对象**播放时才可靠,直接点开 Apple Music 目录里的专辑/播放列表(没
+    /// 先进资料库)同样会失效,不是电台专属、范围比想象中宽得多,且没有已知的可靠
+    /// 替代路径(见 MusicPlaybackController.upNextQueue 被删前的注释,git 历史可查)。
+    /// 用户决定干脆把这个位置换成一个不依赖这个能力边界的功能:Last.fm 播放记录 ——
+    /// 连了账号就是"最近听过"(与停播页共用 RecentListensPanel),没连就是本地静默
+    /// 记的、还没提交的收听("待补提交",与设置页的 pendingListensRow 共用数据源
+    /// ScrobbleBackfillService)。跟 showsLyricsPane 是**同一块地皮**上的两种内容,
+    /// 不是弹出面板——见 body 里 `if showsListenHistory` 那处切换。
+    @State private var showsListenHistory = false
     /// 自绘滚动指示条的数据(offset/内容高):收在小 model 里、只有指示条子视图订阅 ——
     /// 滚动期间逐帧的 preference 更新不能拖着整窗 body 陪跑(性能纪律同 WindowVolumeCapsule)。
     @StateObject private var scrollMetrics = LyricsScrollMetricsModel()
@@ -656,7 +667,12 @@ struct LyricsWindowView: View {
                 // 大留白"的观感差一截。
                 let coverWidth = min(geo.size.width * 0.279, 460)
                 // 歌词栏只有双列模式可隐藏(单列=整窗都是歌词,关了剩空白,强制显示)。
-                let lyricsPaneVisible = showsLyricsPane || !showPlayerPane
+                // 2026-08-27 补 showsListenHistory:右栏关着歌词、切到播放记录时这一项
+                // 也得让右栏亮起来——原来漏了这一条,「隐藏歌词」再点「播放记录」,按钮
+                // 显示已激活,右栏却因为 showsLyricsPane 仍是 false 而整块塌成空白
+                // (lyricsQueuePill 里两个开关各管各的,唯独这个"该不该显示整块右栏"的
+                // 闸门只看了 showsLyricsPane 一个)。
+                let lyricsPaneVisible = showsLyricsPane || showsListenHistory || !showPlayerPane
                 let paneLeading = lyricsPaneVisible
                     ? geo.size.width * 0.111
                     // 歌词隐藏 = AM 的"封面居中"纯播放器视图,左缘 padding 把封面推到正中。
@@ -673,7 +689,9 @@ struct LyricsWindowView: View {
                     // 三区版停播页(2026-08-24 用户按选型册定的排布:左上收听总览、左下上次
                     // 那首 + 一句歌词、右列通高最近听过)。只在**窗口够宽**时用,窄窗仍走原来
                     // 的居中欢迎态 —— 与播放态那条 640pt 双列断点同一个思路,硬塞两列会挤成
-                    // 一团。未连 Last.fm 时 IdleStandbyView 自己退化成「只有唱片 hero 居中」。
+                    // 一团。未连 Last.fm 时左上收听总览没有本地替代来源、直接省略,右列改成
+                    // 本地待补提交清单(2026-08-27,详见 IdleStandbyView 顶部注释)——不再是
+                    // 整段退化成「只有唱片 hero 居中」那个旧版式。
                     if idleWide {
                         IdleStandbyView(
                             player: idlePlayer,
@@ -704,12 +722,24 @@ struct LyricsWindowView: View {
                             .offset(y: -geo.safeAreaInsets.top / 2 - 2)
                     }
                     if lyricsPaneVisible {
-                        rightPane(
-                            leading: showPlayerPane
-                                ? max(24, geo.size.width * 0.515 - (geo.size.width * 0.111 + coverWidth))
-                                : 44,
-                            trailing: max(32, geo.size.width * 0.06)
-                        )
+                        // 「歌词」⟷「播放记录」是同一块地皮上的两种内容(见
+                        // showsListenHistory 声明处),leading/trailing 沿用同一套
+                        // 边距算法 —— 切换时两种内容的左右缘对得上,不会跳一下。
+                        Group {
+                            if showsListenHistory {
+                                listenHistoryPane(
+                                    leading: showPlayerPane
+                                        ? max(24, geo.size.width * 0.515 - (geo.size.width * 0.111 + coverWidth))
+                                        : 44,
+                                    trailing: max(32, geo.size.width * 0.06))
+                            } else {
+                                rightPane(
+                                    leading: showPlayerPane
+                                        ? max(24, geo.size.width * 0.515 - (geo.size.width * 0.111 + coverWidth))
+                                        : 44,
+                                    trailing: max(32, geo.size.width * 0.06))
+                            }
+                        }
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                     } else {
                         Spacer(minLength: 0).frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -747,33 +777,46 @@ struct LyricsWindowView: View {
                     // 右上只放它一颗(2026-08-22 第二轮对拍:AM 右上就一颗音量胶囊,
                     // 窗口动作胶囊在 AM 是左上 X/画中画那颗 —— 置顶/全屏挪去左上同位,
                     // 见下一个 overlay)。
-                    WindowVolumeCapsule(onArtwork: hasArtworkBackground,
-                                        showsOutputMenu: $showsOutputMenu,
-                                        isExternalOutput: isExternalOutput)
-                    // 贴右缘 5pt(2026-08-22 第二轮对拍:AM 胶囊亮缘离窗缘 8px@2x,
-                    // 布局缘取 5 让亮缘落到同位)。
-                    .padding(.trailing, 5)
-                    // ⚠️ 2026-08-22 用户实测报"拖音量键把窗口一起拖走"、两轮修复后仍在:
-                    // 根因是 hiddenTitleBar 窗口顶部那一段 safe-area 高度(geo.safeAreaInsets.top,
-                    // 与真实 NSTitlebarContainerView 等高)在系统层面**无条件**认领拖动 ——
-                    // 不是 isMovableByWindowBackground,也不是"谁的 mouseDownCanMoveWindow
-                    // 返回什么":实测挂 NSViewRepresentable 覆写 mouseDownCanMoveWindow、
-                    // 直接 addSubview 到 contentView 绕开 SwiftUI 树、自定义 NSWindow 子类
-                    // 覆写 sendEvent 整段吞掉再手动转发、同步 nextEvent tracking loop(仿
-                    // NSControl 内部机制)——五种技术方案在独立 harness 里逐一验证,只要
-                    // 起手点的 y 落在这段区间内,拖动就会被 WindowServer 直接接管挪窗口,
-                    // 应用进程收到的 NSEvent 序列完全不受影响,没有任何应用层介入点。唯一
-                    // 能验证有效的办法是**不落在这段区间里**:同一批 harness 测试里,y 越过
-                    // 这段高度的那一刻,挪窗口行为不多不少精确消失。旁边的置顶/全屏/静音/
-                    // AirPlay 键不受影响,是因为它们是**点按**、没有拖动位移,与这条区间
-                    // 无关(纯点击不会被系统认作拖动手势,不管点在哪)。
                     //
-                    // 因此**不再**做"减去 safeAreaInsets.top 再加 8 去对齐红绿灯"这套——
-                    // 那正是把胶囊往危险区间里怼。现在让胶囊留在 safe-area 自然让出的位置
-                    // (= 危险区间正下方)之后只再下移 8pt 留个观感缓冲,牺牲"与红绿灯同一行"
-                    // 的对齐(AM 参考图是这样,但那条约束与"拖动不能挪窗口"这条硬约束冲突,
-                    // 后者优先)。
-                    .offset(y: 8)
+                    // 2026-08-25 用户报"停播页不该有这个音量胶囊"—— 这里原来没有 `!isIdle`
+                    // 判断,跟紧挨着的翻译键/歌词队列胶囊(下面那个 overlay 里
+                    // `if !isIdle`)不是同一套判据,是漏加的。根因不只是"忘了判":
+                    // `PlaybackCoordinator.soundVolume` 读的是 `LocalPlaybackSource.
+                    // lastResolvedBundleID`,而那个字段读的是 `lastSnapshot?.bundleIdentifier`
+                    // —— `lastSnapshot` **真正停播后也从不清空**(SettingsView.offsetScope
+                    // 那条注释也踩过同一个坑),所以就算歌词窗已经判定 isIdle=true、切进了
+                    // 「停播页」,`soundVolume` 依然吐着 Apple Music 最后一次播放时的音量值,
+                    // 胶囊因此照常渲染。不改底层那个"从不清空"的字段(它另有存在理由,
+                    // 见自身注释),只在这一个消费点上补上 isIdle 判断。
+                    if !isIdle {
+                        WindowVolumeCapsule(onArtwork: hasArtworkBackground,
+                                            showsOutputMenu: $showsOutputMenu,
+                                            isExternalOutput: isExternalOutput)
+                        // 贴右缘 5pt(2026-08-22 第二轮对拍:AM 胶囊亮缘离窗缘 8px@2x,
+                        // 布局缘取 5 让亮缘落到同位)。
+                        .padding(.trailing, 5)
+                        // ⚠️ 2026-08-22 用户实测报"拖音量键把窗口一起拖走"、两轮修复后仍在:
+                        // 根因是 hiddenTitleBar 窗口顶部那一段 safe-area 高度(geo.safeAreaInsets.top,
+                        // 与真实 NSTitlebarContainerView 等高)在系统层面**无条件**认领拖动 ——
+                        // 不是 isMovableByWindowBackground,也不是"谁的 mouseDownCanMoveWindow
+                        // 返回什么":实测挂 NSViewRepresentable 覆写 mouseDownCanMoveWindow、
+                        // 直接 addSubview 到 contentView 绕开 SwiftUI 树、自定义 NSWindow 子类
+                        // 覆写 sendEvent 整段吞掉再手动转发、同步 nextEvent tracking loop(仿
+                        // NSControl 内部机制)——五种技术方案在独立 harness 里逐一验证,只要
+                        // 起手点的 y 落在这段区间内,拖动就会被 WindowServer 直接接管挪窗口,
+                        // 应用进程收到的 NSEvent 序列完全不受影响,没有任何应用层介入点。唯一
+                        // 能验证有效的办法是**不落在这段区间里**:同一批 harness 测试里,y 越过
+                        // 这段高度的那一刻,挪窗口行为不多不少精确消失。旁边的置顶/全屏/静音/
+                        // AirPlay 键不受影响,是因为它们是**点按**、没有拖动位移,与这条区间
+                        // 无关(纯点击不会被系统认作拖动手势,不管点在哪)。
+                        //
+                        // 因此**不再**做"减去 safeAreaInsets.top 再加 8 去对齐红绿灯"这套——
+                        // 那正是把胶囊往危险区间里怼。现在让胶囊留在 safe-area 自然让出的位置
+                        // (= 危险区间正下方)之后只再下移 8pt 留个观感缓冲,牺牲"与红绿灯同一行"
+                        // 的对齐(AM 参考图是这样,但那条约束与"拖动不能挪窗口"这条硬约束冲突,
+                        // 后者优先)。
+                        .offset(y: 8)
+                    }
                 }
                 .overlay(alignment: .topLeading) {
                     // 置顶/全屏胶囊(2026-08-22 第二轮对拍挪到左上:AM 同位是 X/画中画
@@ -803,7 +846,10 @@ struct LyricsWindowView: View {
                 }
                 .overlay {
                     if showsMoreMenu, moreAnchorRect != .zero {
-                        ZStack(alignment: .bottomTrailing) {
+                        // 2026-08-24 用户要求把面板从"贴按钮右缘、向左长出"(原先会盖住
+                        // 左栏封面/曲目信息)改成"贴按钮右缘、向右长出"——按钮本来就在
+                        // 左栏靠右的位置,向右长出去正好落进歌词栏那片更空的区域。
+                        ZStack(alignment: .bottomLeading) {
                             // 全窗点击捕手(透明但可命中),点哪都只是关菜单。
                             Color.black.opacity(0.001)
                                 .contentShape(Rectangle())
@@ -813,18 +859,21 @@ struct LyricsWindowView: View {
                                 .transition(.opacity)
                             moreMenuPanel
                                 .fixedSize()
-                                .padding(.trailing, max(8, geo.size.width - moreAnchorRect.maxX))
+                                .padding(.leading, moreAnchorRect.maxX)
                                 .padding(.bottom, max(8, geo.size.height - moreAnchorRect.minY + 8))
-                                // 缩放锚在面板右下角 —— 正好是贴着「…」按钮的那个角,
-                                // 观感是从按钮上长出来(AM 同款)。
-                                .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: .bottomTrailing)))
+                                // 缩放锚在面板左下角 —— 正好是贴着「…」按钮的那个角,
+                                // 观感是从按钮上长出来(AM 同款,只是方向翻到右边)。
+                                .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: .bottomLeading)))
                         }
                     }
                 }
                 // 「显示简介」面板(2026-08-22):从「⋯」菜单点出,与菜单同锚点同样式。
                 .overlay {
                     if showsInfoPanel, moreAnchorRect != .zero {
-                        ZStack(alignment: .bottomTrailing) {
+                        // 同「⋯」菜单本体一起翻到按钮右边(见上面那块的注释)—— 这个面板
+                        // 就是从「⋯」菜单里的「显示简介」点出来的,方向必须跟菜单一致,
+                        // 不然会出现"菜单在右边、点进去的子面板跳回左边"的错位。
+                        ZStack(alignment: .bottomLeading) {
                             Color.black.opacity(0.001)
                                 .contentShape(Rectangle())
                                 .onTapGesture {
@@ -833,16 +882,17 @@ struct LyricsWindowView: View {
                                 .transition(.opacity)
                             trackInfoPanel
                                 .fixedSize()
-                                .padding(.trailing, max(8, geo.size.width - moreAnchorRect.maxX))
+                                .padding(.leading, moreAnchorRect.maxX)
                                 .padding(.bottom, max(8, geo.size.height - moreAnchorRect.minY + 8))
-                                .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: .bottomTrailing)))
+                                .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: .bottomLeading)))
                         }
                     }
                 }
                 // 「你的常听」面板(2026-08-22,Last.fm 系列 #7):同锚点同样式的第三块面板。
                 .overlay {
                     if showsChartsPanel, moreAnchorRect != .zero {
-                        ZStack(alignment: .bottomTrailing) {
+                        // 同上,跟「⋯」菜单本体一起翻到按钮右边。
+                        ZStack(alignment: .bottomLeading) {
                             Color.black.opacity(0.001)
                                 .contentShape(Rectangle())
                                 .onTapGesture {
@@ -859,9 +909,9 @@ struct LyricsWindowView: View {
                                 )
                                 .shadow(color: .black.opacity(0.35), radius: 24, y: 10)
                                 .environment(\.colorScheme, hasArtworkBackground ? .dark : colorScheme)
-                                .padding(.trailing, max(8, geo.size.width - moreAnchorRect.maxX))
+                                .padding(.leading, moreAnchorRect.maxX)
                                 .padding(.bottom, max(8, geo.size.height - moreAnchorRect.minY + 8))
-                                .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: .bottomTrailing)))
+                                .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: .bottomLeading)))
                         }
                     }
                 }
@@ -891,25 +941,6 @@ struct LyricsWindowView: View {
                     }
                     .padding(.trailing, 10)
                     .padding(.bottom, 11)
-                }
-                // 「播放队列」面板:锚在胶囊上方、右缘对齐(机制同翻译菜单)。
-                .overlayPreferenceValue(QueuePillBoundsKey.self) { anchor in
-                    if showsQueuePanel, let anchor {
-                        let r = geo[anchor]
-                        ZStack(alignment: .bottomTrailing) {
-                            Color.black.opacity(0.001)
-                                .contentShape(Rectangle())
-                                .onTapGesture {
-                                    withAnimation(.easeOut(duration: 0.12)) { showsQueuePanel = false }
-                                }
-                                .transition(.opacity)
-                            queuePanel
-                                .fixedSize()
-                                .padding(.trailing, max(8, geo.size.width - r.maxX))
-                                .padding(.bottom, max(8, geo.size.height - r.minY + 8))
-                                .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: .bottomTrailing)))
-                        }
-                    }
                 }
                 // 「翻译与发音」菜单:同「⋯」菜单的窗级自绘玻璃面板机制,悬在按钮上方、
                 // 右缘对齐(AM 同款)。
@@ -967,11 +998,20 @@ struct LyricsWindowView: View {
                         // reload(onlyIfChanged:) 兜住「store 还没加载过」:saveEdit 直接改
                         // raw[key],空 raw 上写会把条目的其它字段(cover_url 等)整个丢掉。
                         await EnrichCacheStore.shared.reload(onlyIfChanged: true)
-                        await EnrichCacheStore.shared.saveEdit(
-                            key: ctx.key,
-                            lyrics: candidate.lyrics, tr: candidate.lyricsTr,
-                            roma: candidate.lyricsRoma, yrc: candidate.lyricsYRC,
-                            source: candidate.source)
+                        // 仅纯文本的候选走独立的存法(见 savePlainTextEdit 头注)——不能
+                        // 跟带时间戳的候选共用 saveEdit,那会把纯文本当成一份"没有任何一行
+                        // 能同步显示"的坏 LRC 写进 lyrics,反而让这首歌在别的展示面上从
+                        // "至少有静态文字"退化成"看起来完全没有歌词"。
+                        if candidate.isPlainTextOnly {
+                            await EnrichCacheStore.shared.savePlainTextEdit(
+                                key: ctx.key, plainLyrics: candidate.lyrics, source: candidate.source)
+                        } else {
+                            await EnrichCacheStore.shared.saveEdit(
+                                key: ctx.key,
+                                lyrics: candidate.lyrics, tr: candidate.lyricsTr,
+                                roma: candidate.lyricsRoma, yrc: candidate.lyricsYRC,
+                                source: candidate.source)
+                        }
                         // 让播放侧立刻重载,不等 2s 轮询的 mtime 检查。
                         PlaybackCoordinator.shared.refreshLyricsForCurrentTrack()
                     }
@@ -1139,7 +1179,14 @@ struct LyricsWindowView: View {
     @ViewBuilder
     private func rightPane(leading: CGFloat, trailing: CGFloat) -> some View {
         if playback.allLines.isEmpty {
-            emptyState
+            // 没有能同步显示的版本,但用户在「搜索候选歌词」里采纳过一条纯文本兜底
+            // (见 currentTrackPlainLyrics 声明处注释)——「歌词窗口」是目前唯一认这个
+            // 字段的展示面,当静态文字读;不跟播放位置联动,不高亮,不自动滚动。
+            if !playback.currentTrackPlainLyrics.isEmpty {
+                plainLyricsFallback(leading: leading, trailing: trailing)
+            } else {
+                emptyState
+            }
         } else {
             ScrollView {
                 // 用 VStack 而不是 LazyVStack:歌词就几十行(这首 43 行),lazy 省不下什么,
@@ -1449,6 +1496,21 @@ struct LyricsWindowView: View {
             }
             .buttonStyle(.plain)
             .anchorPreference(key: MoreMenuButtonBoundsKey.self, value: .bounds) { $0 }
+            // 「设置…」(2026-08-25 用户要求"加在三个点旁边"):这扇窗口本身没有右键菜单/
+            // 工具栏,原来只能从菜单栏图标右键或 Dock 才够得着设置。跟星形/「…」同款
+            // circleIcon,排在「…」右边——三颗圆钮都是"这扇窗自己的功能",不跟播放控件
+            // 混在一起。动作跟菜单栏右键菜单「设置…」那条同一条路径:
+            // `AppActions.shared.openSettings?()` 已经带 `NSApp.activate`(`.accessory`
+            // 策略下没有 Dock 图标,缺这一步点了没反应,见 MenuBarStatusMenu.openSettings
+            // 同款注释),不经 `requestSettings` 指定分类——从这里打开沿用上次停留的设置页。
+            // 文案复用 MenuBarStatusMenu 同一句「设置…」,同一个本地化键,不必新增翻译。
+            Button {
+                AppActions.shared.openSettings?()
+            } label: {
+                circleIcon("gearshape")
+            }
+            .buttonStyle(.plain)
+            .help(L10n.t("设置…"))
         }
     }
 
@@ -1788,16 +1850,27 @@ struct LyricsWindowView: View {
     /// key 用缓存里**实际命中**的那条(EnrichCacheReader.resolvedKey,含宽松匹配)——
     /// 播放器报法与缓存写法有空格/繁简出入时,写回必须落在读取路径同一条上;缓存里还
     /// 没有条目(collector 未解析)就退回 normalizedKey 新建。
+    ///
+    /// 直接读 PlaybackCoordinator.shared,不经本窗口的 WindowPlayback 代理(那份代理对
+    /// title/artist/album/currentDurationMs 各开一条独立的 Combine 订阅转发,见
+    /// WindowPlayback.init)——只隔一层转发更直接,跟 LyricsManagerView.refreshPlaceholder
+    /// 已有的写法一致。
     private func openLyricsSearch() {
-        let artist = playback.artist, title = playback.title, album = playback.album
-        let durationSecs = Double(playback.currentDurationMs ?? 0) / 1000
+        let p = PlaybackCoordinator.shared
+        let artist = p.artist, title = p.title, album = p.album
+        let durationSecs = Double(p.currentDurationMs ?? 0) / 1000
         Task.detached(priority: .userInitiated) {
             let key = EnrichCacheReader.resolvedKey(artist: artist, title: title, album: album)
                 ?? EnrichCacheKeys.normalizedKey(artist: artist, title: title, album: album)
             let source = EnrichCacheReader.sourceInfo(artist: artist, title: title, album: album)?.lyricsSource
             await MainActor.run {
+                // title 传归一化后的(EnrichCacheKeys.normalizedTitle),不是原始播放器标题——
+                // 2026-08-31 真实bug(林潔心《想逃避(22)》):collector 算缓存 key 时会把标题
+                // 结尾这种非版本标记的括号剥掉,但自动解析发去歌词源的搜索请求以前用的是
+                // 原始标题,搜不到;这里如果也传原始标题,手动搜索会复现同一个"搜不到"。
+                // key/source 两个查找仍然传原始 title——它们各自内部会归一化,契约不变。
                 lyricsSearchContext = LyricsSearchContext(
-                    artist: artist, title: title, album: album,
+                    artist: artist, title: EnrichCacheKeys.normalizedTitle(title), album: album,
                     key: key, currentSource: source, durationSecs: durationSecs)
             }
         }
@@ -1875,26 +1948,47 @@ struct LyricsWindowView: View {
         .contentShape(Circle())
     }
 
-    /// [歌词|队列] 双钮胶囊(2026-08-22 三批,AM 同款:71.5×35.5pt 胶囊,激活的一半
-    /// 是白圆+深字形)。歌词钮=歌词栏显隐(仅双列模式显示,单列关了剩空白);队列钮=
-    /// 「播放队列」面板(AppleScript 只有 Apple Music 有,其它播放器不显示)。两颗都
-    /// 没有就整颗胶囊不摆。
+    /// [歌词|播放记录] 双钮胶囊(2026-08-22 三批,AM 同款:71.5×35.5pt 胶囊,激活的
+    /// 一半是白圆+深字形)。歌词钮=歌词栏显隐(仅双列模式显示,单列关了剩空白);
+    /// 播放记录钮=右侧栏内容在"歌词"与"播放记录"之间切换(2026-08-27 取代原来的
+    /// 「播放队列」——AppleScript 读不到目录内容的播放上下文,见 showsListenHistory
+    /// 声明处注释)。播放记录不挑播放器(数据来自 collector 本地记录/Last.fm,不靠
+    /// AppleScript),不像原队列钮那样只在 Apple Music 才显示。两颗都没有就整颗
+    /// 胶囊不摆(理论上不会发生:播放记录钮恒真)。
+    ///
+    /// **两颗钮互斥**(2026-08-27 用户反馈"应该是互斥的,一个选了另一个就灰掉")——
+    /// 原来是两个独立布尔量各管各的(`showsLyricsPane.toggle()` / `showsListenHistory.
+    /// toggle()`),会出现"歌词已隐藏、又点了播放记录,再点歌词切回去,`showsLyricsPane`
+    /// 却因为从没被这条路径碰过而仍是 false"这类脱节状态(已经在 07-lyrics-window.md
+    /// 记过一次的那类死角的同源问题,只是换了个触发路径)。改成显式的二选一:歌词钮
+    /// 点击时,当前在播放记录就切回歌词(不碰 `showsLyricsPane`,不隐藏整栏);当前已经
+    /// 是歌词就走原来的隐藏/显示切换(这是 2026-08-22 就有的既有功能,保留)。播放记录
+    /// 钮点击是**单向选中**(不是 toggle)——点它总是切到播放记录并确保整栏可见,再点
+    /// 一次不会切回歌词,要切回去点左边那颗歌词钮,跟 AM 自己的 Lyrics/Queue 分段控件
+    /// 同一个交互(点已选中的那段不会取消选中,切换靠点另一段)。
     @ViewBuilder private func lyricsQueuePill(showPlayerPane: Bool) -> some View {
         let showsLyricsButton = showPlayerPane
-        let showsQueueButton = isAppleMusicPlayer
-        if showsLyricsButton || showsQueueButton {
+        // 歌词钮"激活"只在"整栏可见 且 当前显示的确实是歌词"时才算——不是单看
+        // showsLyricsPane:播放记录钮点击后会强制把它设回 true(保证整栏不塌),
+        // 这时候 showsLyricsPane 本身已经不能单独代表"现在显示的是歌词"了。
+        let showsLyricsActive = showsLyricsPane && !showsListenHistory
+        if showsLyricsButton {
             HStack(spacing: 2) {
-                if showsLyricsButton {
-                    pillSlotButton(icon: "quote.bubble.fill", active: showsLyricsPane,
-                                   help: L10n.t(showsLyricsPane ? "隐藏歌词" : "显示歌词")) {
-                        withAnimation(.smooth(duration: 0.35)) { showsLyricsPane.toggle() }
+                pillSlotButton(icon: "quote.bubble.fill", active: showsLyricsActive,
+                               help: L10n.t(showsLyricsActive ? "隐藏歌词" : "显示歌词")) {
+                    withAnimation(.smooth(duration: 0.35)) {
+                        if showsListenHistory {
+                            showsListenHistory = false
+                        } else {
+                            showsLyricsPane.toggle()
+                        }
                     }
                 }
-                if showsQueueButton {
-                    pillSlotButton(icon: "list.bullet", active: showsQueuePanel,
-                                   help: L10n.t("待播清单")) {
-                        withAnimation(.easeOut(duration: 0.12)) { showsQueuePanel.toggle() }
-                        if showsQueuePanel { loadQueue() }
+                pillSlotButton(icon: "list.bullet", active: showsListenHistory,
+                               help: L10n.t("播放记录")) {
+                    withAnimation(.smooth(duration: 0.35)) {
+                        showsListenHistory = true
+                        showsLyricsPane = true
                     }
                 }
             }
@@ -1902,7 +1996,17 @@ struct LyricsWindowView: View {
             .frame(height: 36)
             .clearGlassCapsule(
                 rim: hasArtworkBackground ? Color.white.opacity(0.28) : Color.primary.opacity(0.10))
-            .anchorPreference(key: QueuePillBoundsKey.self, value: .bounds) { $0 }
+        } else {
+            // 单列窗口:没有「隐藏歌词」这颗钮(理由同旧版,单列的右栏本来就是整窗
+            // 唯一内容、不能收起来),播放记录钮独立一颗圆钮,这里没有配对的歌词钮
+            // 可以"切回去",所以仍然是普通 toggle(点一下切过去,再点一下切回来)。
+            pillSlotButton(icon: "list.bullet", active: showsListenHistory,
+                           help: L10n.t(showsListenHistory ? "显示歌词" : "播放记录")) {
+                withAnimation(.smooth(duration: 0.35)) { showsListenHistory.toggle() }
+            }
+            .frame(width: 36, height: 36)
+            .clearGlassCapsule(
+                rim: hasArtworkBackground ? Color.white.opacity(0.28) : Color.primary.opacity(0.10))
         }
     }
 
@@ -1923,71 +2027,15 @@ struct LyricsWindowView: View {
         .help(help)
     }
 
-    /// 「待播清单」面板:current playlist 从当前曲目起的一段(能力边界见
-    /// MusicPlaybackController.upNextQueue 注释),行点击跳播该曲。
-    private var queuePanel: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(L10n.t("待播清单"))
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, 10)
-                .padding(.top, 4)
-            if let items = queueItems {
-                if items.isEmpty {
-                    Text(L10n.t("无法获取待播清单"))
-                        .font(.system(size: 12))
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                } else {
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: 0) {
-                            ForEach(items, id: \.index) { item in
-                                QueueRow(item: item) {
-                                    Task.detached(priority: .userInitiated) {
-                                        guard await MusicAutomationPermission.checkAppleMusicSafely(askIfNeeded: true) else { return }
-                                        MusicPlaybackController.playTrackInCurrentPlaylist(index: item.index)
-                                        // 跳播后当前曲变了,清单重拉(小延迟等 Music 切歌落定)
-                                        try? await Task.sleep(nanoseconds: 600_000_000)
-                                        await MainActor.run { loadQueue() }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    .frame(width: 260)
-                    .frame(maxHeight: 320)
-                }
-            } else {
-                ProgressView()
-                    .controlSize(.small)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 10)
-            }
-        }
-        .padding(6)
-        .frame(minWidth: 200, alignment: .leading)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .strokeBorder(Color.white.opacity(0.10), lineWidth: 1)
-        )
-        .shadow(color: .black.opacity(0.35), radius: 24, y: 10)
-        .environment(\.colorScheme, hasArtworkBackground ? .dark : colorScheme)
-        // 面板开着时换曲(自然播完/跳播)清单跟着刷新。
-        .onChange(of: playback.title) { _ in if showsQueuePanel { loadQueue() } }
-    }
-
-    private func loadQueue() {
-        queueItems = nil
-        Task.detached(priority: .userInitiated) {
-            guard await MusicAutomationPermission.checkAppleMusicSafely(askIfNeeded: true) else {
-                await MainActor.run { queueItems = [] }
-                return
-            }
-            let items = MusicPlaybackController.upNextQueue() ?? []
-            await MainActor.run { queueItems = items }
-        }
+    /// 「播放记录」面板:填在右侧栏跟歌词同一块地皮上(不是弹出面板),内容按
+    /// Last.fm 连没连二选一。完整背景见 showsListenHistory 声明处注释。
+    private func listenHistoryPane(leading: CGFloat, trailing: CGFloat) -> some View {
+        ListenHistoryPane(
+            leading: leading, trailing: trailing,
+            onArtwork: hasArtworkBackground, colorScheme: colorScheme,
+            onOpenTrack: { title, artist in
+                openCatalogPage(title: title, artist: artist, target: .track)
+            })
     }
 
     /// 「翻译与发音」菜单(2026-08-22,对照 AM 歌词页右下角):两行开关,开的是设置里
@@ -2035,6 +2083,7 @@ struct LyricsWindowView: View {
                 return parts.joined(separator: " · ")
             }
             if playback.isCurrentTrackInstrumental { return L10n.t("纯音乐") }
+            if !playback.currentTrackPlainLyrics.isEmpty { return L10n.t("纯文本(无时间戳)") }
             return L10n.t("无歌词")
         }()
         let durationText: String? = playback.currentDurationMs.map { ms in
@@ -2446,11 +2495,16 @@ struct LyricsWindowView: View {
                 // 匀速正弦:约 44% 的周期停在小尺寸附近几乎不怎么变,鼓到最大再落回去只占
                 // 中间那一小段,是"停留久、鼓得快"的心跳感,不是均匀呼吸。用 raised-cosine
                 // 的平方去逼近这个"多数时间贴地、中段快速隆起"的形状(指数越大,贴在低点的
-                // 时间占比越大);振幅 ±28%(阈值化的像素计数本来就会低估真实边缘的缩放量)。
+                // 时间占比越大)。振幅原为对称 ±28%(阈值化的像素计数本来就会低估真实边缘的
+                // 缩放量),2026-08-27 改成不对称的 0.90~1.28,理由见下面 breathe 那行注释。
                 let breathePeriodMs = 7000.0
                 let breathePhase = Double(pos).truncatingRemainder(dividingBy: breathePeriodMs) / breathePeriodMs
                 let breatheRaised = pow(0.5 - 0.5 * cos(2 * .pi * breathePhase), 2)
-                let breathe = reduceMotion ? 1 : 0.72 + 0.56 * breatheRaised
+                // 2026-08-27 用户反馈"最小的状态太小了,最大状态不变"——原来振幅是对称的
+                // ±28%(0.72~1.28),现在只抬最低点、封顶仍然钉在 1.28 不动:0.90~1.28。
+                // 呼吸曲线本身(raised-cosine 平方、周期 7s)和最大值都没变,只是把停留最久
+                // 的那段"贴地"抬高了一截,原来在这个尺寸的点几乎看不清是个圆。
+                let breathe = reduceMotion ? 1 : 0.90 + 0.38 * breatheRaised
                 HStack(spacing: lyricFontSize * 0.3) {
                     ForEach(0 ..< 3, id: \.self) { i in
                         Circle()
@@ -2651,6 +2705,32 @@ struct LyricsWindowView: View {
         }
         if playback.isPlayingNow && !playback.hasLyricsContent { return ("magnifyingglass", L10n.t("搜索歌词中…")) }
         return ("text.quote", L10n.t("无歌词"))
+    }
+
+    /// 纯文本歌词兜底的静态展示(2026-08-30 加,见 currentTrackPlainLyrics 声明处
+    /// 注释)。不用 rightPane 主分支那一整套逐字/滚动锚/间奏点渲染管线——那套是为
+    /// "跟着播放位置走"设计的,这里的内容压根没有时间戳,没有"现在唱到哪一行"这回事,
+    /// 硬套上去只会画出一个恒定不动的"当前行"高亮,反而误导用户以为它在跟播放联动。
+    @ViewBuilder
+    private func plainLyricsFallback(leading: CGFloat, trailing: CGFloat) -> some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                Label(L10n.t("这份歌词没有时间戳,无法跟随播放高亮或自动滚动"), systemImage: "exclamationmark.triangle.fill")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(hasArtworkBackground ? .white.opacity(0.75) : Color.orange)
+                Text(playback.currentTrackPlainLyrics)
+                    .font(.system(size: lyricFontSize * 0.62))
+                    .lineSpacing(lyricFontSize * 0.32)
+                    .foregroundStyle(hasArtworkBackground ? .white.opacity(0.92) : Color.primary)
+                    .textSelection(.enabled)
+            }
+            .padding(.top, 40)
+            .padding(.bottom, 60)
+            .padding(.leading, leading)
+            .padding(.trailing, trailing)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .scrollIndicators(.hidden)
     }
 
     @ViewBuilder
@@ -3613,14 +3693,6 @@ private struct TranslationMenuButtonBoundsKey: PreferenceKey {
     }
 }
 
-/// 右下角 [歌词|队列] 胶囊的窗内坐标(同上,队列面板定位用)。
-private struct QueuePillBoundsKey: PreferenceKey {
-    static let defaultValue: Anchor<CGRect>? = nil
-    static func reduce(value: inout Anchor<CGRect>?, nextValue: () -> Anchor<CGRect>?) {
-        value = nextValue() ?? value
-    }
-}
-
 /// 歌词滚动几何(自绘指示条用):内容在滚动坐标系里的偏移与总高。
 private struct LyricsScrollMetricsValue: Equatable {
     var offsetY: CGFloat = 0
@@ -3678,42 +3750,48 @@ private struct LyricsScrollIndicator: View {
     }
 }
 
-/// 待播清单的一行:曲名 + 歌手,当前曲带小喇叭标;悬停圆角高亮、整行可点(点击跳播)。
-private struct QueueRow: View {
-    let item: MusicPlaybackController.UpNextItem
-    let action: () -> Void
-    @State private var hovered = false
+/// 「播放记录」面板的外壳(2026-08-27,取代原来的「播放队列」,完整背景见
+/// LyricsWindowView.showsListenHistory 声明处注释):按 Last.fm 连没连二选一,
+/// 自带 isConnected 订阅——不进 LyricsWindowView 自己的 WindowPlayback 代理,跟
+/// ChartsPanelView/WindowVolumeCapsule 同一个理由,这一小块状态没必要让整个歌词
+/// 窗口 body 陪跑。
+private struct ListenHistoryPane: View {
+    let leading: CGFloat
+    let trailing: CGFloat
+    let onArtwork: Bool
+    let colorScheme: ColorScheme
+    let onOpenTrack: (String, String) -> Void
+
+    @ObservedObject private var stats = LastfmStatsService.shared
 
     var body: some View {
-        Button(action: action) {
-            HStack(spacing: 6) {
-                if item.isCurrent {
-                    Image(systemName: "speaker.wave.2.fill")
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(.secondary)
-                }
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(item.title)
-                        .font(.system(size: 13, weight: item.isCurrent ? .semibold : .regular))
-                        .foregroundStyle(.primary)
-                        .lineLimit(1)
-                    Text(item.artist)
-                        .font(.system(size: 11))
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
-                Spacer(minLength: 0)
+        Group {
+            // showsCard: false —— 2026-08-27 用户反馈"这个列表带卡片背景,感觉像盖了
+            // 一层东西,不是歌词真的被换掉了"。歌词文字本身从来没有卡片背景,直接铺在
+            // 封面模糊背景上;这里让它跟歌词用同一种"裸铺"外观,onArtwork 同步传过去
+            // 让文字颜色也走跟歌词一样的"有封面就固定白色系"那套(详见两个参数在
+            // RecentListensPanel/PendingListensPanel 声明处的注释)。
+            if stats.isConnected {
+                RecentListensPanel(onOpenTrack: onOpenTrack, showsCard: false, onArtwork: onArtwork)
+            } else {
+                PendingListensPanel(onOpenTrack: onOpenTrack, showsCard: false, onArtwork: onArtwork)
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
-            .background(
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(Color.primary.opacity(hovered ? 0.12 : 0))
-            )
-            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
-        .onHover { hovered = $0 }
+        .padding(.leading, leading)
+        .padding(.trailing, trailing)
+        // 上下留白撑够,躲开两个**窗级 overlay**(不属于这块内容自己的布局,内容本身
+        // 不知道它们在哪,只能靠外部撞出来的经验值让开)——2026-08-27 用户截图报"顶部
+        // 卡头跟音量胶囊挤在一起、底部行跟翻译/播放记录那两颗圆钮撞了"。
+        // 上:音量/AirPlay 胶囊(WindowVolumeCapsule)贴 topTrailing、`.offset(y: 8)`、
+        // 自身高 36pt(`.padding(.vertical, 7)` 包住 ~22pt 内容)——两者共用同一个
+        // safe-area 原点(本窗口全程不 ignoresSafeArea 内容层,只有背景那层
+        // ignoresSafeArea),下缘 = 8 + 36 = 44pt,52 留出 8pt 视觉间隙。
+        // 下:翻译/播放记录那两颗圆钮贴 bottomTrailing、`.padding(.bottom, 11)`、
+        // 自身高 36pt,上缘 = 11 + 36 = 47pt,52 同理留一点余量。
+        .padding(.top, 52)
+        .padding(.bottom, 52)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .environment(\.colorScheme, onArtwork ? .dark : colorScheme)
     }
 }
 
@@ -4088,6 +4166,14 @@ private struct IdleLastfmSection: View {
                     }
                 }
                 MiniHeatmapStrip(dailyCounts: stats.dailyCounts)
+                // 首次连接的后台引导同步期间,这条迷你热力图是空白格子——不加一句说明
+                // 用户会以为这个功能坏了(2026-08-25)。total > 3 跟 LastfmStatsService
+                // 内部 dailySyncProgress 的既有分界线一致,日常 1-3 页 top-up 不弹这行字。
+                if case .syncing(_, let total) = stats.bootstrapState, total > 3 {
+                    Text(L10n.t("首次同步历史中，稍候完整数据会自动出现"))
+                        .font(.system(size: 11))
+                        .foregroundStyle(.tertiary)
+                }
             }
             .frame(maxWidth: 420)
             .task {
@@ -4162,6 +4248,26 @@ private struct ChartsPanelView: View {
     @State private var kind: LastfmStatsService.ChartKind = .tracks
     @State private var period: LastfmStatsService.Period = .week
 
+    /// content 区域曾经渲染到过的最大高度(2026-08-25,用户报"加载时窗口先缩小再突然变大")。
+    ///
+    /// 根因:面板整体靠外层 `.fixedSize(vertical: true)` 跟着 content 的天然高度走,而
+    /// content 四态天差地别 —— 有数据时最多 10 行(~300+pt),loading/失败/无数据只是一个
+    /// spinner 或一行灰字(~50pt 出头)。切 kind/period 会触发 refreshChart 重新进入 loading
+    /// 那一档(哪怕只是一瞬间),面板跟着缩成 spinner 那么高,数据一到又弹回大尺寸 —— 就是
+    /// 用户截图想避免的"转圈时先缩小、突然变大"。
+    ///
+    /// 修法是"水位线":content 用 `.frame(minHeight:)` 兜住曾经量到过的最大高度,只会长
+    /// 不会缩;下面 `growMinHeight` 量的是 minHeight 生效**之后**的高度(即
+    /// max(旧水位,天然高度)),所以水位线只可能单调不减,不会因为"量到自己抬高后的高度"
+    /// 而失控增长。
+    ///
+    /// 落 @AppStorage 而不是纯 @State:同一个道理也适用于**这个 App 启动后第一次**打开
+    /// 这面板 —— 冷启动时水位线是 0,那一次没法靠"上一次量到的高度"兜。持久化把这个也
+    /// 解决了,下次开 App 直接用上次退出前那个高度起步。key 不用 "np:" 前缀 —— 那是配置
+    /// 导出白名单(见 SettingsView.offsetScope 同类注释),这是纯渲染测量值,换一台机器/
+    /// 换一次系统字体设置就该失效,不该跟着配置搬家。
+    @AppStorage("settings:chartsPanelMinHeight") private var contentMinHeight: Double = 0
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(L10n.t("你的常听"))
@@ -4190,29 +4296,56 @@ private struct ChartsPanelView: View {
         .onChange(of: period) { _, p in stats.refreshChart(kind: kind, period: p) }
     }
 
+    /// 只在真的变高时才写 —— @AppStorage 写入即落 UserDefaults,同值重复写没有代价但也
+    /// 没有必要,这里比较一下更干净。
+    private func growMinHeight(_ h: CGFloat) {
+        if h > contentMinHeight { contentMinHeight = h }
+    }
+
+    /// nil = 还没量到过任何高度(全新装机/从未打开过这面板),这时不设下限,跟原来行为
+    /// 一样从小渲染起——没有"上一次"可参照,强行给个猜的数字不如不给。
+    private var reservedMinHeight: CGFloat? { contentMinHeight > 0 ? contentMinHeight : nil }
+
     @ViewBuilder
     private var content: some View {
-        if let entries = stats.chart(kind, period), !entries.isEmpty {
-            VStack(spacing: 0) {
-                ForEach(entries.prefix(10)) { entry in
-                    row(entry)
+        Group {
+            if let entries = stats.chart(kind, period), !entries.isEmpty {
+                // .top:真有数据时,行数不足 10 行也让它们贴顶,空出来的地方留白在下面 ——
+                // 这本身就是排行榜类 UI 的自然形态,比强行把几行字撑到垂直居中更像列表。
+                VStack(spacing: 0) {
+                    ForEach(entries.prefix(10)) { entry in
+                        row(entry)
+                    }
                 }
+                .frame(minHeight: reservedMinHeight, alignment: .top)
+            } else if stats.chartLoading(kind, period) {
+                // .center:这三档都是"内容缺席"的占位态,居中比贴顶更自然——不会看着像
+                // 一个 spinner 孤零零钉在一大块空白的最上头。
+                ProgressView().controlSize(.small)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 14)
+                    .frame(minHeight: reservedMinHeight, alignment: .center)
+            } else if stats.chartFailed(kind, period) {
+                Button(L10n.t("重试")) { stats.refreshChart(kind: kind, period: period) }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 10)
+                    .frame(minHeight: reservedMinHeight, alignment: .center)
+            } else {
+                Text(L10n.t("暂无数据"))
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 14)
+                    .frame(minHeight: reservedMinHeight, alignment: .center)
             }
-        } else if stats.chartLoading(kind, period) {
-            ProgressView().controlSize(.small)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 14)
-        } else if stats.chartFailed(kind, period) {
-            Button(L10n.t("重试")) { stats.refreshChart(kind: kind, period: period) }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 10)
-        } else {
-            Text(L10n.t("暂无数据"))
-                .font(.system(size: 12))
-                .foregroundStyle(.secondary)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 14)
         }
+        .background(
+            GeometryReader { g in
+                Color.clear
+                    .onAppear { growMinHeight(g.size.height) }
+                    .onChange(of: g.size.height) { _, h in growMinHeight(h) }
+            }
+        )
     }
 
     private func row(_ entry: LastfmStatsService.ChartEntry) -> some View {

@@ -358,7 +358,7 @@ final class MenuBarScrollingLabel: NSView {
         /// (开关关着 / 没有逐字数据)。含义、构造方式跟 MenuBarStatusItem.karaokeFillPath
         /// 完全一样 —— 调用方(MenuBarPreviewBar)只在真的在播放且当前句有逐字数据时
         /// 才传非 nil,不为空闲时的示例句编造假时间轴(那样会跟其它预览的既有原则相悖,
-        /// 见 OverlayPreviewBar 头注"预览只画整行的最终颜色")。
+        /// 见 SectionPreviewBars.swift 头注「不为示例句编造进度」那一段)。
         let fillPath: [MenuBarMarquee.KaraokeFillPoint]?
         /// 染色对表用的播放时钟快照,含义同 MenuBarStatusItem.syncKaraokeClock 的三个参数。
         let karaokePositionMs: Int?

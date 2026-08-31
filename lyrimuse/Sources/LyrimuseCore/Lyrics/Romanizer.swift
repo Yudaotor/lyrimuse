@@ -21,9 +21,33 @@ public enum ChineseVariant: String, CaseIterable, Sendable {
     ///
     /// 反方向(转繁体)**刻意不做**异体字映射:简体只有「你」,转繁体时无从判断该写「你」
     /// 还是「妳」,那要猜被称呼者的性别。
+    /// `converted(_:)` 会不会真的改动这段文字 —— 也就是"简繁转换对它有没有用"。
+    ///
+    /// 抽成单独一个判据(2026-08-31),是为了让**所有**依赖"这段文字算不算中文"的地方共用
+    /// 同一份逻辑,不可能各自漂开:
+    ///   - `converted(_:)` 自己的早退(下面);
+    ///   - `LocalPlaybackSource.sawChineseLyrics`(粘性,设置页据它决定露不露出开关)——
+    ///     那边原本就手抄了一份一模一样的条件,注释还专门写了"判据跟 ChineseVariant.converted
+    ///     一致",正说明这是一份该被共享的逻辑,不是巧合;
+    ///   - `LocalPlaybackSource.currentLyricsSupportsChineseVariant`(不粘,悬浮窗右键菜单
+    ///     据它决定显不显示「简繁转换」)。
+    ///
+    /// ⚠️ 判据是"有汉字、且没有假名",**不是**"整首歌是不是中文歌"。这两者不等价,而且
+    /// 用后者会出真 bug:
+    ///   - `Romanizer.songScript(of:)` 把"含谚文"排在"含汉字"**之前**判,于是韩文歌里的
+    ///     汉字(漢字)会让它返回 `.korean` —— 但 `converted(_:)` 并没有谚文守卫,照样会把
+    ///     那些汉字转掉。按 songScript 隐藏菜单 = **正在转换、而开关不见了**,那正是
+    ///     SettingsView 里那条「只要它还在起作用,就一定看得见」要防的最坏状态。
+    ///   - 反方向:`looksJapaneseSong` 按**行占比**判,而这里按"有没有假名"判 —— 一首只有
+    ///     3/75 行带假名的中文歌,前者说不是日文歌、后者说是,按前者显示菜单就成了"菜单在、
+    ///     点了没反应"。
+    /// 共用同一个判据之后,这两类不一致都不可能出现:**菜单显示 ⟺ 转换真的会发生**。
+    public static func affects(_ text: String) -> Bool {
+        !text.isEmpty && Romanizer.containsHan(text) && !Romanizer.looksJapanese(text)
+    }
+
     public func converted(_ text: String) -> String {
-        guard self != .off, !text.isEmpty else { return text }
-        guard !Romanizer.looksJapanese(text) else { return text }
+        guard self != .off, Self.affects(text) else { return text }
         let transform: StringTransform =
             self == .traditional
             ? StringTransform("Simplified-Traditional")
@@ -182,6 +206,49 @@ public enum Romanizer {
         return joined
     }
 
+    /// 韩语按空格切词的"片段"——跟 japaneseSegments 形状一致(UTF16 范围 + 读音),但来源
+    /// 不是分词器,是文本自带的词间空格:韩语原文本来就按空格分词,罗马字转写(服务端给的
+    /// 或 ICU 现算的)会保留同样的词间空格,不需要跟日语一样现分词。实测坐实:
+    /// "나는 너를 사랑해"(3 词)→ ICU 给的 "naneun neoleul salanghae" 恰好也是 3 个空格
+    /// 分隔的词、顺序不变;而单字块内部(比如"안녕"→"annyeong")ICU 不插空格,所以这里
+    /// 是按**词**跟逐字词做归并,不是按谚文字符——一个词常常横跨好几个逐字词(酷狗式的
+    /// 逐字切分一个谚文字一个词很常见),归并算法复用 mergeSegmentsIntoWordGroups 那套。
+    ///
+    /// 词数(空格分隔的段数)对不上时返回 nil——多半是罗马字来源对这一行的标点/空格做了
+    /// 什么改写,宁可放弃对齐、退回整行罗马音,也不要猜错位置(跟 hanRomanization 那条
+    /// 分支同一个安全网思路)。
+    public static func koreanSegments(_ text: String, romanization: String) -> [JapaneseSegment]? {
+        let romTokens = romanization.split(whereSeparator: { $0.isWhitespace }).map(String.init)
+        guard !romTokens.isEmpty else { return nil }
+        var segs: [JapaneseSegment] = []
+        var utf16Offset = 0
+        var tokenIdx = 0
+        var wordStart: Int?
+        for ch in text {
+            let chLen = String(ch).utf16.count
+            if ch.isWhitespace {
+                if let start = wordStart {
+                    guard tokenIdx < romTokens.count else { return nil }
+                    segs.append(JapaneseSegment(
+                        utf16Start: start, utf16Length: utf16Offset - start, latin: romTokens[tokenIdx]))
+                    tokenIdx += 1
+                    wordStart = nil
+                }
+            } else if wordStart == nil {
+                wordStart = utf16Offset
+            }
+            utf16Offset += chLen
+        }
+        if let start = wordStart {
+            guard tokenIdx < romTokens.count else { return nil }
+            segs.append(JapaneseSegment(
+                utf16Start: start, utf16Length: utf16Offset - start, latin: romTokens[tokenIdx]))
+            tokenIdx += 1
+        }
+        guard tokenIdx == romTokens.count else { return nil }
+        return segs
+    }
+
     public static func japaneseSegments(
         _ text: String, marks: [KanaAnnotation.Mark] = []
     ) -> [JapaneseSegment] {
@@ -310,6 +377,11 @@ public enum Romanizer {
 /// looksJapanese 的注释:极少数纯汉字的日文行不该被局部特征误判成中文。
 public enum LyricScript: String, Sendable, CaseIterable {
     case japanese, korean, chinese
+    /// 粤语歌的汉字行。文字本身(汉字)跟 .chinese 没有任何差异,分不出普通话还是
+    /// 粤语——这一档只能靠外部信号(collector 判定的 SongLanguage 真值,见
+    /// EnrichCacheLyrics.isCantonese)分派,不能像日语假名/韩语谚文那样靠文字本身
+    /// 判定。2026-08-29 加,拼音/粤拼两个开关分开之后才需要区分。
+    case cantonese
     /// 拉丁字母、泰文、西里尔字母等等。这些跟汉字没有交集,音译无歧义,历来是无条件
     /// 允许的,不纳入按语言开关的管辖 —— 用户提的是"汉语/韩语/日语"三选。
     case other
@@ -319,6 +391,7 @@ public enum LyricScript: String, Sendable, CaseIterable {
         case .japanese: return .japanese
         case .korean: return .korean
         case .chinese: return .chinese
+        case .cantonese: return .cantonese
         case .other: return nil
         }
     }
@@ -335,13 +408,19 @@ public struct RomanizationScripts: OptionSet, Sendable, Codable {
 
     public static let japanese = RomanizationScripts(rawValue: 1 << 0)
     public static let korean = RomanizationScripts(rawValue: 1 << 1)
+    /// 中文(普通话拼音)。设置页文案是"拼音",跟"粤拼"对举——枚举名保留 chinese 不改,
+    /// 只是没必要为了改名字连带迁移已经落盘的用户设置(OptionSet 按 rawValue 持久化,
+    /// 位不变就不用管旧设置怎么迁移)。
     public static let chinese = RomanizationScripts(rawValue: 1 << 2)
+    /// 粤语(粤拼/Jyutping)。2026-08-29 加——此前粤拼罗马音只在服务端无条件生成,
+    /// 客户端完全没有开关能控制显不显示。
+    public static let cantonese = RomanizationScripts(rawValue: 1 << 3)
 
-    /// 默认值刻意等于**改成可配置之前的实际观感**:日文有罗马字、韩文有、中文没有。
-    /// 中文默认关不是随便定的 —— 绝大多数中文歌本来就没有服务端罗马音(网易云不给中文歌
-    /// 算 lyrics_roma,那本身就是"不需要"的信号),客户端也一直不兜底。默认打开会让每首
-    /// 中文歌凭空多出一行拼音,那正是当初修掉的问题。
-    public static let `default`: RomanizationScripts = [.japanese, .korean]
+    /// 2026-08-29 改:四项默认全开——"显示罗马音"总开关一旦打开,不该还要用户再去
+    /// 逐项勾选才看得到东西。此前中文(拼音)单独默认关是因为普通话读者本来就认字、
+    /// 拼音是纯噪声;但那次决定早于粤拼的出现,不该被直接套用到全部四项上(用户
+    /// 2026-08-29 拍板:统一默认开)。
+    public static let `default`: RomanizationScripts = [.japanese, .korean, .chinese, .cantonese]
 }
 
 extension Romanizer {
@@ -422,12 +501,18 @@ extension Romanizer {
         return .other
     }
 
-    /// **一行**的文字种类。行内有假名/谚文就按行自己算(确证);只有纯汉字行才有中日歧义,
-    /// 那种行退回整首歌的判断。
+    /// **一行**的文字种类。行内有假名/谚文就按行自己算(确证);只有纯汉字行才有
+    /// 中文/日文/粤语的歧义,那种行退回整首歌的判断——粤语和普通话的汉字长得
+    /// 一模一样,光看这一行的文字本身分不出来,只能信 song 这个整首歌级别的判定
+    /// (它来自 collector 的 SongLanguage 真值,不是文字分析,见 isCantonese 的注释)。
     public static func script(ofLine line: String, song: LyricScript) -> LyricScript {
         if looksJapanese(line) { return .japanese }
         if containsHangul(line) { return .korean }
-        if containsHan(line) { return song == .japanese ? .japanese : .chinese }
+        if containsHan(line) {
+            if song == .japanese { return .japanese }
+            if song == .cantonese { return .cantonese }
+            return .chinese
+        }
         return .other
     }
 }

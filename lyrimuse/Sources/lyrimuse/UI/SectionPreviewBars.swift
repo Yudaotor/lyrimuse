@@ -2,20 +2,36 @@ import AppKit
 import LyrimuseCore
 import SwiftUI
 
-// 「外观」页里灵动岛/菜单栏两段各自的顶部预览。
+// 「外观」页里**菜单栏**那一段钉在页顶的预览。
 //
-// 桌面悬浮歌词那一段早就有 OverlayPreviewBar 了,这两段一直没有 —— 而它们同样面临
-// "改完的效果只出现在别处、而那个别处此刻多半看不见"的问题:灵动岛贴在刘海下(设置窗
-// 一挡就没了),菜单栏歌词只有一行字还得等有歌在播。
+// (2026-08-31 之前这个文件里还有灵动岛那一段的预览 `NotchPreviewBar` 和它的替身 chrome
+//  `NotchPreviewChrome`。灵动岛改成编辑台范式之后,预览从页顶钉条挪进了可滚动内容区并且
+//  变得可交互,两样一起搬去 NotchEditorStage.swift —— 钉条那一层收不到点击事件,凡是
+//  "能动手改"的预览都只能待在内容区,理由见 SettingsView 里那段 2026-08-16 的复现记录。
+//  三段预览栏共用的 `SectionPreviewMetrics` 留在这里:菜单栏那条还在用,悬浮歌词/灵动岛
+//  两块编辑台也拿它的 caption 度量对齐疏密。)
 //
-// ⚠️ 刻意**不**复用 OverlayPreviewBar。那一条画的是悬浮歌词的字体/颜色/描边/宽度,而
-// 灵动岛和菜单栏**根本不读那些设置**(灵动岛用自己的 notchCardStyle,菜单栏就是系统
-// 菜单栏字)。拿同一条预览挂在这两段上,等于暗示那些设置对它们也有效 —— 那是错的。
-// 每一段的预览只反映这一段自己那几项设置。
+// 桌面悬浮歌词那一段早就有预览了,菜单栏这一段一度没有 —— 而它同样面临"改完的效果只出现
+// 在别处、而那个别处此刻多半看不见"的问题:菜单栏歌词只有一行字,还得等有歌在播。
 //
-// 这两个都照 OverlayPreviewBar 的几条教训写(见那边注释):高度固定不跟内容变(挂在
-// safeAreaInset 上,高度一动整页就跳)、只订阅要用的那一两个 @Published(别 ObservedObject
-// 整个 PlaybackCoordinator)、自带不透明底色(inset 区域盖不到 ScrollView 的 background)。
+// ⚠️ 刻意**不**复用悬浮歌词那条预览。那一条画的是悬浮歌词的字体/颜色/描边/宽度,而菜单栏
+// **根本不读那些设置**(它就是系统菜单栏字)。拿同一条预览挂在这一段上,等于暗示那些设置
+// 对它也有效 —— 那是错的。每一段的预览只反映这一段自己那几项设置。
+//
+// 几条教训(跟悬浮歌词那条钉条同源):高度固定不跟内容变(挂在页顶,高度一动整页就跳)、
+// 只订阅要用的那一两个 @Published(别 ObservedObject 整个 PlaybackCoordinator)、自带
+// 不透明底色(头部区域盖不到 ScrollView 的 background)。
+//
+// MARK: 全仓预览的一条共同原则 —— 不为示例句编造进度
+//
+// **预览只画真实数据能支撑的东西;演示效果不值得用假数据换。**没在播放(或这首歌没有逐字
+// 时间轴)时,预览画的是整行的最终颜色,**不**编一份不存在的播放进度去演示逐字染色 ——
+// 假数据会让预览在"没放歌"这个大多数场景里显得像在骗人,而预览存在的全部意义就是所见即所得。
+// 真的在放歌、这一句确实有逐字数据时,给的是**完全真实**的数据,不是演示。
+//
+// (这条原来记在悬浮歌词那条钉条 `OverlayPreviewBar` 的头注里。钉条 2026-08-31 随死代码
+//  一起删了 —— 悬浮歌词/灵动岛两段都改成了编辑台,它没有任何实例化点 —— 原则本身对这个文件
+//  里的菜单栏预览、以及两块编辑台仍然成立,所以搬到这里。别处引用这条时指这里。)
 
 // 三段预览栏共用的外层度量。
 //
@@ -24,8 +40,6 @@ import SwiftUI
 // 同日灵动岛展开区加高(40→76)后留白涨到几十 pt,用户报"这块太空了,下方内容空间大点"。
 // 两个诉求的调和:高度跟段走 + 换段的高度变化交给动画滑过去(见 SettingsView 挂在
 // 预览 switch 上的 .animation(value: sectionRaw)),不再是硬跳。
-// 灵动岛那条的卡高**仍然包含 hover 展开的余量**(NotchPreviewBar.cardHeight),
-// 段内 hover 展开预览时头部不动 —— 段内零移动这条底线没变。
 @MainActor
 enum SectionPreviewMetrics {
     static let topPadding: CGFloat = 14
@@ -42,157 +56,6 @@ enum SectionPreviewMetrics {
     /// 这一段预览栏的总高:固定开销 + 这一段自己的卡高。
     static func barHeight(cardHeight: CGFloat) -> CGFloat {
         chromeHeight + cardHeight
-    }
-}
-
-/// 灵动岛预览用的 chrome:凑齐 NotchLyricsView 要的那几个属性,但不建窗口、不碰屏幕。
-///
-/// ⚠️ 这个类存在的唯一理由,就是让预览**不去碰 NotchLyricsWindowController.shared**。
-/// 见那个文件顶部那条不变量:`.shared` 是 `static let`,哪怕只是拿来读一下属性都会执行
-/// init() 建窗口并立刻 orderFront —— 灵动岛关着的用户,一打开设置页就会在屏幕顶上凭空
-/// 多出一个胶囊。所以刘海几何这里走的是那边不碰实例状态的 static 函数。
-///
-/// 用独立实例还有第二个好处:鼠标划过预览时展开的是**预览这一份**,不会顺手把真窗口
-/// 也撑开。
-@MainActor
-final class NotchPreviewChrome: ObservableObject, NotchChromeSource {
-    @Published private(set) var isExpanded = false
-    @Published private(set) var notchWidth: CGFloat = 0
-    @Published private(set) var contentTopInset: CGFloat = 0
-
-    /// 预览恒为 false。isCollapsed 是真窗口"没在播放就缩回刘海大小、内容整套不渲染"的
-    /// 行为 —— 照搬到设置页就是一片空白,而用户恰恰是来这里看样式的。
-    var isCollapsed: Bool { false }
-
-    /// 预览恒按**最完整**形态画(有歌词预览、有进度条)—— 用户来这里是看样式的,给他一个
-    /// 因为"此刻这首歌没歌词"而缩掉一截的样张没有意义。跟 isCollapsed 恒 false 同一个理由。
-    var expandedShowsLyricPreview: Bool { true }
-    var expandedShowsScrubber: Bool { true }
-    /// 预览恒按"有曲目"画,理由同 isCollapsed 恒 false:用户来这儿是看样式的。
-    var hasTrack: Bool { true }
-
-    init() { refreshGeometry() }
-
-    /// 视图内部那个 .onHover 打进来的调用,预览里**故意忽略**(空实现)。
-    ///
-    /// 那个 .onHover 挂在 NotchLyricsView 最外层的 GeometryReader 上,覆盖的是它整个
-    /// 布局 frame。真窗口上这分毫不差 —— 那个 frame 就是窗口本身,鼠标进窗口才叫 hover。
-    /// 但预览是嵌在设置页里的一块,外面还套着定高容器、等比缩放和 safeAreaInset,实测
-    /// 触发范围比肉眼看到的卡片大一圈:鼠标还没真移到卡片上就展开了。
-    ///
-    /// 所以预览不吃这条隐式路径,命中判定改由 NotchPreviewBar 拿精确坐标跟卡片矩形直接
-    /// 比 —— 见那边的 onContinuousHover。
-    func setExpanded(_ expanded: Bool) {}
-
-    /// 预览自己算出来的命中结果,这才是预览里真正生效的那条路。
-    func setExpandedFromPreview(_ expanded: Bool) {
-        guard expanded != isExpanded else { return }
-        isExpanded = expanded
-    }
-
-    /// 跟真窗口 recomputeGeometry 取的是同一块屏、同一个公式,预览里的让位宽度/高度才
-    /// 会跟真出来的严丝合缝。设置页开着时用户插拔显示器也要跟着变,所以是个可重入方法。
-    func refreshGeometry() {
-        guard let screen = NotchLyricsWindowController.targetScreen() else { return }
-        let geo = NotchLyricsWindowController.geometry(for: screen)
-        notchWidth = geo.notchWidth
-        contentTopInset = geo.notchHeight
-    }
-}
-
-/// 灵动岛那一段的预览:直接把真窗口那份 NotchLyricsView 搬进设置页渲染。
-///
-/// ⚠️ 这里刻意**不**画简化版的刘海卡。第一版就是手搓的(一个圆角矩形 + 一行居中的字),
-/// 结果是"预览里长这样、真出来完全不是这样":两只耳朵上的歌名和三个播放按钮、歌词行
-/// 尾端的封面缩略图、逐字高亮、hover 展开出来的下一句 + 迷你进度条,一样都没有。设置页
-/// 预览的全部意义就是所见即所得,一份会漂的复刻件比没有预览更糟。
-///
-/// 做法是把 NotchLyricsView 泛型化(见 NotchChromeSource):真窗口拿
-/// NotchLyricsWindowController 当 chrome,预览拿上面那个不建窗口的 NotchPreviewChrome。
-/// 于是这里渲染的是**同一份视图代码**,不存在复刻件漂移;hover 展开、点播放按钮控制播放
-/// 也都照常能用(按钮打的本来就是 PlaybackCoordinator,跟从哪个窗口点的无关)。
-@MainActor
-struct NotchPreviewBar: View {
-    @ObservedObject private var settings = AppSettings.shared
-    @StateObject private var chrome = NotchPreviewChrome()
-
-    // 预览条能给的最大宽度。比卡片列(600)窄一截,两侧留呼吸。
-    private let maxPreviewWidth: CGFloat = 460
-
-    /// 走真窗口那个公式,不直接用 settings.notchContentWidth —— 宽度调得很小时真窗口会被
-    /// "两只耳朵放得下按钮"的下限顶宽,预览得跟着一起顶,否则这一段恰恰在最容易出岔的
-    /// 区间失真。
-    private var contentWidth: CGFloat {
-        NotchLyricsWindowController.contentWidth(
-            baseWidth: settings.notchContentWidth, notchWidth: chrome.notchWidth)
-    }
-
-    /// 卡片此刻的真实高度,跟真窗口 setFrame 的算法一致(刘海高 + 内容行,展开再加一截)。
-    private var cardHeight: CGFloat {
-        chrome.contentTopInset + NotchMetrics.compactRowHeight
-            + (chrome.isExpanded ? NotchMetrics.expandedExtraHeightMax : 0)
-    }
-
-    /// 容器按**展开态**固定高。hover 展开时卡片会长高 40pt,容器高度要是跟着变,这条预览
-    /// 就会把下面整页顶一下 —— OverlayPreviewBar 那边记过这个教训。
-    private var fullHeight: CGFloat { Self.cardHeight }
-
-    /// 这一条的卡片自然高度(含 hover 展开余量),供预览栏定自己的总高。
-    /// 用 static 是因为要在不构造视图的情况下问出来;刘海让位高度只跟屏幕有关,
-    /// 走的是不碰 .shared 的 static 几何函数(理由见 NotchPreviewChrome)。
-    static var cardHeight: CGFloat {
-        let inset = NotchLyricsWindowController.targetScreen()
-            .map { NotchLyricsWindowController.geometry(for: $0).notchHeight } ?? 32
-        return inset + NotchMetrics.compactRowHeight + NotchMetrics.expandedExtraHeightMax
-    }
-
-    // 宽度滑杆能拖到 500,超过预览区就整体等比缩小 —— 这样"宽度"这一项在预览里看得见。
-    private var scale: CGFloat { min(1, maxPreviewWidth / max(contentWidth, 1)) }
-
-    var body: some View {
-        VStack(spacing: 6) {
-            NotchLyricsView(controller: chrome)
-                // 先钉当下的真实尺寸:视图内层是 GeometryReader,耳朵宽度按 proxy.size.width
-                // 算,给错尺寸这一层就先失真了。
-                .frame(width: contentWidth, height: cardHeight)
-                .animation(.easeInOut(duration: 0.18), value: chrome.isExpanded)
-                // 再顶对齐放进固定高的容器 —— 真窗口也是顶边贴死屏幕顶、只向下长。
-                .frame(width: contentWidth, height: fullHeight, alignment: .top)
-                // 命中判定显式做。这一层的局部坐标原点正好落在卡片左上角(卡片顶对齐、
-                // 两者等宽),所以"鼠标在不在卡片上"就是一句 y 的比较,不受外层缩放/
-                // safeAreaInset 的坐标转换影响 —— 理由见 NotchPreviewChrome.setExpanded。
-                //
-                // cardHeight 本身会随展开变高,于是展开后鼠标继续往下移进新长出来的那
-                // 40pt 仍然算在卡片上、维持展开;这跟真窗口"展开时窗口一起变高"是同一个
-                // 行为,展开出来的下一句和进度条才够得着。
-                .onContinuousHover(coordinateSpace: .local) { phase in
-                    switch phase {
-                    case .active(let point):
-                        chrome.setExpandedFromPreview(point.y <= cardHeight)
-                    case .ended:
-                        chrome.setExpandedFromPreview(false)
-                    }
-                }
-                .scaleEffect(scale, anchor: .top)
-                // 缩放不改变布局占位,得显式把外框收到缩放后的尺寸。
-                .frame(width: contentWidth * scale, height: fullHeight * scale)
-            Text(String(format: L10n.t("预览 · %@pt，指向可展开"), "\(Int(contentWidth))"))
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .monospacedDigit()
-        }
-        .padding(.top, SectionPreviewMetrics.topPadding)
-        .padding(.bottom, SectionPreviewMetrics.bottomPadding)
-        // 高度按这一段自己的卡算(含展开余量,段内 hover 不动;见 SectionPreviewMetrics)。
-        .frame(height: SectionPreviewMetrics.barHeight(cardHeight: Self.cardHeight))
-        .frame(maxWidth: .infinity)
-        .background(Color(nsColor: .windowBackgroundColor))
-        .onReceive(
-            NotificationCenter.default.publisher(
-                for: NSApplication.didChangeScreenParametersNotification)
-        ) { _ in
-            chrome.refreshGeometry()
-        }
     }
 }
 
@@ -240,9 +103,8 @@ struct MenuBarPreviewBar: View {
     /// 只在真的在播放、这句确实有逐字(YRC)数据、且没跟标签文本代际错位时才染。
     ///
     /// ⚠️ 没在播放时的示例句("这里是一句歌词示例")**刻意不**编一份假时间轴去演示染色 ——
-    /// OverlayPreviewBar 那边为同一个问题定过调子(见其头注"预览只画整行的最终颜色,
-    /// 不为了演示效果假装有一份不存在的播放进度"):假数据会让预览在没放歌的大多数时候
-    /// 显得像在骗人。真的在放歌且这句有逐字数据时,这里给的是**完全真实**的数据,不是演示。
+    /// 见本文件头注「不为示例句编造进度」那一段(全仓预览共用的原则)。真的在放歌且这句
+    /// 有逐字数据时,这里给的是**完全真实**的数据,不是演示。
     private var karaokeFillPath: [MenuBarMarquee.KaraokeFillPoint]? {
         guard settings.menuBarLyricsKaraoke,
               let line, let words = line.words, !words.isEmpty,

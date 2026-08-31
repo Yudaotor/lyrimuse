@@ -493,6 +493,32 @@ func TestSimEval(t *testing.T) {
 	}
 	fingerprint := fmt.Sprintf("%d/%d/%x", len(tracks), nCands, h.Sum(nil)[:8])
 
+	// 各源候选数按样本实算,不写死。2026-08-12 那轮把"无 musixmatch 候选"手写进
+	// Assumptions,之后样本重采带上了 musixmatch 也没人改这行字——直接后果是
+	// wordTimingCoverage 那道自洽闸"从没在它要治的源上消融过"这件事一直没被发现
+	// (《Rumour Has It》案)。假设要么可执行,要么迟早撒谎。
+	srcCount := map[string]int{}
+	for _, tr := range tracks {
+		for _, ec := range tr.cands {
+			srcCount[ec.c.source]++
+		}
+	}
+	srcNames := make([]string, 0, len(srcCount))
+	for s := range srcCount {
+		srcNames = append(srcNames, s)
+	}
+	sort.Slice(srcNames, func(i, j int) bool {
+		if srcCount[srcNames[i]] != srcCount[srcNames[j]] {
+			return srcCount[srcNames[i]] > srcCount[srcNames[j]]
+		}
+		return srcNames[i] < srcNames[j]
+	})
+	srcParts := make([]string, 0, len(srcNames))
+	for _, s := range srcNames {
+		srcParts = append(srcParts, fmt.Sprintf("%s=%d", s, srcCount[s]))
+	}
+	srcSummary := "本轮样本各源候选数: " + strings.Join(srcParts, " ")
+
 	switch {
 	case writeGolden:
 		out := goldenFile{
@@ -536,6 +562,21 @@ func TestSimEval(t *testing.T) {
 		{"effLineDensity", deltaEffLineDensity},
 		{"creditRatioPenalty", deltaCreditRatioPenalty},
 		{"independentAlbumCorroboration", deltaIndependentAlbumCorroboration},
+		// 2026-08-27 追加(《Rumour Has It》案,实现与来龙去脉见 simevaltimeline_test.go):
+		// LRC↔YRC 双向自洽闸。两种判据分开消融、各自扫阈值——endpointGate 是
+		// deltaWordTimingCoverage 自洽闸(b)拆出来的单独版本(原维度是组合体,混着测
+		// 答不出"单独接这道闸值不值"),skewGate 是逐行中位偏差的更准判据。
+		{"timelineEndpointGate@10s", deltaTimelineEndpointGate(10)},
+		{"timelineEndpointGate@15s", deltaTimelineEndpointGate(15)},
+		{"timelineEndpointGate@20s", deltaTimelineEndpointGate(20)},
+		{"timelineEndpointGate@30s", deltaTimelineEndpointGate(30)},
+		{"timelineSkewGate@2s", deltaTimelineSkewGate(2)},
+		{"timelineSkewGate@3s", deltaTimelineSkewGate(3)},
+		{"timelineSkewGate@5s", deltaTimelineSkewGate(5)},
+		{"timelineSkewGate@8s", deltaTimelineSkewGate(8)},
+		// 判据 C:治数据不治选源——行级 LRC 改由 richsync 生成(见 simevaltimeline_test.go)。
+		{"richsyncGeneratedLRC", deltaRichsyncLRCAt(false)},
+		{"richsyncGeneratedLRC+guard", deltaRichsyncLRCAt(true)},
 	}
 
 	report := &simevalReport{
@@ -553,7 +594,7 @@ func TestSimEval(t *testing.T) {
 			"contentMajority 最大簇平手时取含最小候选下标的簇(修正版;旧版依赖 Go map 迭代序,跨运行不可复现)",
 			"翻盘量尺: contentMajority→durationVerdict→neutral;contentConsensus 维度按方法学换用 manualVerdict→durationVerdict(防量尺与维度同源循环)",
 			"independentAlbumCorroboration 只测『候选互证』半边,apple 第六方半边样本缺字段不可测(catalog eval_plan 已声明)",
-			"本轮样本各源候选数: netease/qq/kugou/lrclib(无 musixmatch 候选)",
+			srcSummary,
 		},
 	}
 	for _, tr := range tracks {

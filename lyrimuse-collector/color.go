@@ -3,12 +3,15 @@
 package main
 
 import (
+	"bytes"
+	"context"
 	"fmt"
 	"image"
 	_ "image/jpeg" // 注册 JPEG 解码器
 	_ "image/png"  // 网易云取色缩略图有时是 PNG(content-type 却谎报 jpg)
 	"math"
 	"net/http"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -22,7 +25,7 @@ var (
 // dominantColor samples a vibrant accent color (hex) from a cover image so the
 // web can tint the card to match the album. Cached per cover URL; fetches a tiny
 // 64x64 variant for a cheap decode.
-func dominantColor(coverURL string) string {
+func dominantColor(ctx context.Context, coverURL string) string {
 	if coverURL == "" {
 		return ""
 	}
@@ -32,7 +35,7 @@ func dominantColor(coverURL string) string {
 		return v
 	}
 	accentMu.Unlock()
-	c := resolveDominantColor(coverURL)
+	c := resolveDominantColor(ctx, coverURL)
 	if c != "" {
 		accentMu.Lock()
 		accentCache[coverURL] = c
@@ -41,7 +44,23 @@ func dominantColor(coverURL string) string {
 	return c
 }
 
-func resolveDominantColor(coverURL string) string {
+// deviceArtworkURLPrefix:trackEnrichment 传下来的设备直送封面,存的是本地文件路径
+// (见 deviceartwork.go 的 saveDeviceArtwork),不是网易云/QQ 那种要发 HTTP 请求的
+// 远程图。取主色不能沿用下面那套 CDN 缩图+doHTTPTracked 的逻辑,直接读本地文件。
+const deviceArtworkURLPrefix = "file://"
+
+func resolveDominantColor(ctx context.Context, coverURL string) string {
+	if strings.HasPrefix(coverURL, deviceArtworkURLPrefix) {
+		data, err := os.ReadFile(strings.TrimPrefix(coverURL, deviceArtworkURLPrefix))
+		if err != nil {
+			return ""
+		}
+		img, _, err := image.Decode(bytes.NewReader(data))
+		if err != nil {
+			return ""
+		}
+		return dominantColorFromImage(img)
+	}
 	small := coverURL
 	referer := "https://music.163.com/"
 	if strings.Contains(coverURL, "music.126.net") || strings.Contains(coverURL, "music.127.net") {
@@ -59,7 +78,7 @@ func resolveDominantColor(coverURL string) string {
 		referer = "https://y.qq.com/"
 	}
 	cli := &http.Client{Timeout: 4 * time.Second}
-	req, err := http.NewRequest(http.MethodGet, small, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, small, nil)
 	if err != nil {
 		return ""
 	}
@@ -77,6 +96,13 @@ func resolveDominantColor(coverURL string) string {
 	if err != nil {
 		return ""
 	}
+	return dominantColorFromImage(img)
+}
+
+// dominantColorFromImage 是取色算法本体,从 resolveDominantColor 里抽出来——设备直送
+// 封面(deviceartwork.go)手上已经是解好的 image.Image,不需要、也不应该再走一遍
+// HTTP 下载那一段,两边共享这一份逐像素扫描逻辑。
+func dominantColorFromImage(img image.Image) string {
 	b := img.Bounds()
 	var wr, wg, wb, wsum float64 // saturation-weighted (favors vibrant color)
 	var ar, ag, ab, n float64    // plain average (fallback for grey covers)

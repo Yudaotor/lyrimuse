@@ -13,6 +13,23 @@ import "testing"
 func TestMergeAliasedArtistsDisplayName(t *testing.T) {
 	const kdaCollab = "K/DA/Madison Beer/(G)I-DLE/Jaira Burns"
 
+	// 隔离 resolveGenericArtistCanonicalName 会打的真实网络请求(MusicBrainz/QQ):
+	// 这组用例测的是合并/显示名挑选逻辑,不是"这个艺人有没有中文名"——不隔离的话,
+	// 一来跑得慢,二来像 "Prince" 这种真实撞过坑的名字(QQ 第二条建议是毫不相关的
+	// "戴爱玲",见 qqArtistCanonicalName 头注)会把这组用例的断言搅坏。
+	withCachedAliases(t, map[string]string{
+		"K/DA": "", "Madison Beer": "", "Prince": "", "IU": "", "Sigur Rós": "", "Sigur Ros": "",
+	})
+	withCachedMBAliases(t, map[string][]string{
+		"K/DA": nil, "Madison Beer": nil, "Prince": nil, "IU": nil, "Sigur Rós": nil, "Sigur Ros": nil,
+	})
+	withCachedQQArtistNames(t, map[string]string{
+		"K/DA": "", "Madison Beer": "", "Prince": "", "IU": "", "Sigur Rós": "", "Sigur Ros": "",
+		// "Dean Ting" 从 artistAliasTable 退休了(2026-08-31,见其头注),现在靠 QQ
+		// 音乐的歌手搜索建议查到"丁世光"——实测真实结果,这里直接预置同一个值。
+		"Dean Ting": "丁世光",
+	})
+
 	t.Run("名字自带斜杠的歌手显示本名而不是被切开的前半截", func(t *testing.T) {
 		got := mergeAliasedArtists([]lastfmChartEntry{
 			{Name: "K/DA", PlayCount: 30},

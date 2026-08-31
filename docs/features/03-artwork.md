@@ -18,7 +18,7 @@
 
 - 桌面悬浮歌词的前景文字色(「跟随封面取色」开着时)
 - 灵动岛整套 UI 着色(歌词、歌名、播放指示条、控制按钮、进度条、瞬态提示条)
-- 设置页「外观」预览条(`OverlayPreviewBar`)
+- 设置页「歌词显示」里的两块编辑台(`OverlayEditorStage` / `NotchEditorStage`,画的都是真视图)
 
 悬浮歌词(LyricsOverlayView)**不**显示封面图,只吃颜色;菜单栏歌词跟封面链路完全无关。
 
@@ -50,7 +50,7 @@
 
 - **触发**:`CombineLatest4($title, $artist, $album, $artworkData)` debounce 300ms 后调用。⚠️debounce 不是省请求,是**避开 @Published 的 willSet 时机**——订阅回调跑在值还没落库那一刻,回调里读 self 的其它属性可能读到上一首的值(本项目为此踩过两次坑);函数体也因此**刻意从 `LocalPlaybackSource.shared` 重新读快照**而不用回调参数。这 300ms 用户无感,系统小图第一帧已经显示。
 - **门槛**(`lowResArtworkThreshold = 300`):用 CGImageSource 只读图头取系统封面的像素宽(`pixelWidth(of:)`,不解码整图)。只有 `0 < 宽 < 300` 才找替代——系统没给封面(宽 0)时该显示占位音符,不该悄悄换成缓存匹配出来的另一张图;正常给大图的播放器(Apple Music)一次都不会触发。300 的依据:封面卡 920px / 300px 已是 3 倍放大。
-- **替代图来源**:`EnrichCacheReader.coverURL(artist:title:album:)`,读 collector 解析歌词时顺手记下的 `cover_url`(网易云/Apple/QQ),三级查找:归一化 key 精确命中 → looseMatch(忽略空格/大小写/繁简)→「歌手|歌名」忽略专辑的索引。再经 `nativeSizedCoverURL` 处理:**只对网易云图床**(`*.music.126.net`)去掉 `?param=600y600`——那个参数只降不升(实测原生 800×800 带 param 拿回 600×600,`param=1200y1200` 也不上采样),去掉才拿得到原图;别的图源参数未核实,不动。
+- **替代图来源**:`EnrichCacheReader.albumMatchedCoverURL(artist:title:album:)`,读 collector 解析歌词时顺手记下的 `cover_url`(网易云/Apple/QQ),两级查找:归一化 key 精确命中 → looseMatch(忽略空格/大小写/繁简,但仍然认专辑)。**不**退到「歌手|歌名」忽略专辑的那级索引——系统这份的专辑名来自 Now Playing、就是当前真正在播的这一版,退一步反而是拿错版本的风险(2026-08-26 用户报的方大同「放不过自己」实锤:缓存里同名不同专辑的两条记录封面完全不同,退到忽略专辑那级会随机凑到错的那条;`coverURL(artist:title:album:)` 保留三级查找给「最近播放」/待机页那两个专辑名本就不一定可信的消费方用,见 `EnrichCacheReader.swift` 两个函数各自的注释)。再经 `nativeSizedCoverURL` 处理:**只对网易云图床**(`*.music.126.net`)去掉 `?param=600y600`——那个参数只降不升(实测原生 800×800 带 param 拿回 600×600,`param=1200y1200` 也不上采样),去掉才拿得到原图;别的图源参数未核实,不动。
 - **换歌时立刻撤掉上一首的高清图**(和均值色同进退)再异步下载——留着的话新图下载完之前会显示上一首的封面,比「先小图后变清晰」糟得多。
 - **下载**走 `ImageMemoryCache.shared.load(url, variant: .original)`(同 URL 并发只发一次请求;底层 URLSession.shared 吃 URLCache 磁盘缓存;原图档——这张要给 920pt@2x 的封面卡,不能吃缩略降采样)。回来后三道守卫:任务未取消、`LocalPlaybackSource.shared.title` 还是发起时那首、**拿回来的宽度必须大于系统那份**(缓存里可能存着一张同样小的图,不值得换)。
 - **均值色同步给**:`highResAverageHex` 用 `LocalPlaybackSource.computeAverageHex(cgImage:)` 后台算,跟图一起赋值。有高清图时两条强调色管线**必须**按它算——系统那份可能是灰底占位图,界面实际显示的是高清替代,强调色还按占位图算就是一团无关的灰。
@@ -74,7 +74,7 @@
 
 - `PlaybackCoordinator.displayForegroundColor`:「跟随封面取色」(followsCoverArt)开着且 `artworkAccentColor` 非 nil → 用它;否则退回设置里手选的 `foregroundColor`。只被 LyricsOverlayView 消费。
 - `NotchLyricsView.accentOrWhite`:followsCoverArt 开着且 `notchAccentColor` 非 nil → 用它;否则纯白。灵动岛歌词/歌名/EqualizerBars/控制按钮/进度条/瞬态提示条全走它(封面小图的描边投影除外)。
-- `OverlayPreviewBar` 订阅 `$artworkAccentColor` 给设置页预览上色。
+- 设置页悬浮歌词编辑台画的是真 `LyricsOverlayView`,`$artworkAccentColor` 经它自己的窄订阅代理 `OverlayPlayback` 生效,不再有单独的预览订阅(旧的 `OverlayPreviewBar` 2026-08-31 已删)。
 
 ### 5. 四个图像消费面
 
@@ -105,7 +105,7 @@
 - **播放器选择(PlaybackPlayerPreference)**:取图的 bundleID 核对按当前选定播放器;系统 Now Playing 焦点被别的 App(网页视频等)抢走时不取图。停播/焦点丢失走 `clearIfWasPlaying()` 把封面连曲目一起清,歌词窗口回到「没有在播放」占位。
 - **「最近播放」列表**:`EnrichCacheReader.coverURL` 同一套三级查找也给它当 Last.fm 缺图时的兜底(共享 coverByArtistTitle 索引);`ImageMemoryCache` 也是同一个,但按用途分两档(2026-08-20 性能审计):列表/头像走缩略档(解码期就降采样到 ≤256px,单张 ≤256KB——原来按原图存,一张网易云原生大图能吃掉 48MB 预算大半、把几百张列表小图挤出去,滚动时反复闪占位符),高清封面替代走原图档;失效 URL 有 10 分钟负缓存,不再每次视图重建都重发真实网络请求。
 - **「跟随封面取色」与描边设置**:见上表,accentAgainstStroke 让封面功能反向依赖描边配置——这是有意的。
-- **设置页预览**:`OverlayPreviewBar` 实时吃 artworkAccentColor;「外观」页的灵动岛预览用的是真 NotchLyricsView,封面小图/背景在预览里同样生效。
+- **设置页预览**:两段都是编辑台、画的都是真视图(`LyricsOverlayView` / `NotchLyricsView`),所以 artworkAccentColor、封面小图、封面模糊背景在预览里跟真窗口逐像素同源。
 - **换歌/停播状态机**:取图的触发、丢弃、清理全部锚定 `LocalPlaybackSource.lastKey` 的生命周期(见 01 章播放状态机);`clearIfWasPlaying` 里 lastKey 必须清,否则封面和歌词列表恢复播放后回不来。
 
 ## 数据与文件
@@ -131,11 +131,12 @@
 | media-control 取图 | `lyrimuse/Sources/LyrimuseCore/Local/MediaControlClient.swift` · `fetchArtwork(player:)`、`ArtworkPayload`、`artworkBundleIDMatches` |
 | 载荷 trackKey 推导 | `lyrimuse/Sources/LyrimuseCore/Local/MediaControlSnapshot.swift` · `trackKey(artist:title:)` |
 | 解码收敛/高清替代/两条色管线 | `lyrimuse/Sources/lyrimuse/PlaybackCoordinator.swift` · `artworkImage`、`highResArtworkImage`、`highResAverageHex`、`refreshHighResCover()`、`lowResArtworkThreshold`、`pixelWidth(of:)`、`start()` 里 CombineLatest 订阅、`displayForegroundColor` |
-| 高清替代 URL 查找 | `lyrimuse/Sources/LyrimuseCore/Local/EnrichCacheReader.swift` · `coverURL(artist:title:album:)`、`nativeSizedCoverURL(_:)`、`coverByArtistTitle()` |
+| 高清替代 URL 查找 | `lyrimuse/Sources/LyrimuseCore/Local/EnrichCacheReader.swift` · `albumMatchedCoverURL(artist:title:album:)`(当前播放专用,不退到忽略专辑那级)、`coverURL(artist:title:album:)`(「最近播放」/待机页用,多一级忽略专辑兜底)、`nativeSizedCoverURL(_:)`、`coverByArtistTitle()` |
+| collector 端封面选源(网易云/Apple/QQ 三源择优 + 同专辑邻居兜底 + 自愈重查) | `lyrimuse-collector/enrich.go` · `resolveTrackEnrichment()`、`preferAppleCoverOverNetease()`、`coverNeedsAlbumCheck()`、`coverSwapAllowed()`、`siblingAlbumCover()`;`lyrimuse-collector/match.go` · `albumScore()`;一次性纠正用 `collector recheck-cover [-apply] "歌手\|歌名\|专辑"`(见 `covercli.go`) |
 | 灵动岛小图 / 背景 / tint | `lyrimuse/Sources/lyrimuse/UI/NotchLyricsView.swift` · `artworkThumbnail(_:)`、`backgroundLayer(size:)`、`accentOrWhite` |
 | 歌词窗口背景 / 封面卡 / 配色切换 | `lyrimuse/Sources/lyrimuse/UI/LyricsWindowView.swift` · `artworkBackground`、`artworkCard`、`hasArtworkBackground`、`primaryTextColor` |
 | 图片内存缓存 | `lyrimuse/Sources/lyrimuse/UI/CachedImage.swift` · `ImageMemoryCache`(`load`/`prewarm`)、`CachedImage` |
-| 设置项 | `lyrimuse/Sources/lyrimuse/Settings/AppSettings.swift` · `notchCardStyle`、`followsCoverArt`;`lyrimuse/Sources/lyrimuse/SettingsView.swift` · `notchOverlayCard`、`overlayColorCard` |
+| 设置项 | `lyrimuse/Sources/lyrimuse/Settings/AppSettings.swift` · `notchCardStyle`、`followsCoverArt`;`lyrimuse/Sources/lyrimuse/SettingsView.swift` · `notchOverlayCard`;`lyrimuse/Sources/lyrimuse/UI/OverlayStyleSettingsRows.swift` · `OverlayColorSettingsRows` |
 
 ## 设计决策与已知坑
 
@@ -149,3 +150,6 @@
 8. **均值色 2026-08-17 起是原始值,提亮下放到消费面**:灵动岛(永远深底)要「够亮」,悬浮歌词(背景未知)要「跟描边够对比」——在源头统一提亮等于替桌面那侧做错误决定;近黑兜底两边策略也不同(灵动岛丢亮度换固定浅灰,悬浮歌词保亮度只丢色相)(`artworkAverageHex` / `accentAgainstStroke` 注释,08-16 近黑浅灰配白描边看不清的回归)。
 9. **网易云图床 param 只降不升**:`?param=600y600` 拿 800 原图只给 600,`param=1200y1200` 也不上采样;去 param 只对 `*.music.126.net` 做,其它图源参数可能编码着尺寸段,去掉可能 404(`nativeSizedCoverURL` 注释)。
 10. **灵动岛小图缺图不画占位**:播放中绝大多数曲目拿得到封面,为少数情况长期锁一块空方块不值;配合「旧图留到新图到货」,布局跳动只发生在启动第一首和真没封面两种情况(`artworkThumbnail` 注释)。
+11. **高清替代绝不能退到「忽略专辑」的兜底**(2026-08-26 用户报的方大同「放不过自己」实锤):同一首歌在不同专辑版本下封面经常真的不一样。原来 `refreshHighResCover` 复用的是给「最近播放」列表设计的 `coverURL`,那个函数专门给 scrobble 专辑名不可信的场景多退一级「忽略专辑,按歌手+歌名」的索引——两条同名不同专辑的缓存记录一旦命中这级,选哪条全看 Dictionary 遍历顺序,而且还会被 `onlyIfMissing: true`(见下一条)焊死到换歌之前。修法:拆出 `albumMatchedCoverURL`,只保留认专辑的两级查找,当前播放这个消费面专辑名来自系统 Now Playing、必然可信,没有退这一步的必要。
+12. **collector 端「宽松包含」的 albumScore=100 不等于真的对上版**:`coverNeedsAlbumCheck`/`resolveTrackEnrichment` 原来用 `albumScore(...) == 0` 判「这张封面不属于当前专辑,该问别的源」,但 `albumScore` 的 100 分档本来就是「候选是目标的子串」(重发版/豪华版这类带后缀的专辑名天然命中),不是真对上版。方大同「很不低调」「烦」的本地专辑是《JTW 西游记 (Gold) [Explicit]》,网易云/Apple 曲库里都还是没有这个后缀的旧版《JTW西游记》——被判成「宽松包含、对上了」,QQ 音乐（这两首实际收录了新版封面的那个源）永远没机会被问到。2026-08-26 把门槛从 `== 0` 收严成 `< 200`(200 = 逐字相等/仅大小写繁简差异),让"同名不同版"也触发向 QQ 补问一次;`qqCoverFallback` 内部本就按 `albumScore` 自行避开精选集/合辑,给出结果就值得信,`coverSwapAllowed` 相应放行 QQ 那档跨源替换(不再要求 `fresh.CoverAlbum` 打分——QQ 从不回传专辑名)。发现即修:`collector recheck-cover -apply` 手动补跑一次这四首。
+13. **文字打分核不出「封面图本身对不对」,同专辑邻居比自己单独检索更可信**:2026-08-27 同一张专辑接着报的方大同「Once」「All Night」——QQ 音乐搜索索引对这两首歌各自只收录了一条记录,专辑名文本上一样"对得上"《JTW 西游记 (Gold) [Explicit]》,挂的封面却是另一款《2CD [B+G]》合集版(半黑半金站姿),跟同专辑其它曲目实际的单张《Gold》版封面(纯金底半脸特写)是完全不同的两张图——`albumScore` 只能核对文字,这类"文字对上、图不对"的情况天生核不出来,不管门槛怎么调都堵不住。加了 `siblingAlbumCover`:三源各自检索都给不出精确对版结果(`< 200`)时,最后问一次缓存里同专辑(同歌手、逐字同专辑名)已经有 `CoverSource=="qq"` 定案的邻居,直接借它的封面——只借 qq 那档,不借网易云/Apple(那两档自己也可能只是"宽松包含"的 100 分,借了等于把一份信不过的答案传染给另一首歌)。

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -23,6 +24,10 @@ import (
 //
 // 探测曲用两首(一首华语一首英文)再取并集:LRCLIB/Musixmatch 的库以英文为主,
 // NetEase/QQ/酷狗以中文为主,任何单独一首都会让另一半源"查不到"而被误报成故障。
+//
+// ⚠️ 选探测曲不能只挑"够红",2026-08-31 加 kuwo 时踩过——酷我搜索结果对越红、越被
+// 翻唱/改编到泛滥的歌命中率反而越低(具体见下面 probes 变量旁的注释),挑一首传唱度高
+// 但没有被淹没在翻唱堆里的歌才靠得住。
 type healthStatus string
 
 const (
@@ -149,14 +154,25 @@ func runHealthcheckCLI(args []string) {
 	// ---- 网络:拿真实搜索路径探两首 ----
 	if !*skipNetwork {
 		type probeTrack struct{ artist, title, album string }
+		// ⚠️ 中文探测曲 2026-08-31 从《晴天》(周杰伦)换成《少年》(梦然):酷我(kuwo)接入后
+		// 实测坐实一个跟"能不能连通"无关的结构性问题——酷我搜索对**越红越被翻唱/改编到
+		// 泛滥**的歌命中率反而越低(前排全是 DJ 改编/伴奏/演唱会现场,原唱裸版本挤不进去),
+		// 《晴天》《稻香》《童话》《Yesterday》《Shape of You》这类超级热门曲目实测全部
+		// 落空,导致 healthcheck 对 kuwo 常年报"两首探测曲都没有候选,这个源目前可能不可用"
+		// ——而 kuwo 的网络连通性其实完全正常,只是这两首探测曲恰好踩中它的已知短板,不是
+		// 真故障。《少年》(梦然)是同样传唱度极高的网络时代金曲,但实测在酷我搜索结果里
+		// 排第一的就是原唱本人的完整单曲(带 MV 副标题),能通过跟其它源同一套身份闸;同时
+		// 保留了对中文库其它源(netease/qq/kugou/musixmatch/amll)一贯的高命中率,不会让
+		// 探测曲的目的从"测连通性"退化成"测某个源的曲库覆盖率"。英文探测曲(Yesterday)
+		// 未受影响、原样保留——kuwo 对英文曲库本来就没有覆盖,不指望这首帮它过关。
 		probes := []probeTrack{
-			{"周杰伦", "晴天", "叶惠美"},                  // 中文库
+			{"梦然", "少年", ""},                      // 中文库
 			{"The Beatles", "Yesterday", "Help!"}, // 英文库
 		}
 		answered := map[string]int{}
 		start := time.Now()
 		for _, p := range probes {
-			_, scored := scoredLyricCandidates(toSimplified(p.artist), toSimplified(p.title), toSimplified(p.album), 0)
+			_, scored := scoredLyricCandidates(context.Background(), toSimplified(p.artist), toSimplified(p.title), toSimplified(p.album), 0)
 			for _, src := range distinctLyricSources(scored, false) {
 				answered[src]++
 			}

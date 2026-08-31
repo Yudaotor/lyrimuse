@@ -13,6 +13,7 @@ import (
 	_ "image/png"  // 网易云取色缩略图有时是 PNG(content-type 却谎报 jpg)
 	"io"
 	"log"
+	"net"
 	"net/http"
 	neturl "net/url"
 	"os"
@@ -48,10 +49,6 @@ type lastfmScrobbler struct {
 	// clearStatus:第一次提交成功时删掉上次运行留下的状态文件(有就删,没有白删一次),
 	// sync.Once 保证整个进程生命周期只做一次这个 stat+remove。
 	clearStatus sync.Once
-	// collapse 决定一条提交该用哪个艺人名 —— 播放器报的合唱串("汪苏泷 & 荷莉")在
-	// Last.fm 编目里往往不存在,原样提交会造出一个只有自己一个听众的影子艺人页。
-	// 为 nil(没配只读 api_key)时所有提交按原样走,见 lastfmcollapse.go。
-	collapse *lastfmArtistCollapser
 }
 
 // newLastfmScrobbler 三者任一为空则不启用(返回 nil,调用方需判空跳过)。
@@ -72,7 +69,6 @@ func lastfmScrobblerIfEnabled(cfg *config) *lastfmScrobbler {
 	if s != nil {
 		// 用**只读**的那个 api_key:track.getInfo 不需要签名/session key,而且读写本来
 		// 就是两个独立的 key,别让判定这一步碰到写凭据。
-		s.collapse = newLastfmArtistCollapser(cfg.LastfmAPIKey)
 	}
 	return s
 }
@@ -132,6 +128,11 @@ func (s *lastfmScrobbler) call(ctx context.Context, method string, params map[st
 				Accepted json.Number `json:"accepted"`
 				Ignored  json.Number `json:"ignored"`
 			} `json:"@attr"`
+			// 单条 <scrobble> 里带着 ignoredMessage(code + 人话原因)。回填路径一直在
+			// 解析它(backfill.go 的 scrobbleEntry/parseScrobbleEntries),活路径原来
+			// 整个丢掉,只报一句笼统的 accepted=0 —— 2026-08-30 排查那 5 条真实失败时
+			// 只能靠翻日志上下文猜是哪首歌、为什么被拒,故补上,复用同一个解析器。
+			Scrobble json.RawMessage `json:"scrobble"`
 		} `json:"scrobbles"`
 	}
 	_ = json.Unmarshal(body, &out) // 解不开就当没有错误体,靠状态码兜底
@@ -141,14 +142,75 @@ func (s *lastfmScrobbler) call(ctx context.Context, method string, params map[st
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("lastfm %s: status %d: %s", method, resp.StatusCode, body)
 	}
-	// track.scrobble 的"被忽略"也是 200:accepted=0(时间戳超两周、艺人被判无效等),
-	// 原来会被当成功。不算致命错误,但必须如实报出去让日志可见。
+	// track.scrobble 的"被忽略"也是 200:accepted=0,原来会被当成功。不算致命错误,
+	// 但必须如实报出去让日志可见。
+	//
+	// 2026-08-30:带上服务端给的真实原因。原来这句只报 accepted=0,排查时无从判断是
+	// 哪一类拒收 —— 实测那 5 条里 3 条是空艺人名(彼时守卫还没加)、2 条是艺人名
+	// "群星"(Various Artists,Last.fm 当非艺人拒收),两种成因的处置完全不同,却报同
+	// 一句话。旧注释里"时间戳超两周"这条对活路径不成立(当场提交不可能超窗),那是从
+	// 回填场景顺手抄来的猜测,一并删掉,不再写没有依据的成因。
 	if out.Scrobbles != nil {
 		if accepted, _ := out.Scrobbles.Attr.Accepted.Int64(); accepted == 0 {
-			return fmt.Errorf("lastfm %s: ignored by server (accepted=0)", method)
+			return &lastfmIgnoredError{Method: method, Reason: ignoredReason(out.Scrobbles.Scrobble)}
 		}
 	}
 	return nil
+}
+
+// lastfmIgnoredError:请求到了服务端、服务端**看过并拒收**(HTTP 200 + accepted=0)。
+//
+// 单独成一个类型而不是 fmt.Errorf,是因为调用方要据此分流:这一类跟网络失败的处置完全
+// 相反 —— 网络失败该留痕待补,被拒收的重发多少次都还是被拒,补提交是白费,只该把真实
+// 原因暴露出来让人去改数据。判据见 poller.go 的 recordFailedMirror。
+type lastfmIgnoredError struct {
+	Method string
+	Reason string // 服务端给的 ignoredMessage,可能为空
+}
+
+func (e *lastfmIgnoredError) Error() string {
+	if e.Reason == "" {
+		return fmt.Sprintf("lastfm %s: ignored by server (accepted=0)", e.Method)
+	}
+	return fmt.Sprintf("lastfm %s: ignored by server (accepted=0): %s", e.Method, e.Reason)
+}
+
+// ignoredReason 把回执里 <scrobble> 的 ignoredMessage 拼成一句可读的原因,拿不到就返回
+// 空串。复用回填那边的 parseScrobbleEntries —— Last.fm 的 "一条是对象、多条是数组"
+// 不一致由它吞掉。
+func ignoredReason(raw json.RawMessage) string {
+	entries := parseScrobbleEntries(raw)
+	reasons := make([]string, 0, len(entries))
+	for _, e := range entries {
+		code := strings.TrimSpace(e.IgnoredMessage.Code)
+		if code == "" || code == "0" {
+			continue // 0 = 没被忽略,不该出现在这里,出现了也不当原因报
+		}
+		if text := strings.TrimSpace(e.IgnoredMessage.Text); text != "" {
+			reasons = append(reasons, code+" "+text)
+			continue
+		}
+		reasons = append(reasons, "code "+code)
+	}
+	return strings.Join(reasons, "; ")
+}
+
+// provablyNeverSent 判断这次失败是不是**可以证明请求从没离开本机**。
+//
+// 只有 DNS 解析失败和 dial 阶段失败算数:这两种情况下 TCP 连接根本没建立起来,服务端
+// 不可能看见过这个请求,所以事后补提交绝不会造成重复。其余一律判 false(宁可漏判,
+// 不可误判)—— 尤其 `context deadline exceeded`,不管卡在 dial 还是等回执,错误链里都
+// **没有** *net.OpError(只有 http 自己的 timeoutError),自然落到 false 这边,正是想要的。
+//
+// ⚠️ 必须用类型断言,不能用 strings.Contains 匹配错误文案:networkobs.go 会重写
+// 出网错误的文案,按字符串判会在它改写之后静默失效。
+func provablyNeverSent(err error) bool {
+	var dnsErr *net.DNSError
+	if errors.As(err, &dnsErr) {
+		return true
+	}
+	var opErr *net.OpError
+	return errors.As(err, &opErr) && opErr.Op == "dial"
 }
 
 // lastfmAPIError 是 Last.fm 应用层错误(区别于网络/HTTP 错误)。
@@ -169,6 +231,25 @@ func (e *lastfmAPIError) Error() string {
 func (e *lastfmAPIError) fatal() bool {
 	switch e.Code {
 	case 4, 9, 10, 26:
+		return true
+	}
+	return false
+}
+
+// mayHaveStored:这个错误码下,Last.fm **有可能已经落库、只是回执没回来**。
+//
+// 只有 11(Service Offline)/16(temporarily unavailable) 属于这一档 —— 沿用 runBackfill
+// 头注释里已经定过的口径("Last.fm 可能已经落库而回执丢了,重发是最大的自造重复源"),
+// 不在这里另立一套。其余的服务端明确表过态、**确定没落库**:凭据类(4/9/10/26)、
+// 限流(29)、参数错误等,补提交安全。
+//
+// 用途见 recordFailedMirror:这一位决定失败的收听是"记下来等回填"还是"记下来但永不
+// 自动重试"。判宽了(把确定没落库的当成可能落库)只是漏补一条;判窄了(把可能落库的
+// 当成确定没落库)会在用户历史里造出永久删不掉的重复,两边代价不对称,存疑就往
+// mayHaveStored=true 靠。
+func (e *lastfmAPIError) mayHaveStored() bool {
+	switch e.Code {
+	case 11, 16:
 		return true
 	}
 	return false
@@ -199,32 +280,115 @@ func (s *lastfmScrobbler) shouldDisable(apiErr *lastfmAPIError, now time.Time) b
 	return false
 }
 
-func (s *lastfmScrobbler) updateNowPlaying(ctx context.Context, artist, track, album string) error {
-	artist = s.collapse.resolve(ctx, artist, track)
+// durationParam 按官方口径把曲长转成 track.scrobble / track.updateNowPlaying 的
+// `duration` 参数:**整数秒**,拿不到(<=0)就不发这个键 —— 它是选填的,发一个 0 或负数
+// 比不发更糟。跟 backfill.go 那边 `if it.DUR > 0` 的处理逐字一致,两条路径别各写一套。
+func durationParam(p map[string]string, key string, durationSecs float64) {
+	if durationSecs > 0 {
+		p[key] = strconv.FormatInt(int64(durationSecs), 10)
+	}
+}
+
+// resolveScrobbleArtist 决定这条提交实际发哪个艺人名。
+//
+// **默认原样发播放器报的整串**;只有用户显式打开 `lastfm_scrobble_first_artist_only`
+// 才截成第一位(firstCreditedArtist,纯字符串判断,不联网)。
+//
+// ## 为什么从"联网条件式"改成静态开关(2026-08-31)
+//
+// 原来的实现是:查一次 Last.fm 目录,**查不到**这首歌挂在合唱串下,才折成第一位
+// (lastfmcollapse.go 的 resolve/isCatalogued)。那套逻辑有两个问题,跟"该不该折"无关:
+//
+//   - **结果不可复现**。同一首歌,取决于 Last.fm 目录当下的状态和网络通不通,两次运行
+//     可能发出不同的艺人名 —— 而 scrobble 落进 Last.fm 基本删不掉。
+//   - **把一次可恢复的匹配失败变成不可逆的数据丢失**。"目录里查不到"只说明 Last.fm
+//     编目暂时没收录这个合唱串,不说明这个署名是错的;而限流/超时/服务抽风同样会走进
+//     "查不到"分支。
+//
+// 静态开关是可预测的:同样的输入永远得到同样的输出,用户也能一眼知道自己开没开。
+//
+// ## 为什么默认是"发整串"
+//
+//   - ListenBrainz 文档明写合唱 credit 应当 "include them all";
+//   - Navidrome 的同名开关 `Lastfm.ScrobbleFirstArtistOnly` 默认也是 false,其代码注释
+//     说明这是给 Last.fm API 缺陷用的 workaround,不是正确性修复;
+//   - 折叠会丢信息且不可逆(把 "Khalil Fong & Fiona Sit" 发成 "方大同",薛凯琪就没了),
+//     而不折叠最坏只是 Last.fm 上多一个听众很少的合唱条目 —— 代价不对称。
+//
+// ⚠️ now-playing 与 scrobble 必须调**同一个**函数:否则会出现 "now playing 显示 A、
+// 落库却是 A & B" 的自相矛盾状态(这是原实现就守住的性质,别在重构里丢掉)。
+func resolveScrobbleArtist(artist string) string {
+	if !features.LastfmScrobbleFirstArtistOnly {
+		return artist
+	}
+	if first := firstCreditedArtist(artist); first != "" {
+		return first
+	}
+	return artist
+}
+
+func (s *lastfmScrobbler) updateNowPlaying(ctx context.Context, artist, track, album string, durationSecs float64) error {
+	artist = resolveScrobbleArtist(artist)
 	p := map[string]string{"artist": artist, "track": track}
 	if album != "" {
 		p["album"] = album
 	}
+	// duration 让 Last.fm 知道这条"正在播放"该挂多久 —— 不给的话它只能自己猜一个默认
+	// 时长,长曲子会提前掉、短曲子会挂太久。官方文档列了这个参数、标注选填。
+	durationParam(p, "duration", durationSecs)
 	return s.call(ctx, "track.updateNowPlaying", p)
 }
 
-func (s *lastfmScrobbler) scrobble(ctx context.Context, artist, track, album string, timestamp int64) error {
+func (s *lastfmScrobbler) scrobble(ctx context.Context, artist, track, album string, timestamp int64, durationSecs float64) error {
 	// 正在播放和完成收听必须走同一次判定,否则 Last.fm 上会出现"now playing 是 A、
-	// 落库却是 A & B"这种自相矛盾的状态。判定结果有缓存,这里不会再打一次网络。
-	artist = s.collapse.resolve(ctx, artist, track)
+	// 落库却是 A & B"这种自相矛盾的状态。
+	artist = resolveScrobbleArtist(artist)
 	p := map[string]string{"artist": artist, "track": track, "timestamp": strconv.FormatInt(timestamp, 10)}
 	if album != "" {
 		p["album"] = album
 	}
+	// 2026-08-30 补:这条**活路径**原来不发 duration,而 backfill.go:200 一直在发 ——
+	// 同一首歌当场 scrobble 反而比事后回填少一个字段,编目匹配的输入不如回填全。两条
+	// 路径本该给 Last.fm 同样的信息,没有任何理由分叉。
+	//
+	// 数据现成:调用方 mirrorScrobbleTracked 早就拿着 durationSecs(第 ① 条给失败留痕
+	// 加的形参),不用为这个再改一遍调用链。
+	durationParam(p, "duration", durationSecs)
 	return s.call(ctx, "track.scrobble", p)
 }
 
 // mirrorAsync 异步、尽力而为地把一次 Last.fm 写入(track.updateNowPlaying /
-// track.scrobble)镜像出去——不阻塞 poll 循环(Last.fm 可能慢/抽风),失败只记日志不
-// 重试(下一次 poll/scrobble 自然会覆盖)。goroutine 自带超时上限,不会泄露(同
-// resolveEnrichAsync 的模式)。s==nil(未配置镜像凭证)时整体跳过,call 不会被执行。
-func mirrorAsync(s *lastfmScrobbler, what string, call func(ctx context.Context) error) {
-	if s == nil || s.dead.Load() {
+// track.scrobble)镜像出去——不阻塞 poll 循环(Last.fm 可能慢/抽风)。goroutine 自带
+// 超时上限,不会泄露(同 resolveEnrichAsync 的模式)。s==nil(未配置镜像凭证)时整体
+// 跳过,call 不会被执行。
+//
+// onFail(可为 nil)在**除熔断以外**的失败分支上被调用,让调用方决定这一条要不要留痕。
+// 加它的理由(2026-08-30 实测排查):
+//
+//	原来失败只打一行日志就完事,注释写的是"下一次 poll/scrobble 自然会覆盖"——那句话
+//	对 now-playing 成立(瞬时状态,下一拍就盖掉),对 **scrobble 不成立**:一次收听只提交
+//	这一次。而 mirrorScrobbleTracked 在发请求**之前**就把 uts 记进 lfmMirrored 并落盘
+//	(防 bridge 抢跑),幂等守卫从此永久挡死这条;p.lfm != nil 时 appendListen 又被跳过。
+//	三处同时不兜底 ⇒ 一次网络抖动 = 永久少一条 scrobble,且无处可查。用户真实日志里
+//	2618 次成功收听对应 13 条这样的真丢失。
+//
+// ⚠️ onFail 跑在这个 goroutine 里,**只准碰自带锁的 listen log**(appendListen /
+// markQuarantined,它们持 listenLogMu)。**绝不能碰 poller 的任何字段** —— 尤其
+// p.lfmMirrored 是裸 map,主循环会经 persistedTTLSet.save 整个 range 它,并发写就是
+// `fatal error: concurrent map iteration and map write`,recover 都救不回来;
+// poller.go 顶部"所有状态变更只发生在 poll 主循环里"那条不变量必须守住。
+func mirrorAsync(s *lastfmScrobbler, what string, call func(ctx context.Context) error, onFail func(error)) {
+	if s == nil {
+		return // 压根没配镜像凭证:这台机器不往 Last.fm 写,谈不上"失败",不留痕
+	}
+	if s.dead.Load() {
+		// 凭据已被判死(见 shouldDisable):不再白打请求,但这一条**确定没写进去**,
+		// 该留的痕照留 —— 否则用户重新授权之后,熔断那段时间的收听回填不回来。
+		// listenlog.go 的 M 字段注释把这个窗口记成"刻意接受的漏补",现在有
+		// recordFailedMirror 就不必再接受了。
+		if onFail != nil {
+			onFail(&lastfmAPIError{Code: 9, Message: "mirror disabled (credentials judged dead)", Method: what})
+		}
 		return
 	}
 	go func() {
@@ -252,9 +416,16 @@ func mirrorAsync(s *lastfmScrobbler, what string, call func(ctx context.Context)
 		if apiErr != nil && apiErr.fatal() {
 			// 单发 error 4:嫌疑已记下,先不熔断 —— 复发才停(见 shouldDisable)。
 			log.Printf("lastfm mirror %s: %v (single error 4 may be transient server flakiness; mirror stays up, disables only on recurrence)", what, apiErr)
+			// 仍然交给 onFail:凭据当下没被判死,但这一发确实没写进去,该留痕的照样留。
+			if onFail != nil {
+				onFail(err)
+			}
 			return
 		}
 		log.Printf("lastfm mirror %s failed: %v", what, err)
+		if onFail != nil {
+			onFail(err)
+		}
 	}()
 }
 

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/xml"
 	"fmt"
 	"io"
@@ -477,13 +478,13 @@ func buildYRCLine(startMs, endMs int, prefix string, words []ttmlWord) string {
 }
 
 // amllFetch 按平台目录 + 音乐 ID 直取 TTML。404 = 这首歌不在库里,不是错误。
-func amllFetch(platformDir, musicID string) (string, bool) {
+func amllFetch(ctx context.Context, platformDir, musicID string) (string, bool) {
 	if platformDir == "" || musicID == "" {
 		return "", false
 	}
 	url := fmt.Sprintf("%s/%s/%s.ttml", amllRawBase, platformDir, musicID)
 	client := &http.Client{Timeout: amllHTTPTimeout}
-	req, err := http.NewRequest(http.MethodGet, url, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return "", false
 	}
@@ -504,7 +505,7 @@ func amllFetch(platformDir, musicID string) (string, bool) {
 
 // amllLyric 按网易云 / QQ 的音乐 ID 查 amll-ttml-db。两个 ID 都给时先试网易云
 // (实测它那份索引最全:命中的 26 首里 20 首有 ncm ID)。
-func amllLyric(neteaseID, qqID string) amllResult {
+func amllLyric(ctx context.Context, neteaseID, qqID string) amllResult {
 	for _, try := range []struct{ dir, id string }{
 		{"ncm-lyrics", neteaseID},
 		{"qq-lyrics", qqID},
@@ -512,7 +513,7 @@ func amllLyric(neteaseID, qqID string) amllResult {
 		if try.id == "" {
 			continue
 		}
-		raw, ok := amllFetch(try.dir, try.id)
+		raw, ok := amllFetch(ctx, try.dir, try.id)
 		if !ok {
 			continue
 		}

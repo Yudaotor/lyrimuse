@@ -309,7 +309,7 @@ func runDedupeEntriesCLI(args []string) {
 	if *apply {
 		if !ensureExclusiveForDedupe(cfgDir) {
 			fmt.Fprintln(os.Stderr, "拒绝执行:collector 正在运行(或锁文件不可用)。")
-			fmt.Fprintln(os.Stderr, "请先停掉常驻实例再跑:launchctl bootout gui/$UID/me.yudaotor.lyrimuse.collector")
+			fmt.Fprintln(os.Stderr, "请先停掉常驻实例再跑:launchctl bootout gui/$UID/com.lyrimuse.collector")
 			os.Exit(1)
 		}
 	}

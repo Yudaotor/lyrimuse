@@ -274,7 +274,7 @@ struct PanelQuickSettings: View {
                         LyricsOverlayWindowController.shared.setWidth(newValue)
                     }
                 }
-            ), range: 420...1000, step: 10)
+            ), range: OverlayEditorStage.widthRange, step: 10)
             toggleRow(L10n.t("锁定位置"),
                       help: L10n.t("解锁后鼠标点击会穿到桌面上；拖动方式见设置里的「拖动前先长按」"),
                       isOn: Binding(
@@ -297,6 +297,12 @@ struct PanelQuickSettings: View {
                 .controlSize(.small)
                 .fixedSize()
             }
+            // ⚠️ 区间走 `NotchEditorStage.usableWidthRangeOnCurrentScreen`,别在这里另写一份
+            // 字面量。理由同悬浮歌词那根:一处能产生别处够不到的值,用户下次一动另一根滑杆就会
+            // 被弹回去,表现是"我调好的宽度自己变了"。
+            // 用 usable 而不是存储层的 `widthRange`:下界含这台机器的"耳朵下限",低于它的值
+            // 拖了卡片也不动(2026-08-31)。step 仍然是 10:这根是兜底通路、旁边没有实时预览,
+            // 粗一点反而好落值(编辑台那根是 2)。
             sliderRow(L10n.t("宽度"), value: Binding(
                 get: { settings.notchContentWidth },
                 set: { newValue in
@@ -305,7 +311,8 @@ struct PanelQuickSettings: View {
                         NotchLyricsWindowController.shared.applyContentWidthSetting()
                     }
                 }
-            ), range: 260...500, step: 10)
+            ), range: NotchEditorStage.usableWidthRangeOnCurrentScreen, step: 10,
+               displayValue: { NotchEditorStage.effectiveWidth(baseWidth: $0) })
         case .menuBar:
             row(L10n.t("宽度模式")) {
                 Picker("", selection: $settings.menuBarLyricsWidthMode) {
@@ -349,14 +356,19 @@ struct PanelQuickSettings: View {
         .modifier(OptionalHelp(text: help))
     }
 
+    /// displayValue:读数要显示的不是设定值本身时给它(灵动岛宽度用 —— 真实宽度还要过一道
+    /// "两只耳朵放得下按钮"的下限,报设定值会跟编辑台里那根条上的数字对不上,见
+    /// `NotchEditorStage.effectiveWidth`)。不给就报设定值,其余两根滑杆行为一字未变。
     private func sliderRow(_ title: String, value: Binding<Double>,
-                           range: ClosedRange<Double>, step: Double = 1) -> some View {
+                           range: ClosedRange<Double>, step: Double = 1,
+                           displayValue: ((Double) -> Double)? = nil) -> some View {
         row(title) {
             HStack(spacing: 6) {
                 Slider(value: value, in: range, step: step)
                     .controlSize(.mini)
                     .frame(width: 128)
-                Text(String(format: L10n.t("%@pt"), "\(Int(value.wrappedValue))"))
+                Text(String(format: L10n.t("%@pt"),
+                            "\(Int(displayValue?(value.wrappedValue) ?? value.wrappedValue))"))
                     .font(.system(size: 10).monospacedDigit())
                     .foregroundStyle(.tertiary)
                     .frame(width: 38, alignment: .trailing)

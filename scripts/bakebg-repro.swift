@@ -52,8 +52,8 @@ struct BakeResult {
     let tintBright: Double
 }
 
-// 与 PlaybackCoordinator.bakeWindowBackgroundLayers 逐行对应(2026-08-23 第九轮,
-// 幂函数 satTarget 版)。
+// 与 PlaybackCoordinator.bakeWindowBackgroundLayers 逐行对应(2026-08-27 第十轮,
+// 幂函数 satTarget 系数 refit 版)。
 func bake(cgImage: CGImage, verbose: Bool) -> BakeResult? {
     let W: CGFloat = 720
     let frame = CGRect(x: 0, y: 0, width: W, height: W)
@@ -125,8 +125,12 @@ func bake(cgImage: CGImage, verbose: Bool) -> BakeResult? {
         }
     }
 
+    // 近黑格的饱和度读数不可信(2026-08-27 第十一轮,见 PlaybackCoordinator.swift
+    // 同一处的完整推导注释)——用归一化前的原始格亮度设一道下限,低于它的格子不参与
+    // 色相判定/p75 统计/欠饱和格子的拉升修正。
+    let darkLumaFloor = 0.08
     var hueSin = 0.0, hueCos = 0.0
-    for i in 0..<36 where cellSat[i] > 0.05 {
+    for i in 0..<36 where cellSat[i] > 0.05 && cellLuma[i] > darkLumaFloor {
         let o = i * 4
         let (h, s, _) = rgbToHSV(Double(px[o]) / 255, Double(px[o + 1]) / 255, Double(px[o + 2]) / 255)
         hueSin += sin(h * .pi / 180) * s * s
@@ -137,7 +141,7 @@ func bake(cgImage: CGImage, verbose: Bool) -> BakeResult? {
         let hDom = atan2(hueSin, hueCos) * 180 / .pi
         if verbose { print("hDom = \(hDom < 0 ? hDom + 360 : hDom)") }
         var totalHueWeight = 0.0, offHueWeight = 0.0
-        for i in 0..<36 where cellSat[i] > 0.05 {
+        for i in 0..<36 where cellSat[i] > 0.05 && cellLuma[i] > darkLumaFloor {
             let o = i * 4
             let (h, s, _) = rgbToHSV(Double(px[o]) / 255, Double(px[o + 1]) / 255, Double(px[o + 2]) / 255)
             var d = h - hDom
@@ -154,7 +158,7 @@ func bake(cgImage: CGImage, verbose: Bool) -> BakeResult? {
         }
         if verbose { print("offHueFraction = \(offHueFraction) hueCoherenceScale = \(hueCoherenceScale)") }
         if offHueFraction < 0.2 {
-            for i in 0..<36 where cellSat[i] > 0.05 {
+            for i in 0..<36 where cellSat[i] > 0.05 && cellLuma[i] > darkLumaFloor {
                 let o = i * 4
                 let (h, s, v) = rgbToHSV(Double(px[o]) / 255, Double(px[o + 1]) / 255, Double(px[o + 2]) / 255)
                 var d = h - hDom
@@ -171,12 +175,22 @@ func bake(cgImage: CGImage, verbose: Bool) -> BakeResult? {
         }
     }
 
-    let satP75 = cellSat.sorted()[26]
-    // 2026-08-23 第九轮:固定 0.35 倍换成幂函数拟合(23 组真机对拍回归,R²≈0.77),
-    // 见 PlaybackCoordinator.swift 同一行上方的完整推导注释,以及
-    // docs/features/07-lyrics-window.md 第九轮记录。
-    let satTarget = min(0.95, 0.94 * pow(satP75, 1.45)) * hueCoherenceScale
-    for i in 0..<36 where cellSat[i] > 0.01 && cellSat[i] < satTarget {
+    // satP75 同样排除近黑格,亮格不够 9 个时退回全 36 格(见 PlaybackCoordinator.swift
+    // 同一处注释)。
+    let brightIdx = (0..<36).filter { cellLuma[$0] > darkLumaFloor }
+    let satP75: Double
+    if brightIdx.count >= 9 {
+        let sats = brightIdx.map { cellSat[$0] }.sorted()
+        satP75 = sats[min(sats.count - 1, Int(Double(sats.count) * 26.0 / 36.0))]
+    } else {
+        satP75 = cellSat.sorted()[26]
+    }
+    // 2026-08-27 第十轮:系数从 0.94/1.45 refit 到 1.029/1.433(36 组真机对拍回归,
+    // R²≈0.754);中途试过加色相项去修"暖色调发灰"但被数据推翻,不采纳。见
+    // PlaybackCoordinator.swift 同一行上方的完整推导注释,以及
+    // docs/features/07-lyrics-window.md 第十轮记录。
+    let satTarget = min(0.95, 1.029 * pow(satP75, 1.433)) * hueCoherenceScale
+    for i in 0..<36 where cellSat[i] > 0.01 && cellSat[i] < satTarget && cellLuma[i] > darkLumaFloor {
         let target = satTarget
         let k = target / cellSat[i]
         let o = i * 4

@@ -96,14 +96,32 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     // 2026-08-19 加入广告插播维度:Spotify 放广告时同样收起(用户拍板"和暂停一样
     // 缩回去")——广告没有歌词可展示,歌名位只显示「广告中」(见 NotchLyricsView.topRow),
     // hover 仍可展开(跟暂停态一致,里面有控制按钮可以切歌跳过广告)。
-    var isCollapsed: Bool { (!isPlayingNow || isAdBreakNow) && !isExpanded }
+    // 2026-08-31 加入 collapsesWhenPaused 维度(用户要求把"暂停/广告时缩到最小"开放成可关
+    // 的配置项):关掉之后暂停/广告态不再收缩,卡片保持原来的稳态/展开尺寸。
+    var isCollapsed: Bool { collapsesWhenPaused && (!isPlayingNow || isAdBreakNow) && !isExpanded }
 
     /// Spotify 广告插播中。写入规则与 isPlayingNow 相同:只取 sink 参数值。
     @Published private(set) var isAdBreakNow: Bool = false
 
+    /// 暂停/广告时要不要收缩,真值在 `AppSettings.notchCollapsesWhenPaused`(见那边的注释)。
+    /// 镜像到这里是同一条 2026-08-19 性能审计纪律:`NotchWindowRoot` 只观察这个控制器、
+    /// 不观察 AppSettings,别为了一个开关把整卡挂回去观察全部设置。
+    @Published private(set) var collapsesWhenPaused: Bool = AppSettings.shared.notchCollapsesWhenPaused
+
+    /// 要不要显示播放指示条(音浪),真值在 `AppSettings.notchShowsEqualizer`。镜像到这里
+    /// 是同一条 2026-08-19 性能审计纪律:`NotchWindowRoot` 只观察这个控制器、不观察
+    /// AppSettings。
+    @Published private(set) var showsEqualizer: Bool = AppSettings.shared.notchShowsEqualizer
+    /// 音浪贴哪只耳朵的外缘,真值在 `AppSettings.notchEqualizerEar`。同上。
+    @Published private(set) var equalizerEar: NotchEqualizerEar = AppSettings.shared.notchEqualizerEar
+
     /// 展开区要不要给"下一句歌词预览"留高度(= 这首歌有没有歌词)。写入规则同
     /// isPlayingNow:只取 sink 参数值,绝不回头读 PlaybackCoordinator 的存储属性。
     @Published private(set) var expandedShowsLyricPreview: Bool = false
+    /// 用户要不要看歌词行,真值在 `AppSettings.notchShowLyrics`(见那边的注释)。
+    /// 镜像到这里是因为 `NotchWindowRoot` 只观察这个控制器、不观察 AppSettings ——
+    /// 那是 2026-08-19 性能审计定的纪律,别为了这一个开关把整卡挂回去观察全部设置。
+    @Published private(set) var showsLyrics: Bool = AppSettings.shared.notchShowLyrics
     /// 展开区要不要给迷你进度条留高度(= 这首歌有没有时长)。同上。
     @Published private(set) var expandedShowsScrubber: Bool = false
 
@@ -147,11 +165,44 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     // 发生变化。数值本身(默认 360)以及用户可调的设置项都定义在 AppSettings.
     // notchContentWidth(这里不重复放一份、避免两处数字不同步)。超长歌词交给
     // NotchLyricsView 的 MarqueeText 来回滚动展示,不靠加宽窗口解决。
-    // 顶行左右两只"耳朵"各自的最低可用宽度(歌名文字 + 3 个播放控制按钮都要放得下,
-    // 不能比这更窄)——算下限时要把这两只耳朵 + 刘海本身宽度 + 左右 padding 都算进去。
-    // 真刘海本身可能相当宽(实测有的机器约 179pt)、或者用户把设置里的宽度调得很小,
-    // 这层下限比用户设的宽度还宽的话取这层,保证按钮不会被裁切。
-    private static let minEarWidth: CGFloat = 70
+    /// 顶行一只"耳朵"的最低可用宽度。算卡片宽度下限时要把**两只**耳朵 + 刘海本身宽度 +
+    /// 左右 padding 都算进去(见 `contentWidth`)。
+    ///
+    /// ⚠️ **两只耳朵恒等宽** —— `earWidth = (卡片宽 − 刘海宽 − 2×cardHorizontalPadding) / 2`
+    /// (见 `NotchLyricsView.body`),所以这里取两边需求的**较大者**,而不是各算各的。
+    ///
+    /// 2026-08-31 之前这是一个写死的 `private static let minEarWidth: CGFloat = 70` ——
+    /// 那是耳朵还写死"左歌名 / 右三个播放键"时按最坏情况定的常量。耳朵改成八选一之后它就
+    /// 成了一刀切:哪怕两只耳朵都配成「不显示」,宽度滑杆的下界照样按"放得下三个播放键"算,
+    /// 这台机器上恒为 `179 + 70×2 + 20 = 339`。用户报的原话是「目前宽度最小值不应该是 340
+    /// 吧,我看依旧左右耳占用了很大空间;可以最小值再小一些,支持调到更小」。
+    ///
+    /// ⚠️ 改了这个函数就等于改了滑杆的下界,而下界一变,**必须有人在它的任一入参变化时重算
+    /// 几何**。承担这件事的是 init 里那**四条**订阅:`leftEarObserver` / `rightEarObserver` /
+    /// `showsEqualizerObserver` / `equalizerEarObserver`(前两条 2026-08-31 随"耳朵八选一"加,
+    /// 后两条同日随"音浪可配"加)。**以后再往这个函数加一个入参,就得同时加第五条订阅** ——
+    /// 漏了的表现不是崩,是"改完设置卡片宽度纹丝不动,直到下次拖宽度滑杆才追上",很难往
+    /// 订阅上想。四条都把 sink 的**参数值**显式传给 `recomputeGeometry`,不让下游回读
+    /// `AppSettings`:@Published 是 willSet 时机派发,此刻回读拿到的是旧值。
+    static func minEarWidth(leftEar: NotchEarModule, rightEar: NotchEarModule,
+                            showsEqualizer: Bool, equalizerEar: NotchEqualizerEar,
+                            contentTopInset: CGFloat) -> CGFloat {
+        // 音浪贴哪只耳朵外缘是可配的(2026-08-31,原来写死在右耳),所以两只耳朵都要按
+        // "自己是不是那一侧"单独判断要不要多留音浪的空间。它是播放指示灯、不是可配模块
+        // (见 NotchEarModule 上方那段),唯一的例外是那只耳朵本身选了控制键——那时音浪
+        // 让位(见 NotchLyricsView.topRow 里那条⚠️)。
+        func equalizerAllowance(forEar ear: NotchEqualizerEar, module: NotchEarModule) -> CGFloat {
+            guard showsEqualizer, equalizerEar == ear, module != .controls else { return 0 }
+            return EqualizerBars.width + NotchMetrics.earWaveSpacing
+        }
+        let left = leftEar.minEarContentWidth(contentTopInset: contentTopInset)
+            + equalizerAllowance(forEar: .left, module: leftEar)
+            + NotchMetrics.earNotchInset
+        let right = rightEar.minEarContentWidth(contentTopInset: contentTopInset)
+            + equalizerAllowance(forEar: .right, module: rightEar)
+            + NotchMetrics.earNotchInset
+        return max(left, right)
+    }
     // hover 展开时在 contentSize 之外额外撑出的高度,放下一句歌词预览 + 迷你进度条这
     // 两样补充信息(更多控制按钮都不如这两样贴合"歌词类产品"的定位)。专辑封面不在这一块
     // ——它常显在歌词行的尾端(见 NotchLyricsView.artworkThumbnail),不需要 hover 才出现,
@@ -166,6 +217,12 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     private var adBreakObserver: AnyCancellable?
     private var lyricPresenceObserver: AnyCancellable?
     private var durationObserver: AnyCancellable?
+    private var showLyricsObserver: AnyCancellable?
+    private var collapsesWhenPausedObserver: AnyCancellable?
+    private var showsEqualizerObserver: AnyCancellable?
+    private var equalizerEarObserver: AnyCancellable?
+    private var leftEarObserver: AnyCancellable?
+    private var rightEarObserver: AnyCancellable?
     private var trackPresenceObserver: AnyCancellable?
     private var screenParamsObserver: NSObjectProtocol?
     // 一个真实的坑:窗口 hover 展开/收起时靠 autoresizingMask 让 NSHostingView
@@ -278,6 +335,41 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         durationObserver = PlaybackCoordinator.shared.$currentDurationMs.sink { [weak self] ms in
             self?.expandedShowsScrubber = (ms ?? 0) > 0
         }
+        // 「显示歌词」开关。同上:存 sink 参数值(@Published 是 willSet 时机,回读拿到旧值);
+        // 只改卡片内容和高度,窗口尺寸不用重算(窗口恒为最大形态)。
+        showLyricsObserver = AppSettings.shared.$notchShowLyrics.removeDuplicates().sink { [weak self] show in
+            self?.showsLyrics = show
+        }
+        // 「暂停时缩到最小」开关。同一个 willSet 坑同一个修法:存 sink 参数值。写入
+        // @Published 即生效——isCollapsed 是计算属性,靠这次 objectWillChange 让依赖它的
+        // 视图重新读到新值,不需要额外重算几何(窗口恒为最大形态,收缩只是内容层的事)。
+        collapsesWhenPausedObserver = AppSettings.shared.$notchCollapsesWhenPaused.removeDuplicates().sink { [weak self] collapses in
+            self?.collapsesWhenPaused = collapses
+        }
+        // 左右耳配置。**必须重算几何**:卡片宽度的下限是这两项的函数(见 minEarWidth),
+        // 换一个模块就可能把卡片顶宽(配成控制键)或者放开(配成不显示)。2026-08-31 耳朵
+        // 刚做成可配时漏了这两条订阅 —— 那时下限是个常量,漏了看不出来;下限跟着配置走之后
+        // 漏了就是"选了播放控制、三个键被裁掉半个,直到下次拖宽度才恢复"。
+        //
+        // ⚠️ 两条都把 sink 的**参数值**显式传下去,不让下游回读 AppSettings:@Published 是
+        // willSet 时机派发,此刻存储属性还是旧值(同一个坑见 NotchMirrorManager.start())。
+        // 每次只有一只耳朵在变,另一只回读是安全的。
+        leftEarObserver = AppSettings.shared.$notchLeftEar.removeDuplicates().sink { [weak self] module in
+            self?.recomputeGeometry(animate: false, leftEar: module)
+        }
+        rightEarObserver = AppSettings.shared.$notchRightEar.removeDuplicates().sink { [weak self] module in
+            self?.recomputeGeometry(animate: false, rightEar: module)
+        }
+        // 音浪开关/贴哪只耳朵(2026-08-31):同一个 willSet 坑同一个修法——存 sink 参数值、
+        // 并且必须重算几何(下限公式 minEarWidth 依赖这两个值,见那边的注释)。
+        showsEqualizerObserver = AppSettings.shared.$notchShowsEqualizer.removeDuplicates().sink { [weak self] shows in
+            self?.showsEqualizer = shows
+            self?.recomputeGeometry(animate: false, showsEqualizer: shows)
+        }
+        equalizerEarObserver = AppSettings.shared.$notchEqualizerEar.removeDuplicates().sink { [weak self] ear in
+            self?.equalizerEar = ear
+            self?.recomputeGeometry(animate: false, equalizerEar: ear)
+        }
 
         // 宽度固定后,recomputeGeometry 的结果不再跟 currentLine 有任何关系,不需要
         // 额外订阅 currentLine 来触发重算。
@@ -297,6 +389,22 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         if visible {
             setHiddenFromCapture(AppSettings.shared.hideDuringScreenCapture)
             setHideWhenNotPlaying(AppSettings.shared.hideWhenNotPlaying)
+            // ⚠️ 2026-08-31 补:**宽度和屏幕**跟上面两个隐藏偏好是同一类"已经配置好、打开时
+            // 要一并应用"的东西,原来漏在外面。设置页那两个入口(宽度调整条 / 「屏幕」浮层)
+            // 都带 `if settings.notchOverlayEnabled` 守卫(那条守卫本身必须留 —— `.shared`
+            // 是 `static let`,读一下就 init 出整扇窗),于是"关着改、再打开"这条路上没有任何
+            // 人把新值应用到几何上:
+            //   ① 用设置页/菜单栏把灵动岛关掉 —— 这个动作本身就走 `.shared.setVisible(false)`,
+            //      实例已经建出来了,`steadyCardWidth` / `window.frame` 停在旧值;
+            //   ② 在编辑台改宽度或换屏 —— 守卫跳过 applyContentWidthSetting()/applyScreenSetting();
+            //   ③ 再打开 —— 这里原来只是 orderFrontRegardless,窗口按**旧宽度**、甚至**旧那块屏**
+            //      冒出来(换屏那一路的表现是"打开后灵动岛出现在另一块显示器上")。
+            // 恢复源本来只剩 didChangeScreenParameters 和"下一次开着的时候再改一遍"——
+            // isPlayingObserver 自 2026-08-17(isCollapsed 改计算属性)起也不再重算几何了。
+            //
+            // recomputeGeometry 内部四个 @Published 和 setFrame 全部判等再写,所以这一句在
+            // 几何没变时是纯读,没有额外代价。
+            recomputeGeometry(animate: false)
         }
         updateActualVisibility(isPlayingNow: PlaybackCoordinator.shared.isPlayingSmoothed)
     }
@@ -464,9 +572,36 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     // 是哪句歌词、歌词有多长有任何关系)。
     // 不加 private:设置页的灵动岛预览要用同一个公式算宽度,否则设成小宽度时预览
     // 显示的是设定值、真窗口却被耳朵下限顶宽,两边对不上。
-    static func contentWidth(baseWidth: CGFloat, notchWidth: CGFloat) -> CGFloat {
-        let earBasedFloor = notchWidth + minEarWidth * 2 + 20
+    ///
+    /// contentTopInset:那块屏的菜单栏高度(= `geometry(for:).notchHeight`)。只有「封面」那一档
+    /// 用得到 —— 它的边长是这个值的函数。**不给估计值**是刻意的:上一版拿 28pt(高菜单栏机器的
+    /// 上界)当常量,在这台机器(菜单栏 32 → 封面 22pt)上就白占 6pt/耳、卡片白宽 12pt。
+    static func contentWidth(baseWidth: CGFloat, notchWidth: CGFloat,
+                             leftEar: NotchEarModule, rightEar: NotchEarModule,
+                             showsEqualizer: Bool, equalizerEar: NotchEqualizerEar,
+                             contentTopInset: CGFloat) -> CGFloat {
+        let earBasedFloor = notchWidth
+            + minEarWidth(leftEar: leftEar, rightEar: rightEar,
+                          showsEqualizer: showsEqualizer, equalizerEar: equalizerEar,
+                          contentTopInset: contentTopInset) * 2
+            + NotchMetrics.cardHorizontalPadding * 2
         return max(baseWidth, earBasedFloor)
+    }
+
+    /// 同上,耳朵/音浪配置**现读设置**。绝大多数调用点(几何重算、编辑台、菜单栏快捷面板)
+    /// 要的就是"按当前配置",不必各自去取一遍。
+    ///
+    /// ⚠️ **`@Published` 的 willSet 窗口里不能用这个重载** —— 那时回读拿到的还是旧值
+    /// (这个仓库为此栽过不止一次,见 NotchMirrorManager.start() 里那段)。耳朵/音浪配置
+    /// 变化那条路径必须走上面那个显式传参的版本,把 sink 收到的新值传下去。
+    static func contentWidth(baseWidth: CGFloat, notchWidth: CGFloat,
+                             contentTopInset: CGFloat) -> CGFloat {
+        contentWidth(baseWidth: baseWidth, notchWidth: notchWidth,
+                     leftEar: AppSettings.shared.notchLeftEar,
+                     rightEar: AppSettings.shared.notchRightEar,
+                     showsEqualizer: AppSettings.shared.notchShowsEqualizer,
+                     equalizerEar: AppSettings.shared.notchEqualizerEar,
+                     contentTopInset: contentTopInset)
     }
 
     // 灵动岛贴哪块屏。
@@ -554,6 +689,20 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         lyricPresenceObserver = nil
         durationObserver?.cancel()
         durationObserver = nil
+        showLyricsObserver?.cancel()
+        showLyricsObserver = nil
+        leftEarObserver?.cancel()
+        leftEarObserver = nil
+        rightEarObserver?.cancel()
+        rightEarObserver = nil
+        showsEqualizerObserver?.cancel()
+        showsEqualizerObserver = nil
+        equalizerEarObserver?.cancel()
+        equalizerEarObserver = nil
+        // ⚠️ 补漏(2026-08-31):这条订阅加的时候漏了在这里 cancel——跟这批新设置同一天
+        // 加的另外两条(showsEqualizer/equalizerEar)当时就注意到了,这条却漏了。
+        collapsesWhenPausedObserver?.cancel()
+        collapsesWhenPausedObserver = nil
         trackPresenceObserver?.cancel()
         trackPresenceObserver = nil
         if let screenParamsObserver {
@@ -572,10 +721,15 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     // 2026-08-17 去掉了 isPlayingOverride 参数:它唯一的用途是算 isCollapsed,而那个已经
     // 改成计算属性了(见那边的注释)。这个函数现在跟播放状态完全无关,自然也就不再需要
     // 绕开 @Published willSet 的旧值陷阱。
-    /// contentWidth:非 nil = 调用方正处于 notchContentWidth 的 willSet 窗口(镜像
-    /// sink 那条路),必须用传入值;nil = 回读存储值(设置页滑杆对 .shared 的调用发生在
-    /// 赋值语句之后,以及 init/屏幕插拔这些时机,存储值都是稳定的)。
-    private func recomputeGeometry(animate: Bool, contentWidth: CGFloat? = nil) {
+    /// contentWidth / leftEar / rightEar / showsEqualizer / equalizerEar:非 nil = 调用方
+    /// 正处于对应那个 `@Published` 的 willSet 窗口(镜像 sink 那条路、左右耳/音浪那几条
+    /// sink),必须用传入值;nil = 回读存储值(设置页滑杆对 .shared 的调用发生在赋值语句
+    /// 之后,以及 init/屏幕插拔这些时机,存储值都是稳定的)。
+    private func recomputeGeometry(animate: Bool, contentWidth: CGFloat? = nil,
+                                   leftEar: NotchEarModule? = nil,
+                                   rightEar: NotchEarModule? = nil,
+                                   showsEqualizer: Bool? = nil,
+                                   equalizerEar: NotchEqualizerEar? = nil) {
         guard let window, let screen = resolvedScreen() else { return }
         let geo = Self.geometry(for: screen)
         // 四个 @Published 全部判等再写(2026-08-19):这个函数挂在设置同步/屏幕插拔/镜像
@@ -589,7 +743,12 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         // (2026-08-17 改,理由见那边的注释)。几何重算只管刘海尺寸和卡片宽度。
         let newSteady = Self.contentWidth(
             baseWidth: contentWidth ?? AppSettings.shared.notchContentWidth,
-            notchWidth: geo.notchWidth)
+            notchWidth: geo.notchWidth,
+            leftEar: leftEar ?? AppSettings.shared.notchLeftEar,
+            rightEar: rightEar ?? AppSettings.shared.notchRightEar,
+            showsEqualizer: showsEqualizer ?? AppSettings.shared.notchShowsEqualizer,
+            equalizerEar: equalizerEar ?? AppSettings.shared.notchEqualizerEar,
+            contentTopInset: geo.notchHeight)
         if steadyCardWidth != newSteady { steadyCardWidth = newSteady }
         let newCollapsed = geo.notchWidth > 0 ? geo.notchWidth : Self.collapsedFallbackWidth
         if collapsedCardWidth != newCollapsed { collapsedCardWidth = newCollapsed }

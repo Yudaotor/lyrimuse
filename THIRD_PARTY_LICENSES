@@ -14,6 +14,7 @@ Contents/Resources/。
 以源码/数据形式内嵌的组件:
 
   4. OpenCC 繁简词典数据                   — Apache-2.0    (内嵌于 collector,见 t2s.go)
+  5. rime-cantonese 粤拼词典数据(单字+词级) — CC-BY-4.0     (内嵌于 collector,见 jyutping.go)
 
 ================================================================================
 1. media-control / mediaremote-adapter
@@ -213,8 +214,9 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 4. OpenCC 繁简转换词典
    https://github.com/BYVoid/OpenCC
    繁→简词典数据(单字 + 多字词组两级)内嵌在 collector 里,用于统一搜索关键词的
-   书写形式。⚠️ 只用了它的**词典数据**,没有链接 OpenCC 代码,也没有引入 Go 移植版
-   github.com/liuzl/gocc —— 后者间接依赖 GPL-2.0-only 的 cedar-go,与本项目的
+   书写形式;2026-08-27 追加同一项目的简→繁单字词典(方向相反),给下面第 5 条粤拼
+   查表当兜底用。⚠️ 只用了它的**词典数据**,没有链接 OpenCC 代码,也没有引入 Go
+   移植版 github.com/liuzl/gocc —— 后者间接依赖 GPL-2.0-only 的 cedar-go,与本项目的
    GPL-3.0 不兼容(见 lyrimuse-collector/t2s.go 顶部注释)。
 ================================================================================
 
@@ -273,3 +275,32 @@ You may add Your own copyright statement to Your modifications and may provide a
 9. Accepting Warranty or Additional Liability. While redistributing the Work or Derivative Works thereof, You may choose to offer, and charge a fee for, acceptance of support, warranty, indemnity, or other liability obligations and/or rights consistent with this License. However, in accepting such obligations, You may act only on Your own behalf and on Your sole responsibility, not on behalf of any other Contributor, and only if You agree to indemnify, defend, and hold each Contributor harmless for any liability incurred by, or claims asserted against, such Contributor by reason of your accepting any such warranty or additional liability.
 
 END OF TERMS AND CONDITIONS
+
+================================================================================
+5. rime-cantonese 粵拼詞庫
+   https://github.com/rime/rime-cantonese
+   单字级(jyut6ping3.chars.dict.yaml)+ 词级(jyut6ping3.words.dict.yaml,2026-08-30
+   加,用于多音字消歧——同一个字在不同词里读音可能不同,如"重要"zung6 jiu3 vs
+   "重量"cung5 loeng6,单字表选不出这种词义相关的读音)两份粤拼(Jyutping)读音词典
+   数据内嵌在 collector 里,用于粤语歌词的罗马音生成(见 lyrimuse-collector/jyutping.go)。
+   ⚠️ 只用了它的**词典数据**(单字表取每个字权重最高的一个读音;词表原始数据没有
+   权重标注,同一个词出现多个候选读音时取文件原始出现顺序的第一个,不逐字/逐词保留
+   全部候选),没有链接 Rime 输入法引擎代码或本项目未用到的其余组件(jyut6ping3.maps
+   采用另一份 ODbL-1.0 许可证,本项目未使用该文件,不适用)。
+
+   附:dictionary/JyutpingCollisionOverrides.txt(38 条,2026-08-30 加)不是新的
+   第三方数据文件,是本项目从上面这份单字表和下面第 4 条 OpenCC 简→繁映射表交叉比对
+   衍生出来的一份小表——修的是部分简体字本身在单字表里还独立收录着另一个繁简共用码位
+   的生僻字(如"离"同时是"離"的简体、也是一个读 ci1 的独立生僻字)导致读错的问题,
+   数值全部来自这两份已经列在上面/下面的授权数据,不引入新的许可证义务。
+================================================================================
+
+Creative Commons Attribution 4.0 International License (CC BY 4.0)
+
+版权归 rime-cantonese 项目(Cantonese Computational Linguistics Infrastructure
+Development Workgroup, @CanCLID)所有,依据 CC BY 4.0 授权:
+https://creativecommons.org/licenses/by/4.0/legalcode
+
+CC BY 4.0 的合规要求是署名 + 注明许可证 + 提供许可证链接(不要求像 BSD/MIT 那样
+在分发物里逐字重印完整法律文本),上面这段属名声明连同许可证链接即满足该要求。
+

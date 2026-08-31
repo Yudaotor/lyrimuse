@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 	"testing"
 )
@@ -113,6 +114,14 @@ func TestTitleVersionTags(t *testing.T) {
 		{"", nil},
 		// 括号没闭合(标签写得不规范)也要认出来
 		{"Blue Gangsta (Demo", []string{"demo"}},
+		// 2026-08-26 补中文版本限定词(真实bug案例:「蜗牛 (伴奏)」查 lyricfind,词表原来
+		// 只认拉丁词,伴奏版被当成正常版收了)。
+		{"蜗牛 (伴奏)", []string{"伴奏"}},
+		{"起风了 (Live)", []string{"live"}},
+		{"晴天 [现场版]", []string{"现场"}},
+		{"告白气球 (阿卡贝拉版本)", []string{"阿卡贝拉"}},
+		// 假阳性陷阱同样适用于中文:词只在括号/破折号段里找。
+		{"不插电的夏天", nil},
 	}
 	for _, c := range cases {
 		got := titleVersionTags(c.title)
@@ -155,6 +164,13 @@ func TestVersionTagsMismatch(t *testing.T) {
 		{"候选歌名只有空白", "Blue Gangsta", "", "   ", "", false},
 		// 假阳性陷阱不能触发不匹配
 		{"Live and Let Die 不是 live 版", "Live and Let Die", "", "Live and Let Die", "", false},
+
+		// 2026-08-26 真实bug复现:本地「蜗牛 (伴奏)」,lyricfind 召回的是正常演唱版
+		// 「蜗牛」——中文限定词补进词表前,这里判两边都是空集、-600 不触发,伴奏版被当成
+		// 正常版收了(候选内容对,但时间轴/歌词其实是另一版本的伴奏)。
+		{"正式版 vs 伴奏", "蜗牛 (伴奏)", "", "蜗牛", "", true},
+		{"两边都是伴奏", "蜗牛 (伴奏)", "", "蜗牛 (伴奏)", "", false},
+		{"不插电的夏天 不是不插电版", "不插电的夏天", "", "不插电的夏天", "", false},
 
 		// ↓↓↓ 2026-08-10 新增:限定词写在**专辑名**里的那一类 ↓↓↓
 
@@ -525,6 +541,11 @@ func TestTitleMatchTierPoints(t *testing.T) {
 		{"中英双语同名", "起源 Origin", "起源", 30},
 		{"完全不同的歌名", "Another Tune", "Song", 0},
 		{"候选没报标题", "", "Song", 0},
+		// 2026-08-26 补:中文限定词在 segmentVersionTags 里没有空格分词,"伴奏版"整段
+		// 会被当成一个词元、跟裸词"伴奏"逐词比对不上——不补 isASCIITag 分流的话这里会
+		// 误判成"纯噪音括号"给回 120,而不是限定词该给的 60。
+		{"中文版本括号只到括号档(伴奏)", "蜗牛 (伴奏)", "蜗牛", 60},
+		{"中文版本括号只到括号档(伴奏版,词元被粘连)", "蜗牛 (伴奏版)", "蜗牛", 60},
 	}
 	for _, c := range cases {
 		if got := titleMatchTierPoints(c.cand, c.local); got != c.want {
@@ -732,4 +753,296 @@ func TestLyricsUpgradeBaselineAcrossScoringVersions(t *testing.T) {
 	if base, ok := lyricsUpgradeBaseline(e, scored); !ok || base != 549 {
 		t.Errorf("同版本应直接用存量分 549,实际 base=%d ok=%v", base, ok)
 	}
+}
+
+// ---- v5(2026-08-27):applyWordTimingTitleOverride ----
+//
+// 数字全部来自真实曲库的 lyrics_decision 记录(方大同《公园 (Live版)》,收在专辑「大事发声·
+// 录音棚现场:方大同专场」),不是编的——见 lyricsScoringVersion 注释里的消融数据出处。
+
+func TestApplyWordTimingTitleOverride_RealWorldCase(t *testing.T) {
+	results := []scoredLyricCandidateResult{
+		{
+			Source: "kugou", Score: 944, Title: "公园 (Live)", Album: "Timeless演唱会",
+			ScoreTerms: []scoreTerm{
+				{Kind: scoreTermDuration, Points: 170},
+				{Kind: scoreTermWordTiming, Points: 400},
+				{Kind: scoreTermLines, Points: 64},
+				{Kind: scoreTermTitleMatch, Points: 60},
+				{Kind: scoreTermConsensus, Points: 250},
+			},
+		},
+		{
+			Source: "netease", Score: 674, Title: "公园 (Live版)", Album: "方大同·专场",
+			ScoreTerms: []scoreTerm{
+				{Kind: scoreTermDuration, Points: 169},
+				{Kind: scoreTermLines, Points: 60},
+				{Kind: scoreTermAlbum, Points: 75},
+				{Kind: scoreTermTitleMatch, Points: 120},
+				{Kind: scoreTermConsensus, Points: 250},
+			},
+		},
+	}
+	applyWordTimingTitleOverride(results)
+
+	kugou, netease := &results[0], &results[1]
+	if kugou.Score != 544 {
+		t.Errorf("酷狗的逐字加分应被整段撤销:944-400=544,实际 %d", kugou.Score)
+	}
+	if p := scoreTermPoints(kugou.ScoreTerms, scoreTermWordTimingOverride); p != -400 {
+		t.Errorf("应该多出一条 wordTimingOverride:-400,实际 %d", p)
+	}
+	if netease.Score != 674 {
+		t.Errorf("网易云不该被这条规则动到,实际 %d", netease.Score)
+	}
+	// 撤销之后排序必须真的翻盘——这是最终能不能选对源的唯一标准,光改分不够。
+	sort.SliceStable(results, func(i, j int) bool { return results[i].Score > results[j].Score })
+	if results[0].Source != "netease" {
+		t.Errorf("修复后冠军应该是 netease(674 > 544),实际是 %s", results[0].Source)
+	}
+}
+
+// 姊妹案例(同一批消融找到的另一个,迈克尔·杰克逊单曲版混进原声带的场景):专辑名部分
+// 对得上、标题吻合分同样反超,同一条规则应该同样命中。
+func TestApplyWordTimingTitleOverride_SecondRealWorldCase(t *testing.T) {
+	results := []scoredLyricCandidateResult{
+		{
+			Source: "kugou", Score: 1059,
+			Title: "Shake Your Body (Remastered Single Version)", Album: "Michael Jackson's This Is It",
+			ScoreTerms: []scoreTerm{
+				{Kind: scoreTermWordTiming, Points: 400},
+				{Kind: scoreTermAlbum, Points: 75},
+				{Kind: scoreTermTitleMatch, Points: 60},
+				{Kind: scoreTermConsensus, Points: 250},
+				{Kind: scoreTermLines, Points: 60},
+				{Kind: scoreTermDuration, Points: 214}, // 凑够 1059:400+75+60+250+60+214
+			},
+		},
+		{
+			Source: "musixmatch", Score: 825,
+			Title: "Shake Your Body (Down to the Ground) [Single Version]",
+			Album:  "Michael Jackson's This Is It (The Music That Inspired the Movie)",
+			ScoreTerms: []scoreTerm{
+				{Kind: scoreTermAlbum, Points: 150},
+				{Kind: scoreTermTitleMatch, Points: 120},
+				{Kind: scoreTermConsensus, Points: 250},
+				{Kind: scoreTermLines, Points: 90},
+				{Kind: scoreTermDuration, Points: 215}, // 凑够 825
+			},
+		},
+	}
+	applyWordTimingTitleOverride(results)
+	sort.SliceStable(results, func(i, j int) bool { return results[i].Score > results[j].Score })
+	if results[0].Source != "musixmatch" {
+		t.Errorf("修复后冠军应该是 musixmatch(标题/专辑都更吻合),实际是 %s", results[0].Source)
+	}
+}
+
+// 反向护栏:标题吻合分**没有**站在亚军那边时(哪怕专辑名有差异、哪怕逐字确实是决定性
+// 因素),这条规则绝对不能出手——这是"窄口子"这三个字的字面意思,也是为什么另外
+// 238 个真实决定性案例不受影响的原因。数字取自 Ariana Grande《big feelings》案的形状:
+// 两边标题吻合分相等(查询词没有版本括号可比),专辑名有"(Explicit)"标签差异。
+func TestApplyWordTimingTitleOverride_DoesNotFireWhenTitleDoesNotFavorRunnerUp(t *testing.T) {
+	results := []scoredLyricCandidateResult{
+		{
+			Source: "kugou", Score: 400 + 75 + 120,
+			ScoreTerms: []scoreTerm{
+				{Kind: scoreTermWordTiming, Points: 400},
+				{Kind: scoreTermAlbum, Points: 75},
+				{Kind: scoreTermTitleMatch, Points: 120}, // 跟亚军相等,不是"严格更高"
+			},
+		},
+		{
+			Source: "netease", Score: 150 + 120,
+			ScoreTerms: []scoreTerm{
+				{Kind: scoreTermAlbum, Points: 150},
+				{Kind: scoreTermTitleMatch, Points: 120}, // 跟冠军相等
+			},
+		},
+	}
+	before := results[0].Score
+	applyWordTimingTitleOverride(results)
+	if results[0].Score != before {
+		t.Errorf("标题吻合分相等(不是亚军严格更高)时不该触发撤销,分数从 %d 变成了 %d", before, results[0].Score)
+	}
+}
+
+// 没有逐字加分的冠军:整条规则的第一道闸(wtPoints<=0)必须挡住,不能误伤"冠军本来就
+// 没靠逐字赢"的正常案例。
+func TestApplyWordTimingTitleOverride_NoOpWithoutWordTiming(t *testing.T) {
+	results := []scoredLyricCandidateResult{
+		{Source: "netease", Score: 900, ScoreTerms: []scoreTerm{{Kind: scoreTermAlbum, Points: 150}, {Kind: scoreTermTitleMatch, Points: 120}}},
+		{Source: "qq", Score: 500, ScoreTerms: []scoreTerm{{Kind: scoreTermTitleMatch, Points: 500}}},
+	}
+	applyWordTimingTitleOverride(results)
+	if results[0].Score != 900 || len(results[0].ScoreTerms) != 2 {
+		t.Error("冠军没有 wordTiming 加分时,函数不该动任何分数或加任何新 term")
+	}
+}
+
+// 逐字加分不是决定性因素时(冠军去掉 +400 依然是冠军)不该触发——这条规则只管"逐字
+// 是唯一让它赢的理由"这一种情况,不是"只要有逐字就要跟标题比一比"。
+func TestApplyWordTimingTitleOverride_NoOpWhenWordTimingNotDecisive(t *testing.T) {
+	results := []scoredLyricCandidateResult{
+		{
+			Source: "kugou", Score: 1200,
+			ScoreTerms: []scoreTerm{
+				{Kind: scoreTermWordTiming, Points: 400},
+				{Kind: scoreTermAlbum, Points: 150},
+				{Kind: scoreTermTitleMatch, Points: 30}, // 就算比亚军低也无所谓:去掉 400 仍是冠军
+				{Kind: scoreTermConsensus, Points: 250},
+				{Kind: scoreTermLines, Points: 370},
+			},
+		},
+		{
+			Source: "netease", Score: 600,
+			ScoreTerms: []scoreTerm{{Kind: scoreTermTitleMatch, Points: 120}},
+		},
+	}
+	before := results[0].Score
+	applyWordTimingTitleOverride(results)
+	if results[0].Score != before {
+		t.Errorf("去掉逐字加分冠军依然是冠军(800>600)时不该触发,分数从 %d 变成了 %d", before, results[0].Score)
+	}
+}
+
+// 一票否决/纯音乐标记(Score<0)不该被当成候选池的一员,不管是当"冠军"还是当"亚军"。
+func TestApplyWordTimingTitleOverride_SkipsRejectedCandidates(t *testing.T) {
+	results := []scoredLyricCandidateResult{
+		{Source: "lrclib", Score: -1, Instrumental: true},
+		{
+			Source: "kugou", Score: 500,
+			ScoreTerms: []scoreTerm{
+				{Kind: scoreTermWordTiming, Points: 400},
+				{Kind: scoreTermTitleMatch, Points: 30},
+			},
+		},
+		{Source: "musixmatch", Score: -1, ScoreTerms: []scoreTerm{{Kind: scoreRejectNotTimed}}},
+	}
+	applyWordTimingTitleOverride(results)
+	if results[1].Score != 500 {
+		t.Errorf("只有一个真实候选、没有亚军可比时不该触发,分数从 500 变成了 %d", results[1].Score)
+	}
+	if results[0].Score != -1 || results[2].Score != -1 {
+		t.Error("一票否决/纯音乐标记的分数不该被这条规则改动")
+	}
+}
+
+// 2026-08-28 用户报「搜索候选歌词」把方大同《南音》的正确候选判成"语言跟这首歌对不上"
+// 而拒绝采用——本地标签(Apple Music)罗马化写成 artist="Khalil Fong" title="Nanyin",
+// 两者都不含汉字,candidateArtist 补上之前测不出来的这一层信息(候选源自己确认匹配到的
+// 歌手,已经过前置的歌手身份闸,不是瞎猜):它含汉字就说明这首歌本来就该有中文候选,不是
+// "上传者把翻译当原文传错了"。
+func TestIsProbablyWrongLanguageLyrics(t *testing.T) {
+	chineseLyrics := "[00:13.76]在他的墨鏡裡\n[00:16.38]看不到二泉的月映有多麼朦朧\n[00:21.77]只記得少年時"
+	englishLyrics := "[00:00.10]this is an english lyric line\n[00:03.20]another english line here today"
+
+	cases := []struct {
+		name                                              string
+		localArtist, localTitle, candidateArtist, lyrics string
+		want                                              bool
+	}{
+		{
+			name: "罗马化标签+候选源确认的中文歌手名→不拦",
+			localArtist: "Zyx Qwerty Nonexistent", localTitle: "Some Song", candidateArtist: "方大同",
+			lyrics: chineseLyrics, want: false,
+		},
+		{
+			// "Pei-yu Hung" 真实存在于 artistAliasTable(→"洪佩瑜")——这条测的是
+			// knownArtistAlias 那道豁免本身,不是"候选源给没给中文名"那道。2026-08-31
+			// 手工表缩到只剩两条通用机制(MusicBrainz+QQ)都覆盖不了的真实残留案例,
+			// 用例跟着换成现存的那条(原来的"方大同/Khalil Fong"已经被通用机制覆盖、
+			// 从表里删掉了,不能再用来测手工表本身)。
+			name: "罗马化标签在手工别名表里能查到中文名(洪佩瑜真实残留案例)→不拦,即使候选源没给中文名",
+			localArtist: "Pei-yu Hung", localTitle: "Some Song", candidateArtist: "",
+			lyrics: chineseLyrics, want: false,
+		},
+		{
+			// 用一个**不在**别名表里的虚构罗马化名字,确保测的是"没有任何救援信号"
+			// 这一档,不会被表里恰好登记过的真实歌手悄悄救回去。
+			name: "罗马化标签+候选源没给出歌手名+别名表也没登记→维持原判,拦",
+			localArtist: "Zyx Qwerty Nonexistent", localTitle: "Some Song", candidateArtist: "",
+			lyrics: chineseLyrics, want: true,
+		},
+		{
+			name: "罗马化标签+候选源报的歌手名同样是罗马化写法+别名表也没登记→救不了,拦",
+			localArtist: "Zyx Qwerty Nonexistent", localTitle: "Some Song", candidateArtist: "Some Artist",
+			lyrics: chineseLyrics, want: true,
+		},
+		{
+			name: "本地标签本身含汉字→本来就不适用这条判断,不拦",
+			localArtist: "方大同", localTitle: "南音", candidateArtist: "",
+			lyrics: chineseLyrics, want: false,
+		},
+		{
+			name: "本地标签非中文+候选正文也非中文→本来就没有语言分歧,不拦",
+			localArtist: "Ed Sheeran", localTitle: "Shape of You", candidateArtist: "Ed Sheeran",
+			lyrics: englishLyrics, want: false,
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := isProbablyWrongLanguageLyrics(c.localArtist, c.localTitle, c.candidateArtist, c.lyrics)
+			if got != c.want {
+				t.Errorf("isProbablyWrongLanguageLyrics(%q, %q, %q, ...) = %v, want %v",
+					c.localArtist, c.localTitle, c.candidateArtist, got, c.want)
+			}
+		})
+	}
+}
+
+// 2026-08-30 真实bug:那英《微笑着离去》本地标签罗马化成 artist="Na Ying" title=
+// "Smiled Then Passed",LRCLIB 报的 candidateArtist 同样是罗马化写法(它自己也没有这位
+// 歌手的中文数据),手工表(artistAliasTable)也没登记——不是每个知名歌手都恰好被人工
+// 录入过,真实的中文歌词被误判成"传错语言的翻译"拒收。
+//
+// 用户反问「怎么还在维护手工表？不能通用处理吗」——正确答案是通用处理:
+// canonicalArtistViaMusicBrainz/musicBrainzArtistAliases 这两条 resolve 链路里本来就在
+// 跑的 MusicBrainz 查询,只要为了别的目的(CanonicalArtist 解析/别名重试)查过这位歌手
+// 一次,答案就已经缓存在 artistAliasCache/mbPrimaryNameCache 里——isProbablyWrongLanguageLyrics
+// 只读窥探这两份缓存即可,不需要把"Na Ying"手工写进 artistAliasTable。这里直接预置缓存
+// 模拟"MusicBrainz 已经查到过"的状态,不发真实网络请求。
+func TestIsProbablyWrongLanguageLyricsUsesResolvedArtistCacheHint(t *testing.T) {
+	chineseLyrics := "[00:35.34]不要把臉藏在月光背後\n[00:41.77]有誰在意我們的生活\n[00:45.67]坐在安靜角落"
+
+	t.Run("artistAliasCache 命中→不拦", func(t *testing.T) {
+		saved := artistAliasCache
+		defer func() { artistAliasCache = saved }()
+		artistAliasCache = map[string]string{"Na Ying": "那英"}
+
+		if got := isProbablyWrongLanguageLyrics("Na Ying", "Smiled Then Passed", "Na Ying", chineseLyrics); got {
+			t.Error("artistAliasCache 里已经查到中文名时不该拦")
+		}
+	})
+
+	t.Run("mbPrimaryNameCache 命中→不拦", func(t *testing.T) {
+		saved := mbPrimaryNameCache
+		defer func() { mbPrimaryNameCache = saved }()
+		mbPrimaryNameCache = map[string][]string{"Na Ying": {"那英"}}
+
+		if got := isProbablyWrongLanguageLyrics("Na Ying", "Smiled Then Passed", "Na Ying", chineseLyrics); got {
+			t.Error("mbPrimaryNameCache 里已经查到中文名时不该拦")
+		}
+	})
+
+	t.Run("两份缓存都没查到→维持原判,拦", func(t *testing.T) {
+		savedAlias, savedMB := artistAliasCache, mbPrimaryNameCache
+		defer func() { artistAliasCache, mbPrimaryNameCache = savedAlias, savedMB }()
+		artistAliasCache = map[string]string{}
+		mbPrimaryNameCache = map[string][]string{}
+
+		if got := isProbablyWrongLanguageLyrics("Na Ying", "Smiled Then Passed", "Na Ying", chineseLyrics); !got {
+			t.Error("两份缓存都没有线索时应该维持原判(拦),不该凭空放行")
+		}
+	})
+
+	t.Run("mbPrimaryNameCache 里全是非中文候选(查过但没有中文名)→不该误判成命中", func(t *testing.T) {
+		saved := mbPrimaryNameCache
+		defer func() { mbPrimaryNameCache = saved }()
+		mbPrimaryNameCache = map[string][]string{"Some Artist": {"Some Other Latin Name"}}
+
+		if got := isProbablyWrongLanguageLyrics("Some Artist", "Some Song", "Some Artist", chineseLyrics); !got {
+			t.Error("缓存里的候选全是非中文时不该触发豁免")
+		}
+	})
 }

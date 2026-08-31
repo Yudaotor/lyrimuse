@@ -264,10 +264,58 @@ jobs:
           # 注释警告过的坑:`run: |` 块里任何一行的缩进都不能浅于块本身,顶格的脚本体会
           # 直接把这个 YAML 文件解析坏(2026-08-16 我第一版就这么写,被 YAML 校验逮住)。
           # 纯 shell 参数替换就够,不用外部解释器。
-          NOTES_HTML="$NOTES_RAW"
-          NOTES_HTML="${NOTES_HTML//]]>/]]]]><![CDATA[>}"
-          if [ -z "${NOTES_HTML//[[:space:]]/}" ]; then
-            NOTES_HTML="See the GitHub release page for details."
+          escape_cdata() {
+            local s="$1"
+            s="${s//]]>/]]]]><![CDATA[>}"
+            if [ -z "${s//[[:space:]]/}" ]; then
+              s="See the GitHub release page for details."
+            fi
+            printf '%s' "$s"
+          }
+          # 双语拆分(2026-08-26 加):Sparkle 更新弹窗的外壳(标题/按钮)本来就跟着
+          # 系统语言走(SUSparkleBundle() 自带一整套 .lproj),但正文一直是我们塞进去的
+          # 一整段静态文本、不分语言,所有人看到的都是同一份中英夹杂。
+          #
+          # Sparkle 的 SUAppcast.m(bestNodeInNodes:name:)其实支持同一个 <item> 下
+          # 按 xml:lang 放多份同名元素,用 NSBundle preferredLocalizationsFromArray:
+          # 按系统语言偏好挑一份——这跟官方 generate_appcast 工具给
+          # <sparkle:releaseNotesLink> 用的是同一套机制,<description> 走的是同一条
+          # 解析路径(SURSSElementDescription 同样会先被"按 name 分组"再送进
+          # bestNodeInNodes:)。
+          #
+          # 约定:tag annotation 里如果显式写了这两行标记,就按标记切成英文/中文两段,
+          # 各自生成一个 <description xml:lang="...">;标题行(裸版本号那一行,在
+          # 两个标记之前)语言中立,原样带进两份里。没有这两个标记的旧式 tag
+          # (v1.4.0 及更早)原样退回单份 <description>,行为不变——这条分支必须保留,
+          # 否则任何忘记按新格式写的 tag 都会在这一步直接崩掉整个发布。
+          #   <!-- lang:en -->
+          #   ……英文正文……
+          #   <!-- lang:zh-Hans -->
+          #   ……中文正文……
+          EN_MARKER='<!-- lang:en -->'
+          ZH_MARKER='<!-- lang:zh-Hans -->'
+          if [[ "$NOTES_RAW" == *"$EN_MARKER"* && "$NOTES_RAW" == *"$ZH_MARKER"* ]]; then
+            HEADER="${NOTES_RAW%%"$EN_MARKER"*}"
+            AFTER_EN="${NOTES_RAW#*"$EN_MARKER"}"
+            EN_BODY="${AFTER_EN%%"$ZH_MARKER"*}"
+            ZH_BODY="${NOTES_RAW#*"$ZH_MARKER"}"
+            EN_HTML=$(escape_cdata "${HEADER}${EN_BODY}")
+            ZH_HTML=$(escape_cdata "${HEADER}${ZH_BODY}")
+            DESCRIPTION_XML=$(
+              echo '      <description xml:lang="en"><![CDATA[<pre>'
+              printf '%s\n' "$EN_HTML"
+              echo '      </pre>]]></description>'
+              echo '      <description xml:lang="zh-Hans"><![CDATA[<pre>'
+              printf '%s\n' "$ZH_HTML"
+              echo '      </pre>]]></description>'
+            )
+          else
+            NOTES_HTML=$(escape_cdata "$NOTES_RAW")
+            DESCRIPTION_XML=$(
+              echo '      <description><![CDATA[<pre>'
+              printf '%s\n' "$NOTES_HTML"
+              echo '      </pre>]]></description>'
+            )
           fi
           # Not a heredoc -- a heredoc's body must stay flush-left to avoid picking up
           # this step's own YAML indentation as literal leading whitespace in every line
@@ -289,13 +337,7 @@ jobs:
             echo "      <pubDate>${PUB_DATE}</pubDate>"
             echo "      <sparkle:version>${VERSION}</sparkle:version>"
             echo "      <sparkle:shortVersionString>${VERSION}</sparkle:shortVersionString>"
-            # Sparkle 更新弹窗的正文。用 CDATA 包住,里面是 HTML —— annotation 是纯文本,
-            # 交给 <pre> 保留换行/缩进最省事,也不用担心正文里的 & < > 破坏 XML(CDATA 里
-            # 它们都是字面量)。唯一要防的是正文里出现 "]]>" 提前闭合 CDATA,下面用
-            # python 把它拆成两段 CDATA 处理。
-            echo '      <description><![CDATA[<pre>'
-            printf '%s\n' "$NOTES_HTML"
-            echo '      </pre>]]></description>'
+            printf '%s\n' "$DESCRIPTION_XML"
             echo '      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>'
             echo '      <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>'
             echo "      <enclosure url=\"${DOWNLOAD_URL}\" sparkle:version=\"${VERSION}\" sparkle:edSignature=\"${SIGNATURE}\" length=\"${LENGTH}\" type=\"application/octet-stream\" />"

@@ -426,6 +426,43 @@ private struct LyricsSettingsTab: View {
     // 一次。存 rawValue 而不是枚举:@AppStorage 只吃基础类型。
     /// 鼠标悬在哪个来源上(只为悬停底色,不影响任何配置)。
     @State private var hoveredSource: String?
+    /// 鼠标悬在哪个来源**整行**上(2026-08-31,跟上面 hoveredSource 是两件独立的事)——
+    /// hoveredSource 现在只覆盖 sourceCheckbox 自己紧贴内容的那一小块(圆点+文字),跟
+    /// 测试小图标(sourceTestAccessory)之间隔着一段 Spacer 空白;用户实机反馈"鼠标放在
+    /// 复选框上才显示测试按钮,移过去的路上就消失了"——正是这段空白:途中既不在
+    /// sourceCheckbox 的悬停范围内,也还没进测试小图标自己的 16×16 命中区,两个悬停信号
+    /// 在这段空白里同时是 false。这个状态覆盖复选框+空白+测试图标整行,专门只用来
+    /// 决定"这一行的测试图标要不要露出来",跟 hoveredSource 驱动的复选框高底色/`.help`
+    /// 提示是两件不同的事,不合并。
+    @State private var hoveredRow: LyricsSource?
+
+    // MARK: - 歌词来源可用性测试(2026-08-30)
+
+    /// 每个来源的测试状态,只在这次设置窗口的会话里有效——不持久化,重开设置就回到
+    /// 「还没测过」,这本来就是一次性诊断动作,不是需要记住的偏好。
+    private enum LyricSourceTestState: Equatable {
+        case testing
+        case result(status: LyricSourceTestService.Status, detail: String)
+    }
+    @State private var sourceTestStates: [LyricsSource: LyricSourceTestState] = [:]
+    /// 「全部测试」和任意一个单独的「测试」按钮共用同一个 collector 子进程槙位
+    /// (LyricSourceTestService 是单例,新一轮会 `cancelRunning()` 杀掉上一轮)。
+    ///
+    /// ⚠️ 2026-08-31 用户明确要求:标题行的「测试」(全部)**不能**被单个来源的测试锁住
+    /// ——不管有没有单个测试在跑,右上角那颗按钮永远可以点、永远会正常触发"测全部"。
+    /// 只有单个来源的测试按钮之间互相排队(靠下面 isTestingLyricSources 置灰),避免
+    /// 用户连点几个不同来源的测试按钮时,自己发起的几轮互相杀来杀去、结果满屏"失败"。
+    /// 所以 `testAllSources()` **不**守卫 `isTestingLyricSources`,随时可以点、随时会
+    /// 取代正在跑的任何一轮(哪怕那一轮是另一颗单独的测试按钮发起的)。
+    ///
+    /// `lyricSourceTestGeneration` 是为了正确处理"取代"这件事:testAllSources 取代一个
+    /// 正在跑的单个测试时,被取代那一轮的 collector 子进程会被杀掉、它的 `await` 会抛错,
+    /// 它自己的收尾逻辑(把 isTestingLyricSources 置回 false)如果无条件执行,会踩在
+    /// **新**这一轮刚设成 true 的状态上——每次发起测试先把这个代数加一,只有自己仍是
+    /// "当前最新一轮"时,收尾才会真的改 isTestingLyricSources/写入"失败"结果;被取代的
+    /// 那一轮的收尾发现代数已经变了,直接放弃,不覆盖新一轮的状态。
+    @State private var isTestingLyricSources = false
+    @State private var lyricSourceTestGeneration = 0
 
     // MARK: - 时间轴偏移那一行的「作用于哪个播放器」(2026-08-21 加)
 
@@ -573,18 +610,56 @@ private struct LyricsSettingsTab: View {
     // 就是这个来源的身份色(跟"歌词管理"窗口里来源列的色点是同一套 source.color)。
     private var sourcesAndMatchingCard: some View {
         SettingsCard {
-            SettingsCardHeader(title: L10n.t("歌词来源"))
+            SettingsCardHeader(title: L10n.t("歌词来源")) { testAllSourcesButton }
             CardDivider()
-            // 五个来源横排成一排可勾选的胶囊,不再一个来源占一整行 —— 五行开关加上分隔线
-            // 把这张卡撑到了半屏高,而这里要表达的只是"哪几个开着"。
-            // 用 WrapLayout 而不是 HStack:万一系统字号调大、或以后加了第六个来源,自动折到
-            // 第二行,不会被卡片宽度裁掉。
+            // 固定 4 列的网格,不再用 WrapLayout 按可用宽度贪心折行 —— 折行位置这件事此前
+            // 完全由译文长度决定:"网易云音乐"5 个字、英文界面下是 "NetEase Cloud Music"
+            // 20 个字符,同一张卡在两种语言下折行结果从两行变成三行,布局"变来变去"。
+            // 2026-08-26 改成固定列数(用户挑了 4 列):行数只取决于「来源数 ÷ 4」,跟语言、
+            // 译文长短完全无关 —— 折行这件事从设计上被消除了,以后加新源最多只多一行。
+            // 单格文字太长会被 sourceCheckbox 内部的 .lineLimit(1) 截断、hover 出完整名字
+            // (.help),不会像 WrapLayout 那样把整张卡的折行结构带歪。
             SettingsRawRow(insetToText: true) {
-                WrapLayout(horizontalSpacing: 10, verticalSpacing: 6, rowAlignment: .leading) {
+                LazyVGrid(
+                    columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 4),
+                    alignment: .leading, spacing: 4
+                ) {
                     ForEach(LyricsSource.allCases) { source in
-                        sourceCheckbox(source)
+                        // 测试按钮/结果状态放在每一格尾部(2026-08-30)。
+                        //
+                        // ⚠️ 2026-08-31 用户实机反馈"点这个 hover 按钮没有反应"——第一版
+                        // 用 `.overlay(alignment: .trailing)` 把测试小图标叠在
+                        // sourceCheckbox 那个铺满整格的开关 Button 上面,想靠
+                        // `.highPriorityGesture` 让点击优先分给小图标,实测**仍然没用**:
+                        // 悬停走 NSTrackingArea,两个叠在一起的区域各自独立、互不冲突,
+                        // 但点击是两个 Button 在抢同一次 mouseDown,这层竞争发生在
+                        // AppKit 的 hit-test 阶段,SwiftUI 手势优先级(`.highPriorityGesture`)
+                        // 根本没有机会介入——它只能调解 SwiftUI **自己**的手势系统内部的
+                        // 优先级,管不到"外层这个 Button 本身的 mouseDown 直接被 AppKit
+                        // 判给了它自己"。真正的修法是让两个控件在布局上就不重叠、变成平级
+                        // 兄弟节点(HStack + Spacer),而不是想办法在重叠状态下调解优先级——
+                        // sourceCheckbox 相应地不再自己占满整格宽度(见该函数改动),这里的
+                        // HStack 补上"占满整格"的职责,Spacer 把测试小图标推到真正的尾部。
+                        HStack(spacing: 4) {
+                            sourceCheckbox(source)
+                            Spacer(minLength: 0)
+                            sourceTestAccessory(source)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        // ⚠️ 2026-08-31 用户实机反馈"鼠标放在复选框上才显示测试按钮,移过去
+                        // 的路上就消失了"——sourceCheckbox 自己的悬停范围现在紧贴内容(不再
+                        // 占满整格,见上面那段改动注释),跟测试小图标之间隔着 Spacer 撑出来
+                        // 的一段空白,途中两边的悬停信号都不成立。这里在整行(复选框+空白+
+                        // 图标)上补一层独立的悬停追踪,专门喂给 hoveredRow——只用来决定
+                        // 测试图标要不要露出来,跟 sourceCheckbox 自己那层驱动高亮底色/
+                        // `.help` 的悬停信号(hoveredSource)是两件不同的事,不合并。
+                        .contentShape(Rectangle())
+                        .onHover { hovering in
+                            hoveredRow = hovering ? source : (hoveredRow == source ? nil : hoveredRow)
+                        }
                     }
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
             CardDivider()
             // 分段控件放在标题行右边,不再单独占一整行 —— 一行一个设置是这套设置页其余地方
@@ -706,10 +781,22 @@ private struct LyricsSettingsTab: View {
                     }
                 }
                 .frame(width: 15, height: 15)
+                // 固定 4 列网格里,格宽是卡片宽度的四分之一 —— 英文译名("NetEase Cloud
+                // Music" 这类)在这个宽度下装不下,原来 WrapLayout 时代靠折行/换行躲开这个
+                // 问题,固定列数之后就躲不开了。这里改用截断:单行 + 尾部省略号,鼠标悬停
+                // (.help)给出完整名字,不让某一个来源的长译名撑破所在的整列宽度。
                 Text(name)
                     .font(.system(size: 13))
                     .foregroundStyle(on ? Color.primary : Color.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
             }
+            // ⚠️ 2026-08-31 去掉了这里的 `.frame(maxWidth: .infinity, alignment: .leading)`
+            // ——这个 Button 曾经故意占满整格宽度,让测试小图标可以叠(overlay)在它上面;
+            // 那个叠加方案在实机上点击互相抢占(见 ForEach 调用点的详细注释),改成两个
+            // 控件平级放进一个 HStack 之后,这个 Button 只需要按自己的内容(圆点+文字)
+            // 天然宽度来,"占满整格"这件事交给外层 HStack 负责,不然它会把 Spacer 和
+            // 测试小图标都挤没有空间。
             .padding(.vertical, 4)
             .padding(.horizontal, 7)
             .background(
@@ -719,6 +806,7 @@ private struct LyricsSettingsTab: View {
             .contentShape(RoundedRectangle(cornerRadius: 6))
         }
         .buttonStyle(.plain)
+        .help(name)
         .onHover { hoveredSource = $0 ? id : (hoveredSource == id ? nil : hoveredSource) }
         .animation(.easeOut(duration: 0.12), value: hovered)
         .accessibilityAddTraits(on ? [.isSelected] : [])
@@ -737,6 +825,215 @@ private struct LyricsSettingsTab: View {
         }
         guard features.lyricsSources != before else { return }
         Task { await features.save() }
+    }
+
+    /// 卡片标题行右侧的「测试」按钮(2026-08-31 从「全部测试」改成「测试」——两个字
+    /// 已经说清楚是干什么的,"全部"是多余的修饰),只测**已启用**的源(跟 collector 侧
+    /// 不传 -source 时默认测全部已启用源的口径一致)。
+    ///
+    /// ⚠️ **故意不 `.disabled(isTestingLyricSources)`**(2026-08-31 用户明确要求"这个
+    /// 按钮不要被单个测试锁住,任何时候都能点、都会触发全部检测")——理由跟具体的取代
+    /// 机制见 `isTestingLyricSources`/`lyricSourceTestGeneration` 声明处注释。`Text`/
+    /// 图标仍然按 `isTestingLyricSources` 换成"测试中…"/转轴,只是这个视觉状态**不再
+    /// 决定能不能点**——哪怕当前是单个测试按钮让它进入"测试中"的显示,这颗按钮依旧可点,
+    /// 点下去会取代那一轮、改跑全部。
+    private var testAllSourcesButton: some View {
+        Button {
+            testAllSources()
+        } label: {
+            HStack(spacing: 4) {
+                if isTestingLyricSources {
+                    ProgressView().controlSize(.mini)
+                } else {
+                    Image(systemName: "antenna.radiowaves.left.and.right")
+                }
+                Text(isTestingLyricSources ? L10n.t("测试中…") : L10n.t("测试"))
+            }
+            .font(.system(size: 11, weight: .medium))
+        }
+        .controlSize(.small)
+        .settingsGlassButtons()
+    }
+
+    /// 每个来源格子尾部的测试按钮/结果状态(2026-08-30)。跟 `sourceCheckbox` 是平级的
+    /// HStack 兄弟节点,不叠在它上面(见 ForEach 调用点注释——叠加方案在实机上悬停/点击
+    /// 会跟下面那个铺满整格的开关 Button 打架,已经放弃)。三种形态:
+    /// - 还没测过、也没在悬停:完全不显示(不给静止状态添视觉噪音)。
+    /// - 悬停中(还没测过,或者正在测):悬停给一个中性的"测试"小图标按钮,鼠标真压在
+    ///   它自己身上时再叠一层圆形底色——单靠一个裸图标看不出"这是能点的东西"
+    ///   (2026-08-31 用户实机反馈"没看到可交互性以及信息能力")。真在测的时候换成
+    ///   小转轴,不管有没有悬停都要看得见——用户点了就该看到反馈。
+    /// - 已经有结果:一个按状态上色的小图标,不管有没有悬停都常驻显示(结果是持续有效的
+    ///   信息,不该只在悬停时才看得见),再点一次等于重新测这一个源。
+    ///
+    /// ⚠️ **原因文案不用 `.help()`**——2026-08-31 用户实机反馈"悬浮并没有提示出来",当时
+    /// 这个控件还叠在 `sourceCheckbox` 上面,两个互相重叠的原生 tooltip 注册区域在
+    /// AppKit 层面会打架。现在已经不叠了,但保留用 `.popover` 自绘(而不是换回
+    /// `.help()`)——popover 能精确控制多行换行(`.frame(width:)+.fixedSize`),
+    /// `.help()` 换行控制没这么直接,不想再冒一次险。
+    ///
+    /// ⚠️ **"还没测过"这个态不再给提示文案**(2026-08-31 用户要求"把这个 hover 文案去掉")
+    /// ——"测试这个来源现在是否可用"这句话本身信息量有限,图标 + 点击行为已经说明白了
+    /// 是干什么的,不需要额外一句话重复。提示只留给 warn/fail 结果——那才是真正有必要
+    /// 读一下的具体原因。
+    @ViewBuilder
+    private func sourceTestAccessory(_ source: LyricsSource) -> some View {
+        let state = sourceTestStates[source]
+        // 用整行悬停(hoveredRow),不是 sourceCheckbox 自己那段更窄的悬停(hoveredSource)
+        // ——理由见 ForEach 调用点的 .onHover 注释:两者中间隔着一段 Spacer 空白,只用
+        // 后者会在鼠标途经空白那一段时让图标提前消失。
+        let isRowHovered = hoveredRow == source
+        let isAccessoryHovered = accessoryHoverSource == source
+        let tooltip = sourceAccessoryTooltip(state)
+        Group {
+            switch state {
+            case .testing:
+                ProgressView().controlSize(.mini)
+            case .result(let status, _):
+                Button { testSource(source) } label: {
+                    Image(systemName: statusSymbol(status))
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(statusColor(status))
+                }
+                .buttonStyle(.plain)
+            case nil:
+                if isRowHovered || isAccessoryHovered {
+                    Button { testSource(source) } label: {
+                        Image(systemName: "antenna.radiowaves.left.and.right")
+                            .font(.system(size: 10))
+                            .foregroundStyle(isAccessoryHovered ? Color.accentColor : Color.secondary)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+        // 固定尺寸的命中区,不随内容是否可见变化——悬停判定(下面的 .onHover)要在图标
+        // 还没出现(比如"还没测过、鼠标刚移进这一格"那一帧)时也能立刻生效,不依赖内容
+        // 本身有没有渲染出东西来提供可命中的几何。
+        .frame(width: 16, height: 16)
+        // 鼠标真压在这个控件上时给一圈圆形底色——单靠图标本身的颜色变化不够明显,
+        // 这一层才是"这是可点的东西"最直接的信号(跟设置页其它按钮 hover 时的反馈同一个
+        // 语言:有底色变化 = 能点)。
+        .background(Circle().fill(isAccessoryHovered ? Color.secondary.opacity(0.18) : Color.clear))
+        .contentShape(Rectangle())
+        .disabled(isTestingLyricSources)
+        .onHover { hovering in
+            accessoryHoverSource = hovering ? source : (accessoryHoverSource == source ? nil : accessoryHoverSource)
+        }
+        .popover(isPresented: Binding(
+            get: { isAccessoryHovered && tooltip != nil },
+            set: { shown in if !shown { accessoryHoverSource = nil } }
+        ), arrowEdge: .bottom) {
+            if let tooltip {
+                // ⚠️ `.frame(maxWidth:)` 单独用不住(2026-08-31 用户实机反馈"文案显示
+                // 不完整,截断了")——popover 的内容尺寸是按 Text 的理想单行宽度算的,
+                // `maxWidth` 只是给了一个上限,不会主动把宽度收窄逼着它换行。改成
+                // `.frame(width:)` 钉死宽度 + `.fixedSize(horizontal: false, vertical:
+                // true)`(横向不再收缩、纵向随内容长高)才会真的按这个宽度换行。
+                Text(tooltip)
+                    .font(.system(size: 11))
+                    .multilineTextAlignment(.leading)
+                    .frame(width: 220, alignment: .leading)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(8)
+            }
+        }
+    }
+
+    /// 悬浮在哪个来源的测试小图标上(只为上面那个自绘 popover,跟 hoveredSource——整格
+    /// 悬停底色用的——是两件独立的事:这个格子悬停着,不代表鼠标正压在那个 16×16 的小
+    /// 图标上)。
+    @State private var accessoryHoverSource: LyricsSource?
+
+    private func sourceAccessoryTooltip(_ state: LyricSourceTestState?) -> String? {
+        switch state {
+        // 通过(ok)不给提示——"接口有响应"这句话本身不携带任何决策信息,绿色✓已经说完了
+        // 整件事,弹一个只会重复视觉状态的气泡纯属打扰。只有 warn/fail 才有值得读的原因。
+        case .result(let status, let detail): return status == .ok ? nil : detail
+        // 还没测过 / 正在测:都不给提示,理由见函数声明处注释。
+        case .testing, nil: return nil
+        }
+    }
+
+    private func statusSymbol(_ status: LyricSourceTestService.Status) -> String {
+        switch status {
+        case .ok: return "checkmark.circle.fill"
+        case .warn: return "exclamationmark.circle.fill"
+        case .fail: return "wifi.slash"
+        }
+    }
+
+    private func statusColor(_ status: LyricSourceTestService.Status) -> Color {
+        switch status {
+        case .ok: return .green
+        case .warn: return .orange
+        case .fail: return .secondary
+        }
+    }
+
+    /// 单独测一个源——不管这个源当前是启用还是禁用都能测(想测一个已经关掉的源、
+    /// 决定要不要重新打开,同样是合理的用法),跟「全部测试」只测已启用源的口径不同。
+    ///
+    /// ⚠️ 不再守卫 `isTestingLyricSources`(2026-08-31)——「全部测试」现在随时可以点、
+    /// 随时会取代正在跑的任意一轮(哪怕是这个函数发起的)。这里靠 generation 编号辨认
+    /// "我是不是被取代了":被取代那一轮的 collector 子进程会被 `cancelRunning()` 杀掉、
+    /// `await` 因此抛错,如果这时候 generation 已经变了(说明"全部测试"或另一次单独测试
+    /// 抢先了),这次的收尾整段放弃——不写"失败"结果(会误导用户以为这个源真的测试
+    /// 失败),也不去动 `isTestingLyricSources`(新那一轮还在跑,不该被这里踩成 false)。
+    private func testSource(_ source: LyricsSource) {
+        lyricSourceTestGeneration += 1
+        let generation = lyricSourceTestGeneration
+        isTestingLyricSources = true
+        sourceTestStates[source] = .testing
+        Task {
+            do {
+                try await LyricSourceTestService.shared.test(source: source) { result in
+                    guard let matched = LyricsSource(rawValue: result.source) else { return }
+                    sourceTestStates[matched] = .result(status: result.status, detail: result.detail)
+                }
+            } catch {
+                if generation == lyricSourceTestGeneration {
+                    sourceTestStates[source] = .result(
+                        status: .fail, detail: error.localizedDescription)
+                }
+            }
+            if generation == lyricSourceTestGeneration {
+                isTestingLyricSources = false
+            }
+        }
+    }
+
+    /// ⚠️ **故意不守卫 `isTestingLyricSources`**(2026-08-31 用户明确要求)——这是唯一
+    /// 一个"随时能点、会取代任何正在跑的一轮"的入口,跟 `testSource` 的取代/generation
+    /// 机制完全对称,理由见 `isTestingLyricSources` 声明处注释。
+    private func testAllSources() {
+        lyricSourceTestGeneration += 1
+        let generation = lyricSourceTestGeneration
+        isTestingLyricSources = true
+        for source in LyricsSource.allCases where features.lyricsSources.contains(source) {
+            sourceTestStates[source] = .testing
+        }
+        Task {
+            do {
+                try await LyricSourceTestService.shared.test(source: nil) { result in
+                    guard let matched = LyricsSource(rawValue: result.source) else { return }
+                    sourceTestStates[matched] = .result(status: result.status, detail: result.detail)
+                }
+            } catch {
+                // 子进程整个没跑起来(比如 collector 二进制缺失)——已经标成"测试中"的
+                // 那些格子要有个交代,不能永远转圈,统一改成失败并带上原因。仅在自己仍是
+                // 最新一轮时才写,理由同 testSource 的 catch 分支。
+                if generation == lyricSourceTestGeneration {
+                    for source in LyricsSource.allCases where sourceTestStates[source] == .testing {
+                        sourceTestStates[source] = .result(
+                            status: .fail, detail: error.localizedDescription)
+                    }
+                }
+            }
+            if generation == lyricSourceTestGeneration {
+                isTestingLyricSources = false
+            }
+        }
     }
 
     private var translationCard: some View {
@@ -858,23 +1155,16 @@ private struct LyricsSettingsTab: View {
                             L10n.t("韩语"), .korean,
                             help: L10n.t("只对判定为韩语的歌词生效，例如 안녕하세요 → annyeonghaseyo"))
                         romanizationToggle(
-                            L10n.t("中文"), .chinese,
-                            help: L10n.t("只对判定为中文的歌词生效，例如 你好 → nǐ hǎo；默认关闭，中文歌词加拼音对中文读者通常是干扰"))
+                            L10n.t("拼音"), .chinese,
+                            help: L10n.t("只对判定为普通话的歌词生效，例如 你好 → nǐ hǎo"))
+                        romanizationToggle(
+                            L10n.t("粤拼"), .cantonese,
+                            help: L10n.t("只对判定为粤语的歌词生效，用的是粤拼(Jyutping)方案，例如 你好 → nei5 hou2"))
                     }
                 }
-                // 这句原来是常驻副标题,2026-08-17 挪进悬停说明(用户要求)——三个语言
+                // 这句原来是常驻副标题,2026-08-17 挪进悬停说明(用户要求)——四个语言
                 // 开关各自已经带了更具体的 help,行上再顶一句概括是重复的噪声。
-                .help(L10n.t("日语、韩语标成罗马字，中文标成拼音"))
-            }
-            CardDivider()
-            SettingsRow(
-                icon: "text.aligncenter",
-                title: L10n.t("双行显示"),
-                // 旁边的译文/罗马音都标了生效面,唯独这行没有 —— 开着灵动岛的人打开它
-                // 没反应,会以为开关坏了。实际消费方只有 LyricsOverlayView(悬浮歌词)。
-                help: L10n.t("这个开关只影响「桌面悬浮歌词」：在当前句下方预览下一句。歌词窗口本来就显示整份歌词，灵动岛和菜单栏只有一行空间")
-            ) {
-                Toggle("", isOn: $settings.showNextLinePreview)
+                .help(L10n.t("日语、韩语标成罗马字，普通话标成拼音，粤语标成粤拼"))
             }
             CardDivider()
             // 时间轴偏移(2026-08-17 加,2026-08-21 加播放器维度)。跟菜单栏「歌词时间轴」那个单曲微调是两档:
@@ -1039,50 +1329,9 @@ private struct LyricsSettingsTab: View {
 
 private struct AppearanceSettingsTab: View {
     @ObservedObject private var settings = AppSettings.shared
-    @State private var showSaveThemeAlert = false
-    @State private var newThemeName = ""
-    // 待确认删除的自定义主题。删除会立刻落盘且没有撤销,必须先问一句。
-    @State private var themePendingDeletion: ColorTheme?
-    // 灵动岛"显示在哪块屏幕"下拉的选项来源。用 @State 快照而不是每次 body 现读
-    // NSScreen.screens:插拔显示器时 SwiftUI 不会因为一个全局数组变了就重算 body,
-    // 得靠下面那条 didChangeScreenParameters 通知显式刷新。
-    @State private var availableScreens: [NSScreen] = NSScreen.screens
-    /// 「所有屏幕」在那个下拉里的哨兵 tag。屏幕的真实 tag 是 ScreenIdentity 给的 UUID
-    /// 串,不可能撞上这个值;空串已经被「自动」占了。
-    private static let allScreensTag = "__all_screens__"
+    // (灵动岛「显示在哪块屏幕」的选项快照和「所有屏幕」哨兵 tag 2026-08-31 随 notchOverlayCard
+    //  一起搬进了 NotchEditorStage.swift 的 NotchScreenSettingsRows —— 只有那一处在用。)
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    private func applyColorTheme(_ theme: ColorTheme) {
-        // 套用一个具体命名主题就是在明确表态"我要固定色,不要动态色"——顺手关掉
-        // "跟随封面"(如果开着),不然套用之后前景色看起来毫无反应,像是这个 Menu
-        // 失灵了(实际上是被"跟随封面"接管了,只是用户不知道)。
-        settings.followsCoverArt = false
-        settings.foregroundColorHex = theme.foregroundColorHex
-        settings.backgroundColorHex = theme.backgroundColorHex
-        settings.textStrokeEnabled = theme.textStrokeEnabled
-        settings.textStrokeColorHex = theme.textStrokeColorHex
-    }
-
-    // 当前四个配色字段正好等于哪个内置预设/自定义主题就显示它的名字,谁都不等于
-    // (比如套用之后又手动微调过某个颜色)就显示"自定义"——这是"使用内置预设"这个
-    // Menu 唯一的选中反馈来源,见调用点注释。"跟随封面"开着时优先显示它,不比较颜色
-    // 字段。
-    //
-    // 2026-08-14 去掉了"followsCoverArt 开着就直接显示「跟随封面」"这个短路。当时那么写是
-    // 因为「跟随封面」也是这个 Menu 里的一项,不短路的话选中态会指向别处;现在它已经是一个
-    // 独立开关,这个 Menu 只负责固定配色,就该老老实实反映四个颜色字段当前等于哪一套 ——
-    // 否则开着"跟随封面"时,用户完全看不出自己的备用色到底是哪个主题。
-    private var currentColorThemeLabel: String {
-        let current = ColorTheme(
-            name: "",
-            foregroundColorHex: settings.foregroundColorHex,
-            backgroundColorHex: settings.backgroundColorHex,
-            textStrokeEnabled: settings.textStrokeEnabled,
-            textStrokeColorHex: settings.textStrokeColorHex
-        )
-        let all = ColorTheme.builtInPresets + settings.customColorThemes
-        return all.first { $0.hasSameColors(as: current) }?.name ?? L10n.t("自定义")
-    }
 
     var body: some View {
         // 2026-08-06 从 .formStyle(.grouped) 换成这套卡片组件(见 SettingsDesignSystem.swift)。
@@ -1105,9 +1354,11 @@ private struct AppearanceSettingsTab: View {
         // 和第一张卡看得见却点不动、鼠标放上去连滚都滚不动。详见
         // SettingsPageWithStickyHeader 上那段注释。
         //
-        // 另外一段(「其它」)不给预览:那一段是两个悬浮窗共用的隐藏开关,没有"长什么样"
-        // 可看。灵动岛和菜单栏**不能**共用 OverlayPreviewBar —— 那条画的是悬浮歌词的
-        // 字体/颜色,而这两个形态压根不读那些字段,各自的预览见 SectionPreviewBars。
+        // 这个固定头部现在只剩菜单栏那一段还在用(2026-08-31):悬浮歌词和灵动岛的预览都已经
+        // 升级成内容区里**可交互**的编辑台,而这一层收不到点击(见下面 Group 里那段)。
+        // 「其它」那一段本来就没有预览 —— 它是两个悬浮窗共用的隐藏开关,没有"长什么样"可看。
+        // ⚠️ 菜单栏那条**不能**换成悬浮歌词的预览:那条画的是悬浮歌词的字体/颜色,而菜单栏
+        // 压根不读那些字段(它就是系统菜单栏字),挂上去等于暗示那些设置对它也有效。
         SettingsPageWithStickyHeader {
             // 每一段挂**自己那一段**的预览。
             //
@@ -1135,8 +1386,14 @@ private struct AppearanceSettingsTab: View {
             // 那一刻生效,不会波及预览内部的高频刷新(karaoke/跑马灯)。
             Group {
                 switch section {
-                case .overlay: OverlayPreviewBar()
-                case .notch: NotchPreviewBar()
+                // ⚠️ 悬浮歌词段(2026-08-30)和灵动岛段(2026-08-31)**刻意不钉预览条**:
+                // 两段的预览都已经升级成内容区里的编辑台(OverlayEditorStage /
+                // NotchEditorStage),里面有宽度调整条和工具栏浮层。而这个固定头部里的控件
+                // **点不动** —— 见上面那段 2026-08-16 的复现记录:跟放的是哪个视图、内部有没有
+                // hover 手势都无关,是这个头部结构本身在 SwiftUI 里的事件派发行为,连
+                // .allowsHitTesting(false) 都救不回来。所以能交互的预览只能待在滚动区。
+                case .overlay: EmptyView()
+                case .notch: EmptyView()
                 case .menuBar: MenuBarPreviewBar()
                 case .other: EmptyView()
                 }
@@ -1148,7 +1405,10 @@ private struct AppearanceSettingsTab: View {
                 // 「三种」而不是原来的「四种」:这一页实际只有三个展示方式开关(桌面悬浮
                 // 歌词/灵动岛歌词/菜单栏歌词)。第四种是「歌词窗口」,它压根不在这一页配置
                 // —— 靠快捷键/菜单按需打开,没有开关。原文案让人数着三个开关去找第四个。
-                subtitle: L10n.t("三种展示方式可以同时开启")
+                subtitle: L10n.t("三种展示方式可以同时开启"),
+                // 这一页顶着一块接近真实尺寸的编辑台,纵向空间格外紧;而窗口标题栏已经写着
+                // 「设置 – 歌词显示」,页内那块 22pt 大标题是同一句话说两遍(2026-08-30 用户要求移除)。
+                showsHeader: false
             ) {
                 sectionPicker
                 currentSection
@@ -1215,17 +1475,42 @@ private struct AppearanceSettingsTab: View {
     private var currentSection: some View {
         switch section {
         case .overlay:
+            // 编辑台(2026-08-30):这一段的预览从"顶部钉住的一条"改成内容区里的主体,
+            // 因为它现在可交互(舞台里有宽度调整条、有点文字/点背景的命中区),而固定头部
+            // 收不到事件(理由见上面
+            // stickyHeader 里那条注释)。钉条本身仍然在,只是这一段不用它 ——
+            // 灵动岛/菜单栏两段照旧,SectionPreviewMetrics 的高度契约不受影响。
+            OverlayEditorStage()
             modeToggleCard(
                 icon: "captions.bubble",
                 title: L10n.t("桌面悬浮歌词"),
                 isOn: Binding(
                     get: { settings.classicOverlayEnabled },
                     set: { LyricsOverlayWindowController.shared.setVisible($0) }))
-            // 配置卡**不跟开关联动**(2026-08-15 用户要求):关着也能调。
+            // 「行为」栏(2026-08-30,编辑台第三步):锁定位置 / 拖动前先长按 / 划过让开。
+            // 从原来的「窗口」卡里提出来单独一栏 —— 它们在编辑台上看不出变化,混在配色
+            // 字体那些"改了当场看得见"的项里,读者会一直等一个不会来的反馈。行本体在
+            // OverlayBehaviorSettingsRows.swift,跟抽屉里「窗口」那一组是同一份。
+            //
+            // 总开关排在它上面而不是下面:那是这一段的主开关(它决定整个形态开不开),
+            // 而行为项是"开了之后这扇窗怎么表现",从属于它。
+            OverlayBehaviorBar()
+            // 配置项**不跟开关联动**(2026-08-15 用户要求):关着也能调。
             // 理由:把它藏起来只是让"先开、调完、再关"变成必须的操作顺序,并不能阻止
             // 什么;而想先配好再打开的人会以为这个形态没有可调项。
-            classicOverlayCard
+            //
+            // 2026-08-30 从平铺的六张卡收成一个默认折叠的抽屉(编辑台第三步)。总开关
+            // 没进去(它在上面常驻),其余 16 项一项没少,见那个文件顶部的注释。
+            OverlayAllSettingsDrawer()
         case .notch:
+            // 编辑台(2026-08-31,照悬浮歌词那一段的范式改):一小片屏幕顶端(菜单栏 + 刘海
+            // + 桌面),灵动岛卡片 1:1 挂在上面。它取代了页顶那条钉住的 NotchPreviewBar ——
+            // 那一层收不到点击(理由见上面 stickyHeader 里那条注释),而这块画布里有宽度调整
+            // 条和两个工具栏浮层。原来那张 notchOverlayCard(风格 / 宽度 / 显示在哪块屏幕)
+            // 整张收进编辑台,这一段因此只剩"编辑台 + 总开关 + 显示歌词"三块。
+            NotchEditorStage()
+            // 总开关排在编辑台下面而不是上面,跟悬浮歌词那一段同一个排法:先看见这个形态
+            // 长什么样,再决定开不开。
             modeToggleCard(
                 icon: "rectangle.topthird.inset.filled",
                 title: L10n.t("灵动岛歌词"),
@@ -1233,7 +1518,15 @@ private struct AppearanceSettingsTab: View {
                 isOn: Binding(
                     get: { settings.notchOverlayEnabled },
                     set: { NotchLyricsWindowController.shared.setVisible($0) }))
-            notchOverlayCard
+            // 「显示歌词」/「暂停缩回」(均为 2026-08-31,原来是平铺的卡)照悬浮歌词的
+            // 「行为」栏范式横着排(见 NotchBehaviorBar)。「显示音浪」几经反复(见
+            // NotchEqualizerRow 头注的⚠️),最终没有落进工具栏(同事离屏量过,5 个入口
+            // 中英文都装不下),改放进工具栏的「左耳」「右耳」浮层顶部各一个独立开关行
+            // (见 NotchEarSettingsRows.equalizerRow),不在这里单独出现。三项**同时**都收进
+            // 下面的「全部设置」抽屉做完整兜底(风格/屏幕/左耳/右耳/宽度这些原有配置项也
+            // 一并收了进去),理由见 NotchAllSettingsDrawer 头注。
+            NotchBehaviorBar()
+            NotchAllSettingsDrawer()
         case .menuBar:
             modeToggleCard(
                 icon: "menubar.rectangle",
@@ -1275,423 +1568,30 @@ private struct AppearanceSettingsTab: View {
     }
 
 
-    // 桌面悬浮歌词(经典悬浮窗)专属的一整套:窗口几何 + 配色与字体。
+    // 「桌面悬浮歌词」那一整套配置卡(配色 / 我的配色主题 / 文字 / 窗口 / 恢复)在
+    // 2026-08-30(编辑台第三步)全部搬走了,这里不再有它们的定义:
+    //   - 五张卡的内容收进了 OverlayAllSettingsDrawer —— 默认折叠的「全部设置」抽屉。
+    //     原来它们平铺在编辑台下面要滚两屏,而高频项已经被编辑台和工具栏浮层接管,
+    //     剩下的职责只有"全量兜底通路",没有理由常年占着两屏。
+    //   - 「窗口」卡里那三个行为项提到了编辑台正下方的 OverlayBehaviorBar(行为栏)。
+    // 行本体分别在 OverlayStyleSettingsRows.swift 和 OverlayBehaviorSettingsRows.swift,
+    // 那也是编辑台两个浮层用的同一份。别在这里重新长出一张同名的卡:这一段现在有浮层、
+    // 行为栏、抽屉三个宿主,多一份实现就多两处会漂的地方(理由见那两个文件顶部)。
+
+    // (2026-08-30 第十步之前这一层还挂着「划过让开」那个预演的状态机:
+    //  `overlayFadePreviewActive` / `overlayFadePreviewTask` / `playOverlayFadePreview()`。
+    //  按钮在行为栏、淡的却是编辑台,两者是兄弟视图,这里是唯一的共同祖先,所以状态放在这层。
+    //  用户要求把那颗「预演」按钮删掉,状态机跟着一起清干净了 —— 这一段现在只剩装配。)
+
+    // 「灵动岛歌词」那张配置卡(风格 / 宽度 / 显示在哪块屏幕)在 2026-08-31 整张搬进了
+    // NotchEditorStage.swift —— 前两项进了编辑台工具栏的两个浮层和舞台里那条宽度调整条,
+    // 屏幕那一项进了「屏幕」浮层。别在这里重新长出一张同名的卡:那一段现在只有编辑台一个
+    // 宿主,多一份实现就多一处会漂的地方(理由同上面悬浮歌词那几张卡)。
     //
-    // 配色/字体放在这张卡里的依据:2026-08-05 全仓核对过消费方,确认字体和三个颜色确实只对
-    // 这一种展示方式生效——mainFont/romanizationFont/translationFont 和 foregroundColor/
-    // backgroundColor/textStrokeColor 的读取点全部落在 LyricsOverlayView.swift 一个文件里
-    // (歌词窗口用固定的系统配色,菜单栏歌词是纯文字,都不读这些字段)。
-    //
-    // ⚠️ 2026-08-16 更正:这段原来把**灵动岛**也算进"都不读这些字段"里,现在不成立了 ——
-    // 「跟随封面取色」(followsCoverArt)这一项被灵动岛读走了(NotchLyricsView.accentOrWhite),
-    // 它是这张卡里唯一一个跨展示方式生效的开关。字体和那三个颜色仍然只对经典悬浮窗生效,
-    // 所以这一项留在这张卡里、只在它自己的副标题上说明作用范围,不为它单开一张卡。
-    //
-    // 原来第一行是一条没有控件的"身份行"(图标 captions.bubble + 标题「桌面悬浮歌词」),
-    // 跟正上方那张总开关卡的图标和标题**一模一样**、相隔 14pt 说了两遍。2026-08-10 把总开关
-    // 按展示方式拆开之后,它当初存在的理由("不点名就跟上面那张卡分不清关系")已经失效,这次
-    // 一并去掉;分组改由每张卡自己的组标题承担。
-    //
-    // 2026-08-14 从一张 13 行的巨型卡拆成五张。原来那张卡里"宽度(几何)/锁定位置(行为)/
-    // 配色主题/字体/字号/三个颜色选择器/描边"平铺在一起,只靠分隔线隔开,读起来分不出层次;
-    // 更糟的是自定义主题列表被 ForEach 插在"配色主题"和"字体"中间 —— **页面长度成了用户
-    // 数据的函数**,每存一个主题,下面的字体/字号/颜色就整体往下掉一行。
-    //
-    // 拆完的顺序是"离预览条越近的越先出现":配色和字体是预览里当场看得见的,窗口几何看不
-    // 太出来,重置放最后。
-    private var classicOverlayCard: some View {
-        Group {
-            overlayColorCard
-            overlayThemesCard
-            overlayTextCard
-            overlayWindowCard
-            overlayResetCard
-        }
-    }
-
-    // 配色。原来"配色主题"这个 Menu 里塞着「跟随封面」,而它根本不是一个配色,是"改用封面
-    // 算出的动态色"这个模式本身 —— 结果是**只能开、不能关**:Menu 里没有"不跟随"这一项,
-    // 唯一的退出路径是套用某个具体主题(连带覆盖四个颜色字段)。拆成一个独立开关之后,开关
-    // 两个方向都走得通,Menu 也回归它本来的职责(选一套固定配色)。
-    private var overlayColorCard: some View {
-        SettingsCard {
-            SettingsCardHeader(title: L10n.t("配色"))
-            CardDivider()
-            // 标题就把范围说清楚了:桌面悬浮歌词这边被接管的只有**文字颜色**
-            // (PlaybackCoordinator.displayForegroundColor),背景色(LyricsOverlayView 的
-            // overlayBackground)和描边色(.lyricsTextStroke)任何时候都无条件生效。
-            //
-            // ⚠️ 有一件事标题里装不下、副标题又已按用户要求去掉(2026-08-17):这个开关
-            // **同时也管灵动岛**,那边歌词、歌名、进度条、播放指示条、控制按钮整套都跟着
-            // 封面走(见 NotchLyricsView.accentOrWhite)。改这一项时记得它的影响不止这张卡。
-            SettingsRow(
-                icon: "photo.on.rectangle.angled",
-                title: L10n.t("文字跟随封面")
-            ) {
-                Toggle("", isOn: $settings.followsCoverArt)
-            }
-            CardDivider()
-            // 只打包"配色"相关的四个字段(文字/背景/描边颜色 + 描边开关),不含字体/字号 ——
-            // 那是排版,跟配色是两回事,不该被同一个"主题"捆在一起改(见 ColorTheme.swift)。
-            // 「跟随封面取色」开着时连这一行也收起来:预设主题的名字("经典黑字"/"经典白字")
-            // 讲的就是文字颜色,而文字颜色已经被封面主色接管,留着只会让人以为选了有用。
-            // 主题里的背景色/描边色确实还生效,但那两项本来就各有独立的一行可以单独调,
-            // 不会因为收起这一行而够不着。
-            if !settings.followsCoverArt {
-            SettingsRow(icon: "swatchpalette", title: L10n.t("配色主题")) {
-                Menu(currentColorThemeLabel) {
-                    ForEach(ColorTheme.builtInPresets) { theme in
-                        Button(theme.name) { applyColorTheme(theme) }
-                    }
-                    if !settings.customColorThemes.isEmpty {
-                        Divider()
-                        ForEach(settings.customColorThemes) { theme in
-                            Button(theme.name) { applyColorTheme(theme) }
-                        }
-                    }
-                }
-                .fixedSize()
-            }
-            }
-            // 「跟随封面取色」开着时,文字颜色由封面主色接管,这一行就收起来 —— 它只剩
-            // "拿不到封面主色时的兜底值"这一点残余作用,为它常占一行、还要配一句解释
-            // 自己为什么半失效的副标题,不如干脆不显示。
-            //
-            // ⚠️ 这跟"展示方式的开关不再跟配置卡联动、关着也能配"不是一回事,别照那条推翻
-            // 这里:那边是**没启用**某个形态时仍要让人能预先配好它;这里是某一项**已经被
-            // 另一项接管**,显示出来只会让人以为改了有用。背景色和描边色不受接管(「文字
-            // 跟随封面」这个名字里的"文字"两个字就是这个意思),所以照常显示。
-            if !settings.followsCoverArt {
-                CardDivider()
-                SettingsRow(icon: "paintbrush", title: L10n.t("文字颜色")) {
-                    ColorPicker("", selection: Binding(
-                        get: { settings.foregroundColor },
-                        set: { settings.foregroundColorHex = $0.hexStringWithAlpha }
-                    ), supportsOpacity: false) // 故意关掉——文字颜色允许透明的话,容易把 alpha
-                                               // 拖到 0,悬浮窗整个消失且没有任何视觉提示能定位问题
-                }
-            }
-            CardDivider()
-            SettingsRow(icon: "rectangle.fill", title: L10n.t("背景颜色")) {
-                ColorPicker("", selection: Binding(
-                    get: { settings.backgroundColor },
-                    set: { settings.backgroundColorHex = $0.hexStringWithAlpha }
-                ), supportsOpacity: true) // 背景不透明度就是这个颜色的 alpha 通道本身,
-                                          // 不另加一根 opacity 滑杆
-            }
-            CardDivider()
-            SettingsRow(icon: "pencil.and.outline", title: L10n.t("文字描边")) {
-                Toggle("", isOn: $settings.textStrokeEnabled)
-            }
-            if settings.textStrokeEnabled {
-                CardDivider()
-                SettingsSubRow(title: L10n.t("描边颜色")) {
-                    ColorPicker("", selection: Binding(
-                        get: { settings.textStrokeColor },
-                        set: { settings.textStrokeColorHex = $0.hexStringWithAlpha }
-                    ), supportsOpacity: true) // 描边只让选颜色(含 alpha),粗细是固定常量
-                                              // (LyricsOverlayView.swift 的 OptionalTextStroke),
-                                              // 不额外加调节项——参考的是 LyricsX 的做法。
-                }
-            }
-        }
-    }
-
-    // 自定义主题独占一张卡。挪出配色卡是这次拆卡的主要目的之一(见 classicOverlayCard 上
-    // 的注释:它原来夹在配色和字体中间,存几个主题就把页面撑长几行)。一个都没存过时整张卡
-    // 只有"存为新主题"一行,不占地方。
-    private var overlayThemesCard: some View {
-        SettingsCard {
-            SettingsRow(icon: "square.stack", title: L10n.t("我的配色主题")) {
-                Button(L10n.t("存为新主题…")) {
-                    newThemeName = ""
-                    showSaveThemeAlert = true
-                }
-            }
-            ForEach(settings.customColorThemes) { theme in
-                CardDivider()
-                SettingsSubRow(title: theme.name) {
-                    HStack(spacing: 10) {
-                        Button(L10n.t("套用")) { applyColorTheme(theme) }
-                        // ⚠️ 删除必须二次确认。customColorThemes 的 didSet 立刻落盘、没有撤销,
-                        // 而这一行的"套用"和"删除"两颗按钮挨着 —— 点错一次,用户自己调了半天
-                        // 的配色就没了,且无从恢复。
-                        Button {
-                            themePendingDeletion = theme
-                        } label: {
-                            Image(systemName: "trash")
-                        }
-                        .buttonStyle(.plain)
-                        .foregroundStyle(.secondary)
-                    }
-                }
-            }
-        }
-        .alert(L10n.t("存为新配色主题"), isPresented: $showSaveThemeAlert) {
-            TextField(L10n.t("主题名称"), text: $newThemeName)
-            Button(L10n.t("保存")) {
-                let name = newThemeName.trimmingCharacters(in: .whitespacesAndNewlines)
-                guard !name.isEmpty else { return }
-                settings.customColorThemes.append(ColorTheme(
-                    name: name,
-                    foregroundColorHex: settings.foregroundColorHex,
-                    backgroundColorHex: settings.backgroundColorHex,
-                    textStrokeEnabled: settings.textStrokeEnabled,
-                    textStrokeColorHex: settings.textStrokeColorHex
-                ))
-            }
-            // 空名原来走 `guard !name.isEmpty else { return }` 静默丢弃:alert 已经关掉了,
-            // 用户看不到任何反馈,只会以为"存了但没出现"。禁用按钮才是能看见的那种拒绝。
-            .disabled(newThemeName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            Button(L10n.t("取消"), role: .cancel) {}
-        } message: {
-            Text(L10n.t("会把当前的文字颜色、背景颜色、描边颜色存成一个可以随时再套用的主题"))
-        }
-        .alert(
-            L10n.t("删除这个配色主题？"),
-            isPresented: Binding(
-                get: { themePendingDeletion != nil },
-                set: { if !$0 { themePendingDeletion = nil } }
-            ),
-            presenting: themePendingDeletion
-        ) { theme in
-            Button(L10n.t("删除"), role: .destructive) {
-                settings.customColorThemes.removeAll { $0.id == theme.id }
-                themePendingDeletion = nil
-            }
-            Button(L10n.t("取消"), role: .cancel) { themePendingDeletion = nil }
-        } message: { theme in
-            Text(String(format: L10n.t("「%@」删除后无法恢复"), theme.name))
-        }
-    }
-
-    private var overlayTextCard: some View {
-        SettingsCard {
-            SettingsCardHeader(title: L10n.t("文字"))
-            CardDivider()
-            SettingsRow(icon: "character", title: L10n.t("字体")) {
-                // 系统装了什么就能选什么(带搜索、每行用字体自己渲染)。原来是一个只有 7 款的
-                // 精选下拉,想用别的字体完全没出路,见 FontFamilyPicker 顶部注释。
-                FontFamilyPicker(selection: $settings.fontFamilyName)
-            }
-            CardDivider()
-            SettingsRow(icon: "textformat.size", title: L10n.t("字号")) {
-                HStack(spacing: 8) {
-                    Slider(value: Binding(
-                        get: { settings.fontSize },
-                        set: { newValue in
-                            // 相等守卫:拖动中每个鼠标事件都会调 set,step 量化后大量等值
-                            // 赋值照样广播 objectWillChange,didSet 还会 recomputeFonts()
-                            // 连带重赋 4 个派生字体 @Published(一写五发)——所有观察
-                            // AppSettings 的界面跟着白跑(2026-08-19,同三个宽度滑杆)。
-                            guard newValue != settings.fontSize else { return }
-                            settings.fontSize = newValue
-                        }
-                    ), in: 14...36, step: 1)
-                        .frame(width: 150)
-                    Text(String(format: L10n.t("%@pt"), "\(Int(settings.fontSize))"))
-                        .foregroundStyle(.secondary)
-                        .monospacedDigit()
-                        .frame(width: 46, alignment: .trailing)
-                }
-            }
-        }
-    }
-
-    private var overlayWindowCard: some View {
-        SettingsCard {
-            SettingsCardHeader(title: L10n.t("窗口"))
-            CardDivider()
-            SettingsRow(icon: "arrow.left.and.right", title: L10n.t("宽度")) {
-                HStack(spacing: 8) {
-                    Slider(value: Binding(
-                        get: { settings.overlayWidth },
-                        set: { newValue in
-                            // 相等守卫:Slider 拖动中会按鼠标事件频率重复调 set,值经 step
-                            // 量化后大量重复 —— @Published 是 willSet 语义,等值赋值照样
-                            // 广播 objectWillChange 打醒所有观察 AppSettings 的界面,didSet
-                            // 还会同步写一次 UserDefaults。下面两个宽度滑杆同款。
-                            guard newValue != settings.overlayWidth else { return }
-                            settings.overlayWidth = newValue
-                            LyricsOverlayWindowController.shared.setWidth(newValue)
-                        }
-                    ), in: 420...1000, step: 10)
-                    .frame(width: 150)
-                    Text(String(format: L10n.t("%@pt"), "\(Int(settings.overlayWidth))"))
-                        .foregroundStyle(.secondary)
-                        .monospacedDigit()
-                        .frame(width: 46, alignment: .trailing)
-                }
-            }
-            CardDivider()
-            // 手势不直观,说明放在 help 气泡里(原来副标题和 help 各写了一遍同一件事,
-            // 副标题那句还更短更含糊)。怎么拖由下面那个「拖动前先长按」决定,这里不写死。
-            SettingsRow(
-                icon: "lock",
-                title: L10n.t("锁定位置"),
-                help: L10n.t("解锁后鼠标点击会穿到桌面上；拖动方式见下面「拖动前先长按」")
-            ) {
-                Toggle("", isOn: Binding(
-                    get: { settings.lockPosition },
-                    set: { newValue in
-                        settings.lockPosition = newValue
-                        LyricsOverlayWindowController.shared.setLocked(newValue)
-                    }
-                ))
-            }
-            CardDivider()
-            // 紧挨着「锁定位置」放:它决定"解锁之后怎么拖"。
-            //
-            // 关掉(默认)= 按住歌词文字直接拖,四周空白照旧穿透 —— 靠的是 2026-08-23 那套
-            // 精准歌词热区(lyricsHotZoneLocal)。打开 = 旧行为:窗口范围内长按 0.35s 才武装,
-            // 期间点哪儿都能穿透。
-            SettingsRow(
-                icon: "hand.tap",
-                title: L10n.t("拖动前先长按"),
-                subtitle: L10n.t("关闭时按住歌词就能拖；打开则要长按 0.35 秒")
-            ) {
-                Toggle("", isOn: Binding(
-                    get: { settings.overlayDragNeedsLongPress },
-                    set: { settings.overlayDragNeedsLongPress = $0 }
-                ))
-            }
-            CardDivider()
-            // 紧挨着「锁定位置」放:两者解的是同一个痛点的两半 —— 那个让点击穿到下层,
-            // 这个让视线看到下层。这张卡本身就在「窗口」标题下、整卡只讲悬浮歌词,不用
-            // 在这一行里重复交代"只对悬浮歌词生效"(那句是给跨形态共用项准备的免责声明,
-            // 这一项从不跨形态)。
-            SettingsRow(
-                icon: "cursorarrow.motionlines",
-                title: L10n.t("划过让开"),
-                subtitle: L10n.t("鼠标移到悬浮歌词上时它会淡下去，移开恢复")
-            ) {
-                Toggle("", isOn: Binding(
-                    get: { settings.overlayFadeOnHover },
-                    set: { newValue in
-                        settings.overlayFadeOnHover = newValue
-                        LyricsOverlayWindowController.shared.setFadeOnHover(newValue)
-                    }
-                ))
-            }
-        }
-    }
-
-    // 名字从"恢复默认外观"收窄成"恢复默认文字与配色":它重置七个字段,却**不碰**宽度和
-    // 锁定位置。原来两者同在一张卡里,"外观"这个说法看着就像把整张卡都恢复了。补上副标题
-    // 明说不含窗口项,比悄悄扩大重置范围安全 —— 扩大的话还得连带调 setWidth/setLocked,
-    // 漏调就会变成"点了按钮但窗口纹丝不动"。
-    private var overlayResetCard: some View {
-        SettingsCard {
-            SettingsRow(
-                icon: "arrow.uturn.backward",
-                title: L10n.t("恢复默认文字与配色"),
-                subtitle: L10n.t("不含宽度和锁定位置")
-            ) {
-                Button(L10n.t("恢复")) {
-                    // 2026-08-26 从硬编码 false 改成读 defaultFollowsCoverArt——这颗按钮的
-                    // 名字就是"恢复默认",默认值现在是"跟随封面开着",硬编码 false 会让它
-                    // 跟"全新安装长什么样"不一致(点了"恢复默认"却恢复不出默认的样子)。
-                    settings.followsCoverArt = AppSettings.defaultFollowsCoverArt
-                    settings.fontFamilyName = AppSettings.defaultFontFamilyName
-                    settings.fontSize = AppSettings.defaultFontSize
-                    settings.foregroundColorHex = ColorTheme.defaultTheme.foregroundColorHex
-                    settings.backgroundColorHex = ColorTheme.defaultTheme.backgroundColorHex
-                    settings.textStrokeEnabled = ColorTheme.defaultTheme.textStrokeEnabled
-                    settings.textStrokeColorHex = ColorTheme.defaultTheme.textStrokeColorHex
-                }
-            }
-        }
-    }
-
-    // 灵动岛歌词专属。三项都只负责持久化,NotchLyricsView 每次渲染直接读,不需要连带调
-    // 某个窗口控制器"生效"——唯一的例外是"宽度",它改的是窗口本身的几何。
-    private var notchOverlayCard: some View {
-        SettingsCard {
-            SettingsCardHeader(title: L10n.t("灵动岛歌词"))
-            CardDivider()
-            SettingsRow(icon: "paintbrush.pointed", title: L10n.t("风格")) {
-                Picker("", selection: $settings.notchCardStyle) {
-                    ForEach(NotchCardStyle.allCases, id: \.self) { style in
-                        Text(style.displayName).tag(style)
-                    }
-                }
-                .pickerStyle(.menu)
-                .fixedSize()
-            }
-            CardDivider()
-            // 跟上面桌面悬浮歌词的"宽度"滑块同一套写法(设置项本身只负责持久化,didSet
-            // 不碰 NSWindow,这里的 set 闭包显式调用窗口控制器的方法让改动立刻生效)。
-            // 跟桌面悬浮歌词不同的是灵动岛不需要"保持中心点"的增量调整——它的位置从来
-            // 都是重新居中算出来的,见 NotchLyricsWindowController.applyContentWidthSetting()。
-            SettingsRow(icon: "arrow.left.and.right", title: L10n.t("宽度")) {
-                HStack(spacing: 8) {
-                    Slider(value: Binding(
-                        get: { settings.notchContentWidth },
-                        set: { newValue in
-                            // 相等守卫,理由见悬浮歌词"宽度"滑杆同款注释。
-                            guard newValue != settings.notchContentWidth else { return }
-                            settings.notchContentWidth = newValue
-                            NotchLyricsWindowController.shared.applyContentWidthSetting()
-                        }
-                    ), in: 260...500, step: 10)
-                    .frame(width: 150)
-                    Text(String(format: L10n.t("%@pt"), "\(Int(settings.notchContentWidth))"))
-                        .foregroundStyle(.secondary)
-                        .monospacedDigit()
-                        .frame(width: 46, alignment: .trailing)
-                }
-            }
-            CardDivider()
-            // 「所有屏幕」2026-08-17 从下面一个独立的 Toggle 并进了这个下拉(用户要求)。
-            // 它跟"选哪一块屏"本来就是同一个问题的几个互斥答案 —— 拆成"下拉 + 一个会把
-            // 下拉整个禁用掉的开关"是把一个选择硬掰成了两个控件,还得额外写一句"开启后
-            // 上面的指定屏幕不再起作用"来解释它们的关系。
-            SettingsRow(
-                icon: "display",
-                title: L10n.t("显示在哪块屏幕"),
-                help: L10n.t("「自动」选带刘海的那块；「所有屏幕」每块屏各显示一个；指定的屏幕拔掉后自动回到「自动」")
-            ) {
-                Picker("", selection: Binding<String>(
-                    get: {
-                        settings.notchAllScreens ? Self.allScreensTag : settings.notchScreenID
-                    },
-                    set: { newValue in
-                        // 两个设置项还是各存各的(notchAllScreens 有自己的订阅方
-                        // NotchMirrorManager),这里只是把它们合成一个选择呈现出来。
-                        // 选具体屏幕时顺手把 allScreens 关掉,否则选了没反应。
-                        settings.notchAllScreens = (newValue == Self.allScreensTag)
-                        if newValue != Self.allScreensTag {
-                            settings.notchScreenID = newValue
-                        }
-                        NotchLyricsWindowController.shared.applyScreenSetting()
-                    }
-                )) {
-                    Text(L10n.t("自动")).tag("")
-                    Text(L10n.t("所有屏幕")).tag(Self.allScreensTag)
-                    Divider()
-                    ForEach(availableScreens, id: \.self) { screen in
-                        if let id = ScreenIdentity.id(of: screen) {
-                            Text(screen.localizedName).tag(id)
-                        }
-                    }
-                    // 存着的那块屏现在没接着时补一个占位项。Picker 的选中值如果在选项里
-                    // 找不到对应 tag,整个控件会显示成空白——那看起来像设置丢了,而实际上
-                    // 偏好还在、屏幕插回来就会恢复。
-                    if !settings.notchAllScreens, !settings.notchScreenID.isEmpty,
-                       ScreenIdentity.screen(withID: settings.notchScreenID) == nil {
-                        Text(L10n.t("已断开的屏幕")).tag(settings.notchScreenID)
-                    }
-                }
-                .pickerStyle(.menu)
-                .fixedSize()
-            }
-        }
-        // 设置页开着的时候插拔显示器,下拉里的选项要跟着变。灵动岛窗口自己也订阅了同一条
-        // 通知去重算位置(见 NotchLyricsWindowController.screenParamsObserver)。
-        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didChangeScreenParametersNotification)) { _ in
-            availableScreens = NSScreen.screens
-        }
-    }
+    // 顺带修掉的两处:那张卡里 `NotchLyricsWindowController.shared.applyContentWidthSetting()`
+    // 和 `.applyScreenSetting()` 原来都是**裸调**的,违反那个类的 `.shared` 不变量(读一下
+    // 就 init 出整扇窗;见 docs/features/05-notch.md 设计决策第 1 条)。新的落点两处都带
+    // `if settings.notchOverlayEnabled` 守卫。
 
     // 菜单栏歌词专属。
     //
@@ -1855,6 +1755,341 @@ private struct AppearanceSettingsTab: View {
     }
 }
 
+// MARK: - 灵动岛「行为」两项(显示歌词 / 暂停时缩到最小)
+
+/// 灵动岛两个纯布尔"设一次就不动"的行为项(显示歌词 / 暂停时缩到最小)的唯一一份实现
+/// (2026-08-31),照悬浮歌词 `OverlayBehaviorItem` 的既有范式:两个宿主——
+///   ① 编辑台正下方的「行为」栏(`NotchBehaviorBar`),横着排、视觉上低一级;
+///   ② 「全部设置」抽屉里的标准设置行(`NotchBehaviorSettingsRows`)。
+/// 文案/图标/Binding 只有这一份,宿主只决定怎么摆——避免"行为栏改了有用、抽屉里改了
+/// 没用"这类漏改不报错的坑(悬浮歌词那边已经为同一个理由付过一次代价)。
+///
+/// 「显示音浪」**不在这个枚举里**:它带一个从属的"贴哪只耳朵"选择器,跟这两项"图标+标题+
+/// 开关"的单一形状不一样,塞进来两个宿主都得为它开洞。照悬浮歌词把"宽度"排除在「行为」栏
+/// 之外的同一个道理(那边的注释:「宽度」不在这一栏,它已经能在别处直接改),音浪走自己
+/// 的 `NotchEqualizerRow`,不进这个枚举。
+enum NotchBehaviorItem: String, CaseIterable, Identifiable {
+    case showLyrics
+    case collapseWhenPaused
+
+    var id: String { rawValue }
+
+    var icon: String {
+        switch self {
+        case .showLyrics: return "text.alignleft"
+        case .collapseWhenPaused: return "arrow.down.right.and.arrow.up.left"
+        }
+    }
+
+    var title: String {
+        switch self {
+        case .showLyrics: return L10n.t("显示歌词")
+        case .collapseWhenPaused: return L10n.t("暂停缩回")
+        }
+    }
+
+    @MainActor
+    var binding: Binding<Bool> {
+        let settings = AppSettings.shared
+        switch self {
+        case .showLyrics:
+            return Binding(get: { settings.notchShowLyrics }, set: { settings.notchShowLyrics = $0 })
+        case .collapseWhenPaused:
+            return Binding(get: { settings.notchCollapsesWhenPaused },
+                            set: { settings.notchCollapsesWhenPaused = $0 })
+        }
+    }
+}
+
+/// 宿主①:「全部设置」抽屉里的标准设置行——原样搬自被这次改动退休的 NotchShowLyricsRow /
+/// NotchCollapsesWhenPausedRow,现在按 `NotchBehaviorItem.allCases` 迭代,不再各写一份。
+@MainActor
+private struct NotchBehaviorSettingsRows: View {
+    var body: some View {
+        VStack(spacing: 0) {
+            ForEach(Array(NotchBehaviorItem.allCases.enumerated()), id: \.element.id) { index, item in
+                if index > 0 { CardDivider() }
+                SettingsRow(icon: item.icon, title: item.title) {
+                    Toggle("", isOn: item.binding)
+                }
+            }
+        }
+    }
+}
+
+/// 宿主②:编辑台正下方那条「行为」栏,逐字照抄 `OverlayBehaviorBar` 的版式(两列而不是
+/// 三列,单元格视觉/间距/描边全部同款,不重新发明一套)。
+@MainActor
+private struct NotchBehaviorBar: View {
+    private static let cellSpacing: CGFloat = 8
+
+    var body: some View {
+        SettingsCard {
+            header
+            HStack(alignment: .top, spacing: Self.cellSpacing) {
+                ForEach(NotchBehaviorItem.allCases) { item in
+                    cell(item)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
+            }
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.horizontal, SettingsRowMetrics.horizontalPadding)
+            .padding(.bottom, 12)
+        }
+    }
+
+    private var header: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Text(L10n.t("行为"))
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(.secondary)
+                .tracking(0.5)
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, SettingsRowMetrics.horizontalPadding)
+        .padding(.top, 10)
+        .padding(.bottom, 7)
+    }
+
+    private func cell(_ item: NotchBehaviorItem) -> some View {
+        HStack(spacing: 4) {
+            Text(item.title)
+                .font(.system(size: 12, weight: .medium))
+                .lineLimit(1)
+                .layoutPriority(1)
+            Spacer(minLength: 4)
+            Toggle("", isOn: item.binding)
+                .labelsHidden()
+                .toggleStyle(.switch)
+                .controlSize(.mini)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(cellBackground)
+    }
+
+    private var cellBackground: some View {
+        let shape = RoundedRectangle(cornerRadius: 8, style: .continuous)
+        return shape
+            .fill(Color.primary.opacity(0.04))
+            .overlay(shape.strokeBorder(Color.primary.opacity(0.07), lineWidth: 0.5))
+    }
+}
+
+// MARK: - 灵动岛「全部设置」抽屉
+
+/// 灵动岛的「全部设置」抽屉(2026-08-31)。用户看过第一版(只收了「显示歌词」/「暂停缩回」/
+/// 「显示音浪」三项)之后要求补齐:工具栏那四个浮层入口(风格/屏幕/左耳/右耳)和宽度调整条
+/// 这些**原有**配置项,也该能在"全部设置"里找到——完全对齐 `OverlayAllSettingsDrawer` 的
+/// 定位:不是"新配置项的收纳盒",是**这个形态全部可配项的完整兜底通路**(键盘/VoiceOver/
+/// "我就想找个开关,不想点开浮层"的场合)。
+///
+/// ⚠️ 顶部工具栏(风格/屏幕/左耳/右耳)和编辑台里那条宽度调整条**本体不受影响**——那条
+/// 横向空间已经被反复验证过是"刚好塞满、不能再挤"的上限(见 NotchEditorStage.toolbar 头
+/// 上那条⚠️)。这里是**多开一条兜底入口**,不是挪走原来那条:每一行都复用浮层/调整条背后
+/// 那份同源组件或同一个 AppSettings 键,不是另起一份平行实现(同悬浮歌词那边的纪律,漏改
+/// 一处的代价是"两个入口改出两个不同的效果")。
+///
+/// 各行的来源:
+///   - 风格 → `NotchStyleSettingsRows()`(跟工具栏「风格」浮层同一份)
+///   - 左耳 / 右耳 → `NotchEarSettingsRows(side:)`(跟工具栏那两个浮层同一份)
+///   - 屏幕 → `NotchScreenSettingsRows(onScreenChange:)`(跟工具栏「屏幕」浮层同一份;
+///     这里没有编辑台预览要刷新,`onScreenChange` 传空闭包——真窗口的更新在这个组件内部
+///     已经带着 `notchOverlayEnabled` 守卫做完了,见该组件本体)
+///   - 宽度 → 本文件新写的 `widthRow`,只读调用 `NotchEditorStage.usableWidthRangeOnCurrentScreen`
+///     / `.effectiveWidth(baseWidth:)`(2026-08-31 归 ls-Rocky 维护的静态 API,这里不改
+///     它们的实现,只是又开一个调用点——跟悬浮歌词抽屉里那根 step 10 的滑杆同一个模式:
+///     跟画布上那条 step 2 的调整条是同一个值的两个入口)
+///   - 显示歌词 / 暂停缩回 → `NotchBehaviorSettingsRows()`(跟下面常驻可见的「行为」栏
+///     同一份)
+///   - 显示音浪 → `NotchEqualizerRow()`,全局兜底,跟「左耳」「右耳」浮层顶部那两个独立
+///     开关行(`NotchEarSettingsRows.equalizerRow`)不是同一份组件复用,是两种粒度的入口:
+///     那边答的是"这只耳朵现在开不开",这里答的是"不管哪只耳朵,一眼看总状态"——两边
+///     共享同一对 `notchShowsEqualizer`/`notchEqualizerEar`,改哪边都会同步反映到另一边,
+///     只是渲染各自独立,没有强行合并成一份组件(合并会破坏"左耳/右耳浮层只关心自己"
+///     这条既有边界)。
+private struct NotchAllSettingsDrawer: View {
+    @ObservedObject private var settings = AppSettings.shared
+
+    /// 展开状态用 @State 而不是 @AppStorage,理由同 OverlayAllSettingsDrawer:设计要求
+    /// "默认折叠",@AppStorage 会把上次展开的样子带到下次打开设置窗口。
+    @State private var isExpanded = false
+
+    var body: some View {
+        SettingsCard {
+            disclosureHeader
+            if isExpanded {
+                CardDivider()
+                styleGroup
+                CardDivider()
+                earGroup
+                CardDivider()
+                screenGroup
+                CardDivider()
+                widthRow
+                CardDivider()
+                NotchBehaviorSettingsRows()
+                CardDivider()
+                NotchEqualizerRow()
+            }
+        }
+        // 理由同 OverlayAllSettingsDrawer:展开/收起的动画挂在改状态那一处(disclosureHeader
+        // 里的 withAnimation),不挂在卡片上——挂在卡片上会把同一个事务里任何不相干的布局
+        // 变化(比如「显示音浪」展开时下面多长出的耳朵选择行)一起带动起来。
+    }
+
+    // MARK: - 各组
+
+    private var styleGroup: some View {
+        Group {
+            SettingsCardHeader(title: L10n.t("风格"))
+            CardDivider()
+            NotchStyleSettingsRows()
+        }
+    }
+
+    private var earGroup: some View {
+        Group {
+            SettingsCardHeader(title: L10n.t("左耳"))
+            CardDivider()
+            NotchEarSettingsRows(side: .left)
+            CardDivider()
+            SettingsCardHeader(title: L10n.t("右耳"))
+            CardDivider()
+            NotchEarSettingsRows(side: .right)
+        }
+    }
+
+    private var screenGroup: some View {
+        Group {
+            SettingsCardHeader(title: L10n.t("显示在哪块屏幕"))
+            CardDivider()
+            NotchScreenSettingsRows(onScreenChange: {})
+        }
+    }
+
+    /// 宽度滑杆。编辑台里那条调整条改的是同一个值,这里是它的兜底通路。
+    ///
+    /// ⚠️ 三条 ls-Rocky 核过的坑,都不是随手能猜对的:
+    ///   ① 区间/读数走 `NotchEditorStage` 那两个**静态**入口(`usableWidthRangeOnCurrentScreen`
+    ///      / `effectiveWidth(baseWidth:)`),自己现算屏幕几何、不碰 `.shared`——这里没有
+    ///      编辑台的 chrome 可以问。
+    ///   ② 读数必须是 `effectiveWidth(baseWidth:)` 算出来的**真实**卡片宽度,不能直接显示
+    ///      `notchContentWidth` 这个设定值:两者在下界附近会不一样(存过更小的旧值,或者
+    ///      换了耳朵配置把下限抬上去了),直接显示设定值会出现"滑杆停在最左、卡片却是另一个
+    ///      宽度"。
+    ///   ③ 写回必须带 `notchOverlayEnabled` 守卫——`NotchLyricsWindowController.shared` 是
+    ///      `static let`,哪怕只是读一下也会执行 init() 建出整扇窗;灵动岛关着的用户碰一下
+    ///      这根滑杆,不该凭空多一套窗口。
+    /// step 10(不是画布那条的 2):这里是兜底通路,旁边没有实时预览,粗一点好落值;落盘值
+    /// 不是 10 的倍数也没关系,step 只约束滑杆自己产生的值,不约束模型(悬浮歌词那根已经
+    /// 验过这条)。
+    private var widthRow: some View {
+        SettingsRow(icon: "arrow.left.and.right", title: L10n.t("宽度")) {
+            HStack(spacing: 8) {
+                Slider(value: Binding(
+                    get: { NotchEditorStage.effectiveWidth(baseWidth: settings.notchContentWidth) },
+                    set: { newValue in
+                        guard newValue != settings.notchContentWidth else { return }
+                        settings.notchContentWidth = newValue
+                        if settings.notchOverlayEnabled {
+                            NotchLyricsWindowController.shared.applyContentWidthSetting()
+                        }
+                    }
+                ), in: NotchEditorStage.usableWidthRangeOnCurrentScreen, step: 10)
+                .frame(width: 150)
+                Text(String(format: L10n.t("%@pt"),
+                            "\(Int(NotchEditorStage.effectiveWidth(baseWidth: settings.notchContentWidth)))"))
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+                    .frame(width: 46, alignment: .trailing)
+            }
+        }
+    }
+
+    // MARK: - 抽屉头
+
+    /// 折叠/展开那一行,逐字复用 OverlayAllSettingsDrawer.disclosureHeader 的写法:用
+    /// Button 手搭而不是 DisclosureGroup(后者的三角形+缩进排版跟这套卡片组件对不上),
+    /// 整行(含右边留白)都可点。
+    private var disclosureHeader: some View {
+        Button {
+            withAnimation(.settingsCardReveal) { isExpanded.toggle() }
+        } label: {
+            HStack(spacing: SettingsRowMetrics.iconTextSpacing) {
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                    .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                    .frame(width: SettingsRowMetrics.iconWidth, alignment: .center)
+                Text(L10n.t("全部设置"))
+                    .font(.system(size: 13))
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, SettingsRowMetrics.horizontalPadding)
+            .padding(.vertical, SettingsRowMetrics.verticalPadding)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(L10n.t("全部设置"))
+        .accessibilityAddTraits(isExpanded ? .isSelected : [])
+        .accessibilityValue(isExpanded ? L10n.t("已展开") : L10n.t("已折叠"))
+    }
+}
+
+/// 「显示音浪」开关 + (开着时才出现的)贴哪只耳朵选择(2026-08-31)。
+///
+/// 播放指示条(音浪/EqualizerBars)原来写死贴在右耳外缘,不是 `NotchEarModule` 的可配
+/// 模块(它是播放指示灯不是内容,这条边界没变)。用户看过左右耳配置后提出两点:①右耳
+/// 固定带着音浪不太合适——想要的话应该能关;②但也想要"歌手 + 音浪同时显示",而这本来
+/// 就是现有行为(音浪跟耳朵内容共存,只在那只耳朵选了「播放控制」时才让位)。于是拍板
+/// 加一个独立开关(默认开,维持既有行为)+ 一个左右耳选择器,而不是把音浪塞进
+/// `NotchEarModule` 的选项列表——塞进去反而会破坏"两种形态都住同一侧、收放切换不横跳"
+/// 这条音浪本来的设计初衷(见 NotchEarModule 上方那段⚠️)。
+///
+/// 副作用值得在这里写清楚:关掉音浪能让灵动岛的最小宽度显著变窄(两只耳朵恒等宽,音浪
+/// 占的那部分宽度会在总宽度上翻倍算);具体贴哪只耳朵不影响下限(左右对称)。精确数字
+/// 因屏幕/刘海尺寸而异,不在这里写死,交给 `NotchLyricsWindowController.minEarWidth` 的
+/// 宽度那条链自己算(那条链 2026-08-31 归 ls-Rocky 维护,见 docs/features/05-notch.md
+/// 「宽度」节)。
+///
+/// ⚠️ 落点四经反复,均系同一天(2026-08-31):最初塞进「风格」浮层(用户要求拆出来)→
+/// 拆成常驻的独立卡(用户嫌它孤零零杵在「行为」栏下面,要求"要么挪进预览框那部分,要么你
+/// 找地方")→ 设计过"并进工具栏当第五个入口"的方案,但同事 ls-Rocky 离屏量过:工具栏
+/// 现状 4 个入口的中文自然宽已经 498pt、窄档舞台可用宽度上限 499pt,只剩 1pt 余量,
+/// 5 个入口不管怎么压摘要/间距,中英文都装不进去(中文最好 592pt、英文 769pt),这条路线
+/// 没有落地 → **最终**改放进「左耳」「右耳」浮层顶部,各一个独立开关行,用分割线跟下面
+/// `NotchEarModule` 的单选列表隔开、可以同时选中(见 `NotchEarSettingsRows.equalizerRow`)。
+/// 这份完整卡片(开关 + 分段选择器二合一)不再对应任何工具栏入口,只作为「全部设置」抽屉
+/// 里的全局兜底——两只耳朵各自的开关是"就地配当前这只耳朵",这份是"不管哪只耳朵,一眼
+/// 看总状态"。
+private struct NotchEqualizerRow: View {
+    @ObservedObject private var settings = AppSettings.shared
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            SettingsRow(
+                icon: "waveform",
+                title: L10n.t("显示音浪"),
+                help: L10n.t("播放指示条，跟着音量起伏摆动，跟耳朵里选的内容共存显示（选了「播放控制」时让位）。关掉之后两只耳朵纯按你选的模块渲染，灵动岛也能配得更窄。")
+            ) {
+                Toggle("", isOn: $settings.notchShowsEqualizer)
+            }
+            if settings.notchShowsEqualizer {
+                CardDivider()
+                SettingsSubRow(title: L10n.t("贴哪只耳朵")) {
+                    Picker("", selection: $settings.notchEqualizerEar) {
+                        Text(L10n.t("左耳")).tag(NotchEqualizerEar.left)
+                        Text(L10n.t("右耳")).tag(NotchEqualizerEar.right)
+                    }
+                    .pickerStyle(.segmented)
+                    .fixedSize()
+                }
+            }
+        }
+    }
+}
+
 // "播放器"分类——2026-07-30 从"通用"里拆出来:播放器选择/权限/常驻服务/App 联动这
 // 几块内容全部围绕"选哪个播放器、能不能正常读到它的播放状态"转,是同一件事的四个
 // 侧面;语言/开机启动/配置备份这些是完全不相干的杂项,继续留在"通用"里,不需要
@@ -1883,6 +2118,15 @@ private struct PlayerSettingsTab: View {
     // 没启动起来"时才为真,切走这个 tab 就清掉,不会把上一次失败的提示一直留着误导下一次
     // 操作。
     @State private var collectorEnableFailed = false
+    // App 本体版本 vs 打包进这份 App 的 collector 版本是否一致(2026-08-31 加,见
+    // CollectorServiceManager.bundledCollectorVersion 头注)。nil = 一致或没法判断(两种
+    // 都不该报警,见 refreshCollectorVersionCheck);非 nil 才代表真的查到了不一致,存的是
+    // (App 版本, collector 版本)这一对,卡片直接把两个号都摊出来给用户看。
+    //
+    // 只在 .onAppear 查一次,不放进每 2 秒一拍的 refreshCollectorState——那条路径要跑得
+    // 够轻(只是解析 `launchctl print` 的文本输出),而这里要真的 spawn 一次 collector
+    // 子进程,版本号在一次设置页停留期间不会变,没必要反复起进程。
+    @State private var collectorVersionMismatch: (appVersion: String, collectorVersion: String)?
     // 「检测到未知播放器」那张卡的数据源。MediaControlClient 那份观察是普通静态变量、
     // 不是 @Published(它在 LyrimuseCore、每 2 秒轮询里顺手记的一笔,不该为了一张设置卡
     // 背上发布语义),所以这里自己按拍取一次。
@@ -1897,6 +2141,7 @@ private struct PlayerSettingsTab: View {
             subtitle: L10n.t("选择读取哪个 App 的播放状态")
         ) {
             playerCard
+            browserAutomationCard
             unknownPlayerCard
             notificationDeniedCard
             trustedPlayersCard
@@ -2072,6 +2317,449 @@ private struct PlayerSettingsTab: View {
         return FeatureSettingsStore.appDisplayName(forBundleID: bundleID) ?? bundleID
     }
 
+    // MARK: - 浏览器歌词同步权限(2026-08-31,平台↔浏览器配对模型)
+
+    /// "一键开启"按钮点下去之后的临时状态,只在这次设置窗口的会话里有效(重开设置就
+    /// 重新读一次 `BrowserAutomationPermission.status` 的实时状态,不持久化)。
+    private enum BrowserPermissionUIState: Equatable {
+        case idle
+        case enabling
+        case result(BrowserAutomationPermission.EnableResult)
+    }
+    @State private var browserPermissionStates: [String: BrowserPermissionUIState] = [:]
+
+    /// 某个平台还能新配对的浏览器:这台机器上**装了**(`BrowserAutomationPermission.
+    /// isInstalled`)+ 引擎受支持(`family` 非 nil)+ 还没配过这个平台——**不要求已经信任
+    /// 过**(2026-08-31 用户明确要求:选一个没信任过的已安装浏览器,`trustAndPairBrowser`
+    /// 会一步自动信任+配对,不逼用户先去那个浏览器里放首歌被动等检测)。按
+    /// `knownBrowserBundleIDs` 的固定顺序展示,不是字典序。Firefox 这类不受支持的内核
+    /// 原样不出现在候选里,不是"报不支持",是这个功能对它压根不适用(见 BrowserPositionProbe
+    /// 头注)。
+    private func addablePlatformBrowsers(platformID: String) -> [String] {
+        let paired = settings.browserPlatformPairs[platformID] ?? []
+        // 内置那份固定顺序在前,用户自己挑进来的按名字排在后面 —— 后者数量不定,混进固定
+        // 顺序里会让内置四个的位置随"加过谁"漂移。
+        let manual = settings.manualBrowserFamilies.keys
+            .filter { !BrowserAutomationPermission.knownBrowserBundleIDs.contains($0) }
+            .sorted { (FeatureSettingsStore.appDisplayName(forBundleID: $0) ?? $0)
+                        .localizedCaseInsensitiveCompare(FeatureSettingsStore.appDisplayName(forBundleID: $1) ?? $1) == .orderedAscending }
+        return (BrowserAutomationPermission.knownBrowserBundleIDs + manual)
+            .filter { BrowserAutomationPermission.isInstalled(bundleID: $0) && !paired.contains($0) }
+    }
+
+    /// 「从应用程序里选…」那条路失败时要说的话。nil = 没有待展示的失败。
+    @State private var browserPickerError: String?
+
+    /// 让用户自己从 /Applications 里挑一个浏览器(2026-08-31,用户原话:「这里点+号出来的
+    /// 是否可以加一个选项是自己在本机的应用程序里面选」)。
+    ///
+    /// 为什么需要这条路:`knownBrowserBundleIDs` 只有四个,而那不是 UI 偷懒 —— 是
+    /// `chromiumPrefsPaths` 只登记实测验证过的浏览器(见那边注释)。Brave / Vivaldi / Opera /
+    /// Chromium / 各种 Beta 通道其实同内核、本来就驱得动,只是没人验过它们的 Preferences 路径。
+    ///
+    /// ⚠️ **挑中的 App 必须真的驱得动才收下**,判据是它的脚本定义里有没有"执行 JavaScript"
+    /// 那条命令(`BrowserAutomationPermission.detectedFamily`,认 AppleScript 四字码不认名字)。
+    /// 判不出来就**拒收并说清理由**,不能放进去一个永远不会工作的配对 —— 那比列表里没有它
+    /// 更糟:用户会以为配好了,然后花时间去查"为什么歌词进度还是不同步"。
+    private func chooseBrowserFromApplications(platformID: String) {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = false
+        panel.allowedContentTypes = [.application]
+        panel.directoryURL = URL(fileURLWithPath: "/Applications")
+        panel.prompt = L10n.t("选择")
+        panel.message = L10n.t("挑一个用来播放这个网站的浏览器")
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        guard let bundleID = Bundle(url: url)?.bundleIdentifier else {
+            browserPickerError = L10n.t("读不出这个应用的标识，换一个试试。")
+            return
+        }
+        // 已经认识的(内置四个、或者之前加过的)不必再判一次,直接走原来那条信任+配对。
+        if BrowserAutomationPermission.family(forBundleID: bundleID) != nil {
+            trustAndPairBrowser(bundleID, platformID: platformID)
+            return
+        }
+        guard let family = BrowserAutomationPermission.detectedFamily(forAppAt: url) else {
+            // 用 Finder 显示的那个名字(本地化过、跟用户在「应用程序」里看到的一致),
+            // 而不是 bundle id 或者文件名。
+            let name = FileManager.default.displayName(atPath: url.path)
+            browserPickerError = String(
+                format: L10n.t("「%@」不能用来同步歌词进度。这项功能要靠浏览器执行一小段 JavaScript 来读播放进度，而这个应用没有提供对应的脚本命令——Firefox 这类内核，以及非浏览器的应用，都属于这种情况。"),
+                name)
+            return
+        }
+        // 双写:AppSettings 负责持久化,BrowserAutomationPermission 负责让本次运行立刻认它
+        // (同 pairBrowser 那条注释里的模式)。只写一边的话要么关了 App 就忘,要么这次加完
+        // 头像点开还是"不支持"。
+        var families = settings.manualBrowserFamilies
+        families[bundleID] = family.rawValue
+        settings.manualBrowserFamilies = families
+        BrowserAutomationPermission.manuallyAddedFamilies[bundleID] = family
+        trustAndPairBrowser(bundleID, platformID: platformID)
+    }
+
+    /// 选中一个还没信任过的浏览器时,先信任、再配对——一步到位,不逼用户先去那个浏览器
+    /// 播放点什么、等 Lyrimuse 被动检测到再手动信任。`trust(bundleID:)` 本身没有"必须
+    /// 观测到过播放"这类前置校验(读过 FeatureSettingsStore.trust 源码确认过),纯粹是
+    /// "写进信任字典"这一步,可以在用户主动选择时直接调用。
+    ///
+    /// `Task { }` 在 MainActor 隔离的 View 操作回调里创建,会继承 MainActor——`await` 之后
+    /// 直接调 `pairBrowser`(同样 MainActor 隔离)不需要额外包 `MainActor.run`,跟
+    /// `unknownPlayerCard` 里 `Task { await features.trust(...) }` 是同一个既有写法。
+    private func trustAndPairBrowser(_ bundleID: String, platformID: String) {
+        Task {
+            if features.trustedPlayers[bundleID] == nil {
+                await features.trust(bundleID: bundleID)
+            }
+            pairBrowser(bundleID, platformID: platformID)
+            // 2026-08-31 用户报:「并不是点击自动信任之后就弹出授权框的,是在我实际通过这个
+            // 浏览器播放音乐的时候才弹出」。原因是这里一共有**三道门**,而"信任+配对"只走完
+            // 前两道 —— ①Lyrimuse 自己的信任列表(features.json)、②浏览器自己那道"允许
+            // Apple Events 里的 JavaScript"开关、③**系统的自动化(TCC)授权**。第③道以前
+            // 完全没人主动触发,只能等 `BrowserPositionProbe` 第一次真的发 Apple Event 时由
+            // 系统弹出 —— 而那要等到用户真的用这个浏览器放歌。
+            //
+            // ⚠️ **只在浏览器已经在跑时才问**。目标 App 没在运行时系统弹窗压根不出现
+            // (2026-07-24 实测坐实,见 MusicAutomationPermission.requestWithTimeout 上那段),
+            // 要弹就得先后台把它启动起来 —— 而用户点的是"把这个浏览器加进列表",不是"现在
+            // 把我的浏览器打开"。没在跑的那条路交给气泡里那个显式的「请求系统授权」按钮。
+            guard MusicAutomationPermission.isRunning(bundleID: bundleID) else { return }
+            _ = await MusicAutomationPermission.requestWithTimeout(
+                bundleID: bundleID, launchIfNeeded: false)
+            automationRefreshTick &+= 1
+        }
+    }
+
+    /// 请求过系统授权之后强制重算气泡 —— 状态是同步现读的(见 `browserPermissionPopover`),
+    /// 没有 @Published 可依赖,靠这个计数器让 SwiftUI 知道该重新读一次。
+    @State private var automationRefreshTick = 0
+
+    /// 显式请求某个浏览器的系统自动化授权。跟配对时那次的区别只有一个:**允许后台启动**
+    /// 那个浏览器(`launchIfNeeded: true`)—— 用户是主动点的这个按钮,把目标拉起来是完成
+    /// 他这个请求所必需的一步,不是顺带的副作用。
+    private func requestBrowserAutomation(bundleID: String) {
+        Task {
+            _ = await MusicAutomationPermission.requestWithTimeout(
+                bundleID: bundleID, launchIfNeeded: true)
+            automationRefreshTick &+= 1
+        }
+    }
+
+    /// 菜单里给还没信任过的候选加一句提示,别让用户点了之后才发现"顺带把这个浏览器也加进了
+    /// 通用信任列表"这件事很意外。
+    private func addBrowserMenuLabel(_ bundleID: String) -> String {
+        let name = FeatureSettingsStore.appDisplayName(forBundleID: bundleID) ?? bundleID
+        guard features.trustedPlayers[bundleID] == nil else { return name }
+        return name + L10n.t("（未信任，选择后自动信任）")
+    }
+
+    // 配对/取消配对都走同一套"改 AppSettings(持久化)+ 同步进
+    // BrowserPositionProbe.shared(让探针立刻生效)"双写,跟 romanizationScripts 那一档
+    // 完全同一个模式(见 AppSettings.browserPlatformPairs 注释)——只写一边的话,要么关了
+    // App 就忘,要么改了要等下次启动才生效。
+    private func pairBrowser(_ bundleID: String, platformID: String) {
+        var pairs = settings.browserPlatformPairs
+        pairs[platformID, default: []].insert(bundleID)
+        settings.browserPlatformPairs = pairs
+        BrowserPositionProbe.shared.platformBrowserPairs = pairs
+    }
+
+    private func unpairBrowser(_ bundleID: String, platformID: String) {
+        var pairs = settings.browserPlatformPairs
+        pairs[platformID]?.remove(bundleID)
+        if pairs[platformID]?.isEmpty == true { pairs.removeValue(forKey: platformID) }
+        settings.browserPlatformPairs = pairs
+        BrowserPositionProbe.shared.platformBrowserPairs = pairs
+    }
+
+    /// 哪个浏览器的头像正在展开详情气泡——同一时间只有一个,点另一个头像会先收起上一个
+    /// (`.popover` 各自绑定自己的 bool,靠这一个共享的可选值天然互斥)。
+    @State private var expandedBrowserBundleID: String?
+
+    // 这张卡管的是"浏览器自己加的第二道 JS 执行开关"(跟下面 permissionCard 管的系统级
+    // Automation/TCC 授权是两码事,见 BrowserAutomationPermission 头注)——只有真正
+    // 信任过至少一个受支持浏览器时才展示这张卡,没有可配对对象时展示空卡片只是噪声,
+    // 跟 trustedPlayersCard 同一个道理(不为了"这里没事"而占地方)。
+    //
+    // 2026-08-31 用户要求从"信任了就自动探测"改成显式的"平台↔浏览器配对":按
+    // `BrowserPositionProbe.supportedPlatforms` 逐个平台分组,配对之外还提供"添加浏览器"——
+    // 没配对过的浏览器完全不会触发后台探测(见 BrowserPositionProbe.kickIfNeeded)。
+    //
+    // 2026-08-31 用户看过三版设计稿后先选了"头像堆叠·紧凑版"(平台一行:图标+名称+
+    // 一叠已配对浏览器的小头像+添加按钮),后来又要求整张卡换成跟上面"播放器"一样的
+    // 图标网格风格(截图对比着说的)——两次要求不矛盾:头像/气泡/添加菜单这套交互逐字
+    // 保留,只是外层容器从"铺满宽度的一行"换成 PlayerChoiceCard 同款的网格小卡片,让
+    // 两张卡在同一页里看起来是同一套视觉语言,不是分别长出来的两种组件。
+    @ViewBuilder
+    private var browserAutomationCard: some View {
+        let anySupportedTrusted = features.trustedPlayers.keys.contains { BrowserAutomationPermission.family(forBundleID: $0) != nil }
+        if anySupportedTrusted {
+            SettingsCard {
+                SettingsCardHeader(
+                    title: L10n.t("网页播放器"),
+                    help: L10n.t("网页播放器不会像本地 App 那样主动汇报精确的播放进度，切歌之后需要这个开关才能立刻校准，不然要过几秒才能追上；这是浏览器自己加的开关，跟上面的系统权限无关")
+                )
+                SettingsRawRow {
+                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3), spacing: 10) {
+                        ForEach(BrowserPositionProbe.supportedPlatforms) { platform in
+                            browserPlatformCard(platform: platform)
+                        }
+                    }
+                    .frame(maxWidth: .infinity)
+                }
+            }
+            // 挂在整张卡上,不是挂在每个平台的小卡上:`browserPickerError` 只有一个,
+            // 而 supportedPlatforms 有好几个 —— 每张小卡各挂一个 `.alert` 绑同一个状态,
+            // 一次失败会同时触发多个弹窗。
+            .alert(
+                L10n.t("这个应用用不了"),
+                isPresented: Binding(
+                    get: { browserPickerError != nil },
+                    set: { if !$0 { browserPickerError = nil } })
+            ) {
+                Button(L10n.t("知道了"), role: .cancel) { browserPickerError = nil }
+            } message: {
+                Text(browserPickerError ?? "")
+            }
+        }
+    }
+
+    /// 跟 `PlayerChoiceCard` 同一套卡片底(10pt 圆角、`Color.primary.opacity(0.05)` 底色、
+    /// 26×26 图标、`.caption` 文字)，但这张卡没有"选中"这个概念——配对的是一组浏览器而不是
+    /// 单选一个,所以整卡不包一个 `Button`,只有头像和"+"各自可点,卡片本身恒定用
+    /// `PlayerChoiceCard` 未选中时的底色,不画描边。图标下面多一行头像+添加按钮,是跟
+    /// `PlayerChoiceCard` 相比唯一多出来的内容,交互逐字复用 `browserAvatarButton`/
+    /// `addablePlatformBrowsers`/`trustAndPairBrowser`,没有新逻辑。
+    private func browserPlatformCard(platform: BrowserPositionProbe.BrowserMusicPlatform) -> some View {
+        // ⚠️ 已配对的头像也要过 `isInstalled` 这道门(2026-08-31 用户拍板)。在此之前只有
+        // 「+」菜单的候选过滤了装没装,头像这一侧是直接铺 `browserPlatformPairs` 的 ——
+        // 于是"配对过、后来把那个浏览器卸载了"会一直留一个取不到图标的虚线方框
+        // (`browserIconView` 的 `app.dashed` 兜底),点开还给一份无意义的权限状态。那是
+        // "设置里显示的东西跟实际能用的东西对不上"。
+        //
+        // ⚠️ **只是不显示,配对记录原样留在 `browserPlatformPairs` 里** —— 装回来自动恢复,
+        // 用户不用重配。这跟「指定的屏幕拔掉后自动回落到自动、偏好保留、插回来即恢复」
+        // 是同一个口径(见 05-notch.md「显示在哪块屏幕」),不是新发明的处置方式。
+        // 也因此**不要**顺手在这里 `unpairBrowser` 去"清理"——那会把用户的配置替他删掉。
+        let pairedBundleIDs = (settings.browserPlatformPairs[platform.id] ?? [])
+            .filter { BrowserAutomationPermission.isInstalled(bundleID: $0) }
+            .sorted()
+        let addable = addablePlatformBrowsers(platformID: platform.id)
+        return VStack(spacing: 6) {
+            if let icon = Self.platformIcon(platform.id) {
+                Image(nsImage: icon)
+                    .resizable()
+                    .frame(width: 26, height: 26)
+            }
+            Text(platform.displayName)
+                .font(.caption)
+                .lineLimit(1)
+                .minimumScaleFactor(0.85)
+                .foregroundStyle(.primary)
+            // 2026-08-31 用户要求头像并排展示,不要重叠(最初版本是负间距叠在一起的
+            // "头像堆叠"效果,改成这样更清楚地看出到底配了几个)——这条既有决定原样保留。
+            HStack(spacing: 6) {
+                ForEach(pairedBundleIDs, id: \.self) { bundleID in
+                    browserAvatarButton(bundleID: bundleID, platformID: platform.id)
+                }
+                // ⚠️ 条件从 `!addable.isEmpty` 放宽成恒真(2026-08-31):内置候选全配完之后
+                // 「+」原本整个消失,而菜单里现在还有「从应用程序中选择…」这条路 —— 那时
+                // 恰恰是最需要它的时候(装的浏览器不在内置那四个里)。
+                do {
+                    Menu {
+                        ForEach(addable, id: \.self) { bundleID in
+                            Button(addBrowserMenuLabel(bundleID)) { trustAndPairBrowser(bundleID, platformID: platform.id) }
+                        }
+                        Divider()
+                        Button(L10n.t("从应用程序中选择…")) { chooseBrowserFromApplications(platformID: platform.id) }
+                    } label: {
+                        Image(systemName: "plus.circle")
+                            .font(.system(size: 15))
+                    }
+                    .menuStyle(.borderlessButton)
+                    .fixedSize()
+                }
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(Color.primary.opacity(0.05))
+        )
+    }
+
+    private func browserAvatarButton(bundleID: String, platformID: String) -> some View {
+        Button {
+            expandedBrowserBundleID = bundleID
+        } label: {
+            Self.browserIconView(bundleID: bundleID, size: 22)
+        }
+        .buttonStyle(.plain)
+        .popover(isPresented: Binding(
+            get: { expandedBrowserBundleID == bundleID },
+            set: { if !$0 { expandedBrowserBundleID = nil } }
+        )) {
+            browserPermissionPopover(bundleID: bundleID, platformID: platformID)
+        }
+    }
+
+    /// 点头像弹出的详情气泡:图标+名称+状态,下面一排"移除配对"(次要)/"一键开启"
+    /// (需要时才出现)。跟之前那版详细列表行是同一套状态/文案逻辑
+    /// (`browserPermissionCaption`/`handleEnableBrowserPermission`),只是从常驻的
+    /// 卡片行搬进了按需弹出的气泡里。
+    /// ⚠️ 这个气泡要说清**两道**门,不是一道(2026-08-31 补的第二道)。浏览器歌词同步一共
+    /// 需要三样东西:①Lyrimuse 自己的信任列表(配对这个动作本身就写了)、②浏览器自己那道
+    /// 「允许 Apple Events 里的 JavaScript」开关、③**系统的自动化(TCC)授权**。
+    /// 改之前这里只显示②,于是③对用户完全不可见 —— 用户报的原话是「并不是点击自动信任
+    /// 之后就弹出授权框的,是在我实际通过这个浏览器播放音乐的时候才弹出」:③以前只能等
+    /// 探针第一次真的发 Apple Event 时由系统被动弹出。
+    private func browserPermissionPopover(bundleID: String, platformID: String) -> some View {
+        let status = BrowserAutomationPermission.status(forBundleID: bundleID)
+        let uiState = browserPermissionStates[bundleID] ?? .idle
+        let isEnabling: Bool = { if case .enabling = uiState { return true }; return false }()
+        // ⚠️ 目标没在跑时 `check` 查不出真实状态(会落进 procNotFound 被当成"还没问过",
+        // 见 MusicAutomationPermission.check(bundleID:) 那段) —— 所以这里用 nil 表示
+        // "查不到",**不能**显示成"未授权":那是假阴性,已经授权过的浏览器一关掉就会被
+        // 说成没授权。`automationRefreshTick` 只是用来在请求之后强制重读一次。
+        _ = automationRefreshTick
+        let running = MusicAutomationPermission.isRunning(bundleID: bundleID)
+        let automation: MusicAutomationPermissionStatus? = running
+            ? MusicAutomationPermission.check(bundleID: bundleID, askIfNeeded: false)
+            : nil
+        return VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 10) {
+                Self.browserIconView(bundleID: bundleID, size: 24)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(displayNameForTrusted(bundleID)).font(.system(size: 13))
+                    Text(browserPermissionCaption(status: status, uiState: uiState))
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                    Text(browserAutomationCaption(automation))
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                }
+                if isEnabling {
+                    Spacer(minLength: 8)
+                    ProgressView().controlSize(.small)
+                }
+            }
+            // 系统授权那一档单独占一行:它跟下面那排是两码事(一个是系统的、一个是浏览器
+            // 自己的),挤进同一行三个按钮在 300pt 里也放不下。
+            if automation != .authorized {
+                HStack {
+                    Spacer()
+                    if automation == .denied {
+                        // 被拒绝之后官方没有 API 能再触发一次系统弹窗,只能引导去面板手动开。
+                        Button(L10n.t("打开系统设置")) {
+                            NSWorkspace.shared.open(MusicAutomationPermission.systemSettingsURL)
+                        }
+                    } else {
+                        Button(L10n.t("请求系统授权")) { requestBrowserAutomation(bundleID: bundleID) }
+                    }
+                }
+            }
+            Divider()
+            HStack {
+                Button(L10n.t("移除配对")) {
+                    unpairBrowser(bundleID, platformID: platformID)
+                    expandedBrowserBundleID = nil
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
+                Spacer()
+                if !isEnabling, status != .enabled {
+                    Button(L10n.t("一键开启")) { handleEnableBrowserPermission(bundleID: bundleID) }
+                }
+            }
+        }
+        .padding(14)
+        .frame(width: 300)
+    }
+
+    /// 系统自动化授权那一行的说明。⚠️ nil ≠ 未授权 —— 见调用点那段。
+    private func browserAutomationCaption(_ status: MusicAutomationPermissionStatus?) -> String {
+        switch status {
+        case .authorized: return L10n.t("系统自动化授权：已授权")
+        case .denied: return L10n.t("系统自动化授权：已拒绝，需要在系统设置里打开")
+        case .notDetermined: return L10n.t("系统自动化授权：尚未授权")
+        case nil: return L10n.t("系统自动化授权：这个浏览器没在运行，查不到当前状态")
+        }
+    }
+
+    private static func browserIconView(bundleID: String, size: CGFloat) -> some View {
+        Group {
+            if let icon = AppIconResolver.icon(forBundleID: bundleID) {
+                Image(nsImage: icon).resizable()
+            } else {
+                Image(systemName: "app.dashed")
+            }
+        }
+        .frame(width: size, height: size)
+        .clipShape(RoundedRectangle(cornerRadius: size * 0.23, style: .continuous))
+    }
+
+    /// 平台图标——YouTube Music 是个网站,没有 `.app` 可以像浏览器那样用 AppIconResolver
+    /// 取真图标。2026-08-31 用户要求用真实图标,跟 lastfmBadgeImage/listenBrainzBadgeImage
+    /// 同一个既有先例:素材取自 Simple Icons(CC0 授权、专门收录给第三方集成场景用的品牌
+    /// 图标合集,矢量描摹自官方标志,不是截图抠像素),PNG 由 build.sh 拷进
+    /// Contents/Resources/,用 Bundle.main(不是 Bundle.module)加载——理由见 L10n.swift
+    /// 顶部注释、AccountLinkingTab.swift 里 lastfmBadgeImage 的同款写法。以后新增别的网页
+    /// 平台,照这个模式再加一份资源 + 一个 case 就行。
+    private static func platformIcon(_ platformID: String) -> NSImage? {
+        switch platformID {
+        case "youtubeMusic": return youtubeMusicIcon
+        default: return nil
+        }
+    }
+
+    private static let youtubeMusicIcon: NSImage = {
+        guard let path = Bundle.main.path(forResource: "YouTubeMusicIcon", ofType: "png"),
+              let image = NSImage(contentsOfFile: path)
+        else {
+            // 没走 build.sh 打包时(直接 swift build 跑)找不到资源,退回 SF Symbol,
+            // 别让图标位裸奔成空白——跟 lastfmBadgeImage/listenBrainzBadgeImage 同一个兜底。
+            return NSImage(systemSymbolName: "play.circle.fill", accessibilityDescription: nil) ?? NSImage()
+        }
+        return image
+    }()
+
+    private func browserPermissionCaption(status: BrowserAutomationPermission.Status, uiState: BrowserPermissionUIState) -> String {
+        // 刚点过按钮的结果优先展示——即使这一轮 `status` 已经因为别的原因(比如用户手动
+        // 在浏览器菜单里开了)变成别的值,也先让用户看到"这次点击到底发生了什么"。
+        switch uiState {
+        case .enabling:
+            return L10n.t("正在尝试开启…")
+        case .result(.needsQuit):
+            return L10n.t("需要先完全退出该浏览器，再点一次")
+        case .result(.failed):
+            return L10n.t("自动开启失败，请到该浏览器「查看→开发者」菜单里手动打开")
+        case .result(.enabled), .result(.alreadyEnabled):
+            return L10n.t("已开启，下次打开该浏览器后生效")
+        case .idle, .result(.unsupported):
+            break
+        }
+        switch status {
+        case .enabled: return L10n.t("已开启")
+        case .disabled: return L10n.t("未开启")
+        case .unknown: return L10n.t("无法确认状态（可能从未打开过这个浏览器）")
+        case .unsupported: return ""
+        }
+    }
+
+    // 文件读写挪到后台线程——虽然通常很快,但涉及磁盘 I/O,不该占用主线程哪怕一瞬间
+    // (跟 permissionCard 那边"权限请求不能同步调用"是同一个"别冻住 UI"的顾虑)。
+    private func handleEnableBrowserPermission(bundleID: String) {
+        browserPermissionStates[bundleID] = .enabling
+        DispatchQueue.global(qos: .userInitiated).async {
+            let result = BrowserAutomationPermission.enable(bundleID: bundleID)
+            DispatchQueue.main.async {
+                browserPermissionStates[bundleID] = .result(result)
+            }
+        }
+    }
+
     // 本地数据源现在通过 AppleScript 直接问 Music.app(见 MediaControlClient.swift),
     // 这个权限因此从"可选、只影响播放进度精度"变成"核心路径必需、没有就完全看不到
     // 歌词",副标题特意说清楚这一点,别让人以为不给也无所谓。
@@ -2174,6 +2862,20 @@ private struct PlayerSettingsTab: View {
                         .textSelection(.enabled)
                 }
             }
+            // App 本体版本跟打包的 collector 版本对不上——2026-08-31 加,见
+            // CollectorServiceManager.bundledCollectorVersion 头注(v1.3.0 发布时真的
+            // 漏同步过一次,当时没有任何地方能看出来)。只在真查到不一致时才显示这条,
+            // 查不出来(nil)时保持沉默,不把"没法判断"说成"有问题"。
+            if let mismatch = collectorVersionMismatch {
+                CardDivider()
+                SettingsNote {
+                    Text(L10n.t("App 版本和后台采集服务版本不一致，可能是这次打包时漏了同步版本号，建议重新安装 App"))
+                    Text("App \(mismatch.appVersion) · \(L10n.t("采集服务")) \(mismatch.collectorVersion)")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                        .textSelection(.enabled)
+                }
+            }
         }
         // ⚠️ 不能只在 onAppear 读一次(2026-08-21 用户报"怎么变成未知了")。
         //
@@ -2186,7 +2888,10 @@ private struct PlayerSettingsTab: View {
         //
         // 修法是让它自愈:每拍重读一次(`launchctl print` 实测 4ms,只在这一页显示着时跑),
         // 外加切回 App 时重读一次(跟上面 permissionCard 的既有做法一致)。
-        .onAppear { refreshCollectorState() }
+        .onAppear {
+            refreshCollectorState()
+            refreshCollectorVersionCheck()
+        }
         .onReceive(Timer.publish(every: 2, on: .main, in: .common).autoconnect()) { _ in
             refreshCollectorState()
         }
@@ -2326,6 +3031,27 @@ private struct PlayerSettingsTab: View {
         if latest != collectorState { collectorState = latest }
     }
 
+    /// 查一次"App 本体版本"跟"打包进这份 App 的 collector 版本"是否一致(见
+    /// CollectorServiceManager.bundledCollectorVersion 头注)。只在 .onAppear 调一次
+    /// (不放进每 2 秒那条心跳),而且真的 spawn 一次子进程,丢到后台线程跑,不阻塞
+    /// 设置页打开这一下的主线程。
+    private func refreshCollectorVersionCheck() {
+        let appVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0"
+        Task.detached(priority: .utility) {
+            guard let collectorVersion = CollectorServiceManager.bundledCollectorVersion(),
+                  collectorVersion != appVersion else {
+                // nil(拿不到)或版本一致,都不该报警——见调用点注释,"没法判断"不等于
+                // "有问题"。已经报过警的情况下重新查到一致(比如刚重新安装完),也要
+                // 把旧警告收回去,不能一直挂着。
+                await MainActor.run { collectorVersionMismatch = nil }
+                return
+            }
+            await MainActor.run {
+                collectorVersionMismatch = (appVersion: appVersion, collectorVersion: collectorVersion)
+            }
+        }
+    }
+
     private func enableCollectorService() {
         isTogglingCollectorService = true
         collectorEnableFailed = false
@@ -2378,6 +3104,19 @@ private struct GeneralSettingsTab: View {
     @State private var iCloudSnapshot: ICloudConfigStore.Snapshot?
     @State private var iCloudBusy = false
     @State private var iCloudMessage: String?
+    /// 「更新备份」写成功后按钮本身要不要变身成打勾的「已保存」(2026-08-26 两轮改)。
+    /// 第一版做的是"按钮下面淡出一行小灰字",用户实测反馈"不明显,不仔细看都不知道"——
+    /// 那行字出现在**视线本来就没在看**的地方(眼睛/光标此刻都停在按钮上,不在按钮下面
+    /// 那一小条)。改成按钮**自己**变身「已保存」+ 打勾图标,反馈就出现在用户刚刚点击、
+    /// 视线正停留的地方,不用移动视线去找 —— 图标/文案/1 秒时长直接照抄"保存修改"那颗
+    /// 按钮成功后变身「已保存 ✓」的写法(LyricsManagerView,同一个 App 只该有一种
+    /// "保存成功"的样子),这里只是多了个失效令牌让它在**别的**动作触发新一轮之前
+    /// 不会被那次新的提前打断(那颗按钮没有这层,因为它不会连着触发两轮反馈)。
+    @State private var iCloudJustSaved = false
+    /// 上面这个"已保存"态的失效令牌——只有它读到自己发出时的这个值才把 `iCloudJustSaved`
+    /// 拨回 false,避免计时器到点时把用户这期间又点了一次触发的**新一轮**"已保存"提前
+    /// 掐掉(两次点击间隔小于展示时长时,新的那次应该完整展示完自己的时长)。
+    @State private var iCloudJustSavedToken = 0
     @State private var pendingImportData: Data?
     /// 待导入配置包**旁边**那份歌词归档(同名、-Config- 换成 -Lyrics-)。nil = 这份备份不带
     /// 歌词(老备份,或用户只导出了设置)—— 那就一个歌词文件都不许动,绝不能当成"空歌词库"
@@ -2498,12 +3237,22 @@ private struct GeneralSettingsTab: View {
                             // 已经存过一份的话这个动作是覆盖式地再存一份新的,叫"存到
                             // iCloud"读起来像还没存过。副标题那行同时在显示现有那份是
                             // 什么时候的,两处合起来才说得通。
-                            Button(iCloudSnapshot == nil
-                                ? (ICloudConfigStore.usingCustomFolder
-                                    ? L10n.t("存一份") : L10n.t("存到 iCloud"))
-                                : L10n.t("更新备份"))
-                            {
+                            Button {
                                 showICloudExportWarning = true
+                            } label: {
+                                // 跟"保存修改"那颗按钮(LyricsManagerView)同一个语言——
+                                // 反馈落在用户刚刚点击、视线正停留的地方,而不是按钮之外
+                                // 的别处(见 iCloudJustSaved 声明处注释,对照第一版
+                                // "下面淡出一行小灰字"改的)。图标/文案/1 秒时长都照抄
+                                // 那边,整个 App 只该有一种"保存成功"的样子。
+                                if iCloudJustSaved {
+                                    Label(L10n.t("已保存"), systemImage: "checkmark")
+                                } else {
+                                    Text(iCloudSnapshot == nil
+                                        ? (ICloudConfigStore.usingCustomFolder
+                                            ? L10n.t("存一份") : L10n.t("存到 iCloud"))
+                                        : L10n.t("更新备份"))
+                                }
                             }
                             if iCloudSnapshot != nil {
                                 Button(L10n.t("导入…")) { importFromICloud() }
@@ -2616,10 +3365,29 @@ private struct GeneralSettingsTab: View {
                                 note = L10n.t("设置已存好，但歌词库那一份没写成功")
                             }
                         }
-                        // 不弹"已存好"——副标题会立刻换成刚写进去那份的时间,按钮也从
-                        // "存到 iCloud"变成"更新",反馈已经在界面上了。
+                        // 2026-08-26 两轮改:原来这里不弹任何反馈——理由是副标题会立刻
+                        // 换成刚写进去那份的时间、按钮也从"存到 iCloud"变成"更新",反馈
+                        // 已经在界面上了。用户实测反馈:**更新**一份已有备份时,界面上唯一
+                        // 的变化只是副标题里的时间戳往前跳几秒,按钮文字本来就已经是
+                        // "更新备份"、不会再变——那种"反馈"太不起眼,点完根本看不出生效
+                        // 没有。第一版补的是按钮下面淡出一行小灰字,用户又反馈"不明显,
+                        // 不仔细看都不知道"——那行字在视线本来就没在看的地方。改成按钮
+                        // 自己变身,理由与写法见 iCloudJustSaved 声明处注释。
                         iCloudSnapshot = ICloudConfigStore.latestSnapshot()
                         iCloudMessage = note
+                        // note 非 nil(歌词库那份没写成功)时不弹这个打勾态:那种情况
+                        // 已经有一条要用户看到并处理的持久提示了(上面 iCloudMessage),
+                        // 按钮再摆出一副"全成功"的样子会互相矛盾。
+                        if note == nil {
+                            iCloudJustSavedToken += 1
+                            let token = iCloudJustSavedToken
+                            withAnimation { iCloudJustSaved = true }
+                            Task { @MainActor in
+                                try? await Task.sleep(for: .seconds(1))
+                                guard iCloudJustSavedToken == token else { return }
+                                withAnimation { iCloudJustSaved = false }
+                            }
+                        }
                     }
                 }
             }
@@ -2813,21 +3581,56 @@ private struct ShortcutsSettingsTab: View {
             title: L10n.t("快捷键"),
             subtitle: L10n.t("全局快捷键在任何 App 里都能触发。至少需要搭配 ⌘/⌥/⌃ 中一个（功能键、媒体键除外）")
         ) {
+            // 2026-08-31 从三张卡重排成四张。原来第一张混着"切换显示形态"和"打开某扇窗"
+            // 两类动作,只有 5 项时还看得过去;这次加到 16 项之后必须按语义分开,否则
+            // 一张卡里十来行、找不到自己要的那一条。
             SettingsCard {
                 SettingsRow(icon: "eye", title: L10n.t("显示/隐藏悬浮歌词")) {
                     ShortcutRecorderControl(name: .toggleOverlay)
+                }
+                CardDivider()
+                SettingsRow(icon: "inset.filled.topthird.square", title: L10n.t("显示/隐藏灵动岛歌词")) {
+                    ShortcutRecorderControl(name: .toggleNotchOverlayHotkey)
+                }
+                CardDivider()
+                SettingsRow(icon: "menubar.rectangle", title: L10n.t("显示/隐藏菜单栏歌词")) {
+                    ShortcutRecorderControl(name: .toggleMenuBarLyricsHotkey)
                 }
                 CardDivider()
                 SettingsRow(icon: "lock", title: L10n.t("锁定/解锁位置")) {
                     ShortcutRecorderControl(name: .toggleLockPosition)
                 }
                 CardDivider()
+                SettingsRow(
+                    icon: "character.book.closed",
+                    title: L10n.t("显示/隐藏译文")
+                ) {
+                    ShortcutRecorderControl(name: .toggleTranslationHotkey)
+                }
+                CardDivider()
+                // ⚠️ 别再给这一行加副标题。原来有一句"总开关；具体给哪几种文字标注仍在
+                // 「歌词显示」里分别设置",2026-08-31 用户看到实机效果后直接要求去掉。
+                // (同一个偏好在「全局时间轴偏移」那一行也有记录:用户明确否掉过解释性文案。)
+                SettingsRow(icon: "textformat.abc", title: L10n.t("显示/隐藏发音")) {
+                    ShortcutRecorderControl(name: .toggleRomanizationHotkey)
+                }
+            }
+
+            SettingsCard {
                 SettingsRow(icon: "list.bullet.rectangle", title: L10n.t("打开歌词管理")) {
                     ShortcutRecorderControl(name: .openLyricsManagerHotkey)
                 }
                 CardDivider()
                 SettingsRow(icon: "text.quote", title: L10n.t("打开歌词窗口")) {
                     ShortcutRecorderControl(name: .openLyricsWindowHotkey)
+                }
+                CardDivider()
+                SettingsRow(
+                    icon: "magnifyingglass",
+                    title: L10n.t("搜索歌词"),
+                    subtitle: L10n.t("给当前这首歌手动搜索候选歌词")
+                ) {
+                    ShortcutRecorderControl(name: .lyricsQuickSearchHotkey)
                 }
                 CardDivider()
                 SettingsRow(icon: "gearshape", title: L10n.t("打开设置")) {
@@ -2846,6 +3649,14 @@ private struct ShortcutsSettingsTab: View {
                 CardDivider()
                 SettingsRow(icon: "forward.end", title: L10n.t("歌词延后")) {
                     ShortcutRecorderControl(name: .lyricsDelayHotkey)
+                }
+                CardDivider()
+                SettingsRow(
+                    icon: "arrow.counterclockwise",
+                    title: L10n.t("歌词偏移归零"),
+                    subtitle: L10n.t("把当前这首歌的校准值清回 0")
+                ) {
+                    ShortcutRecorderControl(name: .lyricsOffsetResetHotkey)
                 }
                 CardDivider()
                 // 每次调整的步长——跟菜单栏"歌词时间轴"共用同一个值,这里改了菜单里的
@@ -2967,6 +3778,16 @@ private struct AboutSettingsTab: View {
                         NSWorkspace.shared.open(URL(string: "https://github.com/Yudaotor/lyrimuse/issues")!)
                     }
                 }
+                CardDivider()
+                // 跟上面"反馈问题"(Issues,追踪 bug 修复状态)分开:这里收想法/新功能建议,
+                // 走 GitHub Discussions 的 Ideas 分类(2026-08-27 新开——仓库原来没启用
+                // Discussions)。选它而不是另起一套表单/第三方服务:零额外基建(仓库自带),
+                // 自带 👍 投票和评论,还能让同一个想法别被重复提好几遍。
+                SettingsRow(icon: "lightbulb", title: L10n.t("想法与建议")) {
+                    Button(L10n.t("前往")) {
+                        NSWorkspace.shared.open(URL(string: "https://github.com/Yudaotor/lyrimuse/discussions/categories/ideas")!)
+                    }
+                }
             }
 
             SettingsCard {
@@ -2977,7 +3798,7 @@ private struct AboutSettingsTab: View {
                 SettingsRow(
                     icon: "doc.text.magnifyingglass",
                     title: L10n.t("导出诊断信息"),
-                    subtitle: L10n.t("汇总 App/采集器日志和权限、常驻服务等关键状态，保存成一份文本文件，不会包含任何账号 token 或密钥的原始内容")
+                    subtitle: L10n.t("汇总日志、权限与后台服务状态，保存为一份文本文件，不含账号 token 或密钥")
                 ) {
                     Button(L10n.t("导出…")) {
                         DiagnosticsExporter.exportInteractively()

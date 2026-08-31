@@ -154,67 +154,6 @@ public enum MusicPlaybackController {
         """#) != nil
     }
 
-    /// 待播清单条目(「播放队列」面板用)。
-    public struct UpNextItem: Sendable {
-        public let index: Int      // 在 current playlist 里的 1-based 下标(跳播用)
-        public let title: String
-        public let artist: String
-        public let isCurrent: Bool
-    }
-
-    /// 待播清单 ≈ current playlist 从当前曲目起的一段(2026-08-22 实机验证:资料库播放
-    /// 时 current playlist=「资料库」、index of current track 可取、逐条读名称/歌手全
-    /// 可行)。⚠️ Music 的真「Up Next」队列(手动插队的 Play Next)AppleScript 拿不到,
-    /// 电台/自动播放时 current playlist 会报错 → nil,面板显示「无法获取」。
-    /// ⚠️ 逐条必须 try(2026-08-22 实机踩雷):队列上下文里会混 URL track(«class cURT»),
-    /// 其 name 是 missing value,一条坏的会把**整段脚本**炸掉 → 面板永远「无法获取」;
-    /// 坏条目跳过、artist 缺省空。当前曲下标由头部 CUR 行显式回传 —— 坏的恰好是当前曲
-    /// 时"第一行=当前"的假设不成立。
-    /// Apple Music 专属;不要在主线程调用。
-    public static func upNextQueue(maxCount: Int = 25) -> [UpNextItem]? {
-        guard let out = runAppleScriptCapturing(#"""
-        tell application "Music"
-            set cp to current playlist
-            set curIdx to index of current track
-            set n to count of tracks of cp
-            set endIdx to curIdx + \#(maxCount - 1)
-            if endIdx > n then set endIdx to n
-            set out to "CUR" & tab & curIdx & linefeed
-            repeat with i from curIdx to endIdx
-                try
-                    set t to track i of cp
-                    set tn to (name of t) as text
-                    set ta to ""
-                    try
-                        set ta to (artist of t) as text
-                    end try
-                    set out to out & i & tab & tn & tab & ta & linefeed
-                end try
-            end repeat
-            return out
-        end tell
-        """#) else { return nil }
-        var items: [UpNextItem] = []
-        var currentIndex: Int?
-        for line in out.split(separator: "\n") {
-            let parts = line.split(separator: "\t", maxSplits: 2, omittingEmptySubsequences: false)
-            if parts.count == 2, parts[0] == "CUR" { currentIndex = Int(parts[1]); continue }
-            guard parts.count == 3, let idx = Int(parts[0]) else { continue }
-            items.append(UpNextItem(index: idx, title: String(parts[1]),
-                                    artist: String(parts[2]), isCurrent: idx == currentIndex))
-        }
-        return items
-    }
-
-    /// 跳播到 current playlist 的第 index 首(待播清单行点击)。Apple Music 专属;
-    /// 不要在主线程调用。
-    @discardableResult
-    public static func playTrackInCurrentPlaylist(index: Int) -> Bool {
-        runAppleScriptCapturing(
-            #"tell application "Music" to play track \#(index) of current playlist"#
-        ) != nil
-    }
-
     /// 恢复播放(歌词窗口欢迎态「继续播放」,Apple Music)。⚠️ 裸 `play` 对空队列是
     /// **静默 no-op**(2026-08-22 实测:stopped 态发 play,state 仍 stopped——Music 停播/
     /// 重启后队列是空的,没有"上次上下文"可恢复)。三段式:①裸 play(接住"有队列只是

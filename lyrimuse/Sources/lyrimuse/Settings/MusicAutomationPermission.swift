@@ -34,8 +34,22 @@ enum MusicAutomationPermission {
     // 已经问过(不管授权还是拒绝)时,系统不会重复弹窗,直接照原样返回结果。
     @discardableResult
     static func check(askIfNeeded: Bool) -> MusicAutomationPermissionStatus {
+        check(bundleID: musicBundleID, askIfNeeded: askIfNeeded)
+    }
+
+    /// 同上,但目标可以是任意 App(2026-08-31 加:浏览器歌词同步也要问同一份权限 ——
+    /// `BrowserPositionProbe` 靠 Apple Event 让浏览器执行 JS,跟读 Music.app 播放头是
+    /// **同一个** TCC 类别,只是目标换成了 Chrome/Edge/Arc/Safari)。
+    ///
+    /// ⚠️ **目标 App 没在运行时问不出来** —— 见 `requestWithTimeout` 上那段 2026-07-24 的
+    /// 实测记录:那时 `AECreateDesc` 按 bundle id 解析不到进程,落进下面的 `procNotFound`
+    /// 分支被当成"还没问过"静默返回,**系统弹窗压根不出现**。所以 `.notDetermined` 有两种
+    /// 完全不同的含义(真没问过 / 目标没跑),调用方要自己用 `isRunning` 区分,别把后者
+    /// 显示成"未授权"——那是假阴性。
+    @discardableResult
+    static func check(bundleID: String, askIfNeeded: Bool) -> MusicAutomationPermissionStatus {
         var target = AEAddressDesc()
-        let bundleIDBytes = Array(musicBundleID.utf8)
+        let bundleIDBytes = Array(bundleID.utf8)
         guard AECreateDesc(
             DescType(typeApplicationBundleID),
             bundleIDBytes,
@@ -137,6 +151,13 @@ enum MusicAutomationPermission {
     // ensureMusicAppRunning 调用点的注释);checkForCurrentPlayerSafely(播放控制快捷键/
     // 按钮专用)传 false,理由见那边的注释。
     static func requestWithTimeout(seconds: Double = 8, launchMusicAppIfNeeded: Bool = true) async -> MusicAutomationPermissionStatus? {
+        await requestWithTimeout(bundleID: musicBundleID, seconds: seconds,
+                                 launchIfNeeded: launchMusicAppIfNeeded)
+    }
+
+    /// 同上,目标任意。浏览器那条路(设置页「网页播放器」卡)走这个。
+    static func requestWithTimeout(bundleID: String, seconds: Double = 8,
+                                   launchIfNeeded: Bool = true) async -> MusicAutomationPermissionStatus? {
         // 2026-07-24 实测坐实(用户报告+复现):Music.app 没在运行时点"请求权限",
         // 系统授权对话框根本不弹——不是超时/挂起,是压根没问。AECreateDesc 按
         // bundle ID 解析目标时,如果找不到对应的运行中进程,大概率直接落到下面
@@ -146,11 +167,11 @@ enum MusicAutomationPermission {
         // 先确保 Music.app 处于运行状态,让 bundle ID 一定能解析到一个真实进程。
         // 用 activates=false 后台启动,不抢用户当前焦点,跟 AppDelegate.swift 里
         // launchMusicOnLyrimuseOpen 那半用的是同一个"后台起、别抢前台"的做法。
-        if launchMusicAppIfNeeded {
-            await ensureMusicAppRunning()
+        if launchIfNeeded {
+            await ensureAppRunning(bundleID: bundleID)
         }
         return await withTaskGroup(of: MusicAutomationPermissionStatus?.self) { group in
-            group.addTask { check(askIfNeeded: true) }
+            group.addTask { check(bundleID: bundleID, askIfNeeded: true) }
             group.addTask {
                 try? await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
                 return nil
@@ -167,20 +188,32 @@ enum MusicAutomationPermission {
     /// 退出时的页面"而不是跳到链接指的那一页(2026-08-23 用户实测反馈)。跟这里已经解决
     /// 过的"TCC 查权限前必须先让 Music.app 存在"是同一个根因,直接复用。
     static func ensureMusicAppRunning() async {
-        guard !NSWorkspace.shared.runningApplications.contains(where: { $0.bundleIdentifier == musicBundleID }) else {
+        await ensureAppRunning(bundleID: musicBundleID)
+    }
+
+    /// 这个 bundle id 在跑没跑。`.notDetermined` 的两种含义要靠它区分(见 `check(bundleID:)`)。
+    static func isRunning(bundleID: String) -> Bool {
+        NSWorkspace.shared.runningApplications.contains { $0.bundleIdentifier == bundleID }
+    }
+
+    /// 同 `ensureMusicAppRunning`,目标任意。
+    ///
+    /// ⚠️ 这一步会**后台启动别人的 App**(`activates = false`,不抢焦点)。只在用户**显式点了
+    /// "请求授权"**时才调 —— 别把它挂在"配对成功"这种顺带的路径上:用户点的是"把这个浏览器
+    /// 加进列表",不是"现在把我的浏览器打开"。
+    static func ensureAppRunning(bundleID: String) async {
+        guard !isRunning(bundleID: bundleID) else { return }
+        guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) else {
+            logger.error("cannot resolve app URL by bundle id, skip pre-launch")
             return
         }
-        guard let musicURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: musicBundleID) else {
-            logger.error("cannot resolve Music.app URL by bundle id, skip pre-launch")
-            return
-        }
-        logger.notice("Music.app not running, launching in background before requesting automation permission")
+        logger.notice("target app not running, launching in background before requesting automation permission")
         let config = NSWorkspace.OpenConfiguration()
         config.activates = false
         do {
-            _ = try await NSWorkspace.shared.openApplication(at: musicURL, configuration: config)
+            _ = try await NSWorkspace.shared.openApplication(at: url, configuration: config)
         } catch {
-            logger.error("failed to launch Music.app before permission request: \(error.localizedDescription, privacy: .public)")
+            logger.error("failed to launch app before permission request: \(error.localizedDescription, privacy: .public)")
         }
     }
 }

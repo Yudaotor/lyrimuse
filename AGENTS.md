@@ -166,6 +166,9 @@ screencapture -x -o -l <窗口ID> /tmp/shot.png                   # 只截那一
   worktree，但收尾必须把改动落回 `dev` 再提交、别把分支留下。`main` 只在发版时推进（默认
   分支仍是 `main`，打 tag 前先把 `dev` 以 fast-forward 合进 `main`）。
 - 发 release 时日志要手写改动清单（中英双语），不要只依赖 GitHub 自动生成的 notes。
+- **tag annotation 里用 `<!-- lang:en -->` / `<!-- lang:zh-Hans -->` 两行标记，把英文正文和中文正文分成两个独立整块**（先写完整的英文版，再写完整的中文版），不要再按 bullet 逐条中英交替写（v1.4.0 及更早都是这么写的，从 v1.5.0 起改）。理由：`release.yml` 的 `Generate signed appcast` 那步会按这两个标记把 tag 正文拆成两份，各自生成一个
+  `<description xml:lang="en">` / `<description xml:lang="zh-Hans">`——Sparkle 的
+  `SUAppcast.m`（`bestNodeInNodes:name:`）支持同一个 `<item>` 下按 `xml:lang` 放多份同名元素、用 `NSBundle preferredLocalizationsFromArray:` 按系统语言偏好选一份，这样 Sparkle 更新弹窗里的**正文**才能跟着系统语言走（弹窗外壳本来就是这样，正文之前一直不是）。GitHub Release 页面不受影响，两个标记是 HTML 注释、GFM 渲染时自动隐藏，两段内容依旧会依次完整显示。裸版本号那一行（标记之前）语言中立，两份里都会带上。**没写这两个标记的 tag 会自动退回旧的单份 `<description>` 行为，不会报错**，但也就享受不到这个语言切换——新写 tag 时记得加。
 
 ---
 

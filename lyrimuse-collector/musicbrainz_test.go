@@ -1,6 +1,10 @@
 package main
 
-import "testing"
+import (
+	"context"
+	"reflect"
+	"testing"
+)
 
 // 2026-08-05 实测排查坐实的真实 bug 的回归测试:欧美艺人在 MusicBrainz 上的中文别名
 // 只是面向中文市场的译名,不该被当成 canonical_artist —— 用户反馈"历史里 Michael
@@ -59,5 +63,83 @@ func TestPickChineseAlias(t *testing.T) {
 		if got := pickChineseAlias(c.aliases, c.country); got != c.want {
 			t.Errorf("%s: pickChineseAlias(...) = %q, want %q", c.label, got, c.want)
 		}
+	}
+}
+
+// 查空**不落盘**、查到才落盘(2026-08-30)——跟 mbPrimaryNameCache 那条同一条规则、同一个
+// 理由(见 TestMBPrimaryNameCachePersistsOnlyHits 的注释)。这份缓存原来是"查一次永久
+// 生效,空值也当确定结果落盘",那英《微笑着离去》真撞上了:MusicBrainz 恰好限速 503,
+// 空结果被永久钉在 "Na Ying" 名下,之后不管 MusicBrainz 是否恢复都不会再重查。
+func TestArtistAliasCachePersistsOnlyHits(t *testing.T) {
+	dir := t.TempDir()
+	path := dir + "/alias.json"
+
+	savedCache, savedPath, savedDirty := artistAliasCache, artistAliasPath, artistAliasDirty
+	defer func() {
+		artistAliasCache, artistAliasPath, artistAliasDirty = savedCache, savedPath, savedDirty
+	}()
+
+	artistAliasPath = path
+	artistAliasCache = map[string]string{
+		"David Tao": "陶喆", // 查到了
+		"Na Ying":   "",   // 查空(可能只是被限速,见上面头注)
+	}
+	artistAliasDirty = true
+	saveArtistAliasCache()
+
+	artistAliasCache = map[string]string{}
+	loadArtistAliasCache(path)
+	if got := artistAliasCache["David Tao"]; got != "陶喆" {
+		t.Errorf("查到的那条没被持久化:got %q", got)
+	}
+	if _, ok := artistAliasCache["Na Ying"]; ok {
+		t.Error("查空的那条落盘了 —— 一次偶发限速会被永久钉死")
+	}
+
+	// 没有路径时(单测/一次性子命令)不写任何文件,也不该 panic。
+	artistAliasPath = ""
+	artistAliasDirty = true
+	saveArtistAliasCache()
+}
+
+// canonicalArtistViaMusicBrainz 写缓存那一步:查空只留在内存(供同一进程内不重复查询),
+// 不标记为脏、不触发落盘。
+func TestCanonicalArtistViaMusicBrainzCacheHitSkipsNetwork(t *testing.T) {
+	savedCache, savedPath, savedDirty := artistAliasCache, artistAliasPath, artistAliasDirty
+	defer func() {
+		artistAliasCache, artistAliasPath, artistAliasDirty = savedCache, savedPath, savedDirty
+	}()
+
+	artistAliasPath = ""
+	artistAliasCache = map[string]string{"Cached Artist": "缓存艺人"}
+	artistAliasDirty = false
+
+	if got := canonicalArtistViaMusicBrainz(context.Background(), "Cached Artist"); got != "缓存艺人" {
+		t.Errorf("缓存命中应直接返回,不该发起网络请求:got %q", got)
+	}
+	if !reflect.DeepEqual(artistAliasCache, map[string]string{"Cached Artist": "缓存艺人"}) {
+		t.Errorf("缓存命中不该修改缓存内容:got %v", artistAliasCache)
+	}
+}
+
+// resolveGenericArtistCanonicalName 必须先查 artistAliasTable 再试通用机制,不能反过来
+// ——2026-08-31 真实bug:"Wanting"的 QQ 歌手搜索建议第一条是"婉婷"(查证过是另一个人,
+// 见 qqArtistCanonicalName 头注),如果通用机制排在手工表前面,会先给出这个错误答案、
+// 手工表里登记的"曲婉婷"根本没有机会生效。这里用缓存直接模拟"QQ 查到了(错误的)结果"
+// 这个状态,断言手工表登记过的名字仍然赢。
+func TestResolveGenericArtistCanonicalNamePrefersHandTableOverGenericMisfire(t *testing.T) {
+	savedQQCache, savedQQPath, savedQQDirty := qqArtistNameCache, qqArtistNamePath, qqArtistNameDirty
+	savedAlias := artistAliasCache
+	defer func() {
+		qqArtistNameCache, qqArtistNamePath, qqArtistNameDirty = savedQQCache, savedQQPath, savedQQDirty
+		artistAliasCache = savedAlias
+	}()
+	qqArtistNamePath = ""
+	artistAliasCache = map[string]string{}
+	// 模拟 QQ 已经查到(错误的)"婉婷"并缓存住了这个状态。
+	qqArtistNameCache = map[string]string{"wanting": "婉婷"}
+
+	if got := resolveGenericArtistCanonicalName(context.Background(), "wanting"); got != "曲婉婷" {
+		t.Errorf("手工表应该优先于通用机制的(错误)结果:got %q, want 曲婉婷", got)
 	}
 }

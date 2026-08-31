@@ -36,6 +36,20 @@ func TestArtistMatchesNameContainingSeparator(t *testing.T) {
 		{"The Revolution", "Prince & The Revolution", true, "整段相等(多词)"},
 		{"陶喆", "陶喆、卢广仲", true, "顿号分隔"},
 
+		// 2026-08-25 实测坐实:YouTube Music/LyricFind 给的艺人字段是繁体,本地查询是
+		// 简体,不折算就判成两个不同的人(见 artistCreditParts/artistMatches 注释)。
+		{"周杰伦", "周杰倫", true, "繁简同一个人,整串直接相等分支"},
+		{"周杰倫", "周杰伦 & 王力宏", true, "繁简同一个人,段匹配分支"},
+
+		// 2026-08-26 实测坐实(「聪明不聪明」真实bug):YouTube Music 给的艺人字段带括号
+		// 外文别名,本地标签只有中文名,这串压根没有 artistCreditParts 认的分隔符,逐段比较
+		// 两档都够不着,靠去括号兜底才行。
+		{"丁世光", "丁世光(Dean Ting)", true, "去括号别名兜底,真实bug案例"},
+		{"丁世光(Dean Ting)", "丁世光", true, "反向也要成立"},
+		// 去括号兜底不能重新打开尾随分隔符仿冒洞:括号内容剥掉之后仍然要过同一套
+		// artistCreditParts 长度守卫。
+		{"周杰伦(某某)", "周杰伦、", false, "括号别名 + 仿冒尾巴叠加,仿冒防线仍要挡住"},
+
 		// ⚠️ 新规则最容易踩的坑:不能退化成任意子串。
 		{"an", "anna", false, "子串但不是分隔符界定的片段"},
 		{"da", "dave/eve", false, "首段的前缀不算(段是 dave)"},
@@ -46,6 +60,8 @@ func TestArtistMatchesNameContainingSeparator(t *testing.T) {
 		// ⚠️ 故意保留的仿冒防线:结尾带分隔符的单人名切完只剩一段,
 		// len(parts)<2 的守卫必须挡住它(见 artistCreditParts 注释)。
 		{"周杰伦", "周杰伦、", false, "仿冒特征:尾随分隔符,不能判成同一个人"},
+		// toSimplified 只折算字符形式,不影响这道防线——繁体写法的仿冒串同样过不了。
+		{"周杰倫", "周杰伦-", false, "仿冒特征换成繁体也一样挡住,toSimplified 不剥离标点"},
 
 		// 无关的两个人。
 		{"K/DA", "IU/Suga", false, "毫无关系"},

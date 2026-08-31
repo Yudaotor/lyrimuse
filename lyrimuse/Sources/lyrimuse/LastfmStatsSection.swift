@@ -133,7 +133,10 @@ struct LastfmStatsSection: View {
                 HStack(spacing: 0) {
                     statCell(value: stats.overview?.today, label: L10n.t("今天"))
                     Divider().padding(.vertical, 10)
-                    statCell(value: stats.overview?.week, label: L10n.t("近 7 天"))
+                    // 跟待机页那个「近 7 天」用**同一个口径**(自然日对齐,见
+                    // IdleListeningStats.lastSevenDays)—— 两处显示同一个名字的数字,
+                    // 算法必须一致,否则用户在设置页和待机页会看到两个不同的「近 7 天」。
+                    statCell(value: weekValue, label: L10n.t("近 7 天"))
                     Divider().padding(.vertical, 10)
                     statCell(value: stats.overview?.total, label: L10n.t("总 scrobble"))
                 }
@@ -167,6 +170,18 @@ struct LastfmStatsSection: View {
                 retryRow { stats.refreshBaseline() }
             }
         }
+    }
+
+    /// 「近 7 天」的数值。跟待机页 `IdleStandbyView.weekValue` 是同一份逻辑 —— 两处显示
+    /// 同一个名字的数字,口径必须一致(见 IdleListeningStats.lastSevenDays 的注释:
+    /// 2026-08-30 从 API 的滚动 168 小时改成自然日对齐,为的是跟环比百分比同源)。
+    /// 桶还没同步完时退回 API 值。
+    private var weekValue: Int? {
+        guard !stats.dailySyncing else { return stats.overview?.week }
+        return IdleListeningStats.lastSevenDays(
+            dailyCounts: stats.dailyCounts, today: Date(),
+            todayCount: stats.overview?.today,
+            dayKey: { LastfmStatsService.dayKey($0) })
     }
 
     private func statCell(value: Int?, label: String) -> some View {

@@ -371,9 +371,10 @@ struct AccountLinkingTab: View {
     // "Last.fm 拒绝了写入"红条的数据源,订阅理由见 LastfmMirrorStatusWatcher 注释
     // (collector 自愈删文件后红条要自己消失,熔断落文件后开着的窗口也要自己冒出来)。
     @ObservedObject private var mirrorStatus = LastfmMirrorStatusWatcher.shared
-    @State private var pendingListensExpanded = false
-    /// 待补清单里鼠标停在哪一条上(uts)。删除按钮只在它上面显形 —— 见 pendingListensRow。
-    @State private var hoveredPendingUTS: Int64?
+    // 2026-08-27 改成默认展开(用户要求)——原来默认收起是为了"攒到几十首时不该把整页
+    // 顶开",但用户更想一进页面就直接看到清单,想收起自己点一下就好,不做成偏好持久化
+    // (只是这一次开窗的初始状态,不需要跨次记住)。
+    @State private var pendingListensExpanded = true
     // 只为了让手动切换语言时这块详情页重新渲染,同 AccountSidebarRow 的理由。
     @ObservedObject private var languageSettings = AppSettings.shared
 
@@ -799,60 +800,20 @@ struct AccountLinkingTab: View {
                 }
             )) {
                 // 高度封顶 + 自己滚:清单可能几十上百条,不能让它无限撑高这张卡。
+                //
+                // 2026-08-27 用户反馈"滚动有点卡"——根因是 hovered 状态原来是这整张
+                // AccountLinkingTab 上的一个共享 @State(hoveredPendingUTS):鼠标停着不动、
+                // 靠滚轮把行滑过光标下面时,每一行滑过都会触发一次 .onHover 进出,每次都写
+                // 这个共享值,进而让 AccountLinkingTab.body 整体重算(牵连连接卡/统计图表等
+                // 一大票跟这份清单毫不相关的内容)——列表越滚,重算越密。改成每行自己的
+                // PendingListenRow 组件、hover 状态下沉成组件自己的本地 @State 之后,
+                // hover 变化只会让**这一行**重新求值,不再波及整个 tab。LazyVStack 顺带
+                // 换掉普通 VStack,几十条也不必一次性建满视图树。
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 4) {
+                    LazyVStack(alignment: .leading, spacing: 4) {
                         ForEach(items, id: \.uts) { item in
-                            let hovered = hoveredPendingUTS == item.uts
-                            HStack(spacing: 6) {
-                                // 三段的布局优先级是**故意**排开的:空间不够时先牺牲专辑,
-                                // 再牺牲歌手,歌名最后才截。清单里有 "愛愛愛 (Acounstic
-                                // Version) - Remix Acoustic Verison" 这种长到离谱的标题,
-                                // 不排优先级的话 SwiftUI 会均摊压缩,几段一起变成省略号。
-                                Text(item.title)
-                                    .font(.caption)
-                                    .lineLimit(1)
-                                    .layoutPriority(2)
-                                Text(item.artist)
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                                    .lineLimit(1)
-                                    .layoutPriority(1)
-                                // 专辑是**会被真提交给 Last.fm 的字段**(listenLogLine.AL 进
-                                // scrobble 请求),这份清单的作用就是"连上之后会补交什么",
-                                // 所以它该看得见 —— 提交前发现专辑名不对,这里是唯一的机会。
-                                //
-                                // ⚠️ 它帮不了"两条看起来一模一样"的情况:那多半是同一首歌
-                                // 听了两遍,专辑当然也一样,区分它们的只有时间。
-                                if let album = item.album, !album.isEmpty {
-                                    Text(album)
-                                        .font(.caption)
-                                        .foregroundStyle(.tertiary)
-                                        .lineLimit(1)
-                                }
-                                Spacer(minLength: 8)
-                                Text(Self.listenTimeText(item.uts))
-                                    .font(.caption2)
-                                    .foregroundStyle(.tertiary)
-                                    .monospacedDigit()
-                                // 槽位常驻、只改 opacity:按钮跟着 hover 出现/消失的话,
-                                // 整行会跟着变宽变窄,鼠标扫过清单时每一行都在抖。
-                                Button {
-                                    backfill.deleteListen(uts: item.uts)
-                                } label: {
-                                    Image(systemName: "xmark.circle.fill")
-                                        .foregroundStyle(.tertiary)
-                                }
-                                .buttonStyle(.plain)
-                                .font(.caption)
-                                .opacity(hovered ? 1 : 0)
-                                // 藏起来的时候必须同时不接受点击 —— 否则清单右侧会有一条
-                                // 看不见却挡手的区域。
-                                .allowsHitTesting(hovered && !backfill.busy)
-                                .help(L10n.t("从待补提交清单里移除这条（不可恢复）"))
-                            }
-                            .contentShape(Rectangle())
-                            .onHover { inside in
-                                hoveredPendingUTS = inside ? item.uts : nil
+                            PendingListenRow(item: item, busy: backfill.busy) {
+                                backfill.deleteListen(uts: item.uts)
                             }
                         }
                     }
@@ -899,7 +860,10 @@ struct AccountLinkingTab: View {
         }
     }
 
-    private static func listenTimeText(_ uts: Int64) -> String {
+    // fileprivate 而不是 private——PendingListenRow(同文件里的独立 struct)也要用同一份
+    // 格式化,理由跟下面那个 struct 头注一致:hover 状态下沉之后它拿不到 AccountLinkingTab
+    // 的 private 成员(Swift 的 private 按"所在声明"限定,不是按文件)。
+    fileprivate static func listenTimeText(_ uts: Int64) -> String {
         let formatter = DateFormatter()
         formatter.dateStyle = .short
         formatter.timeStyle = .short
@@ -1402,43 +1366,47 @@ struct AccountLinkingTab: View {
             CardDivider()
             // 数据源可选——Last.fm 的周榜接口(user.getWeeklyTrackChart/getWeeklyArtistChart)
             // 其实接受任意 from/to,不是只认官方周边界,因此两个 cadence 都能自己选数据源。
-            // Picker 挂在对应开关打开之后(参照"灵动岛风格"只在"灵动岛歌词"开着才出现的
-            // 既有模式)——没开这个提醒,选哪个数据源无所谓;两个 Picker 各给了区分度更高
-            // 的标签("每周数据源"/"每日数据源"而不是都叫"数据源"),避免分不清哪个 Picker
-            // 归哪个开关管。Picker 显示的是"这次实际会用哪个"(未手动选时是
-            // resolvedDigestSource 判定出的默认值),一旦手动选过就变成显式 persist 的偏好。
+            // Picker 显示的是"这次实际会用哪个"(未手动选时是 resolvedDigestSource 判定出的
+            // 默认值),一旦手动选过就变成显式 persist 的偏好。
+            //
+            // 2026-08-31 改版:Picker 从"开关打开后另起一条 SettingsSubRow"改成**跟开关同一
+            // 行**、摆在开关左边(用户要求)。收益不只是省两行高度——原来那版为了让人分得清
+            // 两个同名的"数据源"子行各归谁管,注释里说要给它们不同标签,但代码里两条都写的
+            // L10n.t("数据源"),歧义一直在;放进同一行之后归属由行本身表达,标签直接不需要了
+            // (SettingsRow 的尾部控件统一套了 .labelsHidden())。
+            // 同一行放多个控件的既有写法见 SettingsView 的「全局时间轴偏移」那一行。
             SettingsRow(
                 icon: "calendar",
                 title: L10n.t("每周听歌小结"),
             ) {
-                Toggle("", isOn: Binding(
-                    get: { features.weeklyDigest },
-                    set: { newValue in
-                        let source = resolvedDigestSource(preference: features.weeklyDigestSource)
-                        toggleGuarded(newValue,
-                            sameCardHint: config.pushMissingHint(),
-                            crossCard: digestCrossCard(source: source)
-                        ) { v in features.weeklyDigest = v; Task { await features.save() } }
-                    }
-                ))
-            }
-            if features.weeklyDigest {
-                CardDivider()
-                SettingsSubRow(title: L10n.t("数据源")) {
-                    Picker("", selection: Binding(
-                        get: { resolvedDigestSource(preference: features.weeklyDigestSource) },
-                        set: { picked in
-                            digestSourcePicked(picked, current: features.weeklyDigestSource) {
-                                features.weeklyDigestSource = $0
-                                Task { await features.save() }
+                HStack(spacing: 8) {
+                    // 仍然只在开关打开时才出现:没开这个提醒,选哪个数据源无所谓。
+                    if features.weeklyDigest {
+                        Picker("", selection: Binding(
+                            get: { resolvedDigestSource(preference: features.weeklyDigestSource) },
+                            set: { picked in
+                                digestSourcePicked(picked, current: features.weeklyDigestSource) {
+                                    features.weeklyDigestSource = $0
+                                    Task { await features.save() }
+                                }
                             }
+                        )) {
+                            Text("Last.fm").tag("lastfm")
+                            Text("ListenBrainz").tag("listenbrainz")
                         }
-                    )) {
-                        Text("Last.fm").tag("lastfm")
-                        Text("ListenBrainz").tag("listenbrainz")
+                        .pickerStyle(.menu)
+                        .fixedSize()
                     }
-                    .pickerStyle(.menu)
-                    .fixedSize()
+                    Toggle("", isOn: Binding(
+                        get: { features.weeklyDigest },
+                        set: { newValue in
+                            let source = resolvedDigestSource(preference: features.weeklyDigestSource)
+                            toggleGuarded(newValue,
+                                sameCardHint: config.pushMissingHint(),
+                                crossCard: digestCrossCard(source: source)
+                            ) { v in features.weeklyDigest = v; Task { await features.save() } }
+                        }
+                    ))
                 }
             }
             CardDivider()
@@ -1447,34 +1415,33 @@ struct AccountLinkingTab: View {
                 title: L10n.t("每日听歌报告"),
                 subtitle: L10n.t("每天晚上推送当天的听歌情况")
             ) {
-                Toggle("", isOn: Binding(
-                    get: { features.dailyDigest },
-                    set: { newValue in
-                        let source = resolvedDigestSource(preference: features.dailyDigestSource)
-                        toggleGuarded(newValue,
-                            sameCardHint: config.pushMissingHint(),
-                            crossCard: digestCrossCard(source: source)
-                        ) { v in features.dailyDigest = v; Task { await features.save() } }
-                    }
-                ))
-            }
-            if features.dailyDigest {
-                CardDivider()
-                SettingsSubRow(title: L10n.t("数据源")) {
-                    Picker("", selection: Binding(
-                        get: { resolvedDigestSource(preference: features.dailyDigestSource) },
-                        set: { picked in
-                            digestSourcePicked(picked, current: features.dailyDigestSource) {
-                                features.dailyDigestSource = $0
-                                Task { await features.save() }
+                HStack(spacing: 8) {
+                    if features.dailyDigest {
+                        Picker("", selection: Binding(
+                            get: { resolvedDigestSource(preference: features.dailyDigestSource) },
+                            set: { picked in
+                                digestSourcePicked(picked, current: features.dailyDigestSource) {
+                                    features.dailyDigestSource = $0
+                                    Task { await features.save() }
+                                }
                             }
+                        )) {
+                            Text("Last.fm").tag("lastfm")
+                            Text("ListenBrainz").tag("listenbrainz")
                         }
-                    )) {
-                        Text("Last.fm").tag("lastfm")
-                        Text("ListenBrainz").tag("listenbrainz")
+                        .pickerStyle(.menu)
+                        .fixedSize()
                     }
-                    .pickerStyle(.menu)
-                    .fixedSize()
+                    Toggle("", isOn: Binding(
+                        get: { features.dailyDigest },
+                        set: { newValue in
+                            let source = resolvedDigestSource(preference: features.dailyDigestSource)
+                            toggleGuarded(newValue,
+                                sameCardHint: config.pushMissingHint(),
+                                crossCard: digestCrossCard(source: source)
+                            ) { v in features.dailyDigest = v; Task { await features.save() } }
+                        }
+                    ))
                 }
             }
         }
@@ -1516,5 +1483,69 @@ struct AccountLinkingTab: View {
         if await config.save() {
             lastSavedAt = Date()
         }
+    }
+}
+
+// 「待补提交」清单里的一行,从 AccountLinkingTab.pendingListensRow 拆出来
+// (2026-08-27,用户反馈"滚动有点卡")——独立成 struct 才能让 hover 状态变成这一行
+// 自己的本地 @State,不再是挂在整个 AccountLinkingTab 上的共享值。原来鼠标停着不动、
+// 靠滚轮把行滑过光标下面时,每一行滑过都触发一次 .onHover 进出,每次都要重算
+// AccountLinkingTab.body(连带整张 Last.fm 卡片、统计图表这些跟这份清单毫不相关的
+// 内容),列表越长滚动越卡;下沉成组件自己的状态之后,hover 变化只会让这一行重新
+// 求值,滚动跟其它 45 行/整个 tab 都没关系。
+private struct PendingListenRow: View {
+    let item: ScrobbleBackfillService.Item
+    let busy: Bool
+    let onDelete: () -> Void
+    @State private var isHovered = false
+
+    var body: some View {
+        HStack(spacing: 6) {
+            // 三段的布局优先级是**故意**排开的:空间不够时先牺牲专辑,再牺牲歌手,
+            // 歌名最后才截。清单里有 "愛愛愛 (Acounstic Version) - Remix Acoustic
+            // Verison" 这种长到离谱的标题,不排优先级的话 SwiftUI 会均摊压缩,
+            // 几段一起变成省略号。
+            Text(item.title)
+                .font(.caption)
+                .lineLimit(1)
+                .layoutPriority(2)
+            Text(item.artist)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .layoutPriority(1)
+            // 专辑是**会被真提交给 Last.fm 的字段**(listenLogLine.AL 进 scrobble
+            // 请求),这份清单的作用就是"连上之后会补交什么",所以它该看得见 ——
+            // 提交前发现专辑名不对,这里是唯一的机会。
+            //
+            // ⚠️ 它帮不了"两条看起来一模一样"的情况:那多半是同一首歌听了两遍,
+            // 专辑当然也一样,区分它们的只有时间。
+            if let album = item.album, !album.isEmpty {
+                Text(album)
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+                    .lineLimit(1)
+            }
+            Spacer(minLength: 8)
+            Text(AccountLinkingTab.listenTimeText(item.uts))
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+                .monospacedDigit()
+            // 槽位常驻、只改 opacity:按钮跟着 hover 出现/消失的话,整行会跟着变宽
+            // 变窄,鼠标扫过清单时每一行都在抖。
+            Button(action: onDelete) {
+                Image(systemName: "xmark.circle.fill")
+                    .foregroundStyle(.tertiary)
+            }
+            .buttonStyle(.plain)
+            .font(.caption)
+            .opacity(isHovered ? 1 : 0)
+            // 藏起来的时候必须同时不接受点击 —— 否则清单右侧会有一条看不见却挡手
+            // 的区域。
+            .allowsHitTesting(isHovered && !busy)
+            .help(L10n.t("从待补提交清单里移除这条（不可恢复）"))
+        }
+        .contentShape(Rectangle())
+        .onHover { inside in isHovered = inside }
     }
 }

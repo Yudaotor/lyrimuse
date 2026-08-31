@@ -26,6 +26,11 @@ func TestNormEnrichTitle(t *testing.T) {
 		// `The Girl In Red`,而那可能是另一首完整曲目。
 		{"interlude 保留", "The Girl In Red (Interlude)", "The Girl In Red (Interlude)"},
 		{"中文版本标记保留", "月亮代表我的心 (现场版)", "月亮代表我的心 (现场版)"},
+		// 2026-08-31 真实bug(周杰伦《不能说的秘密》电影原声带):"慢板"版是电影原声带里
+		// 单独收录的钢琴慢版重奏,时长只有 68 秒,跟正式完整版《Secret》是两个不同的录音,
+		// 剥掉会跟正式版撞成同一个 key。
+		{"慢板保留", "Secret (慢板)", "Secret (慢板)"},
+		{"快板保留", "第二圆舞曲 (快板)", "第二圆舞曲 (快板)"},
 
 		// 边界
 		{"括号就是整个歌名", "(Interlude)", "(Interlude)"},
@@ -94,6 +99,162 @@ func TestPlanEnrichKeyMigrationGroups(t *testing.T) {
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("planEnrichKeyMigration = %#v, want %#v", got, want)
 	}
+}
+
+func TestPlanEnrichKeyMigrationDurationGuard(t *testing.T) {
+	// 两个译名括号(都不等于归一化后的 nk 本身)时长差太多,不该被合并 —— 模拟
+	// "慢板/快板"那次真实bug的下一次翻版:关键词清单没漏词(两个都是译名,理应剥括号),
+	// 但时长说明这其实是两个不同的录音。时长兼容的那条仍按原逻辑重命名到 nk,
+	// 只有真正冲突的那条被排除、保留在自己原来的 key 下。
+	t.Run("时长差太多不合并", func(t *testing.T) {
+		cache := map[string]enrichEntry{
+			"某人|神探（Sherlock）|专辑":       {LyricsSource: "kugou", LyricsScore: 1203, DurationSecs: 68},
+			"某人|神探（The Detective）|专辑": {LyricsSource: "netease", LyricsScore: 1107, DurationSecs: 261},
+		}
+		got := planEnrichKeyMigration(cache)
+		want := map[string][]string{
+			"某人|神探|专辑":                {"某人|神探（Sherlock）|专辑"},
+			"某人|神探（The Detective）|专辑": {"某人|神探（The Detective）|专辑"},
+		}
+		if !reflect.DeepEqual(got, want) {
+			t.Errorf("planEnrichKeyMigration = %#v, want %#v", got, want)
+		}
+	})
+
+	// 时长接近(差在 12% 阈值以内)的正常按原逻辑合并 —— 守卫不能误伤真正的重复条目。
+	t.Run("时长接近正常合并", func(t *testing.T) {
+		cache := map[string]enrichEntry{
+			"丁世光|不散的筵席|神經志 The Journal":           {LyricsSource: "netease", LyricsScore: 1107, DurationSecs: 258},
+			"丁世光|不散的筵席（I Miss You）|神經志 The Journal": {LyricsSource: "kugou", LyricsScore: 1203, DurationSecs: 261},
+		}
+		got := planEnrichKeyMigration(cache)
+		want := map[string][]string{
+			"丁世光|不散的筵席|神經志 The Journal": {
+				"丁世光|不散的筵席|神經志 The Journal",
+				"丁世光|不散的筵席（I Miss You）|神經志 The Journal",
+			},
+		}
+		if !reflect.DeepEqual(got, want) {
+			t.Errorf("planEnrichKeyMigration = %#v, want merged: %#v", got, want)
+		}
+	})
+
+	// 旧条目没有时长数据(DurationSecs=0,历史条目/从没解析成功过)——未知时长不能拦合并,
+	// 否则一次升级就把全库没时长字段的旧条目全部冻结在原地。
+	t.Run("时长未知不拦合并", func(t *testing.T) {
+		cache := map[string]enrichEntry{
+			"丁世光|不散的筵席|神經志 The Journal":           {LyricsSource: "netease", LyricsScore: 1107, DurationSecs: 0},
+			"丁世光|不散的筵席（I Miss You）|神經志 The Journal": {LyricsSource: "kugou", LyricsScore: 1203, DurationSecs: 261},
+		}
+		got := planEnrichKeyMigration(cache)
+		if len(got) != 1 {
+			t.Errorf("want 1 merged group when one side has unknown duration, got %#v", got)
+		}
+	})
+
+	// nk 这个名字被两头都想要(其中一条 entry 恰好就存在归一化后的名字下,但时长又跟
+	// 该组里分数更高的另一条冲突)——三方打架,宁可整组都不合并。
+	t.Run("nk名字冲突时整组放弃合并", func(t *testing.T) {
+		cache := map[string]enrichEntry{
+			"丁世光|不散的筵席|神經志 The Journal":           {LyricsSource: "netease", LyricsScore: 1107, DurationSecs: 68},
+			"丁世光|不散的筵席（I Miss You）|神經志 The Journal": {LyricsSource: "kugou", LyricsScore: 1203, DurationSecs: 261},
+		}
+		got := planEnrichKeyMigration(cache)
+		want := map[string][]string{
+			"丁世光|不散的筵席|神經志 The Journal":           {"丁世光|不散的筵席|神經志 The Journal"},
+			"丁世光|不散的筵席（I Miss You）|神經志 The Journal": {"丁世光|不散的筵席（I Miss You）|神經志 The Journal"},
+		}
+		if !reflect.DeepEqual(got, want) {
+			t.Errorf("planEnrichKeyMigration = %#v, want both kept standalone: %#v", got, want)
+		}
+	})
+}
+
+func TestEnrichKeyDurationVariant(t *testing.T) {
+	got := enrichKeyDurationVariant("周杰倫|Secret|不能說的秘密 電影原聲帶", 2)
+	want := "周杰倫|Secret~dur2|不能說的秘密 電影原聲帶"
+	if got != want {
+		t.Errorf("enrichKeyDurationVariant = %q, want %q", got, want)
+	}
+	// 落在标题段,不能污染专辑段 —— "歌词管理"直接显示这三段。
+	if artist, _, album := splitEnrichKey(got); artist != "周杰倫" || album != "不能說的秘密 電影原聲帶" {
+		t.Errorf("variant polluted artist/album: artist=%q album=%q", artist, album)
+	}
+}
+
+// resolveEnrichKeyForDuration 是"慢板/快板"真实bug的第二道兜底(splitByDuration 挡的是
+// 启动迁移合并,这个挡的是实时首次撞车)——见其声明处头注。
+func TestResolveEnrichKeyForDuration(t *testing.T) {
+	key := "周杰倫|Secret|不能說的秘密 電影原聲帶"
+
+	t.Run("key不存在直接放行", func(t *testing.T) {
+		cache := map[string]enrichEntry{}
+		rk, _, ok := resolveEnrichKeyForDuration(cache, key, 231)
+		if rk != key || ok {
+			t.Errorf("got (%q, ok=%v), want (%q, ok=false)", rk, ok, key)
+		}
+	})
+
+	t.Run("时长兼容直接复用原key", func(t *testing.T) {
+		cache := map[string]enrichEntry{key: {LyricsScore: 1200, DurationSecs: 231}}
+		rk, e, ok := resolveEnrichKeyForDuration(cache, key, 233)
+		if rk != key || !ok || e.LyricsScore != 1200 {
+			t.Errorf("got (%q, %+v, ok=%v), want reuse of %q", rk, e, ok, key)
+		}
+	})
+
+	t.Run("任一方时长未知也当兼容", func(t *testing.T) {
+		cache := map[string]enrichEntry{key: {LyricsScore: 1200, DurationSecs: 0}}
+		rk, _, ok := resolveEnrichKeyForDuration(cache, key, 68)
+		if rk != key || !ok {
+			t.Errorf("got (%q, ok=%v), want reuse of %q (unknown duration must not block)", rk, ok, key)
+		}
+	})
+
+	t.Run("时长冲突且无变体位_落到第一个空位新建", func(t *testing.T) {
+		cache := map[string]enrichEntry{key: {LyricsScore: 1200, DurationSecs: 231}}
+		rk, _, ok := resolveEnrichKeyForDuration(cache, key, 68)
+		want := enrichKeyDurationVariant(key, 2)
+		if rk != want || ok {
+			t.Errorf("got (%q, ok=%v), want (%q, ok=false)", rk, ok, want)
+		}
+	})
+
+	t.Run("变体位已存在且时长兼容_复用它", func(t *testing.T) {
+		v2 := enrichKeyDurationVariant(key, 2)
+		cache := map[string]enrichEntry{
+			key: {LyricsScore: 1200, DurationSecs: 231},
+			v2:  {LyricsScore: 900, DurationSecs: 68},
+		}
+		rk, e, ok := resolveEnrichKeyForDuration(cache, key, 68)
+		if rk != v2 || !ok || e.LyricsScore != 900 {
+			t.Errorf("got (%q, %+v, ok=%v), want reuse of %q", rk, e, ok, v2)
+		}
+	})
+
+	t.Run("变体位存在但也冲突_跳到下一个空位", func(t *testing.T) {
+		v2 := enrichKeyDurationVariant(key, 2)
+		cache := map[string]enrichEntry{
+			key: {LyricsScore: 1200, DurationSecs: 231},
+			v2:  {LyricsScore: 900, DurationSecs: 400}, // 第三个互不相容的时长
+		}
+		rk, _, ok := resolveEnrichKeyForDuration(cache, key, 68)
+		want := enrichKeyDurationVariant(key, 3)
+		if rk != want || ok {
+			t.Errorf("got (%q, ok=%v), want (%q, ok=false)", rk, ok, want)
+		}
+	})
+
+	t.Run("变体位全部冲突_放弃消歧退回原key", func(t *testing.T) {
+		cache := map[string]enrichEntry{key: {LyricsScore: 1200, DurationSecs: 231}}
+		for n := 2; n <= maxEnrichKeyDurationVariants; n++ {
+			cache[enrichKeyDurationVariant(key, n)] = enrichEntry{DurationSecs: float64(n) * 500} // 故意都跟 68 冲突
+		}
+		rk, _, ok := resolveEnrichKeyForDuration(cache, key, 68)
+		if rk != key || !ok {
+			t.Errorf("got (%q, ok=%v), want fallback to (%q, ok=true)", rk, ok, key)
+		}
+	})
 }
 
 func TestBetterEnrichEntry(t *testing.T) {

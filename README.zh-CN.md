@@ -21,7 +21,7 @@ Lyrimuse 常驻在菜单栏里，跟着当前播放弹出一个悬浮歌词窗�
 <table>
 <tr>
 <td align="center" width="33%"><img src="docs/images/app-desktop-lyrics.png" width="260" alt="经典桌面悬浮歌词"><br><sub>经典悬浮窗</sub></td>
-<td align="center" width="33%"><img src="docs/images/app-dynamic-island.png" width="260" alt="灵动岛样式歌词"><br><sub>灵动岛样式胶囊（没有物理刘海也能用）</sub></td>
+<td align="center" width="33%"><img src="docs/images/app-dynamic-island.png" width="260" alt="灵动岛样式歌词，播放中"><br><img src="docs/images/app-dynamic-island-paused.png" width="260" alt="灵动岛样式歌词，暂停中"><br><sub>灵动岛样式胶囊（没有物理刘海也能用）——播放时展开，暂停时收成一个胶囊</sub></td>
 <td align="center" width="33%"><img src="docs/images/app-menu-bar-lyrics.png" width="260" alt="菜单栏歌词"><br><sub>菜单栏文字模式，带卡拉OK式染色</sub></td>
 </tr>
 <tr>
@@ -31,6 +31,9 @@ Lyrimuse 常驻在菜单栏里，跟着当前播放弹出一个悬浮歌词窗�
 <tr>
 <td align="center"><img src="docs/images/app-lastfm-profile.png" width="380" alt="Last.fm 听歌档案"><br><sub>Last.fm 听歌档案——数字统计与最近记录</sub></td>
 <td align="center"><img src="docs/images/app-lastfm-charts.png" width="380" alt="Last.fm 榜单"><br><sub>Last.fm 档案——歌手 / 专辑 / 歌曲榜单</sub></td>
+</tr>
+<tr>
+<td colspan="2" align="center"><img src="docs/images/app-lastfm-heatmap.png" width="700" alt="播放热力图"><br><sub>播放热力图——仿 GitHub 贡献图风格的年历，取自完整的 Last.fm 收听历史</sub></td>
 </tr>
 <tr>
 <td align="center"><img src="docs/images/app-menu-bar-dropdown.png" width="380" alt="菜单栏下拉菜单"><br><sub>菜单栏下拉菜单，什么都摸得到</sub></td>
@@ -54,7 +57,7 @@ Lyrimuse 常驻在菜单栏里，跟着当前播放弹出一个悬浮歌词窗�
 - **本地模式完全离线**——已经缓存好的歌词不需要联网也能显示
 
 ### 你的听歌档案
-- **一份真正的听歌档案，不只是同步播放记录**——在主设置的"账号"分类里一键连接 Last.fm（不用自己手动换 token），就能看到今天/近 7 天/总量数字、一行实时的"正在记录"提示，还有带封面的实时最近播放列表
+- **一份真正的听歌档案，不只是同步播放记录**——在主设置的"账号"分类里一键连接 Last.fm（不用自己手动换 token），就能看到今天/近 7 天/总量数字、一行实时的"正在记录"提示，还有带封面的实时最近播放列表。上送时**播放器报什么就发什么、原样不动**，绝不在发送前改写歌手名或歌名（[打卡规则详解](docs/scrobbling.zh-CN.md)）
 - **歌手/专辑/歌曲榜单**，可按时段筛选（近 7 天/近 30 天/近一年/全部），外加「那年今日」——回顾往年这天你在听什么
 - **每次播放都会先记在本地**，就算你还没连 Last.fm——之后连上，之前攒下的记录会通过补传队列自动补上
 - **这份本地历史同样会出现在歌词窗口里**——没有歌在放的时候，它会变成一块听歌总览面板，而不是一片空白（下面还会细说）

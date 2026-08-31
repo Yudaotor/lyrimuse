@@ -215,6 +215,50 @@ func TestTranslateChunkLineCountMismatchFallsBackToSource(t *testing.T) {
 	}
 }
 
+// 2026-08-26 真实bug复现(Michael Jackson《Beat It》):副歌反复的歌逐行独立发翻译请求,
+// 同一句话在原文里出现好几次,以前会分别各发一次、结果各自独立(可能一次翻了、另一次原样
+// 吐回来被当"没翻动"丢掉),同一句台词的译文因此在歌词里断断续续、时有时无。
+// 现在按原文去重再发,断言两件事:①重复的那句话只应该出现在**一次**请求里(不是发几次就
+// 收几次相同的 q,而是一次都不多发);②翻译结果要广播回原文里**全部**出现过的位置,不能
+// 只有第一次出现的那一行有译文、后面几次全是空。
+func TestTranslateDedupesRepeatedLinesAndBroadcastsResult(t *testing.T) {
+	var requestedLines []string
+	srv := fakeMyMemory(t, func(w http.ResponseWriter, r *http.Request) {
+		lines := strings.Split(r.URL.Query().Get("q"), "\n")
+		requestedLines = append(requestedLines, lines...)
+		out := make([]string, len(lines))
+		for i, l := range lines {
+			switch l {
+			case "Just beat it":
+				out[i] = "打败它"
+			case "No one wants to be defeated":
+				out[i] = "没人想被打败"
+			default:
+				t.Fatalf("意料之外的请求行: %q", l)
+			}
+		}
+		body, _ := jsonEscape(strings.Join(out, "\n"))
+		fmt.Fprintf(w, `{"responseData":{"translatedText":%s},"responseStatus":200}`, body)
+	})
+	lrc := "[00:01.00]Just beat it\n" +
+		"[00:02.00]Just beat it\n" +
+		"[00:03.00]No one wants to be defeated\n" +
+		"[00:04.00]Just beat it"
+	res, err := machineTranslateLRCWithBase(context.Background(), srv.Client(), srv.URL, lrc, "zh-CN")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// 4 行里 "Just beat it" 出现 3 次,去重之后请求里应该只有 2 句不同的话(各一次)。
+	if len(requestedLines) != 2 {
+		t.Fatalf("请求行数 = %d,应该去重成 2(3 次 Just beat it 只应该发一次): %v",
+			len(requestedLines), requestedLines)
+	}
+	want := "[00:01.00]打败它\n[00:02.00]打败它\n[00:03.00]没人想被打败\n[00:04.00]打败它"
+	if res.lrc != want {
+		t.Errorf("译文没有广播到全部重复出现的位置:\n得到 %q\n期望 %q", res.lrc, want)
+	}
+}
+
 // 源语言等于目标语言时 MyMemory 把错误信息当译文返回,必须识别出来、不能写进 lyrics_tr。
 func TestTranslateRejectsSameLanguageSentinel(t *testing.T) {
 	srv := fakeMyMemory(t, func(w http.ResponseWriter, r *http.Request) {
@@ -360,9 +404,12 @@ func TestTranslateChunkSendsFreshEmailEachRequest(t *testing.T) {
 		fmt.Fprintf(w, `{"responseData":{"translatedText":%s},"responseStatus":200}`, body)
 	})
 	// 拼一首长到必须切成多块的歌,才能验证"每块一个新邮箱"。
+	// ⚠️ 每行的文本必须互不相同:2026-08-26 加了按原文去重再送翻(见
+	// machineTranslateLRCWithBase 头注释),60 行完全同一句话会被去重成 1 句、
+	// 落不进多块,这条测试就验证不了"逐块换邮箱"了。
 	var b strings.Builder
 	for i := 0; i < 60; i++ {
-		fmt.Fprintf(&b, "[00:%02d.00]%s\n", i, strings.Repeat("word ", 8))
+		fmt.Fprintf(&b, "[00:%02d.00]line%d %s\n", i, i, strings.Repeat("word ", 8))
 	}
 	if _, err := machineTranslateLRCWithBase(context.Background(), srv.Client(), srv.URL,
 		strings.TrimRight(b.String(), "\n"), "zh-CN"); err != nil {

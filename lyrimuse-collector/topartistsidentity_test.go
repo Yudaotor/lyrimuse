@@ -8,6 +8,24 @@ import "testing"
 func TestMergeAliasedArtistsIdentity(t *testing.T) {
 	noID := func(string, string) mbArtistIdentity { return mbArtistIdentity{} }
 
+	// 隔离 resolveGenericArtistCanonicalName 会打的真实网络请求(MusicBrainz/QQ)——这组
+	// 用例注入了假的 mbid 解析器(noID/resolve),测的是"名字键"合并信号跟 mbid 信号
+	// 怎么配合,不是"这个艺人有没有中文名"。"Fan Yi Chen"(范逸臣)恰好是真实存在、
+	// 通用机制现在查得到的歌手——不隔离的话这条用例会因为"通用机制变强了"而失效,
+	// 但这条用例本来测的是"解析不出身份时不改名",用真实网络结果会文不对题。
+	withCachedAliases(t, map[string]string{
+		"Fan Yi Chen": "", "ØZI": "", "Michael Jackson": "",
+		"Michael Jackson & 克里夫兰管弦乐团": "", "Test Artist": "", "Prince": "",
+	})
+	withCachedMBAliases(t, map[string][]string{
+		"Fan Yi Chen": nil, "ØZI": nil, "Michael Jackson": nil,
+		"Michael Jackson & 克里夫兰管弦乐团": nil, "Test Artist": nil, "Prince": nil,
+	})
+	withCachedQQArtistNames(t, map[string]string{
+		"Fan Yi Chen": "", "ØZI": "", "Michael Jackson": "",
+		"Michael Jackson & 克里夫兰管弦乐团": "", "Test Artist": "", "Prince": "",
+	})
+
 	t.Run("两个名字解析到同一个 mbid 就合并,显示中文成员名", func(t *testing.T) {
 		resolve := func(name, _ string) mbArtistIdentity {
 			switch name {

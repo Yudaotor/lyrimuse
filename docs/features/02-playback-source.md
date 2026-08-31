@@ -94,6 +94,24 @@ App 怎么知道"现在在放什么":从本地播放器读出 曲目元数据 + 
   ⚠️ 别把这条读成「按播放器加偏移已经被否掉了」:被否掉的是**自动学**、**按浏览器+根站点**;做进去的是**用户手调**、**按播放器(bundleID)**、默认 0、界面上看得见改得动(08-lyrics-engine.md 的时间轴偏移一节)。同一件事的两个不同形态,分界线就在"谁定这个数"。
 - **`mediaType` 这条路走不通**,记下别再试:酷狗压根不报这个字段、Arc 也不报(不是报 Video,是没有这个键),只有 Apple Music 有。
 
+### 「网页播放器」卡:平台 ↔ 浏览器配对
+
+上一节那套锚点订正治的是"报的数不准";这张卡治的是另一半——**让浏览器把真实播放进度报出来**。做法是用 AppleScript 让浏览器执行一小段 JavaScript 去读页面里的 `<audio>/<video>` 进度(`BrowserPositionProbe`),所以它对浏览器有两个硬要求:①系统级 Automation/TCC 授权(另一张 `permissionCard` 管);②**浏览器自己**那道"允许 Apple Events 里的 JavaScript"开关(`BrowserAutomationPermission`,Chromium 系存在自己的 Preferences JSON 里、Safari 走 `CFPreferences`,两套完全独立的实现)。
+
+配对是**显式**的:没配过的浏览器完全不触发后台探测(`kickIfNeeded`)。设置页按 `supportedPlatforms` 逐个平台一张小卡,卡上是已配对浏览器的头像 + 一个「+」。
+
+**「+」菜单里有两类条目:**
+
+1. **内置候选** —— `knownBrowserBundleIDs` 里装了、且还没配过这个平台的。⚠️ 这份名单只有四个(Arc / Chrome / Edge / Safari),**这不是 UI 偷懒**:名单跟 `chromiumPrefsPaths` 绑在一起,而后者只登记**实测验证过**那个 Preferences 路径的浏览器——Brave/Vivaldi/Opera 大概率同源同构,但没实测过就往里写等于拿用户的配置文件赌(`enableChromium` 是会**覆盖写**那个文件的)。
+2. **「从应用程序中选择…」**(2026-08-31,用户原话:「这里点+号出来的是否可以加一个选项是自己在本机的应用程序里面选」)—— `NSOpenPanel` 从 /Applications 挑一个 App,判定通过就一步信任+配对。这条路存在的意义正是上面那条限制的另一面:那些同内核、本来就驱得动、只是没人验过 Preferences 路径的浏览器,现在用户自己加得进来。
+
+- **判据是"驱不驱得动",不是"名字像不像浏览器"**:读挑中 App 的脚本定义(`Info.plist` 的 `OSAScriptingDefinition` → `Contents/Resources/*.sdef`),看里面有没有"执行 JavaScript"那条命令。**认 AppleScript 四字码不认命令名** —— 名字会随本地化/改版变,四字码是 AppleScript 的 ABI,改了等于破坏所有既有脚本。Chromium 系 `CrSuExJa`、Safari `sfridojs`,2026-08-31 在这台机器上逐个实测:Chrome / Edge / Arc / Safari 全部命中,而 The Unarchiver / 音乐 / QQ音乐 **一处都匹配不到**。
+- **判不出来就拒收并说清理由**,不是"加进去再说"。放进一个永远不会工作的配对比列表里没有它更糟:用户会以为配好了,然后去查"为什么歌词进度还是不同步"。
+- ⚠️ **手动加进来的浏览器只登记引擎族,不登记 Preferences 路径**(`manuallyAddedFamilies` 只喂 `family(...)`)。于是它的 `status(...)` 恒为 `.unknown`、`enable(...)` 恒为 `.unsupported` —— 这是**有意的降级**:那个路径每个浏览器一个样(Arc→`Arc/`、Chrome→`Google/Chrome/`、Edge→`Microsoft Edge/`),没有公式能从 bundleID 推出来。一键开启对它们不可用,用户得自己去浏览器菜单里开那一项。
+- **持久化**:`AppSettings.manualBrowserFamilies`(bundleID → 族的 rawValue),启动时由 `AppDelegate` 灌进 `BrowserAutomationPermission.manuallyAddedFamilies` —— 跟 `platformBrowserPairs` 同一个"存在 AppSettings、运行期同步进 LyrimuseCore 单例"的双写模式。⚠️ 不灌这一次的话,`family(...)` 重启后对这些浏览器返回 nil,表现是"我加过的浏览器重启后从配对列表里消失了",而配对本身还好端端存在 `browserPlatformPairs` 里。
+- 「+」**恒定展示**,不再是"有内置候选才出现":内置候选全配完之后恰恰是最需要「从应用程序中选择…」的时候(装的浏览器不在那四个里)。
+- **「装没装」这道门(`isInstalled` = `NSWorkspace.urlForApplication(withBundleIdentifier:) != nil`)在两侧都生效**(2026-08-31 用户问「我们本地如果没有装的话是不是也不会显示」时补齐的)。在此之前只有「+」菜单的候选过滤了它,而已配对浏览器的**头像**是直接铺 `browserPlatformPairs` 的 —— 于是"配对过、后来卸载了"会一直留一个取不到图标的虚线方框(`browserIconView` 的 `app.dashed` 兜底),点开还给一份无意义的权限状态。⚠️ **只是不显示,配对记录原样留着**,装回来自动恢复;这跟「指定的屏幕拔掉后自动回落、偏好保留、插回来即恢复」是同一个口径(05-notch.md),**不要**顺手 `unpairBrowser` 去"清理"——那是替用户删他的配置。
+
 ### 轮询、事件加速与去抖动
 
 所有状态变更只发生在 `poll()` → `apply()` 这一条路径上:

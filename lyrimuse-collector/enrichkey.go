@@ -52,6 +52,12 @@ var enrichKeyVersionWords = []string{
 	"reprise", "feat", "ft.", "featuring", "session", "mono", "stereo", "dub",
 	"unplugged", "acappella", "a cappella",
 	"interlude", "intro", "outro", "skit", "prelude", "overture",
+	// 2026-08-31 真实bug(周杰伦《不能说的秘密》电影原声带"Secret (慢板)"):"慢板"不在
+	// 这张表里,归一化把整段括号连着"慢板"一起剥掉,存进缓存的 key 变成"Secret"——跟
+	// 正式完整版的《Secret》撞成同一个 key,而"(慢板)"这版实际时长只有 68 秒,是电影原声带
+	// 里单独收录的钢琴慢版重奏,跟正式版是**两个不同的录音**(理由跟"版"字那条一致:剥掉
+	// 会把两首不同的音频当成同一首)。"快板"跟"慢板"是同一类曲速标注,顺带一起补上。
+	"慢板", "快板",
 	"现场", "伴奏", "翻唱", "重制", "修复", "版", "纯音乐", "前奏", "间奏",
 }
 
@@ -192,20 +198,115 @@ func staleExportKeys(newKey, winnerKey string, olds []string) []string {
 // planEnrichKeyMigration 把当前缓存里的 key 按归一化结果分组,返回"新 key → 这一组的旧
 // key(已排序)"。纯函数,好测;真正改内存/删文件的是下面的 migrateEnrichKeys。
 func planEnrichKeyMigration(cache map[string]enrichEntry) map[string][]string {
-	groups := map[string][]string{}
+	buckets := map[string][]string{}
 	for k := range cache {
 		artist, title, album := splitEnrichKey(k)
 		if artist == "" && title == "" && album == "" {
-			groups[k] = append(groups[k], k) // 拆不出三段的畸形 key,原样留着别动
+			buckets[k] = append(buckets[k], k) // 拆不出三段的畸形 key,原样留着别动
 			continue
 		}
 		nk := enrichKey(artist, title, album)
-		groups[nk] = append(groups[nk], k)
+		buckets[nk] = append(buckets[nk], k)
+	}
+
+	groups := map[string][]string{}
+	for nk, ks := range buckets {
+		merge, standalone := splitByDuration(cache, nk, ks)
+		if len(merge) > 0 {
+			groups[nk] = append(groups[nk], merge...)
+		}
+		for _, k := range standalone {
+			groups[k] = append(groups[k], k)
+		}
 	}
 	for _, ks := range groups {
 		sort.Strings(ks)
 	}
 	return groups
+}
+
+// splitByDuration 是"慢板/快板"那次真实bug之后加的硬兜底。enrichKeyVersionWords
+// 是个关键词清单,永远会漏词(下一次可能是"钢琴版"/"acoustic"/随便什么词,清单只能
+// 越补越长),但两个不同录音的时长几乎不可能碰巧一样 —— 拿时长再兜一道,清单漏词时
+// 也不至于把两首不同的歌合并成一条。
+//
+// 判据复用 durationMismatch(>12% 才算数、任一方时长未知就放行),跟"同一首歌换了个
+// 版本要不要重新搜"用的是同一把尺子,两处结论保持一致。
+//
+// nk 恰好等于组内某个旧 key 本身、但那条 entry 时长又跟其它成员冲突时("这个名字该归
+// 谁"三方打架的边界情况),直接放弃整组合并 —— 宁可这一轮什么都不合并,也不要把冲突的
+// 那条错塞进本该属于别人的名字里。
+func splitByDuration(cache map[string]enrichEntry, nk string, ks []string) (merge, standalone []string) {
+	if len(ks) == 1 {
+		return ks, nil
+	}
+	sorted := append([]string(nil), ks...)
+	sort.Strings(sorted)
+	anchor := sorted[0]
+	for _, k := range sorted[1:] {
+		if betterEnrichEntry(cache[k], cache[anchor], k, anchor) {
+			anchor = k
+		}
+	}
+	anchorDur := cache[anchor].DurationSecs
+	for _, k := range sorted {
+		if durationMismatch(anchorDur, cache[k].DurationSecs) {
+			if k == nk {
+				return nil, ks
+			}
+			standalone = append(standalone, k)
+			continue
+		}
+		merge = append(merge, k)
+	}
+	return merge, standalone
+}
+
+// maxEnrichKeyDurationVariants 是 resolveEnrichKeyForDuration 愿意尝试的消歧变体上限。
+// 现实中一个 key 下同时挂着两个以上互不相容时长的"重名录音"极其罕见,这个上限只是
+// 防止(理论上)无限增殖,不是预期会用满的正常路径。
+const maxEnrichKeyDurationVariants = 8
+
+// enrichKeyDurationVariant 给 key 的**标题段**追加一个序号后缀,构造第 n 个消歧变体。
+//
+// 后缀加在标题而不是简单拼在整个 key 末尾:key 是 splitEnrichKey 按前两个 "|" 切出
+// artist|title|album 三段,"歌词管理"直接显示这三段(见 enrichKey 头注释)。拼在末尾
+// 会落进 album 段,让用户在列表里看到一个混进了内部标记的专辑名;拼在标题段虽然也会
+// 带出一点技术痕迹("Secret~dur2"),但至少不污染看起来该是"干净"的专辑名,而且这条
+// 分支本来就只在**关键词清单漏词**这种边界情况下才会触发,不追求好看,追求的是这个
+// 标记本身就是"该去补关键词清单了"的信号。
+//
+// 用序号而不是把时长本身编进后缀:实测时长读数有几百毫秒抖动(trackEnrichment 头注释),
+// 编时长进 key 会让同一份录音因为读数差一点就长出新 key,反而破坏缓存;序号 + 每次都用
+// durationMismatch 判兼容,才能做到"抖动内还是同一条,差太多才另开一条"。
+func enrichKeyDurationVariant(key string, n int) string {
+	artist, title, album := splitEnrichKey(key)
+	return artist + "|" + fmt.Sprintf("%s~dur%d", title, n) + "|" + album
+}
+
+// resolveEnrichKeyForDuration 是"慢板/快板"那次真实bug的第二道兜底 —— splitByDuration
+// 挡的是"启动时合并存量 key",这里挡的是**实时**场景:第一次遇到某首歌时,它的标题
+// 就直接被(清单没收录的)版本词坑剥成了跟另一首歌相同的 key,而那首歌是 trackEnrichment
+// **首次**建条目,压根没有"合并"这一步可拦——单纯是 map 里已经有人占了这个 key。
+//
+// 判据跟 splitByDuration 同一把尺子(durationMismatch,>12% 才算数、任一方时长未知就
+// 放行)。命中已有条目但时长对不上时,不覆盖它(会把两首歌的数据来回冲刷,见头注释同一份
+// 危害),也不能假装没找到直接原地新建(会真的覆盖掉),而是依次找 ~dur2/~dur3/... 这些
+// 消歧变体位:遇到时长兼容的就复用,遇到空位就停在那里当新 key。8 个变体位都跟当前时长
+// 冲突(几乎不可能:同一个标题下同时存在 8 种互不相容时长的"重名录音")才放弃消歧、退回
+// 原 key —— 宁可退化回旧行为(会覆盖),不要无限增殖变体位。
+func resolveEnrichKeyForDuration(cache map[string]enrichEntry, key string, durationSecs float64) (string, enrichEntry, bool) {
+	if e, ok := cache[key]; !ok || !durationMismatch(e.DurationSecs, durationSecs) {
+		return key, e, ok
+	}
+	for n := 2; n <= maxEnrichKeyDurationVariants; n++ {
+		vk := enrichKeyDurationVariant(key, n)
+		e, ok := cache[vk]
+		if !ok || !durationMismatch(e.DurationSecs, durationSecs) {
+			return vk, e, ok
+		}
+	}
+	return key, cache[key], true
 }
 
 // migrateEnrichKeys 把存量缓存迁到归一化 key 上,并清掉合并后不再对应任何条目的导出文件。

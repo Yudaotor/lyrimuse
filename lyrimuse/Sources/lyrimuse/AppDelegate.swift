@@ -72,6 +72,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// NSRunningApplication.launchDate 只对经 LaunchServices 启动的有效。
     private var cancellables = Set<AnyCancellable>()
 
+    /// Dock 图标右键菜单的自定义部分(设置/歌词管理/歌词窗口/Last.fm 四个跳转)。
+    /// 见 DockMenu.swift 顶部注释——跟 applicationDockMenu(_:) 配对使用。
+    private let dockMenuController = DockMenuController()
+
+    /// 2026-08-26 用户对照 Apple Music 自己的 Dock 菜单要求加的常用跳转,见
+    /// DockMenuController 顶部注释。这里返回的菜单会被 AppKit 摆在它自动追加的那部分
+    /// (窗口列表/"选项"子菜单/显示所有窗口/隐藏/退出)**上面**,不需要在这个方法里
+    /// 重复那些系统默认项。
+    func applicationDockMenu(_ sender: NSApplication) -> NSMenu? {
+        dockMenuController.makeMenu()
+    }
+
     private static func processStartTime(_ pid: pid_t) -> TimeInterval? {
         var mib: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_PID, pid]
         var info = kinfo_proc()
@@ -167,6 +179,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // LyrimuseCore 里,够不到 AppSettings),启动时不推一次的话它会一直用默认值,
         // 用户的选择要等到下次在设置页里改动才生效。
         LocalPlaybackSource.shared.romanizationScripts = settings.romanizationScripts
+        // 同一个理由:BrowserPositionProbe 也在 LyrimuseCore 里,够不到 AppSettings,
+        // 启动时不推一次的话"浏览器歌词同步"卡片里配好的配对要等用户重新打开设置页
+        // 才会生效。
+        BrowserPositionProbe.shared.platformBrowserPairs = settings.browserPlatformPairs
+        // 同上:用户手动挑进来的浏览器,它们的引擎族判定结果存在 AppSettings 里,而
+        // BrowserAutomationPermission 在 LyrimuseCore 里够不到。不灌这一次的话,重启之后
+        // `family(...)` 对这些浏览器返回 nil —— 表现是"我加过的浏览器重启后从配对列表里
+        // 消失了",而配对本身还好端端存在 browserPlatformPairs 里。
+        BrowserAutomationPermission.manuallyAddedFamilies = settings.manualBrowserFamilies
+            .compactMapValues { BrowserAutomationPermission.Family(rawValue: $0) }
         // Core 见到中文歌词就会置一个粘性标记;这里把它持久化下来,好让"简繁切换"这一项
         // 在下次启动、还没播中文歌之前就已经该露出来(见 SettingsView 里那个条件)。
         if !settings.hasSeenChineseLyrics {
@@ -207,7 +229,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // media-control 私有通道的一次性自检。只做归因、不做降级 —— 见 MediaControlHealth。
         MediaControlHealth.shared.checkInBackground()
         startObservingScreenLock()
-        startScrollProbe()
+        installScrollForwardMonitor()
         startObservingVolumeBannerPreference()
         // ⚠️ 只 start(),不在这里判断开关 —— 判断在管理器内部,因为"关着"这条路径必须
         // 在碰 NotchLyricsWindowController.shared 之前就 return(碰一下就会凭空建出窗口,
@@ -373,114 +395,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// ⚠️ 这两个通知在 **DistributedNotificationCenter**,不是 NotificationCenter.default
     /// 也不是 NSWorkspace 的那个 —— 挂错地方会静默永不触发。
     /// 只暂停渲染,不碰 2 秒 poll(理由见 LocalPlaybackSource.setScreenLocked)。
-    // MARK: - 滚轮探针(诊断用,定位到根因后删)
-    //
-    // 2026-08-18 装。用户第三次报「鼠标放在设置窗某些位置滚不动、移到旁边空白处就好」,
-    // 而我连着两轮诊断都错了:
-    //   ① 先怀疑悬浮窗那个播放控制胶囊的热区吞滚轮 —— 后来查到用户的「锁定位置」是开着的,
-    //      而控制排的显示条件带 !lockPosition,胶囊压根不渲染,那条路径解释不了;
-    //   ② 再怀疑「App 不在前台时滚轮到不了」 —— 用户实测点一下(取得焦点)也没用,直接否掉。
-    // 期间我用合成 CGEvent 滚轮 + 截图比对做的测量也证明不可靠:同一坐标两次结论相反
-    // (页面已经滚到底时再滚没有视觉变化,被误判成"滚不动")。所以停止推理,让程序自己说。
-    //
-    // 记什么:每个**进到本 App** 的滚轮事件 —— 落在哪扇窗、窗内坐标、以及那个点上命中测试到
-    // 的最深 NSView 的类名链(往上数 8 层)。复发时对着日志看:
-    //   - 有记录 → 类名直接指出是谁吞的(液态玻璃效果层 / 某个控件 / SwiftUI 的某一层)
-    //   - **没有记录** → 事件压根没进本 App,是别的 App 的窗口拿走了(实测屏上有一扇微信的
-    //     layer=3 透明悬浮窗覆盖 x 0~620,而设置窗从 x=442 起,仍是嫌疑)
-    //
-    // 读日志:
-    //   log show --last 10m --predicate 'subsystem == "me.yudaotor.lyrimuse" && category == "scroll-probe"'
-    //
-    // ⚠️ 两个不能省的细节:① 闭包必须**原样返回 event**,返回 nil 就等于探针自己把滚轮吞了;
-    // ② 节流 500ms —— 滚动时事件是连发的,不节流会把日志刷爆。平时不滚动就是零开销。
-    private static let scrollProbeLog = Logger(
-        subsystem: "me.yudaotor.lyrimuse", category: "scroll-probe")
-    private var scrollProbeMonitor: Any?
-    private var lastScrollProbeAt = Date.distantPast
-
-    private func startScrollProbe() {
-        scrollProbeMonitor = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { event in
-            MainActor.assumeIsolated {
-                AppDelegate.logScrollProbe(event)
-                return AppDelegate.forwardScrollIfStranded(event)
-            }
-        }
-    }
-
-    private static var lastProbeAt = Date.distantPast
-
-    private static func logScrollProbe(_ event: NSEvent) {
-        let now = Date()
-        guard now.timeIntervalSince(lastProbeAt) > 0.5 else { return }
-        lastProbeAt = now
-        let win = event.window
-        let loc = event.locationInWindow
-        // 命中测试要在**内容视图的父视图**(窗口的 frame view)坐标系里做 —— 带标题栏的窗口
-        // contentView 的 origin 不是 (0,0),直接拿窗口坐标喂 contentView.hitTest 会偏。
-        let root = win?.contentView?.superview ?? win?.contentView
-        var chain: [String] = []
-        var v = root?.hitTest(loc)
-        var depth = 0
-        while let cur = v, depth < 8 {
-            chain.append(String(describing: type(of: cur)))
-            v = cur.superview
-            depth += 1
-        }
-        // 命中链里没有滚动视图时,把**真正的**滚动视图找出来、连 frame 一起报 —— 这样才能
-        // 看出"鼠标那一点为什么不在它里面"。2026-08-18 第一轮探针已经定到"命中测试停在
-        // NSHostingView<ColumnView> 上、到不了 HostingScrollView",缺的就是这块几何。
-        // 分栏 item 的 frame + 命中视图到滚动视图之间各层的 frame。hitTest 往下走时只要
-        // **中间某一层**的 frame 不含这个点就会停 —— 第二轮探针只打了滚动视图自己的 frame,
-        // 结果发现点明明在它里面却没被命中,缺的就是中间层。
-        var split = ""
-        if let sv = win?.contentView?.subviews.first(where: { $0 is NSSplitView }) as? NSSplitView
-            ?? Self.firstSplitView(in: win?.contentView) {
-            for (i, item) in sv.subviews.enumerated() {
-                let f = item.convert(item.bounds, to: nil)
-                split += " item\(i)=(\(Int(f.minX)),\(Int(f.minY)) \(Int(f.width))x\(Int(f.height)))"
-                        + (f.contains(loc) ? "*" : "")
-            }
-        }
-        var geo = split
-        if !chain.contains(where: { $0.contains("ScrollView") }), let hitView = root?.hitTest(loc) {
-            // 先把子树里**所有**滚动视图列清楚(带 hidden/alpha/含不含鼠标点)——第二轮探针
-            // 只挑了"第一个宽度>1 的",结果挑中的很可能不是真正的内容滚动区:实测探针报
-            // sv=(0,33 900x519),而辅助功能树里真正的内容滚动区是 (220,33 680x487),
-            // 两者不是同一个东西,子树里存在一个铺满整窗的滚动视图。
-            for (i, sv) in Self.scrollViews(in: hitView).prefix(5).enumerated() {
-                let r = sv.convert(sv.bounds, to: nil)
-                geo += " sv\(i)=(\(Int(r.minX)),\(Int(r.minY)) \(Int(r.width))x\(Int(r.height)))"
-                     + (r.contains(loc) ? "*" : "") + (sv.isHidden ? "H" : "")
-                     + (sv.alphaValue < 0.99 ? "a\(String(format: "%.1f", sv.alphaValue))" : "")
-            }
-            // 再对**含鼠标点**的那个滚动视图,逐层往上报 frame 和含不含点 —— 断在哪一层,
-            // 那一层就是把事件挡住的那个。
-            if let target = Self.scrollViews(in: hitView).first(where: { $0.convert($0.bounds, to: nil).contains(loc) }) {
-                var path: [NSView] = []
-                var cur: NSView? = target
-                while let v = cur, v !== hitView { path.append(v); cur = v.superview }
-                for v in path.reversed() {
-                    let f = v.convert(v.bounds, to: nil)
-                    geo += " | \(String(describing: type(of: v)))=(\(Int(f.minX)),\(Int(f.minY)) "
-                         + "\(Int(f.width))x\(Int(f.height)))\(f.contains(loc) ? "*" : "✗")"
-                }
-            }
-            let f = hitView.convert(hitView.bounds, to: nil)
-            geo += " hitFrame=(\(Int(f.minX)),\(Int(f.minY)) \(Int(f.width))x\(Int(f.height)))"
-            let svs = Self.scrollViews(in: hitView)
-            if svs.isEmpty { geo += " sv=none" }
-            for sv in svs.prefix(3) {
-                let r = sv.convert(sv.bounds, to: nil)
-                geo += " sv=(\(Int(r.minX)),\(Int(r.minY)) \(Int(r.width))x\(Int(r.height)))"
-            }
-        }
-        Self.scrollProbeLog.notice("""
-            win=\(win?.title ?? "(nil)", privacy: .public) num=\(win?.windowNumber ?? -1, privacy: .public) at=(\(Int(loc.x), privacy: .public),\(Int(loc.y), privacy: .public)) hit=\(chain.isEmpty ? "(空)" : chain.joined(separator: " <- "), privacy: .public)\(geo, privacy: .public)
-            """)
-    }
-
     // MARK: - 滚轮兜底转发
+    //
+    // 2026-08-18 装的诊断探针(每个进到本 App 的滚轮事件都记一遍命中测试的完整视图层级链)
+    // 已经在 2026-08-27 删掉:它当年是为了定位"设置窗某些位置滚不动"这个 bug,根因确实
+    // 靠它三轮实测钉死了(见下面注释),但探针本身此后一直原样留着继续跑,诊断导出里
+    // 一份 24 小时日志能出现好几条几百字符长的视图层级 dump,对当年那次调查已经没有任何
+    // 价值,纯粹是噪音。真正的修复(下面的 forwardScrollIfStranded)不依赖探针,继续保留。
+    private var scrollForwardMonitor: Any?
+
+    private func installScrollForwardMonitor() {
+        scrollForwardMonitor = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { event in
+            MainActor.assumeIsolated {
+                AppDelegate.forwardScrollIfStranded(event)
+            }
+        }
+    }
     //
     // 为什么需要:2026-08-18 用户连报五次「设置窗某些位置滚不动、挪到旁边就好」。三轮探针把
     // 事实钉死了 —— 事件**确实进到了设置窗**,但 hitTest 停在 NSHostingView<ColumnView> 上、
@@ -559,30 +489,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 return fa.width * fa.height < fb.width * fb.height
             }
     }
-
-    /// 深度优先找第一个 NSSplitView。只给探针用。
-    private static func firstSplitView(in view: NSView?) -> NSSplitView? {
-        guard let view else { return nil }
-        var stack = view.subviews
-        while let v = stack.popLast() {
-            if let sv = v as? NSSplitView { return sv }
-            stack.append(contentsOf: v.subviews)
-        }
-        return nil
-    }
-
-    /// 深度优先找出子树里所有的滚动视图(类名含 ScrollView 的都算,SwiftUI 用的是
-    /// HostingScrollView 这类私有子类)。只给上面那个探针用。
-    private static func scrollViews(in view: NSView) -> [NSView] {
-        var out: [NSView] = []
-        var stack = view.subviews
-        while let v = stack.popLast() {
-            if String(describing: type(of: v)).contains("ScrollView") { out.append(v) }
-            stack.append(contentsOf: v.subviews)
-        }
-        return out
-    }
-
 
     private func startObservingScreenLock() {
         let center = DistributedNotificationCenter.default()

@@ -112,15 +112,21 @@ func lastfmTopArtistsPeriod(ctx context.Context, user, apiKey, period string, li
 // 能判定成同一个人:
 //  1. firstCreditedArtist:多人合credit(如"Prince & The Revolution")先取第一位,
 //     不单独占一个歌手名额;
-//  2. knownArtistAlias(match.go 的 artistAliasTable):已知的英文/罗马化艺名换成
-//     本库常用中文名(比如"Dean Ting"→"丁世光");
+//  2. resolveGenericArtistCanonicalName(musicbrainz.go):已知的英文/罗马化艺名换成
+//     本库常用中文名(比如"Dean Ting"→"丁世光")——2026-08-31 起从只查
+//     knownArtistAlias(match.go 的 artistAliasTable)改成先试 MusicBrainz/QQ 音乐
+//     两条通用机制,只有两条都查不到才落到手工表那两条真实残留案例,见其头注;
 //  3. toSimplified:繁体折成简体(比如"周杰倫"和"周杰伦"折成同一个键);
 //  4. 大小写折叠。
 //
 // 四步做完算出的字符串一致就判定是同一个人。
+//
+// ⚠️ 这是一次性批处理脚本(一天跑一次),不是打分热路径,可以放心让
+// resolveGenericArtistCanonicalName 在缓存不命中时发起真实网络请求——不像
+// isProbablyWrongLanguageLyrics 那样需要 resolvedArtistCJKHint 的纯读缓存约束。
 func artistMergeNameKey(name string) string {
 	first := firstCreditedArtist(name)
-	if alias := knownArtistAlias(first); alias != "" {
+	if alias := resolveGenericArtistCanonicalName(context.Background(), first); alias != "" {
 		first = alias
 	}
 	return strings.ToLower(toSimplified(first))
@@ -141,7 +147,7 @@ func artistMergeNameKey(name string) string {
 // (合credit 段数最少的那个),不再猜。合credit 串"不单独占一个歌手名额"这个目的由
 // artistMergeNameKey(合并键)承担,跟显示名是两件事,那边照旧。
 func artistMergeDisplayName(name string) string {
-	if alias := knownArtistAlias(name); alias != "" {
+	if alias := resolveGenericArtistCanonicalName(context.Background(), name); alias != "" {
 		return alias
 	}
 	return name

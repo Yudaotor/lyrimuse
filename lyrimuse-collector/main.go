@@ -5,6 +5,7 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	_ "image/jpeg" // 注册 JPEG 解码器
 	_ "image/png"  // 网易云取色缩略图有时是 PNG(content-type 却谎报 jpg)
 	"log"
@@ -57,10 +58,25 @@ const (
 )
 
 func main() {
-	log.SetFlags(log.LstdFlags)
+	// LUTC:诊断导出（DiagnosticsExporter.swift）同一份报告里并排放着 App 侧日志（os.Logger，
+	// 显式带 +0000）和这份 collector 日志——不加这个标志，这里打的是本地墙钟且不带任何时区
+	// 标记，两段日志的时间轴对不上（实测坐实：8 小时时区差，排查时得自己心算），这个标志把
+	// 两边统一到 UTC。
+	log.SetFlags(log.LstdFlags | log.LUTC)
 	// 凭据不进日志。必须在这里、在任何子命令分流之前 —— 子命令各自 loadConfig、
 	// 不走下面的主流程,漏了它们同样会把 api_key 写进日志。见 logscrub.go。
 	installLogScrubbing()
+	// `collector version`:一次性子命令,只打印 clientVersion 就退出——App 侧设置页
+	// "后台采集服务"卡片靠它检测"App 本体版本"跟"实际打包进这份 App 的 collector 版本"
+	// 是否一致(2026-08-31 加)。起因是 main.go 里 clientVersion 这个字面量一直是手动
+	// 同步的,发布时忘记同步过至少一次(v1.3.0 那次漏了,见 clientVersion 声明处注释,
+	// User-Agent/ListenBrainz submission_client 因此谎报了一整个发布周期)——当时没有
+	// 任何机制能让用户/开发者自己发现这个不一致,这条子命令就是补上这道自检。跟
+	// search-lyrics 一样,检查要放在 flag.Parse() 之前。
+	if len(os.Args) > 1 && os.Args[1] == "version" {
+		fmt.Println(clientVersion)
+		return
+	}
 	// `collector search-lyrics ...`:一次性子命令,desktop-lyrics 的"歌词管理"窗口靠
 	// Process 调用它来手动重新搜索候选歌词(见 searchcli.go)——检查放在 flag.Parse()
 	// 之前,不然位置参数 "search-lyrics" 会被当成未知 flag 报错。
@@ -92,9 +108,23 @@ func main() {
 		runHealthcheckCLI(os.Args[2:])
 		return
 	}
+	// `collector test-lyric-sources [-source <name>]`:逐个歌词源探测可用性,边测边出
+	// NDJSON 结果,给设置页"歌词来源"卡片的测试按钮用(见 testlyricsourcescli.go)。跟
+	// healthcheck 同一套探测逻辑,输出形状不同(一个源一行,不是一次性整份报告)。
+	if len(os.Args) > 1 && os.Args[1] == "test-lyric-sources" {
+		runTestLyricSourcesCLI(os.Args[2:])
+		return
+	}
 	// `collector top-artists ...`:合并同名歌手后的 Top 榜(见 topartistscli.go)。
 	if len(os.Args) > 1 && os.Args[1] == "top-artists" {
 		runTopArtistsCLI(os.Args[2:])
+		return
+	}
+	// `collector regenerate-jyutping [-apply]`:按当前算法+词典重算存量粤拼(见
+	// regeneratejyutpingcli.go)。maybeGenerateJyutpingRoma 只补空值、从不覆盖,所以
+	// 算法/词典改了之后要靠这个命令回头刷存量。跟 dedupe-entries 同形态:默认预演。
+	if len(os.Args) > 1 && os.Args[1] == "regenerate-jyutping" {
+		runRegenerateJyutpingCLI(os.Args[2:])
 		return
 	}
 	// `collector dedupe-entries [-apply]`:把 enrich 缓存里"其实是同一首歌"的重复条目
@@ -113,6 +143,20 @@ func main() {
 	// 条目补上这个结论(见 covercli.go)。默认预演,-apply 才真改、且要求常驻实例已停。
 	if len(os.Args) > 1 && os.Args[1] == "recheck-instrumental" {
 		runRecheckInstrumentalCLI(os.Args[2:])
+		return
+	}
+	// `collector retranslate-repeated [-apply]`:扫描整份缓存,把"歌词有重复行、可能被
+	// 2026-08-26 那个逐行独立翻译 bug 坑过"的存量译文重新机翻一遍(见 retranslatecli.go)。
+	// 默认预演,-apply 才真改、且要求常驻实例已停。
+	if len(os.Args) > 1 && os.Args[1] == "retranslate-repeated" {
+		runRetranslateRepeatedCLI(os.Args[2:])
+		return
+	}
+	// `collector resync-lyrics [-apply] "歌手|歌名|专辑" ...`:对指定条目强制重新解析,
+	// 补上"歌词正文没变、但译文/罗马音其实有新内容"这种自动 rescore 不会碰的情况(见
+	// resynclyricscli.go)。默认预演,-apply 才真改、且要求常驻实例已停。
+	if len(os.Args) > 1 && os.Args[1] == "resync-lyrics" {
+		runResyncLyricsCLI(os.Args[2:])
 		return
 	}
 	home, err := os.UserHomeDir()
@@ -168,6 +212,10 @@ func main() {
 	// Apple 目录曲目 ID → 权威元数据。ID 是不变映射,这份缓存永久有效、只落盘查到了的
 	// 条目,见 applecatalog.go。
 	loadAppleCatalogCache(filepath.Join(filepath.Dir(*cfgPath), clientName+"-apple-catalog-cache.json"))
+	// "艺人|专辑" → Apple 各商店曲目署名,见 appleStorefrontArtistIdentities。
+	loadAppleStorefrontArtistCache(filepath.Join(filepath.Dir(*cfgPath), clientName+"-apple-storefront-artist-cache.json"))
+	// 按歌手缓存的 QQ 音乐歌手搜索建议结果,见 qq.go 的 qqArtistCanonicalName。
+	loadQQArtistNameCache(filepath.Join(filepath.Dir(*cfgPath), clientName+"-qq-artist-name-cache.json"))
 	// 歌手身份缓存(mbid+中文名),给 Top 歌手榜归并当第三合并信号——见 musicbrainz.go
 	// mbArtistIdentity 注释。与 top-artists CLI 共用同一份文件。
 	loadArtistIdentityCache(filepath.Join(filepath.Dir(*cfgPath), clientName+"-artist-identity-cache.json"))
@@ -186,6 +234,10 @@ func main() {
 	if lyricsDir == "" {
 		lyricsDir = filepath.Join(filepath.Dir(*cfgPath), "lyrics")
 	}
+	// 设备直送封面(deviceartwork.go)落盘目录——跟 lyrics/ 平级,不跟着 lyrics_dir 这个
+	// 用户可改的设置走:那个设置管的是"歌词权威源放哪",封面缓存是内部实现细节,不需要
+	// 暴露成一项用户配置。
+	deviceArtworkDir = filepath.Join(filepath.Dir(*cfgPath), "artwork")
 	// 存量 key 归一化,必须夹在这里:要在 importLyricsFromFiles() 之前(否则老文件会按
 	// 旧头部标签把刚合并掉的条目又导回来,而且两份文件抢同一个 key,内容每次重启随机翻转),
 	// 又要在 lyricsDir 定下来之后(它得删掉落选条目的导出文件)。见 enrichkey.go。
@@ -198,17 +250,23 @@ func main() {
 	// 必须夹在 import(权威内容已从 lyrics/ 文件夹导回缓存)与 export(把修好的内容写回
 	// 导出文件)之间,顺序错了修的就是马上要被覆盖的那一份。
 	migrateYRCWhitespaceTokens()
+	// 行级时间轴与逐字轴打架时以逐字轴为准重挂(2026-08-27,见 lyricstimeline.go)。
+	// 同样夹在 import 与 export 之间,理由同上;放在空白词条清洗**之后**,因为那一步会
+	// 改动 YRC 的词条结构,重挂要读的是清洗完的最终逐字轴。
+	migrateLyricTimelines()
 	exportLyricsFiles()
 	// 本地收听日志:刻意**不带** lastfm-/lb- 这类账号域前缀 —— 这份日志存在的全部意义
 	// 就是"不依赖任何账号",挂上某个账号的名字就说反了。
 	initListenLog(filepath.Join(filepath.Dir(*cfgPath), clientName+"-listens.jsonl"))
 	forwardedPath = filepath.Join(filepath.Dir(*cfgPath), clientName+"-lastfm-forwarded.json")
-	lastfmCollapsePath = filepath.Join(filepath.Dir(*cfgPath), clientName+"-lastfm-collapse.json")
 	lfmMirroredPath = filepath.Join(filepath.Dir(*cfgPath), clientName+"-lastfm-mirrored.json")
 	lastfmStatusPath = filepath.Join(filepath.Dir(*cfgPath), clientName+"-lastfm-status.json")
 	// collector→App 的状态通道(眼下只报"网络不通",见 collectorstatus.go)。设置这个
 	// 路径的同时会清掉上次运行留下的文件 —— 那份状态跟这次进程无关。
 	setCollectorStatusPath(filepath.Join(filepath.Dir(*cfgPath), clientName+"-collector-status.json"))
+	// App 侧"停止搜索"按钮的信号文件路径(见 enrichcancel.go)——跟 Swift 那边
+	// LyricsManagerView.cancelPlaceholderSearch 写入的路径逐字节一致。
+	setEnrichCancelRequestPath(filepath.Join(filepath.Dir(*cfgPath), clientName+"-enrich-cancel-request.txt"))
 	weeklyDigestPath = filepath.Join(filepath.Dir(*cfgPath), clientName+"-lastfm-weekly.json")
 	dailyDigestPath = filepath.Join(filepath.Dir(*cfgPath), clientName+"-lb-daily.json")
 	topArtistsStatePath = filepath.Join(filepath.Dir(*cfgPath), clientName+"-lastfm-top-artists.json")

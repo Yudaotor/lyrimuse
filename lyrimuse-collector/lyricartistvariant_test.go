@@ -26,6 +26,15 @@ func TestLyricSourceArtistMatches(t *testing.T) {
 		{"周杰伦、", "周杰伦", false},
 		// 加符号仿冒:段级字节相等,不做 normLoose/子串,老洞不重开。
 		{"周杰伦-", "周杰伦 & 王力宏", false},
+		// 2026-08-25 实测坐实的真实 bug:LyricFind(经 YouTube Music 检索)给的艺人字段是
+		// 繁体"周杰倫",本地查询是简体"周杰伦"——不折算就整条候选被拒收(见「彩虹」案例,
+		// match.go artistCreditParts/artistMatches 注释)。
+		{"周杰倫", "周杰伦", true},
+		// 繁简 + 仿冒同时出现,仿冒防线仍然要挡住。
+		{"周杰倫-", "周杰伦", false},
+		// 2026-08-26 实测坐实的真实 bug:候选艺人带括号外文别名"丁世光(Dean Ting)",
+		// 本地标签只有中文名,靠 artistMatches 新加的去括号兜底才能过(见 match.go 注释)。
+		{"丁世光(Dean Ting)", "丁世光", true},
 		// 两侧多credit但没有任何一段相等。
 		{"anna & bob", "an & bobby", false},
 		// 空串。
@@ -164,6 +173,78 @@ func TestMergeLyricCandidateRounds(t *testing.T) {
 	for _, r := range merged2 {
 		if r.Instrumental {
 			t.Errorf("instrumental marker kept although a real lrclib candidate exists")
+		}
+	}
+}
+
+// needsRomanizationRetry:见其头注的側田/Justin Lo《Erica》真实案例——musixmatch+lrclib
+// 已经凑够可用源数,但两者都不会给语种/罗马音信号,只有 QQ/酷狗(粤语)、网易云(日语罗马字)
+// 才给,而它们要靠换艺人名重搜才有机会被问到正确的名字。
+func TestNeedsRomanizationRetry(t *testing.T) {
+	cases := []struct {
+		name    string
+		results []scoredLyricCandidateResult
+		want    bool
+	}{
+		{"没有候选", nil, false},
+		{
+			"纯英文歌_不需要",
+			[]scoredLyricCandidateResult{
+				{Source: "musixmatch", Lyrics: "Oh Erica, baby Erica"},
+				{Source: "lrclib", Lyrics: "Oh Erica, baby Erica"},
+			},
+			false,
+		},
+		{
+			// 側田《Erica》真实案例:歌词主体是汉字,两个源都没给语种/罗马音信号。
+			"汉字歌词_没有语种信号_需要重试",
+			[]scoredLyricCandidateResult{
+				{Source: "musixmatch", Lyrics: "知你其實想找一個水泡救生嗎"},
+				{Source: "lrclib", Lyrics: "知你其實想找一個水泡救生嗎"},
+			},
+			true,
+		},
+		{
+			"汉字歌词_但已有语种信号_不需要",
+			[]scoredLyricCandidateResult{
+				{Source: "musixmatch", Lyrics: "知你其實想找一個水泡救生嗎"},
+				{Source: "qq", Lyrics: "知你其實想找一個水泡救生嗎", Language: "yue"},
+			},
+			false,
+		},
+		{
+			"汉字歌词_但已有罗马音_不需要",
+			[]scoredLyricCandidateResult{
+				{Source: "netease", Lyrics: "知你其實想找一個水泡救生嗎", LyricsRoma: "zi1 nei5 kei4 sat6..."},
+			},
+			false,
+		},
+		{
+			"日语假名为主_需要重试",
+			[]scoredLyricCandidateResult{
+				{Source: "musixmatch", Lyrics: "きっと忘れられない くらい素敵な日々を"},
+			},
+			true,
+		},
+		{
+			"韩语谚文_需要重试",
+			[]scoredLyricCandidateResult{
+				{Source: "musixmatch", Lyrics: "사랑해 진짜 진짜 많이 사랑해"},
+			},
+			true,
+		},
+		{
+			"候选有歌词字段为空_不参与文字系统判断",
+			[]scoredLyricCandidateResult{
+				{Source: "qq", Lyrics: "", Score: -1},
+				{Source: "kugou", Lyrics: "", Score: -1},
+			},
+			false,
+		},
+	}
+	for _, c := range cases {
+		if got := needsRomanizationRetry(c.results); got != c.want {
+			t.Errorf("%s: needsRomanizationRetry = %v, want %v", c.name, got, c.want)
 		}
 	}
 }

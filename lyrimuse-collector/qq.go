@@ -5,6 +5,7 @@ package main
 import (
 	"bytes"
 	"compress/zlib"
+	"context"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -13,8 +14,10 @@ import (
 	_ "image/jpeg" // 注册 JPEG 解码器
 	_ "image/png"  // 网易云取色缩略图有时是 PNG(content-type 却谎报 jpg)
 	"io"
+	"log"
 	"net/http"
 	neturl "net/url"
+	"os"
 	"regexp"
 	"strings"
 	"sync"
@@ -30,8 +33,8 @@ var (
 // smartbox + single-song album enrichment (see resolveQQMusicURL). Cached per
 // artist|title|album; only real song URLs are cached — the search-link fallback
 // is not, so a later poll retries exact resolution.
-func qqMusicURL(artist, title, album string) string {
-	m := qqMusicMatchCached(artist, title, album)
+func qqMusicURL(ctx context.Context, artist, title, album string) string {
+	m := qqMusicMatchCached(ctx, artist, title, album)
 	if m.url != "" {
 		return m.url
 	}
@@ -58,7 +61,7 @@ func isQQSearchFallbackURL(u string) bool {
 // 需要这些字段,不能只要一个 URL 字符串。跟 qqMusicURL 共用同一份缓存(按
 // artist|title|album 存完整 qqMusicMatch,而不是只存 url 字符串)——不管从哪个入口
 // 先查到,另一个入口都能直接命中缓存,不会重复发两遍 smartbox/专辑请求。
-func qqMusicMatchCached(artist, title, album string) qqMusicMatch {
+func qqMusicMatchCached(ctx context.Context, artist, title, album string) qqMusicMatch {
 	if title == "" {
 		return qqMusicMatch{}
 	}
@@ -70,7 +73,7 @@ func qqMusicMatchCached(artist, title, album string) qqMusicMatch {
 	}
 	qqURLMu.Unlock()
 
-	m := resolveQQMusicMatch(artist, title, album)
+	m := resolveQQMusicMatch(ctx, artist, title, album)
 	if m.url != "" {
 		qqURLMu.Lock()
 		qqURLCache[key] = m
@@ -92,9 +95,9 @@ const qqUA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36
 // qqSmartbox queries QQ Music's suggest endpoint — the one search API that
 // still answers unauthenticated (musicu.fcg returns an empty list and
 // client_search_cp returns zero bytes under anti-scrape). Returns nil on error.
-func qqSmartbox(query string) []qqSmartboxItem {
+func qqSmartbox(ctx context.Context, query string) []qqSmartboxItem {
 	u := "https://c.y.qq.com/splcloud/fcgi-bin/smartbox_new.fcg?_=1&cv=4747474&ct=24&format=json&is_xml=0&key=" + neturl.QueryEscape(query)
-	req, err := http.NewRequest(http.MethodGet, u, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {
 		return nil
 	}
@@ -135,9 +138,9 @@ func qqSearchQueries(artist, title string) []string {
 }
 
 // qqSmartboxFirstNonEmpty 按顺序试查询词,返回第一个非空结果。
-func qqSmartboxFirstNonEmpty(queries []string) []qqSmartboxItem {
+func qqSmartboxFirstNonEmpty(ctx context.Context, queries []string) []qqSmartboxItem {
 	for _, q := range queries {
-		if items := qqSmartbox(q); len(items) > 0 {
+		if items := qqSmartbox(ctx, q); len(items) > 0 {
 			return items
 		}
 	}
@@ -155,38 +158,66 @@ func qqSmartboxFirstNonEmpty(queries []string) []qqSmartboxItem {
 // 确定查无此人(可以放心负缓存);false = 网络/非 200/解码失败这类**暂时故障**,不能
 // 当"查无"记下来 —— avatarcli 曾把两者都缓存 14 天,离线打开一次页面就让一批歌手
 // 14 天只显示首字母(2026-08-11 审阅确认)。
-func qqSingerAvatar(name string) (string, bool) {
+// qqSingerSuggestion 是 smartbox_new.fcg "singer" 分类返回的一条建议——qqSingerAvatar
+// (取头像)和 qqArtistCanonicalName(取歌手名换算,见其头注)共用同一次网络请求/同一份
+// 解码,避免两个调用点各自发一遍请求。
+type qqSingerSuggestion struct {
+	Name string
+	Pic  string
+}
+
+// qqSingerSuggestions 查 QQ 音乐的歌手搜索建议——用 qqSmartbox 同一个免认证接口,读的是
+// "singer"分类(qqSmartbox 只读"song"分类,是同一份 JSON 里并列的不同板块)。
+//
+// 返回值第二项区分"服务端正常应答"(true,itemlist 可能是空——服务端明确说没有这个歌手)
+// 和"网络/状态码/解码失败"(false,这次没查到任何结论,不代表"确认没有")——调用方各自
+// 需要不同的处理:qqSingerAvatar 只在 ok=false 时报"暂时故障"，qqArtistCanonicalName
+// 的缓存包装同理只在 ok=false 时不落盘负缓存。
+func qqSingerSuggestions(name string) ([]qqSingerSuggestion, bool) {
 	u := "https://c.y.qq.com/splcloud/fcgi-bin/smartbox_new.fcg?_=1&cv=4747474&ct=24&format=json&is_xml=0&key=" + neturl.QueryEscape(name)
 	req, err := http.NewRequest(http.MethodGet, u, nil)
 	if err != nil {
-		return "", false
+		return nil, false
 	}
 	req.Header.Set("Referer", "https://y.qq.com/")
 	req.Header.Set("User-Agent", qqUA)
 	resp, err := doHTTPTracked(&http.Client{Timeout: 6 * time.Second}, req)
 	if err != nil {
-		return "", false
+		return nil, false
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return "", false
+		return nil, false
 	}
 	var out struct {
 		Data struct {
 			Singer struct {
 				ItemList []struct {
-					Pic string `json:"pic"`
+					Name string `json:"name"`
+					Pic  string `json:"pic"`
 				} `json:"itemlist"`
 			} `json:"singer"`
 		} `json:"data"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return nil, false
+	}
+	items := make([]qqSingerSuggestion, 0, len(out.Data.Singer.ItemList))
+	for _, it := range out.Data.Singer.ItemList {
+		items = append(items, qqSingerSuggestion{Name: it.Name, Pic: it.Pic})
+	}
+	return items, true
+}
+
+func qqSingerAvatar(name string) (string, bool) {
+	items, ok := qqSingerSuggestions(name)
+	if !ok {
 		return "", false
 	}
-	if len(out.Data.Singer.ItemList) == 0 {
+	if len(items) == 0 {
 		return "", true // 服务端明确说没有这个歌手
 	}
-	pic := out.Data.Singer.ItemList[0].Pic
+	pic := items[0].Pic
 	if pic == "" {
 		return "", true
 	}
@@ -203,12 +234,148 @@ func qqSingerAvatar(name string) (string, bool) {
 	return pic, true
 }
 
+// qqArtistCanonicalName 用 QQ 音乐自己的歌手搜索建议,把一个罗马化/英文歌手名换成 QQ
+// 曲库认得的写法(通常是中文名)。
+//
+// 2026-08-31 加,起因是通用链路 canonicalArtistViaMusicBrainz/musicBrainzArtistAliases
+// 在"罗马化姓名 → 中文艺人"这个场景上有两类实测坐实的真实缺口:
+//  1. 查不到——李荣浩/窦靖童/陈柏宇/曲婉婷等十余位,MusicBrainz 索引或别名登记不覆盖。
+//  2. 查错人——同名撞车:MusicBrainz 对 "David Tao" 排第一的是一位无关的德国音乐人
+//     (陶喆本人反而没有查到中文别名);对 "Lexie Liu" 给出的是"刘昱妤",跟刘柏辛完全
+//     是两个人。
+//
+// QQ 音乐作为中文平台,它自己的搜索建议本来就是为"用户拿英文/罗马化名字搜华语歌手"这个
+// 场景服务的,实测同一批人绝大多数都能直接查对,包括两个 MusicBrainz 查错人的案例。
+//
+// ⚠️ 只看**第一条**建议,不扫描整份列表——2026-08-31 实测坐实两个反例,分别对应"扫描
+// 整份列表"和"只看第一条"这两种做法各自的坑,必须两条都躲开:
+//   - "Prince":第一条建议就是"Prince"自己(没有汉字,他本来就不需要中文名),但第二条
+//     建议是"戴爱玲"——一个毫不相关的歌手。早期实现"扫描全部建议取第一个含汉字的"会把
+//     这条噪声当成解析结果,而 Prince 这个真实案例混进 Top 歌手榜合并逻辑会把 Prince
+//     的播放量错记到戴爱玲名下。QQ 的自动补全本来就不是身份核验,列表越往后越不相关。
+//   - "Wanting":第一条建议是"婉婷"——含汉字、但查证下来是**另一个人**(QQ 上一位无关
+//     歌手,跟"婉婷/杨炆"合唱,跟真正的曲婉婷毫无关系),真正对应曲婉婷的"曲婉婷"反而是
+//     第二条。这条反过来证明"只信第一条"也不是万能的——第一条同样可能是同名撞车。
+//
+// 两个反例合起来说明:这份接口终究是个模糊补全,不是身份核验,没有一种"扫描位置"的
+// 策略能同时躲开两类坑。选择只信第一条,是因为它已经覆盖了绝大多数真实案例、且"查不到"
+// 比"扫描更靠后的位置、查到错误答案"更安全——查不到会诚实地退回调用方的下一级信号
+// (resolveGenericArtistCanonicalName 里的手工表兜底),查错答案却会被当成确定结果直接
+// 写进展示字段。"wanting"/"hikaru utada"(第一条建议是"Utada"、没有汉字)这两个已知
+// 撞不上的案例保留在 artistAliasTable 里当真实残留,不强求这里的启发式覆盖到 100%。
+func qqArtistCanonicalName(rawArtist string) string {
+	items, ok := qqSingerSuggestions(rawArtist)
+	if !ok || len(items) == 0 {
+		return ""
+	}
+	return pickQQArtistCanonicalName(items[0].Name, rawArtist)
+}
+
+// pickQQArtistCanonicalName 是上面查询的判据部分,拆出来纯函数好测:命中的建议必须
+// 含汉字(否则跟原始罗马化写法没有信息增量),且不能(忽略大小写/空格后)原样等于
+// 输入本身——避免把查询词自己当成"解析结果"回传。
+//
+// ⚠️ 这里没有 artistMatches 那类严格核验(这里没有具体曲目可比对),置信度来自 QQ 自己
+// 的搜索排序;调用方如果需要更高置信度(比如直接展示成正式署名),应该结合别的信号
+// 交叉验证,不要单独当作绝对真相。
+func pickQQArtistCanonicalName(suggestion, rawArtist string) string {
+	suggestion = strings.TrimSpace(suggestion)
+	if suggestion == "" || !containsHan(suggestion) {
+		return ""
+	}
+	if normLoose(suggestion) == normLoose(rawArtist) {
+		return ""
+	}
+	return suggestion
+}
+
+// qqArtistNameCache 是 qqArtistCanonicalName 的持久化缓存,跟 artistAliasCache/
+// mbPrimaryNameCache 同一套"查一次永久生效,但只有查到非空结果才落盘"的规则(理由见
+// musicbrainz.go 里 saveArtistAliasCache 前的注释——一次偶发的网络/接口故障不该把
+// 一位歌手永久钉死在"没有中文名"上)。
+var (
+	qqArtistNameMu    sync.Mutex
+	qqArtistNameCache = map[string]string{}
+	qqArtistNamePath  string
+	qqArtistNameDirty bool
+)
+
+func loadQQArtistNameCache(path string) {
+	qqArtistNamePath = path
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return
+	}
+	var m map[string]string
+	if err := json.Unmarshal(data, &m); err == nil && m != nil {
+		qqArtistNameMu.Lock()
+		qqArtistNameCache = m
+		qqArtistNameMu.Unlock()
+		log.Printf("loaded %d cached QQ artist names from %s", len(m), path)
+	}
+}
+
+func saveQQArtistNameCache() {
+	qqArtistNameMu.Lock()
+	if !qqArtistNameDirty || qqArtistNamePath == "" {
+		qqArtistNameMu.Unlock()
+		return
+	}
+	keep := make(map[string]string, len(qqArtistNameCache))
+	for k, v := range qqArtistNameCache {
+		if v != "" {
+			keep[k] = v
+		}
+	}
+	data, err := json.Marshal(keep)
+	qqArtistNameDirty = false
+	qqArtistNameMu.Unlock()
+	if err != nil {
+		return
+	}
+	tmp := qqArtistNamePath + ".tmp"
+	if err := os.WriteFile(tmp, data, 0o644); err != nil {
+		return
+	}
+	if err := os.Rename(tmp, qqArtistNamePath); err != nil {
+		log.Printf("save QQ artist name cache: %v", err)
+	}
+}
+
+// cachedQQArtistCanonicalName 是 qqArtistCanonicalName 的缓存包装,跟
+// canonicalArtistViaMusicBrainz 同一个模式:containsHan 守卫(已经是中文标签的不必
+// 查)、查一次缓存住。
+func cachedQQArtistCanonicalName(rawArtist string) string {
+	rawArtist = strings.TrimSpace(rawArtist)
+	if rawArtist == "" || containsHan(rawArtist) {
+		return ""
+	}
+
+	qqArtistNameMu.Lock()
+	if v, ok := qqArtistNameCache[rawArtist]; ok {
+		qqArtistNameMu.Unlock()
+		return v
+	}
+	qqArtistNameMu.Unlock()
+
+	resolved := qqArtistCanonicalName(rawArtist)
+
+	qqArtistNameMu.Lock()
+	qqArtistNameCache[rawArtist] = resolved
+	if resolved != "" {
+		qqArtistNameDirty = true
+	}
+	qqArtistNameMu.Unlock()
+	saveQQArtistNameCache()
+	return resolved
+}
+
 // qqSongAlbum returns the album name for a QQ song mid via the single-song
 // detail API (album is at data[0].album.name). Empty on any failure — callers
 // treat that as "unknown album" and fall back to name-based selection.
-func qqSongAlbum(mid string) string {
+func qqSongAlbum(ctx context.Context, mid string) string {
 	u := "https://c.y.qq.com/v8/fcg-bin/fcg_play_single_song.fcg?format=json&platform=yqq&inCharset=utf8&outCharset=utf-8&songmid=" + neturl.QueryEscape(mid)
-	req, err := http.NewRequest(http.MethodGet, u, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {
 		return ""
 	}
@@ -279,9 +446,9 @@ func qqAlbumCoverURL(albumMid string) string {
 // song mid via the same single-song detail API qqSongAlbum uses. The singer is
 // returned so callers can re-verify identity before trusting the cover (a QQ
 // smartbox hit can itself be a fan/cover account; see qqCoverFallback).
-func qqSongCoverAndSinger(mid string) (cover, singer string) {
+func qqSongCoverAndSinger(ctx context.Context, mid string) (cover, singer string) {
 	u := "https://c.y.qq.com/v8/fcg-bin/fcg_play_single_song.fcg?format=json&platform=yqq&inCharset=utf8&outCharset=utf-8&songmid=" + neturl.QueryEscape(mid)
-	req, err := http.NewRequest(http.MethodGet, u, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {
 		return "", ""
 	}
@@ -327,12 +494,12 @@ func qqSongCoverAndSinger(mid string) (cover, singer string) {
 //
 // 多歌手只取第一位:QQ 的歌手页是一人一页,合唱曲目没有"这首歌的歌手页"这种东西,
 // 取主歌手是唯一说得通的选择(与 CanonicalArtist 只在单一歌手时才给值同一个取向)。
-func qqSongCatalogMids(mid string) (albumMid, singerMid string) {
+func qqSongCatalogMids(ctx context.Context, mid string) (albumMid, singerMid string) {
 	if mid == "" {
 		return "", ""
 	}
 	u := "https://c.y.qq.com/v8/fcg-bin/fcg_play_single_song.fcg?format=json&platform=yqq&inCharset=utf8&outCharset=utf-8&songmid=" + neturl.QueryEscape(mid)
-	req, err := http.NewRequest(http.MethodGet, u, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {
 		return "", ""
 	}
@@ -390,7 +557,7 @@ func qqSongCatalogMids(mid string) (albumMid, singerMid string) {
 // 一条,单独过一遍下面这层身份校验;通不过(或本来就没传专辑名)时,原样退回到"逐条
 // 按 smartbox 原始顺序试、第一条双重校验通过就用"这条既有兜底路径,不会比改之前更
 // 容易返回空。
-func qqCoverFallback(artist, title, album string) (cover, canonicalArtist string) {
+func qqCoverFallback(ctx context.Context, artist, title, album string) (cover, canonicalArtist string) {
 	if artist == "" || title == "" {
 		return "", ""
 	}
@@ -403,7 +570,7 @@ func qqCoverFallback(artist, title, album string) (cover, canonicalArtist string
 		exact bool // name 与 title loose 相等,跟 resolveQQMusicMatch 的 exact 同一含义
 	}
 	var cands []qqCoverCand
-	for _, it := range qqSmartboxFirstNonEmpty(qqSearchQueries(artist, title)) {
+	for _, it := range qqSmartboxFirstNonEmpty(ctx, qqSearchQueries(artist, title)) {
 		if it.Mid == "" || !lyricTitleAccepted(it.Name, title) ||
 			!artistMatches(it.Singer, artist) {
 			continue
@@ -411,7 +578,7 @@ func qqCoverFallback(artist, title, album string) (cover, canonicalArtist string
 		cands = append(cands, qqCoverCand{mid: it.Mid, exact: normLoose(it.Name) == normLoose(title)})
 	}
 	tryCand := func(c qqCoverCand) (string, string, bool) {
-		cover, singer := qqSongCoverAndSinger(c.mid)
+		cover, singer := qqSongCoverAndSinger(ctx, c.mid)
 		if cover == "" || !artistMatches(singer, artist) {
 			return "", "", false
 		}
@@ -427,7 +594,7 @@ func qqCoverFallback(artist, title, album string) (cover, canonicalArtist string
 		}
 		bestIdx, bestScore, bestExact := -1, 0, false
 		for i := 0; i < limit; i++ {
-			sc := albumScore(qqSongAlbum(cands[i].mid), album)
+			sc := albumScore(qqSongAlbum(ctx, cands[i].mid), album)
 			if sc == 0 && !cands[i].exact {
 				continue
 			}
@@ -483,15 +650,15 @@ type qqMusicMatch struct {
 	url, title, artist, album string
 }
 
-func resolveQQMusicURL(artist, title, album string) string {
-	return resolveQQMusicMatch(artist, title, album).url
+func resolveQQMusicURL(ctx context.Context, artist, title, album string) string {
+	return resolveQQMusicMatch(ctx, artist, title, album).url
 }
 
-func resolveQQMusicMatch(artist, title, album string) qqMusicMatch {
-	items := qqSmartboxFirstNonEmpty(qqSearchQueries(artist, title))
+func resolveQQMusicMatch(ctx context.Context, artist, title, album string) qqMusicMatch {
+	items := qqSmartboxFirstNonEmpty(ctx, qqSearchQueries(artist, title))
 	if len(items) == 0 {
 		// 歌手名跨平台不一致时,退一步只按标题再搜(同样要带上去括号的那一版)
-		items = qqSmartboxFirstNonEmpty(searchTitleVariants(title))
+		items = qqSmartboxFirstNonEmpty(ctx, searchTitleVariants(title))
 	}
 	type qqCand struct {
 		mid, title, artist string
@@ -527,7 +694,7 @@ func resolveQQMusicMatch(artist, title, album string) qqMusicMatch {
 			if i >= 4 {
 				break
 			}
-			candAlbum := qqSongAlbum(c.mid)
+			candAlbum := qqSongAlbum(ctx, c.mid)
 			sc := albumScore(candAlbum, album)
 			if sc == 0 && !c.exact {
 				continue // 专辑对不上、标题也非精确同名 → 不够格参与本轮选择
@@ -598,7 +765,7 @@ type qqLyricResult struct {
 	instrumental bool
 }
 
-func qqLyric(mid string) qqLyricResult {
+func qqLyric(ctx context.Context, mid string) qqLyricResult {
 	if mid == "" {
 		return qqLyricResult{}
 	}
@@ -608,7 +775,7 @@ func qqLyric(mid string) qqLyricResult {
 		return v
 	}
 	qqLyricMu.Unlock()
-	l := resolveQQLyric(mid)
+	l := resolveQQLyric(ctx, mid)
 	if l.lrc != "" || l.instrumental {
 		qqLyricMu.Lock()
 		qqLyricCache[mid] = l
@@ -617,9 +784,9 @@ func qqLyric(mid string) qqLyricResult {
 	return l
 }
 
-func resolveQQLyric(mid string) qqLyricResult {
+func resolveQQLyric(ctx context.Context, mid string) qqLyricResult {
 	u := "https://c.y.qq.com/lyric/fcgi-bin/fcg_query_lyric_new.fcg?format=json&nobase64=1&g_tk=5381&songmid=" + neturl.QueryEscape(mid)
-	req, err := http.NewRequest(http.MethodGet, u, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {
 		return qqLyricResult{}
 	}
@@ -703,7 +870,7 @@ func qqComm(sess qqSessionInfo) map[string]any {
 // qqMusicuPost POSTs a JSON-RPC-style request to musicu.fcg (QQ 音乐 App 内部接口,
 // 跟 c.y.qq.com 那套完全独立)。返回 request.data 的原始 JSON,调用方各自解码成自己
 // 关心的形状,不用一个万能 map 应付所有响应。
-func qqMusicuPost(method, module string, param any, comm map[string]any) (json.RawMessage, error) {
+func qqMusicuPost(ctx context.Context, method, module string, param any, comm map[string]any) (json.RawMessage, error) {
 	reqBody := struct {
 		Comm    map[string]any `json:"comm"`
 		Request struct {
@@ -719,7 +886,7 @@ func qqMusicuPost(method, module string, param any, comm map[string]any) (json.R
 	if err != nil {
 		return nil, err
 	}
-	req, err := http.NewRequest(http.MethodPost, "https://u.y.qq.com/cgi-bin/musicu.fcg", bytes.NewReader(raw))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://u.y.qq.com/cgi-bin/musicu.fcg", bytes.NewReader(raw))
 	if err != nil {
 		return nil, err
 	}
@@ -753,14 +920,14 @@ func qqMusicuPost(method, module string, param any, comm map[string]any) (json.R
 // qqEnsureSession 懒加载一个匿名 session,失败就返回零值(调用方据此放弃这次 QRC
 // 尝试)。只真正尝试一次(用 qqSessionInit 卡住,不管成不成功),不做主动刷新/重试——
 // 跟 lrclib/kugou 现有代码同等的"失败就放弃、下次进程重启再试"哲学一致。
-func qqEnsureSession() qqSessionInfo {
+func qqEnsureSession(ctx context.Context) qqSessionInfo {
 	qqSessionMu.Lock()
 	defer qqSessionMu.Unlock()
 	if qqSessionInit {
 		return qqSessionVal
 	}
 	qqSessionInit = true
-	data, err := qqMusicuPost("GetSession", "music.getSession.session", map[string]any{
+	data, err := qqMusicuPost(ctx, "GetSession", "music.getSession.session", map[string]any{
 		"caller": 0, "uid": "0", "vkey": 0,
 	}, qqCommBase)
 	if err != nil {
@@ -783,6 +950,11 @@ func qqEnsureSession() qqSessionInfo {
 type qqSongMeta struct {
 	id       int64
 	interval float64 // 秒,QQ 音乐官方时长
+	// language 是 fcg_play_single_song.fcg 的 language 字段,实测坐实 0=国语/1=粤语
+	// (交叉验证过陈奕迅《浮夸》=1/《好久不见》=0、Beyond《海阔天空》=1、周杰伦《稻香》=0、
+	// Taylor Swift《Love Story》=5=英语)。其余取值未穷举,qqCanonicalLanguage 一律折算成空,
+	// 不外推。
+	language int
 }
 
 var (
@@ -805,7 +977,7 @@ func qqSongMetaCachedOnly(mid string) qqSongMeta {
 	return qqSongMetaCache[mid]
 }
 
-func qqSongMetaByMid(mid string) qqSongMeta {
+func qqSongMetaByMid(ctx context.Context, mid string) qqSongMeta {
 	if mid == "" {
 		return qqSongMeta{}
 	}
@@ -817,7 +989,7 @@ func qqSongMetaByMid(mid string) qqSongMeta {
 	qqSongMetaMu.Unlock()
 
 	u := "https://c.y.qq.com/v8/fcg-bin/fcg_play_single_song.fcg?format=json&platform=yqq&inCharset=utf8&outCharset=utf-8&songmid=" + neturl.QueryEscape(mid)
-	req, err := http.NewRequest(http.MethodGet, u, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {
 		return qqSongMeta{}
 	}
@@ -835,16 +1007,31 @@ func qqSongMetaByMid(mid string) qqSongMeta {
 		Data []struct {
 			ID       int64   `json:"id"`
 			Interval float64 `json:"interval"`
+			Language int     `json:"language"`
 		} `json:"data"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil || len(out.Data) == 0 || out.Data[0].ID == 0 {
 		return qqSongMeta{}
 	}
-	m := qqSongMeta{id: out.Data[0].ID, interval: out.Data[0].Interval}
+	m := qqSongMeta{id: out.Data[0].ID, interval: out.Data[0].Interval, language: out.Data[0].Language}
 	qqSongMetaMu.Lock()
 	qqSongMetaCache[mid] = m
 	qqSongMetaMu.Unlock()
 	return m
+}
+
+// qqCanonicalLanguage 把 fcg_play_single_song.fcg 的 language 数字字段折算成
+// lyricCandidate.language 的取值(songLanguageMandarin/songLanguageCantonese),
+// 未识别的取值(含未实测过的枚举值)一律返回空串,不外推。
+func qqCanonicalLanguage(n int) string {
+	switch n {
+	case 0:
+		return songLanguageMandarin
+	case 1:
+		return songLanguageCantonese
+	default:
+		return ""
+	}
 }
 
 // qrcDESKey 是 QQ 音乐 GetPlayLyricInfo 响应里 lyric 字段(逐字内容)加密用的固定 24
@@ -928,15 +1115,15 @@ func qrcToYRC(qrc string) string {
 // qqQRCLyric 是 qqLyric 的逐字版本——独立发起、独立判定成败,不影响 qqLyric(mid)
 // 现有的整行歌词路径;哪一步失败都直接返回空串,不重试(下次 enrich 短 TTL 到期或
 // 进程重启自然再试)。
-func qqQRCLyric(mid, artist, title, album string, durationSecs float64) string {
+func qqQRCLyric(ctx context.Context, mid, artist, title, album string, durationSecs float64) string {
 	if mid == "" {
 		return ""
 	}
-	sess := qqEnsureSession()
+	sess := qqEnsureSession(ctx)
 	if sess.sid == "" {
 		return ""
 	}
-	meta := qqSongMetaByMid(mid)
+	meta := qqSongMetaByMid(ctx, mid)
 	if meta.id == 0 {
 		return ""
 	}
@@ -962,7 +1149,7 @@ func qqQRCLyric(mid, artist, title, album string, durationSecs float64) string {
 		"trans_t":    0,
 		"type":       0,
 	}
-	data, err := qqMusicuPost("GetPlayLyricInfo", "music.musichallSong.PlayLyricInfo", param, qqComm(sess))
+	data, err := qqMusicuPost(ctx, "GetPlayLyricInfo", "music.musichallSong.PlayLyricInfo", param, qqComm(sess))
 	if err != nil {
 		return ""
 	}

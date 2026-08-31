@@ -95,13 +95,39 @@ func lastfmDigestStats(ctx context.Context, user, apiKey string, from, to int64)
 		}
 		stats.TopTracks = append(stats.TopTracks, digestTally{Name: t.Name, Sub: t.Artist, Count: t.PlayCount})
 	}
-	for i, a := range artists {
+	stats.TopArtists = digestTopArtists(artists)
+	return stats, nil
+}
+
+// digestTopArtists 把 Last.fm 歌手榜条目**先归并、再取 Top N**。
+//
+// 抽成独立的纯函数而不是内联在 lastfmDigestStats 里,是为了让"这条路径确实做了归并"
+// 这件事可测 —— lastfmDigestStats 自己要打网络,测不了;内联的话把归并那一行删掉,
+// 单测(只测 mergeAliasedArtists 本身)照样全绿,等于没守住。
+//
+// 归并跟歌手榜(topartists.go)走**同一套**,别自己再造一份 —— 2026-08-30 通盘梳理时
+// 发现 digest 原来完全不归并,于是同一个二进制里同一个人在推送里是两个、在榜单里是
+// 一个(实测这台机器 389 个歌手写法里有 1 例:"张震岳"/"张震嶽")。
+//
+// 用 mergeAliasedArtists 这个已有入口而不是自己按名字键 group:它内部除了名字键还看
+// mbid(并查集,允许链式传递),口径跟榜单逐字一致;而且它走的是 cacheOnlyArtistIdentity
+// —— **只读本地缓存、一个网络请求都不发**,不会给后台推送这条路径加延迟或限速压力。
+//
+// ⚠️ 顺序依赖:取前 N 之前必须已经按次数降序排好。mergeAliasedArtists 结尾有
+// sort.SliceStable 保证了这一点(合并会让次数相加、名次变动,不重排就会取错)。
+//
+// 已知取舍(2026-08-30 用户拍板):合并之后名次和次数会跟**历史推送**对不上。接受 ——
+// 那是口径修正带来的一次性台阶,比"两处口径永久不一致"好。
+func digestTopArtists(artists []lastfmChartEntry) []digestTally {
+	merged := mergeAliasedArtists(artists)
+	var out []digestTally
+	for i, a := range merged {
 		if i >= digestTopN {
 			break
 		}
-		stats.TopArtists = append(stats.TopArtists, digestTally{Name: a.Name, Count: a.PlayCount})
+		out = append(out, digestTally{Name: a.Name, Count: a.PlayCount})
 	}
-	return stats, nil
+	return out
 }
 
 // lbListenEntry 是一条 ListenBrainz 收听记录，只留这个功能要用的字段。
@@ -202,11 +228,20 @@ func listenbrainzDigestStats(ctx context.Context, root, user string, from, to in
 			trackIndex[tk] = len(trackTallies)
 			trackTallies = append(trackTallies, digestTally{Name: l.Title, Sub: l.Artist, Count: 1})
 		}
-		if idx, ok := artistIndex[l.Artist]; ok {
+		// 按归并键计数,不按原串 —— 跟上面 Last.fm 那条路径和歌手榜同一个口径
+		// (2026-08-30 一并统一,否则用户换个数据源"同一个人被算成两个"这个坑还在)。
+		// 这里只能用 artistMergeNameKey 这个纯函数版本,不能套 mergeAliasedArtists:
+		// 那个吃的是 lastfmChartEntry(带 mbid),而 LB 的收听记录里没有 mbid,并查集
+		// 的第二个信号本来就用不上,按名字键分桶已经是这条路径能做到的全部。
+		ak := artistMergeNameKey(l.Artist)
+		if idx, ok := artistIndex[ak]; ok {
 			artistTallies[idx].Count++
 		} else {
-			artistIndex[l.Artist] = len(artistTallies)
-			artistTallies = append(artistTallies, digestTally{Name: l.Artist, Count: 1})
+			artistIndex[ak] = len(artistTallies)
+			// 展示名用 artistMergeDisplayName:只把已知罗马字艺名换成中文本名,**不**做
+			// 繁简/大小写折叠 —— 那两步只是判同一个人时内部用的,不该篡改用户库里原本
+			// 的书写(理由见 artistMergeDisplayName 的注释)。
+			artistTallies = append(artistTallies, digestTally{Name: artistMergeDisplayName(l.Artist), Count: 1})
 		}
 	}
 	sort.SliceStable(trackTallies, func(i, j int) bool { return trackTallies[i].Count > trackTallies[j].Count })

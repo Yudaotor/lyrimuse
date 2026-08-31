@@ -124,6 +124,29 @@ public enum CollectorServiceManager {
 
     public static var isRunning: Bool { state.isRunning }
 
+    /// 打包进这份 App 里的 collector 二进制,自己报出来的版本号(`collector version`,
+    /// 对应 Go 侧 main.go 的 clientVersion)——2026-08-31 加,给设置页"后台采集服务"卡片
+    /// 检测"App 本体版本"跟"这份 App 实际打包的 collector 版本"是否一致用。
+    ///
+    /// 起因是 clientVersion 那个字面量一直是手动同步的,发布时忘记同步过至少一次
+    /// (v1.3.0 那次漏了,见 clientVersion 声明处注释),当时没有任何机制能让人自己发现
+    /// 这个不一致。这里直接运行一次打包好的二进制拿它自己报的版本号,不是猜/不是解析
+    /// 文件名——跟"这个二进制到底是哪个版本"这件事只有它自己说了算。
+    ///
+    /// 独立于上面那份 currentBinaryFingerprint/installedFingerprintKey 机制:那一套解决
+    /// 的是"运行中的旧进程 vs 磁盘上被换掉的新二进制"(自动更新之后的自愈重装),这里解决
+    /// 的是"这次打包时,collector 有没有跟 App 一起同步升过版本号"——两者答的是不同的问题,
+    /// 不能互相替代。
+    ///
+    /// 拿不到(文件不存在/执行失败/输出为空)时返回 nil——不确定就不要瞎猜,调用方应该
+    /// 把 nil 当"这次没法判断"处理,不要当成"版本不一致"报出来。
+    public static func bundledCollectorVersion() -> String? {
+        let (status, output) = runCapturing(bundledCollectorPath, ["version"])
+        guard status == 0 else { return nil }
+        let trimmed = output.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
     // install()/uninstall() 必须互斥——2026-08-02 实测排查坐实:早先 setEnabled(_:)/
     // setEnabledAndWait(_:) 各自派发一个独立的 Task.detached,互相之间完全没有互斥。
     // AppSettings.collectorServiceEnabled 的 didSet 对"赋同一个值"依然会触发(Swift 不

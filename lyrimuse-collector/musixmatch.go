@@ -3,6 +3,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -88,19 +89,43 @@ var (
 	// 这把锁横跨"读磁盘 + 必要时发网络请求"整段,其余 goroutine 直接排队,而不是各自
 	// 再抢一次网络——16 个并发请求因此变成至多 1~2 次真实的 token.get。
 	musixmatchTokenFetchMu sync.Mutex
+
+	// musixmatchLastFailureMu/musixmatchLastFailureReason:诊断用的只读旁路
+	// (2026-08-31,跟 ytmusic.go 的 ytmusicLastFailureReason 同一个思路,同一个理由——
+	// 不改 musixmatchLyric 的返回值形状,自动解析路径从来不需要"为什么没查到"这个原因,
+	// 只给设置页"测试这个源"功能多开一条只读旁路)。2026-08-31 实测坐实:反爬对连续
+	// token.get 请求会限流,第一次成功之后几秒内的请求原样返回 HTTP 200,但 body 是
+	// `status_code:401, hint:"captcha"`——上面 musixmatchFetchToken 早就在检测这个信号
+	// 并退避重试,只是重试失败之后什么原因都没往外传。
+	musixmatchLastFailureMu     sync.Mutex
+	musixmatchLastFailureReason string
 )
+
+func musixmatchSetLastFailureReason(reason string) {
+	musixmatchLastFailureMu.Lock()
+	musixmatchLastFailureReason = reason
+	musixmatchLastFailureMu.Unlock()
+}
+
+// musixmatchLastFailureReasonNow 供 test-lyric-sources 用——本次进程里最近一次识别出的
+// 具体失败原因,识别不出就是空串。
+func musixmatchLastFailureReasonNow() string {
+	musixmatchLastFailureMu.Lock()
+	defer musixmatchLastFailureMu.Unlock()
+	return musixmatchLastFailureReason
+}
 
 // musixmatchDoFetchToken 是"真的去换一个新 token"这一步,musixmatchEnsureToken 在单飞锁
 // 里调它。nil(默认)= 用真正的实现 musixmatchFetchToken。声明成变量是给测试留的缝——
 // TestMusixmatchEnsureTokenSingleFlight 换成一个不碰网络、只计次的桩,验证单飞锁本身
 // 生效(这台机器的网络/反爬状态是不确定的,拿它当测试前提会让用例变得不可复现)。
 //
-// ⚠️ 不能写成 `var musixmatchDoFetchToken = func() string { return musixmatchFetchToken(0) }`——
+// ⚠️ 不能写成 `var musixmatchDoFetchToken = func(ctx context.Context) string { return musixmatchFetchToken(ctx, 0) }`——
 // 那样会形成一条初始化环:该变量的初始化表达式引用 musixmatchFetchToken,
 // 它调 musixmatchDo,musixmatchDo 又调 musixmatchEnsureToken,
 // 而 musixmatchEnsureToken 引用回这个变量,`go build` 直接报
 // "initialization cycle"。留空、调用处判 nil 就没有这个环。
-var musixmatchDoFetchToken func() string
+var musixmatchDoFetchToken func(ctx context.Context) string
 
 // musixmatchCachedToken 只读当前内存里的 token,不碰磁盘/网络。命中就直接返回,让绝大多数
 // 调用(token 仍在有效期内)完全绕开下面的单飞锁——那把锁只在需要真的刷新时才有意义。
@@ -113,7 +138,7 @@ func musixmatchCachedToken() string {
 	return ""
 }
 
-func musixmatchLyric(artist, title string, durationSecs float64, trLang string) musixmatchResult {
+func musixmatchLyric(ctx context.Context, artist, title string, durationSecs float64, trLang string) musixmatchResult {
 	if title == "" {
 		return musixmatchResult{}
 	}
@@ -125,7 +150,7 @@ func musixmatchLyric(artist, title string, durationSecs float64, trLang string) 
 	}
 	musixmatchMu.Unlock()
 
-	r := resolveMusixmatchLyric(artist, title, durationSecs, trLang)
+	r := resolveMusixmatchLyric(ctx, artist, title, durationSecs, trLang)
 	if r.lrc != "" {
 		musixmatchMu.Lock()
 		musixmatchCache[key] = r
@@ -134,24 +159,24 @@ func musixmatchLyric(artist, title string, durationSecs float64, trLang string) 
 	return r
 }
 
-func resolveMusixmatchLyric(artist, title string, durationSecs float64, trLang string) musixmatchResult {
+func resolveMusixmatchLyric(ctx context.Context, artist, title string, durationSecs float64, trLang string) musixmatchResult {
 	_ = durationSecs // 时长匹配交给 enrich.go 统一的 scoreLyricCandidate,这里不用
-	match, ok := musixmatchSearchTrack(artist, title)
+	match, ok := musixmatchSearchTrack(ctx, artist, title)
 	if !ok {
 		return musixmatchResult{}
 	}
-	lrc := musixmatchSubtitleLRC(match.trackID)
+	lrc := musixmatchSubtitleLRC(ctx, match.trackID)
 	if lrc == "" {
 		return musixmatchResult{}
 	}
-	yrc := musixmatchRichsync(match.trackID)
-	tr := musixmatchTranslationLRC(match.trackID, lrc, trLang)
+	yrc := musixmatchRichsync(ctx, match.trackID)
+	tr := musixmatchTranslationLRC(ctx, match.trackID, lrc, trLang)
 	return musixmatchResult{lrc: lrc, yrc: yrc, tr: tr, title: match.title, artist: match.artist, album: match.album, cover: match.cover, durationSecs: match.durationSecs}
 }
 
 // musixmatchEnsureToken 返回一个可用的 usertoken——已缓存且未过期直接复用,否则重新
 // 获取。10 分钟官方有效期,提前 1 分钟当作过期主动换新,避免临界点上请求刚发出就失效。
-func musixmatchEnsureToken() string {
+func musixmatchEnsureToken(ctx context.Context) string {
 	if t := musixmatchCachedToken(); t != "" {
 		return t
 	}
@@ -170,9 +195,9 @@ func musixmatchEnsureToken() string {
 		return t
 	}
 	if musixmatchDoFetchToken != nil {
-		return musixmatchDoFetchToken()
+		return musixmatchDoFetchToken(ctx)
 	}
-	return musixmatchFetchToken(0)
+	return musixmatchFetchToken(ctx, 0)
 }
 
 // musixmatchTokenPath 是 token 的磁盘缓存位置。
@@ -244,11 +269,11 @@ func musixmatchSaveTokenFile(token string, expiry time.Time) {
 // musixmatchFetchToken 请求一个新 token。401 表示这次匿名请求被限流/拒绝,官方样例
 // (syncedlyrics)的做法是退避 10 秒重试一次——这里只重试一次(retry>=1 就放弃),不
 // 无限重试卡住调用方。
-func musixmatchFetchToken(retry int) string {
+func musixmatchFetchToken(ctx context.Context, retry int) string {
 	if retry > 1 {
 		return ""
 	}
-	body, err := musixmatchDo("token.get", neturl.Values{"user_language": {"en"}})
+	body, err := musixmatchDo(ctx, "token.get", neturl.Values{"user_language": {"en"}})
 	if err != nil {
 		return ""
 	}
@@ -266,8 +291,15 @@ func musixmatchFetchToken(retry int) string {
 		return ""
 	}
 	if out.Message.Header.StatusCode == 401 {
-		time.Sleep(10 * time.Second)
-		return musixmatchFetchToken(retry + 1)
+		// 2026-08-31 实测坐实的具体原因,见 musixmatchLastFailureReason 声明处注释——
+		// 先记下来再退避重试,不管重试成不成功,这一拍"是反爬拒的"这个事实已经发生过。
+		musixmatchSetLastFailureReason("Musixmatch 拒绝了匿名 token 请求（反爬限流，hint=captcha），不是网络故障，稍后重试通常会恢复")
+		select {
+		case <-time.After(10 * time.Second):
+		case <-ctx.Done():
+			return ""
+		}
+		return musixmatchFetchToken(ctx, retry+1)
 	}
 	token := out.Message.Body.UserToken
 	if token == "" {
@@ -301,15 +333,15 @@ func musixmatchHTTPClient() *http.Client {
 // musixmatchDo 发起一次带统一身份参数(app_id/usertoken/t)的请求。action=="token.get"
 // 时不附带 usertoken(避免 musixmatchEnsureToken→musixmatchDo→musixmatchEnsureToken
 // 递归),其余 action 都需要先有一个可用 token。
-func musixmatchDo(action string, params neturl.Values) ([]byte, error) {
+func musixmatchDo(ctx context.Context, action string, params neturl.Values) ([]byte, error) {
 	if action != "token.get" {
-		if token := musixmatchEnsureToken(); token != "" {
+		if token := musixmatchEnsureToken(ctx); token != "" {
 			params.Set("usertoken", token)
 		}
 	}
 	params.Set("app_id", musixmatchAppID)
 	params.Set("t", strconv.FormatInt(time.Now().UnixMilli(), 10))
-	req, err := http.NewRequest(http.MethodGet, musixmatchBaseURL+action+"?"+params.Encode(), nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, musixmatchBaseURL+action+"?"+params.Encode(), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -349,18 +381,18 @@ type musixmatchTrackMatch struct {
 // "Billie Jean (Single Version)" 带括号回 1 条、去括号回 5 条(page_size 上限),
 // 候选池小一截就更容易被 has_subtitles/歌手名这两道门全部筛光。多打的这一次请求只在
 // 第一次一无所获时才发生,命中时零额外开销。
-func musixmatchSearchTrack(artist, title string) (musixmatchTrackMatch, bool) {
+func musixmatchSearchTrack(ctx context.Context, artist, title string) (musixmatchTrackMatch, bool) {
 	for _, q := range searchTitleVariants(title) {
 		// 判定用的始终是本地原样标题 title,q 只是搜索词。
-		if m, ok := musixmatchSearchTrackOnce(artist, q, title); ok {
+		if m, ok := musixmatchSearchTrackOnce(ctx, artist, q, title); ok {
 			return m, true
 		}
 	}
 	return musixmatchTrackMatch{}, false
 }
 
-func musixmatchSearchTrackOnce(artist, queryTitle, localTitle string) (musixmatchTrackMatch, bool) {
-	body, err := musixmatchDo("track.search", neturl.Values{
+func musixmatchSearchTrackOnce(ctx context.Context, artist, queryTitle, localTitle string) (musixmatchTrackMatch, bool) {
+	body, err := musixmatchDo(ctx, "track.search", neturl.Values{
 		"q_artist":       {artist},
 		"q_track":        {queryTitle},
 		"s_track_rating": {"desc"},
@@ -420,8 +452,8 @@ func musixmatchSearchTrackOnce(artist, queryTitle, localTitle string) (musixmatc
 }
 
 // musixmatchSubtitleLRC 取该 track_id 官方的逐行 LRC 歌词,当作候选正文。
-func musixmatchSubtitleLRC(trackID int64) string {
-	body, err := musixmatchDo("track.subtitle.get", neturl.Values{
+func musixmatchSubtitleLRC(ctx context.Context, trackID int64) string {
+	body, err := musixmatchDo(ctx, "track.subtitle.get", neturl.Values{
 		"track_id":        {strconv.FormatInt(trackID, 10)},
 		"subtitle_format": {"lrc"},
 	})
@@ -465,8 +497,8 @@ type musixmatchRichsyncLine struct {
 // (desktop-lyrics)认识的语法。查不到/该曲目没有逐字数据都返回空串,不影响
 // musixmatchSubtitleLRC 已经拿到的逐行结果——跟 kugouLyric 的"逐字是加分项,没有不影响
 // 整行可用"策略一致。
-func musixmatchRichsync(trackID int64) string {
-	body, err := musixmatchDo("track.richsync.get", neturl.Values{
+func musixmatchRichsync(ctx context.Context, trackID int64) string {
+	body, err := musixmatchDo(ctx, "track.richsync.get", neturl.Values{
 		"track_id": {strconv.FormatInt(trackID, 10)},
 	})
 	if err != nil {
@@ -569,11 +601,11 @@ var musixmatchLRCLineRe = regexp.MustCompile(`^(\[\d{1,2}:\d{2}[.:]\d{1,3}\])(.*
 // 目标语言由 lang 指定(ISO 639-1 两位小写代码,如 "en"/"es"/"ja"——见
 // FeatureSettingsStore.swift 的 MusixmatchTranslationLanguage)。lang 为空(用户没有
 // 启用 Musixmatch 或没配置译文语言)直接跳过,不发这次请求。
-func musixmatchTranslationLRC(trackID int64, originalLRC, lang string) string {
+func musixmatchTranslationLRC(ctx context.Context, trackID int64, originalLRC, lang string) string {
 	if lang == "" {
 		return ""
 	}
-	body, err := musixmatchDo("crowd.track.translations.get", neturl.Values{
+	body, err := musixmatchDo(ctx, "crowd.track.translations.get", neturl.Values{
 		"track_id":               {strconv.FormatInt(trackID, 10)},
 		"subtitle_format":        {"lrc"},
 		"translation_fields_set": {"minimal"},

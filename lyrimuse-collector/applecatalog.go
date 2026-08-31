@@ -3,10 +3,12 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
+	neturl "net/url"
 	"os"
 	"sync"
 	"time"
@@ -321,6 +323,128 @@ func appleCatalogSearchIdentities(artist, title, album string) []string {
 		seen[n] = true
 		out = append(out, cand)
 	}
+	return out
+}
+
+// appleStorefrontArtistCache 按"艺人|专辑"缓存 appleStorefrontArtistIdentities 的结果——
+// 跟 mbPrimaryNameCache(musicbrainz.go)同一套持久化模式和同一条设计取舍:只落盘
+// **查到了**的条目,查空的只留在内存里(避免一次偶发的网络抖动/超时把这张专辑永久钉死
+// 在"没有别的署名"上,下个进程还有机会重试)。2026-08-30 加,起因是把 retryArtistIdentities
+// 里 knownArtistAlias 那条手工表退休之后,原来"零网络请求"的那批已知歌手(方大同等)
+// 每次搜索候选歌词都要多打 1~4 次 iTunes 请求——这份缓存让**同一首歌第二次起**恢复到
+// 零网络请求,含"歌词管理"手动搜索这种每次都是全新进程、内存缓存跨不过去的场景
+// (跟 mbPrimaryNameCache 落盘的理由完全一样)。
+var (
+	appleStorefrontArtistMu    sync.Mutex
+	appleStorefrontArtistCache = map[string][]string{}
+	appleStorefrontArtistPath  string // 空 = 只用内存不持久化(单测/一次性子命令)
+	appleStorefrontArtistDirty bool
+)
+
+func loadAppleStorefrontArtistCache(path string) {
+	appleStorefrontArtistPath = path
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return
+	}
+	var m map[string][]string
+	if err := json.Unmarshal(data, &m); err == nil && m != nil {
+		appleStorefrontArtistMu.Lock()
+		appleStorefrontArtistCache = m
+		appleStorefrontArtistMu.Unlock()
+		log.Printf("loaded %d cached Apple storefront artist entries from %s", len(m), path)
+	}
+}
+
+func saveAppleStorefrontArtistCache() {
+	appleStorefrontArtistMu.Lock()
+	if !appleStorefrontArtistDirty || appleStorefrontArtistPath == "" {
+		appleStorefrontArtistMu.Unlock()
+		return
+	}
+	keep := make(map[string][]string, len(appleStorefrontArtistCache))
+	for k, v := range appleStorefrontArtistCache {
+		if len(v) > 0 {
+			keep[k] = v
+		}
+	}
+	data, err := json.Marshal(keep)
+	appleStorefrontArtistDirty = false
+	path := appleStorefrontArtistPath
+	appleStorefrontArtistMu.Unlock()
+	if err != nil {
+		return
+	}
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, data, 0o644); err != nil {
+		return
+	}
+	if err := os.Rename(tmp, path); err != nil {
+		log.Printf("save apple storefront artist cache: %v", err)
+	}
+}
+
+// appleStorefrontArtistIdentities 给歌词检索多几个**查询身份**,不需要 MusicBrainz、
+// 不需要任何手工登记表:同一张专辑在 Apple Music 不同区域商店(CN/US)的曲目署名经常
+// 不一样——国际艺名歌手最典型(方大同/Khalil Fong)——这条直接复用 iTunes Search 本来
+// 就会回、只是一直没被解码的 artistName 字段,通用地对**任何**歌手生效。
+//
+// 2026-08-30 加,实测验证过(curl 直接打 iTunes Search API,不是猜的):查询词全程用
+// 同一个字符串"方大同 15"(艺人+专辑名,不需要预先知道换成什么名字去查),country=CN
+// 时曲目署名回"方大同",country=US 时回"Khalil Fong"——iTunes 自己按商店把这个字段
+// 本地化了。跟 resolveAppleMusicMatchViaAlbum 同一套"按专辑名搜、精确定位到
+// collectionId 后拿完整曲目表"技巧(比按标题全文搜索准——见那边注释里方大同「Three
+// Tour」那个真实案例),但目的不同,刻意不合并:那边要的是"这首歌"的封面/链接,这边要
+// 的是"这张专辑在各商店的署名怎么写",不需要定位到具体某一首曲目,专辑里随便一首曲目
+// 的署名都能作数,反而更省一次逐曲比对。
+//
+// 只在 album 非空时生效(跟 resolveAppleMusicMatchViaAlbum 一样)——这条技巧的核心就是
+// 靠专辑名精确定位,没有专辑名没法做这件事。
+func appleStorefrontArtistIdentities(ctx context.Context, artist, title, album string) []string {
+	if album == "" {
+		return nil
+	}
+	// 缓存键按 artist+album(不含 title):决定 iTunes 搜索结果和署名的是这两个,同一张
+	// 专辑不同曲目该共用同一次查询结果,不必逐曲重查。
+	key := normLoose(artist) + "|" + normLoose(album)
+	appleStorefrontArtistMu.Lock()
+	if v, ok := appleStorefrontArtistCache[key]; ok {
+		appleStorefrontArtistMu.Unlock()
+		return v
+	}
+	appleStorefrontArtistMu.Unlock()
+
+	q := neturl.QueryEscape(artist + " " + album)
+	seen := map[string]bool{normLoose(artist): true}
+	var out []string
+	for _, country := range []string{"CN", "US"} {
+		bestID, bestScore := int64(0), 0
+		for _, r := range itunesSearch(ctx, q, country) {
+			if sc := albumScore(r.CollectionName, album); sc > bestScore {
+				bestScore, bestID = sc, r.CollectionID
+			}
+		}
+		if bestID == 0 {
+			continue
+		}
+		for _, t := range itunesLookupTracks(ctx, bestID, country) {
+			n := normLoose(t.ArtistName)
+			if t.ArtistName == "" || n == "" || seen[n] {
+				continue
+			}
+			seen[n] = true
+			out = append(out, t.ArtistName)
+		}
+	}
+
+	appleStorefrontArtistMu.Lock()
+	appleStorefrontArtistCache[key] = out
+	// 查空不算脏 —— 空值不落盘,下一个进程还能再试一次,理由同 mbPrimaryNameCache。
+	if len(out) > 0 {
+		appleStorefrontArtistDirty = true
+	}
+	appleStorefrontArtistMu.Unlock()
+	saveAppleStorefrontArtistCache()
 	return out
 }
 

@@ -60,6 +60,9 @@ public enum EnrichCacheKeys {
         "reprise", "feat", "ft.", "featuring", "session", "mono", "stereo", "dub",
         "unplugged", "acappella", "a cappella",
         "interlude", "intro", "outro", "skit", "prelude", "overture",
+        // 2026-08-31 真实bug(周杰伦《不能说的秘密》电影原声带"Secret (慢板)"),见
+        // enrichkey.go 的 enrichKeyVersionWords 头注。
+        "慢板", "快板",
         "现场", "伴奏", "翻唱", "重制", "修复", "版", "纯音乐", "前奏", "间奏",
     ]
 

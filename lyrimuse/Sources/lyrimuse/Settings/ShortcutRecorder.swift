@@ -133,6 +133,18 @@ final class ShortcutRecorderButton: NSButton {
             return nil
         }
 
+        // 冲突检查(2026-08-31 加,见 ShortcutConflict)。在这之前录一个被系统占用的组合
+        // 会"录制成功"但永远不触发,两个动作绑同一组合也不会被拦。
+        //
+        // ⚠️ 顺序:先 stopRecording()(把本地事件监听摘掉)再弹窗。反过来的话是在事件
+        // 监听闭包里起模态会话,重入。present 内部还会再推迟一个 runloop 回合,双重保证。
+        if let conflict = ShortcutConflict.check(shortcut, event: event, recording: shortcutName) {
+            let window = self.window
+            stopRecording()
+            ShortcutConflict.present(conflict, over: window)
+            return nil
+        }
+
         KeyboardShortcuts.setShortcut(shortcut, for: shortcutName)
         stopRecording()
         return nil

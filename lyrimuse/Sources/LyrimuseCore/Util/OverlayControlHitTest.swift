@@ -8,13 +8,23 @@ import Foundation
 // 是这条链路上唯一可以脱离窗口/事件系统单独验证的部分,而 lyrimuse-selftest 只依赖
 // LyrimuseCore(app 是可执行 target,导不进来),所以放这里才测得到。
 
-/// 胶囊里的五个按钮。
+/// 胶囊里的按钮,外加锁定态下悬浮在歌词上方的"解锁"提示。
+///
+/// 2026-08-29 参考 QQ 音乐悬浮歌词加的四个:`expandToLyricsWindow`(展开到歌词窗口)、
+/// `settingsMenu`(弹出快捷设置菜单)、`closeOverlay`(关闭桌面悬浮歌词)——这三个是胶囊里的
+/// 新按钮,走跟原有五个完全一样的矩形上报+点击分发路径;`unlockPill` 不在胶囊里,是锁定态
+/// hover 时悬浮在歌词上方那个居中的"🔒 解锁"提示,同样借这套 `[OverlayControlID: CGRect]`
+/// 矩形分发机制,只是显示条件和位置不同(见 LyricsOverlayView 的对应视图)。
 public enum OverlayControlID: String, Hashable, CaseIterable, Sendable {
     case previous
     case playPause
     case next
     case favorite
     case lock
+    case expandToLyricsWindow
+    case settingsMenu
+    case closeOverlay
+    case unlockPill
 }
 
 public enum OverlayControlHitTest {

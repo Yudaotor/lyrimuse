@@ -14,6 +14,25 @@ final class AppActions {
     var openLyricsManager: (() -> Void)?
     var openLyricsWindow: (() -> Void)?
     var openOnboarding: (() -> Void)?
+    /// 唤出「搜索歌词…」独立小窗(2026-08-30,悬浮窗 ⚙ 快捷菜单用)——**不是**歌词窗口
+    /// 那个 `.sheet(item:)`(那个要求歌词窗口先开着,用户明确要求"只弹搜索页面,不用
+    /// 拉起歌词窗口")。这是它自己独立的一扇 `Window(id: "lyrics-quick-search")`(见
+    /// App.swift),`LyricsQuickSearchWindow` 是根内容,自己在 `.task` 里现查一次当前
+    /// 曲目——跟上面三个 open* 同一个理由,在 MenuBarSceneActions.swift 的锚点视图里
+    /// 捕获 `openWindow(id:)` 这个环境 action。
+    var openLyricsQuickSearch: (() -> Void)?
+
+    /// 「搜索歌词…」小窗**已经开着**(没被真的关掉,只是被别的窗口挡住/切到后台)时的
+    /// 那一半信号——跟上面 `selectionRequests` 是同一个坑的同一个修法(2026-08-31 用户报
+    /// "已经切歌了,点开搜索页面看到的还是上一首"):`LyricsQuickSearchWindow` 的
+    /// `.task { loadContext() }` 只在这扇 `Window(id:)` 场景**新建**那一次跑一遍,窗口没被
+    /// 真关掉时再点一次「搜索歌词…」只是把已经存在的那个视图实例带到前台,`.task` 不会
+    /// 重跑,`context` 还停在第一次打开时查到的那首歌。每次调用 `openLyricsQuickSearch`
+    /// 时都往这里 send 一下,`LyricsQuickSearchWindow` 用 `.onReceive` 订阅、收到就重新
+    /// `loadContext()`——窗口首次新建那次由 `.task` 兜底(视图还没挂载,订阅还没建立,这次
+    /// send 会落空,但不需要它,`.task` 本来就会查一遍),两条路合起来才是"点这个按钮一定
+    /// 看到当前这首歌"。
+    let quickSearchRefreshRequests = PassthroughSubject<Void, Never>()
 
     // 2026-07-29 新增:Onboarding 的 Last.fm 介绍步骤想直接跳到设置窗口的 Last.fm
     // 详情页,而不是打开设置后还要用户自己再点一次侧边栏。SettingsView 自己管理

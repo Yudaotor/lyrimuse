@@ -76,7 +76,11 @@ public enum NotificationPlatform: String, CaseIterable, Identifiable, Codable {
 // 被这里没声明的字段悄悄丢掉。
 //
 // 文本字段不走 Toggle 那种"改了立刻存盘+重启"的即时保存——不能每敲一个字符就重启一次
-// collector,所以持久化是一个显式调用点,由"推送账号"tab 底部的保存栏触发。
+// collector,所以持久化是一个显式调用点。
+//
+// ⚠️ 触发者**不再是**"底部保存栏"(那个 UI 已经不存在了,2026-08-30 核实):现在是
+// AccountLinkingTab 的 1.2 秒输入防抖自动保存(`performAutoSave` → `save()`),
+// 界面上只剩一个只读的 `autosaveStatusBar` 显示保存状态。
 //
 // isDirty 判定专门跟"已保存快照"比较,不看别的——如果直接读 @Published 字段是否非空,
 // 用户刚敲进去几个字符、还没点保存,状态就会被误判成"已配置/生效中",这里刻意避开
@@ -276,10 +280,13 @@ public final class ConfigStore: ObservableObject {
         savedSnapshot = currentSnapshot
     }
 
-    // 只把当前字段写回磁盘,不重启 collector——"推送账号"tab 的底部保存栏需要先把
-    // ConfigStore 和 FeatureSettingsStore 都写完盘,再统一重启一次 collector(避免
-    // 两个 store 各自重启一次、白白重启两遍)。抛出的错误里带具体原因,调用方决定怎么
+    // 只把当前字段写回磁盘,不重启 collector。抛出的错误里带具体原因,调用方决定怎么
     // 呈现给用户。
+    //
+    // ⚠️ 原注释说"底部保存栏会先把两个 store 都写完盘、再统一重启一次" —— **那个保存栏
+    // 已经不存在了**,而且全仓 grep 确认本方法**只被自己的 save() 调用**,没有任何外部
+    // 协调者(2026-08-30 核实)。"只重启一次"这件事现在由 CollectorRestartCoordinator
+    // 负责——两个 store 的 save() 都走它,它去抖合并。
     public func persistFile() throws {
         raw["listenbrainz_token"] = listenbrainzToken
         raw["listenbrainz_user"] = listenbrainzUser
@@ -310,9 +317,13 @@ public final class ConfigStore: ObservableObject {
         savedSnapshot = currentSnapshot
     }
 
-    // 独立的便捷保存入口(持久化+重启+提交快照一步到位),给不经过底部保存栏的场景用——
-    // 目前只有"连接 Last.fm"成功那一刻会调用:那是一次独立的、以拿到 session key 为
-    // 终点的操作,不需要等用户去点底部的"保存并应用"。
+    // 保存入口:持久化 + 重启 collector + 提交快照,一步到位。
+    //
+    // ⚠️ 原注释说这是"给不经过底部保存栏的场景用"、"目前只有连接 Last.fm 会调用" ——
+    // 两句都已过时(2026-08-30 核实)。保存栏没了,本方法现在是**唯一**的保存路径,
+    // 四个调用点:AccountLinkingTab 的输入自动保存(:1480)与账号切换兜底(:1062)、
+    // LastfmAuthFlow 授权成功那一刻(:220)、以及 AppDelegate 退出前的兜底存盘(:377,
+    // 走 .terminateLater 等这里返回才放行,所以重启去抖不会被进程退出打断)。
     @discardableResult
     public func save() async -> Bool {
         do {
@@ -322,7 +333,10 @@ public final class ConfigStore: ObservableObject {
             logger.error("write failed: \(String(describing: error), privacy: .public)")
             return false
         }
-        if await CollectorControl.restartAndWaitAsync() {
+        // 走共享的重启协调器,不直接调 restartAndWaitAsync —— 否则改一个凭据 + 改一个
+        // 开关会触发两次独立重启,第二次撞上 launchd 的节流阻塞约 10 秒(理由见
+        // CollectorRestartCoordinator 的头注释)。
+        if await CollectorRestartCoordinator.shared.requestRestart() {
             lastError = nil
             commitSnapshot()
             return true

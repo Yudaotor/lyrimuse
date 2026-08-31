@@ -5,12 +5,12 @@ import SwiftUI
 
 private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "feature-settings")
 
-// 五个歌词源——rawValue 必须跟 collector/features.go 的 lyricSourceXxx 常量逐字对应,
+// 八个歌词源——rawValue 必须跟 collector/features.go 的 lyricSourceXxx 常量逐字对应,
 // 这是两侧通过共享 json 文件交换的字符串。displayName/color 直接委托给
 // LyricsManagerView.swift 已有的 sourceDisplayName/sourceColor(那两个函数今天也在给
 // "歌词管理"窗口的来源筛选/列表用),不重复维护第二份名字/颜色映射。
 public enum LyricsSource: String, CaseIterable, Identifiable, Codable, Hashable {
-    case netease, qq, kugou, musixmatch, lrclib, amll
+    case netease, qq, kugou, musixmatch, lrclib, amll, lyricfind, kuwo
     public var id: Self { self }
     public var displayName: String { sourceDisplayName(rawValue) }
     public var color: Color { sourceColor(rawValue) }
@@ -132,14 +132,22 @@ public enum LyricsSourceMode: String, CaseIterable, Identifiable, Codable {
 // 同一份共享 JSON 文件的镜像,字段增删两侧同步;旧配置文件里如果还留着已经删掉的
 // key,JSONDecoder/Go 的 encoding/json 都会静默忽略未知字段,不需要额外的迁移代码。
 struct FeatureFlagsFile: Codable, Equatable {
-    // "apple_music"(默认)或"qq_music"——见 PlaybackPlayer 注释(LyrimuseCore)。跟这个
-    // 文件里其它字段一样"读一次,重启才生效":LocalPlaybackSource 每次轮询都会重新读
-    // 一次这个字段(它在 LyrimuseCore,没法直接订阅这个 store 的 @Published),collector
-    // 只在启动时读一次。
+    // PlaybackPlayer 的 rawValue:"auto"(**默认**)/"apple_music"/"qq_music"/"netease"/
+    // "kugou"/"spotify" —— 见 PlaybackPlayer 注释(LyrimuseCore)。原注释写的是
+    // 「"apple_music"(默认)或"qq_music"」,两处都过时了(默认 2026-08-13 起是 auto;
+    // 播放器有六个不是两个)。
+    //
+    // ⚠️ 生效时机两侧**不一样**,别照抄别的字段的说法:LocalPlaybackSource 每次轮询都会
+    // 重新读一次这个字段(它在 LyrimuseCore,没法直接订阅这个 store 的 @Published),
+    // 所以 App 侧改了立刻生效;collector 只在启动时读一次,要靠保存触发的 kickstart
+    // 重启才会跟上。
     var player: String?
     var albumPrefetch: Bool?
     var lyricsMachineTranslation: Bool?
     var lastfmMirrorScrobble: Bool?
+    /// 合唱串("A & B")上送时只发第一位艺人。**默认 false = 原样发整串**。
+    /// 命名对齐 Navidrome 的 Lastfm.ScrobbleFirstArtistOnly(它默认也是 false)。
+    var lastfmScrobbleFirstArtistOnly: Bool?
     var weeklyDigest: Bool?
     // 见 collector/daily.go——独立于 weeklyDigest 的开关,两个可以同时开、只开一个、
     // 或都不开。
@@ -162,6 +170,15 @@ struct FeatureFlagsFile: Codable, Equatable {
     /// 这个字段就落盘,从此完全以 lyricsSources 为准,用户取消勾选能正常生效。
     /// 与 collector 侧 featureFlagsFile.AMLLLyrics 一一对应。
     var amllLyrics: Bool?
+    /// 跟 amllLyrics 同一个套路的迁移标记(2026-08-25 加 lyricfind 时补)。lyricfind 没有
+    /// amll 那样"曾经有过独立开关"的历史,但要解决的是**同一个**问题:老配置(写的时候
+    /// lyricfind 这个源还不存在)按白名单办会被静默关掉。缺失 ⇒ 老配置,加载时把 lyricfind
+    /// 补进启用集合(只补这一次)。与 collector 侧 featureFlagsFile.LyricFindLyrics 一一对应。
+    var lyricFindLyrics: Bool?
+    /// 跟 amllLyrics/lyricFindLyrics 同一个套路的迁移标记(2026-08-31 加 kuwo 时补)。
+    /// 缺失 ⇒ 老配置,加载时把 kuwo 补进启用集合(只补这一次)。与 collector 侧
+    /// featureFlagsFile.KuwoLyrics 一一对应。
+    var kuwoLyrics: Bool?
     var lyricsSourceMode: String?
     var lyricsSourceOrder: [String]?
     var lyricsDir: String?
@@ -185,12 +202,15 @@ struct FeatureFlagsFile: Codable, Equatable {
         case albumPrefetch = "album_prefetch"
         case lyricsMachineTranslation = "lyrics_machine_translation"
         case lastfmMirrorScrobble = "lastfm_mirror_scrobble"
+        case lastfmScrobbleFirstArtistOnly = "lastfm_scrobble_first_artist_only"
         case weeklyDigest = "weekly_digest"
         case dailyDigest = "daily_digest"
         case weeklyDigestSource = "weekly_digest_source"
         case dailyDigestSource = "daily_digest_source"
         case lyricsSources = "lyrics_sources"
         case amllLyrics = "amll_lyrics"
+        case lyricFindLyrics = "lyricfind_lyrics"
+        case kuwoLyrics = "kuwo_lyrics"
         case lyricsSourceMode = "lyrics_source_mode"
         case lyricsSourceOrder = "lyrics_source_order"
         case lyricsDir = "lyrics_dir"
@@ -220,18 +240,30 @@ struct FeatureFlagsFile: Codable, Equatable {
 public final class FeatureSettingsStore: ObservableObject {
     public static let shared = FeatureSettingsStore()
 
-    // 本地播放状态读取哪个 App——默认 Apple Music,保持这个设置加入之前唯一存在过的
-    // 行为不变。见 PlaybackPlayer(LyrimuseCore)注释。
-    @Published public var player: PlaybackPlayer = .appleMusic
+    // 本地播放状态读取哪个 App——默认**自动识别**。
+    //
+    // ⚠️ 这里原来是 `.appleMusic`(理由是"保持这个设置加入之前唯一存在过的行为不变"),
+    // 但 collector 侧的 resolvePlayer 早在 2026-08-13 就从 appleMusic 改成了 auto,
+    // 下面 load() 的兜底也是 `?? .auto` —— 只有这个属性初值没跟上。后果不是纯注释问题:
+    // features.json **还不存在**时(全新安装)load() 在 guard 处提前 return,界面就停在
+    // 这个初值上,于是设置里显示"Apple Music"、collector 实际按"自动识别"采,两边说的
+    // 不是一回事(2026-08-30 核实)。
+    @Published public var player: PlaybackPlayer = .auto
     @Published public var albumPrefetch = true
     // 这几个都要连一个外部账号才有意义,默认关闭。collector/features.go 的 boolOr
     // 默认值要跟着一起改,否则全新安装时 Swift 这边显示关、Go 那边却按"缺字段=开启"
     // 实际执行,两边会对不上。
     // 歌词源没带社区译文时,自己补一份翻译。默认关:优先走系统端上翻译(不联网),
     // 但在 macOS 26 以下、或语言包没装时会退到网络翻译服务,那条路会把歌词正文发出去,
-    // 该由用户显式同意 —— 现有的五个歌词源只发歌手/歌名。
+    // 该由用户显式同意 —— 现有的八个歌词源只发歌手/歌名。
     @Published public var lyricsMachineTranslation = false
     @Published public var lastfmMirrorScrobble = false
+    /// 默认 false:原样发整串。**必须逐字等于 collector features.go 里 boolOr 的默认值**
+    /// —— 那条对齐是人工维持的,没有机制保证(见 load() 里的警告)。
+    /// 语义与取舍见 collector lastfm.go 的 resolveScrobbleArtist:ListenBrainz 文档要求
+    /// 合唱 credit "include them all";折叠会丢信息且不可逆,不折叠最坏只是 Last.fm 上
+    /// 多一个听众很少的合唱条目 —— 代价不对称。
+    @Published public var lastfmScrobbleFirstArtistOnly = false
     @Published public var weeklyDigest = false
     @Published public var dailyDigest = false
     // 空字符串 = 用户没手动选过,交给 AccountLinkingTab 的 resolvedDigestSource 按
@@ -272,13 +304,19 @@ public final class FeatureSettingsStore: ObservableObject {
             player: player.rawValue,
             albumPrefetch: albumPrefetch,
             lyricsMachineTranslation: lyricsMachineTranslation,
-            lastfmMirrorScrobble: lastfmMirrorScrobble, weeklyDigest: weeklyDigest, dailyDigest: dailyDigest,
+            lastfmMirrorScrobble: lastfmMirrorScrobble,
+            lastfmScrobbleFirstArtistOnly: lastfmScrobbleFirstArtistOnly,
+            weeklyDigest: weeklyDigest, dailyDigest: dailyDigest,
             weeklyDigestSource: weeklyDigestSource.isEmpty ? nil : weeklyDigestSource,
             dailyDigestSource: dailyDigestSource.isEmpty ? nil : dailyDigestSource,
             lyricsSources: lyricsSources.map(\.rawValue).sorted(),
             // 只要保存过一次就落这个字段,值如实反映集合状态。它的作用是让上面那条
             // "老配置补 amll"的迁移**只生效一次** —— 之后用户取消勾选才不会被补回来。
             amllLyrics: lyricsSources.contains(.amll),
+            // 同上,lyricfind 的迁移标记独立生效一次。
+            lyricFindLyrics: lyricsSources.contains(.lyricfind),
+            // 同上,kuwo 的迁移标记独立生效一次(2026-08-31 加)。
+            kuwoLyrics: lyricsSources.contains(.kuwo),
             lyricsSourceMode: lyricsSourceMode.rawValue,
             lyricsSourceOrder: lyricsSourceOrder.map(\.rawValue),
             lyricsDir: lyricsDir.isEmpty ? nil : lyricsDir,
@@ -363,9 +401,13 @@ public final class FeatureSettingsStore: ObservableObject {
     public func load() {
         guard let data = try? Data(contentsOf: Self.featuresURL),
               let f = try? JSONDecoder().decode(FeatureFlagsFile.self, from: data) else {
-            // 文件不存在/解析失败——维持属性的默认值,跟 collector 侧 loadFeatureFlags
-            // 的默认值约定完全一致(核心行为开关 fail-open=true;需要外部账号的 6 个
+            // 文件不存在/解析失败——维持属性的默认值,须跟 collector 侧 loadFeatureFlags
+            // 的默认值逐字对齐(核心行为开关 fail-open=true;需要外部账号的 6 个
             // fail-closed=false,见上面属性声明处的说明)。
+            //
+            // ⚠️ 这条对齐是**人工维持**的,没有任何机制保证 —— 2026-08-30 就抓到 player
+            // 一项脱节了(属性初值 .appleMusic vs collector 的 auto,已修)。改任一侧的
+            // 默认值都要回头核对另一侧,别信这行注释说"一致"就跳过。
             unknownFileKeys = [:]
             savedSnapshot = currentSnapshot
             return
@@ -385,6 +427,7 @@ public final class FeatureSettingsStore: ObservableObject {
         albumPrefetch = f.albumPrefetch ?? true
         lyricsMachineTranslation = f.lyricsMachineTranslation ?? false
         lastfmMirrorScrobble = f.lastfmMirrorScrobble ?? false
+        lastfmScrobbleFirstArtistOnly = f.lastfmScrobbleFirstArtistOnly ?? false
         weeklyDigest = f.weeklyDigest ?? false
         dailyDigest = f.dailyDigest ?? false
         weeklyDigestSource = f.weeklyDigestSource ?? ""
@@ -395,13 +438,32 @@ public final class FeatureSettingsStore: ObservableObject {
         var enabled = Set(decodedSources)
         if enabled.isEmpty {
             enabled = Set(LyricsSource.allCases)
-        } else if f.amllLyrics == nil {
-            // 老配置(写的时候还没有这个源)——见 FeatureFlagsFile.amllLyrics。只补这一次。
-            enabled.insert(.amll)
+        } else {
+            // amll/lyricfind/kuwo 的迁移标记各自独立判断——一份配置可能在 amll 时代之后、
+            // lyricfind 时代之前保存过(amllLyrics 非空、lyricFindLyrics 为空),这种配置
+            // 只该补 lyricfind,不该把 amll 也重新补一遍(用户可能已经手动关掉了它)。
+            //
+            // ⚠️ 2026-08-25 实测坐实过:漏了这一支的那版代码,在已经保存过设置的老用户
+            // 机器上会让 lyricfind 静默不参与检索(lyrics_sources 白名单里没有它、
+            // lyricFindLyrics 又缺失,本该判定"这是老配置、要补齐"却没有对应分支)。
+            if f.amllLyrics == nil {
+                // 老配置(写的时候还没有这个源)——见 FeatureFlagsFile.amllLyrics。只补这一次。
+                enabled.insert(.amll)
+            }
+            if f.lyricFindLyrics == nil {
+                // 同上,见 FeatureFlagsFile.lyricFindLyrics。
+                enabled.insert(.lyricfind)
+            }
+            if f.kuwoLyrics == nil {
+                // 同上,见 FeatureFlagsFile.kuwoLyrics(2026-08-31 加)。
+                enabled.insert(.kuwo)
+            }
         }
         lyricsSources = enabled
         lyricsSourceMode = f.lyricsSourceMode.flatMap(LyricsSourceMode.init(rawValue:)) ?? .smart
-        // 必须是全部 4 个源的完整排列——数量对不上(文件被手动改坏/缺字段)就整体
+        // 必须是全部源的完整排列(数量 == LyricsSource.allCases.count,不是写死的字面量——
+        // 这句注释曾经写死过"4 个",源数量涨到 8 个都没跟着改,不要重蹈一样的坑)。数量
+        // 对不上(文件被手动改坏/缺字段,或者刚加了新源、旧文件的顺序列表还没跟上)就整体
         // 退回默认顺序,不做"缺的补在末尾"这种部分修复,避免搞出一份既不是默认顺序、
         // 也不是用户真实排过的四不像顺序。
         let decodedOrder = (f.lyricsSourceOrder ?? []).compactMap(LyricsSource.init(rawValue:))
@@ -413,8 +475,11 @@ public final class FeatureSettingsStore: ObservableObject {
         savedSnapshot = currentSnapshot
     }
 
-    // 只写盘,不重启——"推送账号"tab 的底部保存栏要把这个和 ConfigStore.persistFile()
-    // 一起调用后,只统一重启一次 collector。
+    // 只写盘,不重启。
+    //
+    // ⚠️ 原注释说"底部保存栏会把这个和 ConfigStore.persistFile() 一起调用后统一重启
+    // 一次" —— 那个保存栏已经不存在了,且本方法只被自己的 save() 调用(2026-08-30
+    // 核实)。"只重启一次"现在由 CollectorRestartCoordinator 保证。
     public func persistFile() throws {
         let data = try JSONEncoder().encode(currentSnapshot)
         var payload = data
@@ -438,20 +503,10 @@ public final class FeatureSettingsStore: ObservableObject {
         savedSnapshot = currentSnapshot
     }
 
-    // 去抖用的状态——2026-08-02 实测排查坐实:"歌词"/"账号连接"tab 里每个开关各自独立
-    // 包一层 Task { await features.save() },用户连续快速切换好几个开关时会并发派生出
-    // 对应数量的独立调用,每一次都完整走一遍 persistFile()+重启 collector,而
-    // CollectorControl.restartAndWaitAsync() 走 launchctl kickstart -k(两次重启间隔
-    // 太近时会被 launchd 节流到约 10 秒才返回),连续多次触发会让"正在播放"推送反复
-    // 出现不必要的中断/延迟。改成:每次调用仍然立刻 persistFile()(廉价、无副作用,
-    // 不去抖),但重启动作延后一小段时间——这段时间内如果又有新的 save() 调用进来,取消
-    // 上一次还没触发的延时、重新计时,只有连续调用真正停下来之后才会触发唯一一次重启;
-    // 所有在等待期间调用过 save() 的地方,都会在这唯一一次重启真正完成后一起收到同一份
-    // 结果,不需要各自等到自己那次触发的重启(那次可能已经被取消)。
-    private var pendingRestartTask: Task<Void, Never>?
-    private var pendingSaveContinuations: [CheckedContinuation<Bool, Never>] = []
-    private static let restartDebounceNanoseconds: UInt64 = 500_000_000 // 0.5s
-
+    // ⚠️ 重启去抖的状态原来在这里(2026-08-02 加),2026-08-30 整体挪进了共享的
+    // CollectorRestartCoordinator —— 原因不是嫌它写得不好,而是它只能是**私有**的:
+    // 看不见 ConfigStore 也在重启,于是"改一个凭据 + 改一个开关"照样两次重启,正好是
+    // 它当初想消灭的那个场景。别在这里重新加一份局部去抖。
     // 独立保存入口(持久化+重启+提交快照一步到位)——给本文件里每一个即时保存的开关用。
     @discardableResult
     public func save() async -> Bool {
@@ -462,32 +517,16 @@ public final class FeatureSettingsStore: ObservableObject {
             logger.error("write failed: \(String(describing: error), privacy: .public)")
             return false
         }
-        return await withCheckedContinuation { continuation in
-            pendingSaveContinuations.append(continuation)
-            pendingRestartTask?.cancel()
-            pendingRestartTask = Task { [weak self] in
-                try? await Task.sleep(nanoseconds: Self.restartDebounceNanoseconds)
-                guard !Task.isCancelled else { return }
-                await self?.performDebouncedRestart()
-            }
-        }
-    }
-
-    private func performDebouncedRestart() async {
-        let continuations = pendingSaveContinuations
-        pendingSaveContinuations = []
-        pendingRestartTask = nil
-        let success: Bool
-        if await CollectorControl.restartAndWaitAsync() {
+        // 去抖逻辑 2026-08-30 挪进了共享的 CollectorRestartCoordinator —— 原来这份是本
+        // store **私有**的,只合并得了自己的连续 save(),看不见 ConfigStore 也在重启,
+        // 于是"改一个凭据 + 改一个开关"仍然是两次重启(见协调器头注释)。
+        if await CollectorRestartCoordinator.shared.requestRestart() {
             lastError = nil
             commitSnapshot()
-            success = true
-        } else {
-            lastError = L10n.t("后台采集服务重启失败")
-            success = false
+            return true
         }
-        for continuation in continuations {
-            continuation.resume(returning: success)
-        }
+        lastError = L10n.t("后台采集服务重启失败")
+        return false
     }
+
 }

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"reflect"
@@ -141,6 +142,64 @@ func TestAppleCatalogSearchIdentities(t *testing.T) {
 	if got := appleCatalogSearchIdentities("周杰伦", "印地安老斑鸠 (Live)", anchorAlbum); got != nil {
 		t.Errorf("署名与本地一致时应返回 nil,得到 %#v", got)
 	}
+}
+
+// TestAppleStorefrontArtistIdentitiesLive 是真实网络集成测试(2026-08-30 加,方大同
+// 《Lovers Policy》案,见 appleStorefrontArtistIdentities 头注)——直接打真实 iTunes
+// Search API,不 mock。跟同包内 TestRetryArtistIdentitiesGenericMusicBrainzReverseDirection
+// 同一个前提:这类"通用查询是否真的通用"的验证,意义就在于打真实的第三方服务,mock 掉
+// 就只是在验证自己写的 mock 数据,证明不了任何事。可能偶发因为该服务限速/网络抖动失败,
+// 跟同包其它真实网络测试(TestRetryArtistIdentitiesUsesMusicBrainzName 等)接受的是
+// 同一类风险。
+func TestAppleStorefrontArtistIdentitiesLive(t *testing.T) {
+	got := appleStorefrontArtistIdentities(context.Background(), "方大同", "Lovers Policy", "15")
+	found := false
+	for _, s := range got {
+		if normLoose(s) == normLoose("Khalil Fong") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("应该能从 US 商店拿到 Khalil Fong 这个身份, got %v", got)
+	}
+	if album := ""; appleStorefrontArtistIdentities(context.Background(), "方大同", "Lovers Policy", album) != nil {
+		t.Errorf("没有专辑名时应返回 nil(这条技巧靠专辑名精确定位)")
+	}
+}
+
+// 查空**不落盘**、查到才落盘——跟 mbPrimaryNameCache 同一条设计取舍(见
+// appleStorefrontArtistCache 声明处注释),这里镜像 TestMBPrimaryNameCachePersistsOnlyHits
+// 的写法单独锁定一遍。
+func TestAppleStorefrontArtistCachePersistsOnlyHits(t *testing.T) {
+	dir := t.TempDir()
+	path := dir + "/storefront.json"
+
+	savedCache, savedPath, savedDirty := appleStorefrontArtistCache, appleStorefrontArtistPath, appleStorefrontArtistDirty
+	defer func() {
+		appleStorefrontArtistCache, appleStorefrontArtistPath, appleStorefrontArtistDirty = savedCache, savedPath, savedDirty
+	}()
+
+	appleStorefrontArtistPath = path
+	appleStorefrontArtistCache = map[string][]string{
+		"方大同|15":   {"Khalil Fong"}, // 查到了
+		"某个没查到的|专辑": nil,           // 查空(可能只是网络抖动)
+	}
+	appleStorefrontArtistDirty = true
+	saveAppleStorefrontArtistCache()
+
+	appleStorefrontArtistCache = map[string][]string{}
+	loadAppleStorefrontArtistCache(path)
+	if got := appleStorefrontArtistCache["方大同|15"]; !reflect.DeepEqual(got, []string{"Khalil Fong"}) {
+		t.Errorf("查到的那条没被持久化:got %v", got)
+	}
+	if _, ok := appleStorefrontArtistCache["某个没查到的|专辑"]; ok {
+		t.Error("查空的那条落盘了 —— 一次偶发网络抖动会被永久钉死")
+	}
+
+	// 没有路径时(单测/一次性子命令)不写任何文件,也不该 panic。
+	appleStorefrontArtistPath = ""
+	appleStorefrontArtistDirty = true
+	saveAppleStorefrontArtistCache()
 }
 
 func TestDedupeArtistIdentities(t *testing.T) {

@@ -21,7 +21,7 @@ Lyrimuse sits quietly in your menu bar and shows a floating lyrics window that f
 <table>
 <tr>
 <td align="center" width="33%"><img src="docs/images/app-desktop-lyrics.png" width="260" alt="Classic desktop lyrics overlay"><br><sub>Classic floating overlay</sub></td>
-<td align="center" width="33%"><img src="docs/images/app-dynamic-island.png" width="260" alt="Dynamic-Island-style lyrics"><br><sub>Dynamic-Island-style capsule (no physical notch required)</sub></td>
+<td align="center" width="33%"><img src="docs/images/app-dynamic-island.png" width="260" alt="Dynamic-Island-style lyrics, playing"><br><img src="docs/images/app-dynamic-island-paused.png" width="260" alt="Dynamic-Island-style lyrics, paused"><br><sub>Dynamic-Island-style capsule (no physical notch required) — expands while playing, collapses to a pill when paused</sub></td>
 <td align="center" width="33%"><img src="docs/images/app-menu-bar-lyrics.png" width="260" alt="Menu bar lyrics"><br><sub>Menu bar text mode, with karaoke-style highlighting</sub></td>
 </tr>
 <tr>
@@ -31,6 +31,9 @@ Lyrimuse sits quietly in your menu bar and shows a floating lyrics window that f
 <tr>
 <td align="center"><img src="docs/images/app-lastfm-profile.png" width="380" alt="Last.fm listening profile"><br><sub>Last.fm listening profile — totals and recent scrobbles</sub></td>
 <td align="center"><img src="docs/images/app-lastfm-charts.png" width="380" alt="Last.fm Top Artists chart"><br><sub>Last.fm profile — Top Artists / Albums / Tracks chart</sub></td>
+</tr>
+<tr>
+<td colspan="2" align="center"><img src="docs/images/app-lastfm-heatmap.png" width="700" alt="Listening heatmap"><br><sub>Listening Heatmap — a GitHub-contributions-style yearly calendar, built from your full Last.fm history</sub></td>
 </tr>
 <tr>
 <td align="center"><img src="docs/images/app-menu-bar-dropdown.png" width="380" alt="Menu bar dropdown"><br><sub>Everything reachable from the menu bar dropdown</sub></td>
@@ -54,7 +57,7 @@ Lyrimuse sits quietly in your menu bar and shows a floating lyrics window that f
 - **Works fully offline** in local mode — no network round-trip needed to show lyrics that are already cached
 
 ### Your listening profile
-- **A real listening profile, not just scrobbling** — connect Last.fm in one click from the main Accounts section (no manual token juggling) and see today/7-day/all-time totals, a live "now scrobbling" indicator, and a real-time recent-plays list with covers
+- **A real listening profile, not just scrobbling** — connect Last.fm in one click from the main Accounts section (no manual token juggling) and see today/7-day/all-time totals, a live "now scrobbling" indicator, and a real-time recent-plays list with covers. Lyrimuse submits the metadata your player reported, unchanged — it never rewrites artist or track names before sending ([how scrobbling works](docs/scrobbling.md))
 - **Top Artists / Albums / Tracks chart**, filterable by time period (7 days, 30 days, a year, or all-time), plus an on-this-day look-back at what you were playing in years past
 - **Every play is logged locally first**, even before you connect Last.fm — connect it later and a backfill queue catches up on everything logged while you were still deciding
 - **That same local history also shows up in the Lyrics Window** — when nothing's playing, it becomes a listening overview instead of an empty screen (more on this below)

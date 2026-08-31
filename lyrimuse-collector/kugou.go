@@ -5,6 +5,7 @@ package main
 import (
 	"bytes"
 	"compress/zlib"
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -31,9 +32,17 @@ type kugouResult struct {
 	durationSecs float64
 	// title/artist/album 是酷狗曲库里这首歌实际匹配到的歌名/歌手/专辑——纯粹给"搜索
 	// 候选歌词"弹窗展示用,不参与任何匹配/打分逻辑,取自搜索结果本身(本来就已经查到,
-	// 只是原来没往外传)。酷狗搜索接口没有可靠的封面图字段(AlbumImage 实测经常是空
-	// 字符串),这里不尝试凑封面。
+	// 只是原来没往外传)。
 	title, artist, album string
+	// cover:2026-08-31 加。搜索接口本身没有可靠的封面图字段(AlbumImage 实测经常是空
+	// 字符串,这一点没变),但搜索结果带的 album_id 能换一次 album/info 接口拿到
+	// imgurl——多一次请求,只在拿到候选(chosen != nil)之后才发,查不到/请求失败就留空,
+	// 交给 enrich.go 的 coverOrFallback 退到 Apple 封面,不影响歌词本身的可用性。
+	cover string
+	// language:酷狗搜索接口 trans_param.language 字段折算出的
+	// songLanguageMandarin/songLanguageCantonese,见 kugouCanonicalLanguage。透传用,
+	// 跟 lyricCandidate.language 同一个模式,不参与打分。
+	language string
 }
 
 var (
@@ -41,7 +50,7 @@ var (
 	kugouCache = map[string]kugouResult{}
 )
 
-func kugouLyric(artist, title, album string, durationSecs float64) kugouResult {
+func kugouLyric(ctx context.Context, artist, title, album string, durationSecs float64) kugouResult {
 	if title == "" {
 		return kugouResult{}
 	}
@@ -56,7 +65,7 @@ func kugouLyric(artist, title, album string, durationSecs float64) kugouResult {
 	}
 	kugouMu.Unlock()
 
-	r := resolveKugouLyric(artist, title, album, durationSecs)
+	r := resolveKugouLyric(ctx, artist, title, album, durationSecs)
 	if r.lrc != "" {
 		kugouMu.Lock()
 		kugouCache[key] = r
@@ -144,7 +153,26 @@ type kugouSong struct {
 	SongName   string  `json:"songname"`
 	SingerName string  `json:"singername"`
 	AlbumName  string  `json:"album_name"`
+	AlbumID    string  `json:"album_id"`
 	Duration   float64 `json:"duration"` // 秒
+	// TransParam.Language:实测坐实酷狗搜索接口自带的语种标签,直接是人类可读字符串
+	// ("国语"/"粤语"),交叉验证过周杰伦《稻香》→"国语"、Beyond《海阔天空》→"粤语"。
+	TransParam struct {
+		Language string `json:"language"`
+	} `json:"trans_param"`
+}
+
+// kugouCanonicalLanguage 把酷狗 trans_param.language 的人类可读字符串折算成
+// lyricCandidate.language 的取值,未识别的取值一律返回空串,不外推。
+func kugouCanonicalLanguage(s string) string {
+	switch s {
+	case "国语":
+		return songLanguageMandarin
+	case "粤语":
+		return songLanguageCantonese
+	default:
+		return ""
+	}
 }
 
 // kugouEscape 编码查询参数值。mobilecdn.kugou.com/krcs.kugou.com 这两个接口不认标准
@@ -156,8 +184,8 @@ func kugouEscape(s string) string {
 	return strings.ReplaceAll(neturl.QueryEscape(s), "+", "%20")
 }
 
-func kugouGet(u string, v any) error {
-	req, err := http.NewRequest(http.MethodGet, u, nil)
+func kugouGet(ctx context.Context, u string, v any) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {
 		return err
 	}
@@ -179,7 +207,7 @@ func kugouGet(u string, v any) error {
 // 同一个 id/accesskey,只是 fmt 参数不同)。lrc 失败则整体放弃;krc 单独失败不影响 lrc
 // (逐字数据本来就是"有更好、没有也不影响整行可用"的加分项)。任何一步
 // 失败/拿不到都直接放弃,不重试(下次 enrich 短 TTL 到期自然再试)。
-func resolveKugouLyric(artist, title, album string, durationSecs float64) kugouResult {
+func resolveKugouLyric(ctx context.Context, artist, title, album string, durationSecs float64) kugouResult {
 	// 搜索词逐个 variant 试,先命中先用(顺序由 searchTitleVariants 定,跟设置走)。带括号的标题在酷狗
 	// 上不会返回空、而是回一串该歌手的热门歌,所以"搜砸了"表现为下面的循环一条都收不下,
 	// 不是 kugouGet 报错——必须靠 chosen==nil 才能发现,不能只在 err != nil 时才换词。
@@ -192,7 +220,7 @@ func resolveKugouLyric(artist, title, album string, durationSecs float64) kugouR
 				Info []kugouSong `json:"info"`
 			} `json:"data"`
 		}
-		if err := kugouGet("http://mobilecdn.kugou.com/api/v3/search/song?format=json&keyword="+kugouEscape(artist+" "+q)+"&page=1&pagesize=10&showtype=1", &sr); err != nil {
+		if err := kugouGet(ctx, "http://mobilecdn.kugou.com/api/v3/search/song?format=json&keyword="+kugouEscape(artist+" "+q)+"&page=1&pagesize=10&showtype=1", &sr); err != nil {
 			continue
 		}
 		for i := range sr.Data.Info {
@@ -240,7 +268,7 @@ func resolveKugouLyric(artist, title, album string, durationSecs float64) kugouR
 	}
 	krcURL := fmt.Sprintf("http://krcs.kugou.com/search?ver=1&man=yes&client=mobi&keyword=%s&duration=%d&hash=%s",
 		kugouEscape(artist+" - "+title), durMs, chosen.Hash)
-	if err := kugouGet(krcURL, &kr); err != nil || len(kr.Candidates) == 0 {
+	if err := kugouGet(ctx, krcURL, &kr); err != nil || len(kr.Candidates) == 0 {
 		return kugouResult{}
 	}
 	c := kr.Candidates[0]
@@ -251,7 +279,7 @@ func resolveKugouLyric(artist, title, album string, durationSecs float64) kugouR
 		Content string `json:"content"`
 	}
 	dlURL := fmt.Sprintf("http://lyrics.kugou.com/download?ver=1&client=pc&id=%s&accesskey=%s&fmt=lrc&charset=utf8", c.ID, c.AccessKey)
-	if err := kugouGet(dlURL, &dl); err != nil || dl.Content == "" {
+	if err := kugouGet(ctx, dlURL, &dl); err != nil || dl.Content == "" {
 		return kugouResult{}
 	}
 	raw, err := base64.StdEncoding.DecodeString(dl.Content)
@@ -268,10 +296,42 @@ func resolveKugouLyric(artist, title, album string, durationSecs float64) kugouR
 		Content string `json:"content"`
 	}
 	krcDlURL := fmt.Sprintf("http://lyrics.kugou.com/download?ver=1&client=pc&id=%s&accesskey=%s&fmt=krc&charset=utf8", c.ID, c.AccessKey)
-	if err := kugouGet(krcDlURL, &krcDl); err == nil && krcDl.Content != "" {
+	if err := kugouGet(ctx, krcDlURL, &krcDl); err == nil && krcDl.Content != "" {
 		if decrypted := decryptKRC(krcDl.Content); decrypted != "" {
 			yrc = krcToYRC(decrypted)
 		}
 	}
-	return kugouResult{lrc: lrc, yrc: yrc, durationSecs: chosen.Duration, title: chosen.SongName, artist: chosen.SingerName, album: chosen.AlbumName}
+	return kugouResult{lrc: lrc, yrc: yrc, durationSecs: chosen.Duration, title: chosen.SongName, artist: chosen.SingerName, album: chosen.AlbumName, language: kugouCanonicalLanguage(chosen.TransParam.Language), cover: kugouAlbumCoverURL(ctx, chosen.AlbumID)}
+}
+
+// kugouAlbumCoverURL 按专辑 ID 查 album/info 接口拿封面(2026-08-31 加)。响应的
+// imgurl 字段是个带 "{size}" 占位符的模板(如
+// "http://imge.kugou.com/stdmusic/{size}/…/….jpg"),换成具体像素数才是能直接访问的
+// URL——400/480/800 实测都能 200,这里用 480,跟 qqCoverMaxEdge 取的档位量级一致。
+// albumID 为空(有些搜索结果确实没有)或请求失败都返回空串,调用方(enrich.go 的
+// coverOrFallback)会自然退到 Apple 封面,不是致命错误。
+func kugouAlbumCoverURL(ctx context.Context, albumID string) string {
+	if albumID == "" {
+		return ""
+	}
+	var out struct {
+		Data struct {
+			ImgURL string `json:"imgurl"`
+		} `json:"data"`
+	}
+	u := "http://mobilecdn.kugou.com/api/v3/album/info?albumid=" + neturl.QueryEscape(albumID)
+	if err := kugouGet(ctx, u, &out); err != nil || out.Data.ImgURL == "" {
+		return ""
+	}
+	cover := strings.ReplaceAll(out.Data.ImgURL, "{size}", "480")
+	// ⚠️ 2026-08-31 真实bug(用户报"酷狗的没有返回封面",截图里酷狗那条候选是空白占位图,
+	// netease 那条却有缩略图):酷我/acg 的这个接口原样返回的是 "http://" 前缀,collector
+	// 这边发请求不受影响(没有 ATS 限制),但这个 URL 之后会原样进 lyricCandidate.cover、
+	// 一路传到 Swift 侧的 AsyncImage——macOS App Transport Security 默认拒绝纯 HTTP 的
+	// 网络请求,图片静默加载失败、退回占位图标,不会报错也不会抛异常,只在真机 UI 上才
+	// 看得出来(拿 CLI 直查 cover_url 字符串本身看不出这个问题,之前用这个办法验证过、
+	// 没发现是因为凑巧没测到走 http 这条路的场景)。实测坐实同一张图换成 https 也是 200,
+	// 强制换成 https 就地修好,不需要额外配置 ATS 例外域名(改 Info.plist 加白名单域名是
+	// 更大范围的例外,没必要为一张图开这个口子)。
+	return strings.Replace(cover, "http://", "https://", 1)
 }

@@ -1,6 +1,6 @@
 # 15. 运行、部署与后台任务
 
-> 最后核对：2026-08-26 · 基线：05767ae+工作树
+> 最后核对：2026-08-30 · 基线：10f4061+工作树
 
 ## 定位
 
@@ -16,6 +16,12 @@
 ### 1. build.sh（构建+打包+部署一条龙）
 
 `swift build`（release，可多架构）→ `go build` collector → 组装 `.app` bundle（collector、media-control、lyrics-translate、.lproj 资源全拷进 `Contents/Resources/`；media-control 缺失时经 Homebrew 自动装）→ 架构检查 → 签名（ad-hoc）→ 经 launchd **kickstart** 重启 App；kickstart 后无存活进程时自动 `bootout+bootstrap` 兜底（LWCR 陈旧 codesigning 约束的自愈）→ 重载 collector job（刷新 launch constraint）。**`swift build` 通过 ≠ 已部署**——真机验证必须跑 build.sh（repo CLAUDE.md 三大硬规则之一）。
+
+**⚠️ 组装不在 /Applications 里就地做（2026-08-31 改）**：`FINAL_APP_DIR` 定下最终位置后，整个装配过程在**同目录的兄弟暂存包** `.Lyrimuse.app.stage.$$` 里进行，最后用 APFS 的 `renamex_np(RENAME_SWAP)`（`/usr/bin/python3` + ctypes，一次原子 vfs 操作）整体换进去。起因是多会话并发：两个会话同时跑 build.sh，实测撞出过 `install_name_tool: cannot rename …(No such file or directory)` 和 `Bootstrap failed: 5: Input/output error`（launchd 拿到写了一半的 bundle，App 起来了、collector 没起来）。根因不是「安装那一步」没互斥，而是原来从 `APP_DIR=` 那行往下近 340 行**全部**在原地增删改签同一个包，整段都是不安全窗口。
+
+  三个必须知道的细节：① **不能用 `mv`**——`mv 新 旧` 在旧目录已存在时不是覆盖而是**塞进去**（得到 `/Applications/Lyrimuse.app/Lyrimuse.app`），退出码 0、无输出、`set -euo pipefail` 拦不住，表现是「装完了但行为没变」；RENAME_SWAP 则没有任何「App 不存在」的窗口。② 换入后必须把 `APP_DIR`/`BIN` **重指回最终路径**，否则 restart 段三处 `pgrep -f "$BIN"` 和 `open "$APP_DIR"` 全部落空（进程命令行是 /Applications/…），脚本会永远判定「没起来」然后 exit 1。③ **media-control 的隐性兜底要显式补回来**：`brew` 里找不到它时那段拷贝被整个跳过，就地组装的年代旧子树原样留在包里等于「没动它」，暂存包里则压根不存在——不补的话 swap 会拿一个丢了 QQ 音乐支持的包覆盖掉本来完好的安装，而且只有一句 warning、退出码还是 0。现在在那个 else 分支里从现装包 `ditto` 继承一份，且**必须放在 codesign 之前**（签完再塞文件会破坏签名封印）。`--dest`（package.sh 用）**不套暂存**：它本来就装到自己的 mktemp 目录，不存在「替换正在使用的安装」这回事。
+
+  ⚠️ **这只解决「安装」这一类冲突，不解决「构建」那一类**。多会话共用同一棵源码树时，`error: input file '.../Foo.swift' was modified during the build` 仍然会发生——那是 SwiftPM 在编译期发现输入文件 mtime/内容变了，跟产物往哪放毫无关系，只能靠「同一时刻只有一个会话在改+编这棵树」解决（打招呼，或各自用独立 worktree）。同理 launchd 重启竞争（两边各自 bootout+bootstrap 同一个 label，正是 `Bootstrap failed: 5` 的另一半成因）也没被这次改动覆盖。顺带把 `FAT_DIR` 从固定的 `.build/fat` 改成 per-run `mktemp -d`——那是同一族的共享可写路径，一个会话的 `rm -rf` 会删掉另一个刚 lipo 出来的切片，SwiftPM 的 `.build/.lock` 只锁 `swift build` 本身、管不到它。
 
 ### 2. 常驻形态（两个 LaunchAgent）
 
@@ -49,12 +55,20 @@ collector 二进制打包在 `.app/Contents/Resources/` 内，由 `Bundle.main` 
 - **daily.go**：每天到 `dailyDigestTriggerHour` 后的第一次检查（半小时一查）推一条当日收听摘要；按 `features.DailyDigestSource` 选数据源；状态文件记「已推送到哪一天」防重启重推。
 - **weekly.go**：每周一条（2 小时一查），按 Last.fm 图表周或 ISO 周边界；状态文件记已推送周。
 - **digest.go**：拼内容（Top 歌曲/歌手各取 `digestTopN` 条，Bark 锁屏预览要能读完；LB 翻页 100 条/页）。
+  - **歌手归并（2026-08-30 加，此前完全没有）**：两条取数路径都按跟歌手榜（`topartists.go`）**同一套**口径归并再取 Top N。
+    修之前 digest 直接把接口返回的歌手原样取前 N，于是同一个二进制里同一个人在推送里是两个、在榜单里是一个（实测这台机器 389 个歌手写法里 1 例真的踩中：`张震岳`/`张震嶽`）。
+    - Last.fm 路径：`digestTopArtists` → `mergeAliasedArtists`（名字键 + mbid 并查集，走 `cacheOnlyArtistIdentity`，**只读本地缓存、零网络请求**，不给后台推送加延迟）。
+    - ListenBrainz 路径：LB 的收听记录里没有 mbid，并查集第二个信号用不上，只能按 `artistMergeNameKey` 分桶；展示名走 `artistMergeDisplayName`（只把已知罗马字艺名换成中文本名，**不**做繁简/大小写折叠——那两步只是判同一个人时内部用的，不该篡改用户库里原本的书写）。
+    - ⚠️ **归并必须发生在截断之前**，否则被截掉那条的次数永远加不回本尊身上；且 `mergeAliasedArtists` 结尾的 `sort.SliceStable` 是取 Top N 的前提（合并会让次数相加、名次变动）。两条都有断言钉着（`digestmerge_test.go`），并做过变异验证。
+    - 抽出 `digestTopArtists` 这个纯函数、而不是内联在 `lastfmDigestStats` 里，是因为后者要打网络、测不了：内联的话把归并那行删掉，单测照样全绿。
+    - 已知取舍（用户拍板）：合并后名次/次数会跟**历史推送**对不上，接受——一次性台阶好过两处口径永久不一致。
 - **notify.go/alerter.go**：推送通道，支持 Bark/钉钉(签名)/企业微信/Discord/飞书(签名)/Server酱（除 Server酱表单编码外都是 webhook+JSON 模子）。原「连续失败 N 次告警」能力已整体下线，alerter 只剩 push 载体。
 
 ### 5. 健康检查与诊断
 
-- `collector health-check`：CLI 汇总各子系统状态（供人工/脚本排查）。
+- `collector healthcheck`：CLI 汇总各子系统状态（配置/歌词来源开关/缓存/导出目录/ListenBrainz·Last.fm 配置，外加真拿两首探测曲实测各歌词源可用性 + 网络整体是否看起来通），供人工/脚本排查；2026-08-27 起也被 App 侧诊断导出直接调用，见第 14 章。
 - App 侧诊断导出（第 14 章）；collector 日志在 `~/Library/Logs/lyrimuse.log`。
+- **日志轮转（2026-08-27 加）**：`installLogScrubbing`（main 启动时最早调的那一步）顺带调 `rotateLogIfNeeded`（logrotate.go）——超过 30MB 就把旧文件归档成 `lyrimuse.log.old`（覆盖式，只留一份）、开一份新的。之前这个文件完全没有轮转过（`lyricstrace.go` 注释早就点名过这一先例），实测涨到过 13.5MB。只在**进程启动时**检查一次,不在运行期间定时轮询——collector 靠 `scheduleCollectorRestart`/launchd kickstart 本来就会被相对频繁地重启，启动时检查已经够用。故意不用系统级 `newsyslog`：那需要 root 权限写 `/etc/newsyslog.d/`，跟这个项目"尽量不依赖需要管理员权限的官方机制"的一贯取向（ad-hoc 签名放弃 SMAppService 走文件系统方案是同一个理由，见第 14 章已知坑）不搭。⚠️ 不能简单 `os.Rename` 完事：进程的 `os.Stderr` 此刻已经指向旧文件的 inode（launchd 通过 `StandardErrorPath` 打开、fork/exec 时继承给我们），rename 只改目录项，不会让已经打开的 fd 转向新路径下的新文件，必须显式 `os.OpenFile` 一份新文件再 `log.SetOutput` 过去。
 - `MediaControlHealth`：App 侧对 media-control 二进制做可用性探测。
 
 ### 6. 音量横幅（VolumeMonitor）
@@ -104,11 +118,13 @@ CoreAudio 属性监听（不拦音量键不轮询 osascript），系统输出音
 | 服务管理 | Settings/CollectorServiceManager.swift（`install` / `reconcileAfterLaunch` / `recordInstalledFingerprint` / `currentBinaryFingerprint`）、LyricsManager/CollectorControl.swift、LyrimuseCore/Local/LaunchdJobState.swift、CollectorStatus.swift |
 | 单实例 | lyrimuse-collector/singleinstance.go |
 | 联动唤起 | lyrimuse-collector/companionlaunch.go |
+| 首次解析取消信号 watcher | lyrimuse-collector/enrichcancel.go（跟 companionlaunch.go 同一种「独立节奏、poller.go `run()` 单开 goroutine、ctx 取消时退出」模式）；机制细节见第 09/11 章 |
 | 日报/周报 | daily.go、weekly.go、digest.go |
 | 推送通道 | notify.go `buildNotifyPayload`、alerter.go |
 | 健康检查 | healthcheckcli.go；App 侧 MediaControlHealth.swift |
 | 音量横幅 | Settings/VolumeMonitor.swift |
 | 网络观察 / 对外请求审计 | networkobs.go（`doHTTPTracked`）、networkobs_test.go |
+| 日志轮转 | logrotate.go（`rotateLogIfNeeded`/`logFilePath`）、logrotate_test.go；接线在 logscrub.go `installLogScrubbing` |
 | 自测 | Sources/lyrimuse-selftest/main.swift；scripts/check-windows.swift |
 
 ## 设计决策与已知坑

@@ -71,19 +71,13 @@ struct NotchWindowRoot: View {
         return controller.steadyCardWidth
     }
 
-    /// 卡片当前高度。收起态只留顶行那一条,稳态多一行歌词,展开再多一块。
-    private var cardHeight: CGFloat {
-        if controller.isCollapsed { return controller.contentTopInset }
-        return controller.contentTopInset
-            // 没有曲目时歌词行整行不渲染(见 NotchChromeSource.hasTrack),高度也别留 ——
-            // 留了就是用户报的那 44pt 空白。
-            + (controller.hasTrack ? NotchMetrics.compactRowHeight : 0)
-            + (controller.isExpanded
-               ? NotchMetrics.expandedExtraHeight(
-                   hasLyricPreview: controller.expandedShowsLyricPreview,
-                   hasScrubber: controller.expandedShowsScrubber)
-               : 0)
-    }
+    /// 卡片当前高度。收起态只留顶行那一条,稳态多一行歌词(用户关掉「显示歌词」时也不留),
+    /// 展开再多一块。
+    ///
+    /// ⚠️ 公式本体在 `NotchChromeSource` 的协议扩展里 —— 设置页编辑台读的是同一份。
+    /// 2026-08-31 之前这里和那边各写了一遍,而入参已经涨到四个;本章设计决策里那条
+    /// "两处各自判断必然漂"说的就是这种地方。
+    private var cardHeight: CGFloat { controller.cardHeight }
 
     var body: some View {
         NotchLyricsView(controller: controller)

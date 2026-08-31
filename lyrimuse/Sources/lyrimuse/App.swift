@@ -23,6 +23,11 @@ struct LyrimuseApp: App {
         Window(L10n.t("歌词管理"), id: "lyrics-manager") {
             LyricsManagerView()
         }
+        // 悬浮窗 ⚙ 快捷菜单「搜索歌词…」的独立小窗(2026-08-30)——故意跟"歌词窗口"
+        // 分开开:用户明确要求点了只弹这一个搜索页面,不需要连带拉起完整的歌词窗口。
+        Window(L10n.t("搜索歌词…"), id: "lyrics-quick-search") {
+            LyricsQuickSearchWindow()
+        }
         // 正经的标题栏窗口(不是悬浮歌词/灵动岛那种无边框浮层),展示完整歌词并跟随
         // 播放自动滚动——见 UI/LyricsWindowView.swift 顶部注释。不加
         // .windowResizability:跟"歌词管理"这个 Window 一样,让它跟着默认的

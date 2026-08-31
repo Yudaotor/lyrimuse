@@ -14,7 +14,7 @@ final class LyricsSearchService {
     static let shared = LyricsSearchService()
 
     /// 上一次还在跑的搜索子进程。2026-08-09 把「重新搜索」按钮在搜索途中也放开之后需要它:
-    /// 不杀掉的话,旧那一轮会继续跑满(最长 20 秒兜底超时),白占六个源的网络请求 —— 结果
+    /// 不杀掉的话,旧那一轮会继续跑满(最长 20 秒兜底超时),白占八个源的网络请求 —— 结果
     /// 反正会被调用方的 searchGeneration 判定作废、一行都不会显示。
     /// 用锁而不是 @MainActor:search() 的进程收尾在后台队列上,两边都要碰这个引用。
     private let processLock = NSLock()
@@ -49,6 +49,10 @@ final class LyricsSearchService {
             // v4(2026-08-22):跟 durationOff 量的不是同一样东西,文案必须分得开 ——
             // 那个是「歌词铺到哪儿 vs 曲长」,这个是「源自己说这首歌多长 vs 本地多长」。
             case "sourceDurationOff": return L10n.t("源自报曲长不符")
+            // v5(2026-08-27):这是全批候选打完分之后才补的一项负分,只在"逐字加分是唯一
+            // 让这个候选赢的理由,而另一个候选标题更吻合"时出现,见 collector 侧
+            // applyWordTimingTitleOverride 的注释。
+            case "wordTimingOverride": return L10n.t("标题吻合度更高的候选存在，撤销逐字加分")
             // v3(2026-08-12)新维度,与 collector match.go 的 scoreTerm kind 一一对应。
             // 旧 "source" case 已删:来源先验分 2026-08-09 从引擎移除后,score_terms 只来自
             // 实时搜索(不落缓存),不存在还带着旧字段的数据,这个分支是死代码。
@@ -63,6 +67,10 @@ final class LyricsSearchService {
             case "rejectCreditOnly": return L10n.t("整份只有署名行，没有正文")
             case "rejectNoLastTimestamp": return L10n.t("取不到最后一句的时间")
             case "rejectDurationMismatch": return L10n.t("时长明显对不上，也没有别的源印证")
+            // 2026-08-30 加:跟 rejectNotTimed 是同一类症状(没有时间戳)、不同的原因——
+            // 那个是"疑似解析失败",这个是"这个源明确说了只有纯文本,压根没有带时间戳的版本"
+            // (见 collector match.go 的 scoreRejectPlainTextOnly 头注)。
+            case "rejectPlainTextOnly": return L10n.t("仅有纯文本，没有时间戳")
             default: return kind
             }
         }
@@ -88,10 +96,14 @@ final class LyricsSearchService {
             case "versionTags": return L10n.t("括号里的 Live / Remix / Demo / Club Mix 等跟本地曲名对不上")
             case "sourceDurationOff":
                 return L10n.t("这个源自己声明的曲目时长跟本地差了 12% 以上，多半挂在另一次录音上")
+            case "wordTimingOverride":
+                return L10n.t("逐字时间轴本来赢在这上面，但另一个候选的标题更吻合查询词——大概率是另一次录音（比如不同现场版）的逐字版本，时间轴细不代表轴对得上这次播放")
             case "durationOff":
                 return L10n.t("最后一句的时间跟曲长差了 25% 以上；仍可选用，但会排在所有时长对得上的后面")
             case "rejectDurationMismatch":
                 return L10n.t("最后一句的时间跟曲长差了 25% 以上，多半是另一个版本")
+            case "rejectPlainTextOnly":
+                return L10n.t("这个源确实收录了这首歌，但只有不带时间戳的纯文本——可以在「歌词窗口」里当静态文字阅读，无法逐字/逐行跟随播放高亮")
             default: return ""
             }
         }
@@ -140,6 +152,11 @@ final class LyricsSearchService {
         let artist: String
         let album: String
         let coverURL: URL?
+        // 2026-08-30 加——true 时 lyrics 装的是没有时间戳的纯文本(见 collector
+        // scoredLyricCandidateResult.PlainTextOnly 头注)。跟别的候选不同,这条**不能**
+        // 用来做逐字/逐行同步展示,只能当静态文字读——「搜索候选歌词」弹窗要用它决定
+        // 要不要挂"无时间戳"警示标签,「歌词窗口」采纳后要用它决定走哪条渲染路径。
+        let isPlainTextOnly: Bool
 
         // 给候选选择界面展示的补充特性——是否逐字这一项 collector 已经算好(hasWordTiming),
         // 译文/罗马音/行数纯粹是本地字段是否非空/切行数,不需要 collector 额外计算。
@@ -162,8 +179,8 @@ final class LyricsSearchService {
         }
     }
 
-    // 2026-08-02 补上——之前 onUpdate 只传候选数组,六个源都没查到候选时,弹窗只能显示
-    // 一句笼统的"都没找到",分不清是这首歌真的没有网络歌词,还是网络整体不通导致六个源
+    // 2026-08-02 补上——之前 onUpdate 只传候选数组,八个源都没查到候选时,弹窗只能显示
+    // 一句笼统的"都没找到",分不清是这首歌真的没有网络歌词,还是网络整体不通导致八个源
     // 的请求全部发不出去。networkLooksDown 由 collector 侧统计"这一轮联网搜索期间发出
     // 的请求有没有全部失败"算出来(见 networkobs.go 的 networkLooksDown()),这里原样
     // 转发给调用方决定展示哪种空状态文案。
@@ -227,6 +244,12 @@ final class LyricsSearchService {
         /// applecover 不算)见 collector/enrich.go 的 lyricSearchUpdateFunc 注释。
         let sourcesDone: Int
         let sourcesTotal: Int
+        /// 这一轮里没给出候选的源,查得到具体原因的那几个(2026-08-31)——collector 侧
+        /// lyricSourceFailureReasons(searchcli.go)算出来,只覆盖 netease/musixmatch/
+        /// lyricfind 三个已经接了诊断旁路的源,给"歌词源可用情况"明细面板用。key 是源名,
+        /// value 是给用户看的中文说明;没查到具体原因的源不会出现在这个字典里(不代表
+        /// "没有原因",只是这个仓库目前没有对应信号,不编一个没核实过的理由)。
+        let sourceFailureReasons: [String: String]
         /// 至少一个源明确说这首是纯音乐(不只 lrclib,网易云 pureMusic 也会置位)。
         /// 用来把"一个候选都没有"这个结局分成"这首歌本来就没词"和"真的谁都没搜到"。
         let instrumental: Bool
@@ -279,7 +302,7 @@ final class LyricsSearchService {
     ) async throws {
         // withTaskCancellationHandler:调用方的 Task 被取消(.task 随视图消失、或
         // searchGeneration 换代)时顺手终结子进程 —— 原来没有任何取消接线,sheet 关掉/
-        // 采纳候选后 collector 子进程照跑满(六个源、20 秒兜底),NDJSON 还在往已消失的
+        // 采纳候选后 collector 子进程照跑满(八个源、20 秒兜底),NDJSON 还在往已消失的
         // 视图里灌,全是无人消费的废工(2026-08-19 性能审计;sheet 侧另有 onDisappear
         // 兜底,两层都在,谁先到谁生效——cancelRunning 幂等)。
         try await withTaskCancellationHandler {
@@ -360,6 +383,7 @@ final class LyricsSearchService {
                         // 可选 + 兜底 0:字段缺失不该让整行解码失败、把这一批候选整批丢掉。
                         sourcesDone: raw.sourcesDone ?? 0,
                         sourcesTotal: raw.sourcesTotal ?? 0,
+                        sourceFailureReasons: raw.sourceFailureReasons ?? [:],
                         // 优先新 key,缺失才退回旧 key —— 两个二进制各自独立部署,可能
                         // 出现「新 App + 旧 collector」(只重建了 App 没换 collector)。
                         instrumental: raw.instrumental ?? raw.lrclibInstrumental ?? false,
@@ -435,6 +459,7 @@ private struct RawSearchUpdate: Decodable {
     let networkLooksDown: Bool
     let sourcesDone: Int?
     let sourcesTotal: Int?
+    let sourceFailureReasons: [String: String]?
     /// collector 一直在输出这个信号,Swift 侧 2026-08-21 才开始接:它把"一个候选都没有"
     /// 分成"这首歌本来就没词"和"真的谁都没搜到"两种,「重新自动匹配」的结果文案要区分。
     ///
@@ -462,6 +487,7 @@ private struct RawCandidate: Decodable {
     let artist: String?
     let album: String?
     let coverURL: String?
+    let plainTextOnly: Bool?
 
     enum CodingKeys: String, CodingKey {
         case source, lyrics, score, title, artist, album
@@ -471,6 +497,7 @@ private struct RawCandidate: Decodable {
         case hasWordTiming = "has_word_timing"
         case scoreTerms = "score_terms"
         case coverURL = "cover_url"
+        case plainTextOnly = "plain_text_only"
     }
 }
 
@@ -489,6 +516,7 @@ private extension LyricsSearchService.Candidate {
             artist: raw.artist ?? "",
             album: raw.album ?? "",
             coverURL: raw.coverURL.flatMap(URL.init(string:)),
+            isPlainTextOnly: raw.plainTextOnly ?? false,
             lineCount: LyricsSearchService.Candidate.countLines(of: raw.lyrics)
         )
     }

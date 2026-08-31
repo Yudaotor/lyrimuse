@@ -78,6 +78,15 @@ func TestCoverNeedsAlbumCheck(t *testing.T) {
 			album: "KUN", want: false,
 		},
 		{
+			// 2026-08-26 收严:albumScore 的 100 分档("宽松包含"——本地专辑名的基础部分
+			// 是候选专辑名的超集,比如带了"(Gold) [Explicit]"这类版本后缀)不等于真的对上
+			// 版,得补查。方大同「很不低调」实测坐实:网易云那张《JTW西游记》是本地
+			// 《JTW 西游记 (Gold) [Explicit]》的子串、算 100 分,但两版封面完全不同。
+			name:  "只是宽松包含(100 分,版本后缀被当成子串忽略):也要补查,不是真的对上版",
+			e:     enrichEntry{CoverSource: "netease", CoverURL: "u", CoverAlbum: "JTW西游记"},
+			album: "JTW 西游记 (Gold) [Explicit]", want: true,
+		},
+		{
 			name:  "Apple 那档不查(本来就是按 albumScore 择优选的)",
 			e:     enrichEntry{CoverSource: "apple", CoverURL: "u"},
 			album: "KUN", want: false,
@@ -180,10 +189,52 @@ func TestCoverSwapAllowed(t *testing.T) {
 			fresh: enrichEntry{CoverURL: "new", CoverSource: "apple", CoverAlbum: "Deadman - Single", NeteaseURL: "n"},
 			album: "KUN", want: false,
 		},
+		{
+			// 2026-08-26:方大同「很不低调」/「烦」——网易云、Apple 都只收录了旧版
+			// 《JTW西游记》,新版《JTW 西游记 (Gold) [Explicit]》只有 QQ 音乐有。QQ 那档
+			// 从不回传 CoverAlbum,不能套"网易云应答过 + albumScore > 0"那条正面证据,
+			// 得单独放行,否则永远换不进去。
+			name:  "跨源到 QQ:即使没有 NeteaseURL/CoverAlbum 也换(qqCoverFallback 自己已经把关)",
+			old:   enrichEntry{CoverURL: "old", CoverSource: "netease", CoverAlbum: "JTW西游记"},
+			fresh: enrichEntry{CoverURL: "new", CoverSource: "qq"},
+			album: "JTW 西游记 (Gold) [Explicit]", want: true,
+		},
 	}
 	for _, c := range cases {
 		if got := coverSwapAllowed(c.old, c.fresh, c.album); got != c.want {
 			t.Errorf("%s: coverSwapAllowed = %v, want %v", c.name, got, c.want)
 		}
+	}
+}
+
+// 2026-08-27:方大同「Once」——QQ 搜索对这首歌唯一收录的记录专辑名文本上对得上,挂的
+// 封面却是另一款合集版,跟同专辑其它曲目实际的单张封面是两张图。siblingAlbumCover 是
+// 兜底的最后一道:同专辑邻居里已经有 qq 定案的封面就借来用。
+func TestSiblingAlbumCover(t *testing.T) {
+	savedCache := enrichCache
+	defer func() { enrichCache = savedCache }()
+
+	const album = "JTW 西游记 (Gold) [Explicit]"
+	enrichCache = map[string]enrichEntry{
+		"方大同|很不低调|" + album: {CoverURL: "https://qq/right.jpg", CoverSource: "qq"},
+		// 网易云那档即使 CoverAlbum 打了分也不该被借用——它自己都信不过。
+		"方大同|放不过自己|" + album: {CoverURL: "https://netease/loose.jpg", CoverSource: "netease", CoverAlbum: "JTW 西游记 (Gold)"},
+		// 别的歌手同名专辑不该被借用。
+		"某歌手|同名曲|" + album: {CoverURL: "https://qq/wrong-artist.jpg", CoverSource: "qq"},
+		// 不同专辑不该被借用。
+		"方大同|烦|JTW西游记": {CoverURL: "https://qq/wrong-album.jpg", CoverSource: "qq"},
+	}
+
+	url, source := siblingAlbumCover("方大同", "Once", album)
+	if url != "https://qq/right.jpg" || source != "qq" {
+		t.Errorf("siblingAlbumCover = (%q, %q), want (https://qq/right.jpg, qq)", url, source)
+	}
+
+	// 专辑里一个 qq 定案的邻居都没有:原样返回空,不该瞎凑。
+	enrichCache = map[string]enrichEntry{
+		"方大同|放不过自己|" + album: {CoverURL: "https://netease/loose.jpg", CoverSource: "netease", CoverAlbum: "JTW 西游记 (Gold)"},
+	}
+	if url, _ := siblingAlbumCover("方大同", "Once", album); url != "" {
+		t.Errorf("没有 qq 定案的邻居时不该借到东西,got %q", url)
 	}
 }

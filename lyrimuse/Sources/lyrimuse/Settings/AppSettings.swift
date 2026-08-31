@@ -11,11 +11,68 @@ import AppKit
 // "歌词窗口"(LyricsWindowView.artworkBackground)完全一致,只是缩小到灵动岛胶囊尺寸。
 // 没有封面数据(还没解析出来/这首歌本来就没有封面)时退回 darkGradient 的固定渐变,
 // 不会露出空白背景,具体判断逻辑在 NotchLyricsView.backgroundLayer。
+//
+// ⚠️ **这个枚举不只决定背景**(2026-08-31 起):`.coverArt` 同时让**前景**(歌名/歌手/歌词/
+// 逐字染色/播放键/进度条/音浪)走封面主色,其余三种风格前景恒为白 —— 也就是"跟随封面"这个
+// 名字现在指的是**整张卡**跟着封面走,而不只是背景。在此之前前景由 `followsCoverArt` 决定,
+// 而那是**桌面悬浮歌词**的开关、入口也全在悬浮歌词那一段,只开灵动岛的用户够不到它,并且跟
+// 这里的「跟随封面」同名不同义。合并的完整理由见 NotchLyricsView 里 `NotchPlayback.accent`
+// 的注释。改这个枚举时记得它现在牵着两处渲染。
 enum NotchCardStyle: String, Codable, Hashable, CaseIterable {
     case solidBlack
     case frostedGlass
     case darkGradient
     case coverArt
+}
+
+/// 灵动岛**稳态/展开**那一行里,左右两只耳朵各显示什么。displayName 定义在
+/// NotchLyricsView.swift(跟卡片本身的 UI 强相关),这里只负责持久化用的 rawValue。
+///
+/// ⚠️ **只管稳态/展开那一套耳朵,管不到收起态**(没在播放且没 hover 时的 iPhone 灵动岛式
+/// 极简形态:左封面、右音浪,2026-08-19 用户拍板)。理由是硬的:收起态单侧耳宽是
+/// `NotchMetrics.collapsedEarWidth` = 34pt,11.5pt 字号下连两个汉字都装不下,歌名/歌手/专辑
+/// 放进去只能是个断头。给它单独配一套 = 多两个下拉、而可选项只剩图标类,收益配不上复杂度。
+///
+/// ⚠️ **音浪(EqualizerBars)不在这个列表里**,它恒定钉在右耳外缘 —— 它是播放指示灯不是内容,
+/// 而且 2026-08-19 特意让它"在两种形态下都住右耳、收放切换时不横跳"。
+/// **唯一的例外是右耳选了 `.controls`**:那时音浪让位(见 NotchLyricsView.topRow)。理由不是
+/// "挤不下"这么将就 —— 播放/暂停那枚按钮的图标本身就在报播放状态(在播时画的是 ⏸),音浪摆在
+/// 它旁边是同一件事说两遍;顺带也解决了右耳那点宽度不够摆下三键 + 音浪的问题。
+///
+/// ⚠️ `.artwork` / `.controls` 两个是 2026-08-31 用户点名要加的,而它们各自都有一段**曾经被
+/// 判定为"不该放进耳朵"的历史**。加进来之后那些顾虑没有消失,只是变成了用户自己的取舍;
+/// 记在这里免得下一个人以为是没想过就塞进来的:
+///   - **封面**:`NotchLyricsView.artworkThumbnail` 上方有实测记录 —— 360pt 宽配实测 179pt
+///     刘海,单耳只有 80.5pt,当年按歌词行那枚 32pt 的尺寸塞进来"实机看过就是放不下"。
+///     现在按**收起态那枚**的尺寸走(`contentTopInset − 10`,约 23pt),放得下;而且歌词行末尾
+///     那枚仍在,两处会同时出现同一张封面,这是选它的人自己的选择。
+///   - **播放控制键**:2026-08-19 从耳朵挪进了 hover 展开卡,理由是"岛本来就是 hover 展开的,
+///     光标到达耳朵之前卡片已经展开,耳朵里再留一枚播放键是重复目标"。那条论证今天依然成立
+///     —— 但它论的是**默认**该摆哪儿,不是"不许摆"。尺寸沿用当年耳朵里那一档
+///     (`controlButton` 的 `primary` 两档默认值 15/18pt,比展开卡里的 22pt 小一号),那两档
+///     默认值从那次搬家起就一直留在代码里没有调用方,现在重新有了。
+enum NotchEarModule: String, Codable, Hashable, CaseIterable {
+    case title
+    case artist
+    case album
+    /// 专辑封面小图。尺寸按收起态那枚走(约 23pt),不是歌词行末尾那枚 32pt 的 —— 耳朵只有
+    /// `contentTopInset` 那么高。点它跟另外两处封面一样:打开歌词窗口。
+    case artwork
+    /// 上一首 / 播放暂停 / 下一首。放进右耳时音浪让位,见上面那段⚠️。
+    case controls
+    /// 已播时长。稳态下卡片里没有进度条(那个只在 hover 展开时才有),这是唯一能看时间的地方。
+    case elapsed
+    /// 剩余时长(带负号)。曲目时长未知时整块留白。
+    case remaining
+    case none
+}
+
+/// 播放指示条(音浪/EqualizerBars)贴哪只耳朵的外缘——2026-08-31 用户要求把"音浪固定贴右耳"
+/// 开放成可配(原来写死在 NotchLyricsView.topRow 里,见那段⚠️)。它依然**不是** NotchEarModule
+/// 的一个选项:音浪是播放指示灯不是内容,这条边界没变,变的只是"贴哪一侧、要不要贴"。
+enum NotchEqualizerEar: String, Codable, Hashable, CaseIterable {
+    case left
+    case right
 }
 
 // 菜单栏歌词那一格怎么占位。两种模式**只在这一句比设定宽度短时**才有区别 ——
@@ -49,6 +106,7 @@ final class AppSettings: ObservableObject {
         static let collectorServiceEnabled = "np:collectorServiceEnabled"
         static let showInDock = "np:showInDock"
         static let showNextLinePreview = "np:showNextLinePreview"
+        static let overlayDuetAlignmentOverride = "np:overlayDuetAlignmentOverride"
         static let showLyricsInMenuBar = "np:showLyricsInMenuBar"
         static let menuBarLyricsMaxChars = "np:menuBarLyricsMaxChars"
         static let menuBarLyricsWidth = "np:menuBarLyricsMaxWidth"
@@ -71,6 +129,9 @@ final class AppSettings: ObservableObject {
         // PlaybackCoordinator.displayForegroundColor。跟 foregroundColorHex 是独立的
         // 两个字段:开着这个模式时 foregroundColorHex 仍然保留、当"没有封面数据时的
         // 备用色"用,不会被覆盖/清空。
+        // ⚠️ 作用范围**只有桌面悬浮歌词**(2026-08-31 起)。此前它连带管着灵动岛整卡的前景
+        // 取色,而它的入口全挂在悬浮歌词上;现在灵动岛那一半并进了 `notchCardStyle` 的
+        // 「跟随封面」选项,两边彻底独立,详见 NotchCardStyle 上方那段注释。
         static let followsCoverArt = "np:followsCoverArt"
         static let lockPosition = "np:lockPosition"
         static let hideDuringScreenCapture = "np:hideDuringScreenCapture"
@@ -89,6 +150,12 @@ final class AppSettings: ObservableObject {
         static let classicOverlayEnabled = "np:classicOverlayEnabled"
         static let notchOverlayEnabled = "np:notchOverlayEnabled"
         static let notchCardStyle = "np:notchCardStyle"
+        static let notchShowLyrics = "np:notchShowLyrics"
+        static let notchCollapsesWhenPaused = "np:notchCollapsesWhenPaused"
+        static let notchShowsEqualizer = "np:notchShowsEqualizer"
+        static let notchEqualizerEar = "np:notchEqualizerEar"
+        static let notchLeftEar = "np:notchLeftEar"
+        static let notchRightEar = "np:notchRightEar"
         static let notchScreenID = "np:notchScreenID"
         static let notchAllScreens = "np:notchAllScreens"
         // 2026-08-05 之前,"这种悬浮歌词要不要显示"这一件事有**两份**独立持久化:上面这两个
@@ -104,6 +171,13 @@ final class AppSettings: ObservableObject {
         // 看懂),自定义配色主题数组是个例外,但用 JSON 编码成字符串(不是 Data blob)
         // 存,`defaults read` 好歹还能读出一段可辨认的 JSON 文本,不是不可读的乱码。
         static let customColorThemesJSON = "np:customColorThemesJSON"
+        // 平台 id → 已配对浏览器 bundle id 集合。同样存 JSON 字符串(不是 Data),理由见
+        // customColorThemesJSON 上面那条注释;Set 编码出来是 JSON 数组,`defaults read`
+        // 照样能看懂。
+        static let browserPlatformPairsJSON = "np:browserPlatformPairsJSON"
+        // 用户手动挑进来的浏览器 bundle id → 实测判定出的引擎族("chromium"/"safari")。
+        // 同样存 JSON 字符串,理由同上。
+        static let manualBrowserFamiliesJSON = "np:manualBrowserFamiliesJSON"
     }
 
     // 字体/字号的默认值,跟配色四项(见下方 init())一样单独给一个有名字的默认值:
@@ -207,6 +281,13 @@ final class AppSettings: ObservableObject {
     }
     @Published var showNextLinePreview: Bool {
         didSet { defaults.set(showNextLinePreview, forKey: Keys.showNextLinePreview) }
+    }
+    /// 悬浮歌词的对齐方式覆盖(2026-08-29,GitHub issue #2)。只有 `LyricsOverlayView`
+    /// 读它,消费方分工见 `OverlayDuetAlignmentOverride` 声明处注释。
+    @Published var overlayDuetAlignmentOverride: OverlayDuetAlignmentOverride {
+        didSet {
+            defaults.set(overlayDuetAlignmentOverride.rawValue, forKey: Keys.overlayDuetAlignmentOverride)
+        }
     }
     // 默认关闭:状态栏平时只是个不起眼的小图标,打开后会换成当前歌词行的文字,占用
     // 面积明显变大——不应该在谁都没主动选择的情况下就改变状态栏原有的观感。
@@ -412,6 +493,53 @@ final class AppSettings: ObservableObject {
     @Published var notchCardStyle: NotchCardStyle {
         didSet { defaults.set(notchCardStyle.rawValue, forKey: Keys.notchCardStyle) }
     }
+    // 稳态/展开那一行左右两只耳朵各显示什么(见 NotchEarModule)。跟 notchCardStyle 同一个
+    // 模式:纯持久化,NotchLyricsView 每次渲染直接读,不需要连带调窗口控制器"生效"——它们
+    // 只改这一行画什么,不改任何几何。
+    // 默认 title / artist = 改动前写死的那一套,老用户升上来观感逐像素不变。
+    /// 灵动岛要不要画歌词行(2026-08-31 用户要求:「多一种形态,对于有一些想要显示播放状态、
+    /// 但又不想有歌词挡住视线的人」)。关掉之后卡片**只保留菜单栏那条高度**(顶行那一条),
+    /// 歌词行连同它那 44pt 一起不渲染 —— 于是灵动岛退化成一条贴着刘海的状态栏,不遮任何东西。
+    /// hover 展开完全不受影响(那是够到播放控制和进度条的唯一入口):播放控制、进度条、下一句
+    /// 歌词预览、当前播放行照常显示,跟开着这个开关时一模一样(2026-08-31 回归修复,见
+    /// NotchChromeSource.showsLyricRow 的注释)。
+    ///
+    /// ⚠️ 判据本身**必须经 `NotchChromeSource.showsLyrics`/`showsLyricRow` 走**,不许在视图里
+    /// 直接读这个属性:卡片高度(NotchWindowRoot)、内容渲染(NotchLyricsView)、设置页编辑台
+    /// 三处要用同一个值,而后两者拿到的是替身 chrome。三处各读各的必然漂,漂的表现是"行不见了
+    /// 高度还留着"。
+    @Published var notchShowLyrics: Bool {
+        didSet { defaults.set(notchShowLyrics, forKey: Keys.notchShowLyrics) }
+    }
+    /// 暂停(或广告插播)时灵动岛要不要缩到最小 —— 只剩贴着刘海的一小块,两只耳朵退化成
+    /// "左封面、右音浪"的 iPhone 灵动岛式极简形态(2026-08-19 用户拍板过这个默认形态,
+    /// 2026-08-31 用户要求把它开放成可关闭的配置项)。关掉之后暂停时卡片保持原来的稳态/
+    /// 展开尺寸不收缩,跟正常播放时一样显示歌名/歌词(位置冻结在暂停那一刻)。
+    ///
+    /// 默认 `true`——维持这个功能一直以来的既有行为,老用户升上来观感不变,只是现在能关了。
+    ///
+    /// ⚠️ 判据本身**必须经 `NotchLyricsWindowController.isCollapsed` 走**(同上面 showsLyrics
+    /// 那条纪律):真窗口那一侧订阅这个设置后镜像成 `@Published`,不在计算属性里直接读
+    /// AppSettings——那样设置一改,依赖 isCollapsed 的视图不会立刻收到 objectWillChange。
+    @Published var notchCollapsesWhenPaused: Bool {
+        didSet { defaults.set(notchCollapsesWhenPaused, forKey: Keys.notchCollapsesWhenPaused) }
+    }
+    /// 要不要显示播放指示条(音浪)。默认 `true`——维持一直以来的既有行为,老用户升上来
+    /// 观感不变。关掉之后两只耳朵都只按各自选的模块渲染,不再固定带音浪(见
+    /// NotchLyricsView.topRow 头上那段⚠️)。
+    @Published var notchShowsEqualizer: Bool {
+        didSet { defaults.set(notchShowsEqualizer, forKey: Keys.notchShowsEqualizer) }
+    }
+    /// 音浪贴哪只耳朵的外缘。默认 `.right`——维持一直以来的既有行为(音浪原来写死在右耳)。
+    @Published var notchEqualizerEar: NotchEqualizerEar {
+        didSet { defaults.set(notchEqualizerEar.rawValue, forKey: Keys.notchEqualizerEar) }
+    }
+    @Published var notchLeftEar: NotchEarModule {
+        didSet { defaults.set(notchLeftEar.rawValue, forKey: Keys.notchLeftEar) }
+    }
+    @Published var notchRightEar: NotchEarModule {
+        didSet { defaults.set(notchRightEar.rawValue, forKey: Keys.notchRightEar) }
+    }
     // 灵动岛贴在哪块屏幕上——存的是显示器 UUID(见 ScreenIdentity),空字符串 = 自动
     // (挑有刘海的那块)。跟 lockPosition/notchContentWidth 同一个模式:这里只负责持久化,
     // 不碰 NSWindow,由 SettingsView 的 Binding.set 显式调用窗口控制器让它立刻生效。
@@ -483,6 +611,34 @@ final class AppSettings: ObservableObject {
             defaults.set(json, forKey: Keys.customColorThemesJSON)
         }
     }
+    // 设置页"浏览器歌词同步"卡片:哪个网页音乐平台(BrowserPositionProbe.supportedPlatforms
+    // 的 id)配对了哪些浏览器(FeatureSettingsStore.trustedPlayers 的 bundle id)。只是
+    // AppSettings 这边的持久化——真正让探针生效要靠 SettingsView 双写进
+    // BrowserPositionProbe.shared.platformBrowserPairs(跟 romanizationScripts 同一个模式,
+    // 见那边注释),这个属性本身不会被 LyrimuseCore 直接读到。
+    @Published var browserPlatformPairs: [String: Set<String>] {
+        didSet {
+            let json = (try? JSONEncoder().encode(browserPlatformPairs)).flatMap { String(data: $0, encoding: .utf8) } ?? "{}"
+            defaults.set(json, forKey: Keys.browserPlatformPairsJSON)
+        }
+    }
+
+    // 用户自己从「应用程序」里挑进来的浏览器(2026-08-31,用户:「这里点+号出来的是否可以加
+    // 一个选项是自己在本机的应用程序里面选」)。bundle id → 引擎族的 rawValue。
+    //
+    // 存的是**判定结果**而不是"用户加过这个 App":引擎族是靠读那个 App 的脚本定义现场判出来的
+    // (BrowserAutomationPermission.detectedFamily),把结论存下来,免得每次启动都去磁盘上
+    // 重读一遍别人的 bundle。App 被卸载/换成别的版本时最坏是多留一条无效记录 —— 而
+    // `isInstalled` 这道门会让它不出现在任何候选里,不会有实际影响。
+    //
+    // 跟 browserPlatformPairs 同一个模式:这边只管持久化,运行期要靠调用点双写进
+    // BrowserAutomationPermission.manuallyAddedFamilies(启动时在 AppDelegate 灌一次)。
+    @Published var manualBrowserFamilies: [String: String] {
+        didSet {
+            let json = (try? JSONEncoder().encode(manualBrowserFamilies)).flatMap { String(data: $0, encoding: .utf8) } ?? "{}"
+            defaults.set(json, forKey: Keys.manualBrowserFamiliesJSON)
+        }
+    }
 
     // 缓存值——LyricsOverlayView.body 随 poller.currentLine 每 50ms 重跑一次(逐字填色
     // 需要),不应该每次渲染都重新解析 hex 字符串/重新查 NSFontManager(会在换行瞬间跟
@@ -531,6 +687,8 @@ final class AppSettings: ObservableObject {
         showInDock = (defaults.object(forKey: Keys.showInDock) as? Bool) ?? true
         // 默认开。多显示一句下文对跟读几乎总是有用的,而这一项本身不占额外窗口高度。
         showNextLinePreview = (defaults.object(forKey: Keys.showNextLinePreview) as? Bool) ?? true
+        overlayDuetAlignmentOverride = defaults.string(forKey: Keys.overlayDuetAlignmentOverride)
+            .flatMap(OverlayDuetAlignmentOverride.init(rawValue:)) ?? .automatic
         showLyricsInMenuBar = (defaults.object(forKey: Keys.showLyricsInMenuBar) as? Bool) ?? false
         menuBarLyricsMaxChars = (defaults.object(forKey: Keys.menuBarLyricsMaxChars) as? Int) ?? 60
         // 默认 200pt:大约中文 15 个字、英文 30 个字,菜单栏上占一小条,不至于把右边
@@ -602,6 +760,13 @@ final class AppSettings: ObservableObject {
         classicOverlayEnabled = classicOn
         notchOverlayEnabled = notchOn
         notchCardStyle = defaults.string(forKey: Keys.notchCardStyle).flatMap(NotchCardStyle.init(rawValue:)) ?? .coverArt
+        notchShowLyrics = (defaults.object(forKey: Keys.notchShowLyrics) as? Bool) ?? true
+        notchCollapsesWhenPaused = (defaults.object(forKey: Keys.notchCollapsesWhenPaused) as? Bool) ?? true
+        notchShowsEqualizer = (defaults.object(forKey: Keys.notchShowsEqualizer) as? Bool) ?? true
+        notchEqualizerEar = defaults.string(forKey: Keys.notchEqualizerEar)
+            .flatMap(NotchEqualizerEar.init(rawValue:)) ?? .right
+        notchLeftEar = defaults.string(forKey: Keys.notchLeftEar).flatMap(NotchEarModule.init(rawValue:)) ?? .title
+        notchRightEar = defaults.string(forKey: Keys.notchRightEar).flatMap(NotchEarModule.init(rawValue:)) ?? .artist
         // 默认开:它是"正在播放"最直观的一个信号,而且不占几个像素。
         notchAllScreens = defaults.bool(forKey: Keys.notchAllScreens)
         notchScreenID = defaults.string(forKey: Keys.notchScreenID) ?? ""
@@ -618,6 +783,20 @@ final class AppSettings: ObservableObject {
             customColorThemes = themes
         } else {
             customColorThemes = []
+        }
+        if let json = defaults.string(forKey: Keys.browserPlatformPairsJSON),
+           let data = json.data(using: .utf8),
+           let pairs = try? JSONDecoder().decode([String: Set<String>].self, from: data) {
+            browserPlatformPairs = pairs
+        } else {
+            browserPlatformPairs = [:]
+        }
+        if let json = defaults.string(forKey: Keys.manualBrowserFamiliesJSON),
+           let data = json.data(using: .utf8),
+           let families = try? JSONDecoder().decode([String: String].self, from: data) {
+            manualBrowserFamilies = families
+        } else {
+            manualBrowserFamilies = [:]
         }
         // didSet 对属性在自己 init() 里的这次赋值不会触发(Swift 语义:属性观察者不响应
         // "首次赋初值"这一步),不能赌它会连带把上面 7 个缓存值填对——显式调一次,幂等、

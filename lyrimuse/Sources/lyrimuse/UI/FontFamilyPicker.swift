@@ -44,9 +44,17 @@ struct FontFamilyPicker: View {
         }
     }
 
-    private var currentLabel: String {
-        selection.isEmpty ? L10n.t("系统字体") : selection
+    /// 族名怎么显示给人看:空串是"跟随系统字体",其余直接用族名。
+    ///
+    /// static 而不是只留下面那个私有计算属性(2026-08-30):悬浮歌词编辑台的工具栏要在
+    /// 「Aa 文字…」按钮上显示同一截摘要(见 OverlayStyleSummary.text),而那个位置手里
+    /// 只有一个字符串、构造不出这个 View。"空串 = 系统字体"这条规则只能有一处 ——
+    /// 抄一份的话,以后把哨兵值从空串换成别的,漏改的那处会显示成一个空白按钮。
+    static func displayName(for family: String) -> String {
+        family.isEmpty ? L10n.t("系统字体") : family
     }
+
+    private var currentLabel: String { Self.displayName(for: selection) }
 
     var body: some View {
         Button {

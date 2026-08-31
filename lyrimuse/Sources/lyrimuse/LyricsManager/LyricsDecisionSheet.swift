@@ -9,6 +9,13 @@ import SwiftUI
 // 刻意只读:这里不提供"改用某条候选"按钮 —— 想换歌词走「联网搜索候选歌词」那条路,
 // 它拿的是新鲜正文;决策记录里根本没有正文(collector 侧三条铁律之一,见 decision.go),
 // 也就不存在"从存档采纳"这种操作。
+// collector 当前的打分算法版本(match.go 的 lyricsScoringVersion 常量)——两边手工保持
+// 一致,collector 每次改动打分公式就同步改一次这里。跟 EnrichCacheKeys.swift 里那些
+// 手工镜像 collector 常量的字段(crc32 表、归一化规则)是同一种做法:这个数字纯粹是
+// "存档那一刻用的是第几版算法",不是需要在界面上展示给用户看的版本号(2026-08-31 用户
+// 反馈"v4"这种裸编号没有对照、看不出新旧),只用来判断存档是不是用旧算法跑的。
+private let currentLyricsScoringVersion = 6
+
 struct LyricsDecisionSheet: View {
     let summary: EnrichCacheStore.Summary
     /// 展示页签:「当前歌词的出处」在前、「最近一次评估」在后;同一轮只留一份(见 init)。
@@ -149,7 +156,9 @@ struct LyricsDecisionSheet: View {
         if let applied = decision.applied {
             head.append(applied ? L10n.t("已采用") : L10n.t("评估后维持原状"))
         }
-        if let version = decision.scoringVersion { head.append("v\(version)") }
+        if let version = decision.scoringVersion, version < currentLyricsScoringVersion {
+            head.append(L10n.t("旧打分算法"))
+        }
         if let ts = decision.decidedAt, ts > 0 {
             head.append(Date(timeIntervalSince1970: TimeInterval(ts))
                 .formatted(date: .abbreviated, time: .shortened))
@@ -191,8 +200,11 @@ struct LyricsDecisionSheet: View {
                              text: applied ? L10n.t("已采用") : L10n.t("评估后维持原状"),
                              tint: applied ? .green : .secondary)
                 }
-                if let version = decision.scoringVersion {
-                    InfoChip(icon: "number", text: "v\(version)", tint: .secondary)
+                // 不展示具体版本号(裸编号没有对照、用户看不出新旧,见
+                // currentLyricsScoringVersion 头注),只在存档确实比当前算法旧时提示一句——
+                // 呼应面板副标题"现在重新搜索结果可能不同"那句话,给出具体原因。
+                if let version = decision.scoringVersion, version < currentLyricsScoringVersion {
+                    InfoChip(icon: "arrow.triangle.2.circlepath", text: L10n.t("旧打分算法"), tint: .orange)
                 }
                 if let ts = decision.decidedAt, ts > 0 {
                     InfoChip(icon: "calendar",

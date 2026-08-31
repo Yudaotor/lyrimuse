@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -25,8 +26,11 @@ import (
 //
 //  1. **本功能上线之前的收听补不回来** —— 那时候一次收听只流向 Last.fm / ListenBrainz /
 //     网页中继三个都需要账号的地方,没连账号就等于没落盘。数据不存在,不是"存了没发"。
-//  2. **Last.fm 只接受约两周内的时间戳**。更老的会被服务端 ignore(现有 lastfm.go 的
-//     call() 里那条注释就写了 accepted=0 的成因之一是"时间戳超两周")。所以回填的有效
+//  2. **Last.fm 只接受约两周内的时间戳**。更老的会被服务端 ignore。⚠️ 这一条的依据是
+//     社区口径,**本仓库内没有实证**:原文引的是 lastfm.go call() 里的一句注释,而那句
+//     2026-08-30 已删——它对**活路径**不成立(当场提交不可能超窗),是从回填场景抄过去的
+//     猜测。删掉不影响回填侧这条限制本身,但要调 backfillMaxAge 的人得自己实测,别再顺着
+//     那条引用找依据。所以回填的有效
 //     窗口是最近两周,不是"整份历史"。超窗的条目会被标记成 skippedTooOld,不会反复重试,
 //     UI 上单独报数,不混进"已补"里假装成功。
 //
@@ -169,9 +173,22 @@ func (s *lastfmScrobbler) scrobbleBatch(ctx context.Context, items []listenLogLi
 
 	p := map[string]string{}
 	for i, it := range items {
-		// 跟单条路径走同一次折叠判定,否则同一首歌两条路提交出去的艺人名会不一致
-		// (合唱串折叠的理由见 lastfmcollapse.go)。resolve 内部有 30 天缓存。
-		artist := s.collapse.resolve(ctx, it.AR, it.TI)
+		// 歌手名**原样用日志里存的播放器原始标签**(见 listenLogLine.AR 注释——那正是
+		// 为此存的原始输入)。
+		//
+		// ⚠️ 2026-08-31 改。这里 2026-08-27 曾补过一层 canonical_artist 替换,目的是
+		// "跟活路径口径一致"。现在活路径(lbMeta)已经撤销了那层替换,这里必须**同步
+		// 撤销** —— 否则就会反过来出现"当场提交发原串、事后回填发改写名"的新分裂,
+		// 正是当初补它想消灭的那个问题。撤销的完整依据见 lb.go 里 lbMeta 那段注释
+		// (Last.fm 官方明确反对自动套用纠正 / 业界 9 个 scrobbler 无一默认这么做 /
+		// 本机审计实测有真错)。
+		//
+		// 顺带:少了那次 trackEnrichment 调用,回填批次不再为每一条去查一遍富化缓存,
+		// 也少了一层"回填时才第一次解析这首歌"的意外联网。
+		// 合唱串处理跟活路径走**同一个**函数(resolveScrobbleArtist),否则同一首歌两条路
+		// 提交出去的艺人名会不一致。2026-08-31 起它是纯静态开关、不联网,所以这里也不再
+		// 需要 ctx。
+		artist := resolveScrobbleArtist(it.AR)
 		idx := strconv.Itoa(i)
 		p["artist["+idx+"]"] = artist
 		p["track["+idx+"]"] = it.TI
@@ -179,9 +196,10 @@ func (s *lastfmScrobbler) scrobbleBatch(ctx context.Context, items []listenLogLi
 		if it.AL != "" {
 			p["album["+idx+"]"] = it.AL
 		}
-		if it.DUR > 0 {
-			p["duration["+idx+"]"] = strconv.FormatInt(int64(it.DUR), 10)
-		}
+		// 跟活路径(lastfm.go 的 scrobble/updateNowPlaying)共用同一个 helper —— 2026-08-30
+		// 补活路径的 duration 时统一的,免得"只发正数、整数秒"这条规则在两处各写一份、
+		// 以后改一处漏一处。
+		durationParam(p, "duration["+idx+"]", it.DUR)
 	}
 	// 签名不需要为批量做任何特殊处理:sign() 用 sort.Strings 按字节序排,而官方要求的
 	// 正是 ASCII 字节序 —— "artist[0]" / "artist[10]" 这类名字排出来跟官方一致。
@@ -360,7 +378,24 @@ func runBackfill(ctx context.Context, s *lastfmScrobbler, dryRun bool) backfillO
 
 		res, err := s.scrobbleBatch(ctx, batch)
 		if err != nil {
-			// 整批状态未知 → 全部进隔离,然后停手。
+			// 停手是一定的(见本函数头注释),但**要不要隔离**取决于这一批到底有没有可能
+			// 已经落库 —— 隔离是永久的(pendingBackfillListens 把 "q" 跟"已提交"同等排除),
+			// 用错了就是把一批从没提交过的收听彻底踢出清单,用户再点多少次也补不回来。
+			//
+			// 2026-08-30 修:原来无条件整批隔离。但 scrobbleBatch 的错误里有一半是
+			// **服务端明确表过态、确定没落库**的 —— 限流(29)、凭据失效(4/9/10/26) ——
+			// 这些恰恰是最该留在清单里等下次的。一次限流就永久吃掉 50 条,而限流在补
+			// 几百条历史时几乎必然会遇到。判据跟 recordFailedMirror 共用 mayHaveStored(),
+			// 口径统一。
+			var apiErr *lastfmAPIError
+			definitelyNotStored := errors.As(err, &apiErr) && !apiErr.mayHaveStored()
+			if definitelyNotStored {
+				out.AbortedReason = err.Error()
+				log.Printf("backfill: aborted, %d listen(s) stay pending (server refused, nothing stored): %v", len(batch), err)
+				return out
+			}
+			// 状态未知(网络错误/超时/服务端说自己暂时不可用/回执畸形)→ 可能已落库,
+			// 重发是最大的自造重复源,整批进隔离。
 			for _, it := range batch {
 				markQuarantined(it.UTS)
 				out.Quarantined++

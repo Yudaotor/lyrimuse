@@ -19,6 +19,9 @@ public final class LocalPlaybackSource: ObservableObject {
     @Published public private(set) var isPlayingNow: Bool = false
     @Published public private(set) var currentLine: SyncedLyricLine?
     @Published public private(set) var nextLineText: String?
+    /// 下一行摆在哪一边(见 SyncedLyricLine.side)——**独立于 currentLine?.side**,不能假定
+    /// 下一句跟当前句是同一位演唱者(2026-08-26,悬浮窗"下一句预览"对唱分栏 bug)。
+    @Published public private(set) var nextLineSide: LyricDuet.Side?
     // "歌词窗口"(完整可滚动歌词列表)用——跟 currentLine/nextLineText 同一套 20Hz tick
     // 算出来,只在真的换了行时才重新赋值(见 fastTick())。allLines 换歌时才重新构造一次
     // (reloadCurrentLyrics()),不需要每 tick 重算——歌词内容本身在同一首歌播放期间不变。
@@ -77,6 +80,15 @@ public final class LocalPlaybackSource: ObservableObject {
     /// 跟 isCurrentTrackInstrumental 互斥:纯音乐是"有依据地确认没有歌词",比这个更精确,
     /// 所以那一档单独判、并且排在前面(见各 View 的分支顺序)。
     @Published public private(set) var currentTrackHasNoLyrics: Bool = false
+
+    /// 没有时间戳的纯文本歌词兜底——2026-08-30 加,只在"这首歌真的没有能同步显示的版本,
+    /// 但用户在「搜索候选歌词」弹窗里采纳过一条明确标了 PlainTextOnly 的候选"时非空(见
+    /// EnrichCacheReader.EnrichCacheLyrics.plainLyrics / collector 侧
+    /// enrichEntry.PlainLyrics 头注)。桌面悬浮歌词/灵动岛这些依赖时间戳逐字/逐行高亮的
+    /// 展示面**不读**这个字段,继续如实显示"无歌词"——只有「歌词窗口」认它,当静态文字
+    /// 展示。恒为空串时代表"没有这份兜底",不是"还没加载完",跟 currentTrackHasNoLyrics
+    /// 一样以 EnrichCacheLyrics.resolved 为准。
+    @Published public private(set) var currentTrackPlainLyrics: String = ""
 
     /// collector 报告"这一轮什么都没查到,是因为网络不通"(见 CollectorStatus)。
     ///
@@ -158,6 +170,18 @@ public final class LocalPlaybackSource: ObservableObject {
     /// 比如英文系统的港台用户,他读繁体、正需要这个开关,而语言列表里可能压根没有中文。
     /// "库里有没有中文歌词"比"用户读什么语言"更贴近"这个设置对你有没有用"。
     @Published public private(set) var sawChineseLyrics = false
+    /// **当前这首歌**的歌词会不会真的被简繁转换改动。跟上面那个粘性位是两件事:
+    ///   - `sawChineseLyrics` 是"这台机器上见过中文歌词没有",只置不清,给**设置页**用 ——
+    ///     一个已经露出来的设置项不该因为换了首歌就消失(见它自己的注释)。
+    ///   - 这一个逐曲计算、会来回变,给**悬浮窗右键菜单**用(2026-08-31 用户要求「只有中文歌
+    ///     时才出现简繁转换」)。右键菜单本来就是上下文菜单、每次弹出重建,它里面已经有
+    ///     按当前曲目决定显隐的先例(「搜索歌词…」在没歌在播时就不给)。
+    ///
+    /// 判据直接用 `ChineseVariant.affects`,跟 `converted(_:)` 是同一个函数 —— 保证
+    /// "菜单显示 ⟺ 转换真的会发生",不可能出现"开关不见了但歌词还在被转"。
+    /// 正文和译文任一会被转就算 —— 译文同样过 `variant.converted`(见 syncEngine.load),
+    /// 所以日文歌配中文译文这种情况也必须让开关留在那儿。
+    @Published public private(set) var currentLyricsSupportsChineseVariant = false
 
     private let syncEngine = LyricsSyncEngine()
     // 公开给 View 层——逐字填色现在按渲染帧频(TimelineView)从这个锚点直接外推真实
@@ -529,10 +553,21 @@ public final class LocalPlaybackSource: ObservableObject {
                 }
                 posReportedBiasSecs = corrected?.bias ?? 0
                 trackPosSeconds = corrected?.seed ?? rawReported
+                // ⚠️ 临时诊断(2026-08-30,排查"网易云切歌之后歌词偏慢,暂停重新播放就
+                // 正常"——排查完就删)。noisyFloored(QQ/网易云)换歌时没有类似 Spotify
+                // naturalAdvanceCorrection 的偏置估计,直接原样采信 rawReported 当播种值
+                // (见上面注释"QQ/网易云的整秒地板会把偏置估计噪声化")——想看这个播种值
+                // 本身是不是系统性偏后(不是纯抖动),所以在这里落一条日志。
+                if tier == .noisyFloored {
+                    logger.notice("neteaseDiag trackChange key=\(key, privacy: .public) rawReported=\(rawReported, format: .fixed(precision: 3)) seed=\(self.trackPosSeconds, format: .fixed(precision: 3))")
+                }
             } else {
                 // 刚从暂停恢复播放 / 首次观察(同曲):暂停冻结的 elapsedTime 带着同一个
                 // 超前锚点的值,偏置继续适用,采用已扣偏置的读数。
                 trackPosSeconds = reported
+                if tier == .noisyFloored {
+                    logger.notice("neteaseDiag resumeOrFirstObserve key=\(key, privacy: .public) reported=\(reported, format: .fixed(precision: 3))")
+                }
             }
             posErrEMA = 0
             return (trackPosSeconds, true)
@@ -580,6 +615,10 @@ public final class LocalPlaybackSource: ObservableObject {
         if Self.shouldRatchetForward(reported: reported, predicted: predicted, tier: tier) {
             // 地板量化源(QQ 音乐/网易云)的前向棘轮:reported 恒 ≤ 真实位置,它比外推值
             // 靠前就证明外推值落后了,立刻向前采纳 —— 理由见 flooredForwardSnapEpsilonSecs。
+            if tier == .noisyFloored {
+                // ⚠️ 临时诊断(2026-08-30,同上,排查完就删)。
+                logger.notice("neteaseDiag ratchetForward key=\(key, privacy: .public) reported=\(reported, format: .fixed(precision: 3)) predicted=\(predicted, format: .fixed(precision: 3))")
+            }
             trackPosSeconds = reported
             posErrEMA = 0
             return (trackPosSeconds, true)
@@ -590,6 +629,11 @@ public final class LocalPlaybackSource: ObservableObject {
         // 不然校正只改了内部累加器、UI 用的锚点还在按旧基准外推,校正根本到不了屏幕。
         let (newEMA, snap) = Self.servoDecision(errEMA: posErrEMA, error: reported - predicted, tier: tier)
         posErrEMA = newEMA
+        if tier == .noisyFloored {
+            // ⚠️ 临时诊断(2026-08-30,同上,排查完就删)——想看换歌之后这个 EMA 要几轮
+            // 才能追上,以及每一轮 reported/predicted 的实际差距有多大、方向是否恒定。
+            logger.notice("neteaseDiag steady key=\(key, privacy: .public) reported=\(reported, format: .fixed(precision: 3)) predicted=\(predicted, format: .fixed(precision: 3)) ema=\(newEMA, format: .fixed(precision: 3)) snap=\(snap, privacy: .public)")
+        }
         if snap {
             trackPosSeconds = tier == .precise ? reported : predicted + newEMA
             posErrEMA = 0
@@ -870,6 +914,7 @@ public final class LocalPlaybackSource: ObservableObject {
         guard let frozen = pausedPositionMs, syncEngine.hasContent else {
             if currentLine != nil { currentLine = nil }
             if nextLineText != nil { nextLineText = nil }
+            if nextLineSide != nil { nextLineSide = nil }
             if currentLineIndex != nil { currentLineIndex = nil }
             if scrollLineIndex != nil { scrollLineIndex = nil }
             if compactLine != nil { compactLine = nil }
@@ -891,6 +936,7 @@ public final class LocalPlaybackSource: ObservableObject {
         if r.compactDwellMs != compactDwellMs { compactDwellMs = r.compactDwellMs }
         if r.compactLeadInMs != compactLeadInMs { compactLeadInMs = r.compactLeadInMs }
         if r.nextText != nextLineText { nextLineText = r.nextText }
+        if r.nextSide != nextLineSide { nextLineSide = r.nextSide }
         if r.index != currentLineIndex { currentLineIndex = r.index }
         if r.scrollIndex != scrollLineIndex { scrollLineIndex = r.scrollIndex }
         if r.gapIndex != currentGapIndex { currentGapIndex = r.gapIndex }
@@ -921,6 +967,7 @@ public final class LocalPlaybackSource: ObservableObject {
         if r.compactDwellMs != compactDwellMs { compactDwellMs = r.compactDwellMs }
         if r.compactLeadInMs != compactLeadInMs { compactLeadInMs = r.compactLeadInMs }
         if r.nextText != nextLineText { nextLineText = r.nextText }
+        if r.nextSide != nextLineSide { nextLineSide = r.nextSide }
         if r.index != currentLineIndex { currentLineIndex = r.index }
         if r.scrollIndex != scrollLineIndex { scrollLineIndex = r.scrollIndex }
         if r.gapIndex != currentGapIndex { currentGapIndex = r.gapIndex }
@@ -977,6 +1024,7 @@ public final class LocalPlaybackSource: ObservableObject {
             anchor = nil
             currentLine = nil
             nextLineText = nil
+            nextLineSide = nil
             currentLineIndex = nil
             scrollLineIndex = nil
             compactLine = nil
@@ -1050,6 +1098,15 @@ public final class LocalPlaybackSource: ObservableObject {
     // 正是想要的行为。
     private var pollGeneration = 0
 
+    /// 连续多少次 poll() 拿到了 nil 快照——给下面"snapshot failed"那行判断该不该打日志用。
+    /// 2026-08-27 实测坐实的问题:这条路径原来无条件每拍都打一遍 `.error`,而空闲档
+    /// (没在放歌)轮询间隔只有 10s,一晚上挂机就是几百条一模一样的行——诊断导出一份
+    /// 24 小时 App Log 里这一条能占到三成,把真正有用的信号淹没掉。改成只在**状态刚
+    /// 变成这样**(从"有快照"变成"没有")时才打一次;如果这个状态持续存在(比如权限
+    /// 真的被收回了),每隔一段时间(约 5 分钟,`% 30` × 10s 空闲档)再打一次,不完全
+    /// 沉默——不然真出问题时诊断导出里反而一条线索都没有。
+    private var consecutiveNilSnapshots = 0
+
     private func poll() {
         pollGeneration += 1
         let generation = pollGeneration
@@ -1070,10 +1127,21 @@ public final class LocalPlaybackSource: ObservableObject {
                 // 加 isPlayingNow=false),否则从"正在播放"切到这种 nil 快照时,状态栏/
                 // 悬浮窗会卡在停播前那一刻不会自己恢复;title/artist/album 不清空,跟
                 // "暂停"时保留最近播放信息的既有行为保持一致。
-                logger.error("snapshot failed (没有自动化权限、Music.app 不在运行，或者没有曲目在播放)")
+                self.consecutiveNilSnapshots += 1
+                if self.consecutiveNilSnapshots == 1 || self.consecutiveNilSnapshots % 30 == 0 {
+                    // logger.error(_:) 吃的是 OSLogMessage,只认编译期字符串插值,不能用
+                    // `+` 拼运行时 String——先把可变的那半拼成局部变量,再一次性插值进去。
+                    let streakSuffix = self.consecutiveNilSnapshots > 1
+                        ? "，已连续 \(self.consecutiveNilSnapshots) 次" : ""
+                    logger.error("snapshot failed (没有自动化权限、Music.app 不在运行，或者没有曲目在播放)\(streakSuffix)")
+                }
                 clearIfWasPlaying()
                 self.adjustPollCadence()
                 return
+            }
+            if self.consecutiveNilSnapshots > 0 {
+                logger.info("snapshot recovered after \(self.consecutiveNilSnapshots) consecutive failures")
+                self.consecutiveNilSnapshots = 0
             }
             // isMusicApp 现在直接由 MediaControlClient 硬编码为 true(只在真的问到
             // Music.app 自己的当前曲目时才会返回非 nil 快照,不再是系统级 Now Playing
@@ -1234,7 +1302,28 @@ public final class LocalPlaybackSource: ObservableObject {
             // MediaControlClient.fetchRawMediaControlSnapshot 的决策注释);QQ 音乐/
             // 网易云=整秒下取整带抖动(noisyFloored)。各档伺服参数见 servoDecision。
             let tier = Self.positionSourceTier(forBundleID: snapshot.bundleIdentifier)
-            let (positionSeconds, didReanchor) = resolvePositionSeconds(reported: snapshot.elapsedTime ?? 0, rate: rate, key: key, now: now, tier: tier)
+            // 浏览器地面真值探针(2026-08-30,见 BrowserPositionProbe 头注,2026-08-30
+            // 改成一次性纠偏后再补一版):对受支持的浏览器+网站,换歌后探测一次网页 DOM
+            // 拿真实播放位置,当"精确种子值"喂给 resolvePositionSeconds(tier 按
+            // noisyFloored——它就是整秒地板量化读数),走正常的 seek-跳变/棘轮/EMA 判定,
+            // 而不是绕开整套伺服逻辑直接采信。命中一次大跳变就会重锚,解决"换歌后进度
+            // 偏慢"的原始问题;这首歌只消费一次(见 consumeCorrection),稳态精度交还给
+            // 本来就更准的 .cleanExtrapolated 连续外推,不会被整秒精度的探针值持续覆盖
+            // 导致周期性回退(2026-08-30 用户反馈坐实过这个回退,历史教训见类头注)。
+            if trackChanged {
+                BrowserPositionProbe.shared.trackChanged()
+            }
+            BrowserPositionProbe.shared.kickIfNeeded(bundleIdentifier: snapshot.bundleIdentifier, key: key)
+            let rawReportedForResolve: Double
+            let effectiveTier: PositionSourceTier
+            if let probed = BrowserPositionProbe.shared.consumeCorrection(forKey: key, rate: rate, now: now) {
+                rawReportedForResolve = probed
+                effectiveTier = .noisyFloored
+            } else {
+                rawReportedForResolve = snapshot.elapsedTime ?? 0
+                effectiveTier = tier
+            }
+            let (positionSeconds, didReanchor) = resolvePositionSeconds(reported: rawReportedForResolve, rate: rate, key: key, now: now, tier: effectiveTier)
             // 只在真的有必要时才重新构造锚点——稳定播放期间(没有换歌/没有真实
             // seek/rate 和时长都没变),继续外推旧锚点在数学上跟重新构造一份新锚点得到
             // 完全相同的 extrapolatedPositionMs(now:) 结果(旧锚点的 fetchedAt+
@@ -1486,9 +1575,9 @@ public final class LocalPlaybackSource: ObservableObject {
     /// 漏掉的表现是"某条路径下全局偏移不生效",只在特定操作顺序下复现,极难归因。
     private func applyOffsets() {
         let track = LyricsOffsetStore.shared.offset(forKey: currentOffsetKey)
-        // 存量补钉 —— pin 机制上线前调好的歌在这里才第一次被钉住(见那个方法的注释)。
-        // 幂等,已经钉住时是纯内存判断。
-        LyricsOffsetStore.shared.backfillPinIfNeeded(forKey: currentOffsetKey, pinKey: currentPinKey)
+        // 播放到这首歌时把 pin 状态跟当前校正值重新对一遍(双向,见那个方法的注释)。
+        // 幂等,状态已经一致时是纯内存判断。
+        LyricsOffsetStore.shared.syncPinToOffset(forKey: currentOffsetKey, pinKey: currentPinKey)
         // 播放器那层按**这一刻真正在播的那个 App** 算。拿不到身份(还没有快照)时传 nil,
         // 那层就按 0 算 —— 绝不能猜一个,否则会把浏览器的补偿套到 Apple Music 上。
         let effective = LyricsOffsetStore.shared.effectiveOffset(
@@ -1561,6 +1650,11 @@ public final class LocalPlaybackSource: ObservableObject {
         let variant: ChineseVariant
         let preferWordLevel: Bool
         let romanizationScripts: RomanizationScripts
+        let isCantonese: Bool
+        // 2026-08-30 加,见 currentTrackPlainLyrics 头注——没有时间戳的纯文本兜底,跟
+        // lyrics 一样得参与这道内容等值闸,不然采纳/更换一条纯文本候选之后,闸会因为
+        // 其它字段(lyrics 本来就是空的,没变)误判"内容没变"而跳过重算,新内容显示不出来。
+        let plainLyrics: String
     }
     private var lastReloadSnapshot: LyricsReloadSnapshot?
 
@@ -1571,13 +1665,18 @@ public final class LocalPlaybackSource: ObservableObject {
             title: snapshot.title ?? "",
             album: snapshot.album ?? ""
         )
-        // 见过中文歌词就记一笔(粘性,只置不清)。判据跟 ChineseVariant.converted 一致:
-        // 有汉字、且没有假名(有假名是日文)。刻意放在下面的等值闸**之前**——闸命中早退
-        // 时这个粘性位也必须照常置位。
+        // 见过中文歌词就记一笔(粘性,只置不清)。判据 2026-08-31 起改用共享的
+        // `ChineseVariant.affects` —— 这里原本手抄了一份"有汉字、且没有假名",注释还写着
+        // "判据跟 ChineseVariant.converted 一致",那正说明它该是同一个函数而不是两份抄写。
+        // 刻意放在下面的等值闸**之前**——闸命中早退时这两个标志也必须照常更新。
         let raw = found?.lyrics ?? ""
-        if !sawChineseLyrics, Romanizer.containsHan(raw), !Romanizer.looksJapanese(raw) {
+        if !sawChineseLyrics, ChineseVariant.affects(raw) {
             sawChineseLyrics = true
         }
+        // 逐曲的那个每次都要**重算**(它会来回变),不能跟着上面那个 `if !sawChineseLyrics`
+        // 的早退一起被跳掉。译文也算进来,理由见它声明处。
+        currentLyricsSupportsChineseVariant =
+            ChineseVariant.affects(raw) || ChineseVariant.affects(found?.lyricsTr ?? "")
         // 内容等值闸(2026-08-20 性能审计):失效键是整个 enrich 缓存文件的 mtime,collector
         // 给**别的歌**写盘(专辑预取最多 30 首逐个落盘/译文回填/重打分)都会带着一字未变的
         // found 走到这里 —— 原来每次都白跑简繁转换×3 + 全套解析过滤 + 整曲罗马音/分词重算
@@ -1596,7 +1695,9 @@ public final class LocalPlaybackSource: ObservableObject {
             resolved: found?.resolved ?? false,
             variant: chineseVariant,
             preferWordLevel: preferWordLevelKaraoke,
-            romanizationScripts: romanizationScripts)
+            romanizationScripts: romanizationScripts,
+            isCantonese: found?.isCantonese ?? false,
+            plainLyrics: found?.plainLyrics ?? "")
         if reloadSnapshot == lastReloadSnapshot {
             logger.debug("lyrics reload skipped: content unchanged (mtime-only churn)")
             return
@@ -1616,7 +1717,8 @@ public final class LocalPlaybackSource: ObservableObject {
             // 用来认出歌词文件开头那行「曲名 - 歌手」抬头,见 looksLikeHeaderLine。
             trackTitle: snapshot.title ?? "",
             trackArtist: snapshot.artist ?? "",
-            romanizationScripts: romanizationScripts
+            romanizationScripts: romanizationScripts,
+            songIsCantonese: found?.isCantonese ?? false
         )
         currentOffsetKey = LyricsOffsetStore.trackKey(
             artist: snapshot.artist ?? "",
@@ -1648,6 +1750,11 @@ public final class LocalPlaybackSource: ObservableObject {
         // 解析跑完了、又不是纯音乐、还是一句都没有 —— 那就是真的没有,别再说"搜索中"。
         let newNoLyrics = (found?.resolved ?? false) && !newHasContent && !newInstrumental
         if newNoLyrics != currentTrackHasNoLyrics { currentTrackHasNoLyrics = newNoLyrics }
+        // 纯文本兜底只在"确实没有能同步显示的版本"时才有展示意义——newHasContent 为 true
+        // 时(不管是不是这首歌待会儿又补出了带时间戳的版本)优先用那份,不显示纯文本,
+        // 避免"歌词窗口"同时收到两份内容不一定完全一致的候选、不知道信哪个。
+        let newPlainLyrics = newHasContent ? "" : (found?.plainLyrics ?? "")
+        if newPlainLyrics != currentTrackPlainLyrics { currentTrackPlainLyrics = newPlainLyrics }
         // "歌词窗口"的全部行只在换歌词内容这一刻重新构造一次——同一首歌播放期间歌词
         // 本身不变,不需要每 20Hz tick 都重算。idPrefix 用 currentOffsetKey(已经是
         // 按当前曲目算出来的标识),保证换歌后这里产出的每个 LyricsWindowLine.id 整体
@@ -1914,6 +2021,46 @@ public final class LocalPlaybackSource: ObservableObject {
         return (r + t * (1 - r), g + t * (1 - g), b + t * (1 - b))
     }
 
+    /// `NotchCardStyle.coverArt` 背景上那层黑色叠加的不透明度——`NotchLyricsView.
+    /// backgroundLayer` 拿它铺 `Color.black.opacity(...)`,`accentForCoverArtBackground`
+    /// (下面)拿它**推算**背景实际有多亮。两处必须用同一个数,所以提成命名常量而不是各自
+    /// 写一遍 0.45——2026-08-27 修对比度问题之前就是这么各写各的,两处数字一旦以后有一处
+    /// 改动没同步,contrast 的估算值就会跟渲染出来的背景对不上,静默失效。
+    nonisolated public static let notchCoverArtOverlayOpacity: Double = 0.45
+
+    /// coverArt 卡片风格下,给灵动岛文字保足够对比度。
+    ///
+    /// `accentForDarkBackdrop` 假设灵动岛背景永远接近纯黑(纯黑/深色渐变两种风格确实是),
+    /// 但 coverArt 背景是「模糊封面 + `notchCoverArtOverlayOpacity` 黑叠加」——亮度**正比于
+    /// 封面本身的亮度**,不是恒定的暗。亮封面(比如实测坐实的一张黄底专辑封面,均值
+    /// #BBA45E、Rec.709 luma 0.645)已经在 accentForDarkBackdrop 的地板之上、不会被再提亮,
+    /// 叠加 45% 黑之后背景仍有 luma 0.355(不暗),文字跟这个背景的 WCAG 对比度实测只有
+    /// 2.78,连大号文字的门槛(3.0)都够不到,灵动岛字号(9~13.5pt)按 WCAG 还够不上"大号
+    /// 文字"这一档,该按 4.5 的门槛要求。
+    ///
+    /// 跟 accentAgainstStroke 修桌面悬浮歌词描边对比度是同一个哲学:量**真实相邻色**的
+    /// 对比度,不是赌一个"背景反正很暗"的假设——这里直接复用 accentAgainstStroke,把
+    /// "描边色"换成按封面自身算出来的 coverArt 背景色估计值。只在 `.coverArt` 风格时调用,
+    /// 纯黑/深色渐变两种风格背景是真的暗,原有的 accentForDarkBackdrop 地板已经够用,
+    /// 不该为它们多算一次。
+    ///
+    /// - Parameters:
+    ///   - r/g/b: `accentForDarkBackdrop` 处理过的候选文字色。
+    ///   - rawR/rawG/rawB: 封面**原始**均值色(未经 brightenedAccent/accentForDarkBackdrop
+    ///     提亮)——背景是拿这份原始色乘 `(1 - notchCoverArtOverlayOpacity)` 得出的,不能拿
+    ///     已经被提亮过的文字色去算,那样估出来的背景会比实际渲染的亮得多。
+    nonisolated public static func accentForCoverArtBackground(
+        r: Double, g: Double, b: Double,
+        rawR: Double, rawG: Double, rawB: Double,
+        minContrast: Double = 4.5
+    ) -> (r: Double, g: Double, b: Double) {
+        let dim = 1 - notchCoverArtOverlayOpacity
+        return accentAgainstStroke(
+            r: r, g: g, b: b,
+            strokeR: rawR * dim, strokeG: rawG * dim, strokeB: rawB * dim,
+            minContrast: minContrast)
+    }
+
     // MARK: - 桌面悬浮歌词的封面取色(跟描边拉开对比)
 
     /// 把封面均值色调成"在描边包围下一定看得清"的文字色。桌面悬浮歌词专用,纯函数。
@@ -1985,6 +2132,50 @@ public final class LocalPlaybackSource: ObservableObject {
         if !preferUp, canGoDown {
             return blendToLuminance(r: r, g: g, b: b, target: lower, towardWhite: false)
         }
+
+        // 优先方向差一点点够不到边界(2026-08-31,灵动岛「封面偏白、歌词却是全黑,
+        // 太突兀」):贴着边界(纯白/纯黑)已经接近达标时,宁可就地收下这个"差一点点"
+        // 的结果,也不要为了凑够数值目标翻到对面走极端——翻方向在几何上总能精确命中
+        // minContrast(往反方向去到 lower/upper 就是照着目标解出来的),数值上永远"更
+        // 好",但对一张偏白的封面,翻过去意味着把文字砸成近乎纯黑,观感上是灾难,
+        // 不是"差一点点"能比的。
+        //
+        // ⚠️ 第一版这里写的是 95% 容忍度,用一个手算的假设场景(luma≈0.187)验证过就
+        // 上线了,结果用户第二天拿真实封面（方大同《红豆》,Timeless 专辑,大面积白底
+        // 配一角深色人像)一测,问题还在——真实封面均值色算出来 luma≈0.779,coverArt
+        // 背景估出来 luma≈0.207,贴纯白只能到对比度 4.08,只有 minContrast=4.5 的
+        // 90.7%,被 95% 的门槛卡在外面,照样翻成了近黑。教训:**手算的假设数字算得再
+        // 仔细,也不能替代拿真实素材跑一遍**——这条经验在这个仓库里已经不是第一次
+        // 印证(第九轮背景取色那次也是纸面系数一个个假设都对、样本一放大就露馅)。
+        // 这版把容忍度从 95% 放宽到 80%,用《红豆》这组真实数字(见下面 selftest)
+        // 和原有的假设场景一起钉住,两组都过。
+        //
+        // 判据双重限定,不能只看"离目标够不够近":① 贴边界的实际对比度必须先过 WCAG
+        // 大号文字基线 3.0(所有调用方字号都够格用这条基线)——这一步保证 minContrast
+        // 本来就是默认值 3.0 的调用方(比如下面的全区间扫描)永远不会走进这条分支:
+        // canGoUp 为 false 在 minContrast==3.0 时数学上等价于贴边界对比度 <3.0,必然
+        // 过不了这道闸,行为原样不变,这条数学关系不随下面这个比例常数变化,调整比例
+        // 不会影响这条安全性。② 贴边界还要接近 minContrast 本身(取 80%)——只有
+        // minContrast 明显高于基线(比如 coverArt 那条路的 4.5)、且贴边界的结果离
+        // 那个更高目标也没差太远时才生效;像下面 selftest 的 mid-gray 反例
+        // (minContrast=7.0,贴边界只够到目标的 57%),跟《红豆》案例的 90.7% 差着
+        // 34 个百分点,离得足够远,仍然应该老实翻方向或取更好端点——80% 卡在两者中间,
+        // 两头都留了余量,不是贴着《红豆》那组数字的下边界硬凑的。
+        let closeEnoughFloor = 3.0
+        let closeEnoughRatio = 0.80
+        if preferUp, !canGoUp {
+            let clamped = contrastRatio(strokeLum, 1)
+            if clamped >= closeEnoughFloor, clamped >= minContrast * closeEnoughRatio {
+                return blendToLuminance(r: r, g: g, b: b, target: 1.0, towardWhite: true)
+            }
+        }
+        if !preferUp, !canGoDown {
+            let clamped = contrastRatio(strokeLum, 0)
+            if clamped >= closeEnoughFloor, clamped >= minContrast * closeEnoughRatio {
+                return blendToLuminance(r: r, g: g, b: b, target: 0.0, towardWhite: false)
+            }
+        }
+
         if canGoUp {
             return blendToLuminance(r: r, g: g, b: b, target: upper, towardWhite: true)
         }

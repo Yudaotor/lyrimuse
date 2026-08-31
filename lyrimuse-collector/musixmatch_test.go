@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -31,7 +32,7 @@ func TestMusixmatchEnsureTokenSingleFlight(t *testing.T) {
 	defer func() { musixmatchDoFetchToken = orig }()
 
 	var calls int32
-	musixmatchDoFetchToken = func() string {
+	musixmatchDoFetchToken = func(ctx context.Context) string {
 		atomic.AddInt32(&calls, 1)
 		// 拉开一点并发窗口,模拟真实网络请求的耗时——没有这个睡眠,16 个 goroutine
 		// 可能因为调度巧合从未真正并发地撞上单飞锁,测试会在锁没生效时也碰巧通过。
@@ -50,7 +51,7 @@ func TestMusixmatchEnsureTokenSingleFlight(t *testing.T) {
 	for i := 0; i < n; i++ {
 		go func(i int) {
 			defer wg.Done()
-			results[i] = musixmatchEnsureToken()
+			results[i] = musixmatchEnsureToken(context.Background())
 		}(i)
 	}
 	wg.Wait()
@@ -77,7 +78,7 @@ func TestMusixmatchEnsureTokenSkipsFetchWhenCached(t *testing.T) {
 
 	orig := musixmatchDoFetchToken
 	defer func() { musixmatchDoFetchToken = orig }()
-	musixmatchDoFetchToken = func() string {
+	musixmatchDoFetchToken = func(ctx context.Context) string {
 		t.Error("token 仍在有效期内,不该去真的换")
 		return "should-not-happen"
 	}
@@ -89,7 +90,7 @@ func TestMusixmatchEnsureTokenSkipsFetchWhenCached(t *testing.T) {
 	for i := 0; i < n; i++ {
 		go func(i int) {
 			defer wg.Done()
-			results[i] = musixmatchEnsureToken()
+			results[i] = musixmatchEnsureToken(context.Background())
 		}(i)
 	}
 	wg.Wait()
@@ -113,7 +114,7 @@ func TestMusixmatchEnsureTokenRefreshesAfterExpiry(t *testing.T) {
 	orig := musixmatchDoFetchToken
 	defer func() { musixmatchDoFetchToken = orig }()
 	var calls int32
-	musixmatchDoFetchToken = func() string {
+	musixmatchDoFetchToken = func(ctx context.Context) string {
 		atomic.AddInt32(&calls, 1)
 		musixmatchTokenMu.Lock()
 		musixmatchToken = "tok-new"
@@ -122,14 +123,14 @@ func TestMusixmatchEnsureTokenRefreshesAfterExpiry(t *testing.T) {
 		return "tok-new"
 	}
 
-	if got := musixmatchEnsureToken(); got != "tok-new" {
+	if got := musixmatchEnsureToken(context.Background()); got != "tok-new" {
 		t.Fatalf("过期后应该换到新 token,实际 %q", got)
 	}
 	if got := atomic.LoadInt32(&calls); got != 1 {
 		t.Fatalf("应该真的换了一次,实际触发 %d 次", got)
 	}
 	// 再调一次:新 token 还在有效期内,不该再触发一次刷新。
-	if got := musixmatchEnsureToken(); got != "tok-new" {
+	if got := musixmatchEnsureToken(context.Background()); got != "tok-new" {
 		t.Fatalf("第二次调用应该复用新 token,实际 %q", got)
 	}
 	if got := atomic.LoadInt32(&calls); got != 1 {

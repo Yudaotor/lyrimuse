@@ -4,6 +4,7 @@ package main
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	_ "image/jpeg" // 注册 JPEG 解码器
 	_ "image/png"  // 网易云取色缩略图有时是 PNG(content-type 却谎报 jpg)
@@ -118,6 +119,20 @@ func getAppleMusicState(ctx context.Context) (map[string]any, bool) {
 	if err := json.Unmarshal(out, &state); err != nil {
 		return nil, false
 	}
+	// ⚠️ 三个标签必须先洗一遍不可见空白(2026-08-31 补)。这里是 **Apple Music 这条路径
+	// 唯一的元数据入口** —— media-control 那条早就在 fetchRawMediaControlState 里洗了,
+	// 而 Apple Music 走 JXA 直接 unmarshal、绕过那里,于是标签里的 NBSP / 零宽字符会
+	// **原样进 Last.fm**,在那边建出一个跟正常写法肉眼完全一样、实际却是另一个实体的
+	// 条目;而 enrichKey 那边又洗过,缓存 key 与上送值两边口径不一致。
+	//
+	// 洗 ≠ 改写:这里只把不可见字符规范化(NBSP/全角空格→普通空格、删零宽、连续空白
+	// 折成一个),不替换任何可见内容 —— 跟 lbMeta「原样上送」那条原则不冲突,业界
+	// (Web Scrobbler 的 removeZeroWidth/trim 等)也普遍这么做。
+	for _, k := range []string{"title", "artist", "album"} {
+		if v, ok := state[k].(string); ok {
+			state[k] = cleanMediaTag(v)
+		}
+	}
 	return state, true
 }
 
@@ -231,9 +246,12 @@ func isKnownPlayerBundleID(bundleID string) bool {
 // trustedPlaybackNotASong:一条来自**用户信任的未知播放器**的播放,歌手名或专辑名是空的
 // —— 判成"这不是一首歌",整条丢掉(既不解析歌词、也不打卡)。
 //
-// 判据跟 isAdBreak 完全一致(`album == "" || artist == ""`),区别只在作用域:那个只服务
-// Spotify 广告(第一行就 `if bundleID != spotifyBundleID { return false }`),这个服务信任
-// 列表。信任列表的意义因此从"靠用户选对"变成"选错了也有兜底"。
+// 判据是 isAdBreak 的**前两条**(`album == "" || artist == ""`),⚠️ **不含**它的第三条
+// `title == "—"` —— 原注释写的是"完全一致",不对(2026-08-30 核实)。后果:标题是占位
+// 破折号、但歌手/专辑都非空的形态,在信任播放器上没有守卫。
+// 区别还在作用域:isAdBreak 只服务 Spotify 广告(第一行就
+// `if bundleID != spotifyBundleID { return false }`),这个服务信任列表。信任列表的意义
+// 因此从"靠用户选对"变成"选错了也有兜底"。
 //
 // 2026-08-21 全靠真实样本定的,四份实测:
 //   - 酷狗音乐   artist=周杰伦          album=七里香            → 是歌
@@ -287,7 +305,8 @@ const mediaPlayerLabelIPhone = "Apple Music (iOS)"
 // 音乐接入后如果继续写死会导致 ListenBrainz 上明明是别的播放器放的歌却显示"通过
 // Apple Music 播放",按当前选定的播放器如实报告。playerAuto("自动识别")下"当前选定的
 // 播放器"这个概念本身没有固定答案,改成按这条具体 listen 的 bundleID(调用方直接传
-// snapshot.Bundle,由 getAutoDetectedState 写入,已经是四个已知播放器之一)如实判断,
+// snapshot.Bundle,由 getAutoDetectedState 写入,是**五个内置播放器之一、或用户显式
+// 信任的未知播放器**——不是只有内置那几个,default 分支不是死代码)如实判断,
 // 不看 features.Player。
 func mediaPlayerLabel(bundleID string) string {
 	if features.Player == playerAuto {
@@ -384,6 +403,11 @@ type mediaControlRawState struct {
 	// 换到权威元数据;本地导入的文件放的是任意 64 位持久 ID(可以是负数)。所有消费方
 	// 都必须先过 appleCatalogAnchor 的守卫+自校验,别直接信这个数——见 applecatalog.go。
 	UniqueIdentifier int64 `json:"uniqueIdentifier"`
+	// ArtworkData/ArtworkMimeType:只有 fetchNowPlayingArtwork 那次不带 --no-artwork
+	// 的调用才会非空(见其头注,主 poll 路径的 fetchRawMediaControlState 一直带这个
+	// 参数,这两个字段在那条路径上恒为空)。base64 编码的封面原始字节。
+	ArtworkData     string `json:"artworkData"`
+	ArtworkMimeType string `json:"artworkMimeType"`
 }
 
 // getQQMusicState/getNeteaseMusicState/getSpotifyState 都是 getMediaControlState 的
@@ -549,6 +573,45 @@ func fetchRawMediaControlState(ctx context.Context) (map[string]any, string, boo
 		"playing": raw.Playing, "playbackRate": raw.PlaybackRate,
 		"isMusicApp": true, "bundleIdentifier": raw.BundleID,
 	}, raw.BundleID, true
+}
+
+// fetchNowPlayingArtwork 单独发一次**不带** --no-artwork 的 media-control 调用,只在
+// poller.go 的 handle() 确认"新曲目开始播放"那一刻才调——不进每轮轮询(pollInterval=5s)
+// 的高频路径,换一次歌才问一次,不会把 --no-artwork 省下来的那份 base64 开销原样加回
+// 轮询频率(见 fetchRawMediaControlState 头注)。
+//
+// expectedBundleID/expectedArtist/expectedTitle 三个校验字段防的是:这次调用和触发它的
+// 那次轮询之间(哪怕只隔几百毫秒)曲目已经又换了一次——这时候读到的封面其实属于另一首歌,
+// 装作没读到比装错更安全(呼应 deviceartwork.go 头注:这份数据可信的前提正是"身份由
+// 读取时刻本身保证",一旦时刻对不上,这个前提就不成立了)。
+func fetchNowPlayingArtwork(ctx context.Context, expectedBundleID, expectedArtist, expectedTitle string) (data []byte, mimeType string, ok bool) {
+	bin := mediaControlBinaryPath()
+	if bin == "" {
+		return nil, "", false
+	}
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, bin, "get", "--now").Output()
+	if err != nil {
+		return nil, "", false
+	}
+	trimmed := strings.TrimSpace(string(out))
+	if trimmed == "" || trimmed == "null" {
+		return nil, "", false
+	}
+	var raw mediaControlRawState
+	if err := json.Unmarshal(out, &raw); err != nil || raw.ArtworkData == "" {
+		return nil, "", false
+	}
+	if raw.BundleID != expectedBundleID ||
+		cleanMediaTag(raw.Artist) != expectedArtist || cleanMediaTag(raw.Title) != expectedTitle {
+		return nil, "", false
+	}
+	decoded, err := base64.StdEncoding.DecodeString(raw.ArtworkData)
+	if err != nil || len(decoded) == 0 {
+		return nil, "", false
+	}
+	return decoded, raw.ArtworkMimeType, true
 }
 
 // mediaControlBinaryPath 找同一个 app bundle 里跟 collector 自己放在一起的

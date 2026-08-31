@@ -20,7 +20,11 @@ import (
 // 间接依赖——效果经过逐条数据对拍验证跟原来 gocc 完全一致(见开发时用两份实现批量对比
 // 4000+ 条词典数据 + 混合句子的验证过程),不是"看起来差不多"的近似替代。
 //
-//go:embed dictionary/TSCharacters.txt dictionary/TSPhrases.txt
+// 2026-08-27 追加 dictionary/STCharacters.txt——同一个 OpenCC 项目、同一份许可证的
+// 简→繁单字词典(方向相反),给 jyutping.go 的粤拼查表当兜底用(JyutpingChars.txt 主体
+// 是繁体收字,简体歌词逐字查不到读音时先转一次繁体再查一次)。见 s2tCharMap 的注释。
+//
+//go:embed dictionary/TSCharacters.txt dictionary/TSPhrases.txt dictionary/STCharacters.txt
 var t2sDictFS embed.FS
 
 var (
@@ -30,11 +34,18 @@ var (
 	t2sCharMap      map[string]string
 	t2sPhraseMap    map[string]string
 	t2sMaxPhraseLen int // TSPhrases.txt 里最长词条的 rune 长度,限定每个位置的搜索窗口
+	// s2tCharMap:STCharacters.txt 的简→繁单字映射,同样只取每个键的第一个候选。
+	// ⚠️ 简→繁本质是一对多(如"发"对应"發"/"髮"),这里跟 t2sCharMap 一样"只取第一个",
+	// 挑的未必是具体这个字在这句里真正想要的那个繁体字——跟 App 侧 HanScript.swift 的
+	// PlayCountVariants 处理同一类问题时的取舍一致,唯一消费方 jyutping.go 只拿它当"查不到
+	// 读音时的兜底猜测",挑错的代价可接受,好过完全不转写。
+	s2tCharMap map[string]string
 )
 
 func init() {
 	t2sCharMap = loadT2SDict("dictionary/TSCharacters.txt")
 	t2sPhraseMap = loadT2SDict("dictionary/TSPhrases.txt")
+	s2tCharMap = loadT2SDict("dictionary/STCharacters.txt")
 	for k := range t2sPhraseMap {
 		if n := len([]rune(k)); n > t2sMaxPhraseLen {
 			t2sMaxPhraseLen = n

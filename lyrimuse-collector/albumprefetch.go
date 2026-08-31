@@ -42,6 +42,21 @@ import (
 // 炸出几十个解析请求。
 const albumPrefetchMaxTracks = 30
 
+// albumPrefetchStagger:2026-08-31 加——预取这条路径本身就是"自己把自己打限流"最大的
+// 放大器。neteaseThrottle(netease.go)那道 250ms 全局节流只挡住了"单个请求发得太快",
+// 挡不住"这一批请求总量太大":换到一张全新专辑时,原来的写法是给最多 30 首曲目**各自**
+// 立即起一个 goroutine 解析,越难匹配的歌触发的重试轮越多(实测《Can We Dance》一首在
+// "标题反查轮"里就打了 6 次网易云请求),二十来首曲目里只要有几首难搜,几秒内堆起几十次
+// 网易云请求毫不夸张——而且这些请求跟共享同一把 neteaseThrottle 锁,会把"正在播的这首"
+// 自己的封面/歌词请求也一起排在后面堵住。
+//
+// 这里改成错峰:每起一个新曲目的解析 goroutine 前,让预取这条队列本身歇一段时间再起下一个
+// (不影响"正在播的那首"的正常首次解析路径——那条不经过这里,该多快还多快)。间隔选得
+// 比单首歌自己内部几轮重试加起来的耗时长一些,让前一首的网易云请求基本收尾了,下一首才
+// 接上,不叠加峰值。专辑里的歌反正是按顺序听、要等几分钟才轮到下一首,预取慢几十秒起步
+// 完全不影响"轮到时已经解析好"这个目的。
+const albumPrefetchStagger = 3 * time.Second
+
 var (
 	prefetchMu     sync.Mutex
 	lastPrefetched string // 上一次已经预取过的专辑名,同一张专辑内切歌不用重复问 Music.app
@@ -110,8 +125,18 @@ func prefetchAlbumSiblings(currentArtist, currentTitle, album, bundleID string) 
 			if !eligible {
 				continue // 已经解析过、或者已经有别的 goroutine 在解析,不重复起
 			}
+			if queued > 0 {
+				// 只在真正要起下一个解析前才等——跳过的曲目(已解析/在途)不占错峰配额,
+				// 不然一张大半已经解析过的专辑,光是跳过那些曲目就会被拖慢一路。
+				time.Sleep(albumPrefetchStagger)
+			}
 			queued++
-			go resolveEnrichAsync(key, t.artist, t.title, album, t.duration)
+			// 专辑预取没有对应的"停止"入口(不是首次搜索占位行,没有 UI 可以取消它),
+			// 见 backfillPeripheralFields 同款注释。
+			// isNewTrack 传 false:预取的是同专辑里**没在播**的其它曲目,这一刻的设备
+			// Now Playing 数据对应的是当前正在播的那首,不能拿来当这些曲目的封面——见
+			// trackEnrichment 参数注释。
+			go resolveEnrichAsync(context.Background(), key, t.artist, t.title, album, "", t.duration, false)
 		}
 		// 成功也打一条。原来这个函数**只在超上限被跳过时**才打日志,正常路径一行不打 ——
 		// 于是"预取到底跑没跑"完全不可观测:日志里没记录,既可能是没跑、也可能是跑得好好的,
@@ -131,8 +156,9 @@ func albumTracks(artist, title, album, bundleID string) ([]albumTrack, bool) {
 		return albumTracksFromMusicApp(album)
 	}
 	// 复用解析歌词时那次搜索的结果 —— neteaseLookup 带 30 天缓存,当前这首歌刚解析过,
-	// 这里是缓存命中、零网络;拿到的 AlbumID 是**这首歌自己所属**的那张专辑。
-	ne := neteaseLookup(artist, title, album)
+	// 这里是缓存命中、零网络;拿到的 AlbumID 是**这首歌自己所属**的那张专辑。缓存命中
+	// 路径不会真的发请求,没有可取消的对象,context.Background() 就够。
+	ne := neteaseLookup(context.Background(), artist, title, album)
 	if ne.AlbumID <= 0 {
 		return nil, false
 	}
@@ -172,12 +198,20 @@ func albumTracksFromMusicApp(album string) ([]albumTrack, bool) {
 	// Music.app —— 一个只用 Spotify/QQ 音乐的用户会被每换一张专辑就静默拉起一次 Apple
 	// Music。本仓其它几段 Music/Spotify 脚本(getStateScript、spotifyPositionScript)
 	// 开头都有同样的守卫,同一个理由。
+	// `media kind is song` 把专辑里混的非歌曲轨道(演唱会/豪华版常见的 music video 花絮、
+	// 纪录片)挡在 AppleScript 这一层——2026-08-26 实测坐实:Michael Jackson《XSCAPE
+	// (Deluxe)》第 18/19 轨"XSCAPE Documentary"/"XSCAPE Documentary Outtakes"的
+	// `media kind` 是 "music video" 不是 "song"（Apple 官方目录里 `kind` 字段也是
+	// "music-video"），本来就没有歌词可言,预取会拿它们去问全部七个歌词源,注定全军覆没,
+	// 还会占满 needsLyricsFirstFill 的重试配额、白白拖长退避周期。用 `is song` 白名单
+	// 而不是拉黑名单排除 video/podcast/audiobook 等——防的是"漏收一种没想到的非歌曲媒体
+	// 类型",而不是"漏挡一种已知的"。
 	script := fmt.Sprintf(`if application "Music" is not running then
 	return ""
 end if
 tell application "Music"
 	set output to ""
-	repeat with t in (every track of library playlist 1 whose album is %s)
+	repeat with t in (every track of library playlist 1 whose album is %s and media kind is song)
 		set output to output & (name of t) & tab & (artist of t) & tab & (duration of t) & linefeed
 	end repeat
 	return output

@@ -20,6 +20,9 @@ private final class NotchPlayback: ObservableObject {
     // ---- 来自 PlaybackCoordinator ----
     @Published private(set) var title = ""
     @Published private(set) var artist = ""
+    /// 只有「专辑」这个耳朵模块读它(2026-08-31 加)。窄订阅的纪律没变:多订一个字段是因为
+    /// 真的有人读,不是"顺手都订上"。
+    @Published private(set) var album = ""
     @Published private(set) var isPlayingNow = false
     @Published private(set) var currentLine: SyncedLyricLine?
     /// 单行展示面取这一行(唱完就切走,提前亮出下一句给跟唱用),不是 currentLine。
@@ -39,13 +42,30 @@ private final class NotchPlayback: ObservableObject {
     @Published private(set) var anchor: ProgressAnchor?
     @Published private(set) var pausedPositionMs: Int?
     @Published private(set) var currentDurationMs: Int?
-    /// 灵动岛几乎所有前景元素的颜色 —— 语义同原来的 accentOrWhite 计算属性(只有
-    /// 「跟随封面取色」开着且这首歌真的取到了主色时用它,否则白;用 notchAccentColor
-    /// 而非 artworkAccentColor 的理由见 PlaybackCoordinator.notchAccentColor 注释),
-    /// 在这里预组合成单个去重值,两个输入任何一个变了才发一次。
+    /// 灵动岛几乎所有前景元素的颜色:音浪、歌名、歌手、歌词(含逐字染色的调色板)、三个
+    /// 播放键、进度条、瞬态横幅 —— 全卡 16 处 `accentOrWhite` 都是它。取到封面主色就用,
+    /// 否则白(用 notchAccentColor 而非 artworkAccentColor 的理由见
+    /// PlaybackCoordinator.notchAccentColor 注释)。两个输入在这里预组合成单个去重值,
+    /// 任何一个变了才发一次。
+    ///
+    /// ⚠️ **"要不要跟封面走"这件事由 `notchCardStyle == .coverArt` 决定**(2026-08-31 改)。
+    /// 在此之前它读的是 `AppSettings.followsCoverArt` —— 那是**桌面悬浮歌词**「配色」组里的
+    /// 开关,而它的两个 UI 入口(设置页悬浮歌词段、悬浮窗上那个 ⚙ 快捷菜单)都挂在悬浮歌词上。
+    /// 于是只开灵动岛的用户根本够不到这个决定自己整卡颜色的开关;更糟的是灵动岛「风格」里
+    /// **已经有一个叫「跟随封面」的选项**(指背景铺封面模糊图),同样四个字、两件事,去那儿找
+    /// 只会找错。现在两者合并成一件事:选「跟随封面」= 这张卡整体跟着封面走(背景是模糊封面、
+    /// 前景是封面主色);选另外三种风格 = 前景恒为白。灵动岛因此不多一个开关,也不再受悬浮歌词
+    /// 那边任何设置影响。
+    /// (取不到封面主色时 `notchAccentColor` 为 nil,自动落回白色 —— 跟 `.coverArt` 背景在
+    ///  没有封面时退回 darkGradient 是同一种兜底,不需要额外分支。)
     @Published private(set) var accent: Color = .white
-    // ---- 来自 AppSettings(灵动岛只读这一项;followsCoverArt 已折进上面的 accent) ----
+    // ---- 来自 AppSettings ----
+    // 灵动岛只读这一项:它既决定卡片背景(见 NotchCardStyle.fill / backgroundLayer),
+    // 也决定前景取不取封面主色(折进上面的 accent)。
     @Published private(set) var notchCardStyle: NotchCardStyle = .coverArt
+    /// 稳态/展开那一行两只耳朵各显示什么(见 NotchEarModule)。
+    @Published private(set) var leftEar: NotchEarModule = .title
+    @Published private(set) var rightEar: NotchEarModule = .artist
     private var subs: [AnyCancellable] = []
 
     init() {
@@ -54,6 +74,7 @@ private final class NotchPlayback: ObservableObject {
         subs = [
             p.$title.removeDuplicates().sink { [weak self] in self?.title = $0 },
             p.$artist.removeDuplicates().sink { [weak self] in self?.artist = $0 },
+            p.$album.removeDuplicates().sink { [weak self] in self?.album = $0 },
             p.$isPlayingNow.removeDuplicates().sink { [weak self] in self?.isPlayingNow = $0 },
             p.$currentLine.removeDuplicates().sink { [weak self] in self?.currentLine = $0 },
             p.$compactLine.removeDuplicates().sink { [weak self] in self?.compactLine = $0 },
@@ -75,11 +96,15 @@ private final class NotchPlayback: ObservableObject {
             p.$anchor.sink { [weak self] in self?.anchor = $0 },
             p.$pausedPositionMs.removeDuplicates().sink { [weak self] in self?.pausedPositionMs = $0 },
             p.$currentDurationMs.removeDuplicates().sink { [weak self] in self?.currentDurationMs = $0 },
-            Publishers.CombineLatest(p.$notchAccentColor, s.$followsCoverArt)
-                .map { accent, follows in follows ? (accent ?? .white) : .white }
+            // ⚠️ 2026-08-31:第二个输入从**悬浮歌词那边的** `followsCoverArt` 换成了灵动岛
+            // 自己的 `notchCardStyle`。理由见 accent 的注释。
+            Publishers.CombineLatest(p.$notchAccentColor, s.$notchCardStyle)
+                .map { accent, style in style == .coverArt ? (accent ?? .white) : .white }
                 .removeDuplicates()
                 .sink { [weak self] in self?.accent = $0 },
             s.$notchCardStyle.removeDuplicates().sink { [weak self] in self?.notchCardStyle = $0 },
+            s.$notchLeftEar.removeDuplicates().sink { [weak self] in self?.leftEar = $0 },
+            s.$notchRightEar.removeDuplicates().sink { [weak self] in self?.rightEar = $0 },
         ]
     }
 }
@@ -87,6 +112,66 @@ private final class NotchPlayback: ObservableObject {
 // 用 AnyShapeStyle 抹掉三种截然不同的 ShapeStyle 具体类型(纯色/材质/渐变),让
 // NotchHangingShape.fill(_:) 能用同一个属性统一接收,不需要写三份 if/switch 分支
 // 各自调用不同重载的 .fill()。
+extension NotchEarModule {
+    /// ⚠️ 不能存成 `static let`/常量字典:`L10n.t` 要在每次取值时现算,存进去等于把首次访问
+    /// 时的语言冻在里面(同 OverlayAlignmentSegmentedControl.label(for:) 那条)。
+    var displayName: String {
+        switch self {
+        case .title: return L10n.t("歌名")
+        case .artist: return L10n.t("歌手")
+        case .album: return L10n.t("专辑")
+        case .artwork: return L10n.t("封面")
+        case .controls: return L10n.t("播放控制")
+        case .elapsed: return L10n.t("已播时长")
+        case .remaining: return L10n.t("剩余时长")
+        case .none: return L10n.t("不显示")
+        }
+    }
+
+    /// 这个模块要不要每秒重算一次(时间类才要)。用它把 TimelineView 圈在真正需要的那一格里 ——
+    /// 顶行原本完全不随播放进度重绘,给不需要的模块也套一个周期时钟纯属白付。
+    var isClock: Bool { self == .elapsed || self == .remaining }
+
+    /// 这个模块塞进一只耳朵里**最少**要多宽。不含朝刘海那侧的 `earNotchInset`,也不含右耳
+    /// 外缘那簇音浪 —— 那两样由 `NotchLyricsWindowController.minEarWidth(...)` 加。
+    ///
+    /// ⚠️ 判据是"**再窄就真的被裁**",不是"再窄就不好看"。宽度滑杆的下界完全按它算
+    /// (`NotchLyricsWindowController.contentWidth`),往上多给一个 pt 就是替用户把岛的下限
+    /// 抬高一个 pt —— 而这一整轮(2026-08-31)用户连提三次的都是同一件事:
+    /// 「左右耳占用了很大空间」「支持调到更小」「这里还有很多位置,把最小调整为刚好放得下
+    /// 一个封面,或者刚好放得下一个音浪就好」。
+    ///
+    /// ⚠️ **歌名 / 歌手 / 专辑给 0,这是有意的**。它们跑马灯,窄了只是滚得更勤、再窄就是
+    /// 什么都不显示,**不会坏** —— 所以它们压根不该参与决定下限。第一版给过 24pt("可读窗口
+    /// 还剩两个汉字"),那是拿"好看"当"会坏"用:它把默认配置(歌名/歌手)的下界钉在 300,而
+    /// 用户看着 300pt 下那两个词旁边的空白说"这里还有很多位置"。给 0 之后,默认配置的下界
+    /// 落到跟「不显示/不显示」同一个数(这台机器 251)—— 那时下限完全由右耳外缘那簇音浪撑着,
+    /// 正是用户说的"刚好放得下一个音浪"。**代价说清楚**:拖到最底那一格,右耳的文字会被音浪
+    /// 挤成 0 宽(左耳还剩 20pt 在滚)。这是滑杆上肉眼可见的连续过程,不是突变,用户想要文字
+    /// 就往回拖两格 —— 把这个选择留给用户,而不是替他把区间截掉。
+    ///
+    /// 剩下三类是真的会被裁的,数字都是 2026-08-31 离屏实测:
+    ///   - 三键 = 命中框 15 + 18 + 15,`spacing: 0`(见 `earControls` 的横向账)= **48**
+    ///   - 时间 = 11.5pt 等宽数字下 "-12:34" / "-88:88" 实测 **39.0**
+    ///   - 封面 = `NotchMetrics.earArtworkSide` 现算,**不给估计值**(这台机器菜单栏 32 → 22pt)
+    func minEarContentWidth(contentTopInset: CGFloat) -> CGFloat {
+        switch self {
+        case .none, .title, .artist, .album: return 0
+        case .controls: return 48
+        case .artwork: return NotchMetrics.earArtworkSide(contentTopInset: contentTopInset)
+        // ⚠️ 时间**不能**靠跑马灯兜底 —— 一秒一跳的数字滚起来根本读不了,所以这一档必须
+        // 真的放得下。超过一小时的曲目("-1:23:45" 实测 50.1pt)在最窄处仍会滚:那是极少数,
+        // 不值得为它把所有人的下限再抬 11pt。
+        case .elapsed, .remaining: return 39
+        }
+    }
+
+    /// 主要信息给 semibold + 更高不透明度,次要信息压一档。**样式跟着模块走、不跟着哪只耳朵走**:
+    /// 把歌名换到右耳时它还是那个最显眼的东西,不会因为换了个位置就变次要。
+    /// (这也正是改动前的样子:左耳歌名 semibold/0.85、右耳歌手 medium/0.6。)
+    var isPrimary: Bool { self == .title }
+}
+
 extension NotchCardStyle {
     var displayName: String {
         switch self {
@@ -191,6 +276,23 @@ enum NotchMetrics {
     /// 刘海左沿。这 6pt 只吃进耳朵内部,不改耳宽、不动外缘的音浪/卡片边距,
     /// 代价是跑马灯可用宽度少 6pt(更容易触发滚动,而滚动本来就是长名字的正解)。
     static let earNotchInset: CGFloat = 6
+    /// 卡片左右两侧的内边距(`topRow` / `collapsedRow` 末尾那句 `.padding(.horizontal:)`)。
+    ///
+    /// ⚠️ 这是**单侧**值。三处按它算:那两句 padding、耳宽公式 `(卡片宽 − 刘海宽 − 2×它) / 2`、
+    /// 以及宽度下限 `NotchLyricsWindowController.contentWidth`。2026-08-31 之前三处各写一份
+    /// 字面量(10 / 20 / 20),提成常量是因为下限现在要跟着耳朵配置现算,再抄一份必然漂。
+    static let cardHorizontalPadding: CGFloat = 10
+    /// 耳朵里「可配模块」与外缘那簇音浪之间的间距(2026-08-31 之前叫 rightEarContentSpacing——
+    /// 音浪贴哪只耳朵可配之后,两只耳朵都用得到这个间距,改成不带方位的名字)。同样要进宽度
+    /// 下限的账(见 `minEarWidth`)。
+    static let earWaveSpacing: CGFloat = 5
+    /// 耳朵里那枚封面的边长(收起态右耳那枚、稳态耳朵配成「封面」时那枚,同一档)。
+    ///
+    /// ⚠️ **三处必须用这一份**:两处渲染 + 一处宽度下限(`NotchEarModule.minEarContentWidth`)。
+    /// 下限要是按一个"够宽的估计值"给,选了封面的耳朵就会白占几个 pt —— 而这一整轮改动
+    /// (2026-08-31)要消掉的正是这种白占。
+    /// 上限 32 那一档是歌词行末尾那枚,不走这里(耳朵只有 contentTopInset 那么高,放不下 32)。
+    static func earArtworkSide(contentTopInset: CGFloat) -> CGFloat { max(16, contentTopInset - 10) }
 }
 
 /// NotchLyricsView 需要从"承载它的那个东西"那里知道的全部几何/状态 —— 一共就这几项。
@@ -219,7 +321,59 @@ protocol NotchChromeSource: ObservableObject {
     /// 按同一个判据留白了),44pt 白占着正是用户 2026-08-21 说的"占用空间"。
     /// 刻意不看"在不在播":暂停中仍然有曲目,歌名/歌词/封面都该照常显示。
     var hasTrack: Bool { get }
+    /// 用户要不要看歌词行(`AppSettings.notchShowLyrics`)。关掉时卡片只剩顶行那一条,
+    /// 退化成贴着刘海的状态栏。
+    ///
+    /// ⚠️ 走 chrome 而不是让视图直接读 AppSettings:卡片高度(NotchWindowRoot)和内容渲染
+    /// (NotchLyricsView)必须用同一个值,而 NotchWindowRoot 只观察 controller、不观察
+    /// AppSettings(那是 2026-08-19 性能审计定的:别让无关设置写入打醒整卡)。真窗口那一侧
+    /// 由控制器订阅设置后 @Published 出来,预览那一侧现读即可。
+    var showsLyrics: Bool { get }
+    /// 要不要显示播放指示条(音浪)。同上,走 chrome 不直接读 AppSettings——它同时影响
+    /// 渲染(NotchLyricsView.topRow)和宽度下限(NotchLyricsWindowController.minEarWidth)。
+    var showsEqualizer: Bool { get }
+    /// 音浪贴哪只耳朵的外缘。同上。
+    var equalizerEar: NotchEqualizerEar { get }
     func setExpanded(_ expanded: Bool)
+}
+
+extension NotchChromeSource {
+    /// 那一行「正在播放」的歌词行(`lyricRow`,44pt 高)到底画不画 —— 用户关掉「显示歌词」时
+    /// 稳态确实该隐藏(退化成贴着刘海的状态栏,这是那个开关本来的意思);但**展开之后必须
+    /// 照常画**(2026-08-31 实测坐实的回归:第一版只放开了「下一句预览」这一行,忘了这一行
+    /// 也被同一个开关挡着,表现是"展开后有下一句、却看不到正在播放的当前行"这种更怪的
+    /// 半吊子状态——用户原话「展开只有一行歌词了，正在播放的那行被你搞没了」)。跟
+    /// `showsExpandedLyricPreview` 同一个道理:展开是用户主动选的动作,不该被"平时不想被
+    /// 歌词挡视线"这个理由连累。高度预留(`cardHeight`)和实际渲染(NotchLyricsView 的
+    /// `if controller.showsLyricRow`)必须用同一个值。
+    var showsLyricRow: Bool { hasTrack && (showsLyrics || isExpanded) }
+
+    /// 展开区里那行「下一句歌词预览」到底画不画 —— 只看这首歌**有没有歌词**,不受
+    /// 「显示歌词」那个开关影响(2026-08-31 用户要求:关掉稳态那一条歌词行之后,指向展开的
+    /// 效果得跟开着歌词时完全一样)。`showsLyrics` 只管稳态那 44pt 的行(见 `showsLyricRow`),
+    /// 不该连带影响展开区——展开是用户主动选的动作,他既然已经点开了,就不该因为"平时不想被
+    /// 歌词挡视线"这个理由被拿掉。高度预留和实际渲染必须读同一个值,否则要么多留一行的空白、
+    /// 要么把它裁掉半截。
+    var showsExpandedLyricPreview: Bool { expandedShowsLyricPreview }
+
+    /// 卡片当前高度 —— **全仓唯一一份公式**,真窗口(NotchWindowRoot)和设置页编辑台
+    /// (NotchEditorStage)都读它。
+    ///
+    /// ⚠️ 2026-08-31 抽出来的:在此之前这个公式在那两处各写了一遍,而它的入参一路从 1 个
+    /// (isCollapsed)涨到 4 个(再加 hasTrack / isExpanded 那一组 / showsLyrics)。本章
+    /// 设计决策里早写过同类教训:"两处各自判断必然漂,而漂的表现是行不见了高度还留着、
+    /// 或反过来把行裁掉半截"。加第四个入参那天正好把它收成一份。
+    var cardHeight: CGFloat {
+        if isCollapsed { return contentTopInset }
+        return contentTopInset
+            // 稳态歌词行要不要留高度,见 showsLyricRow(展开时哪怕关着「显示歌词」也要留)。
+            + (showsLyricRow ? NotchMetrics.compactRowHeight : 0)
+            + (isExpanded
+               ? NotchMetrics.expandedExtraHeight(
+                   hasLyricPreview: showsExpandedLyricPreview,
+                   hasScrubber: expandedShowsScrubber)
+               : 0)
+    }
 }
 
 struct NotchLyricsView<Chrome: NotchChromeSource>: View {
@@ -247,7 +401,8 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
             // 的 rect 比窗口真实宽度多 20pt,只有当这多出来的 20pt 沿某一侧溢出时,那一侧
             // 的底部圆角才会显示为直角(圆角计算本身没错,只是形状宽度比窗口多算了一截,
             // 超出边界的部分被窗口硬裁掉,裁到的正好是圆弧那一小段)。
-            let earWidth = max(0, (proxy.size.width - controller.notchWidth - 20) / 2)
+            let earWidth = max(0, (proxy.size.width - controller.notchWidth
+                                   - NotchMetrics.cardHorizontalPadding * 2) / 2)
             ZStack(alignment: .top) {
                 backgroundLayer(size: proxy.size)
                 // 收起态铺一层纯黑盖住卡片样式自己的底(2026-08-19 用户要求):没在播放时
@@ -267,7 +422,7 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
                 // (anchor 在顶部,因为卡片是从顶边往上收的),内容就跟着卡片一起"被吸回刘海"。
                 VStack(spacing: 0) {
                     // 顶行占菜单栏那一条高度,收起后跟菜单栏齐平、不额外占屏。两种形态:
-                    // 收起(没在播放)= iPhone 灵动岛式极简(左耳音浪、右耳封面,2026-08-19
+                    // 收起(没在播放)= iPhone 灵动岛式极简(左耳封面、右耳音浪,2026-08-19
                     // 用户拍板,歌名/播放键都收进 hover 展开卡);稳态/展开 = 歌名 + 播放键。
                     if controller.isCollapsed {
                         collapsedRow(earWidth: earWidth)
@@ -283,8 +438,20 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
                     // 同一判据留白),44pt 白占着就是用户报的"占用空间"。一处改一处不改的
                     // 表现是"行不见了高度还留着"或反过来把行裁掉半截。
                     if !controller.isCollapsed && controller.hasTrack {
-                        lyricRow
-                            .frame(height: NotchMetrics.compactRowHeight)
+                        // 用户关掉「显示歌词」时这一行连同它那 44pt 一起不渲染,卡片退化成
+                        // 只剩顶行的一条状态栏(2026-08-31)——但展开时哪怕关着也要照常画,
+                        // 见 showsLyricRow 的注释(2026-08-31 回归:第一版漏了展开这一档,
+                        // 表现是"展开后有下一句预览、却看不到正在播放的当前行")。⚠️ 判据
+                        // 必须跟 NotchChromeSource.cardHeight 里那一条**同源**,那边是全仓
+                        // 唯一一份高度公式,两处各判各的必然漂。
+                        if controller.showsLyricRow {
+                            lyricRow
+                                .frame(height: NotchMetrics.compactRowHeight)
+                        }
+                        // 展开区**完全不**受那个开关影响(2026-08-31 用户要求):它是够到
+                        // 播放控制和进度条的唯一入口,而且用户主动指向展开这个动作本身就说明
+                        // 他现在想看更多,不该因为平时不想被歌词挡视线这个理由被拿掉——连里面
+                        // 那行下一句预览也照常画(见 showsExpandedLyricPreview 的注释)。
                         if controller.isExpanded {
                             expandedContent
                         }
@@ -379,7 +546,11 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
                     .resizable()
                     .scaledToFill()
                     .frame(width: size.width, height: size.height)
-                    .overlay(Color.black.opacity(0.45))
+                    // 数值跟 PlaybackCoordinator 算 accentForCoverArtBackground 时估算
+                    // 背景亮度用的是同一个常量(LocalPlaybackSource.
+                    // notchCoverArtOverlayOpacity)——两处对不上,文字对比度的估算就会
+                    // 跟实际渲染出来的背景脱节。
+                    .overlay(Color.black.opacity(LocalPlaybackSource.notchCoverArtOverlayOpacity))
                     .clipShape(NotchHangingShape(bottomCornerRadius: 20))
                     // 换歌/高清替代到货都会产出一张**新的**烘焙图实例(NSImage 指针比较),
                     // 一条过渡覆盖原来 artworkData 字节比较 + highRes 指针比较两条 ——
@@ -400,7 +571,7 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
         HStack(spacing: 0) {
             HStack {
                 if let image = playback.artworkImage {
-                    let side = max(16, controller.contentTopInset - 10)
+                    let side = NotchMetrics.earArtworkSide(contentTopInset: controller.contentTopInset)
                     // 收起态的小封面也是「打开歌词窗口」的入口 —— 跟展开卡右下角那枚
                     // 封面同一动作(点封面看完整歌词,两种形态行为一致)。
                     Button {
@@ -427,7 +598,7 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
             }
             .frame(width: earWidth)
         }
-        .padding(.horizontal, 10)
+        .padding(.horizontal, NotchMetrics.cardHorizontalPadding)
     }
 
     /// 压根没有曲目。读 controller 那一份而不是自己再从 playback 算一遍 —— 卡片高度
@@ -436,24 +607,29 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
     /// 跟菜单栏面板的同名属性是同一套语义(MenuBarPanel.isIdleNoTrack)。
     private var isIdleNoTrack: Bool { !controller.hasTrack }
 
+    /// 播放指示条(音浪)是不是配给了这只耳朵,而且这只耳朵没选控制键——三键本身已经在
+    /// 报播放状态(播放时画 ⏸),音浪摆在旁边是同一件事说两遍,而且窄宽度下(耳朵最窄
+    /// 70pt,减内缩 6 之后 64pt)刚好放得下三键的 48pt,再挤进音浪的 14+5 就超了。这是
+    /// "音浪贴这只耳朵外缘"唯一的例外,跟哪只耳朵无关。
+    private func showsEqualizer(on side: NotchEqualizerEar, module: NotchEarModule) -> Bool {
+        controller.showsEqualizer && controller.equalizerEar == side && module != .controls
+    }
+
+    private var equalizerBars: some View {
+        EqualizerBars(color: accentOrWhite, isPlaying: playback.isPlayingNow,
+                      amplitude: Self.vocalAmplitude(at:))
+    }
+
     private func topRow(earWidth: CGFloat) -> some View {
         HStack(spacing: 0) {
-            // 左耳:歌名。播放指示条(音浪)原在歌名左边,2026-08-19 用户拍板挪到右耳
-            // 歌手侧、贴外缘 —— 跟收起态「封面左/音浪右」的 iPhone 灵动岛构图对齐,
-            // 音浪在两种形态下都住右耳,收放切换时它不横跳。
-            HStack(spacing: 5) {
-                // 广告插播:歌名位直接写「广告中」,不展示广告物料的名字(用户拍板
-                // 2026-08-19)。MarqueeText 的 id 也用显示串——切进/切出广告要重置跑马灯。
-                let displayTitle = playback.isCurrentTrackAdBreak ? L10n.t("广告中") : playback.title
-                MarqueeText(id: displayTitle) {
-                    // 压根没有曲目时**留白**,不摆 ♪(2026-08-21 用户要求"那个无意义的音符
-                    // 不要占位置")。这里的 ♪ 其实只在"没有曲目"这一种情况下才到得了 ——
-                    // 有曲目就有歌名,广告插播也被上面那行换成了「广告中」—— 所以它从来
-                    // 没有"代表一首歌"的语义,纯粹是一个占位。
-                    Text(isIdleNoTrack ? "" : (displayTitle.isEmpty ? "♪" : displayTitle))
-                        .font(.system(size: 11.5, weight: .semibold))
-                        .foregroundStyle(accentOrWhite.opacity(0.85))
+            // 左耳:可配模块 + (可选)音浪。音浪贴哪只耳朵可配之后(2026-08-31,原来写死在
+            // 右耳),这里跟下面右耳是完全对称的结构——只是音浪在外缘,外缘在左耳是"最左",
+            // 所以音浪排在模块**前面**(下面右耳反过来,音浪排在模块后面)。
+            HStack(spacing: NotchMetrics.earWaveSpacing) {
+                if showsEqualizer(on: .left, module: playback.leftEar) {
+                    equalizerBars
                 }
+                earContent(playback.leftEar, alignment: .leading)
             }
             // 内缩必须在 .frame(width:) **之前** —— 之后加等于把耳朵整体变宽 6pt,
             // 三段就不再严丝合缝铺满,背景形状/刘海空当会跟着错位。
@@ -464,37 +640,180 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
             Color.clear
                 .frame(width: controller.notchWidth)
 
-            // 右耳:歌手名 + 音浪(2026-08-19 设计评审的终形,用户逐步拍板):控制键全部
+            // 右耳:可配模块 + (可选)音浪(2026-08-19 设计评审的终形,用户逐步拍板;
+            // 2026-08-31 从"音浪固定贴右耳"改成可配置贴哪只耳朵/要不要显示):控制键全部
             // 退场 —— 岛是 hover 展开的,光标到达耳朵之前岛已经展开,完整三键就在展开卡
-            // 的进度条下方(见 expandedContent),耳朵里再留一枚播放键是重复目标。顶行
-            // 回归纯信息:左歌名、右歌手,音浪贴外缘(跟收起态同侧,收放切换不横跳;
-            // 它固定宽度,放最右不会被滚动的歌手名推着动)。广告时左耳已写「广告中」,
-            // 这里只剩音浪。
-            //
-            // 歌手名 2026-08-20 从"截尾成省略号"改成跑马灯(用户要求)。原来刻意不滚,
-            // 理由是"两只耳朵各滚各的太闹" —— 现在按用户口径改:名字看不全比两处同时
-            // 动更烦,而且只有真的装不下才会滚(MarqueeText 自己测),绝大多数歌手名短、
-            // 一动不动。
-            //
-            // ⚠️ 不能只是把 Text 套进 MarqueeText 就完事:它内层是 GeometryReader、
-            // 会吃满可用宽度,原来靠 Spacer 顶到右边的短名字会整块跑到左耳侧、跟音浪
-            // 之间空出一大段。靠右由 restingAlignment 负责(见 MarqueeText),Spacer 撤掉
-            // —— 留着它会把跑马灯挤成 0 宽,长名字反而一个字都看不见。
-            HStack(spacing: 5) {
-                let displayArtist = playback.isCurrentTrackAdBreak ? "" : playback.artist
-                MarqueeText(id: displayArtist, restingAlignment: .trailing) {
-                    Text(displayArtist)
-                        .font(.system(size: 11.5, weight: .medium))
-                        .foregroundStyle(accentOrWhite.opacity(0.6))
-                        .lineLimit(1)
+            // 的进度条下方(见 expandedContent),耳朵里再留一枚播放键是重复目标。默认配置
+            // (左歌名、右歌手 + 音浪贴右耳)因此跟改动前逐像素一致——只是现在两者都能关/换边。
+            HStack(spacing: NotchMetrics.earWaveSpacing) {
+                earContent(playback.rightEar, alignment: .trailing)
+                if showsEqualizer(on: .right, module: playback.rightEar) {
+                    equalizerBars
                 }
-                EqualizerBars(color: accentOrWhite, isPlaying: playback.isPlayingNow,
-                              amplitude: Self.vocalAmplitude(at:))
             }
             .padding(.leading, NotchMetrics.earNotchInset) // 理由同左耳,见 earNotchInset
             .frame(width: earWidth)
         }
-        .padding(.horizontal, 10)
+        .padding(.horizontal, NotchMetrics.cardHorizontalPadding)
+    }
+
+    // MARK: - 耳朵里的可配模块
+
+    /// 一只耳朵里画什么。`alignment` 是**耳朵**的属性(左耳靠左、右耳靠右),不是模块的。
+    ///
+    /// ⚠️ 三条约束,每条都对应本仓一处既有做法:
+    ///
+    /// ① **只有时间类模块才套 `TimelineView`。** 顶行原本完全不随播放进度重绘,给歌名/歌手/
+    ///    专辑也套一个时钟纯属白付(这个仓库为"整卡跟着高频源重绘"做过一整轮性能审计,见
+    ///    NotchPlayback 的头注)。
+    ///
+    /// ② **没有锚点就不排表**,静态画冻结值 —— 照搬本仓既有的**存在性门**(`NotchScrubber`
+    ///    和歌词窗口那条进度都是 `if let anchor` 才挂表)。暂停/没在播放时 `LocalPlaybackSource`
+    ///    会把 anchor 置 nil,于是这一格退回 `pausedPositionMs` 的冻结读数、一次表都不排。
+    ///    ⚠️ 这条不是可选优化:设置页那块编辑台渲染的是**同一份**视图,而它的替身 chrome 把
+    ///    `hasTrack` 写死 true、`isCollapsed` 写死 false —— 没有这道门,只要有人把耳朵配成时间类,
+    ///    设置页开着就会每秒空转一次,哪怕根本没在放歌。
+    ///
+    /// ③ **周期起点按锚点对齐到"曲目位置的整秒"**,步长按倍速取 `1/rate`(见
+    ///    `NotchTimeFormat.clockSchedule`)。钉在**墙钟**整秒上是不行的:曲目位置的整秒边界跟
+    ///    墙钟整秒无关,两者的相位差在一条锚点的生命周期里是**常量** —— 也就是说 hover 展开时
+    ///    耳朵可能整首歌都比正下方那条迷你进度条**慢 1 秒**(耳朵 1:23、进度条 1:24 长期并排),
+    ///    而不是偶尔闪一下。对齐之后两处读数同源同相。
+    ///    ⚠️ 别顺手把 `clockText` 里的 `Date()` 换成 `context.date`:对齐之后 tick 恰好落在边界上,
+    ///    用调度时刻采样有可能因为亚毫秒取整读回旧的那一秒;实际派发比调度晚几毫秒,`Date()`
+    ///    反而落在边界的正确一侧。
+    @ViewBuilder
+    private func earContent(_ module: NotchEarModule, alignment: Alignment) -> some View {
+        switch module {
+        case .artwork:
+            earArtwork(alignment: alignment)
+        case .controls:
+            earControls(alignment: alignment)
+        case .elapsed, .remaining:
+            if let anchor = playback.anchor {
+                TimelineView(NotchTimeFormat.clockSchedule(for: anchor)) { _ in
+                    earText(clockText(module), module: module, alignment: alignment)
+                }
+            } else {
+                earText(clockText(module), module: module, alignment: alignment)
+            }
+        case .title, .artist, .album, .none:
+            earText(metadataText(module), module: module, alignment: alignment)
+        }
+    }
+
+    /// 耳朵里那枚封面小图(2026-08-31)。
+    ///
+    /// ⚠️ 尺寸走**收起态那一枚**的公式(`contentTopInset − 10`,约 23pt),**不是**歌词行末尾
+    /// 那枚 32pt 的:耳朵只有 `contentTopInset` 那么高,32pt 塞进来上下一点余量都不剩。当年
+    /// 「封面放不进耳朵」的实测结论(见 artworkThumbnail 上方)量的正是 32pt 那一档。
+    ///
+    /// 没有封面数据时**整块不画**(不摆占位方块)—— 跟歌词行末尾那枚同一个取舍,理由见那边。
+    @ViewBuilder
+    private func earArtwork(alignment: Alignment) -> some View {
+        if let image = playback.highResArtworkImage ?? playback.artworkImage {
+            artworkThumbnail(
+                image,
+                side: NotchMetrics.earArtworkSide(contentTopInset: controller.contentTopInset))
+                .frame(maxWidth: .infinity, alignment: alignment)
+        } else {
+            Color.clear.frame(maxWidth: .infinity, maxHeight: 0)
+        }
+    }
+
+    /// 耳朵里那一排播放控制键(2026-08-31 用户点名要加)。
+    ///
+    /// ⚠️ 尺寸沿用 `controlButton` 的 `primary` 两档**默认值**(侧键 glyph 9.5 / 命中 15,
+    /// 播放键 11 / 18)—— 那正是 2026-08-19 把三键从耳朵挪进展开卡之前、耳朵里用的那一档,
+    /// 默认值从那次搬家起就一直留在代码里没有调用方,现在重新有了。展开卡里那一排是 22pt,
+    /// 比这里大一号,是刻意的(那儿是真正会被点的地方)。
+    ///
+    /// 横向账(min 宽度下也要放得下):三键 15+18+15 = 48pt,`spacing: 0` —— 命中框本身就比
+    /// 图标大一圈(15 的框装 9.5 的图标,两侧各 2.75pt),再加间距会白白撑宽。而耳朵最窄是
+    /// **70pt**(`NotchLyricsWindowController.minEarWidth`,宽度滑杆的下界就是按它算的),
+    /// 减掉朝刘海那侧 6pt 的内缩还有 64pt,放得下。右耳还要再减音浪那 14pt + 5pt 间距 = 45pt
+    /// —— 放不下,所以右耳选控制键时**音浪让位**(见 topRow 那段⚠️)。
+    private func earControls(alignment: Alignment) -> some View {
+        HStack(spacing: 0) {
+            controlButton("backward.fill") { MusicPlaybackController.previousTrack() }
+            controlButton(playback.isPlayingNow ? "pause.fill" : "play.fill", primary: true) {
+                // 乐观回声版:歌词窗封面缩放/图标点击即动(见 userTogglePlayPause)。
+                PlaybackCoordinator.shared.userTogglePlayPause()
+            }
+            controlButton("forward.fill") { MusicPlaybackController.nextTrack() }
+        }
+        .frame(maxWidth: .infinity, alignment: alignment)
+    }
+
+    /// 三个元数据模块的取值。
+    ///
+    /// ⚠️ 三条既有规矩原样保留,别在加模块时顺手丢掉:
+    ///   ① **广告插播**:歌名位写「广告中」,不展示广告物料的名字(2026-08-19 用户拍板);
+    ///      歌手/专辑在广告期间一律留空 —— 广告没有"歌手"可言,画上去是假信息。
+    ///   ② **压根没有曲目时留白**,不摆 ♪(2026-08-21 用户要求"那个无意义的音符不要占位置")。
+    ///   ③ 歌名为空时的 ♪ 兜底只在"有曲目但拿不到歌名"这种边角才到得了,保留。
+    private func metadataText(_ module: NotchEarModule) -> String {
+        if isIdleNoTrack { return "" }
+        let isAd = playback.isCurrentTrackAdBreak
+        switch module {
+        case .title:
+            if isAd { return L10n.t("广告中") }
+            return playback.title.isEmpty ? "♪" : playback.title
+        case .artist: return isAd ? "" : playback.artist
+        case .album: return isAd ? "" : playback.album
+        // 非文本模块不走这条路(见 earContent 的分发),这里只是把 switch 补齐。
+        case .artwork, .controls, .elapsed, .remaining, .none: return ""
+        }
+    }
+
+    /// 已播 / 剩余。位置口径跟卡片里那条迷你进度条同源:锚点外推 ?? 暂停冻结位置;歌词时间轴
+    /// 偏移**不适用**(那是歌词的事,不是播放进度的事,别顺手加上去)。时长未知(播客/流)时
+    /// 剩余算不出来,整块留白而不是画个 `--:--` 占位 —— 不为拿不到的数据编一个占位符,跟预览
+    /// 那条"不编造假进度"是同一个态度。
+    ///
+    /// ⚠️ 同源**不等于**逐帧同值,两处已知的差:
+    ///   - **拖动进度条时**:进度条画的是拖到哪儿(它自己的 `@GestureState`,私有),耳朵画的仍是
+    ///     真实播放位置。不把拖动状态提上来是刻意的 —— 那要么把私有手势状态提到整卡这一层
+    ///     (整卡跟着每个指针事件重估,正是那轮性能审计修掉的东西),要么再拉一条通道。
+    ///   - **剩余时长的时长来源**:这里用 `playback.currentDurationMs`,进度条用 `anchor.durationMs`。
+    ///     正常一致,但这是第二个可漂的点,改任一处时对一下另一处。
+    ///
+    /// ⚠️ **广告插播时照常显示**,不套用 `metadataText` 那条"广告期间歌手/专辑留空"的规矩:
+    /// 位置和时长在广告期间是播放器对广告物料的真实读数,不是假信息;清空反而会让耳朵跟正下方
+    /// 那条进度条自相矛盾。
+    private func clockText(_ module: NotchEarModule) -> String {
+        guard !isIdleNoTrack else { return "" }
+        guard let position = playback.anchor?.extrapolatedPositionMs(now: Date())
+                ?? playback.pausedPositionMs else { return "" }
+        switch module {
+        case .elapsed:
+            return NotchTimeFormat.mmss(ms: position)
+        case .remaining:
+            guard let total = playback.currentDurationMs, total > 0 else { return "" }
+            return "-" + NotchTimeFormat.mmss(ms: max(0, total - position))
+        default:
+            return ""
+        }
+    }
+
+    /// 耳朵里那一行字。跑马灯的 id 用**显示串**本身 —— 换了内容才重新测量/重新开始滚动。
+    ///
+    /// ⚠️ 等宽数字**只给时间类**。给歌名/歌手/专辑也套上的话,带数字的名字("M83"、
+    /// "24K Magic")字形会被静默改掉 —— 而这次改造的前提是"默认配置跟改动前逐像素一致"。
+    /// 时间类必须套:不套的话每秒跳一格数字宽度就变、整行跟着抖。
+    /// 条件收进 **Font 值本身**(`Font.monospacedDigit()` 返回 Font),不走 `if/else` 也不走
+    /// `ViewModifier` + `AnyView`:那两种都会在视图树上多一层类型/身份变化,而这里变的只是
+    /// 一个字体属性。(2026-08-31 一度写成 `ConditionalMonospacedDigit` 那样一个 modifier,
+    /// 附的理由是"避免分支切换整块重建" —— 那个理由是假的:`isClock` 一变,上面 `earContent`
+    /// 的分支本来就先换了,子树无论如何都要重建。)
+    private func earText(_ text: String, module: NotchEarModule, alignment: Alignment) -> some View {
+        let base = Font.system(size: 11.5, weight: module.isPrimary ? .semibold : .medium)
+        return MarqueeText(id: text, restingAlignment: alignment) {
+            Text(text)
+                .font(module.isClock ? base.monospacedDigit() : base)
+                .foregroundStyle(accentOrWhite.opacity(module.isPrimary ? 0.85 : 0.6))
+                .lineLimit(1)
+        }
     }
 
     // 封面小图跟歌词之间的间距。
@@ -530,8 +849,9 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
     //
     // 描边 + 投影是给"卡片背景可能是浅色"兜底:磨砂玻璃风格会透出桌面颜色,浅色壁纸下
     // 一张浅色封面直接贴上去边界会糊成一片,一圈极淡的白描边能把方块轮廓钉住。
-    private func artworkThumbnail(_ image: NSImage) -> some View {
-        let side = Self.artworkSide(rowHeight: NotchMetrics.compactRowHeight)
+    /// side:不给就按歌词行那一档(32pt)。耳朵里那枚要小一号,理由见 earArtwork。
+    private func artworkThumbnail(_ image: NSImage, side: CGFloat? = nil) -> some View {
+        let side = side ?? Self.artworkSide(rowHeight: NotchMetrics.compactRowHeight)
         // 点封面 → 打开歌词窗口(2026-08-19 用户要求)。走 AppActions 统一入口,激活
         // 时序(先 NSApp.activate 再 openWindow)在注册处已处理,跟快捷键/菜单/面板同路。
         return Button {
@@ -767,8 +1087,9 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
 
 
     private var accentOrWhite: Color {
-        // 组合逻辑(「跟随封面」开关 × 动态主色)已下沉进 NotchPlayback.accent 预组合去重,
-        // 这里只是个语义化的别名,语义与历史版本逐字一致。
+        // 组合逻辑(风格是不是「跟随封面」× 动态主色)已下沉进 NotchPlayback.accent 预组合
+        // 去重,这里只是个语义化的别名。
+        // (2026-08-31 之前那个"×"左边是悬浮歌词的 followsCoverArt 开关,见 accent 的注释。)
         playback.accent
     }
 
@@ -776,7 +1097,9 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
     // 产品"而不是退化成通用媒体控制器;进度条属于"有余量就加"的加分项。
     private var expandedContent: some View {
         VStack(alignment: .leading, spacing: 4) {
-            if !nextLineDisplayText.isEmpty {
+            // ⚠️ `showsExpandedLyricPreview` 这一条跟下面 .frame(height:) 里留不留这行的高度
+            // 是**同一个值**(协议扩展里那份),别在这里换成别的判据。
+            if controller.showsExpandedLyricPreview, !nextLineDisplayText.isEmpty {
                 Text(nextLineDisplayText)
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(accentOrWhite.opacity(0.5))
@@ -827,7 +1150,7 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
         // 上那两个曲目级标志)—— 两处各自判断的话必然漂,而漂的表现是卡片和内容差一截:
         // 要么底部多一条空隙,要么最下面那排三键被裁掉。
         .frame(height: NotchMetrics.expandedExtraHeight(
-            hasLyricPreview: controller.expandedShowsLyricPreview,
+            hasLyricPreview: controller.showsExpandedLyricPreview,
             hasScrubber: controller.expandedShowsScrubber), alignment: .top)
     }
 
@@ -1024,7 +1347,40 @@ private struct NotchScrubber: View {
         return hoveringScrubber ? 5 : 3
     }
 
-    private static func timeString(ms: Int) -> String {
+    private static func timeString(ms: Int) -> String { NotchTimeFormat.mmss(ms: ms) }
+}
+
+/// `m:ss` —— 迷你进度条底下那行时间和「已播/剩余时长」两个耳朵模块共用一份。
+///
+/// 抽出来是因为 2026-08-31 加耳朵模块时差点在 NotchLyricsView 里再写一份:同一个卡片上两处
+/// 时间格式不一样(一处补前导零、一处不补)是那种没人会当 bug 报、但看着就是不对劲的东西。
+enum NotchTimeFormat {
+    /// 拿不到锚点时那条秒表的兜底起点。
+    /// ⚠️ 放在这里而不是 NotchLyricsView 里:那是个泛型类型(`<Chrome: NotchChromeSource>`),
+    /// Swift 不允许泛型类型有 static 存储属性。
+    static let clockEpoch = Date(timeIntervalSince1970: 0)
+
+    /// 时间类耳朵模块那条秒表的时刻表 —— **相位对齐到"曲目位置正好走到整秒"的那个墙钟时刻**,
+    /// 步长按倍速取 `1/rate`。
+    ///
+    /// 为什么不能直接钉在墙钟整秒上(`from: clockEpoch`):曲目位置 p(t) = progressMs + 走过的时间,
+    /// 它的整秒边界跟墙钟整秒**没有任何关系**,两者的相位差 φ 由 seek/换歌那一刻的锚点定死、
+    /// 在这条锚点的整个生命周期里是**常量**。于是 hover 展开时,耳朵可能**整首歌**都比正下方那条
+    /// 迷你进度条(30Hz,同一份 `mmss`)慢 1 秒 —— 耳朵 1:23、进度条 1:24 长期并排杵着,
+    /// 而不是偶尔闪一下。按锚点均匀分布,期望约一半时间在错位。
+    ///
+    /// ⚠️ 只读 `fetchedAt`/`progressMs`/`rate` 这些**低频**字段,不碰 `Date()` —— 相位在 body
+    /// 反复重估之间因此是稳定的,不会退回"每次重绘都把时钟相位重挪一次"那个问题。
+    static func clockSchedule(for anchor: ProgressAnchor) -> PeriodicTimelineSchedule {
+        guard anchor.rate > 0 else { return .periodic(from: clockEpoch, by: 1) }
+        let ref = anchor.fetchedAt
+        let posAtRef = Double(anchor.extrapolatedPositionMs(now: ref))
+        let msToBoundary = 1000 - posAtRef.truncatingRemainder(dividingBy: 1000)
+        return .periodic(from: ref.addingTimeInterval(msToBoundary / 1000 / anchor.rate),
+                         by: 1 / anchor.rate)
+    }
+
+    static func mmss(ms: Int) -> String {
         let totalSeconds = max(0, ms) / 1000
         return String(format: "%d:%02d", totalSeconds / 60, totalSeconds % 60)
     }
@@ -1063,3 +1419,4 @@ struct NotchHangingShape: Shape {
         return path
     }
 }
+

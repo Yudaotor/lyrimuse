@@ -16,8 +16,13 @@ import SwiftUI
 /// 只在**窗口够宽**时用(判据在 LyricsWindowView.body,跟播放态那条 640pt 断点同一个思路 ——
 /// 窄窗硬塞两列会挤成一团);窄窗仍走原来的居中 `idleWelcomeView`。
 ///
-/// 未连 Last.fm 时左上和右列都没有数据,整页退化成「只有唱片 hero 居中」——不画空卡、
-/// 不画破折号,沿用「没连账号也不难看」那条既有契约。
+/// 2026-08-27 用户要求把右列的"连没连 Last.fm 二选一"也接到这里(歌词窗口那颗「播放
+/// 记录」按钮已经是这个逻辑,见 `docs/features/07-lyrics-window.md`「播放记录取代播放
+/// 队列」一节):未连 Last.fm 时左上「收听总览」仍然没有数据可画(没有本地替代来源,
+/// 那张卡的三个数字全靠 Last.fm 的每日归档),继续省略;但右列不再跟着一起消失——改成
+/// `PendingListensPanel`(本地静默记的、还没提交的收听,数据源 `ScrobbleBackfillService`,
+/// 跟歌词窗口那边共用同一份实现,不重写)。两列布局因此**恒定**,只是左上那张卡有没有、
+/// 右列内容是哪一种,各自独立按连接状态判断。
 struct IdleStandbyView: View {
     let player: PlaybackPlayer
     /// 「继续播放」:AM 三段式 / Spotify 自带恢复,失败兜底激活 App。逻辑留在
@@ -32,28 +37,35 @@ struct IdleStandbyView: View {
     @ObservedObject private var stats = LastfmStatsService.shared
 
     var body: some View {
-        Group {
-            if stats.isConnected {
-                HStack(alignment: .top, spacing: 22) {
-                    VStack(alignment: .leading, spacing: 20) {
-                        IdleOverviewCard()
-                        IdleLastTrackHero(player: player, onResume: onResume,
-                                          onOpenPlayer: onOpenPlayer, onOpenAlbum: onOpenAlbum)
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    IdleRecentPanel(onOpenTrack: onOpenTrack)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        // 右上角那颗音量/AirPlay 胶囊是**窗级 overlay**、浮在内容之上,
-                        // 而且没有 !isIdle 守卫(停播时读得到音量就照样在场)。实测它的下缘
-                        // 落在窗顶 ~50pt,正好压着这张卡的顶边 —— 往下让 18pt 躲开它。
-                        .padding(.top, 18)
-                }
-            } else {
+        HStack(alignment: .top, spacing: 22) {
+            VStack(alignment: .leading, spacing: 20) {
+                // 收听总览没有本地替代来源(三个数字全靠 Last.fm 的每日归档),
+                // 未连接就没有东西可画,直接省略——不画空卡、不画破折号,沿用
+                // 「没连账号也不难看」那条既有契约。
+                if stats.isConnected { IdleOverviewCard() }
                 IdleLastTrackHero(player: player, onResume: onResume,
                                   onOpenPlayer: onOpenPlayer, onOpenAlbum: onOpenAlbum)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            // 右列连没连 Last.fm 二选一(2026-08-27,与歌词窗口「播放记录」按钮同一套
+            // 逻辑):已连接=`RecentListensPanel`(最近听过);未连接=`PendingListensPanel`
+            // (本地静默记的、还没提交的收听)。跟原来"未连接时右列跟着整段消失"不同——
+            // 右列现在恒有内容,两列布局不再随连接状态整体切换结构。
+            Group {
+                if stats.isConnected {
+                    RecentListensPanel(onOpenTrack: onOpenTrack)
+                } else {
+                    PendingListensPanel(onOpenTrack: onOpenTrack)
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            // 右上角那颗音量/AirPlay 胶囊是**窗级 overlay**、浮在内容之上,现在有
+            // `!isIdle` 守卫了(停播页不会再冒出来,见 07-lyrics-window.md 那条
+            // 2026-08-25 的坑)。这 18pt 顶部间距原本是留出来躲它的,但停播页跟播放态
+            // 用的是**同一个**右上角锚点区域,窗口顶边到内容之间那段留白本身作为视觉
+            // 呼吸感也说得通,不为了这一条不再成立就去掉。
+            .padding(.top, 18)
         }
         .padding(EdgeInsets(top: 22, leading: 34, bottom: 26, trailing: 34))
         // 停播页可能一挂几小时,只靠 onAppear 一次会让「今天 N 首」越挂越旧(与原
@@ -133,28 +145,92 @@ private struct IdleOverviewCard: View {
     @ObservedObject private var stats = LastfmStatsService.shared
 
     private static let sparkDays = 30
+    /// 走势图高度。同步中的占位骨架要跟它**严格一致**,分开写两个 52 迟早对不上、
+    /// 抖动就又回来了(2026-08-29)。
+    private static let sparkHeight: CGFloat = 52
     /// 悬停在走势图第几天上(nil = 没悬停)。读数换到图下面那行说明里,不叠浮层。
     @State private var hoverIndex: Int?
+    // 悬停读数跟着游标走所需的三个量(2026-08-29)。原来读数固定在左下角:鼠标在图右侧
+    // 时视线要横跨整条图去找那行小灰字,加上样式悬停前后完全一样,用户反馈"以为移上去
+    // 没反应"。hoverX 存的是**吸附后那一天的点位**(不是鼠标裸坐标),读数才会跟竖线对齐。
+    @State private var hoverX: CGFloat?
+    @State private var chartWidth: CGFloat = 0
+    @State private var captionWidth: CGFloat = 0
 
     var body: some View {
         VStack(alignment: .leading, spacing: 13) {
             HStack(alignment: .top, spacing: 34) {
                 bigStat(value: stats.overview?.today, label: L10n.t("今天"))
-                bigStat(value: stats.overview?.week, label: weekLabel)
+                bigStat(value: weekValue, label: weekLabel)
                 bigStat(value: stats.overview?.total, label: totalLabel)
             }
-            if stats.dailySyncing {
-                Text(stats.dailySyncProgress.map {
-                    String(format: L10n.t("正在同步历史（%@）"), $0)
-                } ?? L10n.t("正在同步历史"))
+            // 首次同步(bootstrapState)跟日常 top-up(dailySyncing)分开措辞(2026-08-25)
+            // ——前者是"这个账号第一次连接",用户需要知道这是一次性的、会自己好;后者
+            // 通常一闪而过,不用强调"首次"。
+            //
+            // ⚠️ 2026-08-25 顺手修复:这里原来是
+            // `String(format: "正在同步历史（%@）", stats.dailySyncProgress)`,而
+            // dailySyncProgress 自己已经是 LastfmStatsService 格式化好的完整句子
+            // "正在同步历史（N/M 页）"——两层格式化叠在一起会显示成"正在同步历史（正在
+            // 同步历史（N/M 页）」"。直接显示 dailySyncProgress 本身即可,不用再包一层。
+            // 走势区。⚠️ 这里的**三种状态高度必须一致**,否则窗口会在数据到位的那一刻
+            // 往下弹一格。这张卡本身只在 `stats.isConnected` 时才渲染(见 body 里的
+            // 调用处),也就是说进到这里就意味着"迟早会有数据",所以没数据/还在同步都
+            // 该先把图的位置占住,而不是等数据到了再撑开。
+            if let note = syncNote {
+                // ⚠️ 这里必须**把走势图的位置预留出来**(2026-08-29,用户报"首次进入这个页面
+                // 时上面折线图区域会加载一下,加载完窗口会抖动一下")。同步中原来只渲染一行
+                // 11pt 文字(≈13pt 高),数据一到就换成 52pt 图 + 13 spacing + 13 说明
+                // (≈78pt),整个窗口当场往下弹一格。占位骨架跟数据态用同一套结构:
+                // sparkHeight 的图位 + 一行说明,数据到了在**原地**换上,高度不变。
+                //
+                // 空白之外补一条基线:跟图里那条(primary 0.10、1pt)同款,让这块在加载时
+                // 也读得出"这里将来是一张图",而不是一片莫名其妙的留白。
+                Color.clear
+                    .frame(height: Self.sparkHeight)
+                    .overlay(alignment: .bottom) {
+                        Rectangle()
+                            .fill(Color.primary.opacity(0.10))
+                            .frame(height: 1)
+                    }
+                Text(note)
                     .font(.system(size: 11))
                     .foregroundStyle(.tertiary)
+                    // 说明换行会让占位高度重新对不上,钉死单行。
+                    .lineLimit(1)
             } else if !series.isEmpty, series.contains(where: { $0 > 0 }) {
                 trendChart
+                // 悬停时这行整行换成那一天的读数(见 trendCaption)。三处让"有反应"看得见:
+                // ① 换强调色 + 加粗 —— 原来悬停前后字号/颜色/位置全不变,只有内容变,
+                //    等于没有任何响应信号;② 水平跟到游标正下方,视线不用横跨整条图;
+                //    ③ 位置变化不做动画(跟内容一样),跟手才不显得拖沓。
                 Text(trendCaption)
-                    .font(.system(size: 11))
-                    .foregroundStyle(.tertiary)
+                    .font(.system(size: 11, weight: hoverIndex == nil ? .regular : .semibold))
+                    .foregroundStyle(hoverIndex == nil
+                                     ? AnyShapeStyle(HierarchicalShapeStyle.tertiary)
+                                     : AnyShapeStyle(Color.accentColor))
+                    .fixedSize()
+                    .background(GeometryReader { g in
+                        Color.clear.preference(key: TrendCaptionWidthKey.self, value: g.size.width)
+                    })
+                    .onPreferenceChange(TrendCaptionWidthKey.self) { captionWidth = $0 }
+                    .offset(x: trendCaptionOffsetX)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                     .animation(nil, value: hoverIndex)
+            } else {
+                // 已连接、但桶还没回来(或这个账号确实还没有播放记录)。同样占住图位 ——
+                // 少了这一档,"刚进页面还没拉到数据"这条最常见的路径照样会抖:它既不在
+                // 同步中、也还没有 series。说明行用一个空格撑行高,空串的 Text 高度是 0。
+                Color.clear
+                    .frame(height: Self.sparkHeight)
+                    .overlay(alignment: .bottom) {
+                        Rectangle()
+                            .fill(Color.primary.opacity(0.10))
+                            .frame(height: 1)
+                    }
+                Text(" ")
+                    .font(.system(size: 11))
+                    .lineLimit(1)
             }
         }
     }
@@ -183,11 +259,26 @@ private struct IdleOverviewCard: View {
         return s
     }
 
+    /// 「近 7 天」的数值 —— 跟紧挨着的那个环比百分比**同源**(见 lastSevenDays 的注释)。
+    /// 桶还没同步完时退回 API 值:那时候桶是残缺的,拿它算只会给出一个偏低的假数字,
+    /// 而这一档下面那个百分比本来也不显示(weekLabel 的 dailySyncing 守卫),不存在
+    /// "数值和百分比不同源"的问题。
+    private var weekValue: Int? {
+        guard !stats.dailySyncing else { return stats.overview?.week }
+        return IdleListeningStats.lastSevenDays(
+            dailyCounts: stats.dailyCounts, today: Date(),
+            todayCount: stats.overview?.today,
+            dayKey: { LastfmStatsService.dayKey($0) })
+    }
+
     private var weekLabel: String {
         let base = L10n.t("近 7 天")
         guard !stats.dailySyncing,
               let d = IdleListeningStats.weekOverWeekDelta(
                 dailyCounts: stats.dailyCounts, today: Date(),
+                // 跟上面 series 里那句 `s[s.count-1] = today` 补的是同一格:桶同步到
+                // 昨天为止,今天这一格得靠 overview 的实时值,否则环比会把今天算成 0。
+                todayCount: stats.overview?.today,
                 dayKey: { LastfmStatsService.dayKey($0) })
         else { return base }
         let pct = Int((d * 100).rounded())
@@ -239,7 +330,7 @@ private struct IdleOverviewCard: View {
         return GeometryReader { geo in
             plot(size: geo.size, series: s, peak: peak, inset: inset)
         }
-        .frame(height: 52)
+        .frame(height: Self.sparkHeight)
     }
 
     private func plot(size: CGSize, series s: [Int], peak: Int,
@@ -285,10 +376,13 @@ private struct IdleOverviewCard: View {
                     $0.move(to: CGPoint(x: pt(hi).x, y: 0))
                     $0.addLine(to: CGPoint(x: pt(hi).x, y: h))
                 }
-                .stroke(Color.primary.opacity(0.22), lineWidth: 1)
+                .stroke(Color.primary.opacity(0.35), lineWidth: 1)
                 Circle()
                     .fill(Color.accentColor)
-                    .frame(width: 7, height: 7)
+                    .frame(width: 8, height: 8)
+                    // 描边同「今天」那个端点:压在折线上也分得清点和线。
+                    .overlay(Circle().strokeBorder(Color(nsColor: .windowBackgroundColor),
+                                                   lineWidth: 2))
                     .position(pt(hi))
             }
             // 「今天」那个端点:小标记才配得上饱和色。2pt 同底色描边,压在折线上也看得清
@@ -306,9 +400,14 @@ private struct IdleOverviewCard: View {
             switch phase {
             case .active(let p):
                 let raw = (p.x - inset) / usable * CGFloat(n)
-                hoverIndex = min(max(0, Int(raw.rounded())), max(0, s.count - 1))
+                let idx = min(max(0, Int(raw.rounded())), max(0, s.count - 1))
+                hoverIndex = idx
+                // 用吸附后的点位而不是 p.x:读数要对齐竖线,不是对齐鼠标。
+                hoverX = inset + usable * CGFloat(idx) / CGFloat(n)
+                chartWidth = w
             case .ended:
                 hoverIndex = nil
+                hoverX = nil
             }
         }
     }
@@ -328,6 +427,29 @@ private struct IdleOverviewCard: View {
         return String(format: L10n.t("近 %1$@ 天 · 最高 %2$@（%3$@）"),
                       "\(Self.sparkDays)", Self.grouped(peak),
                       Self.dayFormatter.string(from: dates[idx]))
+    }
+
+    /// 同步中要显示的那行说明(nil = 没在同步)。首次同步(bootstrapState)跟日常 top-up
+    /// (dailySyncing)分开措辞 —— 前者是"这个账号第一次连接",用户需要知道这是一次性的、
+    /// 会自己好;后者通常一闪而过,不用强调"首次"。合成一个属性是为了让上面那段能用
+    /// `if let` 一次判完,占位骨架只写一份。
+    private var syncNote: String? {
+        if case .syncing(let page, let total) = stats.bootstrapState {
+            return String(format: L10n.t("首次同步历史中（%1$@/%2$@ 页）"), "\(page)", "\(total)")
+        }
+        if stats.dailySyncing {
+            // ⚠️ dailySyncProgress 自己已经是格式化好的完整句子("正在同步历史（N/M 页）"),
+            // 再包一层 format 会显示成"正在同步历史（正在同步历史（N/M 页））"(2026-08-25 修过)。
+            return stats.dailySyncProgress ?? L10n.t("正在同步历史")
+        }
+        return nil
+    }
+
+    /// 读数跟随游标的水平偏移:让文字**中心**对准那一天的点,再钳进图宽,免得贴边时
+    /// 半截跑到图外面去。没在悬停(或还没测到宽度)时回到最左,跟原来的版式一致。
+    private var trendCaptionOffsetX: CGFloat {
+        guard let hx = hoverX, chartWidth > 0, captionWidth > 0 else { return 0 }
+        return min(max(0, hx - captionWidth / 2), max(0, chartWidth - captionWidth))
     }
 
     private static let dayFormatter: DateFormatter = {
@@ -557,244 +679,11 @@ private struct IdleLastTrackHero: View {
     }
 }
 
-// MARK: - 右列:最近听过
-
-/// 通高的「最近听过」:按天分组、每行带封面与「第 N 次听」、底部翻页。
-///
-/// 两处必须知道的既有约束:
-/// - **「第 N 次听」的换算走 Core 里那份共享实现**(`RecentPlayOrdinal`),不是在这里再抄一遍
-///   减法 —— 那段有两把不同的尺子,抄错一处就是用户 2026-08-21 报的「第 15 次听下面紧跟
-///   第 21 次听」。
-/// - **`recentPage` 是服务层的共享状态**:设置页那张「最近记录」卡看的是同一个页码。所以这里
-///   退场时把它拨回第 1 页 —— 不然停播页翻到第 7 页之后,设置页那边会一直停在第 7 页,而它的
-///   自动刷新只在第 1 页才跑(等于把那边的刷新悄悄关掉了)。
-private struct IdleRecentPanel: View {
-    let onOpenTrack: (String, String) -> Void
-
-    @ObservedObject private var stats = LastfmStatsService.shared
-    @State private var hoveredID: String?
-
-    private enum Item: Identifiable {
-        case header(String)
-        case row(LastfmStatsService.RecentTrack, Int?)
-
-        var id: String {
-            switch self {
-            case .header(let s): return "h:" + s
-            case .row(let t, _): return "r:" + t.id
-            }
-        }
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            header
-            // ⚠️ 这里**不能**再跟一个 Spacer:ScrollView 和 Spacer 都是可伸缩的,同在一个
-            // VStack 里会平分剩余高度,把列表压成半截。让 content 自己吃满,翻页条靠
-            // VStack 自然排在它下面。
-            content
-                .frame(maxHeight: .infinity, alignment: .top)
-            if stats.recentTotalPages > 1 { pager }
-        }
-        .padding(EdgeInsets(top: 14, leading: 16, bottom: 12, trailing: 16))
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(.ultraThinMaterial)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .stroke(Color.primary.opacity(0.07), lineWidth: 1))
-        )
-        .onDisappear {
-            if stats.recentPage != 1 { stats.goToPage(1) }
-        }
-    }
-
-    // MARK: 卡头
-
-    private var header: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 8) {
-            Text(L10n.t("最近听过"))
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(.secondary)
-            Spacer(minLength: 0)
-            if let updated = stats.recentUpdatedAt {
-                Text(Self.agoText(updated))
-                    .font(.system(size: 10))
-                    .foregroundStyle(.tertiary)
-                    .help(updated.formatted(date: .abbreviated, time: .standard))
-            }
-            Button {
-                stats.refreshBaseline(force: true)
-            } label: {
-                Image(systemName: "arrow.clockwise")
-                    .font(.system(size: 10, weight: .semibold))
-            }
-            .buttonStyle(.plain)
-            .foregroundStyle(.secondary)
-            .disabled(stats.recentPaging)
-            .help(L10n.t("刷新"))
-        }
-        .padding(.bottom, 10)
-    }
-
-    // MARK: 列表
-
-    @ViewBuilder private var content: some View {
-        if items.isEmpty {
-            emptyState
-        } else {
-            ScrollView(.vertical) {
-                LazyVStack(alignment: .leading, spacing: 0) {
-                    ForEach(items) { item in
-                        switch item {
-                        case .header(let label):
-                            Text(label)
-                                .font(.system(size: 10.5))
-                                .foregroundStyle(.tertiary)
-                                .padding(.top, 10)
-                                .padding(.bottom, 4)
-                                .padding(.horizontal, 4)
-                        case .row(let track, let count):
-                            row(track, count)
-                        }
-                    }
-                }
-            }
-            .scrollIndicators(.never)
-        }
-    }
-
-    private func row(_ track: LastfmStatsService.RecentTrack, _ count: Int?) -> some View {
-        let hovering = hoveredID == track.id
-        return HStack(spacing: 10) {
-            CachedImage(url: stats.coverURL(for: track)) {
-                RoundedRectangle(cornerRadius: 5, style: .continuous)
-                    .fill(LastfmStatsSection.stableColor(for: track.artist).opacity(0.5))
-            }
-            .frame(width: 26, height: 26)
-            .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
-            Text("\(track.title) · \(track.artist)")
-                .font(.system(size: 12.5))
-                .lineLimit(1)
-                .truncationMode(.tail)
-            Spacer(minLength: 12)
-            if let count {
-                Text(String(format: L10n.t("第 %@ 次"), "\(count)"))
-                    .font(.system(size: 11).monospacedDigit())
-                    .foregroundStyle(.secondary)
-            }
-            if let date = track.date {
-                Text(Self.timeFormatter.string(from: date))
-                    .font(.system(size: 11).monospacedDigit())
-                    .foregroundStyle(.tertiary)
-            }
-        }
-        .padding(.vertical, 5)
-        .padding(.horizontal, 6)
-        .background(
-            RoundedRectangle(cornerRadius: 7, style: .continuous)
-                .fill(hovering ? Color.primary.opacity(0.07) : .clear))
-        .contentShape(Rectangle())
-        .onHover { hoveredID = $0 ? track.id : (hoveredID == track.id ? nil : hoveredID) }
-        // 点击 = 在 Apple Music 里**打开**这首歌的页面。刻意不说「播放」:music:// 的语义
-        // 就是原生跳页、不动播放队列,它不会起播(要真起播只能走资料库 AppleScript,
-        // 纯流媒体曲目查不到)。
-        .onTapGesture { onOpenTrack(track.title, track.artist) }
-        .help(L10n.t("在 Apple Music 中打开"))
-    }
-
-    @ViewBuilder private var emptyState: some View {
-        if stats.recentPaging {
-            HStack { Spacer(); ProgressView().controlSize(.small); Spacer() }
-                .padding(.vertical, 24)
-        } else if stats.baselineFailed {
-            VStack(alignment: .leading, spacing: 8) {
-                Text(L10n.t("没拉到最近记录"))
-                    .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
-                Button(L10n.t("重试")) { stats.refreshBaseline(force: true) }
-                    .controlSize(.small)
-            }
-            .padding(.vertical, 16)
-        } else {
-            Text(L10n.t("还没有收听记录"))
-                .font(.system(size: 12))
-                .foregroundStyle(.tertiary)
-                .padding(.vertical, 16)
-        }
-    }
-
-    // MARK: 翻页
-
-    private var pager: some View {
-        HStack(spacing: 12) {
-            Spacer(minLength: 0)
-            Button(L10n.t("上一页")) { stats.goToPage(stats.recentPage - 1) }
-                .disabled(stats.recentPage <= 1 || stats.recentPaging)
-            Text("\(stats.recentPage) / \(max(stats.recentTotalPages, 1))")
-                .font(.system(size: 11).monospacedDigit())
-                .foregroundStyle(.secondary)
-            Button(L10n.t("下一页")) { stats.goToPage(stats.recentPage + 1) }
-                .disabled(stats.recentPage >= stats.recentTotalPages || stats.recentPaging)
-            Spacer(minLength: 0)
-        }
-        .controlSize(.small)
-        .padding(.top, 10)
-    }
-
-    // MARK: 数据
-
-    /// 行 + 日期分隔行。正在播放那条(`date == nil`)整个排除:它还没被 scrobble,不在
-    /// userplaycount 里,喂进 ordinals 会把整列次数错开一位;停播页本来也不该有它。
-    private var items: [Item] {
-        let rows = stats.recent.filter { $0.date != nil }
-        guard !rows.isEmpty else { return [] }
-        let counts = RecentPlayOrdinal.ordinals(
-            rows: rows.map { (artist: $0.artist, title: $0.title) },
-            totals: stats.trackPlayCounts,
-            playCountKey: { LastfmStatsService.playCountKey(artist: $0, title: $1) })
-        var out: [Item] = []
-        var lastLabel: String?
-        for (row, count) in zip(rows, counts) {
-            guard let date = row.date else { continue }
-            let label = Self.dayLabel(date)
-            if label != lastLabel {
-                out.append(.header(label))
-                lastLabel = label
-            }
-            out.append(.row(row, count))
-        }
-        return out
-    }
-
-    // MARK: 格式化
-
-    private static let timeFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.dateFormat = "HH:mm"
-        return f
-    }()
-
-    private static let dayFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.setLocalizedDateFormatFromTemplate("Md")
-        return f
-    }()
-
-    /// 分隔行只写「今天 / 昨天 / 8月16日」,**刻意不带条数** —— 一页只有 20 行,写
-    /// 「今天 · 12 首」必然被读成全天真值(本机今天实际 107 首)。
-    private static func dayLabel(_ date: Date) -> String {
-        let cal = Calendar.current
-        if cal.isDateInToday(date) { return L10n.t("今天") }
-        if cal.isDateInYesterday(date) { return L10n.t("昨天") }
-        return dayFormatter.string(from: date)
-    }
-
-    private static func agoText(_ date: Date) -> String {
-        let mins = Int(Date().timeIntervalSince(date) / 60)
-        if mins < 1 { return L10n.t("刚刚更新") }
-        if mins < 60 { return String(format: L10n.t("%@ 分钟前更新"), "\(mins)") }
-        return String(format: L10n.t("%@ 小时前更新"), "\(mins / 60)")
+/// 待机屏趋势图那行读数的宽度上报(2026-08-29)。读数要水平跟到游标下方并钳进图宽,
+/// 必须知道它自己多宽 —— 拿固定值估会在中英文/位数变化时钳错边。
+private struct TrendCaptionWidthKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
     }
 }

@@ -68,18 +68,63 @@ merge_slices() {
 
 APP_NAME="Lyrimuse"
 # X.Y.Z 语义化版本——检查更新功能(UpdateChecker.swift)靠 CFBundleShortVersionString
-# 跟 GitHub Release 的 tag(去掉 v 前缀)比大小,必须是干净的三段数字,不能再是本地
-# 手动构建这边一直硬编码的"1.0"。CI(release.yml)在真正打 tag 触发时会传入
-# LYRIMUSE_VERSION 环境变量(从 tag 解析出的真实版本号);本地手动跑不设这个变量,
-# 用占位默认值——本地构建本来就不是要发布的正式版本,不需要精确。
-APP_VERSION="${LYRIMUSE_VERSION:-1.0.0}"
+# 跟 GitHub Release 的 tag(去掉 v 前缀)比大小,必须是干净的三段数字。CI(release.yml)
+# 在真正打 tag 触发时会传入 LYRIMUSE_VERSION 环境变量(从 tag 解析出的真实版本号);
+# 本地手动跑不设这个变量。
+#
+# ⚠️ 2026-08-27 之前这里的默认值硬编码成 "1.0.0"——本地构建本来就不是要发布的正式
+# 版本,当时觉得不需要精确。实测坐实这个假设是错的:这台机器上唯一会用到的构建方式
+# 就是本地 `./build.sh`(见 repo CLAUDE.md),诊断导出的「App version」这一行因此
+# 永远报 1.0.0,即便实际代码已经是 v1.4.0 之后好几轮迭代——同一份诊断报告里 collector
+# 侧日志正确打出 `lyrimuse 1.4.0 starting`,App 侧却报 1.0.0,两个版本号当场打架,
+# 排查时反而添乱。改成取最近一个 git tag(去掉 v 前缀)当默认值——不追新 commit 也
+# 不带 hash 后缀,保持"干净三段数字"这条硬约束,但至少不会常年停在一个早就过时的
+# 占位值上;真拿不到 tag(比如浅克隆、不是 git 仓库)才退到 0.0.0 这个一眼假的占位值,
+# 不会看着像一个正常但过时的版本号。
+APP_VERSION="${LYRIMUSE_VERSION:-$(git describe --tags --abbrev=0 2>/dev/null | sed 's/^v//')}"
+[ -z "$APP_VERSION" ] && APP_VERSION="0.0.0"
 # 装到 /Applications/ 而不是仓库自己的 bin/ 里(2026-07-18 当天改的——一开始装在 bin/
 # 下,用户把它拖/拷到了 /Applications/ 自己启动,导致真正在跑的是一份没同步过后续几次
 # 修复的旧拷贝,重新构建/重启了好几次都没反映到用户实际在看的那个进程上,排查了很久才
 # 发现。/Applications/ 才是这个 App 实际使用的位置,以后 build.sh 直接装到这里，不再
 # 留一份 bin/ 下的拷贝，避免"到底哪份是真的在跑"这种混乱再发生一次)。
 # 默认装到 /Applications;--dest 让 package.sh 把包组装到暂存目录,好一次产出多种架构。
-APP_DIR="${DEST:-/Applications/${APP_NAME}.app}"
+# ⚠️ 2026-08-31:不再**就地**组装 /Applications 里那个包。
+#
+# 起因是多会话协作时反复撞车:两个会话同时跑 build.sh,一个正往 /Applications/Lyrimuse.app
+# 里增删改签、另一个同时在改同一个包,实测撞出过两种表现——
+#   * `install_name_tool: cannot rename .../Contents/MacOS/lyrimuse (No such file or directory)`
+#     (文件在 rename 之前被对方删掉了)
+#   * `Bootstrap failed: 5: Input/output error`(launchd 拿到一个写到一半的 bundle,
+#     App 起来了、collector 没起来)
+# 根因不是"安装那一步"没做互斥,而是从这一行往下近 340 行**全部**在原地增删改签同一个包
+# (mkdir/cp/rm -rf/lipo+mv/codesign --force),整段都是不安全窗口。
+#
+# 改法:装配全程在一个**同目录兄弟路径**的暂存包里做,最后一次性换进去(见下面 swap 那段)。
+# 暂存目录刻意不用 `mktemp -d`:TMPDIR 可以被指到别的卷,而跨卷 rename 会 EXDEV;
+# 放在 $APP_DIR 的同级目录,同卷由构造保证。
+#
+# ⚠️ --dest(package.sh 用)**不套暂存**:它本来就装到自己的 mktemp 暂存目录、随后自己打包,
+# 不存在"替换一个正在被使用的安装"这回事,再套一层只会绕。package.sh 的行为逐字不变。
+FINAL_APP_DIR="${DEST:-/Applications/${APP_NAME}.app}"
+if [ -n "$DEST" ]; then
+  APP_DIR="$FINAL_APP_DIR"
+  STAGE=""
+else
+  # 上一次被 SIGKILL 打断时 trap 不会执行,会留下暂存包。开头按**精确前缀**逐个清掉,
+  # 不用通配 rm(前缀写死、只删自己这个脚本造的东西)。
+  for stale in "$(dirname "$FINAL_APP_DIR")/.${APP_NAME}.app.stage."*; do
+    [ -e "$stale" ] && rm -rf "$stale"
+  done
+  STAGE="$(dirname "$FINAL_APP_DIR")/.${APP_NAME}.app.stage.$$"
+  rm -rf "$STAGE"
+  mkdir -p "$STAGE"
+  # 这个脚本原来一个 trap 都没有(package.sh 有)。装配中途失败/被 Ctrl-C 时必须把暂存包
+  # 收走,否则 /Applications 下会慢慢攒垃圾。⚠️ swap 之后 $STAGE 指向的是**旧包**,
+  # 这个 trap 同时也就是"装完把旧包删掉"那一步,不用另写。
+  trap 'rm -rf "$STAGE"' EXIT
+  APP_DIR="$STAGE"
+fi
 BIN="$APP_DIR/Contents/MacOS/lyrimuse"
 # 2026-07-20:App 正式改名 Lyrimuse 这次,把 LABEL(codesign --identifier / launchd
 # Label,TCC 自动化权限按这个认)和 Info.plist 的 CFBundleIdentifier(UserDefaults
@@ -95,9 +140,11 @@ LABEL="me.yudaotor.lyrimuse"
 # 架构"的符号链接,多架构循环里它会在中途被改指向,拿它取产物必然错(2026-08-06 实测:
 # 跑完一次 `swift build --arch x86_64` 之后 .build/release 就指向
 # x86_64-apple-macosx/release 了)。
-FAT_DIR=".build/fat"
-rm -rf "$FAT_DIR"
-mkdir -p "$FAT_DIR"
+# ⚠️ 2026-08-31 从固定的 ".build/fat" 改成 per-run 临时目录。原来是所有会话共用同一个
+# 路径,而下面这句 `rm -rf` 会把**另一个会话刚 lipo 出来的切片**一起删掉,那边随后 cp 到
+# 空气(或者拷到一个只写了一半的文件)。SwiftPM 的 .build/.lock 只锁 `swift build` 本身,
+# 管不到这里。跟上面的暂存包是同一族问题(共享可写路径),顺手一并修掉。
+FAT_DIR="$(mktemp -d)"
 
 echo "==> building (release) [$ARCHES]"
 # 每个架构单独编一次再 lipo 合并,而不是 `swift build --arch arm64 --arch x86_64` 一步
@@ -133,7 +180,13 @@ for arch in $ARCHES; do
     x86_64) goarch=amd64 ;;
     *) echo "!! 不认识的架构:$arch" >&2; exit 2 ;;
   esac
-  out="$PWD/$FAT_DIR/collector-$arch"
+  # ⚠️ 这里**不能**再加 "$PWD/" 前缀。下一行进了子 shell(`cd ../lyrimuse-collector`),
+  # 所以 -o 的落点必须是绝对路径 —— 当 FAT_DIR 还是相对的 ".build/fat" 时,靠 "$PWD/"
+  # 补齐正是必需的。2026-08-31 把 FAT_DIR 改成 `mktemp -d`(绝对路径,理由见它声明处)
+  # 之后,这个前缀就变成了拼接错误:"$PWD" + "/var/folders/…" 造出
+  # `lyrimuse/var/folders/…/collector-arm64`,每次构建往仓库里丢一份产物 —— 提交前
+  # 发现时已经攒了 330MB、183 个未跟踪条目里就有它。FAT_DIR 现在自己就是绝对路径,直接用。
+  out="$FAT_DIR/collector-$arch"
   (cd ../lyrimuse-collector && GOTOOLCHAIN=go1.24.4 GOOS=darwin GOARCH="$goarch" go build -o "$out" .)
   COLLECTOR_SLICES+=("$out")
 done
@@ -297,6 +350,17 @@ print(cand[0], files[cand[0]]["sha256"], d["versions"]["stable"]) if cand else p
   fi
   echo "    media-control bundled (QQ 音乐支持)"
 else
+  # ⚠️ 2026-08-31 暂存化连带出来的一个坑,不补会**静默降级用户已经装好的包**:
+  # 就地组装的年代,brew 里找不到 media-control 时上面那句 `rm -rf` 在 if 内、不会执行,
+  # 旧的 media-control 原样留在包里,这次构建等于"没动它"。换成暂存包之后,整个
+  # Contents/Resources/media-control 子树压根不存在,swap 就会拿一个**丢了 QQ 音乐支持的
+  # 包**覆盖掉本来完好的安装,而且只有一句 warning、退出码还是 0。
+  # 所以这里显式从现装包继承一份,把那层隐性兜底补回来。
+  # ⚠️ 必须在下面 codesign 之前做 —— 签完再往包里塞文件会破坏签名封印。
+  if [ -n "$STAGE" ] && [ -d "$FINAL_APP_DIR/Contents/Resources/media-control" ]; then
+    ditto "$FINAL_APP_DIR/Contents/Resources/media-control" "$APP_DIR/Contents/Resources/media-control"
+    echo "    media-control 从现装包继承(brew 里没找到,保持已装版本不被降级)"
+  fi
   echo "!! media-control not found (brew install media-control) — QQ 音乐支持这次构建不可用,Apple Music 不受影响" >&2
 fi
 
@@ -370,6 +434,7 @@ cp Sources/lyrimuse/Resources/ListenBrainzIcon.png "$APP_DIR/Contents/Resources/
 # 二进制分发条款都要求随附版权声明与许可证文本。仓库根那份是唯一来源,这里只拷。
 cp ../THIRD_PARTY_LICENSES "$APP_DIR/Contents/Resources/THIRD_PARTY_LICENSES"
 cp Sources/lyrimuse/Resources/LastfmIcon.png "$APP_DIR/Contents/Resources/LastfmIcon.png"
+cp Sources/lyrimuse/Resources/YouTubeMusicIcon.png "$APP_DIR/Contents/Resources/YouTubeMusicIcon.png"
 printf 'APPL????' > "$APP_DIR/Contents/PkgInfo"
 cat > "$APP_DIR/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
@@ -415,7 +480,7 @@ cat > "$APP_DIR/Contents/Info.plist" <<PLIST
          要发 Apple Event 控制别的 App 的进程,必须在 Info.plist 里声明这个 key
          说明用途,这段文字会原样显示在系统弹窗里,不经过 App 自己的 L10n 机制。 -->
     <key>NSAppleEventsUsageDescription</key>
-    <string>Lyrimuse needs to send Apple Events to Music.app to read the currently playing track and show synced lyrics.</string>
+    <string>Lyrimuse needs to send Apple Events to media players and browsers to read the currently playing track and show synced lyrics.</string>
     <!-- 2026-07-29 新增:给"连接 Last.fm 账号"这一步的浏览器授权做自动回跳用
          (见 LastfmAuthFlow.authorizeURL 的 cb= 参数 + AppDelegate 的 GetURL 事件
          处理)——注册这个 scheme 之后,授权页跳转到 lyrimuse://lastfm-auth-callback
@@ -436,6 +501,13 @@ cat > "$APP_DIR/Contents/Info.plist" <<PLIST
     <key>SUPublicEDKey</key>
     <string>xTGKkA2z7gn42F0oyb6Qe4YyL+G/RTsKu5jvvsfytTE=</string>
     <key>SUEnableAutomaticChecks</key>
+    <true/>
+    <!-- "自动检查更新"开着才有意义的下一档:自动下载并安装,不用每次弹窗等用户点"安装"。
+         2026-08-31 用户要求默认开启。这两个键都只是**默认值**——跟 SUEnableAutomaticChecks
+         同一个道理,用户在设置页手动改过之后,Sparkle 自己持久化在 UserDefaults 里的那份
+         (SUAutomaticallyUpdate)说了算,不会被这里的默认值覆盖回去,见
+         SparkleUpdaterManager.swift 的注释。 -->
+    <key>SUAutomaticallyUpdate</key>
     <true/>
 </dict>
 </plist>
@@ -508,6 +580,42 @@ if [ -n "$ARCH_BAD" ]; then
   echo "!! 架构与目标[$ARCHES]不符:" >&2
   for f in $ARCH_BAD; do echo "     $f" >&2; done
   echo "!! 要发布的构建先解决上面这些(package.sh 会硬拦)" >&2
+fi
+
+# ==> 把暂存包一次性换进 /Applications(2026-08-31,见文件上方 FINAL_APP_DIR 那段注释)。
+#
+# 用 APFS 的 renamex_np(RENAME_SWAP) 而不是 `mv`,两个原因:
+#   1. **`mv 新 旧` 在旧目录已存在时不是覆盖、是塞进去**,而且退出码 0、没有任何输出 ——
+#      实测:`mv new old` 之后 old/Contents 一个字节没变,只是多出一个 old/new 子目录。
+#      套到这里就是 /Applications/Lyrimuse.app/Lyrimuse.app,旧包原封不动、脚本报成功,
+#      表现是"装完了但行为没变",比直接报错难查得多。`set -euo pipefail` 拦不住。
+#   2. RENAME_SWAP 是**单次原子 vfs 操作**,没有"App 短暂不存在"的窗口 —— 并发的 launchd /
+#      Finder / 正在跑的进程任一时刻看到的要么是完整旧包、要么是完整新包。两步 mv
+#      (旧挪走→新挪上)做不到这点,中间那一瞬 /Applications 下没有这个 App。
+# 换完之后 $STAGE 指向的是**旧包**,交给上面那个 EXIT trap 删 —— 顺带等于装完才删旧包,
+# 老进程在被重启之前一直有完整的一份可用。
+# 首装(目标还不存在)时 renamex_np 返回 ENOENT,回退 mv;那条路径上目标不存在,没有嵌套风险。
+if [ -n "$STAGE" ]; then
+  if [ -e "$FINAL_APP_DIR" ]; then
+    /usr/bin/python3 - "$STAGE" "$FINAL_APP_DIR" <<'SWAP'
+import ctypes, sys
+libc = ctypes.CDLL("/usr/lib/libSystem.dylib", use_errno=True)
+libc.renamex_np.argtypes = [ctypes.c_char_p, ctypes.c_char_p, ctypes.c_uint]
+RENAME_SWAP = 0x00000002
+if libc.renamex_np(sys.argv[1].encode(), sys.argv[2].encode(), RENAME_SWAP) != 0:
+    import os
+    sys.exit(f"renamex_np(RENAME_SWAP) failed: {os.strerror(ctypes.get_errno())}")
+SWAP
+  else
+    mv "$STAGE" "$FINAL_APP_DIR"
+  fi
+  # ⚠️ 必须重指回真实路径。下面 restart 段的 `pgrep -f "$BIN"`(三处)和
+  # `pgrep -f "$APP_DIR/Contents/Resources/collector"` 匹配的是进程命令行,那是
+  # /Applications/... —— 忘了这两行就会永远判定"没起来"然后 exit 1。
+  # `open "$APP_DIR"` 同理,不重指就会去打开那个暂存包。
+  APP_DIR="$FINAL_APP_DIR"
+  BIN="$APP_DIR/Contents/MacOS/lyrimuse"
+  echo "==> installed → $FINAL_APP_DIR"
 fi
 
 if [ "$NO_RESTART" = 1 ]; then

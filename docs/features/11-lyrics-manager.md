@@ -1,6 +1,6 @@
 # 11. 歌词管理窗口
 
-> 最后核对：2026-08-25 · 基线：f34eaa7+工作树
+> 最后核对：2026-08-28 · 基线：0bb53e6+工作树
 
 ## 定位
 
@@ -15,11 +15,17 @@
 
 ### 1. 列表与筛选
 
-- 四列表头：歌名/歌手/专辑/来源（来源列中文名：网易云音乐/QQ音乐/酷狗音乐，LRCLIB/Musixmatch 保留英文；色点=来源身份色，与设置页「歌词来源」同一套 `sourceColor`）。
-- 列宽可拖并持久化（`LyricsColumnWidthsStore`：@Published+didSet 落 UserDefaults，夹值算术是纯函数、selftest 覆盖）。拖动中只更新内存值（beginDragging/endDragging，2026-08-19），松手一次性落盘——原来每个鼠标事件写三笔 UserDefaults 中间态。
-- 筛选：文本搜索 + 歌手/专辑下拉（归并键=toSimplified+小写，繁简/大小写不敏感）。**性能口径（2026-08-19 审计落地）**：繁简归一化键/搜索小写副本在 `Summary` 构建时预存（`normPrimaryArtist`/`normAlbum`/`search*Lower`），排序比较器只做元组比较；歌手/专辑归并展示名与下拉候选下沉进 store 随 summaries 重建一次（原来是视图计算属性，List 每物化一行就全量重建一次 O(N) 归并字典）；`filtered` 经缓存盒按 (filterToken, summariesGeneration) 记忆化（一次 body 被 4~5 处独立求值）；`toSimplified` 本体按原串 memoize。summaries 的构建+排序在 reload 的后台 task 里做，主线程只收结果。
+- 五列表头：歌名/歌手/专辑/来源/偏移（来源列中文名：网易云音乐/QQ音乐/酷狗音乐，LRCLIB/Musixmatch 保留英文；色点=来源身份色，与设置页「歌词来源」同一套 `sourceColor`）。
+- 列宽可拖并持久化（`LyricsColumnWidthsStore`：@Published+didSet 落 UserDefaults，夹值算术是纯函数、selftest 覆盖）。拖动中只更新内存值（beginDragging/endDragging，2026-08-19），松手一次性落盘——原来每个鼠标事件写三笔 UserDefaults 中间态。**「偏移」列不在这套拖拽系统里**（2026-08-26）：固定宽度（`LyricsManagerView.offsetColumnWidth`，56pt），不挂分隔条，不进 `LyricsColumnWidths`——一个纯展示的数字列没必要扩那套本来就最容易出错的夹值算术。它仍然算进 `headerChrome`（4 条 8pt 间距 + 固定宽度，原来是 3 条），否则 `fitted`/`dragged` 算歌名列剩余空间时会把这一列的宽度算漏，实际渲染出来的歌名会比算出来的更窄。
+- 「偏移」列显示这份歌词当前的时间轴校正值（`AppSettings.signedSeconds(ms:)`，"+0.5"/"-0.3"风格，语义与详情页「歌词时间轴偏移」旁边那句「正数=提前显示，负数=延后显示」一致）。值来自 `Summary.offsetMs`，在 `EnrichCacheStore.buildSummaries` 里按 `LyricsOffsetStore.trackKey(artist:title:lyrics:lyricsYRC:)` 查一份 `LyricsOffsetStore.offsetsSnapshot`（新增的只读快照访问器）算出来——`buildSummaries` 要能在 `reload()` 的后台线程跑，不能在函数体内部同步访问那个 `@MainActor` 单例，所以快照必须在调用方（MainActor 上下文）先取好再传进去。详情页调过/重置过偏移之后，`applyOffsetEdit`/`resetOffsetEdit` 会显式调一次 `EnrichCacheStore.rebuildSummaries()`（原为 private，2026-08-26 开放）刷新这一列——偏移改在 `LyricsOffsetStore` 里，不是 `raw` 字典，不会自动触发 summaries 重建。⚠️ 从菜单栏「歌词时间轴」（边听边点着调）调整当前播放曲目的偏移不会触发这次刷新（那条路径不知道这个窗口的存在），列表要等下一次自然 reload（开窗/激活/手动刷新）才会看到新值——跟这一列本身一样，是个可接受的"最终一致"，不是 bug。
+- 「仅人工修正」筛选（2026-08-26 起）**并入「已校准」**：判定条件从单纯 `isManual` 扩成 `isManual || LyricsPinStore.isPinned(key)`。理由：`manual_lyrics`（人工改过歌词正文）和「已校准」（人工调过时间轴偏移）在语义上本来就并列——都是"用户已经亲手把这首歌弄对了，后台别再自作主张"（详情页两个徽章分开显示，但都对应"这首歌被人工介入过"这同一件事），分开筛选只会让用户漏看那些只调过时间轴、没碰过歌词正文的行。`filtered` 的结果缓存(`filteredCache`,按 `(filterToken, summariesGeneration)` 记忆化)不需要额外为 pins 的变化开一个新失效键——`rebuildSummaries()` 每次被调都会让 `summariesGeneration` 自增,而偏移/校准状态的唯一改动入口(`applyOffsetEdit`/`resetOffsetEdit`)已经显式调了它,连带把这份缓存也标脏。
+- 筛选：文本搜索 + 歌手/专辑下拉（归并键=toSimplified+小写，繁简/大小写不敏感）。搜索框（`searchable(prompt: "搜索歌手/歌名/专辑")`）按子串匹配四个小写副本：原始歌手写法、展示歌手名（`canonicalArtist` 优先）、歌名、**专辑名**（`searchAlbumLower`，2026-08-26 加）——四选一命中即算过滤通过。专辑名搜索跟专辑下拉框不是一回事：下拉是"选一个精确专辑名"，搜索框是"打几个字模糊找"，两者互补，不是互斥关系。**性能口径（2026-08-19 审计落地）**：繁简归一化键/搜索小写副本在 `Summary` 构建时预存（`normPrimaryArtist`/`normAlbum`/`search*Lower`），排序比较器只做元组比较；歌手/专辑归并展示名与下拉候选下沉进 store 随 summaries 重建一次（原来是视图计算属性，List 每物化一行就全量重建一次 O(N) 归并字典）；`filtered` 经缓存盒按 (filterToken, summariesGeneration) 记忆化（一次 body 被 4~5 处独立求值）；`toSimplified` 本体按原串 memoize。summaries 的构建+排序在 reload 的后台 task 里做，主线程只收结果。**搜索不是逐字符触发（2026-08-27 起）**：`searchText`（`.searchable` 绑定，随打字实时变）与 `committedSearchText`（真正喂给 `filtered`/`filterToken` 的那份）拆成两个 `@State`，只有点搜索框左边那颗放大镜按钮（`commitSearch()`）或在搜索框按回车（`.onSubmit(of: .search)`）才会把前者同步进后者；清空搜索框（叉号或删完）例外，立刻同步成空串不用等触发——这个方向零过滤开销，用户体验上也不该"卡在上一次的搜索结果里"。见「设计决策」第 16 条。
 - 「回到当前播放」：`focusCurrentlyPlaying` 滚动定位到正在播的条目——**三个触发点**：开窗时自动跑一次（`pendingAutoFocus` 闸 + `onDisappear` 复位）、工具栏按钮手动跑、**窗口开着期间换歌自动跑一次**（2026-08-25 加，见下条）。⚠️ 匹配用的 key **必须**走 `EnrichCacheKeys.normalizedKey`（Swift 侧缓存 key 的唯一构造点，逐字节镜像 collector 的 `enrichKey`），不能手拼 `artist|title|album`：手拼会漏掉 `cleanTag`（各类空格/零宽字符）和 `normalizedTitle`（循环剥结尾括号副题）两道清洗。2026-08-20 用户报「进歌词管理不会自动定位」就是这条：Apple Music 报 `Dynasties and Dystopia (from the series Arcane League of Legends)`，缓存里那条 key 是剥掉副题的 `Dynasties and Dystopia`——精确匹配落空，而 `looseKey` 只折大小写/空格/繁简、折不掉副题，兜底也接不住，函数**静默返回**（设计如此：开窗自动定位不该弹提示），表现成压根没定位。现在的候选顺序是 归一化 key → 原样拼的 key（key 归一化上线前入库的老条目）→ 两者各自的 `looseKey`。悬浮窗/灵动岛一直没这个问题，因为 `EnrichCacheReader` 本来就走 `normalizedKey`。
 - **窗口开着期间换歌不会自动跟着高亮**（2026-08-25 用户报，已修）：原来只在开窗那一刻和点「回到当前播放」按钮时定位一次，窗口开着期间换歌高亮不会动，看起来像是"卡在开窗那一刻播的那首"。修法是 `LyricsManagerNowPlayingObserver`——只转发 `PlaybackCoordinator.artist/title/album` 这三个"换歌才变一次"的属性、去重合成一个签名串，`LyricsManagerView` 用 `.onChange(of:)` 订阅这个签名串再跑一次 `focusCurrentlyPlaying`。⚠️ 不能整对象订阅 `PlaybackCoordinator`：那个单例同时发布 `currentLine`/`anchor`，播放中每秒 20 次刷新，整对象订阅会把这个窗口的 body 拖进 20Hz 重渲染（跟 `AppLanguageObserver` 转发 `appLanguage` 是同一个窄代理套路，同一段顶部注释里能看到理由）。这个 `.onChange` 必须挂在 `ScrollViewReader { scrollProxy in ... }` 闭包**内部**（`focusCurrentlyPlaying` 要用 `scrollProxy`）——`NavigationSplitView` 外层那条修饰符链（`.frame`/`.background`/几个 `.confirmationDialog`）已经出了 `scrollProxy` 的可见范围,挂错层会直接编译报错「cannot find 'scrollProxy' in scope」（实测踩过一次）。
+- **首次搜索期间也能看到这首歌（占位行，2026-08-27）**：collector 只在 `resolveEnrichAsync` 拿到至少一项结果（封面/歌词/链接任一非空）后才会把这个 key 写进缓存文件（第 09 章）——一首歌**第一次播放、还在联网搜索**这段窗口期，缓存文件里压根没有这个 key，而这份列表只读这份文件，所以那段时间里这首歌在「歌词管理」里彻底不可见（2026-08-27 用户报「一首歌还在首次歌词搜索的时候，去歌词管理页面是看不到那条记录的」）——是「有但没显示」之外的另一种情况：条目本身还不存在。修法刻意不去动 collector 那边「只在有结果时才写盘」的数据完整性约定（引入"占位/真实"两套生命周期共存在同一份持久化文件里，代价远大于收益），完全在 Swift 侧解决：`LyricsManagerView.refreshPlaceholder()` 拿当前播放曲目现造一条**不落盘、不进 `raw`**的合成 `Summary`（`isSearching: true`），在开窗、换歌（`.onChange(of: nowPlaying.trackSignature)`）、以及每 5 秒轮询（`EnrichCacheStore.hasEntry(forKey:)` 探测 collector 是否已经写出真实结论，`onlyIfChanged` 门控避免文件没变也整份重解析）三个时机调用——真实条目一出现，占位行立刻让位，不需要手动刷新。占位行的标记徽章（人工修正/逐字/译文/罗马音）**全部隐去**（2026-08-28 之前是一个转圈的 `ProgressView`，用户反馈"有文字体现就够了，不用再加一个转圈"——下面副标题那行的「搜索歌词中…」已经说明白了状态），「无歌词」那一行换成中性的「搜索歌词中…」（不能沿用 `!hasLyrics` 分支——占位行的 `hasLyrics`/`isInstrumental` 都是默认值 `false`，会显示成刺眼的红色「无歌词」，那是"确认没有"的结论，跟"还没查完"是两件事），来源/偏移两列留白（`SourceBadge("")`/`"0.0"` 同样会被误读成"已查清楚、结果是空/零"）。占位行不计入「全选」/搜索结果计数（`selectableFiltered`，过滤掉 `isSearching`）、不出现在多选删除的候选里（`orderedVisibleKeys` 同样过滤）——它不对应 `raw` 里任何 key，编辑/删除/重新自动匹配这些操作对它都没有意义；即便如此，`EnrichCacheStore.delete(keys:)` 本身也已经会把传入的 key 集合过滤到 `Set(raw.keys)`（`EnrichCacheKeys.deletionPlan`），一个混进去的占位 key 在数据层是安全的空操作，上面这些排除纯粹是为了计数准确和不给出无意义的菜单项。
+- **占位行「停止搜索」——真取消，不只是隐藏这一行（2026-08-28）**：用户点开占位行详情页问了两个问题——"能不能手动停止"、"这段等待有没有上限"——答案暴露了一个缺口：`lyricSearchDeadline`（20s）只兜住歌词源那一次并发抓取，`resolveTrackEnrichment` 整体（还挂着 MusicBrainz/Apple Music/QQ 兜底封面这几步顺序网络请求）没有总超时，某一步卡住时占位行会一直挂着，此前完全没有退出方式。用户明确要求"真正取消（改动大，跨 collector）"而不是"只隐藏这一行"——按钮点了就该让 collector 里那一轮真实的网络请求中断，不是隔着进程装样子。机制是文件信号 + `context.CancelFunc` 登记表：`placeholderDetailView` 的「停止搜索」按钮（`cancelPlaceholderSearch`）把这个 key 写进 `~/.config/lyrimuse/lyrimuse-enrich-cancel-request.txt`（纯文本，一个 key）；collector 侧 `enrichcancel.go` 的 `startEnrichCancelWatcher` 每 1 秒检查这份文件，读到 key 就去 `enrichCancelFuncs`（`enrich.go` 里的 `map[string]context.CancelFunc`，跟 `enrichInflight` 同一把锁）查对应的取消函数并调用——真正让 `resolveTrackEnrichment` 内部还在飞的 HTTP 请求中断（`context.Context` 一路下穿到 netease/QQ/酷狗/LRCLIB/Musixmatch/amll/ytmusic/MusicBrainz/Apple/取色九个源的 leaf `http.NewRequestWithContext`，详见第 09 章）。⚠️ 取消判定必须在网络健康度分类（`roundLooksNetworkDown`）**之前**：用户主动取消不是网络真的不通，`resolveEnrichAsync` 里 `ctx.Err() != nil` 那支就是为了不让这次取消被误报成"网络连接失败"。
+
+  ⚠️ **2026-08-28 补：取消后要落定成"暂无歌词"，不是什么都不写**（用户反馈"点击停止搜索之后，不是直接删除记录，而是保留记录，标记为无歌词；并且灵动岛和桌面悬浮歌词都不再继续提示搜索歌词中"）。上线时 `ctx.Err() != nil` 那支是纯粹的 `return`，什么都不写——后果是这首歌从「歌词管理」列表里彻底消失，而灵动岛/桌面悬浮歌词/歌词窗口三处（共享同一套判断逻辑）会一直卡在"搜索歌词中…"，跟从没搜索过一模一样，因为 `EnrichCacheReader.lookup` 找不到这个 key 就返回 `nil`，`resolved` 永远算不出 `true`。改法（详见第 09 章第 24 条）：取消分支现在跟"自然查无"走同一条落盘路径（`commitEnrichEntry`），只是不经过"全空不写入"那道守卫——这条记录天生满足 `resolved: ts>0`，四个界面会各自在下一拍轮询里自动切到"暂无歌词"，**不需要改一行 Swift 展示代码**。唯一需要改的 Swift 代码是 `cancelPlaceholderSearch()` 本身：不能再乐观地立即清空 `placeholderSummary`——`.task` 那个负责"占位行等 collector 写完就自动让位"的 5 秒轮询，guard 条件正是 `placeholderSummary != nil`，清空了就没人再去问磁盘。改成写完取消信号后什么都不做，等现成的 5 秒轮询探测到 `store.hasEntry(forKey:)` 变 true 自然接手。
 - 支持多选批量删除（`delete(keys: Set)`）与「清空全部」（`clearAll`，破坏性操作）。
 - **破坏性操作有可恢复层**（2026-08-22 补，之前完全没有）：
   - 「清空全部缓存」**动手之前**必打一份自动快照；批量删除到 `EnrichCacheStore.autoSnapshotDeleteThreshold`（5）条起同样打。快照走的就是配置备份那份 sidecar 归档（`LyricsBackupStore.buildArchive`，含 `lyrics/` 文件族 + 「已校准」名单），落到 `~/.config/lyrimuse/lyrics-backups/auto-<clear|delete>-<时间戳>.lyrimusebak`，只留最近 `autoSnapshotKeepCount`（3）份。⚠️ 快照必须排在 `raw = [:]` 和删文件**之前** —— `buildArchive` 读的是磁盘上的文件族，晚一步就什么都读不到。
@@ -113,16 +119,19 @@
 | 主题 | 位置 |
 |---|---|
 | 窗口主视图 | LyricsManager/LyricsManagerView.swift（列表/筛选/focusCurrentlyPlaying/sourceDisplayName/sourceColor） |
-| 数据层 | LyricsManager/EnrichCacheStore.swift `saveEdit` `delete` `clearAll` `splitKey` `buildSummaries` `persist`(后台+串行链) `reload(onlyIfChanged:)` `trashOrRemove` `restoreFromAutoSnapshot` `autoSnapshotDeleteThreshold` |
+| 数据层 | LyricsManager/EnrichCacheStore.swift `saveEdit` `delete` `clearAll` `splitKey` `buildSummaries`（含 `offsetsSnapshot` 参数）`rebuildSummaries`（public，供偏移编辑收尾调） `persist`(后台+串行链) `reload(onlyIfChanged:)` `trashOrRemove` `restoreFromAutoSnapshot` `autoSnapshotDeleteThreshold` |
 | 自动快照 | Settings/LyricsBackupStore.swift `writeAutoSnapshot` `autoSnapshots` `pruneAutoSnapshots` `restoreAutoSnapshot` `autoSnapshotDir` `autoSnapshotKeepCount`；归档格式在 LyrimuseCore/Lyrics/LyricsBackupArchive.swift |
 | 联网搜索 | LyricsManager/LyricsSearchSheet.swift、LyricsSearchService.swift；collector 侧 searchcli.go |
 | 决策弹窗 | LyricsManager/LyricsDecisionSheet.swift；数据 decision.go |
 | collector 重启 | LyricsManager/CollectorControl.swift（launchctl kickstart -k + 真实退出码检查） |
-| 列宽 | LyricsManager/LyricsColumnWidthsStore.swift + LyrimuseCore/Lyrics/LyricsColumnLayout.swift |
+| 列宽 | LyricsManager/LyricsColumnWidthsStore.swift + LyrimuseCore/Lyrics/LyricsColumnLayout.swift（不含「偏移」列，见下） |
+| 偏移列 | LyricsManagerView.swift `offsetColumnWidth`/`headerChrome`（固定宽度,不进 LyricsColumnWidths）；LyrimuseCore/Lyrics/LyricsOffsetStore.swift `offsetsSnapshot`；Settings/AppSettings.swift `signedSeconds(ms:)` |
 | 窗口几何持久化 | LyricsManagerView.swift `LyricsManagerWindowFramePersistence` / `LyricsManagerWindowCapture`（frame + 屏幕稳定 ID，恢复时先认屏再夹进可见区） |
 | 换歌自动重定位 | LyricsManagerView.swift `LyricsManagerNowPlayingObserver`（只转发 artist/title/album 的窄代理） |
 | 详情页顶部三种排法 | LyricsManagerView.swift `header` 的 `ViewThatFits` + `headerActions` / `headerActionsWrapped` |
 | 文件导出/导入 | collector 侧 lyricsexport.go / lyricsimport.go |
+| 搜索占位行 | LyricsManagerView.swift `placeholderSummary` `refreshPlaceholder` `placeholderDetailView` `selectableFiltered`；EnrichCacheStore.swift `Summary.isSearching` `hasEntry(forKey:)`；collector 侧「有结果才写盘」的约定在 enrich.go `resolveEnrichAsync`（第 09 章） |
+| 占位行「停止搜索」 | LyricsManagerView.swift `cancelPlaceholderSearch`（不主动清空 `placeholderSummary`，靠 5 秒轮询自然让位）；collector 侧 enrichcancel.go `startEnrichCancelWatcher` `checkEnrichCancelRequest` `setEnrichCancelRequestPath`；enrich.go `enrichCancelFuncs` 登记表 + `resolveEnrichAsync` 的 `ctx.Err()` 分支 + `commitEnrichEntry`（第 09 章第 24 条：取消后落定成"暂无歌词"，`context.Context` 穿透各源的细节也在那一章） |
 
 ## 设计决策与已知坑
 
@@ -132,6 +141,8 @@
 4. 重复条目的两道防线（key 归一化迁移 + 在途宽松查重）之间仍可能漏「空格/繁简」变体，查询侧做了宽松兜底但 key 本身不折繁简——折进 key 会让 Swift 侧悬浮窗整首失配（第 09 章 key 契约）。2026-08-20 补上第三档「合 credit 分隔符」（`A/B/C` vs `A & B & C`，两侧 `loosenEnrichKey`/`EnrichCacheKeys.looseKey` 同步折平）：这一档是**专辑预取**跟播放器的写法差异带来的，一次实测就有 13 组，机制与清理过程见第 09 章 §2。
 5. 决策弹窗只读是刻意的：存档无正文，「从存档采纳」这种操作在数据上就不存在。
 6. 搜索子进程必须可中断，否则连点重搜会积压 20s 的幽灵轮。
+7. 「偏移」列故意做成固定宽度、不进 `LyricsColumnWidths` 的拖拽夹值系统——那套算术（`dragged`/`fitted`/`sanitized`）本来就是这个模块最容易出错的地方，为一个纯展示的数字列去扩成四分隔条不值得；把它算进 `headerChrome`（连同新增的一条 8pt 间距）就足够让现有三列的收敛算术保持正确。
+8. `buildSummaries` 要在 `reload()` 的后台线程跑，不能在函数体内部同步访问 `@MainActor` 的 `LyricsOffsetStore`——调用方必须在 MainActor 上下文先取一份 `offsetsSnapshot`（纯字典拷贝）再传进去。这是这个代码库里"纯函数需要 actor 隔离状态时，调用方先拍快照再传参"的既有套路（跟 `EnrichCacheStore.reload` 本身在 Task.detached 里跑纯函数是同一个道理），不是这次新发明的。
 7. 「清空全部」曾在一次脚本化 GUI 验证中被误触发导致 833 条手工修正丢失——对这个窗口做任何自动化操作前必须备份缓存与 lyrics 文件夹（repo CLAUDE.md 硬规则）。
    **2026-08-22 补上了代码层的可恢复层**（§1 那条）：清空/批量删除前自动快照、删除走废纸篓、菜单里就地给恢复入口。在此之前那次事故在当时的代码上会一字不差地重演——确认弹窗只是提示，落地动作（整份替换落盘 + `deleteAllLyricsFiles` 的 `removeItem`）没有任何回头路，而清空还连带 `LyricsPinStore.removeAll()`，用户一句句听出来的时间轴对应的 pin 也一起没。**但 CLAUDE.md 那条硬规则不因此放松**：快照只覆盖 `lyrics/` 文件族 + pins，挡不住脚本误触别的破坏性控件，也挡不住「快照本身没打成」（库为空/写盘失败）。
 8. ⚠️ **「当前源这一轮没应答」那道闸有个死锁盲点**（2026-08-22 实测）：它假设「没应答」是
@@ -204,4 +215,39 @@
    App 主 target（`lyrimuse`），而 `lyrimuse-selftest` 只链 LyrimuseCore（见本文件顶部惯例），
    验证只能靠独立写的解码脚本手动跑（已跑过，覆盖 winner/sourcesSeen/sourcesResponded/
    resolvedDurationSecs/decisionJSON 五个字段各自缺失的场景，全部通过），不是自动化回归。
+
+16. **搜索框改成"回车/按钮才查"，不是纯 `.onSubmit(of: .search)` 单靠回车**（2026-08-27，
+   用户反馈"输入就卡"，第一版只接了 `.onSubmit(of: .search)` 后用户又反馈"回车也没反应"）。
+   第一版思路：`filtered` 的缓存键 `filterToken` 原来直接拼 `searchText`，每敲一个字符
+   token 就变、`filteredCache` 作废，几百条 `summaries` 全量重过滤一遍（还要在一次 body
+   里被 4~5 处引用点各触发一次，见上面"性能口径"），逐字符可感知的卡顿就是这么来的——
+   拆成 `searchText`（绑定 `.searchable`，随打字变）/`committedSearchText`（真正喂过滤
+   逻辑）两份状态，只在"确认搜索"这一下才同步，能解决卡顿。但只接 `.onSubmit(of: .search)`
+   (挂在跟 `.searchable` 同一条修饰符链上) 实测在这扇窗口里按回车没有任何反应——没有再深入
+   摸是这个 macOS/SwiftUI 版本下 `placement: .sidebar` 的搜索框不触发 `onSubmit`、还是别的
+   什么原因，用户已经明确要求"有个搜索按钮"，不需要先查清楚原生 API 为什么不灵才能给这个
+   按钮。最终形态：`filterBar` 第一行最前面加一颗放大镜图标按钮（`commitSearch()`，最朴素的
+   `Button.action`，不依赖 `.searchable`/`.onSubmit` 那套内部机制，点了必定生效；`searchText
+   == committedSearchText` 时禁用，给"当前搜索已经是最新"的信号），`.onSubmit(of: .search)`
+   保留着一起指向同一个 `commitSearch()`——哪天那个组合自己好了也无妨，两条路径不冲突。
+   清空搜索框是唯一的例外，不需要用户再确认一次：`.onChange(of: searchText)` 见 newValue 为
+   空就直接把 `committedSearchText` 也清空，这个方向没有过滤开销可言，卡在"搜索框空了、
+   结果还是上一次搜的"比多等一次过滤更反直觉。
+
+17. **搜索占位行选择在 Swift 侧合成，不让 collector 往缓存文件里写"正在搜索"这种半成品条目**
+   （2026-08-27）。collector 那份缓存文件目前只有一种条目生命周期：「有结果才存在」——
+   `resolveEnrichAsync` 只在拿到至少一项结果后才 `enrichCache[key] = e`。让它改成"先写一个
+   空壳占位、有结果再补"看起来对称，但会让文件里从此有两种条目共存：真实的和占位的，第
+   09/11 两章围绕这份文件建立的所有假设（唯一真源、只在有结果时写、`buildSummaries` 直接
+   拿字段判定 `hasLyrics`/`isInstrumental`）都要重新审一遍哪些该对占位条目生效——为了一个
+   纯展示需求换来一条新的数据完整性维度，不值得。选择完全留在 Swift 侧：`refreshPlaceholder`
+   现造的 `Summary` 从不写 `raw`、从不落盘，`hasEntry(forKey:)` 只探测"真的写出来了没有"，
+   collector 那边毫不知情、毫无改动。代价是这一条必须在 App 侧手动维持"跟真实条目一致"
+   （标题/歌手/专辑跟着 `PlaybackCoordinator` 实时变，真实条目一出现立刻让位）——比在
+   collector 侧原生支持贵一点，但比"两套生命周期共存在同一份持久化状态里"安全得多。
+   ⚠️ **2026-08-28 补的例外**："占位行毫不知情"这条只管**展示**——「停止搜索」按钮上线后
+   collector 确实需要知道"该不该中断这一轮解析"，但走的是完全独立的一条信号（文件 +
+   `context.CancelFunc` 登记表，见上面「搜索占位行」小节），不是往 `enrichCache` 里塞占位
+   条目、不动这份文件唯一真源的约定——跟本条决策不矛盾，只是给"collector 毫无改动"这句话
+   打了个补丁:它现在会响应取消,但从不会为占位状态本身写盘。
 

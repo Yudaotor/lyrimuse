@@ -23,7 +23,7 @@ import (
 // 开关打开也没用;已经配了凭据的功能,现在才第一次有独立的"关"(尤其是
 // lastfm_bridge/weekly_digest/top_artists_digest 这三个,过去共用同一对
 // lastfm_user/lastfm_api_key 凭据当唯一开关,逻辑上是三个独立能力)。
-// 五个歌词源的 key——跟 enrich.go 里 lyricCandidate.source/scoredLyricCandidateResult.
+// 八个歌词源的 key——跟 enrich.go 里 lyricCandidate.source/scoredLyricCandidateResult.
 // Source 的取值、以及 desktop-lyrics「歌词管理」窗口 LyricsManagerView.swift 的
 // sourceDisplayName 逐字对应,这是整个项目里"歌词源"唯一的一套 id,不是这里新起的。
 const (
@@ -36,6 +36,20 @@ const (
 	// 演唱者归属(TTML 的 ttm:agent),命中即拿到真·结构化对唱,不用靠行首前缀的启发式。
 	// 覆盖率有限(实测约 6%),所以是"锦上添花"的一档,不是主力源。
 	lyricSourceAMLL = "amll"
+	// LyricFind(检索机制见 ytmusic.go,2026-08-25 加)。YouTube Music 的歌词后端同时
+	// 接了 Musixmatch 和 LyricFind 两家供应商,只有 LyricFind 是六源之外的真实增量
+	// 数据——ytmusic.go 按 timedLyricsData 的 sourceMessage 过滤,查到的是 Musixmatch
+	// 换个管道重发时一律当"没查到"处理,所以这个源名副其实:只要叫这个名字的候选,
+	// 就真的是 LyricFind 的数据(源名因此叫 "lyricfind" 不是 "ytmusic"——这是检索
+	// 机制,不是数据归属方,归属方才是这个项目给源命名的准则,见 musixmatch/lrclib)。
+	// 只有逐行,没有逐字。实测(用户曲库 9 首抽样,过滤前的原始命中)8/9 在 YTM 上有
+	// 歌词,但只有 2/9 是 LyricFind,覆盖率不算高,归在"锦上添花",不是主力源。
+	lyricSourceLyricFind = "lyricfind"
+	// 酷我音乐(2026-08-31 加,见 kuwo.go 头注)。接口契约从公开的第三方开源实现
+	// 逆向出来,实测搜索排序完全不可信(原版录音室版本常年不进 top10),接入时已经补了
+	// 自己的重新打分排序,不是简单照搬。只有逐行,没有逐字/译文,覆盖率同 amll/lyricfind
+	// 一档,是"锦上添花"的兜底,不是主力源。
+	lyricSourceKuwo = "kuwo"
 )
 
 const (
@@ -72,10 +86,11 @@ const (
 // scoredLyricCandidates 里 candidates 列表本来的 append 顺序,不是这里凭空定的。
 // ⚠️ 顺序必须与 Swift 侧 LyricsSource.allCases 的**声明顺序**一致 —— 那边的
 // lyricsSourceOrder 默认值就是 allCases,两边对不上会让"顺序优先"模式在首次写盘前后
-// 表现不同。amll 放最后:它覆盖率最低(实测约 6%),想让它优先由用户自己在设置里拖。
+// 表现不同。amll/lyricfind 放最后:两个都是覆盖率有限的"锦上添花"档,想让它们优先
+// 由用户自己在设置里拖。
 var lyricsSourceDefaultOrder = []string{
 	lyricSourceNetease, lyricSourceQQ, lyricSourceKugou, lyricSourceMusixmatch, lyricSourceLRCLIB,
-	lyricSourceAMLL,
+	lyricSourceAMLL, lyricSourceLyricFind, lyricSourceKuwo,
 }
 
 type featureFlagsFile struct {
@@ -84,7 +99,11 @@ type featureFlagsFile struct {
 	Player               string `json:"player,omitempty"`
 	AlbumPrefetch        *bool  `json:"album_prefetch,omitempty"`
 	LastfmMirrorScrobble *bool  `json:"lastfm_mirror_scrobble,omitempty"`
-	WeeklyDigest         *bool  `json:"weekly_digest,omitempty"`
+	// LastfmScrobbleFirstArtistOnly：合唱串("A & B")上送时只发第一位艺人。
+	// **默认 false = 原样发整串**。命名对齐 Navidrome 的 Lastfm.ScrobbleFirstArtistOnly
+	// (它默认也是 false)。语义与取舍见 lastfm.go 里 resolveScrobbleArtist 的注释。
+	LastfmScrobbleFirstArtistOnly *bool `json:"lastfm_scrobble_first_artist_only,omitempty"`
+	WeeklyDigest                  *bool `json:"weekly_digest,omitempty"`
 	// DailyDigest：见 daily.go。跟 WeeklyDigest 是独立开关，两个可以同时开、只开一个、
 	// 或都不开。
 	DailyDigest *bool `json:"daily_digest,omitempty"`
@@ -105,6 +124,18 @@ type featureFlagsFile struct {
 	// 这个字段就落盘,从此完全以 LyricsSources 为准。与 Swift 侧 FeatureFlagsFile.amllLyrics
 	// 一一对应,改一边必须改另一边。
 	AMLLLyrics *bool `json:"amll_lyrics,omitempty"`
+	// LyricFindLyrics：跟 AMLLLyrics 同一个套路的迁移标记(2026-08-25 加 lyricfind 时补)。
+	// lyricfind 没有 amll 那样"曾经有过独立开关"的历史——它从一开始就直接进
+	// LyricsSources 白名单——但这个字段要解决的是**同一个**问题:老配置(写的时候
+	// lyricfind 这个源还不存在)按白名单办会被静默关掉。缺失 ⇒ 老配置,把 lyricfind 补进
+	// 启用集合(只补这一次);一旦保存过,这个字段落盘,从此完全以 LyricsSources 为准。
+	// 与 Swift 侧 FeatureFlagsFile.lyricFindLyrics 一一对应。
+	LyricFindLyrics *bool `json:"lyricfind_lyrics,omitempty"`
+	// KuwoLyrics:跟 AMLLLyrics/LyricFindLyrics 同一个套路的迁移标记(2026-08-31 加
+	// kuwo 时补)。老配置(写的时候 kuwo 这个源还不存在)按白名单办会被静默关掉。
+	// 缺失 ⇒ 老配置,把 kuwo 补进启用集合(只补这一次);一旦保存过,这个字段落盘,
+	// 从此完全以 LyricsSources 为准。与 Swift 侧 FeatureFlagsFile.kuwoLyrics 一一对应。
+	KuwoLyrics *bool `json:"kuwo_lyrics,omitempty"`
 	// LyricsSourceMode："smart"(默认,五源全查+打分取最高分,见 enrich.go 的
 	// scoredLyricCandidates/pickLyricCandidate)或"priority"(按 LyricsSourceOrder
 	// 的顺序,取第一个通过质量校验(score>=0)的源,不比较分数高低)。空值按 smart 处理。
@@ -165,10 +196,12 @@ type featureFlags struct {
 	Player               string
 	AlbumPrefetch        bool
 	LastfmMirrorScrobble bool
-	WeeklyDigest         bool
-	DailyDigest          bool
-	WeeklyDigestSource   string
-	DailyDigestSource    string
+	// 见上面 featureFlagsFile 里同名字段的注释。默认 false(发整串)。
+	LastfmScrobbleFirstArtistOnly bool
+	WeeklyDigest                  bool
+	DailyDigest                   bool
+	WeeklyDigestSource            string
+	DailyDigestSource             string
 	// pickLyricCandidate(enrich.go)读这三个字段决定冠军。
 	//
 	// ⚠️ 2026-08-21 订正:原注释说 `collector search-lyrics` 子命令"从不调用
@@ -229,22 +262,25 @@ func loadFeatureFlags(path string) featureFlags {
 		log.Printf("read feature flags %s: %v (使用默认值)", path, err)
 	}
 	return featureFlags{
-		Player:                    resolvePlayer(f.Player),
-		TrustedPlayers:            resolveTrustedPlayers(f.TrustedPlayers),
-		AlbumPrefetch:             boolOr(f.AlbumPrefetch, true),
-		LastfmMirrorScrobble:      boolOr(f.LastfmMirrorScrobble, false),
-		WeeklyDigest:              boolOr(f.WeeklyDigest, false),
-		DailyDigest:               boolOr(f.DailyDigest, false),
-		WeeklyDigestSource:        f.WeeklyDigestSource,
-		DailyDigestSource:         f.DailyDigestSource,
-		LyricsSources:             resolveLyricsSources(f.LyricsSources, f.AMLLLyrics),
-		LyricsSourceMode:          resolveLyricsSourceMode(f.LyricsSourceMode),
-		LyricsSourceOrder:         resolveLyricsSourceOrder(f.LyricsSourceOrder),
-		LyricsDir:                 f.LyricsDir,
-		LyricsTranslationLanguage: resolveLyricsTranslationLanguage(f.LyricsTranslationLanguage),
-		LyricsMachineTranslation:  boolOr(f.LyricsMachineTranslation, false),
-		LaunchLyrimuseOnMusicOpen: boolOr(f.LaunchLyrimuseOnMusicOpen, true),
-		LyricsDecisionTrace:       boolOr(f.LyricsDecisionTrace, false),
+		Player:               resolvePlayer(f.Player),
+		TrustedPlayers:       resolveTrustedPlayers(f.TrustedPlayers),
+		AlbumPrefetch:        boolOr(f.AlbumPrefetch, true),
+		LastfmMirrorScrobble: boolOr(f.LastfmMirrorScrobble, false),
+		// 默认 false:原样发整串。理由见 lastfm.go resolveScrobbleArtist —— ListenBrainz
+		// 文档要求合唱 credit "include them all",Navidrome 同名开关默认也是 false。
+		LastfmScrobbleFirstArtistOnly: boolOr(f.LastfmScrobbleFirstArtistOnly, false),
+		WeeklyDigest:                  boolOr(f.WeeklyDigest, false),
+		DailyDigest:                   boolOr(f.DailyDigest, false),
+		WeeklyDigestSource:            f.WeeklyDigestSource,
+		DailyDigestSource:             f.DailyDigestSource,
+		LyricsSources:                 resolveLyricsSources(f.LyricsSources, f.AMLLLyrics, f.LyricFindLyrics, f.KuwoLyrics),
+		LyricsSourceMode:              resolveLyricsSourceMode(f.LyricsSourceMode),
+		LyricsSourceOrder:             resolveLyricsSourceOrder(f.LyricsSourceOrder),
+		LyricsDir:                     f.LyricsDir,
+		LyricsTranslationLanguage:     resolveLyricsTranslationLanguage(f.LyricsTranslationLanguage),
+		LyricsMachineTranslation:      boolOr(f.LyricsMachineTranslation, false),
+		LaunchLyrimuseOnMusicOpen:     boolOr(f.LaunchLyrimuseOnMusicOpen, true),
+		LyricsDecisionTrace:           boolOr(f.LyricsDecisionTrace, false),
 	}
 }
 
@@ -286,21 +322,36 @@ func resolveTrustedPlayers(m map[string]string) map[string]string {
 	return out
 }
 
-func resolveLyricsSources(list []string, amllSeen *bool) map[string]bool {
+func resolveLyricsSources(list []string, amllSeen *bool, lyricFindSeen *bool, kuwoSeen *bool) map[string]bool {
 	if len(list) == 0 {
 		return map[string]bool{
 			lyricSourceNetease: true, lyricSourceQQ: true, lyricSourceKugou: true,
 			lyricSourceMusixmatch: true, lyricSourceLRCLIB: true,
-			lyricSourceAMLL: true,
+			lyricSourceAMLL: true, lyricSourceLyricFind: true, lyricSourceKuwo: true,
 		}
 	}
 	m := make(map[string]bool, len(list)+1)
 	for _, s := range list {
 		m[s] = true
 	}
-	// 老配置的一次性迁移,见 featureFlagsFile.AMLLLyrics。
+	// 老配置的一次性迁移,见 featureFlagsFile.AMLLLyrics/.LyricFindLyrics/.KuwoLyrics。三个
+	// 标记各自独立判断——一份配置可能在 amll 时代之后、lyricfind 时代之前保存过(amllSeen
+	// 非空、lyricFindSeen 为空),这种配置只该补 lyricfind,不该把 amll 也重新补一遍(用户
+	// 可能已经手动关掉了它)。
+	//
+	// ⚠️ 2026-08-25 实测坐实过一次:这里漏了迁移标记参数的那版代码,在这台机器真实的
+	// lyrimuse-features.json(lyrics_sources 只有旧的六个、没有对应迁移字段)上跑
+	// search-lyrics,sourcesTotal 停在 6、候选列表里一条新源都没有——「代码接好了但
+	// 静默对现有用户不生效」不是假设的风险,是真的在这台机器上复现过的 bug,加上这几个
+	// 迁移标记的**回归测试**就是防它复发。
 	if amllSeen == nil {
 		m[lyricSourceAMLL] = true
+	}
+	if lyricFindSeen == nil {
+		m[lyricSourceLyricFind] = true
+	}
+	if kuwoSeen == nil {
+		m[lyricSourceKuwo] = true
 	}
 	return m
 }

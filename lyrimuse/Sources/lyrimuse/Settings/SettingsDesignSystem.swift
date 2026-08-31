@@ -200,6 +200,13 @@ struct SettingsPage<Content: View>: View {
     // 自己另搭一套页面容器,是为了让它跟其余几页共用同一份背景色/边距/滚动行为。
     var heroImage: NSImage?
     var heroSize: CGFloat = 88
+    /// 要不要画页内那块大标题(标题 + 副标题 + 可选 hero 图)。
+    ///
+    /// 2026-08-30 加(用户:「这部分太占位置了,移除」):窗口标题栏本来就写着「设置 – 歌词显示」,
+    /// 页内再来一遍 22pt 大标题是同一句话说两遍;而「歌词显示」那一页顶着一块接近真实尺寸的
+    /// 编辑台,纵向每一分都金贵。做成开关而不是直接删掉 header —— 别的页(尤其「关于」那页要
+    /// 压 App 图标)仍然靠它,而且这是页面容器的通用能力,不该为一页写死。
+    var showsHeader: Bool = true
     @ViewBuilder let content: () -> Content
 
     // 参考图里卡片列约占窗口宽度的三分之二;这个窗口 idealWidth 是 860、侧边栏约 190,
@@ -214,7 +221,7 @@ struct SettingsPage<Content: View>: View {
             // (纯底色)的原因,两页因此长得不一样。每张卡都该是独立的一块面板,不要融合。
             SettingsGlassContainer(spacing: 0) {
                 VStack(spacing: 14) {
-                    header
+                    if showsHeader { header }
                     content()
                 }
             }
@@ -373,11 +380,14 @@ enum SettingsRowMetrics {
 // **刻意不给图标**:图标列是设置行的视觉锚点,标题一旦也占那一列,两者就又对齐成平级了。
 // 让标题从卡片左边缘直接起排、不参与那一列,层级一眼就分得开 —— 四个候选样式离线渲染
 // 对比过(带小图标的那版图标跟下面的图标列对不齐,反而显得半吊子)。
-struct SettingsCardHeader: View {
+struct SettingsCardHeader<Trailing: View>: View {
     let title: String
     // 少数几张卡的标题下面还有一句适用范围说明(比如「自动隐藏」要讲清它对哪几个形态生效)。
     var subtitle: String?
     var help: String?
+    // 标题行右侧的附加操作(2026-08-30,「歌词来源」卡的「全部测试」按钮补的)——跟
+    // SettingsRow.trailing 同一个道理,不给的调用点走下面的 EmptyView 扩展,行为不变。
+    @ViewBuilder var trailing: () -> Trailing
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
@@ -388,6 +398,7 @@ struct SettingsCardHeader: View {
                     .tracking(0.5)
                 if let help { HelpButton(text: help) }
                 Spacer(minLength: 0)
+                trailing()
             }
             if let subtitle, !subtitle.isEmpty {
                 Text(subtitle)
@@ -401,6 +412,12 @@ struct SettingsCardHeader: View {
         .padding(.horizontal, SettingsRowMetrics.horizontalPadding)
         .padding(.top, 10)
         .padding(.bottom, 7)
+    }
+}
+
+extension SettingsCardHeader where Trailing == EmptyView {
+    init(title: String, subtitle: String? = nil, help: String? = nil) {
+        self.init(title: title, subtitle: subtitle, help: help) { EmptyView() }
     }
 }
 
@@ -582,6 +599,18 @@ struct SettingsSubRow<Trailing: View>: View {
                 // ⚠️ 跟主行一样统一藏掉控件自带的标签(标题已经在左边了)。所以放在这里的
                 // 控件**不能**指望 Toggle/Picker 自己的 label 显示文字 —— 需要文字就自己
                 // 摆一个 Text,见 SettingsView 里 romanizationToggle 那段注释。
+                //
+                // ⚠️ 另一条、跟 labelsHidden 无关但同样会把文字弄没的坑:**这一行是单行结构,
+                // 左边的标题/说明和这里的控件分同一份宽度**。控件那一侧总宽超出剩余空间时,
+                // SwiftUI 会把亏空按弹性摊给双方,而摊到控件这一侧之后,写死宽度的部件
+                // (`.frame(width:)` 的输入框、滑杆)一分不让,整份亏空全压在**按钮**上 ——
+                // 按钮被压成没有文字的空圆角矩形,看着就像"这个按钮坏了"(2026-08-30
+                // 「我的配色主题」的内联命名行在 380pt 宽的配色浮层里真踩过,当时误判成
+                // labelsHidden 吃掉了 Button 标题,离屏渲染逐个变量排除才定到挤压上)。
+                // 给按钮加 `.fixedSize()` 只是把亏空转嫁给左边那句说明(它会被压成一列单字)。
+                // 所以:尾部插槽只适合放**一个**控件或几个窄控件;又要一段说明、又要输入框
+                // 加两颗按钮的场合,别用这一行,自己搭一个"说明一行、控件另起一行"的容器
+                // (例见 OverlayStyleSettingsRows.swift 里的 OverlayInlineConfirmRow)。
                 .labelsHidden()
                 .toggleStyle(.switch)
                 .settingsGlassButtons()
@@ -631,5 +660,50 @@ struct SettingsRawRow<Content: View>: View {
         .padding(.trailing, SettingsRowMetrics.horizontalPadding)
         .padding(.vertical, SettingsRowMetrics.verticalPadding)
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+// MARK: - 浮层外壳
+
+/// 编辑台工具栏那几个浮层共用的外壳:一个组标题 + 一条分隔线 + 内容,整体套 ScrollView
+/// 并限死宽高。
+///
+/// ⚠️ 高度必须有上限。设置窗口本身只有 552pt 高,浮层比窗口还高的话 macOS 会把它整体
+/// 顶到屏幕上去、或者直接裁掉底部 —— 而「我的配色主题」的行数是**用户数据的函数**
+/// (存几个主题就多几行),没有上限就是"存够十几个主题之后浮层底部够不着"。
+/// ScrollView 在收到"高度不限"的提议时按内容自身高度返回,所以内容少的时候浮层仍然
+/// 贴着内容、不会恒定撑满 460。
+///
+/// (2026-08-31 从 OverlayStyleSettingsRows.swift 里那个 `private struct
+///  OverlayStylePopoverShell` 提到这里并去掉 Overlay 前缀 —— 灵动岛那一段的编辑台
+///  也有两个浮层,再复制一份外壳就意味着同一个窗口里两种浮层的宽度上限/高度上限/
+///  标题排版会各自漂。这是设置页的通用外壳,不是悬浮歌词专属。)
+struct SettingsPopoverShell<Content: View>: View {
+    let title: String
+    /// 标题右边那个「?」气泡。只有真的需要一段说明才给 —— 灵动岛「屏幕」浮层用它承接
+    /// 改版前挂在设置行上的那句作用范围说明。
+    var help: String?
+    /// 浮层宽度。默认 380 是「文字」「配色」两个浮层的既有值 —— 它们里面是滑杆和取色盘,
+    /// 那点宽度是控件本身要的。
+    ///
+    /// ⚠️ **别把这个默认值当成"所有浮层的统一宽度"**。它只是那两个浮层量出来的数,不是设计
+    /// 基线;每个调用点都该按自己内容的 `fittingSize` 取一个带余量的值,理由(带实测数字)
+    /// 分别写在 `OverlayLayoutPopover`(必须更宽)、`NotchStylePopover`、`NotchEarPopover`
+    /// (都该更窄)上面。2026-08-31 之前灵动岛那几个浮层直接吃了这个默认值,「左耳」「右耳」
+    /// 的内容自然宽只有 124pt(中文)/ 136pt(英文),却被硬撑到 380 —— 用户报的原话是
+    /// 「左右耳下拉框太大了,明明需要的空间很小就够了,还是占了这么多空间」。
+    var width: CGFloat = 380
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 0) {
+                SettingsCardHeader(title: title, help: help)
+                CardDivider()
+                content()
+            }
+        }
+        .frame(width: width)
+        .frame(maxHeight: 460)
     }
 }

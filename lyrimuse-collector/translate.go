@@ -313,7 +313,6 @@ func machineTranslateLRCWithBase(ctx context.Context, hc *http.Client, baseURL, 
 		return translationResult{}, nil
 	}
 	// 只把"跟目标语言不是同一套文字"的行送去翻,理由见 dominantScript 那一段。
-	// idx 记住它们在原文里的下标,翻完再按位置散回去。
 	//
 	// 署名行先剔掉(2026-08-23):`[00:02.000] 编曲 : Edward Chan/方大同` 这种行拉丁字母
 	// 比汉字多,dominantScript 判成 latin,于是被当歌词送去翻。三个后果:展示端本来就会
@@ -324,9 +323,23 @@ func machineTranslateLRCWithBase(ctx context.Context, hc *http.Client, baseURL, 
 	// ⚠️ 用 isCreditLineWithSpeakers 而不是 isCreditLine:后者含 genericHanCreditLineRe
 	// 那条纯结构正则(短汉字 + 冒号),「男：It represent my heart!」会被它命中 —— 那是
 	// 真歌词,剔掉就等于对唱歌的英文行永远没译文。带上这一份的说话人标签当豁免才分得开。
+	//
+	// 按原文**去重**再送翻(2026-08-26,Michael Jackson《Beat It》实测坐实):副歌反复的歌
+	// 逐行独立发请求,同一句"Just beat it (beat it), beat it (beat it)"出现 7 次,翻译
+	// 结果对同一份输入**不保证一致**——on-device 的 TranslationSession.Request 逐行互不
+	// 知情,7 次里 6 次原样吐回来、只有 1 次真翻了,而 assembleTranslationLRC 那条"翻出来
+	// 等于原文就不写进译文栏"的规则会把那 6 次全部悄悄丢掉。歌词越重复,译文看起来就越
+	// 支离破碎,却不是网络配额或语言包的问题。
+	//
+	// occurrences[k] 记录 uniqueTexts[k] 这句话在原文里出现过的**全部**下标——翻完按
+	// uniqueTexts 的下标算出结果,一次性广播回它的每一个出现位置,保证同一句话不管重复
+	// 几次,结果必然一致(要么都翻、要么都没翻,不会随机命中一两次)。副产品是重复句子只翻
+	// 一次:MyMemory 那条网络兜底路的字符配额、on-device 的请求数,两条路都跟着省。
 	speakers := lyricSpeakerLabels(lyrics)
-	idx := make([]int, 0, len(lines))
-	texts := make([]string, 0, len(lines))
+	seen := map[string]int{}
+	var uniqueTexts []string
+	var occurrences [][]int
+	totalAttempted := 0
 	for i, l := range lines {
 		if isCreditLineWithSpeakers(strings.TrimSpace(l.text), speakers) {
 			continue
@@ -334,37 +347,47 @@ func machineTranslateLRCWithBase(ctx context.Context, hc *http.Client, baseURL, 
 		if !lineNeedsTranslation(l.text, target) {
 			continue
 		}
-		idx = append(idx, i)
-		texts = append(texts, l.text)
+		totalAttempted++
+		if k, ok := seen[l.text]; ok {
+			occurrences[k] = append(occurrences[k], i)
+			continue
+		}
+		seen[l.text] = len(uniqueTexts)
+		uniqueTexts = append(uniqueTexts, l.text)
+		occurrences = append(occurrences, []int{i})
 	}
-	if len(texts) == 0 {
+	if len(uniqueTexts) == 0 {
 		return translationResult{}, nil // 整首都已经是目标语言了
 	}
-	// scatter 把"只翻了一部分"的结果按原文下标铺回整首歌的长度,没送去翻的行留空串
-	// (assembleTranslationLRC 会跳过空串,不会在译文栏重复一遍原文)。
+	// scatter 把"只翻了一部分"的结果按 uniqueTexts 的下标广播回它在原文里的每一个出现
+	// 位置,没送去翻(或没翻成)的行留空串(assembleTranslationLRC 会跳过空串,不会在
+	// 译文栏重复一遍原文)。
 	scatter := func(out []string) []string {
 		full := make([]string, len(lines))
-		for j, i := range idx {
-			if j < len(out) {
-				full[i] = out[j]
+		for k, occ := range occurrences {
+			if k >= len(out) {
+				break
+			}
+			for _, i := range occ {
+				full[i] = out[k]
 			}
 		}
 		return full
 	}
 	// 优先端上翻译:不联网、无配额、歌词不出这台机器,而且没有 500 字符的分块限制,
 	// 整首歌一次翻完。失败(系统太老/语言包没装/helper 不在)才退到 MyMemory。
-	if out, err := onDeviceTranslate(ctx, appleLangCode(target), texts); err == nil {
-		return assembleTranslationLRC(lines, scatter(out), len(texts)), nil
+	if out, err := onDeviceTranslate(ctx, appleLangCode(target), uniqueTexts); err == nil {
+		return assembleTranslationLRC(lines, scatter(out), totalAttempted), nil
 	} else if !errors.Is(err, errOnDeviceUnavailable) {
 		log.Printf("translate: on-device failed, falling back to network: %v", err)
 	}
 
-	chunks := chunkForTranslation(texts)
+	chunks := chunkForTranslation(uniqueTexts)
 	if len(chunks) > translateMaxChunks {
 		return translationResult{}, fmt.Errorf("lyrics too long: %d chunks", len(chunks))
 	}
 
-	translated := make([]string, 0, len(texts))
+	translated := make([]string, 0, len(uniqueTexts))
 	for _, chunk := range chunks {
 		out, quota, err := translateChunk(ctx, hc, baseURL, chunk, target)
 		if quota {
@@ -381,7 +404,7 @@ func machineTranslateLRCWithBase(ctx context.Context, hc *http.Client, baseURL, 
 		translated = append(translated, out...)
 	}
 
-	return assembleTranslationLRC(lines, scatter(translated), len(texts)), nil
+	return assembleTranslationLRC(lines, scatter(translated), totalAttempted), nil
 }
 
 // assembleTranslationLRC 把逐行译文拼回一份跟主歌词同时间戳的 LRC。两条翻译路径(端上

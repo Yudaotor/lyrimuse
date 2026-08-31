@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"log"
@@ -96,7 +97,9 @@ func planRecheckCover(key string) recheckCoverPlan {
 	if duration <= 0 {
 		duration = e.DurationSecs
 	}
-	fresh := resolveTrackEnrichment(artist, title, album, duration)
+	// 一次性 CLI 命令,没有可以取消它的交互界面,context.Background() 就够。deviceCoverURL
+	// 传空串:这条 CLI 没有实时播放上下文,拿不到"设备现在正在播这首歌"这个前提。
+	fresh := resolveTrackEnrichment(context.Background(), artist, title, album, duration, "")
 	p.newURL, p.newSource, p.newAlbum, p.newAccent = fresh.CoverURL, fresh.CoverSource, fresh.CoverAlbum, fresh.AccentColor
 	p.swap = coverSwapAllowed(e, fresh, album)
 	switch {
@@ -242,7 +245,7 @@ func runRecheckInstrumental(keys []string, apply bool) int {
 		if duration <= 0 {
 			duration = e.DurationSecs
 		}
-		_, scored := scoredLyricCandidates(artist, title, album, duration)
+		_, scored := scoredLyricCandidates(context.Background(), artist, title, album, duration)
 		marker := ""
 		for _, c := range scored {
 			if c.Instrumental {

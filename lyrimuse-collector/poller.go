@@ -303,7 +303,11 @@ func (p *poller) isTracked() bool {
 // 幂等:同一个 timestamp 只提交一次。2026-08-11 起 Last.fm 镜像与 ListenBrainz 的
 // 提交结果解耦(见 applySubmitOutcome),LB 失败重试成功后会再次走到调用点 —— 没有
 // 这个守卫就会对 Last.fm 重复提交同一次收听。
-func (p *poller) mirrorScrobbleTracked(artist, title, album string, timestamp int64) {
+// rawArtist/durationSecs 只在失败留痕时用(见 recordFailedMirror):写进本地收听日志的
+// 必须是**播放器报的原始艺人名** —— 2026-08-31 起上送本身也是原样发原始标签,
+// 见 listenLogLine.AR 的注释,回填会拿它重新跑一遍同样的归一化,喂折叠后的值进去等于
+// 折叠两次。
+func (p *poller) mirrorScrobbleTracked(artist, title, album string, timestamp int64, rawArtist string, durationSecs float64) {
 	if p.lfm == nil || timestamp <= 0 {
 		return
 	}
@@ -313,16 +317,73 @@ func (p *poller) mirrorScrobbleTracked(artist, title, album string, timestamp in
 	p.lfmMirrored[timestamp] = true
 	p.lfmMirroredSet.save(p.lfmMirrored)
 	mirrorAsync(p.lfm, "scrobble", func(ctx context.Context) error {
-		return p.lfm.scrobble(ctx, artist, title, album, timestamp)
+		return p.lfm.scrobble(ctx, artist, title, album, timestamp, durationSecs)
+	}, func(err error) {
+		recordFailedMirror(err, rawArtist, title, album, timestamp, durationSecs)
 	})
+}
+
+// recordFailedMirror 给一次**没写进 Last.fm** 的收听留痕,让它还有被救回来的机会。
+//
+// 为什么不是"撤销 lfmMirrored 标记、下一拍重发"(2026-08-30 评估后否掉的方案):
+//   - 那要从 mirrorAsync 的 goroutine 里写 p.lfmMirrored,而主循环会经
+//     persistedTTLSet.save 整个 range 它 —— 并发写 = 不可 recover 的 fatal error。
+//   - 收益也几乎没有:实测 10 次 DNS 故障里只有 1 次在同一首歌还没放完时等到网络恢复,
+//     其余 9 次 session 早被 finalize 丢弃,标记撤了也没人再提交。
+//
+// 所以标记**保持置位**(活路径永不再发这条 ⇒ 物理上不可能双发),改为把这一条落进
+// listens.jsonl,交给作者已经写好的回填(13 天窗口/批量/限速/隔离/UI 有计数)。
+//
+// 三类失败的处置完全不同,合并成一种就必然错一边:
+//
+//   - **可证明没发出去**(DNS/dial 失败):服务端不可能见过它,补提交零重复风险 ⇒ 只写
+//     "l",回填会正常挑走。
+//   - **服务端拒收内容本身**(accepted=0):这首歌换多少次也还是这首歌,重发必然同样被拒
+//     ⇒ 什么都不写,只靠上面 mirrorAsync 那行日志把真实原因(现在带 ignoredMessage 了)
+//     暴露出来,让人去改数据而不是让机器空转。
+//   - **不确定发没发到**(超时/连接中断/服务端说自己暂时不可用):写 "l" + "q" 一对。
+//     "q" 让回填**永远不会自动重试**它(见 markQuarantined 的注释:重复比漏补贵得多),
+//     "l" 则保住艺人/曲名,将来要人工对账才有依据 —— 原来这种情况连曲目是什么都查不
+//     出来。
+//
+// ⚠️ 应用层错误(lastfmAPIError)**不能**一律当成"拒收"。2026-08-30 首版就是这么写的,
+// 当天复查抓出来:限流(29)和凭据失效(4/9/10/26)下服务端**确定没落库**,那恰恰是最该
+// 留痕待补的情形,一律 return 等于把这个函数要修的洞换个门又开一个 —— 一次限流就让这
+// 首歌在 Last.fm、listens.jsonl 两边同时没有。分档判据用 mayHaveStored(),口径跟
+// runBackfill 头注释里已经定过的一致,不另立一套。
+func recordFailedMirror(err error, rawArtist, title, album string, timestamp int64, durationSecs float64) {
+	var ignored *lastfmIgnoredError
+	if errors.As(err, &ignored) {
+		return // 服务端看过内容并拒收,补提交没有意义
+	}
+	appendListen(rawArtist, title, album, timestamp, durationSecs)
+
+	// 走到这里都要留痕,只剩"能不能自动补"这一个问题。
+	var apiErr *lastfmAPIError
+	if errors.As(err, &apiErr) {
+		if apiErr.mayHaveStored() {
+			markQuarantined(timestamp)
+		}
+		return // 其余应用层错误:服务端明确表过态、确定没落库,回填可以放心补
+	}
+	if !provablyNeverSent(err) {
+		markQuarantined(timestamp)
+	}
 }
 
 // mirrorScrobbleSync 是 mirrorScrobbleTracked 的**同步**变体,只给进程退出前的最后
 // 一次 flush 用:mirrorAsync 起的 goroutine 活不过紧接着的进程退出(2026-08-11 审阅
 // 确认的竞态 —— 标记已落盘、请求没发出去,这首歌对 Last.fm 永久丢失),退出路径必须
 // 拿 flush 的 ctx 同步把请求发完。
-func (p *poller) mirrorScrobbleSync(ctx context.Context, artist, title, album string, timestamp int64) {
-	if p.lfm == nil || timestamp <= 0 || p.lfm.dead.Load() {
+func (p *poller) mirrorScrobbleSync(ctx context.Context, artist, title, album string, timestamp int64, rawArtist string, durationSecs float64) {
+	if p.lfm == nil || timestamp <= 0 {
+		return
+	}
+	if p.lfm.dead.Load() {
+		// 同 mirrorAsync 的入口:不发请求,但这一条确定没写进去,该留痕 —— 退出路径尤其
+		// 不能漏,进程正要结束,没有"下一拍"能补。
+		recordFailedMirror(&lastfmAPIError{Code: 9, Message: "mirror disabled (credentials judged dead)", Method: "track.scrobble"},
+			rawArtist, title, album, timestamp, durationSecs)
 		return
 	}
 	if p.lfmMirrored[timestamp] {
@@ -330,8 +391,11 @@ func (p *poller) mirrorScrobbleSync(ctx context.Context, artist, title, album st
 	}
 	p.lfmMirrored[timestamp] = true
 	p.lfmMirroredSet.save(p.lfmMirrored)
-	if err := p.lfm.scrobble(ctx, artist, title, album, timestamp); err != nil {
+	if err := p.lfm.scrobble(ctx, artist, title, album, timestamp, durationSecs); err != nil {
 		log.Printf("lastfm mirror scrobble (final flush) failed: %v", err)
+		// 退出路径同样要留痕 —— 而且这里比活路径更需要:进程正在退出,没有"下一拍"
+		// 可言。这条是同步调用,本来就在主 goroutine 上,不涉及上面那条并发约束。
+		recordFailedMirror(err, rawArtist, title, album, timestamp, durationSecs)
 	}
 }
 
@@ -635,10 +699,15 @@ func (p *poller) pushScrobble(s snapshot, listenedAt int64, device string) {
 // submitOutcome/announceOutcome 是后台 goroutine 提交完成后、经 channel 送回单一
 // poll 主循环处理的结果。goroutine 本身只做网络 I/O,不直接改 session/poller 字段。
 type submitOutcome struct {
-	sess      *playSession
-	meta      snapshot
-	startedAt int64
-	err       error
+	sess *playSession
+	meta snapshot
+	// artistName 是 lbMeta(meta).ArtistName,顺带给 Last.fm 镜像复用(见
+	// applySubmitOutcome),两条路取同一份、不各算一遍。
+	// 2026-08-31 起 lbMeta 不再做任何替换,所以它就等于**播放器报的原始标签**;
+	// 保留这个字段是为了两条路径永远同源,而不是因为它还需要被加工。
+	artistName string
+	startedAt  int64
+	err        error
 }
 
 type announceOutcome struct {
@@ -666,7 +735,7 @@ func (p *poller) submitSingleAsync(sess *playSession, meta snapshot, startedAt i
 	go func() {
 		err := p.lb.submit(p.ctx, "single", startedAt, lm)
 		select {
-		case p.submitDoneCh <- submitOutcome{sess: sess, meta: meta, startedAt: startedAt, err: err}:
+		case p.submitDoneCh <- submitOutcome{sess: sess, meta: meta, artistName: lm.ArtistName, startedAt: startedAt, err: err}:
 		case <-p.ctx.Done():
 		}
 	}()
@@ -681,13 +750,17 @@ func (p *poller) applySubmitOutcome(r submitOutcome) {
 	// 在发起提交前就已经判定过了,LB 服务抽风不该殃及 Last.fm 那份记录 —— 原来镜像躲
 	// 在下面的成功分支里,LB 挂则两边一起停摆(审阅确认)。LB 失败重试成功后会再次走到
 	// 这里,mirrorScrobbleTracked 的幂等守卫保证不重复提交。
-	p.mirrorScrobbleTracked(r.meta.Artist, r.meta.Title, r.meta.Album, r.startedAt)
-	// 本地收听日志:**无条件**记一笔,不看任何账号配没配(见 listenlog.go 顶部注释)。
+	p.mirrorScrobbleTracked(r.artistName, r.meta.Title, r.meta.Album, r.startedAt, r.meta.Artist, r.meta.Duration)
+	// 本地收听日志:**只在没有在往 Last.fm 提交时**才记(见 appendListen 的注释)。
 	//
-	// 位置必须在下面那句 `if r.err != nil { return }` **之前** —— 否则 LB token 填错
-	// 或 LB 挂掉的用户就漏了,"无论如何都写"这个前提就不成立。这跟紧上方 2026-08-11
-	// 把 Last.fm 镜像从 LB 成功分支里挪出来是同一个道理。
-	// 只在没有在往 Last.fm 提交时才记 —— 见 appendListen 的注释。
+	// ⚠️ 这一段原来的注释写的是"**无条件**记一笔,不看任何账号配没配",而紧跟着的就是
+	// 下面这个 `if p.lfm == nil` —— 2026-08-13 收窄之后旧结论留在了最显眼的位置,新结论
+	// 被塞在末尾当补充。2026-08-30 通盘梳理时坐实这确实误导过判断(照字面读会以为镜像
+	// 失败时本地还有一份兜底,实际没有,那正是那次数据丢失能瞒住这么久的原因之一)。
+	//
+	// 位置必须在下面那句 `if r.err != nil { return }` **之前**:LB token 填错或 LB 挂掉
+	// 时这一条同样要落盘 —— 这个理由至今成立,收窄针对的是"连没连 Last.fm",不是"LB 成没
+	// 成功"。跟紧上方 2026-08-11 把 Last.fm 镜像从 LB 成功分支里挪出来是同一个道理。
 	if p.lfm == nil {
 		appendListen(r.meta.Artist, r.meta.Title, r.meta.Album, r.startedAt, r.meta.Duration)
 	}
@@ -763,7 +836,17 @@ func (p *poller) announce(now time.Time, why string) {
 	p.sess.announcing = true
 	sess := p.sess
 	m := lbMeta(p.cur)
-	artist, title, album := p.cur.Artist, p.cur.Title, p.cur.Album
+	// artist 给 Last.fm 用:跟 m.ArtistName(给 LB 用)取同一份,保证 now-playing 与
+	// 落库不会各说各话。
+	//
+	// ⚠️ 2026-08-31 起 lbMeta **不再做 canonical_artist 替换**,两者都等于播放器原始
+	// 标签。原注释描述的是那次替换(为了解决"方大同/Khalil Fong 在 Last.fm 分裂"),
+	// 现在那个问题改由**显示/统计层**归并解决,上送层只如实记录 —— 完整依据见 lb.go
+	// 里 lbMeta 那段(Last.fm 官方反对自动套用纠正 / 业界无一默认这么做 / 实测有真错)。
+	artist, title, album := m.ArtistName, p.cur.Title, p.cur.Album
+	// 跟 artist/title/album 一样在**闭包外**取值:下面那个 goroutine 直接读 p.cur 就是
+	// 跨 goroutine 读 poller 状态,违反"所有状态只在 poll 主循环里碰"那条不变量。
+	durationSecs := p.cur.Duration
 	playing := p.cur.Playing
 	go func() {
 		// now-playing 镜像与 LB 解耦(2026-08-11,批4):"正在播放"反映的是本机播放器
@@ -777,8 +860,8 @@ func (p *poller) announce(now time.Time, why string) {
 		// LB 不受影响 —— 它要靠 rate=0 表达暂停、自己会丢弃,所以下面的 submit 照旧发。
 		if playing {
 			mirrorAsync(p.lfm, "now-playing", func(ctx context.Context) error {
-				return p.lfm.updateNowPlaying(ctx, artist, title, album)
-			})
+				return p.lfm.updateNowPlaying(ctx, artist, title, album, durationSecs)
+			}, nil) // now-playing 失败无需留痕:它是瞬时状态,下一拍自然覆盖(跟 scrobble 相反)
 		}
 		err := p.lb.submit(p.ctx, "playing_now", 0, m)
 		if err != nil {
@@ -831,7 +914,7 @@ func (p *poller) handle(now time.Time, reanchored, loopRestart bool) {
 		// 故首条须在 enrich 解析完后再发(那时才知有无歌词、有则带上)。已解析(缓存命中,无论
 		// 有无歌词)立即发;仅首次解析中(缓存未命中)才挂起,由下方处理器等 enrich 完成
 		// (enrichNotify 触发)或超时再发。仅影响 KV 兜底路径,KV 主路径不受此延迟。
-		if len(trackEnrichment(p.cur.Artist, p.cur.Title, p.cur.Album, p.cur.Bundle, p.cur.Duration)) > 0 {
+		if len(trackEnrichment(p.cur.Artist, p.cur.Title, p.cur.Album, p.cur.Bundle, p.cur.Duration, true)) > 0 {
 			p.announce(now, "new")
 		} else {
 			p.sess.pnPending = true
@@ -853,7 +936,7 @@ func (p *poller) handle(now time.Time, reanchored, loopRestart bool) {
 		}
 		p.sess.isAd = p.detectAdAtSessionStart()
 		log.Printf("loop restart: %s - %s", p.cur.Artist, p.cur.Title)
-		if len(trackEnrichment(p.cur.Artist, p.cur.Title, p.cur.Album, p.cur.Bundle, p.cur.Duration)) > 0 {
+		if len(trackEnrichment(p.cur.Artist, p.cur.Title, p.cur.Album, p.cur.Bundle, p.cur.Duration, true)) > 0 {
 			p.announce(now, "loop restart")
 		} else {
 			p.sess.pnPending = true
@@ -874,7 +957,10 @@ func (p *poller) handle(now time.Time, reanchored, loopRestart bool) {
 	// 挂起的首条:等 enrich 解析完(enrichNotify 会触发一轮 poll,那时才知有无歌词)或超过
 	// pnPendingMax 再作为"换曲那条"发出。挂起期间不发状态切换/刷新提交(会锁死无歌词的换曲那条)。
 	if p.sess.pnPending {
-		resolved := len(trackEnrichment(p.cur.Artist, p.cur.Title, p.cur.Album, p.cur.Bundle, p.cur.Duration)) > 0
+		// isNewTrack 传 false:这是同一个 session 里等 enrich 完成的轮询重试,不是新曲目
+		// 开始播放的那一刻,不该再问一次 media-control 要设备封面(那一刻已经在上面
+		// "New track" 分支问过了)。
+		resolved := len(trackEnrichment(p.cur.Artist, p.cur.Title, p.cur.Album, p.cur.Bundle, p.cur.Duration, false)) > 0
 		if resolved || now.Sub(p.sess.startedAt) >= pnPendingMax {
 			p.announce(now, "first") // pnPending 在结果异步返回后由 applyAnnounceOutcome 清除
 		}
@@ -1184,6 +1270,7 @@ func run(ctx context.Context, cfg *config, lb *lbClient) error {
 	enrichNotify = make(chan struct{}, 1) // 后台 enrich 完成后触发一次重推
 	p.poll()                              // render immediately, don't wait a full interval on startup
 	go startCompanionLaunchWatcher(ctx)   // 独立节奏,见 companionlaunch.go 顶部注释
+	go startEnrichCancelWatcher(ctx)      // 独立节奏,见 enrichcancel.go 顶部注释
 
 	ticker := time.NewTicker(pollInterval)
 	defer ticker.Stop()
@@ -1200,14 +1287,20 @@ func run(ctx context.Context, cfg *config, lb *lbClient) error {
 				!p.sess.isAd && !isAdBreak(p.sess.meta.Bundle, p.sess.meta.Artist, p.sess.meta.Title, p.sess.meta.Album) {
 				// Last.fm 镜像:与 LB 解耦,且必须走同步变体 —— 异步 goroutine 活不过
 				// 紧接着的 return(见 mirrorScrobbleSync 注释)。
-				p.mirrorScrobbleSync(flushCtx, p.sess.meta.Artist, p.sess.meta.Title, p.sess.meta.Album, p.sess.startedAt.Unix())
+				//
+				// 艺人名跟 LB 提交取同一份(lm.ArtistName)。2026-08-31 起 lbMeta 不再做
+				// canonical_artist 替换,所以 lm.ArtistName 就是**播放器原始标签** ——
+				// 这里保持取同一份,是为了万一以后 lbMeta 又加了什么处理,两条路不会分叉。
+				lm := lbMeta(p.sess.meta)
+				p.mirrorScrobbleSync(flushCtx, lm.ArtistName, p.sess.meta.Title, p.sess.meta.Album, p.sess.startedAt.Unix(),
+					p.sess.meta.Artist, p.sess.meta.Duration)
 				// 同上:退出前这最后一首也是一次算数的收听,本地日志不能漏。放在 LB
 				// 提交之前,理由跟 applySubmitOutcome 那处一致。
 				if p.lfm == nil {
 					appendListen(p.sess.meta.Artist, p.sess.meta.Title, p.sess.meta.Album,
 						p.sess.startedAt.Unix(), p.sess.meta.Duration)
 				}
-				if err := lb.submit(flushCtx, "single", p.sess.startedAt.Unix(), lbMeta(p.sess.meta)); err != nil {
+				if err := lb.submit(flushCtx, "single", p.sess.startedAt.Unix(), lm); err != nil {
 					log.Printf("final listen flush failed: %v", err)
 				} else {
 					p.recordRecentMacListen(p.sess.meta.Artist, p.sess.meta.Title, p.sess.startedAt.Unix())

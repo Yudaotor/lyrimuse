@@ -220,6 +220,12 @@ public final class LyricsOffsetStore: ObservableObject {
         return offsets[key] ?? 0
     }
 
+    /// 整份字典的只读快照——给「歌词管理」列表的"偏移"列用:那一列要给每一行都查一次
+    /// trackKey,而 buildSummaries 本身要能在后台线程跑(见 EnrichCacheStore.reload),
+    /// 不能在那个函数体内部同步访问这个 @MainActor 单例。调用方在 MainActor 上下文里
+    /// 取一份快照传进去,后台线程只做普通字典查找。
+    public var offsetsSnapshot: [String: Int] { offsets }
+
     // ⚠️ 三个写入口都要求传 pinKey(归一化的 enrich key),不给默认值:调过时间轴的歌要
     // 顺手钉进 LyricsPinStore、让 collector 不再自动换歌词源(理由见那个类型的注释)。
     // 给默认值等于允许某条路径静默漏掉这件事,而漏掉的表现是"用户校准过的歌过一阵自己
@@ -242,17 +248,23 @@ public final class LyricsOffsetStore: ObservableObject {
         set(ms, forKey: key, pinKey: pinKey)
     }
 
-    /// 存量补钉:这首歌有非零校正值、却不在已校准名单里,播放到它时顺手补上。
+    /// 播放到这首歌时,把它的"已校准"钉住状态跟当前校正值重新对一遍——维护的是 set() 里
+    /// 那条同一个不变式(非零校正值⇄钉住),不是只补不清的单向操作。
     ///
-    /// 为什么需要:pin 是在 set() 里"改动时"写的,而这个机制上线之前用户已经调好的歌一条
-    /// pin 都没有 —— 不补的话它们全都不受保护(正是最该保护的那些),而且工具栏「已校准
-    /// N 首」这个数字会跟名单长期对不上。setPinned 幂等,状态一致时连盘都不写。
+    /// 为什么必须双向(2026-08-26 实测坐实):这里原来叫 backfillPinIfNeeded、只会钉不会
+    /// 解钉——pin 只有在 set() 被调用的那一刻才会跟着改,可 set() 不是校正值变回 0 的
+    /// 唯一路径(key 含歌词内容指纹,内容一换,旧 key 下的非零校正值就查不到了、新 key
+    /// 默认是 0,而这个函数一旦在内容变化前用旧值钉过一次,之后再也没人告诉它去解钉)。
+    /// 实测这台机器 16 条已校准记录里 9 条就是这么飘出来的:校正值早就是 0,pin 却一直
+    /// 挂着,「仅人工修正」筛选把它们当成"用户亲手弄对过",而这首歌现在其实跟没调过没有
+    /// 任何区别。改成无条件同步(该钉就钉、该解就解)之后,这类飘移会在下次播放到时自愈,
+    /// 不需要用户手动发现再去解钉。
     ///
-    /// 刻意做成"播放到它才补"而不是启动时全量扫一遍:offset 的 key 含歌词内容指纹,离开
+    /// 仍然是"播放到它才同步"而不是启动时全量扫一遍:offset 的 key 含歌词内容指纹,离开
     /// 播放上下文根本算不出对应的 pinKey(得先知道这首歌当下那份歌词内容是什么)。
-    public func backfillPinIfNeeded(forKey key: String, pinKey: String) {
-        guard !pinKey.isEmpty, offset(forKey: key) != 0 else { return }
-        LyricsPinStore.shared.setPinned(true, forKey: pinKey)
+    public func syncPinToOffset(forKey key: String, pinKey: String) {
+        guard !pinKey.isEmpty else { return }
+        LyricsPinStore.shared.setPinned(offset(forKey: key) != 0, forKey: pinKey)
     }
 
     /// 清掉**全部**单曲校正值(「歌词管理」工具栏那个入口)。

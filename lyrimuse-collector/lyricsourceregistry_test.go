@@ -17,7 +17,8 @@ import (
 func allLyricSourceConstants() []string {
 	return []string{
 		lyricSourceNetease, lyricSourceQQ, lyricSourceKugou,
-		lyricSourceMusixmatch, lyricSourceLRCLIB, lyricSourceAMLL,
+		lyricSourceMusixmatch, lyricSourceLRCLIB, lyricSourceAMLL, lyricSourceLyricFind,
+		lyricSourceKuwo,
 	}
 }
 
@@ -50,22 +51,58 @@ func TestEveryLyricSourceIsRegistered(t *testing.T) {
 	}
 
 	// ③ 全集兜底(lyrics_sources 缺失/为空 = 全开)。漏一个 = 那个源在全新安装上被禁用。
-	full := resolveLyricsSources(nil, nil)
+	full := resolveLyricsSources(nil, nil, nil, nil)
 	for _, s := range all {
 		if !full[s] {
 			t.Errorf("源 %q 不在 resolveLyricsSources 的全集兜底里(全新安装会禁用它)", s)
 		}
 	}
 
-	// ④ 老配置的一次性迁移:amll 缺失时补进去,已表态时尊重用户选择
-	old := resolveLyricsSources([]string{"netease", "qq"}, nil)
+	// ④ 老配置的一次性迁移:amll/lyricfind/kuwo 各自的迁移标记缺失时补进去,已表态时
+	// 尊重用户选择。这条不是补测——2026-08-25 实测坐实过:漏了迁移标记参数那版代码在真实
+	// 机器上跑,这台机器 lyrics_sources 里只有旧的六个源、没有对应迁移字段,
+	// search-lyrics 的 sourcesTotal 停在 6、候选列表里一条新源都没有。这里钉死
+	// 的正是当时复现过的那个场景(见 resolveLyricsSources 里对应的注释)。
+	old := resolveLyricsSources([]string{"netease", "qq"}, nil, nil, nil)
 	if !old[lyricSourceAMLL] {
 		t.Error("老配置(amll_lyrics 缺失)应当把 amll 补进启用集合")
 	}
+	if !old[lyricSourceLyricFind] {
+		t.Error("老配置(lyricfind_lyrics 缺失)应当把 lyricfind 补进启用集合——这正是 2026-08-25 实测复现过的那个 bug")
+	}
+	if !old[lyricSourceKuwo] {
+		t.Error("老配置(kuwo_lyrics 缺失)应当把 kuwo 补进启用集合")
+	}
 	no := false
-	stated := resolveLyricsSources([]string{"netease", "qq"}, &no)
-	if stated[lyricSourceAMLL] {
+	statedAMLL := resolveLyricsSources([]string{"netease", "qq"}, &no, nil, nil)
+	if statedAMLL[lyricSourceAMLL] {
 		t.Error("用户已表态(amll_lyrics=false)时不该再把 amll 补回来")
+	}
+	if !statedAMLL[lyricSourceLyricFind] {
+		t.Error("amll 已表态不影响 lyricfind 的迁移——lyricfind_lyrics 仍缺失时应该照常补它")
+	}
+	if !statedAMLL[lyricSourceKuwo] {
+		t.Error("amll 已表态不影响 kuwo 的迁移——kuwo_lyrics 仍缺失时应该照常补它")
+	}
+	statedLF := resolveLyricsSources([]string{"netease", "qq"}, nil, &no, nil)
+	if statedLF[lyricSourceLyricFind] {
+		t.Error("用户已表态(lyricfind_lyrics=false)时不该再把 lyricfind 补回来")
+	}
+	if !statedLF[lyricSourceAMLL] {
+		t.Error("lyricfind 已表态不影响 amll 的迁移——amll_lyrics 仍缺失时应该照常补它")
+	}
+	if !statedLF[lyricSourceKuwo] {
+		t.Error("lyricfind 已表态不影响 kuwo 的迁移——kuwo_lyrics 仍缺失时应该照常补它")
+	}
+	statedKuwo := resolveLyricsSources([]string{"netease", "qq"}, nil, nil, &no)
+	if statedKuwo[lyricSourceKuwo] {
+		t.Error("用户已表态(kuwo_lyrics=false)时不该再把 kuwo 补回来")
+	}
+	if !statedKuwo[lyricSourceAMLL] {
+		t.Error("kuwo 已表态不影响 amll 的迁移——amll_lyrics 仍缺失时应该照常补它")
+	}
+	if !statedKuwo[lyricSourceLyricFind] {
+		t.Error("kuwo 已表态不影响 lyricfind 的迁移——lyricfind_lyrics 仍缺失时应该照常补它")
 	}
 }
 

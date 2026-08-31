@@ -198,4 +198,19 @@ extension ColorTheme {
             && textStrokeEnabled == other.textStrokeEnabled
             && (!textStrokeEnabled || textStrokeColorHex == other.textStrokeColorHex)
     }
+
+    /// 套用这个主题——原来是 `SettingsView.AppearanceSettingsTab` 的私有方法
+    /// `applyColorTheme(_:)`,2026-08-29 悬浮窗新增的快捷设置菜单(`OverlayQuickSettingsMenu`)
+    /// 要套用同一批内置/自定义主题,提到这里当唯一实现,两处调用点都改成调这个方法,行为不变。
+    @MainActor
+    func apply(to settings: AppSettings) {
+        // 套用一个具体命名主题就是在明确表态"我要固定色,不要动态色"——顺手关掉
+        // "跟随封面"(如果开着),不然套用之后前景色看起来毫无反应,像是套用失灵了
+        // (实际上是被"跟随封面"接管了,只是用户不知道)。
+        settings.followsCoverArt = false
+        settings.foregroundColorHex = foregroundColorHex
+        settings.backgroundColorHex = backgroundColorHex
+        settings.textStrokeEnabled = textStrokeEnabled
+        settings.textStrokeColorHex = textStrokeColorHex
+    }
 }
