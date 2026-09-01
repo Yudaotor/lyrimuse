@@ -274,12 +274,11 @@ func (p *poller) recentlyPlayedOnMac(artist, title string, uts int64) bool {
 // (with slightly different combinations of the cur.Playing check) at each of
 // pushRelayState/handle/bridge/poll.
 //
-// 也接受当前选定播放器(features.Player)自己期望的 bundle id,不只是 cfg.BundleIDs
-// 里配置的那份——getState() 的两条路径(getAppleMusicState/getQQMusicState)只会在
-// bundle id 确实对得上当前选定的播放器时才产出非空快照,所以这里理应无条件认它,不能
-// 因为用户没有额外手动去 config.json 里加一条 bundle_ids 就把 QQ 音乐的播放判定成
-// "不是我关心的来源"。cfg.BundleIDs 仍然保留:留给需要额外识别别的 bundle id 的高级
-// 用法。
+// 也接受当前选定播放器集合(features.Players,2026-09-01 起可多选)里任意一个自己期望
+// 的 bundle id,不只是 cfg.BundleIDs 里配置的那份——getState() 的各条路径只会在 bundle
+// id 确实对得上选中集合里的某一个时才产出非空快照,所以这里理应无条件认它,不能因为
+// 用户没有额外手动去 config.json 里加一条 bundle_ids 就把 QQ 音乐的播放判定成"不是我
+// 关心的来源"。cfg.BundleIDs 仍然保留:留给需要额外识别别的 bundle id 的高级用法。
 func (p *poller) isTracked() bool {
 	if p.cur.key() == "" {
 		return false
@@ -288,13 +287,22 @@ func (p *poller) isTracked() bool {
 		return true
 	}
 	// playerAuto("自动识别")没有唯一固定的期望 bundle id——getAutoDetectedState 已经
-	// 只在确认是四个已知播放器之一时才产出非空快照,这里认它是不是这四个之一即可,不能
-	// 拿 expectedPlayerBundleID() 那种"只认一个固定值"的判断(会把除了默认兜底值以外
-	// 的其它三个播放器误判成"不是我关心的来源")。
-	if features.Player == playerAuto {
+	// 只在确认是已知播放器之一时才产出非空快照,这里认它是不是这几个之一即可,不能拿
+	// playerBundleID() 那种"只认一个固定值"的判断(会把除了默认兜底值以外的其它播放器
+	// 误判成"不是我关心的来源")。
+	if features.Players[playerAuto] {
 		return isAcceptedPlayerBundleID(p.cur.Bundle)
 	}
-	return p.cur.Bundle == expectedPlayerBundleID()
+	for player := range features.Players {
+		if p.cur.Bundle == playerBundleID(player) {
+			return true
+		}
+	}
+	// 信任列表(2026-09-01 补)——最典型场景是「网页播放器」卡配对的浏览器,那个动作跟
+	// "选没选自动识别"是两件独立的事,见 isTrustedPlayerBundleID 的注释。getMultiSelectedState
+	// 已经把这类播放当"能采纳"处理并过了 trustedPlaybackNotASong 那道守卫,这里必须同样认它,
+	// 否则播放数据进得来、却在打卡这一步被判"不是我关心的来源"丢掉。
+	return isTrustedPlayerBundleID(p.cur.Bundle)
 }
 
 // mirrorScrobbleTracked 先同步记入"已镜像"集合并落盘,再异步镜像写入 Last.fm——见
@@ -1210,13 +1218,16 @@ func (p *poller) poll() {
 	// 播放头的第二次调用)——QQ 音乐没有这条路径,getQQMusicState 用的 elapsedTimeNow
 	// 已经是每一轮都新鲜的读数,不需要、也不应该再叠加这一步(不加这个判断的话,即使
 	// 选的是 QQ 音乐,这里仍会照样问一次 Music.app,如果它碰巧也开着在放别的东西,会
-	// 用 Music.app 的位置错误覆盖掉 QQ 音乐这边正确算出来的位置)。playerAuto("自动
-	// 识别")下额外允许"这一轮观测到的 bundle 恰好是 Apple Music"这个条件——故意不是
-	// 简单把整个判断换成只看 p.cur.Bundle:那样会让"手动选了 QQ 音乐/网易云音乐/
-	// Spotify,但 p.cur.Bundle 因为某种原因还留着上一轮的 Apple Music 值"这种边界情况
-	// 重新引入上面这段注释描述的坑,所以手动选择的三个非 Apple Music 播放器行为完全
-	// 不变,只有 playerAuto 这一种情况需要额外看 p.cur.Bundle。
-	if (features.Player == playerAppleMusic || (features.Player == playerAuto && p.cur.Bundle == "com.apple.Music")) &&
+	// 用 Music.app 的位置错误覆盖掉 QQ 音乐这边正确算出来的位置)。
+	//
+	// 2026-09-01 多选后简化成一个条件:features.Players 没有勾 Apple Music 时,这个
+	// && 短路,后面 p.cur.Bundle 是否恰好是陈旧的 "com.apple.Music" 完全不重要——跟
+	// 改动前"手动选择的非 Apple Music 播放器行为完全不变"这条不变量等价,只是原来的
+	// 三路 OR 拆开写才需要单独强调。**勾了** Apple Music 时(不管是不是同时也勾了别的、
+	// 或者勾的是自动识别),按"这一轮观测到的 bundle 是不是恰好是 Apple Music"决定要不要
+	// 补这次 AppleScript 精确定位——跟改动前 playerAuto 分支的道理完全一样,只是现在
+	// 多选/自动识别共用同一条判断,不需要再分两个 case。
+	if features.Players[playerAppleMusic] && p.cur.Bundle == "com.apple.Music" &&
 		p.cur.Playing && p.isTracked() {
 		if pos, ok := appleMusicPosition(p.ctx); ok {
 			correctedAt := time.Now()

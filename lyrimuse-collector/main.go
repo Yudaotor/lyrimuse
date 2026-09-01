@@ -198,7 +198,7 @@ func main() {
 	features = loadFeatureFlags(filepath.Join(filepath.Dir(*cfgPath), clientName+"-features.json"))
 	// 歌词打分要知道"用户在放哪个播放器",好偏向那个平台自家的歌词(时间轴对得上同一个
 	// 音频母版)。跟 features 一样只在启动时设一次 —— 换播放器本来就要重启 collector。
-	nativeLyricSource = playerNativeLyricSource(features.Player)
+	nativeLyricSources = resolveNativeLyricSources(features.Players)
 	// 曲目元信息缓存落盘在 config 同目录，重启后不重解析同一首歌。
 	loadEnrichCache(filepath.Join(filepath.Dir(*cfgPath), clientName+"-enrich-cache.json"))
 	// 按歌手(不是按曲目)缓存的 MusicBrainz 中文别名查询结果,同目录下单独一份文件——
@@ -254,6 +254,11 @@ func main() {
 	// 同样夹在 import 与 export 之间,理由同上;放在空白词条清洗**之后**,因为那一步会
 	// 改动 YRC 的词条结构,重挂要读的是清洗完的最终逐字轴。
 	migrateLyricTimelines()
+	// 存量「用户选定的源」→「手动选定」留痕(2026-09-01,见 manualpickmigrate.go)。
+	// ⚠️ 必须排在上面三步**之后**:import / YRC 空白清洗 / 时间轴重挂都会重写 Lyrics 和
+	// LyricsYRC,而这一步要按最终内容算指纹。排在它们之前的话指纹当场过期,老用户打开
+	// 「手动选定歌词后锁定」照样一首都锁不上,且没有任何迹象。
+	migrateManualPickMarks()
 	exportLyricsFiles()
 	// 本地收听日志:刻意**不带** lastfm-/lb- 这类账号域前缀 —— 这份日志存在的全部意义
 	// 就是"不依赖任何账号",挂上某个账号的名字就说反了。

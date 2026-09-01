@@ -122,12 +122,13 @@ func TestLyricRecordingTriangleGuards(t *testing.T) {
 
 // TestLyricRecordingTriangleAlbumWidthBoundary 把长度可比性那道闸的边界钉死。
 //
-// 本地专辑刻意选一个**不含版本限定词**的串:否则 versionTagsMismatch 会先一步否决
-// (本地专辑带 "(Live)"、候选专辑被截短后不带,两边 tag 集合不等 → mismatch),测不到
-// 长度这一闸。这个交互本身是既有行为、不是这次改动引入的,但它说明了一件事:候选专辑名
-// 被截短到丢掉版本词时,拦住它的是版本词那一闸而不是长度闸 —— 两道闸叠着,不是替代。
+// 本地专辑刻意选一个**不含版本限定词、也不含中文现场标记**的串:否则 versionTagsMismatch
+// 会先一步否决(v9 起"演唱会/现场/音乐会"字样的专辑名视同声明了 live——原夹具
+// "周杰伦地表最强世界巡回演唱会"被截短的候选丢掉"演唱会"后两边 tag 集合不等 → mismatch),
+// 测不到长度这一闸。这个交互是版本闸的既有职责:候选专辑名被截短到丢掉版本声明时,拦住它
+// 的是版本闸而不是长度闸 —— 两道闸叠着,不是替代。
 func TestLyricRecordingTriangleAlbumWidthBoundary(t *testing.T) {
-	const local = "周杰伦地表最强世界巡回演唱会" // normLoose → 14 rune,无版本限定词
+	const local = "周杰伦地表最强世界巡回纪念集" // normLoose → 14 rune,无版本限定词/现场标记
 	// 9 字 / 14 = 0.643 >= 0.6 → 通过
 	if !lyricRecordingTriangleMatches("X", "周杰伦地表最强世界", 100, "X", local, 100) {
 		t.Errorf("9/14=0.643 应通过长度可比性")

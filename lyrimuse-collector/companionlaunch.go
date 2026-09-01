@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-// companionLaunch 是"打开当前选定的播放器(features.Player)时顺带唤起 Lyrimuse"这个
+// companionLaunch 是"打开当前选定的播放器(features.Players)时顺带唤起 Lyrimuse"这个
 // 联动的另一半——反方向("打开 Lyrimuse 时唤起播放器")触发点就是 Lyrimuse.app 自己的
 // 启动流程,直接在 Swift 那边(AppDelegate.swift)实现即可,不需要 collector 插手。但
 // 这个方向不一样:必须有一个不依赖 Lyrimuse.app 主进程是否在运行的东西,持续盯着目标
@@ -130,23 +130,28 @@ func isProcessRunning(name string) bool {
 	return exec.CommandContext(ctx, "pgrep", "-x", name).Run() == nil
 }
 
-// companionLaunchProcessNames 是这一轮要盯的可执行文件名列表——手动选定某个播放器时
-// 只有它自己这一个(行为跟合并前完全一致,不会因为多了 playerAuto 而误报别的播放器
-// 启动);playerAuto("自动识别")下没有唯一确定的目标,同时盯着全部四个已知播放器,
-// 任意一个启动都算数,这也是自动识别模式下这个方向反而更有用的地方——用户不需要
-// 事先告诉 Lyrimuse 自己接下来要开哪个播放器。
+// companionLaunchProcessNames 是这一轮要盯的可执行文件名列表——手动选定播放器时盯
+// features.Players 里的每一个(2026-09-01 起可多选;单选年代只有一个 key,行为跟合并
+// 前完全一致,不会因为多了 playerAuto 而误报别的播放器启动);「自动识别」在选中集合里
+// (不管是否同时还勾了别的具体播放器,都按超集处理)时没有唯一确定的目标,同时盯着
+// 全部五个已知播放器,任意一个启动都算数,这也是自动识别模式下这个方向反而更有用的
+// 地方——用户不需要事先告诉 Lyrimuse 自己接下来要开哪个播放器。
 func companionLaunchProcessNames() []string {
-	if features.Player == playerAuto {
+	if features.Players[playerAuto] {
 		return knownPlayerProcessNames
 	}
-	return []string{playerProcessName()}
+	names := make([]string, 0, len(features.Players))
+	for player := range features.Players {
+		names = append(names, playerProcessNameFor(player))
+	}
+	return names
 }
 
 // knownPlayerProcessNames 是全部五个已知播放器的可执行文件名——QQ音乐.app 是
 // QQMusic、网易云音乐.app 是 NeteaseMusic、Spotify.app 是 Spotify、酷狗音乐.app 是
 // **中文的**「酷狗音乐」(都用 PlistBuddy 读 CFBundleExecutable 核实过),Music.app 是
-// Music。playerProcessName() 按 features.Player 从这份列表里挑一个出来给手动选定的
-// 场景用;playerAuto 直接用整份列表。
+// Music。playerProcessNameFor() 给 features.Players 里手动选定的每个成员各查一个出来;
+// playerAuto 在选中集合里时直接用整份列表。
 //
 // ⚠️ 酷狗那一项是非 ASCII 的,2026-08-22 实测确认两件事都成立才敢这么写:
 //  1. `pgrep -x 酷狗音乐` 能匹配到 comm 为中文的进程(拿一个中文名符号链接起进程验过);
@@ -155,10 +160,12 @@ func companionLaunchProcessNames() []string {
 //     里加新播放器时这条限制要一起核。
 var knownPlayerProcessNames = []string{"Music", "QQMusic", "NeteaseMusic", "Spotify", "酷狗音乐"}
 
-// playerProcessName 是当前选定播放器(features.Player)的可执行文件名,给手动选定的
-// 场景用,见 knownPlayerProcessNames 注释。
-func playerProcessName() string {
-	switch features.Player {
+// playerProcessNameFor 是某个具体播放器常量的可执行文件名,给手动选定的场景用,见
+// knownPlayerProcessNames 注释。2026-09-01 从读包级 features.Player 的 playerProcessName
+// 改成纯函数——多选之后 companionLaunchProcessNames 要对 features.Players 里的每个
+// 成员分别求进程名,不能再读一个包级单值。
+func playerProcessNameFor(player string) string {
+	switch player {
 	case playerQQMusic:
 		return "QQMusic"
 	case playerNetease:

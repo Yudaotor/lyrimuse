@@ -11,14 +11,14 @@ func TestKugouPlayerWiring(t *testing.T) {
 	saved := features
 	t.Cleanup(func() { features = saved })
 
-	// "player" 字段必须被接受,不能被 resolvePlayer 当成认不出的值兜底掉。
-	if got := resolvePlayer("kugou_music"); got != playerKugou {
-		t.Errorf("resolvePlayer(kugou_music) = %q，期望 %q（认不出会静默退回自动识别）", got, playerKugou)
+	// "players" 字段里的值必须被接受,不能被 resolvePlayers 当成认不出的值兜底掉。
+	if got := resolvePlayers([]string{"kugou_music"}, ""); !got[playerKugou] {
+		t.Errorf("resolvePlayers([kugou_music]) = %v，期望包含 %q（认不出会静默退回自动识别）", got, playerKugou)
 	}
 
-	features.Player = playerKugou
-	if got := expectedPlayerBundleID(); got != kugouMusicBundleID {
-		t.Errorf("expectedPlayerBundleID() = %q，期望 %q", got, kugouMusicBundleID)
+	features.Players = map[string]bool{playerKugou: true}
+	if got := playerBundleID(playerKugou); got != kugouMusicBundleID {
+		t.Errorf("playerBundleID(kugou) = %q，期望 %q", got, kugouMusicBundleID)
 	}
 	if got := mediaPlayerLabel(kugouMusicBundleID); got != "KuGou Music (macOS)" {
 		t.Errorf("mediaPlayerLabel(固定播放器分支) = %q", got)
@@ -29,7 +29,7 @@ func TestKugouPlayerWiring(t *testing.T) {
 	if !isKnownPlayerBundleID(kugouMusicBundleID) {
 		t.Error("自动识别模式认不出酷狗的 bundle id")
 	}
-	features.Player = playerAuto
+	features.Players = map[string]bool{playerAuto: true}
 	if got := mediaPlayerLabel(kugouMusicBundleID); got != "KuGou Music (macOS)" {
 		t.Errorf("mediaPlayerLabel(自动识别分支) = %q", got)
 	}
@@ -108,8 +108,9 @@ func TestTrustedPlayersWiring(t *testing.T) {
 	}
 
 	// ListenBrainz 的 media_player 标签:用 App 自己的名字,反查不到退回 bundle id ——
-	// 绝不能谎报成 Apple Music(那会让来源统计彻底失真)。
-	features.Player = playerAuto
+	// 绝不能谎报成 Apple Music(那会让来源统计彻底失真)。2026-09-01 起 mediaPlayerLabel
+	// 只看传入的 bundleID + TrustedPlayers,不再看 features.Players,这里不需要设置
+	// 它,保留旧断言只是确认这条不变量继续成立。
 	if got := mediaPlayerLabel("com.foobar.mac"); got != "Foobar2000 (macOS)" {
 		t.Errorf("信任 App 的标签 = %q,期望 Foobar2000 (macOS)", got)
 	}

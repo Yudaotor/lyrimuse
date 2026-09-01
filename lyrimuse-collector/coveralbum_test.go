@@ -199,6 +199,25 @@ func TestCoverSwapAllowed(t *testing.T) {
 			fresh: enrichEntry{CoverURL: "new", CoverSource: "qq"},
 			album: "JTW 西游记 (Gold) [Explicit]", want: true,
 		},
+		{
+			// 2026-08-31 真实bug(Michael Jackson《Workin' Day and Night (Immortal
+			// Version)》):device 一旦定案就不该再被 backfillPeripheralFields 的外围自愈
+			// 换掉——即使 fresh 命中的是上面那条"QQ 无条件放行"。这类不需要中文别名的
+			// 外国歌手,canonical_artist 永远解不出来,needsPeripheralBackfill 因此每隔
+			// enrichPeripheralRetryInterval 就重新判"缺",反复触发这条外围自愈,每次都会把
+			// 刚定案的正确设备封面换成网易云/Apple/QQ 这次又猜错的某个结果——原封面来源
+			// 一直换,表现为封面在几次重试之间来回变。
+			name:  "旧封面来自device:哪怕新结果来自QQ也不换",
+			old:   enrichEntry{CoverURL: "device.jpg", CoverSource: "device", CoverAlbum: "Immortal"},
+			fresh: enrichEntry{CoverURL: "wrong.jpg", CoverSource: "qq"},
+			album: "Immortal", want: false,
+		},
+		{
+			name:  "旧封面来自device:哪怕新结果对得上专辑也不换",
+			old:   enrichEntry{CoverURL: "device.jpg", CoverSource: "device", CoverAlbum: "Immortal"},
+			fresh: enrichEntry{CoverURL: "new.jpg", CoverSource: "apple", CoverAlbum: "Immortal", NeteaseURL: "n"},
+			album: "Immortal", want: false,
+		},
 	}
 	for _, c := range cases {
 		if got := coverSwapAllowed(c.old, c.fresh, c.album); got != c.want {

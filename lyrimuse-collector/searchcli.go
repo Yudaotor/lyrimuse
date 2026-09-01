@@ -88,13 +88,13 @@ func runSearchLyricsCLI(args []string) {
 		// QQ smartbox。
 		loadQQArtistNameCache(filepath.Join(filepath.Dir(cfgPath), clientName+"-qq-artist-name-cache.json"))
 		// ⚠️ 2026-08-21 补:main() 在 loadFeatureFlags 之后紧跟着有这一行,而这条 CLI 子命令
-		// 在那之前就 return 了 —— 于是 match.go 里那个包级 nativeLyricSource 一直是空串,
+		// 在那之前就 return 了 —— 于是 match.go 里那个包级 nativeLyricSources 一直是空集,
 		// "与当前播放器同源 +250"(match.go 的 sameSourceAsPlayer 档)在手动搜索里**恒为 0**。
 		// 后果不是"少一点分"而是排序口径不同:冠亚军分差中位只有 22 分、74% 的歌 ≤40 分,
 		// 250 分足以翻盘(qq 与 kugou 的分差常年只有 9 分)。所以在此之前,「联网搜索候选歌词」
 		// 展示的名次跟 collector 自动决策的名次对不上,用 QQ/网易云/酷狗 听歌的用户尤其明显。
 		// -pick 要拿这套规则选冠军,这个差异必须先补掉。
-		nativeLyricSource = playerNativeLyricSource(features.Player)
+		nativeLyricSources = resolveNativeLyricSources(features.Players)
 	}
 
 	// 跟 enrich.go 的 resolveTrackEnrichment 同一个理由:NetEase/QQ/酷狗/LRCLIB 的
@@ -130,20 +130,29 @@ func runSearchLyricsCLI(args []string) {
 	// 只在最后那行带上(赋值发生在收尾的 emit 之前),流式的中间行不带 —— 冠军要等所有源
 	// 都到齐才有意义。
 	var finalPick *searchLyricsPick
+	// 轮次推导状态,语义见 searchLyricsUpdate.Round 的注释。emit 的调用是串行的
+	// (fetchScoredLyricCandidatesStreaming 里是单个收集 goroutine 在发,兜底轮之间
+	// 也是顺序执行),这两个变量不需要锁。
+	round, lastDone := 1, 0
 	emit := func(_ neteaseInfo, results []scoredLyricCandidateResult, done, total int) {
+		if done < lastDone {
+			round++
+		}
+		lastDone = done
 		// networkLooksDown() 2026-08-02 补上——之前每行 stdout 只是候选数组本身,五个源
 		// 都没查到时 desktop-lyrics 只能显示一句笼统的"都没找到",分不清是这首歌真的没有
 		// 网络歌词,还是网络整体不通导致五个源的请求全部发不出去。见 networkobs.go 的
 		// 注释,这里额外带上这个信号,让前端能区分这两种情况、给出不同的提示文案。
 		update := searchLyricsUpdate{
-			Candidates:           filterEnabledLyricSources(results),
-			NetworkLooksDown:     networkLooksDown(),
-			SourcesDone:          done,
-			SourcesTotal:         total,
-			AppleTitle:           appleTitle,
-			AppleAlbum:           appleAlbum,
-			SourceFailureReasons: lyricSourceFailureReasons(results),
-			Pick:                 finalPick,
+			Candidates:               filterEnabledLyricSources(results),
+			NetworkLooksDown:         networkLooksDown(),
+			SourcesDone:              done,
+			SourcesTotal:             total,
+			Round:                    round,
+			AppleTitle:               appleTitle,
+			AppleAlbum:               appleAlbum,
+			SourceFailureReasonCodes: lyricSourceFailureReasons(results),
+			Pick:                     finalPick,
 		}
 		for _, r := range results {
 			if r.Instrumental {
@@ -239,6 +248,13 @@ type searchLyricsUpdate struct {
 	// 歌词源的完成进度,给弹窗显示 (X/Y)——语义见 lyricSearchUpdateFunc 的注释。
 	SourcesDone  int `json:"sourcesDone"`
 	SourcesTotal int `json:"sourcesTotal"`
+	// Round:第几轮全源检索,从 1 开始(2026-09-02,用户报"到 8/8 了又重新从 1 开始,
+	// 看起来不友好")。scoredLyricCandidatesStreaming 的兜底轮(首歌手变体/别名/标题
+	// 反查,见 enrich.go)每轮都是一次完整的 8 源扫荡,SourcesDone 每轮从 0 重新数——
+	// 这不是 bug 是设计(每轮真的把 8 个源都重新问了一遍),但弹窗上只见数字回跳、
+	// 不见轮次,读起来像出了错。轮次在 emit 那里从"done 比上一行小"推导(单轮内 done
+	// 单调不减,回跳只可能是新一轮开始),不用把轮次序号穿透进 enrich.go 的每层闭包。
+	Round int `json:"round"`
 	// 2026-08-12 起的透传字段,给下一轮打分维度评测攒数据(Swift 端不认识就忽略,无影响):
 	// AppleTitle/AppleAlbum:iTunes(第六方,不与五歌词源共享曲库)匹配到的歌名/专辑名,
 	// 只在最终那行输出上带(拿的是搜索过程中 applecover goroutine 已写热的同 key 缓存,
@@ -246,13 +262,15 @@ type searchLyricsUpdate struct {
 	// Score:-1 哨兵行传递,消费端能与普通 reject 可靠区分)。
 	AppleTitle string `json:"appleTitle,omitempty"`
 	AppleAlbum string `json:"appleAlbum,omitempty"`
-	// SourceFailureReasons:哪些没给出候选的源,查得到具体失败原因——只覆盖
+	// SourceFailureReasonCodes:哪些没给出候选的源,查得到具体失败原因——只覆盖
 	// neteaseLastFailureReasonNow/musixmatchLastFailureReasonNow/ytmusicLastFailureReasonNow
 	// 这三个已经接了诊断旁路的源(2026-08-31,给 test-lyric-sources 用的同一套旁路,见
 	// testlyricsourcescli.go 的排查记录),qq/kugou/lrclib/amll 目前没有对应信号、不在这个
 	// map 里出现——Swift 侧对没出现的源如实显示"未给出候选"，不编一个没核实过的理由。
-	// key 是源名(跟 candidates 里的 source 同一套),value 是给用户看的中文说明。
-	SourceFailureReasons map[string]string `json:"sourceFailureReasons,omitempty"`
+	// key 是源名(跟 candidates 里的 source 同一套),value 是**稳定代码**,不是文案
+	// (2026-09-01 从 SourceFailureReasons 改名——见 lyricsourcefailure.go 头注,人话交给
+	// Swift 侧的 LyricSourceFailureReason.text(forCode:) 按 App 界面语言翻译)。
+	SourceFailureReasonCodes map[string]string `json:"sourceFailureReasonCodes,omitempty"`
 	// Instrumental:有源明确断言"这首本来就没有词"。2026-08-22 从 lrclibInstrumental 改名 ——
 	// 这个信号的来源早就不只 lrclib 了:2026-08-20 加了网易云的 pureMusic/占位正文,
 	// 2026-08-22 又加了 QQ 的占位断言(见第 09 章「纯音乐标记的三个来源」),字段名一直没跟上。
@@ -331,7 +349,8 @@ func filterEnabledLyricSources(results []scoredLyricCandidateResult) []scoredLyr
 
 // lyricSourceFailureReasons 给"搜索候选歌词"弹窗的"歌词源可用情况"明细用(2026-08-31,
 // 用户反馈"能不能说明未给出候选的源具体是为什么")——对每一个**这一轮没给出候选**的源,
-// 查一下有没有已知的具体失败原因,查得到才放进返回的 map。
+// 查一下有没有已知的具体失败原因,查得到才放进返回的 map。返回值的 value 是**稳定
+// 代码**,不是文案,见 lyricsourcefailure.go 头注。
 //
 // 只覆盖三个已经接了诊断旁路的源:netease/musixmatch/lyricfind(见各自 xxxLastFailureReasonNow
 // 的头注,2026-08-31 起给 test-lyric-sources 用的同一条只读旁路,这里复用,不重新发明)。

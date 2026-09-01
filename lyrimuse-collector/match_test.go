@@ -137,6 +137,132 @@ func TestTitleVersionTags(t *testing.T) {
 	}
 }
 
+// ---- v7(2026-09-01):liveAlbumIdentityConflict(「两场不同演唱会」判据) ----
+//
+// 全部字符串取自真实曲库的 lyrics_decision 记录(2339 条全库回放的命中/放行样本),不是编的。
+// 起因:陈奕迅《Shall We Dance (Live)》/《活着多好 (Live)》,本地专辑《The Easy Ride 演唱会
+// (Live)》,酷狗那份挂在《Get A Life (Live)》(另一场巡演)——两边都是 Live,versionTagsMismatch
+// 的限定词集合相等、必然静默,而标题/专辑亲和分全部打平,错的那份靠逐字或时长巧合赢。
+func TestLiveAlbumIdentityConflict(t *testing.T) {
+	cases := []struct {
+		name                 string
+		artist, localAlbum   string
+		candTitle, candAlbum string
+		want                 bool
+	}{
+		// 核心案例:两场不同命名的演唱会 → 冲突
+		{"陈奕迅 Easy Ride vs Get A Life", "陈奕迅", "The Easy Ride 演唱会 (Live)",
+			"活着多好 (Live)", "Get A Life (Live)", true},
+		{"陈奕迅 Easy Ride vs 2003演唱会", "陈奕迅", "The Easy Ride 演唱会 (Live)",
+			"Shall We Talk (Live)", "2003演唱会", true},
+		{"方大同 大事发声 vs Timeless演唱会", "方大同", "大事发声.录音棚现场: 方大同 专场",
+			"公园 (Live)", "Timeless演唱会", true},
+		{"周杰伦 地表最强 vs 无与伦比2004", "周杰伦", "周杰伦地表最强世界巡回演唱会 (Live)",
+			"晴天 (Live)", "周杰伦 2004 无与伦比 演唱会 Live CD", true},
+		// 同一场演出的不同写法 → 放行(四道门之④:共享身份词元)
+		{"同场:Easy Ride 网易云写法(共享 easy/ride)", "陈奕迅", "The Easy Ride 演唱会 (Live)",
+			"活着多好(Live)", "The Easy Ride Live 陈奕迅演唱会", false},
+		{"同场:15 香港演唱会 中英命名(共享 15/2011)", "Khalil Fong", "15 Khalil Fong Live in Hong Kong 2011",
+			"Rosy (Live)", "15 香港演唱会(2011Live)", false},
+		// 歌手名前缀粘连 → 放行(剥掉歌手名后共享整个演出名;lrclib 真实数据)
+		{"同场:歌手名粘连前缀", "周杰伦", "周杰伦地表最强世界巡回演唱会 (Live)",
+			"以父之名 (Live)", "地表最强世界巡回演唱会", false},
+		// 本地专辑名不是现场专辑 → 放行(四道门之①;Queen 全库回放的真实假阳性:
+		// 《The Game (Deluxe Edition)》的 bonus 现场曲,候选《Queen Rock Montreal》
+		// 是本地标题里写的同一场蒙特利尔演出,录音室专辑名对"是哪场演出"没有发言权)
+		{"本地是录音室专辑的 bonus 现场曲", "Queen", "The Game (Deluxe Edition)",
+			"Save Me (Live In Montreal / November 1981)", "Queen Rock Montreal", false},
+		// 候选是录音室版 → 放行(四道门之②,归 versionTagsMismatch 管)
+		{"候选是录音室版", "陈奕迅", "The Easy Ride 演唱会 (Live)",
+			"活着多好", "The Easy Ride", false},
+		// 候选专辑为空 → 放行(没有身份声明构不成矛盾)
+		{"候选专辑为空", "陈奕迅", "The Easy Ride 演唱会 (Live)", "活着多好 (Live)", "", false},
+	}
+	for _, c := range cases {
+		if got := liveAlbumIdentityConflict(c.artist, c.localAlbum, c.candTitle, c.candAlbum); got != c.want {
+			t.Errorf("%s: liveAlbumIdentityConflict(%q, %q, %q, %q) = %v, want %v",
+				c.name, c.artist, c.localAlbum, c.candTitle, c.candAlbum, got, c.want)
+		}
+	}
+}
+
+// 端到端:同一首《活着多好 (Live)》,除了专辑归属其余条件对齐,挂在另一场演唱会的候选
+// 必须吃到 liveAlbumConflict 的 -600、总分被压到吻合场次的候选之下。
+func TestScoreLyricCandidatePenalizesOtherConcert(t *testing.T) {
+	lyr := "[00:10.00]第一句现场歌词占位\n[00:20.00]第二句现场歌词占位\n[00:30.00]第三句现场歌词占位"
+	wrongConcert := lyricCandidate{source: "kugou", lyrics: lyr,
+		title: "活着多好 (Live)", album: "Get A Life (Live)"}
+	rightConcert := lyricCandidate{source: "netease", lyrics: lyr,
+		title: "活着多好(Live)", album: "The Easy Ride Live 陈奕迅演唱会"}
+	sWrong, terms := scoreLyricCandidateDetailed("陈奕迅", "活着多好 (Live)", "The Easy Ride 演唱会 (Live)", 0, wrongConcert, false, 0)
+	sRight, _ := scoreLyricCandidateDetailed("陈奕迅", "活着多好 (Live)", "The Easy Ride 演唱会 (Live)", 0, rightConcert, false, 0)
+	if p := scoreTermPoints(terms, scoreTermLiveAlbumConflict); p != -liveAlbumConflictPenalty {
+		t.Errorf("另一场演唱会的候选应吃到 liveAlbumConflict %d,实际 %d", -liveAlbumConflictPenalty, p)
+	}
+	if sWrong >= sRight {
+		t.Errorf("其余条件对齐时,另一场演唱会的候选(%d)不该赢过吻合场次的候选(%d)", sWrong, sRight)
+	}
+}
+
+// ---- v8(2026-09-01):sameRecordingDespiteVersionTags(时长锚定的限定词豁免) ----
+//
+// 核心案例字符串/时长全部取自真实数据(陈奕迅《孤独探戈 (Live)》,网易云 id=67184,
+// 见 docs/features/09 第 33 条):本地时长 215.373s,候选自报 215.4s(逐位吻合),
+// 专辑对得上,只是候选曲名多一节"(Acoustic Piano)"——这场演出本来就是钢琴演绎,
+// 命名差异不是版本差异。
+func TestSameRecordingDespiteVersionTags(t *testing.T) {
+	localTitle, localAlbum, localDur := "孤独探戈 (Live)", "The Easy Ride 演唱会 (Live)", 215.373
+	cases := []struct {
+		name                 string
+		candTitle, candAlbum string
+		candDur              float64
+		want                 bool
+	}{
+		{"孤独探戈真实案例:acoustic 演奏方式标注", "孤独探戈(Acoustic Piano)(Live)", "The Easy Ride Live 陈奕迅演唱会", 215.4, true},
+		// 时长差超 1% → 不豁免(Get A Life 那条错场次候选自报 233.081s,差 7.6%)
+		{"时长差 7.6% 的错场次", "孤独探戈 (Live)", "Get A Life (Live)", 233.081, false},
+		// 候选缺本地已有的限定词 → 不豁免:本地是 Live、候选是录音室版,哪怕时长碰巧相同
+		{"候选缺 Live 标记", "孤独探戈", "The Easy Ride", 215.4, false},
+		// 多出的词不在白名单 → 不豁免:伴奏版时长常与原曲完全相同,但它是另一次录音
+		{"伴奏版时长相同也不豁免", "孤独探戈 (伴奏)(Live)", "The Easy Ride Live 陈奕迅演唱会", 215.4, false},
+		// 粤语/国语同曲异词、同一伴奏、时长几乎一样 —— versionTags 存在的理由,永不豁免
+		{"国语版时长相同也不豁免", "孤独探戈 (国语)(Live)", "The Easy Ride Live 陈奕迅演唱会", 215.4, false},
+		// 专辑毫无亲和 → 不豁免(时长巧合没有专辑证据背书)
+		{"专辑对不上", "孤独探戈(Acoustic Piano)(Live)", "完全无关的专辑", 215.4, false},
+		// 候选没自报时长 → 不豁免(没有证据不等于证据)
+		{"没自报时长", "孤独探戈(Acoustic Piano)(Live)", "The Easy Ride Live 陈奕迅演唱会", 0, false},
+	}
+	for _, c := range cases {
+		if got := sameRecordingDespiteVersionTags(localTitle, localAlbum, localDur, c.candTitle, c.candAlbum, c.candDur); got != c.want {
+			t.Errorf("%s: sameRecordingDespiteVersionTags(...%q/%q/%.1f) = %v, want %v",
+				c.name, c.candTitle, c.candAlbum, c.candDur, got, c.want)
+		}
+	}
+	// 本地时长未知 → 不豁免
+	if sameRecordingDespiteVersionTags(localTitle, localAlbum, 0, "孤独探戈(Acoustic Piano)(Live)", "The Easy Ride Live 陈奕迅演唱会", 215.4) {
+		t.Error("本地时长未知时不该豁免")
+	}
+}
+
+// 端到端:同一份歌词,只差"曲名多一节 (Acoustic Piano)+自报时长是否吻合",打分层必须
+// 豁免真实案例的 -600、且对时长不吻合的照扣。
+func TestScoreLyricCandidateWaivesVersionTagsForSameRecording(t *testing.T) {
+	lyr := "[00:13.33]你可知道石头\n[00:16.84]要几多冷汗才被冲走\n[00:20.57]你早知探戈"
+	waived := lyricCandidate{source: "netease", lyrics: lyr,
+		title: "孤独探戈(Acoustic Piano)(Live)", album: "The Easy Ride Live 陈奕迅演唱会",
+		sourceReportedDurationSecs: 215.4}
+	_, terms := scoreLyricCandidateDetailed("陈奕迅", "孤独探戈 (Live)", "The Easy Ride 演唱会 (Live)", 215.373, waived, false, 0)
+	if p := scoreTermPoints(terms, scoreTermVersionTags); p != 0 {
+		t.Errorf("时长锚定坐实同一次录音时,versionTags 应被豁免,实际 %+d", p)
+	}
+	notAnchored := waived
+	notAnchored.sourceReportedDurationSecs = 233.081 // Get A Life 那条的真实自报时长
+	_, terms = scoreLyricCandidateDetailed("陈奕迅", "孤独探戈 (Live)", "The Easy Ride 演唱会 (Live)", 215.373, notAnchored, false, 0)
+	if p := scoreTermPoints(terms, scoreTermVersionTags); p != -versionMismatchPenalty {
+		t.Errorf("时长不吻合时 versionTags 应照扣 %d,实际 %+d", -versionMismatchPenalty, p)
+	}
+}
+
 func TestVersionTagsMismatch(t *testing.T) {
 	cases := []struct {
 		label      string
@@ -1045,4 +1171,65 @@ func TestIsProbablyWrongLanguageLyricsUsesResolvedArtistCacheHint(t *testing.T) 
 			t.Error("缓存里的候选全是非中文时不该触发豁免")
 		}
 	})
+}
+
+// TestAlbumTokensLatinCJKBoundary 钉死 v9 的拉丁↔CJK 交界分词(周杰伦《The One》案:
+// QQ 音乐把专辑写成 "The One演唱会",One 和 演唱会 之间不留空格)。
+func TestAlbumTokensLatinCJKBoundary(t *testing.T) {
+	got := albumTokens("The One演唱会")
+	if !got["one"] || !got["演唱会"] {
+		t.Errorf("albumTokens(\"The One演唱会\") = %v,应拆出 one + 演唱会", got)
+	}
+	if got["one演唱会"] {
+		t.Errorf("albumTokens(\"The One演唱会\") 不该再有粘连词元 one演唱会:%v", got)
+	}
+	// 既有的数字↔字母交界分词不回退
+	got = albumTokens("2011Live")
+	if !got["2011"] || !got["live"] {
+		t.Errorf("albumTokens(\"2011Live\") = %v,应拆出 2011 + live", got)
+	}
+	// CJK 内部仍不分词
+	got = albumTokens("周杰伦地表最强世界巡回演唱会")
+	if len(got) != 1 || !got["周杰伦地表最强世界巡回演唱会"] {
+		t.Errorf("纯 CJK 串仍应是单一词元,got %v", got)
+	}
+}
+
+// TestAlbumScoreCrossScriptGlue:v9 之前 albumScore("The One演唱会", "The One 周杰伦演唱会")
+// 是 0(粘连词元 one演唱会 和 one/周杰伦演唱会 零共享)——同一张专辑被判毫无亲和。
+func TestAlbumScoreCrossScriptGlue(t *testing.T) {
+	if sc := albumScore("The One演唱会", "The One 周杰伦演唱会"); sc < 1 {
+		t.Errorf("QQ 拼法与本地拼法应有词元亲和,got %d", sc)
+	}
+	// 无关专辑仍为 0
+	if sc := albumScore("八度空间", "The One 周杰伦演唱会"); sc != 0 {
+		t.Errorf("八度空间 vs The One 应为 0,got %d", sc)
+	}
+}
+
+// TestVersionTagsMismatchAlbumCJKLiveMarker 钉死 v9 的 recordingVersionTags:
+// 专辑名带中文现场标记(演唱会/现场/音乐会)视同声明了 live,双向对称。
+func TestVersionTagsMismatchAlbumCJKLiveMarker(t *testing.T) {
+	cases := []struct {
+		name                                             string
+		localTitle, localAlbum, candTitle, candAlbum     string
+		want                                             bool
+	}{
+		// 本案:QQ 给 The One 演唱会曲目起名不带 (Live),live 身份只在专辑名上
+		{"QQ 现场专辑曲目不再吃 -600", "龙拳 (Live)", "The One 周杰伦演唱会", "龙拳", "The One演唱会", false},
+		// 录音室候选照旧拦住
+		{"录音室候选仍 mismatch", "龙拳 (Live)", "The One 周杰伦演唱会", "龙拳", "八度空间", true},
+		// 对称的新保护:本地是现场专辑(曲名干净),候选是干净录音室版 → 现在能判出来
+		{"本地现场专辑 vs 录音室候选", "龙拳", "The One 周杰伦演唱会", "龙拳", "八度空间", true},
+		// 拉丁 live 词元刻意不认:《Live and Let Die》是录音室发行的合法专辑名
+		{"拉丁 live 词元不触发", "Live and Let Die", "Live and Let Die", "Live and Let Die", "Shaved Fish", false},
+		// 两边都是中文现场专辑命名 → 集合相等,不 mismatch(是不是同一场交给 liveAlbumConflict)
+		{"双方专辑均带演唱会字样", "晴天", "XX演唱会", "晴天", "YY音乐会", false},
+	}
+	for _, c := range cases {
+		if got := versionTagsMismatch(c.localTitle, c.localAlbum, c.candTitle, c.candAlbum); got != c.want {
+			t.Errorf("%s:versionTagsMismatch(%q,%q,%q,%q) = %v,want %v",
+				c.name, c.localTitle, c.localAlbum, c.candTitle, c.candAlbum, got, c.want)
+		}
+	}
 }

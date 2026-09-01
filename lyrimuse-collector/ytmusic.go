@@ -201,7 +201,9 @@ func ytmusicFetchVisitorID(ctx context.Context) string {
 		// 只在能确认这个具体原因时才记;识别不出来(比如页面结构改了、regex 该更新了)
 		// 就留空,退回调用方的通用文案,不能猜一个没验证过的理由。
 		if strings.Contains(strings.ToLower(html), "not available in your area") {
-			ytmusicSetLastFailureReason("YouTube Music 在这个网络所在地区不可用（地区限制，非网络故障）")
+			// 这里存的是稳定代码,不是文案——人话由 Swift 侧按 App 界面语言翻译,见
+			// lyricsourcefailure.go 头注,两侧必须同步维护。
+			ytmusicSetLastFailureReason(lyricFailureReasonLyricFindRegionRestricted)
 		}
 	}
 	return v

@@ -13,18 +13,18 @@ func TestNativeSourceBonus(t *testing.T) {
 			lyricCandidate{source: source, lyrics: lrc, hasWordTiming: wordTiming}, false, 0)
 	}
 
-	saved := nativeLyricSource
-	t.Cleanup(func() { nativeLyricSource = saved })
+	saved := nativeLyricSources
+	t.Cleanup(func() { nativeLyricSources = saved })
 
 	// 识别不出播放器时一分不加，行为跟改动前完全一致。
-	nativeLyricSource = ""
+	nativeLyricSources = nil
 	base := score("qq", false)
 	if got := score("kugou", false); got != base {
 		t.Errorf("没有 native 源时不该有来源差异: qq=%d kugou=%d", base, got)
 	}
 
 	// 放 QQ 音乐 → QQ 那份加分，别家不加。
-	nativeLyricSource = "qq"
+	nativeLyricSources = map[string]bool{"qq": true}
 	if got := score("qq", false); got != base+250 {
 		t.Errorf("同源该加 250, got %d (base %d)", got, base)
 	}
@@ -59,11 +59,29 @@ func TestPlayerNativeLyricSource(t *testing.T) {
 	}
 }
 
+// 2026-09-01 多选后新增:resolveNativeLyricSources 要把选中集合里每个成员各自的原生源
+// 都收进来,不是只挑一个——同时用 QQ 音乐和酷狗听歌的人,两边的同源加权都该生效。
+func TestResolveNativeLyricSources(t *testing.T) {
+	got := resolveNativeLyricSources(map[string]bool{playerQQMusic: true, playerKugou: true})
+	if len(got) != 2 || !got["qq"] || !got["kugou"] {
+		t.Errorf("resolveNativeLyricSources({qq,kugou}) = %v，期望恰好 {qq, kugou}", got)
+	}
+	// Apple Music/Spotify/auto 不贡献任何源,混进去不该多出条目、也不该 panic。
+	got = resolveNativeLyricSources(map[string]bool{playerQQMusic: true, playerAppleMusic: true, playerAuto: true})
+	if len(got) != 1 || !got["qq"] {
+		t.Errorf("resolveNativeLyricSources({qq,apple,auto}) = %v，期望恰好 {qq}", got)
+	}
+	// 全是不贡献源的成员 → 空集,不是 nil 判断失败/panic。
+	if got := resolveNativeLyricSources(map[string]bool{playerAuto: true}); len(got) != 0 {
+		t.Errorf("resolveNativeLyricSources({auto}) = %v，期望空集", got)
+	}
+}
+
 // 换播放器后，"当初见过同源候选却没选它"的歌该获得一次重来的机会 —— 哪怕它已经有逐字。
 func TestNeedsLyricsRetry_NativeSourceMissedOut(t *testing.T) {
-	saved := nativeLyricSource
-	t.Cleanup(func() { nativeLyricSource = saved })
-	nativeLyricSource = "qq"
+	saved := nativeLyricSources
+	t.Cleanup(func() { nativeLyricSources = saved })
+	nativeLyricSources = map[string]bool{"qq": true}
 
 	// 用户那首歌的形态：选了酷狗（带逐字），而 QQ 当初也答过。
 	missed := enrichEntry{
@@ -96,7 +114,7 @@ func TestNeedsLyricsRetry_NativeSourceMissedOut(t *testing.T) {
 	}
 
 	// 识别不出播放器时，行为跟改动前一致（有逐字就不重试）。
-	nativeLyricSource = ""
+	nativeLyricSources = nil
 	if needsLyricsRetry(missed, false, false) {
 		t.Error("没有 native 源时该维持原行为")
 	}
@@ -109,9 +127,9 @@ func TestNeedsLyricsRetry_NativeSourceMissedOut(t *testing.T) {
 // 再过 observeWrongDuration 去抖后以 bool 传入。这里按同样方式组合两个函数,保住
 // "从时长差到重试判定"这条链路的覆盖(去抖本身另有 TestObserveWrongDuration)。
 func TestNeedsLyricsRetry_DurationMismatch(t *testing.T) {
-	saved := nativeLyricSource
-	t.Cleanup(func() { nativeLyricSource = saved })
-	nativeLyricSource = ""
+	saved := nativeLyricSources
+	t.Cleanup(func() { nativeLyricSources = saved })
+	nativeLyricSources = nil
 
 	entry := enrichEntry{
 		Lyrics: "[00:01.00]x", LyricsYRC: "[1,2](1,1,0)x",

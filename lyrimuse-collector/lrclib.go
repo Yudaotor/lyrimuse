@@ -287,7 +287,12 @@ func pickLRCLIBSearchResultDetailed(items []lrclibSearchItem, artist, title, alb
 			continue
 		}
 		// 专辑名一起看:限定词常常只写在专辑上(见 versionTagsMismatch 的注释)。
-		if versionTagsMismatch(title, album, it.TrackName, it.AlbumName) {
+		// v9 起带 sameRecordingDespiteVersionTags 豁免,与打分层的 versionTags 闸同一对
+		// 组合:本地专辑《My Space 演唱會紀念盤》(专辑名推导出 live)对上 lrclib 的截短
+		// 拼法 "My Space"(推导不出)会误判 mismatch,而这里有 it.Duration 可查,豁免的
+		// 四道门查得动——不加的话同场对版在召回层就被扔掉,连进打分的机会都没有。
+		if versionTagsMismatch(title, album, it.TrackName, it.AlbumName) &&
+			!sameRecordingDespiteVersionTags(title, album, durationSecs, it.TrackName, it.AlbumName, it.Duration) {
 			continue
 		}
 		if durationSecs <= 0 {

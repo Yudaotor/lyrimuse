@@ -24,6 +24,12 @@ import (
 //     2026-08-16 把缓存从 204 条磨到 10 条,机制正是"两个实例各写各的"。
 //  3. **只动封面四件套**(cover_url / cover_source / cover_album / accent_color),
 //     歌词、译文、人工修正标记一个字都不碰 —— 那些删了就找不回来。
+//
+// ⚠️ 2026-08-31 起:cover_source=="device" 的条目,coverSwapAllowed 会无条件拒绝换掉
+// (见其注释)——这条 CLI 走的是同一个判定,所以也换不掉设备直送的封面。真遇到设备封面
+// 本身就是错的这种(理论上)情况,唯一的办法是直接手改 enrich-cache.json(先
+// launchctl bootout 停 collector,改完再 bootstrap 拉起来,这仓库其它几处手工缓存修复
+// 都是这个流程)。
 func runRecheckCoverCLI(args []string) {
 	fs := flag.NewFlagSet("recheck-cover", flag.ExitOnError)
 	apply := fs.Bool("apply", false, "真正写回缓存;不加就是预演,只打印计划")

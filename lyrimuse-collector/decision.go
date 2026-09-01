@@ -61,9 +61,21 @@ type lyricsDecisionCandidate struct {
 	// 分数构成明细(或被判负分时的那条 reject 原因),kind 词汇表见 match.go 的 scoreTerm。
 	ScoreTerms []scoreTerm `json:"score_terms,omitempty"`
 	// 这个源实际匹配到的是哪首歌/哪个版本 —— 复盘"选错版本"类问题的关键字段。
-	Title                      string  `json:"title,omitempty"`
-	Artist                     string  `json:"artist,omitempty"`
-	Album                      string  `json:"album,omitempty"`
+	Title  string `json:"title,omitempty"`
+	Artist string `json:"artist,omitempty"`
+	Album  string `json:"album,omitempty"`
+	// CoverURL:这个源当时给出的封面(2026-09-01 加,用户要求决策面板把封面也显示出来)。
+	// 跟 Title/Artist/Album 同一个用途 —— 判断"这个源匹配到的是不是同一个版本",而封面
+	// 往往比专辑名更一眼看得出来(现场版/精选集/单曲封面差别很直观)。
+	//
+	// 2026-09-01 实测(search-lyrics 真查一次《Shall We Dance (Live)》):网易云/酷狗/QQ/
+	// LRCLIB **四个源都给得出**封面(LRCLIB 那条是 iTunes 的 mzstatic 图),连被判 -1 的
+	// 候选也有。不过仍然当"可能为空"处理 —— 某个源某次没查到是正常的。
+	// 存档里的 URL 还可能随时间失效 —— App 侧按"取不到就当没有"处理。
+	//
+	// ⚠️ 存量存档里没有这个字段,老的决策记录一律显示不出封面,这是预期行为(存档是
+	// "当时那一刻的固化",不能事后补 —— 现在再去查一次封面,拿到的不是当时那个)。
+	CoverURL                   string  `json:"cover_url,omitempty"`
 	SourceReportedDurationSecs float64 `json:"source_reported_duration_secs,omitempty"`
 	HasWordTiming              bool    `json:"has_word_timing,omitempty"`
 	Instrumental               bool    `json:"instrumental,omitempty"`
@@ -124,6 +136,7 @@ func buildLyricsDecision(
 			Title:                      c.Title,
 			Artist:                     c.Artist,
 			Album:                      c.Album,
+			CoverURL:                   c.CoverURL,
 			SourceReportedDurationSecs: c.SourceReportedDurationSecs,
 			HasWordTiming:              c.HasWordTiming,
 			Instrumental:               c.Instrumental,

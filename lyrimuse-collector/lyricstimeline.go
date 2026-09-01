@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	"sort"
 	"strconv"
 	"strings"
 	"unicode"
@@ -230,6 +231,128 @@ func rehangLRCOnYRC(lrc, yrc string, durationSecs float64, guard bool) (string, 
 	return newLRC, remap, true
 }
 
+// ---- 逐字轴与行级轴自相矛盾时弃用逐字轴(2026-09-01,陈奕迅《2001太空漫游 (Live)》案) ----
+//
+// rehangLRCOnYRC 只能修"两边逐行文本严格一一对应"的打架(musixmatch 的病正是那个形态)。
+// netease 的两套轴是**两条独立产线**(行级 /api/song/lyric 老接口 vs 逐字 /api/song/lyric/v1
+// 新接口),同一首歌可能**断行方式都不一样**(LRC 拆两行的,YRC 合成一行)、还夹着对方没有的
+// 署名行/纯音乐占位行 —— 行结构对不上,重挂在前提检查那一步就放弃,打架原样留给播放。
+// 用户报的《2001太空漫游 (Live)》:LRC 首句 32.3s、YRC 同一句 74.3s,差 42 秒,配对行
+// 中位偏差 55.5s;播放走 YRC,「歌词管理」显示的是 LRC —— 用户看着 32 秒该有词,播放到
+// 32 秒(人已开唱)什么都不出。
+//
+// 修法:重挂修不了、且两套轴的配对行中位偏差大到不可能是同一次转写的合理误差时,
+// **弃用逐字轴**(候选构造清掉 wordTimingYRC/hasWordTiming;存量缓存由启动迁移清掉),
+// 播放退回行级 LRC。方向的依据:LRC 是打分管线全套校验过的主资产(isTimedLRC/durationFits/
+// 跨源 3-gram 共识全部读它),「歌词管理」展示的也是它;YRC 只过了一道覆盖率守卫
+// (usableWordTiming)。两边矛盾而无法调和时,继续拿只受过弱校验的增强资产驱动播放,
+// 等于让播放跟系统其余全部判断对着干。代价是这几首歌没有逐字卡拉OK效果 —— 正确的逐行
+// 显示胜过错 42 秒的逐字显示。
+//
+// 阈值 10s 从全库分布量出来(2026-09-01,2915 条可分析双轴条目):99.3%(2894 条)中位
+// 偏差 <3s(其中 92% <0.5s —— qq/kugou/amll 的 LRC 本来就是从逐字轴转出来的,天生自洽),
+// ≥10s 的只有 10 条、逐条核对全部是无可争辩的坏数据(含已知旧案 Rock With You 19.4s ——
+// 那条当年确认坏的是 YRC 侧,rehang 的时长闸拦下了"修",但没有"弃",坏 YRC 一直在驱动
+// 播放;这次一并解决)。3~6.5s 之间还有 11 条含糊地带刻意不动 —— 哪边对判不了,等有
+// 真实反馈再说。
+//
+// 配对用 LCS(最长公共子序列)对齐两边归一化文本相同的行,配对行 ≥8 且 ≥LRC 内容行的
+// 一半才评估(配太少时中位数不可信);中位数(不是均值)抗个别错配。
+
+const (
+	wordTimingContradictionSkewMs     = 10000
+	wordTimingContradictionMinMatched = 8
+)
+
+// timelineLCSAlign 返回 texts[i] 对齐到的 heads 下标,没配上是 -1。标准 LCS,相等关系
+// 用 normTimelineText 归一化后比较,空串不参与配对。
+func timelineLCSAlign(tn, hn []string) []int {
+	n, m := len(tn), len(hn)
+	dp := make([][]int32, n+1)
+	for i := range dp {
+		dp[i] = make([]int32, m+1)
+	}
+	for i := 1; i <= n; i++ {
+		for j := 1; j <= m; j++ {
+			if tn[i-1] == hn[j-1] && tn[i-1] != "" {
+				dp[i][j] = dp[i-1][j-1] + 1
+			} else if dp[i-1][j] >= dp[i][j-1] {
+				dp[i][j] = dp[i-1][j]
+			} else {
+				dp[i][j] = dp[i][j-1]
+			}
+		}
+	}
+	align := make([]int, n)
+	for i := range align {
+		align[i] = -1
+	}
+	i, j := n, m
+	for i > 0 && j > 0 {
+		if tn[i-1] == hn[j-1] && tn[i-1] != "" && dp[i][j] == dp[i-1][j-1]+1 {
+			align[i-1] = j - 1
+			i--
+			j--
+		} else if dp[i-1][j] >= dp[i][j-1] {
+			i--
+		} else {
+			j--
+		}
+	}
+	return align
+}
+
+// wordTimingContradictsLRC 判定"这份逐字轴与行级轴自相矛盾、不该再拿来驱动播放"。
+// 只在 rehangLRCOnYRC 修不了(或无需修)之后调用 —— 能重挂对齐的两套轴不算矛盾。
+func wordTimingContradictsLRC(lrc, yrc string) bool {
+	heads := yrcLineHeads(yrc)
+	if len(heads) < 2 {
+		return false
+	}
+	var texts []string
+	var oldMs []int
+	for _, line := range strings.Split(lrc, "\n") {
+		stamps := lrcTimestampCaptureRe.FindAllStringSubmatch(line, -1)
+		if len(stamps) != 1 {
+			continue // 无戳行不参与;一行多戳的行与 YRC 行不一一对应,同样跳过
+		}
+		text := strings.TrimSpace(lrcTimestampRe.ReplaceAllString(line, ""))
+		if text == "" {
+			continue
+		}
+		texts = append(texts, text)
+		oldMs = append(oldMs, lrcStampMs(stamps[0]))
+	}
+	if len(texts) < 2 {
+		return false
+	}
+	tn := make([]string, len(texts))
+	for i, s := range texts {
+		tn[i] = normTimelineText(s)
+	}
+	hn := make([]string, len(heads))
+	for i, h := range heads {
+		hn[i] = normTimelineText(h.text)
+	}
+	align := timelineLCSAlign(tn, hn)
+	var diffs []int
+	for i, a := range align {
+		if a < 0 {
+			continue
+		}
+		d := oldMs[i] - heads[a].ms
+		if d < 0 {
+			d = -d
+		}
+		diffs = append(diffs, d)
+	}
+	if len(diffs) < wordTimingContradictionMinMatched || len(diffs)*2 < len(texts) {
+		return false // 配对太少,中位数不可信 —— 拿不准就不动
+	}
+	sort.Ints(diffs)
+	return diffs[len(diffs)/2] >= wordTimingContradictionSkewMs
+}
+
 // remapLRCTimestamps 把一份**照原文 LRC 时间戳生成**的附属歌词(译文/罗马音)搬到新
 // 时间轴上。按旧毫秒查映射,查不到的行原样保留 —— 附属歌词常比正文少几行(没译到的行
 // 本来就不写),缺行是正常情况,不该因此整份放弃。
@@ -261,18 +384,25 @@ func remapLRCTimestamps(lrc string, remap map[int]int) (string, bool) {
 	return strings.Join(lines, "\n"), true
 }
 
-// rehangCandidateTimelines 就地把一批候选的行级时间轴修到与各自的逐字轴自洽。
+// rehangCandidateTimelines 就地把一批候选的行级时间轴修到与各自的逐字轴自洽;修不了
+// 且两套轴自相矛盾的,弃用逐字轴(见 wordTimingContradictsLRC 头注)。
 //
 // 调用时机(enrich.go):候选构造完、corroboratedEndings 之前 —— 时长/共识判据都读
-// LRC 末句,必须先修完再算,否则打分看到的还是坏时间轴。
+// LRC 末句,必须先修完再算,否则打分看到的还是坏时间轴。弃用发生在打分前,这样自相
+// 矛盾的逐字轴也拿不到 wordTiming 那 +400 —— 它不是质量证据。跟 rehang 一样属于
+// "修数据"而不是"改打分判据",沿用第 23 条确立的先例,不 bump lyricsScoringVersion。
 func rehangCandidateTimelines(candidates []lyricCandidate, durationSecs float64) {
 	for i := range candidates {
 		fixed, remap, ok := rehangLRCOnYRC(candidates[i].lyrics, candidates[i].wordTimingYRC, durationSecs, true)
-		if !ok {
+		if ok {
+			candidates[i].lyrics = fixed
+			candidates[i].timelineRemap = remap
 			continue
 		}
-		candidates[i].lyrics = fixed
-		candidates[i].timelineRemap = remap
+		if candidates[i].wordTimingYRC != "" && wordTimingContradictsLRC(candidates[i].lyrics, candidates[i].wordTimingYRC) {
+			candidates[i].wordTimingYRC = ""
+			candidates[i].hasWordTiming = false
+		}
 	}
 }
 
@@ -286,6 +416,7 @@ func rehangCandidateTimelines(candidates []lyricCandidate, durationSecs float64)
 func migrateLyricTimelines() {
 	enrichMu.Lock()
 	fixed := 0
+	dropped := 0
 	for k, e := range enrichCache {
 		if e.ManualLyrics {
 			continue
@@ -296,6 +427,13 @@ func migrateLyricTimelines() {
 		}
 		newLyrics, remap, ok := rehangLRCOnYRC(e.Lyrics, e.LyricsYRC, dur, true)
 		if !ok {
+			// 重挂修不了的,再看两套轴是否自相矛盾 —— 是就弃用逐字轴,播放退回行级
+			// (见 wordTimingContradictsLRC 头注,《2001太空漫游 (Live)》案)。
+			if e.LyricsYRC != "" && wordTimingContradictsLRC(e.Lyrics, e.LyricsYRC) {
+				e.LyricsYRC = ""
+				enrichCache[k] = e
+				dropped++
+			}
 			continue
 		}
 		e.Lyrics = newLyrics
@@ -308,9 +446,17 @@ func migrateLyricTimelines() {
 		enrichCache[k] = e
 		fixed++
 	}
+	if fixed > 0 || dropped > 0 {
+		// ⚠️ 必须显式置脏:saveEnrichCache 只在 enrichDirty 时才真的写盘。这里不置的话,
+		// 迁移结果能不能落盘取决于同一次启动里**别的路径**有没有恰好把标志置过 true ——
+		// 2026-09-01 实测坐实这个潜伏 bug:弃用逐字轴的迁移连续两次启动都报"dropped 10
+		// entries"、JSON 的 mtime 却纹丝不动,每次开机白干一遍;而 08-28 那次 1010 条
+		// 重挂能落盘纯属搭了别的脏标志的顺风车。
+		enrichDirty = true
+	}
 	enrichMu.Unlock()
-	if fixed > 0 {
-		log.Printf("lyric timeline migration: rehung line timestamps onto word timing in %d entries", fixed)
+	if fixed > 0 || dropped > 0 {
+		log.Printf("lyric timeline migration: rehung %d entries, dropped contradictory word timing in %d entries", fixed, dropped)
 		saveEnrichCache()
 	}
 }

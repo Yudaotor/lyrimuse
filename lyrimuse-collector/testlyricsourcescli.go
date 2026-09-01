@@ -57,13 +57,13 @@ func runTestLyricSourcesCLI(args []string) {
 	reported := make(map[string]bool, len(targets))
 
 	enc := json.NewEncoder(os.Stdout)
-	emitResult := func(source, status, detail string) {
+	emitResult := func(source, status, reasonCode string) {
 		if reported[source] {
 			return
 		}
 		reported[source] = true
 		if err := enc.Encode(lyricSourceTestResult{
-			Source: source, Status: status, Detail: detail,
+			Source: source, Status: status, ReasonCode: reasonCode,
 			NetworkLooksDown: networkLooksDown(),
 		}); err != nil {
 			log.Fatalf("test-lyric-sources: encode result: %v", err)
@@ -82,7 +82,9 @@ func runTestLyricSourcesCLI(args []string) {
 	scanForPositives := func(results []scoredLyricCandidateResult) {
 		for _, src := range lyricSourcesResponded(results) {
 			if wanted[src] && !reported[src] {
-				emitResult(src, "ok", "接口有响应")
+				// ok 状态的 reasonCode 从来不会显示给用户(Swift 侧只在 warn/fail 时才读
+				// 这个字段,见 SettingsView.sourceAccessoryTooltip),留空即可。
+				emitResult(src, "ok", "")
 			}
 		}
 	}
@@ -112,15 +114,17 @@ func runTestLyricSourcesCLI(args []string) {
 		if reported[src] {
 			continue
 		}
-		detail := "两首探测曲都没有响应,这个源目前可能不可用"
+		// 跟具体失败原因(下面 switch 里那三个)一样,这两个通用兜底也存稳定代码不存
+		// 文案——两侧必须同步维护,见 lyricsourcefailure.go 头注。
+		reasonCode := lyricTestReasonNoResponse
 		status := "warn"
 		if down {
-			status, detail = "fail", "网络请求全部失败(DNS/连接问题),这一轮探测本身就没跑起来"
+			status, reasonCode = "fail", lyricTestReasonNetworkDown
 		} else {
 			// 目前接了具体失败原因诊断的源(2026-08-31,分别见 ytmusic.go/musixmatch.go/
 			// netease.go 头注——每一条都是实测复现过、不是猜的)。QQ/酷狗/LRCLIB/AMLL
 			// 逐一验证过,没有找到当前能复现的失败信号(见对应文件排查记录),没有对应
-			// 旁路,拿不到具体原因时统一退回上面的通用文案,不编一个没核实过的理由。
+			// 旁路,拿不到具体原因时统一退回上面的通用代码,不编一个没核实过的理由。
 			var reason string
 			switch src {
 			case "lyricfind":
@@ -131,10 +135,10 @@ func runTestLyricSourcesCLI(args []string) {
 				reason = neteaseLastFailureReasonNow()
 			}
 			if reason != "" {
-				detail = reason
+				reasonCode = reason
 			}
 		}
-		emitResult(src, status, detail)
+		emitResult(src, status, reasonCode)
 	}
 }
 
@@ -147,7 +151,9 @@ type lyricSourceTestResult struct {
 	// ok=这个源这一轮有响应;warn=两首探测曲都没响应但网络本身是通的(源大概率真的不可用,
 	// 但也可能只是恰好都没收录这两首,不排除极小概率误判);fail=网络整体不通,这一轮探测
 	// 本身就没有意义,不能拿来对这个源下任何结论。
-	Status           string `json:"status"`
-	Detail           string `json:"detail"`
+	Status string `json:"status"`
+	// ReasonCode:稳定代码,不是文案(2026-09-01 从 Detail 改名——见 lyricsourcefailure.go
+	// 头注,人话交给 Swift 侧按 App 界面语言翻译)。ok 状态下恒为空串,Swift 侧从不读它。
+	ReasonCode       string `json:"reasonCode"`
 	NetworkLooksDown bool   `json:"networkLooksDown"`
 }

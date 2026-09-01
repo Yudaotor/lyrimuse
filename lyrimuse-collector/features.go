@@ -94,11 +94,17 @@ var lyricsSourceDefaultOrder = []string{
 }
 
 type featureFlagsFile struct {
-	// Player："apple_music"(默认,缺省/认不出的值都按这个处理)、"qq_music" 或
-	// "netease_music"。
-	Player               string `json:"player,omitempty"`
-	AlbumPrefetch        *bool  `json:"album_prefetch,omitempty"`
-	LastfmMirrorScrobble *bool  `json:"lastfm_mirror_scrobble,omitempty"`
+	// Player：**遗留字段**(2026-09-01 起被下面的 Players 取代,只留着给一次性迁移用)。
+	// 旧版本只能选一个播放器时写的就是这个键;Players 缺失时 resolvePlayers 把它当成
+	// 迁移前的选择读一次,resolvePlayers 兜底成 playerAuto。这台机器往后只会写 Players,
+	// 不会再写这个键,但读老配置(iCloud 同步/降级）时不能让它凭空消失。
+	Player string `json:"player,omitempty"`
+	// Players：可多选的播放器集合(2026-09-01 起支持多选,取代上面的 Player)——跟
+	// lyrimuse 侧 FeatureSettingsStore.players(Set<PlaybackPlayer>)对应,rawValue 逐字
+	// 相同。resolvePlayers 负责校验/迁移/兜底,任何时候 features.Players 都保证非空。
+	Players              []string `json:"players,omitempty"`
+	AlbumPrefetch        *bool    `json:"album_prefetch,omitempty"`
+	LastfmMirrorScrobble *bool    `json:"lastfm_mirror_scrobble,omitempty"`
 	// LastfmScrobbleFirstArtistOnly：合唱串("A & B")上送时只发第一位艺人。
 	// **默认 false = 原样发整串**。命名对齐 Navidrome 的 Lastfm.ScrobbleFirstArtistOnly
 	// (它默认也是 false)。语义与取舍见 lastfm.go 里 resolveScrobbleArtist 的注释。
@@ -190,10 +196,11 @@ type featureFlagsFile struct {
 // 的条件完全一样,单独留一个开关只是多一次点击,没有实际区分度,见 poller.go 的
 // bridge() 判断条件。
 type featureFlags struct {
-	// Player 是已经解析过的具体值(playerAppleMusic/playerQQMusic,不会是空字符串或
-	// 认不出的值,见 resolvePlayer)。只被 system.go 的 getState()/appleMusicPosition()
-	// 读取。
-	Player               string
+	// Players 是已经解析/校验过的播放器集合(键是 playerAppleMusic/playerQQMusic 等
+	// 常量,值恒为 true;不会是空 map,见 resolvePlayers)——2026-09-01 从单选的 Player
+	// 改成可多选。system.go 的 getState()/mediaPlayerLabel()、poller.go 的 isTracked()、
+	// companionlaunch.go、match.go 的同源加权都读它。
+	Players              map[string]bool
 	AlbumPrefetch        bool
 	LastfmMirrorScrobble bool
 	// 见上面 featureFlagsFile 里同名字段的注释。默认 false(发整串)。
@@ -262,7 +269,7 @@ func loadFeatureFlags(path string) featureFlags {
 		log.Printf("read feature flags %s: %v (使用默认值)", path, err)
 	}
 	return featureFlags{
-		Player:               resolvePlayer(f.Player),
+		Players:              resolvePlayers(f.Players, f.Player),
 		TrustedPlayers:       resolveTrustedPlayers(f.TrustedPlayers),
 		AlbumPrefetch:        boolOr(f.AlbumPrefetch, true),
 		LastfmMirrorScrobble: boolOr(f.LastfmMirrorScrobble, false),
@@ -284,15 +291,42 @@ func loadFeatureFlags(path string) featureFlags {
 	}
 }
 
-// resolvePlayer 兜底成 playerAuto(2026-08-13 从 playerAppleMusic 改过来,跟 Swift 侧
-// PlaybackPlayer.current 保持同一个默认 —— 两侧默认值必须一致,否则界面显示的播放器和
-// 采集器实际在问的那个会不是同一个)。理由见 PlaybackPlayer.swift 上那段注释:写死
-// Apple Music 会让只用 Spotify/QQ 音乐/网易云的新用户对着一个永远空白的界面。
-func resolvePlayer(p string) string {
-	if p == playerQQMusic || p == playerNetease || p == playerSpotify || p == playerKugou || p == playerAuto {
-		return p
+// isValidPlayerValue 核对一个字符串是不是六个已知播放器 rawValue 之一——resolvePlayers
+// 校验列表条目、以及迁移路径校验 legacy 字段共用同一份判据。
+func isValidPlayerValue(p string) bool {
+	switch p {
+	case playerAppleMusic, playerQQMusic, playerNetease, playerSpotify, playerKugou, playerAuto:
+		return true
+	default:
+		return false
 	}
-	return playerAuto
+}
+
+// resolvePlayers 是 2026-09-01 从单选 resolvePlayer 改成多选后的替代——list 是新字段
+// featureFlagsFile.Players(可能为 nil,老配置/全新安装都会是这样),legacy 是旧字段
+// Player(单选年代写的值)。
+//
+// 优先级:list 里任何认得出的值都收进结果集,认不出的静默丢弃(比如未来某个版本删掉的
+// 播放器,不该让整份解析失败)；list 过滤后一个能收的都没有(nil/空/全认不出),才退回
+// legacy 做**一次性迁移**——老配置只选过一个,迁移后的结果集就是那一个;legacy 也认不出
+// 或本身是空值,才最终兜底成 playerAuto(2026-08-13 定的默认,理由见 PlaybackPlayer.swift
+// 顶部注释:写死 Apple Music 会让只用 Spotify/QQ 音乐/网易云的新用户对着一个永远空白的
+// 界面)。返回值保证非空、且键全部是六个已知值之一,调用方可以放心用 `m[playerXxx]` 判断
+// 成员,不需要再校验一遍。
+func resolvePlayers(list []string, legacy string) map[string]bool {
+	m := map[string]bool{}
+	for _, p := range list {
+		if isValidPlayerValue(p) {
+			m[p] = true
+		}
+	}
+	if len(m) > 0 {
+		return m
+	}
+	if isValidPlayerValue(legacy) {
+		return map[string]bool{legacy: true}
+	}
+	return map[string]bool{playerAuto: true}
 }
 
 // resolveTrustedPlayers 清洗用户信任列表:去掉空 bundle id、去掉首尾空白、去掉五个

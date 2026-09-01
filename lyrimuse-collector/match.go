@@ -374,7 +374,58 @@ const lyricOvershootToleranceSecs = 5.0
 // artist="Khalil Fong" title="Nanyin",两者都不含汉字)是真实案例:候选正文是这首歌真正
 // 的中文歌词,却被 v5 及更早版本判成"语言跟这首歌对不上"一票否决(Score -1),永远进不了
 // 自动解析的候选池。见 isProbablyWrongLanguageLyrics 的注释。
-const lyricsScoringVersion = 6
+//
+// v7(2026-09-01):liveAlbumConflict——「两场不同演唱会」判据(-600,与 versionTags 同级)。
+// 用户报的陈奕迅《Shall We Dance (Live)》/《活着多好 (Live)》案:本地专辑《The Easy Ride
+// 演唱会 (Live)》,酷狗那份挂在《Get A Life (Live)》——**另一场巡演**,两场都收录了这首歌
+// 的现场版,标题吻合分打平(都逐字相等)、专辑亲和分也打平(都只够到 +40 档),错的那份靠
+// 逐字时间轴(Shall We Dance)或时长吻合更紧(活着多好)赢——两首歌赢在不同的项上,说明
+// 病根不在任何一个权重数字,而是**versionTagsMismatch 在"两边都是 Live"时静默**(限定词
+// 集合相等),没有任何判据能说出"这是另一场演出"。同日先试过三个方向都被真实库回放否决:
+// ①冠军专辑证据弱时撤销逐字/时长加分(47~150 个决策翻盘,绝大多数是再版/精选辑噪音);
+// ②奖励自报时长精确匹配(阈值越紧翻盘越多,70→358,变成"唯一凑巧报出逼近值的候选"抽奖);
+// ③抬高专辑词元档分值(安全区间(≤60)翻不了盘,能翻盘的分位(≥94)破坏"精确>子串>词元"
+// 的证据秩序)。三次失败的共同点:都在拿"专辑对不上"当负证据,违反"专辑对不上是零证据"
+// 的既有原则。v7 的判据不同:要求**双方都做出明确的身份声明且互相矛盾**——本地专辑名
+// 自己带 live 标记(录音室专辑名对"是哪场演出"没有发言权,Queen《The Game (Deluxe)》的
+// bonus 现场曲配《Queen Rock Montreal》是同一场演出,不许误伤)、候选也是现场录音、两边
+// 专辑名剥掉歌手名(防"周杰伦地表最强演唱会"vs"地表最强演唱会"的前缀粘连假冲突)和
+// live/演唱会类通用词之后**各自还有身份词、且完全不相交**——这时才是"两场不同命名的
+// 演出"的矛盾证据,不是"字符串没对上"的零证据。全库 2339 条真实决策回放:命中 29 个
+// 候选、涉及 24 首歌,逐条人工核对全部是真的另一场演出(Get A Life/2003演唱会/无与伦比
+// 2004/The One/超时代/Timeless演唱会/中国新歌声...),冠军改变 8 首、全部改对方向,
+// 0 误伤。见 liveAlbumIdentityConflict 的注释。
+//
+// v8(2026-09-01):versionTags 的窄豁免 + 网易云 pick 的时长锚定档(陈奕迅《孤独探戈
+// (Live)》案,同一张 Easy Ride 专辑的第三类形态)。正确版本在网易云库里**存在**
+// (「孤独探戈(Acoustic Piano)(Live)」,专辑对、自报时长与本地逐位吻合),但被两道闸
+// 联手挡死:①netease pick 的"精确同名档优先"让三条错场次的精确同名(Get A Life/
+// Third Encounter/拉阔压轴)压过这条剥括号才同名的正确版本,pick 又完全不看时长;
+// ②即便召回,"(Acoustic Piano)"这节本地曲名没有的限定词会吃 versionTags -600,照样
+// 输给错场次候选。两处配套修(缺一都会更糟——只修 pick 不豁免,正确候选带着 -600 反而
+// 让录音室版夺冠):打分层豁免见 sameRecordingDespiteVersionTags(四道门:时长≤1% +
+// 专辑亲和 + 候选不缺本地限定词 + 多出的词全在 acoustic 家族白名单;全库回放现存 433 个
+// 吃 -600 的候选 0 豁免 0 翻盘,零误伤),pick 锚定档见 netease.go pick() 头注。
+//
+// v9(2026-09-01):两处针对**中文平台命名形态**的修正(周杰伦《The One 周杰伦演唱会》案,
+// 用户报"QQ 搜出来的是录音室版"——检索层的修复在 qq.go 的专辑维度路线,不需要 bump;
+// 这两处是它牵出的打分层配套):
+// ①albumTokens 在拉丁↔CJK 交界处分词:QQ 把专辑写成"The One演唱会"(不留空格),原来
+//   "one演唱会"粘成一个词元、与本地"The One 周杰伦演唱会"零共享词、albumScore=0,同一张
+//   专辑被判毫无亲和——与已有的"2011Live"数字↔字母交界分词同一性质,见 albumTokens 注释。
+// ②versionTags 两道闸(versionTagsMismatch/sameRecordingDespiteVersionTags)改用
+//   recordingVersionTags:专辑名带中文现场标记(演唱会/现场/音乐会)时视同声明了 "live"。
+//   QQ 给现场专辑曲目起名不带"(Live)"、live 身份只写在专辑名上且不加括号,原来这类正确
+//   候选吃 -600;对称地,本地专辑是"XX演唱会"而候选是干净录音室版时,现在能判出版本
+//   不符(原来两边限定词集合都是空、闸门静默)。只认中文标记不认拉丁词元的理由见
+//   recordingVersionTags 注释。全库 2360 条真实决策回放(旧逻辑副本与存档 parity 0):
+//   23 首受影响,唯一 1 处冠军改变是蔡健雅《达尔文》从录音室 kugou(srcDur 265 vs 本地
+//   308,差 14%)翻到 My Space 现场对版 netease(srcDur 308.04 逐位吻合)——改对;其余
+//   全是"-600 平反"(地表最强 7 首 QQ 候选)或"新判出录音室冒充"(冠军均不变),0 误伤。
+//   回放里抓到并已修掉的两类边界:专辑名括号里的描述文案不算标记(韦礼安《女孩》案,
+//   推导只看 stripParens 后的专辑名);候选是同一张专辑的截短拼法时不苛求它也推导出
+//   live(蔡健雅《依赖》案,见 sameRecordingDespiteVersionTags 第③门注释)。
+const lyricsScoringVersion = 9
 
 // scoreTerm 是打分里的一项。只带**机器可读的类型**和分值,文案交给界面本地化 ——
 // App 有中英两套界面,从这里吐中文字符串会让英文用户看到一串中文。
@@ -407,6 +458,8 @@ const (
 	scoreTermSourceDurationOff = "sourceDurationOff" // 源自报曲长与本地明显不符 = 另一次录音
 	// v5 新增(2026-08-27):
 	scoreTermWordTimingOverride = "wordTimingOverride" // 标题吻合度更高的候选存在时,撤销逐字加分
+	// v7 新增(2026-09-01):
+	scoreTermLiveAlbumConflict = "liveAlbumConflict" // 本地和候选是两场不同命名的演出(现场专辑身份词矛盾),重扣
 )
 
 // lyricScoreTermKinds 是**会出现在 score_terms 里**的全部 kind。存在的唯一理由是给
@@ -422,6 +475,7 @@ func lyricScoreTermKinds() []string {
 		scoreTermDurationOff, scoreTermDurationOvershoot, scoreTermAlbum,
 		scoreTermTitleMatch, scoreTermConsensus, scoreTermTranslation,
 		scoreTermRoma, scoreTermSourceDurationOff, scoreTermWordTimingOverride,
+		scoreTermLiveAlbumConflict,
 	}
 }
 
@@ -468,6 +522,18 @@ const durationMismatchPenalty = 500
 //
 // 阈值 12% 复用 enrich.go:wrongDuration 那条既有口径(「差超 12% 就当作给另一个版本选的」),
 // 分母同样取两者中较大的那个,不新造一个数。
+//
+// ⚠️ 2026-09-01 用陈奕迅《活着多好 (Live)》案复查过一遍"收窄阈值是不是就安全了"——
+// 结论是**收窄阈值不是变安全,是变更危险**。诊断脚本(反事实回放全部 3198 条真实
+// 缓存条目、其中 2261 条带 duration_secs)对比几档"只加分"方案的冠军改变数:
+//
+//	<=2%   +300(2026-08-22 那次原方案,当时 34 个可评样本只测出 2 处):现在的库上是 70 处
+//	<=0.5% +300:141 处;<=0.5% +80:77 处;<=0.1% +80:318 处;<=0.02% +80:358 处
+//
+// 阈值越紧、翻盘越多,不是越少——原因是阈值一放宽,同一轮里往往好几个候选都够得着,
+// 加分对排序不构成额外区分度;阈值一收紧,反而变成"这一轮里唯一凑巧报出一个逼近值的
+// 候选"独得一份加分,基本等于按运气抽奖决定冠军。也就是说这条"只扣不加"的设计决策
+// 不是当年样本量太小侥幸躲过的问题,收窄阈值这个方向本身就是死路,不用再试第二次。
 const (
 	sourceDurationMismatchPenalty   = 400
 	sourceDurationMismatchTolerance = 0.12
@@ -491,12 +557,29 @@ const (
 	scoreRejectPlainTextOnly = "rejectPlainTextOnly"
 )
 
-// nativeLyricSource 是「当前播放器自家的歌词源」("qq"/"netease"),main() 按
-// features.Player 设一次;识别不出(Apple Music / Spotify / auto)就留空,不加分。
+// nativeLyricSources 是「当前播放器(集合)自家的歌词源」("qq"/"netease" 等)集合,
+// main()/searchcli.go 按 features.Players 设一次;识别不出/不在这套源之内的成员
+// (Apple Music / Spotify / auto)不会贡献任何条目,集合可能因此是空的(不加分)。
+//
+// 2026-09-01 从单选年代的 nativeLyricSource(单个字符串)改成集合——选了多个播放器时,
+// 同源加权理应对它们各自的原生源都生效,不能只挑其中一个。
 //
 // 跟 features 同款的包级变量而不是打分函数的参数:打分函数已经有 7 个参数,再加一个
 // 会让每个调用点都得关心一件跟它无关的事。测试里直接赋值即可。
-var nativeLyricSource string
+var nativeLyricSources map[string]bool
+
+// resolveNativeLyricSources 把 features.Players 整个集合映射成它们各自的原生歌词源
+// 集合(跳过 playerNativeLyricSource 返回空串的成员)——多选年代 nativeLyricSources 的
+// 唯一构造入口,main()/searchcli.go 启动时各调一次。
+func resolveNativeLyricSources(players map[string]bool) map[string]bool {
+	m := map[string]bool{}
+	for player := range players {
+		if src := playerNativeLyricSource(player); src != "" {
+			m[src] = true
+		}
+	}
+	return m
+}
 
 // playerNativeLyricSource 把播放器映射成它自家的歌词源。
 //
@@ -612,7 +695,7 @@ func scoreLyricCandidateDetailed(
 	if c.hasWordTiming {
 		add(scoreTermWordTiming, 400) // 跟"一档时长差距"同量级,让带逐字时间轴的候选能逆转
 	}
-	if nativeLyricSource != "" && c.source == nativeLyricSource {
+	if nativeLyricSources[c.source] {
 		// 跟当前播放器同源的歌词加分。
 		//
 		// 理由是**时间轴**,不是内容质量:同一个平台的歌词是对着同一个音频母版对的轴,
@@ -651,9 +734,19 @@ func scoreLyricCandidateDetailed(
 	}
 	add(scoreTermLines, lines)
 	// 版本限定词对不上 → 重扣。理由见 versionMismatchPenalty。判定同时看歌名和**专辑名**,
-	// 理由见 versionTagsMismatch。
-	if versionTagsMismatch(localTitle, localAlbum, c.title, c.album) {
+	// 理由见 versionTagsMismatch。v8 加一道窄豁免:时长逐位吻合+专辑亲和+多出的限定词
+	// 只是演奏方式(acoustic 家族)时,是同一次录音的命名差异,不是版本差异 —— 见
+	// sameRecordingDespiteVersionTags(全库回放:现存 433 个吃 -600 的候选 0 个被豁免,
+	// 0 翻盘;它只对"源平台标注了演奏方式、本地曲名没标"这一类新召回的候选生效)。
+	if versionTagsMismatch(localTitle, localAlbum, c.title, c.album) &&
+		!sameRecordingDespiteVersionTags(localTitle, localAlbum, durationSecs, c.title, c.album, c.sourceReportedDurationSecs) {
 		add(scoreTermVersionTags, -versionMismatchPenalty)
+	}
+	// v7:两场不同命名的演出 → 同级重扣。versionTagsMismatch 在「两边都是 Live」时限定词
+	// 集合相等、必然静默,这一档接住它够不到的那半边。判据和四道防误伤的门见
+	// liveAlbumIdentityConflict 的注释。
+	if liveAlbumIdentityConflict(localArtist, localAlbum, c.title, c.album) {
+		add(scoreTermLiveAlbumConflict, -liveAlbumConflictPenalty)
 	}
 	// ---- v3 新维度(2026-08-12,分值全部来自 201 首反事实消融,见 lyricsScoringVersion 注释) ----
 	// 专辑亲和:只加不减——专辑名缺失/对不上是"零证据",不是负证据(中英互译专辑名、
@@ -1551,11 +1644,19 @@ var albumStop = map[string]bool{
 	"i": true, "ii": true, "iii": true, "iv": true,
 }
 
-// albumTokens 除了在非字母数字处断词,还在"数字→字母"/"字母→数字"的交界处断词——中文
-// 演唱会专辑名常见"2011Live"/"2020巡演"这种年份和后缀之间不留空格的写法,原来整段被
+// albumTokens 除了在非字母数字处断词,还在"数字↔字母"和"拉丁字母↔CJK"的交界处断词——
+// 中文演唱会专辑名常见"2011Live"/"2020巡演"这种年份和后缀之间不留空格的写法,原来整段被
 // strings.FieldsFunc 当成一个词,导致跟本地(通常是英文、年份和单词之间有空格)标签的
 // "2011"+"live"两个独立词对不上、白白丢掉本该有的匹配分,容易在多个候选打平时选错。
 // 拆开后能对上"2011"+"live"这两个独立词,分数明显领先,不再靠运气打平。
+//
+// 拉丁↔CJK 交界断词是 v9 加的(2026-09-01,周杰伦《The One 周杰伦演唱会》案):QQ 音乐把
+// 这张专辑写成"The One演唱会"——One 和 演唱会 之间不留空格,unicode.IsLetter 对汉字为真,
+// 原来整段粘成一个词元"one演唱会",跟本地标签的"one"+"周杰伦演唱会"零共享词、
+// albumScore=0,同一张专辑被判成"毫无亲和"。中文平台的专辑名里拉丁词与中文后缀粘连是
+// 常态,这个交界跟"2011Live"的数字↔字母交界是同一性质。⚠️ CJK **内部**仍不分词
+// (汉字之间没有词边界信号,"周杰伦演唱会"照旧是一个词元),所以 cjkLiveAlbumMarkers
+// 的子串匹配仍然必要,见那边注释。
 func albumTokens(s string) map[string]bool {
 	out := map[string]bool{}
 	s = strings.ToLower(s)
@@ -1563,7 +1664,8 @@ func albumTokens(s string) map[string]bool {
 	const (
 		kindNone = iota
 		kindDigit
-		kindLetter
+		kindLatin
+		kindCJK
 	)
 	prevKind := kindNone
 	flush := func() {
@@ -1576,26 +1678,38 @@ func albumTokens(s string) map[string]bool {
 		cur = cur[:0]
 	}
 	for _, r := range s {
+		k := kindNone
 		switch {
 		case unicode.IsDigit(r):
-			if prevKind == kindLetter {
-				flush()
-			}
-			cur = append(cur, r)
-			prevKind = kindDigit
+			k = kindDigit
 		case unicode.IsLetter(r):
-			if prevKind == kindDigit {
-				flush()
+			if isCJKRune(r) {
+				k = kindCJK
+			} else {
+				k = kindLatin
 			}
-			cur = append(cur, r)
-			prevKind = kindLetter
-		default:
+		}
+		if k == kindNone {
 			flush()
 			prevKind = kindNone
+			continue
 		}
+		if prevKind != kindNone && prevKind != k {
+			flush()
+		}
+		cur = append(cur, r)
+		prevKind = k
 	}
 	flush()
 	return out
+}
+
+// isCJKRune:albumTokens 分词用的"这是不是 CJK 字符"。只收汉字和日文假名/韩文谚文这几个
+// 明确"跟拉丁词粘连时必然是两个词"的文字系统,不试图穷举所有非拉丁文字——西里尔/希腊等
+// 字母系统跟拉丁粘连的专辑名没实测见过,不做没有依据的推广。
+func isCJKRune(r rune) bool {
+	return unicode.Is(unicode.Han, r) || unicode.Is(unicode.Hiragana, r) ||
+		unicode.Is(unicode.Katakana, r) || unicode.Is(unicode.Hangul, r)
 }
 
 // albumScore rates how well candidate matches the target album. 100 = substring
@@ -1878,11 +1992,14 @@ func parentheticalSegments(s string) []string {
 //
 // 候选的歌名和专辑名都为空(某些源不回报元数据)时一律判不匹配为 false —— 没有证据就
 // 不扣分,不能因为源的元数据缺失就把它的歌词判死。
+//
+// v9 起限定词集合来自 recordingVersionTags(不再直接用 versionTagsIn):专辑名带中文
+// 现场标记(演唱会/现场/音乐会)视同声明了 "live",双向对称——见 recordingVersionTags 注释。
 func versionTagsMismatch(localTitle, localAlbum, candidateTitle, candidateAlbum string) bool {
 	if strings.TrimSpace(candidateTitle) == "" && strings.TrimSpace(candidateAlbum) == "" {
 		return false
 	}
-	local, cand := versionTagsIn(localTitle, localAlbum), versionTagsIn(candidateTitle, candidateAlbum)
+	local, cand := recordingVersionTags(localTitle, localAlbum), recordingVersionTags(candidateTitle, candidateAlbum)
 	if len(local) != len(cand) {
 		return true
 	}
@@ -1907,10 +2024,222 @@ func versionTagsIn(fields ...string) map[string]bool {
 	return out
 }
 
+// recordingVersionTags 是 versionTagsMismatch / sameRecordingDespiteVersionTags 两道闸
+// 实际使用的"这一边声明了哪些版本限定词"集合:versionTagsIn(歌名+专辑名的括号段) 之外,
+// v9 起再认一种形态——**专辑名带中文现场标记**(演唱会/现场/音乐会,子串匹配,见
+// albumHasCJKLiveMarker)时补一个 "live"。
+//
+// 起因(2026-09-01,周杰伦《龙拳 (Live)》案):QQ 音乐给 The One 演唱会里的曲目起名就叫
+// "龙拳"(不带任何括号),live 身份**只写在专辑名"The One演唱会"上**——而 titleVersionTags
+// 只在括号段/" - "尾段里找限定词,这张专辑名没有括号,于是这条候选的限定词集合是空、
+// 本地("龙拳 (Live)")是 {live},被判 -600。中文平台的现场专辑普遍用"XX演唱会"命名而
+// 不加括号,这是系统性的命名形态差异,不是版本差异。
+//
+// **只认中文标记、刻意不认拉丁 "live" 词元**:albumHasLiveMarker 那张表里的拉丁词
+// (live/concert/tour)在正常专辑名里就会出现(《Live and Let Die》《In Concert》是
+// 录音室发行的合法名字),按词元认会把这类本地专辑打成 {live}、反过来对一切录音室候选
+// 扣 -600;而"演唱会/现场/音乐会"在专辑名里几乎不做别的用途。跟 cjkLiveAlbumMarkers
+// 选择只收无歧义词是同一个原则。
+//
+// **推导只看 stripParens 之后的专辑名**:括号里的中文常是描述性长文本而不是专辑身份——
+// 全库回放抓到的真实误伤:韦礼安《女孩》的 lrclib 候选专辑名
+// "女孩 (2015 韦礼安 《放开那女孩》 小巨蛋演唱会求爱主题曲/电视剧…) - single" 是张录音室
+// single,"演唱会"只出现在括号里的介绍文案里。括号里若真写了版本声明(如 "(Live)"),
+// versionTagsIn 的限定词表本来就管,不需要这层推导。
+func recordingVersionTags(title, album string) map[string]bool {
+	out := versionTagsIn(title, album)
+	if !out["live"] && albumHasCJKLiveMarker(stripParens(album)) {
+		out["live"] = true
+	}
+	return out
+}
+
 // versionMismatchPenalty 要足够大到"永远压不过标题吻合的候选":时长项最高 1000、逐字项
 // 400,600 分足以让原本领先几十分的错版本候选彻底掉到最后。扣完不让它变成负分(负分会被
 // pickLyricCandidate 直接丢弃),而是留 1 分—— 实在只有这一个候选时,有总比没有好。
 const versionMismatchPenalty = 600
+
+// sameRecordingExtraTagWhitelist:候选比本地**多出**的版本限定词里,哪些描述的是
+// "同一场演出怎么演的"而不是"另一次录音"。只收 acoustic 家族:一场演唱会的钢琴/不插电
+// 演绎,源平台可能标注"(Acoustic Piano)"而 Apple 曲名不标,这是**命名差异**;而
+// 伴奏/instrumental/粤语/国语/demo/remix 这些词,即便时长逐位吻合也是**另一次录音**
+// (伴奏版时长常与原曲完全相同;粤语/国语两版同一伴奏、时长几乎一样 —— 恰恰是
+// versionTagsMismatch 存在的理由),永不豁免。
+var sameRecordingExtraTagWhitelist = map[string]bool{
+	"acoustic": true, "unplugged": true, "不插电": true,
+}
+
+// sameRecordingDespiteVersionTags 判定"版本限定词对不上,但其余证据坐实这就是同一次
+// 录音"。第 14 条三角判据(标题+专辑+时长 ≤1%)的推广:那次只挂在 kugou 的歌手闸上,
+// 这里回答的是它的姊妹问题 —— 限定词的**命名不对称**(源平台标了演奏方式、本地曲名没标)
+// 该不该当版本差异罚 -600。
+//
+// 起因(2026-09-01,用户报「陈奕迅《孤独探戈 (Live)》匹配错了」):本地专辑
+// 《The Easy Ride 演唱会 (Live)》,网易云库里**有**正确版本
+// 「孤独探戈(Acoustic Piano)(Live)」(专辑 The Easy Ride Live 陈奕迅演唱会,自报时长
+// 215.4s 与本地 215.373s 逐位吻合 —— 同一次录音的铁证),但它比本地曲名多一节
+// "(Acoustic Piano)",versionTagsMismatch 判两边限定词集合不等、-600 —— 即便召回也
+// 打不过错场次/录音室版的候选。这场演出本来就是钢琴伴奏演绎,"acoustic"描述的是
+// **这场演出本身**,不是另一个版本;Apple 只是没把这层写进曲名。
+//
+// 四道门全过才豁免:①双方都自报了时长且相差 ≤1%(与第 14 条同一档 —— 比打分层那个
+// 25% 严 25 倍,同一次录音跨平台只差在取整);②专辑有亲和(albumScore ≥1,两边都非空);
+// ③候选**不缺**本地已有的任何限定词(本地标 Live 候选没标 → 时长再吻合也可能是录音室版,
+// 不豁免);④候选**多出**的限定词全部在 sameRecordingExtraTagWhitelist 里(见上)。
+func sameRecordingDespiteVersionTags(
+	localTitle, localAlbum string, localDurationSecs float64,
+	candTitle, candAlbum string, candDurationSecs float64,
+) bool {
+	if localDurationSecs <= 0 || candDurationSecs <= 0 {
+		return false
+	}
+	larger := math.Max(localDurationSecs, candDurationSecs)
+	if math.Abs(localDurationSecs-candDurationSecs)/larger > 0.01 {
+		return false
+	}
+	if albumScore(candAlbum, localAlbum) < 1 {
+		return false
+	}
+	// 第③门的 local 侧刻意用**括号级**集合(versionTagsIn),不含 v9 的专辑推导 live:
+	// 真正写在本地曲名/专辑括号里的声明,候选必须有;而本地靠专辑名"演唱会"字样推导出的
+	// live,候选的**截短拼法**推导不出来是拼法问题不是版本声明——全库回放的真实误伤:
+	// 蔡健雅《依赖》本地专辑《My Space 演唱會紀念盤》,kugou/QQ 把同一张写成"My Space"
+	// (自报时长 179 vs 本地 179.52 逐位吻合、专辑 substring 亲和),若苛求候选也推导出
+	// live,这批同场对版全数吃 -600。第①②门(时长≤1% + 专辑亲和)已经把"这就是同一张"
+	// 钉住了。第④门的两侧仍用完整集合(recordingVersionTags):候选**多出**的 live 推导
+	// (录音室本地 vs "XX演唱会"合集候选)不在白名单里,照样不豁免——那一类里混着真现场版,
+	// 时长吻合不足以为它作保(见 docs/features/09 第 34 条周大侠案的记录)。
+	localParen := versionTagsIn(localTitle, localAlbum)
+	local := recordingVersionTags(localTitle, localAlbum)
+	cand := recordingVersionTags(candTitle, candAlbum)
+	for tag := range localParen {
+		if !cand[tag] {
+			return false
+		}
+	}
+	for tag := range cand {
+		if !local[tag] && !sameRecordingExtraTagWhitelist[tag] {
+			return false
+		}
+	}
+	return true
+}
+
+// liveAlbumConflictPenalty:liveAlbumIdentityConflict 命中时扣多少。取跟 versionTags
+// 同一档的 600——它们是同一性质的证据(「这份歌词挂在另一次录音上」),只是抓的形态不同:
+// versionTagsMismatch 抓「一边 Live 一边录音室」,这条抓「两边都是 Live、但是两场不同的
+// 演出」。600 也是实测出的必要量级:陈奕迅《Shall We Dance (Live)》案冠亚分差 419
+// (逐字 +400 是大头)、《活着多好 (Live)》案 53(时长吻合差),要一档能同时压过这两种
+// 组合的扣分,和 versionTags 对齐是最不引入新数字的选择。
+const liveAlbumConflictPenalty = 600
+
+// liveAlbumMarkerTokens / cjkLiveAlbumMarkers:专辑名里「说明这是现场录音」的通用词。
+// 它们只描述录音形态,不携带「是哪场演出」的身份信息,所以在 liveAlbumIdentityConflict
+// 里两用:①判定一张专辑是不是现场专辑(gate);②从身份词集合里剔除(两张现场专辑共享一个
+// "live"/"演唱会"不构成任何同一性证据——陈奕迅《Get A Life (Live)》跟《The Easy Ride
+// 演唱会 (Live)》唯一的共享词元就是"live")。
+var liveAlbumMarkerTokens = map[string]bool{
+	"live": true, "concert": true, "tour": true,
+	"现场": true, "演唱会": true, "音乐会": true, "演出": true, "巡演": true, "巡回": true,
+}
+
+// cjkLiveAlbumMarkers 是上面那张表里需要按**子串**匹配的中文词:albumTokens 对 CJK
+// **内部**不分词(汉字之间没有词边界信号,"录音棚现场"/"周杰伦演唱会"整段是一个词元),
+// 粘连词元里的标记词只能靠子串认。(v9 起拉丁↔CJK 交界会分词,"Timeless演唱会"这类
+// 混排粘连已经能拆出独立的"演唱会"词元,但纯中文粘连仍然只有子串一条路。)拉丁词
+// **不做**子串匹配——"Alive"/"Deliver" 含 "live",子串判会把录音室专辑误判成现场专辑。
+var cjkLiveAlbumMarkers = []string{"现场", "演唱会", "音乐会"}
+
+// albumHasLiveMarker:这个专辑名自己是否声明了「我是现场录音」。
+func albumHasLiveMarker(album string) bool {
+	for t := range albumTokens(toSimplified(album)) {
+		if liveAlbumMarkerTokens[t] {
+			return true
+		}
+	}
+	return albumHasCJKLiveMarker(album)
+}
+
+// albumHasCJKLiveMarker:专辑名是否带**中文**现场标记(演唱会/现场/音乐会,子串匹配)。
+// 从 albumHasLiveMarker 里拆出来单独成名,是因为 recordingVersionTags 只认这一半——
+// 拉丁 live/concert/tour 词元对"这是现场录音"的把握不够(见 recordingVersionTags 注释),
+// 而 liveAlbumIdentityConflict 的 gate 用整个 albumHasLiveMarker(那边有另外三道门兜着,
+// 宽一点安全)。
+func albumHasCJKLiveMarker(album string) bool {
+	for t := range albumTokens(toSimplified(album)) {
+		for _, m := range cjkLiveAlbumMarkers {
+			if strings.Contains(t, m) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// albumIdentityTokens:专辑名的**身份词**集合——剥掉歌手名(防「周杰伦地表最强世界巡回
+// 演唱会」vs「地表最强世界巡回演唱会」这种同一场演出只差歌手名前缀粘连的假冲突;歌手名
+// 出现在自己任何一张专辑名里都不携带区分信息)、再剔除 live/演唱会类通用词之后剩下的词元。
+func albumIdentityTokens(artist, album string) map[string]bool {
+	a := strings.ToLower(toSimplified(album))
+	if ar := strings.ToLower(strings.TrimSpace(toSimplified(artist))); ar != "" {
+		a = strings.ReplaceAll(a, ar, " ")
+	}
+	out := map[string]bool{}
+	for t := range albumTokens(a) {
+		if !liveAlbumMarkerTokens[t] {
+			out[t] = true
+		}
+	}
+	return out
+}
+
+// liveAlbumIdentityConflict 判定「本地和候选是两场**不同命名的演出**」——versionTagsMismatch
+// 够不到的一类:两边都带 live 标记时限定词集合相等,那道闸静默,而同一个艺人的多场演唱会
+// 都收录同一首歌的现场版是华语歌手的常态(陈奕迅《Shall We Dance》至少上过 The Easy Ride
+// 和 Get A Life 两场的专辑),错配的后果和错配录音室版一样:时间轴是另一场演出的。
+//
+// 这**不违反**「专辑对不上是零证据」的既有原则(albumScore 只加不减、v3 起就写明中英互译
+// 专辑名/single 发行/精选集都是合法的"对不上")——那条原则针对的是「字符串没对上=没有信息」,
+// 而这里要求的是**双方都做出了明确的身份声明且声明互相矛盾**,四道门缺一不可:
+//
+//	① 本地**专辑名自己**带 live 标记(不能只靠歌名括号里的 Live):录音室专辑的专辑名对
+//	   「是哪场演出」没有发言权——Queen《The Game (Deluxe Edition)》的 bonus 现场曲配上
+//	   《Queen Rock Montreal》是**同一场**蒙特利尔演出,全库回放坐实这一档必须挡(3 条
+//	   Queen 假阳性全靠这道门排除);
+//	② 候选也是现场录音(歌名/专辑名带 live/现场,或专辑名带标记词元):候选是录音室版时
+//	   归 versionTagsMismatch 管,两道闸恰好互补、不重叠;
+//	③ 两边专辑名剥掉歌手名和 live 类通用词后**各自还有身份词**(全是通用词的一边等于没有
+//	   做身份声明,构不成矛盾);
+//	④ 两个身份词集合**完全不相交**(共享哪怕一个词元——年份、场馆、巡演名——都当同一场
+//	   演出的不同写法放过:方大同《15 (Live in Hong Kong 2011)》vs 网易云《15 香港演唱会
+//	   (2011Live)》共享 "15"/"2011",是同一场的中英命名,全库回放里这类真实配对全部安全)。
+//
+// 全库 2339 条真实决策回放(2026-09-01):命中 29 个候选、涉及 24 首歌,逐条人工核对
+// 全部是真的另一场演出,0 误伤;冠军改变 8 首全部改对。判据对事不对源——网易云自己
+// 匹配错场次时(《孤独探戈》它给的也是 Get A Life)同样被扣。
+func liveAlbumIdentityConflict(localArtist, localAlbum, candTitle, candAlbum string) bool {
+	if strings.TrimSpace(localAlbum) == "" || strings.TrimSpace(candAlbum) == "" {
+		return false
+	}
+	if !albumHasLiveMarker(localAlbum) {
+		return false
+	}
+	candTags := versionTagsIn(candTitle, candAlbum)
+	if !candTags["live"] && !candTags["现场"] && !albumHasLiveMarker(candAlbum) {
+		return false
+	}
+	lt := albumIdentityTokens(localArtist, localAlbum)
+	ct := albumIdentityTokens(localArtist, candAlbum)
+	if len(lt) == 0 || len(ct) == 0 {
+		return false
+	}
+	for t := range ct {
+		if lt[t] {
+			return false
+		}
+	}
+	return true
+}
 
 // lyricTitleAccepted 是**七个源共用**的唯一一条「这条候选的曲名算不算这首歌」判定。
 // 只认三种:

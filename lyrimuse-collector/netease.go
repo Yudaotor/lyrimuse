@@ -12,6 +12,7 @@ import (
 	"math"
 	"net/http"
 	neturl "net/url"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -135,8 +136,8 @@ func neteaseLastFailureReasonNow() string {
 // same song appears on many NetEase albums (originals, compilations, "This Is
 // It"…), so picking songs[0] blindly grabs the wrong cover. Cached per
 // artist|title|album; only cached once the song id is found.
-func neteaseLookup(ctx context.Context, artist, title, album string) neteaseInfo {
-	return withholdImpersonatorRiddenIdentity(artist, neteaseLookupAll(ctx, artist, title, album))
+func neteaseLookup(ctx context.Context, artist, title, album string, durationSecs float64) neteaseInfo {
+	return withholdImpersonatorRiddenIdentity(artist, neteaseLookupAll(ctx, artist, title, album, durationSecs))
 }
 
 // withholdImpersonatorRiddenIdentity 对"版权整体下架、曲库里只剩仿冒号"的艺人
@@ -197,11 +198,16 @@ func withholdImpersonatorRiddenIdentity(artist string, info neteaseInfo) netease
 
 // neteaseLookupAll 是不分艺人、如实返回网易云这一趟查到的全部字段的内层实现。
 // 调用方一律走 neteaseLookup(它在出口按艺人扣字段),不要直接调这个。
-func neteaseLookupAll(ctx context.Context, artist, title, album string) neteaseInfo {
+//
+// durationSecs:本地真实曲长(秒),给 pick() 的时长锚定档用(见 pick 头注),不知道就传 0
+// (锚定档关闭,行为与 2026-09-01 之前逐字节一致)。它参与缓存 key —— 否则预取路径
+// (传 0)先跑,缓存住一个没经过锚定的结果,真播放那次(带时长)命中同一个 key,锚定档
+// 永远轮不到生效,直到 30 天 TTL 过期。
+func neteaseLookupAll(ctx context.Context, artist, title, album string, durationSecs float64) neteaseInfo {
 	if title == "" {
 		return neteaseInfo{}
 	}
-	key := artist + "|" + title + "|" + album
+	key := artist + "|" + title + "|" + album + "|" + strconv.Itoa(int(durationSecs))
 	now := time.Now().Unix()
 	neteaseMu.Lock()
 	if e, ok := neteaseCache[key]; ok {
@@ -216,7 +222,7 @@ func neteaseLookupAll(ctx context.Context, artist, title, album string) neteaseI
 	}
 	neteaseMu.Unlock()
 
-	info := resolveNeteaseInfo(ctx, artist, title, album)
+	info := resolveNeteaseInfo(ctx, artist, title, album, durationSecs)
 	// 只缓存"拿到实质内容"的结果:找到歌但封面+歌词都空(多半被限流)不缓存,以免遮蔽
 	// enrich 的短 TTL 自愈——否则下次重解析命中这份空缓存、永远补不回封面/歌词。
 	if info.SongURL != "" && (info.Cover != "" || info.Lyrics != "") {
@@ -282,7 +288,22 @@ func isInstrumentalPlaceholderLyric(lrc string) bool {
 	return hasPlaceholder
 }
 
-func resolveNeteaseInfo(ctx context.Context, artist, title, album string) neteaseInfo {
+// stripNeteaseEscapedApostrophes 清掉网易云 lyric/tlyric/romalrc/yrc 接口里一小撮曲目
+// 自带的字面 `\'`(反斜杠+英文引号两个字符,不是 JSON 转义——json.Unmarshal 早就完成了
+// 正常解码,这是网易云自己数据库里躺着的脏数据)。2026-09-01 用户报"陈奕迅《爱是怀疑
+// (Live)》里 It\'s / Can\'t 这种反斜杠直接显示在歌词里",实测抓了本地缓存的
+// ~/.config/lyrimuse/lyrics/*.lrc 全量按来源分组核实过:1669 条网易云缓存里只有这 2 条
+// 命中(且都是英文歌词行,反斜杠只出现在撇号前面),QQ/酷狗/musixmatch/lrclib/amll 缓存
+// 里零命中——是网易云这一个源的孤立脏数据,不是我们自己转义/反转义链路的 bug,所以固定
+// 替换反斜杠+撇号这一种组合就够,不用做成通用的转义清洗器。
+func stripNeteaseEscapedApostrophes(s string) string {
+	if !strings.Contains(s, `\'`) {
+		return s
+	}
+	return strings.ReplaceAll(s, `\'`, "'")
+}
+
+func resolveNeteaseInfo(ctx context.Context, artist, title, album string, durationSecs float64) neteaseInfo {
 	cli := &http.Client{Timeout: 4 * time.Second}
 	get := func(u string, v any) error {
 		if err := neteaseThrottle(ctx); err != nil {
@@ -324,8 +345,9 @@ func resolveNeteaseInfo(ctx context.Context, artist, title, album string) neteas
 			if probe.Code == 405 {
 				// 2026-08-31 实测坐实的具体原因,见 neteaseLastFailureReason 声明处注释。
 				// 只在确认是这个 code 时才记——其它非零 code 目前没有验证过具体含义,
-				// 不编一个没核实过的理由。
-				neteaseSetLastFailureReason("网易云接口限流（短时间内请求过多，操作频繁，code 405），不是网络故障")
+				// 不编一个没核实过的理由。存的是稳定代码不是文案,见 lyricsourcefailure.go
+				// 头注,两侧必须同步维护。
+				neteaseSetLastFailureReason(lyricFailureReasonNeteaseRateLimited)
 			}
 			return fmt.Errorf("netease api code %d", probe.Code)
 		}
@@ -425,6 +447,49 @@ func resolveNeteaseInfo(ctx context.Context, artist, title, album string) neteas
 				exactCands = append(exactCands, cand{s, sc})
 			} else {
 				looseCands = append(looseCands, cand{s, sc})
+			}
+		}
+		// 时长+专辑锚定档(v8,2026-09-01,陈奕迅《孤独探戈 (Live)》案),排在既有分层
+		// **之前**:曲库里混着同一首歌的多个实体版本时,"精确同名优先"这条排序对
+		// 「源平台在曲名里多标注了演奏方式」的正确版本是盲的 —— 本地《The Easy Ride
+		// 演唱会 (Live)》的「孤独探戈 (Live)」,网易云库里正确版本叫「孤独探戈(Acoustic
+		// Piano)(Live)」(专辑对、自报时长 215.4s 与本地 215.373s 逐位吻合),却因为标题
+		// 不精确落进 looseCands,被三条**错场次**的精确同名(Get A Life sc=1/Third
+		// Encounter sc=1/拉阔压轴 sc=0)按"exactCands 优先"永远压住 —— pick 原来完全
+		// 不看时长,而时长 ≤1% 恰恰是"同一次录音"的最硬证据(第 14 条三角判据同一档)。
+		//
+		// 判据(全部成立才接管):①sameRecordingDespiteVersionTags 四道门(时长 ≤1% +
+		// 专辑亲和 + 不缺本地限定词 + 多出的词全在 acoustic 家族白名单 —— 伴奏/粤语/国语
+		// 这类"时长相同但确是另一次录音"的词永不锚定,见 match.go 那边的注释);
+		// ②它的专辑分**严格高于**其它全部已通过校验的候选(证据必须是"唯独它对得上",
+		// 不是"大家都差不多");③锚定候选唯一(两条都满足①且专辑分打平 → 有歧义,放弃)。
+		// durationSecs 未知(=0,预取路径)时整档关闭,行为与旧版逐字节一致。
+		if durationSecs > 0 {
+			all := append(append([]cand{}, exactCands...), looseCands...)
+			var anchor *neSong
+			anchorSc := -1
+			for _, c := range all {
+				if !sameRecordingDespiteVersionTags(title, album, durationSecs, c.s.Name, c.s.Album.Name, c.s.Duration/1000) {
+					continue
+				}
+				switch {
+				case c.sc > anchorSc:
+					anchor, anchorSc = c.s, c.sc
+				case c.sc == anchorSc:
+					anchor = nil // 两条锚定候选专辑分打平,有歧义,这一档整体放弃
+				}
+			}
+			if anchor != nil && anchorSc >= 1 {
+				strictlyHighest := true
+				for _, c := range all {
+					if c.s != anchor && c.sc >= anchorSc {
+						strictlyHighest = false
+						break
+					}
+				}
+				if strictlyHighest {
+					return anchor
+				}
 			}
 		}
 		// strict:looseCands 传 true——这批候选标题本身就带着"(Extended)"/"(Live)"/
@@ -529,6 +594,44 @@ func resolveNeteaseInfo(ctx context.Context, artist, title, album string) neteas
 			nameOnlyArtist = nameOnlyMatch(r.Result.Songs)
 		}
 	}
+	// 专辑锚定兜底(2026-09-01,周杰伦《简单爱 (Live)》/《The One 周杰伦演唱会》案):
+	// 四条查询词全部无可信匹配 ≠ 网易云没有这首歌——官方老曲目会被 UGC 翻做/仿冒号从曲目
+	// 搜索排名里彻底挤出窗口(实测四条查询词各自的前 30 条里,官方 The One 版一次都没出现,
+	// 而 /api/album/18906 的曲目列表里它就躺着,id=186043、自报 273.0s 与本地 273.227s
+	// 相差 0.227s,还带 52 行 LRC)。本地专辑名 + 真实时长都已知时,改走"搜专辑
+	// (neteaseAlbumIDByName,artistMatches + albumScore>=100 双闸)→ 浏览曲目 → 标题/
+	// 歌手闸 + 时长唯一锚定"这条不依赖曲目搜索排名的入口,拿曲目 ID 接回既有的取词/取封面
+	// 流程。闸门与 pick() 同强度(见 anchorAlbumTrackForLocalTitle 头注),不是放宽。
+	//
+	// 为什么不交给 enrich.go 的标题反查轮:那轮确实能找到同一条曲目(title-from-album,
+	// 实测 albumDiff=0.227s),但它只把**标题文字**带出来重搜——「简单爱(Live)」跟本地
+	// 「简单爱 (Live)」normLoose 相等,重搜轮直接被"纠正后标题没变化"的判据跳过;就算不跳,
+	// 拿文字重搜撞的还是同一堵召回墙。ID 在手却只回传文字,正是这条兜底要补的缺口。
+	//
+	// 成本:仅在"搜索召回已全空 + 本地有专辑名"时多两次网易云请求(搜专辑 + 浏览曲目),
+	// 走同一个 neteaseThrottle 节流;durationSecs=0(预取路径)时整档关闭,跟 pick() 的
+	// 时长锚定档同一条纪律。
+	if chosen == nil && album != "" && durationSecs > 0 {
+		if albumID, found := neteaseAlbumIDByName(ctx, artist, album); found {
+			if tracks, ok := neteaseAlbumTracks(albumID); ok {
+				if t, ok := anchorAlbumTrackForLocalTitle(tracks, artist, title, durationSecs); ok {
+					var anchored neSong
+					anchored.ID = t.neteaseSongID
+					anchored.Name = t.title
+					anchored.Album.Name = t.neteaseAlbum
+					anchored.Album.ID = albumID
+					anchored.Duration = t.duration * 1000 // neSong.Duration 是毫秒
+					if t.artist != "" {
+						anchored.Artists = make([]struct {
+							Name string `json:"name"`
+						}, 1)
+						anchored.Artists[0].Name = t.artist
+					}
+					chosen = &anchored
+				}
+			}
+		}
+	}
 	if chosen == nil {
 		if nameOnlyArtist != "" {
 			return neteaseInfo{Artist: nameOnlyArtist} // 只拿到统一歌手名用的信号,不给封面/歌词
@@ -594,7 +697,10 @@ func resolveNeteaseInfo(ctx context.Context, artist, title, album string) neteas
 		if err := get(fmt.Sprintf("https://music.163.com/api/song/lyric?id=%d&lv=-1&kv=-1&tv=-1&rv=-1", songID), &r); err != nil {
 			return "", "", "", false
 		}
-		return r.Lrc.Lyric, r.Tlyric.Lyric, r.Romalrc.Lyric, r.PureMusic
+		return stripNeteaseEscapedApostrophes(r.Lrc.Lyric),
+			stripNeteaseEscapedApostrophes(r.Tlyric.Lyric),
+			stripNeteaseEscapedApostrophes(r.Romalrc.Lyric),
+			r.PureMusic
 	}
 	fetchYRC := func(songID int64) string {
 		var r struct {
@@ -605,7 +711,7 @@ func resolveNeteaseInfo(ctx context.Context, artist, title, album string) neteas
 		if err := get(fmt.Sprintf("https://music.163.com/api/song/lyric/v1?id=%d&yv=-1", songID), &r); err != nil {
 			return ""
 		}
-		if y := r.Yrc.Lyric; strings.Contains(y, "[") && len(y) < 40000 {
+		if y := stripNeteaseEscapedApostrophes(r.Yrc.Lyric); strings.Contains(y, "[") && len(y) < 40000 {
 			return y
 		}
 		return ""
@@ -644,12 +750,22 @@ func neteaseAlbumTracks(albumID int64) ([]albumTrack, bool) {
 		return nil, false
 	}
 	cli := &http.Client{Timeout: 6 * time.Second}
+	// ⚠️ 两个端点的字段名不一样(2026-09-01 实测 /api/v1/album/18906 坐实):老端点是
+	// duration/artists,v1 端点是 dt/ar(id/name 两边一致)。原来只解码 duration/artists,
+	// 走 v1 兜底那条路时时长恒为 0、歌手恒为空——bestAlbumTrackByDuration 对时长 <=0 的
+	// 曲目直接跳过,等于"主端点被限流时这条兜底整个静默失效",而且表现跟"专辑里没有时长
+	// 接近的歌"一模一样,从外面看不出来。两套字段都解,谁有值用谁。
 	type neAlbumSong struct {
+		ID       int64   `json:"id"`
 		Name     string  `json:"name"`
-		Duration float64 `json:"duration"` // 毫秒
+		Duration float64 `json:"duration"` // 毫秒(老端点)
+		DT       float64 `json:"dt"`       // 毫秒(v1 端点)
 		Artists  []struct {
 			Name string `json:"name"`
 		} `json:"artists"`
+		Ar []struct {
+			Name string `json:"name"`
+		} `json:"ar"`
 	}
 	var payload struct {
 		Code  int `json:"code"`
@@ -717,16 +833,28 @@ func neteaseAlbumTracks(albumID int64) ([]albumTrack, bool) {
 		// 合唱曲目 artists 是数组,按 " & " 拼回去 —— 跟本地标签"歌手A & 歌手B"的写法
 		// 对齐,别压缩成第一位(压缩会让 enrich 的 key 跟真播到这首歌时算出来的对不上,
 		// 预取的结果白存)。
-		names := make([]string, 0, len(s.Artists))
-		for _, a := range s.Artists {
+		artists := s.Artists
+		if len(artists) == 0 {
+			artists = s.Ar // v1 端点的字段名,见 neAlbumSong 注释
+		}
+		names := make([]string, 0, len(artists))
+		for _, a := range artists {
 			if a.Name != "" {
 				names = append(names, a.Name)
 			}
 		}
+		dur := s.Duration
+		if dur <= 0 {
+			dur = s.DT // v1 端点的字段名,见 neAlbumSong 注释
+		}
 		out = append(out, albumTrack{
 			title:    s.Name,
 			artist:   strings.Join(names, " & "),
-			duration: s.Duration / 1000, // 网易云给的是毫秒
+			duration: dur / 1000, // 网易云给的是毫秒
+			// payload.Album.Name 两种端点 shape 都带(v1 把曲目放顶层,但 album 对象
+			// 照样有,2026-09-01 实测 /api/v1/album/18906 核实),这里不用分情况。
+			neteaseSongID: s.ID,
+			neteaseAlbum:  payload.Album.Name,
 		})
 	}
 	return out, len(out) > 0
@@ -1003,6 +1131,52 @@ func bestAlbumTrackByDuration(tracks []albumTrack, durationSecs float64) string 
 // 的是错误专辑里的《春风吹》,泛搜反而在结果第一条就搜到真正对的《爱爱爱》,误差 0.266s)
 // 各自都真实证明过"我更准"的案例,谁先跑、谁的结果就被无条件采纳这个旧逻辑必然在另一个
 // 案例上出错——必须两条都跑、比谁的 diff 更小,而不是"谁先成功就用谁"。
+// anchorAlbumTrackForLocalTitle 在"浏览专辑全部曲目"的结果里,为本地曲目锚定唯一对应的
+// 网易云曲目(带 neteaseSongID,给 resolveNeteaseInfo 的专辑锚定兜底按 ID 直取歌词用)。
+//
+// 跟 bestAlbumTrackByDurationDetailed 的分工:那个是**纯时长**判据(给标题反查用——标题
+// 在平台间是意译时文字信号本来就不可用,只能赌时长,所以容差卡到 2 秒都嫌松);这里恰恰
+// 相反,产出的是完整歌词候选,闸门必须与 pick() 同强度——lyricTitleAccepted + artistMatches
+// (曲目 artist 为空时跳过歌手闸:专辑记录本身已在 neteaseAlbumIDByName 里按歌手核验过)
+// 先把关,时长只负责在同名多版本里挑对那一个。容差沿用同一个常量:这里文字闸都在,理论上
+// 可以更宽,但没有真实案例证明需要,先不另开一个数值。
+//
+// 同误差出现两个标题不同的曲目时判有歧义、整体放弃(宁可没有,也不要错,跟
+// bestAlbumTrackByDurationDetailed 同一个原则)。
+func anchorAlbumTrackForLocalTitle(tracks []albumTrack, artist, title string, durationSecs float64) (albumTrack, bool) {
+	var best albumTrack
+	bestDiff := math.Inf(1)
+	found := false
+	ambiguous := false
+	for _, t := range tracks {
+		// neteaseSongID<=0 = 不是 neteaseAlbumTracks 填的(Apple 本地资料库/搜索结果
+		// 两条来源都不带 ID),这条兜底拿它没用。
+		if t.neteaseSongID <= 0 || t.title == "" || t.duration <= 0 {
+			continue
+		}
+		if !lyricTitleAccepted(t.title, title) {
+			continue
+		}
+		if t.artist != "" && !artistMatches(t.artist, artist) {
+			continue
+		}
+		d := math.Abs(t.duration - durationSecs)
+		if d > retryTitleFromAlbumMaxDurationDiffSecs {
+			continue
+		}
+		switch {
+		case d < bestDiff:
+			best, bestDiff, found, ambiguous = t, d, true, false
+		case d == bestDiff && normLoose(t.title) != normLoose(best.title):
+			ambiguous = true
+		}
+	}
+	if !found || ambiguous {
+		return albumTrack{}, false
+	}
+	return best, true
+}
+
 func bestAlbumTrackByDurationDetailed(tracks []albumTrack, durationSecs float64) (title string, diff float64, ok bool) {
 	best := ""
 	bestDiff := math.Inf(1)

@@ -24,9 +24,9 @@ func TestPinBlocksAutomaticLyricsReselection(t *testing.T) {
 
 	// 同源当初落选 → 不 pin 该重试。这一条尤其要紧：它是刻意越过「已经有逐字就不重试」
 	// 那道闸的，pin 要是排在那两条后面就会被一起越过。
-	savedNative := nativeLyricSource
-	t.Cleanup(func() { nativeLyricSource = savedNative })
-	nativeLyricSource = "qq"
+	savedNative := nativeLyricSources
+	t.Cleanup(func() { nativeLyricSources = savedNative })
+	nativeLyricSources = map[string]bool{"qq": true}
 	missed := enrichEntry{
 		Lyrics: "[00:01.00]x", LyricsYRC: "[1,2](1,1,0)x",
 		LyricsSource: "kugou", LyricsSourcesSeen: []string{"kugou", "qq"},
@@ -39,7 +39,7 @@ func TestPinBlocksAutomaticLyricsReselection(t *testing.T) {
 	}
 
 	// 时长对不上那条同样是越闸路径，一并覆盖。
-	nativeLyricSource = ""
+	nativeLyricSources = nil
 	wrongDur := enrichEntry{
 		Lyrics: "[00:01.00]x", LyricsYRC: "[1,2](1,1,0)x",
 		LyricsSource: "kugou", ResolvedDurationSecs: 300,

@@ -243,7 +243,39 @@ type enrichEntry struct {
 	// 语义:非空时,自愈路径(升级重试 / rescore)**照常跑**,但重选被约束在这个源内
 	// (pickLyricCandidatePreferring)。于是"同一个源给出了更好的内容"仍然能升上来,
 	// "被换成另一个源"不会发生。那个源这一轮没给出候选时就不换,而不是退回全局最优。
+	//
+	// ⚠️ 2026-09-01 起**没有任何写入方**:App 侧两个「采纳候选」入口原本是这个字段唯一的
+	// 来源,现在恒传空串。用户看到设置里写出来的说明后否掉了这个中间态——他要的两态是
+	// 「不锁 = 之后一切自动优化照常调整,不限制源;锁 = 定死不动(manual_lyrics)」,
+	// "只约束源"这一档既不是他想要的、也是一个只能靠事后一枚徽章解释的隐形约束。本机
+	// 存量的 6 条当时一并清掉了。
+	//
+	// ⚠️ 2026-09-01 再补:migrateManualPickMarks(manualpickmigrate.go)现在会在**每次启动**
+	// 把这个字段清空(顺带把它转成新的 manual_pick_sha 留痕)。所以它不只是"没有写入方",
+	// 而是**读到非空的机会也没有了** —— 下面 pickLyricCandidatePreferring 的非空分支从此
+	// 是确凿的死代码,那两个调用点逐字等价于直接调 pickLyricCandidate,App 侧那两枚
+	// 「来源已选定」pin 徽章也永远不会亮。
+	//
+	// 之所以还没删:这是一整套横跨两种语言的机制(字段 + preferring 函数 + 它的单测 +
+	// 两枚徽章),删它是一次独立的清理,不该混在"改开关语义"这次改动里 —— 而且留着不会
+	// 造成任何行为差异。要删就整套一起删,别只删一半。删的时候连这一段注释、以及
+	// migrateManualPickMarks 里读它的那几行一起处理(迁移本身还得留够久,直到确信线上
+	// 没有人还停在 v1.4.0)。
 	LyricsSourceChoice string `json:"lyrics_source_choice,omitempty"`
+	// ManualPickSHA 是**纯直通字段**:collector 一个字节都不读它,声明在这里只为了让它
+	// 在缓存往返里活下来。
+	//
+	// ⚠️ 这不是可选的。loadEnrichCache 把整个文件解进 map[string]enrichEntry,
+	// saveEnrichCache 再整个 marshal 回去,而 encoding/json 会**直接丢弃未声明字段** ——
+	// App 侧写进缓存的任何字段,只要这里没有对应成员,就会在 collector 下一次存盘时被
+	// 静默抹掉(而 collector 每解析一首歌都可能存盘,窗口就是几分钟)。2026-09-01 第一版
+	// 正是漏了这一句,TestEnrichEntryPreservesAppOwnedFields 当场逮住:表现会是"开关打开
+	// 时什么都没锁上",而缓存文件里那个字段就是不见了,像从没写过。**App 侧以后新增任何
+	// 写进这份缓存的字段,都要在这里补一个成员**,哪怕 collector 永远不读。
+	//
+	// 内容:App 侧「采纳候选」时写下的正文指纹,用来回答"这首歌是用户手动选的、而且当前
+	// 这份内容还就是他选的那一份吗"。语义见 Swift 侧 LyrimuseCore/ManualPickLock.swift。
+	ManualPickSHA string `json:"manual_pick_sha,omitempty"`
 	// Instrumental 标记"联网查过了,至少一个源(lrclib 的 instrumental,或网易云的
 	// pureMusic / 纯音乐占位正文)明确说这首歌是纯音乐"——
 	// 跟"Lyrics 为空"要分开看:后者也可能是"五个源都没查到、真的没搜到"这种更含糊的
@@ -1005,8 +1037,8 @@ func needsLyricsRetry(e enrichEntry, wrongDuration, pinned bool) bool {
 	//
 	// 下面的手改保护/重试上限/时间节流照常生效 —— 同源候选要是每次都赢不了(比如它质量
 	// 实在差,250 分也翻不过来),重试次数上限会兜住,不会没完没了地重搜。
-	nativeMissedOut := nativeLyricSource != "" && e.LyricsSource != nativeLyricSource &&
-		slices.Contains(e.LyricsSourcesSeen, nativeLyricSource)
+	nativeMissedOut := len(nativeLyricSources) > 0 && !nativeLyricSources[e.LyricsSource] &&
+		slices.ContainsFunc(e.LyricsSourcesSeen, func(s string) bool { return nativeLyricSources[s] })
 	// 版本时长对不上(预取用了另一个版本的时长做校验)跟"同源落选"一样,本身就是重来
 	// 一次的理由,同样要越过下面"已经有逐字就不重试"那道闸。wrongDuration 由调用方
 	// (trackEnrichment)算好传进来:durationMismatch 的原始观察值必须先过
@@ -1951,9 +1983,13 @@ type scoredLyricCandidateResult struct {
 	// 透传,不参与打分,见 lyricCandidate.language。
 	Language string `json:"language,omitempty"`
 	// Title/Artist/Album/CoverURL 是这个源实际匹配到的歌名/歌手/专辑/封面(不参与
-	// 打分,见 lyricCandidate 的同名字段注释)——"搜索候选歌词"弹窗靠这几个字段展示
-	// 每条候选具体对应哪首歌/哪个版本,不是只看来源名字。不是每个源都能给全:LRCLIB
-	// 没有封面这个概念,QQ 这条路径也没查封面,留空是"这个源确实没有",不是 bug。
+	// 打分,见 lyricCandidate 的同名字段注释)——"搜索候选歌词"弹窗和「解析决策」面板
+	// 靠这几个字段展示每条候选具体对应哪首歌/哪个版本,不是只看来源名字。
+	//
+	// ⚠️ 这里原来写着"LRCLIB 没有封面这个概念,QQ 这条路径也没查封面"——2026-09-01 实测
+	// 推翻:对《Shall We Dance (Live)》跑一次 search-lyrics,网易云/酷狗/QQ/LRCLIB **四个源
+	// 都返回了封面**(LRCLIB 那条是 iTunes 的 mzstatic 图),连被判 -1 的候选也有。仍然
+	// 当"可能为空"处理(某个源某次没查到是正常的),但别再按"这两个源天生没有"去设计。
 	Title    string `json:"title,omitempty"`
 	Artist   string `json:"artist,omitempty"`
 	Album    string `json:"album,omitempty"`
@@ -2517,7 +2553,7 @@ func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, alb
 	qqIDCh := make(chan string, 1)
 
 	go func() {
-		info := neteaseLookup(ctx, artist, title, album)
+		info := neteaseLookup(ctx, artist, title, album, durationSecs)
 		if info.SongID > 0 {
 			neteaseIDCh <- strconv.FormatInt(info.SongID, 10)
 		} else {
@@ -2542,10 +2578,14 @@ func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, alb
 			// 逐字(QRC)是完全独立的一套接口/密钥,自己失败不影响上面整行歌词——
 			// 见 qq.go 顶部注释。
 			yrc = qqQRCLyric(ctx, qqMid, artist, title, album, durationSecs)
-			// 只读缓存:QRC 那步走通时(它内部查过同一首的单曲详情)这里是热的,没走通
+			// 专辑维度路线(resolveQQMatchViaAlbum)选中时曲目单里就带官方时长,直接用;
+			// 否则只读缓存:QRC 那步走通时(它内部查过同一首的单曲详情)这里是热的,没走通
 			// (会话拿不到 sid / 详情接口失败,那边不写负缓存)就留 0。srcDur 是纯透传的
 			// 评测数据,不值得为它在歌词主路径上多挂一次最多 6s 的请求(2026-08-12 审阅)。
-			qqDur = qqSongMetaCachedOnly(qqMid).interval
+			qqDur = match.interval
+			if qqDur <= 0 {
+				qqDur = qqSongMetaCachedOnly(qqMid).interval
+			}
 		}
 		qqIDCh <- qqMid
 		// language 跟 qqDur 同一个只读缓存、同一条"QRC 那步走通时这里是热的"理由,见上面

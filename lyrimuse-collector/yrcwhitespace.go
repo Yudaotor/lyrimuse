@@ -102,6 +102,11 @@ func migrateYRCWhitespaceTokens() {
 		enrichCache[k] = e
 		fixed++
 	}
+	if fixed > 0 {
+		// 必须显式置脏,否则 saveEnrichCache 是空操作 —— 同 migrateLyricTimelines 里
+		// 那条 2026-09-01 实测坐实的潜伏 bug,这里是同一个形态。
+		enrichDirty = true
+	}
 	enrichMu.Unlock()
 	if fixed > 0 {
 		log.Printf("yrc whitespace-token migration: merged space tokens in %d entries", fixed)

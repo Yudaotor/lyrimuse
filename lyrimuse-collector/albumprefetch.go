@@ -148,6 +148,13 @@ func prefetchAlbumSiblings(currentArtist, currentTitle, album, bundleID string) 
 type albumTrack struct {
 	title, artist string
 	duration      float64
+	// neteaseSongID/neteaseAlbum:这条曲目在网易云上的歌曲 id 和专辑名,只有
+	// neteaseAlbumTracks 这一个来源会填(Apple Music 本地资料库、搜索结果那两条来源
+	// 都是 0/空)。给 resolveNeteaseInfo 的专辑锚定兜底用——那条路径要拿 id 直取歌词,
+	// 不能只有标题文字(见 anchorAlbumTrackForLocalTitle 头注:标题文字拿去重搜正是
+	// 召回失败的那条路)。
+	neteaseSongID int64
+	neteaseAlbum  string
 }
 
 // albumTracks 按当前播放器挑一个"这张专辑有哪些曲目"的来源,见文件头注释。
@@ -158,7 +165,9 @@ func albumTracks(artist, title, album, bundleID string) ([]albumTrack, bool) {
 	// 复用解析歌词时那次搜索的结果 —— neteaseLookup 带 30 天缓存,当前这首歌刚解析过,
 	// 这里是缓存命中、零网络;拿到的 AlbumID 是**这首歌自己所属**的那张专辑。缓存命中
 	// 路径不会真的发请求,没有可取消的对象,context.Background() 就够。
-	ne := neteaseLookup(context.Background(), artist, title, album)
+	// durationSecs 传 0:这条路径查的是"这首歌属于哪张专辑"(要 AlbumID),时长锚定档
+	// 用不上也不该用 —— 预取时还没有真实播放时长。
+	ne := neteaseLookup(context.Background(), artist, title, album, 0)
 	if ne.AlbumID <= 0 {
 		return nil, false
 	}

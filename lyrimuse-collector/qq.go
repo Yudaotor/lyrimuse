@@ -74,7 +74,8 @@ func qqMusicMatchCached(ctx context.Context, artist, title, album string) qqMusi
 	qqURLMu.Unlock()
 
 	m := resolveQQMusicMatch(ctx, artist, title, album)
-	if m.url != "" {
+	// unreliable(专辑路线网络失败、这是回落结果)不进缓存:见 qqMusicMatch.unreliable 注释。
+	if m.url != "" && !m.unreliable {
 		qqURLMu.Lock()
 		qqURLCache[key] = m
 		qqURLMu.Unlock()
@@ -96,32 +97,52 @@ const qqUA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36
 // still answers unauthenticated (musicu.fcg returns an empty list and
 // client_search_cp returns zero bytes under anti-scrape). Returns nil on error.
 func qqSmartbox(ctx context.Context, query string) []qqSmartboxItem {
+	d, _ := qqSmartboxRaw(ctx, query)
+	return d.Song.ItemList
+}
+
+// qqSmartboxAlbums 是同一个 suggest 接口的 **album 分类**——专辑维度检索路线
+// (resolveQQMatchViaAlbum)用它找专辑 mid。跟 song 分类同一次请求形态,条目字段也同形
+// (mid/name/singer)。error 非 nil 表示**网络层失败**(超时/非 200/解码失败),跟"接口
+// 正常应答但 0 条"是两回事——专辑路线要靠这个区分"确定没有"和"这次没查成"。
+func qqSmartboxAlbums(ctx context.Context, query string) ([]qqSmartboxItem, error) {
+	d, err := qqSmartboxRaw(ctx, query)
+	return d.Album.ItemList, err
+}
+
+// qqSmartboxCategoryList 是 smartbox 响应里一个分类的条目列表。
+type qqSmartboxCategoryList struct {
+	ItemList []qqSmartboxItem `json:"itemlist"`
+}
+
+type qqSmartboxData struct {
+	Song  qqSmartboxCategoryList `json:"song"`
+	Album qqSmartboxCategoryList `json:"album"`
+}
+
+func qqSmartboxRaw(ctx context.Context, query string) (qqSmartboxData, error) {
 	u := "https://c.y.qq.com/splcloud/fcgi-bin/smartbox_new.fcg?_=1&cv=4747474&ct=24&format=json&is_xml=0&key=" + neturl.QueryEscape(query)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {
-		return nil
+		return qqSmartboxData{}, err
 	}
 	req.Header.Set("Referer", "https://y.qq.com/")
 	req.Header.Set("User-Agent", qqUA)
 	resp, err := doHTTPTracked(&http.Client{Timeout: 6 * time.Second}, req)
 	if err != nil {
-		return nil
+		return qqSmartboxData{}, err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return nil
+		return qqSmartboxData{}, fmt.Errorf("smartbox status %d", resp.StatusCode)
 	}
 	var out struct {
-		Data struct {
-			Song struct {
-				ItemList []qqSmartboxItem `json:"itemlist"`
-			} `json:"song"`
-		} `json:"data"`
+		Data qqSmartboxData `json:"data"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
-		return nil
+		return qqSmartboxData{}, err
 	}
-	return out.Data.Song.ItemList
+	return out.Data, nil
 }
 
 // qqSearchQueries 是 smartbox 的"歌手+歌名"查询尝试序列。QQ 这一源对括号**格外**敏感:
@@ -646,8 +667,18 @@ func qqArtistOK(strict bool, singer, artist string) bool {
 // 匹配信息——title/artist 来自 smartbox 搜索结果本身(it.Name/it.Singer),album 来自
 // (如果查询带了专辑名)顺带查过的 qqSongAlbum(mid)。给"搜索候选歌词"弹窗展示用,不
 // 参与任何匹配/打分逻辑。
+//
+// interval 只有专辑维度路线(resolveQQMatchViaAlbum)会填:GetAlbumSongList 顺带给了
+// 每首的官方时长(秒),enrich.go 把它当 srcDur 透传给打分;smartbox 路线拿不到时长,留 0
+// (那边照旧走 qqSongMetaCachedOnly 的"QRC 路径查过详情就有"的只读缓存)。
+//
+// unreliable:专辑维度路线因网络层失败没能给出结论、这个 match 是回落的歌名维度结果时
+// 置位——qqMusicMatchCached 见它就不写缓存,下一轮重搜有机会翻案(不置位的话,一次
+// smartbox 超时就把录音室版按 artist|title|album 永久钉进本进程的 qqURLCache)。
 type qqMusicMatch struct {
 	url, title, artist, album string
+	interval                  float64
+	unreliable                bool
 }
 
 func resolveQQMusicURL(ctx context.Context, artist, title, album string) string {
@@ -684,10 +715,15 @@ func resolveQQMusicMatch(ctx context.Context, artist, title, album string) qqMus
 		cands = collect(false) // artistMatches 太严格(跨平台歌手名写法不同)时放宽成 looseContains,但仍要求歌手名沾边
 	}
 	if len(cands) == 0 {
-		return qqMusicMatch{} // 无标题匹配 → 上层退搜索链接,绝不给错歌
+		// 歌名维度一无所获 → 专辑维度还有机会(标题带括号时 smartbox 恒 0 条;命中不了
+		// 就照旧返回零值,上层退搜索链接,绝不给错歌)。零值本来就不进缓存,degraded
+		// 信号在这条路径上不用管。
+		m, _ := resolveQQMatchViaAlbum(ctx, artist, title, album)
+		return m
 	}
 	// 有专辑名 → 给前几条补专辑、按 albumScore 去重。采集器一首歌只解析一次,
 	// 频次低;补专辑失败(反爬/超时)时降级到按名字选,不影响出具体歌链接。
+	viaAlbumDegraded := false // 专辑路线曾网络失败 → 本函数所有回落出口都要打 unreliable
 	if album != "" {
 		bestMid, bestTitle, bestArtist, bestAlbum, bestScore, bestExact := "", "", "", "", 0, false
 		for i, c := range cands {
@@ -706,18 +742,265 @@ func resolveQQMusicMatch(ctx context.Context, artist, title, album string) qqMus
 				bestMid, bestTitle, bestArtist, bestAlbum, bestScore, bestExact = c.mid, c.title, c.artist, candAlbum, sc, c.exact
 			}
 		}
-		if bestMid != "" {
+		if bestMid != "" && bestScore > 0 {
 			return qqMusicMatch{url: qqSongURL(bestMid), title: bestTitle, artist: bestArtist, album: bestAlbum}
+		}
+		// 歌名维度找到了条目但**专辑证据为零**(smartbox 只回热门录音室版是常态——2026-09-01
+		// 周杰伦《龙拳 (Live)》案:它对 "周杰伦 龙拳" 恒只回八度空间那一条,The One 演唱会的
+		// Live 版根本不在联想结果里)→ 先试专辑维度,能以专辑为锚找到对版就用它。
+		var viaAlbum qqMusicMatch
+		viaAlbum, viaAlbumDegraded = resolveQQMatchViaAlbum(ctx, artist, title, album)
+		if viaAlbum.url != "" {
+			return viaAlbum
+		}
+		// 专辑维度也没有 → 回落到原有行为(标题精确同名但专辑对不上的那条)。专辑路线是
+		// 因网络失败(而非"确定没有")空手而回时,给回落结果打 unreliable,不让它进缓存。
+		if bestMid != "" {
+			return qqMusicMatch{url: qqSongURL(bestMid), title: bestTitle, artist: bestArtist, album: bestAlbum, unreliable: viaAlbumDegraded}
 		}
 	}
 	// 无专辑 / 补专辑没命中 → 精确同名优先,否则第一条(smartbox 首条通常是规范版)。
+	// 这两个出口同样可能是专辑路线网络失败后的回落(龙拳案的录音室候选 exact=false、
+	// 专辑分 0,bestMid 一直是空,实际就落在 cands[0] 这里),unreliable 一并带上。
 	for _, c := range cands {
 		if c.exact {
-			return qqMusicMatch{url: qqSongURL(c.mid), title: c.title, artist: c.artist}
+			return qqMusicMatch{url: qqSongURL(c.mid), title: c.title, artist: c.artist, unreliable: viaAlbumDegraded}
 		}
 	}
 	first := cands[0]
-	return qqMusicMatch{url: qqSongURL(first.mid), title: first.title, artist: first.artist}
+	return qqMusicMatch{url: qqSongURL(first.mid), title: first.title, artist: first.artist, unreliable: viaAlbumDegraded}
+}
+
+// ---- 专辑维度检索路线(2026-09-01) ----
+//
+// 起因(用户报"QQ 搜出来的是录音室版"):smartbox 是**前缀联想**不是搜索——对
+// "周杰伦 龙拳" 恒只回八度空间录音室版那一条,加词("周杰伦 龙拳 Live")、带括号都直接
+// 0 条;而 QQ 给现场专辑曲目起名**不带 (Live)**(The One 演唱会里就叫"龙拳"),live 身份
+// 只在专辑名上。也就是说歌名维度**永远**够不到现场专辑曲目,必须以专辑为锚:
+// smartbox 的 album 分类(实测 "周杰伦 The One" 能命中专辑,而带上"周杰伦演唱会"后缀
+// 就 0 条——所以查询词要先剥歌手名和现场类通用词)→ GetAlbumSongList 拉曲目单
+// (musicu.fcg 未登录可用,实测)→ 按标题闸挑曲目。
+//
+// 这条路线只在歌名维度**拿不出专辑证据**时启用(见 resolveQQMusicMatch 里的调用点),
+// 三道身份闸:专辑歌手 looseContains、albumScore≥1、曲目 lyricTitleAccepted 且最优
+// 档位内唯一——宁可空手而归回落旧行为,不给错歌。
+
+var (
+	qqAlbumSongsMu    sync.Mutex
+	qqAlbumSongsCache = map[string][]qqAlbumSong{}
+)
+
+type qqAlbumSong struct {
+	mid, name, singer string
+	interval          float64 // 官方时长,秒
+}
+
+// qqAlbumSongs 拉一张专辑的曲目单(mid/曲名/歌手/时长),按 albumMid 缓存。
+// num=100:够覆盖演唱会专辑的常见规模(The One 20 首、地表最强 30+),真超过也只是
+// 尾部曲目挑不到,不会挑错。error 非 nil = 网络层失败(区分"确定没有",同 qqSmartboxAlbums)。
+func qqAlbumSongs(ctx context.Context, albumMid string) ([]qqAlbumSong, error) {
+	if albumMid == "" {
+		return nil, nil
+	}
+	qqAlbumSongsMu.Lock()
+	if v, ok := qqAlbumSongsCache[albumMid]; ok {
+		qqAlbumSongsMu.Unlock()
+		return v, nil
+	}
+	qqAlbumSongsMu.Unlock()
+	data, err := qqMusicuPost(ctx, "GetAlbumSongList", "music.musichallAlbum.AlbumSongList", map[string]any{
+		"albumMid": albumMid, "begin": 0, "num": 100, "order": 2,
+	}, qqCommBase)
+	if err != nil {
+		return nil, err
+	}
+	var out struct {
+		SongList []struct {
+			SongInfo struct {
+				Mid      string  `json:"mid"`
+				Name     string  `json:"name"`
+				Interval float64 `json:"interval"`
+				Singer   []struct {
+					Name string `json:"name"`
+				} `json:"singer"`
+			} `json:"songInfo"`
+		} `json:"songList"`
+	}
+	if err := json.Unmarshal(data, &out); err != nil {
+		return nil, err
+	}
+	songs := make([]qqAlbumSong, 0, len(out.SongList))
+	for _, s := range out.SongList {
+		si := s.SongInfo
+		if si.Mid == "" || si.Name == "" {
+			continue
+		}
+		singer := ""
+		if len(si.Singer) > 0 {
+			singer = si.Singer[0].Name
+		}
+		songs = append(songs, qqAlbumSong{mid: si.Mid, name: si.Name, singer: singer, interval: si.Interval})
+	}
+	if len(songs) > 0 {
+		qqAlbumSongsMu.Lock()
+		qqAlbumSongsCache[albumMid] = songs
+		qqAlbumSongsMu.Unlock()
+	}
+	return songs, nil
+}
+
+// qqAlbumIdentityQuery:本地专辑名剥掉括号段、歌手名和 live 类通用词之后的"身份串",
+// 给 smartbox 的 album 分类当查询词。实测(2026-09-01):本地标签"The One 周杰伦演唱会",
+// 查 "周杰伦 The One 周杰伦演唱会"/"The One 演唱会" 都是 0 条,查 "周杰伦 The One" 命中
+// ——smartbox 对多余的词零容忍,必须把非身份成分全剥掉。统一转小写+简体:查询对大小写
+// 不敏感,而 ToLower 后再做子串定位不会有字节错位。
+func qqAlbumIdentityQuery(artist, album string) string {
+	s := strings.ToLower(toSimplified(stripParens(album)))
+	if a := strings.ToLower(strings.TrimSpace(toSimplified(artist))); a != "" {
+		s = strings.ReplaceAll(s, a, " ")
+	}
+	for _, m := range cjkLiveAlbumMarkers {
+		s = strings.ReplaceAll(s, m, " ")
+	}
+	var out []string
+	for _, f := range strings.Fields(s) {
+		if liveAlbumMarkerTokens[f] {
+			continue
+		}
+		out = append(out, f)
+	}
+	return strings.Join(out, " ")
+}
+
+// resolveQQMatchViaAlbum 是专辑维度的兜底解析,启用条件与身份闸见上面的路线注释。
+//
+// 第二个返回值 degraded:路上发生过**网络层失败**(超时/限流/解码失败),"没找到"这个
+// 结论不可信——调用方拿它决定回落结果要不要进 qqURLCache(对抗性复核抓出的真实毒化
+// 时序:一次 6s 超时 → 零值 → 回落录音室版被按 artist|title|album 永久正缓存,本进程
+// 后续所有重搜/自愈全部命中毒化条目,恰好把这条路线要修的 bug 原样钉回去)。
+func resolveQQMatchViaAlbum(ctx context.Context, artist, title, album string) (m qqMusicMatch, degraded bool) {
+	if album == "" || title == "" {
+		return qqMusicMatch{}, false
+	}
+	// 本地专辑剥掉歌手名和 live 类通用词后**必须还有身份词**,否则整条路线放弃:
+	// "陈奕迅演唱会"这类粗糙标签剥完是空串,查询词会退化成裸歌手名、闸门也无从核验身份
+	// ——与 liveAlbumIdentityConflict 第③门"全是通用词的一边等于没有做身份声明"同理。
+	localIdentity := albumIdentityTokens(artist, album)
+	if len(localIdentity) == 0 {
+		return qqMusicMatch{}, false
+	}
+	// 整条路线一个总预算:最坏形态(每个查询变体都撞 6s 超时 + musicu 8s)会把 qq
+	// goroutine 拖到 ~26s,连锁让 amll 源(阻塞等 qqID)一起缺席 20s 截止。正常网络下
+	// 每次请求几十 ms,10s 预算只裁撑满超时的病态路径,不裁正常路径。
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	// 查询变体从"信息最全"到"最剥"排——跟 searchTitleVariants 同一哲学:先带原样(剥括号),
+	// 不行再剥身份外的词。每个变体一次请求,第一个产出**过闸专辑**的变体胜出。
+	var queries []string
+	seen := map[string]bool{}
+	addQ := func(q string) {
+		q = strings.TrimSpace(q)
+		if q == "" || seen[q] {
+			return
+		}
+		seen[q] = true
+		queries = append(queries, q)
+	}
+	identity := qqAlbumIdentityQuery(artist, album)
+	addQ(artist + " " + stripParens(album))
+	if identity != "" {
+		addQ(artist + " " + identity)
+		addQ(identity)
+	}
+	var bestAlbum qqSmartboxItem
+	bestScore := 0
+	for _, q := range queries {
+		items, err := qqSmartboxAlbums(ctx, q)
+		if err != nil {
+			degraded = true
+		}
+		for _, it := range items {
+			if it.Mid == "" || !qqArtistOK(false, it.Singer, artist) {
+				continue
+			}
+			// 两道专辑闸都要过:albumScore≥1(词元亲和)+ **身份词**有交集。albumScore
+			// 的词元集不剥歌手名和 live/tour/演唱会类通用词,单靠它,"Jay Chou The One
+			// Concert"和"Jay Chou The Invincible Concert"共享 {jay,chou,concert} 也能
+			// 过闸——身份词交集(剥完通用词后)把这类"同歌手另一场演出"拦在检索层,
+			// 跟打分层 liveAlbumIdentityConflict 的判据同源。
+			sc := albumScore(it.Name, album)
+			if sc == 0 {
+				continue
+			}
+			candIdentity := albumIdentityTokens(artist, it.Name)
+			shared := false
+			for t := range candIdentity {
+				if localIdentity[t] {
+					shared = true
+					break
+				}
+			}
+			if !shared {
+				continue
+			}
+			if sc > bestScore {
+				bestAlbum, bestScore = it, sc
+			}
+		}
+		if bestScore > 0 {
+			break
+		}
+	}
+	if bestScore == 0 {
+		return qqMusicMatch{}, degraded
+	}
+	songs, err := qqAlbumSongs(ctx, bestAlbum.Mid)
+	if err != nil {
+		degraded = true
+	}
+	// 曲目挑选:lyricTitleAccepted 是门,门内分两档——归一化精确同名 > 剥括号后相等(QQ 的
+	// 现场专辑曲目不带"(Live)",本地标题剥掉括号才对得上)。最优档位内必须**唯一**,
+	// 出现两条同档(同名不同版本之类)宁可放弃:这条路线是兜底,拿不准就交回旧行为。
+	// 曲目自带 singer 时再核一遍歌手(合辑/拼盘专辑里同名曲可能是别人唱的);为空不拦
+	// (元数据缺失不是反面证据)。
+	const (
+		tierExact = iota
+		tierStripped
+		tierAccepted
+	)
+	best := -1
+	var picked qqAlbumSong
+	unique := true
+	nt := normLoose(title)
+	st := normLoose(stripParens(title))
+	for _, s := range songs {
+		if !lyricTitleAccepted(s.name, title) {
+			continue
+		}
+		if s.singer != "" && !qqArtistOK(false, s.singer, artist) {
+			continue
+		}
+		tier := tierAccepted
+		switch {
+		case normLoose(s.name) == nt:
+			tier = tierExact
+		case normLoose(stripParens(s.name)) == st:
+			tier = tierStripped
+		}
+		switch {
+		case best == -1 || tier < best:
+			picked, best, unique = s, tier, true
+		case tier == best:
+			unique = false
+		}
+	}
+	if best == -1 || !unique {
+		return qqMusicMatch{}, degraded
+	}
+	return qqMusicMatch{
+		url: qqSongURL(picked.mid), title: picked.name, artist: picked.singer,
+		album: bestAlbum.Name, interval: picked.interval,
+	}, degraded
 }
 
 func qqSongURL(mid string) string {

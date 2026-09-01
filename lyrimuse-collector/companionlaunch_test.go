@@ -47,8 +47,8 @@ func TestShouldCompanionLaunch(t *testing.T) {
 // 这条测试钉的是"每个受支持的播放器都必须有自己的进程名,而且不能悄悄退化成 Music" ——
 // 以后再加播放器时漏接同一处会当场失败。
 func TestPlayerProcessNameCoversEveryPlayer(t *testing.T) {
-	original := features.Player
-	defer func() { features.Player = original }()
+	saved := features.Players
+	t.Cleanup(func() { features.Players = saved })
 
 	cases := []struct{ player, want string }{
 		{playerAppleMusic, "Music"},
@@ -61,15 +61,34 @@ func TestPlayerProcessNameCoversEveryPlayer(t *testing.T) {
 		{playerKugou, "酷狗音乐"},
 	}
 	for _, c := range cases {
-		features.Player = c.player
-		if got := playerProcessName(); got != c.want {
-			t.Errorf("playerProcessName(%s) = %q, want %q", c.player, got, c.want)
+		if got := playerProcessNameFor(c.player); got != c.want {
+			t.Errorf("playerProcessNameFor(%s) = %q, want %q", c.player, got, c.want)
 		}
+	}
+
+	// 多选年代同一个道理:选中集合里每个成员各自的进程名都要出现在
+	// companionLaunchProcessNames() 的结果里,不能只盯着某一个。
+	features.Players = map[string]bool{playerQQMusic: true, playerKugou: true}
+	multi := companionLaunchProcessNames()
+	for _, want := range []string{"QQMusic", "酷狗音乐"} {
+		found := false
+		for _, name := range multi {
+			if name == want {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("多选 {qq, kugou} 时 companionLaunchProcessNames() 缺 %q: %v", want, multi)
+		}
+	}
+	if len(multi) != 2 {
+		t.Errorf("多选 {qq, kugou} 时应恰好盯 2 个进程名, got %v", multi)
 	}
 
 	// 手动选定的每一个播放器,它的进程名都必须在"自动识别"那份列表里 —— 否则
 	// playerAuto 档会盖不住某个明明支持的播放器(酷狗当初就是这么漏的)。
-	features.Player = playerAuto
+	features.Players = map[string]bool{playerAuto: true}
 	auto := companionLaunchProcessNames()
 	for _, c := range cases {
 		found := false
@@ -82,5 +101,13 @@ func TestPlayerProcessNameCoversEveryPlayer(t *testing.T) {
 		if !found {
 			t.Errorf("knownPlayerProcessNames 缺 %q(%s),playerAuto 档会漏掉这个播放器", c.want, c.player)
 		}
+	}
+
+	// 自动识别跟具体播放器一起勾选时,auto 是超集,按 auto 的全量列表处理——不能因为
+	// 同时也勾了 QQ 音乐就退化成只盯 QQMusic 一个,那样反而丢了"自动检测本地新的
+	// 播放器"这条 auto 本该有的能力。
+	features.Players = map[string]bool{playerAuto: true, playerQQMusic: true}
+	if got := companionLaunchProcessNames(); len(got) != len(knownPlayerProcessNames) {
+		t.Errorf("auto+qq 组合应等同于纯 auto(全量列表), got %v", got)
 	}
 }

@@ -18,8 +18,8 @@ import (
 	"time"
 )
 
-// 两条读取路径,按 features.Player 选择——跟 lyrimuse 侧 MediaControlClient.swift
-// 是同一套设计,注释详见那边:
+// 两条读取路径,按 features.Players(2026-09-01 起可多选)选择——跟 lyrimuse 侧
+// MediaControlClient.swift 是同一套设计,注释详见那边:
 //
 //   - Apple Music:AppleScript(JXA)直接问 Music.app 本身要"现在在放什么",不依赖外部
 //     `media-control`(需要 brew install 的私有 MediaRemote 框架社区逆向实现)——这个
@@ -74,25 +74,29 @@ const getStateScript = `(() => {
 })()`
 
 // getState reads the current now-playing state once, dispatching to whichever
-// player the user selected (features.Player). It is the authoritative
-// fallback: the stream subscription can go silent for play/pause/seek
-// notifications (observed on this macOS beta), so the ticker re-reads ground
-// truth here to catch state changes the stream missed.
+// player(s) the user selected (features.Players, 2026-09-01 起可多选). It is
+// the authoritative fallback: the stream subscription can go silent for
+// play/pause/seek notifications (observed on this macOS beta), so the ticker
+// re-reads ground truth here to catch state changes the stream missed.
+//
+// 三条路径,按优先级:
+//   - 选了「自动识别」(不管还同时勾了别的具体播放器,auto 是超集,行为跟单选年代的
+//     playerAuto 完全一样)→ getAutoDetectedState;
+//   - 恰好只选了 Apple Music 一个、没有 auto → 跳过 media-control,直接走
+//     getAppleMusicState 的 AppleScript 路径(跟单选年代的 playerAppleMusic 完全
+//     一样,不多背一次子进程往返);
+//   - 其它情况(单选或多选了 QQ音乐/网易云/Spotify/酷狗中的若干个,同样没有
+//     auto)→ getMultiSelectedState,核对 media-control 报的系统级 Now Playing 焦点
+//     是不是落在选中的这个子集里,是的话才认(跟 getAutoDetectedState 同一套"系统只有
+//     一个焦点"的道理,只是准入名单从"内置五个+信任列表"收窄成"用户这次选中的这几个")。
 func getState(ctx context.Context) (map[string]any, bool) {
-	switch features.Player {
-	case playerQQMusic:
-		return getQQMusicState(ctx)
-	case playerNetease:
-		return getNeteaseMusicState(ctx)
-	case playerSpotify:
-		return getSpotifyState(ctx)
-	case playerKugou:
-		return getKugouMusicState(ctx)
-	case playerAuto:
+	if features.Players[playerAuto] {
 		return getAutoDetectedState(ctx)
-	default:
+	}
+	if len(features.Players) == 1 && features.Players[playerAppleMusic] {
 		return getAppleMusicState(ctx)
 	}
+	return getMultiSelectedState(ctx)
 }
 
 func getAppleMusicState(ctx context.Context) (map[string]any, bool) {
@@ -170,13 +174,13 @@ const (
 	kugouMusicBundleID   = "com.kugou.mac.Music"
 )
 
-// expectedPlayerBundleID 是当前选定播放器(features.Player)自己会报告的 bundle id——
-// 供 poller.go 的 isTracked() 兜底判断用,见其注释。playerAuto("自动识别")没有唯一
-// 固定的目标,不在这里处理——isTracked() 对 playerAuto 走单独一条分支(核对是不是
-// isKnownPlayerBundleID 覆盖的五个已知播放器之一),永远不会调用到这个函数,这里的
-// switch 因此不需要、也不应该加 playerAuto 这个 case。
-func expectedPlayerBundleID() string {
-	switch features.Player {
+// playerBundleID 把一个具体播放器常量(playerQQMusic 等,不接受 playerAuto——它没有
+// 唯一固定的目标,调用方必须先排除这个 case,见 isTracked()/getMultiSelectedState 的
+// 注释)映射成它自己会报告的 bundle id。2026-09-01 从单选年代的 expectedPlayerBundleID
+// (读包级 features.Player)改成纯函数——多选之后"当前选定播放器"不再是唯一一个值,
+// 调用方需要对 features.Players 里的每一个成员分别求 bundle id,不能再读一个包级单值。
+func playerBundleID(player string) string {
+	switch player {
 	case playerQQMusic:
 		return qqMusicBundleID
 	case playerNetease:
@@ -186,7 +190,7 @@ func expectedPlayerBundleID() string {
 	case playerKugou:
 		return kugouMusicBundleID
 	default:
-		return "com.apple.Music"
+		return appleMusicBundleID
 	}
 }
 
@@ -287,11 +291,41 @@ func trustedPlaybackNotASong(bundleID, artist, album string) bool {
 // "这是这个项目内置支持的播放器吗"(mediaPlayerLabel 那类固定映射要它),这个回答的是
 // "这一条播放该不该被采纳"。
 func isAcceptedPlayerBundleID(bundleID string) bool {
-	if isKnownPlayerBundleID(bundleID) {
+	return isKnownPlayerBundleID(bundleID) || isTrustedPlayerBundleID(bundleID)
+}
+
+// isTrustedPlayerBundleID 只回答"信任"这一半(不含五个内置播放器,跟 Swift 侧
+// TrustedPlayers.isTrusted 对应——两者都要处理 Safari 的媒体代理进程别名,见
+// mediaProxyOwners 的注释),从 isAcceptedPlayerBundleID 里抽出来单独用:2026-09-01
+// 播放器多选之后,"具体选中了哪几个播放器"(非 auto)那条路径也要认信任列表——最常见的
+// 场景是「网页播放器」卡的"配对浏览器"动作(一步自动信任+配对,见
+// SettingsView.trustAndPairBrowser),用户没有理由因为没勾"自动识别"就让这份配对失效,
+// 那会让"配对了却读不到播放"的断层从"要不要选一个具体播放器"这条线上重新冒出来。
+// 见 getMultiSelectedState/poller.isTracked。
+func isTrustedPlayerBundleID(bundleID string) bool {
+	if _, trusted := features.TrustedPlayers[bundleID]; trusted {
 		return true
 	}
-	_, trusted := features.TrustedPlayers[bundleID]
-	return trusted
+	// Safari 的媒体进程按它的宿主算,见 mediaProxyOwners。
+	if owner, ok := mediaProxyOwners[bundleID]; ok {
+		_, trusted := features.TrustedPlayers[owner]
+		return trusted
+	}
+	return false
+}
+
+// mediaProxyOwners 是「媒体进程 bundle id → 真正的宿主 App bundle id」。
+//
+// Safari 播网页音视频时解码/播放跑在独立的 WebKit GPU 进程里,MediaRemote 报"现在谁在放"
+// 报的是那个进程(com.apple.WebKit.GPU)而不是 com.apple.Safari。Chromium 系(Arc/Chrome/
+// Edge)报的是浏览器自己的 bundle id,所以只有 Safari 需要这层映射。
+//
+// ⚠️ 跟 Swift 侧 LyrimuseCore/Local/TrustedPlayers.swift 的 mediaProxyOwners 是**同一张
+// 表**,两侧必须同时改 —— 跟 isAcceptedPlayerBundleID / TrustedPlayers.isAccepted 这对
+// 本来就得同步的道理一样。完整推导(为什么用别名而不是把代理进程写进信任列表、为什么只
+// 登记实测见过的)写在 Swift 那边,不在这里重复一遍。
+var mediaProxyOwners = map[string]string{
+	"com.apple.WebKit.GPU": "com.apple.Safari",
 }
 
 // mediaPlayerLabelIPhone 是 iPhone 桥接路径(poller.go 两处 "source"]="iphone" 附近)
@@ -303,45 +337,35 @@ const mediaPlayerLabelIPhone = "Apple Music (iOS)"
 // mediaPlayerLabel 是 lbMeta()(Mac 本地这条路径)提交给 ListenBrainz 的 media_player
 // 字段——2026-07-24 之前这里不管实际来源一律写死"Apple Music (macOS)",QQ 音乐/网易云
 // 音乐接入后如果继续写死会导致 ListenBrainz 上明明是别的播放器放的歌却显示"通过
-// Apple Music 播放",按当前选定的播放器如实报告。playerAuto("自动识别")下"当前选定的
-// 播放器"这个概念本身没有固定答案,改成按这条具体 listen 的 bundleID(调用方直接传
-// snapshot.Bundle,由 getAutoDetectedState 写入,是**五个内置播放器之一、或用户显式
-// 信任的未知播放器**——不是只有内置那几个,default 分支不是死代码)如实判断,
-// 不看 features.Player。
+// Apple Music 播放",按这条具体 listen 真实的 bundleID(调用方直接传 snapshot.Bundle)
+// 如实报告。
+//
+// 2026-09-01 起不再区分"自动识别"和"手动选定"两套分支、也不看 features.Players——
+// 单选年代那道 features.Player 分支背后的假设是"手动选定时 bundleID 只可能是选中的那
+// 一个",多选之后这个假设不成立(bundleID 可能是选中集合里的任意一个),干脆统一按
+// bundleID 直接判断,跟自动识别分支原本的逻辑合并成一份、不再重复——两个分支本来就是
+// 同一份映射抄了两遍,不是两种不同的语义。bundleID 的来源是**五个内置播放器之一、或
+// 用户显式信任的未知播放器**(不是只有内置那几个,default 分支不是死代码)。
 func mediaPlayerLabel(bundleID string) string {
-	if features.Player == playerAuto {
-		switch bundleID {
-		case qqMusicBundleID:
-			return "QQ Music (macOS)"
-		case neteaseMusicBundleID:
-			return "NetEase Cloud Music (macOS)"
-		case spotifyBundleID:
-			return "Spotify (macOS)"
-		case kugouMusicBundleID:
-			return "KuGou Music (macOS)"
-		default:
-			// 用户信任的未知播放器:用它自己的 App 名(Swift 侧反查后写进共享文件),
-			// 反查不到就退回 bundle id —— 总比谎报"Apple Music"好,那会让
-			// ListenBrainz 上的来源统计彻底失真。
-			if name, trusted := features.TrustedPlayers[bundleID]; trusted {
-				if name != "" {
-					return name + " (macOS)"
-				}
-				return bundleID + " (macOS)"
-			}
-			return "Apple Music (macOS)"
-		}
-	}
-	switch features.Player {
-	case playerQQMusic:
+	switch bundleID {
+	case qqMusicBundleID:
 		return "QQ Music (macOS)"
-	case playerNetease:
+	case neteaseMusicBundleID:
 		return "NetEase Cloud Music (macOS)"
-	case playerSpotify:
+	case spotifyBundleID:
 		return "Spotify (macOS)"
-	case playerKugou:
+	case kugouMusicBundleID:
 		return "KuGou Music (macOS)"
 	default:
+		// 用户信任的未知播放器:用它自己的 App 名(Swift 侧反查后写进共享文件),
+		// 反查不到就退回 bundle id —— 总比谎报"Apple Music"好,那会让
+		// ListenBrainz 上的来源统计彻底失真。
+		if name, trusted := features.TrustedPlayers[bundleID]; trusted {
+			if name != "" {
+				return name + " (macOS)"
+			}
+			return bundleID + " (macOS)"
+		}
 		return "Apple Music (macOS)"
 	}
 }
@@ -460,11 +484,8 @@ func getAutoDetectedState(ctx context.Context) (map[string]any, bool) {
 	if !ok {
 		return nil, false
 	}
-	if bundleID == "com.apple.Music" {
-		if state, ok := getAppleMusicState(ctx); ok && len(state) > 0 {
-			return state, true
-		}
-		return raw, true
+	if bundleID == appleMusicBundleID {
+		return refineAppleMusicState(ctx, raw), true
 	}
 	switch bundleID {
 	case qqMusicBundleID, neteaseMusicBundleID, spotifyBundleID, kugouMusicBundleID:
@@ -484,6 +505,59 @@ func getAutoDetectedState(ctx context.Context) (map[string]any, bool) {
 		// Safari/另一个还没被信任的播放器)——统一按"没有可报告的正在播放"处理。
 		return map[string]any{}, true
 	}
+}
+
+// refineAppleMusicState 是 getAutoDetectedState/getMultiSelectedState 共用的尾段
+// (2026-09-01 从 getAutoDetectedState 内联的分支抽出来,给多选新增的
+// getMultiSelectedState 复用,不重复这段逻辑):bundleID 已经确认是 Apple Music 时,
+// 尝试再走一次 getAppleMusicState 的 AppleScript 路径拿更精确的播放位置——跟手动选
+// Apple Music 时同等精度;拿不到(没有"自动化"权限/其它原因)就退回 media-control 本身
+// 已经读到的这份基础数据,不整个放弃。
+func refineAppleMusicState(ctx context.Context, raw map[string]any) map[string]any {
+	if state, ok := getAppleMusicState(ctx); ok && len(state) > 0 {
+		return state
+	}
+	return raw
+}
+
+// getMultiSelectedState 是"显式多选了若干个具体播放器、没有勾自动识别"的读取路径——
+// 跟 getAutoDetectedState 同一套"系统级 Now Playing 只有一个焦点,问 media-control 一次
+// 就知道是谁"的机制,区别只在准入名单:这里认的是 features.Players 里用户这次选中的
+// 那几个,**加上**信任列表(2026-09-01 补,见 isTrustedPlayerBundleID 的注释——最典型
+// 场景是「网页播放器」卡配对的浏览器,那个动作跟"选没选自动识别"是两件独立的事,不该
+// 因为没勾自动识别就让配对形同虚设)。单选且未配对任何浏览器时,这条路径跟旧版
+// matchMediaControlState(expectedBundleID) 行为等价,QQ音乐/网易云/Spotify/酷狗四个旧
+// 函数因此继续保留、单独调用时行为不变(给测试/其它调用点用),getState() 本身不再逐个
+// case 派发到它们,改成统一走这里。
+func getMultiSelectedState(ctx context.Context) (map[string]any, bool) {
+	accepted := map[string]bool{}
+	for p := range features.Players {
+		accepted[playerBundleID(p)] = true
+	}
+	raw, bundleID, ok := fetchRawMediaControlState(ctx)
+	if !ok {
+		return nil, false
+	}
+	if !accepted[bundleID] {
+		if !isTrustedPlayerBundleID(bundleID) {
+			// 系统当前的 Now Playing 是别的 App(网页视频/Safari/另一个播放器等),既不在
+			// 这次选中的子集里、也没被信任过——不能把它当成"正在播放",按"没有可关心的
+			// 正在播放"处理。
+			return map[string]any{}, true
+		}
+		// 走信任列表这条路进来的(不是用户在「播放器」卡里选中的具体播放器)要多过一道
+		// "这是不是一首歌"的守卫——跟 getAutoDetectedState 的信任分支同一套语义,理由见
+		// trustedPlaybackNotASong 的注释(浏览器视频/播客不能被当成一首歌打卡)。
+		artist, _ := raw["artist"].(string)
+		album, _ := raw["album"].(string)
+		if trustedPlaybackNotASong(bundleID, artist, album) {
+			return map[string]any{}, true
+		}
+	}
+	if bundleID == appleMusicBundleID {
+		return refineAppleMusicState(ctx, raw), true
+	}
+	return raw, true
 }
 
 // fetchRawMediaControlState 读内置 media-control 二进制(见 mediaControlBinaryPath)。

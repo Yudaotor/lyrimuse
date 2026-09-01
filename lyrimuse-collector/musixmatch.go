@@ -293,7 +293,8 @@ func musixmatchFetchToken(ctx context.Context, retry int) string {
 	if out.Message.Header.StatusCode == 401 {
 		// 2026-08-31 实测坐实的具体原因,见 musixmatchLastFailureReason 声明处注释——
 		// 先记下来再退避重试,不管重试成不成功,这一拍"是反爬拒的"这个事实已经发生过。
-		musixmatchSetLastFailureReason("Musixmatch 拒绝了匿名 token 请求（反爬限流，hint=captcha），不是网络故障，稍后重试通常会恢复")
+		// 存的是稳定代码不是文案,见 lyricsourcefailure.go 头注,两侧必须同步维护。
+		musixmatchSetLastFailureReason(lyricFailureReasonMusixmatchRateLimited)
 		select {
 		case <-time.After(10 * time.Second):
 		case <-ctx.Done():

@@ -13,6 +13,7 @@ import (
 	_ "image/png"  // 网易云取色缩略图有时是 PNG(content-type 却谎报 jpg)
 	"io"
 	"log"
+	"math"
 	"net/http"
 	neturl "net/url"
 	"regexp"
@@ -209,10 +210,10 @@ func kugouGet(ctx context.Context, u string, v any) error {
 // 失败/拿不到都直接放弃,不重试(下次 enrich 短 TTL 到期自然再试)。
 func resolveKugouLyric(ctx context.Context, artist, title, album string, durationSecs float64) kugouResult {
 	// 搜索词逐个 variant 试,先命中先用(顺序由 searchTitleVariants 定,跟设置走)。带括号的标题在酷狗
-	// 上不会返回空、而是回一串该歌手的热门歌,所以"搜砸了"表现为下面的循环一条都收不下,
-	// 不是 kugouGet 报错——必须靠 chosen==nil 才能发现,不能只在 err != nil 时才换词。
-	// 详见 searchTitleVariants 的注释。第二跳(krcs 查 KRC 候选)不受影响:实测同一个
-	// hash 下 keyword 带不带括号返回的候选完全一致,身份是 hash 认的。
+	// 上不会返回空、而是回一串该歌手的热门歌,所以"搜砸了"表现为 pickKugouSearchCandidate
+	// 一条都收不下,不是 kugouGet 报错——必须靠 chosen==nil 才能发现,不能只在 err != nil
+	// 时才换词。详见 searchTitleVariants 的注释。第二跳(krcs 查 KRC 候选)不受影响:实测
+	// 同一个 hash 下 keyword 带不带括号返回的候选完全一致,身份是 hash 认的。
 	var chosen *kugouSong
 	for _, q := range searchTitleVariants(title) {
 		var sr struct {
@@ -223,32 +224,7 @@ func resolveKugouLyric(ctx context.Context, artist, title, album string, duratio
 		if err := kugouGet(ctx, "http://mobilecdn.kugou.com/api/v3/search/song?format=json&keyword="+kugouEscape(artist+" "+q)+"&page=1&pagesize=10&showtype=1", &sr); err != nil {
 			continue
 		}
-		for i := range sr.Data.Info {
-			s := &sr.Data.Info[i]
-			// 判定用的始终是**本地原样标题** title,不是当前这轮的搜索词 q——放宽的只是
-			// "拿什么去搜",不是"什么算匹配"。
-			// 歌手闸用 lyricSourceArtistMatches:酷狗的合唱署名固定用顿号("UMI、V"),
-			// 本地标签是 "&" 或换了合作者语言写法("UMI & 金泰亨")时 artistMatches 会把
-			// 服务端明明召回成功的正主原地拒掉——酷狗没有 loose 兜底,这一闸拒完整源就空了。
-			if s.Hash == "" || !lyricTitleAccepted(s.SongName, title) {
-				continue
-			}
-			if !lyricSourceArtistMatches(s.SingerName, artist) {
-				// 歌手闸不过 → 还有第二条依据:标题逐字同名 + 专辑对得上 + 时长紧密吻合
-				// = 同一次录音。修的是"艺名↔本名 / 乐队名↔成员名"这类连分隔符都没有、
-				// 段集交集档和别名轮都够不到的署名分歧(实测案例见
-				// lyricRecordingTriangleMatches 的注释)。酷狗是五源里唯一**已经把正主
-				// 排在搜索结果第 1 位、只差这一闸**的源,而且它带 YRC 逐字。
-				if !lyricRecordingTriangleMatches(s.SongName, s.AlbumName, s.Duration,
-					title, album, durationSecs) {
-					continue
-				}
-				log.Printf("lyrics: kugou accepted %q by recording triangle (local artist %q vs source %q; album %q vs %q; dur %.3f vs %.3f)",
-					s.SongName, artist, s.SingerName, album, s.AlbumName, durationSecs, s.Duration)
-			}
-			chosen = s
-			break
-		}
+		chosen = pickKugouSearchCandidate(sr.Data.Info, artist, title, album, durationSecs)
 		if chosen != nil {
 			break
 		}
@@ -302,6 +278,97 @@ func resolveKugouLyric(ctx context.Context, artist, title, album string, duratio
 		}
 	}
 	return kugouResult{lrc: lrc, yrc: yrc, durationSecs: chosen.Duration, title: chosen.SongName, artist: chosen.SingerName, album: chosen.AlbumName, language: kugouCanonicalLanguage(chosen.TransParam.Language), cover: kugouAlbumCoverURL(ctx, chosen.AlbumID)}
+}
+
+// pickKugouSearchCandidate 从一页搜索结果里挑"这份歌词该跟谁走"。
+//
+// 2026-09-01 之前是**第一条过闸就收工**——闸门只有标题(lyricTitleAccepted)和歌手,完全
+// 不看专辑和时长,于是排序靠前的杂项能把同页靠后的正主顶掉。真实案例(周杰伦《简单爱
+// (Live)》/《The One 周杰伦演唱会》,本地 273.227s):酷狗对"周杰伦 简单爱 (Live)"返回的
+// 第 1 条是「简单爱 (无与伦比演唱会 m 56s)」——一个 56 秒的片段、专辑名为空,剥括号后
+// 标题也叫"简单爱"、歌手也对,先到先得直接定死;而第 2 条就是「简单爱 (Live)」《The One
+// 演唱会》273s——**标题跟本地 normLoose 精确相等 + 专辑 token 对得上 + 时长只差 0.227s**,
+// 三项证据全在,却永远轮不到。netease.go 的 queries 注释里早写过这个对比:"那三个源是取
+// 第一条通过校验的候选就收工,搜索词一偏就直接定死在错版本上"——这里把酷狗从那个名单里
+// 摘出来。
+//
+// 排序键(闸门原样保留,只改"过闸之后信谁"):
+//  1. 标题档位:normLoose 精确同名 > 剥括号后相等 > 其它过闸形态(跟 QQ 专辑维度路线
+//     resolveQQMatchViaAlbum 的三档完全同构);
+//  2. 同档位比 albumScore(200 精确 / 100 包含 / token 数,见 match.go);
+//  3. 再同分比时长贴近度(本地或候选缺时长的当 +Inf,排最后);
+//  4. 全都打平保持原序(搜索相关性排序,= 改动前的行为)。
+//
+// 只有一条过闸时四个键全部无事发生,跟旧行为逐位一致。
+func pickKugouSearchCandidate(songs []kugouSong, artist, title, album string, durationSecs float64) *kugouSong {
+	const (
+		tierExact = iota
+		tierStripped
+		tierAccepted
+	)
+	nt := normLoose(title)
+	st := normLoose(stripParens(title))
+	var best *kugouSong
+	bestTier, bestAlbum := 0, 0
+	bestDur := math.Inf(1)
+	bestByTriangle := false
+	for i := range songs {
+		s := &songs[i]
+		// 判定用的始终是**本地原样标题** title,不是搜索词——放宽的只是"拿什么去搜",
+		// 不是"什么算匹配"。
+		// 歌手闸用 lyricSourceArtistMatches:酷狗的合唱署名固定用顿号("UMI、V"),
+		// 本地标签是 "&" 或换了合作者语言写法("UMI & 金泰亨")时 artistMatches 会把
+		// 服务端明明召回成功的正主原地拒掉——酷狗没有 loose 兜底,这一闸拒完整源就空了。
+		if s.Hash == "" || !lyricTitleAccepted(s.SongName, title) {
+			continue
+		}
+		byTriangle := false
+		if !lyricSourceArtistMatches(s.SingerName, artist) {
+			// 歌手闸不过 → 还有第二条依据:标题逐字同名 + 专辑对得上 + 时长紧密吻合
+			// = 同一次录音。修的是"艺名↔本名 / 乐队名↔成员名"这类连分隔符都没有、
+			// 段集交集档和别名轮都够不到的署名分歧(实测案例见
+			// lyricRecordingTriangleMatches 的注释)。酷狗是五源里唯一**已经把正主
+			// 排在搜索结果第 1 位、只差这一闸**的源,而且它带 YRC 逐字。
+			if !lyricRecordingTriangleMatches(s.SongName, s.AlbumName, s.Duration,
+				title, album, durationSecs) {
+				continue
+			}
+			byTriangle = true
+		}
+		tier := tierAccepted
+		switch {
+		case normLoose(s.SongName) == nt:
+			tier = tierExact
+		case normLoose(stripParens(s.SongName)) == st:
+			tier = tierStripped
+		}
+		asc := albumScore(s.AlbumName, album)
+		dd := math.Inf(1)
+		if durationSecs > 0 && s.Duration > 0 {
+			dd = math.Abs(s.Duration - durationSecs)
+		}
+		better := false
+		switch {
+		case best == nil:
+			better = true
+		case tier != bestTier:
+			better = tier < bestTier
+		case asc != bestAlbum:
+			better = asc > bestAlbum
+		case dd != bestDur:
+			better = dd < bestDur
+		}
+		if better {
+			best, bestTier, bestAlbum, bestDur, bestByTriangle = s, tier, asc, dd, byTriangle
+		}
+	}
+	// 日志只报**最终选中**的那条(改成全页排序之前,triangle 一接受就等于选中,日志语义
+	// 是一回事;现在 triangle 接受的候选也可能被排序比下去,不选中就不该说 accepted)。
+	if best != nil && bestByTriangle {
+		log.Printf("lyrics: kugou accepted %q by recording triangle (local artist %q vs source %q; album %q vs %q; dur %.3f vs %.3f)",
+			best.SongName, artist, best.SingerName, album, best.AlbumName, durationSecs, best.Duration)
+	}
+	return best
 }
 
 // kugouAlbumCoverURL 按专辑 ID 查 album/info 接口拿封面(2026-08-31 加)。响应的
