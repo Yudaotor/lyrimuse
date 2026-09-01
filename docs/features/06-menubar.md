@@ -1,6 +1,6 @@
 # 06. 菜单栏:歌词、图标与菜单
 
-> 最后核对:2026-08-24 · 基线:42ef515+工作树
+> 最后核对:2026-09-01 · 基线:5d9031a+工作树
 
 ## 定位
 
@@ -12,7 +12,12 @@
 - **下拉菜单**:点状态栏项弹出,`MenuBarStatusMenu` 手写的 `NSMenu`(不用 `NSHostingMenu`,那要 macOS 14.4,App 下限 14.0)。
 - **Dock 右键菜单**(2026-08-26 新增,仅「在 Dock 中显示」开着、`.regular` 激活策略时才有 Dock 图标可右键):`AppDelegate.applicationDockMenu(_:)` 返回 `DockMenuController.makeMenu()` 的结果,固定四项——设置…/歌词管理…/歌词窗口…/Last.fm,点了分别跳对应窗口/设置页。这四项由 AppKit 摆在它自动追加的那部分(当前开着的窗口列表、「选项」子菜单、显示所有窗口/隐藏/退出)**上面**,`DockMenuController` 不需要重复画那些系统默认项。见「设计决策与已知坑」第 14 条。
 - **设置入口**(两处,见「设置项」):
-  - 设置 › 歌词显示 › 「菜单栏」分段:菜单栏歌词开关、宽度模式、最大宽度、逐字染色开关、文字/染色两个颜色项,顶部固定一条实时预览(`MenuBarPreviewBar`,反映文字色;正在播放且这句有逐字数据时也演真实染色,没播放的示例句不演,见「逐字染色」一节);
+  - 设置 › 歌词显示 › 「菜单栏」分段:2026-09-01 改成跟悬浮歌词/灵动岛一样的"编辑台"风格
+    (`MenuBarEditorStage`,取代原来平铺的 `menuBarCard`)——实时预览(`MenuBarPreviewBar`,
+    反映文字色;正在播放且这句有逐字数据时也演真实染色,没播放的示例句不演,见「卡拉OK染色」
+    一节)挪进了可滚动内容区的编辑台里(不再是页顶固定不可交互的一条),工具栏两个浮层
+    入口(「宽度模式」/「配色」)+「重置 ▾」,「最大宽度」单独常驻一条调整条,菜单栏歌词
+    开关留在编辑台下面,「全部设置」抽屉(`MenuBarAllSettingsDrawer`)五项全量兜底;
   - 设置 › 通用 › 「菜单栏与 Dock」卡:12 款图标网格、「随播放律动」开关。
 
 ## 行为规格
@@ -93,11 +98,74 @@
 `appearMs`**(出现时刻)—— 一个算窗口有多长、一个算窗口前半段有多长,各写一遍必然漂成
 "提前量比整个窗口还长"。落地细节见上面「滚动规则」里那条「开唱之前不滚」。
 
-### 逐字染色(2026-08-22,用户点名"像酷狗菜单栏歌词")
+### 对齐方式(2026-09-01,用户点名)
 
-- **开关**:设置 › 歌词显示 › 菜单栏 ›「逐字染色」,默认开;只对带逐字时间轴(YRC)的歌词生效,LRC 整行歌词维持纯色(没有可信的字级进度就不假装有)。
+固定宽度那一格里,**装得下的**短句靠哪边。`AppSettings.menuBarLyricsAlignment`
+(`MenuBarLyricsAlignment`:leading/center/trailing,默认 leading)。
+
+- **只在固定宽度模式下出现**,而且这不是省事、是定义使然。用户自己先判断出来的(原话:
+  「看起来是不是只会在固定宽度模式下生效?我理解自适应的模式下不存在对齐模式」)——对的:
+  - **自适应模式**下那一格的宽度**就等于**文字宽度(见 `MenuBarLyricsWidthMode.adaptive`),
+    没有多余空间,三个选项画出来一模一样;
+  - **固定宽度下放不下**的句子会横向滚动,文字比格子宽,同样没有空位。
+  所以设置界面用 `if settings.menuBarLyricsWidthMode == .fixed` 整行不渲染,**不用
+  `.disabled`** —— 灰着摆在那儿会让人去猜"要满足什么条件才能点"(同一段里「已唱到的颜色」
+  跟着染色开关显隐是同一个做法)。
+- **落地点只有一处**:`MenuBarScrollingLabel.restartAnimation()` 的静止分支。原来那句是
+  `contentLayer.position = CGPoint(x: 0, ...)` —— **x=0 就是既有的左对齐**,所以 leading
+  作默认值、存量用户观感一字不变。现在按 `slack = max(0, -maxOffset)`
+  (`maxOffset = textWidth - windowWidth`,装得下时为负)算落点:leading=0、center=slack/2、
+  trailing=slack。放不下时 slack 恒为 0,三个选项自动退回 x=0。
+- ⚠️ **只动 `contentLayer` 就够了**:染色那两个裁剪层(`baseClipLayer`/`fillClipLayer`)是它
+  的**子层**(见 `MenuBarScrollingLabel` 头部「图层结构」),跟着一起平移 —— 填色几何一个数
+  都不用改。这是这次改动之所以只有六行的原因。
+- **live 生效**靠两条:真菜单栏加了 `settings.$menuBarLyricsAlignment` 的订阅(→`refresh()`;
+  ⚠️ **不能用 `refreshColors()`** —— 它只重排位图+重放填色、**不碰 position**,而对齐改的
+  正是 position);设置页预览靠 `@ObservedObject` 的 body 重算走到同一个 `present()`。
+  `Plan` 里带上了 `alignment`,所以"只改了对齐"也能过 `next != plan` 那道门。
+- **控件刻意不用系统 `.pickerStyle(.segmented)`**,手搭 `MenuBarAlignmentSegmentedControl`
+  ——照 `OverlayAlignmentSegmentedControl` 搬,那边为这件事修了三轮:`NSSegmentedControl` 按
+  **当前选中段的文字**重新量宽度,于是"选了哪个选项、控件整体宽度就跟着变",而给子 `Text`
+  或给 Picker 整体加 `.frame(minWidth:)` 都不管用(完整记录见第 04 章)。这三个标签正好不等宽
+  (左对齐/居中/右对齐 = 3/2/3 字,英文差得更多),是那个 bug 的正射场景。`.fixedSize()`
+  同样是必需的、不是保险(理由见那边 2026-08-31 的离屏结论:不加会在行里还剩空白时把英文
+  标签截成 "Left-Ali…")。
+- **标题用「对齐方式」不是「对齐模式」**:悬浮歌词那个同名设置就叫「对齐方式」,而用户当天
+  上一条要求正是"和软件其他地方对齐"。三个选项名(`左对齐`/`居中`/`右对齐`,英文
+  `Left-Aligned`/`Center`/`Right-Aligned`)直接复用那边已有的词条。
+
+⚠️ **「自适应（Beta）」的 Beta 字样 2026-09-01 按用户要求去掉**。改的时候差点漏:
+**有两处**用这个标签 —— 设置页(`MenuBarWidthModeRow`)和菜单栏左键面板的快捷设置
+(`MenuBarPanelQuickSettings`,那里还留着一条注释说"两处必须同进同出,否则就成了一条带警告、
+一条不带的两个入口")。只改设置页会让面板那处指向一个已删的词条 —— 是 selftest 的「源码用了
+但 catalog 里没有的键」守卫逮出来的。宽度模式 help 里那句「自适应(不建议)」**当天晚些也去掉了** —— 用户:"这里只需要说明最终的效果是什么就好,不需要说不建议"。整行改成只描述两种模式各自的最终效果:
+
+> 只影响装得下的句子。
+> 固定：短句也占满设定宽度，右边留白，菜单栏上的位置不会变。
+> 自适应：短句按自己的宽度占位，省下多余空间；菜单栏这一项的宽度随每句变化，旁边的图标位置也跟着挪。
+
+删掉的是三样:括号里的「不建议」、整段成因(每换一句都要重建菜单栏项、系统只在项出生那一刻给邻居排位、重建太密时邻居图标会错位闪动、左键面板可能被挤掉)、以及结尾的「想稳定就用固定」。留下的那半句「宽度随每句变化、旁边图标跟着挪」是**可见结果**,跟「固定」那条的「位置不会变」正好对称 —— 两种模式各说自己最终长什么样,不做比较也不给结论。⚠️ 那段被删的成因是实测结论,**搬进了 `MenuBarWidthModeRow` 的代码注释**(连同「UI 上只保留可见结果、成因和『别用』属于判断」这条界线),别当废话丢掉、也别把「不建议」写回去。
+
+### 卡拉OK染色(2026-08-22,用户点名"像酷狗菜单栏歌词";界面标题 2026-09-01 从「逐字染色」改过来)
+
+⚠️ **界面标题的用词 2026-09-01 统过一遍**(用户:"改更专业一点、和软件其他地方对齐")。本仓
+面向用户的术语一直是**卡拉OK**(「歌词 › 效果」那张卡就叫「卡拉OK效果」,候选打分说明里是
+「带逐字（卡拉OK）时间轴」),而**英文侧本来就是** `Karaoke fill`/`Fill color` —— 漂的只有
+这三处中文标题:
+
+| 原标题 | 现标题 | 理由 |
+|---|---|---|
+| 逐字染色 | **卡拉OK染色** | 跟「卡拉OK效果」对齐。⚠️ 两者是**两层**不是重名:那个是全局 `preferWordLevelKaraoke`(要不要用逐字数据),这个是 `menuBarLyricsKaraoke`(菜单栏要不要跟着染);名字相近正是要让这层关系看得出来 |
+| 文字颜色 | 染色**关**时仍是「文字颜色」/ 开时改叫**「未唱到的颜色」** | 这一行管的范围真的会变:关着时它就是整条歌词的颜色(叫「未唱到的」莫名其妙——什么都不会被"唱到"),开着时只管未唱到那半截。⚠️ 关态那个「文字颜色」**跟悬浮歌词那行共用同一个 L10n 键**(`OverlayStyleSettingsRows`),改它的值会连带改掉悬浮歌词那一行 —— 所以菜单栏开态用的是新键,不是改旧键 |
+| 染色颜色 | **已唱到的颜色** | 原词组自己打结("染色"已含"色"),且没说清染的是哪一半;它的 help 一直写着"已唱到部分的颜色",标题直接用那句话,跟「未唱到的颜色」成对 |
+
+英文一并对齐成 macOS 设置项惯用的 Title Case:`Karaoke Tint` / `Unsung Color` / `Sung Color`
+(原来 `Karaoke fill`/`Fill color` 是句式,跟同屏的 `Text Color`/`Follow System` 不统一)。
+
+
+- **开关**:设置 › 歌词显示 › 菜单栏 ›「卡拉OK染色」,默认开;只对带逐字时间轴(YRC)的歌词生效,LRC 整行歌词维持纯色(没有可信的字级进度就不假装有)。
 - **驱动方式**:跟滚动同一哲学 —— 基础色/强调色两张同字形长图做**互补裁剪**(fillClip 露出已唱区 [0,边界]、baseClip 露出未唱区 [边界,句尾],KTV 式硬切边界);整行填色进程按逐字时间轴一次性编成 **三条共享 beginTime/keyTimes 的 CAKeyframeAnimation**(fillClip 宽 + baseClip 的 position.x/bounds;数学在 `MenuBarMarquee.karaokeFillPath` / `karaokeFillKeyframes`,纯函数,selftest 覆盖),装好后主线程一帧都不碰。两个裁剪层挂在滚动的 contentLayer 里,滚动时天然跟文字焊在一起。词边界像素必须按**前缀整段测宽**(`MenuBarMarqueeRenderer.wordEndXs`),各词单测再累加会被词界 kerning 带漂。⚠️ **不能做成"强调色叠在基础色上面"**(第一版,当天被用户截图打回"染色后有白边"):两张图字形抗锯齿覆盖率相同,叠着画时边缘半透明像素让底下的基础色透出来,深色菜单栏上蓝字四周镶一圈白晕;互补裁剪让每个区域的字形只与背景合成一次。离线 harness 有「已染区白色像素=0」专项断言。
-- **染色颜色**:系统 controlAccentColor;**深色菜单栏上向白提亮四成**(`karaokeFillColor`)——强调色按浅底设计,直接压深底上亮度低于旁边的白色基础字,染过的反而更难读(同批用户实测"看不清文字");浅色菜单栏原样。
+- **已唱到的颜色**:系统 controlAccentColor;**深色菜单栏上向白提亮四成**(`karaokeFillColor`)——强调色按浅底设计,直接压深底上亮度低于旁边的白色基础字,染过的反而更难读(同批用户实测"看不清文字");浅色菜单栏原样。
 - **时钟**:位置公式与歌词窗口逐字填色同一条(anchor 外推 ?? 暂停位置,+ 时间轴校准)。对表走独立通道(`syncKaraokeClock`,订阅 $anchor/$pausedPositionMs/$currentLyricsOffsetMs),**不触发槽位 refresh**;标签内部有 **250ms 漂移门** —— 锚点每 ~2s 的例行重发被无声吸收、不打断动画,seek 必然超门重锚,时间轴偏移微调(默认步长 200ms 在门下)走 force 立即生效。暂停静置在当刻边界,恢复从真实位置续染。
 - **自适应宽度模式**下装得下的句子原走 `button.title`(AppKit 自绘,没有图层可叠色)——染色时改走图层渲染,槽宽公式不变(文字宽+18),footprint 逐像素一致。宽度 ≤0 的截断退化路径不染。
 - **反白期间**(菜单/面板开着)填色整个隐掉:基础字已换成选中色,强调色叠在选中背景上要么撞色要么看不清,关掉恢复。
@@ -165,9 +233,10 @@
 | 歌词显示 › 菜单栏 | 菜单栏歌词(开关) | `np:showLyricsInMenuBar` | 关 | 关=永远只显示图标 |
 | 歌词显示 › 菜单栏 | 宽度模式(固定/自适应) | `np:menuBarLyricsWidthMode` | fixed | 只影响装得下的句子怎么占位(见上) |
 | 歌词显示 › 菜单栏 | 最大宽度(滑杆 80~600pt,步进 10) | `np:menuBarLyricsMaxWidth` | 200pt | 歌词格宽度;fixed 模式下即恒定占宽(UI 标题仍叫「最大宽度」) |
-| 歌词显示 › 菜单栏 | 逐字染色(开关) | `np:menuBarLyricsKaraoke` | 开 | 见「逐字染色」一节;只对带逐字时间轴的歌生效 |
+| 歌词显示 › 菜单栏 | 对齐方式(左对齐/居中/右对齐,**仅固定宽度模式下显示**) | `np:menuBarLyricsAlignment` | leading | 装得下的短句在那一格里靠哪边;见「对齐方式」一节 |
+| 歌词显示 › 菜单栏 | 卡拉OK染色(开关) | `np:menuBarLyricsKaraoke` | 开 | 见「卡拉OK染色」一节;只对带逐字时间轴的歌生效 |
 | 歌词显示 › 菜单栏 | 文字颜色(色轮+「跟随系统」) | `np:menuBarLyricsTextColorHex` | 空=跟随系统 | 未唱部分/整行的文字色。空串=labelColor 自适应+反白;自定义色原样用(反白态仍换选中色);自适应 button.title 退化路走 attributedTitle |
-| 歌词显示 › 菜单栏 | 染色颜色(色轮+「跟随系统」,仅逐字染色开着时显示) | `np:menuBarLyricsFillColorHex` | 空=跟随系统 | 已唱部分的颜色。空串=系统强调色+深色菜单栏提亮四成;自定义色**原样用、不再自动提亮** |
+| 歌词显示 › 菜单栏 | 已唱到的颜色(色轮+「跟随系统」,仅卡拉OK染色开着时显示) | `np:menuBarLyricsFillColorHex` | 空=跟随系统 | 已唱部分的颜色。空串=系统强调色+深色菜单栏提亮四成;自定义色**原样用、不再自动提亮** |
 | 通用 › 菜单栏与 Dock | 菜单栏图标(12 款网格) | `np:menuBarIconStyle` | classic | 未显示歌词时那枚图标的样式,点选立即生效 |
 | 通用 › 菜单栏与 Dock | 随播放律动(开关) | `np:menuBarIconAnimates` | 开 | 播放时图标动不动;暂停永远静止 |
 | 快捷键 › 调整步长 | 调整步长(50~2000ms) | `np:lyricsOffsetStepMs` | 200ms | 菜单「提前/延后」和两个快捷键每按一次调多少,菜单项文案跟着变 |
@@ -175,12 +244,56 @@
 
 另:`np:menuBarLyricsMaxChars` 是 2026-08-15 之前「按字数」时代的旧 key,已无读取方,仅为兼容老配置保留。
 
+2026-09-01 编辑台改造顺带加的「重置 ▾」(工具栏,`MenuBarStyleDefaults.restoreDefaults()`):
+恢复宽度模式/卡拉OK染色/文字颜色/已唱到的颜色四项默认值,**不含**最大宽度(结构性尺寸设置)和
+「菜单栏歌词」总开关——取舍跟悬浮歌词/灵动岛两个「重置」一致。默认值命名常量
+`AppSettings.defaultMenuBarLyricsWidthMode` 等四个,`init()` 的 fallback 和这颗按钮读
+同一份,不各自硬编码。
+
+### 图标的初始位置(2026-09-01,用户要求"挪到贴近系统图标的位置")
+
+调研结论:macOS **没有公开 API 能强制第三方状态栏图标的位置**。苹果 HIG 原文明确写着
+"不要指望能预测/固定第三方菜单栏图标的位置,这个决定权在用户手里,不在 App";历史上
+唯一的私有优先级接口(`_statusItemWithLength:withPriority:`)在 10.6.3(2010)就已失效;
+Bartender/Ice 这类工具做的是"接管、管理别人的图标"(靠截屏+私有 CGS 接口伪造整条菜单栏),
+跟单个 App 想调整自己的位置是两码事,且这条路子被证实随时可能被系统架构调整整体打断
+(社区反馈某 macOS 测试版一次性弄坏了 Bartender/Ice/Thaw/Barbee 等多款工具)。
+
+按这个结论实现了两个手段,没有任何一个能"保证"生效:
+
+1. **状态栏项的创建时机尽量提前**(`AppDelegate.applicationDidFinishLaunching`):从原来排在
+   collector 对账、悬浮歌词/灵动岛窗口创建、通知中心注册等一堆重活之后,挪到了
+   `PlaybackCoordinator.shared.start()` 唯一真正的前置依赖(几个 Core 单例的设置快照灌好)
+   之后就立刻创建。经验规律:如果这个 App 恰好跟别的菜单栏 App 同一时刻启动(比如都是
+   登录项),谁先把 `NSStatusItem` 建出来、谁就更可能落在更贴近系统图标的位置——但对已经
+   在运行的其他菜单栏 App **完全无效**。
+2. **首次启动的一次性拖拽引导提示**(`MenuBarPositionHintController`,
+   `MenuBar/MenuBarPositionHint.swift`):`MenuBarStatusItem.start()` 里,状态栏按钮首次
+   建出来 1.5s 后,如果 `AppSettings.hasShownMenuBarPositionHint` 还没置真,就弹一个锚在
+   按钮上的 `NSPopover`(transient,8s 自动收起或点「知道了」手动收起),提示"按住 ⌘
+   拖拽这个图标,可以把它移动到菜单栏里你喜欢的位置"——这是唯一真正可靠、且苹果官方
+   认可的手段。标记在**决定要展示**的那一刻就置真(不等用户点掉),往后永不再弹。
+   `hasShownMenuBarPositionHint` 记的是"这台机器"的状态,已经加进
+   `ConfigPortability.machineLocalDefaultsKeys` 排除表,不会跟着配置导出/导入搬到新机器——
+   否则新机器上这个图标的位置本来就要重新落定,却再也看不到这条最该出现的提示
+   (跟同类的 `hasShownOverlayDragHint` 一个道理)。
+
 ## 与其它功能的交互
 
 - **数据来源**:当前句文本、播放态、句停留时长、曲目微调值全部来自 `PlaybackCoordinator`(它是 `LocalPlaybackSource` 的转发层);配速依赖的 `currentLineDwellSeconds` 用相邻两句时间戳之差,所以歌词时间轴校准不影响它。
 - **歌词时间轴三处入口共享**:菜单「提前/延后」、全局快捷键(`GlobalHotkeys`,快捷键那条路会在**灵动岛**闪一条「歌词偏移 +0.50s」提示,只开悬浮歌词的人无反馈)、「歌词管理」窗口的偏移输入框,底层都是 `LyricsOffsetStore`;步长与菜单文案共用 `lyricsOffsetStepMs`。设置页那一行时间轴偏移是叠加的另**两**层(「全部播放器」= 全局基准,选具体播放器 = 按播放器那层)。
 - **快速开关联动**:悬浮歌词/灵动岛的开关经各自 WindowController 的 `setVisible`(与设置页、全局快捷键同一入口);「锁定位置」= 持久化 `lockPosition` + `setLocked` 两步,与快捷键处逻辑一致;「开机启动」直接翻 `launchAtLoginEnabled`。
-- **设置页预览**(`MenuBarPreviewBar`):不是仿品,直接复用菜单栏本体——同一个 `presentation` 判定、同一个 `MenuBarScrollingLabel`(经 `Representable` 包装)、同一套菜单栏字体;正在播放时预览演真实当前句和真实配速,没播放时演示例句(dwell 给 nil 走固定速度)。逐字染色同理复用本体的填色图层与对表公式(见「逐字染色」一节),不为示例句编假时间轴。垫底用真实桌面壁纸 + `.ultraThinMaterial` 合成菜单栏质感。
+- **预览里那圈虚线边界**(`slotEdgeOutline`,2026-09-01 用户要求"跟悬浮歌词一样把清晰的边界用虚线画出来"):套在 `lyricsSlot` 上,所以**不用自己算宽度** —— 那一格的 frame 本来就恒等于「最大宽度」(`.fixed`)或文字自然宽度(`.text`)。顺带把两种宽度模式的差别也画出来了:固定宽度时虚线框右边空出一块,自适应时贴着文字收紧。
+  - 配色照 `OverlayEditorStage.windowEdgeOutline` 那条老规矩:**固定白色 + 黑色投影,不跟深浅色模式走** —— 这一格压在 `DesktopWallpaperSample` 那张真实壁纸上(再压一层 `.ultraThinMaterial`),底色不受 App 控制,语义色在浅壁纸上会读不出来。
+  - 透明度取 **0.6** 而不是悬浮歌词那条的 0.5:那一圈常驻在**用户真实桌面**上、画满会读成一个"假窗口边框"(真窗口并没有边),所以刻意克制;这一圈在**预览**里,而且是它接替 caption 去回答"这一格有多宽",读不清就等于什么都没说。
+  - 没做「拖动宽度时提亮到 0.95」的联动:那需要把滑杆的 `onEditingChanged` 一路传进 `MenuBarPreviewBar`,而滑杆住在 `MenuBarEditorStage`。属于加法。
+- **caption 砍掉了宽度和模式**(同日):原来是「预览 · 固定宽度 150pt」/「预览 · 自适应，最宽 150pt」，现在只剩「预览」/「预览 · 本句会横向滚动」。同一件事那时候被说了**三遍** —— 虚线边界直接把那一格画出来了(含模式)、编辑台「最大宽度」滑杆右侧有数值、这行字是第三遍。**留下滚动那一句**是因为它是这行字唯一说得出、而画面说不出的事:那一格的宽度看得见,"这句放不下、会横向滚动"看不见。
+- **宽度调整条浮在预览框里**(`MenuBarEditorStage.stageWidthBar` + `MenuBarPreviewBar.reservesWidthLane`,2026-09-01 用户三次点名"和之前两个页面一样加到这个预览框里面去"):前两版都不是他要的 —— 第一版摆在预览下面平铺一行、第二版仍是 VStack 里的兄弟节点,而那两版用的都是 `MenuBarWidthRow`(`SettingsRow` 外壳),在舞台那块近白的 `controlBackgroundColor` 上跟"页面上一条独立的设置行"长得几乎一样,所以看着像没动。
+  - 现在照 `OverlayEditorStage` 的做法:预览条自己让出一条通道(`reservesWidthLane`,28pt;那边是 44pt,但这条预览总高只有 69pt,留 44 会把菜单栏条挤得很窄),胶囊浮在通道里。样式逐项抄 `NotchEditorStage.widthBar`(黑底 0.7 + 白描边 0.18 + 投影、白色小号 Slider、等宽读数)。
+  - ⚠️ 预留通道时 caption 要加一个 `Spacer` 顶在菜单栏条正下方,否则 VStack 会把它均摊到通道中间、正好跟胶囊叠上。
+  - ⚠️ **Slider 不传 `step:`** —— macOS 的 Slider 一有 step 就画刻度线,80…600/step 10 是 52 个刻度、密到连成一条实线,看着像轨道下面平白多一条白杠(悬浮歌词那根为此被用户报过一次)。量化在 `set` 里自己 round。
+  - 抽屉里那份 `MenuBarWidthRow` 保留不动(跟灵动岛「同一份滑杆逻辑、不同外壳宿主」同一个模式)。
+- **设置页预览**(`MenuBarPreviewBar`):不是仿品,直接复用菜单栏本体——同一个 `presentation` 判定、同一个 `MenuBarScrollingLabel`(经 `Representable` 包装)、同一套菜单栏字体;正在播放时预览演真实当前句和真实配速,没播放时演示例句(dwell 给 nil 走固定速度)。逐字染色同理复用本体的填色图层与对表公式(见「卡拉OK染色」一节),不为示例句编假时间轴。垫底用真实桌面壁纸 + `.ultraThinMaterial` 合成菜单栏质感。
 - **窗口打开链路**:菜单的「设置/歌词管理/歌词窗口/引导」四个动作依赖 `MenuBarSceneActions.install()` 建的锚点窗口先注册好 `AppActions` 闭包(AppDelegate 里紧跟 `start()` 之后);首次启动的引导向导也从那个锚点延迟 0.5s 拉起。
 - **字体跟随系统**:歌词用 `NSFont.menuBarFont(ofSize: 0)`,系统改菜单栏字号会跟着变,静态文字路径与图层路径同一字体,切换时字号不跳。
 
@@ -194,6 +307,9 @@
 
 | 主题 | 文件 + 符号 |
 |---|---|
+| 预览里的虚线边界 / caption | `lyrimuse/Sources/lyrimuse/UI/SectionPreviewBars.swift` · `MenuBarPreviewBar`(`slotEdgeOutline` / `previewCaption` / `reservesWidthLane`) |
+| 编辑台工具栏 / 浮在通道里的宽度胶囊 / 对齐 | `lyrimuse/Sources/lyrimuse/UI/MenuBarEditorStage.swift` · `MenuBarEditorStage`(`toolbar` / `stageWidthBar`) · `MenuBarWidthModeRow` · `MenuBarAlignmentRow` · `MenuBarAlignmentSegmentedControl` |
+| 对齐落地(静止时的横向落点) | `lyrimuse/Sources/lyrimuse/MenuBar/MenuBarScrollingLabel.swift` · `restartAnimation()` 的静止分支(`slack` / `alignedX`);`Plan.alignment` 让"只改对齐"也能过 `next != plan` |
 | 状态栏总控、三态判定、透明占位图 | `lyrimuse/Sources/lyrimuse/MenuBar/MenuBarStatusItem.swift` · `MenuBarStatusItem`(`refresh` / `showIcon` / `showStaticText` / `showFixedWidth` / `spacerImage`) |
 | 装得下/要滚的唯一判定、长图排版、按宽截断 | `lyrimuse/Sources/lyrimuse/MenuBar/MenuBarMarqueeRenderer.swift` · `MenuBarMarqueeRenderer`(`presentation` / `Presentation` / `prepare` / `truncate`) |
 | 滚动图层、反白换色不打断动画 | `lyrimuse/Sources/lyrimuse/MenuBar/MenuBarScrollingLabel.swift` · `MenuBarScrollingLabel`(`present` / `rebuildImage` / `restartAnimation` / `Representable`) |
@@ -207,7 +323,10 @@
 | 句停留时长、偏移转发 | `lyrimuse/Sources/lyrimuse/PlaybackCoordinator.swift` · `currentLineDwellSeconds` / `nudgeLyricsOffset` / `trackLyricsOffsetMs` |
 | 偏移的真正执行与叠加 | `lyrimuse/Sources/LyrimuseCore/Local/LocalPlaybackSource.swift` · `nudgeLyricsOffset` / `resetLyricsOffset` / `applyOffsets` |
 | 菜单栏相关设置属性与默认值 | `lyrimuse/Sources/lyrimuse/Settings/AppSettings.swift` · `showLyricsInMenuBar` / `menuBarLyricsWidth` / `menuBarLyricsWidthMode` / `menuBarIconStyle` / `menuBarIconAnimates` / `MenuBarLyricsWidthMode` |
-| 设置页卡片与图标网格 | `lyrimuse/Sources/lyrimuse/SettingsView.swift` · `menuBarCard` / `GeneralSettingsTab.menuBarIconChoice` |
+| 设置页编辑台(工具栏/宽度条/浮层/抽屉) | `lyrimuse/Sources/lyrimuse/UI/MenuBarEditorStage.swift` · `MenuBarEditorStage`、`MenuBarWidthModePopover`、`MenuBarColorPopover`、`MenuBarAllSettingsDrawer`、`MenuBarStyleDefaults` |
+| 首次启动的拖拽引导提示 | `lyrimuse/Sources/lyrimuse/MenuBar/MenuBarPositionHint.swift` · `MenuBarPositionHintController`(`show`);调用点 `MenuBarStatusItem.start()` |
+| 状态栏项创建时机、机器专属配置排除表 | `lyrimuse/Sources/lyrimuse/AppDelegate.swift` · `applicationDidFinishLaunching`(`MenuBarStatusItem.shared.start()` 调用点);`lyrimuse/Sources/lyrimuse/Settings/ConfigPortability.swift` · `machineLocalDefaultsKeys` |
+| 设置页图标网格 | `lyrimuse/Sources/lyrimuse/SettingsView.swift` · `GeneralSettingsTab.menuBarIconChoice` |
 | 设置页实时预览 | `lyrimuse/Sources/lyrimuse/UI/SectionPreviewBars.swift` · `MenuBarPreviewBar` |
 
 ## 设计决策与已知坑

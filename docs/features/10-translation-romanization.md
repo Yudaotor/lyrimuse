@@ -1,6 +1,6 @@
 # 10. 译文与罗马音
 
-> 最后核对：2026-08-30 · 基线：10f4061+工作树
+> 最后核对：2026-09-01 · 基线：5d9031a+工作树
 
 ## 定位
 
@@ -106,3 +106,5 @@
 14. **算法/词典改了之后，存量缓存不会自己跟上——要靠 `regenerate-jyutping`（2026-08-31 加）**：`maybeGenerateJyutpingRoma` 只在 `LyricsRoma` **为空**时才补，绝不覆盖任何已有值（这条"不覆盖源自带罗马音"的规矩本身是对的，不该改）。代价是粤拼算法或词典一改，已经缓存过的歌永远停在旧结果上——2026-08-30 接入词表、2026-08-31 修间距，两次都是如此。新增一次性子命令 `collector regenerate-jyutping [-apply]`（`regeneratejyutpingcli.go`），形态照抄 `dedupe-entries`：默认只打印计划，`-apply` 才落盘，且 `-apply` 前必须拿到独占锁（常驻 collector 内存里握着整份 `enrichCache`，它下一次保存会把修改整份盖回去）。⚠️ 两个关键点：① **怎么判断"这份粤拼是我们生成的"**——判据是"存的这份带数字声调"，collector 生成的粤拼每个汉字必带声调，而歌词源自带的罗马音在真实缓存里不带（39 条粤语条目里恰好 1 条属于这种，必须原样留着）；判不准一律跳过，不猜。② **必须先 `importLyricsFromFiles()` 再改、改完 `exportLyricsFiles()`**——`lyrics/` 文件夹是歌词家族的权威源，只改 JSON 缓存的话，下次启动导入会拿磁盘上的旧 `.roma.lrc` 把它盖回去。首次运行实测：39 条粤语条目里 37 条重新生成、1 条已是最新、1 条无声调被保护跳过；其中 20 条的行数跟当前歌词已经对不上（旧粤拼是在歌词被更新之前生成的），顺带一并修正。
 
     ⚠️ 三个 CLI（`dedupe-entries` / `retranslate` / `regenerate-jyutping`）里"请先停掉常驻实例"那句提示原本写的 launchd 标签是 `me.yudaotor.lyrimuse.collector`，而实际标签是 `com.lyrimuse.collector`（plist 已确认）——照着提示敲会失败。三处已一并改对。
+
+15. **内容匹配对"空白字符种类"不免疫，NBSP 换气停顿撞上 YRC 普通空格时整行粤拼消失（2026-09-01，用户报陈奕迅《冲口而出 (Live)》"若你想欣赏有没有金曲奖"这一行有粤拼、隔壁两行没有）**：`LyricsSyncEngine.swift` 的 `trTextByPlainText`/`romaTextByPlainText`（第 3 章"内容匹配优先于时间最近邻"那套，2026-08-27 加）建 key、查 key 时原来都用 `.trimmingCharacters(in: .whitespaces)`，只削字符串两端。拿这首歌真实缓存数据排查坐实：主 LRC 用 NBSP（U+00A0）标记这句里的换气停顿（`"若你\u{A0}想欣赏\u{A0}有没有\u{A0}金曲奖"`），YRC 逐字数据在同样的词组边界嵌的是普通空格（`words.map(\.text).joined()` 拼出来是 `"若你 想欣赏 有没有 金曲奖"`）——两边可读内容完全一样，但内部空白字符不同，`trimmingCharacters` 只削两端削不掉中间这几个，内容匹配查不到；更巧的是这一行 YRC 的起始时间戳（67696ms）比它在主 LRC 里的时间戳（66990ms）晚 **706ms**，比 `nearestText` 的 700ms 容差多 6ms，时间兜底也刚好卡在门外——第 3 章①②两条路同时失手，这一行才彻底没有粤拼（不是缺失，是两个近似匹配各差一点点），隔壁"我亦会一开口就唱"（漂移 127ms）"若热情在泛滥不记得转弯"（漂移 344ms）都在 700ms 容差内，靠 `nearestText` 蒙混过关，看起来像是"随机挑着漏"。修法：把两处 `.trimmingCharacters(in: .whitespaces)` 换成新增的 `Self.contentMatchKey(_:)`——用 `text.filter { !$0.isWhitespace }` 去掉**全部**空白（含 NBSP 等 Unicode 空白变体，不止两端），理由是这里比较的是"是不是同一句唱词的内容"，字词之间要不要垫空白纯粹是各家源自己的排版习惯，不该算进内容差异。验证：`swift/Sources/lyrimuse-selftest/main.swift` 新增两条断言（"③.6b"），用真实数据的原句/时间戳/漂移量原样最小复现，先确认改前 `FAIL`（`git stash` 只回退引擎改动、留着断言重跑，两条都失败），再确认改后 `ok` 且不影响原有全部断言（`ALL PASS`）。

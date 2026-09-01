@@ -410,8 +410,27 @@ final class LastfmStatsService: ObservableObject {
     /// LiveScrobbleRow 维护(唯一同时看得到播放进度和最近记录的地方),列表渲染时跳过
     /// 这一行;播放结束/暂停实时行退场时置回 nil,该行随即以普通历史行身份回归。
     @Published var liveAbsorbedRecentID: String?
-    /// 那年今日:去年(查不到再往前,最多三年)同一天的收听。整天没有记录则为 nil,卡片隐藏。
+    /// 那年今日:去年(查不到再往前,最多三年)同一天的收听。没有可展示的结果时为 nil。
+    ///
+    /// ⚠️ 光看这个字段**分不出**"为什么没有" —— 见 onThisDayOutcome。原来界面就是只判它
+    /// (`if let`,没有 else),于是四种完全不同的处境全渲染成一片空白(2026-09-01 用户报
+    /// 「那年今日有时候点进去是会空白」)。
     @Published private(set) var onThisDay: OnThisDayResult?
+    /// 「那年今日」这一轮到底发生了什么 —— 界面靠它决定画什么,不能只判 onThisDay 是不是 nil。
+    ///
+    /// 四种处境原来长得一模一样(onThisDay == nil),而它们该给用户看的东西完全不同:
+    ///   - `.pending`  还没取过 / 正在取 → 该显示"正在查"
+    ///   - `.loaded`   取到了 → 正常那张卡
+    ///   - `.empty`    请求成功但 1~3 年前的今天**确实**都没有记录 → 该明说,而不是空白
+    ///   - `.failed`   三年**全部**请求失败(网络/限流/API 抽风)→ 该明说并给「重试」
+    ///
+    /// `.empty` 和 `.failed` 必须分开,因为后者叠着一个更毒的行为:`fetchedAt["onthisday"]`
+    /// 在**发请求之前**就写(见 refreshOnThisDay,那是刻意的 —— 否则一直失败会变成每次露面
+    /// 都重试),于是一次失败会占住整整 6 小时:2 分钟那轮轮询会连着 6 小时全部早退,界面
+    /// 一直空白,除非重启 App。所以失败态必须给一条能**绕过 TTL** 的重试路
+    /// (refreshOnThisDay(force:))。
+    enum OnThisDayOutcome: Equatable { case pending, loaded, empty, failed }
+    @Published private(set) var onThisDayOutcome: OnThisDayOutcome = .pending
     /// 上面那份数据最后一次**成功**拉到的时刻,给卡片头显示"几小时前更新"。
     /// 跟 recentUpdatedAt 同一套语义:只在真的取到内容时才写(见 refreshOnThisDay 里
     /// 赋值的位置——那一句紧挨着 onThisDay 的赋值,不是开头占 TTL 的那个 fetchedAt)。
@@ -465,6 +484,7 @@ final class LastfmStatsService: ObservableObject {
         onThisDay = nil
         onThisDayUpdatedAt = nil
         onThisDayDay = nil
+        onThisDayOutcome = .pending
         snapshotSaveTask?.cancel()
         try? FileManager.default.removeItem(at: Self.snapshotURL)
         titleForms = [:]
@@ -689,15 +709,24 @@ final class LastfmStatsService: ObservableObject {
     /// 22:00 打开取到 8/16 那份,次日 02:00 再打开时 TTL 还没到期,界面就把昨天那份继续
     /// 挂在"今天"上,最长挂 6 小时。App 是常驻 launchd 服务、跨零点不重启,而 fetchedAt
     /// 只在进程内存里 —— 不重启就一直有效,所以这不是理论问题。跨过零点就把缓存作废。
-    func refreshOnThisDay() {
+    /// - Parameter force: 绕过 TTL/跨天那道闸,**无条件**重取一次。只给界面上失败态那颗
+    ///   「重试」按钮用(2026-09-01 加)。没有它的话失败态那颗按钮点了什么都不会发生:
+    ///   `fetchedAt["onthisday"]` 在发请求前就写了,一次失败要占住 6 小时。
+    func refreshOnThisDay(force: Bool = false) {
         let now = Date()
         // 判据是 DailyRefreshGate 那个纯函数(TTL 或 跨天,取或),不是这个类里通用的
         // fresh() —— 后者只判 TTL,正是这次的 bug 所在。见那个文件的注释。
-        guard DailyRefreshGate.needsRefresh(
-            lastFetchedAt: fetchedAt["onthisday"], cachedDay: onThisDayDay,
-            now: now, ttl: 6 * 3600)
-        else { return }
+        if !force {
+            guard DailyRefreshGate.needsRefresh(
+                lastFetchedAt: fetchedAt["onthisday"], cachedDay: onThisDayDay,
+                now: now, ttl: 6 * 3600)
+            else { return }
+        }
         guard let cred = credentials else { return }
+        // 这一轮开始:先回到 pending,界面显示"正在查"而不是继续挂着上一轮的失败提示。
+        // ⚠️ **不清 onThisDay 本身** —— 手上已有内容时重取(跨天/手动重试),清了会让那张卡
+        // 先闪成空再回来;取到新的自然会覆盖,取不到也该继续显示旧的那份而不是变空。
+        onThisDayOutcome = .pending
         // 两个字段同一时机写(而不是等取到内容):它们一起决定"这一天要不要再发请求",
         // 失败时同样占住 6 小时不重试,语义跟其它 fetchedAt 键保持一致。真正对用户可见的
         // "更新时间"是另一个字段 onThisDayUpdatedAt,那个才只在成功时写。
@@ -705,6 +734,9 @@ final class LastfmStatsService: ObservableObject {
         onThisDayDay = now
         Task {
             let cal = Calendar.current
+            // 区分「三年都没记录」和「三年请求全挂」的唯一依据:有没有任何一次拿到过响应。
+            // 只要有一次回来过(哪怕 total == 0),就说明网络和账号都是通的、那几天确实没听歌。
+            var anyResponse = false
             for yearsAgo in 1...3 {
                 guard let anchor = cal.date(byAdding: .year, value: -yearsAgo, to: Date()) else { continue }
                 let from = cal.startOfDay(for: anchor)
@@ -713,6 +745,7 @@ final class LastfmStatsService: ObservableObject {
                             "limit": String(onThisDayPageSize)]
                 guard let first = await request(method: "user.getrecenttracks", cred: cred, extra: base)
                 else { continue }
+                anyResponse = true
                 let total = attrTotal(first)
                 var rows = parseRecent(first).filter { $0.date != nil }
                 guard total > 0, !rows.isEmpty else { continue }
@@ -752,6 +785,7 @@ final class LastfmStatsService: ObservableObject {
                 let top = Array(ranked.prefix(3))
                 onThisDay = OnThisDayResult(yearsAgo: yearsAgo, total: total, top: top)
                 onThisDayUpdatedAt = Date()
+                onThisDayOutcome = .loaded
                 // 这三首的封面走跟最近记录**完全同一套**兜底:本机 enrich 缓存 + getinfo
                 // (必要时按纠正后的歌手名重查一次)。不补的话它们只剩 coverURL(for:) 的
                 // 第一级可用,碰上占位星就是灰块 —— 见 refreshLocalCovers 的注释。
@@ -764,6 +798,14 @@ final class LastfmStatsService: ObservableObject {
                 resolvePlayCounts(for: top.map(\.track))
                 return
             }
+            // 走到这儿 = 三年都没能给出可展示的结果。上面成功那一支是 `return` 出去的,
+            // 所以这里只有两种可能,靠 anyResponse 分开(它们该给用户看的东西完全不同,
+            // 见 OnThisDayOutcome):
+            //   - 有响应过 → 那几天确实没听歌,如实说"没有记录";
+            //   - 一次都没回来 → 网络/限流/API 挂了,说"取不到"并给「重试」。
+            //     这一支尤其要紧:失败已经占住了 6 小时 TTL(见函数开头),不给重试按钮
+            //     就只能等 6 小时或重启 App —— 那正是用户报的"有时候点进去是空白"。
+            onThisDayOutcome = anyResponse ? .empty : .failed
         }
     }
 
@@ -1857,6 +1899,19 @@ final class LastfmStatsService: ObservableObject {
     /// 命中就不必再为这一行发 getinfo 请求了,见 resolvePlayCounts 里的 hasCover。
     func coverURL(for track: RecentTrack) -> URL? {
         if let own = track.imageURL {
+            // 自带图的第二道纠正(2026-09-01):本机缓存里有**封面归属已核实**的图
+            // (cover_album 对得上这一行的专辑)时,它比 Last.fm 给这条 scrobble 挂的实体图
+            // 更可信 —— 实测陈奕迅《不如这样 (Live)》(专辑 The Easy Ride 演唱会):Last.fm
+            // 把这条 scrobble 对到了它库里 **Get A Life 专辑**的曲目实体上,自带图是那张
+            // 黑封面;而同专辑其余行在 Last.fm 恰好没有自带图(走后面层级拿到正确的红图),
+            // 于是列表里孤零零混着两张错场次的黑图。下面那道"同专辑 ≥2 行自带图共识"对
+            // 这种形态无能为力 —— 兄弟行都没有自带图,共识表是空的。注意门槛:普通
+            // localCovers(只按歌手+歌名命中、没核实过封面归属)**没有**这个资格,不然
+            // collector 当年解析错版本存下的图反而会把 Last.fm 对的图顶掉。
+            if let verified = localAlbumVerifiedCovers[Self.playCountKey(artist: track.artist, title: track.title)],
+               verified != own {
+                return verified
+            }
             // 自带图**不是无条件优先**(2026-08-20 加这道口子):同一首歌被两种歌手写法
             // 拆成两个 Last.fm 实体时,两边挂的图可能不是同一张 —— 实测《Toronto 2014》
             // 从 Mac 进来记在「Daniel Caesar & Mustafa」名下、挂的是单曲封面(深蓝纹章),
@@ -1911,6 +1966,10 @@ final class LastfmStatsService: ObservableObject {
     /// stat 一次缓存文件判 mtime,而这个列表一页 100 行、每 45 秒重绘一轮。
     private(set) var localCovers: [String: URL] = [:]
 
+    /// localCovers 的严格子集:这张图的 cover_album 也对得上这一行的专辑(collector 核实
+    /// 过封面归属)。只有这一档有资格排到 Last.fm 自带图**前面**,见 coverURL(for:) 的注释。
+    private(set) var localAlbumVerifiedCovers: [String: URL] = [:]
+
     /// 重算本机封面兜底。覆盖**列表上所有会显示封面的行**:最近记录那一页 +「那年今日」
     /// 那三首。
     ///
@@ -1953,14 +2012,23 @@ final class LastfmStatsService: ObservableObject {
 
     private func refreshLocalCovers() {
         var out: [String: URL] = [:]
+        var verified: [String: URL] = [:]
         for r in recent + (onThisDay?.top.map(\.track) ?? []) {
             let key = Self.playCountKey(artist: r.artist, title: r.title)
-            guard out[key] == nil else { continue }
-            if let url = EnrichCacheReader.coverURL(artist: r.artist, title: r.title, album: r.album ?? "") {
+            if out[key] == nil,
+               let url = EnrichCacheReader.coverURL(artist: r.artist, title: r.title, album: r.album ?? "") {
                 out[key] = url
+            }
+            // 专辑核实版单独一张表:只有 cover_album 也对上这一行专辑的图才进来 ——
+            // 它有资格**纠正** Last.fm 自带图(见 coverURL(for:) 第①级),普通 localCovers
+            // 只配当自带图缺失时的兜底。
+            if verified[key] == nil, let album = r.album, !album.isEmpty,
+               let url = EnrichCacheReader.albumVerifiedCoverURL(artist: r.artist, title: r.title, album: album) {
+                verified[key] = url
             }
         }
         localCovers = out
+        localAlbumVerifiedCovers = verified
     }
 
     /// 「正在记录」那一行要复用的封面:列表里**这首歌 / 这张专辑**的历史行此刻正在显示的

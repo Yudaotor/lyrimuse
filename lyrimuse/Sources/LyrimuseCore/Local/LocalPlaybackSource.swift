@@ -711,7 +711,7 @@ public final class LocalPlaybackSource: ObservableObject {
     // 那条,于是 Spotify 用户白等 2 秒轮询。QQ 音乐/网易云确实没有等价通知,它们靠
     // media-control 的事件流(见 MediaControlStreamWatcher)。
     //
-    // 两条订阅都不按 features.player 条件挂载:某个播放器可能开着但不是当前选定的那个,
+    // 两条订阅都不按 features.players 条件挂载:某个播放器可能开着但不在当前选中集合里,
     // 那种情况下补查一次 poll() 完全无害(poll() 自己会核对 bundleIdentifier,见
     // MediaControlClient.fetchSnapshot 的各条分支)。
     private func startObservingPlayerInfoNotification() {
@@ -991,7 +991,13 @@ public final class LocalPlaybackSource: ObservableObject {
                 settledThresholdLine = line
                 settledThresholdMs = KaraokeFill.lineFillSettledMs(words: words, groups: line?.wordGroups)
             }
-            settled = rawMs + syncEngine.offsetMs >= settledThresholdMs
+            // ⚠️ 必须用 effectiveOffsetMs(含歌词自带的 [offset:]),不能用 offsetMs:
+            // settledThresholdMs 来自词时间戳(歌词原始时间轴),而"播放位置 → 歌词时间轴"
+            // 的换算就是引擎那句「所有查询入口都必须用 effectiveOffsetMs」管的事 ——
+            // 2026-09-01 全链路核对 [offset:] 处理时抓到这里是唯一漏改的入口(2026-08-22
+            // 那次只改了引擎内部五个入口,这处在引擎外面、漏了),带非零 offset 的歌
+            // "行内填色已完成"的判定会偏差相应毫秒数。
+            settled = rawMs + syncEngine.effectiveOffsetMs >= settledThresholdMs
         } else {
             settled = true
             settledThresholdLine = nil
@@ -1485,9 +1491,10 @@ public final class LocalPlaybackSource: ObservableObject {
     public func seek(toMs targetMs: Int) {
         let clampedMs = max(0, min(targetMs, currentDurationMs ?? targetMs))
         let seconds = Double(clampedMs) / 1000
-        // .auto 模式下要按"这一刻实际在播的是谁"选后端,不能只看设置值——设置是"自动识别"时
-        // PlaybackPlayerPreference.current 不等于 .appleMusic,写路径会走 media-control,而
-        // 读路径对 Apple Music 走的是精确的 AppleScript 播放头,两条路不一致。
+        // .auto/多选模式下要按"这一刻实际在播的是谁"选后端,不能只看设置值——只要不是排他地
+        // 选了 Apple Music 一个(PlaybackPlayerPreference.isExclusivelyAppleMusic 为 false),
+        // 写路径会走 media-control,而读路径对 Apple Music 走的是精确的 AppleScript 播放头,
+        // 两条路不一致。
         let resolvedIsAppleMusic = lastSnapshot?.bundleIdentifier == PlaybackPlayer.appleMusic.bundleIdentifier
         MusicPlaybackController.seek(toSeconds: seconds, preferAppleScript: resolvedIsAppleMusic)
 

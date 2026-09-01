@@ -1006,11 +1006,23 @@ struct LyricsWindowView: View {
                             await EnrichCacheStore.shared.savePlainTextEdit(
                                 key: ctx.key, plainLyrics: candidate.lyrics, source: candidate.source)
                         } else {
+                            // ⚠️ 2026-09-01 真实 bug 修复:这里原来既没传 markManual 也没传
+                            // sourceChoice,落进 saveEdit 的默认值 markManual: true——
+                            // 「歌词窗口」里搜一次、采纳一次,就把这首歌**永久冻结**了,
+                            // 以后打分改进/该源补出逐字都再也不会被采纳,而用户只是想换份词。
+                            //
+                            // 这是「采纳候选」的第三个入口(另外两个:歌词管理、悬浮窗 ⚙ 的
+                            // 「搜索歌词…」小窗)。2026-09-01 早些时候修 QuickSearchWindow
+                            // 那处同款 bug 时**漏了这处** —— 当时是顺着"歌词管理 vs 小窗"
+                            // 两两对比找的,没有把三个入口一起数一遍。三处必须同进同出,
+                            // 改任何一处之前先 grep `LyricsSearchSheet(` 数清楚有几个。
                             await EnrichCacheStore.shared.saveEdit(
                                 key: ctx.key,
                                 lyrics: candidate.lyrics, tr: candidate.lyricsTr,
                                 roma: candidate.lyricsRoma, yrc: candidate.lyricsYRC,
-                                source: candidate.source)
+                                source: candidate.source,
+                                markManual: AppSettings.shared.manualPickLocksLyrics,
+                                sourceChoice: "", fromManualPick: true)
                         }
                         // 让播放侧立刻重载,不等 2s 轮询的 mtime 检查。
                         PlaybackCoordinator.shared.refreshLyricsForCurrentTrack()
@@ -2573,11 +2585,12 @@ struct LyricsWindowView: View {
     // 广告/纯音乐两个分支必须排在"还在搜索中"前面,理由跟 LyricsOverlayView.mainLine
     // 一致,见 playback.isCurrentTrackAdBreak / isCurrentTrackInstrumental 定义处的注释。
     /// 停播欢迎态用哪个播放器(2026-08-22 用户指正"不一定是 Apple Music"):设置里选了
-    /// 具体播放器就用它;「自动识别」用停播前最后认下来的那家(LocalPlaybackSource 落在
-    /// UserDefaults,停播时快照已清空、只有它还记得);全新用户兜底 Apple Music。
+    /// 恰好一个具体播放器就用它;「自动识别」、或者 2026-09-01 多选后同时勾了两个以上
+    /// 具体播放器(没有唯一答案,跟纯 auto 归为同一类)时,用停播前最后认下来的那家
+    /// (LocalPlaybackSource 落在 UserDefaults,停播时快照已清空、只有它还记得);全新
+    /// 用户兜底 Apple Music。
     private var idlePlayer: PlaybackPlayer {
-        let configured = PlaybackPlayerPreference.current
-        if configured != .auto { return configured }
+        if let only = PlaybackPlayerPreference.soleExplicitPlayer { return only }
         if let bid = UserDefaults.standard.string(forKey: "np:lastPlayerBundleID"),
            let p = PlaybackPlayer.allCases.first(where: { $0 != .auto && $0.bundleIdentifier == bid }) {
             return p

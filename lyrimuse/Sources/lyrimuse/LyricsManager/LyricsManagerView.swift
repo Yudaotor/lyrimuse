@@ -81,6 +81,102 @@ private enum TimingFilter: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 }
 
+/// 排序方式(2026-09-01,用户要求"加一个排序功能",筛选栏加一个下拉、九个预设组合)。
+/// 「默认排序」原样对应改动前那套写死的(歌手,专辑,歌名)固定排序——不是新行为,只是
+/// 第一次开放成"用户可以主动切走、也可以切回来"的一个选项,不切它列表长得跟改动前
+/// 逐条一样。
+///
+/// 「更新时间」两档 2026-09-01 晚补上(用户点名要)。上面那版注释曾写着"没有这个候选,
+/// 缓存里没有任何时间戳字段"——**结论对、理由不全**:缓存里确实没有一个表达"更新时间"的
+/// 字段(实测覆盖率 decided_at 73% / translation_ts 25% / peripheral_ts 9% /
+/// lyrics_rescore_ts 7%,全是偏科的局部时间戳,而 decided_at 还只反映"自动决策",手改
+/// 歌词根本不动它),但**不需要扩缓存格式** —— 导出的歌词文件 mtime 就是这个信号,而且
+/// 覆盖率 3169/3210。见 `Summary.lyricsUpdatedAt` 的头注(含"为什么它不会被 collector
+/// 每次启动重写冲掉"这个关键前提)。
+private enum LyricsSortOption: String, CaseIterable, Identifiable {
+    case defaultOrder = "默认排序"
+    case titleAscending = "歌名 A→Z"
+    case titleDescending = "歌名 Z→A"
+    case artistAscending = "歌手 A→Z"
+    case artistDescending = "歌手 Z→A"
+    case albumAscending = "专辑 A→Z"
+    case albumDescending = "专辑 Z→A"
+    case sourceAscending = "来源 A→Z"
+    case sourceDescending = "来源 Z→A"
+    case updatedDescending = "更新时间 新→旧"
+    case updatedAscending = "更新时间 旧→新"
+
+    var id: String { rawValue }
+
+    /// 按这个选项给一份已经筛选完的列表排序。
+    ///
+    /// 只有"点名的那个字段"会因升/降序反转,没点名的次序键(比如按歌手排序时,同一位
+    /// 歌手底下的专辑/歌名)恒按升序断平局——跟 Finder"按修改时间降序"仍然按文件名
+    /// 升序断平局是同一个道理,不是把整条元组一起倒过来(那样会连带把断平局的顺序也
+    /// 搅乱,观感上像是"随机")。
+    ///
+    /// 歌手/专辑用的是跟"默认排序"同一套归一化键(`normPrimaryArtist`/`normAlbum`,
+    /// 折过简体+小写),不是列表里实际展示的原始写法——理由见 `LyricsManagerRow` 调用点
+    /// 上方 2026-08-28 那条注释:"筛选/排序继续按统一名归并不变,只是这一列如实展示
+    /// 每条记录自己的原始歌手名"。同一位歌手因为原始标签写法不同(简繁/大小写)被拆成
+    /// 两条记录时,按归一化键排还能让它们挨在一起;按展示字符串排就会被拆到列表两端,
+    /// 是这次改动特意要延续、不要打破的既有行为。
+    func sorted(_ items: [EnrichCacheStore.Summary]) -> [EnrichCacheStore.Summary] {
+        switch self {
+        case .defaultOrder:
+            return items.sorted {
+                ($0.normPrimaryArtist, $0.normAlbum, $0.title) < ($1.normPrimaryArtist, $1.normAlbum, $1.title)
+            }
+        case .titleAscending, .titleDescending:
+            let ascending = self == .titleAscending
+            return items.sorted {
+                let (a, b) = ($0.searchTitleLower, $1.searchTitleLower)
+                if a != b { return ascending ? a < b : a > b }
+                return ($0.normPrimaryArtist, $0.normAlbum) < ($1.normPrimaryArtist, $1.normAlbum)
+            }
+        case .artistAscending, .artistDescending:
+            let ascending = self == .artistAscending
+            return items.sorted {
+                let (a, b) = ($0.normPrimaryArtist, $1.normPrimaryArtist)
+                if a != b { return ascending ? a < b : a > b }
+                return ($0.normAlbum, $0.title) < ($1.normAlbum, $1.title)
+            }
+        case .albumAscending, .albumDescending:
+            let ascending = self == .albumAscending
+            return items.sorted {
+                let (a, b) = ($0.normAlbum, $1.normAlbum)
+                if a != b { return ascending ? a < b : a > b }
+                return ($0.normPrimaryArtist, $0.title) < ($1.normPrimaryArtist, $1.title)
+            }
+        case .sourceAscending, .sourceDescending:
+            let ascending = self == .sourceAscending
+            return items.sorted {
+                let (a, b) = (sourceDisplayName($0.lyricsSource), sourceDisplayName($1.lyricsSource))
+                if a != b { return ascending ? a < b : a > b }
+                return ($0.normPrimaryArtist, $0.normAlbum, $0.title) < ($1.normPrimaryArtist, $1.normAlbum, $1.title)
+            }
+        case .updatedAscending, .updatedDescending:
+            let ascending = self == .updatedAscending
+            return items.sorted {
+                let (a, b) = ($0.lyricsUpdatedAt, $1.lyricsUpdatedAt)
+                // 没有时间的(磁盘上没有歌词文件 = 这条压根没歌词)**两个方向都排最后**,
+                // 不是当成"最早"。"旧→新"里把它们塞到最前面在技术上说得通(未知≈很久以前),
+                // 但用户按更新时间排是想看"最近动过什么 / 最久没动过什么",一串没歌词的
+                // 空行占住列表开头对这两个问题都没有回答。跟 Finder 把无日期项收在末尾
+                // 同一个取舍。
+                switch (a, b) {
+                case (nil, nil): break
+                case (nil, _): return false
+                case (_, nil): return true
+                case let (x?, y?):
+                    if x != y { return ascending ? x < y : x > y }
+                }
+                return ($0.normPrimaryArtist, $0.normAlbum, $0.title) < ($1.normPrimaryArtist, $1.normAlbum, $1.title)
+            }
+        }
+    }
+}
+
 // 歌手筛选下拉按"主歌手"合并——同一位歌手的合唱曲目(如"宇多田ヒカル & Skrillex")
 // 不应该在下拉里单独占一行,应该并进"宇多田ヒカル"那一项里;选中某位歌手后,连同他/她
 // 参与的合唱曲目也一起展示出来,不是只看完全同名的条目。分隔符跟 collector/match.go 的
@@ -485,6 +581,10 @@ struct LyricsManagerView: View {
     // 这两个直接用 String? 而不是另建一个枚举。
     @State private var artistFilter: String?
     @State private var albumFilter: String?
+    // 排序不是筛选(不改变"看得见哪些",只改变"看到的顺序"),所以特意不并进 filterToken——
+    // 那个 token 是 filtered 结果集的缓存键/selectedKeys 收敛的触发信号,两者都只关心
+    // "集合",不关心顺序,混进去只会让缓存判断多背一个跟"集合"无关的维度。
+    @State private var sortOption: LyricsSortOption = .defaultOrder
     // 点了"刷新"却没有任何肉眼可见的变化时(比如内容根本没变),用户很容易以为按钮没
     // 反应——短暂切换成"已刷新"+对勾图标给个明确反馈,1秒后自动变回去。
     @State private var showRefreshedFeedback = false
@@ -597,6 +697,18 @@ struct LyricsManagerView: View {
         return result
     }
 
+    /// `filtered` 按当前排序方式排好的版本——List 的数据源、以及一切"顺序对用户可见"的
+    /// 地方(比如 orderedVisibleKeys 那份删除计划)都该用这个,而不是 `filtered` 本身。
+    ///
+    /// 不另外包一层缓存盒:`filtered` 那份缓存是为了避开"每行现算一次 ICU 归并"这个
+    /// 真正昂贵的操作(见 FilteredCache 声明处的注释),这里排序比较的全是预算好的
+    /// normPrimaryArtist/normAlbum/searchTitleLower 字段,是廉价的字符串/元组比较,
+    /// 一次 body 里被求值 2~3 遍(List 数据源 + orderedVisibleKeys)的成本可以忽略——
+    /// 为它单独维护一套 token/generation 缓存盒反而是这次改动里最不值得的复杂度。
+    private var sortedFiltered: [EnrichCacheStore.Summary] {
+        sortOption.sorted(filtered)
+    }
+
     // 只有恰好选中一条时才显示单曲详情页——detail 侧整条链(编辑缓冲区、offset 输入框、
     // 联网搜索 sheet)都建立在"当前就这一条"上,不能把多选硬塞进去。
     private var singleSelectedKey: String? {
@@ -630,12 +742,16 @@ struct LyricsManagerView: View {
     // "Jackson" 多选 8 条 → 清空搜索框 → 点删除,此时那 8 条一条也看不见,弹窗却写着 8 条,
     // 删完用户完全不知道删了什么,而这个删除是不可逆的(连 lyrics/ 下导出文件一起删)。
     // 所有删除入口和所有计数都走这个函数,保证"弹窗说删 N 条" == "列表里看得见的 N 条"。
-    // 按 filtered 顺序而不是 Set 顺序,是为了让删除计划稳定可复现。
+    // 按 sortedFiltered 顺序(= 列表当前实际显示的顺序)而不是 Set 顺序,是为了让删除
+    // 计划稳定可复现,并且跟用户在屏幕上看到的顺序一致(2026-09-01 加排序功能之前这里
+    // 用的是 filtered,那时"filtered 顺序"=="显示顺序"是同一件事;加了排序之后两者
+    // 分开了,这里必须跟着换成 sortedFiltered,否则"删除计划"的顺序会跟屏幕上看到的
+    // 顺序对不上)。
     private func orderedVisibleKeys(_ keys: Set<String>) -> [String] {
         // 占位行永远排除在"可删除/可批量操作"范围之外——它不对应任何 raw 条目,删它没有
         // 意义(EnrichCacheStore.delete 本身会安全地把不存在的 key 过滤掉,这里提前排除
         // 是为了让"删除 N 条"这个数字如实反映真的会被删掉几条,不是靠下游兜底凑数)。
-        filtered.compactMap { !$0.isSearching && keys.contains($0.key) ? $0.key : nil }
+        sortedFiltered.compactMap { !$0.isSearching && keys.contains($0.key) ? $0.key : nil }
     }
 
     private var selectedVisibleKeys: [String] { orderedVisibleKeys(selectedKeys) }
@@ -776,6 +892,27 @@ struct LyricsManagerView: View {
                 }
                 .pickerStyle(.menu)
                 .frame(maxWidth: 140)
+
+                // 「排序」(2026-09-01,用户要求加排序功能,选的是"筛选栏加一个下拉"而不是
+                // 点列表头排序那个方案)。宽度同样是量出来的(离屏 NSHostingView.fittingSize,
+                // `.font(.caption)` + `.controlSize(.small)`,取九个选项里最长的一条):
+                // 中文最长("专辑 A→Z" 这一档)118.0pt、英文最长("Default Order")140.0pt,
+                // 跟「来源」「时间轴」同一个套路多留 30pt 余量给箭头/内边距/系统版本差异。
+                //
+                // ⚠️ 跟「来源」「时间轴」不同,这一行(歌手/专辑/排序)**没有**挂
+                // `ViewThatFits` 反应窗口变窄——那套机制是 2026-08-31 专为下面那一行
+                // (`filterControlsGroup` + `selectionAndFilterActions`)排的,这一行至今没有
+                // 类似的处理:改动前只有「歌手」「专辑」两个下拉时也是同一个状况,只是
+                // Spacer() 一直吃掉多余宽度、没人测过窗口缩到多窄会溢出。多这一个下拉之后
+                // 触发溢出的窗口宽度阈值会更早一些,如果以后真收到"窗口缩到很窄这里挤成一团"
+                // 的反馈,再照下面那一行的方法论(ViewThatFits + 固定宽度候选)补一套。
+                Picker(L10n.t("排序"), selection: $sortOption) {
+                    ForEach(LyricsSortOption.allCases) { option in
+                        Text(L10n.t(option.rawValue)).tag(option)
+                    }
+                }
+                .pickerStyle(.menu)
+                .frame(width: 170)
 
                 Spacer()
             }
@@ -1072,7 +1209,7 @@ struct LyricsManagerView: View {
                     Divider()
                     listColumnHeader
                     Divider()
-                    List(filtered, selection: $selectedKeys) { summary in
+                    List(sortedFiltered, selection: $selectedKeys) { summary in
                         // 2026-08-28 改用 summary.artist(原始写法)而不是 displayArtist
                         // (统一后的官方名)——理由见 EnrichCacheStore.Summary.displayArtist
                         // 的注释:筛选/排序继续按统一名归并不变,只是这一列如实展示每条记录
@@ -1658,6 +1795,8 @@ struct LyricsManagerView: View {
             hasPlainTextFallback: false,
             isSearching: true,
             hasDecision: false,
+            // 这一行是「正在搜索这首歌的歌词」占位,磁盘上还没有它的歌词文件。
+            lyricsUpdatedAt: nil,
             normPrimaryArtist: toSimplified(primaryArtist(display)).lowercased(),
             normAlbum: toSimplified(playback.album).lowercased(),
             searchArtistLower: playback.artist.lowercased(),
@@ -1877,20 +2016,26 @@ struct LyricsManagerView: View {
                 editedTr = candidate.lyricsTr
                 editedRoma = candidate.lyricsRoma
                 Task {
-                    // markManual: false + sourceChoice(2026-08-22 改)。
+                    // 「采纳候选」要不要顺带冻结这首歌,由 `manualPickLocksLyrics` 决定 ——
+                    // 而**两种状态都不写** lyrics_source_choice(空串 = 显式清掉)。
                     //
-                    // 以前这里走默认的 markManual: true —— 而「采纳一条候选」和「我手工改过
-                    // 正文」是两件事,压成同一个标记的代价是**这首歌从此永久冻结**:以后打分
-                    // 规则改进、这个源后来开始给逐字时间轴,都再也不会被采纳,而用户当初只是
-                    // 想换个源。现在只记下"选了哪个源",自愈路径照常跑但被约束在该源内
-                    // (collector 侧 pickLyricCandidatePreferring)。
+                    // 2026-08-22 这里曾有第三态:开关关着时记下"选了哪个源",自愈路径照常跑
+                    // 但被约束在该源内(collector 侧 pickLyricCandidatePreferring)。当时的想法
+                    // 是把"我手改过正文"和"我不同意这次选源"拆成强弱两级约束。
                     //
-                    // ⚠️ 直接编辑正文那条路径(「保存修改」)**仍然**置 manual_lyrics —— 那份
-                    // 内容删了就找不回来,自动逻辑没有任何理由觉得自己比人工更懂。
+                    // 2026-09-01 用户看到设置里写出来的说明后当场否掉了这个中间态:他要的
+                    // 两态是「关 = 之后所有自动更新/优化照常调整这首歌,**不限制源**;
+                    // 开 = 就定在这份歌词上不动」。中间那档除了不是他想要的,本身也讲不清楚
+                    // —— 它是一个看不见的约束,只能靠歌词管理里事后一枚 pin 徽章解释"为什么
+                    // 这首歌一直是这个源"。于是关态改成什么痕迹都不留;存量缓存里那 6 条
+                    // lyrics_source_choice 也一并清掉了(清理记录见 docs/features/11)。
+                    //
+                    // ⚠️ 直接编辑正文那条路径(「保存修改」)**永远**置 manual_lyrics,不受这个
+                    // 开关影响——那份内容删了就找不回来,自动逻辑没有任何理由觉得自己比人工更懂。
                     await store.saveEdit(key: key, lyrics: candidate.lyrics, tr: candidate.lyricsTr,
                                          roma: candidate.lyricsRoma, yrc: candidate.lyricsYRC,
-                                         source: candidate.source, markManual: false,
-                                         sourceChoice: candidate.source)
+                                         source: candidate.source, markManual: AppSettings.shared.manualPickLocksLyrics,
+                                         sourceChoice: "", fromManualPick: true)
                     // 采纳的候选歌词内容跟原来不一样,offset 的 key(内容指纹)也跟着变——
                     // 输入框要显示"新内容对应的偏移值",不能继续显示采纳前那份内容的值。
                     refreshOffsetState(artist: summary.artist, title: summary.title, lyrics: candidate.lyrics, yrc: candidate.lyricsYRC)
@@ -2016,6 +2161,12 @@ struct LyricsManagerView: View {
             // 这个只把重选**约束在这个源内** —— 打分改进、这个源后来给出逐字,照样能升上来。
             // 之所以也必须标出来,理由跟「已校准」一样:它同样是一个看不见的约束,不说清楚
             // 的话"为什么这首歌一直是这个源"查不出来。解除办法是那颗「重新自动匹配」。
+            //
+            // ⚠️ 2026-09-01 起这枚徽章**永远不会亮**:这个字段没有写入方了,而且 collector
+            // 每次启动都会把存量清空并转成 manual_pick_sha(见 manualpickmigrate.go)。
+            // 留着纯粹是因为"删掉这套机制"是一次独立的清理(字段 + preferring 函数 + 单测 +
+            // 详情面板和列表两枚徽章),不该混进改开关语义那次改动;留着也不产生任何行为
+            // 差异。要删就跟 collector 侧一起整套删。
             if !summary.sourceChoice.isEmpty {
                 InfoChip(icon: "pin.circle.fill",
                          text: String(format: L10n.t("来源已选定：%@"),
@@ -2303,6 +2454,9 @@ struct LyricsManagerView: View {
             done(.kept, String(format: L10n.t("这一轮没搜到逐字歌词，保留现有的「%@」（逐字）——换过去会丢掉逐字时间轴"), currentName))
             return
         case .unchanged:
+            // 内容没换,但这一轮评估本身要留痕——见 EnrichCacheStore.recordUnchangedRematchDecision
+            // 的头注(2026-09-01,呼应 collector 侧"可判的两个分支都写"那条既定规则)。
+            await store.recordUnchangedRematchDecision(key: key, decisionJSON: pick.decisionJSON)
             done(.unchanged, String(format: L10n.t("已重新匹配：仍然是「%1$@」（%2$@ 分），没有更好的"),
                                     sourceDisplayName(pick.winner), "\(pick.winnerScore)"))
             return
@@ -2582,6 +2736,15 @@ private struct LyricsManagerRow: View {
                     if !summary.isSearching {
                         badge("pencil.circle.fill", tint: .orange, on: summary.isManual,
                               help: L10n.t("人工修正过"))
+                        // 「来源已选定」= 用户在「联网搜索候选歌词」里挑过一次源(2026-08-22),
+                        // 跟上面「人工修正」是两件事——那个一票否决全部自动路径,这个只把
+                        // 重选约束在这个源内(见详情面板同名 InfoChip 的注释)。2026-09-01
+                        // 用户反馈补上:之前这个约束只在展开详情才看得到,列表本身完全没有
+                        // 提示,容易让人误以为"选了却什么都没记住"。图标/颜色跟详情面板那颗
+                        // 保持一致,help 文案里带上具体选的是哪个源。
+                        badge("pin.circle.fill", tint: .indigo, on: !summary.sourceChoice.isEmpty,
+                              help: String(format: L10n.t("来源已选定：%@"),
+                                           sourceDisplayName(summary.sourceChoice)))
                         // ⚠️ on 不能写死 true:hasWordTiming 在"完全没有歌词"时也是 false,
                         // 会跟"整行时间戳"撞成同一个默认值——之前就是这么把"无歌词"的行也
                         // 画上了一个看起来很像真结论的"整行时间戳"图标。真正的判据是

@@ -74,6 +74,11 @@ final class MenuBarScrollingLabel: NSView {
     private struct Plan: Equatable {
         var text: String
         var windowWidth: CGFloat
+        /// 静止(装得下)时短句在格子里靠哪边。由 present() 现读 AppSettings 填进来 ——
+        /// 不让调用方传:两个调用点(MenuBarStatusItem.showFixedWidth、设置页预览的
+        /// Representable)都只关心"画哪句话多宽",对齐是纯样式,从这里读一次比在两处各传
+        /// 一遍少一个漂的机会。
+        var alignment: MenuBarLyricsAlignment
         /// nil = 这一句装得下,静止显示。格子宽度照样是 windowWidth(固定宽度,见
         /// MenuBarMarqueeRenderer.presentation)。
         var pacing: MenuBarMarquee.ScrollPacing?
@@ -150,7 +155,9 @@ final class MenuBarScrollingLabel: NSView {
     /// 否则每次 recompute 都会把滚动打回开头,用户永远看不到后半句。
     func present(text: String, windowWidth: CGFloat, pacing: MenuBarMarquee.ScrollPacing?,
                  fillPath: [MenuBarMarquee.KaraokeFillPoint]? = nil) {
-        let next = Plan(text: text, windowWidth: windowWidth, pacing: pacing, fillPath: fillPath)
+        let next = Plan(text: text, windowWidth: windowWidth,
+                        alignment: AppSettings.shared.menuBarLyricsAlignment,
+                        pacing: pacing, fillPath: fillPath)
         guard next != plan else {
             isHidden = false
             return
@@ -393,10 +400,26 @@ final class MenuBarScrollingLabel: NSView {
         else {
             // 两种情况会走到这儿:这一句本来就装得下(pacing == nil,固定宽度下这是常态),
             // 或者调用方判断"要滚"和这里算出来的不一致(比如宽度刚好卡在边界)。
-            // 都是静止停在开头,别留一条跑不起来的动画。
+            // 都是静止的,别留一条跑不起来的动画。
+            //
+            // 静止时的横向落点 = 「对齐模式」(2026-09-01)。slack 是格子比文字宽出来的那段;
+            // maxOffset = textWidth - windowWidth,所以装得下时它是负的,slack 取 -maxOffset。
+            // **放不下时 slack 恒为 0**,三个选项都退回 x=0 —— 文字比格子宽,没有位置可挪
+            // (这也正是设置界面只在固定宽度模式下露出这一行的同一个道理,见
+            // MenuBarLyricsAlignment 头注)。
+            //
+            // ⚠️ 只动 contentLayer 就够了:染色那两个裁剪层(baseClipLayer/fillClipLayer)是
+            // 它的**子层**(见文件头「图层结构」),跟着一起平移,填色几何一个数都不用改。
+            let slack = max(0, -maxOffset)
+            let alignedX: CGFloat
+            switch plan.alignment {
+            case .leading: alignedX = 0
+            case .center: alignedX = (slack / 2).rounded()
+            case .trailing: alignedX = slack.rounded()
+            }
             CATransaction.begin()
             CATransaction.setDisableActions(true)
-            contentLayer.position = CGPoint(x: 0, y: contentLayer.position.y)
+            contentLayer.position = CGPoint(x: alignedX, y: contentLayer.position.y)
             CATransaction.commit()
             return
         }

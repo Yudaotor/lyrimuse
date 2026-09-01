@@ -22,6 +22,14 @@ struct LastfmStatsSection: View {
     /// 各段的 tab 标识,跟 AccountLinkingTab.LastfmSection 一一对应。
     enum Tab: String, CaseIterable, Identifiable {
         case stats, chart, onThisDay
+        /// 「设置」段(2026-09-01):这一段的内容**不在这个 View 里**,由
+        /// `AccountLinkingTab` 自己画(那些设置读的是 FeatureSettingsStore,跟统计数据
+        /// 没关系)。这里加一个 case 只为了让这个 View 在那一段被选中时画**空**。
+        ///
+        /// ⚠️ 为什么不干脆在那一段不挂载这个 View:它的整套刷新逻辑建立在"从不因为切 tab
+        /// 被卸载重建"上(见类型头注),卸载一次就会把已拉到的统计丢掉、回来重拉一轮。
+        /// 所以照旧常驻,只是这一段什么都不画。
+        case settings
         var id: Self { self }
     }
 
@@ -69,6 +77,8 @@ struct LastfmStatsSection: View {
                 recentCard
             case .chart: chartCard
             case .onThisDay: onThisDayCard
+            // 见 Tab.settings:内容由 AccountLinkingTab 画,这里只保持挂载不掉线。
+            case .settings: EmptyView()
             }
         }
         // onAppear/.task 必须挂在**这整个 View**上,不能挂在 switch 里的某一张卡上——
@@ -698,6 +708,19 @@ struct LastfmStatsSection: View {
 
     // MARK: - 那年今日
 
+    /// ⚠️ **这里必须有 else** —— 2026-09-01 用户报「那年今日有时候点进去是会空白」的根因就是
+    /// 没有:原来整段是 `Group { if let o = stats.onThisDay { ... } }`,而 `onThisDay == nil`
+    /// 有四种完全不同的成因(还没取 / 取到了但那几天没听歌 / 请求全挂 / 未连接),全渲染成
+    /// **一片什么都没有的空白**,连个"为什么"都没有。
+    ///
+    /// 其中"请求全挂"那支最毒:`fetchedAt["onthisday"]` 在发请求**之前**就写(刻意的,否则
+    /// 一直失败会变成每次露面都重试),于是一次失败占住 6 小时 —— 那 2 分钟一轮的轮询会连着
+    /// 6 小时全部早退,界面一直空白,除非重启 App。所以失败态那颗按钮走
+    /// `refreshOnThisDay(force: true)` 绕过 TTL,不然点了什么都不会发生。
+    ///
+    /// 实测这次用户遇到的**不是**"没记录":他的账号 1/2 年前的今天是 0 条,但 3 年前有 111 条
+    /// (直接打 Last.fm API 核过),循环本该在 yearsAgo=3 命中 —— 也就是说他看到的空白属于
+    /// "还在取"或"取挂了被 TTL 锁住"这两支,而那两支原来都长得跟"没数据"一模一样。
     private var onThisDayCard: some View {
         Group {
             if let o = stats.onThisDay {
@@ -769,6 +792,34 @@ struct LastfmStatsSection: View {
                         }
                     }
                     .padding(.vertical, 5)
+                    }
+                }
+            } else {
+                SettingsCard {
+                    SettingsRawRow(insetToText: true) {
+                        HStack(spacing: 8) {
+                            switch stats.onThisDayOutcome {
+                            case .pending, .loaded:
+                                // .loaded 不该走到这一支(有内容就进上面那支了);真到了也当
+                                // "正在取"处理,不要空白。
+                                ProgressView().controlSize(.small)
+                                Text(L10n.t("正在查那年今日…"))
+                                    .foregroundStyle(.secondary)
+                            case .empty:
+                                Label(L10n.t("过去三年的今天都没有收听记录"),
+                                      systemImage: "calendar.badge.exclamationmark")
+                                    .foregroundStyle(.secondary)
+                            case .failed:
+                                Label(L10n.t("没能取到那年今日——Last.fm 没有响应"),
+                                      systemImage: "exclamationmark.triangle")
+                                    .foregroundStyle(.secondary)
+                                Spacer()
+                                // ⚠️ 必须 force:失败已经占住 6 小时 TTL,不绕过的话这颗按钮
+                                // 点下去会被那道闸直接早退,什么都不发生。
+                                Button(L10n.t("重试")) { stats.refreshOnThisDay(force: true) }
+                            }
+                            if stats.onThisDayOutcome != .failed { Spacer() }
+                        }
                     }
                 }
             }

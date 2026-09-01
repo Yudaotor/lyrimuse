@@ -47,11 +47,13 @@ struct OnboardingView: View {
     }
 
     // Apple Music 才需要 automation 这一步——QQ 音乐没有"自动化"权限的概念(见文件
-    // 顶部注释)。这份列表本身不 @State,是纯粹从 features.player 派生出来的,player
-    // 一变(用户在上一步刚选完)下一次读到的就是新列表,不需要额外同步。
+    // 顶部注释)。这份列表本身不 @State,是纯粹从 features.players 派生出来的,players
+    // 一变(用户在上一步刚选完)下一次读到的就是新列表,不需要额外同步。引导页这一步
+    // 只让用户选一个起步(见 playerChoiceStep 的注释),所以判据仍是"恰好只有这一个",
+    // 不是 contains——多选是设置页才有的能力。
     private var steps: [Step] {
         var s: [Step] = [.welcome, .playerChoice]
-        if features.player == .appleMusic {
+        if features.players == [.appleMusic] {
             s.append(.automation)
         }
         // lastfm 放在 language 之后、done 之前——跟前面 automation/collectorService
@@ -189,8 +191,11 @@ struct OnboardingView: View {
             // 反过来。设置页"播放器"卡后来也用同一个顺序,见该属性类头注。
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3), spacing: 10) {
                 ForEach(PlaybackPlayer.displayOrder) { player in
-                    PlayerChoiceCard(player: player, isSelected: features.player == player) {
-                        features.player = player
+                    // 引导页这一步保持"选一个起步"的单选体验(2026-09-01 设置页改成多选
+                    // 之后仍然如此,不是遗漏)——第一次装机时让用户一步到位选完更简单,
+                    // 多选是留给"以后想同时用两个播放器"的进阶场景,设置页随时能加。
+                    PlayerChoiceCard(player: player, isSelected: features.players == [player]) {
+                        features.players = [player]
                         Task { await features.save() }
                     }
                 }
@@ -299,8 +304,8 @@ struct OnboardingView: View {
     //    选择(而且绕过 setVisible,改完窗口还不动)。这一步只读不写,唯一的写入路径是
     //    用户亲手拨动开关。
     //
-    // ⚠️ 还有一条结构性约束:这一步里永远不准出现能改 features.player 的控件。steps 的
-    // 长度由 player 决定,而 `steps[step]` 没有任何越界守卫 —— 当前安全是因为唯一能让
+    // ⚠️ 还有一条结构性约束:这一步里永远不准出现能改 features.players 的控件。steps 的
+    // 长度由 players 决定,而 `steps[step]` 没有任何越界守卫 —— 当前安全是因为唯一能让
     // steps 变短的控件在 index 1(playerChoiceStep),而 index 1 在 7 项/8 项列表里都合法。
     private var displayModeStep: some View {
         VStack(alignment: .leading, spacing: 16) {

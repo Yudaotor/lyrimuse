@@ -41,7 +41,11 @@ final class LyricSourceTestService {
     struct Result {
         let source: String
         let status: Status
-        let detail: String
+        /// 稳定代码,不是文案(2026-09-01 从 detail 改名——见 `LyricSourceFailureReason` 的
+        /// 头注)。ok 状态下恒为空串。调用方要显示给用户时经
+        /// `LyricSourceFailureReason.text(forCode:)` 翻成当前 App 界面语言的人话,不要
+        /// 直接显示这个原始值。
+        let reasonCode: String
         let networkLooksDown: Bool
     }
 
@@ -121,7 +125,7 @@ final class LyricSourceTestService {
                         continue
                     }
                     let result = Result(
-                        source: raw.source, status: raw.status, detail: raw.detail,
+                        source: raw.source, status: raw.status, reasonCode: raw.reasonCode,
                         networkLooksDown: raw.networkLooksDown)
                     Task { @MainActor in onUpdate(result) }
                 }
@@ -179,6 +183,6 @@ final class LyricSourceTestService {
 private struct RawTestResult: Decodable {
     let source: String
     let status: LyricSourceTestService.Status
-    let detail: String
+    let reasonCode: String
     let networkLooksDown: Bool
 }

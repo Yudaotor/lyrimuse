@@ -3,7 +3,8 @@ import os
 
 private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "media-control")
 
-// 两条完全独立的读取路径,按 PlaybackPlayerPreference.current 选择:
+// 两条完全独立的读取路径,按 PlaybackPlayerPreference.selected(2026-09-01 起可多选)
+// 分派:
 //
 // - Apple Music:用 AppleScript(JXA)直接问 Music.app 本身要"现在在放什么",不依赖外部
 //   `media-control`(需要 brew install,自带一份 MediaRemoteAdapter.framework + 一段
@@ -34,13 +35,22 @@ public enum MediaControlClient {
     static let artworkTimeout: TimeInterval = 10
 
 
-    public static func fetchSnapshot(player: PlaybackPlayer = PlaybackPlayerPreference.current) -> MediaControlSnapshot? {
-        switch player {
-        case .appleMusic: return fetchAppleMusicSnapshot()
-        case .qqMusic, .netease, .spotify, .kugou:
-            return fetchMediaControlSnapshot(expectedBundleID: player.bundleIdentifier)
-        case .auto: return fetchAutoDetectedSnapshot()
-        }
+    /// players 是当前选中的播放器集合(2026-09-01 起可多选,取代原来的单值 `player:`
+    /// 参数)。三条路径,按优先级(跟 collector 侧 system.go 的 getState() 是同一套设计,
+    /// 两侧必须同步维护):
+    ///   - 选了「自动识别」(不管是否同时还勾了别的具体播放器,auto 是超集)→
+    ///     fetchAutoDetectedSnapshot;
+    ///   - 恰好只选了 Apple Music 一个、没有 auto → 跳过 media-control,直接走
+    ///     fetchAppleMusicSnapshot 的 AppleScript 路径(跟单选年代完全一样,不多背一次
+    ///     子进程往返);
+    ///   - 其它情况(单选或多选了 QQ音乐/网易云/Spotify/酷狗中的若干个,没有 auto)→
+    ///     fetchMultiSelectedSnapshot,核对 media-control 报的系统级 Now Playing 焦点是不是
+    ///     落在选中的这个子集里。
+    public static func fetchSnapshot(players: Set<PlaybackPlayer> = PlaybackPlayerPreference.selected) -> MediaControlSnapshot? {
+        if players.contains(.auto) { return fetchAutoDetectedSnapshot() }
+        if players == [.appleMusic] { return fetchAppleMusicSnapshot() }
+        guard !players.isEmpty else { return nil }
+        return fetchMultiSelectedSnapshot(players)
     }
 
     private static let script = """
@@ -148,6 +158,31 @@ public enum MediaControlClient {
         return snapshot
     }
 
+    // fetchMultiSelectedSnapshot 是"显式多选了若干个具体播放器、没有勾自动识别"的读取
+    // 路径(2026-09-01 加)——跟 fetchAutoDetectedSnapshot 同一套"系统级 Now Playing 只有
+    // 一个焦点,问 media-control 一次就知道是谁"的机制,区别只在准入名单:这里认的是
+    // players 里用户这次选中的那几个,**加上**信任列表(2026-09-01 补,见
+    // TrustedPlayers.isTrusted 的注释——最典型场景是「网页播放器」卡"配对浏览器"这个
+    // 动作,一步自动信任+配对,跟"选没选自动识别"是两件独立的事,不该因为没勾自动识别
+    // 就让配对形同虚设)。单选且未配对任何浏览器时,这条路径跟旧版
+    // fetchMediaControlSnapshot(expectedBundleID:) 行为等价,那个函数继续保留、单独调用时
+    // 行为不变,fetchSnapshot() 本身不再直接调用它。
+    private static func fetchMultiSelectedSnapshot(_ players: Set<PlaybackPlayer>) -> MediaControlSnapshot? {
+        let acceptedBundleIDs = Set(players.map(\.bundleIdentifier))
+        guard let (snapshot, bundleID) = fetchRawMediaControlSnapshot() else { return nil }
+        if !acceptedBundleIDs.contains(bundleID) {
+            guard TrustedPlayers.isTrusted(bundleID) else { return nil }
+            // 走信任列表这条路进来的(不是用户在「播放器」卡里选中的具体播放器)要多过
+            // 一道"这是不是一首歌"的守卫——跟 fetchAutoDetectedSnapshot 的信任分支同一套
+            // 语义,理由见 TrustedPlayers.notASong 的注释(浏览器视频/播客不能被当成一首歌)。
+            guard !TrustedPlayers.notASong(
+                bundleID: bundleID, artist: snapshot.artist, album: snapshot.album) else {
+                return nil
+            }
+        }
+        return refinedAppleMusicSnapshotIfNeeded(bundleID: bundleID, snapshot: snapshot)
+    }
+
     // "自动识别"(PlaybackPlayer.auto)——不预先假定是哪个播放器,直接问 media-control
     // 当前系统级 Now Playing 是谁,核对 bundleIdentifier 是不是这五个已知播放器之一
     // (不是的话说明是别的不相关的 App 在报告,视为"没有可关心的正在播放")。检测到的
@@ -190,6 +225,17 @@ public enum MediaControlClient {
             bundleID: bundleID, artist: snapshot.artist, album: snapshot.album) else {
             return nil
         }
+        return refinedAppleMusicSnapshotIfNeeded(bundleID: bundleID, snapshot: snapshot)
+    }
+
+    // refinedAppleMusicSnapshotIfNeeded 是 fetchAutoDetectedSnapshot/
+    // fetchMultiSelectedSnapshot 共用的尾段(2026-09-01 从 fetchAutoDetectedSnapshot 内联
+    // 的分支抽出来,给多选新增的 fetchMultiSelectedSnapshot 复用,不重复这段带缓存/补偿
+    // 逻辑的代码):bundleID 不是 Apple Music 时原样返回 snapshot;是的话尝试借用后台
+    // AppleScript 缓存的精确播放位置,见下面原有的详细注释。
+    private static func refinedAppleMusicSnapshotIfNeeded(
+        bundleID: String, snapshot: MediaControlSnapshot
+    ) -> MediaControlSnapshot {
         guard bundleID == PlaybackPlayer.appleMusic.bundleIdentifier else { return snapshot }
         // ⚠️ 只在**正在播放**时才起这个后台 AppleScript 子进程。
         //
@@ -313,7 +359,7 @@ public enum MediaControlClient {
     // 完整条目(旧标题+旧封面)——载荷自己的 artist/title 是识别这种情况的唯一依据,调用方
     // 拿它跟当前曲目比对,不匹配就当"还没更新好"重试,而不是把上一首的封面错挂到新歌上
     // (2026-08-17 用户报网易云云盘歌"沿用上一首的封面"后补上)。
-    public static func fetchArtwork(player: PlaybackPlayer = PlaybackPlayerPreference.current) -> (data: Data, mimeType: String, trackKey: String)? {
+    public static func fetchArtwork(players: Set<PlaybackPlayer> = PlaybackPlayerPreference.selected) -> (data: Data, mimeType: String, trackKey: String)? {
         guard let binaryPath = binaryPath() else { return nil }
         // 这次不传 --no-artwork——就是为了要这份数据,所以超时给得比状态查询宽:
         // 封面 base64 有几百 KB。
@@ -323,7 +369,7 @@ public enum MediaControlClient {
         else { return nil }
         guard let raw = try? JSONDecoder().decode(ArtworkPayload.self, from: r.stdout),
               let bundleID = raw.bundleIdentifier,
-              artworkBundleIDMatches(bundleID, player: player),
+              artworkBundleIDMatches(bundleID, players: players),
               let base64 = raw.artworkData,
               let imageData = Data(base64Encoded: base64) else {
             return nil
@@ -344,15 +390,19 @@ public enum MediaControlClient {
         let artist: String?
     }
 
-    // .auto 没有唯一固定的目标 bundle id,核对规则跟 fetchAutoDetectedSnapshot 一致:
-    // 只要是这五个已知播放器之一就认。选了具体某个播放器时要求精确匹配——系统级 Now
-    // Playing 焦点可能被别的 App(网页视频/Safari 等)抢走,不能把那份图错当成这个
-    // 播放器的封面,理由跟 fetchMediaControlSnapshot 一样。
-    private static func artworkBundleIDMatches(_ bundleID: String, player: PlaybackPlayer) -> Bool {
-        if player == .auto {
+    // players 里有 .auto 时没有唯一固定的目标 bundle id,核对规则跟
+    // fetchAutoDetectedSnapshot 一致:只要是内置播放器之一或信任列表成员就认。否则要求
+    // bundleID 精确落在 players 这个子集里——系统级 Now Playing 焦点可能被别的 App
+    // (网页视频/Safari 等)抢走,不能把那份图错当成选中播放器的封面,理由跟
+    // fetchMultiSelectedSnapshot 一样(2026-09-01 从单个 player 参数改成 Set)。
+    private static func artworkBundleIDMatches(_ bundleID: String, players: Set<PlaybackPlayer>) -> Bool {
+        if players.contains(.auto) {
             return TrustedPlayers.isAccepted(bundleID)
         }
-        return bundleID == player.bundleIdentifier
+        if players.contains(where: { $0.bundleIdentifier == bundleID }) { return true }
+        // 2026-09-01 补:信任列表(网页播放器配对)在没有勾自动识别时也该被认,跟
+        // fetchMultiSelectedSnapshot 是同一份判断,理由见那边的注释。
+        return TrustedPlayers.isTrusted(bundleID)
     }
 
 

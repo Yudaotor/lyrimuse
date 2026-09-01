@@ -132,16 +132,22 @@ public enum LyricsSourceMode: String, CaseIterable, Identifiable, Codable {
 // 同一份共享 JSON 文件的镜像,字段增删两侧同步;旧配置文件里如果还留着已经删掉的
 // key,JSONDecoder/Go 的 encoding/json 都会静默忽略未知字段,不需要额外的迁移代码。
 struct FeatureFlagsFile: Codable, Equatable {
-    // PlaybackPlayer 的 rawValue:"auto"(**默认**)/"apple_music"/"qq_music"/"netease"/
-    // "kugou"/"spotify" —— 见 PlaybackPlayer 注释(LyrimuseCore)。原注释写的是
-    // 「"apple_music"(默认)或"qq_music"」,两处都过时了(默认 2026-08-13 起是 auto;
-    // 播放器有六个不是两个)。
+    // player:**遗留字段**(2026-09-01 起被下面的 players 取代,只留着给一次性迁移用)。
+    // 旧版本只能选一个播放器时写的就是这个键;players 缺失时 load() 把它当迁移前的
+    // 选择读一次。这台机器往后只会写 players,不会再写这个键,但读老配置(iCloud
+    // 同步/降级)时不能让它凭空消失——跟 collector 侧 featureFlagsFile.Player 对称。
+    var player: String?
+    // players:可多选的播放器集合(2026-09-01 起支持多选,取代上面的 player)——
+    // PlaybackPlayer 的 rawValue 数组:"auto"/"apple_music"/"qq_music"/"netease_music"/
+    // "kugou_music"/"spotify"(见 PlaybackPlayer 注释,LyrimuseCore)。跟 LyrimuseCore
+    // 的 PlaybackPlayerPreference.selected 读的是同一个键,collector 侧对应
+    // featureFlagsFile.Players。
     //
     // ⚠️ 生效时机两侧**不一样**,别照抄别的字段的说法:LocalPlaybackSource 每次轮询都会
     // 重新读一次这个字段(它在 LyrimuseCore,没法直接订阅这个 store 的 @Published),
     // 所以 App 侧改了立刻生效;collector 只在启动时读一次,要靠保存触发的 kickstart
     // 重启才会跟上。
-    var player: String?
+    var players: [String]?
     var albumPrefetch: Bool?
     var lyricsMachineTranslation: Bool?
     var lastfmMirrorScrobble: Bool?
@@ -199,6 +205,7 @@ struct FeatureFlagsFile: Codable, Equatable {
     /// 键名清单迟早会跟这里对不上,而对不上的后果正是下面要修的那种静默丢数据。
     enum CodingKeys: String, CodingKey, CaseIterable {
         case player
+        case players
         case albumPrefetch = "album_prefetch"
         case lyricsMachineTranslation = "lyrics_machine_translation"
         case lastfmMirrorScrobble = "lastfm_mirror_scrobble"
@@ -240,15 +247,19 @@ struct FeatureFlagsFile: Codable, Equatable {
 public final class FeatureSettingsStore: ObservableObject {
     public static let shared = FeatureSettingsStore()
 
-    // 本地播放状态读取哪个 App——默认**自动识别**。
+    // 本地播放状态读取哪个 App(集合,2026-09-01 起可多选)——默认**{自动识别}**。
     //
     // ⚠️ 这里原来是 `.appleMusic`(理由是"保持这个设置加入之前唯一存在过的行为不变"),
-    // 但 collector 侧的 resolvePlayer 早在 2026-08-13 就从 appleMusic 改成了 auto,
-    // 下面 load() 的兜底也是 `?? .auto` —— 只有这个属性初值没跟上。后果不是纯注释问题:
-    // features.json **还不存在**时(全新安装)load() 在 guard 处提前 return,界面就停在
-    // 这个初值上,于是设置里显示"Apple Music"、collector 实际按"自动识别"采,两边说的
-    // 不是一回事(2026-08-30 核实)。
-    @Published public var player: PlaybackPlayer = .auto
+    // 但 collector 侧的 resolvePlayers 早在 2026-08-13 就从 appleMusic 改成了 auto,
+    // 下面 load() 的兜底也是 `?? [.auto]` —— 只有这个属性初值没跟上。后果不是纯注释
+    // 问题:features.json **还不存在**时(全新安装)load() 在 guard 处提前 return,
+    // 界面就停在这个初值上,于是设置里显示"Apple Music"、collector 实际按"自动识别"
+    // 采,两边说的不是一回事(2026-08-30 核实)。
+    //
+    // 保证非空——UI 层(播放器卡片网格)负责不让用户把最后一个选项也取消勾选,跟
+    // LyrimuseCore 的 PlaybackPlayerPreference.selected/collector 的 resolvePlayers
+    // 同一份"选中集合永远至少有一个成员"的不变量。
+    @Published public var players: Set<PlaybackPlayer> = [.auto]
     @Published public var albumPrefetch = true
     // 这几个都要连一个外部账号才有意义,默认关闭。collector/features.go 的 boolOr
     // 默认值要跟着一起改,否则全新安装时 Swift 这边显示关、Go 那边却按"缺字段=开启"
@@ -301,7 +312,8 @@ public final class FeatureSettingsStore: ObservableObject {
     private var savedSnapshot = FeatureFlagsFile()
     private var currentSnapshot: FeatureFlagsFile {
         FeatureFlagsFile(
-            player: player.rawValue,
+            // 只写 players——player 是纯读的迁移字段(见其注释),这台机器往后不再写它。
+            players: players.map(\.rawValue).sorted(),
             albumPrefetch: albumPrefetch,
             lyricsMachineTranslation: lyricsMachineTranslation,
             lastfmMirrorScrobble: lastfmMirrorScrobble,
@@ -423,7 +435,16 @@ public final class FeatureSettingsStore: ObservableObject {
         } else {
             unknownFileKeys = [:]
         }
-        player = f.player.flatMap(PlaybackPlayer.init(rawValue:)) ?? .auto
+        // players 缺失/空数组时退回 player(遗留单选字段)做一次性迁移;两者都没有
+        // 可用值才最终兜底 {auto}——跟 collector 侧 resolvePlayers 是同一份迁移逻辑。
+        let decodedPlayers = Set((f.players ?? []).compactMap(PlaybackPlayer.init(rawValue:)))
+        if !decodedPlayers.isEmpty {
+            players = decodedPlayers
+        } else if let legacy = f.player.flatMap(PlaybackPlayer.init(rawValue:)) {
+            players = [legacy]
+        } else {
+            players = [.auto]
+        }
         albumPrefetch = f.albumPrefetch ?? true
         lyricsMachineTranslation = f.lyricsMachineTranslation ?? false
         lastfmMirrorScrobble = f.lastfmMirrorScrobble ?? false

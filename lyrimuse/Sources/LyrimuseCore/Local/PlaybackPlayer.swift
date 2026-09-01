@@ -23,7 +23,7 @@ import Foundation
 // collector 的 getState() 里:问 media-control 当前是谁在报告 Now Playing,核对是不是
 // 这五个已知播放器之一,是 Apple Music 的话还会额外走一次 AppleScript 拿更精确的播放
 // 位置(拿不到权限就退回 media-control 本身的读数,不会整个放弃)。
-public enum PlaybackPlayer: String, CaseIterable, Identifiable, Codable {
+public enum PlaybackPlayer: String, CaseIterable, Identifiable, Codable, Hashable {
     case appleMusic = "apple_music"
     case qqMusic = "qq_music"
     case netease = "netease_music"
@@ -57,36 +57,74 @@ public enum PlaybackPlayer: String, CaseIterable, Identifiable, Codable {
     }
 }
 
+extension Set where Element == PlaybackPlayer {
+    /// 排除掉"自动识别"之后,集合里唯一剩下的那个具体播放器——没有具体播放器(纯 auto)
+    /// 或者选了两个以上时返回 nil,交给调用方各自的兜底(idlePlayer/companion-launch/
+    /// "打开 Lyrimuse 时启动 X"这类"只在能唯一确定时才动作,含糊就不猜"场景用)。
+    /// LyrimuseCore(PlaybackPlayerPreference.soleExplicitPlayer)和 App target
+    /// (FeatureSettingsStore.players 直接用)共用同一份逻辑,不重复各写一份。
+    public var soleExplicitPlayer: PlaybackPlayer? {
+        let specific = subtracting([.auto])
+        return specific.count == 1 ? specific.first : nil
+    }
+}
+
 // 独立、轻量地读一次共享 features 文件(~/.config/lyrimuse/lyrimuse-features.json)里的
-// "player" 字段——不能直接复用 FeatureSettingsStore(那是 lyrimuse 主 App target 的东西,
-// LyrimuseCore 是被依赖的下层,不能反向依赖上层,见 Package.swift 的单向依赖关系)。跟
-// EnrichCacheReader 是同一种模式:LyrimuseCore 自己独立读一份 App target 也在维护的共享
-// JSON 文件,只取用得到的这一个字段(JSONDecoder 对不认识的其它字段直接忽略,不需要在
-// 这里镜像整个 FeatureFlagsFile 的形状)。LocalPlaybackSource 每次 2 秒轮询都会读一次,
-// 文件很小,不值得像 EnrichCacheReader 那样加 mtime 缓存。
+// "players"/"player" 字段——不能直接复用 FeatureSettingsStore(那是 lyrimuse 主 App
+// target 的东西,LyrimuseCore 是被依赖的下层,不能反向依赖上层,见 Package.swift 的
+// 单向依赖关系)。跟 EnrichCacheReader 是同一种模式:LyrimuseCore 自己独立读一份 App
+// target 也在维护的共享 JSON 文件,只取用得到的这两个字段(JSONDecoder 对不认识的其它
+// 字段直接忽略,不需要在这里镜像整个 FeatureFlagsFile 的形状)。LocalPlaybackSource
+// 每次 2 秒轮询都会读一次,文件很小,不值得像 EnrichCacheReader 那样加 mtime 缓存。
 public enum PlaybackPlayerPreference {
     private struct MinimalFeatureFlags: Decodable {
+        // player 是遗留单选字段(2026-09-01 前),players 缺失时当一次性迁移源读——
+        // 跟 collector 侧 featureFlagsFile.Player/resolvePlayers 是同一份迁移逻辑,
+        // 两侧必须同步维护。
         let player: String?
+        let players: [String]?
     }
 
     private static let featuresURL = FileManager.default.homeDirectoryForCurrentUser
         .appendingPathComponent(".config/lyrimuse/lyrimuse-features.json")
 
-    // 文件不存在/解析失败/字段缺失/值认不出,一律兜底**自动识别**。
-    //
-    // 2026-08-13 从 appleMusic 改成 auto。原来的理由是"这是这个设置加入之前唯一存在过的
-    // 行为",但那对全新用户是个坏默认:只用 Spotify / QQ 音乐 / 网易云的人如果跳过引导里
-    // 选播放器那一步,App 会一直去问 Music.app,界面永远空白、且完全看不出原因;顺带还要
-    // 为此多要一次 Apple Music 自动化权限(请求前会后台把 Music.app 拉起来),对一个压根
-    // 不用 Apple Music 的人既没必要又突兀。auto 问的是系统级 Now Playing 是谁在放,
-    // 装完就能用。
-    public static var current: PlaybackPlayer {
+    /// 当前选中的播放器集合(2026-09-01 起可多选,取代原来单值的 `current`)。文件不
+    /// 存在/解析失败/两个字段都缺失或认不出,一律兜底**{自动识别}**——理由跟改动前
+    /// `current` 的兜底一致(2026-08-13 从 appleMusic 改成 auto):只用 Spotify / QQ 音乐 /
+    /// 网易云的人如果跳过引导里选播放器那一步,App 不该一直去问 Music.app 换来一个永远
+    /// 空白的界面。
+    ///
+    /// 保证非空——调用方可以放心用 `selected.contains(.appleMusic)` 之类的成员判断,
+    /// 不需要再处理"选中集合是空的"这种状态(那不是一个合法状态,跟 collector 侧
+    /// resolvePlayers 的保证对称)。
+    public static var selected: Set<PlaybackPlayer> {
         guard let data = try? Data(contentsOf: featuresURL),
-              let f = try? JSONDecoder().decode(MinimalFeatureFlags.self, from: data),
-              let raw = f.player,
-              let player = PlaybackPlayer(rawValue: raw) else {
-            return .auto
+              let f = try? JSONDecoder().decode(MinimalFeatureFlags.self, from: data) else {
+            return [.auto]
         }
-        return player
+        if let list = f.players, !list.isEmpty {
+            let known = Set(list.compactMap(PlaybackPlayer.init(rawValue:)))
+            if !known.isEmpty { return known }
+        }
+        if let raw = f.player, let legacy = PlaybackPlayer(rawValue: raw) {
+            return [legacy]
+        }
+        return [.auto]
     }
+
+    /// `selected` 恰好只包含 Apple Music、且没有勾自动识别——这是"该不该绕开
+    /// media-control、直接走 AppleScript 跟 Music.app 对话"的判据(dispatch()/
+    /// checkForCurrentPlayer 系列都用它),不是简单的"selected 里有没有 appleMusic"。
+    /// 理由:一旦用户额外勾了别的具体播放器或自动识别,系统级 Now Playing 焦点可能落在
+    /// 别的 App 上,这时应该让 media-control 的焦点仲裁生效,不能武断地把指令/权限检查
+    /// 全部导向 Music.app——跟"用户只用 Apple Music 一个,值得信任地直连"是两种不同的
+    /// 确定性,不能混为一谈。
+    public static var isExclusivelyAppleMusic: Bool { selected == [.appleMusic] }
+
+    /// 排除掉"自动识别"之后,`selected` 里唯一剩下的那个具体播放器——没有具体播放器
+    /// (纯 auto)或者选了两个以上时返回 nil,交给调用方各自的兜底(idlePlayer/
+    /// companion-launch 那类"只在能唯一确定时才动作,含糊就不猜"场景用)。委托给
+    /// `Set<PlaybackPlayer>.soleExplicitPlayer`——App target(FeatureSettingsStore.players)
+    /// 直接用同一个扩展,不重复这份逻辑。
+    public static var soleExplicitPlayer: PlaybackPlayer? { selected.soleExplicitPlayer }
 }

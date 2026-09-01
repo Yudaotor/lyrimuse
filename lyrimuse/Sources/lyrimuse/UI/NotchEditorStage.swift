@@ -85,6 +85,18 @@ final class NotchPreviewChrome: ObservableObject, NotchChromeSource {
     var showsEqualizer: Bool { AppSettings.shared.notchShowsEqualizer }
     var equalizerEar: NotchEqualizerEar { AppSettings.shared.notchEqualizerEar }
 
+    /// 展开态那一组(2026-09-01)同上,一律现读设置——它们决定的正是"展开态"浮层里那几个
+    /// 开关此刻要不要生效,预览必须如实反映。⚠️ 不含歌词行末尾那枚封面的开关/位置——那两项
+    /// 走 `NotchPlayback` 而不是这个协议;但**含**头部自己的封面开关
+    /// (`expandedTrackInfoShowsArtwork`),理由见 `NotchChromeSource.expandedTrackInfoShowsArtwork`
+    /// 上面那条⚠️——它跟另外三项一样参与高度计算,预览这边不能漏。
+    var expandedShowsNextLine: Bool { AppSettings.shared.notchExpandedShowsNextLine }
+    var expandedShowsControls: Bool { AppSettings.shared.notchExpandedShowsControls }
+    var expandedTrackInfoShowsArtwork: Bool { AppSettings.shared.notchExpandedShowsArtwork }
+    var expandedTrackInfoShowsTitle: Bool { AppSettings.shared.notchExpandedShowsTrackTitle }
+    var expandedTrackInfoShowsArtist: Bool { AppSettings.shared.notchExpandedShowsArtist }
+    var expandedTrackInfoShowsAlbum: Bool { AppSettings.shared.notchExpandedShowsAlbum }
+
     init() { refreshGeometry() }
 
     /// 视图内部那个 .onHover 打进来的调用,预览里**故意忽略**(空实现)。
@@ -263,17 +275,33 @@ struct NotchEditorStage: View {
     /// 它随 `contentTopInset` 变,而那个值只在插拔显示器/换屏时才变(刘海让位高度是屏幕的
     /// 函数)—— 跟悬浮歌词编辑台那条"高度不许依赖 overlayWidth"的纪律不冲突:这里的高度跟
     /// **宽度**没有任何关系,拖调整条时舞台一个像素都不动。
+    /// ⚠️ 2026-09-01 起 `expandedExtraHeightMax` 不再是无参常量,吃"下一句预览开关"+
+    /// "播放控制键开关"+"曲目信息头部现算高度"三个设置维度(见该函数注释)——这里从
+    /// `chrome` 现读,不是钉常量:预览来这儿就是让用户看清楚"这些设置会让展开区变多高",
+    /// 钉死的话舞台留白跟真窗口对不上。
     private var cardAreaHeight: CGFloat {
-        chrome.contentTopInset + NotchMetrics.compactRowHeight + NotchMetrics.expandedExtraHeightMax
+        chrome.contentTopInset + NotchMetrics.compactRowHeight + NotchMetrics.expandedExtraHeightMax(
+            hasLyricPreviewPossible: chrome.expandedShowsNextLine,
+            hasControlsPossible: chrome.expandedShowsControls,
+            trackInfoHeight: NotchMetrics.expandedTrackInfoHeight(
+                showsArtwork: chrome.expandedTrackInfoShowsArtwork,
+                showsTitle: chrome.expandedTrackInfoShowsTitle,
+                showsArtist: chrome.expandedTrackInfoShowsArtist,
+                showsAlbum: chrome.expandedTrackInfoShowsAlbum))
     }
 
     /// 编辑台画布区的高度 = 卡片那一格 + 调整条通道。
     private var stageHeight: CGFloat { cardAreaHeight + Self.widthBarLaneHeight }
 
-    /// 整块(工具栏 + 画布 + 底部说明行)占的高度。caption 那一行的间距和行高沿用预览栏
+    /// 整块(两行工具栏 + 画布 + 底部说明行)占的高度。caption 那一行的间距和行高沿用预览栏
     /// 共用的那套度量,免得同一个窗口里两处 caption 的疏密不一样。
+    ///
+    /// ⚠️ 2026-09-01 工具栏从一行变两行(第二行「歌词行/行为/展开态」三个新入口,见
+    /// `toolbarRow2`)——按钮样式跟第一行完全一样,复用同一个 `toolbarHeight`,只是多加
+    /// 一份「高度 + 行间距」。忘了这里加,表现是编辑台整块比实际内容矮一行,第二行工具栏
+    /// 要么被画布裁掉一截,要么把下面的画布/说明行顶得跟外层预留的空间对不上。
     private var totalHeight: CGFloat {
-        Self.toolbarHeight + Self.toolbarSpacing
+        (Self.toolbarHeight + Self.toolbarSpacing) * 2
             + stageHeight + SectionPreviewMetrics.captionSpacing + SectionPreviewMetrics.captionHeight
     }
 
@@ -316,6 +344,8 @@ struct NotchEditorStage: View {
             VStack(spacing: Self.toolbarSpacing) {
                 toolbar
                     .frame(height: Self.toolbarHeight)
+                toolbarRow2
+                    .frame(height: Self.toolbarHeight)
                 VStack(spacing: SectionPreviewMetrics.captionSpacing) {
                     stage(stageWidth: stageWidth)
                     caption(stageWidth: stageWidth)
@@ -344,18 +374,32 @@ struct NotchEditorStage: View {
 
     // MARK: - 工具栏
 
-    /// 编辑台顶上那一条:四个浮层入口(风格 / 屏幕 / 左耳 / 右耳)。
+    /// 编辑台顶上那一条:四个浮层入口(风格 / 屏幕 / 左耳 / 右耳)+ 右边一个「重置 ▾」菜单。
     ///
-    /// 右边**刻意空着**,没有悬浮歌词那边的「重置 ▾」:那颗按钮要恢复的是十几个外观字段,
-    /// 而灵动岛的外观只有「风格」一个枚举 —— 给一个枚举配一个带确认语义的重置菜单,是把
-    /// "再点一次那四个选项之一"包装成一件需要专门入口的事。
+    /// ⚠️ **2026-09-01 前这里右边是刻意空着的**——当时的理由是"灵动岛的外观只有「风格」
+    /// 一个枚举,不值得配一个重置菜单"。用户之后明确要求"和悬浮歌词那个一样加一个重置
+    /// 按钮",于是这条结论被推翻:范围也跟着扩到"风格 + 左右耳 + 屏幕 + 全部内容开关"
+    /// (`NotchStyleDefaults.restoreDefaults()`),不再是当初设想的"就一个枚举"。
     ///
     /// ⚠️ 横向够不够:这一条的可用宽度就是卡片列宽(窗口按 idealWidth 860 打开时 600pt,
     /// 拖到 minWidth 760 时约 530pt,再窄约 499pt)。**四个**入口都带摘要,最坏情况
     /// 是「屏幕」那截报一个很长的显示器名(`screen.localizedName`,例如 "内建视网膜显示器"
     /// 或 "DELL U2723QE"),所以摘要那截跟悬浮歌词那边一样限宽 140 + 单行 + 尾部省略 +
     /// `.layoutPriority(-1)`(见 toolbarButton)—— 挤不下时**先压摘要、标题始终完整**。
-    /// 这条取舍跟悬浮歌词工具栏第四个位置那次是同一条,不重复推导。
+    /// 这条取舍跟悬浮歌词工具栏第四个位置那次是同一条,不重复推导。「重置 ▾」本身是固定宽度
+    /// 的 `Menu`,不参与这套压缩逻辑(跟悬浮歌词工具栏同一个模式)。
+    ///
+    /// ⚠️ **加了这颗按钮之后,第一行的横向预算从"余量 1pt"变成"确定超支"**(2026-09-01,
+    /// ls-Rocky 离屏 `NSHostingView.fittingSize` 实测,方法论同下面②那次回归):「重置 ▾」
+    /// 本体 + 前后间距增量中文 +88.0pt、英文 +97.0pt——叠到四个入口原有的中文 498.0/英文
+    /// 644.0 上,变成中文 586.0(阈值 499,超 87pt)、英文 741.0(超 242pt)。499pt 下用
+    /// 最坏摘要(风格=磨砂玻璃/Frosted Glass、屏幕=内建视网膜显示器/Built-in Retina Display、
+    /// 左右耳=剩余时长/Remaining)离屏渲染逐个看过:四个标题(含"重置")中英文都完整,亏空
+    /// 全被 `layoutPriority(-1)` 摊给了摘要——但**英文摘要已经归零**(压到单个字母 "R",
+    /// 连省略号都放不下)。也就是说这一行现在真的到底了:**摘要没有任何可让的空间了**,
+    /// 下一次改动——加第五个入口、把哪个标题改长、给摘要多加两个字——亏空会直接开始吃
+    /// 标题,重演当初「Left…」「Righ…」那次回归。改这一行之前必须先重新离屏量一遍,
+    /// 不要凭感觉现改。
     private var toolbar: some View {
         HStack(spacing: 8) {
             toolbarButton(
@@ -400,9 +444,111 @@ struct NotchEditorStage: View {
                 target: .rightEar
             )
             Spacer(minLength: 8)
+            // 「重置 ▾」——逐字复刻悬浮歌词工具栏那颗(见 OverlayEditorStage.toolbar):
+            // Menu 里一条恢复动作 + 一条不可点的作用范围说明,范围声明必须写在这里,理由
+            // 同悬浮歌词那边——"不含宽度和总开关"是安全边界,不能只在动作本体的注释里
+            // 交代、界面上却什么都不提示。
+            Menu {
+                Button(L10n.t("恢复默认风格与开关")) { NotchStyleDefaults.restoreDefaults() }
+                Text(L10n.t("不含宽度和总开关"))
+            } label: {
+                Label(L10n.t("重置"), systemImage: "arrow.uturn.backward")
+            }
+            .menuStyle(.borderlessButton)
+            .fixedSize()
         }
         .font(.system(size: 12))
         .padding(.horizontal, 2)
+    }
+
+    /// 工具栏第二行(2026-09-01):「歌词行 / 行为 / 展开态」三个新入口,收纳的正是这几轮
+    /// 陆续加的一批布尔开关(显示封面+位置、显示歌词、暂停缩回、下一句预览、歌名/歌手/专辑)。
+    /// 这些开关最初直接铺在页面上(先是"行为"卡片横排两格,后来陆续并进「显示封面」和
+    /// 整张「展开态」卡片的四项),用户看过之后要求改回跟「风格/屏幕/左耳/右耳」一样的
+    /// "点开才配置"形态——不是否定之前的内容分组(三个新按钮的分组**就是**之前那三张卡片/
+    /// 分区的分组:歌词行→显示歌词+显示封面,行为→暂停缩回,展开态→下一句预览+
+    /// 歌名+歌手+专辑(⚠️「显示歌词」2026-09-01 同一天又从"行为"改归"歌词行"——它管的是
+    /// 歌词行本身渲不渲染,跟"显示封面"是同一类东西,归在这边更贴切),只是换了个更紧凑、
+    /// 跟已有工具栏统一的呈现方式。内容本身(图标/
+    /// 标题/Binding)仍然只有 `NotchBehaviorItem` 那一份,浮层(`NotchLyricRowPopover`/
+    /// `NotchBehaviorPopover`/`NotchExpandedPopover`)和「全部设置」抽屉(按同样三组拆开的
+    /// `NotchAllSettingsDrawer.lyricRowGroup`/`behaviorGroup`/`expandedGroup`,2026-09-01
+    /// 从铺平的 `allCases` 一整块拆开、修"没有分类,很混乱"的反馈)都调同一个
+    /// `NotchBehaviorItemRows`,不是另起三份实现。
+    ///
+    /// ⚠️ 横向预算**没有**照搬第一行"四个入口"那次的实测数据——那次量的是四个入口的
+    /// 极限,这里是全新的三个入口、内容也不同(标题更短:"歌词行"/"行为"/"展开态"都是
+    /// 两到三个字,比"屏幕"/"左耳"短或相当),没有理由假设会撞到同一个上限,但也**没有
+    /// 重新离屏量过**——如果哪天这一行在窄窗口/英文下也挤出截断,参照第一行那次的方法论
+    /// (`toolbarButton` 摘要限宽 140 + `.layoutPriority(-1)` 先压摘要)重新测,不要凭感觉
+    /// 现改数字。
+    private var toolbarRow2: some View {
+        HStack(spacing: 8) {
+            toolbarButton(
+                icon: "text.alignleft",
+                title: L10n.t("歌词行"),
+                summary: lyricRowSummary,
+                target: .lyricRow
+            )
+            toolbarButton(
+                icon: "switch.2",
+                title: L10n.t("行为"),
+                summary: behaviorSummary,
+                target: .behavior
+            )
+            toolbarButton(
+                icon: "rectangle.expand.vertical",
+                title: L10n.t("展开态"),
+                summary: expandedSummary,
+                target: .expanded
+            )
+            Spacer(minLength: 8)
+        }
+        .font(.system(size: 12))
+        .padding(.horizontal, 2)
+    }
+
+    /// 「歌词行」按钮摘要:2026-09-01「显示歌词」从「行为」浮层搬过来之后,这里要拼两项
+    /// (显示歌词 / 显示封面)。规则跟下面 `behaviorLikeSummary` 一样"只列开着的",但
+    /// 「显示封面」开着时额外带上位置(`NotchEarModule.artwork.displayName` 直接借用耳朵
+    /// 那边"封面"两个字,不新造一个词)——这一细节不能简单并进 `behaviorLikeSummary` 的
+    /// "只列标题"逻辑,否则"贴左还是贴右"这个用户在意的信息会丢,所以单独写。
+    private var lyricRowSummary: String {
+        var parts: [String] = []
+        if settings.notchShowLyrics { parts.append(NotchBehaviorItem.showLyrics.title) }
+        if settings.notchLyricRowShowsArtwork {
+            parts.append("\(NotchEarModule.artwork.displayName) · \(settings.notchLyricRowArtworkPosition.displayName)")
+        }
+        guard !parts.isEmpty else { return L10n.t("全部关闭") }
+        return ListFormatter.localizedString(byJoining: parts)
+    }
+
+    /// 「行为」/「展开态」按钮摘要:全开/全关给一句概括,部分开着就把开着的那几项标题
+    /// 列出来(短则直接读全,长则交给 toolbarButton 摘要那 140pt 限宽 + 尾部省略处理,
+    /// 跟「屏幕」按钮遇到长显示器名同一个兜底,不专门为这里再写一套截断逻辑)。列表拼接
+    /// 用 `ListFormatter`(系统 API)而不是手写分隔符——中文按区域习惯给"、"、英文给
+    /// ", "/"and",不用为这一个用途单独造一条要翻译的标点字符串。
+    @MainActor
+    private func behaviorLikeSummary(_ items: [NotchBehaviorItem]) -> String {
+        let onTitles = items.filter { $0.binding.wrappedValue }.map(\.title)
+        if onTitles.count == items.count { return L10n.t("全部开启") }
+        if onTitles.isEmpty { return L10n.t("全部关闭") }
+        return ListFormatter.localizedString(byJoining: onTitles)
+    }
+
+    /// 只剩「暂停缩回」一项(`.showLyrics` 2026-09-01 搬去了「歌词行」浮层,见
+    /// `lyricRowSummary`)。单项时 `behaviorLikeSummary` 退化成"开/全部开启、关/全部关闭"
+    /// 二选一,信息上没问题,文案"全部"用在单项上略绕口但不算错——没有为 n=1 单独写一套
+    /// 措辞,保持跟「展开态」按钮同一份实现。
+    private var behaviorSummary: String {
+        behaviorLikeSummary([.collapseWhenPaused])
+    }
+
+    private var expandedSummary: String {
+        behaviorLikeSummary([
+            .expandedNextLine, .expandedShowsControls, .expandedShowsLyricsOffset, .expandedShowsArtwork,
+            .expandedShowsTrackTitle, .expandedShowsArtist, .expandedShowsAlbum,
+        ])
     }
 
     private func toolbarButton(
@@ -447,6 +593,9 @@ struct NotchEditorStage: View {
         case screen
         case leftEar
         case rightEar
+        case lyricRow
+        case behavior
+        case expanded
     }
 
     private func popoverBinding(_ target: StagePopover) -> Binding<Bool> {
@@ -468,6 +617,9 @@ struct NotchEditorStage: View {
         case .screen: NotchScreenPopover(onScreenChange: { chrome.refreshGeometry() })
         case .leftEar: NotchEarPopover(side: .left)
         case .rightEar: NotchEarPopover(side: .right)
+        case .lyricRow: NotchLyricRowPopover()
+        case .behavior: NotchBehaviorPopover()
+        case .expanded: NotchExpandedPopover()
         }
     }
 
@@ -978,6 +1130,47 @@ struct NotchStyleSettingsRows: View {
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
+    }
+}
+
+// MARK: - 恢复默认
+
+/// 「重置」按钮(工具栏第一行右侧)的动作本体——逐字复刻悬浮歌词那边的写法
+/// (`OverlayStyleDefaults.restoreTextAndColors()`):抽成独立函数而不是留在按钮闭包里,
+/// 理由同源:以后要是再给这份设置开一个"全部设置"抽屉里的兜底恢复入口,两处调同一个
+/// 函数才不会走出"从工具栏恢复和从抽屉恢复,恢复出来的样子不一样"这种岔子。
+///
+/// 范围(2026-09-01 跟用户确认过,三选一里选的是最宽的一档):风格 + 左右耳 + 屏幕 + 这个
+/// 形态全部的内容开关(歌词行/行为/展开态/音浪那一批布尔量,含各自的从属选择器)。
+/// **不碰** `notchOverlayEnabled`(灵动岛总开关——重置一个"外观/内容默认值"的按钮，不该
+/// 顺手把整个功能关掉)和 `notchContentWidth`(宽度——结构性尺寸设置,跟悬浮歌词「重置」
+/// 明确排除宽度和锁定位置是同一条取舍)。
+///
+/// 每个字段的默认值只在 `AppSettings.defaultNotchXxx` 里出现一次、`AppSettings.init()`
+/// 也读同一份——不在这里重新写一遍字面量,理由同 `defaultFollowsCoverArt` 那组:两处各自
+/// 硬编码,以后改默认值容易漏掉其中一处,变成"点了重置却恢复不出真正默认值"。
+@MainActor
+enum NotchStyleDefaults {
+    static func restoreDefaults() {
+        let settings = AppSettings.shared
+        settings.notchCardStyle = AppSettings.defaultNotchCardStyle
+        settings.notchLeftEar = AppSettings.defaultNotchLeftEar
+        settings.notchRightEar = AppSettings.defaultNotchRightEar
+        settings.notchAllScreens = AppSettings.defaultNotchAllScreens
+        settings.notchScreenID = AppSettings.defaultNotchScreenID
+        settings.notchShowLyrics = AppSettings.defaultNotchShowLyrics
+        settings.notchCollapsesWhenPaused = AppSettings.defaultNotchCollapsesWhenPaused
+        settings.notchShowsEqualizer = AppSettings.defaultNotchShowsEqualizer
+        settings.notchEqualizerEar = AppSettings.defaultNotchEqualizerEar
+        settings.notchExpandedShowsNextLine = AppSettings.defaultNotchExpandedShowsNextLine
+        settings.notchExpandedShowsControls = AppSettings.defaultNotchExpandedShowsControls
+        settings.notchExpandedShowsLyricsOffset = AppSettings.defaultNotchExpandedShowsLyricsOffset
+        settings.notchExpandedShowsArtwork = AppSettings.defaultNotchExpandedShowsArtwork
+        settings.notchExpandedShowsTrackTitle = AppSettings.defaultNotchExpandedShowsTrackTitle
+        settings.notchExpandedShowsArtist = AppSettings.defaultNotchExpandedShowsArtist
+        settings.notchExpandedShowsAlbum = AppSettings.defaultNotchExpandedShowsAlbum
+        settings.notchLyricRowShowsArtwork = AppSettings.defaultNotchLyricRowShowsArtwork
+        settings.notchLyricRowArtworkPosition = AppSettings.defaultNotchLyricRowArtworkPosition
     }
 }
 

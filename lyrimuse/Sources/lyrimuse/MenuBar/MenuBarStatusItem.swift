@@ -65,6 +65,9 @@ final class MenuBarStatusItem: NSObject {
     private let liveIconView = MenuBarLiveIconView()
     /// 左键面板(2026-08-19,「控制中心风」,见 MenuBarPanel.swift)。右键仍是完整菜单。
     private let panelController = MenuBarPanelController()
+    /// 首次启动的一次性「⌘+拖拽可以挪位置」提示(2026-09-01,见 MenuBarPositionHint.swift
+    /// 头注的调研背景)。
+    private let positionHintController = MenuBarPositionHintController()
 
     private override init() { super.init() }
 
@@ -136,6 +139,12 @@ final class MenuBarStatusItem: NSObject {
         // 才生效 —— 那样用户在设置里点一下,菜单栏上看着像没反应。
         settings.$menuBarLyricsWidthMode.dropFirst().receive(on: RunLoop.main)
             .sink { [weak self] _ in self?.refresh() }.store(in: &cancellables)
+        // 「对齐模式」跟宽度模式同一条路(2026-09-01)。⚠️ 必须走 refresh() 而不是
+        // refreshColors():后者只重排位图 + 重放填色,**不碰 position** —— 而对齐改的正是
+        // position。refresh 会一路走到 present(),Plan 里带着 alignment、比出不同,静止分支
+        // 就会按新对齐重新落位(见 MenuBarScrollingLabel.restartAnimation)。
+        settings.$menuBarLyricsAlignment.dropFirst().receive(on: RunLoop.main)
+            .sink { [weak self] _ in self?.refresh() }.store(in: &cancellables)
         // 换图标样式要立刻看到 —— 用户是在设置里一个个点着挑的,等下次换歌才生效
         // 等于挑不了。
         settings.$menuBarIconStyle.dropFirst().receive(on: RunLoop.main)
@@ -170,6 +179,21 @@ final class MenuBarStatusItem: NSObject {
             .sink { [weak self] _ in self?.syncKaraokeClock(force: true) }.store(in: &cancellables)
 
         refresh()
+
+        // 首次启动的一次性拖拽引导提示(2026-09-01,见 MenuBarPositionHint.swift 头注)。
+        // 上面这次 refresh() 是同步的(见 present() 的"没有旧项就无条件重建"分支),此刻
+        // statusItem?.button 已经是真的按钮了。延迟 1.5s 只是让图标先在视觉上落定,不在
+        // 启动的第一帧就糊用户一脸提示。标记提前到"决定要展示"这一刻就置真,而不是等用户
+        // 点了「知道了」才置真——这样即使用户在提示消失前就退出 App,也不会下次启动又弹
+        // 一遍(跟 hasSeenChineseLyrics 类那种"条件成立就一直显示"刻意反过来,这个是
+        // "展示过一次就永远不再显示")。
+        if !AppSettings.shared.hasShownMenuBarPositionHint {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
+                guard let self, let button = self.statusItem?.button else { return }
+                AppSettings.shared.hasShownMenuBarPositionHint = true
+                self.positionHintController.show(relativeTo: button)
+            }
+        }
     }
 
     /// 把播放时钟(外推位置 + 歌词时间轴校准)喂给标签的填色动画。位置公式与歌词窗口

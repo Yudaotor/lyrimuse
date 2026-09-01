@@ -317,9 +317,11 @@ struct PanelQuickSettings: View {
             row(L10n.t("宽度模式")) {
                 Picker("", selection: $settings.menuBarLyricsWidthMode) {
                     Text(L10n.t("固定")).tag(MenuBarLyricsWidthMode.fixed)
-                    // 跟设置页同一个标签 —— 那边打了 Beta,这边不打就等于放了一条"没有警告
-                    // 的入口"(见 SettingsView.menuBarCard)。
-                    Text(L10n.t("自适应（Beta）")).tag(MenuBarLyricsWidthMode.adaptive)
+                    // 跟设置页同一个标签 —— 两处必须同进同出,否则就成了"一条带警告、
+                    // 一条不带"的两个入口。2026-09-01 设置页那边按用户要求去掉了 Beta
+                    // 字样,这里跟着去掉(那次是 selftest 的"源码用了但 catalog 里没有的键"
+                    // 守卫把这处漏改逮出来的 —— 光改设置页会让这里指向一个已删的词条)。
+                    Text(L10n.t("自适应")).tag(MenuBarLyricsWidthMode.adaptive)
                 }
                 .labelsHidden()
                 .pickerStyle(.segmented)

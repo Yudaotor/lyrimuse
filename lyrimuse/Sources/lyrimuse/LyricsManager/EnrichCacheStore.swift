@@ -95,6 +95,24 @@ public final class EnrichCacheStore: ObservableObject {
         // 原来 rebuild 时对每条带该字段的条目都做一轮 JSONSerialization.data + JSONDecoder
         // 双重编解码,而结果只有打开「解析决策」弹窗那一刻才被消费,全量急算纯属浪费。
         let hasDecision: Bool
+        /// 这条的歌词内容上次真的变过是什么时候 —— 取自**导出的歌词文件的 mtime**
+        /// (`lyrics/` 下 `.lrc`/`.tr.lrc`/`.roma.lrc`/`.yrc` 四个里最新的那个),
+        /// nil = 磁盘上一个歌词文件都没有(压根没歌词的条目,export 会跳过它们)。
+        ///
+        /// 为什么用文件 mtime 而不是缓存里的时间戳字段:缓存里**没有**一个真正表达"更新
+        /// 时间"的字段。2026-09-01 实测本机 3210 条的覆盖率 ——
+        ///   `lyrics_decision.decided_at` 73%(而且它是"上次自动决策",手改歌词不会动它)
+        ///   `translation_ts` 25% / `peripheral_ts` 9% / `lyrics_rescore_ts` 7%
+        /// 全是偏科的局部时间戳。而 `lyrics/` 是六字段的权威源,**所有**写入路径都经过它
+        /// (collector 的 exportLyricsFiles、App 的 saveEdit→writeLyricsFiles),覆盖率
+        /// 3169/3210、缺的 41 条正好是没歌词的。
+        ///
+        /// 关键前提:`exportLyricsFiles` 写盘前会比对全文、逐字节相同就 `continue`
+        /// (lyricsexport.go),所以 mtime 不会被"每次 collector 启动都重写一遍"冲掉。
+        /// 实测本机 mtime 散布在 08-22～09-01 而不是全挤在最近一次重启,坐实了这一点。
+        /// ⚠️ 哪天那个跳过逻辑被去掉,这个字段就会集体失真(全变成最后一次启动时间),
+        /// 而且**表现是静默的** —— 排序看着还在工作,只是结果全错。
+        let lyricsUpdatedAt: Date?
         // ---- 预计算归一化键(2026-08-19 性能审计) ----
         // 排序/筛选/归并的热路径原来逐次现算 toSimplified(ICU CFStringTransform)+
         // lowercased:排序比较器每次比较 4 次、筛选谓词每行最多 4 次、专辑归并字典
@@ -234,6 +252,9 @@ public final class EnrichCacheStore: ObservableObject {
         // 在进 Task.detached 之前取快照:LyricsOffsetStore 是 @MainActor 单例,detached
         // 闭包跑在后台线程,不能在里面同步访问它——纯字典拷贝,提前拿一份传进去即可。
         let offsetsSnapshot = LyricsOffsetStore.shared.offsetsSnapshot
+        // 同理:lyricsDir 读的是 FeatureSettingsStore.shared(MainActor),在这儿取好。
+        // 真正的目录枚举(I/O)在 buildSummaries 里、也就是后台跑。
+        let lyricsDir = Self.lyricsDir
         await Task.detached(priority: .userInitiated) {
             box.fingerprint = Self.fileFingerprint(cacheURL)
             guard let data = try? Data(contentsOf: cacheURL) else {
@@ -247,7 +268,7 @@ public final class EnrichCacheStore: ObservableObject {
             box.obj = obj
             // summaries 的构建+排序也在后台做掉(2026-08-19:原来回 MainActor 同步跑,
             // 每次开窗/激活吃几十到一二百 ms 主线程),主线程只收结果赋值。
-            box.bundle = Self.buildSummaries(from: obj, offsetsSnapshot: offsetsSnapshot)
+            box.bundle = Self.buildSummaries(from: obj, offsetsSnapshot: offsetsSnapshot, lyricsDir: lyricsDir)
         }.value
         if let obj = box.obj, let bundle = box.bundle {
             raw = obj
@@ -264,7 +285,7 @@ public final class EnrichCacheStore: ObservableObject {
             raw = [:]
             lastLoadedFingerprint = nil
             lastError = box.errorMessage ?? L10n.t("读取本地记录文件失败")
-            applySummaries(Self.buildSummaries(from: [:], offsetsSnapshot: offsetsSnapshot))
+            applySummaries(Self.buildSummaries(from: [:], offsetsSnapshot: offsetsSnapshot, lyricsDir: Self.lyricsDir))
         }
     }
 
@@ -331,7 +352,8 @@ public final class EnrichCacheStore: ObservableObject {
     // LyricsOffsetStore(不是这里的 raw 字典),summaries 里预算好的 offsetMs 不会自己
     // 跟着变,得靠调用方显式喊一次重建(见 LyricsManagerView.applyOffsetEdit)。
     public func rebuildSummaries() {
-        applySummaries(Self.buildSummaries(from: raw, offsetsSnapshot: LyricsOffsetStore.shared.offsetsSnapshot))
+        applySummaries(Self.buildSummaries(from: raw, offsetsSnapshot: LyricsOffsetStore.shared.offsetsSnapshot,
+                                           lyricsDir: Self.lyricsDir))
     }
 
     // ⚠️ 排序键必须跟"列表上看到的那套分组"用**同一套归并规则**,否则会出现"显示层合并了、
@@ -348,7 +370,52 @@ public final class EnrichCacheStore: ObservableObject {
     /// - Parameter offsetsSnapshot: LyricsOffsetStore 整份字典的一次性快照(调用方在
     ///   MainActor 上下文取好再传进来,见两处调用点的注释)——这个函数本身要能在后台线程跑,
     ///   不能在这里同步访问那个 @MainActor 单例。
-    private nonisolated static func buildSummaries(from raw: [String: [String: Any]], offsetsSnapshot: [String: Int]) -> SummariesBundle {
+    /// 扫一遍歌词目录,得到「折叠后的文件基名 → 该组四个文件里最新的 mtime」。
+    ///
+    /// **一次目录枚举、批量取属性**,不逐条 stat:后者要么 O(n) 次系统调用,要么(如果按
+    /// key 现推文件名)撞上 `exportBaseName` 那个每次都扫全 `raw.keys` 的 O(n²)。实测本机
+    /// 7231 个文件全 stat 一遍 23ms,这条路径比它更省,且只做一次。
+    ///
+    /// 取四个后缀里**最新**的那个,而不是只看主 `.lrc`:译文/罗马音/逐字时间轴后来补上
+    /// 也是这条记录真的变了,用户按「更新时间」找的就是"最近动过什么"。
+    ///
+    /// 键要**折叠成小写**:同一个 key 可能对应普通名或带哈希后缀的消歧名(见
+    /// `exportBaseName`),而这台文件系统大小写不敏感 —— 折叠后两种形态都能被调用方用
+    /// 两次 O(1) 查找命中,不必在这里反推是哪一种。
+    private nonisolated static func lyricsFileModificationDates(in dir: URL) -> [String: Date] {
+        guard let entries = try? FileManager.default.contentsOfDirectory(
+            at: dir, includingPropertiesForKeys: [.contentModificationDateKey],
+            options: [.skipsHiddenFiles]) else { return [:] }
+        var dates: [String: Date] = [:]
+        dates.reserveCapacity(entries.count)
+        for url in entries {
+            let name = url.lastPathComponent
+            // 后缀要**从长到短**匹配:".tr.lrc" 也以 ".lrc" 结尾,先撞上 ".lrc" 会把基名
+            // 切成 "xxx.tr",跟主文件分成两组、两边都算错。
+            guard let suffix = Self.lyricsFileSuffixesLongestFirst.first(where: { name.hasSuffix($0) })
+            else { continue }
+            let base = String(name.dropLast(suffix.count)).lowercased()
+            guard !base.isEmpty,
+                  let date = try? url.resourceValues(forKeys: [.contentModificationDateKey])
+                      .contentModificationDate
+            else { continue }
+            if let known = dates[base], known >= date { continue }
+            dates[base] = date
+        }
+        return dates
+    }
+
+    /// 见 lyricsFileModificationDates 里那段「从长到短」的说明。
+    private static let lyricsFileSuffixesLongestFirst =
+        EnrichCacheKeys.lyricsFileSuffixes.sorted { $0.count > $1.count }
+
+    /// - Parameter lyricsDir: 歌词导出目录的一次性快照。跟 offsetsSnapshot 同一个理由 ——
+    ///   它来自 `FeatureSettingsStore.shared`(MainActor),调用方在 MainActor 上取好传进来,
+    ///   目录枚举这段 I/O 留在这个后台函数里跑。
+    private nonisolated static func buildSummaries(
+        from raw: [String: [String: Any]], offsetsSnapshot: [String: Int], lyricsDir: URL
+    ) -> SummariesBundle {
+        let lyricsFileDates = Self.lyricsFileModificationDates(in: lyricsDir)
         // offsetsSnapshot 几乎永远很小(这台机器实测 1756 条缓存里只有 7 条调过偏移),
         // 但 trackKey 要在 artist|title 之后拼一段**对整首歌词+YRC 正文取 SHA256** 的内容
         // 指纹(见 LyricsOffsetStore.contentFingerprint)——2026-08-26 实测坐实:对全部
@@ -416,6 +483,11 @@ public final class EnrichCacheStore: ObservableObject {
                 hasPlainTextFallback: !((entry["plain_lyrics"] as? String ?? "").isEmpty),
                 isSearching: false, // 这一条来自 raw,真实存在;占位行的构造点在 LyricsManagerView
                 hasDecision: entry["lyrics_decision"] != nil || entry["lyrics_decision_applied"] != nil,
+                // 两次 O(1) 查找:普通名、以及带哈希后缀的消歧名(见 exportBaseName —— 到底
+                // 用哪个取决于有没有别的 key 折叠后同名,那个判断本身是 O(n),不能在这个
+                // 逐条循环里做)。都查不到 = 磁盘上没有这条的歌词文件。
+                lyricsUpdatedAt: lyricsFileDates[EnrichCacheKeys.sanitizeFilename(key).lowercased()]
+                    ?? lyricsFileDates[EnrichCacheKeys.disambiguatedName(forKey: key).lowercased()],
                 normPrimaryArtist: toSimplified(primaryArtist(display)).lowercased(),
                 normAlbum: toSimplified(parts.album).lowercased(),
                 searchArtistLower: parts.artist.lowercased(),
@@ -533,9 +605,14 @@ public final class EnrichCacheStore: ObservableObject {
     ///   字符串 = **显式清掉**(交回算法自由选源);传 nil = 不动这个字段。
     ///   语义见 collector 侧 `enrichEntry.LyricsSourceChoice` 的注释:它跟 `markManual`
     ///   是两件事 —— 那个说"我改过正文,别碰",这个只说"我要这个源的词"。
+    /// - Parameter fromManualPick: 这一笔是不是「采纳一条候选」(三个入口:歌词管理、悬浮窗
+    ///   ⚙「搜索歌词…」小窗、歌词窗口内的搜索)。传 true 会写下内容指纹 `manual_pick_sha`,
+    ///   供「手动选定歌词后锁定」开关**追溯**用;传 false(默认)会把它清掉。详见写入处的
+    ///   注释与 `applyManualPickLock`。它跟 `markManual` 正交:markManual 决定"现在锁不锁",
+    ///   这个只决定"以后开关打开时要不要把这首歌算进去"。
     public func saveEdit(key: String, lyrics: String, tr: String, roma: String, yrc: String? = nil,
                          source: String? = nil, markManual: Bool = true,
-                         sourceChoice: String? = nil,
+                         sourceChoice: String? = nil, fromManualPick: Bool = false,
                          score: Int? = nil, scoringVersion: Int? = nil,
                          resolvedDurationSecs: Double? = nil,
                          sourcesSeen: [String]? = nil, sourcesResponded: [String]? = nil,
@@ -617,6 +694,28 @@ public final class EnrichCacheStore: ObservableObject {
         } else {
             entry.removeValue(forKey: "lyrics_source")
         }
+        // 「这份内容是用户手动采纳的候选」的留痕。**纯记录,零行为影响** —— collector
+        // 一个字节都不读它(grep manual_pick_sha 在 lyrimuse-collector/ 下应该零命中),
+        // 它唯一的消费方是 applyManualPickLock:「手动选定歌词后锁定」开关被打开时,
+        // 靠它找出"哪些歌是用户手动选的、而且当前这份内容还就是他选的那一份"。
+        //
+        // ⚠️ 存内容指纹而不是一个 bool,是这套机制成立的关键:关态下这首歌随时可能被自愈
+        // 路径换成别的版本(那正是关态的语义),那之后再打开开关,锁住的就会是一份用户
+        // **从没选过**的内容。指纹对不上 = 我选的那份已经不在了 = 不锁,这条判断是自证的,
+        // 不依赖 collector 任何一处"换歌词时记得清标记"的配合(那种分散的清理点漏一处
+        // 就错,而且错得无声)。
+        //
+        // 由 saveEdit 自己按刚写进去的正文算,不让调用方传 —— 调用方传的话就有"指纹算的
+        // 是另一份内容"这种对不上的可能。非手动采纳的路径(手改正文/重新自动匹配)一律
+        // 清掉:它们都重写了 lyrics,旧指纹既已失效也没有意义。
+        // 指纹为空(正文只剩元数据标签、归一化后没有词)时同样按"没有留痕"处理 —— 写一个
+        // 空字符串进去只会多一个永远匹配不上的字段。
+        let pickSHA = fromManualPick ? ManualPickLock.fingerprint(lyrics: lyrics) : ""
+        if pickSHA.isEmpty {
+            entry.removeValue(forKey: "manual_pick_sha")
+        } else {
+            entry["manual_pick_sha"] = pickSHA
+        }
         raw[key] = entry
         markLocallyEdited(key)
         writeLyricsFiles(
@@ -634,6 +733,84 @@ public final class EnrichCacheStore: ObservableObject {
         guard await persist() else { return }
         if lastPersistPulledInNewKeys { rebuildSummaries() }
         scheduleCollectorRestart()
+    }
+
+    /// 开关翻面前后要告诉用户的那几个数。
+    ///
+    /// 光有"改了几首"不够 —— 0 首有两种完全不同的成因(从没手动选过 / 选过但内容已被自动
+    /// 换掉),界面得能分开说,否则就只剩一个静默的"什么都没发生"。见 ManualPickLock.PickState。
+    public struct ManualPickLockStats: Sendable {
+        /// 有留痕的总数(不论内容还在不在)。
+        public var picked = 0
+        /// 其中内容仍是当初选定那一份的。
+        public var stillOriginal = 0
+        /// 这次真会被改动的(内容还在 + 锁定状态跟目标相反)。
+        public var targets = 0
+    }
+
+    public func manualPickLockStats(locking: Bool) -> ManualPickLockStats {
+        var stats = ManualPickLockStats()
+        for entry in raw.values {
+            let state = ManualPickLock.state(
+                sha: entry["manual_pick_sha"] as? String,
+                lyrics: entry["lyrics"] as? String ?? "")
+            guard state != .neverPicked else { continue }
+            stats.picked += 1
+            guard state == .original else { continue }
+            stats.stillOriginal += 1
+            if ((entry["manual_lyrics"] as? Bool) ?? false) != locking { stats.targets += 1 }
+        }
+        return stats
+    }
+
+    /// 「手动选定歌词后锁定」开关翻面时,受影响的 key。判据本身是 ManualPickLock.shouldFlip
+    /// (纯函数,摆在 LyrimuseCore 里好让 selftest 够得着,见那个文件的头注);这里只负责
+    /// 把缓存条目的字段喂进去。
+    public func manualPickLockTargets(locking: Bool) -> [String] {
+        raw.compactMap { key, entry in
+            ManualPickLock.shouldFlip(
+                sha: entry["manual_pick_sha"] as? String,
+                lyrics: entry["lyrics"] as? String ?? "",
+                isLocked: (entry["manual_lyrics"] as? Bool) ?? false,
+                locking: locking
+            ) ? key : nil
+        }
+    }
+
+    /// 把上面那批 key 的 `manual_lyrics` 批量翻成 `locking`,返回真正改动的条数。
+    ///
+    /// ⚠️ **必须连 .lrc 文件头一起重写**。导出的歌词文件头里那行 `[manual:1]` 是这个标记的
+    /// 第二份存档,collector 启动时 importLyricsFromFiles 会拿文件头把缓存里的值改回去
+    /// (saveEdit 的 markManual 注释里踩过同一个坑)。只改 JSON 的话,这次批量锁定/解锁
+    /// 会在下次 collector 重启时被静默回滚 —— 而且回滚得毫无痕迹。
+    @discardableResult
+    public func applyManualPickLock(_ locking: Bool) async -> Int {
+        let targets = manualPickLockTargets(locking: locking)
+        guard !targets.isEmpty else { return 0 }
+        for key in targets {
+            guard var entry = raw[key] else { continue }
+            if locking {
+                entry["manual_lyrics"] = true
+            } else {
+                entry.removeValue(forKey: "manual_lyrics")
+            }
+            raw[key] = entry
+            markLocallyEdited(key)
+            writeLyricsFiles(
+                key: key,
+                lyrics: entry["lyrics"] as? String ?? "",
+                tr: entry["lyrics_tr"] as? String ?? "",
+                roma: entry["lyrics_roma"] as? String ?? "",
+                yrc: entry["lyrics_yrc"] as? String ?? "",
+                source: entry["lyrics_source"] as? String ?? "",
+                manual: locking
+            )
+        }
+        rebuildSummaries()
+        guard await persist() else { return 0 }
+        if lastPersistPulledInNewKeys { rebuildSummaries() }
+        scheduleCollectorRestart()
+        return targets.count
     }
 
     /// 采纳一条"仅纯文本"候选(LyricsSearchService.Candidate.isPlainTextOnly,「搜索候选
@@ -676,6 +853,36 @@ public final class EnrichCacheStore: ObservableObject {
     public func markInstrumental(key: String) async {
         var entry = raw[key] ?? [:]
         entry["instrumental"] = true
+        raw[key] = entry
+        markLocallyEdited(key)
+        rebuildSummaries()
+        guard await persist() else { return }
+        if lastPersistPulledInNewKeys { rebuildSummaries() }
+        scheduleCollectorRestart()
+    }
+
+    /// 「重新自动匹配」按钮命中 `LyricsRematchDecision.Outcome.unchanged`(可判、赢家跟现状
+    /// 逐项一致)时调用——这一轮已经完整评估过,collector 侧只要 `Decidable` 就把全量候选
+    /// 打分 build 进了 `pick.decisionJSON`(searchcli.go),只是没有新内容需要采纳。
+    ///
+    /// 呼应 collector 侧 rescoreLyrics 的既定规则:decision.go 定义 `lyrics_decision` =
+    /// "最近一次评估——可能维持原状"，enrich.go 那三个写入点也是"可判的两个分支都写"，跟
+    /// 这一轮赢家有没有变无关。之前这颗按钮在 `.unchanged` 直接 return,把已经算好的证据
+    /// 整段扔掉——「解析决策」弹窗只停在上一次真正换过内容的那一轮,查不出"这一轮其它源
+    /// 给了多少分、只是没赢"(2026-09-01 用户指出)。
+    ///
+    /// 只置 lyrics_decision / lyrics_decision_applied 两个字段,不碰 lyrics/manual_lyrics/
+    /// source 这些——跟上面 markInstrumental 一样窄。槽2(lyrics_decision_applied)也跟着
+    /// 刷新:decision.go 定义槽2是"最近一次'胜者内容成为(或确认仍是)当前歌词'的评估",
+    /// `.unchanged` 恰好就是"确认仍是"那一支,不是"没有新出处"。
+    public func recordUnchangedRematchDecision(key: String, decisionJSON: String) async {
+        guard let data = decisionJSON.data(using: .utf8),
+              let decision = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return
+        }
+        var entry = raw[key] ?? [:]
+        entry["lyrics_decision"] = decision
+        entry["lyrics_decision_applied"] = decision
         raw[key] = entry
         markLocallyEdited(key)
         rebuildSummaries()
@@ -1178,6 +1385,20 @@ struct LyricsResolutionDecision: Decodable {
         let title: String?
         let artist: String?
         let album: String?
+        /// 这个源当时给出的封面(2026-09-01 加)。**老存档里没有这个字段**,所以恒为 nil ——
+        /// 存档是"当时那一刻的固化",不能事后补(现在再查一次拿到的不是当时那个)。
+        ///
+        /// ⚠️ **必须叫 `coverUrl`,不能写成 `coverURL`**。这个类型走的是
+        /// `.convertFromSnakeCase`(见上面 decoder 的配置),它把 `cover_url` 转成的是
+        /// `coverUrl`(小写 rl),跟 `coverURL` 不相等 —— 实测坐实:写成 `coverURL` 时
+        /// `decodeIfPresent` 直接给 nil,**一个封面都不会显示,而其它字段全正常**,是那种
+        /// 光看代码完全看不出来的静默失效。
+        ///
+        /// 隔壁 `LyricsSearchService.RawCandidate` 用的是同一份 JSON 里的同一个字段,但它
+        /// 写成 `coverURL` 没问题 —— 因为那边**手写了完整的 CodingKeys**(`case coverURL =
+        /// "cover_url"`)、根本没开 convertFromSnakeCase。两处看着矛盾,其实是两套解码策略,
+        /// 别照着那边"统一"过来。
+        let coverUrl: String?
         let sourceReportedDurationSecs: Double?
         let hasWordTiming: Bool?
         let instrumental: Bool?

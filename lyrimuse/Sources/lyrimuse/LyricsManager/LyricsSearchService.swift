@@ -53,6 +53,9 @@ final class LyricsSearchService {
             // 让这个候选赢的理由,而另一个候选标题更吻合"时出现,见 collector 侧
             // applyWordTimingTitleOverride 的注释。
             case "wordTimingOverride": return L10n.t("标题吻合度更高的候选存在，撤销逐字加分")
+            // v7(2026-09-01):「两场不同演唱会」判据,见 collector 侧
+            // liveAlbumIdentityConflict 的注释(陈奕迅 The Easy Ride vs Get A Life 案)。
+            case "liveAlbumConflict": return L10n.t("是另一场演出的现场版")
             // v3(2026-08-12)新维度,与 collector match.go 的 scoreTerm kind 一一对应。
             // 旧 "source" case 已删:来源先验分 2026-08-09 从引擎移除后,score_terms 只来自
             // 实时搜索(不落缓存),不存在还带着旧字段的数据,这个分支是死代码。
@@ -98,6 +101,8 @@ final class LyricsSearchService {
                 return L10n.t("这个源自己声明的曲目时长跟本地差了 12% 以上，多半挂在另一次录音上")
             case "wordTimingOverride":
                 return L10n.t("逐字时间轴本来赢在这上面，但另一个候选的标题更吻合查询词——大概率是另一次录音（比如不同现场版）的逐字版本，时间轴细不代表轴对得上这次播放")
+            case "liveAlbumConflict":
+                return L10n.t("两边都是现场版，但这个候选的专辑名指向另一场不同命名的演出（比如另一次巡演）——时间轴是那场演出的，套在这次播放的录音上会对不上")
             case "durationOff":
                 return L10n.t("最后一句的时间跟曲长差了 25% 以上；仍可选用，但会排在所有时长对得上的后面")
             case "rejectDurationMismatch":
@@ -244,12 +249,20 @@ final class LyricsSearchService {
         /// applecover 不算)见 collector/enrich.go 的 lyricSearchUpdateFunc 注释。
         let sourcesDone: Int
         let sourcesTotal: Int
+        /// 第几轮全源检索,从 1 开始(2026-09-02)。兜底轮(首歌手变体/标题反查等,见
+        /// collector/enrich.go)每轮都重新扫全部源,sourcesDone 每轮从 0 重数——没有这个
+        /// 字段时进度显示成"8/8 之后又回到 1/8",读起来像出了错。旧 collector 不发这个
+        /// 字段时解码成 1(单轮语义,跟没有兜底轮的观感一致)。
+        let round: Int
         /// 这一轮里没给出候选的源,查得到具体原因的那几个(2026-08-31)——collector 侧
         /// lyricSourceFailureReasons(searchcli.go)算出来,只覆盖 netease/musixmatch/
         /// lyricfind 三个已经接了诊断旁路的源,给"歌词源可用情况"明细面板用。key 是源名,
-        /// value 是给用户看的中文说明;没查到具体原因的源不会出现在这个字典里(不代表
-        /// "没有原因",只是这个仓库目前没有对应信号,不编一个没核实过的理由)。
-        let sourceFailureReasons: [String: String]
+        /// value 是**稳定代码**,不是文案(2026-09-01 从 sourceFailureReasons 改名——见
+        /// `LyricSourceFailureReason` 的头注,显示给用户前要先经
+        /// `LyricSourceFailureReason.text(forCode:)` 翻译);没查到具体原因的源不会出现
+        /// 在这个字典里(不代表"没有原因",只是这个仓库目前没有对应信号,不编一个没核实
+        /// 过的理由)。
+        let sourceFailureReasonCodes: [String: String]
         /// 至少一个源明确说这首是纯音乐(不只 lrclib,网易云 pureMusic 也会置位)。
         /// 用来把"一个候选都没有"这个结局分成"这首歌本来就没词"和"真的谁都没搜到"。
         let instrumental: Bool
@@ -383,7 +396,8 @@ final class LyricsSearchService {
                         // 可选 + 兜底 0:字段缺失不该让整行解码失败、把这一批候选整批丢掉。
                         sourcesDone: raw.sourcesDone ?? 0,
                         sourcesTotal: raw.sourcesTotal ?? 0,
-                        sourceFailureReasons: raw.sourceFailureReasons ?? [:],
+                        round: raw.round ?? 1, // 旧 collector 不发,按单轮兜底,见 SearchUpdate.round
+                        sourceFailureReasonCodes: raw.sourceFailureReasonCodes ?? [:],
                         // 优先新 key,缺失才退回旧 key —— 两个二进制各自独立部署,可能
                         // 出现「新 App + 旧 collector」(只重建了 App 没换 collector)。
                         instrumental: raw.instrumental ?? raw.lrclibInstrumental ?? false,
@@ -459,7 +473,9 @@ private struct RawSearchUpdate: Decodable {
     let networkLooksDown: Bool
     let sourcesDone: Int?
     let sourcesTotal: Int?
-    let sourceFailureReasons: [String: String]?
+    /// 第几轮全源检索,旧 collector 不发(解码方兜底成 1),见 SearchUpdate.round。
+    let round: Int?
+    let sourceFailureReasonCodes: [String: String]?
     /// collector 一直在输出这个信号,Swift 侧 2026-08-21 才开始接:它把"一个候选都没有"
     /// 分成"这首歌本来就没词"和"真的谁都没搜到"两种,「重新自动匹配」的结果文案要区分。
     ///

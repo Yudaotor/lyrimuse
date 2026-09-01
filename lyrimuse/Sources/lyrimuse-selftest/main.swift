@@ -564,6 +564,26 @@ do {
     let kda = R.coverIndexByArtistTitle(["K/DA|POP/STARS|POP/STARS": "https://cover/kda"])
     expectEqual(R.coverURLString(in: kda, artist: "K/DA", title: "POP/STARS"), "https://cover/kda",
                 "封面兜底: K/DA 不会被斜杠劈成 K")
+
+    // ---- coverAlbumVerified:「最近记录」第①级纠错的资格判定(2026-09-01) ----
+    // 真实案例:陈奕迅《不如这样 (Live)》,Last.fm 行侧专辑写法与缓存 cover_album 在
+    // 繁简/空格上系统性不一致,必须按 looseKey 口径比;而 cover_album 是错场次
+    // (Get A Life)时绝不能给资格 —— 那正是这道闸要挡的东西。
+    expectEqual(R.coverAlbumVerified(coverAlbum: "The Easy Ride 演唱会 (Live)",
+                                     requestedAlbum: "The Easy Ride 演唱会 (Live)"), true,
+                "封面归属核实: 逐字相同")
+    expectEqual(R.coverAlbumVerified(coverAlbum: "The Easy Ride 演唱会 (Live)",
+                                     requestedAlbum: "The Easy Ride 演唱會 (Live)"), true,
+                "封面归属核实: 繁简写法不同也算同一张(looseKey 口径)")
+    expectEqual(R.coverAlbumVerified(coverAlbum: "Get A Life (Live)",
+                                     requestedAlbum: "The Easy Ride 演唱会 (Live)"), false,
+                "封面归属核实: 错场次的 cover_album 没有纠正资格")
+    expectEqual(R.coverAlbumVerified(coverAlbum: nil,
+                                     requestedAlbum: "The Easy Ride 演唱会 (Live)"), false,
+                "封面归属核实: 老条目没有 cover_album 字段时不给资格")
+    expectEqual(R.coverAlbumVerified(coverAlbum: "The Easy Ride 演唱会 (Live)",
+                                     requestedAlbum: ""), false,
+                "封面归属核实: 行侧没有专辑名时无从核实")
 }
 
 // ---- LyricsOffsetStore.trackKey:歌手/歌名必须归一化(2026-08-20 修的真 bug) ----
@@ -1692,8 +1712,8 @@ do {
     expectEqual(M.height(hasLyricPreview: true, hasScrubber: true), 76,
                 "岛展开区: 有歌词有时长 = 76(必须跟改动前逐字相等)")
     expectEqual(M.height(hasLyricPreview: true, hasScrubber: true),
-                M.maxHeight,
-                "岛展开区: 三样齐就等于窗口/预览容器用的那个 Max")
+                M.maxHeight(),
+                "岛展开区: 三样齐就等于窗口/预览容器用的那个 Max(默认参数)")
     expectEqual(M.height(hasLyricPreview: false, hasScrubber: true), 59,
                 "岛展开区: 没歌词省掉预览行的 17pt")
     expectEqual(M.height(hasLyricPreview: true, hasScrubber: false), 52,
@@ -1707,6 +1727,102 @@ do {
     expectEqual(M.height(hasLyricPreview: true, hasScrubber: false)
                 > M.height(hasLyricPreview: false, hasScrubber: false), true,
                 "岛展开区: 加一段内容必须变高")
+}
+
+// ---- 展开区「曲目信息头部」+「下一句预览」用户开关(2026-09-01) ----
+//
+// 两个新维度跟上面 hasLyricPreview/hasScrubber 那两个曲目级数据信号性质不同:是用户
+// 设置,设置一变会触发 NotchLyricsWindowController 重算几何(见该文件的六条订阅),
+// 所以 maxHeight 不必再像 hasScrubber 那样按"最坏情况"钉死——这组断言守的正是这条
+// 不对称:hasLyricPreviewPossible 能让 maxHeight 真的变小,trackInfoHeight 能让它真的变大。
+do {
+    typealias M = NotchExpandedMetrics
+
+    // trackInfoHeight 本身:0 = 四个开关全关,不占地方(⚠️ 封面 2026-09-01 并回歌词行过
+    // 一轮、后来又被要求重新加回头部自己一枚——现在**参与**这个函数的算术,固定贴文字块
+    // 左边,不是"并排/堆叠"两选一那种复杂度,见 trackInfoHeight 的⚠️)
+    expectEqual(M.trackInfoHeight(showsArtwork: false, showsTitle: false, showsArtist: false, showsAlbum: false), 0,
+                "曲目信息头部: 四个开关全关 = 0")
+    expectEqual(M.trackInfoHeight(showsArtwork: false, showsTitle: true, showsArtist: false, showsAlbum: false),
+                M.trackInfoTitleLineHeight,
+                "曲目信息头部: 只开歌名 = 歌名行高本身,没有多余间距")
+    expectEqual(M.trackInfoHeight(showsArtwork: true, showsTitle: false, showsArtist: false, showsAlbum: false),
+                M.trackInfoArtworkSide,
+                "曲目信息头部: 只开封面 = 封面边长本身")
+    // 三行文字都开:三档行高之和 + 两条行间距
+    let threeLines = M.trackInfoTitleLineHeight + M.trackInfoArtistLineHeight + M.trackInfoAlbumLineHeight
+        + 2 * M.trackInfoLineSpacing
+    expectEqual(M.trackInfoHeight(showsArtwork: false, showsTitle: true, showsArtist: true, showsAlbum: true),
+                threeLines, "曲目信息头部: 三行文字 = 三档行高之和 + 两条行间距")
+    // 单调:多开一行不能反而变矮
+    expectEqual(M.trackInfoHeight(showsArtwork: false, showsTitle: true, showsArtist: true, showsAlbum: false)
+                > M.trackInfoHeight(showsArtwork: false, showsTitle: true, showsArtist: false, showsAlbum: false),
+                true, "曲目信息头部: 多开一行文字必须变高")
+    // 封面固定贴文字块左边,取 max 不取和:封面(32)比三行文字矮时,加封面不改变总高度;
+    // 封面比文字高时,总高度等于封面高度,不是"封面+文字"叠加。
+    expectEqual(M.trackInfoHeight(showsArtwork: true, showsTitle: true, showsArtist: true, showsAlbum: true),
+                max(M.trackInfoArtworkSide, threeLines),
+                "曲目信息头部: 封面+三行文字 = 两者较大值(并排,不是堆叠)")
+    expectEqual(M.trackInfoHeight(showsArtwork: true, showsTitle: false, showsArtist: false, showsAlbum: false)
+                <= M.trackInfoHeight(showsArtwork: true, showsTitle: true, showsArtist: true, showsAlbum: true),
+                true, "曲目信息头部: 加文字不能让总高度比只有封面时矮")
+
+    // height(...) 把 trackInfoHeight 原样加一整块(含它自己的间距),0 = 完全不影响原有契约
+    expectEqual(M.height(hasLyricPreview: true, hasScrubber: true, trackInfoHeight: 0), 76,
+                "展开区高度: trackInfoHeight 传 0 必须跟原有契约逐字相等")
+    // ⚠️ 两份间距(2026-09-01 第二轮,用户报"标题首行贴到上面边"):一份贴头部上边(离
+    // topRow 的间距)、一份贴下边(离歌词行的间距),不是原来的一份。
+    expectEqual(M.height(hasLyricPreview: true, hasScrubber: true, trackInfoHeight: threeLines),
+                76 + threeLines + M.trackInfoSpacing * 2,
+                "展开区高度: 有头部时整块 + 上下各一份间距一次性加上")
+
+    // maxHeight 的两个新维度各自独立生效,且跟对应的 height(...) 严丝合缝(真正的不变量:
+    // 窗口按 max 开、内容按当前设置算,给定同一组设置,两者必须相等,否则要么裁按钮要么白留空)
+    expectEqual(M.maxHeight(hasLyricPreviewPossible: true, trackInfoHeight: 0), 76,
+                "岛展开区: 默认设置下 maxHeight 仍是 76")
+    expectEqual(M.maxHeight(hasLyricPreviewPossible: false, trackInfoHeight: 0),
+                M.height(hasLyricPreview: false, hasScrubber: true, trackInfoHeight: 0),
+                "岛展开区: 关掉「下一句预览」开关后,maxHeight 必须真的变矮,且等于此时的 height(...)")
+    expectEqual(M.maxHeight(hasLyricPreviewPossible: false, trackInfoHeight: 0), 59,
+                "岛展开区: 关掉「下一句预览」省下 17pt,跟没歌词时是同一个数(同一块内容)")
+    expectEqual(M.maxHeight(hasLyricPreviewPossible: true, trackInfoHeight: threeLines),
+                M.height(hasLyricPreview: true, hasScrubber: true, trackInfoHeight: threeLines),
+                "岛展开区: 开着「下一句预览」+ 曲目信息头部拉满时,maxHeight 必须等于此时的 height(...)")
+    // 单调性延伸到新维度:多一块内容(头部)不能反而让 max 变矮
+    expectEqual(M.maxHeight(trackInfoHeight: threeLines) > M.maxHeight(trackInfoHeight: 0), true,
+                "岛展开区: 开曲目信息头部必须让 maxHeight 变高,不能纹丝不动")
+}
+
+// ---- 展开区「播放控制键」用户开关(2026-09-01) ----
+//
+// 跟上面 hasLyricPreviewPossible 同一个性质:纯用户设置,不是曲目级数据信号,maxHeight
+// 不必按"最坏情况"钉死,关掉之后窗口真的能变矮。这组断言守:①默认(不传 hasControls)
+// 必须逐字维持改动前的既有契约,不能因为加了这个参数悄悄改变默认行为;②关掉之后正好
+// 省下 controlsBlock 这一整块,不多不少;③maxHeight 的新维度跟 height(...) 严丝合缝。
+do {
+    typealias M = NotchExpandedMetrics
+    // 默认参数(不传 hasControls)必须跟改动前逐字相等——这两条是上面第一组断言已经
+    // 覆盖过的数字,这里重复断言是为了明确"加新参数没有偷偷改默认值"这件事本身。
+    expectEqual(M.height(hasLyricPreview: true, hasScrubber: true), 76,
+                "播放控制键: 不传 hasControls 时必须维持改动前的默认值 76")
+    expectEqual(M.height(hasLyricPreview: false, hasScrubber: false), 35,
+                "播放控制键: 不传 hasControls 时两样都没有仍是 35(默认开)")
+    // 关掉播放控制键:整块(含它的 10pt 底边距)不占地方
+    expectEqual(M.height(hasLyricPreview: false, hasScrubber: false, hasControls: false), 0,
+                "播放控制键: 三样(预览/进度条/控制键)都关 = 0,不留任何空白")
+    expectEqual(M.height(hasLyricPreview: true, hasScrubber: true, hasControls: false),
+                76 - M.controlsBlock,
+                "播放控制键: 关掉之后正好省下 controlsBlock 这一整块,不多不少")
+    // 单调:关掉控制键不能反而变高
+    expectEqual(M.height(hasLyricPreview: true, hasScrubber: true, hasControls: false)
+                < M.height(hasLyricPreview: true, hasScrubber: true, hasControls: true), true,
+                "播放控制键: 关掉之后总高度必须变矮")
+    // maxHeight 的新维度:能让窗口真的变矮,且跟对应的 height(...) 严丝合缝
+    expectEqual(M.maxHeight(hasControlsPossible: false),
+                M.height(hasLyricPreview: true, hasScrubber: true, hasControls: false),
+                "播放控制键: 关掉后 maxHeight 必须真的变矮,且等于此时的 height(...)")
+    expectEqual(M.maxHeight(hasControlsPossible: false) < M.maxHeight(hasControlsPossible: true), true,
+                "播放控制键: maxHeight 关掉控制键必须比开着时矮")
 }
 
 // ---- 「第 N 次听」的作废判据:按最新一条收听的时刻,而不是页内出现次数(2026-08-21) ----
@@ -2036,6 +2152,29 @@ do {
     // bundle id 不能撞车:复制粘贴加播放器时最容易犯,而撞车的表现是"选了 A 却跟着 B 走"。
     let bundles = PlaybackPlayer.allCases.filter { $0 != .auto }.map(\.bundleIdentifier)
     expectEqual(Set(bundles).count, bundles.count, "播放器契约: bundle id 互不重复")
+}
+
+// ---- 播放器多选(2026-09-01):Set<PlaybackPlayer>.soleExplicitPlayer ----
+//
+// 这是"排除自动识别之后,选中集合里能不能唯一确定一个具体播放器"的判据——
+// PlaybackPlayerPreference.soleExplicitPlayer(读共享文件)、SettingsView 的
+// companionCard("打开 Lyrimuse 时启动 X")、LyricsWindowView 的 idlePlayer、
+// AppDelegate 的"打开 Lyrimuse 时唤起播放器"都靠它决定"有没有一个唯一答案可以显示/
+// 动作"。只测这份不碰磁盘的纯逻辑,不测 PlaybackPlayerPreference.selected 本身
+// (那个读的是真实共享文件,写测试数据进去会干扰这台机器上真的在跑的 collector/App)。
+do {
+    expectEqual(Set<PlaybackPlayer>([.auto]).soleExplicitPlayer, nil,
+                "多选.soleExplicitPlayer: 纯自动识别没有唯一具体播放器")
+    expectEqual(Set<PlaybackPlayer>([.appleMusic]).soleExplicitPlayer, .appleMusic,
+                "多选.soleExplicitPlayer: 单选一个具体播放器,原样返回")
+    expectEqual(Set<PlaybackPlayer>([.appleMusic, .auto]).soleExplicitPlayer, .appleMusic,
+                "多选.soleExplicitPlayer: 具体播放器+自动识别一起选,排除 auto 后仍唯一")
+    expectEqual(Set<PlaybackPlayer>([.appleMusic, .qqMusic]).soleExplicitPlayer, nil,
+                "多选.soleExplicitPlayer: 选了两个具体播放器,没有唯一答案")
+    expectEqual(Set<PlaybackPlayer>([.appleMusic, .qqMusic, .auto]).soleExplicitPlayer, nil,
+                "多选.soleExplicitPlayer: 两个具体播放器+auto,排除 auto 后仍不唯一")
+    expectEqual(Set<PlaybackPlayer>([]).soleExplicitPlayer, nil,
+                "多选.soleExplicitPlayer: 空集不该崩、也没有唯一答案(理论不该发生,但函数要安全)")
 }
 
 // ---- EnrichCacheKeys: 缓存 key 归一化,必须跟 collector 逐字节一致(2026-08-14) ----
@@ -6037,6 +6176,100 @@ expectEqual(LyricsSurface.notch.appearanceSectionRawValue, "notch", "形态: 灵
 expectEqual(LyricsSurface(rawValue: "menuBar"), .menuBar, "形态: rawValue 往回认得出来")
 expectEqual(LyricsSurface(rawValue: "other"), nil, "形态: 「其它」段不属于任何一个形态")
 
+// ---- 「手动选定歌词后锁定」开关的追溯判据(ManualPickLock) ----
+//
+// 2026-09-01 加。这个开关打开时要把"之前手动选过的歌"一并锁成 manual_lyrics,判对判错的
+// 后果不对称:判宽了会锁住一份用户**从没选过**的内容(而且锁上之后所有自动改进都不再碰
+// 它,用户很难发现),判窄了只是开关看起来没生效。整个功能的正确性就压在 shouldFlip 上,
+// 所以它被特意从 EnrichCacheStore(App target,selftest 链不到)挪进 LyrimuseCore。
+do {
+    // A / B 是**同一份词的两种排版**:B 换了全部时间戳、改成 CRLF、加了元数据标签和行尾
+    // 空白、把两句挂成多时间戳、插了空行。C 换了词。
+    let lyricsA = "[ti:测试]\n[00:01.00]第一句\n[00:05.00]第二句\n"
+    let lyricsB = "[ar:某人]\r\n[offset:120]\r\n[00:02.34]第一句  \r\n\r\n[00:09.99][01:20.00]第二句\t\r\n"
+    let lyricsC = "[00:01.00]第一句\n[00:05.00]完全不同的第二句\n"
+    let sha = ManualPickLock.fingerprint(lyrics: lyricsA)
+
+    // ---- 跨语言金标准:Go 侧 manualPickFingerprint 必须算出**一模一样**的值 ----
+    //
+    // collector 的存量迁移(manualpickmigrate.go)负责把老用户的 lyrics_source_choice 转成
+    // manual_pick_sha,而拿这个指纹去比对的是这边的 shouldFlip。两边漂开的后果是**静默**的:
+    // 老用户打开开关一首都锁不上,缓存里的指纹看上去还完全正常。Go 侧
+    // TestManualPickFingerprintMatchesSwift 钉着同样的输入和期望值。值由独立的第三方实现
+    // (Python hashlib)算出。
+    expectEqual(sha, "13ec24ce7207", "手动选定锁: 指纹与 Go 侧金标准一致")
+
+    // ⚠️ 这条是 2026-09-01 那次改版的**核心不变量**。第一版对 lyrics+YRC 的原始字节取指纹,
+    // 而 collector 启动时的规范化(migrateYRCWhitespaceTokens 重排逐字词条、
+    // migrateLyricTimelines 重挂行时间轴)会在采纳后**几秒内**改写内容 —— 指纹当场失配,
+    // 开关一首都锁不上,而且完全静默。实测抓到的那条:阿肆《浮光掠影》,lyrics 一字节没变、
+    // YRC 被重排,留痕 3c4fe3efb6e8 vs 当前 6625fc9d1d36。
+    // 根因是把问题定义错了:要回答的是"自动路径有没有把用户选的那份**换掉**",不是"字节有
+    // 没有变" —— 规范化不是替换。
+    expectEqual(ManualPickLock.fingerprint(lyrics: lyricsB), sha,
+                "手动选定锁: 重排时间轴/换行/空白/元数据都不改变指纹(否则 collector 启动时的规范化会让开关静默失效)")
+    expectEqual(ManualPickLock.fingerprint(lyrics: lyricsC) == sha, false,
+                "手动选定锁: 词变了要判成『已被换掉』")
+    expectEqual(ManualPickLock.canonicalLyrics(lyricsA), "第一句\n第二句",
+                "手动选定锁: 归一化只留词")
+    expectEqual(ManualPickLock.fingerprint(lyrics: "[ti:只有元数据]\n\n"), "",
+                "手动选定锁: 归一化后没有词 = 没有留痕(空串,不是空串的哈希)")
+    expectEqual(ManualPickLock.fingerprint(lyrics: ""), "", "手动选定锁: 空正文给空串")
+    expectEqual(sha.count, 12, "手动选定锁: 指纹取 12 位十六进制")
+
+    // 正常路径:用户选过、内容还是那份、当前没锁 → 开关打开时要锁上。
+    expectEqual(ManualPickLock.shouldFlip(sha: sha, lyrics: lyricsA,
+                                          isLocked: false, locking: true), true,
+                "手动选定锁: 选过+内容没变+没锁 → 打开开关时锁上")
+    // 排版被规范化过的同一份词,同样要能锁上 —— 这才是真机上的常态。
+    expectEqual(ManualPickLock.shouldFlip(sha: sha, lyrics: lyricsB,
+                                          isLocked: false, locking: true), true,
+                "手动选定锁: collector 规范化过排版之后仍然锁得上")
+    // 已经是目标状态的不重复计数(否则"已锁定 N 首"会虚高)。
+    expectEqual(ManualPickLock.shouldFlip(sha: sha, lyrics: lyricsA,
+                                          isLocked: true, locking: true), false,
+                "手动选定锁: 已经锁着的不再计进本次改动")
+    expectEqual(ManualPickLock.shouldFlip(sha: sha, lyrics: lyricsA,
+                                          isLocked: true, locking: false), true,
+                "手动选定锁: 关掉开关时,因它而锁的要能解开")
+
+    // ⚠️ 内容被真正换掉(词变了)时**必须不锁**,否则锁的是一份用户从没选过的内容。
+    expectEqual(ManualPickLock.shouldFlip(sha: sha, lyrics: lyricsC,
+                                          isLocked: false, locking: true), false,
+                "手动选定锁: 内容已被自动换掉 → 绝不锁(锁的会是用户没选过的东西)")
+    // 没留痕的歌一律不碰 —— 手改正文产生的 manual_lyrics 就落在这一支,关开关时不该被解开。
+    expectEqual(ManualPickLock.shouldFlip(sha: nil, lyrics: lyricsA,
+                                          isLocked: true, locking: false), false,
+                "手动选定锁: 没有 manual_pick_sha(如手改正文锁的)→ 关开关时不解它")
+    expectEqual(ManualPickLock.shouldFlip(sha: "", lyrics: lyricsA,
+                                          isLocked: true, locking: false), false,
+                "手动选定锁: 空指纹跟没有指纹同等对待")
+
+    // ---- 三态分类:界面靠它把"一首都没动"说成人话 ----
+    //
+    // 2026-09-01 用户反馈「交互有点差」之后加的。三种"0 首"对用户是完全不同的三件事,
+    // 压成一个 Bool 再静默返回,就是那次反馈里最主要的一条。
+    expectEqual(ManualPickLock.state(sha: nil, lyrics: lyricsA), .neverPicked,
+                "手动选定锁三态: 没留痕 = 从没手动选过")
+    expectEqual(ManualPickLock.state(sha: "", lyrics: lyricsA), .neverPicked,
+                "手动选定锁三态: 空留痕同等对待")
+    expectEqual(ManualPickLock.state(sha: sha, lyrics: lyricsB), .original,
+                "手动选定锁三态: 只是排版被规范化 = 还是当初选的那一份")
+    expectEqual(ManualPickLock.state(sha: sha, lyrics: lyricsC), .replaced,
+                "手动选定锁三态: 词变了 = 已被换掉(要跟「从没选过」区分开说)")
+    // shouldFlip 必须就是"三态里的 original + 状态相反",不能两处各判各的。
+    for locked in [true, false] {
+        for locking in [true, false] {
+            expectEqual(
+                ManualPickLock.shouldFlip(sha: sha, lyrics: lyricsA,
+                                          isLocked: locked, locking: locking),
+                ManualPickLock.state(sha: sha, lyrics: lyricsA) == .original
+                    && locked != locking,
+                "手动选定锁: shouldFlip 与三态判定一致(locked=\(locked) locking=\(locking))")
+        }
+    }
+}
+
 // ---- 本地化:Localizable.xcstrings 是唯一真源,生成的 .strings 必须与它逐键逐值一致 ----
 //
 // 2026-08-17 迁移到 String Catalog(吸收自 boring.notch 审阅 B9):词条只在
@@ -6291,6 +6524,32 @@ do {
                 "内容匹配: YRC/LRC 时间戳漂移超过容差时,按内容而不是时间找到译文")
     expectEqual(engineDrift.allLines(idPrefix: "t").first?.line.romanization, "piao yi hang de yi wen",
                 "内容匹配: 罗马音同理,按内容匹配不受时间漂移影响")
+
+    // ③.6b 内容匹配要对"空白差异"免疫,不能只对逐字一致才生效(2026-09-01,真实坐实:
+    // 陈奕迅《冲口而出 (Live)》"若你 想欣赏 有没有 金曲奖"这一行——真实缓存里主 LRC 用
+    // NBSP(U+00A0)标换气停顿,YRC 逐字数据在同样的词组边界嵌的是普通空格,两边可读内容
+    // 完全一样、只是空白字符种类不同;旧版 contentMatchKey 只用 trimmingCharacters 削两端,
+    // 削不掉中间这几个空白,内容匹配因此 miss。更巧的是这一行的 YRC 起始时间比它在主 LRC
+    // 里的时间戳晚 706ms——比 nearestText 的 700ms 容差多 6ms,时间兜底也刚好卡在门外,
+    // 两条路同时失手,这一行才彻底没有罗马音(不是缺失,是两个近似匹配各差一点点)。这里用
+    // 等价的最小复现还原这两个条件:主 LRC 行内嵌 NBSP;YRC 把同一句词标在漂移 706ms 之外
+    // 的时间,词组边界改用普通空格。
+    let engineNbspVsSpace = LyricsSyncEngine()
+    engineNbspVsSpace.load(
+        lyrics: "[00:01.000]若你\u{A0}想欣赏\u{A0}有没有\u{A0}金曲奖",
+        lyricsTr: "",
+        lyricsRoma: "[00:01.000]joek6 nei5 soeng2 jan1 soeng2 jau5 mut6 jau5 gam1 kuk1 zoeng2",
+        lyricsYRC: "[1706,1100](1706,100,0)若(1806,100,0)你 (1906,100,0)想(2006,100,0)欣" +
+            "(2106,100,0)赏 (2206,100,0)有(2306,100,0)没(2406,100,0)有 (2506,100,0)金" +
+            "(2606,100,0)曲(2706,100,0)奖",
+        preferWordLevel: true)
+    let nbspLine = engineNbspVsSpace.allLines(idPrefix: "t").first?.line
+    expectEqual(nbspLine?.romanization,
+                "joek6 nei5 soeng2 jan1 soeng2 jau5 mut6 jau5 gam1 kuk1 zoeng2",
+                "内容匹配: 主LRC用NBSP、YRC词组边界用普通空格时,内容匹配应无视空白差异命中罗马音")
+    expectEqual(nbspLine?.wordGroups?.count, 11,
+                "内容匹配: 命中之后逐字对齐应正常生效(11字11音节严格一一对应,不退回整行)")
+
     // 反例:内容对不上(比如逐字重建出来的文本跟整行 LRC 字面不一致)时,内容匹配字典
     // 查不到,老老实实退回时间最近邻——这里查询时间(3000ms)漂移量超过容差,应仍是 nil,
     // 不能因为加了内容匹配就意外放宽了容差本身的语义。
@@ -6475,6 +6734,58 @@ do {
                                   isAccepted: { TrustedPlayers.isAccepted($0, trusted: [:]) }),
                     false, "发现新播放器: 内置播放器不提议(\(player.rawValue))")
     }
+    // ---- Safari 的媒体代理进程(2026-09-01)----
+    // 用户实测撞上的断层:「网页播放器」卡里配对了 Safari(配对会把 com.apple.Safari 写进
+    // 信任列表),可真播起来 MediaRemote 上报的是 com.apple.WebKit.GPU,不在名单里 →
+    // 整条播放不被采纳,同时"发现未知播放器"卡还跳出来要用户再信任一个看不懂的 bundle id。
+    do {
+        let webkit = "com.apple.WebKit.GPU"
+        let safari = "com.apple.Safari"
+        expectEqual(TrustedPlayers.isAccepted(webkit, trusted: [safari: "Safari"]), true,
+                    "Safari 代理: 信任了 Safari,它的 WebKit 媒体进程也该被采纳")
+        expectEqual(TrustedPlayers.isAccepted(webkit, trusted: [:]), false,
+                    "Safari 代理: 没信任 Safari 时不能凭空放行(别名不是白名单)")
+        expectEqual(TrustedPlayers.isAccepted(webkit, trusted: ["com.google.Chrome": "Chrome"]),
+                    false, "Safari 代理: 信任别的浏览器不能顺带放行 WebKit 进程")
+        // 别名是单向的:信任代理进程不等于信任 Safari 本身
+        expectEqual(TrustedPlayers.isAccepted(safari, trusted: [webkit: ""]), false,
+                    "Safari 代理: 别名单向 —— 信任了代理进程不代表 Safari 本身被信任")
+        expectEqual(TrustedPlayers.mediaProxyOwner(of: webkit), safari,
+                    "Safari 代理: 宿主反查")
+        expectEqual(TrustedPlayers.mediaProxyOwner(of: "com.google.Chrome"), nil,
+                    "Safari 代理: Chromium 系报的是自己的 bundle id,不该在这张表里")
+        // **跨层不变量**:别名一旦生效,"发现未知播放器"那张卡必须同时不再提议它 ——
+        // 那张卡的判据就是 !isAccepted,两者绑在一起,将来任一边单独改都会红。
+        expectEqual(A.shouldOffer(bundleID: webkit, artist: "Musiq Soulchild",
+                                  album: "Juslisen", observedAt: now, isAutoDetect: true,
+                                  now: now,
+                                  isAccepted: { TrustedPlayers.isAccepted($0, trusted: [safari: "Safari"]) }),
+                    false, "Safari 代理: 信任 Safari 之后不该再提议信任 WebKit 进程")
+        expectEqual(A.shouldOffer(bundleID: webkit, artist: "Musiq Soulchild",
+                                  album: "Juslisen", observedAt: now, isAutoDetect: true,
+                                  now: now,
+                                  isAccepted: { TrustedPlayers.isAccepted($0, trusted: [:]) }),
+                    true, "Safari 代理: 没信任 Safari 时仍然该提议(兜底通路不能被别名吃掉)")
+
+        // ---- TrustedPlayers.isTrusted(2026-09-01,播放器多选后新增)----
+        // 只回答"信任"这一半(不含五个内置播放器),供"选中了具体播放器但没勾自动识别"
+        // 这条路径用(MediaControlClient.fetchMultiSelectedSnapshot/artworkBundleIDMatches、
+        // 以及 isAccepted 内部现在也委托给它,不重复实现)——最典型场景是「网页播放器」卡
+        // 配对的浏览器,配对这个动作跟"选没选自动识别"是两件独立的事。
+        expectEqual(TrustedPlayers.isTrusted("com.google.Chrome", trusted: ["com.google.Chrome": "Chrome"]),
+                    true, "isTrusted: 信任列表里的 bundle id 该被认")
+        expectEqual(TrustedPlayers.isTrusted("com.apple.Safari", trusted: [:]),
+                    false, "isTrusted: 没信任过的 bundle id 不该被认")
+        expectEqual(TrustedPlayers.isTrusted(PlaybackPlayer.qqMusic.bundleIdentifier, trusted: [:]),
+                    false, "isTrusted: 只回答信任这一半,内置播放器不该被它认下来(那是 isAccepted 的职责)")
+        expectEqual(TrustedPlayers.isTrusted(webkit, trusted: [safari: "Safari"]),
+                    true, "isTrusted: 信任 Safari 之后,它的媒体代理进程也该经别名表被认")
+        expectEqual(TrustedPlayers.isTrusted(nil, trusted: [safari: "Safari"]),
+                    false, "isTrusted: nil bundle id 不该崩、也不该被认")
+        expectEqual(TrustedPlayers.isTrusted("", trusted: [safari: "Safari"]),
+                    false, "isTrusted: 空字符串 bundle id 不该被认")
+    }
+
     // **跨层不变量**:凡是我们提议信任的,用户点下去一定真的生效 ——
     // 把判据和 TrustedPlayers.notASong 永久绑在一起,将来任何一边单独改都会红
     expectEqual(TrustedPlayers.notASong(bundleID: "com.google.Chrome", artist: "华晨宇",
@@ -7565,6 +7876,17 @@ do {
 do {
     expectEqual(BrowserPositionProbe.supportedPlatforms.contains { $0.id == "youtubeMusic" }, true,
                 "浏览器歌词同步: YouTube Music 在受支持平台列表里")
+    expectEqual(BrowserPositionProbe.supportedPlatforms.contains { $0.id == "spotifyWeb" }, true,
+                "浏览器歌词同步: Spotify 网页版在受支持平台列表里")
+    // ⚠️ **每个摆出来的平台都必须真有一条站点规则**,反之亦然。对不上不会编译报错,只表现成
+    // "卡片在、配对得上、却永远不探测"。
+    expectEqual(BrowserPositionProbe.platformIDsWithSiteRules,
+                Set(BrowserPositionProbe.supportedPlatforms.map(\.id)),
+                "浏览器歌词同步: 受支持平台与站点规则一一对应")
+    // ⚠️ 平台 id 必须唯一:`platformBrowserPairs` 用它当键,撞了就是两个平台共用一份配对。
+    expectEqual(Set(BrowserPositionProbe.supportedPlatforms.map(\.id)).count,
+                BrowserPositionProbe.supportedPlatforms.count,
+                "浏览器歌词同步: 平台 id 不重复")
     let probe = BrowserPositionProbe.shared
     probe.trackChanged()
     probe.platformBrowserPairs = [:] // 确保没有任何配对
@@ -7580,6 +7902,26 @@ do {
                 "浏览器歌词同步: 没配对任何平台时 kickIfNeeded 不应该发起探测")
     probe.trackChanged()
     probe.platformBrowserPairs = [:]
+}
+
+// ---- 「默认展示名单」≠「支持名单」(2026-09-01) ----
+// 用户拍板把 Arc 从「+」菜单的默认候选里拿掉,但**代码里对它的适配全部保留** —— 用户自己从
+// 「应用程序」里挑中它时要走完整的既有适配。这几条断言就是钉住这个区分:
+// 光看 `knownBrowserBundleIDs` 里没有 Arc 就去删 Arc 的适配,会当场红。
+do {
+    let arc = "company.thebrowser.Browser"
+    expectEqual(BrowserAutomationPermission.knownBrowserBundleIDs.contains(arc), false,
+                "浏览器默认名单: Arc 不该出现在「+」菜单的默认候选里")
+    expectEqual(BrowserAutomationPermission.family(forBundleID: arc), .chromium,
+                "浏览器适配: Arc 的引擎族判定必须原样保留(不在默认名单 ≠ 不支持)")
+    // Chrome / Edge / Safari 三个仍然默认展示 —— 免得"拿掉 Arc"被顺手扩大成"清空名单"。
+    for id in ["com.google.Chrome", "com.microsoft.edgemac", "com.apple.Safari"] {
+        expectEqual(BrowserAutomationPermission.knownBrowserBundleIDs.contains(id), true,
+                    "浏览器默认名单: \(id) 应该仍在默认候选里")
+    }
+    // Firefox 这类不受支持的内核照旧判不出来 —— 反向锚点,证明上面那条不是"什么都返回 chromium"。
+    expectEqual(BrowserAutomationPermission.family(forBundleID: "org.mozilla.firefox"), nil,
+                "浏览器适配: 不受支持的内核仍应判不出引擎族")
 }
 
 if failures == 0 {

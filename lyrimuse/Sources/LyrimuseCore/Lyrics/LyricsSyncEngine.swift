@@ -145,6 +145,21 @@ public final class LyricsSyncEngine {
     private var trTextByPlainText: [String: String] = [:]
     private var romaTextByPlainText: [String: String] = [:]
 
+    /// 内容匹配 key:去掉**全部**空白(不止两端),含 NBSP(U+00A0)等 Unicode 空白变体——
+    /// 不是只用 `.trimmingCharacters(in: .whitespaces)`。2026-09-01 用户报陈奕迅《冲口而出
+    /// (Live)》"若你想欣赏有没有金曲奖"这一行粤拼整行消失,查到真实缓存数据坐实:这份
+    /// live 歌词的主 LRC 用 NBSP 标记换气停顿("若你\u{A0}想欣赏\u{A0}有没有\u{A0}金曲奖"),
+    /// 而 YRC 逐字数据在词组边界嵌的是普通空格("若你 想欣赏 有没有 金曲奖")——两边字面
+    /// 内容完全一样,只是"字词之间垫了哪种空白"不同,`trimmingCharacters` 只削两端、削不掉
+    /// 中间这几个,内容匹配因此miss。更巧的是这一行的 YRC 起始时间跟它在主 LRC 里的时间戳
+    /// 差了 706ms,比下面 nearestText 的 700ms 容差多 6ms——本该兜底的时间最近邻也刚好
+    /// 卡在门外,两条路同时失手才让这一行彻底没有罗马音(不是缺失,是两个近似匹配都各差
+    /// 一点点)。归一化时把空白整段拿掉而不是换成统一分隔符:这里比较的是"是不是同一句唱词
+    /// 的内容",字词之间要不要留白纯粹是各家源的排版习惯,不是内容的一部分。
+    private static func contentMatchKey(_ text: String) -> String {
+        text.filter { !$0.isWhitespace }
+    }
+
     // 单曲歌词时间轴微调——毫秒,由 LyricsOffsetStore 按当前曲目 key 灌进来(见
     // LocalPlaybackSource 的 reloadCurrentLyrics())。正数=歌词整体提前
     // (显示得比原始时间戳更早),负数=延后,0=不校正。只在这里(匹配的最后一步)统一加
@@ -1168,13 +1183,13 @@ public final class LyricsSyncEngine {
             let romaByTime = Dictionary(romaLines.map { ($0.timeMs, $0.text) }, uniquingKeysWith: { _, new in new })
             trTextByPlainText = Dictionary(
                 filteredBase.compactMap { line -> (String, String)? in
-                    let key = line.text.trimmingCharacters(in: .whitespaces)
+                    let key = Self.contentMatchKey(line.text)
                     guard !key.isEmpty, let tr = trByTime[line.timeMs], !tr.isEmpty else { return nil }
                     return (key, tr)
                 }, uniquingKeysWith: { _, new in new })
             romaTextByPlainText = Dictionary(
                 filteredBase.compactMap { line -> (String, String)? in
-                    let key = line.text.trimmingCharacters(in: .whitespaces)
+                    let key = Self.contentMatchKey(line.text)
                     guard !key.isEmpty, let roma = romaByTime[line.timeMs], !roma.isEmpty else { return nil }
                     return (key, roma)
                 }, uniquingKeysWith: { _, new in new })
@@ -1291,7 +1306,7 @@ public final class LyricsSyncEngine {
     /// 最近邻——两条路都保留,内容匹配只是优先级更高的一条更准的路径。
     private func translationText(timeMs: Int, plainText: String) -> String? {
         guard !Self.isBareSpeakerTag(plainText) else { return nil }
-        if let byContent = trTextByPlainText[plainText.trimmingCharacters(in: .whitespaces)] {
+        if let byContent = trTextByPlainText[Self.contentMatchKey(plainText)] {
             return byContent
         }
         return nearestText(trLines, timeMs)
@@ -1354,7 +1369,7 @@ public final class LyricsSyncEngine {
         guard !Self.isBareSpeakerTag(plainText) else { return nil }
         // 内容匹配优先,理由跟 translationText 那段一致(同一个 trTextByPlainText/
         // romaTextByPlainText 的建法,对称处理)。
-        if let byContent = romaTextByPlainText[plainText.trimmingCharacters(in: .whitespaces)] {
+        if let byContent = romaTextByPlainText[Self.contentMatchKey(plainText)] {
             return byContent
         }
         if let fromSource = nearestText(romaLines, timeMs) { return fromSource }

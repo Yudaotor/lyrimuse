@@ -1,7 +1,18 @@
 import AppKit
 import Foundation
 
-/// 浏览器"允许来自 Apple 事件的 JavaScript"开关的检测与一键开启(2026-08-31)。
+/// 浏览器"允许来自 Apple 事件的 JavaScript"开关的**检测**(2026-08-31;2026-09-01 去掉了
+/// 一键开启)。
+///
+/// ⚠️ **只检测,不代改**。曾经有过一条"一键开启":读浏览器 profile 里的 `Preferences`(JSON)、
+/// 备份、改一个 key、写回。它在这台机器上**从来没成功过** —— 别的 App 读
+/// `~/Library/Application Support/<浏览器>/` 需要「完全磁盘访问权限」,没给就直接
+/// `NSFileReadNoPermissionError`,第一步就断。而且那个失败**没有系统弹窗、也不进 tccd 的
+/// 拒绝日志**,在终端里手动复刻同一段代码却能跑通(终端通常已有该权限),排查时极具误导性。
+///
+/// 2026-09-01 用户拍板整条移除、统一让用户自己去浏览器菜单里开:为一个布尔开关要求完全
+/// 磁盘访问权限不划算,而且这个 App 是 ad-hoc 签名、**每次构建 cdhash 都变,TCC 授权会被
+/// 下一次构建作废** —— 就算给了权限也留不住。别再把这条路加回来。
 ///
 /// 见 `BrowserPositionProbe` 头注:这个开关是 `execute … javascript`/`do JavaScript` 探针
 /// 能不能工作的前提,跟 macOS 系统层的 Automation/TCC 授权(`MusicAutomationPermission` 管
@@ -45,12 +56,23 @@ public enum BrowserAutomationPermission {
     private static let safariPrefKey = "AllowJavaScriptFromAppleEvents" as CFString
     private static let chromiumPrefKey = "allow_javascript_apple_events"
 
-    /// 所有认识的浏览器 bundle id,固定展示顺序(不是字典的无序 keys)——设置页"添加浏览器"
-    /// 菜单按这份列表过滤"这台机器上装了哪些"再展示,不再要求"必须先被信任过"(2026-08-31
-    /// 用户要求:选一个没信任过的已安装浏览器,应该一步自动信任+配对,而不是先逼用户去
-    /// 那个浏览器里放首歌被动等检测)。
+    /// 设置页「+」菜单里**默认列出来**的那几个浏览器,固定展示顺序(不是字典的无序 keys)。
+    /// 按这份列表过滤"这台机器上装了哪些"再展示,不要求"必须先被信任过"(2026-08-31 用户
+    /// 要求:选一个没信任过的已安装浏览器,应该一步自动信任+配对,而不是先逼用户去那个
+    /// 浏览器里放首歌被动等检测)。
+    ///
+    /// ⚠️ **这是一份"默认展示"名单,不是"支持"名单 —— 两件事别混**(2026-09-01)。这里没有
+    /// 的浏览器照样驱得动:能不能驱动由 `family(forBundleID:)` 说了算,而它认的是
+    /// `chromiumPrefsPaths` / Safari / 用户手动加过的那批,跟这份展示名单是两套东西。
+    ///
+    /// ⚠️ **Arc 就是这么被拿掉的**(2026-09-01 用户拍板:「arc 不要留着,但是我们代码里对他的
+    /// 适配都留着,只是不在这里显示,如果用户自己选了 arc,那就依旧按我们适配好的来走」)。
+    /// Arc 在 `chromiumPrefsPaths` 里**原样留着**,`family(...)` 照样返回 `.chromium`、
+    /// 那道 JS 开关的状态照样读得出来、`browserManualEnableHint` 里那条 Arc 专属菜单路径
+    /// 也原样留着 —— 用户从「从应用程序中选择…」挑中它时,走的是**完整的既有适配**,一步
+    /// 都不降级。少的只是"默认摆在菜单里"这一条。**别因为它不在这份名单里就去删 Arc 的
+    /// 适配代码。**
     public static let knownBrowserBundleIDs: [String] = [
-        "company.thebrowser.Browser", // Arc
         "com.google.Chrome",
         "com.microsoft.edgemac", // Edge
         safariBundleID,
@@ -120,6 +142,33 @@ public enum BrowserAutomationPermission {
         return nil
     }
 
+    /// **这个 bundle id 到底驱不驱得动** —— `family(...)` 的加强版:登记表里查不到时,
+    /// 再去这个 App 自己的 bundle 里现场读一次脚本定义(`detectedFamily`)。
+    ///
+    /// ⚠️ 为什么需要它(2026-09-01,用户原话:「已经被信任了,就应该出现在这个列表里面」):
+    /// 设置页「+」菜单现在也把**已信任的播放器**当候选来源,而信任列表里只有 bundle id 和
+    /// 显示名 —— 那些"用户在'发现未知播放器'卡里点了信任"的浏览器从来没被登记过引擎族,
+    /// `family(...)` 对它们返回 nil,不现场判一次就永远进不了候选。
+    ///
+    /// ⚠️ **判定结果(含 nil)进内存缓存**:这条路要读别人 bundle 的 Info.plist 和 sdef 文件,
+    /// 而调用点是 SwiftUI 的 body —— 每次重绘、每次回到前台都会跑一遍。缓存活到进程结束,
+    /// 用户中途换装了同 bundle id 的另一个版本要重启才认,这个代价可以接受。
+    ///
+    /// ⚠️ **只准主线程调**(`@MainActor`):缓存是个裸 static 字典,而 `family(...)` 会被
+    /// `BrowserPositionProbe` 在后台线程读。两者不共享这份字典,加上这条隔离才说得清。
+    @MainActor
+    public static func resolvedFamily(forBundleID bundleID: String) -> Family? {
+        if let known = family(forBundleID: bundleID) { return known }
+        if let cached = detectedFamilyCache[bundleID] { return cached }
+        let resolved = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID)
+            .flatMap { detectedFamily(forAppAt: $0) }
+        detectedFamilyCache[bundleID] = resolved
+        return resolved
+    }
+
+    @MainActor
+    private static var detectedFamilyCache: [String: Family?] = [:]
+
     /// 这个浏览器有没有真的装在这台机器上——UI 层用它决定要不要展示这一行,免得对着
     /// 一个没装的 App 空谈"检测/开启"。
     public static func isInstalled(bundleID: String) -> Bool {
@@ -154,62 +203,17 @@ public enum BrowserAutomationPermission {
         }
     }
 
-    public enum EnableResult: Equatable {
-        case alreadyEnabled
-        case enabled
-        /// Chromium 系专属:浏览器正在跑,必须先完全退出才能安全改(见类头注——运行中改
-        /// 文件会被浏览器自己退出时的写回覆盖掉,等于白改)。
-        case needsQuit
-        case unsupported
-        case failed
-    }
-
-    /// 尝试一键开启。Chromium 系会先备份原文件、只改这一个 key、写回后立即读回校验
-    /// (校验失败一律报 `.failed`,不自欺欺人地报成功)。
-    public static func enable(bundleID: String) -> EnableResult {
-        guard let family = family(forBundleID: bundleID) else { return .unsupported }
-        if status(forBundleID: bundleID) == .enabled { return .alreadyEnabled }
-        switch family {
-        case .safari:
-            CFPreferencesSetAppValue(safariPrefKey, kCFBooleanTrue, safariBundleID as CFString)
-            guard CFPreferencesAppSynchronize(safariBundleID as CFString) else { return .failed }
-            return status(forBundleID: bundleID) == .enabled ? .enabled : .failed
-        case .chromium:
-            if isRunning(bundleID: bundleID) { return .needsQuit }
-            return enableChromium(bundleID: bundleID)
-        }
-    }
-
+    /// 读那个 Chromium 浏览器 profile 里的 `Preferences`(JSON)。
+    ///
+    /// ⚠️ 读不到就返回 nil,`status` 据此报 `.unknown`(不是 `.disabled`)。读不到最常见的原因
+    /// 不是文件坏了,而是**别的 App 读 `~/Library/Application Support/<浏览器>/` 需要「完全
+    /// 磁盘访问权限」** —— 这个 App 默认没有,所以 Chromium 系的开关状态通常就是"查不到"。
+    /// 那不是故障,UI 上如实说即可(见 SettingsView.browserJSSwitchCaption)。
     private static func readChromiumPrefs(bundleID: String) -> [String: Any]? {
         guard let path = chromiumPrefsPaths[bundleID],
               let data = FileManager.default.contents(atPath: path),
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
         else { return nil }
         return json
-    }
-
-    private static func enableChromium(bundleID: String) -> EnableResult {
-        guard let path = chromiumPrefsPaths[bundleID] else { return .unsupported }
-        let url = URL(fileURLWithPath: path)
-        guard let data = try? Data(contentsOf: url),
-              var json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
-        else { return .failed }
-
-        // 改之前先备份——这是别人(浏览器)的完整配置文件,改坏了用户自己修不回来。
-        // 文件名带 UUID 后缀,不会跟已有备份互相覆盖,也不会被下次开启操作清掉。
-        let backupURL = url.deletingLastPathComponent()
-            .appendingPathComponent("\(url.lastPathComponent).lyrimuse-backup-\(UUID().uuidString.prefix(8))")
-        try? data.write(to: backupURL)
-
-        var browserDict = json["browser"] as? [String: Any] ?? [:]
-        browserDict[chromiumPrefKey] = true
-        json["browser"] = browserDict
-
-        guard let newData = try? JSONSerialization.data(withJSONObject: json, options: [.prettyPrinted]) else {
-            return .failed
-        }
-        guard (try? newData.write(to: url, options: .atomic)) != nil else { return .failed }
-        // 写完不能只信"没抛异常"——重新读一次校验这个 key 是不是真的落地了。
-        return status(forBundleID: bundleID) == .enabled ? .enabled : .failed
     }
 }

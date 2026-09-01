@@ -49,6 +49,9 @@ enum ConfigPortability {
     /// - `hasShownOverlayDragHint`:"长按才能拖动"这条手势提示放没放过。
     ///   LyricsOverlayWindowController 里的原话就是"且**这台机器**从没显示过一次时"——
     ///   它按机器计数是设计如此。
+    /// - `hasShownMenuBarPositionHint`:同上一条同类,"⌘+拖拽可以挪动菜单栏图标"这条
+    ///   提示放没放过(见 MenuBarStatusItem.start())。带过去的后果一模一样:新机器上
+    ///   这个图标的位置本来就要重新落定,却再也看不到这条本该在新机器上最有用的提示。
     ///
     /// 注意 `hasSeenChineseLyrics` 不在此列:它记的是"这个人听到过中文歌"(决定简繁那项
     /// 设置露不露出来),讲的是这个人的曲库,不是这台机器,该跟着走。
@@ -74,6 +77,7 @@ enum ConfigPortability {
         "np:hasShownAutomationOnboarding",
         "np:hasOfferedICloudImport",
         "np:hasShownOverlayDragHint",
+        "np:hasShownMenuBarPositionHint",
         // 「这台机器上哪些 App 已经提示过新播放器」—— 跟上面几条是同一类机器状态。
         // 跟着备份搬去新机器的后果是:新机器上装了同一个播放器却永不提示,而新机器
         // 恰恰最需要提示(浏览器的 bundle id 还可能不一样)。

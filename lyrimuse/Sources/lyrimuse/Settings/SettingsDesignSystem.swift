@@ -695,6 +695,18 @@ struct SettingsPopoverShell<Content: View>: View {
     var width: CGFloat = 380
     @ViewBuilder let content: () -> Content
 
+    /// 内容的真实(未裁剪)高度,由下面的 `GeometryReader` 实测上报。
+    ///
+    /// ⚠️ 只信这个测量值,不再信"ScrollView 收到高度不限的提议时按内容自身高度返回"
+    /// 这条(旧注释里的假设)——那条只在浮层**首次弹出**时成立;弹出之后浮层内部再发生
+    /// 结构性变化(比如「显示歌词」联动显隐「显示封面」那一行),ScrollView 不会把新的
+    /// 内容高度重新报给 `NSHostingController`,于是 `NSPopover` 的尺寸焊死在弹出那一刻,
+    /// 新增的行只能挤进原来那块地方、变成"多出一条滚动条"——2026-09-01 用户截图报的
+    /// 「选完之后出滚动条，空间没变」。显式量出高度再喂给 `.frame(height:)`,每次内容
+    /// 高度变化都会产生一个新的、确定的期望尺寸,`NSPopover` 才会跟着重新摆尺寸而不是
+    /// 转去内部滚动。
+    @State private var measuredHeight: CGFloat = 0
+
     var body: some View {
         ScrollView {
             VStack(spacing: 0) {
@@ -702,8 +714,29 @@ struct SettingsPopoverShell<Content: View>: View {
                 CardDivider()
                 content()
             }
+            .background(
+                GeometryReader { proxy in
+                    Color.clear.preference(key: PopoverContentHeightKey.self, value: proxy.size.height)
+                }
+            )
         }
         .frame(width: width)
-        .frame(maxHeight: 460)
+        // measuredHeight 还没测出来之前(刚弹出的第一帧)不施加高度约束,让 ScrollView
+        // 按内容自身高度走首次弹出这一档还成立的行为;测出来之后就交给实测值 —— 封顶
+        // 460 是「我的配色主题」这类随用户数据变长的列表仍然需要的滚动上限,没超过
+        // 460 时就是"多大内容给多大空间",不再出现滚动条。
+        .frame(height: measuredHeight > 0 ? min(measuredHeight, 460) : nil)
+        .onPreferenceChange(PopoverContentHeightKey.self) { measuredHeight = $0 }
+    }
+}
+
+/// `SettingsPopoverShell` 专用的内容高度上报 key。
+///
+/// 不复用 `LyricsOverlayView.swift` 里那份同名 private key——两边各自的调用方只有一个
+/// 写入点,`max` 归约对两边都成立,没有共享它的必要,私有更不容易被无关处误用。
+private struct PopoverContentHeightKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
     }
 }

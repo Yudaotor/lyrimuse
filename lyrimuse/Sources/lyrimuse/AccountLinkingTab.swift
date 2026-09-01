@@ -715,12 +715,20 @@ struct AccountLinkingTab: View {
     // 挪到 tab 选择器**外面**、无条件渲染;下面这三段只负责"已连接之后想细看的几件事"。
     private enum LastfmSection: String, CaseIterable, Identifiable {
         case stats, chart, onThisDay
+        /// 「设置」段(2026-09-01 用户要求"这里单开一个设置tab页,装在这里面")。
+        ///
+        /// 装的是**跟 Last.fm 上送行为有关、但不是开关本身**的那些配置。为什么不继续摆在
+        /// 上面那张常驻的连接卡里:那张卡的定位是"不看哪个 tab 都该一直看得见的东西"
+        /// (Scrobble 开关、连接状态、待补清单),往里加设置项会把它撑成一张什么都装的卡;
+        /// 而这些设置恰恰是"想调的时候才去找"的类型,归到一段里正合适。
+        case settings
         var id: Self { self }
         var title: String {
             switch self {
             case .stats: return L10n.t("统计")
             case .chart: return L10n.t("榜单")
             case .onThisDay: return L10n.t("那年今日")
+            case .settings: return L10n.t("设置")
             }
         }
     }
@@ -760,6 +768,7 @@ struct AccountLinkingTab: View {
         case .stats: return .stats
         case .chart: return .chart
         case .onThisDay: return .onThisDay
+        case .settings: return .settings
         }
     }
 
@@ -904,9 +913,71 @@ struct AccountLinkingTab: View {
             // LastfmStatsSection 自己的刷新逻辑靠的是这个 View 不因为切 tab 被卸载
             // 重建(见它的类型头注),这里整段只在断开时才不挂载,不随三段切换隐藏。
             LastfmStatsSection(selected: lastfmStatsTab)
+            // 「设置」段的内容由这里画,不进 LastfmStatsSection —— 那个 View 管的是统计
+            // 数据,这些设置读的是 FeatureSettingsStore,两回事。而它仍然常驻挂载(那一段
+            // 只是画空),否则切过来一趟就会把已拉到的统计丢掉、回来重拉(见它的类型头注)。
+            if lastfmSection == .settings {
+                lastfmScrobbleSettingsCard
+            }
         } else {
             // 未连接时没有数据可看,给一句预告而不是一段空 tab。
             lastfmStatsPlaceholderCard
+        }
+    }
+
+    /// 「设置」段的内容(2026-09-01)。
+    ///
+    /// 目前只有一项。这一项 2026-08-31 就在 collector 侧做完了(`resolveScrobbleArtist` +
+    /// `features.lastfm_scrobble_first_artist_only`,带单测和 JSON 往返测试,文档也写了),
+    /// 但**一直没有任何界面入口** —— 只能手改 `~/.config/lyrimuse/lyrimuse-features.json`。
+    /// 用户来问"我怎么找不到这个配置项呢,是做了吗",找不到是对的。
+    ///
+    /// (当天先补在上面那张连接卡里、Scrobble 开关正下方,同一天用户改主意:单开一段装。
+    /// 判据见 LastfmSection.settings 的注释 —— 连接卡的定位是"不看哪个 tab 都该一直看得见
+    /// 的东西",不该长成一张什么都装的卡。)
+    ///
+    /// ⚠️ 这一段**只在已连接时才挂载**(见 lastfmFields),所以这里不必再判 lastfmConnected;
+    /// 但 Scrobble 开关关着时这一项无从谈起(没有上送),那种情况给一句说明而不是一个
+    /// 点了不影响任何事的控件。
+    @ViewBuilder
+    private var lastfmScrobbleSettingsCard: some View {
+        SettingsCard {
+            // 卡头就叫「Scrobble」,中英同字(2026-09-01 用户要求英文用 scrobble、中文我定)。
+            // 三条依据:①本仓的中文界面**本来就不翻译这个词**(「Scrobble 到 Last.fm」
+            // 「Scrobble 已暂停」「总 scrobble」都是原样用);②卡头在这个仓的惯例是名词短语
+            // 而不是「X设置」(歌词来源 / 已信任的其它播放器 / 配置备份与搬家);③这张卡已经
+            // 在「设置」那一段里了,标题再写一遍「设置」是重复。
+            SettingsCardHeader(title: L10n.t("Scrobble"))
+            CardDivider()
+            if features.lastfmMirrorScrobble {
+                SettingsRow(
+                    icon: "person.2",
+                    title: L10n.t("合唱歌曲的歌手"),
+                    // 只说两个选项各自的效果,不写"推荐/建议"、也不写后果告警(2026-09-01
+                    // 用户两次收窄这行字:先"只需要说明最终的效果是什么就好",再把
+                    // 「而 scrobble 落进 Last.fm 之后基本删不掉」整句圈掉)。
+                    //
+                    // 我为那半句争过两次(理由:这是**写侧**不可逆的操作,跟读侧算错了刷新
+                    // 一下就好不是一回事),用户明确定了去掉 —— 记在这儿是为了留住判断依据、
+                    // 不是留个翻案的口子。依据本身没丢:默认「全部」的完整论证在 collector
+                    // 侧 resolveScrobbleArtist 的头注(ListenBrainz 文档要求 include them
+                    // all、折叠不可逆且会丢人、Navidrome 同名开关默认也是关),以及
+                    // docs/features/12 §4 和公开文档 docs/scrobbling.md。
+                    help: L10n.t("多位歌手合唱时（如「Khalil Fong & Fiona Sit」）上送哪个名字。\n\n全部：原样发整串。\n\n只发第一位：只发「Khalil Fong」——Last.fm 上的记录里另一位歌手不会出现。")
+                ) {
+                    Picker("", selection: Binding(
+                        get: { features.lastfmScrobbleFirstArtistOnly },
+                        set: { features.lastfmScrobbleFirstArtistOnly = $0; Task { await features.save() } }
+                    )) {
+                        Text(L10n.t("全部")).tag(false)
+                        Text(L10n.t("只发第一位")).tag(true)
+                    }
+                    .pickerStyle(.segmented)
+                    .fixedSize()
+                }
+            } else {
+                SettingsNote { Text(L10n.t("上面的「Scrobble 到 Last.fm」关着，这里的设置暂时不起作用")) }
+            }
         }
     }
 

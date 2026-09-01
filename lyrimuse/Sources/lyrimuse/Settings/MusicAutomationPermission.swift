@@ -95,7 +95,7 @@ enum MusicAutomationPermission {
     // 导致播放控制按钮/快捷键在选了这两个播放器时永远进不了下面这一步,是接入这两个
     // 播放器时遗留下来一直没修的坑,这次一起补上。
     static func checkForCurrentPlayer(askIfNeeded: Bool) -> Bool {
-        guard PlaybackPlayerPreference.current == .appleMusic else { return true }
+        guard PlaybackPlayerPreference.isExclusivelyAppleMusic else { return true }
         return check(askIfNeeded: askIfNeeded).isAuthorized
     }
 
@@ -112,7 +112,7 @@ enum MusicAutomationPermission {
     // 按钮"那样为了拿到弹窗去后台拉起 Music.app:播放控制快捷键是被动触发的日常操作,
     // 不该有"按一下播放/暂停,Music.app 却在后台悄悄启动"这种意料之外的副作用。
     static func checkForCurrentPlayerSafely(askIfNeeded: Bool) async -> Bool {
-        guard PlaybackPlayerPreference.current == .appleMusic else { return true }
+        guard PlaybackPlayerPreference.isExclusivelyAppleMusic else { return true }
         return await checkAppleMusicSafely(askIfNeeded: askIfNeeded)
     }
 

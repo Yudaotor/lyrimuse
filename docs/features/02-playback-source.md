@@ -1,6 +1,6 @@
 # 02. 播放数据源与播放器支持
 
-> 最后核对:2026-08-25 · 基线:c7d96f5+工作树
+> 最后核对:2026-09-01 · 基线:5d9031a+工作树
 
 ## 定位
 
@@ -8,7 +8,7 @@ App 怎么知道"现在在放什么":从本地播放器读出 曲目元数据 + 
 
 ## 入口与展示面
 
-- **设置 → 播放器 tab**(`SettingsView.swift` 的 `PlayerSettingsTab`):「播放器」卡、「Apple Music 自动化」权限卡(仅选 Apple Music 时出现)、「已信任的其它播放器」卡(有信任项才出现)、「后台采集服务」卡(含 media-control 通道自检失败提示)、两个 App 联动开关。2026-08-25「播放器」卡跟引导页换成同一套图标网格(`PlayerChoiceCard`,用户要求两处排版和谐一致),包在 `SettingsCardHeader` + `SettingsRawRow` 里,融入这页"卡片+发丝描边"的既有语言,不是裸摆一个网格;顺带把「已信任的其它播放器」卡里每一行的图标从通用的 `checkmark.seal` SF Symbol 换成这个 App 自己的真图标(`SettingsRow` 新增的 `iconImage: NSImage?` 参数,跟 `icon` 二选一,原有全部调用点不传就不受影响),补了一个同款 `SettingsCardHeader` 标题——两张卡挨在一起时是"姐妹卡",不是"一张换新一张没换"。
+- **设置 → 播放器 tab**(`SettingsView.swift` 的 `PlayerSettingsTab`):「播放器」卡(2026-09-01 起**可多选**,见下面"多选"一节)、「Apple Music 自动化」权限卡(选中集合包含 Apple Music 时出现)、「已信任的其它播放器」卡(有信任项才出现)、「后台采集服务」卡(含 media-control 通道自检失败提示)、两个 App 联动开关。2026-08-25「播放器」卡跟引导页换成同一套图标网格(`PlayerChoiceCard`,用户要求两处排版和谐一致),包在 `SettingsCardHeader` + `SettingsRawRow` 里,融入这页"卡片+发丝描边"的既有语言,不是裸摆一个网格;顺带把「已信任的其它播放器」卡里每一行的图标从通用的 `checkmark.seal` SF Symbol 换成这个 App 自己的真图标(`SettingsRow` 新增的 `iconImage: NSImage?` 参数,跟 `icon` 二选一,原有全部调用点不传就不受影响),补了一个同款 `SettingsCardHeader` 标题——两张卡挨在一起时是"姐妹卡",不是"一张换新一张没换"。
 - **引导页**(`OnboardingView.swift` 的 `playerChoiceStep` / `automationStep`):首次启动时选播放器;自动化权限步只在选中 Apple Music 时出现在 steps 里。2026-08-25 把 `playerChoiceStep` 从纯文字下拉换成图标卡片网格(`PlayerChoiceCard`,3 列 2 行,后来也被设置页复用,挪进了独立文件 `Settings/PlayerChoiceCard.swift`):优先取**已安装播放器的真实 App 图标**(`AppIconResolver`,跟"正在播放"面板来源角标——`PlaybackCoordinator.resolvedPlayerIcon`——同一份取图标逻辑/缓存,理由也一样:最好认,不用自带商标素材),没装就退回 `PlaybackPlayer.tintColor` + `fallbackSymbolName` 这套占位色块(QQ音乐/网易云音乐/酷狗音乐复用 `sourceColor`——跟"歌词来源"是同一批 App,不维护第二份配色映射)。文案顺带补全:原来的说明句漏了酷狗音乐(2026-08-21 才接入,文案没跟上)。
 - 数据本身没有独立窗口——通过 `PlaybackCoordinator`(`LocalPlaybackSource` 的薄转发层)流向悬浮歌词(`LyricsOverlayView`)、灵动岛(`NotchLyricsView`)、歌词窗口(`LyricsWindowView`)、菜单栏(`MenuBarStatusItem`)。
 - 「导出诊断信息」会带上 `lastResolvedBundleID`(这一刻实际被认下来的播放器,选"自动识别"时只报设置值等于什么都没说)。
@@ -30,7 +30,27 @@ App 怎么知道"现在在放什么":从本地播放器读出 曲目元数据 + 
 
 - QQ 音乐/网易云/酷狗**完全没有 AppleScript 支持**(经 `sdef`/PlistBuddy 核实:无 .sdef、未开 NSAppleScriptEnabled),只能走 media-control。酷狗是个 **Mac Catalyst 应用**(主二进制链的是 `/System/iOSSupport/.../MediaPlayer.framework`),靠 Catalyst 的 `MPNowPlayingInfoCenter` 把播放状态发布进系统级 MediaRemote —— 所以它零新增代码路径,只是多一个 bundle id。接入顺带白捡一项:酷狗本来就是五个**歌词源**之一,于是「同源加权」也一并生效(`playerNativeLyricSource` → `kugou`),用酷狗听歌时优先选酷狗自己的歌词,时间轴跟它的音频母版对得上。Spotify 虽有 AppleScript,但位置直查路线已于 2026-08-18 移除(见下节),现在全程 media-control。
 - media-control 二进制由 build.sh 打进 app bundle(`Contents/Resources/media-control/`,含 Perl 适配脚本 + MediaRemoteAdapter.framework 的整棵相对路径子树);直接 `swift build` 跑时拿不到,退化为纯 AppleScript(Apple Music)可用、其余播放器不可用,事件流也不启动。
-- 设置值经 `PlaybackPlayerPreference.current` 读取(每次轮询现读共享 JSON 文件,不缓存);文件不存在/解析失败/值认不出,**兜底 `auto`**(2026-08-13 从 appleMusic 改过来:老默认让纯 Spotify/QQ/网易云用户界面永远空白且看不出原因)。
+- 设置值经 `PlaybackPlayerPreference.selected` 读取(每次轮询现读共享 JSON 文件,不缓存),类型是 `Set<PlaybackPlayer>`,保证非空;文件不存在/解析失败/值认不出,**兜底 `{auto}`**(2026-08-13 从 appleMusic 改过来:老默认让纯 Spotify/QQ/网易云用户界面永远空白且看不出原因)。
+
+### 多选(2026-09-01)
+
+设置页「播放器」卡从单选改成多选——点一下切换某个具体播放器的选中状态,同时高亮的可以有好几个;「自动识别」也是可以被同时勾上的普通一项,不是跟具体播放器互斥的另一档。
+
+- **数据形状**:共享 JSON 的 `player`(单值字符串)字段被 `players`(字符串数组)取代——Swift `FeatureSettingsStore.players: Set<PlaybackPlayer>`,collector `featureFlagsFile.Players []string` → 解析成 `featureFlags.Players map[string]bool`。旧字段 `player` 只作**一次性迁移源**保留:`players` 缺失/空时才读它,读到就当单元素集合迁移过去;两者都没有可用值最终兜底 `{auto}`。两侧迁移逻辑必须同步维护(Swift `FeatureSettingsStore.load()`/LyrimuseCore `PlaybackPlayerPreference.selected`,Go `resolvePlayers`)。
+- **UI 不允许清空**:`SettingsView.toggleSelectedPlayer` 在选中集合只剩一个成员时拒绝取消勾选它——跟 `PlaybackPlayerPreference.selected`/`resolvePlayers`"保证非空"这条不变量对称,不让界面出现一瞬间"什么都没选中"的非法状态。引导页那一步(`OnboardingView.playerChoiceStep`)刻意保持"选一个起步"的单选体验,不受这次改动影响——点一个直接把 `players` **替换**成那一个,多选是留给设置页的进阶能力。
+- **解析优先级(App 侧 `MediaControlClient.fetchSnapshot`/`fetchArtwork`,collector 侧 `system.go` 的 `getState`)三级**,跟单选年代的判断树是同一套骨架、只是把"选定播放器"从单值换成集合成员判断:
+  1. 选中集合里**包含**「自动识别」(不管是否同时还勾了别的具体播放器,auto 按超集处理)→ 走原有的自动识别路径(`fetchAutoDetectedSnapshot`/`getAutoDetectedState`),行为跟改动前的纯 `.auto` 完全一样,包括"检测到未知播放器"的信任列表机制;
+  2. 选中集合**恰好**是 `{Apple Music}`(没有 auto、没有别的具体播放器)→ 跳过 media-control,直接走 AppleScript 直问 Music.app(`fetchAppleMusicSnapshot`/`getAppleMusicState`),跟单选年代完全一样,不多背一次子进程往返;
+  3. 其它情况(单选或多选了 QQ音乐/网易云/Spotify/酷狗中的若干个,没有 auto)→ `fetchMultiSelectedSnapshot`/`getMultiSelectedState`:问 media-control 系统级 Now Playing 焦点是谁,核对 bundle id 是否落在选中的这个子集里——跟"自动识别"是同一套"系统只有一个焦点,问一次就知道"机制,区别只在准入名单从"内置五个+信任列表"收窄成"这次选中的这几个"。命中 Apple Music 时同样会尝试借用后台 AppleScript 缓存的精确位置(`refinedAppleMusicSnapshotIfNeeded`/`refineAppleMusicState`,从原来 `fetchAutoDetectedSnapshot`/`getAutoDetectedState` 内联的分支抽出来给这条新路径复用,不重复实现)。
+- **"排除自动识别后能不能唯一确定一个具体播放器"这个判据独立成了一个可复用的量**(`Set<PlaybackPlayer>.soleExplicitPlayer`,LyrimuseCore,纯函数):没有具体播放器(纯 auto)或者选了两个以上时是 `nil`。几处"只有能唯一确定时才有意义"的场景都靠它,不各自重新判一遍:
+  - `AppDelegate`「打开 Lyrimuse 时顺带唤起播放器」——含糊就不猜,`bundleIdentifier` 退回空字符串(跟单选年代 `.auto` 的 no-op 效果一致);
+  - `LyricsWindowView.idlePlayer`(停播欢迎态用哪个播放器的图标/文案)——含糊时退回"停播前最后识别到的那家"这条既有兜底;
+  - `SettingsView.companionCard`——「打开 Lyrimuse 时启动 X」这一行含糊时直接隐藏(不猜、不显示读不通的文案),「跟随 X 启动」含糊时文案退回"跟随播放器启动"。
+  - collector 侧对称的是 `companionlaunch.go` 的 `companionLaunchProcessNames`——auto 在选中集合里就盯全部五个已知播放器的进程,否则逐个选中成员各自的进程名都盯(不再局限于唯一一个)。
+- **「Apple Music 自动化」权限卡的展示条件放宽**(`SettingsView.permissionCard`):从"恰好只选了 Apple Music"放宽成"选中集合包含 Apple Music"(不要求排他)——多选场景下 Apple Music 那条 AppleScript 路径照样会被走到(见上面判断树第 3 步),用户仍然值得在这里管理这份权限。`dispatch()`(播放控制写路径)和 `checkForCurrentPlayer`/`checkForCurrentPlayerSafely`(自动化权限的按需检查)则**保持要求排他**(`PlaybackPlayerPreference.isExclusivelyAppleMusic`,即 `selected == [.appleMusic]`)——这两处要的是"能不能武断地把指令/权限检查直接导向 Music.app、不经过系统焦点仲裁"这个更强的确定性,多选/auto 场景下应该让 media-control 的焦点仲裁生效,不能因为用户也勾了 Apple Music 就抢着直连。
+- **同源歌词加权也从单值变成集合**(collector `match.go`):`nativeLyricSource string` → `nativeLyricSources map[string]bool`,`resolveNativeLyricSources(players)` 把选中集合里每个成员各自的原生歌词源都收进来(Apple Music/Spotify/auto 不贡献任何源)——同时用 QQ 音乐和酷狗听歌的人,两边的同源加权都该生效,不能只挑其中一个。
+- **ListenBrainz 的 `media_player` 标签**(collector `mediaPlayerLabel`)顺带简化成纯粹按**这一条具体 listen 实际观察到的 bundle id** 判断,不再区分"自动识别"和"手动选定"两套分支——单选年代那道 `features.Player` 分支背后的假设是"手动选定时 bundleID 只可能是选中的那一个",多选之后这个假设不成立(bundleID 可能是选中集合里的任意一个),两个分支本来就是同一份映射抄了两遍。
+- **「网页播放器」卡的配对同样接进了这套多选/信任机制**,且现在有了跟「播放器」卡对称的"选中并高亮"视觉——完整细节见下面「网页播放器」卡一节最后一条(2026-09-01 那条)。两张卡标题都加了「（可多选）」字样(`SettingsCardHeader` 的 `title`)。
 
 ### 自动识别(.auto)
 
@@ -98,18 +118,77 @@ App 怎么知道"现在在放什么":从本地播放器读出 曲目元数据 + 
 
 上一节那套锚点订正治的是"报的数不准";这张卡治的是另一半——**让浏览器把真实播放进度报出来**。做法是用 AppleScript 让浏览器执行一小段 JavaScript 去读页面里的 `<audio>/<video>` 进度(`BrowserPositionProbe`),所以它对浏览器有两个硬要求:①系统级 Automation/TCC 授权(另一张 `permissionCard` 管);②**浏览器自己**那道"允许 Apple Events 里的 JavaScript"开关(`BrowserAutomationPermission`,Chromium 系存在自己的 Preferences JSON 里、Safari 走 `CFPreferences`,两套完全独立的实现)。
 
+**已支持的站点(2026-09-01 起两个)**:`music.youtube.com` 和 `open.spotify.com`。
+
+⚠️ **新增一个站点必须实测,不能照抄另一条规则** —— 这两条实测下来"看着一样、其实处处不同",照抄任何一条都会得到一个静默不工作的配对:
+
+| | YouTube Music | Spotify Web |
+|---|---|---|
+| 进度元素 | `.time-info`,形如 `0:57 / 4:04`(**带总时长,要先按 `/` 切**) | `[data-testid=playback-position]`,**只有当前位置**(总时长在另一个元素) |
+| 暂停判据 | `<video>.paused` | ⚠️ **页面里没有 `<video>` 也没有 `<audio>`**,这条路直接断掉;改判 `document.title` 里有没有 ` • ` 分隔符(播放中 `歌名 • 歌手`,暂停时整个回落成静态的 `Spotify - Web Player: Music for everyone`) |
+| 精度 | 整秒(页面渲染的文字) | 同左 —— 都按 `.noisyFloored` 处理 |
+
+- ⚠️ **Spotify 进度条里那个 `<input>` 是陷阱**:`[data-testid=playback-progressbar] input` 带 `value=145000 max=269340`,毫秒精度、max 还跟 media-control 的 `duration=269.339773` 严丝合缝,看着比文字好得多。连打三拍实测是 **140000 → 145000 → 145000**(5 秒一跳且滞后),同期文字 2:18 → 2:22 → 2:25 一直在走 —— 它是给滑块用的节流状态,不是实时位置。照它写进度会一顿一顿的。
+- ⚠️ **暂停判据逐个否掉的候选**(都实测过):播放/暂停键的 `aria-label` 是**本地化**的(中文界面下播放中显示「暂停」);`navigator.mediaSession.playbackState` Spotify 没设、恒为 `none`;按钮和它三层祖先节点只有 `data-testid`、没有任何状态位;图标 SVG 的 `path d` 确实是干净的分水岭(两条竖杠 vs 三角形)但认路径字符串太脆。最后用 `document.title` 且**只看分隔符在不在、不看任何一边的文案**,因此不受本地化影响。将来 Spotify 换标题格式的话,这里退化成"永远判暂停" → 探针不出手 → 静默退回 MediaRemote,这是**刻意选的失败方向**。
+- **Spotify Web 确实需要这个探针**(2026-09-01 实测):`media-control` 连打 4 拍,`elapsedTime` 恒 `0`、`timestamp` 恒等于会话创建时刻、`playing=true` —— 跟 YouTube Music 一模一样的冻结锚点。顺带坐实了这个锚点**只在状态切换时更新**:用户一按暂停,`elapsedTime` 立刻变成真实的 `253.04`、`timestamp` 也跟着走,而同刻页面文字正好是 `4:13`=253s,两边对得上。
+- **平台 id ↔ 站点规则的一一对应关系有 selftest 钉着**(`platformIDsWithSiteRules`)。对不上不会编译报错,只表现成"卡片在、配对得上、却永远不探测"。
+- 平台图标取自本机对应 App 的 `AppIcon.icns`(`sips` 转 1024×1024 PNG,放 `Sources/lyrimuse/Resources/`),不去网上抓品牌资源。
+
 配对是**显式**的:没配过的浏览器完全不触发后台探测(`kickIfNeeded`)。设置页按 `supportedPlatforms` 逐个平台一张小卡,卡上是已配对浏览器的头像 + 一个「+」。
 
-**「+」菜单里有两类条目:**
+**「+」菜单里有三类条目:**
 
-1. **内置候选** —— `knownBrowserBundleIDs` 里装了、且还没配过这个平台的。⚠️ 这份名单只有四个(Arc / Chrome / Edge / Safari),**这不是 UI 偷懒**:名单跟 `chromiumPrefsPaths` 绑在一起,而后者只登记**实测验证过**那个 Preferences 路径的浏览器——Brave/Vivaldi/Opera 大概率同源同构,但没实测过就往里写等于拿用户的配置文件赌(`enableChromium` 是会**覆盖写**那个文件的)。
-2. **「从应用程序中选择…」**(2026-08-31,用户原话:「这里点+号出来的是否可以加一个选项是自己在本机的应用程序里面选」)—— `NSOpenPanel` 从 /Applications 挑一个 App,判定通过就一步信任+配对。这条路存在的意义正是上面那条限制的另一面:那些同内核、本来就驱得动、只是没人验过 Preferences 路径的浏览器,现在用户自己加得进来。
+1. **内置候选** —— `knownBrowserBundleIDs` 里装了、且还没配过这个平台的。⚠️ 这份名单短(Chrome / Edge / Safari),**这不是 UI 偷懒**,而是两条不同的收紧叠在一起:①它跟 `chromiumPrefsPaths` 同源,后者只登记**实测验证过**那个 Preferences 路径的浏览器——Brave/Vivaldi/Opera 大概率同源同构,但没实测过就往里写等于拿用户的配置文件赌;②**它是"默认展示"名单,不是"支持"名单**。
+   - ⚠️ **Arc 不在这份名单里,但适配一条都没少**(2026-09-01 用户拍板:「arc 不要留着,但是我们代码里对他的适配都留着,只是不在这里显示,如果用户自己选了 arc,那就依旧按我们适配好的来走」)。Arc 在 `chromiumPrefsPaths` 里原样留着 → `family(...)` 照样返回 `.chromium`、那道 JS 开关的状态照样读得出来、`browserManualEnableHint` 里那条 Arc 专属菜单路径(中文系统下也显示英文)也原样留着;`BrowserPositionProbe` 那边的 Arc 休眠标签页处置更是全族通用。用户从「从应用程序中选择…」挑中它时走的是**完整既有适配,一步都不降级**,少的只是"默认摆在菜单里"这一条。**别因为它不在名单里就去删 Arc 的适配代码。**
+   - 配套:`chooseBrowserFromApplications` 里"已经认识引擎族"那条早退分支也要 `rememberManualBrowser` 登记一次 —— 否则 Arc 这种"认识但不默认展示"的浏览器选完之后仍然不出现在「+」菜单里,下次想再配一个平台还得重走文件选择器。该函数自己跳过内置那几个(它们本来就默认展示,再记一份是冗余状态)。
+2. **已经信任过的浏览器** —— 出现在下面「已信任的其它播放器」卡里、装着、而且**驱得动**的那些(2026-09-01 用户原话:「已经被信任了,就应该出现在这个列表里面,这个逻辑还是要的」)。⚠️ **信任是候选的一个来源,不是候选的前提** —— 这两件事 2026-08-31 和 09-01 各定过一半,别再把其中一半当成全部:没信任过的已安装内置浏览器**照样列出来**(选中时一步自动信任+配对),而已经信任过的浏览器**也一定要列出来**,哪怕它既不在内置名单、也没被手动加过。信任可以发生在配对之外(用户在「发现未知播放器」卡里点的信任;或者配对过又移除了配对——那会顺手忘掉 `manualBrowserFamilies` 里的登记),这两种情况下它都还在信任列表里却进不了候选,用户看到的就是"下面明明信任着 Doubao Browser,上面菜单里没有它"。
+   - ⚠️ 判据必须用 `BrowserAutomationPermission.resolvedFamily` 而**不是** `family` —— 信任列表里只有 bundle id 和显示名,那些"点信任加进来的"浏览器从没被登记过引擎族,`family` 对它们恒为 nil。`resolvedFamily` 查不到时会去那个 App 自己的 bundle 里**现场读一次 sdef**,判定结果(含 nil)进内存缓存:调用点是 SwiftUI 的 body,每次重绘、每次回到前台都会跑一遍。缓存 `@MainActor` 隔离(`family` 会被 `BrowserPositionProbe` 在后台线程读,两者不共享这份字典)。
+   - ⚠️ **配对时必须把现场判定的引擎族落盘**(`trustAndPairBrowser` 开头那句 `rememberManualBrowser`)。那个判定结果只活在内存缓存里,不落盘的话配对之后 `family(...)` 仍然返回 nil,`kickIfNeeded` 和 `runBrowserSelfTest` 都会在第一道 guard 上直接返回——表现是"配上了、头像也有了,却永远不同步、连检测按钮都不工作"。
+3. **「从应用程序中选择…」**(2026-08-31,用户原话:「这里点+号出来的是否可以加一个选项是自己在本机的应用程序里面选」)—— `NSOpenPanel` 从 /Applications 挑一个 App,判定通过就一步信任+配对。这条路存在的意义正是上面那条限制的另一面:那些同内核、本来就驱得动、只是没人验过 Preferences 路径的浏览器,现在用户自己加得进来。
 
 - **判据是"驱不驱得动",不是"名字像不像浏览器"**:读挑中 App 的脚本定义(`Info.plist` 的 `OSAScriptingDefinition` → `Contents/Resources/*.sdef`),看里面有没有"执行 JavaScript"那条命令。**认 AppleScript 四字码不认命令名** —— 名字会随本地化/改版变,四字码是 AppleScript 的 ABI,改了等于破坏所有既有脚本。Chromium 系 `CrSuExJa`、Safari `sfridojs`,2026-08-31 在这台机器上逐个实测:Chrome / Edge / Arc / Safari 全部命中,而 The Unarchiver / 音乐 / QQ音乐 **一处都匹配不到**。
 - **判不出来就拒收并说清理由**,不是"加进去再说"。放进一个永远不会工作的配对比列表里没有它更糟:用户会以为配好了,然后去查"为什么歌词进度还是不同步"。
 - ⚠️ **手动加进来的浏览器只登记引擎族,不登记 Preferences 路径**(`manuallyAddedFamilies` 只喂 `family(...)`)。于是它的 `status(...)` 恒为 `.unknown`、`enable(...)` 恒为 `.unsupported` —— 这是**有意的降级**:那个路径每个浏览器一个样(Arc→`Arc/`、Chrome→`Google/Chrome/`、Edge→`Microsoft Edge/`),没有公式能从 bundleID 推出来。一键开启对它们不可用,用户得自己去浏览器菜单里开那一项。
 - **持久化**:`AppSettings.manualBrowserFamilies`(bundleID → 族的 rawValue),启动时由 `AppDelegate` 灌进 `BrowserAutomationPermission.manuallyAddedFamilies` —— 跟 `platformBrowserPairs` 同一个"存在 AppSettings、运行期同步进 LyrimuseCore 单例"的双写模式。⚠️ 不灌这一次的话,`family(...)` 重启后对这些浏览器返回 nil,表现是"我加过的浏览器重启后从配对列表里消失了",而配对本身还好端端存在 `browserPlatformPairs` 里。
+- ⚠️ **手动加进来的浏览器,最后一个配对被移除时要一起忘掉**(2026-09-01,`forgetManualBrowserIfUnpaired`)。在此之前 `manualBrowserFamilies` 全仓**只有一处写入、零处删除** —— 用户试着从「应用程序」里挑过一个浏览器,它就**永远**留在「+」菜单里,没有任何界面能把它拿掉(用户实际撞上:菜单里常驻一个早就不用的 Doubao Browser,原话「剩下的只有用户自己选了新的浏览器才会显示在这里」)。判据是"一个平台的配对都不剩"而不是"移除了这个平台的配对"——同一个浏览器可以配多个平台。手动加进来的浏览器一加进来就**同步**被配对(`chooseBrowserFromApplications` → `trustAndPairBrowser` → `pairBrowser`,后者不在 await 之后),所以不存在"刚加完还没配上"被误清的窗口。
+  - ⚠️ **只在用户这一次主动移除配对时做,不做启动时的批量清理** —— 后者是在用户没做任何动作的时候替他删状态,跟"卸载了的浏览器保留配对记录"那条既有原则冲突。代价也很低:这份字典存的本来就是一个**判定结果的缓存**(那个 App 的引擎族),不是精心配的偏好,再要它时重新挑一次即可。
 - 「+」**恒定展示**,不再是"有内置候选才出现":内置候选全配完之后恰恰是最需要「从应用程序中选择…」的时候(装的浏览器不在那四个里)。
+- **整张卡的展示条件是"装了受支持的浏览器",不是"已经信任过某个浏览器"**(2026-09-01 改)。旧条件制造了一个**鸡生蛋**:8-31 起「+」菜单已经不要求先信任(`trustAndPairBrowser` 一步自动信任+配对),这张卡因此从"信任之后的配置面板"变成了"信任这件事本身的入口";而它自己的显示条件还停在旧语义上 —— 没信任过任何浏览器时整张卡连同 YouTube Music 一起不显示,界面上没有任何地方能发起信任,只能靠"真的用浏览器放歌 → 被动检测到未知播放器"绕回来。用户清空全部浏览器配置想重走一遍流程时当场撞上,原话「这里的 YouTube Music 应该是要常驻的」。判据跟 `addablePlatformBrowsers` 同源:那边能列出候选,这边就该显示。⚠️"不为了'这里没事'而占地方"这条原则保留 —— 一台只装了 Firefox 的机器仍然不显示这张卡。
+- **平台卡现在也有"选中并高亮"这个状态了**(2026-09-01,用户原话「网页播放器不可以选择并高亮吗」,跟上面"播放器"卡的多选是同一批改动):`browserPlatformCard` 配对了至少一个(装着的)浏览器就按 `PlayerChoiceCard` 同款样式高亮——不是新加一个独立开关,直接复用既有的"配了/没配"状态,配对本身早就是显式动作(点「+」选浏览器),没必要再叠一层"选不选用它"。这次改动**不是纯视觉**:配套把"信任列表"这条线从只在 auto 下生效,扩到"选中了具体播放器但没勾自动识别"这条路径也生效(App 侧 `MediaControlClient.fetchMultiSelectedSnapshot`/`artworkBundleIDMatches` 新增 `TrustedPlayers.isTrusted` 分支,过 `notASong` 守卫;collector 侧新增 `isTrustedPlayerBundleID`,`getMultiSelectedState`/`poller.isTracked` 同步接入)——此前配对一个浏览器只在用户同时勾着"自动识别"时才真的生效,选了具体播放器(不勾 auto)会让配对**看起来配好了、实际读不到播放**这个断层一直存在。高亮因此如实反映"这确实是一个会生效的来源",不是纯装饰。
+
+#### 「检测是否已生效」:一次真的执行 JavaScript 的功能性自检(2026-09-01)
+
+Chromium 系那道 JS 开关的状态**经常读不出来** —— 它在浏览器 profile 的 `Preferences` 里,别的 App 读那个目录要「完全磁盘访问权限」,读不到就只能显示「无法确认状态」。用户按指引手动开完之后,界面上没有任何东西会变,他没法确认自己做对没有(原话:「我现在已经手动去打开了,这个页面怎么回显?没有按钮啊」)。
+
+`BrowserPositionProbe.selfTest` 换一条不依赖那个权限的判据:**直接试着执行一小段 JavaScript(`1+1`)**。成不成功就是用户真正关心的那件事本身,比读配置文件更贴近事实 —— 配置文件写着"开"但浏览器还没重启时其实没生效,而这个自检会如实失败。通过就**落盘**(`AppSettings.browserJSVerifiedAt`),整张气泡收敛成「上次检测通过(x 分钟前)」+ 一个「重新检测」入口,角标消失;明确的反证(`blocked`/`noReply`)反过来**把那条记录抹掉**,不让一句过期的"通过过"在下次打开设置窗时把"已配好"说回去。
+
+- ⚠️ **必须在「当前标签页」上试,不能用 `tab 1 of window 1`**(2026-09-01 修的 bug,用户报「我点击检测就弹出这个异常:检测没通过:no output」)。**Arc 会把非当前标签页休眠掉,对休眠标签页执行 JavaScript 会一直不返回**,于是一个配置完全正常的 Arc 也会被判成失败。同一时刻同一台机器实测:`execute (tab 1 of window 1) javascript "1+1"` 挂死(5 秒被闹钟杀掉、零输出),`execute (active tab of window 1) javascript "1+1"` **123 毫秒返回 2**;当前标签页是第 10 个,它的**紧邻**第 9、11 个(同为 pinned)一样挂死 —— 也就是说"第一个标签页"这个看起来最稳妥的取法,在 Arc 上几乎必然踩中休眠标签页。标签页的 `loading`/`location` 属性都**判不出**它是不是休眠的(实测 `loading` 为 false、`location` 为 pinned,照样挂),没有可用的前置判据。命令名两族不同:Chromium 系 `active tab`(四字码 `acTa`,Arc/Chrome/Edge 一致)、Safari `current tab`(`cTab`),见 `activeTabExpression`。
+- ⚠️ **AppleScript 的裸 `try` 抓不住"挂起"**,只有 `with timeout of N seconds` 能把它变成一个抓得住的错误(-1712)。没有它时"浏览器不回"表现为 osascript 挂死到被 `ProcessRunner` 硬杀、stdout 空空如也,UI 上就是那句什么都没说的「检测没通过:no output」—— 那正是用户看见的。现在 -1712 单独归成 `SelfTestResult.noReply`(跟 `blocked` **分开**:Chrome 那道开关关着时会**立刻**抛一句清楚的错误,Arc 关着时**什么都不说、直接不回**,是两种失败方式)。
+- **探测循环也一样**(`buildAppleScript`):先扫一遍各窗口的**当前标签页**,再扫其余标签页,每条 `execute` 都套 `with timeout of 1 second`。用户开着几十个标签页是常态(实测这台机器 50 个),其中只要有两三个匹配得上 URL 又恰好是休眠的,整次探测的 3 秒预算就没了、真正在播放的那个根本轮不到。
+- **判"开关关着"优先看得到的事实,其次才认文案**:能读到那道开关的状态(Safari 走 `CFPreferences` 一定读得到)且读到的是关着的,直接判 `blocked`,不猜本地化文案;读不到时才认关键词,而且**认关键词不认整句**。Safari 的原话是 "You must enable 'Allow JavaScript from Apple Events' in the Developer section of Safari Settings…"(错误号 8)—— 注意它说的是 **Apple Events** 而不是 AppleScript,跟 Chrome/Edge 那组锚点(`AppleScript` + `turned off`/「已关闭」)一个都对不上,必须单列。
+
+- ⚠️ **文件和实测回答的是两个不同的问题,都对,不存在"以谁为准"**(2026-09-01,用户亲手做的对照实验坐实)。`Preferences` 里那个 `browser.allow_javascript_apple_events` 说的是「**下次启动**会怎样」,`BrowserPositionProbe.selfTest` 说的是「**现在**怎样」—— Chromium 那道开关**只在浏览器启动时读一次**,运行期间在菜单里改它,文件立刻变、运行中的浏览器纹丝不动。实证:这台机器上的 Arc 进程自 8/30 17:49 起一次没重启,用户 16:46 在 Arc 菜单里把它**关掉**、文件当场变 `false`,11 分钟后 `execute … javascript "1+1"` 照样返回 `2`;开的方向同理(此前几小时文件在 `true`/`false` 之间变过,实测行为全程不变)。(排除过自己人:全仓只有 `readChromiumPrefs` 一个读取点,没有任何代码写这些文件——一键开启那条路当天已整条移除。)
+  - **UI 据此的处置**:两者不一致时**要给指引、不能报平安**。`browserJSLikelyWorking` 里 `.disabled` **一票否决**(排在实测结果之前),让菜单路径那块指引露出来;`browserJSSwitchCaption` 的 `.disabled` 分支在 `browserJSProvenWorking` 为真时改口成「这个开关已经被关掉了——现在还能用,只是因为该浏览器还没重启;重启后就会失效」。文件说关意味着**一次已经排好队、必然到来的失效**,那正是最该提前告诉用户的事。
+  - ⚠️ 反过来 `.enabled` **不能**一票通过:它同样只说明下次启动会怎样。那一档仍然让实测结果优先(`blocked`/`noReply`/`failed` 判 false),否则会出现"上面说已开启、下面说检测没通过、却一句指引都不给"。
+  - ⚠️ **2026-09-01 当天这里一度写反过**:先按"文件不可信、以实测为准"改了一版(那时只看到"文件说关但实测能用",误判成文件不可靠),用户补了一句「当时是我自己去给它关掉了」才把因果补全 —— 不是文件不可信,是它在回答另一个时态的问题。**留着这条,别再按"谁更可信"去想这件事。**
+- ⚠️ **这张卡的状态全是渲染时同步现读的,没有 `@Published` 可依赖 —— 所以要在"回到前台"时手动踢一次**(2026-09-01,用户原话「那我现在去打开了,设置里这里要怎么流转状态呢;自动的吗」)。浏览器那道 JS 开关读的是它自己的配置文件、系统自动化授权读的是 TCC,两者都没有任何变更通知可订阅。在此之前用户按指引跑去浏览器菜单里勾上开关、再切回来,界面上**什么都不会变**,得把气泡关掉重开或者点一次「重新检测」。修法是给整张卡挂 `NSApplication.didBecomeActiveNotification` → `automationRefreshTick &+= 1`:"去浏览器/系统设置里操作"这件事**必然**要切走再切回来,这个信号比给配置文件挂 FSEvents 或起定时器轮询都更准更省,而且一次覆盖两道门。
+  - ⚠️ **要补第二拍**:Chromium 那道开关勾完**不是立刻写盘**的(偏好走批量延迟提交),用户两三秒就切回来时文件里很可能还是旧值。所以 activate 之后再延时踢一次(12 秒,**留余量的兜底值、不是实测常数**)。
+  - ⚠️ 这一拍**只是让 SwiftUI 重新读一遍,不发起任何 AppleScript/自检** —— 自检要起 osascript 子进程,不该在每次切回 App 时白跑。要立刻确认的通路是气泡里那个「重新检测」,它**不看文件**、直接执行一段 JavaScript,任何时候都即时准确。
+
+- ⚠️ **配对要先写,信任在后台跑**(2026-09-01 修,用户报「我在加了新浏览器之后过了很久才在这边出现图标」)。头像那一行铺的是 `settings.browserPlatformPairs`(纯本地、瞬时),而 `features.trust` 里那句 `save()` 会走一整套 **collector 重启**:`CollectorRestartCoordinator` 0.5 秒去抖 → `launchctl kickstart -k` → 轮询到一个**新 pid** 才返回,确认超时 3 秒(`CollectorControl.restartConfirmTimeout`)—— 最坏 3.5 秒以上,重启失败还会把这 3.5 秒整个耗满。旧顺序把这套重启**夹在**"用户在菜单里点了那个浏览器"和"头像出现"之间,连带下面那个自动展开的气泡也一起被推后。两者之间没有依赖(信任写 features.json 给 collector 看,配对写 AppSettings 给这张卡和探针看),失败处理也一样——`trust` 的返回值本来就没人接。**以后再往这条路上加动作,先问一句"它挡在 UI 反馈前面吗"。**
+
+### ⚠️ Safari 的媒体进程:`com.apple.WebKit.GPU`
+
+**Safari 播网页音视频时,MediaRemote 报的"现在谁在放"是 `com.apple.WebKit.GPU`,不是 `com.apple.Safari`** —— 解码/播放跑在一个独立的 WebKit GPU 进程里。Chromium 系(Arc/Chrome/Edge)不这样,它们报浏览器自己的 bundle id,**只有 Safari 需要特殊处理**。
+
+不处理的后果是一个用户看得见的断层(2026-09-01 实测撞上,原话「为什么这里又出现了一个 webkit 啥玩意」):在「网页播放器」卡里配对了 Safari、配对也确实把 `com.apple.Safari` 写进了信任列表,可真播起来上报方是 `com.apple.WebKit.GPU` —— 不在名单里 → 整条播放不被采纳,同时"发现未知播放器"那张卡还跳出来要用户再信任一个看不懂的 bundle id。**两个身份、两套机制**:配对认的是"我们要对谁发 AppleScript"(`com.apple.Safari`),准入认的是"谁在上报 Now Playing"(`com.apple.WebKit.GPU`),中间原本没人搭桥。
+
+修法是一张「媒体进程 → 宿主 App」的别名表(`TrustedPlayers.mediaProxyOwners`,Go 侧 `system.go` 同名同内容),`isAccepted` 查不到本体时再查一次宿主。
+
+- ⚠️ **选别名而不是"配对时连带把代理进程也写进信任列表"**:后者会在「已信任的其它播放器」里留下一条用户看不懂的 `com.apple.WebKit.GPU`,而且撤销配对时还得记得一起删(漏了就是永久多一条)。别名跟着宿主的信任状态自动生效/失效,没有需要同步维护的第二份状态。
+- ⚠️ **别名是单向的**:信任了代理进程**不**代表 Safari 本身被信任(反向查表不成立),两侧都有断言钉住。
+- ⚠️ **只登记实测见过的**。`com.apple.WebKit.WebContent` 这类同族进程没有实测到它报过 Now Playing,不凭猜测加 —— 真遇到了在表里补一行,其余逻辑不用动。
+- ⚠️ **两侧必须同时改**(同 `isAcceptedPlayerBundleID` / `TrustedPlayers.isAccepted` 那对)。Swift 8 条断言、Go 6 条断言各自对称覆盖:别名生效/别名不是白名单/别的浏览器不顺带放行/单向性/宿主反查/Chromium 不在表里,外加**跨层不变量**——别名一旦生效,"发现未知播放器"卡必须同时不再提议它(那张卡的判据就是 `!isAccepted`,两者永久绑定)。
 - **「装没装」这道门(`isInstalled` = `NSWorkspace.urlForApplication(withBundleIdentifier:) != nil`)在两侧都生效**(2026-08-31 用户问「我们本地如果没有装的话是不是也不会显示」时补齐的)。在此之前只有「+」菜单的候选过滤了它,而已配对浏览器的**头像**是直接铺 `browserPlatformPairs` 的 —— 于是"配对过、后来卸载了"会一直留一个取不到图标的虚线方框(`browserIconView` 的 `app.dashed` 兜底),点开还给一份无意义的权限状态。⚠️ **只是不显示,配对记录原样留着**,装回来自动恢复;这跟「指定的屏幕拔掉后自动回落、偏好保留、插回来即恢复」是同一个口径(05-notch.md),**不要**顺手 `unpairBrowser` 去"清理"——那是替用户删他的配置。
 
 ### 轮询、事件加速与去抖动
@@ -175,7 +254,7 @@ nil 快照(Music.app stopped/退出、播放列表放完、.auto 或 media-contr
 
 ### 播放控制(写路径,MusicPlaybackController)
 
-- playPause/nextTrack/previousTrack/seek 走双后端 `dispatch`:设置值为 `.appleMusic` → AppleScript 发给 Music.app;**其它任何档(含 .auto)** → media-control 控制指令(作用于系统 Now Playing 焦点,代码注释断言读取路径确认在播时天然作用于该播放器)。seek 有 `preferAppleScript` 覆盖:.auto 下实际在播 Apple Music 时,读路径是 AppleScript 精确播放头,写路径也走同一条(`LocalPlaybackSource.seek` 按 `lastSnapshot?.bundleIdentifier` 判)。⚠️待核对:playPause/上一首/下一首没有同款覆盖——.auto + Apple Music 实际在播时它们走 media-control,行为应等效但未见实测记录。
+- playPause/nextTrack/previousTrack/seek 走双后端 `dispatch`:选中集合**恰好**是 `{Apple Music}`(`PlaybackPlayerPreference.isExclusivelyAppleMusic`,2026-09-01 多选后从"设置值 == .appleMusic"改写成这个判据,行为对单选年代逐位不变)→ AppleScript 发给 Music.app;**其它任何组合(含 .auto、含多选)** → media-control 控制指令(作用于系统 Now Playing 焦点,代码注释断言读取路径确认在播时天然作用于该播放器)。seek 有 `preferAppleScript` 覆盖:非排他选择下实际在播 Apple Music 时,读路径是 AppleScript 精确播放头,写路径也走同一条(`LocalPlaybackSource.seek` 按 `lastSnapshot?.bundleIdentifier` 判)。⚠️待核对:playPause/上一首/下一首没有同款覆盖——.auto/多选 + Apple Music 实际在播时它们走 media-control,行为应等效但未见实测记录。
 - `seek(toMs:)` 除发指令外**立刻**本地重锚三处(trackPosSeconds/posPrevWall/posErrEMA 清零)+ 当场重建 anchor + `pollGeneration += 1` 作废在飞轮询 + 立即 `fastTick()`——不重锚的话小于 2s 的拖动会被 seek 容差永久吞掉。秒数经 `seekArgument` 格式化(固定 3 位小数、en_US_POSIX、负值夹 0、上界故意不夹)。
 - 「喜欢」(favorited/loved 双属性名兜底,macOS 版本间改名)、播放模式(三档:列表/随机/单曲循环)、音量:仅 AppleScript,`supportsExtendedControls` = Apple Music 和 Spotify;Spotify 无单曲循环档(`supportsRepeatOne` 仅 Apple Music,脚本接口只有布尔 repeating);QQ/网易云完全不支持(MediaRemote 只有播放控制)。
 - 所有 Spotify 脚本前垫 running 守卫(发任何命令都会启动 Spotify);写指令"发完就不管"不阻塞,读回值的走 `runAppleScriptCapturing`(5s 超时,**不要在主线程调**)。
@@ -185,7 +264,7 @@ nil 快照(Music.app stopped/退出、播放列表放完、.auto 或 media-contr
 
 `MusicAutomationPermission`(仅覆盖 Lyrimuse 自己这份 TCC 身份;collector 是独立签名身份、独立一条 TCC 记录,App 无 API 可查/可触发,设置页只给说明+跳系统设置按钮):
 
-- 只有 Apple Music 需要(`checkForCurrentPlayer` 对其它播放器直接返回 true);QQ/网易云/Spotify 的 media-control 路径实测全程不触发权限弹窗。
+- 只在选中集合排他地是 `{Apple Music}` 时需要真的去查(`checkForCurrentPlayer`/`checkForCurrentPlayerSafely` 用 `PlaybackPlayerPreference.isExclusivelyAppleMusic` 判断,对其它组合直接返回 true);QQ/网易云/Spotify 的 media-control 路径实测全程不触发权限弹窗。设置页「Apple Music 自动化」权限卡本身的**展示条件**更宽松(选中集合包含 Apple Music 即显示,不要求排他,见上面"多选"一节)——查权限的判据和显示管理入口的判据是两件不同的事,故意不共用同一个条件。
 - 状态查询用 `AEDeterminePermissionToAutomateTarget`(noErr=已授权、-1743=已拒绝、-1744/-600/其它=当"还没问过"——宁可多问一次也不把模糊状态误判成已拒绝)。
 - 该 API 在主线程调用有据可查可能**永久挂起**(SpamSieve 同坑)→ 所有请求路径走 `requestWithTimeout`(后台任务 vs 8s 超时竞速,超时返回 nil="还不确定");播放控制按钮/快捷键专用 `checkForCurrentPlayerSafely`(已确定状态直接同步返回,只有真没问过才走竞速,且不后台拉起 Music.app)。
 - Music.app 没在运行时系统授权弹窗根本不弹(实测与文档不符)→ 设置/引导页显式点"请求权限"前先 `activates=false` 后台拉起 Music.app。
@@ -334,5 +413,8 @@ vs 目录 289.766),拿目录值去盖反而是降精度。覆盖就该待在产�
 
 14. **"陆续支持中"的提示是网格里第 7 张卡,不是文案**(2026-08-25,一次返工才落到位):用户第一次说"在最后面加几个点标识陆续支持中"时,理解成文案末尾加「……」,改完发截图纠正——指的是六张真选项排完 2 行后网格自己空出来的第三行第一格。改法:`playerChoiceStep` 的 `LazyVGrid` 在 `ForEach(PlaybackPlayer.displayOrder)` 后面紧跟一张 `MorePlayersComingCard`(不用 `Button` 包、没有选中态描边/底色,虚线框+三个点跟六张真选项区分开,不会被当成"点了没反应的坏按钮"),`LazyVGrid` 按声明顺序自然往下排,不用另外指定网格坐标。**只在引导页用**——设置页那张卡六个选项正好铺满 2 行,不需要它。
 15. **图标网格从引导页搬到设置页时,连带把"已信任的其它播放器"卡也一起改了**(2026-08-25 用户要求"和谐"):这张卡跟"播放器"卡紧挨着,原来每一行的图标是通用的 `checkmark.seal` SF Symbol,跟旁边六个内置播放器清一色真图标放在一起会显得脱节。给 `SettingsRow` 加了一个新的可选参数 `iconImage: NSImage?`(跟已有的 `icon: String?` 二选一,优先判 `iconImage`),让"已信任的其它播放器"列表也能显示这些第三方 App(比如 Arc 浏览器)自己的真图标——原有全部调用点没传这个新参数,行为不受影响。顺带给这张卡也加了一个 `SettingsCardHeader` 标题("已信任的其它播放器"),跟"播放器"卡的标题成对,不是"一张有标题一张没有"。图标查找收拢进 `AppIconResolver`(见代码锚点),同一份缓存三处共用(此前"正在播放"面板角标和 `PlayerChoiceCard` 各自维护过一份)。
+
+    - **2026-09-01 补齐最后一处漏的**:同一条理由当时**只改了"已信任"那张卡**,而「发现未知播放器」那张(`unknownPlayerCard`,一键「加入信任列表」的那张)还留着通用的 `questionmark.app.dashed`。用户点名要它也显示真图标 —— 而它恰恰是三张卡里**最需要图标的一张**:另外两张里的 App 用户本来就认识,这张问的是"这个你没见过的 App 要不要信任",图标正是他判断"这是我刚在用的那个浏览器"最快的线索,比 `subtitle` 里 bundle id 那行小字快得多。改动就是给那个 `SettingsRow` 传一个 `iconImage: AppIconResolver.icon(forBundleID: seen.bundleID)`。
+    - 取不到图标(理论上不太可能:它此刻正在报播放、必然装着)才退回虚线问号 —— 那个占位本身仍然成立:"这个 App 是谁我们还不确定"。实测确认 `NSWorkspace.urlForApplication(withBundleIdentifier:)` 对截图里那个 `company.thebrowser.Browser` 取得到 32×32 的 Arc.app 图标,不存在的 bundle id 如实返回 nil。
 
 ⚠️待核对:设置为「自动识别」且实际在播 Apple Music 时,playPause/上一首/下一首经 `MusicPlaybackController.dispatch` 走 media-control(只有 seek 有 `preferAppleScript` 覆盖)——代码注释断言 media-control 控制指令对系统 Now Playing 焦点生效、应可控制 Music.app,但仓内未见对这一具体组合的实测记录。

@@ -136,7 +136,8 @@ enum DiagnosticsExporter {
         // 「当前认哪个播放器」是排查"检测不到播放/歌词出不来"时第一个要问的问题,而它有两层:
         // 用户在设置里选的(可能是"自动识别"),和这一刻实际被认下来的那个 bundle id。两层
         // 都要报——只报设置值的话,"自动识别"这一档等于什么都没说。
-        lines.append("Player (setting): \(PlaybackPlayerPreference.current.rawValue)")
+        // 2026-09-01 多选后:可能不止一个,按 rawValue 逗号拼接全部报出来。
+        lines.append("Player (setting): \(PlaybackPlayerPreference.selected.map(\.rawValue).sorted().joined(separator: ", "))")
         // 标签写 "last detected" 而不是 "now":这个值来自最近一次成功的快照,而快照在停播/
         // 检测失效时不会被清掉,所以停播之后它仍然报最后一次识别到的播放器。读报告的人得
         // 知道这一点,否则会把陈旧值当成当下状态。

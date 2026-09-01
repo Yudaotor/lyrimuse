@@ -41,11 +41,17 @@ struct EqualizerBars: View {
     /// 绑在一起**的:相邻 tick 的目标值互不相关,越快抖得越凶。换成下面的连续函数之后,
     /// 快反而是顺滑的前提(采样越密,越贴近那条连续曲线)。
     ///
+    /// 2026-09-01 再从 0.10 降到 0.08(用户反馈"动的幅度太小、不够动感",连同下面的
+    /// `maxHeight`/频率一起调):下面两个频率常量整体调高了约 25%,采样率跟着同比例
+    /// 提高,保持"每个周期的采样点数"跟调之前基本一致——否则只提频率不提采样率,最快那根
+    /// 条子(bar 4)会退回到 2026-08-23 之前那种"稀疏采样、线性补间啃出棱角"的机械感,
+    /// 等于白改。
+    ///
     /// ⚠️ 这**没有**推翻 2026-08-19 的性能结论。那条说的是"补间时长不能等于间隔,否则
     /// 尺寸动画 100% 时间在跑、把窗口钉死在持续合成状态";这里补间仍然只占半个周期
     /// (见 body 末尾),每个周期照样有一半时间完全静止,合成循环该 idle 还是 idle。变的
-    /// 只是**求值频率**:3.6Hz → 10Hz,仍远低于逐字填色那条 30Hz 的热路径。
-    private static let interval: TimeInterval = 0.10
+    /// 只是**求值频率**:3.6Hz → 10Hz → 12.5Hz,仍远低于逐字填色那条 30Hz 的热路径。
+    private static let interval: TimeInterval = 0.08
     /// 2026-08-31 改成 iPhone 那种"上下对称、从中线生长"的声浪。条数几经调整:4(原始)
     /// → 8(照参考图) → **5**(用户看过 8 根的实机效果后说"太多了")。
     ///
@@ -65,7 +71,12 @@ struct EqualizerBars: View {
     /// 耳朵这个尺寸上会细到发虚。减到 5 根之后又回调了一点(1.6 → 1.8),条少了太细会显得稀疏。
     private static let barWidth: CGFloat = 1.8
     private static let spacing: CGFloat = 1.5
-    private static let maxHeight: CGFloat = 11
+    /// 2026-09-01 从 11 提到 16(用户反馈"动的幅度太小、不够动感")。耳朵这一行的高度
+    /// 是 `NotchLyricsWindowController.contentTopInset`,实测下限是自动隐藏菜单栏时的
+    /// `fallbackNotchHeight = 24`(外接屏常见 24~37pt);16pt 居中放进 24pt 高的行,
+    /// 上下各留 4pt,跟同一行里 `earArtworkSide` 那枚封面缩略图的量级相当,不会顶到行
+    /// 边界裁切。
+    private static let maxHeight: CGFloat = 16
     /// 静止时的高度。不取 0 —— 归零会让整排条子消失成一条线,暂停时看着像出了故障。
     /// 对称形态下这是"中线上的一排小短横",跟 iPhone 暂停时的观感一致。
     private static let minHeight: CGFloat = 2.5
@@ -106,10 +117,10 @@ struct EqualizerBars: View {
             //
             // 曲线从 easeInOut 换成 linear:目标值本身已经是连续曲线上的采样点,再套
             // ease 会在每个采样点两端各加一次加减速,反而把平滑的正弦啃成一段段的"顿挫"
-            // —— 那正是"机械感"的另一半来源。linear 把相邻采样点直连,10Hz 下就是这条
+            // —— 那正是"机械感"的另一半来源。linear 把相邻采样点直连,12.5Hz 下就是这条
             // 曲线的分段线性逼近,肉眼即连续。
             //
-            // 时长仍是半个周期(0.05s),不是整个周期 —— 见 interval 注释里对 2026-08-19
+            // 时长仍是半个周期(0.04s),不是整个周期 —— 见 interval 注释里对 2026-08-19
             // 那条性能结论的说明。
             .animation(.linear(duration: Self.interval * 0.5), value: height(bar: 0, time: t, amplitude: amp))
             .animation(.easeInOut(duration: Self.interval), value: isPlaying)
@@ -132,13 +143,19 @@ struct EqualizerBars: View {
     /// (`MenuBarLiveIconView.buildEqualizer`,注释原文「双正弦打破机械感」)是同一个手法,
     /// 保持两处观感一致。
     ///
-    /// 频率取 1.7/2.9 Hz 附近并按条序错开:整体节奏接近中速歌曲的拍点,又不跟任何真实
+    /// 频率取 2.2/3.6 Hz 附近并按条序错开:整体节奏接近中速歌曲的拍点,又不跟任何真实
     /// 节拍同步(它本来就与音频无关,装成对得上反而是虚假承诺)。
+    ///
+    /// 2026-09-01 从 1.7/2.9 调到 2.2/3.6(连同上面 `maxHeight`/`interval` 一起,回应
+    /// "动的幅度太小、不够动感"):两个频率同比例调高约 25%(比值仍是 3.6/2.2≈1.64,
+    /// 跟原来的 2.9/1.7≈1.71 一样不成简单整数比,保留"两两错开、不会看出规律"的性质),
+    /// `interval` 同比例从 0.10 降到 0.08 保持采样密度,不然只提频率会让最快那根条子
+    /// 露出线性补间的棱角。
     private func height(bar: Int, time: Double, amplitude: Double) -> CGFloat {
         guard isPlaying else { return Self.minHeight }
         let phase = Self.barPhase(bar)
-        let f1 = 1.7 + Double(bar) * 0.31
-        let f2 = 2.9 + Double(bar) * 0.23
+        let f1 = 2.2 + Double(bar) * 0.34
+        let f2 = 3.6 + Double(bar) * 0.26
         let raw = 0.62 * sin(time * f1 + phase) + 0.38 * sin(time * f2 + phase * 1.7)
         // raw ∈ [-1, 1] → [0, 1]
         let unit = (raw + 1) / 2

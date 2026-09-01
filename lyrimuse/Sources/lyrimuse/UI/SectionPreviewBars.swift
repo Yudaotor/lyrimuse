@@ -84,6 +84,18 @@ enum SectionPreviewMetrics {
 // 长短句来回切都不伸缩,自适应模式下短句跟着文字缩短(见 MenuBarLyricsWidthMode)。
 @MainActor
 struct MenuBarPreviewBar: View {
+    /// 在仿菜单栏那条下面**预留一条通道**给宽度调整条(2026-09-01,用户第三次点名要
+    /// "和之前两个页面一样加到这个预览框里面去")。默认 false —— 这个开关只为编辑台那个
+    /// 宿主存在,别的地方拿这条预览去用时形状不变。
+    ///
+    /// 做法照 `OverlayEditorStage`:那块舞台在卡片下面留一条 `widthBarLaneHeight`(44pt)
+    /// 高的通道,壁纸铺进通道里,调整条浮在上面。这里通道矮一些(28pt)——胶囊本身就比
+    /// 那边的窄,而这条预览总高只有 69pt,留 44pt 会让预览条本身显得很挤。
+    var reservesWidthLane = false
+
+    /// 见 reservesWidthLane。
+    static let widthLaneHeight: CGFloat = 28
+
     @ObservedObject private var settings = AppSettings.shared
     @State private var line: SyncedLyricLine?
     // 逐字染色对表用的播放时钟快照(2026-08-22 加)。这几个跟 line 一样是
@@ -142,18 +154,22 @@ struct MenuBarPreviewBar: View {
         return false
     }
 
-    /// 预览下面那行说明。必须跟着宽度模式走 —— 自适应模式下还写"固定宽度"是直接说反了,
-    /// 而这行字的全部作用就是解释上面那一格为什么是这个宽度。
+    /// 预览下面那行说明。
+    ///
+    /// ⚠️ 2026-09-01 砍掉了宽度和模式(原来是「预览 · 固定宽度 150pt」/「预览 · 自适应,
+    /// 最宽 150pt」)。同一件事这时候已经被说了**三遍**:虚线边界直接把那一格画出来了
+    /// (见 slotEdgeOutline —— 固定宽度时右边空一块、自适应时贴着文字收紧,模式也在里面),
+    /// 具体数值在编辑台「最大宽度」那条滑杆右侧,这行字是第三遍。用户原话是把那半句框起来
+    /// 「去掉红框文案」。
+    ///
+    /// **留着的是滚动那一句** —— 它是这行字唯一说得出、而画面说不出的事:那一格的宽度看得见,
+    /// "这句放不下、会横向滚动"看不见。别把"会滚动"说成"已截断",超宽时到底是滚还是截由
+    /// 宽度决定,说反了正是让人觉得这个功能"怪怪的"的原因之一。
+    ///
     /// presentation 由调用方(body)求值一次传进来 —— 它看着像存量属性,实际每次访问都做
     /// 一趟 NSString 测宽(2026-08-20 性能审计,原来 body 一轮里被求值 2-3 次)。
     private func previewCaption(_ p: MenuBarMarqueeRenderer.Presentation) -> String {
-        let width = "\(Int(settings.menuBarLyricsWidth))"
-        let base = settings.menuBarLyricsWidthMode == .fixed
-            ? String(format: L10n.t("预览 · 固定宽度 %@pt"), width)
-            : String(format: L10n.t("预览 · 自适应，最宽 %@pt"), width)
-        // 别把"会滚动"说成"已截断" —— 超宽时到底是滚还是截,由宽度决定,说反了正是
-        // 让人觉得这个功能"怪怪的"的原因之一。
-        return Self.willScroll(p) ? base + L10n.t("，本句会横向滚动") : base
+        Self.willScroll(p) ? L10n.t("预览 · 本句会横向滚动") : L10n.t("预览")
     }
 
     /// 仿菜单栏那一条的高度。真菜单栏内容区约 22pt,这里取整到 24 留一点呼吸。
@@ -170,12 +186,16 @@ struct MenuBarPreviewBar: View {
             .font(.caption)
             .foregroundStyle(.secondary)
             .monospacedDigit()
+            // 预留通道时把 caption 顶在菜单栏条正下方,剩下的空间留给浮在下面的胶囊 ——
+            // 不加这个 Spacer 的话 VStack 会把 caption 均摊到通道中间、正好跟胶囊叠上。
+            if reservesWidthLane { Spacer(minLength: 0) }
         }
         .padding(.top, SectionPreviewMetrics.topPadding)
         .padding(.bottom, SectionPreviewMetrics.bottomPadding)
         // 三条预览栏共用一个高度(见 SectionPreviewMetrics)。这一条内容最少,多出来的
         // 空间留白 —— 留白远好过让下面整页跟着跳。
-        .frame(height: SectionPreviewMetrics.barHeight(cardHeight: Self.cardHeight))
+        .frame(height: SectionPreviewMetrics.barHeight(cardHeight: Self.cardHeight)
+               + (reservesWidthLane ? Self.widthLaneHeight : 0))
         .frame(maxWidth: .infinity)
         .background(Color(nsColor: .windowBackgroundColor))
         .onReceive(PlaybackCoordinator.shared.$currentLine.removeDuplicates()) { line = $0 }
@@ -194,6 +214,7 @@ struct MenuBarPreviewBar: View {
         HStack(spacing: 0) {
             Spacer(minLength: 12)
             lyricsSlot(p)
+                .overlay(slotEdgeOutline)
             // 右边这几个只是参照物,让"歌词占了菜单栏多宽"看得出来。用真实时钟而不是
             // 写死一个时间 —— 假数据会让人下意识觉得这块预览"不是真的"。
             HStack(spacing: 11) {
@@ -235,6 +256,33 @@ struct MenuBarPreviewBar: View {
             }
         }
         .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
+    }
+
+    /// 歌词那一格的虚线边界(2026-09-01,用户要求"跟悬浮歌词一样把清晰的边界用虚线画出来")。
+    ///
+    /// 套在 `lyricsSlot` 上,所以**不用自己算宽度** —— 那一格的 frame 本来就恒等于
+    /// 「最大宽度」(`.fixed` 分支)或文字自然宽度(`.text` 分支),虚线贴着它画出来的就是
+    /// 真实边界。顺带把两种宽度模式的差别也画出来了:固定宽度时虚线框右边空出一块,
+    /// 自适应时虚线贴着文字收紧 —— 这正是原来 caption 里那句话在说的事(见 previewCaption)。
+    ///
+    /// 配色照 `OverlayEditorStage.windowEdgeOutline` 那条老规矩:**固定白色 + 黑色投影,
+    /// 不跟深浅色模式走**。理由在这里同样成立 —— 这一格压在 `DesktopWallpaperSample` 那张
+    /// 真实壁纸上(再压一层 `.ultraThinMaterial`),底色什么样完全不受 App 控制,语义色
+    /// (primary/secondary)在浅壁纸上会直接读不出来;投影负责在亮壁纸上给白线兜一圈暗轮廓。
+    ///
+    /// 透明度取 0.6 而不是悬浮歌词那条的 0.5:那一圈是常驻在**用户真实桌面**上的,画满了
+    /// 会变成一个"假窗口边框"(真窗口并没有边),所以刻意克制;这一圈在**预览**里、而且是
+    /// 它接替了 caption 去回答"这一格有多宽",读不清就等于什么都没说。
+    ///
+    /// 没有悬浮歌词那条"拖动宽度时提亮到 0.95"的联动:那需要把「最大宽度」滑杆的
+    /// onEditingChanged 一路传到这里,而滑杆现在住在 `MenuBarEditorStage`(另一个文件、
+    /// 另一个所有者)。真需要再补,属于加法。
+    private var slotEdgeOutline: some View {
+        RoundedRectangle(cornerRadius: 3, style: .continuous)
+            .strokeBorder(Color.white.opacity(0.6), style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
+            .shadow(color: .black.opacity(0.55), radius: 1)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
     }
 
     /// 歌词那一格。宽度恒等于设置里的「显示宽度」,跟真状态栏项一致(那边靠一张固定尺寸的

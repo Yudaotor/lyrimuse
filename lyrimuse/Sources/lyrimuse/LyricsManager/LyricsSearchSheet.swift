@@ -40,9 +40,16 @@ struct LyricsSearchSheet: View {
     // 表达不了"进行中 + 已经有部分结果"这个中间状态。
     @State private var candidates: [LyricsSearchService.Candidate] = []
     /// 给"还在搜索"那两处提示缀的进度,形如 "（2/5）"。还没收到任何一行时是空串。
+    ///
+    /// 轮次标识(2026-09-02,用户反馈):collector 的兜底轮(首歌手变体/标题反查,见
+    /// 第 09 章)每轮都重新扫全部源,进度"到 8/8 又回到 1/8"——数字回跳没有任何标注,
+    /// 读起来像出了错。第 2 轮起在进度后面缀"［2］"标出轮次(放后面是用户定的位置);
+    /// 第 1 轮不缀——绝大多数搜索只有一轮,常驻一个"［1］"是噪音,而标识恰好在数字
+    /// 回跳那一刻出现,自己解释自己。
     private var searchProgressSuffix: String {
         guard sourcesTotal > 0 else { return "" }
-        return "（\(sourcesDone)/\(sourcesTotal)）"
+        let roundSuffix = searchRound >= 2 ? "［\(searchRound)］" : ""
+        return "（\(sourcesDone)/\(sourcesTotal)）\(roundSuffix)"
     }
 
     // 八个歌词源的完整名单——跟 collector 侧 enrich.go 的 lyricSourceNames 手工保持一致
@@ -95,7 +102,10 @@ struct LyricsSearchSheet: View {
                 // 只有三个源(netease/musixmatch/lyricfind)接了具体失败原因诊断,见
                 // searchcli.go 的 lyricSourceFailureReasons 头注——其它源没查到具体原因
                 // 时这里就是 nil,如实只显示"未给出候选",不编一个没核实过的理由。
-                let reason = responded ? nil : sourceFailureReasons[source]
+                // sourceFailureReasonCodes 里存的是稳定代码,经 LyricSourceFailureReason
+                // 翻成当前 App 界面语言的人话再显示,见该类型的头注。
+                let reason = responded ? nil : sourceFailureReasonCodes[source]
+                    .map(LyricSourceFailureReason.text(forCode:))
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 6) {
                         Image(systemName: responded ? "checkmark.circle.fill" : "xmark.circle")
@@ -121,14 +131,17 @@ struct LyricsSearchSheet: View {
     }
 
     // 未给出候选的源,查得到具体原因的那几个(2026-08-31)——给 sourceAvailabilityList
-    // 那颗弹出面板用,见 LyricsSearchService.SearchUpdate.sourceFailureReasons 的注释。
-    @State private var sourceFailureReasons: [String: String] = [:]
+    // 那颗弹出面板用,见 LyricsSearchService.SearchUpdate.sourceFailureReasonCodes 的注释。
+    @State private var sourceFailureReasonCodes: [String: String] = [:]
 
     @State private var isSearching = false
     // 已经回来几个源 / 一共几个 —— 只用来在"还在搜"的提示后面缀一个 (X/Y),让干等的时候
     // 知道进度在动。总数为 0(还没收到任何一行)时不显示,不写成 (0/0)。
     @State private var sourcesDone = 0
     @State private var sourcesTotal = 0
+    // 第几轮全源检索(collector 兜底轮每轮重扫 8 个源),给 searchProgressSuffix 的
+    // 轮次前缀用,语义见 LyricsSearchService.SearchUpdate.round。
+    @State private var searchRound = 1
     // searchGeneration:第几轮搜索。load() 有三个入口(.task 首次进入、"重新搜索"按钮、
     // 输入框 .onSubmit),按钮有 .disabled(isSearching) 挡着,但 .onSubmit 没有——改完
     // 查询词直接回车就能在上一轮还没结束时开第二轮。两轮各自持有自己的进度回调,
@@ -549,7 +562,8 @@ struct LyricsSearchSheet: View {
         instrumental = false
         sourcesDone = 0
         sourcesTotal = 0
-        sourceFailureReasons = [:]
+        searchRound = 1
+        sourceFailureReasonCodes = [:]
         isSearching = true
         do {
             try await LyricsSearchService.shared.search(artist: artist, title: title, album: album, durationSecs: durationSecs) { update in
@@ -559,7 +573,8 @@ struct LyricsSearchSheet: View {
                 instrumental = update.instrumental
                 sourcesDone = update.sourcesDone
                 sourcesTotal = update.sourcesTotal
-                sourceFailureReasons = update.sourceFailureReasons
+                searchRound = update.round
+                sourceFailureReasonCodes = update.sourceFailureReasonCodes
                 // 默认项优先选"这首歌眼下实际生效的来源"(currentSource)——候选是陆续
                 // 到达的,currentSource 对应的那条不一定在第一批就到,所以只要用户还没
                 // 手动点过(userPickedSource),每来一批新候选都重新评估一次,等它一出现

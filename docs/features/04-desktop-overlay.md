@@ -188,8 +188,8 @@
 | 行为 | 机制 | 与灵动岛的关系 |
 |---|---|---|
 | 手动显示/隐藏 | `setVisible` 写 `classicOverlayEnabled`,窗口 orderFront/orderOut | 各自独立开关 |
-| 暂停/无播放时隐藏 | `hideWhenNotPlaying`;实际可见 = 手动开 AND (未开自动隐藏 OR 正在播)。跟的是 `isPlayingSmoothed`(停止侧带 0.5s 宽限,吸收换歌/seek 抖动;恢复播放立即响应),恢复播放自动重新显示,不改手动开关本身 | **共享同一设置项**,设置页"自动隐藏"卡一个 Toggle 同时下发给两个控制器(只发给当下开着的那个) |
-| 截屏/录屏时隐藏 | `hideDuringScreenCapture` → `window.sharingType = .none`:截图/录屏/会议共享拍不到,用户自己仍看得见 | 同上,共享设置项 |
+| 暂停/无播放时隐藏 | `hideWhenNotPlaying`;实际可见 = 手动开 AND (未开自动隐藏 OR 正在播)。跟的是 `isPlayingSmoothed`(停止侧带 0.5s 宽限,吸收换歌/seek 抖动;恢复播放立即响应),恢复播放自动重新显示,不改手动开关本身 | ⚠️ **2026-09-01 起不再与灵动岛共享**:那天用户要求把「自动隐藏」卡从「其它」段搬进两个形态各自的页面,一旦按形态分栏展示、用户就会按形态去理解它,于是连值一起拆开。这个键**只归悬浮歌词**,灵动岛那份是 `notchHideWhenNotPlaying` |
+| 截屏/录屏时隐藏 | `hideDuringScreenCapture` → `window.sharingType = .none`:截图/录屏/会议共享拍不到,用户自己仍看得见 | 同上,只归悬浮歌词;灵动岛那份是 `notchHideDuringScreenCapture` |
 | 拖动前先长按(2026-08-23) | `overlayDragNeedsLongPress`,默认**关**;关=按住歌词直接拖(靠精准歌词热区,四周空白仍穿透)、开=旧的长按 0.35s。见上面「拖动」那条 | 只对悬浮歌词生效 |
 | 指针划过时让开(2026-08-22) | `overlayFadeOnHover`;在 `LyricsOverlayView` 顶层挂 `.opacity`(淡到 15%,**不是** orderOut——那会跟上面三个真正的可见性来源抢同一个开关)。淡入 0.18s 比淡出 0.12s 慢:扫过去要立刻让开才有用,回来从容点更好。判据是 `isHoveringLyrics`(**指针压在歌词文字上**),不是 `isHoveringForControls`(整窗)——见下面「歌词命中判定」 | **只对悬浮歌词生效**;灵动岛贴刘海、hover 是它展开的手势,让开会跟展开打架 |
 
@@ -213,7 +213,7 @@
 | 指针划过时让开 | `overlayFadeOnHover`;指针压在**歌词文字**上时整窗淡到 15%,离开恢复。只对悬浮歌词生效。2026-08-30 起在「行为」栏第 3 格(第三步曾在旁边配一颗「预演」按钮,第十步按用户要求删了) |
 | 恢复默认文字与配色 | 重置跟随封面+字体字号+四个颜色字段,不含宽度/锁定 |
 | 截屏/录屏时隐藏(「其它」段) | sharingType;与灵动岛共享 |
-| 暂停/无播放时隐藏(「其它」段) | 自动隐藏;与灵动岛共享 |
+| 暂停/无播放时隐藏(本段「自动隐藏」卡) | 自动隐藏;**只对悬浮歌词生效** |
 | 显示罗马音 / 罗马音语言(「歌词」页) | 罗马音行与逐词注音的显隐、按语言过滤 |
 | 显示译文(「歌词」页) | 译文行显隐 |
 | 双行显示下一句(「歌词显示 → 悬浮歌词 → 排版」组) | 预览行显隐。⚠️ 副标题「在当前句下方多显示一句」2026-08-30(第十二步)按用户要求删了,只剩标题。2026-08-31(第十三步)从「文字」组挪到「排版」组 |
@@ -224,7 +224,7 @@
 
 - **数据源链**:显示内容全部来自 `PlaybackCoordinator`(单例),它转发 `LocalPlaybackSource`——2 秒轮询 media-control 拿播放快照,20Hz `fastTick` 用 `ProgressAnchor` 外推位置定"当前行";歌词正文来自 collector 的 enrich 缓存(`EnrichCacheReader.lookup`)。「搜索歌词中/暂无歌词/纯音乐/网络连接失败」四个占位状态分别对应 collector 侧的解析进度/`resolved`/`instrumental`/网络状态。悬浮窗视图**不整对象订阅**这两个单例——经 `OverlayPlayback` 窄代理只订阅它实读的二十来个字段(2026-08-19,LiveRowPlayback 同款模式),歌词窗口音量滑杆/灵动岛封面这类无关高频写入不再打醒它的 body;`anchor`/`currentLyricsOffsetMs` 由 TimelineView 闭包直读协调器,不入订阅。
 - **歌词处理管线共享**:署名行过滤(`strippingCreditLines`)、简繁转换(`lyricsChineseVariant`)、逐字/整行选择(`preferWordLevelKaraoke` + 覆盖率判据)都在引擎/数据源层完成,悬浮窗、灵动岛、歌词窗口、菜单栏看到的是同一份结果。署名行过滤直接影响悬浮窗动态高度(漏判的长职员表行曾把窗口撑爆)。
-- **与灵动岛**:开关互相独立可同开;共享 `hideWhenNotPlaying`、`hideDuringScreenCapture` 两个设置项和 `WordKaraokeGradient`(30Hz 上限+渐变算法);「跟随封面」(`followsCoverArt`)开关也被灵动岛读走(NotchLyricsView.accentOrWhite),但两边用的强调色变体不同(悬浮窗按"与描边对比/够亮",灵动岛按"深底够亮")。
+- **与灵动岛**:开关互相独立可同开;共享 `WordKaraokeGradient`(30Hz 上限+渐变算法);**`hideWhenNotPlaying` / `hideDuringScreenCapture` 2026-09-01 起不再共享**(拆成了两份,灵动岛那份叫 `notchHide*`,见 05-notch.md「自动隐藏」那两条);「跟随封面」(`followsCoverArt`)开关也被灵动岛读走(NotchLyricsView.accentOrWhite),但两边用的强调色变体不同(悬浮窗按"与描边对比/够亮",灵动岛按"深底够亮")。
 - **与歌词窗口**:共享 `showRomanization/showTranslation/showNextLinePreview` 三个开关、`WrapLayout`、`KaraokeFill`、LyricDuet;但字体/字号/三个颜色**只**对悬浮窗生效,歌词窗口用固定系统配色;对唱 nil 兜底两边不同(悬浮窗居中、窗口靠左)。
 - **与歌词时间轴校正**:`LyricsOffsetStore` 的基准(全部 / 按播放器,二选一)+ 单曲微调合成 `currentLyricsOffsetMs`,同时作用于"当前行判定"(引擎内)和"逐字填色基准"(视图内显式相加)。
 - **与设置页预览**(⚠️ 下面这一整条描述的是 2026-08-31 之前的钉条 `OverlayPreviewBar`,它连同那份渲染已经删除;编辑台从第八步起画的就是真 `LyricsOverlayView`,不再有第二份渲染。留档是因为「第二份渲染必然漂」这条教训值钱):`OverlayPreviewBar` 曾是刻意维护的第二份渲染实现,复用 `settings.mainFont`/`backgroundColor`/`displayForegroundColor` 规则和 `lyricsTextStroke`(为此放开成 internal)。**逐字填色也复用**(2026-08-26 用户要求,原来这里不复制)——真在播放且当前行有逐字数据时,用同一套 `WordKaraokeGradient`/`KaraokeFill` 算法、同一个播放位置来源(`PlaybackCoordinator.anchor`/`pausedPositionMs`/`currentLyricsOffsetMs`)按真实进度逐字填色,`karaokeContent`/`wordText` 是 `LyricsOverlayView.mainLine`/`wordText` 的镜像写法;没在播放或这一行没有逐字数据时退回原来"整行最终颜色"的静态样子。仍不复制的是逐字行的自动换行(`WrapLayout`,预览高度固定、长行只裁切)和罗马音/译文行;圆角 16 是手抄的常量,改视图记得改预览。

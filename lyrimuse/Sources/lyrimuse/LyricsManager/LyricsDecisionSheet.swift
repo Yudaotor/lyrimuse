@@ -243,44 +243,74 @@ struct LyricsDecisionSheet: View {
                 .frame(maxWidth: .infinity, alignment: .center)
                 .padding(.vertical, 24)
         } else {
+            // 只要**这一轮里有任何一条**候选带封面,就给所有行都留出封面位;一条都没有
+            // 就整轮不留 —— 这样:
+            //   - 老存档(2026-09-01 之前固化的,压根没有 cover_url 字段)长得跟以前一模
+            //     一样,不会变成一列灰色音符占位符,那看着像坏了;
+            //   - 新存档里 LRCLIB/QQ 这种本来就不给封面的源留一个占位符,行左边缘仍然
+            //     对齐,不会参差。
+            let showsCover = candidates.contains { !($0.coverUrl ?? "").isEmpty }
             VStack(alignment: .leading, spacing: 10) {
                 ForEach(candidates) { c in
-                    candidateRow(c, winner: decision.winner)
+                    candidateRow(c, winner: decision.winner, showsCover: showsCover)
                 }
             }
         }
     }
 
-    private func candidateRow(_ c: LyricsResolutionDecision.Candidate, winner: String?) -> some View {
+    /// 候选封面。用 CachedImage 而不是 AsyncImage:存档里的封面 URL 是**当时**那一刻的,
+    /// 隔一段时间失效很正常,而 CachedImage 带失败负缓存(10 分钟内不重试同一个坏 URL)
+    /// 和同 URL 并发合流 —— 这个面板一屏就有四五条候选,还可能来回切换存档记录,用
+    /// AsyncImage 会对着一堆死链反复发真实请求。
+    private func candidateCover(_ raw: String?) -> some View {
+        CachedImage(url: raw.flatMap(URL.init(string:))) {
+            RoundedRectangle(cornerRadius: 4, style: .continuous)
+                .fill(.quaternary)
+                .overlay(
+                    Image(systemName: "music.note")
+                        .font(.caption)
+                        .foregroundStyle(.secondary))
+        }
+        .frame(width: 44, height: 44)
+        .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+    }
+
+    private func candidateRow(
+        _ c: LyricsResolutionDecision.Candidate, winner: String?, showsCover: Bool
+    ) -> some View {
         let isWinner = c.source == winner
-        return VStack(alignment: .leading, spacing: 5) {
-            HStack(spacing: 8) {
-                Text(sourceDisplayName(c.source))
-                    .font(.callout.weight(isWinner ? .semibold : .regular))
-                    .foregroundStyle(sourceColor(c.source))
-                    .padding(.horizontal, 7).padding(.vertical, 2)
-                    .background(sourceColor(c.source).opacity(0.12), in: Capsule())
-                if isWinner {
-                    Label(L10n.t("胜者"), systemImage: "crown.fill")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.orange)
-                }
-                if c.hasWordTiming == true {
-                    Text(L10n.t("逐字")).font(.caption2)
-                        .padding(.horizontal, 5).padding(.vertical, 1)
-                        .background(Color.secondary.opacity(0.12), in: Capsule())
-                }
-                Spacer()
-                Text("\(c.score)")
-                    .font(.callout.weight(.semibold).monospacedDigit())
-                    .foregroundStyle(c.score < 0 ? .red : .primary)
+        return HStack(alignment: .top, spacing: 10) {
+            if showsCover {
+                candidateCover(c.coverUrl)
             }
-            // 这个源匹配到的是哪首/哪个版本 —— 排查"串版本"的关键一行。
-            let matched = [c.title, c.artist, c.album]
-                .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")
-            if !matched.isEmpty {
-                Text(matched).font(.caption).foregroundStyle(.secondary).lineLimit(2)
-            }
+            VStack(alignment: .leading, spacing: 5) {
+                HStack(spacing: 8) {
+                    Text(sourceDisplayName(c.source))
+                        .font(.callout.weight(isWinner ? .semibold : .regular))
+                        .foregroundStyle(sourceColor(c.source))
+                        .padding(.horizontal, 7).padding(.vertical, 2)
+                        .background(sourceColor(c.source).opacity(0.12), in: Capsule())
+                    if isWinner {
+                        Label(L10n.t("胜者"), systemImage: "crown.fill")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.orange)
+                    }
+                    if c.hasWordTiming == true {
+                        Text(L10n.t("逐字")).font(.caption2)
+                            .padding(.horizontal, 5).padding(.vertical, 1)
+                            .background(Color.secondary.opacity(0.12), in: Capsule())
+                    }
+                    Spacer()
+                    Text("\(c.score)")
+                        .font(.callout.weight(.semibold).monospacedDigit())
+                        .foregroundStyle(c.score < 0 ? .red : .primary)
+                }
+                // 这个源匹配到的是哪首/哪个版本 —— 排查"串版本"的关键一行。
+                let matched = [c.title, c.artist, c.album]
+                    .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")
+                if !matched.isEmpty {
+                    Text(matched).font(.caption).foregroundStyle(.secondary).lineLimit(2)
+                }
             if let terms = c.scoreTerms, !terms.isEmpty {
                 // 直接摊开,不做悬停 —— 这是复盘界面,把证据全亮出来正是它存在的目的。
                 //
@@ -296,8 +326,9 @@ struct LyricsDecisionSheet: View {
                 Text(LyricsSearchService.ScoreTerm.explanation(score: c.score, terms: terms))
                     .font(.caption2.monospacedDigit())
                     .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
             }
         }
         .padding(10)

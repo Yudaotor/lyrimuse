@@ -189,6 +189,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // 消失了",而配对本身还好端端存在 browserPlatformPairs 里。
         BrowserAutomationPermission.manuallyAddedFamilies = settings.manualBrowserFamilies
             .compactMapValues { BrowserAutomationPermission.Family(rawValue: $0) }
+
+        // 状态栏那一项(图标/歌词/滚动歌词 + 下拉菜单)。2026-08-16 之前这是 App.swift 里
+        // 的一个 MenuBarExtra 场景,现在是自建的 NSStatusItem,得在这里显式启动。
+        // 生命周期自持(靠 Combine 订阅设置/播放状态),这里只需要点一次。
+        //
+        // 2026-09-01 从原来排在 collector 对账、悬浮歌词/灵动岛窗口创建、通知中心注册、
+        // NotchMirrorManager 等一堆重活之后,挪到了这里——用户要求"把图标挪到贴近系统
+        // 图标的位置",调研结论(见 MenuBarPositionHint.swift 头注 / docs/features/
+        // 06-menubar.md):macOS 没有公开 API 能保证第三方状态栏图标的位置,唯一站得住脚、
+        // 成本几乎为零的手段是"如果这个 App 恰好跟别的菜单栏 App 同一时刻启动(比如都是
+        // 登录项),谁先把 NSStatusItem 建出来、谁就更可能落在更靠右的位置"这条经验规律——
+        // 所以把创建时机尽量往前提,减少建项之前要跑的同步代码。
+        //
+        // 往前只能提到这里,不能再往前:PlaybackCoordinator.start() 依赖上面这几行刚灌完的
+        // Core 单例快照(LocalPlaybackSource.preferWordLevelKaraoke/chineseVariant/
+        // romanizationScripts、BrowserPositionProbe.platformBrowserPairs、
+        // BrowserAutomationPermission.manuallyAddedFamilies)——提前到这些赋值之前的话,
+        // PlaybackCoordinator 启动时读到的还是默认值,后果是"用户配置的这几项设置每次
+        // 启动都要等到去设置页里改一下才生效"。而往后的中文歌词粘性标记订阅、悬浮歌词/
+        // 灵动岛窗口创建、通知中心注册、NotchMirrorManager 等都跟状态栏这一项的创建互不
+        // 相干,能让的同步耗时都在这里让给了它。
+        //
+        // ⚠️ 没有任何保证:这条经验规律只在"恰好同时启动"时可能生效,对已经在运行的其他
+        // 菜单栏 App 完全无效。真正可靠的是引导用户自己 ⌘+拖拽——见
+        // MenuBarStatusItem.start() 里那条首次启动一次性提示。
+        PlaybackCoordinator.shared.start()
+        MenuBarStatusItem.shared.start()
+
         // Core 见到中文歌词就会置一个粘性标记;这里把它持久化下来,好让"简繁切换"这一项
         // 在下次启动、还没播中文歌之前就已经该露出来(见 SettingsView 里那个条件)。
         if !settings.hasSeenChineseLyrics {
@@ -222,8 +250,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             LyricsOverlayWindowController.shared.setHideWhenNotPlaying(settings.hideWhenNotPlaying)
         }
         if settings.notchOverlayEnabled {
-            NotchLyricsWindowController.shared.setHiddenFromCapture(settings.hideDuringScreenCapture)
-            NotchLyricsWindowController.shared.setHideWhenNotPlaying(settings.hideWhenNotPlaying)
+            // ⚠️ 读 `notchHide*` 而不是上面悬浮歌词那两个 —— 2026-09-01 起两个形态各有一份
+            // 独立的「自动隐藏」设置,见 AppSettings 里那两段注释。
+            NotchLyricsWindowController.shared.setHiddenFromCapture(settings.notchHideDuringScreenCapture)
+            NotchLyricsWindowController.shared.setHideWhenNotPlaying(settings.notchHideWhenNotPlaying)
         }
 
         // media-control 私有通道的一次性自检。只做归因、不做降级 —— 见 MediaControlHealth。
@@ -235,11 +265,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // 在碰 NotchLyricsWindowController.shared 之前就 return(碰一下就会凭空建出窗口,
         // 见那个类文件头的不变量)。
         NotchMirrorManager.start()
-        PlaybackCoordinator.shared.start()
-        // 状态栏那一项(图标/歌词/滚动歌词 + 下拉菜单)。2026-08-16 之前这是 App.swift 里
-        // 的一个 MenuBarExtra 场景,现在是自建的 NSStatusItem,得在这里显式启动。
-        // 生命周期自持(靠 Combine 订阅设置/播放状态),这里只需要点一次。
-        MenuBarStatusItem.shared.start()
+        // PlaybackCoordinator.shared.start() / MenuBarStatusItem.shared.start() 挪到上面
+        // BrowserAutomationPermission.manuallyAddedFamilies 那一行之后了(2026-09-01,
+        // 见那边的注释)——状态栏项的创建时机要尽量靠前。
         // 「发现新播放器」的系统通知(2026-08-22 用户报「没有通知机制」)。
         // registerCategory 必须在**投递之前**调:setNotificationCategories 是整表替换,
         // 投递时 categoryIdentifier 查不到的话通知照样显示但**按钮不出现**、而且不报错;
@@ -252,12 +280,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         MenuBarSceneActions.install()
 
         // 打开 Lyrimuse 时顺带唤起当前选定的播放器(可选,见 AppSettings.
-        // launchMusicOnLyrimuseOpen 注释)。跟着 PlaybackPlayerPreference.current 走,
-        // 不再写死 Apple Music——选了 QQ 音乐时唤起的应该是 QQ 音乐,不是一个用户压根
-        // 没在用的 App。只在目标 App 还没运行时才启动它——已经在跑就什么都不做,不做
-        // 多余的"带到前台"动作,避免用户正在用别的 App 时被意外抢焦点。
+        // launchMusicOnLyrimuseOpen 注释)。跟着 PlaybackPlayerPreference.soleExplicitPlayer
+        // 走,不再写死 Apple Music——选了 QQ 音乐时唤起的应该是 QQ 音乐,不是一个用户压根
+        // 没在用的 App。2026-09-01 多选后:只有恰好能唯一确定一个具体播放器时才有明确
+        // 的目标可唤起(纯 auto、或者同时选了两个以上具体播放器,都没有唯一答案,跟单选
+        // 年代 .auto 的"bundleIdentifier 为空、天然 no-op"是同一个道理,不猜)。只在目标
+        // App 还没运行时才启动它——已经在跑就什么都不做,不做多余的"带到前台"动作,
+        // 避免用户正在用别的 App 时被意外抢焦点。
         if settings.launchMusicOnLyrimuseOpen {
-            let bundleID = PlaybackPlayerPreference.current.bundleIdentifier
+            let bundleID = PlaybackPlayerPreference.soleExplicitPlayer?.bundleIdentifier ?? ""
             if !NSWorkspace.shared.runningApplications.contains(where: { $0.bundleIdentifier == bundleID }),
                let playerURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) {
                 let config = NSWorkspace.OpenConfiguration()

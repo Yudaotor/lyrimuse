@@ -109,7 +109,7 @@ final class UnknownPlayerNotifier: NSObject {
         // 「一直是同一个、一直够格」的观察累积。
         guard UnknownPlayerAlert.shouldOffer(
             bundleID: seen.bundleID, artist: seen.artist, album: seen.album,
-            observedAt: seen.at, isAutoDetect: features.player == .auto, now: Date(),
+            observedAt: seen.at, isAutoDetect: features.players.contains(.auto), now: Date(),
             isAccepted: { TrustedPlayers.isAccepted($0) })
         else { resetPending(); return }
 

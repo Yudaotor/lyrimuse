@@ -15,6 +15,11 @@ public struct EnrichCacheEntry: Decodable {
     // collector 解析出的封面地址(网易云/QQ/Apple)。桌面这边原来只读歌词字段,封面一直
     // 没人用 —— 直到「最近播放」列表需要一个 Last.fm 之外的兜底,见 coverURL(artist:...)。
     let coverURL: String?
+    // 这张封面在**来源平台上属于哪张专辑**(collector/enrich.go 的 e.CoverAlbum,
+    // 2026-08-20 起落盘)。2026-09-01 起 Swift 侧解码——「最近记录」需要区分"缓存里有图"
+    // 和"缓存里这张图确实属于这行的专辑":后者才有资格纠正 Last.fm 自带图,见
+    // albumVerifiedCoverURL。
+    let coverAlbum: String?
     // 联网查过了、至少一个源(目前是 lrclib)明确说这首歌是纯音乐——跟"lyrics 是空的"
     // 要分开看,后者也可能是"还没解析完"或者"五个源都没查到"这类更含糊的情况。见
     // collector/enrich.go 的 enrichEntry.Instrumental 定义处的注释。
@@ -54,6 +59,7 @@ public struct EnrichCacheEntry: Decodable {
         case lyricsSource = "lyrics_source"
         case coverSource = "cover_source"
         case coverURL = "cover_url"
+        case coverAlbum = "cover_album"
         case instrumental
         case ts
         case appleMusicURL = "apple_music_url"
@@ -258,6 +264,32 @@ public enum EnrichCacheReader {
         if let s = all[key]?.coverURL, let url = URL(string: s) { return url }
         if let s = looseMatch(key, in: all)?.coverURL, let url = URL(string: s) { return url }
         return nil
+    }
+
+    /// 比 albumMatchedCoverURL 再严一档:不光条目按专辑键命中,**这张封面自己**(cover_album,
+    /// 即它在来源平台上属于哪张专辑)也得对得上请求的专辑。区别在哪:条目键对上只说明"这行
+    /// 歌+专辑有一条缓存",而缓存里那张图可能是 collector 当年从错误版本解析来的(实测
+    /// 陈奕迅《孤独探戈 (Live)》的旧条目键是 The Easy Ride,封面却是网易云错场次 Get A Life
+    /// 的黑图)——只有 cover_album 也对上,这张图才有资格去**纠正**别的来源(Last.fm 自带图)。
+    ///
+    /// 给「最近记录」第①级纠错用,见 LastfmStatsService.coverURL(for:)。
+    public static func albumVerifiedCoverURL(artist: String, title: String, album: String) -> URL? {
+        guard let all = loadEntries() else { return nil }
+        let key = EnrichCacheKeys.normalizedKey(artist: artist, title: title, album: album)
+        let entry = all[key] ?? looseMatch(key, in: all)
+        guard let entry, coverAlbumVerified(coverAlbum: entry.coverAlbum, requestedAlbum: album),
+              let s = entry.coverURL, let url = URL(string: s) else { return nil }
+        return url
+    }
+
+    /// cover_album 与请求的专辑是否算同一张。宽松口径与 looseKey 同源(忽略空格/大小写/
+    /// 繁简/合credit分隔符)——两侧字符串一个来自 collector 落盘、一个来自 Last.fm 行数据,
+    /// 繁简/空格写法系统性不一致(实测行侧「陳奕迅」缓存侧「陈奕迅」)。纯函数,selftest 覆盖。
+    public nonisolated static func coverAlbumVerified(coverAlbum: String?, requestedAlbum: String) -> Bool {
+        guard let ca = coverAlbum?.trimmingCharacters(in: .whitespaces), !ca.isEmpty else { return false }
+        let ra = requestedAlbum.trimmingCharacters(in: .whitespaces)
+        guard !ra.isEmpty else { return false }
+        return EnrichCacheKeys.looseKey(ca) == EnrichCacheKeys.looseKey(ra)
     }
 
     /// 这首歌在本机缓存里有没有封面(collector 从网易云/QQ/Apple 解析出来的那张)。

@@ -417,10 +417,11 @@ final class PlaybackCoordinator: ObservableObject {
 
     /// 这一刻**实际在播**的是不是 Apple Music。
     ///
-    /// ⚠️ 判定必须看这个,不能看 PlaybackPlayerPreference.current。设置里那一档可以是"自动
-    /// 识别"(这台机器上就是),那时 current 不等于 .appleMusic,但实际在播的完全可能就是
-    /// Apple Music —— 用设置值判断会让这颗心在"自动识别"下永远不出现。seek 那条路径早就
-    /// 踩过同一个坑并用同一个信号修好了(见 LocalPlaybackSource.seek 里的 resolvedIsAppleMusic)。
+    /// ⚠️ 判定必须看这个,不能看 PlaybackPlayerPreference.selected/isExclusivelyAppleMusic。
+    /// 设置里那一档可以是"自动识别"(这台机器上就是)、或者多选了好几个,那时选中集合不
+    /// 排他地等于 {.appleMusic},但实际在播的完全可能就是 Apple Music —— 用设置值判断
+    /// 会让这颗心在这些情况下永远不出现。seek 那条路径早就踩过同一个坑并用同一个信号
+    /// 修好了(见 LocalPlaybackSource.seek 里的 resolvedIsAppleMusic)。
     private var isAppleMusicPlayingNow: Bool {
         LocalPlaybackSource.shared.lastResolvedBundleID == PlaybackPlayer.appleMusic.bundleIdentifier
     }

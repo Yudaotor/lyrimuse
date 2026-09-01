@@ -1,5 +1,5 @@
 # 08. 歌词同步引擎(App 侧消费链)
-> 最后核对:2026-08-25 · 基线:bd02c85+工作树
+> 最后核对:2026-09-01 · 基线:10f4061+工作树
 
 ## 定位
 
@@ -117,6 +117,26 @@ LRC 格式标准里的 `[offset:±毫秒]` = 「这份歌词的全部时间戳�
 - ⚠️ **`currentLyricsOffsetMs` 必须含这一层**(`applyOffsets()` 里 `effective + syncEngine.lrcOffsetMs`):它的唯一用途是"把歌词时间轴换算到播放位置",而歌词窗口点某一行反算 seek 目标用的就是 `行时间 − currentLyricsOffsetMs`,漏掉这层的话带非零 offset 的歌点行会跳到隔壁行。而用户可见的那两个数(设置页的基准、菜单里的单曲值)**不**含它 —— LRC offset 不是用户调出来的,不该出现在"你调了多少"里。
 - ⚠️ **时序**:`applyOffsets()` 读 `syncEngine.lrcOffsetMs`,所以它必须排在 `syncEngine.load()` **之后**(`reloadCurrentLyrics` 里本来就是这个顺序);反过来会套用上一首歌的 offset。`load()` 的指纹早退不影响 —— 早退时内容没变,这一层的值本来就该保持。
 - selftest 覆盖 19 条(解析的各种形态 + 量级闸 + 两层相加 + 换歌归零 + 从 YRC 取)。
+- **2026-09-01 全链路复核**(用户问「[offset:] 是否都处理好了」),把所有消费歌词时间戳的
+  地方逐处过了一遍,抓到并修掉两处漏网:
+  1. **`updateLineFillSettled`(LocalPlaybackSource)用的是 `offsetMs` 而不是
+     `effectiveOffsetMs`**——2026-08-22 那次只改了引擎内部五个查询入口,这一处在引擎
+     外面比较"播放位置 vs 词时间戳"(行内填色是否已完成,喂给 relay 快照的 `fillSettled`),
+     漏了。带非零 offset 的歌该判定偏差相应毫秒数。已改用 `effectiveOffsetMs`。
+  2. **网页端(web/index.html 与 web/demo/index.html)`parseLRC`/`parseYRC` 完全不认
+     `[offset:]`**——Swift 解析器当初就是照抄网页的 parseLRC 写的,08-22 修桌面端时网页
+     没跟上,酷狗那两首非零(242ms/600ms)在网页上歌词整体偏移。已补齐,语义与桌面端
+     逐条对齐(LRC 为 0 再看 YRC、只取第一个标签、±10s 量级闸);译文/罗马音按**原始**
+     时间戳配对(两边都是 raw、不受影响),配对完只平移最终展示用的 t。
+  以下各处**核对过、确认不需要改**,连同理由记在这里免得下次重查:
+  - collector 打分层(`lastLRCTimestampSecs`/`durationFits`/overshoot)不应用 offset:
+    实测最大值 600ms 对上 25% 曲长容差/5s overshoot 阈值可忽略,且所有候选同一口径;
+  - `rehangLRCOnYRC`/`wordTimingContradictsLRC` 两边都按原始时间戳比:酷狗的 `.lrc`/`.yrc`
+    头部带**同一个** offset(KRC 母版转出),raw 对 raw 恰好抵消;网易云/Musixmatch 从不带;
+  - 机翻译文/罗马音抄的是原文 LRC 的原始时间戳,引擎与网页配对时两边都是 raw,一致;
+  - 歌词导出/导入(lyrics/ 文件夹)对元数据行原样保留,offset 标签随文件完整往返;
+  - 四个展示面 + 歌词窗口点行反算 seek 全走 `effectiveOffsetMs`/`currentLyricsOffsetMs`,
+    08-22 已覆盖。
 
 ### 查询接口(按播放位置定位)
 

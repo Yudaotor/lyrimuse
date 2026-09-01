@@ -51,12 +51,23 @@ struct LyricsQuickSearchWindow: View {
                         // 同 LyricsWindowView 的 onApply 三步:reload 兜"store 还没加载过"
                         // (空 raw 上 saveEdit 会把条目其它字段如 cover_url 整个丢掉)→
                         // saveEdit → 让播放侧立刻重载,不等 2s 轮询的 mtime 检查。
+                        //
+                        // ⚠️ 2026-09-01 真实bug修复:这里原来一直没传 markManual/sourceChoice,
+                        // 落进 saveEdit 的默认值 markManual: true——跟 LyricsManagerView.swift
+                        // 那条「采纳候选」路径不是同一套行为,等于这扇小窗每次采纳都在悄悄
+                        // 永久冻结这首歌,跟 2026-08-22 那次"采纳候选不该冻结"的设计决定
+                        // 不一致——补齐,让两个入口保持同一套逻辑。
+                        //
+                        // sourceChoice 恒传空串(= 显式清掉):关态不留任何源约束,开态靠
+                        // manual_lyrics 就够了。完整理由见 LyricsManagerView.swift 那个
+                        // 调用点的注释,两处必须同进同出。
                         await EnrichCacheStore.shared.reload(onlyIfChanged: true)
                         await EnrichCacheStore.shared.saveEdit(
                             key: context.key,
                             lyrics: candidate.lyrics, tr: candidate.lyricsTr,
                             roma: candidate.lyricsRoma, yrc: candidate.lyricsYRC,
-                            source: candidate.source)
+                            source: candidate.source, markManual: AppSettings.shared.manualPickLocksLyrics,
+                            sourceChoice: "", fromManualPick: true)
                         PlaybackCoordinator.shared.refreshLyricsForCurrentTrack()
                     }
                 }

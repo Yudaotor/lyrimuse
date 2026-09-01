@@ -1,7 +1,7 @@
 import Foundation
 
 // 跟 AppleMusicPositionClient(同目录,"读"精确播放进度)对称的"写"操作——发指令
-// 控制当前选定播放器(PlaybackPlayerPreference.current)的播放。
+// 控制当前选定播放器(PlaybackPlayerPreference.selected,2026-09-01 起可多选)的播放。
 //
 // 2026-07-29 之前这里无条件发 AppleScript 给"Music"这一个应用,不管当前选的是哪个
 // 播放器——QQ 音乐/网易云音乐接入时都没有同步修这一处,导致选了它们之后悬浮窗/全局
@@ -529,7 +529,8 @@ public enum MusicPlaybackController {
     /// 由播放器自己处理(实测两个后端都只是跳到结尾/切下一首,不会出错),在这里凭猜测夹
     /// 反而会掩盖调用方的计算错误。
     /// preferAppleScript 让调用方按"这一刻实际在播的是谁"覆盖后端选择。设置里选了
-    /// "自动识别"时 PlaybackPlayerPreference.current 不是 .appleMusic,dispatch 默认会走
+    /// "自动识别"(或者选了 Apple Music 以外的其它播放器组合)时
+    /// PlaybackPlayerPreference.isExclusivelyAppleMusic 是 false,dispatch 默认会走
     /// media-control;但如果实际在播的就是 Apple Music,那么位置**读**路径走的是精确的
     /// AppleScript 播放头,写路径也该走同一条,两边保持一致。
     public static func seek(toSeconds seconds: Double, preferAppleScript: Bool = false) {
@@ -562,7 +563,7 @@ public enum MusicPlaybackController {
     }
 
     private static func dispatch(appleScript: String, mediaControlCommand: String, mediaControlArguments: [String] = []) {
-        if PlaybackPlayerPreference.current == .appleMusic {
+        if PlaybackPlayerPreference.isExclusivelyAppleMusic {
             runAppleScript(appleScript)
         } else {
             runMediaControl(mediaControlCommand, arguments: mediaControlArguments)

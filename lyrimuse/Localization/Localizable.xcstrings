@@ -35,6 +35,23 @@
         }
       }
     },
+    "%1$@ 从「%2$@」导出的备份" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Backup exported from “%2$@” on %1$@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ 从「%2$@」导出的备份"
+          }
+        }
+      }
+    },
     "%1$@ 年 %2$@ 月 %3$@ 日" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -154,6 +171,23 @@
         }
       }
     },
+    "%@ 导出的备份" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Backup exported on %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 导出的备份"
+          }
+        }
+      }
+    },
     "%@ 小时前更新" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -235,6 +269,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%@ 次"
+          }
+        }
+      }
+    },
+    "%@ 首保持锁定；从现在起手动选定的歌不再自动锁定" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ songs stay locked; from now on, manually picked songs are no longer locked automatically"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 首保持锁定；从现在起手动选定的歌不再自动锁定"
           }
         }
       }
@@ -562,6 +613,23 @@
         }
       }
     },
+    "Musixmatch 拒绝了匿名 token 请求（反爬限流，hint=captcha），不是网络故障，稍后重试通常会恢复" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Musixmatch rejected the anonymous token request (anti-bot rate limiting, hint=captcha) — not a network fault, this usually recovers after a while"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Musixmatch 拒绝了匿名 token 请求（反爬限流，hint=captcha），不是网络故障，稍后重试通常会恢复"
+          }
+        }
+      }
+    },
     "QQ 音乐" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -643,6 +711,33 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "QQ音乐"
+          }
+        }
+      }
+    },
+    "Safari 在设置里，不在菜单栏：先到「Safari 浏览器 → 设置 → 高级」勾上「显示网页开发者功能」，设置里就会多出「开发」一栏，在那里勾上「允许Apple事件中的JavaScript」。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Safari keeps this in Settings, not the menu bar: open Safari → Settings → Advanced and tick “Show features for web developers”, then a Developer pane appears in Settings — tick “Allow JavaScript from Apple Events” there."
+          }
+        }
+      }
+    },
+    "Scrobble" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Scrobble"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Scrobble"
           }
         }
       }
@@ -732,6 +827,23 @@
         }
       }
     },
+    "YouTube Music 在这个网络所在地区不可用（地区限制，非网络故障）" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "YouTube Music is not available in this network's region (a regional restriction, not a network fault)"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "YouTube Music 在这个网络所在地区不可用（地区限制，非网络故障）"
+          }
+        }
+      }
+    },
     "https://api.day.app/你的Key" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -783,6 +895,23 @@
         }
       }
     },
+    "~/.config/lyrimuse，纯文本可直接编辑；外观与快捷键不在里面（它们在 UserDefaults）" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "~/.config/lyrimuse — plain text, editable directly. Appearance and shortcuts are NOT in here (they live in UserDefaults)."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "~/.config/lyrimuse，纯文本可直接编辑；外观与快捷键不在里面（它们在 UserDefaults）"
+          }
+        }
+      }
+    },
     "① 填写密钥" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -830,6 +959,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "③ 完成连接"
+          }
+        }
+      }
+    },
+    "✓ 已生效——这个浏览器现在可以被驱动了" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "✓ Working — Lyrimuse can drive this browser now"
           }
         }
       }
@@ -946,6 +1085,23 @@
         }
       }
     },
+    "一并解锁" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unlock Them"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "一并解锁"
+          }
+        }
+      }
+    },
     "一行 1 分，最多 200" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1044,6 +1200,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "三连音符"
+          }
+        }
+      }
+    },
+    "上" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Top"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "上"
           }
         }
       }
@@ -1150,6 +1323,67 @@
         }
       }
     },
+    "上次检测通过（%@）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Verified working (%@)"
+          }
+        }
+      }
+    },
+    "上面的「Scrobble 到 Last.fm」关着，这里的设置暂时不起作用" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "“Scrobble to Last.fm” above is off, so these settings have no effect right now"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "上面的「Scrobble 到 Last.fm」关着，这里的设置暂时不起作用"
+          }
+        }
+      }
+    },
+    "下" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bottom"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "下"
+          }
+        }
+      }
+    },
+    "下一句歌词预览" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Next Line Preview"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "下一句歌词预览"
+          }
+        }
+      }
+    },
     "下一步" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1248,6 +1482,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "不可用：%@"
+          }
+        }
+      }
+    },
+    "不含宽度和总开关" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Width and the master toggle are left alone"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "不含宽度和总开关"
           }
         }
       }
@@ -1405,6 +1656,40 @@
         }
       }
     },
+    "两边都是现场版，但这个候选的专辑名指向另一场不同命名的演出（比如另一次巡演）——时间轴是那场演出的，套在这次播放的录音上会对不上" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Both are live versions, but this candidate’s album name points to a differently named performance (e.g. a different tour) — its timing track belongs to that show and won’t line up with this recording."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "两边都是现场版，但这个候选的专辑名指向另一场不同命名的演出（比如另一次巡演）——时间轴是那场演出的，套在这次播放的录音上会对不上"
+          }
+        }
+      }
+    },
+    "两首探测曲都没有响应，这个源目前可能不可用" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Neither probe track got a response — this source may currently be unavailable"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "两首探测曲都没有响应，这个源目前可能不可用"
+          }
+        }
+      }
+    },
     "中文" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1469,6 +1754,40 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "之前创建过就从这里找回：列表里点应用名，页面上就有 API Key 和 Shared Secret"
+          }
+        }
+      }
+    },
+    "之前手动选定的 %@ 首已经都是锁定状态" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "All %@ songs you picked manually are already locked"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "之前手动选定的 %@ 首已经都是锁定状态"
+          }
+        }
+      }
+    },
+    "之前手动选定的 %@ 首，歌词后来都被自动更新过，已经不是你当初选的那一份，所以没有锁定" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The %@ songs you picked earlier have since been updated automatically — they are no longer the versions you chose, so they were not locked"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "之前手动选定的 %@ 首，歌词后来都被自动更新过，已经不是你当初选的那一份，所以没有锁定"
           }
         }
       }
@@ -1762,6 +2081,23 @@
         }
       }
     },
+    "从「%@」导出的备份" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Backup exported from “%@”"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "从「%@」导出的备份"
+          }
+        }
+      }
+    },
     "从备份恢复" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1806,6 +2142,40 @@
         }
       }
     },
+    "从文件导入…" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Import from File…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "从文件导入…"
+          }
+        }
+      }
+    },
+    "从现在起，手动选定的歌不再自动锁定" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "From now on, manually picked songs are no longer locked automatically"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "从现在起，手动选定的歌不再自动锁定"
+          }
+        }
+      }
+    },
     "从自动备份恢复" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1836,6 +2206,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "从资料库删除"
+          }
+        }
+      }
+    },
+    "以下两项只对「灵动岛歌词」生效；桌面悬浮歌词、菜单栏歌词和歌词窗口不受影响" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The two options below apply only to Notch Lyrics; the desktop overlay, menu bar lyrics and the Lyrics window are unaffected"
+          }
+        }
+      }
+    },
+    "以下两项只对「桌面悬浮歌词」生效；灵动岛、菜单栏歌词和歌词窗口不受影响" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The two options below apply only to the Desktop Overlay; the Notch, menu bar lyrics and the Lyrics window are unaffected"
           }
         }
       }
@@ -1993,6 +2383,23 @@
         }
       }
     },
+    "保持锁定" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keep Locked"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "保持锁定"
+          }
+        }
+      }
+    },
     "信任之后它跟内置播放器完全同权:显示歌词，也会记进收听历史" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -2142,6 +2549,40 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "全部专辑"
+          }
+        }
+      }
+    },
+    "全部关闭" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "All Off"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "全部关闭"
+          }
+        }
+      }
+    },
+    "全部开启" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "All On"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "全部开启"
           }
         }
       }
@@ -2499,6 +2940,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "关闭时按住歌词就能拖；打开则要长按 0.35 秒，期间点击照旧穿透"
+          }
+        }
+      }
+    },
+    "关（默认）：只是当下换上这份；以后的自动重搜和打分改进照样会调整它，也可能换成别的来源\n开：这首歌就定在这份歌词上，之后任何自动匹配都不会再碰它\n打开时会把之前手动选定过的歌一并锁定（内容已经被自动换掉的除外）" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Off (default): just swaps in this version for now — later re-searches and scoring improvements can still change it, including switching to another source\nOn: locks this song to this exact version; no automatic matching will touch it again\nTurning it on also locks the songs you picked earlier, unless their lyrics have since been replaced automatically"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "关（默认）：只是当下换上这份；以后的自动重搜和打分改进照样会调整它，也可能换成别的来源\n开：这首歌就定在这份歌词上，之后任何自动匹配都不会再碰它\n打开时会把之前手动选定过的歌一并锁定（内容已经被自动换掉的除外）"
           }
         }
       }
@@ -2962,6 +3420,16 @@
         }
       }
     },
+    "到该浏览器的开发者菜单里打开「允许 Apple 事件中的 JavaScript」。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Turn on “Allow JavaScript from Apple Events” in this browser’s Developer menu."
+          }
+        }
+      }
+    },
     "刷新" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -3217,6 +3685,40 @@
         }
       }
     },
+    "卡拉OK染色" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Karaoke Tint"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "卡拉OK染色"
+          }
+        }
+      }
+    },
+    "即将导入：%@" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "About to import: %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "即将导入：%@"
+          }
+        }
+      }
+    },
     "去年今天听了 %@ 次，最常循环的是这几首" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -3432,6 +3934,26 @@
         }
       }
     },
+    "只对灵动岛生效" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Applies to the notch only"
+          }
+        }
+      }
+    },
+    "只对悬浮歌词生效" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Applies to the desktop overlay only"
+          }
+        }
+      }
+    },
     "只作用于播放中/指向展开时那一行。没在播放时灵动岛缩成刘海大小，那时左边是封面、右边是播放指示条，不受这里影响。\n\n播放指示条固定在右耳外缘，不占模块位。" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -3455,6 +3977,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Applies only to the row shown while playing, or while expanded on hover. When nothing is playing the notch collapses to its physical size, showing artwork on the left and the playback indicator on the right — unaffected by this setting.\n\nWhich ear the playback indicator (waveform) sits on is configured above; it is independent of the module choice below, so both can be set at once."
+          }
+        }
+      }
+    },
+    "只发第一位" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "First Only"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "只发第一位"
           }
         }
       }
@@ -3561,19 +4100,36 @@
         }
       }
     },
-    "只影响装得下的句子。\n\n固定：短句也占满设定宽度，右边留白，菜单栏上的位置不会变。\n\n自适应（不建议）：短句按自己的宽度占位，省下多余空间——代价是每换一句都要重建菜单栏这一项。系统只在项出生那一刻给邻居排位，重建太密时邻居图标会停在旧位置（错位、闪动），左键面板也可能被挤掉。想稳定就用固定。" : {
+    "只影响装得下的句子。\n\n固定：短句也占满设定宽度，右边留白，菜单栏上的位置不会变。\n\n自适应：短句按自己的宽度占位，省下多余空间；菜单栏这一项的宽度随每句变化，旁边的图标位置也跟着挪。" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Only affects lines that already fit.\n\nFixed: short lines still fill the width you set, leaving space on the right, so the item never moves.\n\nAdaptive (not recommended): short lines take only the width they need — the cost is that the menu bar item is rebuilt on every line change. The system only lays out neighboring items at the moment this one is born, so frequent rebuilds leave neighboring icons stranded at their old positions (misaligned, flickering), and the left-click panel can get dismissed. Use Fixed if you want stability."
+            "value" : "Only affects lines that already fit.\n\nFixed: short lines still fill the width you set, leaving space on the right, so the item never moves.\n\nAdaptive: short lines take only the width they need, saving space; the item's width changes with every line, and the icons next to it shift along with it."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "只影响装得下的句子。\n\n固定：短句也占满设定宽度，右边留白，菜单栏上的位置不会变。\n\n自适应（不建议）：短句按自己的宽度占位，省下多余空间——代价是每换一句都要重建菜单栏这一项。系统只在项出生那一刻给邻居排位，重建太密时邻居图标会停在旧位置（错位、闪动），左键面板也可能被挤掉。想稳定就用固定。"
+            "value" : "只影响装得下的句子。\n\n固定：短句也占满设定宽度，右边留白，菜单栏上的位置不会变。\n\n自适应：短句按自己的宽度占位，省下多余空间；菜单栏这一项的宽度随每句变化，旁边的图标位置也跟着挪。"
+          }
+        }
+      }
+    },
+    "只影响装得下的短句：它在固定宽度那一格里靠哪边。放不下的句子会横向滚动，没有多余空间，对齐不起作用" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Only affects lines that fit: which side of the fixed-width slot they sit on. Lines too long to fit scroll horizontally — there is no spare space, so alignment does nothing"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "只影响装得下的短句：它在固定宽度那一格里靠哪边。放不下的句子会横向滚动，没有多余空间，对齐不起作用"
           }
         }
       }
@@ -3663,6 +4219,23 @@
         }
       }
     },
+    "右" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Right"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "右"
+          }
+        }
+      }
+    },
     "右对齐" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -3687,6 +4260,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "右耳"
+          }
+        }
+      }
+    },
+    "合唱歌曲的歌手" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Artist for Collaborations"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "合唱歌曲的歌手"
           }
         }
       }
@@ -3772,6 +4362,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "后台采集服务重启失败"
+          }
+        }
+      }
+    },
+    "含明文凭证；导入会覆盖全部设置并重启" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Contains credentials in plain text; importing overwrites every setting and restarts"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "含明文凭证；导入会覆盖全部设置并重启"
           }
         }
       }
@@ -3946,6 +4553,36 @@
         }
       }
     },
+    "在 Arc 菜单栏依次打开「View → Developer → Allow JavaScript from Apple Events」。Arc 的这几个菜单项在中文系统下也是英文。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "In Arc’s menu bar: View → Developer → Allow JavaScript from Apple Events."
+          }
+        }
+      }
+    },
+    "在 Chrome 菜单栏依次打开「显示 → 开发者 → 允许 Apple 事件中的 JavaScript」。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "In Chrome’s menu bar: View → Developer → Allow JavaScript from Apple Events."
+          }
+        }
+      }
+    },
+    "在 Chrome 菜单栏依次打开「显示 → 开发者 → 允许 Apple 事件中的 JavaScript」。（Chrome 自己的帮助里把这个菜单写成「查看」，是它的文案错了，菜单栏上实际叫「显示」。）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "In Chrome’s menu bar: View → Developer → Allow JavaScript from Apple Events."
+          }
+        }
+      }
+    },
     "在 Dock 中显示" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -3959,6 +4596,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "在 Dock 中显示"
+          }
+        }
+      }
+    },
+    "在 Edge 菜单栏依次打开「查看 → 开发人员 → 允许 Apple 事件中的 JavaScript」。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "In Edge’s menu bar: View → Developer → Allow JavaScript from Apple Events."
           }
         }
       }
@@ -4116,6 +4763,16 @@
         }
       }
     },
+    "在浏览器里手动开启" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enable in Browser"
+          }
+        }
+      }
+    },
     "在设置中查看 Last.fm" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -4252,6 +4909,23 @@
         }
       }
     },
+    "备份文件夹…" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Backup Folder…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "备份文件夹…"
+          }
+        }
+      }
+    },
     "备份里的歌词文件会铺回歌词文件夹：同名的覆盖，缺的补上；备份之后新解析出来的歌不会被删掉。恢复完 collector 会重启一次，把它们重新读进缓存" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -4282,6 +4956,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "多"
+          }
+        }
+      }
+    },
+    "多位歌手合唱时（如「Khalil Fong & Fiona Sit」）上送哪个名字。\n\n全部：原样发整串。\n\n只发第一位：只发「Khalil Fong」——Last.fm 上的记录里另一位歌手不会出现。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Which name is submitted when several artists are credited (e.g. \"Khalil Fong & Fiona Sit\").\n\nAll: the full credit is sent as-is.\n\nFirst only: just \"Khalil Fong\" — the other artist will not appear in your Last.fm history."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "多位歌手合唱时（如「Khalil Fong & Fiona Sit」）上送哪个名字。\n\n全部：原样发整串。\n\n只发第一位：只发「Khalil Fong」——Last.fm 上的记录里另一位歌手不会出现。"
           }
         }
       }
@@ -4473,6 +5164,23 @@
         }
       }
     },
+    "存到 iCloud 的这份包含账号登录凭证和密钥的原文，会同步到登录同一个 iCloud 账号的所有设备" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The copy saved to iCloud contains your account credentials and keys in clear text, and syncs to every device signed in to the same iCloud account."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "存到 iCloud 的这份包含账号登录凭证和密钥的原文，会同步到登录同一个 iCloud 账号的所有设备"
+          }
+        }
+      }
+    },
     "完全同名 120 · 仅括号差异 60 · 中英双语同名 30" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -4654,6 +5362,23 @@
         }
       }
     },
+    "导入失败：这个文件不是 Lyrimuse 的设置备份，或者已经损坏。当前设置没有被改动" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Import failed: this file is not a Lyrimuse settings backup, or it is corrupted. Your current settings were not changed."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "导入失败：这个文件不是 Lyrimuse 的设置备份，或者已经损坏。当前设置没有被改动"
+          }
+        }
+      }
+    },
     "导入并重启" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -4705,6 +5430,23 @@
         }
       }
     },
+    "导出失败：%@" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Export failed: %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "导出失败：%@"
+          }
+        }
+      }
+    },
     "导出时间 %1$@，来自 %2$@。" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -4752,6 +5494,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "导出的文件包含账号登录凭证和密钥，妥善保管，不要发给别人"
+          }
+        }
+      }
+    },
+    "导出的文件包含账号登录凭证和密钥，妥善保管，不要发给别人。歌词库会另外存成同名的第二个文件，搬家时两个都要拷" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The exported file contains your account credentials and keys — keep it safe and do not share it. Your lyrics library is written as a second file with a matching name; copy both when migrating."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "导出的文件包含账号登录凭证和密钥，妥善保管，不要发给别人。歌词库会另外存成同名的第二个文件，搬家时两个都要拷"
           }
         }
       }
@@ -4820,6 +5579,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "封面"
+          }
+        }
+      }
+    },
+    "封面位置" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Artwork Position"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "封面位置"
           }
         }
       }
@@ -4899,6 +5675,74 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "展开"
+          }
+        }
+      }
+    },
+    "展开态" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Expanded State"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "展开态"
+          }
+        }
+      }
+    },
+    "展开时在头部显示一枚封面缩略图。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Shows a small artwork thumbnail in the header when expanded."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "展开时在头部显示一枚封面缩略图。"
+          }
+        }
+      }
+    },
+    "展开时在进度条上方显示下一句要唱的歌词。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Shows the next lyric line above the progress bar when expanded."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "展开时在进度条上方显示下一句要唱的歌词。"
+          }
+        }
+      }
+    },
+    "左" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Left"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "左"
           }
         }
       }
@@ -5050,6 +5894,23 @@
         }
       }
     },
+    "已唱到的颜色" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sung Color"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已唱到的颜色"
+          }
+        }
+      }
+    },
     "已唱到部分的颜色。默认跟随系统强调色（深色菜单栏自动提亮）；自定义后原样使用、不再自动提亮" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -5131,6 +5992,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "已安装但未运行（上次退出码 %d）"
+          }
+        }
+      }
+    },
+    "已导出两个文件：设置和歌词库（%@）。搬到新电脑时两个都要拷" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Exported two files: the settings and the lyrics library (%@). Copy both when moving to a new Mac."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已导出两个文件：设置和歌词库（%@）。搬到新电脑时两个都要拷"
           }
         }
       }
@@ -5498,6 +6376,23 @@
         }
       }
     },
+    "已解锁 %@ 首" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unlocked %@ songs"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已解锁 %@ 首"
+          }
+        }
+      }
+    },
     "已解锁位置" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -5617,6 +6512,16 @@
         }
       }
     },
+    "已配置好，点开可查看或移除" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "All set — click to review or remove"
+          }
+        }
+      }
+    },
     "已采用" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -5698,6 +6603,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "已重新匹配：还是「%1$@」，但逐字时间轴跟原来那份不一样，已换成这一轮抓到的（%2$@ 分）"
+          }
+        }
+      }
+    },
+    "已锁定 %@ 首之前手动选定的歌；从现在起选定的会直接锁定" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Locked %@ songs you had picked manually; from now on, picks are locked right away"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已锁定 %@ 首之前手动选定的歌；从现在起选定的会直接锁定"
           }
         }
       }
@@ -6184,6 +7106,23 @@
         }
       }
     },
+    "恢复这份" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Restore This One"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "恢复这份"
+          }
+        }
+      }
+    },
     "恢复默认位置" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -6214,6 +7153,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "恢复默认文字与配色"
+          }
+        }
+      }
+    },
+    "恢复默认风格与开关" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reset Style and Toggles"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "恢复默认风格与开关"
           }
         }
       }
@@ -6320,6 +7276,16 @@
         }
       }
     },
+    "截图、录屏、视频会议共享屏幕都拍不到它" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Screenshots, screen recordings and screen sharing in video calls won't capture it"
+          }
+        }
+      }
+    },
     "截图、录屏、视频会议共享屏幕都不会拍到悬浮歌词" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -6367,6 +7333,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "所有屏幕"
+          }
+        }
+      }
+    },
+    "手动选定歌词后锁定" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lock Lyrics After Manual Pick"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "手动选定歌词后锁定"
           }
         }
       }
@@ -6524,6 +7507,33 @@
         }
       }
     },
+    "打开备份文件夹" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open Backup Folder"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "打开备份文件夹"
+          }
+        }
+      }
+    },
+    "打开完全磁盘访问权限设置" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open Full Disk Access Settings"
+          }
+        }
+      }
+    },
     "打开歌词文件夹" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -6605,6 +7615,33 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "打开设置"
+          }
+        }
+      }
+    },
+    "打开该浏览器" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open Browser"
+          }
+        }
+      }
+    },
+    "打开配置文件夹" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open Config Folder"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "打开配置文件夹"
           }
         }
       }
@@ -7285,6 +8322,23 @@
         }
       }
     },
+    "播放器（可多选）" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Player (Multi-Select)"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "播放器（可多选）"
+          }
+        }
+      }
+    },
     "播放指示条，跟着音量起伏摆动，跟耳朵里选的内容共存显示（选了「播放控制」时让位）。关掉之后两只耳朵纯按你选的模块渲染，灵动岛也能配得更窄。" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -7536,6 +8590,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "整份只有署名行，没有正文"
+          }
+        }
+      }
+    },
+    "整份配置都在这里，可以直接纳入 dotfiles 版本管理。里面含账号凭据，不要发给别人。注意外观、配色、快捷键这些存在 UserDefaults 里，只拷这个文件夹会丢掉它们——要完整搬家请用「配置备份与搬家」" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The whole configuration lives here and can go straight into a dotfiles repo. It contains account credentials — do not share it. Note that appearance, colours and keyboard shortcuts live in UserDefaults: copying only this folder silently loses them. For a full migration use Backup & Migrate."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "整份配置都在这里，可以直接纳入 dotfiles 版本管理。里面含账号凭据，不要发给别人。注意外观、配色、快捷键这些存在 UserDefaults 里，只拷这个文件夹会丢掉它们——要完整搬家请用「配置备份与搬家」"
           }
         }
       }
@@ -7795,6 +8866,16 @@
         }
       }
     },
+    "无法确认状态（读不到该浏览器的配置文件）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Status unknown (can’t read this browser’s preferences file)"
+          }
+        }
+      }
+    },
     "无法获取待播清单" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -8033,6 +9114,23 @@
         }
       }
     },
+    "是另一场演出的现场版" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A live recording from a different show"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "是另一场演出的现场版"
+          }
+        }
+      }
+    },
     "显示/隐藏发音" : {
       "localizations" : {
         "en" : {
@@ -8090,6 +9188,23 @@
         }
       }
     },
+    "显示专辑" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show Album"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "显示专辑"
+          }
+        }
+      }
+    },
     "显示发音" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -8124,6 +9239,23 @@
         }
       }
     },
+    "显示封面" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show Artwork"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "显示封面"
+          }
+        }
+      }
+    },
     "显示更多" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -8154,6 +9286,40 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "显示桌面悬浮歌词"
+          }
+        }
+      }
+    },
+    "显示歌名" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show Track Title"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "显示歌名"
+          }
+        }
+      }
+    },
+    "显示歌手" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show Artist"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "显示歌手"
           }
         }
       }
@@ -8537,6 +9703,40 @@
         }
       }
     },
+    "更新时间 新→旧" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Updated Newest→Oldest"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "更新时间 新→旧"
+          }
+        }
+      }
+    },
+    "更新时间 旧→新" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Updated Oldest→Newest"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "更新时间 旧→新"
+          }
+        }
+      }
+    },
     "最后一句比歌曲结束还晚 5 秒以上，多半是完整版歌词配了精简版曲目" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -8707,6 +9907,23 @@
         }
       }
     },
+    "有 %@ 首歌是因为这个开关被锁定的。解锁后它们会重新接受自动重搜和打分改进；你手动编辑过正文的歌不受影响，始终保持锁定" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ songs are locked because of this switch. Unlocking lets automatic re-search and scoring improvements adjust them again; songs whose lyrics you edited by hand are unaffected and stay locked"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "有 %@ 首歌是因为这个开关被锁定的。解锁后它们会重新接受自动重搜和打分改进；你手动编辑过正文的歌不受影响，始终保持锁定"
+          }
+        }
+      }
+    },
     "有源明确说这首是纯音乐，没有可用的歌词候选" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -8771,6 +9988,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "未启用"
+          }
+        }
+      }
+    },
+    "未唱到的颜色" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unsung Color"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未唱到的颜色"
           }
         }
       }
@@ -9081,23 +10315,6 @@
         }
       }
     },
-    "染色颜色" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Fill color"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "染色颜色"
-          }
-        }
-      }
-    },
     "查看、编辑、重搜已缓存的歌词" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -9353,6 +10570,26 @@
         }
       }
     },
+    "检测是否已生效" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Check If It Works"
+          }
+        }
+      }
+    },
+    "检测没通过：%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Check failed: %@"
+          }
+        }
+      }
+    },
     "榜单" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -9580,6 +10817,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "歌词列表"
+          }
+        }
+      }
+    },
+    "歌词库是同名的第二个文件，搬家时两个都要拷。\n凭证别发给别人；导入连已连接的账号、播放数据发往的地址一起覆盖" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The lyrics library is a second file with a matching name — copy both when moving to a new Mac.\nDon't share the credentials; importing also overwrites connected accounts and where listening data is sent"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "歌词库是同名的第二个文件，搬家时两个都要拷。\n凭证别发给别人；导入连已连接的账号、播放数据发往的地址一起覆盖"
           }
         }
       }
@@ -9839,6 +11093,40 @@
         }
       }
     },
+    "歌词行" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lyric Row"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "歌词行"
+          }
+        }
+      }
+    },
+    "歌词行末尾那枚封面缩略图,稳态和展开都会显示,不受上面几项影响。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The artwork thumbnail at the end of the lyric row — shown in both steady and expanded states, unaffected by the rows above."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "歌词行末尾那枚封面缩略图,稳态和展开都会显示,不受上面几项影响。"
+          }
+        }
+      }
+    },
     "歌词超出曲长" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -10050,6 +11338,40 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "正在查询网易云 / QQ音乐 / 酷狗 / Musixmatch / LRCLIB…"
+          }
+        }
+      }
+    },
+    "正在查那年今日…" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Looking up this day in past years…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在查那年今日…"
+          }
+        }
+      }
+    },
+    "正在检查已经手动选定过的歌…" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Checking songs you picked manually…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在检查已经手动选定过的歌…"
           }
         }
       }
@@ -10475,6 +11797,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "没有找到带时间戳的版本，已自动采纳一份纯文本兜底（可在「歌词窗口」里查看）"
+          }
+        }
+      }
+    },
+    "没能取到那年今日——Last.fm 没有响应" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't load this day in past years — Last.fm didn't respond"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "没能取到那年今日——Last.fm 没有响应"
           }
         }
       }
@@ -11656,6 +12995,16 @@
         }
       }
     },
+    "系统自动化授权：上次检测时已授权" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "System automation access: granted as of the last check"
+          }
+        }
+      }
+    },
     "系统自动化授权：尚未授权" : {
       "localizations" : {
         "en" : {
@@ -11978,6 +13327,23 @@
         }
       }
     },
+    "网易云接口限流（短时间内请求过多，操作频繁，code 405），不是网络故障" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "NetEase Cloud Music's API is rate-limiting (too many requests in a short time, code 405) — not a network fault"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "网易云接口限流（短时间内请求过多，操作频繁，code 405），不是网络故障"
+          }
+        }
+      }
+    },
     "网易云音乐" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -12042,6 +13408,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "网络似乎不通，这一轮没搜到任何候选"
+          }
+        }
+      }
+    },
+    "网络请求全部失败（DNS/连接问题），这一轮探测本身就没跑起来" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "All network requests failed (DNS/connection issue) — this probe round never got off the ground"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "网络请求全部失败（DNS/连接问题），这一轮探测本身就没跑起来"
           }
         }
       }
@@ -12114,19 +13497,19 @@
         }
       }
     },
-    "网页播放器不会像本地 App 那样主动汇报精确的播放进度，切歌之后需要这个开关才能立刻校准，不然要过几秒才能追上；这是浏览器自己加的开关，跟上面的系统权限无关" : {
+    "网页播放器（可多选）" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Web players don't report precise playback position the way local apps do — this switch lets Lyrimuse recalibrate immediately after a track change instead of taking a few seconds to catch up. It's added by the browser itself and is unrelated to the system permission above."
+            "value" : "Web Player (Multi-Select)"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "网页播放器不会像本地 App 那样主动汇报精确的播放进度，切歌之后需要这个开关才能立刻校准，不然要过几秒才能追上；这是浏览器自己加的开关，跟上面的系统权限无关"
+            "value" : "网页播放器（可多选）"
           }
         }
       }
@@ -12482,23 +13865,6 @@
         }
       }
     },
-    "自适应（Beta）" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Adaptive (Beta)"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "自适应（Beta）"
-          }
-        }
-      }
-    },
     "节拍器" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -12720,6 +14086,23 @@
         }
       }
     },
+    "要把之前锁定的歌一并解锁吗？" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unlock the songs locked earlier?"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "要把之前锁定的歌一并解锁吗？"
+          }
+        }
+      }
+    },
     "规则换版重选" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -12937,6 +14320,57 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "设置已存好，但歌词库那一份没写成功"
+          }
+        }
+      }
+    },
+    "设置已导出；歌词库这次没打包成功，只有设置那一个文件" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Settings exported; the lyrics library could not be packaged this time, so only the settings file was written"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "设置已导出；歌词库这次没打包成功，只有设置那一个文件"
+          }
+        }
+      }
+    },
+    "设置已导出；歌词库那份写盘失败，只有设置那一个文件" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Settings exported; writing the lyrics archive failed, so only the settings file was written"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "设置已导出；歌词库那份写盘失败，只有设置那一个文件"
+          }
+        }
+      }
+    },
+    "设置文件" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Settings File"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "设置文件"
           }
         }
       }
@@ -13263,6 +14697,36 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Couldn’t read this app’s identifier. Try another one."
+          }
+        }
+      }
+    },
+    "读不到该浏览器的配置文件——改这个开关需要「完全磁盘访问权限」。下面两条路二选一，效果一样：给权限后可以一键开启；或者自己到该浏览器「查看 → 开发者」里勾上「允许 Apple 事件中的 JavaScript」。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Can’t read this browser’s preferences file — changing this switch needs Full Disk Access. Either option below works: grant access and use one-click enable, or turn on “Allow JavaScript from Apple Events” yourself under the browser’s View → Developer menu."
+          }
+        }
+      }
+    },
+    "读不到该浏览器的配置文件——改这个开关需要「完全磁盘访问权限」，而且给完权限后要重启 Lyrimuse 才生效。下面两条路二选一，效果一样：给权限并重启；或者自己到该浏览器「查看 → 开发者」里勾上「允许 Apple 事件中的 JavaScript」（这条不需要任何权限）。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Can’t read this browser’s preferences file — changing this switch needs Full Disk Access, and Lyrimuse must be restarted after you grant it. Either option below works: grant access and restart, or turn on “Allow JavaScript from Apple Events” yourself under the browser’s View → Developer menu (that one needs no permissions)."
+          }
+        }
+      }
+    },
+    "读不到该浏览器的配置文件。给 Lyrimuse 开「完全磁盘访问权限」后就能一键开启；不想开权限的话，到该浏览器「查看 → 开发者」菜单里手动打开也一样。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Can’t read this browser’s preferences file. Grant Lyrimuse Full Disk Access and one-click enable will work; otherwise turn it on yourself from the browser’s View → Developer menu."
           }
         }
       }
@@ -13692,6 +15156,23 @@
         }
       }
     },
+    "过去三年的今天都没有收听记录" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No listens on this day in the past three years"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "过去三年的今天都没有收听记录"
+          }
+        }
+      }
+    },
     "运行中" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -13896,6 +15377,23 @@
         }
       }
     },
+    "还没有手动选定过歌词；从现在起你选定的都会直接锁定" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "You haven't picked any lyrics manually yet; from now on, your picks will be locked right away"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "还没有手动选定过歌词；从现在起你选定的都会直接锁定"
+          }
+        }
+      }
+    },
     "还没有收听记录" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -13930,6 +15428,26 @@
         }
       }
     },
+    "还没生效：浏览器回绝了执行 JavaScript 的请求，按上面那条路径再确认一下开关勾上了没有" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Not working yet: the browser refused to run JavaScript. Follow the path above and make sure the switch is ticked"
+          }
+        }
+      }
+    },
+    "还没生效：浏览器收下了请求却一直没回应，多半是那个开关还没勾上（有的浏览器不报错、直接不回）。按上面那条路径再确认一下" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Not working yet: the browser took the request but never answered — most likely that switch still isn't ticked (some browsers stay silent instead of reporting an error). Follow the path above and check again"
+          }
+        }
+      }
+    },
     "还没连接 Last.fm 账号" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -13943,6 +15461,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "还没连接 Last.fm 账号"
+          }
+        }
+      }
+    },
+    "还没配置完，点开看看还差什么" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Setup isn’t finished — click to see what’s left"
           }
         }
       }
@@ -13977,6 +15505,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "还缺用户名，听歌报告用不了"
+          }
+        }
+      }
+    },
+    "这个开关已经被关掉了——现在还能用，只是因为该浏览器还没重启；重启后就会失效" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This switch has been turned off — it still works right now only because the browser hasn't restarted yet, and it will stop working after a restart"
           }
         }
       }
@@ -14144,6 +15682,23 @@
         }
       }
     },
+    "这个文件不是 Lyrimuse 的设置备份，没有导入" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "That file is not a Lyrimuse settings backup — nothing was imported"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这个文件不是 Lyrimuse 的设置备份，没有导入"
+          }
+        }
+      }
+    },
     "这个时段还没有记录" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -14157,6 +15712,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "这个时段还没有记录"
+          }
+        }
+      }
+    },
+    "这个浏览器没在运行，或者一个标签页都没开——打开它并随便开一个网页，再检测一次" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This browser isn’t running, or has no open tab — open it with any page loaded, then check again"
           }
         }
       }
@@ -15062,23 +16627,6 @@
         }
       }
     },
-    "逐字染色" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Karaoke fill"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "逐字染色"
-          }
-        }
-      }
-    },
     "逐字歌词" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -15211,6 +16759,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "那年今日 · %1$@ 年前听了 %2$@ 首"
+          }
+        }
+      }
+    },
+    "配置备份与搬家" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Backup & Migrate"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "配置备份与搬家"
           }
         }
       }
@@ -15381,6 +16946,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "重新搜索"
+          }
+        }
+      }
+    },
+    "重新检测" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Check Again"
           }
         }
       }
@@ -15946,6 +17521,23 @@
         }
       }
     },
+    "预览" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Preview"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "预览"
+          }
+        }
+      }
+    },
     "预览 · %@pt" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -16099,23 +17691,6 @@
         }
       }
     },
-    "预览 · 固定宽度 %@pt" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Preview · fixed %@pt"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "预览 · 固定宽度 %@pt"
-          }
-        }
-      }
-    },
     "预览 · 固定宽度 %@pt，本句会横向滚动" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -16133,19 +17708,19 @@
         }
       }
     },
-    "预览 · 自适应，最宽 %@pt" : {
+    "预览 · 本句会横向滚动" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Preview · adaptive, max %@pt"
+            "value" : "Preview · this line scrolls"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "预览 · 自适应，最宽 %@pt"
+            "value" : "预览 · 本句会横向滚动"
           }
         }
       }
@@ -16303,6 +17878,23 @@
         }
       }
     },
+    "鼠标悬停在灵动岛上时能看到什么" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "What you see when hovering over the Dynamic Island"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "鼠标悬停在灵动岛上时能看到什么"
+          }
+        }
+      }
+    },
     "鼠标移到悬浮歌词上时它会淡下去，移开恢复" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -16388,19 +17980,250 @@
         }
       }
     },
-    "，本句会横向滚动" : {
+    "网页播放器不会像本地 App 那样主动汇报精确的播放进度，切歌之后需要这个开关才能立刻校准。" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : " — this line scrolls"
+            "value" : "Web players don't report precise playback position the way local apps do — this switch lets Lyrimuse recalibrate immediately after a track change."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "，本句会横向滚动"
+            "value" : "网页播放器不会像本地 App 那样主动汇报精确的播放进度，切歌之后需要这个开关才能立刻校准。"
+          }
+        }
+      }
+    },
+    "排序" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sort"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "排序"
+          }
+        }
+      }
+    },
+    "默认排序" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Default Order"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "默认排序"
+          }
+        }
+      }
+    },
+    "歌名 A→Z" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Title A→Z"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "歌名 A→Z"
+          }
+        }
+      }
+    },
+    "歌名 Z→A" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Title Z→A"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "歌名 Z→A"
+          }
+        }
+      }
+    },
+    "歌手 A→Z" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Artist A→Z"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "歌手 A→Z"
+          }
+        }
+      }
+    },
+    "歌手 Z→A" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Artist Z→A"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "歌手 Z→A"
+          }
+        }
+      }
+    },
+    "专辑 A→Z" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Album A→Z"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "专辑 A→Z"
+          }
+        }
+      }
+    },
+    "专辑 Z→A" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Album Z→A"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "专辑 Z→A"
+          }
+        }
+      }
+    },
+    "来源 A→Z" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Source A→Z"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "来源 A→Z"
+          }
+        }
+      }
+    },
+    "来源 Z→A" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Source Z→A"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "来源 Z→A"
+          }
+        }
+      }
+    },
+    "显示播放控制" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show Playback Controls"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "显示播放控制"
+          }
+        }
+      }
+    },
+    "显示歌词校准" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show Lyrics Calibration"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "显示歌词校准"
+          }
+        }
+      }
+    },
+    "恢复默认宽度模式与配色" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reset Width Mode and Colors"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "恢复默认宽度模式与配色"
+          }
+        }
+      }
+    },
+    "按住 ⌘ 拖拽这个图标，可以把它移动到菜单栏里你喜欢的位置。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hold ⌘ and drag this icon to move it anywhere in the menu bar."
           }
         }
       }

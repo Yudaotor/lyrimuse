@@ -66,6 +66,21 @@ private final class NotchPlayback: ObservableObject {
     /// 稳态/展开那一行两只耳朵各显示什么(见 NotchEarModule)。
     @Published private(set) var leftEar: NotchEarModule = .title
     @Published private(set) var rightEar: NotchEarModule = .artist
+    /// 歌词行末尾那枚封面缩略图要不要显示、贴哪一边(2026-09-01)。走这里现读而不是
+    /// `NotchChromeSource` 协议——它只影响 `lyricRowContent` 内部的 HStack 排列,不影响
+    /// 卡片高度/宽度,理由同 `notchCardStyle`/`leftEar`/`rightEar`(那几个也只影响渲染)。
+    @Published private(set) var lyricRowShowsArtwork: Bool = true
+    @Published private(set) var lyricRowArtworkPosition: NotchLyricRowArtworkPosition = .right
+    /// 展开区时间行中间要不要显示「歌词时间轴微调」(2026-09-01)。同上走这里现读——只影响
+    /// `NotchScrubber` 内部时间行怎么排,不影响卡片高度,理由见
+    /// `AppSettings.notchExpandedShowsLyricsOffset` 上面那条⚠️。
+    @Published private(set) var showsLyricsOffsetControls: Bool = false
+    /// 这首歌的歌词时间轴校正值(毫秒)+ 每次点击的步长——菜单栏面板那颗微调控件读的是
+    /// 同一对值(`PlaybackCoordinator.trackLyricsOffsetMs`/`AppSettings.lyricsOffsetStepMs`),
+    /// 这里镜像一份是因为 `NotchScrubber` 是 `private struct`、靠参数传值(不直接订阅
+    /// PlaybackCoordinator/AppSettings),得有人先把值取到手。
+    @Published private(set) var trackLyricsOffsetMs: Int = 0
+    @Published private(set) var lyricsOffsetStepMs: Int = 200
     private var subs: [AnyCancellable] = []
 
     init() {
@@ -105,6 +120,11 @@ private final class NotchPlayback: ObservableObject {
             s.$notchCardStyle.removeDuplicates().sink { [weak self] in self?.notchCardStyle = $0 },
             s.$notchLeftEar.removeDuplicates().sink { [weak self] in self?.leftEar = $0 },
             s.$notchRightEar.removeDuplicates().sink { [weak self] in self?.rightEar = $0 },
+            s.$notchLyricRowShowsArtwork.removeDuplicates().sink { [weak self] in self?.lyricRowShowsArtwork = $0 },
+            s.$notchLyricRowArtworkPosition.removeDuplicates().sink { [weak self] in self?.lyricRowArtworkPosition = $0 },
+            s.$notchExpandedShowsLyricsOffset.removeDuplicates().sink { [weak self] in self?.showsLyricsOffsetControls = $0 },
+            p.$trackLyricsOffsetMs.removeDuplicates().sink { [weak self] in self?.trackLyricsOffsetMs = $0 },
+            s.$lyricsOffsetStepMs.removeDuplicates().sink { [weak self] in self?.lyricsOffsetStepMs = $0 },
         ]
     }
 }
@@ -170,6 +190,15 @@ extension NotchEarModule {
     /// 把歌名换到右耳时它还是那个最显眼的东西,不会因为换了个位置就变次要。
     /// (这也正是改动前的样子:左耳歌名 semibold/0.85、右耳歌手 medium/0.6。)
     var isPrimary: Bool { self == .title }
+}
+
+extension NotchLyricRowArtworkPosition {
+    var displayName: String {
+        switch self {
+        case .left: return L10n.t("左")
+        case .right: return L10n.t("右")
+        }
+    }
 }
 
 extension NotchCardStyle {
@@ -247,11 +276,41 @@ enum NotchMetrics {
     /// 展开区的最大高度 / 按内容算的实际高度 —— 实现在 LyrimuseCore 的
     /// NotchExpandedMetrics(那边有完整的推导注释和 selftest 断言),这里只是转发,
     /// 让调用点仍然只需要认识 NotchMetrics 这一个入口。
-    static var expandedExtraHeightMax: CGFloat { NotchExpandedMetrics.maxHeight }
-
-    static func expandedExtraHeight(hasLyricPreview: Bool, hasScrubber: Bool) -> CGFloat {
-        NotchExpandedMetrics.height(hasLyricPreview: hasLyricPreview, hasScrubber: hasScrubber)
+    ///
+    /// ⚠️ 2026-09-01 加了 `trackInfoHeight`/`hasLyricPreviewPossible` 之后:**以后再往
+    /// `NotchExpandedMetrics` 加一个决定展开区高度的入参,这两个转发函数(以及
+    /// `NotchLyricsWindowController.expandedExtraHeight`)都要跟着加**,同时别忘了在
+    /// `NotchLyricsWindowController` 加一条对应的设置订阅——漏了订阅的表现不是崩,是
+    /// "改完设置卡片高度纹丝不动,直到下次触发别的几何重算才追上",很难联想到订阅上。
+    static func expandedExtraHeightMax(
+        hasLyricPreviewPossible: Bool = true, hasControlsPossible: Bool = true, trackInfoHeight: CGFloat = 0
+    ) -> CGFloat {
+        NotchExpandedMetrics.maxHeight(
+            hasLyricPreviewPossible: hasLyricPreviewPossible, hasControlsPossible: hasControlsPossible,
+            trackInfoHeight: trackInfoHeight)
     }
+
+    static func expandedExtraHeight(
+        hasLyricPreview: Bool, hasScrubber: Bool, hasControls: Bool = true, trackInfoHeight: CGFloat = 0
+    ) -> CGFloat {
+        NotchExpandedMetrics.height(
+            hasLyricPreview: hasLyricPreview, hasScrubber: hasScrubber, hasControls: hasControls,
+            trackInfoHeight: trackInfoHeight)
+    }
+
+    /// 曲目信息头部(封面 + 歌名/歌手/专辑三个文字开关)的高度。
+    static func expandedTrackInfoHeight(
+        showsArtwork: Bool, showsTitle: Bool, showsArtist: Bool, showsAlbum: Bool
+    ) -> CGFloat {
+        NotchExpandedMetrics.trackInfoHeight(
+            showsArtwork: showsArtwork, showsTitle: showsTitle, showsArtist: showsArtist, showsAlbum: showsAlbum)
+    }
+
+    // 曲目信息头部渲染(而非高度算术)要用到的几个尺寸,同样只转发 NotchExpandedMetrics
+    // 那份定义,不重复写字面量。
+    static var trackInfoSpacing: CGFloat { NotchExpandedMetrics.trackInfoSpacing }
+    static var trackInfoArtworkSide: CGFloat { NotchExpandedMetrics.trackInfoArtworkSide }
+    static var trackInfoLineSpacing: CGFloat { NotchExpandedMetrics.trackInfoLineSpacing }
 
     // 收起态(没在播放)单侧耳宽:左耳只放音浪(约 14pt 宽)、右耳只放一枚小封面
     // (2026-08-19 用户拍板的 iPhone 灵动岛式极简形态,歌名/播放键都收进 hover 展开卡),
@@ -334,6 +393,25 @@ protocol NotchChromeSource: ObservableObject {
     var showsEqualizer: Bool { get }
     /// 音浪贴哪只耳朵的外缘。同上。
     var equalizerEar: NotchEqualizerEar { get }
+    /// 用户要不要看展开区那行「下一句歌词预览」(`AppSettings.notchExpandedShowsNextLine`)。
+    /// 跟 `expandedShowsLyricPreview`(这首歌有没有下一句)是两回事,两者都成立才画,见
+    /// `showsExpandedLyricPreview`。同上,走 chrome 不直接读 AppSettings。
+    var expandedShowsNextLine: Bool { get }
+    /// 用户要不要看展开区那排播放控制键(`AppSettings.notchExpandedShowsControls`)。
+    /// 跟 `expandedShowsNextLine`/`expandedShowsScrubber` 不一样的是:控制键不看曲目级
+    /// 数据信号(播放/暂停/上一首/下一首任何时候都能点),纯粹是一个用户开关,不需要像
+    /// `showsExpandedLyricPreview` 那样跟"这首歌有没有下一句"再取一次交集——这个属性
+    /// 本身就是渲染判据,不用另包一层。
+    var expandedShowsControls: Bool { get }
+    /// 展开区「曲目信息头部」四个独立开关(封面/歌名/歌手/专辑),同上均走 chrome 现读设置。
+    /// ⚠️ 这枚封面(`expandedTrackInfoShowsArtwork`)**不是**歌词行末尾那枚
+    /// (`lyricRowShowsArtwork`/`lyricRowArtworkPosition`,走 `NotchPlayback` 而不是这个
+    /// 协议)——两枚封面是独立开关,可以同时开,详见 `AppSettings.notchExpandedShowsArtwork`
+    /// 上面那段⚠️的落点简史。
+    var expandedTrackInfoShowsArtwork: Bool { get }
+    var expandedTrackInfoShowsTitle: Bool { get }
+    var expandedTrackInfoShowsArtist: Bool { get }
+    var expandedTrackInfoShowsAlbum: Bool { get }
     func setExpanded(_ expanded: Bool)
 }
 
@@ -354,7 +432,51 @@ extension NotchChromeSource {
     /// 不该连带影响展开区——展开是用户主动选的动作,他既然已经点开了,就不该因为"平时不想被
     /// 歌词挡视线"这个理由被拿掉。高度预留和实际渲染必须读同一个值,否则要么多留一行的空白、
     /// 要么把它裁掉半截。
-    var showsExpandedLyricPreview: Bool { expandedShowsLyricPreview }
+    ///
+    /// `expandedShowsNextLine`(2026-09-01)是这个功能第一次有用户开关:以前无条件跟着
+    /// `expandedShowsLyricPreview` 这个曲目级数据出现,现在两者都成立才画。别把它塞进
+    /// `NotchMetrics.expandedExtraHeight` 的入参列表——那会让"这一段到底该不该占高度"有
+    /// 两个真源(一个在这里判、一个在 height() 里判),这里判完的**结果**才是 height() 该吃
+    /// 的唯一输入。
+    var showsExpandedLyricPreview: Bool { expandedShowsLyricPreview && expandedShowsNextLine }
+
+    /// 展开区「曲目信息头部」到底画不画——只要四个开关(封面/歌名/歌手/专辑)有一个开着,
+    /// 且此刻有曲目(没曲目时四者都是空的,画一块空头部没有意义,理由同
+    /// `showsLyricRow` 对 `hasTrack` 的处理)。
+    var showsExpandedTrackInfo: Bool {
+        hasTrack && (expandedTrackInfoShowsArtwork || expandedTrackInfoShowsTitle
+                     || expandedTrackInfoShowsArtist || expandedTrackInfoShowsAlbum)
+    }
+
+    /// 曲目信息头部按当前设置算出来的高度,`0` = 不画(见 `showsExpandedTrackInfo`)。
+    /// 单独抽出来是因为 `cardHeight` 和 `NotchLyricsWindowController.expandedExtraHeight`
+    /// 都要用同一个值——两处各自现算的话,当天早些时候「左右耳」那次教训会原样重演一遍。
+    var expandedTrackInfoHeight: CGFloat {
+        guard showsExpandedTrackInfo else { return 0 }
+        return NotchMetrics.expandedTrackInfoHeight(
+            showsArtwork: expandedTrackInfoShowsArtwork,
+            showsTitle: expandedTrackInfoShowsTitle,
+            showsArtist: expandedTrackInfoShowsArtist,
+            showsAlbum: expandedTrackInfoShowsAlbum)
+    }
+
+    /// 曲目信息头部要占的**总**高度(内容本身 + 上下各一份间距)——头部现在是独立渲染在
+    /// 歌词行**之上**的一块(2026-09-01 用户要求"新字段都在最上面,歌词行/下一句挪到
+    /// 最下面"),不再是 `expandedContent` 内部的第一个子视图,所以它自己的 `.frame(height:)`
+    /// 得包含"离下面歌词行的间距"这一截——跟 `NotchExpandedMetrics` 里
+    /// `lyricPreviewBlock`/`scrubberBlock` 那种"值本身含尾随间距"是同一个惯例。
+    /// `expandedContent` 自己那份 `NotchMetrics.expandedExtraHeight(...)` 调用因此永远传
+    /// `trackInfoHeight: 0`——这部分高度已经在这里算过一次,不能算两次。
+    ///
+    /// ⚠️ **上面那份间距**是 2026-09-01 同一天补的第二轮:第一版只留了尾随间距,头部紧挨在
+    /// 上面的 topRow 下面、零间距,用户报"标题首行贴到上面边了"。跟 `NotchExpandedMetrics.height`
+    /// 的注释同步——两份间距都在 `trackInfoSpacing * 2` 里算过,渲染那侧
+    /// (`NotchLyricsView.trackInfoHeader`)只需要在内容顶部真的加一次 `.padding(.top:)`
+    /// 把上面那份"用出来",不需要在这里再调这个函数的返回值分配比例。
+    var expandedTrackInfoHeaderHeight: CGFloat {
+        let height = expandedTrackInfoHeight
+        return height > 0 ? height + NotchMetrics.trackInfoSpacing * 2 : 0
+    }
 
     /// 卡片当前高度 —— **全仓唯一一份公式**,真窗口(NotchWindowRoot)和设置页编辑台
     /// (NotchEditorStage)都读它。
@@ -371,7 +493,9 @@ extension NotchChromeSource {
             + (isExpanded
                ? NotchMetrics.expandedExtraHeight(
                    hasLyricPreview: showsExpandedLyricPreview,
-                   hasScrubber: expandedShowsScrubber)
+                   hasScrubber: expandedShowsScrubber,
+                   hasControls: expandedShowsControls,
+                   trackInfoHeight: expandedTrackInfoHeight)
                : 0)
     }
 }
@@ -438,6 +562,17 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
                     // 同一判据留白),44pt 白占着就是用户报的"占用空间"。一处改一处不改的
                     // 表现是"行不见了高度还留着"或反过来把行裁掉半截。
                     if !controller.isCollapsed && controller.hasTrack {
+                        // 曲目信息头部(歌名/歌手/专辑,2026-09-01):画在歌词行**之上**——
+                        // 用户原话"新加的这些字段元素都是在最上面,然后歌词行和下一行歌词
+                        // 这些都放在最下面,而不是现在这样信息都夹在两行歌词之间"(第一版
+                        // 把它塞进 expandedContent 顶部,结果夹在"正在播放"那行和"下一句
+                        // 预览"中间)。只在展开时出现,理由跟下面 expandedContent 一致:
+                        // 展开是用户主动选的动作。高度用 `expandedTrackInfoHeaderHeight`——
+                        // 它已经包含跟下面歌词行之间的间距,见该属性的注释。
+                        if controller.isExpanded, controller.showsExpandedTrackInfo {
+                            trackInfoHeader
+                                .frame(height: controller.expandedTrackInfoHeaderHeight, alignment: .top)
+                        }
                         // 用户关掉「显示歌词」时这一行连同它那 44pt 一起不渲染,卡片退化成
                         // 只剩顶行的一条状态栏(2026-08-31)——但展开时哪怕关着也要照常画,
                         // 见 showsLyricRow 的注释(2026-08-31 回归:第一版漏了展开这一档,
@@ -887,6 +1022,11 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
 
     private var lyricRowContent: some View {
         HStack(spacing: NotchMetrics.artworkLyricSpacing) {
+            // 封面贴左还是贴右可配(2026-09-01,`notchLyricRowShowsArtwork` /
+            // `notchLyricRowArtworkPosition`,见 NotchPlayback 的注释)——2026-08-10 之前
+            // 用户曾要求去掉这个开关、固定显示,这次重开开关必须保住"默认贴右、默认开"
+            // 这条既有行为,不能让升级上来的用户发现封面凭空挪位或消失。
+            if playback.lyricRowArtworkPosition == .left { lyricRowArtwork }
             MarqueeText(id: playback.compactLine?.plainText ?? "",
                         edgeFadeWidth: NotchMetrics.lyricEdgeFadeWidth) {
                 lyricContent
@@ -897,16 +1037,7 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
             // 写一次 maxWidth: .infinity 把"歌词吃掉剩余宽度"这个意图钉死,不依赖
             // GeometryReader 在 stack 里的隐式伸缩行为。
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-
-            // 封面小图在歌词右边(卡片右下角),没有封面数据时整个摘掉、把宽度全部还给
-            // 歌词,理由见 artworkThumbnail 上面的注释。
-            // 2026-08-10 删掉了「显示专辑封面」开关(用户要求),固定按原来的默认值走:
-            // 有封面就显示。
-            // 高清替代优先,理由同 backgroundLayer:网易云的系统封面只有 100×100,云盘
-            // 未匹配歌还是灰底音符占位图。
-            if let image = playback.highResArtworkImage ?? playback.artworkImage {
-                artworkThumbnail(image)
-            }
+            if playback.lyricRowArtworkPosition == .right { lyricRowArtwork }
         }
         .padding(.horizontal, 16)
         // ⚠️ 封面**在场性**的变化必须是瞬时的,不能落进任何补间 —— 这是用户报的
@@ -934,7 +1065,30 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
         // artworkThumbnail 上面那段"没有封面就连位置一起不占"的决定直接冲突;给它加
         // .transition 淡入也不行 —— 淡入到不透明的过程中 clip 边界照旧滞后,只是把遮挡
         // 从"实心"变成"半透明"。封面出现/消失本来就是一次宽度**跳变**,补间只会制造不同步。
-        .animation(nil, value: (playback.highResArtworkImage ?? playback.artworkImage) == nil)
+        //
+        // ⚠️ 2026-09-01 加了显示开关之后,这里的 value 必须是"封面这一刻实际占不占位"这个
+        // **合成**布尔(开关 && 有数据),不能只看数据——开关关着时数据端的有无变化不该
+        // 触发任何布局動作,但如果只 key 数据端,`.animation(nil,)` 会在开关关闭期间对
+        // 一个根本不影响布局的信号误判"没变化"而放行别的动画,反而在开关重新打开的
+        // 那一刻可能撞上活动动画的同一次更新窗口——虽然实测未必能复现,但没有理由把
+        // 判据故意做窄。
+        .animation(nil, value: !lyricRowArtworkPresent)
+    }
+
+    /// 歌词行末尾(或开头)那枚封面缩略图,2026-08-05 就有、2026-08-10 到 2026-09-01 之间
+    /// 固定显示,现在受 `notchLyricRowShowsArtwork` 开关控制。没有封面数据(没曲目/取图
+    /// 失败)或开关关着时都不画占位方块,理由见 `artworkThumbnail` 上面那段。
+    @ViewBuilder
+    private var lyricRowArtwork: some View {
+        if playback.lyricRowShowsArtwork, let image = playback.highResArtworkImage ?? playback.artworkImage {
+            artworkThumbnail(image)
+        }
+    }
+
+    /// 上面那枚封面此刻是不是真的占着一个位置——给 `.animation(nil, value:)` 当判据用,
+    /// 见那一行的注释。
+    private var lyricRowArtworkPresent: Bool {
+        playback.lyricRowShowsArtwork && (playback.highResArtworkImage ?? playback.artworkImage) != nil
     }
 
     private var lyricContent: some View {
@@ -1095,6 +1249,12 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
 
     // hover 展开时多出来的这一块——下一句歌词预览 + 迷你进度条,用来强化"这是个歌词类
     // 产品"而不是退化成通用媒体控制器;进度条属于"有余量就加"的加分项。
+    //
+    // ⚠️ 曲目信息头部(歌名/歌手/专辑)**不在这里**——2026-09-01 一度是这个 VStack 的第一个
+    // 子视图,用户报"信息夹在两行歌词之间",要求挪到歌词行**之上**,现在是 body 里
+    // lyricRow 前面一个独立的 `trackInfoHeader` 块(见 body 那段注释)。这里因此永远传
+    // `trackInfoHeight: 0`——那部分高度已经在 `expandedTrackInfoHeaderHeight` 那份独立
+    // 的 `.frame(height:)` 里算过一次。
     private var expandedContent: some View {
         VStack(alignment: .leading, spacing: 4) {
             // ⚠️ `showsExpandedLyricPreview` 这一条跟下面 .frame(height:) 里留不留这行的高度
@@ -1113,28 +1273,45 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
                 pausedPositionMs: playback.pausedPositionMs,
                 durationMs: playback.currentDurationMs,
                 isPlayingNow: playback.isPlayingNow,
-                tint: accentOrWhite)
+                tint: accentOrWhite,
+                showsLyricsOffsetControls: playback.showsLyricsOffsetControls,
+                trackLyricsOffsetMs: playback.trackLyricsOffsetMs,
+                lyricsOffsetStepMs: playback.lyricsOffsetStepMs)
 
             // 完整三键(2026-08-19 设计评审,从右耳挪进来):岛是 hover 展开的,真正的
             // 点击全发生在展开态 —— 控制就该在展开卡里、进度条下方居中,跟菜单栏面板
             // 卡片同一套设计语言(进度条 + 居中三键),目标也大得多(22pt vs 耳朵里 15pt)。
-            HStack(spacing: 34) {
-                controlButton("backward.fill", glyphSize: 11.5, hitSize: 22) {
-                    MusicPlaybackController.previousTrack()
+            //
+            // 2026-09-01 加了 `expandedShowsControls` 开关——关掉后这排键不画,理由见
+            // `NotchChromeSource.expandedShowsControls` 的注释(不是唯一入口,`NotchEarModule`
+            // 本来就有「播放控制」这个选项)。
+            if controller.expandedShowsControls {
+                HStack(spacing: 34) {
+                    controlButton("backward.fill", glyphSize: 11.5, hitSize: 22) {
+                        MusicPlaybackController.previousTrack()
+                    }
+                    controlButton(playback.isPlayingNow ? "pause.fill" : "play.fill",
+                                  glyphSize: 14, hitSize: 22) {
+                        // 乐观回声版:歌词窗封面缩放/图标点击即动(见 userTogglePlayPause)。
+                        PlaybackCoordinator.shared.userTogglePlayPause()
+                    }
+                    controlButton("forward.fill", glyphSize: 11.5, hitSize: 22) {
+                        MusicPlaybackController.nextTrack()
+                    }
                 }
-                controlButton(playback.isPlayingNow ? "pause.fill" : "play.fill",
-                              glyphSize: 14, hitSize: 22) {
-                    // 乐观回声版:歌词窗封面缩放/图标点击即动(见 userTogglePlayPause)。
-                    PlaybackCoordinator.shared.userTogglePlayPause()
-                }
-                controlButton("forward.fill", glyphSize: 11.5, hitSize: 22) {
-                    MusicPlaybackController.nextTrack()
-                }
+                .frame(maxWidth: .infinity)
             }
-            .frame(maxWidth: .infinity)
         }
         .padding(.horizontal, 16)
-        .padding(.bottom, 10)
+        // 10pt 底边距是 `NotchExpandedMetrics.controlsBlock`(35 = 22 键高 + 10 底边距 +
+        // 3pt 余量)的一部分,关掉播放控制键之后这一整块(含底边距)在高度算术里都不占
+        // 地方了(见 height(...) 的 hasControls 分支),渲染这侧必须跟着不加,否则算出来的
+        // 高度比实际渲染矮 10pt,会把上面的内容顶出去一截、被 `.frame(alignment: .top)`
+        // 裁掉底部——两处一个开一个不开,必然对不上。⚠️ 代价:关掉控制键但进度条/下一句
+        // 预览还开着时,最后一个元素少了这 10pt 专属边距,只剩它自己那份"间距4"贴底(比如
+        // 进度条时间行离底边只剩 4pt,不是 10pt)——比专属边距紧一些,但不会被裁,这是
+        // 接受的取舍,不值得为这一种组合另开一条独立的常量。
+        .padding(.bottom, controller.expandedShowsControls ? 10 : 0)
         // ⚠️ maxWidth: .infinity 是必须的,不是随手加的保险。
         //
         // 不钉这一下,这一块的宽度就跟着**内容**走。播放时里面有进度条,进度条用
@@ -1151,7 +1328,83 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
         // 要么底部多一条空隙,要么最下面那排三键被裁掉。
         .frame(height: NotchMetrics.expandedExtraHeight(
             hasLyricPreview: controller.showsExpandedLyricPreview,
-            hasScrubber: controller.expandedShowsScrubber), alignment: .top)
+            hasScrubber: controller.expandedShowsScrubber,
+            hasControls: controller.expandedShowsControls,
+            trackInfoHeight: 0), alignment: .top)
+    }
+
+    /// 曲目信息头部:封面 + 歌名/歌手/专辑,四项独立开关(2026-09-01)。解决的缺口:两只
+    /// 耳朵都配成非文本模块(比如「剩余时长」)时,hover 展开也看不出这是哪首歌。
+    ///
+    /// ⚠️ **封面落点反复过**——最初设计里就带一枚,用户看过效果后指出"跟歌词行末尾已有的
+    /// 那枚封面重复了",要求并回那一枚(`lyricRowContent` 里的 `artworkThumbnail`,受
+    /// `notchLyricRowShowsArtwork`/`notchLyricRowArtworkPosition` 控制,走 `NotchPlayback`
+    /// 镜像,不在这个协议里);过了几轮之后用户又要求"在展开态里面多增加一个显示封面",
+    /// 重新给头部配上**自己**的一枚(`expandedTrackInfoShowsArtwork`,这个协议里),这次
+    /// 没有位置四选一——固定贴文字块左边,用户参照图就是"封面居左+文字居右"。两枚封面因此
+    /// 是两个独立开关,理论上能同时开(一枚在歌词行末尾、一枚在头部左边),不算矛盾。
+    @ViewBuilder
+    private var trackInfoHeader: some View {
+        if controller.showsExpandedTrackInfo {
+            HStack(spacing: 8) {
+                trackInfoArtwork
+                trackInfoTextStack
+            }
+                // 左内边距**跟下面歌词行的首字对齐**,不是跟上面 topRow 对齐——2026-09-01
+                // 同一天先按 topRow 的 NotchMetrics.cardHorizontalPadding(10pt)对齐过一版,
+                // 用户看完又改口"和下面的歌词首字左对齐更好看",所以这里改成跟
+                // lyricRowContent/expandedContent 同一个 16pt(那两处也是这个字面量,不是
+                // 巧合——都在描述"歌词那一列文字的左边界"这同一件事)。这会导致跟 topRow
+                // 不对齐(10 vs 16,差 6pt),这是用户明确的取舍,不是遗漏。
+                .padding(.horizontal, 16)
+                // 顶部间距(2026-09-01,同一天第二轮):头部紧挨在 topRow 下面,原来零间距,
+                // 用户报"标题首行贴到上面边了"。这份间距已经在
+                // `expandedTrackInfoHeaderHeight`/`NotchExpandedMetrics.height` 的高度算术
+                // 里算过(`trackInfoSpacing * 2`,一份在上一份在下),这里只是真的把"上面
+                // 那份"实现成看得见的留白——`.frame(alignment: .top)` 会把这段 padding 之后
+                // 的内容继续钉在分配到的那块高度顶部,不会把它推到底部去。
+                .padding(.top, NotchMetrics.trackInfoSpacing)
+        }
+    }
+
+    /// 头部里的封面缩略图,复用 `artworkThumbnail`(点击打开歌词窗口的行为跟着一起继承)。
+    /// 没有封面数据(没曲目/取图失败)时不画占位方块——跟 `lyricRowContent` 末尾那枚同一个
+    /// 惯例(`@ViewBuilder` 的 `if let` 不满足时直接产出零视图,HStack 自然收缩)。
+    @ViewBuilder
+    private var trackInfoArtwork: some View {
+        if controller.expandedTrackInfoShowsArtwork,
+           let image = playback.highResArtworkImage ?? playback.artworkImage {
+            artworkThumbnail(image, side: NotchMetrics.trackInfoArtworkSide)
+        }
+    }
+
+    /// 头部里的歌名/歌手/专辑三行,复用 `metadataText`——跟耳朵里那三个文本模块走同一份
+    /// 广告插播/空曲目规则(广告中歌名写「广告中」、歌手专辑留空),不重新定义一套。
+    ///
+    /// `.frame(maxWidth: .infinity, alignment: .leading)` 是必须的:没有它,`.lineLimit(1)`
+    /// 的 `Text` 在 VStack 里只会按内容天然宽度收缩,压根不会触发截断——这一块需要一个
+    /// 明确的宽度提议才截得断长歌名/长专辑名。
+    private var trackInfoTextStack: some View {
+        VStack(alignment: .leading, spacing: NotchMetrics.trackInfoLineSpacing) {
+            if controller.expandedTrackInfoShowsTitle {
+                Text(metadataText(.title))
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(accentOrWhite.opacity(0.9))
+            }
+            if controller.expandedTrackInfoShowsArtist {
+                Text(metadataText(.artist))
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(accentOrWhite.opacity(0.6))
+            }
+            if controller.expandedTrackInfoShowsAlbum {
+                Text(metadataText(.album))
+                    .font(.system(size: 9))
+                    .foregroundStyle(accentOrWhite.opacity(0.4))
+            }
+        }
+        .lineLimit(1)
+        .truncationMode(.tail)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var nextLineDisplayText: String {
@@ -1238,6 +1491,12 @@ private struct NotchScrubber: View {
     let durationMs: Int?
     let isPlayingNow: Bool
     let tint: Color
+    /// 「歌词时间轴微调」(2026-09-01,菜单栏面板同款功能的灵动岛入口)要不要塞进时间行
+    /// 中间——三项都是纯渲染参数,理由见 `NotchPlayback.showsLyricsOffsetControls` 上面
+    /// 那条注释(不影响卡片几何,不走 `NotchChromeSource`)。
+    let showsLyricsOffsetControls: Bool
+    let trackLyricsOffsetMs: Int
+    let lyricsOffsetStepMs: Int
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     // 正在拖进度条时手指所在的比例(0~1);没在拖就是 nil。
@@ -1325,12 +1584,75 @@ private struct NotchScrubber: View {
             HStack {
                 Text(Self.timeString(ms: currentMs))
                 Spacer()
+                // 「歌词时间轴微调」(2026-09-01):中间这一截以前一直空着(两个时间数字
+                // 中间的 Spacer),塞进跟菜单栏面板同一份功能的灵动岛入口——见
+                // `AppSettings.notchExpandedShowsLyricsOffset` 上面那条⚠️,两个 Spacer
+                // 各占一半剩余空间,把中间那截天然居中,关掉开关时跟改动前逐字一样
+                // (只剩一个 Spacer)。
+                if showsLyricsOffsetControls {
+                    lyricsOffsetControls
+                    Spacer()
+                }
                 Text("-" + Self.timeString(ms: max(0, durationMs - currentMs)))
             }
             .font(.system(size: 9, weight: .medium))
             .foregroundStyle(tint.opacity(0.4))
             .monospacedDigit()
         }
+    }
+
+    // MARK: - 歌词时间轴微调(2026-09-01,菜单栏面板 `MenuBarPanel.offsetControls` 同款功能)
+
+    /// 「− 歌词±0.5s +」。⚠️ 按钮尺寸刻意收窄到跟这一行本身的高度(9pt 字号撑出来的行高,
+    /// `NotchExpandedMetrics.scrubberBlock` 里"时间行 11"那个常量)齐平,**不能**照抄菜单栏
+    /// 面板那份 16×14——那边的行高本来就是被 14pt 的按钮撑出来的(见
+    /// `MenuBarPanel.offsetButton` 的注释,那个面板没有这份高度预算的约束);这里按钮比
+    /// 这一行本身的高度高,会把整个时间行顶出 `expandedContent` 预留的高度,被
+    /// `.frame(alignment: .top)` 从底部裁掉一截。这也是这个开关全程不进
+    /// `NotchExpandedMetrics`/`NotchChromeSource` 那套几何链路的前提——按钮必须真的不
+    /// 长高这一行,不是"大概率不会",尺寸因此比菜单栏那份小一档。
+    private var lyricsOffsetControls: some View {
+        HStack(spacing: 3) {
+            lyricsOffsetButton("minus", help: nudgeHelp(L10n.t("延后"))) {
+                _ = PlaybackCoordinator.shared.nudgeLyricsOffset(by: -lyricsOffsetStepMs)
+            }
+            Text(offsetText)
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    guard trackLyricsOffsetMs != 0 else { return }
+                    PlaybackCoordinator.shared.resetLyricsOffset()
+                }
+                .modifier(OptionalHelp(text: trackLyricsOffsetMs != 0 ? L10n.t("点击归零") : nil))
+            lyricsOffsetButton("plus", help: nudgeHelp(L10n.t("提前"))) {
+                _ = PlaybackCoordinator.shared.nudgeLyricsOffset(by: lyricsOffsetStepMs)
+            }
+        }
+    }
+
+    /// 「歌词 +0.5s」/「歌词 0.0s」——值是**这首歌**那一部分,跟菜单栏面板 `offsetText`
+    /// 同一个理由(不含设置里的全局基准,归零操作对应的是这个数字清零)。
+    private var offsetText: String {
+        "\(L10n.t("歌词")) \(AppSettings.signedSeconds(ms: trackLyricsOffsetMs))s"
+    }
+
+    private func nudgeHelp(_ verb: String) -> String {
+        "\(verb) \(AppSettings.formattedSeconds(ms: lyricsOffsetStepMs))\(L10n.t("秒"))"
+    }
+
+    private func lyricsOffsetButton(_ symbol: String, help: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.system(size: 7, weight: .semibold))
+                .frame(width: 10, height: 11)
+        }
+        .buttonStyle(.plain)
+        // 命中区上下左右各扩 5pt,跟上面进度条命中区同一个技巧:padding 撑开
+        // contentShape,再用等量负 padding 抵消对布局尺寸的影响——按钮本身画多小,
+        // 手指/鼠标能按到的范围都不因此缩水,但不会把这一行的实际高度撑高。
+        .padding(5)
+        .contentShape(Rectangle())
+        .padding(-5)
+        .modifier(OptionalHelp(text: help))
     }
 
     /// 进度条轨道的粗细:悬停变粗一点、真按住再粗一点。
