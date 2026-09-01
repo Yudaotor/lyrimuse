@@ -147,7 +147,7 @@ brew install --cask lyrimuse
 
    两份的区别只在架构：不带后缀的那份是纯 Apple Silicon，`-intel` 那份同时含 Intel 和 Apple Silicon 两套代码。`-intel` 也能在 Apple Silicon 上跑，但没必要——体积大一倍，而且 macOS 27 及以后会因为它含 Intel 代码而提示「需要更新 App」（Apple 要在 macOS 28 移除 Rosetta；App 本身没问题）。
 
-   App 内的自动更新只服务 Apple Silicon 那份。Intel 用户不会被推送更新（Sparkle 会正确跳过、只显示「已是最新」，不会推一个装上打不开的包），有新版本请回这个页面手动下 `-intel` 那份。
+   **两种架构都有 App 内自动更新。** 更新源里为同一个版本登记了两条，各自对应一种架构：Apple Silicon 收到不带后缀的那份，Intel 收到 `-intel` 那份，Sparkle 按机器自己挑，你不用管。（v1.4.0 及更早只服务 Apple Silicon，Intel 用户当时得回这个页面手动下。）
 2. 第一次打开时 macOS 会拒绝运行——提示"Lyrimuse 已损坏，无法打开"或"来自身份不明的开发者"。用下面任意一种方式解锁一次即可：
 
    - **推荐——终端命令（永远有效）：**
@@ -209,7 +209,7 @@ QQ 音乐/网易云音乐/酷狗音乐/Spotify/自动识别这几个播放源支
 可以——罗马音按行判断（中日双语混唱的歌不会整首被判错），翻译来自歌词源自带的社区翻译，或者端上/联网机器翻译，译文语言可选 18 种。
 
 **支持 Intel Mac 吗？**
-支持，走单独的 universal 包（见上面方案 B）——App 内自动更新只服务 Apple Silicon，Intel 用户请直接去 [Releases 页面](https://github.com/Yudaotor/lyrimuse/releases) 看有没有新版本。
+支持，走单独的 universal 包（见上面方案 B）。**App 内自动更新对 Intel 同样生效**（v1.4.1 起），装好之后跟 Apple Silicon 一样会自己提示新版本。
 
 ## 排查
 

@@ -150,7 +150,7 @@ This clears the one-time Gatekeeper quarantine automatically as part of installi
 
    The only difference between the two downloads is architecture: the one without a suffix is Apple Silicon only, while `-intel` carries both Intel and Apple Silicon code. `-intel` does run on Apple Silicon, but there is no reason to use it there — it is twice the size, and macOS 27 and later will warn that the app "needs to be updated" because it contains Intel code (Apple is removing Rosetta in macOS 28; nothing is actually wrong with the app).
 
-   The in-app updater serves the Apple Silicon build only. Intel users are never offered an update — Sparkle correctly skips it and reports "you're up to date" rather than pushing a build that would not open — so check back here for a newer `-intel` download.
+   **Both architectures get in-app auto-updates.** The feed lists two entries for the same version, one per architecture: Apple Silicon is served the unsuffixed build, Intel is served the `-intel` one, and Sparkle picks per machine on its own. (v1.4.0 and earlier served Apple Silicon only; Intel users had to come back here by hand.)
 2. On first launch, macOS will refuse to open it — "Lyrimuse can't be opened because Apple cannot check it for malicious software" or "is from an unidentified developer." Clear it once, with whichever of these you're more comfortable with:
 
    - **Recommended — Terminal (always works):**
@@ -212,7 +212,7 @@ Lyrics resolution talks to public lyric APIs (NetEase, QQ, Kugou, Musixmatch, LR
 Yes — romanization is judged per line (so a song mixing languages doesn't get the wrong treatment on the wrong lines), and translation comes from either a lyric source's own community translation or on-device/online machine translation, in 18 target languages.
 
 **Does it support Intel Macs?**
-Yes, via a separate universal build (see Option B above) — the in-app auto-updater only serves Apple Silicon, so Intel users should check the [Releases page](https://github.com/Yudaotor/lyrimuse/releases) directly for new versions.
+Yes, via a separate universal build (see Option B above). **The in-app auto-updater covers Intel too** (since v1.4.1) — once installed it prompts for new versions just like on Apple Silicon.
 
 ## Troubleshooting
 

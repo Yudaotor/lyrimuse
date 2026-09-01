@@ -191,21 +191,43 @@ jobs:
       # installed," and not maintaining a multi-version feed avoids having to keep every
       # past release's zip around on the runner just to regenerate a fuller feed.
       #
-      # The feed advertises the **primary (arm64-only)** zip and nothing else, and the item
-      # carries <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>. That
-      # element is the one thing in the two-asset scheme that breaks users if it is missing:
-      # Sparkle running natively on x86_64 uses it to decide the item does not apply and
-      # reports "you're up to date" (SPUAppcastItemStateResolver.isArm64HardwareRequirementOK),
-      # so Intel users are never handed a package that cannot launch on their machine. They
-      # download the -intel asset from the Releases page by hand instead, which is what the
-      # README tells them.
+      # The feed carries TWO items for the same version, and that is how Intel Macs get
+      # auto-updates (2026-09-01; before this the feed listed the arm64 zip only and Intel
+      # users had to download the -intel asset from the Releases page by hand -- the
+      # -intel.zip download counter sat at exactly 0 for the whole v1.4.0 cycle, which is
+      # what that arrangement looks like from the outside):
       #
-      # It is an ELEMENT inside <item>, not an attribute on <enclosure>. Sparkle reads it
-      # via SUAppcastElementHardwareRequirements = "sparkle:hardwareRequirements" out of the
-      # item's element dictionary, and its own fixture (Tests/Resources/
-      # testappcast_arm64HardwareRequirement.xml) writes it as an element. Spelled as an
-      # attribute it parses fine, matches nothing, and silently offers the arm64 build to
-      # every Intel client -- exactly the failure it exists to prevent.
+      #   item #1  the arm64-only zip, WITH <sparkle:hardwareRequirements>arm64</...>
+      #   item #2  the -intel (universal) zip, with NO hardwareRequirements element
+      #
+      # Sparkle filters before it picks: SUAppcastDriver.filterSupportedAppcast: drops every
+      # item whose arm64HardwareRequirementIsOK is false, and only then does
+      # bestItemFromAppcastItems: choose among what survives. So a native x86_64 client never
+      # even sees item #1 and lands on #2; an arm64 client sees both and takes #1. This is
+      # Sparkle's own documented-by-unit-test behaviour -- Tests/SUAppcastTest.swift
+      # testARM64Requirement asserts exactly this shape (6 items -> 2 survive on x86_64,
+      # 5 on arm64, with the expected winner each way).
+      #
+      # ⚠️ ORDER MATTERS AND FAILS SILENTLY. Both items carry the same sparkle:version, and
+      # bestItemFromAppcastItems: only advances on a strictly-newer comparison ("if two items
+      # are equal, we must select the first matching one"). So whichever item is emitted
+      # FIRST is what arm64 clients get. Emit the arm64 one first: flip the order and every
+      # Apple Silicon user silently starts pulling the ~2x larger universal zip (21 MB vs
+      # 11 MB) -- it still installs and runs, so nothing ever surfaces the mistake.
+      #
+      # ⚠️ hardwareRequirements is an ELEMENT inside <item>, not an attribute on <enclosure>.
+      # Sparkle reads it via SUAppcastElementHardwareRequirements =
+      # "sparkle:hardwareRequirements" out of the item's element dictionary, and its own
+      # fixture (Tests/Resources/testappcast_arm64HardwareRequirement.xml) writes it as an
+      # element. Spelled as an attribute it parses fine, matches nothing, and silently offers
+      # the arm64 build to every Intel client -- a package that cannot launch there.
+      #
+      # ⚠️ The Intel path CANNOT be verified on Apple Silicon, not even under Rosetta:
+      # isArm64HardwareRequirementOK deliberately reports "hardware is compatible" when
+      # sysctl.proc_translated says the process is translated (SPUAppcastItemStateResolver.m),
+      # and Sparkle's own test comments "We're assuming this test is not run through Rosetta".
+      # The guard below validates the feed's *shape*; the actual per-arch selection rests on
+      # Sparkle's unit test plus, after release, the -intel.zip download counter moving off 0.
       - name: Extract tag changelog
         # ⚠️ 必须排在 appcast 生成**之前**:appcast 的 item 要把这段 annotation 当
         # release notes 内嵌进去(Sparkle 更新弹窗里显示的就是它)。原来这一步在
@@ -249,14 +271,25 @@ jobs:
             exit 1
           fi
           chmod +x "$SIGN_UPDATE"
-          # The primary zip only -- never the -intel one. Sparkle updates Apple Silicon
-          # users; Intel users are handled by the hardwareRequirements element below.
-          ZIP_NAME="${{ steps.version.outputs.asset_base }}.zip"
-          ZIP="lyrimuse/dist/${ZIP_NAME}"
+          # Both zips get signed -- one item per architecture (see the long note above).
           VERSION="${{ steps.version.outputs.bundle_version }}"
-          LENGTH=$(stat -f%z "$ZIP")
-          SIGNATURE=$(echo "$SPARKLE_PRIVATE_KEY" | "$SIGN_UPDATE" --ed-key-file - -p "$ZIP")
+          ZIP_NAME="${{ steps.version.outputs.asset_base }}.zip"
+          INTEL_ZIP_NAME="${{ steps.version.outputs.asset_base }}-intel.zip"
+          # Fail loudly on a missing zip. Without this check `stat` just errors to stderr and
+          # LENGTH ends up empty, which emits length="" -- a feed that parses but whose item
+          # Sparkle refuses, i.e. "auto-update silently stopped working" for that arch.
+          for z in "$ZIP_NAME" "$INTEL_ZIP_NAME"; do
+            if [ ! -f "lyrimuse/dist/$z" ]; then
+              echo "expected release zip missing: lyrimuse/dist/$z" >&2
+              exit 1
+            fi
+          done
+          LENGTH=$(stat -f%z "lyrimuse/dist/${ZIP_NAME}")
+          SIGNATURE=$(echo "$SPARKLE_PRIVATE_KEY" | "$SIGN_UPDATE" --ed-key-file - -p "lyrimuse/dist/${ZIP_NAME}")
           DOWNLOAD_URL="https://github.com/${{ github.repository }}/releases/latest/download/${ZIP_NAME}"
+          INTEL_LENGTH=$(stat -f%z "lyrimuse/dist/${INTEL_ZIP_NAME}")
+          INTEL_SIGNATURE=$(echo "$SPARKLE_PRIVATE_KEY" | "$SIGN_UPDATE" --ed-key-file - -p "lyrimuse/dist/${INTEL_ZIP_NAME}")
+          INTEL_DOWNLOAD_URL="https://github.com/${{ github.repository }}/releases/latest/download/${INTEL_ZIP_NAME}"
           PUB_DATE=$(date -u +"%a, %d %b %Y %H:%M:%S +0000")
           # tag annotation 原文 → 安全地放进 CDATA。只需处理 "]]>"(它会提前闭合 CDATA,
           # 拆成两段 CDATA 即可);其余字符在 CDATA 里都是字面量,不需要 HTML 转义。
@@ -324,6 +357,23 @@ jobs:
           # indentation. Building the file line-by-line with `echo` sidesteps both: each
           # line's indentation in this workflow file is just normal shell-script
           # indentation, entirely independent of what actually lands inside the quotes.
+          # 一个 item = 一种架构。$4 = "yes" 时才写 hardwareRequirements(见上面那段长注释:
+          # 带这个元素的 item 在原生 x86_64 客户端那里会被 filterSupportedAppcast: 剔掉)。
+          emit_item() {
+            local url="$1" sig="$2" len="$3" arm64_only="$4"
+            echo '    <item>'
+            echo "      <title>${{ steps.version.outputs.version }}</title>"
+            echo "      <pubDate>${PUB_DATE}</pubDate>"
+            echo "      <sparkle:version>${VERSION}</sparkle:version>"
+            echo "      <sparkle:shortVersionString>${VERSION}</sparkle:shortVersionString>"
+            printf '%s\n' "$DESCRIPTION_XML"
+            echo '      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>'
+            if [ "$arm64_only" = "yes" ]; then
+              echo '      <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>'
+            fi
+            echo "      <enclosure url=\"${url}\" sparkle:version=\"${VERSION}\" sparkle:edSignature=\"${sig}\" length=\"${len}\" type=\"application/octet-stream\" />"
+            echo '    </item>'
+          }
           {
             echo '<?xml version="1.0" encoding="utf-8"?>'
             echo '<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">'
@@ -332,21 +382,19 @@ jobs:
             echo "    <link>https://github.com/${{ github.repository }}/releases/latest/download/appcast.xml</link>"
             echo '    <description>Lyrimuse release feed</description>'
             echo '    <language>en</language>'
-            echo '    <item>'
-            echo "      <title>${{ steps.version.outputs.version }}</title>"
-            echo "      <pubDate>${PUB_DATE}</pubDate>"
-            echo "      <sparkle:version>${VERSION}</sparkle:version>"
-            echo "      <sparkle:shortVersionString>${VERSION}</sparkle:shortVersionString>"
-            printf '%s\n' "$DESCRIPTION_XML"
-            echo '      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>'
-            echo '      <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>'
-            echo "      <enclosure url=\"${DOWNLOAD_URL}\" sparkle:version=\"${VERSION}\" sparkle:edSignature=\"${SIGNATURE}\" length=\"${LENGTH}\" type=\"application/octet-stream\" />"
-            echo '    </item>'
+            # ⚠️ arm64 必须**第一个** —— 两个 item 版本号相同,Sparkle 取先出现的那个。
+            emit_item "$DOWNLOAD_URL" "$SIGNATURE" "$LENGTH" yes
+            emit_item "$INTEL_DOWNLOAD_URL" "$INTEL_SIGNATURE" "$INTEL_LENGTH" no
             echo '  </channel>'
             echo '</rss>'
           } > appcast.xml
           echo "---- appcast.xml ----"
           cat appcast.xml
+          # 形状自检。⚠️ 校验器**刻意放在独立文件**里而不是内嵌 heredoc:`run: |` 块里
+          # 任何一行的缩进都不能浅于块本身,而 heredoc 的体又必须顶格(否则 python 收到
+          # 的每行都带前导空白、直接 IndentationError)——这两条互相冲突,正是这个 step
+          # 上面注释里记的那个 2026-08-16 的坑。独立文件同时还能本地直接跑。
+          python3 .github/scripts/check_appcast.py appcast.xml
 
       - name: Create GitHub Release
         if: startsWith(github.ref, 'refs/tags/')
