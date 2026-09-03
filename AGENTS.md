@@ -201,9 +201,21 @@ screencapture -x -o -l <窗口ID> /tmp/shot.png                   # 只截那一
   worktree，但收尾必须把改动落回 `dev` 再提交、别把分支留下。`main` 只在发版时推进（默认
   分支仍是 `main`，打 tag 前先把 `dev` 以 fast-forward 合进 `main`）。
 - 发 release 时日志要手写改动清单（中英双语），不要只依赖 GitHub 自动生成的 notes。
-- **tag annotation 里用 `<!-- lang:en -->` / `<!-- lang:zh-Hans -->` 两行标记，把英文正文和中文正文分成两个独立整块**（先写完整的英文版，再写完整的中文版），不要再按 bullet 逐条中英交替写（v1.4.0 及更早都是这么写的，从 v1.5.0 起改）。理由：`release.yml` 的 `Generate signed appcast` 那步会按这两个标记把 tag 正文拆成两份，各自生成一个
-  `<description xml:lang="en">` / `<description xml:lang="zh-Hans">`——Sparkle 的
-  `SUAppcast.m`（`bestNodeInNodes:name:`）支持同一个 `<item>` 下按 `xml:lang` 放多份同名元素、用 `NSBundle preferredLocalizationsFromArray:` 按系统语言偏好选一份，这样 Sparkle 更新弹窗里的**正文**才能跟着系统语言走（弹窗外壳本来就是这样，正文之前一直不是）。GitHub Release 页面不受影响，两个标记是 HTML 注释、GFM 渲染时自动隐藏，两段内容依旧会依次完整显示。裸版本号那一行（标记之前）语言中立，两份里都会带上。**没写这两个标记的 tag 会自动退回旧的单份 `<description>` 行为，不会报错**，但也就享受不到这个语言切换——新写 tag 时记得加。
+- **tag annotation 的双语正文两种写法都行**：①显式标记式——`<!-- lang:en -->` 英文整块 +
+  `<!-- lang:zh-Hans -->` 中文整块（标记是 HTML 注释，GitHub Release 页渲染时隐藏，两段
+  依旧依次完整显示；裸版本号那行放标记前，语言中立）；②传统的逐条中英交错式（英文行在前、
+  中文行两空格缩进跟随，v1.5.0 那份就是）。`release.yml` 的 `Generate signed appcast` 那步
+  统一调 `.github/scripts/split_release_notes.py` 拆分：有标记按标记拆（作者拆的比启发式准，
+  优先），没标记按行内 CJK 占比启发式拆——**改了交错式的行文习惯（比如英文行里大段夹中文）
+  要回脚本核一遍 0.25 的阈值**。拆出的两份会被渲染成真 HTML（标题/列表/加粗/链接/表格、
+  CJK 感知的硬换行合并——Sparkle 的说明 WebView 渲染 HTML 不渲染 markdown，2026-09-03 之前
+  塞 `<pre>` 的观感就是用户在 v1.5.0 升级弹窗里报的那个「句子中间断行 + 裸 markdown」），
+  生成 `<description xml:lang="en">` / `xml:lang="zh-Hans">` 两份——Sparkle 的
+  `SUAppcast.m`（`bestNodeInNodes:name:`）按系统语言偏好选一份，更新弹窗正文从此跟随系统
+  语言（弹窗外壳本来就是）。**两种格式都拆不动时自动退回单份 `<description>`，不会报错、
+  不会卡发布**——但也就没有语言切换。v1.5.0 的 appcast 是事后手工补的
+  `<sparkle:releaseNotesLink xml:lang>` 资产（同一机制的链接形态），从 v1.5.1 起走上面这条
+  自动路径。
 
 ---
 

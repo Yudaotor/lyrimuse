@@ -316,31 +316,30 @@ jobs:
           # 解析路径(SURSSElementDescription 同样会先被"按 name 分组"再送进
           # bestNodeInNodes:)。
           #
-          # 约定:tag annotation 里如果显式写了这两行标记,就按标记切成英文/中文两段,
-          # 各自生成一个 <description xml:lang="...">;标题行(裸版本号那一行,在
-          # 两个标记之前)语言中立,原样带进两份里。没有这两个标记的旧式 tag
-          # (v1.4.0 及更早)原样退回单份 <description>,行为不变——这条分支必须保留,
-          # 否则任何忘记按新格式写的 tag 都会在这一步直接崩掉整个发布。
-          #   <!-- lang:en -->
-          #   ……英文正文……
-          #   <!-- lang:zh-Hans -->
-          #   ……中文正文……
-          EN_MARKER='<!-- lang:en -->'
-          ZH_MARKER='<!-- lang:zh-Hans -->'
-          if [[ "$NOTES_RAW" == *"$EN_MARKER"* && "$NOTES_RAW" == *"$ZH_MARKER"* ]]; then
-            HEADER="${NOTES_RAW%%"$EN_MARKER"*}"
-            AFTER_EN="${NOTES_RAW#*"$EN_MARKER"}"
-            EN_BODY="${AFTER_EN%%"$ZH_MARKER"*}"
-            ZH_BODY="${NOTES_RAW#*"$ZH_MARKER"}"
-            EN_HTML=$(escape_cdata "${HEADER}${EN_BODY}")
-            ZH_HTML=$(escape_cdata "${HEADER}${ZH_BODY}")
+          # 拆分与渲染(2026-09-03 起)统一交给 .github/scripts/split_release_notes.py:
+          # 它认两种 tag 正文格式——①显式标记式(<!-- lang:en --> 英文整块 +
+          # <!-- lang:zh-Hans --> 中文整块,AGENTS.md「发布」一节的约定,作者拆的
+          # 永远比启发式准);②本仓传统的逐条中英交错式(v1.5.0 那份就是,英文行在前、
+          # 中文行缩进跟随,按行内 CJK 占比拆)。两种都会把 markdown 渲染成真 HTML
+          # (标题/列表/加粗/链接/表格,硬换行按 CJK 规则合并)——此前是把原文塞进
+          # <pre>,Sparkle 弹窗里满屏"句子中间断行 + 裸 ** [] ()"(2026-09-03 用户
+          # 在 v1.4.0→v1.5.0 升级弹窗里看到的就是这个)。
+          #
+          # 脚本对拆不动的输入(任一语言侧过短)以非零退出**拒绝输出**,此时落回
+          # 单份 <description> 的兜底分支——所以这一步永远不会把发布卡死;兜底
+          # 分支必须保留,别在将来的整理里顺手删掉。
+          SPLIT_DIR="$RUNNER_TEMP/notes-split"
+          printf '%s\n' "$NOTES_RAW" > "$RUNNER_TEMP/notes-raw.md"
+          if python3 .github/scripts/split_release_notes.py "$RUNNER_TEMP/notes-raw.md" "$SPLIT_DIR"; then
+            EN_HTML=$(escape_cdata "$(cat "$SPLIT_DIR/notes.en.html")")
+            ZH_HTML=$(escape_cdata "$(cat "$SPLIT_DIR/notes.zh-Hans.html")")
             DESCRIPTION_XML=$(
-              echo '      <description xml:lang="en"><![CDATA[<pre>'
+              echo '      <description xml:lang="en"><![CDATA['
               printf '%s\n' "$EN_HTML"
-              echo '      </pre>]]></description>'
-              echo '      <description xml:lang="zh-Hans"><![CDATA[<pre>'
+              echo '      ]]></description>'
+              echo '      <description xml:lang="zh-Hans"><![CDATA['
               printf '%s\n' "$ZH_HTML"
-              echo '      </pre>]]></description>'
+              echo '      ]]></description>'
             )
           else
             NOTES_HTML=$(escape_cdata "$NOTES_RAW")
