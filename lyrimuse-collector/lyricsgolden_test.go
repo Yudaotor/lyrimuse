@@ -638,7 +638,7 @@ func writeGoldenFixture(fx *goldenFixture) error {
 func TestLyricsGolden(t *testing.T) {
 	fixtures := loadGoldenFixtures(t)
 	if len(fixtures) == 0 {
-		t.Skip("testdata/lyricsgolden 还没有样本")
+		t.Fatal("testdata/lyricsgolden 里一个样本都没有——金标集是入库资产,目录被删/被清就是红,不是跳过")
 	}
 	for _, fx := range fixtures {
 		fx := fx
@@ -686,7 +686,7 @@ func TestLyricsGolden(t *testing.T) {
 func TestLyricsGoldenCategoryCoverage(t *testing.T) {
 	fixtures := loadGoldenFixtures(t)
 	if len(fixtures) == 0 {
-		t.Skip("testdata/lyricsgolden 还没有样本")
+		t.Fatal("testdata/lyricsgolden 里一个样本都没有——金标集是入库资产,目录被删/被清就是红,不是跳过")
 	}
 	// 一类算"有覆盖",是**有样本真的体现了它**(goldenCategoryCheck 过),不是有样本贴了这个标签——
 	// 一个样本常常同时体现好几类(纯音乐那首里网易云的署名行也被否决了),按标签数就漏了。
@@ -966,5 +966,48 @@ func TestLyricsGoldenWinnersAreIndependentlyJustified(t *testing.T) {
 				t.Errorf("样本里记的判据跟重算的不一致(有人手改过样本?):\n  记录 %+v\n  重算 %+v", stored, ev)
 			}
 		})
+	}
+}
+
+// goldenUncoverableKinds:打分项 / 否决原因里**没有**金标样本、且说得出为什么的那几个。新增一条打分项或
+// 否决原因时,要么采一首样本让它出现在某个 fixture 里,要么在这里写清楚为什么采不到——两个都没有,
+// TestLyricsGoldenCoversEveryScoreTerm 红。
+var goldenUncoverableKinds = map[string]string{
+	scoreTermWordTimingOverride: "库里 20 条真实触发全是同一次录音的括号写法差异(见 goldenRequiredCategories 上方注释),有争议不采;match_test.go 的 TestApplyWordTimingTitleOverride_* 钉住",
+	scoreRejectNotTimed:         "2026-08-30 起 lrclib/musixmatch 的纯文本走 plainOnly → rejectPlainTextOnly,库里历史上的 rejectNotTimed 全是 lrclib 纯文本,如今再也触发不到;两首候选曲(罗伯·强生《Sweet Home Chicago》、米津玄师《Shitodo Seiten Daimeiwaku》)都要靠别名/变体重试轮才有候选,单轮不可回放",
+	scoreRejectNoLastTimestamp:  "过了 isTimedLRC 却提不出末句时间戳,理论上不会发生(scoreLyricCandidateDetailed 里的注释),库里零例",
+}
+
+// TestLyricsGoldenCoversEveryScoreTerm:lyricScoreTermKinds 里的每一项、以及每一种 reject 原因,都要在
+// 至少一个样本里真的出现过——不然那条判据对金标集来说是空气。采不到的必须在 goldenUncoverableKinds 里
+// 说明理由。
+func TestLyricsGoldenCoversEveryScoreTerm(t *testing.T) {
+	fixtures := loadGoldenFixtures(t)
+	if len(fixtures) == 0 {
+		t.Fatal("testdata/lyricsgolden 里一个样本都没有——金标集是入库资产,目录被删/被清就是红,不是跳过")
+	}
+	seen := map[string]bool{}
+	for _, fx := range fixtures {
+		for _, c := range fx.Expect.Ranked {
+			for _, term := range c.Terms {
+				seen[term.Kind] = true
+			}
+		}
+		for _, v := range fx.Expect.Verdicts {
+			seen[v] = true
+		}
+	}
+	want := append(lyricScoreTermKinds(),
+		scoreRejectNotTimed, scoreRejectWrongLanguage, scoreRejectCreditOnly, scoreRejectNoLastTimestamp, scoreRejectPlainTextOnly)
+	for _, kind := range want {
+		if seen[kind] {
+			if why, listed := goldenUncoverableKinds[kind]; listed {
+				t.Errorf("%s 已经有样本覆盖了,把它从 goldenUncoverableKinds 里删掉(原因写的是:%s)", kind, why)
+			}
+			continue
+		}
+		if _, listed := goldenUncoverableKinds[kind]; !listed {
+			t.Errorf("打分项/否决原因 %s 没有任何金标样本体现,也没有在 goldenUncoverableKinds 里说明为什么采不到", kind)
+		}
 	}
 }

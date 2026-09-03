@@ -397,7 +397,7 @@ func goldenJudgeSearchPick(e searchGoldenExpect, j searchGoldenJudge) error {
 func TestLyricsSearchGolden(t *testing.T) {
 	fixtures := loadSearchGoldenFixtures(t)
 	if len(fixtures) == 0 {
-		t.Skip("testdata/lyricsgolden/search 还没有样本")
+		t.Fatal("testdata/lyricsgolden/search 里一个样本都没有——金标集是入库资产,目录被删/被清就是红,不是跳过")
 	}
 	for _, fx := range fixtures {
 		fx := fx
@@ -468,7 +468,7 @@ func TestLyricsSearchGoldenPicksAreJustified(t *testing.T) {
 func TestLyricsSearchGoldenSourceCoverage(t *testing.T) {
 	fixtures := loadSearchGoldenFixtures(t)
 	if len(fixtures) == 0 {
-		t.Skip("testdata/lyricsgolden/search 还没有样本")
+		t.Fatal("testdata/lyricsgolden/search 里一个样本都没有——金标集是入库资产,目录被删/被清就是红,不是跳过")
 	}
 	count, negatives := map[string]int{}, map[string]int{}
 	for _, fx := range fixtures {
