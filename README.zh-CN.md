@@ -6,7 +6,7 @@
 
 **跟着 Apple Music、QQ 音乐、网易云音乐、酷狗音乐、Spotify，或浏览器里的网页版 YouTube Music / Spotify 播放，在 Mac 桌面上实时显示逐字同步歌词——外加 Last.fm 听歌档案和端上机器翻译。**
 
-**语言 / Language:** [English](README.md) | **简体中文**
+**语言 / Language:** [English](README.md) | **简体中文** | [繁體中文](README.zh-Hant.md)
 
 ![Platform](https://img.shields.io/badge/platform-macOS%2014%2B-blue)
 ![Architecture](https://img.shields.io/badge/arch-Apple%20Silicon%20%2B%20Intel-blue)

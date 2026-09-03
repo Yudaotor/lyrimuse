@@ -6,7 +6,7 @@
 
 **Real-time, word-synced lyrics on your Mac desktop — plus a Last.fm listening profile and on-device translation — for Apple Music, QQ Music, NetEase Cloud Music, Kugou Music, Spotify, or YouTube Music / Spotify Web playing in your browser.**
 
-**Language / 语言:** **English** | [简体中文](README.zh-CN.md)
+**Language / 语言 / 語言:** **English** | [简体中文](README.zh-CN.md) | [繁體中文](README.zh-Hant.md)
 
 ![Platform](https://img.shields.io/badge/platform-macOS%2014%2B-blue)
 ![Architecture](https://img.shields.io/badge/arch-Apple%20Silicon%20%2B%20Intel-blue)
