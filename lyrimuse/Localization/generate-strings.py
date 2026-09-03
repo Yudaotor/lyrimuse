@@ -29,7 +29,12 @@ TARGETS = {
     # build.sh 都按这个名字找)
     "zh-Hans": "zh-hans.lproj",
     "en": "en.lproj",
+    "zh-Hant": "zh-hant.lproj",
 }
+# 缺翻译时允许回退到源语言(简体)的语言。**当前为空**:2026-09-03 用户定的规则是「新加文案必须把
+# 当前支持的语言都写全」(见 AGENTS.md「容易踩的具体坑 → 本地化」),所以 zh-Hant 跟 en 一样缺译就
+# 失败并列出缺的键。加繁体那天曾短暂开过回退,让 1196 条译文写入前树不红;译文齐了就关掉。
+FALLBACK_TO_SOURCE = set()
 OUT_DIR = os.path.join(ROOT, "..", "Sources", "lyrimuse", "Resources")
 
 HEADER = """\
@@ -57,6 +62,8 @@ def main() -> int:
         return 1
     for lang, lproj in TARGETS.items():
         lines = [HEADER]
+        fallback_count = 0
+        missing = []
         for key in sorted(strings):
             entry = strings[key] or {}
             unit = ((entry.get("localizations") or {}).get(lang) or {}).get("stringUnit") or {}
@@ -66,14 +73,26 @@ def main() -> int:
                 # 别静默生成一个回退键 —— 那会让"缺翻译"从可见问题变成隐形问题。
                 if lang == catalog["sourceLanguage"]:
                     value = key
+                elif lang in FALLBACK_TO_SOURCE:
+                    src = ((entry.get("localizations") or {}).get(catalog["sourceLanguage"]) or {}).get("stringUnit") or {}
+                    value = src.get("value") or key
+                    fallback_count += 1
                 else:
-                    print(f"键 {key!r} 缺 {lang} 翻译", file=sys.stderr)
-                    return 1
+                    missing.append(key)
+                    continue
             lines.append(f'"{escape(key)}" = "{escape(value)}";\n')
         out = os.path.join(OUT_DIR, lproj, "Localizable.strings")
         with open(out, "w", encoding="utf-8") as f:
             f.writelines(lines)
-        print(f"{lproj}: {len(strings)} 键")
+        if missing:
+            print(f"\u2717 {lang} 缺 {len(missing)} 条翻译(新加文案必须把 en / zh-Hant 都写全,繁体规范见 Localization/zh-Hant-STYLE.md):", file=sys.stderr)
+            for key in missing[:20]:
+                print(f"    {key[:80]}", file=sys.stderr)
+            if len(missing) > 20:
+                print(f"    …还有 {len(missing) - 20} 条", file=sys.stderr)
+            return 1
+        suffix = f"(其中 {fallback_count} 条暂回退简体)" if fallback_count else ""
+        print(f"{lproj}: {len(strings)} 键{suffix}")
     return 0
 
 

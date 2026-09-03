@@ -415,18 +415,26 @@ struct AccountLinkingTab: View {
         // SettingsRawRow,拿到跟其它行一致的内边距即可。
         VStack(spacing: 0) {
             SettingsPageCustomHeader {
-                VStack(spacing: 6) {
-                    accountIconBadge(destination, size: 52, cornerRadius: 12)
-                        .padding(.bottom, 2)
-                    Text(destination.title)
-                        .font(.system(size: 22, weight: .bold))
-                    if let intro = cardIntroText {
-                        Text(intro)
-                            .font(.system(size: 13))
-                            .foregroundStyle(.secondary)
-                            .multilineTextAlignment(.center)
-                            .frame(maxWidth: 380)
-                            .fixedSize(horizontal: false, vertical: true)
+                if destination == .lastfm {
+                    // Last.fm 页 2026-09-03 改成「账号卡」页头(用户提议:图标和名字在左,右边
+                    // 两行分别是开关和状态):原来"居中大徽标 + 大标题 + 一句说明"再加一张两行的
+                    // 连接卡,光是页头就占掉近 200pt,而这页真正要看的是下面的统计。其它三个目的地
+                    // 是表单页、没有"身份 + 开关"这组东西,维持居中页头。
+                    lastfmProfileCard
+                } else {
+                    VStack(spacing: 6) {
+                        accountIconBadge(destination, size: 52, cornerRadius: 12)
+                            .padding(.bottom, 2)
+                        Text(destination.title)
+                            .font(.system(size: 22, weight: .bold))
+                        if let intro = cardIntroText {
+                            Text(intro)
+                                .font(.system(size: 13))
+                                .foregroundStyle(.secondary)
+                                .multilineTextAlignment(.center)
+                                .frame(maxWidth: 380)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
                     }
                 }
             } content: {
@@ -711,7 +719,7 @@ struct AccountLinkingTab: View {
     //
     // ⚠️ 「连接」**不是**一个 tab(2026-08-23 用户要求撤掉):Scrobble 开关/连接状态
     // 是这一页唯一"不看哪个 tab 都该一直看得见"的东西——开关本来就该常驻在最上面,
-    // 塞进某一个 tab 里等于只有点开那个 tab 才碰得到它。做法是 lastfmConnectionCard
+    // 塞进某一个 tab 里等于只有点开那个 tab 才碰得到它。做法是 lastfmProfileCard(页头账号卡)
     // 挪到 tab 选择器**外面**、无条件渲染;下面这三段只负责"已连接之后想细看的几件事"。
     private enum LastfmSection: String, CaseIterable, Identifiable {
         case stats, chart, onThisDay
@@ -727,7 +735,7 @@ struct AccountLinkingTab: View {
             switch self {
             case .stats: return L10n.t("统计")
             case .chart: return L10n.t("榜单")
-            case .onThisDay: return L10n.t("那年今日")
+            case .onThisDay: return L10n.t("足迹") // 2026-09-03 改名:这一段现在是「收听足迹」+「那年今日」两张卡,足迹在上
             case .settings: return L10n.t("设置")
             }
         }
@@ -907,7 +915,7 @@ struct AccountLinkingTab: View {
     private var lastfmFields: some View {
         // 连接状态常驻在 tab 选择器**外面**,不随下面三段切换——理由见 LastfmSection
         // 头注:开关这种"一直该碰得到"的东西不该只在点开某一个 tab 时才看得见。
-        lastfmConnectionCard
+        // 2026-09-03 起它就是页头本身(lastfmProfileCard,见 body),这里不再重复放一张卡。
         if lastfmConnected {
             lastfmSectionPicker
             // LastfmStatsSection 自己的刷新逻辑靠的是这个 View 不因为切 tab 被卸载
@@ -927,10 +935,13 @@ struct AccountLinkingTab: View {
 
     /// 「设置」段的内容(2026-09-01)。
     ///
-    /// 目前只有一项。这一项 2026-08-31 就在 collector 侧做完了(`resolveScrobbleArtist` +
-    /// `features.lastfm_scrobble_first_artist_only`,带单测和 JSON 往返测试,文档也写了),
-    /// 但**一直没有任何界面入口** —— 只能手改 `~/.config/lyrimuse/lyrimuse-features.json`。
-    /// 用户来问"我怎么找不到这个配置项呢,是做了吗",找不到是对的。
+    /// 目前两项:合唱歌曲的歌手(2026-09-03 起三档:全部 / 只发第一位 / 智能,绑
+    /// `features.lastfmScrobbleArtistMode`)、短于 30 秒的曲目(2026-09-03,绑
+    /// `features.scrobbleShortTracks`,默认关)。前一项 2026-08-31 就在 collector 侧做完了
+    /// (`resolveScrobbleArtist` + `features.lastfm_scrobble_first_artist_only`,带单测和 JSON
+    /// 往返测试,文档也写了),但**一直没有任何界面入口** —— 只能手改
+    /// `~/.config/lyrimuse/lyrimuse-features.json`。用户来问"我怎么找不到这个配置项呢,是
+    /// 做了吗",找不到是对的。
     ///
     /// (当天先补在上面那张连接卡里、Scrobble 开关正下方,同一天用户改主意:单开一段装。
     /// 判据见 LastfmSection.settings 的注释 —— 连接卡的定位是"不看哪个 tab 都该一直看得见
@@ -963,17 +974,39 @@ struct AccountLinkingTab: View {
                     // 侧 resolveScrobbleArtist 的头注(ListenBrainz 文档要求 include them
                     // all、折叠不可逆且会丢人、Navidrome 同名开关默认也是关),以及
                     // docs/features/12 §4 和公开文档 docs/scrobbling.md。
-                    help: L10n.t("多位歌手合唱时（如「Khalil Fong & Fiona Sit」）上送哪个名字。\n\n全部：原样发整串。\n\n只发第一位：只发「Khalil Fong」——Last.fm 上的记录里另一位歌手不会出现。")
+                    //
+                    // 2026-09-03 加第三档「智能」:同样只写效果 —— 它按 Last.fm 上有没有这个合唱条目
+                    // 决定发哪个名字,机制(编目判定、每首歌只判一次、失败维持原样)在 collector
+                    // lastfmcollapse.go 头注和 docs/features/12 §4,不在这行字里展开。
+                    help: L10n.t("多位歌手合唱时（如「Khalil Fong & Fiona Sit」）上送哪个名字。\n\n全部：原样发整串。\n\n只发第一位：只发「Khalil Fong」——Last.fm 上的记录里另一位歌手不会出现。\n\n智能：Last.fm 上已有「Khalil Fong & Fiona Sit」这个合唱条目就原样发；没有、而「Khalil Fong」名下已有这首歌就只发「Khalil Fong」；两边都查不到时原样发。每首歌只判一次，之后一直沿用。")
                 ) {
                     Picker("", selection: Binding(
-                        get: { features.lastfmScrobbleFirstArtistOnly },
-                        set: { features.lastfmScrobbleFirstArtistOnly = $0; Task { await features.save() } }
+                        get: { features.lastfmScrobbleArtistMode },
+                        set: { features.lastfmScrobbleArtistMode = $0; Task { await features.save() } }
                     )) {
-                        Text(L10n.t("全部")).tag(false)
-                        Text(L10n.t("只发第一位")).tag(true)
+                        ForEach(LastfmScrobbleArtistMode.allCases) { mode in
+                            Text(mode.displayName).tag(mode)
+                        }
                     }
                     .pickerStyle(.segmented)
                     .fixedSize()
+                }
+                CardDivider()
+                // 短曲目(2026-09-03 用户要求加的开关,默认关)。Last.fm 官方规则 "The track must be
+                // longer than 30 seconds" 是给客户端的,服务端不拒收;这里默认照规则办,用户显式打开
+                // 才放行。**只管 Last.fm**:collector 侧短曲目进了漏斗之后由 shortTrackLastfmOnly 挡住
+                // ListenBrainz 那一路(用户原话"这个配置项是 lastfm 的,和 listenbrainz 没有一点关系");
+                // 本地收听日志/回填照记,它们本来就是给 Last.fm 兜底的。文案照这张卡的惯例只写效果,
+                // 同一天用户要求再简化过一次。
+                SettingsRow(
+                    icon: "timer",
+                    title: L10n.t("短于 30 秒的曲目"),
+                    help: L10n.t("开：短于 30 秒的曲目也 scrobble 到 Last.fm，听过一半就记一次。\n\n关：不记（Last.fm 官方规则要求曲目长于 30 秒）。")
+                ) {
+                    Toggle("", isOn: Binding(
+                        get: { features.scrobbleShortTracks },
+                        set: { features.scrobbleShortTracks = $0; Task { await features.save() } }
+                    ))
                 }
             } else {
                 SettingsNote { Text(L10n.t("上面的「Scrobble 到 Last.fm」关着，这里的设置暂时不起作用")) }
@@ -995,31 +1028,69 @@ struct AccountLinkingTab: View {
     // 只在这一段活跃时跑——这没问题:它们喂的 backfill.pending 只喂这张卡自己的
     // pendingListensRow,不像 LastfmStatsSection 的刷新要跨 4 个 tab 共用,离开这一段
     // 不会让别的 tab 变旧,回来再 onAppear 一次就补齐。
-    private var lastfmConnectionCard: some View {
+    /// Last.fm 页的页头「账号卡」(2026-09-03):左边身份(品牌图标 + 名字 + 用户名/一句说明),
+    /// 右边两行——上行 Scrobble 开关、下行连接状态与动作(断开 / 连接 / 重新连接)。取代原来
+    /// "居中大徽标页头 + 两行连接卡"的组合,信息一样、高度少一半;下面紧接着就是 tab 选择器。
+    private var lastfmProfileCard: some View {
         SettingsCard {
-            SettingsRow(
-                icon: "arrow.up.circle",
-                title: L10n.t("Scrobble 到 Last.fm")
-            ) {
-                Toggle("", isOn: Binding(
-                    get: { lastfmConnected && features.lastfmMirrorScrobble },
-                    set: { on in
-                        if on {
-                            if lastfmConnected {
-                                features.lastfmMirrorScrobble = true
-                                Task { await features.save() }
-                            } else {
-                                // 开关本身就是配置入口。视觉上不先扳过去(get 算出来
-                                // 仍是 false),等向导真正连接成功再亮。
-                                showLastfmWizard = true
-                            }
-                        } else {
-                            features.lastfmMirrorScrobble = false
-                            Task { await features.save() }
+            HStack(alignment: .center, spacing: 14) {
+                accountIconBadge(.lastfm, size: 44, cornerRadius: 10)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(destination.title)
+                        .font(.system(size: 17, weight: .semibold))
+                    if lastfmConnected {
+                        // 用户名跟着身份放左边;主页链接紧挨着它(这个动作是"去看这个人的页面")。
+                        HStack(spacing: 5) {
+                            Text(lastfmDisplayName.isEmpty ? L10n.t("已连接 Last.fm 账号") : lastfmDisplayName)
+                                .font(.system(size: 13))
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                            lastfmProfileLinkButton
+                                .font(.system(size: 11))
+                                .foregroundStyle(.secondary)
                         }
+                    } else if let intro = cardIntroText {
+                        Text(intro)
+                            .font(.system(size: 12))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
-                ))
+                }
+                Spacer(minLength: 16)
+                VStack(alignment: .trailing, spacing: 8) {
+                    // 上行:开关。文字是它自己的标签(卡里没有 SettingsRow 那种左标题可依附)。
+                    HStack(spacing: 10) {
+                        Text(L10n.t("Scrobble 到 Last.fm"))
+                            .font(.system(size: 13))
+                        Toggle("", isOn: Binding(
+                            get: { lastfmConnected && features.lastfmMirrorScrobble },
+                            set: { on in
+                                if on {
+                                    if lastfmConnected {
+                                        features.lastfmMirrorScrobble = true
+                                        Task { await features.save() }
+                                    } else {
+                                        // 开关本身就是配置入口。视觉上不先扳过去(get 算出来
+                                        // 仍是 false),等向导真正连接成功再亮。
+                                        showLastfmWizard = true
+                                    }
+                                } else {
+                                    features.lastfmMirrorScrobble = false
+                                    Task { await features.save() }
+                                }
+                            }
+                        ))
+                        .labelsHidden()
+                        .toggleStyle(.switch)
+                        .controlSize(.small)
+                    }
+                    // 下行:状态 + 动作。三种处境各一行,都控制在一行之内。
+                    lastfmProfileStatusLine
+                }
             }
+            .padding(.horizontal, SettingsRowMetrics.horizontalPadding)
+            .padding(.vertical, 12)
             // 只要本地攒了东西就把它们列出来 —— 不看连没连账号,理由见 pendingListensRow
             // 的文档注释(界面原来按 lastfmConnected 分岔,而数据层看的是 Scrobble 开关)。
             //
@@ -1028,36 +1099,6 @@ struct AccountLinkingTab: View {
             if (backfill.pending?.eligible ?? 0) > 0 {
                 CardDivider()
                 pendingListensRow
-            }
-            if lastfmConnected, mirrorStatus.info != nil {
-                CardDivider()
-                SettingsRawRow(insetToText: true) {
-                    HStack(spacing: 8) {
-                        Label(L10n.t("Last.fm 拒绝了写入，Scrobble 已暂停——授权可能已在网站上被撤销"),
-                              systemImage: "exclamationmark.triangle.fill")
-                            .font(.callout)
-                            .foregroundStyle(.red)
-                        Spacer()
-                        Button(L10n.t("重新连接")) { showLastfmWizard = true }
-                    }
-                }
-            }
-            if lastfmConnected {
-                CardDivider()
-                SettingsRawRow(insetToText: true) {
-                    HStack {
-                        Label(
-                            lastfmDisplayName.isEmpty
-                                ? L10n.t("已连接 Last.fm 账号")
-                                : String(format: L10n.t("已连接：%@"), lastfmDisplayName),
-                            systemImage: "checkmark.seal.fill"
-                        ).foregroundStyle(.green)
-                        Spacer()
-                        lastfmProfileLinkButton
-                        Button(L10n.t("断开")) { showLastfmDisconnectConfirm = true }
-                        .buttonStyle(.link)
-                    }
-                }
             }
         }
         .onAppear { backfill.refreshPending() }
@@ -1094,6 +1135,36 @@ struct AccountLinkingTab: View {
         } message: {
             Text(L10n.t("重新连接需要再走一次浏览器授权"))
         }
+    }
+
+    /// 账号卡右下那一行:连接状态 + 对应动作。
+    ///  - 熔断(collector 落了 lyrimuse-lastfm-status.json):红字「授权已失效，Scrobble 已暂停」+「重新连接」
+    ///    ——这条此前是卡里单独一整行的长句,这里压成一行短句,长句留在悬停提示里。
+    ///  - 已连接:绿勾「已连接」+「断开」(断开走确认框,理由见 showLastfmDisconnectConfirm)。
+    ///  - 未连接:灰字「未连接」+「连接账号…」(跟拨开关同一个入口:向导 sheet)。
+    @ViewBuilder
+    private var lastfmProfileStatusLine: some View {
+        HStack(spacing: 8) {
+            if lastfmConnected, mirrorStatus.info != nil {
+                Label(L10n.t("授权已失效，Scrobble 已暂停"), systemImage: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.red)
+                    .help(L10n.t("Last.fm 拒绝了写入，Scrobble 已暂停——授权可能已在网站上被撤销"))
+                Button(L10n.t("重新连接")) { showLastfmWizard = true }
+                    .buttonStyle(.link)
+            } else if lastfmConnected {
+                Label(L10n.t("已连接"), systemImage: "checkmark.seal.fill")
+                    .foregroundStyle(.green)
+                Button(L10n.t("断开")) { showLastfmDisconnectConfirm = true }
+                    .buttonStyle(.link)
+            } else {
+                Text(L10n.t("未连接"))
+                    .foregroundStyle(.secondary)
+                Button(L10n.t("连接账号…")) { showLastfmWizard = true }
+                    .buttonStyle(.link)
+            }
+        }
+        .font(.system(size: 12))
+        .lineLimit(1)
     }
 
     /// 未连接时,「统计/最近记录/榜单/那年今日」四段都还没有数据可看,给一句预告

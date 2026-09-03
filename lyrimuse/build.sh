@@ -154,15 +154,18 @@ echo "==> building (release) [$ARCHES]"
 # exist or is not executable"(2026-08-06 实测)。单 --arch 交叉编译不经过 xcbuild,可用。
 SWIFT_SLICES=()
 TRANSLATE_SLICES=()
+ROMANIZE_SLICES=()
 for arch in $ARCHES; do
   swift build -c release --arch "$arch"
   # 产物目录问 --show-bin-path,不硬编码 ".build/<arch>-apple-macosx/release"。
   BIN_PATH="$(swift build -c release --arch "$arch" --show-bin-path)"
   SWIFT_SLICES+=("$BIN_PATH/lyrimuse")
   TRANSLATE_SLICES+=("$BIN_PATH/lyrics-translate")
+  ROMANIZE_SLICES+=("$BIN_PATH/lyrics-romanize")
 done
 merge_slices "$FAT_DIR/lyrimuse" "${SWIFT_SLICES[@]}"
 merge_slices "$FAT_DIR/lyrics-translate" "${TRANSLATE_SLICES[@]}"
+merge_slices "$FAT_DIR/lyrics-romanize" "${ROMANIZE_SLICES[@]}"
 
 # 2026-07-21:collector 现在打包进 .app 里(见 Contents/Resources/collector),不再要求
 # 用户手动单独构建它——CollectorServiceManager.swift 靠 Bundle.main.bundleURL 精确知道
@@ -187,7 +190,20 @@ for arch in $ARCHES; do
   # `lyrimuse/var/folders/…/collector-arm64`,每次构建往仓库里丢一份产物 —— 提交前
   # 发现时已经攒了 330MB、183 个未跟踪条目里就有它。FAT_DIR 现在自己就是绝对路径,直接用。
   out="$FAT_DIR/collector-$arch"
-  (cd ../lyrimuse-collector && GOTOOLCHAIN=go1.24.4 GOOS=darwin GOARCH="$goarch" go build -o "$out" .)
+  # -ldflags -X:把版本号注入 collector,让它跟 App 的 CFBundleShortVersionString
+  # **同源**($APP_VERSION 就是上面写进 Info.plist 的那个值)。
+  #
+  # 2026-09-02 加。在此之前 collector 的版本号是 main.go 里一个手写字面量,靠人在
+  # 发版时记得改那一行来跟 App 对齐——v1.3.0 漏过一次,v1.5.0 又漏一次(用户装了
+  # 1.5.0 的 dmg,设置页报「App 1.5.0 · 采集服务 1.4.0」)。注入之后这两个版本号
+  # 由构造保证一致,不再依赖任何人的记性。
+  #
+  # ⚠️ 注入的目标必须是 **var**(main.go 里 clientVersion 就是 var,那里有详细注释)。
+  # -X 对 const **静默失败**:构建照样成功、不报错,值原封不动——所以这条注入
+  # "看起来生效了"是靠不住的,真正的把关在 versioninjection_test.go 和下面装配完
+  # 之后那道 collector/App 版本一致性校验。
+  (cd ../lyrimuse-collector && GOTOOLCHAIN=go1.24.4 GOOS=darwin GOARCH="$goarch" \
+    go build -ldflags "-X main.clientVersion=$APP_VERSION" -o "$out" .)
   COLLECTOR_SLICES+=("$out")
 done
 merge_slices "$FAT_DIR/collector" "${COLLECTOR_SLICES[@]}"
@@ -232,6 +248,12 @@ codesign --force --sign - "$APP_DIR/Contents/Resources/collector"
 rm -f "$APP_DIR/Contents/Resources/lyrics-translate"
 cp "$FAT_DIR/lyrics-translate" "$APP_DIR/Contents/Resources/lyrics-translate"
 codesign --force --sign - "$APP_DIR/Contents/Resources/lyrics-translate"
+
+# 罗马音预生成小助手(2026-09-03)。同上:collector 算不了 CFStringTokenizer/ICU 那一步。
+# 三步(先删再拷再补签)与上面逐字对称,理由见 collector 那段注释。
+rm -f "$APP_DIR/Contents/Resources/lyrics-romanize"
+cp "$FAT_DIR/lyrics-romanize" "$APP_DIR/Contents/Resources/lyrics-romanize"
+codesign --force --sign - "$APP_DIR/Contents/Resources/lyrics-romanize"
 
 # 2026-07-24:QQ 音乐支持——QQ音乐.app 没有 AppleScript 支持(sdef/NSAppleScriptEnabled
 # 都核实过没有),读它的播放状态改走系统级 MediaRemote,经 ungive/media-control
@@ -424,8 +446,9 @@ echo "    Sparkle.framework embedded + signed"
 # 时的旧文案——新加的翻译永远生效不了,且不会有任何报错(App 里表现成"这个字符串一直
 # 显示中文原文",很容易被误判成 L10n 查找逻辑或者 SwiftUI 刷新的问题,实际上是这里)。
 # 先删再拷贝,保证每次都是干净覆盖,不会残留/嵌套旧内容。
-rm -rf "$APP_DIR/Contents/Resources/zh-hans.lproj" "$APP_DIR/Contents/Resources/en.lproj"
+rm -rf "$APP_DIR/Contents/Resources/zh-hans.lproj" "$APP_DIR/Contents/Resources/zh-hant.lproj" "$APP_DIR/Contents/Resources/en.lproj"
 cp -R Sources/lyrimuse/Resources/zh-hans.lproj "$APP_DIR/Contents/Resources/zh-hans.lproj"
+cp -R Sources/lyrimuse/Resources/zh-hant.lproj "$APP_DIR/Contents/Resources/zh-hant.lproj"
 cp -R Sources/lyrimuse/Resources/en.lproj "$APP_DIR/Contents/Resources/en.lproj"
 # ⚠️ **遍历,不要再逐个文件写 cp**(2026-09-01 改)。这里原来是一行一个图标的 cp 清单,
 # 而 `Bundle.main.path(forResource:)` 找不到资源时各调用点都有 SF Symbol 兜底 —— 于是
@@ -585,6 +608,38 @@ if [ -n "$ARCH_BAD" ]; then
   echo "!! 架构与目标[$ARCHES]不符:" >&2
   for f in $ARCH_BAD; do echo "     $f" >&2; done
   echo "!! 要发布的构建先解决上面这些(package.sh 会硬拦)" >&2
+fi
+
+# ==> collector / App 版本一致性(2026-09-02 加)。
+#
+# 这道闸验的是**真实产物**,不是源码推断:直接运行刚打进包里的那个 collector 问它
+# `version`,跟写进 Info.plist 的 $APP_VERSION 比。放在 swap **之前** —— 不一致就
+# 别把这个包换进 /Applications。
+#
+# 起因:collector 的版本号长期是 main.go 里的手写字面量,靠人在发版时记得改。v1.3.0
+# 漏过一次,v1.5.0 又漏一次——用户在另一台机器装了 1.5.0 的 dmg,设置页报「App 1.5.0 ·
+# 采集服务 1.4.0」。同上面 -ldflags 注入那段注释:注入本身**不会**在失败时报错
+# (-X 对 const 静默失效),所以光有注入不够,必须有一道验产物的闸。
+#
+# ⚠️ 这道闸和 App 内设置页那张卡(CollectorServiceManager.bundledCollectorVersion)
+# 问的是同一个问题,区别只在时机:那张卡是装到用户机器上之后才告警——它确实抓到了
+# v1.5.0 这次,但那时 dmg 已经发出去了。这道闸把同一个检查提前到构建期。
+VERSION_CHECK_BIN="$APP_DIR/Contents/Resources/collector"
+# 交叉编译出的包可能不含本机架构(比如在 arm64 上只构 x86_64),那样跑不起来,
+# 只能跳过 —— 但要说清楚是"没验",不能让人误以为验过了。
+HOST_ARCH="$(uname -m)"
+if ! lipo -archs "$VERSION_CHECK_BIN" 2>/dev/null | grep -qw "$HOST_ARCH"; then
+  echo "    ⚠️ collector 不含本机架构($HOST_ARCH),跳过版本一致性校验" >&2
+elif ! BUNDLED_VER="$("$VERSION_CHECK_BIN" version 2>/dev/null)"; then
+  echo "!! collector 跑不起来,无法校验版本(这本身就不正常)" >&2
+  exit 1
+elif [ "$BUNDLED_VER" != "$APP_VERSION" ]; then
+  echo "!! App 与 collector 版本不一致:App=$APP_VERSION collector=$BUNDLED_VER" >&2
+  echo "!! 版本号由 -ldflags 注入(见上面 go build collector 那段);若 collector 报 'dev'," >&2
+  echo "!! 多半是 main.go 里 clientVersion 被改回 const 了——-X 对 const 静默失效。" >&2
+  exit 1
+else
+  echo "    版本一致 App=$APP_VERSION collector=$BUNDLED_VER"
 fi
 
 # ==> 把暂存包一次性换进 /Applications(2026-08-31,见文件上方 FINAL_APP_DIR 那段注释)。

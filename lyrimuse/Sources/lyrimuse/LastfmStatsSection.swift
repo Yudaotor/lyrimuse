@@ -48,6 +48,7 @@ struct LastfmStatsSection: View {
     @AppStorage("np:lastfmChartCollapsed") private var chartCollapsed = false
     @AppStorage("np:lastfmRecentCollapsed") private var recentCollapsed = false
     @AppStorage("np:lastfmOnThisDayCollapsed") private var onThisDayCollapsed = false
+    @AppStorage("np:lastfmFootprintCollapsed") private var footprintCollapsed = false
     @AppStorage("np:lastfmChartKind") private var kindRaw = LastfmStatsService.ChartKind.artists.rawValue
     @AppStorage("np:lastfmChartPeriod") private var periodRaw = LastfmStatsService.Period.month.rawValue
 
@@ -76,7 +77,12 @@ struct LastfmStatsSection: View {
                 statsCard
                 recentCard
             case .chart: chartCard
-            case .onThisDay: onThisDayCard
+            case .onThisDay:
+                // 「足迹」段(2026-09-03 由「那年今日」改名):足迹卡在上——它天天有内容、全部从本地
+                // 日桶派生零请求;那年今日在下——一年里大半天是空的("那天没听"很正常),放上面会让
+                // 整段先看到一句"没有记录"(用户反馈「花样太少」后加足迹卡,随后定下这个顺序)。
+                listeningFootprintCard
+                onThisDayCard
             // 见 Tab.settings:内容由 AccountLinkingTab 画,这里只保持挂载不掉线。
             case .settings: EmptyView()
             }
@@ -97,6 +103,21 @@ struct LastfmStatsSection: View {
             pageInput = "\(stats.recentPage)"
         }
         .onChange(of: stats.recentPage) { _, page in pageInput = "\(page)" }
+        // 切回 App 时补刷一次(2026-09-02 加)。此前**只有** onAppear 和那个 120 秒的轮询
+        // 两条路:设置窗口一直开着、人去干别的事再切回来,最坏要干等 120 秒才看到新数据,
+        // 而"切回来"恰恰是最想看到活数据的那一刻。
+        //
+        // 不怕被点爆:`refreshBaseline` 开头就是 TTL 闸(baselineTTL 110s),频繁切换只是
+        // 几次字典查找;也刻意**不传** force —— force 是"用户明确要求现在就刷"那颗按钮的
+        // 语义,切窗口不是。
+        // 用 NSApplication.didBecomeActiveNotification 而不是 scenePhase:这个 App 是
+        // .accessory,全仓已有 8 处用的都是这个通知(见 SettingsView / LyricsManagerView),
+        // 不为这一处另起一套。
+        .onReceive(NotificationCenter.default.publisher(
+            for: NSApplication.didBecomeActiveNotification)) { _ in
+            stats.refreshBaseline()
+            stats.refreshOnThisDay()
+        }
         // 页面开着不该是一张死快照:每 2 分钟刷一轮档案数字和最近记录(服务侧
         // baselineTTL 同为 2 分钟,正好放行),recent 重新赋值触发重渲染,"6 小时前"
         // 这些相对时间跟着重算。
@@ -123,9 +144,23 @@ struct LastfmStatsSection: View {
                 // 预取)不伴随任何 Last.fm 响应,得单独在这里过一遍,否则那些行会一直
                 // 灰着(见 refreshLocalCoversIfCacheChanged)。mtime 没变就是一次 stat。
                 stats.refreshLocalCoversIfCacheChanged()
-                // 只自动刷第一页:后面几页是历史,内容不会变,重拉一遍纯属打扰
-                // (正看着的那一屏被替换掉)。
-                guard stats.recentPage == 1 else { continue }
+                // ⚠️ **这里原来有一道 `guard stats.recentPage == 1 else { continue }`,
+                // 2026-09-02 删掉了。** 原注释的理由是"只自动刷第一页:后面几页是历史,内容
+                // 不会变,重拉一遍纯属打扰(正看着的那一屏被替换掉)"。那句话对**最近记录那
+                // 一列**成立,但它把整条 `refreshBaseline` 一起早退了 —— 而那一次调用同时还
+                // 刷着上面三个数字(今天/近 7 天/总 scrobble),那三个跟页码毫无关系。后果是
+                // 用户翻到第 2 页之后停在那儿,这整张卡(含三个数字)就**再也不会自动更新**,
+                // 而回到第 1 页只发生在 `RecentListensPanel.onDisappear`(卡片离开视图层级时)。
+                // 用户 2026-09-02 报的正是这个:「一直停留在十几小时之前,直到我手动点击刷新
+                // 才去刷新」—— 手动那颗按钮走 `refreshBaseline(force: true)`,直接绕过了这道
+                // guard,所以只有它有效。
+                //
+                // 现在无条件调。`refreshBaseline` 内部请求的本来就是**当前这一页**
+                // (`let requestedPage = recentPage`),所以不会把人从第 5 页弹回第 1 页;
+                // 代价是停在历史页时那一屏可能被"当前真实的第 5 页"替换掉 —— 而那只会在
+                // **确实有新打卡、页边界移动了**的时候发生,那种时候显示移动后的内容比继续
+                // 端着一份陈快照更接近事实。用"永远不会静默冻住"换"历史页可能被原地刷新",
+                // 这个取舍是有意的,别再把 guard 加回来。
                 stats.refreshBaseline()
             }
         }
@@ -168,14 +203,23 @@ struct LastfmStatsSection: View {
             // (轻请求,见 LastfmStatsService 的说明),这里只是说明"热力图/次数合并
             // 还在补全中",不是遮挡整卡的阻塞态。total > 3 跟 syncHistoryIfNeeded 里
             // dailySyncProgress 的既有分界线一致,日常 1-3 页 top-up 不弹这行字。
-            if case .syncing(_, let total) = stats.bootstrapState, total > 3 {
+            if case .syncing(let page, let total) = stats.bootstrapState, total > 3 {
                 CardDivider()
-                Text(L10n.t("首次同步历史中，稍候完整数据会自动出现"))
+                // 2026-09-02 用户问"大概要多久、要不要加进度":这轮扫描本来就有页码
+                // (bootstrapState 从 syncHistoryIfNeeded 逐页更新),之前这里只显示一句
+                // 通用文案、把页码丢在一边——待机页(IdleStandbyView.syncNote)早就在用
+                // 同一个状态画"首次同步历史中（N/M 页）",这里改成同一句、同一个 key,
+                // 不是新造一条文案。
+                Text(String(format: L10n.t("首次同步历史中（%1$@/%2$@ 页）"), "\(page)", "\(total)"))
                     .font(.caption).foregroundStyle(.secondary)
+                    .monospacedDigit()
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 10)
             }
-            if stats.baselineFailed {
+            // 只在**手上什么都没有**时画失败态(2026-09-03)。有快照/上一轮数据在显示时,一次
+            // 超时不该让这张卡长出一行「重试」——本机链路 16% 超时,设置页常开时这行会反复
+            // 冒出来又消失;失败的观感交给最近记录卡头那处"N 分钟前更新"变暗 + 小图标。
+            if stats.baselineFailed, stats.overview == nil {
                 CardDivider()
                 retryRow { stats.refreshBaseline() }
             }
@@ -389,9 +433,21 @@ struct LastfmStatsSection: View {
                 if let at = stats.recentUpdatedAt {
                     // 这一页的数据是轮询来的(远端会话 45 秒一轮、否则两分钟),标一下它
                     // 是什么时候的,免得看着一个不动的列表猜是不是卡住了。
-                    Text(String(format: L10n.t("%@更新"), Self.coarseRelative(at)))
-                        .font(.caption).foregroundStyle(.tertiary)
-                        .help(String(format: L10n.t("上次刷新:%@"), Self.absolute(at)))
+                    //
+                    // 上一轮刷新失败但手上有内容时,失败的观感就只在这里:文字变暗 + 一个小叹号,
+                    // 悬停说明"显示的是缓存"(2026-09-03)。不弹整行「重试」——列表明明在,
+                    // 说"失败"是吓人;而"这份内容是几分钟前的"才是用户真正需要知道的。
+                    HStack(spacing: 3) {
+                        if stats.baselineFailed {
+                            Image(systemName: "exclamationmark.circle").font(.system(size: 9))
+                        }
+                        Text(String(format: L10n.t("%@更新"), Self.coarseRelative(at)))
+                    }
+                    .font(.caption)
+                    .foregroundStyle(stats.baselineFailed ? .quaternary : .tertiary)
+                    .help(stats.baselineFailed
+                          ? String(format: L10n.t("上次刷新没有成功，显示的是 %@ 的内容"), Self.absolute(at))
+                          : String(format: L10n.t("上次刷新:%@"), Self.absolute(at)))
                 }
                 // 手动刷新。轮询最慢要等两分钟,而"刚听完一首歌想立刻看到它"正是这张卡
                 // 最常见的用法 —— 干等不如给一颗按钮。
@@ -735,11 +791,16 @@ struct LastfmStatsSection: View {
                         // yearsAgo 是 1 时必须走单数句:英文没有能同时读通 "1 years ago"
                         // 和 "2 years ago" 的写法,原来那条靠 "year(s)" 糊过去 —— 那是
                         // 机翻痕迹,而 1...3 的循环里 1 恰好是最常出现的一档。
-                        subtitle: o.yearsAgo == 1
-                            ? String(format: L10n.t("去年今天听了 %@ 次，最常循环的是这几首"), "\(o.total)")
-                            : String(
-                                format: L10n.t("%1$@ 年前的今天听了 %2$@ 次，最常循环的是这几首"),
-                                "\(o.yearsAgo)", "\(o.total)"),
+                        // 当天为空时结果是放宽到 ±3 天的"那一周"(见 OnThisDayPlanner),句子要说清楚。
+                        subtitle: o.isWeek
+                            ? (o.yearsAgo == 1
+                                ? String(format: L10n.t("去年的这一周听了 %@ 次，最常循环的是这几首"), "\(o.total)")
+                                : String(format: L10n.t("%1$@ 年前的这一周听了 %2$@ 次，最常循环的是这几首"),
+                                         "\(o.yearsAgo)", "\(o.total)"))
+                            : (o.yearsAgo == 1
+                                ? String(format: L10n.t("去年今天听了 %@ 次，最常循环的是这几首"), "\(o.total)")
+                                : String(format: L10n.t("%1$@ 年前的今天听了 %2$@ 次，最常循环的是这几首"),
+                                         "\(o.yearsAgo)", "\(o.total)")),
                         collapsed: $onThisDayCollapsed
                     ) {
                         if let at = stats.onThisDayUpdatedAt {
@@ -806,7 +867,7 @@ struct LastfmStatsSection: View {
                                 Text(L10n.t("正在查那年今日…"))
                                     .foregroundStyle(.secondary)
                             case .empty:
-                                Label(L10n.t("过去三年的今天都没有收听记录"),
+                                Label(L10n.t("过去三年的今天和那几周都没有收听记录"),
                                       systemImage: "calendar.badge.exclamationmark")
                                     .foregroundStyle(.secondary)
                             case .failed:
@@ -824,6 +885,90 @@ struct LastfmStatsSection: View {
                 }
             }
         }
+    }
+
+    // MARK: - 收听足迹(2026-09-03)
+
+    /// 全部从热力图日桶 + 账号总数派生(ListeningMilestones,Core 纯函数),零请求;日桶还在首次
+    /// 全量同步时不算——那时算出来的"日均/连续"都是残缺数据上的假数。
+    @ViewBuilder
+    private var listeningFootprintCard: some View {
+        if stats.dailySyncing || stats.dailyCounts.isEmpty {
+            SettingsCard {
+                SettingsRawRow(insetToText: true) {
+                    HStack(spacing: 8) {
+                        if stats.dailySyncing { ProgressView().controlSize(.small) }
+                        Text(L10n.t("首次同步历史之后，这里会出现你的收听足迹"))
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                    }
+                }
+            }
+        } else {
+            let today = Date()
+            let sum = ListeningMilestones.summarize(
+                dailyCounts: stats.dailyCounts, today: today,
+                dayKey: { LastfmStatsService.dayKey($0) })
+            let avg = IdleListeningStats.dailyAverage(dailyCounts: stats.dailyCounts)
+            SettingsCard {
+                collapsibleHeader(icon: "figure.walk", title: L10n.t("收听足迹"),
+                                  collapsed: $footprintCollapsed) { EmptyView() }
+                if !footprintCollapsed {
+                    CardDivider()
+                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 0), count: 3), spacing: 0) {
+                        if let days = sum.daysSinceFirst, let first = sum.firstDay {
+                            footprintCell(value: String(format: L10n.t("%@ 天"), days.formatted()),
+                                          label: String(format: L10n.t("自 %@ 起"), Self.dayLabel(first)))
+                        }
+                        footprintCell(value: String(format: L10n.t("%@ 天"), sum.recordedDays.formatted()),
+                                      label: String(format: L10n.t("有记录 · 日均 %@ 首"), (avg?.average ?? 0).formatted()))
+                        if let peak = sum.peak {
+                            footprintCell(value: String(format: L10n.t("%@ 首"), peak.count.formatted()),
+                                          label: String(format: L10n.t("单日最高 · %@"), Self.dayLabel(peak.day)))
+                        }
+                        footprintCell(value: String(format: L10n.t("%@ 天"), sum.currentStreak.formatted()),
+                                      label: String(format: L10n.t("当前连续 · 最长 %@ 天"), sum.longestStreak.formatted()))
+                        footprintCell(value: String(format: L10n.t("%@ 首"), sum.yearToDate.formatted()),
+                                      label: sum.priorYearSameSpan.map {
+                                          String(format: L10n.t("今年至今 · %1$@ 年同期 %2$@ 首"), "\($0.year)", $0.count.formatted())
+                                      } ?? L10n.t("今年至今"))
+                        if let total = stats.overview?.total, total > 0 {
+                            let next = ListeningMilestones.nextMilestone(total: total)
+                            footprintCell(value: String(format: L10n.t("还差 %@ 首"), next.remaining.formatted()),
+                                          label: String(format: L10n.t("到第 %@ 次 scrobble"), next.target.formatted()))
+                        }
+                    }
+                    .padding(.vertical, 6)
+                }
+            }
+        }
+    }
+
+    private func footprintCell(value: String, label: String) -> some View {
+        VStack(spacing: 3) {
+            Text(value)
+                .font(.system(size: 17, weight: .semibold))
+                .monospacedDigit()
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+            Text(label)
+                .font(.caption).foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 10)
+    }
+
+    /// 日桶键 "yyyy-MM-dd" → 按 App 语言格式化的日期(不带时间)。
+    private static func dayLabel(_ key: String) -> String {
+        let parts = key.split(separator: "-").compactMap { Int($0) }
+        guard parts.count == 3,
+              let date = Calendar.current.date(from: DateComponents(year: parts[0], month: parts[1], day: parts[2]))
+        else { return key }
+        return date.formatted(Date.FormatStyle(date: .abbreviated, time: .omitted, locale: L10n.locale))
     }
 }
 
@@ -863,6 +1008,13 @@ private final class LiveRowPlayback: ObservableObject {
     @Published private(set) var isPlayingNow = false
     @Published private(set) var isAdBreak = false
     @Published private(set) var artworkImage: NSImage?
+    /// 高清替代(见 `PlaybackCoordinator.highResArtworkImage`)。这一行只画到 26pt、分辨率
+    /// 无所谓,但**画的是不是同一张图**有所谓:Chrome 里放 YouTube Music 时系统给的可能是
+    /// 一帧 MV 画面(实测方大同《白发》给的是 150×84 的 MV 截帧),不取高清替代就会跟
+    /// 歌词窗口/灵动岛显示成两张不同的图(用户 2026-09-02 报的就是这类不一致)。
+    @Published private(set) var highResArtworkImage: NSImage?
+    /// 该显示的那张 —— 别在调用点各写一遍 `?? `。
+    var displayArtworkImage: NSImage? { highResArtworkImage ?? artworkImage }
     private var subs: [AnyCancellable] = []
 
     init() {
@@ -875,6 +1027,9 @@ private final class LiveRowPlayback: ObservableObject {
             p.$isCurrentTrackAdBreak.removeDuplicates().sink { [weak self] in self?.isAdBreak = $0 },
             p.$artworkImage.removeDuplicates(by: { $0 === $1 })
                 .sink { [weak self] in self?.artworkImage = $0 },
+            // 高清替代是换歌后异步下载的,不订阅的话这一行会一直停在系统原图上。
+            p.$highResArtworkImage.removeDuplicates(by: { $0 === $1 })
+                .sink { [weak self] in self?.highResArtworkImage = $0 },
         ]
     }
 }
@@ -930,7 +1085,7 @@ private struct LiveScrobbleRow: View {
                                                album: playback.album)
             return LiveSource(title: playback.title,
                               artist: canonicalLiveArtist(localArtist: playback.artist),
-                              artwork: playback.artworkImage, imageURL: listCover,
+                              artwork: playback.displayArtworkImage, imageURL: listCover,
                               confirmed: serverConfirms(playback.title), remote: false)
         }
         // ② 本机没在放,但 Last.fm 说有一首正在记录 —— 多半在手机/网页/别的设备上放。
@@ -1110,6 +1265,10 @@ private struct LiveScrobbleRow: View {
             pendingForceRefresh = Task {
                 try? await Task.sleep(nanoseconds: 10_000_000_000)
                 guard !Task.isCancelled, stats.recentPage == 1 else { return }
+                // collector 的 feed 活着时不发:它在镜像 scrobble 成功后 5 s 就会提前拉一次、
+                // 落盘,这边 ≤5 s 内读到——同样 ~10 s 见到上一首,却是 0 个 App 请求
+                // (2026-09-03,见 LastfmStatsService 的 collector feed 一节)。
+                guard !stats.feedIsFresh else { return }
                 stats.refreshBaseline(force: true)
             }
         }
@@ -1122,7 +1281,9 @@ private struct LiveScrobbleRow: View {
                 guard !Task.isCancelled else { break }
                 // 跟父视图那条 2 分钟轮询同一条守卫:翻到历史页时别把用户正看的那屏
                 // 换掉(强刷会无视 TTL,原来这两条路径都漏了这个判断)。
-                guard stats.recentPage == 1, !playback.isPlayingNow, remoteSessionLikelyActive else { continue }
+                // feed 活着时也不发:远端会话正是 collector 15 s 一拍在盯的东西,这里再拉是重复。
+                guard stats.recentPage == 1, !playback.isPlayingNow, remoteSessionLikelyActive,
+                      !stats.feedIsFresh else { continue }
                 stats.refreshBaseline(force: true)
             }
         }

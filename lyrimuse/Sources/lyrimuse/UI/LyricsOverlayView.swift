@@ -53,6 +53,8 @@ private final class OverlayPlayback: ObservableObject {
     @Published private(set) var textStrokeColor: Color = .black.opacity(0.65)
     @Published private(set) var backgroundIsVisible = false
     @Published private(set) var backgroundColor: Color = .clear
+    /// 悬浮歌词背景毛玻璃(2026-09-02),见 AppSettings.overlayBackgroundGlass。
+    @Published private(set) var backgroundGlass = false
     /// 对唱行两侧留白的基准量(见 LyricDuetLayout)。窗宽和字号都会影响它,所以在这里
     /// 预组合成一个去重值 —— 免得视图为了算这一个数字去订阅两个高频设置。
     @Published private(set) var duetInsetUnit: CGFloat = 0
@@ -91,6 +93,7 @@ private final class OverlayPlayback: ObservableObject {
             s.$textStrokeColor.removeDuplicates().sink { [weak self] in self?.textStrokeColor = $0 },
             s.$backgroundIsVisible.removeDuplicates().sink { [weak self] in self?.backgroundIsVisible = $0 },
             s.$backgroundColor.removeDuplicates().sink { [weak self] in self?.backgroundColor = $0 },
+            s.$overlayBackgroundGlass.removeDuplicates().sink { [weak self] in self?.backgroundGlass = $0 },
             // 内缩基准:可用宽度 = 窗宽 − 两侧 20pt 内边距(见 lyricsCard 的 padding)。
             s.$overlayWidth.combineLatest(s.$fontSize)
                 .map { width, font in
@@ -133,6 +136,10 @@ protocol OverlayChromeSource: ObservableObject {
     var isHoveringForControls: Bool { get }
     /// 指针压在**歌词文字**上 —— 「指针划过时让开」的命中判据。
     var isHoveringLyrics: Bool { get }
+    /// 指针压在**控制排本身**上(播放控制胶囊,或锁定态那颗解锁按钮)。跟上面那个整窗
+    /// 判定的 `isHoveringForControls` 是两件事:那个决定"要不要显示",这个决定"能不能
+    /// 让它横向换边" —— 用户正瞄着按钮时把落点冻住,见 `OverlayControlsSidePin`。
+    var isHoveringControlPill: Bool { get }
     /// 长按拖动已经"武装",画一圈跟前景色同色的高亮描边。
     var isDragArmed: Bool { get }
     /// 第一次解锁「锁定位置」时短暂弹一次的手势提示。
@@ -178,6 +185,29 @@ private enum OverlaySpeakerIndicator {
     /// 前面那一截的固定宽度,`speakerIndicatorInset(side:)` 要拿同一份值给罗马音/译文
     /// 补留白,两处必须**完全**一致(否则又是一次没对齐)。
     static let width: CGFloat = 6 + 7 + 2 + 7
+}
+
+/// 控制排横向落点用的声部快照 —— 指针压在按钮上的那段时间里冻住不动。
+///
+/// 为什么要冻(2026-09-03,跟"控制排跟着歌词换边"同一次改动):对唱歌逐句换人唱时歌词
+/// 每几秒就换一次边,控制排跟着换边之后,**换边的幅度就是大半个窗宽**(1016pt 宽的窗、
+/// 默认字号下两个落点差 759pt)。用户瞄准某颗按钮的那零点几秒里正好赶上换行,按钮排会
+/// 整条从指针底下抽走 —— 轻则点空(事件穿透到桌面),重则点到挪过来的**另一颗**按钮上,
+/// 而这一排里有「关闭悬浮窗」和「锁定位置」两颗点错了要费事收拾的。
+///
+/// 判据用的是"指针**压在按钮排上**"(`OverlayChromeSource.isHoveringControlPill`),不是
+/// "控制排显示着"(`isHoveringForControls`,整窗判定)—— 后者会让指针只是停在窗口里、
+/// 根本没在瞄按钮的时候也一起冻住,那正好又变回用户这次反馈的现象(按钮不在歌词上方)。
+/// 指针一离开按钮排,下一行就立刻回到"跟着歌词走"。
+private enum OverlayControlsSidePin: Equatable {
+    /// 没冻:跟着当前行走。
+    case free
+    /// 冻住:按压上按钮那一刻**当前行的原始声部**算(`nil` = 那一行没有对唱信息)。
+    ///
+    /// ⚠️ 存的是**原始**声部、不是算完的对齐方向:落点由"对齐方向"和"两侧内缩"两件事
+    /// 合成,而这两件事在非自动的「对齐方式」覆盖下走的是两条不同的推导(见
+    /// `OverlayDuetAlignmentOverride`)。只冻其中一半,换行时另一半照旧会变,冻了等于白冻。
+    case pinned(LyricDuet.Side?)
 }
 
 struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
@@ -234,6 +264,8 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
     /// 时**才被 tick —— 关着的时候这里恒为初始值,不产生任何开销。
     @State private var frameProbe = FrameRateProbe()
     @State private var debugFPS: Double?
+    /// 控制排横向落点的"冻结"状态,见 `OverlayControlsSidePin`。
+    @State private var controlsSidePin: OverlayControlsSidePin = .free
 
     // 播放控制排该不该显示:悬停中、且没锁定位置。抽成计算属性是因为下面有三处要用同一个
     // 判断(可见性、是否接受点击、热区要不要上报),散开写容易改漏其中一处。
@@ -325,6 +357,25 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
             // 不加的话,两个状态又会变回不一样高,刚修好的"锁定/解锁切换时内容整体挪动"
             // 会原样复发(见下面播放控制排/解锁提示各自注释里记的那个高度不对齐的坑)。
             .padding(.top, 4)
+            // 横向跟着歌词块走(2026-09-03 用户实机反馈:「在对唱模式下,这个悬浮菜单不是
+            // 显示对应歌词上面的,看起来是在整个窗口的居中位置」)。
+            //
+            // 病根:这一格原来只吃外层 `VStack(spacing: 0)` 默认的 `.center` 对齐,而歌词
+            // 卡片自己是 `.frame(maxWidth:.infinity, alignment: duetFrameAlignment)` ——
+            // 对唱歌把歌词甩到右半边时,按钮排还钉在整扇窗正中,差出大半个窗宽。普通歌看
+            // 不出来纯属巧合:`duetSide` 兜底就是 `.center`,两边算出来正好同一个位置。
+            //
+            // 留白 = 卡片内缩 + 卡片水平内边距(`OverlayCardGeometry.controlsInsets`,跟卡片
+            // 共用 core 里同一份几何),再按同一个方向靠边 —— 按钮排的近侧边缘因此跟歌词块
+            // 的近侧边缘严格重合,不是靠肉眼凑。合唱/普通歌两侧对称,`.center` 下位置跟改动
+            // 前逐像素相同。
+            //
+            // ⚠️ 故意**不加动画**:歌词换行本身就是纯属性跳变(见文件头),按钮排跟着一起
+            // 硬切才对得上;而且动画途中 `ControlRectsPreferenceKey` 会逐帧上报中间位置,
+            // 控制器按矩形分发的点击会落在"飞到一半"的按钮上。
+            .padding(.leading, controlsInsets.leading)
+            .padding(.trailing, controlsInsets.trailing)
+            .frame(maxWidth: .infinity, alignment: controlsFrameAlignment)
             lyricsCard
         }
         .coordinateSpace(name: overlayCoordSpaceName)
@@ -370,6 +421,17 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
         // 那边必须能把这条副作用空实现掉(见 OverlayChromeSource.controlsDidBecomeVisible)。
         .onChange(of: controlsVisible) { _, visible in
             if visible { overlayController.controlsDidBecomeVisible() }
+        }
+        // 指针压上按钮排的那一刻把横向落点冻住,离开立刻解冻 —— 理由(以及为什么判据是
+        // "压在按钮排上"而不是"控制排显示着")见 OverlayControlsSidePin。
+        .onChange(of: overlayController.isHoveringControlPill) { _, onPill in
+            controlsSidePin = onPill ? .pinned(line?.side) : .free
+        }
+        // 第二道闸:指针离开整扇窗时控制排本来就藏起来了,不该再留着一份陈旧快照。控制器
+        // 在"窗口隐藏/锁定/卸掉监听器"几处也会顺手清掉 isHoveringControlPill,但那是四个
+        // 分散的赋值点,漏一个就会冻死;这里只认"整窗悬停"这一个总闸,漏不掉。
+        .onChange(of: overlayController.isHoveringForControls) { _, hovering in
+            if !hovering { controlsSidePin = .free }
         }
         // ⚠️ 内容必须**贴着窗口顶边**放,不能让它在窗口里居中。
         //
@@ -425,6 +487,31 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
     }
     private var nextLineDecorationSide: LyricDuet.Side {
         playback.duetAlignmentOverride.effectiveDecorationSide(realSide: playback.nextLineSide) ?? .center
+    }
+
+    /// 控制排(播放控制胶囊 / 锁定态的解锁按钮)算横向落点时用的**原始**声部。
+    ///
+    /// 平时就是当前行自己的 `line?.side` —— 于是按钮排跟歌词块贴同一条边(2026-09-03
+    /// 用户反馈:对唱歌里按钮排还钉在整扇窗正中,不在对应歌词上方)。指针压上按钮排的
+    /// 那段时间里换成压上去那一刻的快照,理由见 `OverlayControlsSidePin`。
+    private var controlsRealSide: LyricDuet.Side? {
+        if case .pinned(let side) = controlsSidePin { return side }
+        return line?.side
+    }
+
+    /// 控制排该贴哪一边 —— 跟卡片 `duetFrameAlignment` 同一条推导,只是输入换成
+    /// `controlsRealSide`(可能是冻住的那一份)。
+    private var controlsFrameAlignment: Alignment {
+        frameAlignment(for: playback.duetAlignmentOverride.effectiveAlignmentSide(realSide: controlsRealSide))
+    }
+
+    /// 控制排两侧该留多少白 —— 卡片内缩 + 卡片水平内边距,算法在 core 里跟卡片共用同一份
+    /// (见 `OverlayCardGeometry`)。加总之后按钮排的近侧边缘跟歌词块的近侧边缘严格重合。
+    private var controlsInsets: (leading: CGFloat, trailing: CGFloat) {
+        OverlayCardGeometry.controlsInsets(
+            for: playback.duetAlignmentOverride.effectiveDecorationSide(realSide: controlsRealSide),
+            unit: playback.duetInsetUnit,
+            cardHorizontalPadding: OverlayPlayback.cardHorizontalPadding)
     }
 
     /// 下一句预览用的字号——只有**下一句换了个人唱**(`nextLineSide` 有值且跟当前行的
@@ -589,13 +676,11 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
     /// 必须传经过 `OverlayDuetAlignmentOverride.effectiveDecorationSide` 处理过的值
     /// (自动模式下就是原始的 `currentLine?.side` / `nextLineSide`,非自动模式下强制
     /// 为 nil)。
+    /// (映射本身 2026-09-03 搬进 core 的 `OverlayCardGeometry` —— 卡片上方那排控制按钮
+    /// 要贴的是**同一条边**,两处必须逐字一致,见该类型声明处的注释。这里只是把
+    /// `duetInsetUnit` 喂进去,数值和取舍一个字没变。)
     private func duetInsets(for side: LyricDuet.Side?) -> (leading: CGFloat, trailing: CGFloat) {
-        guard let side else { return (0, 0) }
-        switch side {
-        case .leading: return (0, playback.duetInsetUnit)
-        case .trailing: return (playback.duetInsetUnit, 0)
-        case .center: return (playback.duetInsetUnit, playback.duetInsetUnit)
-        }
+        OverlayCardGeometry.cardInsets(for: side, unit: playback.duetInsetUnit)
     }
 
     private var duetInsets: (leading: CGFloat, trailing: CGFloat) {
@@ -881,7 +966,21 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
     // 究竟是谁在起作用,看起来像开关失灵。
     @ViewBuilder
     private var overlayBackground: some View {
-        if playback.backgroundIsVisible {
+        if playback.backgroundGlass {
+            // 毛玻璃(2026-09-02):系统材质垫底,用户的背景色叠在上面当着色——背景色全透明
+            // 就是纯玻璃,alpha 越高越接近下面那档纯色卡片。材质用 .regularMaterial 而不是
+            // .thickMaterial(灵动岛那档):悬浮歌词压在壁纸/别的窗口上,厚材质几乎把底下盖成
+            // 一块灰板,失去"透出壁纸"的意义;也不用 .ultraThin,浅色壁纸上白字会不够清楚。
+            // 材质在这扇 isOpaque=false、backgroundColor=.clear 的 NSPanel 里能直接渲染,
+            // NotchLyricsWindow 用 .thickMaterial 是同一条路。系统「减少透明度」开着时材质
+            // 自动退成近乎不透明的底色,不用特判。
+            ZStack {
+                RoundedRectangle(cornerRadius: overlayBackgroundCornerRadius, style: .continuous)
+                    .fill(.regularMaterial)
+                RoundedRectangle(cornerRadius: overlayBackgroundCornerRadius, style: .continuous)
+                    .fill(playback.backgroundColor)
+            }
+        } else if playback.backgroundIsVisible {
             RoundedRectangle(cornerRadius: overlayBackgroundCornerRadius, style: .continuous)
                 .fill(playback.backgroundColor)
         } else {

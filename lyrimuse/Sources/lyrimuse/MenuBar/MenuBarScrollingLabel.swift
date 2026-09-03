@@ -33,12 +33,20 @@ import SwiftUI
 // ---- 图层结构 ----
 //
 //   self.layer
-//     └ clipLayer   (masksToBounds,尺寸/位置 = NSStatusBarButton 画 image 的那一块)
-//          └ contentLayer  (滚动动画动的是它的 position.x)
-//               ├ baseClipLayer  (masksToBounds,只露出**未唱**区 [边界, 句尾])
-//               │    └ textLayer      (contents = 整句长图,基础色)
-//               └ fillClipLayer  (masksToBounds,只露出**已唱**区 [0, 边界])
-//                    └ fillTextLayer (contents = 同一句的强调色长图)
+//     ├ clipLayer   (masksToBounds,尺寸/位置 = NSStatusBarButton 画 image 的那一块)
+//     │    └ contentLayer  (滚动动画动的是它的 position.x)
+//     │         ├ baseClipLayer  (masksToBounds,只露出**未唱**区 [边界, 句尾])
+//     │         │    └ textLayer      (contents = 整句长图,基础色)
+//     │         └ fillClipLayer  (masksToBounds,只露出**已唱**区 [0, 边界])
+//     │              └ fillTextLayer (contents = 同一句的强调色长图)
+//     └ iconHostLayer  (歌词旁那枚带播放进度的图标,2026-09-03;关掉时整层 isHidden)
+//          ├ iconBaseClipLayer (masksToBounds,只露出**还没放到**的那截 [边界, 顶])
+//          │    └ iconBaseLayer (contents = 图标模板图,基础色)
+//          └ iconFillClipLayer (masksToBounds,只露出**已经放过**的那截 [底, 边界])
+//               └ iconFillLayer (contents = 同一枚图标的强调色版)
+//
+// 图标那一支**挂在 self.layer 上、不挂在 clipLayer/contentLayer 里** —— 它不跟着歌词滚,
+// 也不该被歌词那一格的裁剪窗切掉;它跟歌词是并排的两块,只在 layout() 里一起排位。
 //
 // 用多层而不是"直接给 self.layer 设 contents":文字要能滚出可视区并被裁掉,而可视区
 // 的位置得跟按钮里 image 的绘制位置对齐(见 layout())。分层之后,layout 只碰
@@ -62,6 +70,9 @@ final class MenuBarScrollingLabel: NSView {
     private static let fillAnimationKey = "lyrimuse.karaoke-fill"
     private static let basePositionAnimationKey = "lyrimuse.karaoke-base-pos"
     private static let baseBoundsAnimationKey = "lyrimuse.karaoke-base-bounds"
+    private static let iconFillAnimationKey = "lyrimuse.progress-fill"
+    private static let iconBasePositionAnimationKey = "lyrimuse.progress-base-pos"
+    private static let iconBaseBoundsAnimationKey = "lyrimuse.progress-base-bounds"
 
     private let clipLayer = CALayer()
     private let contentLayer = CALayer()
@@ -69,6 +80,22 @@ final class MenuBarScrollingLabel: NSView {
     private let textLayer = CALayer()
     private let fillClipLayer = CALayer()
     private let fillTextLayer = CALayer()
+    private let iconHostLayer = CALayer()
+    private let iconBaseClipLayer = CALayer()
+    private let iconBaseLayer = CALayer()
+    private let iconFillClipLayer = CALayer()
+    private let iconFillLayer = CALayer()
+
+    /// 歌词旁边那枚带播放进度的图标要不要画、画哪一款、摆哪边(nil = 关着)。
+    ///
+    /// 存的是**款式枚举**而不是 NSImage:NSImage 没有值语义的相等性,放进 `Plan` 会让
+    /// "同参数重复调用是空操作"这条失效(每次都判定成变了 → 每次重排位图 + 重启动画)。
+    /// 真正的图从 `MenuBarProgressIcon`(内部走 `MenuBarIconStyle.cachedImage`)现取。
+    struct IconBadge: Equatable {
+        let style: MenuBarIconStyle
+        /// 只会是 `.leading` / `.trailing` —— `.off` 由调用方转成 `icon: nil`。
+        let position: MenuBarLyricsIconPosition
+    }
 
     /// 一句歌词的滚动参数。只有它变了才重排版 + 重启动画;换颜色不动它。
     private struct Plan: Equatable {
@@ -78,13 +105,22 @@ final class MenuBarScrollingLabel: NSView {
         /// 不让调用方传:两个调用点(MenuBarStatusItem.showFixedWidth、设置页预览的
         /// Representable)都只关心"画哪句话多宽",对齐是纯样式,从这里读一次比在两处各传
         /// 一遍少一个漂的机会。
-        var alignment: MenuBarLyricsAlignment
+        var alignment: LyricsRestingAlignment
+        /// 字重(2026-09-03)。跟 alignment 一样由 present() 现读 AppSettings。它同时改变**位图内容**
+        /// 和**文字宽度**(滚动距离),所以下面 bitmapsUnchanged / scrollUnchanged 两道判定都要看它,
+        /// 否则用户在设置里换了粗细,菜单栏要等到下一次换句才变。
+        var fontWeight: OverlayFontWeight
+        /// 字号(2026-09-03),0 = 跟随系统。同 fontWeight:位图、行高、滚动距离都随它变。
+        var fontSize: CGFloat
         /// nil = 这一句装得下,静止显示。格子宽度照样是 windowWidth(固定宽度,见
         /// MenuBarMarqueeRenderer.presentation)。
         var pacing: MenuBarMarquee.ScrollPacing?
         /// 逐字染色的填色边界路径(nil = 这句没有逐字数据 / 开关关着,不染)。
         /// 路径是词时间轴的纯翻译,不含播放位置 —— 时钟另走 updateKaraokeClock。
         var fillPath: [MenuBarMarquee.KaraokeFillPoint]?
+        /// 歌词旁那枚带播放进度的图标(nil = 关着)。跟 fillPath 一样只描述"画什么",
+        /// 进度到哪儿了是另一条时钟通道(updateProgressClock)。
+        var icon: IconBadge?
     }
 
     private var plan: Plan?
@@ -106,6 +142,32 @@ final class MenuBarScrollingLabel: NSView {
     }
 
     private var karaokeClock: KaraokeClock?
+
+    /// 整首歌的播放时钟快照(进度图标用)。跟上面那份 `KaraokeClock` 长得像但**不是**
+    /// 同一份,刻意不合并:
+    ///   * 这一份多一个 `durationMs`(逐字染色不需要曲长,它的终点是这一行唱完);
+    ///   * 喂进来的位置**不含歌词时间轴偏移**(那份含)—— 见
+    ///     `MenuBarMarquee.progressFillLength` 上面那段⚠️ 和调用点
+    ///     `MenuBarStatusItem.syncProgressClock`。
+    /// 合并成一个类型只会让"这个位置到底加没加偏移"变成一个要靠记忆回答的问题。
+    private struct ProgressClock {
+        let baseMs: Int
+        let durationMs: Int
+        let rate: Double
+        let playing: Bool
+        let capturedAt: Date
+
+        func positionMs(at date: Date = Date()) -> Int {
+            guard playing, rate > 0 else { return baseMs }
+            return baseMs + Int(date.timeIntervalSince(capturedAt) * 1000 * rate)
+        }
+    }
+
+    private var progressClock: ProgressClock?
+
+    /// 进度图标染好色的两张位图(基础色 / 强调色)。nil = 这一刻不画图标。
+    private var preparedIcon: (base: MenuBarProgressIcon.Prepared,
+                               fill: MenuBarProgressIcon.Prepared)?
 
     init() {
         super.init(frame: .zero)
@@ -134,6 +196,20 @@ final class MenuBarScrollingLabel: NSView {
         contentLayer.addSublayer(fillClipLayer)
         clipLayer.addSublayer(contentLayer)
         layer?.addSublayer(clipLayer)
+        // 进度图标那一支。几何关系跟上面那对裁剪层**逐条对称**,只是把横向换成纵向:
+        // fillClip 露出 [底, 边界]、baseClip 露出 [边界, 顶](2026-09-03 用户从
+        // "左→右"和"下→上"里选的后者,像水位涨上来)。
+        for l in [iconHostLayer, iconBaseClipLayer, iconBaseLayer, iconFillClipLayer, iconFillLayer] {
+            l.anchorPoint = .zero
+        }
+        iconBaseClipLayer.masksToBounds = true
+        iconFillClipLayer.masksToBounds = true
+        iconHostLayer.isHidden = true
+        iconBaseClipLayer.addSublayer(iconBaseLayer)
+        iconHostLayer.addSublayer(iconBaseClipLayer)
+        iconFillClipLayer.addSublayer(iconFillLayer)
+        iconHostLayer.addSublayer(iconFillClipLayer)
+        layer?.addSublayer(iconHostLayer)
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) 不使用") }
@@ -154,10 +230,13 @@ final class MenuBarScrollingLabel: NSView {
     /// 显示(或更新)一句要滚动的歌词。同一句用同样的参数重复调用是空操作 ——
     /// 否则每次 recompute 都会把滚动打回开头,用户永远看不到后半句。
     func present(text: String, windowWidth: CGFloat, pacing: MenuBarMarquee.ScrollPacing?,
-                 fillPath: [MenuBarMarquee.KaraokeFillPoint]? = nil) {
+                 fillPath: [MenuBarMarquee.KaraokeFillPoint]? = nil,
+                 icon: IconBadge? = nil) {
         let next = Plan(text: text, windowWidth: windowWidth,
                         alignment: AppSettings.shared.menuBarLyricsAlignment,
-                        pacing: pacing, fillPath: fillPath)
+                        fontWeight: AppSettings.shared.menuBarLyricsFontWeight,
+                        fontSize: AppSettings.shared.menuBarLyricsFontSize,
+                        pacing: pacing, fillPath: fillPath, icon: icon)
         guard next != plan else {
             isHidden = false
             return
@@ -167,8 +246,13 @@ final class MenuBarScrollingLabel: NSView {
         // 槽宽/配速"的调用(interim → 重建落地)原来会把逐像素相同的长图白排一遍。颜色在
         // 本路径不变(highlighted/appearance 变化各有自己的入口,那两处照旧重画)。
         // fillPath 的**有无**参与判定(强调色那张图要不要排),路径数值本身不影响位图。
+        // ⚠️ 图标也进这道判定:换款式(用户在设置里一款款点着挑)、开关这一项、换边,
+        // 三件事都要重出位图。不带它的话换款式在菜单栏上要等下一次换句才生效。
         let bitmapsUnchanged = prepared != nil && plan?.text == next.text
             && (plan?.fillPath != nil) == (next.fillPath != nil)
+            && plan?.icon == next.icon
+            && plan?.fontWeight == next.fontWeight
+            && plan?.fontSize == next.fontSize
         // 滚动动画只在**滚动参数**(文字/槽宽/配速)真的变了时才重启。fillPath 从 nil 变成
         // 非 nil **不算** —— 那是"开唱那一刻把逐字填色挂上"(菜单栏订了 compactLine 和
         // currentLine 两条流,后者就管这一下,见 MenuBarStatusItem)。2026-08-24 之前它会
@@ -176,6 +260,7 @@ final class MenuBarScrollingLabel: NSView {
         // 开唱那一下再从零起一遍首停,等于把提前量白等两遍,长句更滚不完。
         let scrollUnchanged = prepared != nil && (plan.map {
             $0.text == next.text && $0.windowWidth == next.windowWidth && $0.pacing == next.pacing
+                && $0.fontWeight == next.fontWeight && $0.fontSize == next.fontSize
         } ?? false)
         plan = next
         isHidden = false
@@ -187,6 +272,10 @@ final class MenuBarScrollingLabel: NSView {
         }
         // 换句/换路径后按存底时钟重装填色(时钟按墙钟外推,不用等下一次对表)。
         applyKaraokeFill()
+        // 进度图标同理。⚠️ 它跟换句**没关系**(整首歌一条匀速动画),但重排位图会把
+        // contents 换掉、裁剪层的 bounds 也被重设,所以每次走到这儿都得按存底时钟重装一次,
+        // 否则换句那一下进度会跳回 0 停在那儿。
+        applyProgressFill()
         needsLayout = true
     }
 
@@ -214,11 +303,80 @@ final class MenuBarScrollingLabel: NSView {
         applyKaraokeFill()
     }
 
+    /// 整首歌的进度对表(进度图标用)。跟上面那条逐字染色的对表是**两条独立通道**,由
+    /// `MenuBarStatusItem` 在同一批订阅里各喂各的。
+    ///
+    /// - Parameter positionMs: 当前播放位置,**不含**歌词时间轴偏移(见 ProgressClock)。
+    /// - Parameter durationMs: 曲长。nil / 非正 = 不知道这首歌多长(有些播放器不报),
+    ///   那就整枚图标只用基础色,不假装有进度。
+    /// - Parameter force: 跳过漂移门。
+    ///
+    /// 漂移门比逐字染色那道**宽得多(1s,那边 250ms)**,而且这是算出来的不是拍的:整首歌
+    /// 的进度铺在图标那 ~15pt 高上,一首 4 分钟的歌里 1 秒 = 15 × 1/240 ≈ **0.06pt**,
+    /// 肉眼绝无可能看出来。而锚点每 ~2s 例行重发一次,门太窄就会没事重装动画。
+    func updateProgressClock(positionMs: Int?, durationMs: Int?, rate: Double, playing: Bool,
+                             force: Bool = false) {
+        guard let positionMs, let durationMs, durationMs > 0 else {
+            progressClock = nil
+            applyProgressFill()
+            return
+        }
+        let next = ProgressClock(baseMs: positionMs, durationMs: durationMs, rate: rate,
+                                 playing: playing, capturedAt: Date())
+        if !force, playing, let old = progressClock, old.playing, old.rate == rate,
+           old.durationMs == durationMs,
+           iconFillClipLayer.animation(forKey: Self.iconFillAnimationKey) != nil,
+           abs(old.positionMs() - positionMs) < 1000 {
+            progressClock = next
+            return
+        }
+        progressClock = next
+        applyProgressFill()
+    }
+
     /// 退出滚动模式(这一句装得下、菜单栏歌词关掉、或者没在播放)。
     /// 必须真的把动画摘掉:留一条 repeatCount = .infinity 的动画在隐藏图层上,
     /// 渲染层会一直为它做无用功。
     func clear() {
         guard plan != nil || !isHidden else { return }
+        plan = nil
+        prepared = nil
+        contentLayer.removeAnimation(forKey: Self.scrollAnimationKey)
+        fillClipLayer.removeAnimation(forKey: Self.fillAnimationKey)
+        baseClipLayer.removeAnimation(forKey: Self.basePositionAnimationKey)
+        baseClipLayer.removeAnimation(forKey: Self.baseBoundsAnimationKey)
+        // 进度图标那条也必须真的摘掉(同一条理由:留一条 fillMode=forwards 的动画在
+        // 隐藏图层上,渲染层会一直为它做无用功)。
+        iconFillClipLayer.removeAnimation(forKey: Self.iconFillAnimationKey)
+        iconBaseClipLayer.removeAnimation(forKey: Self.iconBasePositionAnimationKey)
+        iconBaseClipLayer.removeAnimation(forKey: Self.iconBaseBoundsAnimationKey)
+        preparedIcon = nil
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        textLayer.contents = nil
+        fillTextLayer.contents = nil
+        fillClipLayer.isHidden = true
+        iconBaseLayer.contents = nil
+        iconFillLayer.contents = nil
+        iconHostLayer.isHidden = true
+        CATransaction.commit()
+        isHidden = true
+    }
+
+    /// 只把**歌词**收掉、那枚进度图标留在原地(2026-09-03,悬停三键接管时用)。用户原话:
+    /// "如果有开启左右侧图标的话,悬浮之后图标依旧保留,只是歌词部分变为控制键"。
+    ///
+    /// 跟 `clear()` 的差别只有两处,但都要紧:
+    ///  - **`isHidden` 不置真** —— 图标就画在这一层上,整层藏了图标也没了;
+    ///  - **`preparedIcon` / `iconHostLayer` / 三条进度动画全部留着** —— `syncProgressClock`
+    ///    那条通道在接管期间照常喂进来(它不经 `refresh()`),图标上的进度会继续涨。
+    ///
+    /// `plan` **照样置 nil**:留着的话退出接管后 `present()` 拿同一句进来会被 `next != plan`
+    /// 那道去重当成空操作直接 return,而文字层已经被清空了 —— 表现是"移开鼠标之后歌词一片
+    /// 空白,要等换下一句才回来"。置 nil 之后 `layout()` 会早退,图标的 frame 就停在接管前
+    /// 那一次算好的位置上,而接管期间几何本来就是冻住的,正好。
+    func clearLyricsKeepingIcon() {
+        guard plan != nil else { return }
         plan = nil
         prepared = nil
         contentLayer.removeAnimation(forKey: Self.scrollAnimationKey)
@@ -231,7 +389,6 @@ final class MenuBarScrollingLabel: NSView {
         fillTextLayer.contents = nil
         fillClipLayer.isHidden = true
         CATransaction.commit()
-        isHidden = true
     }
 
     /// 菜单打开/关闭。只换文字颜色,**不碰**正在跑的滚动动画 —— 点开菜单看一眼再关掉,
@@ -242,6 +399,9 @@ final class MenuBarScrollingLabel: NSView {
         highlighted = on
         rebuildImage()
         applyKaraokeFill()
+        // 反白期间进度填色也整个隐掉(同逐字染色:基础图已换成选中色,强调色叠在选中
+        // 背景上要么撞色要么看不清)。关掉菜单恢复。
+        applyProgressFill()
     }
 
     // 系统在浅色/深色之间切换时,labelColor 解析出来的是另一个值,得重画。
@@ -252,34 +412,121 @@ final class MenuBarScrollingLabel: NSView {
 
     // MARK: - 内部
 
-    override func layout() {
-        super.layout()
-        guard let plan else { return }
+    /// 这一层里两块内容各自的矩形(视图坐标):歌词那一格、以及可选的那枚进度图标。
+    ///
+    /// 抽出来是因为**第二个消费者**:悬停三键要正好落在「歌词那一格」里(开着图标时那一格
+    /// 比整个按钮窄,图标那一块要留着,见 MenuBarStatusItem 的 hover 那一段)。各算一份迟早
+    /// 漂开,而这套算式跟状态栏项**出生时**算槽宽的那份本来就是配对的
+    /// (`MenuBarProgressIcon.reservedWidth`,对不上就是歌词画到槽外压邻居)。
+    struct ContentGeometry {
+        /// 歌词格:滚动裁剪窗的位置和大小(高度是这一句的行高,不是整个按钮高)。
+        let lyrics: CGRect
+        /// 那枚进度图标;没开就是 nil。
+        let icon: CGRect?
+    }
+
+    func contentGeometry() -> ContentGeometry? {
+        guard let plan else { return nil }
         let height = prepared?.pointHeight ?? MenuBarMarqueeRenderer.lineHeight
         // 可视窗口跟 NSStatusBarButton 画 image 的位置对齐:水平居中 + 垂直居中。
         // 宽度用 plan.windowWidth 而不是 bounds.width —— 按钮比它宽一圈(系统给状态栏项
         // 留的左右内边距),文字必须落在中间那一块,否则会顶到相邻图标上。
         // 裁剪窗钳制在自身 bounds 内(2026-08-19):bounds 短暂陈旧(启动竞态/尺寸切换
         // 的一拍)时,原来的居中公式会算出大负数/大偏移,把可视窗甩到槽位外。
-        let clipW = min(plan.windowWidth, bounds.width)
-        let x = max(0, ((bounds.width - clipW) / 2).rounded())
+        // 开着进度图标时,这一格里是**并排的两块**:图标 + 间距 + 歌词格。整块一起在按钮里
+        // 居中,图标按设置落在左端或右端;歌词格的宽度**不受影响**(图标占的是额外让出来的
+        // 地方,用户设的「最大宽度」仍然全是歌词的)。
+        //
+        // ⚠️ 让出多宽用 `MenuBarProgressIcon.reservedWidth` —— 跟状态栏项**出生时**算槽宽
+        // 用的是同一个函数。这里另算一遍的后果不是"差几个点":macOS 26 起项的宽度只在出生
+        // 那一刻算数,两边对不上就是歌词画到槽外、压在邻居图标上(见 MenuBarStatusItem
+        // .present 头注)。
+        let iconSize = plan.icon.map { MenuBarProgressIcon.size(of: $0.style) } ?? .zero
+        let reserved = MenuBarProgressIcon.reservedWidth(for: plan.icon?.style)
+        // ⚠️ 横向那一半交给 `MenuBarHoverControls.lyricsSlot` —— 悬停三键要落在**同一格**里,
+        // 而它拿不到 `plan`(易失),只能从槽宽反推。两个入口共用一份算式,别在这儿再写一遍
+        // (为什么:那正是 2026-09-03「点暂停生效上一首」那个 bug 的病根,见那个函数的头注)。
+        guard let slot = MenuBarHoverControls.lyricsSlot(
+            buttonWidth: bounds.width, contentWidth: plan.windowWidth + reserved,
+            reservedIconWidth: reserved, iconLeading: plan.icon?.position == .leading)
+        else { return nil }
+        let contentW = min(plan.windowWidth + reserved, bounds.width)
+        let left = max(0, ((bounds.width - contentW) / 2).rounded())
+        let clipW = slot.width
         let y = ((bounds.height - height) / 2).rounded()
+        let lyricsX = slot.x
+        let iconX: CGFloat
+        switch plan.icon?.position {
+        case .leading:
+            iconX = left
+        case .trailing:
+            iconX = left + clipW + MenuBarProgressIcon.gap
+        default:
+            iconX = 0
+        }
+        return ContentGeometry(
+            lyrics: CGRect(x: lyricsX, y: y, width: clipW, height: height),
+            // 图标按自己的高度在按钮里垂直居中 —— 跟"图标独占那一格"时按钮自己居中画
+            // 模板图的落点一致,两态之间切换时图标不会上下跳。
+            icon: plan.icon == nil ? nil : CGRect(
+                x: iconX, y: ((bounds.height - iconSize.height) / 2).rounded(),
+                width: iconSize.width, height: iconSize.height))
+    }
+
+    // ⚠️ 这里曾经有个 `lyricsSlotFrame`,供悬停三键问"歌词格在哪"(2026-09-03 当天加、当天删)。
+    // 删掉的原因不是没用,而是**这条路本身是错的**:它按 `plan` 算,而 `plan` 是易失的
+    // (悬停接管时被清、暂停收成图标时又被清),于是同一格会算出两套位置、三个键的矩形在
+    // `48.5/72.5/96.5` 和 `36/60/84` 之间跳,差 12.5pt 正好够点到隔壁键。现在由
+    // `MenuBarStatusItem.currentLyricsSlot()` 从槽宽(`item.length`,这一项的硬事实)反推,
+    // 横向算式两边共用 `MenuBarHoverControls.lyricsSlot`。**别再加回来。**
+
+    /// 这一刻画着那枚进度图标没有。悬停三键要据此决定收歌词时能不能连图标一起收
+    /// (答案是不能,见 `clearLyricsKeepingIcon`)。读这一层的**实际状态**而不是去读设置:
+    /// 设置刚改完、还没走到重画时两者会短暂不一致。
+    var showsIconBadge: Bool { plan?.icon != nil }
+
+    override func layout() {
+        super.layout()
+        guard let geometry = contentGeometry() else { return }
         CATransaction.begin()
         CATransaction.setDisableActions(true)
-        clipLayer.frame = CGRect(x: x, y: y, width: clipW, height: height)
+        clipLayer.frame = geometry.lyrics
         // 只写 y。x 由滚动动画接管(动的是 contentLayer),这里碰它会跟滚动打架。
         contentLayer.position = CGPoint(x: contentLayer.position.x, y: 0)
+        if let icon = geometry.icon { iconHostLayer.frame = icon }
         CATransaction.commit()
     }
 
-    private var tintColor: NSColor {
+    /// 「未唱到 / 整行」文字色的**唯一口径**。设置页那个色块也从这里取(定型在菜单栏那一档
+    /// 的 appearance 下,见 MenuBarAppearanceStore)—— 各写一份的后果就是 2026-09-03 用户
+    /// 报的"菜单栏上是白字,设置里的色块是黑的"。
+    ///
+    /// ⚠️ 返回的可能是**动态色**(`labelColor` / `selectedMenuItemTextColor`),真正解析成 RGB
+    /// 是在绘制那一刻按当前 appearance 决定的 —— 调用方负责套 `performAsCurrentDrawingAppearance`
+    /// 或 `resolved(in:)`。
+    static func textColor(hex: String, highlighted: Bool) -> NSColor {
         // 菜单打开时状态栏项整块反白,文字得跟着变 —— 这正是以前用模板图时系统免费
         // 帮我们做的那件事,自己拿图层之后要自己做。反白优先于自定义色:选中蓝底上
         // 什么自定义色都可能看不清。
         if highlighted { return .selectedMenuItemTextColor }
-        let hex = AppSettings.shared.menuBarLyricsTextColorHex
         guard !hex.isEmpty else { return .labelColor }
         return NSColor(Color(hexWithAlpha: hex, fallback: Color(nsColor: .labelColor)))
+    }
+
+    /// 「已唱到」那一半的颜色的**唯一口径**(理由同上)。`darkMenuBar` 显式传进来而不是在里面
+    /// 读 `effectiveAppearance`:设置页那个色块问的是"**菜单栏**上会是什么色",而它自己身处
+    /// 浅色的设置窗口里。
+    static func fillColor(hex: String, darkMenuBar: Bool) -> NSColor {
+        if !hex.isEmpty {
+            return NSColor(Color(hexWithAlpha: hex, fallback: Color(nsColor: .controlAccentColor)))
+        }
+        let accent = NSColor.controlAccentColor
+        guard darkMenuBar else { return accent }
+        return accent.blended(withFraction: 0.4, of: .white) ?? accent
+    }
+
+    private var tintColor: NSColor {
+        Self.textColor(hex: AppSettings.shared.menuBarLyricsTextColorHex, highlighted: highlighted)
     }
 
     /// 染色用的颜色。用户设了自定义色(设置 › 菜单栏 › 染色颜色)就**原样用**;没设则跟随
@@ -288,15 +535,9 @@ final class MenuBarScrollingLabel: NSView {
     /// 浅色菜单栏保持原样:深色文字旁边的饱和强调色本来就够跳。动态色,必须在
     /// performAsCurrentDrawingAppearance 里取值。
     private var karaokeFillColor: NSColor {
-        let hex = AppSettings.shared.menuBarLyricsFillColorHex
-        if !hex.isEmpty {
-            return NSColor(Color(hexWithAlpha: hex, fallback: Color(nsColor: .controlAccentColor)))
-        }
-        let accent = NSColor.controlAccentColor
-        guard effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua else {
-            return accent
-        }
-        return accent.blended(withFraction: 0.4, of: .white) ?? accent
+        Self.fillColor(
+            hex: AppSettings.shared.menuBarLyricsFillColorHex,
+            darkMenuBar: effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua)
     }
 
     /// 颜色设置(文字色/染色色)变了:重排位图 + 重放填色几何,**不碰**滚动动画 ——
@@ -304,6 +545,7 @@ final class MenuBarScrollingLabel: NSView {
     func refreshColors() {
         rebuildImage()
         applyKaraokeFill()
+        applyProgressFill()
     }
 
     /// 按当前颜色重排这一句。**不重启动画**:图片尺寸只跟文字+字体有关,颜色变了尺寸不变,
@@ -313,6 +555,8 @@ final class MenuBarScrollingLabel: NSView {
         let color = tintColor
         var built: MenuBarMarqueeRenderer.PreparedLine?
         var fillBuilt: MenuBarMarqueeRenderer.PreparedLine?
+        var iconBase: MenuBarProgressIcon.Prepared?
+        var iconFill: MenuBarProgressIcon.Prepared?
         // ⚠️ labelColor/selectedMenuItemTextColor 是**动态**颜色,真正解析成 RGB 是在
         // 绘制那一刻按"当前绘制 appearance"决定的。不套这一层的话,深色菜单栏上会画出
         // 一行几乎看不见的深色字(取决于 App 自己的 appearance,而不是菜单栏的)。
@@ -320,6 +564,14 @@ final class MenuBarScrollingLabel: NSView {
             built = MenuBarMarqueeRenderer.prepare(text: plan.text, color: color)
             if plan.fillPath != nil {
                 fillBuilt = MenuBarMarqueeRenderer.prepare(text: plan.text, color: karaokeFillColor)
+            }
+            // 图标跟歌词共用**同两个颜色**(未唱到的 / 已唱到的),所以它跟旁边的字永远
+            // 是一套配色 —— 深浅色菜单栏、菜单反白、用户自定义色三件事一次都不用另写。
+            // ⚠️ 强调色这一张跟 `plan.fillPath` **没有**关系:逐字染色关掉了(或者这首歌
+            // 没有逐字数据)时,进度图标照样要染 —— 它的进度来自播放位置,不是歌词时间轴。
+            if let icon = plan.icon {
+                iconBase = MenuBarProgressIcon.tinted(style: icon.style, color: color)
+                iconFill = MenuBarProgressIcon.tinted(style: icon.style, color: karaokeFillColor)
             }
         }
         guard let built else {
@@ -343,6 +595,23 @@ final class MenuBarScrollingLabel: NSView {
             fillClipLayer.bounds.size.height = fillBuilt.pointHeight
         } else {
             fillTextLayer.contents = nil
+        }
+        if let iconBase, let iconFill {
+            preparedIcon = (iconBase, iconFill)
+            iconBaseLayer.contents = iconBase.cg
+            iconBaseLayer.contentsScale = iconBase.scale
+            iconBaseLayer.bounds = CGRect(origin: .zero, size: iconBase.size)
+            iconFillLayer.contents = iconFill.cg
+            iconFillLayer.contentsScale = iconFill.scale
+            iconFillLayer.bounds = CGRect(origin: .zero, size: iconFill.size)
+            // 只动宽,不碰高 —— 高是进度动画的领地(见 applyProgressFill)。
+            iconFillClipLayer.bounds.size.width = iconFill.size.width
+            iconHostLayer.isHidden = false
+        } else {
+            preparedIcon = nil
+            iconBaseLayer.contents = nil
+            iconFillLayer.contents = nil
+            iconHostLayer.isHidden = true
         }
         CATransaction.commit()
         needsLayout = true
@@ -371,12 +640,27 @@ final class MenuBarScrollingLabel: NSView {
         let karaokePositionMs: Int?
         let karaokeRate: Double
         let karaokePlaying: Bool
+        /// 歌词旁那枚带播放进度的图标(nil = 关着)。跟本体一样由调用方现读 AppSettings 传
+        /// 进来 —— 预览这条路没有 MenuBarStatusItem 的订阅可蹭。
+        let icon: IconBadge?
+        /// 进度对表:位置**不含**歌词时间轴偏移(跟上面 karaokePositionMs 的区别就在这儿),
+        /// 曲长 nil = 不知道这首歌多长。速率和播放态两条时钟共用同一份,不再重复传。
+        let progressPositionMs: Int?
+        let progressDurationMs: Int?
 
         func makeNSView(context: Context) -> MenuBarScrollingLabel { MenuBarScrollingLabel() }
 
         func updateNSView(_ view: MenuBarScrollingLabel, context: Context) {
+            // ⚠️ 按**真实菜单栏**那一档的明暗渲染,不跟宿主(设置窗口)走。
+            // 「跟随系统」的文字色是 `labelColor` 这个**动态色**,在浅色的设置窗口里解析出来
+            // 是黑的,而菜单栏上是白的 —— 2026-09-03 用户报的"预览也是黑色"就是这个。
+            // `NSView.appearance` 一设,内部那些 `effectiveAppearance` 取色的地方(rebuildImage /
+            // karaokeFillColor)自然就换到这一档,不用给渲染路径另开参数。
+            // 见 MenuBarAppearanceStore 头注。
+            view.appearance = MenuBarAppearanceStore.shared.appearance
             // present 对"参数没变"是空操作,所以设置页每次重算 body 都不会把滚动打回开头。
-            view.present(text: text, windowWidth: windowWidth, pacing: pacing, fillPath: fillPath)
+            view.present(text: text, windowWidth: windowWidth, pacing: pacing, fillPath: fillPath,
+                         icon: icon)
             // 预览实例不在 MenuBarStatusItem 的颜色订阅覆盖范围内,靠宿主 body 重算带一次
             // 重排 —— 用户在旁边拖「文字颜色」色轮时预览才跟手(重排一句位图 sub-ms 级)。
             view.refreshColors()
@@ -384,6 +668,9 @@ final class MenuBarScrollingLabel: NSView {
             // 把最新播放时钟带进来 —— 内部漂移门保证这不会打断正在跑的填色动画。
             view.updateKaraokeClock(positionMs: karaokePositionMs, rate: karaokeRate,
                                     playing: karaokePlaying)
+            view.updateProgressClock(positionMs: progressPositionMs,
+                                     durationMs: progressDurationMs,
+                                     rate: karaokeRate, playing: karaokePlaying)
         }
     }
 
@@ -406,7 +693,7 @@ final class MenuBarScrollingLabel: NSView {
             // maxOffset = textWidth - windowWidth,所以装得下时它是负的,slack 取 -maxOffset。
             // **放不下时 slack 恒为 0**,三个选项都退回 x=0 —— 文字比格子宽,没有位置可挪
             // (这也正是设置界面只在固定宽度模式下露出这一行的同一个道理,见
-            // MenuBarLyricsAlignment 头注)。
+            // LyricsRestingAlignment 头注)。
             //
             // ⚠️ 只动 contentLayer 就够了:染色那两个裁剪层(baseClipLayer/fillClipLayer)是
             // 它的**子层**(见文件头「图层结构」),跟着一起平移,填色几何一个数都不用改。
@@ -511,6 +798,93 @@ final class MenuBarScrollingLabel: NSView {
         } else {
             // 暂停 / 已唱完:静止停在此刻该有的边界。
             setBoundary(MenuBarMarquee.karaokeFillX(atMs: nowMs, path: path))
+        }
+        CATransaction.commit()
+    }
+
+    // MARK: - 整首歌的进度(歌词旁那枚图标)
+
+    /// 按当前 plan + 存底时钟(重新)装进度填色。跟上面 `applyKaraokeFill` **逐条对称**,
+    /// 只是两处换了:横向换成纵向(用户选的"下→上,像水位"),按词边界分段的关键帧换成
+    /// **一条匀速动画**(整首歌的进度本来就是匀速的,不需要分段)。
+    ///
+    /// 两个裁剪层同样做**互补**运动 —— 文件头注那条"白边"教训对图标一字不改地成立:两张
+    /// 同字形的图叠着画,边缘的半透明像素会让底下那张透出来,深色菜单栏上就镶一圈白晕。
+    /// fillClip 露出 [底, 边界],baseClip 露出 [边界, 顶];baseClip 的几何关系 =
+    /// anchorPoint 零 + position.y 与 bounds.origin.y 同为边界值,让里面的 iconBaseLayer
+    /// 在 host 坐标系里纹丝不动。
+    ///
+    /// 播放中:一条从此刻到放完的线性动画,fillMode=forwards 停在满格、不循环。
+    /// 暂停 / 曲长未知 / 菜单反白:静置(曲长未知就是 0,也就是整枚基础色,不假装有进度)。
+    private func applyProgressFill() {
+        iconFillClipLayer.removeAnimation(forKey: Self.iconFillAnimationKey)
+        iconBaseClipLayer.removeAnimation(forKey: Self.iconBasePositionAnimationKey)
+        iconBaseClipLayer.removeAnimation(forKey: Self.iconBaseBoundsAnimationKey)
+        guard let icon = preparedIcon else { return }
+        let w = icon.base.size.width
+        let h = icon.base.size.height
+        func baseRect(_ boundary: CGFloat) -> CGRect {
+            CGRect(x: 0, y: min(boundary, h), width: w, height: max(0, h - boundary))
+        }
+        func setBoundary(_ boundary: CGFloat) {
+            iconFillClipLayer.bounds = CGRect(x: 0, y: 0, width: w, height: max(0, boundary))
+            iconBaseClipLayer.position = CGPoint(x: 0, y: min(boundary, h))
+            iconBaseClipLayer.bounds = baseRect(boundary)
+        }
+        // 所有"不染"路径的必经出口:填色层隐掉、baseClip 复位成整枚 —— 基础图**永远**经由
+        // baseClip 显示,漏了这一步就是"关掉进度之后图标只剩上半截"。
+        guard !highlighted, let clock = progressClock, clock.durationMs > 0 else {
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            iconFillClipLayer.isHidden = true
+            setBoundary(0)
+            CATransaction.commit()
+            return
+        }
+        let nowMs = clock.positionMs()
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        iconFillClipLayer.isHidden = false
+        if let ramp = MenuBarMarquee.progressFillRamp(
+            positionMs: nowMs, durationMs: clock.durationMs,
+            rate: clock.playing ? clock.rate : 0, fullLength: h) {
+            // 模型值直接放终态(动画 fillMode=forwards 盖着;动画一旦被摘,这首歌也已经
+            // 放完了,终态正确)。
+            setBoundary(ramp.to)
+            // 三条动画显式共享同一个 beginTime:互补裁剪的两边差半帧,边界处就会闪出一条
+            // 双色缝或空缝(同逐字染色那三条)。
+            let start = iconFillClipLayer.convertTime(CACurrentMediaTime(), from: nil)
+            func install(_ keyPath: String, from: Any, to: Any, on layer: CALayer, key: String) {
+                let animation = CABasicAnimation(keyPath: keyPath)
+                animation.fromValue = from
+                animation.toValue = to
+                animation.duration = ramp.duration
+                animation.beginTime = start
+                // ⚠️ CABasicAnimation 默认曲线是 easeInEaseOut,**必须**显式给线性:这条
+                // 动画一铺就是整首歌好几分钟,默认曲线会让进度开头爬得极慢、中间冲一下、
+                // 结尾又慢下来 —— 那不是"进度条"。(逐字染色那三条是 CAKeyframeAnimation
+                // 且显式设了 calculationMode = .linear,不吃这个默认值。)
+                animation.timingFunction = CAMediaTimingFunction(name: .linear)
+                animation.isRemovedOnCompletion = false
+                animation.fillMode = .forwards
+                layer.add(animation, forKey: key)
+            }
+            install("bounds.size.height",
+                    from: NSNumber(value: Double(ramp.from)),
+                    to: NSNumber(value: Double(ramp.to)),
+                    on: iconFillClipLayer, key: Self.iconFillAnimationKey)
+            install("position.y",
+                    from: NSNumber(value: Double(min(ramp.from, h))),
+                    to: NSNumber(value: Double(min(ramp.to, h))),
+                    on: iconBaseClipLayer, key: Self.iconBasePositionAnimationKey)
+            install("bounds",
+                    from: NSValue(rect: baseRect(ramp.from)),
+                    to: NSValue(rect: baseRect(ramp.to)),
+                    on: iconBaseClipLayer, key: Self.iconBaseBoundsAnimationKey)
+        } else {
+            // 暂停 / 已放完:静止停在此刻该有的边界。
+            setBoundary(MenuBarMarquee.progressFillLength(
+                positionMs: nowMs, durationMs: clock.durationMs, fullLength: h))
         }
         CATransaction.commit()
     }

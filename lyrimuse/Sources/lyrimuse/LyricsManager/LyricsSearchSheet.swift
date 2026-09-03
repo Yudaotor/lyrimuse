@@ -204,6 +204,14 @@ struct LyricsSearchSheet: View {
         artist != originalArtist || title != originalTitle || album != originalAlbum
     }
 
+    /// 「这次搜索是为哪首歌开的」——三个原始字段拼成的标识,给下面 `.task(id:)` / `.onChange`
+    /// 用。三个入口里,歌词管理(`sheet(isPresented:)`)与歌词窗口(`sheet(item:)`)在面板存活
+    /// 期间它不会变,行为等同于原来的 `.task {}`;只有悬浮窗 ⚙ 的独立小窗
+    /// (`LyricsQuickSearchWindow`)会在窗口开着期间换歌再点一次时把新曲目喂进来。
+    private var searchSubject: String {
+        originalArtist + "\u{1F}" + originalTitle + "\u{1F}" + originalAlbum
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             HStack {
@@ -231,7 +239,26 @@ struct LyricsSearchSheet: View {
             content
         }
         .frame(minWidth: 720, minHeight: 480)
-        .task { await load() }
+        // ⚠️ 2026-09-02 真实bug修复(悬浮窗 ⚙「搜索歌词…」小窗切歌后串 key):那扇窗口是
+        // `if let context { LyricsSearchSheet(...) }`,2026-08-31 让它再点一次就重查曲目、把新
+        // context 喂进来——但 SwiftUI 里 Optional 从 A 换成 B 是**同一个视图身份**:上面三个
+        // 查询词 @State 只在首次创建时取 initialValue,`.task {}` 也只跑首次挂载那一遍,于是
+        // 面板还显示上一首的查询词与候选(顺带让「恢复原信息」凭空出现,因为 @State 与新的
+        // originalXxx 不相等被判成用户改过),而 onApply 已捕获新曲目的 key——采纳会把上一首
+        // 的歌词写进当前这首的条目(lyrics/ 文件族随之落盘,开了「采纳即锁定」还会冻结)。
+        //
+        // 修在面板这一层,而不是让宿主加 `.id(context.key)` 整棵重建:离屏 NSHostingView 探针
+        // 实测重建时**新面板的 .task 先起、旧面板的任务取消与 onDisappear 后到**,而两者都调
+        // 全局 `cancelRunning()`(它杀的是"当前在跑的那个"),新起的 collector 子进程会被旧面板
+        // 的收尾杀掉,3/3 复现。`.task(id:)` 的语义是先取消旧任务再起新任务,顺序由 SwiftUI
+        // 保证,同一探针下新搜索每次都能跑完。`.onChange` 在更新阶段同步触发、`.task(id:)` 的
+        // 任务体在其后异步起跑,所以 load() 起跑时查询词已经是新曲目的。
+        .onChange(of: searchSubject) { _, _ in
+            artist = originalArtist
+            title = originalTitle
+            album = originalAlbum
+        }
+        .task(id: searchSubject) { await load() }
         // 关闭/采纳/Esc 任何一条退出路径都把还在跑的 collector 子进程停掉 —— 不停的话
         // 它会继续对八个源发请求直到 20 秒兜底,NDJSON 还在往已消失的视图里灌
         // (2026-08-19 性能审计;search() 内的 withTaskCancellationHandler 是第二层,

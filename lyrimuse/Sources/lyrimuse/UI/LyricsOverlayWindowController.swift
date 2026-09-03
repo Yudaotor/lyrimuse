@@ -110,6 +110,13 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
     /// 走 isHoveringForControls(整窗判定):想点按钮时指针常常先落在窗口边缘,那一侧
     /// 收紧成"必须压在字上"反而不好点。
     @Published private(set) var isHoveringLyrics: Bool = false
+    /// 指针是否压在**控制排本身**上(未锁定时是播放控制胶囊,锁定时是那颗解锁按钮)。
+    /// 只给"要不要冻住控制排的横向落点"用 —— 见 `OverlayControlsSidePin`。判据分两截:
+    /// 未锁定时用整条胶囊的热区(`controlsHotZoneLocal`,含胶囊内边距,比按钮并集大一圈,
+    /// 指针在两颗按钮的缝里也算),锁定时那条热区不上报(`ControlsFramePreferenceKey`
+    /// 只挂在播放控制排那一支上),退回按钮矩形本身 —— 锁定态那一格只有解锁一颗按钮,
+    /// 用它自己的矩形足够。
+    @Published private(set) var isHoveringControlPill: Bool = false
     // 长按拖动是否已经"武装"(用于 View 层画一圈高亮提示"现在可以拖了")。
     @Published private(set) var isDragArmed: Bool = false
     // 见 hasShownDragHintKey 处的注释——只在第一次解锁时短暂为 true,几秒后自动收回。
@@ -121,6 +128,15 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
     /// 时机全在 LyricsOverlayView 那个 .onChange(of: controlsVisible) 的注释里。
     func controlsDidBecomeVisible() {
         PlaybackCoordinator.shared.refreshFavorited()
+    }
+
+    /// 控制排相关的悬停态清零。四处"这套手势整个用不上了"的收尾(锁定/窗口隐藏/卸监听器/
+    /// 关掉划过让开)共用同一份口径 —— 2026-09-03 加第三个悬停量(isHoveringControlPill)时
+    /// 就得挨个改四处,漏一处就会留下一份陈旧的 true。`isHoveringLyrics` 不并进来:那四处
+    /// 对它的处理本来就各不相同(setLocked 压根不碰它)。
+    private func clearControlsHoverState() {
+        if isHoveringForControls { isHoveringForControls = false }
+        if isHoveringControlPill { isHoveringControlPill = false }
     }
 
     private var globalMouseMonitor: Any?
@@ -338,7 +354,7 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
         if locked {
             // 锁定这一刻可能正悬停/正长按/正拖到一半,全部清零,不留任何残留状态。
             cancelPendingPress()
-            isHoveringForControls = false
+            clearControlsHoverState()
         } else {
             maybeShowDragHintOnFirstUnlock()
         }
@@ -508,7 +524,7 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
         syncMouseMonitors()
         // 关掉的一刻指针可能正停在窗口上。留着 true 不会让它一直淡着(视图层同时读开关),
         // 但会让下次开启时凭一个陈旧的悬停态直接淡下去 —— 清掉更干净。
-        if !enabled, isHoveringForControls { isHoveringForControls = false }
+        if !enabled { clearControlsHoverState() }
         if !enabled, isHoveringLyrics { isHoveringLyrics = false }
     }
 
@@ -537,7 +553,7 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
         // 卸载这一刻可能正悬停/长按到一半 —— 跟 setLocked 的清理口径一致,不留残留状态。
         // 已武装的拖动不受影响:performDrag 是同步阻塞调用,跑着的时候到不了这里。
         cancelPendingPress()
-        if isHoveringForControls { isHoveringForControls = false }
+        clearControlsHoverState()
     }
 
     private func installMouseMonitors() {
@@ -732,7 +748,7 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
         guard window.isVisible else {
             if !isDragArmed {
                 cancelPendingPress()
-                if isHoveringForControls { isHoveringForControls = false }
+                clearControlsHoverState()
                 if isHoveringLyrics { isHoveringLyrics = false }
             }
             return
@@ -753,6 +769,15 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
             let insideWindow = frame.contains(loc)
             if isHoveringForControls != insideWindow {
                 isHoveringForControls = insideWindow
+            }
+            // 指针压没压在控制排本身上 —— 只用来冻住它的横向落点(见 OverlayControlsSidePin),
+            // 跟"要不要显示"(上面那行整窗判定)、"要不要拦截点击"(下面 insideHotZone)都
+            // 是独立的三件事,不要合并。锁定态没有胶囊热区,退回按钮矩形,见声明处注释。
+            let onControlPill = insideWindow
+                && ((controlsHotZoneLocal?.contains(localPoint) ?? false)
+                    || OverlayControlHitTest.control(at: localPoint, in: controlRectsLocal) != nil)
+            if isHoveringControlPill != onControlPill {
+                isHoveringControlPill = onControlPill
             }
             // 歌词命中是**独立**的一套:窗口内 + 压在文字矩形上才算。热区还没上报上来
             // (刚显示、或者这一轮没有任何文字)时退回窗口判定,别让功能整个失灵。

@@ -153,6 +153,19 @@ import SwiftUI
 // 被删掉的两块命中区留下的踩坑记录(重叠区域的 hover 派生、光标计数、提示层不接事件)已迁进
 // docs/features/04-desktop-overlay.md「编辑台改造」第十步,别随代码一起消失。
 
+// 第十八步(2026-09-03,用户原话:「这个预览窗口给我高度搞小一点,把下面的开关完整漏出来」)
+// **整块编辑台从 425pt 压到 382pt**,两笔:
+//   ① 卡片那一格 `maxCardHeight` 288 → 266(−22),照第九步那张实测表挑的数,只让"36pt +
+//      逐词罗马音 + 译文 + 下一句 + 主歌词两行"这一个组合溢出被裁;
+//   ② 舞台底下那行 caption **整个删掉**(−21)。它常态是空字符串,唯一会写的那句
+//      「两端已裁切」搬进舞台、跟宽度调整条并排在窗下那条通道里(`overflowHint`),因此
+//      整块高度仍然是常量、超宽状态来回翻转时页面一动不动。
+// 为什么正好压这么多、而不是"随手矮一点":这一段的版面账是量出来的(用户截图 1358×1038
+// @144dpi = 679×519pt,按 2x 逐行采样反推),原来「桌面悬浮歌词」那张总开关卡的底边落在
+// 551.5pt、而 552pt 高的窗口里可视内容只有 519pt —— 开关只露出 13.5pt。−43pt 之后卡底
+// 508.5pt,完整露出、底下还剩 10.5pt。逐项账见 `maxCardHeight` 和 `totalHeight` 两条注释,
+// 以及 docs/features/04-desktop-overlay.md「编辑台改造」第十八步。
+
 /// 编辑台渲染真 `LyricsOverlayView` 时用的 chrome:凑齐它要的那四个状态,但**不建窗口、
 /// 不碰 `LyricsOverlayWindowController.shared`**。
 ///
@@ -181,6 +194,9 @@ import SwiftUI
 final class OverlayPreviewChrome: ObservableObject, OverlayChromeSource {
     let isHoveringForControls = false
     let isHoveringLyrics = false
+    /// 恒 false —— 控制排在编辑台里根本不显示(上一条恒 false),更不会有指针压上去;
+    /// 它只影响"要不要冻住控制排的横向落点",预览里没有可冻的东西。
+    let isHoveringControlPill = false
     let isDragArmed = false
     let showDragHint = false
     /// 恒 nil,理由同上一条:编辑台里没有能触发它的全局快捷键,预览也不该有副作用。
@@ -268,11 +284,28 @@ struct OverlayEditorStage: View {
     /// 定一个常量,既装得下,又不会让舞台高度间接依赖窗宽(那正是第七步修掉的「背景永远不要
     /// 变」:舞台一动,整张壁纸就跟着上下动)。
     ///
-    /// 还装不下的(两次以上换行、或者 36pt 逐词罗马音再多换一行)照旧溢出、由舞台的 clipShape
-    /// 裁掉底边 —— 那比让卡片压住调整条、或者让舞台高度跟着内容跳要好。取舍写在这里:再往上抬
-    /// 就是拿整页版面换一个越来越罕见的组合,而 288 已经覆盖了三个显示开关的**全部**组合 ×
-    /// 全字号 × 一次换行。
-    private static let maxCardHeight: CGFloat = 288
+    /// 还装不下的照旧溢出、由舞台的 clipShape 裁掉底边 —— 那比让卡片压住调整条、或者让舞台
+    /// 高度跟着内容跳要好。
+    ///
+    /// ⚠️ **2026-09-03 从 288 降到 266**(用户原话:「这个预览窗口给我高度搞小一点,把下面的
+    /// 开关完整漏出来」)。第九步抬到 288 时的取舍是"拿整页版面换那个越来越罕见的组合",这次
+    /// 是同一条取舍**朝反方向拍**了一次 —— 因为那笔版面账现在算得出来:288 的舞台让
+    /// 「桌面悬浮歌词」那张总开关卡的底边落在 551.5pt,而用户常用的 552pt 高窗口里可视内容
+    /// 只有 519pt,开关只露出 13.5pt。这几个数是**量出来的**(用户截图 1358×1038 @144dpi
+    /// = 679×519pt,按 2x 逐行采样):舞台顶 138.5 + 332 = 470.5 = 舞台底,+6+15 是 caption
+    /// 那一行,+14 是卡间距 → 卡顶 505.5;卡高 46(离屏 NSHostingView 量的总开关卡,见
+    /// docs/features/04-desktop-overlay.md 的高度账)。
+    ///
+    /// 266 是**照上面那张实测表**挑的,不是随手压的:它仍然覆盖 20/31/36pt 三档的「三个显示
+    /// 开关全开 + 主歌词一次换行」(最坏 265.5)和 31pt 那档逐词罗马音(260.5),只让
+    /// 「36pt + 逐词罗马音 + 译文 + 下一句 + 主歌词两行」(286.5)这**一个**组合溢出 20.5pt
+    /// 被裁。卡片在这一格里是**居中**的(见 inCardSlot),所以降这个数在装得下的配置里只是
+    /// 削掉卡片上下那两条壁纸留白(31pt 全开那档:原来上下各 40.5pt,现在各 29.5pt),歌词
+    /// 本身一个像素都没少。
+    ///
+    /// 同一轮还删掉了舞台下面那行 caption(21pt,见 totalHeight),两笔合计 −43pt:编辑台
+    /// 425 → 382,总开关卡底 551.5 → 508.5,519pt 的可视内容里完整露出、底下还剩 10.5pt。
+    private static let maxCardHeight: CGFloat = 266
 
     /// 卡片可用的那一格。卡片在这一格里垂直居中。
     private static var cardAreaHeight: CGFloat { maxCardHeight }
@@ -338,23 +371,37 @@ struct OverlayEditorStage: View {
 
     /// 窗口比编辑台还宽时,两端各盖多宽的一条渐隐带。
     ///
-    /// 它是"没显示全"唯一的**视觉**信号(caption 里那句「两端已裁切」只是文字兜底):太窄看
-    /// 不出来,太宽会把歌词本身也糊掉;20pt 大约是一个汉字的量级。
+    /// 它是"没显示全"唯一的**视觉**信号(窗下那颗「两端已裁切」提示胶囊只是文字兜底,见
+    /// `overflowHint`):太窄看不出来,太宽会把歌词本身也糊掉;20pt 大约是一个汉字的量级。
     private static let overflowFadeWidth: CGFloat = 20
 
     /// 工具栏那一条的高度。26 是 `.bordered` 小按钮的自然高度量级 —— 写死而不是让它
     /// 自己撑,是因为整块的高度必须是常量(见 body 里 `.frame(height:)` 那段注释)。
     private static let toolbarHeight: CGFloat = 26
 
-    /// 工具栏和画布之间的呼吸。比 caption 那边宽一点:工具栏是**可操作**的一条,
-    /// 跟画布贴太近会让人分不清按钮属于工具栏还是画布。
+    /// 工具栏和画布之间的呼吸。比预览栏那套 `captionSpacing`(6)宽:工具栏是**可操作**的
+    /// 一条,跟画布贴太近会让人分不清按钮属于工具栏还是画布。
     private static let toolbarSpacing: CGFloat = 10
 
-    /// 整块(工具栏 + 画布 + 底部说明行)占的高度。caption 那一行的间距和行高沿用三条
-    /// 预览栏共用的那套度量,免得同一个窗口里两处 caption 的疏密不一样。
+    /// 整块(工具栏两行 + 画布)占的高度。
+    ///
+    /// ⚠️ **2026-09-03 把舞台底下那行 caption 整个删了**(省 `captionSpacing` 6 +
+    /// `captionHeight` 15 = 21pt),同一轮跟 `maxCardHeight` 288 → 266 一起把编辑台从 425
+    /// 压到 382;起因、实测和完整的高度账写在 `maxCardHeight` 那条注释里。
+    /// 删得掉是因为那一行**常态是空字符串**:第六步起它只在"窗口比舞台还宽、两端确实没画全"
+    /// 时写一句「两端已裁切」,其余时候占着 21pt 什么都不显示。那句提示**搬进了舞台**
+    /// (`overflowHint`,窗下那条通道的左端),不是删掉 —— 它是「超宽」两个必需信号里的一个
+    /// (另一个是两端的渐隐带,见 `isOverflowing`)。
+    /// ⚠️ **别改成"有提示时才加那 21pt"**:整块高度必须是常量(见 body 末尾那条
+    /// `.frame(height:)` 的注释),而"超宽"恰恰是拖宽度调整条时会来回翻转的状态 —— 那样拖动
+    /// 中整页卡片会跟着跳 21pt。搬进舞台正是为了让它出现/消失时整块高度一动不动。
+    ///
+    /// ⚠️ `* 2` 是**两行**工具栏(2026-09-02 加第二行「行为」时改的,同 `NotchEditorStage`)。
+    /// 第二行不是为了排版好看:第一行的横向预算早在 2026-08-31 加第三个入口时就量到了上限
+    /// (见 `toolbar` 头上那条⚠️——中文常见值 535pt / 可用 600pt,还要留给右边的「重置 ▾」),
+    /// 第四颗按钮塞不进去。
     static var totalHeight: CGFloat {
-        toolbarHeight + toolbarSpacing
-            + stageHeight + SectionPreviewMetrics.captionSpacing + SectionPreviewMetrics.captionHeight
+        (toolbarHeight + toolbarSpacing) * 2 + stageHeight
     }
 
     /// 宽度的合法区间。
@@ -412,8 +459,8 @@ struct OverlayEditorStage: View {
     ///     全貌,跟用户在桌面上的经验一致;
     ///   - 不用横向滚动条:设置页整页自己还在纵向滚,里面再嵌一条横向滚动条很别扭,而且它会
     ///     诱导用户"滚着把内容读完"——这块画布要看的是尺寸感,不是内容。
-    /// 代价是超宽时看不见窗口的左右边缘,所以必须补两个信号:两端渐隐(overflowFade)+ caption
-    /// 里那句「两端已裁切」。少了它们,用户会以为"这扇窗就这么宽"。
+    /// 代价是超宽时看不见窗口的左右边缘,所以必须补两个信号:两端渐隐(overflowFade)+ 窗下
+    /// 那颗「两端已裁切」提示胶囊(overflowHint)。少了它们,用户会以为"这扇窗就这么宽"。
     private static func isOverflowing(cardWidth: CGFloat, stageWidth: CGFloat) -> Bool {
         // 0.5 的余量:宽度量化到 2pt、舞台宽度是测出来的浮点数,差几个 0.0x 不该点亮渐隐带。
         cardWidth > stageWidth + 0.5
@@ -440,10 +487,11 @@ struct OverlayEditorStage: View {
             VStack(spacing: Self.toolbarSpacing) {
                 toolbar
                     .frame(height: Self.toolbarHeight)
-                VStack(spacing: SectionPreviewMetrics.captionSpacing) {
-                    stage(stageWidth: stageWidth)
-                    caption(stageWidth: stageWidth)
-                }
+                toolbarRow2
+                    .frame(height: Self.toolbarHeight)
+                // 2026-09-03 起舞台底下没有 caption 那一行了(21pt,理由见 totalHeight),
+                // 这里直接就是舞台本身。
+                stage(stageWidth: stageWidth)
             }
             .frame(maxWidth: .infinity)
         }
@@ -458,15 +506,20 @@ struct OverlayEditorStage: View {
 
     // MARK: - 工具栏
 
-    /// 编辑台顶上那一条:三个浮层入口 + 重置菜单。
+    /// 编辑台顶上第一行:三个「长什么样」的浮层入口 + 重置菜单。
     ///
-    /// 「文字…」「配色…」「排版…」放左边、「重置 ▾」推到右边:重置是一次性的破坏性动作,
-    /// 跟高频入口隔开一段距离,少一点误点(设计稿也是把它从卡片里收进这个菜单的 ——
-    /// "不适合摆在画布上被误点")。
+    /// 三颗按钮放左边、「重置 ▾」推到右边:重置是一次性的破坏性动作,跟高频入口隔开一段距离,
+    /// 少一点误点(设计稿也是把它从卡片里收进这个菜单的 ——"不适合摆在画布上被误点")。
     ///
-    /// ⚠️ 这三颗按钮是三个浮层**唯一**的入口(第十步删掉画布命中区之后)。原先画布上还有
+    /// ⚠️ 工具栏按钮是各浮层**唯一**的入口(第十步删掉画布命中区之后)。原先画布上还有
     /// "点歌词/点背景"两块快捷方式,而那种入口靠 hover 才看得见、键盘和 VoiceOver 根本够不着 ——
     /// 显式入口一直是主路径、不是兜底,所以删掉快捷方式没有留下够不到的设置。
+    ///
+    /// **2026-09-02 重排**:原来是「文字 / 配色 / 排版」。用户要求把「配色」按内容拆开,于是
+    /// 「配色」没了,拆成「主题」(配色主题 / 我的配色主题)和「背景」(背景颜色 / 毛玻璃);
+    /// 文字层那几项(字体/粗细/字号/跟随封面/文字色/描边)归「文字」。**顺序跟「全部设置」
+    /// 抽屉的渲染顺序逐字一致**(主题 → 文字 → 背景 → 排版 → 窗口)—— 抽屉的职责是工具栏
+    /// 浮层的全量兜底通路,两个宿主分组或顺序不一样,用户按记忆去另一边找就会落空。
     ///
     /// ⚠️ 横向够不够(2026-08-31 加第三个入口时离屏量的,别凭感觉重排):这一条的可用宽度
     /// 就是卡片列宽 —— 窗口按 idealWidth 860 打开时 600pt(卡片列上限),拖到 minWidth 760
@@ -474,8 +527,21 @@ struct OverlayEditorStage: View {
     /// 自定义主题名)672pt、英文常见值 662pt。所以 600pt 下中文常见值刚好整条读得完,再窄或
     /// 换英文就得靠摘要截断 —— 这是接受的取舍:摘要是"不点开也知道现在什么样"的赠品,入口
     /// 本身才是功能。为此摘要那截给了 `.layoutPriority(-1)`,让它**先**被压(见 toolbarButton)。
+    ///
+    /// ⚠️ **这一行仍然是三颗,不是四颗** —— 拆分之后总入口从 3 个变成 5 个(主题/文字/背景/
+    /// 排版/行为),但上面那笔账说得很清楚:三颗中文常见值就已经 535/600pt 了,第四颗按同一
+    /// 量级估算会去到 700pt 以上,必然把摘要压成「…」甚至挤掉标题。所以「排版」跟着「行为」
+    /// 下沉到第二行,见 `toolbarRow2`。
     private var toolbar: some View {
         HStack(spacing: 8) {
+            // 图标沿用原「配色」那颗的 `circle.lefthalf.filled`:拆分之后"选配色主题"这件事
+            // 归它,视觉上接得住用户对旧按钮的记忆。
+            toolbarButton(
+                icon: "circle.lefthalf.filled",
+                title: L10n.t("主题"),
+                summary: OverlayStyleSummary.theme,
+                target: .theme
+            )
             toolbarButton(
                 icon: "textformat",
                 title: L10n.t("文字"),
@@ -483,11 +549,51 @@ struct OverlayEditorStage: View {
                 target: .text
             )
             toolbarButton(
-                icon: "circle.lefthalf.filled",
-                title: L10n.t("配色"),
-                summary: OverlayStyleSummary.color,
-                target: .color
+                icon: "rectangle.fill",
+                title: L10n.t("背景"),
+                summary: OverlayStyleSummary.background,
+                target: .background
             )
+            Spacer(minLength: 8)
+            Menu {
+                Button(L10n.t("恢复默认主题、文字与背景")) { OverlayStyleDefaults.restoreTextAndColors() }
+                // 作用范围写成菜单里一条**不可点**的说明项(SwiftUI 里裸 Text 在 Menu 中
+                // 就是一条禁用菜单项)。不用 Button 的"标题 + 副标题"两段式 label:那个
+                // 桥接到 NSMenuItem.subtitle 的行为在这台机器的系统版本上没实测过,而这句
+                // 是作用范围声明、不能"可能没显示出来"。
+                // ⚠️ 两句 2026-09-03 都改过(老那两句合起来在说谎),理由见抽屉里那份
+                // `OverlayAllSettingsDrawer.resetRow` 的头注 —— **两个入口必须一字不差**。
+                Text(L10n.t("不含排版、行为和宽度"))
+            } label: {
+                Label(L10n.t("重置"), systemImage: "arrow.uturn.backward")
+            }
+            .menuStyle(.borderlessButton)
+            .fixedSize()
+        }
+        .font(.system(size: 12))
+        .padding(.horizontal, 2)
+    }
+
+    /// 工具栏第二行(2026-09-02):「排版」+「行为」。
+    ///
+    /// 用户原话:「你帮我和灵动岛设置页一样处理,放到上面的小按钮里面,点了出现下拉框」——
+    /// 在此之前这三项(锁定位置 / 长按拖动 / 悬浮淡化)加上并进来的两行自动隐藏是编辑台
+    /// **下面**一张常驻卡(`OverlayBehaviorBar`,已删除)。灵动岛那边同一批东西早就是工具栏
+    /// 浮层,两个形态的同一类设置摆在两种形态里,是用户读到的不一致。
+    ///
+    /// ⚠️ 为什么另起一行、而不是当第一行的第四颗:第一行的横向预算是量过的上限(见 `toolbar`
+    /// 头上那条⚠️:中文常见值 535pt、可用 600pt,右边还有「重置 ▾」),再加一颗必然把摘要压成
+    /// 「…」甚至挤掉标题。灵动岛那边也是同一个理由拆的两行(`NotchEditorStage.toolbarRow2`)。
+    ///
+    /// **2026-09-02 当天又多了一颗**:「配色」拆成「主题」+「背景」之后第一行变四颗、按那笔
+    /// 横向账必然超,于是把「排版」也挪下来。两颗仍然远低于第一行量到的三颗 535pt,不用重量。
+    ///
+    /// ⚠️ 这一行**不再是纯"设一次就不动"的项**了:「排版」(双行显示 / 对齐方式)在编辑台上
+    /// 是看得见的。分行的依据从"看不看得见"退成了**横向预算**,如实记在这里 —— 别照着
+    /// 「第二行 = 看不见的项」这个已经不成立的印象去重排。真要恢复那条语义,得先解决第一行
+    /// 装不下四颗的问题(比如把摘要限宽从 140 收窄再离屏重量一遍),那是另一次改动。
+    private var toolbarRow2: some View {
+        HStack(spacing: 8) {
             // 2026-08-31 新增。用户原话:「双行显示不应该挂在这个文字里面吧,是否应该是一个
             // 独立的开关呢;还有这个对齐方式也是,不应该是子选项吧」—— 那两项讲的是排几行、
             // 摆哪边,是版面不是字形,于是从「文字」里拆出来单开一个入口(拆的判据写在
@@ -498,22 +604,40 @@ struct OverlayEditorStage: View {
                 summary: OverlayStyleSummary.layout,
                 target: .layout
             )
+            toolbarButton(
+                icon: "switch.2",
+                title: L10n.t("行为"),
+                summary: behaviorSummary,
+                target: .behavior
+            )
             Spacer(minLength: 8)
-            Menu {
-                Button(L10n.t("恢复默认文字与配色")) { OverlayStyleDefaults.restoreTextAndColors() }
-                // 作用范围写成菜单里一条**不可点**的说明项(SwiftUI 里裸 Text 在 Menu 中
-                // 就是一条禁用菜单项)。不用 Button 的"标题 + 副标题"两段式 label:那个
-                // 桥接到 NSMenuItem.subtitle 的行为在这台机器的系统版本上没实测过,而这句
-                // 「不含宽度和锁定位置」是作用范围声明、不能"可能没显示出来"。
-                Text(L10n.t("不含宽度和锁定位置"))
-            } label: {
-                Label(L10n.t("重置"), systemImage: "arrow.uturn.backward")
-            }
-            .menuStyle(.borderlessButton)
-            .fixedSize()
         }
         .font(.system(size: 12))
         .padding(.horizontal, 2)
+    }
+
+    /// 「行为」按钮上那句摘要。**跨两个枚举**:`OverlayBehaviorItem` 三项(锁定位置 / 长按
+    /// 拖动 / 悬浮淡化)+ `AutoHideItem` 两项(截屏隐藏 / 暂停隐藏,2026-09-02 从撤掉的独立
+    /// 「自动隐藏」卡并进「行为」的)。
+    ///
+    /// ⚠️ **两个来源必须都算,而且要跟 `OverlayBehaviorPopover` /
+    /// `OverlayAllSettingsDrawer.windowGroup` 的内容一致**:少算自动隐藏那两项不会编译报错,
+    /// 只会让这颗按钮在它们开着时照旧显示「全部关闭」—— 一个会撒谎的派生值。灵动岛那边
+    /// (`NotchEditorStage.behaviorSummary`)是同一天为同一个原因写的同一个形状。
+    ///
+    /// ⚠️ 这里读的是 `binding(...).wrappedValue` 的 **get** 分支,而 `AutoHideItem` 的 get
+    /// 必须是纯 AppSettings 读、一个 `.shared` 都不许有 —— 这句摘要在悬浮歌词**关着**的时候
+    /// 照样求值(设置项刻意不跟总开关联动),碰一下控制器就会把整扇窗建出来。详见
+    /// `AutoHideSettingsRows.swift` 里 `binding(for:)` 上那段。
+    ///
+    /// 五项都开时摘要会拼成一长串,交给 `toolbarButton` 里那 140pt 限宽 + 尾部省略处理 ——
+    /// 跟「文字」按钮遇到超长字体名是同一个兜底,不为这里另写一套截断。
+    private var behaviorSummary: String {
+        SettingsToggleSummary.text(
+            OverlayBehaviorItem.allCases.map { (title: $0.title, isOn: $0.binding.wrappedValue) }
+                + AutoHideItem.allCases.map {
+                    (title: $0.title, isOn: $0.binding(for: .desktopOverlay).wrappedValue)
+                })
     }
 
     private func toolbarButton(
@@ -564,9 +688,13 @@ struct OverlayEditorStage: View {
     ///  跟着没了,但"一个可空枚举而不是几个 Bool"这条没变 —— 两个 NSPopover 同时摆出来会互相
     ///  遮挡、transient 关闭时机还打架。)
     private enum StagePopover: Equatable {
+        /// 2026-09-02:`.color` 拆成了 `.theme` + `.background`(用户要求把「配色」按内容分开)。
+        case theme
         case text
-        case color
+        case background
         case layout
+        /// 2026-09-02 加,跟 `.layout` 一起挂在工具栏第二行。见 `toolbarRow2`。
+        case behavior
     }
 
     private func popoverBinding(_ target: StagePopover) -> Binding<Bool> {
@@ -582,9 +710,11 @@ struct OverlayEditorStage: View {
     @ViewBuilder
     private func popoverContent(for target: StagePopover) -> some View {
         switch target {
+        case .theme: OverlayThemePopover()
         case .text: OverlayTextPopover()
-        case .color: OverlayColorPopover()
+        case .background: OverlayBackgroundPopover()
         case .layout: OverlayLayoutPopover()
+        case .behavior: OverlayBehaviorPopover()
         }
     }
 
@@ -610,6 +740,18 @@ struct OverlayEditorStage: View {
             widthBar
                 .padding(.bottom, Self.widthBarBottomInset)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+            // 「两端已裁切」跟调整条**同一条通道、同一个底距**,靠左端摆(2026-09-03 从舞台
+            // 底下那行 caption 搬进来,理由见 totalHeight)。排在调整条之后只是把层序写明确,
+            // 两者横向不重叠:调整条那条胶囊总宽 258pt(10×2 内边距 + 图标 10 + 8 + 滑杆 168
+            // + 8 + 读数 44)居中摆,这颗提示胶囊约 75pt;窗口 minWidth 760 那一档舞台最窄
+            // 约 499pt —— 胶囊左沿 120.5、提示右沿 87,还差着 33pt。要往这条通道里再塞第三
+            // 样东西,先按这笔账重算一遍。
+            if Self.isOverflowing(cardWidth: cardWidth, stageWidth: stageWidth) {
+                overflowHint
+                    .padding(.leading, Self.widthBarBottomInset)
+                    .padding(.bottom, Self.widthBarBottomInset)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+            }
         }
         // 宽度用**测出来的实际值**,不用 maxWidth: .infinity —— 后者遇到一个比它还宽的固定尺寸
         // 子视图(超宽的卡片)会被撑到子视图的尺寸,那样"裁切"就无从谈起了。高度是常量。
@@ -836,7 +978,7 @@ struct OverlayEditorStage: View {
     ///
     /// ⚠️ 宽度按**卡片真实宽度**画,不是 visibleWidth:窗口超宽时左右两条边本来就在舞台外面,
     /// 让它们被舞台的 clipShape 裁掉、只剩上下两条横线,说的正好是"窗口有这么高、两端还没完",
-    /// 跟渐隐带和 caption 里那句「两端已裁切」是一套话。按 visibleWidth 画会在舞台内沿描出一个
+    /// 跟渐隐带和那颗「两端已裁切」提示胶囊是一套话。按 visibleWidth 画会在舞台内沿描出一个
     /// **闭合**的框,那是在撒谎——它会被读成"这扇窗就这么宽"。
     private func windowEdgeOutline(cardWidth: CGFloat) -> some View {
         let strong = adjustingWidth
@@ -859,9 +1001,11 @@ struct OverlayEditorStage: View {
 
     /// 舞台内部、悬浮歌词窗口正下方那条宽度调整条(2026-08-30 第六步,替掉左右两个拖拽握柄)。
     ///
-    /// 摆在**舞台里面**而不是舞台底下那行 caption 旁边,是因为它得跟它改的那扇窗待在同一块
-    /// 画面里:窗口两侧现在露着桌面(desktopSurround),调整条压在窗外那片桌面上、正对
-    /// 窗口下沿,"这根条改的是上面这扇窗的宽度"不用另写一句话解释。
+    /// 摆在**舞台里面**而不是舞台底下(第六步当时舞台下面还有一行 caption,2026-09-03 删了),
+    /// 是因为它得跟它改的那扇窗待在同一块画面里:窗口两侧现在露着桌面(desktopSurround),
+    /// 调整条压在窗外那片桌面上、正对窗口下沿,"这根条改的是上面这扇窗的宽度"不用另写一句话
+    /// 解释。同一条通道的左端 2026-09-03 起还并排摆着那颗「两端已裁切」提示胶囊
+    /// (`overflowHint`,横向余量那笔账见 stage 里那段注释)。
     ///
     /// ⚠️ 配色**固定黑底白字 + 投影,不跟深浅色模式走** —— 同 lockBadge /
     /// windowEdgeOutline 那条老规矩:它底下垫的是用户真实的桌面壁纸,那块底色什么样完全不受
@@ -906,18 +1050,16 @@ struct OverlayEditorStage: View {
                 // 值读两遍(同 lockBadge 那条)。
                 .accessibilityHidden(true)
         }
-        .foregroundStyle(.white)
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
-        .background(Capsule().fill(Color.black.opacity(0.7)))
-        .overlay(Capsule().strokeBorder(Color.white.opacity(0.18), lineWidth: 0.5))
-        .shadow(color: .black.opacity(0.35), radius: 5, y: 1)
+        // 外壳跟「两端已裁切」那颗提示胶囊共用一份(见 overlayStagePillChrome):两者并排在
+        // 窗下同一条通道里,长得不一样就会像两个来路不同的东西。
+        .overlayStagePillChrome()
     }
 
     /// "640pt"这种带单位的读数。滑杆旁边显示的和 VoiceOver 读的是同一个字符串。
     ///
-    /// ⚠️ 这个数字在整块编辑台上**只出现这一处**:caption 那边第六步起不再带宽度 —— 同一个
-    /// 数字摆两处,一调两边一起跳,读者会以为那是两件事。
+    /// ⚠️ 这个数字在整块编辑台上**只出现这一处**:舞台底下那行 caption 第六步起就不再带宽度
+    /// (那一行 2026-09-03 整个删了)—— 同一个数字摆两处,一调两边一起跳,读者会以为那是
+    /// 两件事。
     ///
     /// ⚠️ 读的是 `draggingWidth ?? settings.overlayWidth`,不是裸的 `settings.overlayWidth`
     /// (2026-08-31 修)。落盘推迟到松手之后(见 draggingWidth),而窗口宽度走的是同一个
@@ -1002,28 +1144,43 @@ struct OverlayEditorStage: View {
         return (clamped / widthStep).rounded() * widthStep
     }
 
-    // MARK: - 底部说明
+    // MARK: - 超宽提示
 
-    /// 舞台底下那行小字。
+    /// 「两端已裁切」——窗口比舞台还宽、左右两端确实没画全时,窗下那条通道左端出现的一颗胶囊。
     ///
-    /// ⚠️ **不带宽度数字**(2026-08-30 第六步)。数字现在长在舞台里那条调整条旁边,离它改的那扇
-    /// 窗更近;两处都写就成了同一个数字在一屏里跳两下,读者会以为是两件事。
+    /// 它跟两端的渐隐带**互为解释**:只有渐隐、没有这句话,用户会读成"边上暗一点是设计如此";
+    /// 只有这句话、没有渐隐,又指不出被裁的是哪儿。两个信号一个都不能少(见 isOverflowing)。
     ///
-    /// ⚠️ **「拖窗口两侧改宽度」那半句随握柄一起删了** —— 握柄没了,那句话是错的。它当年是为了
-    /// 兜住拖拽的可发现性才加的(2026-08-30 用户问"这个窗口里面怎么去调整悬浮歌词宽度?"),
-    /// 而"要靠一句文案才找得到"本身就是那条路走不通的证据,第六步换成滑杆之后不需要它了。
+    /// ⚠️ **2026-09-03 从舞台底下那行 caption 搬进舞台**(那一行整个删了,省 21pt,理由和
+    /// 高度账见 totalHeight / maxCardHeight)。搬进来之后配色必须跟着换:原来是页面底色上的
+    /// `.secondary` 灰字,现在压在真实桌面壁纸上 —— 灰字在浅色壁纸上直接看不见。跟调整条那条
+    /// 胶囊共用同一副外壳(`overlayStagePillChrome`,白字 + 黑底 + 发丝描边 + 投影),这也是
+    /// 钉条那边"caption 别压在壁纸上"那条老教训的正解:不是躲开壁纸,是自带底色。
     ///
-    /// 「实际大小」必须留着:它是"编辑台不缩放、看到多大就是多大"这个前提唯一的声明,而那正是
-    /// 第四步要修的概念性错误(「已缩放至 X%」也是那时删的;钉条那边照旧有,它的 caption 是另
-    /// 一条文案)。超宽时换成带「两端已裁切」的那句,跟两端的渐隐带互为解释 —— 只有渐隐、没有
-    /// 这句话的话,用户可能读成"边上暗一点是设计如此"。
-    private func caption(stageWidth: CGFloat) -> some View {
-        let overflowing = Self.isOverflowing(cardWidth: windowWidth, stageWidth: stageWidth)
-        // 常态不写字(2026-08-30 用户要求去掉「实际大小」):宽度数值就在调整条上,
-        // "这是预览"也不必再说一遍 —— 一块画着桌面壁纸和歌词的方框,没人会以为是别的东西。
-        // 只保留**真正带信息**的那一句:窗口比舞台宽、两端确实没画全时才提示。
-        return Text(overflowing ? L10n.t("两端已裁切") : "")
-            .font(.caption)
-            .foregroundStyle(.secondary)
+    /// ⚠️ **不带宽度数字**(2026-08-30 第六步的结论,搬家后照旧成立):数字只长在调整条旁边
+    /// 那一处,同一个数字在一屏里跳两下会被读成两件事。
+    /// (第四步之前这行小字还写着「实际大小」/「已缩放至 X%」,连同"缩放"这个概念一起删了;
+    ///  第六步又删掉了「拖窗口两侧改宽度」那半句 —— 握柄没了,那句话是错的。)
+    private var overflowHint: some View {
+        Text(L10n.t("两端已裁切"))
+            .font(.system(size: 11, weight: .medium))
+            .overlayStagePillChrome()
+    }
+}
+
+/// 舞台上那些**浮在真实桌面壁纸之上**的小件共用的外壳:宽度调整条那条胶囊(`widthBar`)和
+/// 「两端已裁切」那颗提示胶囊(`overflowHint`)。
+///
+/// 抽出来是因为两者**并排在窗下同一条通道里、同一个底距**:差一档不透明度或者圆角,看着就
+/// 像两个来路不同的东西。白字 + 黑底 0.7 + 白色 0.18 发丝描边 + 投影这一套跟壁纸内容无关,
+/// 深浅外观、亮暗壁纸下都读得清 —— 这正是它们不能用 `.secondary` 这类语义色的原因。
+private extension View {
+    func overlayStagePillChrome() -> some View {
+        foregroundStyle(.white)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(Capsule().fill(Color.black.opacity(0.7)))
+            .overlay(Capsule().strokeBorder(Color.white.opacity(0.18), lineWidth: 0.5))
+            .shadow(color: .black.opacity(0.35), radius: 5, y: 1)
     }
 }

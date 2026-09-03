@@ -48,20 +48,22 @@ public enum NotchExpandedMetrics {
     /// 关心它是怎么来的,只管加不加、加多少 —— 跟 `hasLyricPreview`/`hasScrubber` 一样是
     /// "只加一次、且这次的间距已经包含在值里"的一整块,0 表示这块完全不占地方(不渲染)。
     ///
-    /// ⚠️ 头部占用 `trackInfoHeight + trackInfoSpacing * 2`——**两份**间距,不是一份:
-    /// 一份贴在上边(2026-09-01 用户报"标题首行贴到上面边了",头部紧挨在 topRow 下面,
-    /// 原来零间距),一份贴在下边(离下面歌词行的间距,加这块之前就有)。渲染那侧
-    /// (`NotchLyricsView.trackInfoHeader`)只在**内容顶部**加一次 `.padding(.top:
-    /// trackInfoSpacing)`——`.frame(alignment: .top)` 已经把内容锚在分配到的这块高度的
-    /// 顶部,上下各留一份间距的效果因此不需要在视图那侧显式凑两次 padding,只要这里的
-    /// 高度算术把两份都算进去、视图那侧把 topRow 与内容之间那一份实现出来即可。
+    /// ⚠️ 头部占用 `trackInfoHeight + trackInfoTopSpacing + trackInfoSpacing`——**两份**
+    /// 间距,不是一份,而且 2026-09-02 起**两份不再同值**:
+    /// 一份贴在上边(`trackInfoTopSpacing`,离 topRow;2026-09-01 用户报"标题首行贴到上面
+    /// 边了",头部紧挨在 topRow 下面、原来零间距),一份贴在下边(`trackInfoSpacing`,
+    /// 离下面歌词行,加这块之前就有)。渲染那侧(`NotchLyricsView.trackInfoHeader`)只在
+    /// **内容顶部**加一次 `.padding(.top: trackInfoTopSpacing)`——`.frame(alignment: .top)`
+    /// 已经把内容锚在分配到的这块高度的顶部,上下各留一份间距的效果因此不需要在视图那侧
+    /// 显式凑两次 padding,只要这里的高度算术把两份都算进去、视图那侧把 topRow 与内容之间
+    /// 那一份实现出来即可。
     public static func height(
         hasLyricPreview: Bool, hasScrubber: Bool, hasControls: Bool = true, trackInfoHeight: CGFloat = 0
     ) -> CGFloat {
         var h: CGFloat = hasControls ? controlsBlock : 0
         if hasLyricPreview { h += lyricPreviewBlock }
         if hasScrubber { h += scrubberBlock }
-        if trackInfoHeight > 0 { h += trackInfoHeight + trackInfoSpacing * 2 }
+        if trackInfoHeight > 0 { h += trackInfoHeight + trackInfoTopSpacing + trackInfoSpacing }
         return h
     }
 
@@ -69,6 +71,14 @@ public enum NotchExpandedMetrics {
 
     /// 头部本身跟下一行内容之间的间距。
     public static let trackInfoSpacing: CGFloat = 4
+
+    /// 头部跟**上面** topRow 之间的间距。
+    ///
+    /// 2026-09-02 从跟 `trackInfoSpacing` 共用一个值(4)拆出来单独放大到 12——用户要求
+    /// 「把这个整体再往下移一点」(展开态里封面+歌名/歌手/专辑那一整块贴刘海太近)。
+    /// **只放大上面这一份**:下面那份是"头部离歌词行"的间距,截图上本来就够,一起放大
+    /// 会让整块显得松散,而且卡片会白长两倍的高度。
+    public static let trackInfoTopSpacing: CGFloat = 12
     /// 头部里封面缩略图的边长——跟歌词行尾端那枚同一档(`NotchMetrics.artworkSide` 的
     /// 上限 32),两处都在同一张卡片里,没理由长得不一样大。
     public static let trackInfoArtworkSide: CGFloat = 32

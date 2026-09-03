@@ -34,6 +34,28 @@ private final class PanelPlayback: ObservableObject {
     @Published private(set) var isCurrentTrackAdBreak = false
     @Published private(set) var currentLineFillSettled = true
     @Published private(set) var artworkImage: NSImage?
+    /// 系统那张封面的**高清替代**(`PlaybackCoordinator.highResArtworkImage`),系统给的
+    /// 实在太小/不像封面时才有值。
+    ///
+    /// ⚠️ 消费方必须写 `highResArtworkImage ?? artworkImage` —— 这是那个属性声明处就写明的
+    /// 口径(灵动岛、歌词窗口、悬浮歌词三处都照它写)。这个面板 2026-09-02 之前**只订阅了
+    /// `artworkImage`**,于是它是唯一一个显示系统原图的消费面:用户报「为什么这两个地方的
+    /// 封面不一样」(方大同《白发》,Chrome 里放 YouTube Music)——系统经 MediaSession 给的
+    /// 是一帧 **150×84 的 MV 画面**(长宽比偏离正方形 0.44,远超
+    /// `deviceArtworkMaxAspectSkew` 的 0.15,所以 collector 侧那道守卫正确地没把它当封面
+    /// 收下),面板显示的就是那帧 MV,而歌词窗口/灵动岛显示的是缓存里正确的专辑封面。
+    ///
+    /// ⚠️ 面板**画的不是它本尊**,是它的预缩小图 `highResArtworkThumbnail`(2026-09-03):
+    /// 这张是懒解码的原图档(1400~3000px),面板 44pt 那格首帧直接画它 = 主线程整张解码再缩,
+    /// 离线量过 ~30ms,而面板每次打开都是全新建树、每次都重付——这就是用户报「点图标之后
+    /// 有个小延迟才弹出」的一部分。缩好的小图由 PlaybackCoordinator 在图到货时后台烘一次。
+    /// 这里仍然订阅本尊只是为了跟 thumbnail 同进退时不出现"图有、缩略没有"的半拍。
+    @Published private(set) var highResArtworkImage: NSImage?
+    @Published private(set) var highResArtworkThumbnail: NSImage?
+    /// 面板该显示的那张 —— 别在视图里各写一遍 `?? `,漏一处就又是一个显示原图的消费面。
+    /// 优先级:预缩小的高清图 → 高清原图(理论上不该走到,thumbnail 跟原图同一趟产出,
+    /// 只有缩图失败才会) → 系统那张。
+    var displayArtworkImage: NSImage? { highResArtworkThumbnail ?? highResArtworkImage ?? artworkImage }
     @Published private(set) var anchor: ProgressAnchor?
     @Published private(set) var pausedPositionMs: Int?
     @Published private(set) var currentDurationMs: Int?
@@ -63,6 +85,13 @@ private final class PanelPlayback: ObservableObject {
             p.$currentLineFillSettled.removeDuplicates().sink { [weak self] in self?.currentLineFillSettled = $0 },
             p.$artworkImage.removeDuplicates(by: { $0 === $1 })
                 .sink { [weak self] in self?.artworkImage = $0 },
+            // ⚠️ 这条订阅不能省(2026-09-02 补):高清替代是**换歌后异步下载**的,只改
+            // 读取处不加订阅的话,面板会一直停在系统原图上、等到下一次别的 @Published
+            // 变化顺带刷新才换过来。按指针去重跟上面那条同款(每次到货都是新实例)。
+            p.$highResArtworkImage.removeDuplicates(by: { $0 === $1 })
+                .sink { [weak self] in self?.highResArtworkImage = $0 },
+            p.$highResArtworkThumbnail.removeDuplicates(by: { $0 === $1 })
+                .sink { [weak self] in self?.highResArtworkThumbnail = $0 },
             p.$anchor.sink { [weak self] in self?.anchor = $0 },
             p.$pausedPositionMs.removeDuplicates().sink { [weak self] in self?.pausedPositionMs = $0 },
             p.$currentDurationMs.removeDuplicates().sink { [weak self] in self?.currentDurationMs = $0 },
@@ -107,7 +136,11 @@ final class MenuBarPanelController {
         }
         let pop = NSPopover()
         pop.behavior = .transient
-        pop.animates = true
+        // 2026-09-03 用户要求「点了马上弹出」:NSPopover 默认那段弹出/收起动画本身就有
+        // 一两百毫秒,跟"按下→松开才触发"和首帧解码大图叠在一起就是可感知的一拍延迟。
+        // 三处一起改(另两处见 MenuBarStatusItem.attachButtonChrome / statusButtonClicked
+        // 和 PanelPlayback.highResArtworkThumbnail),这里关动画,弹出即到位。
+        pop.animates = false
         let content = MenuBarPanelView(close: { [weak pop] in pop?.performClose(nil) })
         pop.contentViewController = FirstMouseHostingController(rootView: content)
         popover = pop
@@ -231,6 +264,9 @@ private struct MenuBarPanelView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// Last.fm 连接情况,开窗那一刻取一次快照(见 lastfmFooterItem)。
     @State private var lastfmStatus: DestinationStatus?
+    /// 有没有查到还没装的新版本,开窗那一刻取一次快照(同 lastfmStatus 的理由:面板是短命
+    /// 视图,不为一个几天才变一次的值常驻订阅;见 versionFooterItem)。
+    @State private var pendingUpdate: SparkleUpdaterManager.AvailableUpdate?
 
     var body: some View {
         VStack(spacing: 9) {
@@ -258,6 +294,7 @@ private struct MenuBarPanelView: View {
         // 收起再开就对了。而 destinationStatus 的判定本身跟设置页共用同一个函数,不会出现
         // 两处口径不一致。
         .onAppear {
+            pendingUpdate = SparkleUpdaterManager.shared.availableUpdate
             lastfmStatus = destinationStatus(
                 for: .lastfm,
                 config: .shared,
@@ -599,7 +636,9 @@ private struct MenuBarPanelView: View {
     }
 
     @ViewBuilder private var coverView: some View {
-        if let image = playback.artworkImage {
+        // displayArtworkImage 而不是裸 artworkImage:高清替代优先,口径跟灵动岛/歌词窗口/
+        // 悬浮歌词一致(见那个属性的注释,以及用户 2026-09-02 报的《白发》两处封面不一样)。
+        if let image = playback.displayArtworkImage {
             Image(nsImage: image)
                 .resizable()
                 .aspectRatio(contentMode: .fill)
@@ -747,6 +786,9 @@ private struct MenuBarPanelView: View {
     // 2026-08-19 用户拍板收敛成两项:「歌词管理…」上移进钮块网格(见 knobGrid),
     // 「更多」撤掉(完整菜单本来就有右键这个入口,面板里再放一份是双入口),
     // 换成直接的「退出」。
+    // 2026-09-03 用户要求右下角那格再换:「退出」撤掉(退出留在右键菜单与 ⌘Q),改放**当前
+    // 版本号**,点了跳设置「关于」页;查到还没装的新版本时这一格变成「有新版本 vX.Y.Z」,点了
+    // 拉起 Sparkle 的更新窗口(见 versionFooterItem)。
 
     private var footer: some View {
         HStack(spacing: 0) {
@@ -755,8 +797,43 @@ private struct MenuBarPanelView: View {
                 AppActions.shared.openSettings?()
             }
             lastfmFooterItem
-            footerButton("rectangle.portrait.and.arrow.right", L10n.t("退出 Lyrimuse")) {
-                NSApplication.shared.terminate(nil)
+            versionFooterItem
+        }
+    }
+
+    /// 右下角那一格:平时是版本号(→ 关于页),有未安装的新版本时是升级提示(→ Sparkle 窗口)。
+    ///
+    /// 状态来自 `SparkleUpdaterManager.availableUpdate`(Sparkle 委托只记状态、不接管显示,
+    /// 见那边注释),开窗时取一次快照。升级提示用强调色 + 下载图标,而不是只换文字——跟
+    /// Last.fm 出错那格换橙色三角是同一个理由:颜色和图形一起说"这里有事",一格宽度放不下
+    /// 更多字。「已下载」和「有新版本」分开写:自动下载开着时 Sparkle 已经把包拉完,点开是
+    /// "重启安装"而不是再等一次下载,文案要对得上用户接下来看到的窗口。
+    @ViewBuilder private var versionFooterItem: some View {
+        if let update = pendingUpdate {
+            footerItem(
+                // 两个 L10n.t 分开写:三目塞进 L10n.t 里,文案守卫(parity 脚本 / selftest)扫不到字面量。
+                title: String(format: update.downloaded ? L10n.t("%@ 已下载，点击安装") : L10n.t("有新版本 %@"),
+                              update.version),
+                tint: .accentColor, help: L10n.t("点击打开更新窗口"),
+                icon: { Image(systemName: "arrow.down.circle.fill").font(.system(size: 10.5)) }
+            ) {
+                close()
+                // 跟右键菜单「检查更新…」同一个坑:.accessory 策略下 Sparkle 的窗口要先激活
+                // App 才出得来。用户发起的检查由 Sparkle 标准流程接管,直接把已发现的更新
+                // 窗口拉到最前。
+                NSApp.activate(ignoringOtherApps: true)
+                SparkleUpdaterManager.shared.checkForUpdates()
+            }
+        } else {
+            footerItem(
+                title: String(format: L10n.t("版本 %@"), SparkleUpdaterManager.appVersionString),
+                tint: .secondary, help: L10n.t("关于 Lyrimuse"),
+                icon: { Image(systemName: "info.circle").font(.system(size: 10.5)) }
+            ) {
+                close()
+                // 一次性信箱把设置窗口直接翻到「关于」,跟右键菜单 openAbout 同一条路。
+                AppActions.shared.requestSettings(.tab(.about))
+                AppActions.shared.openSettings?()
             }
         }
     }

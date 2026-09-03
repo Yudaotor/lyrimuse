@@ -275,6 +275,10 @@ struct PanelQuickSettings: View {
                     }
                 }
             ), range: OverlayEditorStage.widthRange, step: 10)
+            // 「对齐方式」摆在宽度之后、锁定位置之前(2026-09-03 补):它跟字号/宽度同属
+            // "看一眼再决定"的排版旋钮,而锁定位置是窗口行为,归到最后。
+            alignmentRow(selection: $settings.overlayDuetAlignmentOverride,
+                         label: OverlayAlignmentSegmentedControl.label(for:))
             toggleRow(L10n.t("锁定位置"),
                       help: L10n.t("解锁后鼠标点击会穿到桌面上；拖动方式见设置里的「拖动前先长按」"),
                       isOn: Binding(
@@ -313,6 +317,13 @@ struct PanelQuickSettings: View {
                 }
             ), range: NotchEditorStage.usableWidthRangeOnCurrentScreen, step: 10,
                displayValue: { NotchEditorStage.effectiveWidth(baseWidth: $0) })
+            // 2026-09-03 补。⚠️ 这里**不跟着 `notchShowLyrics` 显隐**,跟设置页那一行不同:
+            // 设置页里「显示歌词」就在它上一行,关掉时这一行消失,原因看得见;而这块面板里
+            // 没有「显示歌词」这一项,跟着藏就成了"凭空少一行、看不出为什么"。关掉歌词的人
+            // 本来也不会来点「灵动岛歌词」这个格子调排版,留着一个当下无效的旋钮,代价比
+            // 一个无法解释的消失小。
+            alignmentRow(selection: $settings.notchLyricsAlignment,
+                         label: LyricsAlignmentSegmentedControl.label(for:))
         case .menuBar:
             row(L10n.t("宽度模式")) {
                 Picker("", selection: $settings.menuBarLyricsWidthMode) {
@@ -332,6 +343,15 @@ struct PanelQuickSettings: View {
                 get: { Double(settings.menuBarLyricsWidth) },
                 set: { settings.menuBarLyricsWidth = CGFloat(($0 / 10).rounded() * 10) }
             ), range: 80...600, step: 10)
+            // 2026-09-03 补。⚠️ **只在固定宽度模式下出现**,判据跟设置页那一行一字不差
+            // (`MenuBarLayoutRows` 里那个 `if`)——自适应模式下那一格的宽度就等于文字宽度,
+            // 没有多余空间,三个选项画出来一模一样(完整理由见 `LyricsRestingAlignment` 头注)。
+            // 这里跟着藏是**说得通**的:「宽度模式」就在上面两行,原因看得见 —— 跟灵动岛那条
+            // 「不跟着 notchShowLyrics 藏」的取舍不矛盾,区别正在于原因看不看得见。
+            if settings.menuBarLyricsWidthMode == .fixed {
+                alignmentRow(selection: $settings.menuBarLyricsAlignment,
+                             label: LyricsAlignmentSegmentedControl.label(for:))
+            }
             // 这两项改的是菜单栏那一项占多宽,而这张面板正锚在那一项上 —— 面板开着期间
             // 状态栏项不许重建(见 MenuBarStatusItem.present 里的 panelIsOpen 分支),
             // 所以拖的时候菜单栏上不会当场变。明说一句,别让人以为拖了没反应。
@@ -366,7 +386,10 @@ struct PanelQuickSettings: View {
                            displayValue: ((Double) -> Double)? = nil) -> some View {
         row(title) {
             HStack(spacing: 6) {
-                Slider(value: value, in: range, step: step)
+                // SteppedSlider 而不是原生带步长的构造器:后者会在轨道下面画一排刻度点
+                // (2026-09-02 用户点名「没有意义,不好看」)。这一根尤其明显 —— 面板总宽
+                // 只有 296pt、滑杆 128pt,宽度那两根的刻度密到直接连成一条实线。
+                SteppedSlider(value: value, in: range, step: step)
                     .controlSize(.mini)
                     .frame(width: 128)
                 Text(String(format: L10n.t("%@pt"),
@@ -382,6 +405,37 @@ struct PanelQuickSettings: View {
                            isOn: Binding<Bool>) -> some View {
         row(title, help: help) {
             Toggle("", isOn: isOn).labelsHidden().controlSize(.mini)
+        }
+    }
+
+    /// 「对齐方式」行(2026-09-03)。三个形态各一行,枚举不同(悬浮歌词是四档的
+    /// `OverlayDuetAlignmentOverride`,灵动岛/菜单栏是三档的 `LyricsRestingAlignment`),
+    /// 所以泛型化 + 标签用闭包传 —— 标签本身**一定要用各自设置页那份 `label(for:)`**,
+    /// 不在这里另写:控件里叫「左对齐」而这儿叫「左」就是同一个值的两种叫法(悬浮歌词那边
+    /// 为这件事专门把 label 提成了 static func)。
+    ///
+    /// 标题直接复用既有词条「对齐方式」,不新造 —— 跟设置页一字不差,也省一条要翻译的串。
+    ///
+    /// ⚠️ 用 `.pickerStyle(.menu)` 下拉,**不用分段控件**,三个理由:
+    ///   ① 这块面板总宽只有 296pt。四档标签(自动/居中/左对齐/右对齐)按设置页那份手搓控件的
+    ///      每档 56pt 下限算就要 220pt 以上,加标题和行内边距直接超;
+    ///   ② macOS 把 SwiftUI 的分段 Picker 桥接成 `NSSegmentedControl`,而它**按当前选中段的
+    ///      文字重新量宽度** —— 选哪个控件就多宽(设置页为这件事修了三轮才改成手搓,见
+    ///      `LyricsAlignmentSegmentedControl` 头注)。在一块定宽面板里那是会把整行挤变形的;
+    ///   ③ 这个文件里已有的宽选项行(灵动岛「风格」)用的就是 `.menu`,同一套语言。
+    private func alignmentRow<Value: Hashable & CaseIterable>(
+        selection: Binding<Value>, label: @escaping (Value) -> String
+    ) -> some View where Value.AllCases: RandomAccessCollection {
+        row(L10n.t("对齐方式")) {
+            Picker("", selection: selection) {
+                ForEach(Value.allCases, id: \.self) { option in
+                    Text(label(option)).tag(option)
+                }
+            }
+            .labelsHidden()
+            .pickerStyle(.menu)
+            .controlSize(.small)
+            .fixedSize()
         }
     }
 

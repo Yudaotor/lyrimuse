@@ -317,4 +317,57 @@ public enum MenuBarMarquee {
         return ScrollPacing(pointsPerSecond: pointsPerSecond,
                             headHoldSeconds: head, tailHoldSeconds: tail)
     }
+
+    // MARK: - 整首歌的播放进度(菜单栏歌词旁那枚图标的染色)
+
+    // 2026-09-03 加。用户点名"仿照酷狗菜单栏歌词:可以选择在最左侧或者最右侧展示软件图标,
+    // 图标上会逐渐染色代表当前歌曲进度条"。
+    //
+    // ⚠️ 跟上面那套逐字染色**不是**一回事,别合并:
+    //   * 逐字染色的进度来自**歌词时间轴**(词起止),范围是**这一句**,方向横向(跟着字走),
+    //     而且只有带 YRC 的歌才有;
+    //   * 这里的进度来自**播放位置 / 曲长**,范围是**整首歌**,方向纵向(2026-09-03 用户从
+    //     "左→右"和"下→上"里选的后者,像水位),任何歌都有 —— 连没歌词的都有,只是那时候
+    //     菜单栏本来就不显示歌词、这枚图标也就不出现。
+    // 两边唯一共享的是"边界怎么装成 CA 动画"这个形状;共用的那点手法在
+    // MenuBarScrollingLabel 的互补裁剪图层里,算法各写各的。
+    //
+    // ⚠️ 喂进来的位置**不含歌词时间轴偏移**:那个偏移把歌词往前/往后挪,歌本身放到哪儿
+    // 没变。加上去的话用户把歌词调快 2 秒,进度也跟着虚报 2 秒(调用点
+    // MenuBarStatusItem.syncProgressClock 有对照注释:染色那条**要**加、这条不加)。
+
+    /// 此刻该填多长(0...fullLength)。曲长未知/非正、位置越界都夹住 —— 菜单栏上宁可画一个
+    /// 空的或满的,也不要画出格子外面去。
+    public static func progressFillLength(
+        positionMs: Int, durationMs: Int, fullLength: CGFloat
+    ) -> CGFloat {
+        guard durationMs > 0, fullLength > 0 else { return 0 }
+        let t = Double(positionMs) / Double(durationMs)
+        return fullLength * CGFloat(min(1, max(0, t)))
+    }
+
+    /// 从此刻匀速涨到满的那一段。整首歌的进度是**匀速**的,一条线性动画就够,不像逐字
+    /// 染色要按词边界分段成关键帧。
+    public struct ProgressFillRamp: Equatable, Sendable {
+        /// 起点长度(= 此刻的 `progressFillLength`)。
+        public let from: CGFloat
+        /// 终点长度(= fullLength,也就是放完)。
+        public let to: CGFloat
+        /// 走完剩下这段要几秒(已按播放速率折算)。
+        public let duration: Double
+    }
+
+    /// nil = 没有可动的余量:暂停(rate <= 0)、曲长未知、或已经放到末尾 —— 调用方静置在
+    /// `progressFillLength` 的取值上,别留一条跑不起来的动画。
+    public static func progressFillRamp(
+        positionMs: Int, durationMs: Int, rate: Double, fullLength: CGFloat
+    ) -> ProgressFillRamp? {
+        guard rate > 0, durationMs > 0, fullLength > 0, positionMs < durationMs else { return nil }
+        let remainMs = Double(durationMs - max(0, positionMs))
+        return ProgressFillRamp(
+            from: progressFillLength(positionMs: positionMs, durationMs: durationMs,
+                                     fullLength: fullLength),
+            to: fullLength,
+            duration: remainMs / 1000 / rate)
+    }
 }

@@ -13,8 +13,12 @@ import SwiftUI
 // 才能开这个形态";它留在编辑台正下方那张 modeToggleCard 里常驻可见。
 //
 // ⚠️ 抽屉里的每一组都是**别处那份组件**,这里只有外壳:
-//   - 配色 / 我的配色主题 / 文字 / 排版 → OverlayStyleSettingsRows.swift(跟工具栏三个浮层同一份)
+//   - 主题 / 文字 / 背景 / 排版 → OverlayStyleSettingsRows.swift(跟工具栏那几个浮层同一份)。
+//     ⚠️ 2026-09-02 从「配色 / 我的配色主题 / 文字 / 排版」重新分的组:原「配色」那七行混着
+//     文字层和背景层,拆分判据见那个文件里 OverlayBackgroundSettingsRows 的头注
 //   - 窗口里那三个行为项 → OverlayBehaviorSettingsRows.swift(跟上面那条行为栏同一份)
+//   - 「窗口」组末尾那两行自动隐藏 → AutoHideSettingsRows.swift(2026-09-02 从撤掉的独立
+//     「自动隐藏」卡并进来;跟行为栏那份、以及灵动岛「行为」浮层/抽屉那两处是同一个组件)
 //   - 恢复 → OverlayStyleDefaults.restoreTextAndColors()(跟工具栏「重置 ▾」同一个动作)
 // 「宽度」那根滑杆写在本文件里 —— 它跟编辑台里那条宽度调整条(2026-08-30 第六步替掉了
 // 原来的拖拽握柄)是同一个值的两个入口:那边 step 2、紧挨着窗口、看得见效果;这边 step 10、
@@ -33,13 +37,20 @@ struct OverlayAllSettingsDrawer: View {
             disclosureHeader
             if isExpanded {
                 CardDivider()
-                colorGroup
-                CardDivider()
-                // 「我的配色主题」不给组标题:这一组的第一行本身就叫「我的配色主题」
-                // (带图标),再加一条组标题就是同一句话说两遍。
-                OverlayCustomThemeRows()
+                // 2026-09-02 重新分组:原来是「配色」(七行混着文字色和背景色)+ 一组无标题的
+                // 「我的配色主题」,现在按"这个字段改的是哪一层"拆成 主题 / 文字 / 背景 三组
+                // (拆分判据见 OverlayStyleSettingsRows.swift 里 OverlayBackgroundSettingsRows
+                // 的头注)。顺序跟编辑台工具栏那几颗按钮一致 —— 抽屉的职责是"工具栏浮层的
+                // 全量兜底通路",两个宿主分组不一样的话,用户按工具栏的记忆到抽屉里找会落空。
+                //
+                // 「我的配色主题」不再单独占一组:它现在长在「主题」组里(OverlayThemeSettingsRows
+                // 的第二段),原来那组之所以没有组标题,就是因为它第一行本身就叫「我的配色主题」、
+                // 再加一条组标题是同一句话说两遍 —— 并进「主题」之后这个别扭之处一起没了。
+                themeGroup
                 CardDivider()
                 textGroup
+                CardDivider()
+                backgroundGroup
                 CardDivider()
                 layoutGroup
                 CardDivider()
@@ -91,19 +102,28 @@ struct OverlayAllSettingsDrawer: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(L10n.t("全部设置"))
-        // VoiceOver 里这一行是"展开/收起"而不是普通按钮 —— 抽屉是键盘用户到达那 16 项的
-        // 唯一入口,读不出"已折叠"的话,这一整段听上去就只有一个孤零零的按钮。
+        // VoiceOver 里这一行是"展开/收起"而不是普通按钮 —— 抽屉是键盘用户到达那 18 项的
+        // 唯一入口(2026-08-30 的 16 项 + 2026-09-02 并进「窗口」组的两行自动隐藏),读不出
+        // "已折叠"的话,这一整段听上去就只有一个孤零零的按钮。
         .accessibilityAddTraits(isExpanded ? .isSelected : [])
         .accessibilityValue(isExpanded ? L10n.t("已展开") : L10n.t("已折叠"))
     }
 
     // MARK: - 各组
 
-    private var colorGroup: some View {
+    private var themeGroup: some View {
         Group {
-            SettingsCardHeader(title: L10n.t("配色"))
+            SettingsCardHeader(title: L10n.t("主题"))
             CardDivider()
-            OverlayColorSettingsRows()
+            OverlayThemeSettingsRows()
+        }
+    }
+
+    private var backgroundGroup: some View {
+        Group {
+            SettingsCardHeader(title: L10n.t("背景"))
+            CardDivider()
+            OverlayBackgroundSettingsRows()
         }
     }
 
@@ -127,6 +147,10 @@ struct OverlayAllSettingsDrawer: View {
         }
     }
 
+    /// ⚠️ 组名的不对称是**有意接受**的,不是漏改:页面上那张常驻卡叫「行为」,抽屉这一组叫
+    /// 「窗口」,而 2026-09-02 起两处装的是同一批开关(三个行为项 + 两行自动隐藏)。抽屉这边按
+    /// "这扇窗的事"归组(它还带着「宽度」滑杆),行为栏那边按"设一次就不动的行为"归组,两个
+    /// 名字各自成立;要取齐就得连「宽度」一起重新分组,不值得为两行改动一整组的语义。
     private var windowGroup: some View {
         Group {
             SettingsCardHeader(title: L10n.t("窗口"))
@@ -134,6 +158,10 @@ struct OverlayAllSettingsDrawer: View {
             widthRow
             CardDivider()
             OverlayBehaviorSettingsRows()
+            // 「自动隐藏」两行。⚠️ "本组之前"这条分隔线由宿主插,组件内部只在自己两行之间
+            // 插一条 —— 见 AutoHideSettingsRows.swift 顶部那条约定,四个宿主一处都不能漏。
+            CardDivider()
+            AutoHideSettingsRows(surface: .desktopOverlay)
         }
     }
 
@@ -146,7 +174,9 @@ struct OverlayAllSettingsDrawer: View {
     private var widthRow: some View {
         SettingsRow(icon: "arrow.left.and.right", title: L10n.t("宽度")) {
             HStack(spacing: 8) {
-                Slider(value: Binding(
+                // SteppedSlider 而不是原生带步长的构造器:后者会在轨道下面画一排刻度点
+                // (2026-09-02 用户点名「没有意义,不好看」),量化语义一模一样。
+                SteppedSlider(value: Binding(
                     get: { settings.overlayWidth },
                     set: { newValue in
                         // 相等守卫:Slider 拖动中会按鼠标事件频率重复调 set,值经 step
@@ -176,18 +206,25 @@ struct OverlayAllSettingsDrawer: View {
         }
     }
 
-    /// 「恢复默认文字与配色」。
+    /// 「恢复默认主题、文字与背景」。
     ///
     /// 动作本体在 OverlayStyleDefaults.restoreTextAndColors() —— 编辑台工具栏的「重置 ▾」
     /// 菜单执行的是同一件事,两处**不能**各写一份赋值:以后新增一个外观字段时很容易只往
     /// 其中一处补上,表现为"从菜单点恢复和从抽屉点恢复,恢复出来的样子不一样"。
     ///
-    /// 副标题「不含宽度和锁定位置」两个入口都要带 —— 它是这颗按钮的作用范围声明,不是装饰。
+    /// ⚠️ 标题和副标题合起来是这颗按钮的**作用范围声明**,两个入口都要带,不是装饰。
+    /// 2026-09-03 两句都改过,因为老那两句合起来在说谎:标题「恢复默认文字与配色」+ 副标题
+    /// 「不含宽度和锁定位置」会让人理解成"除这两样之外都恢复",而实际上它只写 9 个字段,
+    /// 「排版」「行为」两个浮层里的 6 项(双行显示 / 对齐方式 / 长按拖动 / 悬浮淡化 /
+    /// 截屏录屏时隐藏 / 暂停无播放时隐藏)一个都不碰。
+    /// 现在标题念**它真正覆盖的那三个浮层**、副标题念**没覆盖的**,跟菜单栏那颗同一个句式
+    /// (见 MenuBarStyleDefaults 头注)。⚠️ 功能本身没改 —— 排版和行为该不该纳入是产品取舍,
+    /// 不是这次要顺手动的东西。
     private var resetRow: some View {
         SettingsRow(
             icon: "arrow.uturn.backward",
-            title: L10n.t("恢复默认文字与配色"),
-            subtitle: L10n.t("不含宽度和锁定位置")
+            title: L10n.t("恢复默认主题、文字与背景"),
+            subtitle: L10n.t("不含排版、行为和宽度")
         ) {
             Button(L10n.t("恢复")) { OverlayStyleDefaults.restoreTextAndColors() }
         }

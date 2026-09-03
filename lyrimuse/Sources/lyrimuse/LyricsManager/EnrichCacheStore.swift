@@ -113,6 +113,19 @@ public final class EnrichCacheStore: ObservableObject {
         /// ⚠️ 哪天那个跳过逻辑被去掉,这个字段就会集体失真(全变成最后一次启动时间),
         /// 而且**表现是静默的** —— 排序看着还在工作,只是结果全错。
         let lyricsUpdatedAt: Date?
+        /// 这条记录**上次被解析出来**的时刻,取自缓存里的 `ts`(collector 侧
+        /// `enrichEntry.TS`,写入点 enrich.go 的 `e.TS = time.Now().Unix()`)。
+        /// nil = 老条目没有这个字段。
+        ///
+        /// 它**不是** `lyricsUpdatedAt` 的替代品,只当次级键用:两者量纲不同 ——
+        /// mtime 是"歌词正文上次真的变过",ts 是"这条上次被解析过"(重搜一轮没搜到新
+        /// 东西也会把 ts 推到当下,而正文没变、mtime 不动)。全库覆盖率也更低
+        /// (2026-09-02 实测 2445/3402 ≈ 72%,而 mtime 是 3169/3210 ≈ 99%)。
+        ///
+        /// 唯一用途见 `LyricsSortOrder`:**没有歌词文件 / 没有来源**的那一批行,
+        /// 在对应排序档里本来注定是一团分不出先后的平局(退化成默认排序,看起来像
+        /// "选了排序没反应"),用 ts 给这个尾块一个真实的组内顺序。
+        let resolvedAt: Date?
         // ---- 预计算归一化键(2026-08-19 性能审计) ----
         // 排序/筛选/归并的热路径原来逐次现算 toSimplified(ICU CFStringTransform)+
         // lowercased:排序比较器每次比较 4 次、筛选谓词每行最多 4 次、专辑归并字典
@@ -488,6 +501,12 @@ public final class EnrichCacheStore: ObservableObject {
                 // 逐条循环里做)。都查不到 = 磁盘上没有这条的歌词文件。
                 lyricsUpdatedAt: lyricsFileDates[EnrichCacheKeys.sanitizeFilename(key).lowercased()]
                     ?? lyricsFileDates[EnrichCacheKeys.disambiguatedName(forKey: key).lowercased()],
+                // `ts` 是 Unix 秒。JSONSerialization 对整数给的是 NSNumber,用 Double
+                // 取一次就够(秒级精度远在 Double 的安全整数范围内);<=0 当没有。
+                resolvedAt: {
+                    let ts = (entry["ts"] as? Double) ?? 0
+                    return ts > 0 ? Date(timeIntervalSince1970: ts) : nil
+                }(),
                 normPrimaryArtist: toSimplified(primaryArtist(display)).lowercased(),
                 normAlbum: toSimplified(parts.album).lowercased(),
                 searchArtistLower: parts.artist.lowercased(),
@@ -640,9 +659,26 @@ public final class EnrichCacheStore: ObservableObject {
                 entry.removeValue(forKey: stale)
             }
         }
+        // 正文改了、而罗马音是原样交回来的 → 那份罗马音描述的是**旧正文**,必须清掉。
+        // 跟上面 lyrics_tr_lang/lyrics_tr_source 那条是同一条规矩:别拿旧内容给新内容背书。
+        //
+        // ⚠️ 这条 2026-09-03 才补,而它治的问题**是同日那次改动放大出来的**:collector 新增
+        // 了日/韩/中罗马音预生成(第 10 章 §5),缓存里带 lyrics_roma 的条目从 117 涨到 2133
+        // (3.3% → 60%)。在那之前绝大多数歌的 lyrics_roma 是空的,用户改完正文,App 侧
+        // `Romanizer` 的客户端兜底会按新正文现算,结果是对的;现在 lyrics_roma 非空,
+        // `LyricsSyncEngine.romanizationText` 会**优先用缓存里这份**(按行内容匹配不上就退
+        // 700ms 就近匹配),于是改过的那几行显示的是旧正文的读音 —— 而且是静默的。
+        //
+        // 判据是"roma 跟存着的那份逐字相同",也就是用户**没动**罗马音编辑框那一格。他自己
+        // 改过就按他的来,不替他清。
+        let previousLyrics = raw[key]?["lyrics"] as? String ?? ""
+        let previousRoma = raw[key]?["lyrics_roma"] as? String ?? ""
+        let romaDescribesOldLyrics =
+            !roma.isEmpty && lyrics != previousLyrics && roma == previousRoma
+        let effectiveRoma = romaDescribesOldLyrics ? "" : roma
         entry["lyrics"] = lyrics
         entry["lyrics_tr"] = tr
-        entry["lyrics_roma"] = roma
+        entry["lyrics_roma"] = effectiveRoma
         if markManual {
             entry["manual_lyrics"] = true
         } else {
@@ -719,7 +755,7 @@ public final class EnrichCacheStore: ObservableObject {
         raw[key] = entry
         markLocallyEdited(key)
         writeLyricsFiles(
-            key: key, lyrics: lyrics, tr: tr, roma: roma,
+            key: key, lyrics: lyrics, tr: tr, roma: effectiveRoma,
             yrc: entry["lyrics_yrc"] as? String ?? "",
             source: entry["lyrics_source"] as? String ?? "",
             manual: markManual

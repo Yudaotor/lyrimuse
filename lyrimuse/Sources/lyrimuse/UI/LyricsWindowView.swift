@@ -144,6 +144,10 @@ private final class LyricsWindowController: ObservableObject {
     // 重新打开这个窗口都从"不置顶"开始,跟伪全屏状态同一个"只在这次打开期间有效"的
     // 处理原则,没有额外加一个 UserDefaults 存档的必要性。
     @Published private(set) var isAlwaysOnTop = false
+    /// 窗口面此刻是否真的看得见(`occlusionState` 含 `.visible`):被别的窗口**完全**遮住、
+    /// 最小化、orderOut 都是 false;部分露出算可见。逐字两级时钟 / 间奏三点 / 换行滚动动画的
+    /// 门控用(2026-09-02,见已知坑 #17)。默认 true——宁可多跑也不能把看得见的窗口停表。
+    @Published private(set) var isSurfaceVisible = true
 
     private weak var window: NSWindow?
     /// 窗口此刻在不在屏幕上 —— App 激活刷新的可见性守卫用(Window 场景关闭后视图树
@@ -159,6 +163,7 @@ private final class LyricsWindowController: ObservableObject {
     private var fullScreenCapabilityObserver: NSObjectProtocol?
     private var frameObserver: NSObjectProtocol?
     private var resizeObserver: NSObjectProtocol?
+    private var occlusionObserver: NSObjectProtocol?
     /// 落盘去抖。拖动窗口期间 didMove 每帧都来,不去抖就是每帧一次 UserDefaults 写 ——
     /// 跟「歌词管理」列宽拖动那次性能审计(2026-08-19,松手才落盘)同一个坑,同一个修法。
     private var persistFrameTask: Task<Void, Never>?
@@ -255,6 +260,9 @@ private final class LyricsWindowController: ObservableObject {
         behavior.remove(.fullScreenAuxiliary)
         behavior.insert(.fullScreenPrimary)
         window.collectionBehavior = behavior
+        // ⚠️ 临时诊断(2026-09-03):只计数不打日志 —— 这里挂在 didUpdate 上,逐次打会淹掉
+        // 日志。计数由 SpaceDiagnostics 在 Space/激活事件里顺带报出来。定位后删。
+        SpaceDiagnostics.noteFullScreenCapabilityWrite()
     }
 
     /// 红绿灯默认位置(AppKit 坐标,标题栏容器内),首次 attach 时记录。
@@ -341,6 +349,23 @@ private final class LyricsWindowController: ObservableObject {
         if let resizeObserver { NotificationCenter.default.removeObserver(resizeObserver) }
         resizeObserver = NotificationCenter.default.addObserver(
             forName: NSWindow.didResizeNotification, object: window, queue: .main, using: persist)
+        // 窗口面可见性(2026-09-02):SwiftUI 对被遮住/最小化/orderOut 的窗口**不会**自动
+        // 暂停 TimelineView(.animation)——离屏探针实测五种不可见状态都还是 ~63 次/秒。
+        // 用 occlusionState 当唯一信号:遮挡与最小化都会让它失去 .visible,不用再单挂
+        // miniaturize 通知;切 Space 只是短暂翻一下、几帧后自己翻回来,不需要防抖。
+        // attach 时窗口可能还没 orderFront(此时 occlusionState 也是"不可见"),先按可见算——
+        // 首次显示后系统会补一次通知(探针实测 orderFront 后 ~30ms 到),再以它为准。
+        if let occlusionObserver { NotificationCenter.default.removeObserver(occlusionObserver) }
+        isSurfaceVisible = window.isVisible ? window.occlusionState.contains(.visible) : true
+        occlusionObserver = NotificationCenter.default.addObserver(
+            forName: NSWindow.didChangeOcclusionStateNotification, object: window, queue: .main
+        ) { [weak self] note in
+            guard let win = note.object as? NSWindow else { return }
+            MainActor.assumeIsolated {
+                let visible = win.occlusionState.contains(.visible)
+                if self?.isSurfaceVisible != visible { self?.isSurfaceVisible = visible }
+            }
+        }
         if let fullScreenCapabilityObserver { NotificationCenter.default.removeObserver(fullScreenCapabilityObserver) }
         fullScreenCapabilityObserver = NotificationCenter.default.addObserver(
             forName: NSWindow.didUpdateNotification, object: window, queue: .main
@@ -605,6 +630,8 @@ struct LyricsWindowView: View {
     /// 自绘滚动指示条的数据(offset/内容高):收在小 model 里、只有指示条子视图订阅 ——
     /// 滚动期间逐帧的 preference 更新不能拖着整窗 body 陪跑(性能纪律同 WindowVolumeCapsule)。
     @StateObject private var scrollMetrics = LyricsScrollMetricsModel()
+    /// 窗口面不可见期间是否发生过需要滚动的换行/间奏切换(见 isSurfaceVisible 的 onChange)。
+    @State private var scrollPendingWhileHidden = false
     /// 停播欢迎态的呼吸动画驱动(onAppear 置真触发 repeatForever)。
     @State private var idleBreath = false
     /// 简介面板里的歌词来源(EnrichCacheReader 异步查,面板打开时取一次)。
@@ -1035,7 +1062,10 @@ struct LyricsWindowView: View {
             // (逐字歌词才知道"唱完"是几点;行级 LRC 不抢跑,两个下标恒等,行为跟改前
             // 一致),染色/加粗/虚化仍全部看 currentLineIndex。
             .onChange(of: playback.scrollLineIndex) {
-                scrollToActiveLine(scrollProxy: scrollProxy, animated: true)
+                // 窗口面不可见时不做滚动动画(没人看,被遮住/最小化的窗口也不会去合成),
+                // 直接定位;并记一笔,恢复可见时再无动画定位一次兜底(2026-09-02,已知坑 #17)。
+                scrollToActiveLine(scrollProxy: scrollProxy, animated: windowController.isSurfaceVisible)
+                if !windowController.isSurfaceVisible { scrollPendingWhileHidden = true }
             }
             .onChange(of: playback.currentGapIndex) {
                 // 进入间奏 → 滚到那排「•••」(跟当前行同一个 41% 锚位)。出间奏不用管:
@@ -1044,12 +1074,18 @@ struct LyricsWindowView: View {
                 // 解析不到 —— 交给 scrollToActiveLine 的"滚第一句、锚 0.52"路径,再延一拍
                 // 让布局先落地(实测同一事务里滚,圆点停在列表顶部)。
                 if let g = playback.currentGapIndex {
+                    let visible = windowController.isSurfaceVisible
+                    if !visible { scrollPendingWhileHidden = true }
                     if g == -1 {
                         DispatchQueue.main.async {
-                            scrollToActiveLine(scrollProxy: scrollProxy, animated: true)
+                            scrollToActiveLine(scrollProxy: scrollProxy, animated: visible)
                         }
                     } else if let id = gapRowID(g) {
-                        withAnimation(Self.lineTransition) {
+                        if visible {
+                            withAnimation(Self.lineTransition) {
+                                scrollProxy.scrollTo(id, anchor: Self.activeLineAnchor)
+                            }
+                        } else {
                             scrollProxy.scrollTo(id, anchor: Self.activeLineAnchor)
                         }
                     }
@@ -1060,6 +1096,16 @@ struct LyricsWindowView: View {
                 // LyricsWindowLine 类型注释),等新内容渲染出来后跳到新歌当前行——
                 // 还没到第一句时锚到前奏「•••」/间奏点(AM 式开场,歌词从窗口中部
                 // 开始,见 scrollToActiveLine 的兜底链)。
+                DispatchQueue.main.async {
+                    scrollToActiveLine(scrollProxy: scrollProxy, animated: false)
+                }
+            }
+            .onChange(of: windowController.isSurfaceVisible) { _, visible in
+                // 恢复可见:**只有**隐藏期间发生过换行/进出间奏才重定位,且无动画——用户手动
+                // 翻看歌词后切个 Space 回来,不该被拽回当前行(那是今天没有的行为)。隐藏期间
+                // 那次无动画 scrollTo 通常已经到位,这里是它在最小化窗口里没生效时的兜底。
+                guard visible, scrollPendingWhileHidden else { return }
+                scrollPendingWhileHidden = false
                 DispatchQueue.main.async {
                     scrollToActiveLine(scrollProxy: scrollProxy, animated: false)
                 }
@@ -1226,7 +1272,13 @@ struct LyricsWindowView: View {
                             // 间奏进行中"当前"是那排「•••」,唱完的行不再保持活跃态。
                             isActive: item.id == activeID && playback.currentGapIndex == nil,
                             isHovered: hoveredLineID == item.id,
-                            isPlaying: playback.isPlayingNow,
+                            // 这个值在 LyricsLineRow → KaraokeLineText → KaraokeWordText 一路
+                            // 只喂两处 TimelineView 的 paused(粗时钟 / 细时钟),不参与任何
+                            // 画面判断,所以窗口面不可见时直接并进来一起停表(2026-09-02,
+                            // 已知坑 #17):被完全遮住/最小化的窗口里 60Hz 细时钟照跑是白烧。
+                            // 恢复可见那一帧时钟重新给真值,填色不插值(叶子 .transaction 清
+                            // 动画),没有补播。
+                            isPlaying: playback.isPlayingNow && windowController.isSurfaceVisible,
                             // 只给**染色当前行**传真实值,其余行恒 false —— settled 每行翻转
                             // 两次,全表行都跟着比较变化的话,一次翻转就是整表行重算。
                             // ⚠️ 按 currentLineIndex 配对而不是 activeID(2026-08-23 像素采样
@@ -2489,7 +2541,10 @@ struct LyricsWindowView: View {
         if playback.currentGapIndex == marker.index {
             // 暂停时把表停掉——暂停在间奏中时圆点亮度/大小本来就该定格(闭包里的
             // pausedPositionMs 兜底),表继续走只是白跑。
-            TimelineView(.animation(paused: !playback.isPlayingNow)) { context in
+            // 窗口面不可见也停(2026-09-02,已知坑 #17):这是这扇窗里唯一一个满帧率、且
+            // 整段间奏都在跑的时钟,最小化时白烧得最多。
+            TimelineView(.animation(paused: !playback.isPlayingNow
+                                            || !windowController.isSurfaceVisible)) { context in
                 // 跟逐字填色同一套时间基准:外推位置 + 当前歌词偏移(间奏窗口是歌词
                 // 原始时间轴,见 LyricsGapMarker 注释)。暂停时 anchor 为 nil,退回
                 // 冻结位置,点就停在当下的亮度上。
@@ -4156,12 +4211,25 @@ private struct InfoPanelListeningRows: View {
 private struct IdleLastfmSection: View {
     @ObservedObject private var stats = LastfmStatsService.shared
 
+    /// 「本周」跟设置页 / 待机页那个「近 7 天」**同一个口径**(自然日对齐的日桶,见
+    /// IdleListeningStats.lastSevenDays)。2026-09-03 之前这里直接读 API 的 `overview.week`
+    /// (滚动 168 小时)——三个面里唯一一处口径不同;而且 2026-09-03 起最近记录改走 collector
+    /// feed 之后,`overview.week` 只在 feed 不在、退回轮询时才会被刷新,读它就是读一个陈值。
+    /// 桶还没同步完时退回 API 值(那时桶本身残缺)。
+    private var weekValue: Int? {
+        guard !stats.dailySyncing else { return stats.overview?.week }
+        return IdleListeningStats.lastSevenDays(
+            dailyCounts: stats.dailyCounts, today: Date(),
+            todayCount: stats.overview?.today,
+            dayKey: { LastfmStatsService.dayKey($0) })
+    }
+
     var body: some View {
         if stats.isConnected {
             VStack(spacing: 12) {
-                if let o = stats.overview {
+                if let o = stats.overview, let week = weekValue {
                     Text(String(format: L10n.t("今天听了 %1$@ 首 · 本周 %2$@ 首"),
-                                "\(o.today)", "\(o.week)"))
+                                "\(o.today)", "\(week)"))
                         .font(.system(size: 12))
                         .foregroundStyle(.secondary)
                 }

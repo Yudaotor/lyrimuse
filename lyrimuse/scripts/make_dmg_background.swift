@@ -1,6 +1,6 @@
 // 生成 DMG 窗口的背景图(dist/dmg-background.tiff)。
 //
-// 为什么是脚本生成而不是丢一张设计稿进仓库:这张图只有几个几何图形,用代码描述比用
+// 为什么是脚本生成而不是丢一张设计稿进仓库:这张图只有几何图形,用代码描述比用
 // 二进制资产描述更好审阅、也能跟窗口尺寸/图标坐标保持单一来源 —— 下面这几个常量跟
 // scripts/dmg_settings.py 里的必须一致,写在代码里至少能在一处看到两边的关系。
 //
@@ -11,6 +11,22 @@
 // 写哪种语言都会有人看不懂。图标位置 + 箭头本身就说清了"往右拖"这件事。
 //
 // 用法:swift scripts/make_dmg_background.swift <输出路径.tiff>
+//
+// ---- 2026-09-02 美化(用户"参考一些其他软件"要求) ----
+//
+// 原来是一层近乎无色的灰白渐变 + 一圈几乎看不见的虚线 + 一条 30% 透明度的细灰箭头——
+// 干净但没有任何"这是 Lyrimuse"的辨识度,旁边随便换个 App 名字都说得通。这一轮改成
+// 直接从 AppIcon.icns 里量出来的真实像素色(见下面 brand* 那几个常量的注释,不是配出来
+// 的近似色),让背景跟图标本身呼应成一套。三处具体变化:
+//   1. 背景从平面灰白渐变换成三团柔和的粉/橘/藕色径向光晕叠加——效果类似图标自己那种
+//      "暖色渐变"观感,但淡了很多(每团峰值透明度只有 16~20%),不会跟 Finder 的深色
+//      文件名标签抢对比度。
+//   2. Applications 那侧的落点提示从纯灰虚线环换成:底下一层暖橘光晕("这里能放")+
+//      上面一圈用品牌色画的虚线环(不再是快看不见的浅灰)。
+//   3. 箭头从 30% 透明度的细灰线换成用图标本身的珊瑚色(粉+橘混出来的那个中间色)、
+//      更粗、边缘加了一圈淡淡阴影,同时保留原来"留出图标半径、不压在图标上"那条规则。
+// 没有改的:画布尺寸、两枚图标的坐标(跟 dmg_settings.py 严格一致)、"不烧文字"这条
+// 决策——上面这条理由依然成立,美化不等于开始往图里塞语言相关的东西。
 import AppKit
 
 let width = 660.0
@@ -18,6 +34,39 @@ let height = 400.0
 /// 两枚图标的中心点(跟 dmg_settings.py 的 icon_locations 一致,那边的坐标系原点在左上)。
 let appIconCenter = CGPoint(x: 180, y: 170)
 let applicationsCenter = CGPoint(x: 480, y: 170)
+/// dmg_settings.py 里的 icon_size,只用来算"光晕/虚线环该比图标大多少"这类相对尺寸。
+let iconRadius = 64.0
+
+// ---- 品牌色板:直接从 AppIcon.icns(1024×1024)量出来的真实像素值,不是配出来的 ----
+// 量法:sips 把 .icns 转成 PNG,再用一个几行的 NSBitmapImageRep.colorAt 脚本在图标身上
+// 挑几处"纯色渐变面"(避开圆角高光和白色音符/线条)采样。四个点分别对应图标的
+// 左侧粉、右上桃橘、里面那根黄色横条、底部粉紫——这样背景跟图标是同一套色系,而不是
+// "看着搭"的巧合。
+let brandPink = NSColor(calibratedRed: 254 / 255, green: 190 / 255, blue: 214 / 255, alpha: 1)
+let brandPeach = NSColor(calibratedRed: 254 / 255, green: 217 / 255, blue: 170 / 255, alpha: 1)
+let brandYellow = NSColor(calibratedRed: 255 / 255, green: 247 / 255, blue: 169 / 255, alpha: 1)
+let brandLavender = NSColor(calibratedRed: 251 / 255, green: 209 / 255, blue: 229 / 255, alpha: 1)
+/// 箭头用的珊瑚色:粉+桃橘各半混出来的中间色,比单独用粉或橘都更"暖"、跟图标里
+/// 音符到歌词线之间那道过渡色最接近。
+let brandCoral = blend(brandPink, brandPeach, 0.5)
+
+/// 两个 calibratedRGB 颜色按比例线性混合(t=0 纯 a,t=1 纯 b)。
+func blend(_ a: NSColor, _ b: NSColor, _ t: CGFloat) -> NSColor {
+    NSColor(calibratedRed: a.redComponent * (1 - t) + b.redComponent * t,
+            green: a.greenComponent * (1 - t) + b.greenComponent * t,
+            blue: a.blueComponent * (1 - t) + b.blueComponent * t,
+            alpha: 1)
+}
+
+/// 一团从 `color`(在中心,透明度 `peakAlpha`)向外径向淡出到全透明的光晕,半径 `radius`。
+/// 全靠透明度渐变自然收边,没有硬边缘需要另外羽化。
+func glow(_ color: NSColor, center: CGPoint, radius: CGFloat, peakAlpha: CGFloat) {
+    let gradient = NSGradient(colors: [
+        color.withAlphaComponent(peakAlpha),
+        color.withAlphaComponent(0),
+    ])
+    gradient?.draw(fromCenter: center, radius: 0, toCenter: center, radius: radius, options: [])
+}
 
 func draw(scale: CGFloat) -> NSBitmapImageRep {
     let pixelsWide = Int(width * scale)
@@ -33,51 +82,70 @@ func draw(scale: CGFloat) -> NSBitmapImageRep {
     NSGraphicsContext.saveGraphicsState()
     NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
 
-    // 底色:一层很淡的竖向渐变。深色不合适 —— Finder 的文件名标签在浅色背景上是深字,
-    // 深底会让它变成"深字压深底"。
-    let gradient = NSGradient(
-        colors: [
-            NSColor(calibratedRed: 0.976, green: 0.973, blue: 0.969, alpha: 1),
-            NSColor(calibratedRed: 0.925, green: 0.918, blue: 0.910, alpha: 1),
-        ]
-    )
-    gradient?.draw(in: NSRect(x: 0, y: 0, width: width, height: height), angle: -90)
+    // 底色:极淡的暖白(不是纯白)——这样上面叠的几团光晕不会显得"浮在死白上",
+    // 而是像从同一块材质里透出来的。
+    NSColor(calibratedRed: 1.0, green: 0.992, blue: 0.988, alpha: 1).setFill()
+    NSBezierPath(rect: NSRect(x: 0, y: 0, width: width, height: height)).fill()
 
-    // AppKit 的绘图原点在左下角,而上面那两个中心点用的是"原点在左上"的坐标系
-    // (跟 dmg_settings.py 对齐),这里翻一次 y。
+    // AppKit 的绘图原点在左下角,而上面两个中心点、以及 dmg_settings.py 用的都是
+    // "原点在左上"的坐标系,这里翻一次 y。
     func flipped(_ p: CGPoint) -> CGPoint { CGPoint(x: p.x, y: height - p.y) }
-    let from = flipped(appIconCenter)
-    let to = flipped(applicationsCenter)
+    let appCenter = flipped(appIconCenter)
+    let appsCenter = flipped(applicationsCenter)
 
-    // 目标位置底下画一枚淡淡的圆环,暗示"放到这里"。
-    let ringRadius = 62.0
+    // 三团大而淡的色块,呼应图标本身"左粉、右上橘黄、底部粉紫"的对角渐变,但淡了
+    // 5~6 倍(峰值透明度 16~20% vs 图标本身接近不透明)——背景该是气氛,不是抢戏。
+    glow(brandPink, center: CGPoint(x: 40, y: height - 40), radius: 420, peakAlpha: 0.20)
+    glow(brandYellow, center: CGPoint(x: width - 60, y: height - 20), radius: 380, peakAlpha: 0.18)
+    glow(brandLavender, center: CGPoint(x: width * 0.55, y: 30), radius: 420, peakAlpha: 0.16)
+
+    // App 图标背后的"聚光"——比上面三团更集中、更浓一点,让图标看起来是画面焦点而不是
+    // 随便摆在一片渐变上。半径比图标本身(64pt 半径)大出一大截,边缘早在图标轮廓之前
+    // 就已经淡下去,不会在图标周围留出一圈看得见的色环。
+    glow(brandCoral, center: appCenter, radius: iconRadius + 90, peakAlpha: 0.30)
+
+    // Applications 落点:先垫一层暖橘光晕("放这里"的引导),再叠一圈跟图标同心、
+    // 半径比图标大一点的虚线环。环本身也从原来的浅灰换成品牌色。
+    glow(brandPeach, center: appsCenter, radius: iconRadius + 24, peakAlpha: 0.20)
+    let ringRadius = iconRadius + 6
     let ring = NSBezierPath(ovalIn: NSRect(
-        x: to.x - ringRadius, y: to.y - ringRadius,
+        x: appsCenter.x - ringRadius, y: appsCenter.y - ringRadius,
         width: ringRadius * 2, height: ringRadius * 2))
     ring.lineWidth = 1.5
-    NSColor(calibratedWhite: 0.45, alpha: 0.16).setStroke()
+    brandCoral.withAlphaComponent(0.5).setStroke()
     ring.setLineDash([6, 6], count: 2, phase: 0)
     ring.stroke()
 
-    // 两枚图标之间的箭头。留出图标本身的半径,别让线压在图标上。
-    let inset = 84.0
-    let start = CGPoint(x: from.x + inset, y: from.y)
-    let end = CGPoint(x: to.x - inset, y: to.y)
-    NSColor(calibratedWhite: 0.35, alpha: 0.30).setStroke()
+    // 两枚图标之间的箭头:珊瑚色实心箭头,比原来那条 30% 透明度的细灰线更清楚地
+    // 传达"往这边拖"。留出图标本身的半径,别让线压在图标上;箭身带一圈淡淡的
+    // 投影,让它看起来"浮"在背景上而不是画在背景里。
+    let inset = iconRadius + 20
+    let start = CGPoint(x: appCenter.x + inset, y: appCenter.y)
+    let end = CGPoint(x: appsCenter.x - inset, y: appsCenter.y)
+
+    NSGraphicsContext.saveGraphicsState()
+    let shadow = NSShadow()
+    shadow.shadowColor = NSColor(calibratedWhite: 0.4, alpha: 0.22)
+    shadow.shadowBlurRadius = 4
+    shadow.shadowOffset = NSSize(width: 0, height: -1.5)
+    shadow.set()
+
+    brandCoral.withAlphaComponent(0.68).setStroke()
     let shaft = NSBezierPath()
     shaft.move(to: start)
-    shaft.line(to: CGPoint(x: end.x - 10, y: end.y))
-    shaft.lineWidth = 2
+    shaft.line(to: CGPoint(x: end.x - 12, y: end.y))
+    shaft.lineWidth = 3
     shaft.lineCapStyle = .round
     shaft.stroke()
 
-    NSColor(calibratedWhite: 0.35, alpha: 0.30).setFill()
+    brandCoral.withAlphaComponent(0.75).setFill()
     let head = NSBezierPath()
     head.move(to: end)
-    head.line(to: CGPoint(x: end.x - 14, y: end.y + 7))
-    head.line(to: CGPoint(x: end.x - 14, y: end.y - 7))
+    head.line(to: CGPoint(x: end.x - 16, y: end.y + 8))
+    head.line(to: CGPoint(x: end.x - 16, y: end.y - 8))
     head.close()
     head.fill()
+    NSGraphicsContext.restoreGraphicsState()
 
     NSGraphicsContext.restoreGraphicsState()
     return rep

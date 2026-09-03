@@ -2,9 +2,10 @@ import Foundation
 import OSLog
 
 /// 「所有对外请求」审计日志的统一出口——2026-08-26 用户明确要求"所有软件发出的对外
-/// 请求全部都给我记录下日志"。App 侧真正发起网络请求的地方只有 6 处、分布在 5 个
+/// 请求全部都给我记录下日志"。App 侧真正发起网络请求的地方只有 7 处、分布在 6 个
 /// 文件(`LastfmStatsService.request`/`LastfmAuthFlow` 的两处/`ListenBrainzTokenCheck.
-/// validate`/`CachedImage.load`/`MusicCatalogSearch` 的两处),规模远小于 collector
+/// validate`/`CachedImage.load`/`MusicCatalogSearch` 的两处/`GitHubStarsService.fetch`
+/// ——最后这处 2026-09-03 加,是「关于」页那个 star 数),规模远小于 collector
 /// (Go 侧),不需要一个像 `doHTTPTracked` 那样的运行期包装层——每个调用点各自在发起
 /// 请求前后调一次 `record(...)` 就够了。
 ///

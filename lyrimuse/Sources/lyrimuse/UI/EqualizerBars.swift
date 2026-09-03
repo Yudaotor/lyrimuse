@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import LyrimuseCore
 
 // 灵动岛左耳歌名前面那几根"跳动的均衡条"——纯装饰性的播放指示器,不是真的频谱。
 //
@@ -161,7 +162,16 @@ struct EqualizerBars: View {
         let unit = (raw + 1) / 2
         // 振幅只压缩"能跳多高",不动地板 —— minHeight 那条线永远在,间奏/纯音乐时条子
         // 收敛成小幅晃动而不是趴平。趴平的观感是"坏了",而这个元件的职责是"告诉你还在放"。
-        let scaled = unit * max(0, min(1, amplitude))
+        //
+        // 2026-09-02:夹取从「先夹振幅再乘曲线」改成「乘完再夹」。VocalEnvelope 在字起音那一拍
+        // 会给到 1.25——以前 min(1, amplitude) 直接把它吃掉,起音脉冲根本显示不出来;乘完再夹的
+        // 效果是起音那一刻更多条子顶到 maxHeight 上限、然后回落,那就是 kick,高度永远不超上限。
+        //
+        // 2026-09-03:unit 先过 smoothstep 对比曲线再乘振幅(`EqualizerBarCurve`,LyrimuseCore,
+        // 用户拍板的「小幅压平、大幅拉伸」版本)。曲线在 0.5 处不动,所以均值高度不变、不会重演
+        // 「幅度太小」;变的是顶满与贴地的时间占比,数字与被否掉的 ease-in / 逐柱轮廓的理由见那个
+        // 文件的头注。
+        let scaled = EqualizerBarCurve.level(unit: unit, amplitude: amplitude)
         return Self.minHeight + (Self.maxHeight - Self.minHeight) * CGFloat(scaled)
     }
 }

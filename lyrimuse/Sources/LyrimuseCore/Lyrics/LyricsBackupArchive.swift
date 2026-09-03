@@ -18,21 +18,77 @@ import Foundation
 /// 可覆盖、下载慢也只影响歌词这一步。`BackupDiscovery` 只认 `Lyrimuse-Config-*.json`,所以
 /// sidecar 天然不会被误认成配置包。
 ///
-/// ## 为什么备份的是 `lyrics/` 文件族,不是 17 MB 的 enrich 缓存
+/// ## 歌词正文走 `lyrics/` 文件族,其余字段走 `meta`(2026-09-02 补齐)
 ///
 ///  - `lyrics/` 是歌词六字段(正文/译文/罗马音/逐字/来源/人工标记)的**权威源**:collector 每次
 ///    启动都跑 `importLyricsFromFiles`(文件赢、只增不删),缓存里没有那个 key 也会**新建条目**。
 ///    也就是说只要把文件铺回去,歌词自己会长回缓存里 —— 不需要碰缓存 JSON。
 ///  - 反过来直接盖写 `lyrimuse-enrich-cache.json` 会撞上一个实测过的竞态:collector 内存里握着
 ///    整份缓存、有七处会整份写回磁盘,在 kickstart 生效之前它可能把刚恢复的内容整份盖回去
-///    (2026-08-14「清空了又回来」就是这个,见 EnrichCacheStore.clearAll 的注释)。
-///  - 缓存里其余字段(封面/链接/mbid/打分/决策存档)都是**可重新解析的派生数据**,不值得为它们
-///    多背 17 MB 和一个竞态。
+///    (2026-08-14「清空了又回来」就是这个,见 EnrichCacheStore.clearAll 的注释)。**这条约束
+///    到今天依然成立**,所以下面那个 `meta` 也不是"恢复时直接盖缓存",而是落一份待采纳文件、
+///    由 collector 在自己的启动路径里合并(跟 `importLyricsFromFiles` 同一个时机、同一把锁)。
+///  - ⚠️ 2026-09-02 修正一条**错了的旧判断**:这里原来写「缓存里其余字段(封面/链接/mbid/打分/
+///    决策存档)都是可重新解析的派生数据,不值得为它们多背 17 MB 和一个竞态」——"可重新解析"
+///    对其中几类**不成立**,用户实测撞上(原话「在另外电脑导入了配置,但是并没有把歌曲的决策
+///    解析给带过来」):
+///      * `lyrics_decision` / `lyrics_decision_applied`(本机 2414 / 2368 条)记的是**当时那一轮**
+///        各源分别给了什么、得了多少分 —— 是历史快照,重新解析只会写一份**今天的**,原来那份
+///        永久消失,「解析决策」弹窗里的证据链就断了;
+///      * `plain_lyrics` / `plain_lyrics_source`(用户手点「采纳为静态文本」)压根没有对应的
+///        导出文件(没有时间戳,不属于四种歌词后缀),此前**不在任何备份里**,100% 丢失;
+///      * `manual_pick_sha`(手动选定后锁定的追溯凭据)同样没有落文件,丢了之后
+///        `ManualPickLock` 把这首歌算成"从没手动选过",锁不上且**完全静默**;
+///      * `lyrics_scoring_version` 丢了会被读成 0、落后于当前打分版本 → `needsLyricsRescore`
+///        把**全库**排进"按新规则重选一次"的队列,赢家一变就把刚恢复的正文换掉,连带
+///        单曲校正值的内容指纹一起失效(只有 `manual_lyrics` 和 pins 名单挡得住)。
+///    所以现在整份缓存**剥掉那六个歌词字段之后**一起带走:实测 41.8 MB → 9.7 MB,
+///    base64 进 JSON 再 zlib 只占 1.25 MB(sidecar 13.8 MB → 15.1 MB,+9%),
+///    换掉的是上面这四类真丢不可再生的东西。
 ///  - 顺带保住一个容易忽略的东西:单曲校正值的 key 里含**歌词内容指纹**,正文逐字节相同才查得到。
 ///    走文件族恢复正文一个字节都不变,所以那批校正值到了新机器**真的还有效**。
 public enum LyricsBackupArchive {
     /// 归档内容的格式版本(跟配置包的 `exportFormatVersion` 各自独立)。
-    public static let payloadVersion = 1
+    ///
+    /// 2 = 载荷多了 `meta`(2026-09-02)。**两个方向都能互读**,所以不需要任何迁移代码:
+    /// v1 的包在这一版解出来 `meta == nil`(可选字段缺省);v2 的包在只认 v1 的旧版本上,
+    /// `meta` 作为未知字段被 JSONDecoder 忽略,歌词部分照样恢复。
+    public static let payloadVersion = 2
+
+    /// `meta` 里**不带**的字段 —— 它们的权威源是 `lyrics/` 文件族,由 collector 的
+    /// `importLyricsFromFiles` 负责灌回缓存(见类型头注)。
+    ///
+    /// ⚠️ 这六个字符串必须跟 collector 侧 `enrichEntry` 的 json tag 一字不差
+    /// (`lyrimuse-collector/enrich.go`),对不上的后果是**静默**的:多带的字段会在恢复时
+    /// 盖掉刚从文件导进去的正文,少带的字段则永远不会被搬走。selftest 钉住这份清单。
+    public static let lyricFieldKeys = [
+        "lyrics", "lyrics_tr", "lyrics_roma", "lyrics_yrc", "lyrics_source", "manual_lyrics",
+    ]
+
+    /// enrich 缓存的 JSON → `meta` 载荷用的字节:逐条剥掉 `lyricFieldKeys`,其余原样保留。
+    ///
+    /// 刻意做成"剥黑名单"而不是"挑白名单":这份缓存的字段是**长期在加**的(光 2026-08 就加了
+    /// `plain_lyrics`/`plain_lyrics_source`/`manual_pick_sha` 等好几个),白名单的失效方式是
+    /// 静默漏搬新字段 —— 而这正是这次这个 bug 的同款成因。黑名单只有六个成员、且被 selftest
+    /// 钉住,新字段自动跟着走。
+    ///
+    /// 剥完为空的条目整条丢掉(只有歌词字段的条目没有任何值得搬的东西);解不出来返回 nil,
+    /// 调用方据此把 `meta` 留空 —— 备份少一部分远好过整份打不出来。
+    public static func strippedMeta(fromCacheJSON data: Data) -> Data? {
+        guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return nil
+        }
+        var out: [String: Any] = [:]
+        out.reserveCapacity(root.count)
+        for (key, value) in root {
+            guard var entry = value as? [String: Any] else { continue }
+            for field in lyricFieldKeys { entry.removeValue(forKey: field) }
+            guard !entry.isEmpty else { continue }
+            out[key] = entry
+        }
+        guard !out.isEmpty else { return nil }
+        return try? JSONSerialization.data(withJSONObject: out, options: [.sortedKeys])
+    }
 
     /// 配置包名里的这一段换成下面那个,就是 sidecar 名 —— 同名同时间戳,一眼看得出是一对。
     public static let configNameMarker = "-Config-"
@@ -70,14 +126,25 @@ public enum LyricsBackupArchive {
         public var files: [String: String]
         /// 「已校准」名单:归一化 enrich key → 钉住时的 unix 秒。
         public var pins: [String: Int]
+        /// enrich 缓存**剥掉六个歌词字段之后**的那一份(`strippedMeta` 的产物),原样是一段
+        /// JSON 字节。nil = 这份备份不带(v1 老包,或打包时缓存读不出来)。
+        ///
+        /// 为什么是 `Data`(在 JSON 里落成 base64)而不是嵌套的 JSON 对象:Swift 这一侧**完全
+        /// 不需要看懂**里面的字段,它只负责原样搬运——打包时从缓存文件读出来剥一遍,恢复时
+        /// 原样写成一份待采纳文件交给 collector。用 `Data` 就不必为了 `Codable` 造一套
+        /// 任意-JSON 的胶水类型,也不会因为将来 collector 加了新字段而需要动这边一行代码。
+        /// 代价是 base64 的 33% 膨胀(9.7 MB → 12.9 MB),但压缩后只差 0.65 MB
+        /// (0.60 → 1.25 MB),换这份"字段无关、永不需要跟着改"的解耦是划算的。
+        public var meta: Data?
 
         public init(v: Int = LyricsBackupArchive.payloadVersion, at: String, device: String,
-                    files: [String: String], pins: [String: Int]) {
+                    files: [String: String], pins: [String: Int], meta: Data? = nil) {
             self.v = v
             self.at = at
             self.device = device
             self.files = files
             self.pins = pins
+            self.meta = meta
         }
     }
 

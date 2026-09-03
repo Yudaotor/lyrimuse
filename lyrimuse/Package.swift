@@ -68,5 +68,16 @@ let package = Package(
             name: "lyrics-translate",
             path: "Sources/lyrics-translate"
         ),
+        // 罗马音预生成小助手。理由跟 lyrics-translate 一模一样:调用方是 Go 写的 collector,
+        // 而日文读音必须走 CFStringTokenizer 形态分析、中韩走 ICU,都是 Apple 系统能力,
+        // Go 里没有对应物。见 Sources/lyrics-romanize/main.swift 顶部注释。
+        //
+        // ⚠️ 它**依赖 LyrimuseCore**(lyrics-translate 不依赖)—— 读音本体必须跟 App 播放时
+        // 的客户端兜底走同一个 `Romanizer.lineReading`,不能照抄一份。
+        .executableTarget(
+            name: "lyrics-romanize",
+            dependencies: ["LyrimuseCore"],
+            path: "Sources/lyrics-romanize"
+        ),
     ]
 )

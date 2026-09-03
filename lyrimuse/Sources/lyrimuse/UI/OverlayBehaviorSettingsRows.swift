@@ -5,18 +5,20 @@ import SwiftUI
 // 实现,2026-08-30(编辑台第三步)从 SettingsView 的「窗口」卡里抽出来。
 //
 // 为什么抽:跟 OverlayStyleSettingsRows 同一个理由 —— 这三项现在有**两个**宿主:
-//   ① 编辑台正下方那条独立的「行为」栏(OverlayBehaviorBar),三列小格、视觉上低一级;
+//   ① 编辑台工具栏第二行「行为 ▾」点开的浮层(OverlayBehaviorPopover);
 //   ② 「全部设置」抽屉里「窗口」那一组(OverlayAllSettingsDrawer),键盘/VoiceOver/
 //      "我就想找个开关"的全量兜底通路。
-// 两个宿主的**排版**必然不一样(一个是三列格子、一个是标准设置行),但文案、图标和那个
+// (2026-09-02 之前① 是编辑台正下方一张常驻卡 `OverlayBehaviorBar`,三列小格、视觉上低一级;
+//  用户要求改成跟灵动岛一致的"点开才配置",那张卡整个删掉,理由写在 OverlayBehaviorPopover 上。)
+// 两个宿主的**排版**曾经不一样(一个是三列格子、一个是标准设置行),但文案、图标和那个
 // "改了要连带让真窗口生效"的 Binding 只有下面 OverlayBehaviorItem 这一份 —— 宿主只决定
 // 怎么摆。这个仓库刚为"同一个属性两条路径"付过代价(「对齐方式」在预览条上失效),而设置项
 // 漏改不会编译报错,只会变成"在行为栏里改了有用、在抽屉里改了没用"。
 //
-// 为什么把它们从「窗口」卡里提出来单独成一栏:这三项在编辑台上**看不出变化**(编辑台画的
+// 为什么把它们从「窗口」卡里提出来单独成一组:这三项在编辑台上**看不出变化**(编辑台画的
 // 是一张静态卡,没有点击穿透、没有拖动、没有指针悬停),混在配色/字体那些"改了当场看得见"
-// 的项里,读者会一直等一个不会来的视觉反馈。提出来之后编辑台上方那一整块就只剩"所见即
-// 所得"的项,行为项自己占一栏。
+// 的项里,读者会一直等一个不会来的视觉反馈。分出来之后编辑台画布上方那几个入口里,"所见即
+// 所得"的(文字/配色/排版)排第一行,行为项自己占第二行。
 //
 // (2026-08-30 第十步按用户要求做了一次纯删除:栏标题旁那句「这些改动在编辑台上看不出来,
 //  所以留在这儿」、「锁定位置」那格的小字、「拖动前先长按」的副标题、以及「划过让开」旁边
@@ -28,6 +30,20 @@ import SwiftUI
 //
 // 「宽度」**不在这一栏**:它已经能在编辑台里那条宽度调整条上直接改(看得见),抽屉里那根
 // 滑杆只是兜底,不属于"设一次就不动"的行为项。
+//
+// ⚠️ **2026-09-02 起这两个宿主里各多两行,但它们不属于 `OverlayBehaviorItem`**:「截屏/录屏
+// 时隐藏」和「暂停/无播放时隐藏」原来是设置页上一张独立的「自动隐藏」卡,用户要求"不要单独
+// 放在外面,要遵循设计理念,放到行为卡片里面去",于是并进了「行为」这一组和抽屉「窗口」组。
+// 它们的真源在 `UI/AutoHideSettingsRows.swift`(`AutoHideItem`),`OverlayBehaviorItem.allCases`
+// **仍然恒为三项**。
+// 别为了"都是行为项"把它们并进下面这个枚举:那两项要同时服务灵动岛(靠 `AutoHideSurface`
+// 分流到 `notchHide*` 和另一个控制器),而 `OverlayBehaviorItem` 的 Binding 写死打的是悬浮窗
+// 控制器。它们落在这一组里的判据跟这三项是同一条(在编辑台上看不出变化),这是那条判据的
+// 延伸,不是新规矩。
+// (2026-09-02 之前这里还有一条理由:「`OverlayBehaviorBar` 的三列格子版式不画副标题和 ⓘ
+//  气泡,并进 allCases 会把那两行的文案静默丢掉」。那张卡删掉之后这条不再成立 —— 浮层里
+//  全是标准 `SettingsRow`,副标题和 ⓘ 都画得出来。**但上面那条按形态分流的理由没变**,
+//  仍然不能合并。)
 
 /// 三个行为项的唯一真源:文案、图标、以及那个"改了要连带让真窗口生效"的 Binding。
 ///
@@ -74,11 +90,12 @@ enum OverlayBehaviorItem: String, CaseIterable, Identifiable {
     /// AppSettings.lockPosition 声明处的注释),真窗口的点击穿透、鼠标监听器装卸都在
     /// LyricsOverlayWindowController 那边。丢掉就是"开关变了、真窗口纹丝不动"。
     ///
-    /// ⚠️ 这两句**没有**套 `if settings.classicOverlayEnabled` 守卫,跟宽度那一路不一样 ——
-    /// 这是**原样搬过来的既有行为**,不是漏写。宽度的三个写入点(编辑台调整条 / 菜单栏快捷
-    /// 面板 / 抽屉滑杆)本来就都带守卫,而这两个开关从来没带过;要不要给它们补上是另一件事
-    /// (牵涉控制器里 `isPositionLocked` 那份镜像会不会变陈旧,见那个属性声明处那段 bug 记录),
-    /// 不该混在"把行搬个位置"这次改动里悄悄改掉。
+    /// ⚠️ 这两句**都套着** `if settings.classicOverlayEnabled` 守卫(2026-08-30 补的,逐条理由
+    /// 写在下面各自的行内注释里)。
+    /// (这段话 2026-08-30 拆文件时写的是"这两句**没有**套守卫、是原样搬过来的既有行为",守卫
+    ///  补上之后就过期了,2026-09-02 更正。特意留一句而不是直接删:它正好会把
+    ///  `UI/AutoHideSettingsRows.swift` 头注那条核心不变量读反 —— 那条说"`.shared` 只准出现在
+    ///  set: 闭包里、必须带 `xxxEnabled` 守卫",而这里曾经写着"同族的行为项没有守卫"。)
     ///
     /// 「拖动前先长按」没有 WindowController 那一句:它是纯持久化项,长按判定每次鼠标事件
     /// 现读 AppSettings(handleGlobalMouseEvent),不需要谁去"应用"一次。
@@ -148,101 +165,40 @@ struct OverlayBehaviorSettingsRows: View {
     }
 }
 
-// MARK: - 宿主②:编辑台下面那条「行为」栏
+// MARK: - 宿主②:编辑台工具栏「行为」浮层
 
-/// 编辑台正下方那一栏。三列排布,每格就是"标题 + 开关"一行(第十二步删掉最后一句副标题
-/// 之后,三格的内容完全同构)。
+/// 编辑台工具栏第二行那颗「行为 ▾」点开的浮层(2026-09-02)。
 ///
-/// 视觉上刻意比上面的卡低一级:标题只有 12pt、小字是次要色、整格垫一层比卡片更淡的底 ——
-/// 这三项是"设一次就不动"的,不该跟字体/配色那些高频项抢注意力。
+/// **前身是编辑台正下方一张常驻卡 `OverlayBehaviorBar`**(三列小格 + 下面两行标准设置行),
+/// 用户看过之后要求「你帮我和灵动岛设置页一样处理,放到上面的小按钮里面,点了出现下拉框」
+/// —— 灵动岛那边同一批东西(`NotchBehaviorPopover`)早就是工具栏浮层,同一类设置在两个形态
+/// 里长成两副样子,是用户读到的不一致。那张卡连同它的三列格子版式整个删掉。
+///
+/// 顺带解决了那张卡自己的一个结构性别扭:格子版式**只画"标题 + mini 开关"**,不画副标题
+/// 也不画 ⓘ 气泡,而 2026-09-02 并进来的「截屏/录屏时隐藏」两样都有 —— 那时只能把它们摆在
+/// 三列格子**外面**、走另一套版式,一张卡里两种行长相。浮层里全是标准 `SettingsRow`,五项
+/// 长相一致。
+///
+/// ⚠️ **宽度 420 是实测值,别拍脑袋改**:瓶颈是英文标题 "Hide During Screenshots/Recording"
+/// (216pt) + ⓘ(19pt),自动隐藏那两行的内容自然宽 271pt(中文)/ 385pt(英文),1pt 步进探出的
+/// 英文不折行硬下限是 **386**;`SettingsRow` 的标题没有 `lineLimit`,超宽的表现是**折行**不是
+/// 截断,而 ⓘ 跟标题同处一个 HStack 会垂直居中、尾部开关是 `.top` 对齐,三者当场错位。420 的
+/// 余量 +34 跟 `NotchStylePopover` +28 / `NotchEarPopover` +24 / `OverlayLayoutPopover` +32
+/// 同一档。上面那三项(锁定位置/长按拖动/悬浮淡化)都比它短,瓶颈不变。
+/// 跟 `NotchBehaviorPopover` 同宽也让两个形态的「行为」浮层看起来是一件东西。
+///
+/// ⚠️ 内容必须跟 `OverlayAllSettingsDrawer.windowGroup` 和
+/// `OverlayEditorStage.behaviorSummary` 三处一致 —— 抽屉那一组是这五项**不用点开浮层**就能
+/// 摸到的兜底入口(键盘 / VoiceOver),别顺手把它也收进浮层。
 @MainActor
-struct OverlayBehaviorBar: View {
-    /// 三格之间的间距。
-    private static let cellSpacing: CGFloat = 8
-
+struct OverlayBehaviorPopover: View {
     var body: some View {
-        SettingsCard {
-            header
-            HStack(alignment: .top, spacing: Self.cellSpacing) {
-                ForEach(OverlayBehaviorItem.allCases) { item in
-                    cell(item)
-                        // maxHeight: .infinity 保的是**三格等高**:HStack 的高度取三格里最高
-                        // 的那一格,再让每格撑满它。三格现在内容同构、本来就一样高,留着是因为
-                        // 代价为零而失效是静默的 —— 哪天某一格的标题换行或多挂一个 ⓘ,少了这
-                        // 一句就会变成底边参差不齐。
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                }
-            }
-            .fixedSize(horizontal: false, vertical: true)
-            .padding(.horizontal, SettingsRowMetrics.horizontalPadding)
-            .padding(.bottom, 12)
+        SettingsPopoverShell(title: L10n.t("行为"), width: 420) {
+            OverlayBehaviorSettingsRows()
+            // 「自动隐藏」两行。⚠️ "本组之前"这条分隔线由宿主插,组件内部只在自己两行之间
+            // 插一条 —— 见 AutoHideSettingsRows.swift 顶部那条约定,四个宿主一处都不能漏。
+            CardDivider()
+            AutoHideSettingsRows(surface: .desktopOverlay)
         }
-    }
-
-    /// 栏标题。
-    ///
-    /// 刻意不用 SettingsCardHeader:那个是"标题一行、说明另起一行"的两行结构,而这里只有一个
-    /// 词,占不满两行。字号/字重/颜色/内边距全部沿用 SettingsCardHeader 的口径,不另立一套。
-    ///
-    /// (第十步之前标题右边还排着一句「这些改动在编辑台上看不出来,所以留在这儿」—— 把说明
-    ///  挪到同一行是为了省下一行高度。那句按用户要求删了,`HStack` 留着:它撑的是标题左对齐
-    ///  加尾部 Spacer 那套排版,换成裸 Text 反而要重调内边距。)
-    private var header: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 8) {
-            Text(L10n.t("行为"))
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(.secondary)
-                .tracking(0.5)
-            Spacer(minLength: 0)
-        }
-        .padding(.horizontal, SettingsRowMetrics.horizontalPadding)
-        .padding(.top, 10)
-        .padding(.bottom, 7)
-    }
-
-    private func cell(_ item: OverlayBehaviorItem) -> some View {
-        // 一行就够了。第十二步删掉最后一句副标题之后,原来那层 VStack(标题行 + 可选小字 +
-        // 顶住上边的 Spacer)只剩下标题行 —— 留着它会在每格底下多垫一段 spacing + Spacer
-        // 的空白,看着像"这里本该还有一句话没画出来"。
-        HStack(spacing: 4) {
-            Text(item.title)
-                .font(.system(size: 12, weight: .medium))
-                .lineLimit(1)
-                // 标题比开关重要:宽度不够时先让开关那一侧的最小间距去挤,别把标题
-                // 截成"拖动前先长…"。
-                .layoutPriority(1)
-            Spacer(minLength: 4)
-            Toggle("", isOn: item.binding)
-                .labelsHidden()
-                // ⚠️ 必须显式指定 .switch —— macOS 上 Toggle 默认画成复选框,只有在
-                // Form/List 里才自动变开关(同 SettingsRow 里那条注释)。这一栏是自己
-                // 用 VStack 搭的,不写这一句三个开关全是 ☑。
-                .toggleStyle(.switch)
-                .controlSize(.mini)
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .background(cellBackground)
-    }
-
-    // (第十步之前「划过让开」那一格底下还有一颗「预演」按钮:点一下让编辑台画布淡到 25% 再
-    //  回来、约 1.2 秒演完,是这个开关在编辑台上唯一能"被看见"的方式。用户要求删掉,连带
-    //  宿主那边的 overlayFadePreviewActive / overlayFadePreviewTask / playOverlayFadePreview
-    //  和编辑台那三个时长常量一起清干净了。⚠️ 当年"刻意做成一次性演示、不去模拟'鼠标移到
-    //  编辑台画布上就淡'"那条结论仍然有效:真视图对 isHoveringLyrics 的反应是整卡淡到 15%,
-    //  在编辑台上接指针悬停就是"想点它、它就躲",见 OverlayEditorStage 里 OverlayPreviewChrome
-    //  的注释。)
-
-    /// 每一格的底。
-    ///
-    /// 跟编辑台底板一样刻意**不**用 settingsCardBackground 那套液态玻璃:这三格是嵌在
-    /// 一张卡**里面**的,玻璃套玻璃只会糊成一片(SettingsGlassContainer 的 spacing 传 0
-    /// 就是为了避免相邻的卡融成一整块)。一层低透明度中性填充 + 一条发丝描边,深浅色
-    /// 模式下都成立。
-    private var cellBackground: some View {
-        let shape = RoundedRectangle(cornerRadius: 8, style: .continuous)
-        return shape
-            .fill(Color.primary.opacity(0.04))
-            .overlay(shape.strokeBorder(Color.primary.opacity(0.07), lineWidth: 0.5))
     }
 }

@@ -47,11 +47,25 @@ actor LastfmRateLimiter {
     func acquire(priority: Priority) async {
         await withCheckedContinuation { (cont: CheckedContinuation<Void, Never>) in
             switch priority {
-            case .interactive: fgWaiters.append(cont)
+            case .interactive:
+                fgWaiters.append(cont)
+                lastInteractiveAcquire = Date()
             case .background: bgWaiters.append(cont)
             }
             startPumpIfNeeded()
         }
+    }
+
+    /// 最近一次前台(interactive)排队的时刻。给"前台安静了才跑"的后台批任务用,见
+    /// `interactiveIdle(for:)`。
+    private var lastInteractiveAcquire: Date = .distantPast
+
+    /// 过去 `seconds` 秒内没有任何前台请求排过队 → true。别名自动发现这类一轮几十个请求的
+    /// 后台批任务先问一句再动手(2026-09-03):它们虽然排在后台队列、放行让前台优先,但
+    /// 4 路并发的 getinfo 一旦发出去,就在同一条(本机实测很慢的)链路上跟前台请求排队,
+    /// 用户正在等的那几个次数/封面会被拖慢——不如等前台歇下来再扫。
+    func interactiveIdle(for seconds: TimeInterval) -> Bool {
+        Date().timeIntervalSince(lastInteractiveAcquire) >= seconds
     }
 
     /// request() 探测到 429 / Last.fm error 29(Rate Limit Exceeded)时调用。

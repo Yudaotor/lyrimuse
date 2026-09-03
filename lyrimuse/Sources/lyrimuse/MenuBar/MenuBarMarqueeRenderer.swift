@@ -17,12 +17,57 @@ import LyrimuseCore
 // 菜单打开时 selectedMenuItemTextColor,都在按钮当前的 effectiveAppearance 下解析)。
 @MainActor
 enum MenuBarMarqueeRenderer {
-    /// 跟系统菜单栏项同一套字体。ofSize: 0 = 用系统当前的菜单栏字号,不要写死数字,
-    /// 否则用户改了系统字号之后这行歌词会跟旁边的菜单项不齐。
-    static var font: NSFont { NSFont.menuBarFont(ofSize: 0) }
+    /// 跟系统菜单栏项同一套字体族;**粗细**(`menuBarLyricsFontWeight`,2026-09-03 加)和**字号**
+    /// (`menuBarLyricsFontSize`,同日用户要求追加,0 = 跟随系统)听用户的。跟随系统时字号取
+    /// `menuBarFont(ofSize: 0)` 的 pointSize,不要写死数字,否则系统字号变了这行歌词会跟旁边的
+    /// 菜单项不齐。
+    ///
+    /// 实测(2026-09-03,本机 SF 13pt):六档字重的 ascender/descender 完全相同 → `lineHeight` 不随
+    /// 字重变,固定宽度模式下槽位几何一像素不动;中文各档同宽(只变笔画),拉丁字随字重变宽
+    /// (medium +2%、semibold +3.5%、bold +5.6%、heavy +8.6%),自适应模式下换档那一刻槽宽变一次。
+    /// 默认档 `.regular` 与 `menuBarFont(ofSize: 0)` 逐点同宽同高,直接返回后者,老用户零变化。
+    static var font: NSFont {
+        let settings = AppSettings.shared
+        return font(weight: settings.menuBarLyricsFontWeight, size: settings.menuBarLyricsFontSize)
+    }
+
+    /// 字号可选的合法区间(2026-09-03 加字号)。上限由状态栏项按钮的高度推出来:`NSStatusBar.system
+    /// .thickness` 恒 22pt(带刘海的机器菜单栏本身 33pt 高,按钮仍是 22),而 `lineHeight` 逐字号实测
+    /// 13→18 / 14→19 / 15→20 / 16→21 / 17→23 —— 17pt 起装不下,那张撑槽宽的透明占位图会被按钮按比例
+    /// 缩小、槽宽跟着失真。下限 10pt 之下在菜单栏里已经读不清。存量配置越界时夹回区间,不崩不留空白。
+    static let fontSizeRange: ClosedRange<CGFloat> = 10...16
+
+    /// 系统菜单栏此刻的字号(本机 13)。设置里 0 = 跟随它。
+    static var systemPointSize: CGFloat { NSFont.menuBarFont(ofSize: 0).pointSize }
+
+    /// - Parameter size: 0 = 跟随系统字号;其余按点数,越界夹回 `fontSizeRange`。
+    static func font(weight: OverlayFontWeight, size: CGFloat) -> NSFont {
+        let pointSize = size > 0
+            ? min(max(size, fontSizeRange.lowerBound), fontSizeRange.upperBound)
+            : systemPointSize
+        // regular 走 menuBarFont(ofSize:) 而不是 systemFont:两者实测逐点同宽同高,但前者才是
+        // "菜单栏那套字体"这个语义本身,系统将来换菜单栏字体时它跟得上。
+        guard weight != .regular else { return NSFont.menuBarFont(ofSize: pointSize) }
+        return NSFont.systemFont(ofSize: pointSize, weight: weight.nsWeight)
+    }
+
+    /// 长间奏 / 唱完等待时占位的那个音符。MenuBarStatusItem.refresh 与这里共用这一份,别各写一个字面量。
+    static let placeholderGlyph = "♪"
+
+    /// 画**这段文字**用的字体。占位符 ♪ 恒用系统默认字重(字号仍跟设置走,行高才对得上):实测 U+266A 在
+    /// medium / semibold 下会落到另一款回退字体,宽度从 6.5pt 跳到 12pt、字形也变(bold / heavy 又回到
+    /// 7.1pt)—— 一个占位记号不该随用户的粗细设置换脸,而且它一变宽在自适应模式下就是一次槽位重建。
+    static func font(for text: String) -> NSFont {
+        let lineFont = font
+        return text == placeholderGlyph ? NSFont.menuBarFont(ofSize: lineFont.pointSize) : lineFont
+    }
 
     /// 这段文字画出来有多宽(点)。取窗宽度和滚动距离都靠它算。
     static func width(of text: String) -> CGFloat {
+        width(of: text, font: font(for: text))
+    }
+
+    private static func width(of text: String, font: NSFont) -> CGFloat {
         guard !text.isEmpty else { return 0 }
         return (text as NSString).size(withAttributes: [.font: font]).width
     }
@@ -39,10 +84,13 @@ enum MenuBarMarqueeRenderer {
     /// plainText(引擎侧保证 plainText = words.map(\.text).joined()),同一份字符串、
     /// 同一个字体,这里量出来的前缀宽度天然落在长图的同一坐标系上。
     static func wordEndXs(for words: [SyncedLyricWord]) -> [CGFloat] {
+        // 显式用整句的字体量前缀,不走 font(for:):某个前缀恰好等于占位符 ♪ 时不能换成默认字重,
+        // 否则这一个词的填色边界会跟长图对不上。
+        let lineFont = font
         var prefix = ""
         return words.map { w in
             prefix += w.text
-            return width(of: prefix)
+            return width(of: prefix, font: lineFont)
         }
     }
 
@@ -160,7 +208,7 @@ enum MenuBarMarqueeRenderer {
     ///   (见 MenuBarScrollingLabel.rebuildImage)。
     static func prepare(text: String, color: NSColor) -> PreparedLine? {
         guard !text.isEmpty else { return nil }
-        let font = Self.font
+        let font = Self.font(for: text)
         let boxHeight = lineHeight
         let attributes: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: color]
         let textWidth = ceil((text as NSString).size(withAttributes: attributes).width)

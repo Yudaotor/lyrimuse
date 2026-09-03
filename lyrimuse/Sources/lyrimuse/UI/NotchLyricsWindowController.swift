@@ -98,7 +98,24 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     // hover 仍可展开(跟暂停态一致,里面有控制按钮可以切歌跳过广告)。
     // 2026-08-31 加入 collapsesWhenPaused 维度(用户要求把"暂停/广告时缩到最小"开放成可关
     // 的配置项):关掉之后暂停/广告态不再收缩,卡片保持原来的稳态/展开尺寸。
-    var isCollapsed: Bool { collapsesWhenPaused && (!isPlayingNow || isAdBreakNow) && !isExpanded }
+    // 2026-09-02 加入 hideWhenNotPlaying 维度:开着「暂停/无播放时隐藏」时,暂停态**不再经过
+    // 收起态**——用户目验"先收起再消失"后否掉("直接从正常大小缩小到无,不要经历那个暂停状态"),
+    // 改为整卡从当前大小缩进刘海(isVanished,见 updateActualVisibility)。广告插播仍收起:
+    // 广告期间 isPlayingNow 为 true、窗口不隐藏,收起态照旧有意义。
+    var isCollapsed: Bool {
+        collapsesWhenPaused && ((!isPlayingNow && !hideWhenNotPlaying) || isAdBreakNow) && !isExpanded
+    }
+
+    /// 「暂停/无播放时隐藏」的退场态(2026-09-02):true 时 NotchWindowRoot 把整卡缩到刘海里
+    /// (scale→0 + 透明),动画走完再 orderOut;恢复播放时先 orderFront 再翻回 false,卡片从
+    /// 刘海里弹出来。窗口隐藏期间保持 true,这样下次露面一定是从无到有,而不是先满幅一帧。
+    @Published private(set) var isVanished = false
+
+    /// 出场动画的触发计数(2026-09-03):每次卡片「从无到有」露面 —— 窗口刚 orderFront(冷启动、手动打开
+    /// 灵动岛)或从 isVanished 回场 —— 加一,`NotchWindowRoot` 的 keyframeAnimator 以它为 trigger 播一遍
+    /// 「从刘海撑开」(细节见 NotchReveal / NotchRevealShape 头注)。两件事同时发生只加一次。收起 → 稳态那条
+    /// 弹簧不走这里:那是尺寸变化,不是出场。
+    @Published private(set) var revealGeneration = 0
 
     /// Spotify 广告插播中。写入规则与 isPlayingNow 相同:只取 sink 参数值。
     @Published private(set) var isAdBreakNow: Bool = false
@@ -500,9 +517,10 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     }
 
     // 灵动岛自己那一份"暂停/无播放时隐藏"(`AppSettings.notchHideWhenNotPlaying`)。
-    // ⚠️ 2026-09-01 之前它跟经典悬浮窗**共用同一个设置项**,那天用户要求把「自动隐藏」
-    // 这张卡搬进两个形态各自的页面并拆成独立两套 —— 别再把 `AppSettings.hideWhenNotPlaying`
-    // (现在只归悬浮歌词)接回这里。
+    // ⚠️ 2026-09-01 之前它跟经典悬浮窗**共用同一个设置项**,那天用户要求把「自动隐藏」搬进
+    // 两个形态各自的页面并拆成独立两套 —— 别再把 `AppSettings.hideWhenNotPlaying`
+    // (现在只归悬浮歌词)接回这里。(那两行的 UI 落点 2026-09-02 又收进了各形态的「行为」
+    // 入口、渲染合成一份 `UI/AutoHideSettingsRows.swift`;**值仍是两份**,这条禁令不受影响。)
     func setHideWhenNotPlaying(_ hide: Bool) {
         hideWhenNotPlaying = hide
         updateActualVisibility(isPlayingNow: PlaybackCoordinator.shared.isPlayingSmoothed)
@@ -596,19 +614,84 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     /// orderFrontRegardless 不是免费的(一次 WindowServer 重排序事务),而这个函数挂在
     /// 播放状态翻转/设置同步/镜像 syncAll 多条路径上,值没变就别重复叫(2026-08-19)。
     private var lastAppliedShouldShow: Bool?
+    /// 「先收起再隐藏」的排队与作废(2026-09-02):挂着的延迟隐藏 + 代数。任何一次重新求值出
+    /// 「要显示」/「立刻隐藏」都让它作废(代数加一),到点时再核一遍代数与当下状态才真正
+    /// orderOut。挂着期间 lastAppliedShouldShow 仍是 true——窗口确实还在屏幕上。
+    private var pendingHideWork: DispatchWorkItem?
+    private var hideGeneration = 0
 
     private func updateActualVisibility(isPlayingNow: Bool) {
-        // ⚠️ 开着「暂停/无播放时隐藏」时,暂停就整个 orderOut —— 那样**看不到收起动画**
-        // (窗口都没了,还收什么)。灵动岛的收起态本身只占菜单栏那一条高度、不额外占屏,
-        // 所以想看到"歌词行卷回顶行"的效果,得把这个设置关掉。这是设置本身的语义,不是 bug:
-        // 有人就是要暂停后连那条顶行都别留。
         let shouldShow = isVisible && (!hideWhenNotPlaying || isPlayingNow)
-        guard shouldShow != lastAppliedShouldShow else { return }
-        lastAppliedShouldShow = shouldShow
-        // orderFrontRegardless(),不是 orderFront(nil)——这个 App 是 .accessory 策略、
-        // 从不激活成前台 App,参照的真实开源实现(NotchDrop/DynamicNotchKit)贴刘海用的
-        // 都是这个,不看"当前是否是活跃 App"这个前提就把窗口调到最前。
-        if shouldShow { window?.orderFrontRegardless() } else { window?.orderOut(nil) }
+        if shouldShow {
+            // 中途又播放了:挂着的延迟隐藏作废;窗口若已在屏上就一次 WindowServer 事务都不发。
+            cancelPendingHide()
+            // 「从无到有」露面的两种情况合并成一次出场动画:窗口刚上屏、或卡片从刘海里回场。先加计数再
+            // orderFront / 翻 isVanished —— 同一事务里 SwiftUI 看到的第一帧就是裁剪到刘海宽的起始态,
+            // 不会先满幅一帧。
+            if lastAppliedShouldShow != true || isVanished { revealGeneration &+= 1 }
+            if lastAppliedShouldShow != true {
+                lastAppliedShouldShow = true
+                // orderFrontRegardless(),不是 orderFront(nil)——这个 App 是 .accessory 策略、
+                // 从不激活成前台 App,参照的真实开源实现(NotchDrop/DynamicNotchKit)贴刘海用的
+                // 都是这个,不看"当前是否是活跃 App"这个前提就把窗口调到最前。
+                window?.orderFrontRegardless()
+            }
+            // 先 orderFront 再翻回 false:卡片在已经可见的窗口里从刘海撑开(出场动画由上面的
+            // revealGeneration 触发,scale 本身瞬时回 1)。顺序反了动画会在看不见的窗口里播完。
+            if isVanished { isVanished = false }
+            return
+        }
+        guard lastAppliedShouldShow != false else { cancelPendingHide(); return }
+        // 「暂停/无播放时隐藏」开着时先让整卡缩进刘海、再 orderOut(2026-09-02,推翻此前"暂停即
+        // 整窗消失、看不到动画是设置语义"的决定,见 05 章设计决策 #17)。首版是"先播 0.45s 收起
+        // 弹簧再走",用户目验后否掉——"不要经历那个暂停状态,直接从正常大小缩小到无":现在
+        // isCollapsed 在这个开关开着时不再把暂停算进去(卡片保持稳态尺寸),由 isVanished 驱动
+        // NotchWindowRoot 把整卡 scale→0 缩进刘海(NotchWindowRoot.vanishDuration),再等
+        // vanishSettleDelay 三重校验后 orderOut。仍然立刻隐藏的情况:系统减弱动态效果(不做尺寸
+        // 动画)、用户把灵动岛整个关掉(isVisible=false)、窗口本来就还没显示过(lastApplied == nil)。
+        // 截屏/录屏隐藏走的是 sharingType,不经这里,不受这 1/4 秒影响。
+        let animatesVanish = isVisible && lastAppliedShouldShow == true
+            && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+        guard animatesVanish else {
+            cancelPendingHide()
+            lastAppliedShouldShow = false
+            if isVanished { isVanished = false }
+            window?.orderOut(nil)
+            return
+        }
+        // 已经在等退场动画就不重排:设置同步(syncStateFromSettings)等路径会带着同样的结论
+        // 再进来,重排只会把隐藏一推再推。
+        guard pendingHideWork == nil else { return }
+        isVanished = true
+        hideGeneration &+= 1
+        let generation = hideGeneration
+        let work = DispatchWorkItem { [weak self] in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                self.pendingHideWork = nil
+                // 到点时按当下重算,不信排队那一刻的结论:代数没被"又播放了/关掉了"作废过;
+                // 开关与灵动岛仍开;平滑播放态仍是"没在放"。作废的那一路自己负责把 isVanished
+                // 翻回去(shouldShow 分支 / 立刻隐藏分支),这里不动它。
+                guard generation == self.hideGeneration else { return }
+                let stillShow = self.isVisible
+                    && (!self.hideWhenNotPlaying || PlaybackCoordinator.shared.isPlayingSmoothed)
+                if stillShow {
+                    // 兜底:没人作废却又该显示了——别让一张缩成一点的卡片留在可见窗口里。
+                    if self.isVanished { self.isVanished = false }
+                    return
+                }
+                self.lastAppliedShouldShow = false
+                self.window?.orderOut(nil)   // isVanished 保持 true:下次露面从刘海里长出来
+            }
+        }
+        pendingHideWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + NotchWindowRoot.vanishSettleDelay, execute: work)
+    }
+
+    private func cancelPendingHide() {
+        hideGeneration &+= 1
+        pendingHideWork?.cancel()
+        pendingHideWork = nil
     }
 
     // 不加 private:「外观」页的灵动岛预览要用同一套刘海几何。
@@ -617,7 +700,7 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     // 不变量:引用 .shared 会执行 init() 建窗口并立刻 orderFront,灵动岛关着的用户会
     // 凭空多出一个胶囊。这个函数不碰任何实例状态,拿它算几何是安全的。
     struct NotchGeometry {
-        // 刘海本身(或无刘海屏幕的兜底值)的高度——这一整条永远只留纯黑背景,不放
+        // 刘海本身(或无刘海屏幕的兜底值)的高度——这一整条永远只留纯黑背景,不放(唯一例外:NotchLyricsView.notchSeam 那枚故意让硬件挡住的彩蛋,2026-09-03)
         // 任何文字/图标,常显内容行从这条高度往下才开始画,见 NotchLyricsView。
         let notchHeight: CGFloat
         let centerX: CGFloat
@@ -772,6 +855,7 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     /// 插拔循环会无界累积。断开 contentView/hostingView 这一向,环即解体。
     /// (主实例 .shared 是有意常驻的单例、从不 teardown,不受影响。)
     func teardown() {
+        cancelPendingHide()
         window?.orderOut(nil)
         isPlayingObserver?.cancel()
         isPlayingObserver = nil

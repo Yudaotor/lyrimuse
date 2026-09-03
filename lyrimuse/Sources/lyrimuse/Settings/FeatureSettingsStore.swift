@@ -96,6 +96,20 @@ extension PlaybackPlayer {
         }
     }
 
+    /// 这台机器没装对应 App 时,`AppIconResolver.icon(bundledResourceName:)` 该去找哪个
+    /// 随包打包的静态品牌图(2026-09-02,见该函数头注的完整背景)。nil = 没有这一层兜底,
+    /// 直接落到 `tintColor`+`fallbackSymbolName` 那套纯色占位——Apple Music 是系统自带,
+    /// 几乎不存在"没装"这种情况;`.auto` 本来就不对应任何具体 App。
+    public var bundledIconResourceName: String? {
+        switch self {
+        case .qqMusic: return "QQMusicIcon"
+        case .netease: return "NeteaseIcon"
+        case .kugou: return "KugouIcon"
+        case .spotify: return "SpotifyIcon"
+        case .appleMusic, .auto: return nil
+        }
+    }
+
     /// 图标网格(引导页"选择播放器" + 设置页"播放器"卡,2026-08-25)的摆放顺序,按
     /// 系统语言排——只影响这两处图标网格,不改 `allCases` 本身:这个类型别的消费点
     /// (`PlaybackCoordinator.allCases.first(where:)` 这类按 bundle id 查找)不关心顺序,
@@ -126,6 +140,27 @@ public enum LyricsSourceMode: String, CaseIterable, Identifiable, Codable {
     }
 }
 
+// 合唱串("A & B")scrobble 时发哪个名字(2026-09-03 起三档)。rawValue 必须跟 collector
+// features.go 的 scrobbleArtistAll/First/Smart 常量逐字相同——两侧通过同一份 features.json
+// 交换,collector 只认这三个串,拼错就静默退回 all。
+//
+// - all:原样发整串(默认)。
+// - first:纯字符串取第一位(collector firstCreditedArtist),不联网。
+// - smart:按 Last.fm 编目判定(collector lastfmcollapse.go):合唱串已被收录就原样发;没收录、
+//   而第一位歌手名下这首歌已被收录才只发第一位;两边都查不到或查询失败维持原样。每首歌只判
+//   一次、结论永久沿用。
+public enum LastfmScrobbleArtistMode: String, CaseIterable, Identifiable, Codable {
+    case all, first, smart
+    public var id: Self { self }
+    public var displayName: String {
+        switch self {
+        case .all: return L10n.t("全部")
+        case .first: return L10n.t("只发第一位")
+        case .smart: return L10n.t("智能")
+        }
+    }
+}
+
 // 跟 collector/features.go 的 featureFlagsFile 逐字段对应的 on-disk 形状——所有字段
 // 可选(nil = 沿用默认开启),跟 collector 侧"文件缺失/字段缺失都当作 true"的约定一致,
 // 这里存的是 Lyrimuse 这台机器上用户明确设置过的值。collector/features.go 那侧是
@@ -149,11 +184,22 @@ struct FeatureFlagsFile: Codable, Equatable {
     // 重启才会跟上。
     var players: [String]?
     var albumPrefetch: Bool?
+    /// 歌词定下来之后要不要跟着算法/打分升级在后台自动换掉。缺失=true(现状),
+    /// 跟 collector 侧 `boolOr(f.LyricsAutoUpgrade, true)` 对齐。
+    var lyricsAutoUpgrade: Bool?
     var lyricsMachineTranslation: Bool?
     var lastfmMirrorScrobble: Bool?
-    /// 合唱串("A & B")上送时只发第一位艺人。**默认 false = 原样发整串**。
-    /// 命名对齐 Navidrome 的 Lastfm.ScrobbleFirstArtistOnly(它默认也是 false)。
+    /// 合唱串上送档位,LastfmScrobbleArtistMode 的 rawValue("all"/"first"/"smart")。
+    /// 缺失时 load() 退回下面的遗留布尔做一次迁移。
+    var lastfmScrobbleArtistMode: String?
+    /// **遗留字段**(2026-08-31 ~ 09-03 之间的二态开关,被上面的 lastfmScrobbleArtistMode
+    /// 取代,只留着给一次性迁移用):true ↔ first,false/缺失 ↔ all。这台机器往后只写
+    /// lastfmScrobbleArtistMode,不再写它——跟 collector 侧 featureFlagsFile 对称。
     var lastfmScrobbleFirstArtistOnly: Bool?
+    /// 短于 30 秒的曲目也 scrobble 到 Last.fm。**默认 false = 现状**(Last.fm 官方规则要求曲目长于
+    /// 30 秒)。只管 Last.fm(含给它兜底的本地收听日志/回填),ListenBrainz 不受影响 —— 见
+    /// collector poller.go tooShortToScrobble / shortTrackLastfmOnly。
+    var scrobbleShortTracks: Bool?
     var weeklyDigest: Bool?
     // 见 collector/daily.go——独立于 weeklyDigest 的开关,两个可以同时开、只开一个、
     // 或都不开。
@@ -207,9 +253,12 @@ struct FeatureFlagsFile: Codable, Equatable {
         case player
         case players
         case albumPrefetch = "album_prefetch"
+        case lyricsAutoUpgrade = "lyrics_auto_upgrade"
         case lyricsMachineTranslation = "lyrics_machine_translation"
         case lastfmMirrorScrobble = "lastfm_mirror_scrobble"
+        case lastfmScrobbleArtistMode = "lastfm_scrobble_artist_mode"
         case lastfmScrobbleFirstArtistOnly = "lastfm_scrobble_first_artist_only"
+        case scrobbleShortTracks = "scrobble_short_tracks"
         case weeklyDigest = "weekly_digest"
         case dailyDigest = "daily_digest"
         case weeklyDigestSource = "weekly_digest_source"
@@ -260,7 +309,34 @@ public final class FeatureSettingsStore: ObservableObject {
     // LyrimuseCore 的 PlaybackPlayerPreference.selected/collector 的 resolvePlayers
     // 同一份"选中集合永远至少有一个成员"的不变量。
     @Published public var players: Set<PlaybackPlayer> = [.auto]
+
+    /// 点一下切换这个播放器的选中状态,并落盘。设置页「播放器」卡和引导页「选择播放器」
+    /// 那一步共用这一份(2026-09-03 从 `SettingsView.toggleSelectedPlayer` 提上来 ——
+    /// 引导页同日从单选改成多选,两处各写一遍就有两份"最后一个能不能取消"的判断)。
+    ///
+    /// 「自动识别」跟具体播放器不是互斥关系,可以一起勾——见 PlaybackPlayerPreference
+    /// 的注释,勾了自动识别之后它按超集处理,不会因为同时也勾了具体播放器就退化。
+    ///
+    /// ⚠️ **不能取消到空集**:选中集合永远至少留一个,跟上面那条"保证非空"的不变量以及
+    /// LyrimuseCore `PlaybackPlayerPreference.selected` / collector `resolvePlayers` 对称
+    /// —— 真放任清空,下一次 collector 重启读到的会是"什么都没选"这个非法状态(两侧都会
+    /// 各自兜底成 auto,但界面会有一瞬间显示"什么都没选中",观感是错的)。
+    @MainActor
+    public func togglePlayer(_ player: PlaybackPlayer) {
+        if players.contains(player) {
+            guard players.count > 1 else { return }
+            players.remove(player)
+        } else {
+            players.insert(player)
+        }
+        Task { await save() }
+    }
+
     @Published public var albumPrefetch = true
+    /// 「自动跟进算法升级」——关掉之后,已经选定的歌词不再被后台的重打分/升级重搜换掉
+    /// (2026-09-03 用户要求)。⚠️ 初值 true 必须跟 collector 侧
+    /// `boolOr(f.LyricsAutoUpgrade, true)` 一致,不然全新安装时两边行为对不上。
+    @Published public var lyricsAutoUpgrade = true
     // 这几个都要连一个外部账号才有意义,默认关闭。collector/features.go 的 boolOr
     // 默认值要跟着一起改,否则全新安装时 Swift 这边显示关、Go 那边却按"缺字段=开启"
     // 实际执行,两边会对不上。
@@ -269,12 +345,15 @@ public final class FeatureSettingsStore: ObservableObject {
     // 该由用户显式同意 —— 现有的八个歌词源只发歌手/歌名。
     @Published public var lyricsMachineTranslation = false
     @Published public var lastfmMirrorScrobble = false
-    /// 默认 false:原样发整串。**必须逐字等于 collector features.go 里 boolOr 的默认值**
-    /// —— 那条对齐是人工维持的,没有机制保证(见 load() 里的警告)。
+    /// 默认 .all:原样发整串。**必须逐字等于 collector features.go 里 resolveScrobbleArtistMode
+    /// 的兜底值** —— 那条对齐是人工维持的,没有机制保证(见 load() 里的警告)。
     /// 语义与取舍见 collector lastfm.go 的 resolveScrobbleArtist:ListenBrainz 文档要求
     /// 合唱 credit "include them all";折叠会丢信息且不可逆,不折叠最坏只是 Last.fm 上
     /// 多一个听众很少的合唱条目 —— 代价不对称。
-    @Published public var lastfmScrobbleFirstArtistOnly = false
+    @Published public var lastfmScrobbleArtistMode: LastfmScrobbleArtistMode = .all
+    /// 默认 false:短于 30 秒不记(Last.fm 官方规则)。**必须逐字等于 collector features.go 里
+    /// boolOr 的默认值**(人工维持,见 load() 里的警告)。
+    @Published public var scrobbleShortTracks = false
     @Published public var weeklyDigest = false
     @Published public var dailyDigest = false
     // 空字符串 = 用户没手动选过,交给 AccountLinkingTab 的 resolvedDigestSource 按
@@ -315,9 +394,12 @@ public final class FeatureSettingsStore: ObservableObject {
             // 只写 players——player 是纯读的迁移字段(见其注释),这台机器往后不再写它。
             players: players.map(\.rawValue).sorted(),
             albumPrefetch: albumPrefetch,
+            lyricsAutoUpgrade: lyricsAutoUpgrade,
             lyricsMachineTranslation: lyricsMachineTranslation,
             lastfmMirrorScrobble: lastfmMirrorScrobble,
-            lastfmScrobbleFirstArtistOnly: lastfmScrobbleFirstArtistOnly,
+            // 只写新键;遗留的 lastfm_scrobble_first_artist_only 是纯读的迁移字段(见其注释)。
+            lastfmScrobbleArtistMode: lastfmScrobbleArtistMode.rawValue,
+            scrobbleShortTracks: scrobbleShortTracks,
             weeklyDigest: weeklyDigest, dailyDigest: dailyDigest,
             weeklyDigestSource: weeklyDigestSource.isEmpty ? nil : weeklyDigestSource,
             dailyDigestSource: dailyDigestSource.isEmpty ? nil : dailyDigestSource,
@@ -446,9 +528,14 @@ public final class FeatureSettingsStore: ObservableObject {
             players = [.auto]
         }
         albumPrefetch = f.albumPrefetch ?? true
+        lyricsAutoUpgrade = f.lyricsAutoUpgrade ?? true
         lyricsMachineTranslation = f.lyricsMachineTranslation ?? false
         lastfmMirrorScrobble = f.lastfmMirrorScrobble ?? false
-        lastfmScrobbleFirstArtistOnly = f.lastfmScrobbleFirstArtistOnly ?? false
+        // 新键缺失/非法时退回遗留二态开关迁移一次(true → first),两者都没有才兜底 all ——
+        // 跟 collector 侧 resolveScrobbleArtistMode 是同一份规则。
+        lastfmScrobbleArtistMode = f.lastfmScrobbleArtistMode.flatMap(LastfmScrobbleArtistMode.init(rawValue:))
+            ?? ((f.lastfmScrobbleFirstArtistOnly ?? false) ? .first : .all)
+        scrobbleShortTracks = f.scrobbleShortTracks ?? false
         weeklyDigest = f.weeklyDigest ?? false
         dailyDigest = f.dailyDigest ?? false
         weeklyDigestSource = f.weeklyDigestSource ?? ""

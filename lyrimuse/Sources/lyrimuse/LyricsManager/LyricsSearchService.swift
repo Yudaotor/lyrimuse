@@ -3,6 +3,21 @@ import os
 
 private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "lyrics-search")
 
+/// `search-lyrics` 子进程 stderr 里那几类**源健康信号**的匹配标记。
+///
+/// 2026-09-03 加。此前 stderr 只在**退出码非 0** 时才被打进日志(见 terminationHandler
+/// 里那句 `logger.error`),正常退出时整段丢掉 —— 而手动搜索这条路径上所有的"网易云被限流
+/// 了/某个源在退避"都只写在那段 stderr 里,于是 `~/Library/Logs/lyrimuse.log`(常驻
+/// collector 那半边)里**一条都查不到**:实测 `grep -c "code 405"` = 0,而同一时刻界面上
+/// 正显示着「网易云接口限流」。事后复盘"到底有没有被限流过"这件事,在这条路径上做不到。
+///
+/// 只捞这几行、不整段转录:一次搜索的 stderr 有几十行(每个源每一轮的 `api call:`),整段
+/// 打进 os_log 会把日志刷成噪声,而真正需要事后复盘的就是"谁被拒了、谁在退避"。
+/// 标记选的是 Go 侧**英文格式串里的固定片段**(`netease.go` 的 `rejected (code %d)`、
+/// `sourcebreaker.go` 的 `cooling down`),不是中文文案 —— 那几处日志将来要是本地化了、
+/// 或者措辞改了,这里跟着改;别用会随语言变的词做判据。
+private let searchLyricsHealthMarkers = ["rejected (code", "backing off", "cooling down"]
+
 // "联网搜索候选歌词"——参考 LyricsX 的 SearchLyricsViewController,但不在 Swift 这边
 // 重新实现网易云/QQ/酷狗/Musixmatch/LRCLIB 的检索逻辑(那会是第二份、迟早会跟 Go collector 那份
 // 走样的实现)。改用一次性子进程调用 `collector search-lyrics`(collector/searchcli.go),
@@ -342,6 +357,23 @@ final class LyricsSearchService {
                 "-album", album,
                 "-duration", String(durationSecs),
             ]
+            // 同源加权(打分里那条 +250「与当前播放器同源」)要知道**现在在放的是哪个
+            // 播放器** —— 它的立论是"时间轴对着同一份音频母版",那是正在播的那个播放器的
+            // 属性。这条 CLI 是独立进程,拿不到播放状态,只能由这边传。
+            //
+            // 2026-09-02 加。在此之前 collector 那边是按 `features.Players`(**设置里勾了
+            // 哪些播放器**)算的,六个全勾的用户会让酷狗/网易云/QQ 三个源同时拿到 +250 ——
+            // 「解析决策」面板上"这个源就是你正在用的播放器"对三个都是假话,而且这一项的
+            // 区分力被自己抵消掉了。详见 collector 侧 match.go 里 nativeLyricSources 的注释。
+            //
+            // 取值沿用 `LyricsWindowView.idlePlayer` 那条既有先例:LocalPlaybackSource 把
+            // 当前播放器 bundle id 落在这个键上(停播时快照清空、只有它还记得)。⚠️ 取不到
+            // 就**不传**,collector 那边认不出会让这一项不加分 —— 宁可少加一项也不要加错。
+            if let playerBundleID = UserDefaults.standard.string(forKey: "np:lastPlayerBundleID"),
+               !playerBundleID.isEmpty
+            {
+                process.arguments?.append(contentsOf: ["-player", playerBundleID])
+            }
             if pickWinner {
                 process.arguments?.append("-pick")
                 if !currentSource.isEmpty {
@@ -440,6 +472,7 @@ final class LyricsSearchService {
                     continuation.resume(throwing: SearchError.processFailed(msg?.isEmpty == false ? msg! : String(format: L10n.t("退出码 %@"), "\(proc.terminationStatus)")))
                     return
                 }
+                Self.logSourceHealthSignals(box.errBuffer)
                 continuation.resume(returning: ())
             }
 
@@ -535,5 +568,32 @@ private extension LyricsSearchService.Candidate {
             isPlainTextOnly: raw.plainTextOnly ?? false,
             lineCount: LyricsSearchService.Candidate.countLines(of: raw.lyrics)
         )
+    }
+}
+
+// MARK: - 子进程 stderr 里的源健康信号
+
+extension LyricsSearchService {
+    /// 把 `search-lyrics` 的 stderr 里"某个源被拒/在退避"那几行收进 App 日志(2026-09-03)。
+    ///
+    /// 用 `.notice` 而不是 `.debug`:`.debug` 在 os_log 里默认**不落盘**(内存环形缓冲、随时
+    /// 被丢),而 `DiagnosticsExporter.recentAppLogLines()` 是按 subsystem 事后查询的 ——
+    /// 用 debug 等于白记。也正因为会落盘,这里必须限量:只捞匹配标记的行、最多 12 行。
+    ///
+    /// ⚠️ 只在**退出码 0** 那条路径上调它。非 0 时 terminationHandler 已经把整段 stderr
+    /// 原样打进 `logger.error` 了,再捞一遍就是重复。
+    fileprivate static func logSourceHealthSignals(_ stderr: Data) {
+        guard !stderr.isEmpty, let text = String(data: stderr, encoding: .utf8) else { return }
+        let hits = text.split(separator: "\n").filter { line in
+            searchLyricsHealthMarkers.contains { line.contains($0) }
+        }
+        guard !hits.isEmpty else { return }
+        let shown = hits.prefix(12)
+        for line in shown {
+            logger.notice("search-lyrics: \(line.trimmingCharacters(in: .whitespaces), privacy: .public)")
+        }
+        if hits.count > shown.count {
+            logger.notice("search-lyrics: 另有 \(hits.count - shown.count, privacy: .public) 行同类信号未记录(单次上限 12 行)")
+        }
     }
 }

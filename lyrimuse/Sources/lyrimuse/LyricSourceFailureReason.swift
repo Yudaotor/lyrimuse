@@ -20,6 +20,13 @@ enum LyricSourceFailureReason {
             return L10n.t("Musixmatch 拒绝了匿名 token 请求（反爬限流，hint=captcha），不是网络故障，稍后重试通常会恢复")
         case "netease_rate_limited":
             return L10n.t("网易云接口限流（短时间内请求过多，操作频繁，code 405），不是网络故障")
+        case "musixmatch_direct_blocked":
+            // ⚠️ 跟上面的 musixmatch_rate_limited 是完全不同的两回事,别混:那个是服务器
+            // **正经回了** 401 hint=captcha(反爬),这个是一个字节都没拿到。2026-09-03 实测
+            // 这台机器直连 apic-appmobile.musixmatch.com 那两个 AWS 地址 100% ICMP 丢包、
+            // TLS 握手 16 次 0 次成功,而经本机代理立刻 200。用户该做的事也不同:那个是等,
+            // 这个是去开代理。
+            return L10n.t("Musixmatch 的接口地址在当前网络下直连不通（TCP/TLS 都没有响应），系统代理也不可用——开启代理后通常会恢复")
         // 下面两个是 test-lyric-sources 自己的通用兜底,只有设置页那颗测试按钮会用到
         // (「联网搜索候选歌词」弹窗走的是 lyricSourceFailureReasons,只覆盖上面三个具体
         // 代码,查不到就是 nil、不落到这里)。

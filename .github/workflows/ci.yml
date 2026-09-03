@@ -70,6 +70,11 @@ jobs:
         # 就抓到了 3 对重复 key。
         run: python3 lyrimuse/scripts/check_strings_parity.py
 
+      - name: 第三方许可声明覆盖
+        # Package.resolved 里每个 SPM 包、build.sh 里 brew install 进包的东西、go.mod 的 require，
+        # 都必须在 THIRD_PARTY_LICENSES 里出现一次。忘补声明在这里红，不是发出去之后才被人指出来。
+        run: python3 lyrimuse/scripts/check_third_party_licenses.py
+
       - name: Swift selftest
         # 用 `swift build` 再直接执行产物，**不要**用 `swift run`。release.yml 里记着实测
         # 结论：runner 上 `swift run lyrimuse-selftest` 会在 exec 刚构建出来的二进制那一刻

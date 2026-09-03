@@ -95,10 +95,20 @@ struct RecentListensPanel: View {
                 .foregroundStyle(secondaryTextColor)
             Spacer(minLength: 0)
             if let updated = stats.recentUpdatedAt {
-                Text(Self.agoText(updated))
-                    .font(.system(size: 10))
-                    .foregroundStyle(tertiaryTextColor)
-                    .help(updated.formatted(date: .abbreviated, time: .standard))
+                // 上一轮刷新失败但列表还在:只把这行时间变暗 + 小叹号,不换成失败态
+                // (跟设置页最近记录卡头同一套观感,2026-09-03)。
+                HStack(spacing: 3) {
+                    if stats.baselineFailed {
+                        Image(systemName: "exclamationmark.circle").font(.system(size: 9))
+                    }
+                    Text(Self.agoText(updated))
+                }
+                .font(.system(size: 10))
+                .foregroundStyle(tertiaryTextColor.opacity(stats.baselineFailed ? 0.6 : 1))
+                .help(stats.baselineFailed
+                      ? String(format: L10n.t("上次刷新没有成功，显示的是 %@ 的内容"),
+                               updated.formatted(date: .abbreviated, time: .standard))
+                      : updated.formatted(date: .abbreviated, time: .standard))
             }
             Button {
                 stats.refreshBaseline(force: true)

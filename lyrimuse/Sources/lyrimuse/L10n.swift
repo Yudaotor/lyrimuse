@@ -1,4 +1,5 @@
 import Foundation
+import LyrimuseCore
 
 // 本地化查找——不用 SwiftUI Text(_:LocalizedStringKey) 自带的自动语言协商,原因是一个
 // 坑:纯用 `swift build`(没装完整 Xcode)编译时,SwiftPM 打包 .lproj 资源会把目录名
@@ -16,10 +17,15 @@ import Foundation
 // `Bundle.main` 后,`.lproj` 目录直接放在 `Contents/Resources/` 下(build.sh 里的拷贝
 // 步骤)——这是 Apple 原生支持、不依赖任何机器的标准位置。
 //
-// 目前只做中/英两档:preferredLanguages 第一项以 "zh" 开头就用中文包,否则退到英文包。
+// 三档:简体 / 繁体 / 英文(繁体 2026-09-03 加,借鉴清单 #10)。preferredLanguages 第一项以 "zh"
+// 开头就是中文,其中带 hant / -tw / -hk / -mo 任一标记的走繁体包(判据跟
+// AppSettings.userReadsSimplifiedChinese 同一套,别各写一份),其余中文走简体;以 "en" 开头走
+// 英文;都不是就退回简体(这是开发语言,至少是能读懂的原文)。繁体包缺译的键由
+// generate-strings.py 在生成时回退成简体,运行时不需要再兜一层。
 // 要支持更多语言:①在 Resources/ 下加 `<lang>.lproj/Localizable.strings`(文件名小写,
-// 跟打包出来的实际目录名一致);②在 `current` 里加一条判断分支返回对应目录名。查找/
-// 兜底逻辑(bundle/t(_:))不用改。
+// 跟打包出来的实际目录名一致),并在 generate-strings.py 的 TARGETS 和 build.sh 的拷贝那两行
+// 登记;②在 `current` 里加一条判断分支返回对应目录名;③`localeIdentifier(for:)` 加映射。
+// 查找/兜底逻辑(bundle/t(_:))不用改。
 enum L10n {
     // current/bundle 每次读都重新解析,不用 `static let` 一次性缓存——否则运行期切换
     // 语言不会立刻生效,得强制重启 App。这里故意不 import AppSettings.shared 来读这个
@@ -29,21 +35,30 @@ enum L10n {
     // Picker,这里只读),字符串必须保持一致但没有编译期耦合。
     private static let languageOverrideKey = "np:appLanguage"
 
-    // "system"(跟随系统,默认)/"zh-hans"/"en"。zh-hans.lproj 是这个项目的开发语言
+    // "system"(跟随系统,默认)/"zh-hans"/"zh-hant"/"en"。zh-hans.lproj 是这个项目的开发语言
     // (源码里所有字符串字面量本来就是简体中文),所以系统语言没匹配到已知前缀时,兜底
     // 也应该退回中文而不是英文——保证在没有对应语言包的系统语言下,至少还是能读懂的
     // 原文,不会突然冒出一句读不懂的英文兜底。
     static var current: String {
         let override = UserDefaults.standard.string(forKey: languageOverrideKey) ?? "system"
-        if override == "en" || override == "zh-hans" { return override }
-        let preferred = Locale.preferredLanguages.first ?? "zh-hans"
-        return preferred.lowercased().hasPrefix("en") ? "en" : "zh-hans"
+        if override == "en" || override == "zh-hans" || override == "zh-hant" { return override }
+        return resolveSystem(Locale.preferredLanguages.first ?? "zh-hans")
+    }
+
+    /// 系统首选语言标签 → 语言包目录名。规则本体在 LyrimuseCore 的 `UILanguage`(selftest 钉着
+    /// zh-Hant-TW / zh-HK / zh-Hans-HK / 裸 zh / en-GB / ja 这些标签的分流),这里只是转发。
+    static func resolveSystem(_ preferred: String) -> String {
+        UILanguage.resolve(preferred: preferred)
     }
 
     // current 映射成系统 API 认的 locale 标识。抽成纯函数是为了让 selftest 能直接覆盖
     // (locale 本身要读 UserDefaults,测试里不该去动用户的真实设置)。
     static func localeIdentifier(for lang: String) -> String {
-        lang == "en" ? "en" : "zh-Hans"
+        switch lang {
+        case "en": return "en"
+        case "zh-hant": return "zh-Hant"
+        default: return "zh-Hans"
+        }
     }
 
     /// 界面语言对应的 `Locale` —— 给那些**不走 .strings 表、但仍该跟着界面语言变**的系统

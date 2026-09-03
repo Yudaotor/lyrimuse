@@ -194,6 +194,36 @@ public enum Romanizer {
     /// 的整行读音和逐词分组共用**同一次** CFStringTokenizer,不再各分一遍(2026-08-20
     /// 性能审计)。返回 nil 的口径也对齐 romanize:片段为空(=分不出词)或读音跟原文
     /// 一模一样(没有信息增量)都算"没有读音",调用方照 romanize 的原语义退 ICU 音译。
+    /// **整行罗马音的判定阶梯** —— 播放引擎的客户端兜底和 `lyrics-romanize` helper
+    /// (collector 预生成那条路)**共用这一份**。
+    ///
+    /// 2026-09-03 从 `LyricsSyncEngine.romanizationText` 里提出来。提的理由不是"整理代码":
+    /// 预生成写进 `lyrics_roma` 之后,那份产物必须跟播放时现算的结果**逐字一致** ——
+    /// 否则同一首歌"这次装了缓存"和"上次现算"读音不一样,而且这种不一致**不会报错**,
+    /// 只会表现成用户偶尔觉得"某句罗马音怎么变了"。照抄一份阶梯就是给这件事开第二个漂移点。
+    ///
+    /// ⚠️ 两个条件是**或**的关系,不是"整首歌像日文"再判行(2026-08-24 定):
+    ///   · 行内有假名 → 这一行确证是日文,不管整首歌是什么(中文歌里引用的日文行);
+    ///   · 纯汉字行 → 中日读音歧义,只有这种行才看整首歌的标记。
+    /// 写成 `songLooksJapanese && (looksJapanese || containsHan)` 的话,中文歌一旦被整首
+    /// 判成日文,它的**纯中文行**就靠 containsHan 一路走进日语形态分析。
+    ///
+    /// - Parameter segments: 用 `@autoclosure` 收 —— 只有走进日语分支时才需要分词
+    ///   (CFStringTokenizer 不便宜),而调用方常常持有按行缓存的分词结果。求值必须是惰性的,
+    ///   否则纯英文歌的每一行都要白分一次词。
+    public static func lineReading(
+        _ line: String,
+        songLooksJapanese: Bool,
+        segments: @autoclosure () -> [JapaneseSegment]
+    ) -> String? {
+        if looksJapanese(line) || (songLooksJapanese && containsHan(line)),
+            let reading = readingFromSegments(segments(), original: line)
+        {
+            return reading
+        }
+        return romanize(line, japanese: false)
+    }
+
     public static func readingFromSegments(
         _ segs: [JapaneseSegment], original text: String
     ) -> String? {

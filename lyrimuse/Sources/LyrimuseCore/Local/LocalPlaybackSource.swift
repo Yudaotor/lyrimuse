@@ -179,9 +179,40 @@ public final class LocalPlaybackSource: ObservableObject {
     ///
     /// 判据直接用 `ChineseVariant.affects`,跟 `converted(_:)` 是同一个函数 —— 保证
     /// "菜单显示 ⟺ 转换真的会发生",不可能出现"开关不见了但歌词还在被转"。
-    /// 正文和译文任一会被转就算 —— 译文同样过 `variant.converted`(见 syncEngine.load),
-    /// 所以日文歌配中文译文这种情况也必须让开关留在那儿。
+    ///
+    /// ⚠️ 译文这一支要**再乘一个「译文正在屏幕上」**(2026-09-02)。原来是无条件
+    /// `affects(正文) || affects(译文)`,理由写的是"译文同样过 variant.converted,所以
+    /// 日文歌配中文译文这种情况也必须让开关留在那儿" —— 那句话本身没错,漏的是一层:
+    /// 译文没在显示时,把它从简体转成繁体是一次**看不见**的改动,菜单项就成了点了没有
+    /// 任何视觉反馈的死项。用户报的正是这个形状:米津玄师《Petrichor》是纯日文歌词
+    /// (正文那一支正确地判 false),但缓存里带一份中文机翻 `lyrics_tr`,译文那一支
+    /// 把菜单点亮了 ——「播日文歌为什么也显示简繁转换」。
+    /// 所以不变量升级成:**菜单显示 ⟺ 转换真的会发生、而且看得见**。
+    ///
+    /// 判据本体抽成了纯函数 `supportsChineseVariant(lyrics:translation:translationVisible:)`。
     @Published public private(set) var currentLyricsSupportsChineseVariant = false
+
+    /// 译文有没有在屏幕上 —— 镜像 App 层的 `AppSettings.showTranslation`
+    /// (Core 够不到 AppSettings,由 AppDelegate 订阅推进来)。
+    ///
+    /// ⚠️ 这个开关**不参与歌词装载**:译文转不转由 `chineseVariant` 决定,关掉它只是不画
+    /// 那一行,引擎侧照常转(见 reloadCurrentLyrics 里的 `variant.converted(lyricsTr)`)。
+    /// 它唯一的用途是上面那条显隐判据 —— Core 之所以需要知道一件纯展示的事,理由在那里。
+    /// 也正因为不参与装载,它**不进** `LyricsReloadSnapshot`:那道闸管的是"要不要重算",
+    /// 而这个标志的重算发生在闸之前,翻转时正好只更新标志、跳过整段解析。
+    @Published public var showsTranslation = false {
+        didSet { reloadCurrentLyrics() }
+    }
+
+    /// 「简繁转换」这一项该不该露出来。抽成纯函数是为了让 selftest 能直接钉住这条不变量——
+    /// `reloadCurrentLyrics()` 要一份真实播放快照才跑得起来,测不到。
+    /// (`nonisolated`:不碰任何 @MainActor 隔离状态,跟 `servoDecision` 同一个理由。)
+    public nonisolated static func supportsChineseVariant(
+        lyrics: String, translation: String, translationVisible: Bool
+    ) -> Bool {
+        ChineseVariant.affects(lyrics)
+            || (translationVisible && ChineseVariant.affects(translation))
+    }
 
     private let syncEngine = LyricsSyncEngine()
     // 公开给 View 层——逐字填色现在按渲染帧频(TimelineView)从这个锚点直接外推真实
@@ -306,6 +337,16 @@ public final class LocalPlaybackSource: ObservableObject {
 
     /// 见 flooredForwardSnapEpsilonSecs。纯函数,selftest 直接覆盖。
     ///
+    /// 浏览器探针那笔一次性地面真值,差多少才值得重锚。
+    ///
+    /// 0.30s 的取法:探针值做完去地板补偿后,自身残余误差是 ±0.5s 内的均匀分布(标准差 ≈0.29s),
+    /// 再叠上页面文字本身 ±0.1s 的跳变抖动。门槛低于这个量级只会来回抖,高于它就白白放过
+    /// 实测中最常见的那档 0.7~0.9s 系统性偏差。
+    ///
+    /// ⚠️ 值得重锚的判据是"比噪声大",不是"比 1 秒大" —— 用 `servoDecision` 那套给周期性
+    /// 噪声源设计的门槛来卡一次性样本,是这条纠偏此前从不生效的直接原因。
+    public static let groundTruthSnapToleranceSecs: Double = 0.30
+
     /// 只对地板量化源(noisyFloored)生效:棘轮的依据是"reported ≤ 真实位置"这条
     /// 不等式,而 Spotify 的读数恰恰恒略**超前**真值(2026-08-18 实测),对它棘轮
     /// 只会把位置锁在抖动的上包络、且 EMA 每次吸附都被清零,永远修不回来。
@@ -504,7 +545,9 @@ public final class LocalPlaybackSource: ObservableObject {
     // 返回值除了外推出的秒数,还带一个 didReanchor:标记这次是不是真的发生了"不连续"
     // (换歌/刚恢复播放/第一次观察/真实 seek,即用了 reported 而不是 predicted)。
     // 调用方(apply())用这个标记判断"这次真的有必要重新构造 anchor 吗"——见那边注释。
-    private func resolvePositionSeconds(reported rawReported: Double, rate: Double, key: String, now: Date, tier: PositionSourceTier) -> (seconds: Double, didReanchor: Bool) {
+    /// `isGroundTruthSeed`:这一笔读数是不是**浏览器探针直接问网页要来的地面真值**(而不是
+    /// MediaRemote 报的外推值)。为真时走一条专门的重锚路径,见函数体里那段⚠️。
+    private func resolvePositionSeconds(reported rawReported: Double, rate: Double, key: String, now: Date, tier: PositionSourceTier, isGroundTruthSeed: Bool = false) -> (seconds: Double, didReanchor: Bool) {
         // 自然切歌锚点偏置(见 naturalAdvanceCorrection 一带的注释):同曲期间每笔读数
         // 恒定超前 bias,先扣掉再进入后续所有判断。raw 值只在三处直接用:换歌时的偏置
         // 估计、冻结检测的逐笔差分(常量偏置在差分里天然消掉,但语义上按原始值记)、
@@ -609,6 +652,27 @@ public final class LocalPlaybackSource: ObservableObject {
             // ≥3s(绝大多数)正常进此分支纠正,换歌即自愈。
             posReportedBiasSecs = 0
             trackPosSeconds = rawReported
+            posErrEMA = 0
+            return (trackPosSeconds, true)
+        }
+        // 浏览器探针的**一次性地面真值**:不走 EMA,超过门槛直接重锚。
+        //
+        // ⚠️ 这条必须有,否则这个纠偏**几乎永远不会生效**(2026-09-02 用真机日志坐实)。
+        // 它是"每首歌一次"的样本,而 `servoDecision` 对 noisyFloored 是 alpha 0.3 / 门槛 1.0
+        // —— 单个样本最多把 EMA 推到 `0.3 × 误差`,要误差超过 **3.33 秒**才可能触发。实测
+        // 连着三首歌 `ema=-0.197 / -0.206 / -0.226`、`snap=false`,而同期离屏逐帧量到的真实
+        // 偏差是 0.7~0.9 秒(App 偏快):**探针每次都测准了、每次都被扔掉**。
+        //
+        // ⚠️ 一次性直接采信跟 `BrowserPositionProbe` 类头注那条"不要持续覆盖"的教训**不冲突**:
+        // 那次的病根是**每 ~0.9 秒**拿一份整秒读数覆盖一次连续外推,造成周期性回退;这里每首歌
+        // 只发生一次,采信完立刻把稳态精度交还给连续外推。
+        //
+        // ⚠️ 位置有讲究:必须排在冻结守卫和 seek 分支**之后**(那两条是更强的信号),又必须排在
+        // 前向棘轮**之前** —— 探针值已经做过去地板补偿(`flooredMidpointBiasSecs`),不再满足
+        // 棘轮赖以成立的"reported ≤ 真实位置"。
+        if isGroundTruthSeed, abs(reported - predicted) > Self.groundTruthSnapToleranceSecs {
+            logger.notice("browser probe reanchor: reported=\(reported, format: .fixed(precision: 3)) predicted=\(predicted, format: .fixed(precision: 3)) delta=\(reported - predicted, format: .fixed(precision: 3))")
+            trackPosSeconds = reported
             posErrEMA = 0
             return (trackPosSeconds, true)
         }
@@ -1191,7 +1255,29 @@ public final class LocalPlaybackSource: ObservableObject {
             UserDefaults.standard.set(bid, forKey: "np:lastPlayerBundleID")
             lastPersistedPlayerBundleID = bid
         }
-        if !newTitle.isEmpty, newTitle != lastPersistedTrackTitle {
+        // 广告判定必须在下面 np:lastTrack* 落盘**之前**算出来:那几个键是"上次在听什么"
+        // (停播页的唱片 hero、待机页、歌词窗口都读它),一段广告不该被记成上次在听的歌。
+        // 2026-09-02 之前不需要管这件事 —— YT Music 的广告在 MediaControlClient 那道闸
+        // 就被整条丢掉了,根本走不到这里;现在它会走到(为了让 UI 能显示「广告中」,见
+        // YouTubeMusicAdProbe.Gate.acceptAsAd),所以这道保护要在这里补上。
+        // 判定语义见下面 isCurrentTrackAdBreak 那一段。
+        let isSpotifyNative = snapshot.bundleIdentifier == PlaybackPlayer.spotify.bundleIdentifier
+        let resolvedBundleID = BrowserPositionProbe.probeTargetBundleID(forReported: snapshot.bundleIdentifier)
+        let isSpotifyWeb = BrowserPositionProbe.shared.isPaired(bundleID: resolvedBundleID, platformID: "spotifyWeb")
+        let isSpotify = isSpotifyNative || isSpotifyWeb
+        // YouTube Music 网页版的广告(2026-09-02):它的字段形状跟"真歌但没报专辑名"分不开
+        // (广告的 artist 是**广告主频道名**、非空,album 空),所以下面那套 adByFields 启发式
+        // 对它无效 —— 判据只能来自页面本身。这里读的正是 MediaControlClient 刚用过的同一份
+        // 探针缓存(同一个 key、同一把锁),两边不会得出不同结论。
+        let youTubeMusicAdKey = YouTubeMusicAdProbe.trackKey(artist: snapshot.artist, title: snapshot.title)
+        // ⚠️ 用 showsAdBadge 而不是 `!= .song`:判定**缺失**时绝不能点亮「广告中」,
+        // 否则探针一超时就会在真歌上贴广告标签。方向与 gate 相反,理由见它的头注。
+        let isYouTubeMusicAd = YouTubeMusicAdProbe.showsAdBadge(
+            verdict: YouTubeMusicAdProbe.shared.cachedVerdict(forKey: youTubeMusicAdKey))
+        let adByFields = isYouTubeMusicAd
+            || (isSpotify && !newTitle.isEmpty
+                && (newAlbum.isEmpty || newArtist.isEmpty || newTitle == "—"))
+        if !newTitle.isEmpty, !adByFields, newTitle != lastPersistedTrackTitle {
             UserDefaults.standard.set(newTitle, forKey: "np:lastTrackTitle")
             UserDefaults.standard.set(newArtist, forKey: "np:lastTrackArtist")
             // 专辑 2026-08-24 才补上(停播页的唱片 hero 要显示「歌手 · 专辑」)。它跟着
@@ -1207,18 +1293,45 @@ public final class LocalPlaybackSource: ObservableObject {
         // 同款)定初值,同曲期间只往 true 棘轮、不回落;是 Spotify 就再异步问一次本尊
         // (`spotify url` 前缀是权威分类,广告可以带全 artist/title/album 骗过启发式),
         // 结果回来仍是这首才采纳。judge 与 collector 两侧口径一致,那边管上报,这边管 UI。
-        let isSpotify = snapshot.bundleIdentifier == PlaybackPlayer.spotify.bundleIdentifier
-        let adByFields = isSpotify && !newTitle.isEmpty
-            && (newAlbum.isEmpty || newArtist.isEmpty || newTitle == "—")
+        //
+        // ⚠️ **网页版 Spotify 也要认**(2026-09-02,用户实测截图坐实:Last.fm 那张卡的
+        // "正在记录"行原样显示了一条"广告"——`!playback.isAdBreak` 那道闸没拦住,因为下面
+        // `isSpotify` 原来只认原生客户端的 bundleIdentifier,浏览器代理进程报的是
+        // `com.apple.WebKit.GPU`/浏览器自己的 bundle id,永远对不上)。现场抓的真实广告
+        // 样本:`album=""  artist=""  title="广告"  duration≈30s`——跟原生客户端广告同一套
+        // 字段信号,不需要另外发明判据,只需要把"这是不是 Spotify"的判断扩到网页版。
+        // `BrowserPositionProbe.shared.platformBrowserPairs` 是用户在「网页播放器」设置页
+        // 显式配对过的浏览器↔平台关系(跟 kickIfNeeded 用的是同一份数据、同一把锁),
+        // 配对了 "spotifyWeb" 的浏览器标签页播放就按 Spotify 处理。
+        //
+        // ⚠️ **YouTube Music 网页版也要认**(2026-09-02,用户要求"chrome 上播 YT Music 的
+        // 广告也像 Spotify 那样显示出来是广告")。它跟 Spotify 走的不是同一条判据:Spotify
+        // 广告靠字段形状就能认(album/artist 空、标题「—」),而 YT Music 广告的 artist 是
+        // 广告主频道名、**非空**,跟"真歌但没报专辑名"在字段上完全分不开 —— 只能问页面。
+        // 那次查询由 `YouTubeMusicAdProbe` 异步做、结果进缓存,上面 `isYouTubeMusicAd`
+        // 读的就是它。在此之前这类广告在 MediaControlClient 那道闸就被整条丢掉了,后果是
+        // 30 秒广告期间灵动岛/悬浮窗整个塌成"没有在播放"、广告完了再弹回来。
+        //
+        // isSpotifyNative/isSpotifyWeb/isYouTubeMusicAd/adByFields 四个局部量在上面
+        // np: 落盘那段之前就算好了(广告不该被记成"上次在听"),这里直接用。
         if snapshot.trackKey != lastKey {
             if isCurrentTrackAdBreak != adByFields { isCurrentTrackAdBreak = adByFields }
-            if isSpotify, !adByFields { verifySpotifyAdViaAppleScript(forKey: snapshot.trackKey) }
+            // AppleScript 权威复核只对原生客户端有意义(`spotify url` 是原生 App 的
+            // scripting 字典,网页版没有这个接口)——网页版只吃字段启发式本身的结果。
+            if isSpotifyNative, !adByFields { verifySpotifyAdViaAppleScript(forKey: snapshot.trackKey) }
         } else if adByFields, !isCurrentTrackAdBreak {
             isCurrentTrackAdBreak = true
         }
 
         let key = snapshot.trackKey
         let trackChanged = key != lastKey
+        // ⚠️ 必须在这里留一份旧 key:下面 `lastKey = key` 之后,`lastKey` 就等于 `key` 了,
+        // 到浏览器探针那一段(`if trackChanged`)再读它只会读到新值。留它是为了让探针的
+        // "重新开放额度"日志能分辨这次到底是**真换歌**(旧 key 非空、跟新的不一样)还是
+        // **中断后重新接上**(旧 key 为空 —— 快照变 nil 那条路径把 lastKey 清成了 "",
+        // 见上面 `lastKey = ""` 一带)。2026-09-03 加:真机上实测到同一首歌连续播放期间
+        // 探针额度被重开了 4 次(同一个 pid,排除了重启),但当时的日志分辨不出是哪一种。
+        let previousKey = lastKey
         // 同一首歌播到中途,collector 还可能给它补出译文、或者换上一份更好的歌词(见
         // collector 的 backfillTranslation / retryLyricsUpgrade / rescoreLyrics)。原来这里
         // 只在换歌或"完全没歌词"时才重读,于是这类中途补上的东西要等下一次换歌才看得到 ——
@@ -1317,19 +1430,36 @@ public final class LocalPlaybackSource: ObservableObject {
             // 本来就更准的 .cleanExtrapolated 连续外推,不会被整秒精度的探针值持续覆盖
             // 导致周期性回退(2026-08-30 用户反馈坐实过这个回退,历史教训见类头注)。
             if trackChanged {
-                BrowserPositionProbe.shared.trackChanged()
+                BrowserPositionProbe.shared.trackChanged(from: previousKey, to: key)
             }
-            BrowserPositionProbe.shared.kickIfNeeded(bundleIdentifier: snapshot.bundleIdentifier, key: key)
+            // ⚠️ `expectedDuration` 不是可选的锦上添花:探针拿它在 JS 里认"这个标签页放的
+            // 是不是同一首歌"(见 `BrowserPositionProbe.pageDurationToleranceSecs`),
+            // YouTube Music 插播广告、同一浏览器里开着第二个 Spotify 标签页都靠它认出来。
+            // 这里的 `duration` 已经被外层 `if playing, let duration, duration > 0` 保证 >0。
+            BrowserPositionProbe.shared.kickIfNeeded(
+                bundleIdentifier: snapshot.bundleIdentifier, key: key, expectedDuration: duration)
             let rawReportedForResolve: Double
             let effectiveTier: PositionSourceTier
+            var usedBrowserProbe = false
+            // ⚠️ **这里不要再加"拿 MediaRemote 位置当参照物"的守卫。** 2026-09-02 加过一道
+            // (`isPlausibleCorrection(probed:reference:)`,reference 传 `snapshot.elapsedTime`),
+            // 当天就被真机抓出来删掉了:这个探针存在的前提就是网页播放器的 `elapsedTime`
+            // **恒为 0**,拿它当参照物,守卫直接退化成"只有页面放在前 8 秒内的修正才采纳",
+            // 而消费又是每首歌一次性的 —— 整首歌都跑在错锚点上。完整原委和"为什么换成外推值
+            // 同样不行"见 `BrowserPositionProbe.pageClockIsRunning` 一带的头注。
+            // 可信度判据已经全部下沉进探针内部(同一首歌 + 页面的钟在走),那里才有能证明这
+            // 两件事的材料;这一层只负责把探针值当"精确种子"喂进伺服逻辑。
             if let probed = BrowserPositionProbe.shared.consumeCorrection(forKey: key, rate: rate, now: now) {
                 rawReportedForResolve = probed
                 effectiveTier = .noisyFloored
+                usedBrowserProbe = true
             } else {
                 rawReportedForResolve = snapshot.elapsedTime ?? 0
                 effectiveTier = tier
             }
-            let (positionSeconds, didReanchor) = resolvePositionSeconds(reported: rawReportedForResolve, rate: rate, key: key, now: now, tier: effectiveTier)
+            let (positionSeconds, didReanchor) = resolvePositionSeconds(
+                reported: rawReportedForResolve, rate: rate, key: key, now: now,
+                tier: effectiveTier, isGroundTruthSeed: usedBrowserProbe)
             // 只在真的有必要时才重新构造锚点——稳定播放期间(没有换歌/没有真实
             // seek/rate 和时长都没变),继续外推旧锚点在数学上跟重新构造一份新锚点得到
             // 完全相同的 extrapolatedPositionMs(now:) 结果(旧锚点的 fetchedAt+
@@ -1681,9 +1811,11 @@ public final class LocalPlaybackSource: ObservableObject {
             sawChineseLyrics = true
         }
         // 逐曲的那个每次都要**重算**(它会来回变),不能跟着上面那个 `if !sawChineseLyrics`
-        // 的早退一起被跳掉。译文也算进来,理由见它声明处。
-        currentLyricsSupportsChineseVariant =
-            ChineseVariant.affects(raw) || ChineseVariant.affects(found?.lyricsTr ?? "")
+        // 的早退一起被跳掉。译文只在**正在显示**时才算进来,理由见它声明处。
+        currentLyricsSupportsChineseVariant = Self.supportsChineseVariant(
+            lyrics: raw,
+            translation: found?.lyricsTr ?? "",
+            translationVisible: showsTranslation)
         // 内容等值闸(2026-08-20 性能审计):失效键是整个 enrich 缓存文件的 mtime,collector
         // 给**别的歌**写盘(专辑预取最多 30 首逐个落盘/译文回填/重打分)都会带着一字未变的
         // found 走到这里 —— 原来每次都白跑简繁转换×3 + 全套解析过滤 + 整曲罗马音/分词重算

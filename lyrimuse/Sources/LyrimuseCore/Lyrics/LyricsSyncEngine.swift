@@ -272,6 +272,20 @@ public final class LyricsSyncEngine {
         // 「主唱」「合作」:它们更可能被用作对唱/口白的说话人标签,而那两类署名在真实
         // 数据里总是成片出现,交给 matchesNameListCreditShape 的整份闸去收更安全。
         "竖琴", "长号", "副唱", "和音", "三和",
+        // 第十四轮(2026-09-02):用户报方大同《白发》头部「著作权人：+© 2019、赋音乐」
+        // 漏到悬浮窗上。同一首歌的「推广公司：东亚星光」当时只是**侥幸**没漏 —— 它靠的是
+        // matchesNameListCreditShape 那条"整份 ≥2 行"的闸(这首刚好凑到 2 行),整首只有
+        // 一行推广署名的歌就会漏;郑润泽《彻夜》的「营销推广：戴欣怡 (DDStudio)X深声不息」
+        // 正是这么漏的(它是单段,撞上 latinCreditRestLooksLikeSentence:"深声不息"里有个
+        // 「不」,被判成句子放过 —— 跟第十轮「庄有豪」同一个机制)。
+        //
+        // 两个词都拿全库语料量过(4579 份 / 233128 行正文):
+        //  - 「著作」命中 45 行,现有规则漏 3 行,其中**一条是真歌词** —— 方大同《放不过
+        //    自己》的「自我执著作怪」("自我执著"+"作怪"恰好夹出「著作」)。它没有冒号,
+        //    而 matchesRoleWordCredit 的第一道门就是"必须有冒号",所以收这个词不会碰到它。
+        //    这条真歌词已经进 selftest 当反向哨兵钉着。
+        //  - 「推广」命中 6 行,漏 2 行,两条都是署名,0 条真歌词。
+        "著作", "推广",
     ]
 
     /// 标签里允许出现的分隔符。第七轮(2026-08-16)加的:用户报「录音师/录音室：王力宏/
@@ -542,10 +556,52 @@ public final class LyricsSyncEngine {
         return false
     }
 
+    /// 国际标准录音码(ISRC)那一行。第十五轮(2026-09-03,用户报陈绮贞《我亲爱的偏执狂》
+    /// 结尾没过滤干净)。
+    ///
+    /// 形如 `ISRC TWB870211301` / `ISRC: TW-B87-02-11301`。它**没有冒号也没有角色词**,
+    /// 上面那一整排以"角色+冒号"为形状的规则一条都够不着;结构性过滤同样够不着(它要冒号)。
+    /// 判据是 ISRC 这个词 + 它固定的 12 位编码形状(2 位国家码 + 3 位登记者 + 2 位年份 +
+    /// 5 位序号),歌词里不可能出现,所以不设否决闸。
+    private static let isrcPattern = try! NSRegularExpression(
+        pattern: #"^ISRC[\s:：-]*[A-Za-z]{2}[-\s]?[A-Za-z0-9]{3}[-\s]?\d{2}[-\s]?\d{5}\b"#,
+        options: [.caseInsensitive]
+    )
+
+    /// 「英文角色名 : 拉丁人名」——半角冒号、而且冒号右边**没有**中日文的那一档署名行。
+    /// 第十五轮(2026-09-03)。实测漏例:`Publisher : Sam Duann`。
+    ///
+    /// 为什么现有两条拉丁规则都够不着:全角那条要求冒号是「：」;半角那条要求冒号右边出现
+    /// 中日文(`latinCreditHalfWidthPattern`)——那个要求是**故意**的,它的注释写着"单靠
+    /// 半角冒号 + 拉丁标签是不敢删的:`Verse 1: ...` 这类真会出现在歌词里"。同一份歌词里
+    /// `Executive Producer : 林暐哲` 被删掉、`Publisher : Sam Duann` 留下来,差别就在这儿。
+    ///
+    /// 所以这一条**不放宽形状,只收窄标签**:标签必须落在一张"绝不会当段落标记用"的英文
+    /// 角色名白名单里。
+    ///
+    /// ⚠️ 白名单**刻意不收** chorus / verse / bridge / intro / outro / hook / rap / refrain
+    /// ——那几个正是段落标记,后面跟的是真歌词,收了就是成片误杀。也**刻意不收**乐器与声部名
+    /// (guitar / vocals / drums / bass / piano…):它们做署名标签固然常见,但这一条已经够本次
+    /// 那两行了,而收窄比收宽安全 —— 真有漏例时按语料再加,别凭想象扩表(这正是
+    /// `genericHanCreditLinePattern` 那段说的"枚举收敛不了"的另一面:枚举收不全不等于可以
+    /// 放宽形状)。
+    private static let latinRoleColonPattern = try! NSRegularExpression(
+        pattern: #"^(?:executive\s+|assistant\s+|co-)?"#
+            + #"(producers?|production|publishers?|labels?|composers?|lyricists?|"#
+            + #"arrang(?:er|ement|ed)|engineers?|engineering|studios?|"#
+            + #"mixing|mixed|mastering|mastered|recording|recorded|"#
+            + #"orchestra|conductor|photograph(?:y|er)|artwork|design(?:er)?|director)"#
+            + #"\s*:\s*\S"#,
+        options: [.caseInsensitive]
+    )
+
     private static func matchesLatinCreditPattern(_ text: String) -> Bool {
         let r = NSRange(text.startIndex..., in: text)
         let shapeHit = latinCreditFullWidthPattern.firstMatch(in: text, range: r) != nil
             || latinCreditHalfWidthPattern.firstMatch(in: text, range: r) != nil
+            // 第十五轮:白名单角色名 + 半角冒号 + 拉丁人名(见 latinRoleColonPattern)。
+            // 它跟上面两条共用下面那道"右边像不像一句话"的否决闸。
+            || latinRoleColonPattern.firstMatch(in: text, range: r) != nil
         guard shapeHit else { return false }
         // 形状命中之后再看右边像不像一句话 —— 见 latinCreditRestLooksLikeSentence。
         guard let colon = text.firstIndex(where: { $0 == ":" || $0 == "：" }) else { return false }
@@ -805,6 +861,46 @@ public final class LyricsSyncEngine {
         copyrightNoticePattern.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)) != nil
     }
 
+    /// 带**版权标记**的著作权行 —— 「著作权人：+© 2019、赋音乐」(2026-09-02,用户在
+    /// 方大同《白发》的悬浮窗上看到它;那首歌 12 行职员表里只有这一行漏网)。
+    ///
+    /// 为什么现有规则一条都够不着,而且是**四条各差一点**,这才值得单开一条:
+    ///  - creditLinePattern 的关键词表里其实**有**「©」「℗」,但那条正则是 `^` 锚定的,
+    ///    只认版权标记开头的行;这一行开头是汉字标签「著作权人」;
+    ///  - matchesRoleWordCredit 要求标签里含一个双字角色词,而「著作」当时不在表里
+    ///    (这一轮一并补进 creditRoleWords 了,见那边第十四轮的注释);
+    ///  - matchesNameListCreditShape 这条免词表规则形状本来是命中的(标签 4 个汉字、右侧
+    ///    「+© 2019」「赋音乐」正好两段),卡在右侧的字符集校验上:`+` 和 `©` 既不是汉字
+    ///    也不是字母数字。刻意**不**放宽那道校验 —— 逐段的字符集是那条规则唯一的精度
+    ///    来源(它没有词表锚点,只有"整份 ≥2 行"这一道闸),为一个版权标记就把符号放进去,
+    ///    换来的覆盖面还不如单独写这一条;
+    ///  - matchesCopyrightNotice 认的是「未经…许可」「不得翻录」这类**成句**的法务声明,
+    ///    这一行只有标记 + 年份 + 公司名,一个法务词都没有。
+    ///
+    /// 判据:整行同时出现 ①版权/录音版权标记(© ℗ 及其圆圈变体,或加括号的 (C)/(P))
+    /// 和 ②一个四位年份。跟位置、冒号、标签形状全都无关 —— 所以「℗ 2016 北京享耳音乐」
+    /// 这种没有冒号、没有汉字标签的写法一并覆盖,不用再等下一个形态被报上来。
+    ///
+    /// 误杀面:拿这台机器上 4579 份歌词、233128 行正文量过 —— 版权标记在整个语料里
+    /// **总共只出现 1 次**,就是这一行;加括号的 (C)/(P) 形态 0 次。真歌词里不会出现版权
+    /// 标记,这是这条规则几乎没有误杀空间的原因。
+    ///
+    /// ⚠️ 年份那半边在当前语料上是**冗余**的(光看标记也是 0 误杀)。仍然要求它,理由跟
+    /// matchesPromoCreditLine 里那段完全一样:漏掉一行只是多显示一行,误杀一行是**静默
+    /// 吞掉用户的一句歌词**,两个方向的代价不对称。
+    private static let copyrightMarks: Set<Character> = ["©", "℗", "Ⓒ", "Ⓟ", "ⓒ", "ⓟ"]
+    private static let parenCopyrightPattern = try! NSRegularExpression(
+        pattern: #"\(\s*[CP]\s*\)"#, options: [.caseInsensitive])
+    private static let fourDigitYearPattern = try! NSRegularExpression(
+        pattern: #"(?:19|20)\d{2}"#)
+
+    public static func matchesCopyrightMarkLine(_ text: String) -> Bool {
+        let full = NSRange(text.startIndex..., in: text)
+        guard fourDigitYearPattern.firstMatch(in: text, range: full) != nil else { return false }
+        if text.contains(where: { copyrightMarks.contains($0) }) { return true }
+        return parenCopyrightPattern.firstMatch(in: text, range: full) != nil
+    }
+
     /// 纯日期戳注解行,没有冒号也没有角色词("July 18, 2012 at 5:25 PM")。
     ///
     /// 2026-08-27 加的:用户报丁世光《瘦子》结尾职员表最前面混进一行创作日期戳,上面所有
@@ -817,6 +913,11 @@ public final class LyricsSyncEngine {
         pattern: #"^(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec)\.?\s+\d{1,2},\s*\d{4}(\s+at\s+\d{1,2}:\d{2}\s*[ap]m)?$"#,
         options: [.caseInsensitive]
     )
+
+    /// 见 `isrcPattern`。
+    public static func matchesISRCLine(_ text: String) -> Bool {
+        isrcPattern.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)) != nil
+    }
 
     public static func matchesDateStampLine(_ text: String) -> Bool {
         let trimmed = text.trimmingCharacters(in: .whitespaces)
@@ -1011,9 +1112,16 @@ public final class LyricsSyncEngine {
             // 版权/免责声明("未经著作权人许可不得翻录翻唱或使用")——没有冒号,上面几条
             // 以"角色+冒号"为形状的规则一条都够不着,见 copyrightNoticePattern。
             if matchesCopyrightNotice(text) { return true }
+            // 带版权标记的著作权行(「著作权人：+© 2019、赋音乐」「℗ 2016 北京享耳音乐」)。
+            // 跟上面那条"成句的法务声明"不是一回事:那条认法务词,这条认版权标记 + 年份,
+            // 见 matchesCopyrightMarkLine(那里记着四条现有规则各差在哪一步)。
+            if matchesCopyrightMarkLine(text) { return true }
             // 纯日期戳注解("July 18, 2012 at 5:25 PM")——同样没有冒号也不是角色词开头,
             // 见 dateStampPattern。
             if matchesDateStampLine(text) { return true }
+            // 国际标准录音码行(`ISRC TWB870211301`)——没有冒号、也不是角色词开头,
+            // 上面所有以"角色+冒号"为形状的规则都够不着,见 isrcPattern。
+            if matchesISRCLine(text) { return true }
             // 厂牌/平台的宣传出品语(「网易云音乐特别企划"星辰集"出品」)——同样没有冒号,
             // 见 matchesPromoCreditLine(那里记着平台词这道闸是拿 15 万行真实歌词量出来的,
             // 不加会误杀 6 条含「呈现」的真歌词)。
@@ -1094,7 +1202,12 @@ public final class LyricsSyncEngine {
         if fingerprint == loadedFingerprint { return false }
         loadedFingerprint = fingerprint
         self.romanizationScripts = romanizationScripts
-        let yrc = preferWordLevel ? YRCParser.parse(lyricsYRC) : []
+        // 逐字时间轴先过一遍合法性归一化(LyricTimelineNormalizer,2026-09-02):字起点早于行首 /
+        // 落在下一行开始之后的小偏差夹回来,乱序或偏差太大的行退化成均匀扫过。放在署名过滤之前——
+        // 归一化要看相邻行的时间戳,得在完整的行列表上做。每次加载只记一行汇总日志。
+        let normalizedYRC = LyricTimelineNormalizer.normalize(preferWordLevel ? YRCParser.parse(lyricsYRC) : [])
+        let yrc = normalizedYRC.lines
+        LyricTimelineNormalizer.logSummary(normalizedYRC.report, track: trackTitle)
         // 过滤前先把整份的文本取出来判一次(结构化规则是整份粒度的,见
         // shouldApplyStructuralCreditFilter),不能像原来那样逐行独立 filter。
         //
@@ -1393,21 +1506,17 @@ public final class LyricsSyncEngine {
         // 转写 > 原文,尾部同走 mergeSokuon,见 Romanizer.readingFromSegments),selftest 有
         // 两者一致的断言。派生不出读音(整行拉丁/读音等于原文)时照 romanize 的原语义退到
         // ICU 音译。
-        let result: String?
-        // ⚠️ 两个条件是**或**的关系,不是"整首歌像日文"再判行(2026-08-24 改):
-        //   · 行内有假名 → 这一行确证是日文,不管整首歌是什么(中文歌里引用的日文行);
-        //   · 纯汉字行 → 中日读音歧义,只有这种行才看整首歌的标记。
-        // 原来写成 `songLooksJapanese && (looksJapanese || containsHan)`,于是中文歌一旦
-        // 被整首判成日文,它的**纯中文行**就靠 containsHan 一路走进日语形态分析。
-        if Romanizer.looksJapanese(plainText)
-            || (songLooksJapanese && Romanizer.containsHan(plainText)),
-            let reading = Romanizer.readingFromSegments(
-                cachedJapaneseSegments(for: plainText), original: plainText)
-        {
-            result = reading
-        } else {
-            result = Romanizer.romanize(plainText, japanese: false)
-        }
+        // ⚠️ 判定阶梯本体在 `Romanizer.lineReading`(2026-09-03 从这里提出去),**不准在这里
+        // 再写一份**:collector 侧的 `lyrics-romanize` helper 预生成 `lyrics_roma` 时走的
+        // 是同一个函数,两份实现一旦漂开,同一首歌"装了缓存"和"现算"的读音就会不一样,而且
+        // 不报错、只表现成用户偶尔觉得"某句罗马音怎么变了"。selftest 有闸。
+        //
+        // `cachedJapaneseSegments(for:)` 作为 @autoclosure 传进去,只有真的走日语分支时才
+        // 求值 —— 惰性跟提取之前一模一样。
+        let result = Romanizer.lineReading(
+            plainText,
+            songLooksJapanese: songLooksJapanese,
+            segments: cachedJapaneseSegments(for: plainText))
         romanizerFallbackCache[plainText] = result
         return result
     }

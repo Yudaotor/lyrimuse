@@ -108,72 +108,57 @@ private enum LyricsSortOption: String, CaseIterable, Identifiable {
 
     var id: String { rawValue }
 
+    /// 翻译成 LyrimuseCore 里那套纯规则。**规则本身**(哪一档优先、平局怎么断、缺失值
+    /// 排在哪儿)住在 `LyricsSortOrder`,不在这里 —— 那边 lyrimuse-selftest 够得到,
+    /// 能逐档钉住;留在这个 private enum 里的话一行覆盖都没有(搬走的缘由见它的头注)。
+    var coreOrder: LyricsSortOrder {
+        switch self {
+        case .defaultOrder: return .defaultOrder
+        case .titleAscending: return .title(ascending: true)
+        case .titleDescending: return .title(ascending: false)
+        case .artistAscending: return .artist(ascending: true)
+        case .artistDescending: return .artist(ascending: false)
+        case .albumAscending: return .album(ascending: true)
+        case .albumDescending: return .album(ascending: false)
+        case .sourceAscending: return .source(ascending: true)
+        case .sourceDescending: return .source(ascending: false)
+        case .updatedAscending: return .updated(ascending: true)
+        case .updatedDescending: return .updated(ascending: false)
+        }
+    }
+
     /// 按这个选项给一份已经筛选完的列表排序。
     ///
-    /// 只有"点名的那个字段"会因升/降序反转,没点名的次序键(比如按歌手排序时,同一位
-    /// 歌手底下的专辑/歌名)恒按升序断平局——跟 Finder"按修改时间降序"仍然按文件名
-    /// 升序断平局是同一个道理,不是把整条元组一起倒过来(那样会连带把断平局的顺序也
-    /// 搅乱,观感上像是"随机")。
-    ///
-    /// 歌手/专辑用的是跟"默认排序"同一套归一化键(`normPrimaryArtist`/`normAlbum`,
-    /// 折过简体+小写),不是列表里实际展示的原始写法——理由见 `LyricsManagerRow` 调用点
-    /// 上方 2026-08-28 那条注释:"筛选/排序继续按统一名归并不变,只是这一列如实展示
-    /// 每条记录自己的原始歌手名"。同一位歌手因为原始标签写法不同(简繁/大小写)被拆成
-    /// 两条记录时,按归一化键排还能让它们挨在一起;按展示字符串排就会被拆到列表两端,
-    /// 是这次改动特意要延续、不要打破的既有行为。
+    /// 排序键**一次性算好再排**,不在比较器里现算:`sourceDisplayName` 要走一次 L10n
+    /// 查表,放进 O(N·logN) 的比较里会被调用上万次(跟 Summary 里那几个 norm* 字段
+    /// 2026-08-19 预算好的动机一样)。其余字段都是 Summary 上现成的,只是搬进一个
+    /// 值类型里。
     func sorted(_ items: [EnrichCacheStore.Summary]) -> [EnrichCacheStore.Summary] {
-        switch self {
-        case .defaultOrder:
-            return items.sorted {
-                ($0.normPrimaryArtist, $0.normAlbum, $0.title) < ($1.normPrimaryArtist, $1.normAlbum, $1.title)
-            }
-        case .titleAscending, .titleDescending:
-            let ascending = self == .titleAscending
-            return items.sorted {
-                let (a, b) = ($0.searchTitleLower, $1.searchTitleLower)
-                if a != b { return ascending ? a < b : a > b }
-                return ($0.normPrimaryArtist, $0.normAlbum) < ($1.normPrimaryArtist, $1.normAlbum)
-            }
-        case .artistAscending, .artistDescending:
-            let ascending = self == .artistAscending
-            return items.sorted {
-                let (a, b) = ($0.normPrimaryArtist, $1.normPrimaryArtist)
-                if a != b { return ascending ? a < b : a > b }
-                return ($0.normAlbum, $0.title) < ($1.normAlbum, $1.title)
-            }
-        case .albumAscending, .albumDescending:
-            let ascending = self == .albumAscending
-            return items.sorted {
-                let (a, b) = ($0.normAlbum, $1.normAlbum)
-                if a != b { return ascending ? a < b : a > b }
-                return ($0.normPrimaryArtist, $0.title) < ($1.normPrimaryArtist, $1.title)
-            }
-        case .sourceAscending, .sourceDescending:
-            let ascending = self == .sourceAscending
-            return items.sorted {
-                let (a, b) = (sourceDisplayName($0.lyricsSource), sourceDisplayName($1.lyricsSource))
-                if a != b { return ascending ? a < b : a > b }
-                return ($0.normPrimaryArtist, $0.normAlbum, $0.title) < ($1.normPrimaryArtist, $1.normAlbum, $1.title)
-            }
-        case .updatedAscending, .updatedDescending:
-            let ascending = self == .updatedAscending
-            return items.sorted {
-                let (a, b) = ($0.lyricsUpdatedAt, $1.lyricsUpdatedAt)
-                // 没有时间的(磁盘上没有歌词文件 = 这条压根没歌词)**两个方向都排最后**,
-                // 不是当成"最早"。"旧→新"里把它们塞到最前面在技术上说得通(未知≈很久以前),
-                // 但用户按更新时间排是想看"最近动过什么 / 最久没动过什么",一串没歌词的
-                // 空行占住列表开头对这两个问题都没有回答。跟 Finder 把无日期项收在末尾
-                // 同一个取舍。
-                switch (a, b) {
-                case (nil, nil): break
-                case (nil, _): return false
-                case (_, nil): return true
-                case let (x?, y?):
-                    if x != y { return ascending ? x < y : x > y }
-                }
-                return ($0.normPrimaryArtist, $0.normAlbum, $0.title) < ($1.normPrimaryArtist, $1.normAlbum, $1.title)
-            }
-        }
+        let order = coreOrder
+        return items
+            .map { (key: $0.lyricsSortKey, item: $0) }
+            .sorted { order.less($0.key, $1.key) }
+            .map(\.item)
+    }
+}
+
+extension EnrichCacheStore.Summary {
+    /// 映射成排序用的纯值类型。歌手/专辑取的是归一化键(`normPrimaryArtist`/`normAlbum`,
+    /// 折过简体+小写)而不是列表里展示的原始写法——理由见 `LyricsManagerRow` 调用点上方
+    /// 2026-08-28 那条注释:"筛选/排序继续按统一名归并不变,只是这一列如实展示每条记录
+    /// 自己的原始歌手名"。同一位歌手因为原始标签写法不同(简繁/大小写)被拆成两条记录时,
+    /// 按归一化键排还能让它们挨在一起;按展示字符串排就会被拆到列表两端。
+    var lyricsSortKey: LyricsSortKey {
+        LyricsSortKey(
+            normPrimaryArtist: normPrimaryArtist,
+            normAlbum: normAlbum,
+            title: title,
+            searchTitleLower: searchTitleLower,
+            sourceDisplayName: sourceDisplayName(lyricsSource),
+            hasSource: !lyricsSource.isEmpty,
+            lyricsUpdatedAt: lyricsUpdatedAt,
+            resolvedAt: resolvedAt
+        )
     }
 }
 
@@ -1795,8 +1780,10 @@ struct LyricsManagerView: View {
             hasPlainTextFallback: false,
             isSearching: true,
             hasDecision: false,
-            // 这一行是「正在搜索这首歌的歌词」占位,磁盘上还没有它的歌词文件。
+            // 这一行是「正在搜索这首歌的歌词」占位,磁盘上还没有它的歌词文件,
+            // 缓存里也还没有这个 key(所以也没有 ts)。
             lyricsUpdatedAt: nil,
+            resolvedAt: nil,
             normPrimaryArtist: toSimplified(primaryArtist(display)).lowercased(),
             normAlbum: toSimplified(playback.album).lowercased(),
             searchArtistLower: playback.artist.lowercased(),
@@ -2181,7 +2168,8 @@ struct LyricsManagerView: View {
             }
             // 机翻的译文单独标出来,不让它冒充歌词源自带的社区翻译 —— 跟"人工修正"徽章
             // 同一个原则:凡是"这份内容是哪来的"能影响用户判断的,就如实说。
-            if summary.hasTranslation && summary.lyricsTrSource == "machine" {
+            if summary.hasTranslation
+                && summary.lyricsTrSource == LyricsTranslationSource.machineSentinel {
                 InfoChip(icon: "character.book.closed", text: L10n.t("机器翻译"), tint: .purple)
             }
             if !summary.hasLyrics {
@@ -2758,9 +2746,9 @@ private struct LyricsManagerRow: View {
                         // 紫色标机译——同一份数据在两个地方讲两套语言。图标形状(书本)跟旁边罗马音
                         // 的 textformat.abc 已经不同,共用紫色不会认错是哪个标记。
                         badge("character.book.closed",
-                              tint: summary.lyricsTrSource == "machine" ? .purple : .green,
+                              tint: summary.lyricsTrSource == LyricsTranslationSource.machineSentinel ? .purple : .green,
                               on: summary.hasTranslation,
-                              help: summary.lyricsTrSource == "machine"
+                              help: summary.lyricsTrSource == LyricsTranslationSource.machineSentinel
                                   ? L10n.t("译文(机器翻译)") : L10n.t("译文(歌词源自带)"))
                         badge("textformat.abc", tint: .purple, on: summary.hasRomanization,
                               help: L10n.t("罗马音"), forceLatinIcon: true)

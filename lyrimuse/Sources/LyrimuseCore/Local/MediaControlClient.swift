@@ -175,10 +175,11 @@ public enum MediaControlClient {
             // 走信任列表这条路进来的(不是用户在「播放器」卡里选中的具体播放器)要多过
             // 一道"这是不是一首歌"的守卫——跟 fetchAutoDetectedSnapshot 的信任分支同一套
             // 语义,理由见 TrustedPlayers.notASong 的注释(浏览器视频/播客不能被当成一首歌)。
-            guard !TrustedPlayers.notASong(
-                bundleID: bundleID, artist: snapshot.artist, album: snapshot.album) else {
+            guard !trustedPlaybackRejected(bundleID: bundleID, snapshot: snapshot) else {
                 return nil
             }
+            return refinedAppleMusicSnapshotIfNeeded(
+                bundleID: bundleID, snapshot: snapshotWithProbedAlbum(snapshot))
         }
         return refinedAppleMusicSnapshotIfNeeded(bundleID: bundleID, snapshot: snapshot)
     }
@@ -221,11 +222,111 @@ public enum MediaControlClient {
         }
         // 信任的未知播放器再过一道"这是不是一首歌"的守卫:歌手名**或专辑名**为空的丢掉
         // (浏览器视频/播客)。见 TrustedPlayers.notASong —— 跟 collector 侧同一套语义。
-        guard !TrustedPlayers.notASong(
-            bundleID: bundleID, artist: snapshot.artist, album: snapshot.album) else {
+        guard !trustedPlaybackRejected(bundleID: bundleID, snapshot: snapshot) else {
             return nil
         }
-        return refinedAppleMusicSnapshotIfNeeded(bundleID: bundleID, snapshot: snapshot)
+        return refinedAppleMusicSnapshotIfNeeded(
+            bundleID: bundleID, snapshot: snapshotWithProbedAlbum(snapshot))
+    }
+
+    /// 上游报的专辑名为空时,用 YouTube Music 探针**刚刚那次**读到的那个补上(2026-09-03,
+    /// 用户报「YT Music 播一张专辑时第一首不上送专辑名」)。判据是纯函数
+    /// `YouTubeMusicAdProbe.albumPatch`(selftest 覆盖),这里只负责把它接上真实的探针缓存。
+    ///
+    /// ⚠️ **必须在 `trustedPlaybackRejected` 之后**调用,不能提前把专辑名补进去再过守卫:
+    /// 那道守卫"album 为空"正是触发广告复核的唯一入口,先补上等于把广告检测整个绕过去
+    /// (广告的 album 也是空的)。顺序反了不会报错,只会让广告悄悄进来。
+    ///
+    /// 只补内置五个播放器之外、走信任列表进来的那条路 —— 探针缓存本来也只在 YouTube Music
+    /// 的标签页上才会有值(key 还带着曲目身份),但把调用点限制在这一支,读代码时不用去
+    /// 推理"Apple Music 会不会被它改到"。
+    private static func snapshotWithProbedAlbum(_ snapshot: MediaControlSnapshot)
+        -> MediaControlSnapshot {
+        let key = YouTubeMusicAdProbe.trackKey(artist: snapshot.artist, title: snapshot.title)
+        guard let album = YouTubeMusicAdProbe.albumPatch(
+            reported: snapshot.album,
+            reading: YouTubeMusicAdProbe.shared.cachedReading(forKey: key))
+        else { return snapshot }
+        return snapshot.withAlbum(album)
+    }
+
+    /// `TrustedPlayers.notASong` 的"带 YouTube Music 广告复核"版本,也是这两条取快照的
+    /// 路径该用的那一个(2026-09-02)。
+    ///
+    /// 基础判据(artist 或 album 为空就丢)原样不动 —— 它跟 collector 侧
+    /// `trustedPlaybackNotASong` 是逐字对应的一套语义。复核作为**外面一层**加上去,
+    /// 只在一种情况下发生:基础判据要拒、而且唯一的理由是 album 为空(artist 非空)。
+    ///
+    /// 这一层是为了让 YouTube Music 能被识别 —— 它的 album **常常**是空的(不是总是,
+    /// 见 `YouTubeMusicAdProbe` 头注那条订正),空的那些不复核就永远进不来
+    /// (用户 2026-09-02 报的就是这个)。而不能简单免检 album,因为那一条同时也在挡广告:
+    /// 实测广告的 artist 是广告主频道名、**非空**(见 `YouTubeMusicAdProbe` 头注的两条
+    /// 真实样本)。
+    ///
+    /// 三条出口在 `YouTubeMusicAdProbe.gate` 里(纯函数、selftest 覆盖),这里只负责
+    /// 把它接上真实的探针缓存。
+    ///
+    /// ⚠️ 2026-09-02 起「判定是广告」**不再拒**,而是放行、由
+    /// `LocalPlaybackSource.isCurrentTrackAdBreak` 标成广告驱动 UI(用户要求 YT Music 的
+    /// 广告也像 Spotify 那样显示「广告中」)。放行不会让广告被记录 —— 完整理由见
+    /// `YouTubeMusicAdProbe.Gate.acceptAsAd` 的注释,那里也写明了 Swift 与 Go 在这一层
+    /// 故意不对称。
+    private static func trustedPlaybackRejected(
+        bundleID: String, snapshot: MediaControlSnapshot
+    ) -> Bool {
+        guard TrustedPlayers.notASong(
+            bundleID: bundleID, artist: snapshot.artist, album: snapshot.album) else {
+            return false
+        }
+        // ⚠️ **Spotify 网页版广告必须在下面那道短路之前处理**(2026-09-03)。它的字段形状是
+        // `title="广告" artist="" album="" duration≈30s`(现场抓的真实样本,见
+        // `SpotifyWebAdProbe` 头注那张对照表)—— **artist 是空的**,而下面那行 guard 会把
+        // 歌手名为空的一律丢掉,页面复核根本轮不到。后果是广告那 30 秒 App 手上一条播放数据
+        // 都没有:菜单栏塌回小图标、灵动岛/悬浮窗一起消失,广告完了再弹回来。
+        // (原生 Spotify 客户端不受这道闸约束 —— 内置播放器在 notASong 第一行就 return false,
+        //  所以它一直是好的,只有浏览器里的 Spotify 掉在这个洞里。)
+        if spotifyWebAdAccepted(bundleID: bundleID, snapshot: snapshot) { return false }
+        guard !(snapshot.artist ?? "").trimmingCharacters(in: .whitespaces).isEmpty else {
+            return true
+        }
+        let key = YouTubeMusicAdProbe.trackKey(artist: snapshot.artist, title: snapshot.title)
+        // 先踢一次(异步、不阻塞),再读缓存 —— 同步路径上绝不能等 AppleScript 往返,
+        // 见 YouTubeMusicAdProbe 头注"异步 kick + 读缓存"那一节。
+        YouTubeMusicAdProbe.shared.kickIfNeeded(bundleIdentifier: bundleID, key: key)
+        let verdict = YouTubeMusicAdProbe.shared.cachedVerdict(forKey: key)
+        return YouTubeMusicAdProbe.gate(artist: snapshot.artist, verdict: verdict) == .reject
+    }
+
+    /// 「这条是不是一段 Spotify 网页版广告,该放行并标成广告?」(2026-09-03)
+    ///
+    /// 三道门,全过才放行 —— 判据本体是两个纯函数(`fieldShapeNeedsProbe` / `gate`,
+    /// selftest 覆盖),这里只负责把它们接上真实的配对表和探针缓存:
+    ///
+    /// 1. **这个浏览器配对过 spotifyWeb**。没配对就一个 AppleEvent 都不发 —— 用户没说过
+    ///    "我拿这个浏览器听 Spotify",我们就不去 tell 它。
+    /// 2. **字段形状是"标题非空 + 歌手为空"**。这是 Spotify 网页广告的形状,也正是下面那道
+    ///    短路要丢掉的形状。⚠️ 这道门同时把 YT Music 那条探针的领地(artist 非空、album 空)
+    ///    挡在外面 —— 不然配对了两个平台的浏览器(这台机器上 Safari / Arc)每一轮会背两次
+    ///    osascript 往返。
+    /// 3. **页面自己说此刻在放广告**(正向证据)。拿不准一律不放行 —— fail-closed 的方向是
+    ///    "维持改动前的样子(丢掉)",不是"在一首真歌上贴广告标签"。
+    ///
+    /// 放行之后由谁标成广告:`LocalPlaybackSource` 里那套 `adByFields` 本来就认这个形状
+    /// (`isSpotify && !title.isEmpty && (album 空 || artist 空)`,而 `isSpotify` 早已包含
+    /// 网页版),所以这里**只要不丢**,「广告中」自然就亮了 —— 不需要再传一个标记下去。
+    private static func spotifyWebAdAccepted(
+        bundleID: String, snapshot: MediaControlSnapshot
+    ) -> Bool {
+        guard SpotifyWebAdProbe.fieldShapeNeedsProbe(title: snapshot.title,
+                                                     artist: snapshot.artist) else { return false }
+        let host = BrowserPositionProbe.probeTargetBundleID(forReported: bundleID)
+        guard BrowserPositionProbe.shared.isPaired(bundleID: host, platformID: "spotifyWeb") else {
+            return false
+        }
+        let key = SpotifyWebAdProbe.trackKey(artist: snapshot.artist, title: snapshot.title)
+        SpotifyWebAdProbe.shared.kickIfNeeded(bundleIdentifier: bundleID, key: key)
+        let verdict = SpotifyWebAdProbe.shared.cachedVerdict(forKey: key)
+        return SpotifyWebAdProbe.gate(verdict: verdict) == .acceptAsAd
     }
 
     // refinedAppleMusicSnapshotIfNeeded 是 fetchAutoDetectedSnapshot/

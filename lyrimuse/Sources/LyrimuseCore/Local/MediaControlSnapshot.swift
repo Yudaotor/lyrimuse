@@ -30,4 +30,17 @@ public struct MediaControlSnapshot: Decodable {
     public static func trackKey(artist: String?, title: String?) -> String {
         "\(artist ?? "")|\(title ?? "")"
     }
+
+    /// 换掉专辑名的副本(2026-09-03)。唯一的用处是给 YouTube Music **每条队列第一首**
+    /// 补上专辑名 —— 那些歌 MediaSession 里的 album 是空的,但页面上有,见
+    /// `YouTubeMusicAdProbe.albumPatch`。
+    ///
+    /// 写成显式方法而不是就地用合成的 memberwise init:字段有十个,memberwise 调用点
+    /// 长得看不出"只改了一个字段",而且以后加字段时那种调用点会静默漏改。
+    public func withAlbum(_ newAlbum: String) -> MediaControlSnapshot {
+        MediaControlSnapshot(
+            title: title, artist: artist, album: newAlbum, duration: duration,
+            elapsedTime: elapsedTime, playing: playing, playbackRate: playbackRate,
+            isMusicApp: isMusicApp, bundleIdentifier: bundleIdentifier)
+    }
 }

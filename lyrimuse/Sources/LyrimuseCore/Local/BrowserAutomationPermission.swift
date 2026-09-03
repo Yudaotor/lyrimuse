@@ -90,7 +90,8 @@ public enum BrowserAutomationPermission {
     ///
     /// 上面那两张表只登记实测验证过的浏览器(理由见 `chromiumPrefsPaths` 那段),所以设置页
     /// 「添加浏览器」菜单原本只列得出四个,而 Brave / Vivaldi / Opera / Chromium / 各种 Beta
-    /// 通道其实都是同一套内核、本来就驱得动。2026-08-31 用户问「这里点+号出来的是否可以加
+    /// 通道其实都是 Chrome 的分支、连脚本字典一起继承了(同一个四字码 `CrSuExJa`),本来就
+    /// 驱得动。2026-08-31 用户问「这里点+号出来的是否可以加
     /// 一个选项是自己在本机的应用程序里面选」——这份字典就是那条路的落点。
     ///
     /// ⚠️ 它只影响 `family(...)`(= "这个 App 驱不驱得动"),**不影响 `chromiumPrefsPaths`**
@@ -182,8 +183,15 @@ public enum BrowserAutomationPermission {
     public enum Status: Equatable {
         case enabled
         case disabled
-        /// Chromium 系专属:Preferences 文件读不到/解析不出来(装了但从没启动过、格式变了)——
-        /// 跟"确定关着"的 disabled 区分开,UI 上给不同的提示,别把"不确定"说成"确定没开"。
+        /// 开关状态**查不到**:Chromium 系是 Preferences 文件读不到/解析不出来(装了但从没
+        /// 启动过、格式变了、或最常见的——没有「完全磁盘访问权限」);Safari 是
+        /// `CFPreferencesCopyAppValue` 返回 nil(`com.apple.Safari` 是 TCC 保护域,同样多半
+        /// 是权限问题)。跟"确定关着"的 `disabled` 区分开,UI 上给不同的提示,别把"不确定"
+        /// 说成"确定没开"。
+        ///
+        /// ⚠️ 2026-09-02 之前 Safari 分支把 nil 判成 `disabled`(那时这里还写着"Chromium 系
+        /// 专属"),导致开关明明勾着却被告警"已经被关掉了"——详见 `status` 里 Safari 分支的
+        /// 那段注释。
         case unknown
         case unsupported
     }
@@ -192,15 +200,52 @@ public enum BrowserAutomationPermission {
         guard let family = family(forBundleID: bundleID) else { return .unsupported }
         switch family {
         case .safari:
-            guard let value = CFPreferencesCopyAppValue(safariPrefKey, safariBundleID as CFString) else {
-                return .disabled // Safari 这个开关默认就是关的,读不到值等价于"从没开过"
-            }
-            return (value as? Bool) == true || (value as? NSNumber)?.boolValue == true ? .enabled : .disabled
+            return safariStatus(fromPrefValue:
+                CFPreferencesCopyAppValue(safariPrefKey, safariBundleID as CFString))
         case .chromium:
             guard let dict = readChromiumPrefs(bundleID: bundleID) else { return .unknown }
             let browserDict = dict["browser"] as? [String: Any]
             return (browserDict?[chromiumPrefKey] as? Bool) == true ? .enabled : .disabled
         }
+    }
+
+    /// Safari 那道开关的判据,从 `CFPreferencesCopyAppValue` 的返回值算出状态。
+    ///
+    /// 拆成纯函数只为一件事:让 selftest 能覆盖 nil 这一档而不碰系统偏好(同本仓库
+    /// "网络函数拆出纯判据"的既有做法)。nil 必须是 `.unknown` 不能是 `.disabled` ——
+    /// 完整案情见下面 `case nil` 那段。
+    public static func safariStatus(fromPrefValue value: CFPropertyList?) -> Status {
+        guard let value else {
+                // ⚠️ **读不到 ≠ 关着**(2026-09-02 修)。原来这里 `return .disabled`,理由写的是
+                // "Safari 这个开关默认就是关的,读不到值等价于从没开过" —— 这个假设是错的,
+                // 而且跟隔壁 Chromium 分支的处置**自相矛盾**:那边读不到明确返回 `.unknown`,
+                // 头注还专门写了"那不是坏了,是查不到,文案要如实说,别显示成未开启"。
+                //
+                // nil 有两种成因,这里分不出来:①真的从没设过;②**读不到** —— `com.apple.Safari`
+                // 是 TCC 保护域,别的 App 读它要「完全磁盘访问权限」,这个 App 默认没有,
+                // 于是 nil 才是常态。
+                //
+                // 真实后果(2026-09-02 用户报「可以现在就是勾着的啊」):用户 Safari 里那个开关
+                // **确实勾着**、自检也实测通过(绿字「现在可以被驱动了」),界面却橙字告警
+                // 「这个开关已经被关掉了——重启后就会失效」,并把菜单路径指引整块摆出来让他
+                // 再去勾一遍——而它本来就勾着,照做无事发生。误报之外还有连带伤害:
+                // `browserJSLikelyWorking` 对 `.disabled` 是**一票否决**,于是这张卡永远收敛
+                // 不到"已配好"那一档,角标也一直挂着。
+                //
+                // 实测(2026-09-02,本机 Safari 开关为开):外层
+                // `~/Library/Preferences/com.apple.Safari.plist`(105 字节的 stub,只有两个键)
+                // 和容器内 `~/Library/Containers/com.apple.Safari/.../com.apple.Safari.plist`
+                // **都是 true**;终端身份(有完全磁盘访问权限)`CFPreferencesCopyAppValue` 读到
+                // `1`,而没有该权限的 App 读到 nil —— 同一台机器、同一个值,读得到读不到只取决
+                // 于调用方的 TCC 身份,跟开关本身死活无关。
+                //
+                // 改成 `.unknown` 之后这一档交给**实测**(「检测是否已生效」)兜底,那正是
+                // 这个仓库对 Chromium 系一直以来的做法:读不到就别猜,去真的执行一段 JavaScript
+                // 问事实。代价是"Safari 真的关着"时不再由文件直接判定 —— 但那本来也判不出来
+                // (nil 分不出两种成因),而实测会如实失败并给出指引,结论不丢。
+                return .unknown
+            }
+        return (value as? Bool) == true || (value as? NSNumber)?.boolValue == true ? .enabled : .disabled
     }
 
     /// 读那个 Chromium 浏览器 profile 里的 `Preferences`(JSON)。

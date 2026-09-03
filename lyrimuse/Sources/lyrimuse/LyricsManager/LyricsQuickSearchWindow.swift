@@ -24,6 +24,13 @@ import LyrimuseCore
 // `openLyricsQuickSearch` 都往那个 subject send 一下,这里额外 `.onReceive` 它、收到就
 // 重新 `loadContext()`,跟 `.task` 各管一段("窗口还没建出来"用 `.task`,"窗口已经开着"用
 // `.onReceive`),合起来才是真正的"每次点这个按钮都现查一次"。
+// ⚠️ 2026-09-02 第二个真实bug(由上一条修法引出):`.onReceive` 只替换了 `context`,而 SwiftUI 里
+// `if let context { LyricsSearchSheet(...) }` 从 Optional(A) 换成 Optional(B) 保持**同一个视图
+// 身份**——面板里的查询词 @State 与首次挂载才跑的 `.task` 都不会重置,屏幕上还是上一首的查询词
+// 和候选,而下面 onApply 闭包捕获的已是新 `context.key`:采纳会把上一首的歌词写进当前这首的
+// 条目。修在 `LyricsSearchSheet` 内部(按原始字段 `.task(id:)` 重搜 + `.onChange` 重置查询词),
+// **刻意不**在这里加 `.id(context.key)` 整棵重建——探针实测重建时新面板的搜索会被旧面板迟到的
+// cancelRunning() 杀掉,详见那边 `.task(id:)` 上方的注释。这个文件的代码没有变,只有这条说明。
 // ⚠️ 不像 LyricsWindowView 那边特意 `Task.detached` 到背景线程读 EnrichCacheReader(那扇
 // 窗口有 60fps 的逐字填色,主线程哪怕短暂卡顿都会被看见)——这扇窗口只在打开这一瞬间读一次
 // 缓存,直接在 MainActor 上做,没有必要为这一次性读多绕一层线程切换。

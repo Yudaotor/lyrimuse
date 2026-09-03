@@ -17,10 +17,15 @@ import SwiftUI
 //   ③ 「风格」「屏幕」收进工具栏两个浮层,按钮上带当前值摘要(不点开也知道现在什么样)。
 //   ④ 总开关卡留在编辑台正下方常驻(同悬浮歌词那一段:主开关不进折叠区)。
 //
-// ⚠️ **没有**「全部设置」抽屉,这不是漏做。悬浮歌词那边的抽屉是为 16 项设置准备的全量
-// 兜底通路;灵动岛一共只有三项(风格 / 宽度 / 屏幕),两个浮层加舞台里那根滑杆已经**全部
-// 覆盖**,而且三处都是原生可聚焦控件(Button → popover、Slider 自带键盘/VoiceOver 调节),
-// 键盘和 VoiceOver 没有够不到的设置。再加一个抽屉就是同一批设置在同一页里摆两遍。
+// ⚠️ **这里原来写着"没有「全部设置」抽屉,这不是漏做",那条论证 2026-08-31 已经被推翻。**
+// 原话是:悬浮歌词那边的抽屉是 16 项设置的全量兜底通路,而灵动岛一共只有三项(风格 / 宽度 /
+// 屏幕),两个浮层加舞台里那根滑杆已经全部覆盖,再加抽屉就是同一批设置摆两遍。**前提变了**:
+// 可配项后来涨到两行工具栏共七个入口(风格 / 屏幕 / 左耳 / 右耳 + 歌词行 / 行为 / 展开态),
+// 用户看过第一版抽屉之后要求把**原有**那几项也补齐,于是有了 `NotchAllSettingsDrawer`
+// (在 SettingsView.swift,渲染点是 `currentSection` 的 `.notch` 分支)。它的分组跟工具栏那几个
+// 浮层**逐字对应**:风格 / 左耳 + 右耳 / 屏幕 / 宽度 / 歌词行 / 行为(含 2026-09-02 并进来的
+// 自动隐藏两行,见 UI/AutoHideSettingsRows.swift)/ 展开态 / 显示音浪。
+// (悬浮歌词那个抽屉同期也从 16 项涨到 18 项,同样是并进了那两行自动隐藏。)
 //
 // ⚠️ 舞台**不缩放**,一律按真实 pt 画(同悬浮歌词编辑台第四步定的调子:"看到多大就是多大")。
 // 卡片宽度上限就是 `widthRange.upperBound` = 500(耳朵下限最高的一档 —— 某只耳朵配成时长 ——
@@ -516,6 +521,15 @@ struct NotchEditorStage: View {
     private var lyricRowSummary: String {
         var parts: [String] = []
         if settings.notchShowLyrics { parts.append(NotchBehaviorItem.showLyrics.title) }
+        // 「对齐方式」(2026-09-03)只在**非默认**时才报。三选一不是开关,套不进上面那条
+        // "只列开着的"规则;而默认值(左对齐)是绝大多数人的状态,无条件报出来等于给每个人的
+        // 按钮上加一句恒定噪声、还要跟 140pt 限宽抢地方。非默认才报 = 跟"只列开着的"同一个
+        // 精神(只说偏离缺省的那部分)。文案走 `LyricsAlignmentSegmentedControl.label(for:)`,
+        // 跟控件里的标签是同一份口径 —— 控件写「左对齐」、摘要写「左」是同一个值的两种叫法
+        // (悬浮歌词那边为这件事专门把 label 提成了 static func,见那个注释)。
+        if settings.notchLyricsAlignment != AppSettings.defaultNotchLyricsAlignment {
+            parts.append(LyricsAlignmentSegmentedControl.label(for: settings.notchLyricsAlignment))
+        }
         if settings.notchLyricRowShowsArtwork {
             parts.append("\(NotchEarModule.artwork.displayName) · \(settings.notchLyricRowArtworkPosition.displayName)")
         }
@@ -530,18 +544,41 @@ struct NotchEditorStage: View {
     /// ", "/"and",不用为这一个用途单独造一条要翻译的标点字符串。
     @MainActor
     private func behaviorLikeSummary(_ items: [NotchBehaviorItem]) -> String {
-        let onTitles = items.filter { $0.binding.wrappedValue }.map(\.title)
-        if onTitles.count == items.count { return L10n.t("全部开启") }
-        if onTitles.isEmpty { return L10n.t("全部关闭") }
-        return ListFormatter.localizedString(byJoining: onTitles)
+        toggleSummary(items.map { (title: $0.title, isOn: $0.binding.wrappedValue) })
     }
 
-    /// 只剩「暂停缩回」一项(`.showLyrics` 2026-09-01 搬去了「歌词行」浮层,见
-    /// `lyricRowSummary`)。单项时 `behaviorLikeSummary` 退化成"开/全部开启、关/全部关闭"
-    /// 二选一,信息上没问题,文案"全部"用在单项上略绕口但不算错——没有为 n=1 单独写一套
-    /// 措辞,保持跟「展开态」按钮同一份实现。
+    /// 上面那套归约逻辑的本体。2026-09-02 从 `behaviorLikeSummary` 里下沉了一层,吃的是
+    /// "标题 + 当前值"而不是某一个具体枚举 —— 因为「行为」浮层那一组的开关**来自两个枚举**
+    /// (`NotchBehaviorItem.collapseWhenPaused` + `AutoHideItem` 那两项),摘要必须把两个来源
+    /// 都算进去,见 `behaviorSummary`。
+    ///
+    /// 同一天悬浮歌词的编辑台也要这句摘要(「行为」按钮,见 `OverlayEditorStage.behaviorSummary`),
+    /// 归约本体因此又往上提了一层到 `SettingsToggleSummary` —— 它产出的是用户看得见的文案,
+    /// 两个编辑台各留一份迟早会漂开。这里保留这个薄包装,只是为了让本文件里三处调用点读起来
+    /// 不变。
+    @MainActor
+    private func toggleSummary(_ entries: [(title: String, isOn: Bool)]) -> String {
+        SettingsToggleSummary.text(entries)
+    }
+
+    /// 「行为」浮层现在有三项,而且**跨两个枚举**:`NotchBehaviorItem.collapseWhenPaused`
+    /// (`.showLyrics` 2026-09-01 搬去了「歌词行」浮层,见 `lyricRowSummary`)+ `AutoHideItem`
+    /// 那两项(2026-09-02 从撤掉的独立「自动隐藏」卡并进来的)。
+    ///
+    /// ⚠️ **两个来源必须都算,而且要跟 `NotchBehaviorPopover` /
+    /// `NotchAllSettingsDrawer.behaviorGroup` 的内容一致**:少算自动隐藏那两项不会编译报错,
+    /// 只会让这颗按钮在它们开着时照旧显示「全部关闭」—— 一个会撒谎的派生值。
+    ///
+    /// 三项都开时摘要会拼成一长串(「暂停缩回、截屏/录屏时隐藏、暂停/无播放时隐藏」),交给
+    /// `toolbarButton` 里那 140pt 限宽 + 尾部省略处理,跟「屏幕」按钮遇到长显示器名是同一个
+    /// 兜底,不为这里另写一套截断。
     private var behaviorSummary: String {
-        behaviorLikeSummary([.collapseWhenPaused])
+        toggleSummary(
+            [(title: NotchBehaviorItem.collapseWhenPaused.title,
+              isOn: NotchBehaviorItem.collapseWhenPaused.binding.wrappedValue)]
+                + AutoHideItem.allCases.map {
+                    (title: $0.title, isOn: $0.binding(for: .notch).wrappedValue)
+                })
     }
 
     private var expandedSummary: String {
@@ -1171,6 +1208,15 @@ enum NotchStyleDefaults {
         settings.notchExpandedShowsAlbum = AppSettings.defaultNotchExpandedShowsAlbum
         settings.notchLyricRowShowsArtwork = AppSettings.defaultNotchLyricRowShowsArtwork
         settings.notchLyricRowArtworkPosition = AppSettings.defaultNotchLyricRowArtworkPosition
+        settings.notchLyricsAlignment = AppSettings.defaultNotchLyricsAlignment
+        // 「行为」组里那两个自动隐藏开关(2026-09-03 补漏)。
+        //
+        // 它们 2026-09-02 才从撤掉的那张跨形态「自动隐藏」卡并进灵动岛「行为」组,**并进来时
+        // 没同步扩这里** —— 而这颗按钮叫「恢复默认风格与**开关**」、界面自报的排除范围只有
+        // "不含宽度和总开关",这两项既是开关又不在排除项里,点了重置却不动,是漏不是取舍。
+        // (同一天菜单栏那颗也因为同样的原因漏了两项,见 MenuBarStyleDefaults 的头注。)
+        settings.notchHideDuringScreenCapture = AppSettings.defaultNotchHideDuringScreenCapture
+        settings.notchHideWhenNotPlaying = AppSettings.defaultNotchHideWhenNotPlaying
     }
 }
 

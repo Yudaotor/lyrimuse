@@ -1,3 +1,4 @@
+import LyrimuseCore
 import SwiftUI
 
 // 真窗口里装 NotchLyricsView 的那一层壳。
@@ -21,6 +22,13 @@ import SwiftUI
 // 但只要给它加一层哪怕完全透明的 Color.clear.contentShape(Rectangle()),点击就会被这个
 // 窗口吞掉 —— 那意味着用户点不动被盖住的那一段菜单栏。这是这次重构唯一的真风险点。
 struct NotchWindowRoot: View {
+    /// 「暂停/无播放时隐藏」的退场动画(2026-09-02):整卡以刘海中心为锚 scale→0 并透明,
+    /// 缩进刘海里。首版是"先播收起弹簧再走",用户目验后否掉——不要经过暂停收起态,直接从
+    /// 正常大小缩到无;时长按用户"半秒太久、砍一半"的口径取 0.2s,ease-in(加速冲进刘海)。
+    static let vanishDuration: TimeInterval = 0.2
+    /// 控制器等这么久再 orderOut——比 vanishDuration 略长,让最后一帧真的落到 0。改动画时长
+    /// 要连着改这里。
+    static let vanishSettleDelay: TimeInterval = 0.25
     @ObservedObject var controller: NotchLyricsWindowController
     /// 光标上一次是不是在卡片上 —— 只为了让触觉反馈在"进入"那一下触发一次,不是状态源。
     @State private var hoveringCard = false
@@ -79,9 +87,78 @@ struct NotchWindowRoot: View {
     /// "两处各自判断必然漂"说的就是这种地方。
     private var cardHeight: CGFloat { controller.cardHeight }
 
+    /// 退场/回场动画:缩进刘海用 ease-in(vanishDuration);**回场瞬时,不做动画**。
+    /// `.animation(_:value:)` 用变化后的新值求值,所以 isVanished 刚翻 true 走前者、
+    /// 刚翻 false 走后者。reduceMotion 下一律 nil(控制器那边也不会进这条路)。
+    ///
+    /// ⚠️ **回场那一档 2026-09-03 从 `.spring(0.42, 0.8)` 改成 nil**,用户报「从广告变成歌
+    /// 的时候灵动岛的封面是平移过来的,不是直接就切换了外观」。抓帧坐实(按窗口 ID 连拍
+    /// 灵动岛那扇窗,24 帧/次):空档期卡片整个消失(连续 13 帧字节数完全相同),新歌开始时
+    /// 只跨 1 帧就长回终态,中间那一帧卡片明显比终态窄、内容整体偏移 —— 那是
+    /// `scaleEffect(0.001 → 1, anchor: .top)` 的中间态。卡片背景在 `.coverArt` 风格下就是
+    /// 封面模糊图,整卡放大时封面跟着一起被重新缩放/裁切,观感就是"封面平移过来"。
+    ///
+    /// ⚠️ **退场那一档不动**:2026-09-02 用户明确要过「直接从正常大小缩小到无」,那是他点过
+    /// 头的。回场这条弹簧是当时对称加上去的、没有单独的用户依据 —— 两个方向本来就不必对称:
+    /// 退场是"东西要走了",给一点动画是交代;回场是"新歌来了",用户要的是立刻看到新外观。
+    ///
+    /// 2026-09-03 下午起回场由出场动画(下面 body 里的 keyframeAnimator,裁剪撑开、不缩放)负责,这里的
+    /// nil 仍然正确、而且必须是 nil:scale 要瞬时回 1,渐显交给裁剪去做,两者叠加就又回到"封面被缩放"。
+    private var vanishAnimation: Animation? {
+        if reduceMotion { return nil }
+        return controller.isVanished ? .easeIn(duration: Self.vanishDuration) : nil
+    }
+
+    /// 出场动画的起始几何:从真刘海两侧撑开、只露顶行。按当前卡片尺寸换算成比例(裁剪形状按比例画,
+    /// 卡片在动画中途变尺寸也不会算错)。纯函数在 LyrimuseCore.NotchReveal,selftest 钉着边界。
+    private var revealStartWidth: CGFloat {
+        NotchReveal.startWidthFraction(notchWidth: controller.notchWidth, cardWidth: cardWidth)
+    }
+    private var revealStartHeight: CGFloat {
+        NotchReveal.startHeightFraction(topRowHeight: controller.contentTopInset, cardHeight: cardHeight)
+    }
+
     var body: some View {
         NotchLyricsView(controller: controller)
             .frame(width: cardWidth, height: cardHeight)
+            // 出场动画「从刘海撑开」(2026-09-03,用户拍板):卡片「从无到有」露面时(冷启动 / 手动打开 /
+            // 从刘海回场,由控制器的 revealGeneration 计数触发)播一遍 —— 裁剪区从真刘海宽、顶行高起,横向
+            // 0.20s 撑到全宽,纵向按住 0.06s 后 0.24s 长到全高,内容 0.10s 后 0.16s 淡入,总 0.30s。
+            //
+            // ⚠️ 只裁剪、不缩放:同日上午用户报「封面平移过来」,根因是回场 scaleEffect(0.001 → 1) 让
+            // 封面模糊底一起被重新缩放裁切;裁剪路线内容始终在终态位置,封面一个像素都不动。
+            // ⚠️ initialValue 是终态:keyframeAnimator 首次出现时停在 initialValue、trigger 变了才动,
+            // 若 initialValue 写成起始态,视图第一次出现会永远卡在一条细缝上。每条轨用 MoveKeyframe
+            // 先跳到起始态再长满。reduceMotion 时 trigger 恒为 0,永不播,卡片始终是终态。
+            .keyframeAnimator(initialValue: NotchRevealState.settled,
+                              trigger: reduceMotion ? 0 : controller.revealGeneration) { card, state in
+                card
+                    .environment(\.notchRevealContentOpacity, state.contentOpacity)
+                    .clipShape(NotchRevealShape(widthFraction: state.widthFraction,
+                                                heightFraction: state.heightFraction))
+            } keyframes: { _ in
+                KeyframeTrack(\.widthFraction) {
+                    MoveKeyframe(revealStartWidth)
+                    SpringKeyframe(1, duration: NotchReveal.widthDuration,
+                                   spring: Spring(response: 0.22, dampingRatio: 0.9))
+                }
+                KeyframeTrack(\.heightFraction) {
+                    MoveKeyframe(revealStartHeight)
+                    LinearKeyframe(revealStartHeight, duration: NotchReveal.heightDelay)
+                    SpringKeyframe(1, duration: NotchReveal.heightDuration,
+                                   spring: Spring(response: 0.26, dampingRatio: 0.85))
+                }
+                KeyframeTrack(\.contentOpacity) {
+                    MoveKeyframe(0)
+                    LinearKeyframe(0, duration: NotchReveal.contentDelay)
+                    CubicKeyframe(1, duration: NotchReveal.contentDuration)
+                }
+            }
+            // 「暂停/无播放时隐藏」的退场态:整卡以顶边中点(=刘海中心)为锚缩到无、同时透明,
+            // 看起来是被吸进刘海;不取 0 而取 0.001,避开退化变换。尺寸(frame)不参与——
+            // isCollapsed 在这个开关开着时不算暂停,卡片保持稳态尺寸,只有这个缩放在动。
+            .scaleEffect(controller.isVanished ? 0.001 : 1, anchor: .top)
+            .opacity(controller.isVanished ? 0 : 1)
             // 命中形状显式钉成卡片这个矩形,hover 判定就挂在**卡片本身**上。
             //
             // ⚠️ 两条都是实测出来的,别改回去:
@@ -106,6 +183,7 @@ struct NotchWindowRoot: View {
             .animation(cardAnimation, value: cardWidth)
             // 收起/弹出时内容整块淡入淡出,由同一条弹簧驱动,跟尺寸变化同步。
             .animation(cardAnimation, value: controller.isCollapsed)
+            .animation(vanishAnimation, value: controller.isVanished)
     }
 
     private func updateHover(inside: Bool) {

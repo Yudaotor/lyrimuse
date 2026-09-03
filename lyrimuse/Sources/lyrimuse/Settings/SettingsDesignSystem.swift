@@ -382,7 +382,12 @@ enum SettingsRowMetrics {
 // 对比过(带小图标的那版图标跟下面的图标列对不齐,反而显得半吊子)。
 struct SettingsCardHeader<Trailing: View>: View {
     let title: String
-    // 少数几张卡的标题下面还有一句适用范围说明(比如「自动隐藏」要讲清它对哪几个形态生效)。
+    // 卡标题下面那一句适用范围说明。⚠️ **2026-09-02 起零调用点**:唯一用过它的是那张「自动隐藏」
+    // 卡(副标题写「只对悬浮歌词生效」/「只对灵动岛生效」),那张卡整个撤掉了、两行并进各形态的
+    // 「行为」入口(见 UI/AutoHideSettingsRows.swift),作用范围由所在的分段/浮层本身交代,不再需要
+    // 一句副标题。参数**保留**:它是设计系统组件的通用能力(不像 `OverlayBehaviorItem.subtitle`
+    // 那次是业务枚举上一个恒为 nil 的属性,那个连宿主分支一起清了),下一张需要作用范围说明的卡
+    // 直接传就是。
     var subtitle: String?
     var help: String?
     // 标题行右侧的附加操作(2026-08-30,「歌词来源」卡的「全部测试」按钮补的)——跟
@@ -738,5 +743,104 @@ private struct PopoverContentHeightKey: PreferenceKey {
     static let defaultValue: CGFloat = 0
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
         value = max(value, nextValue())
+    }
+}
+
+/// 一组布尔开关归约成编辑台工具栏按钮上那句摘要:全开一句话、全关一句话,部分开着就把
+/// **开着的**那几项标题列出来。
+///
+/// 为什么是共享的而不是各编辑台一份(2026-09-02):它产出的是**用户看得见的文案**,而两个
+/// 编辑台的「行为」按钮现在装的是同一类东西(各自的行为项 + 同一份 `AutoHideItem`)。同一句
+/// 摘要在两处漂开——一处写「全部开启」、另一处把五项标题拼全——是这个仓库反复付过代价的
+/// 那种 bug:漏改不报错,只表现成"两个入口说法不一样"。
+/// (2026-09-02 先在 `NotchEditorStage` 里从 `behaviorLikeSummary` 下沉了一层,同一天悬浮
+///  歌词那边也要用,于是提到这里;两处的调用点仍然各自决定"要算哪些开关"。)
+///
+/// ⚠️ 列表拼接必须用 `ListFormatter`(系统 API),别手写分隔符:中文按区域习惯给「、」、
+/// 英文给 ", " / "and",不用为这一个用途单独造一条要翻译的标点字符串。
+///
+/// ⚠️ 元组数组**不能**用 key path 简写(`filter(\.isOn)` 编译不过),只能写成闭包。
+enum SettingsToggleSummary {
+    @MainActor
+    static func text(_ entries: [(title: String, isOn: Bool)]) -> String {
+        let onTitles = entries.filter { $0.isOn }.map { $0.title }
+        if onTitles.count == entries.count { return L10n.t("全部开启") }
+        if onTitles.isEmpty { return L10n.t("全部关闭") }
+        return ListFormatter.localizedString(byJoining: onTitles)
+    }
+}
+
+// MARK: - 不画刻度的量化滑杆
+
+/// 量化到 `step` 的整数倍、但**不给底层 `Slider` 传 `step:` 入参**的滑杆。
+///
+/// 签名跟 SwiftUI 原生那个带 step 的构造器一模一样,调用点把类型名换掉就行,别的都不用动。
+///
+/// ## 为什么要有这么个东西
+///
+/// macOS 的 SwiftUI `Slider` 一旦拿到 `step:`,就会在轨道下面画一排刻度点,而且**没有任何
+/// 开关关得掉**:没有对应的修饰符,底层也不是 NSSlider 包出来的(`OverlayEditorStage` 里
+/// 记着那次 `NSHostingView` 子树 dump —— 递归下去只有 `KeyViewProxy` / `_FocusRingView`),
+/// 拿不到 `numberOfTickMarks` 去清零。唯一的办法就是别传那个入参,量化改在 `Binding` 的
+/// `set` 里自己做。
+///
+/// 用户为这排点报过两次:
+///   - 2026-08-31,悬浮歌词宽度条(300...1400、步长 2 = 550 个点密到连成一条实线,原话
+///     「为什么这里灰色条下面还有一条纯白的?」)。当时是在那一处就地展开的,
+///     `OverlayEditorStage.widthBar` / `NotchEditorStage.widthBar` 至今是那个写法。
+///   - 2026-09-02,设置页其余**全部**滑杆(「那些虚线点都移除掉,没有意义,不好看」)。
+///     一次要改五处,才把它提成共享组件 —— 继续指望每个调用点自己记得"别传步长",
+///     就是等着下一根新滑杆再把刻度点带回来(上一次就是这么复发的)。
+///
+/// ⚠️ 新写滑杆一律用这个,别回头去用原生那个带步长的构造器;真要连续无量化,才直接用
+///    `Slider(value:in:)`。selftest 里有一条源码扫描守卫盯着这件事(搜「滑杆刻度」),
+///    它是**纯文本扫描**:注释里别把"带步长的那个构造器"整句写全,不然会被算成一次真调用。
+///
+/// ## 量化语义
+///
+/// 逐位对齐 SwiftUI 的原生行为,**没有任何刻意偏差** —— 这次改动的全部目的就是"外观少一排
+/// 点、行为一个字不变",落值只要跟原来不一样,就是给用户凭空制造了一次"我调好的值自己变了"。
+///
+/// 两条具体的约束:
+///   - 栅格**锚在 `range.lowerBound`**,不是锚在 0。下界不是步长整数倍时才看得出差别 ——
+///     灵动岛那根的下界是这台机器的"耳朵下限"、是个任意数,锚错了所有落值整体偏移。
+///   - 区间长度不是步长整数倍时,**上界够不到**,最大只到最后一个整格(263.5...1187 / 步长 10
+///     拖到底是 1183.5,不是 1187)。这跟原生一致,是刻意保留的 —— 先夹后量化自然就是这个
+///     结果。(实测记录:2026-09-02 数值对拍时,这里的注释一度写反成"夹到 upperBound、
+///     拖得到真正的最大值",被对拍脚本当场打脸。别照着直觉改这个顺序。)
+struct SteppedSlider: View {
+    private let value: Binding<Double>
+    private let range: ClosedRange<Double>
+    private let step: Double
+
+    init(value: Binding<Double>, in range: ClosedRange<Double>, step: Double) {
+        self.value = value
+        self.range = range
+        self.step = step
+    }
+
+    var body: some View {
+        // get 原样透传:存着的值不在栅格上(旧版本存的、或者别处写进来的)就照原样显示,
+        // 一动才落到栅格 —— 跟原生带步长时的行为一致,不在渲染时偷偷改用户的设置。
+        //
+        // set 里只做量化,**不加相等守卫**:守卫是各调用点自己的事(它们的 set 里有各自的
+        // 副作用要防 —— 比如 fontSize 的 didSet 会 recomputeFonts 一写五发)。这里再加一层
+        // 会读一次 wrappedValue,而有的调用点的 get 是现算的(灵动岛读数走
+        // `effectiveWidth`),多读一次不等价。
+        Slider(value: Binding(
+            get: { value.wrappedValue },
+            set: { value.wrappedValue = Self.snap($0, in: range, step: step) }
+        ), in: range)
+    }
+
+    /// 夹进区间并量化到锚在下界的栅格。
+    ///
+    /// `step <= 0` 时只夹不量化:除零会得到 nan,一路写进 UserDefaults 就是一根再也拖不动的
+    /// 滑杆(而且下次启动读回来还是 nan)。
+    static func snap(_ raw: Double, in range: ClosedRange<Double>, step: Double) -> Double {
+        let clamped = min(max(raw, range.lowerBound), range.upperBound)
+        guard step > 0 else { return clamped }
+        let quantized = range.lowerBound + ((clamped - range.lowerBound) / step).rounded() * step
+        return min(max(quantized, range.lowerBound), range.upperBound)
     }
 }

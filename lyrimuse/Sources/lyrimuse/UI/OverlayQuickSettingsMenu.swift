@@ -96,40 +96,44 @@ final class OverlayQuickSettingsMenu: NSObject, NSMenuDelegate {
 
     /// 「更改配色」子菜单:跟随封面 → 6 个内置主题 → 用户自存主题。
     ///
-    /// ⚠️ **跟随封面开着时,下面整段主题列表不展示**(2026-08-31 用户拍板)。跟设置页
-    /// (`OverlayStyleSettingsRows.swift` 的 `if !settings.followsCoverArt`)现在是同一个
-    /// 口径 —— 某一项已经被另一项接管时,把它显示出来只会让人以为改了有用。
+    /// ⚠️ **跟随封面开着时,主题照常列出,但一个都不打勾**(2026-09-02,跟设置页取齐)。
     ///
-    /// 这里原来是反过来的:主题照常列出,理由是"这是改一下的快捷入口,点具体主题会顺带
-    /// 关掉跟随封面(见 ColorTheme.apply(to:)),不需要用可见性去暗示联动"。那个设计的实际
-    /// 后果是用户报的 bug:跟随封面开着时,四个颜色字段仍然等于某个主题,于是「跟随封面 ✓」
-    /// 和「黑字描边 ✓」**同时打勾**,读起来是两个互相矛盾的"正在生效"。
-    /// (中间试过用第三态 `.mixed` 渲染成短横表示"这是备用色、没在生效",用户否掉了,
-    /// 要的就是干脆不显示。)
+    /// 这一档来回改过三次,三次的取舍都记在这里,免得下一个人把它转回去:
+    ///  1. 最初:主题照常列出、按颜色字段打勾。**用户报的 bug**——跟随封面开着时四个颜色字段
+    ///     仍然等于某个主题,于是「跟随封面 ✓」和「黑字描边 ✓」**同时打勾**,读起来是两个
+    ///     互相矛盾的"正在生效"。
+    ///  2. 2026-08-31:整段主题列表干脆不展示(用户拍板;中间试过第三态 `.mixed` 渲染成短横
+    ///     表示"这是备用色、没在生效",被否掉了)。这修掉了矛盾,但代价是从跟随封面切到某个
+    ///     固定主题要**两步**(先取消跟随封面、再打开菜单选)。
+    ///  3. 2026-09-02(现在):用户要求「勾选了跟随封面之后依然可以选择主题,但是你去选了主题
+    ///     之后跟随封面就自动取消勾选」。于是列表回来了,**而第 1 条那个矛盾靠"不打勾"消除**——
+    ///     矛盾的来源是给一个"没在生效"的主题**打勾**,不是把它**列出来**。跟随封面开着时
+    ///     整段列表无勾选 = "现在生效的只有跟随封面",点任意一个主题会
+    ///     `ColorTheme.apply(to:)` 把跟随封面关掉、那个主题当场生效并打上勾。一步到位。
     ///
-    /// 代价如实记下:从跟随封面切到某个固定主题现在要两步(先取消跟随封面、再打开菜单选),
-    /// 不能一步到位。`ColorTheme.apply(to:)` 里那句 `followsCoverArt = false` 仍然保留 ——
-    /// 设置页那条路径、以及以后任何别的入口都还依赖它。
+    /// ⚠️ 不打勾**只在跟随封面开着时**,关着时照常按颜色字段打勾——那才是"现在生效的是哪套"。
     private func colorThemeMenu(_ settings: AppSettings) -> NSMenu {
         let m = NSMenu()
         m.autoenablesItems = false
         m.addItem(toggle(L10n.t("跟随封面"), symbol: "photo",
                          on: settings.followsCoverArt,
                          action: #selector(toggleFollowsCoverArt)))
-        // 跟随封面开着 → 到此为止,下面一个主题都不列(见头注释)。
-        guard !settings.followsCoverArt else { return m }
         m.addItem(.separator())
         let current = ColorTheme(
             name: "", foregroundColorHex: settings.foregroundColorHex,
             backgroundColorHex: settings.backgroundColorHex,
             textStrokeEnabled: settings.textStrokeEnabled, textStrokeColorHex: settings.textStrokeColorHex)
+        // 跟随封面开着时一个都不打勾 —— 那四个颜色字段此刻只是备用值,给它们打勾就是
+        // 「跟随封面 ✓」+「某主题 ✓」两个互相矛盾的"正在生效"(见头注释第 1 条)。
+        let showsCheckmarks = !settings.followsCoverArt
         for theme in ColorTheme.builtInPresets {
-            m.addItem(colorThemeItem(theme, checked: theme.hasSameColors(as: current)))
+            m.addItem(colorThemeItem(theme, checked: showsCheckmarks && theme.hasSameColors(as: current)))
         }
         if !settings.customColorThemes.isEmpty {
             m.addItem(.separator())
             for theme in settings.customColorThemes {
-                m.addItem(colorThemeItem(theme, checked: theme.hasSameColors(as: current)))
+                // 同上,自存主题也一样不打勾。
+                m.addItem(colorThemeItem(theme, checked: showsCheckmarks && theme.hasSameColors(as: current)))
             }
         }
         return m
@@ -141,8 +145,10 @@ final class OverlayQuickSettingsMenu: NSObject, NSMenuDelegate {
     private func colorThemeItem(_ theme: ColorTheme, checked: Bool) -> NSMenuItem {
         let item = makeItem(theme.name, symbol: "", selector: #selector(applyColorTheme(_:)))
         item.representedObject = theme
-        // 两态就够:跟随封面开着时这些条目压根不会被建出来(见 colorThemeMenu 的早退),
-        // 所以不存在"打着勾但其实没生效"那种状态,不需要第三态。
+        // 两态就够。2026-09-02 之前的理由是"跟随封面开着时这些条目压根不会被建出来";
+        // 现在它们会被建出来了,但调用方在那种状态下一律传 checked=false(见 colorThemeMenu
+        // 里的 showsCheckmarks),所以仍然不存在"打着勾但其实没生效"那种状态 —— 依旧不需要
+        // 第三态(用户 2026-08-31 明确否掉过 `.mixed` 那个短横)。
         item.state = checked ? .on : .off
         return item
     }

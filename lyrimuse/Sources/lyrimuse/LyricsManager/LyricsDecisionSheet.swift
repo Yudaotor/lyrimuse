@@ -160,8 +160,12 @@ struct LyricsDecisionSheet: View {
             head.append(L10n.t("旧打分算法"))
         }
         if let ts = decision.decidedAt, ts > 0 {
+            // ⚠️ 必须显式传 L10n.locale,不能让它隐式落到 Locale.current(2026-09-02
+            // 用户报:界面语言切成英文之后,这里的日期还是"2026年8月22日"中文格式)——
+            // Date.formatted(date:time:) 不传 locale 时默认走系统区域设置,跟不走 .strings
+            // 表的其它系统 API 是同一类坑,见 L10n.locale 头注那次"语言名中英混排"案例。
             head.append(Date(timeIntervalSince1970: TimeInterval(ts))
-                .formatted(date: .abbreviated, time: .shortened))
+                .formatted(Date.FormatStyle(date: .abbreviated, time: .shortened, locale: L10n.locale)))
         }
         lines.append(head.joined(separator: " · "))
         let query = [decision.queryArtist, decision.queryTitle, decision.queryAlbum]
@@ -207,9 +211,10 @@ struct LyricsDecisionSheet: View {
                     InfoChip(icon: "arrow.triangle.2.circlepath", text: L10n.t("旧打分算法"), tint: .orange)
                 }
                 if let ts = decision.decidedAt, ts > 0 {
+                    // ⚠️ 同 dumpLines 那处——必须显式传 L10n.locale,不能落到 Locale.current。
                     InfoChip(icon: "calendar",
                              text: Date(timeIntervalSince1970: TimeInterval(ts))
-                                 .formatted(date: .abbreviated, time: .shortened),
+                                 .formatted(Date.FormatStyle(date: .abbreviated, time: .shortened, locale: L10n.locale)),
                              tint: .secondary)
                 }
             }

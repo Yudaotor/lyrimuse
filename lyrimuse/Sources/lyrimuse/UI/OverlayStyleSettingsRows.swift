@@ -21,13 +21,22 @@ import SwiftUI
 
 // MARK: - 文字
 
-/// 「文字」那一组:字体 / 字号。
+/// 「文字」那一组:字体 / 粗细 / 字号 / 跟随封面 / 文字颜色 / 文字描边 / 描边颜色。
 ///
 /// 行与行之间的 `CardDivider()` 由这个组件自己插 —— 宿主只知道"这里放一组文字设置",
 /// 不该知道它内部有几行、该在哪儿断。
 ///
-/// (2026-08-31 起只剩这两项:「双行显示」「对齐方式」搬去了下面的 `OverlayLayoutSettingsRows`。
-///  判据和用户原话记在那个组件的注释里。)
+/// **这一组两次增删的账**:
+///   - 2026-08-31 减:「双行显示」「对齐方式」搬去了 `OverlayLayoutSettingsRows` ——
+///     字体字号讲的是**字长什么样**,那两项讲的是版面,判据和用户原话记在那个组件的注释里。
+///   - 2026-09-02 增:原「配色」组里属于**文字层**的四行(跟随封面 / 文字颜色 / 文字描边 /
+///     描边颜色)并了过来(用户原话:「帮我把这 2 个里面的配置重新整理一下,拆分为文字以及
+///     背景;分别归纳」)。拆分判据见 `OverlayBackgroundSettingsRows` 的头注。
+/// 两次方向相反但用的是同一条判据 —— 按"这个字段改的是哪一层"归组,不按"都跟文字有关"
+/// 这种最粗的相关性(那条相关性把整页设置都能装进去)。
+///
+/// ⚠️ 两处条件显示(`if !followsCoverArt` / `if textStrokeEnabled`)是搬过来时**原样保留**的
+/// 既有行为,理由写在各自那一行上面,别顺手拉平。
 @MainActor
 struct OverlayTextSettingsRows: View {
     @ObservedObject private var settings = AppSettings.shared
@@ -44,9 +53,42 @@ struct OverlayTextSettingsRows: View {
                 FontFamilyPicker(selection: $settings.fontFamilyName)
             }
             CardDivider()
+            // 2026-09-02 加(用户原话:「帮我悬浮歌词模块加一个控制字体粗细的功能配置吧」)。
+            //
+            // 排在字体和字号**之间**:粗细是"这个字体族的哪一个粗细",跟字体是同一件事的两半,
+            // 中间隔着字号会把它读成一个独立维度。
+            //
+            // ⚠️ 这一行叫「粗细」不叫「字重」(2026-09-02 当天改的,用户:「这个命名为字重是不是
+            // 不太合适啊」)。「字重」是排版行话,而用户提这个需求时自己的原话就是"控制字体粗细"
+            // —— 用户已经说出口的那个词,就是这一行该有的名字。**代码里的标识符仍然叫
+            // `overlayFontWeight` / `OverlayFontWeight`**,那是给写代码的人看的,行业术语在那边
+            // 反而更准确;这条不对称是有意的,别为了"统一"把界面文案改回去。
+            //
+            // ⚠️ 这里选的是**主歌词行**那一档,罗马音/译文/下一句三行按固定档位差自动跟着细
+            // (见 `OverlayFontWeight`)。刻意不做成四行各自可调:那是四个滑杆的复杂度,换来的是
+            // 用户可以把译文调得比主歌词还粗——一个没人想要、却要用界面去防的状态。
+            //
+            // ⚠️ `.fixedSize()` 不能省(2026-09-02 已知坑第 15 条):`SettingsRow` 的 HStack 有三个
+            // 可伸缩成员,SwiftUI **均分**剩余宽度而不是"先按理想宽度发",不加这一句时下拉会在
+            // 行里还空着一大截的情况下被压到自己的下限、把最长的那个选项截掉。
+            SettingsRow(icon: "bold", title: L10n.t("粗细")) {
+                Picker("", selection: $settings.overlayFontWeight) {
+                    ForEach(OverlayFontWeight.allCases, id: \.self) { weight in
+                        Text(weight.displayName).tag(weight)
+                    }
+                }
+                .labelsHidden()
+                // 六个档位:分段控件在 380pt 的浮层里放不下六个中文标签(而且这一栏本来就不是
+                // 高频项),下拉更合适。同 `FontFamilyPicker` 那一行的形态。
+                .pickerStyle(.menu)
+                .fixedSize()
+            }
+            CardDivider()
             SettingsRow(icon: "textformat.size", title: L10n.t("字号")) {
                 HStack(spacing: 8) {
-                    Slider(value: Binding(
+                    // SteppedSlider 而不是原生带步长的构造器:后者会在轨道下面画一排刻度点
+                    // (2026-09-02 用户点名「没有意义,不好看」),量化语义一模一样。
+                    SteppedSlider(value: Binding(
                         get: { settings.fontSize },
                         set: { newValue in
                             // 相等守卫:拖动中每个鼠标事件都会调 set,step 量化后大量等值
@@ -64,7 +106,60 @@ struct OverlayTextSettingsRows: View {
                         .frame(width: 46, alignment: .trailing)
                 }
             }
+            // ── 以下四行 2026-09-02 从原「配色」组并过来 ──
+            //
+            // 标题「跟随封面」前面本来带着「文字」二字(2026-08-26 应用户要求去掉,嫌标题太长)。
+            // 它接管的只有**文字颜色**(PlaybackCoordinator.displayForegroundColor);背景色
+            // (LyricsOverlayView 的 overlayBackground)和描边色(.lyricsTextStroke)任何时候都
+            // 无条件生效 —— 这正是它归到「文字」而不是「背景」的依据。
+            //
+            // (2026-08-17 到 2026-08-31 之间这里挂着一条⚠️:"这个开关同时也管灵动岛"。已经不
+            //  成立了 —— 灵动岛整卡前景取色 2026-08-31 并进了它自己的 `notchCardStyle == .coverArt`,
+            //  理由见 NotchPlayback.accent 的注释。这个开关现在**只管桌面悬浮歌词**。)
+            CardDivider()
+            SettingsRow(
+                icon: "photo.on.rectangle.angled",
+                title: L10n.t("跟随封面")
+            ) {
+                Toggle("", isOn: $settings.followsCoverArt)
+            }
+            // 「跟随封面」开着时文字颜色由封面主色接管,这一行收起来 —— 它只剩"拿不到封面主色时
+            // 的兜底值"这一点残余作用,为它常占一行、还要配一句解释自己为什么半失效的副标题,
+            // 不如干脆不显示。
+            //
+            // ⚠️ 这跟"展示方式的开关不再跟配置卡联动、关着也能配"不是一回事,别照那条推翻这里:
+            // 那边是**没启用**某个形态时仍要让人能预先配好它;这里是某一项**已经被另一项接管**,
+            // 显示出来只会让人以为改了有用。背景色和描边色不受接管,所以照常显示。
+            if !settings.followsCoverArt {
+                CardDivider()
+                SettingsRow(icon: "paintbrush", title: L10n.t("文字颜色")) {
+                    ColorPicker("", selection: Binding(
+                        get: { settings.foregroundColor },
+                        set: { settings.foregroundColorHex = $0.hexStringWithAlpha }
+                    ), supportsOpacity: false) // 故意关掉——文字颜色允许透明的话,容易把 alpha
+                                               // 拖到 0,悬浮窗整个消失且没有任何视觉提示能定位问题
+                }
+            }
+            CardDivider()
+            SettingsRow(icon: "pencil.and.outline", title: L10n.t("文字描边")) {
+                Toggle("", isOn: $settings.textStrokeEnabled)
+            }
+            if settings.textStrokeEnabled {
+                CardDivider()
+                SettingsSubRow(title: L10n.t("描边颜色")) {
+                    ColorPicker("", selection: Binding(
+                        get: { settings.textStrokeColor },
+                        set: { settings.textStrokeColorHex = $0.hexStringWithAlpha }
+                    ), supportsOpacity: true) // 描边只让选颜色(含 alpha),粗细是固定常量
+                                              // (LyricsOverlayView.swift 的 OptionalTextStroke),
+                                              // 不额外加调节项——参考的是 LyricsX 的做法。
+                }
+            }
         }
+        // 条件行长出/收起时别硬跳(设计稿明确要求)。挂 value: 而不是裸 .animation() ——
+        // 裸的那种会把这一组里所有变化都动画化,包括拖字号滑杆时预览的每一帧。
+        .animation(.default, value: settings.followsCoverArt)
+        .animation(.default, value: settings.textStrokeEnabled)
     }
 }
 
@@ -214,75 +309,26 @@ struct OverlayAlignmentSegmentedControl: View {
     }
 }
 
-// MARK: - 配色
+// MARK: - 背景
 
-/// 「配色」那一组:跟随封面 / 配色主题 / 文字颜色 / 背景颜色 / 文字描边 / 描边颜色。
+/// 「背景」那一组:背景颜色 / 毛玻璃背景。
 ///
-/// ⚠️ 两处条件显示(`if !followsCoverArt` / `if textStrokeEnabled`)是**原样保留**的既有
-/// 行为,理由写在各自那一行上面,别顺手拉平。
+/// 2026-09-02 从原来的「配色」组里拆出来(用户原话:「帮我把这 2 个里面的配置重新整理一下,
+/// 拆分为文字以及背景;分别归纳」)。原「配色」组一次装着 跟随封面 / 配色主题 / 文字颜色 /
+/// 背景颜色 / 毛玻璃背景 / 文字描边 / 描边颜色 七行 —— "都是颜色"是它们唯一的共性,而那条
+/// 共性太粗:改文字色和改背景色是两件互不相干的事,挤在一个入口里要先在七行里找。
+///
+/// 拆分判据是**这个字段改的是哪一层**:
+///   - 文字层(字形 + 字色 + 描边)→ `OverlayTextSettingsRows`
+///   - 背景层(底色 + 底的材质)→ 本组
+///   - 一键套一整套配色 → `OverlayThemeSettingsRows`(它同时改两层,所以哪一边都不属于)
+/// 「跟随封面」跟着文字走,因为它接管的只有文字颜色(见那一行上面的注释)。
 @MainActor
-struct OverlayColorSettingsRows: View {
+struct OverlayBackgroundSettingsRows: View {
     @ObservedObject private var settings = AppSettings.shared
 
     var body: some View {
         VStack(spacing: 0) {
-            // 标题「跟随封面」前面本来带着「文字」二字(2026-08-26 应用户要求去掉,嫌标题
-            // 太长)——图标(photo.on.rectangle.angled)+ 卡片标题「配色」已经把语境定住了,
-            // 桌面悬浮歌词这边被接管的只有**文字颜色**(PlaybackCoordinator.
-            // displayForegroundColor),背景色(LyricsOverlayView 的 overlayBackground)和
-            // 描边色(.lyricsTextStroke)任何时候都无条件生效。
-            //
-            // (2026-08-17 到 2026-08-31 之间这里挂着一条⚠️:"这个开关同时也管灵动岛"。
-            //  已经不成立了 —— 灵动岛整卡前景取色 2026-08-31 并进了它自己的
-            //  `notchCardStyle == .coverArt`,理由见 NotchPlayback.accent 的注释。这个开关
-            //  现在**只管桌面悬浮歌词**,作用范围跟这一组里其余几项一致。)
-            SettingsRow(
-                icon: "photo.on.rectangle.angled",
-                title: L10n.t("跟随封面")
-            ) {
-                Toggle("", isOn: $settings.followsCoverArt)
-            }
-            // 只打包"配色"相关的四个字段(文字/背景/描边颜色 + 描边开关),不含字体/字号 ——
-            // 那是排版,跟配色是两回事,不该被同一个"主题"捆在一起改(见 ColorTheme.swift)。
-            // 「跟随封面取色」开着时连这一行也收起来:预设主题的名字("经典黑字"/"经典白字")
-            // 讲的就是文字颜色,而文字颜色已经被封面主色接管,留着只会让人以为选了有用。
-            // 主题里的背景色/描边色确实还生效,但那两项本来就各有独立的一行可以单独调,
-            // 不会因为收起这一行而够不着。
-            //
-            // 「跟随封面取色」开着时,文字颜色由封面主色接管,那一行也收起来 —— 它只剩
-            // "拿不到封面主色时的兜底值"这一点残余作用,为它常占一行、还要配一句解释
-            // 自己为什么半失效的副标题,不如干脆不显示。
-            //
-            // ⚠️ 这跟"展示方式的开关不再跟配置卡联动、关着也能配"不是一回事,别照那条推翻
-            // 这里:那边是**没启用**某个形态时仍要让人能预先配好它;这里是某一项**已经被
-            // 另一项接管**,显示出来只会让人以为改了有用。背景色和描边色不受接管(「文字
-            // 跟随封面」这个名字里的"文字"两个字就是这个意思),所以照常显示。
-            if !settings.followsCoverArt {
-                CardDivider()
-                SettingsRow(icon: "swatchpalette", title: L10n.t("配色主题")) {
-                    Menu(Self.currentThemeLabel) {
-                        ForEach(ColorTheme.builtInPresets) { theme in
-                            Button(theme.name) { theme.apply(to: settings) }
-                        }
-                        if !settings.customColorThemes.isEmpty {
-                            Divider()
-                            ForEach(settings.customColorThemes) { theme in
-                                Button(theme.name) { theme.apply(to: settings) }
-                            }
-                        }
-                    }
-                    .fixedSize()
-                }
-                CardDivider()
-                SettingsRow(icon: "paintbrush", title: L10n.t("文字颜色")) {
-                    ColorPicker("", selection: Binding(
-                        get: { settings.foregroundColor },
-                        set: { settings.foregroundColorHex = $0.hexStringWithAlpha }
-                    ), supportsOpacity: false) // 故意关掉——文字颜色允许透明的话,容易把 alpha
-                                               // 拖到 0,悬浮窗整个消失且没有任何视觉提示能定位问题
-                }
-            }
-            CardDivider()
             SettingsRow(icon: "rectangle.fill", title: L10n.t("背景颜色")) {
                 ColorPicker("", selection: Binding(
                     get: { settings.backgroundColor },
@@ -290,41 +336,100 @@ struct OverlayColorSettingsRows: View {
                 ), supportsOpacity: true) // 背景不透明度就是这个颜色的 alpha 通道本身,
                                           // 不另加一根 opacity 滑杆
             }
+            // 毛玻璃(2026-09-02):作为「背景颜色」的从属项——它改变的是背景颜色的**含义**
+            // (从"卡片本色"变成"玻璃上的着色"),不是一个独立维度,所以缩进挂在背景颜色下面。
+            // 默认关,关着时透明/纯色两种既有用法逐像素不变。
             CardDivider()
-            SettingsRow(icon: "pencil.and.outline", title: L10n.t("文字描边")) {
-                Toggle("", isOn: $settings.textStrokeEnabled)
-            }
-            if settings.textStrokeEnabled {
-                CardDivider()
-                SettingsSubRow(title: L10n.t("描边颜色")) {
-                    ColorPicker("", selection: Binding(
-                        get: { settings.textStrokeColor },
-                        set: { settings.textStrokeColorHex = $0.hexStringWithAlpha }
-                    ), supportsOpacity: true) // 描边只让选颜色(含 alpha),粗细是固定常量
-                                              // (LyricsOverlayView.swift 的 OptionalTextStroke),
-                                              // 不额外加调节项——参考的是 LyricsX 的做法。
-                }
+            // (2026-09-02 当天用户要求删掉这一行的副标题「开启后背景颜色作为玻璃的着色」。
+            //  上面那段注释已经把"它改变的是背景颜色的含义"这层关系交代清楚了,那是给读代码
+            //  的人看的;界面上缩进本身就是一句话——这一行是上一行的从属项。L10n 键跟着一起
+            //  从 catalog 里删了,全仓再无引用。)
+            SettingsSubRow(title: L10n.t("毛玻璃背景")) {
+                Toggle("", isOn: $settings.overlayBackgroundGlass)
             }
         }
-        // 条件行长出/收起时别硬跳(设计稿明确要求)。挂 value: 而不是裸 .animation() ——
-        // 裸的那种会把这一组里所有变化都动画化,包括拖字号滑杆时预览的每一帧。
-        .animation(.default, value: settings.followsCoverArt)
-        .animation(.default, value: settings.textStrokeEnabled)
     }
+}
+
+// MARK: - 主题
+
+/// 「主题」那一组:配色主题 / 我的配色主题。
+///
+/// 2026-09-02 单独立成第三个入口。它本来跟文字色、背景色挤在「配色」里,而按"改的是哪一层"
+/// 这条判据它**两层都改** —— 塞进「文字」或「背景」任何一边都是错的分类(用户拍板:单开)。
+///
+/// ⚠️ **「配色主题」那一行任何时候都显示,不再被「跟随封面」收起**(2026-09-02 用户拍板:
+/// 「勾选了跟随封面之后依然可以选择主题,但是你去选了主题之后跟随封面就自动取消勾选」)。
+///
+/// 在此之前它的显隐条件是 `!followsCoverArt`,理由是"文字颜色被封面主色接管时,留着它只会
+/// 让人以为选了有用"。**那条理由现在不成立**:`ColorTheme.apply(to:)` 第一行就是
+/// `settings.followsCoverArt = false` —— 选一个主题**本来就会**把跟随封面关掉、四个颜色
+/// 字段当场生效。所以它不是"选了没用",而是"选了就切过去",藏起来反而把一步的操作变成两步
+/// (先去「文字」浮层关掉跟随封面,再回这一组选)。
+///
+/// ⚠️ **跟随封面开着时,这一行的当前值显示成占位符「—」**(2026-09-02 用户拍板:「当我跟随
+/// 封面开着的时候,主题这边摘要和详情都指向一个占位符」)。判据在 `currentThemeLabel` 里,
+/// 工具栏「主题」按钮的摘要跟这里是**同一个字符串**,不会两边说法不一。
+///
+/// 为什么是占位符而不是备用主题名:那一刻**没有任何一套主题真的在生效** —— 文字色被封面
+/// 主色接管了。报一个具体主题名等于说"现在是黑字描边",而屏幕上并不是。这跟悬浮窗快捷菜单
+/// 里"跟随封面开着时主题一个勾都不打"是同一条逻辑(见 OverlayQuickSettingsMenu),两个入口
+/// 一致。列表本身照常能点开、能选,选了就切过去。
+///
+/// ⚠️ **别因此把「跟随封面」搬到这一组来"就近"**:那会让「文字」组失去它唯一的取色模式开关,
+/// 而 `followsCoverArt` 接管的恰恰只有文字色。
+@MainActor
+struct OverlayThemeSettingsRows: View {
+    @ObservedObject private var settings = AppSettings.shared
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // 只打包"配色"相关的四个字段(文字/背景/描边颜色 + 描边开关),不含字体/字号 ——
+            // 那是排版,跟配色是两回事,不该被同一个"主题"捆在一起改(见 ColorTheme.swift)。
+            SettingsRow(icon: "swatchpalette", title: L10n.t("配色主题")) {
+                Menu(Self.currentThemeLabel) {
+                    ForEach(ColorTheme.builtInPresets) { theme in
+                        Button(theme.name) { theme.apply(to: settings) }
+                    }
+                    if !settings.customColorThemes.isEmpty {
+                        Divider()
+                        ForEach(settings.customColorThemes) { theme in
+                            Button(theme.name) { theme.apply(to: settings) }
+                        }
+                    }
+                }
+                .fixedSize()
+            }
+            CardDivider()
+            OverlayCustomThemeRows()
+        }
+    }
+
+    /// 占位符:跟随封面开着时"当前主题"这个概念不成立,用它顶上。
+    ///
+    /// 用破折号而不是一句话("跟随封面中"之类):这一格是**值**的位置,值不存在时空着最诚实;
+    /// 而且它是纯标点、跟语言无关,不用往 `Localizable.xcstrings` 里加键。
+    static let noThemeInEffectPlaceholder = "—"
 
     /// 当前四个配色字段正好等于哪个内置预设/自定义主题就显示它的名字,谁都不等于
     /// (比如套用之后又手动微调过某个颜色)就显示"自定义"——这是「配色主题」那个
     /// Menu 唯一的选中反馈来源。
     ///
-    /// 2026-08-14 去掉了"followsCoverArt 开着就直接显示「跟随封面」"这个短路。当时那么写是
-    /// 因为「跟随封面」也是这个 Menu 里的一项,不短路的话选中态会指向别处;现在它已经是一个
-    /// 独立开关,这个 Menu 只负责固定配色,就该老老实实反映四个颜色字段当前等于哪一套 ——
-    /// 否则开着"跟随封面"时,用户完全看不出自己的备用色到底是哪个主题。
+    /// ⚠️ **跟随封面开着时直接返回占位符**(2026-09-02 用户拍板,原话见本类型头注)。
     ///
-    /// static 而不是实例计算属性:工具栏的「◐ 配色…」按钮要拿同一个字符串当摘要
-    /// (见 OverlayStyleSummary),而那个位置构造不出这个 View。
+    /// 这一档来回改过两次,两次的理由都记下来:
+    ///  - 2026-08-14 **去掉**过"followsCoverArt 开着就直接显示「跟随封面」"这个短路,理由是
+    ///    "否则开着跟随封面时,用户完全看不出自己的备用色到底是哪个主题"。
+    ///  - 2026-09-02 **换一种形式加回来**:不是显示「跟随封面」(那是模式名、不是主题),而是
+    ///    显示占位符。当时那条理由的前提是"用户需要在这里看备用色是哪套";而这次用户要的
+    ///    恰恰相反 —— 那一刻没有主题在生效,这一格就不该报任何主题名。备用色是哪套,关掉
+    ///    跟随封面立刻就能看到(四个字段一个没动),不需要在生效期间预告。
+    ///
+    /// static 而不是实例计算属性:工具栏的「主题」按钮要拿同一个字符串当摘要
+    /// (见 OverlayStyleSummary.theme),而那个位置构造不出这个 View。
     static var currentThemeLabel: String {
         let settings = AppSettings.shared
+        guard !settings.followsCoverArt else { return noThemeInEffectPlaceholder }
         let current = ColorTheme(
             name: "",
             foregroundColorHex: settings.foregroundColorHex,
@@ -520,8 +625,13 @@ enum OverlayStyleDefaults {
         settings.followsCoverArt = AppSettings.defaultFollowsCoverArt
         settings.fontFamilyName = AppSettings.defaultFontFamilyName
         settings.fontSize = AppSettings.defaultFontSize
+        // 2026-09-02:字重跟字体/字号同属「文字」那一组,"恢复默认文字与配色"必须把它一起带上,
+        // 否则点完之后字体字号回默认、粗细还停在用户上次选的档,那不叫恢复默认。
+        settings.overlayFontWeight = AppSettings.defaultOverlayFontWeight
         settings.foregroundColorHex = ColorTheme.defaultTheme.foregroundColorHex
         settings.backgroundColorHex = ColorTheme.defaultTheme.backgroundColorHex
+        // 2026-09-02:毛玻璃是背景那一组的第八个字段,"恢复默认文字与配色"一起带回默认的关。
+        settings.overlayBackgroundGlass = false
         settings.textStrokeEnabled = ColorTheme.defaultTheme.textStrokeEnabled
         settings.textStrokeColorHex = ColorTheme.defaultTheme.textStrokeColorHex
     }
@@ -538,20 +648,48 @@ enum OverlayStyleDefaults {
 /// 把它缓存成 @State:那就又多了一份要跟设置同步的真相,正是这次抽取要消灭的东西。
 @MainActor
 enum OverlayStyleSummary {
-    /// 例:「系统字体 31pt」。字体名复用 FontFamilyPicker 的同一份显示口径 ——
+    /// 例:「系统字体 加粗 31pt」。字体名复用 FontFamilyPicker 的同一份显示口径 ——
     /// 空串要显示成「系统字体」这条规则只能有一处。
+    ///
+    /// 2026-09-02 加了中间那截字重。**三项全报**,跟 `layout` 那条同一个理由:这个浮层里总共就
+    /// 这三项,少报一项等于让人为了确认它再点开一次浮层,那这截摘要就白给了。代价是长字体名
+    /// 下更容易触发截断 —— 那本来就有兜底(`toolbarButton` 里 140pt 限宽 + `.layoutPriority(-1)`,
+    /// 摘要先被压、标题始终完整),不为多这一截另写一套。
     static var text: String {
         let settings = AppSettings.shared
         let size = String(format: L10n.t("%@pt"), "\(Int(settings.fontSize))")
-        return "\(FontFamilyPicker.displayName(for: settings.fontFamilyName)) \(size)"
+        let family = FontFamilyPicker.displayName(for: settings.fontFamilyName)
+        return "\(family) \(settings.overlayFontWeight.displayName) \(size)"
     }
 
     /// 例:「跟随封面」/「暗夜霓虹」/「自定义」。跟随封面开着时文字颜色由封面主色接管,
     /// 这时候报主题名会误导(那只是拿不到封面主色时的兜底值),所以优先报模式本身。
-    static var color: String {
-        AppSettings.shared.followsCoverArt
-            ? L10n.t("跟随封面")
-            : OverlayColorSettingsRows.currentThemeLabel
+    ///
+    /// 2026-09-02 从 `color` 改名成 `theme`(那个浮层拆成了「主题」「背景」两个),语义和取值
+    /// 一字未变 —— 它报的一直是"当前这一套配色叫什么",正好就是「主题」按钮该说的话。
+    /// ⚠️ 直接复用 `currentThemeLabel`,**不要**在这里再写一份分支。2026-09-02 之前这里
+    /// 短路成 `followsCoverArt ? "跟随封面" : ...`,于是同一个概念在工具栏和浮层里给出两种
+    /// 说法(按钮说"跟随封面"、行里说"黑字描边"),而用户要的是两边都指向同一个占位符。
+    /// 判据只留一处,见 `OverlayThemeSettingsRows.currentThemeLabel`。
+    static var theme: String { OverlayThemeSettingsRows.currentThemeLabel }
+
+    /// 例:「毛玻璃」/「纯色」/「透明」。报的是**背景当前是什么材质**,不是颜色值本身 ——
+    /// 一串 hex 或者 rgb 数字在按钮上没人读得出来是什么样,而"毛玻璃/纯色/透明"这三档正好
+    /// 覆盖了这一组两个字段的全部有意义组合。
+    ///
+    /// ⚠️ 「透明」这一档不能省:背景色的 ColorPicker 是 `supportsOpacity: true`,把 alpha 拖到 0
+    /// (歌词直接浮在桌面上、没有底板)是个常用配置,而那种状态报「纯色」是错的。
+    ///
+    /// ⚠️ 阈值**不在这里重写一遍**:直接借 `AppSettings.backgroundVisible(hex:glass:)`,`glass`
+    /// 传 false 之后它正好退化成"背景色本身看得见吗"(alpha > 0.02)。那个函数已经是窗口阴影 /
+    /// 拖拽捕获层 / 编辑台虚线边界三处联动共用的判据,再抄一份 0.02 就是第四个会漂的地方。
+    /// (`settings.backgroundIsVisible` 那个缓存属性不能直接用 —— 它把毛玻璃也算成"可见",
+    ///  而这里要的正是把两者分开。)
+    static var background: String {
+        let settings = AppSettings.shared
+        if settings.overlayBackgroundGlass { return L10n.t("毛玻璃") }
+        return AppSettings.backgroundVisible(hex: settings.backgroundColorHex, glass: false)
+            ? L10n.t("纯色") : L10n.t("透明")
     }
 
     /// 例:「双行 · 自动」。两项都报 —— 排版浮层里总共就这两项,摘要少报一项等于让人为了
@@ -569,12 +707,20 @@ enum OverlayStyleSummary {
 
 // (2026-08-30 删掉了 `overview` —— 拼给「全部设置」抽屉折起来时的那串「系统字体 31pt ·
 //  跟随封面 · 486pt」。用户要求删掉那处展示,删完这个派生属性就一个消费方都没有了,留着
-//  就是一段没人调的代码。`text` / `color` 两截仍在用:编辑台工具栏「Aa 文字…」「◐ 配色…」
-//  两颗按钮上的摘要就是它们。)
+//  就是一段没人调的代码。其余几截仍在用:编辑台工具栏那几颗按钮上的摘要就是它们
+//  —— 2026-09-02 起是 `theme` / `text` / `background` / `layout` 四截,`color` 那一截随
+//  「配色」浮层一起拆成了前面的 `theme` 和 `background`。)
 
 // MARK: - 浮层外壳
 
-/// 「Aa 文字…」浮层。内容就是卡片里那一组,没有第二份实现。
+/// 「Aa 文字…」浮层。内容就是抽屉「文字」那一组,没有第二份实现。
+///
+/// 2026-09-02 内容从三行(字体/粗细/字号)长到最多七行:原「配色」组里属于文字层的四行
+/// (跟随封面 / 文字颜色 / 文字描边 / 描边颜色)并了过来。
+/// 宽度仍吃外壳默认的 380 —— 并进来的四行标题都很短(英文最长 "Follow Cover Art"),尾部
+/// 是 Toggle / ColorPicker,横向瓶颈仍然是原来那三行(`FontFamilyPicker` 的字体名下拉、
+/// 粗细下拉、字号滑杆+读数),没有变。高度最多七行 ≈ 340pt,在外壳 460 的上限内,不会
+/// 退化成"多一条滚动条"。
 @MainActor
 struct OverlayTextPopover: View {
     var body: some View {
@@ -584,15 +730,44 @@ struct OverlayTextPopover: View {
     }
 }
 
-/// 「◐ 配色…」浮层。配色六项 + 底部的「我的配色主题」分组 —— 后者在设计稿里就该跟配色
-/// 待在一起(套用后预览立刻变色),而不是像现状那样拆成上下两张卡。
+/// 「主题」浮层(2026-09-02,原「◐ 配色…」浮层拆出来的三个之一)。
+///
+/// 宽度吃外壳默认的 380:里面的 `OverlayCustomThemeRows` 有两行内联确认(130pt 输入框 +
+/// 两颗按钮),380 是它验证过的下限——2026-08-30 那次"按钮被挤成空圆角矩形"就是在 380 的
+/// 配色浮层里踩的,修法是把那两行改成"说明一行、控件另起一行",不是把浮层拉宽。别为了跟
+/// 「背景」浮层的 420 取齐而动它,那两个数各有各的来路。
 @MainActor
-struct OverlayColorPopover: View {
+struct OverlayThemePopover: View {
     var body: some View {
-        SettingsPopoverShell(title: L10n.t("配色")) {
-            OverlayColorSettingsRows()
-            CardDivider()
-            OverlayCustomThemeRows()
+        SettingsPopoverShell(title: L10n.t("主题")) {
+            OverlayThemeSettingsRows()
+        }
+    }
+}
+
+/// 「背景」浮层(2026-09-02,同上)。
+///
+/// ⚠️ **宽度 420 现在没有依据了,是个待重量的遗留值**(2026-09-02 当天)。
+///
+/// 它当初是量出来的:内容自然宽中文 298pt / **英文 386pt**(离屏 `NSHostingView.fittingSize`,
+/// 1pt 步进的换行探测给出的英文硬下限就是 386),420 按同族浮层的既有余量取
+/// (`NotchStylePopover` +28 / `NotchEarPopover` +24 / `OverlayLayoutPopover` +32)。
+/// **但那 386 的瓶颈是「毛玻璃背景」那一行的副标题**——英文
+/// "When on, the background color tints the glass" 比中文长出 88pt,380 差 6pt、英文下当场
+/// 折成两行。同一天用户要求把那句副标题删掉,瓶颈随之消失,这个数就悬空了。
+///
+/// 现在这个浮层只剩两行短内容(背景颜色 + 色板 / 毛玻璃背景 + 开关),420 几乎肯定过宽 ——
+/// 而"浮层比内容宽出一大截"正是用户报过的那类问题(左右耳浮层从 380 收到 160 那次,原话
+/// 是「明明需要的空间很小就够了,还是占了这么多空间」)。
+///
+/// **没有顺手改成 380 或别的数**:380 是「文字」「主题」两个浮层量出来的值,不是通用基线
+/// (见 `SettingsPopoverShell.width` 的注释),照搬同样是凭感觉。要收窄就得按同一套方法论
+/// 重新离屏量一遍(中英各一次),仓库里没有现成的测量脚本,那是一次单独的改动。
+@MainActor
+struct OverlayBackgroundPopover: View {
+    var body: some View {
+        SettingsPopoverShell(title: L10n.t("背景"), width: 420) {
+            OverlayBackgroundSettingsRows()
         }
     }
 }

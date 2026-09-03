@@ -144,7 +144,12 @@ public enum TrustedPlayers {
         if PlaybackPlayer.allCases.contains(where: { $0 != .auto && $0.bundleIdentifier == bundleID }) {
             return false
         }
-        guard trusted[bundleID] != nil else { return false }
+        // 走 isTrusted 而不是裸查 trusted[bundleID]:Safari 的播放报的是媒体代理进程
+        // com.apple.WebKit.GPU,信任表里存的是宿主 com.apple.Safari,裸查永远落空 →
+        // 这道守卫对 Safari 恒不生效,Safari 播非歌曲视频(album 为空)会被当成一首歌
+        // (2026-09-02 修,collector 侧 trustedPlaybackNotASong 同一个洞、同日一起修,
+        // 见 system.go getAutoDetectedState 那处的完整案情)。
+        guard isTrusted(bundleID, trusted: trusted) else { return false }
         func blank(_ s: String?) -> Bool {
             (s ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         }

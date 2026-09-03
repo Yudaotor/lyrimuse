@@ -87,7 +87,12 @@ final class PlaybackCoordinator: ObservableObject {
     // ⚠️ 别直接归零:归零意味着 isPlayingNow 任何一次瞬时 false 都会立刻触发收起/隐藏,
     // 换歌、seek、缓冲时就会看到灵动岛缩回去再弹出来。真要再快,先确认那些抖动在你的
     // 播放器上不存在。
-    private static let stopGracePeriod: TimeInterval = 0.5
+    //
+    // 2026-09-02 再从 0.5 压到 0.25:用户目验「暂停即隐藏」(先收起再 orderOut)后说
+    // "一秒太久"——那一秒 = 这里的 0.5 + 收起再隐藏的 0.5,要求各砍一半。0.25s 仍吸收
+    // 亚 1/4 秒的瞬时 false;若之后换歌/seek 时看到灵动岛缩一下又弹开,就是播放器的
+    // 空档超过了这个窗口,回 0.5 即可(只此一个常量)。
+    private static let stopGracePeriod: TimeInterval = 0.25
     private var stopGraceWork: DispatchWorkItem?
     /// userTogglePlayPause 乐观翻转后的对账定时(见那边注释)。
     private var optimisticReconcileWork: DispatchWorkItem?
@@ -156,6 +161,14 @@ final class PlaybackCoordinator: ObservableObject {
     /// 权威图;缓存里那张是按歌手/歌名/专辑匹配出来的,同名不同版本时可能是另一张封面。
     /// 播放器本来就给大图时(Apple Music)完全不碰这条路。
     @Published private(set) var highResArtworkImage: NSImage?
+    /// 上面那张高清替代的**预缩小图**(≤256px,2026-09-03 加),给菜单栏面板 44pt 那格小封面
+    /// 用。`highResArtworkImage` 是 `NSImage(data:)` 懒解码的**原图档**(给歌词窗口 920pt@2x
+    /// 的封面卡),面板每次打开都是全新建树、首帧直接画它 = 在主线程把一张 1400~3000px 的
+    /// 图整张解码再缩到 88px,离线量过一次要 ~30ms(300px 的只要 5ms);面板收起即整树释放,
+    /// 所以这笔账每次打开都可能重付。这里在图到货那一刻、跟均值色同一个后台任务里缩好,
+    /// 面板拿到就是画起来只要 1~2ms 的小图。跟 `blurredArtworkImage` 同一个"到货时离线烘
+    /// 一次、视图只铺静态图"的纪律。nil 的含义跟 highResArtworkImage 一致,同进退。
+    @Published private(set) var highResArtworkThumbnail: NSImage?
     /// 灵动岛 coverArt 背景用的**预烘焙模糊图**(2026-08-19 性能审计落地)。视图层原来
     /// 直接挂 `.blur(radius: 20)` —— 那是合成期实时滤镜,而灵动岛窗口播放期间因逐字填色/
     /// 音浪/跑马灯几乎永动,GPU 每次重合成都对同一张封面重算同一个模糊结果,封面每首歌
@@ -281,14 +294,40 @@ final class PlaybackCoordinator: ObservableObject {
     // 不用单独发布:播放器切换必然伴随曲目/播放态变化,面板反正会跟着那些 @Published 重渲染。
     var resolvedPlayerDisplayName: String? {
         guard let id = LocalPlaybackSource.shared.lastResolvedBundleID else { return nil }
+        if let platformID = resolvedWebPlatformID,
+           let platform = BrowserPositionProbe.supportedPlatforms.first(where: { $0.id == platformID }) {
+            return platform.displayName
+        }
         return PlaybackPlayer.allCases.first { $0 != .auto && $0.bundleIdentifier == id }?.displayName
+    }
+
+    /// 浏览器在放的是哪个**网页音乐平台**(nil = 不是网页播放器 / 认不出来)。
+    ///
+    /// 2026-09-03 加。用户原话:"这里显示 youtubemusic,如果确实是 youtube music 的情况下,
+    /// 不再显示浏览器;如果是浏览器里面播放 spotify 就显示 spotify;其他的不是这两个的话
+    /// 就正常显示浏览器图标"。判据全在 `BrowserPositionProbe.playingPlatformID`(证据优先、
+    /// 配对推断兜底,那边有完整取舍),这里只负责把它接上当前这条播放。
+    private var resolvedWebPlatformID: String? {
+        guard let id = LocalPlaybackSource.shared.lastResolvedBundleID else { return nil }
+        return BrowserPositionProbe.shared.playingPlatformID(forBundleID: id)
     }
 
     /// 上面那个的图标版(2026-08-19 用户拍板改图标):取**已安装播放器的真实 App 图标**。
     /// 查找/缓存逻辑收在 `AppIconResolver`(2026-08-25,跟另外两处消费点共用一份缓存,
     /// 见那个类型的类头注)。没装(理论上不可能:它正在放)/认不出来给 nil,角标不显示。
+    ///
+    /// ⚠️ 2026-09-03 起浏览器多一层:认得出在放哪个网页音乐平台时,画**平台**图标而不是
+    /// 浏览器图标(YouTube Music / Spotify 网页版)。认不出来(没配对、配了两个又还没探到、
+    /// 或者放的压根不是这两个站)照旧画浏览器 —— 那正是用户说的"其他的不是这两个的话就
+    /// 正常显示浏览器图标"。
+    ///
+    /// ⚠️ **点击行为一个字没改**:`openResolvedPlayerApp()` 仍然按 bundle id 唤那个**浏览器**。
+    /// 角标换了张脸,点下去要去的地方没变(YouTube Music 是个网站,没有 App 可唤)。
     var resolvedPlayerIcon: NSImage? {
         guard let id = LocalPlaybackSource.shared.lastResolvedBundleID else { return nil }
+        if let platformID = resolvedWebPlatformID, let icon = WebPlatformIcon.image(platformID) {
+            return icon
+        }
         return AppIconResolver.icon(forBundleID: id)
     }
 
@@ -1352,6 +1391,7 @@ final class PlaybackCoordinator: ObservableObject {
         // 订阅(2026-08-20 性能审计)。撤掉旧图的语义不变,只是已经空了就别再赋。
         func clearHighRes() {
             if highResArtworkImage != nil { highResArtworkImage = nil }
+            if highResArtworkThumbnail != nil { highResArtworkThumbnail = nil }
             if highResAverageHex != nil { highResAverageHex = nil }
         }
         guard !title.isEmpty else {
@@ -1395,14 +1435,44 @@ final class PlaybackCoordinator: ObservableObject {
             // 均值色跟图一起给(理由见 highResAverageHex 的注释)。CIAreaAverage 放到
             // 后台算,跟 LocalPlaybackSource 取图那条路的做法一致,不挡主线程。
             var hex: String?
+            var thumbnail: NSImage?
             if let cg = image.cgImage(forProposedRect: nil, context: nil, hints: nil) {
-                hex = await Task.detached { LocalPlaybackSource.computeAverageHex(cgImage: cg) }.value
+                // 均值色和面板小图同一趟后台算:两个都只依赖这张 CGImage,分两趟就是把同一张
+                // 大图的解码结果多搬一遍。
+                (hex, thumbnail) = await Task.detached {
+                    (LocalPlaybackSource.computeAverageHex(cgImage: cg),
+                     Self.downscaledThumbnail(cg, maxPixel: 256))
+                }.value
             }
             guard !Task.isCancelled, LocalPlaybackSource.shared.title == title else { return }
             logger.debug("highres: swapped in \(Int(image.size.width), privacy: .public)px for \(title, privacy: .public) (system=\(systemPixels, privacy: .public)px)")
             self?.highResArtworkImage = image
+            self?.highResArtworkThumbnail = thumbnail
             self?.highResAverageHex = hex
         }
+    }
+
+    /// 把一张(已解码的)CGImage 等比缩到最长边 ≤ maxPixel,给 highResArtworkThumbnail 用。
+    /// 纯 CoreGraphics,可以在后台线程跑;本来就不比 maxPixel 大的图原样包成 NSImage 返回。
+    nonisolated private static func downscaledThumbnail(_ cg: CGImage, maxPixel: Int) -> NSImage? {
+        let w = cg.width, h = cg.height
+        guard w > 0, h > 0 else { return nil }
+        let longest = max(w, h)
+        guard longest > maxPixel else {
+            return NSImage(cgImage: cg, size: NSSize(width: w, height: h))
+        }
+        let scale = CGFloat(maxPixel) / CGFloat(longest)
+        let tw = max(1, Int((CGFloat(w) * scale).rounded()))
+        let th = max(1, Int((CGFloat(h) * scale).rounded()))
+        guard let ctx = CGContext(
+            data: nil, width: tw, height: th, bitsPerComponent: 8, bytesPerRow: 0,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
+        else { return nil }
+        ctx.interpolationQuality = .high
+        ctx.draw(cg, in: CGRect(x: 0, y: 0, width: tw, height: th))
+        guard let out = ctx.makeImage() else { return nil }
+        return NSImage(cgImage: out, size: NSSize(width: tw, height: th))
     }
 
     /// 封面原始字节的像素宽度。用 CGImageSource 只读图头,不解码整张图。

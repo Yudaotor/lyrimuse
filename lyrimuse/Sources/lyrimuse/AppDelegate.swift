@@ -179,6 +179,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // LyrimuseCore 里,够不到 AppSettings),启动时不推一次的话它会一直用默认值,
         // 用户的选择要等到下次在设置页里改动才生效。
         LocalPlaybackSource.shared.romanizationScripts = settings.romanizationScripts
+        // 「显示翻译」也得让 Core 知道 —— 它**不是**给歌词装载用的(译文转不转由
+        // chineseVariant 决定,跟这个开关无关),而是给「简繁转换」那一项的显隐判据用:
+        // 译文没在屏幕上时,把一首日文歌的中文机翻转成繁体是一次看不见的改动,那一项就不该
+        // 出现(2026-09-02 用户报「播日文歌为什么也显示简繁转换」,见
+        // LocalPlaybackSource.currentLyricsSupportsChineseVariant 的注释)。
+        //
+        // 这一项用**订阅**而不是像上面几行那样赋一次值:它有三个写入点(设置页的开关、
+        // 歌词窗口「⋯」菜单里的显示/隐藏翻译、全局快捷键 GlobalHotkeys),双写模式漏掉
+        // 任何一个都会让判据停在旧值。@Published 在订阅那一刻会先发一次当前值,所以
+        // "启动时推一次"也被它一并覆盖了,不需要再单独赋一遍。
+        // ⚠️ 闭包里用**参数**、不回头读 AppSettings:@Published 是 willSet 时机发布,那一刻
+        // 属性还是旧值(同 startObservingVolumeBannerPreference 上那条注释)。
+        settings.$showTranslation
+            .sink { on in
+                MainActor.assumeIsolated { LocalPlaybackSource.shared.showsTranslation = on }
+            }
+            .store(in: &cancellables)
         // 同一个理由:BrowserPositionProbe 也在 LyrimuseCore 里,够不到 AppSettings,
         // 启动时不推一次的话"浏览器歌词同步"卡片里配好的配对要等用户重新打开设置页
         // 才会生效。
@@ -204,7 +221,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         //
         // 往前只能提到这里,不能再往前:PlaybackCoordinator.start() 依赖上面这几行刚灌完的
         // Core 单例快照(LocalPlaybackSource.preferWordLevelKaraoke/chineseVariant/
-        // romanizationScripts、BrowserPositionProbe.platformBrowserPairs、
+        // romanizationScripts/showsTranslation、BrowserPositionProbe.platformBrowserPairs、
         // BrowserAutomationPermission.manuallyAddedFamilies)——提前到这些赋值之前的话,
         // PlaybackCoordinator 启动时读到的还是默认值,后果是"用户配置的这几项设置每次
         // 启动都要等到去设置页里改一下才生效"。而往后的中文歌词粘性标记订阅、悬浮歌词/
@@ -265,6 +282,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // 在碰 NotchLyricsWindowController.shared 之前就 return(碰一下就会凭空建出窗口,
         // 见那个类文件头的不变量)。
         NotchMirrorManager.start()
+        // ⚠️ 临时诊断(2026-09-03,用户报「切到别的 App 全屏就被弹回桌面」):定位到根因后
+        // 连同 Diagnostics/SpaceDiagnostics.swift 整个删掉,见那个文件的头注。
+        SpaceDiagnostics.start()
         // PlaybackCoordinator.shared.start() / MenuBarStatusItem.shared.start() 挪到上面
         // BrowserAutomationPermission.manuallyAddedFamilies 那一行之后了(2026-09-01,
         // 见那边的注释)——状态栏项的创建时机要尽量靠前。
@@ -467,20 +487,60 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         subsystem: "me.yudaotor.lyrimuse", category: "scroll-forward")
     private static var lastForwardLogAt = Date.distantPast
 
+    /// 上一次判定的结果,给同一次滚动手势复用。⚠️ 存 `NSScrollView?` 而不是 Bool:
+    /// "放行"和"转发给某个具体视图"都要能原样重放。
+    private static var lastScrollDecision: (windowNumber: Int, point: CGPoint,
+                                            at: Date, target: NSScrollView?)?
+
     /// 返回值直接交给监听闭包:nil = 我们已代为处理,event = 原样放行。
     private static func forwardScrollIfStranded(_ event: NSEvent) -> NSEvent? {
         guard let win = event.window else { return event }
         let loc = event.locationInWindow
+        // ⚠️ **必须缓存这个判定**(2026-09-02,真机 `sample` 抓栈坐实的性能 bug)。
+        //
+        // 用户报「设置页 Last.fm 那一段往下滑就卡、严重时整个 App 无响应要强制退出」,两台
+        // 机器都遇到。抓到的主线程栈里,这个函数下面挂着 **74/1439 个采样**,而且下面是
+        // 一整条 `-[NSThemeFrame _performHitTestForContext:]` → `NSHostingView.hitTest` →
+        // `PlatformHitTestingManager.hitTest` → `MultiViewResponder.containsGlobalPoints`
+        // 的**深度递归** —— 也就是说下面那句 `root?.hitTest(loc)` 会把整个窗口的 SwiftUI
+        // 视图树递归走一遍。
+        //
+        // 而这个函数装在**全局滚轮监视器**里:触控板惯性滚动每秒发几十到上百个事件,于是
+        // 每秒就有几十到上百次全窗口递归命中测试压在主线程上。页面越深越卡 —— 设置页
+        // Last.fm 那一段正好是最长最深的一页,所以在那儿最明显。
+        //
+        // ⚠️ 排查时曾经一路怀疑 Last.fm 的数据链路(冷缓存、每行的播放次数请求、封面兜底、
+        // 简繁写法索引…),**全部是错的方向**:这跟 Last.fm 一点关系都没有,是个全局的、
+        // 任何窗口任何页面都在付的成本,只是那一页把它放大到了看得见。**别再顺着数据层查。**
+        //
+        // 修法不动判定逻辑本身,只是不再每个事件都重算:滚动手势期间指针本来就不动,
+        // 判定一次就够。同窗口 + 指针没挪 + 没过期 → 直接重放上次结论。
+        let nowDate = Date()
+        if let cached = lastScrollDecision,
+           ScrollForwardDecision.canReuse(cachedWindow: cached.windowNumber,
+                                          cachedPoint: cached.point, cachedAt: cached.at,
+                                          window: win.windowNumber, point: loc, now: nowDate) {
+            guard let cachedTarget = cached.target else { return event }
+            cachedTarget.scrollWheel(with: event)
+            return nil
+        }
         let root = win.contentView?.superview ?? win.contentView
         // 命中测试本来就能走进滚动视图 → 正常路径,**绝不插手**。
         var v = root?.hitTest(loc)
         var depth = 0
         while let cur = v, depth < 12 {
-            if cur is NSScrollView { return event }
+            if cur is NSScrollView {
+                lastScrollDecision = (win.windowNumber, loc, nowDate, nil)
+                return event
+            }
             v = cur.superview
             depth += 1
         }
-        guard let target = fallbackScrollTarget(in: win, at: loc) else { return event }
+        guard let target = fallbackScrollTarget(in: win, at: loc) else {
+            lastScrollDecision = (win.windowNumber, loc, nowDate, nil)
+            return event
+        }
+        lastScrollDecision = (win.windowNumber, loc, nowDate, target)
         let now = Date()
         if now.timeIntervalSince(lastForwardLogAt) > 0.5 {
             lastForwardLogAt = now

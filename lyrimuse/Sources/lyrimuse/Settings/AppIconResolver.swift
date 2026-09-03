@@ -24,4 +24,28 @@ enum AppIconResolver {
         cache[bundleID] = icon
         return icon
     }
+
+    /// 装不了 App 就没图标可查时的兜底:随 App 一起打包的静态品牌图。
+    ///
+    /// 2026-09-02 用户反馈:换一台只装了 Apple Music/QQ 音乐的机器,「播放器」卡片网格里
+    /// 网易云音乐/酷狗音乐/Spotify 全变成了一个纯色块+SF Symbol 音符,"看着都跟坏了一样"。
+    /// 根因是 `PlayerChoiceCard` 原来直接把 `icon(forBundleID:)` 查不到(=这台机器没装那个
+    /// App)当"没图标"处理,退回占位——但这几个播放器的品牌图标本身跟"这台机器装没装"没
+    /// 关系,是固定的。跟 `SettingsView.swift` 里 `platformIcon`(YouTube Music/Spotify 网页
+    /// 播放器卡)同一个思路、同一批已经打包进 Contents/Resources/ 的 PNG(2026-08-31/
+    /// 2026-09-01 那两次的先例:取自本机已安装 App 的 AppIcon.icns,sips 转 1024×1024 PNG,
+    /// 不是从网上抓的品牌资源)——网易云音乐/酷狗音乐/QQ 音乐这三张是这次新加的
+    /// (NeteaseIcon.png/KugouIcon.png/QQMusicIcon.png),Spotify 直接复用已有的
+    /// SpotifyIcon.png,不用再拷一份。
+    ///
+    /// 用 `Bundle.main`(不是 `Bundle.module`)加载——理由跟 `platformIcon` 那边一致:
+    /// 资源是 build.sh 拷进 Contents/Resources/ 的,不是走 SwiftPM 的资源打包机制。
+    static func icon(bundledResourceName name: String) -> NSImage? {
+        let key = "bundled:" + name
+        if let cached = cache[key] { return cached }
+        guard let path = Bundle.main.path(forResource: name, ofType: "png"),
+              let image = NSImage(contentsOfFile: path) else { return nil }
+        cache[key] = image
+        return image
+    }
 }

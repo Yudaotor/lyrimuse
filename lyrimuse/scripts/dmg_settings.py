@@ -17,6 +17,16 @@ import os
 application = os.environ["LYRIMUSE_DMG_APP"]
 _app_name = os.path.basename(application)
 
+# 卷图标(2026-09-02):挂载后 Finder 侧边栏/桌面上那个"盘"该长 Lyrimuse 的样子,而不是
+# 系统通用的白盘子图标。直接从**已经打包进这个 App 的那份** AppIcon.icns 取,不新开一个
+# env var 单独传路径——图标只有一份来源(build.sh 里 `cp AppIcon.icns
+# "$APP_DIR/Contents/Resources/AppIcon.icns"`),这样图标以后换了也不会出现"App 里换了、
+# DMG 卷图标忘了跟着换"这种两处各写一份的漂移。dmgbuild 拿到 `icon` 就会把它复制成挂载点
+# 根目录下的 .VolumeIcon.icns 并对那个目录跑 `SetFile -a C`(设"有自定义图标"标记)——
+# 只影响**挂载后**那个卷的图标,不影响 .dmg 文件本身在 Finder 里双击前显示的通用镜像图标
+# (那是另一套机制,这次没做)。
+icon = os.path.join(application, "Contents/Resources/AppIcon.icns")
+
 # ⚠️ dmgbuild 的 `filesystem`/`format` 必须跟 hdiutil 那条路径一致,否则同一个版本
 # 用不用 dmgbuild 出来的产物特性不同(兼容性、体积),那种差异排查起来很费劲。
 filesystem = "HFS+"
