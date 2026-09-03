@@ -1,0 +1,181 @@
+{
+  "id": "live-same-jiandanai-netease",
+  "source": "netease",
+  "note": "同名第一层样本 live-same-jiandanai 的检索层",
+  "track": {
+    "artist": "周杰伦",
+    "title": "简单爱 (Live)",
+    "album": "The One 周杰伦演唱会"
+  },
+  "captured_at": "2026-09-04",
+  "query": {
+    "artist": "周杰伦",
+    "title": "简单爱 (Live)",
+    "album": "The One 周杰伦演唱会",
+    "duration_secs": 273.22601318359375
+  },
+  "local_duration_secs": 273.22601318359375,
+  "items": [
+    {
+      "id": "2738258578",
+      "title": "“简单爱” 周杰伦 Sweet Pop Beat",
+      "artists": [
+        "QK ON THE BEAT"
+      ],
+      "album": "“简单爱” 周杰伦 Sweet Pop Beat",
+      "album_id": "282254262",
+      "duration_secs": 187.946
+    },
+    {
+      "id": "3399478059",
+      "title": "周杰伦“简单爱”Lazy X网感 Type beat",
+      "artists": [
+        "WEICHENG-BEAT"
+      ],
+      "album": "周杰伦“简单爱”Lazy X网感 Type beat",
+      "album_id": "384243845",
+      "duration_secs": 214.799
+    },
+    {
+      "id": "3377466479",
+      "title": "周杰伦“简单爱” Pop x R\u0026B Type Beat",
+      "artists": [
+        "JJBaby Beats"
+      ],
+      "album": "周杰伦“简单爱” Pop x R\u0026B Type Beat",
+      "album_id": "374127595",
+      "duration_secs": 172.8
+    },
+    {
+      "id": "3334354724",
+      "title": "周杰伦“简单爱” hip-pop beat",
+      "artists": [
+        "WEICHENG-BEAT"
+      ],
+      "album": "周杰伦“简单爱” hip-pop beat",
+      "album_id": "356657695",
+      "duration_secs": 163.657
+    },
+    {
+      "id": "3377626833",
+      "title": "周杰伦“简单爱”R\u0026B x Pop Type Beat",
+      "artists": [
+        "何洛林"
+      ],
+      "album": "周杰伦“简单爱”R\u0026B x Pop Type Beat",
+      "album_id": "374151032",
+      "duration_secs": 182.32
+    },
+    {
+      "id": "3377472786",
+      "title": "周杰伦“简单爱” R\u0026B x Pop Beat",
+      "artists": [
+        "NYONTHEBEAT"
+      ],
+      "album": "周杰伦“简单爱” R\u0026B x Pop Beat",
+      "album_id": "374124658",
+      "duration_secs": 181.24
+    },
+    {
+      "id": "3335893565",
+      "title": "周杰伦“简单爱”风格\u0026浪漫x小幸运 pop beat",
+      "artists": [
+        "WEICHENG-BEAT"
+      ],
+      "album": "周杰伦“简单爱”风格\u0026浪漫x小幸运 pop beat",
+      "album_id": "357150052",
+      "duration_secs": 206.445
+    },
+    {
+      "id": "186043",
+      "title": "简单爱(Live)",
+      "artists": [
+        "周杰伦"
+      ],
+      "album": "The One 周杰伦演唱会",
+      "album_id": "18906",
+      "duration_secs": 273
+    },
+    {
+      "id": "29932476",
+      "title": "简单爱 (live)",
+      "artists": [
+        "陈奕迅",
+        "周杰伦"
+      ],
+      "album": "2015江苏卫视新年演唱会",
+      "album_id": "3087145",
+      "duration_secs": 266
+    },
+    {
+      "id": "185984",
+      "title": "简单爱(Live)",
+      "artists": [
+        "周杰伦"
+      ],
+      "album": "2004 无与伦比演唱会",
+      "album_id": "18900",
+      "duration_secs": 393.626
+    },
+    {
+      "id": "509781710",
+      "title": "简单爱 (Live)",
+      "artists": [
+        "周杰伦",
+        "董姿彦"
+      ],
+      "album": "中国新歌声第二季 第15期",
+      "album_id": "36412636",
+      "duration_secs": 219.046
+    },
+    {
+      "id": "2159991512",
+      "title": "简单爱 (Live)",
+      "artists": [
+        "周杰伦、陈奕迅"
+      ],
+      "duration_secs": 313.312
+    },
+    {
+      "id": "457367222",
+      "title": "周杰伦 - 简单爱",
+      "artists": [
+        "山洺"
+      ],
+      "album": "简单爱·国风",
+      "album_id": "35161219",
+      "duration_secs": 287.059
+    },
+    {
+      "id": "451592981",
+      "title": "简单爱（翻自 周杰伦）",
+      "artists": [
+        "赵凌皙"
+      ],
+      "album": "翻唱集.忆语",
+      "album_id": "35109498",
+      "duration_secs": 266.657
+    },
+    {
+      "id": "1807128462",
+      "title": "简单爱_饭特稀KUO（cover周杰伦）",
+      "artists": [
+        "饭特稀KUO"
+      ],
+      "album": "我的青春范特西（翻唱集1）",
+      "album_id": "120849326",
+      "duration_secs": 269.885
+    }
+  ],
+  "expect": {
+    "picked_id": "186043"
+  },
+  "judge": {
+    "title_accepted": true,
+    "artist_matches": true,
+    "source_duration_delta_pct": 0.08272022892706077,
+    "version_tags_ok": true,
+    "live_mismatch": false,
+    "plausible_alternatives": 0
+  }
+}

@@ -1,0 +1,121 @@
+{
+  "id": "ja-orion-kugou",
+  "source": "kugou",
+  "note": "同名第一层样本 ja-orion 的检索层",
+  "track": {
+    "artist": "米津玄師",
+    "title": "orion",
+    "album": "BOOTLEG"
+  },
+  "captured_at": "2026-09-04",
+  "query": {
+    "artist": "米津玄师",
+    "title": "orion",
+    "album": "BOOTLEG",
+    "duration_secs": 281.90301513671875
+  },
+  "local_duration_secs": 281.90301513671875,
+  "items": [
+    {
+      "id": "10169fd517e7cc11587e2e29c279d835",
+      "title": "orion",
+      "artist": "米津玄師",
+      "album": "オリオン",
+      "album_id": "1970498",
+      "duration_secs": 281,
+      "language": "日语"
+    },
+    {
+      "id": "da60f11f69affc7107adede9dd17352a",
+      "title": "Lemon",
+      "artist": "米津玄師",
+      "album": "STRAY SHEEP",
+      "album_id": "38684039",
+      "duration_secs": 255,
+      "language": "日语"
+    },
+    {
+      "id": "8800bedbc05e51f23fc51815dc795d5e",
+      "title": "打上花火",
+      "artist": "Daoko、米津玄師",
+      "album": "THANK YOU BLUE",
+      "album_id": "8173948",
+      "duration_secs": 289,
+      "language": "日语"
+    },
+    {
+      "id": "bfc18ce8f655d223f86536250cc24152",
+      "title": "KICK BACK",
+      "artist": "米津玄師",
+      "album": "KICK BACK",
+      "album_id": "61996888",
+      "duration_secs": 193,
+      "language": "日语"
+    },
+    {
+      "id": "3e7f798579fdb946f676c89235bea6df",
+      "title": "LOSER",
+      "artist": "米津玄師",
+      "album": "LOSER / ナンバーナイン",
+      "album_id": "1788003",
+      "duration_secs": 243,
+      "language": "日语"
+    },
+    {
+      "id": "d9aef9c22dd9fa78375374ce623f9ee4",
+      "title": "打上花火",
+      "artist": "米津玄師",
+      "album": "BOOTLEG",
+      "album_id": "4554311",
+      "duration_secs": 259,
+      "language": "日语"
+    },
+    {
+      "id": "836d31c0f7cf358ff68f4473fa729efd",
+      "title": "IRIS OUT",
+      "artist": "米津玄師",
+      "album": "IRIS OUT",
+      "album_id": "161431002",
+      "duration_secs": 151,
+      "language": "日语"
+    },
+    {
+      "id": "0b39d5414fd3fcff7dede8d0df5fbd49",
+      "title": "BOW AND ARROW",
+      "artist": "米津玄師",
+      "album": "BOW AND ARROW",
+      "album_id": "136152568",
+      "duration_secs": 175,
+      "language": "日语"
+    },
+    {
+      "id": "03853ac0e1e3b128b428f66cd9679de9",
+      "title": "JANE DOE",
+      "artist": "米津玄師、宇多田ヒカル",
+      "album": "JANE DOE",
+      "album_id": "161940464",
+      "duration_secs": 235,
+      "language": "日语"
+    },
+    {
+      "id": "6a9bd52b4c1aeffc7a64c8310a89f8a8",
+      "title": "春雷",
+      "artist": "米津玄師",
+      "album": "BOOTLEG",
+      "album_id": "4554311",
+      "duration_secs": 288,
+      "language": "日语"
+    }
+  ],
+  "expect": {
+    "picked_id": "10169fd517e7cc11587e2e29c279d835"
+  },
+  "judge": {
+    "title_accepted": true,
+    "artist_matches": true,
+    "source_duration_delta_pct": 0.32032830024212444,
+    "version_tags_ok": true,
+    "live_mismatch": false,
+    "plausible_alternatives": 0
+  }
+}

@@ -980,6 +980,50 @@ func qqMatchFromCand(c qqCand, unreliable bool) qqMusicMatch {
 //
 //	① 标题精确同名 —— 避开 纯音乐/串烧/live 这类变体,权重最高;
 //	② 署名恰好是同一组人 —— 只作同档内的 tiebreak,区分独唱/合唱,见 qqCreditSetEqual。
+//
+// qqPickCandidateWithAlbum 是 resolveQQMusicMatch 里"有本地专辑名"那一档的挑选:按 albumScore
+// 去重、标题精确同名 > 专辑分 > 署名同组人。原是那个函数里的内联循环,2026-09-04 原样提成纯函数
+// (lookupAlbum 是"候选没自带专辑名时去查一次"的注入点,生产传 qqSongAlbum,检索层金标传恒空),
+// 理由同 enrich.go 的 rankLyricSourceResults:测试跑生产同一份代码。返回 haveBest=false 表示
+// 没有任何候选够格(专辑对不上且标题也非精确同名)。
+func qqPickCandidateWithAlbum(cands []qqCand, artist, album string, lookupAlbum func(mid string) string) (best qqCand, haveBest bool, bestScore int) {
+	bestExact, bestCreditEq := false, false
+	// 条数上限只约束**需要额外发一次详情请求**的候选(上限的初衷就是别为一首歌
+	// 反复打详情接口)。client_search_cp 路线的专辑名是搜索结果自带的、不花请求,
+	// 全部参与比较——这个上限当年是照着 smartbox"短而紧"的候选表定的,套在一次回
+	// 十条的正式搜索结果上会把正确的那条挡在门外。
+	fetched := 0
+	for _, c := range cands {
+		if c.album == "" && fetched >= qqAlbumLookupBudget {
+			continue
+		}
+		if c.album == "" {
+			fetched++
+		}
+		candAlbum := qqCandAlbumName(c.album, func() string { return lookupAlbum(c.mid) })
+		sc := albumScore(candAlbum, album)
+		if sc == 0 && !c.exact {
+			continue // 专辑对不上、标题也非精确同名 → 不够格参与本轮选择
+		}
+		// 标题精确同名优先于专辑分(与 albumScore 的 exact>loose 分层同一原则):避免
+		// 同专辑里一首标题超串/子串的非规范版(live/伴奏等)靠专辑分打平甚至反超真正
+		// 同名曲目——历史上这类打分边界条件已经在 albumScore 上出过一次真实 bug。
+		// 优先级:标题精确同名 > 专辑分 > 署名恰好同一组人。最后一档只在前两项都打平时
+		// 起作用,专门区分同名同专辑的独唱/合唱两条,见 qqCreditSetEqual。
+		creditEq := qqCreditSetEqual(c.artist, artist)
+		better := !haveBest ||
+			(c.exact && !bestExact) ||
+			(c.exact == bestExact && sc > bestScore) ||
+			(c.exact == bestExact && sc == bestScore && creditEq && !bestCreditEq)
+		if better {
+			best = c
+			best.album = candAlbum // 自带为空时这里装的是刚查到的那个,别丢回去
+			haveBest, bestScore, bestExact, bestCreditEq = true, sc, c.exact, creditEq
+		}
+	}
+	return best, haveBest, bestScore
+}
+
 func qqPickCandidate(cands []qqCand, artist string) (qqCand, bool) {
 	var best qqCand
 	haveBest, bestRank := false, -1
@@ -1008,6 +1052,9 @@ func resolveQQMusicMatch(ctx context.Context, artist, title, album string) qqMus
 	// 放宽成 looseContains 重试——但绝不完全跳过校验:完全不查歌手会让标题撞上、歌手完全
 	// 不相干的翻唱/仿冒账号蒙混过关、链接指向错误的人(同 match.go artistMatches 注释里
 	// Jay Chou 那次教训同理;这里此前就是"完全不查")。
+	if lyricSearchItemsTap != nil {
+		lyricSearchItemsTap("qq", artist, title, album, 0, items)
+	}
 	cands := qqCollectCandidates(items, artist, title, true)
 	if len(cands) == 0 {
 		cands = qqCollectCandidates(items, artist, title, false) // artistMatches 太严格(跨平台歌手名写法不同)时放宽成 looseContains,但仍要求歌手名沾边
@@ -1023,41 +1070,7 @@ func resolveQQMusicMatch(ctx context.Context, artist, title, album string) qqMus
 	// 频次低;补专辑失败(反爬/超时)时降级到按名字选,不影响出具体歌链接。
 	viaAlbumDegraded := false // 专辑路线曾网络失败 → 本函数所有回落出口都要打 unreliable
 	if album != "" {
-		var best qqCand
-		haveBest, bestScore, bestExact, bestCreditEq := false, 0, false, false
-		// 条数上限只约束**需要额外发一次详情请求**的候选(上限的初衷就是别为一首歌
-		// 反复打详情接口)。client_search_cp 路线的专辑名是搜索结果自带的、不花请求,
-		// 全部参与比较——这个上限当年是照着 smartbox"短而紧"的候选表定的,套在一次回
-		// 十条的正式搜索结果上会把正确的那条挡在门外。
-		fetched := 0
-		for _, c := range cands {
-			if c.album == "" && fetched >= qqAlbumLookupBudget {
-				continue
-			}
-			if c.album == "" {
-				fetched++
-			}
-			candAlbum := qqCandAlbumName(c.album, func() string { return qqSongAlbum(ctx, c.mid) })
-			sc := albumScore(candAlbum, album)
-			if sc == 0 && !c.exact {
-				continue // 专辑对不上、标题也非精确同名 → 不够格参与本轮选择
-			}
-			// 标题精确同名优先于专辑分(与 albumScore 的 exact>loose 分层同一原则):避免
-			// 同专辑里一首标题超串/子串的非规范版(live/伴奏等)靠专辑分打平甚至反超真正
-			// 同名曲目——历史上这类打分边界条件已经在 albumScore 上出过一次真实 bug。
-			// 优先级:标题精确同名 > 专辑分 > 署名恰好同一组人。最后一档只在前两项都打平时
-			// 起作用,专门区分同名同专辑的独唱/合唱两条,见 qqCreditSetEqual。
-			creditEq := qqCreditSetEqual(c.artist, artist)
-			better := !haveBest ||
-				(c.exact && !bestExact) ||
-				(c.exact == bestExact && sc > bestScore) ||
-				(c.exact == bestExact && sc == bestScore && creditEq && !bestCreditEq)
-			if better {
-				best = c
-				best.album = candAlbum // 自带为空时这里装的是刚查到的那个,别丢回去
-				haveBest, bestScore, bestExact, bestCreditEq = true, sc, c.exact, creditEq
-			}
-		}
+		best, haveBest, bestScore := qqPickCandidateWithAlbum(cands, artist, album, func(mid string) string { return qqSongAlbum(ctx, mid) })
 		if haveBest && bestScore > 0 {
 			return qqMatchFromCand(best, false)
 		}

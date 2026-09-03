@@ -1,0 +1,143 @@
+{
+  "id": "ja-orion-netease",
+  "source": "netease",
+  "note": "同名第一层样本 ja-orion 的检索层",
+  "track": {
+    "artist": "米津玄師",
+    "title": "orion",
+    "album": "BOOTLEG"
+  },
+  "captured_at": "2026-09-04",
+  "query": {
+    "artist": "米津玄师",
+    "title": "orion",
+    "album": "BOOTLEG",
+    "duration_secs": 281.90301513671875
+  },
+  "local_duration_secs": 281.90301513671875,
+  "items": [
+    {
+      "id": "512377169",
+      "title": "orion",
+      "artists": [
+        "米津玄師"
+      ],
+      "album": "BOOTLEG",
+      "album_id": "36529043",
+      "duration_secs": 281.959
+    },
+    {
+      "id": "472307304",
+      "title": "Orion（《三月的狮子》ED）（Cover 米津玄師）",
+      "artists": [
+        "涼信Ryoshinn"
+      ],
+      "album": "壹柒翻",
+      "album_id": "35375286",
+      "duration_secs": 279.09
+    },
+    {
+      "id": "505033274",
+      "title": "Orion（Cover 米津玄师）",
+      "artists": [
+        "年糕糕"
+      ],
+      "album": "Orion",
+      "album_id": "36157669",
+      "duration_secs": 281.782
+    },
+    {
+      "id": "1822881326",
+      "title": "orion (acoustic ver.)（翻自 米津玄師）",
+      "artists": [
+        "monogataru"
+      ],
+      "album": "カバーソング集丨monogataru",
+      "album_id": "122430601",
+      "duration_secs": 280.704
+    },
+    {
+      "id": "1951982991",
+      "title": "orion (Cover) [アニメ『3月のライオン』ED] [オリジナル歌手：米津玄師]",
+      "artists": [
+        "オルゴールミュージック"
+      ],
+      "album": "orion (Cover) [アニメ『3月のライオン』ED] [オリジナル歌手：米津玄師]",
+      "album_id": "145750708",
+      "duration_secs": 35.47
+    },
+    {
+      "id": "3327101311",
+      "title": "orion (米津玄師)",
+      "artists": [
+        "コロムビアオルゴール"
+      ],
+      "album": "クリスマス・オルゴール・エターナル",
+      "album_id": "354076461",
+      "duration_secs": 295.6
+    },
+    {
+      "id": "516078058",
+      "title": "orion（Cover 米津玄师）",
+      "artists": [
+        "纸鹤"
+      ],
+      "album": "orion",
+      "album_id": "36686620",
+      "duration_secs": 276.297
+    },
+    {
+      "id": "2114845335",
+      "title": "orion（米津玄师COVER）",
+      "artists": [
+        "阿棱_p",
+        "nana_436"
+      ],
+      "album": "nana的翻唱集",
+      "album_id": "182499505",
+      "duration_secs": 281.58
+    },
+    {
+      "id": "1442253213",
+      "title": "orion(cover 米津玄师）",
+      "artists": [
+        "艾凡Alvan"
+      ],
+      "album": "orion",
+      "album_id": "88276823",
+      "duration_secs": 283.954
+    },
+    {
+      "id": "552067243",
+      "title": "【KAITO】三月的狮子ED2-orion-Acoustic Ver.（Cover 米津玄師）",
+      "artists": [
+        "幻野eve",
+        "KAITO"
+      ],
+      "album": "我的VOCALOID翻调曲",
+      "album_id": "36179164",
+      "duration_secs": 90.226
+    },
+    {
+      "id": "2066831632",
+      "title": "orion Originally Performed By 米津玄師 （オルゴール）",
+      "artists": [
+        "オルゴールサウンド J-POP"
+      ],
+      "album": "オルゴール J-POP HIT VOL-485",
+      "album_id": "170302354",
+      "duration_secs": 189.76
+    }
+  ],
+  "expect": {
+    "picked_id": "512377169"
+  },
+  "judge": {
+    "title_accepted": true,
+    "artist_matches": true,
+    "source_duration_delta_pct": 0.01985961847697917,
+    "version_tags_ok": true,
+    "live_mismatch": false,
+    "plausible_alternatives": 0
+  }
+}

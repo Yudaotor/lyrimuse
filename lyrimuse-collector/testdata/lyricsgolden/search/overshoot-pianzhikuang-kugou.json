@@ -1,0 +1,117 @@
+{
+  "id": "overshoot-pianzhikuang-kugou",
+  "source": "kugou",
+  "note": "同名第一层样本 overshoot-pianzhikuang 的检索层",
+  "track": {
+    "artist": "陈绮贞",
+    "title": "我亲爱的偏执狂",
+    "album": "吉他手"
+  },
+  "captured_at": "2026-09-04",
+  "query": {
+    "artist": "陈绮贞",
+    "title": "我亲爱的偏执狂",
+    "album": "吉他手",
+    "duration_secs": 175
+  },
+  "local_duration_secs": 175,
+  "items": [
+    {
+      "id": "155a260370c473f3e3cad658bed55618",
+      "title": "我亲爱的偏执狂",
+      "artist": "陈绮贞",
+      "album": "Groupies 吉他手",
+      "album_id": "959335",
+      "duration_secs": 175,
+      "language": "国语"
+    },
+    {
+      "id": "a8daa60699c928efa54f935f87de42ba",
+      "title": "我亲爱的偏执狂 (Live)",
+      "artist": "陈绮贞",
+      "album": "花的姿态 演唱会经典实录",
+      "album_id": "968720",
+      "duration_secs": 254,
+      "language": "国语"
+    },
+    {
+      "id": "d3cd015cbf4d58de3ccfe097581881e6",
+      "title": "我亲爱的偏执狂 (Live)",
+      "artist": "陈绮贞",
+      "album": "太阳 巡回演唱会Immortal Tour影音记录",
+      "album_id": "557665",
+      "duration_secs": 175,
+      "language": "国语"
+    },
+    {
+      "id": "0653c8f5e35d282e2c5687b8168313ee",
+      "title": "太聪明",
+      "artist": "陈绮贞",
+      "album": "陈绮贞 精选 1998-2005",
+      "album_id": "974969",
+      "duration_secs": 262,
+      "language": "国语"
+    },
+    {
+      "id": "3f44744bd632c62a1946a7cb36777a1e",
+      "title": "我亲爱的偏执狂 (Live)",
+      "artist": "陈绮贞",
+      "duration_secs": 238,
+      "language": "国语"
+    },
+    {
+      "id": "a82da4f897cb67a69e124dc2996b38c2",
+      "title": "After 17",
+      "artist": "陈绮贞",
+      "album": "After 17",
+      "album_id": "976528",
+      "duration_secs": 165,
+      "language": "国语"
+    },
+    {
+      "id": "df7f63db74cf4a5d6967739ac2d01af6",
+      "title": "我亲爱的偏执狂 (2013香港春浪音乐节现场)",
+      "artist": "陈绮贞",
+      "duration_secs": 272,
+      "language": "国语"
+    },
+    {
+      "id": "9a5378025125283565b07b0bebb2944a",
+      "title": "还是会寂寞",
+      "artist": "陈绮贞",
+      "album": "滚石香港黄金十年 陈绮贞精选",
+      "album_id": "968757",
+      "duration_secs": 272,
+      "language": "国语"
+    },
+    {
+      "id": "e9293c274c45dd3fb105ca88e2668eb2",
+      "title": "私奔到月球",
+      "artist": "五月天、陈绮贞",
+      "album": "离开地球表面 Jump!",
+      "album_id": "980513",
+      "duration_secs": 226,
+      "language": "国语"
+    },
+    {
+      "id": "29107fd07f67668858f2563f57d2dcd1",
+      "title": "旅行的意义",
+      "artist": "陈绮贞",
+      "album": "华丽的冒险",
+      "album_id": "973419",
+      "duration_secs": 256,
+      "language": "国语"
+    }
+  ],
+  "expect": {
+    "picked_id": "155a260370c473f3e3cad658bed55618"
+  },
+  "judge": {
+    "title_accepted": true,
+    "artist_matches": true,
+    "source_duration_delta_pct": 0,
+    "version_tags_ok": true,
+    "live_mismatch": false,
+    "plausible_alternatives": 0
+  }
+}

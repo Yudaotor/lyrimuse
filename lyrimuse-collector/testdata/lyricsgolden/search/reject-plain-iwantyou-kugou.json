@@ -1,0 +1,114 @@
+{
+  "id": "reject-plain-iwantyou-kugou",
+  "source": "kugou",
+  "note": "同名第一层样本 reject-plain-iwantyou 的检索层",
+  "track": {
+    "artist": "蛋堡",
+    "title": "I Want You",
+    "album": "月光"
+  },
+  "captured_at": "2026-09-04",
+  "query": {
+    "artist": "蛋堡",
+    "title": "I Want You",
+    "album": "月光",
+    "duration_secs": 243.5290069580078
+  },
+  "local_duration_secs": 243.5290069580078,
+  "items": [
+    {
+      "id": "ee43a600eb85726e3387573e7516f987",
+      "title": "I Want You",
+      "artist": "蛋堡",
+      "album": "月光",
+      "album_id": "1591234",
+      "duration_secs": 246,
+      "language": "国语"
+    },
+    {
+      "id": "ee43a600eb85726e3387573e7516f987",
+      "title": "I want you",
+      "artist": "蛋堡、JABBERLOOP",
+      "album": "経典!",
+      "album_id": "611658",
+      "duration_secs": 246,
+      "language": "国语"
+    },
+    {
+      "id": "5466b15cb2c0516bcc799f20ac3d92b9",
+      "title": "I Want You",
+      "artist": "蛋堡",
+      "duration_secs": 30
+    },
+    {
+      "id": "2931365395f1a40e45595551fde5f305",
+      "title": "Trap",
+      "artist": "HENRY刘宪华、圭贤、泰民",
+      "album": "The 1st Mini Album 'Trap'",
+      "album_id": "968041",
+      "duration_secs": 225,
+      "language": "韩语"
+    },
+    {
+      "id": "7b1c673d1f687b3268dfadaa70d4e0b4",
+      "title": "I Want You (DJ 阿树版)",
+      "artist": "蛋堡",
+      "duration_secs": 149,
+      "language": "国语"
+    },
+    {
+      "id": "531b9fed43ffbb50a75322a8e837fdfc",
+      "title": "关于小熊",
+      "artist": "蛋堡",
+      "album": "收敛水",
+      "album_id": "560740",
+      "duration_secs": 316,
+      "language": "国语"
+    },
+    {
+      "id": "3b85ece7dbeb8507927e25cb516fabc7",
+      "title": "I Want You (DJ 阿若版)",
+      "artist": "蛋堡",
+      "duration_secs": 157,
+      "language": "国语"
+    },
+    {
+      "id": "da363df58f45c566e5307f81f6f0d07a",
+      "title": "I Wanted You",
+      "artist": "Ina Wroldsen",
+      "album": "Suddenly",
+      "album_id": "254723",
+      "duration_secs": 233,
+      "language": "英语"
+    },
+    {
+      "id": "ace39ea43ec4643e2af83a6cac23e145",
+      "title": "偷偷",
+      "artist": "蛋堡、阎韦伶",
+      "album": "Winter Sweet",
+      "album_id": "560741",
+      "duration_secs": 248,
+      "language": "国语"
+    },
+    {
+      "id": "bfa0a117d6075261dce44da485d68eb8",
+      "title": "Hit the Rhyme",
+      "artist": "蛋堡",
+      "album": "收敛水",
+      "album_id": "560740",
+      "duration_secs": 300,
+      "language": "国语"
+    }
+  ],
+  "expect": {
+    "picked_id": "ee43a600eb85726e3387573e7516f987"
+  },
+  "judge": {
+    "title_accepted": true,
+    "artist_matches": true,
+    "source_duration_delta_pct": 1.014660665215239,
+    "version_tags_ok": true,
+    "live_mismatch": false,
+    "plausible_alternatives": 0
+  }
+}

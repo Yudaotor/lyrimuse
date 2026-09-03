@@ -1,0 +1,114 @@
+{
+  "id": "amll-thats-what-i-like-qq",
+  "source": "qq",
+  "note": "同名第一层样本 amll-thats-what-i-like 的检索层",
+  "track": {
+    "artist": "Bruno Mars",
+    "title": "That's What I Like",
+    "album": "24K Magic"
+  },
+  "captured_at": "2026-09-04",
+  "query": {
+    "artist": "Bruno Mars",
+    "title": "That's What I Like",
+    "album": "24K Magic",
+    "duration_secs": 0
+  },
+  "local_duration_secs": 206.693,
+  "items": [
+    {
+      "id": "003a1tne1nSz1Y",
+      "title": "That's What I Like",
+      "artist": "Bruno Mars",
+      "album": "24K Magic",
+      "duration_secs": 206
+    },
+    {
+      "id": "002Tzw5Z4BW6r8",
+      "title": "That's What I Like (BRII Remix)",
+      "artist": "Brii/Bruno Mars",
+      "album": "That's What I Like (BRII Remix)",
+      "duration_secs": 198
+    },
+    {
+      "id": "001kGOoj02ZENZ",
+      "title": "That's What I Like (Alan Walker Remix)",
+      "artist": "Bruno Mars",
+      "album": "That's What I Like (Alan Walker Remix)",
+      "duration_secs": 195
+    },
+    {
+      "id": "0048avSd29bw2Q",
+      "title": "That's What I Like (Remix)",
+      "artist": "Bruno Mars/Gucci Mane",
+      "album": "That's What I Like (Remix)",
+      "duration_secs": 234
+    },
+    {
+      "id": "000zR7cv2QHXks",
+      "title": "APT.",
+      "artist": "ROSÉ/Bruno Mars",
+      "album": "APT.",
+      "duration_secs": 169
+    },
+    {
+      "id": "002zRAaY0kSGdc",
+      "title": "Runaway Baby",
+      "artist": "Bruno Mars",
+      "album": "Doo-Wops \u0026 Hooligans",
+      "duration_secs": 148
+    },
+    {
+      "id": "000bz9Nw30VQAr",
+      "title": "Treasure",
+      "artist": "Bruno Mars",
+      "album": "Unorthodox Jukebox",
+      "duration_secs": 178
+    },
+    {
+      "id": "003XCoIT3iRKgw",
+      "title": "Talking to the Moon",
+      "artist": "Bruno Mars",
+      "album": "It's Better If You Don't Understand",
+      "duration_secs": 207
+    },
+    {
+      "id": "003Mu5xa1u731Z",
+      "title": "That's what I Like (降调版)",
+      "artist": "F-F",
+      "album": "Miss You",
+      "duration_secs": 62
+    },
+    {
+      "id": "0037L31d3plMbl",
+      "title": "That's What I Like (情绪版)",
+      "artist": "Lkjhgf",
+      "album": "Diamonds（Remix）",
+      "duration_secs": 123
+    }
+  ],
+  "expect": {
+    "picked_id": "003a1tne1nSz1Y",
+    "accepted_strict": [
+      "003a1tne1nSz1Y",
+      "002Tzw5Z4BW6r8",
+      "001kGOoj02ZENZ",
+      "0048avSd29bw2Q"
+    ],
+    "accepted_loose": [
+      "003a1tne1nSz1Y",
+      "002Tzw5Z4BW6r8",
+      "001kGOoj02ZENZ",
+      "0048avSd29bw2Q"
+    ],
+    "picked_no_album": "003a1tne1nSz1Y"
+  },
+  "judge": {
+    "title_accepted": true,
+    "artist_matches": true,
+    "source_duration_delta_pct": 0.33527985950177897,
+    "version_tags_ok": true,
+    "live_mismatch": false,
+    "plausible_alternatives": 0
+  }
+}

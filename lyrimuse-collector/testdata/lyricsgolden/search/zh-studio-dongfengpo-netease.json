@@ -1,0 +1,41 @@
+{
+  "id": "zh-studio-dongfengpo-netease",
+  "source": "netease",
+  "note": "同名第一层样本 zh-studio-dongfengpo 的检索层",
+  "track": {
+    "artist": "周杰伦",
+    "title": "东风破",
+    "album": "叶惠美"
+  },
+  "captured_at": "2026-09-04",
+  "query": {
+    "artist": "周杰伦",
+    "title": "东风破",
+    "album": "叶惠美",
+    "duration_secs": 315.413
+  },
+  "local_duration_secs": 315.413,
+  "items": [
+    {
+      "id": "186018",
+      "title": "东风破",
+      "artists": [
+        "周杰伦"
+      ],
+      "album": "叶惠美",
+      "album_id": "18905",
+      "duration_secs": 315.018
+    }
+  ],
+  "expect": {
+    "picked_id": "186018"
+  },
+  "judge": {
+    "title_accepted": true,
+    "artist_matches": true,
+    "source_duration_delta_pct": 0.12523263150220143,
+    "version_tags_ok": true,
+    "live_mismatch": false,
+    "plausible_alternatives": 0
+  }
+}

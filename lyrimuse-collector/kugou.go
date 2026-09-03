@@ -343,6 +343,9 @@ func resolveKugouLyric(ctx context.Context, artist, title, album string, duratio
 		if err := kugouGet(ctx, "http://mobilecdn.kugou.com/api/v3/search/song?format=json&keyword="+kugouEscape(artist+" "+q)+"&page=1&pagesize=10&showtype=1", &sr); err != nil {
 			continue
 		}
+		if lyricSearchItemsTap != nil {
+			lyricSearchItemsTap("kugou", artist, title, album, durationSecs, sr.Data.Info)
+		}
 		chosen = pickKugouSearchCandidate(sr.Data.Info, artist, title, album, durationSecs)
 		if chosen != nil {
 			break

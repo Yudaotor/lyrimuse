@@ -1,0 +1,109 @@
+{
+  "id": "reject-lang-bestfriend-qq",
+  "source": "qq",
+  "note": "同名第一层样本 reject-lang-bestfriend 的检索层",
+  "track": {
+    "artist": "Musiq Soulchild",
+    "title": "Bestfriend",
+    "album": "Juslisen"
+  },
+  "captured_at": "2026-09-04",
+  "query": {
+    "artist": "Musiq Soulchild",
+    "title": "Bestfriend",
+    "album": "Juslisen",
+    "duration_secs": 0
+  },
+  "local_duration_secs": 261,
+  "items": [
+    {
+      "id": "003MzbGh2QaAoW",
+      "title": "Bestfriend",
+      "artist": "Musiq Soulchild",
+      "album": "Juslisen (Special Edition)",
+      "duration_secs": 261
+    },
+    {
+      "id": "003JE6p531cyvs",
+      "title": "Bestfriend (Album Version|Edited)",
+      "artist": "Musiq Soulchild",
+      "album": "Juslisen",
+      "duration_secs": 261
+    },
+    {
+      "id": "000PnpAD3MtmJN",
+      "title": "Best Friends",
+      "artist": "The Weeknd",
+      "album": "Dawn FM (Explicit)",
+      "duration_secs": 163
+    },
+    {
+      "id": "0039uvGi3aXjeZ",
+      "title": "Best Friend (feat. Doja Cat, Jamie \u0026 CHANMINA) (Remix|Explicit)",
+      "artist": "Saweetie/Doja Cat/JAMIE/CHANMINA",
+      "album": "Best Friend (feat. Doja Cat) [Remix EP] [Extended Edition] [Explicit]",
+      "duration_secs": 206
+    },
+    {
+      "id": "004TZ6uW32gD2h",
+      "title": "Best Friend (feat. Doja Cat) (Explicit)",
+      "artist": "Saweetie/Doja Cat",
+      "album": "Best Friend (feat. Doja Cat) [Explicit]",
+      "duration_secs": 155
+    },
+    {
+      "id": "0004RXNa3bb8vE",
+      "title": "Best Friend (Explicit)",
+      "artist": "Rex Orange County/Ben Ash/Alex O'Connor",
+      "album": "Best Friend (Explicit)",
+      "duration_secs": 262
+    },
+    {
+      "id": "004SmrPr2eAbrO",
+      "title": "Best Friend",
+      "artist": "天王星Uranu$/小不点",
+      "duration_secs": 231
+    },
+    {
+      "id": "001EzWjK14XYCO",
+      "title": "Best Friend",
+      "artist": "NCT DREAM",
+      "album": "We Boom - The 3rd Mini Album",
+      "duration_secs": 204
+    },
+    {
+      "id": "002P3hac2YjoSm",
+      "title": "BEST FRIEND",
+      "artist": "iKON",
+      "album": "Return",
+      "duration_secs": 230
+    },
+    {
+      "id": "003mRcKZ47VFt7",
+      "title": "Best Friend（I Wanna Be Your Favorite Boy）",
+      "artist": "自渡野",
+      "album": "Best Friend（I Wanna Be Your Favorite Boy）",
+      "duration_secs": 109
+    }
+  ],
+  "expect": {
+    "picked_id": "003MzbGh2QaAoW",
+    "accepted_strict": [
+      "003MzbGh2QaAoW",
+      "003JE6p531cyvs"
+    ],
+    "accepted_loose": [
+      "003MzbGh2QaAoW",
+      "003JE6p531cyvs"
+    ],
+    "picked_no_album": "003MzbGh2QaAoW"
+  },
+  "judge": {
+    "title_accepted": true,
+    "artist_matches": true,
+    "source_duration_delta_pct": 0,
+    "version_tags_ok": true,
+    "live_mismatch": false,
+    "plausible_alternatives": 0
+  }
+}

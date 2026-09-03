@@ -1,0 +1,264 @@
+{
+  "id": "single-are-you-ready-netease",
+  "source": "netease",
+  "note": "同名第一层样本 single-are-you-ready 的检索层",
+  "track": {
+    "artist": "关浩德",
+    "title": "Are You Ready",
+    "album": "Just Be a Rock"
+  },
+  "captured_at": "2026-09-04",
+  "query": {
+    "artist": "关浩德",
+    "title": "Are You Ready",
+    "album": "Just Be a Rock",
+    "duration_secs": 193.6529998779297
+  },
+  "local_duration_secs": 193.6529998779297,
+  "items": [
+    {
+      "id": "2106094112",
+      "title": "Are You Ready",
+      "artists": [
+        "关浩德Walter"
+      ],
+      "album": "Just Be A Rock",
+      "album_id": "180553360",
+      "duration_secs": 193.653
+    },
+    {
+      "id": "2081236103",
+      "title": "Are You Ready",
+      "artists": [
+        "关浩德Walter"
+      ],
+      "album": "Be",
+      "album_id": "174512432",
+      "duration_secs": 193.653
+    },
+    {
+      "id": "3338876633",
+      "title": "Are You Ready",
+      "artists": [
+        "LNGSHOT"
+      ],
+      "album": "4SHOBOIZ MIXTAPE",
+      "album_id": "358177623",
+      "duration_secs": 155
+    },
+    {
+      "id": "2608516858",
+      "title": "Are You Ready",
+      "artists": [
+        "张铄"
+      ],
+      "album": "Just Be A Rock(cover关浩德Walter)",
+      "album_id": "241295227",
+      "duration_secs": 194.097
+    },
+    {
+      "id": "1315604510",
+      "title": "Are You Ready",
+      "artists": [
+        "Bassjackers"
+      ],
+      "album": "Les pays bass EP, vol. 2",
+      "album_id": "73789666",
+      "duration_secs": 135.756
+    },
+    {
+      "id": "3430890650",
+      "title": "Are You Ready",
+      "artists": [
+        "BANR"
+      ],
+      "album": "Techno House Session",
+      "album_id": "396332088",
+      "duration_secs": 139.679
+    },
+    {
+      "id": "1462715443",
+      "title": "Are You Ready",
+      "artists": [
+        "BAD NINJA"
+      ],
+      "album": "Tai Sabaki",
+      "album_id": "92403145",
+      "duration_secs": 179.408
+    },
+    {
+      "id": "3314201105",
+      "title": "Areyouready (DJ Mix)",
+      "artists": [
+        "DJ Frekuenzy"
+      ],
+      "album": "DJ Melody",
+      "album_id": "349116118",
+      "duration_secs": 29.072
+    },
+    {
+      "id": "1824976979",
+      "title": "AreYouReady",
+      "artists": [
+        "村山 シベリウス 達彦"
+      ],
+      "album": "AreYouReady",
+      "album_id": "123906380",
+      "duration_secs": 117.375
+    },
+    {
+      "id": "1824976399",
+      "title": "AreYouReady",
+      "artists": [
+        "村山 シベリウス 達彦"
+      ],
+      "album": "AreYouReady",
+      "album_id": "123906625",
+      "duration_secs": 117.375
+    },
+    {
+      "id": "2698115138",
+      "title": "AREYOUREADY",
+      "artists": [
+        "Pulse."
+      ],
+      "album": "SOLARA",
+      "album_id": "269926013",
+      "duration_secs": 109.152
+    },
+    {
+      "id": "2134768222",
+      "title": "AreYouReady",
+      "artists": [
+        "AWAKE"
+      ],
+      "album": "AreYouReady",
+      "album_id": "188651655",
+      "duration_secs": 169.401
+    },
+    {
+      "id": "2641875684",
+      "title": "Areyouready",
+      "artists": [
+        "Cz_9"
+      ],
+      "album": "强势硬控曲",
+      "album_id": "252440012",
+      "duration_secs": 154.561
+    },
+    {
+      "id": "1952650202",
+      "title": "AreYouReady",
+      "artists": [
+        "村山シベリウス達彦"
+      ],
+      "album": "AreYouReady",
+      "album_id": "145878091",
+      "duration_secs": 117.375
+    },
+    {
+      "id": "2081636567",
+      "title": "AreYouReady",
+      "artists": [
+        "KAJI"
+      ],
+      "album": "AreYouReady",
+      "album_id": "174623343",
+      "duration_secs": 247.802
+    },
+    {
+      "id": "1826367498",
+      "title": "AreYouReady",
+      "artists": [
+        "Bam",
+        "Vic Almighty"
+      ],
+      "album": "AreYouReady",
+      "album_id": "124177198",
+      "duration_secs": 112.796
+    },
+    {
+      "id": "2658507906",
+      "title": "areyouready",
+      "artists": [
+        "3MITSU",
+        "scape.ghst"
+      ],
+      "album": "4THELOVE",
+      "album_id": "257511380",
+      "duration_secs": 68.219
+    },
+    {
+      "id": "2755313366",
+      "title": "Areyouready",
+      "artists": [
+        "delbuo"
+      ],
+      "album": "tooeasyzg",
+      "album_id": "288374886",
+      "duration_secs": 79.656
+    },
+    {
+      "id": "2682866720",
+      "title": "AREYOUREADY",
+      "artists": [
+        "Panca Borneo"
+      ],
+      "album": "AREYOUREADY",
+      "album_id": "265286737",
+      "duration_secs": 188.307
+    },
+    {
+      "id": "2146583951",
+      "title": "areyouready",
+      "artists": [
+        "chordandjocks"
+      ],
+      "album": "RUSH",
+      "album_id": "192518513",
+      "duration_secs": 68.044
+    },
+    {
+      "id": "3419723674",
+      "title": "AREYOUREADY (feat. cozy!)",
+      "artists": [
+        "UNO+",
+        "cozy!"
+      ],
+      "album": "TheOnlyOne",
+      "album_id": "391938672",
+      "duration_secs": 129.126
+    },
+    {
+      "id": "2602812222",
+      "title": "areyouready",
+      "artists": [
+        "Kei"
+      ],
+      "album": "smell you later!",
+      "album_id": "240552736",
+      "duration_secs": 73.141
+    },
+    {
+      "id": "2110668571",
+      "title": "Areyouready",
+      "artists": [
+        "P021"
+      ],
+      "album": "Areyouready",
+      "album_id": "181620953",
+      "duration_secs": 173.897
+    }
+  ],
+  "expect": {
+    "picked_id": ""
+  },
+  "judge": {
+    "title_accepted": false,
+    "artist_matches": false,
+    "source_duration_delta_pct": -1,
+    "version_tags_ok": false,
+    "live_mismatch": false,
+    "plausible_alternatives": 0
+  }
+}

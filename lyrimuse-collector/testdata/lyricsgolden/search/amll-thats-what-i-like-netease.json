@@ -1,0 +1,61 @@
+{
+  "id": "amll-thats-what-i-like-netease",
+  "source": "netease",
+  "note": "同名第一层样本 amll-thats-what-i-like 的检索层",
+  "track": {
+    "artist": "Bruno Mars",
+    "title": "That's What I Like",
+    "album": "24K Magic"
+  },
+  "captured_at": "2026-09-04",
+  "query": {
+    "artist": "Bruno Mars",
+    "title": "That's What I Like",
+    "album": "24K Magic",
+    "duration_secs": 206.693
+  },
+  "local_duration_secs": 206.693,
+  "items": [
+    {
+      "id": "441120471",
+      "title": "That's What I Like",
+      "artists": [
+        "Bruno Mars"
+      ],
+      "album": "24K Magic",
+      "album_id": "34898697",
+      "duration_secs": 206.693
+    },
+    {
+      "id": "2083556700",
+      "title": "bruno mars that's what i like - Slowed",
+      "artists": [
+        "Tidiet"
+      ],
+      "album": "Change The World pt.84",
+      "album_id": "175109553",
+      "duration_secs": 250.906
+    },
+    {
+      "id": "2114952998",
+      "title": "That's What I Like",
+      "artists": [
+        "Molotov Cocktail Piano"
+      ],
+      "album": "MCP Performs Bruno Mars: 24K Magic",
+      "album_id": "182636614",
+      "duration_secs": 206.976
+    }
+  ],
+  "expect": {
+    "picked_id": "441120471"
+  },
+  "judge": {
+    "title_accepted": true,
+    "artist_matches": true,
+    "source_duration_delta_pct": 0,
+    "version_tags_ok": true,
+    "live_mismatch": false,
+    "plausible_alternatives": 0
+  }
+}

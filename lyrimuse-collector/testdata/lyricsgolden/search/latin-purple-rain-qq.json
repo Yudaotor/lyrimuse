@@ -1,0 +1,117 @@
+{
+  "id": "latin-purple-rain-qq",
+  "source": "qq",
+  "note": "同名第一层样本 latin-purple-rain 的检索层",
+  "track": {
+    "artist": "Prince \u0026 The Revolution",
+    "title": "Purple Rain",
+    "album": "Purple Rain"
+  },
+  "captured_at": "2026-09-04",
+  "query": {
+    "artist": "Prince \u0026 The Revolution",
+    "title": "Purple Rain",
+    "album": "Purple Rain",
+    "duration_secs": 0
+  },
+  "local_duration_secs": 521,
+  "items": [
+    {
+      "id": "0020Ou8f3eNMo4",
+      "title": "Purple Rain",
+      "artist": "Prince \u0026 The Revolution",
+      "album": "The Hits / The B-Sides (Explicit)",
+      "duration_secs": 520
+    },
+    {
+      "id": "001V6yyy3T2EeS",
+      "title": "Let's Go Crazy",
+      "artist": "Prince \u0026 The Revolution",
+      "album": "4Ever",
+      "duration_secs": 230
+    },
+    {
+      "id": "003ek9qX4G3EXQ",
+      "title": "I Would Die 4 U",
+      "artist": "Prince \u0026 The Revolution",
+      "album": "The Hits / The B-Sides (Explicit)",
+      "duration_secs": 178
+    },
+    {
+      "id": "0004taI03j1XQQ",
+      "title": "Purple Rain",
+      "artist": "Prince/The Revolution",
+      "album": "Purple Rain (Explicit)",
+      "duration_secs": 520
+    },
+    {
+      "id": "003CSAvv08SvmB",
+      "title": "Purple Rain",
+      "artist": "A-Lin",
+      "album": "幸福了 然后呢",
+      "duration_secs": 264
+    },
+    {
+      "id": "002NWmSa0HeZFo",
+      "title": "When Doves Cry",
+      "artist": "Prince/The Revolution",
+      "album": "Purple Rain (Explicit)",
+      "duration_secs": 354
+    },
+    {
+      "id": "000rGKsq349Jp5",
+      "title": "Purple Rain (Live in Syracuse, NY, 3/30/85)",
+      "artist": "Prince",
+      "album": "Prince and the Revolution: Live",
+      "duration_secs": 1165
+    },
+    {
+      "id": "002KtMpx34CVEh",
+      "title": "Purple Rain (Live)",
+      "artist": "Prince",
+      "album": "Welcome To The 1980s (Live)",
+      "duration_secs": 432
+    },
+    {
+      "id": "003vQ7Zx0Eobss",
+      "title": "Purple Rain (Live)",
+      "artist": "Prince",
+      "album": "Live 1991-1993",
+      "duration_secs": 261
+    },
+    {
+      "id": "004bjC6u0mzgwD",
+      "title": "Purple Rain (Live In Syracuse, March 30, 1985 - 2022 Remaster)",
+      "artist": "Prince/Prince And The Revolution",
+      "album": "Prince and The Revolution: Live (2022 Remaster) [Explicit]",
+      "duration_secs": 1134
+    }
+  ],
+  "expect": {
+    "picked_id": "0004taI03j1XQQ",
+    "accepted_strict": [
+      "0020Ou8f3eNMo4",
+      "0004taI03j1XQQ",
+      "000rGKsq349Jp5",
+      "002KtMpx34CVEh",
+      "003vQ7Zx0Eobss",
+      "004bjC6u0mzgwD"
+    ],
+    "accepted_loose": [
+      "0020Ou8f3eNMo4",
+      "0004taI03j1XQQ",
+      "000rGKsq349Jp5",
+      "002KtMpx34CVEh",
+      "003vQ7Zx0Eobss"
+    ],
+    "picked_no_album": "0020Ou8f3eNMo4"
+  },
+  "judge": {
+    "title_accepted": true,
+    "artist_matches": true,
+    "source_duration_delta_pct": 0.19193857965451055,
+    "version_tags_ok": true,
+    "live_mismatch": false,
+    "plausible_alternatives": 0
+  }
+}

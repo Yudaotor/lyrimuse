@@ -1,0 +1,114 @@
+{
+  "id": "native-earth-song-qq",
+  "source": "qq",
+  "note": "同名第一层样本 native-earth-song 的检索层",
+  "track": {
+    "artist": "Michael Jackson",
+    "title": "Earth Song",
+    "album": "HIStory Continues"
+  },
+  "captured_at": "2026-09-04",
+  "query": {
+    "artist": "Michael Jackson",
+    "title": "Earth Song",
+    "album": "HIStory Continues",
+    "duration_secs": 0
+  },
+  "local_duration_secs": 405.9339904785156,
+  "items": [
+    {
+      "id": "0010M8Lp23Lqct",
+      "title": "Earth Song",
+      "artist": "Michael Jackson",
+      "album": "HIStory - PAST, PRESENT AND FUTURE - BOOK I (Explicit)",
+      "duration_secs": 405
+    },
+    {
+      "id": "004bwvBJ3TjHoM",
+      "title": "Earth Song 地球之歌",
+      "artist": "Michael Jackson",
+      "album": "Top 10 on Charts 2 (全美冠軍排行榜)",
+      "duration_secs": 300
+    },
+    {
+      "id": "001NSdAy0u4euA",
+      "title": "Earth Song",
+      "artist": "Michael Jackson",
+      "album": "Die Groessten Nr 1 Hits",
+      "duration_secs": 301
+    },
+    {
+      "id": "0006fkf80Hafu5",
+      "title": "Earth Song (Radio Edit)",
+      "artist": "Michael Jackson",
+      "album": "Number Ones",
+      "duration_secs": 301
+    },
+    {
+      "id": "001J16wc3Xu7AG",
+      "title": "Earth Song (Single Version)",
+      "artist": "Michael Jackson",
+      "album": "Michael Jackson's Vision",
+      "duration_secs": 405
+    },
+    {
+      "id": "002P5kP80d88Vp",
+      "title": "Billie Jean",
+      "artist": "Michael Jackson",
+      "album": "Thriller",
+      "duration_secs": 294
+    },
+    {
+      "id": "002qI4qz4XTBUY",
+      "title": "Beat It",
+      "artist": "Michael Jackson",
+      "album": "Thriller",
+      "duration_secs": 258
+    },
+    {
+      "id": "002hZlLf3I2NZg",
+      "title": "We Are the World (Demo)",
+      "artist": "Michael Jackson",
+      "album": "Michael Jackson: The Ultimate Collection",
+      "duration_secs": 319
+    },
+    {
+      "id": "004X5Y6027t5am",
+      "title": "Smooth Criminal",
+      "artist": "Michael Jackson",
+      "album": "Bad",
+      "duration_secs": 260
+    },
+    {
+      "id": "004G1Kit4X63zp",
+      "title": "You Are Not Alone",
+      "artist": "Michael Jackson",
+      "album": "HIStory - PAST, PRESENT AND FUTURE - BOOK I (Explicit)",
+      "duration_secs": 344
+    }
+  ],
+  "expect": {
+    "picked_id": "0010M8Lp23Lqct",
+    "accepted_strict": [
+      "0010M8Lp23Lqct",
+      "001NSdAy0u4euA",
+      "0006fkf80Hafu5",
+      "001J16wc3Xu7AG"
+    ],
+    "accepted_loose": [
+      "0010M8Lp23Lqct",
+      "001NSdAy0u4euA",
+      "0006fkf80Hafu5",
+      "001J16wc3Xu7AG"
+    ],
+    "picked_no_album": "0010M8Lp23Lqct"
+  },
+  "judge": {
+    "title_accepted": true,
+    "artist_matches": true,
+    "source_duration_delta_pct": 0.2300843241568994,
+    "version_tags_ok": true,
+    "live_mismatch": false,
+    "plausible_alternatives": 0
+  }
+}

@@ -1,0 +1,118 @@
+{
+  "id": "yue-shall-we-talk-qq",
+  "source": "qq",
+  "note": "同名第一层样本 yue-shall-we-talk 的检索层",
+  "track": {
+    "artist": "陈奕迅",
+    "title": "Shall We Talk",
+    "album": "陈奕迅 国语精选"
+  },
+  "captured_at": "2026-09-04",
+  "query": {
+    "artist": "陈奕迅",
+    "title": "Shall We Talk",
+    "album": "陈奕迅 国语精选",
+    "duration_secs": 0
+  },
+  "local_duration_secs": 227.277,
+  "items": [
+    {
+      "id": "003OGTD62x8QrT",
+      "title": "Shall We Talk",
+      "artist": "陈奕迅",
+      "album": "Shall We Dance? Shall We Talk!",
+      "duration_secs": 227
+    },
+    {
+      "id": "003VQrF72a0DGb",
+      "title": "Shall We Talk (Tre Lune MMXIX)",
+      "artist": "陈奕迅",
+      "album": "Shall We Talk (Tre Lune MMXIX)",
+      "duration_secs": 261
+    },
+    {
+      "id": "0007KebF3tyOV5",
+      "title": "Shall We Talk (国语)",
+      "artist": "陈奕迅",
+      "album": "七",
+      "duration_secs": 227
+    },
+    {
+      "id": "000vgi9j1CbcET",
+      "title": "Shall We Talk (Live)",
+      "artist": "陈奕迅",
+      "album": "Get A Life (Live)",
+      "duration_secs": 234
+    },
+    {
+      "id": "001vFNkB0HLUVl",
+      "title": "Shall We Talk (Live)",
+      "artist": "陈奕迅",
+      "album": "Third Encounter Live",
+      "duration_secs": 371
+    },
+    {
+      "id": "004ZVASH1GhWLA",
+      "title": "Shall We Talk (玉蝴蝶Intro)",
+      "artist": "陈奕迅",
+      "album": "The Easy Ride Live",
+      "duration_secs": 235
+    },
+    {
+      "id": "003aAPj81VWrbL",
+      "title": "富士山下",
+      "artist": "陈奕迅",
+      "album": "What's Going On...?",
+      "duration_secs": 259
+    },
+    {
+      "id": "004CU50m2JjBjr",
+      "title": "单车",
+      "artist": "陈奕迅",
+      "album": "Shall We Dance? Shall We Talk!",
+      "duration_secs": 211
+    },
+    {
+      "id": "004IsqcS2BilGv",
+      "title": "你的背包",
+      "artist": "陈奕迅",
+      "album": "Special Thanks To…",
+      "duration_secs": 237
+    },
+    {
+      "id": "0029Zemv0kR1ur",
+      "title": "葡萄成熟时",
+      "artist": "陈奕迅",
+      "album": "U 87",
+      "duration_secs": 277
+    }
+  ],
+  "expect": {
+    "picked_id": "003OGTD62x8QrT",
+    "accepted_strict": [
+      "003OGTD62x8QrT",
+      "003VQrF72a0DGb",
+      "0007KebF3tyOV5",
+      "000vgi9j1CbcET",
+      "001vFNkB0HLUVl",
+      "004ZVASH1GhWLA"
+    ],
+    "accepted_loose": [
+      "003OGTD62x8QrT",
+      "003VQrF72a0DGb",
+      "0007KebF3tyOV5",
+      "000vgi9j1CbcET",
+      "001vFNkB0HLUVl",
+      "004ZVASH1GhWLA"
+    ],
+    "picked_no_album": "003OGTD62x8QrT"
+  },
+  "judge": {
+    "title_accepted": true,
+    "artist_matches": true,
+    "source_duration_delta_pct": 0.12187770869907066,
+    "version_tags_ok": true,
+    "live_mismatch": false,
+    "plausible_alternatives": 0
+  }
+}

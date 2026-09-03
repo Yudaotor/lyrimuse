@@ -1,0 +1,348 @@
+{
+  "id": "latin-purple-rain-netease",
+  "source": "netease",
+  "note": "同名第一层样本 latin-purple-rain 的检索层",
+  "track": {
+    "artist": "Prince \u0026 The Revolution",
+    "title": "Purple Rain",
+    "album": "Purple Rain"
+  },
+  "captured_at": "2026-09-04",
+  "query": {
+    "artist": "Prince \u0026 The Revolution",
+    "title": "Purple Rain",
+    "album": "Purple Rain",
+    "duration_secs": 521
+  },
+  "local_duration_secs": 521,
+  "items": [
+    {
+      "id": "21393066",
+      "title": "Purple Rain",
+      "artists": [
+        "Prince",
+        "The Revolution"
+      ],
+      "album": "Purple Rain",
+      "album_id": "1974771",
+      "duration_secs": 521.866
+    },
+    {
+      "id": "21393383",
+      "title": "Purple Rain",
+      "artists": [
+        "Prince",
+        "The Revolution"
+      ],
+      "album": "The Hits / The B-Sides",
+      "album_id": "1974815",
+      "duration_secs": 521.866
+    },
+    {
+      "id": "1951080882",
+      "title": "Purple Rain (Live In Syracuse, March 30, 1985 - 2022 Remaster)",
+      "artists": [
+        "Prince",
+        "The Revolution"
+      ],
+      "album": "Prince and The Revolution: Live (2022 Remaster)",
+      "album_id": "145617713",
+      "duration_secs": 1134.178
+    },
+    {
+      "id": "26849795",
+      "title": "Purple Rain",
+      "artists": [
+        "Prince",
+        "The Revolution"
+      ],
+      "album": "Kuschelrock - Lovesongs of the 80's",
+      "album_id": "2566192",
+      "duration_secs": 242
+    },
+    {
+      "id": "1447931689",
+      "title": "Purple Rain (Live in Syracuse, NY, 3/30/85)",
+      "artists": [
+        "Prince",
+        "The Revolution"
+      ],
+      "album": "Prince and the Revolution: Live",
+      "album_id": "89414994",
+      "duration_secs": 1165.975
+    },
+    {
+      "id": "1331865544",
+      "title": "Purple Rain (2015 Paisley Park Remaster)",
+      "artists": [
+        "The Revolution"
+      ],
+      "album": "Purple Rain (Deluxe Edition)",
+      "album_id": "74811129",
+      "duration_secs": 524.653
+    },
+    {
+      "id": "2637213464",
+      "title": "Purple Rain",
+      "artists": [
+        "Prince",
+        "The Revolution"
+      ],
+      "album": "Syracuse 1985 (HQ 2024 Remastered)",
+      "album_id": "250932789",
+      "duration_secs": 1167.373
+    },
+    {
+      "id": "442898774",
+      "title": "Purple Rain",
+      "artists": [
+        "Prince",
+        "The Revolution"
+      ],
+      "album": "4Ever",
+      "album_id": "35012013",
+      "duration_secs": 520.786
+    },
+    {
+      "id": "31062474",
+      "title": "Purple Rain",
+      "artists": [
+        "Prince",
+        "The Revolution"
+      ],
+      "album": "Late Night Tales: At the Movies",
+      "album_id": "3111061",
+      "duration_secs": 295
+    },
+    {
+      "id": "485992525",
+      "title": "Purple Rain (2015 Paisley Park Remaster)",
+      "artists": [
+        "Prince",
+        "The Revolution"
+      ],
+      "album": "Purple Rain (Deluxe Expanded Edition)",
+      "album_id": "35630864",
+      "duration_secs": 524.653
+    },
+    {
+      "id": "21393064",
+      "title": "I Would Die 4 U",
+      "artists": [
+        "Prince",
+        "The Revolution"
+      ],
+      "album": "Purple Rain",
+      "album_id": "1974771",
+      "duration_secs": 169.666
+    },
+    {
+      "id": "26692056",
+      "title": "Purple Rain (Aus ''purple Rain)",
+      "artists": [
+        "Prince",
+        "The Revolution"
+      ],
+      "album": "Mission Hollywood Die Groessten Filmhits Zur TV-Serien",
+      "album_id": "2546604",
+      "duration_secs": 242.599
+    },
+    {
+      "id": "21393058",
+      "title": "Let's Go Crazy",
+      "artists": [
+        "Prince",
+        "The Revolution"
+      ],
+      "album": "Purple Rain",
+      "album_id": "1974771",
+      "duration_secs": 279.24
+    },
+    {
+      "id": "5104554",
+      "title": "Purple Rain",
+      "artists": [
+        "Prince",
+        "The Revolution"
+      ],
+      "album": "Brit Awards 2010",
+      "album_id": "504223",
+      "duration_secs": 319
+    },
+    {
+      "id": "21393061",
+      "title": "Computer Blue",
+      "artists": [
+        "Prince",
+        "The Revolution"
+      ],
+      "album": "Purple Rain",
+      "album_id": "1974771",
+      "duration_secs": 239.506
+    },
+    {
+      "id": "1312622335",
+      "title": "Purple Rain (Live)",
+      "artists": [
+        "Prince",
+        "The Revolution"
+      ],
+      "album": "On Parade in '86 (Live)",
+      "album_id": "73599035",
+      "duration_secs": 721.449
+    },
+    {
+      "id": "3316905341",
+      "title": "Pop Life (Extended Version) [2025 Remaster]",
+      "artists": [
+        "Prince \u0026 The Revolution"
+      ],
+      "album": "Pop Life (Extended Version) [2025 Remaster]",
+      "album_id": "350064369",
+      "duration_secs": 546.871
+    },
+    {
+      "id": "21393037",
+      "title": "Purple Rain",
+      "artists": [
+        "Prince",
+        "The Revolution"
+      ],
+      "album": "The Hits 2",
+      "album_id": "1974766",
+      "duration_secs": 520.786
+    },
+    {
+      "id": "3393978542",
+      "title": "Prince \u0026 The Revolution",
+      "artists": [
+        "商用利用可著作権フリー音楽堂"
+      ],
+      "album": "Trashy Comic",
+      "album_id": "381797690",
+      "duration_secs": 174.36
+    },
+    {
+      "id": "23680248",
+      "title": "Purple Rain (Short Version)",
+      "artists": [
+        "Prince \u0026 The Revolution"
+      ],
+      "album": "American Anthems II",
+      "album_id": "2145338",
+      "duration_secs": 249
+    },
+    {
+      "id": "1331870239",
+      "title": "Our Destiny / Roadhouse Garden",
+      "artists": [
+        "The Revolution"
+      ],
+      "album": "Purple Rain (Deluxe Edition)",
+      "album_id": "74811129",
+      "duration_secs": 385.409
+    },
+    {
+      "id": "31745184",
+      "title": "Purple Rain",
+      "artists": [
+        "The Revolution"
+      ],
+      "album": "The Very Best of Prince",
+      "album_id": "3132615",
+      "duration_secs": 521.866
+    },
+    {
+      "id": "1331870235",
+      "title": "Darling Nikki (2015 Paisley Park Remaster)",
+      "artists": [
+        "The Revolution"
+      ],
+      "album": "Purple Rain (Deluxe Edition)",
+      "album_id": "74811129",
+      "duration_secs": 255.32
+    },
+    {
+      "id": "1331865540",
+      "title": "Let's Go Crazy (2015 Paisley Park Remaster)",
+      "artists": [
+        "The Revolution"
+      ],
+      "album": "Purple Rain (Deluxe Edition)",
+      "album_id": "74811129",
+      "duration_secs": 278.256
+    },
+    {
+      "id": "1331870236",
+      "title": "I Would Die 4 U (2015 Paisley Park Remaster)",
+      "artists": [
+        "The Revolution"
+      ],
+      "album": "Purple Rain (Deluxe Edition)",
+      "album_id": "74811129",
+      "duration_secs": 169.053
+    },
+    {
+      "id": "5214279",
+      "title": "Purple Rain",
+      "artists": [
+        "The Revolution",
+        "Prince"
+      ],
+      "album": "The All Time Greatest Pop Hits Of The Last 3 Decades",
+      "album_id": "509426",
+      "duration_secs": 520.786
+    },
+    {
+      "id": "410607836",
+      "title": "Purple Rain",
+      "artists": [
+        "The Revolution"
+      ],
+      "album": "Ultimate",
+      "album_id": "34668081",
+      "duration_secs": 521.866
+    },
+    {
+      "id": "2014711416",
+      "title": "Purple Rain",
+      "artists": [
+        "The Revolution"
+      ],
+      "album": "Prince \u0026 The Revolution - WMMR FM Broadcast The Carrier Dome Syracuse NY 30th March 1985 Part Two.",
+      "album_id": "158285735",
+      "duration_secs": 1167.373
+    },
+    {
+      "id": "1331865542",
+      "title": "When Doves Cry (2015 Paisley Park Remaster)",
+      "artists": [
+        "The Revolution"
+      ],
+      "album": "Purple Rain (Deluxe Edition)",
+      "album_id": "74811129",
+      "duration_secs": 353.453
+    },
+    {
+      "id": "1331865541",
+      "title": "Computer Blue (2015 Paisley Park Remaster)",
+      "artists": [
+        "The Revolution"
+      ],
+      "album": "Purple Rain (Deluxe Edition)",
+      "album_id": "74811129",
+      "duration_secs": 238.6
+    }
+  ],
+  "expect": {
+    "picked_id": "21393066"
+  },
+  "judge": {
+    "title_accepted": true,
+    "artist_matches": true,
+    "source_duration_delta_pct": 0.16621880998080335,
+    "version_tags_ok": true,
+    "live_mismatch": false,
+    "plausible_alternatives": 0
+  }
+}

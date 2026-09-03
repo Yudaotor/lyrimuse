@@ -1,0 +1,112 @@
+{
+  "id": "reject-plain-iwantyou-qq",
+  "source": "qq",
+  "note": "同名第一层样本 reject-plain-iwantyou 的检索层",
+  "track": {
+    "artist": "蛋堡",
+    "title": "I Want You",
+    "album": "月光"
+  },
+  "captured_at": "2026-09-04",
+  "query": {
+    "artist": "蛋堡",
+    "title": "I Want You",
+    "album": "月光",
+    "duration_secs": 0
+  },
+  "local_duration_secs": 243.5290069580078,
+  "items": [
+    {
+      "id": "001zgnla3AWIbe",
+      "title": "I Want You",
+      "artist": "蛋堡",
+      "album": "月光",
+      "duration_secs": 246
+    },
+    {
+      "id": "000tvo4124CCa5",
+      "title": "I Want You",
+      "artist": "SHINee",
+      "album": "‘The Story of Light’ EP.2 - The 6th Album",
+      "duration_secs": 184
+    },
+    {
+      "id": "001AfEC23jx6wJ",
+      "title": "I Want You (Japanese Ver.)",
+      "artist": "SHINee",
+      "album": "Sunny Side",
+      "duration_secs": 185
+    },
+    {
+      "id": "003QWrbv14Q8Ir",
+      "title": "I Want You (DJ 阿若版)",
+      "artist": "蛋堡",
+      "duration_secs": 157
+    },
+    {
+      "id": "001KCrRN4GtA8l",
+      "title": "关于小熊",
+      "artist": "蛋堡",
+      "album": "收敛水",
+      "duration_secs": 316
+    },
+    {
+      "id": "001V0Spj12efwE",
+      "title": "偷偷",
+      "artist": "蛋堡/阎韦伶",
+      "album": "Winter Sweet",
+      "duration_secs": 248
+    },
+    {
+      "id": "0039PFRT0W22Oi",
+      "title": "I Wanted You",
+      "artist": "Ina Wroldsen",
+      "album": "Suddenly",
+      "duration_secs": 233
+    },
+    {
+      "id": "0039JEXJ3eCu5U",
+      "title": "Hit the Rhyme",
+      "artist": "蛋堡",
+      "album": "收敛水",
+      "duration_secs": 300
+    },
+    {
+      "id": "002oUhLC2AWTEB",
+      "title": "过程",
+      "artist": "蛋堡",
+      "album": "月光",
+      "duration_secs": 288
+    },
+    {
+      "id": "0029p1GI3JiS3p",
+      "title": "Trap (Chinese Ver.)",
+      "artist": "HENRY刘宪华/泰民",
+      "album": "The 1st Mini Album 'Trap'",
+      "duration_secs": 227
+    }
+  ],
+  "album_lookup": {
+    "003QWrbv14Q8Ir": ""
+  },
+  "expect": {
+    "picked_id": "001zgnla3AWIbe",
+    "accepted_strict": [
+      "001zgnla3AWIbe",
+      "003QWrbv14Q8Ir"
+    ],
+    "accepted_loose": [
+      "001zgnla3AWIbe",
+      "003QWrbv14Q8Ir"
+    ],
+    "picked_no_album": "001zgnla3AWIbe"
+  },
+  "judge": {
+    "title_accepted": true,
+    "artist_matches": true,
+    "source_duration_delta_pct": 1.014660665215239,
+    "version_tags_ok": true,
+    "live_mismatch": false,
+    "plausible_alternatives": 0
+  }
+}

@@ -1,0 +1,121 @@
+{
+  "id": "reject-lang-bestfriend-kugou",
+  "source": "kugou",
+  "note": "同名第一层样本 reject-lang-bestfriend 的检索层",
+  "track": {
+    "artist": "Musiq Soulchild",
+    "title": "Bestfriend",
+    "album": "Juslisen"
+  },
+  "captured_at": "2026-09-04",
+  "query": {
+    "artist": "Musiq Soulchild",
+    "title": "Bestfriend",
+    "album": "Juslisen",
+    "duration_secs": 261
+  },
+  "local_duration_secs": 261,
+  "items": [
+    {
+      "id": "bdd99f313a78f5f0d1f1b32297f268a8",
+      "title": "Bestfriend",
+      "artist": "Musiq Soulchild",
+      "album": "Juslisen (Special Edition)",
+      "album_id": "45368630",
+      "duration_secs": 261,
+      "language": "英语"
+    },
+    {
+      "id": "143c538792a7a8344ac9157fdbd516f4",
+      "title": "Best Friend (Explicit)",
+      "artist": "Rex Orange County、Alex O'Connor、Ben Ash",
+      "album": "Best Friend (Explicit)",
+      "album_id": "18058040",
+      "duration_secs": 262,
+      "language": "英语"
+    },
+    {
+      "id": "76567dcee8069447cd006e78a094276f",
+      "title": "Best Friend (feat. Doja Cat, Jamie \u0026 CHANMINA)(Remix|Explicit)",
+      "artist": "Saweetie、Doja Cat、ちゃんみな、JAMIE",
+      "album": "Best Friend (feat. Doja Cat) [Remix EP] [Extended Edition] [Explicit]",
+      "album_id": "43859256",
+      "duration_secs": 206,
+      "language": "英语"
+    },
+    {
+      "id": "1aa8de3873a49c7f809f8d62dd96ac90",
+      "title": "Best Friend",
+      "artist": "Toy-Box",
+      "album": "FanTastic",
+      "album_id": "586462",
+      "duration_secs": 212,
+      "language": "英语"
+    },
+    {
+      "id": "73ba7c43d8d744da50880bfbbd0cd90c",
+      "title": "Best Friend",
+      "artist": "DJ江海",
+      "album": "addiction（Slowed）",
+      "album_id": "202414361",
+      "duration_secs": 172,
+      "language": "英语"
+    },
+    {
+      "id": "e2e6b5a110a76975ee924fe3fbb96fc5",
+      "title": "Best Friend",
+      "artist": "西野カナ",
+      "album": "ベストフレンド",
+      "album_id": "44780707",
+      "duration_secs": 319,
+      "language": "日语"
+    },
+    {
+      "id": "baa6909f4445486471e313641c9bca36",
+      "title": "Best Friend",
+      "artist": "Saweetie、Doja Cat",
+      "album": "Best Friend (feat. Doja Cat)",
+      "album_id": "45880257",
+      "duration_secs": 155,
+      "language": "英语"
+    },
+    {
+      "id": "5829e372b2c669a696402d2d8a9fab43",
+      "title": "Best Friend",
+      "artist": "Jason Chen",
+      "album": "Best Friend",
+      "album_id": "32135508",
+      "duration_secs": 233,
+      "language": "英语"
+    },
+    {
+      "id": "76cc8253912ca0502f7e139e17be75c0",
+      "title": "BEST FRIEND",
+      "artist": "児島未散",
+      "album": "BEST FRIEND",
+      "album_id": "725655",
+      "duration_secs": 295,
+      "language": "日语"
+    },
+    {
+      "id": "7fc3b9504330184f6a07bdb261826e90",
+      "title": "BEST FRIEND",
+      "artist": "iKON",
+      "album": "Return",
+      "album_id": "8323797",
+      "duration_secs": 230,
+      "language": "韩语"
+    }
+  ],
+  "expect": {
+    "picked_id": "bdd99f313a78f5f0d1f1b32297f268a8"
+  },
+  "judge": {
+    "title_accepted": true,
+    "artist_matches": true,
+    "source_duration_delta_pct": 0,
+    "version_tags_ok": true,
+    "live_mismatch": false,
+    "plausible_alternatives": 0
+  }
+}

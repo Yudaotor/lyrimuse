@@ -506,6 +506,145 @@ func stripNeteaseEscapedApostrophes(s string) string {
 	return strings.ReplaceAll(s, `\'`, "'")
 }
 
+// neSearchSong 是网易云 /api/search 返回的一条歌曲(只声明用得上的字段)。2026-09-04 从
+// resolveNeteaseInfo 的局部类型提到包级,跟 neteasePickSong 一起——理由见那边。
+type neSearchSong struct {
+	ID      int64  `json:"id"`
+	Name    string `json:"name"`
+	Artists []struct {
+		Name string `json:"name"`
+	} `json:"artists"`
+	Album struct {
+		Name string `json:"name"`
+		// ID:专辑 id。给"提前解析同专辑其它曲目"用 —— 拿的是 **pick() 选中的这首歌
+		// 自己所属**的专辑,不是拿专辑名去另搜一次,所以天然不会撞上同名专辑/精选集
+		// (实测搜 "Michael Jackson Bad",前三条全是套装:King of Pop 48 首、
+		// The Collection 76 首,原专辑排到第 13 条)。
+		ID int64 `json:"id"`
+	} `json:"album"`
+	// Duration:搜索结果自带的曲长(毫秒)。透传给候选,不参与本文件内的任何挑选逻辑。
+	Duration float64 `json:"duration"`
+}
+
+// neteasePickSong 从一批搜索结果里挑出"就是本地这首歌"的那条;挑不出返回 nil。原是
+// resolveNeteaseInfo 里的 pick 闭包,2026-09-04 原样提成包级纯函数,让检索层金标
+// (lyricsgolden_search_test.go)能拿真实搜索结果直接喂它——跟 enrich.go 的
+// rankLyricSourceResults 同一个理由:测试跑生产同一份代码,不重抄骨架。判据与分层的
+// 来龙去脉见下面各段注释(逐字原文搬入,一字未改)。
+func neteasePickSong(songs []neSearchSong, artist, title, album string, durationSecs float64) *neSearchSong {
+	type cand struct {
+		s  *neSearchSong
+		sc int
+	}
+	var exactCands, looseCands []cand
+	for i := range songs {
+		s := &songs[i]
+		if !lyricTitleAccepted(s.Name, title) {
+			continue
+		}
+		artistMatch := false
+		for _, a := range s.Artists {
+			if artistMatches(a.Name, artist) {
+				artistMatch = true
+				break
+			}
+		}
+		if !artistMatch {
+			continue
+		}
+		sc := albumScore(s.Album.Name, album)
+		if normLoose(s.Name) == normLoose(title) {
+			exactCands = append(exactCands, cand{s, sc})
+		} else {
+			looseCands = append(looseCands, cand{s, sc})
+		}
+	}
+	// 时长+专辑锚定档(v8,2026-09-01,陈奕迅《孤独探戈 (Live)》案),排在既有分层
+	// **之前**:曲库里混着同一首歌的多个实体版本时,"精确同名优先"这条排序对
+	// 「源平台在曲名里多标注了演奏方式」的正确版本是盲的 —— 本地《The Easy Ride
+	// 演唱会 (Live)》的「孤独探戈 (Live)」,网易云库里正确版本叫「孤独探戈(Acoustic
+	// Piano)(Live)」(专辑对、自报时长 215.4s 与本地 215.373s 逐位吻合),却因为标题
+	// 不精确落进 looseCands,被三条**错场次**的精确同名(Get A Life sc=1/Third
+	// Encounter sc=1/拉阔压轴 sc=0)按"exactCands 优先"永远压住 —— pick 原来完全
+	// 不看时长,而时长 ≤1% 恰恰是"同一次录音"的最硬证据(第 14 条三角判据同一档)。
+	//
+	// 判据(全部成立才接管):①sameRecordingDespiteVersionTags 四道门(时长 ≤1% +
+	// 专辑亲和 + 不缺本地限定词 + 多出的词全在 acoustic 家族白名单 —— 伴奏/粤语/国语
+	// 这类"时长相同但确是另一次录音"的词永不锚定,见 match.go 那边的注释);
+	// ②它的专辑分**严格高于**其它全部已通过校验的候选(证据必须是"唯独它对得上",
+	// 不是"大家都差不多");③锚定候选唯一(两条都满足①且专辑分打平 → 有歧义,放弃)。
+	// durationSecs 未知(=0,预取路径)时整档关闭,行为与旧版逐字节一致。
+	if durationSecs > 0 {
+		all := append(append([]cand{}, exactCands...), looseCands...)
+		var anchor *neSearchSong
+		anchorSc := -1
+		for _, c := range all {
+			if !sameRecordingDespiteVersionTags(title, album, durationSecs, c.s.Name, c.s.Album.Name, c.s.Duration/1000) {
+				continue
+			}
+			switch {
+			case c.sc > anchorSc:
+				anchor, anchorSc = c.s, c.sc
+			case c.sc == anchorSc:
+				anchor = nil // 两条锚定候选专辑分打平,有歧义,这一档整体放弃
+			}
+		}
+		if anchor != nil && anchorSc >= 1 {
+			strictlyHighest := true
+			for _, c := range all {
+				if c.s != anchor && c.sc >= anchorSc {
+					strictlyHighest = false
+					break
+				}
+			}
+			if strictlyHighest {
+				return anchor
+			}
+		}
+	}
+	// strict:looseCands 传 true——这批候选标题本身就带着"(Extended)"/"(Live)"/
+	// "(Instrumental)"这类版本限定词,天然就是"另一个版本",唯一候选也不能免检直接信。
+	// exactCands 传 false,保留"唯一精确同名候选、专辑名对不上也认"的既有行为,不能收紧。
+	bestOf := func(cands []cand, strict bool) *neSearchSong {
+		if len(cands) == 1 && !(strict && album != "" && cands[0].sc == 0) {
+			return cands[0].s // 唯一候选,没有歧义,直接信
+		}
+		// 多条候选(有歧义)→ 要求专辑分>0 才采信,选分最高的;都是0就整体放弃。
+		var best *neSearchSong
+		bestSc := 0
+		for _, c := range cands {
+			if album != "" && c.sc == 0 {
+				continue
+			}
+			if best == nil || c.sc > bestSc {
+				best, bestSc = c.s, c.sc
+			}
+		}
+		return best
+	}
+	// exactCands 优先,但优先到"没有 bestOf 选得出的"时不能直接放弃返回 nil——网易云上
+	// 常年混着跟目标专辑无关、却标题恰好逐字同名的现场/盗版录音,这类候选一多就会让
+	// exactCands 内部因"有歧义+都对不上专辑"被 bestOf 拒绝返回 nil;但 looseCands 里
+	// 那条真正官方专辑版本(标题带"(Remaster)"等后缀、专辑分却明确对得上)本来是能唯一
+	// 确定的,不该因为 exactCands 抢先返回 nil 就被连带放弃。
+	if len(exactCands) > 0 {
+		if c := bestOf(exactCands, false); c != nil {
+			return c
+		}
+	}
+	// looseCands 的"唯一候选直接信"不能像 exactCands 一样无条件生效——"查询词带上
+	// 本地专辑名"这条优化(见上面 queries 构造处注释)可能让网易云的搜索排序把其它候选
+	// 挤出结果窗口,只剩一条恰好通过标题/歌手校验、实为错误版本的候选,造成"看似唯一、
+	// 其实只是被这次查询词意外筛剩下"的假象。looseCands 天然都是"标题带版本限定词"的
+	// 候选(不然早被分进 exactCands 了),比 exactCands 更容易出现这种假象,所以收紧成
+	// "本地有专辑名时,唯一候选也必须专辑分>0 才采信",专辑分对不上就整体放弃、交给
+	// QQ 音乐兜底(宁可没有,也不要错,跟这个函数其它几处判断同一个原则)。
+	if len(looseCands) > 0 {
+		return bestOf(looseCands, true)
+	}
+	return nil
+}
+
 func resolveNeteaseInfo(ctx context.Context, artist, title, album string, durationSecs float64) neteaseInfo {
 	cli := &http.Client{Timeout: 4 * time.Second}
 	get := func(u string, v any) error {
@@ -603,23 +742,7 @@ func resolveNeteaseInfo(ctx context.Context, artist, title, album string, durati
 		queries = append(queries, ca+" "+title) // 保留原始作为补充
 	}
 	queries = append(queries, ct+" "+ca)
-	type neSong = struct {
-		ID      int64  `json:"id"`
-		Name    string `json:"name"`
-		Artists []struct {
-			Name string `json:"name"`
-		} `json:"artists"`
-		Album struct {
-			Name string `json:"name"`
-			// ID:专辑 id。给"提前解析同专辑其它曲目"用 —— 拿的是 **pick() 选中的这首歌
-			// 自己所属**的专辑,不是拿专辑名去另搜一次,所以天然不会撞上同名专辑/精选集
-			// (实测搜 "Michael Jackson Bad",前三条全是套装:King of Pop 48 首、
-			// The Collection 76 首,原专辑排到第 13 条)。
-			ID int64 `json:"id"`
-		} `json:"album"`
-		// Duration:搜索结果自带的曲长(毫秒)。透传给候选,不参与本文件内的任何挑选逻辑。
-		Duration float64 `json:"duration"`
-	}
+	type neSong = neSearchSong
 	// 选谁的封面/链接:同名歌里混着别歌手的翻唱/演奏/卡拉OK/同名他人歌。优先级:
 	// ①歌名+歌手都匹配、且专辑分最高(专辑名 loose 相等=100 直接锁定正确专辑版本);
 	// ②歌手名跨平台不一致但专辑强匹配(albumScore>0);③都无 → 返回空,不串错歌手。
@@ -636,117 +759,10 @@ func resolveNeteaseInfo(ctx context.Context, artist, title, album string, durati
 	// 这时候才需要专辑分>0 来确认选的是目标专辑对应的版本,选不出来宁可整体放弃、交给
 	// QQ 音乐兜底,也不要矮子里拔将军选一个不确定对不对版本的候选。
 	pick := func(songs []neSong) *neSong {
-		type cand struct {
-			s  *neSong
-			sc int
+		if lyricSearchItemsTap != nil {
+			lyricSearchItemsTap("netease", artist, title, album, durationSecs, songs)
 		}
-		var exactCands, looseCands []cand
-		for i := range songs {
-			s := &songs[i]
-			if !lyricTitleAccepted(s.Name, title) {
-				continue
-			}
-			artistMatch := false
-			for _, a := range s.Artists {
-				if artistMatches(a.Name, artist) {
-					artistMatch = true
-					break
-				}
-			}
-			if !artistMatch {
-				continue
-			}
-			sc := albumScore(s.Album.Name, album)
-			if normLoose(s.Name) == normLoose(title) {
-				exactCands = append(exactCands, cand{s, sc})
-			} else {
-				looseCands = append(looseCands, cand{s, sc})
-			}
-		}
-		// 时长+专辑锚定档(v8,2026-09-01,陈奕迅《孤独探戈 (Live)》案),排在既有分层
-		// **之前**:曲库里混着同一首歌的多个实体版本时,"精确同名优先"这条排序对
-		// 「源平台在曲名里多标注了演奏方式」的正确版本是盲的 —— 本地《The Easy Ride
-		// 演唱会 (Live)》的「孤独探戈 (Live)」,网易云库里正确版本叫「孤独探戈(Acoustic
-		// Piano)(Live)」(专辑对、自报时长 215.4s 与本地 215.373s 逐位吻合),却因为标题
-		// 不精确落进 looseCands,被三条**错场次**的精确同名(Get A Life sc=1/Third
-		// Encounter sc=1/拉阔压轴 sc=0)按"exactCands 优先"永远压住 —— pick 原来完全
-		// 不看时长,而时长 ≤1% 恰恰是"同一次录音"的最硬证据(第 14 条三角判据同一档)。
-		//
-		// 判据(全部成立才接管):①sameRecordingDespiteVersionTags 四道门(时长 ≤1% +
-		// 专辑亲和 + 不缺本地限定词 + 多出的词全在 acoustic 家族白名单 —— 伴奏/粤语/国语
-		// 这类"时长相同但确是另一次录音"的词永不锚定,见 match.go 那边的注释);
-		// ②它的专辑分**严格高于**其它全部已通过校验的候选(证据必须是"唯独它对得上",
-		// 不是"大家都差不多");③锚定候选唯一(两条都满足①且专辑分打平 → 有歧义,放弃)。
-		// durationSecs 未知(=0,预取路径)时整档关闭,行为与旧版逐字节一致。
-		if durationSecs > 0 {
-			all := append(append([]cand{}, exactCands...), looseCands...)
-			var anchor *neSong
-			anchorSc := -1
-			for _, c := range all {
-				if !sameRecordingDespiteVersionTags(title, album, durationSecs, c.s.Name, c.s.Album.Name, c.s.Duration/1000) {
-					continue
-				}
-				switch {
-				case c.sc > anchorSc:
-					anchor, anchorSc = c.s, c.sc
-				case c.sc == anchorSc:
-					anchor = nil // 两条锚定候选专辑分打平,有歧义,这一档整体放弃
-				}
-			}
-			if anchor != nil && anchorSc >= 1 {
-				strictlyHighest := true
-				for _, c := range all {
-					if c.s != anchor && c.sc >= anchorSc {
-						strictlyHighest = false
-						break
-					}
-				}
-				if strictlyHighest {
-					return anchor
-				}
-			}
-		}
-		// strict:looseCands 传 true——这批候选标题本身就带着"(Extended)"/"(Live)"/
-		// "(Instrumental)"这类版本限定词,天然就是"另一个版本",唯一候选也不能免检直接信。
-		// exactCands 传 false,保留"唯一精确同名候选、专辑名对不上也认"的既有行为,不能收紧。
-		bestOf := func(cands []cand, strict bool) *neSong {
-			if len(cands) == 1 && !(strict && album != "" && cands[0].sc == 0) {
-				return cands[0].s // 唯一候选,没有歧义,直接信
-			}
-			// 多条候选(有歧义)→ 要求专辑分>0 才采信,选分最高的;都是0就整体放弃。
-			var best *neSong
-			bestSc := 0
-			for _, c := range cands {
-				if album != "" && c.sc == 0 {
-					continue
-				}
-				if best == nil || c.sc > bestSc {
-					best, bestSc = c.s, c.sc
-				}
-			}
-			return best
-		}
-		// exactCands 优先,但优先到"没有 bestOf 选得出的"时不能直接放弃返回 nil——网易云上
-		// 常年混着跟目标专辑无关、却标题恰好逐字同名的现场/盗版录音,这类候选一多就会让
-		// exactCands 内部因"有歧义+都对不上专辑"被 bestOf 拒绝返回 nil;但 looseCands 里
-		// 那条真正官方专辑版本(标题带"(Remaster)"等后缀、专辑分却明确对得上)本来是能唯一
-		// 确定的,不该因为 exactCands 抢先返回 nil 就被连带放弃。
-		if len(exactCands) > 0 {
-			if c := bestOf(exactCands, false); c != nil {
-				return c
-			}
-		}
-		// looseCands 的"唯一候选直接信"不能像 exactCands 一样无条件生效——"查询词带上
-		// 本地专辑名"这条优化(见上面 queries 构造处注释)可能让网易云的搜索排序把其它候选
-		// 挤出结果窗口,只剩一条恰好通过标题/歌手校验、实为错误版本的候选,造成"看似唯一、
-		// 其实只是被这次查询词意外筛剩下"的假象。looseCands 天然都是"标题带版本限定词"的
-		// 候选(不然早被分进 exactCands 了),比 exactCands 更容易出现这种假象,所以收紧成
-		// "本地有专辑名时,唯一候选也必须专辑分>0 才采信",专辑分对不上就整体放弃、交给
-		// QQ 音乐兜底(宁可没有,也不要错,跟这个函数其它几处判断同一个原则)。
-		if len(looseCands) > 0 {
-			return bestOf(looseCands, true)
-		}
-		return nil
+		return neteasePickSong(songs, artist, title, album, durationSecs)
 	}
 	// 仅用于统一"歌手名怎么写"的兜底候选:歌名+专辑名都精确对上(albumScore=200)、且这批
 	// 结果里只有唯一一条这样的候选,才采信它的歌手名——即便歌手名字面对不上查询词也认(比如

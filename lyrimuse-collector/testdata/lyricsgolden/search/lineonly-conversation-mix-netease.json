@@ -1,0 +1,332 @@
+{
+  "id": "lineonly-conversation-mix-netease",
+  "source": "netease",
+  "note": "同名第一层样本 lineonly-conversation-mix 的检索层",
+  "track": {
+    "artist": "Backstreet Boys",
+    "title": "All I Have to Give (The Conversation Mix)",
+    "album": "Backstreet's Back"
+  },
+  "captured_at": "2026-09-04",
+  "query": {
+    "artist": "Backstreet Boys",
+    "title": "All I Have to Give (The Conversation Mix)",
+    "album": "Backstreet's Back",
+    "duration_secs": 256.04
+  },
+  "local_duration_secs": 256.04,
+  "items": [
+    {
+      "id": "3950800",
+      "title": "All I Have to Give",
+      "artists": [
+        "Backstreet Boys"
+      ],
+      "album": "Backstreet Boys (US Version)",
+      "album_id": "399674",
+      "duration_secs": 272.744
+    },
+    {
+      "id": "16835304",
+      "title": "All I Have to Give",
+      "artists": [
+        "Backstreet Boys"
+      ],
+      "album": "Backstreet's Back",
+      "album_id": "1550465",
+      "duration_secs": 274.573
+    },
+    {
+      "id": "16835285",
+      "title": "All I Have To Give (A Capella)",
+      "artists": [
+        "Backstreet Boys"
+      ],
+      "album": "Black \u0026 Blue",
+      "album_id": "1550463",
+      "duration_secs": 230.866
+    },
+    {
+      "id": "3950682",
+      "title": "All I Have To Give (Radio Version)",
+      "artists": [
+        "Backstreet Boys"
+      ],
+      "album": "All I Have to Give",
+      "album_id": "399666",
+      "duration_secs": 242.533
+    },
+    {
+      "id": "28452058",
+      "title": "All I Have to Give (The Conversation Mix)",
+      "artists": [
+        "Backstreet Boys"
+      ],
+      "album": "Backstreet's Back",
+      "album_id": "1550465",
+      "duration_secs": 256.04
+    },
+    {
+      "id": "3950651",
+      "title": "All I Have To Give (Album Version)",
+      "artists": [
+        "Backstreet Boys"
+      ],
+      "album": "All I Have to Give",
+      "album_id": "399666",
+      "duration_secs": 274.572
+    },
+    {
+      "id": "3950334",
+      "title": "All I Have To Give (Live)",
+      "artists": [
+        "Backstreet Boys"
+      ],
+      "album": "For the Fans",
+      "album_id": "399637",
+      "duration_secs": 226
+    },
+    {
+      "id": "3950296",
+      "title": "All I Have To Give (A Capella)",
+      "artists": [
+        "Backstreet Boys"
+      ],
+      "album": "Shape of My Heart",
+      "album_id": "399635",
+      "duration_secs": 230.866
+    },
+    {
+      "id": "3950585",
+      "title": "All I Have To Give",
+      "artists": [
+        "Backstreet Boys"
+      ],
+      "album": "A Night Out With The Backstreet Boys",
+      "album_id": "399658",
+      "duration_secs": 296
+    },
+    {
+      "id": "16835262",
+      "title": "All I Have to Give",
+      "artists": [
+        "Backstreet Boys"
+      ],
+      "album": "Greatest Hits - Chapter 1",
+      "album_id": "1550462",
+      "duration_secs": 278.266
+    },
+    {
+      "id": "402911997",
+      "title": "All I Have to Give (A Capella)",
+      "artists": [
+        "Backstreet Boys"
+      ],
+      "album": "Black \u0026 Blue",
+      "album_id": "34491036",
+      "duration_secs": 228.746
+    },
+    {
+      "id": "1998383345",
+      "title": "All I Have To Give (Rob Moore Clean Remix)",
+      "artists": [
+        "Backstreet Boys"
+      ],
+      "album": "All I Have To Give (Rob Moore Clean Remix)",
+      "album_id": "154904336",
+      "duration_secs": 246.804
+    },
+    {
+      "id": "3950663",
+      "title": "All I Have To Give (Davidson Ospina Radio Mix)",
+      "artists": [
+        "Backstreet Boys"
+      ],
+      "album": "All I Have to Give",
+      "album_id": "399666",
+      "duration_secs": 265
+    },
+    {
+      "id": "27918866",
+      "title": "All I Have to Give",
+      "artists": [
+        "Backstreet Boys"
+      ],
+      "album": "The Essential Backstreet Boys",
+      "album_id": "2695092",
+      "duration_secs": 276.758
+    },
+    {
+      "id": "3950657",
+      "title": "All I Have To Give (Part II - The Conversation Mix)",
+      "artists": [
+        "Backstreet Boys"
+      ],
+      "album": "All I Have to Give",
+      "album_id": "399666",
+      "duration_secs": 257.933
+    },
+    {
+      "id": "3950668",
+      "title": "All I Have To Give (Soul Solution Radio Mix)",
+      "artists": [
+        "Backstreet Boys"
+      ],
+      "album": "All I Have to Give",
+      "album_id": "399666",
+      "duration_secs": 222
+    },
+    {
+      "id": "1998383348",
+      "title": "All I Have To Give (Rob Moore Remix)",
+      "artists": [
+        "Backstreet Boys"
+      ],
+      "album": "All I Have To Give (Rob Moore Remix)",
+      "album_id": "154904340",
+      "duration_secs": 362.945
+    },
+    {
+      "id": "16835292",
+      "title": "All I Have To Give",
+      "artists": [
+        "Backstreet Boys"
+      ],
+      "album": "Playlist: The Very Best Of Backstreet Boys",
+      "album_id": "1550464",
+      "duration_secs": 274.573
+    },
+    {
+      "id": "3392747396",
+      "title": "Bottle Up (from PAW Patrol: The Dino Movie)",
+      "artists": [
+        "Backstreet Boys",
+        "PAW Patrol"
+      ],
+      "album": "Bottle Up (from PAW Patrol: The Dino Movie)",
+      "album_id": "381256215",
+      "duration_secs": 217.133
+    },
+    {
+      "id": "16835302",
+      "title": "Everybody (Backstreet's Back)",
+      "artists": [
+        "Backstreet Boys"
+      ],
+      "album": "Backstreet's Back",
+      "album_id": "1550465",
+      "duration_secs": 226.44
+    },
+    {
+      "id": "16835293",
+      "title": "I Want It That Way",
+      "artists": [
+        "Backstreet Boys"
+      ],
+      "album": "Playlist: The Very Best Of Backstreet Boys",
+      "album_id": "1550464",
+      "duration_secs": 213.368
+    },
+    {
+      "id": "3950023",
+      "title": "All I Have to Give",
+      "artists": [
+        "Backstreet Boys"
+      ],
+      "album": "The Hits--Chapter One",
+      "album_id": "399614",
+      "duration_secs": 278.266
+    },
+    {
+      "id": "16835297",
+      "title": "Drowning",
+      "artists": [
+        "Backstreet Boys"
+      ],
+      "album": "Playlist: The Very Best Of Backstreet Boys",
+      "album_id": "1550464",
+      "duration_secs": 268.106
+    },
+    {
+      "id": "3950704",
+      "title": "Everybody (Backstreet's Back) (Instrumental)",
+      "artists": [
+        "Backstreet Boys"
+      ],
+      "album": "All I Have to Give",
+      "album_id": "399666",
+      "duration_secs": 225
+    },
+    {
+      "id": "16835303",
+      "title": "As Long as You Love Me",
+      "artists": [
+        "Backstreet Boys"
+      ],
+      "album": "Backstreet's Back",
+      "album_id": "1550465",
+      "duration_secs": 222.266
+    },
+    {
+      "id": "28183560",
+      "title": "All I Have to Give",
+      "artists": [
+        "Backstreet Boys"
+      ],
+      "album": "Original Album Classics",
+      "album_id": "2740418",
+      "duration_secs": 278.266
+    },
+    {
+      "id": "3950795",
+      "title": "Everybody (Backstreet's Back) [Extended Version]",
+      "artists": [
+        "Backstreet Boys"
+      ],
+      "album": "Backstreet Boys (US Version)",
+      "album_id": "399674",
+      "duration_secs": 287.867
+    },
+    {
+      "id": "3950805",
+      "title": "Anywhere for You",
+      "artists": [
+        "Backstreet Boys"
+      ],
+      "album": "Backstreet Boys (US Version)",
+      "album_id": "399674",
+      "duration_secs": 283
+    },
+    {
+      "id": "3950715",
+      "title": "As Long As You Love Me (Pepperment Jam Remix)",
+      "artists": [
+        "Backstreet Boys"
+      ],
+      "album": "All I Have to Give",
+      "album_id": "399666",
+      "duration_secs": 222
+    },
+    {
+      "id": "3950688",
+      "title": "Everybody (Backstreet's Back) (7\" Version)",
+      "artists": [
+        "Backstreet Boys"
+      ],
+      "album": "All I Have to Give",
+      "album_id": "399666",
+      "duration_secs": 226.44
+    }
+  ],
+  "expect": {
+    "picked_id": "28452058"
+  },
+  "judge": {
+    "title_accepted": true,
+    "artist_matches": true,
+    "source_duration_delta_pct": 0,
+    "version_tags_ok": true,
+    "live_mismatch": false,
+    "plausible_alternatives": 0
+  }
+}

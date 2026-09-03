@@ -1,0 +1,113 @@
+{
+  "id": "corroborated-haoburongyi-kugou",
+  "source": "kugou",
+  "note": "同名第一层样本 corroborated-haoburongyi 的检索层",
+  "track": {
+    "artist": "方大同",
+    "title": "好不容易",
+    "album": "15"
+  },
+  "captured_at": "2026-09-04",
+  "query": {
+    "artist": "方大同",
+    "title": "好不容易",
+    "album": "15",
+    "duration_secs": 379.994
+  },
+  "local_duration_secs": 379.994,
+  "items": [
+    {
+      "id": "05776052d5d9fbfbb597d5dbdd83060f",
+      "title": "好不容易",
+      "artist": "方大同",
+      "album": "15",
+      "album_id": "979398",
+      "duration_secs": 380,
+      "language": "国语"
+    },
+    {
+      "id": "812a915cf8d7af676dc74164f3a2dcdf",
+      "title": "好不容易 (Live)",
+      "artist": "方大同",
+      "album": "15 Khalil Fong Live in Hong Kong 2011",
+      "album_id": "974119",
+      "duration_secs": 514,
+      "language": "国语"
+    },
+    {
+      "id": "906df4bd3949d1ab56e1a7d279ce57c8",
+      "title": "好不容易 (Live)",
+      "artist": "方大同",
+      "album": "MOOV Live 2011 方大同",
+      "album_id": "164364364",
+      "duration_secs": 325,
+      "language": "国语"
+    },
+    {
+      "id": "3a08c7b067ec2e9b552ab8664490fceb",
+      "title": "麦恩莉",
+      "artist": "方大同",
+      "album": "回到未来",
+      "album_id": "971920",
+      "duration_secs": 288,
+      "language": "国语"
+    },
+    {
+      "id": "e824ad50ade848c51cfcd0c3a1b1f840",
+      "title": "好不容易 (电台版)",
+      "artist": "方大同",
+      "duration_secs": 274,
+      "language": "国语"
+    },
+    {
+      "id": "dc8087e99400f25bf1da9d541018cd19",
+      "title": "为你写的歌",
+      "artist": "方大同",
+      "album": "橙月",
+      "album_id": "983396",
+      "duration_secs": 197,
+      "language": "国语"
+    },
+    {
+      "id": "b6efe16705bb70c957d1b3bbd1587675",
+      "title": "好不容易 (钢琴曲)",
+      "artist": "方大同",
+      "duration_secs": 359
+    },
+    {
+      "id": "c5b47cc2d009c20667e504b3f79f172a",
+      "title": "才二十三",
+      "artist": "方大同",
+      "album": "梦想家 The Dreamer",
+      "album_id": "105966233",
+      "duration_secs": 224,
+      "language": "国语"
+    },
+    {
+      "id": "5f2a3a305fee2f4e3ca3772d1e805933",
+      "title": "好不容易 (DJ 阿乐版)",
+      "artist": "方大同",
+      "duration_secs": 402
+    },
+    {
+      "id": "0f7a79adaaeeb6ea1da3e19dd637fd73",
+      "title": "特别的人",
+      "artist": "方大同",
+      "album": "危险世界",
+      "album_id": "965097",
+      "duration_secs": 259,
+      "language": "国语"
+    }
+  ],
+  "expect": {
+    "picked_id": "05776052d5d9fbfbb597d5dbdd83060f"
+  },
+  "judge": {
+    "title_accepted": true,
+    "artist_matches": true,
+    "source_duration_delta_pct": 0.001578972299555205,
+    "version_tags_ok": true,
+    "live_mismatch": false,
+    "plausible_alternatives": 0
+  }
+}

@@ -1,0 +1,317 @@
+{
+  "id": "overshoot-pianzhikuang-netease",
+  "source": "netease",
+  "note": "同名第一层样本 overshoot-pianzhikuang 的检索层",
+  "track": {
+    "artist": "陈绮贞",
+    "title": "我亲爱的偏执狂",
+    "album": "吉他手"
+  },
+  "captured_at": "2026-09-04",
+  "query": {
+    "artist": "陈绮贞",
+    "title": "我亲爱的偏执狂",
+    "album": "吉他手",
+    "duration_secs": 175
+  },
+  "local_duration_secs": 175,
+  "items": [
+    {
+      "id": "209394",
+      "title": "我亲爱的偏执狂",
+      "artists": [
+        "陈绮贞"
+      ],
+      "album": "Groupies吉他手",
+      "album_id": "21302",
+      "duration_secs": 175.72
+    },
+    {
+      "id": "209167",
+      "title": "我亲爱的偏执狂 (Live)",
+      "artists": [
+        "陈绮贞"
+      ],
+      "album": "花的姿态演唱会经典实录",
+      "album_id": "21280",
+      "duration_secs": 254.453
+    },
+    {
+      "id": "209062",
+      "title": "我亲爱的偏执狂 (Live)",
+      "artists": [
+        "陈绮贞"
+      ],
+      "album": "太阳 巡迴演唱会Immortal Tour影音记录",
+      "album_id": "21270",
+      "duration_secs": 175.76
+    },
+    {
+      "id": "37240057",
+      "title": "我亲爱的偏执狂(Live)",
+      "artists": [
+        "陈绮贞"
+      ],
+      "album": "“时间的歌”演唱会",
+      "album_id": "3395414",
+      "duration_secs": 249.226
+    },
+    {
+      "id": "209314",
+      "title": "after 17",
+      "artists": [
+        "陈绮贞"
+      ],
+      "album": "After 17",
+      "album_id": "21293",
+      "duration_secs": 165
+    },
+    {
+      "id": "209397",
+      "title": "太聪明",
+      "artists": [
+        "陈绮贞"
+      ],
+      "album": "Groupies吉他手",
+      "album_id": "21302",
+      "duration_secs": 263.173
+    },
+    {
+      "id": "209536",
+      "title": "嫉妒",
+      "artists": [
+        "陈绮贞"
+      ],
+      "album": "让我想一想",
+      "album_id": "21315",
+      "duration_secs": 268.826
+    },
+    {
+      "id": "209478",
+      "title": "还是会寂寞",
+      "artists": [
+        "陈绮贞"
+      ],
+      "album": "还是会寂寞",
+      "album_id": "21311",
+      "duration_secs": 272.293
+    },
+    {
+      "id": "26348057",
+      "title": "After 17",
+      "artists": [
+        "陈绮贞"
+      ],
+      "album": "A Piece of Summer II",
+      "album_id": "2461013",
+      "duration_secs": 175.12
+    },
+    {
+      "id": "209228",
+      "title": "旅行的意义",
+      "artists": [
+        "陈绮贞"
+      ],
+      "album": "华丽的冒险",
+      "album_id": "21286",
+      "duration_secs": 257.973
+    },
+    {
+      "id": "471403427",
+      "title": "我喜欢上你时的内心活动",
+      "artists": [
+        "陈绮贞"
+      ],
+      "album": "我喜欢上你时的内心活动",
+      "album_id": "35338449",
+      "duration_secs": 225.761
+    },
+    {
+      "id": "1333352696",
+      "title": "华生",
+      "artists": [
+        "陈绮贞"
+      ],
+      "album": "沙发海",
+      "album_id": "74879757",
+      "duration_secs": 221.066
+    },
+    {
+      "id": "1323302330",
+      "title": "残缺的彩虹",
+      "artists": [
+        "陈绮贞"
+      ],
+      "album": "沙发海",
+      "album_id": "74879757",
+      "duration_secs": 207.693
+    },
+    {
+      "id": "27965451",
+      "title": "雨水一盒",
+      "artists": [
+        "陈绮贞"
+      ],
+      "album": "时间的歌",
+      "album_id": "2702057",
+      "duration_secs": 289.52
+    },
+    {
+      "id": "209414",
+      "title": "小尘埃",
+      "artists": [
+        "陈绮贞"
+      ],
+      "album": "Groupies吉他手",
+      "album_id": "21302",
+      "duration_secs": 182.506
+    },
+    {
+      "id": "209268",
+      "title": "九份的咖啡店",
+      "artists": [
+        "陈绮贞"
+      ],
+      "album": "陈绮贞 精选 1998-2005",
+      "album_id": "21289",
+      "duration_secs": 291.773
+    },
+    {
+      "id": "209496",
+      "title": "慢歌1",
+      "artists": [
+        "陈绮贞"
+      ],
+      "album": "还是会寂寞",
+      "album_id": "21311",
+      "duration_secs": 254.506
+    },
+    {
+      "id": "209400",
+      "title": "小步舞曲",
+      "artists": [
+        "陈绮贞"
+      ],
+      "album": "Groupies吉他手",
+      "album_id": "21302",
+      "duration_secs": 259.72
+    },
+    {
+      "id": "209245",
+      "title": "Self",
+      "artists": [
+        "陈绮贞"
+      ],
+      "album": "华丽的冒险",
+      "album_id": "21286",
+      "duration_secs": 306.866
+    },
+    {
+      "id": "209115",
+      "title": "鱼",
+      "artists": [
+        "陈绮贞"
+      ],
+      "album": "太阳",
+      "album_id": "21275",
+      "duration_secs": 300.187
+    },
+    {
+      "id": "209287",
+      "title": "太聪明",
+      "artists": [
+        "陈绮贞"
+      ],
+      "album": "陈绮贞 精选 1998-2005",
+      "album_id": "21289",
+      "duration_secs": 263.221
+    },
+    {
+      "id": "1327994028",
+      "title": "小船",
+      "artists": [
+        "陈绮贞"
+      ],
+      "album": "沙发海",
+      "album_id": "74879757",
+      "duration_secs": 219.96
+    },
+    {
+      "id": "209251",
+      "title": "表面的和平",
+      "artists": [
+        "陈绮贞"
+      ],
+      "album": "华丽的冒险",
+      "album_id": "21286",
+      "duration_secs": 223
+    },
+    {
+      "id": "209494",
+      "title": "告诉我",
+      "artists": [
+        "陈绮贞"
+      ],
+      "album": "还是会寂寞",
+      "album_id": "21311",
+      "duration_secs": 313.733
+    },
+    {
+      "id": "1881832807",
+      "title": "我亲爱的偏执狂 Cover陈绮贞",
+      "artists": [
+        "小九是九妹"
+      ],
+      "album": "小九的楼梯间",
+      "album_id": "125657604",
+      "duration_secs": 165.616
+    },
+    {
+      "id": "3349569382",
+      "title": "我亲爱的偏执狂",
+      "artists": [
+        "星貊"
+      ],
+      "album": "Groupies",
+      "album_id": "361955625",
+      "duration_secs": 175.118
+    },
+    {
+      "id": "3376251756",
+      "title": "我亲爱的偏执狂",
+      "artists": [
+        "麻衣花贝"
+      ],
+      "album": "贝贝の2026唱歌合集",
+      "album_id": "373569866",
+      "duration_secs": 175.72
+    },
+    {
+      "id": "3371402535",
+      "title": "我亲爱的偏执狂",
+      "artists": [
+        "柚子音乐巷"
+      ],
+      "duration_secs": 284.537
+    },
+    {
+      "id": "3371385328",
+      "title": "我亲爱的偏执狂",
+      "artists": [
+        "每天发呆15小时_mini"
+      ],
+      "duration_secs": 105.045
+    }
+  ],
+  "expect": {
+    "picked_id": "209394"
+  },
+  "judge": {
+    "title_accepted": true,
+    "artist_matches": true,
+    "source_duration_delta_pct": 0.41142857142857076,
+    "version_tags_ok": true,
+    "live_mismatch": false,
+    "plausible_alternatives": 0
+  }
+}

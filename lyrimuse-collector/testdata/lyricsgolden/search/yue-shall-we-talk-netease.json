@@ -1,0 +1,332 @@
+{
+  "id": "yue-shall-we-talk-netease",
+  "source": "netease",
+  "note": "同名第一层样本 yue-shall-we-talk 的检索层",
+  "track": {
+    "artist": "陈奕迅",
+    "title": "Shall We Talk",
+    "album": "陈奕迅 国语精选"
+  },
+  "captured_at": "2026-09-04",
+  "query": {
+    "artist": "陈奕迅",
+    "title": "Shall We Talk",
+    "album": "陈奕迅 国语精选",
+    "duration_secs": 227.277
+  },
+  "local_duration_secs": 227.277,
+  "items": [
+    {
+      "id": "67411",
+      "title": "Shall We Talk",
+      "artists": [
+        "陈奕迅"
+      ],
+      "album": "Shall We Dance? Shall We Talk!",
+      "album_id": "6590",
+      "duration_secs": 227.207
+    },
+    {
+      "id": "1462659723",
+      "title": "Shall We Talk (Tre Lune MMXIX)",
+      "artists": [
+        "陈奕迅"
+      ],
+      "album": "Shall We Talk (Tre Lune MMXIX)",
+      "album_id": "92392526",
+      "duration_secs": 261.8
+    },
+    {
+      "id": "31234183",
+      "title": "Shall We Talk(Live)",
+      "artists": [
+        "陈奕迅",
+        "at17"
+      ],
+      "album": "良音发现音乐第四现场 陈奕迅xat 17",
+      "album_id": "3070638",
+      "duration_secs": 236
+    },
+    {
+      "id": "26608864",
+      "title": "Shall We Talk (钢琴版)",
+      "artists": [
+        "陈奕迅"
+      ],
+      "album": "2013 陈奕迅 music life 精选",
+      "album_id": "2532179",
+      "duration_secs": 235.666
+    },
+    {
+      "id": "66961",
+      "title": "Shall We Talk",
+      "artists": [
+        "陈奕迅"
+      ],
+      "album": "4 A Change \u0026 Hits",
+      "album_id": "6555",
+      "duration_secs": 227.069
+    },
+    {
+      "id": "65855",
+      "title": "Shall We Talk (Live)",
+      "artists": [
+        "陈奕迅"
+      ],
+      "album": "Get A Life (Live)",
+      "album_id": "6454",
+      "duration_secs": 234.614
+    },
+    {
+      "id": "67231",
+      "title": "Shall We Talk (Live)",
+      "artists": [
+        "陈奕迅"
+      ],
+      "album": "The Easy Ride Live 陈奕迅演唱会",
+      "album_id": "6572",
+      "duration_secs": 235.2
+    },
+    {
+      "id": "66902",
+      "title": "Shall We Talk(Live)",
+      "artists": [
+        "陈奕迅"
+      ],
+      "album": "Third Encounter Live",
+      "album_id": "6551",
+      "duration_secs": 371.565
+    },
+    {
+      "id": "1897927503",
+      "title": "Shall We Talk",
+      "artists": [
+        "陈奕迅"
+      ],
+      "album": "陈奕迅 广东精选",
+      "album_id": "136598511",
+      "duration_secs": 226.586
+    },
+    {
+      "id": "66432",
+      "title": "Shall We Talk",
+      "artists": [
+        "陈奕迅"
+      ],
+      "album": "英皇钢琴热恋系列 - 陈奕迅",
+      "album_id": "6510",
+      "duration_secs": 236.267
+    },
+    {
+      "id": "1901371647",
+      "title": "孤勇者",
+      "artists": [
+        "陈奕迅"
+      ],
+      "album": "孤勇者",
+      "album_id": "137142551",
+      "duration_secs": 256
+    },
+    {
+      "id": "66285",
+      "title": "葡萄成熟时",
+      "artists": [
+        "陈奕迅"
+      ],
+      "album": "U87",
+      "album_id": "6491",
+      "duration_secs": 279.846
+    },
+    {
+      "id": "65342",
+      "title": "Shall We Talk",
+      "artists": [
+        "陈奕迅"
+      ],
+      "album": "你的陈奕迅 国语精选",
+      "album_id": "6423",
+      "duration_secs": 227
+    },
+    {
+      "id": "65722",
+      "title": "Shall We Talk(钢琴曲)",
+      "artists": [
+        "陈奕迅"
+      ],
+      "album": "Sound \u0026 Sight",
+      "album_id": "6437",
+      "duration_secs": 236
+    },
+    {
+      "id": "65334",
+      "title": "你的背包",
+      "artists": [
+        "陈奕迅"
+      ],
+      "album": "你的陈奕迅 国语精选",
+      "album_id": "6423",
+      "duration_secs": 237.88
+    },
+    {
+      "id": "65766",
+      "title": "富士山下",
+      "artists": [
+        "陈奕迅"
+      ],
+      "album": "What's Going On…?",
+      "album_id": "6451",
+      "duration_secs": 258.902
+    },
+    {
+      "id": "26608826",
+      "title": "Shall We Talk (国语版)",
+      "artists": [
+        "陈奕迅"
+      ],
+      "album": "2013 陈奕迅 music life 精选",
+      "album_id": "2532179",
+      "duration_secs": 227.026
+    },
+    {
+      "id": "65536",
+      "title": "爱情转移",
+      "artists": [
+        "陈奕迅"
+      ],
+      "album": "认了吧",
+      "album_id": "6434",
+      "duration_secs": 259.986
+    },
+    {
+      "id": "409931770",
+      "title": "十面埋伏",
+      "artists": [
+        "陈奕迅"
+      ],
+      "album": "The Best Moment",
+      "album_id": "34611604",
+      "duration_secs": 232.133
+    },
+    {
+      "id": "65538",
+      "title": "好久不见",
+      "artists": [
+        "陈奕迅"
+      ],
+      "album": "认了吧",
+      "album_id": "6434",
+      "duration_secs": 250.543
+    },
+    {
+      "id": "65958",
+      "title": "Shall We Talk",
+      "artists": [
+        "陈奕迅"
+      ],
+      "album": "我的最好时代",
+      "album_id": "6462",
+      "duration_secs": 227.207
+    },
+    {
+      "id": "65800",
+      "title": "最佳损友",
+      "artists": [
+        "陈奕迅"
+      ],
+      "album": "Life Continues…",
+      "album_id": "6452",
+      "duration_secs": 233.56
+    },
+    {
+      "id": "66842",
+      "title": "十年",
+      "artists": [
+        "陈奕迅"
+      ],
+      "album": "黑白灰",
+      "album_id": "6548",
+      "duration_secs": 205.423
+    },
+    {
+      "id": "2733425353",
+      "title": "异梦",
+      "artists": [
+        "陈奕迅"
+      ],
+      "album": "FEAR and DREAMS",
+      "album_id": "280573395",
+      "duration_secs": 227.666
+    },
+    {
+      "id": "66342",
+      "title": "Shall We Talk",
+      "artists": [
+        "陈奕迅"
+      ],
+      "album": "Great 5000 Secs",
+      "album_id": "6498",
+      "duration_secs": 227.207
+    },
+    {
+      "id": "65643",
+      "title": "Shall We Talk",
+      "artists": [
+        "陈奕迅"
+      ],
+      "album": "Sound \u0026 Sight",
+      "album_id": "6437",
+      "duration_secs": 227
+    },
+    {
+      "id": "26608806",
+      "title": "Shall We Talk",
+      "artists": [
+        "陈奕迅"
+      ],
+      "album": "2013 陈奕迅 music life 精选",
+      "album_id": "2532179",
+      "duration_secs": 226.586
+    },
+    {
+      "id": "409941730",
+      "title": "Shall We Talk",
+      "artists": [
+        "陈奕迅"
+      ],
+      "album": "The Best Moment",
+      "album_id": "34611604",
+      "duration_secs": 227.187
+    },
+    {
+      "id": "409941771",
+      "title": "Shall We Talk",
+      "artists": [
+        "陈奕迅"
+      ],
+      "album": "The Best Moment",
+      "album_id": "34611604",
+      "duration_secs": 227.187
+    },
+    {
+      "id": "410518027",
+      "title": "Shall We Talk",
+      "artists": [
+        "陈奕迅"
+      ],
+      "album": "英皇之最The Best Of EEG三周年全纪录",
+      "album_id": "34666015",
+      "duration_secs": 225.093
+    }
+  ],
+  "expect": {
+    "picked_id": "65342"
+  },
+  "judge": {
+    "title_accepted": true,
+    "artist_matches": true,
+    "source_duration_delta_pct": 0.12187770869907066,
+    "version_tags_ok": true,
+    "live_mismatch": false,
+    "plausible_alternatives": 0
+  }
+}

@@ -1,0 +1,119 @@
+{
+  "id": "yue-shall-we-talk-kugou",
+  "source": "kugou",
+  "note": "同名第一层样本 yue-shall-we-talk 的检索层",
+  "track": {
+    "artist": "陈奕迅",
+    "title": "Shall We Talk",
+    "album": "陈奕迅 国语精选"
+  },
+  "captured_at": "2026-09-04",
+  "query": {
+    "artist": "陈奕迅",
+    "title": "Shall We Talk",
+    "album": "陈奕迅 国语精选",
+    "duration_secs": 227.277
+  },
+  "local_duration_secs": 227.277,
+  "items": [
+    {
+      "id": "ecdc9b4ad9e4f1aa528ef02dc76ecc76",
+      "title": "Shall We Talk",
+      "artist": "陈奕迅",
+      "album": "Shall We Dance? Shall We Talk!",
+      "album_id": "504206",
+      "duration_secs": 227,
+      "language": "粤语"
+    },
+    {
+      "id": "4a621f80bafa0a58c9e151e066d2e5e1",
+      "title": "Shall We Talk (Live)",
+      "artist": "陈奕迅",
+      "album": "Get A Life (Live)",
+      "album_id": "974842",
+      "duration_secs": 234,
+      "language": "粤语"
+    },
+    {
+      "id": "bbf035849944b94d9d4e6080bfa12f24",
+      "title": "Shall We Talk",
+      "artist": "陈奕迅",
+      "album": "Shall We Talk (Tre Lune MMXIX)",
+      "album_id": "38494611",
+      "duration_secs": 261,
+      "language": "粤语"
+    },
+    {
+      "id": "0d47c914a62eeb7314a39751d459fa5d",
+      "title": "Shall We Talk (2025 FEAR and DREAMS世界巡回演唱会海口站)",
+      "artist": "陈奕迅",
+      "duration_secs": 228,
+      "language": "粤语"
+    },
+    {
+      "id": "5146461a5717b942f4b13125978618e3",
+      "title": "十年",
+      "artist": "陈奕迅",
+      "album": "黑白灰",
+      "album_id": "504194",
+      "duration_secs": 205,
+      "language": "国语"
+    },
+    {
+      "id": "86b9f10b3edfaf51e71f48d8b37b043b",
+      "title": "K歌之王 (粤语版)",
+      "artist": "陈奕迅",
+      "album": "打得火热",
+      "album_id": "2996273",
+      "duration_secs": 222,
+      "language": "粤语"
+    },
+    {
+      "id": "ef22fc314b30356590d498ce4d225cb9",
+      "title": "Shall We Talk (普通话版)",
+      "artist": "陈奕迅",
+      "album": "七",
+      "album_id": "504192",
+      "duration_secs": 227,
+      "language": "国语"
+    },
+    {
+      "id": "cbfa7dde592b23322e21e4bdaa9be9f9",
+      "title": "最佳损友",
+      "artist": "陈奕迅",
+      "album": "Life Continues",
+      "album_id": "964332",
+      "duration_secs": 233,
+      "language": "粤语"
+    },
+    {
+      "id": "45645e0ee77ab6255845d01260b4a3c8",
+      "title": "Shall We Talk (Live)",
+      "artist": "陈奕迅、林子祥",
+      "album": "林子祥 \u0026 陈奕迅 拉阔压轴",
+      "album_id": "972108",
+      "duration_secs": 248,
+      "language": "粤语"
+    },
+    {
+      "id": "9f834dc027fcf8397e2aa6e7b129aae9",
+      "title": "人来人往",
+      "artist": "陈奕迅",
+      "album": "The Line-Up",
+      "album_id": "2996274",
+      "duration_secs": 234,
+      "language": "粤语"
+    }
+  ],
+  "expect": {
+    "picked_id": "ecdc9b4ad9e4f1aa528ef02dc76ecc76"
+  },
+  "judge": {
+    "title_accepted": true,
+    "artist_matches": true,
+    "source_duration_delta_pct": 0.12187770869907066,
+    "version_tags_ok": true,
+    "live_mismatch": false,
+    "plausible_alternatives": 0
+  }
+}

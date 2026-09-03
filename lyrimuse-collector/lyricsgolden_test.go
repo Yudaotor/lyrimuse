@@ -713,6 +713,17 @@ func TestLyricsGoldenCategoryCoverage(t *testing.T) {
 // OpenCC 繁→简词典里的字(置乱池刻意避开了它们),也不可能出现 goldenScrambleForbiddenSample
 // 里这些高频真实汉字。命中就说明有人手工往样本里塞了明文,或者采集时绕过了 scrambleLyricRound。
 func TestLyricsGoldenFixturesAreScrambled(t *testing.T) {
+	// 检索层样本里只有 lrclib 的搜索结果带正文,一并查。
+	for _, fx := range loadSearchGoldenFixtures(t) {
+		for _, it := range fx.Items {
+			for _, text := range []string{it.SyncedLyrics, it.PlainLyrics} {
+				if line, ok := goldenFindUnscrambledLine(text); ok {
+					t.Errorf("%s/%s 疑似明文歌词行: %q", fx.ID, it.ID, line)
+					break
+				}
+			}
+		}
+	}
 	fixtures := loadGoldenFixtures(t)
 	for _, fx := range fixtures {
 		for src, g := range fx.Sources {

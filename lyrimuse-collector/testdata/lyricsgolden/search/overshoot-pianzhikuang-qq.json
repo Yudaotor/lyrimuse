@@ -1,0 +1,116 @@
+{
+  "id": "overshoot-pianzhikuang-qq",
+  "source": "qq",
+  "note": "同名第一层样本 overshoot-pianzhikuang 的检索层",
+  "track": {
+    "artist": "陈绮贞",
+    "title": "我亲爱的偏执狂",
+    "album": "吉他手"
+  },
+  "captured_at": "2026-09-04",
+  "query": {
+    "artist": "陈绮贞",
+    "title": "我亲爱的偏执狂",
+    "album": "吉他手",
+    "duration_secs": 0
+  },
+  "local_duration_secs": 175,
+  "items": [
+    {
+      "id": "001Kgoe30O3130",
+      "title": "我亲爱的偏执狂",
+      "artist": "陈绮贞",
+      "album": "Groupies 吉他手",
+      "duration_secs": 175
+    },
+    {
+      "id": "003JjiAe1TB6ha",
+      "title": "我亲爱的偏执狂 (Live)",
+      "artist": "陈绮贞",
+      "album": "花的姿态演唱会经典实录",
+      "duration_secs": 254
+    },
+    {
+      "id": "000vMWx42dbave",
+      "title": "我亲爱的偏执狂 (Live)",
+      "artist": "陈绮贞",
+      "album": "太阳巡回演唱会Immortal Tour影音记录",
+      "duration_secs": 175
+    },
+    {
+      "id": "0034LoAO3M5Og3",
+      "title": "我亲爱的偏执狂 (2013香港春浪音乐节现场)",
+      "artist": "陈绮贞",
+      "duration_secs": 272
+    },
+    {
+      "id": "001z3G5r2M3KZj",
+      "title": "太聪明",
+      "artist": "陈绮贞",
+      "album": "Groupies 吉他手",
+      "duration_secs": 263
+    },
+    {
+      "id": "002TNeGt0OL0tV",
+      "title": "After 17",
+      "artist": "陈绮贞",
+      "album": "After 17",
+      "duration_secs": 165
+    },
+    {
+      "id": "001fXNWa3t8EQQ",
+      "title": "我喜欢上你时的内心活动",
+      "artist": "陈绮贞",
+      "album": "我喜欢上你时的内心活动",
+      "duration_secs": 225
+    },
+    {
+      "id": "000EZEV00EZCHo",
+      "title": "私奔到月球",
+      "artist": "五月天/陈绮贞",
+      "album": "离开地球表面 Jump!",
+      "duration_secs": 226
+    },
+    {
+      "id": "000BVOc63EthVV",
+      "title": "旅行的意义",
+      "artist": "陈绮贞",
+      "album": "华丽的冒险",
+      "duration_secs": 256
+    },
+    {
+      "id": "001mbNss3ifctU",
+      "title": "还是会寂寞",
+      "artist": "陈绮贞",
+      "album": "还是会寂寞",
+      "duration_secs": 272
+    }
+  ],
+  "album_lookup": {
+    "0034LoAO3M5Og3": ""
+  },
+  "expect": {
+    "picked_id": "001Kgoe30O3130",
+    "accepted_strict": [
+      "001Kgoe30O3130",
+      "003JjiAe1TB6ha",
+      "000vMWx42dbave",
+      "0034LoAO3M5Og3"
+    ],
+    "accepted_loose": [
+      "001Kgoe30O3130",
+      "003JjiAe1TB6ha",
+      "000vMWx42dbave",
+      "0034LoAO3M5Og3"
+    ],
+    "picked_no_album": "001Kgoe30O3130"
+  },
+  "judge": {
+    "title_accepted": true,
+    "artist_matches": true,
+    "source_duration_delta_pct": 0,
+    "version_tags_ok": true,
+    "live_mismatch": false,
+    "plausible_alternatives": 0
+  }
+}

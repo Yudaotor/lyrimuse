@@ -1,0 +1,343 @@
+{
+  "id": "reject-lang-bestfriend-netease",
+  "source": "netease",
+  "note": "同名第一层样本 reject-lang-bestfriend 的检索层",
+  "track": {
+    "artist": "Musiq Soulchild",
+    "title": "Bestfriend",
+    "album": "Juslisen"
+  },
+  "captured_at": "2026-09-04",
+  "query": {
+    "artist": "Musiq Soulchild",
+    "title": "Bestfriend",
+    "album": "Juslisen",
+    "duration_secs": 261
+  },
+  "local_duration_secs": 261,
+  "items": [
+    {
+      "id": "1712251",
+      "title": "Bestfriend",
+      "artists": [
+        "Musiq",
+        "Carvin \"Ransum\" Haggins",
+        "Taalib Johnson",
+        "Ivan Barias"
+      ],
+      "album": "Juslisen",
+      "album_id": "173434",
+      "duration_secs": 261.061
+    },
+    {
+      "id": "1822811837",
+      "title": "Bestfriend",
+      "artists": [
+        "Musiq Soulchild"
+      ],
+      "album": "Juslisen (Special Edition)",
+      "album_id": "123500154",
+      "duration_secs": 261.041
+    },
+    {
+      "id": "1712205",
+      "title": "Newness",
+      "artists": [
+        "Musiq",
+        "Carvin \"Ransum\" Haggins",
+        "Taalib Johnson",
+        "Ivan Barias"
+      ],
+      "album": "Juslisen",
+      "album_id": "173434",
+      "duration_secs": 226
+    },
+    {
+      "id": "1712215",
+      "title": "Stoplayin",
+      "artists": [
+        "Musiq",
+        "Andre Harris",
+        "Carvin \"Ransum\" Haggins",
+        "Taalib Johnson",
+        "Ivan Barias"
+      ],
+      "album": "Juslisen",
+      "album_id": "173434",
+      "duration_secs": 240.466
+    },
+    {
+      "id": "1712154",
+      "title": "Forthenight",
+      "artists": [
+        "Musiq Soulchild"
+      ],
+      "album": "Soulstar",
+      "album_id": "173428",
+      "duration_secs": 229.466
+    },
+    {
+      "id": "1712100",
+      "title": "teachme",
+      "artists": [
+        "Musiq Soulchild"
+      ],
+      "album": "Luvanmusiq",
+      "album_id": "173424",
+      "duration_secs": 260.773
+    },
+    {
+      "id": "1712129",
+      "title": "greatestlove",
+      "artists": [
+        "Musiq Soulchild"
+      ],
+      "album": "Luvanmusiq",
+      "album_id": "173424",
+      "duration_secs": 286.253
+    },
+    {
+      "id": "1712125",
+      "title": "lullaby",
+      "artists": [
+        "Musiq Soulchild"
+      ],
+      "album": "Luvanmusiq",
+      "album_id": "173424",
+      "duration_secs": 258
+    },
+    {
+      "id": "1712288",
+      "title": "Just Friends (Sunny)",
+      "artists": [
+        "Musiq Soulchild"
+      ],
+      "album": "Aijuswanaseing",
+      "album_id": "173440",
+      "duration_secs": 251.454
+    },
+    {
+      "id": "1712175",
+      "title": "Dontstop/Her",
+      "artists": [
+        "Musiq Soulchild"
+      ],
+      "album": "Soulstar",
+      "album_id": "173428",
+      "duration_secs": 488.315
+    },
+    {
+      "id": "1712143",
+      "title": "Soulstar",
+      "artists": [
+        "Musiq Soulchild"
+      ],
+      "album": "Soulstar",
+      "album_id": "173428",
+      "duration_secs": 182
+    },
+    {
+      "id": "1712159",
+      "title": "Whoknows",
+      "artists": [
+        "Musiq Soulchild"
+      ],
+      "album": "Soulstar",
+      "album_id": "173428",
+      "duration_secs": 295.32
+    },
+    {
+      "id": "432942973",
+      "title": "rewind (bonus version)",
+      "artists": [
+        "Musiq Soulchild"
+      ],
+      "album": "Luvanmusiq",
+      "album_id": "173424",
+      "duration_secs": 186.853
+    },
+    {
+      "id": "1712167",
+      "title": "Missyou",
+      "artists": [
+        "Musiq Soulchild"
+      ],
+      "album": "Soulstar",
+      "album_id": "173428",
+      "duration_secs": 237.853
+    },
+    {
+      "id": "409941189",
+      "title": "The Girl",
+      "artists": [
+        "Musiq Soulchild"
+      ],
+      "album": "Life On Earth (Deluxe Edition)",
+      "album_id": "34611408",
+      "duration_secs": 242.049
+    },
+    {
+      "id": "21041454",
+      "title": "ifuleave [feat. Mary J. Blige] (Album Version)",
+      "artists": [
+        "Musiq Soulchild"
+      ],
+      "album": "onmyradio",
+      "album_id": "1947377",
+      "duration_secs": 252.44
+    },
+    {
+      "id": "1920526934",
+      "title": "Just Friends (Sunny)",
+      "artists": [
+        "Musiq Soulchild"
+      ],
+      "album": "Ménage (Soundtrack by MUSIQ)",
+      "album_id": "140421406",
+      "duration_secs": 251.426
+    },
+    {
+      "id": "1712285",
+      "title": "You And Me",
+      "artists": [
+        "Musiq Soulchild"
+      ],
+      "album": "Aijuswanaseing",
+      "album_id": "173440",
+      "duration_secs": 260.063
+    },
+    {
+      "id": "409941186",
+      "title": "I Do",
+      "artists": [
+        "Musiq Soulchild"
+      ],
+      "album": "Life On Earth (Deluxe Edition)",
+      "album_id": "34611408",
+      "duration_secs": 257.65
+    },
+    {
+      "id": "1311806082",
+      "title": "Start Over",
+      "artists": [
+        "Musiq Soulchild"
+      ],
+      "album": "Start Over",
+      "album_id": "73530903",
+      "duration_secs": 230.453
+    },
+    {
+      "id": "21041462",
+      "title": "sobeautiful (Album Version)",
+      "artists": [
+        "Musiq Soulchild"
+      ],
+      "album": "onmyradio",
+      "album_id": "1947377",
+      "duration_secs": 291.201
+    },
+    {
+      "id": "1711947",
+      "title": "sayido",
+      "artists": [
+        "Musiq Soulchild"
+      ],
+      "album": "MUSIQINTHEMAGIQ",
+      "album_id": "173411",
+      "duration_secs": 190.28
+    },
+    {
+      "id": "1712300",
+      "title": "Seventeen",
+      "artists": [
+        "Musiq Soulchild"
+      ],
+      "album": "Aijuswanaseing",
+      "album_id": "173440",
+      "duration_secs": 202.895
+    },
+    {
+      "id": "1712297",
+      "title": "Musiq Soulchild (Interlude)",
+      "artists": [
+        "Musiq Soulchild"
+      ],
+      "album": "Aijuswanaseing",
+      "album_id": "173440",
+      "duration_secs": 38.057
+    },
+    {
+      "id": "1343244807",
+      "title": "lullaby",
+      "artists": [
+        "Musiq Soulchild"
+      ],
+      "album": "Luvanmusiq",
+      "album_id": "75388614",
+      "duration_secs": 258
+    },
+    {
+      "id": "21041460",
+      "title": "someone (Album Version)",
+      "artists": [
+        "Musiq Soulchild"
+      ],
+      "album": "onmyradio",
+      "album_id": "1947377",
+      "duration_secs": 279
+    },
+    {
+      "id": "1712173",
+      "title": "Thereason",
+      "artists": [
+        "Musiq Soulchild"
+      ],
+      "album": "Soulstar",
+      "album_id": "173428",
+      "duration_secs": 326.89
+    },
+    {
+      "id": "1358887077",
+      "title": "b.u.d.d.y.",
+      "artists": [
+        "Musiq Soulchild"
+      ],
+      "album": "Buddy (110844)",
+      "album_id": "78514618",
+      "duration_secs": 223.813
+    },
+    {
+      "id": "432942974",
+      "title": "b.u.d.d.y. (Remix)",
+      "artists": [
+        "Musiq Soulchild",
+        "Ja Rule",
+        "Fat Joe"
+      ],
+      "album": "Luvanmusiq",
+      "album_id": "173424",
+      "duration_secs": 268.277
+    },
+    {
+      "id": "1712277",
+      "title": "Scratch Introlude",
+      "artists": [
+        "Musiq Soulchild"
+      ],
+      "album": "Aijuswanaseing",
+      "album_id": "173440",
+      "duration_secs": 46.347
+    }
+  ],
+  "expect": {
+    "picked_id": "1822811837"
+  },
+  "judge": {
+    "title_accepted": true,
+    "artist_matches": true,
+    "source_duration_delta_pct": 0.01570881226053518,
+    "version_tags_ok": true,
+    "live_mismatch": false,
+    "plausible_alternatives": 0
+  }
+}

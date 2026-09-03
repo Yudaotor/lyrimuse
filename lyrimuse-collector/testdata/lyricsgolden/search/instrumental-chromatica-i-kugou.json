@@ -1,0 +1,121 @@
+{
+  "id": "instrumental-chromatica-i-kugou",
+  "source": "kugou",
+  "note": "同名第一层样本 instrumental-chromatica-i 的检索层",
+  "track": {
+    "artist": "Lady Gaga",
+    "title": "Chromatica I",
+    "album": "Chromatica"
+  },
+  "captured_at": "2026-09-04",
+  "query": {
+    "artist": "Lady Gaga",
+    "title": "Chromatica I",
+    "album": "Chromatica",
+    "duration_secs": 60.55500030517578
+  },
+  "local_duration_secs": 60.55500030517578,
+  "items": [
+    {
+      "id": "9f0d927427c7dd96d9e45bcc229e4cd9",
+      "title": "Chromatica I",
+      "artist": "Lady Gaga",
+      "album": "Chromatica",
+      "album_id": "37818238",
+      "duration_secs": 60,
+      "language": "纯音乐"
+    },
+    {
+      "id": "645e837927e3207ad0aea3997eb00444",
+      "title": "Poker Face",
+      "artist": "Lady Gaga",
+      "album": "The Fame",
+      "album_id": "38501704",
+      "duration_secs": 237,
+      "language": "英语"
+    },
+    {
+      "id": "3ef072e796a8cf441c83bc751bcb5c38",
+      "title": "The Cure",
+      "artist": "Lady Gaga",
+      "album": "The Cure",
+      "album_id": "1994338",
+      "duration_secs": 211,
+      "language": "英语"
+    },
+    {
+      "id": "6ed2b8e87f131556bd08b8e385bf217e",
+      "title": "Telephone",
+      "artist": "Lady Gaga、Beyoncé",
+      "album": "The Fame Monster (Deluxe Edition) [Explicit]",
+      "album_id": "27575218",
+      "duration_secs": 220,
+      "language": "英语"
+    },
+    {
+      "id": "689f0ddb59f4048a6a2a704afc650de6",
+      "title": "Always Remember Us This Way",
+      "artist": "Lady Gaga",
+      "album": "A Star Is Born Soundtrack (Explicit)",
+      "album_id": "10792486",
+      "duration_secs": 210,
+      "language": "英语"
+    },
+    {
+      "id": "b8ad75ee196c85f8987e795f1402b728",
+      "title": "Bad Romance",
+      "artist": "Lady Gaga",
+      "album": "The Fame Monster (International Deluxe)",
+      "album_id": "509900",
+      "duration_secs": 294,
+      "language": "英语"
+    },
+    {
+      "id": "ff9f0bea3a290582c5d66d6ed1f039c3",
+      "title": "Die With A Smile",
+      "artist": "Lady Gaga、Bruno Mars",
+      "album": "Die With A Smile",
+      "album_id": "101820448",
+      "duration_secs": 251,
+      "language": "英语"
+    },
+    {
+      "id": "1513213367df95e074bbc498ad802727",
+      "title": "Bloody Mary",
+      "artist": "Lady Gaga",
+      "album": "Born This Way (International Standard Version)",
+      "album_id": "20726972",
+      "duration_secs": 244,
+      "language": "英语"
+    },
+    {
+      "id": "49255ae998569ea0027b447a744e4af5",
+      "title": "Government Hooker",
+      "artist": "Lady Gaga",
+      "album": "Born This Way (International Standard Version)",
+      "album_id": "20726972",
+      "duration_secs": 254,
+      "language": "英语"
+    },
+    {
+      "id": "638dee2a59481243524333dc04e07443",
+      "title": "The Cure (Spiros Hamza Remix)",
+      "artist": "Lady Gaga",
+      "album": "The Cure (Spiros Hamza Remix)",
+      "album_id": "41186452",
+      "duration_secs": 218,
+      "language": "英语"
+    }
+  ],
+  "expect": {
+    "picked_id": "9f0d927427c7dd96d9e45bcc229e4cd9"
+  },
+  "judge": {
+    "title_accepted": true,
+    "artist_matches": true,
+    "source_duration_delta_pct": 0.9165226692738436,
+    "version_tags_ok": true,
+    "live_mismatch": false,
+    "plausible_alternatives": 0
+  }
+}

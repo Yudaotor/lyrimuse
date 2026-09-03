@@ -1,0 +1,349 @@
+{
+  "id": "instrumental-chromatica-i-netease",
+  "source": "netease",
+  "note": "同名第一层样本 instrumental-chromatica-i 的检索层",
+  "track": {
+    "artist": "Lady Gaga",
+    "title": "Chromatica I",
+    "album": "Chromatica"
+  },
+  "captured_at": "2026-09-04",
+  "query": {
+    "artist": "Lady Gaga \u0026 BLACKPINK",
+    "title": "Chromatica I",
+    "album": "Chromatica",
+    "duration_secs": 60.55500030517578
+  },
+  "local_duration_secs": 60.55500030517578,
+  "items": [
+    {
+      "id": "1451648391",
+      "title": "Chromatica I",
+      "artists": [
+        "Lady Gaga"
+      ],
+      "album": "Chromatica",
+      "album_id": "90095288",
+      "duration_secs": 60.397
+    },
+    {
+      "id": "1451492235",
+      "title": "Sour Candy",
+      "artists": [
+        "Lady Gaga",
+        "BLACKPINK"
+      ],
+      "album": "Chromatica",
+      "album_id": "90095288",
+      "duration_secs": 157.704
+    },
+    {
+      "id": "1451648394",
+      "title": "Chromatica II",
+      "artists": [
+        "Lady Gaga"
+      ],
+      "album": "Chromatica",
+      "album_id": "90095288",
+      "duration_secs": 41.86
+    },
+    {
+      "id": "1451648397",
+      "title": "Chromatica III",
+      "artists": [
+        "Lady Gaga"
+      ],
+      "album": "Chromatica",
+      "album_id": "90095288",
+      "duration_secs": 27.667
+    },
+    {
+      "id": "1451649225",
+      "title": "911",
+      "artists": [
+        "Lady Gaga"
+      ],
+      "album": "Chromatica",
+      "album_id": "90095288",
+      "duration_secs": 172.145
+    },
+    {
+      "id": "1451648392",
+      "title": "Stupid Love",
+      "artists": [
+        "Lady Gaga"
+      ],
+      "album": "Chromatica",
+      "album_id": "90095288",
+      "duration_secs": 193.53
+    },
+    {
+      "id": "1451648398",
+      "title": "Babylon",
+      "artists": [
+        "Lady Gaga"
+      ],
+      "album": "Chromatica",
+      "album_id": "90095288",
+      "duration_secs": 161.76
+    },
+    {
+      "id": "1451649222",
+      "title": "Alice",
+      "artists": [
+        "Lady Gaga"
+      ],
+      "album": "Chromatica",
+      "album_id": "90095288",
+      "duration_secs": 177.604
+    },
+    {
+      "id": "1451649223",
+      "title": "Rain On Me",
+      "artists": [
+        "Lady Gaga",
+        "Ariana Grande"
+      ],
+      "album": "Chromatica",
+      "album_id": "90095288",
+      "duration_secs": 182.202
+    },
+    {
+      "id": "1451649226",
+      "title": "Plastic Doll",
+      "artists": [
+        "Lady Gaga"
+      ],
+      "album": "Chromatica",
+      "album_id": "90095288",
+      "duration_secs": 221.673
+    },
+    {
+      "id": "1451648393",
+      "title": "Free Woman",
+      "artists": [
+        "Lady Gaga"
+      ],
+      "album": "Chromatica",
+      "album_id": "90095288",
+      "duration_secs": 191.464
+    },
+    {
+      "id": "1451648395",
+      "title": "Enigma",
+      "artists": [
+        "Lady Gaga"
+      ],
+      "album": "Chromatica",
+      "album_id": "90095288",
+      "duration_secs": 179.751
+    },
+    {
+      "id": "1451649229",
+      "title": "1000 Doves",
+      "artists": [
+        "Lady Gaga"
+      ],
+      "album": "Chromatica",
+      "album_id": "90095288",
+      "duration_secs": 215.502
+    },
+    {
+      "id": "1451649224",
+      "title": "Fun Tonight",
+      "artists": [
+        "Lady Gaga"
+      ],
+      "album": "Chromatica",
+      "album_id": "90095288",
+      "duration_secs": 173.426
+    },
+    {
+      "id": "1875162373",
+      "title": "Sour Candy (Shygirl \u0026 Mura Masa Remix)",
+      "artists": [
+        "Lady Gaga",
+        "BLACKPINK",
+        "Shygirl",
+        "Mura Masa"
+      ],
+      "album": "Dawn Of Chromatica",
+      "album_id": "132730197",
+      "duration_secs": 225.325
+    },
+    {
+      "id": "1451648396",
+      "title": "Replay",
+      "artists": [
+        "Lady Gaga"
+      ],
+      "album": "Chromatica",
+      "album_id": "90095288",
+      "duration_secs": 186.661
+    },
+    {
+      "id": "1451649228",
+      "title": "Sine From Above",
+      "artists": [
+        "Lady Gaga",
+        "Elton John"
+      ],
+      "album": "Chromatica",
+      "album_id": "90095288",
+      "duration_secs": 244.84
+    },
+    {
+      "id": "1951407966",
+      "title": "Chromatica II",
+      "artists": [
+        "Lady Gaga"
+      ],
+      "album": "红心安利 - 洗脑神曲 Vol.4",
+      "album_id": "145681817",
+      "duration_secs": 41.86
+    },
+    {
+      "id": "1875161484",
+      "title": "Babylon (Haus Labs Version)",
+      "artists": [
+        "Lady Gaga",
+        "TCHAMI",
+        "BloodPop"
+      ],
+      "album": "Dawn Of Chromatica",
+      "album_id": "132730197",
+      "duration_secs": 181.534
+    },
+    {
+      "id": "1875161481",
+      "title": "Plastic Doll (Ashnikko Remix)",
+      "artists": [
+        "Lady Gaga",
+        "Ashnikko"
+      ],
+      "album": "Dawn Of Chromatica",
+      "album_id": "132730197",
+      "duration_secs": 149.527
+    },
+    {
+      "id": "1875162370",
+      "title": "Free Woman (Rina Sawayama \u0026 Clarence Clarity Remix)",
+      "artists": [
+        "Lady Gaga",
+        "Rina Sawayama",
+        "Clarence Clarity"
+      ],
+      "album": "Dawn Of Chromatica",
+      "album_id": "132730197",
+      "duration_secs": 233.901
+    },
+    {
+      "id": "1875162371",
+      "title": "Fun Tonight (Pabllo Vittar Remix)",
+      "artists": [
+        "Lady Gaga",
+        "Pabllo Vittar"
+      ],
+      "album": "Dawn Of Chromatica",
+      "album_id": "132730197",
+      "duration_secs": 140.968
+    },
+    {
+      "id": "1875162372",
+      "title": "911 (Charli XCX \u0026 A. G. Cook Remix)",
+      "artists": [
+        "Lady Gaga",
+        "Charli xcx",
+        "A. G. Cook"
+      ],
+      "album": "Dawn Of Chromatica",
+      "album_id": "132730197",
+      "duration_secs": 253.642
+    },
+    {
+      "id": "1875162376",
+      "title": "1000 Doves (Planningtorock Remix)",
+      "artists": [
+        "Lady Gaga",
+        "Planningtorock"
+      ],
+      "album": "Dawn Of Chromatica",
+      "album_id": "132730197",
+      "duration_secs": 305.167
+    },
+    {
+      "id": "31384291",
+      "title": "Poker Face",
+      "artists": [
+        "Lady Gaga"
+      ],
+      "album": "Now That's What I Call Music! USA",
+      "album_id": "3119195",
+      "duration_secs": 238.956
+    },
+    {
+      "id": "24063033",
+      "title": "Poker Face",
+      "artists": [
+        "Lady Gaga"
+      ],
+      "album": "Now That's What I Call A Wedding",
+      "album_id": "2163007",
+      "duration_secs": 238.956
+    },
+    {
+      "id": "1315466676",
+      "title": "Look What I Found",
+      "artists": [
+        "Lady Gaga"
+      ],
+      "album": "A Star Is Born Soundtrack (Without Dialogue)",
+      "album_id": "73782951",
+      "duration_secs": 175.24
+    },
+    {
+      "id": "1315441721",
+      "title": "Look What I Found",
+      "artists": [
+        "Lady Gaga"
+      ],
+      "album": "A Star Is Born Soundtrack",
+      "album_id": "73781284",
+      "duration_secs": 175.24
+    },
+    {
+      "id": "1875161480",
+      "title": "Rain On Me (Arca Remix)",
+      "artists": [
+        "Lady Gaga",
+        "Ariana Grande",
+        "Arca"
+      ],
+      "album": "Dawn Of Chromatica",
+      "album_id": "132730197",
+      "duration_secs": 263.473
+    },
+    {
+      "id": "1875162374",
+      "title": "Replay (Dorian Electra Remix)",
+      "artists": [
+        "Lady Gaga",
+        "Dorian Electra"
+      ],
+      "album": "Dawn Of Chromatica",
+      "album_id": "132730197",
+      "duration_secs": 229.406
+    }
+  ],
+  "expect": {
+    "picked_id": "1451648391"
+  },
+  "judge": {
+    "title_accepted": true,
+    "artist_matches": true,
+    "source_duration_delta_pct": 0.2609203276022081,
+    "version_tags_ok": true,
+    "live_mismatch": false,
+    "plausible_alternatives": 0
+  }
+}

@@ -1,0 +1,111 @@
+{
+  "id": "credit-xiaojiuwo-kugou",
+  "source": "kugou",
+  "note": "同名第一层样本 credit-xiaojiuwo 的检索层",
+  "track": {
+    "artist": "林俊杰 \u0026 蔡卓妍",
+    "title": "小酒窝",
+    "album": "JJ陆"
+  },
+  "captured_at": "2026-09-04",
+  "query": {
+    "artist": "林俊杰 \u0026 蔡卓妍",
+    "title": "小酒窝",
+    "album": "JJ陆",
+    "duration_secs": 218.026
+  },
+  "local_duration_secs": 218.026,
+  "items": [
+    {
+      "id": "b55cd1a339313b5c1fb1a51fc143297b",
+      "title": "小酒窝",
+      "artist": "林俊杰、蔡卓妍",
+      "album": "JJ陆",
+      "album_id": "963179",
+      "duration_secs": 218,
+      "language": "国语"
+    },
+    {
+      "id": "0c345d4038a968f9421a234621983fb6",
+      "title": "小酒窝 (粤语版)",
+      "artist": "林俊杰、蔡卓妍",
+      "album": "1+1 合唱精选",
+      "album_id": "527441",
+      "duration_secs": 218,
+      "language": "粤语"
+    },
+    {
+      "id": "2c90720f31292a3c7e95a36bdf9c9220",
+      "title": "小酒窝 (3D环绕版)",
+      "artist": "林俊杰、蔡卓妍",
+      "duration_secs": 213,
+      "language": "国语"
+    },
+    {
+      "id": "b9bcf451227bbf5a8cb2e0e89fc900f7",
+      "title": "小酒窝 (普通话版)",
+      "artist": "林俊杰",
+      "album": "他是... JJ林俊杰",
+      "album_id": "1740482",
+      "duration_secs": 217,
+      "language": "国语"
+    },
+    {
+      "id": "bdfbb39f83ebe4321b525d36628d82d1",
+      "title": "小酒窝 (DJ阿lo版)",
+      "artist": "林俊杰、蔡卓妍、DJ阿lo",
+      "album": "小酒窝 DJ阿lo版",
+      "album_id": "168088911",
+      "duration_secs": 155,
+      "language": "国语"
+    },
+    {
+      "id": "7d3b8b0261bcb2468893bce80ad34129",
+      "title": "小酒窝",
+      "artist": "蔡卓妍、林俊杰",
+      "album": "二缺一",
+      "album_id": "507619",
+      "duration_secs": 217,
+      "language": "粤语"
+    },
+    {
+      "id": "a32fde5005577dc77f25065e59f3a7b6",
+      "title": "小酒窝 (DJ版)",
+      "artist": "蔡卓妍、林俊杰",
+      "duration_secs": 222,
+      "language": "国语"
+    },
+    {
+      "id": "98ebc172b44eca0356899ef55834d2b2",
+      "title": "小酒窝 (Live)",
+      "artist": "蔡卓妍、林俊杰",
+      "duration_secs": 145,
+      "language": "国语"
+    },
+    {
+      "id": "79b35fcb023a72eac2a616a7e29cf9a1",
+      "title": "小酒窝 (Live)",
+      "artist": "蔡卓妍、林俊杰",
+      "duration_secs": 215,
+      "language": "国语"
+    },
+    {
+      "id": "03329458dd593c8877a381571273f32c",
+      "title": "小酒窝",
+      "artist": "蔡卓妍、林俊杰",
+      "duration_secs": 126,
+      "language": "国语"
+    }
+  ],
+  "expect": {
+    "picked_id": "b55cd1a339313b5c1fb1a51fc143297b"
+  },
+  "judge": {
+    "title_accepted": true,
+    "artist_matches": true,
+    "source_duration_delta_pct": 0.011925183235031812,
+    "version_tags_ok": true,
+    "live_mismatch": false,
+    "plausible_alternatives": 0
+  }
+}

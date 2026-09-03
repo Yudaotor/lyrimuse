@@ -1,0 +1,42 @@
+{
+  "id": "credit-xiaojiuwo-netease",
+  "source": "netease",
+  "note": "同名第一层样本 credit-xiaojiuwo 的检索层",
+  "track": {
+    "artist": "林俊杰 \u0026 蔡卓妍",
+    "title": "小酒窝",
+    "album": "JJ陆"
+  },
+  "captured_at": "2026-09-04",
+  "query": {
+    "artist": "林俊杰 \u0026 蔡卓妍",
+    "title": "小酒窝",
+    "album": "JJ陆",
+    "duration_secs": 218.026
+  },
+  "local_duration_secs": 218.026,
+  "items": [
+    {
+      "id": "108468",
+      "title": "小酒窝",
+      "artists": [
+        "林俊杰",
+        "蔡卓妍"
+      ],
+      "album": "JJ陆",
+      "album_id": "10770",
+      "duration_secs": 218.026
+    }
+  ],
+  "expect": {
+    "picked_id": "108468"
+  },
+  "judge": {
+    "title_accepted": true,
+    "artist_matches": true,
+    "source_duration_delta_pct": 0,
+    "version_tags_ok": true,
+    "live_mismatch": false,
+    "plausible_alternatives": 0
+  }
+}

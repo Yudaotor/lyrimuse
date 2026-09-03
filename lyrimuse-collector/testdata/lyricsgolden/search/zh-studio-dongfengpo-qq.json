@@ -1,0 +1,115 @@
+{
+  "id": "zh-studio-dongfengpo-qq",
+  "source": "qq",
+  "note": "同名第一层样本 zh-studio-dongfengpo 的检索层",
+  "track": {
+    "artist": "周杰伦",
+    "title": "东风破",
+    "album": "叶惠美"
+  },
+  "captured_at": "2026-09-04",
+  "query": {
+    "artist": "周杰伦",
+    "title": "东风破",
+    "album": "叶惠美",
+    "duration_secs": 0
+  },
+  "local_duration_secs": 315.413,
+  "items": [
+    {
+      "id": "003uEbEr0jcW7c",
+      "title": "东风破",
+      "artist": "周杰伦",
+      "album": "叶惠美",
+      "duration_secs": 315
+    },
+    {
+      "id": "002y3sa12TOcpk",
+      "title": "东风破 (Live)",
+      "artist": "周杰伦",
+      "album": "The Era 2010 超时代演唱会",
+      "duration_secs": 322
+    },
+    {
+      "id": "001BF0TR10z5R3",
+      "title": "东风破 (Live)",
+      "artist": "周杰伦",
+      "album": "周杰伦 2004 无与伦比 演唱会 Live CD",
+      "duration_secs": 314
+    },
+    {
+      "id": "004AG7b4362PAb",
+      "title": "东风破 (2024乐来乐快乐现场)",
+      "artist": "周杰伦",
+      "duration_secs": 213
+    },
+    {
+      "id": "004KmDTY14RZyS",
+      "title": "东风破 - 自由联想 快乐共享 联想手机",
+      "artist": "周杰伦",
+      "duration_secs": 311
+    },
+    {
+      "id": "0039MnYb0qxYhV",
+      "title": "晴天",
+      "artist": "周杰伦",
+      "album": "叶惠美",
+      "duration_secs": 269
+    },
+    {
+      "id": "0027oMO61wWi55",
+      "title": "发如雪",
+      "artist": "周杰伦",
+      "album": "十一月的萧邦",
+      "duration_secs": 299
+    },
+    {
+      "id": "00128N3r2SYKMF",
+      "title": "兰亭序",
+      "artist": "周杰伦",
+      "album": "魔杰座",
+      "duration_secs": 253
+    },
+    {
+      "id": "002qU5aY3Qu24y",
+      "title": "青花瓷",
+      "artist": "周杰伦",
+      "album": "我很忙",
+      "duration_secs": 239
+    },
+    {
+      "id": "003KtYhg4frNXC",
+      "title": "枫",
+      "artist": "周杰伦",
+      "album": "十一月的萧邦",
+      "duration_secs": 275
+    }
+  ],
+  "album_lookup": {
+    "004AG7b4362PAb": ""
+  },
+  "expect": {
+    "picked_id": "003uEbEr0jcW7c",
+    "accepted_strict": [
+      "003uEbEr0jcW7c",
+      "002y3sa12TOcpk",
+      "001BF0TR10z5R3",
+      "004AG7b4362PAb"
+    ],
+    "accepted_loose": [
+      "003uEbEr0jcW7c",
+      "002y3sa12TOcpk",
+      "001BF0TR10z5R3",
+      "004AG7b4362PAb"
+    ],
+    "picked_no_album": "003uEbEr0jcW7c"
+  },
+  "judge": {
+    "title_accepted": true,
+    "artist_matches": true,
+    "source_duration_delta_pct": 0.1309394349630519,
+    "version_tags_ok": true,
+    "live_mismatch": false,
+    "plausible_alternatives": 0
+  }
+}

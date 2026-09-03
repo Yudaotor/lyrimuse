@@ -1,0 +1,111 @@
+{
+  "id": "live-same-jiandanai-kugou",
+  "source": "kugou",
+  "note": "同名第一层样本 live-same-jiandanai 的检索层",
+  "track": {
+    "artist": "周杰伦",
+    "title": "简单爱 (Live)",
+    "album": "The One 周杰伦演唱会"
+  },
+  "captured_at": "2026-09-04",
+  "query": {
+    "artist": "周杰伦",
+    "title": "简单爱 (Live)",
+    "album": "The One 周杰伦演唱会",
+    "duration_secs": 273.22601318359375
+  },
+  "local_duration_secs": 273.22601318359375,
+  "items": [
+    {
+      "id": "9e75d258f56a4842879244c464513026",
+      "title": "简单爱 (无与伦比演唱会 m 56s)",
+      "artist": "周杰伦",
+      "duration_secs": 56,
+      "language": "国语"
+    },
+    {
+      "id": "80c0ad8f4224f5a1cd342cfef132065d",
+      "title": "简单爱 (Live)",
+      "artist": "周杰伦",
+      "album": "The One 演唱会",
+      "album_id": "974915",
+      "duration_secs": 273,
+      "language": "国语"
+    },
+    {
+      "id": "509839f86ffe477971f951e89c87c33e",
+      "title": "简单爱 (Live)",
+      "artist": "周杰伦",
+      "album": "周杰伦 2004 无与伦比 演唱会 Live CD",
+      "album_id": "2996504",
+      "duration_secs": 393,
+      "language": "国语"
+    },
+    {
+      "id": "6e44ce19be5872384fa184b995cce23b",
+      "title": "简单爱",
+      "artist": "周杰伦",
+      "album": "范特西",
+      "album_id": "958706",
+      "duration_secs": 270,
+      "language": "国语"
+    },
+    {
+      "id": "822a21dd60a36fd2790f37066c7c1a3a",
+      "title": "简单爱 (Live)",
+      "artist": "周杰伦、陈奕迅",
+      "album": "2015江苏卫视新年演唱会",
+      "album_id": "970862",
+      "duration_secs": 313,
+      "language": "国语"
+    },
+    {
+      "id": "69f5c7ffe97584e06cd55071a0943bd6",
+      "title": "简单爱 (Live)",
+      "artist": "周杰伦",
+      "album": "浙江卫视2019年中音乐盛典",
+      "album_id": "24940553",
+      "duration_secs": 222,
+      "language": "国语"
+    },
+    {
+      "id": "d0c5bc32f97a44d25ba7d34c0b1ca540",
+      "title": "简单爱 (2004无与伦比演唱会)",
+      "artist": "周杰伦",
+      "duration_secs": 264,
+      "language": "国语"
+    },
+    {
+      "id": "f00d493133e6d42f45f719b7c98019fa",
+      "title": "简单爱 (2024嘉年华世界巡回演唱会台北站)",
+      "artist": "周杰伦",
+      "duration_secs": 184,
+      "language": "国语"
+    },
+    {
+      "id": "823db2da3cab41d7e521a698a12d33ca",
+      "title": "简单爱 (2018地表最强2演唱会首场新加坡站)",
+      "artist": "周杰伦",
+      "duration_secs": 169,
+      "language": "国语"
+    },
+    {
+      "id": "921f2430b35bef0475ddaef57cf73aa4",
+      "title": "简单爱 (2017地表最强世界巡回演唱会杭州站)",
+      "artist": "周杰伦、孙杨",
+      "duration_secs": 163,
+      "language": "国语"
+    }
+  ],
+  "expect": {
+    "picked_id": "80c0ad8f4224f5a1cd342cfef132065d"
+  },
+  "judge": {
+    "title_accepted": true,
+    "artist_matches": true,
+    "source_duration_delta_pct": 0.08272022892706077,
+    "version_tags_ok": true,
+    "live_mismatch": false,
+    "plausible_alternatives": 0
+  }
+}

@@ -1,0 +1,116 @@
+{
+  "id": "credit-xiaojiuwo-qq",
+  "source": "qq",
+  "note": "同名第一层样本 credit-xiaojiuwo 的检索层",
+  "track": {
+    "artist": "林俊杰 \u0026 蔡卓妍",
+    "title": "小酒窝",
+    "album": "JJ陆"
+  },
+  "captured_at": "2026-09-04",
+  "query": {
+    "artist": "林俊杰 \u0026 蔡卓妍",
+    "title": "小酒窝",
+    "album": "JJ陆",
+    "duration_secs": 0
+  },
+  "local_duration_secs": 218.026,
+  "items": [
+    {
+      "id": "003h3CYS3UxDB4",
+      "title": "小酒窝",
+      "artist": "林俊杰/蔡卓妍",
+      "album": "JJ陆",
+      "duration_secs": 218
+    },
+    {
+      "id": "003FKIZt27gmXO",
+      "title": "小酒窝 (粤语)",
+      "artist": "林俊杰/蔡卓妍",
+      "album": "70th Anniversary Collection",
+      "duration_secs": 217
+    },
+    {
+      "id": "002GntaZ4TExeB",
+      "title": "小酒窝 (2010英皇盛世10周年巨星演唱会)",
+      "artist": "林俊杰/蔡卓妍",
+      "duration_secs": 131
+    },
+    {
+      "id": "004E41JM4HhrrJ",
+      "title": "小酒窝",
+      "artist": "蔡卓妍/林俊杰",
+      "album": "二缺一",
+      "duration_secs": 217
+    },
+    {
+      "id": "002Q0F6H3l4CEK",
+      "title": "小酒窝 (DJ威仔版)",
+      "artist": "蔡卓妍/林俊杰",
+      "duration_secs": 248
+    },
+    {
+      "id": "002sRshy1BE5sL",
+      "title": "小酒窝 (Live)",
+      "artist": "宋威龙/宋茜",
+      "duration_secs": 181
+    },
+    {
+      "id": "002f0Cm82rdOUV",
+      "title": "小酒窝 (DJ版)",
+      "artist": "林俊杰/蔡卓妍",
+      "duration_secs": 155
+    },
+    {
+      "id": "001aHsjZ3wFREo",
+      "title": "小酒窝 (Live)",
+      "artist": "洪杰/许靖韵/陈凯彤",
+      "album": "英皇15周年群星演唱会",
+      "duration_secs": 215
+    },
+    {
+      "id": "000cbnoB0lbQTB",
+      "title": "小酒窝 (Live)",
+      "artist": "杨紫/吴昊宸",
+      "duration_secs": 130
+    },
+    {
+      "id": "003SPDPy1cgaAD",
+      "title": "小酒窝",
+      "artist": "白允y",
+      "album": "琥珀色黄昏像糖在很美的远方",
+      "duration_secs": 218
+    }
+  ],
+  "album_lookup": {
+    "002GntaZ4TExeB": "",
+    "002Q0F6H3l4CEK": "",
+    "002f0Cm82rdOUV": ""
+  },
+  "expect": {
+    "picked_id": "003h3CYS3UxDB4",
+    "accepted_strict": [
+      "003h3CYS3UxDB4",
+      "003FKIZt27gmXO",
+      "002GntaZ4TExeB",
+      "004E41JM4HhrrJ",
+      "002Q0F6H3l4CEK",
+      "002f0Cm82rdOUV"
+    ],
+    "accepted_loose": [
+      "003h3CYS3UxDB4",
+      "003FKIZt27gmXO",
+      "002GntaZ4TExeB",
+      "002f0Cm82rdOUV"
+    ],
+    "picked_no_album": "003h3CYS3UxDB4"
+  },
+  "judge": {
+    "title_accepted": true,
+    "artist_matches": true,
+    "source_duration_delta_pct": 0.011925183235031812,
+    "version_tags_ok": true,
+    "live_mismatch": false,
+    "plausible_alternatives": 0
+  }
+}

@@ -1,0 +1,105 @@
+{
+  "id": "single-are-you-ready-qq",
+  "source": "qq",
+  "note": "同名第一层样本 single-are-you-ready 的检索层",
+  "track": {
+    "artist": "关浩德",
+    "title": "Are You Ready",
+    "album": "Just Be a Rock"
+  },
+  "captured_at": "2026-09-04",
+  "query": {
+    "artist": "关浩德",
+    "title": "Are You Ready",
+    "album": "Just Be a Rock",
+    "duration_secs": 0
+  },
+  "local_duration_secs": 193.6529998779297,
+  "items": [
+    {
+      "id": "002aTHZ32Xpxte",
+      "title": "Are You Ready",
+      "artist": "关浩德Walter",
+      "album": "Be",
+      "duration_secs": 193
+    },
+    {
+      "id": "001Qa2GZ2T1n14",
+      "title": "Are You Ready",
+      "artist": "LNGSHOT",
+      "album": "4SHOBOIZ MIXTAPE",
+      "duration_secs": 155
+    },
+    {
+      "id": "0025xeI31vBMJV",
+      "title": "Are You Ready",
+      "artist": "Bassjackers",
+      "album": "Les pays bass EP, vol. 2",
+      "duration_secs": 135
+    },
+    {
+      "id": "001CVq5d0LuX8i",
+      "title": "Are You Ready (Live)",
+      "artist": "张月",
+      "album": "跨界歌王第五季 第7期",
+      "duration_secs": 214
+    },
+    {
+      "id": "000YzLgi3oOlV3",
+      "title": "Are You Ready (Live)",
+      "artist": "杨宝心",
+      "album": "中国好声音第四季 第2期",
+      "duration_secs": 201
+    },
+    {
+      "id": "001rVUnS2qEBrX",
+      "title": "Are You Ready",
+      "artist": "张惠妹",
+      "album": "牵手",
+      "duration_secs": 242
+    },
+    {
+      "id": "0033IoaM4KaBnj",
+      "title": "Are You Ready?",
+      "artist": "Lawson",
+      "album": "Chapman Square Chapter II (Deluxe Version)",
+      "duration_secs": 214
+    },
+    {
+      "id": "002vMiDr2b0vfm",
+      "title": "Are You Ready",
+      "artist": "AC/DC",
+      "album": "The Razors Edge",
+      "duration_secs": 250
+    },
+    {
+      "id": "00448BRd3wkRAK",
+      "title": "Are You Ready",
+      "artist": "BAD NINJA",
+      "album": "Tai Sabaki",
+      "duration_secs": 179
+    },
+    {
+      "id": "001BGJPm2u8JIN",
+      "title": "海浪海岸",
+      "artist": "关浩德Walter/关诗敏",
+      "album": "宜莫深思",
+      "duration_secs": 316
+    }
+  ],
+  "expect": {
+    "picked_id": "002aTHZ32Xpxte",
+    "accepted_loose": [
+      "002aTHZ32Xpxte"
+    ],
+    "picked_no_album": "002aTHZ32Xpxte"
+  },
+  "judge": {
+    "title_accepted": true,
+    "artist_matches": true,
+    "source_duration_delta_pct": 0.3372010133286393,
+    "version_tags_ok": true,
+    "live_mismatch": false,
+    "plausible_alternatives": 0
+  }
+}

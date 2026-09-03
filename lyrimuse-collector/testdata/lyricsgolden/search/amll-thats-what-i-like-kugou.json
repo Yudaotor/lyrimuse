@@ -1,0 +1,121 @@
+{
+  "id": "amll-thats-what-i-like-kugou",
+  "source": "kugou",
+  "note": "同名第一层样本 amll-thats-what-i-like 的检索层",
+  "track": {
+    "artist": "Bruno Mars",
+    "title": "That's What I Like",
+    "album": "24K Magic"
+  },
+  "captured_at": "2026-09-04",
+  "query": {
+    "artist": "Bruno Mars",
+    "title": "That's What I Like",
+    "album": "24K Magic",
+    "duration_secs": 206.693
+  },
+  "local_duration_secs": 206.693,
+  "items": [
+    {
+      "id": "3019f200dec10cb93ed58776b428665c",
+      "title": "That's What I Like",
+      "artist": "Bruno Mars",
+      "album": "24K Magic",
+      "album_id": "1792182",
+      "duration_secs": 206,
+      "language": "英语"
+    },
+    {
+      "id": "9705414e78bb1f0286eaa8d3b75d4efd",
+      "title": "That's What I Like (Remix)",
+      "artist": "Bruno Mars、Gucci Mane",
+      "album": "That's What I Like (Remix)",
+      "album_id": "2037493",
+      "duration_secs": 234,
+      "language": "英语"
+    },
+    {
+      "id": "d4398a04e125f3ba8c3d724a28c3ec72",
+      "title": "That's What I Like (BRII Remix)",
+      "artist": "Brii、Bruno Mars",
+      "album": "That's What I Like (BRII Remix)",
+      "album_id": "15556449",
+      "duration_secs": 198,
+      "language": "英语"
+    },
+    {
+      "id": "69a17702261a74e994bbdaa5780221d3",
+      "title": "APT.",
+      "artist": "ROSÉ、Bruno Mars",
+      "album": "APT.",
+      "album_id": "106438812",
+      "duration_secs": 169,
+      "language": "英语"
+    },
+    {
+      "id": "b91d348c7e14c0ca3b7917d8aab2099c",
+      "title": "That's What I Like (Alan Walker Remix)",
+      "artist": "Bruno Mars、Alan Walker",
+      "album": "That's What I Like (Alan Walker Remix)",
+      "album_id": "2138495",
+      "duration_secs": 195,
+      "language": "英语"
+    },
+    {
+      "id": "7ed7ab591160bc19d8034ad558ed1418",
+      "title": "Talking to the Moon",
+      "artist": "Bruno Mars",
+      "album": "It's Better If You Don't Understand",
+      "album_id": "1593507",
+      "duration_secs": 207,
+      "language": "英语"
+    },
+    {
+      "id": "655c8bbd98a3deca5ff2092e5551e61f",
+      "title": "That's What I Like (Workout Mix)",
+      "artist": "Power Music Workout、Bruno Mars、Jeremy Reeves、Jonathan Yip、Ray Romulus、Phillip Lawrence、James Fauntleroy、Christopher Brown",
+      "album": "That's What I Like - Single",
+      "album_id": "35663797",
+      "duration_secs": 222,
+      "language": "英语"
+    },
+    {
+      "id": "a874c45970ad55255dcb11aa7d64b376",
+      "title": "Runaway Baby",
+      "artist": "Bruno Mars",
+      "album": "Doo-Wops \u0026 Hooligans(Deluxe Version)",
+      "album_id": "969063",
+      "duration_secs": 148,
+      "language": "英语"
+    },
+    {
+      "id": "5d7b45d84c64e235e131c3c215218ed0",
+      "title": "That's What I Like (Tazty、slowed + reverb Tazty、slowed + reverb songs变速版)",
+      "artist": "Bruno Mars",
+      "album": "that's what i like",
+      "album_id": "59352805",
+      "duration_secs": 250,
+      "language": "英语"
+    },
+    {
+      "id": "c2ec3e8e1d712de1e9e9f242fc9170ae",
+      "title": "Uptown Funk (Explicit)",
+      "artist": "Mark Ronson、Bruno Mars",
+      "album": "Uptown Special",
+      "album_id": "544129",
+      "duration_secs": 269,
+      "language": "英语"
+    }
+  ],
+  "expect": {
+    "picked_id": "3019f200dec10cb93ed58776b428665c"
+  },
+  "judge": {
+    "title_accepted": true,
+    "artist_matches": true,
+    "source_duration_delta_pct": 0.33527985950177897,
+    "version_tags_ok": true,
+    "live_mismatch": false,
+    "plausible_alternatives": 0
+  }
+}

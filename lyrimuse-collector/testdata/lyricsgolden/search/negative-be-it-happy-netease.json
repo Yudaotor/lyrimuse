@@ -1,0 +1,336 @@
+{
+  "id": "negative-be-it-happy-netease",
+  "source": "netease",
+  "note": "负样本:只有 QQ 收录这位歌手,网易云/酷狗的同名结果全是别人的歌,身份闸必须一条都不认",
+  "track": {
+    "artist": "关浩德",
+    "title": "Be It Happy Or Sad",
+    "album": "Just Be a Rock"
+  },
+  "captured_at": "2026-09-04",
+  "query": {
+    "artist": "关浩德",
+    "title": "Be It Happy Or Sad",
+    "album": "Just Be a Rock",
+    "duration_secs": 219.6580047607422
+  },
+  "local_duration_secs": 219.6580047607422,
+  "items": [
+    {
+      "id": "2106094107",
+      "title": "Be It Happy Or Sad",
+      "artists": [
+        "关浩德Walter"
+      ],
+      "album": "Just Be A Rock",
+      "album_id": "180553360",
+      "duration_secs": 219.658
+    },
+    {
+      "id": "2051390387",
+      "title": "Be It Happy Or Sad",
+      "artists": [
+        "关浩德Walter"
+      ],
+      "album": "Just",
+      "album_id": "163715893",
+      "duration_secs": 219.658
+    },
+    {
+      "id": "1886365820",
+      "title": "let it be",
+      "artists": [
+        "关浩德Walter"
+      ],
+      "album": "if i could let it be",
+      "album_id": "134650658",
+      "duration_secs": 260.699
+    },
+    {
+      "id": "3394441320",
+      "title": "快乐着疲惫",
+      "artists": [
+        "DEN"
+      ],
+      "album": "快乐着疲惫",
+      "album_id": "382014527",
+      "duration_secs": 202.25
+    },
+    {
+      "id": "3430736775",
+      "title": "Be Happy",
+      "artists": [
+        "Veliora Swift"
+      ],
+      "album": "Can’t fix it",
+      "album_id": "396264290",
+      "duration_secs": 239.232
+    },
+    {
+      "id": "3423792049",
+      "title": "Ego Death",
+      "artists": [
+        "Xmonte"
+      ],
+      "album": "Happy Birthday X",
+      "album_id": "393708615",
+      "duration_secs": 121.208
+    },
+    {
+      "id": "3426457586",
+      "title": "Happy for You (Radio Edit)",
+      "artists": [
+        "Gareth John"
+      ],
+      "album": "Happy for You",
+      "album_id": "394753813",
+      "duration_secs": 193.59
+    },
+    {
+      "id": "3430420024",
+      "title": "Threadbare",
+      "artists": [
+        "Island J"
+      ],
+      "album": "Nobody Likes a Happy Woman",
+      "album_id": "396166033",
+      "duration_secs": 154.44
+    },
+    {
+      "id": "3430550951",
+      "title": "Happy",
+      "artists": [
+        "Sandy cde"
+      ],
+      "album": "Happy",
+      "album_id": "396202292",
+      "duration_secs": 181.84
+    },
+    {
+      "id": "3423672319",
+      "title": "Happy Hour",
+      "artists": [
+        "Brit Scoops"
+      ],
+      "album": "American Cheese",
+      "album_id": "393641482",
+      "duration_secs": 332.8
+    },
+    {
+      "id": "3431154428",
+      "title": "Happy birthday",
+      "artists": [
+        "SONGWRITERIA"
+      ],
+      "album": "Happy birthday",
+      "album_id": "396407297",
+      "duration_secs": 187.88
+    },
+    {
+      "id": "3424917266",
+      "title": "Happy Birthday to me myself and i",
+      "artists": [
+        "Trustedenemy"
+      ],
+      "album": "Happy Birthday to me myself and i",
+      "album_id": "394197014",
+      "duration_secs": 185.68
+    },
+    {
+      "id": "3430217501",
+      "title": "Be Happy, Right Now",
+      "artists": [
+        "RPeterson"
+      ],
+      "album": "We Deserve This Love",
+      "album_id": "396108034",
+      "duration_secs": 272.48
+    },
+    {
+      "id": "3424740509",
+      "title": "Happy Birthday To Me",
+      "artists": [
+        "Trustedenemy"
+      ],
+      "album": "Happy Birthday To Me",
+      "album_id": "394136488",
+      "duration_secs": 187.48
+    },
+    {
+      "id": "570837763",
+      "title": "笨小孩",
+      "artists": [
+        "刘德华",
+        "吴宗宪",
+        "柯受良"
+      ],
+      "album": "BMG全家福Happy Family",
+      "album_id": "39553829",
+      "duration_secs": 239.733
+    },
+    {
+      "id": "3423792047",
+      "title": "Noonie Mane",
+      "artists": [
+        "Xmonte"
+      ],
+      "album": "Happy Birthday X",
+      "album_id": "393708615",
+      "duration_secs": 148.971
+    },
+    {
+      "id": "3430997947",
+      "title": "happy children",
+      "artists": [
+        "泪痕",
+        "霓虹灯"
+      ],
+      "album": "happy children",
+      "album_id": "396368222",
+      "duration_secs": 137.456
+    },
+    {
+      "id": "3430898362",
+      "title": "Try To Be Happy",
+      "artists": [
+        "Bloody Lucky"
+      ],
+      "album": "Second Birth",
+      "album_id": "396336572",
+      "duration_secs": 201.545
+    },
+    {
+      "id": "3404775356",
+      "title": "why can't i be happy",
+      "artists": [
+        "asteria",
+        "an4rch"
+      ],
+      "album": "why can't i be happy",
+      "album_id": "386326718",
+      "duration_secs": 113.391
+    },
+    {
+      "id": "3423755872",
+      "title": "HAPPY BIRTHDAY MY LOVE",
+      "artists": [
+        "ELPRIDE-GANG"
+      ],
+      "album": "HAPPY BIRTHDAY MY LOVE",
+      "album_id": "393692049",
+      "duration_secs": 244.239
+    },
+    {
+      "id": "3430536221",
+      "title": "I HEAR THUNDER",
+      "artists": [
+        "Happy Kids Club"
+      ],
+      "album": "I HEAR THUNDER",
+      "album_id": "396197237",
+      "duration_secs": 240.024
+    },
+    {
+      "id": "3430444196",
+      "title": "Happy Birthday To You",
+      "artists": [
+        "Mister AK"
+      ],
+      "album": "Happy Birthday",
+      "album_id": "396173118",
+      "duration_secs": 245.92
+    },
+    {
+      "id": "3430427355",
+      "title": "HAPPY BIRTHDAY",
+      "artists": [
+        "Yourapper"
+      ],
+      "album": "ETATS D'ÂME",
+      "album_id": "396169183",
+      "duration_secs": 199.719
+    },
+    {
+      "id": "3423792053",
+      "title": "Paranoia",
+      "artists": [
+        "Xmonte"
+      ],
+      "album": "Happy Birthday X",
+      "album_id": "393708615",
+      "duration_secs": 154.697
+    },
+    {
+      "id": "3430389375",
+      "title": "1. Happiness",
+      "artists": [
+        "Kikuro",
+        "Kakira"
+      ],
+      "album": "Happy",
+      "album_id": "396159535",
+      "duration_secs": 269.56
+    },
+    {
+      "id": "3430574103",
+      "title": "Happy Birthday, Dear",
+      "artists": [
+        "Teddy North"
+      ],
+      "album": "Happy Birthday, Dear",
+      "album_id": "396207412",
+      "duration_secs": 199.76
+    },
+    {
+      "id": "3431146219",
+      "title": "Happy Birthday Kanha",
+      "artists": [
+        "Gaurav Yadav"
+      ],
+      "album": "Happy Birthday Kanha",
+      "album_id": "396403746",
+      "duration_secs": 178.586
+    },
+    {
+      "id": "3430528985",
+      "title": "Happy to meet you",
+      "artists": [
+        "Annie Jiang"
+      ],
+      "album": "Happy to meet you",
+      "album_id": "396194682",
+      "duration_secs": 90.6
+    },
+    {
+      "id": "3428460752",
+      "title": "Happy Birthday",
+      "artists": [
+        "ThyGhxst"
+      ],
+      "album": "Celebrate",
+      "album_id": "395472093",
+      "duration_secs": 109.2
+    },
+    {
+      "id": "3426546681",
+      "title": "Happy",
+      "artists": [
+        "MONKEY MAJIK"
+      ],
+      "album": "Frequency",
+      "album_id": "394792565",
+      "duration_secs": 154.098
+    }
+  ],
+  "expect": {
+    "picked_id": ""
+  },
+  "judge": {
+    "title_accepted": false,
+    "artist_matches": false,
+    "source_duration_delta_pct": -1,
+    "version_tags_ok": false,
+    "live_mismatch": false,
+    "plausible_alternatives": 0
+  }
+}

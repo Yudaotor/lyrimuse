@@ -1,0 +1,332 @@
+{
+  "id": "reject-plain-iwantyou-netease",
+  "source": "netease",
+  "note": "同名第一层样本 reject-plain-iwantyou 的检索层",
+  "track": {
+    "artist": "蛋堡",
+    "title": "I Want You",
+    "album": "月光"
+  },
+  "captured_at": "2026-09-04",
+  "query": {
+    "artist": "蛋堡",
+    "title": "I Want You",
+    "album": "月光",
+    "duration_secs": 243.5290069580078
+  },
+  "local_duration_secs": 243.5290069580078,
+  "items": [
+    {
+      "id": "76834",
+      "title": "I Want You",
+      "artists": [
+        "蛋堡"
+      ],
+      "album": "月光",
+      "album_id": "7542",
+      "duration_secs": 246.408
+    },
+    {
+      "id": "76873",
+      "title": "关键字: Intro",
+      "artists": [
+        "蛋堡"
+      ],
+      "album": "收敛水",
+      "album_id": "7547",
+      "duration_secs": 114.026
+    },
+    {
+      "id": "76881",
+      "title": "关于小熊",
+      "artists": [
+        "蛋堡"
+      ],
+      "album": "收敛水",
+      "album_id": "7547",
+      "duration_secs": 316.92
+    },
+    {
+      "id": "76867",
+      "title": "打包",
+      "artists": [
+        "蛋堡"
+      ],
+      "album": "打包",
+      "album_id": "7546",
+      "duration_secs": 272.901
+    },
+    {
+      "id": "76899",
+      "title": "收敛水",
+      "artists": [
+        "蛋堡"
+      ],
+      "album": "收敛水",
+      "album_id": "7547",
+      "duration_secs": 237.32
+    },
+    {
+      "id": "76837",
+      "title": "过程",
+      "artists": [
+        "蛋堡"
+      ],
+      "album": "月光",
+      "album_id": "7542",
+      "duration_secs": 288.32
+    },
+    {
+      "id": "29343277",
+      "title": "爱简单",
+      "artists": [
+        "蛋堡"
+      ],
+      "album": "打包",
+      "album_id": "7546",
+      "duration_secs": 289
+    },
+    {
+      "id": "76875",
+      "title": "Hit the Rhyme",
+      "artists": [
+        "蛋堡"
+      ],
+      "album": "收敛水",
+      "album_id": "7547",
+      "duration_secs": 300.84
+    },
+    {
+      "id": "76897",
+      "title": "热水澡",
+      "artists": [
+        "蛋堡"
+      ],
+      "album": "收敛水",
+      "album_id": "7547",
+      "duration_secs": 181.6
+    },
+    {
+      "id": "76844",
+      "title": "少年维持着烦恼",
+      "artists": [
+        "蛋堡"
+      ],
+      "album": "Winter Sweet",
+      "album_id": "7543",
+      "duration_secs": 329.84
+    },
+    {
+      "id": "29343276",
+      "title": "回到",
+      "artists": [
+        "蛋堡"
+      ],
+      "album": "打包",
+      "album_id": "7546",
+      "duration_secs": 326.556
+    },
+    {
+      "id": "76891",
+      "title": "金赌兰",
+      "artists": [
+        "蛋堡"
+      ],
+      "album": "收敛水",
+      "album_id": "7547",
+      "duration_secs": 271.053
+    },
+    {
+      "id": "76883",
+      "title": "给你一个吻",
+      "artists": [
+        "蛋堡"
+      ],
+      "album": "收敛水",
+      "album_id": "7547",
+      "duration_secs": 99.04
+    },
+    {
+      "id": "76836",
+      "title": "她和时间跳华尔兹",
+      "artists": [
+        "蛋堡"
+      ],
+      "album": "月光",
+      "album_id": "7542",
+      "duration_secs": 381.873
+    },
+    {
+      "id": "27533015",
+      "title": "我们都有问题 feat. N.CHEN",
+      "artists": [
+        "蛋堡"
+      ],
+      "album": "你所不知道的杜振熙之内部整修",
+      "album_id": "2628001",
+      "duration_secs": 286.175
+    },
+    {
+      "id": "27533219",
+      "title": "史诗",
+      "artists": [
+        "蛋堡"
+      ],
+      "album": "你所不知道的杜振熙之内部整修",
+      "album_id": "2628001",
+      "duration_secs": 210
+    },
+    {
+      "id": "76858",
+      "title": "Winter Sweet",
+      "artists": [
+        "蛋堡"
+      ],
+      "album": "Winter Sweet",
+      "album_id": "7543",
+      "duration_secs": 350
+    },
+    {
+      "id": "76885",
+      "title": "遇见",
+      "artists": [
+        "蛋堡"
+      ],
+      "album": "收敛水",
+      "album_id": "7547",
+      "duration_secs": 233.053
+    },
+    {
+      "id": "27533016",
+      "title": "雨没停过",
+      "artists": [
+        "蛋堡"
+      ],
+      "album": "你所不知道的杜振熙之内部整修",
+      "album_id": "2628001",
+      "duration_secs": 285.851
+    },
+    {
+      "id": "76821",
+      "title": "踩.脚.踏.车",
+      "artists": [
+        "蛋堡"
+      ],
+      "album": "踩.脚.踏.车",
+      "album_id": "7539",
+      "duration_secs": 245.426
+    },
+    {
+      "id": "2079697134",
+      "title": "IwantYou",
+      "artists": [
+        "Retread",
+        "Luba Juice"
+      ],
+      "album": "BlessmyEars",
+      "album_id": "174084525",
+      "duration_secs": 260.194
+    },
+    {
+      "id": "4157452",
+      "title": "iwantyou",
+      "artists": [
+        "Lovesliescrushing"
+      ],
+      "album": "bloweyelashwish",
+      "album_id": "420268",
+      "duration_secs": 122.093
+    },
+    {
+      "id": "29345578",
+      "title": "Iwantyou",
+      "artists": [
+        "Nemertines"
+      ],
+      "album": "Nemertines",
+      "album_id": "2998633",
+      "duration_secs": 296
+    },
+    {
+      "id": "3400871280",
+      "title": "IWANTYOU",
+      "artists": [
+        "Juniya!"
+      ],
+      "album": "IWANTYOU",
+      "album_id": "384931581",
+      "duration_secs": 154.087
+    },
+    {
+      "id": "1897085440",
+      "title": "Iwantyou",
+      "artists": [
+        "代慧媛伊人"
+      ],
+      "album": "冲冲",
+      "album_id": "136441860",
+      "duration_secs": 71
+    },
+    {
+      "id": "2753776963",
+      "title": "iwantyou",
+      "artists": [
+        "Lovesliescrushing"
+      ],
+      "album": "Bloweyelashwish (Deluxe Version)",
+      "album_id": "287817703",
+      "duration_secs": 122.093
+    },
+    {
+      "id": "2034914587",
+      "title": "IWANTYOU",
+      "artists": [
+        "jo."
+      ],
+      "album": "This Moment D Minor",
+      "album_id": "162783605",
+      "duration_secs": 225
+    },
+    {
+      "id": "3349000667",
+      "title": "Iwantyou",
+      "artists": [
+        "Bigray301"
+      ],
+      "album": "Make Love Not War",
+      "album_id": "361804555",
+      "duration_secs": 189.96
+    },
+    {
+      "id": "2086564147",
+      "title": "IWANTYOU",
+      "artists": [
+        "POYMI"
+      ],
+      "album": "IWANTYOU",
+      "album_id": "175868505",
+      "duration_secs": 123.399
+    },
+    {
+      "id": "1966238576",
+      "title": "Iwantyou",
+      "artists": [
+        "Shellbeat"
+      ],
+      "album": "Iwantyou",
+      "album_id": "148533268",
+      "duration_secs": 739.701
+    }
+  ],
+  "expect": {
+    "picked_id": "76834"
+  },
+  "judge": {
+    "title_accepted": true,
+    "artist_matches": true,
+    "source_duration_delta_pct": 1.1821971755868101,
+    "version_tags_ok": true,
+    "live_mismatch": false,
+    "plausible_alternatives": 0
+  }
+}

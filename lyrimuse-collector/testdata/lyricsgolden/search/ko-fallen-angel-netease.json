@@ -1,0 +1,332 @@
+{
+  "id": "ko-fallen-angel-netease",
+  "source": "netease",
+  "note": "同名第一层样本 ko-fallen-angel 的检索层",
+  "track": {
+    "artist": "JENNIE",
+    "title": "FALLEN ANGEL",
+    "album": "Fallen Angel - EP"
+  },
+  "captured_at": "2026-09-04",
+  "query": {
+    "artist": "JENNIE",
+    "title": "FALLEN ANGEL",
+    "album": "Fallen Angel - EP",
+    "duration_secs": 199.16600036621094
+  },
+  "local_duration_secs": 199.16600036621094,
+  "items": [
+    {
+      "id": "3427054688",
+      "title": "FALLEN ANGEL",
+      "artists": [
+        "JENNIE"
+      ],
+      "album": "Fallen Angel (Digital EP)",
+      "album_id": "395010831",
+      "duration_secs": 199.166
+    },
+    {
+      "id": "1816530449",
+      "title": "FallenAngel",
+      "artists": [
+        "UnicornPhantom"
+      ],
+      "album": "Fallen Angel",
+      "album_id": "122195117",
+      "duration_secs": 204.787
+    },
+    {
+      "id": "3427056943",
+      "title": "HEAVEN",
+      "artists": [
+        "JENNIE"
+      ],
+      "album": "Fallen Angel (Digital EP)",
+      "album_id": "395010831",
+      "duration_secs": 186.72
+    },
+    {
+      "id": "3409943113",
+      "title": "Less than a Lover",
+      "artists": [
+        "JENNIE"
+      ],
+      "album": "Less than a Lover",
+      "album_id": "388454258",
+      "duration_secs": 145.68
+    },
+    {
+      "id": "2678217330",
+      "title": "start a war",
+      "artists": [
+        "JENNIE"
+      ],
+      "album": "Ruby",
+      "album_id": "263843261",
+      "duration_secs": 165.066
+    },
+    {
+      "id": "451701228",
+      "title": "FallenAngel",
+      "artists": [
+        "ASTRAY"
+      ],
+      "album": "FallenAngel",
+      "album_id": "35113262",
+      "duration_secs": 125.675
+    },
+    {
+      "id": "2088473570",
+      "title": "You \u0026 Me",
+      "artists": [
+        "JENNIE"
+      ],
+      "album": "JENNIE Special Single [You \u0026 Me]",
+      "album_id": "176381425",
+      "duration_secs": 179.164
+    },
+    {
+      "id": "3427055191",
+      "title": "Less than a Lover",
+      "artists": [
+        "JENNIE"
+      ],
+      "album": "Fallen Angel (Digital EP)",
+      "album_id": "395010831",
+      "duration_secs": 145.68
+    },
+    {
+      "id": "2692914700",
+      "title": "like JENNIE",
+      "artists": [
+        "JENNIE"
+      ],
+      "album": "like JENNIE",
+      "album_id": "268559014",
+      "duration_secs": 123.559
+    },
+    {
+      "id": "2678216836",
+      "title": "Seoul City",
+      "artists": [
+        "JENNIE"
+      ],
+      "album": "Ruby",
+      "album_id": "263843261",
+      "duration_secs": 164.398
+    },
+    {
+      "id": "528273510",
+      "title": "FallenAngel",
+      "artists": [
+        "LIEON"
+      ],
+      "album": "FallenAngel",
+      "album_id": "37179207",
+      "duration_secs": 124.998
+    },
+    {
+      "id": "2678216793",
+      "title": "with the IE (way up)",
+      "artists": [
+        "JENNIE"
+      ],
+      "album": "Ruby",
+      "album_id": "263843261",
+      "duration_secs": 163.899
+    },
+    {
+      "id": "1324880131",
+      "title": "SOLO",
+      "artists": [
+        "JENNIE"
+      ],
+      "album": "SOLO",
+      "album_id": "74284272",
+      "duration_secs": 169.566
+    },
+    {
+      "id": "3356285367",
+      "title": "Seoul City",
+      "artists": [
+        "JENNIE"
+      ],
+      "album": "Ruby (The Complete Collection)",
+      "album_id": "364938636",
+      "duration_secs": 164.398
+    },
+    {
+      "id": "2678217359",
+      "title": "F.T.S.",
+      "artists": [
+        "JENNIE"
+      ],
+      "album": "Ruby",
+      "album_id": "263843261",
+      "duration_secs": 152.75
+    },
+    {
+      "id": "2678216807",
+      "title": "ZEN",
+      "artists": [
+        "JENNIE"
+      ],
+      "album": "Ruby",
+      "album_id": "263843261",
+      "duration_secs": 201.446
+    },
+    {
+      "id": "3356285368",
+      "title": "Starlight",
+      "artists": [
+        "JENNIE"
+      ],
+      "album": "Ruby (The Complete Collection)",
+      "album_id": "364938636",
+      "duration_secs": 168.489
+    },
+    {
+      "id": "2678217385",
+      "title": "Starlight",
+      "artists": [
+        "JENNIE"
+      ],
+      "album": "Ruby",
+      "album_id": "263843261",
+      "duration_secs": 168.457
+    },
+    {
+      "id": "3356285361",
+      "title": "Damn Right (JENNIE Only Audio)",
+      "artists": [
+        "JENNIE"
+      ],
+      "album": "Ruby (The Complete Collection)",
+      "album_id": "364938636",
+      "duration_secs": 143.751
+    },
+    {
+      "id": "2678217317",
+      "title": "like JENNIE",
+      "artists": [
+        "JENNIE"
+      ],
+      "album": "Ruby",
+      "album_id": "263843261",
+      "duration_secs": 123.517
+    },
+    {
+      "id": "2678217387",
+      "title": "twin",
+      "artists": [
+        "JENNIE"
+      ],
+      "album": "Ruby",
+      "album_id": "263843261",
+      "duration_secs": 208.909
+    },
+    {
+      "id": "2635069083",
+      "title": "Mantra",
+      "artists": [
+        "JENNIE"
+      ],
+      "album": "Mantra",
+      "album_id": "250157091",
+      "duration_secs": 136.672
+    },
+    {
+      "id": "2098023871",
+      "title": "FallenAngel",
+      "artists": [
+        "Vampyx",
+        "Pröz"
+      ],
+      "album": "Fallen angel",
+      "album_id": "178648543",
+      "duration_secs": 154.062
+    },
+    {
+      "id": "2008287716",
+      "title": "fallenangel",
+      "artists": [
+        "callasoiled"
+      ],
+      "album": "Apocalypse",
+      "album_id": "156913353",
+      "duration_secs": 230.222
+    },
+    {
+      "id": "3354331886",
+      "title": "FALLENANGEL",
+      "artists": [
+        "ORACLE"
+      ],
+      "album": "FALLENANGEL",
+      "album_id": "364062715",
+      "duration_secs": 160.845
+    },
+    {
+      "id": "2634749495",
+      "title": "Mantra",
+      "artists": [
+        "JENNIE"
+      ],
+      "album": "Mantra",
+      "album_id": "250157091",
+      "duration_secs": 136.695
+    },
+    {
+      "id": "2090117183",
+      "title": "fallenangel",
+      "artists": [
+        "4thwavelouie"
+      ],
+      "album": "Blues.",
+      "album_id": "176622312",
+      "duration_secs": 95.169
+    },
+    {
+      "id": "2070492216",
+      "title": "FallenAngel",
+      "artists": [
+        "SaintRichard"
+      ],
+      "album": "FallenAngel",
+      "album_id": "171459802",
+      "duration_secs": 175.912
+    },
+    {
+      "id": "2669430617",
+      "title": "fallenangel",
+      "artists": [
+        "d1rty"
+      ],
+      "album": "fallen angel",
+      "album_id": "260843564",
+      "duration_secs": 85
+    },
+    {
+      "id": "1805483585",
+      "title": "FallenAngel",
+      "artists": [
+        "Joker"
+      ],
+      "album": "FallenAngel",
+      "album_id": "120632564",
+      "duration_secs": 223.634
+    }
+  ],
+  "expect": {
+    "picked_id": "3427054688"
+  },
+  "judge": {
+    "title_accepted": true,
+    "artist_matches": true,
+    "source_duration_delta_pct": 1.8387221715045302e-7,
+    "version_tags_ok": true,
+    "live_mismatch": false,
+    "plausible_alternatives": 0
+  }
+}

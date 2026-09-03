@@ -1,0 +1,121 @@
+{
+  "id": "native-earth-song-kugou",
+  "source": "kugou",
+  "note": "同名第一层样本 native-earth-song 的检索层",
+  "track": {
+    "artist": "Michael Jackson",
+    "title": "Earth Song",
+    "album": "HIStory Continues"
+  },
+  "captured_at": "2026-09-04",
+  "query": {
+    "artist": "Michael Jackson",
+    "title": "Earth Song",
+    "album": "HIStory Continues",
+    "duration_secs": 405.9339904785156
+  },
+  "local_duration_secs": 405.9339904785156,
+  "items": [
+    {
+      "id": "2aa0f429c28c20fafef788ba9e37ba74",
+      "title": "Earth Song",
+      "artist": "Michael Jackson",
+      "album": "HIStory - PAST, PRESENT AND FUTURE - BOOK I (Explicit)",
+      "album_id": "26632080",
+      "duration_secs": 405,
+      "language": "英语"
+    },
+    {
+      "id": "9e1ec0eb20e829c0dd1bc02e36e731e4",
+      "title": "Earth Song (Radio Edit)",
+      "artist": "Michael Jackson",
+      "album": "Number Ones",
+      "album_id": "981160",
+      "duration_secs": 301,
+      "language": "英语"
+    },
+    {
+      "id": "d6028f481adee2df5a3271235916bc78",
+      "title": "Earth Song (Remastered Version)",
+      "artist": "Michael Jackson",
+      "album": "Michael Jackson's This Is It",
+      "album_id": "55769830",
+      "duration_secs": 406,
+      "language": "英语"
+    },
+    {
+      "id": "6c57b4c89863b825b812d968e7488232",
+      "title": "Billie Jean",
+      "artist": "Michael Jackson",
+      "album": "Thriller (颤栗)",
+      "album_id": "8439993",
+      "duration_secs": 294,
+      "language": "英语"
+    },
+    {
+      "id": "187fe15716634c6679fc2a566fd87aac",
+      "title": "Earth Song",
+      "artist": "Michael Jackson",
+      "album": "700 songs Remixes",
+      "album_id": "18765800",
+      "duration_secs": 301,
+      "language": "英语"
+    },
+    {
+      "id": "3c1e4d7261a88224360eb7af9a2f3ec3",
+      "title": "Beat It",
+      "artist": "Michael Jackson",
+      "album": "Thriller (颤栗)",
+      "album_id": "8439993",
+      "duration_secs": 258,
+      "language": "英语"
+    },
+    {
+      "id": "3f632608ba349a6b4a46f1133c3561bf",
+      "title": "Earth Song (Radio Edit)",
+      "artist": "Michael Jackson",
+      "album": "Talents France Bleu Vol. 2",
+      "album_id": "19323917",
+      "duration_secs": 287,
+      "language": "英语"
+    },
+    {
+      "id": "b9b5fb5386c8a6eacca56e5a0851ecf2",
+      "title": "We Are The World",
+      "artist": "Michael Jackson",
+      "album": "King of Pop",
+      "album_id": "4077366",
+      "duration_secs": 320,
+      "language": "英语"
+    },
+    {
+      "id": "96f8a4defa51fc707b5d8d30b86ad2d9",
+      "title": "Earth Song (Live)",
+      "artist": "Michael Jackson",
+      "album": "New Years Eve in Brunei",
+      "album_id": "966555",
+      "duration_secs": 565,
+      "language": "英语"
+    },
+    {
+      "id": "6576ed8c1e6d716d5379b632fdac1e91",
+      "title": "Michael Jackson DMC Megamix",
+      "artist": "Michael Jackson",
+      "album": "Earth Song",
+      "album_id": "982983",
+      "duration_secs": 677,
+      "language": "英语"
+    }
+  ],
+  "expect": {
+    "picked_id": "2aa0f429c28c20fafef788ba9e37ba74"
+  },
+  "judge": {
+    "title_accepted": true,
+    "artist_matches": true,
+    "source_duration_delta_pct": 0.2300843241568994,
+    "version_tags_ok": true,
+    "live_mismatch": false,
+    "plausible_alternatives": 0
+  }
+}

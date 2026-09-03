@@ -1,0 +1,115 @@
+{
+  "id": "ko-fallen-angel-qq",
+  "source": "qq",
+  "note": "同名第一层样本 ko-fallen-angel 的检索层",
+  "track": {
+    "artist": "JENNIE",
+    "title": "FALLEN ANGEL",
+    "album": "Fallen Angel - EP"
+  },
+  "captured_at": "2026-09-04",
+  "query": {
+    "artist": "JENNIE",
+    "title": "FALLEN ANGEL",
+    "album": "Fallen Angel - EP",
+    "duration_secs": 0
+  },
+  "local_duration_secs": 199.16600036621094,
+  "items": [
+    {
+      "id": "00110Ak40arZvM",
+      "title": "FALLEN ANGEL",
+      "artist": "JENNIE",
+      "album": "Fallen Angel (Digital EP) [Explicit]",
+      "duration_secs": 199
+    },
+    {
+      "id": "000EUP2x2za0qj",
+      "title": "HEAVEN (Explicit)",
+      "artist": "JENNIE",
+      "album": "Fallen Angel (Digital EP) [Explicit]",
+      "duration_secs": 186
+    },
+    {
+      "id": "00313VJb0z7M7h",
+      "title": "Fallen Angel (2026 Lollapalooza音乐节芝加哥站现场)",
+      "artist": "JENNIE",
+      "duration_secs": 254
+    },
+    {
+      "id": "0042ateh1Vwlkg",
+      "title": "Fallen Angel",
+      "artist": "Jennie（제니）",
+      "album": "Fallen Angel",
+      "duration_secs": 193
+    },
+    {
+      "id": "000CDZLc1WG0ao",
+      "title": "Less than a Lover",
+      "artist": "JENNIE",
+      "album": "Fallen Angel (Digital EP) [Explicit]",
+      "duration_secs": 145
+    },
+    {
+      "id": "002KUEtN1x4U04",
+      "title": "FALLEN ANGEL (28秒试听版片段)",
+      "artist": "JENNIE",
+      "duration_secs": 28
+    },
+    {
+      "id": "002xIMbb0urBTq",
+      "title": "Dracula (Explicit)",
+      "artist": "Tame Impala/JENNIE",
+      "album": "Dracula [Explicit]",
+      "duration_secs": 209
+    },
+    {
+      "id": "0001OrBj0vNr7d",
+      "title": "Mantra (Explicit)",
+      "artist": "JENNIE",
+      "album": "Mantra",
+      "duration_secs": 136
+    },
+    {
+      "id": "002vDVlf0N3N25",
+      "title": "Black",
+      "artist": "G-DRAGON/JENNIE",
+      "album": "G-DRAGON 2ND ALBUM : COUP D`ETAT",
+      "duration_secs": 205
+    },
+    {
+      "id": "000OMenX3r9wZL",
+      "title": "One Of The Girls",
+      "artist": "The Weeknd/JENNIE/Lily-Rose Depp",
+      "album": "The Idol Episode 4 (Music from the HBO Original Series)",
+      "duration_secs": 244
+    }
+  ],
+  "album_lookup": {
+    "002KUEtN1x4U04": "",
+    "00313VJb0z7M7h": ""
+  },
+  "expect": {
+    "picked_id": "00110Ak40arZvM",
+    "accepted_strict": [
+      "00110Ak40arZvM",
+      "00313VJb0z7M7h",
+      "002KUEtN1x4U04"
+    ],
+    "accepted_loose": [
+      "00110Ak40arZvM",
+      "00313VJb0z7M7h",
+      "0042ateh1Vwlkg",
+      "002KUEtN1x4U04"
+    ],
+    "picked_no_album": "00110Ak40arZvM"
+  },
+  "judge": {
+    "title_accepted": true,
+    "artist_matches": true,
+    "source_duration_delta_pct": 0.08334774304133685,
+    "version_tags_ok": true,
+    "live_mismatch": false,
+    "plausible_alternatives": 0
+  }
+}

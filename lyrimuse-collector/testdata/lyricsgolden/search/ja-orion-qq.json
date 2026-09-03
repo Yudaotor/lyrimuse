@@ -1,0 +1,107 @@
+{
+  "id": "ja-orion-qq",
+  "source": "qq",
+  "note": "同名第一层样本 ja-orion 的检索层",
+  "track": {
+    "artist": "米津玄師",
+    "title": "orion",
+    "album": "BOOTLEG"
+  },
+  "captured_at": "2026-09-04",
+  "query": {
+    "artist": "米津玄师",
+    "title": "orion",
+    "album": "BOOTLEG",
+    "duration_secs": 0
+  },
+  "local_duration_secs": 281.90301513671875,
+  "items": [
+    {
+      "id": "000lfCOR1mpXiN",
+      "title": "orion",
+      "artist": "米津玄師",
+      "album": "オリオン",
+      "duration_secs": 281
+    },
+    {
+      "id": "001bAKML3oWvdu",
+      "title": "LADY+ORION (Remix)",
+      "artist": "瑞典厨师/米津玄師",
+      "duration_secs": 183
+    },
+    {
+      "id": "000akynZ2Rbro5",
+      "title": "Lemon",
+      "artist": "米津玄師",
+      "album": "レモン",
+      "duration_secs": 256
+    },
+    {
+      "id": "000MW82Z2j20g2",
+      "title": "LOSER",
+      "artist": "米津玄師",
+      "album": "LOSER / ナンバーナイン",
+      "duration_secs": 243
+    },
+    {
+      "id": "003mgM2o0oyQBz",
+      "title": "オリオン",
+      "artist": "YOASOBI",
+      "album": "THE BOOK for,",
+      "duration_secs": 206
+    },
+    {
+      "id": "001p3V4c0PQdmd",
+      "title": "打上花火",
+      "artist": "Daoko/米津玄師",
+      "album": "打上花火 (通常盤)",
+      "duration_secs": 289
+    },
+    {
+      "id": "0014vlbY2MFJQ9",
+      "title": "JANE DOE",
+      "artist": "米津玄師/宇多田光",
+      "album": "JANE DOE",
+      "duration_secs": 235
+    },
+    {
+      "id": "000pdJhi1P0N8f",
+      "title": "死神",
+      "artist": "米津玄師",
+      "album": "Pale Blue",
+      "duration_secs": 180
+    },
+    {
+      "id": "003RkReH1UVuEC",
+      "title": "IRIS OUT",
+      "artist": "米津玄師",
+      "album": "IRIS OUT",
+      "duration_secs": 151
+    },
+    {
+      "id": "003H8p1T3bjOv7",
+      "title": "KICK BACK",
+      "artist": "米津玄師",
+      "album": "KICK BACK",
+      "duration_secs": 193
+    }
+  ],
+  "expect": {
+    "picked_id": "000lfCOR1mpXiN",
+    "accepted_strict": [
+      "000lfCOR1mpXiN"
+    ],
+    "accepted_loose": [
+      "000lfCOR1mpXiN"
+    ],
+    "picked_no_album": "000lfCOR1mpXiN"
+  },
+  "judge": {
+    "title_accepted": true,
+    "artist_matches": true,
+    "source_duration_delta_pct": 0.32032830024212444,
+    "version_tags_ok": true,
+    "live_mismatch": false,
+    "plausible_alternatives": 0
+  }
+}

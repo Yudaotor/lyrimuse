@@ -1,0 +1,121 @@
+{
+  "id": "latin-purple-rain-kugou",
+  "source": "kugou",
+  "note": "同名第一层样本 latin-purple-rain 的检索层",
+  "track": {
+    "artist": "Prince \u0026 The Revolution",
+    "title": "Purple Rain",
+    "album": "Purple Rain"
+  },
+  "captured_at": "2026-09-04",
+  "query": {
+    "artist": "Prince \u0026 The Revolution",
+    "title": "Purple Rain",
+    "album": "Purple Rain",
+    "duration_secs": 521
+  },
+  "local_duration_secs": 521,
+  "items": [
+    {
+      "id": "07fb70a916111edc449d70910bffeec3",
+      "title": "Purple Rain",
+      "artist": "Prince \u0026 The Revolution",
+      "album": "The Hits / The B-Sides (Explicit)",
+      "album_id": "8260514",
+      "duration_secs": 520,
+      "language": "英语"
+    },
+    {
+      "id": "2cc35a0ad478c863300433ce663737f8",
+      "title": "Let's Go Crazy",
+      "artist": "Prince \u0026 The Revolution",
+      "album": "Purple Rain",
+      "album_id": "94048299",
+      "duration_secs": 280,
+      "language": "英语"
+    },
+    {
+      "id": "701d005a6dc806a502c69c9243dc928c",
+      "title": "I Would Die 4 U",
+      "artist": "Prince \u0026 The Revolution",
+      "album": "Purple Rain",
+      "album_id": "94048299",
+      "duration_secs": 169,
+      "language": "英语"
+    },
+    {
+      "id": "d3ed28f74b2b469e9d19f047abd7a118",
+      "title": "Purple Rain (Live)",
+      "artist": "Prince \u0026 The Revolution、Prince Rogers Nelson、Wendy Melvoin、Lisa Coleman",
+      "album": "On Parade in '86(Live)",
+      "album_id": "10913439",
+      "duration_secs": 721,
+      "language": "英语"
+    },
+    {
+      "id": "fd4e5458064a519b8b983cfff43a5891",
+      "title": "Purple Rain (Live)",
+      "artist": "Prince \u0026 The Revolution",
+      "album": "The Future (Live)",
+      "album_id": "45973994",
+      "duration_secs": 1167,
+      "language": "英语"
+    },
+    {
+      "id": "071544f752c1488eca0c9e29da919a74",
+      "title": "Purple Rain",
+      "artist": "Prince、The Revolution",
+      "album": "The Very Best Of Prince",
+      "album_id": "163476",
+      "duration_secs": 522,
+      "language": "英语"
+    },
+    {
+      "id": "8b18ece1faaa609bf74f860fdedd6a48",
+      "title": "Purple Rain (Live)",
+      "artist": "Jessie J",
+      "album": "歌手第二季 第六期",
+      "album_id": "8356167",
+      "duration_secs": 384,
+      "language": "英语"
+    },
+    {
+      "id": "193e60f209670eaecb82e522f6a1c8cc",
+      "title": "Purple Rain",
+      "artist": "The Revolution",
+      "album": "Purple Rain (Explicit)",
+      "album_id": "1849235",
+      "duration_secs": 520,
+      "language": "英语"
+    },
+    {
+      "id": "6fffeb64e9d819a237488baa153af3d6",
+      "title": "Purple Rain",
+      "artist": "Urselle",
+      "album": "Vintage Chic 100",
+      "album_id": "35802824",
+      "duration_secs": 239,
+      "language": "英语"
+    },
+    {
+      "id": "987426efd36b1bae14d24cd191cf8e7f",
+      "title": "Let's Go Crazy",
+      "artist": "Prince、Prince \u0026 The Revolution",
+      "album": "The Best Air Guitar Album in the World...Ever Vol.3",
+      "album_id": "23749073",
+      "duration_secs": 280,
+      "language": "英语"
+    }
+  ],
+  "expect": {
+    "picked_id": "193e60f209670eaecb82e522f6a1c8cc"
+  },
+  "judge": {
+    "title_accepted": true,
+    "artist_matches": true,
+    "source_duration_delta_pct": 0.19193857965451055,
+    "version_tags_ok": true,
+    "live_mismatch": false,
+    "plausible_alternatives": 0
+  }
+}

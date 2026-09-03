@@ -1,0 +1,333 @@
+{
+  "id": "corroborated-haoburongyi-netease",
+  "source": "netease",
+  "note": "同名第一层样本 corroborated-haoburongyi 的检索层",
+  "track": {
+    "artist": "方大同",
+    "title": "好不容易",
+    "album": "15"
+  },
+  "captured_at": "2026-09-04",
+  "query": {
+    "artist": "方大同",
+    "title": "好不容易",
+    "album": "15",
+    "duration_secs": 379.994
+  },
+  "local_duration_secs": 379.994,
+  "items": [
+    {
+      "id": "81997",
+      "title": "好不容易",
+      "artists": [
+        "方大同"
+      ],
+      "album": "15",
+      "album_id": "8100",
+      "duration_secs": 380
+    },
+    {
+      "id": "1462515188",
+      "title": "好不容易",
+      "artists": [
+        "方大同"
+      ],
+      "album": "好不容易",
+      "album_id": "92364230",
+      "duration_secs": 380.864
+    },
+    {
+      "id": "81958",
+      "title": "好不容易(Live)",
+      "artists": [
+        "方大同"
+      ],
+      "album": "15 香港演唱会(2011Live)",
+      "album_id": "8094",
+      "duration_secs": 514.266
+    },
+    {
+      "id": "28403111",
+      "title": "特别的人",
+      "artists": [
+        "方大同"
+      ],
+      "album": "危险世界",
+      "album_id": "2759704",
+      "duration_secs": 259.064
+    },
+    {
+      "id": "432509281",
+      "title": "味道",
+      "artists": [
+        "方大同",
+        "Zion.T",
+        "Crush"
+      ],
+      "album": "JTW 西游记 (Black)",
+      "album_id": "34860030",
+      "duration_secs": 249.986
+    },
+    {
+      "id": "28029102",
+      "title": "好不容易",
+      "artists": [
+        "方大同"
+      ],
+      "album": "The Soulboy Collection",
+      "album_id": "2716009",
+      "duration_secs": 380
+    },
+    {
+      "id": "82360",
+      "title": "Love Song",
+      "artists": [
+        "方大同"
+      ],
+      "album": "未来",
+      "album_id": "8128",
+      "duration_secs": 269.293
+    },
+    {
+      "id": "1462515184",
+      "title": "因为你",
+      "artists": [
+        "方大同"
+      ],
+      "album": "因为你",
+      "album_id": "92364228",
+      "duration_secs": 236.04
+    },
+    {
+      "id": "25648006",
+      "title": "麦恩莉",
+      "artists": [
+        "方大同"
+      ],
+      "album": "回到未来",
+      "album_id": "2265001",
+      "duration_secs": 288.36
+    },
+    {
+      "id": "25638935",
+      "title": "好不容易",
+      "artists": [
+        "方大同"
+      ],
+      "album": "2011 Hit Fm 年度百首单曲",
+      "album_id": "2261167",
+      "duration_secs": 380
+    },
+    {
+      "id": "28387868",
+      "title": "天气先生",
+      "artists": [
+        "方大同"
+      ],
+      "album": "危险世界",
+      "album_id": "2759704",
+      "duration_secs": 271.583
+    },
+    {
+      "id": "82181",
+      "title": "黑白",
+      "artists": [
+        "方大同"
+      ],
+      "album": "橙月",
+      "album_id": "8116",
+      "duration_secs": 231.613
+    },
+    {
+      "id": "2635125903",
+      "title": "回留",
+      "artists": [
+        "方大同"
+      ],
+      "album": "梦想家 The Dreamer",
+      "album_id": "250300440",
+      "duration_secs": 236.343
+    },
+    {
+      "id": "1468114214",
+      "title": "好不容易",
+      "artists": [
+        "方大同"
+      ],
+      "album": "上一首情歌 (国语精选)",
+      "album_id": "93427116",
+      "duration_secs": 380
+    },
+    {
+      "id": "28029104",
+      "title": "红豆",
+      "artists": [
+        "方大同"
+      ],
+      "album": "The Soulboy Collection",
+      "album_id": "2716009",
+      "duration_secs": 236.093
+    },
+    {
+      "id": "3425968348",
+      "title": "好不容易（太多人失意）",
+      "artists": [
+        "池袋西口"
+      ],
+      "album": "好不容易（太多人失意）",
+      "album_id": "394560077",
+      "duration_secs": 223.418
+    },
+    {
+      "id": "1902251868",
+      "title": "好不容易",
+      "artists": [
+        "告五人"
+      ],
+      "album": "好不容易",
+      "album_id": "137304834",
+      "duration_secs": 295.466
+    },
+    {
+      "id": "28029112",
+      "title": "三人游",
+      "artists": [
+        "方大同"
+      ],
+      "album": "The Soulboy Collection",
+      "album_id": "2716009",
+      "duration_secs": 237.426
+    },
+    {
+      "id": "2619125556",
+      "title": "才二十三",
+      "artists": [
+        "方大同"
+      ],
+      "album": "梦想家 The Dreamer",
+      "album_id": "250300440",
+      "duration_secs": 224.498
+    },
+    {
+      "id": "82453",
+      "title": "爱爱爱",
+      "artists": [
+        "方大同"
+      ],
+      "album": "爱爱爱",
+      "album_id": "8133",
+      "duration_secs": 213.266
+    },
+    {
+      "id": "437387015",
+      "title": "好不容易（Cover 张靓颖）",
+      "artists": [
+        "冯心怡"
+      ],
+      "album": "好不容易 （Cover张靓颖）",
+      "album_id": "34936488",
+      "duration_secs": 239.621
+    },
+    {
+      "id": "25648005",
+      "title": "关于爱的定义",
+      "artists": [
+        "方大同"
+      ],
+      "album": "回到未来",
+      "album_id": "2265001",
+      "duration_secs": 239.12
+    },
+    {
+      "id": "82486",
+      "title": "春风吹",
+      "artists": [
+        "方大同"
+      ],
+      "album": "Soulboy",
+      "album_id": "8134",
+      "duration_secs": 200.586
+    },
+    {
+      "id": "431855964",
+      "title": "听",
+      "artists": [
+        "方大同"
+      ],
+      "album": "JTW西游记",
+      "album_id": "34898185",
+      "duration_secs": 281.092
+    },
+    {
+      "id": "2635125901",
+      "title": "谁知爱是什么",
+      "artists": [
+        "方大同"
+      ],
+      "album": "梦想家 The Dreamer",
+      "album_id": "250300440",
+      "duration_secs": 182.742
+    },
+    {
+      "id": "1902944901",
+      "title": "好不容易",
+      "artists": [
+        "账户已注销"
+      ],
+      "album": "告五人 Accusefive",
+      "album_id": "73813768",
+      "duration_secs": 164.629
+    },
+    {
+      "id": "1369452832",
+      "title": "好不容易",
+      "artists": [
+        "澪恩Seiwen"
+      ],
+      "album": "好不容易",
+      "album_id": "79544996",
+      "duration_secs": 228.376
+    },
+    {
+      "id": "28406199",
+      "title": "枫叶做的风铃",
+      "artists": [
+        "方大同"
+      ],
+      "album": "危险世界",
+      "album_id": "2759704",
+      "duration_secs": 226.103
+    },
+    {
+      "id": "82194",
+      "title": "每个人都会 (song for Cartier [Love Project])",
+      "artists": [
+        "方大同"
+      ],
+      "album": "橙月",
+      "album_id": "8116",
+      "duration_secs": 178.36
+    },
+    {
+      "id": "1355916145",
+      "title": "白发",
+      "artists": [
+        "方大同"
+      ],
+      "album": "白发",
+      "album_id": "78271666",
+      "duration_secs": 208.436
+    }
+  ],
+  "expect": {
+    "picked_id": "81997"
+  },
+  "judge": {
+    "title_accepted": true,
+    "artist_matches": true,
+    "source_duration_delta_pct": 0.001578972299555205,
+    "version_tags_ok": true,
+    "live_mismatch": false,
+    "plausible_alternatives": 0
+  }
+}

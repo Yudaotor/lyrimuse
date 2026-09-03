@@ -1,0 +1,179 @@
+{
+  "id": "lineonly-conversation-mix-qq",
+  "source": "qq",
+  "note": "同名第一层样本 lineonly-conversation-mix 的检索层",
+  "track": {
+    "artist": "Backstreet Boys",
+    "title": "All I Have to Give (The Conversation Mix)",
+    "album": "Backstreet's Back"
+  },
+  "captured_at": "2026-09-04",
+  "query": {
+    "artist": "Backstreet Boys",
+    "title": "All I Have to Give (The Conversation Mix)",
+    "album": "Backstreet's Back",
+    "duration_secs": 0
+  },
+  "local_duration_secs": 256.04,
+  "items": [
+    {
+      "id": "001UQoK01BgaOH",
+      "title": "All I Have To Give",
+      "artist": "Backstreet Boys",
+      "album": "For The Fans",
+      "duration_secs": 226
+    },
+    {
+      "id": "002oC7MS40jNSH",
+      "title": "All I Have to Give",
+      "artist": "Backstreet Boys",
+      "album": "The Hits – Chapter One",
+      "duration_secs": 276
+    },
+    {
+      "id": "000gjhVc12kJCk",
+      "title": "All I Have To Give (Live)",
+      "artist": "Backstreet Boys",
+      "album": "For The Fans",
+      "duration_secs": 246
+    },
+    {
+      "id": "002uaz2D0a0Vff",
+      "title": "All I Have To Give (Live)",
+      "artist": "Backstreet Boys",
+      "album": "A Night Out With The Backstreet Boys",
+      "duration_secs": 296
+    },
+    {
+      "id": "002UL6572alXiH",
+      "title": "All I Have To Give (A Capella)",
+      "artist": "Backstreet Boys",
+      "album": "Shape of My Heart",
+      "duration_secs": 226
+    },
+    {
+      "id": "002k54uD2crl9L",
+      "title": "As Long As You Love Me",
+      "artist": "Backstreet Boys",
+      "album": "Backstreet's Back",
+      "duration_secs": 222
+    },
+    {
+      "id": "003tZrk51NBcsc",
+      "title": "Bottle Up (from PAW Patrol: The Dino Movie)",
+      "artist": "Backstreet Boys/PAW Patrol",
+      "album": "Bottle Up (from PAW Patrol: The Dino Movie)",
+      "duration_secs": 217
+    },
+    {
+      "id": "00052a2703qQkz",
+      "title": "I Want It That Way",
+      "artist": "Backstreet Boys",
+      "album": "I Want It That Way",
+      "duration_secs": 215
+    },
+    {
+      "id": "001r84Ta451N5J",
+      "title": "Everybody",
+      "artist": "Backstreet Boys",
+      "album": "Backstreet's Back",
+      "duration_secs": 227
+    },
+    {
+      "id": "001gyrUt421eeh",
+      "title": "Larger Than Life",
+      "artist": "Backstreet Boys",
+      "album": "Millennium",
+      "duration_secs": 232
+    },
+    {
+      "id": "001VKrfM3JItWp",
+      "title": "All I Have To Give (Part II - The Conversation Mix)",
+      "artist": "Backstreet Boys",
+      "album": "All I Have to Give",
+      "duration_secs": 257
+    },
+    {
+      "id": "002IrBr6265n3n",
+      "title": "As Long As You Love Me (Radio Version)",
+      "artist": "Backstreet Boys",
+      "album": "As Long as You Love Me",
+      "duration_secs": 214
+    },
+    {
+      "id": "002xkPFy2qA2Cq",
+      "title": "Everybody (Backstreet's Back) (7\" Version)",
+      "artist": "Backstreet Boys",
+      "album": "Everybody (Backstreet's Back)",
+      "duration_secs": 287
+    },
+    {
+      "id": "004Pk4tI1WjSht",
+      "title": "All I Have to Give",
+      "artist": "Hurts/Theo Hutchcraft/Adam Anderson",
+      "album": "Faith",
+      "duration_secs": 232
+    },
+    {
+      "id": "002l4Mu903uqNa",
+      "title": "All I Have To Give (Acappella)",
+      "artist": "Backstreet Boys",
+      "album": "Black \u0026 Blue",
+      "duration_secs": 274
+    },
+    {
+      "id": "003AnGmx3z9xrM",
+      "title": "All I Have To Give (Radio Edit)",
+      "artist": "Backstreet Boys",
+      "album": "All I Have To Give (CD-SINGLE)",
+      "duration_secs": 249
+    },
+    {
+      "id": "000xfDp22FH3uk",
+      "title": "All I Have to Give",
+      "artist": "Backstreet Boys"
+    },
+    {
+      "id": "003zGRwB2JoOtz",
+      "title": "Backstreet Boys - All I Have To Give",
+      "artist": "Backstreet Boys"
+    }
+  ],
+  "album_lookup": {
+    "000xfDp22FH3uk": "Backstreet's Back"
+  },
+  "expect": {
+    "picked_id": "000xfDp22FH3uk",
+    "accepted_strict": [
+      "001UQoK01BgaOH",
+      "002oC7MS40jNSH",
+      "000gjhVc12kJCk",
+      "002uaz2D0a0Vff",
+      "002UL6572alXiH",
+      "001VKrfM3JItWp",
+      "002l4Mu903uqNa",
+      "003AnGmx3z9xrM",
+      "000xfDp22FH3uk"
+    ],
+    "accepted_loose": [
+      "001UQoK01BgaOH",
+      "002oC7MS40jNSH",
+      "000gjhVc12kJCk",
+      "002uaz2D0a0Vff",
+      "002UL6572alXiH",
+      "001VKrfM3JItWp",
+      "002l4Mu903uqNa",
+      "003AnGmx3z9xrM",
+      "000xfDp22FH3uk"
+    ],
+    "picked_no_album": "001UQoK01BgaOH"
+  },
+  "judge": {
+    "title_accepted": true,
+    "artist_matches": true,
+    "source_duration_delta_pct": -1,
+    "version_tags_ok": true,
+    "live_mismatch": false,
+    "plausible_alternatives": 0
+  }
+}

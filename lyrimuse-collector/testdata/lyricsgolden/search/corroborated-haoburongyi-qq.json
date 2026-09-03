@@ -1,0 +1,114 @@
+{
+  "id": "corroborated-haoburongyi-qq",
+  "source": "qq",
+  "note": "同名第一层样本 corroborated-haoburongyi 的检索层",
+  "track": {
+    "artist": "方大同",
+    "title": "好不容易",
+    "album": "15"
+  },
+  "captured_at": "2026-09-04",
+  "query": {
+    "artist": "方大同",
+    "title": "好不容易",
+    "album": "15",
+    "duration_secs": 0
+  },
+  "local_duration_secs": 379.994,
+  "items": [
+    {
+      "id": "000qmrUc2SZWU9",
+      "title": "好不容易",
+      "artist": "方大同",
+      "album": "15",
+      "duration_secs": 380
+    },
+    {
+      "id": "001Zp3O24XkMSl",
+      "title": "好不容易 (Live)",
+      "artist": "方大同",
+      "album": "15 Khalil Fong Live in Hong Kong 2011",
+      "duration_secs": 514
+    },
+    {
+      "id": "002Pi6UF4EQtlM",
+      "title": "好不容易 (钢琴曲)",
+      "artist": "方大同",
+      "duration_secs": 359
+    },
+    {
+      "id": "000k7Ita2MeJUq",
+      "title": "好不容易",
+      "artist": "告五人",
+      "album": "好不容易",
+      "duration_secs": 295
+    },
+    {
+      "id": "004AkL6C0uGTnW",
+      "title": "为你写的歌",
+      "artist": "方大同",
+      "album": "橙月",
+      "duration_secs": 197
+    },
+    {
+      "id": "001lmD2a2YZYN3",
+      "title": "麦恩莉",
+      "artist": "方大同",
+      "album": "回到未来",
+      "duration_secs": 288
+    },
+    {
+      "id": "000YG57K1ZMTIF",
+      "title": "每个人都会",
+      "artist": "方大同",
+      "album": "橙月",
+      "duration_secs": 178
+    },
+    {
+      "id": "004JILAu2HwhPP",
+      "title": "三人游",
+      "artist": "方大同",
+      "album": "橙月",
+      "duration_secs": 237
+    },
+    {
+      "id": "0011OjVF1WZ22Y",
+      "title": "关于爱的定义",
+      "artist": "方大同",
+      "album": "回到未来",
+      "duration_secs": 239
+    },
+    {
+      "id": "003BBkww3jWdeI",
+      "title": "才二十三",
+      "artist": "方大同",
+      "album": "梦想家 The Dreamer",
+      "duration_secs": 224
+    }
+  ],
+  "album_lookup": {
+    "002Pi6UF4EQtlM": ""
+  },
+  "expect": {
+    "picked_id": "000qmrUc2SZWU9",
+    "accepted_strict": [
+      "000qmrUc2SZWU9",
+      "001Zp3O24XkMSl",
+      "002Pi6UF4EQtlM"
+    ],
+    "accepted_loose": [
+      "000qmrUc2SZWU9",
+      "001Zp3O24XkMSl",
+      "002Pi6UF4EQtlM"
+    ],
+    "picked_no_album": "000qmrUc2SZWU9"
+  },
+  "judge": {
+    "title_accepted": true,
+    "artist_matches": true,
+    "source_duration_delta_pct": 0.001578972299555205,
+    "version_tags_ok": true,
+    "live_mismatch": false,
+    "plausible_alternatives": 0
+  }
+}

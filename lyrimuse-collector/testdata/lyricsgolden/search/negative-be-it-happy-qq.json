@@ -1,0 +1,105 @@
+{
+  "id": "negative-be-it-happy-qq",
+  "source": "qq",
+  "note": "负样本:只有 QQ 收录这位歌手,网易云/酷狗的同名结果全是别人的歌,身份闸必须一条都不认",
+  "track": {
+    "artist": "关浩德",
+    "title": "Be It Happy Or Sad",
+    "album": "Just Be a Rock"
+  },
+  "captured_at": "2026-09-04",
+  "query": {
+    "artist": "关浩德",
+    "title": "Be It Happy Or Sad",
+    "album": "Just Be a Rock",
+    "duration_secs": 0
+  },
+  "local_duration_secs": 219.6580047607422,
+  "items": [
+    {
+      "id": "000sLrSK1IGtk3",
+      "title": "Be It Happy Or Sad",
+      "artist": "关浩德Walter",
+      "album": "Just Be A Rock",
+      "duration_secs": 219
+    },
+    {
+      "id": "000DCjgk1Dde6N",
+      "title": "后知后觉",
+      "artist": "关浩德Walter",
+      "album": "A",
+      "duration_secs": 171
+    },
+    {
+      "id": "002k7sZt3Rkz9C",
+      "title": "原来",
+      "artist": "关浩德Walter",
+      "album": "Just Be A Rock",
+      "duration_secs": 297
+    },
+    {
+      "id": "000lnR0j0ysUYr",
+      "title": "Let Me Go",
+      "artist": "关浩德Walter",
+      "album": "A",
+      "duration_secs": 258
+    },
+    {
+      "id": "001BGJPm2u8JIN",
+      "title": "海浪海岸",
+      "artist": "关浩德Walter/关诗敏",
+      "album": "宜莫深思",
+      "duration_secs": 316
+    },
+    {
+      "id": "001QL1GI3V6Qta",
+      "title": "Love Is All Around",
+      "artist": "关浩德Walter",
+      "album": "Love Is All Around",
+      "duration_secs": 178
+    },
+    {
+      "id": "003hdw7N3kOEzv",
+      "title": "When",
+      "artist": "关浩德Walter",
+      "album": "When",
+      "duration_secs": 271
+    },
+    {
+      "id": "000Ra04l0waxd3",
+      "title": "天",
+      "artist": "关浩德Walter",
+      "album": "宜莫深思",
+      "duration_secs": 225
+    },
+    {
+      "id": "003AezYH0xApe3",
+      "title": "Just Be A Rock",
+      "artist": "关浩德Walter",
+      "album": "Just Be A Rock",
+      "duration_secs": 279
+    },
+    {
+      "id": "0038hWlL1OB89u",
+      "title": "Sunday",
+      "artist": "关浩德Walter",
+      "album": "宜莫深思",
+      "duration_secs": 189
+    }
+  ],
+  "expect": {
+    "picked_id": "000sLrSK1IGtk3",
+    "accepted_loose": [
+      "000sLrSK1IGtk3"
+    ],
+    "picked_no_album": "000sLrSK1IGtk3"
+  },
+  "judge": {
+    "title_accepted": true,
+    "artist_matches": true,
+    "source_duration_delta_pct": 0.29955874426652707,
+    "version_tags_ok": true,
+    "live_mismatch": false,
+    "plausible_alternatives": 0
+  }
+}

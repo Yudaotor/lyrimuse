@@ -2665,6 +2665,13 @@ type lyricSourceResult struct {
 // 样本(见 lyricsgolden_capture_test.go);打分逻辑不读它,跟 decision.go 那条"只写不读"同一纪律。
 var lyricSourceResultTap func(lyricSourceResult)
 
+// lyricSearchItemsTap 同样只给测试用(默认 nil):各源把**解析好的搜索结果**交给自己的挑选函数之前
+// 回调一次——netease 的 neteasePickSong、qq 的 qqCollectCandidates、kugou 的 pickKugouSearchCandidate、
+// lrclib 的 pickLRCLIBSearchResultDetailed。检索层金标(lyricsgolden_search_test.go)靠它把"这一批
+// 搜索结果里该选谁"固化成样本。items 是各源自己的切片类型([]neSearchSong / []qqSearchItem /
+// []kugouSong / []lrclibSearchItem),由采集侧按 source 断言回来。
+var lyricSearchItemsTap func(source, artist, title, album string, durationSecs float64, items any)
+
 // rankLyricSourceResults 把一组各源原始应答变成打好分、排好序的候选列表——构建候选、
 // 时间轴自洽修复、corroboratedEndings、跨源正文共识、逐条打分、纯音乐标记搭车、逐字加分撤销、
 // 稳定排序,全在这里。它是 fetchScoredLyricCandidatesStreaming 原来那个 scoreAndSort 闭包的

@@ -94,6 +94,27 @@ GOTOOLCHAIN=go1.24.4 go test -run 'TestLyricsGoldenCapture$' -v .
 - 标题 / 歌手 / 专辑 / 封面 URL / 自报时长是元数据,原样保留,人能凭它们认出样本是哪首歌;
 - `TestLyricsGoldenFixturesAreScrambled` 用「置乱段里出现了基本区汉字」当探针,手工往样本里塞明文会红。
 
+## 第二层:检索层(`search/`)
+
+打分层守"拿到最终候选后怎么挑",`search/` 守再往前一步——一个源在**自己的搜索结果**里该选谁
+(`lyricsgolden_search_test.go`)。四个源各一个纯函数:netease `neteasePickSong`、qq `qqCollectCandidates` +
+`qqPickCandidateWithAlbum` / `qqPickCandidate`、kugou `pickKugouSearchCandidate`、lrclib
+`pickLRCLIBSearchResultDetailed`。样本是搜索结果的**元数据**(不是歌词,不用置乱;只有 lrclib 的结果带正文,
+照上面的规矩置乱)+ 本地查询词 + 期望挑中谁。
+
+```sh
+LYRICS_SEARCH_GOLDEN_CAPTURE=1 LYRICS_GOLDEN_KEY='歌手|歌名|专辑' LYRICS_GOLDEN_ID=<前缀> \
+[LYRICS_GOLDEN_NOTE='…'] GOTOOLCHAIN=go1.24.4 go test -run 'TestLyricsSearchGoldenCapture$' -v .
+```
+
+一次联网检索给四个源各写一份 `<前缀>-<源>.json`(该源这次没搜到就跳过)。网易云/酷狗按标题变体查多次,
+取"选出了结果"的批次里条目最多的一批。挑选结果要过 `goldenJudgeSearchPick`:歌名过闸、歌手沾边
+(qq loose 档口径)、自报时长 ≤3%、版本一致、live 对称;**选空**的样本要求这批里确实没有站得住的候选。
+不过就不写——那往往正是检索层放行了错版本、靠打分层救回的地方,记在 09 章。
+
+更新口径与第一层相同:`LYRICS_GOLDEN_UPDATE=1`,挑选结果变了要 `LYRICS_GOLDEN_ACCEPT_SEMANTIC=<样本id>`。
+覆盖契约:四个源各 ≥3 个样本,"选空"负样本全体 ≥2。
+
 ## 文件结构
 
 `<id>.json`,字段见 `goldenFixture`(lyricsgolden_test.go):`query`(发给各源的查询词,已 toSimplified)/

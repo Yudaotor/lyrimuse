@@ -1,0 +1,117 @@
+{
+  "id": "ko-fallen-angel-kugou",
+  "source": "kugou",
+  "note": "同名第一层样本 ko-fallen-angel 的检索层",
+  "track": {
+    "artist": "JENNIE",
+    "title": "FALLEN ANGEL",
+    "album": "Fallen Angel - EP"
+  },
+  "captured_at": "2026-09-04",
+  "query": {
+    "artist": "JENNIE",
+    "title": "FALLEN ANGEL",
+    "album": "Fallen Angel - EP",
+    "duration_secs": 199.16600036621094
+  },
+  "local_duration_secs": 199.16600036621094,
+  "items": [
+    {
+      "id": "0dec0f1afef9c3044193d45a4e287229",
+      "title": "FALLEN ANGEL",
+      "artist": "JENNIE",
+      "album": "Fallen Angel (Digital EP) [Explicit]",
+      "album_id": "204983824",
+      "duration_secs": 199,
+      "language": "英语"
+    },
+    {
+      "id": "08fd7601a6b132319bb17218fb1464b1",
+      "title": "Fallen Angel (2026 Lollapalooza音乐节芝加哥站现场)",
+      "artist": "JENNIE",
+      "duration_secs": 254,
+      "language": "英语"
+    },
+    {
+      "id": "5e60a3f919f4423e4b2d2597147f2c37",
+      "title": "Mantra (Explicit)",
+      "artist": "JENNIE",
+      "album": "Mantra",
+      "album_id": "105937141",
+      "duration_secs": 136,
+      "language": "英语"
+    },
+    {
+      "id": "1e256292f42a1a672e26a77f12733ee0",
+      "title": "Handlebars (feat. Dua Lipa)(Explicit)",
+      "artist": "JENNIE、Dua Lipa",
+      "album": "Ruby",
+      "album_id": "139065355",
+      "duration_secs": 184,
+      "language": "英语"
+    },
+    {
+      "id": "49de44950dbf2887eba04edccc3e1fa5",
+      "title": "FALLEN ANGEL (28秒试听版片段)",
+      "artist": "JENNIE",
+      "duration_secs": 28,
+      "language": "英语"
+    },
+    {
+      "id": "efafdf62bd7d1373397ea44f3b2f6ee4",
+      "title": "SPOT! (feat. JENNIE)",
+      "artist": "ZICO (지코)、JENNIE",
+      "album": "SPOT! (feat. JENNIE)",
+      "album_id": "92439885",
+      "duration_secs": 167,
+      "language": "英语"
+    },
+    {
+      "id": "fb242eee0592761905d1390a9b58d743",
+      "title": "ExtraL",
+      "artist": "JENNIE、Doechii",
+      "album": "ExtraL",
+      "album_id": "138525017",
+      "duration_secs": 167,
+      "language": "英语"
+    },
+    {
+      "id": "d100094dfdbb0956078fa742f306aabb",
+      "title": "You \u0026 Me (Coachella ver.)",
+      "artist": "JENNIE",
+      "album": "JENNIE Special Single [You \u0026 Me]",
+      "album_id": "78738762",
+      "duration_secs": 179,
+      "language": "英语"
+    },
+    {
+      "id": "e6bc3876473b689587deabed18ecc38d",
+      "title": "Love Hangover (feat. Dominic Fike)(Explicit)",
+      "artist": "JENNIE、Dominic Fike",
+      "album": "Love Hangover (Explicit)",
+      "album_id": "136565320",
+      "duration_secs": 180,
+      "language": "英语"
+    },
+    {
+      "id": "df3d1f0aa8e638b155eff23417173286",
+      "title": "HEAVEN (Explicit)",
+      "artist": "JENNIE",
+      "album": "Fallen Angel (Digital EP) [Explicit]",
+      "album_id": "204983824",
+      "duration_secs": 186,
+      "language": "英语"
+    }
+  ],
+  "expect": {
+    "picked_id": "0dec0f1afef9c3044193d45a4e287229"
+  },
+  "judge": {
+    "title_accepted": true,
+    "artist_matches": true,
+    "source_duration_delta_pct": 0.08334774304133685,
+    "version_tags_ok": true,
+    "live_mismatch": false,
+    "plausible_alternatives": 0
+  }
+}

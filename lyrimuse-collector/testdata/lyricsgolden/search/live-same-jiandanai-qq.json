@@ -1,0 +1,167 @@
+{
+  "id": "live-same-jiandanai-qq",
+  "source": "qq",
+  "note": "同名第一层样本 live-same-jiandanai 的检索层",
+  "track": {
+    "artist": "周杰伦",
+    "title": "简单爱 (Live)",
+    "album": "The One 周杰伦演唱会"
+  },
+  "captured_at": "2026-09-04",
+  "query": {
+    "artist": "周杰伦",
+    "title": "简单爱 (Live)",
+    "album": "The One 周杰伦演唱会",
+    "duration_secs": 0
+  },
+  "local_duration_secs": 273.22601318359375,
+  "items": [
+    {
+      "id": "0022nw6P1dcHgp",
+      "title": "简单爱 (Live)",
+      "artist": "周杰伦",
+      "album": "周杰伦 2004 无与伦比 演唱会 Live CD",
+      "duration_secs": 393
+    },
+    {
+      "id": "001IcyF42TKTf1",
+      "title": "简单爱 (Live)",
+      "artist": "陈奕迅/周杰伦",
+      "album": "2015江苏卫视新年演唱会",
+      "duration_secs": 313
+    },
+    {
+      "id": "003v4Qny09D7xp",
+      "title": "简单爱 (Live)",
+      "artist": "杨颖/鹿晗",
+      "duration_secs": 117
+    },
+    {
+      "id": "003IV8zQ0VubPC",
+      "title": "简单爱+Top Of The World (Live)",
+      "artist": "周杰伦/董姿彦",
+      "album": "中国新歌声第二季 第15期",
+      "duration_secs": 219
+    },
+    {
+      "id": "0009BCJK1nRaad",
+      "title": "简单爱",
+      "artist": "周杰伦",
+      "album": "范特西",
+      "duration_secs": 270
+    },
+    {
+      "id": "002zmbfl20fPlG",
+      "title": "再度重相逢",
+      "artist": "伍佰 \u0026 China Blue",
+      "album": "泪桥",
+      "duration_secs": 209
+    },
+    {
+      "id": "000cDnva31taNn",
+      "title": "简单爱 (Live)",
+      "artist": "允儿",
+      "duration_secs": 244
+    },
+    {
+      "id": "0039eytm1HTjPQ",
+      "title": "简单爱 (Live)",
+      "artist": "Ella陈嘉桦",
+      "album": "爱而为一 演唱会影音馆",
+      "duration_secs": 170
+    },
+    {
+      "id": "001hCU4F1tfVqO",
+      "title": "简单爱",
+      "artist": "刘瑞琦",
+      "album": "再次寻找周杰伦",
+      "duration_secs": 272
+    },
+    {
+      "id": "004Ikl0G2CLsbH",
+      "title": "简单爱",
+      "artist": "小F4",
+      "album": "My Party",
+      "duration_secs": 281
+    },
+    {
+      "id": "000DwKYk20Fyab",
+      "title": "简单爱 (Live)",
+      "artist": "周杰伦",
+      "album": "The One演唱会",
+      "duration_secs": 273
+    },
+    {
+      "id": "001RUjhg1fCd9e",
+      "title": "简单爱 (DJ版)",
+      "artist": "周杰伦",
+      "duration_secs": 253
+    },
+    {
+      "id": "0039MnYb0qxYhV",
+      "title": "晴天",
+      "artist": "周杰伦",
+      "album": "叶惠美",
+      "duration_secs": 269
+    },
+    {
+      "id": "001zMQr71F1Qo8",
+      "title": "夜曲",
+      "artist": "周杰伦",
+      "album": "十一月的萧邦",
+      "duration_secs": 226
+    },
+    {
+      "id": "004Z8Ihr0JIu5s",
+      "title": "七里香",
+      "artist": "周杰伦",
+      "album": "七里香",
+      "duration_secs": 299
+    },
+    {
+      "id": "002HeqcH2GMiOL",
+      "title": "霍元甲",
+      "artist": "周杰伦",
+      "album": "霍元甲",
+      "duration_secs": 278
+    },
+    {
+      "id": "002qU5aY3Qu24y",
+      "title": "青花瓷",
+      "artist": "周杰伦",
+      "album": "我很忙",
+      "duration_secs": 239
+    }
+  ],
+  "album_lookup": {
+    "001RUjhg1fCd9e": ""
+  },
+  "expect": {
+    "picked_id": "000DwKYk20Fyab",
+    "accepted_strict": [
+      "0022nw6P1dcHgp",
+      "001IcyF42TKTf1",
+      "003IV8zQ0VubPC",
+      "0009BCJK1nRaad",
+      "000DwKYk20Fyab",
+      "001RUjhg1fCd9e"
+    ],
+    "accepted_loose": [
+      "0022nw6P1dcHgp",
+      "001IcyF42TKTf1",
+      "003IV8zQ0VubPC",
+      "0009BCJK1nRaad",
+      "000DwKYk20Fyab",
+      "001RUjhg1fCd9e"
+    ],
+    "picked_no_album": "0022nw6P1dcHgp"
+  },
+  "judge": {
+    "title_accepted": true,
+    "artist_matches": true,
+    "source_duration_delta_pct": 0.08272022892706077,
+    "version_tags_ok": true,
+    "live_mismatch": false,
+    "plausible_alternatives": 0
+  }
+}

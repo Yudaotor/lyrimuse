@@ -212,6 +212,9 @@ func lrclibSearch(ctx context.Context, artist, title, album string, durationSecs
 	// 带时间戳的候选优先(allowPlainOnly=false,跟旧行为一致);一条都挑不出来才退一步
 	// 认纯文本兜底——不是"两档一起扫、纯文本也能跟带时间戳的候选抢"，是"带时间戳的确实
 	// 一条都没有,才轮到纯文本"(见 lrclibResult.plainOnly 头注)。
+	if lyricSearchItemsTap != nil {
+		lyricSearchItemsTap("lrclib", artist, title, album, durationSecs, items)
+	}
 	best, plainOnly := pickLRCLIBSearchResultDetailed(items, artist, title, album, durationSecs, false)
 	if best == nil {
 		best, plainOnly = pickLRCLIBSearchResultDetailed(items, artist, title, album, durationSecs, true)

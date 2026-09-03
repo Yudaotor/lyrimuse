@@ -1,0 +1,108 @@
+{
+  "id": "instrumental-chromatica-i-qq",
+  "source": "qq",
+  "note": "同名第一层样本 instrumental-chromatica-i 的检索层",
+  "track": {
+    "artist": "Lady Gaga",
+    "title": "Chromatica I",
+    "album": "Chromatica"
+  },
+  "captured_at": "2026-09-04",
+  "query": {
+    "artist": "Lady Gaga",
+    "title": "Chromatica I",
+    "album": "Chromatica",
+    "duration_secs": 0
+  },
+  "local_duration_secs": 60.55500030517578,
+  "items": [
+    {
+      "id": "001SR3Nm2OSnU7",
+      "title": "Chromatica I",
+      "artist": "Lady Gaga",
+      "album": "Chromatica",
+      "duration_secs": 60
+    },
+    {
+      "id": "002gWRB71FBJnF",
+      "title": "Poker Face",
+      "artist": "Lady Gaga",
+      "album": "The Fame",
+      "duration_secs": 237
+    },
+    {
+      "id": "004czLT31uUbyl",
+      "title": "The Cure",
+      "artist": "Lady Gaga",
+      "album": "The Cure",
+      "duration_secs": 211
+    },
+    {
+      "id": "003VkCAL1sAiT8",
+      "title": "Telephone",
+      "artist": "Lady Gaga/Beyoncé",
+      "album": "The Fame Monster (Explicit)",
+      "duration_secs": 220
+    },
+    {
+      "id": "001DTcCk2QAUzy",
+      "title": "Always Remember Us This Way",
+      "artist": "Lady Gaga",
+      "album": "A Star Is Born Soundtrack (Explicit)",
+      "duration_secs": 210
+    },
+    {
+      "id": "003SCd693BGcnL",
+      "title": "Abracadabra",
+      "artist": "Lady Gaga",
+      "album": "Abracadabra",
+      "duration_secs": 223
+    },
+    {
+      "id": "002L922J1xDquy",
+      "title": "Bad Romance",
+      "artist": "Lady Gaga",
+      "album": "Bad Romance",
+      "duration_secs": 294
+    },
+    {
+      "id": "000Ka7OA0aSOGf",
+      "title": "Sour Candy",
+      "artist": "Lady Gaga/BLACKPINK",
+      "album": "Sour Candy",
+      "duration_secs": 157
+    },
+    {
+      "id": "000cODqt3FCRhK",
+      "title": "The Cure (Spiros Hamza Remix)",
+      "artist": "Spiros Hamza/Lady Gaga",
+      "album": "The Cure (Spiros Hamza Remix)",
+      "duration_secs": 218
+    },
+    {
+      "id": "002Gfwej1waeuN",
+      "title": "Rain On Me",
+      "artist": "Lady Gaga/Ariana Grande",
+      "album": "Rain On Me",
+      "duration_secs": 182
+    }
+  ],
+  "expect": {
+    "picked_id": "001SR3Nm2OSnU7",
+    "accepted_strict": [
+      "001SR3Nm2OSnU7"
+    ],
+    "accepted_loose": [
+      "001SR3Nm2OSnU7"
+    ],
+    "picked_no_album": "001SR3Nm2OSnU7"
+  },
+  "judge": {
+    "title_accepted": true,
+    "artist_matches": true,
+    "source_duration_delta_pct": 0.9165226692738436,
+    "version_tags_ok": true,
+    "live_mismatch": false,
+    "plausible_alternatives": 0
+  }
+}

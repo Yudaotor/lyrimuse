@@ -1,0 +1,115 @@
+{
+  "id": "zh-studio-dongfengpo-kugou",
+  "source": "kugou",
+  "note": "同名第一层样本 zh-studio-dongfengpo 的检索层",
+  "track": {
+    "artist": "周杰伦",
+    "title": "东风破",
+    "album": "叶惠美"
+  },
+  "captured_at": "2026-09-04",
+  "query": {
+    "artist": "周杰伦",
+    "title": "东风破",
+    "album": "叶惠美",
+    "duration_secs": 315.413
+  },
+  "local_duration_secs": 315.413,
+  "items": [
+    {
+      "id": "b24ab4ad67a1e7228121180247503e84",
+      "title": "东风破",
+      "artist": "周杰伦",
+      "album": "叶惠美",
+      "album_id": "966846",
+      "duration_secs": 315,
+      "language": "国语"
+    },
+    {
+      "id": "f3f9c7ab0d6de570e5b3b968fb20f65a",
+      "title": "东风破 (Live)",
+      "artist": "周杰伦",
+      "album": "周杰伦 2004 无与伦比 演唱会 Live CD",
+      "album_id": "2996504",
+      "duration_secs": 314,
+      "language": "国语"
+    },
+    {
+      "id": "0e088b74a0c4a17fd36b1e7e32758e7c",
+      "title": "东风破 (2017 CCTV-15音乐频道精彩音乐汇现场)",
+      "artist": "周杰伦",
+      "duration_secs": 308,
+      "language": "国语"
+    },
+    {
+      "id": "055a1ae5d7b2355bbbb52307e99e43a9",
+      "title": "千里之外",
+      "artist": "周杰伦、费玉清",
+      "album": "依然范特西",
+      "album_id": "965291",
+      "duration_secs": 256,
+      "language": "国语"
+    },
+    {
+      "id": "1afe7b2c4c7f07611bb77e4574b8beea",
+      "title": "东风破 (纯音乐)",
+      "artist": "周杰伦",
+      "duration_secs": 68,
+      "language": "纯音乐"
+    },
+    {
+      "id": "37a8f50a9ec3b267c3cc6bec633d9c4a",
+      "title": "青花瓷",
+      "artist": "周杰伦",
+      "album": "我很忙",
+      "album_id": "979856",
+      "duration_secs": 239,
+      "language": "国语"
+    },
+    {
+      "id": "1a0a7384b95b44ab30f9a34e009e2ee0",
+      "title": "东风破 (2013央视星光璀璨中国巨星演唱会)",
+      "artist": "周杰伦",
+      "duration_secs": 307,
+      "language": "国语"
+    },
+    {
+      "id": "4ec10b1b7b9beb2f0adb89bbec5f664b",
+      "title": "兰亭序",
+      "artist": "周杰伦",
+      "album": "魔杰座",
+      "album_id": "960399",
+      "duration_secs": 253,
+      "language": "国语"
+    },
+    {
+      "id": "eac1519759f2e6f13a89647e252f1255",
+      "title": "东风破 (DJ版)",
+      "artist": "周杰伦",
+      "album": "东风破 DJ版",
+      "album_id": "168088160",
+      "duration_secs": 226,
+      "language": "国语"
+    },
+    {
+      "id": "8909e1809908cd8e3bf6cf85d98b93f0",
+      "title": "稻香",
+      "artist": "周杰伦",
+      "album": "魔杰座",
+      "album_id": "960399",
+      "duration_secs": 223,
+      "language": "国语"
+    }
+  ],
+  "expect": {
+    "picked_id": "b24ab4ad67a1e7228121180247503e84"
+  },
+  "judge": {
+    "title_accepted": true,
+    "artist_matches": true,
+    "source_duration_delta_pct": 0.1309394349630519,
+    "version_tags_ok": true,
+    "live_mismatch": false,
+    "plausible_alternatives": 0
+  }
+}

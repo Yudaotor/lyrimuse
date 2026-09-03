@@ -1,0 +1,352 @@
+{
+  "id": "native-earth-song-netease",
+  "source": "netease",
+  "note": "同名第一层样本 native-earth-song 的检索层",
+  "track": {
+    "artist": "Michael Jackson",
+    "title": "Earth Song",
+    "album": "HIStory Continues"
+  },
+  "captured_at": "2026-09-04",
+  "query": {
+    "artist": "Michael Jackson",
+    "title": "Earth Song",
+    "album": "HIStory Continues",
+    "duration_secs": 405.9339904785156
+  },
+  "local_duration_secs": 405.9339904785156,
+  "items": [
+    {
+      "id": "1698432",
+      "title": "Earth Song",
+      "artists": [
+        "Michael Jackson"
+      ],
+      "album": "HIStory: Past, Present and Future, Book I",
+      "album_id": "172259",
+      "duration_secs": 405.506
+    },
+    {
+      "id": "27536415",
+      "title": "Earth Song",
+      "artists": [
+        "Michael Jackson"
+      ],
+      "album": "The Indispensable Collection",
+      "album_id": "2627713",
+      "duration_secs": 406.093
+    },
+    {
+      "id": "1696736",
+      "title": "Earth Song (Radio Edit)",
+      "artists": [
+        "Michael Jackson"
+      ],
+      "album": "King of Pop [Box set]",
+      "album_id": "172138",
+      "duration_secs": 301.533
+    },
+    {
+      "id": "21178205",
+      "title": "Earth Song (Radio Edit)",
+      "artists": [
+        "Michael Jackson"
+      ],
+      "album": "King Of Pop",
+      "album_id": "1958213",
+      "duration_secs": 301.533
+    },
+    {
+      "id": "1697446",
+      "title": "Earth Song (live)",
+      "artists": [
+        "Michael Jackson"
+      ],
+      "album": "New Years Eve in Brunei",
+      "album_id": "172191",
+      "duration_secs": 565
+    },
+    {
+      "id": "27043666",
+      "title": "Earth Song",
+      "artists": [
+        "Michael Jackson"
+      ],
+      "album": "Michael Jackson's Vision",
+      "album_id": "2580749",
+      "duration_secs": 414
+    },
+    {
+      "id": "21178564",
+      "title": "Earth Song (Hani's Extended Radio Experience)",
+      "artists": [
+        "Michael Jackson"
+      ],
+      "album": "Blood On the Dance Floor: HIStory In the Mix",
+      "album_id": "1958235",
+      "duration_secs": 475.4
+    },
+    {
+      "id": "27505539",
+      "title": "Earth Song (Radio Edit)",
+      "artists": [
+        "Michael Jackson"
+      ],
+      "album": "The Ultimate Fan Extras Collection",
+      "album_id": "2622323",
+      "duration_secs": 302.254
+    },
+    {
+      "id": "5111052",
+      "title": "Earth Song",
+      "artists": [
+        "Michael Jackson"
+      ],
+      "album": "Die Groessten Nr 1 Hits",
+      "album_id": "504511",
+      "duration_secs": 301.533
+    },
+    {
+      "id": "2731602229",
+      "title": "Earth Song (live)",
+      "artists": [
+        "Michael Jackson"
+      ],
+      "album": "Live in Brunei 1996",
+      "album_id": "280117003",
+      "duration_secs": 529.128
+    },
+    {
+      "id": "27505540",
+      "title": "Earth Song (Hani's Extended Radio Experience)",
+      "artists": [
+        "Michael Jackson"
+      ],
+      "album": "The Ultimate Fan Extras Collection",
+      "album_id": "2622323",
+      "duration_secs": 475.4
+    },
+    {
+      "id": "1697795",
+      "title": "Earth Song (Radio Edit)",
+      "artists": [
+        "Michael Jackson",
+        "Elmer Bernstein",
+        "Jeremy Lubbock",
+        "Bill Ross",
+        "Susie Katayama",
+        "Brad Buxer",
+        "Michael Boddicker",
+        "Steve Porcaro",
+        "Annette Sanders",
+        "Maxi Anderson",
+        "Alan Shearman",
+        "Anna Mathias",
+        "Gregory Martin",
+        "Dawn McMillan",
+        "Phillip G. Proctor",
+        "Susan Silo",
+        "Jesse Corti",
+        "Hattie Winston",
+        "Maurice La Marche",
+        "Rodger Bumpass",
+        "Emily Bernstein",
+        "Geoff Grace"
+      ],
+      "album": "Number Ones",
+      "album_id": "172213",
+      "duration_secs": 301
+    },
+    {
+      "id": "30148097",
+      "title": "Earth Song",
+      "artists": [
+        "Michael Jackson"
+      ],
+      "album": "Musical Harmony Collection",
+      "album_id": "3094008",
+      "duration_secs": 405.506
+    },
+    {
+      "id": "21177877",
+      "title": "Earth Song (Remastered Version)",
+      "artists": [
+        "Michael Jackson"
+      ],
+      "album": "Michael Jackson's This Is It",
+      "album_id": "1958179",
+      "duration_secs": 406.279
+    },
+    {
+      "id": "1698249",
+      "title": "Earth Song (Hani's Club Experience)",
+      "artists": [
+        "Michael Jackson"
+      ],
+      "album": "They Don't Care About Us",
+      "album_id": "172248",
+      "duration_secs": 475.4
+    },
+    {
+      "id": "21177730",
+      "title": "Earth Song (Radio Edit)",
+      "artists": [
+        "Michael Jackson"
+      ],
+      "album": "The Essential Michael Jackson",
+      "album_id": "1958167",
+      "duration_secs": 301.533
+    },
+    {
+      "id": "29827827",
+      "title": "Earth Song (Hani's Radio Experience)",
+      "artists": [
+        "Michael Jackson"
+      ],
+      "album": "700 songs Remixes",
+      "album_id": "3084968",
+      "duration_secs": 214.543
+    },
+    {
+      "id": "1698266",
+      "title": "Earth Song (Hani's Around The World Experience)",
+      "artists": [
+        "Michael Jackson"
+      ],
+      "album": "Earth Song",
+      "album_id": "172250",
+      "duration_secs": 888
+    },
+    {
+      "id": "27536461",
+      "title": "Earth Song (Hani's Extended Radio Experience)",
+      "artists": [
+        "Michael Jackson"
+      ],
+      "album": "The Indispensable Collection",
+      "album_id": "2627713",
+      "duration_secs": 475.4
+    },
+    {
+      "id": "29827838",
+      "title": "Earth Song (Radio Edit)",
+      "artists": [
+        "Michael Jackson"
+      ],
+      "album": "700 songs Remixes",
+      "album_id": "3084968",
+      "duration_secs": 301.533
+    },
+    {
+      "id": "21178262",
+      "title": "Billie Jean",
+      "artists": [
+        "Michael Jackson"
+      ],
+      "album": "Thriller",
+      "album_id": "1958217",
+      "duration_secs": 293.506
+    },
+    {
+      "id": "1697590",
+      "title": "We Are The World (Demo)",
+      "artists": [
+        "Michael Jackson"
+      ],
+      "album": "The Ultimate Collection",
+      "album_id": "172195",
+      "duration_secs": 320.946
+    },
+    {
+      "id": "27505552",
+      "title": "Michael Jackson DMC Megamix",
+      "artists": [
+        "Michael Jackson"
+      ],
+      "album": "The Ultimate Fan Extras Collection",
+      "album_id": "2622323",
+      "duration_secs": 677
+    },
+    {
+      "id": "21178260",
+      "title": "Thriller",
+      "artists": [
+        "Michael Jackson"
+      ],
+      "album": "Thriller",
+      "album_id": "1958217",
+      "duration_secs": 357.753
+    },
+    {
+      "id": "21178478",
+      "title": "Don't Stop 'Til You Get Enough",
+      "artists": [
+        "Michael Jackson"
+      ],
+      "album": "Off the Wall",
+      "album_id": "1958229",
+      "duration_secs": 365.531
+    },
+    {
+      "id": "1698391",
+      "title": "Beat It",
+      "artists": [
+        "Michael Jackson"
+      ],
+      "album": "HIStory: Past, Present and Future, Book I",
+      "album_id": "172259",
+      "duration_secs": 258
+    },
+    {
+      "id": "1698448",
+      "title": "You Are Not Alone",
+      "artists": [
+        "Michael Jackson"
+      ],
+      "album": "HIStory: Past, Present and Future, Book I",
+      "album_id": "172259",
+      "duration_secs": 345.303
+    },
+    {
+      "id": "27505510",
+      "title": "Smooth Criminal (Dance Radio Edit)",
+      "artists": [
+        "Michael Jackson"
+      ],
+      "album": "The Ultimate Fan Extras Collection",
+      "album_id": "2622323",
+      "duration_secs": 323.947
+    },
+    {
+      "id": "21178422",
+      "title": "Dangerous",
+      "artists": [
+        "Michael Jackson"
+      ],
+      "album": "Dangerous",
+      "album_id": "1958224",
+      "duration_secs": 419.946
+    },
+    {
+      "id": "21178386",
+      "title": "Whatever Happens",
+      "artists": [
+        "Michael Jackson"
+      ],
+      "album": "Invincible",
+      "album_id": "1958222",
+      "duration_secs": 296.733
+    }
+  ],
+  "expect": {
+    "picked_id": "1698432"
+  },
+  "judge": {
+    "title_accepted": true,
+    "artist_matches": true,
+    "source_duration_delta_pct": 0.1054335159298036,
+    "version_tags_ok": true,
+    "live_mismatch": false,
+    "plausible_alternatives": 0
+  }
+}
