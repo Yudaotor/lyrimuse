@@ -69,6 +69,10 @@ type musixmatchResult struct {
 	// lyricCandidate.sourceReportedDurationSecs 参与打分,见 match.go 的
 	// sourceDurationMismatchPenalty。
 	durationSecs float64
+	// plainOnly:lrc 装的是**没有时间戳**的纯文本(2026-09-02 加)。语义与取舍完全等同
+	// lrclibResult.plainOnly,见那边的头注——分数钉死 -1、绝不被自动路径选中,只有用户
+	// 在「搜索候选歌词」弹窗里明确采纳才生效。
+	plainOnly bool
 }
 
 var (
@@ -165,9 +169,46 @@ func resolveMusixmatchLyric(ctx context.Context, artist, title string, durationS
 	if !ok {
 		return musixmatchResult{}
 	}
-	lrc := musixmatchSubtitleLRC(ctx, match.trackID)
+	// hasSubtitles==false 时**不发** track.subtitle.get:那一趟按契约必然 404(见
+	// pickMusixmatchTrackRow),白等一个网络往返。有 subtitles 却取回空仍照旧往下走纯文本
+	// 回退 —— 那是"说有却拿不到"的异常,不是"本来就没有"。
+	var lrc string
+	if match.hasSubtitles {
+		lrc = musixmatchSubtitleLRC(ctx, match.trackID)
+	}
 	if lrc == "" {
-		return musixmatchResult{}
+		// ⚠️ **纯文本回退**(2026-09-02,Charlie Musselwhite《Storm Warning》案)。
+		//
+		// 在此之前这里直接 `return musixmatchResult{}` —— 只要 track.subtitle.get(带时间戳
+		// 的字幕)拿不到,整个 Musixmatch 源就当没有。可 Musixmatch 的曲目元数据本来就分
+		// **两个独立字段**:has_subtitles(有没有做时间轴)和 has_lyrics(有没有词)。凡是
+		// `has_lyrics=1 / has_subtitles=0` 的歌,词就在 track.lyrics.get 里躺着,而我们从来
+		// 不问那个接口。
+		//
+		// 实测坐实的那一首:Charlie Musselwhite《Storm Warning》(专辑 Look Out Highway,
+		// 2025-05-16 发行)。track.subtitle.get 回 404,track.lyrics.get 回 200 + 616 字
+		// 完整歌词。八个源全查一遍的结果是"都没找到",而其实词一直在。这类"新专辑,平台
+		// 收了音频但没人做时间轴"的情况,Musixmatch 往往是唯一有词的那个源 —— 它是西方
+		// 曲库覆盖最好的一个,这个洞的影响面不止一首歌。
+		//
+		// 走的是既有的 plainOnly 通道(lrclib 2026-08-30 起就在喂),不是新造一条路:分数
+		// 钉死 -1、绝不被自动解析选中,只在「搜索候选歌词」弹窗里带「无时间戳」标签出现,
+		// 由用户决定采不采纳。
+		plain := musixmatchPlainLyrics(ctx, match.trackID)
+		if plain == "" {
+			return musixmatchResult{}
+		}
+		// 纯文本这条路**不取逐字、不取译文**:richsync 是逐字时间轴(没有字幕就更不会有),
+		// 而 musixmatchTranslationLRC 是把译文按行贴回带时间戳的 LRC —— 喂一份没有时间戳
+		// 的正文给它只会产出畸形结果。
+		//
+		// isTimedLRC 这道兜底:track.lyrics.get 按契约给的是无时间戳正文,万一哪天回了带
+		// 时间戳的内容,把它标成 plainOnly 等于把一份能自动采纳的歌词降级成"要用户手点",
+		// 是净损失 —— 那种情况按正常候选返回。
+		if isTimedLRC(plain) {
+			return musixmatchResult{lrc: plain, title: match.title, artist: match.artist, album: match.album, cover: match.cover, durationSecs: match.durationSecs}
+		}
+		return musixmatchResult{lrc: plain, plainOnly: true, title: match.title, artist: match.artist, album: match.album, cover: match.cover, durationSecs: match.durationSecs}
 	}
 	yrc := musixmatchRichsync(ctx, match.trackID)
 	tr := musixmatchTranslationLRC(ctx, match.trackID, lrc, trLang)
@@ -326,7 +367,12 @@ var (
 
 func musixmatchHTTPClient() *http.Client {
 	musixmatchClientOnce.Do(func() {
-		musixmatchClient = dohHTTPClient(8 * time.Second)
+		// onBlocked:直连被打掉、系统代理也救不回来时,给设置页那颗「测试」按钮留一个
+		// 比通用 no_response 准确得多的原因 —— 那两种情况在界面上长得一样("这个源没
+		// 反应"),但用户该做的事完全不同(一个是等,一个是去开代理)。
+		musixmatchClient = dohHTTPClient(func() {
+			musixmatchSetLastFailureReason(lyricFailureReasonMusixmatchDirectBlocked)
+		})
 	})
 	return musixmatchClient
 }
@@ -368,6 +414,76 @@ type musixmatchTrackMatch struct {
 	trackID                     int64
 	title, artist, album, cover string
 	durationSecs                float64 // musixmatch 自报的曲长,0=没给
+	// hasSubtitles:这首歌在 Musixmatch 上有没有**做过时间轴**。2026-09-02 加。
+	// false 时 track.subtitle.get 必然 404,调用方直接跳过那一趟、去问纯文本接口。
+	hasSubtitles bool
+}
+
+// musixmatchTrackRow 是 track.search 响应里的一条曲目。抽成命名类型是为了让挑选逻辑
+// (pickMusixmatchTrackRow)能脱离网络单测——那道 has_subtitles 闸门 2026-09-02 放宽过
+// 一次,而它原来内联在只能联网跑的函数里,改错了没有任何测试会红。
+type musixmatchTrackRow struct {
+	TrackID              int64  `json:"track_id"`
+	TrackName            string `json:"track_name"`
+	ArtistName           string `json:"artist_name"`
+	AlbumName            string `json:"album_name"`
+	AlbumCoverart500x500 string `json:"album_coverart_500x500"`
+	HasSubtitles         int    `json:"has_subtitles"`
+	// HasLyrics:有没有词(跟 HasSubtitles 是**两个独立字段**)。2026-09-02 才开始读——
+	// 在此之前只认 HasSubtitles==1,于是"有词但没做时间轴"的歌在搜索这一步就被跳过,
+	// 整个 Musixmatch 源对它们等于不存在。见 pickMusixmatchTrackRow。
+	HasLyrics int `json:"has_lyrics"`
+	// TrackLength:musixmatch 自报的曲长(秒)。2026-08-22 补上解析。
+	// 在此之前五个源里只有它的候选永远没有 sourceReportedDurationSecs,
+	// 于是新增的 sourceDurationOff(-400)对它**系统性免罚** —— 而它恰恰
+	// 是五源里匹配最松的一个(既不看专辑也不看时长,resolveMusixmatchLyric
+	// 第一行还把 durationSecs 直接丢掉)。对抗性复核实测:52 个"musixmatch
+	// 有有效候选"的缓存条目里,按 max() 口径偏差 >12% 的有 7 条(13.5%),
+	// 其余四源合计 4.3%。字段本来就在响应里 —— 那不是"没有证据",是证据没被读。
+	TrackLength int `json:"track_length"`
+}
+
+// pickMusixmatchTrackRow 从一批搜索结果里挑出这首歌。纯函数,给单测直接覆盖。
+//
+// **两趟**,顺序不能反(2026-09-02):
+//   - 第一趟只认 has_subtitles==1 —— 跟放宽之前逐字节一致,有时间轴的永远优先;
+//   - 第一趟空手时才走第二趟,认 has_lyrics==1 的"只有纯文本"候选。
+//
+// 为什么要有第二趟:Musixmatch 把"有没有时间轴"和"有没有词"记成两个独立字段。原来这里
+// 只认前者(注释写的理由是"没有逐行歌词的候选后面 track.subtitle.get 必然 404,不必跑
+// 这一趟"),推理没错但**结论过头**了 —— 那些候选确实拿不到字幕,可它们的词就在
+// track.lyrics.get 里。实测 Charlie Musselwhite《Storm Watch…》(Storm Warning,专辑
+// Look Out Highway,2025-05-16):has_lyrics=1 / has_subtitles=0,subtitle 回 404、
+// lyrics 回 616 字完整歌词,而八源搜索的结果是"都没找到"。
+//
+// 两趟不能合成一趟按分排序:合起来的话,一条"有词无时间轴"的候选可能因为排在前面就顶掉
+// 后面那条有时间轴的,把一份能自动采纳的歌词降级成要用户手点的纯文本,是净损失。
+func pickMusixmatchTrackRow(rows []musixmatchTrackRow, artist, localTitle string) (musixmatchTrackMatch, bool) {
+	accept := func(r musixmatchTrackRow) bool {
+		return lyricTitleAccepted(r.TrackName, localTitle) && lyricSourceArtistMatches(r.ArtistName, artist)
+	}
+	build := func(r musixmatchTrackRow) musixmatchTrackMatch {
+		return musixmatchTrackMatch{
+			trackID:      r.TrackID,
+			title:        r.TrackName,
+			artist:       r.ArtistName,
+			album:        r.AlbumName,
+			cover:        r.AlbumCoverart500x500,
+			durationSecs: float64(r.TrackLength),
+			hasSubtitles: r.HasSubtitles == 1,
+		}
+	}
+	for _, r := range rows {
+		if r.HasSubtitles == 1 && accept(r) {
+			return build(r), true
+		}
+	}
+	for _, r := range rows {
+		if r.HasLyrics == 1 && accept(r) {
+			return build(r), true
+		}
+	}
+	return musixmatchTrackMatch{}, false
 }
 
 // musixmatchSearchTrack 按歌手+歌名分字段搜索(q_artist/q_track,不是拼成一个字符串的
@@ -410,23 +526,7 @@ func musixmatchSearchTrackOnce(ctx context.Context, artist, queryTitle, localTit
 			} `json:"header"`
 			Body struct {
 				TrackList []struct {
-					Track struct {
-						TrackID              int64  `json:"track_id"`
-						TrackName            string `json:"track_name"`
-						ArtistName           string `json:"artist_name"`
-						AlbumName            string `json:"album_name"`
-						AlbumCoverart500x500 string `json:"album_coverart_500x500"`
-						HasSubtitles         int    `json:"has_subtitles"`
-						// TrackLength:musixmatch 自报的曲长(秒)。2026-08-22 补上解析。
-						// 在此之前五个源里只有它的候选永远没有 sourceReportedDurationSecs,
-						// 于是新增的 sourceDurationOff(-400)对它**系统性免罚** —— 而它恰恰
-						// 是五源里匹配最松的一个(这个函数只查 title+artist+has_subtitles,
-						// 既不看专辑也不看时长,resolveMusixmatchLyric 第一行还把 durationSecs
-						// 直接丢掉)。对抗性复核实测:52 个"musixmatch 有有效候选"的缓存条目里,
-						// 按 max() 口径偏差 >12% 的有 7 条(13.5%),其余四源合计 4.3%。
-						// 字段本来就在响应里 —— 那不是"没有证据",是证据没被读。
-						TrackLength int `json:"track_length"`
-					} `json:"track"`
+					Track musixmatchTrackRow `json:"track"`
 				} `json:"track_list"`
 			} `json:"body"`
 		} `json:"message"`
@@ -434,25 +534,119 @@ func musixmatchSearchTrackOnce(ctx context.Context, artist, queryTitle, localTit
 	if json.Unmarshal(body, &out) != nil || out.Message.Header.StatusCode != 200 {
 		return musixmatchTrackMatch{}, false
 	}
+	rows := make([]musixmatchTrackRow, 0, len(out.Message.Body.TrackList))
 	for _, t := range out.Message.Body.TrackList {
-		if t.Track.HasSubtitles != 1 {
-			continue
-		}
-		if lyricTitleAccepted(t.Track.TrackName, localTitle) && lyricSourceArtistMatches(t.Track.ArtistName, artist) {
-			return musixmatchTrackMatch{
-				trackID:      t.Track.TrackID,
-				title:        t.Track.TrackName,
-				artist:       t.Track.ArtistName,
-				album:        t.Track.AlbumName,
-				cover:        t.Track.AlbumCoverart500x500,
-				durationSecs: float64(t.Track.TrackLength),
-			}, true
-		}
+		rows = append(rows, t.Track)
 	}
-	return musixmatchTrackMatch{}, false
+	return pickMusixmatchTrackRow(rows, artist, localTitle)
 }
 
 // musixmatchSubtitleLRC 取该 track_id 官方的逐行 LRC 歌词,当作候选正文。
+// musixmatchPlainLyrics 取**没有时间戳**的纯文本歌词(track.lyrics.get)。
+//
+// 只在 musixmatchSubtitleLRC 空手而归时才调,理由见 resolveMusixmatchLyric 里那段注释。
+// Musixmatch 把"有没有时间轴"和"有没有词"记成两个独立字段(has_subtitles / has_lyrics),
+// 这个接口对应后者。
+//
+// restricted / instrumental 非 0 时返回空:前者是版权受限(正文可能是占位或空串),后者是
+// 平台明确说"这是纯音乐"——两种都不该当成歌词端出去。⚠️ instrumental 这里只是**不返回
+// 歌词**,不往上报"这是纯音乐"的结论:那个结论有自己的一套跨源优先级(见 enrich.go 的
+// instrumentalMarker),不从这里开新口子。
+func musixmatchPlainLyrics(ctx context.Context, trackID int64) string {
+	body, err := musixmatchDo(ctx, "track.lyrics.get", neturl.Values{
+		"track_id": {strconv.FormatInt(trackID, 10)},
+	})
+	if err != nil {
+		return ""
+	}
+	var out struct {
+		Message struct {
+			Header struct {
+				StatusCode int `json:"status_code"`
+			} `json:"header"`
+			Body struct {
+				Lyrics struct {
+					LyricsBody   string `json:"lyrics_body"`
+					Restricted   int    `json:"restricted"`
+					Instrumental int    `json:"instrumental"`
+				} `json:"lyrics"`
+			} `json:"body"`
+		} `json:"message"`
+	}
+	if json.Unmarshal(body, &out) != nil || out.Message.Header.StatusCode != 200 {
+		return ""
+	}
+	l := out.Message.Body.Lyrics
+	if l.Restricted != 0 || l.Instrumental != 0 {
+		return ""
+	}
+	return sanitizeMusixmatchPlainLyrics(l.LyricsBody)
+}
+
+// sanitizeMusixmatchPlainLyrics 清洗 track.lyrics.get 的正文。纯函数,给单测直接覆盖。
+//
+// ⚠️ **本项目用的这组身份(apic-appmobile + mac-ios-v2.0)实测不带商用免责水印**
+// (2026-09-02 抓 Charlie Musselwhite《Storm Warning》核实:24 行 616 字,末行就是最后
+// 一句歌词,没有 `*******` 围栏、没有 `(1409...)` 追踪号)。网上大多数参考实现描述的那个
+// 水印是 `web-desktop-app-v1.0` 那组才有的,**不要**照那个说法当成既成事实。
+//
+// 那为什么还写剥离:代价是几行纯字符串处理,收益是万一 Musixmatch 改了行为、或者某些
+// 曲目/地区确实带水印时,不会把免责声明当歌词正文端给用户。剥离规则只认**极其特征化**
+// 的两种形态(整行都是星号的围栏、以及 "not for commercial use" 那句),不做模糊猜测,
+// 不会误伤正常歌词。
+func sanitizeMusixmatchPlainLyrics(s string) string {
+	lines := strings.Split(strings.ReplaceAll(s, "\r\n", "\n"), "\n")
+	kept := make([]string, 0, len(lines))
+	for _, ln := range lines {
+		if musixmatchNoticeLine(ln) {
+			break // 水印一旦出现,它和它后面的东西全不是歌词
+		}
+		kept = append(kept, ln)
+	}
+	// 尾部单独一行的追踪号 `(1409618012345)`——水印围栏缺失、只剩这一行时的兜底。
+	for len(kept) > 0 {
+		last := strings.TrimSpace(kept[len(kept)-1])
+		if last == "" || musixmatchTrackingNumberLine(last) {
+			kept = kept[:len(kept)-1]
+			continue
+		}
+		break
+	}
+	return strings.TrimSpace(strings.Join(kept, "\n"))
+}
+
+// musixmatchNoticeLine:这一行是不是水印区的起点。
+func musixmatchNoticeLine(line string) bool {
+	t := strings.TrimSpace(line)
+	if t == "" {
+		return false
+	}
+	if strings.Count(t, "*") >= 3 && strings.Trim(t, "*") == "" {
+		return true // 整行都是星号的围栏
+	}
+	return strings.Contains(strings.ToLower(t), "not for commercial use")
+}
+
+// musixmatchTrackingNumberLine:形如 `(1409618012345)` 的纯数字追踪号行。
+//
+// ⚠️ 要求整行**只有**括号加数字,不能放宽 —— 歌词里出现 `(2)`、`(x3)` 这类标注是常事,
+// 放宽了会把真歌词吃掉。长度下限取 6 位,把 `(2)` 这种彻底排除在外。
+func musixmatchTrackingNumberLine(t string) bool {
+	if !strings.HasPrefix(t, "(") || !strings.HasSuffix(t, ")") {
+		return false
+	}
+	inner := t[1 : len(t)-1]
+	if len(inner) < 6 {
+		return false
+	}
+	for _, r := range inner {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
+}
+
 func musixmatchSubtitleLRC(ctx context.Context, trackID int64) string {
 	body, err := musixmatchDo(ctx, "track.subtitle.get", neturl.Values{
 		"track_id":        {strconv.FormatInt(trackID, 10)},

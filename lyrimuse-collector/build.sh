@@ -18,8 +18,32 @@ BUNDLED_BIN="/Applications/Lyrimuse.app/Contents/Resources/collector"
 LABEL="com.lyrimuse.collector"
 TOOLCHAIN=go1.24.4 # 原生发 LC_UUID + 有效签名的工具链
 
-echo "==> building with $TOOLCHAIN (native LC_UUID + valid signature)"
-GOTOOLCHAIN="$TOOLCHAIN" go build -o "$BIN" .
+# 注入版本号,让这份 collector 自报的版本跟它将要替换掉的那份保持一致。
+#
+# 2026-09-02 加(同 lyrimuse/build.sh 那处,理由见 main.go 的 clientVersion 注释):
+# collector 版本号以前是 main.go 里的手写字面量,发版时靠人记得改,v1.3.0 和 v1.5.0
+# 各漏过一次。现在两个构建脚本统一用 -ldflags 注入。
+#
+# 取值优先级刻意跟 lyrimuse/build.sh **不完全相同**,因为这个脚本的用途不一样:它把
+# 产物直接拷进**已经装好的** /Applications/Lyrimuse.app(见下面那段注释),所以第一
+# 顺位应该是"那个 App 自己是什么版本",而不是 git tag——本地 tag 完全可能落后于已装
+# 的 App(比如装的是 CI 发的 1.5.0,而本地仓库最新 tag 还是 v1.4.0),那时用 git tag
+# 反而会亲手制造出这次要修的那种不一致。
+#   ① LYRIMUSE_VERSION 环境变量(显式指定,最高优先)
+#   ② 已安装 App 的 CFBundleShortVersionString(产物要拷进去,必须跟它对齐)
+#   ③ 最近一个 git tag(App 还没装时的兜底)
+#   ④ dev(一眼假值,见 main.go clientVersion 注释里"为什么不写具体版本号")
+COLLECTOR_VERSION="${LYRIMUSE_VERSION:-}"
+if [ -z "$COLLECTOR_VERSION" ] && [ -f "$BUNDLED_BIN" ]; then
+  COLLECTOR_VERSION="$(plutil -extract CFBundleShortVersionString raw \
+    /Applications/Lyrimuse.app/Contents/Info.plist 2>/dev/null || true)"
+fi
+[ -z "$COLLECTOR_VERSION" ] && COLLECTOR_VERSION="$(git describe --tags --abbrev=0 2>/dev/null | sed 's/^v//' || true)"
+[ -z "$COLLECTOR_VERSION" ] && COLLECTOR_VERSION="dev"
+
+echo "==> building with $TOOLCHAIN (native LC_UUID + valid signature), version $COLLECTOR_VERSION"
+# ⚠️ -X 只能注入 var,对 const 静默失败——见 main.go clientVersion 那段注释。
+GOTOOLCHAIN="$TOOLCHAIN" go build -ldflags "-X main.clientVersion=$COLLECTOR_VERSION" -o "$BIN" .
 codesign -v "$BIN" && echo "    signature valid"
 
 # 2026-07-21 起 collector 真正被 launchd 管的那份是打包进 Lyrimuse.app 里的

@@ -151,6 +151,9 @@ func TestCoverSwapAllowed(t *testing.T) {
 		name       string
 		old, fresh enrichEntry
 		album      string
+		// upgradable 只对 old.CoverSource == "device" 那几档有意义:下面用它给
+		// deviceCoverUpgradable 打桩(真判据要取图比指纹,单测不发网络请求)。
+		upgradable bool
 		want       bool
 	}{
 		{
@@ -207,20 +210,39 @@ func TestCoverSwapAllowed(t *testing.T) {
 			// enrichPeripheralRetryInterval 就重新判"缺",反复触发这条外围自愈,每次都会把
 			// 刚定案的正确设备封面换成网易云/Apple/QQ 这次又猜错的某个结果——原封面来源
 			// 一直换,表现为封面在几次重试之间来回变。
-			name:  "旧封面来自device:哪怕新结果来自QQ也不换",
+			// ⚠️ 2026-09-02 起这两条的语义变了:device 分支改成"问一次能不能升级"
+			// (见 coverquality.go)。它们现在验的是**判据说不能升级时,一律不换** ——
+			// 上面那段《Immortal》的保护正是靠这一档(那张 QQ 高清图不是同一张图,
+			// 判据会拒绝升级)。下面用桩把判据固定成"不能升级",不发真实网络请求。
+			name:  "旧封面来自device且不可升级:哪怕新结果来自QQ也不换",
 			old:   enrichEntry{CoverURL: "device.jpg", CoverSource: "device", CoverAlbum: "Immortal"},
 			fresh: enrichEntry{CoverURL: "wrong.jpg", CoverSource: "qq"},
 			album: "Immortal", want: false,
 		},
 		{
-			name:  "旧封面来自device:哪怕新结果对得上专辑也不换",
+			name:  "旧封面来自device且不可升级:哪怕新结果对得上专辑也不换",
 			old:   enrichEntry{CoverURL: "device.jpg", CoverSource: "device", CoverAlbum: "Immortal"},
 			fresh: enrichEntry{CoverURL: "new.jpg", CoverSource: "apple", CoverAlbum: "Immortal", NeteaseURL: "n"},
 			album: "Immortal", want: false,
 		},
+		{
+			// 2026-09-02 新增:判据说"可以升级"(低分辨率设备封面 + 同一张图的高清远程版,
+			// 《24K Magic》那一档)时必须放行 —— 否则那 21 条存量低分辨率封面永远糊着。
+			name:  "旧封面来自device但可升级:换",
+			old:   enrichEntry{CoverURL: "device.jpg", CoverSource: "device", CoverAlbum: "24K Magic"},
+			fresh: enrichEntry{CoverURL: "big.jpg", CoverSource: "netease", CoverAlbum: "24K Magic", NeteaseURL: "n"},
+			album: "24K Magic", upgradable: true, want: true,
+		},
 	}
 	for _, c := range cases {
-		if got := coverSwapAllowed(c.old, c.fresh, c.album); got != c.want {
+		// 把"能不能升级"的判据换成桩:真判据要取图比指纹,单测不该发网络请求
+		// (它自己的用例在 coverquality_test.go 里)。
+		saved := deviceCoverUpgradable
+		upgradable := c.upgradable
+		deviceCoverUpgradable = func(string, string) bool { return upgradable }
+		got := coverSwapAllowed(c.old, c.fresh, c.album)
+		deviceCoverUpgradable = saved
+		if got != c.want {
 			t.Errorf("%s: coverSwapAllowed = %v, want %v", c.name, got, c.want)
 		}
 	}

@@ -128,6 +128,15 @@ func musicbrainzThrottle(ctx context.Context) error {
 // 供 resolveTrackEnrichment(enrich.go)调用。只对"原始标签本身不含中文"的歌手生效
 // (containsHan 判断,复用 match.go 的 cjkRatio)——已经是中文标签的没有"中英文两套
 // 写法"这个问题需要解决,不必白白消耗 MusicBrainz 的请求额度。
+// artistCanonicalCacheOnly:为真时 canonicalArtistViaMusicBrainz / cachedQQArtistCanonicalName
+// 只读缓存、绝不联网(查不到就当没有,也不往缓存写空值)。给 `collector top-artists`(App 统计页
+// 背后那条 CLI)的默认档用——2026-09-03 实测:artistMergeNameKey 2026-08-31 起走
+// resolveGenericArtistCanonicalName,而 CLI 进程既没加载别名缓存、又对 4 个时段 × 30 条里每个
+// 非中文歌手名都真查 MusicBrainz(全局 1.1 s 限速)+ QQ,一次跑 1 分 49 秒,App 侧 25 s 看门狗必然
+// 把它杀掉 → 歌手榜永远是"加载失败"。CLI 的 -mb-budget 0 本来就承诺"只读缓存不联网、毫秒级",
+// 这里让 canonical 名那一步也遵守同一个承诺;归并仍有 mbid 身份缓存 + 名字键两路信号。
+var artistCanonicalCacheOnly bool
+
 func canonicalArtistViaMusicBrainz(ctx context.Context, rawArtist string) string {
 	rawArtist = strings.TrimSpace(rawArtist)
 	if rawArtist == "" || containsHan(rawArtist) {
@@ -140,6 +149,9 @@ func canonicalArtistViaMusicBrainz(ctx context.Context, rawArtist string) string
 		return v
 	}
 	artistAliasMu.Unlock()
+	if artistCanonicalCacheOnly {
+		return "" // 见 artistCanonicalCacheOnly:不联网、不写空值
+	}
 
 	resolved := lookupMusicBrainzChineseAlias(ctx, rawArtist)
 

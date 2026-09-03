@@ -42,6 +42,32 @@ func listenThreshold(duration float64) float64 {
 	return listenCapSecs
 }
 
+// tooShortToScrobble 判"这首歌短到不该记一次收听"。Last.fm 官方规则(api/scrobbling)写的是
+// "The track must be longer than 30 seconds",是给客户端的规则——服务端不拒收、ignoredMessage
+// 也没有"太短"这一码;主流 scrobbler 都在客户端照做。这里默认照做(minTrackSecs),用户显式
+// 打开 features.ScrobbleShortTracks 才放行(2026-09-03 加,设置里「短于 30 秒的曲目」,默认关)。
+//
+// 三点不变:①曲长拿不到(≤0)时不拦,跟原来一样;②放行之后半程规则(listenThreshold)照旧,
+// 20 秒的歌得听满 10 秒;③这条闸在提交漏斗**入口**(到点提交/切歌收尾/退出兜底)和回填复核
+// 四处共用。放行的短曲目**只发 Last.fm**(含本地收听日志和回填——它们本来就是给 Last.fm 兜底
+// 的),ListenBrainz 那一路由 shortTrackLastfmOnly 单独挡住、维持原状:这是 Last.fm 页的设置,
+// 用户明确要求它跟 ListenBrainz 无关(2026-09-03)。
+func tooShortToScrobble(durationSecs float64) bool {
+	if durationSecs <= 0 || durationSecs >= minTrackSecs {
+		return false
+	}
+	return !features.ScrobbleShortTracks
+}
+
+// shortTrackLastfmOnly 判"这次收听只发 Last.fm、不发 ListenBrainz"。短曲目只有在
+// features.ScrobbleShortTracks 打开时才能通过 tooShortToScrobble 走进提交漏斗,而那个开关是
+// Last.fm 页的设置——ListenBrainz 自己没有 30 秒规则,但用户要的是"这个配置项跟 ListenBrainz
+// 没有一点关系",所以 LB 对短曲目维持原来的行为(不发)。两处调用:submitSingleAsync(活路径)
+// 和退出兜底那条同步路径,两处都要挡,漏一处就是"平时不发、退出时发"的分裂。
+func shortTrackLastfmOnly(durationSecs float64) bool {
+	return features.ScrobbleShortTracks && durationSecs > 0 && durationSecs < minTrackSecs
+}
+
 // seedPosition derives the true current playback position (seconds) from a
 // media-control reading. media-control freezes elapsedTime/timestamp at the
 // moment a track started (observed: a track 133s in still reports elapsed≈0 with
@@ -131,10 +157,14 @@ type poller struct {
 	lastListenDev  string
 
 	// Last.fm bridge (iPhone via FastScrobbler→Last.fm) state.
-	forwardedSet     persistedTTLSet
-	lfmMirroredSet   persistedTTLSet
-	lastfmCheckedAt  time.Time
-	bridgeFetching   bool // 见 bridge()/applyBridgeResult 顶部注释,防止同时起两个 lastfmRecent 请求
+	forwardedSet    persistedTTLSet
+	lfmMirroredSet  persistedTTLSet
+	lastfmCheckedAt time.Time
+	bridgeFetching  bool // 见 bridge()/applyBridgeResult 顶部注释,防止同时起两个 lastfmRecent 请求
+	// feed 里最近一次"有人在听"的时刻(now-playing / 新 scrobble),决定拉取节奏,见
+	// lastfmFeedInterval。跟 remoteAt 不是一回事:remoteAt 只在 LB 桥接那段里维护、
+	// 且 Mac 一活跃就被清零,这里要的是"Last.fm 那边最近有没有动静"本身。
+	feedActivityAt   time.Time
 	remoteKey        string
 	remotePN         time.Time
 	forwarded        map[int64]bool
@@ -174,12 +204,9 @@ type poller struct {
 // 有状态副作用的逻辑，仍只在主循环里跑，不引入并发读写)。
 type bridgeFetchResult struct {
 	now  time.Time
-	np   *lastfmTrack
-	done []lastfmTrack
+	page lastfmRecentPage // np/done/total 一起(2026-09-03,feed 要用 total)
 	ok   bool
 }
-
-const lastfmPollInterval = 15 * time.Second
 
 // nearDuplicateWindow：见 recordRecentMacListen 注释。同一首歌从 Mac 完成收听到在
 // Last.fm 上冒出一条"独立"的第二条(带 (Remaster) 等标题后缀、uts 对不上我方镜像写入
@@ -325,7 +352,13 @@ func (p *poller) mirrorScrobbleTracked(artist, title, album string, timestamp in
 	p.lfmMirrored[timestamp] = true
 	p.lfmMirroredSet.save(p.lfmMirrored)
 	mirrorAsync(p.lfm, "scrobble", func(ctx context.Context) error {
-		return p.lfm.scrobble(ctx, artist, title, album, timestamp, durationSecs)
+		err := p.lfm.scrobble(ctx, artist, title, album, timestamp, durationSecs)
+		if err == nil {
+			// 我们自己刚写进 Last.fm 一条:几秒后拉一次 feed,App 那边"上一首"就能立刻进
+			// 列表,不用等下一个拉取周期(这里在 goroutine 里,只碰 atomic,见 lastfmfeed.go)。
+			requestLastfmFeedRefresh(5 * time.Second)
+		}
+		return err
 	}, func(err error) {
 		recordFailedMirror(err, rawArtist, title, album, timestamp, durationSecs)
 	})
@@ -715,6 +748,9 @@ type submitOutcome struct {
 	// 保留这个字段是为了两条路径永远同源,而不是因为它还需要被加工。
 	artistName string
 	startedAt  int64
+	// lastfmOnly:这条是开着「短于 30 秒的曲目」放进来的短曲目,没发 ListenBrainz(见
+	// shortTrackLastfmOnly);err 恒为 nil,applySubmitOutcome 据此换一行日志。
+	lastfmOnly bool
 	err        error
 }
 
@@ -740,6 +776,13 @@ func (p *poller) submitSingleAsync(sess *playSession, meta snapshot, startedAt i
 		return
 	}
 	lm := lbMeta(meta)
+	if shortTrackLastfmOnly(meta.Duration) {
+		// 短曲目只发 Last.fm(见 shortTrackLastfmOnly):不打 LB,直接把一个"成功"结果送回
+		// 主循环,让 applySubmitOutcome 走 Last.fm 镜像 / 本地日志 / 会话收尾那条既有路径——
+		// 不另开一条分支,免得两条路以后各改各的。这里已经在主循环里,同步调用即可。
+		p.applySubmitOutcome(submitOutcome{sess: sess, meta: meta, artistName: lm.ArtistName, startedAt: startedAt, lastfmOnly: true})
+		return
+	}
 	go func() {
 		err := p.lb.submit(p.ctx, "single", startedAt, lm)
 		select {
@@ -777,7 +820,11 @@ func (p *poller) applySubmitOutcome(r submitOutcome) {
 		return
 	}
 	r.sess.listenSent = true
-	log.Printf("listen recorded: %s - %s", r.meta.Artist, r.meta.Title)
+	if r.lastfmOnly {
+		log.Printf("listen recorded (Last.fm only, %.0fs track under %.0fs): %s - %s", r.meta.Duration, minTrackSecs, r.meta.Artist, r.meta.Title)
+	} else {
+		log.Printf("listen recorded: %s - %s", r.meta.Artist, r.meta.Title)
+	}
 	p.pushScrobble(r.meta, r.startedAt, "mac")
 	p.recordRecentMacListen(r.meta.Artist, r.meta.Title, r.startedAt)
 	p.pushRelayState(time.Now(), false) // 立刻把刚确认的收听/上次播放状态推给网页,不必等下一轮 5s 心跳
@@ -801,7 +848,7 @@ func (p *poller) finalize(now time.Time) {
 	s := p.sess
 	p.sess = nil
 	p.recentFinalized, p.recentFinalizedAt = s, now
-	if s.listenSent || s.submitting || s.meta.Duration > 0 && s.meta.Duration < minTrackSecs {
+	if s.listenSent || s.submitting || tooShortToScrobble(s.meta.Duration) {
 		return
 	}
 	if s.playedSecs < listenThreshold(s.meta.Duration) {
@@ -1005,14 +1052,14 @@ func (p *poller) handle(now time.Time, reanchored, loopRestart bool) {
 		p.announce(now, "refresh")
 	}
 	if !p.sess.listenSent && !p.sess.submitting && p.sess.playedSecs >= listenThreshold(p.sess.meta.Duration) &&
-		(p.sess.meta.Duration <= 0 || p.sess.meta.Duration >= minTrackSecs) {
+		!tooShortToScrobble(p.sess.meta.Duration) {
 		p.sess.submitting = true
 		p.submitSingleAsync(p.sess, p.sess.meta, p.sess.startedAt.Unix())
 	}
 }
 
 // bridge kicks off a background fetch of Last.fm (iPhone via FastScrobbler→
-// Last.fm) gently every lastfmPollInterval — 见 bridgeDoneCh 顶部注释,
+// Last.fm) gently every lastfmFeedInterval(15 s / 空闲 60 s) — 见 bridgeDoneCh 顶部注释,
 // lastfmRecent 本身(8s 超时)挪到 goroutine 跑,不阻塞 poll() 后面紧跟的
 // pushRelayState。实际的转发/镜像逻辑(有状态副作用)在 applyBridgeResult 里、
 // 结果送回主循环后才跑。
@@ -1027,23 +1074,41 @@ func (p *poller) handle(now time.Time, reanchored, loopRestart bool) {
 // token 的用户在设置页看到桥接是"活的",这里却直接 return,什么都不发生、也不报错。
 // Swift 侧现已补上 isListenBrainzReadable(token+用户名)专门表示"能读统计",跟这个门
 // 对齐;用户名输入框的提示也改成了"听歌报告需要"。改这里的条件时记得同步那一侧。
+//
+// 2026-09-03:拉取这一步的门槛**只看 Last.fm 凭据**,不再要求 ListenBrainz 也配好——同一份
+// 响应现在还要落成 App 读的 recent feed(lastfmfeed.go),那跟 LB 毫无关系。LB 桥接
+// (转发 iPhone 收听、镜像远端 now-playing)的门槛原样保留,搬到了 applyBridgeResult 里
+// (bridgeForwardingEnabled)。节奏也从固定 15 s 改成自适应(lastfmFeedInterval:有人在听
+// 15 s、空闲 60 s),并接受"镜像 scrobble 刚成功"的提前拉一次(lastfmFeedNudgeDue)。
 func (p *poller) bridge(now time.Time) {
-	if p.cfg.LastfmUser == "" || p.cfg.lastfmBridgeAPIKey() == "" || p.cfg.User == "" || p.cfg.Token == "" {
+	if p.cfg.LastfmUser == "" || p.cfg.lastfmBridgeAPIKey() == "" {
 		return
 	}
-	if p.bridgeFetching || now.Sub(p.lastfmCheckedAt) < lastfmPollInterval {
+	if p.bridgeFetching {
+		return
+	}
+	localPlaying := p.cur.Playing && p.isTracked()
+	due := now.Sub(p.lastfmCheckedAt) >= lastfmFeedInterval(localPlaying, p.feedActivityAt, now)
+	if !due && !lastfmFeedNudgeDue(now) {
 		return
 	}
 	p.lastfmCheckedAt = now
 	p.bridgeFetching = true
 	user, apiKey := p.cfg.LastfmUser, p.cfg.lastfmBridgeAPIKey()
 	go func() {
-		np, done, ok := lastfmRecent(p.ctx, user, apiKey)
+		page, ok := lastfmRecent(p.ctx, user, apiKey)
 		select {
-		case p.bridgeDoneCh <- bridgeFetchResult{now: now, np: np, done: done, ok: ok}:
+		case p.bridgeDoneCh <- bridgeFetchResult{now: now, page: page, ok: ok}:
 		case <-p.ctx.Done():
 		}
 	}()
+}
+
+// bridgeForwardingEnabled:iPhone→ListenBrainz 桥接(转发完成收听 + 镜像远端 now-playing)
+// 的既有门槛。2026-09-03 之前它跟"要不要拉 Last.fm"是同一个判断,现在拉取只看 Last.fm
+// 凭据(见 bridge()),这里单独保住 LB 那半边的条件不变。
+func (p *poller) bridgeForwardingEnabled() bool {
+	return p.cfg.User != "" && p.cfg.Token != ""
 }
 
 // applyBridgeResult 在 poll 主循环里处理 bridge() 后台拉取的 Last.fm 结果——转发/
@@ -1057,13 +1122,22 @@ func (p *poller) applyBridgeResult(r bridgeFetchResult) {
 	if !r.ok {
 		return
 	}
+	// 先落 feed(App 读的那份,见 lastfmfeed.go)——这一步只要 Last.fm 凭据,跟下面的 LB
+	// 桥接无关。fetchedAt 用发起拉取的时刻 r.now(不是现在):响应体反映的是那一刻的状态。
+	writeLastfmRecentFeed(p.cfg.LastfmUser, r.page, r.now)
+	if at := lastfmFeedActivityAt(r.page, r.now); !at.IsZero() && at.After(p.feedActivityAt) {
+		p.feedActivityAt = at
+	}
+	if !p.bridgeForwardingEnabled() {
+		return // 没配 ListenBrainz:下面全是往 LB 转发/镜像的逻辑,原来在 bridge() 入口就挡掉
+	}
 	// 异步化之后,这次处理结果不再必然发生在 poll() 里紧跟 pushRelayState 那次调用之内
 	// (可能在两次 poll tick 之间才到达),所以这里补一次推送——沿用
 	// applySubmitOutcome/applyAnnounceOutcome 同款"处理完就主动推一次、内部去重兜底"
 	// 的模式。用 defer 而不是在每个 return 分支前手动加一遍,保证不管走哪条分支
 	// (Mac 抢占/iPhone 停播/判定为自己的回声/正常记录 iPhone 在播)都会触发。
 	defer p.pushRelayState(time.Now(), false)
-	now, np, done := r.now, r.np, r.done
+	now, np, done := r.now, r.page.NowPlaying, r.page.Done
 
 	// 把 Last.fm 上"没转发过"的完成收听转成 LB listen(集合去重,天然兼容乱序/迟到:
 	// Marvis 后台漏了、之后补同步的旧时间戳记录,只要不在集合里就会被补上)。首次(无持久化
@@ -1110,7 +1184,7 @@ func (p *poller) applyBridgeResult(r bridgeFetchResult) {
 			// 改成 submitSingleAsync 那种即发即走会打乱这个顺序保证。且这里处理的是
 			// iPhone 那边已经完成的历史收听(不是当下的实时展示),没有 announce()/
 			// 内联 single 提交那样"卡住会冻结网页展示"的紧迫性(bridge 本身也只有每
-			// lastfmPollInterval=15s 才跑一次,不是每 5s 的 poll 主循环),所以这条暂不
+			// lastfmFeedInterval=15s/60s 才跑一次,不是每 5s 的 poll 主循环),所以这条暂不
 			// 纳入本轮"poll() 提交异步化"的范围。
 			if err := p.lb.submit(p.ctx, "single", s.UTS, m); err != nil {
 				if errors.Is(err, errListenRejected) {
@@ -1294,7 +1368,7 @@ func run(ctx context.Context, cfg *config, lb *lbClient) error {
 			// 这条退出兜底路径直接调 mirrorScrobbleSync/lb.submit,不经过 submitSingleAsync,
 			// 所以广告判据要在这里再挡一次(见 isAdBreak)。
 			if p.sess != nil && !p.sess.listenSent && p.sess.playedSecs >= listenThreshold(p.sess.meta.Duration) &&
-				(p.sess.meta.Duration <= 0 || p.sess.meta.Duration >= minTrackSecs) &&
+				!tooShortToScrobble(p.sess.meta.Duration) &&
 				!p.sess.isAd && !isAdBreak(p.sess.meta.Bundle, p.sess.meta.Artist, p.sess.meta.Title, p.sess.meta.Album) {
 				// Last.fm 镜像:与 LB 解耦,且必须走同步变体 —— 异步 goroutine 活不过
 				// 紧接着的 return(见 mirrorScrobbleSync 注释)。
@@ -1311,7 +1385,10 @@ func run(ctx context.Context, cfg *config, lb *lbClient) error {
 					appendListen(p.sess.meta.Artist, p.sess.meta.Title, p.sess.meta.Album,
 						p.sess.startedAt.Unix(), p.sess.meta.Duration)
 				}
-				if err := lb.submit(flushCtx, "single", p.sess.startedAt.Unix(), lm); err != nil {
+				// 短曲目只发 Last.fm、不发 LB —— 跟 submitSingleAsync 同一条判据,两处都要挡。
+				if shortTrackLastfmOnly(p.sess.meta.Duration) {
+					p.recordRecentMacListen(p.sess.meta.Artist, p.sess.meta.Title, p.sess.startedAt.Unix())
+				} else if err := lb.submit(flushCtx, "single", p.sess.startedAt.Unix(), lm); err != nil {
 					log.Printf("final listen flush failed: %v", err)
 				} else {
 					p.recordRecentMacListen(p.sess.meta.Artist, p.sess.meta.Title, p.sess.startedAt.Unix())

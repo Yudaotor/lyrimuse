@@ -138,6 +138,12 @@ func runRegenerateJyutping(apply bool) int {
 		e.LyricsRoma = fresh
 		enrichCache[k] = e
 	}
+	// ⚠️ 2026-09-03 补:这里原来**漏了置脏**,是一个既有 bug。saveEnrichCache() 开头有
+	// `if !enrichDirty { return }`,所以 `regenerate-jyutping -apply` 一直是"文件写了、
+	// 缓存没写";它之所以看起来一直正常,是因为下次启动 importLyricsFromFiles() 会把
+	// lyrics/ 里的 .roma.lrc 读回缓存 —— 侥幸,不是设计。写 backfill-roma 时踩到同一个坑
+	// 才发现这边也有。
+	enrichDirty = true
 	enrichMu.Unlock()
 
 	saveEnrichCache()

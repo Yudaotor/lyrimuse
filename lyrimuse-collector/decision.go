@@ -45,6 +45,9 @@ type lyricsDecision struct {
 	// 可用候选的)的区别正是排查的第一问:酷狗是超时没露面,还是回了份烂候选?
 	// 两回事,两种修法(lyra 的 trace 把 no response / found-but-REJECT 分开报,同一个理由)。
 	SourcesResponded []string `json:"sources_responded,omitempty"`
+	// 这一轮因源级熔断被**跳过**(压根没发请求)的源,见 sourcebreaker.go——跟"超时没露面"
+	// 又是另一回事:这是我们主动不问它。由三处写缓存点在 buildLyricsDecision 之后填。
+	SourcesSkipped []string `json:"sources_skipped,omitempty"`
 	// 胜者的源名;空 = 这一轮没选出任何可用候选。
 	Winner string `json:"winner,omitempty"`
 	// 这次评估的结果有没有真的落到 Lyrics 字段上。upgrade/rescore 评估完维持现状时是
@@ -52,6 +55,17 @@ type lyricsDecision struct {
 	Applied bool `json:"applied"`
 	// 全部候选(含被判负分的),按 scoredLyricCandidates 的排序原样保留。
 	Candidates []lyricsDecisionCandidate `json:"candidates,omitempty"`
+	// RetryMethod/CorrectedTitle:**胜者**是不是"标题反查改写标题之后"那一轮搜出来的,
+	// 以及改写成了什么。两者都空 = 胜者来自按本地标题的正常那一轮(绝大多数情况)。
+	//
+	// 2026-09-02 加。起因是一次事后无法审计的错配(打上花火被反查成《春雷》):存档里
+	// 只有 winner/candidates 时,想知道"库里还有多少条是走这条高风险路径来的"完全无从
+	// 下手——光看标题分不出对错,Uchiagehanabi→春雷(错)和 Black Hole→黑洞里(对)在
+	// 标题层面是同一个形状。这两个字段把"走没走那条路径"变成可 grep 的事实。
+	//
+	// ⚠️ 仍然服从头注那条"只写不读"铁律:解析逻辑不许拿它当输入。
+	RetryMethod    string `json:"retry_method,omitempty"`
+	CorrectedTitle string `json:"corrected_title,omitempty"`
 }
 
 // 一条候选的元数据 —— 字段跟 scoredLyricCandidateResult 一一对应,唯独**没有歌词正文**。
@@ -126,6 +140,9 @@ func buildLyricsDecision(
 	}
 	if picked != nil {
 		d.Winner = picked.Source
+		// 只记**胜者**那条的来路:候选里混着两轮的结果,记"这一批里有人走过反查"没有意义,
+		// 要回答的问题是"当前这份歌词是不是那么来的"。
+		d.RetryMethod, d.CorrectedTitle = picked.RetryMethod, picked.RetriedTitle
 	}
 	for i := range scored {
 		c := &scored[i]

@@ -17,18 +17,41 @@ import (
 	"time"
 )
 
+// clientVersion 是这份 collector 自报的版本号——`collector version` 子命令、
+// ListenBrainz 的 submission_client_version、以及 musicbrainz/lrclib 两处 User-Agent
+// 都用它。
+//
+// ⚠️ **构建时由 -ldflags 注入,不要在这里手写版本号**。两个构建脚本都注入同一个值:
+// lyrimuse/build.sh(打包 App 时构建这份 collector,CI 发版也走它)和
+// lyrimuse-collector/build.sh(本地只重建 collector 时用),注入的都是跟 App 的
+// CFBundleShortVersionString **同一个来源**的版本号(LYRIMUSE_VERSION 环境变量,
+// 没有就取最近一个 git tag)。
+//
+// ⚠️ **必须是 var,不能是 const** —— Go 的 `-ldflags -X` 只能写 var,对 const
+// **静默失败**:构建照样 exit 0、不报错不警告,而值原封不动。2026-09-02 实测坐实
+// (`go build -ldflags "-X main.clientVersion=9.9.9"` 之后 `collector version`
+// 仍然打印旧值)。谁要是哪天顺手把它改回 const,注入就会无声无息地失效,回到下面
+// 说的那个老毛病——`versioninjection_test.go` 有一条断言专门钉住这件事。
+//
+// **为什么改成注入**(2026-09-02):在此之前这里是手动维护的字面量,而 App 侧版本号
+// 一直是从 git tag 自动派生的——两个版本号一个自动一个手动,靠人在发版时记得改这一行
+// 来同步。实际记录:v1.1.0 补同步一次、v1.2.0 补一次、**v1.3.0 漏了**(User-Agent/
+// ListenBrainz submission_client 谎报了一整个发布周期)、v1.4.0 补上、**v1.5.0 又漏了**
+// (用户在另一台机器装了 1.5.0 的 dmg,设置页报「App 1.5.0 · 采集服务 1.4.0」)。
+// 同一个坑两年内踩两次,说明问题不在"谁不小心",在于机制本身要求人工同步两个本该
+// 同源的值。改成从构建脚本注入之后,这一行不再需要任何人手动维护。
+//
+// 默认值 "dev" 是**故意选的一眼假值**,不是占位版本号:裸 `go build`/`go test` 出来的
+// 二进制会自报 dev,一眼看出"这不是发布构建"。刻意不写成某个具体版本号——那正是这次
+// 事故最坏的形态:一个看起来完全正常、实际早就过时的版本号,没有任何人会起疑。
+// (同一条原则见 lyrimuse/build.sh 里 APP_VERSION 退到 0.0.0 那段注释。)
+var clientVersion = "dev"
+
 const (
 	// 2026-07-23:项目最早叫 applemusic-nowplaying,后来改名 Lyrimuse 时这个常量
 	// 没跟着一起改——配置目录/文件名前缀/User-Agent/ListenBrainz submission_client
 	// 全部由它派生,现在统一改过来,不做旧路径兼容(不写自动迁移代码)。
 	clientName = "lyrimuse"
-	// 2026-07-27:之前一直没跟着 App 的 CFBundleShortVersionString 走(App 侧由
-	// LYRIMUSE_VERSION 从 git tag 自动派生,这个常量完全独立、从改名到现在没手动
-	// 动过)——收到 v1.1.0 发布时顺手同步一次,不代表以后每次发版都会自动跟着改,
-	// 这里仍然是纯手动维护的字面量。2026-08-03 随 v1.2.0 发布再同步一次;v1.3.0
-	// 那次漏了(User-Agent/ListenBrainz submission_client 因此谎报了一整个发布
-	// 周期),2026-08-24 随 v1.4.0 补上。
-	clientVersion = "1.4.0"
 
 	pollInterval      = 5 * time.Second
 	playingNowRefresh = 60 * time.Second
@@ -49,7 +72,9 @@ const (
 	maxAccrualGapSecs = 60.0
 	// Standard scrobble rule: half the track or 4 minutes, whichever is less.
 	listenCapSecs = 240.0
-	// Tracks shorter than this are never submitted as listens.
+	// Tracks shorter than this are not submitted as listens unless the user opts in
+	// (features.ScrobbleShortTracks; see tooShortToScrobble in poller.go). Last.fm's
+	// scrobbling guidelines: "The track must be longer than 30 seconds."
 	minTrackSecs = 30.0
 	// LB rejects any single listen larger than 10240 bytes. Lyrics (esp. word-level
 	// yrc) are the only large fields; cap their combined size well under that, with
@@ -127,6 +152,13 @@ func main() {
 		runRegenerateJyutpingCLI(os.Args[2:])
 		return
 	}
+	// `collector backfill-roma [-apply] [-limit N]`:给存量条目补罗马音(见
+	// backfillromacli.go)。maybeGenerateHelperRoma 只在解析/重评那一刻跑,所以这条特性
+	// 上线时存量一条都不会被补上;跟 regenerate-jyutping 同形态,默认预演。
+	if len(os.Args) > 1 && os.Args[1] == "backfill-roma" {
+		runBackfillRomaCLI(os.Args[2:])
+		return
+	}
 	// `collector dedupe-entries [-apply]`:把 enrich 缓存里"其实是同一首歌"的重复条目
 	// 并成一条(见 dedupecli.go)。默认预演,-apply 才真改。
 	if len(os.Args) > 1 && os.Args[1] == "dedupe-entries" {
@@ -196,9 +228,10 @@ func main() {
 		os.Exit(0)
 	}
 	features = loadFeatureFlags(filepath.Join(filepath.Dir(*cfgPath), clientName+"-features.json"))
-	// 歌词打分要知道"用户在放哪个播放器",好偏向那个平台自家的歌词(时间轴对得上同一个
-	// 音频母版)。跟 features 一样只在启动时设一次 —— 换播放器本来就要重启 collector。
-	nativeLyricSources = resolveNativeLyricSources(features.Players)
+	// (2026-09-02 删掉了这里的 `nativeLyricSources = resolveNativeLyricSources(features.Players)`。
+	//  同源加权的判据不该是"用户勾了哪些播放器",而是"**这一刻在放的是哪个**"——现在由
+	//  trackEnrichment 每首歌按 bundleID 设一次,见 match.go 里 nativeLyricSources 的注释。
+	//  顺带,原注释那句"换播放器本来就要重启 collector"对多选年代也不成立了。)
 	// 曲目元信息缓存落盘在 config 同目录，重启后不重解析同一首歌。
 	loadEnrichCache(filepath.Join(filepath.Dir(*cfgPath), clientName+"-enrich-cache.json"))
 	// 按歌手(不是按曲目)缓存的 MusicBrainz 中文别名查询结果,同目录下单独一份文件——
@@ -238,9 +271,19 @@ func main() {
 	// 用户可改的设置走:那个设置管的是"歌词权威源放哪",封面缓存是内部实现细节,不需要
 	// 暴露成一项用户配置。
 	deviceArtworkDir = filepath.Join(filepath.Dir(*cfgPath), "artwork")
+	// 这些设备封面同时要托管到状态中继上,否则推给网页/ListenBrainz 的是别的机器
+	// 根本读不到的 file:// 本地路径(2026-09-02 用户报「网页上没有封面了」)。
+	// 复用 /push 那套地址与令牌 —— 是同一个中继、同一份认证。见 artworkrelay.go 头注。
+	artworkRelayURL, artworkRelayToken = cfg.StateRelayURL, cfg.StateRelayToken
 	// 存量 key 归一化,必须夹在这里:要在 importLyricsFromFiles() 之前(否则老文件会按
 	// 旧头部标签把刚合并掉的条目又导回来,而且两份文件抢同一个 key,内容每次重启随机翻转),
 	// 又要在 lyricsDir 定下来之后(它得删掉落选条目的导出文件)。见 enrichkey.go。
+	// 「配置搬家」带过来的决策数据(enrich 缓存的非歌词字段),见 enrichrestore.go 头注。
+	// 位置有三条硬约束:要在 loadEnrichCache 之后(要有 enrichPath 才落得了盘)、
+	// migrateEnrichKeys 之前(备份里的 key 是导出那台机器当时的写法,得跟着一起归一化)、
+	// importLyricsFromFiles 之前(那一步负责让 lyrics/ 文件族赢下六个歌词字段)。
+	// 绝大多数启动这个文件不存在,直接早退,零成本。
+	adoptEnrichRestore(filepath.Join(filepath.Dir(*cfgPath), clientName+"-enrich-restore.json"))
 	migrateEnrichKeys()
 	importLyricsFromFiles()
 	// 夹在 import 和 export 之间:见 invalidateStaleTranslations 的注释——前者让
@@ -266,6 +309,12 @@ func main() {
 	forwardedPath = filepath.Join(filepath.Dir(*cfgPath), clientName+"-lastfm-forwarded.json")
 	lfmMirroredPath = filepath.Join(filepath.Dir(*cfgPath), clientName+"-lastfm-mirrored.json")
 	lastfmStatusPath = filepath.Join(filepath.Dir(*cfgPath), clientName+"-lastfm-status.json")
+	// 合唱串「智能」档的判定缓存(见 lastfmcollapse.go)。必须在 lastfmScrobblerIfEnabled
+	// 之前设好 —— 判定器构造时就读它。backfillcli.go 用同一个文件名,两条路径共读一份。
+	lastfmCollapsePath = filepath.Join(filepath.Dir(*cfgPath), clientName+"-lastfm-collapse.json")
+	// collector→App 的 Last.fm「最近记录」feed(见 lastfmfeed.go):桥接每次拉到的
+	// recenttracks 落盘,App 读它代替自己直连轮询。
+	lastfmFeedPath = filepath.Join(filepath.Dir(*cfgPath), clientName+"-lastfm-recent-feed.json")
 	// collector→App 的状态通道(眼下只报"网络不通",见 collectorstatus.go)。设置这个
 	// 路径的同时会清掉上次运行留下的文件 —— 那份状态跟这次进程无关。
 	setCollectorStatusPath(filepath.Join(filepath.Dir(*cfgPath), clientName+"-collector-status.json"))
@@ -282,6 +331,9 @@ func main() {
 
 	log.Printf("%s %s starting (bundles: %v, dry-run: %v)",
 		clientName, clientVersion, cfg.BundleIDs, *dryRun)
+	// 存量设备封面补传。放后台:它只是把已有的图确认/补到中继上,不该挡住 run()。
+	// 绝大多数启动里每张都会在 HEAD 那步命中,整个扫描就是几十次廉价的读(见头注)。
+	go sweepDeviceArtwork(ctx)
 	if err := run(ctx, cfg, lb); err != nil && ctx.Err() == nil {
 		log.Fatalf("run: %v", err)
 	}

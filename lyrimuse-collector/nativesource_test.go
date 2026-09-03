@@ -59,21 +59,75 @@ func TestPlayerNativeLyricSource(t *testing.T) {
 	}
 }
 
-// 2026-09-01 多选后新增:resolveNativeLyricSources 要把选中集合里每个成员各自的原生源
-// 都收进来,不是只挑一个——同时用 QQ 音乐和酷狗听歌的人,两边的同源加权都该生效。
-func TestResolveNativeLyricSources(t *testing.T) {
-	got := resolveNativeLyricSources(map[string]bool{playerQQMusic: true, playerKugou: true})
-	if len(got) != 2 || !got["qq"] || !got["kugou"] {
-		t.Errorf("resolveNativeLyricSources({qq,kugou}) = %v，期望恰好 {qq, kugou}", got)
+// 2026-09-02:同源加权的判据从「用户勾了哪些播放器」换成「**这一刻在放的是哪个**」。
+//
+// (这里原来是 TestResolveNativeLyricSources,钉的是 2026-09-01 多选那次的行为:
+//  「选中集合里每个成员各自的原生源都收进来」。那个函数连同它的判据一起删了 —— 它对
+//  别的按播放器分叉的功能成立,对**这一项**不成立,理由见 match.go 里 nativeLyricSources
+//  的注释:这一项的立论是"时间轴对着同一份音频母版",那是正在播的那个播放器的属性。)
+func TestPlayerForBundleID(t *testing.T) {
+	cases := map[string]string{
+		appleMusicBundleID:   playerAppleMusic,
+		qqMusicBundleID:      playerQQMusic,
+		neteaseMusicBundleID: playerNetease,
+		spotifyBundleID:      playerSpotify,
+		kugouMusicBundleID:   playerKugou,
+		// ⚠️ 认不出必须是"不知道"(空串),不能是"就当是 Apple Music"—— playerBundleID
+		// 那个反方向的函数 default 分支返回 appleMusicBundleID,照抄过来就会把任何浏览器/
+		// 第三方 App 都认成 Apple Music。
+		"com.google.Chrome": "",
+		"":                  "",
 	}
-	// Apple Music/Spotify/auto 不贡献任何源,混进去不该多出条目、也不该 panic。
-	got = resolveNativeLyricSources(map[string]bool{playerQQMusic: true, playerAppleMusic: true, playerAuto: true})
-	if len(got) != 1 || !got["qq"] {
-		t.Errorf("resolveNativeLyricSources({qq,apple,auto}) = %v，期望恰好 {qq}", got)
+	for bundleID, want := range cases {
+		if got := playerForBundleID(bundleID); got != want {
+			t.Errorf("playerForBundleID(%q) = %q, want %q", bundleID, got, want)
+		}
 	}
-	// 全是不贡献源的成员 → 空集,不是 nil 判断失败/panic。
-	if got := resolveNativeLyricSources(map[string]bool{playerAuto: true}); len(got) != 0 {
-		t.Errorf("resolveNativeLyricSources({auto}) = %v，期望空集", got)
+}
+
+func TestSetNativeLyricSourcesForPlayer(t *testing.T) {
+	saved := nativeLyricSources
+	t.Cleanup(func() { nativeLyricSources = saved })
+
+	// ⚠️ 用户报的那个 bug 的形状:设置里六个播放器全勾,但实际在放 Apple Music。
+	// 旧判据(按 features.Players)会得出 {kugou, netease, qq} —— 三个源同时 +250,
+	// 而「解析决策」面板上那句"这个源就是你正在用的播放器"对三个都是假话。
+	// 新判据只看在放的那个:Apple Music 没有原生歌词源 → 空集,谁都不加。
+	setNativeLyricSourcesForPlayer(appleMusicBundleID)
+	if hasNativeLyricSource() {
+		t.Errorf("放 Apple Music 时不该有任何同源加权,got %v", nativeLyricSources)
+	}
+	for _, src := range []string{"qq", "netease", "kugou"} {
+		if isNativeLyricSource(src) {
+			t.Errorf("放 Apple Music 时 %q 不该被判成同源", src)
+		}
+	}
+
+	// 放 QQ 音乐:只有 qq 一个,不能顺带把别的中文源也算进去。
+	setNativeLyricSourcesForPlayer(qqMusicBundleID)
+	if !isNativeLyricSource("qq") {
+		t.Error("放 QQ 音乐时 qq 应当判为同源")
+	}
+	if isNativeLyricSource("netease") || isNativeLyricSource("kugou") {
+		t.Errorf("放 QQ 音乐时只该有 qq 一个,got %v", nativeLyricSources)
+	}
+
+	// 换播放器要**换掉**而不是累积 —— 累积就退化成旧那个"多个源同时加"的形状了。
+	setNativeLyricSourcesForPlayer(kugouMusicBundleID)
+	if !isNativeLyricSource("kugou") || isNativeLyricSource("qq") {
+		t.Errorf("换到酷狗之后应当恰好只剩 kugou,got %v", nativeLyricSources)
+	}
+
+	// Spotify 跟 Apple Music 同类:接进来了,但不是这套里的歌词源,没有"同源"可言。
+	setNativeLyricSourcesForPlayer(spotifyBundleID)
+	if hasNativeLyricSource() {
+		t.Errorf("放 Spotify 时不该有任何同源加权,got %v", nativeLyricSources)
+	}
+
+	// 认不出的 bundle id(浏览器网页版等)同样是空集,不能兜底成某个源。
+	setNativeLyricSourcesForPlayer("com.google.Chrome")
+	if hasNativeLyricSource() {
+		t.Errorf("认不出的播放器不该有同源加权,got %v", nativeLyricSources)
 	}
 }
 
@@ -88,34 +142,34 @@ func TestNeedsLyricsRetry_NativeSourceMissedOut(t *testing.T) {
 		Lyrics: "[00:01.00]x", LyricsYRC: "[1,2](1,1,0)x",
 		LyricsSource: "kugou", LyricsSourcesSeen: []string{"kugou", "qq", "lrclib"},
 	}
-	if !needsLyricsRetry(missed, false, false) {
+	if !needsLyricsRetry(missed, false, false, true) {
 		t.Error("见过同源候选却没选它，该重试（这正是被『有逐字就不重试』挡死的那种）")
 	}
 
 	// 已经就是同源 → 没什么可换的。
 	already := missed
 	already.LyricsSource = "qq"
-	if needsLyricsRetry(already, false, false) {
+	if needsLyricsRetry(already, false, false, true) {
 		t.Error("已经是同源，不该重试")
 	}
 
 	// 同源当初压根没答过 → 重搜也变不出来。
 	unseen := missed
 	unseen.LyricsSourcesSeen = []string{"kugou", "lrclib"}
-	if needsLyricsRetry(unseen, false, false) {
+	if needsLyricsRetry(unseen, false, false, true) {
 		t.Error("同源没出现过，不该为它重试")
 	}
 
 	// ⚠️ 最要紧：用户手改过的绝不能被这条新路径重搜覆盖掉 —— 那是缓存里唯一不可恢复的东西。
 	manual := missed
 	manual.ManualLyrics = true
-	if needsLyricsRetry(manual, false, false) {
+	if needsLyricsRetry(manual, false, false, true) {
 		t.Error("手改过的歌词绝不能重搜")
 	}
 
 	// 识别不出播放器时，行为跟改动前一致（有逐字就不重试）。
 	nativeLyricSources = nil
-	if needsLyricsRetry(missed, false, false) {
+	if needsLyricsRetry(missed, false, false, true) {
 		t.Error("没有 native 源时该维持原行为")
 	}
 }
@@ -137,7 +191,7 @@ func TestNeedsLyricsRetry_DurationMismatch(t *testing.T) {
 		ResolvedDurationSecs: 164,
 	}
 	retryAt := func(e enrichEntry, actual float64) bool {
-		return needsLyricsRetry(e, durationMismatch(e.ResolvedDurationSecs, actual), false)
+		return needsLyricsRetry(e, durationMismatch(e.ResolvedDurationSecs, actual), false, true)
 	}
 	if !retryAt(entry, 246) {
 		t.Error("164s 校验的歌词碰上 246s 的真实版本，该重选（哪怕有逐字）")

@@ -50,16 +50,36 @@ func dominantColor(ctx context.Context, coverURL string) string {
 const deviceArtworkURLPrefix = "file://"
 
 func resolveDominantColor(ctx context.Context, coverURL string) string {
+	img := loadCoverImage(ctx, coverURL)
+	if img == nil {
+		return ""
+	}
+	return dominantColorFromImage(img)
+}
+
+// loadCoverImage 把一个封面 URL(本地 file:// 或远程 CDN)取回来解成 image.Image。
+//
+// 2026-09-02 从 resolveDominantColor 里抽出来 —— 设备封面的清晰度判据
+// (coverquality.go)也要取远程候选来比一次,而"哪个 CDN 该怎么降采样、要不要带
+// Referer"这套知识只该有一份。抽的时候行为一字未改。
+//
+// ⚠️ **返回的远程图是降采样过的**(网易云 64y64、QQ 300),因为唯一的原始调用方是取色。
+// 所以**绝不能拿它的解码尺寸去判"这个候选有多清晰"** —— 那会把一张 800×800 的候选读成
+// 64px。清晰度判据(coverquality.go)因此改成从 URL 里读目标尺寸
+// (`coverURLIntendedEdge`),只把这里返回的小图用于 8×8 感知指纹(那个尺度上降采样
+// 无所谓)。2026-09-02 实现时真的先踩了这一脚:第一版用 `minEdge(解码结果)` 比大小,
+// 判据恒成立、修复一次都不会触发。
+func loadCoverImage(ctx context.Context, coverURL string) image.Image {
 	if strings.HasPrefix(coverURL, deviceArtworkURLPrefix) {
 		data, err := os.ReadFile(strings.TrimPrefix(coverURL, deviceArtworkURLPrefix))
 		if err != nil {
-			return ""
+			return nil
 		}
 		img, _, err := image.Decode(bytes.NewReader(data))
 		if err != nil {
-			return ""
+			return nil
 		}
-		return dominantColorFromImage(img)
+		return img
 	}
 	small := coverURL
 	referer := "https://music.163.com/"
@@ -80,23 +100,23 @@ func resolveDominantColor(ctx context.Context, coverURL string) string {
 	cli := &http.Client{Timeout: 4 * time.Second}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, small, nil)
 	if err != nil {
-		return ""
+		return nil
 	}
 	req.Header.Set("Referer", referer)
 	req.Header.Set("User-Agent", "Mozilla/5.0")
 	resp, err := doHTTPTracked(cli, req)
 	if err != nil {
-		return ""
+		return nil
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return ""
+		return nil
 	}
 	img, _, err := image.Decode(resp.Body) // 自动识别 JPEG/PNG
 	if err != nil {
-		return ""
+		return nil
 	}
-	return dominantColorFromImage(img)
+	return img
 }
 
 // dominantColorFromImage 是取色算法本体,从 resolveDominantColor 里抽出来——设备直送

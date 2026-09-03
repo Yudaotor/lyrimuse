@@ -121,7 +121,9 @@ func pendingBackfillListens(now time.Time) (pending []listenLogLine, tooOld int)
 			continue
 		}
 		// 本地复核一遍"算不算一次收听"—— 不信任日志一定干净(手工编辑过、旧版本写的)。
-		if l.DUR > 0 && l.DUR < minTrackSecs {
+		// 短曲目按**当前**开关判(tooShortToScrobble):开关开着时写下的短曲目记录,关掉后再
+		// 回填会被这里筛掉——回填是把"现在也算收听"的记录补上去,不是复刻当时的口径。
+		if tooShortToScrobble(l.DUR) {
 			continue
 		}
 		if uts < cutoff {
@@ -186,9 +188,9 @@ func (s *lastfmScrobbler) scrobbleBatch(ctx context.Context, items []listenLogLi
 		// 顺带:少了那次 trackEnrichment 调用,回填批次不再为每一条去查一遍富化缓存,
 		// 也少了一层"回填时才第一次解析这首歌"的意外联网。
 		// 合唱串处理跟活路径走**同一个**函数(resolveScrobbleArtist),否则同一首歌两条路
-		// 提交出去的艺人名会不一致。2026-08-31 起它是纯静态开关、不联网,所以这里也不再
-		// 需要 ctx。
-		artist := resolveScrobbleArtist(it.AR)
+		// 提交出去的艺人名会不一致。智能档下这里可能联网判定(每首歌一次、结论永久缓存,
+		// 活路径已判过的直接命中缓存),所以要带 ctx 和判定器。
+		artist := resolveScrobbleArtist(ctx, s.collapse, it.AR, it.TI)
 		idx := strconv.Itoa(i)
 		p["artist["+idx+"]"] = artist
 		p["track["+idx+"]"] = it.TI

@@ -102,14 +102,30 @@ type featureFlagsFile struct {
 	// Players：可多选的播放器集合(2026-09-01 起支持多选,取代上面的 Player)——跟
 	// lyrimuse 侧 FeatureSettingsStore.players(Set<PlaybackPlayer>)对应,rawValue 逐字
 	// 相同。resolvePlayers 负责校验/迁移/兜底,任何时候 features.Players 都保证非空。
-	Players              []string `json:"players,omitempty"`
-	AlbumPrefetch        *bool    `json:"album_prefetch,omitempty"`
-	LastfmMirrorScrobble *bool    `json:"lastfm_mirror_scrobble,omitempty"`
-	// LastfmScrobbleFirstArtistOnly：合唱串("A & B")上送时只发第一位艺人。
-	// **默认 false = 原样发整串**。命名对齐 Navidrome 的 Lastfm.ScrobbleFirstArtistOnly
-	// (它默认也是 false)。语义与取舍见 lastfm.go 里 resolveScrobbleArtist 的注释。
+	Players       []string `json:"players,omitempty"`
+	AlbumPrefetch *bool    `json:"album_prefetch,omitempty"`
+	// LyricsAutoUpgrade:歌词定下来之后,还要不要跟着"匹配算法/打分规则升级"在后台自动
+	// 换掉(2026-09-03 用户要求把这个能力交出来:「控制是否会有自动按照最新版本的算法优化
+	// 调整歌词的能力;开了就是现状,不开就是一开始选了什么就不会后台自动给换了」)。
+	// 缺失=true=现状。闸门只加在**换掉已有歌词**的那两条路径上(enrich.go 的
+	// needsLyricsRescore / needsLyricsRetry),首次填充、封面/译文回填、用户手动重搜都不受它管。
+	LyricsAutoUpgrade    *bool `json:"lyrics_auto_upgrade,omitempty"`
+	LastfmMirrorScrobble *bool `json:"lastfm_mirror_scrobble,omitempty"`
+	// LastfmScrobbleArtistMode：合唱串("A & B")上送时发哪个名字,三档
+	// scrobbleArtistAll / scrobbleArtistFirst / scrobbleArtistSmart(2026-09-03 起)。
+	// 缺失/非法值时退回下面的遗留布尔做一次迁移,见 resolveScrobbleArtistMode。
+	// 语义与取舍见 lastfm.go 里 resolveScrobbleArtist 的注释。
+	LastfmScrobbleArtistMode string `json:"lastfm_scrobble_artist_mode,omitempty"`
+	// LastfmScrobbleFirstArtistOnly：**遗留字段**(2026-08-31 ~ 2026-09-03 之间的二态开关,
+	// 被上面的 LastfmScrobbleArtistMode 取代,只留着给一次性迁移用)。true ↔ scrobbleArtistFirst,
+	// false/缺失 ↔ scrobbleArtistAll。这台机器往后只写 LastfmScrobbleArtistMode,不再写它。
 	LastfmScrobbleFirstArtistOnly *bool `json:"lastfm_scrobble_first_artist_only,omitempty"`
-	WeeklyDigest                  *bool `json:"weekly_digest,omitempty"`
+	// ScrobbleShortTracks:短于 minTrackSecs(30 秒)的曲目也 scrobble 到 Last.fm(2026-09-03 加,
+	// 设置里 Last.fm →「短于 30 秒的曲目」)。**默认 false = 现状**:Last.fm 官方规则要求曲目长于
+	// 30 秒,主流 scrobbler 都在客户端照做。**只管 Last.fm**(含给 Last.fm 兜底的本地收听日志和
+	// 回填),ListenBrainz 不受影响 —— 见 poller.go tooShortToScrobble / shortTrackLastfmOnly。
+	ScrobbleShortTracks *bool `json:"scrobble_short_tracks,omitempty"`
+	WeeklyDigest        *bool `json:"weekly_digest,omitempty"`
 	// DailyDigest：见 daily.go。跟 WeeklyDigest 是独立开关，两个可以同时开、只开一个、
 	// 或都不开。
 	DailyDigest *bool `json:"daily_digest,omitempty"`
@@ -200,15 +216,20 @@ type featureFlags struct {
 	// 常量,值恒为 true;不会是空 map,见 resolvePlayers)——2026-09-01 从单选的 Player
 	// 改成可多选。system.go 的 getState()/mediaPlayerLabel()、poller.go 的 isTracked()、
 	// companionlaunch.go、match.go 的同源加权都读它。
-	Players              map[string]bool
-	AlbumPrefetch        bool
+	Players       map[string]bool
+	AlbumPrefetch bool
+	// 见 featureFlagsFile.LyricsAutoUpgrade。默认 true(现状)。
+	LyricsAutoUpgrade    bool
 	LastfmMirrorScrobble bool
-	// 见上面 featureFlagsFile 里同名字段的注释。默认 false(发整串)。
-	LastfmScrobbleFirstArtistOnly bool
-	WeeklyDigest                  bool
-	DailyDigest                   bool
-	WeeklyDigestSource            string
-	DailyDigestSource             string
+	// 合唱串上送档位,恒为 scrobbleArtistAll/First/Smart 之一(resolveScrobbleArtistMode
+	// 保证),默认 scrobbleArtistAll(发整串)。
+	LastfmScrobbleArtistMode string
+	// 见 featureFlagsFile.ScrobbleShortTracks。默认 false(短曲目不记,Last.fm 官方规则)。
+	ScrobbleShortTracks bool
+	WeeklyDigest        bool
+	DailyDigest         bool
+	WeeklyDigestSource  string
+	DailyDigestSource   string
 	// pickLyricCandidate(enrich.go)读这三个字段决定冠军。
 	//
 	// ⚠️ 2026-08-21 订正:原注释说 `collector search-lyrics` 子命令"从不调用
@@ -269,26 +290,62 @@ func loadFeatureFlags(path string) featureFlags {
 		log.Printf("read feature flags %s: %v (使用默认值)", path, err)
 	}
 	return featureFlags{
-		Players:              resolvePlayers(f.Players, f.Player),
-		TrustedPlayers:       resolveTrustedPlayers(f.TrustedPlayers),
-		AlbumPrefetch:        boolOr(f.AlbumPrefetch, true),
+		Players:        resolvePlayers(f.Players, f.Player),
+		TrustedPlayers: resolveTrustedPlayers(f.TrustedPlayers),
+		AlbumPrefetch:  boolOr(f.AlbumPrefetch, true),
+		// 默认 true = 保持这个能力上线以来的行为;Swift 侧 `lyricsAutoUpgrade` 的属性初值
+		// 必须跟这里一致(两侧默认值对齐那条老规矩,见上面 AlbumPrefetch 的注释)。
+		LyricsAutoUpgrade:    boolOr(f.LyricsAutoUpgrade, true),
 		LastfmMirrorScrobble: boolOr(f.LastfmMirrorScrobble, false),
-		// 默认 false:原样发整串。理由见 lastfm.go resolveScrobbleArtist —— ListenBrainz
-		// 文档要求合唱 credit "include them all",Navidrome 同名开关默认也是 false。
-		LastfmScrobbleFirstArtistOnly: boolOr(f.LastfmScrobbleFirstArtistOnly, false),
-		WeeklyDigest:                  boolOr(f.WeeklyDigest, false),
-		DailyDigest:                   boolOr(f.DailyDigest, false),
-		WeeklyDigestSource:            f.WeeklyDigestSource,
-		DailyDigestSource:             f.DailyDigestSource,
-		LyricsSources:                 resolveLyricsSources(f.LyricsSources, f.AMLLLyrics, f.LyricFindLyrics, f.KuwoLyrics),
-		LyricsSourceMode:              resolveLyricsSourceMode(f.LyricsSourceMode),
-		LyricsSourceOrder:             resolveLyricsSourceOrder(f.LyricsSourceOrder),
-		LyricsDir:                     f.LyricsDir,
-		LyricsTranslationLanguage:     resolveLyricsTranslationLanguage(f.LyricsTranslationLanguage),
-		LyricsMachineTranslation:      boolOr(f.LyricsMachineTranslation, false),
-		LaunchLyrimuseOnMusicOpen:     boolOr(f.LaunchLyrimuseOnMusicOpen, true),
-		LyricsDecisionTrace:           boolOr(f.LyricsDecisionTrace, false),
+		// 默认 scrobbleArtistAll:原样发整串。理由见 lastfm.go resolveScrobbleArtist ——
+		// ListenBrainz 文档要求合唱 credit "include them all",Navidrome 同名开关默认也是 false。
+		LastfmScrobbleArtistMode: resolveScrobbleArtistMode(f.LastfmScrobbleArtistMode, f.LastfmScrobbleFirstArtistOnly),
+		// 默认 false:照 Last.fm 官方规则,短于 30 秒不记。fail-closed 跟其余"改变上送内容"的
+		// 开关一致——字段缺失不能让老用户的历史突然多出一批短曲目。
+		ScrobbleShortTracks:       boolOr(f.ScrobbleShortTracks, false),
+		WeeklyDigest:              boolOr(f.WeeklyDigest, false),
+		DailyDigest:               boolOr(f.DailyDigest, false),
+		WeeklyDigestSource:        f.WeeklyDigestSource,
+		DailyDigestSource:         f.DailyDigestSource,
+		LyricsSources:             resolveLyricsSources(f.LyricsSources, f.AMLLLyrics, f.LyricFindLyrics, f.KuwoLyrics),
+		LyricsSourceMode:          resolveLyricsSourceMode(f.LyricsSourceMode),
+		LyricsSourceOrder:         resolveLyricsSourceOrder(f.LyricsSourceOrder),
+		LyricsDir:                 f.LyricsDir,
+		LyricsTranslationLanguage: resolveLyricsTranslationLanguage(f.LyricsTranslationLanguage),
+		LyricsMachineTranslation:  boolOr(f.LyricsMachineTranslation, false),
+		LaunchLyrimuseOnMusicOpen: boolOr(f.LaunchLyrimuseOnMusicOpen, true),
+		LyricsDecisionTrace:       boolOr(f.LyricsDecisionTrace, false),
 	}
+}
+
+// 合唱串上送档位(features.LastfmScrobbleArtistMode)。字符串值跟 Swift 侧
+// LastfmScrobbleArtistMode 的 rawValue 逐字相同 —— 两侧通过同一份 features.json 交换。
+const (
+	// 原样发播放器报的整串(默认)。
+	scrobbleArtistAll = "all"
+	// 纯字符串取第一位(firstCreditedArtist),不联网。
+	scrobbleArtistFirst = "first"
+	// 按 Last.fm 编目判定:合唱串已被收录就原样发;没收录、而第一位歌手名下这首歌已被
+	// 收录才折成第一位;两边都查不到或查询失败维持原样。见 lastfmcollapse.go。
+	scrobbleArtistSmart = "smart"
+)
+
+// resolveScrobbleArtistMode 把文件里的档位字符串校验成三个常量之一;缺失/非法时退回
+// 遗留的二态开关 lastfm_scrobble_first_artist_only 做一次迁移(true → first),两者都没有
+// 才兜底 all。非法值**不**当成 all 静默吞掉之外还会记一行日志 —— 拼错档位名的后果是
+// "设置里选了智能、collector 一直在发整串",不报出来查不到。
+func resolveScrobbleArtistMode(raw string, legacyFirstOnly *bool) string {
+	switch raw {
+	case scrobbleArtistAll, scrobbleArtistFirst, scrobbleArtistSmart:
+		return raw
+	case "":
+	default:
+		log.Printf("feature flags: unknown lastfm_scrobble_artist_mode %q (falling back)", raw)
+	}
+	if legacyFirstOnly != nil && *legacyFirstOnly {
+		return scrobbleArtistFirst
+	}
+	return scrobbleArtistAll
 }
 
 // isValidPlayerValue 核对一个字符串是不是六个已知播放器 rawValue 之一——resolvePlayers

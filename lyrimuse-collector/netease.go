@@ -5,10 +5,12 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	_ "image/jpeg" // 注册 JPEG 解码器
 	_ "image/png"  // 网易云取色缩略图有时是 PNG(content-type 却谎报 jpg)
 	"io"
+	"log"
 	"math"
 	"net/http"
 	neturl "net/url"
@@ -96,25 +98,223 @@ var (
 // 最密集的那段峰值削掉,让同一次搜索里连续几个重试轮之间留出呼吸空间。
 const neteaseMinIntervalBetweenCalls = 250 * time.Millisecond
 
-var (
-	neteaseRateMu   sync.Mutex
-	neteaseLastCall time.Time
+// neteaseBlockCooldown:2026-09-02 加——探测到网易云在 body 里拒绝请求(限流/风控,
+// 见下面 neteaseReportBlocked)之后,这个端点桶要退避多久才再放行。之前完全没有这一层:
+// neteaseThrottle 只管"发得多快",探测到拒绝之后什么反应都没有,下一次还是按原节奏
+// 250ms 后立刻再发——等于对着已经关上的门继续按原速敲,真被限流的那几十秒里越敲越难
+// 自愈,而且现有代码对拒绝完全不留痕(见 neteaseReportBlocked 旁边补的日志),连事后
+// 复盘"到底有没有被限流过"都做不到。
+//
+// 参照 LastfmRateLimiter.reportThrottled(同一个项目里已经验证过的思路:探测到 429 就让
+// 队列整体退避)。跟那边的关键差异:网易云是**按端点分桶**限流的(neteaseAlbumIDByName
+// 头注的实测记录——同一时刻 /api/search/get/web 被拒、/api/search/get 照常放行),
+// 所以这里的退避也按桶记,不是让整个网易云一起停摆——否则 neteaseSearch 那道"主端点被拒
+// 立刻换备用端点试"的兜底会被这里新加的退避直接废掉(备用端点的请求同样要过
+// neteaseThrottle,退避要是全局的,它也得跟着傻等)。
+//
+// ⚠️ **2026-09-03:从固定 30 秒改成按"这个桶连续被拒几次"指数递增**(base → ×2 → … →
+// 上限,该桶有一次请求成功就清零,见 neteaseReportSuccess)。上一版注释自己写着"30 秒是
+// 没有实测依据的保守起步值……以后如果观察到退避期一过又立刻再被拒,再按实际现象调大"——
+// 现在观察到了,而且是数出来的:
+//
+// 拿 ~25 小时的真实日志(~/Library/Logs/lyrimuse.log.old,2026-09-01 18:47 → 09-02 19:12
+// UTC)统计 171 次拒绝(164× code 405 / 7× 406,**全部落在 /api/search/get/web 一个桶**):
+//   - 相邻两次拒绝间隔 **≤35 秒的有 89 次(52%)** —— 也就是"退避刚满就再撞一次";
+//   - 这种"满了就撞"最长**连成 21 次一串**(≈10.5 分钟一直在敲同一扇关着的门);
+//   - 间隔 2-10 分钟的 48 次,>10 分钟的 12 次 —— 说明真正的恢复窗口是分钟级,不是 30 秒。
+// 固定 30 秒的后果不只是白撞:每次撞上去都会把服务端的惩罚窗口续一次,等于自己把限流
+// 维持住。
+//
+// base 取 2 分钟(能消掉绝大多数"满了就撞")、上限 15 分钟(别让一个桶因为一串连撞被
+// 永久打死)。这两个数来自上面那份分布,不是拍的;有新数据再调。
+const (
+	neteaseBlockCooldownBase = 2 * time.Minute
+	neteaseBlockCooldownMax  = 15 * time.Minute
 )
+
+var (
+	neteaseRateMu        sync.Mutex
+	neteaseLastCall      time.Time
+	neteaseCooldownUntil = map[string]time.Time{}
+	// neteaseBlockStreak:每个端点桶**连续**被拒了几次(成功一次就清零)。指数退避的指数。
+	neteaseBlockStreak = map[string]int{}
+	// neteaseAnySuccess:这次进程生命周期里,网易云有没有任何一个请求真的成功过。
+	// 它不参与节流,只给"该不该把限流当成这个源没给候选的原因"当判据 —— 见
+	// neteaseSawSuccessNow 的头注。
+	neteaseAnySuccess bool
+)
+
+// 网易云搜索的两个端点桶。⚠️ **2026-09-03 主备对调**:原来 /api/search/get/web 是首选、
+// /api/search/get 是被限流时的兜底,现在反过来。
+//
+// 依据是同一份 25 小时日志里的对照:两个端点的请求量同一量级(/web 10029 次、/get 8537 次),
+// 而**拒绝 171 : 0** —— 171 次全在 /web,/get 一次都没被拒过。也就是说这不是"谁被打得多
+// 谁就被限得狠"的采样偏差,是这两个端点在服务端的宽容度本身差一个量级。响应结构完全一致
+// (result.songs[] 里 name/id/artists/album/duration 都在,2026-08-09 实测),对调没有
+// 解析层面的代价。
+//
+// 兜底那一条**保留不删**:分桶限流的意义就是"一条路堵了还有另一条",把 /web 删掉等于把
+// 冗余也删了。只是它现在排第二 —— 平时压根不会被用到,真轮到它时也说明首选那条出事了。
+const (
+	neteaseSearchEndpointPrimary  = "https://music.163.com/api/search/get"
+	neteaseSearchEndpointFallback = "https://music.163.com/api/search/get/web"
+)
+
+// neteaseEndpointBucket 把请求 URL 归到"网易云按端点分桶限流"的那个桶——只取路径,
+// query string 里 type=1/type=10 这类参数不影响服务端按哪个桶计数(2026-08-09/
+// 2026-08-28 两次实测都是同一路径下不同 query 一起被限、不同路径各自独立限流)。
+func neteaseEndpointBucket(rawURL string) string {
+	if u, err := neturl.Parse(rawURL); err == nil && u.Path != "" {
+		return u.Path
+	}
+	return rawURL
+}
+
+// neteaseReportBlocked 供各处"body code 显示被拒绝"的分支调用(见 resolveNeteaseInfo/
+// neteaseAlbumTracks/neteaseAlbumIDByName/retryTitleFromArtistSearchDetailed 各自的
+// get/fetch 闭包):让 rawURL 对应的端点桶接下来 cooldown 这么久都不再放行
+// (neteaseThrottle 里的第二层等待)。同一个桶如果已经在更晚的退避期里(比如短时间内
+// 连续被拒两次),只会延长、不会缩短——后到的拒绝信号更新鲜,没理由让它把已经算好的
+// 更长退避覆盖成更短的,跟 LastfmRateLimiter.reportThrottled"只可能往后延"同一个理由。
+func neteaseReportBlocked(rawURL string, cooldown time.Duration) {
+	bucket := neteaseEndpointBucket(rawURL)
+	target := time.Now().Add(cooldown)
+	neteaseRateMu.Lock()
+	if existing, ok := neteaseCooldownUntil[bucket]; !ok || target.After(existing) {
+		neteaseCooldownUntil[bucket] = target
+	}
+	neteaseRateMu.Unlock()
+}
+
+// neteaseReportRejected 是各处 get/fetch 闭包真正该调的那个(2026-09-03 加):记一次
+// body 层面的拒绝 —— 递增这个桶的连撞计数、按指数算出这次退避多久、写进冷却表,把
+// (退避时长, 连撞第几次)交回去给调用方打日志。
+//
+// 拆成两层而不是直接把指数逻辑塞进 neteaseReportBlocked:后者是"退避到某个时刻"这个
+// 纯粹的原语,neteasethrottle_test.go 拿它构造精确的退避场景(毫秒级),指数逻辑混进去
+// 就没法再构造了。
+func neteaseReportRejected(rawURL string) (time.Duration, int) {
+	bucket := neteaseEndpointBucket(rawURL)
+	neteaseRateMu.Lock()
+	neteaseBlockStreak[bucket]++
+	streak := neteaseBlockStreak[bucket]
+	neteaseRateMu.Unlock()
+	neteaseReportBlocked(rawURL, neteaseCooldownForStreak(streak))
+	return neteaseCooldownForStreak(streak), streak
+}
+
+// neteaseCooldownForStreak:连撞第 streak 次该退避多久。base × 2^(streak-1),封顶。
+// ⚠️ 移位前必须先卡住 streak:`time.Duration` 是 int64,base(2min=1.2e11ns)左移 30 位
+// 就溢出成负数,而负的退避会被 neteaseReportBlocked 算成"已经过期",等于**没有退避**——
+// 连撞越多反而越不退避,正好反了。streak ≥ 4 时 base<<3 = 16min 已经超过上限,直接封顶。
+func neteaseCooldownForStreak(streak int) time.Duration {
+	if streak < 1 {
+		streak = 1
+	}
+	if streak >= 4 {
+		return neteaseBlockCooldownMax
+	}
+	if scaled := neteaseBlockCooldownBase << (streak - 1); scaled < neteaseBlockCooldownMax {
+		return scaled
+	}
+	return neteaseBlockCooldownMax
+}
+
+// neteaseReportSuccess:这个桶刚真的答了一次(HTTP 200 且 body 里没有拒绝码)。
+// 三件事:①连撞计数清零,下次被拒重新从 base 起算(不然一个桶只会越退越久、永不复原);
+// ②顺手清掉这个桶可能残留的冷却标记;③置那个"这次进程里网易云成功过"的全局标记。
+func neteaseReportSuccess(rawURL string) {
+	bucket := neteaseEndpointBucket(rawURL)
+	neteaseRateMu.Lock()
+	delete(neteaseBlockStreak, bucket)
+	delete(neteaseCooldownUntil, bucket)
+	neteaseAnySuccess = true
+	neteaseRateMu.Unlock()
+}
+
+// neteaseSawSuccessNow:这次进程里网易云有没有任何一个请求成功过。
+//
+// 用途只有一个(2026-09-03 加):`lyricSourceFailureReasons`(搜索候选弹窗的「歌词源
+// 可用情况」)和 `test-lyric-sources` 在决定"要不要把限流当成这个源没给出候选的原因"
+// 时先问一下这里。
+//
+// ⚠️ 病根是实测坐实的**张冠李戴**:`neteaseLastFailureReason` 只要进程里出现过一次
+// code 405 就会被贴上,而只要该源这一轮没给出候选就会显示出来 —— 两件独立的事被显示成
+// 因果。对照实验(2026-09-03,同一分钟内跑两次 `collector search-lyrics`):
+//   - 《妳聽得到》:首个网易云请求吃 405 → 换备用端点 10 次全 200 → 仍然零候选,
+//     面板显示"未给出候选 + 接口限流";
+//   - 《白发》:**同样**吃 405 → 走备用端点 → netease **给出 4 条候选**,最终
+//     failureCodes 里根本没有 netease。
+// 后者证明"吃过 405"跟"没给出候选"根本不是同一件事。加这道判据之后,只有该源这一轮
+// **一次都没成功过**才会把限流报成原因,否则如实显示"未给出候选"(没有更多信息)。
+func neteaseSawSuccessNow() bool {
+	neteaseRateMu.Lock()
+	defer neteaseRateMu.Unlock()
+	return neteaseAnySuccess
+}
 
 // neteaseThrottle 跟 musicbrainzThrottle 同一个模式:全局锁串行化 + 按需 sleep 补足
 // 间隔,ctx 取消时提前退出等待(不占用这次调用名额,不更新 neteaseLastCall)。
-func neteaseThrottle(ctx context.Context) error {
-	neteaseRateMu.Lock()
-	defer neteaseRateMu.Unlock()
-	if wait := neteaseMinIntervalBetweenCalls - time.Since(neteaseLastCall); wait > 0 {
+//
+// 2026-09-02 加了第二层等待:rawURL 对应的端点桶如果最近被 neteaseReportBlocked 标记过
+// 退避,还要多等到那个退避期满。⚠️ 两层等待都**不持锁 sleep**——这一点故意跟
+// musicbrainzThrottle"锁一直拿着睡"不一样:退避可能长达 30 秒,如果也锁着睡,会把
+// **所有**端点(包括没被限流的备用端点、其它完全不相干的接口)一起卡住 30 秒,直接废掉
+// neteaseSearch"主端点被拒立刻换备用端点试"这条兜底,也会让同时在解析别的曲目、命中
+// 别的健康端点的请求跟着白等。改成"锁内只读/写状态、算出该睡多久、解锁再睡、睡醒了回去
+// 重新排队"的轮询式设计,任何一个端点桶的长退避都不会挡住其它桶或全局最小间隔的正常节奏。
+// errNeteaseBucketCooling:这个端点桶正在退避期内。**立刻返回,不睡**。
+//
+// ⚠️ 2026-09-02 改的语义(此前是睡满整个退避期再放行),连带改掉了
+// neteasethrottle_test.go 里那两条断言。实测依据(「搜索候选歌词」搜
+// DAOKO×米津玄師《打上花火》,逐条打时间戳):**整次搜索 150 秒以上,其中约 120 秒
+// 是在这里睡掉的**,而且睡出来的是一条等差数列 —— 30 / 60 / 90 / 120 / 150 秒。
+//
+// 病灶形状:调用方(retryTitleFromArtistSearchDetailed / neteaseAlbumIDByName)都是
+// "主端点不行就换备用端点"的两段式写法 ——
+//
+//	tracks, ok := get(".../api/search/get/web?...")  // 正在被 405 限流的桶
+//	if !ok {
+//	    tracks, ok = get(".../api/search/get?...")   // 另一个桶,健康,150ms 就回
+//	}
+//
+// 主端点冷却中时,旧写法先睡满 30 秒、醒来发一个请求、再被 405 拒一次(顺带把退避又
+// 延长 30 秒),然后才轮到那个**本来就健康**的备用端点。反查轮要发好几个这样的请求,
+// 于是每一个都白睡 30 秒。
+//
+// 立刻返回错误对"被限流就别继续敲门"这个原始意图其实**更强**:退避期内一个请求都不
+// 发(旧写法是睡完再发一个去试),同时调用方能立刻改走备用桶。
+//
+// ⚠️ 别把这条读成"退避变宽松了"。250ms 最小间隔那一层照旧**睡**(它管的是"发得太快",
+// 不是"这个桶被拒了"),两层的语义不一样,不能一起改。
+var errNeteaseBucketCooling = errors.New("netease: endpoint bucket cooling down")
+
+func neteaseThrottle(ctx context.Context, rawURL string) error {
+	bucket := neteaseEndpointBucket(rawURL)
+	for {
+		neteaseRateMu.Lock()
+		now := time.Now()
+		// 退避期:不睡,直接告诉调用方"这个桶现在别用"。见 errNeteaseBucketCooling。
+		if until, ok := neteaseCooldownUntil[bucket]; ok && until.After(now) {
+			neteaseRateMu.Unlock()
+			return errNeteaseBucketCooling
+		}
+		wait := neteaseMinIntervalBetweenCalls - now.Sub(neteaseLastCall)
+		if wait <= 0 {
+			neteaseLastCall = now
+			neteaseRateMu.Unlock()
+			return nil
+		}
+		neteaseRateMu.Unlock()
 		select {
 		case <-time.After(wait):
+			// 睡醒了不代表这个名额一定还留着(别的调用者可能抢先拿走了、或者这期间这个桶
+			// 被拒绝标记进了退避),回到循环开头重新读一次最新状态、重新排队,不假设睡完
+			// 这一段就一定能通过。
 		case <-ctx.Done():
 			return ctx.Err()
 		}
 	}
-	neteaseLastCall = time.Now()
-	return nil
 }
 
 func neteaseSetLastFailureReason(reason string) {
@@ -244,11 +444,12 @@ func neteaseLookupAll(ctx context.Context, artist, title, album string, duration
 // 一条路走通。
 func neteaseSearch(get func(string, any) error, q string, out any) error {
 	escaped := neturl.QueryEscape(q)
-	err := get("https://music.163.com/api/search/get/web?type=1&limit=30&s="+escaped, out)
+	const query = "?type=1&limit=30&s="
+	err := get(neteaseSearchEndpointPrimary+query+escaped, out)
 	if err == nil {
 		return nil
 	}
-	return get("https://music.163.com/api/search/get?type=1&limit=30&s="+escaped, out)
+	return get(neteaseSearchEndpointFallback+query+escaped, out)
 }
 
 // isInstrumentalPlaceholderLyric 判断这份 lrc 是不是"纯音乐占位"而不是真歌词。
@@ -306,7 +507,7 @@ func stripNeteaseEscapedApostrophes(s string) string {
 func resolveNeteaseInfo(ctx context.Context, artist, title, album string, durationSecs float64) neteaseInfo {
 	cli := &http.Client{Timeout: 4 * time.Second}
 	get := func(u string, v any) error {
-		if err := neteaseThrottle(ctx); err != nil {
+		if err := neteaseThrottle(ctx, u); err != nil {
 			return err
 		}
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
@@ -342,15 +543,26 @@ func resolveNeteaseInfo(ctx context.Context, artist, title, album string, durati
 		}
 		// code 缺省(有些端点不带这个字段)时是 0,不当作错误。
 		if err := json.Unmarshal(body, &probe); err == nil && probe.Code != 0 && probe.Code != 200 {
+			// 2026-09-02:body 拒绝一律记日志 + 退避这个端点桶(neteaseReportBlocked),
+			// 不再只在 code==405 时才留痕——退避这层不需要先搞懂拒绝码具体是什么意思,
+			// 任何非 0/200 都当"这个桶该歇一歇"处理,宁可偶尔多等一次没必要的退避,
+			// 也不要对着还没搞懂的拒绝码继续按原速撞。
+			cooldown, streak := neteaseReportRejected(u)
+			log.Printf("netease: %s rejected (code %d), backing off %s (这个桶连续第 %d 次被拒)",
+				neteaseEndpointBucket(u), probe.Code, cooldown, streak)
 			if probe.Code == 405 {
 				// 2026-08-31 实测坐实的具体原因,见 neteaseLastFailureReason 声明处注释。
-				// 只在确认是这个 code 时才记——其它非零 code 目前没有验证过具体含义,
-				// 不编一个没核实过的理由。存的是稳定代码不是文案,见 lyricsourcefailure.go
-				// 头注,两侧必须同步维护。
+				// 只在确认是这个 code 时才记**具体原因**——其它非零 code 目前没有验证过
+				// 具体含义,不编一个没核实过的理由。存的是稳定代码不是文案,见
+				// lyricsourcefailure.go 头注,两侧必须同步维护。（上面的退避不受这条限制,
+				// 是两件事:退避只需要知道"被拒了",不需要知道"为什么"。）
 				neteaseSetLastFailureReason(lyricFailureReasonNeteaseRateLimited)
 			}
 			return fmt.Errorf("netease api code %d", probe.Code)
 		}
+		// 走到这儿 = 这个桶真的答了(HTTP 200 且 body 里没有拒绝码):清连撞计数、
+		// 记下"这次进程里网易云成功过"。见 neteaseReportSuccess / neteaseSawSuccessNow。
+		neteaseReportSuccess(u)
 		return json.Unmarshal(body, v)
 	}
 
@@ -778,9 +990,17 @@ func neteaseAlbumTracks(albumID int64) ([]albumTrack, bool) {
 	}
 	fetch := func(u string) bool {
 		// 这个函数没有 ctx 参数(调用方目前都不需要取消),context.Background() 只用来
-		// 让 neteaseThrottle 复用同一套等待/退出逻辑——不可取消,但反正这里的等待
-		// 至多 neteaseMinIntervalBetweenCalls 那么长,不值得为此改这个函数的签名。
-		if err := neteaseThrottle(context.Background()); err != nil {
+		// 让 neteaseThrottle 复用同一套等待/退出逻辑——不可取消。
+		//
+		// ⚠️ **更正(2026-09-02 当天,实测证伪)**:这里原来写着「这个端点桶如果刚被
+		// neteaseReportBlocked 标记过退避,最长可能等到 neteaseBlockCooldown(30s)——这条
+		// 路径本来就是后台预取/兜底重试(调用方 retryTitleFromAlbumDetailed 等不阻塞任何
+		// 用户可见的同步等待),偶尔多等几十秒不影响体验」。**那个前提是错的**:
+		// retryTitleFromAlbumDetailed 正长在用户可见的同步路径上 ——「搜索候选歌词」弹窗
+		// 就是它,实测用户盯着转圈等了 150 秒以上,其中约 120 秒是这层退避睡掉的。
+		// 退避现在**不睡了**(见 errNeteaseBucketCooling),这里最长仍然只等
+		// neteaseMinIntervalBetweenCalls 那一档。
+		if err := neteaseThrottle(context.Background(), u); err != nil {
 			return false
 		}
 		req, err := http.NewRequest(http.MethodGet, u, nil)
@@ -811,7 +1031,14 @@ func neteaseAlbumTracks(albumID int64) ([]albumTrack, bool) {
 			return false
 		}
 		// code 非 200/0 一律当失败(-462 就走这里),别把限流解成"零首歌"。
-		return payload.Code == 0 || payload.Code == 200
+		if payload.Code != 0 && payload.Code != 200 {
+			cooldown, streak := neteaseReportRejected(u)
+			log.Printf("netease: %s rejected (code %d), backing off %s (这个桶连续第 %d 次被拒)",
+				neteaseEndpointBucket(u), payload.Code, cooldown, streak)
+			return false
+		}
+		neteaseReportSuccess(u) // 见 resolveNeteaseInfo 的 get 里同一句的注释
+		return true
 	}
 	if !fetch(fmt.Sprintf("https://music.163.com/api/album/%d", albumID)) {
 		if !fetch(fmt.Sprintf("https://music.163.com/api/v1/album/%d", albumID)) {
@@ -879,7 +1106,7 @@ func neteaseAlbumIDByName(ctx context.Context, artist, album string) (int64, boo
 	// (专治这类"主名(外文别名)"形态),核验用的仍然是完整的原始 artist,不受这里影响。
 	q := stripParens(artist) + " " + album
 	get := func(u string) (int64, bool, bool) { // (albumID, found, requestSucceeded)
-		if err := neteaseThrottle(ctx); err != nil {
+		if err := neteaseThrottle(ctx, u); err != nil {
 			return 0, false, false
 		}
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
@@ -904,8 +1131,17 @@ func neteaseAlbumIDByName(ctx context.Context, artist, album string) (int64, boo
 			Code int `json:"code"`
 		}
 		if err := json.Unmarshal(body, &probe); err == nil && probe.Code != 0 && probe.Code != 200 {
-			return 0, false, false // 限流/拒绝,不是"零张专辑"
+			// 限流/拒绝,不是"零张专辑"。跟 resolveNeteaseInfo 的 get 同一份处理:
+			// 记日志 + 指数退避这个端点桶,405 时额外记具体原因(见那边注释)。
+			cooldown, streak := neteaseReportRejected(u)
+			log.Printf("netease: %s rejected (code %d), backing off %s (这个桶连续第 %d 次被拒)",
+				neteaseEndpointBucket(u), probe.Code, cooldown, streak)
+			if probe.Code == 405 {
+				neteaseSetLastFailureReason(lyricFailureReasonNeteaseRateLimited)
+			}
+			return 0, false, false
 		}
+		neteaseReportSuccess(u) // 见 resolveNeteaseInfo 的 get 里同一句的注释
 		var out struct {
 			Result struct {
 				Albums []struct {
@@ -945,10 +1181,11 @@ func neteaseAlbumIDByName(ctx context.Context, artist, album string) (int64, boo
 		}
 		return 0, false, true // 请求成功、确实没有匹配的专辑
 	}
-	if id, ok, succeeded := get("https://music.163.com/api/search/get/web?type=10&limit=5&s=" + neturl.QueryEscape(q)); succeeded {
+	const query = "?type=10&limit=5&s="
+	if id, ok, succeeded := get(neteaseSearchEndpointPrimary + query + neturl.QueryEscape(q)); succeeded {
 		return id, ok
 	}
-	id, ok, _ := get("https://music.163.com/api/search/get?type=10&limit=5&s=" + neturl.QueryEscape(q))
+	id, ok, _ := get(neteaseSearchEndpointFallback + query + neturl.QueryEscape(q))
 	return id, ok
 }
 
@@ -1037,7 +1274,7 @@ func retryTitleFromArtistSearchDetailed(ctx context.Context, artist, title strin
 		} `json:"artists"`
 	}
 	get := func(u string) ([]albumTrack, bool) { // (candidates, requestSucceeded)
-		if err := neteaseThrottle(ctx); err != nil {
+		if err := neteaseThrottle(ctx, u); err != nil {
 			return nil, false
 		}
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
@@ -1062,10 +1299,18 @@ func retryTitleFromArtistSearchDetailed(ctx context.Context, artist, title strin
 			Code int `json:"code"`
 		}
 		// 跟本文件其它两处网易云调用同一个理由:限流照样回 HTTP 200,拒绝写在 body 的 code
-		// 里,不能当成"零条搜索结果"。
+		// 里,不能当成"零条搜索结果"。记日志 + 退避这个端点桶,405 时额外记具体原因
+		// (见 resolveNeteaseInfo 的 get 那段注释)。
 		if err := json.Unmarshal(body, &probe); err == nil && probe.Code != 0 && probe.Code != 200 {
+			cooldown, streak := neteaseReportRejected(u)
+			log.Printf("netease: %s rejected (code %d), backing off %s (这个桶连续第 %d 次被拒)",
+				neteaseEndpointBucket(u), probe.Code, cooldown, streak)
+			if probe.Code == 405 {
+				neteaseSetLastFailureReason(lyricFailureReasonNeteaseRateLimited)
+			}
 			return nil, false
 		}
+		neteaseReportSuccess(u) // 见 resolveNeteaseInfo 的 get 里同一句的注释
 		var out struct {
 			Result struct {
 				Songs []neSearchSong `json:"songs"`
@@ -1093,14 +1338,59 @@ func retryTitleFromArtistSearchDetailed(ctx context.Context, artist, title strin
 		}
 		return tracks, true
 	}
-	tracks, reqOK := get("https://music.163.com/api/search/get/web?type=1&limit=30&s=" + neturl.QueryEscape(q))
+	const query = "?type=1&limit=30&s="
+	tracks, reqOK := get(neteaseSearchEndpointPrimary + query + neturl.QueryEscape(q))
 	if !reqOK {
-		tracks, reqOK = get("https://music.163.com/api/search/get?type=1&limit=30&s=" + neturl.QueryEscape(q))
+		tracks, reqOK = get(neteaseSearchEndpointFallback + query + neturl.QueryEscape(q))
 		if !reqOK {
 			return "", 0, false
 		}
 	}
-	return bestAlbumTrackByDurationDetailed(tracks, durationSecs)
+	return bestAlbumTrackByDurationDetailed(topSearchRanked(tracks, retryTitleFromArtistSearchMaxRank), durationSecs)
+}
+
+// retryTitleFromArtistSearchMaxRank:泛搜回来的 30 条里,只有**排名最靠前的这几条**够格
+// 交给纯时长判据。2026-09-02 修的真实 bug(打上花火 → 春雷 案)。
+//
+// 病灶:这条兜底刻意不看标题文字(理由见 retryTitleFromArtistSearch 头注),判据只剩
+// "歌手对得上 + 时长差 < 2s"。而搜索词是"歌手 + 本地标题",标题一个字都没命中时,搜索
+// 引擎返回的就是**这个歌手的曲库**——30 条里总能矬出一首时长凑巧接近的,于是纯时长判据
+// 从"在几个相关候选里挑对的那个"退化成"在整个曲库里抽签"。
+//
+// 用户实例:DAOKO×米津玄師《打上花火》(本地 289.334s)。搜"米津玄师 Uchiagehanabi"回来
+// 30 条,落在 2s 容差内的有四条,判据挑了误差最小的《春雷》(288.949s,差 0.385s)——完全
+// 另一首歌,整屏歌词都是错的。而它在搜索结果里排**第 12 名**。
+//
+// 排名恰好是这里缺的那个信号,实测三个案例分得干干净净(2026-09-02 各真查一次网易云):
+//
+//	查询                        纯时长会选的        它的排名   对错
+//	米津玄师 Uchiagehanabi       春雷               第 12 名   ✗ 错(另一首歌)
+//	方大同 Love Love Love        爱爱爱             第  2 名   ✓ 对
+//	陶喆 Airport in 10:30        飞机场的10:30      第  1 名   ✓ 对
+//
+// 后两个正是这条兜底存在的理由(见 retryTitleFromArtistSearch 头注和 enrich.go 里那段
+// "两条兜底谁更可信"),它们都靠**搜索引擎认得那个标题**才排到最前面;而排到第 12 名
+// 说明引擎压根没把它跟标题关联起来,那一条纯粹是"同歌手 + 时长撞车"。取 5 是给已知的
+// 最差正例(第 2 名)留一倍余量,同时离错例(第 12 名)还差得远。
+//
+// ⚠️ 只对这条**泛搜**路径生效,不能下放进 bestAlbumTrackByDurationDetailed:另一个调用方
+// retryTitleFromAlbum 喂进去的是"某张专辑的完整曲目表",那里的顺序是曲序、不是相关性
+// 排名,截断前几条等于随机丢掉后半张专辑。
+//
+// ⚠️ 排名是**过滤掉非本歌手之后**的名次(get 里的 artistMatches 那道闸先跑)。这只会让
+// 名次更靠前、不会更靠后,对上面那张表的结论只增不减。
+//
+// 另外核实过、但**没有**采用的一条修法:把网易云搜索结果里的 alias/transNames 取回来当
+// 文字佐证。字段确实有(《飞机场的10:30》正是靠 transNames:["Airport at 10:30"] 成立的),
+// 但《爱爱爱》两个字段**全空**——做成硬闸会把 2026-08-30 刚修好的那个案例重新打死。
+const retryTitleFromArtistSearchMaxRank = 5
+
+// topSearchRanked 取前 n 条(不足就全给)。单独拆出来是为了让上面那条判据能被断言覆盖。
+func topSearchRanked(tracks []albumTrack, n int) []albumTrack {
+	if n <= 0 || len(tracks) <= n {
+		return tracks
+	}
+	return tracks[:n]
 }
 
 // bestAlbumTrackByDuration 是 retryTitleFromAlbum 的判据部分,拆出来是为了能不发真实网络
@@ -1177,10 +1467,26 @@ func anchorAlbumTrackForLocalTitle(tracks []albumTrack, artist, title string, du
 	return best, true
 }
 
+// bestAlbumTrackAmbiguityMarginSecs:亚军(**标题跟冠军不同**的那些候选里最接近的一个)
+// 跟冠军的误差差距小于这个值,就判"分不出是哪首"、整体弃权。
+//
+// 2026-09-02 加。在此之前这道守卫写的是 `d == bestDiff` —— **浮点精确相等**,两首不同的歌
+// 时长差要 bit 级完全一样才会触发,等于这道守卫从来没生效过。它不是被写坏的,是随
+// 2026-08-30 那次修改(把"任何第二条一样近都算歧义"收紧成"只有标题不同才算歧义",见
+// bestAlbumTrackByDuration 头注那个《爱爱爱》案)顺手留下的:那次要修的是"同一首歌被反复
+// 收录不该算歧义",标题判据加对了,但打平判据仍旧沿用了精确相等。
+//
+// 0.5s 的来历:容差本身是 2s,而"两首不同的歌时长差在半秒以内"已经完全在纯时长判据分辨
+// 不了的范围里了。取值刻意保守——这道守卫的方向是**弃权**,而弃权只是"这轮兜底不出结果",
+// 上层还有别的候选源兜着,代价远小于给出一首错歌。
+const bestAlbumTrackAmbiguityMarginSecs = 0.5
+
 func bestAlbumTrackByDurationDetailed(tracks []albumTrack, durationSecs float64) (title string, diff float64, ok bool) {
 	best := ""
 	bestDiff := math.Inf(1)
-	ambiguous := false
+	// runnerDiff:跟当前冠军**标题不同**的候选里,最接近的那个的误差。同名重复(同一首歌
+	// 被不同专辑/合辑反复收录)不进这里 —— 那正是 2026-08-30 那次要保住的东西。
+	runnerDiff := math.Inf(1)
 	for _, t := range tracks {
 		if t.title == "" || t.duration <= 0 {
 			continue
@@ -1191,12 +1497,20 @@ func bestAlbumTrackByDurationDetailed(tracks []albumTrack, durationSecs float64)
 		}
 		switch {
 		case d < bestDiff:
-			best, bestDiff, ambiguous = t.title, d, false
-		case d == bestDiff && normLoose(t.title) != normLoose(best):
-			ambiguous = true
+			// 冠军被换掉时,旧冠军**降级成亚军候选**——不这么做的话,先出现的那条会被
+			// 静默忘掉,守卫又会退化成只看"最后一次打平"。
+			if best != "" && normLoose(best) != normLoose(t.title) && bestDiff < runnerDiff {
+				runnerDiff = bestDiff
+			}
+			best, bestDiff = t.title, d
+		case normLoose(t.title) != normLoose(best) && d < runnerDiff:
+			runnerDiff = d
 		}
 	}
-	if best == "" || ambiguous {
+	if best == "" {
+		return "", 0, false
+	}
+	if runnerDiff-bestDiff <= bestAlbumTrackAmbiguityMarginSecs {
 		return "", 0, false
 	}
 	return best, bestDiff, true

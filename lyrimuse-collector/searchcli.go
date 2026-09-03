@@ -49,6 +49,9 @@ func runSearchLyricsCLI(args []string) {
 	// 当前源这一轮没应答时不敢下结论(它可能本来就是最优的,只是这次超时了),避免一次偶发的
 	// 部分应答把用户降级到更差的一份。
 	currentSource := fs.String("current-source", "", "the lyric source in effect now (for the -pick decidability guard)")
+	// -player:**这一刻在放的播放器** bundle id(com.apple.Music / com.tencent.QQMusicMac …)。
+	// 只喂给同源加权那一项,见下面 setNativeLyricSourcesForPlayer 那处注释。缺省=不加分。
+	player := fs.String("player", "", "bundle id of the player currently playing (for the same-source scoring term)")
 	if err := fs.Parse(args); err != nil {
 		log.Fatalf("search-lyrics: %v", err)
 	}
@@ -94,7 +97,16 @@ func runSearchLyricsCLI(args []string) {
 		// 250 分足以翻盘(qq 与 kugou 的分差常年只有 9 分)。所以在此之前,「联网搜索候选歌词」
 		// 展示的名次跟 collector 自动决策的名次对不上,用 QQ/网易云/酷狗 听歌的用户尤其明显。
 		// -pick 要拿这套规则选冠军,这个差异必须先补掉。
-		nativeLyricSources = resolveNativeLyricSources(features.Players)
+		// 同源加权的判据:按调用方(Swift 侧「歌词管理」/「解析决策」)传进来的**当前
+		// 播放器 bundle id** 设。⚠️ 不能像 2026-09-02 之前那样按 features.Players 设 ——
+		// 那是"用户勾了哪些播放器",不是"现在在放哪个",全勾的用户会让三个源同时拿到
+		// +250(见 match.go 里 nativeLyricSources 的注释)。
+		//
+		// -player 缺省(老版本 App、或调用方拿不到当前播放器)时是空串,`playerForBundleID`
+		// 认不出、集合为空 —— 这一项不加分。宁可少加一项也不要加错:2026-08-21 补
+		// nativeLyricSources 那次要修的是"手动搜索的名次跟自动决策对不上",而**加错**同样
+		// 会造成对不上,还多一层"错得理直气壮"。
+		setNativeLyricSourcesForPlayer(*player)
 	}
 
 	// 跟 enrich.go 的 resolveTrackEnrichment 同一个理由:NetEase/QQ/酷狗/LRCLIB 的
@@ -164,6 +176,30 @@ func runSearchLyricsCLI(args []string) {
 			log.Fatalf("search-lyrics: encode results: %v", err)
 		}
 	}
+	// 歌手别名解析**预热**(2026-09-02):跟第一轮搜索并发跑,把 MusicBrainz 那趟网络往返
+	// 藏进第一轮那 20 秒总截止里。
+	//
+	// 为什么只在这条 CLI 上做:常驻端走 resolveTrackEnrichment,那边 `e.CanonicalArtist =
+	// canonicalArtistViaMusicBrainz(...)` 早就把这份缓存捂热了;而这条子命令是**每点一次
+	// 「搜索候选歌词」就新起一个进程**,进程内缓存永远从空开始 —— 于是每点一次都要在
+	// 第一轮跑完之后再串行等一趟 MusicBrainz。
+	//
+	// 实测(DAOKO×米津玄師《打上花火》,逐条打时间戳):第一轮 20.03s 撞满总截止 → 26.03s
+	// 才等到 `musicbrainz.org/ws/2/artist/ FAILED after 6001ms: context deadline exceeded`,
+	// 整整 6 秒纯串行等待。而 MusicBrainz 这阵子本来就慢:同一时刻直连探测三次是
+	// 5.60s / 2.99s / 11.51s(超时),6 秒的客户端上限经常撞满,不是偶发。
+	//
+	// ⚠️ **不多打一次请求**:`retryArtistIdentities` 本来就会在别名轮被调用(enrich.go 里
+	// `dedupeArtistIdentities(...)` 那一行),这里只是把同一次调用提前到第一轮开始时发起,
+	// 结果落进那几份带锁的进程内缓存(artistAliasCache / mbPrimaryNameCache /
+	// qqArtistNameCache),别名轮再调时直接命中。查到非空还会落盘,下次点搜索也省了。
+	//
+	// ⚠️ 用 fire-and-forget 而不是等它:预热**失败或没跑完都不该拖慢搜索**。理论上它和
+	// 别名轮那次调用可能撞上、各发一次 MusicBrainz(缓存检查不带 in-flight 去重),但预热
+	// 早了整整一轮(≥20s)、而 MB 客户端上限只有 6s,实际撞不上;真撞上了也只是被
+	// musicbrainzThrottle 串成两次、相隔 1.1s,不会放大成请求风暴。
+	go retryArtistIdentities(context.Background(), sArtist)
+
 	// 一次性 CLI 命令,没有可以取消它的交互界面,context.Background() 就够。
 	_, results := scoredLyricCandidatesStreaming(context.Background(), sArtist, sTitle, sAlbum, effectiveDuration, emit)
 	// 苹果侧元数据:搜索里的 applecover goroutine 用同一组关键词查过、通常已写热
@@ -358,6 +394,11 @@ func filterEnabledLyricSources(results []scoredLyricCandidateResult) []scoredLyr
 // 只是这个仓库目前还没有实测复现过、能稳定识别的具体失败信号,宁可让 Swift 侧照实显示
 // "未给出候选"(没有更多信息),也不编一个没核实过的理由。
 //
+// ⚠️ **原因 ≠ 没给出候选的原因**(2026-09-03 补的一道判据):网易云那一条现在还要过
+// `neteaseSawSuccessNow()` —— 这一轮它只要成功答过一次,就不把限流报上去。实测对照见
+// netease.go 里那个函数的头注(同一分钟两次搜索:两次都吃了 405,其中一次照样给出 4 条
+// 候选)。musixmatch/lyricfind 暂时没有等价的"成功过"信号,维持原样。
+//
 // ⚠️ 这几个 xxxLastFailureReasonNow 读的是**进程级**"这次进程生命周期里最近一次识别出的
 // 失败原因",不是专门为"这一轮搜索"重新打点的——但 search-lyrics 本来就是一次性短命进程
 // (每次手动搜索都是全新进程),这次搜索期间对该源发起的请求要是真的撞上了已识别的失败
@@ -374,7 +415,13 @@ func lyricSourceFailureReasons(results []scoredLyricCandidateResult) map[string]
 			reasons[source] = r
 		}
 	}
-	check("netease", neteaseLastFailureReasonNow)
+	// ⚠️ 2026-09-03:网易云这一轮只要**成功答过一次**,就不把限流报成"没给出候选"的原因。
+	// 病根是张冠李戴 —— `neteaseLastFailureReason` 只要进程里出现过一次 code 405 就被贴上,
+	// 而这个 map 只看"有没有给出候选",两件独立的事被显示成因果。对照实验和完整推导见
+	// netease.go 里 `neteaseSawSuccessNow` 的头注。
+	if !neteaseSawSuccessNow() {
+		check("netease", neteaseLastFailureReasonNow)
+	}
 	check("musixmatch", musixmatchLastFailureReasonNow)
 	check("lyricfind", ytmusicLastFailureReasonNow)
 	if len(reasons) == 0 {

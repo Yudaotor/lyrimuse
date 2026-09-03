@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"unicode"
 	"unicode/utf8"
 )
@@ -425,7 +426,26 @@ const lyricOvershootToleranceSecs = 5.0
 //   回放里抓到并已修掉的两类边界:专辑名括号里的描述文案不算标记(韦礼安《女孩》案,
 //   推导只看 stripParens 后的专辑名);候选是同一张专辑的截短拼法时不苛求它也推导出
 //   live(蔡健雅《依赖》案,见 sameRecordingDespiteVersionTags 第③门注释)。
-const lyricsScoringVersion = 9
+// v10(2026-09-02):修掉"标题反查泛搜"那条兜底的两处判据缺陷(泛搜结果不再整份 30 条
+// 交给纯时长判据、只取前 5 名;排歧义守卫从浮点精确相等改成 0.5s 真实余量)。详见
+// netease.go 的 retryTitleFromArtistSearchMaxRank / bestAlbumTrackAmbiguityMarginSecs。
+//
+// ⚠️ **这次提版本号本身就是修复的一部分,不是走个形式**:被写坏的条目(实测用户库里
+// 至少一条——DAOKO×米津玄師《打上花火》整屏显示的是《春雷》的歌词)只有在
+// needsLyricsRescore 放行时才会被重选,而那道闸的判据正是
+// `e.LyricsScoringVersion >= lyricsScoringVersion`。停在 9 的话,已经按 v9 打过分的
+// 114 条(2026-09-02 实测,占有歌词条目的 3.5%)永远不会被重访,错的会一直错着。
+//
+// 提到 10 之后仍然救不回来的两类,如实记在这里:重打分次数已达 lyricsRescoreMaxAttempts
+// 的(实测 6 条)、以及 ManualLyrics 手动锁定的(实测 6 条,这类是**刻意**跳过的)。
+//
+// v11(2026-09-02):lyricConsensusBody 跳过 `[kana:…]`/`[ti:…]`/`[offset:…]` 这类无时间戳
+// 的元数据标签行(isLRCMetaTagLine)。起因:QQ 的 `[kana:]` 假名标注行接进整行歌词
+// (qq.go attachKanaLine)后,E2E 实测《Lemon》的 QQ 候选从 1407 掉到 1158——一行 1700+
+// 字符的假名把正文 3-gram 相似度拖到 0.55 阈值以下、250 分共识没了,冠军会因此换成酷狗。
+// 这条规则对酷狗自带 `[kana:]` 的日文歌其实一直成立,只是没被注意。提版本号让已按 v10
+// 打过分的条目重新裁决(重算用的是决策留痕里的存量候选,不联网)。
+const lyricsScoringVersion = 11
 
 // scoreTerm 是打分里的一项。只带**机器可读的类型**和分值,文案交给界面本地化 ——
 // App 有中英两套界面,从这里吐中文字符串会让英文用户看到一串中文。
@@ -557,28 +577,88 @@ const (
 	scoreRejectPlainTextOnly = "rejectPlainTextOnly"
 )
 
-// nativeLyricSources 是「当前播放器(集合)自家的歌词源」("qq"/"netease" 等)集合,
-// main()/searchcli.go 按 features.Players 设一次;识别不出/不在这套源之内的成员
-// (Apple Music / Spotify / auto)不会贡献任何条目,集合可能因此是空的(不加分)。
+// nativeLyricSources 是「**这一刻正在播的那个播放器**自家的歌词源」("qq"/"netease"/
+// "kugou")。正在播的播放器没有原生歌词源(Apple Music / Spotify)或者认不出来时是空集,
+// 谁都不加分。
 //
-// 2026-09-01 从单选年代的 nativeLyricSource(单个字符串)改成集合——选了多个播放器时,
-// 同源加权理应对它们各自的原生源都生效,不能只挑其中一个。
+// 集合形状是历史遗留(单选年代是单个字符串,2026-09-01 多选时改成集合),实际最多只有
+// 一个成员 —— 一次只可能有一个播放器在放。留着集合形状是为了不动 scoreLyricCandidate
+// 和 nativeMissedOut 两处的读法。
+//
+// ⚠️ **2026-09-02 修的真实 bug:输入从「用户勾选了哪些播放器」换成「现在在放的是哪个」。**
+// 此前它是 `resolveNativeLyricSources(features.Players)`,也就是**设置里勾了哪些播放器**。
+// 2026-09-01 加多选时那个函数的注释写着「选了多个播放器时,同源加权理应对它们各自的原生源
+// 都生效,不能只挑其中一个」—— 这句话对**别的**按播放器分叉的功能成立,对这一项不成立:
+// 它的立论是「时间轴对着同一份音频母版」(见下面 scoreLyricCandidateDetailed 里那段),
+// 那是**正在播的那个播放器**的属性,跟"我允许哪些播放器"没有关系。
+//
+// 用户报的形状:六个播放器全勾(apple_music/auto/kugou/netease/qq/spotify),于是
+// nativeLyricSources = {kugou, netease, qq},**三个源同时拿 +250**;而他实际在用
+// Apple Music 听(np:lastPlayerBundleID = com.apple.Music),按定义**一条都不该给**。
+// 后果有两层:①「解析决策」面板上「这个源就是你正在用的播放器」对三个源都是假话;
+// ② 这一项的**区分力被自己抵消**——三个中文源都 +250,它没法在三者之间区分,只剩
+// "系统性地把它们抬到 Musixmatch / LRCLIB 之上"这一个效果。
 //
 // 跟 features 同款的包级变量而不是打分函数的参数:打分函数已经有 7 个参数,再加一个
-// 会让每个调用点都得关心一件跟它无关的事。测试里直接赋值即可。
-var nativeLyricSources map[string]bool
+// 会让每个调用点都得关心一件跟它无关的事。⚠️ 但它现在是**运行期按曲目变的**(换播放器
+// 就变),不再是启动时设一次的常量,所以读写都要过下面那把锁;测试里直接赋值仍然可以
+// (单 goroutine)。
+var (
+	nativeLyricSourcesMu sync.RWMutex
+	nativeLyricSources   map[string]bool
+)
 
-// resolveNativeLyricSources 把 features.Players 整个集合映射成它们各自的原生歌词源
-// 集合(跳过 playerNativeLyricSource 返回空串的成员)——多选年代 nativeLyricSources 的
-// 唯一构造入口,main()/searchcli.go 启动时各调一次。
-func resolveNativeLyricSources(players map[string]bool) map[string]bool {
-	m := map[string]bool{}
-	for player := range players {
-		if src := playerNativeLyricSource(player); src != "" {
-			m[src] = true
-		}
+// setNativeLyricSourcesForPlayer 按**正在播的** bundle id 设置同源加权的目标。
+// 常驻端每首歌进 trackEnrichment 时调一次;search-lyrics 子命令按 -player 参数调一次。
+func setNativeLyricSourcesForPlayer(bundleID string) {
+	src := playerNativeLyricSource(playerForBundleID(bundleID))
+	nativeLyricSourcesMu.Lock()
+	defer nativeLyricSourcesMu.Unlock()
+	if src == "" {
+		nativeLyricSources = nil
+		return
 	}
-	return m
+	if len(nativeLyricSources) == 1 && nativeLyricSources[src] {
+		return // 没变,不重建 map
+	}
+	nativeLyricSources = map[string]bool{src: true}
+}
+
+// isNativeLyricSource / hasNativeLyricSource 是读侧的唯一入口 —— 直接索引那个 map 会跟
+// setNativeLyricSourcesForPlayer 抢(换歌和上一首的兜底轮可能同时在跑)。
+func isNativeLyricSource(src string) bool {
+	nativeLyricSourcesMu.RLock()
+	defer nativeLyricSourcesMu.RUnlock()
+	return nativeLyricSources[src]
+}
+
+func hasNativeLyricSource() bool {
+	nativeLyricSourcesMu.RLock()
+	defer nativeLyricSourcesMu.RUnlock()
+	return len(nativeLyricSources) > 0
+}
+
+// playerForBundleID 是 playerBundleID(system.go)的逆向:把播放器上报的 bundle id 映射
+// 回播放器常量,认不出就返回空串。
+//
+// ⚠️ **不能拿 playerBundleID 反推**:那个函数的 default 分支把一切未知都映射成 Apple
+// Music(对它的用途是对的 —— 调用方已经先排除了 playerAuto),反过来用会把任何不认识的
+// bundle id 都当成 Apple Music。这里认不出必须是"不知道",不是"就当是 Apple Music"。
+func playerForBundleID(bundleID string) string {
+	switch bundleID {
+	case appleMusicBundleID:
+		return playerAppleMusic
+	case qqMusicBundleID:
+		return playerQQMusic
+	case neteaseMusicBundleID:
+		return playerNetease
+	case spotifyBundleID:
+		return playerSpotify
+	case kugouMusicBundleID:
+		return playerKugou
+	default:
+		return ""
+	}
 }
 
 // playerNativeLyricSource 把播放器映射成它自家的歌词源。
@@ -695,7 +775,7 @@ func scoreLyricCandidateDetailed(
 	if c.hasWordTiming {
 		add(scoreTermWordTiming, 400) // 跟"一档时长差距"同量级,让带逐字时间轴的候选能逆转
 	}
-	if nativeLyricSources[c.source] {
+	if isNativeLyricSource(c.source) {
 		// 跟当前播放器同源的歌词加分。
 		//
 		// 理由是**时间轴**,不是内容质量:同一个平台的歌词是对着同一个音频母版对的轴,
@@ -2301,8 +2381,19 @@ func lyricTitleAccepted(candidateTitle, localTitle string) bool {
 
 // ---- v3 打分维度的支撑 helper(2026-08-12) ----
 
-// lyricConsensusBody 把一份 LRC 归一成"可跨源比对的正文":逐行去时间戳、丢署名行与
-// 空行,每行 normLoose 后拼接。给 contentConsensusPeers 的 3-gram 比对用。
+// lrcMetaTagPrefixRe 认 `[ti:`/`[ar:`/`[al:`/`[by:`/`[offset:`/`[kana:` 这类字母键的 LRC 标签
+// 行开头;时间戳 `[00:01.00]` 是数字开头,不会命中。
+var lrcMetaTagPrefixRe = regexp.MustCompile(`^\[[A-Za-z_]+:`)
+
+// isLRCMetaTagLine 判一行是不是整行都是 LRC 元数据标签(`[键:值]`,无时间戳)。只在整行以
+// `]` 收尾时才算,避免把"[kana:…]"之外任何带正文的行误判掉。
+func isLRCMetaTagLine(line string) bool {
+	trimmed := strings.TrimSpace(line)
+	return strings.HasSuffix(trimmed, "]") && lrcMetaTagPrefixRe.MatchString(trimmed)
+}
+
+// lyricConsensusBody 把一份 LRC 归一成"可跨源比对的正文":逐行去时间戳、丢署名行、
+// 元数据标签行与空行,每行 normLoose 后拼接。给 contentConsensusPeers 的 3-gram 比对用。
 func lyricConsensusBody(lyrics string) string {
 	// 演唱者标签行留下(2026-08-23,见 lyricspeaker.go),但只留**冒号后的正文** ——
 	// 跨源比对要的是"唱了什么",标签本身是这一份的格式细节,别的源没有它。
@@ -2312,6 +2403,12 @@ func lyricConsensusBody(lyrics string) string {
 	speakers := lyricSpeakerLabels(lyrics)
 	var b strings.Builder
 	for _, line := range splitLyricLines(lyrics) {
+		// v11:`[kana:…]`/`[ti:…]`/`[offset:…]` 这类无时间戳的元数据标签行不是"唱了什么",
+		// 跳过。起因见 lyricsScoringVersion 的 v11 注释:QQ 的假名标注行(1700+ 字符的假名)
+		// 一进整行歌词就把《Lemon》QQ 候选的 3-gram 相似度拖到阈值以下、丢了 250 分共识。
+		if isLRCMetaTagLine(line) {
+			continue
+		}
 		text := strings.TrimSpace(lrcTimestampRe.ReplaceAllString(line, ""))
 		if text == "" {
 			continue

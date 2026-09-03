@@ -66,8 +66,12 @@ func doHTTPTracked(cli *http.Client, req *http.Request) (*http.Response, error) 
 		}
 		log.Printf("api call: %s %s%s FAILED after %dms: %v",
 			req.Method, req.URL.Host, req.URL.Path, elapsed.Milliseconds(), safeErr)
+		// 歌词源级熔断的失败观察(见 sourcebreaker.go):只有歌词源的主机会被记,别的请求
+		// 在 lyricSourceForHost 那里直接归零。
+		lyricSourceBreakerShared.observe(req.URL.Host, err, 0, "")
 		return resp, err
 	}
+	lyricSourceBreakerShared.observe(req.URL.Host, nil, resp.StatusCode, resp.Header.Get("Retry-After"))
 	if m := req.URL.Query().Get("method"); m != "" {
 		log.Printf("api call: %s %s%s method=%s -> %d (%dms)",
 			req.Method, req.URL.Host, req.URL.Path, m, resp.StatusCode, elapsed.Milliseconds())

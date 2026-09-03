@@ -18,6 +18,12 @@ const (
 	lyricFailureReasonLyricFindRegionRestricted = "lyricfind_region_restricted"
 	lyricFailureReasonMusixmatchRateLimited     = "musixmatch_rate_limited"
 	lyricFailureReasonNeteaseRateLimited        = "netease_rate_limited"
+	// musixmatch_direct_blocked(2026-09-03):apic-appmobile.musixmatch.com 那两个 AWS
+	// 地址在当前网络下直连不通(实测 100% ICMP 丢包、TCP 16 次只成功 3 次、TLS 16 次
+	// 0 次成功),而 proxyfallback.go 的系统代理兜底也没能救回来(没配代理,或者配了但
+	// 连不上)。跟 musixmatch_rate_limited 是完全不同的两回事:那个是服务器**正经回了**
+	// 401 hint=captcha,这个是一个字节都没拿到。
+	lyricFailureReasonMusixmatchDirectBlocked = "musixmatch_direct_blocked"
 )
 
 // 下面两个是 testlyricsourcescli.go 自己的通用兜底(没有命中上面任何一条具体已知失败

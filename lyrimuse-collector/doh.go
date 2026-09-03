@@ -7,6 +7,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	neturl "net/url"
 	"strings"
 	"sync"
 	"time"
@@ -36,6 +37,11 @@ import (
 const (
 	dohTimeout  = 4 * time.Second
 	dohCacheTTL = 30 * time.Minute
+	// 单个地址的拨号上限。有了 dohDialRace 的并发拨号之后,这个值不再决定"整体等多久"
+	// (黑洞地址不会再挡住好地址),真正卡总时长的是调用方 ctx 上的 deadline
+	// —— dohHTTPClient 那条路上是 proxyFallbackTransport 的 3s 直连预算。
+	dohDialTimeout         = 8 * time.Second
+	dohTLSHandshakeTimeout = 8 * time.Second
 )
 
 // 两个 DoH 端点都用 IP 直连(自己不需要再解析一次 DNS,否则就是鸡生蛋)。
@@ -152,36 +158,127 @@ func dohParseAnswer(body []byte) []string {
 // 不是这里的 IP,所以证书照常按域名严格校验(跟 curl --resolve 是同一个机制)。绝不能
 // 为了"连得上"去关 InsecureSkipVerify:那才是真的把连接置于风险之中。
 func dohDialContext(ctx context.Context, network, addr string) (net.Conn, error) {
-	dialer := &net.Dialer{Timeout: 8 * time.Second, KeepAlive: 30 * time.Second}
 	host, port, err := net.SplitHostPort(addr)
 	if err != nil || !dohShouldResolve(host) {
-		return dialer.DialContext(ctx, network, addr)
+		return dohDialer().DialContext(ctx, network, addr)
 	}
-	ips := dohLookup(host)
-	var lastErr error
-	for _, ip := range ips {
-		conn, err := dialer.DialContext(ctx, network, net.JoinHostPort(ip, port))
-		if err == nil {
-			return conn, nil
-		}
-		lastErr = err
+	conn, raceErr := dohDialRace(ctx, network, dohLookup(host), port)
+	if conn != nil {
+		return conn, nil
 	}
 	// DoH 没结果、或者拿到的地址都连不上:退回系统解析,行为跟没有这套东西时一致。
-	conn, err := dialer.DialContext(ctx, network, addr)
-	if err != nil && lastErr != nil {
-		return nil, fmt.Errorf("%w (DoH 地址也连不上: %v)", err, lastErr)
+	conn, err = dohDialer().DialContext(ctx, network, addr)
+	if err != nil && raceErr != nil {
+		return nil, fmt.Errorf("%w (DoH 地址也连不上: %v)", err, raceErr)
 	}
 	return conn, err
 }
 
-// dohHTTPClient 造一个走上面那套拨号逻辑的 client。
-func dohHTTPClient(timeout time.Duration) *http.Client {
+func dohDialer() *net.Dialer {
+	return &net.Dialer{Timeout: dohDialTimeout, KeepAlive: 30 * time.Second}
+}
+
+// dohDialRace 对 DoH 查到的每个地址**同时**发起拨号,第一个连上的胜出,慢一步也连上的
+// 当场关掉。ips 为空时返回 (nil, nil),由调用方退回系统解析。
+//
+// ⚠️ 2026-09-03 修的真 bug。原来这里是串行的:
+//
+//	for _, ip := range ips { conn, err := dialer.DialContext(ctx, ...); if err == nil { return } }
+//
+// 每个 dialer.Timeout = 8s,而外面 http.Client.Timeout 也是 8s —— 第一个地址是黑洞
+// (SYN 石沉大海、不是被拒)时,8 秒预算全耗在它身上,**永远轮不到第二个**。而 DoH 返回的
+// 地址顺序是随机轮转的(2026-09-03 实测:1.1.1.1 对同一个域名连查三次给了两种顺序),
+// dohCache 又一存 30 分钟 —— 一次坏运气就是接下来半小时这个源全废,而另一个地址明明是
+// 好的。并发拨号让"有一个地址能连"直接等价于"连得上",跟顺序无关。
+//
+// 这跟 net.Dialer 自己对多地址做的 Happy Eyeballs 是同一个思路,但标准库那套只在**它自己**
+// 解析出多个地址时生效;我们是拿 DoH 的结果逐个拨,走不到那条路径。
+func dohDialRace(ctx context.Context, network string, ips []string, port string) (net.Conn, error) {
+	return dohDialRaceWith(ctx, dohDialer().DialContext, network, ips, port)
+}
+
+// dohDialRaceWith 是 dohDialRace 的可注入版本。拆出来只为单测:要证明"第一个地址是黑洞
+// 时不再挡住第二个",就得有一个**真的永远不返回**的拨号目标,而真实网络里没有可移植、
+// 可复现的黑洞地址(RFC 5737 那几段在不同网络下有时秒回 EHOSTUNREACH、有时超时)。
+// 生产路径只有 dohDialRace 一个调用方,传的永远是真拨号器。
+func dohDialRaceWith(ctx context.Context, dial func(context.Context, string, string) (net.Conn, error),
+	network string, ips []string, port string) (net.Conn, error) {
+	if len(ips) == 0 {
+		return nil, nil
+	}
+	dialCtx, cancel := context.WithCancel(ctx)
+	type dialOutcome struct {
+		conn net.Conn
+		err  error
+	}
+	// 缓冲开满:输家写进来永远不会阻塞,即使赢家已经把结果交出去、没人再读。
+	ch := make(chan dialOutcome, len(ips))
+	for _, ip := range ips {
+		go func(ip string) {
+			conn, err := dial(dialCtx, network, net.JoinHostPort(ip, port))
+			ch <- dialOutcome{conn, err}
+		}(ip)
+	}
+	var firstErr error
+	for remaining := len(ips); remaining > 0; remaining-- {
+		select {
+		case out := <-ch:
+			if out.err != nil {
+				if firstErr == nil {
+					firstErr = out.err
+				}
+				continue
+			}
+			// 有人连上了:立刻交出去,**不等**剩下那几个 —— 等它们就等于没有并发,黑洞
+			// 那条要到 dialer.Timeout 才返回。cancel 让它们尽快收工,收尾 goroutine 把
+			// 万一也连上的连接关掉,不泄漏 fd。
+			//
+			// cancel 不会影响已经交出去的这条:net.Dialer 的 ctx 只管拨号过程,连接建成
+			// 之后 ctx 过期/取消对它没有作用(标准库文档明写)。
+			go func(n int) {
+				defer cancel()
+				for i := 0; i < n; i++ {
+					if o := <-ch; o.conn != nil {
+						_ = o.conn.Close()
+					}
+				}
+			}(remaining - 1)
+			return out.conn, nil
+		case <-dialCtx.Done():
+			cancel()
+			return nil, dialCtx.Err()
+		}
+	}
+	cancel()
+	return nil, firstErr
+}
+
+// dohHTTPClient 造一个走上面那套拨号逻辑的 client:直连优先(DoH 解析 + 并发拨号),直连
+// 被打掉时自动改走系统代理(proxyfallback.go / systemproxy.go —— 完整的实测依据和"为什么
+// 不全局走代理"记在 systemproxy.go 头注)。
+//
+// onBlocked 透传给 proxyFallbackTransport:直连不通、代理也救不回来时回调一次,让调用方
+// 记一个具体的失败原因。可以为 nil。
+//
+// ⚠️ **刻意不设 http.Client.Timeout。** 那是把直连和代理两次尝试算进同一个预算里,直连一
+// 超时就没钱给代理重试了,fallback 等于没加。预算落在 proxyFallbackTransport.attempt 的
+// 每次尝试上(3s 直连 / 10s 代理),调用方自己 ctx 上的 deadline 照常生效。
+func dohHTTPClient(onBlocked func()) *http.Client {
 	return &http.Client{
-		Timeout: timeout,
-		Transport: &http.Transport{
-			DialContext:         dohDialContext,
-			TLSHandshakeTimeout: 8 * time.Second,
-			ForceAttemptHTTP2:   true,
+		Transport: &proxyFallbackTransport{
+			direct: &http.Transport{
+				DialContext:         dohDialContext,
+				TLSHandshakeTimeout: dohTLSHandshakeTimeout,
+				ForceAttemptHTTP2:   true,
+			},
+			// 走代理时拨的是代理自己的地址(通常是 127.0.0.1),DoH 对它没有意义,用默认
+			// 拨号器即可;目标域名交给代理去解析。
+			viaProxy: &http.Transport{
+				Proxy:               func(*http.Request) (*neturl.URL, error) { return systemProxyURL(), nil },
+				TLSHandshakeTimeout: dohTLSHandshakeTimeout,
+				ForceAttemptHTTP2:   true,
+			},
+			onBlocked: onBlocked,
 		},
 	}
 }

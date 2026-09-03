@@ -114,7 +114,18 @@ func lbMeta(s snapshot) lbTrackMeta {
 	// poller.go handle() 那种"刚确认是新曲目"的现场时刻。
 	enr := trackEnrichment(s.Artist, s.Title, s.Album, s.Bundle, s.Duration, false)
 	for _, k := range []string{"cover_url", "accent_color", "netease_url", "apple_music_url", "qq_music_url", "spotify_url", "cover_source", "lyrics_source"} {
-		if v := enr[k]; v != "" {
+		v := enr[k]
+		if k == "cover_url" {
+			// ⚠️ 这份 info 是**要离开这台机器**的(ListenBrainz 的 additional_info,
+			// 以及 relay.go relayState 推给网页的 artwork —— 它读的就是这里的 ai)。
+			// 而 2026-08-31 起 cover_url 可能是设备直送封面的 file:// 本地路径,别的
+			// 机器根本读不到,发出去只会得到一张加载失败的图 + 把本机用户名公开出去。
+			// webSafeCoverURL 把它换成中继上的 https 地址(或者干脆留空,让网页走它
+			// 自己的兜底)。缓存里存的仍然是 file://——本机 App 要的就是那一份。
+			// 改在这里是因为 relayState 和 LB 提交共用这一份 info,一处改到底。
+			v = webSafeCoverURL(v)
+		}
+		if v != "" {
 			info[k] = v
 		}
 	}

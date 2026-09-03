@@ -29,6 +29,9 @@ import (
 type kugouResult struct {
 	lrc string
 	yrc string // 归一化成 YRCParser 语法后的逐字数据,没有则空串
+	// tr/roma:KRC 里 `[language:<base64>]` 内嵌的中文译文 / 罗马音两轨,已按 KRC 行始
+	// 时间戳拼成逐行 LRC(2026-09-02 加,见 krcLanguageTracks);没有则空串。
+	tr, roma string
 	// durationSecs:酷狗曲库自报的这首歌时长(秒),0=没给。透传用,见 lyricCandidate 同名字段。
 	durationSecs float64
 	// title/artist/album 是酷狗曲库里这首歌实际匹配到的歌名/歌手/专辑——纯粹给"搜索
@@ -149,6 +152,122 @@ func krcToYRC(krc string) string {
 	return strings.Join(lines, "\n")
 }
 
+// ---- 酷狗 KRC 内嵌的译文 / 罗马音轨(`[language:<base64>]`) ----
+//
+// 解密后的 KRC 正文里有一行 `[language:<base64>]`,base64 解出 JSON:
+//
+//	{"content":[{"type":1,"language":0,"lyricContent":[["要是这是场梦"],…]},
+//	            {"type":0,"language":0,"lyricContent":[["yu ","me ","na ","ra ","ba"],…]}],"version":1}
+//
+// type 1 是中文译文、type 0 是音译;lyricContent 每一项对应 KRC 的一条计时行
+// (`[行始,行长]<…>`),**按行序号对齐**,行数相等是格式契约(2026-09-02 直连实测 5 首:
+// Lemon 57/57、Ditto 73/73、Cruel Summer 73/73、Pretender 78/78、夜に駆ける 88/88;晴天
+// 这类中文歌没有这一行)。片段拼接后就是这一行的文字,片段自带空格;空片段对应署名行。
+// 行始时间戳取 KRC 那一行的行始——App 侧把译文贴到酷狗 fmt=lrc 那份整行歌词上用的是
+// 700ms 最近邻,实测两套时间戳最近邻差最大 9ms。
+//
+// ⚠️ 韩文歌的 type 0 轨**不是罗马音,是中文谐音**(Ditto 实测:「马列做 say it back」
+// 「啊亲们 挠木 摸咯」),照单全收会把这种谐音当罗马音显示。这里用汉字占比
+// 把它挡掉(krcLanguageRomaMaxHanRatio);下游 usableValueAdd 的"原文假名占比 > 5%"是第二道闸。
+
+var krcLanguageLineRegex = regexp.MustCompile(`^\[language:(.*)\]$`)
+
+// krcLanguageRomaMaxHanRatio:type 0 轨正文里汉字占比超过这个值就当没有罗马音。真罗马音
+// 是拉丁字母(实测 Lemon/Pretender/夜に駆ける 三首为 0),谐音轨实测 ≈0.9,取 0.3 两边都不擦边。
+const krcLanguageRomaMaxHanRatio = 0.3
+
+// splitKRCLanguageLine 把 `[language:…]` 行摘出来,返回 base64 正文与去掉该行后的 KRC。
+// 没有就返回 ("", 原文)。
+func splitKRCLanguageLine(krc string) (b64, rest string) {
+	normalized := strings.ReplaceAll(strings.ReplaceAll(krc, "\r\n", "\n"), "\r", "\n")
+	lines := strings.Split(normalized, "\n")
+	for i, line := range lines {
+		if m := krcLanguageLineRegex.FindStringSubmatch(strings.TrimSpace(line)); m != nil {
+			return strings.TrimSpace(m[1]), strings.Join(append(lines[:i:i], lines[i+1:]...), "\n")
+		}
+	}
+	return "", normalized
+}
+
+// krcLineStarts 返回 KRC 里每条计时行(`[行始,行长]<…>` 形态)的行始毫秒,顺序即行序号。
+// 只认正文以 `<` 开头的行——[ti:]/[ar:] 这类署名头没有 [数字,数字] 前缀本来就进不来,
+// 这里再要求 `<`,防某天出现不带逐字的 [数字,数字] 行把序号挤歪。
+func krcLineStarts(krc string) []int {
+	var starts []int
+	for _, line := range strings.Split(krc, "\n") {
+		m := krcLineRegex.FindStringSubmatch(strings.TrimSpace(line))
+		if m == nil || !strings.HasPrefix(strings.TrimSpace(m[3]), "<") {
+			continue
+		}
+		start, err := strconv.Atoi(m[2])
+		if err != nil {
+			continue
+		}
+		starts = append(starts, start)
+	}
+	return starts
+}
+
+// krcLanguageTracks 把 `[language:]` 的 base64 正文解成 (译文 LRC, 罗马音 LRC),任一轨拿不到
+// 就是空串。krc 是**去掉 language 行之后**的正文,只用来取各计时行的行始。
+func krcLanguageTracks(b64, krc string) (tr, roma string) {
+	if b64 == "" {
+		return "", ""
+	}
+	raw, err := base64.StdEncoding.DecodeString(b64)
+	if err != nil {
+		return "", ""
+	}
+	var payload struct {
+		Content []struct {
+			Type         int        `json:"type"`
+			LyricContent [][]string `json:"lyricContent"`
+		} `json:"content"`
+	}
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		return "", ""
+	}
+	starts := krcLineStarts(krc)
+	for _, track := range payload.Content {
+		switch track.Type {
+		case 1:
+			if tr == "" {
+				tr = krcLanguageTrackToLRC(track.LyricContent, starts)
+			}
+		case 0:
+			if roma == "" {
+				roma = krcLanguageTrackToLRC(track.LyricContent, starts)
+			}
+		}
+	}
+	if roma != "" && cjkRatio(roma) > krcLanguageRomaMaxHanRatio {
+		roma = "" // 中文谐音轨,不是罗马音
+	}
+	return tr, roma
+}
+
+// krcLanguageTrackToLRC 按行序号把一条轨拼成逐行 LRC:行数与 KRC 计时行数不等就整轨放弃
+// (对不齐宁可整体不要,跟假名标注同一口径);空行、`//` 占位行跳过;不够 3 行带戳当没有。
+func krcLanguageTrackToLRC(content [][]string, starts []int) string {
+	if len(content) == 0 || len(content) != len(starts) {
+		return ""
+	}
+	var out []string
+	for i, fragments := range content {
+		text := strings.Join(strings.Fields(strings.Join(fragments, "")), " ")
+		if text == "" || text == "//" {
+			continue
+		}
+		ms := starts[i]
+		out = append(out, fmt.Sprintf("[%02d:%02d.%03d]%s", ms/60000, (ms/1000)%60, ms%1000, text))
+	}
+	lrc := strings.Join(out, "\n")
+	if !isTimedLRC(lrc) {
+		return ""
+	}
+	return lrc
+}
+
 type kugouSong struct {
 	Hash       string  `json:"hash"`
 	SongName   string  `json:"songname"`
@@ -267,17 +386,22 @@ func resolveKugouLyric(ctx context.Context, artist, title, album string, duratio
 		return kugouResult{}
 	}
 
-	var yrc string
+	var yrc, tr, roma string
 	var krcDl struct {
 		Content string `json:"content"`
 	}
 	krcDlURL := fmt.Sprintf("http://lyrics.kugou.com/download?ver=1&client=pc&id=%s&accesskey=%s&fmt=krc&charset=utf8", c.ID, c.AccessKey)
 	if err := kugouGet(ctx, krcDlURL, &krcDl); err == nil && krcDl.Content != "" {
 		if decrypted := decryptKRC(krcDl.Content); decrypted != "" {
-			yrc = krcToYRC(decrypted)
+			// `[language:<base64>]` 那一行先摘出来(它是译文/罗马音两轨的载体,8~12KB 的
+			// base64,原样留在逐字数据里只是一行 App 读不懂的垃圾、还会随 .yrc 导出),剩余
+			// 正文才进 krcToYRC;两轨按 KRC 行序号对齐行始时间戳,见 krcLanguageTracks。
+			lang, body := splitKRCLanguageLine(decrypted)
+			yrc = krcToYRC(body)
+			tr, roma = krcLanguageTracks(lang, body)
 		}
 	}
-	return kugouResult{lrc: lrc, yrc: yrc, durationSecs: chosen.Duration, title: chosen.SongName, artist: chosen.SingerName, album: chosen.AlbumName, language: kugouCanonicalLanguage(chosen.TransParam.Language), cover: kugouAlbumCoverURL(ctx, chosen.AlbumID)}
+	return kugouResult{lrc: lrc, yrc: yrc, tr: tr, roma: roma, durationSecs: chosen.Duration, title: chosen.SongName, artist: chosen.SingerName, album: chosen.AlbumName, language: kugouCanonicalLanguage(chosen.TransParam.Language), cover: kugouAlbumCoverURL(ctx, chosen.AlbumID)}
 }
 
 // pickKugouSearchCandidate 从一页搜索结果里挑"这份歌词该跟谁走"。

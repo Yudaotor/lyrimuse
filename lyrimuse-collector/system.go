@@ -277,7 +277,11 @@ func trustedPlaybackNotASong(bundleID, artist, album string) bool {
 	if isKnownPlayerBundleID(bundleID) {
 		return false
 	}
-	if _, trusted := features.TrustedPlayers[bundleID]; !trusted {
+	// isTrustedPlayerBundleID 而不是裸查 features.TrustedPlayers[bundleID]:Safari 的
+	// 播放报的是媒体代理进程 com.apple.WebKit.GPU,信任表里存的是宿主 com.apple.Safari,
+	// 裸查永远落空 → 这道守卫对 Safari 恒不生效(2026-09-02 修,王力宏《你不知道的事》
+	// Safari 网页播放案连带查出来的三处同型裸查之一,见 getAutoDetectedState 那处的注释)。
+	if !isTrustedPlayerBundleID(bundleID) {
 		return false
 	}
 	return strings.TrimSpace(artist) == "" || strings.TrimSpace(album) == ""
@@ -360,11 +364,18 @@ func mediaPlayerLabel(bundleID string) string {
 		// 用户信任的未知播放器:用它自己的 App 名(Swift 侧反查后写进共享文件),
 		// 反查不到就退回 bundle id —— 总比谎报"Apple Music"好,那会让
 		// ListenBrainz 上的来源统计彻底失真。
-		if name, trusted := features.TrustedPlayers[bundleID]; trusted {
+		// Safari 的播放报的是媒体代理进程(com.apple.WebKit.GPU),名字要按宿主查,
+		// 否则 Safari 播的歌全部落到下面的兜底、被谎报成"Apple Music (macOS)"
+		// (2026-09-02 修,同日三处同型裸查之一,见 getAutoDetectedState 那处注释)。
+		lookupID := bundleID
+		if owner, ok := mediaProxyOwners[bundleID]; ok {
+			lookupID = owner
+		}
+		if name, trusted := features.TrustedPlayers[lookupID]; trusted {
 			if name != "" {
 				return name + " (macOS)"
 			}
-			return bundleID + " (macOS)"
+			return lookupID + " (macOS)"
 		}
 		return "Apple Music (macOS)"
 	}
@@ -493,16 +504,38 @@ func getAutoDetectedState(ctx context.Context) (map[string]any, bool) {
 	default:
 		// 用户显式信任过的未知播放器跟内置的完全同权(见 features.TrustedPlayers),
 		// 但要多过一道"这是不是一首歌"的守卫 —— 见 trustedPlaybackNotASong。
-		if _, trusted := features.TrustedPlayers[bundleID]; trusted {
+		//
+		// ⚠️ 必须走 isTrustedPlayerBundleID,不能裸查 features.TrustedPlayers[bundleID]
+		// (2026-09-02 修,王力宏《你不知道的事》Safari 网页播放案):Safari 播网页音频时
+		// MediaRemote 报的是媒体代理进程 com.apple.WebKit.GPU,信任表里存的是宿主
+		// com.apple.Safari,裸查永远落空 → Safari 的播放在这条 auto 路径被整条当成
+		// "不相关 App"丢掉。Swift 侧(MediaControlClient)走 TrustedPlayers.isTrusted
+		// 做了代理解析、认了这首歌,于是 App 显示曲目并挂出"搜索歌词中…"占位,而 collector
+		// 这边认为什么都没在放、永远不会去解析——占位行就永远停在那。Chrome/Arc 报的是
+		// 浏览器自己的 bundle id、直接在表里,所以一直正常;只有 Safari 走代理别名,恰好
+		// 只有这条路漏了解析。同型裸查同日一起修的还有 trustedPlaybackNotASong 和
+		// mediaPlayerLabel(getMultiSelectedState 从新写就用对了,不在其列)。
+		if isTrustedPlayerBundleID(bundleID) {
 			artist, _ := raw["artist"].(string)
 			album, _ := raw["album"].(string)
-			if trustedPlaybackNotASong(bundleID, artist, album) {
+			title, _ := raw["title"].(string)
+			// trustedPlaybackRejected 而不是裸的 trustedPlaybackNotASong:后者只看字段,
+			// 会把 YouTube Music 里"没报专辑名"的那些歌挡在门外(它的 album 常常是空的)。前者在"仅因 album 空
+			// 被拒"时去问一次页面本身是广告还是歌,读不到就退回原判据。见 ytmusicad.go 头注。
+			rejected, patchAlbum := trustedPlaybackRejected(ctx, bundleID, artist, album, title)
+			if rejected {
 				return map[string]any{}, true
+			}
+			// YouTube Music 每条队列的**第一首**在 MediaSession 里没有专辑名(YT Music
+			// 自己的疏漏,页面上其实有),复核那一趟顺路读回来了就补上 —— 补的是空缺,
+			// 上游报了就一个字不动。见 ytmusicAlbumPatch。
+			if patchAlbum != "" {
+				raw["album"] = patchAlbum
 			}
 			return raw, true
 		}
 		// 空字符串(没有任何 App 在报告 Now Playing)或者别的不相关 App(网页视频/
-		// Safari/另一个还没被信任的播放器)——统一按"没有可报告的正在播放"处理。
+		// 还没被信任的播放器)——统一按"没有可报告的正在播放"处理。
 		return map[string]any{}, true
 	}
 }
@@ -550,8 +583,16 @@ func getMultiSelectedState(ctx context.Context) (map[string]any, bool) {
 		// trustedPlaybackNotASong 的注释(浏览器视频/播客不能被当成一首歌打卡)。
 		artist, _ := raw["artist"].(string)
 		album, _ := raw["album"].(string)
-		if trustedPlaybackNotASong(bundleID, artist, album) {
+		title, _ := raw["title"].(string)
+		// 同 getAutoDetectedState 那处:走 trustedPlaybackRejected,好让 YouTube Music 里
+		// 没报专辑名的那些歌(album 常常是空的)能靠"页面是不是在放广告"这道复核进来。见 ytmusicad.go 头注。
+		rejected, patchAlbum := trustedPlaybackRejected(ctx, bundleID, artist, album, title)
+		if rejected {
 			return map[string]any{}, true
+		}
+		// 同 getAutoDetectedState 那处:补上 YouTube Music 队列第一首缺的专辑名。
+		if patchAlbum != "" {
+			raw["album"] = patchAlbum
 		}
 	}
 	if bundleID == appleMusicBundleID {

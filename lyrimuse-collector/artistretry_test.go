@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"testing"
+	"time"
 )
 
 // 往 MusicBrainz 别名缓存里预置条目，让 canonicalArtistViaMusicBrainz 走缓存命中分支，
@@ -141,16 +142,63 @@ func TestRetryArtistIdentitiesFallsBackToQQ(t *testing.T) {
 // "Khalil Fong"，不依赖任何手工登记。命中 MusicBrainz 的真实数据、发起真实网络请求
 // (跟同文件里 TestRetryArtistIdentitiesUsesMusicBrainzName 等测试同一个前提)。
 func TestRetryArtistIdentitiesGenericMusicBrainzReverseDirection(t *testing.T) {
-	got := retryArtistIdentities(context.Background(), "方大同")
-	found := false
-	for _, s := range got {
-		if normLoose(s) == normLoose("Khalil Fong") {
-			found = true
+	const artist = "方大同"
+	hit := func() bool {
+		for _, s := range retryArtistIdentities(context.Background(), artist) {
+			if normLoose(s) == normLoose("Khalil Fong") {
+				return true
+			}
 		}
+		return false
 	}
-	if !found {
-		t.Fatalf("通用 MusicBrainz 查询应该能换回国际艺名，不需要手工登记, got %v", got)
+	if hit() {
+		return // 命中，这条测试的正事就完成了
 	}
+	// ⚠️ 没命中时**必须先清掉进程内缓存再重试**:musicBrainzArtistAliases 把"这次查空"也写进
+	// mbPrimaryNameCache(只是不落盘),所以同一个进程里再查一次拿到的是那个空结果,重试等于
+	// 白重试 —— 这一条是 2026-09-03 实测踩出来的:第一版守卫只在事后探一次 MB,结果探针拿到
+	// 200、而真查询早一秒钟撞上 503 已经把空值缓存下来了,测试照样红。
+	mbPrimaryNameMu.Lock()
+	delete(mbPrimaryNameCache, artist)
+	mbPrimaryNameMu.Unlock()
+	// 没命中时**先分清是谁的问题**（2026-09-03 加）:MusicBrainz 没答（超时/503）是对方的事，
+	// 答了但没给出这个别名才是回归。混在一起报 FAIL 的代价是实测过的：那天 `go test ./...`
+	// 因为这一条红了，逐层量下来发现是 MB 自己在过载 —— DNS 正常、TCP 443 0.33s 连上、HTTP
+	// 回 503 且正文写着 "The MusicBrainz web server is currently busy"，配额头还剩
+	// x-ratelimit-remaining: 447/1200（没超配额），而且是间歇的（隔 2 秒连打 5 次全 200，
+	// 其中一次 7.3s —— 客户端超时是 6s，慢过就算失败）。
+	//
+	// 这种红会**吃掉整个测试套件的信号价值**:那次为了确认"这条红不是我这轮改动造成的"，
+	// 要单独核实到网络层；下一个人更可能直接忽略它，连带忽略掉一条真问题。
+	if err := musicBrainzAnswering(); err != nil {
+		t.Skipf("MusicBrainz 这一刻没给出可用响应(%v)，跳过 —— 这条测试按设计打真实网络，"+
+			"对方过载/限速时它的红不代表本仓库有回归；要复现请稍后重跑", err)
+	}
+	// 对方在答话:给这条真实查询第二次机会(第一次可能正好撞上它的过载卸载,实测 503 是
+	// 间歇的 —— 同一分钟里连打 5 次全 200，其中一次 7.3s，而客户端超时是 6s)。
+	if hit() {
+		return
+	}
+	t.Fatalf("通用 MusicBrainz 查询应该能换回国际艺名，不需要手工登记(MB 这一刻是答话的，"+
+		"两次查询都没给出 Khalil Fong)")
+}
+
+// musicBrainzAnswering 探一次 MusicBrainz 到底答不答话。**只在上面那条断言即将失败时调用**，
+// 所以正常绿的时候不多打任何请求（MB 的限速是 1 req/s 按 IP 算，能省就省）。
+//
+// 刻意走生产同一条 `mbGetJSON`：User-Agent（MB 强制要求，不带直接 403）、6 秒超时、
+// 非 200 一律当错误、审计日志 —— 这些都不该在测试里再抄一份，抄了就会跟生产漂开。
+func musicBrainzAnswering() error {
+	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+	defer cancel()
+	if err := musicbrainzThrottle(ctx); err != nil {
+		return err
+	}
+	// 最轻的一次查询，只看"它答不答"，不看答什么。
+	var sink struct {
+		Count int `json:"count"`
+	}
+	return mbGetJSON(ctx, "https://musicbrainz.org/ws/2/artist?query=a&fmt=json&limit=1", &sink)
 }
 
 // 往 QQ 歌手名缓存里预置条目，让 cachedQQArtistCanonicalName 走缓存命中分支，测试期间

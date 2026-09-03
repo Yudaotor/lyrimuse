@@ -49,6 +49,10 @@ type lastfmScrobbler struct {
 	// clearStatus:第一次提交成功时删掉上次运行留下的状态文件(有就删,没有白删一次),
 	// sync.Once 保证整个进程生命周期只做一次这个 stat+remove。
 	clearStatus sync.Once
+	// collapse 是合唱串「智能」档的判定器(见 lastfmcollapse.go),只在
+	// features.LastfmScrobbleArtistMode == scrobbleArtistSmart 时被 resolveScrobbleArtist
+	// 调用;nil(没配只读 api_key)时该档整体退化成原样提交。
+	collapse *lastfmArtistCollapser
 }
 
 // newLastfmScrobbler 三者任一为空则不启用(返回 nil,调用方需判空跳过)。
@@ -67,8 +71,9 @@ func lastfmScrobblerIfEnabled(cfg *config) *lastfmScrobbler {
 	}
 	s := newLastfmScrobbler(cfg.LastfmScrobbleAPIKey, cfg.LastfmScrobbleSecret, cfg.LastfmScrobbleSessionKey)
 	if s != nil {
-		// 用**只读**的那个 api_key:track.getInfo 不需要签名/session key,而且读写本来
-		// 就是两个独立的 key,别让判定这一步碰到写凭据。
+		// 用**只读**的那把 api_key:track.getInfo 不需要签名/session key,判定这一步不碰写凭据。
+		// 三档都建(判定器只是读了一下缓存文件),档位在 resolveScrobbleArtist 里判。
+		s.collapse = newLastfmArtistCollapser(cfg.lastfmBridgeAPIKey())
 	}
 	return s
 }
@@ -289,23 +294,14 @@ func durationParam(p map[string]string, key string, durationSecs float64) {
 	}
 }
 
-// resolveScrobbleArtist 决定这条提交实际发哪个艺人名。
+// resolveScrobbleArtist 决定这条提交实际发哪个艺人名 —— 三档,由
+// features.LastfmScrobbleArtistMode 选(设置里「合唱歌曲的歌手」:全部 / 只发第一位 / 智能):
 //
-// **默认原样发播放器报的整串**;只有用户显式打开 `lastfm_scrobble_first_artist_only`
-// 才截成第一位(firstCreditedArtist,纯字符串判断,不联网)。
-//
-// ## 为什么从"联网条件式"改成静态开关(2026-08-31)
-//
-// 原来的实现是:查一次 Last.fm 目录,**查不到**这首歌挂在合唱串下,才折成第一位
-// (lastfmcollapse.go 的 resolve/isCatalogued)。那套逻辑有两个问题,跟"该不该折"无关:
-//
-//   - **结果不可复现**。同一首歌,取决于 Last.fm 目录当下的状态和网络通不通,两次运行
-//     可能发出不同的艺人名 —— 而 scrobble 落进 Last.fm 基本删不掉。
-//   - **把一次可恢复的匹配失败变成不可逆的数据丢失**。"目录里查不到"只说明 Last.fm
-//     编目暂时没收录这个合唱串,不说明这个署名是错的;而限流/超时/服务抽风同样会走进
-//     "查不到"分支。
-//
-// 静态开关是可预测的:同样的输入永远得到同样的输出,用户也能一眼知道自己开没开。
+//   - scrobbleArtistAll(默认):原样发播放器报的整串。
+//   - scrobbleArtistFirst:截成第一位(firstCreditedArtist,纯字符串判断,不联网)。
+//   - scrobbleArtistSmart:按 Last.fm 编目判定(lastfmcollapse.go):合唱串已被收录就原样发;
+//     没收录、而第一位歌手名下这首歌已被收录才折成第一位;两边都查不到或查询失败维持原样。
+//     每首歌只判一次、结论永久缓存。c 为 nil(没配只读 api_key)时该档退化成原样发。
 //
 // ## 为什么默认是"发整串"
 //
@@ -315,20 +311,41 @@ func durationParam(p map[string]string, key string, durationSecs float64) {
 //   - 折叠会丢信息且不可逆(把 "Khalil Fong & Fiona Sit" 发成 "方大同",薛凯琪就没了),
 //     而不折叠最坏只是 Last.fm 上多一个听众很少的合唱条目 —— 代价不对称。
 //
-// ⚠️ now-playing 与 scrobble 必须调**同一个**函数:否则会出现 "now playing 显示 A、
-// 落库却是 A & B" 的自相矛盾状态(这是原实现就守住的性质,别在重构里丢掉)。
-func resolveScrobbleArtist(artist string) string {
-	if !features.LastfmScrobbleFirstArtistOnly {
+// ## 历史
+//
+// 2026-08-07 ~ 08-31 只有一套"联网条件式"(查不到就折,30 天 TTL),08-31 因"结果不可复现"
+// 被整个删掉、换成二态静态开关;2026-09-03 把它修好后作为第三档加回来 —— 修了什么、为什么
+// 现在自洽,见 lastfmcollapse.go 头注(每首歌只判一次永久沿用、折叠前核查目标已收录、
+// 失败不缓存)和 docs/features/12 §4。
+//
+// ⚠️ now-playing、scrobble、回填三条路径必须调**同一个**函数:否则会出现 "now playing 显示 A、
+// 落库却是 A & B" 的自相矛盾状态。智能档下唯一允许的分歧见 lastfmcollapse.go「一致性」一节。
+func resolveScrobbleArtist(ctx context.Context, c *lastfmArtistCollapser, artist, track string) string {
+	switch features.LastfmScrobbleArtistMode {
+	case scrobbleArtistFirst:
+		if first := firstCreditedArtist(artist); first != "" {
+			return first
+		}
+		return artist
+	case scrobbleArtistSmart:
+		return c.resolve(ctx, artist, track)
+	default:
 		return artist
 	}
-	if first := firstCreditedArtist(artist); first != "" {
-		return first
+}
+
+// mirrorTimeout 是 mirrorAsync 给一次 Last.fm 写入的总窗口。智能档下多给判定那份预算
+// (最多两个 track.getInfo),免得判定把真正的写入挤掉;其余档不联网判定,维持 8 秒。
+func mirrorTimeout() time.Duration {
+	const write = 8 * time.Second
+	if features.LastfmScrobbleArtistMode == scrobbleArtistSmart {
+		return write + lastfmCollapseBudget
 	}
-	return artist
+	return write
 }
 
 func (s *lastfmScrobbler) updateNowPlaying(ctx context.Context, artist, track, album string, durationSecs float64) error {
-	artist = resolveScrobbleArtist(artist)
+	artist = resolveScrobbleArtist(ctx, s.collapse, artist, track)
 	p := map[string]string{"artist": artist, "track": track}
 	if album != "" {
 		p["album"] = album
@@ -342,7 +359,7 @@ func (s *lastfmScrobbler) updateNowPlaying(ctx context.Context, artist, track, a
 func (s *lastfmScrobbler) scrobble(ctx context.Context, artist, track, album string, timestamp int64, durationSecs float64) error {
 	// 正在播放和完成收听必须走同一次判定,否则 Last.fm 上会出现"now playing 是 A、
 	// 落库却是 A & B"这种自相矛盾的状态。
-	artist = resolveScrobbleArtist(artist)
+	artist = resolveScrobbleArtist(ctx, s.collapse, artist, track)
 	p := map[string]string{"artist": artist, "track": track, "timestamp": strconv.FormatInt(timestamp, 10)}
 	if album != "" {
 		p["album"] = album
@@ -392,7 +409,7 @@ func mirrorAsync(s *lastfmScrobbler, what string, call func(ctx context.Context)
 		return
 	}
 	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), mirrorTimeout())
 		defer cancel()
 		err := call(ctx)
 		if err == nil {
@@ -452,17 +469,35 @@ func writeLastfmMirrorStatus(apiErr *lastfmAPIError) {
 
 // lastfmTrack is a track from Last.fm. UTS is the scrobble time in unix seconds
 // (0 for the currently-playing entry, which has no timestamp).
+//
+// Image(2026-09-03 加)是响应里 `image` 数组的 large 档 URL(拿不到退 extralarge、再退
+// 最后一档),原样透传、不判占位星——App 侧 `imageURL()` 一直在做那道过滤(按固定 hash 认
+// Last.fm 的"万能白星"),两边各判一次没有意义。只给 recent feed 用,桥接/去重逻辑不看它。
 type lastfmTrack struct {
 	Title, Artist, Album string
+	Image                string
 	UTS                  int64
+}
+
+// lastfmRecentPage 是一次 `user.getrecenttracks limit=50` 的完整解析结果。
+//
+// 2026-09-03 之前 lastfmRecent 只返回 (nowPlaying, done):桥接只关心这两样。现在这次
+// 拉取还要落成 App 读的 recent feed(见 lastfmfeed.go),feed 要把 `@attr.total`(账号
+// 总 scrobble 数——App 那三个数字里的"总量"原来单独靠一次 page=1 请求的同一个字段)一并
+// 带走,所以把响应里用得上的东西收成一个结构体整体返回。
+type lastfmRecentPage struct {
+	NowPlaying *lastfmTrack
+	Done       []lastfmTrack // 已完成的 scrobble,新→旧
+	Total      int           // @attr.total,解析不到时为 0
 }
 
 // lastfmRecent fetches a user's recent Last.fm tracks: the currently-playing one
 // (if any) and completed scrobbles with timestamps (newest first). Bridges iPhone
 // playback (FastScrobbler→Last.fm) into ListenBrainz — now-playing mirrors the
 // live track, completed scrobbles are forwarded as listens so "last played" and
-// history reflect the phone on any device.
-func lastfmRecent(ctx context.Context, user, apiKey string) (nowPlaying *lastfmTrack, done []lastfmTrack, ok bool) {
+// history reflect the phone on any device. 2026-09-03 起同一份响应也落成 App 读的
+// recent feed(lastfmfeed.go),所以顺手多解 image / @attr.total。
+func lastfmRecent(ctx context.Context, user, apiKey string) (page lastfmRecentPage, ok bool) {
 	ctx, cancel := context.WithTimeout(ctx, 8*time.Second)
 	defer cancel()
 	u := fmt.Sprintf(
@@ -471,20 +506,39 @@ func lastfmRecent(ctx context.Context, user, apiKey string) (nowPlaying *lastfmT
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {
 		log.Printf("lastfmRecent: build request: %v", err)
-		return nil, nil, false
+		return lastfmRecentPage{}, false
 	}
 	resp, err := doHTTPTracked(http.DefaultClient, req)
 	if err != nil {
 		log.Printf("lastfmRecent: request failed: %v", err)
-		return nil, nil, false
+		return lastfmRecentPage{}, false
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		log.Printf("lastfmRecent: status %d", resp.StatusCode)
-		return nil, nil, false
+		return lastfmRecentPage{}, false
 	}
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
+	if err != nil {
+		log.Printf("lastfmRecent: read response: %v", err)
+		return lastfmRecentPage{}, false
+	}
+	page, err = parseLastfmRecent(body)
+	if err != nil {
+		log.Printf("lastfmRecent: decode response: %v", err)
+		return lastfmRecentPage{}, false
+	}
+	return page, true
+}
+
+// parseLastfmRecent 把 `user.getrecenttracks` 的响应体解成 lastfmRecentPage。拆出来是为了
+// 能用样本 JSON 单测(lastfmfeed_test.go);网络部分在 lastfmRecent。
+func parseLastfmRecent(body []byte) (lastfmRecentPage, error) {
 	var out struct {
 		RecentTracks struct {
+			Attr struct {
+				Total string `json:"total"`
+			} `json:"@attr"`
 			Track []struct {
 				Name   string `json:"name"`
 				Artist struct {
@@ -493,6 +547,10 @@ func lastfmRecent(ctx context.Context, user, apiKey string) (nowPlaying *lastfmT
 				Album struct {
 					Text string `json:"#text"`
 				} `json:"album"`
+				Image []struct {
+					Size string `json:"size"`
+					Text string `json:"#text"`
+				} `json:"image"`
 				Date struct {
 					UTS string `json:"uts"`
 				} `json:"date"`
@@ -502,22 +560,39 @@ func lastfmRecent(ctx context.Context, user, apiKey string) (nowPlaying *lastfmT
 			} `json:"track"`
 		} `json:"recenttracks"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
-		log.Printf("lastfmRecent: decode response: %v", err)
-		return nil, nil, false
+	if err := json.Unmarshal(body, &out); err != nil {
+		return lastfmRecentPage{}, err
 	}
+	var page lastfmRecentPage
+	page.Total, _ = strconv.Atoi(out.RecentTracks.Attr.Total)
 	for _, t := range out.RecentTracks.Track {
 		if t.Name == "" {
 			continue
 		}
 		tr := lastfmTrack{Title: t.Name, Artist: t.Artist.Text, Album: t.Album.Text}
+		// large 优先,跟 App 侧 imageURL() 同一个取档顺序(large → extralarge → 最后一档)。
+		pick := func(size string) string {
+			for _, im := range t.Image {
+				if im.Size == size {
+					return im.Text
+				}
+			}
+			return ""
+		}
+		tr.Image = pick("large")
+		if tr.Image == "" {
+			tr.Image = pick("extralarge")
+		}
+		if tr.Image == "" && len(t.Image) > 0 {
+			tr.Image = t.Image[len(t.Image)-1].Text
+		}
 		if t.Attr.NowPlaying == "true" {
 			np := tr
-			nowPlaying = &np
+			page.NowPlaying = &np
 		} else if t.Date.UTS != "" {
 			tr.UTS, _ = strconv.ParseInt(t.Date.UTS, 10, 64)
-			done = append(done, tr)
+			page.Done = append(page.Done, tr)
 		}
 	}
-	return nowPlaying, done, true
+	return page, nil
 }

@@ -114,6 +114,11 @@ func toSimplifiedT2S(s string) string {
 		r := runes[i]
 		if repl, ok := t2sCharMap[string(r)]; ok {
 			b.WriteString(repl)
+		} else if std, ok := hanVariantMap[r]; ok {
+			// 2026-09-03 加的第三层:OpenCC 词组表和单字表都没管的字,再问一次**异体字表**
+			// (「妳」→「你」这类)。挂在这个兜底分支上是刻意的 —— 它永远不会覆盖 OpenCC 的
+			// 判断,只填它留下的空。来龙去脉见 hanvariants.go 头注。
+			b.WriteRune(std)
 		} else {
 			b.WriteRune(r)
 		}

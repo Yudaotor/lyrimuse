@@ -181,6 +181,13 @@ func importLyricsFromFiles() {
 			continue
 		}
 		name := ent.Name()
+		// writeLyricsFileAtomic 崩溃/断电时可能留下 `X.lrc.tmp.123456` 这种临时文件,只在
+		// 启动时清一次——导出过程中不能扫(会误删另一轮正在写的临时文件)。不在四个后缀里,
+		// 下面的分组本来也认不出它,清扫只是别让它永远躺在文件夹里。
+		if isLyricsTempFile(name) {
+			_ = os.Remove(filepath.Join(lyricsDir, name))
+			continue
+		}
 		suffix := lyricsFileSuffixOf(name)
 		if suffix == "" {
 			continue // 不认识的文件(比如 .DS_Store),忽略

@@ -15,10 +15,10 @@ func TestPinBlocksAutomaticLyricsReselection(t *testing.T) {
 
 	// 版本落后 → 不 pin 该重选。
 	stale := enrichEntry{Lyrics: "x", LyricsScoringVersion: lyricsScoringVersion - 1}
-	if !needsLyricsRescore(stale, false) {
+	if !needsLyricsRescore(stale, false, true) {
 		t.Fatal("前提不成立：版本落后的条目本来就该重选，测试用例失效")
 	}
-	if needsLyricsRescore(stale, true) {
+	if needsLyricsRescore(stale, true, true) {
 		t.Error("已校准的条目不该被 rescore 换掉歌词")
 	}
 
@@ -31,10 +31,10 @@ func TestPinBlocksAutomaticLyricsReselection(t *testing.T) {
 		Lyrics: "[00:01.00]x", LyricsYRC: "[1,2](1,1,0)x",
 		LyricsSource: "kugou", LyricsSourcesSeen: []string{"kugou", "qq"},
 	}
-	if !needsLyricsRetry(missed, false, false) {
+	if !needsLyricsRetry(missed, false, false, true) {
 		t.Fatal("前提不成立：同源落选的条目本来就该重试，测试用例失效")
 	}
-	if needsLyricsRetry(missed, false, true) {
+	if needsLyricsRetry(missed, false, true, true) {
 		t.Error("已校准的条目不该被 retry 换掉歌词（哪怕是同源落选这条越闸路径）")
 	}
 
@@ -50,10 +50,10 @@ func TestPinBlocksAutomaticLyricsReselection(t *testing.T) {
 	if !confirmedMismatch {
 		t.Fatal("前提不成立：时长差 33% 该判为 mismatch，测试用例失效")
 	}
-	if !needsLyricsRetry(wrongDur, confirmedMismatch, false) {
+	if !needsLyricsRetry(wrongDur, confirmedMismatch, false, true) {
 		t.Fatal("前提不成立：确认过的时长不匹配本来就该重试，测试用例失效")
 	}
-	if needsLyricsRetry(wrongDur, confirmedMismatch, true) {
+	if needsLyricsRetry(wrongDur, confirmedMismatch, true, true) {
 		t.Error("已校准的条目不该被「时长对不上」这条路径换掉歌词")
 	}
 

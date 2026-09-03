@@ -132,7 +132,12 @@ func runTestLyricSourcesCLI(args []string) {
 			case "musixmatch":
 				reason = musixmatchLastFailureReasonNow()
 			case "netease":
-				reason = neteaseLastFailureReasonNow()
+				// 同 lyricSourceFailureReasons(2026-09-03):这一轮网易云只要成功答过
+				// 一次,就不把限流当成"这个源没给出候选"的原因 —— 吃过一次 405 跟"这个源
+				// 不可用"是两件事,实测对照见 netease.go 的 neteaseSawSuccessNow 头注。
+				if !neteaseSawSuccessNow() {
+					reason = neteaseLastFailureReasonNow()
+				}
 			}
 			if reason != "" {
 				reasonCode = reason

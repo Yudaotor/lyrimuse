@@ -5,6 +5,7 @@ package main
 import (
 	"fmt"
 	"hash/crc32"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -151,9 +152,65 @@ func exportLyricsFiles() {
 			if existing, err := os.ReadFile(path); err == nil && string(existing) == full {
 				continue
 			}
-			_ = os.WriteFile(path, []byte(full), 0o644)
+			if err := writeLyricsFileAtomic(path, []byte(full)); err != nil {
+				log.Printf("lyrics export: write %s: %v", filepath.Base(path), err)
+			}
 		}
 	}
+}
+
+// writeLyricsFileAtomic 用「同目录临时文件 + 改名」写一份歌词文件——文件要么是旧的完整
+// 内容,要么是新的完整内容,不会出现半截(2026-09-02 加)。
+//
+// 为什么这里必须原子、而且比别的缓存文件更要紧:lyrics/ 是歌词六字段的**权威源**
+// (01 章),importLyricsFromFiles 启动时只校验头部三行、**正文不校验**、内容不同就覆盖
+// 缓存——之前的 os.WriteFile 是"先截断再写",崩溃/断电/磁盘满留下的空文件或半截文件,
+// 下次启动就会以「用户文件」的身份把缓存里完整的歌词顶掉,手改过的 manual_lyrics 也在这条
+// 路上。同仓 saveEnrichCache 与 Swift 侧 saveEdit(`atomically: true`)早就是这个写法,只有
+// 这里没跟上。顺带消掉一个并发坑:exportLyricsFiles 有 8 个调用点、文件写入那段没有锁,两轮
+// 导出同时写同一个文件时 WriteFile 会互相截断交错;各写各的临时文件再改名,最后改名的赢、
+// 内容完整。
+//
+// 临时文件名 `<base>.lrc.tmp.随机`:不以四个歌词后缀收尾,所以导入分组(lyricsFileSuffixOf)、
+// Swift 侧目录扫描与备份归档(都按 EnrichCacheKeys.lyricsFileSuffixes 过滤)都会自动忽略它;
+// 崩溃残留由 importLyricsFromFiles 启动时清扫(isLyricsTempFile)。权限显式补成 0644——
+// os.CreateTemp 默认 0600,不补的话用户在 Finder / 编辑器里打开自己的歌词文件会比以前多一层
+// 限制(同一用户其实能读,但跟之前导出的 0644 不一致)。不 fsync,跟 saveEnrichCache 一致。
+//
+// 11 章的「mtime 当最近更新信号」不受影响:调用方仍然先比对全文、逐字节相同就不写,改名
+// 后文件的 mtime 就是这次真正写入的时刻,跟 WriteFile 的语义一样。
+func writeLyricsFileAtomic(path string, data []byte) error {
+	tmp, err := os.CreateTemp(filepath.Dir(path), filepath.Base(path)+".tmp.*")
+	if err != nil {
+		return err
+	}
+	tmpName := tmp.Name()
+	if _, err := tmp.Write(data); err != nil {
+		tmp.Close()
+		os.Remove(tmpName)
+		return err
+	}
+	if err := tmp.Chmod(0o644); err != nil {
+		tmp.Close()
+		os.Remove(tmpName)
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		os.Remove(tmpName)
+		return err
+	}
+	if err := os.Rename(tmpName, path); err != nil {
+		os.Remove(tmpName)
+		return err
+	}
+	return nil
+}
+
+// isLyricsTempFile 认 writeLyricsFileAtomic 留下的临时文件(`X.lrc.tmp.123456`):名字里带
+// `.tmp.` 且不以四个歌词后缀收尾——后一条是为了绝不把用户自己命名成 "xx.tmp.lrc" 的正常
+// 歌词文件当垃圾扫掉。
+func isLyricsTempFile(name string) bool {
+	return strings.Contains(name, ".tmp.") && lyricsFileSuffixOf(name) == ""
 }
 
 // sanitizeLyricsFilename turns a "艺人|歌名|专辑" cache key into a safe,

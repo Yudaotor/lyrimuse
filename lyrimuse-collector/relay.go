@@ -47,6 +47,9 @@ func relayState(s snapshot, playing bool, device string, listenedAt int64, curre
 		// artist 用 meta.ArtistName(可能已被网易云/QQ 音乐核实的官方写法覆盖,统一大小写/
 		// 中英文——见 lbMeta),不用 s.Artist 原始标签,让"正在播放"卡片和历史列表用同一版本。
 		"title": meta.TrackName, "artist": meta.ArtistName, "album": meta.ReleaseName,
+		// artwork 已经在 lbMeta 里过了 webSafeCoverURL 那道闸(见 lb.go 那处注释):
+		// 设备直送封面在缓存里是 file:// 本地路径,这里拿到的是中继上的 https 地址,
+		// 或者干脆是空串。**这里不该再看到 file://** —— 真看到了就是那道闸漏了。
 		"artwork": ai["cover_url"], "accent": ai["accent_color"], "device": device,
 		"lyrics": enr["lyrics"], "lyricsTr": enr["lyrics_tr"], "lyricsRoma": enr["lyrics_roma"], "lyricsYRC": enr["lyrics_yrc"],
 		// 封面/歌词实际来自哪个平台("netease"/"qq"/"lrclib"/"amll"…),供网页页脚如实展示。
