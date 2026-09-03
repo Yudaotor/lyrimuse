@@ -1,5 +1,5 @@
 # 07. 歌词窗口
-> 最后核对:2026-08-30 · 基线:0bb53e6+工作树
+> 最后核对:2026-09-02 · 基线:e103532+工作树
 
 ## 定位
 
@@ -61,6 +61,7 @@
 
 - 有逐字数据(`line.words` 非空)的行**不论活跃与否**都走 `KaraokeLineText`(结构统一,见已知坑 #11);无逐字数据的行渲染纯文本。
 - **驱动方式定稿 = 逐帧重算 TimelineView @ 60Hz**(2026-08-21 五轮拉锯后,勿再翻烧饼):填色几何与**悬浮歌词逐像素同款**(渐变中心=人声位置、软边=±8%词宽同一个 `KaraokeFill.wordEdgeSoftenBand`,用户点名的观感基准),唯一差别是刷新档位 `WordKaraokeGradient.windowRefreshInterval = 1/60`(悬浮窗 30Hz;这台面板 60Hz,窗口字号大,30Hz 步进可感知)。同日第三轮曾整体改成**排程式**(fillFraction 对时间线性→一次性排 .linear 显式动画交渲染管线插值,LyricsX/AMLL 同架构)——CPU 是零逐帧代码,但 **SCK 逐帧探针实测 macOS 只以 ~20Hz 提交这些动画**(系统对长时程慢动画自动降档、无 API 干预;对照组悬浮窗 TimelineView 30Hz 准点),20Hz×14px 步进正是"卡顿感"本体,故回退。逐帧的开销结构由既有三件套压住:字级叶子时钟+4Hz 粗时钟只养活"正在扫的字"+WrapLayout contentKey 缓存+Palette 纯色跨帧复用。
+- **窗口面不可见时停表(2026-09-02)**:被别的窗口完全遮住、最小化、orderOut 时,行级 4Hz 粗时钟、正在唱那个字的 60Hz 细时钟、间奏三颗点的满帧率时钟全部 `paused`,换行/进出间奏的滚动改为无动画直接定位并记一笔;恢复可见的那一帧时钟重新给真值(填色按时间算、叶子 `.transaction` 清动画,**没有补播**),隐藏期间发生过换行才无动画重定位一次(用户手动翻看歌词后切 Space 回来不会被拽回当前行)。信号是 `NSWindow.occlusionState.contains(.visible)`(`LyricsWindowController.isSurfaceVisible`,`didChangeOcclusionStateNotification` 驱动,遮挡与最小化都走它),部分露出算可见。窗口看得见时一切不变。1Hz 时间标签不动。为什么要做、为什么不能靠系统:见已知坑 #17。
 - 视觉参数弯路记录(二/三轮按 AMLL 逆向参数"改良"、全被用户否掉):②羽化放大到 0.55×字号→光晕横跨大半个字,**字内的人声位置信号被洗掉**("全都是一个速度");③尖端对齐→相邻字光晕不跨界搭接,每字边界"熄灭再重生"("更机械了")。结论:**软边必须骑在人声位置上**,字内位置信号(边缘贴人声爬行)才是"流动感",不是宽光晕。
 - 排程式那轮留下的三个真修复保留:①行激活瞬间 forceFilled→按时间 的取值跳变会被行级 `.animation(value: distance)` 插值成"全亮再褪色"(=「下一行先亮一下再从头逐字」bug)→ 字级叶子挂 `.transaction { $0.animation = nil }` 禁掉一切外来动画事务;②定格全填色的 fraction 必须取 **1+band**(取 1.0 走不到纯色快路径,右缘 band 段被淡到半强度);③上浮参数:幅度 0.05em(从 0.07 调低,用户定稿)、时长 **min(词长, 1000ms)**(七轮定稿,两头都有用户实测背书——上界防长词亚像素颤抖:长词按词长爬完整词=每帧 ~0.05 物理像素,字形抗锯齿持续重采样,"长音字上下抖动";下界跟词长对齐:"染色结束=上浮结束",短词随染色利落收尾;isLive 的存活窗口要把它算进去。AMLL 的 max(1000,词长) 没颤抖问题是 DOM 合成器插值,不是逐帧重排字形)。
 - **行级动画屏障**(七轮,60fps 胶片实锤):①的 `.transaction` 拦截对"值作用域 .animation 祖先"实测**失效**(新行前几个字仍先全亮、亮暗边界 ~100ms 从右往左回撤),真正有效的是在行内容与 opacity/blur 之间插 `.animation(nil, value: distance)`/`.animation(nil, value: isHovered)` 屏障——内层 .animation(value:) 覆盖外层是文档化行为,景深动画只够到屏障之上的 opacity/blur。叶子 .transaction 保留作命令式 withAnimation 事务的兜底。
@@ -93,7 +94,7 @@
 - **显示简介**:同锚点玻璃面板,行=歌名/歌手/专辑/时长/播放器/歌词形态(逐字·译文·罗马音 从 allLines 推)/来源(EnrichCacheReader.sourceInfo 新只读口,异步取,复用歌词管理的 sourceDisplayName 中文名)。不发 AppleScript(简介不该有可感知等待)。
 - **歌词时间轴行**:内联控件(标签+当前值+提前/延后/重置 三小钮),点按**不关菜单**(校准要边听边连按)。动作/步长/显示口径与菜单栏「歌词时间轴」子菜单完全同源(nudgeLyricsOffset±lyricsOffsetStepMs / resetLyricsOffset;值只显示**这首歌**的微调 trackLyricsOffsetMs、不含全局基准;重置按需出现)。trackLyricsOffsetMs 补进 WindowPlayback 窄订阅。
 - **搜索歌词…**(2026-08-22 二批):歌词管理的联网搜索面板(`LyricsSearchSheet`,自包含)独立调起。点击瞬间快照曲目字段(sheet(item:) 的身份即快照,弹窗期间换歌不串)、后台解析**写回 key**(`EnrichCacheReader.resolvedKey` 新只读口,精确→宽松两级——播放器报法与缓存写法有空格/繁简出入时写回必须落在读取路径命中的同一条上,否则读写分家改了不生效;缓存无条目退 normalizedKey 新建)+当前来源。onApply 写回三步:`EnrichCacheStore.reload(onlyIfChanged: true)` 兜「store 未加载」(空 raw 上 saveEdit 会丢条目其它字段如 cover_url)→ `saveEdit` → `refreshLyricsForCurrentTrack()` 即时刷新播放侧(不等 2s mtime 轮询)。
-  - **桌面悬浮歌词 ⚙ 快捷菜单的「搜索歌词…」不是这条路径的第二个入口(2026-08-30)**:第一版做成"先叫出这扇歌词窗口,再让它自己弹面板"(复用这里的 `openLyricsSearch()`),被用户明确纠正——"只需要弹出搜索歌词页面,不需要把歌词窗口也拉起"。改成完全独立的一扇小窗 `LyricsQuickSearchWindow`(`LyricsManager/LyricsQuickSearchWindow.swift`,`Window(id: "lyrics-quick-search")`,见 04 章),`LyricsSearchSheet` 直接是它的根内容,不套 `.sheet()`,曲目快照在那扇窗口自己的 `.task` 里现查一次——跟本文件这条路径的 `LyricsSearchContext`/`openLyricsSearch()` 是两套完全独立、互不依赖的调用,只是共用同一个 `LyricsSearchSheet` 视图。⚠️ **2026-08-31 真实bug修复**(用户报"已经切歌了,点开搜索页面看到的还是上一首"):`Window(id:)` 场景没被真关掉时,再点一次「搜索歌词…」只会把已存在的视图带到前台,`.task` 只在首次挂载时跑一遍、不会重跑,曲目快照停留在第一次打开时那首歌。补了 `AppActions.quickSearchRefreshRequests` 这个 `PassthroughSubject`,每次调用 `openLyricsQuickSearch` 都 send 一下,`LyricsQuickSearchWindow` 额外 `.onReceive` 它重新现查——详见 04 章那条同一处修复的完整说明,不重复。
+  - **桌面悬浮歌词 ⚙ 快捷菜单的「搜索歌词…」不是这条路径的第二个入口(2026-08-30)**:第一版做成"先叫出这扇歌词窗口,再让它自己弹面板"(复用这里的 `openLyricsSearch()`),被用户明确纠正——"只需要弹出搜索歌词页面,不需要把歌词窗口也拉起"。改成完全独立的一扇小窗 `LyricsQuickSearchWindow`(`LyricsManager/LyricsQuickSearchWindow.swift`,`Window(id: "lyrics-quick-search")`,见 04 章),`LyricsSearchSheet` 直接是它的根内容,不套 `.sheet()`,曲目快照在那扇窗口自己的 `.task` 里现查一次——跟本文件这条路径的 `LyricsSearchContext`/`openLyricsSearch()` 是两套完全独立、互不依赖的调用,只是共用同一个 `LyricsSearchSheet` 视图。⚠️ **2026-08-31 真实bug修复**(用户报"已经切歌了,点开搜索页面看到的还是上一首"):`Window(id:)` 场景没被真关掉时,再点一次「搜索歌词…」只会把已存在的视图带到前台,`.task` 只在首次挂载时跑一遍、不会重跑,曲目快照停留在第一次打开时那首歌。补了 `AppActions.quickSearchRefreshRequests` 这个 `PassthroughSubject`,每次调用 `openLyricsQuickSearch` 都 send 一下,`LyricsQuickSearchWindow` 额外 `.onReceive` 它重新现查——详见 04 章那条同一处修复的完整说明,不重复。2026-09-02 又补了这条路的后半截:只刷新 `context` 不够,面板自身要按原始字段重置并重搜(改在 `LyricsSearchSheet` 里,按 `searchSubject` 走 `.task(id:)`;本文件这条 `sheet(item:)` 路径的原始字段在面板存活期间不变,行为不受影响),完整说明与「为什么不用 `.id()` 重建」同在 04 章。
 - 评估时确认**搬不动**的:创建电台/分享电台(sdef 无电台对象、URL scheme 只能开既有电台);「分享歌曲」可行(Search API trackViewUrl+NSSharingServicePicker)但本轮用户未选。
 
 ### 进度条与拖拽跳转
@@ -358,7 +359,7 @@
 |---|---|
 | 窗口场景声明 | `lyrimuse/Sources/lyrimuse/App.swift` `LyrimuseApp.body`(`Window(id: "lyrics-window")`) |
 | 整窗视图 | `lyrimuse/Sources/lyrimuse/UI/LyricsWindowView.swift` `LyricsWindowView` |
-| 置顶/伪全屏状态机 | 同文件 `LyricsWindowController`(attach/toggleAlwaysOnTop/enter/exit/forceExit) |
+| 置顶/伪全屏状态机 · 窗口面可见性 | 同文件 `LyricsWindowController`(attach/toggleAlwaysOnTop/enter/exit/forceExit;`isSurfaceVisible` ← `didChangeOcclusionStateNotification`) |
 | NSWindow 捕获 | 同文件 `LyricsWindowCapture` |
 | 行视图(景深/悬停/点击) | 同文件 `LyricsLineRow` |
 | 逐字填色行/字 | 同文件 `KaraokeLineText` / `KaraokeWordText` |
@@ -426,6 +427,8 @@
    只能在 `attach()` 里调一次,不能塞进 `enforceFullScreenCapability`/
    `enforceTrafficLightPosition` 那套"挂 didUpdate、每帧查一位、缺了才写"的持续守护——
    那套模式的前提是目标操作本身幂等,搬到这里每帧调一次会往菜单里堆出一整排重复项。
+
+17. **SwiftUI 不会替被遮住/最小化的窗口暂停 `TimelineView(.animation)`**(2026-09-02 离屏 `NSHostingView` 探针,不碰 App):可见 63.0 / 完全遮挡 63.0 / 最小化 63.0 / 移出屏幕 62.5 / orderOut 62.0 次每秒,五种不可见状态一个都不停。所以这扇窗最小化之后逐字两级时钟、间奏三点(满帧率、整段间奏都在跑,烧得最多)照旧运转,靠 `paused:` 自己门控。信号选 `occlusionState.contains(.visible)`:探针实测首次 `orderFront` 后 ~30ms 补一次通知,遮挡/取消遮挡/最小化/还原/orderOut/再显示各发一次,用它门控后不可见期间 0.0 次每秒、恢复即 63;不需要再单挂 miniaturize 通知。`attach()` 时窗口可能还没显示(此时 occlusionState 也是"不可见"),按可见算、等首次通知——**默认必须是 true**,宁可多跑也不能把看得见的窗口停表。接法上没有给三层结构体加参数:`LyricsLineRow.isPlaying` 在行 → 行文本 → 字三层里只喂两处 `paused`、不参与画面判断,在构造点直接 `&& isSurfaceVisible`;间奏三点在本文件顶层直接读控制器。滚动那半截刻意克制:隐藏期间换行改无动画定位并记 `scrollPendingWhileHidden`,恢复可见**只在记过账时**无动画定位一次(最小化窗口里 `scrollTo` 若没生效的兜底)——不记账就不动,否则用户手动翻看歌词后切个 Space 回来会被拽回当前行,那是改前没有的行为。真机 CPU 对比没量到(当时窗口关着、不能非交互地开/最小化),量级就是窗口可见时这几个时钟的自身开销。
 
 ## 专项:背景取色逼近 Apple Music(进行中,2026-08-23 开新会话延续)
 

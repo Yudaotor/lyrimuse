@@ -106,6 +106,24 @@ collector(Go, 5s 轮询) ── 同样两条播放读取路径(独立于 App)
         web/index.html 读 /now /history     feishu-bot 读 /now(或直连 LB)
 ```
 
+### 许可、版权与对外请求(2026-09-03)
+
+- **许可**:Lyrimuse 本身 GPL-3.0(仓库根 `LICENSE`);随包分发的第三方组件与数据(media-control、Sparkle、KeyboardShortcuts、OpenCC 词典、rime-cantonese 词典)在仓库根 `THIRD_PARTY_LICENSES` 逐条列出并附许可证全文,`build.sh` 把它拷进 `Contents/Resources/`(BSD/MIT 分发条款要求随附),设置「关于 → 第三方许可」用 TextEdit 打开包里这份(开发态或没有 TextEdit 退到 GitHub 同一文件)。`scripts/check_third_party_licenses.py`(CI 也跑)机械核对 `Package.resolved` / `build.sh` 的 `brew install` / `go.mod` 的每个依赖都在文件里出现过。
+- **版权立场**:歌词、封面、曲目信息归权利人;本项目只检索、缓存、展示,不托管、不转发、不再分发;与各播放器 / 歌词平台无隶属关系。对用户的完整表述只维护在 README 中英版「许可与版权说明」一节——App 里的「使用与版权说明」入口(关于页)和引导欢迎页那句都只是链接过去,**不在 xcstrings 里抄第二份**(这段话改的频率远高于发版)。**刻意不做阻断式首启接受页**:引导原则是介绍性内容不锁下一步,GPL 个人工具也没有需要「接受」的条款。
+- **对外请求全景**:README 那一节向用户承诺「会离开你 Mac 的只有这些」——**加一处对外请求就要同步这张表和那一节**;实际发生的每一条都进审计日志(第 14 章 §7、第 15 章「网络观察」)。
+
+| 目的地 | 谁发 | 发什么 | 何时 |
+|---|---|---|---|
+| 八个歌词源:`music.163.com`、`*.qq.com`、`*.kugou.com`、`*.kuwo.cn`、`*.musixmatch.com`、`lrclib.net`、`music.youtube.com`(LyricFind)、`raw.githubusercontent.com`(AMLL) | collector | 歌手、歌名、专辑,部分源带时长;AMLL 只按网易云 / QQ 音乐 ID 取文件 | 每首新歌解析(第 09 章) |
+| `musicbrainz.org` | collector | 歌手名 | 各源全落空时查别名 / 主名(第 09 章) |
+| `itunes.apple.com` | collector、App | 歌手 + 歌名(+ 地区) | collector 封面 / 署名锚点;App 高清封面替代与空闲页链接(第 03 章) |
+| `api.mymemory.translated.net` | collector | **歌词正文**分块 + 随机生成的邮箱参数 | 「系统兜底翻译」开着且端上 Apple 翻译不可用(第 10 章) |
+| `1.1.1.1` / `8.8.8.8`(DoH) | collector | 域名 | 只有 `*.musixmatch.com` 走 DoH(`doh.go dohHostSuffixes`) |
+| `api.github.com` | App | 无用户数据 | 关于页 star 数,最多每 6 小时一次 |
+| `github.com`(Releases appcast) | App(Sparkle) | 无系统信息(未开 `SUEnableSystemProfiling`) | 更新检查 |
+| `ws.audioscrobbler.com`、`api.listenbrainz.org` | collector、App | 播放记录(带账号凭据鉴权) | 用户主动连接后 |
+| 推送平台(Bark、钉钉、企业微信、Discord、飞书、Server酱)、状态中继(自建 Worker)、`api.deezer.com`(网页 Top10 歌手头像) | collector | 周报文本 / 当前播放状态 / 歌手名 | 用户主动配置后 |
+
 ## 设置项
 
 无(本章是架构总览;各设置项归属各功能章节)。与架构直接相关的仅两个:设置页「后台服务」开关(装/卸 collector LaunchAgent,`CollectorServiceManager`)和「开机启动」开关(装/卸 App 自己的 LaunchAgent,`LoginItemManager`)。
@@ -132,7 +150,7 @@ collector(Go, 5s 轮询) ── 同样两条播放读取路径(独立于 App)
 | `lyrimuse-features.json` | Swift `FeatureSettingsStore` | collector(启动时) | 播放器选择、功能开关(*bool,缺省=沿用现有行为)、歌词源集合/模式/顺序、`lyrics_dir` |
 | `lyrimuse-app-settings.json` | Swift `AppSettingsMirror` | Swift(仅 `restoreIfPristine()` 全新装机时读回) | UserDefaults 的单向镜像(外观/快捷键等),让"拷走整个文件夹=拷走整份配置"成立 |
 | `lyrimuse-enrich-cache.json` | collector(整 map 覆盖写);歌词管理 `EnrichCacheStore` 按 key 字典级增删改 | 双方 | 曲目元信息+歌词+封面+取色+链接缓存,key=`歌手\|歌名\|专辑`(经 `enrichKey()` 归一) |
-| `lyrics/`(可经 `lyrics_dir` 改位置) | collector 导出;歌词管理直写/删 | collector 启动调和 | 每曲目 `<base>.lrc/.tr.lrc/.roma.lrc/.yrc` 四缀,歌词字段权威源 |
+| `lyrics/`(可经 `lyrics_dir` 改位置) | collector 导出(同目录临时文件 + 改名的原子写,2026-09-02 起);歌词管理直写(`atomically: true`)/删 | collector 启动调和(顺带清扫 `*.tmp.*` 崩溃残留) | 每曲目 `<base>.lrc/.tr.lrc/.roma.lrc/.yrc` 四缀,歌词字段权威源 |
 | `lyrimuse-listens.jsonl` | collector | collector、App(本地收听清单) | 账号无关的本地收听日志(刻意不带账号前缀) |
 | `lyrimuse-artist-alias-cache.json` | collector | collector | MusicBrainz 按歌手的中文别名查询缓存 |
 | `lyrimuse-artist-identity-cache.json` | collector | collector | MusicBrainz 歌手身份缓存(mbid+中文名),Top 歌手榜归并第三信号 |
@@ -206,7 +224,7 @@ applemusic-nowplaying/
 6. **`launchctl print` 退出码 ≠ 进程在跑**(`CollectorServiceManager.state` 的 2026-08-15 修复注释):它只表示 job 注册过;曾让设置页在崩溃循环时一直显示绿勾,还短路了 kickstart 失败自愈。
 7. **media-control 的 `elapsedTime` 在稳定播放期间会整段冻结**,必须用 `--now` 的外推值;但暂停后外推基准不归零,`elapsedTimeNow` 会继续疯涨——暂停时要用原始值(`system.go` 注释,实测拿到过 1381 秒的荒谬值)。
 8. **改名残留是刻意不迁移的**:collector 的 `clientName` 2026-07-23 从 applemusic-nowplaying 统一成 lyrimuse 且不写旧路径兼容;`bark_url` 这个 JSON key 名与字段语义(通用 webhook)不一致也是刻意保留,避免旧配置迁移成本。feishu-bot 的配置目录仍是旧名。
-9. **`clientVersion`(`main.go`)是纯手动维护的字面量**,不随 App 的 git tag 自动派生,发版时容易忘记同步。
+9. **~~`clientVersion`(`main.go`)是纯手动维护的字面量~~ → 2026-09-02 已改成构建时 `-ldflags` 注入**。原文说的"发版时容易忘记同步"果然应验了两次:v1.3.0 漏过一次(User-Agent/ListenBrainz submission_client 谎报了一整个发布周期),v1.5.0 又漏一次——用户在另一台机器装了 1.5.0 的 dmg,设置页报「App 1.5.0 · 采集服务 1.4.0」。根因不是谁不小心,是机制本身要求人工同步两个本该同源的值(App 侧一直从 git tag 自动派生)。现在两个构建脚本(`lyrimuse/build.sh` 打包路径、CI 发版也走它;`lyrimuse-collector/build.sh` 本地重建路径)统一注入同一个版本号,`clientVersion` 因此**必须是 `var` 不能是 `const`**——`-X` 对 const **静默失败**(构建照样 exit 0、值原封不动)。三道防线:`versioninjection_test.go`(钉住 var / 默认值是一眼假的 "dev" / 两个脚本都带注入,已做变异测试验证有效)、`build.sh` 里 swap 前一道**跑真实产物问版本**的一致性闸、以及原有的设置页告警(`bundledCollectorVersion`,它正是抓到 v1.5.0 这次的那道,只是时机在发版之后)。详见 15 章。
 10. **web/README.md 尚写着 Lyrimuse "not yet open-source"**,与根 README 已开源的现状不一致——web/ 是独立嵌套仓,文档同步节奏与主仓脱节。
 
 ---

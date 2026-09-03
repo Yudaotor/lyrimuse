@@ -1,6 +1,6 @@
 # 02. 播放数据源与播放器支持
 
-> 最后核对:2026-09-01 · 基线:5d9031a+工作树
+> 最后核对:2026-09-03 · 基线:e103532+工作树
 
 ## 定位
 
@@ -80,6 +80,36 @@ App 怎么知道"现在在放什么":从本地播放器读出 曲目元数据 + 
   | Arc 放 YouTube② | `Dream in reality`(**频道名**) | `""` | 不是歌 |
 
   **album 是这四份样本里唯一 100% 分对的字段**。②(时长 925 秒的法语 vlog)正是"只卡 artist 不够"的证据:YouTube 把频道名塞进 artist,数据形状跟"歌手 - 歌名"无法区分。代价是电台/单曲场景真音乐 App 若不报专辑名会被误挡 —— 2026-08-21 用户拍板接受(宁可漏认,不要把视频写进永久收听历史)。`mediaType` 这条路走不通,记下别再试:酷狗压根不报这个字段、Arc 也不报(**不是报 Video,是没有这个键**),只有 Apple Music 有。内置五个播放器不走这条(各有既有守卫)。发现卡用**同一套判据**(`UngatedNowPlaying` 因此也带上 album)—— 否则会摆出一张"点了必定没反应"的卡片。信任列表的意义因此从"靠用户选对"变成"选错了也有兜底"。
+- **YouTube Music 的破例:改问页面本身是不是在放广告(2026-09-02)**。上面那条守卫把**浏览器里的 YouTube Music 整个挡在门外** —— 用户报「为什么我现在用 chrome 播放的 YouTube music 不能识别到」,根因就是它经 MediaSession 报出来的 album **常常是空的**,正好踩在上一条写明的那个"代价"上。⚠️ 是"常常"不是"总是"(2026-09-02 实测订正,初版把它写成了"恒为空"):同一个 Chrome 里播 YT Music,「死神」「September」的 album 是空的,而「Bad」报的是 `The Essential Michael Jackson` —— 所以这不是"YT Music 一律进不来",是"看运气",报了专辑名的那些本来就能进。**"看运气"这四个字 2026-09-03 有了确切答案:空的是每条播放队列的第一首**(实测两张专辑四个采样,含一条排除"同名去重"的关键反例)——机制、补法和那张实测表见「设计决策与已知坑」第 17 条。Chrome 已在信任列表、media-control 也读得到,卡的纯粹是 album。
+
+  ⚠️ **不能简单地"给 `music.youtube.com` 免检 album"** —— 因为 album 那一条**同时也在挡广告**。2026-09-02 抓了两条真实广告(media-control 与页面 JS **同一时刻成对采样**):
+
+  | title | artist | album | duration |
+  |---|---|---|---|
+  | 「Liese Jelly to Bubble 全新登場!染髮新革命」 | `KAO Hong Kong` | `""` | **30.021** |
+  | 「趁早把握出生頭3年腦部發育黃金期…」 | `香港美贊臣 Mead Johnson` | `""` | 20.001 |
+
+  **artist 是非空的**(广告主的频道名),免检 album 之后这两条会畅通无阻地被当成"KAO Hong Kong 的一首歌"收下 —— 跟第 09 章记的 Spotify 事故同形态(用户曾在「最近播放」看到 `Now Streaming on Hulu.`)。⚠️ **别指望 `minTrackSecs = 30` 兜住**:那条 Liese 广告是 **30.021 秒**,比 30 秒地板高 21 毫秒,照样过闸(打卡阈值 `min(时长/2, 240)` = 15s,播满就超)。YouTube 的标准 30 秒广告位基本都这样贴着线过去。
+
+  所以改成**问页面本身**,思路同 `spotifyCurrentTrackIsAd`(问 Spotify 本尊要 `spotify:ad:` 前缀)—— 字段启发式分不出来的事,去问权威来源。YouTube 没有对应的 AppleScript 接口,问的是页面 DOM。同一批成对采样里,**22 个连续样本、横跨两条不同广告**:
+
+  | 信号 | 广告期间 | 真歌期间 |
+  |---|---|---|
+  | 播放器 class 含 `ad-showing` | 22/22 命中 | 0 |
+  | 广告徽章元素存在 | 22/22 命中 | 0 |
+  | `document.title` | 「YouTube Music」 | 「歌名 \| YouTube Music」 |
+
+  三个都读、**任一命中就算广告**(不取多数):误判成广告只是这一轮没识别(下一轮自我纠正),误判成歌是把广告永久写进 Last.fm。`document.title` 那条已知有一个假阳性(页面刚加载、还没开始播时标题也是裸的「YouTube Music」)—— 接受它,此刻本来也没有播放可言;留着它是因为它是另外两条的**兜底**,YouTube 哪天改了 class 名它还在挡。
+
+  落点(`YouTubeMusicAdProbe.swift` / `ytmusicad.go`,**两侧同一份判据、必须同时改**):
+  - 基础判据 `notASong` / `trustedPlaybackNotASong` **原样不动**,复核作为外面一层(`trustedPlaybackRejected`)。只在"基础判据要拒、而且唯一理由是 album 为空(artist 非空)"时才复核 —— artist 为空一律直接拒、不复核,顺带省掉一次 AppleEvent。
+  - **fail-closed**:**还没探到/读不到**(权限没开、标签页休眠、TCC 没授权、超时)一律拒,退回原判据。所以最坏情况是"YouTube Music 仍然不被识别",不是"广告漏进收听历史"。
+  - ⚠️ **判定为广告时,Swift 与 Go 故意不对称(2026-09-03 改)**:Go 侧照旧**拒**(不采纳、不上报);Swift 侧改成**放行、并标成广告**,让 UI 显示「广告中」。起因是用户要求"chrome 上播 YouTube Music 的广告也像 Spotify 那样显示出来是广告"——原来一起丢掉的话 UI 拿不到任何东西,一段 30 秒广告期间灵动岛/悬浮窗会整个塌成"没有在播放"、广告完了再弹回来。这跟 Spotify 广告一直以来的形态一致(快照照常流进来、由 `isCurrentTrackAdBreak` 标记驱动 UI,打卡在别处拦)。三条出口收在纯函数 `YouTubeMusicAdProbe.gate(artist:verdict:)` 里(selftest 覆盖),详见第 20 条。
+    ⚠️ 注意这条**只**破例在"复核这一层";基础判据 `notASong` / `trustedPlaybackNotASong` 仍然必须逐字一致。
+  - Swift 侧是**异步 kick + 读缓存**(`MediaControlClient` 整个类型是同步的,不能被一次 ~187ms 的 AppleScript 往返卡住),照 `BrowserPositionProbe` 那套范式。代价是新曲目第一轮拿不到判定、按 fail-closed 拒掉,下一轮就好 —— 跟那个探针"新曲目要等下一轮探测成功"是同量级的延迟。
+  - 只在 `music.youtube.com` 的标签页上执行,**普通 `www.youtube.com` 视频完全不受影响**,仍按 album 判据挡掉。
+  - selftest 有一条**跨语言防漂**守卫:直接读 `lyrimuse-collector/ytmusicad.go` 对账那几个标志串和 AppleScript 事件超时值。加机械闸的理由是"两边必须同时改"这句话已经在注释里写着了、但注释拦不住漏改(验证过:把 Go 侧超时改成 7 会当场 FAIL)。2026-09-03 在它旁边补了一条**更硬的**:把两侧的探针 JS 取出来**逐字比**——marker 那条挡不住"关键字都在、JS 却已经漂了",实测把 Go 侧 `browse/MPREb` 改成 `MPREc` 时 marker 守卫**没逮到**(同一文件的注释里还写着那个串),逐字比那条当场红。
+
 - **发现通知(macOS 系统通知,2026-08-22)**:用户报「识别到新的播放器,但我自己不知道要去这里信任,目前没有一个通知机制」—— 发现卡只在设置页、而且只在那个播放器**此刻正在报 Now Playing** 时才出现,不主动打开设置页就永远看不到。用户拍板**只做系统通知,不要菜单栏那部分**;发现卡保留作兜底。
   - **判据下沉**:原来那套门槛写在 View 的 `if` 里,通知那条路必然要再抄一份、抄漏是必然的。现在拆成两层放进 `LyrimuseCore/Local/UnknownPlayerAlert.swift`(纯函数,selftest 33 条断言):`shouldOffer` **卡片与通知共用**(自动识别 / 观察不陈旧 15s / artist 与 album **trim 后**都非空 / 未被接受);`shouldAnnounce` 是通知专属的更高门槛(静音名单 / 反查得到 App 名 / 稳定 ≥6 秒且 ≥3 次 / 次数上限与冷却)。**顺带修掉一个既有 bug**:卡片原来写裸 `!album.isEmpty`,而 `notASong` 是 trim 后判空 —— `album = " "` 的播放能过卡片、过不了守卫,即"点了必定没反应"。
   - **通知门槛为什么比卡片高**:通知是我们主动打扰。①静音名单 `mutedForAnnounce`(播客/TV/图书/新闻/信息/FaceTime/QuickTime/预览/照片/语音备忘录/WebKit.GPU/控制中心/微信)—— 播客的 artist=节目名、album 常常非空,能过 artist/album 那道门槛,信任之后就会被当歌打卡进**永久收听历史**;微信语音/视频号是实测这台机器上真正"天天来一次"的那个。⚠️ 刻意**不**写成"整个 `com.apple.*` 静音":Safari 放网页音乐跟 Chrome 一样正当。名单**只影响要不要弹通知,不影响能不能信任** —— 真想信任播客的人在卡上照样点得到,这正是"卡片保留作兜底"的价值。②`appDisplayName` 反查不到的不弹(`com.apple.WebKit.GPU` 这种,标题只能摆一串 bundle id)。③稳定性门槛:实测 `mediaremoted` 日志里 12 分钟有 4 组**亚秒级**焦点往返(Music ⇄ Chrome),不设门会为一个只抢了两秒焦点的 App 烧掉它的提醒机会。
@@ -118,6 +148,67 @@ App 怎么知道"现在在放什么":从本地播放器读出 曲目元数据 + 
 
 上一节那套锚点订正治的是"报的数不准";这张卡治的是另一半——**让浏览器把真实播放进度报出来**。做法是用 AppleScript 让浏览器执行一小段 JavaScript 去读页面里的 `<audio>/<video>` 进度(`BrowserPositionProbe`),所以它对浏览器有两个硬要求:①系统级 Automation/TCC 授权(另一张 `permissionCard` 管);②**浏览器自己**那道"允许 Apple Events 里的 JavaScript"开关(`BrowserAutomationPermission`,Chromium 系存在自己的 Preferences JSON 里、Safari 走 `CFPreferences`,两套完全独立的实现)。
 
+⚠️ **读到"错的标签页"要挡住,但判据绝不能拿 MediaRemote 报的位置当参照物。** 这一条 2026-09-02 加了一版**错的**、当天就被真机抓出来重写,两版都记在这里,因为踩的坑比结论有用。
+
+**要挡的现象**(2026-09-02 实测撞上):Spotify Connect 会把同一账号的其它标签页变成**遥控镜像**——标题带着 ` • ` 分隔符、播放键显示暂停图标、位置文字也在,**三条判据全说"正在播放"**,而那个位置可以卡死十几秒不动(实测:Safari 已放到约 35 秒,Arc 里同一张专辑的标签页 15 次采样一直读 7 秒)。跨浏览器那种被 bundle id 挡住了(`kickIfNeeded` 只对当下真在出声的浏览器发起探测);**挡不住的是同一个浏览器里开着第二个 Spotify 标签页**——规则先试当前标签页,当前那个若正好是陈旧镜像或只是在浏览专辑,它就会赢。
+
+**❌ 错的那版:`isPlausibleCorrection(probed:reference:)` —— 差 8 秒以上就弃用,`reference` 传 `snapshot.elapsedTime`。** 它把整个探针**对所有网页播放器整首歌废掉了**,而且一行日志都没有。原因就写在本文档上一节:锚点冻结的源 `elapsedTime` **恒为 0**。于是 `abs(probed - 0) <= 8` 退化成 `probed <= 8` ——**只有页面真放在前 8 秒内的修正才会被采纳,过了第 8 秒一律弃用**;消费又是每首歌一次性的(`consumedKey`),整首歌都跑在错的外推锚点上。现场:Chrome + music.youtube.com,`elapsedTime` 三次采样恒 0、`timestamp` 恒定不动,用户报「歌词进度不准」。
+
+  - ⚠️ **教训不是"参照物选错了",是"这里根本没有可用的参照物"。** 换成外推值同样不行:探针最该出手的场合恰恰是"锚点本身就是错的"(冷启动时歌已经放到两分钟、MediaRemote 报 0、锚点也从 0 起),那时外推值 ≈0 而探针读 120,拿它当参照会**恰好在探针最该生效的场合**把它挡掉。
+  - ⚠️ **selftest 当时不但没拦住,还把这个 bug 固化成了断言**:那张表的放行用例写成 `(probed: 0.23, reference: 0.0, true)` / `(1.60, 0.0, true)` / `(8.0, 0.0, true)`,`reference` 一律填 0——等于把"锚点误差 0.23s"顺手写成了"reference=0, probed=0.23",而真实场景里 `reference` 恒为 0、`probed` 是几十上百秒。**把参照物写死成常数的用例,证明不了任何跟参照物有关的判据**,它只是把写用例时的假设复述一遍。
+
+**✅ 现在这版:不问"离参照物多远",改问两件探针自己拿得出材料的事。**
+
+  1. **这个标签页放的是不是同一首歌** —— 页面显示的总时长跟 MediaRemote 的 `duration` 比,容差 `pageDurationToleranceSecs = 2` 秒(页面显示 `floor(总时长)`、MediaRemote 给小数,实测 `218.781` 对页面 `3:38`=218,固有差不到 1 秒)。⚠️ 这道比较做在 **JS 里**、不在 Swift 里:差一首歌的标签页要让 AppleScript 那两遍循环**继续往下找**,否则"陈旧镜像排在正在放的那个标签页前面"时后者永远轮不到。期望时长拿不到(传 0)或页面读不出总时长时**跳过这道检查**,不判否——失败方向保持"最坏也不过是回到没有这道检查的样子"。
+  2. **这个标签页的钟有没有在走** —— 隔 `livenessGapSeconds = 1.5` 秒采两次,要求整秒读数至少 +1(`pageClockIsRunning`)。陈旧镜像的特征恰恰是**它不动**(实测 15 次采样一直读 7 秒)。⚠️ 间隔必须 **> 1 秒**:读数只有整秒精度,间隔不到一个量化步长时"没前进"分不出是钟停了还是没跨过整秒边界。⚠️ 判据用"floor 有没有 +1"而不是"增量 ≈ Δt×rate"——读数本来就是地板量化的,拿它比连续量要给的容差大到没有区分力。⚠️ 两次采样必须是**两次独立的 osascript 运行**,不能在 AppleScript 里 `delay`:`probeTimeout` 是 3 秒硬超时,脚本里睡 1.5 秒会把预算吃掉一半。
+
+  - **代价**:纠偏比原来晚约 1.5 秒落地。可接受——`consumeCorrection` 按 `rate * age` 补偿滞后,落地的**值**仍然是对的;正常换下一首时未纠偏位置本来也≈0,看不出差别,真正吃到这 1.5 秒的只有"冷启动时歌已经放到一半"这种本来就要等探测往返的场合。
+  - **有界重试**(`maxProbeAttempts = 3`,退避 `probeRetryBackoffSecs = 3` 秒,从上一次探测**结束**算起):判"钟没在走"可能是瞬时的(页面缓冲、标签页刚切到后台还没跑满一个计时周期)。这类失败**不消费**那次一次性额度——判据在探针内部,拿不到值就不写缓存、`consumeCorrection` 自然不会置 `consumedKey`,所以重试是自动的;上界只是别让一个读不到的标签页被整首歌每轮 tell 一遍。⚠️ 这一点是**旧版真正的第二个坑**:旧版把判据放在消费点,不合理的那次**也算用掉了额度**,一次瞬时抖动就赔掉整首歌。
+  - ⚠️ **广告是这套判据认不出来的那一类,只能靠时长兜**:YouTube Music 插广告时页面那行进度文字是**广告自己的**、而且**是在走的**,活性判据对它一路放行。
+  - ⚠️ 仍然漏的:时长恰好相同的另一首歌 + 它的钟也在走。这时两条判据都判不出来,只能靠 bundle id 那道门。
+  - 2026-09-02 补了日志(`category: "browserprobe"`):采信和弃用两边都记,弃用带原因。⚠️ 这不是锦上添花——上面那次退化就是因为**这个类一行日志都没有**,"日志里查不到探针活动"完全不能当"它没跑"的证据,只能靠读代码 + 量 media-control 反推。
+
+#### 怎么查这个探针(2026-09-03 真机复量后补)
+
+```
+/usr/bin/log show --predicate 'subsystem == "me.yudaotor.lyrimuse" AND category == "browserprobe"' --last 20m --style compact
+```
+
+⚠️ **`log` 必须写绝对路径 `/usr/bin/log`** —— zsh 里 `log` 是个 builtin,直接写 `log show …` 会报 `(eval):log:1: too many arguments`;要是命令里还带了 `2>/dev/null`,这条报错会被吞掉、只剩一片空输出,**极容易误判成"探测压根没发起"**而往完全错误的方向查(2026-09-03 实测踩过)。同源于 CLAUDE.md 里那条"`grep` 被 shell 污染要用绝对路径"。
+
+三行日志各自证明什么,别混:
+
+| 日志 | 打在哪 | 证明什么 |
+|---|---|---|
+| `采信 Xs(上一拍 Ys,…)` | 探针内部,写缓存那步 | 拿到了一个**通过两条判据**的读数 |
+| `交出纠偏 Xs(…),本曲额度用完` | 消费点 `consumeCorrection` | 这个值**真的交给伺服逻辑用了** |
+| `曲目标识变了,重新开放本曲的探测额度` | `trackChanged()` | 一次性额度被**重新开放**了 |
+
+⚠️ **只看"采信"会读出假结论**:同一首歌可能出现好几行"采信"却只有一行"交出",一次性额度(`consumedKey`)把后面几次挡在门外;光看"采信"会以为重锚了好几次,也看不出这一拍的位置到底是探针给的还是外推的。
+
+⚠️ **一首歌中途出现多轮探测不一定是 bug,但要看清是哪一种。** 2026-09-03 复量实测到同一首《白发》连续播放期间出现 4 次 `采信`(位置 12/74/134/194s、间隔约 60s、**全部标着 `#1`**)—— 标 `#1` 说明重试计数被重置过,也就是 `trackChanged()` 真的被调了 4 次。
+
+- ✅ **已排除 App 重启**:这四行日志的 pid 全是 `72772`,同一个进程(⚠️ 查这类问题一定要看 pid ——同一段日志里 00:01:59 和 00:03:02 那两行 pid 从 64957 变成 66917,那两次**才**是重启导致的重开,长得跟前面四行一模一样)。
+- ❓ **剩下两个候选还没分清**:`trackChanged` 的判据是 `key != lastKey`(`key` = artist+title),所以要么是 ①`lastKey` 被清成了 `""` —— 快照变成 nil(播放器退出 / stopped / 系统 Now Playing 焦点被别的 App 抢走一次)那条路径会清它,见 `LocalPlaybackSource` 里 `lastKey = ""` 一带的注释;要么是 ②artist/title 本身在抖(网页播放器元信息刷新)。
+- 2026-09-03 起 `曲目标识变了` 这行日志会带上**旧 key 和新 key**,一眼就能分:**旧 key 为空 = ①**,旧 key 非空且跟新的不一样 = ②。下次撞见照着读即可,别再靠猜。
+
+⚠️ 目前**没有把它当 bug 修**,理由是:每次重开都会重新拿一份**当下的**地面真值,再走同一套 `groundTruthSnapToleranceSecs` 重锚路径,精度上是加分不是减分;它跟 2026-08-30 那次"每 0.9 秒用整秒读数覆盖一次连续外推"的回退**不是一回事**(那次是高频覆盖更准的源,这次是低频注入更准的值)。等日志把成因定死了再决定动不动它。
+
+#### ⚠️ 验收这个探针时,界面抓拍**不是**有效证据
+
+2026-09-03 复量时差点栽在这里:抓悬浮窗看到显示的歌词行跟探针位置对得上,看着像端到端验证 —— 但那一次的冻结锚点**恰好也是对的**(`timestamp` 冻在 00:05:43,而那正是这首歌真实开始、App 重启并注册元信息的时刻,`now − timestamp` ≈ 真值)。**换句话说那一次即使不修,界面看起来也一样对。** 界面抓拍只证明内部自洽,证明不了修复改变了可见结果。
+
+真正有区分力的证据是**日志里的数值本身**:实测那四次采信的位置是 12/74/134/194s,**全部远超旧守卫那 8 秒窗口**,即修复前这四次无一例外会被弃用。这类"新旧判据会给出相反结论"的样本才是验收标准。
+
+⚠️ **2026-09-02 用真机日志坐实:这条一次性纠偏此前几乎从不生效,已修**。两处病根:
+
+1. **一次性样本走了给周期性噪声源设计的闸门。** `servoDecision` 对 `noisyFloored` 是 alpha 0.3 / 门槛 1.0,单个样本最多把 EMA 推到 `0.3 × 误差` —— 要误差超过 **3.33 秒**才可能触发。实测连着三首歌 `ema=-0.206 / -0.226 / -0.219, snap=false`,探针每次都测出偏差、每次都被扔掉。修法是在 `resolvePositionSeconds` 里给它开一条专门路径(`groundTruthSnapToleranceSecs = 0.30`,不走 EMA,命中打 `browser probe reanchor` 日志)。⚠️ 位置必须排在冻结守卫和 seek 分支**之后**、前向棘轮**之前**。
+2. **读数自带 −0.5 秒系统偏置。** 页面显示的是 `floor(真实位置)`,直接采信 `n` 恒偏后。补 `flooredMidpointBiasSecs = 0.5` 取区间中点变成无偏估计。
+
+- **"页面是 floor 不是 round"是实测坐实的,不是假设**:用 `media-control pause`(暂停那一刻 MediaRemote 记的是精确位置)抓小数 ≥0.5 的样本 —— `elapsedTime=165.627` 而页面文字是 `165`(round 会是 166)。
+- **页面文字滞后真实位置 ≤0.05 秒**(同一手法 10 个样本,`T − displayed` 均匀铺满 0.051~0.916,最小值即滞后上界)。所以"抓文字跳变瞬间"可以当精确到 ±0.05s 的真值标尺用 —— 今晚所有偏置数字都建立在这个标尺上。
+- ⚠️ **别拿"字级高亮反推的位置"当位置链路的误差**:那个量的是「位置误差 ⊕ 歌词文件自身对齐误差」。实测同一张 Live 专辑上,修复前后帧法都得到 ~+0.86s,而同期日志里的 `reported − predicted` 从 −0.685 降到 −0.269 —— 差值不随修复变化的那部分,是歌词文件的对齐,不是位置链路。判位置链路要看日志那一对数。
+
 **已支持的站点(2026-09-01 起两个)**:`music.youtube.com` 和 `open.spotify.com`。
 
 ⚠️ **新增一个站点必须实测,不能照抄另一条规则** —— 这两条实测下来"看着一样、其实处处不同",照抄任何一条都会得到一个静默不工作的配对:
@@ -132,7 +223,10 @@ App 怎么知道"现在在放什么":从本地播放器读出 曲目元数据 + 
 - ⚠️ **暂停判据逐个否掉的候选**(都实测过):播放/暂停键的 `aria-label` 是**本地化**的(中文界面下播放中显示「暂停」);`navigator.mediaSession.playbackState` Spotify 没设、恒为 `none`;按钮和它三层祖先节点只有 `data-testid`、没有任何状态位;图标 SVG 的 `path d` 确实是干净的分水岭(两条竖杠 vs 三角形)但认路径字符串太脆。最后用 `document.title` 且**只看分隔符在不在、不看任何一边的文案**,因此不受本地化影响。将来 Spotify 换标题格式的话,这里退化成"永远判暂停" → 探针不出手 → 静默退回 MediaRemote,这是**刻意选的失败方向**。
 - **Spotify Web 确实需要这个探针**(2026-09-01 实测):`media-control` 连打 4 拍,`elapsedTime` 恒 `0`、`timestamp` 恒等于会话创建时刻、`playing=true` —— 跟 YouTube Music 一模一样的冻结锚点。顺带坐实了这个锚点**只在状态切换时更新**:用户一按暂停,`elapsedTime` 立刻变成真实的 `253.04`、`timestamp` 也跟着走,而同刻页面文字正好是 `4:13`=253s,两边对得上。
 - **平台 id ↔ 站点规则的一一对应关系有 selftest 钉着**(`platformIDsWithSiteRules`)。对不上不会编译报错,只表现成"卡片在、配对得上、却永远不探测"。
-- 平台图标取自本机对应 App 的 `AppIcon.icns`(`sips` 转 1024×1024 PNG,放 `Sources/lyrimuse/Resources/`),不去网上抓品牌资源。
+- 平台图标的来路**按"这个平台有没有本机 App"分两种**:**Spotify** 取自本机 `/Applications/Spotify.app` 的 `AppIcon.icns`(`sips` 转 1024×1024 PNG,放 `Sources/lyrimuse/Resources/`);**YouTube Music** 是个网站、没有 `.app` 可取,用 Simple Icons(CC0 授权、专门收录给第三方集成场景用的品牌图标合集,矢量描摹自官方标志)。两条都**不去网上抓品牌资源**。⚠️ `platformIcon(_:)` 里的 key 必须跟 `BrowserPositionProbe.supportedPlatforms` 的 `id` 一字不差 —— 对不上不报错,只表现成"那张平台卡的图标位空着"。
+  - ⚠️ **Simple Icons 是单色图标集,直接拿来用会让图标内部跟着深浅外观变色**(2026-09-02 用户报:「不要是这种会随外观是白天模式还是黑色模式变里面的颜色…固定为白色」)。`YouTubeMusicIcon.png` 里**只有那个红色实心圆是不透明的**,中间那圈细白环和播放三角**是抠掉的透明像素**(实测 alpha 恒为 0)—— 显示成什么颜色完全取决于背后是什么:浅色外观下卡片底浅、看着就是白的,深色外观下那两处跟着变深(用户截图里那个"深色三角")。**跟 SwiftUI 的着色、模板图 `isTemplate`、`.foregroundStyle` 都无关,改视图那一侧改不掉。**
+  - 修法是 `SettingsView.whiteFilledCutouts(image:)`:在图标底下垫一个纯白圆,红圆自己把多余的白盖住,只剩镂空处透出白色。白圆半径必须**小于红圆、大于镂空**,两头都是实测的(1024×1024 源图,原点在中心):红圆是满幅内切圆、半径 512(四条中线上第一个不透明像素分别落在 0 / 1023);所有镂空像素离中心最远 **303**(细白环的外沿,不是三角 —— 三角更靠里)。安全区间因此是 (303, 508],取 `inset = 8%`(半径 430)落在正中间,26pt 显示尺寸下红边仍有约 2pt,不会因为边缘抗锯齿漏出白圈。三种卡片底色(深色选中卡 / 深色普通卡 / 浅色卡)× 真实 26pt 尺寸离屏渲染逐张看过。
+  - ⚠️ **不改磁盘上那份 PNG**,素材保持跟 Simple Icons 原样一致(来路可查,同 `SpotifyIcon.png` 的纪律),垫白只发生在运行时;用 `NSImage(size:flipped:drawingHandler:)` 而不是 `lockFocus()` 烤位图,保持分辨率无关。也**不要**改成"在视图里垫一层 `Circle().fill(.white)`":那样只有当前这一个调用点是对的,换个地方用 `platformIcon("youtubeMusic")` 又会退回镂空 —— 垫白属于这张图本身。`SpotifyIcon.png` 不需要这一步(图形内部整片不透明,实测中心 alpha = 1)。
 
 配对是**显式**的:没配过的浏览器完全不触发后台探测(`kickIfNeeded`)。设置页按 `supportedPlatforms` 逐个平台一张小卡,卡上是已配对浏览器的头像 + 一个「+」。
 
@@ -144,9 +238,10 @@ App 怎么知道"现在在放什么":从本地播放器读出 曲目元数据 + 
 2. **已经信任过的浏览器** —— 出现在下面「已信任的其它播放器」卡里、装着、而且**驱得动**的那些(2026-09-01 用户原话:「已经被信任了,就应该出现在这个列表里面,这个逻辑还是要的」)。⚠️ **信任是候选的一个来源,不是候选的前提** —— 这两件事 2026-08-31 和 09-01 各定过一半,别再把其中一半当成全部:没信任过的已安装内置浏览器**照样列出来**(选中时一步自动信任+配对),而已经信任过的浏览器**也一定要列出来**,哪怕它既不在内置名单、也没被手动加过。信任可以发生在配对之外(用户在「发现未知播放器」卡里点的信任;或者配对过又移除了配对——那会顺手忘掉 `manualBrowserFamilies` 里的登记),这两种情况下它都还在信任列表里却进不了候选,用户看到的就是"下面明明信任着 Doubao Browser,上面菜单里没有它"。
    - ⚠️ 判据必须用 `BrowserAutomationPermission.resolvedFamily` 而**不是** `family` —— 信任列表里只有 bundle id 和显示名,那些"点信任加进来的"浏览器从没被登记过引擎族,`family` 对它们恒为 nil。`resolvedFamily` 查不到时会去那个 App 自己的 bundle 里**现场读一次 sdef**,判定结果(含 nil)进内存缓存:调用点是 SwiftUI 的 body,每次重绘、每次回到前台都会跑一遍。缓存 `@MainActor` 隔离(`family` 会被 `BrowserPositionProbe` 在后台线程读,两者不共享这份字典)。
    - ⚠️ **配对时必须把现场判定的引擎族落盘**(`trustAndPairBrowser` 开头那句 `rememberManualBrowser`)。那个判定结果只活在内存缓存里,不落盘的话配对之后 `family(...)` 仍然返回 nil,`kickIfNeeded` 和 `runBrowserSelfTest` 都会在第一道 guard 上直接返回——表现是"配上了、头像也有了,却永远不同步、连检测按钮都不工作"。
-3. **「从应用程序中选择…」**(2026-08-31,用户原话:「这里点+号出来的是否可以加一个选项是自己在本机的应用程序里面选」)—— `NSOpenPanel` 从 /Applications 挑一个 App,判定通过就一步信任+配对。这条路存在的意义正是上面那条限制的另一面:那些同内核、本来就驱得动、只是没人验过 Preferences 路径的浏览器,现在用户自己加得进来。
+3. **「从应用程序中选择…」**(2026-08-31,用户原话:「这里点+号出来的是否可以加一个选项是自己在本机的应用程序里面选」)—— `NSOpenPanel` 从 /Applications 挑一个 App,判定通过就一步信任+配对。这条路存在的意义正是上面那条限制的另一面:那些同样继承了 Chrome 脚本字典、本来就驱得动、只是没人验过 Preferences 路径的浏览器,现在用户自己加得进来。
 
 - **判据是"驱不驱得动",不是"名字像不像浏览器"**:读挑中 App 的脚本定义(`Info.plist` 的 `OSAScriptingDefinition` → `Contents/Resources/*.sdef`),看里面有没有"执行 JavaScript"那条命令。**认 AppleScript 四字码不认命令名** —— 名字会随本地化/改版变,四字码是 AppleScript 的 ABI,改了等于破坏所有既有脚本。Chromium 系 `CrSuExJa`、Safari `sfridojs`,2026-08-31 在这台机器上逐个实测:Chrome / Edge / Arc / Safari 全部命中,而 The Unarchiver / 音乐 / QQ音乐 **一处都匹配不到**。
+  - ⚠️ **决定能不能用的是「这个 App 有没有实现脚本命令」,不是「它用什么渲染引擎」**(2026-09-02 订正,用户问「你确定火狐不支持吗」)。此前代码注释和那条拒收弹窗都写成「Firefox 这类内核不支持」,归因错了:Gecko 跟这件事毫无关系,是 **Mozilla 从来没给 Firefox 写过 AppleScript 字典** —— 本机 `sdef /Applications/Firefox.app` 读出来只有系统样板套件(Standard / Text / Type Definitions),**没有 `tab` 类、没有任何执行 JS 的命令**,从 Apple Events 这条路够不到任何一个标签页。反向的例子同样说明问题:Arc 能用不是因为「Chromium 内核」,而是它 fork 了 Chrome 的代码、连脚本字典一起继承(四字码都是同一个 `CrSuExJa`);Safari 的 `sfridojs` 又是 Apple 自己给 Safari 加的,跟 WebKit 引擎也无关。Gecko 浏览器明天想加也能加。⚠️ 代码里的 `BrowserAutomationPermission.Family`(「引擎族」)这个抽象**不动** —— 按 fork 血缘分组是有效的实用启发式(脚本字典就是沿 fork 继承的),错的只是把「不支持」归因到引擎那句话。
 - **判不出来就拒收并说清理由**,不是"加进去再说"。放进一个永远不会工作的配对比列表里没有它更糟:用户会以为配好了,然后去查"为什么歌词进度还是不同步"。
 - ⚠️ **手动加进来的浏览器只登记引擎族,不登记 Preferences 路径**(`manuallyAddedFamilies` 只喂 `family(...)`)。于是它的 `status(...)` 恒为 `.unknown`、`enable(...)` 恒为 `.unsupported` —— 这是**有意的降级**:那个路径每个浏览器一个样(Arc→`Arc/`、Chrome→`Google/Chrome/`、Edge→`Microsoft Edge/`),没有公式能从 bundleID 推出来。一键开启对它们不可用,用户得自己去浏览器菜单里开那一项。
 - **持久化**:`AppSettings.manualBrowserFamilies`(bundleID → 族的 rawValue),启动时由 `AppDelegate` 灌进 `BrowserAutomationPermission.manuallyAddedFamilies` —— 跟 `platformBrowserPairs` 同一个"存在 AppSettings、运行期同步进 LyrimuseCore 单例"的双写模式。⚠️ 不灌这一次的话,`family(...)` 重启后对这些浏览器返回 nil,表现是"我加过的浏览器重启后从配对列表里消失了",而配对本身还好端端存在 `browserPlatformPairs` 里。
@@ -155,6 +250,8 @@ App 怎么知道"现在在放什么":从本地播放器读出 曲目元数据 + 
 - 「+」**恒定展示**,不再是"有内置候选才出现":内置候选全配完之后恰恰是最需要「从应用程序中选择…」的时候(装的浏览器不在那四个里)。
 - **整张卡的展示条件是"装了受支持的浏览器",不是"已经信任过某个浏览器"**(2026-09-01 改)。旧条件制造了一个**鸡生蛋**:8-31 起「+」菜单已经不要求先信任(`trustAndPairBrowser` 一步自动信任+配对),这张卡因此从"信任之后的配置面板"变成了"信任这件事本身的入口";而它自己的显示条件还停在旧语义上 —— 没信任过任何浏览器时整张卡连同 YouTube Music 一起不显示,界面上没有任何地方能发起信任,只能靠"真的用浏览器放歌 → 被动检测到未知播放器"绕回来。用户清空全部浏览器配置想重走一遍流程时当场撞上,原话「这里的 YouTube Music 应该是要常驻的」。判据跟 `addablePlatformBrowsers` 同源:那边能列出候选,这边就该显示。⚠️"不为了'这里没事'而占地方"这条原则保留 —— 一台只装了 Firefox 的机器仍然不显示这张卡。
 - **平台卡现在也有"选中并高亮"这个状态了**(2026-09-01,用户原话「网页播放器不可以选择并高亮吗」,跟上面"播放器"卡的多选是同一批改动):`browserPlatformCard` 配对了至少一个(装着的)浏览器就按 `PlayerChoiceCard` 同款样式高亮——不是新加一个独立开关,直接复用既有的"配了/没配"状态,配对本身早就是显式动作(点「+」选浏览器),没必要再叠一层"选不选用它"。这次改动**不是纯视觉**:配套把"信任列表"这条线从只在 auto 下生效,扩到"选中了具体播放器但没勾自动识别"这条路径也生效(App 侧 `MediaControlClient.fetchMultiSelectedSnapshot`/`artworkBundleIDMatches` 新增 `TrustedPlayers.isTrusted` 分支,过 `notASong` 守卫;collector 侧新增 `isTrustedPlayerBundleID`,`getMultiSelectedState`/`poller.isTracked` 同步接入)——此前配对一个浏览器只在用户同时勾着"自动识别"时才真的生效,选了具体播放器(不勾 auto)会让配对**看起来配好了、实际读不到播放**这个断层一直存在。高亮因此如实反映"这确实是一个会生效的来源",不是纯装饰。
+
+- ⚠️ **那道 JS 开关「只在浏览器启动时读一次」,开和关两个方向都要重启才落实 —— 指引里必须写出来**(2026-09-02 用户实际踩到:「刚才我明明有打开 safari 的 js 啊,是不是没有重启的原因?」,重启 Safari 后当场就通)。当天两族各有一次实测坐实:**Chromium** 侧,用户在 Arc 菜单里把开关**关掉**、`Preferences` 当场变 `false`,而没重启的 Arc 11 分钟后仍能 `execute … javascript` 返回 `2`;**Safari** 侧,勾上之后一直报错误号 8,退出重开就通。修法是在 `browserManualEnableHint` 那句路径**下面单独一行**提示重启——不并进那句里:那句回答"点哪",这句回答"点完还要做什么",混在一起读者会当成同一步的补充说明而略过,而略过的代价正是"我明明开了却不 work"。
 
 #### 「检测是否已生效」:一次真的执行 JavaScript 的功能性自检(2026-09-01)
 
@@ -169,6 +266,8 @@ Chromium 系那道 JS 开关的状态**经常读不出来** —— 它在浏览�
 
 - ⚠️ **文件和实测回答的是两个不同的问题,都对,不存在"以谁为准"**(2026-09-01,用户亲手做的对照实验坐实)。`Preferences` 里那个 `browser.allow_javascript_apple_events` 说的是「**下次启动**会怎样」,`BrowserPositionProbe.selfTest` 说的是「**现在**怎样」—— Chromium 那道开关**只在浏览器启动时读一次**,运行期间在菜单里改它,文件立刻变、运行中的浏览器纹丝不动。实证:这台机器上的 Arc 进程自 8/30 17:49 起一次没重启,用户 16:46 在 Arc 菜单里把它**关掉**、文件当场变 `false`,11 分钟后 `execute … javascript "1+1"` 照样返回 `2`;开的方向同理(此前几小时文件在 `true`/`false` 之间变过,实测行为全程不变)。(排除过自己人:全仓只有 `readChromiumPrefs` 一个读取点,没有任何代码写这些文件——一键开启那条路当天已整条移除。)
   - **UI 据此的处置**:两者不一致时**要给指引、不能报平安**。`browserJSLikelyWorking` 里 `.disabled` **一票否决**(排在实测结果之前),让菜单路径那块指引露出来;`browserJSSwitchCaption` 的 `.disabled` 分支在 `browserJSProvenWorking` 为真时改口成「这个开关已经被关掉了——现在还能用,只是因为该浏览器还没重启;重启后就会失效」。文件说关意味着**一次已经排好队、必然到来的失效**,那正是最该提前告诉用户的事。
+  - ⚠️ **Safari 的 `.disabled` 此前是个误报——「读不到」被当成了「关着」(2026-09-02 修)**。用户原话「可以现在就是勾着的啊」:那个开关**确实勾着**、自检也实测通过(绿字「现在可以被驱动了」),界面却橙字告警「这个开关已经被关掉了——重启后就会失效」,还把菜单路径指引整块摆出来让他再勾一遍(本来就勾着,照做无事发生)。根因在 `BrowserAutomationPermission.status` 的 Safari 分支:`CFPreferencesCopyAppValue` 返回 nil 时 `return .disabled`,注释理由写的是"Safari 这个开关默认就是关的,读不到值等价于从没开过"——**这个假设是错的**,而且跟隔壁 Chromium 分支的处置自相矛盾(那边读不到明确返回 `.unknown`,还专门写了"那不是坏了,是查不到,别显示成未开启")。nil 有两种成因分不出来:真的没设过、以及**读不到**——`com.apple.Safari` 是 TCC 保护域,别的 App 读它要「完全磁盘访问权限」,**没有才是常态**。实测坐实(本机 Safari 开关为开):外层 stub plist 和容器内那份**都是 `true`**,终端身份(有权限)`CFPreferencesCopyAppValue` 读到 `1`、App 身份读到 nil——同一台机器同一个值,读得到读不到只取决于调用方的 TCC 身份,跟开关死活无关。连带伤害不只是文案:`browserJSLikelyWorking` 对 `.disabled` 是**一票否决**,所以这张卡永远收敛不到"已配好"、角标一直挂着。修法:Safari 分支改判 `.unknown`,跟 Chromium 对齐,这一档交给实测兜底(那正是本仓库对 Chromium 系一直以来的做法);判据抽成纯函数 `safariStatus(fromPrefValue:)` 供 selftest 覆盖 nil/true/false/NSNumber 四档,**已做变异测试**(改回 `.disabled` 当场被抓)。⚠️ 这也说明上一条那个"两句都对"的结论**只对 Chromium 成立**——Safari 那次根本不是两个时间点的差异,是纯误报。
+  - ⚠️ **但这个处置会让同一张卡自己跟自己打架,2026-09-02 补掉**(用户报「是不是自相矛盾了,到底当前是可以用还是不可以用」):开关已关、浏览器还没重启时,上面橙字说「重启后就会失效」、下面绿字说「✓ 已生效——这个浏览器现在可以被驱动了」。**两句都对**(一句答"下次启动",一句答"现在"),但并排读就是直接矛盾。病根在「已生效」这三个字有歧义——用户读成的是「我刚勾的那个开关已经生效了」,而它实际只想说「此刻驱动得动」。修法:`browserSelfTestCaption` 新增 `switchDisabled` 入参,`.ok` 且开关在文件里是关的时,换成「✓ 此刻驱动得动——但这是重启前的暂时状态:上面那个开关已经被关掉,重启后就会失效」,让两块变成同一个故事的两半。**两个调用点都要传**(「还没配好」的指引分支和「已经配好了」的结果分支同形,后者一样会撞上这一幕——写这条修复时 assert 拦下了只改一处的版本)。这跟更早那次「同时出现『✓ 已生效』和『请求系统授权』」是同一类问题、同一个修法:**让互相矛盾的状态块互相感知**;这张卡有多个各自独立现读、互不知情的状态块,是它反复长出这类矛盾的结构性原因,以后往里加状态行时都要先问一句"它会不会跟旁边那行打架"。
   - ⚠️ 反过来 `.enabled` **不能**一票通过:它同样只说明下次启动会怎样。那一档仍然让实测结果优先(`blocked`/`noReply`/`failed` 判 false),否则会出现"上面说已开启、下面说检测没通过、却一句指引都不给"。
   - ⚠️ **2026-09-01 当天这里一度写反过**:先按"文件不可信、以实测为准"改了一版(那时只看到"文件说关但实测能用",误判成文件不可靠),用户补了一句「当时是我自己去给它关掉了」才把因果补全 —— 不是文件不可信,是它在回答另一个时态的问题。**留着这条,别再按"谁更可信"去想这件事。**
 - ⚠️ **这张卡的状态全是渲染时同步现读的,没有 `@Published` 可依赖 —— 所以要在"回到前台"时手动踢一次**(2026-09-01,用户原话「那我现在去打开了,设置里这里要怎么流转状态呢;自动的吗」)。浏览器那道 JS 开关读的是它自己的配置文件、系统自动化授权读的是 TCC,两者都没有任何变更通知可订阅。在此之前用户按指引跑去浏览器菜单里勾上开关、再切回来,界面上**什么都不会变**,得把气泡关掉重开或者点一次「重新检测」。修法是给整张卡挂 `NSApplication.didBecomeActiveNotification` → `automationRefreshTick &+= 1`:"去浏览器/系统设置里操作"这件事**必然**要切走再切回来,这个信号比给配置文件挂 FSEvents 或起定时器轮询都更准更省,而且一次覆盖两道门。
@@ -176,6 +275,8 @@ Chromium 系那道 JS 开关的状态**经常读不出来** —— 它在浏览�
   - ⚠️ 这一拍**只是让 SwiftUI 重新读一遍,不发起任何 AppleScript/自检** —— 自检要起 osascript 子进程,不该在每次切回 App 时白跑。要立刻确认的通路是气泡里那个「重新检测」,它**不看文件**、直接执行一段 JavaScript,任何时候都即时准确。
 
 - ⚠️ **配对要先写,信任在后台跑**(2026-09-01 修,用户报「我在加了新浏览器之后过了很久才在这边出现图标」)。头像那一行铺的是 `settings.browserPlatformPairs`(纯本地、瞬时),而 `features.trust` 里那句 `save()` 会走一整套 **collector 重启**:`CollectorRestartCoordinator` 0.5 秒去抖 → `launchctl kickstart -k` → 轮询到一个**新 pid** 才返回,确认超时 3 秒(`CollectorControl.restartConfirmTimeout`)—— 最坏 3.5 秒以上,重启失败还会把这 3.5 秒整个耗满。旧顺序把这套重启**夹在**"用户在菜单里点了那个浏览器"和"头像出现"之间,连带下面那个自动展开的气泡也一起被推后。两者之间没有依赖(信任写 features.json 给 collector 看,配对写 AppSettings 给这张卡和探针看),失败处理也一样——`trust` 的返回值本来就没人接。**以后再往这条路上加动作,先问一句"它挡在 UI 反馈前面吗"。**
+
+- ⚠️ **探针那一侧也要做媒体代理别名解析,漏了它 Safari 一次都不会被探测**(2026-09-02 实测撞上)。用户在 Safari 里打开 Spotify 网页版播放,MediaRemote 报的 bundle id 是 `com.apple.WebKit.GPU`,而 `BrowserPositionProbe.kickIfNeeded` 直接拿它去查 `family(...)` → nil → **当场返回,一次探测都不发起**;就算过了这道,`pairedPlatformIDs` 也查不到(配对表里存的是 `com.apple.Safari`),再退一步 `probeOnce` 会拿它去 `tell application id`,而那个进程根本 tell 不动。三处全错,而且**一条日志都没有** —— 表现就是"配对了 Safari、卡片也在、却永远不同步"。准入那一侧(`TrustedPlayers.isAccepted`)2026-09-01 就补了这步解析,探针这侧一直漏着,对 YouTube Music 同样成立。修法是入口处解析一次(`BrowserPositionProbe.probeTargetBundleID(forReported:)`),下游三处统一用宿主 id;selftest 有三条断言钉着。
 
 ### ⚠️ Safari 的媒体进程:`com.apple.WebKit.GPU`
 
@@ -190,6 +291,7 @@ Chromium 系那道 JS 开关的状态**经常读不出来** —— 它在浏览�
 - ⚠️ **只登记实测见过的**。`com.apple.WebKit.WebContent` 这类同族进程没有实测到它报过 Now Playing,不凭猜测加 —— 真遇到了在表里补一行,其余逻辑不用动。
 - ⚠️ **两侧必须同时改**(同 `isAcceptedPlayerBundleID` / `TrustedPlayers.isAccepted` 那对)。Swift 8 条断言、Go 6 条断言各自对称覆盖:别名生效/别名不是白名单/别的浏览器不顺带放行/单向性/宿主反查/Chromium 不在表里,外加**跨层不变量**——别名一旦生效,"发现未知播放器"卡必须同时不再提议它(那张卡的判据就是 `!isAccepted`,两者永久绑定)。
 - **「装没装」这道门(`isInstalled` = `NSWorkspace.urlForApplication(withBundleIdentifier:) != nil`)在两侧都生效**(2026-08-31 用户问「我们本地如果没有装的话是不是也不会显示」时补齐的)。在此之前只有「+」菜单的候选过滤了它,而已配对浏览器的**头像**是直接铺 `browserPlatformPairs` 的 —— 于是"配对过、后来卸载了"会一直留一个取不到图标的虚线方框(`browserIconView` 的 `app.dashed` 兜底),点开还给一份无意义的权限状态。⚠️ **只是不显示,配对记录原样留着**,装回来自动恢复;这跟「指定的屏幕拔掉后自动回落、偏好保留、插回来即恢复」是同一个口径(05-notch.md),**不要**顺手 `unpairBrowser` 去"清理"——那是替用户删他的配置。
+- ⚠️ **别名解析必须在每一个"判信任"的入口生效,collector 侧 2026-09-02 又抓出三处漏网的裸查**(王力宏《你不知道的事》Safari 播放案,「歌词管理」占位行永远停在"搜索歌词中…"):`system.go` 里 `getAutoDetectedState`、`trustedPlaybackNotASong`、`mediaPlayerLabel` 三处都是直接 `features.TrustedPlayers[bundleID]` 裸查——对 `com.apple.WebKit.GPU` 永远落空。后果分别是:**auto 路径把 Safari 的播放整条当"不相关 App"丢掉**(collector 报 empty、永远不解析歌词,而 Swift 侧 `TrustedPlayers.isTrusted` 有别名解析、App 认了这首歌并挂出占位行——两侧判定分叉,占位行等一个永远不会发生的解析);非歌守卫对 Safari 恒不生效;media_player 标签把 Safari 播放谎报成 "Apple Music (macOS)"。Swift 侧 `TrustedPlayers.notASong` 也有同一处裸查,同日一起修。修法统一改调 `isTrustedPlayerBundleID` / `isTrusted(_:trusted:)`;`safariproxy_test.go` 除功能断言外还有一个**源码级守卫**(扫 `system.go`,`features.TrustedPlayers[bundleID]` 裸查只允许 `isTrustedPlayerBundleID` 内部那一处),selftest 补了三条代理进程的非歌守卫断言。端到端验证:修后 collector 立刻认领 Safari 播放(relay 从 `empty` 变 `mac|特別的人|方大同|危險世界`)并跑完整八源解析。教训与上面探针那条(2026-09-02)同型:**每接一个新的"拿 bundleID 判身份"的地方,都要想一遍 Safari 代理进程**——这已经是第三批漏网点了。
 
 ### 轮询、事件加速与去抖动
 
@@ -382,6 +484,7 @@ vs 目录 289.766),拿目录值去盖反而是降精度。覆盖就该待在产�
 | 图标卡片(引导页 + 设置页共用) | `lyrimuse/Settings/PlayerChoiceCard.swift` · `PlayerChoiceCard` / `MorePlayersComingCard`(后者只在引导页用) |
 | 图标网格摆放顺序 | `lyrimuse/Settings/FeatureSettingsStore.swift` · `PlaybackPlayer.displayOrder`;判据 `lyrimuse/Settings/AppSettings.swift` · `AppSettings.userReadsSimplifiedChinese` |
 | 真实 App 图标解析(共享缓存) | `lyrimuse/Settings/AppIconResolver.swift` · `AppIconResolver.icon(forBundleID:)` |
+| 网页平台图标(自带素材 + 镂空垫白) | `lyrimuse/SettingsView.swift` · `PlayerSettingsTab.platformIcon(_:)` / `youtubeMusicIcon` / `spotifyIcon` / `whiteFilledCutouts(image:)` |
 | 事件流常驻子进程 | `LyrimuseCore/Local/MediaControlStreamWatcher.swift` · `MediaControlStreamWatcher` |
 | 通道健康自检 | `LyrimuseCore/Local/MediaControlHealth.swift` · `MediaControlHealth` |
 | 播放控制写路径 | `LyrimuseCore/Local/MusicPlaybackController.swift` · `MusicPlaybackController`(`dispatch`/`seek`/`setPlaybackMode`/`supportsExtendedControls`) |
@@ -418,3 +521,197 @@ vs 目录 289.766),拿目录值去盖反而是降精度。覆盖就该待在产�
     - 取不到图标(理论上不太可能:它此刻正在报播放、必然装着)才退回虚线问号 —— 那个占位本身仍然成立:"这个 App 是谁我们还不确定"。实测确认 `NSWorkspace.urlForApplication(withBundleIdentifier:)` 对截图里那个 `company.thebrowser.Browser` 取得到 32×32 的 Arc.app 图标,不存在的 bundle id 如实返回 nil。
 
 ⚠️待核对:设置为「自动识别」且实际在播 Apple Music 时,playPause/上一首/下一首经 `MusicPlaybackController.dispatch` 走 media-control(只有 seek 有 `preferAppleScript` 覆盖)——代码注释断言 media-control 控制指令对系统 Now Playing 焦点生效、应可控制 Music.app,但仓内未见对这一具体组合的实测记录。
+
+16. **YouTube Music 的广告要在 UI 上显示「广告中」,于是 Swift 侧改成"放行并标记"、Go 侧照旧拒**
+    (2026-09-03,用户原话「帮我把 chrome 上播放的 youtubemusic 的广告也像是 spotify 那样显示
+    当前是广告出来」)。
+    - **接的是上面那套检测的下一步**:检测(`ytmusicad.go` / `YouTubeMusicAdProbe`)已经能认出
+      广告了,但缺口在展示——驱动 UI 显示广告的是 `LocalPlaybackSource.isCurrentTrackAdBreak`,
+      而它的判据写死了 `isSpotify && …`,YT Music 的广告点不亮它;更靠前的
+      `trustedPlaybackRejected` 还会把广告快照**整条丢掉**,UI 根本拿不到东西。
+    - **为什么"放行"不会让广告被记录**——这条不是推断,是逐条核过的(2026-09-03):
+      - Swift 全树搜 `track.scrobble` / `submit-listens` → **零命中**;提交 listen 全在
+        collector 的 `lastfm.go` / `lb.go`,那边由 Go 侧的拒继续拦。
+      - **enrich 缓存**:Swift 侧写它只有 `saveEdit` / `savePlainTextEdit`,三个调用点全在
+        "用户点了候选"的闭包里,**没有按播放自动写入的路径** —— 所以广告快照流进来不会
+        变成永久条目(这条是 ls-Kelly 复核时点名要查的风险面,查完没有兑现)。
+      - 没有 App→collector 的"请解析这首"通道;collector 全树搜 `"np:` **零命中**,不读
+        App 那几个键。
+      - 封面中继是 collector→外部,Swift 没有发送端。
+    - **唯一被新引入的落盘点已经堵上**:`np:lastTrack*`(停播页/待机页/歌词窗口读的"上次在听")
+      原本会被广告覆盖。修法是把广告判定**提到 `apply(_:)` 里那段落盘之前**算,落盘条件加
+      一道 `!adByFields`。在此之前不需要管,因为广告根本走不到那里。
+    - ⚠️ **展示口径与 fail-closed 方向相反,不能顺手共用同一个判断**。收成两个纯函数:
+      - `gate(artist:verdict:)` —— 要不要采纳这条播放。拿不准(判定缺失)时**当广告丢掉**:
+        漏认一首歌只是这一轮没识别,认错一条广告是永久写进收听历史。
+      - `showsAdBadge(verdict:)` —— 要不要在界面上说这是广告。拿不准时**必须当成不是广告**:
+        探针会真的超时(osascript 卡住、浏览器没给自动化权限,实测发生过),那时判定是缺失的;
+        若跟着 gate 的口径走,就会在一首**真歌**上打「广告中」。
+      一句话:**丢弃可以宁枉勿纵,贴标签必须宁纵勿枉。**
+    - 收成纯函数的动机就是可测:原来这三条出口在 `MediaControlClient.trustedPlaybackRejected`
+      这个 `private static` 里,selftest(独立 target)看不见,而其中一条正是这次特意改掉的。
+    - 回归口径:selftest **ALL PASS**(本条新增 9 条断言);**7 个变异全部被抓、0 漏**,含
+      "把广告改回丢弃"(= 本次改动被改回去)和"showsAdBadge 顺手共用 gate 的口径"(= 上面那条
+      反向陷阱)两条。
+    - ⚠️ **未做端到端界面验证**:本仓禁止用 AppleScript/System Events 驱动界面,而复现需要
+      在 Chrome 里播 YouTube Music 一直等到插广告。已验的是判据层与数据层。
+      (2026-09-03 补:那天顺路在 Edge 上撞到了真广告 —— media-control 里两条独立条目
+      `Strepsils HK` / `八達通 Octopus Hong Kong` 当 artist、album 空,数据形状跟这里
+      记的一字不差。界面那一半仍未逐像素核对。)
+
+17. **YouTube Music 每条队列的第一首没有专辑名,靠同一次探针从页面上补**(2026-09-03)
+
+    用户报「YouTube Music 播一张专辑的时候,第一首歌怎么不上送专辑名」。**是真的,而且不是
+    我们这条链路丢的** —— 当场用 `media-control get` + 在页面上读
+    `navigator.mediaSession.metadata` 对照,两边**完全一致**(都是空)。
+
+    | 时间 | 队列位置 | 曲名 | 页面 byline 上的专辑 | `mediaSession.album` |
+    |---|---|---|---|---|
+    | 02:22 | #0 | Reasons, i love you | Reasons, i love you | **空** |
+    | 02:24 | #1 | Not enough seasons | Reasons, i love you | 有 |
+    | 02:27 | #2 | Be kind to myself | Reasons, i love you | 有 |
+    | 02:29 | #0(另一张) | Heavy on Me | **Already Gone** | **空** |
+
+    - **机制**:YT Music 开一条新队列时,在专辑上下文解析出来**之前**就把 MediaSession
+      元数据设好了,之后**不再刷新这一首** —— 所以页面 byline 后来拿到了专辑名,
+      MediaSession 里那份却永远停在空;第二首起队列数据已经在手,就带上了。
+    - ⚠️ **最后一行是关键反例,别把规律记成"同名去重"**。中途一度以为是"专辑名和曲名相同时
+      YT Music 就省掉 album"(第一张专辑的第一首正好是同名主打曲,四个已知样本全对得上,
+      连 02 章里原有的 `Bad`/`死神`/`September` 三个老样本也对得上)。第四行推翻了它:
+      `Heavy on Me` 的专辑是 `Already Gone`,**不同名,照样是空**。规律就是"队列第一首"。
+    - **补法:搭 `YouTubeMusicAdProbe` / `ytmusicAdProbe` 现有那次 JS 往返的顺风车**,零额外
+      AppleEvent。这不是省事 —— 那道广告复核**本来就只在 album 为空时才发生**,正好是需要
+      补的那一刻,时机严丝合缝。探针返回值从 `a|b|c` 变成 `a|b|c|album`。
+    - **认专辑靠 `browse/MPREb` 前缀**:byline 里歌手链接是 `channel/UC…`、专辑链接是
+      `browse/MPREb…`。所以这一条**跟语言无关**(不受 byline 里「2026年」这类本地化后缀
+      影响),也不会把歌手或播放量误当成专辑。⚠️ 用**遍历 + indexOf**而不是 CSS 属性选择器
+      `a[href*=…]`:选择器里那个值含 `/`,不加引号不是合法 CSS 标识符,而加引号只能加单引号
+      —— 单引号已经被外面那层 JS 字符串占了(JS 里只许用单引号,见第 16 条那条纪律)。
+    - **专辑名放最后一段**,解析按"最多切 4 段"切:专辑名是任意文本、可以自带 `|`。用普通
+      split 的话专辑名里一个竖线就会让整条读数退化成"形状不对",**连带把广告判定一起丢掉**。
+    - **补的判据是纯函数**(`YouTubeMusicAdProbe.albumPatch` / `ytmusicAlbumPatch`,两侧同一套),
+      三条同时成立才补:上游报的是空(**非空一律不动** —— 上游是权威,探针只补缺不纠正)、
+      探针读到非空、这一条判定成**歌**(广告没有专辑,广告期间 byline 上读到的多半是上一首的
+      残留,补上去等于给广告安一个别人的专辑名)。
+    - ⚠️ **补的动作必须在守卫之后**:"album 为空"正是触发广告复核的唯一入口,先把专辑名补进去
+      再过守卫,等于把广告检测整个绕过去(广告的 album 也是空的)。顺序反了不会报错,只会让
+      广告悄悄进来。Swift 侧那个 `snapshotWithProbedAlbum` 的注释里钉着这句。
+    - **两侧都要改**,不是只改一边:Swift 侧管 UI 显示的专辑名,而**歌词匹配和打卡到 Last.fm
+      的专辑字段走的是 collector**(它自己独立读 media-control)。只改一边的表现是"界面上有、
+      Last.fm 上没有",极难对上。
+    - **新增一条比 marker 更硬的跨语言闸**:原来的守卫只检查 `ytmusicad.go` 里"关键字都在",
+      保证不了两段 JS **真的**一样。现在直接把 Go 侧反引号拼出来的那串取出来,跟
+      `YouTubeMusicAdProbe.probeJS` **逐字比**。这条不是锦上添花 —— 变异测试里把 Go 侧的
+      `browse/MPREb` 改成 `browse/MPREc`,**旧的 marker 守卫没逮到**(因为同一个文件的**注释**
+      里还写着 `browse/MPREb`,`contains` 照样为真),逐字比那条当场红。
+    - 回归口径:selftest **2241 条 ALL PASS**(本条新增 23 条断言),collector `go test ./...`
+      通过;**3 个变异全部被抓**(Go 侧 JS 改一个字符 / Swift 去掉"上游已有专辑名就不动" /
+      Go 侧让广告也补专辑名)。
+
+19. **Spotify 网页版的广告也要认 —— 但判据跟 YouTube Music 完全不同**(2026-09-03)
+
+    用户要求"把 spotify 的网页广告识别也加上"。查下来**问题跟"没做识别"不是一回事**:
+
+    - 原生 Spotify 客户端的广告一直好好地显示「广告中」;
+    - **浏览器里的** Spotify 广告会让整个 UI 塌 30 秒 —— 菜单栏收回小图标、灵动岛/悬浮窗
+      一起消失,广告完了再弹回来。当天日志里那行 `slot rebuild: icon(38.5) -> fixed(...)`
+      就是广告结束、歌词槽重新长出来的一瞬间。
+
+    **根因**:Spotify 网页广告的字段形状是(现场抓的真实样本,同一批广告 6 次采样一致)
+
+    ```
+    title="广告"   artist=""   album=""   duration≈30s
+    ```
+
+    **artist 是空的**,而 `MediaControlClient.trustedPlaybackRejected` 里那道
+    `guard !artist.isEmpty else { return true }` 短路在任何页面复核之前就把它整条丢掉了。
+    YT Music 广告走得到复核,是因为它的 artist 是**广告主频道名、非空**。原生客户端不受这道闸
+    约束(内置播放器在 `notASong` 第一行就 return false)—— 所以**只有浏览器里的 Spotify
+    掉在这个洞里**。
+
+    修法与第 16 条同向:**Swift 放行并标成广告、Go 照旧拒**。
+
+    - **判据:四个 `data-testid`,任一命中即广告**(`SpotifyWebAdProbe.probeJS`)——
+      `ad-controls` / `context-item-info-ad-subtitle` / `ad-countdown-timer` / `ad-link`。
+      2026-09-03 现场对照样本(Safari + open.spotify.com,同一张专辑连播):
+
+      | 采样 | 曲目 | 四个标志 |
+      |---|---|---|
+      | 4 次歌曲态 | 三年二班 / 東風破 / 妳聽得到 / 同一種調調 | `0\|0\|0\|0` |
+      | 6 次广告态 | 跨 **3 条连续**广告(Uber「第 1 个,共 3 个」) | `1\|1\|1\|1` |
+
+    - 用 `data-testid` 而不是文字,因为**跟语言无关** —— 页面上那句「广告 • 第 1 个,共 3 个」
+      是跟界面语言走的,英文界面下是 "Advertisement"。
+    - ⚠️ **绝不能用 `[data-testid*=ad]` 子串匹配**:歌曲态里就有 `add-button`(含 "ad"),
+      会把每一首真歌都判成广告。selftest 有一条机械闸钉住 `probeJS` 里不许出现 `*=`
+      (变异测试验过:改成子串匹配当场红)。同理页脚那个 `Tailored Advertising Opt-out`
+      也不能算 —— 它在歌曲态一直在。
+    - ⚠️ **判据只用"广告在场"的正向标记**,不用"标题里没有 ` • `"或"曲目链接缺失"这类**缺失**
+      型信号:页面加载/切歌的一瞬间它们同样成立,会在真歌上闪出「广告中」。这跟 YT Music 那边
+      刻意留一条"裸标题"兜底**方向不同**,因为调用语境不同:那边是"拿不准就丢掉"(误判只损失
+      这一轮),这里是"拿不准就维持现状",而误判的代价是在真歌上贴广告标签。
+    - **闸只有两个出口**(比 YT Music 少一个):`.acceptAsAd` / `.reject`。走到这条路上的播放
+      本来就要被丢掉(歌手名为空),判定说"是歌"也不能让它变成一首可采纳的歌 —— 真歌不会没有
+      歌手名,那多半是别的网页音频。判定**缺失**一律 reject(fail-closed:最坏是回到改动前
+      "广告让 UI 塌一下",不是"在真歌上贴广告标签")。
+    - **探测门槛 `fieldShapeNeedsProbe` = 标题非空 + 歌手为空**。这不是省性能的优化,是**避免
+      两条探针互相踩**:artist 非空、album 空那一档是 YT Music 探针的领地,两条都发 AppleEvent
+      的话,配对了两个平台的浏览器(这台机器上 Safari / Arc)每一轮要背两次 osascript 往返。
+    - **放行之后不需要再传标记**:`LocalPlaybackSource` 那套 `adByFields` 本来就认这个形状
+      (`isSpotify && !title.isEmpty && (album 空 || artist 空)`,而 `isSpotify` 2026-09-02
+      起已经包含网页版),所以这里只要**不丢**,「广告中」自然就亮了。
+    - **Go 侧不做**:它的职责是"别把广告打卡上去",而它现在就已经拒(`trustedPlaybackNotASong`
+      见 artist 为空直接拒,连复核都不用)。加一份探针只会多一次 AppleScript 往返、得到同一个
+      "拒"。这条不对称是有意的,跟第 16 条同源。
+    - **顺带抽了一份共享模板**:`BrowserTabProbeScript`(在某浏览器里找匹配域名的标签页、跑一段
+      JS、把返回值拿回来)。那段 AppleScript 的每一行都是踩出来的(先扫当前标签页躲 Arc 休眠、
+      `with timeout` 兜挂起、两种方言的注入命令不同名、脚本写临时文件躲多层引号),复制第二份
+      等于把教训复制一份再等它们漂开。抽取当天用 harness **逐字节**比对过:两种方言的输出跟
+      抽取前完全相同(chromium 2769 字符 / safari 2763 字符)。selftest 另有一条闸:把两个探针
+      各自的域名和 JS 抠掉之后骨架必须逐字相同(变异测试验过:给 Spotify 那份换个超时当场红)。
+      ⚠️ `BrowserPositionProbe` 那一份**没有**并进来 —— 它多两样东西(JS 里的
+      `__EXPECT__`/`__TOL__` 占位符要在拼进 AppleScript 之前替换;按用户配对过的平台逐条试
+      多份站点规则、命中即返回),硬套会长出两个只有一个调用方用得上的参数。
+    - 回归口径:selftest **2309 条 ALL PASS**(本条新增 42 条断言);**4 个变异全部被抓**
+      (JS 改子串匹配 / 判定缺失改成 fail-open / 探针模板漂开 / 探测门槛放宽到"只要标题非空")。
+
+20. **来源角标:浏览器里放 YouTube Music / Spotify 网页版时画平台图标,不画浏览器**(2026-09-03)
+
+    用户原话:"这里显示 youtubemusic,如果确实是 youtube music 的情况下,不再显示浏览器;
+    如果是浏览器里面播放 spotify 就显示 spotify;其他的不是这两个的话就正常显示浏览器图标"。
+
+    判据收在纯函数 `BrowserPositionProbe.resolvePlayingPlatformID(pairedPlatformIDs:recentMatch:)`
+    (selftest 8 条覆盖),**证据优先、推断兜底**两档:
+
+    1. **最近一次探测真的命中过某个平台** → 就是它。这是硬证据:探测成功意味着刚从那个
+       站点自己的 DOM 里读到一个**在走**的进度。一个浏览器同时配对了两个平台时(这台机器
+       上 Safari / Arc 都是),只有这一档答得上来。
+    2. **只配对了一个平台** → 推断成它,**不用等探测成功**。覆盖绝大多数人的实际配置,也是
+       这台机器上 Edge / Chrome 的形状 —— 用户截图里那枚 Edge 角标就靠这一档立刻变成
+       YouTube Music。
+    3. 两档都答不上来 → nil → 照旧画浏览器图标。
+
+    - **第 2 档是推断不是证据,可能错**:浏览器里放别的、恰好也带齐 artist+album 的网页
+      音源(播客站之类)时角标会显示成那个平台。代价是**纯观感**的 —— 点击仍走
+      `openResolvedPlayerApp()` 按 bundle id 唤那个**浏览器**,行为一个字不变(YouTube Music
+      是个网站,没有 App 可唤)。同款推断 `LocalPlaybackSource` 判"网页版 Spotify 广告"时
+      早就在用(`isPaired(…platformID: "spotifyWeb")`),不是新开的口子。
+    - ⚠️ **第 1 档要求命中的平台仍在配对表里**:用户后来取消配对了,探测就不跑了、那条旧
+      证据再也刷新不掉 —— 认它的话角标会永远挂着一个已取消的平台。
+    - 证据保质期 `matchedPlatformMaxAge = 15min`。按"证据什么时候过期"取的:探测每次换歌
+      都重新发起,正常听歌几分钟刷新一次;只有"暂停很久"或"换成了没有站点规则的网页音源"
+      才会变旧,后者正是该退回浏览器图标的场景。
+    - ⚠️ 入口自己做**媒体代理别名解析**(Safari 报 `com.apple.WebKit.GPU`、配对表里存
+      `com.apple.Safari`)。这一步漏掉的后果这一章已经记过一次(第 279 行那条:"配对了却
+      永远不同步",而且一条日志都没有)。
+    - **顺带修的真 bug**:`probeAdvancing` 的两拍采样原来**不检查是不是同一个平台**。同时
+      开着 YouTube Music 和 Spotify 网页版、两拍之间规则优先级翻个个儿时,会拿 A 站的读数减
+      B 站的读数去判"进度在不在走" —— 那个差值既可能碰巧为正(把另一首歌的位置安到这首上),
+      也可能碰巧为负(白白弃用一次真读数)。现在两拍不同平台直接弃用,并落一条 notice。
+    - **tooltip 顺带对了**:`resolvedPlayerDisplayName` 原来对浏览器一律返回 nil(悬停是空的,
+      它只查 `PlaybackPlayer.allCases`),现在认得出平台时给「YouTube Music」/「Spotify」。
+      歌词窗口那两处「正在播放于 X」跟着受益。
+    - 真机验证(2026-09-03 03:16,装机后):Safari 里放 Spotify 网页版,新日志行
+      `探针 #1: 采信 194.000000s(…,平台 spotifyWeb)` 连续两次命中 —— 也就是第 1 档的输入
+      确实拿到了 `spotifyWeb`,角标据此画 Spotify。Edge 那一侧(只配 youtubeMusic)走第 2 档,
+      用真实配对表离线跑过判据。

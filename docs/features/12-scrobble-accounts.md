@@ -1,6 +1,6 @@
 # 12. 账号连接与收听记录
 
-> 最后核对：2026-09-01 · 基线：5d9031a+工作树
+> 最后核对：2026-09-03 · 基线：59564e5+工作树
 
 ## 定位
 
@@ -9,7 +9,7 @@
 ## 入口与展示面
 
 - 设置 → 账号：四个目的地卡片——**ListenBrainz**、**Last.fm**、**网页推送**（stateRelay）、**推送提醒**（Bark），各自的连接状态/配置入口（`AccountLinkingTab`，侧边栏行有状态点）。
-- Last.fm 详情页（2026-08-23 改成分段 tab，理由跟「歌词显示」页一致——原来是连接卡+四张统计卡顺序平铺的一条长滚动，一次只关心其中一件事也要先滚过其它几件）：连接状态（Scrobble 开关、连接/断开、回填入口）**常驻在 tab 选择器外面**，不随下面的段切换；已连接时再展开「统计」（今天/近7天/总量数字 + 最近记录列表，合成一段）/「榜单」/「那年今日」/**「设置」**四个并列 tab（`AccountLinkingTab.LastfmSection` 选择器 + `LastfmStatsSection`，正在记录的实时行、最近播放列表带封面都在「统计」段里）；未连接时全部收起、只留一句预告文案。
+- Last.fm 详情页（2026-08-23 改成分段 tab，理由跟「歌词显示」页一致——原来是连接卡+四张统计卡顺序平铺的一条长滚动，一次只关心其中一件事也要先滚过其它几件）：连接状态（Scrobble 开关、连接/断开、回填入口）**常驻在 tab 选择器外面**，不随下面的段切换；已连接时再展开「统计」（今天/近7天/总量数字 + 最近记录列表，合成一段）/「榜单」/「足迹」（2026-09-03 由「那年今日」改名：上面是零请求的「收听足迹」卡、下面是「那年今日」卡）/**「设置」**四个并列 tab（`AccountLinkingTab.LastfmSection` 选择器 + `LastfmStatsSection`，正在记录的实时行、最近播放列表带封面都在「统计」段里）；未连接时全部收起、只留一句预告文案。
   - **「设置」段 2026-09-01 加**（用户原话「这里单开一个设置tab页，装在这里面」）。装的是「跟 Last.fm 上送行为有关、但不是开关本身」的配置，卡头就叫 **`Scrobble`（中英同字）**。目前只有一项：「合唱歌曲的歌手」（见 §4）。
     - **为什么不继续摆在常驻的连接卡里**：那张卡的定位是「不看哪个 tab 都该一直看得见的东西」（Scrobble 开关、连接状态、待补清单），往里加设置项会把它撑成一张什么都装的卡；而这些设置恰恰是「想调的时候才去找」的类型。（当天先补在连接卡里、Scrobble 开关正下方，同日改成单开一段。）
     - **卡头中英同字 `Scrobble`** 的三条依据：①本仓的中文界面**本来就不翻译这个词**（「Scrobble 到 Last.fm」「Scrobble 已暂停」「总 scrobble」都是原样用）；②卡头在这个仓的惯例是名词短语而不是「X设置」（歌词来源／已信任的其它播放器／配置备份与搬家）；③这张卡已经在「设置」段里，标题再写一遍「设置」是重复。
@@ -21,6 +21,7 @@
 ### 1. 一次「算数的收听」（collector poller）
 
 - 阈值 `listenThreshold = min(曲长/2, 240s)`：过半或满 4 分钟即计一次（`listenCapSecs = 240`）。
+- **短曲目**：曲长 `0 < d < 30s`（`minTrackSecs`）默认不记——Last.fm 官方规则 *"The track must be longer than 30 seconds"*，是给客户端的规则（服务端不拒收、ignoredMessage 也没有「太短」这一码），主流 scrobbler 都在客户端照做。2026-09-03 起可由 `scrobble_short_tracks`（features.json，默认 false；设置入口 账号→Last.fm→设置→Scrobble 卡「短于 30 秒的曲目」）放开。四处闸共用 `tooShortToScrobble`（poller.go：到点提交 / 切歌收尾 / 退出兜底；backfill.go：回填复核）。**只管 Last.fm**：短曲目进了漏斗之后，`shortTrackLastfmOnly` 在 `submitSingleAsync` 和退出兜底两处把 ListenBrainz 那一路挡掉（不发 LB、直接以 `lastfmOnly` 结果走 `applySubmitOutcome` 收尾），本地收听日志/回填照记——它们本来就是给 Last.fm 兜底的。用户原话（2026-09-03）：「这个配置项是 lastfm 的，和 listenbrainz 没有一点关系」；第一版曾把它做成漏斗级（LB 一起记），当天按这句改成 Last.fm-only。曲长未知（≤0）照旧不拦；放行后半程规则照旧（20 秒的歌要听满 10 秒）；恰好 30.000s 按既有口径放行（官方是 `> 30`，差这一秒是历史行为）。回填按**当前**开关复核：开关开着时写下的短曲目记录，关掉后再回填会被筛掉。测试 `TestTooShortToScrobble` / `TestScrobbleShortTracksFlagRoundTrip` / `TestPendingBackfillListensHonorsShortTrackFlag` / `TestSubmitSingleShortTrackSkipsListenBrainz`（假 LB 服务器收到 0 个请求、普通曲目仍收 1 个）/ `TestShortTrackLastfmOnly`。
 - **scrobble 时间戳 = 开播时刻**（不是达标时刻）。
 - 单曲循环重启按新一次播放重新计（`loopRestart` 重锚，进度连续性判定）。
 - 提交在后台 goroutine 跑（LB 慢时 single 最长 ~24s），`submitting/announcing` 标记防 5s 轮询重复触发。
@@ -74,23 +75,34 @@
 - ⚠️ **「艺人归并」在这个项目里有四处，它们服务的目的不同，不要试图合并成一套**（2026-08-30 通盘梳理时定的边界）：
   | 位置 | 作用 | 可逆 |
   |---|---|---|
-  | `resolveScrobbleArtist`（写侧） | 决定**往 Last.fm 发什么字节** | ❌ **不可逆**，Last.fm 纠错库已冻结（2026-08-31 起是纯静态开关、默认不折） |
+  | `resolveScrobbleArtist`（写侧） | 决定**往 Last.fm 发什么字节** | ❌ **不可逆**，Last.fm 纠错库已冻结（三档：全部／只发第一位／智能，默认不折；智能档见下） |
   | `topartists.go` 并查集（读侧） | 歌手榜分组 | ✅ 纯展示 |
   | Swift `ArtistCredit`（读侧） | 界面分组 + 「第 N 次听」写法族 | ✅ 纯展示 |
   | `digest.go`（读侧） | 日报/周报推送 —— **2026-08-30 之前完全不归并**，已接上榜单那套，见第 15 章 |
   - 写侧跟读侧**不是一类东西**：读侧算错了下次刷新就好，写侧算错了是往用户历史里写一条删不掉的记录。所以读侧可以激进、写侧必须保守。
   - **已知分歧，刻意保留**：Swift 侧认 `feat.` 家族（`feat./ft./featuring`，带词边界守卫），Go 写侧的 `artistCreditParts` **不认** —— 于是 `A feat. B` 在 `resolve` 第 3 行就 `len<2` 提前返回、整串原样提交。要不要给 Go 写侧补上 `feat.`：**不补**。理由：①实测这台机器 2384 条缓存里只有 1 例含 feat. 家族，且是 `張震嶽+Featuring：蔡健雅` 这种四套实现都处理不了的畸形写法；②写侧不可逆；③Last.fm 通常**本来就**把 `A feat. B` 当合法编目条目收录，强行折叠反而可能造出错误归属。收益近零、风险不可逆，不动。
-- **合唱串：默认原样发整串，折叠是可选开关**（2026-08-31 改，`resolveScrobbleArtist`）。开关 `lastfm_scrobble_first_artist_only`，**默认 false**。
-  - **删掉了原来的「联网条件式折叠」**（`lastfmcollapse.go` 整个文件已移除）。原实现是：查一次 Last.fm 目录，**查不到**这首歌挂在合唱串下才折成第一位。删它的理由跟「该不该折」无关：
-    - **结果不可复现** —— 同一首歌，取决于 Last.fm 目录当下状态和网络通断，两次运行可能发出不同的艺人名，而 scrobble 落进 Last.fm 基本删不掉；
-    - **把一次可恢复的匹配失败变成不可逆的数据丢失** —— 「目录里查不到」只说明编目暂时没收录，不说明署名是错的；限流/超时/服务抽风同样会走进「查不到」分支。
+- **合唱串：三档，默认原样发整串**（`resolveScrobbleArtist`，`features.json` 键 `lastfm_scrobble_artist_mode`，值 `all`／`first`／`smart`，**默认 `all`**；2026-09-03 起）。
+  - `all`：原样发播放器报的整串。`first`：纯字符串取第一位（`firstCreditedArtist`，不联网）。`smart`：按 Last.fm 编目判定，见下一条。
+  - **遗留键迁移**：2026-08-31 ~ 09-03 之间的二态开关 `lastfm_scrobble_first_artist_only` 两侧仍读不写——新键缺失/非法时 `true → first`、否则 `all`（Go `resolveScrobbleArtistMode` / Swift `FeatureSettingsStore.load`，`TestScrobbleArtistModeFlagRoundTrip` 钉住 10 种组合）。非法档位值 Go 侧记一行日志再兜底，不静默。
+- **智能档（`smart`）= 修好的「联网条件式折叠」**（`lastfmcollapse.go`，2026-09-03 作为第三档加回；2026-08-07 首版，08-31 整个删掉）。判定两步、顺序即守卫：
+  1. 按原样的「合唱串 + 歌名」查一次 `track.getInfo(autocorrect=1)`。**已被编目收录**（有 mbid，或听众 ≥ 500，或有时长——三个都是影子条目不会有的东西）→ `keep`，原样发，**永久**。
+  2. 没收录，再查「第一位歌手 + 歌名」。**折叠目标已被收录** → `collapse`，发第一位，**永久**；目标也没收录 → `defer`，维持原样，90 天后允许重查。
+  - 跟 08-31 删掉的那版比，修了三处、也正是当时列的删除理由：
+    - **结果不可复现** → 每首歌只判一次，`keep`/`collapse` 永不重查（"已收录"不会变成"未收录"，"折过一次"再翻回整串只会把用户自己的历史劈成两半）；唯一允许重查的 `defer` 不是结论。要强制重判，删缓存文件。
+    - **「查不到就折」折进一个 Last.fm 也不认识的名字** → 加了第 2 步目标核查。它同时是 `firstCreditedArtist` 之外的第二道防线：切错头（K/DA → K 那次真实事故）时「K」名下不会有这首歌被正规收录，不折。
+    - **「限流/超时会走进查不到分支」** —— 这条其实当时就不成立（老码失败即原样、不缓存），现在照旧：网络/429/5xx/坏 JSON/非 "not found" 的 error 6/error 29/听众数字段不是数字，一律返回原串、不写缓存。
+  - **now-playing 与 scrobble 一致性**：两条路径 + 回填共用同一份缓存，正常情况必然同名。**唯一**可能不一致：now-playing 那次查询失败（原样、不缓存），几分钟后 scrobble 那次查成功并判 `collapse`——此时以 scrobble 为准（永久记录 > 几分钟的瞬时状态），刻意取舍。
+  - **预算**：一次判定最多两个 GET，单个 4 s、合计 6 s；`mirrorAsync` 在智能档下把总窗口从 8 s 加到 14 s（`mirrorTimeout`），写入那 8 s 不被挤占。判定器只在有只读 api_key 时构造（`lastfmBridgeAPIKey()`），没有就整档退化成原样发。
+  - **缓存文件** `~/.config/lyrimuse/lyrimuse-lastfm-collapse.json`：键 `"歌手串\n歌名"`（收录情况按曲目，同一合唱串在不同歌上结论可以不同），值带 `verdict`/`artist`/`ts` 和两步的判据留痕（`joint`/`primary`：found/mbid/listeners/duration_ms，只写不读，给人事后核对）。2026-08 老格式（没有 verdict）加载时丢掉重判——那批只做了第 1 步，不能升格成永久结论。tmp+rename 落盘，常驻 collector 与回填子命令共读一份（`backfillcli.go` 也设 `lastfmCollapsePath`）。
+  - 歌名含 `+`/`%` 必须走 `lastfmGetQuery` 双重编码（下方「已知坑」）——error 6 在这里意味着"可能折叠"，编码错就是把正规合体署名折坏。`TestCollapseRequestShape` 钉着 `%252B`/`%2525`。
+  - 测试：`lastfmcollapse_test.go`（判定矩阵 16 例、永久性、defer 到期、失败不缓存、键带歌名、请求形态、nil 透传、落盘往返+老格式丢弃、端到端三档）+ `scrobbleartist_test.go`。
   - **默认 false（发整串）的依据**：ListenBrainz 文档明写合唱 credit 应当 *"include them all"*；Navidrome 同名开关 `Lastfm.ScrobbleFirstArtistOnly` 默认也是 false，其注释说明这是给 Last.fm API 缺陷的 workaround、不是正确性修复；折叠会丢信息且不可逆（`Khalil Fong & Fiona Sit` → `方大同`，薛凯琪没了），不折叠最坏只是 Last.fm 上多一个听众很少的合唱条目——**代价不对称**。
-  - ⚠️ now-playing 与 scrobble 必须调**同一个**函数，否则会出现「now playing 显示 A、落库却是 A & B」的自相矛盾状态（这是原实现就守住的性质，重构里别丢）。回填侧走同一个函数，所以两条路结果必然一致。
-  - 开关打开时走 `firstCreditedArtist`（纯字符串、不联网），`/` 仍与逗号顿号分档——`K/DA` 不会被劈成 `K`（有断言钉着；那次真实事故见下方「已知坑」）。
+  - ⚠️ now-playing、scrobble、回填三条路径必须调**同一个**函数（现在签名带 `ctx` 和判定器：`resolveScrobbleArtist(ctx, s.collapse, artist, track)`），否则会出现「now playing 显示 A、落库却是 A & B」的自相矛盾状态。
+  - `first` 档走 `firstCreditedArtist`（纯字符串、不联网），`/` 仍与逗号顿号分档——`K/DA` 不会被劈成 `K`（有断言钉着；那次真实事故见下方「已知坑」）。
   - ⚠️ **2026-08-31 做完之后整整一天没有界面入口**（2026-09-01 补）。当时 collector 侧齐了（`resolveScrobbleArtist` + 开关 + `TestResolveScrobbleArtist` + `TestScrobbleFirstArtistOnlyFlagRoundTrip`），App 侧的 `FeatureSettingsStore.lastfmScrobbleFirstArtistOnly` 也齐了（编解码 + `@Published`），文档（本节 + 公开的 `docs/scrobbling.md`）也写了 —— **唯独没有任何 View 绑定它**，只能手改 `~/.config/lyrimuse/lyrimuse-features.json`。用户来问「我记得之前加了一个配置项…在哪里呢，我怎么找不到，是做了吗」，找不到是对的。
-    - 现在的入口：**账号 → Last.fm →「设置」段 → `Scrobble` 卡 →「合唱歌曲的歌手」**，分段控件「全部／只发第一位」。
+    - 现在的入口：**账号 → Last.fm →「设置」段 → `Scrobble` 卡 →「合唱歌曲的歌手」**，分段控件「全部／只发第一位／智能」（2026-09-03 加第三档，`LastfmScrobbleArtistMode.allCases`）。
     - **这类漏洞从代码里看不出来**：`FeatureSettingsStore` 里属性齐齐整整，缺的是最后那一步 UI。同一次会话里还撞到第二例（第 11 章「更新时间」排序，注释写着"挂起等用户确认"然后就停在那了）。要查全得反过来对账：`FeatureSettingsStore` 的每个属性有没有任何 View 读它。
-  - **界面文案两次收窄**（2026-09-01）：先按「只需要说明最终的效果是什么就好」去掉了推荐语，再把「而 scrobble 落进 Last.fm 之后基本删不掉」整句也去掉了（用户圈图指定）。现在只剩两个选项各自的效果。⚠️ 那半句的判断依据**没丢**、也不是被否掉了才删的：写侧不可逆这条论证仍然在 `resolveScrobbleArtist` 的头注、本节上面几条、以及 `docs/scrobbling.md` 里，改这行字的时候别把它当"已经不重要了"。
+  - **界面文案两次收窄**（2026-09-01）：先按「只需要说明最终的效果是什么就好」去掉了推荐语，再把「而 scrobble 落进 Last.fm 之后基本删不掉」整句也去掉了（用户圈图指定）。现在只剩各选项自己的效果（2026-09-03 加的「智能」一段同样只写效果：Last.fm 上已有合唱条目就原样发；没有、而第一位名下已有这首歌就只发第一位；两边都查不到原样发；每首歌只判一次）。⚠️ 那半句的判断依据**没丢**、也不是被否掉了才删的：写侧不可逆这条论证仍然在 `resolveScrobbleArtist` 的头注、本节上面几条、以及 `docs/scrobbling.md` 里，改这行字的时候别把它当"已经不重要了"。
 
 ### 5. iPhone 桥接（poller bridge）
 
@@ -150,7 +162,7 @@ iPhone 端由 FastScrobbler 直接写 Last.fm；collector 周期拉 `lastfmRecen
 - **`nowPlayingCount`（「正在记录」实时行的次数）没有自愈机制，会跟 `trackPlayCounts` 越差越远**（2026-08-24 用户报「为什么正在记录 17 次、下面历史行 28 次」）：`nowPlayingCount` 只在换歌那一刻（`refreshNowPlayingCount`）取一次，取完之后**不会重取**——设计初衷是防止「取晚了这次播放被 scrobble 进去多算一」，但代价是它跟 `trackPlayCounts` 完全脱钩：后者有上面那三条作废判据持续纠正，前者没有。实测坐实：《Controversy》换歌那一刻取到 16（显示 17），同一时刻 `trackPlayCounts` 经 `resolvePlayCounts` 刷新已经追到 27（显示 28）——查过当天只新增了一次收听，不是"还没并计进去"那种几分钟延迟能解释的量级，根因没能确定到具体是哪一层（不排除 Last.fm 接口本身在那一刻返回了陈旧值），但现象很干脆：这一次取数就是拿到了一个明显偏低的数，取完之后再没人管过它。
   - 修法：`reconcileNowPlayingCount` 挂在 `resolvePlayCounts` 每次合并新 `counts` 的地方——只要 `trackPlayCounts` 学到的总数比当前显示的 `nowPlayingCount - 1` 还高就采纳，**只能涨、不能跌**（`PlayCountRecency.reconciledNowPlayingCount`）。`nowPlayingCountPlayCountKey` 记录当前 nowPlaying 身份的 `playCountKey` 形态，换歌时跟 `nowPlayingCountKey` 一起设、账号重置时一起清。
   - ⚠️ 已知的窄边界（刻意接受，不是漏想）：如果追赶发生在**当前这次播放自己**已经越过 scrobble 门槛、且 Last.fm 已经把它计进 `userplaycount` 之后，追到的新总数会连这次播放也算进去，`+1` 之后偶发多算一。跟"完全冻结、整段会话数字长期错到离谱"（用户实测的 17 vs 28，差 11）相比，这个窗口窄得多、代价小得多——歌一换就会用全新的换歌取数覆盖掉，不会带到下一首歌头上。
-- **Last.fm GET query 要双重编码 `+` 和 `%`**（2026-08-22 实测坐实）：`ws.audioscrobbler.com/2.0/` 的 **GET** 端点会对 query value **多解一次码**——先标准 percent-decode，再按 form-urlencoded 口径解一遍（那一遍把 `+` 当空格）。于是含加号的歌名走标准编码必然 404：`track=夜曲%2B窃爱 (Live)` → `error 6 Track not found`，`track=夜曲%252B窃爱 (Live)` → 命中 `userplaycount=2`。这是**端点级**行为，用真实存在的乐队 `+44`（733,475 听众）独立验证过（`%2B44` 同样 error 6）。入口是 `URLComponents.queryItems`——它按 `urlQueryAllowed` 编码，那套集合**放行 `+`**。修法：`LastfmQuery.escape` 先把 `%` 再把 `+` 各多编一层（顺序不能反），再按 RFC 3986 unreserved 严格转义；不含这两个字符的 value 编出来跟标准编码逐字节相同，对既有请求零影响。⚠️ **只有 GET 这样**：scrobble 走 POST form body（`lastfm.go` 的 `form.Encode()`）只解一遍，套上去反而会把字面 `%2B` 写进曲名——「记得对、却查不到」这个不对称正是本坑的表征。两侧各一份同规则实现（Swift `LyrimuseCore/Networking/LastfmQuery.swift`、Go `lastfmquery.go`），断言逐字节对齐，改一侧必须改另一侧。collector 那侧更要紧：`isCatalogued` 查不到就判「影子条目 → 折叠歌手串」，是个**不可逆的写侧动作**，查错了就是把正规合体署名折坏（现存 83 条判定缓存里没有含加号的，无既成损失）。
+- **Last.fm GET query 要双重编码 `+` 和 `%`**（2026-08-22 实测坐实）：`ws.audioscrobbler.com/2.0/` 的 **GET** 端点会对 query value **多解一次码**——先标准 percent-decode，再按 form-urlencoded 口径解一遍（那一遍把 `+` 当空格）。于是含加号的歌名走标准编码必然 404：`track=夜曲%2B窃爱 (Live)` → `error 6 Track not found`，`track=夜曲%252B窃爱 (Live)` → 命中 `userplaycount=2`。这是**端点级**行为，用真实存在的乐队 `+44`（733,475 听众）独立验证过（`%2B44` 同样 error 6）。入口是 `URLComponents.queryItems`——它按 `urlQueryAllowed` 编码，那套集合**放行 `+`**。修法：`LastfmQuery.escape` 先把 `%` 再把 `+` 各多编一层（顺序不能反），再按 RFC 3986 unreserved 严格转义；不含这两个字符的 value 编出来跟标准编码逐字节相同，对既有请求零影响。⚠️ **只有 GET 这样**：scrobble 走 POST form body（`lastfm.go` 的 `form.Encode()`）只解一遍，套上去反而会把字面 `%2B` 写进曲名——「记得对、却查不到」这个不对称正是本坑的表征。两侧各一份同规则实现（Swift `LyrimuseCore/Networking/LastfmQuery.swift`、Go `lastfmquery.go`），断言逐字节对齐，改一侧必须改另一侧。collector 那侧更要紧：智能档的 `probe`（lastfmcollapse.go）查不到就判「没收录 → 可能折叠歌手串」，是个**不可逆的写侧动作**，查错了就是把正规合体署名折坏（2026-08-22 修时现存 83 条判定缓存里没有含加号的，无既成损失；09-03 重做后 `TestCollapseRequestShape` 钉着双重编码）。
 - **第①级自带图的第二道纠正：本机「封面归属已核实」的图优先于 Last.fm 实体图**（2026-09-01，
   用户报「最近记录里这两首封面显示错了」——陈奕迅《孤独探戈 (live)》《不如这样 (Live)》，
   专辑都是 The Easy Ride 演唱会，行里却顶着 Get A Life 的黑封面）。根因：Last.fm 把这两条
@@ -180,11 +192,148 @@ iPhone 端由 FastScrobbler 直接写 Last.fm；collector 周期拉 `lastfmRecen
 - **同专辑封面共识**（2026-08-20）：行自带的 Last.fm 图**不再无条件优先**。同一首歌被两种歌手写法拆成两个 Last.fm 实体时，两边挂的图可能不是同一张——实测《Toronto 2014》的合唱实体挂的是单曲封面（深蓝纹章），同专辑其它行挂的是 NEVER ENOUGH 专辑封面，于是连播的列表里孤零零混进一张别的图。规则：按「合唱归第一位的歌手 + 专辑名」把当前这一页分组，**同组至少两行挂同一张图**才算共识，只有跟共识不一致的那一行被纠正（`ArtistCredit.albumConsensusCovers` + `coverURL(for:)`）。共识只看行自带的图，不掺本机缓存/getinfo 的兜底图（否则是拿两套来源互相投票）；一行一张各不相同（合辑/逐曲封面）时没有共识、照原样显示。跟 `recentAlbumCovers` 分工不同：那个补「压根没图」的行，这个纠正「挂错图」的行。
 - **播放热力图**（2026-08-18）：档案卡（今天/近7天/总量）右上角日历按钮 → popover 弹 GitHub 贡献图风格年历（周列×周一至周日行，色阶=当年非零日的四分位数，GitHub 官方浅/深两套绿）。数据=`LastfmStatsService.dailyCounts`（本地时区天粒度桶）：`user.getRecentTracks` 全量分页聚合，首次同步整个历史（~110 页、页间 150ms），之后按 `dailySyncedThrough` 从「最后已同步天的零点」增量重拉（该天整天作废重算）；同步全程不动旧数据、全部成功才合并替换，失败只标记可重试。缓存 `lyrimuse-lastfm-daily-heatmap.json`（换账号不吃旧缓存）。
 
-#### 「那年今日」（`refreshOnThisDay` + `onThisDayCard`）
+#### 刷新机制（`refreshBaseline` + `LastfmStatsSection.task`）
+
+三条驱动路径，都过 `refreshBaseline` 开头那道 TTL 闸（`baselineTTL` 110s）：`onAppear`（开窗/切到这一页）、
+120 秒一轮的 `.task` 轮询、以及 `NSApplication.didBecomeActiveNotification`（2026-09-02 加）。手动那颗刷新按钮走
+`refreshBaseline(force: true)`——`force` 的唯一作用是把 `fetchedAt["baseline"]` 置 nil，从而**绕过 TTL 闸**。
+
+⚠️ **2026-09-02 修了一组会让这张卡静默冻死的缺陷。** 用户报「这个刷新机制是不是坏了，之前一直停留在十几小时之前，
+直到我手动点击刷新才去刷新」。取证过程本身值得记，因为第一个假设是错的：
+
+- **先排除了"没东西可刷"**。当时刚查清同一台机器上 Safari 网页播放因为 `system.go` 的裸查 bug 完全不被 collector
+  认领（连打卡都没有，见 02 章），所以第一反应是「Last.fm 上本来就没有新记录」。**实测否掉了**：磁盘上那份
+  `lyrimuse-lastfm-recent-pages.json` 里第 1 页的真实打卡时间是 `22:31 … 21:02`／`17:47 17:44 17:42`／`15:09`／
+  `12:39`，而用户截图里最新一条是「19 小时前」≈ 03:35 —— **Last.fm 上比它新的有整整 20 条**，列表确实冻了约 19 小时。
+  collector 日志也证实打卡一直在跑（本地 10:00/11:00/12:00/15:00/17:00/21:00/22:00 都有 POST 到
+  `ws.audioscrobbler.com`）。
+- ⚠️ **读 collector 日志前先换算时区**：它是 launchd agent、进程没有 TZ，`log.Printf` 写的是 **UTC**，比本地慢
+  8 小时。第一版时间线就是照字面读的，把"睡觉那 7 小时的空档"错当成了"19 小时没打卡"。
+- **现场态查不到了**：诊断时 App 已经被另一个会话的 `./build.sh` 重启过，内存里的 `fetchedAt` 没了。所以下面①②
+  只能给结构性判定、给不出当时的现场证据 —— 这也是⑤（加面包屑日志）的直接由来。
+
+五处改动：
+
+1. **轮询不再按页早退**（`LastfmStatsSection`）。原来那行 `guard stats.recentPage == 1 else { continue }` 的理由是
+   "后面几页是历史，内容不会变，重拉一遍纯属打扰（正看着的那一屏被替换掉）"——对**最近记录那一列**成立，但它把整条
+   `refreshBaseline` 一起早退了，而那一次调用同时还刷着上面三个数字（今天／近 7 天／总 scrobble），那三个跟页码毫无
+   关系。后果：用户翻到第 2 页停在那儿，这整张卡**再也不会自动更新任何东西**，而回到第 1 页只发生在
+   `RecentListensPanel.onDisappear`（卡片离开视图层级时）。手动按钮直接调 `refreshBaseline(force:)`、不经过这道
+   guard —— 「只有手动点击才刷」由此得到结构性解释。现在无条件调；`refreshBaseline` 请求的本来就是**当前这一页**
+   （`let requestedPage = recentPage`），不会把人弹回第 1 页。⚠️ 取舍是有意的：拿"历史页可能被原地刷新"换"永远不会
+   静默冻住"，**别把 guard 加回来**。
+2. **`fresh()` 对未来时间戳硬化**（`LastfmStatsService`）。旧写法 `Date().timeIntervalSince(at) < ttl`，`at` 落在
+   未来时差值为负、恒小于 TTL → 这个 key **永远**算"新鲜"，所有走 `fresh()` 的自动刷新静默早退；而 `fetchedAt` 不会
+   自己回到过去，这个状态一直挂到 App 重启，唯一逃生口正是 `force`。系统时钟被回拨（改时间／NTP 校正）就够触发。
+   现在 `age < 0` 一律判过期并 `logger.warning` 记一行——判过期是安全方向：最坏多发一次请求，而不是永久不发。
+3. **页缓存不再落 now-playing 那一行**（`scheduleRecentPageCacheSave`）。Last.fm 的 `user.getrecenttracks` 会把
+   "正在播放"那首放在**每一页**响应的第一条（没有 `date`），而这份缓存按页存原始行 → 每页都存下"抓这一页那一刻在放
+   什么"。实测这台机器的缓存 10 页 210 行里正好 10 条这种行，其中 8 条是同一首早就放完的米津玄师《Mirage Song》——
+   展示缓存页时会把它显示成「正在播放」，而"正在播放"的真源是本机播放状态、不该由一份磁盘快照回答。
+   ⚠️ **只在落盘这一层剔**（`filter { $0.date != nil }`）：内存里那份 `recentPageCache` 保持原样，`goToPage` 的
+   stale-while-revalidate 靠它立刻上屏。
+4. **切回 App 时补刷一次**（`NSApplication.didBecomeActiveNotification`）。此前只有 `onAppear` 和 120 秒轮询两条路，
+   设置窗口一直开着、人去干别的再切回来，最坏干等 120 秒。不传 `force`——TTL 闸挡着，频繁切窗口只是几次字典查找；
+   `force` 是"用户明确要求现在就刷"那颗按钮的语义。用这个通知而不是 `scenePhase`：本 App 是 `.accessory`，全仓已有
+   8 处用的都是它。
+5. **`refreshBaseline` 的每条早退都记一行面包屑**（`logger`，`me.yudaotor.lyrimuse` / `lastfm-stats`）。这条路径此前
+   **一行日志都没有**，事后只能从磁盘缓存反推"列表确实陈了"，判不出是哪道闸门早退的。查法：
+   `log show --predicate 'subsystem == "me.yudaotor.lyrimuse"' --last 1h`。
+
+#### 缓存策略重构（2026-09-03）：存量先行、旧值不撤、热路径改走 collector feed
+
+完整设计与实测数据见 `docs/proposals/lastfm-cache-strategy.md`（第 1.3 节的实测是这次改动的全部依据）。
+一句话动机：**App 进程直连 Last.fm 的链路在本机走系统代理，实测 `track.getinfo` p50 1.2 s / p90 6 s /
+16% 超时（12 h 审计日志 172/1053 次全部是 10 s 超时），同一时段 collector 的 Go 直连 p50 0.4 s / ~1% 失败；
+`curl` 对照：直连 0.6–1.0 s 全成功，经代理 1.7–2.5 s 且 2/6 握手失败。** 所有"等网络"的界面态都被这条
+慢链路放大成可感知的等待。设计原则从此定为：界面永远只读内存状态（L0），t=0 必有存量；网络只在背后把
+内容变新；过期 ≠ 删除。
+
+1. **最近记录 / 正在播放 / 总 scrobble 数改读 collector 落盘的 feed**（`lyrimuse-lastfm-recent-feed.json`，
+   `lyrimuse-collector/lastfmfeed.go` 写、`LastfmStatsService.pollFeedFile`/`ingestFeed` 读）。collector 为了
+   iPhone 桥接**本来就每 15 s 拉一次** `user.getrecenttracks limit=50`，同一份响应现在多解 `image` /
+   `@attr.total` 后落盘（内容没变不重写、但至少每 60 s 心跳一次；tmp+rename 原子写）。App 侧 5 s 一次 stat、
+   mtime 变了才解码，feed 行走**跟网络响应完全同一条** `applyRecent` 路径（作废判据/封面/次数/写法收割照旧），
+   第 1 页（凑得齐时第 2 页）进翻页缓存并盖新鲜戳，`recentTotalPages` 按 `total/20` 换算（此前要等一次
+   page=1 网络响应，冷启动翻页控件因此空窗）。feed 活着（`LastfmRecentFeed.freshWindow` 3 分钟内有写入）
+   时给 `fetchedAt["baseline"]` 盖戳 → 既有的 110 s 轮询自然早退；feed 陈旧（collector 不在）→ 不盖 →
+   轮询在 110 s 内自动接管。**没有显式的"模式切换"，退路就是旧行为。** 换账号：feed 头部带 `username`，
+   不符即忽略。
+   - collector 侧三处配套：①拉取门槛**只看 Last.fm 凭据**，不再要求 ListenBrainz 也配好（LB 那半边的
+     转发/镜像门槛原样搬进 `applyBridgeResult` 的 `bridgeForwardingEnabled`）；②节奏自适应
+     （`lastfmFeedInterval`：本机在放或 feed 里 10 分钟内有动静 → 15 s，空闲 → 60 s，替代固定 15 s）；
+     ③镜像 scrobble 成功后 5 s **提前拉一次**（`requestLastfmFeedRefresh`，goroutine 里只碰 atomic，
+     主循环 `bridge()` 消费），App 那边 ≤10 s 见到"上一首"、0 个 App 请求。
+   - App 侧配套：`LiveScrobbleRow` 换歌后 10 s 的强刷、远端会话 45 s 的强刷在 `feedIsFresh` 时不发；
+     `refreshBaseline` 三个请求只剩 feed 不在时的兜底。
+2. **今天 / 近 7 天不再各占一个请求**：今天由 `LastfmRecentFeed.todayCount` 从日桶 + feed 派生（窗口盖住整天
+   直接数；否则桶 + 同步后新行；两者都不行只给下界并补一个 `limit=1` 请求，`refreshTodayCountIfNeeded`）；
+   近 7 天三个面（设置页 / 待机页 / 歌词窗口欢迎态）统一走 `IdleListeningStats.lastSevenDays`（欢迎态此前
+   是唯一还读 API `overview.week` 的地方，口径不同且 feed 时代会变成陈值）。
+3. **旧值不撤（真正的 stale-while-revalidate）**：四条次数作废判据命中改成往 `stalePlayCountKeys` 记一笔，
+   `trackPlayCounts` 的旧值继续显示，`resolvePlayCounts` 把"在集合里"与"没值"同等重取，取到即移出；
+   `nil` 从此只表示"从未有过"（`···` 占位只在那时出现）。换歌时 `nowPlayingCount` 先用历史表里同曲的已知
+   总数 +1 顶上，真值回来再覆盖——徽章/实时行不再"先消失、等 1–9 s 再出现"。首次全量索引建成时整表
+   标过期而不是清空；别名发现改变家族时同理。
+4. **失败不打扰**：`refreshBaseline` 三个响应各自落地（`mergeOverview` 逐字段合并，`overview == nil` 时三个
+   都到齐才建，不凑假 0），`baselineFailed` 只描述最近记录那一列；有存量时不画「重试」行（数字卡
+   `overview == nil` 才画），最近记录卡头 / 待机页列表头的「N 分钟前更新」变暗 + 小叹号、悬停说明"显示的是
+   缓存"。此前 all-or-nothing 在 16% 单次失败率下整轮成功概率只有 0.84³≈59%。
+5. **该落盘的都落盘**：「那年今日」进快照（`onThisDay`/`onThisDayDay`/`onThisDayUpdatedAt`，只在 `.loaded`
+   时写；此前每次启动都"正在查"）；`fetchedAt` 白名单键持久化（12 组榜单 + `baseline` + `onthisday`，
+   ⚠️ **戳只跟着内容一起回来**——快照里没有对应内容就不还原那个戳，否则"内容空、闸门却说新鲜"会让那年
+   今日挂 6 小时"正在查"、榜单挂 15 分钟骨架）；`titleFormsLastTopUp` 进 `TitleFormsSnapshot`（重启 15 分钟
+   内不再多扫一轮）。
+6. **翻页预读**：落在第 N 页时后台拉 N+1 页原始行进缓存（`prefetchNeighborPage`，只拉行不解析次数），顺翻
+   11 页之后零等待；跳页仍要等一次网络（本机 p50 2.8 s），旧页留着 + 翻页条转圈。
+   - **同日追加：缓存页改按绝对位置拼，不再"先端上旧缓存、过会儿偷换"**（用户当天报「切换页码的时候过了一会会
+     突然重新换一批」）。根因：翻页缓存是"按页存原始行"，超过 5 分钟就背后重拉（`revalidateRecentPage`），而
+     Last.fm 的分页是"最新 N 条"上的偏移——期间每进来 k 条新 scrobble 所有页边界整体下移 k 行，重拉回来的
+     "现在的第 N 页"跟端上桌的缓存版对不上，1–9 s 后整批被换掉（听有声书时几分钟一条，几乎必现）。修法
+     `LastfmPageComposer`（Core，纯函数 + selftest）：每个缓存页记下抓取时的 `@attr.total`
+     （`recentPageCacheTotal`，随页缓存落盘），当下起点 = `(N-1)*20 + (total_now − total_at_fetch)`；feed 的 50 行
+     永远是位置 0 起。翻到第 N 页时把这些来源按位置铺到 20 个槽位：槽满且没有同一条记录出现两次 → 这一页此刻
+     就是精确的，直接显示、**不再重拉**；有洞 → 走网络（旧页留在屏上 + 翻页条转圈，加载是明确的）。`storeFetchedPage`
+     是四条网络路径的统一入口，漏了它那一页就永远拼不进来。只在 feed 活着时用（总数的权威来源就是它），feed
+     陈旧时退回旧办法。已知的窄边界：手机迟到同步把一条 scrobble 插进 feed 窗口之下时，比它新的那段真实只下移
+     k−1，按 k 铺会偏一格——跟 feed 交界处会撞出"同一条出现两次"被抓住，更深的页要等下次真拉那一页才归正。
+7. **后台批任务让路**：`request()` 超时按优先级分级（前台 10 s / 后台 20 s，把 p90 6 s 的长尾从"失败重试"
+   变成"慢成功"）；`track.getinfo` 的 **api error 6（Track not found）是定论**（`requestDetailed.notFound`），
+   `resolvePlayCounts` 按"成功返回但为空"记进 unavailable、不再每轮重问——此前它跟超时一样只是 nil，实测 7 首
+   Last.fm 根本没有的有声书章节每次 `applyRecent` 都重发 7 个请求、永不收敛，feed 时代 `applyRecent` 更频繁把这个
+   洞放大了；别名自动发现按**新请求数**封顶 40（⚠️ 原 `discoveryBatchLimit=12` 注释写的是请求数、
+   代码用成了候选数，实测一轮打出 131 个请求）且前台 60 s 内有请求就本轮跳过（`LastfmRateLimiter.interactiveIdle`）。
+
+8. **歌手榜「加载失败」的真因与修法**（用户当天报「一开始是加载失败，点了重试之后一直是骨架」）：歌手榜走
+   `collector top-artists -all-periods`，而 `artistMergeNameKey` 自 2026-08-31 起经 `resolveGenericArtistCanonicalName`
+   查「英文标签→中文常用名」——CLI 进程既没加载那条链的两份缓存（MusicBrainz 别名 / QQ 歌手名），又对 4 时段 × 30 条里
+   每个非中文名真查 MusicBrainz（全局 1.1 s 限速）+ QQ，实测一次 **1 分 49 秒**，App 侧 25 s 看门狗必然杀掉（日志
+   `top-artists failed (exit 15)`），于是永远失败。修法两道：① collector `runTopArtistsCLI` 加载两份缓存，且 `-mb-budget 0`
+   （App 用的默认档）时 `artistCanonicalCacheOnly` 让 canonical 名那一步只读缓存不联网（实测 2.6 s、只剩 4 个 Last.fm
+   请求）；② App `refreshMergedArtistChart` 子命令失败时退回直连 `user.gettopartists` 拿未合并的原始榜（`fetchChartDirect`），
+   不再把「重试」当终态。⚠️ 常驻进程里 `topArtistsDigest` 仍在 poll 主循环里同步做同一套归并、会联网，一天一次，未改。
+
+刻意不做：App 绕过系统代理直连（换网络环境结论可能反过来，不该不可见地改路由）；`from=` 水位增量替代
+整页重拉（省的是响应体积不是请求数，feed 把请求本身省掉了）。
+
+#### 「那年今日」（`refreshOnThisDay` + `onThisDayCard`）+「收听足迹」（`listeningFootprintCard`）
 
 去年同一天（0–24 点）的收听；整天为空自动往前一年，**最多探三年**。6 小时 TTL，且必须跟
 **日历天**一起判（`DailyRefreshGate`，TTL 或跨天取或）——只判 TTL 会把昨天那份一路带过零点，
 而 App 是常驻 launchd 服务、跨零点不重启，`fetchedAt` 只活在进程内存里，所以这不是理论问题。
+
+**2026-09-03 两处扩展**（用户看到「过去三年的今天都没有收听记录」一句话孤零零占一段，反馈「花样太少」；
+核实过那句是真的——2024/2025 整年无记录、2023-09-03 当天 0 条、前后两天分别 16/88 条）：
+- **取数计划由本地日桶排**（`OnThisDayPlanner.plan`，Core 纯函数）：每年先看当天，当天为空**放宽到那一周**
+  （±3 天），日桶里合计仍为 0 的窗口**不发请求**；按"年份近→远、天→周"排，沿计划请求，第一个拿到行的就是结果。
+  结果带 `span`（day/week），卡头副标题据此说「N 年前的今天」或「N 年前的这一周」；老快照没有该字段 → 当天。
+  日桶没同步过（首次全量还没跑完）时退回"三年只看当天、都发"的旧计划。三年的天和周都空时**零请求**直接判
+  `.empty`，并把另一天算出来的旧结果撤掉（"保留旧内容"只对"没取到"成立）。`.empty` 现在要求计划里的窗口
+  **全部**回来且都为空——见下面那条收严。
+- **「收听足迹」卡**（`ListeningMilestones.summarize` / `nextMilestone`，Core 纯函数，零请求）：自起点第 N 天 ·
+  有记录天数 + 日均 · 单日最高 · 当前/最长连续 · 今年至今（对比最近一个同期有记录的往年）· 距下一个整数
+  scrobble 里程碑还差多少（<1000 按 100、<10000 按 500、之后按 1000）。日桶还在首次同步时只显示一句说明，
+  不用残缺数据算日均/连续。两张卡各自可折叠（`np:lastfmFootprintCollapsed`）。
 
 ⚠️ **`fetchedAt["onthisday"]` 在发请求之前就写**，也就是**失败同样占住 6 小时**。这是刻意的
 （否则一直失败会变成每次露面都重试，见 `DailyRefreshGate` 的参数注释），但它跟下面那个 UI
@@ -195,7 +344,7 @@ iPhone 端由 FastScrobbler 直接写 Last.fm；collector 周期拉 `lastfmRecen
   - **③ 最毒**：失败已经占住 6 小时 TTL，于是那个 2 分钟一轮的轮询（`LastfmStatsSection` 的 `.task`）会连着 6 小时**全部早退** —— 空白一直挂着，除非重启 App。
   - **这次实测的不是「没记录」**：直接打 Last.fm API 核过作者账号，1 年前 / 2 年前的今天 total=0，**3 年前 total=111**，循环本该在 `yearsAgo=3` 命中。也就是说用户看到的空白属于 ① 或 ③ —— 而它们原来跟 ② 长得一模一样，从界面上分不出来。
   - **修法**：加 `LastfmStatsService.OnThisDayOutcome`（`pending / loaded / empty / failed`），界面三态各有样子（正在查 ⟳ ／「过去三年的今天都没有收听记录」／「没能取到——Last.fm 没有响应」＋**「重试」**）。
-  - **区分 `.empty` 和 `.failed` 的唯一依据是循环里的 `anyResponse`**：只要有一次响应回来过（哪怕 `total == 0`），就说明网络和账号都通、那几天确实没听歌；一次都没回来才是 failed。
+  - **区分 `.empty` 和 `.failed` 的依据是循环里回来的年数 `responses`**（2026-09-03 从 `anyResponse` 收严）：三年**都**回来且都 `total == 0` 才是 empty——"都没有"是对三年下的结论，少一年就不能说；有任何一年没回来就是 failed + 重试。此前只要任一年有响应就判 empty，慢链路上第 3 年超时时会把"没能取到"说成"都没有"。
   - ⚠️ **「重试」必须走 `refreshOnThisDay(force: true)`**（新加的参数，只给这一处用）。不绕过那道闸的话，这颗按钮会被 6 小时 TTL 直接早退、点了什么都不会发生。
   - ⚠️ **重取时不清 `onThisDay` 本身**。手上已有内容时（跨天/手动重试）清了会让那张卡先闪成空再回来；取到新的自然覆盖，取不到也该继续显示旧的那份。只把 `onThisDayOutcome` 打回 `.pending`。
   - **同类风险**：这一区还有别的 `if let` 条件视图（榜单/热力图）。判据是「nil 有没有多种成因」——只有一种（比如"这个功能没开"）时空着无妨，有多种就必须说清是哪一种。
@@ -206,7 +355,8 @@ iPhone 端由 FastScrobbler 直接写 Last.fm；collector 周期拉 `lastfmRecen
 |---|---|---|
 | 账号→ListenBrainz | token | LB 提交开/关与身份 |
 | 账号→Last.fm | 连接/断开、镜像开关 | `lastfmMirrorScrobble`（features.json） |
-| 账号→Last.fm→设置 | 合唱歌曲的歌手（全部／只发第一位） | `lastfm_scrobble_first_artist_only`（features.json，默认关＝发整串）。界面 2026-09-01 才补，见 §4 |
+| 账号→Last.fm→设置 | 短于 30 秒的曲目 | `scrobble_short_tracks`（features.json，默认 false＝不记；开了只 scrobble 到 Last.fm，ListenBrainz 不受影响）。见 §1「短曲目」 |
+| 账号→Last.fm→设置 | 合唱歌曲的歌手（全部／只发第一位／智能） | `lastfm_scrobble_artist_mode`（features.json，`all`/`first`/`smart`，默认 `all`＝发整串；遗留键 `lastfm_scrobble_first_artist_only` 只读迁移）。界面 2026-09-01 才补、09-03 加智能档，见 §4 |
 | 账号→网页推送 | relay 地址/密钥 | 第 13 章 |
 | 账号→推送提醒 | Bark 配置 | 后台任务通知（第 15 章） |
 
@@ -222,14 +372,17 @@ iPhone 端由 FastScrobbler 直接写 Last.fm；collector 周期拉 `lastfmRecen
 - `~/.config/lyrimuse/config.json`：LB token、Last.fm api key/secret/session（ConfigStore，导出备份会带走原文——第 14 章）。
 - `lyrimuse-lastfm-title-forms.json`：「第 N 次听」写法索引（折叠键→真实写法族＋水位，换账号不吃旧索引，删了无损下次重建）。
 - `lyrimuse-lastfm-title-aliases-discovered.json`：写法别名自动发现的动态表（歌手键→折叠歌名→中文本名歌名＋duration 缓存＋尝试时间戳，换账号不吃旧数据，删了无损、下次扫描重新发现）。
+- `lyrimuse-lastfm-collapse.json`：合唱串「智能」档的判定缓存（2026-09-03，`lastfmcollapse.go`）：`"歌手串\n歌名"` → `{verdict, artist, ts, joint, primary}`；`keep`/`collapse` 永久、`defer` 90 天。删了 = 所有合唱歌重判（会各打 1~2 个 `track.getInfo`），不会丢收听数据。
+- `lyrimuse-lastfm-recent-feed.json`：collector 每次桥接拉取落盘的最近 50 条 + now-playing + `@attr.total`（2026-09-03，App 的最近记录主来源；内容不变时最多 60 s 心跳一次；删了无损，下一拍重写）。
 - `lyrimuse-listens.jsonl`（收听日志，含隔离 "q" 行；已连 Last.fm 时只在**镜像失败**才写，见第 4 节 `recordFailedMirror`）；`forwarded`/`lfmMirrored` TTL 集合各一份落盘文件；Last.fm mirror 状态文件（红标依据）。
 
 ## 代码锚点
 
 | 主题 | 位置 |
 |---|---|
-| 计次/提交调度 | lyrimuse-collector/poller.go `listenThreshold` `submitSingleAsync` `applySubmitOutcome` |
-| 「那年今日」取数与四态 | Settings/LastfmStatsService.swift `refreshOnThisDay(force:)` `OnThisDayOutcome` · LyrimuseCore/Util/DailyRefreshGate.swift `needsRefresh` |
+| 计次/提交调度 | lyrimuse-collector/poller.go `listenThreshold` `tooShortToScrobble` `shortTrackLastfmOnly`（短曲目闸，开关 `features.ScrobbleShortTracks`，只发 Last.fm）`submitSingleAsync` `applySubmitOutcome` |
+| 「那年今日」取数与四态 | Settings/LastfmStatsService.swift `refreshOnThisDay(force:)` `OnThisDayOutcome` `OnThisDayResult.span` · LyrimuseCore/Util/DailyRefreshGate.swift `needsRefresh` · LyrimuseCore/Local/ListeningMemories.swift `OnThisDayPlanner.plan`（按日桶排窗口，天→周） |
+| 「收听足迹」卡 | LastfmStatsSection.swift `listeningFootprintCard` `footprintCell`；LyrimuseCore/Local/ListeningMemories.swift `ListeningMilestones.summarize` `nextMilestone`；selftest 在 lyrimuse-selftest/LastfmTests.swift「那年今日计划 + 收听足迹」 |
 | 「那年今日」界面三态＋重试 | LastfmStatsSection.swift `onThisDayCard`（⚠️ 那个 `else` 分支是 2026-09-01 修「点进去空白」的本体，别当冗余删掉） |
 | Last.fm「设置」段 | AccountLinkingTab.swift `LastfmSection.settings` `lastfmScrobbleSettingsCard` · LastfmStatsSection.swift `Tab.settings`（画空、保持挂载） |
 | LB 客户端 | lyrimuse-collector/lb.go `lbMeta` `submit` `coolingDown` `noteOutcome` `lbCooldownSchedule` |
@@ -238,13 +391,15 @@ iPhone 端由 FastScrobbler 直接写 Last.fm；collector 周期拉 `lastfmRecen
 | 写法别名自动发现（动态，2026-08-29） | Settings/LastfmStatsService.swift `discoverTitleAliasesIfNeeded`（逐 canonicalArtist 分 han/non-han 组比对 duration，唯一匹配才采纳）`durationFor` `discoveredTitleAliases` `discoveredDurations` `discoveryAttemptedAt` `loadTitleAliasDiscovery` `scheduleTitleAliasDiscoverySave` |
 | 合唱 credit 归并 / 同专辑封面共识 | LyrimuseCore/Models/ArtistCredit.swift `primary` `mergeArtist` `albumConsensusKey` `albumConsensusCovers`；Settings/LastfmStatsService.swift `primaryCreditFamilies` `rebuildPrimaryCreditFamilies` `albumConsensusCovers` `coverURL(for:)` |
 | 封面兜底认合唱 credit | LyrimuseCore/Local/EnrichCacheReader.swift `coverIndexByArtistTitle` `coverURLString` |
-| 合唱串折叠(写侧,不可逆) | lyrimuse-collector/lastfm.go `resolveScrobbleArtist`（开关 `lastfm_scrobble_first_artist_only`，默认 false）；match.go `firstCreditedArtist` `firstSlashCredit` `slashHeadPlausible` `isArtistCreditPrimarySep`；Swift 侧同规则在 LyrimuseCore/Models/ArtistCredit.swift `slashHeadIsPlausible` |
+| 合唱串折叠(写侧,不可逆) | lyrimuse-collector/lastfm.go `resolveScrobbleArtist` `mirrorTimeout`（三档 `features.LastfmScrobbleArtistMode`，features.go `scrobbleArtistAll/First/Smart` `resolveScrobbleArtistMode`）；lastfmcollapse.go `lastfmArtistCollapser.resolve` `probe` `lastfmCatalogProbe.catalogued` `verdictKeep/Collapse/Defer` `lastfmCollapsePath`；match.go `firstCreditedArtist` `firstSlashCredit` `slashHeadPlausible` `isArtistCreditPrimarySep`；Swift 侧 Settings/FeatureSettingsStore.swift `LastfmScrobbleArtistMode`、AccountLinkingTab.swift `lastfmScrobbleSettingsCard`；同规则在 LyrimuseCore/Models/ArtistCredit.swift `slashHeadIsPlausible` |
 | 封面第⑤级(Apple Music 目录) | LyrimuseCore/Local/MusicCatalogSearch.swift `pickArtwork` `upscaleArtwork` `resolveArtwork` `ArtworkConfidence`；Settings/LastfmStatsService.swift `catalogCovers` `resolveCatalogCovers` `catalogCoverBatch` `coverURL(for:)` |
 | 封面第①级纠正(本机专辑核实图) | LyrimuseCore/Local/EnrichCacheReader.swift `albumVerifiedCoverURL` `coverAlbumVerified`；Settings/LastfmStatsService.swift `localAlbumVerifiedCovers`（`refreshLocalCovers` 内填表、`coverURL(for:)` 第①级消费） |
 | 次数缓存作废四判据 | Settings/LastfmStatsService.swift `applyRecent` `contradictedPlayCountKeys` `newestPlaySeen` `playCountFetchedAt`（判据③专用，不持久化）`staleByAgePlayCountKeys` `playCountVerifiedAt`（判据④专用，持久化，编码进 `StatsSnapshot`）`playCountStaleAfter`；LyrimuseCore/Models/PlayCountRecency.swift `newest` `contradicted` `stale` |
 | nowPlayingCount 追赶 trackPlayCounts | Settings/LastfmStatsService.swift `refreshNowPlayingCount` `reconcileNowPlayingCount` `nowPlayingCountPlayCountKey`；LyrimuseCore/Models/PlayCountRecency.swift `reconciledNowPlayingCount` |
-| Last.fm GET query 双重编码 | LyrimuseCore/Networking/LastfmQuery.swift `escape` `queryString`；Settings/LastfmStatsService.swift `request`；lyrimuse-collector/lastfmquery.go `lastfmGetQuery` `lastfmEscape`（⚠️ 2026-08-31 起 **Go 侧已无消费方** —— 唯一调用方 `lastfmcollapse.go` 随合唱串折叠改造删除；Swift 侧那份仍在服役，见 LastfmStatsService.request） |
-| 桥接 | poller.go `bridge` `applyBridgeResult` `recordRecentMacListen` |
+| Last.fm GET query 双重编码 | LyrimuseCore/Networking/LastfmQuery.swift `escape` `queryString`；Settings/LastfmStatsService.swift `request`；lyrimuse-collector/lastfmquery.go `lastfmGetQuery` `lastfmEscape`（Go 侧消费方是 `lastfmcollapse.go` 的 `probe`——2026-08-31 随折叠删除时一度无人调用，09-03 智能档加回后重新在服役；Swift 侧那份见 LastfmStatsService.request） |
+| 桥接 / feed 拉取 | poller.go `bridge`（节奏 `lastfmFeedInterval`、门槛只看 Last.fm 凭据）`bridgeForwardingEnabled` `applyBridgeResult` `recordRecentMacListen`；lastfmfeed.go `writeLastfmRecentFeed` `shouldWriteLastfmFeed` `requestLastfmFeedRefresh`；lastfm.go `parseLastfmRecent` |
+| App 读 feed / SWR 显示层 | Settings/LastfmStatsService.swift `pollFeedFile` `ingestFeed` `feedIsFresh` `refreshTodayCountIfNeeded` `mergeOverview` `stalePlayCountKeys` `prefetchNeighborPage` `persistedFetchedAtKeys` `composeExactPage` `storeFetchedPage` `recentPageCacheTotal`；LyrimuseCore/Local/LastfmRecentFeed.swift `decode` `isFresh` `todayCount` `totalPages`；LyrimuseCore/Local/LastfmPageComposer.swift `firstPosition` `compose`；selftest 在 lyrimuse-selftest/LastfmTests.swift（组 `lastfm`） |
+| 歌手榜 CLI 只读缓存 / 直连兜底 | lyrimuse-collector/topartistscli.go `runTopArtistsCLI`、musicbrainz.go `artistCanonicalCacheOnly`；Settings/LastfmStatsService.swift `fetchChartDirect` `refreshMergedArtistChart` |
 | 去重集合 | dedup.go `persistedTTLSet` |
 | 收听日志/删除 | listenlog.go；deletelistencli.go |
 | 回填 | backfill.go、backfillcli.go；App 侧 Settings/ScrobbleBackfillService.swift |

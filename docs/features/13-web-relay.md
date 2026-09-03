@@ -52,6 +52,8 @@
 
 state-worker（/push 接收、/now 供网页与 feishu-bot、KV 缓存、LB 兜底合成）、留言墙/表情写接口等在 nowplaying-workers 仓库，行为规格不在本文档维护范围；本仓库只保证 relayState 的 JSON 形状与其约定一致。
 
+2026-09-02 起本仓库对那边**多了一条契约**：`POST /artwork/<sha>`（带 `x-token`，body 是图字节）/ `GET·HEAD /artwork/<sha>`，用来托管「设备直送封面」（见下面已知坑第 8 条）。`sha` 是内容 sha256 的前 8 字节、十六进制 16 位，路由前缀 `/artwork/` 与采集器 `artworkrelay.go` 的 `artworkRelayPath` 逐字一致，**改一边必须改另一边**。这条链路要求中继先部署、采集器后上线：中继还没有这个路由时，采集器的上传会失败并进 5 分钟冷却，期间网页退回自己的 iTunes 兜底（不会崩，只是没封面）。
+
 ## 设置项
 
 | 位置 | 项 | 影响 |
@@ -95,3 +97,15 @@ state-worker（/push 接收、/now 供网页与 feishu-bot、KV 缓存、LB 兜�
 5. feishu-bot 选长连接是国内网络现实（3s 超时）逼出来的，改回调式会直接不可用。
 6. web/ 的部署路径不走本地 git push（本地 HEAD 落后是常态），别试图「顺手」把它 push 上去。
 7. Top10 不做「不够就补拉」的动态逻辑——极端情况宁可少于 10 个。
+8. ⚠️ **任何要离开这台机器的 `cover_url` 都必须先过 `webSafeCoverURL`**（`artworkrelay.go`）。2026-08-31 起「设备直送封面」会把 `cover_url` 写成 `file:///Users/<用户名>/.config/lyrimuse/artwork/<sha>.jpg`——对本机 App 是升级（封面一定对版），但它被原样带出去之后：网页拿到一个浏览器永远读不到的本地路径（表现是**封面整块空白、其它一切正常**，2026-09-02 用户报「为什么我的网页上没有封面了」），ListenBrainz 那边还把本机用户名和目录结构公开了出去。
+
+    最阴的一点是**网页的兜底闸拦不住它**：`web/index.html` 那条 iTunes 兜底写的是 `if (!art)`，而 `file://…` 是个非空字符串，大摇大摆地绕过兜底、直接被塞进 `<img src>`。所以这不是「少了个兜底」，是「兜底被一个看起来有值的坏值骗过去了」。
+
+    修法是 **C：把图本身托管到中继**（`POST /artwork/<sha>`，采集器上传；`GET /artwork/<sha>` 网页读）。没选「退回网易云/QQ 那张远程封面」是因为退不回去也不该退——`resolveTrackEnrichment` / `applyDeviceCoverUpgrade` 都直接覆盖 `CoverURL`，`coverSwapAllowed` 又规定 `cover_source == "device"` 一律不再换源，旧的远程 URL 已被永久覆盖（核过那 90 条，剩下的 http 链接全是歌曲**页面**链接）；何况设备直送那张才是对版的，退回去等于让网页显示一张可能挂错的封面。
+
+    三条硬约束，改这条链路时都不能松：
+    - **省 KV 写额度**。中继是 CF Worker + KV，免费版 1000 写/天，而 `/push` 播放中每几秒就写一次。所以键是**内容寻址**的（sha = 图内容 sha256 前 8 字节，落盘时就按它命名，实测 90 条曲目只对应 31 张图），上传前先 `HEAD` 问一句、命中就一个字节都不写，Worker 侧再兜一层「已存在就 existed、不写」。内容寻址还顺带让 `GET` 能发 `immutable` 长缓存。
+    - **`artworkUploaded` 只活在内存里**，重启后为空。所以 `HEAD` 那一步不是可选优化——没有它，每次 collector 重启都会把整个 `artwork/` 目录重传一遍。
+    - **认不出的 `file://` 一律返回空串，绝不原样透传**。宁可让网页暂时退回 iTunes 兜底，也不能再把本地路径放出去。
+
+9. ⚠️ **ListenBrainz 里 2026-08-31~09-02 那两天的记录已经永久带着 `file://` 封面**，改不掉。所以 `fromLB` 那条兜底链路上必须长期留一道 `^https?://` 的守卫——网页（`index.html` + `demo/index.html`）和 state-worker 各有一份**同名同逻辑**的 `fromLB`，三处都要有，改一处记得改另外两处（这个「两份几乎逐字相同的 `fromLB`」本来就是 `index.html` 里写明的已知重复）。

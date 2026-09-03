@@ -7,7 +7,7 @@
 依据——改之前读了，能省掉重新踩一遍的时间；改完在同一次改动里更新对应章，这是仓库约定。
 （这条单独写在这里，是因为 AGENTS.md 提到功能文档已经是最后一节了，只读前半截会完全错过它。）
 
-下面四条是最容易在"没读文档"的情况下踩到的，单独提出来：
+下面五条是最容易在"没读文档"的情况下踩到的，单独提出来：
 
 1. **Go 命令一律带 `GOTOOLCHAIN=go1.24.4`**。默认的 go 1.21 编出来的二进制在这台机器上
    被 AMFI 拒签、启动即死，而且**看起来像是被测代码自己崩了**（见 AGENTS.md 里的说明）。
@@ -22,3 +22,8 @@
    `worktree-*` 分支——直接在 `dev` 上改、在 `dev` 上提交。（这个仓库只有作者一个人在
    `dev` 上推进，多开一个分支只会让改动落在他不看的地方、还多一次合并。详见 AGENTS.md
    「提交」一节。）
+
+5. **新加界面文案必须把当前支持的语言都写全。** `lyrimuse/Localization/Localizable.xcstrings`
+   里每个键都要有 `en` 和 `zh-Hant`（简体是键本身），繁体按 `lyrimuse/Localization/zh-Hant-STYLE.md`
+   写；改完跑 `python3 Localization/generate-strings.py`。缺一种语言，生成脚本、parity 脚本和
+   selftest 守卫都会红。详见 AGENTS.md「容易踩的具体坑 → 本地化」。

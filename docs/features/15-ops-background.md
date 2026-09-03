@@ -1,6 +1,6 @@
 # 15. 运行、部署与后台任务
 
-> 最后核对：2026-08-30 · 基线：10f4061+工作树
+> 最后核对：2026-09-03 · 基线：e103532+工作树
 
 ## 定位
 
@@ -16,6 +16,20 @@
 ### 1. build.sh（构建+打包+部署一条龙）
 
 `swift build`（release，可多架构）→ `go build` collector → 组装 `.app` bundle（collector、media-control、lyrics-translate、.lproj 资源全拷进 `Contents/Resources/`；media-control 缺失时经 Homebrew 自动装）→ 架构检查 → 签名（ad-hoc）→ 经 launchd **kickstart** 重启 App；kickstart 后无存活进程时自动 `bootout+bootstrap` 兜底（LWCR 陈旧 codesigning 约束的自愈）→ 重载 collector job（刷新 launch constraint）。**`swift build` 通过 ≠ 已部署**——真机验证必须跑 build.sh（repo CLAUDE.md 三大硬规则之一）。
+
+**⚠️ collector 的版本号由这里注入（2026-09-02 加）**：`go build` collector 那步带
+`-ldflags "-X main.clientVersion=$APP_VERSION"`，`$APP_VERSION` 就是写进 Info.plist 的那个值
+（`LYRIMUSE_VERSION` 环境变量 → 最近一个 git tag → `0.0.0`），于是 App 与 collector 的版本号
+**由构造保证同源**。装配完、swap **之前**还有一道**跑真实产物问版本**的一致性闸（执行刚打进包里
+的 `collector version` 跟 `$APP_VERSION` 比，不一致直接 exit 1，绝不把这个包换进 /Applications；
+交叉编译出不含本机架构的包时跳过并明说「没验」）。
+
+  为什么光有注入不够：`-ldflags -X` **只能写 `var`，对 `const` 静默失败**——构建照样 exit 0、
+  不报错不警告，值原封不动（2026-09-02 实测坐实）。也就是说注入这行「看起来在那儿」完全不代表
+  它生效了，必须有一道验产物的闸。`lyrimuse-collector/build.sh`（本地只重建 collector）同样注入，
+  但取值优先级刻意不同：它把产物直接拷进**已装好的** .app，所以第一顺位是那个 App 自己的
+  `CFBundleShortVersionString`，而不是 git tag——本地 tag 完全可能落后于已装的 App，那时用 tag
+  反而会亲手造出不一致。完整案情见第 9 条已知坑。
 
 **⚠️ 组装不在 /Applications 里就地做（2026-08-31 改）**：`FINAL_APP_DIR` 定下最终位置后，整个装配过程在**同目录的兄弟暂存包** `.Lyrimuse.app.stage.$$` 里进行，最后用 APFS 的 `renamex_np(RENAME_SWAP)`（`/usr/bin/python3` + ctypes，一次原子 vfs 操作）整体换进去。起因是多会话并发：两个会话同时跑 build.sh，实测撞出过 `install_name_tool: cannot rename …(No such file or directory)` 和 `Bootstrap failed: 5: Input/output error`（launchd 拿到写了一半的 bundle，App 起来了、collector 没起来）。根因不是「安装那一步」没互斥，而是原来从 `APP_DIR=` 那行往下近 340 行**全部**在原地增删改签同一个包，整段都是不安全窗口。
 
@@ -86,7 +100,7 @@ CoreAudio 属性监听（不拦音量键不轮询 osascript），系统输出音
 
 ### 8. 测试（selftest）
 
-无 XCTest（无完整 Xcode）。`swift run lyrimuse-selftest` 跑手写 `expectEqual` 断言（歌词引擎/取色/偏移/本地化守卫等）；Go 侧 `GOTOOLCHAIN=go1.24.4 go test ./...`（默认 go 1.21 编译产物会被 AMFI 拒签、启动即死，repo CLAUDE.md 硬规则）。真机界面验证用只读方式：`swift lyrimuse/scripts/check-windows.swift` + `screencapture -l <窗口ID>`，**禁止** AppleScript/System Events 驱动界面（毁过用户数据）。
+无 XCTest（无完整 Xcode）。`swift run lyrimuse-selftest` 跑手写 `expectEqual` 断言（歌词引擎/取色/偏移/本地化守卫等）。2026-09-03 起按领域拆成 `Sources/lyrimuse-selftest/` 下 17 个 `XxxTests.swift`（每文件一个 `runXxxTests()`）+ `Harness.swift`（断言函数、`failures`/`assertions`/`quietOutput` 三个计数器）+ `main.swift`（`groups` 注册表、参数、逐组汇总）；`--filter <组名子串>`（可重复、不区分大小写）只跑子集，`--quiet` 只留 FAIL 与每组一行「N 条断言, X ms」，`--list` 列组；退出码 0 通过 / 1 有 FAIL / 2 参数错或 `--filter` 零匹配。`main.swift` 开头内置「注册表守卫」：扫目录里所有 `run…Tests()` 定义，逐个核对 `groups` 有没有引用，漏注册直接 FAIL（拆多文件后唯一新增的坑，编译过、一条不跑、输出看不出少了什么）。拆分是纯机械搬迁：拆前后各跑一遍、`ok - ` 标签多重集逐字节一致（2241 条），断言内容一字未改。两条实测细节：① 原顶层语句搬进函数后，引用 Core 里 `@MainActor` 属性的断言会报「nonisolated context」（main.swift 顶层在本包语言模式下也不是主 actor 上下文，直接调 `@MainActor` 函数编不过），所以每个 `runXxxTests()` 标 `@MainActor`、注册表调用处包一层 `MainActor.assumeIsolated`；② 好几条守卫靠 `#filePath` 往上数目录层数定位仓库文件，领域文件必须平铺在 `Sources/lyrimuse-selftest/`、不能建子目录。Go 侧 `GOTOOLCHAIN=go1.24.4 go test ./...`（默认 go 1.21 编译产物会被 AMFI 拒签、启动即死，repo CLAUDE.md 硬规则）。真机界面验证用只读方式：`swift lyrimuse/scripts/check-windows.swift` + `screencapture -l <窗口ID>`，**禁止** AppleScript/System Events 驱动界面（毁过用户数据）。
 
 ## 设置项
 
@@ -125,7 +139,7 @@ CoreAudio 属性监听（不拦音量键不轮询 osascript），系统输出音
 | 音量横幅 | Settings/VolumeMonitor.swift |
 | 网络观察 / 对外请求审计 | networkobs.go（`doHTTPTracked`）、networkobs_test.go |
 | 日志轮转 | logrotate.go（`rotateLogIfNeeded`/`logFilePath`）、logrotate_test.go；接线在 logscrub.go `installLogScrubbing` |
-| 自测 | Sources/lyrimuse-selftest/main.swift；scripts/check-windows.swift |
+| 自测 | Sources/lyrimuse-selftest/（main.swift 注册表 + Harness.swift + 17 个 XxxTests.swift）；scripts/check-windows.swift |
 
 ## 设计决策与已知坑
 
@@ -137,3 +151,21 @@ CoreAudio 属性监听（不拦音量键不轮询 osascript），系统输出音
 6. 界面验证只许只读手段（截图/读窗口状态），AppleScript 驱动界面是禁区（历史事故：误触「清空全部」、误关用户其它 App）。
 7. 故障告警（连续失败推送）已整体下线——别按旧印象去找 ok()/fail()。
 8. build.sh 的 kickstart 失败自愈（bootout+bootstrap）针对 LWCR 陈旧签名约束，是真实踩过的坑。
+9. **两个本该同源的版本号，一个自动一个手动 → 必然漂**（2026-09-02，用户在另一台机器装了 1.5.0 的 dmg，设置页报「App 1.5.0 · 采集服务 1.4.0」）。App 版本一直从 git tag 自动派生，collector 的 `clientVersion` 却是 `main.go` 里的手写字面量，靠人在发版时记得改那一行。实测记录：v1.1.0 补同步、v1.2.0 补同步、**v1.3.0 漏**、v1.4.0 补上、**v1.5.0 又漏**——同一个坑两年内踩两次，说明问题不在谁不小心。
+   - **功能其实没坏**：`clientVersion` 只用于 `collector version` 子命令、ListenBrainz 的 `submission_client_version`、以及 musicbrainz/lrclib 两处 User-Agent，全是「自报家门」的字符串。用户拿到的 collector **就是 1.5.0 的代码**，只是自报 1.4.0。
+   - **提示文案当时是误导的**：设置页建议「重新安装 App」，但版本号烧死在二进制里，装多少次同一个 dmg 都一样——已改成如实说明。
+   - **修法**：两个构建脚本统一 `-ldflags` 注入（见上面 build.sh 一节），`clientVersion` 从 `const` 改成 `var`（`-X` 对 const 静默失效）。防线三道：`versioninjection_test.go`（钉住 var / 默认值必须是一眼假的 `"dev"` 而不是某个具体版本号 / 两个脚本都带注入 / build.sh 有产物闸，**已做变异测试**验证四条断言真能抓到回归）、build.sh 的产物一致性闸、以及原有的设置页告警。
+   - **默认值为什么是 `"dev"` 不是某个版本号**：这次事故最坏的形态就是「一个看起来完全正常、实际早就过时的版本号」——没有任何人会起疑。一眼假的值让「没走发布构建」自己暴露。同一条原则见 build.sh 里 `APP_VERSION` 退到 `0.0.0` 那段注释。
+   - **设置页那张卡（`bundledCollectorVersion`）本身是有效的**：它正是抓到 v1.5.0 这次的机制（2026-08-31 才加，起因就是 v1.3.0 那次）。它没做错什么，只是时机在**发版之后**；这次把同一个检查提前到了构建期。
+
+10. **本机 `defaults` 里的 `SUFeedURL` 覆盖会让所有更新检查静默失败，本地验完 appcast 必须删（2026-09-03 实测）**：
+    Sparkle 读 feed 地址时**用户偏好优先于 Info.plist**。此前某次本地验证 release.yml 的 appcast 切分逻辑用了「假 appcast +
+    `defaults write me.yudaotor.lyrimuse SUFeedURL http://127.0.0.1:8791/appcast.xml`」的配方（见记忆库发版笔记），验完没有 `defaults delete`，
+    于是这台机器上之后**每一次**定时检查都在连一个没人监听的本地端口——定时检查失败不弹窗、`SULastCheckTime` 照样更新，
+    从外面看完全像"检查过了、没有新版本"。这次是为演示菜单栏面板「有新版本」把本地版本号压成 1.3.9、手动点「检查更新」弹出
+    「获取升级信息时出现错误」才暴露。**定位方法**：统一日志在这台机器上查不到 App 记录（`log show` 对 lyrimuse 进程恒返回 0 行，
+    原因未查），改用一个链接 App 内 `Sparkle.framework`、以 `/Applications/Lyrimuse.app` 为 hostBundle 的 `SPUUpdater` 诊断小程序
+    （`SPUUserDriver` 全部方法只打印、`showUpdateFound` 回 `.dismiss`），`updater.feedURL` 直接暴露实际生效地址，
+    `showUpdaterError` 给出完整 NSError 链（`NSURLErrorDomain -1004` → 127.0.0.1:8791）。**修法**：`defaults delete me.yudaotor.lyrimuse SUFeedURL`，
+    删后同一诊断程序立刻 `didFindValidUpdate 1.4.0`。**规则**：以后任何走 `defaults write SUFeedURL` 的本地验证，收尾必须成对 `defaults delete`，
+    并把「`defaults read me.yudaotor.lyrimuse SUFeedURL` 应报不存在」写进验证清单；「导出诊断信息」的 `Auto-update checks` 行也应带上实际生效的 feed 地址（待做）。

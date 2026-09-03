@@ -1,5 +1,5 @@
 # 08. 歌词同步引擎(App 侧消费链)
-> 最后核对:2026-09-01 · 基线:10f4061+工作树
+> 最后核对：2026-09-03 · 基线：e103532+工作树
 
 ## 定位
 
@@ -60,6 +60,7 @@ PlaybackCoordinator (UI 层唯一入口) → 各展示面
 ### 加载与选路(LyricsSyncEngine.load)
 
 1. LRC 和 YRC **各自**解析并各自过署名行过滤(不是「有 YRC 就一定用 YRC」)。
+   - **逐字时间轴合法性归一化**(`LyricTimelineNormalizer`,2026-09-02 加,紧跟 `YRCParser.parse`、署名过滤之前,因为要看相邻行的时间戳):边界是**下一行的起点**而不是行头声明的行长(引擎从来不看行长,一行的可见窗口就是到下一行开始)。三条规则:① 字起点比前一字倒退 → 整行退化;② 字起点早于行首,差 ≤250ms 夹到行首、终点不动,超过 → 退化;③ 字起点不早于下一行起点,差 ≤250ms 拉到「下一行起点 − 260ms」(`KaraokeFill.lineTailLeadMs + minTailFillMs`)、终点不动、不越过前一字起点,超过 → 退化。退化 = 该行只剩一个覆盖全部文字的字,从行首匀速扫到下一行开始,文字不动。相邻行同时间戳时没有边界、不判③;最后一行没有下一行、不判③。每次 load 只记一行 `lyrics-timeline` 汇总日志。数据依据见设计决策第 13 条。
 2. **覆盖率判据**:`usingWords = 过滤后逐字非空 && (整行为空 || 逐字行数*2 >= 整行行数)`。逐字行数不到整行的一半就认为这份 YRC 是退化的(真实案例:某歌 YRC 只有 10 行、9 行是署名,过滤后剩 1 行,整首歌卡在那一行不动),退回整行模式。LRC 本身为空时没得选,仍用逐字。
 3. **对唱标记剥离**(2026-08-23 重写,见 `LyricDuet`):
    - **先认身份、再过滤署名、最后剥离**,顺序不能反 —— 「每句都带标记」的对唱歌天然满足署名过滤"命中 ≥3 行且过半"的闸门,先过滤就是整首被删空。`LyricDuet.speakers(in:)` 的结果作为 `speakerExemptions` 喂给 `strippingCreditLines`,在所有规则**最前面**放行。
@@ -104,6 +105,18 @@ PlaybackCoordinator (UI 层唯一入口) → 各展示面
   ① `matchesRoleWordCredit` 加了「·」(U+00B7)当冒号的等价分隔符——QQ 音乐 `[by:krc转qrc工具]` 转出来的格式不用冒号,用「和声 Backing Vocal·Dean Ting」「录音室 Studio·Retro Records Studio」这种写法。**只放宽这一条**:冒号后面还要过角色词表这道关,误杀面跟冒号版本同一个量级;没有放宽 `matchesBilingualCreditShape`/`matchesNameListCreditShape` 那两条不查角色词表的免词表规则——「·」在真歌词里出现的概率(「爱·恨」这类风格化写法)比冒号高得多,没有角色词锚点不敢跟着放宽。
   ② **考虑过、试过、又撤销的改动**:这两首 Interlude 整首歌的"歌词"就是清一色职员表(没有一句真正在唱的词),9 行加上「·」支持后全部命中,触发了 `strippingCreditLines` 末尾"整份判定成职员表就一行都不删"的兜底闸(见上文"永不删空兜底"),表现是从"漏了 3 行"变成"9 行全部显示"——比修「·」之前还多。试过把这道闸收窄成"只在结构化规则(`genericHanCreditLineRe`,这套规则里精度最低的一条)参与判定时才触发",逻辑本身对这两首歌有效,但被 selftest 里一条既有回归测试原样打回来:`作词：甲/作曲：乙/编曲：丙`(纯关键词表命中、跟结构化规则完全无关)那条用例就是刻意设计成验证"不管靠哪条规则命中,100% 就是不删"——这道闸是**故意**做成通用保险,不是结构化规则的专属兜底,收窄等于系统性削弱全库的这层保护去换两首歌的观感,判断不划算,撤销了改动。
   ③ **真正该管这件事的层**:collector 侧 `isCreditOnlyLRC`(`lyrimuse-collector/match.go`)是"整份候选要不要收下当歌词"的入口闸,拒收之后还有别的源可以顶上——这才是"一整份候选其实只有职员表"该被拦下来的地方。但实测这个函数用的 `creditLineRe`/`genericHanCreditLineRe` 比 Swift 侧这一整套规则族简单得多(关键词表小很多,要求冒号,不认「·」,没有抬头行识别),对这两首歌的 9 行全部判成"非 credit"(`isCreditOnlyLRC` 返回 false,正常收下)。把它补齐到跟 Swift 侧同等能力,是一次会改变"哪些候选被接受"的采集端改动,风险和范围都明显大于纯展示层的过滤调整,没有在这一轮里做——需要用户明确要才动。
+- **第十四轮(2026-09-02):带版权标记的著作权行 + 「著作」「推广」两个角色词**(用户报方大同《白发》头部「著作权人：+© 2019、赋音乐」漏到悬浮窗上;全曲 12 行职员表里只有这一行漏网)。
+  ① 新增 `matchesCopyrightMarkLine`:整行同时出现①版权/录音版权标记(© ℗ 及圆圈变体,或加括号的 `(C)`/`(P)`)和②一个四位年份 → 删。跟位置/冒号/标签形状全都无关,所以「℗ 2016 北京享耳音乐」这种没冒号没汉字标签的写法一并覆盖。**值得单开一条的理由是四条现有规则各差一步**:关键词表里其实**有**「©」「℗」但那条正则 `^` 锚定、只认标记开头的行(这行开头是汉字标签);`matchesRoleWordCredit` 要标签含双字角色词而「著作」不在表里;`matchesNameListCreditShape` 形状本来命中(标签 4 汉字、右侧「+© 2019」「赋音乐」正好两段),卡在逐段的字符集校验上(`+` 和 `©` 既非汉字也非字母数字)——**刻意不放宽那道校验**,逐段字符集是那条免词表规则唯一的精度来源;`matchesCopyrightNotice` 认的是「未经…许可」这类**成句**法务声明,这行一个法务词都没有。
+  ② `creditRoleWords` 补「著作」「推广」。「推广公司：东亚星光」在这首歌里只是**侥幸**没漏(靠 `matchesNameListCreditShape` 的"整份 ≥2 行"闸刚好凑到 2 行);郑润泽《彻夜》的「营销推广：戴欣怡 (DDStudio)X深声不息」正是这么漏的——单段撞上 `latinCreditRestLooksLikeSentence`("深声不息"里有个「不」),跟第十二轮「庄有豪」同一个机制。
+  **全库前后回归**(4579 份 / 233128 行正文,逐行 diff `creditLineDropDecisions`):KEEP→DROP **恰好 2 行**(《白发》那行 + 《彻夜》那行,都是真署名),DROP→KEEP **0 行**。版权标记在整个语料里**总共只出现 1 次**就是这一行、加括号形态 0 次,所以这条规则几乎没有误杀空间(年份那半边因此是冗余的,仍然要求,理由同 `matchesPromoCreditLine`:漏治只是多显示一行,误杀是静默吞歌词)。
+  ⚠️ **语料现场抓到的反向哨兵**:方大同《放不过自己》的真歌词「自我执著作怪」("自我执著"+"作怪")夹着「著作」——它没有冒号,`matchesRoleWordCredit` 第一道门就是"必须有冒号",所以补词表碰不到它。已进 selftest 钉着,防的是哪天把冒号那道门放宽。selftest 共补 12 条(5 条给 `matchesCopyrightMarkLine` 的正反例、4 条给新角色词含那条哨兵、3 条《白发》真实头部端到端)。
+
+- **第十五轮(2026-09-03):ISRC 行 + 「英文角色名 : 拉丁人名」**(用户报陈绮贞《我亲爱的偏执狂》结尾没过滤干净)。那一份结尾 20 行署名里**只漏了 2 行**:`ISRC TWB870211301` 和 `Publisher : Sam Duann`。
+  ① 新增 `matchesISRCLine`:`ISRC` 这个词 + 它固定的 12 位编码形状(2 位国家码 + 3 位登记者 + 2 位年份 + 5 位序号),覆盖紧凑写法 `ISRC TWB870211301` 和分段写法 `ISRC TW-A47-05-32010`。它**没有冒号也没有角色词**,上面那一整排以"角色+冒号"为形状的规则一条都够不着,结构性过滤同样够不着(它要冒号)。歌词里不可能出现这个词配这个形状,所以不设否决闸。
+  ② 新增 `latinRoleColonPattern`(并进 `matchesLatinCreditPattern` 的形状判定,共用那道"右边像不像一句话"的否决闸):**半角冒号、且冒号右边没有中日文**的那一档。同一份歌词里 `Executive Producer : 林暐哲` 早就被删、`Publisher : Sam Duann` 却留着,差别就在这儿——`latinCreditHalfWidthPattern` **故意**要求右边有 CJK,它的注释写着"单靠半角冒号 + 拉丁标签是不敢删的:`Verse 1: ...` 这类真会出现在歌词里"。所以这一条**不放宽形状,只收窄标签**:标签必须落在一张"绝不会当段落标记用"的英文角色名白名单里,**刻意不收** chorus / verse / bridge / intro / outro / hook / rap / refrain(那几个正是段落标记),也**刻意不收**乐器与声部名(guitar / vocals / drums…,收窄比收宽安全,有真实漏例再按语料加)。
+  **全库前后回归**(3464 首 / 144439 行正文,逐行 diff `creditLineDropDecisions`):KEEP→DROP **61 行 / 16 种**,全部是真署名(Mixing / Mastering / Publisher / Producers / ISRC),**零误伤**;DROP→KEEP **0 行**。
+  ⚠️ **这一轮真正的教训在定位方法上**:第一版探针逐条调**单行**匹配函数,报出 7 行漏网;换成真实入口 `creditLineDropDecisions` 之后只剩 2 行 —— 差的正是**整份闸门**(两条形状规则要 ≥2 行才认、结构性过滤要"过半"),那些行其实早被兜住了。按第一版结论去修,会白改 5 处、还可能为了"修"它们而放宽形状、伤及真歌词。**改这类规则前必须用整份入口验**,`creditLineDropDecisions` 的注释本来就写着它存在的理由就是这个。
+  ⚠️ 另一条现场教训:给新规则写 selftest 时只喂两行署名,断言当场红 —— 整份被判全删触发了「永不删空」兜底闸,两行又被原样放回。用例里必须掺一行真歌词。这个红很有价值,它证明那道安全阀确实在工作。selftest 共补 8 条(5 条 ISRC 正反例、1 条端到端、2 条**反例哨兵**钉住 Chorus/Verse/Bridge/Rap 一条都不许删)。
 
 ### 歌词自带的 `[offset:]`(2026-08-22 加)
 
@@ -166,7 +179,10 @@ LRC 格式标准里的 `[offset:±毫秒]` = 「这份歌词的全部时间戳�
 - **日文歌一律原样返回**:判据「有假名就是日文」——日文新字体(学/国)被简繁转换改掉不是转换,是写坏。用 ICU `Simplified-Traditional`,非无脑逐字(头发→頭髮 正确)。本机 1487 条缓存实测:42 首被这道守卫拦下,**全部是真日文歌**(Sou / 米津玄師 / タイナカ彩智 …),没有中文歌被误拦。
 - **转简体时必须再补一层异体字规范化**(`HanVariants`,2026-08-22 用户报「明明开了简体,歌词里还是看到繁体」):ICU 只管**繁简**,不管**异体字**。实例《开不了口 (Live)》——ICU 把那首歌 37 种字符全转对了(沒→没、煩→烦、開→开、讓→让…),**只剩「妳」没动,而它出现 21 次**,整屏都是,看着就是"压根没转"。
   - 根因不是 ICU 有 bug:「妳」不是「你」的繁体,是大陆《第一批异体字整理表》淘汰、港台仍在用的**异体字**,不在繁简转换的范畴里。**换 OpenCC 也一样** —— collector 用的 gocc,它的 `TSCharacters` / `TWVariantsRev` / `HKVariantsRev` 三张字典全库 grep 过,「妳」「祂」「牠」**零条目**。这一层只能项目自己维护。
-  - 现表 6 字(本机缓存实测词频):妳→你 149 次 / 祂→他 50 / 濛→蒙 28 / 牠→它 2 / 痲→麻 1 / 痺→痹 2,覆盖 21 首曲目、230 处字符。收录标准见 `HanVariants` 的注释:① ICU 确实不转它 ② 大陆规范有明确取代字 ③ 歌词语境无歧义。第三条否掉了「祇」(神祇 vs 只)、「乾」(乾坤,ICU 已按上下文正确保留)和粤语字「嘅咁哋冇」(不是异体字,转了才错)。
+  - ⚠️ **2026-09-03 起这张表不再是手工维护的,是从上游数据生成的**(用户要求:「做成通用逻辑,后续遇到这种字的问题都要可以解决,不要通过手动维护一个表的方式,而且 swift 和 go 都使用同一套逻辑尽量」)。生成器 `scripts/gen-han-variants.py`,数据来自 Unicode Unihan(`kUnihanCore2020` 区域集 / `kGradeLevel` 学段字表 / `kSimplifiedVariant`·`kSpecializedSemanticVariant`·`kSemanticVariant` 变体关系)+ OpenCC 繁简单字表 + 一份带理由的人工补丁。产物 **681 条**,同一次生成写两份:`LyrimuseCore/Lyrics/HanVariantsTable.swift`(App 编译进去)和 `lyrimuse-collector/dictionary/HanVariants.txt`(collector `//go:embed` 读),**两侧同一份数据**,selftest 有一条断言读那个 .txt 逐字对账。
+  - 推导规则(完整版在生成器头注):只考虑 **`kUnihanCore2020` 不含 G**(大陆通用集之外)的字;目标按 OpenCC → `kSimplifiedVariant` → `kSpecializedSemanticVariant` → `kSemanticVariant` 优先级取,候选先按"必须在 G 集"过滤,剩多个再用 `kGradeLevel` 收敛,仍然多个就**放弃这个字**(宁可不折叠也不猜);目标还要再过一遍 OpenCC 推到不动点(否则会出现「寗→甯」而「甯」自己还会被转成「宁」这种半路产物,collector 侧有断言钉住)。
+  - 原来那 6 个手工字里 **4 个是推出来的**(妳→你 / 牠→它 / 濛→蒙 / 痺→痹),只剩 **祂→他、痲→麻** 仍要人工补丁——上游对这两个字真的没有可用关系(祂 是 20 世纪造字,Unihan 里零变体关系;痲 只关联到同样非通用的「痳」),理由逐条写在 `scripts/han-variant-overrides.txt`。词频仍留作参考(本机缓存实测:妳 149 次 / 祂 50 / 濛 28 / 牠 2 / 痲 1 / 痺 2,21 首曲目 230 处字符)。
+  - ⚠️ 原来靠人记着的第三条收录标准(「歌词语境无歧义」,据此否掉「祇」「乾」和粤语字「嘅咁哋冇」)现在是**规则的自然结果**:那些字本身就在 G 集里,第一步就被排除。2026-09-03 逐个核过 15 个这类候选,一个都没进表。真出现误折,往补丁文件加一行 `字<TAB>-<TAB>理由` 否决即可,**不用改代码**(已经用这个机制否掉两条:「卍→万」——它在中文里是佛教符号不是「万」的异体;「雝→簌」——上游唯一的通用候选是错的)。
   - **只在转简体方向生效,绝不反推**:简体只有「你」,转繁体时无从判断该写「你」还是「妳」——那要猜被称呼者的性别。
   - ⚠️ 排查这类问题时**别拿 ICU 去检查 ICU 自己的输出**:第一版扫描用的判据是「某字单独能转、整串却没转」,那只能发现 ICU 的上下文漏字(全库仅 3 个「著」),发现不了 ICU 压根不认的字,于是漏掉了正主。有效的过滤器是「`Hant-Hans(c)==c` 且 `Hans-Hant(c)==c`」——ICU 双向都不动的"通用字",高频的是正常字、低频端才是异体字候选(3742 种汉字缩到 2466 个,妳/祂/牠/痲 全落在里面)。
 - **设置项条件显示**:`sawChineseLyrics`(LocalPlaybackSource 上的粘性标记,判据「有汉字且无假名」,只置不清)→ AppDelegate 首次见到时持久化为 `AppSettings.hasSeenChineseLyrics`;设置页在「系统读中文 || 见过中文歌词 || 已不是默认值」时才露出这一项。最后半边是硬要求:开关正在起作用时绝不能消失。
@@ -266,10 +282,11 @@ LRC 格式标准里的 `[offset:±毫秒]` = 「这份歌词的全部时间戳�
 | 行/词数据模型 | 同上 — `SyncedLyricWord`、`SyncedLyricWordGroup`、`SyncedLyricLine`、`LyricsWindowLine` |
 | LRC 解析(含 CRLF) | `LyrimuseCore/Lyrics/LRCParser.swift` — `LRCParser.parse` |
 | YRC 解析(含畸形元组) | `LyrimuseCore/Lyrics/YRCParser.swift` — `YRCParser.parse`、`wordRegex`、`malformedTupleRegex` |
+| 逐字时间轴合法性归一化 | `LyrimuseCore/Lyrics/LyricTimelineNormalizer.swift` — `LyricTimelineNormalizer.normalize/maxClampMs/tailWindowMs/DegradeReason/Report/logSummary`;调用点 `LyricsSyncEngine.load`(紧跟 `YRCParser.parse`) |
 | 偏移存储与合成 | `LyrimuseCore/Lyrics/LyricsOffsetStore.swift` — `LyricsOffsetStore.trackKey/baseOffsetMs/effectiveOffset/globalOffsetMs/playerOffsets/playerOffset/setPlayerOffset/nudge/setOffset` |
 | 偏移作用域下拉框候选 | `LyrimuseCore/Lyrics/LyricsOffsetScope.swift` — `LyricsOffsetScope.options/allPlayersTag`(纯函数,selftest 覆盖四条不变量:排除 `.auto`、配过偏移的必列、顺序稳定无重复、`builtInOrder` 参数生效) |
 | 罗马音/语言判定/简繁 | `LyrimuseCore/Lyrics/Romanizer.swift` — `Romanizer.romanize/japaneseSegments/looksJapanese/script`、`ChineseVariant.converted`、`RomanizationScripts` |
-| 异体字规范化表(繁简之外的一层,有 selftest) | `LyrimuseCore/Lyrics/HanVariants.swift` — `toSimplified`、`normalizeToSimplified` |
+| 异体字规范化表(繁简之外的一层,有 selftest) | `LyrimuseCore/Lyrics/HanVariants.swift` — `toSimplified`、`normalizeToSimplified`、`icuGaps`;数据是**生成产物** `HanVariantsTable.swift`(与 collector 侧 `dictionary/HanVariants.txt` 同源),生成器 `scripts/gen-han-variants.py` + 补丁 `scripts/han-variant-overrides.txt` + ICU 实测探针 `scripts/han-icu-probe.swift` |
 | 假名标注 | `LyrimuseCore/Lyrics/KanaAnnotation.swift` — `KanaAnnotation.parse/marks` |
 | 对唱分栏 | `LyrimuseCore/Lyrics/LyricDuet.swift` — `speakers/plan/planWords/sides/identity`;两侧内缩在 `LyricDuetLayout.swift` |
 | 缓存直读 | `LyrimuseCore/Local/EnrichCacheReader.swift` — `EnrichCacheReader.lookup/looseMatch/fileModificationDate/coverURL/nativeSizedCoverURL` |
@@ -285,7 +302,7 @@ LRC 格式标准里的 `[offset:±毫秒]` = 「这份歌词的全部时间戳�
 
 1. **逐字填色不预烤进 @Published**:曾经在 20Hz tick 里预算 fillFraction 再靠 `.animation(.linear)` 补间,SwiftUI 对不可合并曲线是新旧位移矢量相加而非接续,补间时长(60ms)>tick 间隔(50ms)时几乎总被打断——这是逐字卡顿的结构性根源。现在只发真实时间戳,View 按帧现算(`SyncedLyricWord` 顶部注释)。
 2. **CRLF 是一个扩展字形簇**:`split(separator:"\n")` 切不开 `\r\n`,酷狗社区上传约半数是 CRLF;LRC 侧后果是「整个桌面都是歌词」。Python 分析查不出,必须在 Swift 里验证(两个 Parser 的归一化注释)。
-3. **署名行过滤的爆炸半径**:同一条结构正则在 collector 侧误判一行无害、在展示侧误判一行就是静默吞真歌词——所以有「≥3 且过半」闸门、说话人豁免、永不删空三重护栏;枚举法收敛不了(至今补到第八轮),新增规则优先走「形状/双字包含」而不是加关键词。
+3. **署名行过滤的爆炸半径**:同一条结构正则在 collector 侧误判一行无害、在展示侧误判一行就是静默吞真歌词——所以有「≥3 且过半」闸门、说话人豁免、永不删空三重护栏;枚举法收敛不了(至今补到第十五轮),新增规则优先走「形状/双字包含」而不是加关键词。
 4. **YRC 退化要看覆盖率不是非空**:「有 YRC 就用」曾让某歌整首卡在唯一幸存的一行上;判据是逐字行数 ≥ 整行的一半。
 5. **罗马音兜底必须按行缓存**:activeLine 每 tick 重新构造,不缓存时纯英文歌每秒 20 次 ICU 音译,表现为本地歌词进度可见地慢于网页端。
 6. **日文汉字不能走 Any-Latin**:假名出罗马字、汉字出拼音混一行;整首粒度判日文(局部纯汉字日文行会被误判中文),日文读音吃上下文所以整行分词再按 UTF-16 对回。
@@ -299,3 +316,4 @@ LRC 格式标准里的 `[offset:±毫秒]` = 「这份歌词的全部时间戳�
 ⚠️**待核对**:按播放器偏移对浏览器**实际有多少用**,仓内没有实测记录。02-playback-source.md 记着两条相关实测:一是「没有可学的常数」(Δ位置−Δts 七个样本极差 1.03s,所以自动学一个偏移不可行),二是时间戳相位订正已把平均绝对误差从 0.653s 压到 0.163s。残余偏差是否真接近常数、用户手调一个固定值能不能明显改善 Arc 的观感,**都还没量过**。这一层的正确性(存储、分层、不串台)有 selftest 钉住,「有效性」是待核对的。
 
 其余行为均以当前工作树代码及其注释为准核对过。
+13. **逐字时间轴归一化的阈值是量出来的,边界选「下一行起点」也是量出来的**(2026-09-02)。全库 3071 首带逐字 / 161,723 行 / 118.8 万字扫描:字起点 ≥ 下一行起点 **4516 字 / 422 首**(中位 0ms——网易云行尾标点 token 起点正好等于下一行、时长 0;p90 62ms——酷狗/QQ 最后一个真词晚 50~300ms,正是「最后一点不走完就下一句」;p99 1.9s——amll 整行错位);字起点早于行首 27 字 / 8 首(中位 109ms,5 个差几秒到 153 秒);字起点倒退 21 字 / 12 首。字终点晚于声明行尾 2155 字、与前一字重叠 1604 字都是中位 1ms 的取整误差,且在「不看行长」的模型里无害,**刻意不处理**。`maxClampMs=250` 落在 p90(62ms)与 p99(1.9s)之间的空档,盖住 96% 越界、不把整行错位硬夹进去;超过就退化成匀速扫过而不是整行高亮——同一首歌其它行还在逐字,突然一行不动比匀速扫过更像坏了。参照实现拿声明行尾做边界、字终点超过也退化,对 lyrimuse 治不到病:那 4516 个字里绝大多数相对声明行尾并不越界。`KaraokeFill.tailClamped` 仍保留:它管的是最后一个字的**时长**压进换行前,这里管的是**起点**落在哪。selftest 23 条断言(行首夹取 / 下一行夹取 / 超阈值退化 / 倒退退化 / 最后一行 / 同时间戳 / 拉回不越过前一字 / 行比窗口短 / 空)。

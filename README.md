@@ -49,7 +49,7 @@ Lyrimuse sits quietly in your menu bar and shows a floating lyrics window that f
 
 ### Lyrics that just work
 - **Word-by-word synced highlighting**, following playback in real time
-- **Six lyrics sources checked automatically** — NetEase Cloud Music, QQ Music, Kugou, Musixmatch, LRCLIB, and AMLL (a hand-curated, word-by-word lyrics database) — always picks the best match, no manual searching required
+- **Eight lyrics sources checked automatically** — NetEase Cloud Music, QQ Music, Kugou, Kuwo, Musixmatch, LRCLIB, LyricFind (via YouTube Music), and AMLL (a hand-curated, word-by-word lyrics database) — always picks the best match, no manual searching required
 - **Romanization and translation**, shown alongside the original lyrics — translation comes from the source's own community translation when one exists, otherwise from on-device machine translation (Apple's Translation framework — lyrics never leave your Mac) with an online fallback, in any of 18 target languages; romanization is judged per line, so a Chinese song quoting one Japanese line only gets a reading on that line, not pinyin sprinkled over the rest
 - **Duet and multi-singer lyrics show each part separately**, when the source (or an AMLL entry) marks who's singing which line, instead of interleaving both voices into one confusing block
 - **Simplified/Traditional Chinese**, switchable for the lyrics text independent of the app's own UI language
@@ -74,7 +74,7 @@ Lyrimuse sits quietly in your menu bar and shows a floating lyrics window that f
 - **Auto-hide when paused** so it never sits on your desktop doing nothing
 
 ### Just a good Mac citizen
-- **Simplified Chinese and English UI**, switches instantly, no restart needed
+- **Simplified Chinese, Traditional Chinese and English UI**, switches instantly, no restart needed
 - **Global keyboard shortcuts** for every action, all left unbound by default so you decide
 - **Checks for updates on its own** (or on demand from the menu bar) — no need to keep revisiting the Releases page
 - **Optional companion launch** with your chosen player, in either direction — launch one when the other opens
@@ -206,13 +206,20 @@ Same idea, not the same app — Lyrimuse brings that floating-desktop-lyrics exp
 Once a song's lyrics have been resolved once, yes — local mode shows already-cached lyrics with no network round-trip. The initial lookup (and machine translation, when it's needed) does require a connection.
 
 **Does any of my data leave my Mac?**
-Lyrics resolution talks to public lyric APIs (NetEase, QQ, Kugou, Musixmatch, LRCLIB, AMLL) to fetch lyrics for whatever's playing — that's inherent to the feature. Translation defaults to on-device (Apple's Translation framework) instead, and only reaches a network translator as a fallback. Everything else — your local listening history, cached lyrics, settings — stays in files on your Mac unless you explicitly connect Last.fm, ListenBrainz, or the optional web relay.
+Lyrics resolution talks to public lyric APIs (NetEase, QQ, Kugou, Kuwo, Musixmatch, LRCLIB, LyricFind, AMLL) and cover art to the iTunes Search API, for whatever's playing — that's inherent to the feature. Translation defaults to on-device (Apple's Translation framework) and only sends lyric text to a network translator (MyMemory) as a fallback. Everything else — your local listening history, cached lyrics, settings — stays in files on your Mac unless you explicitly connect Last.fm, ListenBrainz, or the optional web relay. The itemized list is under [License and Copyright](#license-and-copyright) below.
 
 **Can I get Japanese/Korean romanization or Chinese translation of the lyrics?**
 Yes — romanization is judged per line (so a song mixing languages doesn't get the wrong treatment on the wrong lines), and translation comes from either a lyric source's own community translation or on-device/online machine translation, in 18 target languages.
 
 **Does it support Intel Macs?**
-Yes, via a separate universal build (see Option B above). **The in-app auto-updater covers Intel too** (since v1.4.1) — once installed it prompts for new versions just like on Apple Silicon.
+Yes, via a separate universal build (see Option B above). **The in-app auto-updater covers Intel too** (since v1.5.0) — once installed it prompts for new versions just like on Apple Silicon.
+
+## License and Copyright
+
+- **Lyrimuse itself is [GPL-3.0](LICENSE).** The open-source components and dictionary data shipped inside the app (media-control, Sparkle, KeyboardShortcuts, and the OpenCC and rime-cantonese dictionaries) keep their own licenses; the full texts are in [THIRD_PARTY_LICENSES](THIRD_PARTY_LICENSES), which is also bundled into the app and can be opened from **Settings → About → Third-party licenses**.
+- **Lyrics, artwork and track metadata belong to their respective rights holders.** Lyrimuse only looks them up, caches them and displays them: whatever the public lyric APIs return is stored on your own Mac (`~/.config/lyrimuse/`) for your own viewing. It does not host, relay or redistribute lyrics or artwork, and the cache can be deleted at any time from Lyrics Manager or by removing that folder.
+- **Lyrimuse is an independent open-source project.** It is not affiliated with, endorsed by or connected to Apple, Tencent (QQ Music), NetEase (NetEase Cloud Music), Kugou, Kuwo, Spotify, Google (YouTube Music), Last.fm, ListenBrainz, Musixmatch, LRCLIB, LyricFind or AMLL. Their names and trademarks belong to their owners and appear here only to say which players and lyric sources are supported.
+- **This is everything that leaves your Mac.** Lyrics resolution sends the track's artist, title and album (plus the duration, for sources that accept it) to the eight lyric sources above; when none of them matches, the artist name is also sent to MusicBrainz for alias lookup. Cover art and the idle page send artist + title to the iTunes Search API. The machine-translation fallback (off by default, and used only when on-device Apple translation is unavailable) sends the **lyric text itself**, in chunks, to MyMemory, with a randomly generated e-mail parameter — never yours. Musixmatch's domain is resolved over DNS-over-HTTPS via Cloudflare (1.1.1.1) and Google (8.8.8.8). The About page asks the GitHub API for the star count at most once every six hours; update checks fetch the appcast from GitHub Releases and send no system profile. Beyond that, only the services you connect yourself: Last.fm, ListenBrainz, push-notification platforms, the optional web relay (whose Top-10 artists page looks up artist avatars on Deezer). Every outbound request is written to a local audit log — host and operation only, never parameters or credentials — which "Export diagnostics" includes.
 
 ## Troubleshooting
 

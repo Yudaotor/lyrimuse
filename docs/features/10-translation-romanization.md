@@ -1,6 +1,6 @@
 # 10. 译文与罗马音
 
-> 最后核对：2026-09-01 · 基线：5d9031a+工作树
+> 最后核对：2026-09-03 · 基线：e103532+工作树
 
 ## 定位
 
@@ -15,7 +15,7 @@
 
 ### 1. 译文的来源链
 
-1. **社区译文（随冠军候选走，第 09 章）**：网易云 `tlyric`（固定中文）；Musixmatch `crowd.track.translations.get`（**唯一可选语言的源**，目标语言=设置的译文语言，按原文时间轴逐行拼成独立 LRC）；amll-ttml-db 内嵌的 `x-translation`（2026-08-26 起真正接上，见下面已知坑 9——TTML 没有给译文标语言的字段，语言标注沿用跟"能不能用"判定同一个简化假设：直接记成当前设置的目标语言，不做真实校验）。QQ/酷狗/LRCLIB 无译文。
+1. **社区译文（随冠军候选走，第 09 章）**：网易云 `tlyric`（固定中文）；Musixmatch `crowd.track.translations.get`（**唯一可选语言的源**，目标语言=设置的译文语言，按原文时间轴逐行拼成独立 LRC）；amll-ttml-db 内嵌的 `x-translation`（2026-08-26 起真正接上，见下面已知坑 9——TTML 没有给译文标语言的字段，语言标注沿用跟"能不能用"判定同一个简化假设：直接记成当前设置的目标语言，不做真实校验）。QQ `GetPlayLyricInfo` 的 `trans`（固定中文，标 `zh`，2026-09-02 起接回；`//` 占位行、版权声明行、`[kana:]` 元数据行在 collector 侧剔掉，格式与实测见第 09 章第 38 条）。酷狗 KRC `[language:]` 内嵌的 type 1 轨（固定中文，标 `zh`，按行序号对齐 KRC 计时行，2026-09-02 起接回，见第 09 章第 40 条）。LRCLIB 无译文。
 2. **机翻兜底（`backfillTranslation`，translate.go）**——触发条件全部满足才跑：
    - 「系统兜底翻译」开关开着（默认关）；有主歌词；目标语言非空；
    - 现有译文对当前目标语言**不可用**（`translationUsable`，语言标签与正文矛盾时以正文为准）；
@@ -30,15 +30,26 @@
 
 ### 3. 罗马音的来源链（App 侧展示时逐行决定）
 
-1. **源自带**：网易云 `romalrc`（随冠军候选，`lyrics_roma` 字段）。
+1. **源自带**：网易云 `romalrc`；QQ `GetPlayLyricInfo` 的 `roma`（QRC 逐字压成逐行 LRC，2026-09-02 起，见第 09 章第 38 条）；酷狗 KRC `[language:]` 的 type 0 轨（2026-09-02 起，见第 09 章第 40 条——韩文歌这一轨是中文谐音，collector 侧按汉字占比先挡掉）。都随冠军候选走、写 `lyrics_roma` 字段，都要过 `usableValueAdd` 的「原文假名占比 > 5%」闸——韩文歌的源自带罗马音会被判不可用而不写入。
 2. **客户端现算兜底**（`Romanizer`，2026-08-04 加）：服务端没给时现算。日文**必须走形态分析**（CFStringTokenizer），绝不能用 ICU Any-Latin——汉字会被按普通话读成拼音（「火曜日」→"huǒ yào rì"）；中文走拼音；整首歌统一判语言（`songLooksJapanese`/`songScript`），不逐行判。带 LRU 缓存防 20Hz 渲染热路径反复音译。
-3. **酷狗假名标注**（`KanaAnnotation`）：酷狗 LRC 的 `[kana:]` 标签给出汉字**在这首歌里**的实际读音（「明日」读 asu 还是 ashita 分词器给不出）；格式=`<覆盖字符数><读音假名>` 序列，按顺序对齐正文里的待标字符（汉字+`々`）；对不齐整体放弃（半对半错比不标更糟），退回形态分析。
+3. **酷狗 / QQ 假名标注**（`KanaAnnotation`）：酷狗 LRC 自带的、以及 QQ 由 collector 从 QRC 正文首行摘出并拼进整行歌词的（2026-09-02 起，见第 09 章第 39 条）`[kana:]` 标签给出汉字**在这首歌里**的实际读音（「明日」读 asu 还是 ashita 分词器给不出）；格式=`<覆盖字符数><读音假名>` 序列，按顺序对齐正文里的待标字符（汉字+`々`）；对不齐整体放弃（半对半错比不标更糟），退回形态分析。
 4. **粤语粤拼**（collector 侧生成兜底，`maybeGenerateJyutpingRoma`/`jyutping.go`，2026-08-27 加）：跟上面②③不是同一套机制——这条只在 `SongLanguage==粤语` 且这一轮**没有任何源**给出 `lyrics_roma`（也就是网易云①没命中）时才补，补的结果永久写进 enrich 缓存，是服务端一次性生成而不是客户端渲染热路径现算，也**不受**下面第 5 条的语言开关影响（那是纯展示层开关，生成不看它）。字典数据来自 [rime-cantonese](https://github.com/rime/rime-cantonese)（CC-BY-4.0，见 THIRD_PARTY_LICENSES）：先按 `jyut6ping3.words.dict.yaml` 做最长词匹配（2026-08-30 加，修多音字——同一个字在不同词里读音不同，如"重要"zung6 jiu3 vs "重量"cung5 loeng6，纯单字查表两个会拼成同一个错的读音；命中词典的词按词级读音整体输出），匹配不到再退回 `jyut6ping3.chars.dict.yaml` 单字查表（查不到再借 OpenCC 数据转一次繁体重试）。词典本身没有区分声调风格的开关——不管来源是哪条，粤拼一律带数字声调（如 `ngo5`），这跟网易云①那份不带数字声调是两种不同产物，不是同一份数据的两种格式。词典覆盖不到的词/字仍会退化成"可能跟语境不符"或原样穿透，跟这条链路①②③"服务端没有就退化"的整体设计一致。
-5. **按语言分别开关**（`RomanizationScripts`，2026-08-29 起是日/韩/中(拼音)/粤(粤拼)**四**项勾选，同日起四项默认全开——此前只有日韩中三项、中文单独默认关，粤拼是这次改动才补上的独立开关）：同一个人对不同语言需求常相反（日文要罗马字、中文不要拼音）。汉字本身分不出普通话还是粤语，"粤"这一档是靠 collector 判定的 `SongLanguage`（外部信号）分派，不是靠文字本身识别（跟日语假名/韩语谚文能自证不同）。这个开关管的是**展示**：粤拼是否生成、写进 enrich 缓存由第 4 条的 `SongLanguage` 判定决定，跟这里的勾选是否打开无关；勾选只决定已经生成好的这份粤拼要不要在悬浮歌词/歌词窗口里渲染出来。总开关关着时语言勾选行折叠。
+5. **日／韩／中 collector 侧预生成**（`maybeGenerateHelperRoma`/`romanize.go` + `lyrics-romanize` helper，2026-09-03 加）：跟第 4 条同一个位置（`maybeGenerateRoma` 里粤拼之后），只在**本字段仍为空**时才补，绝不覆盖①②④。**顺序不能反**：粤拼是专门为粤语做的词典查表，质量高于这条通用 ICU 音译（粤语汉字走 `.toLatin` 会出普通话拼音，完全不对）。同样**不看**下面那条语言开关（生成一次性，开关随时可改；按开关生成的话用户一打开中文拼音，存量几千首就得全部回补）。
+   - ⚠️ **为什么这条要起子进程，而粤拼不用——差异从来不是「要不要缓存」，是「谁算得出来」**。粤拼是纯查表（rime-cantonese 词典 `go:embed` 进 collector 二进制），Go 自己算得出。而日文读音**必须**走 `CFStringTokenizer` 形态分析（不能用 ICU 通用音译：汉字中日共用，Any-Latin 一律按普通话读，`火曜日の朝は` → `huǒ yào rìno cháoha`），中／韩走 ICU `applyingTransform(.toLatin)`——都是 Apple 系统能力，Go 里没有对应物。所以拆成 `lyrics-romanize` 这个 Swift 子进程，跟 `lyrics-translate`／media-control 同一形态。比 `lyrics-translate` 简单的地方：CFStringTokenizer／ICU 在任何 macOS 上都有，不像 `Translation.framework` 要 macOS 26+，没有版本兜底也没有网络退路。
+   - ⚠️ **读音本体走 `Romanizer.lineReading`，跟 App 播放时的客户端兜底是同一个函数**（2026-09-03 从 `LyricsSyncEngine.romanizationText` 提出来）。这是这条特性能不能成立的前提：预生成的产物必须跟现算逐字一致，否则同一首歌「装了缓存」和「现算」读音不一样——而这种不一致**不报错**，只表现成用户偶尔觉得「某句罗马音怎么变了」。selftest `contracts` 组有闸禁止任何一方把阶梯抄回去。
+   - **为什么值得做**：省 CPU **不是**理由（20Hz 热路径 2026-08-04 起就有按行记忆化）。真正的理由是**能导出**——`lyrics_roma` 会被 `exportLyricsFiles` 写成 `.roma.lrc`，现算的不会；在此之前用户把歌词文件夹拷到别处、或用别的播放器读，罗马音是丢的。
+   - **成本（2026-09-03 真实全量跑完的数字，不是估算）**：1996 首用时 **1m30s**（约 **45 ms/首**），成功 1996、无产出 0、失败 0；带罗马音的条目 **117 → 2133**，`.roma.lrc` 文件 2133 个；enrich 缓存 **47.86 MB → 52.90 MB（+5.0 MB）**。
+     - ⚠️ **两次事前估算都不准，方向还相反**：先按「罗马音正文与原文同量级」估 6–12 MB（偏高），又按 30 首样本外推估 ~1 MB（偏低一个量级，样本全是短歌）。真实值 +5.0 MB 落在第一次的区间下沿。**这类体积别再靠外推，跑一次 `-limit` 看真实增量**。
+     - 落盘核对（备份对拍）：原有罗马音被改动/丢失 **0** 条，除 `lyrics_roma` 外别的字段变动 **0** 条，条目总数不变（3571）；collector 重启后 2133 条仍在（没有被 `importLyricsFromFiles` 回滚）。
+   - **存量要手动回补**：`maybeGenerateHelperRoma` 只在解析／重评那一刻跑，所以上线时存量一条都不会变。`collector backfill-roma [-apply] [-limit N]`（`backfillromacli.go`）负责回补，形态照抄 `regenerate-jyutping`：默认预演，`-apply` 前必须确认独占（常驻 collector 内存里握着整份 enrichCache，会把修改整份盖回去），写完 `saveEnrichCache()` + `exportLyricsFiles()`——**漏掉 export 等于白做**，因为「能导出成文件」正是这条特性的主要理由。
+   - ⚠️ **改完 `enrichCache` 必须置 `enrichDirty = true`**，这是踩出来的（2026-09-03，20 条试跑时发现 `.roma.lrc` 写了 20 个、cache 的 mtime 纹丝不动）。`saveEnrichCache()` 开头是 `if !enrichDirty { return }`，漏置的表现是**静默不落盘**，而同一条路径上的 `exportLyricsFiles()` 照常写文件 → 「文件有、缓存没有」，下次启动 `importLyricsFromFiles()` 又把文件读回缓存，一切**看起来正常**。也就是说这个 bug 在正常使用下几乎观测不到。
+     - **`regenerate-jyutping` 一直带着同一个 bug**（同日一并修）——它之所以看起来正常，纯粹是靠上面那条 import 侥幸兜住，不是设计。
+     - 机械闸：`romanize_test.go` 的 `TestApplyCLIsMarkEnrichDirty` 扫所有 `*cli.go`，凡是「写 `enrichCache[` + 调 `saveEnrichCache()`」的都必须出现 `enrichDirty = true`；并要求至少扫到 2 个文件（扫到 0 个说明判据本身失效了）。做过变异测试：摘掉那一行当场红。
+6. **按语言分别开关**（`RomanizationScripts`，2026-08-29 起是日/韩/中(拼音)/粤(粤拼)**四**项勾选，同日起四项默认全开——此前只有日韩中三项、中文单独默认关，粤拼是这次改动才补上的独立开关）：同一个人对不同语言需求常相反（日文要罗马字、中文不要拼音）。汉字本身分不出普通话还是粤语，"粤"这一档是靠 collector 判定的 `SongLanguage`（外部信号）分派，不是靠文字本身识别（跟日语假名/韩语谚文能自证不同）。这个开关管的是**展示**：粤拼是否生成、写进 enrich 缓存由第 4 条的 `SongLanguage` 判定决定，跟这里的勾选是否打开无关；勾选只决定已经生成好的这份粤拼要不要在悬浮歌词/歌词窗口里渲染出来。总开关关着时语言勾选行折叠。
 
 ### 4. 中文繁简转换（相邻功能，见第 08 章）
 
-`ChineseVariant.converted` 只影响**显示**不动缓存原文；有假名判日文一律原样返回（防把日文新字体转坏：学→學）；用 ICU Simplified-Traditional 词级转换，**转简体时再叠一层 `HanVariants` 异体字表**（ICU 和 OpenCC 的繁简字典都不含「妳/祂/牠」这类异体字，详见 08-lyrics-engine）。
+`ChineseVariant.converted` 只影响**显示**不动缓存原文；有假名判日文一律原样返回（防把日文新字体转坏：学→學）；用 ICU Simplified-Traditional 词级转换，**转简体时再叠一层 `HanVariants` 异体字表**（ICU 和 OpenCC 的繁简字典都不含「妳/祂/牠」这类异体字，详见 08-lyrics-engine）。⚠️ 2026-09-03 起这张表是**从 Unicode Unihan + OpenCC 生成的**（681 条），跟 collector 侧搜索用的是同一份数据、同一个生成器，不再各维护一份。
 
 ## 设置项
 
@@ -60,7 +71,7 @@
 ## 数据与文件
 
 - enrich 缓存字段：`lyrics_tr` / `lyrics_tr_lang` / `lyrics_tr_source`（空=社区，"machine"=机翻）/ `lyrics_roma`；导出文件 `.tr.lrc` / `.roma.lrc`（第 11 章）。
-- `lyrics-translate` helper 打包在 `Lyrimuse.app/Contents/Resources/`，collector 按相对路径调用（与 media-control 同形态）。
+- `lyrics-translate` / `lyrics-romanize` 两个 helper 都打包在 `Lyrimuse.app/Contents/Resources/`，collector 按自身可执行文件的相对路径调用（与 media-control 同形态）。build.sh 里各占三步：加进 `*_SLICES` → `merge_slices` 出 fat 二进制 → 先删再拷再补签。找不到 helper 时**静默降级**（直接 `go build` 跑 collector 的开发场景），不报错刷日志。
 
 ## 代码锚点
 
@@ -72,6 +83,9 @@
 | 网易云译文/罗马音 | lyrimuse-collector/netease.go（tlyric/romalrc） |
 | 粤拼生成兜底 | lyrimuse-collector/jyutping.go `toJyutpingLine` `jyutpingReading`(含 `jyutpingCollisionOverrideMap`)`jyutpingWordReading` `jyutpingLRC`；enrich.go `maybeGenerateJyutpingRoma` |
 | 客户端罗马音 | LyrimuseCore/Lyrics/Romanizer.swift `romanize` `looksJapanese` `japaneseSegments` |
+| **整行读音判定阶梯（唯一一份）** | LyrimuseCore/Lyrics/Romanizer.swift `lineReading` —— 播放引擎与预生成 helper 共用 |
+| 整份 LRC 预生成 | LyrimuseCore/Lyrics/LyricsRomanization.swift `romanizeLRC`；helper 入口 lyrimuse/Sources/lyrics-romanize/main.swift |
+| 日/韩/中预生成接入 | lyrimuse-collector/romanize.go `onDeviceRomanize` `shouldGenerateHelperRoma` `maybeGenerateHelperRoma` `maybeGenerateRoma`；存量回补 backfillromacli.go |
 | 假名标注 | LyrimuseCore/Lyrics/KanaAnnotation.swift `parse` `marks(forLine:)` |
 | 逐行接入点 | LyrimuseCore/Lyrics/LyricsSyncEngine.swift（`songLooksJapanese`/`kanaAnnotation`/romanize 调用点） |
 | 语言包 UI | lyrimuse/Settings/LanguagePackRow.swift `LanguagePackStatusStore` |

@@ -9,13 +9,22 @@
 | 判据 | 取值 |
 |---|---|
 | 播够时长 | 曲长的一半，上限 240 秒；曲长未知则固定 240 秒 |
-| 曲子够长 | `≥ 30 秒`（时长未知也放行） |
+| 曲子够长 | `≥ 30 秒`（时长未知也放行）。可以关掉，见 §1a |
 | 不是广告 | 会识别并跳过 Spotify 的广告时段 |
 
 每 5 秒采样一次，播放时长按墙钟累加，所以暂停就停止计数、拖进度条也不会灌水。如果两次采样
 之间隔了 60 秒以上——机器睡了，或者采集器重启了——这一段间隔会被直接丢弃，不计入。
 
 这套阈值对齐 [Last.fm 官方打卡规范](https://www.last.fm/api/scrobbling)。
+
+### 1a. 短于 30 秒的曲目
+
+设置 → 账号 → Last.fm → *Scrobble* → **短于 30 秒的曲目**（`scrobble_short_tracks`，默认**关**）。
+Last.fm 的规则 *"The track must be longer than 30 seconds"* 是给客户端的——服务端不拒收短曲目、也没有
+「太短」这一个 ignore 码——但所有主流 scrobbler 都照做，所以 Lyrimuse 默认也照做。打开后，短曲目只要
+过了「听过一半」这条就记一次（20 秒的歌要听满 10 秒）。这是一个**只管 Last.fm** 的开关：短曲目会
+scrobble 到 Last.fm（也会记进给 Last.fm 回填兜底的本地收听记录），但**不会**提交到 ListenBrainz——
+开不开，ListenBrainz 那边都跟原来一样。
 
 ## 2. 发出去的字段
 
@@ -58,18 +67,34 @@
 
 ## 4. 合唱串的处理
 
-| 设置 | 默认 | 效果 |
+设置 → 账号 → Last.fm → *Scrobble* → **合唱歌曲的歌手**
+（`~/.config/lyrimuse/lyrimuse-features.json` 里的 `lastfm_scrobble_artist_mode`）：
+
+| 档位 | 值 | 对 `Khalil Fong & Fiona Sit` 的效果 |
 |---|---|---|
-| `lastfm_scrobble_first_artist_only` | **关** | 打开后 `Khalil Fong & Fiona Sit` 只发 `Khalil Fong` |
+| **全部**（默认） | `all` | 原样发整串 |
+| 只发第一位 | `first` | 只发 `Khalil Fong`——纯字符串处理，不联网 |
+| 智能 | `smart` | 到 Last.fm 上查一次，按曲目决定（见下） |
 
-在 `~/.config/lyrimuse/lyrimuse-features.json` 里配置；设置界面里没有对应开关。
-
-默认关，因为折叠不可逆——打开它，Fiona Sit（薛凯琪）就从你的历史里消失了；而不折叠，最坏不过
-是多一个听众很少的合唱条目。Navidrome 同名的开关（`Lastfm.ScrobbleFirstArtistOnly`）默认同样
+默认「全部」，因为折叠不可逆——折了，Fiona Sit（薛凯琪）就从你的历史里消失了；而不折叠，最坏
+不过是多一个听众很少的合唱条目。Navidrome 同名的开关（`Lastfm.ScrobbleFirstArtistOnly`）默认同样
 是关。
 
-打开之后切分是保守的：`/` 跟 `,`、`&` 分档处理，所以 `K/DA`、`AC/DC` 不会被切成 `K` 和 `AC`。
-这一步是纯字符串处理——不查询、不联网——同样的输入永远得到同样的结果。
+切分（「只发第一位」和「智能」都用）是保守的：`/` 跟 `,`、`&` 分档处理，所以 `K/DA`、`AC/DC`
+不会被切成 `K` 和 `AC`。
+
+**智能**拿 Last.fm 自己的编目当白名单，跟 Last.fm 的纠错规范同一个判断（"只有合体名下确实有
+发行时才映射到合体名；拿不准时归到更主要的那位"）：
+
+1. 用合唱串查一次 `track.getInfo`。Last.fm 上已经有这个正规条目（有 MBID、或听众 ≥ 500、或有
+   时长——一个人 scrobble 出来的影子条目三样都没有）→ 原样发整串。判一次，永久沿用。
+2. 没有的话，再用第一位歌手查一次。**那个**条目是正规条目 → 只发第一位，同样判一次永久沿用。
+   两边都没有 → 原样发整串，90 天后再查。
+
+查询失败（网络、限流、应答不对）一律原样发整串、不写缓存，一次抽风不会变成永久决定。判定结果
+连同依据存在 `~/.config/lyrimuse/lyrimuse-lastfm-collapse.json`，删掉这个文件就全部重判。
+
+旧的布尔开关 `lastfm_scrobble_first_artist_only` 仍然会读（`true` → `first`），但不再写。
 
 ## 5. 提交失败了怎么办
 

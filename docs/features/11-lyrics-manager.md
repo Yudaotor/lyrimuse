@@ -1,6 +1,6 @@
 # 11. 歌词管理窗口
 
-> 最后核对：2026-09-01 · 基线：5d9031a+工作树
+> 最后核对：2026-09-02 · 基线：e103532+工作树
 
 ## 定位
 
@@ -135,7 +135,20 @@
   - 验证方式：`TestBuildLyricsDecisionCopiesDisplayFields` 钉住「展示字段逐个抄进存档」（做过变异测试，摘掉复制行当场红）；端到端另跑过一次性验证——真实网络抓候选 → `buildLyricsDecision` → 序列化，Go 写出 4/4 带封面，再把**那份真实产物**交给 Swift 的解码路径解出 4/4。
 - 与「联网搜索」的本质区别：那是**现在**重新抽签（受 20s 期限影响，候选和当初不一定一样），这是当初那轮的**离线存档**。完整结构懒解码（`decodedDecision(for:)`，2026-08-19）：列表/按钮只用 `hasDecision` 布尔，打开弹窗那一刻才按 key 解一条——原来 rebuild 时对每条带该字段的条目全量做 JSON 双重编解码。刻意不提供「改用某条」按钮——存档里没有正文（collector 三铁律），想换歌词走联网搜索。
 
-### 7. 歌词文件夹（设置 → 歌词 → 管理段）
+### 7. 歌词库统计面板（设置 → 歌词 → 管理段，2026-09-03）
+
+- 「歌词管理 打开…」那一行下面一块统计面板（`Settings/LyricsLibraryStats.swift` 的 `LyricsLibraryStatsPanel`）：**总数 / 逐字 / 逐行 / 纯文本 / 纯音乐 / 暂无** 六格等宽，下面一行「其中 N 首有译文 · N 首有罗马音」。用户要求（「统计目前歌词数量，歌词情况，比如逐字多少，纯文本多少，逐行多少」）。
+- **零新增解析**：全部读 `EnrichCacheStore.Summary` 上早就存着的 `hasWordTiming` / `hasLyrics` / `hasPlainTextFallback` / `isInstrumental` / `hasTranslation` / `hasRomanization` —— 这些值本窗口的列表和详情页一直在显示，只是设置页此前一个数字都不给，想知道「库里攒了多少、成色如何」必须开这扇窗去数。
+- ⚠️ **成色是一次有优先级的判定，不是四个独立布尔**（`LyrimuseCore.LyricsKind.classify`）：逐字 → 逐行 → 纯文本 → 纯音乐 → 暂无，命中即停。`lyrics_yrc` 是在 `lyrics` 之上补的，所以「有逐字」的条目几乎一定也「有逐行」——不设阶梯的话各项之和会超过总数，用户一眼看出面板在瞎报。`isInstrumental` 排在 `.none` 前面同样是有意的：确证过的纯音乐跟「没搜到」是两回事（2026-08-20 在本窗口列表里修过一次，一整批 LoL 原声带被显示成刺眼的红色「无歌词」）。
+- 分类本体放在 **LyrimuseCore** 而不是跟面板放一起：App target 不可被 `lyrimuse-selftest` 引用（它只依赖 LyrimuseCore），而这个阶梯改错了**完全不报错、只是数字悄悄变形**。selftest（`lyrics-manager` 组）用一张 **16 行显式期望表**穷举全部组合——刻意不照着实现再写一遍 if 链，那是拿同一个假设验证它自己、阶梯整体挪位置照样全绿。显示用的名字/配色留在 App 侧（要 L10n / SwiftUI）。
+- **译文按来源拆两半**（2026-09-03，用户问「罗马音和译文这 2 个有没有必要区分歌词源带的还是机器翻译的」）：`LyrimuseCore.LyricsTranslationSource.classify` 读 `lyrics_tr_source`（空=社区译文，`"machine"`=collector 机翻）。本机实测 **1135 首有译文 = 源自带 723（63.7%）+ 机翻 412（36.3%）**，六四开，不是"分了也全落一边"的伪区分，而且两者质量差得远。⚠️ 必须**先判 `hasTranslation`**：`lyrics_tr_source` 为空既可能是社区译文也可能是压根没译文，光看那个字段会把三千多条没译文的歌全算成社区译文。
+  - ⚠️ **`"machine"` 这个哨兵跟 collector 的 `lyricsTrSourceMachine`（translate.go）之间没有任何编译期耦合**。Go 那边改成别的字符串时 Swift 不会报错，只会**静默**把机翻全算成社区译文（面板两个数字对调、歌词管理里那枚紫色徽章集体变绿）。selftest `contracts` 组有一条闸直接去扫 Go 源码对账。同批把 `LyricsManagerView` 里三处硬编码的 `"machine"` 也换成了这个共享常量。
+- **罗马音刻意「不」按来源拆**，两个原因：① 根本没有 `lyrics_roma_source` 这种字段——`lyrics_roma` 的来路是混的（网易云 `romalrc` / QQ `roma` / 酷狗 KRC 是源自带，粤拼是 collector 自算），只能靠 `song_language=="yue"` 推断，而粤拼只在「没有任何源给出 romalrc」时才补，一首源自带 romalrc 的粤语歌照样标 `yue`，会被误判成自算。② 更要紧：`lyrics_roma` 只覆盖 **114/3566 ≈ 3.2%**，而 App 侧 `Romanizer` 有客户端现算兜底（第 10 章 §33-34），服务端没给的照样在渲染时现算——所以这个数**不等于**「有多少首歌看得到罗马音」。文案因此定为「N 首**已缓存**罗马音」并挂 `HelpButton` 说明，不能写成「N 首有罗马音」（那正是这一版上线时的措辞，会让人以为罗马音基本没生效）。
+  - ⚠️ 同日**这个数字的含义变了一半**：collector 新增了日／韩／中预生成（第 10 章 §5，`lyrics-romanize` helper），所以「已缓存」不再只是「源自带 + 粤拼」那一小撮。但 `maybeGenerateHelperRoma` 只在解析／重评那一刻跑，**存量条目要跑一次 `collector backfill-roma -apply` 才会补上**。本机 2026-09-03 已跑完全量：带罗马音的条目 **117 → 2133**（3571 条里；其余 1323 条非中日韩文字、115 条没歌词）。⚠️ help 气泡的文案 2026-09-03 砍过一轮（用户原话「不要说那么多有的没的」），只留「这个数在数什么 / 没被数的去哪了」两句；「三条来路」的枚举和「哪些歌仍走实时生成」的举例移进代码注释和第 10 章 §5——那是开发者要知道的，不该占用户的气泡。
+- `isSearching` 的占位行不计入（那不是缓存里真实存在的条目，见 `Summary.isSearching`）。空库不摆一排 0，改成一句「还没有缓存任何歌词。放一首歌，Lyrimuse 会自动搜好存在这里」。
+- 面板**自己**持 `@ObservedObject EnrichCacheStore.shared` 并在 `.task` 里 `reload(onlyIfChanged: true)`，不把订阅挂到整个设置页上——那个单例有七八个 `@Published`，整页订阅意味着任何一次 reload / 体积重算都要重画整张设置页（本仓库为「@ObservedObject 订阅整个单例」踩过真实的过度重渲染 bug）。
+
+### 8. 歌词文件夹（设置 → 歌词 → 管理段）
 
 - 路径展示 + 「选择文件夹…」（NSOpenPanel，改 `features.lyricsDir`）+「打开歌词文件夹」（不存在先兜底创建）+「恢复默认位置」（lyricsDir 置空）。换文件夹后旧文件不自动搬。
 - 文件格式：每条目最多 4 个文件，头部 `[ar:]/[ti:]/[al:]/[source:]/[manual:1]` 标签；collector 启动时「文件赢」导入覆盖 JSON（只增不删）；大小写碰撞组加 crc32 哈希后缀消歧。
@@ -145,6 +158,7 @@
 | 位置 | 项 | 影响 |
 |---|---|---|
 | 歌词→管理 | 歌词管理 打开… | 打开本窗口 |
+| 歌词→管理 | 歌词库统计面板 | 只读，来自 `EnrichCacheStore.summaries` |
 | 歌词→管理 | 歌词文件夹（选择/打开/恢复默认） | `features.lyricsDir`（features.json+kickstart） |
 
 ## 与其它功能的交互
@@ -166,6 +180,7 @@
 | 主题 | 位置 |
 |---|---|
 | 窗口主视图 | LyricsManager/LyricsManagerView.swift（列表/筛选/focusCurrentlyPlaying/sourceDisplayName/sourceColor） |
+| 排序 | 展示枚举 LyricsManagerView.swift `LyricsSortOption`（绑 Picker，只负责把自己翻译成 `coreOrder`）+ `EnrichCacheStore.Summary.lyricsSortKey`（映射成纯值类型）；**规则本身**在 LyrimuseCore/Local/LyricsSortOrder.swift `LyricsSortKey` `LyricsSortOrder.less` `compareOptional` `fallbackLess`；覆盖在 lyrimuse-selftest（见「设计决策」第 20 条） |
 | 数据层 | LyricsManager/EnrichCacheStore.swift `saveEdit` `delete` `clearAll` `splitKey` `buildSummaries`（含 `offsetsSnapshot` 参数）`rebuildSummaries`（public，供偏移编辑收尾调） `persist`(后台+串行链) `reload(onlyIfChanged:)` `trashOrRemove` `restoreFromAutoSnapshot` `autoSnapshotDeleteThreshold` |
 | 自动快照 | Settings/LyricsBackupStore.swift `writeAutoSnapshot` `autoSnapshots` `pruneAutoSnapshots` `restoreAutoSnapshot` `autoSnapshotDir` `autoSnapshotKeepCount`；归档格式在 LyrimuseCore/Lyrics/LyricsBackupArchive.swift |
 | 联网搜索 | LyricsManager/LyricsSearchSheet.swift、LyricsSearchService.swift；collector 侧 searchcli.go |
@@ -298,3 +313,79 @@
    条目、不动这份文件唯一真源的约定——跟本条决策不矛盾，只是给"collector 毫无改动"这句话
    打了个补丁:它现在会响应取消,但从不会为占位状态本身写盘。
 
+
+18. **collector 导出歌词文件改成原子写（2026-09-02）**：`lyricsexport.go`
+    之前直接 `os.WriteFile`（先截断再写），而 `importLyricsFromFiles` 只校验头部三行、**正文不校验**、
+    内容不同就覆盖缓存——崩溃 / 断电 / 磁盘满留下的空文件或半截文件，下次 collector 启动就会以
+    「用户文件」身份把缓存里完整的歌词顶掉，手改过的 manual_lyrics 也在这条路上。同仓 `saveEnrichCache`
+    与 App 侧 `saveEdit`（`atomically: true`）早就是临时文件 + 改名，只有导出没跟上。现在
+    `writeLyricsFileAtomic`：同目录 `os.CreateTemp`（`<base>.lrc.tmp.随机`）→ 写 → `chmod 0644`
+    （CreateTemp 默认 0600，补成跟以前一致）→ 改名，任一步失败删临时文件并记日志；不 fsync（与
+    saveEnrichCache 一致）。临时文件名不以四个歌词后缀收尾，所以导入分组、本窗口的目录扫描
+    （`lyricsFileSuffixesLongestFirst`）与备份归档（`EnrichCacheKeys.lyricsFileSuffixes` 过滤）都会自动
+    忽略它；崩溃残留由 `importLyricsFromFiles` 启动时清扫一次（`isLyricsTempFile`，只在启动做——导出
+    过程中扫会误删另一轮正在写的临时文件）。**§1 那条「mtime 当最近更新信号」不受影响**：导出仍先
+    比对全文、逐字节相同就不写，改名后的 mtime 就是这次真正写入的时刻。顺带消掉一个并发坑：
+    `exportLyricsFiles` 有 8 个调用点、文件写入那段没有锁，两轮导出同时写同一个文件时 WriteFile 会
+    互相截断交错；各写各的临时文件再改名，最后改名的赢、内容完整（单测
+    `TestExportLyricsFilesConcurrentWritesStayWhole` 八路并发钉住）。刻意**不动导入侧的校验**：导入要
+    能采纳用户手写的任何内容，「正文不校验」是刻意的，原子写把问题在源头堵住就够了。同类非原子写
+    还有 collectorstatus / daily / lastfm / topartists / weekly / deviceartwork 六处，读方都能容错，
+    没一起改。
+
+19. **「搜索歌词…」小窗切歌后串 key（2026-09-02）**：悬浮窗 ⚙ 的独立小窗（`LyricsQuickSearchWindow`）
+    2026-08-31 为修「再点一次还是上一首」改成每次点击重查曲目、替换 `context`，但 `if let context {
+    LyricsSearchSheet(...) }` 从 Optional(A) 到 Optional(B) 是同一个 SwiftUI 视图身份：面板的查询词
+    `@State` 与首次挂载才跑的 `.task` 都不重置，界面仍是上一首的查询词和候选（「恢复原信息」凭空出现是
+    可见征兆），`onApply` 捕获的却是新曲目的 key——采纳把上一首的歌词写进当前这首的条目，lyrics/
+    文件族随之落盘（文件是权威源，collector 重裁覆盖不回来），开了「采纳即锁定」还会把它冻住。
+    修在 `LyricsSearchSheet` 内部（本窗口也用它，原始字段在面板存活期间不变，行为不受影响）：三个原始
+    字段拼成 `searchSubject`，`.task(id: searchSubject)` 重搜、`.onChange(of: searchSubject)` 把查询词
+    重置回原始值。**刻意不用**宿主层 `.id(context.key)` 整棵重建：离屏 `NSHostingView` 探针实测重建时
+    新面板 `.task` 先起、旧面板的任务取消与 `onDisappear` 后到，两者都调全局
+    `LyricsSearchService.cancelRunning()`（杀「当前在跑的那个」），新起的 collector 子进程 3/3 被杀；
+    `.task(id:)` 由 SwiftUI 保证先取消旧任务再起新任务。真机复现步骤：开小窗 → 切歌 → 再点
+    「搜索歌词…」或按热键 → 查询框应立刻变成新歌名、候选重载、没有「恢复原信息」按钮。
+
+20. **排序规则搬进 LyrimuseCore，并给「无歌词文件 / 无来源」这两个尾块补一个次级时间键**
+    （2026-09-02，用户报「歌词管理页面的排序有时候选了不生效」，截图是「仅无歌词」开着 +
+    「更新时间 新→旧」，列表却仍是歌手字母序）。
+    - **不是比较器写错，是这批数据让排序无从下手。** `lyricsUpdatedAt` 取的是**导出歌词
+      文件的 mtime**，而「仅无歌词」筛出来的行按定义**没有歌词文件**（export 会跳过），
+      于是整屏 `lyricsUpdatedAt` 全是 nil → 全部落进同一个「无时间戳」尾块 → 由平局键
+      `(歌手,专辑,歌名)` 决定顺序，而那恰好**就是**「默认排序」。用户看到的"选了没反应"
+      是真的没反应，只是原因在数据形状上，不在代码分支上。
+    - 同一屏「来源 A→Z / Z→A」也塌：2026-09-02 实测本机 14 条命中「仅无歌词」，
+      `lyrics_source` **全为空**，`sourceDisplayName("")` 都是「无来源」这同一个字符串。
+    - **排除过另一种可能**：不是 mtime 字段集体失真（第 19 条那个前提垮掉的形态）。实测
+      `lyrics/` 下 7707 个文件、1972 个不同 mtime 秒值、散布在 08-22～09-02，有歌词的行
+      排序是好的。
+    - 修法：`Summary` 新增 `resolvedAt`（缓存里的 `ts`，collector 侧 `enrichEntry.TS`，
+      语义是"这条上次被解析出来的时刻"），**只作次级键**：
+      - 「更新时间」——无 mtime 的尾块**整体仍排最后**（不变），块内从歌手字母序改成按 ts；
+      - 「来源」——无来源的行改成**两个方向都排最后**（原来是按「无来源」这个展示名参与
+        字母序），块内同样按 ts；
+      - 同一来源内部**不动**，仍按 `(歌手,专辑,歌名)`——「来源」这一档表达的是分组，不是
+        组内次序。
+      实测那 14 条 **14/14 都有 ts 且取值互不相同**，排出来的顺序与事实吻合。
+    - ⚠️ `resolvedAt` **不是** `lyricsUpdatedAt` 的替代品，两者量纲不同：mtime 是"歌词正文
+      上次真的变过"，ts 是"这条上次被解析过"（重搜一轮没搜到新东西也会把 ts 推到当下，而
+      正文没变、mtime 不动）；覆盖率也更低（2026-09-02 实测 2445/3402 ≈ 72%，mtime 是
+      3169/3210 ≈ 99%）。所以只在"那一档本来注定是一团平局"的尾块里用它。
+    - **为什么顺手把规则搬去 LyrimuseCore**：比较器原来是 `LyricsManagerView.swift` 里一个
+      `private enum` 的方法，而 `lyrimuse-selftest` 只依赖 LyrimuseCore、够不到它——这套
+      规则（哪一档优先、平局怎么断、缺失值排哪儿）此前**一行自动化覆盖都没有**，而这次的
+      bug 恰恰是"逻辑对但在某些数据形状下退化成静默无操作"，肉眼看列表发现不了。搬完跟
+      `EnrichCacheKeys` 同一个待遇：视图层只负责映射 `lyricsSortKey`，规则可被逐档钉住。
+      排序键一次性算好再排（`sourceDisplayName` 要走 L10n 查表，不能放进 O(N·logN) 的
+      比较里）。
+    - 回归口径（用户要求）：selftest **2124 条断言全过、0 失败**（本条新增 20 条）；
+      **13 个变异全部被抓、0 漏**——其中「同一来源内部改成按 ts」这条一开始**没被抓到**，
+      查下来是我自己那条断言写空了（用例里 ts 顺序与歌手字母序恰好一致，两种规则给出同一个
+      结果），把 ts 改成与字母序相反后才真正生效，用例里留了注释钉住这一点。另外单独验过
+      `entry["ts"] as? Double` 对 JSONSerialization 的 `__NSCFNumber` 确实取得到值
+      （拿真实缓存跑：目标条目解出 2026-09-02 21:32、全库 2445/3402），否则整个修复会是
+      静默空操作。
+    - ⚠️ **未做端到端界面验证**：本仓禁止用 AppleScript/System Events 驱动界面，而「歌词
+      管理」窗口在 App 重启后是关着的、`sortOption` 又是不持久化的 `@State`，无法在不驱动
+      界面的前提下复现"开着「仅无歌词」+ 选「更新时间」"那一屏。已验的是规则层与数据层。

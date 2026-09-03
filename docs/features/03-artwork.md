@@ -76,9 +76,13 @@
 - `NotchLyricsView.accentOrWhite`:followsCoverArt 开着且 `notchAccentColor` 非 nil → 用它;否则纯白。灵动岛歌词/歌名/EqualizerBars/控制按钮/进度条/瞬态提示条全走它(封面小图的描边投影除外)。
 - 设置页悬浮歌词编辑台画的是真 `LyricsOverlayView`,`$artworkAccentColor` 经它自己的窄订阅代理 `OverlayPlayback` 生效,不再有单独的预览订阅(旧的 `OverlayPreviewBar` 2026-08-31 已删)。
 
-### 5. 四个图像消费面
+### 5. 图像消费面(六处)
 
 所有图像消费面读的都是 `poller.highResArtworkImage ?? poller.artworkImage`——**解码收敛在 PlaybackCoordinator**:`artworkData` 变化时 `NSImage(data:)` 只解一次(`artworkImage`),灵动岛一个 body 里两处读封面不会把同一张几百 KB 的 JPEG 每次重算 body 都解两遍。
+
+⚠️ **这条口径是每个消费面自己的义务,漏了不报错**。下面列的四处之外还有两处后来加的:**菜单栏快捷面板的 44pt 小封面**(`MenuBarPanel.coverView`)和 **Last.fm「正在播放」行的 26pt 缩略图**(`LastfmStatsSection` 的 `LiveRowPlayback`);再加上**灵动岛收起态左耳的小封面**(`NotchLyricsView.collapsedRow`),这三处一直漏着 `?? `,2026-09-02 才由用户报出来 —— 方大同《白发》在 Chrome 里放 YouTube Music 时,系统经 MediaSession 给的是一帧 **150×84 的 MV 截帧**(长宽比偏离正方形 0.44,collector 侧 `deviceArtworkMaxAspectSkew` 正确地没把它当封面收下),于是菜单栏面板画的是那帧 MV、歌词窗口画的是缓存里正确的专辑封面,同一首歌两处两张图。用户原话:「为什么这两个地方的封面不一样?难道取值不一样吗」—— 确实就是取值不一样。
+
+**现在有机械闸**:selftest 扫 `Sources/lyrimuse` 里所有 `.artworkImage` 的**取值点**(排除声明/订阅/赋值/KeyPath),不带 `highResArtworkImage ?? ` 也不走已包好的 `displayArtworkImage` 就红。新增消费面时别绕开它。加闸的理由是这条口径靠"记得写"维护了三个月、漏了三处才被发现,而漏掉既不编译报错也不崩,只表现成"两个地方的封面不一样"。
 
 1. **灵动岛封面小图**(`NotchLyricsView.artworkThumbnail`):歌词行尾端(卡片右下角),边长 `max(16, min(32, 行高-12))` = 32pt,圆角 5pt + 极淡白描边 + 小投影(给磨砂玻璃风格下的浅色封面兜轮廓)。没有封面数据**整个不占位**(不画空方块)——换歌时旧图留到新图到货,只有「启动后第一首」和「这首歌真没封面」才发生一次宽度增减。这枚小图无开关(2026-08-10 删掉「显示专辑封面」开关,固定有图就显示)。
 2. **灵动岛「跟随封面」背景**(`NotchLyricsView.backgroundLayer`):`notchCardStyle == .coverArt` 且有图时,封面 scaledToFill + blur 20 + 45% 黑,底下先铺一层不透明的 darkGradient 打底(blur 会把图像边缘羽化成半透明,没有打底卡片四周会透出桌面)。模糊半径 20 远小于歌词窗口的 72——灵动岛 4.7:1 又矮又宽,照搬大半径会把任何封面抹成统一深灰。没图(或风格不是 coverArt)退回所选固定风格的填充。
@@ -153,3 +157,16 @@
 11. **高清替代绝不能退到「忽略专辑」的兜底**(2026-08-26 用户报的方大同「放不过自己」实锤):同一首歌在不同专辑版本下封面经常真的不一样。原来 `refreshHighResCover` 复用的是给「最近播放」列表设计的 `coverURL`,那个函数专门给 scrobble 专辑名不可信的场景多退一级「忽略专辑,按歌手+歌名」的索引——两条同名不同专辑的缓存记录一旦命中这级,选哪条全看 Dictionary 遍历顺序,而且还会被 `onlyIfMissing: true`(见下一条)焊死到换歌之前。修法:拆出 `albumMatchedCoverURL`,只保留认专辑的两级查找,当前播放这个消费面专辑名来自系统 Now Playing、必然可信,没有退这一步的必要。
 12. **collector 端「宽松包含」的 albumScore=100 不等于真的对上版**:`coverNeedsAlbumCheck`/`resolveTrackEnrichment` 原来用 `albumScore(...) == 0` 判「这张封面不属于当前专辑,该问别的源」,但 `albumScore` 的 100 分档本来就是「候选是目标的子串」(重发版/豪华版这类带后缀的专辑名天然命中),不是真对上版。方大同「很不低调」「烦」的本地专辑是《JTW 西游记 (Gold) [Explicit]》,网易云/Apple 曲库里都还是没有这个后缀的旧版《JTW西游记》——被判成「宽松包含、对上了」,QQ 音乐（这两首实际收录了新版封面的那个源）永远没机会被问到。2026-08-26 把门槛从 `== 0` 收严成 `< 200`(200 = 逐字相等/仅大小写繁简差异),让"同名不同版"也触发向 QQ 补问一次;`qqCoverFallback` 内部本就按 `albumScore` 自行避开精选集/合辑,给出结果就值得信,`coverSwapAllowed` 相应放行 QQ 那档跨源替换(不再要求 `fresh.CoverAlbum` 打分——QQ 从不回传专辑名)。发现即修:`collector recheck-cover -apply` 手动补跑一次这四首。
 13. **文字打分核不出「封面图本身对不对」,同专辑邻居比自己单独检索更可信**:2026-08-27 同一张专辑接着报的方大同「Once」「All Night」——QQ 音乐搜索索引对这两首歌各自只收录了一条记录,专辑名文本上一样"对得上"《JTW 西游记 (Gold) [Explicit]》,挂的封面却是另一款《2CD [B+G]》合集版(半黑半金站姿),跟同专辑其它曲目实际的单张《Gold》版封面(纯金底半脸特写)是完全不同的两张图——`albumScore` 只能核对文字,这类"文字对上、图不对"的情况天生核不出来,不管门槛怎么调都堵不住。加了 `siblingAlbumCover`:三源各自检索都给不出精确对版结果(`< 200`)时,最后问一次缓存里同专辑(同歌手、逐字同专辑名)已经有 `CoverSource=="qq"` 定案的邻居,直接借它的封面——只借 qq 那档,不借网易云/Apple(那两档自己也可能只是"宽松包含"的 100 分,借了等于把一份信不过的答案传染给另一首歌)。
+
+14. **设备直送封面不再无条件顶掉远程候选:判「是不是同一张图」,不判「谁更大」**(2026-09-02,用户报《24K Magic》「封面这么糊清晰度很低」)。形态很干净 —— **同一张专辑的其它 8 首都是 800×800,只有标题曲拿到了一张 120×120**(`cover_source=device`,本地 7 KB 的 `file://`)。歌词窗口那张大卡在 Retina 下要画到 ~560px,120px 放大 4.7 倍就是那个糊。全库扫下来 113 条 device 条目里有 **21 条**低于 300px(120px×10、150px×11),其余 92 条不受影响。
+
+    成因是两条**各自都对**的设计叠在一起:① `deviceArtworkMinEdge = 64` 下限故意压得极低,注释里写明「Arc/Edge 播 Apple Music 网页版时 MediaSession 实际上送的封面就是 120x120,收紧到 200 就是在挡真实数据」;② 设备封面**无条件顶掉**网易云/Apple/QQ/同专辑邻居那一整套结果,而 `coverSwapAllowed` 又规定 `cover_source == "device"` 一律不再换源 —— 于是那张 120px **永久锁死**,连上一条的 `siblingAlbumCover` 明明已经在缓存里找到了 800×800 也照样被盖掉。
+
+    ⚠️ **不能改成"分辨率不够就不用设备封面"** —— 那会把上一条(第 13 条)和 8-31 的 Immortal 案例**反过来**:那些案例里设备给的 120×120 是**对的**,QQ 那张高清图是**挂错的**。单看分辨率选,等于每次都把对的换成错的。
+
+    所以判据是**"两张图是不是同一张"**:设备封面的价值在**身份**(这一刻这个 App 自己吐出来的,不靠文字匹配去猜),远程候选的价值在**分辨率**;两者其实是同一张图时就拿高清那份,不是同一张就身份优先、认这个糊。判据表与实现见 `lyrimuse-collector/coverquality.go` 头注。三个实现细节值得记:
+
+    - **"候选有多大"必须从 URL 读(`coverURLIntendedEdge`),不能量解码结果**:`loadCoverImage` 是给取色用的、**返回的远程图已经降采样**(网易云 64y64、QQ 300),拿它的尺寸判清晰度会把一张 800×800 读成 64px,判据恒成立、修复一次都不会触发。实现时真踩了这一脚。
+    - **指纹必须箱式取平均、不能取最近邻**:8×8 aHash 对高分辨率图只采 64 个点的话,同一张图的 120px 版和 800px 版会采到完全不同的内容。实测坐实:箱式平均下用户那张 120px 与同专辑邻居 800px(被降到 64px)的指纹**逐位相同**、距离 0。
+    - **阈值是拿真实数据校准的**:正例距离 0,反例(缓存里随机抽的 8 张其它专辑封面)17…39,无一误判;阈值取 10,落在 0↔17 的空隙里,离两边分别 10 和 7。
+    - **存量自愈通路是 `coverSwapAllowed` 的 device 分支**(不是新造 CLI):那 21 条各自下次被播到、走到 `backfillPeripheralFields` 的外围自愈时自动升级,用户不需要做任何事;要立刻修某几首用 `collector recheck-cover -apply`(它走同一个判定)。

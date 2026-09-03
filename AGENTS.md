@@ -13,6 +13,7 @@
 # Swift（App）—— 仓库根执行
 cd lyrimuse && swift build                  # 只编译，不影响已安装的 App
 cd lyrimuse && swift run lyrimuse-selftest  # 全部断言，失败以非零码退出
+cd lyrimuse && swift run lyrimuse-selftest --filter lastfm -q  # 只跑一组（--list 看组名）
 cd lyrimuse && ./build.sh                   # release 构建 + 重打包 + 重签名 + 重启
 
 # Go（collector）
@@ -34,9 +35,14 @@ cd lyrimuse-collector && gofmt -l .
 （它做 release 构建、重新打包 `.app`、重新签名、通过 launchd 重启）。
 
 **没有 XCTest**（这台机器没有完整 Xcode，`swift test` 报 "no such module"）。Swift 侧的
-测试全部在 `Sources/lyrimuse-selftest/main.swift`，是手写的 `expectEqual` 断言。
-往里加断言时注意：**文件末尾是失败汇总 + `exit()`**，追加到文件尾部的代码永远不会执行，
-新断言要插在汇总之前。
+测试在 `Sources/lyrimuse-selftest/`，是手写的 `expectEqual` 断言，**按领域拆成十几个
+`XxxTests.swift`**，每个文件一个 `runXxxTests()`，由 `main.swift` 里的 `groups` 注册表按顺序
+调用（`main.swift` 只放注册表、参数解析、汇总；断言函数与计数器在 `Harness.swift`）。
+加断言：已有领域就写进对应文件的 `runXxxTests()` 函数体里；新领域就新建一个文件 + 函数，
+再到 `groups` 里加一行 —— 忘了加会被「注册表守卫」当场 FAIL（它扫目录里所有 `run…Tests()`
+定义逐个核对）。**不要把断言写进 `main.swift`**，也**不要建子目录**：好几条守卫靠 `#filePath`
+往上数目录层数定位仓库文件。`--filter <组名子串>` 只跑一组、`--quiet` 只留 FAIL 与每组一行
+汇总、`--list` 列出全部组；`--filter` 一组都没匹配上退出码 2，不给假绿。
 
 ---
 
@@ -113,6 +119,21 @@ screencapture -x -o -l <窗口ID> /tmp/shot.png                   # 只截那一
   渐变 stop 在同位置打架、长行被压成一串省略号），而混在 View 里时除了盯屏幕没有别的验证
   办法。下沉到 Core，UI 层只留薄薄一层绑定。
 - **collector（Go）只读 `config.json`，从不写回**；写入方是 Swift 侧的 `ConfigStore`。
+- **设置页 UI 只用 `Settings/SettingsDesignSystem.swift` 那套组件，选用顺序固定**（2026-09-03 成文）：
+  页面容器 `SettingsPage`（页头要自己画用 `SettingsPageCustomHeader`，顶部要钉分段/预览用
+  `SettingsPageWithStickyHeader`）→ `SettingsCard`（一张卡一个意图，卡标题 `SettingsCardHeader` + `CardDivider`）
+  → `SettingsRow`（前导图标 + 标题 + 副标题 + 尾部控件，行间 `CardDivider` 手插）→ 从属项 `SettingsSubRow`
+  → 操作之后才冒出来的提示 `SettingsNote` → 这几样都塞不进才 `SettingsRawRow`。设置页里**不写裸
+  `Toggle`/`Picker`/`Form`/`.formStyle(.grouped)`**；同一行放多个控件照「全局时间轴偏移」那一行的 HStack
+  写法；尾部控件一律 `.labelsHidden()`；破坏性按钮用 `DestructiveButton`，滑杆用 `SteppedSlider`；文案经
+  `L10n.t`、不加句尾句号。为什么是这套、每一条背后的实测都在那个文件的头注里，这里不复述。
+- **macOS 26 才有的 API 一律 `#available(macOS 26.0, *)` 门控，旧系统退回改版前的外观、不做模拟**。
+  部署目标是 macOS 14，而 CI 跑在 macos-26 —— 没门控的 `.glassEffect`/`.glass`/`.glassProminent`/
+  `GlassEffectContainer` 在 CI 编得过、在用户的 macOS 14 上启动即崩，没有别的机制拦它。液态玻璃只经
+  SettingsDesignSystem 的入口（`settingsCardBackground` / `settingsGlassButtons` / `settingsProminentGlassButton`
+  / `clearGlassCapsule` / `SettingsGlassContainer`）；展示面（悬浮歌词 / 灵动岛 / 歌词窗口）自己套玻璃时
+  同样门控，现有唯一例外是 `LyricsOverlayView.overlayCapsuleBackground`。selftest contracts 组有闸：这些
+  API 的调用点只允许出现在这两个文件里，且文件里必须有那句 `#available`。
 
 ---
 
@@ -124,8 +145,22 @@ screencapture -x -o -l <窗口ID> /tmp/shot.png                   # 只截那一
 一次性引导标记这类）才写进 `machineLocalDefaultsKeys`；删键时写进 `obsoleteDefaultsKeys`。判错
 不报错，表现是新机器上「界面在说一件不成立的事」。
 
-**本地化**：`Localizable.strings` 里**中文原文就是 key**。只加中文那份、忘了英文那份，
-英文界面会静默显示中文，编译不报错。改完用 key 集合对比两份文件确认没有一边独有的。
+**本地化（三语：简体 = key、英文、繁体，2026-09-03 用户定）**：`Localization/Localizable.xcstrings`
+是唯一真源，中文原文就是 key。**新加或改任何面向用户的文案，必须在同一次改动里把当前支持的
+所有语言写全**：`en` 和 `zh-Hant` 都不能缺（zh-Hans 可省略，值即键），占位符三语一致；繁体按
+`Localization/zh-Hant-STYLE.md` 写（台湾软件用语 + Apple 词表，**不是**字级简繁转换）。写完跑
+`python3 Localization/generate-strings.py`，把三份生成的 `.strings` 一起提交。缺任何一种语言：
+生成脚本直接失败并列出缺的键、`scripts/check_strings_parity.py` 红、selftest 本地化守卫红 ——
+静默回退（英文界面冒中文、繁体界面冒简体）正是这套守卫要消灭的事故。以后再加语言，同样的
+规则整套照做：TARGETS、`UILanguage`、两个语言选择器、`build.sh` 拷贝、守卫，并把全部既有键补齐。
+
+**第三方声明与对外请求说明**（2026-09-03）：随包分发的每个依赖（`Package.resolved` 的 SPM 包、
+`build.sh` 里 `brew install` 进包的东西、collector 的 Go 模块）都必须在仓库根 `THIRD_PARTY_LICENSES`
+里有一条，`scripts/check_third_party_licenses.py` 机械对一遍（CI 也跑）；BSD/MIT 的分发条款要求随附
+许可证文本，这个文件由 `build.sh` 拷进 `Contents/Resources/`，设置「关于 → 第三方许可」打开的就是它。
+**新增一处对外请求**（新歌词源、新的封面 / 翻译后端、新的第三方服务）时，同一次改动里把 README 中英版
+「许可与版权说明」那一节的清单和 01 章「许可、版权与对外请求」那张表补上——那一节对用户承诺的是
+「会离开你 Mac 的只有这些」，漏一条就是承诺失实。说明正文只在 README 维护，App 里两处入口都只是链接。
 
 **歌词打分**：`match.go` 的分值不是拍脑袋定的，注释里记着消融实验结论（例如"按来源加分
 改变了 69/206 首歌的冠军，其中 0 次变对、6 次变错，去掉后准确率 93%→96%"）。改分值前先读

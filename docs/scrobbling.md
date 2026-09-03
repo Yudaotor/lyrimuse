@@ -9,7 +9,7 @@ A play is submitted once **all** of these hold:
 | Rule | Value |
 |---|---|
 | Played long enough | half the track, capped at 240s — or 240s if the length is unknown |
-| Track is long enough | `≥ 30s` (tracks of unknown length are allowed through) |
+| Track is long enough | `≥ 30s` (tracks of unknown length are allowed through). Can be switched off — see §1a |
 | Not an ad | Spotify ad breaks are detected and skipped |
 
 Playback is sampled every 5 seconds and elapsed time accrues from the wall clock, so pausing stops
@@ -17,6 +17,16 @@ the count and seeking does not inflate it. If two samples end up more than 60 se
 machine slept, or the collector was restarted — that gap is discarded rather than credited.
 
 These thresholds match [Last.fm's scrobbling guidelines](https://www.last.fm/api/scrobbling).
+
+### 1a. Tracks under 30 seconds
+
+Settings → Accounts → Last.fm → *Scrobble* → **Tracks under 30 seconds** (`scrobble_short_tracks`,
+default **off**). Last.fm's rule *"The track must be longer than 30 seconds"* is a client-side rule —
+the server does not reject short tracks and has no "too short" ignore code — and every mainstream
+scrobbler honours it, so Lyrimuse does too by default. Turning it on lets short tracks count once
+they pass the half-played rule (a 20-second track needs 10 seconds). It is a **Last.fm-only** setting:
+short tracks are scrobbled to Last.fm (and recorded in the local log that feeds Last.fm backfill) but
+are never submitted to ListenBrainz, whose behaviour is unchanged either way.
 
 ## 2. What gets sent
 
@@ -63,19 +73,40 @@ Why there is no external lookup to "canonicalise" names:
 
 ## 4. Multi-artist credits
 
-| Setting | Default | Effect |
+Settings → Accounts → Last.fm → *Scrobble* → **Artists on collaborations**
+(`lastfm_scrobble_artist_mode` in `~/.config/lyrimuse/lyrimuse-features.json`):
+
+| Mode | Value | Effect on `Khalil Fong & Fiona Sit` |
 |---|---|---|
-| `lastfm_scrobble_first_artist_only` | **off** | On: `Khalil Fong & Fiona Sit` is submitted as `Khalil Fong` |
+| **All** (default) | `all` | Submitted as-is |
+| First only | `first` | Submitted as `Khalil Fong` — pure string handling, no network call |
+| Smart | `smart` | Looks the track up on Last.fm once and decides per track (below) |
 
-Set in `~/.config/lyrimuse/lyrimuse-features.json`; there is no toggle for it in Settings.
-
-Off by default because collapsing is irreversible — turning it on removes Fiona Sit from your
-history, while leaving it off costs at most one lightly-listened collaboration entry. Navidrome's
+*All* is the default because collapsing is irreversible — it removes Fiona Sit from your history,
+while leaving the credit intact costs at most one lightly-listened collaboration entry. Navidrome's
 option of the same name (`Lastfm.ScrobbleFirstArtistOnly`) also defaults to off.
 
-When on, splitting is conservative: `/` is handled separately from `,` and `&`, so `K/DA` and
-`AC/DC` are not split into `K` and `AC`. It is pure string handling — no lookup, no network call —
-so the same input always produces the same result.
+Splitting (used by *First only* and *Smart*) is conservative: `/` is handled separately from `,`
+and `&`, so `K/DA` and `AC/DC` are not split into `K` and `AC`.
+
+**Smart** uses Last.fm's own catalogue as the whitelist, following Last.fm's correction guidelines
+("only map to a joint artist name if a release exists under it; otherwise prefer the more
+prominently credited artist"):
+
+1. `track.getInfo` for the joint credit. If Last.fm already has it as a real entry (an MBID, or
+   ≥ 500 listeners, or a duration — none of which a ghost entry created by one scrobbler has), the
+   full credit is sent. Decided once, kept forever.
+2. Otherwise, `track.getInfo` for the first artist. If *that* entry exists as a real entry, only
+   the first artist is sent — also decided once and kept forever. If neither exists, the full credit
+   is sent and the track is re-checked after 90 days.
+
+Any lookup failure (network, rate limit, malformed answer) keeps the full credit and caches
+nothing, so a hiccup never becomes a permanent decision. Decisions live in
+`~/.config/lyrimuse/lyrimuse-lastfm-collapse.json` with the evidence that produced them; delete the
+file to re-decide everything.
+
+The legacy boolean `lastfm_scrobble_first_artist_only` is still read (`true` → `first`) but no
+longer written.
 
 ## 5. If a scrobble fails
 
