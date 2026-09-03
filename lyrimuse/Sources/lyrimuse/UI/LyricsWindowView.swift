@@ -2756,23 +2756,27 @@ struct LyricsWindowView: View {
         NSWorkspace.shared.openApplication(at: url, configuration: NSWorkspace.OpenConfiguration())
     }
 
-    private var emptyStateSpec: (icon: String, text: String) {
+    /// 第三个字段 `offersSearch`(2026-09-03,用户拍板):这一档要不要在图标文案下面给一颗「搜索歌词…」。
+    /// 只有「暂无歌词」「网络连接失败」为 true —— 前者是自动解析的明确结论,用户不服就手动搜;后者是
+    /// 此刻查不了,网好了想立刻再查也在这里。**「纯音乐」刻意不给**(用户原话「纯音乐的就不给了」);
+    /// 「没有在播放」「广告中」没有可搜的对象,「搜索歌词中…」正在搜,兜底那档理论上到不了。
+    private var emptyStateSpec: (icon: String, text: String, offersSearch: Bool) {
         // 什么都没在放(播放列表放完/播放器退出)—— 这时候写"无歌词"是答非所问:不是这首歌
         // 没词,是压根没有"这首歌"。判据用曲名为空:停播时 LocalPlaybackSource 会把曲目信息
         // 一并清掉(见 clearIfWasPlaying),播放中/暂停中它一定非空。
-        if playback.title.isEmpty { return ("music.note", L10n.t("没有在播放")) }
-        if playback.isCurrentTrackAdBreak { return ("megaphone", L10n.t("广告中")) }
-        if playback.isCurrentTrackInstrumental { return ("waveform", L10n.t("纯音乐")) }
+        if playback.title.isEmpty { return ("music.note", L10n.t("没有在播放"), false) }
+        if playback.isCurrentTrackAdBreak { return ("megaphone", L10n.t("广告中"), false) }
+        if playback.isCurrentTrackInstrumental { return ("waveform", L10n.t("纯音乐"), false) }
         // 搜完确实没有 → 别再说"搜索中",理由见 playback.currentTrackHasNoLyrics。
-        if playback.currentTrackHasNoLyrics { return ("text.badge.xmark", L10n.t("暂无歌词")) }
+        if playback.currentTrackHasNoLyrics { return ("text.badge.xmark", L10n.t("暂无歌词"), true) }
         // 断网:collector 什么都查不到,而"全空不写缓存"的守卫让 hasLyricsContent 永远
         // 是 false —— 不插这一档的话界面会一直显示"搜索歌词中…",而那句话在断网时永远
         // 不会有下文。排在"暂无歌词"之后:那是明确结论,比"此刻没网"更有信息量。
         if playback.collectorNetworkDown && !playback.hasLyricsContent {
-            return ("wifi.slash", L10n.t("网络连接失败"))
+            return ("wifi.slash", L10n.t("网络连接失败"), true)
         }
-        if playback.isPlayingNow && !playback.hasLyricsContent { return ("magnifyingglass", L10n.t("搜索歌词中…")) }
-        return ("text.quote", L10n.t("无歌词"))
+        if playback.isPlayingNow && !playback.hasLyricsContent { return ("magnifyingglass", L10n.t("搜索歌词中…"), false) }
+        return ("text.quote", L10n.t("无歌词"), false)
     }
 
     /// 纯文本歌词兜底的静态展示(2026-08-30 加,见 currentTrackPlainLyrics 声明处
@@ -2811,11 +2815,37 @@ struct LyricsWindowView: View {
             VStack(spacing: 12) {
                 Image(systemName: spec.icon).font(.system(size: 40))
                 Text(spec.text).font(.system(size: 16, weight: .semibold))
+                // 「搜索歌词…」(2026-09-03):此前这个入口只藏在「⋯」菜单里,看到「暂无歌词」的人
+                // 得先知道那里有。样式跟本窗口别的浮层控件一样是白色玻璃胶囊(clearGlassCapsule),
+                // 动作跟「⋯」菜单那一项同一条 openLyricsSearch(),弹同一个面板、不另开小窗。
+                if spec.offersSearch {
+                    Button {
+                        openLyricsSearch()
+                    } label: {
+                        Label(L10n.t("搜索歌词…"), systemImage: "magnifyingglass")
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundStyle(.white.opacity(0.92))
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 8)
+                    }
+                    .buttonStyle(.plain)
+                    .clearGlassCapsule(rim: Color.white.opacity(0.28))
+                    .padding(.top, 6)
+                }
             }
             .foregroundStyle(.white.opacity(0.75))
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
-            ContentUnavailableView(spec.text, systemImage: spec.icon)
+            // 系统版用 actions 插槽放同一颗按钮(按钮样式交给系统),条件同上。
+            ContentUnavailableView {
+                Label(spec.text, systemImage: spec.icon)
+            } description: {
+                EmptyView()
+            } actions: {
+                if spec.offersSearch {
+                    Button(L10n.t("搜索歌词…")) { openLyricsSearch() }
+                }
+            }
         }
     }
 
