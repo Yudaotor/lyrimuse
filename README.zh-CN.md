@@ -21,7 +21,7 @@ Lyrimuse 常驻在菜单栏里，跟着当前播放弹出一个悬浮歌词窗�
 <table>
 <tr>
 <td align="center" width="33%"><img src="docs/images/app-desktop-lyrics.png" width="260" alt="经典桌面悬浮歌词"><br><sub>经典悬浮窗</sub></td>
-<td align="center" width="33%"><img src="docs/images/app-dynamic-island.png" width="260" alt="灵动岛样式歌词，播放中"><br><img src="docs/images/app-dynamic-island-paused.png" width="260" alt="灵动岛样式歌词，暂停中"><br><sub>灵动岛样式胶囊（没有物理刘海也能用）——播放时展开，暂停时收成一个胶囊</sub></td>
+<td align="center" width="33%"><img src="docs/images/app-dynamic-island.png" width="260" alt="灵动岛样式歌词，播放中"><br><img src="docs/images/app-dynamic-island-paused.png" width="260" alt="灵动岛样式歌词，暂停中"><br><sub>灵动岛样式胶囊（没有物理刘海也能用）——悬停展开完整卡片，暂停收成一个胶囊</sub></td>
 <td align="center" width="33%"><img src="docs/images/app-menu-bar-lyrics.png" width="260" alt="菜单栏歌词"><br><sub>菜单栏文字模式，带卡拉OK式染色</sub></td>
 </tr>
 <tr>
@@ -37,11 +37,15 @@ Lyrimuse 常驻在菜单栏里，跟着当前播放弹出一个悬浮歌词窗�
 </tr>
 <tr>
 <td align="center"><img src="docs/images/app-menu-bar-dropdown.png" width="380" alt="菜单栏下拉菜单"><br><sub>菜单栏下拉菜单，什么都摸得到</sub></td>
-<td align="center"><img src="docs/images/app-settings.png" width="380" alt="设置页"><br><sub>设置页，改哪项都有实时预览</sub></td>
+<td align="center"><img src="docs/images/app-settings.png" width="380" alt="设置页——悬浮歌词编辑台"><br><img src="docs/images/app-settings-notch.png" width="380" alt="设置页——灵动岛编辑台"><br><sub>设置页——每种歌词形态都是一个带原尺寸实时预览的编辑台</sub></td>
 </tr>
 <tr>
 <td align="center"><img src="docs/images/app-lyrics-manager.png" width="380" alt="歌词管理"><br><sub>歌词管理——浏览、手改、重新匹配任意一首歌的歌词</sub></td>
 <td align="center"><img src="docs/images/app-lyrics-search.png" width="380" alt="搜索歌词"><br><sub>每个候选都打了分、标了来源，选错版本一眼就能看出来</sub></td>
+</tr>
+<tr>
+<td align="center"><img src="docs/images/app-player-settings.png" width="380" alt="播放器选择"><br><sub>播放器可多选——浏览器里的网页播放器也是正经播放器</sub></td>
+<td align="center"><img src="docs/images/app-resolution-decision.png" width="380" alt="解析决策"><br><sub>智能评分决策——每个候选的得分逐项讲清，赢家为什么赢一目了然</sub></td>
 </tr>
 </table>
 

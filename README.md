@@ -21,7 +21,7 @@ Lyrimuse sits quietly in your menu bar and shows a floating lyrics window that f
 <table>
 <tr>
 <td align="center" width="33%"><img src="docs/images/app-desktop-lyrics.png" width="260" alt="Classic desktop lyrics overlay"><br><sub>Classic floating overlay</sub></td>
-<td align="center" width="33%"><img src="docs/images/app-dynamic-island.png" width="260" alt="Dynamic-Island-style lyrics, playing"><br><img src="docs/images/app-dynamic-island-paused.png" width="260" alt="Dynamic-Island-style lyrics, paused"><br><sub>Dynamic-Island-style capsule (no physical notch required) — expands while playing, collapses to a pill when paused</sub></td>
+<td align="center" width="33%"><img src="docs/images/app-dynamic-island.png" width="260" alt="Dynamic-Island-style lyrics, playing"><br><img src="docs/images/app-dynamic-island-paused.png" width="260" alt="Dynamic-Island-style lyrics, paused"><br><sub>Dynamic-Island-style capsule (no physical notch required) — hover expands the full card, pausing collapses it to a pill</sub></td>
 <td align="center" width="33%"><img src="docs/images/app-menu-bar-lyrics.png" width="260" alt="Menu bar lyrics"><br><sub>Menu bar text mode, with karaoke-style highlighting</sub></td>
 </tr>
 <tr>
@@ -37,11 +37,15 @@ Lyrimuse sits quietly in your menu bar and shows a floating lyrics window that f
 </tr>
 <tr>
 <td align="center"><img src="docs/images/app-menu-bar-dropdown.png" width="380" alt="Menu bar dropdown"><br><sub>Everything reachable from the menu bar dropdown</sub></td>
-<td align="center"><img src="docs/images/app-settings.png" width="380" alt="Settings"><br><sub>Settings, with a live preview of every change</sub></td>
+<td align="center"><img src="docs/images/app-settings.png" width="380" alt="Settings — floating lyrics editor"><br><img src="docs/images/app-settings-notch.png" width="380" alt="Settings — notch editor"><br><sub>Settings — every lyrics surface is an editor with a live, full-size preview</sub></td>
 </tr>
 <tr>
 <td align="center"><img src="docs/images/app-lyrics-manager.png" width="380" alt="Lyrics Manager"><br><sub>Lyrics Manager — browse, hand-edit, and re-match any track's lyrics</sub></td>
 <td align="center"><img src="docs/images/app-lyrics-search.png" width="380" alt="Search for Lyrics"><br><sub>Every candidate scored and labelled, so a wrong version is obvious before you pick it</sub></td>
+</tr>
+<tr>
+<td align="center"><img src="docs/images/app-player-settings.png" width="380" alt="Player picker"><br><sub>Pick several players at once — web players running in your browser included</sub></td>
+<td align="center"><img src="docs/images/app-resolution-decision.png" width="380" alt="Resolution decision"><br><sub>Resolution decision — how every candidate was scored, and why the winner won</sub></td>
 </tr>
 </table>
 
