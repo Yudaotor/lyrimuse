@@ -201,6 +201,9 @@ screencapture -x -o -l <窗口ID> /tmp/shot.png                   # 只截那一
   worktree，但收尾必须把改动落回 `dev` 再提交、别把分支留下。`main` 只在发版时推进（默认
   分支仍是 `main`，打 tag 前先把 `dev` 以 fast-forward 合进 `main`）。
 - 发 release 时日志要手写改动清单（中英双语），不要只依赖 GitHub 自动生成的 notes。
+- **发版按 [docs/releasing.md](docs/releasing.md) 的 checklist 顺序执行**——从写日志、同步
+  README/截图/llms.txt/About，到验证、打 tag、cask 与 Sparkle 实测、issue 收口，每条都带着
+  v1.5.0 实录的坑；别凭记忆走流程。
 - **tag annotation 的双语正文两种写法都行**：①显式标记式——`<!-- lang:en -->` 英文整块 +
   `<!-- lang:zh-Hans -->` 中文整块（标记是 HTML 注释，GitHub Release 页渲染时隐藏，两段
   依旧依次完整显示；裸版本号那行放标记前，语言中立）；②传统的逐条中英交错式（英文行在前、
