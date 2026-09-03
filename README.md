@@ -24,8 +24,11 @@ Lyrimuse sits quietly in your menu bar and shows a floating lyrics window that f
 <td align="center" width="33%"><img src="docs/images/app-dynamic-island.png" width="260" alt="Dynamic-Island-style lyrics, playing"><br><img src="docs/images/app-dynamic-island-paused.png" width="260" alt="Dynamic-Island-style lyrics, paused"><br><sub>Dynamic-Island-style capsule (no physical notch required) — hover expands the full card, pausing collapses it to a pill</sub></td>
 <td align="center" width="33%"><img src="docs/images/app-menu-bar-lyrics.png" width="260" alt="Menu bar lyrics"><br><sub>Menu bar text mode, with karaoke-style highlighting</sub></td>
 </tr>
+</table>
+
+<table>
 <tr>
-<td align="center"><img src="docs/images/app-lyrics-window.png" width="380" alt="Lyrics Window"><br><sub>Lyrics Window, modelled on the Apple Music lyrics page</sub></td>
+<td align="center" width="50%"><img src="docs/images/app-lyrics-window.png" width="380" alt="Lyrics Window"><br><sub>Lyrics Window, modelled on the Apple Music lyrics page</sub></td>
 <td align="center"><img src="docs/images/app-idle-standby.png" width="380" alt="Lyrics Window listening overview"><br><sub>Same window, showing a listening overview when nothing's playing</sub></td>
 </tr>
 <tr>

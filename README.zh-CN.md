@@ -24,8 +24,11 @@ Lyrimuse 常驻在菜单栏里，跟着当前播放弹出一个悬浮歌词窗�
 <td align="center" width="33%"><img src="docs/images/app-dynamic-island.png" width="260" alt="灵动岛样式歌词，播放中"><br><img src="docs/images/app-dynamic-island-paused.png" width="260" alt="灵动岛样式歌词，暂停中"><br><sub>灵动岛样式胶囊（没有物理刘海也能用）——悬停展开完整卡片，暂停收成一个胶囊</sub></td>
 <td align="center" width="33%"><img src="docs/images/app-menu-bar-lyrics.png" width="260" alt="菜单栏歌词"><br><sub>菜单栏文字模式，带卡拉OK式染色</sub></td>
 </tr>
+</table>
+
+<table>
 <tr>
-<td align="center"><img src="docs/images/app-lyrics-window.png" width="380" alt="歌词窗口"><br><sub>歌词窗口，仿 Apple Music 歌词页</sub></td>
+<td align="center" width="50%"><img src="docs/images/app-lyrics-window.png" width="380" alt="歌词窗口"><br><sub>歌词窗口，仿 Apple Music 歌词页</sub></td>
 <td align="center"><img src="docs/images/app-idle-standby.png" width="380" alt="歌词窗口听歌总览"><br><sub>同一个窗口，没有歌在放时的听歌总览</sub></td>
 </tr>
 <tr>
