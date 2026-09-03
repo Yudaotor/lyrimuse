@@ -4,7 +4,7 @@
 
 # Lyrimuse
 
-**Real-time, word-synced lyrics on your Mac desktop — plus a Last.fm listening profile and on-device translation — for Apple Music, QQ Music, NetEase Cloud Music, Kugou Music, or Spotify.**
+**Real-time, word-synced lyrics on your Mac desktop — plus a Last.fm listening profile and on-device translation — for Apple Music, QQ Music, NetEase Cloud Music, Kugou Music, Spotify, or YouTube Music / Spotify Web playing in your browser.**
 
 **Language / 语言:** **English** | [简体中文](README.zh-CN.md)
 
@@ -16,7 +16,7 @@
 
 </div>
 
-Lyrimuse sits quietly in your menu bar and shows a floating lyrics window that follows whatever's playing — Apple Music, QQ Music, NetEase Cloud Music, Kugou Music, or Spotify, your choice (or just let it auto-detect) — word by word, in sync, always on top, across every Space. Think of the "desktop lyrics" experience from NetEase Cloud Music, but native to macOS.
+Lyrimuse sits quietly in your menu bar and shows a floating lyrics window that follows whatever's playing — Apple Music, QQ Music, NetEase Cloud Music, Kugou Music, Spotify, or YouTube Music / Spotify Web in a browser; pick any combination, or just let it auto-detect — word by word, in sync, always on top, across every Space. Think of the "desktop lyrics" experience from NetEase Cloud Music, but native to macOS.
 
 <table>
 <tr>
@@ -50,7 +50,7 @@ Lyrimuse sits quietly in your menu bar and shows a floating lyrics window that f
 ### Lyrics that just work
 - **Word-by-word synced highlighting**, following playback in real time
 - **Eight lyrics sources checked automatically** — NetEase Cloud Music, QQ Music, Kugou, Kuwo, Musixmatch, LRCLIB, LyricFind (via YouTube Music), and AMLL (a hand-curated, word-by-word lyrics database) — always picks the best match, no manual searching required
-- **Romanization and translation**, shown alongside the original lyrics — translation comes from the source's own community translation when one exists, otherwise from on-device machine translation (Apple's Translation framework — lyrics never leave your Mac) with an online fallback, in any of 18 target languages; romanization is judged per line, so a Chinese song quoting one Japanese line only gets a reading on that line, not pinyin sprinkled over the rest
+- **Romanization and translation**, shown alongside the original lyrics — translation comes from the source's own community translation when one exists, otherwise from on-device machine translation (Apple's Translation framework — lyrics never leave your Mac) with an online fallback, in any of 18 target languages; romanization is judged per line, so a Chinese song quoting one Japanese line only gets a reading on that line, not pinyin sprinkled over the rest — and Cantonese songs get word-aware Jyutping readings
 - **Duet and multi-singer lyrics show each part separately**, when the source (or an AMLL entry) marks who's singing which line, instead of interleaving both voices into one confusing block
 - **Simplified/Traditional Chinese**, switchable for the lyrics text independent of the app's own UI language
 - **A full Lyrics Manager window** — browse, hand-edit, delete, or re-search lyrics for any track, with multi-select batch delete, resizable columns, and per-track timing offset if the sync ever drifts
@@ -63,7 +63,8 @@ Lyrimuse sits quietly in your menu bar and shows a floating lyrics window that f
 - **That same local history also shows up in the Lyrics Window** — when nothing's playing, it becomes a listening overview instead of an empty screen (more on this below)
 
 ### Show it your way
-- **Choose your player, or let it auto-detect**: reads what's playing from Apple Music (via Automation access), or QQ Music / NetEase Cloud Music / Kugou Music / Spotify (via macOS's system-level MediaRemote — no permission needed); pick once during onboarding, switch anytime in Settings, or leave it on auto-detect to follow whichever app macOS currently considers "Now Playing"
+- **Choose your players — plural — or let it auto-detect**: reads what's playing from Apple Music (via Automation access), or QQ Music / NetEase Cloud Music / Kugou Music / Spotify (via macOS's system-level MediaRemote — no permission needed); select any combination in Settings, or leave it on auto-detect to follow whichever app macOS currently considers "Now Playing"
+- **Web players work too**: pair the browser of your choice once and YouTube Music or Spotify Web becomes a first-class player — lyrics sync precisely to the page's own progress bar, with a one-click self-test that tells you whether the browser can actually be driven
 - **Three ways to display it**: a classic desktop overlay, a Dynamic-Island-style capsule docked at the top of the screen (optionally showing the album artwork, and blurring it behind the capsule), or a resizable Lyrics Window modelled on the Apple Music lyrics page — two columns, a blurred cover backdrop, and the full sheet auto-scrolling to the current line — turn on any combination, or none
 - **Menu bar text mode** — read the current line directly from the status bar instead of a floating window; long lines scroll rather than getting cut off mid-sentence (truncating is still one toggle away)
 - **Drag the progress bar to seek** — the bars in the Lyrics Window and the notch are controls, not just indicators
