@@ -275,6 +275,18 @@ iPhone 端由 FastScrobbler 直接写 Last.fm；collector 周期拉 `lastfmRecen
    `nil` 从此只表示"从未有过"（`···` 占位只在那时出现）。换歌时 `nowPlayingCount` 先用历史表里同曲的已知
    总数 +1 顶上，真值回来再覆盖——徽章/实时行不再"先消失、等 1–9 s 再出现"。首次全量索引建成时整表
    标过期而不是清空；别名发现改变家族时同理。
+   - **「那边没有」不再永久（2026-09-03 晚补）**。此前 `playCountUnavailable` 只进不出：行龄 ≥ 15 分钟
+     （`playCountZeroGraceSecs`）时 `track.getinfo` 给 `userplaycount = 0` 或 error 6 就永久记"没有"、随
+     `recent-pages` 快照落盘、重启也不重问，唯一解除是再播一次（`adoptFreshTotal`）。实测陳綺貞《慢歌 3》
+     16:36:04 落库，16:36/16:38/16:40/16:46/16:50 五轮 `resolvePlayCounts` 都是 `0/1`——Last.fm 对新条目
+     的按用户计数滞后远超 15 分钟——过宽限那一轮把它钉死，界面既无「第 N 次听」也无 `···`（占位只给
+     "还在解析"），而 Last.fm 网页那边已显示 Scrobbles 1。同批还钉死了 Jehoda《Not Enough Seasons》、
+     冠声文化两条有声书等。现在每条"没有"记 **时刻 + 连续命中次数**（`playCountUnavailableAt` /
+     `playCountUnavailableStrikes`，随快照落盘），按 `PlayCountUnavailableBackoff` 退避重探：1 h → 6 h →
+     24 h 封顶；重探只发生在 `resolvePlayCounts` 本来就会看的行上，对真没有的曲目每天最多一个请求；
+     取到正数整套清掉（`clearPlayCountUnavailable`）。老快照里没有时间戳的键当作"欠一次重探"，装上后
+     第一轮就把被钉死的那几首重问一遍。`resolvePlayCounts` 那条日志现在带未解析的键名（封顶 6 个）——
+     这次排查只能靠 `0/1` 的时间点对是哪一首。selftest「次数不可用退避」12 条。
 4. **失败不打扰**：`refreshBaseline` 三个响应各自落地（`mergeOverview` 逐字段合并，`overview == nil` 时三个
    都到齐才建，不凑假 0），`baselineFailed` 只描述最近记录那一列；有存量时不画「重试」行（数字卡
    `overview == nil` 才画），最近记录卡头 / 待机页列表头的「N 分钟前更新」变暗 + 小叹号、悬停说明"显示的是
@@ -398,7 +410,7 @@ iPhone 端由 FastScrobbler 直接写 Last.fm；collector 周期拉 `lastfmRecen
 | nowPlayingCount 追赶 trackPlayCounts | Settings/LastfmStatsService.swift `refreshNowPlayingCount` `reconcileNowPlayingCount` `nowPlayingCountPlayCountKey`；LyrimuseCore/Models/PlayCountRecency.swift `reconciledNowPlayingCount` |
 | Last.fm GET query 双重编码 | LyrimuseCore/Networking/LastfmQuery.swift `escape` `queryString`；Settings/LastfmStatsService.swift `request`；lyrimuse-collector/lastfmquery.go `lastfmGetQuery` `lastfmEscape`（Go 侧消费方是 `lastfmcollapse.go` 的 `probe`——2026-08-31 随折叠删除时一度无人调用，09-03 智能档加回后重新在服役；Swift 侧那份见 LastfmStatsService.request） |
 | 桥接 / feed 拉取 | poller.go `bridge`（节奏 `lastfmFeedInterval`、门槛只看 Last.fm 凭据）`bridgeForwardingEnabled` `applyBridgeResult` `recordRecentMacListen`；lastfmfeed.go `writeLastfmRecentFeed` `shouldWriteLastfmFeed` `requestLastfmFeedRefresh`；lastfm.go `parseLastfmRecent` |
-| App 读 feed / SWR 显示层 | Settings/LastfmStatsService.swift `pollFeedFile` `ingestFeed` `feedIsFresh` `refreshTodayCountIfNeeded` `mergeOverview` `stalePlayCountKeys` `prefetchNeighborPage` `persistedFetchedAtKeys` `composeExactPage` `storeFetchedPage` `recentPageCacheTotal`；LyrimuseCore/Local/LastfmRecentFeed.swift `decode` `isFresh` `todayCount` `totalPages`；LyrimuseCore/Local/LastfmPageComposer.swift `firstPosition` `compose`；selftest 在 lyrimuse-selftest/LastfmTests.swift（组 `lastfm`） |
+| App 读 feed / SWR 显示层 | Settings/LastfmStatsService.swift `pollFeedFile` `ingestFeed` `feedIsFresh` `refreshTodayCountIfNeeded` `mergeOverview` `stalePlayCountKeys` `prefetchNeighborPage` `persistedFetchedAtKeys` `composeExactPage` `storeFetchedPage` `recentPageCacheTotal`；LyrimuseCore/Local/LastfmRecentFeed.swift `decode` `isFresh` `todayCount` `totalPages`；LyrimuseCore/Local/LastfmPageComposer.swift `firstPosition` `compose`；selftest 在 lyrimuse-selftest/LastfmTests.swift（组 `lastfm`）；`playCountUnavailableDue` `markPlayCountUnavailable` `clearPlayCountUnavailable`（退避重探，日程在 LyrimuseCore/Local/PlayCountUnavailableBackoff.swift） |
 | 歌手榜 CLI 只读缓存 / 直连兜底 | lyrimuse-collector/topartistscli.go `runTopArtistsCLI`、musicbrainz.go `artistCanonicalCacheOnly`；Settings/LastfmStatsService.swift `fetchChartDirect` `refreshMergedArtistChart` |
 | 去重集合 | dedup.go `persistedTTLSet` |
 | 收听日志/删除 | listenlog.go；deletelistencli.go |

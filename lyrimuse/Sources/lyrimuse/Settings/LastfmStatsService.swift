@@ -323,6 +323,11 @@ final class LastfmStatsService: ObservableObject {
         var playCountUnavailable: [String]?
         /// 每页抓取时的账号总数(页码字符串键,同 pages)。2026-09-03 加,老文件没有 → nil。
         var totals: [String: Int]?
+        /// "那边没有次数"结论的记录时刻(unix 秒)与连续命中次数,给退避重探用
+        /// (PlayCountUnavailableBackoff,2026-09-03)。老文件没有 → nil:名单里有、这两张表里
+        /// 没有的键当作"欠一次重探",下轮 resolvePlayCounts 就重问一次(见 playCountUnavailableDue)。
+        var playCountUnavailableAt: [String: Double]?
+        var playCountUnavailableStrikes: [String: Int]?
     }
 
     private static let recentPageCacheURL = FileManager.default.homeDirectoryForCurrentUser
@@ -353,6 +358,14 @@ final class LastfmStatsService: ObservableObject {
         }
         if let unavailable = snap.playCountUnavailable, !unavailable.isEmpty {
             playCountUnavailable.formUnion(unavailable)
+        }
+        if let at = snap.playCountUnavailableAt {
+            for (k, t) in at where playCountUnavailableAt[k] == nil {
+                playCountUnavailableAt[k] = Date(timeIntervalSince1970: t)
+            }
+        }
+        if let strikes = snap.playCountUnavailableStrikes {
+            for (k, n) in strikes where playCountUnavailableStrikes[k] == nil { playCountUnavailableStrikes[k] = n }
         }
     }
 
@@ -395,6 +408,12 @@ final class LastfmStatsService: ObservableObject {
                 playCountUnavailable: Array(scopedUnavailable),
                 totals: Dictionary(uniqueKeysWithValues: capped.keys.compactMap { page in
                     recentPageCacheTotal[page].map { (String(page), $0) }
+                }),
+                playCountUnavailableAt: Dictionary(uniqueKeysWithValues: scopedUnavailable.compactMap { k in
+                    playCountUnavailableAt[k].map { (k, $0.timeIntervalSince1970) }
+                }),
+                playCountUnavailableStrikes: Dictionary(uniqueKeysWithValues: scopedUnavailable.compactMap { k in
+                    playCountUnavailableStrikes[k].map { (k, $0) }
                 }))
             let url = Self.recentPageCacheURL
             await Task.detached(priority: .utility) {
@@ -581,11 +600,19 @@ final class LastfmStatsService: ObservableObject {
     ///
     /// ⚠️⚠️ 还有一类"成功返回但不能当真"的:**刚 scrobble 完的曲目 userplaycount 会是 0**。
     /// Last.fm 的这个数不是实时的,新记录要过几分钟才并进去 —— 而"最近记录"最上面那几行
-    /// 恰恰全是刚 scrobble 的。记进这张表就等于永久放弃(这一进程内再不重查),表现是那一行
+    /// 恰恰全是刚 scrobble 的。记进这张表(2026-09-03 之前)就等于永久放弃、再不重查,表现是那一行
     /// 永远不显示「第 N 次听」。2026-08-19 用户报「为什么只有微尘没有第一次听」就是这个:
     /// 实测那一刻直接问 Last.fm,userplaycount 已经是 1 了,只是 8 分钟前问的时候是 0。
     /// 所以 0 值只对**够老的行**才记进来,见 playCountZeroGraceSecs。
     private var playCountUnavailable = Set<String>()
+    /// ⚠️⚠️⚠️ 2026-09-03 起这张表**不再是永久的**。实测陳綺貞《慢歌 3》:16:36 落库,
+    /// 16:36/16:38/16:40/16:46/16:50 五次查 userplaycount 都是 0 —— Last.fm 对新条目的按用户
+    /// 计数滞后远超 15 分钟 —— 过了宽限那一轮把它钉死、随快照落盘,重启也不重问,而 Last.fm
+    /// 网页那边已经显示 1 次。所以每条"没有"记下**时刻 + 连续命中次数**,按
+    /// PlayCountUnavailableBackoff(1 h → 6 h → 24 h)到期重探;取到正数就整套清掉。
+    /// 两张表跟名单一起随 recentPageCache 快照落盘;老快照里没有时间戳的键当作"欠一次重探"。
+    private var playCountUnavailableAt: [String: Date] = [:]
+    private var playCountUnavailableStrikes: [String: Int] = [:]
     /// scrobble 之后多久之内,userplaycount=0 一律当成"还没并进去",留给下一轮重查。
     /// 15 分钟:实测几分钟就并好了,留足余量;超过这个岁数还是 0 才认为那边真的没有
     /// (那时行也快被新的 scrobble 顶下去了,重查的成本自然收敛)。
@@ -773,6 +800,8 @@ final class LastfmStatsService: ObservableObject {
         recentCoverByAlbum = [:]
         localCovers = [:]
         playCountUnavailable = []
+        playCountUnavailableAt = [:]
+        playCountUnavailableStrikes = [:]
         coverUnavailable = []
         playCountsInFlight = []
         stalePlayCountKeys = []
@@ -1394,6 +1423,8 @@ final class LastfmStatsService: ObservableObject {
                 // (旧值留着显示,重取回来再换,见 stalePlayCountKeys)。
                 stalePlayCountKeys.formUnion(trackPlayCounts.keys)
                 playCountUnavailable = []
+                playCountUnavailableAt = [:]
+                playCountUnavailableStrikes = [:]
                 resolvePlayCounts(for: recent)
                 // bootstrap 收尾:历史扫描是最耗请求量的部分,完成后顺手把 overview/最近
                 // 记录/12 组常听榜单都预取一遍——不用等用户切到某个 tab 才发现要转圈。
@@ -1506,7 +1537,7 @@ final class LastfmStatsService: ObservableObject {
             trackPlayCounts[k] = total
             newestPlaySeen[k] = nil
             // 之前被判"那边没有这一项"的,拿到真数就该解除 —— 否则它永远不再取。
-            playCountUnavailable.remove(k)
+            clearPlayCountUnavailable(k)
             stalePlayCountKeys.remove(k) // 刚取的新鲜值,不再过期
         }
         scheduleSnapshotSave()
@@ -2524,6 +2555,28 @@ final class LastfmStatsService: ObservableObject {
         playCountUnavailable.contains(Self.playCountKey(artist: artist, title: title))
     }
 
+    /// 这个键现在能不能去问次数:不在"没有"名单里 → 能;在名单里但退避期已过(或老快照里
+    /// 没有时间戳)→ 能,重探一次;否则不能。见 playCountUnavailableAt 的注释。
+    private func playCountUnavailableDue(_ key: String, now: Date) -> Bool {
+        guard playCountUnavailable.contains(key) else { return true }
+        guard let at = playCountUnavailableAt[key] else { return true }
+        return PlayCountUnavailableBackoff.isDue(markedAt: at, strikes: playCountUnavailableStrikes[key] ?? 1, now: now)
+    }
+
+    /// 记一次"那边没有":连续次数 +1、时刻刷新。
+    private func markPlayCountUnavailable(_ key: String, at stamp: Date) {
+        playCountUnavailable.insert(key)
+        playCountUnavailableAt[key] = stamp
+        playCountUnavailableStrikes[key] = (playCountUnavailableStrikes[key] ?? 0) + 1
+    }
+
+    /// 拿到真数了:整套解除。
+    private func clearPlayCountUnavailable(_ key: String) {
+        playCountUnavailable.remove(key)
+        playCountUnavailableAt[key] = nil
+        playCountUnavailableStrikes[key] = nil
+    }
+
     private func applyRecent(_ rows: [RecentTrack]) {
         // Last.fm 侧漏进来的广告 nowplaying 行不展示(2026-08-19,两轮:「—」行 + 带全
         // 字段的 Blinds.com 行)。三个判据:歌手为空/标题是占位符「—」(真实 scrobble 必带
@@ -2823,8 +2876,9 @@ final class LastfmStatsService: ObservableObject {
                                               zeroIsFinal: Bool)? in
             let key = Self.playCountKey(artist: r.artist, title: r.title)
             // 次数还缺、或已知过期(旧值仍在显示,见 stalePlayCountKeys),且没被判定为"那边没有"
+            // —— 或虽判过"没有"但退避期已到、该重探了(playCountUnavailableDue)
             let needsCount = (trackPlayCounts[key] == nil || stalePlayCountKeys.contains(key))
-                && !playCountUnavailable.contains(key)
+                && playCountUnavailableDue(key, now: now)
             // 封面还缺:四级兜底任一有值就不必为封面发请求 —— 自带图/本机缓存/同专辑兄弟
             // 都算数,否则封面明明已经显示出来了还在每轮重查(审阅指出的放大器)。
             // localCovers 这一项 2026-08-14 补:漏了它的话本机已经给出封面的行还会继续
@@ -2948,16 +3002,26 @@ final class LastfmStatsService: ObservableObject {
                 }
                 // 观测用:这一批一共问了多少首、成功拿到几个次数——之前排查"预取到底有没有
                 // 真的在解析"全靠猜,留一条轻量日志比重新加临时诊断代码划算。
-                logger.notice("resolvePlayCounts: resolved \(counts.count, privacy: .public)/\(missing.count, privacy: .public) counts")
+                // 没解析出来的那几首把键名一起打出来:2026-09-03 排查《慢歌 3》时只有
+                // "0/1" 这种计数,得靠时间点去对是哪一首。封顶 6 个,免得刷屏。
+                let unresolved = missing.filter { $0.wantsCount && counts[$0.key] == nil }.map(\.key)
+                let unresolvedNote = unresolved.isEmpty ? "" :
+                    " (unresolved: \(unresolved.prefix(6).joined(separator: ", "))\(unresolved.count > 6 ? ", …" : ""))"
+                logger.notice("resolvePlayCounts: resolved \(counts.count, privacy: .public)/\(missing.count, privacy: .public) counts\(unresolvedNote, privacy: .public)")
                 if !counts.isEmpty {
                     trackPlayCounts.merge(counts) { _, new in new }
                     // 取到新值 = 不再过期(见 stalePlayCountKeys)。
                     stalePlayCountKeys.subtract(counts.keys)
+                    // 退避重探拿到正数:之前那个"没有"作废,整套清掉(见 playCountUnavailableAt)。
+                    for k in counts.keys { clearPlayCountUnavailable(k) }
                     reconcileNowPlayingCount(with: counts)
                 }
                 if !covers.isEmpty { recentTrackCovers.merge(covers) { _, new in new } }
                 if !albumCovers.isEmpty { recentAlbumCovers.merge(albumCovers) { _, new in new } }
-                playCountUnavailable.formUnion(noCount)
+                // "没有"带时间戳记账(第 1 次 1 小时后重探、再 6 小时、再 24 小时封顶),
+                // 不再是永久结论 —— 见 playCountUnavailableAt 的注释。
+                let markedAt = Date()
+                for k in noCount { markPlayCountUnavailable(k, at: markedAt) }
                 // "那边确实没有"也是一个定论,同样解除过期标记,免得每轮重问;此时若还挂着
                 // 一个过期旧值(用户删过 scrobble 之类),要一并撤掉——"没有"就不该再显示数字。
                 stalePlayCountKeys.subtract(noCount)

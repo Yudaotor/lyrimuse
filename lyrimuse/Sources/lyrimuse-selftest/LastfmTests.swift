@@ -837,4 +837,35 @@ func runLastfmTests() {
         expectEqual(ListeningMilestones.nextMilestone(total: 4321).target, 4500, "里程碑: 千级按 500")
         expectEqual(ListeningMilestones.nextMilestone(total: 42).target, 100, "里程碑: 百以内按 100")
     }
+
+    // ---- 「那边没有次数」结论的退避重探(2026-09-03) ----
+    //
+    // 陳綺貞《慢歌 3》16:36 落库,五次查 userplaycount 都是 0,过了 15 分钟宽限那一轮把它永久钉进
+    // playCountUnavailable、随快照落盘,重启也不重问 —— 而 Last.fm 网页那边已经显示 1 次。
+    // 现在"没有"带时间戳:1 h → 6 h → 24 h 封顶,到期重探;拿到正数整套清掉(那部分在
+    // LastfmStatsService,这里只钉日程表)。
+    do {
+        typealias B = PlayCountUnavailableBackoff
+        let h = 3600.0
+        expectEqual(B.delay(strikes: 1), 1 * h, "次数退避: 第 1 次判没有 → 1 小时后重探")
+        expectEqual(B.delay(strikes: 2), 6 * h, "次数退避: 第 2 次 → 6 小时")
+        expectEqual(B.delay(strikes: 3), 24 * h, "次数退避: 第 3 次 → 24 小时")
+        expectEqual(B.delay(strikes: 9), 24 * h, "次数退避: 之后封顶 24 小时,不再增长")
+        expectEqual(B.delay(strikes: 0), 1 * h, "次数退避: 非法的 0 次按第 1 档")
+        let t0 = Date(timeIntervalSince1970: 1_788_424_564) // 那条 scrobble 的时刻
+        expectEqual(B.isDue(markedAt: t0, strikes: 1, now: t0.addingTimeInterval(59 * 60)), false,
+                    "次数退避: 59 分钟还不到期")
+        expectEqual(B.isDue(markedAt: t0, strikes: 1, now: t0.addingTimeInterval(60 * 60)), true,
+                    "次数退避: 满 1 小时到期(闭区间)")
+        expectEqual(B.isDue(markedAt: t0, strikes: 2, now: t0.addingTimeInterval(5 * h)), false,
+                    "次数退避: 第 2 次之后 5 小时不到期")
+        expectEqual(B.isDue(markedAt: t0, strikes: 2, now: t0.addingTimeInterval(6 * h)), true,
+                    "次数退避: 第 2 次之后 6 小时到期")
+        expectEqual(B.isDue(markedAt: t0, strikes: 3, now: t0.addingTimeInterval(23 * h)), false,
+                    "次数退避: 封顶档 23 小时不到期")
+        expectEqual(B.isDue(markedAt: t0, strikes: 7, now: t0.addingTimeInterval(24 * h)), true,
+                    "次数退避: 封顶档 24 小时到期")
+        expectEqual(B.isDue(markedAt: t0, strikes: 1, now: t0.addingTimeInterval(-10)), false,
+                    "次数退避: 时钟倒退(now 早于记录时刻)不算到期")
+    }
 }
