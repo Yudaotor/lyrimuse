@@ -62,9 +62,10 @@ func TestPlayerNativeLyricSource(t *testing.T) {
 // 2026-09-02:同源加权的判据从「用户勾了哪些播放器」换成「**这一刻在放的是哪个**」。
 //
 // (这里原来是 TestResolveNativeLyricSources,钉的是 2026-09-01 多选那次的行为:
-//  「选中集合里每个成员各自的原生源都收进来」。那个函数连同它的判据一起删了 —— 它对
-//  别的按播放器分叉的功能成立,对**这一项**不成立,理由见 match.go 里 nativeLyricSources
-//  的注释:这一项的立论是"时间轴对着同一份音频母版",那是正在播的那个播放器的属性。)
+//
+//	「选中集合里每个成员各自的原生源都收进来」。那个函数连同它的判据一起删了 —— 它对
+//	别的按播放器分叉的功能成立,对**这一项**不成立,理由见 match.go 里 nativeLyricSources
+//	的注释:这一项的立论是"时间轴对着同一份音频母版",那是正在播的那个播放器的属性。)
 func TestPlayerForBundleID(t *testing.T) {
 	cases := map[string]string{
 		appleMusicBundleID:   playerAppleMusic,

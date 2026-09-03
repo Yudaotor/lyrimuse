@@ -17,10 +17,10 @@ import "testing"
 func uchiagehanabiSearchResults() []albumTrack {
 	tracks := []albumTrack{
 		{title: "打上花火", artist: "米津玄師", duration: 259.459},      // 1(正确的歌,但版本不同、差 29.9s)
-		{title: "Lemon", artist: "米津玄師", duration: 256.000},      // 2
-		{title: "IRIS OUT", artist: "米津玄師", duration: 151.626},   // 3
-		{title: "LOSER", artist: "米津玄師", duration: 243.879},      // 4
-		{title: "KICK BACK", artist: "米津玄師", duration: 193.561},  // 5
+		{title: "Lemon", artist: "米津玄師", duration: 256.000},     // 2
+		{title: "IRIS OUT", artist: "米津玄師", duration: 151.626},  // 3
+		{title: "LOSER", artist: "米津玄師", duration: 243.879},     // 4
+		{title: "KICK BACK", artist: "米津玄師", duration: 193.561}, // 5
 		{title: "BOW AND ARROW", artist: "米津玄師", duration: 175.775},
 		{title: "烏 - Raven", artist: "米津玄師", duration: 248.528},
 		{title: "M八七", artist: "米津玄師", duration: 263.123},
@@ -34,7 +34,7 @@ func uchiagehanabiSearchResults() []albumTrack {
 			title: "填充" + string(rune('A'+len(tracks))), artist: "米津玄師", duration: 200.0})
 	}
 	return append(tracks,
-		albumTrack{title: "打上花火 (Cover)", artist: "米津玄師", duration: 288.376},   // 24,差 0.958s
+		albumTrack{title: "打上花火 (Cover)", artist: "米津玄師", duration: 288.376},      // 24,差 0.958s
 		albumTrack{title: "打上花火 (Cover) [其他]", artist: "米津玄師", duration: 288.376}, // 25
 		albumTrack{title: "填充X", artist: "米津玄師", duration: 200.0},
 		albumTrack{title: "填充Y", artist: "米津玄師", duration: 200.0},

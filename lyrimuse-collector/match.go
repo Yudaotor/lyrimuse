@@ -412,20 +412,24 @@ const lyricOvershootToleranceSecs = 5.0
 // 用户报"QQ 搜出来的是录音室版"——检索层的修复在 qq.go 的专辑维度路线,不需要 bump;
 // 这两处是它牵出的打分层配套):
 // ①albumTokens 在拉丁↔CJK 交界处分词:QQ 把专辑写成"The One演唱会"(不留空格),原来
-//   "one演唱会"粘成一个词元、与本地"The One 周杰伦演唱会"零共享词、albumScore=0,同一张
-//   专辑被判毫无亲和——与已有的"2011Live"数字↔字母交界分词同一性质,见 albumTokens 注释。
+//
+//	"one演唱会"粘成一个词元、与本地"The One 周杰伦演唱会"零共享词、albumScore=0,同一张
+//	专辑被判毫无亲和——与已有的"2011Live"数字↔字母交界分词同一性质,见 albumTokens 注释。
+//
 // ②versionTags 两道闸(versionTagsMismatch/sameRecordingDespiteVersionTags)改用
-//   recordingVersionTags:专辑名带中文现场标记(演唱会/现场/音乐会)时视同声明了 "live"。
-//   QQ 给现场专辑曲目起名不带"(Live)"、live 身份只写在专辑名上且不加括号,原来这类正确
-//   候选吃 -600;对称地,本地专辑是"XX演唱会"而候选是干净录音室版时,现在能判出版本
-//   不符(原来两边限定词集合都是空、闸门静默)。只认中文标记不认拉丁词元的理由见
-//   recordingVersionTags 注释。全库 2360 条真实决策回放(旧逻辑副本与存档 parity 0):
-//   23 首受影响,唯一 1 处冠军改变是蔡健雅《达尔文》从录音室 kugou(srcDur 265 vs 本地
-//   308,差 14%)翻到 My Space 现场对版 netease(srcDur 308.04 逐位吻合)——改对;其余
-//   全是"-600 平反"(地表最强 7 首 QQ 候选)或"新判出录音室冒充"(冠军均不变),0 误伤。
-//   回放里抓到并已修掉的两类边界:专辑名括号里的描述文案不算标记(韦礼安《女孩》案,
-//   推导只看 stripParens 后的专辑名);候选是同一张专辑的截短拼法时不苛求它也推导出
-//   live(蔡健雅《依赖》案,见 sameRecordingDespiteVersionTags 第③门注释)。
+//
+//	recordingVersionTags:专辑名带中文现场标记(演唱会/现场/音乐会)时视同声明了 "live"。
+//	QQ 给现场专辑曲目起名不带"(Live)"、live 身份只写在专辑名上且不加括号,原来这类正确
+//	候选吃 -600;对称地,本地专辑是"XX演唱会"而候选是干净录音室版时,现在能判出版本
+//	不符(原来两边限定词集合都是空、闸门静默)。只认中文标记不认拉丁词元的理由见
+//	recordingVersionTags 注释。全库 2360 条真实决策回放(旧逻辑副本与存档 parity 0):
+//	23 首受影响,唯一 1 处冠军改变是蔡健雅《达尔文》从录音室 kugou(srcDur 265 vs 本地
+//	308,差 14%)翻到 My Space 现场对版 netease(srcDur 308.04 逐位吻合)——改对;其余
+//	全是"-600 平反"(地表最强 7 首 QQ 候选)或"新判出录音室冒充"(冠军均不变),0 误伤。
+//	回放里抓到并已修掉的两类边界:专辑名括号里的描述文案不算标记(韦礼安《女孩》案,
+//	推导只看 stripParens 后的专辑名);候选是同一张专辑的截短拼法时不苛求它也推导出
+//	live(蔡健雅《依赖》案,见 sameRecordingDespiteVersionTags 第③门注释)。
+//
 // v10(2026-09-02):修掉"标题反查泛搜"那条兜底的两处判据缺陷(泛搜结果不再整份 30 条
 // 交给纯时长判据、只取前 5 名;排歧义守卫从浮点精确相等改成 0.5s 真实余量)。详见
 // netease.go 的 retryTitleFromArtistSearchMaxRank / bestAlbumTrackAmbiguityMarginSecs。

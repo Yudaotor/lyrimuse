@@ -99,13 +99,13 @@ type enrichEntry struct {
 	QQSingerMid string `json:"qq_singer_mid,omitempty"`
 	SpotifyURL  string `json:"spotify_url,omitempty"`
 	Lyrics      string `json:"lyrics,omitempty"`
-	LyricsTr    string `json:"lyrics_tr,omitempty"`   // 中文翻译(逐行 LRC)
+	LyricsTr    string `json:"lyrics_tr,omitempty"` // 中文翻译(逐行 LRC)
 	// 罗马音(逐行 LRC)。三条来路,优先级见 maybeGenerateRoma:
 	//   ① 源自带(网易云 romalrc / QQ roma / 酷狗 KRC);
 	//   ② 粤语粤拼,collector 纯查表自算(maybeGenerateJyutpingRoma);
 	//   ③ 日/韩/中,起 lyrics-romanize 子进程算(maybeGenerateHelperRoma,2026-09-03)。
 	// ②③ 都只在本字段为空时才补,绝不覆盖①。
-	LyricsRoma  string `json:"lyrics_roma,omitempty"`
+	LyricsRoma string `json:"lyrics_roma,omitempty"`
 	// PlainLyrics:2026-08-30 加——跟 Lyrics **不是同一件事**:这里装的是没有时间戳的纯
 	// 文本。存在的理由是给"歌词窗口"一条静态兜底展示:Lyrics 为空、这个字段有内容时,
 	// 说明"没有能同步显示的版本,但至少有纯文字可读"——两个字段刻意分开,不能把纯文本塞进

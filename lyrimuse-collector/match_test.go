@@ -947,7 +947,7 @@ func TestApplyWordTimingTitleOverride_SecondRealWorldCase(t *testing.T) {
 		{
 			Source: "musixmatch", Score: 825,
 			Title: "Shake Your Body (Down to the Ground) [Single Version]",
-			Album:  "Michael Jackson's This Is It (The Music That Inspired the Movie)",
+			Album: "Michael Jackson's This Is It (The Music That Inspired the Movie)",
 			ScoreTerms: []scoreTerm{
 				{Kind: scoreTermAlbum, Points: 150},
 				{Kind: scoreTermTitleMatch, Points: 120},
@@ -1064,12 +1064,12 @@ func TestIsProbablyWrongLanguageLyrics(t *testing.T) {
 	englishLyrics := "[00:00.10]this is an english lyric line\n[00:03.20]another english line here today"
 
 	cases := []struct {
-		name                                              string
+		name                                             string
 		localArtist, localTitle, candidateArtist, lyrics string
-		want                                              bool
+		want                                             bool
 	}{
 		{
-			name: "罗马化标签+候选源确认的中文歌手名→不拦",
+			name:        "罗马化标签+候选源确认的中文歌手名→不拦",
 			localArtist: "Zyx Qwerty Nonexistent", localTitle: "Some Song", candidateArtist: "方大同",
 			lyrics: chineseLyrics, want: false,
 		},
@@ -1079,29 +1079,29 @@ func TestIsProbablyWrongLanguageLyrics(t *testing.T) {
 			// 手工表缩到只剩两条通用机制(MusicBrainz+QQ)都覆盖不了的真实残留案例,
 			// 用例跟着换成现存的那条(原来的"方大同/Khalil Fong"已经被通用机制覆盖、
 			// 从表里删掉了,不能再用来测手工表本身)。
-			name: "罗马化标签在手工别名表里能查到中文名(洪佩瑜真实残留案例)→不拦,即使候选源没给中文名",
+			name:        "罗马化标签在手工别名表里能查到中文名(洪佩瑜真实残留案例)→不拦,即使候选源没给中文名",
 			localArtist: "Pei-yu Hung", localTitle: "Some Song", candidateArtist: "",
 			lyrics: chineseLyrics, want: false,
 		},
 		{
 			// 用一个**不在**别名表里的虚构罗马化名字,确保测的是"没有任何救援信号"
 			// 这一档,不会被表里恰好登记过的真实歌手悄悄救回去。
-			name: "罗马化标签+候选源没给出歌手名+别名表也没登记→维持原判,拦",
+			name:        "罗马化标签+候选源没给出歌手名+别名表也没登记→维持原判,拦",
 			localArtist: "Zyx Qwerty Nonexistent", localTitle: "Some Song", candidateArtist: "",
 			lyrics: chineseLyrics, want: true,
 		},
 		{
-			name: "罗马化标签+候选源报的歌手名同样是罗马化写法+别名表也没登记→救不了,拦",
+			name:        "罗马化标签+候选源报的歌手名同样是罗马化写法+别名表也没登记→救不了,拦",
 			localArtist: "Zyx Qwerty Nonexistent", localTitle: "Some Song", candidateArtist: "Some Artist",
 			lyrics: chineseLyrics, want: true,
 		},
 		{
-			name: "本地标签本身含汉字→本来就不适用这条判断,不拦",
+			name:        "本地标签本身含汉字→本来就不适用这条判断,不拦",
 			localArtist: "方大同", localTitle: "南音", candidateArtist: "",
 			lyrics: chineseLyrics, want: false,
 		},
 		{
-			name: "本地标签非中文+候选正文也非中文→本来就没有语言分歧,不拦",
+			name:        "本地标签非中文+候选正文也非中文→本来就没有语言分歧,不拦",
 			localArtist: "Ed Sheeran", localTitle: "Shape of You", candidateArtist: "Ed Sheeran",
 			lyrics: englishLyrics, want: false,
 		},
@@ -1211,9 +1211,9 @@ func TestAlbumScoreCrossScriptGlue(t *testing.T) {
 // 专辑名带中文现场标记(演唱会/现场/音乐会)视同声明了 live,双向对称。
 func TestVersionTagsMismatchAlbumCJKLiveMarker(t *testing.T) {
 	cases := []struct {
-		name                                             string
-		localTitle, localAlbum, candTitle, candAlbum     string
-		want                                             bool
+		name                                         string
+		localTitle, localAlbum, candTitle, candAlbum string
+		want                                         bool
 	}{
 		// 本案:QQ 给 The One 演唱会曲目起名不带 (Live),live 身份只在专辑名上
 		{"QQ 现场专辑曲目不再吃 -600", "龙拳 (Live)", "The One 周杰伦演唱会", "龙拳", "The One演唱会", false},

@@ -179,7 +179,7 @@ func TestRetryArtistIdentitiesGenericMusicBrainzReverseDirection(t *testing.T) {
 	if hit() {
 		return
 	}
-	t.Fatalf("通用 MusicBrainz 查询应该能换回国际艺名，不需要手工登记(MB 这一刻是答话的，"+
+	t.Fatalf("通用 MusicBrainz 查询应该能换回国际艺名，不需要手工登记(MB 这一刻是答话的，" +
 		"两次查询都没给出 Khalil Fong)")
 }
 

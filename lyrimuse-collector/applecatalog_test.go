@@ -181,8 +181,8 @@ func TestAppleStorefrontArtistCachePersistsOnlyHits(t *testing.T) {
 
 	appleStorefrontArtistPath = path
 	appleStorefrontArtistCache = map[string][]string{
-		"方大同|15":   {"Khalil Fong"}, // 查到了
-		"某个没查到的|专辑": nil,           // 查空(可能只是网络抖动)
+		"方大同|15":    {"Khalil Fong"}, // 查到了
+		"某个没查到的|专辑": nil,             // 查空(可能只是网络抖动)
 	}
 	appleStorefrontArtistDirty = true
 	saveAppleStorefrontArtistCache()

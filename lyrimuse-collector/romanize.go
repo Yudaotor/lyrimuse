@@ -126,8 +126,9 @@ func (e *enrichEntry) shouldGenerateHelperRoma() bool {
 }
 
 // maybeGenerateRoma 是罗马音兜底的**唯一入口**,顺序固定:
-//   ① 粤拼(纯查表,本进程算得出,只认粤语);
-//   ② helper(日/韩/中,要 Apple 系统能力)。
+//
+//	① 粤拼(纯查表,本进程算得出,只认粤语);
+//	② helper(日/韩/中,要 Apple 系统能力)。
 //
 // ⚠️ 顺序不能反。粤拼带数字声调、是专门为粤语做的词典查表,质量高于 helper 那条通用
 // ICU 音译(粤语汉字走 .toLatin 会出普通话拼音,完全不对)。两个函数都只在 LyricsRoma

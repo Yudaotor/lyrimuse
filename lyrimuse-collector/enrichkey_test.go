@@ -108,7 +108,7 @@ func TestPlanEnrichKeyMigrationDurationGuard(t *testing.T) {
 	// 只有真正冲突的那条被排除、保留在自己原来的 key 下。
 	t.Run("时长差太多不合并", func(t *testing.T) {
 		cache := map[string]enrichEntry{
-			"某人|神探（Sherlock）|专辑":       {LyricsSource: "kugou", LyricsScore: 1203, DurationSecs: 68},
+			"某人|神探（Sherlock）|专辑":      {LyricsSource: "kugou", LyricsScore: 1203, DurationSecs: 68},
 			"某人|神探（The Detective）|专辑": {LyricsSource: "netease", LyricsScore: 1107, DurationSecs: 261},
 		}
 		got := planEnrichKeyMigration(cache)
@@ -124,7 +124,7 @@ func TestPlanEnrichKeyMigrationDurationGuard(t *testing.T) {
 	// 时长接近(差在 12% 阈值以内)的正常按原逻辑合并 —— 守卫不能误伤真正的重复条目。
 	t.Run("时长接近正常合并", func(t *testing.T) {
 		cache := map[string]enrichEntry{
-			"丁世光|不散的筵席|神經志 The Journal":           {LyricsSource: "netease", LyricsScore: 1107, DurationSecs: 258},
+			"丁世光|不散的筵席|神經志 The Journal":             {LyricsSource: "netease", LyricsScore: 1107, DurationSecs: 258},
 			"丁世光|不散的筵席（I Miss You）|神經志 The Journal": {LyricsSource: "kugou", LyricsScore: 1203, DurationSecs: 261},
 		}
 		got := planEnrichKeyMigration(cache)
@@ -143,7 +143,7 @@ func TestPlanEnrichKeyMigrationDurationGuard(t *testing.T) {
 	// 否则一次升级就把全库没时长字段的旧条目全部冻结在原地。
 	t.Run("时长未知不拦合并", func(t *testing.T) {
 		cache := map[string]enrichEntry{
-			"丁世光|不散的筵席|神經志 The Journal":           {LyricsSource: "netease", LyricsScore: 1107, DurationSecs: 0},
+			"丁世光|不散的筵席|神經志 The Journal":             {LyricsSource: "netease", LyricsScore: 1107, DurationSecs: 0},
 			"丁世光|不散的筵席（I Miss You）|神經志 The Journal": {LyricsSource: "kugou", LyricsScore: 1203, DurationSecs: 261},
 		}
 		got := planEnrichKeyMigration(cache)
@@ -156,12 +156,12 @@ func TestPlanEnrichKeyMigrationDurationGuard(t *testing.T) {
 	// 该组里分数更高的另一条冲突)——三方打架,宁可整组都不合并。
 	t.Run("nk名字冲突时整组放弃合并", func(t *testing.T) {
 		cache := map[string]enrichEntry{
-			"丁世光|不散的筵席|神經志 The Journal":           {LyricsSource: "netease", LyricsScore: 1107, DurationSecs: 68},
+			"丁世光|不散的筵席|神經志 The Journal":             {LyricsSource: "netease", LyricsScore: 1107, DurationSecs: 68},
 			"丁世光|不散的筵席（I Miss You）|神經志 The Journal": {LyricsSource: "kugou", LyricsScore: 1203, DurationSecs: 261},
 		}
 		got := planEnrichKeyMigration(cache)
 		want := map[string][]string{
-			"丁世光|不散的筵席|神經志 The Journal":           {"丁世光|不散的筵席|神經志 The Journal"},
+			"丁世光|不散的筵席|神經志 The Journal":             {"丁世光|不散的筵席|神經志 The Journal"},
 			"丁世光|不散的筵席（I Miss You）|神經志 The Journal": {"丁世光|不散的筵席（I Miss You）|神經志 The Journal"},
 		}
 		if !reflect.DeepEqual(got, want) {

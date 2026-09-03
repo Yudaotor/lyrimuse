@@ -242,8 +242,8 @@ func TestNeteaseBlockBackoff(t *testing.T) {
 	t.Run("不同桶各自记连撞,不互相污染", func(t *testing.T) {
 		reset()
 		_, _ = neteaseReportRejected("https://music.163.com/api/search/get/web?type=1&s=a")
-		_, _ = neteaseReportRejected("https://music.163.com/api/search/get/web?type=10&s=b") // 同桶
-		_, streak := neteaseReportRejected("https://music.163.com/api/search/get?type=1&s=a")  // 另一个桶
+		_, _ = neteaseReportRejected("https://music.163.com/api/search/get/web?type=10&s=b")  // 同桶
+		_, streak := neteaseReportRejected("https://music.163.com/api/search/get?type=1&s=a") // 另一个桶
 		if streak != 1 {
 			t.Errorf("另一个桶的首次拒绝 streak = %d, want 1", streak)
 		}
