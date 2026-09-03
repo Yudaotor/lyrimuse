@@ -1,0 +1,110 @@
+{
+  "id": "instrumental-chromatica-i",
+  "category": "instrumental-marker",
+  "note": "纯音乐标记:这是一段管弦乐 intro,没有任何源能给歌词,但源明确说了\"纯音乐\"——Score:-1 / Instrumental:true 的标记搭车进结果、不参与挑选;界面显示「纯音乐」而不是「无歌词」",
+  "label_evidence": {
+    "consensus_peers": 0,
+    "title_accepted": false,
+    "version_tags_ok": false,
+    "source_duration_delta_pct": -1,
+    "lyrics_end_secs": 0,
+    "coverage_pct": 0,
+    "album_score": 0,
+    "live_mismatch": false,
+    "cache_agreement": "instrumental",
+    "instrumental": "lrclib"
+  },
+  "track": {
+    "artist": "Lady Gaga",
+    "title": "Chromatica I",
+    "album": "Chromatica"
+  },
+  "captured_at": "2026-09-04",
+  "scoring_version_at_capture": 11,
+  "query": {
+    "artist": "Lady Gaga",
+    "title": "Chromatica I",
+    "album": "Chromatica",
+    "duration_secs": 60.55500030517578
+  },
+  "settings": {
+    "translation_language": "zh",
+    "sources": {
+      "amll": true,
+      "kugou": true,
+      "kuwo": true,
+      "lrclib": true,
+      "lyricfind": true,
+      "musixmatch": true,
+      "netease": true,
+      "qq": true
+    },
+    "source_mode": "smart",
+    "source_order": [
+      "netease",
+      "qq",
+      "kugou",
+      "musixmatch",
+      "lrclib",
+      "amll",
+      "lyricfind",
+      "kuwo"
+    ]
+  },
+  "sources": {
+    "amll": {
+      "amll": {}
+    },
+    "applecover": {
+      "cover": "https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/5d/4d/f9/5d4df96a-e95e-2fe9-404a-5d570513762d/20UMGIM15390.rgb.jpg/1200x1200bb.jpg"
+    },
+    "kugou": {},
+    "kuwo": {},
+    "lrclib": {
+      "instrumental": true
+    },
+    "lyricfind": {},
+    "musixmatch": {},
+    "netease": {
+      "netease": {
+        "cover": "https://p1.music.126.net/IeRnZyxClyoTwqZ76Qcyhw==/109951166161936990.jpg?param=800y800",
+        "song_url": "https://music.163.com/song?id=1451648391",
+        "lyrics": "[00:00.00] 作词 : Ahsonu Qcvvj/Rnmj Onon\n[00:01.00] 作曲 : Ahsonu Qcvvj/Rnmj Onon\n[00:05.00]纯音乐，请欣赏\n",
+        "duration_secs": 60.397,
+        "artist": "Lady Gaga",
+        "title": "Chromatica I",
+        "album": "Chromatica",
+        "song_id": 1451648391,
+        "album_id": 90095288,
+        "pure_music": true
+      }
+    },
+    "qq": {
+      "title": "Chromatica I",
+      "artist": "Lady Gaga",
+      "album": "Chromatica",
+      "cover": "https://y.qq.com/music/photo_new/T002R800x800M000000XcLpO2aYB2I.jpg",
+      "duration_secs": 60,
+      "instrumental": true
+    }
+  },
+  "expect": {
+    "winner": "",
+    "instrumental_marker": "lrclib",
+    "verdicts": {
+      "netease": "rejectCreditOnly"
+    },
+    "ranked": [
+      {
+        "source": "netease",
+        "score": -1,
+        "terms": [
+          {
+            "kind": "rejectCreditOnly",
+            "points": 0
+          }
+        ]
+      }
+    ]
+  }
+}

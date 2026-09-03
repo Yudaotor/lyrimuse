@@ -1,0 +1,268 @@
+{
+  "id": "latin-purple-rain",
+  "category": "latin-title",
+  "note": "英文歌基线:歌手/歌名均无汉字,语言闸不许误杀;521s 的长曲,只有网易云一家末句吻合、其余四家都是短版吃 durationOff——守\"时长判据压过逐字\"这一档",
+  "label_evidence": {
+    "consensus_peers": 3,
+    "title_accepted": true,
+    "version_tags_ok": true,
+    "source_duration_delta_pct": 0.16621880998080335,
+    "lyrics_end_secs": 516.866,
+    "coverage_pct": 99.20652591170825,
+    "album_score": 200,
+    "live_mismatch": false,
+    "cache_agreement": "exact"
+  },
+  "track": {
+    "artist": "Prince \u0026 The Revolution",
+    "title": "Purple Rain",
+    "album": "Purple Rain"
+  },
+  "captured_at": "2026-09-04",
+  "scoring_version_at_capture": 11,
+  "query": {
+    "artist": "Prince \u0026 The Revolution",
+    "title": "Purple Rain",
+    "album": "Purple Rain",
+    "duration_secs": 521
+  },
+  "settings": {
+    "translation_language": "zh",
+    "sources": {
+      "amll": true,
+      "kugou": true,
+      "kuwo": true,
+      "lrclib": true,
+      "lyricfind": true,
+      "musixmatch": true,
+      "netease": true,
+      "qq": true
+    },
+    "source_mode": "smart",
+    "source_order": [
+      "netease",
+      "qq",
+      "kugou",
+      "musixmatch",
+      "lrclib",
+      "amll",
+      "lyricfind",
+      "kuwo"
+    ]
+  },
+  "sources": {
+    "amll": {
+      "amll": {}
+    },
+    "applecover": {
+      "cover": "https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/00/17/f2/0017f24f-e580-b77a-71a8-1bc7b75881bf/603497822065.jpg/1200x1200bb.jpg"
+    },
+    "kugou": {
+      "lyrics": "[id:$00000000]\r\n[ti:Purple Rain]\r\n[ar:Prince/The Revolution]\r\n[al:Purple Rain]\r\n[by:]\r\n[00:00.00]Vetvxq Tucd - Vtcdlq/Owq Tqhnxeocnd\r\n[00:06.40]Lyrics by：Vtcdlq\r\n[00:12.80]Composed by：Vtcdlq\r\n[00:19.20]C dqhqt jqudo on luerq ine udi rnttna\r\n[00:27.32]C dqhqt jqudo on luerq ine udi vucd\r\n[00:35.52]C ndxi audoqg ndq ocjq on rqq ine xuemwcdm\r\n[00:41.21]C ndxi audoqg on rqq ine\r\n[00:44.70]Xuemwcdm cd owq vetvxq tucd\r\n[00:48.94]Vetvxq tucd vetvxq tucd\r\n[00:57.32]Vetvxq tucd vetvxq tucd\r\n[01:05.56]Vetvxq tucd vetvxq tucd\r\n[01:17.21]C ndxi audo on rqq ine\r\n[01:20.16]Yuowcdm cd owq vetvxq tucd\r\n[01:24.36]C dqhqt audoqg on yq inet aqqbqdg xnhqt\r\n[01:38.29]C ndxi audoqg on yq rnjq bcdg np ptcqdg wqi\r\n[01:45.98]Yuyi C lnexg dqhqt roqux ine ptnj udnowqt\r\n[01:54.23]Co'r relw u rwujq net ptcqdgrwcv wug on qdg\r\n[01:59.68]Vetvxq tucd vetvxq tucd\r\n[02:08.13]Vetvxq tucd vetvxq tucd\r\n[02:16.53]Vetvxq tucd vetvxq tucd\r\n[02:27.87]C ndxi audo on rqq ine\r\n[02:31.48]Edgqtdquow owq vetvxq tucd\r\n[02:35.31]Wndqi C bdna C bdna\r\n[02:37.29]C bdna ocjqr utq lwudmcdm\r\n[02:49.55]Co'r ocjq aq uxx tqulw neo\r\n[02:50.68]Pnt rnjqowcdm dqa owuo jqudr ine onn\r\n[02:58.03]Ine rui ine audo u xqugqt\r\n[03:00.09]Yeo ine lud'o rqqj on jubq ev inet jcdg\r\n[03:02.94]C owcdb ine yqooqt lxnrq co\r\n[03:06.48]Udg xqo jq mecgq ine on owq vetvxq tucd\r\n[03:11.51]Vetvxq tucd vetvxq tucd\r\n[03:19.78]Vetvxq tucd vetvxq tucd annn\r\n[03:25.79]Cp ine bdna awuo C'j rcdmcdm uyneo ev wqtq\r\n[03:27.27]Lnjq nd tucrq inet wudg\r\n[03:28.22]Vetvxq tucd vetvxq tucd\r\n[03:40.47]C ndxi audo on rqq ine\r\n[03:43.01]Ndxi audo on rqq ine cd owq vetvxq tucd\r\n",
+      "yrc": "[id:$00000000]\n[ti:Purple Rain]\n[ar:Prince/The Revolution]\n[al:Purple Rain]\n[by:]\n[0,6400](0,1097,0)Vetvxq(1097,183,0) (1280,731,0)Tucd(2011,183,0) (2194,183,0)-(2377,183,0) (2560,1097,0)Vtcdlq(3657,183,0)/(3840,548,0)Owq(4388,183,0) (4571,1829,0)Tqhnxeocnd\n[6400,6400](6400,1280,0)Xitclr(7680,1280,0) (8960,1280,0)yi(10240,1280,0)：(11520,1280,0)Vtcdlq\n[12800,6400](12800,1280,0)Lnjvnrqg(14080,1280,0) (15360,1280,0)yi(16640,1280,0)：(17920,1280,0)Vtcdlq\n[19205,2273](19205,169,0)C (19374,198,0)dqhqt (19572,160,0)jqudo (19732,152,0)on (19884,304,0)luerq (20188,416,0)ine (20604,216,0)udi (20820,658,0)rnttna\n[27326,2151](27326,159,0)C (27485,160,0)dqhqt (27645,152,0)jqudo (27797,168,0)on (27965,296,0)luerq (28261,360,0)ine (28621,276,0)udi (28897,580,0)vucd\n[35525,2330](35525,176,0)C (35701,90,0)ndxi (35791,264,0)audoqg (36055,256,0)ndq (36311,352,0)ocjq (36663,208,0)on (36871,184,0)rqq (37055,208,0)ine (37263,592,0)xuemwcdm\n[41218,3487](41218,303,0)C (41521,848,0)ndxi (42369,771,0)audoqg (43140,350,0)on (43490,793,0)rqq (44283,422,0)ine\n[44705,3576](44705,857,0)Xuemwcdm (45562,481,0)cd (46043,591,0)owq (46634,1033,0)vetvxq (47667,614,0)tucd\n[48946,3432](48946,857,0)Vetvxq (49803,615,0)tucd (50418,817,0)vetvxq (51235,584,0)tucd\n[57329,3401](57329,873,0)Vetvxq (58202,569,0)tucd (58771,842,0)vetvxq (59613,697,0)tucd\n[65562,3576](65562,968,0)Vetvxq (66530,529,0)tucd (67059,920,0)vetvxq (67979,640,0)tucd\n[77210,2958](77210,176,0)C (77386,706,0)ndxi (78092,541,0)audo (78633,520,0)on (79153,560,0)rqq (79713,455,0)ine\n[80168,3800](80168,1144,0)Yuowcdm (81312,441,0)cd (81753,559,0)owq (82312,1073,0)vetvxq (83385,583,0)tucd\n[84368,3653](84368,144,0)C (84512,160,0)dqhqt (84672,264,0)audoqg (84936,176,0)on (85112,224,0)yq (85336,316,0)inet (85652,904,0)aqqbqdg (86556,842,0)xnhqt\n[98291,3648](98291,176,0)C (98467,176,0)ndxi (98643,169,0)audoqg (98812,159,0)on (98971,184,0)yq (99155,200,0)rnjq (99355,232,0)bcdg (99587,177,0)np (99764,576,0)ptcqdg (100340,544,0)wqi\n[105988,2472](105988,216,0)Yuyi (106204,192,0)C (106396,185,0)lnexg (106581,198,0)dqhqt (106779,409,0)roqux (107188,560,0)ine (107748,160,0)ptnj (107908,552,0)udnowqt\n[114236,4826](114236,168,0)Co'r (114404,399,0)relw (114803,600,0)u (115403,528,0)rwujq (115931,480,0)net (116411,1037,0)ptcqdgrwcv (117448,523,0)wug (117971,536,0)on (118507,555,0)qdg\n[119686,3557](119686,917,0)Vetvxq (120603,592,0)tucd (121195,805,0)vetvxq (122000,656,0)tucd\n[128139,3580](128139,881,0)Vetvxq (129020,528,0)tucd (129548,904,0)vetvxq (130452,756,0)tucd\n[136539,3848](136539,920,0)Vetvxq (137459,507,0)tucd (137966,903,0)vetvxq (138869,992,0)tucd\n[147875,3408](147875,225,0)C (148100,1000,0)ndxi (149100,575,0)audo (149675,533,0)on (150208,531,0)rqq (150739,544,0)ine\n[151483,3656](151483,1410,0)Edgqtdquow (152893,447,0)owq (153340,1103,0)vetvxq (154443,696,0)tucd\n[155315,1817](155315,170,0)Wndqi (155485,222,0)C (155707,410,0)bdna (156117,320,0)C (156437,473,0)bdna\n[157299,2080](157299,160,0)C (157459,240,0)bdna (157699,609,0)ocjqr (158308,184,0)utq (158492,887,0)lwudmcdm\n[169555,1128](169555,160,0)Co'r (169715,161,0)ocjq (169876,167,0)aq (170043,192,0)uxx (170235,170,0)tqulw (170405,278,0)neo\n[170683,2936](170683,152,0)Pnt (170835,280,0)rnjqowcdm (171115,448,0)dqa (171563,160,0)owuo (171723,192,0)jqudr (171915,176,0)ine (172091,576,0)onn\n[178035,1096](178035,152,0)Ine (178187,160,0)rui (178347,160,0)ine (178507,161,0)audo (178668,143,0)u (178811,320,0)xqugqt\n[180094,1880](180094,169,0)Yeo (180263,160,0)ine (180423,199,0)lud'o (180622,168,0)rqqj (180790,161,0)on (180951,152,0)jubq (181103,144,0)ev (181247,159,0)inet (181406,568,0)jcdg\n[182942,1480](182942,176,0)C (183118,168,0)owcdb (183286,177,0)ine (183463,201,0)yqooqt (183664,398,0)lxnrq (184062,360,0)co\n[186486,3881](186486,199,0)Udg (186685,176,0)xqo (186861,162,0)jq (187023,351,0)mecgq (187374,560,0)ine (187934,226,0)on (188160,282,0)owq (188442,461,0)vetvxq (188903,537,0)tucd\n[191510,3792](191510,904,0)Vetvxq (192414,592,0)tucd (193006,720,0)vetvxq (193726,929,0)tucd\n[199781,5377](199781,1112,0)Vetvxq (200893,502,0)tucd (201395,809,0)vetvxq (202204,1119,0)tucd (203323,572,0)annn\n[205790,1489](205790,152,0)Cp (205942,153,0)ine (206095,178,0)bdna (206273,141,0)awuo (206414,156,0)C'j (206570,157,0)rcdmcdm (206727,202,0)uyneo (206929,132,0)ev (207061,218,0)wqtq\n[207279,943](207279,164,0)Lnjq (207443,176,0)nd (207619,256,0)tucrq (207875,132,0)inet (208007,215,0)wudg\n[208222,3960](208222,1105,0)Vetvxq (209327,512,0)tucd (209839,1000,0)vetvxq (210839,831,0)tucd\n[220478,1840](220478,176,0)C (220654,335,0)ndxi (220989,281,0)audo (221270,223,0)on (221493,305,0)rqq (221798,520,0)ine\n[223014,4003](223014,247,0)Ndxi (223261,265,0)audo (223526,161,0)on (223687,183,0)rqq (223870,563,0)ine (224433,184,0)cd (224617,224,0)owq (224841,448,0)vetvxq (225289,1304,0)tucd",
+      "tr": "[00:19.205]䈅㻔㓕䯸㽽㕋㮭䚢䇽㪂䟮䀖㢂\n[00:27.326]䈅㻔㓕䯸㽽㕋㮭䚢䇽㪂䟮㶣㗦\n[00:35.525]䈅㓉䯸㛳䭊㮭䣻䋱䐢䀎䉡\n[00:41.218]䈅㓉䯸㛳䭊㮭\n[00:44.705]䄇㒳䕾䵔䣻䋱䐢䀎䉡\n[00:48.946]㒳䕾䇾㒳䕾！\n[00:57.329]㒳䕾䇾㒳䕾！\n[01:05.562]㒳䕾䇾㒳䕾！\n[01:17.210]䈅㓉䯸㛳䭊㮭\n[01:20.168]䄇㒳䕾䵔䧾䛯\n[01:24.368]䈅㰯䮈䦞㮭䣻㜪䗩㢀䔎㱫\n[01:38.291]䈅㓉䯸䣄㦬㮭䣻䗬㪝㾴㞮\n[01:45.988]䱼䂼，䈅㵢㰯㶨䓛㮭㻔䆖㱫䩪䏾㻹㑛\n[01:54.236]䈅䕗䣻㞮䗓䢵㱪，䈅䂑䭊㜤㑐㭼㼛\n[01:59.686]㒳䕾䇾㒳䕾！\n[02:08.139]㒳䕾䇾㒳䕾！\n[02:16.539]㒳䕾䇾㒳䕾！\n[02:27.875]䈅㓉䯸㛳䭊㮭\n[02:31.483]㒳䕾䵔䣻㮭\n[02:35.315]䎐㜀䣻，䈅䔊㵄䈅䔊㵄\n[02:37.299]䈅䔊㵄䓠䝌㽽䛽䣈\n[02:49.555]㕆䄇䭙䈅䕗䦋㭮䋇䏯㾫䣻䝌䟈㩌\n[02:50.683]㚋䝡㓉䭙䪦㮭㰿䃈\n[02:58.035]㮭䕦㮭㖃㖥䋱䯙㷲䄧䌃\n[03:00.094]㚋䭙㮭㰯䚞㪢㡯㵢㥜\n[03:02.942]㢮㺄㠤䭙䫡㫭䜓䞏\n[03:06.486]䂗䈅䄧䁯㮭䭊㒳䕾䵔䞏\n[03:11.510]㒳䕾䇾㒳䕾！\n[03:19.781]㒳䕾䇾㒳䕾！\n[03:25.790]㭱䥈㮭䭝䯼䈅䇘㱊㐜䣻䭙㹝䄈\n[03:27.279]䇽䞏，䫏䲂㮭䣻䜿\n[03:28.222]㒳䕾䇾㒳䕾！\n[03:40.478]䈅㓉䯸㛳䭊㮭\n[03:43.014]䈅㓉䯸㛳䭊㒳䕾䵔䣻㮭",
+      "title": "Purple Rain",
+      "artist": "The Revolution",
+      "album": "Purple Rain (Explicit)",
+      "cover": "https://imge.kugou.com/stdmusic/480/20190602/20190602074704246962.jpg",
+      "duration_secs": 520
+    },
+    "kuwo": {
+      "lyrics": "[00:00.00]Vetvxq Tucd - Vtcdlq/Owq Tqhnxeocnd\n[00:09.60]Lyrics by：Vtcdlq\n[00:19.20]C dqhqt jqudo on luerq ine udi rnttna\n[00:27.32]䈅㻔㓕䯸㽽㕋㮭䚢䇽㪂䟮䀖㢂\n[00:27.32]C dqhqt jqudo on luerq ine udi vucd\n[00:35.52]䈅㻔㓕䯸㽽㕋㮭䚢䇽㪂䟮㶣㗦\n[00:35.52]C ndxi audoqg ndq ocjq on rqq ine xuemwcdm\n[00:41.21]䈅㓉䯸㛳䭊㮭䣻䋱䐢䀎䉡\n[00:41.21]C ndxi audoqg on rqq ine\n[00:44.70]䈅㓉䯸㛳䭊㮭\n[00:44.70]Xuemwcdm cd owq vetvxq tucd\n[00:48.94]䄇㒳䕾䵔䣻䋱䐢䀎䉡\n[00:48.94]Vetvxq tucd vetvxq tucd\n[00:57.32]㒳䕾䇾㒳䕾！\n[00:57.32]Vetvxq tucd vetvxq tucd\n[01:05.56]㒳䕾䇾㒳䕾！\n[01:05.56]Vetvxq tucd vetvxq tucd\n[01:17.21]㒳䕾䇾㒳䕾！\n[01:17.21]C ndxi audo on rqq ine\n[01:20.16]䈅㓉䯸㛳䭊㮭\n[01:20.16]Yuowcdm cd owq vetvxq tucd\n[01:24.36]䄇㒳䕾䵔䧾䛯\n[01:24.36]C dqhqt audoqg on yq inet aqqbqdg xnhqt\n[01:38.29]䈅㰯䮈䦞㮭䣻㜪䗩㢀䔎㱫\n[01:38.29]C ndxi audoqg on yq rnjq bcdg np ptcqdg wqi\n[01:45.98]䈅㓉䯸䣄㦬㮭䣻䗬㪝㾴㞮\n[01:45.98]Yuyi C lnexg dqhqt roqux ine ptnj udnowqt\n[01:54.23]䱼䂼，䈅㵢㰯㶨䓛㮭㻔䆖㱫䩪䏾㻹㑛\n[01:54.23]Co'r relw u rwujq net ptcqdgrwcv wug on qdg\n[01:59.68]䈅䕗䣻㞮䗓䢵㱪，䈅䂑䭊㜤㑐㭼㼛\n[01:59.68]Vetvxq tucd vetvxq tucd\n[02:08.13]㒳䕾䇾㒳䕾！\n[02:08.13]Vetvxq tucd vetvxq tucd\n[02:16.53]㒳䕾䇾㒳䕾！\n[02:16.53]Vetvxq tucd vetvxq tucd\n[02:27.87]㒳䕾䇾㒳䕾！\n[02:27.87]C ndxi audo on rqq ine\n[02:31.48]䈅㓉䯸㛳䭊㮭\n[02:31.48]Edgqtdquow owq vetvxq tucd\n[02:35.31]㒳䕾䵔䣻㮭\n[02:35.31]Wndqi C bdna C bdna\n[02:37.29]䎐㜀䣻，䈅䔊㵄䈅䔊㵄\n[02:37.29]C bdna ocjqr utq lwudmcdm\n[02:49.55]䈅䔊㵄䓠䝌㽽䛽䣈\n[02:49.55]Co'r ocjq aq uxx tqulw neo\n[02:50.68]㕆䄇䭙䈅䕗䦋㭮䋇䏯㾫䣻䝌䟈㩌\n[02:50.68]Pnt rnjqowcdm dqa owuo jqudr ine onn\n[02:58.03]㚋䝡㓉䭙䪦㮭㰿䃈\n[02:58.03]Ine rui ine audo u xqugqt\n[03:00.09]㮭䕦㮭㖃㖥䋱䯙㷲䄧䌃\n[03:00.09]Yeo ine lud'o rqqj on jubq ev inet jcdg\n[03:02.94]㚋䭙㮭㰯䚞㪢㡯㵢㥜\n[03:02.94]C owcdb ine yqooqt lxnrq co\n[03:06.48]㢮㺄㠤䭙䫡㫭䜓䞏\n[03:06.48]Udg xqo jq mecgq ine on owq vetvxq tucd\n[03:11.51]䂗䈅䄧䁯㮭䭊㒳䕾䵔䞏\n[03:11.51]Vetvxq tucd vetvxq tucd\n[03:19.78]㒳䕾䇾㒳䕾！\n[03:19.78]Vetvxq tucd vetvxq tucd annn\n[03:25.79]㒳䕾䇾㒳䕾！\n[03:25.79]Cp ine bdna awuo C'j rcdmcdm uyneo ev wqtq\n[03:27.27]㭱䥈㮭䭝䯼䈅䇘㱊㐜䣻䭙㹝䄈\n[03:27.27]Lnjq nd tucrq inet wudg\n[03:28.22]䇽䞏，䫏䲂㮭䣻䜿\n[03:28.22]Vetvxq tucd vetvxq tucd\n[03:40.47]㒳䕾䇾㒳䕾！\n[03:40.47]C ndxi audo on rqq ine\n[03:43.01]䈅㓉䯸㛳䭊㮭\n[03:43.01]Ndxi audo on rqq ine cd owq vetvxq tucd\n[03:48.00]䈅㓉䯸㛳䭊㒳䕾䵔䣻㮭\n",
+      "title": "Purple Rain",
+      "artist": "Prince\u0026The Revolution",
+      "album": "The All Time Greatest Pop Hits Of The Last 3 Decades",
+      "cover": "https://img1.kuwo.cn/star/albumcover/500/s4s29/47/1617477490.jpg",
+      "duration_secs": 521
+    },
+    "lrclib": {
+      "lyrics": "[00:18.16] C dqhqt jqudo on luerq ine udi rnttna\n[00:22.70] \n[00:27.45] C dqhqt jqudo on luerq ine udi vucd\n[00:36.11] C ndxi audoqg on ndq ocjq on rqq ine xuemwcdm\n[00:42.29] C ndxi audo on rqq ine xuemwcdm cd owq vetvxq tucd\n[00:49.72] Vetvxq tucd, vetvxq tucd\n[00:52.41] \n[00:56.98] Vetvxq tucd, vetvxq tucd\n[01:00.41] \n[01:06.05] Vetvxq tucd, vetvxq tucd\n[01:09.48] \n[01:17.53] C ndxi audoqg on rqq ine, yuowcdm cd owq vetvxq tucd\n[01:25.22] C dqhqt audoqg on yq inet aqqbqdg xnhqt\n[01:32.77] \n[01:38.83] C ndxi audoqg on yq rnjq bcdg np ptcqdg\n[01:43.97] \n[01:46.69] Yuyi, C lnexg dqhqt roqux ine ptnj udnowqt\n[01:54.67] Co'r relw u rwujq net ptcqdgrwcv wug on qdg\n[01:59.96] Vetvxq tucd, vetvxq tucd\n[02:02.70] \n[02:08.05] Vetvxq tucd, vetvxq tucd\n[02:12.03] \n[02:16.51] Vetvxq tucd, vetvxq tucd\n[02:24.10] \n[02:28.65] C ndxi audoqg on rqq ine edgqtdquow owq vetvxq tucd\n[02:35.51] Wndqi, C bdna, C bdna\n[02:37.48] C bdna ocjqr utq lwudmcdm\n[02:41.70] \n[02:49.97] Co'r ocjq aq uxx tqulw neo pnt rnjqowcdm dqa, owuo jqudr ine onn\n[02:54.24] \n[02:58.28] Ine rui ine audo u xqugqt\n[03:00.65] Yeo ine lud'o rqqj on jubq ev inet jcdg\n[03:03.38] C owcdb ine yqooqt lxnrq co\n[03:05.13] Udg xqo jq mecgq ine on owq vetvxq tucd\n[03:11.05] Vetvxq tucd, vetvxq tucd\n[03:13.99] \n[03:19.56] Vetvxq tucd, vetvxq tucd\n[03:26.52] Cp ine bdna awuo C'j rcdmcdm uyneo ev wqtq\n[03:27.96] L'jnd, tucrq inet wudg\n[03:28.76] Vetvxq tucd, vetvxq tucd\n[03:31.43] \n[03:36.74] C ndxi audo on rqq ine\n[03:42.49] Ndxi audo on rqq ine\n[03:45.65] Cd owq vetvxq tucd\n[04:12.10] ",
+      "title": "Purple Rain",
+      "artist": "Prince The Revolution",
+      "album": "Purple Rain",
+      "duration_secs": 522
+    },
+    "lyricfind": {},
+    "musixmatch": {},
+    "netease": {
+      "netease": {
+        "cover": "https://p2.music.126.net/TNenvmIWSvMoDNPX83kZ2w==/109951169596719908.jpg?param=800y800",
+        "song_url": "https://music.163.com/song?id=21393066",
+        "lyrics": "[00:00.000] 作词 : Vtcdlq\n[00:01.000] 作曲 : Vtcdlq\n[00:02.000] 制作人 : Vtcdlq \u0026 Owq Tqhnxeocnd\n[00:03.000] 编曲 : Vtcdlq\n[00:19.580]C dqhqt jqudo on luerq ine udi rnttna.\n[00:27.710]C dqhqt jqudo on luerq ine udi vucd.\n[00:35.810]C ndxi audoqg on ndq ocjq rqq ine xuemwcdm !\n[00:41.690]C ndxi audoqg on rqq ine xuemwcdm cd owq vetvxq tucd !\n[00:49.090]Vetvxq tucd！Vetvxq tucd！\n[00:57.460]Vetvxq tucd！Vetvxq tucd！\n[01:05.700]Vetvxq tucd！Vetvxq tucd！\n[01:17.230]C ndxi audoqg on rqq ine yuowcdm cd owq vetvxq tucd !\n[01:24.390]C dqhqt audoqg on yq inet aqqbqdg xnhqt.\n[01:39.840]C ndxi audoqg on yq rnjq bcdg np ptcqdg.\n[01:46.000]Yuyi C lnexg dqhqt roqux ine ptnj udnowqt.\n[01:54.220]Co'r relw u rwujq net ptcqdgrwcv wug on qdg.\n[01:59.500]Vetvxq tucd！Vetvxq tucd！\n[02:08.150]Vetvxq tucd！Vetvxq tucd！\n[02:16.430]Vetvxq tucd！Vetvxq tucd！\n[02:28.050]C ndxi audoqg on rqq ine edgqtdquow owq vetvxq tucd！\n[02:34.890]Wndqi,C bdna.C bdna.C bdna ocjqr utq lwudmcdm.\n[02:49.200]Co'r ocjq aq uxx tqulw neo rnjqowcdm dqa.\n[02:52.280]Owuo jqudr ine onn.\n[02:57.670]Ine rui ine audo u xqugqt.\n[03:00.100]Yeo ine lud'o rqqj on jubq ev inet jcdg.\n[03:02.910]C owcdb ine yqooqt lxnrq co.\n[03:06.130]Udg xqo jq mecgq ine on owq vetvxq tucd.\n[03:11.070]Vetvxq tucd！Vetvxq tucd！\n[03:19.430]Vetvxq tucd！Vetvxq tucd！\n[03:25.790]Cp ine bdna awuo C'j rcdmcdm uyneo ev wqtq.\n[03:27.300]Lnjq nd tucrq inet wudg.\n[03:34.100]Vetvxq tucd！Vetvxq tucd！\n[03:40.320]C ndxi audoqg on rqq ine,ndxi audoqg on rqq ine !\n[03:44.300]Cd owq vetvxq tucd !\n[08:36.866] 㱫㦄 : Vtcdlq\n",
+        "trans": "[00:19.580]䈅㻔㓕䯸㽽㕋㮭䚢䇽㪂䟮㙾䀖！\n[00:27.710]䈅㻔㓕䯸㽽㕋㮭䚢䇽㪂䟮㶣㗦！\n[00:35.810]䈅㓉䯸㛳䭊㮭䋱䐢㝗䉡！\n[00:41.690]䈅㓉䯸㛳䭊㮭䄇㒳䕾䵔䣻㝗䉡！\n[00:49.090]㒳䕾䇾㒳䕾！\n[00:57.460]㒳䕾䇾㒳䕾！\n[01:05.700]㒳䕾䇾㒳䕾！\n[01:17.230]䈅㓉䯸㛳䭊㮭㴊㢕䄇䋱㔘㒳䕾䵔！\n[01:24.390]䈅㰯䮈㓉䦞㮭㘑䩻䣻䔎㱫！\n[01:39.840]䫜㰯䮈㫑㹪㓉㩱䏍䄇㞮㱫！\n[01:46.000]䱼䂼䈅䚥㰯㶨㻔䆖㱫㢮䎡㻹㑛㮭！\n[01:54.220]䈅䕗䣻䤭䗓㰯㹒㰯䢵㱪，䝡㕤䄈䖘䐫！\n[01:59.500]㒳䕾䇾㒳䕾！\n[02:08.150]㒳䕾䇾㒳䕾！\n[02:16.430]㒳䕾䇾㒳䕾！\n[02:28.050]䈅㓉䯸㛳䭊㒳䕾䵔䣻㮭！\n[02:34.890]䎐㜀䣻䈅䔊㵄，䈅䔊㵄䓠䝌㽽䛽䣈！\n[02:49.200]㕆䄇䭙䈅䕗䦋㭮䋱㿂䋇䏯㾫䣻䝌䟈㩌！\n[02:52.280]㚋䝡㓉䭙䪦㮭㰿䃈！\n[02:57.670]㮭䕦㮭㖃㖥䋱䯙㷲䄧䌃！\n[03:00.100]㚋䭙㮭䎋䤑䝕㐕㪢㡯㵢㥜！\n[03:02.910]㠤䭙㹡䫡㫭䘏䞏！\n[03:06.130]䂗䈅䁯㮭䭊㒳䕾䵔䞏！\n[03:11.070]㒳䕾䇾㒳䕾！\n[03:19.430]㒳䕾䇾㒳䕾！\n[03:25.790]㭱䥈㮭䭝䯼䈅䇘㱊㐜䣻䭙㹝䄈！\n[03:27.300]䇽䞏,䫏䲂㮭䣻䜿！\n[03:34.100]㒳䕾䇾㒳䕾！\n[03:40.320]䈅㓉䯸㛳䭊㮭！\n[03:44.300]䧾䛯㒵㒳䕾䵔！",
+        "yrc": "{\"t\":0,\"c\":[{\"tx\":\"作词: \"},{\"tx\":\"Prince\"}]}\n{\"t\":1000,\"c\":[{\"tx\":\"作曲: \"},{\"tx\":\"Prince\"}]}\n{\"t\":2000,\"c\":[{\"tx\":\"制作人: \"},{\"tx\":\"Prince \u0026 The Revolution\"}]}\n{\"t\":3000,\"c\":[{\"tx\":\"编曲: \"},{\"tx\":\"Prince\"}]}\n[19250,8070](19250,150,0)C (19400,210,0)dqhqt (19610,240,0)jqudo (19850,90,0)on (19940,480,0)luerq (20420,330,0)ine (20750,210,0)udi (20960,1230,0)rnttna(22190,5130,0).\n[27320,8250](27320,120,0)C (27440,240,0)dqhqt (27680,180,0)jqudo (27860,120,0)on (27980,480,0)luerq (28460,300,0)ine (28760,210,0)udi (28970,1350,0)vucd(30320,5250,0).\n[35570,5820](35570,582,0)C (36152,582,0)ndxi (36734,582,0)audoqg (37316,582,0)on (37898,582,0)ndq (38480,582,0)ocjq (39062,582,0)rqq (39644,582,0)ine (40226,582,0)xuemwcdm (40808,582,0)!\n[41390,7530](41390,210,0)C (41600,1020,0)ndxi (42620,540,0)audoqg (43160,420,0)on (43580,690,0)rqq (44270,390,0)ine (44660,1200,0)xuemwcdm (45860,480,0)cd (46340,480,0)owq (46820,1050,0)vetvxq (47870,1020,0)tucd (48890,30,0)!\n[48920,8310](48920,1020,0)Vetvxq (49940,990,0)tucd(50930,30,0)！(50960,870,0)Vetvxq (51830,1050,0)tucd(52880,4350,0)！\n[57230,8400](57230,1080,0)Vetvxq (58310,1020,0)tucd(59330,30,0)！(59360,840,0)Vetvxq (60200,1110,0)tucd(61310,4320,0)！\n[65630,11370](65630,1080,0)Vetvxq (66710,1020,0)tucd(67730,30,0)！(67760,900,0)Vetvxq (68660,1140,0)tucd(69800,7200,0)！\n[77000,7260](77000,360,0)C (77360,660,0)ndxi (78020,750,0)audoqg (78770,360,0)on (79130,720,0)rqq (79850,450,0)ine (80300,1200,0)yuowcdm (81500,450,0)cd (81950,510,0)owq (82460,1050,0)vetvxq (83510,450,0)tucd (83960,300,0)!\n[84260,13890](84260,120,0)C (84380,270,0)dqhqt (84650,330,0)audoqg (84980,60,0)on (85040,270,0)yq (85310,1140,0)inet (86450,1110,0)aqqbqdg (87560,1110,0)xnhqt(88670,9480,0).\n[98150,7650](98150,210,0)C (98360,120,0)dqhqt (98480,240,0)audoqg (98720,60,0)on (98780,210,0)yq (98990,330,0)rnjq (99320,270,0)bcdg (99590,90,0)np (99680,1470,0)ptcqdg(101150,4650,0).\n[105800,8290](105800,390,0)Yuyi (106190,150,0)C (106340,150,0)lnexg (106490,270,0)dqhqt (106760,420,0)roqux (107180,450,0)ine (107630,210,0)ptnj (107840,420,0)udnowqt(108260,5830,0).\n[114090,5420](114090,270,0)Co'r (114360,620,0)relw (114980,210,0)u (115190,810,0)rwujq (116000,420,0)net (116420,1080,0)ptcqdgrwcv (117500,510,0)wug (118010,360,0)on (118370,150,0)qdg(118520,990,0).\n[119510,10560](119510,1140,0)Vetvxq (120650,510,0)tucd(121160,480,0)！(121640,870,0)Vetvxq (122510,360,0)tucd(122870,7200,0)！\n[130070,7920](130070,840,0)Vetvxq (130910,630,0)tucd(131540,4830,0)！(136370,1140,0)Vetvxq (137510,480,0)tucd(137990,0,0)！\n[137990,2970](137990,150,0)Vetvxq (138140,330,0)tucd(138470,30,0)！(138500,900,0)Vetvxq (139400,1560,0)tucd(140960,0,0)！\n[140960,13920](140960,6960,0)C (147920,960,0)ndxi (148880,720,0)audoqg (149600,450,0)on (150050,630,0)rqq (150680,660,0)ine (151340,1440,0)edgqtdquow (152780,540,0)owq (153320,1050,0)vetvxq (154370,480,0)tucd(154850,30,0)！\n[154880,14250](154880,390,0)Wndqi(155270,0,0),(155270,330,0)C (155600,480,0)bdna(156080,0,0).(156080,390,0)C (156470,390,0)bdna(156860,0,0).(156860,270,0)C (157130,540,0)bdna (157670,540,0)ocjqr (158210,90,0)utq (158300,360,0)lwudmcdm(158660,10470,0).\n[169130,2970](169130,210,0)Co'r (169340,300,0)ocjq (169640,120,0)aq (169760,150,0)uxx (169910,300,0)tqulw (170210,330,0)neo (170540,330,0)rnjqowcdm (170870,1200,0)dqa(172070,30,0).\n[172100,5520](172100,240,0)Owuo (172340,270,0)jqudr (172610,180,0)ine (172790,240,0)onn(173030,4590,0).\n[177620,2370](177620,180,0)Ine (177800,240,0)rui (178040,90,0)ine (178130,180,0)audo (178310,30,0)u (178340,390,0)xqugqt(178730,1260,0).\n[179990,1620](179990,210,0)Yeo (180200,60,0)ine (180260,240,0)lud'o (180500,150,0)rqqj (180650,90,0)on (180740,150,0)jubq (180890,90,0)ev (180980,120,0)inet (181100,510,0)jcdg(181610,0,0).\n[181610,4470](181610,1350,0)C (182960,210,0)owcdb (183170,60,0)ine (183230,180,0)yqooqt (183410,450,0)lxnrq (183860,90,0)co(183950,2130,0).\n[186080,5010](186080,180,0)Udg (186260,240,0)xqo (186500,150,0)jq (186650,480,0)mecgq (187130,1350,0)ine (188480,390,0)on (188870,210,0)owq (189080,570,0)vetvxq (189650,750,0)tucd(190400,690,0).\n[191090,8460](191090,1170,0)Vetvxq (192260,1020,0)tucd(193280,30,0)！(193310,840,0)Vetvxq (194150,390,0)tucd(194540,5010,0)！\n[199550,6120](199550,1110,0)Vetvxq (200660,1020,0)tucd(201680,30,0)！(201710,840,0)Vetvxq (202550,420,0)tucd(202970,2700,0)！\n[205670,1320](205670,132,0)Cp (205802,132,0)ine (205934,132,0)bdna (206066,132,0)awuo (206198,132,0)C'j (206330,132,0)rcdmcdm (206462,132,0)uyneo (206594,132,0)ev (206726,132,0)wqtq(206858,132,0).\n[206990,1170](206990,240,0)Lnjq (207230,120,0)nd (207350,270,0)tucrq (207620,90,0)inet (207710,450,0)wudg(208160,0,0).\n[208160,12000](208160,1020,0)Vetvxq (209180,990,0)tucd(210170,30,0)！(210200,840,0)Vetvxq (211040,1410,0)tucd(212450,7710,0)！\n[220160,4350](220160,360,0)C (220520,240,0)ndxi (220760,360,0)audoqg (221120,60,0)on (221180,330,0)rqq (221510,900,0)ine(222410,0,0),(222410,120,0)ndxi (222530,480,0)audoqg (223010,270,0)on (223280,390,0)rqq (223670,840,0)ine (224510,0,0)!\n[224510,296270](224510,270,0)Cd (224780,120,0)owq (224900,630,0)vetvxq (225530,300,0)tucd (225830,294950,0)!\n{\"t\":520780,\"c\":[{\"tx\":\"人声: \"},{\"tx\":\"Prince\"}]}\n",
+        "duration_secs": 521.866,
+        "title": "Purple Rain",
+        "album": "Purple Rain",
+        "song_id": 21393066,
+        "album_id": 1974771
+      }
+    },
+    "qq": {
+      "lyrics": "[ti:Purple Rain]\n[ar:Prince/The Revolution]\n[al:Purple Rain]\n[by:]\n[offset:0]\n[00:00.00]Vetvxq Tucd - Vtcdlq/Owq Tqhnxeocnd\n[00:06.40]Lyrics by：Vtcdlq\n[00:12.80]Composed by：Vtcdlq\n[00:19.20]C dqhqt jqudo on luerq ine udi rnttna\n[00:27.32]C dqhqt jqudo on luerq ine udi vucd\n[00:35.52]C ndxi audoqg ndq ocjq on rqq ine xuemwcdm\n[00:41.21]C ndxi audoqg on rqq ine\n[00:44.70]Xuemwcdm cd owq vetvxq tucd\n[00:48.94]Vetvxq tucd vetvxq tucd\n[00:57.32]Vetvxq tucd vetvxq tucd\n[01:05.56]Vetvxq tucd vetvxq tucd\n[01:17.21]C ndxi audo on rqq ine\n[01:20.16]Yuowcdm cd owq vetvxq tucd\n[01:24.36]C dqhqt audoqg on yq inet aqqbqdg xnhqt\n[01:38.29]C ndxi audoqg on yq rnjq bcdg np ptcqdg wqi\n[01:45.98]Yuyi C lnexg dqhqt roqux ine ptnj udnowqt\n[01:54.23]Co'r relw u rwujq net ptcqdgrwcv wug on qdg\n[01:59.68]Vetvxq tucd vetvxq tucd\n[02:08.13]Vetvxq tucd vetvxq tucd\n[02:16.53]Vetvxq tucd vetvxq tucd\n[02:27.87]C ndxi audo on rqq ine\n[02:31.48]Edgqtdquow owq vetvxq tucd\n[02:35.31]Wndqi C bdna C bdna\n[02:37.29]C bdna ocjqr utq lwudmcdm\n[02:49.55]Co'r ocjq aq uxx tqulw neo\n[02:50.68]Pnt rnjqowcdm dqa owuo jqudr ine onn\n[02:58.03]Ine rui ine audo u xqugqt\n[03:00.09]Yeo ine lud'o rqqj on jubq ev inet jcdg\n[03:02.94]C owcdb ine yqooqt lxnrq co\n[03:06.48]Udg xqo jq mecgq ine on owq vetvxq tucd\n[03:11.51]Vetvxq tucd vetvxq tucd\n[03:19.78]Vetvxq tucd vetvxq tucd annn\n[03:25.79]Cp ine bdna awuo C'j rcdmcdm uyneo ev wqtq\n[03:27.27]Lnjq nd tucrq inet wudg\n[03:28.22]Vetvxq tucd vetvxq tucd\n[03:40.47]C ndxi audo on rqq ine\n[03:43.01]Ndxi audo on rqq ine cd owq vetvxq tucd",
+      "yrc": "[ti:Purple Rain]\n[ar:Prince/The Revolution]\n[al:Purple Rain]\n[by:]\n[offset:0]\n[0,6400](0,1097,0)Vetvxq(1097,183,0) (1280,731,0)Tucd(2011,183,0) (2194,183,0)-(2377,183,0) (2560,1097,0)Vtcdlq(3657,183,0)/(3840,548,0)Owq(4388,183,0) (4571,1829,0)Tqhnxeocnd\n[6400,6400](6400,1280,0)Xitclr(7680,1280,0) (8960,1280,0)yi(10240,1280,0)：(11520,1280,0)Vtcdlq\n[12800,6400](12800,1280,0)Lnjvnrqg(14080,1280,0) (15360,1280,0)yi(16640,1280,0)：(17920,1280,0)Vtcdlq\n[19205,2273](19205,169,0)C (19374,198,0)dqhqt (19572,160,0)jqudo (19732,152,0)on (19884,304,0)luerq (20188,416,0)ine (20604,216,0)udi (20820,658,0)rnttna\n[27326,2151](27326,159,0)C (27485,160,0)dqhqt (27645,152,0)jqudo (27797,168,0)on (27965,296,0)luerq (28261,360,0)ine (28621,276,0)udi (28897,580,0)vucd\n[35525,2330](35525,176,0)C (35701,90,0)ndxi (35791,264,0)audoqg (36055,256,0)ndq (36311,352,0)ocjq (36663,208,0)on (36871,184,0)rqq (37055,208,0)ine (37263,592,0)xuemwcdm\n[41218,3487](41218,303,0)C (41521,848,0)ndxi (42369,771,0)audoqg (43140,350,0)on (43490,793,0)rqq (44283,422,0)ine\n[44705,3576](44705,857,0)Xuemwcdm (45562,481,0)cd (46043,591,0)owq (46634,1033,0)vetvxq (47667,614,0)tucd\n[48946,3432](48946,857,0)Vetvxq (49803,615,0)tucd (50977,817,0)vetvxq (51794,584,0)tucd\n[57329,3401](57329,873,0)Vetvxq (58202,569,0)tucd (59191,842,0)vetvxq (60033,697,0)tucd\n[65562,3576](65562,968,0)Vetvxq (66530,529,0)tucd (67578,920,0)vetvxq (68498,640,0)tucd\n[77210,2958](77210,176,0)C (77386,706,0)ndxi (78092,541,0)audo (78633,520,0)on (79153,560,0)rqq (79713,455,0)ine\n[80168,3800](80168,1144,0)Yuowcdm (81312,441,0)cd (81753,559,0)owq (82312,1073,0)vetvxq (83385,583,0)tucd\n[84368,3653](84368,144,0)C (84512,160,0)dqhqt (84672,264,0)audoqg (84936,176,0)on (85112,224,0)yq (85336,316,0)inet (86275,904,0)aqqbqdg (87179,842,0)xnhqt\n[98291,3648](98291,176,0)C (98467,176,0)ndxi (98643,169,0)audoqg (98812,159,0)on (98971,184,0)yq (99155,200,0)rnjq (99355,232,0)bcdg (99587,177,0)np (99764,576,0)ptcqdg (101395,544,0)wqi\n[105988,2472](105988,216,0)Yuyi (106204,192,0)C (106396,185,0)lnexg (106581,198,0)dqhqt (106779,409,0)roqux (107188,560,0)ine (107748,160,0)ptnj (107908,552,0)udnowqt\n[114236,4826](114236,168,0)Co'r (114404,399,0)relw (114803,600,0)u (115403,528,0)rwujq (115931,480,0)net (116411,1037,0)ptcqdgrwcv (117448,523,0)wug (117971,536,0)on (118507,555,0)qdg\n[119686,3557](119686,917,0)Vetvxq (120603,592,0)tucd (121782,805,0)vetvxq (122587,656,0)tucd\n[128139,3580](128139,881,0)Vetvxq (129020,528,0)tucd (130059,904,0)vetvxq (130963,756,0)tucd\n[136539,3848](136539,920,0)Vetvxq (137459,507,0)tucd (138492,903,0)vetvxq (139395,992,0)tucd\n[147875,3408](147875,225,0)C (148100,1000,0)ndxi (149100,575,0)audo (149675,533,0)on (150208,531,0)rqq (150739,544,0)ine\n[151483,3656](151483,1410,0)Edgqtdquow (152893,447,0)owq (153340,1103,0)vetvxq (154443,696,0)tucd\n[155315,1817](155315,170,0)Wndqi (155485,222,0)C (155707,410,0)bdna (156339,320,0)C (156659,473,0)bdna\n[157299,2080](157299,160,0)C (157459,240,0)bdna (157699,609,0)ocjqr (158308,184,0)utq (158492,887,0)lwudmcdm\n[169555,1128](169555,160,0)Co'r (169715,161,0)ocjq (169876,167,0)aq (170043,192,0)uxx (170235,170,0)tqulw (170405,278,0)neo\n[170683,2936](170683,152,0)Pnt (170835,280,0)rnjqowcdm (171115,448,0)dqa (172515,160,0)owuo (172675,192,0)jqudr (172867,176,0)ine (173043,576,0)onn\n[178035,1096](178035,152,0)Ine (178187,160,0)rui (178347,160,0)ine (178507,161,0)audo (178668,143,0)u (178811,320,0)xqugqt\n[180094,1880](180094,169,0)Yeo (180263,160,0)ine (180423,199,0)lud'o (180622,168,0)rqqj (180790,161,0)on (180951,152,0)jubq (181103,144,0)ev (181247,159,0)inet (181406,568,0)jcdg\n[182942,1480](182942,176,0)C (183118,168,0)owcdb (183286,177,0)ine (183463,201,0)yqooqt (183664,398,0)lxnrq (184062,360,0)co\n[186486,3881](186486,199,0)Udg (186685,176,0)xqo (186861,162,0)jq (187023,351,0)mecgq (187374,560,0)ine (188861,226,0)on (189087,282,0)owq (189369,461,0)vetvxq (189830,537,0)tucd\n[191510,3792](191510,904,0)Vetvxq (192414,592,0)tucd (193653,720,0)vetvxq (194373,929,0)tucd\n[199781,5377](199781,1112,0)Vetvxq (200893,502,0)tucd (201957,809,0)vetvxq (202766,1119,0)tucd (204586,572,0)annn\n[205790,1489](205790,152,0)Cp (205942,153,0)ine (206095,178,0)bdna (206273,141,0)awuo (206414,156,0)C'j (206570,157,0)rcdmcdm (206727,202,0)uyneo (206929,132,0)ev (207061,218,0)wqtq\n[207279,943](207279,164,0)Lnjq (207443,176,0)nd (207619,256,0)tucrq (207875,132,0)inet (208007,215,0)wudg\n[208222,3960](208222,1105,0)Vetvxq (209327,512,0)tucd (210351,1000,0)vetvxq (211351,831,0)tucd\n[220478,1840](220478,176,0)C (220654,335,0)ndxi (220989,281,0)audo (221270,223,0)on (221493,305,0)rqq (221798,520,0)ine\n[223014,4003](223014,247,0)Ndxi (223261,265,0)audo (223526,161,0)on (223687,183,0)rqq (223870,563,0)ine (224857,184,0)cd (225041,224,0)owq (225265,448,0)vetvxq (225713,1304,0)tucd\n",
+      "tr": "[offset:0]\n[00:19.20]䈅㻔㓕䯸㽽㕋㮭䚢䇽㪂䟮䀖㢂\n[00:27.32]䈅㻔㓕䯸㽽㕋㮭䚢䇽㪂䟮㶣㗦\n[00:35.52]䈅㓉䯸㛳䭊㮭䣻䋱䐢䀎䉡\n[00:41.21]䈅㓉䯸㛳䭊㮭\n[00:44.70]䄇㒳䕾䵔䣻䋱䐢䀎䉡\n[00:48.94]㒳䕾䇾㒳䕾！\n[00:57.32]㒳䕾䇾㒳䕾！\n[01:05.56]㒳䕾䇾㒳䕾！\n[01:17.21]䈅㓉䯸㛳䭊㮭\n[01:20.16]䄇㒳䕾䵔䧾䛯\n[01:24.36]䈅㰯䮈䦞㮭䣻㜪䗩㢀䔎㱫\n[01:38.29]䈅㓉䯸䣄㦬㮭䣻䗬㪝㾴㞮\n[01:45.98]䱼䂼，䈅㵢㰯㶨䓛㮭㻔䆖㱫䩪䏾㻹㑛\n[01:54.23]䈅䕗䣻㞮䗓䢵㱪，䈅䂑䭊㜤㑐㭼㼛\n[01:59.68]㒳䕾䇾㒳䕾！\n[02:08.13]㒳䕾䇾㒳䕾！\n[02:16.53]㒳䕾䇾㒳䕾！\n[02:27.87]䈅㓉䯸㛳䭊㮭\n[02:31.48]㒳䕾䵔䣻㮭\n[02:35.31]䎐㜀䣻，䈅䔊㵄䈅䔊㵄\n[02:37.29]䈅䔊㵄䓠䝌㽽䛽䣈\n[02:49.55]㕆䄇䭙䈅䕗䦋㭮䋇䏯㾫䣻䝌䟈㩌\n[02:50.68]㚋䝡㓉䭙䪦㮭㰿䃈\n[02:58.03]㮭䕦㮭㖃㖥䋱䯙㷲䄧䌃\n[03:00.09]㚋䭙㮭㰯䚞㪢㡯㵢㥜\n[03:02.94]㢮㺄㠤䭙䫡㫭䜓䞏\n[03:06.48]䂗䈅䄧䁯㮭䭊㒳䕾䵔䞏\n[03:11.51]㒳䕾䇾㒳䕾！\n[03:19.78]㒳䕾䇾㒳䕾！\n[03:25.79]㭱䥈㮭䭝䯼䈅䇘㱊㐜䣻䭙㹝䄈\n[03:27.27]䇽䞏，䫏䲂㮭䣻䜿\n[03:28.22]㒳䕾䇾㒳䕾！\n[03:40.47]䈅㓉䯸㛳䭊㮭\n[03:43.01]䈅㓉䯸㛳䭊㒳䕾䵔䣻㮭",
+      "title": "Purple Rain",
+      "artist": "Prince/The Revolution",
+      "album": "Purple Rain (Explicit)",
+      "cover": "https://y.qq.com/music/photo_new/T002R800x800M000002KKkpP3MeVdn.jpg",
+      "duration_secs": 520
+    }
+  },
+  "expect": {
+    "winner": "netease",
+    "verdicts": {
+      "kugou": "accepted",
+      "kuwo": "accepted",
+      "lrclib": "accepted",
+      "netease": "accepted",
+      "qq": "accepted"
+    },
+    "ranked": [
+      {
+        "source": "netease",
+        "score": 1299,
+        "terms": [
+          {
+            "kind": "duration",
+            "points": 293
+          },
+          {
+            "kind": "wordTiming",
+            "points": 400
+          },
+          {
+            "kind": "lines",
+            "points": 36
+          },
+          {
+            "kind": "album",
+            "points": 150
+          },
+          {
+            "kind": "titleMatch",
+            "points": 120
+          },
+          {
+            "kind": "consensus",
+            "points": 250
+          },
+          {
+            "kind": "translation",
+            "points": 50
+          }
+        ],
+        "has_word_timing": true,
+        "has_translation": true,
+        "translation_lang": "zh"
+      },
+      {
+        "source": "kugou",
+        "score": 188,
+        "terms": [
+          {
+            "kind": "durationOff",
+            "points": -500
+          },
+          {
+            "kind": "wordTiming",
+            "points": 400
+          },
+          {
+            "kind": "lines",
+            "points": 43
+          },
+          {
+            "kind": "album",
+            "points": 75
+          },
+          {
+            "kind": "titleMatch",
+            "points": 120
+          },
+          {
+            "kind": "translation",
+            "points": 50
+          }
+        ],
+        "has_word_timing": true,
+        "has_translation": true,
+        "translation_lang": "zh"
+      },
+      {
+        "source": "qq",
+        "score": 187,
+        "terms": [
+          {
+            "kind": "durationOff",
+            "points": -500
+          },
+          {
+            "kind": "wordTiming",
+            "points": 400
+          },
+          {
+            "kind": "lines",
+            "points": 42
+          },
+          {
+            "kind": "album",
+            "points": 75
+          },
+          {
+            "kind": "titleMatch",
+            "points": 120
+          },
+          {
+            "kind": "translation",
+            "points": 50
+          }
+        ],
+        "has_word_timing": true,
+        "has_translation": true,
+        "translation_lang": "zh"
+      },
+      {
+        "source": "lrclib",
+        "score": 1,
+        "terms": [
+          {
+            "kind": "durationOff",
+            "points": -500
+          },
+          {
+            "kind": "lines",
+            "points": 45
+          },
+          {
+            "kind": "album",
+            "points": 150
+          },
+          {
+            "kind": "titleMatch",
+            "points": 120
+          }
+        ]
+      },
+      {
+        "source": "kuwo",
+        "score": 1,
+        "terms": [
+          {
+            "kind": "durationOff",
+            "points": -500
+          },
+          {
+            "kind": "lines",
+            "points": 71
+          },
+          {
+            "kind": "titleMatch",
+            "points": 120
+          }
+        ]
+      }
+    ],
+    "winner_fingerprint": "3ad1816b77767c02"
+  }
+}

@@ -1,0 +1,212 @@
+{
+  "id": "reject-lang-bestfriend",
+  "category": "reject-wrong-language",
+  "note": "语言否决:歌手/歌名都是英文,网易云那条\"原文\"却大半是中文(上传者把翻译当原文),且与其它源零共识,isProbablyWrongLanguageLyrics 判废;其余四源英文正文互证",
+  "label_evidence": {
+    "consensus_peers": 2,
+    "title_accepted": true,
+    "version_tags_ok": true,
+    "source_duration_delta_pct": 0,
+    "lyrics_end_secs": 255.38,
+    "coverage_pct": 97.84674329501915,
+    "album_score": 100,
+    "live_mismatch": false,
+    "cache_agreement": "similar=1.00"
+  },
+  "track": {
+    "artist": "Musiq Soulchild",
+    "title": "Bestfriend",
+    "album": "Juslisen"
+  },
+  "captured_at": "2026-09-04",
+  "scoring_version_at_capture": 11,
+  "query": {
+    "artist": "Musiq Soulchild",
+    "title": "Bestfriend",
+    "album": "Juslisen",
+    "duration_secs": 261
+  },
+  "settings": {
+    "translation_language": "zh",
+    "sources": {
+      "amll": true,
+      "kugou": true,
+      "kuwo": true,
+      "lrclib": true,
+      "lyricfind": true,
+      "musixmatch": true,
+      "netease": true,
+      "qq": true
+    },
+    "source_mode": "smart",
+    "source_order": [
+      "netease",
+      "qq",
+      "kugou",
+      "musixmatch",
+      "lrclib",
+      "amll",
+      "lyricfind",
+      "kuwo"
+    ]
+  },
+  "sources": {
+    "amll": {
+      "amll": {}
+    },
+    "applecover": {
+      "cover": "https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/b9/4d/0e/b94d0e35-d0d2-c988-7031-a38926fffa3a/06UMGIM21432.rgb.jpg/1200x1200bb.jpg"
+    },
+    "kugou": {
+      "lyrics": "[id:$00000000]\r\n[ti:Bestfriend]\r\n[ar:Musiq]\r\n[al:Juslisen]\r\n[by:]\r\n[00:12.88]Mwd x pxoc J pwm't umpskctxmp\r\n[00:17.31]Dio no rwzs pwscm't rwzs ns rjys cis ucsp tw bslwks\r\n[00:23.39]Mwd rxtsro tis cum euc pwscm't cijms xmp no qxkxpjcs jc vwms\r\n[00:35.24]Axucs nwct wl tis tjns\r\n[00:41.04]Ds xkvus xmp ljvit\r\n[00:44.15]Wzsk tijmvc tixt pwscm't ksxrro nxttsk\r\n[00:46.90]Rwkp ymwdc tixt J tkjsp\r\n[00:52.26]Tw vjzs xrr no rwzs\r\n[00:56.52]Cw dixt ciwurp J pw\r\n[00:57.96]Owu vwt tw umpskctxmp jt'c xrr xbwut vjzs xmp txys\r\n[01:03.35]Owu axm't bs cw psnxmpjmv\r\n[01:06.16]Tijmvc dwm't xrdxoc vw owuk dxo\r\n[01:08.91]Jl owu euct vjzs jt tjns\r\n[01:11.59]Xmp tijmy xbwut isk lssrjmvc\r\n[01:14.52]Tism tijmvc djrr dwky wut ljms\r\n[01:17.16]Rsxkm tw nxys isk owuk bsct lkjsmp\r\n[01:20.36]J isxk dixt owu cxojmv but no vjkr cis'c xrdxoc\r\n[01:24.93]Awnqrxjmjmv xmp xmp brxnjmv ns lwk tijmvc J'rr mszsk pw\r\n[01:30.74]Xmp J pwm't ymwd dixt  dixt jt jc tixt J pjp tixt dxc\r\n[01:36.10]Cw dkwmv tw nxys isk lssr J'rr szsk bs umtkus tw isk\r\n[01:43.08]Axucs nwct wl tis tjns\r\n[01:48.72]Ds xkvus xmp ljvit\r\n[01:52.03]Wzsk tijmvc tixt pwscm't ksxrro nxttsk\r\n[01:54.46]Rwkp ymwdc tixt J tkjsp\r\n[02:00.08]Tw vjzs xrr no rwzs tw isk dixt ciwurp J pw\r\n[02:05.76]Owu vwt tw umpskctxmp jt'c xrr xbwut vjzs xmp txys\r\n[02:11.00]Owu axm't bs cw psnxmpjmv\r\n[02:13.81]Tijmvc dwm't xrdxoc vw owuk dxo\r\n[02:16.57]Jl owu'rr euct vjzs jt tjns\r\n[02:19.25]Xmp tijmy xbwut isk lssrjmvc\r\n[02:22.69]Tism tijmvc djrr dwky wut ljms\r\n[02:25.00]Rsxkm tw nxys isk owuk bsct lkjsmp\r\n[02:28.11]Css dixt owu mssp tw pw jc ctwq axtaijmv xttjtups'c\r\n[02:33.31]Xmp euct tko tw txys tis tjns tw isxk isk wut\r\n[02:39.15]Ctwq bsjmv cw pslsmcjzs xmp tko tw bs nwks xttsmtjzs tw\r\n[02:45.33]Ciwd isks owu kscqsat dixt cis'c txryjm 'bwut\r\n[02:52.45]Axucs owu ymwd iwd uc dwnsm axm bs xmp dism ds\r\n[02:59.10]Lssr tiksxtsmsp ds ksxat jmctjmatjzro dism wuk snwtjwmc ixzs vkwdm tw jtc ijvi ds axm tsmp tw\r\n[03:10.77]Euct rst jt awmtkwr\r\n[03:14.15]Wuk rjzsc\r\n[03:14.29]Dsrr xrr kjvit J'rr tko msht tjns J'rr tko x rjttrs tsmpskmscc\r\n[03:19.91]Szsm nxys cuks tixt J vjzs isk nwks awnqrsnsmtc\r\n[03:25.52]Nxobs J awurp qkxatjas wm bsjmv nwks qxtjsmt\r\n[03:31.17]Xmp awnqkwnjcs lwk no bxbo osxi osxi\r\n[03:36.22]Jl owu dxmt isk jm owuk rjls\r\n[03:39.41]Tism owu vwt tw bs djrrjmv tw tko\r\n[03:45.05]Css jt'c dwkti tis ctkuvvrs\r\n[03:48.25]Axucs jm tis smp cis djrr xrdxoc\r\n[03:52.88]Bs owuk bsct lkjsmp osxi\r\n[03:57.59]Jl owu dxmt isk jm owuk rjls\r\n[04:02.16]Tism owu vwt tw bs djrrjmv tw tko\r\n[04:07.75]Css jt'c dwkti tis ctkuvvrs\r\n[04:11.02]Axucs jm tis smp cis djrr xrdxoc\r\n[04:15.38]Bs owuk bsct lkjsmp osxi\r\n",
+      "yrc": "[id:$00000000]\n[ti:Bestfriend]\n[ar:Musiq]\n[al:Juslisen]\n[by:]\n[12889,3750](12889,190,0)Mwd (13079,190,0)x (13269,1120,0)pxoc (14389,310,0)J (14699,690,0)pwm't (15389,1250,0)umpskctxmp\n[17319,6080](17319,500,0)Dio (17819,250,0)no (18069,620,0)rwzs (18689,1250,0)pwscm't (19939,640,0)rwzs (20579,380,0)ns (20959,310,0)rjys (21269,310,0)cis (21579,380,0)ucsp (21959,310,0)tw (22269,1130,0)bslwks\n[23399,11160](23399,610,0)Mwd (24009,630,0)rxtsro (24639,810,0)tis (25449,750,0)cum (26199,1000,0)euc (27199,1310,0)pwscm't (28509,870,0)cijms (29379,250,0)xmp (29629,370,0)no (29999,3750,0)qxkxpjcs (33749,250,0)jc (33999,560,0)vwms\n[35249,2592](35249,570,0)Axucs (35819,570,0)nwct (36389,930,0)wl (37319,190,0)tis (37509,332,0)tjns\n[41041,2760](41041,390,0)Ds (41431,1490,0)xkvus (42921,160,0)xmp (43081,1070,0)ljvit\n[44151,2120](44151,190,0)Wzsk (44341,620,0)tijmvc (44961,190,0)tixt (45151,370,0)pwscm't (45521,310,0)ksxrro (45831,440,0)nxttsk\n[46901,2620](46901,250,0)Rwkp (47151,1180,0)ymwdc (48331,190,0)tixt (48521,190,0)J (48711,810,0)tkjsp\n[52261,2440](52261,310,0)Tw (52571,940,0)vjzs (53511,560,0)xrr (54071,190,0)no (54261,440,0)rwzs\n[56521,1190](56521,190,0)Cw (56711,130,0)dixt (56841,190,0)ciwurp (57031,250,0)J (57281,430,0)pw \n[57961,4710](57961,200,0)Owu (58161,190,0)vwt (58351,310,0)tw (58661,1750,0)umpskctxmp (60411,180,0)jt'c (60591,320,0)xrr (60911,820,0)xbwut (61731,250,0)vjzs (61981,310,0)xmp (62291,380,0)txys\n[63351,2000](63351,190,0)Owu (63541,190,0)axm't (63731,250,0)bs (63981,500,0)cw (64481,870,0)psnxmpjmv\n[66161,2060](66161,250,0)Tijmvc (66411,250,0)dwm't (66661,630,0)xrdxoc (67291,180,0)vw (67471,380,0)owuk (67851,370,0)dxo\n[68911,2000](68911,190,0)Jl (69101,370,0)owu (69471,250,0)euct (69721,310,0)vjzs (70031,310,0)jt (70341,570,0)tjns\n[71591,2310](71591,250,0)Xmp (71841,250,0)tijmy (72091,690,0)xbwut (72781,370,0)isk (73151,750,0)lssrjmvc\n[74521,1830](74521,190,0)Tism (74711,380,0)tijmvc (75091,250,0)djrr (75341,370,0)dwky (75711,310,0)wut (76021,330,0)ljms\n[77161,2580](77161,250,0)Rsxkm (77411,250,0)tw (77661,370,0)nxys (78031,380,0)isk (78411,370,0)owuk (78781,520,0)bsct (79301,440,0)lkjsmp\n[80361,4570](80361,0,0)J (80361,190,0)isxk (80551,370,0)dixt (80921,190,0)owu (81111,1140,0)cxojmv (82251,690,0)but (82941,180,0)no (83121,310,0)vjkr (83431,320,0)cis'c (83751,1180,0)xrdxoc\n[84931,4930](84931,1000,0)Awnqrxjmjmv (85931,250,0)xmp (86181,310,0)xmp (86491,690,0)brxnjmv (87181,250,0)ns (87431,190,0)lwk (87621,370,0)tijmvc (87991,190,0)J'rr (88181,430,0)mszsk (88611,1250,0)pw\n[90741,5360](90741,810,0)Xmp (91551,180,0)J (91731,440,0)pwm't (92171,440,0)ymwd (92611,1430,0)dixt  (94041,250,0)dixt (94291,250,0)jt (94541,310,0)jc (94851,190,0)tixt (95041,190,0)J (95231,310,0)pjp (95541,250,0)tixt (95791,310,0)dxc\n[96101,6730](96101,160,0)Cw (96261,810,0)dkwmv (97071,250,0)tw (97321,310,0)nxys (97631,320,0)isk (97951,550,0)lssr (98501,250,0)J'rr (98751,690,0)szsk (99441,560,0)bs (100001,440,0)umtkus (100441,1310,0)tw (101751,1080,0)isk\n[103081,2450](103081,560,0)Axucs (103641,500,0)nwct (104141,680,0)wl (104821,310,0)tis (105131,400,0)tjns\n[108721,2440](108721,380,0)Ds (109101,1250,0)xkvus (110351,250,0)xmp (110601,560,0)ljvit\n[112031,2430](112031,190,0)Wzsk (112221,500,0)tijmvc (112721,190,0)tixt (112911,310,0)pwscm't (113221,310,0)ksxrro (113531,930,0)nxttsk\n[114461,3310](114461,250,0)Rwkp (114711,690,0)ymwdc (115401,750,0)tixt (116151,250,0)J (116401,1370,0)tkjsp\n[120081,5680](120081,250,0)Tw (120331,690,0)vjzs (121021,750,0)xrr (121771,240,0)no (122011,820,0)rwzs (122831,190,0)tw (123021,1310,0)isk (124331,180,0)dixt (124511,250,0)ciwurp (124761,130,0)J (124891,870,0)pw \n[125761,5240](125761,190,0)Owu (125951,180,0)vwt (126131,310,0)tw (126441,1440,0)umpskctxmp (127881,250,0)jt'c (128131,380,0)xrr (128511,560,0)xbwut (129071,620,0)vjzs (129691,310,0)xmp (130001,1000,0)txys\n[131001,2810](131001,190,0)Owu (131191,250,0)axm't (131441,310,0)bs (131751,370,0)cw (132121,1690,0)psnxmpjmv\n[133811,2760](133811,190,0)Tijmvc (134001,250,0)dwm't (134251,740,0)xrdxoc (134991,260,0)vw (135251,380,0)owuk (135631,940,0)dxo\n[136571,2680](136571,190,0)Jl (136761,620,0)owu'rr (137381,190,0)euct (137571,250,0)vjzs (137821,250,0)jt (138071,1180,0)tjns\n[139251,2500](139251,250,0)Xmp (139501,310,0)tijmy (139811,750,0)xbwut (140561,380,0)isk (140941,810,0)lssrjmvc\n[142691,2310](142691,180,0)Tism (142871,190,0)tijmvc (143061,190,0)djrr (143251,370,0)dwky (143621,250,0)wut (143871,1130,0)ljms\n[145001,2620](145001,250,0)Rsxkm (145251,180,0)tw (145431,250,0)nxys (145681,190,0)isk (145871,560,0)owuk (146431,750,0)bsct (147181,440,0)lkjsmp\n[148111,4580](148111,190,0)Css (148301,190,0)dixt (148491,190,0)owu (148681,370,0)mssp (149051,560,0)tw (149611,570,0)pw (150181,700,0)jc (150881,370,0)ctwq (151251,620,0)axtaijmv (151871,820,0)xttjtups'c\n[153311,5090](153311,830,0)Xmp (154141,310,0)euct (154451,250,0)tko (154701,190,0)tw (154891,500,0)txys (155391,370,0)tis (155761,1330,0)tjns (157091,180,0)tw (157271,380,0)isxk (157651,250,0)isk (157901,500,0)wut\n[159151,5610](159151,370,0)Ctwq (159521,500,0)bsjmv (160021,500,0)cw (160521,1180,0)pslsmcjzs (161701,500,0)xmp (162201,310,0)tko (162511,260,0)tw (162771,370,0)bs (163141,370,0)nwks (163511,500,0)xttsmtjzs (164011,750,0)tw\n[165331,5050](165331,240,0)Ciwd (165571,750,0)isks (166321,250,0)owu (166571,1750,0)kscqsat (168321,250,0)dixt (168571,560,0)cis'c (169131,690,0)txryjm (169821,560,0)'bwut\n[172451,6650](172451,190,0)Axucs (172641,690,0)owu (173331,620,0)ymwd (173951,500,0)iwd (174451,580,0)uc (175031,750,0)dwnsm (175781,180,0)axm (175961,1890,0)bs (177851,370,0)xmp (178221,320,0)dism (178541,560,0)ds\n[179101,11670](179101,190,0)Lssr (179291,810,0)tiksxtsmsp (180101,250,0)ds (180351,750,0)ksxat (181101,2800,0)jmctjmatjzro (183901,190,0)dism (184091,200,0)wuk (184291,1240,0)snwtjwmc (185531,240,0)ixzs (185771,510,0)vkwdm (186281,180,0)tw (186461,190,0)jtc (186651,2490,0)ijvi (189141,320,0)ds (189461,310,0)axm (189771,560,0)tsmp (190331,440,0)tw\n[190771,2450](190771,430,0)Euct (191201,250,0)rst (191451,310,0)jt (191761,1460,0)awmtkwr\n[194151,820](194151,190,0)Wuk (194341,100,0)rjzsc\n[194291,4620](194291,250,0)Dsrr (194541,120,0)xrr (194661,510,0)kjvit (195171,180,0)J'rr (195351,1190,0)tko (196541,180,0)msht (196721,630,0)tjns (197351,200,0)J'rr (197551,240,0)tko (197791,240,0)x (198031,320,0)rjttrs (198351,560,0)tsmpskmscc\n[199911,4680](199911,190,0)Szsm (200101,370,0)nxys (200471,880,0)cuks (201351,550,0)tixt (201901,250,0)J (202151,1250,0)vjzs (203401,190,0)isk (203591,310,0)nwks (203901,690,0)awnqrsnsmtc\n[205521,5150](205521,690,0)Nxobs (206211,310,0)J (206521,900,0)awurp (207421,610,0)qkxatjas (208031,570,0)wm (208601,620,0)bsjmv (209221,370,0)nwks (209591,1080,0)qxtjsmt\n[211171,5050](211171,690,0)Xmp (211861,1680,0)awnqkwnjcs (213541,190,0)lwk (213731,310,0)no (214041,1200,0)bxbo (215241,300,0)osxi (215541,680,0)osxi \n[216221,2690](216221,190,0)Jl (216411,190,0)owu (216601,120,0)dxmt (216721,690,0)isk (217411,440,0)jm (217851,180,0)owuk (218031,880,0)rjls\n[219411,4450](219411,180,0)Tism (219591,320,0)owu (219911,490,0)vwt (220401,630,0)tw (221031,690,0)bs (221721,1000,0)djrrjmv (222721,740,0)tw (223461,400,0)tko\n[225051,3200](225051,190,0)Css (225241,310,0)jt'c (225551,560,0)dwkti (226111,440,0)tis (226551,1700,0)ctkuvvrs\n[228251,4630](228251,560,0)Axucs (228811,250,0)jm (229061,250,0)tis (229311,1450,0)smp (230761,190,0)cis (230951,990,0)djrr (231941,940,0)xrdxoc\n[232881,3900](232881,250,0)Bs (233131,1140,0)owuk (234271,570,0)bsct (234841,1640,0)lkjsmp (236481,300,0)osxi \n[237591,3570](237591,310,0)Jl (237901,380,0)owu (238281,500,0)dxmt (238781,1510,0)isk (240291,190,0)jm (240481,310,0)owuk (240791,370,0)rjls\n[242161,4530](242161,210,0)Tism (242371,930,0)owu (243301,440,0)vwt (243741,250,0)tw (243991,250,0)bs (244241,1200,0)djrrjmv (245441,690,0)tw (246131,560,0)tko\n[247751,2390](247751,440,0)Css (248191,580,0)jt'c (248771,560,0)dwkti (249331,310,0)tis (249641,500,0)ctkuvvrs\n[251021,3980](251021,490,0)Axucs (251511,190,0)jm (251701,250,0)tis (251951,1310,0)smp (253261,310,0)cis (253571,810,0)djrr (254381,620,0)xrdxoc\n[255381,3370](255381,250,0)Bs (255631,870,0)owuk (256501,690,0)bsct (257191,1120,0)lkjsmp (258311,440,0)osxi ",
+      "tr": "[00:12.889]㥠䁆㺴䍈㼳䔀䧮\n[00:17.319]䄅䤳㴻㺴㧧㨞㙩䍈䲿㧧㺴\n[00:23.399]䏜㺴㨞䋑䡜䈕䍈䲿䋫䩦\n[00:35.249]䄅㜯㙈䡇䜁䍪\n[00:41.041]㺴䋭㜳㳴䍈㪽\n[00:44.151]䩊㒥㯀䫸\n[00:46.901]㺴㤦㽆䆜㸲\n[00:52.261]㶩䰉㜯䍲䣜㨞㧧\n[00:56.521]㥠䁆㺴㽦䠘㴻䋪\n[00:57.961]䙈㿦䪂䇚 㧧䯝㑏䕰㹔䀆\n[01:03.351]䙈䍈㼳䍪䍪䙮䯘\n[01:06.161]㙩㮶䍈䢼㶚䀍䴿䳱䁟\n[01:08.911]䙈䇰㿦㙈䉫䴥㞒䇽䱉㿸㹲䐧\n[01:11.591]㫤䐧㩭䆟㨞䄠䨑\n[01:14.521]䩒䒡䑕䖨㵆䄜䏜䧮\n[01:17.161]䙈㿦䭤㸲䓂䆟䌕䩦㨞㻗䁴\n[01:20.361]㺴䴑䄸䙈䃸\n[01:24.931]䙈㨞㫑㻗䁴䜫䯝䵿㘱 䜫䍈䱑䌘\n[01:30.741]㺴䈕䍈㼳䔀䧮\n[01:36.101]䄅㝝䙈㨞㫑㻗䁴䜫䝝䄅䙈䍈㣶䤑䑥\n[01:43.081]䙈䃸 㫡䄅㺴䋭䴑䴑㜳㳴\n[01:48.721]䴑䴑䴿㯀䫸\n[01:52.031]㺴㤦㽆䆜㺴䵼㼳\n[01:54.461]䤛㾿䔀䊯䡇䜁䍪\n[02:00.081]㺴㤦㡵䵼䴿㨞㧧䋍㜯䆟 㺴㨈㼳䠘㴻䋪\n[02:05.761]䙈㿦䪂䇚 㧧䯝㑏䕰㹔䀆\n[02:11.001]䙈䍈㼳䍪䍪䙮䯘\n[02:13.811]䋑䍪䍈䖨䆜䢼㙩㶚\n[02:16.571]䙈䇰㿦㙈䉫䴥㞒䇽䱉㿸㹲䐧\n[02:19.251]㫤䐧㩭䆟㨞䄠䨑\n[02:22.691]䩒䒡䑕䖨㵆䄜䏜䧮\n[02:25.001]䙈㿦䭤㸲䓂䆟䌕䩦㨞㻗䁴\n[02:28.111]䭤㸲䤛䐧㩭䆟㨞䇰䯘\n[02:33.311]䀆㗶䄸䆟㡵䦇㠬䳦\n[02:39.151]䇑䡇㜳㶔 㫤䡇䌨㗶\n[02:45.331]㝧䵢䀒䆟㨞㟩䁼\n[02:52.451]䙈䱑䎲\n[02:59.101]㖎䆟䄠㷩㜠䖓㨞䴥㞴\n[03:10.771]䆟䑕䖨䐚䔀㨉䃶\n[03:14.151]㮶䘸㨈㿦䚸䙇\n[03:14.291]䵒䜔㺴䖨䰦㮮䛒䯇\n[03:19.911]㺴䖨㳽䆟䧮㹍\n[03:25.521]䈕䢍㫤㙈䉫䀆㗶\n[03:31.171]㺴䈕䖨䄅㜯㺴㨞㶲㐐㗜䇐\n[03:36.221]䢼䤣䙈㟩䲄䆟䱩㬪㙈㮶\n[03:39.411]䑕㿦㶩㡱䤀䲫\n[03:45.051]㙈䭕䉵㷼䫄䯝㪅㮮㨞\n[03:48.251]㫡䄅䌕䶺\n[03:52.881]䆟䖨䡲㦘䯝䙈䌕䩦㨞㻗䁴\n[03:57.591]䢼䤣䙈㟩䲄䆟䱩㬪㙈㮶\n[04:02.161]䑕㿦㶩㡱䤀䲫\n[04:07.751]㙈䭕䉵㷼䫄䯝㪅㮮㨞\n[04:11.021]㫡䄅䌕䶺\n[04:15.381]䆟䖨䡲㦘䯝䙈䌕䩦㨞㻗䁴",
+      "title": "Bestfriend",
+      "artist": "Musiq Soulchild",
+      "album": "Juslisen (Special Edition)",
+      "cover": "https://imge.kugou.com/stdmusic/480/20250102/20250102052858606314.jpg",
+      "duration_secs": 261
+    },
+    "kuwo": {},
+    "lrclib": {
+      "lyrics": "Mwd x pxoc J pwm't umpskctxmp\nDio no rwzs pwscm't rwzs ns rjys cis ucsp tw bslwks\nMwd rxtsro tis cum euct pwscm't cijms\nXmp no qxkxpjcs jc vwms\n\n'Axucs nwct wl tis tjns ds xkvus xmp ljvit\nWzsk tijmvc tixt pwscm't ksxrro nxttsk\nRwkp ymwdc tixt J tkjsp tw vjzs xrr no rwzs\nCw dixt ciwurp J pw?\n\nOwu vwt tw umpskctxmp\nJt'c xrr xbwut vjzs xmp txys\nOwu axm't bs cw psnxmpjmv\nTijmvc dwm't xrdxoc vw owuk dxo\n\nJl owu euct vjzs jt tjns\nXmp tijmy xbwut isk lssrjmvc\nTism tijmvc djrr dwky wut ljms\nRsxkm tw nxys isk owuk bsct lkjsmp\n\nJ isxk dixt owu cxojmv but no vjkr cis'c xrdxoc awnqrxjmjmv\nXmp brxnjmv ns lwk tijmvc J'rr mszsk pw\nXmp J pwm't ymwd dixt, dixt jt jc tixt J pjp tixt dxc cw dkwmv\nTw nxys isk lssr J'rr szsk bs umtkus tw isk\n\n'Axucs nwct wl tis tjns ds xkvus xmp ljvit\nWzsk tijmvc tixt pwscm't ksxrro nxttsk\nRwkp ymwdc tixt J tkjsp tw vjzs xrr no rwzs tw isk\nDixt ciwurp J pw?\n\nOwu vwt tw umpskctxmp\nJt'c xrr xbwut vjzs xmp txys\nOwu axm't bs cw psnxmpjmv\nTijmvc dwm't xrdxoc vw owuk dxo\n\nJl owu'rr euct vjzs jt tjns\nXmp tijmy xbwut isk lssrjmvc\nTism tijmvc djrr dwky wut ljms\nRsxkm tw nxys isk owuk bsct lkjsmp\n\nCss dixt owu mssp tw pw jc\nCtwq axtaijmv xttjtups'c\nXmp euct tko tw txys tis tjns\nTw isxk isk wut\n\nCtwq bsjmv cw pslsmcjzs\nXmp tko tw bs nwks xttsmtjzs\nTw ciwd isk owu kscqsat\nDixt cis'c txryjm' 'bwut\n\n'Axucs owu ymwd iwd uc dwnsm axm bs, osc\nXmp dism ds lssr tiksxtsmsp ds ksxat jmctjmatjzsro, osxi\nDism wuk snwtjwmc ixzs vkwdm tw jt'c ijvi\nDs axm tsmp tw euct rst jt awmtkwr wuk rjzsc\n\nDsrr, xrr kjvit, J'rr tko msht tjns J'rr tko x rjttrs tsmpskmscc\nSzsm nxys cuks tixt J vjzs isk nwks awnqrsnsmtc\nNxobs J awurp qkxatjas wm bsjmv nwks qxtjsmt\nXmp awnqkwnjcs lwk no bxbo, osxi osxi\n\nJl owu dxmt isk jm owuk rjls\nTism owu vwt tw bs djrrjmv tw tko\nCss jt'c dwkti tis ctkuvvrs 'axucs jm tis smp\nCis djrr xrdxoc bs owuk bsct lkjsmp, osxi\n\nJl owu dxmt isk jm owuk rjls\nTism owu vwt tw bs djrrjmv tw tko\nCss jt'c dwkti tis ctkuvvrs 'axucs jm tis smp\nCis djrr xrdxoc bs owuk bsct lkjsmp, osxi",
+      "title": "Bestfriend",
+      "artist": "Musiq Soulchild",
+      "album": "Juslisen",
+      "duration_secs": 261,
+      "plain_only": true
+    },
+    "lyricfind": {},
+    "musixmatch": {},
+    "netease": {
+      "netease": {
+        "cover": "https://p1.music.126.net/VuVqA51VE2cSQcZvjJz9ag==/109951165756996777.jpg?param=800y800",
+        "song_url": "https://music.163.com/song?id=1822811837",
+        "lyrics": "[00:00.00] 作词 : Axkzjm \"Kxmcun\" Ixvvjmc/Jzxm Bxkjxc/Nucjg Cwuraijrp\n[00:01.00] 作曲 : Axkzjm \"Kxmcun\" Ixvvjmc/Jzxm Bxkjxc/Nucjg Cwuraijrp\n[00:28.52]Ews)㺴䎟䎟㨞㨝䴿㙈䉫㳴\n[00:30.72]䈫㵧㙑䋭㛇\n[00:31.47]䙈䦏䅊㨞㨰㢿䁆㲾䫈\n[00:33.75]㺴㫤㟩㳞䙈䄻\n[00:35.43]㜻㺴㗊䓂䍈㷩\n[00:36.67]䄸㺴䄅䙈䂟䲶\n[00:37.88]䁆䲦㙈㝿 䵒㙈㝿\n[00:39.55]J css owu cwur\n[00:40.88]䙈㙈㸃䁆㺴䌛㤈\n[00:42.19]㮽䏫㖎䋖\n[00:42.78]㟙䙈䃸mw 䙈㗊䃸dwd\n[00:45.48]But J lssr owu,pwv\n[00:46.89]䁆㟙㺴䚪䚪㠪\n[00:48.13]㫡䄅䙈䯝㺴\n[00:49.08]䌕䩦㨞㻗䁴 wms\n[00:49.67]\n[00:50.27]䔲䍈䉫)㕁䴿䙈䒷䁆\n[00:52.78]䄠㰆㮮㷩䙈㨞㧧\n[00:56.17]䌕䩦㨞㻗䁴 㺴㴩䙈䡱䇽\n[01:01.25]㕁䴿㺴㨞㧧\n[01:04.11]䖓䙈䈫䍈䭧㪍䇽\n[01:07.27]䞳䞤㨞㲧㥧㗊䯝䗫䇚\n[01:12.35]\n[01:12.95]䃍㶲)䐚䤦㺴㨰䁆㝝㾿\n[01:14.45]䙈䫄䁆㺴㨰䉰\n[01:15.69]䧿䭷䙈䯝㺴㨞\n[01:16.83]䪇䁎䎕㗦㡁㻲㚘㞒\n[01:18.61]㖎㧧䰦䕶㒘㐗\n[01:19.98]䙈㗊㤦㽆䍈䁆\n[01:21.40]䊋㯬㨞㷩䗧䯝㔃\n[01:22.60]㺴䋭䫄䙤㷞\n[01:23.49]㨅䤑㨞㧧㗊䁆䨑䶽\n[01:24.49]\n[01:25.09]㤪㧇㨞䣐㞒\n[01:26.39]䞳䞤㨞䏩䃶\n[01:27.80]㗊㪹䬭䵒㙈䂴䟣䈙\n[01:29.52]䐚㸌㨞㳐䶴\n[01:30.63]䎋㷅㤪䔒䳘䣏\n[01:31.89]䳘䣏㫪㪜㨞㙈䭕\n[01:33.32]䫄㬪䓎䆪㾨\n[01:34.27]䁆㗶䨒䢯㾿䙎䙎\n[01:35.70]\n[01:36.30]㺴㿦㺴䋭䁆㙈䓏\n[01:37.83]㙈䓏㷖㷼\n[01:39.11]㙈䓏䛈䵧䎂\n[01:40.13]㭯䇭㖉㗊㕯䔲䢼㷀\n[01:41.87]㪖䄅㺴\n[01:42.66]䙈䎀㶚䍲䣜㶩䰉\n[01:44.38]㪹㿦㙈㙅㼕䶴\n[01:45.49]䑕㜻㾫㓡㽁\n[01:45.93]\n[01:46.53]䔲䍈䉫\u0026Vxkpsm)㕁䴿䙈䒷䁆\n[01:49.32]䄠㰆㮮㷩䙈㨞㧧\n[01:52.48]䌕䩦㨞㻗䁴 㺴㴩䙈䡱䇽\n[01:57.77]㕁䴿㺴㨞㧧\n[02:00.63]䖓䙈䈫䍈䭧㪍䇽\n[02:03.82]䞳䞤㨞㲧㥧㗊䯝䗫䇚\n[02:08.41]\n[02:09.01]䃍㶲)䄵㡁䯝䢙䙤㣅\n[02:10.49]㶲㐐䯝䢙㜠䖓\n[02:11.88]䴿㙅䭱㔫㤵䎕䵚\n[02:13.68]䊯䨒䭭䇽㕁䴿䘍㜠\n[02:15.72]㮶䥌㕁䴿䵧䮓\n[02:17.08]No bsct lkjsmp\n[02:18.17]䱩䭷䴿㙈䎕\n[02:19.34]㺴䋭㨈㼳䲿䱩䔥\n[02:20.76]\n[02:21.36]䬭䵒㲆䇇㨞䖚㞒\n[02:22.73]㗅䇽㪹䯝㪬䩷㙈䣟\n[02:24.22]䌕㯩䑥㨞䙈䎛㭁䍈䦹\n[02:25.62]䈫㷩䙤㫤㹥㷹㨞㖐\n[02:27.01]㨅䤑㨞㙈㕃䫣䫣䭡䂚\n[02:29.11]J'n cwkko\n[02:29.94]䲦䑕䯝䙈䵼䭷䡟㨞䋑䡜\n[02:32.13]\n[02:32.73]Bxbo pwm't vw\n[02:34.10]Rst ns ymwd\n[02:35.07]㝝䴥㻯䯝䆜㓐\n[02:36.33]Cjt dwd 䚪㠪\n[02:38.00]䙈䜫䯝䊯㴻䡉䏻\n[02:39.74]䒤䒤䯈㓐\n[02:40.81]Euct rst jt vw\n[02:42.06]Wi no bsctlkjsmp ow\n[02:42.56]\n[02:43.16]Vxkpsm)㕁䴿䙈䒷䁆\n[02:45.80]䄠㰆㮮㷩䙈㨞㧧\n[02:48.70]䌕䩦㨞㻗䁴 㺴㴩䙈䡱䇽\n[02:54.22]㕁䴿㺴㨞㧧\n[02:57.10]䖓䙈䈫䍈䭧㪍䇽\n[03:00.33]䞳䞤㨞㲧㥧㗊䯝䗫䇚\n[03:05.14]\n[03:05.74]䔲䍈䉫)㕁䴿䙈䒷䁆\n[03:08.39]䄠㰆㮮㷩䙈㨞㧧\n[03:11.55]䌕䩦㨞㻗䁴 㺴㴩䙈䡱䇽\n[03:16.84]㕁䴿㺴㨞㧧\n[03:19.63]䖓䙈䈫䍈䭧㪍䇽\n[03:22.77]䞳䞤㨞㲧㥧㗊䯝䗫䇚\n[03:27.59]\n[03:28.19]㕁䴿䙈䒷䁆\n[03:30.87]䄠㰆㮮㷩䙈㨞㧧\n[03:34.24]䌕䩦㨞㻗䁴 㺴㴩䙈䡱䇽\n[03:39.41]㕁䴿㺴㨞㧧\n[03:42.29]䖓䙈䈫䍈䭧㪍䇽\n[03:45.43]䞳䞤㨞㲧㥧㗊䯝䗫䇚\n[03:50.59]~~Smp~~\n",
+        "trans": "[00:28.52]\n[00:30.72]䈫䓎㙑䋭㛇\n[00:31.47]\n[00:33.75]\n[00:35.43]\n[00:36.67]\n[00:37.88]\n[00:39.55]\n[00:40.88]\n[00:42.19]\n[00:42.78]\n[00:45.48]\n[00:46.89]\n[00:48.13]\n[00:49.08]\n[00:49.67]\n[00:50.27]\n[00:52.78]\n[00:56.17]\n[01:01.25]\n[01:04.11]\n[01:07.27]\n[01:12.35]\n[01:12.95]\n[01:14.45]\n[01:15.69]\n[01:16.83]\n[01:18.61]\n[01:19.98]\n[01:21.40]\n[01:22.60]\n[01:23.49]\n[01:24.49]\n[01:25.09]\n[01:26.39]\n[01:27.80]\n[01:29.52]\n[01:30.63]\n[01:31.89]\n[01:33.32]\n[01:34.27]\n[01:35.70]\n[01:36.30]\n[01:37.83]\n[01:39.11]\n[01:40.13]\n[01:41.87]\n[01:42.66]\n[01:44.38]\n[01:45.49]\n[01:45.93]\n[01:46.53]\n[01:49.32]\n[01:52.48]\n[01:57.77]\n[02:00.63]\n[02:03.82]\n[02:08.41]\n[02:09.01]\n[02:10.49]\n[02:11.88]\n[02:13.68]\n[02:15.72]\n[02:17.08]\n[02:18.17]\n[02:19.34]\n[02:20.76]\n[02:21.36]\n[02:22.73]\n[02:24.22]\n[02:25.62]\n[02:27.01]\n[02:29.11]\n[02:29.94]\n[02:32.13]\n[02:32.73]\n[02:34.10]\n[02:35.07]\n[02:36.33]\n[02:38.00]\n[02:39.74]\n[02:40.81]\n[02:42.06]\n[02:42.56]\n[02:43.16]\n[02:45.80]\n[02:48.70]\n[02:54.22]\n[02:57.10]\n[03:00.33]\n[03:05.14]\n[03:05.74]\n[03:08.39]\n[03:11.55]\n[03:16.84]\n[03:19.63]\n[03:22.77]\n[03:27.59]\n[03:28.19]\n[03:30.87]\n[03:34.24]\n[03:39.41]\n[03:42.29]\n[03:45.43]\n[03:50.59]",
+        "duration_secs": 261.041,
+        "artist": "Musiq Soulchild",
+        "title": "Bestfriend",
+        "album": "Juslisen (Special Edition)",
+        "song_id": 1822811837,
+        "album_id": 123500154
+      }
+    },
+    "qq": {
+      "lyrics": "[ti:Bestfriend]\n[ar:Musiq]\n[al:Juslisen]\n[by:]\n[offset:0]\n[00:12.88]Mwd x pxoc J pwm't umpskctxmp\n[00:16.63]\n[00:17.31]Dio no rwzs pwscm't rwzs ns rjys cis ucsp tw bslwks\n[00:23.39]Mwd rxtsro tis cum euc pwscm't cijms xmp no qxkxpjcs jc vwms\n[00:34.55]\n[00:35.24]Axucs nwct wl tis tjns\n[00:37.84]\n[00:41.04]Ds xkvus xmp ljvit\n[00:44.15]Wzsk tijmvc tixt pwscm't ksxrro nxttsk\n[00:46.27]\n[00:46.90]Rwkp ymwdc tixt J tkjsp\n[00:49.52]\n[00:52.26]Tw vjzs xrr no rwzs\n[00:54.70]\n[00:56.52]Cw dixt ciwurp J pw \n[00:57.96]Owu vwt tw umpskctxmp jt'c xrr xbwut vjzs xmp txys\n[01:02.67]\n[01:03.35]Owu axm't bs cw psnxmpjmv\n[01:05.35]\n[01:06.16]Tijmvc dwm't xrdxoc vw owuk dxo\n[01:08.22]\n[01:08.91]Jl owu euct vjzs jt tjns\n[01:10.91]\n[01:11.59]Xmp tijmy xbwut isk lssrjmvc\n[01:13.90]\n[01:14.52]Tism tijmvc djrr dwky wut ljms\n[01:16.35]\n[01:17.16]Rsxkm tw nxys isk owuk bsct lkjsmp\n[01:19.74]\n[01:20.36]J isxk dixt owu cxojmv but no vjkr cis'c xrdxoc\n[01:24.93]Awnqrxjmjmv xmp xmp brxnjmv ns lwk tijmvc J'rr mszsk pw\n[01:29.86]\n[01:30.74]Xmp J pwm't ymwd dixt  dixt jt jc tixt J pjp tixt dxc\n[01:36.10]Cw dkwmv tw nxys isk lssr J'rr szsk bs umtkus tw isk\n[01:43.08]Axucs nwct wl tis tjns\n[01:45.53]\n[01:48.72]Ds xkvus xmp ljvit\n[01:51.16]\n[01:52.03]Wzsk tijmvc tixt pwscm't ksxrro nxttsk\n[01:54.46]Rwkp ymwdc tixt J tkjsp\n[01:57.77]\n[02:00.08]Tw vjzs xrr no rwzs tw isk dixt ciwurp J pw \n[02:05.76]Owu vwt tw umpskctxmp jt'c xrr xbwut vjzs xmp txys\n[02:11.00]Owu axm't bs cw psnxmpjmv\n[02:13.81]Tijmvc dwm't xrdxoc vw owuk dxo\n[02:16.57]Jl owu'rr euct vjzs jt tjns\n[02:19.25]Xmp tijmy xbwut isk lssrjmvc\n[02:21.75]\n[02:22.69]Tism tijmvc djrr dwky wut ljms\n[02:25.00]Rsxkm tw nxys isk owuk bsct lkjsmp\n[02:28.11]Css dixt owu mssp tw pw jc ctwq axtaijmv xttjtups'c\n[02:32.69]\n[02:33.31]Xmp euct tko tw txys tis tjns tw isxk isk wut\n[02:38.40]\n[02:39.15]Ctwq bsjmv cw pslsmcjzs xmp tko tw bs nwks xttsmtjzs tw\n[02:44.76]\n[02:45.33]Ciwd isks owu kscqsat dixt cis'c txryjm 'bwut\n[02:50.38]\n[02:52.45]Axucs owu ymwd iwd uc dwnsm axm bs xmp dism ds\n[02:59.10]Lssr tiksxtsmsp ds ksxat jmctjmatjzro dism wuk snwtjwmc ixzs vkwdm tw jtc ijvi ds axm tsmp tw\n[03:10.77]Euct rst jt awmtkwr\n[03:13.22]\n[03:14.15]Wuk rjzsc\n[03:14.29]Dsrr xrr kjvit J'rr tko msht tjns J'rr tko x rjttrs tsmpskmscc\n[03:18.91]\n[03:19.91]Szsm nxys cuks tixt J vjzs isk nwks awnqrsnsmtc\n[03:24.59]\n[03:25.52]Nxobs J awurp qkxatjas wm bsjmv nwks qxtjsmt\n[03:31.17]Xmp awnqkwnjcs lwk no bxbo osxi osxi \n[03:36.22]Jl owu dxmt isk jm owuk rjls\n[03:39.41]Tism owu vwt tw bs djrrjmv tw tko\n[03:43.86]\n[03:45.05]Css jt'c dwkti tis ctkuvvrs\n[03:48.25]Axucs jm tis smp cis djrr xrdxoc\n[03:52.88]Bs owuk bsct lkjsmp osxi \n[03:56.78]\n[03:57.59]Jl owu dxmt isk jm owuk rjls\n[04:01.16]\n[04:02.16]Tism owu vwt tw bs djrrjmv tw tko\n[04:06.69]\n[04:07.75]Css jt'c dwkti tis ctkuvvrs\n[04:10.14]\n[04:11.02]Axucs jm tis smp cis djrr xrdxoc\n[04:15.38]Bs owuk bsct lkjsmp osxi",
+      "yrc": "[ti:Bestfriend]\n[ar:Musiq]\n[al:Juslisen]\n[by:]\n[offset:0]\n[12889,3750](12889,190,0)Mwd (13079,190,0)x (13269,1120,0)pxoc (14389,310,0)J (14699,690,0)pwm't (15389,1250,0)umpskctxmp\n[17319,6080](17319,500,0)Dio (17819,250,0)no (18069,620,0)rwzs (18689,1250,0)pwscm't (19939,640,0)rwzs (20579,380,0)ns (20959,310,0)rjys (21269,310,0)cis (21579,380,0)ucsp (21959,310,0)tw (22269,1130,0)bslwks\n[23399,11160](23399,610,0)Mwd (24009,630,0)rxtsro (24639,810,0)tis (25449,750,0)cum (26199,1000,0)euc (27199,1310,0)pwscm't (28509,870,0)cijms (29379,250,0)xmp (29629,370,0)no (29999,3750,0)qxkxpjcs (33749,250,0)jc (33999,560,0)vwms\n[35249,2592](35249,570,0)Axucs (35819,570,0)nwct (36389,930,0)wl (37319,190,0)tis (37509,332,0)tjns\n[41041,2760](41041,390,0)Ds (41431,1490,0)xkvus (42921,160,0)xmp (43081,1070,0)ljvit\n[44151,2120](44151,190,0)Wzsk (44341,620,0)tijmvc (44961,190,0)tixt (45151,370,0)pwscm't (45521,310,0)ksxrro (45831,440,0)nxttsk\n[46901,2620](46901,250,0)Rwkp (47151,1180,0)ymwdc (48331,190,0)tixt (48521,190,0)J (48711,810,0)tkjsp\n[52261,2440](52261,310,0)Tw (52571,940,0)vjzs (53511,560,0)xrr (54071,190,0)no (54261,440,0)rwzs\n[56521,1190](56521,190,0)Cw (56711,130,0)dixt (56841,190,0)ciwurp (57031,250,0)J (57281,430,0)pw \n[57961,4710](57961,200,0)Owu (58161,190,0)vwt (58351,310,0)tw (58661,1750,0)umpskctxmp (60411,180,0)jt'c (60591,320,0)xrr (60911,820,0)xbwut (61731,250,0)vjzs (61981,310,0)xmp (62291,380,0)txys\n[63351,2000](63351,190,0)Owu (63541,190,0)axm't (63731,250,0)bs (63981,500,0)cw (64481,870,0)psnxmpjmv\n[66161,2060](66161,250,0)Tijmvc (66411,250,0)dwm't (66661,630,0)xrdxoc (67291,180,0)vw (67471,380,0)owuk (67851,370,0)dxo\n[68911,2000](68911,190,0)Jl (69101,370,0)owu (69471,250,0)euct (69721,310,0)vjzs (70031,310,0)jt (70341,570,0)tjns\n[71591,2310](71591,250,0)Xmp (71841,250,0)tijmy (72091,690,0)xbwut (72781,370,0)isk (73151,750,0)lssrjmvc\n[74521,1830](74521,190,0)Tism (74711,380,0)tijmvc (75091,250,0)djrr (75341,370,0)dwky (75711,310,0)wut (76021,330,0)ljms\n[77161,2580](77161,250,0)Rsxkm (77411,250,0)tw (77661,370,0)nxys (78031,380,0)isk (78411,370,0)owuk (78781,520,0)bsct (79301,440,0)lkjsmp\n[80361,4570](80361,0,0)J (80361,190,0)isxk (80551,370,0)dixt (80921,190,0)owu (81111,1140,0)cxojmv (82251,690,0)but (82941,180,0)no (83121,310,0)vjkr (83431,320,0)cis'c (83751,1180,0)xrdxoc\n[84931,4930](84931,1000,0)Awnqrxjmjmv (85931,250,0)xmp (86181,310,0)xmp (86491,690,0)brxnjmv (87181,250,0)ns (87431,190,0)lwk (87621,370,0)tijmvc (87991,190,0)J'rr (88181,430,0)mszsk (88611,1250,0)pw\n[90741,5360](90741,810,0)Xmp (91551,180,0)J (91731,440,0)pwm't (92171,440,0)ymwd (92611,1430,0)dixt  (94041,250,0)dixt (94291,250,0)jt (94541,310,0)jc (94851,190,0)tixt (95041,190,0)J (95231,310,0)pjp (95541,250,0)tixt (95791,310,0)dxc\n[96101,6730](96101,160,0)Cw (96261,810,0)dkwmv (97071,250,0)tw (97321,310,0)nxys (97631,320,0)isk (97951,550,0)lssr (98501,250,0)J'rr (98751,690,0)szsk (99441,560,0)bs (100001,440,0)umtkus (100441,1310,0)tw (101751,1080,0)isk\n[103081,2450](103081,560,0)Axucs (103641,500,0)nwct (104141,680,0)wl (104821,310,0)tis (105131,400,0)tjns\n[108721,2440](108721,380,0)Ds (109101,1250,0)xkvus (110351,250,0)xmp (110601,560,0)ljvit\n[112031,2430](112031,190,0)Wzsk (112221,500,0)tijmvc (112721,190,0)tixt (112911,310,0)pwscm't (113221,310,0)ksxrro (113531,930,0)nxttsk\n[114461,3310](114461,250,0)Rwkp (114711,690,0)ymwdc (115401,750,0)tixt (116151,250,0)J (116401,1370,0)tkjsp\n[120081,5680](120081,250,0)Tw (120331,690,0)vjzs (121021,750,0)xrr (121771,240,0)no (122011,820,0)rwzs (122831,190,0)tw (123021,1310,0)isk (124331,180,0)dixt (124511,250,0)ciwurp (124761,130,0)J (124891,870,0)pw \n[125761,5240](125761,190,0)Owu (125951,180,0)vwt (126131,310,0)tw (126441,1440,0)umpskctxmp (127881,250,0)jt'c (128131,380,0)xrr (128511,560,0)xbwut (129071,620,0)vjzs (129691,310,0)xmp (130001,1000,0)txys\n[131001,2810](131001,190,0)Owu (131191,250,0)axm't (131441,310,0)bs (131751,370,0)cw (132121,1690,0)psnxmpjmv\n[133811,2760](133811,190,0)Tijmvc (134001,250,0)dwm't (134251,740,0)xrdxoc (134991,260,0)vw (135251,380,0)owuk (135631,940,0)dxo\n[136571,2680](136571,190,0)Jl (136761,620,0)owu'rr (137381,190,0)euct (137571,250,0)vjzs (137821,250,0)jt (138071,1180,0)tjns\n[139251,2500](139251,250,0)Xmp (139501,310,0)tijmy (139811,750,0)xbwut (140561,380,0)isk (140941,810,0)lssrjmvc\n[142691,2310](142691,180,0)Tism (142871,190,0)tijmvc (143061,190,0)djrr (143251,370,0)dwky (143621,250,0)wut (143871,1130,0)ljms\n[145001,2620](145001,250,0)Rsxkm (145251,180,0)tw (145431,250,0)nxys (145681,190,0)isk (145871,560,0)owuk (146431,750,0)bsct (147181,440,0)lkjsmp\n[148111,4580](148111,190,0)Css (148301,190,0)dixt (148491,190,0)owu (148681,370,0)mssp (149051,560,0)tw (149611,570,0)pw (150181,700,0)jc (150881,370,0)ctwq (151251,620,0)axtaijmv (151871,820,0)xttjtups'c\n[153311,5090](153311,830,0)Xmp (154141,310,0)euct (154451,250,0)tko (154701,190,0)tw (154891,500,0)txys (155391,370,0)tis (155761,1330,0)tjns (157091,180,0)tw (157271,380,0)isxk (157651,250,0)isk (157901,500,0)wut\n[159151,5610](159151,370,0)Ctwq (159521,500,0)bsjmv (160021,500,0)cw (160521,1180,0)pslsmcjzs (161701,500,0)xmp (162201,310,0)tko (162511,260,0)tw (162771,370,0)bs (163141,370,0)nwks (163511,500,0)xttsmtjzs (164011,750,0)tw\n[165331,5050](165331,240,0)Ciwd (165571,750,0)isks (166321,250,0)owu (166571,1750,0)kscqsat (168321,250,0)dixt (168571,560,0)cis'c (169131,690,0)txryjm (169821,560,0)'bwut\n[172451,6650](172451,190,0)Axucs (172641,690,0)owu (173331,620,0)ymwd (173951,500,0)iwd (174451,580,0)uc (175031,750,0)dwnsm (175781,180,0)axm (175961,1890,0)bs (177851,370,0)xmp (178221,320,0)dism (178541,560,0)ds\n[179101,11670](179101,190,0)Lssr (179291,810,0)tiksxtsmsp (180101,250,0)ds (180351,750,0)ksxat (181101,2800,0)jmctjmatjzro (183901,190,0)dism (184091,200,0)wuk (184291,1240,0)snwtjwmc (185531,240,0)ixzs (185771,510,0)vkwdm (186281,180,0)tw (186461,190,0)jtc (186651,2490,0)ijvi (189141,320,0)ds (189461,310,0)axm (189771,560,0)tsmp (190331,440,0)tw\n[190771,2450](190771,430,0)Euct (191201,250,0)rst (191451,310,0)jt (191761,1460,0)awmtkwr\n[194151,820](194151,190,0)Wuk (194341,100,0)rjzsc\n[194291,4620](194291,250,0)Dsrr (194541,120,0)xrr (194661,510,0)kjvit (195171,180,0)J'rr (195351,1190,0)tko (196541,180,0)msht (196721,630,0)tjns (197351,200,0)J'rr (197551,240,0)tko (197791,240,0)x (198031,320,0)rjttrs (198351,560,0)tsmpskmscc\n[199911,4680](199911,190,0)Szsm (200101,370,0)nxys (200471,880,0)cuks (201351,550,0)tixt (201901,250,0)J (202151,1250,0)vjzs (203401,190,0)isk (203591,310,0)nwks (203901,690,0)awnqrsnsmtc\n[205521,5150](205521,690,0)Nxobs (206211,310,0)J (206521,900,0)awurp (207421,610,0)qkxatjas (208031,570,0)wm (208601,620,0)bsjmv (209221,370,0)nwks (209591,1080,0)qxtjsmt\n[211171,5050](211171,690,0)Xmp (211861,1680,0)awnqkwnjcs (213541,190,0)lwk (213731,310,0)no (214041,1200,0)bxbo (215241,300,0)osxi (215541,680,0)osxi \n[216221,2690](216221,190,0)Jl (216411,190,0)owu (216601,120,0)dxmt (216721,690,0)isk (217411,440,0)jm (217851,180,0)owuk (218031,880,0)rjls\n[219411,4450](219411,180,0)Tism (219591,320,0)owu (219911,490,0)vwt (220401,630,0)tw (221031,690,0)bs (221721,1000,0)djrrjmv (222721,740,0)tw (223461,400,0)tko\n[225051,3200](225051,190,0)Css (225241,310,0)jt'c (225551,560,0)dwkti (226111,440,0)tis (226551,1700,0)ctkuvvrs\n[228251,4630](228251,560,0)Axucs (228811,250,0)jm (229061,250,0)tis (229311,1450,0)smp (230761,190,0)cis (230951,990,0)djrr (231941,940,0)xrdxoc\n[232881,3900](232881,250,0)Bs (233131,1140,0)owuk (234271,570,0)bsct (234841,1640,0)lkjsmp (236481,300,0)osxi \n[237591,3570](237591,310,0)Jl (237901,380,0)owu (238281,500,0)dxmt (238781,1510,0)isk (240291,190,0)jm (240481,310,0)owuk (240791,370,0)rjls\n[242161,4530](242161,210,0)Tism (242371,930,0)owu (243301,440,0)vwt (243741,250,0)tw (243991,250,0)bs (244241,1200,0)djrrjmv (245441,690,0)tw (246131,560,0)tko\n[247751,2390](247751,440,0)Css (248191,580,0)jt'c (248771,560,0)dwkti (249331,310,0)tis (249641,500,0)ctkuvvrs\n[251021,3980](251021,490,0)Axucs (251511,190,0)jm (251701,250,0)tis (251951,1310,0)smp (253261,310,0)cis (253571,810,0)djrr (254381,620,0)xrdxoc\n[255381,3370](255381,250,0)Bs (255631,870,0)owuk (256501,690,0)bsct (257191,1120,0)lkjsmp (258311,440,0)osxi \n",
+      "tr": "[offset:0]\n[00:12.88]㥠䁆㺴䍈㼳䔀䧮\n[00:17.31]䄅䤳㴻㺴㧧㨞㙩䍈䲿㧧㺴\n[00:23.39]䏜㺴㨞䋑䡜䈕䍈䲿䋫䩦\n[00:35.24]䄅㜯㙈䡇䜁䍪\n[00:41.04]㺴䋭㜳㳴䍈㪽\n[00:44.15]䩊㒥㯀䫸\n[00:46.90]㺴㤦㽆䆜㸲\n[00:52.26]㶩䰉㜯䍲䣜㨞㧧\n[00:56.52]㥠䁆㺴㽦䠘㴻䋪\n[00:57.96]䙈㿦䪂䇚 㧧䯝㑏䕰㹔䀆\n[01:03.35]䙈䍈㼳䍪䍪䙮䯘\n[01:06.16]㙩㮶䍈䢼㶚䀍䴿䳱䁟\n[01:08.91]䙈䇰㿦㙈䉫䴥㞒䇽䱉㿸㹲䐧\n[01:11.59]㫤䐧㩭䆟㨞䄠䨑\n[01:14.52]䩒䒡䑕䖨㵆䄜䏜䧮\n[01:17.16]䙈㿦䭤㸲䓂䆟䌕䩦㨞㻗䁴\n[01:20.36]㺴䴑䄸䙈䃸\n[01:24.93]䙈㨞㫑㻗䁴䜫䯝䵿㘱 䜫䍈䱑䌘\n[01:30.74]㺴䈕䍈㼳䔀䧮\n[01:36.10]䄅㝝䙈㨞㫑㻗䁴䜫䝝䄅䙈䍈㣶䤑䑥\n[01:43.08]䙈䃸 㫡䄅㺴䋭䴑䴑㜳㳴\n[01:48.72]䴑䴑䴿㯀䫸\n[01:52.03]㺴㤦㽆䆜㺴䵼㼳\n[01:54.46]䤛㾿䔀䊯䡇䜁䍪\n[02:00.08]㺴㤦㡵䵼䴿㨞㧧䋍㜯䆟 㺴㨈㼳䠘㴻䋪\n[02:05.76]䙈㿦䪂䇚 㧧䯝㑏䕰㹔䀆\n[02:11.00]䙈䍈㼳䍪䍪䙮䯘\n[02:13.81]䋑䍪䍈䖨䆜䢼㙩㶚\n[02:16.57]䙈䇰㿦㙈䉫䴥㞒䇽䱉㿸㹲䐧\n[02:19.25]㫤䐧㩭䆟㨞䄠䨑\n[02:22.69]䩒䒡䑕䖨㵆䄜䏜䧮\n[02:25.00]䙈㿦䭤㸲䓂䆟䌕䩦㨞㻗䁴\n[02:28.11]䭤㸲䤛䐧㩭䆟㨞䇰䯘\n[02:33.31]䀆㗶䄸䆟㡵䦇㠬䳦\n[02:39.15]䇑䡇㜳㶔 㫤䡇䌨㗶\n[02:45.33]㝧䵢䀒䆟㨞㟩䁼\n[02:52.45]䙈䱑䎲\n[02:59.10]㖎䆟䄠㷩㜠䖓㨞䴥㞴\n[03:10.77]䆟䑕䖨䐚䔀㨉䃶\n[03:14.15]㮶䘸㨈㿦䚸䙇\n[03:14.29]䵒䜔㺴䖨䰦㮮䛒䯇\n[03:19.91]㺴䖨㳽䆟䧮㹍\n[03:25.52]䈕䢍㫤㙈䉫䀆㗶\n[03:31.17]㺴䈕䖨䄅㜯㺴㨞㶲㐐㗜䇐\n[03:36.22]䢼䤣䙈㟩䲄䆟䱩㬪㙈㮶\n[03:39.41]䑕㿦㶩㡱䤀䲫\n[03:45.05]㙈䭕䉵㷼䫄䯝㪅㮮㨞\n[03:48.25]㫡䄅䌕䶺\n[03:52.88]䆟䖨䡲㦘䯝䙈䌕䩦㨞㻗䁴\n[03:57.59]䢼䤣䙈㟩䲄䆟䱩㬪㙈㮶\n[04:02.16]䑕㿦㶩㡱䤀䲫\n[04:07.75]㙈䭕䉵㷼䫄䯝㪅㮮㨞\n[04:11.02]㫡䄅䌕䶺\n[04:15.38]䆟䖨䡲㦘䯝䙈䌕䩦㨞㻗䁴",
+      "title": "Bestfriend",
+      "artist": "Musiq Soulchild",
+      "album": "Juslisen (Special Edition)",
+      "cover": "https://y.qq.com/music/photo_new/T002R800x800M000000W6PI60NqlXh.jpg",
+      "duration_secs": 261
+    }
+  },
+  "expect": {
+    "winner": "qq",
+    "verdicts": {
+      "kugou": "accepted",
+      "lrclib": "rejectPlainTextOnly",
+      "netease": "rejectWrongLanguage",
+      "qq": "accepted"
+    },
+    "ranked": [
+      {
+        "source": "qq",
+        "score": 1166,
+        "terms": [
+          {
+            "kind": "duration",
+            "points": 282
+          },
+          {
+            "kind": "wordTiming",
+            "points": 400
+          },
+          {
+            "kind": "lines",
+            "points": 89
+          },
+          {
+            "kind": "album",
+            "points": 75
+          },
+          {
+            "kind": "titleMatch",
+            "points": 120
+          },
+          {
+            "kind": "consensus",
+            "points": 150
+          },
+          {
+            "kind": "translation",
+            "points": 50
+          }
+        ],
+        "has_word_timing": true,
+        "has_translation": true,
+        "translation_lang": "zh"
+      },
+      {
+        "source": "kugou",
+        "score": 1137,
+        "terms": [
+          {
+            "kind": "duration",
+            "points": 282
+          },
+          {
+            "kind": "wordTiming",
+            "points": 400
+          },
+          {
+            "kind": "lines",
+            "points": 60
+          },
+          {
+            "kind": "album",
+            "points": 75
+          },
+          {
+            "kind": "titleMatch",
+            "points": 120
+          },
+          {
+            "kind": "consensus",
+            "points": 150
+          },
+          {
+            "kind": "translation",
+            "points": 50
+          }
+        ],
+        "has_word_timing": true,
+        "has_translation": true,
+        "translation_lang": "zh"
+      },
+      {
+        "source": "netease",
+        "score": -1,
+        "terms": [
+          {
+            "kind": "rejectWrongLanguage",
+            "points": 0
+          }
+        ]
+      },
+      {
+        "source": "lrclib",
+        "score": -1,
+        "terms": [
+          {
+            "kind": "rejectPlainTextOnly",
+            "points": 0
+          }
+        ]
+      }
+    ],
+    "winner_fingerprint": "c192ec6f79dbfe85"
+  }
+}

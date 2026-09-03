@@ -165,7 +165,12 @@ screencapture -x -o -l <窗口ID> /tmp/shot.png                   # 只截那一
 **歌词打分**：`match.go` 的分值不是拍脑袋定的，注释里记着消融实验结论（例如"按来源加分
 改变了 69/206 首歌的冠军，其中 0 次变对、6 次变错，去掉后准确率 93%→96%"）。改分值前先读
 那些注释。改了打分逻辑要同步 `lyricsScoringVersion`（`match.go:294`），否则老缓存条目不会
-被后台重新裁决。
+被后台重新裁决。**改完必须过回归金标集**：`GOTOOLCHAIN=go1.24.4 go test -run 'TestLyricsGolden|TestGolden' .`
+（`lyrimuse-collector/testdata/lyricsgolden/`，18 首真实曲目覆盖 19 类判据、置乱正文、断言冠军与全部分项，
+冠军的正确性由一组独立判据证明而不是"缓存里就是它"）。
+分项快照变了用 `LYRICS_GOLDEN_UPDATE=1` 重生成并把 JSON diff 一起提交；**冠军/判决变了**还要
+`LYRICS_GOLDEN_ACCEPT_SEMANTIC=<样本id>` 逐首点头，不许静默改写。新加一条判据 = 在
+`goldenRequiredCategories` 加一类 + 采一首样本，用法见那个目录的 README（09 章「歌词搜索回归金标集」）。
 
 **enrich 缓存的 key** 一律经 `enrichKey()`（`enrichkey.go`）构造，Swift 侧镜像在
 `EnrichCacheKeys.swift`，两边必须同步。同一首歌的两种写法曾经产生两条缓存 + 两份歌词文件，

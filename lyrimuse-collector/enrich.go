@@ -2633,28 +2633,283 @@ func enabledLyricSourceCount() int {
 	return n
 }
 
-func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, album string, durationSecs float64, onUpdate lyricSearchUpdateFunc) (neteaseInfo, []scoredLyricCandidateResult) {
-	type sourceResult struct {
-		source                  string
-		ne                      neteaseInfo
-		lyr, yrc, tr, roma      string // roma:源自带罗马音(逐行 LRC),目前只有 qq 走这里(网易云的在 ne.Roma),2026-09-02 加
-		matchTitle, matchArtist string
-		matchAlbum, matchCover  string
-		srcDur                  float64 // 源自己声明的曲长(秒),0=没给。见 lyricCandidate.sourceReportedDurationSecs
-		// language:源自己上报的语种(songLanguageMandarin/songLanguageCantonese/空),
-		// 目前只有 qq/kugou 两路会填,见 lyricCandidate.language。
-		language string
-		// instrumental:"这首歌是纯音乐"这个**明确结论**。三个源会给:lrclib 的结构化字段、
-		// 网易云的 pureMusic/占位正文、QQ 的占位正文(2026-08-22 加,见 qqLyricResult)。
-		instrumental bool
-		// plainOnly:2026-08-30 加。lrclib 与 musixmatch 两个源会给(musixmatch 2026-09-02
-		// 接入,见 resolveMusixmatchLyric 里的纯文本回退)——语义见 lrclibResult.plainOnly 头注。
-		plainOnly bool
-		// amll:amll-ttml-db 那一档的三件套(见 amllttml.go)。它跟别的源不同,一次就带回
-		// 整行+逐字+译文,所以单独放一个结构而不是复用上面的 lyr/yrc/tr。
-		amll amllResult
+// lyricSourceResult 是**一个源这一轮的原始应答**——fetchScoredLyricCandidatesStreaming 里九个
+// goroutine 各自往 resultsCh 送的就是它。2026-09-04 从那个函数的局部类型提到包级,理由只有一个:
+// 让 rankLyricSourceResults(打分/排序这一段)能以"一组原始应答"为入参单独存在,回归金标集
+// (lyricsgolden_test.go)才能拿真实曲目的原始应答喂**生产同一份代码**,而不是在测试里重抄一份
+// 骨架(simeval_test.go 就是重抄的,已经漂了两步:少了 rehangCandidateTimelines 和
+// applyWordTimingTitleOverride)。字段语义一个都没动。
+type lyricSourceResult struct {
+	source                  string
+	ne                      neteaseInfo
+	lyr, yrc, tr, roma      string // roma:源自带罗马音(逐行 LRC),目前只有 qq 走这里(网易云的在 ne.Roma),2026-09-02 加
+	matchTitle, matchArtist string
+	matchAlbum, matchCover  string
+	srcDur                  float64 // 源自己声明的曲长(秒),0=没给。见 lyricCandidate.sourceReportedDurationSecs
+	// language:源自己上报的语种(songLanguageMandarin/songLanguageCantonese/空),
+	// 目前只有 qq/kugou 两路会填,见 lyricCandidate.language。
+	language string
+	// instrumental:"这首歌是纯音乐"这个**明确结论**。三个源会给:lrclib 的结构化字段、
+	// 网易云的 pureMusic/占位正文、QQ 的占位正文(2026-08-22 加,见 qqLyricResult)。
+	instrumental bool
+	// plainOnly:2026-08-30 加。lrclib 与 musixmatch 两个源会给(musixmatch 2026-09-02
+	// 接入,见 resolveMusixmatchLyric 里的纯文本回退)——语义见 lrclibResult.plainOnly 头注。
+	plainOnly bool
+	// amll:amll-ttml-db 那一档的三件套(见 amllttml.go)。它跟别的源不同,一次就带回
+	// 整行+逐字+译文,所以单独放一个结构而不是复用上面的 lyr/yrc/tr。
+	amll amllResult
+}
+
+// lyricSourceResultTap 只给测试用(默认 nil,生产永远不设):fetchScoredLyricCandidatesStreaming
+// 每收到一个源的原始应答就回调一次。回归金标集的采集器靠它把一次真实检索的原始应答固化成
+// 样本(见 lyricsgolden_capture_test.go);打分逻辑不读它,跟 decision.go 那条"只写不读"同一纪律。
+var lyricSourceResultTap func(lyricSourceResult)
+
+// rankLyricSourceResults 把一组各源原始应答变成打好分、排好序的候选列表——构建候选、
+// 时间轴自洽修复、corroboratedEndings、跨源正文共识、逐条打分、纯音乐标记搭车、逐字加分撤销、
+// 稳定排序,全在这里。它是 fetchScoredLyricCandidatesStreaming 原来那个 scoreAndSort 闭包的
+// 原样搬出(2026-09-04),**每次有新源到达都全量重跑**的性质不变(分数不是只增不改的东西,
+// 见 onUpdate 处的注释)。
+//
+// 提成包级纯函数的唯一理由是可测:回归金标集(lyricsgolden_test.go)拿真实曲目固化下来的
+// 原始应答直接喂这里,断言"冠军是谁、每条候选判决如何、分项是什么"——测的是生产同一份
+// 代码,不是测试里另抄的一份骨架。除 features(译文语言、来源开关)、当前播放器同源表和
+// 歌手别名缓存(isProbablyWrongLanguageLyrics 读)之外不依赖别的包级状态。
+//
+// raw 里缺某个源(没应答/被熔断跳过)就是零值,跟原来那二十个状态变量一直留在零值上是同一件事。
+func rankLyricSourceResults(artist, title, album string, durationSecs float64, raw map[string]lyricSourceResult) []scoredLyricCandidateResult {
+	ne := raw["netease"].ne
+	qq, kugou, lrclib, mx, lf, kuwo := raw["qq"], raw["kugou"], raw["lrclib"], raw["musixmatch"], raw["lyricfind"], raw["kuwo"]
+	qqLyr, qqYRC, qqTr, qqRoma, qqTitle, qqArtist, qqAlbum, qqCover, qqDur, qqLang := qq.lyr, qq.yrc, qq.tr, qq.roma, qq.matchTitle, qq.matchArtist, qq.matchAlbum, qq.matchCover, qq.srcDur, qq.language
+	qqInstrumental := qq.instrumental
+	kugouLyr, kugouYRC, kugouTr, kugouRoma, kugouTitle, kugouArtist, kugouAlbum, kugouCover, kugouDur, kugouLang := kugou.lyr, kugou.yrc, kugou.tr, kugou.roma, kugou.matchTitle, kugou.matchArtist, kugou.matchAlbum, kugou.matchCover, kugou.srcDur, kugou.language
+	lrclibLyr, lrclibTitle, lrclibArtist, lrclibAlbum, lrclibDur := lrclib.lyr, lrclib.matchTitle, lrclib.matchArtist, lrclib.matchAlbum, lrclib.srcDur
+	lrclibInstrumental := lrclib.instrumental
+	lrclibPlainOnly := lrclib.plainOnly
+	mxLyr, mxYRC, mxTr, mxTitle, mxArtist, mxAlbum, mxCover, mxDur := mx.lyr, mx.yrc, mx.tr, mx.matchTitle, mx.matchArtist, mx.matchAlbum, mx.matchCover, mx.srcDur
+	mxPlainOnly := mx.plainOnly
+	lfLyr, lfTitle, lfArtist, lfAlbum, lfCover, lfDur := lf.lyr, lf.matchTitle, lf.matchArtist, lf.matchAlbum, lf.matchCover, lf.srcDur
+	kuwoLyr, kuwoTitle, kuwoArtist, kuwoAlbum, kuwoCover, kuwoDur := kuwo.lyr, kuwo.matchTitle, kuwo.matchArtist, kuwo.matchAlbum, kuwo.matchCover, kuwo.srcDur
+	amll := raw["amll"].amll
+	appleCover := raw["applecover"].matchCover
+	// coverOrFallback:候选自己的源有封面就用自己的——2026-08-31 起网易云/QQ/酷狗/
+	// Musixmatch/LyricFind/酷我六个源都能给(QQ 复用 qqSongCoverAndSinger,酷狗多查
+	// 一次 album/info,酷我搜索结果自带 web_albumpic_short,见各自文件的注释),没有就用
+	// Apple Music/iTunes 那路通用兜底(LRCLIB/AMLL 这两个是纯歌词库,格式本身不带封面,
+	// 结构性地只能走兜底)。即使 appleCover 这一刻还没到(还在并发查),先留空,后面
+	// applecover 到达触发的下一轮 onUpdate/最终返回会自然补上,不需要特殊处理"到达顺序"。
+	coverOrFallback := func(own string) string {
+		if own != "" {
+			return own
+		}
+		return appleCover
 	}
-	resultsCh := make(chan sourceResult, 9)
+	var candidates []lyricCandidate
+	if ne.Lyrics != "" {
+		// 网易云的社区翻译固定中文(见下面附着处的注释),usable 判定按目标语言过闸;
+		// 这两个标志必须在**打分前**算好挂到候选上(v3 的增值内容决胜分要读它),
+		// 不能等选完冠军再附着。
+		neTr, neRoma := usableValueAdd(ne.Lyrics, ne.Trans, "zh", ne.Roma, features.LyricsTranslationLanguage)
+		candidates = append(candidates, lyricCandidate{source: "netease", lyrics: ne.Lyrics, wordTimingYRC: usableYRC(ne.Lyrics, ne.YRC), hasWordTiming: usableWordTiming(ne.Lyrics, ne.YRC), hasUsableTranslation: neTr, hasUsableRomanization: neRoma, sourceReportedDurationSecs: ne.DurationSecs, title: ne.Title, artist: ne.Artist, album: ne.Album, cover: coverOrFallback(ne.Cover)})
+	}
+	if qqLyr != "" {
+		// QQ 的译文固定是中文(跟网易云 tlyric 同款),语言标 "zh";罗马音的可用判定
+		// (原文假名占比 > 5%)也沿用同一套 usableValueAdd——韩文歌的罗马音会跟网易云
+		// 一样被判不可用,这是既有口径,不是 QQ 这路新加的规则。
+		qqUsableTr, qqUsableRoma := usableValueAdd(qqLyr, qqTr, "zh", qqRoma, features.LyricsTranslationLanguage)
+		candidates = append(candidates, lyricCandidate{source: "qq", lyrics: qqLyr, wordTimingYRC: usableYRC(qqLyr, qqYRC), hasWordTiming: usableWordTiming(qqLyr, qqYRC), hasUsableTranslation: qqUsableTr, hasUsableRomanization: qqUsableRoma, sourceReportedDurationSecs: qqDur, title: qqTitle, artist: qqArtist, album: qqAlbum, cover: coverOrFallback(qqCover), language: qqLang})
+	}
+	if kugouLyr != "" {
+		// 酷狗 KRC `[language:]` 轨的译文固定中文,标 "zh";罗马音的可用判定同样走
+		// usableValueAdd 的假名占比闸(韩文歌的谐音轨在 kugou.go 里已先按汉字占比挡掉一次)。
+		kugouUsableTr, kugouUsableRoma := usableValueAdd(kugouLyr, kugouTr, "zh", kugouRoma, features.LyricsTranslationLanguage)
+		candidates = append(candidates, lyricCandidate{source: "kugou", lyrics: kugouLyr, wordTimingYRC: usableYRC(kugouLyr, kugouYRC), hasWordTiming: usableWordTiming(kugouLyr, kugouYRC), hasUsableTranslation: kugouUsableTr, hasUsableRomanization: kugouUsableRoma, sourceReportedDurationSecs: kugouDur, title: kugouTitle, artist: kugouArtist, album: kugouAlbum, cover: coverOrFallback(kugouCover), language: kugouLang})
+	}
+	if mxLyr != "" {
+		mxUsableTr, _ := usableValueAdd(mxLyr, mxTr, features.LyricsTranslationLanguage, "", features.LyricsTranslationLanguage)
+		candidates = append(candidates, lyricCandidate{source: "musixmatch", lyrics: mxLyr, wordTimingYRC: usableYRC(mxLyr, mxYRC), hasWordTiming: usableWordTiming(mxLyr, mxYRC), hasUsableTranslation: mxUsableTr, sourceReportedDurationSecs: mxDur, title: mxTitle, artist: mxArtist, album: mxAlbum, cover: coverOrFallback(mxCover), plainTextOnly: mxPlainOnly})
+	}
+	if lrclibLyr != "" {
+		candidates = append(candidates, lyricCandidate{source: "lrclib", lyrics: lrclibLyr, sourceReportedDurationSecs: lrclibDur, title: lrclibTitle, artist: lrclibArtist, album: lrclibAlbum, cover: coverOrFallback(""), plainTextOnly: lrclibPlainOnly})
+	}
+	if lfLyr != "" {
+		// 只有逐行,没有逐字/译文/罗马音——跟 lrclib 同一个形状(见 ytmusic.go 头注)。
+		candidates = append(candidates, lyricCandidate{source: "lyricfind", lyrics: lfLyr, sourceReportedDurationSecs: lfDur, title: lfTitle, artist: lfArtist, album: lfAlbum, cover: coverOrFallback(lfCover)})
+	}
+	if kuwoLyr != "" {
+		// 只有逐行,没有逐字/译文/罗马音,也没有自己的封面——跟 lyricfind 同一个形状
+		// (见 kuwo.go 头注)。
+		candidates = append(candidates, lyricCandidate{source: "kuwo", lyrics: kuwoLyr, sourceReportedDurationSecs: kuwoDur, title: kuwoTitle, artist: kuwoArtist, album: kuwoAlbum, cover: coverOrFallback(kuwoCover)})
+	}
+	if !amll.empty() {
+		// 身份是确定的 —— 这份 TTML 是按网易云/QQ 的音乐 ID 直接取回来的,不是搜出来的,
+		// 所以 title/artist/album 直接沿用本地曲目信息,不会在标题/歌手/专辑那几项上
+		// 被扣分。它没有自报时长,sourceReportedDurationSecs 留 0(= 该项不参与打分)。
+		amllTr, _ := usableValueAdd(amll.lrc, amll.tr, features.LyricsTranslationLanguage, "", features.LyricsTranslationLanguage)
+		candidates = append(candidates, lyricCandidate{
+			source: "amll", lyrics: amll.lrc,
+			wordTimingYRC: usableYRC(amll.lrc, amll.yrc), hasWordTiming: usableWordTiming(amll.lrc, amll.yrc),
+			hasUsableTranslation: amllTr,
+			title:                title, artist: artist, album: album, cover: coverOrFallback(""),
+		})
+	}
+	// 时间轴自洽修复:候选自带的行级 LRC 与逐字轴打架时,以逐字轴为准重挂行时间戳
+	// (见 lyricstimeline.go 的完整来龙去脉)。**必须在这里**而不是选完冠军之后 ——
+	// corroboratedEndings / contentConsensusPeers / scoreLyricCandidateDetailed 的
+	// 时长判据全都读 LRC 末句,先修完再算,打分看到的才是修正后的时间轴。
+	rehangCandidateTimelines(candidates, durationSecs)
+	corroborated := corroboratedEndings(candidates, durationSecs)
+	// v3:跨源正文共识,整批统一算(理由同 corroboratedEndings——peers 随后到的源变化,
+	// 每轮全量重算)。artist/title 已是 toSimplified 后的搜索关键词,与打分入参一致。
+	consensusPeers := contentConsensusPeers(artist, title, candidates, durationSecs)
+	// lrclib 明确说这首歌是纯音乐、且没有真的歌词候选(lrclibLyr=="")时,搭车塞一条
+	// Score:-1 的标记进 results——见 Instrumental 字段定义处的注释,不参与打分/排序,
+	// 不会被 pickLyricCandidate 选中,只是把这个信号原样带出这个函数。
+	var instrumentalMarker *scoredLyricCandidateResult
+	if lrclibLyr == "" && lrclibInstrumental {
+		instrumentalMarker = &scoredLyricCandidateResult{Source: "lrclib", Score: -1, Instrumental: true}
+	} else if qqLyr == "" && qqInstrumental {
+		// QQ 那一路(2026-08-22 加)。实测案例:蛋堡《收敛水》第 1 轨「关键字: Intro」
+		// (114s 的专辑 intro)——网易云只有一行署名(没有 pureMusic 字段)、酷狗
+		// KRC 候选 0 条、LRCLIB 404,**只有 QQ 明确回了**「此歌曲为没有填词的纯音乐」。
+		// 在此之前那句话在 resolveQQLyric 末尾的 isTimedLRC(要求 ≥3 行带戳)那里就被
+		// 当成"不是歌词"扔掉了,于是这类曲目落在「无歌词」而不是「纯音乐」:界面上看起来
+		// 像失败,还要每 24 小时(退避后翻倍)白搜一轮五个源。
+		// 排在网易云之前只是因为 QQ 这句话是**明文断言**、语义比"正文只有占位"更硬。
+		instrumentalMarker = &scoredLyricCandidateResult{Source: "qq", Score: -1, Instrumental: true}
+	} else if ne.Lyrics == "" && ne.PureMusic {
+		// 网易云那一路同款(2026-08-20 加)。用户报「一堆条目显示无歌词、其实都是
+		// 纯音乐」(LoL 原声带 The Music of League of Legends Vol.1 十几首):
+		// 那些曲目 lrclib 压根没有(五源全空、responded 是空的),而网易云**匹配上了
+		// 歌**(封面/单曲链接都给了)、歌词接口也明确回了 pureMusic=true —— 结论一直
+		// 在手上,只是没人接。lrclib 优先只是因为它的标记是结构化字段、语义最干净。
+		instrumentalMarker = &scoredLyricCandidateResult{Source: "netease", Score: -1, Instrumental: true}
+	}
+
+	results := make([]scoredLyricCandidateResult, 0, len(candidates))
+	for _, c := range candidates {
+		r := scoredLyricCandidateResult{
+			Source:                     c.source,
+			Lyrics:                     c.lyrics,
+			LyricsYRC:                  c.wordTimingYRC,
+			HasWordTiming:              c.hasWordTiming,
+			SourceReportedDurationSecs: c.sourceReportedDurationSecs,
+			Title:                      c.title,
+			Artist:                     c.artist,
+			Album:                      c.album,
+			CoverURL:                   c.cover,
+			Language:                   c.language,
+			PlainTextOnly:              c.plainTextOnly,
+		}
+		r.Score, r.ScoreTerms = scoreLyricCandidateDetailed(
+			artist, title, album, durationSecs, c, corroborated[c.source], consensusPeers[c.source])
+		// 正文时间轴被重挂过的话,附属歌词也得搬 —— 它们的时间戳是照原文 LRC 抄的
+		// (translate.go 的 assembleTranslationLRC / musixmatch.go 的 buildTranslatedLRC)。
+		// 下面 switch 里各源赋完 r.LyricsTr/r.LyricsRoma 之后统一搬,见循环末尾。
+		switch c.source {
+		case "netease":
+			// 翻译/罗马音网易云固定给中文;酷狗至今只接了逐字、不接翻译/罗马音(接 QRC/KRC
+			// 那次计划里"刻意不做的"项,QQ 那一半 2026-09-02 已经补回,见下面 case "qq")。
+			// "固定中文"这件事必须记下来:目标语言不是中文时,
+			// 这份译文用不上,得让机翻接手(见 needsTranslationBackfill)。
+			//
+			// ⚠️ 2026-08-30 真实bug(温岚《Jumping Machine (跳楼机)》,繁体原文配了一份
+			// 内容几乎一样、只是转成简体的"翻译"):c.hasUsableTranslation/
+			// hasUsableRomanization 这两个"能不能用"的判定(usableValueAdd,已经算过
+			// "原文本来就是目标语言,同语言不同文字不算翻译"这类情况)以前**只用来加
+			// +50/+30 的打分**,从没管过这里赋值——candidates 里那份不可用的翻译内容
+			// 照样原样抄进 r.LyricsTr,分数赢了就带着这份没有意义的"翻译"一起进缓存。
+			// 现在补上闸门,判定为不可用时干脆不赋值,行为跟"这个源没有可用译文"一致。
+			if c.hasUsableTranslation {
+				r.LyricsTr = ne.Trans
+				r.LyricsTrLang = "zh"
+			}
+			if c.hasUsableRomanization {
+				r.LyricsRoma = ne.Roma
+			}
+		case "musixmatch":
+			// Musixmatch 的译文语言是用户在"歌词"设置里配的
+			// LyricsTranslationLanguage(ISO 639-1 代码),不像网易云固定中文——
+			// 见 musixmatchTranslationLRC 注释。没配置/没查到社区翻译时 mxTr 是
+			// 空串,r.LyricsTr 保持空,不影响这条候选本身的原文歌词。
+			// 同上,c.hasUsableTranslation 是同一道闸——不可用(如目标语言跟原文
+			// 实际语言"同语言不同文字"这类假翻译)就不赋值。
+			if c.hasUsableTranslation {
+				r.LyricsTr = mxTr
+				// 抓取时用的就是当时设置里的语言。之后用户改了设置,这里记下的旧语言
+				// 就会跟新目标对不上 —— 那正是要的:对不上就重翻。
+				r.LyricsTrLang = features.LyricsTranslationLanguage
+			}
+		case "amll":
+			// 2026-08-26 真实bug复现(ROSÉ & Bruno Mars《APT.》):amll.tr 早就在
+			// candidates 构造那一步被读出来过(见上面 usableValueAdd 调用,+50 分的
+			// 打分信号靠它),但这个 switch 从一开始就没有 amll 分支——分数算对了、
+			// 内容却从没被抄进 r.LyricsTr,选中 amll 之后 lyrics_tr 永远是空的,机翻
+			// 又拿这份本来就有毛病的原文(逐词粘连,见 amllttml.go 那次修复)反复重试、
+			// 屡试屡败,表现成"这首歌一直没有译文"。
+			//
+			// 语言标注沿用 usableValueAdd 那次调用同样的简化:amll-ttml-db 的 TTML
+			// 没有给译文标语言的字段,判定"能不能用"时就是直接拿 targetLang 自比自
+			// (trLang 传的就是 features.LyricsTranslationLanguage 本身,永远相等)——
+			// 这里不重新发明一套更严格的判定,原样沿用同一个假设,保持"能不能用"和
+			// "语言标什么"这两处判断口径一致。同上,c.hasUsableTranslation 一并把关
+			// "同语言不同文字不算翻译"这类情况。
+			if c.hasUsableTranslation {
+				r.LyricsTr = amll.tr
+				r.LyricsTrLang = features.LyricsTranslationLanguage
+			}
+		case "qq":
+			// 2026-09-02 加。QQ GetPlayLyricInfo 的 trans/roma 两轨(见 qq.go qqQRCLyric /
+			// qqAuxiliaryLRC):译文跟网易云一样固定中文,标 "zh";两轨都由候选构造时算好的
+			// usableValueAdd 结果把关——这个 switch 从 amll 那次事故(已知坑 10:分数算对了、
+			// 内容没抄进来)之后就是"接一个源就必须在这里补一个 case",别再漏。
+			if c.hasUsableTranslation {
+				r.LyricsTr = qqTr
+				r.LyricsTrLang = "zh"
+			}
+			if c.hasUsableRomanization {
+				r.LyricsRoma = qqRoma
+			}
+		case "kugou":
+			// 2026-09-02 加。酷狗 KRC `[language:]` 内嵌的中文译文 / 罗马音(见 kugou.go
+			// krcLanguageTracks),口径与 qq 完全一致:译文固定 "zh",两轨都由候选装配时的
+			// usableValueAdd 结果把关。
+			if c.hasUsableTranslation {
+				r.LyricsTr = kugouTr
+				r.LyricsTrLang = "zh"
+			}
+			if c.hasUsableRomanization {
+				r.LyricsRoma = kugouRoma
+			}
+		}
+		// 正文时间轴被重挂过就把附属歌词一起搬过去。放在 switch **之后** —— 各源的
+		// r.LyricsTr/r.LyricsRoma 到这里才赋完值,搬早了搬的是空串。
+		if len(c.timelineRemap) > 0 {
+			if tr, ok := remapLRCTimestamps(r.LyricsTr, c.timelineRemap); ok {
+				r.LyricsTr = tr
+			}
+			if roma, ok := remapLRCTimestamps(r.LyricsRoma, c.timelineRemap); ok {
+				r.LyricsRoma = roma
+			}
+		}
+		results = append(results, r)
+	}
+	if instrumentalMarker != nil {
+		results = append(results, *instrumentalMarker)
+	}
+	// v5(2026-08-27):必须在排序**之前**跑——它要看的是"排完序会是谁赢",然后据此
+	// 决定要不要撤销冠军的逐字加分,晚了就成了在排好的结果上事后改分,顺序会跟着乱。
+	// instrumentalMarker(Score:-1)不受影响,函数内部本来就跳过负分。
+	applyWordTimingTitleOverride(results)
+	// 稳定排序:来源加分拿掉之后同分会变多(见 scoreLyricCandidateDetailed 里那段注释),
+	// 不稳定的排序会让同分候选的先后随运行变化,同一首歌两次解析可能选出不同的源。
+	// 稳定之后就是按 candidates 的构造顺序决胜,确定且可复现。
+	sort.SliceStable(results, func(i, j int) bool { return results[i].Score > results[j].Score })
+	return results
+}
+
+func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, album string, durationSecs float64, onUpdate lyricSearchUpdateFunc) (neteaseInfo, []scoredLyricCandidateResult) {
+	resultsCh := make(chan lyricSourceResult, 9)
 
 	// 源级熔断(sourcebreaker.go):起跑前算一次"谁在冷却中",冷却中的源不发请求、立刻回一个
 	// 空结果——省掉的正是那 20 秒截止里白等的部分。被跳过的源记进 ctx 上的 round(没挂就
@@ -2680,7 +2935,7 @@ func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, alb
 	go func() {
 		if skipSource("netease") {
 			neteaseIDCh <- ""
-			resultsCh <- sourceResult{source: "netease"}
+			resultsCh <- lyricSourceResult{source: "netease"}
 			return
 		}
 		info := neteaseLookup(ctx, artist, title, album, durationSecs)
@@ -2689,12 +2944,12 @@ func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, alb
 		} else {
 			neteaseIDCh <- ""
 		}
-		resultsCh <- sourceResult{source: "netease", ne: info}
+		resultsCh <- lyricSourceResult{source: "netease", ne: info}
 	}()
 	go func() {
 		if skipSource("qq") {
 			qqIDCh <- ""
-			resultsCh <- sourceResult{source: "qq"}
+			resultsCh <- lyricSourceResult{source: "qq"}
 			return
 		}
 		// qqMusicMatchCached 本身也是一次网络请求(smartbox 搜索,6秒超时,按
@@ -2740,7 +2995,7 @@ func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, alb
 		if qqMid != "" {
 			qqCover, _ = qqSongCoverAndSinger(ctx, qqMid)
 		}
-		resultsCh <- sourceResult{source: "qq", lyr: lyr, yrc: yrc, tr: tr, roma: roma, matchTitle: match.title, matchArtist: match.artist, matchAlbum: match.album, matchCover: qqCover, srcDur: qqDur, language: qqLang, instrumental: qqInstrumental}
+		resultsCh <- lyricSourceResult{source: "qq", lyr: lyr, yrc: yrc, tr: tr, roma: roma, matchTitle: match.title, matchArtist: match.artist, matchAlbum: match.album, matchCover: qqCover, srcDur: qqDur, language: qqLang, instrumental: qqInstrumental}
 	}()
 	go func() {
 		// 等两个 ID 都到齐再查。两个 goroutine 都是无条件启动的(启用与否在后面
@@ -2748,295 +3003,68 @@ func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, alb
 		// 不会在这里挂死。
 		neteaseID, qqID := <-neteaseIDCh, <-qqIDCh
 		if skipSource("amll") {
-			resultsCh <- sourceResult{source: "amll"}
+			resultsCh <- lyricSourceResult{source: "amll"}
 			return
 		}
-		resultsCh <- sourceResult{source: "amll", amll: amllLyric(ctx, neteaseID, qqID)}
+		resultsCh <- lyricSourceResult{source: "amll", amll: amllLyric(ctx, neteaseID, qqID)}
 	}()
 	go func() {
 		if skipSource("kugou") {
-			resultsCh <- sourceResult{source: "kugou"}
+			resultsCh <- lyricSourceResult{source: "kugou"}
 			return
 		}
 		r := kugouLyric(ctx, artist, title, album, durationSecs)
-		resultsCh <- sourceResult{source: "kugou", lyr: r.lrc, yrc: r.yrc, tr: r.tr, roma: r.roma, matchTitle: r.title, matchArtist: r.artist, matchAlbum: r.album, matchCover: r.cover, srcDur: r.durationSecs, language: r.language}
+		resultsCh <- lyricSourceResult{source: "kugou", lyr: r.lrc, yrc: r.yrc, tr: r.tr, roma: r.roma, matchTitle: r.title, matchArtist: r.artist, matchAlbum: r.album, matchCover: r.cover, srcDur: r.durationSecs, language: r.language}
 	}()
 	go func() {
 		if skipSource("lrclib") {
-			resultsCh <- sourceResult{source: "lrclib"}
+			resultsCh <- lyricSourceResult{source: "lrclib"}
 			return
 		}
 		r := lrclibLyric(ctx, artist, title, album, durationSecs)
-		resultsCh <- sourceResult{source: "lrclib", lyr: r.lyrics, matchTitle: r.title, matchArtist: r.artist, matchAlbum: r.album, srcDur: r.durationSecs, instrumental: r.instrumental, plainOnly: r.plainOnly}
+		resultsCh <- lyricSourceResult{source: "lrclib", lyr: r.lyrics, matchTitle: r.title, matchArtist: r.artist, matchAlbum: r.album, srcDur: r.durationSecs, instrumental: r.instrumental, plainOnly: r.plainOnly}
 	}()
 	go func() {
 		if skipSource("musixmatch") {
-			resultsCh <- sourceResult{source: "musixmatch"}
+			resultsCh <- lyricSourceResult{source: "musixmatch"}
 			return
 		}
 		r := musixmatchLyric(ctx, artist, title, durationSecs, features.LyricsTranslationLanguage)
-		resultsCh <- sourceResult{source: "musixmatch", lyr: r.lrc, yrc: r.yrc, tr: r.tr, matchTitle: r.title, matchArtist: r.artist, matchAlbum: r.album, matchCover: r.cover, srcDur: r.durationSecs, plainOnly: r.plainOnly}
+		resultsCh <- lyricSourceResult{source: "musixmatch", lyr: r.lrc, yrc: r.yrc, tr: r.tr, matchTitle: r.title, matchArtist: r.artist, matchAlbum: r.album, matchCover: r.cover, srcDur: r.durationSecs, plainOnly: r.plainOnly}
 	}()
 	go func() {
 		if skipSource("lyricfind") {
-			resultsCh <- sourceResult{source: "lyricfind"}
+			resultsCh <- lyricSourceResult{source: "lyricfind"}
 			return
 		}
 		// ytmusicLyric 检索机制上是"查 YouTube Music",但对外只暴露真正是 LyricFind 的
 		// 那部分(见 ytmusic.go 头注的过滤理由)——source 因此标 "lyricfind" 不是 "ytmusic"。
 		r := ytmusicLyric(ctx, artist, title, album, durationSecs)
-		resultsCh <- sourceResult{source: "lyricfind", lyr: r.lyrics, matchTitle: r.title, matchArtist: r.artist, matchAlbum: r.album, matchCover: r.cover, srcDur: r.durationSecs}
+		resultsCh <- lyricSourceResult{source: "lyricfind", lyr: r.lyrics, matchTitle: r.title, matchArtist: r.artist, matchAlbum: r.album, matchCover: r.cover, srcDur: r.durationSecs}
 	}()
 	go func() {
 		if skipSource("kuwo") {
-			resultsCh <- sourceResult{source: "kuwo"}
+			resultsCh <- lyricSourceResult{source: "kuwo"}
 			return
 		}
 		r := kuwoLyric(ctx, artist, title, album, durationSecs)
-		resultsCh <- sourceResult{source: "kuwo", lyr: r.lyrics, matchTitle: r.title, matchArtist: r.artist, matchAlbum: r.album, matchCover: r.cover, srcDur: r.durationSecs}
+		resultsCh <- lyricSourceResult{source: "kuwo", lyr: r.lyrics, matchTitle: r.title, matchArtist: r.artist, matchAlbum: r.album, matchCover: r.cover, srcDur: r.durationSecs}
 	}()
 	go func() {
 		// 跟 resolveTrackEnrichment 里 e.AppleURL = appleMatch.url 共用同一份
 		// appleURLCache——谁先查到谁写缓存,这里不重复消耗一次网络请求。
-		resultsCh <- sourceResult{source: "applecover", matchCover: appleMusicMatchCached(ctx, artist, title, album).cover}
+		resultsCh <- lyricSourceResult{source: "applecover", matchCover: appleMusicMatchCached(ctx, artist, title, album).cover}
 	}()
 
-	var ne neteaseInfo
-	var qqLyr, qqYRC, qqTr, qqRoma, qqTitle, qqArtist, qqAlbum, qqLang, qqCover string
-	var qqDur, kugouDur, lrclibDur float64
-	var kugouLyr, kugouYRC, kugouTr, kugouRoma, kugouTitle, kugouArtist, kugouAlbum, kugouLang, kugouCover string
-	var lrclibLyr, lrclibTitle, lrclibArtist, lrclibAlbum string
-	var lrclibInstrumental bool
-	var lrclibPlainOnly bool
-	var qqInstrumental bool
-	var mxLyr, mxYRC, mxTr, mxTitle, mxArtist, mxAlbum, mxCover string
-	var mxPlainOnly bool
-	var mxDur float64
-	var amll amllResult
-	var lfLyr, lfTitle, lfArtist, lfAlbum, lfCover string
-	var lfDur float64
-	var kuwoLyr, kuwoTitle, kuwoArtist, kuwoAlbum, kuwoCover string
-	var kuwoDur float64
-	var appleCover string
+	// raw:目前为止到手的各源原始应答,按源名存(applecover 也在里面)。打分/排序全部下放给
+	// rankLyricSourceResults(包级纯函数,回归金标集与生产共用),这里只负责收结果、喂进去。
+	raw := map[string]lyricSourceResult{}
 	// scoreAndSort 用目前为止已经到手的原始结果重新构建候选、算 corroboratedEndings、
 	// 打分、排序——每次有新结果到达都会重新跑一遍(而不是缓存增量),因为一份候选的
 	// corroborated 状态可能随后到的源变化(见上面 onUpdate 的注释),分数不是只增不改
 	// 的东西,不能靠增量更新蒙混过去。
 	scoreAndSort := func() []scoredLyricCandidateResult {
-		// coverOrFallback:候选自己的源有封面就用自己的——2026-08-31 起网易云/QQ/酷狗/
-		// Musixmatch/LyricFind/酷我六个源都能给(QQ 复用 qqSongCoverAndSinger,酷狗多查
-		// 一次 album/info,酷我搜索结果自带 web_albumpic_short,见各自文件的注释),没有就用
-		// Apple Music/iTunes 那路通用兜底(LRCLIB/AMLL 这两个是纯歌词库,格式本身不带封面,
-		// 结构性地只能走兜底)。即使 appleCover 这一刻还没到(还在并发查),先留空,后面
-		// applecover 到达触发的下一轮 onUpdate/最终返回会自然补上,不需要特殊处理"到达顺序"。
-		coverOrFallback := func(own string) string {
-			if own != "" {
-				return own
-			}
-			return appleCover
-		}
-		var candidates []lyricCandidate
-		if ne.Lyrics != "" {
-			// 网易云的社区翻译固定中文(见下面附着处的注释),usable 判定按目标语言过闸;
-			// 这两个标志必须在**打分前**算好挂到候选上(v3 的增值内容决胜分要读它),
-			// 不能等选完冠军再附着。
-			neTr, neRoma := usableValueAdd(ne.Lyrics, ne.Trans, "zh", ne.Roma, features.LyricsTranslationLanguage)
-			candidates = append(candidates, lyricCandidate{source: "netease", lyrics: ne.Lyrics, wordTimingYRC: usableYRC(ne.Lyrics, ne.YRC), hasWordTiming: usableWordTiming(ne.Lyrics, ne.YRC), hasUsableTranslation: neTr, hasUsableRomanization: neRoma, sourceReportedDurationSecs: ne.DurationSecs, title: ne.Title, artist: ne.Artist, album: ne.Album, cover: coverOrFallback(ne.Cover)})
-		}
-		if qqLyr != "" {
-			// QQ 的译文固定是中文(跟网易云 tlyric 同款),语言标 "zh";罗马音的可用判定
-			// (原文假名占比 > 5%)也沿用同一套 usableValueAdd——韩文歌的罗马音会跟网易云
-			// 一样被判不可用,这是既有口径,不是 QQ 这路新加的规则。
-			qqUsableTr, qqUsableRoma := usableValueAdd(qqLyr, qqTr, "zh", qqRoma, features.LyricsTranslationLanguage)
-			candidates = append(candidates, lyricCandidate{source: "qq", lyrics: qqLyr, wordTimingYRC: usableYRC(qqLyr, qqYRC), hasWordTiming: usableWordTiming(qqLyr, qqYRC), hasUsableTranslation: qqUsableTr, hasUsableRomanization: qqUsableRoma, sourceReportedDurationSecs: qqDur, title: qqTitle, artist: qqArtist, album: qqAlbum, cover: coverOrFallback(qqCover), language: qqLang})
-		}
-		if kugouLyr != "" {
-			// 酷狗 KRC `[language:]` 轨的译文固定中文,标 "zh";罗马音的可用判定同样走
-			// usableValueAdd 的假名占比闸(韩文歌的谐音轨在 kugou.go 里已先按汉字占比挡掉一次)。
-			kugouUsableTr, kugouUsableRoma := usableValueAdd(kugouLyr, kugouTr, "zh", kugouRoma, features.LyricsTranslationLanguage)
-			candidates = append(candidates, lyricCandidate{source: "kugou", lyrics: kugouLyr, wordTimingYRC: usableYRC(kugouLyr, kugouYRC), hasWordTiming: usableWordTiming(kugouLyr, kugouYRC), hasUsableTranslation: kugouUsableTr, hasUsableRomanization: kugouUsableRoma, sourceReportedDurationSecs: kugouDur, title: kugouTitle, artist: kugouArtist, album: kugouAlbum, cover: coverOrFallback(kugouCover), language: kugouLang})
-		}
-		if mxLyr != "" {
-			mxUsableTr, _ := usableValueAdd(mxLyr, mxTr, features.LyricsTranslationLanguage, "", features.LyricsTranslationLanguage)
-			candidates = append(candidates, lyricCandidate{source: "musixmatch", lyrics: mxLyr, wordTimingYRC: usableYRC(mxLyr, mxYRC), hasWordTiming: usableWordTiming(mxLyr, mxYRC), hasUsableTranslation: mxUsableTr, sourceReportedDurationSecs: mxDur, title: mxTitle, artist: mxArtist, album: mxAlbum, cover: coverOrFallback(mxCover), plainTextOnly: mxPlainOnly})
-		}
-		if lrclibLyr != "" {
-			candidates = append(candidates, lyricCandidate{source: "lrclib", lyrics: lrclibLyr, sourceReportedDurationSecs: lrclibDur, title: lrclibTitle, artist: lrclibArtist, album: lrclibAlbum, cover: coverOrFallback(""), plainTextOnly: lrclibPlainOnly})
-		}
-		if lfLyr != "" {
-			// 只有逐行,没有逐字/译文/罗马音——跟 lrclib 同一个形状(见 ytmusic.go 头注)。
-			candidates = append(candidates, lyricCandidate{source: "lyricfind", lyrics: lfLyr, sourceReportedDurationSecs: lfDur, title: lfTitle, artist: lfArtist, album: lfAlbum, cover: coverOrFallback(lfCover)})
-		}
-		if kuwoLyr != "" {
-			// 只有逐行,没有逐字/译文/罗马音,也没有自己的封面——跟 lyricfind 同一个形状
-			// (见 kuwo.go 头注)。
-			candidates = append(candidates, lyricCandidate{source: "kuwo", lyrics: kuwoLyr, sourceReportedDurationSecs: kuwoDur, title: kuwoTitle, artist: kuwoArtist, album: kuwoAlbum, cover: coverOrFallback(kuwoCover)})
-		}
-		if !amll.empty() {
-			// 身份是确定的 —— 这份 TTML 是按网易云/QQ 的音乐 ID 直接取回来的,不是搜出来的,
-			// 所以 title/artist/album 直接沿用本地曲目信息,不会在标题/歌手/专辑那几项上
-			// 被扣分。它没有自报时长,sourceReportedDurationSecs 留 0(= 该项不参与打分)。
-			amllTr, _ := usableValueAdd(amll.lrc, amll.tr, features.LyricsTranslationLanguage, "", features.LyricsTranslationLanguage)
-			candidates = append(candidates, lyricCandidate{
-				source: "amll", lyrics: amll.lrc,
-				wordTimingYRC: usableYRC(amll.lrc, amll.yrc), hasWordTiming: usableWordTiming(amll.lrc, amll.yrc),
-				hasUsableTranslation: amllTr,
-				title:                title, artist: artist, album: album, cover: coverOrFallback(""),
-			})
-		}
-		// 时间轴自洽修复:候选自带的行级 LRC 与逐字轴打架时,以逐字轴为准重挂行时间戳
-		// (见 lyricstimeline.go 的完整来龙去脉)。**必须在这里**而不是选完冠军之后 ——
-		// corroboratedEndings / contentConsensusPeers / scoreLyricCandidateDetailed 的
-		// 时长判据全都读 LRC 末句,先修完再算,打分看到的才是修正后的时间轴。
-		rehangCandidateTimelines(candidates, durationSecs)
-		corroborated := corroboratedEndings(candidates, durationSecs)
-		// v3:跨源正文共识,整批统一算(理由同 corroboratedEndings——peers 随后到的源变化,
-		// 每轮全量重算)。artist/title 已是 toSimplified 后的搜索关键词,与打分入参一致。
-		consensusPeers := contentConsensusPeers(artist, title, candidates, durationSecs)
-		// lrclib 明确说这首歌是纯音乐、且没有真的歌词候选(lrclibLyr=="")时,搭车塞一条
-		// Score:-1 的标记进 results——见 Instrumental 字段定义处的注释,不参与打分/排序,
-		// 不会被 pickLyricCandidate 选中,只是把这个信号原样带出这个函数。
-		var instrumentalMarker *scoredLyricCandidateResult
-		if lrclibLyr == "" && lrclibInstrumental {
-			instrumentalMarker = &scoredLyricCandidateResult{Source: "lrclib", Score: -1, Instrumental: true}
-		} else if qqLyr == "" && qqInstrumental {
-			// QQ 那一路(2026-08-22 加)。实测案例:蛋堡《收敛水》第 1 轨「关键字: Intro」
-			// (114s 的专辑 intro)——网易云只有一行署名(没有 pureMusic 字段)、酷狗
-			// KRC 候选 0 条、LRCLIB 404,**只有 QQ 明确回了**「此歌曲为没有填词的纯音乐」。
-			// 在此之前那句话在 resolveQQLyric 末尾的 isTimedLRC(要求 ≥3 行带戳)那里就被
-			// 当成"不是歌词"扔掉了,于是这类曲目落在「无歌词」而不是「纯音乐」:界面上看起来
-			// 像失败,还要每 24 小时(退避后翻倍)白搜一轮五个源。
-			// 排在网易云之前只是因为 QQ 这句话是**明文断言**、语义比"正文只有占位"更硬。
-			instrumentalMarker = &scoredLyricCandidateResult{Source: "qq", Score: -1, Instrumental: true}
-		} else if ne.Lyrics == "" && ne.PureMusic {
-			// 网易云那一路同款(2026-08-20 加)。用户报「一堆条目显示无歌词、其实都是
-			// 纯音乐」(LoL 原声带 The Music of League of Legends Vol.1 十几首):
-			// 那些曲目 lrclib 压根没有(五源全空、responded 是空的),而网易云**匹配上了
-			// 歌**(封面/单曲链接都给了)、歌词接口也明确回了 pureMusic=true —— 结论一直
-			// 在手上,只是没人接。lrclib 优先只是因为它的标记是结构化字段、语义最干净。
-			instrumentalMarker = &scoredLyricCandidateResult{Source: "netease", Score: -1, Instrumental: true}
-		}
-
-		results := make([]scoredLyricCandidateResult, 0, len(candidates))
-		for _, c := range candidates {
-			r := scoredLyricCandidateResult{
-				Source:                     c.source,
-				Lyrics:                     c.lyrics,
-				LyricsYRC:                  c.wordTimingYRC,
-				HasWordTiming:              c.hasWordTiming,
-				SourceReportedDurationSecs: c.sourceReportedDurationSecs,
-				Title:                      c.title,
-				Artist:                     c.artist,
-				Album:                      c.album,
-				CoverURL:                   c.cover,
-				Language:                   c.language,
-				PlainTextOnly:              c.plainTextOnly,
-			}
-			r.Score, r.ScoreTerms = scoreLyricCandidateDetailed(
-				artist, title, album, durationSecs, c, corroborated[c.source], consensusPeers[c.source])
-			// 正文时间轴被重挂过的话,附属歌词也得搬 —— 它们的时间戳是照原文 LRC 抄的
-			// (translate.go 的 assembleTranslationLRC / musixmatch.go 的 buildTranslatedLRC)。
-			// 下面 switch 里各源赋完 r.LyricsTr/r.LyricsRoma 之后统一搬,见循环末尾。
-			switch c.source {
-			case "netease":
-				// 翻译/罗马音网易云固定给中文;酷狗至今只接了逐字、不接翻译/罗马音(接 QRC/KRC
-				// 那次计划里"刻意不做的"项,QQ 那一半 2026-09-02 已经补回,见下面 case "qq")。
-				// "固定中文"这件事必须记下来:目标语言不是中文时,
-				// 这份译文用不上,得让机翻接手(见 needsTranslationBackfill)。
-				//
-				// ⚠️ 2026-08-30 真实bug(温岚《Jumping Machine (跳楼机)》,繁体原文配了一份
-				// 内容几乎一样、只是转成简体的"翻译"):c.hasUsableTranslation/
-				// hasUsableRomanization 这两个"能不能用"的判定(usableValueAdd,已经算过
-				// "原文本来就是目标语言,同语言不同文字不算翻译"这类情况)以前**只用来加
-				// +50/+30 的打分**,从没管过这里赋值——candidates 里那份不可用的翻译内容
-				// 照样原样抄进 r.LyricsTr,分数赢了就带着这份没有意义的"翻译"一起进缓存。
-				// 现在补上闸门,判定为不可用时干脆不赋值,行为跟"这个源没有可用译文"一致。
-				if c.hasUsableTranslation {
-					r.LyricsTr = ne.Trans
-					r.LyricsTrLang = "zh"
-				}
-				if c.hasUsableRomanization {
-					r.LyricsRoma = ne.Roma
-				}
-			case "musixmatch":
-				// Musixmatch 的译文语言是用户在"歌词"设置里配的
-				// LyricsTranslationLanguage(ISO 639-1 代码),不像网易云固定中文——
-				// 见 musixmatchTranslationLRC 注释。没配置/没查到社区翻译时 mxTr 是
-				// 空串,r.LyricsTr 保持空,不影响这条候选本身的原文歌词。
-				// 同上,c.hasUsableTranslation 是同一道闸——不可用(如目标语言跟原文
-				// 实际语言"同语言不同文字"这类假翻译)就不赋值。
-				if c.hasUsableTranslation {
-					r.LyricsTr = mxTr
-					// 抓取时用的就是当时设置里的语言。之后用户改了设置,这里记下的旧语言
-					// 就会跟新目标对不上 —— 那正是要的:对不上就重翻。
-					r.LyricsTrLang = features.LyricsTranslationLanguage
-				}
-			case "amll":
-				// 2026-08-26 真实bug复现(ROSÉ & Bruno Mars《APT.》):amll.tr 早就在
-				// candidates 构造那一步被读出来过(见上面 usableValueAdd 调用,+50 分的
-				// 打分信号靠它),但这个 switch 从一开始就没有 amll 分支——分数算对了、
-				// 内容却从没被抄进 r.LyricsTr,选中 amll 之后 lyrics_tr 永远是空的,机翻
-				// 又拿这份本来就有毛病的原文(逐词粘连,见 amllttml.go 那次修复)反复重试、
-				// 屡试屡败,表现成"这首歌一直没有译文"。
-				//
-				// 语言标注沿用 usableValueAdd 那次调用同样的简化:amll-ttml-db 的 TTML
-				// 没有给译文标语言的字段,判定"能不能用"时就是直接拿 targetLang 自比自
-				// (trLang 传的就是 features.LyricsTranslationLanguage 本身,永远相等)——
-				// 这里不重新发明一套更严格的判定,原样沿用同一个假设,保持"能不能用"和
-				// "语言标什么"这两处判断口径一致。同上,c.hasUsableTranslation 一并把关
-				// "同语言不同文字不算翻译"这类情况。
-				if c.hasUsableTranslation {
-					r.LyricsTr = amll.tr
-					r.LyricsTrLang = features.LyricsTranslationLanguage
-				}
-			case "qq":
-				// 2026-09-02 加。QQ GetPlayLyricInfo 的 trans/roma 两轨(见 qq.go qqQRCLyric /
-				// qqAuxiliaryLRC):译文跟网易云一样固定中文,标 "zh";两轨都由候选构造时算好的
-				// usableValueAdd 结果把关——这个 switch 从 amll 那次事故(已知坑 10:分数算对了、
-				// 内容没抄进来)之后就是"接一个源就必须在这里补一个 case",别再漏。
-				if c.hasUsableTranslation {
-					r.LyricsTr = qqTr
-					r.LyricsTrLang = "zh"
-				}
-				if c.hasUsableRomanization {
-					r.LyricsRoma = qqRoma
-				}
-			case "kugou":
-				// 2026-09-02 加。酷狗 KRC `[language:]` 内嵌的中文译文 / 罗马音(见 kugou.go
-				// krcLanguageTracks),口径与 qq 完全一致:译文固定 "zh",两轨都由候选装配时的
-				// usableValueAdd 结果把关。
-				if c.hasUsableTranslation {
-					r.LyricsTr = kugouTr
-					r.LyricsTrLang = "zh"
-				}
-				if c.hasUsableRomanization {
-					r.LyricsRoma = kugouRoma
-				}
-			}
-			// 正文时间轴被重挂过就把附属歌词一起搬过去。放在 switch **之后** —— 各源的
-			// r.LyricsTr/r.LyricsRoma 到这里才赋完值,搬早了搬的是空串。
-			if len(c.timelineRemap) > 0 {
-				if tr, ok := remapLRCTimestamps(r.LyricsTr, c.timelineRemap); ok {
-					r.LyricsTr = tr
-				}
-				if roma, ok := remapLRCTimestamps(r.LyricsRoma, c.timelineRemap); ok {
-					r.LyricsRoma = roma
-				}
-			}
-			results = append(results, r)
-		}
-		if instrumentalMarker != nil {
-			results = append(results, *instrumentalMarker)
-		}
-		// v5(2026-08-27):必须在排序**之前**跑——它要看的是"排完序会是谁赢",然后据此
-		// 决定要不要撤销冠军的逐字加分,晚了就成了在排好的结果上事后改分,顺序会跟着乱。
-		// instrumentalMarker(Score:-1)不受影响,函数内部本来就跳过负分。
-		applyWordTimingTitleOverride(results)
-		// 稳定排序:来源加分拿掉之后同分会变多(见 scoreLyricCandidateDetailed 里那段注释),
-		// 不稳定的排序会让同分候选的先后随运行变化,同一首歌两次解析可能选出不同的源。
-		// 稳定之后就是按 candidates 的构造顺序决胜,确定且可复现。
-		sort.SliceStable(results, func(i, j int) bool { return results[i].Score > results[j].Score })
-		return results
+		return rankLyricSourceResults(artist, title, album, durationSecs, raw)
 	}
 
 	deadline := time.After(lyricSearchDeadline)
@@ -3058,31 +3086,11 @@ collect:
 		select {
 		case r := <-resultsCh:
 			doneSources[r.source] = true
-			switch r.source {
-			case "amll":
-				amll = r.amll
-			case "netease":
-				ne = r.ne
-			case "qq":
-				qqLyr, qqYRC, qqTr, qqRoma, qqTitle, qqArtist, qqAlbum, qqCover, qqDur, qqLang = r.lyr, r.yrc, r.tr, r.roma, r.matchTitle, r.matchArtist, r.matchAlbum, r.matchCover, r.srcDur, r.language
-				qqInstrumental = r.instrumental
-			case "kugou":
-				kugouLyr, kugouYRC, kugouTr, kugouRoma, kugouTitle, kugouArtist, kugouAlbum, kugouCover, kugouDur, kugouLang = r.lyr, r.yrc, r.tr, r.roma, r.matchTitle, r.matchArtist, r.matchAlbum, r.matchCover, r.srcDur, r.language
-			case "lrclib":
-				lrclibLyr, lrclibTitle, lrclibArtist, lrclibAlbum, lrclibDur = r.lyr, r.matchTitle, r.matchArtist, r.matchAlbum, r.srcDur
-				lrclibInstrumental = r.instrumental
-				lrclibPlainOnly = r.plainOnly
-			case "musixmatch":
-				mxLyr, mxYRC, mxTr, mxTitle, mxArtist, mxAlbum, mxCover, mxDur = r.lyr, r.yrc, r.tr, r.matchTitle, r.matchArtist, r.matchAlbum, r.matchCover, r.srcDur
-				mxPlainOnly = r.plainOnly
-			case "lyricfind":
-				lfLyr, lfTitle, lfArtist, lfAlbum, lfCover, lfDur = r.lyr, r.matchTitle, r.matchArtist, r.matchAlbum, r.matchCover, r.srcDur
-			case "kuwo":
-				kuwoLyr, kuwoTitle, kuwoArtist, kuwoAlbum, kuwoCover, kuwoDur = r.lyr, r.matchTitle, r.matchArtist, r.matchAlbum, r.matchCover, r.srcDur
-			case "applecover":
-				appleCover = r.matchCover
+			raw[r.source] = r
+			if lyricSourceResultTap != nil {
+				lyricSourceResultTap(r)
 			}
-			onUpdate(ne, scoreAndSort(), enabledDone(), totalSources)
+			onUpdate(raw["netease"].ne, scoreAndSort(), enabledDone(), totalSources)
 		case <-deadline:
 			log.Printf("lyrics: search deadline (%s) hit for artist=%q title=%q, proceeding with %d/8 sources back", lyricSearchDeadline, artist, title, i)
 			break collect
@@ -3094,7 +3102,7 @@ collect:
 		}
 	}
 
-	return ne, scoreAndSort()
+	return raw["netease"].ne, scoreAndSort()
 }
 
 // loadEnrichCache reads the persisted enrichment cache (best-effort) and sets the

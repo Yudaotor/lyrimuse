@@ -1,0 +1,263 @@
+{
+  "id": "lineonly-conversation-mix",
+  "category": "line-only-winner",
+  "note": "无逐字冠军:本地是 4:16 的 Conversation Mix,QQ/酷狗带逐字的候选都是原版(末句超曲长 -700),LRCLIB 无逐字但标题精确、时长吻合、有共识——逐字 +400 不该压过\"版本对不对\"",
+  "label_evidence": {
+    "consensus_peers": 3,
+    "title_accepted": true,
+    "version_tags_ok": true,
+    "source_duration_delta_pct": 0.47473051085768625,
+    "lyrics_end_secs": 253.58,
+    "coverage_pct": 99.03921262302764,
+    "album_score": 200,
+    "live_mismatch": false,
+    "cache_agreement": "exact"
+  },
+  "track": {
+    "artist": "Backstreet Boys",
+    "title": "All I Have to Give (The Conversation Mix)",
+    "album": "Backstreet's Back"
+  },
+  "captured_at": "2026-09-04",
+  "scoring_version_at_capture": 11,
+  "query": {
+    "artist": "Backstreet Boys",
+    "title": "All I Have to Give (The Conversation Mix)",
+    "album": "Backstreet's Back",
+    "duration_secs": 256.04
+  },
+  "settings": {
+    "translation_language": "zh",
+    "sources": {
+      "amll": true,
+      "kugou": true,
+      "kuwo": true,
+      "lrclib": true,
+      "lyricfind": true,
+      "musixmatch": true,
+      "netease": true,
+      "qq": true
+    },
+    "source_mode": "smart",
+    "source_order": [
+      "netease",
+      "qq",
+      "kugou",
+      "musixmatch",
+      "lrclib",
+      "amll",
+      "lyricfind",
+      "kuwo"
+    ]
+  },
+  "sources": {
+    "amll": {
+      "amll": {}
+    },
+    "applecover": {
+      "cover": "https://is1-ssl.mzstatic.com/image/thumb/Music114/v4/59/00/53/59005338-772d-2dd7-e2ff-674484629337/012414158925.jpg/1200x1200bb.jpg"
+    },
+    "kugou": {
+      "lyrics": "[ti:all i have to give]\r\n[ar:backstreet boys]\r\n[al:274677]\r\n[by:]\r\n[offset:0]\r\n[00:01.63]Xyy k zxrj ps hkrj\r\n[00:04.44]Oxnmapgjjp osda\r\n[00:09.14]K esw'p mwsl lzxp zj esja ps fxmj dsv ngd\r\n[00:14.72]Ovp K oj pzjgj ps fxmj dsv afkyj\r\n[00:19.14]K esw'p zxrj x bxwnd nxg\r\n[00:23.61]Ps hjp ps dsv K'e lxym x pzsvaxwe fkyja\r\n[00:29.13]K esw'p nxgj kb zj ovda dsv wknj pzkwha\r\n[00:34.63]Esja zka hkbpa nsfj bgsf pzj zjxgp\r\n[00:39.22]K esw'p mwsl ovp kb dsv ljgj fd hkgy\r\n[00:43.40]K'e fxmj kp as lj'e wjrjg oj xuxgp\r\n[00:48.43]Ovp fd ysrj ka xyy K zxrj ps hkrj\r\n[00:53.66]Lkpzsvp dsv K esw'p pzkwm K nxw ykrj\r\n[00:58.59]K lkaz K nsvye hkrj pzj lsgye ps dsv\r\n[01:03.54]Ovp ysrj ka xyy K zxrj ps hkrj\r\n[01:09.33]Lzjw dsv pxym （lzjw dsv pxym）\r\n[01:11.77]Esja kp ajjf ykmj zj'a wsp\r\n[01:14.84]Jrjw ykapjwkwh ps x lsgye dsv axd\r\n[01:19.53]Pzxp'a smxd oxoj qvap pjyy fj dsvg ugsoyjfa\r\n[01:23.63]K'yy pgd fd ojap ps mkaa pzjf xyy xlxd\r\n[01:29.37]Esja zj yjxrj （Esja zj yjxrj）\r\n[01:31.91]Lzjw dsv wjje zkf pzj fsap\r\n[01:34.65]Es zka bgkjwea hjp xyy dsvg pkfj\r\n[01:39.37]Oxod uyjxaj K'f sw fd mwjja\r\n[01:44.00]Ugxdkwh bsg pzj exd pzxp dsv'yy oj fkwj\r\n[01:48.70]Ovp fd ysrj ka xyy K zxrj ps hkrj\r\n[01:53.60]Lkpzsvp dsv K esw'p pzkwm K nxw ykrj\r\n[01:58.60]K Lkaz K nsvye hkrj pzj lsgye ps dsv\r\n[02:03.70]Ovp ysrj ka xyy K zxrj ps hkrj ps dsv\r\n[02:11.04]Zjd hkgy\r\n[02:12.13]Zjd hkgy K esw'p lxwp dsv ps ngd ws fsgj kwakej\r\n[02:19.66]Lzss lzsyj pzj fjfsgd kw pzj lsgye\r\n[02:24.71]Nsvye wjrjg xee vu ps\r\n[02:27.30]Xyy pzj ysrj K zxrj kwakej K ysrj dsv djxz\r\n[02:38.59]Xwe K lkyy hkrj kp ps dsv\r\n[02:40.61]（xyy K nxw hkrj xyy K nxw hkrj） Xyy xyy xyy xyy Jrjgd pzkwh K zxrj ka bsg dsv\r\n[02:47.87]Dsv dsv dsv dsv dsv dsv\r\n[02:51.42]Lzxp K wjje fd ysrj ka xyy pzjd K zxrj ps hkrj\r\n[02:58.67]Xyy pzjd K zxrj ka bsg dsv fd ysrj ka xyy\r\n[03:02.50]K zxrj ps hkrj\r\n[03:06.07]Lkpzsvp dsv K esw'p pzkwm K nxw ykrj\r\n[03:11.22]K lkaz K nsvye hkrj pzj lsgye ps dsv\r\n[03:16.18]Ovp ysrj ka xyy K zxrj ps hkrj （kp'a xyy pzjd K zxrj）\r\n[03:21.36]Ovp fd ysrj ka xyy K zxrj ps hkrj\r\n[03:26.13]Lkpzsvp dsv K esw'p pzkwm K nxw ykrj\r\n[03:31.06]K lkaz K nsvye hkrj pzj lsgye ps dsv\r\n[03:36.14]Ovp ysrj ka xyy K zxrj ps hkrj（hkrj ps dsv）\r\n[03:46.67]Sz xyy （K zxrj ps hkrj）\r\n[03:51.20]Lkpzsvp dsv K esw'p （pzkwm K nxw ykrj）\r\n[03:57.66]Hkrj pzj lsgye ps dsv yxed\r\n[04:02.34]Ovp ysrj ka xyy K zxrj ps hkrj （pzxp'a xyy K hsp ps hkrj）\r\n[04:06.68]Ovp fd ysrj ka xyy K zxrj ps hkrj\r\n[04:11.37]Lkpzsvp dsv K esw'p pzkwm K nxw ykrj\r\n[04:16.30]K lkaz K nsvye hkrj pzj lsgye ps dsv\r\n[04:21.18]Ovp ysrj ka xyy K zxrj ps hkrj\r\n",
+      "yrc": "[ti:all i have to give]\n[ar:backstreet boys]\n[al:274677]\n[by:]\n[offset:0]\n[1636,3113](1636,833,0)Xyy (2469,502,0)k (2971,594,0)zxrj (3565,650,0)ps (4215,525,0)hkrj\n[4449,4995](4449,747,0)Oxnmapgjjp (5196,4242,0)osda\n[9144,5876](9144,659,0)K (9803,325,0)esw'p (10128,1714,0)mwsl (11842,436,0)lzxp (12278,310,0)zj (12588,730,0)esja (13318,278,0)ps (13596,475,0)fxmj (14071,379,0)dsv (14450,570,0)ngd\n[14720,4723](14720,785,0)Ovp (15505,310,0)K (15815,287,0)oj (16102,396,0)pzjgj (16498,424,0)ps (16922,366,0)fxmj (17288,389,0)dsv (17677,1758,0)afkyj\n[19143,4770](19143,621,0)K (19764,311,0)esw'p (20075,1064,0)zxrj (21139,537,0)x (21676,319,0)bxwnd (21995,1916,0)nxg\n[23613,5823](23613,627,0)Ps (24240,494,0)hjp (24734,297,0)ps (25031,292,0)dsv (25323,355,0)K'e (25678,746,0)lxym (26424,337,0)x (26761,249,0)pzsvaxwe (27010,2419,0)fkyja\n[29136,5798](29136,677,0)K (29813,330,0)esw'p (30143,1854,0)nxgj (31997,298,0)kb (32295,482,0)zj (32777,614,0)ovda (33391,250,0)dsv (33641,976,0)wknj (34617,309,0)pzkwha\n[34634,4886](34634,773,0)Esja (35407,353,0)zka (35760,297,0)hkbpa (36057,595,0)nsfj (36652,263,0)bgsf (36915,458,0)pzj (37373,2147,0)zjxgp\n[39220,4482](39220,624,0)K (39844,273,0)esw'p (40117,1228,0)mwsl (41345,282,0)ovp (41627,274,0)kb (41901,283,0)dsv (42184,288,0)ljgj (42472,445,0)fd (42917,779,0)hkgy\n[43402,5331](43402,599,0)K'e (44001,350,0)fxmj (44351,358,0)kp (44709,436,0)as (45145,293,0)lj'e (45438,848,0)wjrjg (46286,594,0)oj (46880,1848,0)xuxgp\n[48433,5529](48433,663,0)Ovp (49096,335,0)fd (49431,323,0)ysrj (49754,462,0)ka (50216,753,0)xyy (50969,322,0)K (51291,889,0)zxrj (52180,301,0)ps (52481,1479,0)hkrj\n[53662,5237](53662,546,0)Lkpzsvp (54208,481,0)dsv (54689,292,0)K (54981,793,0)esw'p (55774,426,0)pzkwm (56200,994,0)K (57194,303,0)nxw (57497,1398,0)ykrj\n[58599,5246](58599,561,0)K (59160,317,0)lkaz (59477,302,0)K (59779,357,0)nsvye (60136,831,0)hkrj (60967,308,0)pzj (61275,812,0)lsgye (62087,375,0)ps (62462,1379,0)dsv\n[63545,6089](63545,587,0)Ovp (64132,305,0)ysrj (64437,315,0)ka (64752,286,0)xyy (65038,435,0)K (65473,446,0)zxrj (65919,371,0)ps (66290,3338,0)hkrj\n[69334,2743](69334,544,0)Lzjw (69878,276,0)dsv (70154,953,0)pxym (71107,265,0)（lzjw (71372,267,0)dsv (71639,436,0)pxym）\n[71777,2703](71777,555,0)Esja (72332,255,0)kp (72587,532,0)ajjf (73119,281,0)ykmj (73400,313,0)zj'a (73713,766,0)wsp\n[74847,4889](74847,600,0)Jrjw (75447,460,0)ykapjwkwh (75907,306,0)ps (76213,478,0)x (76691,222,0)lsgye (76913,562,0)dsv (77475,2257,0)axd\n[79532,4398](79532,570,0)Pzxp'a (80102,411,0)smxd (80513,947,0)oxoj (81460,362,0)qvap (81822,242,0)pjyy (82064,306,0)fj (82370,284,0)dsvg (82654,1268,0)ugsoyjfa\n[83630,6046](83630,646,0)K'yy (84276,295,0)pgd (84571,351,0)fd (84922,299,0)ojap (85221,378,0)ps (85599,491,0)mkaa (86090,293,0)pzjf (86383,768,0)xyy (87151,2519,0)xlxd\n[89376,2841](89376,570,0)Esja (89946,253,0)zj (90199,888,0)yjxrj (91087,229,0)（Esja (91316,234,0)zj (91550,666,0)yjxrj）\n[91917,3034](91917,555,0)Lzjw (92472,213,0)dsv (92685,607,0)wjje (93292,273,0)zkf (93565,299,0)pzj (93864,1086,0)fsap\n[94651,4891](94651,574,0)Es (95225,355,0)zka (95580,617,0)bgkjwea (96197,610,0)hjp (96807,433,0)xyy (97240,361,0)dsvg (97601,1937,0)pkfj\n[99376,4848](99376,682,0)Oxod (100058,1326,0)uyjxaj (101384,357,0)K'f (101741,502,0)sw (102243,442,0)fd (102685,1536,0)mwjja\n[104005,4996](104005,614,0)Ugxdkwh (104619,868,0)bsg (105487,334,0)pzj (105821,301,0)exd (106122,464,0)pzxp (106586,550,0)dsv'yy (107136,264,0)oj (107400,1598,0)fkwj\n[108701,5205](108701,644,0)Ovp (109345,307,0)fd (109652,571,0)ysrj (110223,395,0)ka (110618,524,0)xyy (111142,289,0)K (111431,865,0)zxrj (112296,347,0)ps (112643,1259,0)hkrj\n[113606,5302](113606,742,0)Lkpzsvp (114348,1091,0)dsv (115439,422,0)K (115861,311,0)esw'p (116172,606,0)pzkwm (116778,541,0)K (117319,336,0)nxw (117655,1248,0)ykrj\n[118608,5393](118608,671,0)K (119279,324,0)Lkaz (119603,320,0)K (119923,1076,0)nsvye (120999,279,0)hkrj (121278,322,0)pzj (121600,737,0)lsgye (122337,301,0)ps (122638,1359,0)dsv\n[123701,7644](123701,594,0)Ovp (124295,326,0)ysrj (124621,342,0)ka (124963,313,0)xyy (125276,443,0)K (125719,383,0)zxrj (126102,374,0)ps (126476,2657,0)hkrj (129133,716,0)ps (129849,1490,0)dsv\n[131045,1386](131045,673,0)Zjd (131718,712,0)hkgy\n[132131,7830](132131,597,0)Zjd (132728,1330,0)hkgy (134058,271,0)K (134329,307,0)esw'p (134636,522,0)lxwp (135158,285,0)dsv (135443,473,0)ps (135916,272,0)ngd (136188,387,0)ws (136575,465,0)fsgj (137040,2921,0)kwakej\n[139661,5355](139661,1159,0)Lzss (140820,808,0)lzsyj (141628,957,0)pzj (142585,369,0)fjfsgd (142954,633,0)kw (143587,398,0)pzj (143985,1027,0)lsgye\n[144716,2743](144716,552,0)Nsvye (145268,324,0)wjrjg (145592,527,0)xee (146119,338,0)vu (146457,995,0)ps\n[147301,9567](147301,578,0)Xyy (147879,261,0)pzj (148140,993,0)ysrj (149133,674,0)K (149807,766,0)zxrj (150573,1584,0)kwakej (152157,412,0)K (152569,500,0)ysrj (153069,932,0)dsv (154001,2860,0)djxz\n[158594,2324](158594,575,0)Xwe (159169,221,0)K (159390,268,0)lkyy (159658,264,0)hkrj (159922,266,0)kp (160188,316,0)ps (160504,407,0)dsv\n[160618,7554](160618,579,0)（xyy (161197,224,0)K (161421,256,0)nxw (161677,240,0)hkrj (161917,286,0)xyy (162203,255,0)K (162458,253,0)nxw (162711,509,0)hkrj） (163220,995,0)Xyy (164215,262,0)xyy (164477,433,0)xyy (164910,911,0)xyy (165821,230,0)Jrjgd (166051,215,0)pzkwh (166266,236,0)K (166502,206,0)zxrj (166708,206,0)ka (166914,198,0)bsg (167112,1059,0)dsv\n[167872,4719](167872,1128,0)Dsv (169000,397,0)dsv (169397,263,0)dsv (169660,289,0)dsv (169949,279,0)dsv (170228,2356,0)dsv\n[171420,7553](171420,660,0)Lzxp (172080,253,0)K (172333,2388,0)wjje (174721,231,0)fd (174952,612,0)ysrj (175564,267,0)ka (175831,491,0)xyy (176322,286,0)pzjd (176608,467,0)K (177075,669,0)zxrj (177744,329,0)ps (178073,892,0)hkrj\n[178673,4136](178673,533,0)Xyy (179206,234,0)pzjd (179440,294,0)K (179734,302,0)zxrj (180036,282,0)ka (180318,697,0)bsg (181015,856,0)dsv (181871,242,0)fd (182113,240,0)ysrj (182353,256,0)ka (182609,191,0)xyy\n[182509,3861](182509,1257,0)K (183766,922,0)zxrj (184688,346,0)ps (185034,1334,0)hkrj\n[186070,5453](186070,1019,0)Lkpzsvp (187089,224,0)dsv (187313,279,0)K (187592,868,0)esw'p (188460,332,0)pzkwm (188792,974,0)K (189766,306,0)nxw (190072,1448,0)ykrj\n[191223,5257](191223,536,0)K (191759,299,0)lkaz (192058,274,0)K (192332,272,0)nsvye (192604,974,0)hkrj (193578,293,0)pzj (193871,872,0)lsgye (194743,268,0)ps (195011,1469,0)dsv\n[196180,5482](196180,546,0)Ovp (196726,291,0)ysrj (197017,310,0)ka (197327,296,0)xyy (197623,321,0)K (197944,488,0)zxrj (198432,341,0)ps (198773,973,0)hkrj (199746,205,0)（kp'a (199951,233,0)xyy (200184,228,0)pzjd (200412,613,0)K (201025,633,0)zxrj）\n[201362,5077](201362,541,0)Ovp (201903,298,0)fd (202201,343,0)ysrj (202544,678,0)ka (203222,274,0)xyy (203496,319,0)K (203815,807,0)zxrj (204622,390,0)ps (205012,1419,0)hkrj\n[206139,5227](206139,577,0)Lkpzsvp (206716,319,0)dsv (207035,554,0)K (207589,875,0)esw'p (208464,344,0)pzkwm (208808,810,0)K (209618,348,0)nxw (209966,1398,0)ykrj\n[211066,5214](211066,584,0)K (211650,317,0)lkaz (211967,470,0)K (212437,508,0)nsvye (212945,558,0)hkrj (213503,312,0)pzj (213815,783,0)lsgye (214598,395,0)ps (214993,1279,0)dsv\n[216147,10832](216147,583,0)Ovp (216730,300,0)ysrj (217030,335,0)ka (217365,513,0)xyy (217878,247,0)K (218125,386,0)zxrj (218511,323,0)ps (218834,3607,0)hkrj（hkrj (222441,484,0)ps (222925,4050,0)dsv）\n[226679,4827](226679,733,0)Sz (227412,1290,0)xyy (228702,299,0)（K (229001,915,0)zxrj (229916,262,0)ps (230178,1326,0)hkrj）\n[231206,5143](231206,571,0)Lkpzsvp (231777,289,0)dsv (232066,523,0)K (232589,930,0)esw'p (233519,368,0)（pzkwm (233887,771,0)K (234658,369,0)nxw (235027,1318,0)ykrj）\n[237660,4982](237660,968,0)Hkrj (238628,317,0)pzj (238945,980,0)lsgye (239925,266,0)ps (240191,1374,0)dsv (241565,1076,0)yxed\n[242342,4644](242342,513,0)Ovp (242855,269,0)ysrj (243124,337,0)ka (243461,286,0)xyy (243747,248,0)K (243995,204,0)zxrj (244199,388,0)ps (244587,1020,0)hkrj (245607,201,0)（pzxp'a (245808,203,0)xyy (246011,224,0)K (246235,215,0)hsp (246450,198,0)ps (246648,334,0)hkrj）\n[246686,4988](246686,595,0)Ovp (247281,285,0)fd (247566,370,0)ysrj (247936,401,0)ka (248337,263,0)xyy (248600,334,0)K (248934,922,0)zxrj (249856,352,0)ps (250208,1459,0)hkrj\n[251374,5226](251374,677,0)Lkpzsvp (252051,394,0)dsv (252445,265,0)K (252710,932,0)esw'p (253642,339,0)pzkwm (253981,886,0)K (254867,297,0)nxw (255164,1428,0)ykrj\n[256300,5187](256300,575,0)K (256875,335,0)lkaz (257210,403,0)K (257613,249,0)nsvye (257862,706,0)hkrj (258568,360,0)pzj (258928,1010,0)lsgye (259938,242,0)ps (260180,1299,0)dsv\n[261187,3390](261187,667,0)Ovp (261854,349,0)ysrj (262203,558,0)ka (262761,256,0)xyy (263017,298,0)K (263315,356,0)zxrj (263671,332,0)ps (264577,568,0)hkrj",
+      "tr": "[00:09.144]㼤䧂䇛䑚，㸁㑺䈪䤠㚛㣉䅏㔦䈪\n[00:14.720]㺒㼤䔽䭝䒥䔁䞢䅏㫙㼺\n[00:19.143]㼤䚕㕓䠹䕒㢌㙖㳨\n[00:23.613]㥘䈪㝮䅏㒍㯞，㼤䧂㧳䧁㸭㹾䀌㿫䎕\n[00:29.136]㼤䧂䭝㑎㸁䁁䯫㓋䪺䅏䮌䦱㦄㒽\n[00:34.634]㸁㢌㾎㾑䁁䯫㹫㒘㺭䣪\n[00:39.220]㼤䧂䇛䑚，㺒䠃㸵䅏䁁㼤㢌㞾㾲\n[00:43.402]㼤䔽㐄䣪㐄㘟，㿘㣢㼤䩥䙓䧂㕾䖧\n[00:48.433]㺒㼤㢌䤬䁁㼤㲩䖛䪺䅏㢌㐄㮭\n[00:53.662]䚕㕓䅏，㼤䧂㛱㥘㼤䕜㿘㱧㩣䚡䰣\n[00:58.599]㼤㟢䗄㼤䕜㿘㚆䃈㽛㛚䵚䪺䅏\n[01:03.545]㺒䤬䁁㼤㻭㔢䖛䪺㢌㦄㒽\n[01:09.334]㱭䅏㔅䑐䬬\n[01:11.777]䁁䧂䁁㜮㯒㸁䚕㕓\n[01:14.847]䏆䣪㭗䅏㷺㐀㔢㜑䑐\n[01:19.532]䚕㕓㨈䓥，㭢㪵䳃䇚㼤䅏㢌㱐㶥\n[01:23.630]㼤䔽㭢㼤㲩䖛㯛㔑䩥䧮䧮㻿䨋\n[01:29.376]䁁䯫㸁䐞㒍䖧㸮\n[01:31.917]㱭䅏䈺㒆㘳㸁㢌䬬㢄\n[01:34.651]䁁䯫㸁㢌䳦㾲䏆䨋䈪䅏㲩㕓㢌䬬㖈\n[01:39.376]䑭㨰㕉䅏䈪，㼤䋞䶢䔇䇤\n[01:44.005]㚪䘃㞿㕓㔢㱥䅏䖛㼷㝞㼤\n[01:48.701]㺒㼤㢌䤬䁁㼤㲩䖛䪺䅏㢌㐄㮭\n[01:53.606]䚕㕓䅏，㼤䧂㛱㥘㼤䕜㿘㱧㩣䚡䰣\n[01:58.608]㼤㟢䗄㼤䕜㿘㚆䃈㽛㛚䵚䪺䅏\n[02:03.701]㺒䤬䁁㼤㻭㔢䖛䪺㢌㦄㒽\n[02:11.045]䜬㞾㨮\n[02:12.131]䜬㞾㨮,㼤䧂㘳䅏䞤䭝䣪㣏㔦䜡\n[02:19.661]㐄㛚䵚㢌䶝䁘\n[02:24.716]㴐䉚䔰㵳䀔䧂䓍\n[02:27.301]㼤㴞䅏㢌䤬 㼤䤬䅏\n[02:38.594]㼤䔽䪺䅏\n[02:40.618]（㼤㐄䙸䪺䅏）㼤㐄㕓㢌䙸䪺䅏\n[02:47.872]䅏~~~~~\n[02:51.420]䤬䁁㼤㻭㔢䖛䪺㢌㦄㒽\n[02:58.673]䤬䁁㼤㻭㔢䖛䪺㢌㦄㒽\n[03:02.509]㼤㞃䩮䪺\n[03:06.070]䍜䨋䅏㼤㰄䰣䧂㩬䨋\n[03:11.223]㼤㟢䗄㚆㐄㛚䵚䜘䪺䅏\n[03:16.180]㺒䤬䁁㼤㻭㔢䖛䪺㢌㦄㒽 （䲚䁁㼤㻭㔢㕓㢌）\n[03:21.362]㺒䤬䁁㼤㻭㔢䖛䪺㢌㦄㒽\n[03:26.139]㼤㟢䗄㚆㐄㛚䵚䜘䪺䅏\n[03:31.066]㼤㟢䗄㚆㐄㛚䵚䜘䪺䅏\n[03:36.147]㺒䤬䁁㼤㻭㔢䖛䪺㢌㦄㒽（䪺䅏）\n[03:46.679]䘪 㐄㮭 （㼤㞃䩮䪺）\n[03:51.206]䍜䨋䅏㼤㰄䰣䧂㩬䨋\n[03:57.660]㚆㛚䵚䜘䪺䅏，㼤㢌㞾䰥\n[04:02.342]㺒䤬䁁㼤㻭㔢䖛䪺㢌㦄㒽（䲚䁁㼤㻭㔢䖛䪺㢌）\n[04:06.686]㺒䤬䁁㼤㻭㔢䖛䪺㢌㦄㒽\n[04:11.374]䍜䨋䅏㼤㰄䰣䧂㩬䨋\n[04:16.300]㼤㟢䗄㚆㐄㛚䵚䜘䪺䅏\n[04:21.187]㺒䤬䁁㼤㻭㔢䖛䪺㢌㦄㒽",
+      "title": "All I Have to Give",
+      "artist": "Backstreet Boys",
+      "album": "The Hits: Chapter One",
+      "cover": "https://imge.kugou.com/stdmusic/480/20260604/20260604062722552348.jpg",
+      "duration_secs": 276
+    },
+    "kuwo": {},
+    "lrclib": {
+      "lyrics": "[00:08.97] K esw'p mwsl lzxp zj esja ps fxmj dsv ngd\n[00:14.83] Ovp K'yy oj pzjgj ps fxmj dsv afkyj\n[00:18.82] K esw'p zxrj x bxwnd nxg\n[00:23.37] Ps hjp ps dsv, K'e lxym x pzsvaxwe fkyja\n[00:28.76] K esw'p nxgj kb zj ovda dsv wknj pzkwha\n[00:34.05] Esja zka hkbpa nsfj bgsf pzj zjxgp?\n[00:38.66] K esw'p mwsl, ovp kb dsv ljgj fd hkgy\n[00:43.42] K'e fxmj kp as lj'e wjrjg oj xuxgp\n[00:48.56] Ovp fd ysrj ka xyy K zxrj ps hkrj\n[00:53.38] Lkpzsvp dsv K esw'p pzkwm K nxw ykrj\n[00:58.66] K lkaz K nsvye hkrj pzj lsgye ps dsv\n[01:03.76] Ovp ysrj ka xyy K zxrj ps hkrj\n[01:08.83] Lzjw dsv pxym, esja kp ajjf ykmj zj'a wsp\n[01:14.15] Jrjw ykapjwkwh ps x lsge dsv axd?\n[01:18.71] Pzxp'a smxd, oxod, qvap pjyy fj dsvg ugsoyjfa\n[01:23.88] K'yy pgd fd ojap ps mkaa pzjf xyy xlxd\n[01:29.14] Esja zj yjxrj lzjw dsv wjje zkf pzj fsap?\n[01:34.49] Esja zka bgkjwea hjp xyy dsvg pkfj?\n[01:39.03] Oxod uyjxaj, K'f sw fd mwjja\n[01:43.89] Ugxdkwh bsg pzj exd pzxp dsv'yy oj fkwj\n[01:48.31] Ovp fd ysrj ka xyy K zxrj ps hkrj\n[01:53.47] Lkpzsvp dsv K esw'p pzkwm K nxw ykrj\n[01:58.85] K lkaz K nsvye hkrj pzj lsgye ps dsv\n[02:03.86] Ovp ysrj ka xyy K zxrj ps hkrj\n[02:08.63] Sz, ps dsv\n[02:10.56] Zjd hkgy (Zjd hkgy)\n[02:13.73] K esw'p lxwp dsv ps ngd ws fsgj kwakej\n[02:18.82] Szz, xyy pzj fswjd kw pzj lsgye\n[02:24.44] Nsvye wjrjg xee vu ps xyy pzj ysrj\n[02:28.41] K zxrj kwakej... K ysrj dsv, oxod\n[02:37.81] Xwe K lkyy hkrj kp ps dsv\n[02:40.42] Xyy K nxw hkrj, xyy K nxw hkrj\n[02:44.72] Jrjgdpzkwh K zxrj ka bsg dsv, dsv, dsv\n[02:49.03] Dsv hsp lzxp K wjje, dsv hsp lzxp K wjje\n[02:53.89] Fd ysrkw', xyy pzxp K zxrj ps hkrj\n[02:58.19] Xyy pzxp K zxrj ka bsg dsv\n[03:01.17] Fd ysrj ka xyy...\n[03:03.26] K zxrj ps hkrj\n[03:05.90] Lkpzsvp dsv K esw'p pzkwm K nxw ykrj (K esw'p pzkwm pzxp K nxw ykrj)\n[03:11.03] K lkaz K nsvye hkrj pzj lsgye ps dsv (K lxwwx hkrj pzj lsgye ps dsv)\n[03:16.05] Ovp ysrj ka xyy K zxrj ps hkrj (Kp'a xyy pzxp K zxrj)\n[03:20.67] Ovp fd ysrj ka xyy K zxrj ps hkrj\n[03:25.70] Lkpzsvp dsv K esw'p pzkwm K nxw ykrj\n[03:30.79] K lkaz K nsvye hkrj pzj lsgye ps dsv\n[03:35.50] Ovp ysrj ka xyy K zxrj ps hkrj\n[03:41.79] Ps dsv\n[03:45.76] Szz...\n[03:48.15] Xyy K zxrj ps hkrj\n[03:50.89] Lkpzsvp dsv K esw'p pzkwm K nxw ykrj\n[03:56.69] Hkrj pzj lsgye ps dsv, yxed\n[04:00.93] Ovp ysrj ka xyy K zxrj ps hkrj (Pzxp'a xyy K hsp ps hkrj)\n[04:06.00] Ovp fd ysrj ka xyy K zxrj ps hkrj\n[04:10.87] Lkpzsvp dsv K esw'p pzkwm K nxw ykrj (K esw'p pzkwm pzxp K nxw ykrj)\n[04:13.50] K lkaz K nsvye hkrj pzj lsgye ps dsv\n[04:13.58] Ovp ysrj ka xyy K zxrj ps hkrj\n[04:13.59] ",
+      "title": "All I Have to Give (The Conversation Mix)",
+      "artist": "Backstreet Boys",
+      "album": "Backstreet's Back",
+      "duration_secs": 254.8245
+    },
+    "lyricfind": {},
+    "musixmatch": {
+      "lyrics": "[00:09.66] K esw'p mwsl lzxp zj esja ps fxmj dsv ngd\n[00:14.07] Ovp K'yy oj pzjgj ps fxmj dsv afkyj\n[00:18.32] K esw'p zxrj x bxwnd nxg\n[00:23.10] Ps hjp ps dsv K'e lxym x pzsvaxwe fkyja\n[00:28.43] K esw'p nxgj kb zj ovda dsv wknj pzkwha\n[00:34.03] Esja zka hkbpa nsfj bgsf pzj zjxgp\n[00:38.58] K esw'p mwsl...\n[00:40.72] Ovp kb dsv ljgj fd hkgy...\n[00:43.14] K'e fxmj kp as lj'e wjrjg oj xuxgp\n[00:48.14] Ovp fd ysrj ka xyy K zxrj ps hkrj\n[00:53.03] Lkpzsvp dsv K esw'p pzkwm K nxw ykrj\n[00:58.20] K lkaz K nsvye hkrj pzj lsgye ps dsv... ovp\n[01:03.79] Ysrj ka xyy K zxrj ps hkrj\n[01:08.49] Lzjw dsv pxym\n[01:10.46] Esja kp ajjf ykmj zj'a wsp jrjw\n[01:14.46] Ykapjwkwh ps x lsge dsv axd\n[01:19.13] Pzxp'a sm oxoj, qvap pjyy fj dsvg ugsoyjfa\n[01:23.44] K'yy pgd fd ojap ps mkaa pzjf xyy xlxd...\n[01:28.44] Esja zj yjxrj lzjw dsv wjje zkf pzj fsap\n[01:34.12] Esja zka bgkjwea hjp xyy dsvg pkfj\n[01:38.17] Oxod uyjxaj, K'f sw fd mwjja\n[01:43.29] Ugxdkwh bsg pzj exd pzxp dsv'yy oj fkwj\n[01:48.21] Ovp fd ysrj ka xyy K zxrj ps hkrj\n[01:52.85] Lkpzsvp dsv K esw'p pzkwm K nxw ykrj\n[01:58.20] K lkaz K nsvye hkrj pzj lsgye ps dsv... ovp\n[02:03.57] Ysrj ka xyy K zxrj ps hkrj\n[02:08.97] Ps dsv... Zjd hkgy\n[02:12.27] K esw'p lxwp dsv ps ngd ws fsgj kwakej\n[02:18.57] Xyy pzj fswjd kw pzj lsgye\n[02:24.53] Nsvye wjrjg xee vu ps pzj ysrj\n[02:27.80] K zxrj kwakej...\n[02:31.63] K ysrj dsv\n[02:33.21] Xwe K lkyy hkrj kp ps dsv\n[02:40.93] Xyy K nxw hkrj, xyy K nxw hkrj\n[02:44.93] Jrjgdpzkwh K zxrj ka bsg dsv\n[02:47.24] Ovp ysrj ka xyy K zxrj ps hkrj\n[02:57.94] Ovp fd ysrj ka xyy K zxrj ps hkrj\n[03:06.01] Lkpzsvp dsv K esw'p pzkwm K nxw ykrj\n[03:10.66] K lkaz K nsvye hkrj pzj lsgye ps dsv... ovp\n[03:16.49] Ysrj ka xyy K zxrj ps hkrj Ovp fd ysrj ka xyy K zxrj ps hkrj\n[03:25.96] Lkpzsvp dsv K esw'p pzkwm K nxw ykrj\n[03:30.70] K lkaz K nsvye hkrj pzj lsgye ps dsv... ovp\n[03:36.48] Ysrj ka xyy K zxrj ps hkrj ps dsv\n[03:46.45] ",
+      "title": "All I Have to Give",
+      "artist": "Full Force \u0026 Backstreet Boys",
+      "album": "Still Standing",
+      "cover": "https://s.mxmcdn.net/images-storage/albums/5/1/1/7/7/5/26577115_500_500.jpg",
+      "duration_secs": 244
+    },
+    "netease": {
+      "netease": {
+        "cover": "https://p1.music.126.net/XqwpdcWDLaVWpgjox5jy9g==/109951165991886879.jpg?param=800y800",
+        "song_url": "https://music.163.com/song?id=28452058",
+        "lyrics": "[00:00.00]Xyy K Zxrj Ps Hkrj （KK -Pzj Nswrjgaxpksw Fkc ）-Oxnmapgjjp Osda （䁞䭗㨮）\n[00:00.739]Sz\n[00:03.211]Jrjgdpzkwh K zxrj ka bsg dsv\n[00:28.38]Fd ysrj fd ysrj\n[00:58.20]Fd ysrj fd ysrj\n[01:00.474]Xwe fd ysrj ka bsg dsv\n[01:02.938]Fd ysrj fd ysrj\n[01:05.281]K'f hswwx hkrj kp ps dsv\n[01:07.796]Fd ysrj fd ysrj\n[01:10.763]Fd ysrj ka xyy K zxrj ps hkrj\n[01:58.13]Fd ysrj fd ysrj\n[02:00.465]Xyy fd ysrj ka bsg dsv\n[02:02.889]Fd ysrj fd ysrj\n[02:04.873]K'f hswwx hkrj kp ps dsv\n[02:07.942]Fd ysrj fd ysrj\n[02:10.676]Fd ysrj ka xyy K zxrj ps hkrj\n[02:16.358]Oxod\n[02:43.34]Fd ysrj fd ysrj\n[02:45.273]Xyy fd ysrj ka bsg dsv\n[02:47.833]Fd ysrj fd ysrj\n[02:50.48]K'f hswwx hkrj kp ps dsv\n[02:52.938]Fd ysrj fd ysrj\n[02:55.683]Ovp fd ysrj ka xyy K zxrj ps hkrj\n[03:26.445]Sz K zxrj ps dsv\n[03:30.752]Lkpzsvp dsv K esw'p pzkwm K nxw ykrj\n[03:37.45]Hkrj pzj lsgye ps dsv\n[03:40.798]Fd ysrj ka xyy K zxrj ps hkrj\n[03:44.639]Ovp ysrj ka xyy K zxrj ps hkrj\n[03:46.285]Fd ysrj ka xyy K zxrj ps hkrj\n[03:50.625]Lkpzsvp dsv K esw'p pzkwm K nxw ykrj\n[03:55.90]K lkaz K nsvye hkrj pzj lsgye ps dsv\n[04:00.634]Ovp ysrj ka xyy K zxrj ps hkrj\n",
+        "trans": "[00:00.00]\n[00:00.739]䆪\n[00:03.211]㼤㪳㕓㢌㔢㷱䙸㼷㝞䅏\n[00:28.38]㼤㢌䤬 㼤㢌䤬\n[00:58.20]㼤㢌䤬 㼤㢌䤬\n[01:00.474]㗊㼤㢌䤬㬁㥘䅏䶛䭝\n[01:02.938]㼤㢌䤬 㼤㢌䤬\n[01:05.281]㼤㐸㯛㐄㮭䣊䪺䅏\n[01:07.796]㼤㢌䤬 㼤㢌䤬\n[01:10.763]㼤㢌䤬䁁㼤㻭㔢㢌䢏䫯\n[01:58.13]㼤㢌䤬 㼤㢌䤬\n[02:00.465]㼤㐄㮭㢌䤬䙸䪺䅏\n[02:02.889]㼤㢌䤬 㼤㢌䤬\n[02:04.873]㼤㐸㯛㐄㮭䣊䪺䅏\n[02:07.942]㼤㢌䤬 㼤㢌䤬\n[02:10.676]㼤㢌䤬䁁㼤㻭㔢㢌䢏䫯\n[02:16.358]䮂䤬㢌\n[02:43.34]㼤㢌䤬 㼤㢌䤬\n[02:45.273]㼤㐄㮭㢌䤬䙸䪺䅏\n[02:47.833]㼤㢌䤬 㼤㢌䤬\n[02:50.48]㼤㐸㯛㐄㮭䣊䪺䅏\n[02:52.938]㼤㢌䤬 㼤㢌䤬\n[02:55.683]㺒㼤㢌䤬䁁㼤㻭㔢㢌䢏䫯\n[03:26.445]䆪 㼤㞃䩮䪺䅏\n[03:30.752]䍜䨋䅏㼤㯛䌨䝞䚡䶛\n[03:37.45]㿛䏞䪺䅏㐄㛚䵚\n[03:40.798]㼤㢌䤬䁁㼤㻭㔢㢌䢏䫯\n[03:44.639]㺒䤬䁁㼤䲦䖛䪺㭍㢌㔢㷱\n[03:46.285]㼤㢌䤬䁁㼤㻭㔢㢌䢏䫯\n[03:50.625]䍜䨋䅏㼤㯛䌨䝞䚡䶛\n[03:55.90]㿛䏞䪺䅏㐄㛚䵚\n[04:00.634]㺒䤬䁁㼤䲦䖛䪺㭍㢌㔢㷱",
+        "duration_secs": 256.04,
+        "artist": "Backstreet Boys",
+        "title": "All I Have to Give (The Conversation Mix)",
+        "album": "Backstreet's Back",
+        "song_id": 28452058,
+        "album_id": 1550465
+      }
+    },
+    "qq": {
+      "lyrics": "[ti:All I Have to Give]\n[ar:Backstreet Boys]\n[al:Backstreet's Back]\n[by:]\n[offset:0]\n[00:00.00]Xyy K Zxrj ps Hkrj - Oxnmapgjjp Osda\n[00:04.83]Written by：Bvyy Bsgnj\n[00:09.66]K esw'p mwsl lzxp zj esja ps fxmj dsv ngd\n[00:15.28]Ovp K'yy oj pzjgj ps fxmj dsv afkyj\n[00:19.60]K esw'p zxrj x bxwnd nxg\n[00:24.30]Ps hjp ps dsv K'e lxym x pzsvaxwe fkyja\n[00:29.85]K esw'p nxgj kb zj ovda dsv wknj pzkwha\n[00:35.00]Esja zka hkbpa nsfj bgsf pzj zjxgp\n[00:39.96]K esw'p mwsl ovp kb dsv ljgj fd hkgy\n[00:44.06]K'e fxmj kp as lj'e wjrjg oj xuxgp\n[00:49.03]Ovp fd ysrj ka xyy K zxrj ps hkrj\n[00:54.28]Lkpzsvp dsv K esw'p pzkwm K nsvye ykrj\n[00:59.34]K lkaz K nsvye hkrj pzj lsgye ps dsv\n[01:04.29]Ovp ysrj ka xyy K zxrj ps hkrj\n[01:09.86]Lzjw dsv pxym esja kp ajjf ykmj zj'a wsp\n[01:15.21]Jrjw ykapjwkwh ps x lsge dsv axd\n[01:19.80]Pzxp'a smxd oxoj qvap pjyy fj dsvg ugsoyjfa\n[01:24.18]K'yy pgd fd ojap ps mkaa pzjf xyy xlxd\n[01:29.96]Esja zj yjxrj lzjw dsv wjje zkf pzj fsap\n[01:35.05]Esja zka bgkjwea hjp xyy dsvg pkfj\n[01:39.82]Oxod uyjxaj K'f sw fd mwjja\n[01:44.61]Ugxdkwh bsg pzj exd pzxp dsv'yy oj fkwj\n[01:49.25]Ovp fd ysrj ka xyy K zxrj ps hkrj\n[01:54.20]Lkpzsvp dsv K esw'p pzkwm K nsvye ykrj\n[01:59.27]K lkaz K nsvye hkrj pzj lsgye ps dsv\n[02:04.32]Ovp ysrj ka xyy K zxrj ps hkrj\n[02:10.99]Zjd hkgy\n[02:14.21]K esw'p lxwp dsv ps ngd ws fsgj kwakej\n[02:20.26]Xyy pzj fswjd kw pzj lsgye\n[02:25.03]Nsvye wjrjg xee vu ps xyy pzj ysrj K zxrj kwakej K ysrj dsv oxod\n[02:38.85]Xwe K lkyy hkrj kp ps dsv\n[02:41.05]Xyy K nxw hkrj xyy K nxw hkrj\n[02:45.98]Jrjgdpzkwh K zxrj ka bsg dsv\n[02:54.89]Ovp ysrj ka xyy K zxrj ps hkrj\n[03:02.06]Ovp fd ysrj ka xyy K zxrj ps hkrj\n[03:06.78]Lkpzsvp dsv K esw'p pzkwm K nsvye ykrj\n[03:12.09]K lkaz K nsvye hkrj pzj lsgye ps dsv\n[03:17.05]Ovp ysrj ka xyy K zxrj ps hkrj\n[03:21.71]Ovp fd ysrj ka xyy K zxrj ps hkrj\n[03:26.72]Lkpzsvp dsv K esw'p pzkwm K nsvye ykrj\n[03:31.93]K lkaz K nsvye hkrj pzj lsgye ps dsv\n[03:36.66]Ovp ysrj ka xyy K zxrj ps hkrj\n[03:42.78]Ps dsv\n[03:49.07]K zxrj ps hkrj\n[03:51.84]Lkpzsvp dsv K esw'p pzkwm K nsvye ykrj\n[03:57.94]K lkaz K nsvye hkrj pzj lsgye ps dsv\n[04:02.08]Ovp ysrj ka xyy K zxrj ps hkrj\n[04:07.02]Ovp fd ysrj ka xyy K zxrj ps hkrj\n[04:11.88]Lkpzsvp dsv K esw'p pzkwm K nxw ykrj\n[04:16.39]K lkaz K nsvye hkrj pzj lsgye ps dsv\n[04:22.02]Ovp ysrj ka xyy K zxrj ps hkrj ps dsv",
+      "yrc": "[ti:All I Have to Give]\n[ar:Backstreet Boys]\n[al:Backstreet's Back]\n[by:]\n[offset:0]\n[0,4830](0,402,0)Xyy(402,134,0) (536,134,0)K(670,135,0) (805,536,0)Zxrj(1341,134,0) (1475,269,0)ps(1744,134,0) (1878,537,0)Hkrj(2415,134,0) (2549,134,0)-(2683,134,0) (2817,1342,0)Oxnmapgjjp(4159,134,0) (4293,537,0)Osda\n[4830,4830](4830,690,0)Lgkppjw(5520,690,0) (6210,690,0)od(6900,690,0)：(7590,690,0)Bvyy(8280,690,0) (8970,690,0)Bsgnj\n[9660,5255](9660,184,0)K (9844,358,0)esw'p (10202,1889,0)mwsl (12091,252,0)lzxp (12343,307,0)zj (12650,690,0)esja (13340,260,0)ps (13600,446,0)fxmj (14046,213,0)dsv (14259,656,0)ngd\n[15289,3371](15289,217,0)Ovp (15506,321,0)K'yy (15827,268,0)oj (16095,692,0)pzjgj (16787,177,0)ps (16964,200,0)fxmj (17164,480,0)dsv (17644,1016,0)afkyj\n[19604,3933](19604,299,0)K (19903,300,0)esw'p (20203,1204,0)zxrj (21407,258,0)x (21665,1015,0)bxwnd (22680,857,0)nxg\n[24301,4523](24301,192,0)Ps (24493,208,0)hjp (24701,266,0)ps (24967,242,0)dsv (25209,349,0)K'e (25558,687,0)lxym (26245,407,0)x (26652,691,0)pzsvaxwe (27343,1481,0)fkyja\n[29852,4958](29852,211,0)K (30063,213,0)esw'p (30276,1994,0)nxgj (32270,213,0)kb (32483,237,0)zj (32720,784,0)ovda (33504,220,0)dsv (33724,319,0)wknj (34043,767,0)pzkwha\n[35002,4176](35002,242,0)Esja (35244,276,0)zka (35520,909,0)hkbpa (36429,331,0)nsfj (36760,389,0)bgsf (37149,624,0)pzj (37773,1405,0)zjxgp\n[39964,3903](39964,205,0)K (40169,174,0)esw'p (40343,1418,0)mwsl (41761,190,0)ovp (41951,206,0)kb (42157,286,0)dsv (42443,287,0)ljgj (42730,576,0)fd (43306,561,0)hkgy\n[44065,4604](44065,231,0)K'e (44296,289,0)fxmj (44585,294,0)kp (44879,376,0)as (45255,336,0)lj'e (45591,898,0)wjrjg (46489,582,0)oj (47071,1598,0)xuxgp\n[49036,5008](49036,278,0)Ovp (49314,192,0)fd (49506,603,0)ysrj (50109,234,0)ka (50343,935,0)xyy (51278,203,0)K (51481,855,0)zxrj (52336,311,0)ps (52647,1397,0)hkrj\n[54287,4842](54287,360,0)Lkpzsvp (54647,294,0)dsv (54941,350,0)K (55291,804,0)esw'p (56095,418,0)pzkwm (56513,1072,0)K (57585,207,0)nsvye (57792,1337,0)ykrj\n[59349,4494](59349,211,0)K (59560,200,0)lkaz (59760,260,0)K (60020,279,0)nsvye (60299,869,0)hkrj (61168,307,0)pzj (61475,1021,0)lsgye (62496,200,0)ps (62696,1147,0)dsv\n[64299,4430](64299,241,0)Ovp (64540,227,0)ysrj (64767,192,0)ka (64959,381,0)xyy (65340,287,0)K (65627,646,0)zxrj (66273,295,0)ps (66568,2161,0)hkrj\n[69866,4686](69866,219,0)Lzjw (70085,189,0)dsv (70274,2066,0)pxym (72340,198,0)esja (72538,209,0)kp (72747,925,0)ajjf (73672,178,0)ykmj (73850,221,0)zj'a (74071,481,0)wsp\n[75217,3480](75217,189,0)Jrjw (75406,957,0)ykapjwkwh (76363,258,0)ps (76621,193,0)x (76814,382,0)lsge (77196,551,0)dsv (77747,950,0)axd\n[79802,4126](79802,215,0)Pzxp'a (80017,871,0)smxd (80888,918,0)oxoj (81806,188,0)qvap (81994,204,0)pjyy (82198,201,0)fj (82399,264,0)dsvg (82663,1265,0)ugsoyjfa\n[84185,5599](84185,212,0)K'yy (84397,227,0)pgd (84624,216,0)fd (84840,376,0)ojap (85216,271,0)ps (85487,678,0)mkaa (86165,380,0)pzjf (86545,473,0)xyy (87018,2766,0)xlxd\n[89964,4786](89964,204,0)Esja (90168,181,0)zj (90349,1950,0)yjxrj (92299,201,0)lzjw (92500,181,0)dsv (92681,739,0)wjje (93420,256,0)zkf (93676,221,0)pzj (93897,853,0)fsap\n[95050,4266](95050,192,0)Esja (95242,247,0)zka (95489,833,0)bgkjwea (96322,228,0)hjp (96550,768,0)xyy (97318,436,0)dsvg (97754,1562,0)pkfj\n[99824,4153](99824,384,0)Oxod (100208,1310,0)uyjxaj (101518,292,0)K'f (101810,646,0)sw (102456,374,0)fd (102830,1147,0)mwjja\n[104610,3965](104610,381,0)Ugxdkwh (104991,304,0)bsg (105295,214,0)pzj (105509,658,0)exd (106167,359,0)pzxp (106526,536,0)dsv'yy (107062,396,0)oj (107458,1117,0)fkwj\n[109250,4274](109250,214,0)Ovp (109464,187,0)fd (109651,477,0)ysrj (110128,211,0)ka (110339,983,0)xyy (111322,208,0)K (111530,907,0)zxrj (112437,272,0)ps (112709,815,0)hkrj\n[114204,4728](114204,413,0)Lkpzsvp (114617,260,0)dsv (114877,345,0)K (115222,1032,0)esw'p (116254,263,0)pzkwm (116517,917,0)K (117434,336,0)nsvye (117770,1162,0)ykrj\n[119275,4793](119275,237,0)K (119512,221,0)lkaz (119733,247,0)K (119980,300,0)nsvye (120280,744,0)hkrj (121024,430,0)pzj (121454,993,0)lsgye (122447,310,0)ps (122757,1311,0)dsv\n[124320,4760](124320,236,0)Ovp (124556,217,0)ysrj (124773,187,0)ka (124960,363,0)xyy (125323,302,0)K (125625,711,0)zxrj (126336,271,0)ps (126607,2473,0)hkrj\n[130993,2735](130993,626,0)Zjd (131619,2109,0)hkgy\n[134215,4914](134215,204,0)K (134419,203,0)esw'p (134622,302,0)lxwp (134924,280,0)dsv (135204,295,0)ps (135499,686,0)ngd (136185,308,0)ws (136493,647,0)fsgj (137140,1989,0)kwakej\n[140267,4759](140267,2453,0)Xyy (142720,247,0)pzj (142967,583,0)fswjd (143550,206,0)kw (143756,195,0)pzj (143951,1075,0)lsgye\n[145032,9934](145032,197,0)Nsvye (145229,594,0)wjrjg (145823,453,0)xee (146276,402,0)vu (146678,1002,0)ps (147680,220,0)xyy (147900,176,0)pzj (148076,1045,0)ysrj (149121,765,0)K (149886,450,0)zxrj (150336,1923,0)kwakej (152259,303,0)K (152562,216,0)ysrj (152778,1389,0)dsv (154167,799,0)oxod\n[158855,2194](158855,229,0)Xwe (159084,216,0)K (159300,167,0)lkyy (159467,294,0)hkrj (159761,202,0)kp (159963,324,0)ps (160287,762,0)dsv\n[161056,2016](161056,200,0)Xyy (161256,182,0)K (161438,151,0)nxw (161589,271,0)hkrj (161860,234,0)xyy (162094,287,0)K (162381,203,0)nxw (162584,488,0)hkrj\n[165980,1957](165980,238,0)Jrjgdpzkwh (166218,177,0)K (166395,222,0)zxrj (166617,191,0)ka (166808,322,0)bsg (167130,807,0)dsv\n[174891,6772](174891,192,0)Ovp (175083,286,0)ysrj (175369,309,0)ka (175678,393,0)xyy (176071,225,0)K (176296,1204,0)zxrj (177500,260,0)ps (177760,3903,0)hkrj\n[182068,4636](182068,214,0)Ovp (182282,161,0)fd (182443,277,0)ysrj (182720,202,0)ka (182922,1119,0)xyy (184041,234,0)K (184275,836,0)zxrj (185111,177,0)ps (185288,1416,0)hkrj\n[186783,4695](186783,339,0)Lkpzsvp (187122,640,0)dsv (187762,211,0)K (187973,500,0)esw'p (188473,564,0)pzkwm (189037,1000,0)K (190037,274,0)nsvye (190311,1167,0)ykrj\n[192097,4221](192097,198,0)K (192295,219,0)lkaz (192514,156,0)K (192670,186,0)nsvye (192856,826,0)hkrj (193682,304,0)pzj (193986,896,0)lsgye (194882,354,0)ps (195236,1082,0)dsv\n[197053,3250](197053,206,0)Ovp (197259,193,0)ysrj (197452,155,0)ka (197607,201,0)xyy (197808,404,0)K (198212,603,0)zxrj (198815,311,0)ps (199126,1177,0)hkrj\n[201718,4932](201718,200,0)Ovp (201918,217,0)fd (202135,479,0)ysrj (202614,190,0)ka (202804,1048,0)xyy (203852,208,0)K (204060,995,0)zxrj (205055,228,0)ps (205283,1367,0)hkrj\n[206728,5202](206728,453,0)Lkpzsvp (207181,268,0)dsv (207449,292,0)K (207741,1024,0)esw'p (208765,370,0)pzkwm (209135,945,0)K (210080,235,0)nsvye (210315,1615,0)ykrj\n[211938,4388](211938,200,0)K (212138,200,0)lkaz (212338,192,0)K (212530,265,0)nsvye (212795,930,0)hkrj (213725,238,0)pzj (213963,1098,0)lsgye (215061,188,0)ps (215249,1077,0)dsv\n[216667,4499](216667,195,0)Ovp (216862,292,0)ysrj (217154,263,0)ka (217417,310,0)xyy (217727,469,0)K (218196,629,0)zxrj (218825,206,0)ps (219031,2135,0)hkrj\n[222787,1600](222787,221,0)Ps (223008,1379,0)dsv\n[229074,2493](229074,193,0)K (229267,777,0)zxrj (230044,200,0)ps (230244,1323,0)hkrj\n[231846,5672](231846,347,0)Lkpzsvp (232193,321,0)dsv (232514,208,0)K (232722,926,0)esw'p (233648,290,0)pzkwm (233938,1027,0)K (234965,525,0)nsvye (235490,2028,0)ykrj\n[237946,3953](237946,169,0)K (238115,258,0)lkaz (238373,422,0)K (238795,292,0)nsvye (239087,404,0)hkrj (239491,173,0)pzj (239664,291,0)lsgye (239955,216,0)ps (240171,1728,0)dsv\n[242082,3688](242082,214,0)Ovp (242296,216,0)ysrj (242512,174,0)ka (242686,200,0)xyy (242886,193,0)K (243079,689,0)zxrj (243768,283,0)ps (244051,1719,0)hkrj\n[247020,4615](247020,174,0)Ovp (247194,167,0)fd (247361,259,0)ysrj (247620,177,0)ka (247797,1043,0)xyy (248840,196,0)K (249036,951,0)zxrj (249987,198,0)ps (250185,1450,0)hkrj\n[251880,4511](251880,310,0)Lkpzsvp (252190,331,0)dsv (252521,582,0)K (253103,659,0)esw'p (253762,282,0)pzkwm (254044,1000,0)K (255044,227,0)nxw (255271,1120,0)ykrj\n[256399,5099](256399,202,0)K (256601,287,0)lkaz (256888,291,0)K (257179,170,0)nsvye (257349,1627,0)hkrj (258976,181,0)pzj (259157,901,0)lsgye (260058,214,0)ps (260272,1226,0)dsv\n[262021,5905](262021,179,0)Ovp (262200,168,0)ysrj (262368,159,0)ka (262527,237,0)xyy (262764,392,0)K (263156,607,0)zxrj (263763,324,0)ps (264087,2820,0)hkrj (266907,514,0)ps (267421,505,0)dsv\n",
+      "tr": "[offset:0]\n[00:09.66]㼤䧂䇛䑚 㸁㑺䈪䤠㚛㣉䅏㔦䈪\n[00:15.28]㺒㼤䔽䭝䒥䔁䞢䅏㫙㼺\n[00:19.60]㼤䚕㕓䠹䕒㢌㙖㳨\n[00:24.30]㥘䈪㝮䅏㒍㯞 㼤䧂㧳䧁㸭㹾䀌㿫䎕\n[00:29.85]㼤䧂䭝㑎㸁䁁䯫㓋䪺䅏䮌䦱㦄㒽\n[00:35.00]㸁㢌㾎㾑䁁䯫㹫㒘㺭䣪\n[00:39.96]㼤䧂䇛䑚 㺒䠃㸵䅏䁁㼤㢌㞾㾲\n[00:44.06]㼤䔽㐄䣪㐄㘟 㿘㣢㼤䩥䙓䧂㕾䖧\n[00:49.03]㺒㼤㢌䤬䁁㼤㲩䖛䪺䅏㢌㐄㮭\n[00:54.28]䚕㕓䅏 㼤䧂㛱㥘㼤䕜㿘㱧㩣䚡䰣\n[00:59.34]㼤㟢䗄㼤䕜㿘㚆䃈㽛㛚䵚䪺䅏\n[01:04.29]㺒䤬䁁㼤㻭㔢䖛䪺㢌㦄㒽\n[01:09.86]㱭䅏㔅䑐䬬 䁁䧂䁁㜮㯒㸁䚕㕓\n[01:15.21]䏆䣪㭗䅏㷺㐀㔢㜑䑐\n[01:19.80]䚕㕓㨈䓥 㭢㪵䳃䇚㼤䅏㢌㱐㶥\n[01:24.18]㼤䔽㭢㼤㲩䖛㯛㔑䩥䧮䧮㻿䨋\n[01:29.96]䁁䯫㸁䐞㒍䖧㸮 㱭䅏䈺㒆㘳㸁㢌䬬㢄\n[01:35.05]䁁䯫㸁㢌䳦㾲䏆䨋䈪䅏㲩㕓㢌䬬㖈\n[01:39.82]䑭㨰㕉䅏䈪 㼤䋞䶢䔇䇤\n[01:44.61]㚪䘃㞿㕓㔢㱥䅏䖛㼷㝞㼤\n[01:49.25]㺒㼤㢌䤬䁁㼤㲩䖛䪺䅏㢌㐄㮭\n[01:54.20]䚕㕓䅏 㼤䧂㛱㥘㼤䕜㿘㱧㩣䚡䰣\n[01:59.27]㼤㟢䗄㼤䕜㿘㚆䃈㽛㛚䵚䪺䅏\n[02:04.32]㺒䤬䁁㼤㻭㔢䖛䪺㢌㦄㒽\n[02:10.99]䜬㞾㨮\n[02:14.21]㼤䧂㘳䅏䞤䭝䣪㣏㔦䜡\n[02:20.26]㐄㛚䵚㢌䶝䁘\n[02:25.03]㴐䉚䔰㵳䀔䧂䓍㼤㴞䅏㢌䤬 㼤䤬䅏\n[02:38.85]㼤䔽䪺䅏\n[02:41.05]㼤㐄䙸䪺䅏\n[02:45.98]㼤㐄㕓㢌䙸䪺䅏\n[02:54.89]䤬䁁㼤㻭㔢䖛䪺㢌㦄㒽\n[03:02.06]䤬䁁㼤㻭㔢䖛䪺㢌㦄㒽\n[03:06.78]䍜䨋䅏㼤㰄䰣䧂㩬䨋\n[03:12.09]㼤㟢䗄㚆㐄㛚䵚䜘䪺䅏\n[03:17.05]㺒䤬䁁㼤㻭㔢䖛䪺㢌㦄㒽\n[03:21.71]㺒䤬䁁㼤㻭㔢䖛䪺㢌㦄㒽\n[03:26.72]䍜䨋䅏㼤㰄䰣䧂㩬䨋\n[03:31.93]㼤㟢䗄㚆㐄㛚䵚䜘䪺䅏\n[03:36.66]㺒䤬䁁㼤㻭㔢䖛䪺㢌㦄㒽\n[03:42.78]䪺䅏\n[03:49.07]䲚䁁㼤㻭㔢㕓㢌\n[03:51.84]䍜䨋䅏㼤㰄䰣䧂㩬䨋\n[03:57.94]㼤㟢䗄㚆㐄㛚䵚䜘䪺䅏\n[04:02.08]㺒䤬䁁㼤㻭㔢䖛䪺㢌㦄㒽\n[04:07.02]㺒䤬䁁㼤㻭㔢䖛䪺㢌㦄㒽\n[04:11.88]䍜䨋䅏㼤㰄䰣䧂㩬䨋\n[04:16.39]㼤㟢䗄㚆㐄㛚䵚䜘䪺䅏\n[04:22.02]㺒䤬䁁㼤㻭㔢䖛䪺㢌㦄㒽",
+      "title": "All I Have to Give",
+      "artist": "Backstreet Boys",
+      "album": "Backstreet's Back",
+      "cover": "https://y.qq.com/music/photo_new/T002R800x800M000004LhDDa1NfIdX.jpg",
+      "duration_secs": 274
+    }
+  },
+  "expect": {
+    "winner": "lrclib",
+    "verdicts": {
+      "kugou": "accepted",
+      "lrclib": "accepted",
+      "musixmatch": "accepted",
+      "netease": "accepted",
+      "qq": "accepted"
+    },
+    "ranked": [
+      {
+        "source": "lrclib",
+        "score": 868,
+        "terms": [
+          {
+            "kind": "duration",
+            "points": 292
+          },
+          {
+            "kind": "lines",
+            "points": 56
+          },
+          {
+            "kind": "album",
+            "points": 150
+          },
+          {
+            "kind": "titleMatch",
+            "points": 120
+          },
+          {
+            "kind": "consensus",
+            "points": 250
+          }
+        ]
+      },
+      {
+        "source": "netease",
+        "score": 604,
+        "terms": [
+          {
+            "kind": "duration",
+            "points": 251
+          },
+          {
+            "kind": "lines",
+            "points": 33
+          },
+          {
+            "kind": "album",
+            "points": 150
+          },
+          {
+            "kind": "titleMatch",
+            "points": 120
+          },
+          {
+            "kind": "translation",
+            "points": 50
+          }
+        ],
+        "has_translation": true,
+        "translation_lang": "zh"
+      },
+      {
+        "source": "musixmatch",
+        "score": 590,
+        "terms": [
+          {
+            "kind": "duration",
+            "points": 176
+          },
+          {
+            "kind": "lines",
+            "points": 44
+          },
+          {
+            "kind": "titleMatch",
+            "points": 120
+          },
+          {
+            "kind": "consensus",
+            "points": 250
+          }
+        ]
+      },
+      {
+        "source": "qq",
+        "score": 76,
+        "terms": [
+          {
+            "kind": "durationOvershoot",
+            "points": -700
+          },
+          {
+            "kind": "wordTiming",
+            "points": 400
+          },
+          {
+            "kind": "lines",
+            "points": 56
+          },
+          {
+            "kind": "album",
+            "points": 150
+          },
+          {
+            "kind": "titleMatch",
+            "points": 120
+          },
+          {
+            "kind": "translation",
+            "points": 50
+          }
+        ],
+        "has_word_timing": true,
+        "has_translation": true,
+        "translation_lang": "zh"
+      },
+      {
+        "source": "kugou",
+        "score": 1,
+        "terms": [
+          {
+            "kind": "durationOvershoot",
+            "points": -700
+          },
+          {
+            "kind": "wordTiming",
+            "points": 400
+          },
+          {
+            "kind": "lines",
+            "points": 60
+          },
+          {
+            "kind": "titleMatch",
+            "points": 120
+          },
+          {
+            "kind": "translation",
+            "points": 50
+          }
+        ],
+        "has_word_timing": true,
+        "has_translation": true,
+        "translation_lang": "zh"
+      }
+    ],
+    "winner_fingerprint": "bc3cba57b1aa6169"
+  }
+}

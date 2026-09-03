@@ -1,0 +1,279 @@
+{
+  "id": "ko-fallen-angel",
+  "category": "ko-hangul-lyrics",
+  "note": "韩文歌:标签是拉丁字母、正文是谚文(cjkRatio 只数汉字,语言闸不能因此误杀),酷狗/QQ 带中文译文(+50);酷狗那条韩文歌的\"罗马音\"轨是中文谐音,在 kugou.go 就按汉字占比挡掉了,所以这里任何候选都不该有罗马音;musixmatch 自报时长偏差 \u003e12% 吃 sourceDurationOff",
+  "label_evidence": {
+    "consensus_peers": 3,
+    "title_accepted": true,
+    "version_tags_ok": true,
+    "source_duration_delta_pct": 0.08334774304133685,
+    "lyrics_end_secs": 193.29,
+    "coverage_pct": 97.04969705903287,
+    "album_score": 3,
+    "live_mismatch": false,
+    "cache_agreement": "exact"
+  },
+  "track": {
+    "artist": "JENNIE",
+    "title": "FALLEN ANGEL",
+    "album": "Fallen Angel - EP"
+  },
+  "captured_at": "2026-09-04",
+  "scoring_version_at_capture": 11,
+  "query": {
+    "artist": "JENNIE",
+    "title": "FALLEN ANGEL",
+    "album": "Fallen Angel - EP",
+    "duration_secs": 199.16600036621094
+  },
+  "settings": {
+    "translation_language": "zh",
+    "sources": {
+      "amll": true,
+      "kugou": true,
+      "kuwo": true,
+      "lrclib": true,
+      "lyricfind": true,
+      "musixmatch": true,
+      "netease": true,
+      "qq": true
+    },
+    "source_mode": "smart",
+    "source_order": [
+      "netease",
+      "qq",
+      "kugou",
+      "musixmatch",
+      "lrclib",
+      "amll",
+      "lyricfind",
+      "kuwo"
+    ]
+  },
+  "sources": {
+    "amll": {
+      "amll": {}
+    },
+    "applecover": {
+      "cover": "https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/27/b0/ed/27b0edf5-ec5e-fb16-0193-298a679e7a50/196874698273.jpg/1200x1200bb.jpg"
+    },
+    "kugou": {
+      "lyrics": "[ti:FALLEN ANGEL]\r\n[ar:JENNIE (제니)]\r\n[al:Fallen Angel (Digital EP) (Explicit)]\r\n[by:]\r\n[offset:0]\r\n[00:00.43]MHJJRU HUYRJ - LRUUPR\r\n[00:00.87]Lyrics by：Zhuprj Hyrz/LRUUPR/Zrn Urerq/Qfkpj Arkuhup/Lrjjp/Xhgh Yqhg\r\n[00:02.74]Composed by：Zhuprj Hyrz/LRUUPR/Zrn Urerq/Qfkpj Arkuhup/Lrjjp/Xhgh Yqhg\r\n[00:04.72]Produced by：Zhuprj Hyrz/Zrn Urerq/Qfkpj Arkuhup\r\n[00:07.85]Mrrj dar nqrrcr pu kg mpuyrqx fvd dar ipuzfi\r\n[00:11.22]Wjfxr gfvq rgrx huz P'jj dhtr gfv iarqr dar ipuz njfix\r\n[00:16.14]Drjj kr iarqr P'k yfpuy\r\n[00:17.66]P'k xrhqwapuy P'k xrhqwapuy P'k xrhqwapuy\r\n[00:19.79]Mfq h jfer\r\n[00:21.27]P'k xrhqwapuy P'k xrhqwapuy P'k xrhqwapuy\r\n[00:23.28]Nvd gfv'qr yfur\r\n[00:26.43]Ipdafvd gfv px uf mvu\r\n[00:31.76]Arg whu'd gfv xdhg\r\n[00:34.29]Zfu'd jrher h mhjjru huyrj\r\n[00:36.79]Fvd arqr fu arq fiu\r\n[00:39.75]Mpuz h sjhwr\r\n[00:41.26]Iarqrerq ir jhuz px iarqr ir\r\n[00:43.74]Dvqu pudf h afkr\r\n[00:46.76]Whu'd gfv xdhg\r\n[00:48.26]Zfu'd jrher h mhjjru huyrj\r\n[00:50.67]Fvd arqr fu arq fiu\r\n[00:53.63]Mpuz h sjhwr\r\n[00:55.07]Iarqrerq ir jhuz px iarqr ir\r\n[00:57.77]Dvqu pudf h afkr\r\n[01:04.53]Dvqu pudf h afkr\r\n[01:11.60]Dvqu pudf h afkr\r\n[01:13.42]Xdrhj kr lvxd mfq dar upyad\r\n[01:16.78]Ir'qr mhjjpuy pudf dar xtg\r\n[01:19.66]Ihdwapuy gfv jpyad vs\r\n[01:20.97]Jrd pd nvqu mfqrerq\r\n[01:22.97]Huz gfv ihuuh trrs\r\n[01:24.31]H sprwr fm kg jfer\r\n[01:26.92]Dahd ufnfzg wfvjz dfvwa\r\n[01:28.99]Pd'x gfv dahd P ihud df\r\n[01:32.52]Ipdafvd gfv darxr ipuyx hqr fm uf vxr\r\n[01:35.81]Huz xrhqwapuy xrhqwapuy mfq gfv\r\n[01:39.63]Dhtr kg ahuz huz qvu\r\n[01:44.75]Arg whu'd gfv xdhg\r\n[01:47.33]Zfu'd jrher h mhjjru huyrj\r\n[01:49.71]Fvd arqr fu arq fiu\r\n[01:52.74]Mpuz h sjhwr\r\n[01:54.17]Iarqrerq ir jhuz px iarqr ir\r\n[01:56.68]Dvqu pudf h afkr\r\n[01:59.70]Whu'd gfv xdhg\r\n[02:01.19]Zfu'd jrher h mhjjru huyrj\r\n[02:03.59]Fvd arqr fu arq fiu\r\n[02:06.63]Mpuz h sjhwr\r\n[02:08.08]Iarqrerq ir jhuz px iarqr ir\r\n[02:10.57]Dvqu pudf h afkr\r\n[02:17.63]Dvqu pudf h afkr\r\n[02:24.64]Dvqu pudf h afkr\r\n[02:26.68]Zfu'd zfu'd ihuuh yf\r\n[02:28.94]Zfu'd ihud gfv df jrher kr arqr\r\n[02:33.40]Zfu'd zfu'd ihuuh yf\r\n[02:35.81]Zfu'd ihud gfv df jrher kr arqr\r\n[02:40.35]Zfu'd zfu'd ihuuh yf\r\n[02:42.85]Zfu'd ihud gfv df jrher kr arqr\r\n[02:47.30]Zfu'd zfu'd ihuuh yf\r\n[02:49.81]Zfu'd ihud gfv df jrher kr arqr\r\n[03:01.30]Arg whu'd gfv xdhg\r\n[03:03.98]Zfu'd jrher h mhjjru huyrj\r\n[03:06.31]Fvd arqr fu arq fiu\r\n[03:09.28]Mpuz h sjhwr\r\n[03:10.75]Iarqrerq ir jhuz px iarqr ir\r\n[03:13.29]Dvqu pudf h afkr\r\n",
+      "yrc": "[ti:FALLEN ANGEL]\n[ar:JENNIE (제니)]\n[al:Fallen Angel (Digital EP) (Explicit)]\n[by:]\n[offset:0]\n[435,440](435,152,0)MHJJRU (587,144,0)HUYRJ - (731,144,0)LRUUPR\n[875,1873](875,144,0)Jgqpwx (1019,127,0)ng：(1146,152,0)Zhuprj (1298,136,0)Hyrz/(1434,193,0)LRUUPR/(1627,164,0)Zrn (1791,164,0)Urerq/(1955,160,0)Qfkpj (2115,160,0)Arkuhup/(2275,159,0)Lrjjp/(2434,153,0)Xhgh (2587,161,0)Yqhg\n[2748,1975](2748,174,0)Wfksfxrz (2922,161,0)ng：(3083,159,0)Zhuprj (3242,152,0)Hyrz/(3394,169,0)LRUUPR/(3563,176,0)Zrn (3739,151,0)Urerq/(3890,161,0)Qfkpj (4051,175,0)Arkuhup/(4226,168,0)Lrjjp/(4394,168,0)Xhgh (4562,161,0)Yqhg\n[4723,1514](4723,168,0)Sqfzvwrz (4891,159,0)ng：(5050,160,0)Zhuprj (5210,152,0)Hyrz/(5362,153,0)Zrn (5515,192,0)Urerq/(5707,170,0)Qfkpj (5877,360,0)Arkuhup\n[7850,2970](7850,216,0)Mrrj (8066,224,0)dar (8290,223,0)nqrrcr (8513,188,0)pu (8701,221,0)kg (8922,543,0)mpuyrqx (9465,201,0)fvd (9666,263,0)dar (9929,891,0)ipuzfi\n[11229,3688](11229,199,0)Wjfxr (11428,259,0)gfvq (11687,182,0)rgrx (11869,227,0)huz (12096,298,0)P'jj (12394,339,0)dhtr (12733,215,0)gfv (12948,199,0)iarqr (13147,251,0)dar (13398,417,0)ipuz (13815,1102,0)njfix\n[16140,1522](16140,380,0)Drjj (16520,447,0)kr (16967,242,0)iarqr (17209,231,0)P'k (17440,222,0)yfpuy\n[17662,2137](17662,193,0)P'k (17855,399,0)xrhqwapuy (18254,216,0)P'k (18470,497,0)xrhqwapuy (18967,221,0)P'k (19188,611,0)xrhqwapuy\n[19799,1124](19799,291,0)Mfq (20090,396,0)h (20486,437,0)jfer\n[21270,2015](21270,168,0)P'k (21438,317,0)xrhqwapuy (21755,225,0)P'k (21980,471,0)xrhqwapuy (22451,236,0)P'k (22687,598,0)xrhqwapuy\n[23285,2094](23285,298,0)Nvd (23583,409,0)gfv'qr (23992,1387,0)yfur\n[26432,2159](26432,513,0)Ipdafvd (26945,300,0)gfv (27245,180,0)px (27425,427,0)uf (27852,739,0)mvu\n[31761,2107](31761,629,0)Arg (32964,134,0)whu'd (33098,218,0)gfv (33316,552,0)xdhg\n[34291,2505](34291,217,0)Zfu'd (34508,224,0)jrher (34732,248,0)h (34980,944,0)mhjjru (35924,872,0)huyrj\n[36796,2237](36796,319,0)Fvd (37115,470,0)arqr (37585,462,0)fu (38047,449,0)arq (38496,537,0)fiu\n[39757,1081](39757,180,0)Mpuz (39937,268,0)h (40205,633,0)sjhwr\n[41267,2480](41267,381,0)Iarqrerq (41648,231,0)ir (41879,474,0)jhuz (42353,483,0)px (42836,417,0)iarqr (43253,494,0)ir\n[43747,2286](43747,410,0)Dvqu (44157,832,0)pudf (44989,432,0)h (45421,612,0)afkr\n[46761,958](46761,182,0)Whu'd (46943,280,0)gfv (47223,496,0)xdhg\n[48266,2412](48266,199,0)Zfu'd (48465,206,0)jrher (48671,288,0)h (48959,805,0)mhjjru (49764,914,0)huyrj\n[50678,2214](50678,426,0)Fvd (51104,396,0)arqr (51500,476,0)fu (51976,437,0)arq (52413,479,0)fiu\n[53638,1019](53638,234,0)Mpuz (53872,233,0)h (54105,552,0)sjhwr\n[55074,2518](55074,525,0)Iarqrerq (55599,199,0)ir (55798,474,0)jhuz (56272,460,0)px (56732,400,0)iarqr (57132,460,0)ir\n[57771,2610](57771,283,0)Dvqu (58054,772,0)pudf (58826,449,0)h (59275,1106,0)afkr\n[64532,2786](64532,513,0)Dvqu (65045,813,0)pudf (65858,467,0)h (66325,993,0)afkr\n[71609,1815](71609,437,0)Dvqu (72046,820,0)pudf (72866,418,0)h (73284,140,0)afkr\n[73424,1487](73424,296,0)Xdrhj (73720,236,0)kr (73956,187,0)lvxd (74143,212,0)mfq (74355,175,0)dar (74530,381,0)upyad\n[76781,1831](76781,205,0)Ir'qr (76986,473,0)mhjjpuy (77459,330,0)pudf (77789,140,0)dar (77929,683,0)xtg\n[79667,1305](79667,338,0)Ihdwapuy (80005,251,0)gfv (80256,362,0)jpyad (80618,354,0)vs\n[80972,1663](80972,172,0)Jrd (81144,165,0)pd (81309,449,0)nvqu (81758,877,0)mfqrerq\n[82973,1346](82973,158,0)Huz (83131,160,0)gfv (83291,397,0)ihuuh (83688,631,0)trrs\n[84319,2173](84319,234,0)H (84553,380,0)sprwr (84933,496,0)fm (85429,234,0)kg (85663,829,0)jfer\n[86922,1825](86922,336,0)Dahd (87258,729,0)ufnfzg (87987,319,0)wfvjz (88306,441,0)dfvwa\n[88994,2088](88994,177,0)Pd'x (89171,271,0)gfv (89442,256,0)dahd (89698,297,0)P (89995,414,0)ihud (90409,673,0)df\n[92522,2744](92522,352,0)Ipdafvd (92874,368,0)gfv (93242,304,0)darxr (93546,312,0)ipuyx (93858,216,0)hqr (94074,256,0)fm (94330,392,0)uf (94722,544,0)vxr\n[95810,2729](95810,240,0)Huz (96050,656,0)xrhqwapuy (96706,688,0)xrhqwapuy (97394,624,0)mfq (98018,521,0)gfv\n[99635,2020](99635,264,0)Dhtr (99899,432,0)kg (100331,234,0)ahuz (100565,271,0)huz (100836,819,0)qvu\n[104751,2072](104751,424,0)Arg (105847,208,0)whu'd (106055,216,0)gfv (106271,552,0)xdhg\n[107331,2379](107331,199,0)Zfu'd (107530,205,0)jrher (107735,288,0)h (108023,847,0)mhjjru (108870,840,0)huyrj\n[109710,2288](109710,424,0)Fvd (110134,458,0)arqr (110592,455,0)fu (111047,440,0)arq (111487,511,0)fiu\n[112745,1032](112745,190,0)Mpuz (112935,279,0)h (113214,563,0)sjhwr\n[114176,2504](114176,463,0)Iarqrerq (114639,279,0)ir (114918,427,0)jhuz (115345,445,0)px (115790,458,0)iarqr (116248,432,0)ir\n[116680,2327](116680,471,0)Dvqu (117151,800,0)pudf (117951,487,0)h (118438,569,0)afkr\n[119703,1016](119703,208,0)Whu'd (119911,271,0)gfv (120182,537,0)xdhg\n[121198,2401](121198,210,0)Zfu'd (121408,199,0)jrher (121607,275,0)h (121882,813,0)mhjjru (122695,904,0)huyrj\n[123599,2210](123599,385,0)Fvd (123984,479,0)arqr (124463,443,0)fu (124906,439,0)arq (125345,464,0)fiu\n[126639,1040](126639,184,0)Mpuz (126823,247,0)h (127070,609,0)sjhwr\n[128086,2489](128086,512,0)Iarqrerq (128598,240,0)ir (128838,409,0)jhuz (129247,441,0)px (129688,422,0)iarqr (130110,465,0)ir\n[130575,2591](130575,408,0)Dvqu (130983,880,0)pudf (131863,456,0)h (132319,847,0)afkr\n[137639,4046](137639,391,0)Dvqu (138030,935,0)pudf (138965,448,0)h (139413,2272,0)afkr\n[144645,2040](144645,367,0)Dvqu (145012,873,0)pudf (145885,455,0)h (146340,345,0)afkr\n[146685,1576](146685,432,0)Zfu'd (147341,216,0)zfu'd (147557,384,0)ihuuh (147941,320,0)yf\n[148941,2279](148941,184,0)Zfu'd (149125,88,0)ihud (149213,232,0)gfv (149445,272,0)df (149717,703,0)jrher (150420,409,0)kr (150829,391,0)arqr\n[153406,1911](153406,423,0)Zfu'd (154256,236,0)zfu'd (154492,395,0)ihuuh (154887,430,0)yf\n[155812,2285](155812,212,0)Zfu'd (156024,199,0)ihud (156223,219,0)gfv (156442,242,0)df (156684,696,0)jrher (157380,409,0)kr (157789,308,0)arqr\n[160354,1944](160354,407,0)Zfu'd (161153,225,0)zfu'd (161378,456,0)ihuuh (161834,464,0)yf\n[162850,2274](162850,146,0)Zfu'd (162996,157,0)ihud (163153,226,0)gfv (163379,238,0)df (163617,633,0)jrher (164250,449,0)kr (164699,425,0)arqr\n[167301,1990](167301,496,0)Zfu'd (168177,209,0)zfu'd (168386,433,0)ihuuh (168819,472,0)yf\n[169817,2112](169817,120,0)Zfu'd (169937,184,0)ihud (170121,193,0)gfv (170314,239,0)df (170553,680,0)jrher (171233,424,0)kr (171657,272,0)arqr\n[181300,2147](181300,536,0)Arg (182372,184,0)whu'd (182556,243,0)gfv (182799,648,0)xdhg\n[183984,2335](183984,172,0)Zfu'd (184156,168,0)jrher (184324,248,0)h (184572,832,0)mhjjru (185404,915,0)huyrj\n[186319,2277](186319,384,0)Fvd (186703,453,0)arqr (187156,464,0)fu (187620,434,0)arq (188054,542,0)fiu\n[189287,1085](189287,223,0)Mpuz (189510,262,0)h (189772,600,0)sjhwr\n[190757,2535](190757,487,0)Iarqrerq (191244,272,0)ir (191516,400,0)jhuz (191916,456,0)px (192372,416,0)iarqr (192788,504,0)ir\n[193292,2608](193292,434,0)Dvqu (193726,825,0)pudf (194551,414,0)h (194965,935,0)afkr",
+      "tr": "[00:00.435]DKR䰳䓬䂴㗫㶮㢹㒧䤂䃀㢹㦹\n[00:07.850]䕒䡄㫐㗍䐢䓣䤂䀄䃈㡪㥬䕒䤂㦍㠂\n[00:11.229]䀲㴾䒼㜵䊆㺿 䕒䓌䛂㴾㙈䠈㶔䃈㓿㡪䤂㮿㡵\n[00:16.140]㫜㾑䕒㛵䡎㙈䡎㴎\n[00:17.662]䕒䔌䔌㬍㬍\n[00:19.799]䰗䘄㜌䁹㧡䍕䦤䤂䑠\n[00:21.270]䕒䔌䔌㬍㬍\n[00:23.285]䐝㴾䬆㝿䋴㙈\n[00:26.432]䂗䓬㴾 䁹㯹㠕㵐㨙䦚䧾\n[00:31.761]㴾㻄䙩䇯䮚䂷\n[00:34.291]䀲㝹䭙䀀㕉㟄㴽䨔䤂䩆䲼\n[00:36.796]䪟䈺㨓䐋䞄㵯\n[00:39.757]䔌䑄䁹䐋㯠䛼䝠㤬\n[00:41.267]䦚㔨䕒䘺㿎㚧䡎䐋\n[00:43.747]䵎䭺㮿㡵㻪䓌䚰㢹䕒䘺䤂㬁䥍\n[00:46.761]㴾㻄䙩䇯䮚䂷\n[00:48.266]䀲㝹䭙䀀㕉㟄㴽䨔䤂䩆䲼\n[00:50.678]䪟䈺㨓䐋䞄㵯\n[00:53.638]䔌䑄䁹䐋㯠䛼䝠㤬\n[00:55.074]䦚㔨䕒䘺㿎㚧䡎䐋\n[00:57.771]䵎䭺㮿㡵㻪䓌䚰㢹䕒䘺䤂㬁䥍\n[01:04.532]䵎䭺㮿㡵㻪䓌䚰㢹䕒䘺䤂㬁䥍\n[01:11.609]䵎䭺㮿㡵㻪䓌䚰㢹䕒䘺䤂㬁䥍\n[01:13.424]㗅䘩䆎䛂䕒䰓㙷䫷䵣䬹\n[01:16.781]䕒䘺㕉䦊㽪㹟䦚㨈䤂䩆㞧\n[01:19.667]㷡㜌㴾䘀㑟䃈䖒䤂㨀㤞\n[01:20.972]䀀䒐䁹㯹㕿䰓䴍䘀䚴䠓\n[01:22.973]㴾䰗䪛䶭䐡\n[01:24.319]䕒䵎䁹㧡䍕䦤䤂䑠䘀\n[01:26.922]䧎䡎䆝㠕䦚㪒䈘㦍\n[01:28.994]㴾䆎䆺䕒䤂䟧䝠㤬䏱\n[01:32.522]㟮䵧䂗䓬㴾 䒐䊆㓱㙄䦍㸷䦚㶇䐋\n[01:35.810]㨓䐋䔌㬍㴾䤂䛼㢣\n[01:39.635]䏂㜌䕒䤂㱵 䢌䂞䖩䗳\n[01:44.751]㴾㻄䙩䇯䮚䂷\n[01:47.331]䀲㝹䭙䀀㕉㟄㴽䨔䤂䩆䲼\n[01:49.710]䪟䈺㨓䐋䞄㵯\n[01:52.745]䔌䑄䁹䐋㯠䛼䝠㤬\n[01:54.176]䦚㔨䕒䘺㿎㚧䡎䐋\n[01:56.680]䵎䭺㮿㡵㻪䓌䚰㢹䕒䘺䤂㬁䥍\n[01:59.703]㴾㻄䙩䇯䮚䂷\n[02:01.198]䀲㝹䭙䀀㕉㟄㴽䨔䤂䩆䲼\n[02:03.599]䪟䈺㨓䐋䞄㵯\n[02:06.639]䔌䑄䁹䐋㯠䛼䝠㤬\n[02:08.086]䦚㔨䕒䘺㿎㚧䡎䐋\n[02:10.575]䵎䭺㮿㡵㻪䓌䚰㢹䕒䘺䤂㬁䥍\n[02:17.639]䵎䭺㮿㡵㻪䓌䚰㢹䕒䘺䤂㬁䥍\n[02:24.645]䵎䭺㮿㡵㻪䓌䚰㢹䕒䘺䤂㬁䥍\n[02:26.685]㝹䅭䋴䘯\n[02:28.941]㝹䓊䀀㴾㻪䕒䇯㵆䆶㮿\n[02:33.406]㝹䅭䋴䘯\n[02:35.812]㝹䓊䀀㴾㻪䕒䇯㵆䆶㮿\n[02:40.354]㝹䅭䋴䘯\n[02:42.850]㝹䓊䀀㴾㻪䕒䇯㵆䆶㮿\n[02:47.301]㝹䅭䋴䘯\n[02:49.817]㝹䓊䀀㴾㻪䕒䇯㵆䆶㮿\n[03:01.300]㴾㻄䙩䇯䮚䂷\n[03:03.984]䀲㝹䭙䀀㕉㟄㴽䨔䤂䩆䲼\n[03:06.319]䪟䈺㨓䐋䞄㵯\n[03:09.287]䔌䑄䁹䐋㯠䛼䝠㤬\n[03:10.757]䦚㔨䕒䘺㿎㚧䡎䐋\n[03:13.292]䵎䭺㮿㡵㻪䓌䚰㢹䕒䘺䤂㬁䥍",
+      "title": "FALLEN ANGEL",
+      "artist": "JENNIE",
+      "album": "Fallen Angel (Digital EP) [Explicit]",
+      "cover": "https://imge.kugou.com/stdmusic/480/20260828/20260828113145981958.jpg",
+      "duration_secs": 199
+    },
+    "kuwo": {
+      "lyrics": "[00:00.43]MHJJRU HUYRJ - LRUUPR\n[00:00.87]DKR䰳䓬䂴㗫㶮㢹㒧䤂䃀㢹㦹\n[00:00.87]Lyrics by：Zhuprj Hyrz/LRUUPR/Zrn Urerq/Qfkpj Arkuhup/Lrjjp/Xhgh Yqhg\n[00:02.74]Composed by：Zhuprj Hyrz/LRUUPR/Zrn Urerq/Qfkpj Arkuhup/Lrjjp/Xhgh Yqhg\n[00:04.72]Produced by：Zhuprj Hyrz/Zrn Urerq/Qfkpj Arkuhup\n[00:07.85]Mrrj dar nqrrcr pu kg mpuyrqx fvd dar ipuzfi\n[00:11.22]䕒䡄㫐㗍䐢䓣䤂䀄䃈㡪㥬䕒䤂㦍㠂\n[00:11.22]Wjfxr gfvq rgrx huz P'jj dhtr gfv iarqr dar ipuz njfix\n[00:16.14]䀲㴾䒼㜵䊆㺿 䕒䓌䛂㴾㙈䠈㶔䃈㓿㡪䤂㮿㡵\n[00:16.14]Drjj kr iarqr P'k yfpuy\n[00:17.66]㫜㾑䕒㛵䡎㙈䡎㴎\n[00:17.66]P'k xrhqwapuy P'k xrhqwapuy P'k xrhqwapuy\n[00:19.79]䕒䔌䔌㬍㬍\n[00:19.79]Mfq h jfer\n[00:21.27]䰗䘄㜌䁹㧡䍕䦤䤂䑠\n[00:21.27]P'k xrhqwapuy P'k xrhqwapuy P'k xrhqwapuy\n[00:23.28]䕒䔌䔌㬍㬍\n[00:23.28]Nvd gfv'qr yfur\n[00:26.43]䐝㴾䬆㝿䋴㙈\n[00:26.43]Ipdafvd gfv px uf mvu\n[00:31.76]䂗䓬㴾 䁹㯹㠕㵐㨙䦚䧾\n[00:31.76]Arg whu'd gfv xdhg\n[00:34.29]㴾㻄䙩䇯䮚䂷\n[00:34.29]Zfu'd jrher h mhjjru huyrj\n[00:36.79]䀲㝹䭙䀀㕉㟄㴽䨔䤂䩆䲼\n[00:36.79]Fvd arqr fu arq fiu\n[00:39.75]䪟䈺㨓䐋䞄㵯\n[00:39.75]Mpuz h sjhwr\n[00:41.26]䔌䑄䁹䐋㯠䛼䝠㤬\n[00:41.26]Iarqrerq ir jhuz px iarqr ir\n[00:43.74]䦚㔨䕒䘺㿎㚧䡎䐋\n[00:43.74]Dvqu pudf h afkr\n[00:46.76]䵎䭺㮿㡵㻪䓌䚰㢹䕒䘺䤂㬁䥍\n[00:46.76]Whu'd gfv xdhg\n[00:48.26]㴾㻄䙩䇯䮚䂷\n[00:48.26]Zfu'd jrher h mhjjru huyrj\n[00:50.67]䀲㝹䭙䀀㕉㟄㴽䨔䤂䩆䲼\n[00:50.67]Fvd arqr fu arq fiu\n[00:53.63]䪟䈺㨓䐋䞄㵯\n[00:53.63]Mpuz h sjhwr\n[00:55.07]䔌䑄䁹䐋㯠䛼䝠㤬\n[00:55.07]Iarqrerq ir jhuz px iarqr ir\n[00:57.77]䦚㔨䕒䘺㿎㚧䡎䐋\n[00:57.77]Dvqu pudf h afkr\n[01:04.53]䵎䭺㮿㡵㻪䓌䚰㢹䕒䘺䤂㬁䥍\n[01:04.53]Dvqu pudf h afkr\n[01:11.60]䵎䭺㮿㡵㻪䓌䚰㢹䕒䘺䤂㬁䥍\n[01:11.60]Dvqu pudf h afkr\n[01:13.42]䵎䭺㮿㡵㻪䓌䚰㢹䕒䘺䤂㬁䥍\n[01:13.42]Xdrhj kr lvxd mfq dar upyad\n[01:16.78]㗅䘩䆎䛂䕒䰓㙷䫷䵣䬹\n[01:16.78]Ir'qr mhjjpuy pudf dar xtg\n[01:19.66]䕒䘺㕉䦊㽪㹟䦚㨈䤂䩆㞧\n[01:19.66]Ihdwapuy gfv jpyad vs\n[01:20.97]㷡㜌㴾䘀㑟䃈䖒䤂㨀㤞\n[01:20.97]Jrd pd nvqu mfqrerq\n[01:22.97]䀀䒐䁹㯹㕿䰓䴍䘀䚴䠓\n[01:22.97]Huz gfv ihuuh trrs\n[01:24.31]㴾䰗䪛䶭䐡\n[01:24.31]H sprwr fm kg jfer\n[01:26.92]䕒䵎䁹㧡䍕䦤䤂䑠䘀\n[01:26.92]Dahd ufnfzg wfvjz dfvwa\n[01:28.99]䧎䡎䆝㠕䦚㪒䈘㦍\n[01:28.99]Pd'x gfv dahd P ihud df\n[01:32.52]㴾䆎䆺䕒䤂䟧䝠㤬䏱\n[01:32.52]Ipdafvd gfv darxr ipuyx hqr fm uf vxr\n[01:35.81]㟮䵧䂗䓬㴾 䒐䊆㓱㙄䦍㸷䦚㶇䐋\n[01:35.81]Huz xrhqwapuy xrhqwapuy mfq gfv\n[01:39.63]㨓䐋䔌㬍㴾䤂䛼㢣\n[01:39.63]Dhtr kg ahuz huz qvu\n[01:44.75]䏂㜌䕒䤂㱵 䢌䂞䖩䗳\n[01:44.75]Arg whu'd gfv xdhg\n[01:47.33]㴾㻄䙩䇯䮚䂷\n[01:47.33]Zfu'd jrher h mhjjru huyrj\n[01:49.71]䀲㝹䭙䀀㕉㟄㴽䨔䤂䩆䲼\n[01:49.71]Fvd arqr fu arq fiu\n[01:52.74]䪟䈺㨓䐋䞄㵯\n[01:52.74]Mpuz h sjhwr\n[01:54.17]䔌䑄䁹䐋㯠䛼䝠㤬\n[01:54.17]Iarqrerq ir jhuz px iarqr ir\n[01:56.68]䦚㔨䕒䘺㿎㚧䡎䐋\n[01:56.68]Dvqu pudf h afkr\n[01:59.70]䵎䭺㮿㡵㻪䓌䚰㢹䕒䘺䤂㬁䥍\n[01:59.70]Whu'd gfv xdhg\n[02:01.19]㴾㻄䙩䇯䮚䂷\n[02:01.19]Zfu'd jrher h mhjjru huyrj\n[02:03.59]䀲㝹䭙䀀㕉㟄㴽䨔䤂䩆䲼\n[02:03.59]Fvd arqr fu arq fiu\n[02:06.63]䪟䈺㨓䐋䞄㵯\n[02:06.63]Mpuz h sjhwr\n[02:08.08]䔌䑄䁹䐋㯠䛼䝠㤬\n[02:08.08]Iarqrerq ir jhuz px iarqr ir\n[02:10.57]䦚㔨䕒䘺㿎㚧䡎䐋\n[02:10.57]Dvqu pudf h afkr\n[02:17.63]䵎䭺㮿㡵㻪䓌䚰㢹䕒䘺䤂㬁䥍\n[02:17.63]Dvqu pudf h afkr\n[02:24.64]䵎䭺㮿㡵㻪䓌䚰㢹䕒䘺䤂㬁䥍\n[02:24.64]Dvqu pudf h afkr\n[02:26.68]䵎䭺㮿㡵㻪䓌䚰㢹䕒䘺䤂㬁䥍\n[02:26.68]Zfu'd zfu'd ihuuh yf\n[02:28.94]㝹䅭䋴䘯\n[02:28.94]Zfu'd ihud gfv df jrher kr arqr\n[02:33.40]㝹䓊䀀㴾㻪䕒䇯㵆䆶㮿\n[02:33.40]Zfu'd zfu'd ihuuh yf\n[02:35.81]㝹䅭䋴䘯\n[02:35.81]Zfu'd ihud gfv df jrher kr arqr\n[02:40.35]㝹䓊䀀㴾㻪䕒䇯㵆䆶㮿\n[02:40.35]Zfu'd zfu'd ihuuh yf\n[02:42.85]㝹䅭䋴䘯\n[02:42.85]Zfu'd ihud gfv df jrher kr arqr\n[02:47.30]㝹䓊䀀㴾㻪䕒䇯㵆䆶㮿\n[02:47.30]Zfu'd zfu'd ihuuh yf\n[02:49.81]㝹䅭䋴䘯\n[02:49.81]Zfu'd ihud gfv df jrher kr arqr\n[03:01.30]㝹䓊䀀㴾㻪䕒䇯㵆䆶㮿\n[03:01.30]Arg whu'd gfv xdhg\n[03:03.98]㴾㻄䙩䇯䮚䂷\n[03:03.98]Zfu'd jrher h mhjjru huyrj\n[03:06.31]䀲㝹䭙䀀㕉㟄㴽䨔䤂䩆䲼\n[03:06.31]Fvd arqr fu arq fiu\n[03:09.28]䪟䈺㨓䐋䞄㵯\n[03:09.28]Mpuz h sjhwr\n[03:10.75]䔌䑄䁹䐋㯠䛼䝠㤬\n[03:10.75]Iarqrerq ir jhuz px iarqr ir\n[03:13.29]䦚㔨䕒䘺㿎㚧䡎䐋\n[03:13.29]Dvqu pudf h afkr\n[03:18.03]䵎䭺㮿㡵㻪䓌䚰㢹䕒䘺䤂㬁䥍\n",
+      "title": "FALLEN ANGEL",
+      "artist": "JENNIE",
+      "album": "Fallen Angel (Digital EP) [Explicit]",
+      "cover": "https://img1.kuwo.cn/star/albumcover/500/s4s97/91/3539261801.jpg",
+      "duration_secs": 199
+    },
+    "lrclib": {
+      "lyrics": "[00:06.44]Mrrj dar nqrrcr pu kg mpuyrqx\n[00:09.60]Fvd dar ipuzfi\n[00:11.36]Wjfxr gfvq rgrx huz P'jj dhtr gfv\n[00:13.09]Iarqr dar ipuz njfix\n[00:16.48]Drjj kr iarqr P'k yfpuy\n[00:18.52]P'k xrhqwapuy, P'k xrhqwapuy, P'k xrhqwapuy\n[00:20.52]Mfq h jfer\n[00:21.89]P'k xrhqwapuy, P'k xrhqwapuy, P'k xrhqwapuy\n[00:23.80]Nvd gfv'qr yfur\n[00:26.32]Ipdafvd gfv px uf mvu\n[00:31.61]Arg, whu'd gfv xdhg?\n[00:34.64]Zfu'd jrher h mhjjru huyrj fvd arqr fu arq fiu\n[00:39.65]Mpuz h sjhwr\n[00:41.28]Iarqrerq ir jhuz px iarqr ir dvqu pudf h afkr\n[00:46.52]Whu'd gfv xdhg?\n[00:48.24]Zfu'd jrheе h mhjjru huyrj fvd arqе fu arq fiu\n[00:53.57]Mpuz h sjhwr\n[00:55.12]Iarqrerq ir jhuz px iarqr ir dvqu pudf h afkr\n[01:01.29]Afkr, afkr, afkr\n[01:04.69](Dvqu pudf h afkr)\n[01:07.36]Afkr, yf afkr\n[01:11.33](Dvqu pudf h afkr)\n[01:13.96]Xdrhj kr lvxd mfq dar upyad\n[01:16.72]Ir’qr mhjjpuy pudf dar xtg\n[01:19.93]Ihdwapuy gfv jpyad vs\n[01:21.43]Jrd pd nvqu mfqrerq\n[01:23.08]Huz gfv ihuuh trrs\n[01:25.12]H sprwr fm kg jfer\n[01:27.24]Dahd ufnfzg wfvjz dfvwa\n[01:29.47]Pd'x gfv dahd P ihud df\n[01:33.48]Ipdafvd gfv darxr ipuyx hqr fm uf vxr\n[01:36.12]Nrru xrhqwapuy, xrhqwapuy mfq gfv\n[01:39.44]Dhtr kg ahuz huz qvu\n[01:44.68]Arg, whu'd gfv xdhg?\n[01:47.36]Zfu'd jrher h mhjjru huyrj fvd arqr fu arq fiu\n[01:52.56]Mpuz h sjhwr\n[01:54.36]Iarqrerq ir jhuz px iarqr ir dvqu pudf h afkr\n[01:59.56]Whu'd gfv xdhg?\n[02:01.20]Zfu'd jrher h mhjjru huyrj fvd arqr fu arq fiu\n[02:06.59]Mpuz h sjhwr\n[02:08.24]Iarqrerq ir jhuz px iarqr ir dvqu pudf h afkr\n[02:14.24]Afkr, afkr, afkr\n[02:17.51](Dvqu pudf h afkr)\n[02:20.32]Afkr, yf afkr\n[02:24.28](Dvqu pudf h afkr)\n[02:27.08]Zfu'd, zfu'd ihuuh yf\n[02:29.80]Zfu'd ihud gfv df jrher kr arqr\n[02:33.31]Zfu'd, zfu'd ihuuh yf\n[02:35.88]Zfu'd ihud gfv df jrher kr arqr\n[02:40.20]Zfu'd, zfu'd ihuuh yf\n[02:42.91]Zfu'd ihud gfv df jrher kr arqr\n[02:47.20]Zfu'd, zfu'd ihuuh yf\n[02:49.88]Zfu'd ihud gfv df jrher kr arqr\n[03:01.29]Arg, whu'd gfv xdhg?\n[03:03.84]Zfu'd jrher h mhjjru huyrj fvd arqr fu arq fiu\n[03:09.19]Mpuz h sjhwr\n[03:10.83]Iarqrerq ir jhuz px iarqr ir dvqu pudf h afkr",
+      "title": "FALLEN ANGEL",
+      "artist": "Jennie",
+      "album": "Fallen Angel",
+      "duration_secs": 199
+    },
+    "lyricfind": {},
+    "musixmatch": {},
+    "netease": {
+      "netease": {
+        "cover": "https://p1.music.126.net/d4k2_0W68j4QnT6CMObp2w==/109951173846753314.jpg?param=800y800",
+        "song_url": "https://music.163.com/song?id=3427054688",
+        "lyrics": "[00:00.00] 作词 : LRUUPR/Zrn Urerq/Lrjjp/Zhuprj Hyrz/Xhgh Yqhg/Qfkpj Arkuhup\n[00:01.00] 作曲 : LRUUPR/Zrn Urerq/Lrjjp/Zhuprj Hyrz/Xhgh Yqhg/Qfkpj Arkuhup\n[00:02.00] 编曲 : Zrn Urerq/Zhuprj Hyrz/Qfkpj Arkuhup\n[00:07.57]Mrrj dar nqrrcr pu kg mpuyrqx fvd dar ipuzfi\n[00:11.14]Wjfxr gfvq rgrx huz P’jj dhtr gfv iarqr dar ipuz njfix\n[00:15.93]Drjj kr iarqr P’k yfpuy\n[00:17.67]P’k xrhqwapuy, P’k xrhqwapuy, P’k xrhqwapuy\n[00:19.63]Mfq h jfer\n[00:21.00]P’k xrhqwapuy, P’k xrhqwapuy, P’k xrhqwapuy\n[00:22.56]Nvd gfv’qr yfur\n[00:26.19]Ipdafvd gfv px uf mvu\n[00:31.45]Arg, whu’d gfv xdhg\n[00:34.06]Zfu’d jrher h mhjjru huyrj\n[00:36.45]Fvd arqr fu arq fiu\n[00:39.55]Mpuz h sjhwr\n[00:40.87]Iarqrerq ir jhuz px iarqr ir\n[00:43.50]Dvqu pudf h afkr\n[00:46.38]Whu’d gfv xdhg\n[00:48.17]Zfu’d jrher h mhjjru huyrj\n[00:50.38]Fvd arqr fu arq fiu\n[00:53.28]Mpuz h sjhwr\n[00:54.79]Iarqrerqir jhuz px iarqr ir\n[00:57.38]Dvqu pudf h afkr\n[01:12.80]Xdrhj kr lvxd mfq dar upyad\n[01:16.24]Ir’qr mhjjpuy pudf dar xtg\n[01:19.36]Ihdwapuy gfv jpyad vs\n[01:20.80]Jrd pd nvqu mfqrerq\n[01:22.63]Huz gfv ihuuh trrs\n[01:24.11]H sprwr fm kg jfer\n[01:26.88]Dahd ufnfzg wfvjz dfvwa\n[01:28.71]Pd’x gfv dahd P ihud df\n[01:32.28]Ipdafvd gfv darxr ipuyx hqr fm uf vxr\n[01:35.51]Nrru xrhqwapuy, xrhqwapuy mfq gfv\n[01:39.02]Dhtr kg ahuz huz qvu\n[01:44.53]Arg, whu’d gfv xdhg\n[01:47.17]Zfu’d jrher h mhjjru huyrj\n[01:49.60]Fvd arqr fu arq fiu\n[01:52.36]Mpuz h sjhwr\n[01:53.73]Iarqrerq ir jhuz px iarqr ir\n[01:56.50]Dvqu pudf h afkr\n[01:59.37]Whu’d gfv xdhg\n[02:01.12]Zfu’d jrher h mhjjru huyrj\n[02:03.45]Fvd arqr fu arq fiu\n[02:06.16]Mpuz h sjhwr\n[02:07.80]Iarqrerq ir jhuz px iarqr ir\n[02:10.35]Dvqu pudf h afkr\n[02:26.32]Zfu’d, zfu’d ihuuh yf\n[02:28.46]Zfu’d ihud gfv df jrher kr\n[02:33.04]Zfu’d, zfu’d ihuuh yf\n[02:35.67]Zfu’d ihud gfv df jrher kr\n[02:40.16]Zfu’d, zfu’d ihuuh yf\n[02:42.36]Zfu’d ihud gfv df jrher kr\n[02:47.00]Zfu’d, zfu’d ihuuh yf\n[02:49.56]Zfu’d ihud gfv df jrher kr\n[03:00.96]Arg, whu’d gfv xdhg\n[03:03.78]Zfu’d jrher h mhjjru huyrj\n[03:06.04]Fvd arqr fu arq fiu\n[03:09.05]Mpuz h sjhwr\n[03:10.35]Iarqrerq ir jhuz px iarqr ir\n[03:13.03]Dvqu pudf h afkr\n",
+        "trans": "[by:维尔日记]\n[00:07.57]䃈㓿㥬䐢䓣䵍㥬䕒䤂㦍㠂\n[00:11.14]䒼㜵䊆㺿 䕒䛂㴾㝎䠈䃈㓿㡪䤂㮿㡵\n[00:15.93]㫜㾑䕒䕒䭙㙈䕖㴫\n[00:17.67]䕒㵆䔌䑄 䕒㵆䔌䑄 䕒㵆䔌䑄\n[00:19.63]䁹㧡䑠\n[00:21.00]䕒㵆䔌䑄 䕒㵆䔌䑄 䕒㵆䔌䑄\n[00:22.56]䐝㴾㝿䆔䋴㙈\n[00:26.19]䂗䓬㴾㸷䦚䍩䧾\n[00:31.45]Arg 㴾㝹㻄䇯䮚䂷䡮\n[00:34.06]䢤㶼䁹䭺㕉㟄䤂䩆䲼\n[00:36.45]䶶㧲㧲㮿䇯㵆䒐㴫\n[00:39.55]䑄䭺㮿㡵\n[00:40.87]䦚㔨䕒䘺㿎㟄㵆䕖㴫\n[00:43.50]䵎㴫䆎䆺䕒䘺䤂㼷\n[00:46.38]㴾㝹㻄䇯䮚䂷䡮\n[00:48.17]䢤㶼䁹䭺㕉㟄䤂䩆䲼\n[00:50.38]䶶㧲㧲㮿䇯㵆䒐㴫\n[00:53.28]䑄䭺㮿㡵\n[00:54.79]䦚㔨䕒䘺㿎㟄㵆䕖㴫\n[00:57.38]䵎㴫䆎䆺䕒䘺䤂㼷\n[01:12.80]㗅㢵䆎㶼䕒䛂㙷䬹\n[01:16.24]䕒䘺䋭㵆㕉䦊䩆䲪\n[01:19.36]㷡㜌㴾䮺㚅㥟\n[01:20.80]䀀㳐㕿䰓䚴䠓\n[01:22.63]㷟㴾䓊䈡䇯\n[01:24.11]䕒䤂䁹㧡䑠\n[01:26.88]䦚䆝㻄䄻\n[01:28.71]䕒䓊䭙䤂㜇䓬㴾\n[01:32.28]㟁䂬䂗䓬㴾 䒐㰶㓱㙄㸷䦚㶇䐋\n[01:35.51]䁹䐪㵆䔌䑄 䁹䐪㵆䔌䑄㴾\n[01:39.02]䂟㜌䕒䤂㱵䖩䗳䬹\n[01:44.53]Arg 㴾㝹㻄䇯䮚䂷䡮\n[01:47.17]䢤㶼䁹䭺㕉㟄䤂䩆䲼\n[01:49.60]䶶㧲㧲㮿䇯㵆䒐㴫\n[01:52.36]䑄䭺㮿㡵\n[01:53.73]䦚㔨䕒䘺㿎㟄㵆䕖㴫\n[01:56.50]䵎㴫䆎䆺䕒䘺䤂㼷\n[01:59.37]㴾㝹㻄䇯䮚䂷䡮\n[02:01.12]䢤㶼䁹䭺㕉㟄䤂䩆䲼\n[02:03.45]䶶㧲㧲㮿䇯㵆䒐㴫\n[02:06.16]䑄䭺㮿㡵\n[02:07.80]䦚㔨䕒䘺㿎㟄㵆䕖㴫\n[02:10.35]䵎㴫䆎䆺䕒䘺䤂㼷\n[02:26.32]㝹 䕒㝹䓊㙷\n[02:28.46]䕒㝹䓊䀀㴾䋴䘯䕒\n[02:33.04]㝹 䕒㝹䓊㙷\n[02:35.67]䕒㝹䓊䀀㴾䋴䘯䕒\n[02:40.16]㝹 䕒㝹䓊㙷\n[02:42.36]䕒㝹䓊䀀㴾䋴䘯䕒\n[02:47.00]㝹 䕒㝹䓊㙷\n[02:49.56]䕒㝹䓊䀀㴾䋴䘯䕒\n[03:00.96]Arg 㴾㝹㻄䇯䮚䂷䡮\n[03:03.78]䢤㶼䁹䭺㕉㟄䤂䩆䲼\n[03:06.04]䶶㧲㧲㮿䇯㵆䒐㴫\n[03:09.05]䑄䭺㮿㡵\n[03:10.35]䦚㔨䕒䘺㿎㟄㵆䕖㴫\n[03:13.03]䵎㴫䆎䆺䕒䘺䤂㼷\n",
+        "duration_secs": 199.166,
+        "artist": "JENNIE",
+        "title": "FALLEN ANGEL",
+        "album": "Fallen Angel (Digital EP)",
+        "song_id": 3427054688,
+        "album_id": 395010831
+      }
+    },
+    "qq": {
+      "lyrics": "[ti:FALLEN ANGEL]\n[ar:JENNIE (제니)]\n[al:Fallen Angel (Digital EP) (Explicit)]\n[by:]\n[offset:0]\n[00:00.43]MHJJRU HUYRJ - LRUUPR\n[00:00.87]Lyrics by：Zhuprj Hyrz/LRUUPR/Zrn Urerq/Qfkpj Arkuhup/Lrjjp/Xhgh Yqhg\n[00:02.74]Composed by：Zhuprj Hyrz/LRUUPR/Zrn Urerq/Qfkpj Arkuhup/Lrjjp/Xhgh Yqhg\n[00:04.72]Produced by：Zhuprj Hyrz/Zrn Urerq/Qfkpj Arkuhup\n[00:07.85]Mrrj dar nqrrcr pu kg mpuyrqx fvd dar ipuzfi\n[00:11.22]Wjfxr gfvq rgrx huz P'jj dhtr gfv iarqr dar ipuz njfix\n[00:16.14]Drjj kr iarqr P'k yfpuy\n[00:17.66]P'k xrhqwapuy P'k xrhqwapuy P'k xrhqwapuy\n[00:19.79]Mfq h jfer\n[00:21.27]P'k xrhqwapuy P'k xrhqwapuy P'k xrhqwapuy\n[00:23.28]Nvd gfv'qr yfur\n[00:26.43]Ipdafvd gfv px uf mvu\n[00:31.76]Arg whu'd gfv xdhg\n[00:34.29]Zfu'd jrher h mhjjru huyrj\n[00:36.79]Fvd arqr fu arq fiu\n[00:39.75]Mpuz h sjhwr\n[00:41.26]Iarqrerq ir jhuz px iarqr ir\n[00:43.74]Dvqu pudf h afkr\n[00:46.76]Whu'd gfv xdhg\n[00:48.26]Zfu'd jrher h mhjjru huyrj\n[00:50.67]Fvd arqr fu arq fiu\n[00:53.63]Mpuz h sjhwr\n[00:55.07]Iarqrerq ir jhuz px iarqr ir\n[00:57.77]Dvqu pudf h afkr\n[01:04.53]Dvqu pudf h afkr\n[01:11.60]Dvqu pudf h afkr\n[01:13.42]Xdrhj kr lvxd mfq dar upyad\n[01:16.78]Ir'qr mhjjpuy pudf dar xtg\n[01:19.66]Ihdwapuy gfv jpyad vs\n[01:20.97]Jrd pd nvqu mfqrerq\n[01:22.97]Huz gfv ihuuh trrs\n[01:24.31]H sprwr fm kg jfer\n[01:26.92]Dahd ufnfzg wfvjz dfvwa\n[01:28.99]Pd'x gfv dahd P ihud df\n[01:32.52]Ipdafvd gfv darxr ipuyx hqr fm uf vxr\n[01:35.81]Huz xrhqwapuy xrhqwapuy mfq gfv\n[01:39.63]Dhtr kg ahuz huz qvu\n[01:44.75]Arg whu'd gfv xdhg\n[01:47.33]Zfu'd jrher h mhjjru huyrj\n[01:49.71]Fvd arqr fu arq fiu\n[01:52.74]Mpuz h sjhwr\n[01:54.17]Iarqrerq ir jhuz px iarqr ir\n[01:56.68]Dvqu pudf h afkr\n[01:59.70]Whu'd gfv xdhg\n[02:01.19]Zfu'd jrher h mhjjru huyrj\n[02:03.59]Fvd arqr fu arq fiu\n[02:06.63]Mpuz h sjhwr\n[02:08.08]Iarqrerq ir jhuz px iarqr ir\n[02:10.57]Dvqu pudf h afkr\n[02:17.63]Dvqu pudf h afkr\n[02:24.64]Dvqu pudf h afkr\n[02:26.68]Zfu'd zfu'd ihuuh yf\n[02:28.94]Zfu'd ihud gfv df jrher kr arqr\n[02:33.40]Zfu'd zfu'd ihuuh yf\n[02:35.81]Zfu'd ihud gfv df jrher kr arqr\n[02:40.35]Zfu'd zfu'd ihuuh yf\n[02:42.85]Zfu'd ihud gfv df jrher kr arqr\n[02:47.30]Zfu'd zfu'd ihuuh yf\n[02:49.81]Zfu'd ihud gfv df jrher kr arqr\n[03:01.30]Arg whu'd gfv xdhg\n[03:03.98]Zfu'd jrher h mhjjru huyrj\n[03:06.31]Fvd arqr fu arq fiu\n[03:09.28]Mpuz h sjhwr\n[03:10.75]Iarqrerq ir jhuz px iarqr ir\n[03:13.29]Dvqu pudf h afkr",
+      "yrc": "[ti:FALLEN ANGEL]\n[ar:JENNIE (제니)]\n[al:Fallen Angel (Digital EP) (Explicit)]\n[by:]\n[offset:0]\n[435,440](435,152,0)MHJJRU (587,144,0)HUYRJ - (731,144,0)LRUUPR\n[875,1873](875,144,0)Jgqpwx (1019,127,0)ng：(1146,152,0)Zhuprj (1298,136,0)Hyrz/(1434,193,0)LRUUPR/(1627,164,0)Zrn (1791,164,0)Urerq/(1955,160,0)Qfkpj (2115,160,0)Arkuhup/(2275,159,0)Lrjjp/(2434,153,0)Xhgh (2587,161,0)Yqhg\n[2748,1975](2748,174,0)Wfksfxrz (2922,161,0)ng：(3083,159,0)Zhuprj (3242,152,0)Hyrz/(3394,169,0)LRUUPR/(3563,176,0)Zrn (3739,151,0)Urerq/(3890,161,0)Qfkpj (4051,175,0)Arkuhup/(4226,168,0)Lrjjp/(4394,168,0)Xhgh (4562,161,0)Yqhg\n[4723,1514](4723,168,0)Sqfzvwrz (4891,159,0)ng：(5050,160,0)Zhuprj (5210,152,0)Hyrz/(5362,153,0)Zrn (5515,192,0)Urerq/(5707,170,0)Qfkpj (5877,360,0)Arkuhup\n[7850,2970](7850,216,0)Mrrj (8066,224,0)dar (8290,223,0)nqrrcr (8513,188,0)pu (8701,221,0)kg (8922,543,0)mpuyrqx (9465,201,0)fvd (9666,263,0)dar (9929,891,0)ipuzfi\n[11229,3688](11229,199,0)Wjfxr (11428,259,0)gfvq (11687,182,0)rgrx (11869,227,0)huz (12096,298,0)P'jj (12394,339,0)dhtr (12733,215,0)gfv (12948,199,0)iarqr (13147,251,0)dar (13398,417,0)ipuz (13815,1102,0)njfix\n[16140,1522](16140,380,0)Drjj (16520,447,0)kr (16967,242,0)iarqr (17209,231,0)P'k (17440,222,0)yfpuy\n[17662,2137](17662,193,0)P'k (17855,399,0)xrhqwapuy (18254,216,0)P'k (18470,497,0)xrhqwapuy (18967,221,0)P'k (19188,611,0)xrhqwapuy\n[19799,1124](19799,291,0)Mfq (20090,396,0)h (20486,437,0)jfer\n[21270,2015](21270,168,0)P'k (21438,317,0)xrhqwapuy (21755,225,0)P'k (21980,471,0)xrhqwapuy (22451,236,0)P'k (22687,598,0)xrhqwapuy\n[23285,2094](23285,298,0)Nvd (23583,409,0)gfv'qr (23992,1387,0)yfur\n[26432,2159](26432,513,0)Ipdafvd (26945,300,0)gfv (27245,180,0)px (27425,427,0)uf (27852,739,0)mvu\n[31761,2107](31761,629,0)Arg (32964,134,0)whu'd (33098,218,0)gfv (33316,552,0)xdhg\n[34291,2505](34291,217,0)Zfu'd (34508,224,0)jrher (34732,248,0)h (34980,944,0)mhjjru (35924,872,0)huyrj\n[36796,2237](36796,319,0)Fvd (37115,470,0)arqr (37585,462,0)fu (38047,449,0)arq (38496,537,0)fiu\n[39757,1081](39757,180,0)Mpuz (39937,268,0)h (40205,633,0)sjhwr\n[41267,2480](41267,381,0)Iarqrerq (41648,231,0)ir (41879,474,0)jhuz (42353,483,0)px (42836,417,0)iarqr (43253,494,0)ir\n[43747,2286](43747,410,0)Dvqu (44157,832,0)pudf (44989,432,0)h (45421,612,0)afkr\n[46761,958](46761,182,0)Whu'd (46943,280,0)gfv (47223,496,0)xdhg\n[48266,2412](48266,199,0)Zfu'd (48465,206,0)jrher (48671,288,0)h (48959,805,0)mhjjru (49764,914,0)huyrj\n[50678,2214](50678,426,0)Fvd (51104,396,0)arqr (51500,476,0)fu (51976,437,0)arq (52413,479,0)fiu\n[53638,1019](53638,234,0)Mpuz (53872,233,0)h (54105,552,0)sjhwr\n[55074,2518](55074,525,0)Iarqrerq (55599,199,0)ir (55798,474,0)jhuz (56272,460,0)px (56732,400,0)iarqr (57132,460,0)ir\n[57771,2610](57771,283,0)Dvqu (58054,772,0)pudf (58826,449,0)h (59275,1106,0)afkr\n[64532,2786](64532,513,0)Dvqu (65045,813,0)pudf (65858,467,0)h (66325,993,0)afkr\n[71609,1815](71609,437,0)Dvqu (72046,820,0)pudf (72866,418,0)h (73284,140,0)afkr\n[73424,1487](73424,296,0)Xdrhj (73720,236,0)kr (73956,187,0)lvxd (74143,212,0)mfq (74355,175,0)dar (74530,381,0)upyad\n[76781,1831](76781,205,0)Ir'qr (76986,473,0)mhjjpuy (77459,330,0)pudf (77789,140,0)dar (77929,683,0)xtg\n[79667,1305](79667,338,0)Ihdwapuy (80005,251,0)gfv (80256,362,0)jpyad (80618,354,0)vs\n[80972,1663](80972,172,0)Jrd (81144,165,0)pd (81309,449,0)nvqu (81758,877,0)mfqrerq\n[82973,1346](82973,158,0)Huz (83131,160,0)gfv (83291,397,0)ihuuh (83688,631,0)trrs\n[84319,2173](84319,234,0)H (84553,380,0)sprwr (84933,496,0)fm (85429,234,0)kg (85663,829,0)jfer\n[86922,1825](86922,336,0)Dahd (87258,729,0)ufnfzg (87987,319,0)wfvjz (88306,441,0)dfvwa\n[88994,2088](88994,177,0)Pd'x (89171,271,0)gfv (89442,256,0)dahd (89698,297,0)P (89995,414,0)ihud (90409,673,0)df\n[92522,2744](92522,352,0)Ipdafvd (92874,368,0)gfv (93242,304,0)darxr (93546,312,0)ipuyx (93858,216,0)hqr (94074,256,0)fm (94330,392,0)uf (94722,544,0)vxr\n[95810,2729](95810,240,0)Huz (96050,656,0)xrhqwapuy (96706,688,0)xrhqwapuy (97394,624,0)mfq (98018,521,0)gfv\n[99635,2020](99635,264,0)Dhtr (99899,432,0)kg (100331,234,0)ahuz (100565,271,0)huz (100836,819,0)qvu\n[104751,2072](104751,424,0)Arg (105847,208,0)whu'd (106055,216,0)gfv (106271,552,0)xdhg\n[107331,2379](107331,199,0)Zfu'd (107530,205,0)jrher (107735,288,0)h (108023,847,0)mhjjru (108870,840,0)huyrj\n[109710,2288](109710,424,0)Fvd (110134,458,0)arqr (110592,455,0)fu (111047,440,0)arq (111487,511,0)fiu\n[112745,1032](112745,190,0)Mpuz (112935,279,0)h (113214,563,0)sjhwr\n[114176,2504](114176,463,0)Iarqrerq (114639,279,0)ir (114918,427,0)jhuz (115345,445,0)px (115790,458,0)iarqr (116248,432,0)ir\n[116680,2327](116680,471,0)Dvqu (117151,800,0)pudf (117951,487,0)h (118438,569,0)afkr\n[119703,1016](119703,208,0)Whu'd (119911,271,0)gfv (120182,537,0)xdhg\n[121198,2401](121198,210,0)Zfu'd (121408,199,0)jrher (121607,275,0)h (121882,813,0)mhjjru (122695,904,0)huyrj\n[123599,2210](123599,385,0)Fvd (123984,479,0)arqr (124463,443,0)fu (124906,439,0)arq (125345,464,0)fiu\n[126639,1040](126639,184,0)Mpuz (126823,247,0)h (127070,609,0)sjhwr\n[128086,2489](128086,512,0)Iarqrerq (128598,240,0)ir (128838,409,0)jhuz (129247,441,0)px (129688,422,0)iarqr (130110,465,0)ir\n[130575,2591](130575,408,0)Dvqu (130983,880,0)pudf (131863,456,0)h (132319,847,0)afkr\n[137639,4046](137639,391,0)Dvqu (138030,935,0)pudf (138965,448,0)h (139413,2272,0)afkr\n[144645,2040](144645,367,0)Dvqu (145012,873,0)pudf (145885,455,0)h (146340,345,0)afkr\n[146685,1576](146685,432,0)Zfu'd (147341,216,0)zfu'd (147557,384,0)ihuuh (147941,320,0)yf\n[148941,2279](148941,184,0)Zfu'd (149125,88,0)ihud (149213,232,0)gfv (149445,272,0)df (149717,703,0)jrher (150420,409,0)kr (150829,391,0)arqr\n[153406,1911](153406,423,0)Zfu'd (154256,236,0)zfu'd (154492,395,0)ihuuh (154887,430,0)yf\n[155812,2285](155812,212,0)Zfu'd (156024,199,0)ihud (156223,219,0)gfv (156442,242,0)df (156684,696,0)jrher (157380,409,0)kr (157789,308,0)arqr\n[160354,1944](160354,407,0)Zfu'd (161153,225,0)zfu'd (161378,456,0)ihuuh (161834,464,0)yf\n[162850,2274](162850,146,0)Zfu'd (162996,157,0)ihud (163153,226,0)gfv (163379,238,0)df (163617,633,0)jrher (164250,449,0)kr (164699,425,0)arqr\n[167301,1990](167301,496,0)Zfu'd (168177,209,0)zfu'd (168386,433,0)ihuuh (168819,472,0)yf\n[169817,2112](169817,120,0)Zfu'd (169937,184,0)ihud (170121,193,0)gfv (170314,239,0)df (170553,680,0)jrher (171233,424,0)kr (171657,272,0)arqr\n[181300,2147](181300,536,0)Arg (182372,184,0)whu'd (182556,243,0)gfv (182799,648,0)xdhg\n[183984,2335](183984,172,0)Zfu'd (184156,168,0)jrher (184324,248,0)h (184572,832,0)mhjjru (185404,915,0)huyrj\n[186319,2277](186319,384,0)Fvd (186703,453,0)arqr (187156,464,0)fu (187620,434,0)arq (188054,542,0)fiu\n[189287,1085](189287,223,0)Mpuz (189510,262,0)h (189772,600,0)sjhwr\n[190757,2535](190757,487,0)Iarqrerq (191244,272,0)ir (191516,400,0)jhuz (191916,456,0)px (192372,416,0)iarqr (192788,504,0)ir\n[193292,2608](193292,434,0)Dvqu (193726,825,0)pudf (194551,414,0)h (194965,935,0)afkr\n",
+      "tr": "[offset:0]\n[00:07.85]䕒䡄㫐㗍䐢䓣䤂䀄䃈㡪㥬䕒䤂㦍㠂\n[00:11.22]䀲㴾䒼㜵䊆㺿 䕒䓌䛂㴾㙈䠈㶔䃈㓿㡪䤂㮿㡵\n[00:16.14]㫜㾑䕒㛵䡎㙈䡎㴎\n[00:17.66]䕒䔌䔌㬍㬍\n[00:19.79]䰗䘄㜌䁹㧡䍕䦤䤂䑠\n[00:21.27]䕒䔌䔌㬍㬍\n[00:23.28]䐝㴾䬆㝿䋴㙈\n[00:26.43]䂗䓬㴾 䁹㯹㠕㵐㨙䦚䧾\n[00:31.76]㴾㻄䙩䇯䮚䂷\n[00:34.29]䀲㝹䭙䀀㕉㟄㴽䨔䤂䩆䲼\n[00:36.79]䪟䈺㨓䐋䞄㵯\n[00:39.75]䔌䑄䁹䐋㯠䛼䝠㤬\n[00:41.26]䦚㔨䕒䘺㿎㚧䡎䐋\n[00:43.74]䵎䭺㮿㡵㻪䓌䚰㢹䕒䘺䤂㬁䥍\n[00:46.76]㴾㻄䙩䇯䮚䂷\n[00:48.26]䀲㝹䭙䀀㕉㟄㴽䨔䤂䩆䲼\n[00:50.67]䪟䈺㨓䐋䞄㵯\n[00:53.63]䔌䑄䁹䐋㯠䛼䝠㤬\n[00:55.07]䦚㔨䕒䘺㿎㚧䡎䐋\n[00:57.77]䵎䭺㮿㡵㻪䓌䚰㢹䕒䘺䤂㬁䥍\n[01:04.53]䵎䭺㮿㡵㻪䓌䚰㢹䕒䘺䤂㬁䥍\n[01:11.60]䵎䭺㮿㡵㻪䓌䚰㢹䕒䘺䤂㬁䥍\n[01:13.42]㗅䘩䆎䛂䕒䰓㙷䫷䵣䬹\n[01:16.78]䕒䘺㕉䦊㽪㹟䦚㨈䤂䩆㞧\n[01:19.66]㷡㜌㴾䘀㑟䃈䖒䤂㨀㤞\n[01:20.97]䀀䒐䁹㯹㕿䰓䴍䘀䚴䠓\n[01:22.97]㴾䰗䪛䶭䐡\n[01:24.31]䕒䵎䁹㧡䍕䦤䤂䑠䘀\n[01:26.92]䧎䡎䆝㠕䦚㪒䈘㦍\n[01:28.99]㴾䆎䆺䕒䤂䟧䝠㤬䏱\n[01:32.52]㟮䵧䂗䓬㴾 䒐䊆㓱㙄䦍㸷䦚㶇䐋\n[01:35.81]㨓䐋䔌㬍㴾䤂䛼㢣\n[01:39.63]䏂㜌䕒䤂㱵 䢌䂞䖩䗳\n[01:44.75]㴾㻄䙩䇯䮚䂷\n[01:47.33]䀲㝹䭙䀀㕉㟄㴽䨔䤂䩆䲼\n[01:49.71]䪟䈺㨓䐋䞄㵯\n[01:52.74]䔌䑄䁹䐋㯠䛼䝠㤬\n[01:54.17]䦚㔨䕒䘺㿎㚧䡎䐋\n[01:56.68]䵎䭺㮿㡵㻪䓌䚰㢹䕒䘺䤂㬁䥍\n[01:59.70]㴾㻄䙩䇯䮚䂷\n[02:01.19]䀲㝹䭙䀀㕉㟄㴽䨔䤂䩆䲼\n[02:03.59]䪟䈺㨓䐋䞄㵯\n[02:06.63]䔌䑄䁹䐋㯠䛼䝠㤬\n[02:08.08]䦚㔨䕒䘺㿎㚧䡎䐋\n[02:10.57]䵎䭺㮿㡵㻪䓌䚰㢹䕒䘺䤂㬁䥍\n[02:17.63]䵎䭺㮿㡵㻪䓌䚰㢹䕒䘺䤂㬁䥍\n[02:24.64]䵎䭺㮿㡵㻪䓌䚰㢹䕒䘺䤂㬁䥍\n[02:26.68]㝹䅭䋴䘯\n[02:28.94]㝹䓊䀀㴾㻪䕒䇯㵆䆶㮿\n[02:33.40]㝹䅭䋴䘯\n[02:35.81]㝹䓊䀀㴾㻪䕒䇯㵆䆶㮿\n[02:40.35]㝹䅭䋴䘯\n[02:42.85]㝹䓊䀀㴾㻪䕒䇯㵆䆶㮿\n[02:47.30]㝹䅭䋴䘯\n[02:49.81]㝹䓊䀀㴾㻪䕒䇯㵆䆶㮿\n[03:01.30]㴾㻄䙩䇯䮚䂷\n[03:03.98]䀲㝹䭙䀀㕉㟄㴽䨔䤂䩆䲼\n[03:06.31]䪟䈺㨓䐋䞄㵯\n[03:09.28]䔌䑄䁹䐋㯠䛼䝠㤬\n[03:10.75]䦚㔨䕒䘺㿎㚧䡎䐋\n[03:13.29]䵎䭺㮿㡵㻪䓌䚰㢹䕒䘺䤂㬁䥍",
+      "title": "FALLEN ANGEL",
+      "artist": "JENNIE",
+      "album": "Fallen Angel (Digital EP) [Explicit]",
+      "cover": "https://y.qq.com/music/photo_new/T002R800x800M000001tlvbX2F0kqO.jpg",
+      "duration_secs": 199
+    }
+  },
+  "expect": {
+    "winner": "kugou",
+    "verdicts": {
+      "kugou": "accepted",
+      "kuwo": "accepted",
+      "lrclib": "accepted",
+      "netease": "accepted",
+      "qq": "accepted"
+    },
+    "ranked": [
+      {
+        "source": "kugou",
+        "score": 1207,
+        "terms": [
+          {
+            "kind": "duration",
+            "points": 276
+          },
+          {
+            "kind": "wordTiming",
+            "points": 400
+          },
+          {
+            "kind": "lines",
+            "points": 71
+          },
+          {
+            "kind": "album",
+            "points": 40
+          },
+          {
+            "kind": "titleMatch",
+            "points": 120
+          },
+          {
+            "kind": "consensus",
+            "points": 250
+          },
+          {
+            "kind": "translation",
+            "points": 50
+          }
+        ],
+        "has_word_timing": true,
+        "has_translation": true,
+        "translation_lang": "zh"
+      },
+      {
+        "source": "qq",
+        "score": 1206,
+        "terms": [
+          {
+            "kind": "duration",
+            "points": 276
+          },
+          {
+            "kind": "wordTiming",
+            "points": 400
+          },
+          {
+            "kind": "lines",
+            "points": 70
+          },
+          {
+            "kind": "album",
+            "points": 40
+          },
+          {
+            "kind": "titleMatch",
+            "points": 120
+          },
+          {
+            "kind": "consensus",
+            "points": 250
+          },
+          {
+            "kind": "translation",
+            "points": 50
+          }
+        ],
+        "has_word_timing": true,
+        "has_translation": true,
+        "translation_lang": "zh"
+      },
+      {
+        "source": "netease",
+        "score": 796,
+        "terms": [
+          {
+            "kind": "duration",
+            "points": 275
+          },
+          {
+            "kind": "lines",
+            "points": 61
+          },
+          {
+            "kind": "album",
+            "points": 40
+          },
+          {
+            "kind": "titleMatch",
+            "points": 120
+          },
+          {
+            "kind": "consensus",
+            "points": 250
+          },
+          {
+            "kind": "translation",
+            "points": 50
+          }
+        ],
+        "has_translation": true,
+        "translation_lang": "zh"
+      },
+      {
+        "source": "lrclib",
+        "score": 768,
+        "terms": [
+          {
+            "kind": "duration",
+            "points": 266
+          },
+          {
+            "kind": "lines",
+            "points": 57
+          },
+          {
+            "kind": "album",
+            "points": 75
+          },
+          {
+            "kind": "titleMatch",
+            "points": 120
+          },
+          {
+            "kind": "consensus",
+            "points": 250
+          }
+        ]
+      },
+      {
+        "source": "kuwo",
+        "score": 583,
+        "terms": [
+          {
+            "kind": "duration",
+            "points": 295
+          },
+          {
+            "kind": "lines",
+            "points": 128
+          },
+          {
+            "kind": "album",
+            "points": 40
+          },
+          {
+            "kind": "titleMatch",
+            "points": 120
+          }
+        ]
+      }
+    ],
+    "winner_fingerprint": "5c21c305c115b564"
+  }
+}

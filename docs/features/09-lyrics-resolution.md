@@ -1,6 +1,6 @@
 # 09. 歌词解析决策（collector）
 
-> 最后核对：2026-09-03 · 基线：e103532+工作树
+> 最后核对：2026-09-04 · 基线：0640c12+工作树
 
 ## 定位
 
@@ -185,7 +185,9 @@ collector 的核心：一首歌播放时，去八个歌词源（网易云/QQ/酷
 | LyricFind 源 | ytmusic.go `ytmusicLyric` `resolveYTMusicLyric`（search→next→browse 三跳，只接受 LyricFind、见 `ytmusicIsLyricFindSource`）`ytmusicEnsureVisitorID`（单飞） |
 | 酷我源 | kuwo.go `kuwoLyric` `resolveKuwoLyric`（搜索后自己重新打分排序，见 `kuwoCandidateScore`）`kuwoSearch` `kuwoFetchLyric` |
 | 演唱者标签(Go 侧) | lyricspeaker.go `lyricSpeakerLabels` `lyricSplitLabel` `isCreditLineWithSpeakers` —— 与 Swift 侧 `LyricDuet` 同口径,改一边必须改另一边 |
-| 打分 | match.go `scoreLyricCandidateDetailed`（版本 `lyricsScoringVersion`）；打完分排序前的收尾撤销 `applyWordTimingTitleOverride`（两处调用：enrich.go `scoreAndSort` / `mergeLyricCandidateRounds`） |
+| 打分 | match.go `scoreLyricCandidateDetailed`（版本 `lyricsScoringVersion`）；打完分排序前的收尾撤销 `applyWordTimingTitleOverride`（两处调用：enrich.go `rankLyricSourceResults` / `mergeLyricCandidateRounds`） |
+| 一轮原始应答 → 排好序的候选 | enrich.go `rankLyricSourceResults`（2026-09-04 从 `fetchScoredLyricCandidatesStreaming` 的 `scoreAndSort` 闭包提成包级纯函数；候选构建、时间轴自洽修复、末尾印证、正文共识、逐条打分、纯音乐标记、逐字加分撤销、稳定排序全在这里）；入参类型 `lyricSourceResult`；只给测试用的观察钩子 `lyricSourceResultTap` |
+| 回归金标集 | lyricsgolden_test.go（`TestLyricsGolden` / 类别契约 `goldenRequiredCategories` + `goldenCategoryCheck` / 明文探针）、lyricsgolden_scramble_test.go（保形置乱 `scrambleLyricRound`）、lyricsgolden_capture_test.go（联网采集 `TestLyricsGoldenCapture`，默认跳过）；样本 testdata/lyricsgolden/*.json，用法见同目录 README |
 | 挑选 | enrich.go `pickLyricCandidate` |
 | 守卫 | match.go `isTimedLRC` `isProbablyWrongLanguageLyrics`（第 25 条：候选源自己确认的 candidateArtist 或 `knownArtistAlias(localArtist)` 含汉字可豁免）`isCreditOnlyLRC` `usableWordTiming` |
 | 歌手闸三档 | match.go `artistMatches` / `lyricSourceArtistMatches` / `lyricRecordingTriangleMatches`（第三档只在 kugou.go `resolveKugouLyric` 调用） |
@@ -200,7 +202,7 @@ collector 的核心：一首歌播放时，去八个歌词源（网易云/QQ/酷
 | 决策留痕 | decision.go `buildLyricsDecision`；lyricstrace.go |
 | 手动重匹配的可判定性闸 | enrich.go `rescoreDecidable`（第三参 `noCurrentLyrics`）；Swift 侧 `LyricsRematchDecision.decide` |
 | 各源 | netease.go / qq.go / kugou.go / lrclib.go / musixmatch.go |
-| 纯音乐占位判定 | netease.go `isInstrumentalPlaceholderLyric`；qq.go `resolveQQLyric`→`qqLyricResult`；enrich.go `scoreAndSort` 的 `instrumentalMarker` 三分支 |
+| 纯音乐占位判定 | netease.go `isInstrumentalPlaceholderLyric`；qq.go `resolveQQLyric`→`qqLyricResult`；enrich.go `rankLyricSourceResults` 的 `instrumentalMarker` 三分支 |
 | QQ 译文 / 罗马音 | qq.go `qqQRCLyric`→`qqQRCResult{yrc,tr,roma}`、`qqAuxiliaryLRC`→`qqAuxiliaryPlainToLRC`（`hasQRCLineTiming` 分流到 `qrcToLineLRC` / `cleanQQAuxiliaryLRC`，`isQQTranslationNotice`）、假名标注行 `splitQRCKanaLine`→`qqQRCResult.kana`→`attachKanaLine`；enrich.go 候选装配处 `usableValueAdd(qqLyr, qqTr, "zh", qqRoma, …)`、最终装配 `switch c.source` 的 `case "qq"`；单测 `qqaux_test.go` |
 | 酷狗译文 / 罗马音 | kugou.go `splitKRCLanguageLine`→`krcLanguageTracks`（`krcLineStarts` 行序号对齐、`krcLanguageTrackToLRC`、`krcLanguageRomaMaxHanRatio` 谐音闸）；enrich.go 候选装配处 `usableValueAdd(kugouLyr, kugouTr, "zh", kugouRoma, …)`、最终装配 `switch c.source` 的 `case "kugou"`；单测 `kugoulang_test.go` |
 | 源级熔断 / 退避 | sourcebreaker.go `lyricSourceBreaker`（`observe` / `planRound` / `lyricSourceForHost` / `parseLyricSourceRetryAfter`）、`lyricSourceRound`（ctx 传递跳过名单）；networkobs.go `doHTTPTracked` 两处 `observe`；enrich.go `fetchScoredLyricCandidatesStreaming` 的 `skipSource`、三处写缓存点的 `LyricsSourcesSkipped`、`needsLyricsFirstFill` 的 `lyricsFillSkippedRetryInterval`；decision.go `SourcesSkipped`；单测 `sourcebreaker_test.go` |
@@ -212,6 +214,25 @@ collector 的核心：一首歌播放时，去八个歌词源（网易云/QQ/酷
 | 流式搜索的中间态合并 | enrich.go `scoredLyricCandidatesStreaming` 里别名重试轮的 `aliasUpdate` 闭包 + 首歌手变体轮的 `mergedUpdate` 闭包，都靠 `mergeLyricCandidateRounds` 避免"搜索候选歌词"弹窗中途闪回空/半状态 |
 | `lyrimuse-collector/lyricstimeline.go` | 行级 LRC 与逐字轴打架时以逐字轴为准重挂时间戳（`rehangLRCOnYRC`），译文/罗马音跟着搬（`remapLRCTimestamps`）；重挂修不了且两套轴自相矛盾（配对行中位偏差 ≥10s）时弃用逐字轴（`wordTimingContradictsLRC`，见坑 32）；候选构造处 `rehangCandidateTimelines`、启动期存量 `migrateLyricTimelines`。不改打分判据，因此不 bump 版本。见坑 23/32 |
 ## 设计决策与已知坑
+
+### 歌词搜索回归金标集：改打分先过它（2026-09-04 加）
+
+**背景**：这一章记的每一条「已知坑」都对应一次真实错配，修法散在 `match.go` / `enrich.go` 的几十条判据里；但仓库里守它们的一直是**按函数**钉的单测（"这一条规则对这个输入怎么判"），从来没有"**这首歌**拿到**这组候选**最后**选对了**"的端到端样本——历次"全库 2339 条回放"都是一次性脚本、跑完即丢，`simeval` 又依赖本机数据默认跳过。结果是改任何一档权重，"哪几类歌会换冠军"在仓库里没有常驻证据。
+
+**做了什么**：
+- `fetchScoredLyricCandidatesStreaming` 里的 `scoreAndSort` 闭包提成包级纯函数 **`rankLyricSourceResults`**（入参 = 各源原始应答 `map[source]lyricSourceResult`），生产与测试跑同一份代码——`simeval_test.go` 那种在测试里重抄骨架的做法已经漂过两步（少了 `rehangCandidateTimelines` 和 `applyWordTimingTitleOverride`），不再允许。
+- **`testdata/lyricsgolden/*.json`**：18 首真实曲目的原始应答 + 已确认正确的结论（冠军、每条候选判决、纯音乐标记、完整分项快照），覆盖 19 类。类别清单与"这一类的样本必须体现什么"钉在 `goldenRequiredCategories` / `goldenCategoryCheck`：华语录音室多源、英文、日文罗马音、韩文谚文、粤语、同场/另一场现场版、版本限定词错配、多歌手合 credit、三类否决（署名/纯文本/语言）、末句超曲长、跨源末尾印证、无逐字冠军、amll 内嵌译文、播放器同源、单候选、纯音乐标记。覆盖按**行为被体现**算而不按标签算（纯音乐那首里网易云的署名行也被否决了，就算覆盖了「署名否决」）。
+- **正确性不信缓存**（用户 2026-09-04 定「不能纯信目前的缓存」）：每个样本的冠军要过一组独立判据 `goldenLabelEvidence` / `goldenJudgeEvidence`——歌名过 `lyricTitleAccepted`、版本限定词一致且不是另一场演出、自报曲长偏差 ≤3%、末句不超曲长且覆盖 ≥50%、**至少一个别的源印证正文**（单候选则曲长 ≤1% 且覆盖 ≥70%）、现场专辑要对得上同一场、两边 live 声明对称（这一条按 `albumHasLiveMarker` 连拉丁 live/concert 词元一起认，比打分层严）。缓存里那份只是旁证，跟冠军不是同一份内容就算有争议、拒绝。没有 FORCE。`TestLyricsGoldenWinnersAreIndependentlyJustified` 每次都拿样本数据重算这组判据。
+- **没有 `word-timing-override` 这一类**：库里 20 条真实触发案例过了一遍没有一条站得住——原始案例（方大同《公园/南音 (Live版)》，酷狗是另一场演唱会）如今被 v7 `liveAlbumConflict` 先接住、逐字不再是决胜项、规则不触发；仍会触发的 11 条（林家谦 White Summer Live 系列、《Catch a Dream (Live版)》《爱不来 (Live版)》《大风吹 (和声伴奏)》）里，被撤销 +400 的酷狗候选跟冠军**是同一张专辑、同一自报时长的同一次录音**，只是括号写法不同（「(with 宣萱)(White Summer Live)」vs「(White Summer Live) [with 宣萱]」）——撤销之后用户丢的是逐字、换来的不是版本正确。⚠️ 这更像 v5 那条规则的误伤面（v5 消融时 0 误报的口径是 861 条 v5 之前的记录，White Summer 这批是之后进来的），值得单独复核：同专辑 + 自报时长 ≤1% 的两条候选之间不该触发撤销。规则本身仍由 match_test.go 的 `TestApplyWordTimingTitleOverride_*` 钉住。
+- **断言分两层**：冠军/判决/纯音乐标记是语义硬断言，`LYRICS_GOLDEN_UPDATE=1` 也不会静默改写、必须再给 `LYRICS_GOLDEN_ACCEPT_SEMANTIC=<样本id>` 逐首点头；分数/分项是快照，改权重后 UPDATE 重生成、靠 git diff 审"哪首歌的哪一项动了"。突变测试实测：把 `lyricOvershootToleranceSecs` 5s 改成 50s，`lineonly-conversation-mix` 冠军翻成错版本的 QQ、`overshoot-pianzhikuang` 的 -700 消失，两处当场红。
+- **样本正文是置乱的，这是刻意的**：01 章版权立场是「不托管、不转发、不再分发」，真实歌词进 git 违背它。`scrambleLyricRound` 做同一首内一致的字符双射（汉字→CJK 扩展 A 区、拉丁保大小写置换、假名/谚文块内置换；时间戳/标点/元数据标签/署名行/演唱者标签/纯音乐占位原样），打分读到的全部特征置乱前后逐位相同——采集器把"置乱前后 `rankLyricSourceResults` 结果逐项一致"当写入前的硬闸，不一致就拒绝入库。⚠️ 第一版把行首「标签+冒号」一律原样保留，接缝处造出的 3-gram 让《躺在你的衣柜 (Guitar Version)》netease 与其它源的 Jaccard 从 0.559 漂到 0.544、跨过 0.55 丢了 100 分共识，被闸 3 拦下——现在只有**内容决定分类**的标签（演唱者标记、署名关键词/乐器词根/代词、精确署名表）保留原样，人名/普通词标签整行连标签一起置乱。
+- 用法见 `testdata/lyricsgolden/README.md`。
+
+**采集过程顺手核实到的三件事**（2026-09-03，缓存快照），改这一章别的功能时要知道：
+1. 丁世光《低潮期 (feat. 叶喜儿)》缓存里生效的是酷狗一条 **30 秒、5 行的残片**——决策存档 `duration_secs` 为空，rescore 那轮是拿 0 时长打的分，时长判据整套失效后 `wordTiming:400 + titleMatch:120 + lines:5` 就赢了。这是 searchcli.go 里那段「duration=0 会让这条路直接被堵死」的另一个形态：不是搜不到，是**选错还理直气壮**。联网重搜网易云那条（专辑吻合 + 时长吻合 + 与 QQ 正文共识）是对的；这首没进金标（缓存与冠军不一致 = 有争议）。
+2. 方大同《公园 (Live版)》缓存条目**自相矛盾**：`lyrics_decision_applied` 记着 rescore v6 胜者 netease、`applied=true`、`lyrics_score=674`（正是 netease 那条的分），但 `lyrics_source` 与正文（以及 `lyrics/` 权威文件的 `[source:kugou]` 头）都还是酷狗那份 Timeless 演唱会版——用户当初报的就是这份错的。`rescoreLyrics` 的代码路径在正文变化时会导出文件，所以更像是事后某次文件调和/备份恢复把内容倒回去了、决策槽没跟着回滚。⚠️待核对 具体是哪条路径。现在联网重搜 QQ 已经给出正确的专场版（1090 分），这首歌不再触发 wordTimingOverride；同样没进金标。
+3. Lady Gaga《Chromatica I》（60 秒管弦乐 intro，没有任何源有歌词）在采集器进程里（跟 `search-lyrics` CLI 同一处境：无 Apple 目录锚点索引）一次完整解析跑了 **31 轮**九源并发（别名/目录署名/标题反查各种兜底轮全部依次上阵），120 秒仍未结束（采集器的 ctx 到点取消）。纯音乐标记在第一轮就已经拿到（lrclib `instrumental`），后面 30 轮都是白跑。⚠️ 这不是金标集的范围，但值得单独修："已有纯音乐结论"应该跟"已有可用候选"一样短路掉后续重试轮。
+
 
 ### 同源 +250 认错了「当前播放器」：判据是勾选集合而不是在放的那个（2026-09-02 修，用户报「怎么全都显示符合播放器」）
 
