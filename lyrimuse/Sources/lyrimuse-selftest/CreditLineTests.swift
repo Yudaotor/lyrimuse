@@ -193,6 +193,45 @@ func runCreditLineTests() {
                     [false, false, false, false],
                     "拉丁角色名(反向): 段落标记(Chorus/Verse/Bridge/Rap)后面跟的是真歌词,一条都不许删")
 
+        // ---- 第十六轮(2026-09-03,李佳薇《甲乙丙丁》头部「艺术指导」漏网) ----
+        //
+        // 用 App 同一条路径(LRC+YRC → load → allLines)复现:64 行里 16 行署名删了 15 行,只剩
+        // 「艺术指导：程楚楚(廊坊师范学院）」。标签「艺术指导」不含 creditRoleWords 任何词;右边
+        // 带括注机构、括号半全角混用,不是干净的人名表,形状规则也接不住。
+        // 收进表的四个词(指导 / 总监 / 策划 / 导演)全部先拿全库语料量过(3480 首 / 197235 行):
+        // 带冒号的全是署名、不带冒号的全是真歌词,冒号那道门正好把两边分开。
+        // **before/after 全库差分(3480 首 / 197236 行正文,逐行 diff creditLineDropDecisions)**:
+        // KEEP→DROP **1 行**(就是这条),DROP→KEEP **0 行**。另外三个词在语料里零翻转——它们现有
+        // 的实例都已经被 matchesNameListCreditShape 的"整份 ≥2 行"闸兜住了,收进表只为
+        // "整首只有一行这种署名"的场合(第十轮定下的理由)。差分用的是整份入口,所以也覆盖了
+        // 这张表的第二个消费点 englishCreditPattern(它把整张表当可选中文前缀 join 进正则)。
+        // ⚠️ 差分工具切行必须按 isNewline:酷狗源 1439 首歌词是 CRLF,Swift 的 "\r\n" 是一个
+        // Character,`split(separator: "\n")` 切不开、整份变一行——第一版工具漏掉了这 1439 首,
+        // 报出的"2671 首 / 153121 行"是错的。App 自己的 LRCParser 早就为此先归一了换行。
+        //
+        // ⚠️ 用例里掺真歌词,理由同第十五轮:只给署名行会触发「永不删空」兜底闸把它们原样放回。
+        expectEqual(LyricsSyncEngine.creditLineDropDecisions(
+            ["还没来得及习惯", "独自入睡的不安", "艺术指导：程楚楚(廊坊师范学院）", "你外套味道还没散"],
+            trackTitle: "甲乙丙丁Strangers", trackArtist: "李佳薇"),
+                    [false, false, true, false],
+                    "第十六轮: 《甲乙丙丁》那一行带括注机构的「艺术指导」在整份入口里要被删,正文不动")
+        expectEqual(LyricsSyncEngine.matchesRoleWordCredit("艺术指导：程楚楚(廊坊师范学院）"), true,
+                    "角色词: 「指导」(艺术指导,右边带括注机构、括号半全角混用)")
+        expectEqual(LyricsSyncEngine.matchesRoleWordCredit("项目总监：闫曼嘉/蔡雨燕/庄有豪"), true,
+                    "角色词: 「总监」(丁世光多首头部的项目总监行)")
+        expectEqual(LyricsSyncEngine.matchesRoleWordCredit("总策划:赵宗/唐晶晶"), true,
+                    "角色词: 「策划」(半角冒号)")
+        expectEqual(LyricsSyncEngine.matchesRoleWordCredit("导演助理：Minto"), true,
+                    "角色词: 「导演」(导演助理,右边单个拉丁名——单行、人名表形状接不住的那种)")
+        // 反向哨兵:语料里含这几个词的**真歌词**,一条都不许删。它们都没有冒号(过不了
+        // matchesRoleWordCredit 第一道门),也没有 "by/at"(过不了 englishCreditPattern);哪天
+        // 有人把"必须有冒号"放宽,这几条先红。
+        expectEqual(LyricsSyncEngine.creditLineDropDecisions(
+            ["进入你梦里 指导你演戏", "当你的时尚顾问 别说你不能", "有超多导演跟编剧", "有谁来导演出好戏",
+             "唱情歌唱到像顾问一样"]),
+                    [false, false, false, false, false],
+                    "第十六轮(反向): 周杰伦/陶喆/张敬轩歌词里的 指导/顾问/导演 是真歌词,没有冒号,一条都不许删")
+
         // 「著作」「推广」进 creditRoleWords(第十四轮)。两条都必须**靠冒号那道门**生效。
         expectEqual(LyricsSyncEngine.matchesRoleWordCredit("著作权人：赋音乐"), true,
                     "角色词: 「著作权人」不带版权标记时也认")
