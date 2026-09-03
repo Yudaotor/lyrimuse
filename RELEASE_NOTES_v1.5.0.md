@@ -1,20 +1,23 @@
 v1.5.0
 
 The lyrics matching algorithm was overhauled — concert recordings should
-stop getting studio lyrics, and vice versa. And YouTube Music and Spotify
-playing in a browser are now properly supported as players. Worth knowing
-before you upgrade: first launch re-scores your library in a throttled
-background pass, so some tracks will switch to a better match over the
-following hours; the player setting is now multi-select (your old choice
-carries over); the notch's auto-hide switches are now separate from the
-desktop overlay's; and Intel Macs get in-app auto-update from this
-version on — but v1.5.0 itself needs one last manual install.
+stop getting studio lyrics, and vice versa. YouTube Music and Spotify
+playing in a browser are now properly supported as players, and the UI
+speaks Traditional Chinese now. Worth knowing before you upgrade: first
+launch re-scores your library in a throttled background pass, so some
+tracks will switch to a better match over the following hours (a new
+"follow algorithm upgrades" toggle lets you freeze picks instead); the
+player setting is now multi-select (your old choice carries over); the
+notch's auto-hide switches are now separate from the desktop overlay's;
+and Intel Macs get in-app auto-update from this version on — but v1.5.0
+itself needs one last manual install.
 
 歌词匹配算法做了一轮大修——演唱会现场歌曲不该再拿到录音室歌词，反过来也一样；
-网页版 YouTube Music 和 Spotify 也正式当播放器支持了。升级前值得知道：首次启
-动会在后台节流地给全库重新打分，接下来几个小时里会有一些歌换上更对的歌词；播
-放器设置改成多选（原单选值自动带过来）；灵动岛的自动隐藏开关跟悬浮歌词拆开
-了；Intel 从本版起有 App 内自动更新——但 v1.5.0 本身还得手动安装最后一次。
+网页版 YouTube Music 和 Spotify 也正式当播放器支持了；界面新增繁体中文。升级
+前值得知道：首次启动会在后台节流地给全库重新打分，接下来几个小时里会有一些歌
+换上更对的歌词（新增「自动跟进算法升级」开关，不想被后台换的可以关掉）；播放
+器设置改成多选（原单选值自动带过来）；灵动岛的自动隐藏开关跟悬浮歌词拆开了；
+Intel 从本版起有 App 内自动更新——但 v1.5.0 本身还得手动安装最后一次。
 
 New / 新功能
 - Select several players at once instead of one
@@ -27,12 +30,18 @@ New / 新功能
 - YouTube Music (LyricFind) and Kuwo join as lyrics sources — eight in
   total now
   新增 YouTube Music（LyricFind）和酷我两个歌词源，总数达到八个
+- The UI is available in Traditional Chinese, as a third interface
+  language alongside Simplified Chinese and English
+  界面新增繁體中文，与简体中文、英文并列的第三种界面语言
 - Cantonese songs get word-aware Jyutping readings; all four romanization
   languages now default to on
   粤语歌自动标注粤拼（按词消歧）；罗马音语言开关四项默认全开
 - Hand-picked lyrics can be locked against automatic rematching (new
   toggle, applied retroactively)
   手动选定的歌词可以锁定，不再被自动匹配换掉（新开关，可追溯生效）
+- Background lyric upgrades can be turned off entirely — settled picks
+  then stay put until you re-search yourself
+  新增「自动跟进算法升级」开关：关掉后已选定的歌词不再被后台换掉
 - A first-time lyrics search can be stopped — the song settles as "no
   lyrics" instead of searching forever
   首次联网搜歌词可以「停止搜索」，停止后落定为「暂无歌词」，不再一直转
@@ -52,11 +61,21 @@ New / 新功能
   灵动岛顶行也能拼：左右耳各自八选一（歌名/歌手/专辑/封面/播放控制/已播时长/
   剩余时长/不显示），音浪可关、可换边（样式也重画了），「显示歌词」可整个关
   掉，「暂停缩回」可选，最小宽度大幅放宽
+- The notch animates in and out — pausing shrinks the card back into the
+  notch instead of it vanishing — and gained its own lyrics alignment
+  setting
+  灵动岛有了出/收场动画（暂停时整卡缩回刘海，不再瞬间消失），并新增自己的
+  歌词对齐方式
 - The overlay, menu bar and notch settings pages are all editors now,
   with live preview and reset-to-defaults; menu-bar lyrics gained an
   alignment mode; a one-time tip shows that ⌘-dragging moves the icon
   悬浮歌词、菜单栏、灵动岛的设置页都改成带实时预览的编辑台，可一键恢复默认；
   菜单栏歌词新增对齐方式；首次启动提示 ⌘ 拖拽可挪图标
+- Menu bar: a progress icon next to the lyrics (fills bottom-up with
+  playback, Kugou-style), playback controls on hover, and adjustable
+  lyric font weight and size
+  菜单栏：歌词旁新增进度图标（随播放进度自下而上染色，仿酷狗）、悬停显示播放
+  控制三键、歌词字重和字号可调
 - Desktop overlay: a hover control row (expand to lyrics window /
   settings / close), a ⚙ quick-settings menu with a standalone
   lyric-search mini window, an unlock button right on the overlay, and an
@@ -84,14 +103,21 @@ New / 新功能
   searches
   歌词管理新增排序（11 种）、「偏移」列、按专辑搜索、搜索中的歌也有占位行；
   决策面板显示候选封面；搜索进度标注轮次
+- Settings shows lyrics-library stats, with translations split into
+  source-provided vs machine-translated
+  设置新增歌词库统计面板，译文按「源自带 / 机翻」分开统计
 - The lyrics search shows each source's availability and failure reason,
   and Settings gained a one-click lyric-source test
   联网搜索能看到各歌词源的可用情况和失败原因；设置页新增歌词源一键测试
 - The Dock icon has a right-click menu (Settings / Lyrics Manager /
-  Lyrics Window / Last.fm), and the lyrics window's title bar gained a
-  settings button
+  Lyrics Window / Last.fm), the lyrics window's title bar gained a
+  settings button, and the "no lyrics" / "network failed" empty states
+  offer a Search Lyrics button right there
   Dock 图标有了右键菜单（设置/歌词管理/歌词窗口/Last.fm）；歌词窗口标题栏加
-  了设置按钮
+  了设置按钮；「暂无歌词」「网络连接失败」两个空态页直接给出「搜索歌词…」按钮
+- The About page was redesigned — live GitHub star count, usage and
+  copyright notes, and a third-party licenses list
+  关于页重新设计：显示仓库实时 star 数，新增「使用与版权说明」和「第三方许可」
 - Every outbound network request is audit-logged, and the diagnostics
   export got much richer
   所有外发网络请求有审计日志；诊断导出的内容大幅扩充
@@ -105,6 +131,9 @@ Lyrics matching & scoring / 歌词匹配与打分
   同一首歌的不同场演唱会能分开了
 - QQ Music can find live-album tracks now
   QQ 音乐搜得到现场专辑曲目了
+- QQ lyrics carry their official translation, romanization and Japanese
+  furigana tracks now
+  QQ 源歌词现在能带上官方译文、罗马音和日语假名标注
 - Album names glued across scripts ("The One演唱会") tokenize correctly,
   and an album named 演唱会/现场/音乐会 counts as a live version
   中英文粘写的专辑名（「The One演唱会」）能正确分词；专辑名带「演唱会/现场/
@@ -119,9 +148,10 @@ Lyrics matching & scoring / 歌词匹配与打分
   顶着原唱歌手名的「DJ 某某版」混音不再被当成原版收下
 - Chinese-catalog matching got a batch of fixes: traditional/simplified
   artist spellings, bracketed aliases, Cantonese vs Mandarin versions of
-  a song, and mixed-script artist names all match correctly now
+  a song, mixed-script artist names, and variant Han characters (one
+  variant glyph used to make every Chinese source miss the song)
   中文曲库匹配一批修正：繁简艺名、括号别名、同一首歌的粤语/国语版、中英混排
-  艺名现在都能对上
+  艺名、汉字异体字（原来一个异体字就能让三家中文源全搜不到）现在都能对上
 - Kugou candidates are ranked across the whole result page
   酷狗候选改成整页排序
 - When a lyric's two timing tracks contradict each other, the bad one is
@@ -136,14 +166,25 @@ Lyrics matching & scoring / 歌词匹配与打分
 - When no source has synced lyrics, plain-text lyrics are adopted
   automatically as a fallback
   全部源都只有纯文本歌词时会自动采纳兜底，不再必须手动采纳
+- Blocked sources retry through the system proxy, and a failing source
+  cools down on its own instead of slowing every search
+  歌词源被网络屏蔽时自动经系统代理兜底；单个源故障会按原因自行冷却，不再拖慢
+  整轮搜索
 - NetEase lyrics no longer show literal \' artifacts
   网易云歌词不再出现字面的 \'
 
 Last.fm & scrobbling / Last.fm 与打卡
 - Paging through listening history is fast now
   翻听歌历史快了
-- "On this day" reports failures and offers a retry instead of a blank page
-  「那年今日」失败时不再空白，可重试
+- "On this day" reports failures and offers a retry instead of a blank
+  page; the tab became "Footprint" — a local listening-footprint card
+  plus a smarter look-back that widens to the whole week when the exact
+  day is empty
+  「那年今日」失败时不再空白，可重试；该段升级为「足迹」——本地收听足迹卡 +
+  更会找料的「那年今日」（当天没记录会放宽到那一周）
+- Ads on YouTube Music / Spotify web no longer enter the listening
+  history
+  YouTube Music / Spotify 网页版的广告不再混进收听历史
 - Covers verified by your own library take precedence over Last.fm's
   wrongly matched art
   本机已核实的封面优先于 Last.fm 配错的图
@@ -157,18 +198,26 @@ Last.fm & scrobbling / Last.fm 与打卡
   across stats, charts and digest notifications
   播放次数会合并同一首歌/同一歌手的不同写法（中英文歌名、繁简体、罗马字），
   统计、榜单和日报/周报推送同口径
-- Scrobbles submit exactly what the player reported; multi-artist tracks
-  can submit only the first artist; scrobbling is now documented
+- Scrobbles submit exactly what the player reported; multi-artist
+  credits can go out as-is, first-artist-only, or via a smart mode that
+  follows Last.fm's own catalog; scrobbling is now documented
   (docs/scrobbling.md)
-  打卡按播放器上报的信息原样提交；多歌手曲目可只提交第一位；打卡机制有了公开
-  文档（docs/scrobbling.md）
+  打卡按播放器上报的信息原样提交；合唱署名可选原样、只发第一位，或按 Last.fm
+  自己的编目判断的智能档；打卡机制有了公开文档（docs/scrobbling.md）
 
 Fixes / 修复
 - Now-playing covers got a batch of accuracy fixes: artwork sent by the
   player itself is used first, wrong-edition album art is corrected, and
   Apple covers doubled in resolution
   正在播放的封面一批对版修复：优先用播放器自己送来的封面、同名不同版专辑不再
-  配错图、Apple 封面分辨率翻倍
+  配错图、Apple 封面分辨率翻倍；网页展示页遇到设备直送封面不再空白
+- Searching lyric candidates dropped from minutes to seconds in the worst
+  case
+  「搜索候选歌词」最坏情况从两三分钟降到几秒
+- NetEase rate limiting is handled properly now — exponential backoff, a
+  steadier endpoint, and no more false "rate limited" labels on sources
+  that simply had no match
+  网易云限流治理：指数退避、换更稳的端点；「没给出候选」不再被误标成限流
 - AMLL's embedded translations were never actually read; machine
   translation no longer skips repeated chorus lines
   AMLL 自带的译文此前一直没被读取，已修；机翻不再漏掉重复的副歌行
@@ -213,6 +262,9 @@ Ops / 运维
   发布流水线在打 tag 时校验更新源结构
 - build.sh installs atomically, so concurrent builds can't corrupt the app
   build.sh 改成原子安装，并发构建不再弄坏已装的 App
+- The collector reports the app's own version, so Settings can no longer
+  show two mismatched version numbers
+  采集服务版本号与 App 同源，设置页不再出现两个对不上的版本号
 
 ## Download / 下载
 
@@ -224,6 +276,6 @@ Ops / 运维
 Not sure which one? Check your chip under **About This Mac**.
 不确定该下哪个？打开「关于本机」看芯片是 Apple M… 还是 Intel Core…
 
-23 commits since v1.4.0.
+26 commits since v1.4.0.
 
 **Full Changelog**: https://github.com/Yudaotor/lyrimuse/compare/v1.4.0...v1.5.0
