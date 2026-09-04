@@ -7,6 +7,7 @@
 //	LYRICS_GOLDEN_CATEGORY=zh-studio-multisource \  # goldenRequiredCategories 里的键
 //	LYRICS_GOLDEN_NOTE='...' \                      # 为什么挑这首
 //	[LYRICS_GOLDEN_PLAYER=com.apple.Music] \        # 这一刻"在放"的播放器(同源 +250 的判据),缺省不加分
+//	[LYRICS_GOLDEN_CACHE_KNOWN_WRONG=1] \           # 见下:缓存里那份就是被修的 bug 本身时,解除"缓存不一致即拒绝"
 //	GOTOOLCHAIN=go1.24.4 go test -run TestLyricsGoldenCapture -v .
 //
 // 写入前的四道硬闸,任何一道不过就不写文件:
@@ -16,7 +17,11 @@
 //  2. **独立判据成立**(goldenJudgeEvidence,不依赖缓存):歌名过闸、版本一致、自报曲长 ≤3%、末句不超
 //     曲长且覆盖过半、有别的源印证正文(单候选则曲长 ≤1% 且覆盖 ≥70%)、现场专辑要对得上同一场;
 //     缓存里那份只作旁证——它跟冠军**不是同一份**(且不是手选)就算有争议,拒绝。没有 FORCE:
-//     有争议的不采(用户 2026-09-04 定)。采集器会把冠军正文的头尾各 4 行明文打到终端供人过目;
+//     有争议的不采(用户 2026-09-04 定)。唯一的例外是 LYRICS_GOLDEN_CACHE_KNOWN_WRONG=1:正在给一个
+//     **用户已报错、代码已修**的案例采回归样本时,缓存里那份恰恰就是那个 bug 的产物,它跟新冠军不一致
+//     不是争议、是修复本身——这时只解除"缓存不一致"这一条,其余每一项独立判据照样全部要过,并把
+//     "differs=…, cache known wrong" 原样写进 label_evidence 让人看得见。采集器会把冠军正文的头尾各 4 行
+//     明文打到终端供人过目;
 //  3. **置乱保形**:置乱前后 rankLyricSourceResults 的结果逐项相同(冠军、判决、分数、分项、附属);
 //  4. **样本自洽**:写出的 JSON 读回来、按 TestLyricsGolden 同一条路跑一遍,diff 为零。
 //
@@ -203,6 +208,9 @@ func TestLyricsGoldenCapture(t *testing.T) {
 		if entry.Lyrics != "" && ev.CacheAgreement != "exact" {
 			t.Logf("缓存里当前生效(%s)正文头尾:\n%s\n    …\n%s", entry.LyricsSource, goldenHeadLines(entry.Lyrics, 4), goldenTailLines(entry.Lyrics, 4))
 		}
+	}
+	if strings.HasPrefix(ev.CacheAgreement, "differs") && os.Getenv("LYRICS_GOLDEN_CACHE_KNOWN_WRONG") != "" {
+		ev.CacheAgreement += " (cache known wrong, see note)"
 	}
 	t.Logf("独立判据: %+v", ev)
 	if err := goldenJudgeEvidence(goldenQuery{Artist: qArtist, Title: qTitle, Album: qAlbum, DurationSecs: dur}, winnerName, ev); err != nil {

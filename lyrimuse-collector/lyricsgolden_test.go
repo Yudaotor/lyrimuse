@@ -207,7 +207,9 @@ type goldenLabelEvidence struct {
 	// 另一场演出的,不能当金标。
 	LiveMismatch bool `json:"live_mismatch"`
 	// CacheAgreement:采集那一刻缓存里生效的那份跟冠军的关系——exact / similar=0.93 / differs=0.12 /
-	// no-cache / manual。**只作旁证**;differs 且不是手选时采集会拒绝,因为那意味着有争议。
+	// no-cache / manual。**只作旁证**;differs 且不是手选时采集会拒绝,因为那意味着有争议——除非采集人
+	// 用 LYRICS_GOLDEN_CACHE_KNOWN_WRONG 声明缓存那份就是被修的 bug 本身(后缀 "cache known wrong"),
+	// 那是给用户已报错、代码已修的案例采回归样本的唯一通道,其余判据一条不少。
 	CacheAgreement string `json:"cache_agreement"`
 	// Instrumental:纯音乐类样本——没有歌词冠军,标记来自哪个源的**明文断言**(lrclib 结构化字段 /
 	// 网易云 pureMusic / QQ 占位正文),与缓存无关。
@@ -310,7 +312,7 @@ func goldenJudgeEvidence(q goldenQuery, winner string, ev goldenLabelEvidence) e
 	if ev.LiveMismatch {
 		problems = append(problems, "一边是现场录音一边不是(专辑名带 live/concert/演唱会),时间轴是另一次演出的")
 	}
-	if strings.HasPrefix(ev.CacheAgreement, "differs") {
+	if strings.HasPrefix(ev.CacheAgreement, "differs") && !strings.Contains(ev.CacheAgreement, "cache known wrong") {
 		problems = append(problems, "缓存里生效的那份跟冠军不是同一份内容("+ev.CacheAgreement+"),有争议")
 	}
 	if len(problems) > 0 {
@@ -333,6 +335,7 @@ var goldenRequiredCategories = map[string]string{
 	"live-same-concert":     "现场版,候选与本地是同一场演出(live 标记双向对称,不吃 versionTags)",
 	"live-other-concert":    "现场版,另一场演出的候选吃 liveAlbumConflict",
 	"version-tag-mismatch":  "版本限定词错配的候选吃 versionTags -600",
+	"version-tag-edit":      "「(Edit)」单曲剪辑版被识别为另一次录音(v12,2026-09-04 用户报的 Diamonds and Pearls 案)",
 	"multi-artist-credit":   "多歌手合 credit 的署名",
 	"reject-credit-only":    "整份只有署名行的候选被否决",
 	"reject-plain-text":     "无时间戳纯文本候选被否决",
@@ -874,6 +877,29 @@ func goldenCategoryCheck(fx *goldenFixture, category string, e goldenExpect) err
 		}
 		if !anyCand(func(c goldenRankedCandidate) bool { return c.Source != e.Winner && hasTerm(c, scoreTermVersionTags) }) {
 			return fmt.Errorf("要求:有非冠军候选吃到 versionTags")
+		}
+	case "version-tag-edit":
+		if err := needWinner(); err != nil {
+			return err
+		}
+		hit := false
+		for src, g := range fx.Sources {
+			title := g.Title
+			if g.Netease != nil {
+				title = g.Netease.Title
+			}
+			if src == e.Winner || !parenOnlyVersionTags(title)["edit"] {
+				continue
+			}
+			if anyCand(func(c goldenRankedCandidate) bool { return c.Source == src && hasTerm(c, scoreTermVersionTags) }) {
+				hit = true
+			}
+		}
+		if !hit {
+			return fmt.Errorf("要求:有标题带「(Edit)」的非冠军候选吃到 versionTags")
+		}
+		if parenOnlyVersionTags(fx.Query.Title)["edit"] {
+			return fmt.Errorf("要求:本地曲名本身不是 edit 版(这一类守的是'剪辑版冒充原版')")
 		}
 	case "multi-artist-credit":
 		if err := needWinner(); err != nil {

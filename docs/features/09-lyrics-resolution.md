@@ -89,7 +89,7 @@ collector 的核心：一首歌播放时，去八个歌词源（网易云/QQ/酷
   - `rejectNoLastTimestamp`：提不出末句时间戳。
 - **逐字覆盖率守卫** `usableWordTiming`：YRC 末时刻 < LRC 末时刻 ×0.5 就当没有逐字（防 QQ 截断残片骗 +400 又被「已有逐字不重试」钉死；阈值实测依据：残片覆盖 19.1%、正常最低 85.4%）。
 
-### 5. 打分（`lyricsScoringVersion = 11`）
+### 5. 打分（`lyricsScoringVersion = 12`）
 
 | 项 | 分值 | 条件 |
 |---|---|---|
@@ -102,7 +102,7 @@ collector 的核心：一首歌播放时，去八个歌词源（网易云/QQ/酷
 | **逐字加分撤销** | **-与上面那条 +400 相等** | v5 新增（`wordTimingOverride`，见下面「设计决策与已知坑」20）。全部候选打完分、排序前的收尾一步：逐字加分是唯一让冠军赢的理由、且另一个真实候选的标题吻合分更高时，把这份 +400 整段撤销。不是下调 +400 本身，是窄口子只在这个具体组合下触发 |
 | 与当前播放器同源 | +250 | 放 QQ 音乐偏向 QQ 词（理由是时间轴对齐，非内容质量）。⚠️ 判据是**这一刻在放的那个播放器**（按 bundle id），不是设置里勾了哪些——2026-09-02 修，见下面「设计决策与已知坑」那条 |
 | 行数 | +1/行，封顶 200 | |
-| 版本限定词错配 | -600 | 歌名∪专辑名比对；词表 2026-08-22 补了 `club mix`/`radio mix`/`house mix`/`dub mix`/`dance mix`/`vocal mix`/`club edit`。v8（2026-09-01）加一道窄豁免 `sameRecordingDespiteVersionTags`（时长 ≤1% + 专辑亲和 + 候选不缺本地限定词 + 多出的词全在 acoustic 家族白名单 → 是同一次录音的命名差异，不扣），见「设计决策与已知坑」33。v9（2026-09-01）起限定词集合来自 `recordingVersionTags`：专辑名 stripParens 后含中文现场标记（演唱会/现场/音乐会）视同声明 live，双向对称；豁免的第③门本地侧用括号级集合（截短拼法防误伤）——见第 36 条 |
+| 版本限定词错配 | -600 | 歌名∪专辑名比对；词表 2026-08-22 补了 `club mix`/`radio mix`/`house mix`/`dub mix`/`dance mix`/`vocal mix`/`club edit`；v12（2026-09-04）补裸 `edit`（只按整词匹配，见「已知坑」首条）。v8（2026-09-01）加一道窄豁免 `sameRecordingDespiteVersionTags`（时长 ≤1% + 专辑亲和 + 候选不缺本地限定词 + 多出的词全在 acoustic 家族白名单 → 是同一次录音的命名差异，不扣），见「设计决策与已知坑」33。v9（2026-09-01）起限定词集合来自 `recordingVersionTags`：专辑名 stripParens 后含中文现场标记（演唱会/现场/音乐会）视同声明 live，双向对称；豁免的第③门本地侧用括号级集合（截短拼法防误伤）——见第 36 条 |
 | **另一场演出**（`liveAlbumConflict`） | **-600** | v7 新增（2026-09-01，见「设计决策与已知坑」31）。versionTagsMismatch 在「两边都是 Live」时限定词集合相等、必然静默，这一档接住它够不到的那半边：本地**专辑名自己**带 live 标记 + 候选也是现场录音 + 两边专辑名剥掉歌手名和 live/演唱会类通用词后各自还有身份词且**完全不相交** → 判为两场不同命名的演出。四道门缺一不可（防误伤的实测依据见第 31 条） |
 | 专辑亲和 | +150/+75/+40 | 只加不减（专辑对不上是零证据非负证据） |
 | 标题吻合梯度 | +120/+60/+30 | 精确/剥括号带版本词/双语 |
@@ -228,6 +228,16 @@ collector 的核心：一首歌播放时，去八个歌词源（网易云/QQ/酷
 - **断言分两层**：冠军/判决/纯音乐标记是语义硬断言，`LYRICS_GOLDEN_UPDATE=1` 也不会静默改写、必须再给 `LYRICS_GOLDEN_ACCEPT_SEMANTIC=<样本id>` 逐首点头；分数/分项是快照，改权重后 UPDATE 重生成、靠 git diff 审"哪首歌的哪一项动了"。突变测试实测：把 `lyricOvershootToleranceSecs` 5s 改成 50s，`lineonly-conversation-mix` 冠军翻成错版本的 QQ、`overshoot-pianzhikuang` 的 -700 消失，两处当场红。
 - **样本正文是置乱的，这是刻意的**：01 章版权立场是「不托管、不转发、不再分发」，真实歌词进 git 违背它。`scrambleLyricRound` 做同一首内一致的字符双射（汉字→CJK 扩展 A 区、拉丁保大小写置换、假名/谚文块内置换；时间戳/标点/元数据标签/署名行/演唱者标签/纯音乐占位原样），打分读到的全部特征置乱前后逐位相同——采集器把"置乱前后 `rankLyricSourceResults` 结果逐项一致"当写入前的硬闸，不一致就拒绝入库。⚠️ 第一版把行首「标签+冒号」一律原样保留，接缝处造出的 3-gram 让《躺在你的衣柜 (Guitar Version)》netease 与其它源的 Jaccard 从 0.559 漂到 0.544、跨过 0.55 丢了 100 分共识，被闸 3 拦下——现在只有**内容决定分类**的标签（演唱者标记、署名关键词/乐器词根/代词、精确署名表）保留原样，人名/普通词标签整行连标签一起置乱。
 - **第二层：检索层金标**（`lyricsgolden_search_test.go`，同日）。打分层守的是"拿到最终候选后怎么挑"，这一层守再往前一步——各源在**自己的搜索结果**里挑"就是本地这首"的那一条（同名歌里混着翻唱/演奏/另一场演唱会/另一位歌手）。四个源的挑选逻辑各是一个纯函数（见锚点表；netease 的 pick 闭包和 QQ 的专辑分支循环为此原样提成包级函数），样本 = 真实搜索结果的元数据（id/歌名/歌手/专辑/自报时长/语种；只有 lrclib 的结果带正文，照第一层置乱）+ 本地查询词 + 期望挑中谁（QQ 另记 strict/loose 两档各放行了谁、不看专辑时会选谁；候选没自带专辑名时生产要查详情的那几条，采集时按同一份预算真的查一遍记成 `album_lookup`，回放照表还原）。55 个样本（netease 19 / qq 17 / kugou 15 / lrclib 4，含 2 个"选空"负样本）。挑选结果同样过独立判据（歌名过闸、歌手沾边、自报时长 ≤3%、版本一致、live 对称；选空则这批里必须**确实没有**站得住的候选），不过就不采——采集时被拒的几条本身就是信息：QQ/酷狗对《Shall We Talk (Live)》在检索层挑的是《Get A Life (Live)》另一场（打分层靠 liveAlbumConflict 兜住）、QQ 对《躺在你的衣柜 (Guitar Version)》挑的是 199s 的录音室版（打分层靠 durationOff+sourceDurationOff 兜住）、酷狗对《All I Have to Give (The Conversation Mix)》挑的是 276s 的原版（打分层靠 -700 兜住）——三处都是检索层放行了错版本、靠打分层救回，检索层本身没有版本判据。突变测试：`lyricTitleAccepted` 放开任意子串包含，三个 QQ 样本的放行名单当场红。
+### 「(Edit)」剪辑版冒充原版：版本词表漏了裸 edit（2026-09-04 修，用户报「这个歌匹配错了」）
+
+**现象**：PRINCE《Diamonds and Pearls (2023 Remaster)》（本地 283.0s）配上了酷狗《Diamonds And Pearls (Edit)》/ The Very Best Of Prince——单曲剪辑版，自报 260s。酷狗 1122 分（时长吻合 299 + 逐字 400 + 53 行 + 标题 120 + 共识 250）压过 QQ 的《Diamonds and Pearls (2023 Remaster)》/ Diamonds and Pearls (Remaster)（1079：291 + 400 + 118 行 + 专辑 150 + 标题 120，**没有共识**）。
+
+**三道本该拦住它的判据为什么全部静默**：① `distinctRecordingVersionTags` 只有 "radio edit" / "club edit" 两个带前缀的写法，"(Edit)" / "(2003 Edit)" / "(Single Edit)" 这种最常见的剪辑版标法一个都不认——于是 `versionTagsMismatch` 两边都是空集，-600 不触发；② 同一原因让 `titleMatchTierPoints` 认为"括号里没有版本词"，剥括号相等直接给了精确档 120（而不是 60）；③ `sourceDurationOff` 的门槛是 12%，260 vs 283 只差 8.1%；末句时刻又恰好落在 25% 容差内还拿了 299 分。三道闸各自的宽松叠在一起，剪辑版就一路绿灯。
+
+**修法（v12）**：词表补裸 `"edit"`，但**只按整词匹配**（`wordOnlyVersionTags`）——`titleVersionTags` 对拉丁词一直是子串匹配（"remixes"/"remixed" 都能命中 "remix"），而 "edit" 是 "edition" 的前缀，子串匹配会把 Deluxe Edition / Expanded Edition 这一大类专辑名当成 edit，整个 Deluxe 系跟原版之间凭空多出 -600。`remaster` 刻意继续不收：它是同一次录音的另一次母带，时间轴是同一条。修后酷狗那条吃 versionTags -600、标题降到 60，QQ 胜出（联网复现 1079 vs 462）。全库 2652 条决策扫过一遍：受影响的另 20 条候选全是 Michael Jackson《Number Ones》"(2003 Edit)" / "(Radio Edit)" 系，方向一致（本地是 edit 时非 edit 候选该扣、反之亦然），零反向。金标 `vertag-edit-diamonds-pearls`（类别 `version-tag-edit`）钉住；单测 `TestScoreLyricCandidatePenalizesSingleEdit` / `TestTitleVersionTags` 新增用例含 "(Deluxe Edition)" 不许误伤。
+
+**顺手看到、没动的**：QQ 这条 118 行的候选是上传者用 "krc转qrc工具" 烘进去的**双语正文**——每句英文后面紧跟一行独立时间戳的中文译文。它跟 lrclib/musixmatch 纯英文正文的 3-gram 相似度只有 0.41，所以拿不到共识分；显示时也会英中交替。collector 目前没有"把烘进正文的逐行译文拆出来当 `lyrics_tr`"这一步，⚠️待定 要不要做（判据大概是：拉丁行后 ≤3s 紧跟一行纯汉字、成对出现占比过半）。
+
 - 用法见 `testdata/lyricsgolden/README.md`。
 
 **采集过程顺手核实到的三件事**（2026-09-03，缓存快照），改这一章别的功能时要知道：

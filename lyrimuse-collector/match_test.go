@@ -122,6 +122,15 @@ func TestTitleVersionTags(t *testing.T) {
 		{"告白气球 (阿卡贝拉版本)", []string{"阿卡贝拉"}},
 		// 假阳性陷阱同样适用于中文:词只在括号/破折号段里找。
 		{"不插电的夏天", nil},
+		// 2026-09-04 补裸 "edit"(PRINCE《Diamonds and Pearls (2023 Remaster)》配了《… (Edit)》的词,
+		// 见 distinctRecordingVersionTags 处注释)。"(Radio Edit)" 现在同时命中 "radio edit" 和 "edit"。
+		{"Diamonds And Pearls (Edit)", []string{"edit"}},
+		{"Man In the Mirror (2003 Edit)", []string{"edit"}},
+		{"Everybody (Backstreet's Back) (Radio Edit)", []string{"radio edit", "edit"}},
+		// ⚠️ "edit" 只按整词匹配:edition 不是 edit,Deluxe Edition 这一大类专辑/曲名不能被误伤。
+		{"Thriller (Deluxe Edition)", nil},
+		{"Purple Rain (Expanded Edition)", nil},
+		{"Editor's Cut (Live)", []string{"live"}},
 	}
 	for _, c := range cases {
 		got := titleVersionTags(c.title)
@@ -134,6 +143,44 @@ func TestTitleVersionTags(t *testing.T) {
 				t.Errorf("titleVersionTags(%q) = %v, 缺 %q", c.title, got, w)
 			}
 		}
+	}
+}
+
+// ---- v12(2026-09-04):裸 "edit" 是另一次录音 ----
+//
+// 字符串与时长全部取自真实决策记录(PRINCE|Diamonds and Pearls (2023 Remaster)|Diamonds and Pearls
+// (Remaster),本地 283.016s):酷狗《Diamonds And Pearls (Edit)》/ The Very Best Of Prince 自报 260s,
+// QQ《Diamonds and Pearls (2023 Remaster)》/ Diamonds and Pearls (Remaster) 自报 282s。修之前酷狗
+// 1122 > QQ 1079(逐字都有、酷狗多 250 共识),修之后酷狗要吃 -600 且标题只剩 60。
+func TestScoreLyricCandidatePenalizesSingleEdit(t *testing.T) {
+	// 英文歌配英文占位行:中文占位会被 isProbablyWrongLanguageLyrics 判废(歌手/歌名都无汉字),
+	// 那是另一条规则的事。
+	lyr := "[00:49.45]placeholder line one\n[00:50.10]placeholder line two\n[00:50.95]placeholder line three\n[04:35.00]placeholder last line"
+	local := struct{ artist, title, album string }{"PRINCE", "Diamonds and Pearls (2023 Remaster)", "Diamonds and Pearls (Remaster)"}
+	edit := lyricCandidate{source: "kugou", lyrics: lyr, hasWordTiming: true, sourceReportedDurationSecs: 260,
+		title: "Diamonds And Pearls (Edit)", artist: "Prince、The New Power Generation", album: "The Very Best Of Prince"}
+	remaster := lyricCandidate{source: "qq", lyrics: lyr, hasWordTiming: true, sourceReportedDurationSecs: 282,
+		title: "Diamonds and Pearls (2023 Remaster)", artist: "Prince/The New Power Generation", album: "Diamonds and Pearls (Remaster)"}
+	if !versionTagsMismatch(local.title, local.album, edit.title, edit.album) {
+		t.Fatalf("(Edit) 对 (2023 Remaster) 必须判成版本不符")
+	}
+	if versionTagsMismatch(local.title, local.album, remaster.title, remaster.album) {
+		t.Fatalf("(2023 Remaster) 对 (2023 Remaster) 不该判成版本不符——remaster 不是另一次录音")
+	}
+	// 修之前的形态:酷狗还多拿 250 共识、QQ 没有,依旧得输。
+	sEdit, termsEdit := scoreLyricCandidateDetailed(local.artist, local.title, local.album, 283.016, edit, false, 2)
+	sRemaster, termsRemaster := scoreLyricCandidateDetailed(local.artist, local.title, local.album, 283.016, remaster, false, 0)
+	if p := scoreTermPoints(termsEdit, scoreTermVersionTags); p != -600 {
+		t.Errorf("(Edit) 候选应吃 versionTags -600,实际 %d(%v)", p, termsEdit)
+	}
+	if p := scoreTermPoints(termsEdit, scoreTermTitleMatch); p != 60 {
+		t.Errorf("(Edit) 候选的标题吻合应降到剥括号档 60,实际 %d", p)
+	}
+	if p := scoreTermPoints(termsRemaster, scoreTermTitleMatch); p != 120 {
+		t.Errorf("精确同名的 (2023 Remaster) 候选标题吻合应是 120,实际 %d", p)
+	}
+	if sEdit >= sRemaster {
+		t.Errorf("剪辑版(%d)不该赢过精确同名的 2023 Remaster(%d)", sEdit, sRemaster)
 	}
 }
 

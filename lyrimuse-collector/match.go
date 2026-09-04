@@ -449,7 +449,13 @@ const lyricOvershootToleranceSecs = 5.0
 // 字符的假名把正文 3-gram 相似度拖到 0.55 阈值以下、250 分共识没了,冠军会因此换成酷狗。
 // 这条规则对酷狗自带 `[kana:]` 的日文歌其实一直成立,只是没被注意。提版本号让已按 v10
 // 打过分的条目重新裁决(重算用的是决策留痕里的存量候选,不联网)。
-const lyricsScoringVersion = 11
+//
+// v12(2026-09-04):distinctRecordingVersionTags 补裸 "edit"(只按整词匹配)。PRINCE《Diamonds and
+// Pearls (2023 Remaster)》案:酷狗《Diamonds And Pearls (Edit)》是剪短的单曲版(自报 260s vs 本地
+// 283s,差 8%,够不到 sourceDurationOff 的 12%),词表不认 "(Edit)",versionTags 静默、titleMatch 还按
+// "括号里没有版本词"给了精确档 120,+400 逐字 +250 共识后 1122 分压过 2023 Remaster 精确同名的 QQ
+// 1079。补词后该候选吃 versionTags -600、titleMatch 降到 60,QQ 那条胜出。全库决策扫描见词表处注释。
+const lyricsScoringVersion = 12
 
 // scoreTerm 是打分里的一项。只带**机器可读的类型**和分值,文案交给界面本地化 ——
 // App 有中英两套界面,从这里吐中文字符串会让英文用户看到一串中文。
@@ -1976,7 +1982,26 @@ var distinctRecordingVersionTags = []string{
 	// 国语版歌词可能被错配给粤语音轨(反之亦然)。normLoose 内部先过 toSimplified
 	// (见 normLoose 注释),繁体"粵語/國語"会被折成简体再比对,这里只需列简体。
 	"粤语", "国语", "cantonese", "mandarin",
+	// 2026-09-04 补裸 "edit"(用户报 PRINCE《Diamonds and Pearls (2023 Remaster)》配了酷狗
+	// 《Diamonds And Pearls (Edit)》的词——单曲剪辑版,自报 260s 对本地 283s,8% 的差距够不到
+	// sourceDurationOff 的 12% 门槛,末句时刻又恰好落在容差里,于是 +400 逐字 +250 共识 + 120
+	// 标题精确 一路绿灯 1122 分,压过 2023 Remaster 精确同名、专辑同名的 QQ 1079)。词表原来只有
+	// "radio edit"/"club edit" 两个带前缀的写法,"(Edit)"/"(2003 Edit)"/"(Single Edit)" 这种最常见
+	// 的剪辑版标法一条都不认——它跟 remaster 不同:remaster 是同一次录音的另一次母带(刻意不收),
+	// edit 是剪短了的另一个版本,时间轴对不上。全库 2652 条决策扫过:受影响的另 20 条候选全是
+	// Michael Jackson《Number Ones》"(2003 Edit)"/"(Radio Edit)" 系的,方向一致(本地是 edit 时
+	// 非 edit 候选该扣、反之亦然),没有一条反向。
+	//
+	// ⚠️ 这个词**只按词元匹配、不按子串**(见 wordOnlyVersionTags):子串匹配会把 "(Deluxe Edition)"
+	// "(Expanded Edition)" 里的 edition 当成 edit,整个 Deluxe 系专辑跟原版之间凭空多出 -600。
+	"edit",
 }
+
+// wordOnlyVersionTags:distinctRecordingVersionTags 里只能按**整词**匹配、不能按子串匹配的那几个。
+// titleVersionTags 对拉丁词一直用子串(好处是 "remixes"/"remixed" 都能命中 "remix"),但 "edit"
+// 是 "edition" 的前缀,子串匹配会误伤 Deluxe Edition 这一大类专辑名。segmentVersionTags 本来就是
+// 词元级的,这里复用它。
+var wordOnlyVersionTags = map[string]bool{"edit": true}
 
 // djRemixTagPattern 认"DJ+任意名字+版"这个模式(阿若/阿树/阿罗/阿喜/糖糖/小阿龙/胧驿/
 // 王小龙/凯西……这些都是不同 DJ 各自的艺名,列不完,不能像上面那样按固定字符串收进
@@ -2013,7 +2038,17 @@ func titleVersionTags(title string) map[string]bool {
 		if n == "" {
 			continue
 		}
+		var wordTags map[string]bool
 		for _, tag := range distinctRecordingVersionTags {
+			if wordOnlyVersionTags[tag] {
+				if wordTags == nil {
+					wordTags = segmentVersionTags(seg)
+				}
+				if wordTags[tag] {
+					out[tag] = true
+				}
+				continue
+			}
 			if strings.Contains(n, normLoose(tag)) {
 				out[tag] = true
 			}
