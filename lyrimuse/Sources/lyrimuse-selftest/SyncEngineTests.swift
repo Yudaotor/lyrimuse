@@ -678,6 +678,34 @@ func runSyncEngineTests() {
         expectEqual(nbspLine?.wordGroups?.count, 11,
                     "内容匹配: 命中之后逐字对齐应正常生效(11字11音节严格一一对应,不退回整行)")
 
+        // ③.6c 内容匹配还要对"标点差异"免疫(2026-09-04,用户报 Prince《Cream (Without Rap
+        // Monologue)》里带括号和声的句子全都没有译文)。真实缓存坐实:网易云整行 LRC 写
+        // "U're so fine (U're so fine)"(ASCII 括号),YRC 逐字数据同一句写 "U're so fine （U're so
+        // fine）"(全角括号),两边可读内容一样;而这首歌 YRC 行起点比 LRC 系统性早 1.4~1.6 秒
+        // (LRC 53 行 / YRC 49 行,行结构对不上,collector 那边的 rehang 依前提放弃),700ms 的
+        // 时间兜底也够不着——所以恰好只有带括号和声的句子没译文。这里按真实数据的形状复现:
+        // LRC/译文在 175600ms,YRC 同一句在 174240ms(早 1360ms),括号一边半角一边全角。
+        let engineParenStyle = LyricsSyncEngine()
+        engineParenStyle.load(
+            lyrics: "[02:55.60]U're so fine (U're so fine)",
+            lyricsTr: "[02:55.60]你如此耀眼（你如此耀眼）",
+            lyricsRoma: "",
+            lyricsYRC: "[174240,1500](174240,300,0)U're (174540,300,0)so (174840,300,0)fine " +
+                "(175140,300,0)（U're (175440,300,0)so (175740,300,0)fine）",
+            preferWordLevel: true)
+        expectEqual(engineParenStyle.allLines(idPrefix: "t").first?.line.translation, "你如此耀眼（你如此耀眼）",
+                    "内容匹配: LRC 半角括号、YRC 全角括号、时间漂移超容差时,按字母数字内容仍应命中译文")
+        // 大小写差异同理("U're" vs "u're" 是同一句词)。
+        let engineCase = LyricsSyncEngine()
+        engineCase.load(
+            lyrics: "[00:01.00]U got the horn",
+            lyricsTr: "[00:01.00]号角在手",
+            lyricsRoma: "",
+            lyricsYRC: "[3000,900](3000,300,0)u (3300,300,0)got (3600,300,0)the horn",
+            preferWordLevel: true)
+        expectEqual(engineCase.allLines(idPrefix: "t").first?.line.translation, "号角在手",
+                    "内容匹配: 大小写差异不该让同一句词查不到译文")
+
         // 反例:内容对不上(比如逐字重建出来的文本跟整行 LRC 字面不一致)时,内容匹配字典
         // 查不到,老老实实退回时间最近邻——这里查询时间(3000ms)漂移量超过容差,应仍是 nil,
         // 不能因为加了内容匹配就意外放宽了容差本身的语义。

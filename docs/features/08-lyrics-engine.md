@@ -162,7 +162,7 @@ LRC 格式标准里的 `[offset:±毫秒]` = 「这份歌词的全部时间戳�
 
 四个入口都在查询位置上先加 `offsetMs`(时间轴校正,见下节),然后线性扫「timeMs <= 位置」的最后一行:
 
-- `activeLine(atMs:)` → `SyncedLyricLine`:逐字模式给 `words`(+可选 `wordGroups`)、整行模式给 `mainText`,两者只有一个非空(`plainText` 按此取值);`translation` 用 `nearestText(trLines, 行时间戳, 容差700ms)` 最近邻贴行,超容差该行就没有译文;`romanization` 同理(见下节);`side` 为对唱分栏。位置还没到第一句时返回 nil。
+- `activeLine(atMs:)` → `SyncedLyricLine`:逐字模式给 `words`(+可选 `wordGroups`)、整行模式给 `mainText`,两者只有一个非空(`plainText` 按此取值);`translation` 先按**内容**查(`trTextByPlainText`:load 时把译文行按精确 timeMs 配到整行 LRC 的行、以 `contentMatchKey(原文)` 为键;键只留字母数字、统一小写——2026-08-27 加、09-01 去空白、**09-04 去标点/大小写**,见已知坑「YRC 与 LRC 不是同一套时间轴」),查不到才退回 `nearestText(trLines, 行时间戳, 容差700ms)` 最近邻贴行,两条路都 miss 该行就没有译文;`romanization` 同理(见下节);`side` 为对唱分栏。位置还没到第一句时返回 nil。
 - `upcomingLineText(afterMs:)`:下一行纯文本(双行预览用)。**故意**不要求当前行存在——还没到第一句时(idx=-1)直接把第一句真歌词当预览提前露出(署名行过滤上线后这个窗口更常见)。
 - `activeLineIndex(atMs:)`:当前行下标(歌词窗口滚动定位用)。故意不用「拿 activeLine 内容去 allLines 找」——副歌重复句内容相同,必须按时间戳直接扫下标。
 - `allLines(idPrefix:)`:整首歌全部行一次性构造(歌词窗口用),每行同样贴罗马音/译文。id = `"\(idPrefix)#\(行号)"`,idPrefix 由调用方传曲目标识(实际传 `currentOffsetKey`)——保证换歌后 id 集合整体不同,SwiftUI ForEach 做干净整体替换而不是逐行「变形」旧内容(否则换歌瞬间串行/闪烁)。
@@ -324,3 +324,4 @@ LRC 格式标准里的 `[offset:±毫秒]` = 「这份歌词的全部时间戳�
 
 其余行为均以当前工作树代码及其注释为准核对过。
 13. **逐字时间轴归一化的阈值是量出来的,边界选「下一行起点」也是量出来的**(2026-09-02)。全库 3071 首带逐字 / 161,723 行 / 118.8 万字扫描:字起点 ≥ 下一行起点 **4516 字 / 422 首**(中位 0ms——网易云行尾标点 token 起点正好等于下一行、时长 0;p90 62ms——酷狗/QQ 最后一个真词晚 50~300ms,正是「最后一点不走完就下一句」;p99 1.9s——amll 整行错位);字起点早于行首 27 字 / 8 首(中位 109ms,5 个差几秒到 153 秒);字起点倒退 21 字 / 12 首。字终点晚于声明行尾 2155 字、与前一字重叠 1604 字都是中位 1ms 的取整误差,且在「不看行长」的模型里无害,**刻意不处理**。`maxClampMs=250` 落在 p90(62ms)与 p99(1.9s)之间的空档,盖住 96% 越界、不把整行错位硬夹进去;超过就退化成匀速扫过而不是整行高亮——同一首歌其它行还在逐字,突然一行不动比匀速扫过更像坏了。参照实现拿声明行尾做边界、字终点超过也退化,对 lyrimuse 治不到病:那 4516 个字里绝大多数相对声明行尾并不越界。`KaraokeFill.tailClamped` 仍保留:它管的是最后一个字的**时长**压进换行前,这里管的是**起点**落在哪。selftest 23 条断言(行首夹取 / 下一行夹取 / 超阈值退化 / 倒退退化 / 最后一行 / 同时间戳 / 拉回不越过前一字 / 行比窗口短 / 空)。
+14. **YRC 与 LRC 不是同一套时间轴,译文/罗马音跟着 LRC 走,所以贴行只能靠内容**(2026-08-27 起,09-04 第三次收口)。网易云的整行 LRC 与逐字 YRC 是两条独立产线,同一句词的时间戳系统性差 0.7~3 秒,而 collector 生成/透传的 `lyrics_tr`/`lyrics_roma` 逐条抄的是 LRC 的时间戳;播放走 YRC 行起点去查译文,`nearestText` 700ms 容差经常够不着,于是 2026-08-27 加了 `trTextByPlainText` **内容匹配优先**(load 时按精确 timeMs 把译文行配到 LRC 行,再以原文内容为键)。键的归一化被真实数据逼着放宽了两次:09-01 陈奕迅《冲口而出 (Live)》——LRC 用 NBSP 标换气、YRC 用普通空格,`trimmingCharacters` 只削两端 → 去掉**全部**空白;**09-04 Prince《Cream (Without Rap Monologue)》**——用户报「这些句子都没有翻译」,恰好全是带括号和声的句子:LRC 写 ASCII 括号 `(U're so fine)`、YRC 写全角 `（U're so fine）`,这首歌 YRC 又比 LRC 早 1.4~1.6 秒且行数对不上(53/49,collector 的 rehang 依前提放弃),两条路一起 miss → 键改成**只留字母数字、统一小写**,跟 collector 侧配对 LRC↔YRC 行的 `normTimelineText` 同一口径。教训是通用的:两边"可读内容一样"的句子在字面上可以差在空白种类、标点全半角、大小写任何一处,内容键必须只保留内容本身。selftest ③.6/③.6b/③.6c 三组按真实数据形状钉住。

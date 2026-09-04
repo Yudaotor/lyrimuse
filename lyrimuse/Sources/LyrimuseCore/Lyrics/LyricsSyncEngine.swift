@@ -156,8 +156,20 @@ public final class LyricsSyncEngine {
     /// 卡在门外,两条路同时失手才让这一行彻底没有罗马音(不是缺失,是两个近似匹配都各差
     /// 一点点)。归一化时把空白整段拿掉而不是换成统一分隔符:这里比较的是"是不是同一句唱词
     /// 的内容",字词之间要不要留白纯粹是各家源的排版习惯,不是内容的一部分。
+    ///
+    /// 2026-09-04 再放宽到**只留字母和数字、统一小写**(用户报 Prince《Cream (Without Rap
+    /// Monologue)》带括号和声的句子全都没有译文:"U're so fine (U're so fine)")。真实缓存坐实:
+    /// 网易云整行 LRC 写的是 ASCII 括号 `(U're so fine)`,YRC 逐字数据同一句写的是全角括号
+    /// `（U're so fine）`,两边可读内容完全一样、只差括号是哪一种;而这首歌 YRC 行起点比 LRC
+    /// 系统性早 1.4~1.6 秒(LRC 53 行 / YRC 49 行,行结构对不上,collector 的 rehang 判据
+    /// 依前提放弃、没法把两套轴拉齐),700ms 的时间兜底也够不着——于是**恰好**所有带括号和声
+    /// 的句子两条路一起 miss、只有它们没译文,不带括号的句子内容匹配都命中。标点/符号跟空白
+    /// 一样是各家源的排版细节:collector 侧配对 LRC↔YRC 行的 normTimelineText 同样只留
+    /// 字母数字,这里跟它同一口径。大小写也折掉(同一句词一边 "U're" 一边 "u're" 不该算两句)。
+    /// 只留字母数字后两句本来只差标点的词会撞同一个键——那两句的译文本来就该一样,
+    /// `uniquingKeysWith` 取后者,不是问题。
     private static func contentMatchKey(_ text: String) -> String {
-        text.filter { !$0.isWhitespace }
+        String(text.lowercased().unicodeScalars.filter { CharacterSet.alphanumerics.contains($0) })
     }
 
     // 单曲歌词时间轴微调——毫秒,由 LyricsOffsetStore 按当前曲目 key 灌进来(见
