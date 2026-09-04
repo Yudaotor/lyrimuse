@@ -236,7 +236,7 @@ func TestQQPickCandidatePrefersExact(t *testing.T) {
 		{mid: "live", title: "Gravity Blues (Live)", exact: false},
 		{mid: "studio", title: "Gravity Blues", exact: true},
 	}
-	got, ok := qqPickCandidate(cands, "周杰伦")
+	got, ok := qqPickCandidate(cands, "周杰伦", 0)
 	if !ok || got.mid != "studio" {
 		t.Fatalf("got %+v (ok=%v), want mid=studio", got, ok)
 	}
@@ -244,11 +244,11 @@ func TestQQPickCandidatePrefersExact(t *testing.T) {
 
 func TestQQPickCandidateFallsBackToFirst(t *testing.T) {
 	cands := []qqCand{{mid: "a", exact: false}, {mid: "b", exact: false}}
-	got, ok := qqPickCandidate(cands, "周杰伦")
+	got, ok := qqPickCandidate(cands, "周杰伦", 0)
 	if !ok || got.mid != "a" {
 		t.Fatalf("got %+v (ok=%v), want mid=a", got, ok)
 	}
-	if _, ok := qqPickCandidate(nil, "周杰伦"); ok {
+	if _, ok := qqPickCandidate(nil, "周杰伦", 0); ok {
 		t.Error("空候选该返回 ok=false")
 	}
 }
@@ -327,12 +327,12 @@ func TestQQPickCandidatePrefersExactCreditOnTie(t *testing.T) {
 		{mid: "duet", title: "逗阵兄弟", artist: "陶喆/卢广仲", album: "再见你好吗", interval: 306},
 		{mid: "solo", title: "逗阵兄弟", artist: "陶喆", album: "再见你好吗", interval: 335},
 	}
-	got, ok := qqPickCandidate(cands, "陶喆")
+	got, ok := qqPickCandidate(cands, "陶喆", 0)
 	if !ok || got.mid != "solo" {
 		t.Fatalf("got %+v, want mid=solo(署名恰好同一组人)", got)
 	}
 	// 本地就是合唱时,反过来选合唱那条。
-	got, ok = qqPickCandidate(cands, "陶喆/卢广仲")
+	got, ok = qqPickCandidate(cands, "陶喆/卢广仲", 0)
 	if !ok || got.mid != "duet" {
 		t.Fatalf("got %+v, want mid=duet", got)
 	}
@@ -345,8 +345,42 @@ func TestQQPickCandidateExactTitleBeatsCredit(t *testing.T) {
 		{mid: "instrumental", title: "逗阵兄弟 (消音伴奏)", artist: "陶喆", exact: false},
 		{mid: "real", title: "逗阵兄弟", artist: "陶喆/卢广仲", exact: true},
 	}
-	got, ok := qqPickCandidate(cands, "陶喆")
+	got, ok := qqPickCandidate(cands, "陶喆", 0)
 	if !ok || got.mid != "real" {
 		t.Fatalf("got %+v, want mid=real(标题精确同名优先于署名 tiebreak)", got)
+	}
+}
+
+// 2026-09-05,用户报 PRINCE《319》"搜不到"(酷狗那边的同款用例见 kugousearchpick_test.go)。QQ 搜索结果
+// 第 1 条就是正主「319 (X-cerpt) / The VERSACE Experience (PRELUDE 2 GOLD) [Explicit]」88s,但专辑分支的挑选
+// 按"标题精确同名 > 专辑分"排,《The Gold Experience》185 秒的完整版「319」精确同名先赢。现在自报曲长
+// 对不上(>12%)的整组排到对得上的后面。字符串与时长全部取自真实搜索结果(client_search_cp 自带专辑名,
+// 不需要查详情,lookupAlbum 传恒空)。
+func TestQQPickCandidateDurationFitBeatsExactTitle(t *testing.T) {
+	items := []qqSearchItem{
+		{Mid: "001d7enp3Ydoop", Name: "319 (X-cerpt)", Singer: "Prince", Album: "The VERSACE Experience (PRELUDE 2 GOLD) [Explicit]", Interval: 88},
+		{Mid: "004JRej817Ddcq", Name: "319", Singer: "Prince", Album: "The Gold Experience (Explicit)", Interval: 185},
+		{Mid: "000YBe0C3zQOWp", Name: "319", Singer: "Prince", Album: "The Complete East Glam Slam Show, Miami, June 1994 (Hd Remastered Edition)", Interval: 310},
+		{Mid: "001JuPPq0O7Xya", Name: "319 (Live)", Singer: "Prince", Album: "Miami Glam Slam Club 1994 (Live)", Interval: 310},
+	}
+	cands := qqCollectCandidates(items, "PRINCE", "319", true)
+	if len(cands) < 3 {
+		t.Fatalf("身份闸应放行至少三条,实际 %d", len(cands))
+	}
+	noLookup := func(string) string { return "" }
+	best, ok, sc := qqPickCandidateWithAlbum(cands, "PRINCE", "The VERSACE Experience Prelude 2 Gold", 88.226, noLookup)
+	if !ok || best.mid != "001d7enp3Ydoop" {
+		t.Fatalf("本地 88 秒时 X-cerpt 该赢(专辑分 %d),拿到 %+v", sc, best)
+	}
+	if c, ok := qqPickCandidate(cands, "PRINCE", 88.226); !ok || c.mid != "001d7enp3Ydoop" {
+		t.Fatalf("不看专辑的挑选同理,拿到 %+v", c)
+	}
+	// 对称:本地是 185 秒的专辑版时完整版赢。
+	if best, ok, _ := qqPickCandidateWithAlbum(cands, "PRINCE", "The Gold Experience", 185.12, noLookup); !ok || best.mid != "004JRej817Ddcq" {
+		t.Fatalf("本地 185 秒时完整版该赢,拿到 %+v", best)
+	}
+	// 时长未知时时长键关闭,回到"精确同名优先"的旧行为。
+	if best, ok, _ := qqPickCandidateWithAlbum(cands, "PRINCE", "The VERSACE Experience Prelude 2 Gold", 0, noLookup); !ok || best.mid != "004JRej817Ddcq" {
+		t.Fatalf("时长未知时应回到精确同名优先,拿到 %+v", best)
 	}
 }

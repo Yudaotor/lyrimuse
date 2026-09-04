@@ -1,0 +1,116 @@
+{
+  "id": "xcerpt-319-qq",
+  "source": "qq",
+  "note": "「319 (X-cerpt)」88 秒节选版(用户 2026-09-05 报\"搜不到\"):搜索结果里同时有 185 秒的专辑版「319」(标题精确同名)和 88 秒的「319 (X-cerpt)」(专辑同名、时长逐位吻合);v14 起自报曲长对不上的排到后面,X-cerpt 胜出。v14 之前酷狗/QQ 都挑了 185 秒版,打分层 -700/-400 变 1 分照样被采用",
+  "track": {
+    "artist": "PRINCE",
+    "title": "319",
+    "album": "The VERSACE Experience Prelude 2 Gold"
+  },
+  "captured_at": "2026-09-05",
+  "query": {
+    "artist": "PRINCE",
+    "title": "319",
+    "album": "The VERSACE Experience Prelude 2 Gold",
+    "duration_secs": 88.22599792480469
+  },
+  "local_duration_secs": 88.22599792480469,
+  "items": [
+    {
+      "id": "001d7enp3Ydoop",
+      "title": "319 (X-cerpt)",
+      "artist": "Prince",
+      "album": "The VERSACE Experience (PRELUDE 2 GOLD) [Explicit]",
+      "duration_secs": 88
+    },
+    {
+      "id": "004JRej817Ddcq",
+      "title": "319",
+      "artist": "Prince",
+      "album": "The Gold Experience (Explicit)",
+      "duration_secs": 185
+    },
+    {
+      "id": "000YBe0C3zQOWp",
+      "title": "319",
+      "artist": "Prince",
+      "album": "The Complete East Glam Slam Show, Miami, June 1994 (Hd Remastered Edition)",
+      "duration_secs": 310
+    },
+    {
+      "id": "002D1ID40507iI",
+      "title": "319",
+      "artist": "Prince",
+      "album": "3 Nites In Miami Glam Slam '94",
+      "duration_secs": 310
+    },
+    {
+      "id": "001JuPPq0O7Xya",
+      "title": "319 (Live)",
+      "artist": "Prince",
+      "album": "Miami Glam Slam Club 1994 (Live)",
+      "duration_secs": 310
+    },
+    {
+      "id": "002hhzcj1qR8zF",
+      "title": "如一",
+      "artist": "任嘉伦",
+      "album": "周生如故  影视原声带",
+      "duration_secs": 237
+    },
+    {
+      "id": "0004taI03j1XQQ",
+      "title": "Purple Rain",
+      "artist": "Prince/The Revolution",
+      "album": "Purple Rain (Explicit)",
+      "duration_secs": 520
+    },
+    {
+      "id": "003UwJjb1Qtt0c",
+      "title": "不屈",
+      "artist": "任嘉伦",
+      "album": "不屈",
+      "duration_secs": 193
+    },
+    {
+      "id": "002cy6923UxT6K",
+      "title": "荣耀",
+      "artist": "任嘉伦",
+      "album": "荣耀",
+      "duration_secs": 218
+    },
+    {
+      "id": "003yt5Tn3kscpd",
+      "title": "中国梦·我的梦 (Live)",
+      "artist": "黄轩/宋茜/肖战/宋轶/任嘉伦/杨洋/杨幂/黄觉/周深/毛不易/迪丽热巴/硬糖少女303/INTO1/张杰/杨千嬅/金晨/孟佳/张晚意/肖顺尧/陈小春/张智霖/林晓峰/梁汉文",
+      "album": "中国梦·我的梦",
+      "duration_secs": 275
+    }
+  ],
+  "expect": {
+    "picked_id": "001d7enp3Ydoop",
+    "accepted_strict": [
+      "001d7enp3Ydoop",
+      "004JRej817Ddcq",
+      "000YBe0C3zQOWp",
+      "002D1ID40507iI",
+      "001JuPPq0O7Xya"
+    ],
+    "accepted_loose": [
+      "001d7enp3Ydoop",
+      "004JRej817Ddcq",
+      "000YBe0C3zQOWp",
+      "002D1ID40507iI",
+      "001JuPPq0O7Xya"
+    ],
+    "picked_no_album": "001d7enp3Ydoop"
+  },
+  "judge": {
+    "title_accepted": true,
+    "artist_matches": true,
+    "source_duration_delta_pct": 0.2561579694426424,
+    "version_tags_ok": true,
+    "live_mismatch": false,
+    "plausible_alternatives": 0
+  }
+}

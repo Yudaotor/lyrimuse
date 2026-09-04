@@ -1,0 +1,121 @@
+{
+  "id": "xcerpt-319-kugou",
+  "source": "kugou",
+  "note": "「319 (X-cerpt)」88 秒节选版(用户 2026-09-05 报\"搜不到\"):搜索结果里同时有 185 秒的专辑版「319」(标题精确同名)和 88 秒的「319 (X-cerpt)」(专辑同名、时长逐位吻合);v14 起自报曲长对不上的排到后面,X-cerpt 胜出。v14 之前酷狗/QQ 都挑了 185 秒版,打分层 -700/-400 变 1 分照样被采用",
+  "track": {
+    "artist": "PRINCE",
+    "title": "319",
+    "album": "The VERSACE Experience Prelude 2 Gold"
+  },
+  "captured_at": "2026-09-05",
+  "query": {
+    "artist": "PRINCE",
+    "title": "319",
+    "album": "The VERSACE Experience Prelude 2 Gold",
+    "duration_secs": 88.22599792480469
+  },
+  "local_duration_secs": 88.22599792480469,
+  "items": [
+    {
+      "id": "7cd854d985344dc57f5b30ca7e4c4356",
+      "title": "319",
+      "artist": "Prince",
+      "album": "The Gold Experience (Explicit)",
+      "album_id": "933107",
+      "duration_secs": 185,
+      "language": "英语"
+    },
+    {
+      "id": "43aafa891adba947887a2a7b699fa694",
+      "title": "319 (X-cerpt)",
+      "artist": "Prince",
+      "album": "The VERSACE Experience (PRELUDE 2 GOLD) [Explicit]",
+      "album_id": "28653597",
+      "duration_secs": 88,
+      "language": "英语"
+    },
+    {
+      "id": "2976407ba046fa2d75e27ddcdd084a29",
+      "title": "319",
+      "artist": "Prince",
+      "album": "3 Nites In Miami Glam Slam '94",
+      "album_id": "192546408",
+      "duration_secs": 310,
+      "language": "英语"
+    },
+    {
+      "id": "45ba0e2c4a4edc3885dbc32d6f127e91",
+      "title": "如一",
+      "artist": "任嘉伦",
+      "album": "周生如故  影视原声带",
+      "album_id": "48463780",
+      "duration_secs": 237,
+      "language": "国语"
+    },
+    {
+      "id": "77bcd22007597c6387e192a581bf1452",
+      "title": "319 (Live|Remastered)",
+      "artist": "Prince、The New Power Generation",
+      "album": "3 Nights Live In Miami 1994 (Remastered)",
+      "album_id": "10421851",
+      "duration_secs": 310,
+      "language": "英语"
+    },
+    {
+      "id": "0e4cb134a445df7989ca2ee6149e9a4e",
+      "title": "荣耀",
+      "artist": "任嘉伦",
+      "album": "荣耀",
+      "album_id": "1965856",
+      "duration_secs": 218,
+      "language": "国语"
+    },
+    {
+      "id": "36b20b886b1b674bd272f80489250c8c",
+      "title": "心墙",
+      "artist": "任嘉伦",
+      "album": "心墙",
+      "album_id": "35487263",
+      "duration_secs": 283,
+      "language": "国语"
+    },
+    {
+      "id": "36053b84574069c6d6c5cdc7e007e064",
+      "title": "琵琶行 (Live)",
+      "artist": "任嘉伦",
+      "album": "经典咏流传 第八期",
+      "album_id": "8443614",
+      "duration_secs": 290,
+      "language": "国语"
+    },
+    {
+      "id": "88f3f8b34dc3ffde6e58f7ffa5711f10",
+      "title": "See Ya",
+      "artist": "任嘉伦",
+      "album": "See Ya",
+      "album_id": "40839948",
+      "duration_secs": 222,
+      "language": "国语"
+    },
+    {
+      "id": "5bd3beaa5a5cbfbf293c729c8c5e1ffa",
+      "title": "中国梦·我的梦 (Live)",
+      "artist": "黄轩、宋茜、肖战、宋轶、任嘉伦、杨洋、杨幂、黄觉、周深、毛不易、迪丽热巴、硬糖少女303、INTO1、张杰、杨千嬅、金晨、孟佳、张晚意、肖顺尧、陈小春、张智霖、林晓峰、梁汉文",
+      "album": "中国梦·我的梦",
+      "album_id": "53877449",
+      "duration_secs": 275,
+      "language": "国语"
+    }
+  ],
+  "expect": {
+    "picked_id": "43aafa891adba947887a2a7b699fa694"
+  },
+  "judge": {
+    "title_accepted": true,
+    "artist_matches": true,
+    "source_duration_delta_pct": 0.2561579694426424,
+    "version_tags_ok": true,
+    "live_mismatch": false,
+    "plausible_alternatives": 0
+  }
+}

@@ -89,7 +89,7 @@ collector 的核心：一首歌播放时，去八个歌词源（网易云/QQ/酷
   - `rejectNoLastTimestamp`：提不出末句时间戳。
 - **逐字覆盖率守卫** `usableWordTiming`：YRC 末时刻 < LRC 末时刻 ×0.5 就当没有逐字（防 QQ 截断残片骗 +400 又被「已有逐字不重试」钉死；阈值实测依据：残片覆盖 19.1%、正常最低 85.4%）。
 
-### 5. 打分（`lyricsScoringVersion = 13`）
+### 5. 打分（`lyricsScoringVersion = 14`）
 
 | 项 | 分值 | 条件 |
 |---|---|---|
@@ -188,6 +188,7 @@ collector 的核心：一首歌播放时，去八个歌词源（网易云/QQ/酷
 | 打分 | match.go `scoreLyricCandidateDetailed`（版本 `lyricsScoringVersion`）；打完分排序前的收尾撤销 `applyWordTimingTitleOverride`（两处调用：enrich.go `rankLyricSourceResults` / `mergeLyricCandidateRounds`） |
 | 一轮原始应答 → 排好序的候选 | enrich.go `rankLyricSourceResults`（2026-09-04 从 `fetchScoredLyricCandidatesStreaming` 的 `scoreAndSort` 闭包提成包级纯函数；候选构建、时间轴自洽修复、末尾印证、正文共识、逐条打分、纯音乐标记、逐字加分撤销、稳定排序全在这里）；入参类型 `lyricSourceResult`；只给测试用的观察钩子 `lyricSourceResultTap` |
 | 回归金标集（打分层） | lyricsgolden_test.go（`TestLyricsGolden` / 类别契约 `goldenRequiredCategories` + `goldenCategoryCheck` / 独立判据 `goldenLabelEvidence` + `goldenJudgeEvidence` / 明文探针）、lyricsgolden_scramble_test.go（保形置乱 `scrambleLyricRound`）、lyricsgolden_capture_test.go（联网采集 `TestLyricsGoldenCapture`，默认跳过）；样本 testdata/lyricsgolden/*.json，用法见同目录 README |
+| 检索层挑选的时长排序键 | match.go `sourceDurationFits`（与 `sourceDurationMismatchTolerance` 同口径）；kugou.go `pickKugouSearchCandidate` 第一键；qq.go `qqPickCandidateWithAlbum` / `qqPickCandidate` 第一键，`durationSecs` 经 `qqMusicMatchCached`（缓存 key 含取整秒）→ `resolveQQMusicMatch` 传入 |
 | 回归金标集（检索层） | lyricsgolden_search_test.go（`TestLyricsSearchGolden` / 独立判据 `goldenJudgeSearchPick` / 源覆盖契约 / 采集 `TestLyricsSearchGoldenCapture`）；样本 testdata/lyricsgolden/search/*.json；四个源的挑选纯函数 netease.go `neteasePickSong`（2026-09-04 从 `resolveNeteaseInfo` 的 pick 闭包提出，类型 `neSearchSong`）、qq.go `qqCollectCandidates` `qqPickCandidateWithAlbum`（同日从 `resolveQQMusicMatch` 的专辑分支提出）`qqPickCandidate`、kugou.go `pickKugouSearchCandidate`、lrclib.go `pickLRCLIBSearchResultDetailed`；只给测试用的观察钩子 enrich.go `lyricSearchItemsTap`（四个源把解析好的搜索结果交给挑选函数前回调） |
 | 挑选 | enrich.go `pickLyricCandidate` |
 | 守卫 | match.go `isTimedLRC` `isProbablyWrongLanguageLyrics`（第 25 条：候选源自己确认的 candidateArtist 或 `knownArtistAlias(localArtist)` 含汉字可豁免）`isCreditOnlyLRC` `usableWordTiming` |
@@ -216,6 +217,14 @@ collector 的核心：一首歌播放时，去八个歌词源（网易云/QQ/酷
 | 流式搜索的中间态合并 | enrich.go `scoredLyricCandidatesStreaming` 里别名重试轮的 `aliasUpdate` 闭包 + 首歌手变体轮的 `mergedUpdate` 闭包，都靠 `mergeLyricCandidateRounds` 避免"搜索候选歌词"弹窗中途闪回空/半状态 |
 | `lyrimuse-collector/lyricstimeline.go` | 行级 LRC 与逐字轴打架时以逐字轴为准重挂时间戳（`rehangLRCOnYRC`），译文/罗马音跟着搬（`remapLRCTimestamps`）；重挂修不了且两套轴自相矛盾（配对行中位偏差 ≥10s）时弃用逐字轴（`wordTimingContradictsLRC`，见坑 32）；候选构造处 `rehangCandidateTimelines`、启动期存量 `migrateLyricTimelines`。不改打分判据，因此不 bump 版本。见坑 23/32 |
 ## 设计决策与已知坑
+
+### 88 秒的节选版配上 185 秒专辑版的词：酷狗/QQ 的检索层挑选"标题精确同名压过一切"（2026-09-05 修，用户报「这首为什么搜不到」）
+
+**现象**：PRINCE《319》，本地是《The VERSACE Experience (Prelude 2 Gold)》那张里 **88 秒的 X-cerpt 节选版**。「搜索候选歌词」里只有 QQ/酷狗两条、都是 1 分、都是《The Gold Experience》185 秒完整版的词，QQ 那份还标着「当前使用」——88 秒的曲目挂着 185 秒版的歌词。
+
+**根因在检索层不在打分层**：用检索层金标采集器把四个源的搜索结果原样拉出来看——QQ 第 1 条、酷狗第 2 条**就是**「319 (X-cerpt) / The VERSACE Experience (PRELUDE 2 GOLD) [Explicit]」88s，专辑同名、时长逐位吻合；但 `pickKugouSearchCandidate` 与 `qqPickCandidateWithAlbum` 的排序都是"标题精确同名 > 专辑分 > 时长"，「319」比「319 (X-cerpt)」高一档，专辑分和时长只在同档内部才比。挑回来的 185 秒版到打分层立刻吃 `durationOvershoot -700 + sourceDurationOff -400` 变 1 分，而 1 分 ≥ 0 照样被采用（"负分统一夹到 1"是刻意的，见第 5 节）。网易云早在 v8 就有「时长 ≤1% + 专辑亲和」的锚定档所以选对了，只是那一轮它没应答。
+
+**修法（v14）**：`sourceDurationFits`（match.go，口径 = 打分层 `sourceDurationOff` 的 12%）成为酷狗/QQ 两处挑选的**第一排序键**——自报曲长对不上的候选整组排到对得上的后面，标题档/专辑分/署名只在同一组内部再比；任一边不知道时长（预取路径传 0、smartbox 条目没有 interval）时不下结论，行为与改动前逐字节一致。为此 `resolveQQMusicMatch` / `qqMusicMatchCached` / `qqMusicURL` 都多了 `durationSecs` 入参，QQ 匹配缓存的 key 带上取整到秒的时长（同一首歌的专辑版和节选版是两次不同的挑选）。**为什么不是"负分的候选不采用"**：那是另一个问题（有一份存疑的词好过没有），而且改它救不了这首——正确的候选根本没被挑回来。打分规则本身没变但挑回来的候选变了，存量条目要重搜才会换成对的，所以提版本号。检索层金标 `xcerpt-319-{netease,qq,kugou}` 三个源都钉住 88 秒版；单测 `TestPickKugouSearchCandidate` / `TestQQPickCandidateDurationFitBeatsExactTitle` 各含正向、对称反向（本地是 185 秒专辑版时完整版照旧赢）、时长未知回退三档。既有 15 个酷狗 / 17 个 QQ 检索层金标零变化——所有旧样本里精确同名的冠军自报时长本来就对得上，这条键只在"精确同名但时长不对"时才起作用。
 
 ### 歌词搜索回归金标集：改打分先过它（2026-09-04 加）
 

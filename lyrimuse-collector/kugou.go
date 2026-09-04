@@ -438,7 +438,7 @@ func pickKugouSearchCandidate(songs []kugouSong, artist, title, album string, du
 	var best *kugouSong
 	bestTier, bestAlbum := 0, 0
 	bestDur := math.Inf(1)
-	bestByTriangle := false
+	bestByTriangle, bestFits := false, false
 	for i := range songs {
 		s := &songs[i]
 		// 判定用的始终是**本地原样标题** title,不是搜索词——放宽的只是"拿什么去搜",
@@ -454,7 +454,7 @@ func pickKugouSearchCandidate(songs []kugouSong, artist, title, album string, du
 			// 歌手闸不过 → 还有第二条依据:标题逐字同名 + 专辑对得上 + 时长紧密吻合
 			// = 同一次录音。修的是"艺名↔本名 / 乐队名↔成员名"这类连分隔符都没有、
 			// 段集交集档和别名轮都够不到的署名分歧(实测案例见
-			// lyricRecordingTriangleMatches 的注释)。酷狗是五源里唯一**已经把正主
+			// lyricRecordingTriangleMatches 的注释)。酷狗是各源里唯一**已经把正主
 			// 排在搜索结果第 1 位、只差这一闸**的源,而且它带 YRC 逐字。
 			if !lyricRecordingTriangleMatches(s.SongName, s.AlbumName, s.Duration,
 				title, album, durationSecs) {
@@ -474,10 +474,15 @@ func pickKugouSearchCandidate(songs []kugouSong, artist, title, album string, du
 		if durationSecs > 0 && s.Duration > 0 {
 			dd = math.Abs(s.Duration - durationSecs)
 		}
+		// 自报曲长对不上(>12%,与打分层 sourceDurationOff 同口径)的候选排到所有对得上的后面,
+		// 标题档只在同一组内部再比——理由见 match.go sourceDurationFits(PRINCE《319》X-cerpt 案)。
+		fits := sourceDurationFits(durationSecs, s.Duration)
 		better := false
 		switch {
 		case best == nil:
 			better = true
+		case fits != bestFits:
+			better = fits
 		case tier != bestTier:
 			better = tier < bestTier
 		case asc != bestAlbum:
@@ -486,7 +491,7 @@ func pickKugouSearchCandidate(songs []kugouSong, artist, title, album string, du
 			better = dd < bestDur
 		}
 		if better {
-			best, bestTier, bestAlbum, bestDur, bestByTriangle = s, tier, asc, dd, byTriangle
+			best, bestTier, bestAlbum, bestDur, bestByTriangle, bestFits = s, tier, asc, dd, byTriangle, fits
 		}
 	}
 	// 日志只报**最终选中**的那条(改成全页排序之前,triangle 一接受就等于选中,日志语义

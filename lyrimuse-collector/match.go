@@ -318,6 +318,27 @@ func corroboratedEndings(candidates []lyricCandidate, durationSecs float64) map[
 	return corroborated
 }
 
+// sourceDurationFits:候选自报曲长跟本地曲长是不是"同一次录音"能接受的差距——口径与打分层的
+// sourceDurationOff 完全一致(偏差 >12% 就是另一次录音,分母取较大者),任一边不知道时长时不下结论
+// (返回 true)。
+//
+// 2026-09-05 提出来给**检索层挑选**用(kugou pickKugouSearchCandidate / qq qqPickCandidate*):
+// 用户报 PRINCE《319》(The VERSACE Experience 那张里 88 秒的 X-cerpt 节选版)"搜不到"——四个源里
+// 酷狗和 QQ 的搜索结果**都有**「319 (X-cerpt) / The VERSACE Experience (PRELUDE 2 GOLD)」88s 这条,
+// 却都挑了《The Gold Experience》185 秒的完整版「319」:两边的挑选都是"标题精确同名"压倒一切,
+// 专辑分和时长只在同名档内部才比。挑回来的候选到打分层立刻吃 durationOvershoot -700 +
+// sourceDurationOff -400 变成 1 分,而 1 分 ≥ 0 照样被采用——88 秒的曲目挂着 185 秒版的词。
+// 网易云的 pick 早在 v8 就有"时长 ≤1% + 专辑亲和"的锚定档,所以它选对了;这里把"自报曲长偏差
+// >12%"直接当**第一排序键**(对不上的排到所有对得上的后面,标题档只在同一组内部再比):打分层
+// 既然已经把 >12% 判成另一次录音,检索层还把这样的候选挑回来就是白跑一趟。
+func sourceDurationFits(localSecs, sourceSecs float64) bool {
+	if localSecs <= 0 || sourceSecs <= 0 {
+		return true
+	}
+	larger := math.Max(localSecs, sourceSecs)
+	return math.Abs(localSecs-sourceSecs)/larger <= sourceDurationMismatchTolerance
+}
+
 // scoreLyricCandidate 给一份候选歌词打分,越高越可信;返回负数表示直接判定无效——不管
 // 别的候选分数多低,都不能选一份未通过基本校验的候选。三层基本校验(时间戳密度/语言/
 // 是否只有credit)都通过后,依次看:
@@ -460,7 +481,13 @@ const lyricOvershootToleranceSecs = 5.0
 // 《Diamonds and Pearls (2023 Remaster)》案里 QQ 那条正确候选 118 行有 59 行是上传者烘进去的中文译文,
 // 正文跟 lrclib/musixmatch 纯英文正文的 3-gram 相似度只有 0.41、拿不到共识分,显示时英中交替。摘掉后
 // 共识 +250、行数 -59、译文 +50(目标语言中文时);受影响的只有这种形态的候选,判据与全库实测见那边头注。
-const lyricsScoringVersion = 13
+//
+// v14(2026-09-05):检索层挑选(kugou pickKugouSearchCandidate / qq qqPickCandidateWithAlbum +
+// qqPickCandidate)把"自报曲长偏差 >12%"当第一排序键,对不上的排到所有对得上的后面。PRINCE《319》案
+// (The VERSACE Experience 里 88 秒的 X-cerpt 节选版):两家的搜索结果里都有 88 秒的「319 (X-cerpt)」,却都
+// 按"标题精确同名压过一切"挑了 185 秒的完整版,到打分层吃 -700/-400 变 1 分照样被采用。打分规则本身
+// 没变,但挑回来的候选变了,存量条目要重搜一轮才会换成对的,所以提版本号。判据见 sourceDurationFits。
+const lyricsScoringVersion = 14
 
 // scoreTerm 是打分里的一项。只带**机器可读的类型**和分值,文案交给界面本地化 ——
 // App 有中英两套界面,从这里吐中文字符串会让英文用户看到一串中文。

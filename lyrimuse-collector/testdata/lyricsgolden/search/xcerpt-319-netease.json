@@ -1,0 +1,153 @@
+{
+  "id": "xcerpt-319-netease",
+  "source": "netease",
+  "note": "「319 (X-cerpt)」88 秒节选版(用户 2026-09-05 报\"搜不到\"):搜索结果里同时有 185 秒的专辑版「319」(标题精确同名)和 88 秒的「319 (X-cerpt)」(专辑同名、时长逐位吻合);v14 起自报曲长对不上的排到后面,X-cerpt 胜出。v14 之前酷狗/QQ 都挑了 185 秒版,打分层 -700/-400 变 1 分照样被采用",
+  "track": {
+    "artist": "PRINCE",
+    "title": "319",
+    "album": "The VERSACE Experience Prelude 2 Gold"
+  },
+  "captured_at": "2026-09-05",
+  "query": {
+    "artist": "PRINCE",
+    "title": "319",
+    "album": "The VERSACE Experience Prelude 2 Gold",
+    "duration_secs": 88.22599792480469
+  },
+  "local_duration_secs": 88.22599792480469,
+  "items": [
+    {
+      "id": "1390396481",
+      "title": "319 (X-cerpt)",
+      "artists": [
+        "Prince"
+      ],
+      "album": "The VERSACE Experience (PRELUDE 2 GOLD)",
+      "album_id": "81580953",
+      "duration_secs": 88.267
+    },
+    {
+      "id": "1390395612",
+      "title": "Shhh (X-cerpt)",
+      "artists": [
+        "Prince"
+      ],
+      "album": "The VERSACE Experience (PRELUDE 2 GOLD)",
+      "album_id": "81580953",
+      "duration_secs": 234.553
+    },
+    {
+      "id": "1390395611",
+      "title": "Pussy Control (Club Mix) (Edit)",
+      "artists": [
+        "Prince"
+      ],
+      "album": "The VERSACE Experience (PRELUDE 2 GOLD)",
+      "album_id": "81580953",
+      "duration_secs": 182.415
+    },
+    {
+      "id": "1390396483",
+      "title": "Billy Jack Bitch",
+      "artists": [
+        "Prince"
+      ],
+      "album": "The VERSACE Experience (PRELUDE 2 GOLD)",
+      "album_id": "81580953",
+      "duration_secs": 151.327
+    },
+    {
+      "id": "1390395614",
+      "title": "Eye Hate U (Remix)",
+      "artists": [
+        "Prince"
+      ],
+      "album": "The VERSACE Experience (PRELUDE 2 GOLD)",
+      "album_id": "81580953",
+      "duration_secs": 208.677
+    },
+    {
+      "id": "1390396487",
+      "title": "Gold (X-cerpt)",
+      "artists": [
+        "Prince"
+      ],
+      "album": "The VERSACE Experience (PRELUDE 2 GOLD)",
+      "album_id": "81580953",
+      "duration_secs": 216.409
+    },
+    {
+      "id": "1390395616",
+      "title": "Chatounette Controle",
+      "artists": [
+        "Prince"
+      ],
+      "album": "The VERSACE Experience (PRELUDE 2 GOLD)",
+      "album_id": "81580953",
+      "duration_secs": 144.846
+    },
+    {
+      "id": "1388774658",
+      "title": "Rootie Kazootie (Edit)",
+      "artists": [
+        "Prince",
+        "Madhouse"
+      ],
+      "album": "The VERSACE Experience (PRELUDE 2 GOLD)",
+      "album_id": "81580953",
+      "duration_secs": 157.988
+    },
+    {
+      "id": "1390395617",
+      "title": "Pussy Control (Control Tempo) (Edit)",
+      "artists": [
+        "Prince"
+      ],
+      "album": "The VERSACE Experience (PRELUDE 2 GOLD)",
+      "album_id": "81580953",
+      "duration_secs": 83.336
+    },
+    {
+      "id": "1390396486",
+      "title": "Segue",
+      "artists": [
+        "Prince"
+      ],
+      "album": "The VERSACE Experience (PRELUDE 2 GOLD)",
+      "album_id": "81580953",
+      "duration_secs": 49.83
+    },
+    {
+      "id": "1390396484",
+      "title": "Sonny T. (X-cerpt)",
+      "artists": [
+        "Prince",
+        "Madhouse"
+      ],
+      "album": "The VERSACE Experience (PRELUDE 2 GOLD)",
+      "album_id": "81580953",
+      "duration_secs": 28.351
+    },
+    {
+      "id": "1390396482",
+      "title": "Shy (X-cerpt)",
+      "artists": [
+        "Prince"
+      ],
+      "album": "The VERSACE Experience (PRELUDE 2 GOLD)",
+      "album_id": "81580953",
+      "duration_secs": 142.663
+    }
+  ],
+  "expect": {
+    "picked_id": "1390396481"
+  },
+  "judge": {
+    "title_accepted": true,
+    "artist_matches": true,
+    "source_duration_delta_pct": 0.04647391490006677,
+    "version_tags_ok": true,
+    "live_mismatch": false,
+    "plausible_alternatives": 0
+  }
+}

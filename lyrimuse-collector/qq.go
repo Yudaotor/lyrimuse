@@ -34,8 +34,8 @@ var (
 // smartbox + single-song album enrichment (see resolveQQMusicURL). Cached per
 // artist|title|album; only real song URLs are cached — the search-link fallback
 // is not, so a later poll retries exact resolution.
-func qqMusicURL(ctx context.Context, artist, title, album string) string {
-	m := qqMusicMatchCached(ctx, artist, title, album)
+func qqMusicURL(ctx context.Context, artist, title, album string, durationSecs float64) string {
+	m := qqMusicMatchCached(ctx, artist, title, album, durationSecs)
 	if m.url != "" {
 		return m.url
 	}
@@ -62,11 +62,14 @@ func isQQSearchFallbackURL(u string) bool {
 // 需要这些字段,不能只要一个 URL 字符串。跟 qqMusicURL 共用同一份缓存(按
 // artist|title|album 存完整 qqMusicMatch,而不是只存 url 字符串)——不管从哪个入口
 // 先查到,另一个入口都能直接命中缓存,不会重复发两遍 smartbox/专辑请求。
-func qqMusicMatchCached(ctx context.Context, artist, title, album string) qqMusicMatch {
+// durationSecs:本地曲长(秒),0=不知道。参与挑选(见 qqPickCandidateWithAlbum / qqPickCandidate 的
+// 时长排序键),所以也进缓存 key——同一首歌两个不同时长的本地实体(专辑版 / 节选版)是两次不同的挑选。
+// 取整到秒:调用方给的时长小数位随播放器抖动,不能让 88.226 和 88.231 变成两条缓存。
+func qqMusicMatchCached(ctx context.Context, artist, title, album string, durationSecs float64) qqMusicMatch {
 	if title == "" {
 		return qqMusicMatch{}
 	}
-	key := artist + "|" + title + "|" + album
+	key := artist + "|" + title + "|" + album + "|" + strconv.Itoa(int(durationSecs))
 	qqURLMu.Lock()
 	if v, ok := qqURLCache[key]; ok {
 		qqURLMu.Unlock()
@@ -74,7 +77,7 @@ func qqMusicMatchCached(ctx context.Context, artist, title, album string) qqMusi
 	}
 	qqURLMu.Unlock()
 
-	m := resolveQQMusicMatch(ctx, artist, title, album)
+	m := resolveQQMusicMatch(ctx, artist, title, album, durationSecs)
 	// unreliable(专辑路线网络失败、这是回落结果)不进缓存:见 qqMusicMatch.unreliable 注释。
 	if m.url != "" && !m.unreliable {
 		qqURLMu.Lock()
@@ -886,8 +889,8 @@ type qqMusicMatch struct {
 	unreliable                bool
 }
 
-func resolveQQMusicURL(ctx context.Context, artist, title, album string) string {
-	return resolveQQMusicMatch(ctx, artist, title, album).url
+func resolveQQMusicURL(ctx context.Context, artist, title, album string, durationSecs float64) string {
+	return resolveQQMusicMatch(ctx, artist, title, album, durationSecs).url
 }
 
 // qqCand 是歌名维度的一条候选。提到包级(原来是 resolveQQMusicMatch 里的局部类型)只为
@@ -986,8 +989,8 @@ func qqMatchFromCand(c qqCand, unreliable bool) qqMusicMatch {
 // (lookupAlbum 是"候选没自带专辑名时去查一次"的注入点,生产传 qqSongAlbum,检索层金标传恒空),
 // 理由同 enrich.go 的 rankLyricSourceResults:测试跑生产同一份代码。返回 haveBest=false 表示
 // 没有任何候选够格(专辑对不上且标题也非精确同名)。
-func qqPickCandidateWithAlbum(cands []qqCand, artist, album string, lookupAlbum func(mid string) string) (best qqCand, haveBest bool, bestScore int) {
-	bestExact, bestCreditEq := false, false
+func qqPickCandidateWithAlbum(cands []qqCand, artist, album string, durationSecs float64, lookupAlbum func(mid string) string) (best qqCand, haveBest bool, bestScore int) {
+	bestExact, bestCreditEq, bestFits := false, false, false
 	// 条数上限只约束**需要额外发一次详情请求**的候选(上限的初衷就是别为一首歌
 	// 反复打详情接口)。client_search_cp 路线的专辑名是搜索结果自带的、不花请求,
 	// 全部参与比较——这个上限当年是照着 smartbox"短而紧"的候选表定的,套在一次回
@@ -1011,20 +1014,24 @@ func qqPickCandidateWithAlbum(cands []qqCand, artist, album string, lookupAlbum 
 		// 优先级:标题精确同名 > 专辑分 > 署名恰好同一组人。最后一档只在前两项都打平时
 		// 起作用,专门区分同名同专辑的独唱/合唱两条,见 qqCreditSetEqual。
 		creditEq := qqCreditSetEqual(c.artist, artist)
+		// 自报曲长对不上(>12%)的排到所有对得上的后面,精确同名/专辑分/署名只在同一组内部再比
+		// ——2026-09-05 加,理由见 match.go sourceDurationFits(PRINCE《319》X-cerpt 案)。
+		fits := sourceDurationFits(durationSecs, c.interval)
 		better := !haveBest ||
-			(c.exact && !bestExact) ||
-			(c.exact == bestExact && sc > bestScore) ||
-			(c.exact == bestExact && sc == bestScore && creditEq && !bestCreditEq)
+			(fits && !bestFits) ||
+			(fits == bestFits && ((c.exact && !bestExact) ||
+				(c.exact == bestExact && sc > bestScore) ||
+				(c.exact == bestExact && sc == bestScore && creditEq && !bestCreditEq)))
 		if better {
 			best = c
 			best.album = candAlbum // 自带为空时这里装的是刚查到的那个,别丢回去
-			haveBest, bestScore, bestExact, bestCreditEq = true, sc, c.exact, creditEq
+			haveBest, bestScore, bestExact, bestCreditEq, bestFits = true, sc, c.exact, creditEq, fits
 		}
 	}
 	return best, haveBest, bestScore
 }
 
-func qqPickCandidate(cands []qqCand, artist string) (qqCand, bool) {
+func qqPickCandidate(cands []qqCand, artist string, durationSecs float64) (qqCand, bool) {
 	var best qqCand
 	haveBest, bestRank := false, -1
 	for _, c := range cands {
@@ -1035,6 +1042,10 @@ func qqPickCandidate(cands []qqCand, artist string) (qqCand, bool) {
 		if c.exact {
 			rank += 2
 		}
+		// 自报曲长对得上的一组整体压在对不上的一组之上(见 sourceDurationFits)。
+		if sourceDurationFits(durationSecs, c.interval) {
+			rank += 4
+		}
 		if !haveBest || rank > bestRank {
 			best, haveBest, bestRank = c, true, rank
 		}
@@ -1042,7 +1053,7 @@ func qqPickCandidate(cands []qqCand, artist string) (qqCand, bool) {
 	return best, haveBest
 }
 
-func resolveQQMusicMatch(ctx context.Context, artist, title, album string) qqMusicMatch {
+func resolveQQMusicMatch(ctx context.Context, artist, title, album string, durationSecs float64) qqMusicMatch {
 	items := qqSearchSongs(ctx, qqSearchQueries(artist, title), title)
 	if len(items) == 0 {
 		// 歌手名跨平台不一致时,退一步只按标题再搜(同样要带上去括号的那一版)
@@ -1053,7 +1064,7 @@ func resolveQQMusicMatch(ctx context.Context, artist, title, album string) qqMus
 	// 不相干的翻唱/仿冒账号蒙混过关、链接指向错误的人(同 match.go artistMatches 注释里
 	// Jay Chou 那次教训同理;这里此前就是"完全不查")。
 	if lyricSearchItemsTap != nil {
-		lyricSearchItemsTap("qq", artist, title, album, 0, items)
+		lyricSearchItemsTap("qq", artist, title, album, durationSecs, items)
 	}
 	cands := qqCollectCandidates(items, artist, title, true)
 	if len(cands) == 0 {
@@ -1070,7 +1081,7 @@ func resolveQQMusicMatch(ctx context.Context, artist, title, album string) qqMus
 	// 频次低;补专辑失败(反爬/超时)时降级到按名字选,不影响出具体歌链接。
 	viaAlbumDegraded := false // 专辑路线曾网络失败 → 本函数所有回落出口都要打 unreliable
 	if album != "" {
-		best, haveBest, bestScore := qqPickCandidateWithAlbum(cands, artist, album, func(mid string) string { return qqSongAlbum(ctx, mid) })
+		best, haveBest, bestScore := qqPickCandidateWithAlbum(cands, artist, album, durationSecs, func(mid string) string { return qqSongAlbum(ctx, mid) })
 		if haveBest && bestScore > 0 {
 			return qqMatchFromCand(best, false)
 		}
@@ -1095,7 +1106,7 @@ func resolveQQMusicMatch(ctx context.Context, artist, title, album string) qqMus
 	// 透传——专辑名喂给打分的 versionTagsMismatch / 候选弹窗展示,时长喂给
 	// sourceDurationMismatchPenalty,跟专辑维度路线(resolveQQMatchViaAlbum)填 interval
 	// 是同一个字段、同一套语义。smartbox 兜底路线两者都是零值,行为与改造前一致。
-	c, ok := qqPickCandidate(cands, artist)
+	c, ok := qqPickCandidate(cands, artist, durationSecs)
 	if !ok {
 		return qqMusicMatch{}
 	}

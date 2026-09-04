@@ -240,7 +240,7 @@ func runSearchGolden(fx *searchGoldenFixture) searchGoldenExpect {
 		if len(cands) == 0 {
 			break
 		}
-		if c, ok := qqPickCandidate(cands, q.Artist); ok {
+		if c, ok := qqPickCandidate(cands, q.Artist, q.DurationSecs); ok {
 			e.PickedNoAlbum = c.mid
 		}
 		// 跟 resolveQQMusicMatch 同一条路:有本地专辑名先走专辑档(候选没自带专辑名时生产会去查一次,
@@ -249,7 +249,7 @@ func runSearchGolden(fx *searchGoldenFixture) searchGoldenExpect {
 		// 生产在"有 best 但专辑分为 0"时会先走专辑维度检索(网络),失败才退回 best;这里没有那一步,
 		// 直接退回 best——差别只在那条网络路径,挑选结果是否站得住由 goldenJudgeSearchPick 另行把关。
 		if q.Album != "" {
-			best, haveBest, _ := qqPickCandidateWithAlbum(cands, q.Artist, q.Album, func(mid string) string { return fx.AlbumLookup[mid] })
+			best, haveBest, _ := qqPickCandidateWithAlbum(cands, q.Artist, q.Album, q.DurationSecs, func(mid string) string { return fx.AlbumLookup[mid] })
 			if haveBest {
 				e.PickedID = best.mid
 				break
@@ -618,7 +618,7 @@ func TestLyricsSearchGoldenCapture(t *testing.T) {
 				cands = qqCollectCandidates(items, chosen.q.Artist, chosen.q.Title, false)
 			}
 			rec := map[string]string{}
-			qqPickCandidateWithAlbum(cands, chosen.q.Artist, chosen.q.Album, func(mid string) string {
+			qqPickCandidateWithAlbum(cands, chosen.q.Artist, chosen.q.Album, chosen.q.DurationSecs, func(mid string) string {
 				a := qqSongAlbum(ctx, mid)
 				rec[mid] = a
 				return a

@@ -1931,7 +1931,7 @@ func resolveTrackEnrichment(ctx context.Context, artist, title, album string, du
 	// 复用上面封面兜底那步已经算出来的 appleMatch(同一个 key 缓存,不是重新发请求),
 	// 不用再单独调一次 appleMusicURL。
 	e.AppleURL = appleMatch.url
-	e.QQURL = qqMusicURL(ctx, artist, title, album)
+	e.QQURL = qqMusicURL(ctx, artist, title, album, durationSecs)
 	// 顺手把专辑/歌手 mid 一起拿到,不用等下一轮外围回填(首次解析本来就在打一堆请求,
 	// 多这一个不影响体感;拿不到就留空,菜单那两行自己会隐藏)。
 	e.QQAlbumMid, e.QQSingerMid = qqSongCatalogMids(ctx, qqMidFromURL(e.QQURL))
@@ -2993,7 +2993,7 @@ func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, alb
 		// 前面的一步单独阻塞;resolveTrackEnrichment 那边为封面/跳转链接另外调用
 		// qqMusicURL 时会命中这里可能已经写热的缓存,反过来也一样,谁先算出来谁写
 		// 缓存,不要求哪边一定在前(两者共用同一份 qqURLCache,见 qq.go)。
-		match := qqMusicMatchCached(ctx, artist, title, album)
+		match := qqMusicMatchCached(ctx, artist, title, album, durationSecs)
 		qqMid := qqMidFromURL(match.url)
 		var lyr, yrc, tr, roma string
 		var qqDur float64
