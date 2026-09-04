@@ -93,6 +93,8 @@ type lyricsDecisionCandidate struct {
 	SourceReportedDurationSecs float64 `json:"source_reported_duration_secs,omitempty"`
 	HasWordTiming              bool    `json:"has_word_timing,omitempty"`
 	Instrumental               bool    `json:"instrumental,omitempty"`
+	// BakedTranslationLines:见 scoredLyricCandidateResult 同名字段(2026-09-04)。
+	BakedTranslationLines int `json:"baked_translation_lines,omitempty"`
 }
 
 // buildLyricsDecision 把一轮完整评估固化成决策记录。picked 传 nil 表示没选出;
@@ -157,6 +159,7 @@ func buildLyricsDecision(
 			SourceReportedDurationSecs: c.SourceReportedDurationSecs,
 			HasWordTiming:              c.HasWordTiming,
 			Instrumental:               c.Instrumental,
+			BakedTranslationLines:      c.BakedTranslationLines,
 		})
 	}
 	return d

@@ -3,7 +3,7 @@
   "category": "latin-title",
   "note": "英文歌基线:歌手/歌名均无汉字,语言闸不许误杀;521s 的长曲,只有网易云一家末句吻合、其余四家都是短版吃 durationOff——守\"时长判据压过逐字\"这一档",
   "label_evidence": {
-    "consensus_peers": 3,
+    "consensus_peers": 4,
     "title_accepted": true,
     "version_tags_ok": true,
     "source_duration_delta_pct": 0.16621880998080335,
@@ -254,13 +254,19 @@
           },
           {
             "kind": "lines",
-            "points": 71
+            "points": 37
           },
           {
             "kind": "titleMatch",
             "points": 120
+          },
+          {
+            "kind": "translation",
+            "points": 50
           }
-        ]
+        ],
+        "has_translation": true,
+        "translation_lang": "zh"
       }
     ],
     "winner_fingerprint": "3ad1816b77767c02"

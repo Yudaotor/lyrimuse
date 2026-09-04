@@ -665,6 +665,10 @@ func TestLyricsGolden(t *testing.T) {
 					return
 				}
 				fx.Expect = got
+				// 独立判据也跟着重算(共识数/覆盖率会随正文处理变),缓存旁证保留采集时的值。
+				ev := goldenComputeEvidence(fx.Query, rankLyricSourceResults(fx.Query.Artist, fx.Query.Title, fx.Query.Album, fx.Query.DurationSecs, goldenRawRound(fx)))
+				ev.CacheAgreement = fx.LabelEvidence.CacheAgreement
+				fx.LabelEvidence = ev
 				if err := writeGoldenFixture(fx); err != nil {
 					t.Fatalf("写回样本失败: %v", err)
 				}

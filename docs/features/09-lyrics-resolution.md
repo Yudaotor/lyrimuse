@@ -50,7 +50,7 @@ collector 的核心：一首歌播放时，去八个歌词源（网易云/QQ/酷
 | amll | **不检索**（按 ID 直取） | TTML→YRC | 内嵌 `x-translation` | 无 | 无（结构性没有） | 见下 |
 | musixmatch | 不参与 | richsync→YRC | **可选语言** | 无 | 500px | DoH 防 DNS 污染（并发拨号，2026-09-03）＋直连被打掉时经**系统代理**兜底（见第 42 条，全仓只有这个源走这条路）；匿名 token 双缓存；richsync 把**空格当独立计时条目**、掏空短词的读条时长（实测 "In" 23ms＋空格 165ms，悬浮窗观感"没有读条直接填满"）——`richsyncToYRC` 归并空白条目进前词（2026-08-19），存量缓存由启动迁移 `migrateYRCWhitespaceTokens`（yrcwhitespace.go，夹在 import 与 export 之间、幂等）原地清洗，无需重新联网解析 |
 | lyricfind | 是（flexColumn 直接给） | **无** | 无 | 无 | 缩略图 URL | 见下 |
-| kuwo | 是（自己重新打分，不信 Kuwo 排序） | **无** | 无 | 无 | **自带**（2026-08-31 起，见下） | 见下 |
+| kuwo | 是（自己重新打分，不信 Kuwo 排序） | **无** | 中文（从正文里摘出的烘入译文，v13 起，见「已知坑」首条） | 无 | **自带**（2026-08-31 起，见下） | 见下 |
 
 所有源共用两道身份闸：`lyricTitleAccepted`（归一相等/剥括号相等/双语前缀，**绝不认任意子串包含**）+ 歌手闸。歌手闸 2026-08-20 起分两套：**歌词候选采纳**（kugou/qq strict 档/lrclib search/musixmatch/lyricfind）用 `lyricSourceArtistMatches` = `artistMatches` + 「两侧都是多人合credit 时段集有交集即过」——跨服务合唱署名会换分隔符、换合作者语言写法（「UMI、V」vs「UMI & 金泰亨」），要求整串对上等于要求两边曲库同一套署名习惯,实测酷狗服务端召回明明成功、正主却死在客户端闸上；交集档仍要求两侧各切出 ≥2 段（「周杰伦、」进不了）、段间字节相等（「周杰伦-」不认）。**身份判定/防仿冒**（netease 的 nameOnlyMatch、canonical 统一拼写、qqCoverFallback）仍用原 `artistMatches`（多人 credit 逐段精确相等 + 连续段拼回救 K/DA 类名字，拒绝「周杰伦、」式仿冒尾巴），刻意不放宽。两套闸门比较前都先过一遍 `toSimplified`（繁转简，跟 `normLoose` 同一份词典、同一个理由，2026-08-25 加）——`artistCreditParts` 内部下沉一次即两处共同受益，只转字符形式不剥标点，不影响上面的仿冒防线；起因是 lyricfind（经 YouTube Music 检索）给的艺人字段是繁体「周杰倫」，本地查询是简体「周杰伦」，折算前会把同一个人判成两个人、整条候选被拒收（「彩虹」案例）。`artistMatches` 2026-08-26 再补一档去括号别名兜底（`丁世光(Dean Ting)` 案，见下方第 18 条已知坑），跟 `lyricTitleAccepted` 早就有的「去括号再比」标题规则对齐，同样不影响仿冒防线。
 
@@ -89,7 +89,7 @@ collector 的核心：一首歌播放时，去八个歌词源（网易云/QQ/酷
   - `rejectNoLastTimestamp`：提不出末句时间戳。
 - **逐字覆盖率守卫** `usableWordTiming`：YRC 末时刻 < LRC 末时刻 ×0.5 就当没有逐字（防 QQ 截断残片骗 +400 又被「已有逐字不重试」钉死；阈值实测依据：残片覆盖 19.1%、正常最低 85.4%）。
 
-### 5. 打分（`lyricsScoringVersion = 12`）
+### 5. 打分（`lyricsScoringVersion = 13`）
 
 | 项 | 分值 | 条件 |
 |---|---|---|
@@ -198,6 +198,7 @@ collector 的核心：一首歌播放时，去八个歌词源（网易云/QQ/酷
 | QQ 专辑维度检索 | qq.go `resolveQQMatchViaAlbum` `qqAlbumIdentityQuery` `qqAlbumSongs`（GetAlbumSongList）`qqSmartboxAlbums`；启用条件见 `resolveQQMusicMatch` 内两处调用点（见第 36 条） |
 | QQ 歌名维度检索 | qq.go `qqSearchSongs`（唯一入口：`qqClientSearch` 跨标题变体合并 + 按需补 `qqSmartbox`，判据 `qqSearchNeedsSmartboxSupplement`）`qqClientSearchItems`（响应归一，合唱署名用 `/` 拼）`qqCollectCandidates`（标题闸+身份闸，透传专辑名/时长）`qqCandAlbumName`（自带专辑名免去一次详情请求，预算 `qqAlbumLookupBudget`）`qqPickCandidate`+`qqCreditSetEqual`（挑冠军与独唱/合唱 tiebreak）`qqMatchFromCand`；单测 `qqclientsearch_test.go`（见第 39 条） |
 | Apple 目录锚点 | applecatalog.go `appleCatalogAnchor` `appleCatalogSearchIdentities` `dedupeArtistIdentities`（详见第 02 章） |
+| 烘进正文的逐行译文 | bakedtranslation.go `splitBakedTranslation` `adoptBakedTranslation` `classifyBakedLine` `stripBakedYRCLines`；调用处 enrich.go `rankLyricSourceResults` 候选装配前；透传字段 `BakedTranslationLines`（scoredLyricCandidateResult / lyricsDecisionCandidate） |
 | 重试/重打分 | enrich.go `needsLyricsRetry` `retryLyricsUpgrade` `needsLyricsRescore` `rescoreLyrics` |
 | 已校准一票否决 | lyricspins.go `lyricsPinned` `readLyricsPins`;Swift 侧 `LyricsPinStore` |
 | 决策留痕 | decision.go `buildLyricsDecision`；lyricstrace.go |
@@ -236,7 +237,7 @@ collector 的核心：一首歌播放时，去八个歌词源（网易云/QQ/酷
 
 **修法（v12）**：词表补裸 `"edit"`，但**只按整词匹配**（`wordOnlyVersionTags`）——`titleVersionTags` 对拉丁词一直是子串匹配（"remixes"/"remixed" 都能命中 "remix"），而 "edit" 是 "edition" 的前缀，子串匹配会把 Deluxe Edition / Expanded Edition 这一大类专辑名当成 edit，整个 Deluxe 系跟原版之间凭空多出 -600。`remaster` 刻意继续不收：它是同一次录音的另一次母带，时间轴是同一条。修后酷狗那条吃 versionTags -600、标题降到 60，QQ 胜出（联网复现 1079 vs 462）。全库 2652 条决策扫过一遍：受影响的另 20 条候选全是 Michael Jackson《Number Ones》"(2003 Edit)" / "(Radio Edit)" 系，方向一致（本地是 edit 时非 edit 候选该扣、反之亦然），零反向。金标 `vertag-edit-diamonds-pearls`（类别 `version-tag-edit`）钉住；单测 `TestScoreLyricCandidatePenalizesSingleEdit` / `TestTitleVersionTags` 新增用例含 "(Deluxe Edition)" 不许误伤。
 
-**顺手看到、没动的**：QQ 这条 118 行的候选是上传者用 "krc转qrc工具" 烘进去的**双语正文**——每句英文后面紧跟一行独立时间戳的中文译文。它跟 lrclib/musixmatch 纯英文正文的 3-gram 相似度只有 0.41，所以拿不到共识分；显示时也会英中交替。collector 目前没有"把烘进正文的逐行译文拆出来当 `lyrics_tr`"这一步，⚠️待定 要不要做（判据大概是：拉丁行后 ≤3s 紧跟一行纯汉字、成对出现占比过半）。
+**同一案牵出的第二件事（v13，同日）**：QQ 这条 118 行的候选是上传者用 "krc转qrc工具" 烘进去的**双语正文**——每句英文后面紧跟一行独立时间戳的中文译文，QRC 逐字轨里同样有这些行（每个汉字 66ms 的假计时）。它跟 lrclib/musixmatch 纯英文正文的 3-gram 相似度只有 0.41，拿不到共识分；行数分虚高一倍；显示时英中交替、逐字填色还会在中文行上跑一遍假计时。现在候选装配前由 `bakedtranslation.go` 把这种形态识别出来：中文行从正文与逐字轨里摘掉，改挂到**原文行的时间戳**上放进 `lyrics_tr`（App 侧译文按 700ms 最近邻贴行，不能留上传者那个偏 2 秒的戳）。判据刻意保守：本地标签不含汉字（或原文行过半带假名/谚文——日韩歌常用汉字标歌名）、外文行与纯汉字行各 ≥8 行、数量比 0.7~1.3、≥80% 的汉字行紧跟在一个外文行后面。拿用户 3481 条缓存冠军正文扫过：F/H 各 ≥8 的 351 条里"紧跟比例"最高 0.67（真中英混唱），没有一条 ≥0.8——真双语歌是段落级交错，不是逐句一比一。译文接到译文轨本来就是中文语义的源（netease/qq/kugou/kuwo）；musixmatch/amll 的译文语言跟设置走，只摘不接。金标当场抓到**酷我对外文歌是系统性地这么做的**（`ko-fallen-angel` 酷我候选 128→67 行、`latin-purple-rain` 71→37 行，摘掉后都拿到了共识分），所以酷我从"无译文"变成"有从正文摘出的中文译文"。摘了多少行记在候选的 `baked_translation_lines`（决策留痕同名字段），事后能回答"这条候选行数怎么少了一半 / 译文哪来的"。Diamonds and Pearls 的 QQ 候选：1079 → **1319**（共识 +250、译文 +50、行数 −55），冠军不变。
 
 - 用法见 `testdata/lyricsgolden/README.md`。
 

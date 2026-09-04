@@ -3,12 +3,12 @@
   "category": "version-tag-edit",
   "note": "「(Edit)」剪辑版(用户 2026-09-04 报\"这个歌匹配错了\"):酷狗《Diamonds And Pearls (Edit)》自报 260s 对本地 283s 只差 8%(够不到 sourceDurationOff 的 12%),末句时刻又落在容差里,带逐字 + 共识;v12 之前词表不认 \"edit\",它以 1122 压过 2023 Remaster 精确同名、专辑同名的 QQ 1079。v12 起吃 versionTags -600、标题降到 60 档,QQ 胜出。采集时缓存里生效的仍是那份 Edit(即被修的 bug),故用 CACHE_KNOWN_WRONG 采;QQ 这份正文里夹着逐行中文译文(上传者用 krc转qrc工具 烘进去的),所以跟 lrclib/musixmatch 的纯英文正文共识只有 0.41、拿不到共识分——正确性靠 2023 Remaster 精确同名 + 专辑同名 + 自报时长 0.36% + 覆盖 99% 站住",
   "label_evidence": {
-    "consensus_peers": 0,
+    "consensus_peers": 3,
     "title_accepted": true,
     "version_tags_ok": true,
     "source_duration_delta_pct": 0.3589872100832145,
-    "lyrics_end_secs": 280.06,
-    "coverage_pct": 98.95553915583012,
+    "lyrics_end_secs": 278.28,
+    "coverage_pct": 98.32659942970936,
     "album_score": 200,
     "live_mismatch": false,
     "cache_agreement": "differs=0.41 (cache known wrong, see note)"
@@ -114,11 +114,11 @@
     "ranked": [
       {
         "source": "qq",
-        "score": 1079,
+        "score": 1319,
         "terms": [
           {
             "kind": "duration",
-            "points": 291
+            "points": 286
           },
           {
             "kind": "wordTiming",
@@ -126,7 +126,7 @@
           },
           {
             "kind": "lines",
-            "points": 118
+            "points": 63
           },
           {
             "kind": "album",
@@ -135,9 +135,19 @@
           {
             "kind": "titleMatch",
             "points": 120
+          },
+          {
+            "kind": "consensus",
+            "points": 250
+          },
+          {
+            "kind": "translation",
+            "points": 50
           }
         ],
-        "has_word_timing": true
+        "has_word_timing": true,
+        "has_translation": true,
+        "translation_lang": "zh"
       },
       {
         "source": "lrclib",
@@ -223,6 +233,6 @@
         "has_word_timing": true
       }
     ],
-    "winner_fingerprint": "335ffaa01a66320f"
+    "winner_fingerprint": "e9abe12266556d38"
   }
 }

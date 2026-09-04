@@ -3,7 +3,7 @@
   "category": "ko-hangul-lyrics",
   "note": "韩文歌:标签是拉丁字母、正文是谚文(cjkRatio 只数汉字,语言闸不能因此误杀),酷狗/QQ 带中文译文(+50);酷狗那条韩文歌的\"罗马音\"轨是中文谐音,在 kugou.go 就按汉字占比挡掉了,所以这里任何候选都不该有罗马音;musixmatch 自报时长偏差 \u003e12% 吃 sourceDurationOff",
   "label_evidence": {
-    "consensus_peers": 3,
+    "consensus_peers": 4,
     "title_accepted": true,
     "version_tags_ok": true,
     "source_duration_delta_pct": 0.08334774304133685,
@@ -194,6 +194,38 @@
         "translation_lang": "zh"
       },
       {
+        "source": "kuwo",
+        "score": 803,
+        "terms": [
+          {
+            "kind": "duration",
+            "points": 276
+          },
+          {
+            "kind": "lines",
+            "points": 67
+          },
+          {
+            "kind": "album",
+            "points": 40
+          },
+          {
+            "kind": "titleMatch",
+            "points": 120
+          },
+          {
+            "kind": "consensus",
+            "points": 250
+          },
+          {
+            "kind": "translation",
+            "points": 50
+          }
+        ],
+        "has_translation": true,
+        "translation_lang": "zh"
+      },
+      {
         "source": "netease",
         "score": 796,
         "terms": [
@@ -248,28 +280,6 @@
           {
             "kind": "consensus",
             "points": 250
-          }
-        ]
-      },
-      {
-        "source": "kuwo",
-        "score": 583,
-        "terms": [
-          {
-            "kind": "duration",
-            "points": 295
-          },
-          {
-            "kind": "lines",
-            "points": 128
-          },
-          {
-            "kind": "album",
-            "points": 40
-          },
-          {
-            "kind": "titleMatch",
-            "points": 120
           }
         ]
       }

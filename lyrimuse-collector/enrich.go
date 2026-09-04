@@ -2110,6 +2110,10 @@ type scoredLyricCandidateResult struct {
 	// 一个用户可以手动选中的选项展示出来,只是要在旁边标出"无时间戳",不能让用户误以为
 	// 会像其它候选一样逐字/逐行同步。
 	PlainTextOnly bool `json:"plain_text_only,omitempty"`
+	// BakedTranslationLines:候选装配时从正文里摘掉、改挂到译文轨的"烘进正文的逐行中文译文"行数
+	// (bakedtranslation.go,2026-09-04)。0 = 这条候选没有这种形态。透传进决策留痕,让"这条候选行数
+	// 怎么比另一个源少了一半 / 译文哪来的"能事后回答。不参与打分。
+	BakedTranslationLines int `json:"baked_translation_lines,omitempty"`
 }
 
 // lyricSearchDeadline 给 fetchScoredLyricCandidates 整体加一个上限——八个源各自的
@@ -2711,6 +2715,22 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 		}
 		return appleCover
 	}
+	// 烘进正文的逐行中文译文(bakedtranslation.go,2026-09-04):候选装配**之前**摘出来——共识、行数、
+	// 逐字覆盖率全都读正文,晚了就都是按"一半是中文"的正文算的。译文轨本来就是中文语义的源
+	// (netease/qq/kugou)接上摘出来的译文;musixmatch/amll 的译文语言跟设置走,只摘不接。
+	foreignSong := !containsHan(artist) && !containsHan(title)
+	bakedLines := map[string]int{}
+	ne.Lyrics, ne.Trans, ne.YRC, bakedLines["netease"] = adoptBakedTranslation(ne.Lyrics, ne.Trans, ne.YRC, foreignSong, true)
+	qqLyr, qqTr, qqYRC, bakedLines["qq"] = adoptBakedTranslation(qqLyr, qqTr, qqYRC, foreignSong, true)
+	kugouLyr, kugouTr, kugouYRC, bakedLines["kugou"] = adoptBakedTranslation(kugouLyr, kugouTr, kugouYRC, foreignSong, true)
+	mxLyr, _, mxYRC, bakedLines["musixmatch"] = adoptBakedTranslation(mxLyr, "", mxYRC, foreignSong, false)
+	lrclibLyr, _, _, bakedLines["lrclib"] = adoptBakedTranslation(lrclibLyr, "", "", foreignSong, false)
+	lfLyr, _, _, bakedLines["lyricfind"] = adoptBakedTranslation(lfLyr, "", "", foreignSong, false)
+	// 酷我对外文歌**系统性**地把中文译文烘在正文里(金标 ko-fallen-angel / latin-purple-rain 里的酷我候选
+	// 128→67 行、71→37 行),摘出来的译文照 qq/kugou 的口径接到译文轨(中文)。
+	var kuwoTr string
+	kuwoLyr, kuwoTr, _, bakedLines["kuwo"] = adoptBakedTranslation(kuwoLyr, "", "", foreignSong, true)
+	amll.lrc, _, amll.yrc, bakedLines["amll"] = adoptBakedTranslation(amll.lrc, "", amll.yrc, foreignSong, false)
 	var candidates []lyricCandidate
 	if ne.Lyrics != "" {
 		// 网易云的社区翻译固定中文(见下面附着处的注释),usable 判定按目标语言过闸;
@@ -2746,7 +2766,8 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 	if kuwoLyr != "" {
 		// 只有逐行,没有逐字/译文/罗马音,也没有自己的封面——跟 lyricfind 同一个形状
 		// (见 kuwo.go 头注)。
-		candidates = append(candidates, lyricCandidate{source: "kuwo", lyrics: kuwoLyr, sourceReportedDurationSecs: kuwoDur, title: kuwoTitle, artist: kuwoArtist, album: kuwoAlbum, cover: coverOrFallback(kuwoCover)})
+		kuwoUsableTr, _ := usableValueAdd(kuwoLyr, kuwoTr, "zh", "", features.LyricsTranslationLanguage)
+		candidates = append(candidates, lyricCandidate{source: "kuwo", lyrics: kuwoLyr, hasUsableTranslation: kuwoUsableTr, sourceReportedDurationSecs: kuwoDur, title: kuwoTitle, artist: kuwoArtist, album: kuwoAlbum, cover: coverOrFallback(kuwoCover)})
 	}
 	if !amll.empty() {
 		// 身份是确定的 —— 这份 TTML 是按网易云/QQ 的音乐 ID 直接取回来的,不是搜出来的,
@@ -2807,6 +2828,7 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 			CoverURL:                   c.cover,
 			Language:                   c.language,
 			PlainTextOnly:              c.plainTextOnly,
+			BakedTranslationLines:      bakedLines[c.source],
 		}
 		r.Score, r.ScoreTerms = scoreLyricCandidateDetailed(
 			artist, title, album, durationSecs, c, corroborated[c.source], consensusPeers[c.source])
@@ -2876,6 +2898,13 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 			}
 			if c.hasUsableRomanization {
 				r.LyricsRoma = qqRoma
+			}
+		case "kuwo":
+			// 2026-09-04 加。酷我自己没有译文轨,这里接的是从正文里摘出来的烘入译文
+			// (bakedtranslation.go),固定中文,可用性同样由候选装配时的 usableValueAdd 把关。
+			if c.hasUsableTranslation {
+				r.LyricsTr = kuwoTr
+				r.LyricsTrLang = "zh"
 			}
 		case "kugou":
 			// 2026-09-02 加。酷狗 KRC `[language:]` 内嵌的中文译文 / 罗马音(见 kugou.go

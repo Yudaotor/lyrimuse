@@ -455,7 +455,12 @@ const lyricOvershootToleranceSecs = 5.0
 // 283s,差 8%,够不到 sourceDurationOff 的 12%),词表不认 "(Edit)",versionTags 静默、titleMatch 还按
 // "括号里没有版本词"给了精确档 120,+400 逐字 +250 共识后 1122 分压过 2023 Remaster 精确同名的 QQ
 // 1079。补词后该候选吃 versionTags -600、titleMatch 降到 60,QQ 那条胜出。全库决策扫描见词表处注释。
-const lyricsScoringVersion = 12
+//
+// v13(2026-09-04):候选装配前把"烘进正文的逐行中文译文"摘出来(bakedtranslation.go)。同一首
+// 《Diamonds and Pearls (2023 Remaster)》案里 QQ 那条正确候选 118 行有 59 行是上传者烘进去的中文译文,
+// 正文跟 lrclib/musixmatch 纯英文正文的 3-gram 相似度只有 0.41、拿不到共识分,显示时英中交替。摘掉后
+// 共识 +250、行数 -59、译文 +50(目标语言中文时);受影响的只有这种形态的候选,判据与全库实测见那边头注。
+const lyricsScoringVersion = 13
 
 // scoreTerm 是打分里的一项。只带**机器可读的类型**和分值,文案交给界面本地化 ——
 // App 有中英两套界面,从这里吐中文字符串会让英文用户看到一串中文。
