@@ -357,7 +357,7 @@
 "在 ListenBrainz 网站获取 Token →" = "Get a Token from the ListenBrainz website →";
 "在 iCloud 里发现一份 Lyrimuse 备份" = "Found a Lyrimuse backup in iCloud";
 "在 iPhone 上安装 Bark App，首页显示的就是你的专属推送地址，复制粘贴过来即可，不需要额外设置" = "Install the Bark app on your iPhone — the home screen shows your personal push URL. Just copy and paste it here; no extra setup needed";
-"在「设置 → 歌词 → 歌词来源」里关掉的源，这一轮没有查它" = "Turned off under Settings → Lyrics → Lyrics Sources; this search did not query it";
+"在「设置 → 歌词 → 歌词来源」里关掉的源，这一轮不采用它的结果" = "Turned off under Settings → Lyrics → Lyrics Sources; its results are not used in this search";
 "在企业微信群里：群设置 → 群机器人 → 添加机器人，创建后复制 Webhook 地址，不需要额外的签名设置" = "In your WeCom group: Group Settings → Group Bots → Add a Bot, then copy the webhook URL after creating it. No extra signature setup is needed";
 "在其他设备上播放，Last.fm 已收到" = "Playing on another device; Last.fm has received it";
 "在播放器中打开" = "Show in Player";

@@ -102,8 +102,11 @@ struct LyricsSearchSheet: View {
     @State private var showSourceAvailability = false
 
     /// 这一轮**开着**的源(rawValue)。开搜那一刻从 FeatureSettingsStore 快照——collector 子进程
-    /// 起跑时读的是同一份 features.json,所以这份集合就是它实际去查的那几个;搜索中途在设置里
-    /// 开关源不改这一轮的标注(下次「重新搜索」才生效),跟候选一样是"这一轮"的事实。
+    /// 起跑时读的是同一份 features.json,所以这份集合就是它这一轮**采用结果**的那几个;搜索中途在
+    /// 设置里开关源不改这一轮的标注(下次「重新搜索」才生效),跟候选一样是"这一轮"的事实。
+    /// ⚠️ 不是"它查了哪几个":fetchScoredLyricCandidatesStreaming 对全部源无条件起 goroutine,
+    /// 关掉的源照样发请求,只是结果被 filterEnabledLyricSources 丢掉(planRound 只跳过冷却中的源)。
+    /// 首版注释和 .help 写成「没有查它」,被 ls-Alex 评审指出跟日志对不上,已改口。
     /// 用途只有一个:「歌词源可用情况」把没开的源标成「未启用」而不是「未给出候选」(2026-09-06,
     /// 用户拍板"加一档,不藏掉")。徽标的分母**不**用它,用 collector 报的 sourcesTotal,见下。
     /// 空集 = 还没开搜(徽标那时也不显示);行列表把空集当"全开"处理,别把九行全标成未启用。
@@ -150,7 +153,7 @@ struct LyricsSearchSheet: View {
             // "给过候选"≠"这条候选能用"——一个源明确回过一份被拒绝的候选(比如没时间戳、
             // 语言不对),跟它压根没回应(超时/限速/真的没收录这首歌),是两回事,分开
             // 标出来才不会把"回应了但不好"和"根本没回应"混为一谈。用户关掉的源又是第三回事
-            // ——这一轮压根没查它,单独一档,见 disabledSourceRow。
+            // ——它的结果这一轮不采用,单独一档,见 disabledSourceRow。
             ForEach(sourceAvailabilityRows, id: \.source) { row in
                 if row.enabled {
                     sourceAvailabilityRow(row.source)
@@ -193,10 +196,11 @@ struct LyricsSearchSheet: View {
         }
     }
 
-    /// 用户在设置里关掉的源(2026-09-06):这一轮 collector 根本没查它,既不是「已给出候选」也不是
+    /// 用户在设置里关掉的源(2026-09-06):collector 这一轮不采用它的结果(请求照发、候选被
+    /// filterEnabledLyricSources 过滤,见 enabledSources 那条 ⚠️),既不是「已给出候选」也不是
     /// 「未给出候选」——之前它跟真没应答的源一样显示「未给出候选」,是把"没参与"报成了"没结果"。
-    /// 空心减号 + 第三级灰,比「未给出候选」的叉再退一级:它不是结果。不给失败原因(collector 对
-    /// 没开的源不发代码,也不该发)。文案复用账号页那条「未启用」;悬停说明在哪开。
+    /// 空心减号 + 第三级灰,比「未给出候选」的叉再退一级:它不是结果。不给失败原因(collector 的
+    /// lyricSourceFailureReasons 对没开的源不发代码)。文案复用账号页那条「未启用」;悬停说明在哪开。
     private func disabledSourceRow(_ source: String) -> some View {
         HStack(spacing: 6) {
             Image(systemName: "minus.circle")
@@ -208,7 +212,7 @@ struct LyricsSearchSheet: View {
                 .foregroundStyle(.tertiary)
         }
         .font(.callout)
-        .help(L10n.t("在「设置 → 歌词 → 歌词来源」里关掉的源，这一轮没有查它"))
+        .help(L10n.t("在「设置 → 歌词 → 歌词来源」里关掉的源，这一轮不采用它的结果"))
     }
 
     // 未给出候选的源,查得到具体原因的那几个(2026-08-31)——给 sourceAvailabilityList
