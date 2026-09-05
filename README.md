@@ -22,39 +22,17 @@ Lyrimuse sits quietly in your menu bar and shows a floating lyrics window that f
 
 **Install:** `brew tap yudaotor/lyrimuse && brew install --cask lyrimuse` (Apple Silicon and Intel; clears the one-time Gatekeeper flag automatically) — or grab the [latest release](https://github.com/Yudaotor/lyrimuse/releases/latest) and see [Getting Started](#getting-started).
 
-<table>
-<tr>
-<td align="center" width="33%"><img src="docs/images/app-desktop-lyrics.png" width="260" alt="Classic desktop lyrics overlay"><br><sub>Classic floating overlay</sub></td>
-<td align="center" width="33%"><img src="docs/images/app-dynamic-island.png" width="260" alt="Dynamic-Island-style lyrics, playing"><br><img src="docs/images/app-dynamic-island-paused.png" width="260" alt="Dynamic-Island-style lyrics, paused"><br><sub>Dynamic-Island-style capsule (no physical notch required) — hover expands the full card, pausing collapses it to a pill</sub></td>
-<td align="center" width="33%"><img src="docs/images/app-menu-bar-lyrics.png" width="260" alt="Menu bar lyrics"><br><sub>Menu bar text mode, with karaoke-style highlighting</sub></td>
-</tr>
-</table>
+<img src="docs/images/hero-surfaces.png" alt="Lyrimuse lyrics surfaces — Apple-Music-style lyrics window, Dynamic-Island-style capsule, floating overlay with word-by-word highlight, menu-bar lyrics">
+<p align="center"><sub>Four ways to show lyrics — the full Lyrics Window, a Dynamic-Island-style capsule, the classic floating overlay (word-by-word highlight), and menu-bar lyrics</sub></p>
 
-<table>
-<tr>
-<td align="center" width="50%"><img src="docs/images/app-lyrics-window.png" width="380" alt="Lyrics Window"><br><sub>Lyrics Window, modelled on the Apple Music lyrics page</sub></td>
-<td align="center"><img src="docs/images/app-idle-standby.png" width="380" alt="Lyrics Window listening overview"><br><sub>Same window, showing a listening overview when nothing's playing</sub></td>
-</tr>
-<tr>
-<td align="center"><img src="docs/images/app-lastfm-profile.png" width="380" alt="Last.fm listening profile"><br><sub>Last.fm listening profile — totals and recent scrobbles</sub></td>
-<td align="center"><img src="docs/images/app-lastfm-charts.png" width="380" alt="Last.fm Top Artists chart"><br><sub>Last.fm profile — Top Artists / Albums / Tracks chart</sub></td>
-</tr>
-<tr>
-<td colspan="2" align="center"><img src="docs/images/app-lastfm-heatmap.png" width="700" alt="Listening heatmap"><br><sub>Listening Heatmap — a GitHub-contributions-style yearly calendar, built from your full Last.fm history</sub></td>
-</tr>
-<tr>
-<td align="center"><img src="docs/images/app-menu-bar-dropdown.png" width="380" alt="Menu bar dropdown"><br><sub>Everything reachable from the menu bar dropdown</sub></td>
-<td align="center"><img src="docs/images/app-settings.png" width="380" alt="Settings — floating lyrics editor"><br><img src="docs/images/app-settings-notch.png" width="380" alt="Settings — notch editor"><br><sub>Settings — every lyrics surface is an editor with a live, full-size preview</sub></td>
-</tr>
-<tr>
-<td align="center"><img src="docs/images/app-lyrics-manager.png" width="380" alt="Lyrics Manager"><br><sub>Lyrics Manager — browse, hand-edit, and re-match any track's lyrics</sub></td>
-<td align="center"><img src="docs/images/app-lyrics-search.png" width="380" alt="Search for Lyrics"><br><sub>Every candidate scored and labelled, so a wrong version is obvious before you pick it</sub></td>
-</tr>
-<tr>
-<td align="center"><img src="docs/images/app-player-settings.png" width="380" alt="Player picker"><br><sub>Pick several players at once — web players running in your browser included</sub></td>
-<td align="center"><img src="docs/images/app-resolution-decision.png" width="380" alt="Resolution decision"><br><sub>Resolution decision — how every candidate was scored, and why the winner won</sub></td>
-</tr>
-</table>
+<img src="docs/images/hero-engine.png" alt="Lyrimuse lyrics engine — Lyrics Manager, scored manual search, per-track resolution decision panel">
+<p align="center"><sub>The lyrics engine — Lyrics Manager, manual search with every candidate scored, and the per-track resolution decision showing why the winner won</sub></p>
+
+<img src="docs/images/hero-profile.png" alt="Lyrimuse listening profile — Last.fm stats, top charts, idle listening overview, yearly listening heatmap">
+<p align="center"><sub>Your listening profile — Last.fm totals and charts, a listening overview when nothing's playing, and a GitHub-style yearly heatmap</sub></p>
+
+<img src="docs/images/hero-customize.png" alt="Lyrimuse settings — live-preview editors, multi-select player picker with web players, menu-bar dropdown">
+<p align="center"><sub>Make it yours — every surface is an editor with a live preview, players are multi-select (web players included), and everything is one dropdown away</sub></p>
 
 ## Features
 

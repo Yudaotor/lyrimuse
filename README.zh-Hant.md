@@ -22,39 +22,17 @@ Lyrimuse 常駐在選單列裡，跟著目前播放彈出一個浮動歌詞視�
 
 **安裝：** `brew tap yudaotor/lyrimuse && brew install --cask lyrimuse`（Apple Silicon 與 Intel 都支援；自動清掉一次性的 Gatekeeper 攔截）——或者到[最新 Release](https://github.com/Yudaotor/lyrimuse/releases/latest) 手動下載，詳見[快速開始](#快速開始)。
 
-<table>
-<tr>
-<td align="center" width="33%"><img src="docs/images/app-desktop-lyrics.png" width="260" alt="經典桌面浮動歌詞"><br><sub>經典浮動視窗</sub></td>
-<td align="center" width="33%"><img src="docs/images/app-dynamic-island.png" width="260" alt="動態島樣式歌詞，播放中"><br><img src="docs/images/app-dynamic-island-paused.png" width="260" alt="動態島樣式歌詞，暫停中"><br><sub>動態島樣式膠囊（沒有實體瀏海也能用）——指向展開完整卡片，暫停收成一個膠囊</sub></td>
-<td align="center" width="33%"><img src="docs/images/app-menu-bar-lyrics.png" width="260" alt="選單列歌詞"><br><sub>選單列文字模式，帶卡拉OK式填色</sub></td>
-</tr>
-</table>
+<img src="docs/images/hero-surfaces.png" alt="Lyrimuse 歌詞顯示形態——歌詞視窗、動態島膠囊、桌面浮動歌詞（逐字填色）、選單列歌詞">
+<p align="center"><sub>四種顯示形態——完整歌詞視窗、動態島樣式膠囊、經典桌面浮動歌詞（逐字填色）、選單列歌詞</sub></p>
 
-<table>
-<tr>
-<td align="center" width="50%"><img src="docs/images/app-lyrics-window.png" width="380" alt="歌詞視窗"><br><sub>歌詞視窗，仿 Apple Music 歌詞頁</sub></td>
-<td align="center"><img src="docs/images/app-idle-standby.png" width="380" alt="歌詞視窗聆聽總覽"><br><sub>同一個視窗，沒有歌曲播放時的聆聽總覽</sub></td>
-</tr>
-<tr>
-<td align="center"><img src="docs/images/app-lastfm-profile.png" width="380" alt="Last.fm 聆聽檔案"><br><sub>Last.fm 聆聽檔案——數字統計與最近記錄</sub></td>
-<td align="center"><img src="docs/images/app-lastfm-charts.png" width="380" alt="Last.fm 排行榜"><br><sub>Last.fm 檔案——歌手 / 專輯 / 歌曲排行榜</sub></td>
-</tr>
-<tr>
-<td colspan="2" align="center"><img src="docs/images/app-lastfm-heatmap.png" width="700" alt="播放熱力圖"><br><sub>播放熱力圖——仿 GitHub 貢獻圖風格的年曆，取自完整的 Last.fm 聆聽記錄</sub></td>
-</tr>
-<tr>
-<td align="center"><img src="docs/images/app-menu-bar-dropdown.png" width="380" alt="選單列下拉選單"><br><sub>選單列下拉選單，什麼都摸得到</sub></td>
-<td align="center"><img src="docs/images/app-settings.png" width="380" alt="設定頁——浮動歌詞編輯台"><br><img src="docs/images/app-settings-notch.png" width="380" alt="設定頁——動態島編輯台"><br><sub>設定頁——每種歌詞形態都是一個帶原尺寸即時預覽的編輯台</sub></td>
-</tr>
-<tr>
-<td align="center"><img src="docs/images/app-lyrics-manager.png" width="380" alt="歌詞管理"><br><sub>歌詞管理——瀏覽、手動修改、重新比對任何一首歌的歌詞</sub></td>
-<td align="center"><img src="docs/images/app-lyrics-search.png" width="380" alt="搜尋歌詞"><br><sub>每個候選都打了分、標了來源，選錯版本一眼就能看出來</sub></td>
-</tr>
-<tr>
-<td align="center"><img src="docs/images/app-player-settings.png" width="380" alt="播放器選擇"><br><sub>播放器可多選——瀏覽器裡的網頁播放器也是正規播放器</sub></td>
-<td align="center"><img src="docs/images/app-resolution-decision.png" width="380" alt="解析決策"><br><sub>智慧評分決策——每個候選的得分逐項講清，贏家為什麼贏一目了然</sub></td>
-</tr>
-</table>
+<img src="docs/images/hero-engine.png" alt="Lyrimuse 歌詞引擎——歌詞管理、帶評分的手動搜尋、逐首歌的解析決策面板">
+<p align="center"><sub>歌詞引擎——歌詞管理、每個候選都有評分的手動搜尋、以及每首歌「贏家為什麼贏」的解析決策</sub></p>
+
+<img src="docs/images/hero-profile.png" alt="Lyrimuse 聆聽檔案——Last.fm 統計、排行榜、閒置聆聽總覽、全年熱力圖">
+<p align="center"><sub>聆聽檔案——Last.fm 數字與排行榜、沒有歌曲播放時的聆聽總覽、GitHub 風格的全年熱力圖</sub></p>
+
+<img src="docs/images/hero-customize.png" alt="Lyrimuse 設定——即時預覽編輯台、播放器多選（含網頁播放器）、選單列下拉選單">
+<p align="center"><sub>隨你自訂——每種形態都是帶即時預覽的編輯台、播放器可多選（網頁播放器也算數）、一切都在選單列一步之內</sub></p>
 
 ## 功能特色
 

@@ -22,39 +22,17 @@ Lyrimuse 常驻在菜单栏里，跟着当前播放弹出一个悬浮歌词窗�
 
 **安装：** `brew tap yudaotor/lyrimuse && brew install --cask lyrimuse`（Apple Silicon 与 Intel 都支持；自动清掉一次性的 Gatekeeper 拦截）——或者去 [最新 Release](https://github.com/Yudaotor/lyrimuse/releases/latest) 手动下载，详见[快速开始](#快速开始)。
 
-<table>
-<tr>
-<td align="center" width="33%"><img src="docs/images/app-desktop-lyrics.png" width="260" alt="经典桌面悬浮歌词"><br><sub>经典悬浮窗</sub></td>
-<td align="center" width="33%"><img src="docs/images/app-dynamic-island.png" width="260" alt="灵动岛样式歌词，播放中"><br><img src="docs/images/app-dynamic-island-paused.png" width="260" alt="灵动岛样式歌词，暂停中"><br><sub>灵动岛样式胶囊（没有物理刘海也能用）——悬停展开完整卡片，暂停收成一个胶囊</sub></td>
-<td align="center" width="33%"><img src="docs/images/app-menu-bar-lyrics.png" width="260" alt="菜单栏歌词"><br><sub>菜单栏文字模式，带卡拉OK式染色</sub></td>
-</tr>
-</table>
+<img src="docs/images/hero-surfaces.png" alt="Lyrimuse 歌词展示形态——歌词窗口、灵动岛胶囊、桌面悬浮歌词（逐字染色）、菜单栏歌词">
+<p align="center"><sub>四种展示形态——完整歌词窗口、灵动岛样式胶囊、经典桌面悬浮歌词（逐字染色）、菜单栏歌词</sub></p>
 
-<table>
-<tr>
-<td align="center" width="50%"><img src="docs/images/app-lyrics-window.png" width="380" alt="歌词窗口"><br><sub>歌词窗口，仿 Apple Music 歌词页</sub></td>
-<td align="center"><img src="docs/images/app-idle-standby.png" width="380" alt="歌词窗口听歌总览"><br><sub>同一个窗口，没有歌在放时的听歌总览</sub></td>
-</tr>
-<tr>
-<td align="center"><img src="docs/images/app-lastfm-profile.png" width="380" alt="Last.fm 听歌档案"><br><sub>Last.fm 听歌档案——数字统计与最近记录</sub></td>
-<td align="center"><img src="docs/images/app-lastfm-charts.png" width="380" alt="Last.fm 榜单"><br><sub>Last.fm 档案——歌手 / 专辑 / 歌曲榜单</sub></td>
-</tr>
-<tr>
-<td colspan="2" align="center"><img src="docs/images/app-lastfm-heatmap.png" width="700" alt="播放热力图"><br><sub>播放热力图——仿 GitHub 贡献图风格的年历，取自完整的 Last.fm 收听历史</sub></td>
-</tr>
-<tr>
-<td align="center"><img src="docs/images/app-menu-bar-dropdown.png" width="380" alt="菜单栏下拉菜单"><br><sub>菜单栏下拉菜单，什么都摸得到</sub></td>
-<td align="center"><img src="docs/images/app-settings.png" width="380" alt="设置页——悬浮歌词编辑台"><br><img src="docs/images/app-settings-notch.png" width="380" alt="设置页——灵动岛编辑台"><br><sub>设置页——每种歌词形态都是一个带原尺寸实时预览的编辑台</sub></td>
-</tr>
-<tr>
-<td align="center"><img src="docs/images/app-lyrics-manager.png" width="380" alt="歌词管理"><br><sub>歌词管理——浏览、手改、重新匹配任意一首歌的歌词</sub></td>
-<td align="center"><img src="docs/images/app-lyrics-search.png" width="380" alt="搜索歌词"><br><sub>每个候选都打了分、标了来源，选错版本一眼就能看出来</sub></td>
-</tr>
-<tr>
-<td align="center"><img src="docs/images/app-player-settings.png" width="380" alt="播放器选择"><br><sub>播放器可多选——浏览器里的网页播放器也是正经播放器</sub></td>
-<td align="center"><img src="docs/images/app-resolution-decision.png" width="380" alt="解析决策"><br><sub>智能评分决策——每个候选的得分逐项讲清，赢家为什么赢一目了然</sub></td>
-</tr>
-</table>
+<img src="docs/images/hero-engine.png" alt="Lyrimuse 歌词引擎——歌词管理、带打分的手动搜索、逐首歌的解析决策面板">
+<p align="center"><sub>歌词引擎——歌词管理、每个候选都打分的手动搜索、以及每首歌「赢家为什么赢」的解析决策</sub></p>
+
+<img src="docs/images/hero-profile.png" alt="Lyrimuse 听歌档案——Last.fm 统计、榜单、空闲听歌总览、全年热力图">
+<p align="center"><sub>听歌档案——Last.fm 数字与榜单、没有歌在放时的听歌总览、GitHub 风格的全年热力图</sub></p>
+
+<img src="docs/images/hero-customize.png" alt="Lyrimuse 设置——实时预览编辑台、播放器多选（含网页播放器）、菜单栏下拉">
+<p align="center"><sub>随你定制——每种形态都是带实时预览的编辑台、播放器可多选（网页播放器也算数）、一切都在菜单栏一步之内</sub></p>
 
 ## 功能特性
 
