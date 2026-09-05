@@ -969,11 +969,11 @@ struct NotchEditorStage: View {
     /// "放不下"由外层 `stage` 对「屏幕顶端」整组做 `scaleEffect` 解决(见 previewScale),这里不知道
     /// 也不该知道缩放这回事;hover 判定用的 `point.y` 是本地(未缩放)坐标,跟 `cardHeight` 同一把尺。
     ///
-    /// **任何**浮层开着时预览**钉在展开态**(`keepsExpandedForPopover`,用户:「我一旦选中有弹窗出来的
-    /// 期间,你不要去把它的展开态给关闭了,一直维持着展开状态」):首版只钉「展开态」那个浮层(它里面的
-    /// 开关全是展开区的内容,指针一离开卡片去点浮层卡片就缩回稳态,改了什么根本看不见),用户要求
-    /// 扩成全部 —— 从卡片上点开浮层时卡片本来就是展开的,浮层一开它缩回去就是"选中的东西自己变形了"。
-    /// 展开态是稳态的超集(顶行 / 歌词行都在),钉着不会让任何浮层要改的东西看不见。
+    /// **从卡片上点开**的浮层开着时预览**钉在展开态**(`keepsExpandedForPopover`,用户:「我一旦选中有弹窗
+    /// 出来的期间,你不要去把它的展开态给关闭了,一直维持着展开状态」):从卡片上点开浮层时卡片本来就是
+    /// 展开的,浮层一开它缩回去就是"选中的东西自己变形了"。**从工具栏点开的不钉**(用户第四轮:「点开
+    /// 这些选项,不要把下面的自动展开呀」)—— 工具栏那条路卡片本来是稳态,凭空展开是多余的动作;
+    /// 想看展开区的效果把指针移到卡片上即可,跟以前一样。中间有过一版"任一浮层都钉"(含工具栏),被否。
     private var card: some View {
         NotchLyricsView(controller: chrome)
             // 先钉当下的真实尺寸:视图内层是 GeometryReader,耳朵宽度按 proxy.size.width 算,
@@ -996,7 +996,10 @@ struct NotchEditorStage: View {
                 }
             }
             .onChange(of: popover) { _, newValue in
-                // 任一浮层开 → 钉在展开;全关 → 放开(指针若还在卡片上,下一次 hover 事件会再展开)。
+                // 从卡片上点开的浮层开 → 钉在展开;关 → 放开(指针若还在卡片上,下一次 hover 事件会
+                // 再展开)。从工具栏点开的两头都不碰:开时不展开、关时也不去收(收放仍归 hover 管)。
+                // popoverAnchor 在关闭时保持着上一个浮层的锚点,所以关的时候也能分辨它是从哪开的。
+                guard case .hotspot = popoverAnchor else { return }
                 if newValue != nil {
                     chrome.setExpandedFromPreview(true)
                 } else if adjustingThumb == nil {
@@ -1008,8 +1011,11 @@ struct NotchEditorStage: View {
             .frame(maxHeight: .infinity, alignment: .top)
     }
 
-    /// 任一浮层开着时预览钉在展开态,理由见 `card` 的注释。
-    private var keepsExpandedForPopover: Bool { popover != nil }
+    /// 从卡片上点开的浮层开着时预览钉在展开态(工具栏点开的不钉),理由见 `card` 的注释。
+    private var keepsExpandedForPopover: Bool {
+        guard popover != nil, case .hotspot = popoverAnchor else { return false }
+        return true
+    }
 
     // MARK: - 预览卡上的可点区域
 
