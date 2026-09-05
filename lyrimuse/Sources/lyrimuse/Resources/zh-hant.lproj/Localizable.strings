@@ -550,6 +550,7 @@
 "打开 Music" = "打開 Music";
 "打开 sct.ftqq.com，用微信扫码登录，首页会显示你的 SendKey，完整地址是 https://sctapi.ftqq.com/你的SendKey.send，把这一整串填进上面" = "打開 sct.ftqq.com，用微信掃 QR Code 登入，首頁會顯示你的 SendKey，完整網址是 https://sctapi.ftqq.com/你的SendKey.send，把這一整串填入上面";
 "打开…" = "打開…";
+"打开「%@」设置" = "打開「%@」設定";
 "打开任意已知播放器时启动 Lyrimuse" = "打開任意已知播放器時啟動 Lyrimuse";
 "打开备份文件夹" = "打開備份檔案夾";
 "打开完全磁盘访问权限设置" = "打開「完整磁碟取用權限」設定";

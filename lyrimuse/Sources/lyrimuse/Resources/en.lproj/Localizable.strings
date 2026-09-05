@@ -550,6 +550,7 @@
 "打开 Music" = "Open Music";
 "打开 sct.ftqq.com，用微信扫码登录，首页会显示你的 SendKey，完整地址是 https://sctapi.ftqq.com/你的SendKey.send，把这一整串填进上面" = "Go to sct.ftqq.com and log in by scanning the QR code with WeChat — your SendKey will appear on the home page. The full URL is https://sctapi.ftqq.com/YourSendKey.send; paste that whole string above";
 "打开…" = "Open…";
+"打开「%@」设置" = "Open %@ settings";
 "打开任意已知播放器时启动 Lyrimuse" = "Launch Lyrimuse when any known player opens";
 "打开备份文件夹" = "Open Backup Folder";
 "打开完全磁盘访问权限设置" = "Open Full Disk Access Settings";

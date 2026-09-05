@@ -167,6 +167,10 @@ struct NotchEditorStage: View {
     /// 遮挡、而且各自的 transient 关闭时机会打架(同 OverlayEditorStage.StagePopover)。
     @State private var popover: StagePopover?
 
+    /// 指针此刻悬在预览卡的哪块**可点区域**上(nil = 都没悬)。只用来画那块区域的高亮框,
+    /// 见 `cardHotspots` / `hotspotView`。
+    @State private var hoveredHotspot: CardHotspot.Kind?
+
     /// 用户此刻正按着宽度调整条的哪只滑块(nil = 没按着)。两个用途:把卡片那圈轮廓加强一档
     /// (见 windowEdgeOutline);按着**展开**那只时让卡片按展开态画(见 card / cardWidth)——
     /// 否则拖上限时鼠标在滑杆上、卡片没被 hover,用户看不见自己在调的那个宽度。
@@ -917,15 +921,29 @@ struct NotchEditorStage: View {
     /// 子树里),而且紧挨着它显式加了一句 `.contentShape(Rectangle())` 把整格钉成命中形状 ——
     /// 既保证 hover 一定收得到,也顺手把落在卡片上的点击**吞掉**(不会穿到底下那张桌面上)。
     ///
+    /// ⚠️ **例外:卡片上叠了一层"可点区域"(`hotspotLayer`,2026-09-06)** —— 那不是真视图里的控件
+    /// 重新可达,而是编辑台自己按几何算出来的几块透明命中区(左耳 / 右耳 / 曲目信息头部 / 歌词行 /
+    /// 展开区三段),点一下打开**管这块的浮层**(用户:「类似这些区域帮我调整成可以点击来换取相应的
+    /// 配置」)。它们仍然不碰播放、不开窗口,"预览不产生副作用"这条口径没破;打开的浮层就是工具栏
+    /// 那几个,锚在工具栏按钮上(那里是浮层的家,卡片右半边一直露着、改一项当场看见 —— 锚到区域上
+    /// 会把浮层压在卡片上,正好挡住要看的东西)。
+    ///
     /// ⚠️ 卡片按**真实 pt** 排版(视图内层按 `proxy.size.width` 反推耳宽,给别的宽度耳朵就错位),
     /// "放不下"由外层 `stage` 对「屏幕顶端」整组做 `scaleEffect` 解决(见 previewScale),这里不知道
     /// 也不该知道缩放这回事;hover 判定用的 `point.y` 是本地(未缩放)坐标,跟 `cardHeight` 同一把尺。
+    ///
+    /// 「展开态」浮层开着时预览**钉在展开态**(`keepsExpandedForPopover`):那个浮层里的开关全是展开区的
+    /// 内容,指针一离开卡片去点浮层卡片就缩回稳态,改了什么根本看不见。此前从工具栏点开也是这样,
+    /// 只是这次可点区域把"点展开区 → 开浮层 → 指针移走"变成了必经之路,这个洞才必须补。
     private var card: some View {
         NotchLyricsView(controller: chrome)
             // 先钉当下的真实尺寸:视图内层是 GeometryReader,耳朵宽度按 proxy.size.width 算,
             // 给错尺寸这一层就先失真了。
             .frame(width: cardWidth, height: cardHeight)
             .allowsHitTesting(false)
+            // 可点区域压在真视图之上、轮廓之下;它在 allowsHitTesting(false) **之后**挂上,所以自己
+            // 收得到 hover / 点击。
+            .overlay(alignment: .topLeading) { hotspotLayer }
             .animation(reduceMotion ? nil : .easeInOut(duration: 0.18), value: chrome.isExpanded)
             // 再顶对齐放进定高容器 —— 真窗口也是顶边贴死屏幕顶、只向下长。
             .frame(width: cardWidth, height: cardAreaHeight, alignment: .top)
@@ -933,14 +951,144 @@ struct NotchEditorStage: View {
             .onContinuousHover(coordinateSpace: .local) { phase in
                 switch phase {
                 case .active(let point):
-                    chrome.setExpandedFromPreview(point.y <= cardHeight)
+                    chrome.setExpandedFromPreview(point.y <= cardHeight || keepsExpandedForPopover)
                 case .ended:
+                    chrome.setExpandedFromPreview(keepsExpandedForPopover)
+                }
+            }
+            .onChange(of: popover) { _, newValue in
+                // 「展开态」浮层开 → 钉在展开;关 → 放开(指针若还在卡片上,下一次 hover 事件会再展开)。
+                if newValue == .expanded {
+                    chrome.setExpandedFromPreview(true)
+                } else if adjustingThumb == nil {
                     chrome.setExpandedFromPreview(false)
                 }
             }
             // 卡片那圈轮廓压在卡片上,理由见 windowEdgeOutline。
             .overlay(alignment: .top) { windowEdgeOutline }
             .frame(maxHeight: .infinity, alignment: .top)
+    }
+
+    /// 「展开态」浮层开着时预览钉在展开态,理由见 `card` 的注释。
+    private var keepsExpandedForPopover: Bool { popover == .expanded }
+
+    // MARK: - 预览卡上的可点区域
+
+    /// 预览卡上一块可点的区域:点它打开管这块内容的浮层(2026-09-06,用户:「类似这些区域帮我
+    /// 调整成可以点击来换取相应的配置的逻辑」)。
+    ///
+    /// `rect` 是**卡片本地、未缩放**坐标(原点卡片左上角),跟 `NotchLyricsView.body` 那棵 VStack
+    /// 的排版逐段对应:顶行两只耳朵 → 曲目信息头部(展开且开着才有)→ 歌词行(`showsLyricRow`)→
+    /// 展开区的三段(下一句 / 进度条 / 播放键,各自开着才有)。高度全部取自跟渲染同一份的度量
+    /// (`contentTopInset` / `expandedTrackInfoHeaderHeight` / `compactRowHeight` /
+    /// `NotchExpandedMetrics` 三个 block),不另写数字 —— 渲染那边一改这里就跟着对。
+    private struct CardHotspot: Identifiable {
+        enum Kind: Hashable {
+            case leftEar, rightEar, trackInfoHeader, lyricRow
+            case expandedNextLine, expandedScrubber, expandedControls
+        }
+        let kind: Kind
+        let rect: CGRect
+        let target: StagePopover
+        /// 无障碍标签用的浮层名(跟工具栏按钮标题同一份文案)。
+        let title: String
+        var id: Kind { kind }
+    }
+
+    private var cardHotspots: [CardHotspot] {
+        let width = cardWidth
+        let earWidth = max(0, (width - chrome.notchWidth - NotchMetrics.cardHorizontalPadding * 2) / 2)
+        let top = chrome.contentTopInset
+        var spots: [CardHotspot] = [
+            CardHotspot(kind: .leftEar,
+                        rect: CGRect(x: NotchMetrics.cardHorizontalPadding, y: 0, width: earWidth, height: top),
+                        target: .leftEar, title: L10n.t("左耳")),
+            CardHotspot(kind: .rightEar,
+                        rect: CGRect(x: width - NotchMetrics.cardHorizontalPadding - earWidth, y: 0,
+                                     width: earWidth, height: top),
+                        target: .rightEar, title: L10n.t("右耳")),
+        ]
+        var y = top
+        if chrome.isExpanded, chrome.showsExpandedTrackInfo {
+            let height = chrome.expandedTrackInfoHeaderHeight
+            spots.append(CardHotspot(kind: .trackInfoHeader,
+                                     rect: CGRect(x: 0, y: y, width: width, height: height),
+                                     target: .expanded, title: L10n.t("展开态")))
+            y += height
+        }
+        if chrome.showsLyricRow {
+            spots.append(CardHotspot(kind: .lyricRow,
+                                     rect: CGRect(x: 0, y: y, width: width, height: NotchMetrics.compactRowHeight),
+                                     target: .lyricRow, title: L10n.t("歌词行")))
+            y += NotchMetrics.compactRowHeight
+        }
+        if chrome.isExpanded {
+            // 三段的高度就是 NotchExpandedMetrics 里那三个 block(各自含尾随间距),跟
+            // `expandedContent` 的 `.frame(height:)` 是同一笔账。
+            if chrome.showsExpandedLyricPreview {
+                spots.append(CardHotspot(kind: .expandedNextLine,
+                                         rect: CGRect(x: 0, y: y, width: width, height: NotchExpandedMetrics.lyricPreviewBlock),
+                                         target: .expanded, title: L10n.t("展开态")))
+                y += NotchExpandedMetrics.lyricPreviewBlock
+            }
+            if chrome.expandedShowsScrubber {
+                spots.append(CardHotspot(kind: .expandedScrubber,
+                                         rect: CGRect(x: 0, y: y, width: width, height: NotchExpandedMetrics.scrubberBlock),
+                                         target: .expanded, title: L10n.t("展开态")))
+                y += NotchExpandedMetrics.scrubberBlock
+            }
+            if chrome.expandedShowsControls {
+                spots.append(CardHotspot(kind: .expandedControls,
+                                         rect: CGRect(x: 0, y: y, width: width, height: NotchExpandedMetrics.controlsBlock),
+                                         target: .expanded, title: L10n.t("展开态")))
+            }
+        }
+        return spots
+    }
+
+    /// 全部可点区域,按 `rect` 摆在卡片本地坐标里。压在真视图之上(真视图 `allowsHitTesting(false)`,
+    /// 这一层自己接事件)。
+    private var hotspotLayer: some View {
+        ZStack(alignment: .topLeading) {
+            ForEach(cardHotspots) { spot in
+                hotspotView(spot)
+                    .frame(width: spot.rect.width, height: spot.rect.height)
+                    .offset(x: spot.rect.minX, y: spot.rect.minY)
+            }
+        }
+        .frame(width: cardWidth, height: cardHeight, alignment: .topLeading)
+    }
+
+    /// 一块可点区域:平时完全透明,指针悬上去描一圈白色细框 + 一层极淡的白底(告诉用户"这块能点"),
+    /// 指针换成手形;点一下打开 `spot.target` 那个浮层(锚在工具栏按钮上,见 `card` 的注释)。
+    ///
+    /// 内缩 2pt 是让相邻两块(歌词行和它上下的区域)的高亮框不贴在一起;点击命中区仍是整块
+    /// (`contentShape` 在 padding 之外)。白色不跟深浅色走,理由同 `windowEdgeOutline`:它压在
+    /// 四种卡片风格上,语义色在封面模糊底上读不出来。
+    private func hotspotView(_ spot: CardHotspot) -> some View {
+        let hovering = hoveredHotspot == spot.kind
+        return RoundedRectangle(cornerRadius: 6)
+            .fill(Color.white.opacity(hovering ? 0.10 : 0))
+            .overlay(
+                RoundedRectangle(cornerRadius: 6)
+                    .strokeBorder(Color.white.opacity(hovering ? 0.9 : 0), lineWidth: 1))
+            .padding(2)
+            .contentShape(Rectangle())
+            .onHover { inside in
+                if inside {
+                    hoveredHotspot = spot.kind
+                    NSCursor.pointingHand.push()
+                } else {
+                    if hoveredHotspot == spot.kind { hoveredHotspot = nil }
+                    NSCursor.pop()
+                }
+            }
+            .onTapGesture { popover = spot.target }
+            .animation(.easeOut(duration: 0.12), value: hovering)
+            .accessibilityElement()
+            .accessibilityLabel(String(format: L10n.t("打开「%@」设置"), spot.title))
+            .accessibilityAddTraits(.isButton)
+            .accessibilityAction { popover = spot.target }
     }
 
     /// 拖宽度时把卡片的左右边界描出来。
@@ -1030,7 +1178,8 @@ struct NotchEditorStage: View {
                         chrome.setExpandedFromPreview(false)
                     case nil:
                         // 松手:把拖动中攒下的那对值提交出去,然后交还给 settings 当真源。
-                        chrome.setExpandedFromPreview(false)
+                        // 展开态由「展开态」浮层钉着的话不放开(见 keepsExpandedForPopover)。
+                        chrome.setExpandedFromPreview(keepsExpandedForPopover)
                         if draggingSteady != nil || draggingExpanded != nil {
                             Self.commitWidths(steady: draggingSteady, expanded: draggingExpanded)
                             draggingSteady = nil
