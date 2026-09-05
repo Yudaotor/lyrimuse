@@ -83,6 +83,14 @@ public final class EnrichCacheStore: ObservableObject {
         /// (「歌词窗口」已经在读它做静态展示),但列表和详情页都只看 hasLyrics,于是这批
         /// "至少有纯文字可读"的条目显示成刺眼的红色「无歌词」,跟"什么都没有"混为一谈。
         public let hasPlainTextFallback: Bool
+        /// 歌词源(网易云 / QQ 音乐)的曲库里**有这首歌**——netease_url 带 song id、或 qq_music_url
+        /// 是 songDetail 页而不是搜索兜底页——但没拿到词。2026-09-05 加:「歌词管理」里 82 条
+        /// 非纯音乐的空条目,56 条是 2026 年新发的独立作品(gamza / jehoda / The Rose /
+        /// Japanese City Pop),网易云和 QQ 都收录了歌、只是发行方没挂歌词、社区也没人写;
+        /// 它们跟"九个源一条都没搜到、可能是我们匹配失败"是两种不同的"无歌词",前者不是
+        /// 该修的,只能等。列表/详情据此把红色「无歌词」换成中性的「源里有歌、无词」——
+        /// 判据是 collector 解析时确实定位到了那首歌(拿到了平台 id),不是猜的。
+        public let knownOnSources: Bool
         /// true = 这一行不是缓存里真实存在的条目,是"这首歌正在联网搜歌词、collector
         /// 还没写出任何结论"这段窗口期的占位行(见 `LyricsManagerView.refreshPlaceholder`)。
         /// 2026-08-27 用户反馈"歌一直在放、还在首次搜歌词的时候,歌词管理里完全看不到
@@ -196,8 +204,7 @@ public final class EnrichCacheStore: ObservableObject {
     /// 有备份 —— 那比没有备份更危险。
     @Published private(set) var lastAutoSnapshotURL: URL?
 
-    private static let cacheURL = FileManager.default.homeDirectoryForCurrentUser
-        .appendingPathComponent(".config/lyrimuse/lyrimuse-enrich-cache.json")
+    private static let cacheURL = LyrimusePaths.configFile("lyrimuse-enrich-cache.json")
     // 读 FeatureSettingsStore 的计算属性,而不是编译期定死的 static let——用户可在
     // "歌词"设置分类里自定义文件夹位置,这里必须跟 collector 那边(main.go 读
     // features.LyricsDir)认的是同一个位置,否则存/删歌词文件的目录跟 collector 实际
@@ -509,6 +516,7 @@ public final class EnrichCacheStore: ObservableObject {
                 hasLyrics: !lyrics.isEmpty,
                 isInstrumental: entry["instrumental"] as? Bool ?? false,
                 hasPlainTextFallback: !((entry["plain_lyrics"] as? String ?? "").isEmpty),
+                knownOnSources: Self.knownOnSources(entry),
                 isSearching: false, // 这一条来自 raw,真实存在;占位行的构造点在 LyricsManagerView
                 hasDecision: entry["lyrics_decision"] != nil || entry["lyrics_decision_applied"] != nil,
                 // 两次 O(1) 查找:普通名、以及带哈希后缀的消歧名(见 exportBaseName —— 到底
@@ -910,14 +918,46 @@ public final class EnrichCacheStore: ObservableObject {
     /// 完整播放一遍触发后台首次解析重新走一遍(而这首歌八天前就是那条路径写的坏结论)。
     /// 只置一个字段、不碰 lyrics/manual_lyrics/source 这些——跟 collector 侧的写法一样窄。
     public func markInstrumental(key: String) async {
+        await setInstrumental(key: key, true)
+    }
+
+    /// 用户在详情页手动标/撤「纯音乐」(2026-09-05 加)。起因:MJ《Off the Wall》的 Quincy Jones
+    /// 访谈口白、《Raise!》26 秒的 Kalimba Tree 这类曲目,九个源里没有任何一个会给出
+    /// instrumental 标记(lrclib 的 instrumental 字段和网易云的 pureMusic 都只覆盖它们自己
+    /// 收录且标了的曲目),collector 永远拿不到"这首本来就没词"的结论,列表就永远红着「无歌词」、
+    /// 补空扫描也会每隔一天(退避后翻倍)白搜一轮——这个结论只有人能下。
+    /// 只置一个字段、不碰 lyrics/manual_lyrics/source,跟 markInstrumental 同一口径;撤销时把键
+    /// 整个删掉(collector 侧 omitempty,false 与缺失等价)。标上之后 collector 的
+    /// needsLyricsFirstFill 会直接 return——这也是这个动作真正的效果:告诉自动逻辑"别再搜了"。
+    public func setInstrumental(key: String, _ value: Bool) async {
         var entry = raw[key] ?? [:]
-        entry["instrumental"] = true
+        if value {
+            entry["instrumental"] = true
+        } else {
+            entry.removeValue(forKey: "instrumental")
+        }
         raw[key] = entry
         markLocallyEdited(key)
         rebuildSummaries()
         guard await persist() else { return }
         if lastPersistPulledInNewKeys { rebuildSummaries() }
         scheduleCollectorRestart()
+    }
+
+    /// 一条记录会不会被 collector 的补空扫描真的拿去搜(2026-09-05):没词、没确证纯音乐、没人工
+    /// 修正(有纯文本兜底的也算——那仍不是带时间轴的词),跟 collector 侧 lyricsFillSweepCandidates
+    /// 的三道硬闸同一口径;占位行不算(它此刻正在被搜)。「歌词管理」工具栏/多选面板和设置页
+    /// 「歌词库」面板三处按钮上的数字都从这里来,按钮上的数就是真会被搜的条数。
+    nonisolated static func isFillSweepRetryable(_ s: Summary) -> Bool {
+        !s.hasLyrics && !s.isInstrumental && !s.isManual && !s.isSearching
+    }
+
+    /// 见 Summary.knownOnSources;判据本体在 LyrimuseCore.EnrichSourcePresence(selftest 覆盖)。
+    /// nonisolated:buildSummaries 在后台跑(这个类是 @MainActor 的)。
+    nonisolated static func knownOnSources(_ entry: [String: Any]) -> Bool {
+        EnrichSourcePresence.knownOnSources(
+            neteaseURL: entry["netease_url"] as? String,
+            qqMusicURL: entry["qq_music_url"] as? String)
     }
 
     /// 「重新自动匹配」按钮命中 `LyricsRematchDecision.Outcome.unchanged`(可判、赢家跟现状

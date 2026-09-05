@@ -41,12 +41,11 @@ func runDeleteListenCLI(args []string) {
 
 	resolved := *cfgPath
 	if resolved == "" {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "delete-listen: 拿不到家目录: %v\n", err)
+		if configDir() == "" {
+			fmt.Fprintf(os.Stderr, "delete-listen: 拿不到家目录(LYRIMUSE_CONFIG_DIR 也没设)\n")
 			os.Exit(1)
 		}
-		resolved = filepath.Join(home, ".config", clientName, "config.json")
+		resolved = filepath.Join(configDir(), "config.json")
 	}
 	// 跟 main() 用同一条路径规则。这条一次性子命令不会走到 main 里 initListenLog 那行
 	// (它在 os.Args[1] 的提前分支里就 return 了),所以自己设一次。

@@ -43,11 +43,10 @@ func runRecheckCoverCLI(args []string) {
 		os.Exit(2)
 	}
 
-	home, err := os.UserHomeDir()
-	if err != nil {
-		log.Fatalf("recheck-cover: resolve home dir: %v", err)
+	if configDir() == "" {
+		log.Fatalf("recheck-cover: cannot resolve home directory (and LYRIMUSE_CONFIG_DIR is unset)")
 	}
-	cfgDir := filepath.Join(home, ".config", clientName)
+	cfgDir := configDir()
 	// 只读地拿一下功能开关(歌词源勾选会影响这一轮的候选挑选),跟 dedupe-entries 同款。
 	features = loadFeatureFlags(filepath.Join(cfgDir, clientName+"-features.json"))
 	// ⚠️ 刻意**不**调 loadArtistIdentityCache / loadArtistAliasCache:那两份缓存的
@@ -201,11 +200,10 @@ func runRecheckInstrumentalCLI(args []string) {
 		fmt.Fprintln(os.Stderr, `用法: collector recheck-instrumental [-apply] "歌手|歌名|专辑" ...`)
 		os.Exit(2)
 	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		log.Fatalf("recheck-instrumental: resolve home dir: %v", err)
+	if configDir() == "" {
+		log.Fatalf("recheck-instrumental: cannot resolve home directory (and LYRIMUSE_CONFIG_DIR is unset)")
 	}
-	cfgDir := filepath.Join(home, ".config", clientName)
+	cfgDir := configDir()
 	features = loadFeatureFlags(filepath.Join(cfgDir, clientName+"-features.json"))
 	// 跟 recheck-cover 同款:刻意不读歌手身份/别名缓存,免得拿空 map 盖掉常驻实例攒的那份。
 	if *apply && !ensureExclusiveForDedupe(cfgDir) {

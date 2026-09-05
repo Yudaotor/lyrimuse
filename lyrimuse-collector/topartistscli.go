@@ -46,11 +46,10 @@ func runTopArtistsCLI(args []string) {
 		log.Fatalf("top-artists: invalid -period %q", *period)
 	}
 
-	home, err := os.UserHomeDir()
-	if err != nil {
-		log.Fatalf("top-artists: resolve home dir: %v", err)
+	if configDir() == "" {
+		log.Fatalf("top-artists: cannot resolve home directory (and LYRIMUSE_CONFIG_DIR is unset)")
 	}
-	cfg, err := loadConfig(filepath.Join(home, ".config", clientName, "config.json"))
+	cfg, err := loadConfig(filepath.Join(configDir(), "config.json"))
 	if err != nil {
 		log.Fatalf("top-artists: load config: %v", err)
 	}
@@ -60,14 +59,14 @@ func runTopArtistsCLI(args []string) {
 	// 身份缓存(mbid+中文名)与常驻进程共用同一份文件;默认预算 0 = 只读缓存不联网,
 	// App 统计页那条调用路径保持毫秒级。手动导出想现场解析就传 -mb-budget(每个未缓存
 	// 名字 ≤2 次 MusicBrainz 请求、全局 1.1s 限速,预算大时耐心等)。
-	loadArtistIdentityCache(filepath.Join(home, ".config", clientName, clientName+"-artist-identity-cache.json"))
+	loadArtistIdentityCache(filepath.Join(configDir(), clientName+"-artist-identity-cache.json"))
 	// 归并的名字键(artistMergeNameKey)2026-08-31 起还会经 resolveGenericArtistCanonicalName 查
 	// "英文标签 → 中文常用名"——那条链有自己的两份缓存(MusicBrainz 中文别名 / QQ 歌手名),
 	// 跟常驻进程共用同一份文件,这里也得加载,否则每个名字都当"没查过"(2026-09-03 实测 CLI
 	// 因此跑 1 分 49 秒被 App 看门狗杀掉)。预算为 0 时那条链同样只读缓存不联网,见
 	// artistCanonicalCacheOnly。
-	loadArtistAliasCache(filepath.Join(home, ".config", clientName, clientName+"-artist-alias-cache.json"))
-	loadQQArtistNameCache(filepath.Join(home, ".config", clientName, clientName+"-qq-artist-name-cache.json"))
+	loadArtistAliasCache(filepath.Join(configDir(), clientName+"-artist-alias-cache.json"))
+	loadQQArtistNameCache(filepath.Join(configDir(), clientName+"-qq-artist-name-cache.json"))
 	artistCanonicalCacheOnly = *mbBudget <= 0
 	resolve := budgetedArtistIdentity(*mbBudget)
 	defer saveArtistIdentityCache()

@@ -76,7 +76,7 @@ func systemProxyURL() *neturl.URL {
 	}
 	u := readSystemProxyURL()
 	if u != nil && !proxyReachable(u) {
-		log.Printf("proxy: 系统代理 %s 配置着但连不上,这一轮当作没有代理", u.Host)
+		log.Printf("proxy: system proxy %s is configured but unreachable, treating this round as no proxy", u.Host)
 		u = nil
 	}
 	systemProxyValue, systemProxyReadAt = u, time.Now()

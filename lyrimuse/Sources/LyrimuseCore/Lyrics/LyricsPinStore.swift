@@ -38,8 +38,7 @@ public final class LyricsPinStore: ObservableObject {
 
     private static let fileVersion = 1
 
-    private static let defaultURL = FileManager.default.homeDirectoryForCurrentUser
-        .appendingPathComponent(".config/lyrimuse/lyrimuse-lyrics-pins.json")
+    private static let defaultURL = LyrimusePaths.configFile("lyrimuse-lyrics-pins.json")
 
     /// 实际落盘位置。生产环境永远是上面那个;selftest 会把它指到临时目录。
     private static var url = defaultURL

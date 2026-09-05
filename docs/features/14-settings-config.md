@@ -23,17 +23,14 @@
 | 歌词显示（yellow） | rectangle.3.group | 四段按展示面分。前两段是**编辑台**版式（内容区里一块 1:1 的实时画布＋工具栏浮层＋舞台内的宽度调整条，页顶不钉预览）：**悬浮歌词**（`OverlayEditorStage`：**两行工具栏**共五个浮层，第一行「主题」[配色主题/我的配色主题]／「文字」[字体/粗细/字号＋跟随封面/文字色/文字描边/描边色]／「背景」[背景色/毛玻璃背景]＋「重置▾」，第二行「排版」[双行显示/对齐方式]／「行为」[锁定位置/长按拖动/悬浮淡化＋截屏/录屏时隐藏、暂停/无播放时隐藏]（⚠️ 2026-09-02 按"改的是哪一层"把原来的「文字」＋「配色」重新分成 **主题 / 文字 / 背景** 三组，组件 `OverlayThemePopover` / `OverlayTextPopover` / `OverlayBackgroundPopover`；工具栏按钮已接上，两个过渡壳 `OverlayColorPopover` / `OverlayStyleSummary.color` 已删、全仓 0 引用，见 04 章第十七步）；舞台内宽度条；下面只剩开关＋「全部设置」折叠抽屉）/**灵动岛**（`NotchEditorStage`：两行工具栏共七个浮层[风格/屏幕/左耳/右耳＋歌词行/行为/展开态]＋「重置▾」＋舞台内宽度条；下面是开关＋「全部设置」折叠抽屉[2026-08-31 补齐，跟悬浮歌词那个同一个定位]）/**菜单栏**（`MenuBarEditorStage`，2026-09-01 也改成了编辑台：一行工具栏[布局（宽度模式/对齐方式/歌词旁的图标/悬停显示播放控制，2026-09-03 加第四行「悬停显示播放控制」——它是个**行为**开关，塞进「布局」而不是新开第四个工具栏入口，因为那一行的横向预算已经用尽，见 `MenuBarEditorStage.toolbar` 头注）／配色／字体（2026-09-03 加第三个入口：粗细六档下拉 + 字号滑杆 10~16pt，字体族仍跟系统；「粗细」英文词条为此从 Font Weight 缩成 Weight，横向预算同上）]＋「重置▾」＋一块**舞台**——壁纸铺满、仿菜单栏条贴上边缘、宽度胶囊浮在舞台内的通道里，caption 在舞台外；下面是总开关＋「全部设置」折叠抽屉。⚠️ 「页顶仍钉一条仿菜单栏预览」这个旧说法从那天起就不成立了，预览已经搬进可滚动内容区；壁纸底 2026-09-02 又从"只垫菜单栏那一条"扩展成"包住整块舞台"，见 06 章）。⚠️ **原来还有第四段「其它」，只装着一张跨形态的「自动隐藏」卡，2026-09-01 整个撤掉**（用户原话：「不要单独开一个其他页面出来了」）——那两个开关同时被**拆成两份独立的值**（`hideDuringScreenCapture`/`hideWhenNotPlaying` 归悬浮歌词，`notchHide*` 归灵动岛），各自摆进对应形态那一段（排在「全部设置」抽屉上面）。⚠️ **2026-09-02 再进一步**：那两张独立卡也撤掉了（用户原话：「不要单独放在外面，要遵循设计理念，放到行为卡片里面去」），两个开关分别并进悬浮歌词的「行为」栏（＋抽屉「窗口」组）和灵动岛的「行为」浮层（＋抽屉「行为」组），渲染真源合成一份 `UI/AutoHideSettingsRows.swift`——**共用的是视图与文案，值仍是两份**。这一页因此不再有任何一张只装隐藏开关的卡。⚠️ **同日第三次**：用户看过成品后要求「和灵动岛设置页一样处理，放到上面的小按钮里面，点了出现下拉框」，于是悬浮歌词那条**「行为」栏本身**也删了（`OverlayBehaviorBar`），五项进了编辑台工具栏新起的第二行「行为」浮层（`OverlayBehaviorPopover`，宽 420，跟灵动岛那个同宽）——两个形态的「行为」入口至此完全同构。这一段因此只剩编辑台＋开关＋抽屉三块，页面内容高度 605→449pt。详见 04 章第十六步。⚠️ **这两个数按当时口径少算了约 86pt**（一直拿第一步的画布 246 在加，而画布第九步起就是 332），真实的逐块账见 04 章「高度账」那张表。⚠️ **2026-09-03 又压了一次**（用户原话：「这个预览窗口给我高度搞小一点，把下面的开关完整漏出来」）：编辑台 425→**382**（`maxCardHeight` 288→266，＋删掉舞台底下那行常态为空的 caption，那句「两端已裁切」搬进舞台里跟宽度调整条并排），总开关卡的底边从 551.5pt 落到 508.5pt，552pt 高的窗口（可视内容 519pt）里从"只露 13.5pt"变成完整露出；抽屉头仍在折线以下。详见 04 章第十八步。删掉一个分段 rawValue 是安全的：`section` 计算属性带 `?? .overlay` 兜底，老用户上次停在「其它」段的话下次打开会落回悬浮歌词。⚠️ 页顶那层固定头部**收不到点击事件**，凡是可交互的预览都只能待在滚动区。歌词窗口刻意不在此页配置（按需打开的窗口，非常驻展示面） |
 | 快捷键（teal） | keyboard | 全部 16 个全局快捷键的录制行（四张卡：显示 / 窗口 / 歌词时间轴 / 播放控制）+ 调整步长 |
 | 通用（gray） | gearshape | 菜单栏与 Dock（菜单栏图标：12 款 2×6 的 `MenuBarIconPicker`，行尾常驻所选款名；随播放律动；在 Dock 中显示）、语言与启动（语言：跟随系统 / 简体中文 / 繁體中文 / English，引导页欢迎页同一组选项；开机启动）、配置备份与搬家（iCloud/自选文件夹备份、设置文件导出/导入；配置文件夹 2026-09-01 搬去「关于」）、清除所有设置。⚠️ **这一页没有预览**：2026-09-04 曾按「歌词显示」编辑台范式在页顶放过一块仿菜单栏舞台（真壁纸 + 所选图标本体、律动时真的动），用户看完明确不要（「我不想这块」），次日撤掉——菜单栏就在屏幕顶上，选哪款抬头就看得见，别再加回来 |
-| 关于（blue） | info.circle | **2026-09-03 重排**：页头 = 图标 + 名字 + 可点击拷贝的版本胶囊（版本 · 芯片架构）+ tagline + 两颗胶囊按钮（请作者喝杯咖啡 / GitHub 带 star 数）+ 求 star 那句；四张带标题的卡：更新（检查更新＋副标题「上次检查 / 有新版本」、自动检查、自动下载并安装、**接收测试版更新**[2026-09-05，独立一行带 flask 图标；机器专属键 `np:receiveBetaUpdates`，见 15 章决策 11]）、反馈与社区（反馈问题、想法与建议）、许可与版权（使用与版权说明、第三方许可、开源许可证）、诊断与数据（导出诊断信息、配置文件夹）；页脚「© · GPL-3.0」 |
-| 账号 | — | `AccountLinkingTab`（见第 12 章） |
-
-「歌词」与「歌词显示」的边界：前者管歌词**数据与内容**（哪来、什么语言、什么效果、存哪），后者管**展示形态**（显示在哪、长什么样、何时隐藏）。
+| 关于（blue） | info.circle | **2026-09-03 重排**：页头 = 图标 + 名字 + 可点击拷贝的版本胶囊（版本 · 芯片架构）+ tagline + 两颗胶囊按钮（请作者喝杯咖啡 / GitHub 带 star 数）+ 求 star 那句；四张带标题的卡：更新（检查更新＋副标题「上次检查 / 有新版本」、自动检查、自动下载并安装、**接收测试版更新**[2026-09-05，独立一行带 flask 图标；机器专属键 `np:receiveBetaUpdates`，见 15 章决策 11]）、反馈与社区（反馈问题、想法与建议）、许可与版权（使用与版权说明、第三方许可、开源许可证）、诊断与数据（导出诊断信息、配置文件夹）；页脚「© · GPL-3.0」。
 
 **顶层分类记上次停留（2026-09-04）**：新建设置窗口时落在上次停留的顶层分类（`SettingsTab.restoredLastTab()`，`@AppStorage settings:lastTab`；`SettingsTab` 因此有了 String 原始值 = case 名，改 case 名会让老值解码失败退回「歌词」）。只记六个顶层分类，账号页（`.account`）不记——它多半在默认折叠的「实验室功能」区里，记了下次打开就是「detail 切过去、侧栏高亮不到」的状态，且账号页的落点本来就由引导页的信箱管；`AppActions.requestSettings` 的信箱 / subject 在 `.onAppear` / `.onReceive` 里覆盖记忆，优先级更高。初值在属性初始化器里直接读盘，不在 `.onAppear` 里补跳（那样会先画一帧「歌词」再切）。键用 `settings:` 前缀：与二级分段（`settings:lyricsSection` / `settings:appearanceSection`）同一约定，配置导出只带 `np:` / `KeyboardShortcuts_`，界面停留位置这种机器状态天然不随备份走（selftest contracts 组守着键名前缀与导出过滤两头）。停在「关于」这类低频页下次也落在那里，接受。
 
 ### 2. 两套配置存储 + 镜像
 
 - **`AppSettings`**（UserDefaults，`np:` 前缀，48 个 @Published）：App 自身偏好（外观/窗口/图标/开关），`didSet` 里同步写 defaults，**立即生效**。部分项**双写**到 `LocalPlaybackSource`（如繁简转换、卡拉OK、罗马音语言集），让当前这首歌立刻重新解析——只写一边的话要么关 App 就忘、要么等下一首才生效。
-- **`FeatureSettingsStore`**（`~/.config/lyrimuse/lyrimuse-features.json`）：需要 collector 参与的功能开关（player/lyricsSources/lyricsSourceMode+Order/lyricsDir/lyricsTranslationLanguage/albumPrefetch/lyricsMachineTranslation/lastfmMirrorScrobble/daily+weeklyDigest(+source)/launchLyrimuseOnMusicOpen/trustedPlayers（信任的未知播放器，见第 02 章））。`save()` = 立即 `persistFile()` + **0.5s 去抖的 collector 重启**（连续快速切多个开关只重启一次；`launchctl kickstart -k` 被 launchd 节流约 10s，去抖前实测会造成推送反复中断）。所有等待中的 save 调用共享同一次重启结果。枚举 rawValue 与 collector `features.go` 常量逐字对应（共享 JSON 的契约）。
+- **`FeatureSettingsStore`**（`~/.config/lyrimuse/lyrimuse-features.json`）：需要 collector 参与的功能开关（player/lyricsSources/lyricsSourceMode+Order/lyricsDir/lyricsTranslationLanguage/albumPrefetch/lyricsMachineTranslation/lastfmMirrorScrobble/daily+weeklyDigest(+source)/launchLyrimuseOnMusicOpen/trustedPlayers（信任的未知播放器，见第 02 章））。`save()` = 立即 `persistFile()` + **0.5s 去抖的 collector 重启**（连续快速切多个开关只重启一次；`launchctl kickstart -k` 被 launchd 节流约 10s，去抖前实测会造成推送反复中断）。所有等待中的 save 调用共享同一次重启结果。枚举 rawValue 与 collector `features.go` 常量逐字对应（共享 JSON 的契约）。**保存结果的可见性（2026-09-05，借鉴清单 #51）**：设置窗口 detail 列底部浮一条 `CollectorApplyStatusBar`——重启排队/进行中显示「正在应用到后台服务…」（`CollectorRestartCoordinator.isRestarting`），重启失败显示原因 +「重试」（重试 = 再走一次 `save()`），后台服务被用户主动停用时显示中性提示「已停用，下次启用时生效」（`pendingUntilServiceEnabled`）；两个 Store 的 `lastError` 从此都有人读，见决策 21。
 - **`ConfigStore`**（`~/.config/lyrimuse/config.json`，账号凭据：ListenBrainz token/用户名、状态中继地址/token、Last.fm 账号与 scrobble 凭据、推送平台与 webhook、钉钉/飞书签名密钥；collector 侧 `config.go` 读同一份文件，**只读不写**）：整字典读写（`api_root`/`bundle_ids`/`log_level` 这些 UI 不管的字段原样保留）。触发者是 AccountLinkingTab 的 1.2s 输入防抖自动保存、账号切换/关窗兜底、Last.fm 授权成功与「断开」（这两条**不看 `isDirty`**）、以及 AppDelegate 退出前兜底（只在 `isDirty` 时）。`save()` = `persistFile()`（原子写 + 0600，见 `SecretFileWrite`）+ 走 `CollectorRestartCoordinator` 的合并重启 + `commitSnapshot()`。
 - **两份共享文件的读写口径（2026-09-05，借鉴清单 #46）**：`ConfigStore` / `FeatureSettingsStore` 的读盘、合并、写盘都走 Core `JSONConfigDocument`。读盘分**三态**：不存在（首次保存允许创建）/ 正常 / **损坏**（文件在、但不是 JSON 对象；features.json 还多一条「对象合法但字段按类型解不出」也算损坏）。损坏时 `loadFailure` 亮起、`persistFile()` **拒绝**保存（抛 `ConfigFileSaveError.refusedCorruptFile`，`save()` 把它跟「写失败」分开报进 lastError），设置窗口 detail 列顶部钉出 `ConfigFileDamageBanner`：说明哪份文件、技术原因（只含解析位置/键名/期望类型，不含文件内容）、两个出口——「在访达中显示」自己修（修好重开 App），或「放弃坏文件并重建」把它改名成 `<文件名>.corrupt-<yyyyMMdd-HHmmss>` 留在原目录、再用当前值重建。写盘是合并 → 序列化 → 写 → **成功后才更新内存镜像**，写失败字典与状态都不动。合并规则：已知键以本次编码为准（没给的已知键删掉——遗留迁移字段 `player` / `lastfm_scrobble_first_artist_only` 靠这条「往后不再写」），其余键原样保留（features.json 里这台机器不认识的 `ytmusic_lyrics` 之类就这样活下来）。诊断导出 State 段各报一行三态。selftest：ops-diagnostics「配置文件三态读写」拿真实临时目录钉逻辑，contracts「共享配置文件的读写口径」扫两个 Store 不许自己读写盘。取舍见设计决策第 19 条。
 - **`AppSettingsMirror`**：App 偏好一变就镜像成配置文件夹里的 JSON——让「拷走整个 `~/.config/lyrimuse` 文件夹」这条搬家路径不再静默丢掉 UserDefaults 那一半（2026-08-13 用户指出的裂缝）。
@@ -159,6 +156,8 @@
 - **新增 `Auto-update checks` 行**：Sparkle 自己的 `automaticallyChecksForUpdates`/`lastUpdateCheckDate`，回答"为什么没提示我更新"这类反馈，读取零成本、不涉及联网。
 - **新增 `== Current Track Lyrics Resolution ==`**（仅当前有播放曲目时出现）：当前曲目在 `EnrichCacheReader` 里的缓存 key、来源、有没有歌词/逐字/译文/罗马音、是否标记纯音乐——"这首歌没歌词/用错源了"是最常见的一类反馈，以前只能让用户口头报歌名再手动去歌词管理查。查不到本身也是信号（要么真没解析过，要么归一化 key 对不上，第 11 章记录过这类真实坑）。`EnrichCacheReader` 整个类型是 `@MainActor`，这一段必须在调用方（`exportInteractively`/`buildReport`）先算好、以纯文本传进后台任务，不能挪到 `Task.detached` 里现调。
 
+- **新增 `== Recent Crash Reports ==`（2026-09-06，用户拍板，借鉴清单 #31）**：`~/Library/Logs/DiagnosticReports/` 里最近 7 天、文件名前缀 `lyrimuse-` / `collector-` 的 .ips，正文再按 bundle id 与「`<显示名>.app/Contents/`」路径确认是本变体的（别的 App 也可能有叫 collector 的进程；Dev 与正式版互不混入），**每个进程各取最近 3 份**（collector 走 KeepAlive 崩溃循环会刷出一串，总共取 3 会把 App 那一份挤掉）。App 崩了 os.Logger 留不下现场、collector 崩溃循环时 lyrimuse.log 只见反复 starting、Intel/Rosetta「打不开」这类启动期事故日志里一行都没有——而 macOS 早把报告写好了，缺的只是收进导出。**摘要以 termination 为主、帧只在有的时候附**：动手前数了本机 7 份真实报告，6 份是启动期 DYLD「Library missing」（SIGABRT，`reasons` 直接写着缺哪个库）、1 份 CODESIGNING「Launch Constraint Violation」，故障线程**一帧都没有**，能说明问题的只有 `termination` 的 namespace / indicator / reasons / details；有帧时附故障线程前 15 帧（库名 + 符号 + 偏移 + 源文件行）。.ips = 摘要行 JSON + 正文 JSON 两段，解析在 Core `CrashReportSummary`（宽容：任一段坏了就只用另一段并在 `note:` 里说明，两段都坏退成一行「unparseable」；没有摘要行时整份当正文再试），selftest ops-diagnostics 组用三种样本钉着（DYLD 缺库 / 签名约束 / 带 20 帧的 EXC_BAD_ACCESS 截成 15）+ `LYRIMUSE_LIVE_CRASHREPORTS=1` 时真拿本机报告全解一遍。目录列不出、单个文件读不到都只留一行说明，不让整份导出失败；「没有匹配文件」也写出来（含扫过几个候选）。每行过 `LogRedactor.redactAll`，家目录改写成 `~`（报告里的 App 包路径在 /Applications 下不含用户名；家目录下的路径 macOS 自己已改写成 `/Users/USER/*`）。旧版纯文本 `.crash` 不支持——App 最低 macOS 14，那时起只有 .ips。⚠️ **没验**：App 进程在没有完全磁盘访问时能否读这个目录（DiagnosticReports 不在 TCC 保护目录列表里，终端里能读），读不到就是那条兜底路径，不会坏；要看真实效果在 Dev 的「关于」页点「导出诊断信息」。
+
 **调试 HUD（隐藏开关，不进设置界面）**：`defaults write me.yudaotor.lyrimuse np:debugHUD -bool true` 后重开悬浮歌词，右上角显示实测帧率。取样器是 `LyrimuseCore/Playback/FrameRateProbe.swift`（纯值类型，selftest 无屏覆盖 6 条），挂在**逐字填色那个既有的 `TimelineView` 闭包**里——量的正是这个 App 最贵的那段渲染实际拿到多少帧，而不是另起一个 TimelineView 去量一个无关的数字。HUD 用 `.overlay` 挂而**不**塞进 VStack：它绝不能改变布局，否则会把窗口撑高、量到的就不是原来那套渲染了。
 背景：项目最贵的两个渲染结论（07 章 #13 的 ~20Hz 提交、04 章 #2 的 30Hz 上限）都靠一次性搭的 ScreenCaptureKit 探针量出来，量完就没了，而 07 章还写着「将来重试排程式填色，先用探针核实提交频率再谈」。两道防泄密：状态段只用 ConfigStore 的只读布尔判断；日志正文统一过 `LogRedactor` 脱敏（2026-08-13 前该约束是破的——Go `*url.Error` 会把 api_key 连 URL 原样打进日志）。
 
@@ -168,7 +167,7 @@
 
 ## 与其它功能的交互
 
-- FeatureSettingsStore.save() 的 kickstart 会让 collector 重启（歌词解析/推送短暂中断），去抖是为保护「正在播放」推送。
+- FeatureSettingsStore.save() 的 kickstart 会让 collector 重启（歌词解析/推送短暂中断），去抖是为保护「正在播放」推送。重启进行中 / 失败 / 服务已停用三种状态在设置窗口底部状态条可见（决策 21）。
 - 「歌词来源被禁用仍会抓取、只在挑选时过滤」——所以改来源勾选不触发重搜（第 09 章）。
 - 双写模式的另一半在 `LocalPlaybackSource` 各属性的 `didSet`（改了立刻 reload 当前歌，第 08 章）。
 - 语言切换即时生效靠各视图 `.id(L10n.current)` 强制重建。
@@ -176,7 +175,7 @@
 ## 数据与文件
 
 - UserDefaults：`np:*`（AppSettings + 各处 @AppStorage）、`KeyboardShortcuts_*`；另有 `settings:*`（设置页的停留位置：顶层分类 `settings:lastTab`、二级分段 `settings:lyricsSection` / `settings:appearanceSection`）——机器状态，刻意不在配置导出的前缀里。
-- `~/.config/lyrimuse/`：`config.json`（账号凭据，ConfigStore）、`lyrimuse-features.json`、App 偏好镜像 JSON、enrich 缓存等（清单见第 01 章）。损坏文件被用户「放弃」后留在同目录，名为 `<原名>.corrupt-<yyyyMMdd-HHmmss>`（不自动清理；uninstall.sh `--purge` 连目录一起删）。
+- `~/.config/lyrimuse/`（路径唯一口径在 Core `LyrimusePaths`，2026-09-05）：`config.json`（账号凭据，ConfigStore）、`lyrimuse-features.json`、App 偏好镜像 JSON、enrich 缓存等（清单见第 01 章）。损坏文件被用户「放弃」后留在同目录，名为 `<原名>.corrupt-<yyyyMMdd-HHmmss>`（不自动清理；uninstall.sh `--purge` 连目录一起删）。
 - iCloud：`~/Library/Mobile Documents/com~apple~CloudDocs/Lyrimuse/`。
 - LaunchAgent：`~/Library/LaunchAgents/me.yudaotor.lyrimuse.plist`。
 
@@ -195,7 +194,7 @@
 | 更新 | Settings/SparkleUpdaterManager.swift |
 | 引导 | lyrimuse/OnboardingView.swift |
 | 本地化 | lyrimuse/L10n.swift、LyrimuseCore/Util/UILanguage.swift（语言协商）、Localization/generate-strings.py、Localizable.xcstrings、Resources/{zh-hans,zh-hant,en}.lproj |
-| 诊断 | Settings/DiagnosticsExporter.swift（`collapseRepeatedLines`/`collectorHealthCheckLines`/`currentTrackLyricsLines`/`recentCollectorLogLines`）、LyrimuseCore/Diagnostics/LogRedactor.swift；时区对齐见 collector 侧 main.go `log.LUTC`；App 版本号见 build.sh `APP_VERSION` |
+| 诊断 | Settings/DiagnosticsExporter.swift（`collapseRepeatedLines`/`collectorHealthCheckLines`/`currentTrackLyricsLines`/`recentCollectorLogLines`/`recentCrashReportLines`）、LyrimuseCore/Diagnostics/LogRedactor.swift、LyrimuseCore/Diagnostics/CrashReportSummary.swift（.ips 摘要：`parse`/`belongsToApp`/`select`/`renderLines`）；时区对齐见 collector 侧 main.go `log.LUTC`；App 版本号见 build.sh `APP_VERSION` |
 | 歌词来源可用性测试（2026-08-30） | Settings/LyricSourceTestService.swift；SettingsView.swift `sourceTestAccessory`/`testSource`/`testAllSources`/`testAllSourcesButton`（悬停提示走自绘 `.popover` + `accessoryHoverSource`，不是 `.help()`，理由见「设计决策」）；`SettingsCardHeader` 的 `trailing` 插槽；collector 侧 lyrimuse-collector/testlyricsourcescli.go（`collector test-lyric-sources [-source <name>]`），跟 healthcheckcli.go 共享同一套两首探测曲思路；具体失败原因旁路见 ytmusic.go/musixmatch.go/netease.go 各自的 `*LastFailureReason` |
 | 对外请求审计 | LyrimuseCore/Diagnostics/NetworkAuditLog.swift（App 侧 7 个调用点）；collector 侧见第 15 章「网络观察」 |
 | 更新与测试版频道（2026-09-05） | Settings/SparkleUpdaterManager.swift（Sparkle 接线；`feedURLString(for:)` / `allowedChannels(for:)`；Release 列表查询 + UserDefaults 地址缓存）；LyrimuseCore/Util/UpdateChannel.swift（挑 appcast / 解析 / 刷新判据）、LyrimuseCore/Util/ReleaseVersion.swift（版本解析 / 四段构建号）；lyrimuse/scripts/build-version.sh（构建号唯一定义）；.github/workflows/release.yml、.github/scripts/check_appcast.py；selftest `update-channel` 组 |
@@ -507,3 +506,19 @@
     用的是没夹过的 500pt）。修法：到达边界（首 / 末行中线，留 0.5pt 浮点容差）直接落到首 / 末位——边界处指针推不动，不存在来回换位，
     滞回在那里没有意义；settings-ui 组补 8 条叠加用例（含逐帧「先夹再判」一路拖到顶）。教训同「校准阈值别只用合成单测」那条：两个
     各自正确的约束叠加要单独测一条端到端的路径。
+21. **功能开关 / 账号凭据保存后的 collector 重启结果在设置窗口可见：进行中 + 失败原因 + 重试，服务被主动停用另算（2026-09-05，用户拍板，借鉴清单 #51）**：
+    起因：两个 Store 的 `save()` 都把「写盘失败」「重启失败」写进 `lastError`，但功能开关的 20 多个调用点全是 `Task { await features.save() }` 丢弃结果，
+    `FeatureSettingsStore.lastError` 全仓没人读（`ConfigStore.lastError` 只在账号页那条状态栏上显示）。表现：开关翻了、features.json 也写了，collector 没重启，
+    用户以为已生效——正是决策 8 说的「界面上看不出来的信息」。**做法**：不逐卡挂提示、不改任何调用点，在设置窗口 detail 列底部浮一条 `CollectorApplyStatusBar`
+    （`overlay` 不是 `safeAreaInset`：它随每次拨开关出现又消失，inset 会让整页内容上下跳；顶部那条损坏横幅是持久态才用 inset），三种状态按优先级：
+    ① 任一 Store `lastError` 非空 → 橙色，原因 +「重试」+ 关闭。**重试 = 再走一次 `save()`**（再落一次盘幂等，顺带把途中改的开关带上；两个 Store 同时失败时
+    并发发起，让协调器合并成一次重启），不做「回滚开关」——文件已是新值，回滚界面会让它与 features.json 不一致；② `CollectorRestartCoordinator.isRestarting`
+    （新加的 `@Published`：有请求排队或正在执行）→ 一行小字「正在应用到后台服务…」，窗口是 0.5s 去抖 + 最多 3s 确认，撞上 launchd 节流可到 10s；
+    ③ `pendingUntilServiceEnabled` → 中性提示「后台采集服务已停用，改动会在下次启用时生效」，服务一启用就不显示。
+    **服务被主动停用是评估时发现的坑**：用户在「播放器」页关掉后台服务后，每次拨开关 kickstart 都失败、`lastError` 每次都被写成「重启失败」，此前没人读所以无感，
+    一显示出来就是每个开关一条红字。处理是**先试重启、失败后再看 `AppSettings.collectorServiceEnabled`**：标志为关就定性成「已保存、待启用」并提交快照
+    （collector 启动时读盘，这句是真的）；刻意不反过来「看标志就跳过重启」——build.sh 直接装机的机器上这个标志可能从没被写过（读不到时默认 false）但 job 在跑，
+    跳过会让改动真的不生效。失败文案从「后台采集服务重启失败」改成「已保存，但后台采集服务重启失败，改动要等下次重启才生效」，说清文件已经写了（歌词管理那条同名
+    旧文案不动，它的语义不同）。账号页原有的红色 `lastError` 标签保留（它是那条自动保存状态栏的一部分），账号页失败时两处都会显示。
+    守卫：contracts「后台服务应用状态可见」。**没验**：真机上没法不用 GUI 自动化去拨开关，失败态与进行中态只靠编译 + 源码守卫；要看效果可在 Dev 上
+    `launchctl bootout gui/$UID/com.lyrimuse.collector.dev` 后拨一个开关看橙条，`bootstrap` 回来后点「重试」看它消失。

@@ -346,7 +346,7 @@ func neteaseLookup(ctx context.Context, artist, title, album string, durationSec
 // (见 isNeteaseImpersonatorRidden)只保留**歌词族**字段,把身份/封面/跳转链接/专辑 id
 // 全部扣下 —— 净效果跟这道防线原来那种"整源跳过"逐条一致(Cover 空 → 不写
 // CoverSource/CoverAlbum;AlbumID=0 → 专辑预取早退;SongURL 空 → 不写 NeteaseURL;
-// Artist 空 → canonical_artist 走其它链路),唯一的差别是歌词照常进入五源打分。
+// Artist 空 → canonical_artist 走其它链路),唯一的差别是歌词照常进入全源打分。
 //
 // 为什么身份/封面照旧不信:仿冒号能把歌名、专辑名、时长一字不差地抄成目标曲目,
 // pick() 的标题/歌手名校验对这类艺人天然拦不住(见 isNeteaseImpersonatorRidden 注释)。
@@ -356,11 +356,11 @@ func neteaseLookup(ctx context.Context, artist, title, album string, durationSec
 // 是两回事;而歌词候选另有一整套跟来源无关的防线(lyricTitleAccepted + 歌手闸 +
 // 版本限定词 -600 + 时长 -700/-500 + 语言闸 + creditOnly 闸 + 跨源共识),错版本的歌词
 // 在打分层就会掉下去,不需要靠"整源不看"这种粒度的封锁 —— 那个粒度的代价是:这位艺人
-// 的每一首歌都**先天少一个源**,而网易云恰好是五源里唯一同时供逐字 YRC、社区译文和
+// 的每一首歌都**先天少一个源**,而网易云恰好是少数同时供逐字 YRC、社区译文和
 // 罗马音的那个。
 //
 // 2026-08-22 实测(用户报「开不了口 (Live) 歌词不准」):本地在放《周杰伦地表最强世界
-// 巡回演唱会 (Live)》里的「开不了口 (Live)」(272.973s)。整源跳过之下,五个源里 QQ 的
+// 巡回演唱会 (Live)》里的「开不了口 (Live)」(272.973s)。整源跳过之下,各源里 QQ 的
 // smartbox 首个查询只回一条署名"周杰伦微博台"的仿冒条目(被歌手闸拒)、酷狗只有 2010
 // 超时代演唱会那版(399s,错版本)、musixmatch 空,只剩 LRCLIB 一条 509 分的候选,而那份
 // 的时间轴相对录音室版从 +1.0s 一路漂到 +11.5s、只有 34 行、末句比录音室版还早,根本
@@ -689,7 +689,7 @@ func resolveNeteaseInfo(ctx context.Context, artist, title, album string, durati
 			// 任何非 0/200 都当"这个桶该歇一歇"处理,宁可偶尔多等一次没必要的退避,
 			// 也不要对着还没搞懂的拒绝码继续按原速撞。
 			cooldown, streak := neteaseReportRejected(u)
-			log.Printf("netease: %s rejected (code %d), backing off %s (这个桶连续第 %d 次被拒)",
+			log.Printf("netease: %s rejected (code %d), backing off %s (bucket rejected %d times in a row)",
 				neteaseEndpointBucket(u), probe.Code, cooldown, streak)
 			if probe.Code == 405 {
 				// 2026-08-31 实测坐实的具体原因,见 neteaseLastFailureReason 声明处注释。
@@ -719,7 +719,7 @@ func resolveNeteaseInfo(ctx context.Context, artist, title, album string, durati
 	// 2026-08-09 实测坐实:把这里也改成"版本限定词原样优先"之后,14 首带 (Live)/
 	// (Original Version)/(reprise) 的歌,网易云拿到的候选曲名**一条都没变**(分数的整齐
 	// -50 是另一次改动删掉来源加分造成的,与此无关),白白多打最多 2 次请求 —— 而网易云
-	// 恰恰是五个源里最容易被限流的那个(HTTP 200 + body code 405)。所以改回来。
+	// 恰恰是各源里最容易被限流的那个(HTTP 200 + body code 405)。所以改回来。
 	ct := stripParens(title)
 	// ca:去掉艺人标签自带的括号别名再拼进搜索词——2026-08-30 真实bug(温岚《夏日の風》):
 	// 本地艺人字段有时是"主名 (罗马化别名)"(YouTube Music 桥接给的常见形态,如
@@ -1051,7 +1051,7 @@ func neteaseAlbumTracks(albumID int64) ([]albumTrack, bool) {
 		// code 非 200/0 一律当失败(-462 就走这里),别把限流解成"零首歌"。
 		if payload.Code != 0 && payload.Code != 200 {
 			cooldown, streak := neteaseReportRejected(u)
-			log.Printf("netease: %s rejected (code %d), backing off %s (这个桶连续第 %d 次被拒)",
+			log.Printf("netease: %s rejected (code %d), backing off %s (bucket rejected %d times in a row)",
 				neteaseEndpointBucket(u), payload.Code, cooldown, streak)
 			return false
 		}
@@ -1152,7 +1152,7 @@ func neteaseAlbumIDByName(ctx context.Context, artist, album string) (int64, boo
 			// 限流/拒绝,不是"零张专辑"。跟 resolveNeteaseInfo 的 get 同一份处理:
 			// 记日志 + 指数退避这个端点桶,405 时额外记具体原因(见那边注释)。
 			cooldown, streak := neteaseReportRejected(u)
-			log.Printf("netease: %s rejected (code %d), backing off %s (这个桶连续第 %d 次被拒)",
+			log.Printf("netease: %s rejected (code %d), backing off %s (bucket rejected %d times in a row)",
 				neteaseEndpointBucket(u), probe.Code, cooldown, streak)
 			if probe.Code == 405 {
 				neteaseSetLastFailureReason(lyricFailureReasonNeteaseRateLimited)
@@ -1321,7 +1321,7 @@ func retryTitleFromArtistSearchDetailed(ctx context.Context, artist, title strin
 		// (见 resolveNeteaseInfo 的 get 那段注释)。
 		if err := json.Unmarshal(body, &probe); err == nil && probe.Code != 0 && probe.Code != 200 {
 			cooldown, streak := neteaseReportRejected(u)
-			log.Printf("netease: %s rejected (code %d), backing off %s (这个桶连续第 %d 次被拒)",
+			log.Printf("netease: %s rejected (code %d), backing off %s (bucket rejected %d times in a row)",
 				neteaseEndpointBucket(u), probe.Code, cooldown, streak)
 			if probe.Code == 405 {
 				neteaseSetLastFailureReason(lyricFailureReasonNeteaseRateLimited)

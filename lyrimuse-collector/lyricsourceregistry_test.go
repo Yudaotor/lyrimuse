@@ -18,7 +18,7 @@ func allLyricSourceConstants() []string {
 	return []string{
 		lyricSourceNetease, lyricSourceQQ, lyricSourceKugou,
 		lyricSourceMusixmatch, lyricSourceLRCLIB, lyricSourceAMLL, lyricSourceLyricFind,
-		lyricSourceKuwo,
+		lyricSourceKuwo, lyricSourceMigu,
 	}
 }
 
@@ -51,7 +51,7 @@ func TestEveryLyricSourceIsRegistered(t *testing.T) {
 	}
 
 	// ③ 全集兜底(lyrics_sources 缺失/为空 = 全开)。漏一个 = 那个源在全新安装上被禁用。
-	full := resolveLyricsSources(nil, nil, nil, nil)
+	full := resolveLyricsSources(nil, nil, nil, nil, nil)
 	for _, s := range all {
 		if !full[s] {
 			t.Errorf("源 %q 不在 resolveLyricsSources 的全集兜底里(全新安装会禁用它)", s)
@@ -63,7 +63,7 @@ func TestEveryLyricSourceIsRegistered(t *testing.T) {
 	// 机器上跑,这台机器 lyrics_sources 里只有旧的六个源、没有对应迁移字段,
 	// search-lyrics 的 sourcesTotal 停在 6、候选列表里一条新源都没有。这里钉死
 	// 的正是当时复现过的那个场景(见 resolveLyricsSources 里对应的注释)。
-	old := resolveLyricsSources([]string{"netease", "qq"}, nil, nil, nil)
+	old := resolveLyricsSources([]string{"netease", "qq"}, nil, nil, nil, nil)
 	if !old[lyricSourceAMLL] {
 		t.Error("老配置(amll_lyrics 缺失)应当把 amll 补进启用集合")
 	}
@@ -73,8 +73,11 @@ func TestEveryLyricSourceIsRegistered(t *testing.T) {
 	if !old[lyricSourceKuwo] {
 		t.Error("老配置(kuwo_lyrics 缺失)应当把 kuwo 补进启用集合")
 	}
+	if !old[lyricSourceMigu] {
+		t.Error("老配置(migu_lyrics 缺失)应当把 migu 补进启用集合")
+	}
 	no := false
-	statedAMLL := resolveLyricsSources([]string{"netease", "qq"}, &no, nil, nil)
+	statedAMLL := resolveLyricsSources([]string{"netease", "qq"}, &no, nil, nil, nil)
 	if statedAMLL[lyricSourceAMLL] {
 		t.Error("用户已表态(amll_lyrics=false)时不该再把 amll 补回来")
 	}
@@ -84,7 +87,7 @@ func TestEveryLyricSourceIsRegistered(t *testing.T) {
 	if !statedAMLL[lyricSourceKuwo] {
 		t.Error("amll 已表态不影响 kuwo 的迁移——kuwo_lyrics 仍缺失时应该照常补它")
 	}
-	statedLF := resolveLyricsSources([]string{"netease", "qq"}, nil, &no, nil)
+	statedLF := resolveLyricsSources([]string{"netease", "qq"}, nil, &no, nil, nil)
 	if statedLF[lyricSourceLyricFind] {
 		t.Error("用户已表态(lyricfind_lyrics=false)时不该再把 lyricfind 补回来")
 	}
@@ -94,7 +97,7 @@ func TestEveryLyricSourceIsRegistered(t *testing.T) {
 	if !statedLF[lyricSourceKuwo] {
 		t.Error("lyricfind 已表态不影响 kuwo 的迁移——kuwo_lyrics 仍缺失时应该照常补它")
 	}
-	statedKuwo := resolveLyricsSources([]string{"netease", "qq"}, nil, nil, &no)
+	statedKuwo := resolveLyricsSources([]string{"netease", "qq"}, nil, nil, &no, nil)
 	if statedKuwo[lyricSourceKuwo] {
 		t.Error("用户已表态(kuwo_lyrics=false)时不该再把 kuwo 补回来")
 	}
@@ -103,6 +106,16 @@ func TestEveryLyricSourceIsRegistered(t *testing.T) {
 	}
 	if !statedKuwo[lyricSourceLyricFind] {
 		t.Error("kuwo 已表态不影响 lyricfind 的迁移——lyricfind_lyrics 仍缺失时应该照常补它")
+	}
+	if !statedKuwo[lyricSourceMigu] {
+		t.Error("kuwo 已表态不影响 migu 的迁移——migu_lyrics 仍缺失时应该照常补它")
+	}
+	statedMigu := resolveLyricsSources([]string{"netease", "qq"}, nil, nil, nil, &no)
+	if statedMigu[lyricSourceMigu] {
+		t.Error("用户已表态(migu_lyrics=false)时不该再把 migu 补回来")
+	}
+	if !statedMigu[lyricSourceKuwo] {
+		t.Error("migu 已表态不影响 kuwo 的迁移——kuwo_lyrics 仍缺失时应该照常补它")
 	}
 }
 
@@ -173,6 +186,44 @@ func TestSwiftSearchEmptyStateCountMatchesSourceCount(t *testing.T) {
 		if !strings.Contains(body, needle) {
 			t.Errorf("在 %s 里没找到 %q——源数量是 %d(%s个),这两句空状态文案的数字要跟着改",
 				p, needle, n, digit)
+		}
+	}
+}
+
+// 面向用户 / 面向维护者的几处"一共几个源"必须跟常量表对齐——2026-09-04 加咪咕时只改了上面
+// selftest 钉住的两句文案和 README 三处,漏了 01 章、09 章标题、14 章、collector 一条日志里写死的
+// "%d/8"(用户当天发现「歌词源数量还是 8」)。这里把**带具体数字的现状描述**钉死;其它地方从此
+// 一律写"全部源 / 各源",不带数字(带日期的历史记录除外),新加源时就不会再有第二批漏网。
+func TestDocsSourceCountMatchesSourceCount(t *testing.T) {
+	chineseDigits := map[int]string{5: "五", 6: "六", 7: "七", 8: "八", 9: "九", 10: "十"}
+	englishWords := map[int]string{5: "Five", 6: "Six", 7: "Seven", 8: "Eight", 9: "Nine", 10: "Ten"}
+	n := len(allLyricSourceConstants())
+	zh, okZh := chineseDigits[n]
+	en, okEn := englishWords[n]
+	if !okZh || !okEn {
+		t.Fatalf("源数量是 %d,没有对应的中英数字——请在两张表里补上再跑这个测试", n)
+	}
+	checks := []struct{ path, needle string }{
+		{"../README.md", en + " lyrics sources checked automatically"},
+		{"../README.md", "to the " + strings.ToLower(en) + " lyric sources above"},
+		{"../README.zh-CN.md", "自动查" + zh + "个歌词源"},
+		{"../README.zh-CN.md", "发给上面" + zh + "个歌词源"},
+		{"../docs/features/01-overview.md", zh + "个歌词源:`music.163.com`"},
+		{"../docs/features/01-overview.md", zh + "个歌词源(网易云/QQ/酷狗/"},
+		{"../docs/features/09-lyrics-resolution.md", "### 3. " + zh + "源并发收集"},
+		{"../docs/features/09-lyrics-resolution.md", "去" + zh + "个歌词源（"},
+		{"../docs/features/14-settings-config.md", "歌词来源" + zh + "源勾选"},
+		{"../docs/features/README.md", zh + "源检索、守卫"},
+		{"../lyrimuse/Sources/lyrimuse/Settings/FeatureSettingsStore.swift", "// " + zh + "个歌词源——rawValue"},
+	}
+	for _, c := range checks {
+		raw, err := os.ReadFile(c.path)
+		if err != nil {
+			t.Errorf("读不到 %s: %v", c.path, err)
+			continue
+		}
+		if !strings.Contains(string(raw), c.needle) {
+			t.Errorf("%s 里没找到 %q——源数量是 %d,这处的数字要跟着改", c.path, c.needle, n)
 		}
 	}
 }

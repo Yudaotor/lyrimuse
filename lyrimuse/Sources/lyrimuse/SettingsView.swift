@@ -317,6 +317,9 @@ struct SettingsView: View {
             // 配置文件损坏告示(2026-09-05,借鉴清单 #46):平时零高度;config.json / features.json 任一启动时
             // 判定为损坏就钉在 detail 列顶部,不挑分页 —— 那时所有保存都被拒,用户在哪一页拨开关都会撞上。
             .safeAreaInset(edge: .top, spacing: 0) { ConfigFileDamageBanner() }
+            // 应用到后台服务的状态条(2026-09-05,借鉴清单 #51):重启进行中 / 失败 + 重试 / 服务停用提示。浮在 detail 列
+            // 底部(overlay 不是 inset:它随每次拨开关出现又消失,inset 会让整页内容跳),一处覆盖 20 多个保存调用点。
+            .overlay(alignment: .bottom) { CollectorApplyStatusBar() }
             // 2026-08-25 拆开:窗口**标题**钉死成「设置」,当前分类改用副标题。原来标题栏
             // 跟着选中的分类走(仿系统"系统设置"那套"标题=当前面板名"的做法),但那套设计
             // 假设这扇窗口有自己独占的 Dock 图标——这个 App 的 Dock/Window 菜单是"设置"/
@@ -4958,6 +4961,8 @@ private struct AboutSettingsTab: View {
     // 离开设置页再回来不该重读缓存、更不该重复发请求。
     @ObservedObject private var updater = SparkleUpdaterManager.shared
     @ObservedObject private var githubStars = GitHubStarsService.shared
+    /// 只为「接收测试版更新」那一个开关订阅 AppSettings —— 这一页其余内容不读它。
+    @ObservedObject private var settings = AppSettings.shared
     /// 版本胶囊刚被点过(版本信息已在剪贴板)的短暂反馈态,1.6 秒后自动复原。
     @State private var versionCopied = false
 
@@ -5005,7 +5010,8 @@ private struct AboutSettingsTab: View {
                 // 图标的粉色已经够跳,再铺一层就腻了。
                 .shadow(color: .black.opacity(0.14), radius: 12, y: 6)
                 .padding(.bottom, 6)
-            Text("Lyrimuse")
+            // 正式版 "Lyrimuse",Dev 构建 "Lyrimuse Dev"(图标上另有角标)——两个并排跑时靠这里认。
+            Text(LyrimuseIdentity.displayName)
                 .font(.system(size: 24, weight: .bold))
             versionChip
             Text(L10n.t("Lyric × Muse——把你的歌词交给音乐女神吧"))
@@ -5115,6 +5121,12 @@ private struct AboutSettingsTab: View {
         SettingsCard {
             SettingsCardHeader(title: L10n.t("更新"))
             CardDivider()
+            updateControls
+        }
+    }
+
+    @ViewBuilder
+    private var updateControls: some View {
             // Sparkle 自己处理"检查中/已是最新/发现新版本"这几种状态的 UI 展示(SPUStandardUserDriver
             // 的标准弹窗),不需要自己维护 loading 状态或者判断结果再手动弹 alert。副标题只补 Sparkle
             // 弹窗之外的一件事:上次什么时候查过 / 已经查到了什么。
@@ -5142,7 +5154,24 @@ private struct AboutSettingsTab: View {
                 // —— 藏起来会让人以为设置项没了。
                 .disabled(!updater.automaticallyChecksForUpdates)
             }
-        }
+            CardDivider()
+            // 「接收测试版更新」(2026-09-05,用户拍板):开了之后 Sparkle 改读版本最高的那个 Release(含预发布)
+            // 自己 tag 目录下的 appcast,预发布 item 带 beta channel;关着的实例连 channel 都不放行。为什么不能
+            // 只靠 channel、为什么正式用户读的 latest 永远不含预发布,见 Core UpdateChannel 头注与 15 章决策 11。
+            // 是这台机器的偏好、不随配置搬家(machineLocalDefaultsKeys)。放成独立一行而不是「检查更新」的从属行:
+            // 它不依赖「自动检查」,手动检查同样受它影响。
+            SettingsRow(
+                icon: "flask",
+                title: L10n.t("接收测试版更新"),
+                subtitle: L10n.t("带 beta 后缀的预发布版本也会出现在更新提示里，可能不稳定")
+            ) {
+                Toggle("", isOn: Binding(
+                    get: { settings.receiveBetaUpdates },
+                    set: { settings.receiveBetaUpdates = $0 }
+                ))
+                .labelsHidden()
+                .toggleStyle(.switch)
+            }
     }
 
     /// 「检查更新」那一行的副标题:已经查到新版本就说新版本(文案跟菜单栏面板底栏那一格同一套);
@@ -5255,7 +5284,9 @@ private struct AboutSettingsTab: View {
             SettingsRow(
                 icon: "folder",
                 title: L10n.t("配置文件夹"),
-                subtitle: L10n.t("~/.config/lyrimuse，纯文本可直接编辑；外观与快捷键不在里面（它们在 UserDefaults）"),
+                // 路径按变体显示(正式 ~/.config/lyrimuse,Dev ~/.config/lyrimuse-dev),别让 Dev 的用户对着一个错的路径找文件。
+                subtitle: String(format: L10n.t("%@，纯文本可直接编辑；外观与快捷键不在里面（它们在 UserDefaults）"),
+                                 "~/.config/" + LyrimuseIdentity.configDirName),
                 help: L10n.t("含账号凭据，不要发给别人；要连外观、快捷键一起搬走，用「配置备份与搬家」")
             ) {
                 Button(L10n.t("打开配置文件夹")) {

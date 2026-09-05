@@ -1,6 +1,6 @@
 module applemusic-nowplaying/collector
 
-go 1.21
+go 1.22
 
 // 钉住构建/测试用的工具链版本,不只是靠 AGENTS.md 提醒「记得带 GOTOOLCHAIN=go1.24.4」。
 //

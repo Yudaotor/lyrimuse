@@ -119,7 +119,7 @@ collector(Go, 5s 轮询) ── 同样两条播放读取路径(独立于 App)
 | `itunes.apple.com` | collector、App | 歌手 + 歌名(+ 地区) | collector 封面 / 署名锚点;App 高清封面替代与空闲页链接(第 03 章) |
 | `api.mymemory.translated.net` | collector | **歌词正文**分块 + 随机生成的邮箱参数 | 「系统兜底翻译」开着且端上 Apple 翻译不可用(第 10 章) |
 | `1.1.1.1` / `8.8.8.8`(DoH) | collector | 域名 | 只有 `*.musixmatch.com` 走 DoH(`doh.go dohHostSuffixes`) |
-| `api.github.com` | App | 无用户数据 | 关于页 star 数,最多每 6 小时一次 |
+| `api.github.com` | App | 无用户数据 | 关于页 star 数,最多每 6 小时一次;打开「接收测试版更新」后最多每小时查一次 Release 列表(挑版本最高的 appcast,2026-09-05) |
 | `github.com`(Releases appcast) | App(Sparkle) | 无系统信息(未开 `SUEnableSystemProfiling`) | 更新检查 |
 | `ws.audioscrobbler.com`、`api.listenbrainz.org` | collector、App | 播放记录(带账号凭据鉴权) | 用户主动连接后 |
 | 推送平台(Bark、钉钉、企业微信、Discord、飞书、Server酱)、状态中继(自建 Worker)、`api.deezer.com`(网页 Top10 歌手头像) | collector | 周报文本 / 当前播放状态 / 歌手名 | 用户主动配置后 |
@@ -146,7 +146,7 @@ collector(Go, 5s 轮询) ── 同样两条播放读取路径(独立于 App)
 
 | 文件 | 写入方 | 读取方 | 内容 |
 |---|---|---|---|
-| `config.json` | Swift `ConfigStore` | collector(启动时) | LB token、Last.fm 凭据、状态中继地址/token、通知 webhook 等 |
+| `config.json` | Swift `ConfigStore` | collector(启动时) | LB token、Last.fm 凭据、状态中继地址/token、通知 webhook 等。目录 `~/.config/lyrimuse`(Swift `LyrimusePaths` / Go `configDir()`,collector 经环境变量 `LYRIMUSE_CONFIG_DIR` 得知) |
 | `lyrimuse-features.json` | Swift `FeatureSettingsStore` | collector(启动时) | 播放器选择、功能开关(*bool,缺省=沿用现有行为)、歌词源集合/模式/顺序、`lyrics_dir` |
 | `lyrimuse-app-settings.json` | Swift `AppSettingsMirror` | Swift(仅 `restoreIfPristine()` 全新装机时读回) | UserDefaults 的单向镜像(外观/快捷键等),让"拷走整个文件夹=拷走整份配置"成立 |
 | `lyrimuse-enrich-cache.json` | collector(整 map 覆盖写);歌词管理 `EnrichCacheStore` 按 key 字典级增删改 | 双方 | 曲目元信息+歌词+封面+取色+链接缓存,key=`歌手\|歌名\|专辑`(经 `enrichKey()` 归一) |

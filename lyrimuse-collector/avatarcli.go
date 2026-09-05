@@ -41,11 +41,10 @@ func runArtistAvatarsCLI(args []string) {
 		fmt.Fprintln(os.Stderr, "artist-avatars: at least one artist name is required")
 		os.Exit(2)
 	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		log.Fatalf("artist-avatars: resolve home dir: %v", err)
+	if configDir() == "" {
+		log.Fatalf("artist-avatars: cannot resolve home directory (and LYRIMUSE_CONFIG_DIR is unset)")
 	}
-	cachePath := filepath.Join(home, ".config", clientName, clientName+"-artist-avatar-cache.json")
+	cachePath := filepath.Join(configDir(), clientName+"-artist-avatar-cache.json")
 
 	cache := map[string]avatarCacheEntry{}
 	if data, err := os.ReadFile(cachePath); err == nil {

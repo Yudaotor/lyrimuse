@@ -2,7 +2,6 @@ package main
 
 import (
 	"io"
-	"log"
 	"net/url"
 	"regexp"
 	"slices"
@@ -141,17 +140,5 @@ func (s secretScrubber) Write(p []byte) (int, error) {
 	return len(p), nil
 }
 
-// installLogScrubbing 接管标准 log 的输出。main 一进来就调,早于任何配置加载 ——
-// 第二道防线(按参数名)不需要配置就能工作。
-//
-// 2026-08-27 顺带接了日志轮转(见 logrotate.go):这一刻还没有任何这次进程自己写的
-// 日志内容,归档旧文件不会丢东西。rotateLogIfNeeded 判定不需要轮转/轮转失败时都会
-// 老老实实退回 os.Stderr,这里不需要关心到底走了哪条路径。
-func installLogScrubbing() {
-	w, rotated := rotateLogIfNeeded(logFilePath(), logRotateMaxBytes)
-	log.SetOutput(secretScrubber{w: w})
-	if rotated {
-		log.Printf("log rotated: previous file exceeded %dMB, archived to lyrimuse.log.old",
-			logRotateMaxBytes/1024/1024)
-	}
-}
+// 日志出口的装配(接管 log 包输出、轮转、折叠)2026-09-05 起在 logsink.go 的 installLogSink;
+// 这个文件只负责脱敏那一层(secretScrubber 挂在那条链的倒数第二节)。

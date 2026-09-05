@@ -16,8 +16,7 @@ enum LyricsBackupStore {
     /// ⚠️ 同一个路径在 `EnrichCacheReader` 和 `EnrichCacheStore` 里各有一份 `private static let`
     /// —— 那两处都是私有的,为了这里一次只读访问去放宽它们的可见性不值得,所以这是第三份。
     /// 三处必须一致;真要收拢,该收进 Core 的一个 public 常量里,那是另一件事。
-    private static let enrichCacheURL = FileManager.default.homeDirectoryForCurrentUser
-        .appendingPathComponent(".config/lyrimuse/lyrimuse-enrich-cache.json")
+    private static let enrichCacheURL = LyrimusePaths.configFile("lyrimuse-enrich-cache.json")
 
     /// 恢复时把 `meta` 落成这份**待采纳**文件,由 collector 在启动路径里合并进缓存
     /// (`lyrimuse-collector/enrichrestore.go` 的 `adoptEnrichRestore`,采纳成功后自己删掉)。
@@ -26,8 +25,7 @@ enum LyricsBackupStore {
     /// 有七处会整份写回磁盘,盖了大概率被它盖回去(2026-08-14「清空了又回来」)。交给
     /// collector 自己在启动时合并,跟 `lyrics/` 文件族被 `importLyricsFromFiles` 采纳
     /// 是同一个时机、同一把 `enrichMu` 锁,天然没有竞态。
-    private static let enrichRestoreURL = FileManager.default.homeDirectoryForCurrentUser
-        .appendingPathComponent(".config/lyrimuse/lyrimuse-enrich-restore.json")
+    private static let enrichRestoreURL = LyrimusePaths.configFile("lyrimuse-enrich-restore.json")
 
     /// 当前这台机器上歌词库的规模,给设置页那句"约 N MB"用。**不读文件内容**(只 stat),
     /// 所以进设置页调它是廉价的。
@@ -199,8 +197,7 @@ enum LyricsBackupStore {
     /// 每次清空都往用户的云盘里塞几 MB。`uninstall.sh --purge` 删整个 CONFIG_DIR,顺带
     /// 把它收走,不用另外维护一条清理路径。
     static var autoSnapshotDir: URL {
-        FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent(".config/lyrimuse/lyrics-backups")
+        LyrimusePaths.configFile("lyrics-backups")
     }
 
     /// 只保留最近这么多份。歌词库实测 14.5 MB → 压缩后 6.1 MB,三份约 18 MB —— 够覆盖

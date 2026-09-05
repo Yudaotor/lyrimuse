@@ -30,14 +30,23 @@ public enum ProcessRunner {
     ///
     /// 返回 nil 只代表"进程根本没起来"(可执行文件不存在/没有执行权限),跟"跑了但失败"
     /// 是两回事,后者由 Result.status 表达。
+    ///
+    /// - Parameter environment: 传 nil = 继承本进程环境(osascript / media-control 这类
+    ///   不认配置目录的命令用这个)。**spawn collector 的一次性子命令必须显式传
+    ///   `LyrimusePaths.collectorProcessEnvironment()`** —— 不传的话子命令会按自己的默认
+    ///   规则找配置目录,Dev 变体下就跟 App 不是同一份数据(2026-09-06 真实 bug:待补提交
+    ///   清单的删除按钮点了没反应,见 ScrobbleBackfillService.runDelete)。
     public static func run(
         _ executable: String,
         _ arguments: [String],
-        timeout: TimeInterval
+        timeout: TimeInterval,
+        environment: [String: String]? = nil
     ) -> Result? {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: executable)
         process.arguments = arguments
+        // 只在显式给了才设:一旦设了 environment,子进程就**只有**你给的这些,不再继承。
+        if let environment { process.environment = environment }
         let outPipe = Pipe()
         process.standardOutput = outPipe
         process.standardError = FileHandle.nullDevice

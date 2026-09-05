@@ -119,12 +119,13 @@ public final class ConfigStore: ObservableObject {
     @Published public var feishuSignSecret = ""
 
     @Published public private(set) var lastError: String?
+    /// 同 FeatureSettingsStore.pendingUntilServiceEnabled:落盘成功、因后台服务被主动停用而没重启(2026-09-05)。
+    @Published public private(set) var pendingUntilServiceEnabled = false
     /// 启动时 config.json 判定为**损坏**(文件在、但读不懂)的原因;nil = 正常或文件不存在。非 nil 期间
     /// `persistFile()` 一律拒绝,设置窗口顶部的 `ConfigFileDamageBanner` 据此显示告示与出口。
     @Published public private(set) var loadFailure: String?
 
-    static let fileURL = FileManager.default.homeDirectoryForCurrentUser
-        .appendingPathComponent(".config/lyrimuse/config.json")
+    static let fileURL = LyrimusePaths.configFile("config.json")
 
     /// 磁盘上那份对象的内存镜像 + 三态(见 Core `JSONConfigDocument`)。JSON → 字段的映射在 load,
     /// 字段 → JSON 在 persistFile,这里只管字节与字典。
@@ -355,6 +356,12 @@ public final class ConfigStore: ObservableObject {
         savedSnapshot = currentSnapshot
     }
 
+    /// 设置窗口底部状态条的「关闭」:清掉上一次保存的失败原因 / 「服务已停用」提示。不改任何数据。
+    public func clearApplyStatus() {
+        lastError = nil
+        pendingUntilServiceEnabled = false
+    }
+
     // 保存入口:持久化 + 重启 collector + 提交快照,一步到位。
     //
     // ⚠️ 原注释说这是"给不经过底部保存栏的场景用"、"目前只有连接 Last.fm 会调用" ——
@@ -381,12 +388,20 @@ public final class ConfigStore: ObservableObject {
         // CollectorRestartCoordinator 的头注释)。
         if await CollectorRestartCoordinator.shared.requestRestart() {
             lastError = nil
+            pendingUntilServiceEnabled = false
             commitSnapshot()
             return true
-        } else {
-            lastError = L10n.t("后台采集服务重启失败")
-            return false
         }
+        if !AppSettings.shared.collectorServiceEnabled {
+            // 同 FeatureSettingsStore.save():先试重启、失败了再看标志,服务被主动停用不算失败。
+            logger.notice("collector restart skipped: service disabled by the user; change applies on next start")
+            lastError = nil
+            pendingUntilServiceEnabled = true
+            commitSnapshot()
+            return true
+        }
+        lastError = L10n.t("已保存，但后台采集服务重启失败，改动要等下次重启才生效")
+        return false
     }
 }
 

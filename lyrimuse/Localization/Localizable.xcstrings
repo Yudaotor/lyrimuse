@@ -1,6 +1,517 @@
 {
   "sourceLanguage" : "zh-Hans",
   "strings" : {
+    "已保存，但后台采集服务重启失败，改动要等下次重启才生效" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Saved, but the background service could not be restarted. The change takes effect the next time it restarts."
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已儲存，但背景擷取服務重新啟動失敗，變更要等下次重新啟動才會生效"
+          }
+        }
+      }
+    },
+    "正在应用到后台服务…" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Applying to the background service…"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在套用到背景服務…"
+          }
+        }
+      }
+    },
+    "后台采集服务已停用，改动会在下次启用时生效" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The background service is turned off. The change takes effect when it is turned on again."
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "背景擷取服務已停用，變更會在下次啟用時生效"
+          }
+        }
+      }
+    },
+    "重新扫描无歌词条目（%@ 首）" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rescan Entries Without Lyrics (%@)"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重新扫描无歌词条目（%@ 首）"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重新掃描無歌詞項目（%@ 首）"
+          }
+        }
+      }
+    },
+    "源里有歌、无词" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Indexed, No Lyrics"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "源里有歌、无词"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "來源有歌、無詞"
+          }
+        }
+      }
+    },
+    "源里有歌、无词 %@ 首" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ indexed, no lyrics"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "源里有歌、无词 %@ 首"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "來源有歌、無詞 %@ 首"
+          }
+        }
+      }
+    },
+    "重试选中的无歌词 %@ 条" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Retry Lyrics for %@ Songs"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重试选中的无歌词 %@ 条"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重試選取的 %@ 筆無歌詞"
+          }
+        }
+      }
+    },
+    "停止重试" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stop Retrying"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "停止重试"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "停止重試"
+          }
+        }
+      }
+    },
+    "正在搜：%@" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Searching: %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在搜：%@"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在搜尋：%@"
+          }
+        }
+      }
+    },
+    "正在重试无歌词条目…" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Retrying entries without lyrics…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在重试无歌词条目…"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在重試無歌詞項目…"
+          }
+        }
+      }
+    },
+    "重试全部无歌词条目（%@ 首）" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Retry All Without Lyrics (%@)"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重试全部无歌词条目（%@ 首）"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重試全部無歌詞項目（%@ 首）"
+          }
+        }
+      }
+    },
+    "重试当前筛选出的无歌词条目（%@ 首）" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Retry Filtered Without Lyrics (%@)"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重试当前筛选出的无歌词条目（%@ 首）"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重試目前篩選出的無歌詞項目（%@ 首）"
+          }
+        }
+      }
+    },
+    "逐首联网重搜，每首间隔 15 秒；纯音乐与人工修正过的不碰" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Re-searches online one track at a time, 15 s apart; skips instrumentals and manual edits"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "逐首联网重搜，每首间隔 15 秒；纯音乐与人工修正过的不碰"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "逐首連線重新搜尋，每首間隔 15 秒；純音樂與人工修正過的不動"
+          }
+        }
+      }
+    },
+    "上次：搜了 %1$@ 首，补出 %2$@ 首" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Last run: searched %1$@, filled %2$@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "上次：搜了 %1$@ 首，补出 %2$@ 首"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "上次：搜尋了 %1$@ 首，補上 %2$@ 首"
+          }
+        }
+      }
+    },
+    "上次被手动停止" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Last run was stopped manually"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "上次被手动停止"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "上次已手動停止"
+          }
+        }
+      }
+    },
+    "上一轮" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Last Run"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "上一轮"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "上一輪"
+          }
+        }
+      }
+    },
+    "重试中 %1$@/%2$@" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Retrying %1$@/%2$@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重试中 %1$@/%2$@"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重試中 %1$@/%2$@"
+          }
+        }
+      }
+    },
+    "重试无歌词" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Retry Missing Lyrics"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重试无歌词"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重試無歌詞"
+          }
+        }
+      }
+    },
+    "让采集服务现在就把没有歌词的条目重新搜一遍，不用等每首歌再次播放" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Have the collector re-search every entry without lyrics now, instead of waiting for each track to be played again"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "让采集服务现在就把没有歌词的条目重新搜一遍，不用等每首歌再次播放"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "讓擷取服務現在就把沒有歌詞的項目重新搜尋一遍，不必等每首歌再次播放"
+          }
+        }
+      }
+    },
+    "取消纯音乐标记" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unmark Instrumental"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "取消纯音乐标记"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "取消純音樂標記"
+          }
+        }
+      }
+    },
+    "撤回「纯音乐」结论，这首歌重新回到自动补搜歌词的队列" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Withdraw the instrumental verdict; this track goes back into the automatic lyric-retry queue"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "撤回「纯音乐」结论，这首歌重新回到自动补搜歌词的队列"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "撤回「純音樂」結論，這首歌重新回到自動補搜歌詞的佇列"
+          }
+        }
+      }
+    },
+    "标为纯音乐" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mark as Instrumental"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "标为纯音乐"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "標為純音樂"
+          }
+        }
+      }
+    },
+    "这首本来就没有歌词（口白、过场、纯乐器）：标上之后不再显示为「无歌词」，采集服务也不再反复重搜" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This track has no lyrics by nature (spoken word, interlude, instrumental): once marked it no longer shows as “No Lyrics” and the collector stops re-searching it"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这首本来就没有歌词（口白、过场、纯乐器）：标上之后不再显示为「无歌词」，采集服务也不再反复重搜"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "這首本來就沒有歌詞（口白、過場、純樂器）：標上之後不再顯示為「無歌詞」，擷取服務也不再反覆重新搜尋"
+          }
+        }
+      }
+    },
     "至少 %@ 次" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -2106,29 +2617,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "iCloud 備份"
-          }
-        }
-      }
-    },
-    "~/.config/lyrimuse，纯文本可直接编辑；外观与快捷键不在里面（它们在 UserDefaults）" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "~/.config/lyrimuse — plain text, editable directly. Appearance and shortcuts are NOT in here (they live in UserDefaults)."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "~/.config/lyrimuse，纯文本可直接编辑；外观与快捷键不在里面（它们在 UserDefaults）"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "~/.config/lyrimuse，純文字可直接編輯；外觀與快速鍵不在裡面（它們在 UserDefaults）"
           }
         }
       }
@@ -28461,6 +28949,23 @@
         }
       }
     },
+    "%@，纯文本可直接编辑；外观与快捷键不在里面（它们在 UserDefaults）" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ — plain text, editable directly. Appearance and shortcuts are NOT in here (they live in UserDefaults)."
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@，純文字可直接編輯；外觀與快速鍵不在裡面（它們在 UserDefaults）"
+          }
+        }
+      }
+    },
     "上移" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -28495,6 +29000,23 @@
         }
       }
     },
+    "带 beta 后缀的预发布版本也会出现在更新提示里，可能不稳定" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pre-release builds (tags with a beta suffix) also show up in update prompts and may be unstable"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "帶 beta 後綴的預先發佈版本也會出現在更新提示中，可能不穩定"
+          }
+        }
+      }
+    },
     "拖动调整顺序" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -28508,6 +29030,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "拖移調整順序"
+          }
+        }
+      }
+    },
+    "接收测试版更新" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Receive beta updates"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "接收測試版更新"
           }
         }
       }

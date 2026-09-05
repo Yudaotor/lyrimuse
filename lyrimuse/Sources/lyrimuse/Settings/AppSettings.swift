@@ -295,6 +295,8 @@ final class AppSettings: ObservableObject {
         static let manualBrowserFamiliesJSON = "np:manualBrowserFamiliesJSON"
         // bundle id → 最近一次「检测是否已生效」通过的时刻。
         static let browserJSVerifiedAtJSON = "np:browserJSVerifiedAtJSON"
+        /// 「接收测试版更新」。这台机器的偏好,不随配置搬家(见 ConfigPortability.machineLocalDefaultsKeys)。
+        static let receiveBetaUpdates = "np:receiveBetaUpdates"
     }
 
     // 字体/字号的默认值,跟配色四项(见下方 init())一样单独给一个有名字的默认值:
@@ -409,6 +411,18 @@ final class AppSettings: ObservableObject {
     /// macOS 没有 API 能保证图标位置,唯一真正可靠的办法是引导用户自己拖拽。
     @Published var hasShownMenuBarPositionHint: Bool {
         didSet { defaults.set(hasShownMenuBarPositionHint, forKey: Keys.hasShownMenuBarPositionHint) }
+    }
+
+    /// 「接收测试版更新」(2026-09-05,用户拍板)。开了之后 Sparkle 改读版本最高的那个 Release(含预发布)自己 tag
+    /// 目录下的 appcast,并放行 beta channel;关着只读 Info.plist 那个 latest 地址(GitHub 的 latest 不含预发布)。
+    /// 这是**这台机器**的偏好、不随配置搬家(ConfigPortability.machineLocalDefaultsKeys):测试版本来就是「只给自己
+    /// 另一台机器试」,搬到新机器上默认收测试版正好把这道闸绕开。didSet 通知 SparkleUpdaterManager 立刻重算 feed
+    /// 并在后台查一次,让开关有即时反馈,不用等下一次周期检查。机制与取舍见 Core UpdateChannel 头注、15 章决策 11。
+    @Published var receiveBetaUpdates: Bool {
+        didSet {
+            defaults.set(receiveBetaUpdates, forKey: Keys.receiveBetaUpdates)
+            SparkleUpdaterManager.shared.betaChannelPreferenceChanged(enabled: receiveBetaUpdates)
+        }
     }
 
     /// 这台机器的用户读不读中文 —— 用系统的**首选语言列表**判,不是只看 App 界面语言:
@@ -1146,6 +1160,7 @@ final class AppSettings: ObservableObject {
         // "开关显示开着、系统里其实没注册"的假象。补的那一步在
         // AppDelegate.applicationDidFinishLaunching 里,两处必须一起看。
         launchAtLoginEnabled = (defaults.object(forKey: Keys.launchAtLoginEnabled) as? Bool) ?? true
+        receiveBetaUpdates = (defaults.object(forKey: Keys.receiveBetaUpdates) as? Bool) ?? false
         if let raw = defaults.array(forKey: Keys.launchPlayersOnLyrimuseOpen) as? [String] {
             launchPlayersOnLyrimuseOpen = Set(raw.compactMap(PlaybackPlayer.init(rawValue:)))
         } else {

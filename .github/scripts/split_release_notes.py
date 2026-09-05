@@ -22,8 +22,9 @@ markdown——直接塞 <pre> 会得到"句子中间断行 + 裸 **粗体** [链
 
 用法：split_release_notes.py NOTES.md OUT_DIR
 产出：OUT_DIR/notes.{en,zh-Hans}.html（自包含页面：内嵌 CDATA 或挂资产均可用）。
-出错宁可整体失败也不出半截文件（CI 里失败就退回内嵌单份 description 的老路，
-所以这里的非零退出码是安全阀，不是事故）。
+出错宁可整体失败也不出半截文件。2026-09-05 起 .github/scripts/check_release_tag.sh
+在 CI 构建前先跑一遍本脚本，非零退出＝拒发这个 tag；appcast 那步的单份 description
+兜底只剩安全阀。
 """
 import html
 import pathlib
@@ -57,6 +58,12 @@ def split_header(line: str):
 
 EN_MARKER = "<!-- lang:en -->"
 ZH_MARKER = "<!-- lang:zh-Hans -->"
+
+# 哨兵阈值（拆出来的纯文本字符数）。分语言：v1.1.0–v1.5.0 五份正文拆出来中英字数比稳定在 0.38，
+# 中文侧也卡 200 等于要求英文 ≥520，一份四条 bullet 的标记式日志（英 416 / 中 175）会被误拒。
+# 一两行的 hotfix 日志（v1.0.0 那种 39 字节）仍过不了，这是有意的——发版日志本来就要求手写双语改动清单。
+MIN_EN_CHARS = 200
+MIN_ZH_CHARS = 80
 
 
 def split_notes_by_marker(text: str):
@@ -272,9 +279,10 @@ def main() -> int:
     en_plain = "\n".join(en_lines)
     zh_plain = "\n".join(zh_lines)
     # 哨兵：两边都必须有实质内容——一边太短就说明输入不是双语对照格式（或者拆分
-    # 逻辑坏了），此时拒绝输出让 CI 退回单份 description，比发出去半截强。
-    if len(en_plain) < 200 or len(zh_plain) < 200:
-        print(f"!! 拆分结果太短 en={len(en_plain)} zh={len(zh_plain)}，拒绝输出", file=sys.stderr)
+    # 逻辑坏了），此时拒绝输出。构建前的 check_release_tag.sh 据此拒发；appcast 那步据此退回单份。
+    if len(en_plain) < MIN_EN_CHARS or len(zh_plain) < MIN_ZH_CHARS:
+        print(f"!! 拆分结果太短 en={len(en_plain)} zh={len(zh_plain)}（要求 en≥{MIN_EN_CHARS}、zh≥{MIN_ZH_CHARS}），拒绝输出",
+              file=sys.stderr)
         return 1
     (out_dir / "notes.en.html").write_text(render_html(en_lines, "en"), encoding="utf-8")
     (out_dir / "notes.zh-Hans.html").write_text(render_html(zh_lines, "zh-Hans"), encoding="utf-8")

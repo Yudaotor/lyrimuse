@@ -1089,7 +1089,9 @@ func (p *poller) bridge(now time.Time) {
 	}
 	localPlaying := p.cur.Playing && p.isTracked()
 	due := now.Sub(p.lastfmCheckedAt) >= lastfmFeedInterval(localPlaying, p.feedActivityAt, now)
-	if !due && !lastfmFeedNudgeDue(now) {
+	// 三个触发源任一成立就拉:到周期、进程内提前拉(镜像 scrobble 刚成功)、跨进程信号文件
+	// (回填子命令刚补进一批,见 lastfmFeedNudgePath)。
+	if !due && !lastfmFeedNudgeDue(now) && !lastfmFeedNudgeFileDue() {
 		return
 	}
 	p.lastfmCheckedAt = now
@@ -1356,6 +1358,7 @@ func run(ctx context.Context, cfg *config, lb *lbClient) error {
 	p.poll()                              // render immediately, don't wait a full interval on startup
 	go startCompanionLaunchWatcher(ctx)   // 独立节奏,见 companionlaunch.go 顶部注释
 	go startEnrichCancelWatcher(ctx)      // 独立节奏,见 enrichcancel.go 顶部注释
+	go startLyricsFillSweeper(ctx)        // 存量空歌词的定时/手动补空扫描,见 lyricsfillsweep.go 顶部注释
 
 	ticker := time.NewTicker(pollInterval)
 	defer ticker.Stop()

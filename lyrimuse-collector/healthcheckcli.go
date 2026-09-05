@@ -15,7 +15,7 @@ import (
 // `collector healthcheck`:一次性子命令,回答"歌词为什么不出来"。
 //
 // 排查这件事以前只有两条路:翻 ~/Library/Logs/lyrimuse.log,或者猜。而链路上能坏的地方
-// 分散在好几层——配置解析、功能开关、缓存文件、歌词导出目录的写权限、五个歌词源各自的
+// 分散在好几层——配置解析、功能开关、缓存文件、歌词导出目录的写权限、各歌词源各自的
 // 可达性、网络本身。这个子命令把它们一次性问一遍。
 //
 // 网络这部分故意**不**去逐个 ping 各家的域名,而是拿真实的搜索路径跑两首探测曲,看哪些源
@@ -56,12 +56,11 @@ func runHealthcheckCLI(args []string) {
 		os.Exit(2)
 	}
 
-	home, err := os.UserHomeDir()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "healthcheck: 拿不到家目录: %v\n", err)
+	if configDir() == "" {
+		fmt.Fprintf(os.Stderr, "healthcheck: 拿不到家目录(LYRIMUSE_CONFIG_DIR 也没设)\n")
 		os.Exit(1)
 	}
-	configDir := filepath.Join(home, ".config", clientName)
+	configDir := configDir()
 	cfgPath := filepath.Join(configDir, "config.json")
 
 	var report healthReport

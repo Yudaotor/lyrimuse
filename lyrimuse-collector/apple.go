@@ -30,7 +30,7 @@ var (
 type appleMusicMatch struct {
 	url, cover string
 	// title/album:iTunes 曲库里实际匹配到的歌名/专辑名。2026-08-12 起透传——它是不与
-	// 五个歌词源共享曲库和搜歪模式的**第六方**元数据,给下一轮"独立专辑互证"维度评测
+	// 各歌词源共享曲库和搜歪模式之外的**独立**元数据,给下一轮"独立专辑互证"维度评测
 	// 攒数据(search-lyrics CLI 的输出会带上),不参与本文件内的任何挑选逻辑。
 	title, album string
 	// durationSecs:2026-08-30 加,给 searchcli.go 的"本地没有可信时长时,问 Apple 目录

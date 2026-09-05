@@ -15,7 +15,7 @@ import (
 
 // ---- 歌词源级熔断 / 退避 ----
 //
-// 2026-09-02 加。八个歌词源并发、20 秒总截止(lyricSearchDeadline),
+// 2026-09-02 加。全部歌词源并发、20 秒总截止(lyricSearchDeadline),
 // 某个源整个哑掉(DNS 污染、TLS 挂死、5xx)时,之前每首歌都要把它等到自己的超时——AGENTS.md
 // 里 2026-08-15 Musixmatch DNS 事故的原话就是「每首歌都要把 DNS/TLS 超时白等一遍」。已有的
 // 退避都是点状的(网易云端点桶 30s 拒绝冷却、lb.go 的 429 阶梯、Musixmatch 自己换 token),
@@ -112,6 +112,8 @@ func lyricSourceForHost(host string) string {
 		return "lyricfind"
 	case h == "kuwo.cn" || strings.HasSuffix(h, ".kuwo.cn"):
 		return "kuwo"
+	case h == "migu.cn" || strings.HasSuffix(h, ".migu.cn"):
+		return "migu" // 搜索 pd.musicapp.migu.cn、歌词文件 d.musicapp.migu.cn 都归这一源
 	}
 	return ""
 }
@@ -175,7 +177,7 @@ func (b *lyricSourceBreaker) observe(host string, err error, status int, retryAf
 }
 
 // parseLyricSourceRetryAfter 只认「秒数」写法;HTTP-date 写法(RFC 7231 允许)用默认值——
-// 八个源里没见过谁发日期形态的 Retry-After,不值得为它引入日期解析。
+// 各源里没见过谁发日期形态的 Retry-After,不值得为它引入日期解析。
 func parseLyricSourceRetryAfter(v string) time.Duration {
 	secs, err := strconv.Atoi(strings.TrimSpace(v))
 	if err != nil || secs <= 0 {
@@ -191,7 +193,7 @@ func parseLyricSourceRetryAfter(v string) time.Duration {
 // lyricSourceRoundPlan:这一轮该跳过的源 → 剩余冷却时长。
 type lyricSourceRoundPlan map[string]time.Duration
 
-// planRound 在一轮八源搜索起跑前算一次"谁在冷却中"。启用的源全部都在冷却时返回 nil
+// planRound 在一轮全源搜索起跑前算一次"谁在冷却中"。启用的源全部都在冷却时返回 nil
 // (谁也不跳过,见文件头第二条护栏);未启用的源在不在名单里无所谓——它们的结果本来就会被
 // filterEnabledLyricSources 过滤掉,跳过只是少发几个白费的请求。
 func (b *lyricSourceBreaker) planRound(sources []string, enabled func(string) bool) lyricSourceRoundPlan {

@@ -101,7 +101,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func handleGetURLEvent(_ event: NSAppleEventDescriptor, withReplyEvent replyEvent: NSAppleEventDescriptor) {
         guard let urlString = event.paramDescriptor(forKeyword: AEKeyword(keyDirectObject))?.stringValue,
-              let url = URL(string: urlString), url.scheme == "lyrimuse" else {
+              let url = URL(string: urlString), url.scheme == LyrimuseIdentity.urlScheme else {
             return
         }
         // 目前只有这一种回调用途,不需要按 host/path 再分流;后续如果这个 scheme 挂了
@@ -153,7 +153,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // 假设这个目录已经存在，但谁都不会在写之前 createDirectory——这里无条件、幂等
         // 地建一次，不依赖引导流程是否跑完，第一次启动就先把这个目录建好。
         try? FileManager.default.createDirectory(
-            at: FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".config/lyrimuse"),
+            at: LyrimusePaths.configDir,
             withIntermediateDirectories: true)
 
         // collector 的 launchd job 对账。必须在启动路径上跑,这是 Sparkle 自动更新 /

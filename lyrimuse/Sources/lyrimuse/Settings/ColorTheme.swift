@@ -1,3 +1,5 @@
+import AppKit
+import AppKit
 import Foundation
 
 // 经典悬浮窗"配色主题"——内置预设一键套用 + 自定义主题另存复用,对标 PlayStatus/
@@ -212,5 +214,15 @@ extension ColorTheme {
         settings.backgroundColorHex = backgroundColorHex
         settings.textStrokeEnabled = textStrokeEnabled
         settings.textStrokeColorHex = textStrokeColorHex
+    }
+}
+
+extension ColorTheme {
+    /// 下拉项 / 「我的配色主题」子行里的三段色条(文字 / 背景 / 描边),画法只有 ThemeSwatch 一份。
+    func swatchImage() -> NSImage {
+        ThemeSwatch.image(
+            foregroundHex: foregroundColorHex, backgroundHex: backgroundColorHex,
+            strokeEnabled: textStrokeEnabled, strokeHex: textStrokeColorHex
+        )
     }
 }

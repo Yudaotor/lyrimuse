@@ -184,7 +184,7 @@ func lastLRCTimestampSecs(lrc string) (float64, bool) {
 
 // lyricCandidate 是某个歌词源解析出的一份候选结果,连同来源标记。
 type lyricCandidate struct {
-	source        string // "netease" | "qq" | "kugou" | "musixmatch" | "lrclib" | "amll" | "lyricfind"
+	source        string // "netease" | "qq" | "kugou" | "musixmatch" | "lrclib" | "amll" | "lyricfind" | "kuwo" | "migu"
 	lyrics        string
 	wordTimingYRC string // 该候选归一化成 YRCParser 语法后的逐字数据,没有则空串(netease/qq/kugou 都可能有,lrclib 恒无)
 	hasWordTiming bool   // = wordTimingYRC != "",构造候选时直接算好,见 enrich.go
@@ -714,7 +714,7 @@ func playerNativeLyricSource(player string) string {
 	case playerNetease:
 		return "netease"
 	case playerKugou:
-		// 酷狗**本来就是**这个项目的五个歌词源之一(kugou.go),所以接入播放器顺带把同源
+		// 酷狗**本来就是**这个项目的歌词源之一(kugou.go),所以接入播放器顺带把同源
 		// 加权也接上了:用酷狗听歌时优先选酷狗自己的歌词,时间轴跟它的音频母版对得上。
 		return "kugou"
 	default:
@@ -2392,7 +2392,7 @@ func liveAlbumIdentityConflict(localArtist, localAlbum, candTitle, candAlbum str
 	return true
 }
 
-// lyricTitleAccepted 是**七个源共用**的唯一一条「这条候选的曲名算不算这首歌」判定。
+// lyricTitleAccepted 是**全部源共用**的唯一一条「这条候选的曲名算不算这首歌」判定。
 // 只认三种:
 //
 //	① 归一化后完全相等;

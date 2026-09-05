@@ -34,7 +34,7 @@ func TestKugouPlayerWiring(t *testing.T) {
 		t.Errorf("mediaPlayerLabel(自动识别分支) = %q", got)
 	}
 
-	// 白捡的一项:酷狗本来就是五个歌词源之一,接入播放器顺带把同源加权也接上。
+	// 白捡的一项:酷狗本来就是歌词源之一,接入播放器顺带把同源加权也接上。
 	if got := playerNativeLyricSource(playerKugou); got != "kugou" {
 		t.Errorf("playerNativeLyricSource(酷狗) = %q，期望 kugou", got)
 	}

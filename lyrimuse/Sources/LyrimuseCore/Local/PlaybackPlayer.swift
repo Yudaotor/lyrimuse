@@ -85,8 +85,7 @@ public enum PlaybackPlayerPreference {
         let players: [String]?
     }
 
-    private static let featuresURL = FileManager.default.homeDirectoryForCurrentUser
-        .appendingPathComponent(".config/lyrimuse/lyrimuse-features.json")
+    private static let featuresURL = LyrimusePaths.configFile("lyrimuse-features.json")
 
     /// 当前选中的播放器集合(2026-09-01 起可多选,取代原来单值的 `current`)。文件不
     /// 存在/解析失败/两个字段都缺失或认不出,一律兜底**{自动识别}**——理由跟改动前

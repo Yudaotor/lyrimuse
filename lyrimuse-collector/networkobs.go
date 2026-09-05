@@ -3,15 +3,18 @@
 package main
 
 import (
-	"log"
+	"log/slog"
 	"net/http"
 	"net/url"
+	"sort"
+	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 )
 
 // networkAttemptCount/networkFailureCount 给"联网搜索候选歌词"(searchcli.go)判断
-// "七个源都没找到候选"到底是这首歌真的没有网络歌词,还是网络整体不通导致请求全部
+// "所有源都没找到候选"到底是这首歌真的没有网络歌词,还是网络整体不通导致请求全部
 // 发不出去用——2026-08-02 补上(当时还只有五个源,netease/qq/kugou/lrclib/musixmatch,
 // amll/ytmusic 后来才接入,一并算进这个统计),之前每个源各自内部把 http 请求失败和
 // "服务器正常响应、只是没查到"统统当空结果处理,两种情况在 UI 上完全分不清。
@@ -35,7 +38,7 @@ var (
 //     (2026-08-02 起,原来只覆盖七个歌词源)。
 //  2. 2026-08-26 新加:**这是整个采集器所有对外请求的统一审计日志出口**——用户
 //     明确要求"所有软件发出的对外请求全部都给我记录下日志"。采集器里几乎所有发
-//     真实网络请求的地方(Last.fm/ListenBrainz/歌词七源/推送/状态中继/翻译/取色/
+//     真实网络请求的地方(Last.fm/ListenBrainz/歌词各源/推送/状态中继/翻译/取色/
 //     MusicBrainz/iTunes)都已经改成调这个函数,不再各自直接 cli.Do(req)。
 //
 // 日志行故意**不带 query string**——Last.fm/ListenBrainz 这类接口的凭据就是拼在
@@ -53,6 +56,15 @@ func doHTTPTracked(cli *http.Client, req *http.Request) (*http.Response, error) 
 	resp, err := cli.Do(req)
 	elapsed := time.Since(start)
 	atomic.AddInt32(&networkAttemptCount, 1)
+	// 审计里标识"打的是哪个接口":HTTP 方法 + host + path(+ Last.fm 的 method 参数)。
+	// 同时是汇总的分组键。
+	target := req.Method + " " + req.URL.Host + req.URL.Path
+	// 汇总的分组键把路径里的资源 ID 抹掉(见 normalizeAuditPath),逐条行仍写真实路径。
+	summaryKey := req.Method + " " + req.URL.Host + normalizeAuditPath(req.URL.Path)
+	if m := req.URL.Query().Get("method"); m != "" {
+		target += " method=" + m
+		summaryKey += " method=" + m
+	}
 	if err != nil {
 		atomic.AddInt32(&networkFailureCount, 1)
 		// Go 的 http.Client.Do 失败时返回的是 *url.Error,它的 Error() 会把**完整
@@ -64,22 +76,154 @@ func doHTTPTracked(cli *http.Client, req *http.Request) (*http.Response, error) 
 		if ue, ok := err.(*url.Error); ok {
 			safeErr = ue.Err
 		}
-		log.Printf("api call: %s %s%s FAILED after %dms: %v",
-			req.Method, req.URL.Host, req.URL.Path, elapsed.Milliseconds(), safeErr)
+		// 失败逐条记、Warn 级:这是要看的信号,不进汇总里被平均掉(汇总仍计一次 failed)。
+		slog.Warn("api call: "+target+" FAILED", "elapsed_ms", elapsed.Milliseconds(), "err", safeErr)
+		recordAPICall(summaryKey, elapsed, true, time.Now())
 		// 歌词源级熔断的失败观察(见 sourcebreaker.go):只有歌词源的主机会被记,别的请求
 		// 在 lyricSourceForHost 那里直接归零。
 		lyricSourceBreakerShared.observe(req.URL.Host, err, 0, "")
 		return resp, err
 	}
 	lyricSourceBreakerShared.observe(req.URL.Host, nil, resp.StatusCode, resp.Header.Get("Retry-After"))
-	if m := req.URL.Query().Get("method"); m != "" {
-		log.Printf("api call: %s %s%s method=%s -> %d (%dms)",
-			req.Method, req.URL.Host, req.URL.Path, m, resp.StatusCode, elapsed.Milliseconds())
+	failed := resp.StatusCode >= 400
+	if failed {
+		slog.Warn("api call: "+target, "status", resp.StatusCode, "elapsed_ms", elapsed.Milliseconds())
 	} else {
-		log.Printf("api call: %s %s%s -> %d (%dms)",
-			req.Method, req.URL.Host, req.URL.Path, resp.StatusCode, elapsed.Milliseconds())
+		// 成功的逐次记录在 Debug(默认不落盘,log_level=debug 时可见);落盘的是下面按分钟
+		// 的汇总 —— 2026-08-26"所有对外请求全部记录"这条要求由汇总里的 count 兑现,不再
+		// 一行一次(Last.fm 每 5 秒一次轮询,两天日志里这一项就 4219 行)。
+		slog.Debug("api call: "+target, "status", resp.StatusCode, "elapsed_ms", elapsed.Milliseconds())
 	}
+	recordAPICall(summaryKey, elapsed, failed, time.Now())
 	return resp, err
+}
+
+// ---- 审计汇总(2026-09-05)----
+//
+// 同一 target 在一分钟窗口内的调用合成一行 Info:
+//
+//	api call summary target="GET ws.audioscrobbler.com/2.0/ method=user.getrecenttracks" count=12 failed=0 p50_ms=350 max_ms=800 span_s=55
+//
+// 窗口从这个 target 第一次被记开始算,满一分钟后由维护循环(logsink.go,每 30 秒)或退出前
+// (flushLogSink)结算。failed 同时计传输失败和 HTTP 4xx/5xx —— 这两种在逐条 Warn 里都能
+// 看到细节,汇总只回答"这一分钟里失败了几次"。
+
+const apiCallSummaryWindow = time.Minute
+
+// normalizeAuditPath:把路径里像资源标识符的段抹成占位,让汇总按"接口"而不是按"某一个资源"
+// 分组。2026-09-05 首次装机实测不抹的话:启动期给几十张封面各发一次 HEAD
+// (np.yudaotor.me/artwork/<hash>.jpg)、每个艺人查一次 MusicBrainz(/ws/2/artist/<uuid>),
+// 一个资源一行汇总,比逐次记还长。四类占位:<uuid> / <hex>(≥8 位十六进制)/ <n>(≥3 位纯数字)/
+// <id>(≥24 字符且含数字的长 token);扩展名保留(能看出是 .jpg 还是 .ttml)。版本段(v8、2.0、1)
+// 太短不会被碰。只动汇总的分组键,逐条的 Debug / Warn 行仍写真实路径 —— 排查时要知道是哪一个。
+func normalizeAuditPath(p string) string {
+	segs := strings.Split(p, "/")
+	for i, seg := range segs {
+		base, ext := seg, ""
+		if dot := strings.LastIndexByte(seg, '.'); dot > 0 && len(seg)-dot <= 5 {
+			base, ext = seg[:dot], seg[dot:]
+		}
+		switch {
+		case base == "":
+		case isUUIDToken(base):
+			segs[i] = "<uuid>" + ext
+		case len(base) >= 8 && allInSet(base, "0123456789abcdefABCDEF"):
+			segs[i] = "<hex>" + ext
+		case len(base) >= 3 && allInSet(base, "0123456789"):
+			segs[i] = "<n>" + ext
+		case len(base) >= 24 && strings.ContainsAny(base, "0123456789"):
+			segs[i] = "<id>" + ext
+		}
+	}
+	return strings.Join(segs, "/")
+}
+
+func allInSet(s, set string) bool {
+	for _, r := range s {
+		if !strings.ContainsRune(set, r) {
+			return false
+		}
+	}
+	return true
+}
+
+func isUUIDToken(s string) bool {
+	if len(s) != 36 {
+		return false
+	}
+	for i, r := range s {
+		switch i {
+		case 8, 13, 18, 23:
+			if r != '-' {
+				return false
+			}
+		default:
+			if !strings.ContainsRune("0123456789abcdefABCDEF", r) {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+type apiCallWindow struct {
+	first, last time.Time
+	count       int
+	failed      int
+	durations   []time.Duration
+}
+
+var apiCallAgg = struct {
+	mu      sync.Mutex
+	windows map[string]*apiCallWindow
+}{windows: map[string]*apiCallWindow{}}
+
+func recordAPICall(target string, elapsed time.Duration, failed bool, now time.Time) {
+	apiCallAgg.mu.Lock()
+	defer apiCallAgg.mu.Unlock()
+	w := apiCallAgg.windows[target]
+	if w == nil {
+		w = &apiCallWindow{first: now}
+		apiCallAgg.windows[target] = w
+	}
+	w.last = now
+	w.count++
+	if failed {
+		w.failed++
+	}
+	w.durations = append(w.durations, elapsed)
+}
+
+// flushAPICallSummaries:把开窗满一分钟的 target 各写一行汇总;force = 不管满没满全部结算
+// (退出前)。输出按 target 排序,同一秒结算的几行顺序稳定,便于对照。
+func flushAPICallSummaries(now time.Time, force bool) {
+	apiCallAgg.mu.Lock()
+	type done struct {
+		target string
+		w      *apiCallWindow
+	}
+	var ready []done
+	for target, w := range apiCallAgg.windows {
+		if !force && now.Sub(w.first) < apiCallSummaryWindow {
+			continue
+		}
+		ready = append(ready, done{target, w})
+		delete(apiCallAgg.windows, target)
+	}
+	apiCallAgg.mu.Unlock()
+	sort.Slice(ready, func(i, j int) bool { return ready[i].target < ready[j].target })
+	for _, d := range ready {
+		sort.Slice(d.w.durations, func(i, j int) bool { return d.w.durations[i] < d.w.durations[j] })
+		p50 := d.w.durations[len(d.w.durations)/2]
+		max := d.w.durations[len(d.w.durations)-1]
+		slog.Info("api call summary",
+			"target", d.target,
+			"count", d.w.count,
+			"failed", d.w.failed,
+			"p50_ms", p50.Milliseconds(),
+			"max_ms", max.Milliseconds(),
+			"span_s", int(d.w.last.Sub(d.w.first).Round(time.Second).Seconds()))
+	}
 }
 
 // networkLooksDown 判断"这一轮联网搜索期间,是不是网络本身就不通"。至少尝试过 3 次

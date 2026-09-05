@@ -196,3 +196,34 @@ func TestLastfmFeedNudge(t *testing.T) {
 		t.Fatal("到期一次就该被消费掉")
 	}
 }
+
+// 跨进程信号文件(2026-09-03):回填子命令 touch、常驻进程消费。钉三件事:没文件不触发;
+// touch 之后恰好触发一次并把文件删掉;路径为空(单测/未配置)整个通道关闭、touch 也不写。
+func TestLastfmFeedNudgeFile(t *testing.T) {
+	saved := lastfmFeedNudgePath
+	defer func() { lastfmFeedNudgePath = saved }()
+
+	lastfmFeedNudgePath = ""
+	touchLastfmFeedNudgeFile()
+	if lastfmFeedNudgeFileDue() {
+		t.Fatal("路径为空时通道应关闭")
+	}
+
+	lastfmFeedNudgePath = filepath.Join(t.TempDir(), "feed-nudge")
+	if lastfmFeedNudgeFileDue() {
+		t.Fatal("没有信号文件不该触发")
+	}
+	touchLastfmFeedNudgeFile()
+	if _, err := os.Stat(lastfmFeedNudgePath); err != nil {
+		t.Fatalf("touch 后文件应存在: %v", err)
+	}
+	if !lastfmFeedNudgeFileDue() {
+		t.Fatal("touch 后应触发一次")
+	}
+	if _, err := os.Stat(lastfmFeedNudgePath); !os.IsNotExist(err) {
+		t.Fatalf("触发后信号文件应被消费(删除),stat err=%v", err)
+	}
+	if lastfmFeedNudgeFileDue() {
+		t.Fatal("消费过一次之后不该再触发")
+	}
+}

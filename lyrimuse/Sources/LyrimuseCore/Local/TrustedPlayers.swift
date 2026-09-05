@@ -26,8 +26,7 @@ public enum TrustedPlayers {
         let trusted_players: [String: String]?
     }
 
-    private static let featuresURL = FileManager.default.homeDirectoryForCurrentUser
-        .appendingPathComponent(".config/lyrimuse/lyrimuse-features.json")
+    private static let featuresURL = LyrimusePaths.configFile("lyrimuse-features.json")
 
     /// bundle id → 显示名(可能是空串:反查不到 App 名时)。文件不存在/解析失败一律空表。
     public static var current: [String: String] {

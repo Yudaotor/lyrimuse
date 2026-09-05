@@ -42,9 +42,11 @@
 | Job | 管理者 | 策略 |
 |---|---|---|
 | `me.yudaotor.lyrimuse`（App） | LoginItemManager（第 14 章） | RunAtLoad、**无** KeepAlive（用户会 Cmd-Q，不该复活） |
-| `com.lyrimuse.collector` | CollectorServiceManager | **KeepAlive=true**（无人值守，崩了自动拉起；没有它所有歌词展示面都空） |
+| `com.lyrimuse.collector` | CollectorServiceManager | **KeepAlive=true**（无人值守，崩了自动拉起；没有它所有歌词展示面都空）；plist 带 `EnvironmentVariables`（`LYRIMUSE_CONFIG_DIR` / `LYRIMUSE_LOG_FILE` / `LYRIMUSE_APP_BUNDLE_ID`，2026-09-05 起，见决策 12） |
 
-collector 二进制打包在 `.app/Contents/Resources/` 内，由 `Bundle.main` 精确定位，无需用户拼路径。`CollectorControl.restartAndWaitAsync`（launchctl kickstart -k + 真实退出码检查）被歌词管理和 features 保存共用。
+2026-09-05 曾加过并排安装的开发构建「Lyrimuse Dev」（label 加 `.dev`、独立配置目录 / 日志 / bundle id），2026-09-06 用户拍板整体回退，见决策 12。名字与路径仍由 Core `LyrimuseIdentity` / `LyrimusePaths` 一处派生，collector 经环境变量拿到同一套值（正式版传的就是默认值）。
+
+collector 二进制打包在 `.app/Contents/Resources/` 内，由 `Bundle.main` 精确定位，无需用户拼路径。`CollectorControl.restartAndWaitAsync`（launchctl kickstart -k + 真实退出码检查）被歌词管理和 features 保存共用；设置侧两个 Store 经 `CollectorRestartCoordinator`（去抖，`isRestarting` 可观察）发起，结果回到设置窗口底部状态条（14 章决策 21）。
 
 **启动时对账（`CollectorServiceManager.reconcileAfterLaunch`，2026-08-22 加）**——这是 Sparkle 自动更新 / Homebrew cask upgrade / 手动拖 .app 覆盖这三条路唯一的兜底，它们都不经过 build.sh：
 
@@ -134,7 +136,7 @@ CoreAudio 属性监听（不拦音量键不轮询 osascript），系统输出音
 
 | 主题 | 位置 |
 |---|---|
-| 构建部署 | lyrimuse/build.sh；打包 lyrimuse/package.sh；发布 .github/workflows/release.yml |
+| 构建部署 | lyrimuse/build.sh；打包 lyrimuse/package.sh；发布 .github/workflows/release.yml（tag 构建前硬校验 .github/scripts/check_release_tag.sh、双语拆分 split_release_notes.py、appcast 自检 check_appcast.py） |
 | 卸载 | lyrimuse/scripts/uninstall.sh（`has_defaults` / purge 段）、lyrimuse/scripts/uninstall_test.sh |
 | 服务管理 | Settings/CollectorServiceManager.swift（`install` / `reconcileAfterLaunch` / `recordInstalledFingerprint` / `currentBinaryFingerprint`）、LyricsManager/CollectorControl.swift、LyrimuseCore/Local/LaunchdJobState.swift、CollectorStatus.swift |
 | 单实例 | lyrimuse-collector/singleinstance.go |
@@ -176,3 +178,89 @@ CoreAudio 属性监听（不拦音量键不轮询 osascript），系统输出音
     `showUpdaterError` 给出完整 NSError 链（`NSURLErrorDomain -1004` → 127.0.0.1:8791）。**修法**：`defaults delete me.yudaotor.lyrimuse SUFeedURL`，
     删后同一诊断程序立刻 `didFindValidUpdate 1.4.0`。**规则**：以后任何走 `defaults write SUFeedURL` 的本地验证，收尾必须成对 `defaults delete`，
     并把「`defaults read me.yudaotor.lyrimuse SUFeedURL` 应报不存在」写进验证清单；「导出诊断信息」的 `Auto-update checks` 行也应带上实际生效的 feed 地址（待做）。
+
+11. **含 `-` 的 tag 标 prerelease、构建号与展示版本分家、App 内「接收测试版更新」开关（2026-09-05，用户拍板，借鉴清单 #32）**：
+    起因：`release.yml` 对任何 `v*` tag 都发成正式 Release，而 `SUFeedURL` 指 `releases/latest/download/appcast.xml`，于是「发一个只给
+    自己另一台机器试的版本」没有安全路径——带后缀的 tag 会成为 latest、把全体用户推到测试版且退不回来。**三层改法**：
+    ① CI：版本步用 `lyrimuse/scripts/build-version.sh` 校验 tag 形态（`vX.Y.Z` / `vX.Y.Z-(alpha|beta|rc).N`，其它构建前拒），含 `-`
+    即 `prerelease: true`（GitHub 的 latest 不含 prerelease，正式用户读的 appcast 不变）；enclosure 从 `releases/latest/download/<zip>`
+    改成 `releases/download/<tag>/<zip>`（预发布不是 latest，旧写法在它的 appcast 里会 404；正式版两种写法指同一文件，顺带消掉
+    「刚拿到 appcast 就撞上下一版发布」那个小竞态）；预发布 item 带 `<sparkle:channel>beta</sparkle:channel>`；`check_appcast.py`
+    新增 tag / 展示版本 / 构建号 / 预发布四项断言；发布后新增一步对三个下载地址 `curl -I` 探活。
+    ② 构建号：**Sparkle 的 `SUStandardVersionComparator` 实测把 `-` 之后全部忽略**（`1.6.0-beta.1 == 1.6.0`、`beta.2 == beta.1`，
+    拿 Sparkle.framework 编了个小程序量出来的），预发布若拿 tag 当 `sparkle:version`，beta 用户永远收不到 beta.2、也收不到同号正式版。
+    所以 CFBundleShortVersionString 保留 tag 原文给人看，CFBundleVersion / `sparkle:version` 另算四段纯数字：正式 `X.Y.Z.1000`、alpha `N`、
+    beta `100+N`、rc `500+N`；映射只在 `build-version.sh` 一份（build.sh 写 plist，release.yml 从 zip 里的 plist 回读并与版本步交叉核对），
+    Core `ReleaseVersion` 是运行时镜像，selftest update-channel 组拿一张表跑 shell 与 Swift 逐个比。老用户机上的三段 `1.5.0` 跟四段新号
+    比到第二段就分出大小，不受影响；本机装机核过 Info.plist 是 `1.5.0.1000` / `1.5.0`。
+    ③ App：`AppSettings.receiveBetaUpdates`（机器专属键，不随配置搬家——测试版本来就是给「自己另一台机器」的）。开着时
+    `SparkleUpdaterManager` 每小时最多查一次 GitHub Release 列表（`api.github.com`，匿名，审计日志 `operation=releases`，限流退避照
+    star 数那套），挑非 draft、tag 能解析、版本最高的那个 Release（**可能是正式版**——同号正式版出来后 beta 用户也被带回正式频道），
+    把它 tag 目录下的 appcast 经 `SPUUpdaterDelegate.feedURLString(for:)` 交给 Sparkle，并经 `allowedChannels(for:)` 放行 `beta`；关着
+    两者都不做，Sparkle 回到 Info.plist 的 latest。地址缓存在 UserDefaults，委托闭包直接读它（不捕获 self，Sparkle 起 updater 前就能答）。
+    开关切换立刻刷新并 `checkForUpdatesInBackground` 给即时反馈；关掉不会把已装测试版退回，等下一个版本号更高的正式版。
+    **为什么不能只靠 channel**：appcast 每个 Release 自带一份、只列自己，预发布的那份没有稳定地址，正式用户读的 latest 永远不含它——
+    channel 只能做第二道保险（防手动 `defaults write` 指错 feed）。**验证**：selftest 19 组 3062 条 ALL PASS（新组 update-channel 86 条
+    + `LYRIMUSE_LIVE_GITHUB=1` 真网核对 2 条，挑出 v1.5.0）；`check_appcast.py` 正反样本各跑过；release.yml 过 YAML 解析；装机无崩溃。
+    **CI 链路只能靠真实 tag 验**，第一个 `-beta.1` tag 推上去时按 docs/releasing.md「六」逐条对。
+
+12. **开发构建隔离成独立 identifier 的「Lyrimuse Dev」，身份与路径全部收口到一处（2026-09-05，用户拍板，借鉴清单 #33）**：
+    起因：这个仓库最贵的两次数据事故（缓存 204 条被磨到 10 条、GUI 自动化清空 852 条歌词）都发生在「开发验证直接打在生产数据上」
+    的形态里——build.sh 每次都覆盖 /Applications 里正在用的 App，两者共用同一份 UserDefaults 与 `~/.config/lyrimuse`；同事会话跑
+    build.sh 还会把用户手头的 App 重启关窗（第 14 章决策 18 记过）。**分两步做**。
+    第一步纯重构（正式版行为一个字节不变，装机核过）：Core 新增 `LyrimuseIdentity`（Info.plist `LyrimuseVariant` → 两套名字：
+    displayName / bundleIdentifier / configDirName / collectorLaunchdLabel / 两个日志名 / 默认安装位置 / urlScheme，纯函数
+    `resolve(variant:home:)`）、`LyrimusePaths`（`configDir` / `configFile` / `launchAgentPlist` / `collectorEnvironment`）、`LogFiles`
+    挪进来；Swift 侧 25 处 `homeDirectoryForCurrentUser.appendingPathComponent(".config/lyrimuse/…")` 字面量、两个 label、日志路径
+    全部改走它们；Go 侧新增 `paths.go`（`configDir()` 读 `LYRIMUSE_CONFIG_DIR`，`logFilePath()` 读 `LYRIMUSE_LOG_FILE`，`appBundleID()`
+    读 `LYRIMUSE_APP_BUNDLE_ID`），20 处 `filepath.Join(home, ".config", clientName)` 与 15 处随之无用的 `os.UserHomeDir()` 块改掉；
+    collector 的 launchd plist 带 `EnvironmentVariables`，App spawn 的六处一次性子命令（search-lyrics / test-lyric-sources / healthcheck /
+    backfill / top-artists / artist-avatars）都传同一套环境——**正式版传的就是默认值，永远只有一条代码路径**。selftest 新组 identity
+    46 条 + contracts「身份与路径收口」：Swift 除 LyrimuseIdentity.swift 外、Go 除 paths.go 外不许再出现这些字面量，spawn 处数与
+    environment 处数必须相等。
+    第二步 `build.sh --dev`：全部分叉集中在开头「变体身份」一段（APP_NAME / LABEL / COLLECTOR_LABEL / CONFIG_DIR_NAME / URL_SCHEME /
+    DEFAULT_INSTALL_DIR / 两段 plist 片段），后面不再有第二个 `if DEV`；Info.plist 写 `LyrimuseVariant=dev`、CFBundleDisplayName「Lyrimuse Dev」、
+    scheme `lyrimuse-dev`、**不写 Sparkle 键**；图标由 `scripts/badge-app-icon.swift` 从 AppIcon.icns 现画一个橙色 DEV 角标（十档 iconset →
+    iconutil）；装到 `~/Applications`；首次装机 rsync 快照 `~/.config/lyrimuse` → `-dev`（**排除 config.json**——账号凭据，带过去两个
+    collector 会各自 scrobble；也排除 collector.lock），并把正式版 UserDefaults 复制进 Dev 域（去掉 `KeyboardShortcuts_*`——两个 App 抢同一
+    组合会静默失败、`np:collectorInstalledFingerprint`——Dev 要自己装 .dev 的 job、`SU*`——Sparkle 状态；`np:launchAtLoginEnabled` 置关）。
+    App 侧按 `LyrimuseIdentity.isDev` 门控：Sparkle updater 不启动、更新卡只留一句「开发构建不检查更新」、关于页名字与配置文件夹副标题
+    按变体、开机启动默认关；companion launch 的 collector 改 `open -b appBundleID()`（Dev 的 collector 若拿写死的正式 id，播放器一起来
+    就把正式版拉起来）。uninstall.sh 加 `--dev`（同一套名字，正式版一个字节不碰）。
+    **验证**：selftest 20 组 3134 条 ALL PASS（identity 46 + contracts 「身份收口」「Dev 构建对齐」）；`go test` 过；正式版装机后
+    `launchctl print` 的 plist 带三项环境变量、进程环境同；`./build.sh --dev` 真装：两个 App、两个 collector 并存，各自
+    `LYRIMUSE_CONFIG_DIR` / `LYRIMUSE_APP_BUNDLE_ID` 正确，Dev 配置目录无 config.json、Dev collector 日志「no listenbrainz_token …
+    running locally only」，正式版进程 pid 与 config.json mtime 全程不变，无崩溃。⚠️ 第一次 `--dev` 时脚本在 `sleep 2` 后没等到进程就
+    判「没起来」退出（首次 `open` 新 bundle 要先注册 LaunchServices），改成最多等 10 秒的轮询。**已知取舍**：① Dev 首次要重新授权
+    Music 自动化 / 各浏览器 / 通知（TCC 按 bundle id）；② companion launch 按可执行名 `lyrimuse` 查"在不在跑"分不出两个变体，Dev 的
+    collector 在正式版已跑时会跳过拉起 Dev——宁可少拉一次，不能拉错；③ 两套菜单栏项与悬浮窗并存，靠 DEV 角标与关于页名字区分，菜单栏
+    本身没有角标；④ Logger subsystem 两个变体相同，`log show` 要按 `processImagePath` 区分。**协作口径同日改**：AI 会话真机验证一律
+    `./build.sh --dev`，正式版只在用户要求「装到正式版」时才 `./build.sh`（AGENTS.md「构建与验证」、CLAUDE.md 第 3 条、verify-ui skill）。
+    **2026-09-06 整体回退（用户拍板）**：Dev 模式装上不到一天就撞了三件事——① 用户在 Dev 的设置页恢复了一份配置备份，账号凭据随归档进了
+    `~/.config/lyrimuse-dev`，两个 collector 对同一首歌各 scrobble 一次（Last.fm 上「Tick, Tick, Bang」「I Am You」各两条）；② 同事会话照旧跑
+    不带 `--dev` 的 `build.sh`，把还没真机验过的改动装进了正式版，隔离形同虚设；③ 用户分不清手里的正式版是哪个二进制、什么时候会被拉起
+    （正式 collector 的 companion launch 按可执行名判「在不在跑」，两个变体同名）。用户结论：「做这个 dev 版本出来没有任何收益，反而会导致
+    一些问题」，回到「改完直接 `./build.sh` 装正式版」的老模式。**回退范围**：卸掉本机 `Lyrimuse Dev.app`、`com.lyrimuse.collector.dev` job、
+    Dev 偏好域与日志（`~/.config/lyrimuse-dev` 留给用户自己决定，里面有一份带凭据的 `config.json.disabled-*`）；删 `build.sh --dev` /
+    `uninstall.sh --dev` / `scripts/badge-app-icon.swift` / Info.plist 的 `LyrimuseVariant`；`LyrimuseIdentity` 收成一套固定名字（`Resolved`
+    保留给 selftest 整体断言）、去掉 `isDev` 与所有按它的门控（Sparkle 照常启动、更新卡恢复、开机启动默认开）；contracts「Dev 构建对齐」块
+    删除，identity 组只剩正式版断言；AGENTS.md / CLAUDE.md / verify-ui 与 triage skill 改回。**保留**第一步的路径收口：`LyrimusePaths` /
+    `LogFiles` / Go `paths.go` 的环境变量下发（正式版传的就是默认值），它消掉了 45 处字面量、有守卫钉着，与变体无关。教训：隔离方案要在
+    「谁来装、装哪个」的协作口径真的换过去之后才有效，一半人还在按老习惯装正式版时，多一个变体只是多一个出事的地方。
+13. **tag 构建前硬校验：annotated / 正文非空 / 能拆成中英两份，判据一份、本地与 CI 同跑（2026-09-05，用户拍板，借鉴清单 #45）**：
+    起因：`release.yml` 原来只在构建完之后读 tag 正文，且三种坏形态全部静默降级——轻量 tag 的 `%(contents)` 是 commit message，
+    照发；正文为空被 appcast 那步兜底成一句「See the GitHub release page」；拆不出双语退回单份 `<description>`——都要等十几分钟构建
+    跑完、Release 发出去了才在页面上看见（v1.0.0/v1.0.1 因浅克隆把 tag 剥成 commit，正文就这样静默丢过一次）。**做法**：Checkout 之后、
+    Set up Go 之前新增「Validate release tag」步，调 `.github/scripts/check_release_tag.sh`：形态委托 `build-version.sh`、
+    `git cat-file -t` 必须是 `tag`、正文非空、`split_release_notes.py` 拆得开（标记式与交错式都认，判据是两边都有实质内容）；
+    原「Extract tag changelog」步并入，正文只读一次，appcast 与 Create Release 引用同一个输出；appcast 的单份兜底分支保留作安全阀但
+    实际走不到。脚本本地可跑（docs/releasing.md「四」要求 push 前先过），「CI 链路只能靠真实 tag 验」的缺口至少堵住了脚本这一半。
+    **两个实测坑**：① bash 3.2 的 `${BODY//[[:space:]]/}` 对 18KB 含中文的 v1.5.0 正文要跑 **98 秒**（模式替换按多字节字符逐个扫，
+    二次方级），改 `tr -d '[:space:]'` 后 0.1 秒——release.yml 里 `escape_cdata` 至今仍用同一写法处理整段正文，同样体量下同样慢，
+    这次不碰 appcast 生成逻辑所以没顺手改；② 拆分脚本的哨兵原来两边各 ≥200 字符，量了 v1.1.0–v1.5.0 五份正文，中英字数比稳定在 0.38，
+    中文侧按 200 卡等于要求英文 ≥520，一份四条 bullet 的标记式日志（英 416 / 中 175）会被拒，所以中文阈值改 80、英文不动；
+    一两行的 hotfix 日志（v1.0.0 那种 39 字节）仍会被拒，这是有意的——发版日志本来就要求手写双语改动清单。
+    **验证**：临时仓库九种样本（形态错 ×2、轻量 ×2、空正文、纯英文、交错式、标记式、beta 标记式）判定全部符合预期，`--body-out`
+    写出的正文与 `%(contents)` 一致；真实 7 个 tag 里 v1.1.0 起全过、v1.0.0/v1.0.1 按预期被拒；release.yml 过 YAML 解析、步骤顺序
+    Checkout → Validate → Set up Go；contracts 组「tag 校验」钉住脚本判据、步骤顺序、正文单次读取与两处文档。**yaml 那一步本身只能等
+    下一个真实 tag 验**。

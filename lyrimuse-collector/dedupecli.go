@@ -285,11 +285,10 @@ func runDedupeEntriesCLI(args []string) {
 		log.Fatalf("dedupe-entries: %v", err)
 	}
 
-	home, err := os.UserHomeDir()
-	if err != nil {
-		log.Fatalf("dedupe-entries: resolve home dir: %v", err)
+	if configDir() == "" {
+		log.Fatalf("dedupe-entries: cannot resolve home directory (and LYRIMUSE_CONFIG_DIR is unset)")
 	}
-	cfgDir := filepath.Join(home, ".config", clientName)
+	cfgDir := configDir()
 	features = loadFeatureFlags(filepath.Join(cfgDir, clientName+"-features.json"))
 	lyricsDir = features.LyricsDir
 	if lyricsDir == "" {

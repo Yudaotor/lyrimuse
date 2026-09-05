@@ -389,12 +389,12 @@ struct OverlayThemeSettingsRows: View {
             SettingsRow(icon: "swatchpalette", title: L10n.t("配色主题")) {
                 Menu(Self.currentThemeLabel) {
                     ForEach(ColorTheme.builtInPresets) { theme in
-                        Button(theme.name) { theme.apply(to: settings) }
+                        themeItem(theme)
                     }
                     if !settings.customColorThemes.isEmpty {
                         Divider()
                         ForEach(settings.customColorThemes) { theme in
-                            Button(theme.name) { theme.apply(to: settings) }
+                            themeItem(theme)
                         }
                     }
                 }
@@ -403,6 +403,48 @@ struct OverlayThemeSettingsRows: View {
             CardDivider()
             OverlayCustomThemeRows()
         }
+    }
+
+    /// 下拉里的一项。**只有名字,没有色条也没有勾**。
+    ///
+    /// ⚠️ **别再往这个 `Menu` 的条目里塞 `Toggle` 或 `Image`**(2026-09-06 实测回归,用户报
+    /// 「点开是一片空白」)。当天为了给下拉项加三段色条 + 原生勾(借鉴清单 #55),这里一度写成
+    ///
+    /// ```swift
+    /// Toggle(isOn: Binding(get: …, set: …)) {
+    ///     Label { Text(theme.name) } icon: { Image(nsImage: theme.swatchImage()) }
+    /// }
+    /// ```
+    ///
+    /// 结果是菜单面板照常弹出、尺寸也对,**里面一个条目都画不出来 —— 连主题名都没有**(不是只丢了
+    /// 图标)。也就是说失败发生在"条目"这一层,不是"图标"这一层,加再多兜底图也救不回来。
+    ///
+    /// 为什么不继续试哪一样能用:① 这个仓库里**每一个正常工作的 SwiftUI `Menu` 都是 `Button(标题)`**
+    /// (`NotchEditorStage` / `MenuBarEditorStage` / `SettingsView` 的浏览器与备份菜单、`LyricsManagerView`
+    /// 的缓存菜单),`Toggle` 条目和 `Image(nsImage:)` 图标在本仓**一个先例都没有**;② 它没法离屏验证 ——
+    /// SwiftUI 的 `Menu` 在 `NSHostingView` 的视图树里**根本不产生 `NSPopUpButton`**(实测只有
+    /// `KeyViewProxy` / `_FocusRingView` 两层壳),NSMenu 是**打开那一刻**才建的,摸不到 `menu.items`,
+    /// 只能靠真人点开看。在一个"改错了用户就看到空白菜单"的位置上,不值得拿没有先例的写法去赌。
+    ///
+    /// 真要在下拉里显示色条 + 勾,走 AppKit:`OverlayQuickSettingsMenu.colorThemeMenu` 已经证明
+    /// `NSMenu` + `NSMenuItem.image` + `.state` 这条路在本仓是通的,把这一格换成包一层
+    /// `NSViewRepresentable` 的 `NSPopUpButton` 即可 —— 那条路的条目内容能离屏 dump 出来核对。
+    ///
+    /// 色条本身(`ThemeSwatch` / `ColorTheme.swatchImage()`)**保留**:它在「我的配色主题」那些
+    /// **子行**里是普通 SwiftUI 视图、渲染正常,不受这条限制影响。
+    private func themeItem(_ theme: ColorTheme) -> some View {
+        Button(theme.name) { theme.apply(to: settings) }
+    }
+
+    /// 当前四个配色字段打包成一个匿名主题,给 hasSameColors 当比较对象(下拉的勾与 currentThemeLabel 共用)。
+    static func currentColors(_ settings: AppSettings) -> ColorTheme {
+        ColorTheme(
+            name: "",
+            foregroundColorHex: settings.foregroundColorHex,
+            backgroundColorHex: settings.backgroundColorHex,
+            textStrokeEnabled: settings.textStrokeEnabled,
+            textStrokeColorHex: settings.textStrokeColorHex
+        )
     }
 
     /// 占位符:跟随封面开着时"当前主题"这个概念不成立,用它顶上。
@@ -430,13 +472,7 @@ struct OverlayThemeSettingsRows: View {
     static var currentThemeLabel: String {
         let settings = AppSettings.shared
         guard !settings.followsCoverArt else { return noThemeInEffectPlaceholder }
-        let current = ColorTheme(
-            name: "",
-            foregroundColorHex: settings.foregroundColorHex,
-            backgroundColorHex: settings.backgroundColorHex,
-            textStrokeEnabled: settings.textStrokeEnabled,
-            textStrokeColorHex: settings.textStrokeColorHex
-        )
+        let current = currentColors(settings)
         let all = ColorTheme.builtInPresets + settings.customColorThemes
         return all.first { $0.hasSameColors(as: current) }?.name ?? L10n.t("自定义")
     }
@@ -571,6 +607,9 @@ struct OverlayCustomThemeRows: View {
                 } else {
                     SettingsSubRow(title: theme.name) {
                         HStack(spacing: 10) {
+                            // 自定义主题只有名字可认,色条是唯一的视觉线索(2026-09-06,借鉴清单 #55)。放在「套用」
+                            // 左边而不是行首:SettingsSubRow 刻意不占图标列(见它的注释)。
+                            Image(nsImage: theme.swatchImage())
                             Button(L10n.t("套用")) { theme.apply(to: settings) }
                             Button {
                                 isNaming = false

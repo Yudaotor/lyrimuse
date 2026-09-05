@@ -34,6 +34,8 @@ func TestLyricSourceForHost(t *testing.T) {
 		"raw.githubusercontent.com":     "amll",
 		"music.youtube.com":             "lyricfind",
 		"search.kuwo.cn":                "kuwo",
+		"pd.musicapp.migu.cn":           "migu",
+		"d.musicapp.migu.cn":            "migu",
 		"ws.audioscrobbler.com":         "",
 		"api.listenbrainz.org":          "",
 		"musicbrainz.org":               "",
@@ -157,7 +159,7 @@ func TestLyricSourceBreakerPlanRoundNeverSkipsAllEnabled(t *testing.T) {
 	allOn := func(string) bool { return true }
 	plan := b.planRound(lyricSourceNames, allOn)
 	if len(plan) != 2 || plan["netease"] == 0 || plan["qq"] == 0 {
-		t.Fatalf("八源全开时应只跳过冷却中的两个,实际 %v", plan)
+		t.Fatalf("全源全开时应只跳过冷却中的两个,实际 %v", plan)
 	}
 	if _, ok := plan["kugou"]; ok {
 		t.Fatal("没冷却的源不该在跳过名单里")

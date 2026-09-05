@@ -7,6 +7,9 @@
 依据——改之前读了，能省掉重新踩一遍的时间；改完在同一次改动里更新对应章，这是仓库约定。
 （这条单独写在这里，是因为 AGENTS.md 提到功能文档已经是最后一节了，只读前半截会完全错过它。）
 
+操作型流程按场景触发的项目级 skill 在 `.claude/skills/`：真机验证 `lyrimuse-verify-ui`、歌词排查 `lyrimuse-lyrics-triage`、
+发版 `/lyrimuse-release`（只能显式触发）。它们只写步骤，理由都回链 AGENTS.md 与 docs。
+
 下面五条是最容易在"没读文档"的情况下踩到的，单独提出来：
 
 1. **Go 命令一律带 `GOTOOLCHAIN=go1.24.4`**。默认的 go 1.21 编出来的二进制在这台机器上
@@ -16,7 +19,8 @@
    `swift lyrimuse/scripts/check-windows.swift` 和 `screencapture -l <窗口ID>`。
    这个项目为此毁过一次用户数据、误截过一次用户的聊天窗口。
 
-3. **`swift build` 通过不等于装好了。** 真机验证前必须 `cd lyrimuse && ./build.sh`。
+3. **`swift build` 通过不等于装好了。** 真机验证前必须 `cd lyrimuse && ./build.sh`（它会重启用户正在用的 App，
+   跑之前先确认没有别的会话在构建）。
 
 4. **所有改动直接做在 `dev` 分支上。** 不要新建 feature 分支，也不要为一次改动开
    `worktree-*` 分支——直接在 `dev` 上改、在 `dev` 上提交。（这个仓库只有作者一个人在

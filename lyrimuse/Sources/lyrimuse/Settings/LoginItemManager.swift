@@ -13,7 +13,9 @@ import Foundation
 final class LoginItemManager {
     static let shared = LoginItemManager()
 
-    private let label = "me.yudaotor.lyrimuse"
+    /// = CFBundleIdentifier(按变体派生,唯一口径在 Core LyrimuseIdentity);Dev 构建是 me.yudaotor.lyrimuse.dev,
+    /// 跟正式版的 LaunchAgent 互不覆盖。
+    private let label = LyrimuseIdentity.appLaunchdLabel
     // LaunchAgent 应该始终指向 build.sh 真正安装的位置(跟 collector 的 bin/collector
     // 同一个约定),不是当前运行进程的路径——开发时用 swift run/直接跑 .build/debug 的
     // 那次,进程路径是临时调试目录,不该拿来当"以后开机启动"的目标。优先信任当前正在
@@ -25,11 +27,10 @@ final class LoginItemManager {
         if let running = Bundle.main.executablePath, running.hasSuffix("/Contents/MacOS/lyrimuse") {
             return running
         }
-        return URL(fileURLWithPath: "/Applications/Lyrimuse.app/Contents/MacOS/lyrimuse").path
+        return LyrimusePaths.defaultAppBundleURL.appendingPathComponent("Contents/MacOS/lyrimuse").path
     }
     private var plistURL: URL {
-        FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent("Library/LaunchAgents/\(label).plist")
+        LyrimusePaths.launchAgentPlist(label: label)
     }
 
     private init() {}

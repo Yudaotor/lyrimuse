@@ -40,9 +40,8 @@ func runTestLyricSourcesCLI(args []string) {
 	// 之前就 return 了,features 这个包级变量不自己补一遍加载的话是零值(LyricsSources 为
 	// nil map),lyricSourceEnabled 对任何源都会返回 false —— 测试功能会把每一个源都误判成
 	// "没启用",一个都测不了。
-	home, err := os.UserHomeDir()
-	if err == nil {
-		cfgPath := filepath.Join(home, ".config", clientName, "config.json")
+	if configDir() != "" {
+		cfgPath := filepath.Join(configDir(), "config.json")
 		features = loadFeatureFlags(filepath.Join(filepath.Dir(cfgPath), clientName+"-features.json"))
 	}
 

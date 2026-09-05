@@ -5,6 +5,10 @@
 
 这份文件只写**不读到就会做错事**的约束。每一条背后都有一次真实的翻车。
 
+操作型流程（真机验证 / 歌词排查 / 发版）抽成了项目级 skill 放在 `.claude/skills/`（2026-09-05）：那边**只写步骤与判据**，
+理由回链到这里和 `docs/`，不复制正文——改这里的流程性段落时看一眼对应 skill 是否还对得上。发版 skill 设了
+`disable-model-invocation`，只能显式 `/lyrimuse-release` 触发。selftest contracts 组「项目级 skill」守着行数上限与链接有效性。
+
 ---
 
 ## 构建与验证
@@ -14,7 +18,7 @@
 cd lyrimuse && swift build                  # 只编译，不影响已安装的 App
 cd lyrimuse && swift run lyrimuse-selftest  # 全部断言，失败以非零码退出
 cd lyrimuse && swift run lyrimuse-selftest --filter lastfm -q  # 只跑一组（--list 看组名）
-cd lyrimuse && ./build.sh                   # release 构建 + 重打包 + 重签名 + 重启
+cd lyrimuse && ./build.sh                   # release 构建 + 重打包 + 重签名 + 重启(跑之前确认没有别的会话在构建)
 
 # Go（collector）
 cd lyrimuse-collector && GOTOOLCHAIN=go1.24.4 go test ./...
@@ -32,7 +36,12 @@ cd lyrimuse-collector && gofmt -l .
 581 行 shell 的第 123 行注释里，没被读到。
 
 **`swift build` 通过 ≠ 用户桌面上的 App 更新了。** 真机验证前必须跑 `./build.sh`
-（它做 release 构建、重新打包 `.app`、重新签名、通过 launchd 重启）。
+（release 构建、重新打包 `.app`、重新签名、重启 /Applications 里的那份 —— 用户手头正在用的就是它,所以跑之前先
+`pgrep -fl '[b]uild\.sh'` 确认没有别的会话在构建,装完把 pid 报给用户）。2026-09-05 曾试过并排安装的开发构建
+「Lyrimuse Dev」,2026-09-06 用户拍板整体回退(没有收益,反而带来重复 scrobble、分不清手里是哪个二进制这类问题),
+**别再造第二个变体**;整个来回见 15 章决策 12。身份与路径的唯一口径在 Core `LyrimuseIdentity` / `LyrimusePaths`
+(Go 侧 `paths.go`),别在别处写 `.config/lyrimuse`、`com.lyrimuse.collector`、`Library/Logs/lyrimuse` 这些字面量 ——
+selftest contracts 组「身份与路径收口」会红。
 
 **没有 XCTest**（这台机器没有完整 Xcode，`swift test` 报 "no such module"）。Swift 侧的
 测试在 `Sources/lyrimuse-selftest/`，是手写的 `expectEqual` 断言，**按领域拆成十几个
@@ -95,7 +104,7 @@ screencapture -x -o -l <窗口ID> /tmp/shot.png                   # 只截那一
 
 ```sh
 /Applications/Lyrimuse.app/Contents/Resources/collector healthcheck -local-only  # 快，不联网
-/Applications/Lyrimuse.app/Contents/Resources/collector healthcheck              # 含五源探测，约 30s
+/Applications/Lyrimuse.app/Contents/Resources/collector healthcheck              # 含各源探测，约 30s
 ```
 
 **`lyrimuse/scripts/uninstall.sh` 是这个仓库里唯一会删用户数据的脚本，不要随手跑它。**
@@ -162,6 +171,31 @@ screencapture -x -o -l <窗口ID> /tmp/shot.png                   # 只截那一
 「许可与版权说明」那一节的清单和 01 章「许可、版权与对外请求」那张表补上——那一节对用户承诺的是
 「会离开你 Mac 的只有这些」，漏一条就是承诺失实。说明正文只在 README 维护，App 里两处入口都只是链接。
 
+**退出路径必须打 `exiting reason=<code>`**（2026-09-03）：App 侧所有主动 terminate 只准经
+`AppExit.request(_:)`（`applicationShouldTerminate` 兜底记 external_request / sparkle_install，SIGTERM 由
+`AppExit.installSigtermHandler` 接住记 sigterm），日志走 `lifecycle` 分类的 Logger 不走 NSLog（诊断导出
+按 subsystem 查，NSLog 查不到）；collector 常驻路径的退出走 `exitreason.go` 的 `logExit` / `fatalExit`
+（经 log.Printf → logscrub 出口，不要 fmt.Fprintln(os.Stderr)），main.go 里不准再出现裸 `os.Exit` /
+`log.Fatalf`。原因码英文 snake_case，新加一个就写进 15 章 §3 那张表。排「为什么自己退了」grep 这个
+前缀即可。selftest contracts 组「退出原因」守着两侧。
+
+**日志按业界通用范式写**（2026-09-04）：正文一律英文、小写开头、不加句末标点，动态上下文写成 `key=value`，
+错误值放最后（Go `: %v`，Swift 直接插值）。collector 侧出口是标准库 `log/slog`（2026-09-05 起，logsink.go）：既有的
+`log.Printf("<component>: <what happened> key=value: %v")` 经 `slog.SetDefault` 桥接按 Info 级进同一条链、不用改；**新写的日志用
+`slog.Debug/Info/Warn/Error("<component>: <what happened>", "key", value)`**，例行成功放 Debug、要人看的失败放 Warn，等级由
+config.json `log_level`（默认 info）/ 环境变量 `LYRIMUSE_LOG_LEVEL` 控制。每行 `time=<UTC RFC3339 毫秒 Z> level=… msg=… key=value`，
+组件前缀（`netease:` / `proxy:` / `exiting reason=`）仍是 grep 的把手。三条体量纪律（2026-09-05 拿两天 40k 行真实日志数出来的）：
+同一条状态只在**变化时**记，不要每次轮询都打（"reusing existing entry" 曾一首歌打 1158 遍）；高频例行事件（对外请求审计）按分钟
+**聚合**成一行汇总而不是一行一次；连续重复行由出口自动折叠成 `last message repeated N times`（syslog 语义，只折连续的）。凭据由
+`logscrub` 在出口脱敏，不用每处手写；退出路径必须经 `logExit`（它 flush 出口，否则最后一分钟的汇总和折叠计数随进程一起丢）。
+App 与 collector 的 launchd stderr 各自一份文件（`lyrimuse-app.log` / `lyrimuse.log`，路径唯一口径在 Core `LogFiles`），子进程
+（launchctl 等）的输出要显式接管（Pipe 读掉或 nullDevice），不许继承 stderr 漏进日志。
+App / Core 侧只用 `Logger(subsystem: "me.yudaotor.lyrimuse", category: "<module>")`，禁 `NSLog` / 裸 `print`（selftest 与命令行
+小工具除外）——诊断导出按 subsystem 查 OSLogStore，绕开 Logger 的日志进不了导出；插值显式标 privacy，排查必需的标识
+（歌名 / 歌手 / 缓存 key）用 `.public`。**不记**凭据、歌词正文、第三方响应体全文；面向用户的文案走 L10n，不进日志。
+selftest contracts 组「日志规范」扫两侧日志字面量（Go 含 `log.*` 与 `slog.*`）含 CJK、App / Core 里的 `NSLog(` / 裸 `print(`、Logger subsystem 不一致；
+确需例外在那一行行尾写 `// log-style: allow`（行尾注释本身可以是中文，守卫只看字面量）。
+
 **歌词打分**：`match.go` 的分值不是拍脑袋定的，注释里记着消融实验结论（例如"按来源加分
 改变了 69/206 首歌的冠军，其中 0 次变对、6 次变错，去掉后准确率 93%→96%"）。改分值前先读
 那些注释。改了打分逻辑要同步 `lyricsScoringVersion`（`match.go:294`），否则老缓存条目不会
@@ -207,6 +241,10 @@ screencapture -x -o -l <窗口ID> /tmp/shot.png                   # 只截那一
   还平白多出一次合并，而这个仓库本来就只有作者一个人在 `dev` 上推进。需要临时隔离时可以用
   worktree，但收尾必须把改动落回 `dev` 再提交、别把分支留下。`main` 只在发版时推进（默认
   分支仍是 `main`，打 tag 前先把 `dev` 以 fast-forward 合进 `main`）。
+- **tag 形态**（2026-09-05 起）：`vX.Y.Z` 正式版、`vX.Y.Z-(alpha|beta|rc).N` 测试版，其它形态 CI 构建前直接拒。带 `-` 自动标
+  prerelease、不进 `releases/latest`、appcast item 带 beta channel，只有打开「接收测试版更新」的机器会收到。构建号
+  （CFBundleVersion）由 `lyrimuse/scripts/build-version.sh` **唯一**定义（Sparkle 的比较器忽略 `-` 之后的内容，展示版本
+  不能直接当构建号），别在别处再写一份映射；流程见 docs/releasing.md「六、发测试版」，机制见 15 章决策 11。
 - 发 release 时日志要手写改动清单（中英双语），不要只依赖 GitHub 自动生成的 notes。
 - **发版按 [docs/releasing.md](docs/releasing.md) 的 checklist 顺序执行**——从写日志、同步
   README/截图/llms.txt/About，到验证、打 tag、cask 与 Sparkle 实测、issue 收口，每条都带着
@@ -222,10 +260,19 @@ screencapture -x -o -l <窗口ID> /tmp/shot.png                   # 只截那一
   塞 `<pre>` 的观感就是用户在 v1.5.0 升级弹窗里报的那个「句子中间断行 + 裸 markdown」），
   生成 `<description xml:lang="en">` / `xml:lang="zh-Hans">` 两份——Sparkle 的
   `SUAppcast.m`（`bestNodeInNodes:name:`）按系统语言偏好选一份，更新弹窗正文从此跟随系统
-  语言（弹窗外壳本来就是）。**两种格式都拆不动时自动退回单份 `<description>`，不会报错、
-  不会卡发布**——但也就没有语言切换。v1.5.0 的 appcast 是事后手工补的
+  语言（弹窗外壳本来就是）。**两种格式都拆不动的 tag 从 2026-09-05 起在 CI 构建前就被拒**（下一条），
+  不再静默退回单份 `<description>`；appcast 那步的单份兜底分支只剩安全阀作用。v1.5.0 的 appcast 是事后手工补的
   `<sparkle:releaseNotesLink xml:lang>` 资产（同一机制的链接形态），从 v1.5.1 起走上面这条
   自动路径。
+- **tag 构建前硬校验**（2026-09-05 起）：`release.yml` 在 Checkout 之后、装任何工具链之前跑
+  `.github/scripts/check_release_tag.sh`，四条判据任一不满足直接红、零构建成本：① 形态合法（委托 `build-version.sh`）；
+  ② 必须是 annotated tag——轻量 tag 的 `%(contents)` 是 commit message，会被当发布日志发出去，浅克隆把 annotated tag
+  剥成 commit 也落在这条（v1.0.0/v1.0.1 就这样静默丢过正文）；③ 正文去空白非空（`git tag -a -m ''` 是能打出来的）；
+  ④ 正文能被 `split_release_notes.py` 拆成中英两份——上一条的两种写法都认，判据是两边都有实质内容（英文 ≥200 字符、
+  中文 ≥80 字符，按 v1.1.0–v1.5.0 中英字数比 0.38 折算），不是查两行注释在不在；一两行的 hotfix 日志过不了，这是有意的。
+  原来这三种坏形态全部静默降级，要等十几分钟构建完在 Release 页上才看见。**push tag 前在本地跑同一份**
+  （`bash .github/scripts/check_release_tag.sh v<版本>`），判据只有这一份，别在 yaml 里另写；正文也只在那一步读一次，
+  appcast 与 Release 页引用同一个输出。机制与实测坑见 15 章决策 13。
 
 ---
 

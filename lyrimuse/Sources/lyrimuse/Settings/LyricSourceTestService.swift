@@ -1,4 +1,5 @@
 import Foundation
+import LyrimuseCore
 import os
 
 private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "lyrics-source-test")
@@ -89,6 +90,8 @@ final class LyricSourceTestService {
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
             let process = Process()
             process.executableURL = URL(fileURLWithPath: Self.collectorPath)
+            // 子命令必须跟本 App 同一份配置目录 / 日志文件(Dev 构建是另一套),见 LyrimusePaths.collectorEnvironment。
+            process.environment = LyrimusePaths.collectorProcessEnvironment()
             var arguments = ["test-lyric-sources"]
             if let source {
                 arguments.append(contentsOf: ["-source", source.rawValue])

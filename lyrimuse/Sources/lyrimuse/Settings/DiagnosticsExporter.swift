@@ -284,6 +284,17 @@ enum DiagnosticsExporter {
         lines.append(contentsOf: recentAppStderrLines().map { LogRedactor.redactAll($0, secrets: secrets) })
         lines.append("")
 
+        // ---- 最近崩溃报告(2026-09-06,借鉴清单 #31)----
+        //
+        // App 崩了 os.Logger 留不下现场;collector 走 KeepAlive 崩溃循环时 lyrimuse.log 里只见反复 starting;
+        // Intel / Rosetta「打不开」、缺库、Launch Constraint 这类启动期事故日志里一行都没有 —— 而 macOS 早把
+        // .ips 写在 ~/Library/Logs/DiagnosticReports/ 了,缺的只是收进导出。摘要以 termination 为主、帧只在有的
+        // 时候附(本机 7 份真实报告 6 份 DYLD 缺库、1 份签名约束,故障线程一帧都没有);解析在 Core
+        // CrashReportSummary,selftest 钉着三种样本。目录 / 文件读不到只留一行,不让导出失败。同样过脱敏。
+        lines.append("== Recent Crash Reports (~/Library/Logs/DiagnosticReports, last 7 days) ==")
+        lines.append(contentsOf: recentCrashReportLines().map { LogRedactor.redactAll($0, secrets: secrets) })
+        lines.append("")
+
         // ---- collector healthcheck(2026-08-27 加)----
         //
         // collector 早就有一个专门回答"歌词为什么不出来"的一次性子命令(healthcheckcli.go):
@@ -340,6 +351,53 @@ enum DiagnosticsExporter {
             lines.append("\(logEntry.date) [\(logEntry.category)] \(logEntry.composedMessage)")
         }
         return lines.isEmpty ? ["(no entries in the last \(hours)h)"] : lines
+    }
+
+    /// 最近 `days` 天内本 App 家族(App 本体 + 包内 collector)的崩溃报告摘要,每个进程最多 `perProcessLimit` 份
+    /// (2026-09-06,借鉴清单 #31)。文件名前缀粗筛(`<可执行名>-*.ips` / `collector-*.ips`),正文再按 bundle id /
+    /// 包路径确认是本变体的(别的 App 也可能有叫 collector 的进程;Dev 与正式版互不混入)。目录列不出、单个文件
+    /// 读不到或解不开都只留一行,不抛、不让整份导出失败;「没有匹配」也写出来。家目录改写成 ~。
+    private static func recentCrashReportLines(days: Int = 7, perProcessLimit: Int = 3) -> [String] {
+        let fm = FileManager.default
+        let home = fm.homeDirectoryForCurrentUser
+        let dir = home.appendingPathComponent("Library/Logs/DiagnosticReports")
+        func tilde(_ text: String) -> String { text.replacingOccurrences(of: home.path, with: "~") }
+        let names: [String]
+        do {
+            names = try fm.contentsOfDirectory(atPath: dir.path)
+        } catch {
+            return [tilde("(cannot list \(dir.path): \(error.localizedDescription))")]
+        }
+        // 进程名取自运行时,不写死:正式版与 Dev 的可执行文件同名,.ips 文件名前缀就是它。
+        let executable = Bundle.main.executableURL?.lastPathComponent ?? "lyrimuse"
+        let cutoff = Date().addingTimeInterval(-Double(days) * 86_400)
+        var matched: [CrashReportSummary] = []
+        var scanned = 0
+        var problems: [String] = []
+        for name in names where name.hasSuffix(".ips") && (name.hasPrefix("\(executable)-") || name.hasPrefix("collector-")) {
+            let url = dir.appendingPathComponent(name)
+            guard let modified = (try? url.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate,
+                  modified >= cutoff else { continue }
+            scanned += 1
+            guard let data = try? Data(contentsOf: url) else { problems.append("\(name): unreadable"); continue }
+            guard let summary = CrashReportSummary.parse(fileName: name, data: data) else {
+                problems.append("\(name): unparseable"); continue
+            }
+            guard summary.belongsToApp(executableName: executable,
+                                       bundleIdentifier: LyrimuseIdentity.bundleIdentifier,
+                                       appDisplayName: LyrimuseIdentity.displayName) else { continue }
+            matched.append(summary)
+        }
+        var lines: [String] = []
+        if matched.isEmpty {
+            lines.append("(no crash reports for \(LyrimuseIdentity.displayName) / collector in the last \(days) days; \(scanned) candidate file(s) scanned)")
+        } else {
+            let shown = CrashReportSummary.select(matched, perProcessLimit: perProcessLimit)
+            lines.append("\(matched.count) report(s) in the last \(days) days; showing up to \(perProcessLimit) per process (\(shown.count) shown)")
+            for summary in shown { lines.append(contentsOf: summary.renderLines()) }
+        }
+        lines.append(contentsOf: problems.map { "(\($0))" })
+        return lines.map(tilde)
     }
 
     private static func recentAppStderrLines(maxLines: Int = 100) -> [String] {
@@ -455,6 +513,8 @@ enum DiagnosticsExporter {
 
         let process = Process()
         process.executableURL = URL(fileURLWithPath: collectorPath)
+        // 子命令必须跟本 App 同一份配置目录 / 日志文件(Dev 构建是另一套),见 LyrimusePaths.collectorEnvironment。
+        process.environment = LyrimusePaths.collectorProcessEnvironment()
         process.arguments = ["healthcheck"]
         // 分两路管道,不合成一路:healthcheck 报告本身走 fmt.Println(stdout),但它触发的
         // 两首探测曲会经 doHTTPTracked 打一堆 `api call: ...` 审计行到 log.Printf(stderr)。

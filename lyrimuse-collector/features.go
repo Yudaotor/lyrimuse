@@ -23,7 +23,7 @@ import (
 // 开关打开也没用;已经配了凭据的功能,现在才第一次有独立的"关"(尤其是
 // lastfm_bridge/weekly_digest/top_artists_digest 这三个,过去共用同一对
 // lastfm_user/lastfm_api_key 凭据当唯一开关,逻辑上是三个独立能力)。
-// 八个歌词源的 key——跟 enrich.go 里 lyricCandidate.source/scoredLyricCandidateResult.
+// 九个歌词源的 key——跟 enrich.go 里 lyricCandidate.source/scoredLyricCandidateResult.
 // Source 的取值、以及 desktop-lyrics「歌词管理」窗口 LyricsManagerView.swift 的
 // sourceDisplayName 逐字对应,这是整个项目里"歌词源"唯一的一套 id,不是这里新起的。
 const (
@@ -32,7 +32,7 @@ const (
 	lyricSourceKugou      = "kugou"
 	lyricSourceMusixmatch = "musixmatch"
 	lyricSourceLRCLIB     = "lrclib"
-	// amll-ttml-db 社区库(见 amllttml.go)。它跟前五个源的区别是**格式本身**能携带
+	// amll-ttml-db 社区库(见 amllttml.go)。它跟其余源的区别是**格式本身**能携带
 	// 演唱者归属(TTML 的 ttm:agent),命中即拿到真·结构化对唱,不用靠行首前缀的启发式。
 	// 覆盖率有限(实测约 6%),所以是"锦上添花"的一档,不是主力源。
 	lyricSourceAMLL = "amll"
@@ -50,6 +50,10 @@ const (
 	// 自己的重新打分排序,不是简单照搬。只有逐行,没有逐字/译文,覆盖率同 amll/lyricfind
 	// 一档,是"锦上添花"的兜底,不是主力源。
 	lyricSourceKuwo = "kuwo"
+	// 咪咕音乐(2026-09-04 加,见 migu.go 头注)。跟酷我相反,搜索排序基本可信(原版排第一),
+	// 只套身份闸淘汰、不重新打分;逐行 LRC + 外语歌的中文译文,没有逐字。华语曲库覆盖率预期
+	// 不低,但仍先按"锦上添花"档排在默认顺序末尾——三处顺序必须一致(见 lyricsSourceDefaultOrder)。
+	lyricSourceMigu = "migu"
 )
 
 const (
@@ -90,7 +94,7 @@ const (
 // 由用户自己在设置里拖。
 var lyricsSourceDefaultOrder = []string{
 	lyricSourceNetease, lyricSourceQQ, lyricSourceKugou, lyricSourceMusixmatch, lyricSourceLRCLIB,
-	lyricSourceAMLL, lyricSourceLyricFind, lyricSourceKuwo,
+	lyricSourceAMLL, lyricSourceLyricFind, lyricSourceKuwo, lyricSourceMigu,
 }
 
 type featureFlagsFile struct {
@@ -138,7 +142,7 @@ type featureFlagsFile struct {
 	// LyricsSources：启用的歌词源集合(lyricSourceXxx 常量的子集)。nil/缺失 = 全部
 	// 启用,维持这个字段加之前的既有行为不变。
 	LyricsSources []string `json:"lyrics_sources,omitempty"`
-	// AMLLLyrics：**迁移标记,不是开关**。amll 的启用状态跟其余五源一样记在 LyricsSources 里。
+	// AMLLLyrics：**迁移标记,不是开关**。amll 的启用状态跟其余源一样记在 LyricsSources 里。
 	//
 	// 它只解决一件事:LyricsSources 是白名单,而老配置写的时候 amll 这个源还不存在,列表里
 	// 不可能有它 —— 按白名单办等于对所有老用户默认关闭,而"没列出"在这里的真实含义是
@@ -158,7 +162,10 @@ type featureFlagsFile struct {
 	// 缺失 ⇒ 老配置,把 kuwo 补进启用集合(只补这一次);一旦保存过,这个字段落盘,
 	// 从此完全以 LyricsSources 为准。与 Swift 侧 FeatureFlagsFile.kuwoLyrics 一一对应。
 	KuwoLyrics *bool `json:"kuwo_lyrics,omitempty"`
-	// LyricsSourceMode："smart"(默认,五源全查+打分取最高分,见 enrich.go 的
+	// MiguLyrics:同上一套迁移标记(2026-09-04 加 migu 时补)。缺失 ⇒ 老配置,把 migu 补进启用
+	// 集合(只补这一次)。与 Swift 侧 FeatureFlagsFile.miguLyrics 一一对应。
+	MiguLyrics *bool `json:"migu_lyrics,omitempty"`
+	// LyricsSourceMode："smart"(默认,全部源全查+打分取最高分,见 enrich.go 的
 	// scoredLyricCandidates/pickLyricCandidate)或"priority"(按 LyricsSourceOrder
 	// 的顺序,取第一个通过质量校验(score>=0)的源,不比较分数高低)。空值按 smart 处理。
 	LyricsSourceMode string `json:"lyrics_source_mode,omitempty"`
@@ -182,12 +189,16 @@ type featureFlagsFile struct {
 	// 不在这份共享文件里,是 Swift 侧 AppSettings 自己的纯本地设置,不需要 collector
 	// 知道。
 	LaunchLyrimuseOnMusicOpen *bool `json:"launch_lyrimuse_on_music_open,omitempty"`
+	// LaunchLyrimuseOnPlayers:「跟随播放器启动」逐播放器勾选(2026-09-03,Swift 侧 FeatureSettingsStore
+	// 的 launchLyrimuseOnPlayers)。键在就严格按它来(空列表 = 关),键缺失是布尔年代的老配置,退回
+	// 「盯整个选中集合 / auto 全量」。上面那个布尔 App 仍然写(= 列表非空),两者同时在时布尔只当总开关。
+	LaunchLyrimuseOnPlayers []string `json:"launch_lyrimuse_on_players,omitempty"`
 	// TrustedPlayers:用户显式信任的"未知播放器"—— bundle id → 界面显示名。
 	//
 	// 「自动识别」原来只认写死的五个播放器,别的 App 在报 Now Playing 一律当"没有可关心
 	// 的播放"。这道白名单不只挡显示,**也挡打卡**(poller.go 的 isTracked):放开它等于
 	// 让 YouTube 视频、播客、网课被当成收听写进用户的 Last.fm/ListenBrainz 永久历史,
-	// 还会往"设计上永不清理"的歌词缓存里灌垃圾条目、白烧五个歌词源的查询。而想靠内容
+	// 还会往"设计上永不清理"的歌词缓存里灌垃圾条目、白烧全部歌词源的查询。而想靠内容
 	// 形状分辨也不可靠 —— 浏览器里的网页播放器能通过 MediaSession API 自己填
 	// title/artist/artwork,一个 YouTube 音乐视频跟一首歌长得一模一样。
 	//
@@ -234,7 +245,7 @@ type featureFlags struct {
 	//
 	// ⚠️ 2026-08-21 订正:原注释说 `collector search-lyrics` 子命令"从不调用
 	// loadFeatureFlags、这三个字段在那条路径上永远是零值",**这是错的** —— searchcli.go
-	// 一直自己加载一遍(不然 LyricsSources 是 nil map,过滤时五个源全被误判成"没启用"、
+	// 一直自己加载一遍(不然 LyricsSources 是 nil map,过滤时全部源被误判成"没启用"、
 	// 直接返回空列表)。LyricsSources 早就被 filterEnabledLyricSources 实际读取着;
 	// LyricsSourceMode/Order 在 -pick 模式下也被读(冠军要按用户选的「匹配算法」算)。
 	// 这条错注释误导过一轮设计评审,别再照它推结论。
@@ -254,6 +265,9 @@ type featureFlags struct {
 	LyricsMachineTranslation bool
 	// LaunchLyrimuseOnMusicOpen 只被 companionlaunch.go 读取。
 	LaunchLyrimuseOnMusicOpen bool
+	// LaunchLyrimuseOnPlayers 是逐播放器勾选的集合(键是 player* 常量);nil = 文件里没有这个键(老配置),
+	// 由 companionLaunchProcessNames 退回布尔年代语义。只被 companionlaunch.go 读取。
+	LaunchLyrimuseOnPlayers map[string]bool
 	// LyricsDecisionTrace 只被 lyricstrace.go 读取,见那边注释。
 	LyricsDecisionTrace bool
 	// TrustedPlayers 是已经清洗过的形态(见 resolveTrustedPlayers):键一定非空、一定不是
@@ -264,6 +278,23 @@ type featureFlags struct {
 // features is set once in main() before run() starts; every gate site reads
 // this package-level value (same style as enrichCache/lyricsDir等既有包级状态)。
 var features featureFlags
+
+// resolveLaunchLyrimuseOnPlayers 把「跟随哪些播放器启动」的原始列表清洗成集合:键缺失(nil,布尔年代
+// 的老配置)原样返回 nil,由 companionLaunchProcessNames 退回旧语义;键在(哪怕是空列表)就严格按它来,
+// 不认识的值丢掉(auto 也丢 —— 它不是一个可以"启动"的进程)。
+func resolveLaunchLyrimuseOnPlayers(raw []string) map[string]bool {
+	if raw == nil {
+		return nil
+	}
+	out := map[string]bool{}
+	for _, p := range raw {
+		switch p {
+		case playerAppleMusic, playerQQMusic, playerNetease, playerKugou, playerSpotify:
+			out[p] = true
+		}
+	}
+	return out
+}
 
 func boolOr(p *bool, def bool) bool {
 	if p == nil {
@@ -284,10 +315,10 @@ func loadFeatureFlags(path string) featureFlags {
 	var f featureFlagsFile
 	if data, err := os.ReadFile(path); err == nil {
 		if jerr := json.Unmarshal(data, &f); jerr != nil {
-			log.Printf("parse feature flags %s: %v (使用默认值)", path, jerr)
+			log.Printf("parse feature flags %s: %v (falling back to defaults)", path, jerr)
 		}
 	} else if !errors.Is(err, os.ErrNotExist) {
-		log.Printf("read feature flags %s: %v (使用默认值)", path, err)
+		log.Printf("read feature flags %s: %v (falling back to defaults)", path, err)
 	}
 	return featureFlags{
 		Players:        resolvePlayers(f.Players, f.Player),
@@ -307,13 +338,14 @@ func loadFeatureFlags(path string) featureFlags {
 		DailyDigest:               boolOr(f.DailyDigest, false),
 		WeeklyDigestSource:        f.WeeklyDigestSource,
 		DailyDigestSource:         f.DailyDigestSource,
-		LyricsSources:             resolveLyricsSources(f.LyricsSources, f.AMLLLyrics, f.LyricFindLyrics, f.KuwoLyrics),
+		LyricsSources:             resolveLyricsSources(f.LyricsSources, f.AMLLLyrics, f.LyricFindLyrics, f.KuwoLyrics, f.MiguLyrics),
 		LyricsSourceMode:          resolveLyricsSourceMode(f.LyricsSourceMode),
 		LyricsSourceOrder:         resolveLyricsSourceOrder(f.LyricsSourceOrder),
 		LyricsDir:                 f.LyricsDir,
 		LyricsTranslationLanguage: resolveLyricsTranslationLanguage(f.LyricsTranslationLanguage),
 		LyricsMachineTranslation:  boolOr(f.LyricsMachineTranslation, false),
 		LaunchLyrimuseOnMusicOpen: boolOr(f.LaunchLyrimuseOnMusicOpen, true),
+		LaunchLyrimuseOnPlayers:   resolveLaunchLyrimuseOnPlayers(f.LaunchLyrimuseOnPlayers),
 		LyricsDecisionTrace:       boolOr(f.LyricsDecisionTrace, false),
 	}
 }
@@ -413,19 +445,19 @@ func resolveTrustedPlayers(m map[string]string) map[string]string {
 	return out
 }
 
-func resolveLyricsSources(list []string, amllSeen *bool, lyricFindSeen *bool, kuwoSeen *bool) map[string]bool {
+func resolveLyricsSources(list []string, amllSeen *bool, lyricFindSeen *bool, kuwoSeen *bool, miguSeen *bool) map[string]bool {
 	if len(list) == 0 {
 		return map[string]bool{
 			lyricSourceNetease: true, lyricSourceQQ: true, lyricSourceKugou: true,
 			lyricSourceMusixmatch: true, lyricSourceLRCLIB: true,
-			lyricSourceAMLL: true, lyricSourceLyricFind: true, lyricSourceKuwo: true,
+			lyricSourceAMLL: true, lyricSourceLyricFind: true, lyricSourceKuwo: true, lyricSourceMigu: true,
 		}
 	}
 	m := make(map[string]bool, len(list)+1)
 	for _, s := range list {
 		m[s] = true
 	}
-	// 老配置的一次性迁移,见 featureFlagsFile.AMLLLyrics/.LyricFindLyrics/.KuwoLyrics。三个
+	// 老配置的一次性迁移,见 featureFlagsFile.AMLLLyrics/.LyricFindLyrics/.KuwoLyrics/.MiguLyrics。四个
 	// 标记各自独立判断——一份配置可能在 amll 时代之后、lyricfind 时代之前保存过(amllSeen
 	// 非空、lyricFindSeen 为空),这种配置只该补 lyricfind,不该把 amll 也重新补一遍(用户
 	// 可能已经手动关掉了它)。
@@ -443,6 +475,9 @@ func resolveLyricsSources(list []string, amllSeen *bool, lyricFindSeen *bool, ku
 	}
 	if kuwoSeen == nil {
 		m[lyricSourceKuwo] = true
+	}
+	if miguSeen == nil {
+		m[lyricSourceMigu] = true
 	}
 	return m
 }

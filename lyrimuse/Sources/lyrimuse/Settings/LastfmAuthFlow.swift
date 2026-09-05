@@ -99,7 +99,8 @@ enum LastfmAuthFlow {
         comps.queryItems = [
             URLQueryItem(name: "api_key", value: apiKey),
             URLQueryItem(name: "token", value: token),
-            URLQueryItem(name: "cb", value: "lyrimuse://lastfm-auth-callback"),
+            // scheme 按变体来(正式 lyrimuse://,Dev lyrimuse-dev://),否则 Dev 里授权完会跳回正式版。
+            URLQueryItem(name: "cb", value: "\(LyrimuseIdentity.urlScheme)://lastfm-auth-callback"),
         ]
         return comps.url!
     }

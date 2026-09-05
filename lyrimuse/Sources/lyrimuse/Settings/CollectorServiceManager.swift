@@ -22,11 +22,9 @@ public enum CollectorServiceManager {
         Bundle.main.bundleURL.appendingPathComponent("Contents/Resources/collector").path
     }
     private static var plistURL: URL {
-        FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent("Library/LaunchAgents/\(label).plist")
+        LyrimusePaths.launchAgentPlist(label: label)
     }
-    private static let configDir = FileManager.default.homeDirectoryForCurrentUser
-        .appendingPathComponent(".config/lyrimuse")
+    private static let configDir = LyrimusePaths.configDir
 
     private static let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "collector-service")
 
@@ -141,7 +139,12 @@ public enum CollectorServiceManager {
     /// 拿不到(文件不存在/执行失败/输出为空)时返回 nil——不确定就不要瞎猜,调用方应该
     /// 把 nil 当"这次没法判断"处理,不要当成"版本不一致"报出来。
     public static func bundledCollectorVersion() -> String? {
-        let (status, output) = runCapturing(bundledCollectorPath, ["version"])
+        // 带环境:这是 App 唯一一处直接 spawn collector 的地方(其余走 launchd / ProcessRunner)。
+        // `version` 子命令今天不读配置目录,所以带不带都跑得出结果;显式传是为了让"每处 spawn
+        // 都带环境"这条不变量真的处处成立,而不是靠"这个子命令恰好不读配置"来豁免 —— 下次给
+        // version 加一句"顺便报一下配置目录"就会在 Dev 变体上读错目录。
+        let (status, output) = runCapturing(
+            bundledCollectorPath, ["version"], environment: LyrimusePaths.collectorProcessEnvironment())
         guard status == 0 else { return nil }
         let trimmed = output.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? nil : trimmed
@@ -197,8 +200,7 @@ public enum CollectorServiceManager {
         // （谁先跑到都行，createDirectory 本身是幂等的）。
         try? FileManager.default.createDirectory(at: configDir, withIntermediateDirectories: true)
 
-        let logPath = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent("Library/Logs/lyrimuse.log").path
+        let logPath = LogFiles.collector.path
         let plist: [String: Any] = [
             "Label": label,
             "ProgramArguments": [bundledCollectorPath],
@@ -207,6 +209,9 @@ public enum CollectorServiceManager {
             "ProcessType": "Background",
             "StandardOutPath": logPath,
             "StandardErrorPath": logPath,
+            // collector 的配置目录与日志文件跟本 App 的变体走(正式版传的就是它自己的默认值,Dev 传
+            // ~/.config/lyrimuse-dev 那套)。Go 侧 paths.go 读这两个环境变量,见 LyrimusePaths.collectorEnvironment。
+            "EnvironmentVariables": LyrimusePaths.collectorEnvironment,
         ]
         guard let data = try? PropertyListSerialization.data(fromPropertyList: plist, format: .xml, options: 0)
         else { return }
@@ -280,10 +285,21 @@ public enum CollectorServiceManager {
     ///
     /// stderr 直接丢进 nullDevice 而不是另开一个 Pipe:同样是"设了不读"的死锁形状,而这里
     /// 的调用方要的信息退出码已经给全了。
-    private static func runCapturing(_ path: String, _ args: [String]) -> (status: Int32, output: String) {
+    ///
+    /// `environment` 传 nil = 继承本进程(launchctl 那些调用点就该如此);spawn **collector**
+    /// 的调用点必须显式传 `LyrimusePaths.collectorProcessEnvironment()`,否则子命令会落回默认
+    /// 配置目录、跟本 App 不是同一份数据(Dev 变体下就是两个目录)。2026-09-06 补:此前这里
+    /// 压根没有这个参数,`bundledCollectorVersion()` 是**真的不带环境在 spawn collector**,
+    /// 而 selftest 那道"每处 spawn 都要带环境"的守卫按 `process.executableURL` 字面量数,
+    /// 这个函数的变量叫 `p`、字面量对不上,于是 execs=0/envs=0 恰好"配平"、漏数了它 ——
+    /// 守卫成立靠的是变量名巧合。守卫的匹配已一并放宽成 `.executableURL = URL(fileURLWithPath:`。
+    private static func runCapturing(
+        _ path: String, _ args: [String], environment: [String: String]? = nil
+    ) -> (status: Int32, output: String) {
         let p = Process()
         p.executableURL = URL(fileURLWithPath: path)
         p.arguments = args
+        if let environment { p.environment = ProcessInfo.processInfo.environment.merging(environment) { _, new in new } }
         let outPipe = Pipe()
         p.standardOutput = outPipe
         p.standardError = FileHandle.nullDevice

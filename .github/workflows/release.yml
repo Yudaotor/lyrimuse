@@ -49,16 +49,46 @@ jobs:
         with:
           # fetch-depth: 0 -- a shallow (default depth-1) checkout does NOT reliably bring
           # along annotated tag objects/messages, only the commit the pushed ref points to.
-          # The "Extract tag changelog" step below reads the pushed tag's own annotation
+          # The "Validate release tag" step below reads the pushed tag's own annotation
           # message, which silently came back empty on v1.0.0/v1.0.1 for exactly this
           # reason (verified after the fact via `gh release view` -- both releases' pages
           # only ever showed GitHub's auto-generated compare link, never the changelog that
           # was actually written into each tag's message). Full history costs a bit more
-          # fetch time on CI but this repo is small; correctness here matters more.
+          # fetch time on CI but this repo is small; correctness here matters more. Since
+          # 2026-09-05 a peeled/lightweight tag fails that step loudly instead of shipping an
+          # empty or wrong changelog, so a regression here can no longer go unnoticed.
           fetch-depth: 0
         # lyrimuse/ and lyrimuse-collector/ are sibling directories in this one repo (not
         # two repos) -- lyrimuse/build.sh does `(cd ../lyrimuse-collector && ...)`, so a
         # single full checkout already lays both out side by side. No submodules needed.
+
+      - name: Validate release tag
+        # 构建前硬校验(2026-09-05):tag 必须是 annotated、正文非空、正文能拆成中英两份。任一不满足
+        # 在这里就红——Go / Swift 工具链都还没装,零构建成本。原来这三种坏形态全部静默降级:轻量 tag 的
+        # %(contents) 是 commit message,照发;空正文被 appcast 那步兜底成一句 "See the GitHub release
+        # page";拆不出双语就退回单份 <description>——都要等十几分钟构建跑完、Release 发出去了才在页面上
+        # 看见。判据与报错文案只在 .github/scripts/check_release_tag.sh 一份,打 tag 的人 push 前在本地跑
+        # 同一份(docs/releasing.md「四」),别在这里另写一套。
+        #
+        # 原来的「Extract tag changelog」步并进这里:正文只读一次,经 body 输出喂给「Generate signed
+        # appcast」(Sparkle 更新弹窗正文)和「Create GitHub Release」(Release 页正文)。为什么必须显式读
+        # tag 正文:实测坐实 v1.0.0/v1.0.1 的 Release 页面从来没显示过写进 annotated tag message 里的改动点
+        # 清单——只有 GitHub 自动生成的 compare 链接。generate_release_notes:true 在没有显式 body 时会直接把
+        # body 整个替换成自动生成的内容,不是"追加在 tag message 后面";显式喂 body 之后,GitHub 那边的
+        # 规则是 body 在前、自动内容追加在后,两者都要才凑得齐。
+        if: startsWith(github.ref, 'refs/tags/')
+        id: tag
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          if ! bash .github/scripts/check_release_tag.sh "$TAG" --body-out "$RUNNER_TEMP/tag-body.md"; then
+            echo "::error::tag '${TAG}' failed release-tag validation (annotated / non-empty / bilingual notes) -- nothing was built, see the log above" >&2
+            exit 1
+          fi
+          {
+            echo "body<<CHANGELOG_EOF"
+            cat "$RUNNER_TEMP/tag-body.md"
+            echo "CHANGELOG_EOF"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Set up Go ${{ env.GO_VERSION }}
         uses: actions/setup-go@v7
@@ -116,17 +146,31 @@ jobs:
         run: |
           if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
             VERSION="${GITHUB_REF#refs/tags/}"
-            # BUNDLE_VERSION feeds build.sh's CFBundleShortVersionString/CFBundleVersion,
-            # which the in-app update checker compares against this repo's Releases --
-            # strip the leading "v" so it's a clean X.Y.Z, matching what UpdateChecker.swift
-            # does to the tag_name it gets back from the GitHub API.
+            # BUNDLE_VERSION is the display version (CFBundleShortVersionString): the tag minus
+            # its leading "v", either X.Y.Z or X.Y.Z-alpha|beta|rc.N. build-version.sh is the
+            # single definition of what a valid version looks like AND of the numeric
+            # CFBundleVersion Sparkle compares (its comparator ignores everything after "-", so
+            # pre-releases need a separate 4-component build number -- see the script header).
+            # Anything else fails here, before a single byte gets built: a tag like v-test or
+            # v1.6 never reaches the Releases page.
             BUNDLE_VERSION="${VERSION#v}"
+            if ! BUILD_VERSION="$(bash lyrimuse/scripts/build-version.sh "$BUNDLE_VERSION")"; then
+              echo "::error::tag '${VERSION}' is not vX.Y.Z or vX.Y.Z-(alpha|beta|rc).N -- refusing to build" >&2
+              exit 1
+            fi
+            # A "-" in the tag marks a pre-release (2026-09-05): the GitHub Release gets the
+            # prerelease flag, so releases/latest -- and with it every regular user's appcast --
+            # keeps pointing at the newest stable release. Only users who opted into beta updates
+            # in the app (or point SUFeedURL at this tag's appcast by hand) ever see it.
+            if [[ "$VERSION" == *-* ]]; then IS_PRERELEASE=true; else IS_PRERELEASE=false; fi
           else
             VERSION="dev-$(git rev-parse --short HEAD)"
             # Not a real release tag, so there's no meaningful X.Y.Z here -- build.sh's own
             # placeholder default is fine, this build will never reach the public Releases
             # page anyway (see the "Create GitHub Release" step's tag-only gate below).
             BUNDLE_VERSION="1.0.0"
+            BUILD_VERSION="1.0.0.1000"
+            IS_PRERELEASE=false
           fi
           # asset_base is derived from the bundle version, not the tag: package.sh names its
           # output from the built app's own Info.plist, so the two have to agree. On a tag
@@ -135,9 +179,11 @@ jobs:
           {
             echo "version=${VERSION}"
             echo "bundle_version=${BUNDLE_VERSION}"
+            echo "build_version=${BUILD_VERSION}"
+            echo "is_prerelease=${IS_PRERELEASE}"
             echo "asset_base=Lyrimuse-v${BUNDLE_VERSION}-macos"
           } >> "$GITHUB_OUTPUT"
-          echo "Building ${VERSION} (bundle version ${BUNDLE_VERSION})"
+          echo "Building ${VERSION} (display ${BUNDLE_VERSION}, CFBundleVersion ${BUILD_VERSION}, prerelease=${IS_PRERELEASE})"
 
       # package.sh, not build.sh -- it is the single definition of what a release asset is,
       # and it builds BOTH variants: an arm64-only primary and a universal one for Intel.
@@ -174,9 +220,15 @@ jobs:
         # smoke-test them, without ever touching the public Releases tab.
 
       # Only runs on a real tag push, same gate as "Create GitHub Release" below --
-      # appcast.xml's enclosure URL points at releases/latest/download/..., which is
-      # meaningless without an actual Release, and this step needs the SPARKLE_PRIVATE_KEY
+      # appcast.xml's enclosure URLs point at releases/download/<tag>/..., which only exist
+      # once an actual Release is published, and this step needs the SPARKLE_PRIVATE_KEY
       # secret that a bare workflow_dispatch dry run has no reason to touch.
+      #
+      # <tag>, not latest (2026-09-05): a pre-release is never "latest", so a latest/... link in
+      # its appcast would resolve into the newest stable release's asset directory and 404 on the
+      # version-named zip. Pinning the tag directory works for both kinds of release; the FEED URL
+      # regular users read (Info.plist SUFeedURL -> releases/latest/download/appcast.xml) is
+      # unchanged and still redirects to the newest stable release's appcast.
       #
       # sign_update lives in the same SPM binary-target download that build.sh's Sparkle
       # embedding step already pulled in (.build/artifacts/sparkle/Sparkle/bin/) -- no
@@ -228,38 +280,17 @@ jobs:
       # and Sparkle's own test comments "We're assuming this test is not run through Rosetta".
       # The guard below validates the feed's *shape*; the actual per-arch selection rests on
       # Sparkle's unit test plus, after release, the -intel.zip download counter moving off 0.
-      - name: Extract tag changelog
-        # ⚠️ 必须排在 appcast 生成**之前**:appcast 的 item 要把这段 annotation 当
-        # release notes 内嵌进去(Sparkle 更新弹窗里显示的就是它)。原来这一步在
-        # appcast 之后,于是弹窗里永远是空的 —— 用户升级前看不到这一版改了什么。
-        # 之前的假设是错的:实测坐实 v1.0.0/v1.0.1 的 Release 页面从来没有显示过写进
-        # annotated tag message 里的改动点清单——只有 GitHub 自动生成的 compare 链接。
-        # generate_release_notes:true 在没有显式 body 时会直接把 body 整个替换成自动
-        # 生成的内容,不是"追加在 tag message 后面"。这里显式把这个 tag 自己的
-        # annotation 读出来,喂给下一步的 body 输入,GitHub 那边的规则是 body 在前、
-        # generate_release_notes 的自动内容追加在后,两者都要才凑得齐。
-        if: startsWith(github.ref, 'refs/tags/')
-        id: changelog
-        run: |
-          TAG="${GITHUB_REF#refs/tags/}"
-          BODY="$(git for-each-ref "refs/tags/${TAG}" --format='%(contents)')"
-          {
-            echo "body<<CHANGELOG_EOF"
-            echo "$BODY"
-            echo "CHANGELOG_EOF"
-          } >> "$GITHUB_OUTPUT"
-
       - name: Generate signed appcast
         if: startsWith(github.ref, 'refs/tags/')
         id: appcast
         env:
           SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
-          # 通过 env 传入,而不是在 run 脚本里直接写 ${{ steps.changelog.outputs.body }} --
+          # 通过 env 传入,而不是在 run 脚本里直接写 ${{ steps.tag.outputs.body }} --
           # 那种写法是 GitHub Actions 在脚本文本层面做字符串替换,tag annotation 原文
           # 里只要出现 " ` $( 这类 shell 语法字符就会破坏脚本甚至被当命令执行(这个
           # step 的环境里还带着 SPARKLE_PRIVATE_KEY)。env 传参这条路径里,shell 只会
           # 把它当一个变量值读,不会重新解析成语法。
-          NOTES_RAW: ${{ steps.changelog.outputs.body }}
+          NOTES_RAW: ${{ steps.tag.outputs.body }}
         run: |
           # lyrimuse/build.sh 一开头就 `cd "$(dirname "$0")"` 切到 lyrimuse/ 目录,
           # 所以 swift build 的 .build/ 产物实际生成在 lyrimuse/.build/ 下——不是
@@ -284,12 +315,22 @@ jobs:
               exit 1
             fi
           done
+          TAG="${{ steps.version.outputs.version }}"
+          # sparkle:version must be the numeric build number, not the display version (Sparkle's
+          # comparator ignores everything after "-"). Read it back from the zip's own Info.plist --
+          # what build.sh actually wrote -- and cross-check against the version step so the two
+          # definitions can never drift apart silently.
+          BUILD_VERSION="$(unzip -p "lyrimuse/dist/${ZIP_NAME}" 'Lyrimuse.app/Contents/Info.plist' | plutil -extract CFBundleVersion raw -o - -)"
+          if [ "$BUILD_VERSION" != "${{ steps.version.outputs.build_version }}" ]; then
+            echo "CFBundleVersion inside the zip ($BUILD_VERSION) != build-version.sh (${{ steps.version.outputs.build_version }})" >&2
+            exit 1
+          fi
           LENGTH=$(stat -f%z "lyrimuse/dist/${ZIP_NAME}")
           SIGNATURE=$(echo "$SPARKLE_PRIVATE_KEY" | "$SIGN_UPDATE" --ed-key-file - -p "lyrimuse/dist/${ZIP_NAME}")
-          DOWNLOAD_URL="https://github.com/${{ github.repository }}/releases/latest/download/${ZIP_NAME}"
+          DOWNLOAD_URL="https://github.com/${{ github.repository }}/releases/download/${TAG}/${ZIP_NAME}"
           INTEL_LENGTH=$(stat -f%z "lyrimuse/dist/${INTEL_ZIP_NAME}")
           INTEL_SIGNATURE=$(echo "$SPARKLE_PRIVATE_KEY" | "$SIGN_UPDATE" --ed-key-file - -p "lyrimuse/dist/${INTEL_ZIP_NAME}")
-          INTEL_DOWNLOAD_URL="https://github.com/${{ github.repository }}/releases/latest/download/${INTEL_ZIP_NAME}"
+          INTEL_DOWNLOAD_URL="https://github.com/${{ github.repository }}/releases/download/${TAG}/${INTEL_ZIP_NAME}"
           PUB_DATE=$(date -u +"%a, %d %b %Y %H:%M:%S +0000")
           # tag annotation 原文 → 安全地放进 CDATA。只需处理 "]]>"(它会提前闭合 CDATA,
           # 拆成两段 CDATA 即可);其余字符在 CDATA 里都是字面量,不需要 HTML 转义。
@@ -326,8 +367,10 @@ jobs:
           # 在 v1.4.0→v1.5.0 升级弹窗里看到的就是这个)。
           #
           # 脚本对拆不动的输入(任一语言侧过短)以非零退出**拒绝输出**,此时落回
-          # 单份 <description> 的兜底分支——所以这一步永远不会把发布卡死;兜底
-          # 分支必须保留,别在将来的整理里顺手删掉。
+          # 单份 <description> 的兜底分支。2026-09-05 起「Validate release tag」那步已经
+          # 对同一份正文跑过同一个脚本,拆不动的 tag 在构建前就被拒、到不了这里,所以
+          # 兜底分支实际走不到;仍保留作安全阀(临时目录写失败之类),别在将来的整理里
+          # 顺手删掉。
           SPLIT_DIR="$RUNNER_TEMP/notes-split"
           printf '%s\n' "$NOTES_RAW" > "$RUNNER_TEMP/notes-raw.md"
           if python3 .github/scripts/split_release_notes.py "$RUNNER_TEMP/notes-raw.md" "$SPLIT_DIR"; then
@@ -363,14 +406,21 @@ jobs:
             echo '    <item>'
             echo "      <title>${{ steps.version.outputs.version }}</title>"
             echo "      <pubDate>${PUB_DATE}</pubDate>"
-            echo "      <sparkle:version>${VERSION}</sparkle:version>"
+            echo "      <sparkle:version>${BUILD_VERSION}</sparkle:version>"
             echo "      <sparkle:shortVersionString>${VERSION}</sparkle:shortVersionString>"
             printf '%s\n' "$DESCRIPTION_XML"
             echo '      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>'
+            if [ "${{ steps.version.outputs.is_prerelease }}" = "true" ]; then
+              # Pre-release items live in the beta channel: an updater that has not opted in
+              # (SPUUpdaterDelegate allowedChannels, driven by the in-app "receive beta updates"
+              # switch) skips them even if it somehow reads this feed. Second line of defence
+              # behind "pre-releases are never latest".
+              echo '      <sparkle:channel>beta</sparkle:channel>'
+            fi
             if [ "$arm64_only" = "yes" ]; then
               echo '      <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>'
             fi
-            echo "      <enclosure url=\"${url}\" sparkle:version=\"${VERSION}\" sparkle:edSignature=\"${sig}\" length=\"${len}\" type=\"application/octet-stream\" />"
+            echo "      <enclosure url=\"${url}\" sparkle:version=\"${BUILD_VERSION}\" sparkle:edSignature=\"${sig}\" length=\"${len}\" type=\"application/octet-stream\" />"
             echo '    </item>'
           }
           {
@@ -393,15 +443,18 @@ jobs:
           # 任何一行的缩进都不能浅于块本身,而 heredoc 的体又必须顶格(否则 python 收到
           # 的每行都带前导空白、直接 IndentationError)——这两条互相冲突,正是这个 step
           # 上面注释里记的那个 2026-08-16 的坑。独立文件同时还能本地直接跑。
-          python3 .github/scripts/check_appcast.py appcast.xml
+          python3 .github/scripts/check_appcast.py appcast.xml --tag "$TAG" --display-version "$VERSION" --build-version "$BUILD_VERSION" --prerelease "${{ steps.version.outputs.is_prerelease }}"
 
       - name: Create GitHub Release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v3
         with:
           name: Lyrimuse ${{ steps.version.outputs.version }}
-          body: ${{ steps.changelog.outputs.body }}
+          body: ${{ steps.tag.outputs.body }}
           generate_release_notes: true
+          # Tags with a "-" (v1.6.0-beta.1) publish as a pre-release: GitHub's releases/latest
+          # skips those, so the appcast regular users read stays on the newest stable release.
+          prerelease: ${{ steps.version.outputs.is_prerelease == 'true' }}
           # Both variants ship: the unsuffixed one is arm64-only and is what Sparkle and
           # the Homebrew cask both point at; -intel is universal, for the Intel Macs that
           # every release up to v1.2.0 silently excluded. Each comes as a zip (the format
@@ -417,3 +470,25 @@ jobs:
             appcast.xml
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify published download URLs
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          # The appcast's enclosure URLs only resolve once the Release above has published its
+          # assets. Probe them for real: a typo in the tag directory would otherwise surface as
+          # "update download failed" on every user's Mac, and nothing before this point can see
+          # it. Assets can take a few seconds to appear after the release is created, so retry.
+          TAG="${{ steps.version.outputs.version }}"
+          BASE="https://github.com/${{ github.repository }}/releases/download/${TAG}"
+          for name in "${{ steps.version.outputs.asset_base }}.zip" "${{ steps.version.outputs.asset_base }}-intel.zip" appcast.xml; do
+            ok=""
+            for attempt in 1 2 3 4 5 6; do
+              if curl -sSfIL --max-time 30 "${BASE}/${name}" -o /dev/null; then ok=1; break; fi
+              sleep 10
+            done
+            if [ -z "$ok" ]; then
+              echo "::error::${BASE}/${name} is not downloadable" >&2
+              exit 1
+            fi
+            echo "ok  ${BASE}/${name}"
+          done

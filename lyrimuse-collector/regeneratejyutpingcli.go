@@ -31,11 +31,10 @@ func runRegenerateJyutpingCLI(args []string) {
 		log.Fatalf("regenerate-jyutping: %v", err)
 	}
 
-	home, err := os.UserHomeDir()
-	if err != nil {
-		log.Fatalf("regenerate-jyutping: resolve home dir: %v", err)
+	if configDir() == "" {
+		log.Fatalf("regenerate-jyutping: cannot resolve home directory (and LYRIMUSE_CONFIG_DIR is unset)")
 	}
-	cfgDir := filepath.Join(home, ".config", clientName)
+	cfgDir := configDir()
 	features = loadFeatureFlags(filepath.Join(cfgDir, clientName+"-features.json"))
 	lyricsDir = features.LyricsDir
 	if lyricsDir == "" {

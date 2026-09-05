@@ -55,6 +55,10 @@ type config struct {
 	DingtalkSignSecret string `json:"dingtalk_sign_secret,omitempty"`
 	FeishuSignSecret   string `json:"feishu_sign_secret,omitempty"`
 
+	// 日志等级(2026-09-05):debug / info / warn / error,默认 info;环境变量 LYRIMUSE_LOG_LEVEL
+	// 优先。见 logsink.go。App 侧 ConfigStore 整份 JSON 原样读写,不认识的键不会被它抹掉。
+	LogLevel string `json:"log_level,omitempty"`
+
 	// 这次加载中被跳过的字段,给调用方打日志用。小写不导出,json 包不会碰它——
 	// Go 侧从来只读 config.json、不写回(写入方是 Swift 那边的 ConfigStore)。
 	loadIssues []string

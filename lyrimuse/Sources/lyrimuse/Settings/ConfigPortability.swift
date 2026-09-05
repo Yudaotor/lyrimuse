@@ -20,8 +20,7 @@ private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "config
 // clearAllConfig() 是跟 import 反着来的第三个操作——不是"换一份配置进来"而是"清空
 // 回到刚装完的样子",供 SettingsView 的"清除所有配置"按钮用。
 enum ConfigPortability {
-    private static let configDir = FileManager.default.homeDirectoryForCurrentUser
-        .appendingPathComponent(".config/lyrimuse")
+    private static let configDir = LyrimusePaths.configDir
 
     /// 给"在访达中显示配置文件夹"用。这个 App 的配置本来就住在 `~/.config/lyrimuse`
     /// (对一个 SwiftUI 菜单栏 App 来说不常见),对拿 dotfiles / chezmoi 管机器的人来说
@@ -97,6 +96,10 @@ enum ConfigPortability {
         // 的 LaunchAgent",而不是用户的偏好。带过去的话,新机器上服务其实还没装,界面却
         // 显示"已启用",用户找不到那个能把它真正装上的开关。
         "np:collectorServiceEnabled",
+        // 「接收测试版更新」(2026-09-05)。测试版本来就是「只给自己另一台机器试」的东西,跟着备份搬去新机器等于
+        // 让那台机器默认收测试版,正好把这道闸绕开;而且它开着时 Sparkle 会多查一次 GitHub Release 列表,
+        // 新机器上的人未必知道自己在收什么。宁可在新机器上自己再开一次。
+        "np:receiveBetaUpdates",
         // 「这台机器上现在装进 launchd 的是哪个 collector 二进制」(路径+大小+mtime,见
         // CollectorServiceManager.installedFingerprintKey)。跟上面那条同类,而且带过去更糟:
         // 新机器上的二进制必然是另一个文件,却因为指纹"对得上"而跳过启动时那次本该做的重装,

@@ -252,11 +252,10 @@ func musixmatchEnsureToken(ctx context.Context) string {
 //
 // 落盘之后两条路径共用同一个 token,10 分钟内不管起多少个进程都只取一次。
 func musixmatchTokenPath() string {
-	home, err := os.UserHomeDir()
-	if err != nil {
+	if configDir() == "" {
 		return ""
 	}
-	return filepath.Join(home, ".config", clientName, clientName+"-musixmatch-token.json")
+	return filepath.Join(configDir(), clientName+"-musixmatch-token.json")
 }
 
 type musixmatchTokenFile struct {
@@ -436,7 +435,7 @@ type musixmatchTrackRow struct {
 	// TrackLength:musixmatch 自报的曲长(秒)。2026-08-22 补上解析。
 	// 在此之前五个源里只有它的候选永远没有 sourceReportedDurationSecs,
 	// 于是新增的 sourceDurationOff(-400)对它**系统性免罚** —— 而它恰恰
-	// 是五源里匹配最松的一个(既不看专辑也不看时长,resolveMusixmatchLyric
+	// 是各源里匹配最松的一个(既不看专辑也不看时长,resolveMusixmatchLyric
 	// 第一行还把 durationSecs 直接丢掉)。对抗性复核实测:52 个"musixmatch
 	// 有有效候选"的缓存条目里,按 max() 口径偏差 >12% 的有 7 条(13.5%),
 	// 其余四源合计 4.3%。字段本来就在响应里 —— 那不是"没有证据",是证据没被读。
@@ -493,7 +492,7 @@ func pickMusixmatchTrackRow(rows []musixmatchTrackRow, artist, localTitle string
 // 歌手/歌名都对上、且 has_subtitles==1(没有逐行歌词的候选后面 track.subtitle.get 必然
 // 404,不必跑这一趟)的结果。
 // 搜索词按 searchTitleVariants 逐个试,先命中先返回(顺序跟设置走,见那边注释)。
-// Musixmatch 在这一点上是五个源里最温和的:带括号仍能回 1~2 条、而且往往就是对的那条,
+// Musixmatch 在这一点上是各源里最温和的:带括号仍能回 1~2 条、而且往往就是对的那条,
 // 不像 QQ 直接 0 条、酷狗回一堆热门歌。但实测(2026-08-09)差距确实存在——
 // "Billie Jean (Single Version)" 带括号回 1 条、去括号回 5 条(page_size 上限),
 // 候选池小一截就更容易被 has_subtitles/歌手名这两道门全部筛光。多打的这一次请求只在

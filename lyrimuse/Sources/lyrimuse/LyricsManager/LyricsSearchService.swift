@@ -354,6 +354,8 @@ final class LyricsSearchService {
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
             let process = Process()
             process.executableURL = URL(fileURLWithPath: Self.collectorPath)
+            // 子命令必须跟本 App 同一份配置目录 / 日志文件(Dev 构建是另一套),见 LyrimusePaths.collectorEnvironment。
+            process.environment = LyrimusePaths.collectorProcessEnvironment()
             process.arguments = [
                 "search-lyrics",
                 "-artist", artist,

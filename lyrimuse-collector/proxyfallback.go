@@ -73,7 +73,7 @@ func (t *proxyFallbackTransport) RoundTrip(req *http.Request) (*http.Response, e
 		// 代理自己坏了(用户关掉了 / 换了端口 / 节点挂了):清掉粘性,当场回直连再试一次。
 		// 不清的话会一直往一个死代理上撞,而直连说不定早就恢复了。
 		t.clearSticky(host)
-		log.Printf("proxy: %s 经代理失败(%v),清掉粘性、改回直连重试", host, err)
+		log.Printf("proxy: %s failed via proxy (%v), clearing sticky proxy and retrying direct", host, err)
 		resp, err = t.attempt(t.direct, req, proxyFallbackDirectBudget)
 		if err != nil {
 			t.reportBlocked()
@@ -100,13 +100,13 @@ func (t *proxyFallbackTransport) RoundTrip(req *http.Request) (*http.Response, e
 		// 的那条路怎么了),代理那次的错在返回值里是拿不到的 —— 不在这里记一行,"兜底为什么
 		// 也没兜住"就彻底不可观测。2026-09-03 装机验证时正是缺了它,才没法一眼看出第一首
 		// 探测曲的代理那半边是超时还是被代理拒了。
-		log.Printf("proxy: %s 直连失败(%v, %s)后经系统代理 %s 也失败(%v, %s)",
+		log.Printf("proxy: %s direct failed (%v, %s), then failed via system proxy %s too (%v, %s)",
 			host, directErr, directElapsed.Round(time.Millisecond),
 			proxy.Host, proxyErr, time.Since(proxyStart).Round(time.Millisecond))
 		return nil, directErr
 	}
 	t.markSticky(host)
-	log.Printf("proxy: %s 直连失败(%v, %s),经系统代理 %s 成功(%s),接下来 %s 内直接走代理",
+	log.Printf("proxy: %s direct failed (%v, %s), succeeded via system proxy %s (%s), using the proxy for the next %s",
 		host, directErr, directElapsed.Round(time.Millisecond), proxy.Host,
 		time.Since(proxyStart).Round(time.Millisecond), proxyFallbackSticky)
 	return resp, nil
@@ -191,11 +191,10 @@ type proxyFallbackHintFile struct {
 }
 
 func proxyFallbackHintPath() string {
-	home, err := os.UserHomeDir()
-	if err != nil {
+	if configDir() == "" {
 		return ""
 	}
-	return filepath.Join(home, ".config", clientName, clientName+"-proxy-hint.json")
+	return filepath.Join(configDir(), clientName+"-proxy-hint.json")
 }
 
 func readProxyFallbackHint() proxyFallbackHintFile {

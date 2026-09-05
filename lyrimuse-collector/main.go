@@ -83,14 +83,12 @@ const (
 )
 
 func main() {
-	// LUTC:诊断导出（DiagnosticsExporter.swift）同一份报告里并排放着 App 侧日志（os.Logger，
-	// 显式带 +0000）和这份 collector 日志——不加这个标志，这里打的是本地墙钟且不带任何时区
-	// 标记，两段日志的时间轴对不上（实测坐实：8 小时时区差，排查时得自己心算），这个标志把
-	// 两边统一到 UTC。
-	log.SetFlags(log.LstdFlags | log.LUTC)
-	// 凭据不进日志。必须在这里、在任何子命令分流之前 —— 子命令各自 loadConfig、
-	// 不走下面的主流程,漏了它们同样会把 api_key 写进日志。见 logscrub.go。
-	installLogScrubbing()
+	// 日志出口最先装(logsink.go),在任何子命令分流之前 —— 子命令各自 loadConfig、不走
+	// 下面的主流程,漏了它们同样会把 api_key 写进日志。时间戳(UTC、带 Z,跟 App 侧 os.Logger
+	// 的 +0000 对得上表)/ 等级 / 脱敏 / 重复折叠 / 轮转全在那条链上;2026-09-05 之前这里是
+	// log.SetFlags(LUTC) + installLogScrubbing 两步,slog 桥接后 log 包自己不再打时间前缀。
+	// 常驻模式写自己打开的日志文件,子命令写 stderr。
+	installLogSink(isDaemonInvocation(os.Args))
 	// `collector version`:一次性子命令,只打印 clientVersion 就退出——App 侧设置页
 	// "后台采集服务"卡片靠它检测"App 本体版本"跟"实际打包进这份 App 的 collector 版本"
 	// 是否一致(2026-08-31 加)。起因是 main.go 里 clientVersion 这个字面量一直是手动
@@ -191,11 +189,12 @@ func main() {
 		runResyncLyricsCLI(os.Args[2:])
 		return
 	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		log.Fatalf("resolve home dir: %v", err)
+	// 配置目录默认 ~/.config/lyrimuse,环境变量 LYRIMUSE_CONFIG_DIR 优先(paths.go)。
+	defaultConfigDir := configDir()
+	if defaultConfigDir == "" {
+		fatalExit(exitReasonHomeDirUnresolved, "cannot resolve home directory and LYRIMUSE_CONFIG_DIR is unset")
 	}
-	cfgPath := flag.String("config", filepath.Join(home, ".config", clientName, "config.json"), "config file path")
+	cfgPath := flag.String("config", filepath.Join(defaultConfigDir, "config.json"), "config file path")
 	dryRun := flag.Bool("dry-run", false, "log submissions instead of calling ListenBrainz")
 	flag.Parse()
 
@@ -204,8 +203,10 @@ func main() {
 		// 走到这儿只剩"文件在但读不出来"(权限/IO)一种情况——内容有问题已经在
 		// loadConfig 里降级成 loadIssues 了,不再打死进程。见 loadConfig 的注释:
 		// KeepAlive 下 Fatal 等于崩溃循环,而核心功能根本不需要配置。
-		log.Fatalf("load config: %v", err)
+		fatalExit(exitReasonConfigUnreadable, "err=%v", err)
 	}
+	// 等级要在配置读出来之后才知道;之前那几行(启动 / 轮转提示)按默认 info 打,没有损失。
+	applyLogLevel(cfg.LogLevel)
 	for _, issue := range cfg.loadIssues {
 		// 这条要显眼:配置没有完整生效,但服务照常在跑,用户看到的是"某个功能不工作"
 		// 而不是"服务挂了",没有这行日志就无从下手。
@@ -224,7 +225,7 @@ func main() {
 	// 拿不到锁说明已有实例在跑:退出码 0,launchd 的 KeepAlive 会按自己的节流重试,
 	// 等旧实例真退了再接管。
 	if !acquireSingleInstanceLock(filepath.Dir(*cfgPath)) {
-		log.Printf("another collector instance is already running; exiting to avoid clobbering shared caches")
+		logExit(exitReasonAlreadyRunning, "another collector instance holds the lock; exiting so shared caches are not clobbered, launchd KeepAlive will retry")
 		os.Exit(0)
 	}
 	features = loadFeatureFlags(filepath.Join(filepath.Dir(*cfgPath), clientName+"-features.json"))
@@ -315,12 +316,16 @@ func main() {
 	// collector→App 的 Last.fm「最近记录」feed(见 lastfmfeed.go):桥接每次拉到的
 	// recenttracks 落盘,App 读它代替自己直连轮询。
 	lastfmFeedPath = filepath.Join(filepath.Dir(*cfgPath), clientName+"-lastfm-recent-feed.json")
+	// 回填子命令→常驻进程的"feed 提前拉一次"信号文件(见 lastfmfeed.go lastfmFeedNudgePath)。
+	lastfmFeedNudgePath = filepath.Join(filepath.Dir(*cfgPath), clientName+"-lastfm-feed-nudge")
 	// collector→App 的状态通道(眼下只报"网络不通",见 collectorstatus.go)。设置这个
 	// 路径的同时会清掉上次运行留下的文件 —— 那份状态跟这次进程无关。
 	setCollectorStatusPath(filepath.Join(filepath.Dir(*cfgPath), clientName+"-collector-status.json"))
 	// App 侧"停止搜索"按钮的信号文件路径(见 enrichcancel.go)——跟 Swift 那边
 	// LyricsManagerView.cancelPlaceholderSearch 写入的路径逐字节一致。
 	setEnrichCancelRequestPath(filepath.Join(filepath.Dir(*cfgPath), clientName+"-enrich-cancel-request.txt"))
+	// 「歌词管理」的「重试无歌词条目」请求文件 + 进度状态文件(见 lyricsfillsweep.go)。
+	setLyricsFillPaths()
 	weeklyDigestPath = filepath.Join(filepath.Dir(*cfgPath), clientName+"-lastfm-weekly.json")
 	dailyDigestPath = filepath.Join(filepath.Dir(*cfgPath), clientName+"-lb-daily.json")
 	topArtistsStatePath = filepath.Join(filepath.Dir(*cfgPath), clientName+"-lastfm-top-artists.json")
@@ -334,7 +339,16 @@ func main() {
 	// 存量设备封面补传。放后台:它只是把已有的图确认/补到中继上,不该挡住 run()。
 	// 绝大多数启动里每张都会在 HEAD 那步命中,整个扫描就是几十次廉价的读(见头注)。
 	go sweepDeviceArtwork(ctx)
-	if err := run(ctx, cfg, lb); err != nil && ctx.Err() == nil {
-		log.Fatalf("run: %v", err)
+	err = run(ctx, cfg, lb)
+	if err != nil && ctx.Err() == nil {
+		fatalExit(exitReasonRunError, "err=%v", err)
+	}
+	// 走到这里是正常收尾。ctx 被信号取消(launchctl kickstart -k 重启、bootout 卸载、终端 Ctrl-C
+	// 都是 SIGTERM / SIGINT)是常驻 collector 最常见的退出 —— 2026-09-03 之前这条路一行日志都没有,
+	// 排「collector 为什么自己退了」只能拿 launchd 状态猜。见 exitreason.go。
+	if ctx.Err() != nil {
+		logExit(exitReasonSignal, "context canceled by SIGTERM/SIGINT")
+	} else {
+		logExit(exitReasonRunReturned, "run returned without error")
 	}
 }

@@ -324,7 +324,7 @@ func deviceCoverOverridesCandidate(ctx context.Context, deviceCoverURL, candidat
 		func(u string) image.Image { return loadCoverImage(ctx, u) })
 	if !override {
 		// 只在"没有顶掉"时记一句 —— 那是这次修复真正生效的时刻,而且很罕见,不会刷屏。
-		log.Printf("cover: 设备封面 %dpx 让位给远程候选 %dpx(%s)",
+		log.Printf("cover: device artwork %dpx yields to remote candidate %dpx (%s)",
 			minEdge(deviceImg), coverURLIntendedEdge(candidateURL), reason)
 	}
 	return override

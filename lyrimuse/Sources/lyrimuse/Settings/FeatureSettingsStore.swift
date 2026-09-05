@@ -298,7 +298,9 @@ struct FeatureFlagsFile: Codable, Equatable {
 //
 // 这个 store 里的每一个开关都是"改了立刻保存"——Binding 的 set 里包一层
 // `Task { await features.save() }`,持久化+重启挪到后台执行,但从用户视角"点开关
-// 立刻生效"这个体验不变(不需要等,也没有额外的"保存中"提示)。"账号连接"tab 底部那条
+// 立刻生效"这个体验不变(不需要等;2026-09-05 起设置窗口底部有一条**不阻塞**的状态条
+// CollectorApplyStatusBar:重启进行中一行小字、重启失败给原因和「重试」、后台服务被主动停用给
+// 中性提示——lastError 从此有人读)。"账号连接"tab 底部那条
 // 批量保存栏(isDirty/saveBar)管的是 ConfigStore 的文本/密钥字段,跟这个 store 的开关
 // 无关,不要混为一谈。
 @MainActor
@@ -395,13 +397,16 @@ public final class FeatureSettingsStore: ObservableObject {
     @Published public private(set) var trustedPlayers: [String: String] = [:]
 
     @Published public private(set) var lastError: String?
+    /// 上一次保存落盘成功、但 collector 没重启——因为用户在「播放器」页主动停用了后台服务(kickstart 对没加载的
+    /// job 必然失败)。不是错误:collector 下次启动时读盘就拿到新值。设置窗口底部状态条据此显示一句中性提示
+    /// (2026-09-05,借鉴清单 #51);下一次成功重启清掉。
+    @Published public private(set) var pendingUntilServiceEnabled = false
     /// 启动时 features.json 判定为**损坏**(文件在、但不是 JSON 对象,或字段按类型解不出来)的原因;
     /// nil = 正常或文件不存在。非 nil 期间 `persistFile()` 一律拒绝,设置窗口顶部的 `ConfigFileDamageBanner`
     /// 据此显示告示与出口。三态口径见 Core `JSONConfigDocument` 头注。
     @Published public private(set) var loadFailure: String?
 
-    static let fileURL = FileManager.default.homeDirectoryForCurrentUser
-        .appendingPathComponent(".config/lyrimuse/lyrimuse-features.json")
+    static let fileURL = LyrimusePaths.configFile("lyrimuse-features.json")
 
     private var savedSnapshot = FeatureFlagsFile()
     private var currentSnapshot: FeatureFlagsFile {
@@ -485,8 +490,7 @@ public final class FeatureSettingsStore: ObservableObject {
         if !lyricsDir.isEmpty {
             return URL(fileURLWithPath: lyricsDir)
         }
-        return FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent(".config/lyrimuse/lyrics")
+        return LyrimusePaths.configFile("lyrics")
     }
     public var isDirty: Bool { currentSnapshot != savedSnapshot }
 
@@ -691,6 +695,12 @@ public final class FeatureSettingsStore: ObservableObject {
         savedSnapshot = currentSnapshot
     }
 
+    /// 设置窗口底部状态条的「关闭」:清掉上一次保存的失败原因 / 「服务已停用」提示。不改任何数据。
+    public func clearApplyStatus() {
+        lastError = nil
+        pendingUntilServiceEnabled = false
+    }
+
     // ⚠️ 重启去抖的状态原来在这里(2026-08-02 加),2026-08-30 整体挪进了共享的
     // CollectorRestartCoordinator —— 原因不是嫌它写得不好,而是它只能是**私有**的:
     // 看不见 ConfigStore 也在重启,于是"改一个凭据 + 改一个开关"照样两次重启,正好是
@@ -715,10 +725,22 @@ public final class FeatureSettingsStore: ObservableObject {
         // 于是"改一个凭据 + 改一个开关"仍然是两次重启(见协调器头注释)。
         if await CollectorRestartCoordinator.shared.requestRestart() {
             lastError = nil
+            pendingUntilServiceEnabled = false
             commitSnapshot()
             return true
         }
-        lastError = L10n.t("后台采集服务重启失败")
+        if !AppSettings.shared.collectorServiceEnabled {
+            // 用户主动停用了后台服务:文件已是新值,collector 下次启动读盘即生效,不算失败。**先试重启、失败了再看
+            // 标志**,而不是看标志就跳过重启——build.sh 直接装机的机器上这个标志可能从没被写过(默认 false)但 job
+            // 在跑,跳过会让改动真的不生效。
+            logger.notice("collector restart skipped: service disabled by the user; change applies on next start")
+            lastError = nil
+            pendingUntilServiceEnabled = true
+            commitSnapshot()
+            return true
+        }
+        // 文件已经写了,说清后果:不是「没保存」,是「没生效」。
+        lastError = L10n.t("已保存，但后台采集服务重启失败，改动要等下次重启才生效")
         return false
     }
 

@@ -535,7 +535,7 @@ func loadQQArtistNameCache(path string) {
 		qqArtistNameMu.Lock()
 		qqArtistNameCache = m
 		qqArtistNameMu.Unlock()
-		log.Printf("loaded %d cached QQ artist names from %s", len(m), path)
+		log.Printf("cache: loaded %d QQ artist names from %s", len(m), path)
 	}
 }
 

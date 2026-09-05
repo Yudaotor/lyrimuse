@@ -20,8 +20,7 @@ public enum CollectorStatus {
         public let at: Int64
     }
 
-    private static let url = FileManager.default.homeDirectoryForCurrentUser
-        .appendingPathComponent(".config/lyrimuse/lyrimuse-collector-status.json")
+    private static let url = LyrimusePaths.configFile("lyrimuse-collector-status.json")
 
     private static let lock = NSLock()
     nonisolated(unsafe) private static var cachedMTime: Date?

@@ -49,8 +49,7 @@ final class LastfmStatsService: ObservableObject {
     // feed 一旦陈旧(collector 不在了)轮询就自动接管,不需要一个显式的"模式切换"。
     // 换账号:feed 头部带 username,不符即忽略;collector 在配置变化时会重启重写。
 
-    private static let feedURL = FileManager.default.homeDirectoryForCurrentUser
-        .appendingPathComponent(".config/lyrimuse/lyrimuse-lastfm-recent-feed.json")
+    private static let feedURL = LyrimusePaths.configFile("lyrimuse-lastfm-recent-feed.json")
     private var feedTimer: Timer?
     private var feedMTime: Date?
     private var lastFeed: LastfmRecentFeed?
@@ -330,8 +329,7 @@ final class LastfmStatsService: ObservableObject {
         var playCountUnavailableStrikes: [String: Int]?
     }
 
-    private static let recentPageCacheURL = FileManager.default.homeDirectoryForCurrentUser
-        .appendingPathComponent(".config/lyrimuse/lyrimuse-lastfm-recent-pages.json")
+    private static let recentPageCacheURL = LyrimusePaths.configFile("lyrimuse-lastfm-recent-pages.json")
 
     /// 惰性加载,跟 loadTitleForms/loadDailySnapshot 同一套模式——按 username 校验,
     /// 换账号不吃旧缓存。⚠️ 刻意**不**恢复对应的 fetchedAt:磁盘上写的是"上次退出时的
@@ -1174,8 +1172,7 @@ final class LastfmStatsService: ObservableObject {
         var days: [String: Int]
     }
 
-    private static let dailyURL = FileManager.default.homeDirectoryForCurrentUser
-        .appendingPathComponent(".config/lyrimuse/lyrimuse-lastfm-daily-heatmap.json")
+    private static let dailyURL = LyrimusePaths.configFile("lyrimuse-lastfm-daily-heatmap.json")
 
     private static let dayKeyFormatter: DateFormatter = {
         let f = DateFormatter()
@@ -1227,8 +1224,7 @@ final class LastfmStatsService: ObservableObject {
         var startedAt: TimeInterval
     }
 
-    private static let historyCheckpointURL = FileManager.default.homeDirectoryForCurrentUser
-        .appendingPathComponent(".config/lyrimuse/lyrimuse-lastfm-history-checkpoint.json")
+    private static let historyCheckpointURL = LyrimusePaths.configFile("lyrimuse-lastfm-history-checkpoint.json")
     private var historyCheckpoint: HistorySyncCheckpoint?
     private var historyCheckpointLoaded = false
 
@@ -1552,8 +1548,7 @@ final class LastfmStatsService: ObservableObject {
         var lastTopUp: Date?
     }
 
-    private static let titleFormsURL = FileManager.default.homeDirectoryForCurrentUser
-        .appendingPathComponent(".config/lyrimuse/lyrimuse-lastfm-title-forms.json")
+    private static let titleFormsURL = LyrimusePaths.configFile("lyrimuse-lastfm-title-forms.json")
     /// 折叠键 → 历史上真实出现过的写法族。
     private var titleForms: [String: [TitleForm]] = [:]
     /// 全量建成/增量补到的水位(uts)。0 = 从未建成,候选退回猜枚举。
@@ -1799,8 +1794,7 @@ final class LastfmStatsService: ObservableObject {
         var attemptedAt: [String: TimeInterval]
     }
 
-    private static let titleAliasDiscoveryURL = FileManager.default.homeDirectoryForCurrentUser
-        .appendingPathComponent(".config/lyrimuse/lyrimuse-lastfm-title-aliases-discovered.json")
+    private static let titleAliasDiscoveryURL = LyrimusePaths.configFile("lyrimuse-lastfm-title-aliases-discovered.json")
 
     private var discoveredTitleAliases: [String: [String: String]] = [:]
     private var discoveredDurations: [String: Int] = [:]
@@ -2249,8 +2243,7 @@ final class LastfmStatsService: ObservableObject {
         return keys
     }()
 
-    private static let snapshotURL = FileManager.default.homeDirectoryForCurrentUser
-        .appendingPathComponent(".config/lyrimuse/lyrimuse-lastfm-stats-cache.json")
+    private static let snapshotURL = LyrimusePaths.configFile("lyrimuse-lastfm-stats-cache.json")
     private var snapshotSaveTask: Task<Void, Never>?
 
     private func loadSnapshot() {
@@ -3518,6 +3511,8 @@ final class LastfmStatsService: ObservableObject {
         Task.detached(priority: .userInitiated) {
             let process = Process()
             process.executableURL = URL(fileURLWithPath: collectorPath)
+            // 子命令必须跟本 App 同一份配置目录 / 日志文件(Dev 构建是另一套),见 LyrimusePaths.collectorEnvironment。
+            process.environment = LyrimusePaths.collectorProcessEnvironment()
             // -all-periods:四个时段一次进程拿全(Go 侧四路并发取数),切时段零等待、
             // 也免了每档各一次 spawn + 磁盘加载(2026-08-11 发散采纳)。
             process.arguments = ["top-artists", "-all-periods", "-limit", "10"]
@@ -3614,6 +3609,8 @@ final class LastfmStatsService: ObservableObject {
         Task.detached(priority: .utility) {
             let process = Process()
             process.executableURL = URL(fileURLWithPath: collectorPath)
+            // 子命令必须跟本 App 同一份配置目录 / 日志文件(Dev 构建是另一套),见 LyrimusePaths.collectorEnvironment。
+            process.environment = LyrimusePaths.collectorProcessEnvironment()
             process.arguments = ["artist-avatars"] + missing
             let pipe = Pipe()
             let errPipe = Pipe()

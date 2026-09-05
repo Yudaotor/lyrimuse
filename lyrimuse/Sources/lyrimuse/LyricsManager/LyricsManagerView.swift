@@ -566,6 +566,10 @@ struct LyricsManagerView: View {
     @State private var manualOnly = false
     @State private var missingLyricsOnly = false
     @State private var instrumentalOnly = false
+    // collector 侧「补空扫描」的进度快照(LyricsFillSweep,进度文件按 mtime 读),由列表那个
+    // 轮询 .task 刷新;nil = 这个 collector 进程还没跑过任何一轮。工具栏「重试无歌词」按钮和
+    // 多选面板的「重试选中的…」都按它判"正在跑"来置灰/显示进度。
+    @State private var fillSweepStatus: LyricsFillSweep.Info?
     // nil = 全部歌手/专辑。跟 SourceFilter/TimingFilter 不同,歌手/专辑的候选值不是固定
     // 的几种,是从当前缓存数据里现算出来的(见 distinctArtists/distinctAlbums),所以
     // 这两个直接用 String? 而不是另建一个枚举。
@@ -1364,6 +1368,9 @@ struct LyricsManagerView: View {
                         .keyboardShortcut(.delete, modifiers: .command)
                     }
                     ToolbarItem {
+                        fillSweepToolbarMenu
+                    }
+                    ToolbarItem {
                         // 缓存占用查看 + 一键清空——这份缓存设计上"解析一次永久保留",
                         // 之前只能在下面列表里逐条删,没有总大小展示、也没有批量清空的入口。
                         //
@@ -1494,8 +1501,15 @@ struct LyricsManagerView: View {
                 // 不会有常驻计时器漏在后台。
                 .task {
                     while !Task.isCancelled {
-                        try? await Task.sleep(for: .seconds(5))
-                        guard !Task.isCancelled, placeholderSummary != nil else { continue }
+                        // 补空扫描跑着的时候加密到 2 秒:每条搜完 collector 都会改缓存文件、
+                        // 也会推进进度文件,列表和工具栏那颗按钮都该跟着动;没在跑就维持 5 秒。
+                        try? await Task.sleep(for: .seconds(fillSweepStatus?.running == true ? 2 : 5))
+                        guard !Task.isCancelled else { continue }
+                        // 进度文件按 mtime 读(LyricsFillSweep.current 内部缓存),Equatable
+                        // 没变就不赋值——不制造无意义的重渲染。
+                        let sweep = LyricsFillSweep.current
+                        if sweep != fillSweepStatus { fillSweepStatus = sweep }
+                        guard placeholderSummary != nil || sweep?.running == true else { continue }
                         await store.reload(onlyIfChanged: true)
                         refreshPlaceholder()
                     }
@@ -1670,7 +1684,12 @@ struct LyricsManagerView: View {
         let wordTiming = picked.filter(\.hasWordTiming).count
         // 「无歌词」这颗只数**真的缺**的:确证过的纯音乐、有纯文本兜底的都不该算进去,
         // 否则数字跟行上的徽章互相矛盾(行显示「纯音乐」/「仅纯文本」、上面却说它是无歌词)。
-        let missing = picked.filter { !$0.hasLyrics && !$0.isInstrumental && !$0.hasPlainTextFallback }.count
+        // 「源里有歌、无词」同理单独一颗(2026-09-05),跟行上的徽章一一对应。
+        let noLyrics = picked.filter { !$0.hasLyrics && !$0.isInstrumental && !$0.hasPlainTextFallback }
+        let indexed = noLyrics.filter(\.knownOnSources).count
+        let missing = noLyrics.count - indexed
+        // 「重试选中的无歌词条目」喂给 collector 的 key,口径见 EnrichCacheStore.isFillSweepRetryable。
+        let retryable = picked.filter(EnrichCacheStore.isFillSweepRetryable).map(\.key)
         return VStack(spacing: 14) {
             Image(systemName: "checklist")
                 .font(.system(size: 40))
@@ -1689,11 +1708,27 @@ struct LyricsManagerView: View {
                 if missing > 0 {
                     InfoChip(icon: "text.badge.xmark", text: String(format: L10n.t("无歌词 %@ 首"), "\(missing)"), tint: .red)
                 }
+                if indexed > 0 {
+                    InfoChip(icon: "music.note", text: String(format: L10n.t("源里有歌、无词 %@ 首"), "\(indexed)"), tint: .secondary)
+                }
             }
             if manual > 0 {
                 Text(L10n.t("人工修正过的歌词删掉之后找不回来"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
+            }
+            // 多选的另一条动线(2026-09-05):筛出「仅无歌词」→ 全选 → 让 collector 现在就把这批
+            // 重搜一遍,不用等每首歌各自再被播到。走 LyricsFillSweep 请求文件,进度在工具栏那颗
+            // 「重试无歌词」上显示。一次只允许一轮在跑,跑着的时候置灰。
+            if !retryable.isEmpty {
+                Button {
+                    LyricsFillSweep.request(keys: retryable)
+                } label: {
+                    Label(String(format: L10n.t("重试选中的无歌词 %@ 条"), "\(retryable.count)"),
+                          systemImage: "arrow.triangle.2.circlepath")
+                }
+                .buttonStyle(.bordered)
+                .disabled(fillSweepStatus?.running == true)
             }
             Button(role: .destructive) {
                 requestDelete(selectedKeys)
@@ -1707,6 +1742,89 @@ struct LyricsManagerView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(24)
+    }
+
+    /// 工具栏「重试无歌词」(2026-09-05):让 collector 现在就把没歌词的存量条目重搜一遍,不用等
+    /// 每首歌各自再被播到(补空路径设计上只在重播时触发,见 collector/lyricsfillsweep.go 头注)。
+    /// 两个入口:全库、或当前筛选出来的那批(只在筛选真的缩小了范围时才出现,免得两个数字一样
+    /// 的按钮并排)。跑着的时候**图标本身**换成一个确定进度的圆环 + 「3/82」——macOS 工具栏
+    /// 对 Label 只画图标、把标题整个丢掉(隔壁「占用」那颗的注释记着同一件事),第一版把进度
+    /// 写在标题里等于没显示,用户当场指出;菜单里只剩「停止」——一次只允许一轮。
+    /// 上一轮的结果留在菜单里当收据:搜了几首、补出几首,不然点完只看到列表里几行悄悄变了。
+    private var fillSweepToolbarMenu: some View {
+        let status = fillSweepStatus
+        let running = status?.running == true
+        let retryableAll = store.summaries.filter(EnrichCacheStore.isFillSweepRetryable).map(\.key)
+        let retryableVisible = sortedFiltered.filter(EnrichCacheStore.isFillSweepRetryable).map(\.key)
+        return Menu {
+            if let status, running {
+                Section {
+                    Button(role: .destructive) {
+                        LyricsFillSweep.requestCancel()
+                    } label: {
+                        Label(L10n.t("停止重试"), systemImage: "stop.circle")
+                    }
+                } header: {
+                    // 菜单里只放"正在搜哪一首":总进度已经在按钮标题上。key 是
+                    // "歌手|歌名|专辑",直接显示够认。
+                    Text(status.current.map { String(format: L10n.t("正在搜：%@"), $0) }
+                         ?? L10n.t("正在重试无歌词条目…"))
+                }
+            } else {
+                Section {
+                    Button {
+                        LyricsFillSweep.request(keys: [])
+                    } label: {
+                        Label(String(format: L10n.t("重试全部无歌词条目（%@ 首）"), "\(retryableAll.count)"),
+                              systemImage: "arrow.triangle.2.circlepath")
+                    }
+                    .disabled(retryableAll.isEmpty)
+                    if hasActiveFilters && retryableVisible.count != retryableAll.count {
+                        Button {
+                            LyricsFillSweep.request(keys: retryableVisible)
+                        } label: {
+                            Label(String(format: L10n.t("重试当前筛选出的无歌词条目（%@ 首）"), "\(retryableVisible.count)"),
+                                  systemImage: "line.3.horizontal.decrease.circle")
+                        }
+                        .disabled(retryableVisible.isEmpty)
+                    }
+                } header: {
+                    Text(L10n.t("逐首联网重搜，每首间隔 15 秒；纯音乐与人工修正过的不碰"))
+                }
+                if let status, status.finishedAt != nil {
+                    Section {
+                        // 纯展示的一行,不可点。cancelled 时另说一句,免得"搜了 12 首"被当成全部。
+                        Text(String(format: L10n.t("上次：搜了 %1$@ 首，补出 %2$@ 首"), "\(status.done)", "\(status.filled)"))
+                        if status.cancelled == true {
+                            Text(L10n.t("上次被手动停止"))
+                        }
+                    } header: {
+                        Text(L10n.t("上一轮"))
+                    }
+                }
+            }
+        } label: {
+            if let status, running {
+                // 不用 Label:工具栏会把 Label 缩成只剩图标。自己拼一个 HStack,圆环就是图标位,
+                // 「3/82」紧跟着——两个都是进度,少了哪个都不完整。total 兜到 ≥1,免得 0/0 的
+                // 那一瞬间(状态文件刚写出、候选还没数完)让 ProgressView 拿到 NaN。
+                HStack(spacing: 4) {
+                    ProgressView(value: Double(status.done), total: Double(max(status.total, 1)))
+                        .progressViewStyle(.circular)
+                        .controlSize(.small)
+                    Text("\(status.done)/\(status.total)")
+                        .font(.caption)
+                        .monospacedDigit()
+                }
+                .accessibilityLabel(String(format: L10n.t("重试中 %1$@/%2$@"), "\(status.done)", "\(status.total)"))
+            } else {
+                Label(L10n.t("重试无歌词"), systemImage: "arrow.triangle.2.circlepath")
+                    .labelStyle(.titleAndIcon)
+            }
+        }
+        .help(running
+              ? String(format: L10n.t("重试中 %1$@/%2$@"), "\(status?.done ?? 0)", "\(status?.total ?? 0)")
+              : L10n.t("让采集服务现在就把没有歌词的条目重新搜一遍，不用等每首歌再次播放"))
     }
 
     // 口径本体挪到 EnrichCacheStore.byteText —— 设置页「歌词库」那一行是第三处要显示同一个
@@ -1779,6 +1897,7 @@ struct LyricsManagerView: View {
             hasLyrics: false,
             isInstrumental: false,
             hasPlainTextFallback: false,
+            knownOnSources: false,
             isSearching: true,
             hasDecision: false,
             // 这一行是「正在搜索这首歌的歌词」占位,磁盘上还没有它的歌词文件,
@@ -1854,6 +1973,22 @@ struct LyricsManagerView: View {
         DispatchQueue.main.async {
             if animated {
                 withAnimation { scrollProxy.scrollTo(key, anchor: .center) }
+                // 补一发校正(2026-09-06 用户报「点一次没用,要点两次才跳到当前播放这首」)。
+                // 跟下面开窗那条是**同一个**根因,只是 08-07 加校正时只给了不带动画那条路:
+                // List 的行高是懒量的,没被滚到过的行一直按估算高度算。列表几千条、目标又
+                // 在视口外老远时,一次 scrollTo 按估算落点走,停下来的位置差着一截 —— 而
+                // 「点第二次就好了」恰恰是这个机制的自证:第一次已经把目标附近那些行量出了
+                // 真实高度,第二次才按真高度算得准。所以这里补的不是"再滚一次",是"等这一轮
+                // 布局按真实行高走完之后再定一次位"。
+                //
+                // 0.35s 比默认动画(约 0.25-0.3s)略长一点,让第一发滚完再校正;校正这一发给
+                // 一个很短的动画而不是硬跳 —— 落点本来就只差几行,120ms 的缓动看起来是
+                // "停稳"而不是"又跳了一下"。已经居中的话它是空操作,不会有任何可见变化。
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                    withAnimation(.easeOut(duration: 0.12)) {
+                        scrollProxy.scrollTo(key, anchor: .center)
+                    }
+                }
             } else {
                 scrollProxy.scrollTo(key, anchor: .center)
                 // 开窗那一次要补一发。2026-08-07 实测(临时文件日志量 NSScrollView 的
@@ -1919,8 +2054,7 @@ struct LyricsManagerView: View {
     /// 落盘之后它们会各自在下一拍自动从"搜索歌词中…"切到"暂无歌词",不需要额外接线。
     private func cancelPlaceholderSearch() {
         guard let key = placeholderSummary?.key else { return }
-        let url = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent(".config/lyrimuse/lyrimuse-enrich-cancel-request.txt")
+        let url = LyrimusePaths.configFile("lyrimuse-enrich-cancel-request.txt")
         try? key.write(to: url, atomically: true, encoding: .utf8)
     }
 
@@ -2122,6 +2256,24 @@ struct LyricsManagerView: View {
                        help: L10n.t("联网搜索候选歌词"), disabled: rematchRunningKey != nil) {
                 showSearchSheet = true
             }
+            // 「标为纯音乐」/「取消纯音乐标记」只对没歌词的条目出现(2026-09-05):口白 intro、
+            // 访谈、几十秒的过场,九个源里没有任何一个会替它们给出 instrumental 结论,
+            // 这个判断只有人能下。标上之后列表从红色「无歌词」变成中性「纯音乐」,collector
+            // 也不再每隔一天白搜一轮(needsLyricsFirstFill 见到这个标记直接 return)。
+            // 可撤销:标错了点一下就回来,没有别的副作用(见 EnrichCacheStore.setInstrumental)。
+            if !summary.hasLyrics {
+                if summary.isInstrumental {
+                    ActionTile(icon: "waveform.slash", title: L10n.t("取消纯音乐标记"),
+                               help: L10n.t("撤回「纯音乐」结论，这首歌重新回到自动补搜歌词的队列")) {
+                        Task { await store.setInstrumental(key: summary.key, false) }
+                    }
+                } else {
+                    ActionTile(icon: "waveform", title: L10n.t("标为纯音乐"),
+                               help: L10n.t("这首本来就没有歌词（口白、过场、纯乐器）：标上之后不再显示为「无歌词」，采集服务也不再反复重搜")) {
+                        Task { await store.setInstrumental(key: summary.key, true) }
+                    }
+                }
+            }
             // 跟工具栏按钮、右键菜单走同一条 requestDelete → 侧栏那个确认弹窗的路径:
             // 只留一处弹窗,文案/统计/快照逻辑不会两处漂移。
             ActionTile(icon: "trash", title: L10n.t("删除本地记录"),
@@ -2189,6 +2341,11 @@ struct LyricsManagerView: View {
                     // 2026-08-30 加,理由同 isInstrumental 那档:有纯文本兜底不是"什么都
                     // 没有",不该跟真的一条候选都没有共用刺眼的红色。
                     InfoChip(icon: "text.quote", text: L10n.t("仅纯文本"), tint: .orange)
+                } else if summary.knownOnSources {
+                    // 2026-09-05 加:网易云/QQ 曲库里有这首歌、只是没人挂词(多是刚发行的独立
+                    // 作品)。这不是"我们没搜到",是"词还不存在"——中性色,别当故障报。
+                    // 判据见 Summary.knownOnSources。
+                    InfoChip(icon: "music.note", text: L10n.t("源里有歌、无词"), tint: .secondary)
                 } else {
                     InfoChip(icon: "text.badge.xmark", text: L10n.t("无歌词"), tint: .red)
                 }
@@ -2778,6 +2935,10 @@ private struct LyricsManagerRow: View {
                         // 2026-08-30 加:有纯文本兜底(「歌词窗口」已经在展示了)不是
                         // "什么都没有",不该跟真的一条候选都没有共用刺眼的红色。
                         Text(L10n.t("仅纯文本")).font(.caption2).foregroundStyle(.orange)
+                    } else if summary.knownOnSources {
+                        // 2026-09-05 加,跟详情页 infoStrip 同一档:源里有歌、没人挂词,
+                        // 不是故障,中性色。
+                        Text(L10n.t("源里有歌、无词")).font(.caption2).foregroundStyle(.secondary)
                     } else {
                         Text(L10n.t("无歌词")).font(.caption2).foregroundStyle(.red)
                     }

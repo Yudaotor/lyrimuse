@@ -189,7 +189,7 @@ func scheduleArtworkUpload(sha, path string) {
 		}
 		artworkMu.Unlock()
 		if err != nil {
-			log.Printf("artwork relay: %s 上传失败(%v 内不再重试): %v", sha, artworkUploadRetryAfter, err)
+			log.Printf("artwork relay: upload failed sha=%s, not retrying for %v: %v", sha, artworkUploadRetryAfter, err)
 		}
 	}()
 }
@@ -280,7 +280,7 @@ func sweepDeviceArtwork(ctx context.Context) {
 		}
 		if err := ensureArtworkUploaded(ctx, sha, path); err != nil {
 			failed++
-			log.Printf("artwork relay: 补传 %s 失败: %v", sha, err)
+			log.Printf("artwork relay: backfill upload failed sha=%s: %v", sha, err)
 		} else {
 			artworkMu.Lock()
 			artworkUploaded[sha] = true
@@ -294,6 +294,6 @@ func sweepDeviceArtwork(ctx context.Context) {
 		}
 	}
 	if uploaded > 0 || failed > 0 {
-		log.Printf("artwork relay: 启动补传完成(确认 %d 张、失败 %d、跳过 %d)", uploaded, failed, skipped)
+		log.Printf("artwork relay: startup backfill done confirmed=%d failed=%d skipped=%d", uploaded, failed, skipped)
 	}
 }

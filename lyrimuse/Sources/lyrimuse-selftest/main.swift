@@ -47,6 +47,8 @@ let groups: [TestGroup] = [
     TestGroup(name: "overlay", summary: "桌面悬浮歌词 / 歌词窗口的几何与命中测试", run: runOverlayTests),
     TestGroup(name: "notch", summary: "灵动岛:展开区 / 音浪包络", run: runNotchTests),
     TestGroup(name: "idle-page", summary: "停播页:第 N 次听换算 / 收听总览 / 选句 / 平台链接", run: runIdlePageTests),
+    TestGroup(name: "identity", summary: "变体身份与落盘路径:正式 / Dev 两套名字、配置目录、日志、传给 collector 的环境变量", run: runIdentityTests),
+    TestGroup(name: "update-channel", summary: "更新频道:版本号 / 构建号(与 build-version.sh 交叉校验)/ Release 列表 / 测试版该读哪份 appcast", run: runUpdateChannelTests),
     TestGroup(name: "settings-ui", summary: "设置页交互纯逻辑:顺序优先列表拖拽排序(滞回 / 让位 / 写回)", run: runSettingsInteractionTests),
     TestGroup(name: "contracts", summary: "跨文件契约(多数靠 #filePath 扫源码文本):设置页分段 / 本地化 / 滑杆 / 封面口径 / 灵动岛对齐 / 引导页", run: runSourceContractTests),
     TestGroup(name: "ops-diagnostics", summary: "诊断脱敏 / 备份发现 / 导入策略 / 安全写文件 / launchd / 进程", run: runOpsDiagnosticsTests),

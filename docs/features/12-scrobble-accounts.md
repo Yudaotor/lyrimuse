@@ -32,7 +32,7 @@
 
 ⚠️ **写入条件是两条，满足其一才写**（标题曾经写「不依赖账号」，那是 2026-08-13 收窄**之前**的行为，已改）：①没连 Last.fm（`p.lfm == nil`）；②连了 Last.fm 但这一条**确定没写进去**（镜像失败，`recordFailedMirror`，2026-08-30 加，见第 4 节）。**一个一直连着账号、网络也一直正常的用户，这份日志会是空的——那是对的。**
 
-每次符合上述条件的收听追加一行到 `lyrimuse-listens.jsonl`——2026-08-13 补上：此前收听只流向「三个都要账号」的目的地，先用一周后连账号的用户那一周从没落过盘。收窄的理由是「一直连着账号的用户写进去的每一行都是注定不会被用到的死数据，却要一直占盘、一直参与折叠计算」。这份日志是「本地已记录 N 首，连接后可补提交」清单的数据源。`collector delete-listen -uts <秒>` 删指定条目（必须由 collector 做——它在持续追加、格式语义都在它这边）。
+每次符合上述条件的收听追加一行到 `lyrimuse-listens.jsonl`——2026-08-13 补上：此前收听只流向「三个都要账号」的目的地，先用一周后连账号的用户那一周从没落过盘。收窄的理由是「一直连着账号的用户写进去的每一行都是注定不会被用到的死数据，却要一直占盘、一直参与折叠计算」。这份日志是「本地已记录 N 首，连接后可补提交」清单的数据源。`collector delete-listen -uts <秒>` 删指定条目（必须由 collector 做——它在持续追加、格式语义都在它这边）。⚠️ **2026-09-06 真实 bug：清单上那颗删除叉点了没反应。** `ScrobbleBackfillService.runDelete` 是六个 collector 子命令调用点里唯一没传 `LyrimusePaths.collectorProcessEnvironment()` 的一个——它走 `ProcessRunner.run`，而那个函数当时压根没有环境参数（另外五处都是自己 new Process、顺手就设上了）。后果：`delete-listen` 按 collector 自己的默认规则找配置目录，**Dev 变体**下 App 读的是 `~/.config/lyrimuse-dev`、删的却是 `~/.config/lyrimuse`，那几条 uts 在正式版日志里根本不存在 → `deleted:0` → `ok=false` → 清单原样重拉一遍 → 界面上就是「点了没反应」。正式版两个目录同名，所以它只在 Dev 上现形——这也正是它能活到今天的原因。定位靠日志（`category=backfill` 的 `delete listen uts=… ok=false` 说明点击**有**到达，排除了按钮/命中测试那一层），复现靠拿 dev 日志的副本跑两遍子命令（带 `LYRIMUSE_CONFIG_DIR` → `deleted:1`；不带 → `deleted:0`）。修法：`ProcessRunner.run` 加 `environment:` 参数（nil = 继承，osascript / media-control 那些不认配置目录的仍走继承），调用点显式传。selftest 的「身份收口」守卫此前按 `process.executableURL` 字面量数 spawn 点，数不到 ProcessRunner 这条路，现在两种形状一起数（`execs + runners == envs`）。
 
 ### 3. ListenBrainz 提交（lb.go）
 

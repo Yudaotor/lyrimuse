@@ -423,6 +423,18 @@ func runOpsDiagnosticsTests() {
         expectEqual(hello?.succeeded, true, "ProcessRunner: succeeded")
 
         // 非零退出：跑了但失败，跟"没跑起来"是两回事。
+        // environment(2026-09-06 加):不传 = 继承本进程;传了 = 子进程只有这一份。
+        // 这个参数是「待补提交删除按钮点了没反应」那个 bug 的修法,值得有行为断言而不是
+        // 只靠调用点的注释。
+        let inherited = ProcessRunner.run("/bin/sh", ["-c", "echo \"[$LYRIMUSE_SELFTEST_ENV]\""], timeout: 5)
+        expectEqual(inherited?.stdoutText.trimmingCharacters(in: .whitespacesAndNewlines), "[]",
+                    "ProcessRunner: 不传 environment 时继承本进程(这个变量本来就没有 → 空)")
+        let explicit = ProcessRunner.run(
+            "/bin/sh", ["-c", "echo \"[$LYRIMUSE_SELFTEST_ENV]\""], timeout: 5,
+            environment: ["LYRIMUSE_SELFTEST_ENV": "on"])
+        expectEqual(explicit?.stdoutText.trimmingCharacters(in: .whitespacesAndNewlines), "[on]",
+                    "ProcessRunner: 传了 environment 就真的传进子进程")
+
         let failed = ProcessRunner.run("/bin/sh", ["-c", "exit 3"], timeout: 5)
         expectEqual(failed?.status, 3, "ProcessRunner: 非零退出码如实返回")
         expectEqual(failed?.succeeded, false, "ProcessRunner: 非零退出不算成功")
@@ -533,5 +545,144 @@ func runOpsDiagnosticsTests() {
         expectEqual(CollectorLogLine.timestamp(of: "2026/09/04 15:49") == nil, true, "collector 时间戳: 老格式截短 → nil 不崩")
         expectEqual(LogFiles.appStderr.lastPathComponent, "lyrimuse-app.log", "日志文件: App stderr 单独一份")
         expectEqual(LogFiles.collector.lastPathComponent, "lyrimuse.log", "日志文件: collector 日志路径不变")
+    }
+
+    // ---- CrashReportSummary(诊断导出的崩溃报告段,2026-09-06,借鉴清单 #31)----
+    //
+    // .ips = 摘要行 JSON + 正文 JSON。三种样本照本机真实报告的形状写:启动期 DYLD 缺库(零帧,信息全在
+    // termination)、另一个同名包里 collector 的签名约束、带 20 帧的 EXC_BAD_ACCESS(截成 15)。再钉宽容解析、归属判定
+    // (本 App / 另一个同名包 / 别家 collector)与每进程限量挑选。bundle id 与包名一律从 LyrimuseIdentity 取,不写字面量。
+    do {
+        print("\n== 崩溃报告摘要 ==")
+        let prod = LyrimuseIdentity.current
+        // 另一个同名包(想象中的 nightly 版):用来断言归属判定按 bundle id / 包名把它排除在外。
+        let otherName = prod.displayName + " Nightly"
+        let otherID = prod.bundleIdentifier + ".nightly"
+        func ips(_ header: String, _ body: String) -> Data { (header + "\n" + body).data(using: .utf8)! }
+
+        let dyldHeader = """
+        {"app_name":"lyrimuse","timestamp":"2026-08-30 18:33:01.00 +0800","app_version":"1.4.0","build_version":"1.4.0","bug_type":"309","os_version":"macOS 27.0 (26A5416b)","bundleID":"\(prod.bundleIdentifier)","incident_id":"AAAA"}
+        """
+        let dyldBody = """
+        {"procName":"lyrimuse","procPath":"/Applications/\(prod.displayName).app/Contents/MacOS/lyrimuse","bundleInfo":{"CFBundleShortVersionString":"1.4.0","CFBundleVersion":"1.4.0","CFBundleIdentifier":"\(prod.bundleIdentifier)"},"captureTime":"2026-08-30 18:33:01.5 +0800","exception":{"type":"EXC_CRASH","signal":"SIGABRT","codes":"0x0, 0x0"},"termination":{"code":1,"flags":518,"namespace":"DYLD","indicator":"Library missing","details":["(terminated at launch; ignore backtrace)"],"reasons":["Library not loaded: @rpath/Sparkle.framework/Versions/B/Sparkle","Referenced from: <UUID> /Applications/\(prod.displayName).app/Contents/MacOS/lyrimuse"]},"faultingThread":0,"threads":[{"id":1,"triggered":true,"frames":[]}],"usedImages":[]}
+        """
+        let dyld = CrashReportSummary.parse(fileName: "lyrimuse-2026-08-30-183301.ips", data: ips(dyldHeader, dyldBody))
+        expectEqual(dyld != nil, true, "崩溃报告: DYLD 样本解析成功")
+        if let dyld {
+            expectEqual(dyld.processName, "lyrimuse", "崩溃报告: 进程名")
+            expectEqual(dyld.version, "1.4.0", "崩溃报告: 版本")
+            expectEqual(dyld.bugType, "309", "崩溃报告: bug_type 来自摘要行")
+            expectEqual(dyld.timestamp, "2026-08-30 18:33:01.00 +0800", "崩溃报告: 时间戳优先取摘要行")
+            expectEqual(dyld.exceptionSignal, "SIGABRT", "崩溃报告: 信号")
+            expectEqual(dyld.terminationNamespace, "DYLD", "崩溃报告: termination namespace")
+            expectEqual(dyld.terminationIndicator, "Library missing", "崩溃报告: termination indicator")
+            expectEqual(dyld.terminationReasons.count, 2, "崩溃报告: reasons 两条")
+            expectEqual(dyld.terminationDetails, ["(terminated at launch; ignore backtrace)"], "崩溃报告: details")
+            expectEqual(dyld.faultingThreadIndex, 0, "崩溃报告: 故障线程号")
+            expectEqual(dyld.frames.isEmpty && dyld.totalFrames == 0, true, "崩溃报告: 启动期崩溃零帧")
+            expectEqual(dyld.parseNotes.isEmpty, true, "崩溃报告: 两段都解出来没有 note")
+            let text = dyld.renderLines().joined(separator: "\n")
+            expectEqual(text.contains("- lyrimuse-2026-08-30-183301.ips"), true, "崩溃报告: 渲染首行是文件名")
+            expectEqual(text.contains("process: lyrimuse 1.4.0 ·"), true, "崩溃报告: 版本与构建号相同只写一次")
+            expectEqual(text.contains("termination: DYLD · Library missing"), true, "崩溃报告: 渲染 termination")
+            expectEqual(text.contains("reason: Library not loaded: @rpath/Sparkle.framework/Versions/B/Sparkle"), true, "崩溃报告: 渲染缺的库")
+            expectEqual(text.contains("faulting thread 0: no frames recorded"), true, "崩溃报告: 零帧明说")
+            expectEqual(dyld.belongsToApp(executableName: "lyrimuse", bundleIdentifier: prod.bundleIdentifier, appDisplayName: prod.displayName), true,
+                        "崩溃报告归属: 本 App 的报告属于本 App")
+            expectEqual(dyld.belongsToApp(executableName: "lyrimuse", bundleIdentifier: otherID, appDisplayName: otherName), false,
+                        "崩溃报告归属: 本 App 的报告不混进别的 bundle id")
+        }
+
+        let frameJSON = (0..<20).map { i in
+            "{\"imageIndex\":\(i % 2),\"imageOffset\":\(1000 + i),\"symbol\":\"sym\(i)\"" + (i == 0 ? ",\"sourceFile\":\"Foo.swift\",\"sourceLine\":42" : "") + "}"
+        }.joined(separator: ",")
+        let crashBody = """
+        {"procName":"lyrimuse","procPath":"/Applications/\(prod.displayName).app/Contents/MacOS/lyrimuse","bundleInfo":{"CFBundleShortVersionString":"1.5.0","CFBundleVersion":"1.5.0.1000","CFBundleIdentifier":"\(prod.bundleIdentifier)"},"captureTime":"2026-09-06 02:00:00.0 +0800","osVersion":{"train":"macOS 27.0","build":"26A5416b"},"exception":{"type":"EXC_BAD_ACCESS","signal":"SIGSEGV","subtype":"KERN_INVALID_ADDRESS at 0x0"},"termination":{"namespace":"SIGNAL","indicator":"Segmentation fault: 11","flags":0,"code":11},"faultingThread":1,"threads":[{"frames":[{"imageIndex":1,"imageOffset":5}]},{"triggered":true,"frames":[\(frameJSON)]}],"usedImages":[{"name":"lyrimuse","base":0},{"name":"libswiftCore.dylib","base":0}]}
+        """
+        let crash = CrashReportSummary.parse(fileName: "lyrimuse-2026-09-06-020000.ips", data: ips("{not json", crashBody))
+        expectEqual(crash != nil, true, "崩溃报告: 摘要行坏了只用正文")
+        if let crash {
+            expectEqual(crash.parseNotes, ["header unreadable"], "崩溃报告: note 记下摘要行没解出来")
+            expectEqual(crash.timestamp, "2026-09-06 02:00:00.0 +0800", "崩溃报告: 时间戳退到正文 captureTime")
+            expectEqual(crash.osVersion, "macOS 27.0 (26A5416b)", "崩溃报告: 系统版本退到正文 osVersion")
+            expectEqual(crash.faultingThreadIndex, 1, "崩溃报告: 取故障线程而不是第 0 个")
+            expectEqual(crash.totalFrames, 20, "崩溃报告: 记总帧数")
+            expectEqual(crash.frames.count, CrashReportSummary.maxFrames, "崩溃报告: 只留前 15 帧")
+            expectEqual(crash.frames[0].imageName, "lyrimuse", "崩溃报告: imageIndex → usedImages 名字")
+            expectEqual(crash.frames[1].imageName, "libswiftCore.dylib", "崩溃报告: 第二帧的库名")
+            expectEqual(crash.frames[0].sourceFile, "Foo.swift", "崩溃报告: 源文件")
+            expectEqual(crash.frames[0].sourceLine, 42, "崩溃报告: 源行")
+            let text = crash.renderLines().joined(separator: "\n")
+            expectEqual(text.contains("process: lyrimuse 1.5.0 (1.5.0.1000)"), true, "崩溃报告: 构建号不同才带括号")
+            expectEqual(text.contains("exception: EXC_BAD_ACCESS · SIGSEGV"), true, "崩溃报告: 渲染 exception")
+            expectEqual(text.contains("faulting thread 1: showing 15 of 20 frames"), true, "崩溃报告: 帧数摘要")
+            expectEqual(text.contains("lyrimuse  sym0 + 1000  (Foo.swift:42)"), true, "崩溃报告: 帧行格式")
+            expectEqual(text.contains("sym15"), false, "崩溃报告: 第 16 帧起不渲染")
+            expectEqual(text.contains("note: header unreadable"), true, "崩溃报告: note 渲染出来")
+        }
+
+        let collectorHeader = """
+        {"app_name":"collector","timestamp":"2026-09-06 01:00:00.00 +0800","app_version":"???","bug_type":"309","os_version":"macOS 27.0 (26A5416b)","incident_id":"BBBB"}
+        """
+        let collectorBody = """
+        {"procName":"collector","procPath":"/Users/USER/*/\(otherName).app/Contents/Resources/collector","exception":{"type":"EXC_CRASH","signal":"SIGKILL (Code Signature Invalid)"},"termination":{"namespace":"CODESIGNING","indicator":"Launch Constraint Violation","flags":66,"code":4},"faultingThread":0,"threads":[{"frames":[]}]}
+        """
+        let devCollector = CrashReportSummary.parse(fileName: "collector-2026-09-06-010000.ips", data: ips(collectorHeader, collectorBody))
+        expectEqual(devCollector?.bundleIdentifier == nil, true, "崩溃报告: collector 没有 bundle id")
+        expectEqual(devCollector?.belongsToApp(executableName: "lyrimuse", bundleIdentifier: otherID, appDisplayName: otherName), true,
+                    "崩溃报告归属: 另一个同名包里的 collector 属于那个包(按包名判,家目录已被 macOS 改写)")
+        expectEqual(devCollector?.belongsToApp(executableName: "lyrimuse", bundleIdentifier: prod.bundleIdentifier, appDisplayName: prod.displayName), false,
+                    "崩溃报告归属: 别的包的 collector 不混进本 App")
+        let foreignBody = """
+        {"procName":"collector","procPath":"/Applications/Other.app/Contents/MacOS/collector","termination":{"namespace":"SIGNAL","indicator":"Abort trap: 6"}}
+        """
+        let foreign = CrashReportSummary.parse(fileName: "collector-2026-09-06-010500.ips", data: ips("{\"app_name\":\"collector\"}", foreignBody))
+        expectEqual(foreign?.belongsToApp(executableName: "lyrimuse", bundleIdentifier: prod.bundleIdentifier, appDisplayName: prod.displayName), false,
+                    "崩溃报告归属: 别家叫 collector 的进程被排除")
+
+        // 宽容解析的边界
+        let headerOnly = CrashReportSummary.parse(fileName: "x.ips", data: ips(dyldHeader, "garbage {"))
+        expectEqual(headerOnly?.parseNotes, ["body unreadable"], "崩溃报告: 正文坏了只用摘要行")
+        expectEqual(headerOnly?.processName, "lyrimuse", "崩溃报告: 摘要行里的进程名还在")
+        expectEqual(CrashReportSummary.parse(fileName: "x.ips", data: ips("garbage", "more garbage")) == nil, true, "崩溃报告: 两段都坏 → nil")
+        expectEqual(CrashReportSummary.parse(fileName: "x.ips", data: Data()) == nil, true, "崩溃报告: 空文件 → nil")
+        expectEqual(CrashReportSummary.parse(fileName: "x.ips", data: "   \n  \n".data(using: .utf8)!) == nil, true, "崩溃报告: 只有空白 → nil")
+        let bodyOnly = CrashReportSummary.parse(fileName: "x.ips", data: crashBody.data(using: .utf8)!)
+        expectEqual(bodyOnly?.processName, "lyrimuse", "崩溃报告: 没有摘要行、整份是正文也认")
+        expectEqual(bodyOnly?.totalFrames, 20, "崩溃报告: 整份正文的帧照常解")
+        let arrayTop = CrashReportSummary.parse(fileName: "x.ips", data: ips("[1,2]", "[3]"))
+        expectEqual(arrayTop == nil, true, "崩溃报告: 顶层不是对象 → nil 不崩")
+
+        // 每进程限量
+        func stub(_ name: String, _ ts: String) -> CrashReportSummary {
+            var s = CrashReportSummary(fileName: "\(name)-\(ts).ips"); s.processName = name; s.timestamp = ts; return s
+        }
+        let many = (1...5).map { stub("lyrimuse", "2026-09-0\($0) 00:00:00") } + (1...4).map { stub("collector", "2026-09-1\($0) 00:00:00") }
+        let picked = CrashReportSummary.select(many, perProcessLimit: 3)
+        expectEqual(picked.count, 6, "崩溃报告挑选: 两个进程各 3 份")
+        expectEqual(picked.filter { $0.processName == "lyrimuse" }.count, 3, "崩溃报告挑选: App 那 3 份没被 collector 挤掉")
+        expectEqual(picked.first { $0.processName == "lyrimuse" }?.timestamp, "2026-09-05 00:00:00", "崩溃报告挑选: 同进程按时间倒序,最新的在前")
+        expectEqual(picked.first { $0.processName == "collector" }?.timestamp, "2026-09-14 00:00:00", "崩溃报告挑选: collector 同理")
+        expectEqual(CrashReportSummary.select([], perProcessLimit: 3).isEmpty, true, "崩溃报告挑选: 空输入空输出")
+        expectEqual(CrashReportSummary.select(many, perProcessLimit: 0).isEmpty, true, "崩溃报告挑选: 限量 0 → 空")
+
+        // 真报告全解一遍(默认不跑):LYRIMUSE_LIVE_CRASHREPORTS=1 时读本机 DiagnosticReports 里 lyrimuse-*.ips。
+        if ProcessInfo.processInfo.environment["LYRIMUSE_LIVE_CRASHREPORTS"] == "1" {
+            let dir = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Logs/DiagnosticReports")
+            let names = ((try? FileManager.default.contentsOfDirectory(atPath: dir.path)) ?? [])
+                .filter { $0.hasPrefix("lyrimuse-") && $0.hasSuffix(".ips") }.sorted()
+            print("live: \(names.count) real report(s)")
+            for name in names {
+                let data = (try? Data(contentsOf: dir.appendingPathComponent(name))) ?? Data()
+                let parsed = CrashReportSummary.parse(fileName: name, data: data)
+                expectEqual(parsed != nil, true, "崩溃报告(真): \(name) 解析成功")
+                expectEqual(parsed?.parseNotes.isEmpty, true, "崩溃报告(真): \(name) 两段都解出来")
+                expectEqual(parsed?.terminationIndicator != nil, true, "崩溃报告(真): \(name) 有 termination indicator")
+            }
+            if let last = names.last, let data = try? Data(contentsOf: dir.appendingPathComponent(last)),
+               let parsed = CrashReportSummary.parse(fileName: last, data: data) {
+                for line in parsed.renderLines() { print("   ", line) }
+            }
+        }
     }
 }

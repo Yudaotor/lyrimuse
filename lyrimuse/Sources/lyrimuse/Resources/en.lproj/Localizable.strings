@@ -30,6 +30,7 @@
 "%@（推荐）" = "%@ (recommended)";
 "%@，已下载" = "%@, downloaded";
 "%@，点击下载" = "%@, click to download";
+"%@，纯文本可直接编辑；外观与快捷键不在里面（它们在 UserDefaults）" = "%@ — plain text, editable directly. Appearance and shortcuts are NOT in here (they live in UserDefaults).";
 "%d 次" = "×%d";
 "/ %@ 页" = "of %@";
 "Apple Music" = "Apple Music";
@@ -80,7 +81,6 @@
 "https://api.day.app/你的Key" = "https://api.day.app/YourKey";
 "https://sctapi.ftqq.com/你的SendKey.send" = "https://sctapi.ftqq.com/YourSendKey.send";
 "iCloud 备份" = "Backup in iCloud";
-"~/.config/lyrimuse，纯文本可直接编辑；外观与快捷键不在里面（它们在 UserDefaults）" = "~/.config/lyrimuse — plain text, editable directly. Appearance and shortcuts are NOT in here (they live in UserDefaults).";
 "① 填写密钥" = "① Enter API Key";
 "② 浏览器授权" = "② Authorize in Browser";
 "③ 完成连接" = "③ Connection Complete";
@@ -103,6 +103,7 @@
 "三连音符" = "Three Notes";
 "上" = "Top";
 "上一步" = "Back";
+"上一轮" = "Last Run";
 "上一页" = "Previous";
 "上一首" = "Previous Track";
 "上次保存：%@ · 采集器已重启" = "Last saved: %@ · Collector restarted";
@@ -111,6 +112,8 @@
 "上次听" = "Last listened";
 "上次检查：%@" = "Last checked: %@";
 "上次检测通过（%@）" = "Verified working (%@)";
+"上次被手动停止" = "Last run was stopped manually";
+"上次：搜了 %1$@ 首，补出 %2$@ 首" = "Last run: searched %1$@, filled %2$@";
 "上移" = "Move Up";
 "上面的「Scrobble 到 Last.fm」关着，这里的设置暂时不起作用" = "“Scrobble to Last.fm” above is off, so these settings have no effect right now";
 "下" = "Bottom";
@@ -191,6 +194,7 @@
 "修好文件后重新打开 Lyrimuse；或放弃这份文件，用当前界面上的值重建（原文件会改名保留，不会删除）。" = "Fix the file and reopen Lyrimuse, or discard it and rebuild it from the values shown here (the original is renamed, not deleted).";
 "偏移" = "Offset";
 "停止搜索" = "Stop Searching";
+"停止重试" = "Stop Retrying";
 "光盘" = "Disc";
 "全局快捷键在任何 App 里都能触发。至少需要搭配 ⌘/⌥/⌃ 中一个（功能键、媒体键除外）" = "Global shortcuts work in any app. Each needs at least one of ⌘/⌥/⌃ (function and media keys excepted)";
 "全局时间轴偏移" = "Global Timing Offset";
@@ -285,6 +289,7 @@
 "取不到最后一句的时间" = "No timestamp on the last line";
 "取消" = "Cancel";
 "取消喜欢" = "Remove Favorite";
+"取消纯音乐标记" = "Unmark Instrumental";
 "取消置顶" = "Turn Off Always on Top";
 "取消选择" = "Deselect All";
 "取消静音" = "Unmute";
@@ -321,6 +326,7 @@
 "同步收听到 Last.fm（可选）" = "Scrobble to Last.fm (optional)";
 "同步服务地址" = "Sync Server URL";
 "后台采集服务" = "Background Collector Service";
+"后台采集服务已停用，改动会在下次启用时生效" = "The background service is turned off. The change takes effect when it is turned on again.";
 "后台采集服务未运行，歌词不会更新" = "Background collector is not running; lyrics will not update";
 "后台采集服务还没启用，所以这次不算走完引导——下次启动会再问一次" = "The background service isn't enabled yet, so this doesn't count as finishing setup — you'll be asked again next launch";
 "后台采集服务重启失败" = "Could not restart the background service";
@@ -420,6 +426,7 @@
 "已下载" = "Downloaded";
 "已下载 %@ / %@" = "%@ of %@ downloaded";
 "已保存" = "Saved";
+"已保存，但后台采集服务重启失败，改动要等下次重启才生效" = "Saved, but the background service could not be restarted. The change takes effect the next time it restarts.";
 "已信任的其它播放器" = "Trusted third-party players";
 "已减少推荐" = "Suggested Less";
 "已删除" = "Deleted";
@@ -480,6 +487,7 @@
 "已隐藏译文" = "Translation hidden";
 "已静音" = "Muted";
 "布局" = "Layout";
+"带 beta 后缀的预发布版本也会出现在更新提示里，可能不稳定" = "Pre-release builds (tags with a beta suffix) also show up in update prompts and may be unstable";
 "带逐字（卡拉OK）时间轴，是歌词质量最直接的证据" = "Has word-by-word (karaoke) timing, the most direct evidence of quality";
 "常规" = "Regular";
 "常驻后台服务" = "Background service";
@@ -579,6 +587,7 @@
 "排序" = "Sort";
 "排版" = "Layout";
 "接收 Lyrimuse 的推送通知" = "Receive push notifications from Lyrimuse";
+"接收测试版更新" = "Receive beta updates";
 "推送提醒" = "Push Alerts";
 "描边颜色" = "Stroke Color";
 "提前" = "Advance";
@@ -593,6 +602,7 @@
 "搜索歌词" = "Search Lyrics";
 "搜索歌词…" = "Search Lyrics…";
 "搜索歌词中…" = "Searching for lyrics…";
+"撤回「纯音乐」结论，这首歌重新回到自动补搜歌词的队列" = "Withdraw the instrumental verdict; this track goes back into the automatic lyric-retry queue";
 "播放/暂停" = "Play/Pause";
 "播放器" = "Player";
 "播放器（可多选）" = "Player (Multi-Select)";
@@ -738,6 +748,7 @@
 "查看已有应用" = "My applications";
 "查看效果 + 教程 →" = "See Effect + Guide →";
 "查询词：%@" = "Query: %@";
+"标为纯音乐" = "Mark as Instrumental";
 "标注哪些语言" = "Annotate";
 "标题吻合" = "Title match";
 "标题吻合度更高的候选存在，撤销逐字加分" = "A candidate matches the title better, so the word-timing bonus is withdrawn";
@@ -805,7 +816,9 @@
 "正在同步历史（%1$@/%2$@ 页）" = "Syncing history (page %1$@ of %2$@)";
 "正在同步历史（%@）" = "Syncing history (%@)";
 "正在尝试开启…" = "Enabling…";
+"正在应用到后台服务…" = "Applying to the background service…";
 "正在搜索歌词…" = "Searching for lyrics…";
+"正在搜：%@" = "Searching: %@";
 "正在播放" = "Playing";
 "正在放：%@" = "Now playing: %@";
 "正在查询网易云 / QQ音乐 / 酷狗 / Musixmatch / LRCLIB…" = "Searching NetEase Cloud Music / QQ Music / Kugou Music / Musixmatch / LRCLIB…";
@@ -820,6 +833,7 @@
 "正在采用…" = "Applying…";
 "正在重新匹配…" = "Re-matching…";
 "正在重新匹配…（%1$@/%2$@）" = "Re-matching… (%1$@/%2$@)";
+"正在重试无歌词条目…" = "Retrying entries without lyrics…";
 "正在验证…" = "Checking…";
 "正数=提前显示,负数=延后显示" = "Positive = show earlier, negative = show later";
 "正数＝歌词提前，负数＝歌词延后；常用来抵消蓝牙耳机的声音延迟" = "Positive shows lyrics earlier, negative later; usually to offset Bluetooth audio delay";
@@ -864,6 +878,8 @@
 "清除所有设置" = "Erase All Settings";
 "清除筛选" = "Clear Filters";
 "源自报曲长不符" = "Source duration mismatch";
+"源里有歌、无词" = "Indexed, No Lyrics";
+"源里有歌、无词 %@ 首" = "%@ indexed, no lyrics";
 "灵动岛" = "Notch";
 "灵动岛宽度" = "Notch Card Width";
 "灵动岛歌词" = "Notch Lyrics";
@@ -1022,6 +1038,7 @@
 "解锁后鼠标点击会穿到桌面上；拖动方式见设置里的「拖动前先长按」" = "Unlocked: clicks pass through to the desktop. How dragging works is set by 'Long-press before dragging' in Settings";
 "让它一直待命" = "Keep It Running";
 "让每首歌都有一份对得上的歌词" = "Give every track lyrics that actually match it";
+"让采集服务现在就把没有歌词的条目重新搜一遍，不用等每首歌再次播放" = "Have the collector re-search every entry without lyrics now, instead of waiting for each track to be played again";
 "记录的是手动修改之前的最后一次自动评估" = "This records the last automatic evaluation before your manual edit";
 "许可与版权" = "License & Copyright";
 "设置" = "Settings";
@@ -1156,6 +1173,7 @@
 "这里是译文示例" = "The translation looks like this";
 "这里的设置对桌面悬浮歌词和灵动岛生效，先开启其中一种" = "These settings apply to Desktop Floating Lyrics and Notch Lyrics — turn one of them on first";
 "这里能看到已创建的应用和它们的 API Key，但看不到 Secret；Secret 丢了的话，用上面「前往申请」再建一个新的就好" = "This shows apps you've already created and their API Key, but not the Secret. If you've lost the Secret, use 'Get an API account' above to create a new one instead";
+"这首本来就没有歌词（口白、过场、纯乐器）：标上之后不再显示为「无歌词」，采集服务也不再反复重搜" = "This track has no lyrics by nature (spoken word, interlude, instrumental): once marked it no longer shows as “No Lyrics” and the collector stops re-searching it";
 "这首歌在你 Last.fm 上的第几次收听" = "Which play of this track this was in your Last.fm history";
 "这首歌在你 Last.fm 上的第几次收听，点一下看合并了哪些写法" = "Which play of this track this was in your Last.fm history. Click to see which spellings were merged";
 "这首歌没有歌词或还在搜索时，用「♪ 歌名」占住歌词的位置，不缩回小图标；歌词一到就换成歌词。暂停时仍缩回图标，广告中不显示" = "While a song has no lyrics or is still being searched, keep the lyrics slot with “♪ Title” instead of collapsing to the icon; the line is swapped in as soon as lyrics arrive. Still collapses when paused, and never shows during ads";
@@ -1191,6 +1209,7 @@
 "逐字歌词，唱到哪个字亮到哪个字；没有逐字数据的歌整行高亮" = "Word-by-word lyrics: each word lights up as it is sung. Songs without word timings highlight the whole line";
 "逐行" = "Line-by-line";
 "逐行歌词" = "Line-by-line";
+"逐首联网重搜，每首间隔 15 秒；纯音乐与人工修正过的不碰" = "Re-searches online one track at a time, 15 s apart; skips instrumentals and manual edits";
 "通用" = "General";
 "通知平台" = "Notification Platform";
 "那天最后一次:%@" = "Last played that day: %@";
@@ -1209,6 +1228,7 @@
 "采纳为静态文本" = "Adopt as Static Text";
 "采集服务" = "Collector";
 "重新打开授权页面" = "Reopen Authorization Page";
+"重新扫描无歌词条目（%@ 首）" = "Rescan Entries Without Lyrics (%@)";
 "重新搜索" = "Search Again";
 "重新检测" = "Check Again";
 "重新联网跑一遍匹配，直接采用算法选出的那一份，不用自己挑；跟设置里的「匹配算法」一致" = "Search again and take whatever the matcher picks, instead of choosing yourself; follows the “Matching algorithm” setting";
@@ -1219,6 +1239,11 @@
 "重置" = "Reset";
 "重置列宽" = "Reset Column Widths";
 "重试" = "Retry";
+"重试中 %1$@/%2$@" = "Retrying %1$@/%2$@";
+"重试全部无歌词条目（%@ 首）" = "Retry All Without Lyrics (%@)";
+"重试当前筛选出的无歌词条目（%@ 首）" = "Retry Filtered Without Lyrics (%@)";
+"重试无歌词" = "Retry Missing Lyrics";
+"重试选中的无歌词 %@ 条" = "Retry Lyrics for %@ Songs";
 "钉钉" = "DingTalk";
 "钢琴键" = "Piano Keys";
 "锁定/解锁位置" = "Lock/Unlock Position";

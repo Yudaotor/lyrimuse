@@ -24,7 +24,7 @@ import (
 //
 // 连过去的结果是 TLS 握手直接失败(`SSL: no alternative certificate subject name
 // matches target host name`)—— 证书当然对不上,那台机器根本不是 Musixmatch。
-// 于是 token.get 一个字节都拿不到,整个 Musixmatch 源静默失效:五个源里唯一覆盖
+// 于是 token.get 一个字节都拿不到,整个 Musixmatch 源静默失效:各源里唯一覆盖
 // 欧美/日韩曲库的那个,英文歌就只剩 LRCLIB 一家。
 //
 // 这**不是**代码问题,也不是 musixmatch.go 注释里记的那种反爬拦截(那种会正经返回

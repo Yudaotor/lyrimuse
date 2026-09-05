@@ -117,7 +117,7 @@ func TestMBAliasCandidatesForRetryPrimaryEqualsRawStillReturnsOtherAliases(t *te
 // 这条不是洁癖:MusicBrainz 限速按 IP、1 req/s,而 musicbrainzThrottle 是进程内节流 ——
 // 常驻 collector、手动搜索那个一次性 CLI、跑测试的进程各自计时,互相不知道。撞上 503
 // 就返回空;要是把空也永久写进文件,一次偶发限速会把这位歌手永久钉死在"没有别名"上,
-// 而这条兜底恰恰是"五个源一条候选都没有"时最后的救命绳。⚠️ artistAliasCache 当初就是
+// 而这条兜底恰恰是"所有源一条候选都没有"时最后的救命绳。⚠️ artistAliasCache 当初就是
 // 这么做的(空值永久落盘),2026-08-30 那英《微笑着离去》真撞上了(MusicBrainz 503 →
 // 语言闸误杀真候选),已改成跟这里一致的"只存非空"规则,见 musicbrainz.go 里
 // saveArtistAliasCache 的注释。

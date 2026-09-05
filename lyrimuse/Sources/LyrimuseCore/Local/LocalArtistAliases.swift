@@ -163,8 +163,7 @@ public enum LocalArtistAliases {
 /// 读 collector 的三份 MusicBrainz 歌手缓存(纯读盘、解 JSON,失败给空表)。放在 Core 是因为
 /// EnrichCacheReader 同样在 Core 读盘;selftest 不碰它,只测 LocalArtistAliases.derive 的纯函数部分。
 public enum ArtistIdentityCaches {
-    public static func load(configDir: URL = FileManager.default.homeDirectoryForCurrentUser
-                                .appendingPathComponent(".config/lyrimuse")) -> LocalArtistAliases.MusicBrainzCaches {
+    public static func load(configDir: URL = LyrimusePaths.configDir) -> LocalArtistAliases.MusicBrainzCaches {
         var out = LocalArtistAliases.MusicBrainzCaches()
         if let data = try? Data(contentsOf: configDir.appendingPathComponent("lyrimuse-artist-alias-cache.json")),
            let m = try? JSONDecoder().decode([String: String].self, from: data) {

@@ -1,3 +1,4 @@
+import Combine
 import Foundation
 import os
 
@@ -33,8 +34,12 @@ private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "collec
 /// 真正完成后收到**同一份**结果,不需要各自等自己那次(那次可能已经被取消)。
 /// 这套语义原样搬自 FeatureSettingsStore 的私有实现,不是重新设计。
 @MainActor
-public final class CollectorRestartCoordinator {
+public final class CollectorRestartCoordinator: ObservableObject {
     public static let shared = CollectorRestartCoordinator()
+
+    /// 有一次重启在排队(去抖等待中)或正在执行。设置窗口底部的状态条(CollectorApplyStatusBar)据此显示
+    /// 「正在应用到后台服务…」(2026-09-05,借鉴清单 #51)。只是可见性信号,不参与去抖逻辑。
+    @Published public private(set) var isRestarting = false
 
     private init() {}
 
@@ -49,6 +54,7 @@ public final class CollectorRestartCoordinator {
     public func requestRestart() async -> Bool {
         await withCheckedContinuation { continuation in
             waiters.append(continuation)
+            isRestarting = true
             pendingTask?.cancel()
             pendingTask = Task { [weak self] in
                 try? await Task.sleep(nanoseconds: Self.debounceNanoseconds)
@@ -72,5 +78,7 @@ public final class CollectorRestartCoordinator {
         for continuation in pending {
             continuation.resume(returning: ok)
         }
+        // 重启期间又有新请求进来就还在忙(它们会另起一轮),否则收工。
+        isRestarting = !waiters.isEmpty
     }
 }

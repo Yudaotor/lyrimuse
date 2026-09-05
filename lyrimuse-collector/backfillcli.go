@@ -28,12 +28,11 @@ func runBackfillLastfmCLI(args []string) {
 	timeoutSecs := fs.Int("timeout", 600, "overall timeout in seconds")
 	_ = fs.Parse(args)
 
-	home, err := os.UserHomeDir()
-	if err != nil {
+	if configDir() == "" {
 		emitBackfillOutcome(backfillOutcome{AbortedReason: "cannot resolve home directory"})
 		return
 	}
-	cfgDir := filepath.Join(home, ".config", clientName)
+	cfgDir := configDir()
 	cfgPath := filepath.Join(cfgDir, "config.json")
 
 	// 跟 searchcli.go 同一个理由:这条子命令走的是 main() 里那串提前 return 分支,
@@ -52,6 +51,8 @@ func runBackfillLastfmCLI(args []string) {
 	// 子命令绕过了那段,自己设一次,否则回填里每首合唱歌都要重新打 track.getInfo,而且
 	// 常驻 collector 已经判过的结论也拿不到(两条路径必须读同一份缓存才能发同一个名字)。
 	lastfmCollapsePath = filepath.Join(cfgDir, clientName+"-lastfm-collapse.json")
+	// 跨进程的"feed 提前拉一次"信号文件,跟常驻进程 main.go 设的是同一个路径(见 lastfmfeed.go)。
+	lastfmFeedNudgePath = filepath.Join(cfgDir, clientName+"-lastfm-feed-nudge")
 
 	// 刻意**不**走 lastfmScrobblerIfEnabled:那个多包了一层 features.LastfmMirrorScrobble
 	// 开关。回填是用户在界面上显式点的一次性动作,不该被"要不要持续镜像"这个偏好否决 ——

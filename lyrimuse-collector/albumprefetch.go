@@ -211,7 +211,7 @@ func albumTracksFromMusicApp(album string) ([]albumTrack, bool) {
 	// 纪录片)挡在 AppleScript 这一层——2026-08-26 实测坐实:Michael Jackson《XSCAPE
 	// (Deluxe)》第 18/19 轨"XSCAPE Documentary"/"XSCAPE Documentary Outtakes"的
 	// `media kind` 是 "music video" 不是 "song"（Apple 官方目录里 `kind` 字段也是
-	// "music-video"），本来就没有歌词可言,预取会拿它们去问全部七个歌词源,注定全军覆没,
+	// "music-video"），本来就没有歌词可言,预取会拿它们去问全部歌词源,注定全军覆没,
 	// 还会占满 needsLyricsFirstFill 的重试配额、白白拖长退避周期。用 `is song` 白名单
 	// 而不是拉黑名单排除 video/podcast/audiobook 等——防的是"漏收一种没想到的非歌曲媒体
 	// 类型",而不是"漏挡一种已知的"。

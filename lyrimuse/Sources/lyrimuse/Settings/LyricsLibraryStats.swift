@@ -130,6 +130,10 @@ struct LyricsLibrarySizeLabel: View {
 /// OnboardingView 里 isPlayingNow 那段注释),把订阅面收在这一小块里。
 struct LyricsLibraryStatsPanel: View {
     @ObservedObject private var store = EnrichCacheStore.shared
+    // collector 侧补空扫描的进度快照(LyricsFillSweep,进度文件按 mtime 读),由下面那个 .task 轮询。
+    // 「歌词管理」窗口里同一份状态另有自己的一份 @State,两处各自轮询同一个文件,不共享——
+    // 两扇窗口生命周期独立,共享一个 ObservableObject 只会多一个单例订阅面。
+    @State private var fillSweepStatus: LyricsFillSweep.Info?
 
     private static let numberFormatter: NumberFormatter = {
         let formatter = NumberFormatter()
@@ -182,12 +186,66 @@ struct LyricsLibraryStatsPanel: View {
                     // 站在这个数字前面唯一会问的问题:这个数到底在数什么、没被数的去哪了。
                     HelpButton(text: L10n.t("只数存进缓存、会随歌词文件一起导出的那些。其余歌曲的罗马音在播放时实时生成，不计入"))
                 }
+                fillSweepRow
             }
         }
         // `onlyIfChanged` 让重复进出这一页不重复解析整份缓存(全库几千条,那是一次真实的
         // 开销)。用 .task 而不是 .onAppear:reload 本身是 async 的,挂在 .task 上由 SwiftUI
         // 负责视图消失时取消。
-        .task { await store.reload(onlyIfChanged: true) }
+        //
+        // 之后留在这个循环里轮询补空扫描的进度(2026-09-05):跑着的时候 2 秒一次、顺带
+        // reload —— 每补上一首「暂无」那格就该少一;没在跑 5 秒一次只看进度文件的 mtime,
+        // 一次 stat 的开销。视图消失即取消,没有常驻计时器。
+        .task {
+            await store.reload(onlyIfChanged: true)
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(fillSweepStatus?.running == true ? 2 : 5))
+                guard !Task.isCancelled else { break }
+                let sweep = LyricsFillSweep.current
+                if sweep != fillSweepStatus { fillSweepStatus = sweep }
+                if sweep?.running == true { await store.reload(onlyIfChanged: true) }
+            }
+        }
+    }
+
+    /// 「重新扫描」入口(2026-09-05 用户要求"在这个页面也加一个重新扫描的入口"):对「暂无」那批
+    /// 让 collector 现在就重搜一遍——跟「歌词管理」工具栏那颗「重试无歌词」是同一条通道
+    /// (LyricsFillSweep,见第 09 章「补空扫描」),只是入口开在用户正盯着那个橙色数字的地方。
+    /// 数字按 EnrichCacheStore.isFillSweepRetryable 算(「暂无」+ 有纯文本兜底的,人工修正过的
+    /// 除外),所以可能跟左边「暂无」那格差一两首——按钮说的是"真会被搜的条数",不是重复那格。
+    /// 跑着的时候换成圆环进度 + 「停止重试」;上一轮结果留一句收据。
+    private var fillSweepRow: some View {
+        let status = fillSweepStatus
+        let retryable = store.summaries.filter(EnrichCacheStore.isFillSweepRetryable).count
+        return HStack(spacing: 10) {
+            if let status, status.running {
+                ProgressView(value: Double(status.done), total: Double(max(status.total, 1)))
+                    .progressViewStyle(.circular)
+                    .controlSize(.small)
+                Text(String(format: L10n.t("重试中 %1$@/%2$@"), "\(status.done)", "\(status.total)"))
+                    .font(.system(size: 11))
+                    .monospacedDigit()
+                    .foregroundStyle(.secondary)
+                Button(L10n.t("停止重试")) { LyricsFillSweep.requestCancel() }
+                    .controlSize(.small)
+            } else {
+                Button {
+                    LyricsFillSweep.request(keys: [])
+                } label: {
+                    Label(String(format: L10n.t("重新扫描无歌词条目（%@ 首）"), Self.format(retryable)),
+                          systemImage: "arrow.triangle.2.circlepath")
+                }
+                .controlSize(.small)
+                .disabled(retryable == 0)
+                .help(L10n.t("让采集服务现在就把没有歌词的条目重新搜一遍，不用等每首歌再次播放"))
+                if let status, status.finishedAt != nil {
+                    Text(String(format: L10n.t("上次：搜了 %1$@ 首，补出 %2$@ 首"), "\(status.done)", "\(status.filled)"))
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+            }
+        }
     }
 
     private func cell(value: Int, label: String, tint: Color) -> some View {

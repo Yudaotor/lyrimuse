@@ -1,19 +1,6 @@
 import Foundation
 
-/// 两侧日志文件的落点。唯一口径:LoginItemManager 写 plist、DiagnosticsExporter 读文件、
-/// uninstall.sh 的清理列表(那边是 shell,手工同步)都按这里。
-public enum LogFiles {
-    private static var home: URL { FileManager.default.homeDirectoryForCurrentUser }
-
-    /// collector 常驻进程的日志(launchd 的 StandardErrorPath,也是 collector 自己打开并按大小轮转的那份)。
-    public static var collector: URL { home.appendingPathComponent("Library/Logs/lyrimuse.log") }
-
-    /// App 进程由 launchd 拉起时的 stdout / stderr(2026-09-05 起单独一份;此前跟 collector 共用
-    /// `lyrimuse.log`,两个进程两种格式两种时区混在一个文件里,launchctl 子进程漏出来的报错也
-    /// 分不清是谁的)。正常情况下几乎是空的 —— App 的日志走 os.Logger;能落进来的只有 Swift
-    /// 运行时的 fatal 信息、被子进程漏出的 stderr 这类"本不该有"的东西,正因为如此它排查崩溃时最有用。
-    public static var appStderr: URL { home.appendingPathComponent("Library/Logs/lyrimuse-app.log") }
-}
+// LogFiles(两侧日志文件的落点)2026-09-05 挪到 Util/LyrimuseIdentity.swift,跟配置目录、launchd label 一起按变体派生。
 
 /// collector 日志行的时间戳解析(2026-09-05)。
 ///

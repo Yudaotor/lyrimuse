@@ -1,4 +1,5 @@
 import Foundation
+import LyrimuseCore
 
 /// 读 collector 落盘的 Last.fm 镜像状态文件(lyrimuse-lastfm-status.json)。
 ///
@@ -15,8 +16,7 @@ enum LastfmMirrorStatus {
         let at: Int64
     }
 
-    private static let url = FileManager.default.homeDirectoryForCurrentUser
-        .appendingPathComponent(".config/lyrimuse/lyrimuse-lastfm-status.json")
+    private static let url = LyrimusePaths.configFile("lyrimuse-lastfm-status.json")
 
     private static var cachedMTime: Date?
     private static var cached: Info?

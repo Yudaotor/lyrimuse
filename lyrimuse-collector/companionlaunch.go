@@ -137,12 +137,30 @@ func isProcessRunning(name string) bool {
 // 全部五个已知播放器,任意一个启动都算数,这也是自动识别模式下这个方向反而更有用的
 // 地方——用户不需要事先告诉 Lyrimuse 自己接下来要开哪个播放器。
 func companionLaunchProcessNames() []string {
+	var candidates []string
 	if features.Players[playerAuto] {
-		return knownPlayerProcessNames
+		candidates = knownPlayerProcessNames
+	} else {
+		candidates = make([]string, 0, len(features.Players))
+		for player := range features.Players {
+			candidates = append(candidates, playerProcessNameFor(player))
+		}
 	}
-	names := make([]string, 0, len(features.Players))
-	for player := range features.Players {
-		names = append(names, playerProcessNameFor(player))
+	// 2026-09-03 起「跟随播放器启动」按播放器逐个勾选(features.LaunchLyrimuseOnPlayers,用户拍板):键在就
+	// 只盯勾了的、且仍在候选(选中集合 / auto 全量)里的那几个 —— 勾了但已经取消选中的播放器不算,跟 Swift 侧
+	// PlayerLinkage.effective 同一条规则;键缺失是布尔年代的老配置,退回盯整个候选集合。
+	if features.LaunchLyrimuseOnPlayers == nil {
+		return candidates
+	}
+	names := make([]string, 0, len(features.LaunchLyrimuseOnPlayers))
+	for player := range features.LaunchLyrimuseOnPlayers {
+		name := playerProcessNameFor(player)
+		for _, candidate := range candidates {
+			if candidate == name {
+				names = append(names, name)
+				break
+			}
+		}
 	}
 	return names
 }
@@ -190,7 +208,8 @@ func launchLyrimuseApp() {
 	if isProcessRunning(lyrimuseAppProcessName) {
 		return
 	}
-	if err := exec.Command("open", "--background", "-b", "me.yudaotor.lyrimuse").Start(); err != nil {
+	// bundle id 来自 paths.go appBundleID()(环境变量可覆盖,缺省正式 id),上面按可执行名 `lyrimuse` 查"在不在跑"。
+	if err := exec.Command("open", "--background", "-b", appBundleID()).Start(); err != nil {
 		log.Printf("companion launch: failed to open Lyrimuse.app: %v", err)
 	}
 }

@@ -114,7 +114,7 @@ func loadAppleCatalogCache(path string) {
 		appleCatalogMu.Lock()
 		appleCatalogCache = m
 		appleCatalogMu.Unlock()
-		log.Printf("loaded %d cached Apple catalog tracks from %s", len(m), path)
+		log.Printf("cache: loaded %d Apple catalog tracks from %s", len(m), path)
 	}
 }
 
@@ -352,7 +352,7 @@ func loadAppleStorefrontArtistCache(path string) {
 		appleStorefrontArtistMu.Lock()
 		appleStorefrontArtistCache = m
 		appleStorefrontArtistMu.Unlock()
-		log.Printf("loaded %d cached Apple storefront artist entries from %s", len(m), path)
+		log.Printf("cache: loaded %d Apple storefront artist entries from %s", len(m), path)
 	}
 }
 
@@ -451,7 +451,7 @@ func appleStorefrontArtistIdentities(ctx context.Context, artist, title, album s
 // dedupeArtistIdentities 把几组"换个名字再搜一遍"的候选身份按 normLoose 去重后串成一条
 // 列表,保留各组内部的原有顺序。给 scoredLyricCandidatesStreaming 用:Apple 目录锚点那
 // 一组和 retryArtistIdentities 那一组完全可能给出同一个名字(比如手工别名表里恰好登记过
-// 同一位歌手),不去重就是同一个查询词白跑一整轮五源抓取(每轮 20 秒兜底)。
+// 同一位歌手),不去重就是同一个查询词白跑一整轮全源抓取(每轮 20 秒兜底)。
 func dedupeArtistIdentities(groups ...[]string) []string {
 	seen := map[string]bool{}
 	var out []string

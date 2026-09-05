@@ -39,11 +39,10 @@ func runRetranslateRepeatedCLI(args []string) {
 		log.Fatalf("retranslate-repeated: %v", err)
 	}
 
-	home, err := os.UserHomeDir()
-	if err != nil {
-		log.Fatalf("retranslate-repeated: resolve home dir: %v", err)
+	if configDir() == "" {
+		log.Fatalf("retranslate-repeated: cannot resolve home directory (and LYRIMUSE_CONFIG_DIR is unset)")
 	}
-	cfgDir := filepath.Join(home, ".config", clientName)
+	cfgDir := configDir()
 	features = loadFeatureFlags(filepath.Join(cfgDir, clientName+"-features.json"))
 
 	if *apply && !ensureExclusiveForDedupe(cfgDir) {

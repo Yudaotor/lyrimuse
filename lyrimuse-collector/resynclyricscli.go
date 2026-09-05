@@ -41,11 +41,10 @@ func runResyncLyricsCLI(args []string) {
 		os.Exit(2)
 	}
 
-	home, err := os.UserHomeDir()
-	if err != nil {
-		log.Fatalf("resync-lyrics: resolve home dir: %v", err)
+	if configDir() == "" {
+		log.Fatalf("resync-lyrics: cannot resolve home directory (and LYRIMUSE_CONFIG_DIR is unset)")
 	}
-	cfgDir := filepath.Join(home, ".config", clientName)
+	cfgDir := configDir()
 	features = loadFeatureFlags(filepath.Join(cfgDir, clientName+"-features.json"))
 	// 跟 searchcli.go 同一个理由(那边有详细注释):这条 CLI 每次都是新进程,不读这几份
 	// 持久化缓存的话,scoredLyricCandidates 内部的 retryArtistIdentities/艺人别名重试/

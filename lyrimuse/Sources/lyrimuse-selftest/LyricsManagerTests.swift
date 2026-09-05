@@ -746,4 +746,43 @@ func runLyricsManagerTests() {
         let b = ManualPickLock.fingerprint(lyrics: "[00:02.50]你好\r\n[00:06.10]世界\n")
         expectEqual(a == b && !a.isEmpty, true, "同词标注: 复用只取词的指纹,时间戳/CRLF 不影响")
     }
+
+    // ---- 「源里有歌、无词」判据(EnrichSourcePresence,2026-09-05)----
+    //
+    // 网易云 url 只在真的匹配到曲目时才写;QQ 那条有"搜索页兜底"这一档,不需要网络就能拼出来,
+    // 不构成"平台上有这首歌"的证据(跟 collector 侧 isQQSearchFallbackURL 同一个理由)。
+    do {
+        typealias P = EnrichSourcePresence
+        expectEqual(P.knownOnSources(neteaseURL: "https://music.163.com/song?id=3421955553", qqMusicURL: nil), true,
+                    "源里有歌: 网易云拿到 song id 即算")
+        expectEqual(P.knownOnSources(neteaseURL: nil, qqMusicURL: "https://y.qq.com/n/ryqq/songDetail/0015Wy5y3rO14w"), true,
+                    "源里有歌: QQ songDetail 页算")
+        expectEqual(P.knownOnSources(neteaseURL: "", qqMusicURL: "https://y.qq.com/n/ryqq/search?w=%E8%8C%83%E9%80%B8%E8%87%A3+%E9%9D%A9%E5%91%BD"), false,
+                    "源里有歌: QQ 搜索页兜底不算(本地拼的,不是证据)")
+        expectEqual(P.knownOnSources(neteaseURL: nil, qqMusicURL: nil), false, "源里有歌: 两个都没有就是没有")
+    }
+
+    // ---- 补空扫描通道(LyricsFillSweep,2026-09-05)----
+    //
+    // 请求文件的形状是 collector 侧 parseLyricsFillRequest 的契约:一行 "all" 或每行一个 key;
+    // 进度文件是 collector 的 lyricsFillStatus 逐字段 JSON。两侧各自有测试,这里钉 Swift 这半。
+    do {
+        typealias S = LyricsFillSweep
+        expectEqual(S.requestBody(keys: []), "all\n", "补空请求: 空 keys = 全部")
+        expectEqual(S.requestBody(keys: ["周杰伦|晴天|叶惠美", "A|B|C"]), "周杰伦|晴天|叶惠美\nA|B|C\n",
+                    "补空请求: 指定 key 一行一个、末尾换行")
+        let json = """
+        {"running":true,"manual":true,"total":82,"done":3,"filled":1,"current":"范逸臣|革命|無樂不作","startedAt":1788700000,"updatedAt":1788700100}
+        """
+        let info = try? JSONDecoder().decode(S.Info.self, from: Data(json.utf8))
+        expectEqual(info?.running, true, "补空进度: running 解出来")
+        expectEqual(info?.total, 82, "补空进度: total")
+        expectEqual(info?.current, "范逸臣|革命|無樂不作", "补空进度: current")
+        expectEqual(info?.finishedAt, nil, "补空进度: 跑着的时候没有 finishedAt(omitempty)")
+        let done = try? JSONDecoder().decode(S.Info.self, from: Data("""
+        {"running":false,"manual":false,"total":40,"done":40,"filled":6,"startedAt":1,"updatedAt":2,"finishedAt":3,"cancelled":true}
+        """.utf8))
+        expectEqual(done?.cancelled, true, "补空进度: cancelled 解出来")
+        expectEqual(done?.finishedAt, 3, "补空进度: finishedAt 解出来")
+    }
 }

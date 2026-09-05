@@ -1,6 +1,6 @@
 # 09. 歌词解析决策（collector）
 
-> 最后核对：2026-09-04 · 基线：0640c12+工作树
+> 最后核对：2026-09-05 · 基线：96aa6b5+工作树
 
 ## 定位
 
@@ -155,6 +155,7 @@ collector 的核心：一首歌播放时，去九个歌词源（网易云/QQ/酷
 2. **rescore**：打分规则版本落后时按新规则重选（**不比大小**）；1 小时节流、上限 3 次；要求当前歌词的源本轮也应答了才够格推翻。
 3. **升级重试**（`needsLyricsRetry`）：⚠️ **2026-09-03 起这条和下面的重打分一起受设置里「自动跟进算法升级」管**（`features.LyricsAutoUpgrade`，默认开=现状；关掉之后已经选定的歌词不再被后台换掉）。闸门做成这两个纯函数的**入参**（`autoUpgrade bool`）而不是在函数里读包级 `features`，理由跟 `pinned` 那个参数一样：这两个判定要能被单测直接钉住（`lyricsautoupgrade_test.go`）。**只挡"换掉已有歌词"**——首次填充（`needsLyricsFirstFill`）、封面/译文回填、用户手动重搜都不受它管，那几条不属于"把用户已经拿到的那份换掉"。当初有启用的源没赶上 20s 截止才重搜；6 小时节流、上限 3 次；新分**严格更高**才替换（跨打分版本用 `lyricsUpgradeBaseline` 换同尺度基准）。已有逐字不重试，两个例外可翻盘：「同源候选当初落选」（换播放器场景）与「时长差 >12%」。⚠️ **Apple Music 现在多了一道上游防线**：Apple 目录锚点成立时，时长直接用 Apple 目录的权威值，脏快照在进入这条链路之前就被顶掉了（见第 02 章）。锚点对用户自己导入的曲库和别的播放器无效，所以下面这道去抖仍是必需的。⚠️ 时长差这条的原始观察值必须先过 `observeWrongDuration` 的 **30 秒同值去抖**（2026-08-22）：换曲/预载窗口里 media-control 会把**下一首**的时长和当前曲目的标题拼进同一份快照（实锤：「开不了口 (Live)」272.973s 开播 6 秒后，relay 快照携带同专辑下一首「床边故事 (Live)」的 220.239s，逐位一致），一次性脏观察直接当真会白烧一轮重试、所有候选按错误时长吃 -700、还把决策记录盖掉。同一脏值（±1s）稳定满 30 秒才触发；时长又对上即清零；观察断流超 5 分钟按陈旧重计（防"切出侧脏值残留 + 几天后重放同曲第一口又是脏值"拿旧 firstSeen 一步凑满窗口；上限须盖过稳定播放期的正常喂食间隔——relay 心跳/LB 提交都是 ≤4 分钟一次）；确认放行同时清记录（下一轮重新攒，不会连发烧光预算）。
 4. **机翻补译文**：见第 10 章。
+5. **补空扫描**（`lyricsfillsweep.go`，2026-09-05）：上面四条都挂在「这首歌又被播到」这一刻；`needsLyricsFirstFill` 那条补空路径对**没在听的存量空条目**因此永远不会动——「歌词管理」把全库摊开给用户看，里面躺着的空条目用户不重播就没人再问。实测 82 条非纯音乐空条目里，范逸臣《革命》《Dalala-Dila》8-31 首解析时一个源都没应答（偶发网络），五天后手动重搜 QQ 1057 / 971 分。两条触发：**自动**——进程起来 10 分钟后一次、之后每 24 小时一次，只处理 `needsLyricsFirstFill` 为真（退避到期）的条目、每轮上限 40 条、两首之间隔 15 秒（只把「要不要问」的时机从「被播到」改成「到点了」，每条的退避账不变）；**手动**——App 往 `lyrimuse-lyrics-fill-request.txt` 写 `all` / `cancel` / 每行一个 key，2 秒内读到就开一轮，忽略退避、不设条数上限，但仍只碰「没词、没人工修正、没确证纯音乐」的条目（三道硬闸对两种触发都生效）。逐条串行、不并发：Musixmatch 匿名 token 对并发 `token.get` 会 captcha 限流，一口气起 80 首等于自己把这个源打哑（实测：CLI 连发 5 个进程立刻 `musixmatch_rate_limited`）。每条走现成的 `retryLyricsUpgrade(firstFill=true)`，写回规则全在那里；扫描只负责挑哪些、什么时候、报进度（`lyrimuse-lyrics-fill-status.json`，App 侧 `LyricsFillSweep`）。一次只允许一轮；扫描本身另起 goroutine 跑，请求文件的轮询循环一直转着，`cancel` 才能在几十分钟的一轮中途被看到。
 
 `ManualLyrics`（用户手改）对一切自动路径一票否决。**已校准**（用户手动调过这首歌的歌词时间轴偏移）同样一票否决 rescore 与升级重试——名单在 `~/.config/lyrimuse/lyrimuse-lyrics-pins.json`，由 App 写、`lyricspins.go` 按 mtime 重读（不需要重启 collector）。理由：校正值绑在歌词内容指纹上，换一份内容就等于让它静默作废（详见第 8 章「已校准即锁定歌词源」）。
 
@@ -179,7 +180,8 @@ collector 的核心：一首歌播放时，去九个歌词源（网易云/QQ/酷
 
 ## 数据与文件
 
-- `~/.config/lyrimuse/lyrimuse-enrich-cache.json`：主缓存，无 TTL 永久保留，原子写（temp+rename）+ 互斥锁；损坏文件挪 `.corrupt` 旁路。
+- `~/.config/lyrimuse/lyrimuse-enrich-cache.json`：主缓存，无 TTL 永久保留，原子写（temp+rename）+ 互斥锁；损坏文件挪 `.corrupt` 旁路。**2026-09-05 起编解码保留未知键**（`enrichjson.go`：`enrichEntry.Unknown` + 自定义 (Un)MarshalJSON，二进制不认识的顶层键原样写回；加载时带未知键的记录数非零打一行 Warn）——起因见下文「一次 backfill-roma 抹掉四个字段」。
+- `~/.config/lyrimuse/lyrimuse-lyrics-fill-request.txt` / `lyrimuse-lyrics-fill-status.json`：补空扫描的请求与进度通道（第 9.5 条；App 侧见第 11 章）。
 - `~/.config/lyrimuse/lyrimuse-lyrics-decision-trace.ndjson`：可选流水账。
 - `~/.config/lyrimuse/lyrimuse-artist-primary-cache.json`：MB 主名（本名 ↔ 艺名）缓存，只存查到的条目，见「歌手别名重试」。
 - 各源自有内存/磁盘缓存（网易云 30 天/10 分钟分级、musixmatch token 9 分钟等）。⚠️ **musixmatch 换 token 必须单飞**（2026-08-24 修）：批量解析（相册预取/批量导入一次触发十几首歌并发解析）时，原来每个 goroutine 独立判定「没有可用 token」就各自发一次 `token.get`，而 apic 那台机器实测把除第一个之外的并发请求全按反爬拒掉（401 hint=captcha），被拒的按官方样例退避 10 秒重试一次——但 20 秒的搜索预算扛不住 N 个 goroutine 各跑一遍「发请求→等 10 秒→重试」。实测（用户库）批量解析场景 musixmatch 交出候选的比例只有约 20%，单首/大规模顺序扫描能到 65%~90%，量出来的正是这个：一次 16 首并发解析里 musixmatch 是 0/16。修法：`musixmatchTokenFetchMu` 单飞锁包住「读磁盘 + 必要时发网络请求」整段，其余 goroutine 排队等它做完、拿锁后**必须**重新查一遍缓存（前一个持锁者可能已经换好了），不能各自再抢一次网络。`musixmatchCachedToken()` 让 token 仍在有效期内的调用完全绕开这把锁——它只在真的需要刷新时才有意义。回归测试 `musixmatch_test.go` 用 `musixmatchDoFetchToken` 这个缝（nil=用真实实现）验证并发场景，不碰网络。lyricfind 抓 `X-Goog-Visitor-Id`（2026-08-25 加，`ytmusicEnsureVisitorID`，函数名仍按检索机制叫 ytmusic）从一开始就按同一个单飞模式写，不重蹈这个坑——区别是它没有过期时间，抓到一次就一直复用到进程退出，测试见 `ytmusic_test.go`。
@@ -213,6 +215,8 @@ collector 的核心：一首歌播放时，去九个歌词源（网易云/QQ/酷
 | QQ 歌名维度检索 | qq.go `qqSearchSongs`（唯一入口：`qqClientSearch` 跨标题变体合并 + 按需补 `qqSmartbox`，判据 `qqSearchNeedsSmartboxSupplement`）`qqClientSearchItems`（响应归一，合唱署名用 `/` 拼）`qqCollectCandidates`（标题闸+身份闸，透传专辑名/时长）`qqCandAlbumName`（自带专辑名免去一次详情请求，预算 `qqAlbumLookupBudget`）`qqPickCandidate`+`qqCreditSetEqual`（挑冠军与独唱/合唱 tiebreak）`qqMatchFromCand`；单测 `qqclientsearch_test.go`（见第 39 条） |
 | Apple 目录锚点 | applecatalog.go `appleCatalogAnchor` `appleCatalogSearchIdentities` `dedupeArtistIdentities`（详见第 02 章） |
 | 重试/重打分 | enrich.go `needsLyricsRetry` `retryLyricsUpgrade` `needsLyricsRescore` `rescoreLyrics` |
+| 补空扫描 | lyricsfillsweep.go `startLyricsFillSweeper`（run() 单开 goroutine）`runLyricsFillSweep` `lyricsFillSweepCandidates`（三道硬闸 + 自动上限）`lyricsFillSweepOne` `parseLyricsFillRequest` `writeLyricsFillStatus` `setLyricsFillPaths`（main.go 接线）；单测 lyricsfillsweep_test.go；App 侧 `LyrimuseCore.LyricsFillSweep`（第 11 章） |
+| 缓存编解码保未知键 | enrichjson.go `enrichEntry.UnmarshalJSON`（严格档 DisallowUnknownFields 一遍即完，撞到 unknown field 才退宽松档挑未知键）`MarshalJSON`（只在 `Unknown` 非空时合并；已知键永远赢）`enrichEntryKnownJSONKeys`（反射 tag 算一次）`warnEnrichUnknownKeys`（loadEnrichCache 调）；单测 enrichjson_test.go（含「每个字段都必须带 json tag」守卫） |
 | 已校准一票否决 | lyricspins.go `lyricsPinned` `readLyricsPins`;Swift 侧 `LyricsPinStore` |
 | 决策留痕 | decision.go `buildLyricsDecision`；lyricstrace.go |
 | 手动重匹配的可判定性闸 | enrich.go `rescoreDecidable`（第三参 `noCurrentLyrics`）；Swift 侧 `LyricsRematchDecision.decide` |
@@ -229,6 +233,18 @@ collector 的核心：一首歌播放时，去九个歌词源（网易云/QQ/酷
 | 流式搜索的中间态合并 | enrich.go `scoredLyricCandidatesStreaming` 里别名重试轮的 `aliasUpdate` 闭包 + 首歌手变体轮的 `mergedUpdate` 闭包，都靠 `mergeLyricCandidateRounds` 避免"搜索候选歌词"弹窗中途闪回空/半状态 |
 | `lyrimuse-collector/lyricstimeline.go` | 行级 LRC 与逐字轴打架时以逐字轴为准重挂时间戳（`rehangLRCOnYRC`），译文/罗马音跟着搬（`remapLRCTimestamps`）；重挂修不了且两套轴自相矛盾（配对行中位偏差 ≥10s）时弃用逐字轴（`wordTimingContradictsLRC`，见坑 32）；候选构造处 `rehangCandidateTimelines`、启动期存量 `migrateLyricTimelines`。不改打分判据，因此不 bump 版本。见坑 23/32 |
 ## 设计决策与已知坑
+
+### 一次 `backfill-roma -apply` 抹掉四个字段：老构建整份重写缓存（2026-09-05 查实并修，用户问「歌词管理里搜不到的怎么办」时顺藤摸到的）
+
+现象：8-30 加的「全源无带时间轴版本时自动采纳纯文本」看起来从没生效——全库 0 条 `plain_lyrics`，日志 0 次 `auto-adopted plain-text`，而符合条件的有 10 条；跑一遍真实的 `resolveTrackEnrichment`（临时诊断测试）代码路径又明明是通的（约翰梅尔《Someday After Awhile》出来 `PlainLyrics=531 字节`）。对着 `backup-pre-backfill-roma-20260903-101525/` 那份备份逐条 diff 才看清：09-03 10:15 备份里 `plain_lyrics` 有 10 条、`song_language` 1083 条；当前缓存里同 key、同 `ts`（没重新解析过）的记录**丢了** `plain_lyrics` 10 条、`song_language` 1082 条、`lyrics_sources_skipped` 161 条、`manual_pick_sha` 1 条——丢 `song_language` 的 1082 条里 935 条同时**新增**了 `lyrics_roma`，就是紧接着备份跑的那次 `backfill-roma -apply` 干的。四个被抹的字段全是 08-31～09-03 新加进 `enrichEntry` 的：跑那条子命令的构建产物结构体里还没有它们，`json.Unmarshal` 把不认识的键丢在地上，`saveEnrichCache` 整份写回自然没有。具体是哪个构建已不可追溯（日志只保留到 09-04），但机制确定。
+
+在此之前 `PlainLyrics` 字段本身的注释就记着同一类担心（「不声明就会被 Go 冲掉」），当时的解法是追着把 Swift 写的键一个个声明进结构体——那只防「字段没声明」，防不住「字段声明了但跑的是老构建」。修法改成通用的：`enrichjson.go` 给 `enrichEntry` 加 `Unknown map[string]json.RawMessage`（`json:"-"`）和自定义 (Un)MarshalJSON，未知顶层键原样进出。解码走两档——先 `DisallowUnknownFields` 严格解一次（二进制认识全部字段时零额外开销；缓存 50MB+、每个一次性子命令启动都整份加载，不能给日常路径无条件加一遍二次解析），撞到 `unknown field` 才退宽松档再解一遍原始 map 挑出未知键；编码只在 `Unknown` 非空时合并，已知键永远赢。`loadEnrichCache` 数出带未知键的记录数、非零打 Warn——那就是「你正在用一个比缓存文件老的构建」的直接信号。边界（刻意接受）：只保顶层键，嵌套的 `lyrics_decision` 里的未知分项仍按标准库语义丢弃（复盘元数据，不构成数据丢失）。单测 `enrichjson_test.go` 五条，其中「二进制认识全部字段时输出与标准库逐字节一致」既是性能承诺也是「没改任何现有文件形状」的承诺。
+
+数据恢复走仓库既定的手工修缓存流程：备份当前 → `launchctl bootout` 停常驻 collector → 脚本持 `collector.lock` 的 flock（拿不到就退出）→ 只对同 key 同 ts 的记录补当前**没有**的键、绝不覆盖 → `bootstrap` 拉起。补回 `plain_lyrics`/`plain_lyrics_source` 10 条、`song_language` 1082 条、`manual_pick_sha` 1 条；`lyrics_sources_skipped` 刻意不补（它是每轮整体覆盖的瞬态字段，补回陈旧的跳过名单只会让 `needsLyricsFirstFill` 白触发一次 10 分钟重试）。
+
+顺带修的一处标签错：`lyricCandidateFromScored`（合并轮重打分时把 scored 候选还原成打分入参）漏拷 `plainTextOnly` 和 `language`，走过别名轮/变体轮的 lrclib 纯文本候选在决策存档里被记成 `rejectNotTimed` 而不是 `rejectPlainTextOnly`，「搜索候选歌词」弹窗据此给的提示也是错的（「没有时间戳」而非「仅纯文本」）。分数两条路都是 -1、采纳不受影响，只是标签，不抬 `lyricsScoringVersion`。
+
+另外两条查过但**刻意不改**的：① 日文标题被当中文做繁→简（`負けないで`→`负けないで`），53 条含假名的标题里 12 条被改写——实测网易云/酷狗对转写后的查询照样高分命中（已解析的 5 条都是 900+），而加「含假名就跳过转换」的守卫反而有让「上传方本来就写简体字形」的歌在比对层对不上的风险，收益不值；② LyricFind 源在用户当前网络下恒为 `lyricfind_region_restricted`（YouTube Music 按 IP 地区拒），它头注自己也写了对九源落空的歌命中率为 0，建议用户在「歌词来源」里关掉即可，不在代码上动。
 
 ### 88 秒的节选版配上 185 秒专辑版的词：酷狗/QQ 的检索层挑选"标题精确同名压过一切"（2026-09-05 修，用户报「这首为什么搜不到」）
 

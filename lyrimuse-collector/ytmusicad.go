@@ -399,7 +399,7 @@ func trustedPlaybackRejected(ctx context.Context, bundleID, artist, album, title
 	case ytmusicAdIsAd:
 		// 值得记一句:这是"我们主动挡掉了一条广告",跟"读不到"不是一回事,
 		// 排查"为什么这首没被识别"时这一行能直接分开两种情况。
-		log.Printf("ytmusic: 判定为广告,不采纳(%s - %s)", artist, title)
+		log.Printf("ytmusic: rejected as advertisement (%s - %s)", artist, title)
 		return true, ""
 	default:
 		return true, ""

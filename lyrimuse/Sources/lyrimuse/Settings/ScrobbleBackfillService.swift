@@ -72,8 +72,7 @@ final class ScrobbleBackfillService: ObservableObject {
     /// 一首那一刻才重跑 dry-run。路径跟 collector 那边 initListenLog 传进去的一致
     /// (main.go:178,配置目录 + clientName + "-listens.jsonl")。
     static func listenLogModifiedAt() -> Date? {
-        let url = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent(".config/lyrimuse/lyrimuse-listens.jsonl")
+        let url = LyrimusePaths.configFile("lyrimuse-listens.jsonl")
         return (try? FileManager.default.attributesOfItem(atPath: url.path))?[.modificationDate] as? Date
     }
 
@@ -149,8 +148,18 @@ final class ScrobbleBackfillService: ObservableObject {
         let path = collectorPath
         return await Task.detached(priority: .userInitiated) { () -> Bool in
             // 用 ProcessRunner:带超时,而且 stdout 会被先读空再等退出(见它的注释)。
+            //
+            // ⚠️ **environment 必须显式传**(2026-09-06 修的真 bug:点删除没反应)。这条是
+            // 唯一一个漏了它的 collector 子命令调用点 —— 因为它走 ProcessRunner,而那个函数
+            // 当时压根没有环境参数,另外五处(search-lyrics / 源自检 / Last.fm 统计 ×2 /
+            // 诊断导出)都是自己 new Process、顺手就把 collectorProcessEnvironment 设上了。
+            // 不传的后果:delete-listen 按 collector 自己的默认规则找配置目录,**Dev 变体**
+            // 下 App 读的是 ~/.config/lyrimuse-dev、删的却是 ~/.config/lyrimuse,那几条 uts
+            // 在正式版日志里根本不存在 → deleted:0 → ok=false → 列表原样重拉一遍 → 界面上
+            // 就是"点了没反应"。正式版两个目录同名,所以这个 bug 只在 Dev 上现形。
             guard let r = ProcessRunner.run(
-                path, ["delete-listen", "-uts", String(uts)], timeout: 15), r.succeeded
+                path, ["delete-listen", "-uts", String(uts)], timeout: 15,
+                environment: LyrimusePaths.collectorProcessEnvironment()), r.succeeded
             else { return false }
             struct Result: Decodable { let deleted: Int }
             return (try? JSONDecoder().decode(Result.self, from: r.stdout))?.deleted ?? 0 > 0
@@ -162,6 +171,8 @@ final class ScrobbleBackfillService: ObservableObject {
         return await Task.detached(priority: .userInitiated) { () -> Outcome? in
             let process = Process()
             process.executableURL = URL(fileURLWithPath: path)
+            // 子命令必须跟本 App 同一份配置目录 / 日志文件(Dev 构建是另一套),见 LyrimusePaths.collectorEnvironment。
+            process.environment = LyrimusePaths.collectorProcessEnvironment()
             process.arguments = dryRun ? ["backfill-lastfm", "-dry-run"] : ["backfill-lastfm"]
             let pipe = Pipe()
             let errPipe = Pipe()

@@ -3,7 +3,6 @@ package main
 import (
 	"io"
 	"os"
-	"path/filepath"
 )
 
 // 日志轮转(2026-08-27 加)。
@@ -33,13 +32,7 @@ const logRotateMaxBytes int64 = 30 * 1024 * 1024
 // StandardErrorPath、以及 App 侧 DiagnosticsExporter.swift 里各自硬编码的同一个路径
 // 保持一致(两侧语言不同没法共享一个常量,这是这三处唯一各自维护的地方,改动时记得
 // 一起改)。UserHomeDir 拿不到时返回空串,调用方据此放弃轮转,不阻塞启动。
-func logFilePath() string {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return ""
-	}
-	return filepath.Join(home, "Library/Logs/lyrimuse.log")
-}
+// logFilePath 2026-09-05 挪到 paths.go(跟配置目录一起按环境变量派生)。
 
 // rotateLogIfNeeded 检查 path 处的文件是否超过 maxBytes——超过就归档成 `<path>.old`
 // (覆盖式,只留一份历史,这个文件本来就是"最近发生了什么"的滚动快照,不是长期归档,
@@ -59,17 +52,28 @@ func rotateLogIfNeeded(path string, maxBytes int64) (io.Writer, bool) {
 		return fallback, false
 	}
 
+	f, ok := archiveAndReopen(path)
+	if !ok {
+		return fallback, false
+	}
+	return f, true
+}
+
+// archiveAndReopen:把 path 归档成 path.old(覆盖式,只留一份)并新开一份同名文件。
+// 启动期(rotateLogIfNeeded)和运行期(logsink.go rotatingLogFile.rotateLocked)共用这一套
+// 动作 —— 2026-09-05 运行期轮转加进来时抽出来的,两处别各写一份。
+func archiveAndReopen(path string) (*os.File, bool) {
 	oldPath := path + ".old"
 	_ = os.Remove(oldPath) // 覆盖式,不管上一份 .old 是否存在
 	if err := os.Rename(path, oldPath); err != nil {
-		return fallback, false
+		return nil, false
 	}
 	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
 	if err != nil {
 		// 已经把旧文件挪走了但开不出新的——比"什么都不做"更糟(等于让日志无处可写),
 		// 尽力把旧文件挪回来,挪不回来也只能算了,至少不在这里 panic。
 		_ = os.Rename(oldPath, path)
-		return fallback, false
+		return nil, false
 	}
 	return f, true
 }

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """校验 release.yml 生成的 appcast.xml 形状对不对。
 
-用法:  python3 .github/scripts/check_appcast.py appcast.xml
+用法:  python3 .github/scripts/check_appcast.py appcast.xml [--tag vX.Y.Z[-beta.N]] [--display-version X.Y.Z[-beta.N]] [--build-version X.Y.Z.B] [--prerelease true|false]
 
 # 为什么需要这道闸
 
@@ -32,14 +32,30 @@ arm64HardwareRequirementIsOK 剔,再 bestItemFromAppcastItems: 挑)与它自己�
 Tests/SUAppcastTest.swift testARM64Requirement。"版本相同取先出现的那个"来自
 bestItemFromAppcastItems: 的注释 "if two items are equal, we must select the first
 matching one" —— 这就是顺序必须 arm64 在前的原因。
+
+# 2026-09-05 加的四个可选参数(release.yml 全部传;本地只传文件名也能跑基础形状检查)
+
+  --tag             enclosure 必须落在 releases/download/<tag>/ 目录下,**不许**再指 releases/latest/:
+                    预发布不是 latest,latest 链接在它的 appcast 里会解析到最新正式版的目录、404。
+  --display-version sparkle:shortVersionString 与 zip 文件名里的版本(Lyrimuse-v<版本>-macos[-intel].zip)。
+  --build-version   sparkle:version(元素与 enclosure 属性)必须等于它,且是四段纯数字 —— Sparkle 的比较器
+                    实测把 "-" 之后全忽略,展示版本不能直接当比较用的版本(见 lyrimuse/scripts/build-version.sh)。
+  --prerelease      true 时每个 item 必须带 <sparkle:channel>beta</sparkle:channel>,false 时一个都不许带:
+                    这是「预发布不推给没打开测试版开关的用户」的第二道保险(第一道是 GitHub 的 latest 不含 prerelease)。
 """
+from __future__ import annotations  # 本机 python 3.9 也要能跑:注解里的 `str | None` 靠它延迟求值
+
+import argparse
+import re
 import sys
 import xml.etree.ElementTree as ET
 
 SPARKLE_NS = "http://www.andymatuschak.org/xml-namespaces/sparkle"
+BUILD_VERSION_RE = re.compile(r"^\d+\.\d+\.\d+\.\d+$")
 
 
-def check(path: str) -> list[str]:
+def check(path: str, tag: str | None = None, display_version: str | None = None,
+          build_version: str | None = None, prerelease: bool | None = None) -> list[str]:
     problems: list[str] = []
     try:
         root = ET.parse(path).getroot()
@@ -72,6 +88,34 @@ def check(path: str) -> list[str]:
             problems.append(f"{where} length 非法: {length!r}")
         if not url.endswith(".zip"):
             problems.append(f"{where} enclosure url 不是 .zip: {url!r}")
+        if "/releases/latest/" in url:
+            problems.append(
+                f"{where} enclosure url 指向 releases/latest/ —— 预发布不是 latest,这个链接在它的 appcast 里"
+                f"会落到最新正式版的目录、404;必须是 releases/download/<tag>/: {url!r}")
+        if tag and f"/releases/download/{tag}/" not in url:
+            problems.append(f"{where} enclosure url 不在 releases/download/{tag}/ 目录下: {url!r}")
+        if display_version:
+            expected_name = f"Lyrimuse-v{display_version}-macos{'-intel' if i == 1 else ''}.zip"
+            if not url.endswith("/" + expected_name):
+                problems.append(f"{where} zip 文件名应为 {expected_name},实际 {url.rsplit('/', 1)[-1]!r}")
+            short = (item.findtext(f"{{{SPARKLE_NS}}}shortVersionString") or "").strip()
+            if short != display_version:
+                problems.append(f"{where} sparkle:shortVersionString 应为 {display_version!r},实际 {short!r}")
+        item_version = (item.findtext(f"{{{SPARKLE_NS}}}version") or "").strip()
+        enclosure_version = (enc.get(f"{{{SPARKLE_NS}}}version") or "").strip()
+        if item_version and not BUILD_VERSION_RE.match(item_version):
+            problems.append(
+                f"{where} sparkle:version 不是四段纯数字: {item_version!r} —— Sparkle 的比较器忽略 '-' 之后的内容,"
+                "展示版本不能直接当比较用的构建号(见 lyrimuse/scripts/build-version.sh)")
+        if enclosure_version != item_version:
+            problems.append(f"{where} enclosure 的 sparkle:version 属性({enclosure_version!r})与元素({item_version!r})不一致")
+        if build_version and item_version != build_version:
+            problems.append(f"{where} sparkle:version 应为 {build_version!r},实际 {item_version!r}")
+        channels = [(e.text or "").strip() for e in item.findall(f"{{{SPARKLE_NS}}}channel")]
+        if prerelease is True and channels != ["beta"]:
+            problems.append(f"{where} 预发布 item 必须且只能带一个 <sparkle:channel>beta</sparkle:channel>,实际 {channels!r}")
+        if prerelease is False and channels:
+            problems.append(f"{where} 正式版 item 不该带 sparkle:channel,实际 {channels!r} —— 带了正式用户就收不到这一版")
 
         if i == 0:
             if hw != ["arm64"]:
@@ -103,11 +147,25 @@ def check(path: str) -> list[str]:
     return problems
 
 
+def parse_bool(value: str) -> bool:
+    lowered = value.strip().lower()
+    if lowered in ("true", "yes", "1"):
+        return True
+    if lowered in ("false", "no", "0"):
+        return False
+    raise argparse.ArgumentTypeError(f"--prerelease 要 true/false,收到 {value!r}")
+
+
 def main() -> int:
-    if len(sys.argv) != 2:
-        print(__doc__.strip().splitlines()[2], file=sys.stderr)
-        return 2
-    problems = check(sys.argv[1])
+    parser = argparse.ArgumentParser(description="校验 release.yml 生成的 appcast.xml 形状", add_help=True)
+    parser.add_argument("path")
+    parser.add_argument("--tag", help="Release 的 tag(vX.Y.Z 或 vX.Y.Z-beta.N),enclosure 必须在它的目录下")
+    parser.add_argument("--display-version", help="展示版本 = tag 去 v,对 shortVersionString 与 zip 文件名")
+    parser.add_argument("--build-version", help="四段纯数字构建号,对 sparkle:version")
+    parser.add_argument("--prerelease", type=parse_bool, default=None, help="true/false:预发布 item 必须带 beta channel,正式版不许带")
+    args = parser.parse_args()
+    problems = check(args.path, tag=args.tag, display_version=args.display_version,
+                     build_version=args.build_version, prerelease=args.prerelease)
     if problems:
         print("appcast 自检失败:", file=sys.stderr)
         for p in problems:

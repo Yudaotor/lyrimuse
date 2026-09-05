@@ -1348,6 +1348,39 @@ func runSourceContractTests() {
         expectEqual(banner.contains("activateFileViewerSelecting"), true, "配置读写口径: 横幅给「在访达中显示」让用户自己修")
     }
 
+    // ---- 后台服务应用状态可见(2026-09-05,借鉴清单 #51)----
+    //
+    // 功能开关 / 账号凭据保存后的 collector 重启结果,原来只写进两个 Store 的 lastError、全仓没人读。现在由设置窗口
+    // 底部一条状态条统一显示。钉住:状态条挂上了并读三种态;协调器暴露进行中态;两个 Store 在重启失败后先看服务
+    // 是否被主动停用再定性,并给状态条关闭出口;失败文案换成说清后果的那句。文案键由本地化 parity 守卫管。
+    do {
+        let appDir = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("lyrimuse")
+        func code(_ rel: String) -> String {
+            (try? String(contentsOfFile: appDir.appendingPathComponent(rel).path, encoding: .utf8)) ?? ""
+        }
+        expectEqual(code("SettingsView.swift").contains("CollectorApplyStatusBar()"), true, "应用状态: 状态条挂在设置窗口 detail 列")
+        let bar = code("Settings/CollectorApplyStatusBar.swift")
+        expectEqual(bar.isEmpty, false, "应用状态: 读得到 CollectorApplyStatusBar.swift")
+        expectEqual(bar.contains(".isRestarting"), true, "应用状态: 状态条读协调器的进行中态")
+        expectEqual(bar.contains(".pendingUntilServiceEnabled"), true, "应用状态: 状态条读「服务已停用」态")
+        expectEqual(bar.contains(".lastError"), true, "应用状态: 状态条读 lastError(它终于有人读了)")
+        expectEqual(bar.contains("L10n.t(\"重试\")"), true, "应用状态: 失败态带「重试」")
+        expectEqual(bar.contains("clearApplyStatus()"), true, "应用状态: 状态条接了关闭出口")
+        let coordinator = code("Settings/CollectorRestartCoordinator.swift")
+        expectEqual(coordinator.contains("@Published public private(set) var isRestarting"), true, "应用状态: 协调器暴露进行中态")
+        expectEqual(coordinator.contains("isRestarting = !waiters.isEmpty"), true, "应用状态: 重启完成后按还有没有排队者收工")
+        for f in ["Settings/ConfigStore.swift", "Settings/FeatureSettingsStore.swift"] {
+            let s = code(f)
+            expectEqual(s.contains("var pendingUntilServiceEnabled"), true, "应用状态: \(f) 区分「服务已停用」与「重启失败」")
+            expectEqual(s.contains("if !AppSettings.shared.collectorServiceEnabled {"), true,
+                        "应用状态: \(f) 重启失败后看服务是否被主动停用(先试再看,不是看了就跳)")
+            expectEqual(s.contains("func clearApplyStatus()"), true, "应用状态: \(f) 给状态条一个关闭出口")
+            expectEqual(s.contains("L10n.t(\"后台采集服务重启失败\")"), false, "应用状态: \(f) 的失败文案换成说清后果的那句")
+        }
+    }
+
     // ---- 项目级 skill(2026-09-05,借鉴清单 #49)----
     //
     // `.claude/skills/<名>/SKILL.md` 是 AGENTS.md 里三段操作型流程(真机验证 / 歌词排查 / 发版)的「步骤版」:
@@ -1417,6 +1450,236 @@ func runSourceContractTests() {
             let text = (try? String(contentsOfFile: repoRoot.appendingPathComponent(entry).path, encoding: .utf8)) ?? ""
             expectEqual(text.contains(".claude/skills/"), true, "项目级 skill: \(entry) 指向 .claude/skills/")
         }
+    }
+
+    // ---- 预发布闸与测试版频道的发布链路(2026-09-05,借鉴清单 #32 + 用户拍板「接收测试版」开关)----
+    //
+    // 这条链路只在真打 tag 时跑得到,出错全是静默的(全体用户被推到测试版 / beta 用户收不到 beta.2)。能在本机
+    // 钉住的只有形状:release.yml 对含 - 的 tag 标 prerelease、enclosure 指 tag 自己的目录而不是 latest、预发布
+    // item 带 beta channel、构建号走同一份脚本;build.sh 把构建号写进 CFBundleVersion、展示版本留在
+    // CFBundleShortVersionString;开关是机器专属键;Sparkle 委托接了两个改决策的方法。
+    do {
+        let repoRoot = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+        func read(_ rel: String) -> String {
+            (try? String(contentsOfFile: repoRoot.appendingPathComponent(rel).path, encoding: .utf8)) ?? ""
+        }
+        let yml = read(".github/workflows/release.yml")
+        expectEqual(yml.isEmpty, false, "发布链路: 读得到 release.yml")
+        expectEqual(yml.contains("prerelease: ${{ steps.version.outputs.is_prerelease == 'true' }}"), true,
+                    "发布链路: 含 - 的 tag 标 prerelease(GitHub 的 latest 不含它,正式用户看不见)")
+        expectEqual(yml.contains("releases/latest/download/${ZIP_NAME}"), false, "发布链路: enclosure 不再指 latest(预发布下会 404)")
+        expectEqual(yml.contains("releases/latest/download/${INTEL_ZIP_NAME}"), false, "发布链路: intel enclosure 同样不指 latest")
+        expectEqual(yml.contains("releases/download/${TAG}/${ZIP_NAME}"), true, "发布链路: enclosure 指 tag 自己的目录")
+        expectEqual(yml.contains("<sparkle:channel>beta</sparkle:channel>"), true, "发布链路: 预发布 item 带 beta channel")
+        expectEqual(yml.contains("scripts/build-version.sh"), true, "发布链路: tag 形态与构建号走同一份脚本")
+        expectEqual(yml.contains("check_appcast.py appcast.xml --tag"), true, "发布链路: appcast 自检带 tag / 版本 / 预发布参数")
+        let buildSh = read("lyrimuse/build.sh")
+        expectEqual(buildSh.contains("scripts/build-version.sh"), true, "发布链路: build.sh 的 CFBundleVersion 走同一份脚本")
+        expectEqual(buildSh.contains("<key>CFBundleVersion</key>\n    <string>${BUILD_VERSION}</string>"), true,
+                    "发布链路: CFBundleVersion 写构建号")
+        expectEqual(buildSh.contains("<key>CFBundleShortVersionString</key>\n    <string>${APP_VERSION}</string>"), true,
+                    "发布链路: CFBundleShortVersionString 仍是展示版本(tag 原文)")
+        let portability = read("lyrimuse/Sources/lyrimuse/Settings/ConfigPortability.swift")
+        expectEqual(portability.contains("\"np:receiveBetaUpdates\""), true, "发布链路: 「接收测试版」是这台机器的偏好,不随配置搬家")
+        let sparkle = read("lyrimuse/Sources/lyrimuse/Settings/SparkleUpdaterManager.swift")
+        expectEqual(sparkle.contains("func feedURLString(for updater: SPUUpdater) -> String?"), true, "发布链路: Sparkle 委托接了 feedURLString")
+        expectEqual(sparkle.contains("func allowedChannels(for updater: SPUUpdater) -> Set<String>"), true, "发布链路: Sparkle 委托接了 allowedChannels")
+        expectEqual(sparkle.contains("UpdateChannel.betaChannelName"), true, "发布链路: channel 名从 Core 常量来,跟 release.yml 那个字符串一处对齐")
+
+        // tag 构建前硬校验(2026-09-05,借鉴清单 #45):annotated / 正文非空 / 能拆成中英两份,判据只在
+        // check_release_tag.sh 一份;校验步排在装任何工具链之前;正文只读一次,appcast 与 Release 引用同一个输出。
+        let checkTag = read(".github/scripts/check_release_tag.sh")
+        expectEqual(checkTag.isEmpty, false, "tag 校验: 读得到 check_release_tag.sh")
+        expectEqual(checkTag.contains("git cat-file -t"), true, "tag 校验: 查 tag 对象类型(拒轻量 tag / 浅克隆剥过的 tag)")
+        expectEqual(checkTag.contains("split_release_notes.py"), true, "tag 校验: 双语判据复用同一份拆分脚本(两种格式都认)")
+        expectEqual(checkTag.contains("scripts/build-version.sh"), true, "tag 校验: 形态判据委托 build-version.sh,不另写正则")
+        expectEqual(checkTag.contains("${BODY//"), false, "tag 校验: 不用 bash 模式替换处理正文(bash 3.2 对 18KB 中文正文要跑 98 秒)")
+        expectEqual(yml.contains("check_release_tag.sh"), true, "tag 校验: release.yml 调那份脚本,不在 yaml 里另写判据")
+        let validateAt = yml.range(of: "- name: Validate release tag")?.lowerBound
+        let setupGoAt = yml.range(of: "- name: Set up Go")?.lowerBound
+        let buildAt = yml.range(of: "- name: Build + package release assets")?.lowerBound
+        expectEqual(validateAt != nil && setupGoAt != nil && buildAt != nil, true, "tag 校验: 三个步骤名都在")
+        if let v = validateAt, let g = setupGoAt, let b = buildAt {
+            expectEqual(v < g && v < b, true, "tag 校验: 校验步排在装工具链与构建之前(失败零构建成本)")
+        }
+        expectEqual(yml.contains("steps.changelog."), false, "tag 校验: 旧的 Extract tag changelog 步已并入校验步")
+        expectEqual(yml.components(separatedBy: "steps.tag.outputs.body").count - 1 >= 2, true,
+                    "tag 校验: appcast 与 Release 正文引用同一个 body 输出(正文只读一次)")
+        expectEqual(read("docs/releasing.md").contains("check_release_tag.sh"), true, "tag 校验: releasing.md 让打 tag 的人 push 前本地跑同一份")
+        expectEqual(read("AGENTS.md").contains("check_release_tag.sh"), true, "tag 校验: AGENTS.md「提交」写明 CI 拒什么")
+    }
+
+    // ---- 身份与路径收口(2026-09-05,借鉴清单 #33 第一步)----
+    //
+    // 配置目录 `~/.config/lyrimuse`、两个 launchd label、两份日志文件名,在 Swift 侧只许出现在 Core
+    // LyrimuseIdentity.swift 一处(App / Core 其余文件一律经 LyrimusePaths / LogFiles / LyrimuseIdentity 取);
+    // Go 侧只许出现在 paths.go(其余文件经 configDir() / configFilePath() / logFilePath())。路径只有一处来源,
+    // 任何漏网的字面量都是将来改目录 / 改名时会漏改的地方。App spawn 的每个 collector
+    // 子命令都必须带 LyrimusePaths.collectorProcessEnvironment(),否则子命令落回默认目录、跟本 App 不是同一份数据。
+    do {
+        let repoRoot = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+        let fm = FileManager.default
+        func swiftFiles(under rel: String) -> [String] {
+            let base = repoRoot.appendingPathComponent(rel).path
+            guard let e = fm.enumerator(atPath: base) else { return [] }
+            return e.compactMap { $0 as? String }.filter { $0.hasSuffix(".swift") }.map { base + "/" + $0 }.sorted()
+        }
+        func codeLines(_ path: String) -> [(Int, String)] {
+            let src = (try? String(contentsOfFile: path, encoding: .utf8)) ?? ""
+            return src.split(separator: "\n", omittingEmptySubsequences: false).enumerated().compactMap { i, line in
+                let t = line.trimmingCharacters(in: .whitespaces)
+                if t.hasPrefix("//") { return nil }
+                // 行内注释里的举例不算:只看注释符之前的代码
+                let code = String(line.split(separator: "//", maxSplits: 1, omittingEmptySubsequences: false).first ?? "")
+                return (i + 1, code)
+            }
+        }
+        var offenders: [String] = []
+        for path in swiftFiles(under: "lyrimuse/Sources/LyrimuseCore") + swiftFiles(under: "lyrimuse/Sources/lyrimuse") {
+            let name = path.split(separator: "/").last.map(String.init) ?? path
+            if name == "LyrimuseIdentity.swift" { continue }
+            for (n, code) in codeLines(path) {
+                if code.contains("L10n.t(") { continue }   // 面向用户的文案里写路径是给人看的,不是取值
+                if code.contains(".config/lyrimuse") { offenders.append("\(name):\(n) .config/lyrimuse") }
+                if code.contains("Library/Logs/lyrimuse") { offenders.append("\(name):\(n) Library/Logs/lyrimuse") }
+                if code.contains("\"com.lyrimuse.collector") { offenders.append("\(name):\(n) collector label 字面量") }
+                if code.contains("\"me.yudaotor.lyrimuse\""), !code.contains("subsystem"), !code.contains("DispatchQueue(label:") {
+                    offenders.append("\(name):\(n) bundle id 字面量(只许 Logger subsystem / 队列名用)")
+                }
+                if code.contains("/Applications/Lyrimuse.app") { offenders.append("\(name):\(n) 安装路径字面量") }
+            }
+        }
+        expectEqual(offenders, [], "身份收口(Swift): 配置目录 / 日志 / label / 安装路径只许在 LyrimuseIdentity.swift 里写字面量")
+
+        var goOffenders: [String] = []
+        let goDir = repoRoot.appendingPathComponent("lyrimuse-collector").path
+        for f in ((try? fm.contentsOfDirectory(atPath: goDir)) ?? []).filter({ $0.hasSuffix(".go") && !$0.hasSuffix("_test.go") && $0 != "paths.go" }).sorted() {
+            for (n, code) in codeLines(goDir + "/" + f) {
+                if code.contains("\".config\", clientName") || code.contains(".config/lyrimuse\"") { goOffenders.append("\(f):\(n) 配置目录") }
+                if code.contains("Library/Logs") { goOffenders.append("\(f):\(n) 日志路径") }
+                if code.contains("os.UserHomeDir()") { goOffenders.append("\(f):\(n) 自己拿家目录拼路径(走 configDir())") }
+            }
+        }
+        expectEqual(goOffenders, [], "身份收口(Go): 配置目录 / 日志路径只许在 paths.go 里拼,其余经 configDir() / logFilePath()")
+        let pathsGo = (try? String(contentsOfFile: goDir + "/paths.go", encoding: .utf8)) ?? ""
+        expectEqual(pathsGo.contains("LYRIMUSE_CONFIG_DIR") && pathsGo.contains("LYRIMUSE_LOG_FILE") && pathsGo.contains("LYRIMUSE_APP_BUNDLE_ID"), true,
+                    "身份收口(Go): paths.go 读的三个环境变量名与 Swift LyrimusePaths.collectorEnvironment 一致")
+        let companion = (try? String(contentsOfFile: goDir + "/companionlaunch.go", encoding: .utf8)) ?? ""
+        expectEqual(companion.contains("\"-b\", appBundleID()"), true, "身份收口(Go): companion launch 用 appBundleID() 而不是写死 id(bundle id 由 App 经环境变量下发)")
+
+        // App spawn collector 子命令的每一处都带环境变量
+        var spawnOffenders: [String] = []
+        for path in swiftFiles(under: "lyrimuse/Sources/lyrimuse") {
+            let src = (try? String(contentsOfFile: path, encoding: .utf8)) ?? ""
+            guard src.contains("Contents/Resources/collector") else { continue }
+            // spawn 有两种形状:自己 new Process 设 executableURL,以及走 ProcessRunner.run
+            // (2026-09-06 补上后一种 —— 「待补提交」清单的删除叉就是漏在那条路上:它是唯一
+            // 一个用 ProcessRunner 的 collector 子命令,而那个函数当时连环境参数都没有,于是
+            // 这道守卫按 executableURL 数根本数不到它。配置目录一旦不是默认值,App 读的是一处、
+            // delete-listen 删的却是默认目录,deleted:0,界面上就是"点了没反应")。
+            // ⚠️ 两处都在 2026-09-06 收紧,起因是这道守卫**两次**都靠巧合成立:
+            //
+            // 一、匹配**不带**变量名前缀。原来数的是 `process.executableURL = …`,于是
+            //    `CollectorServiceManager.runCapturing` 里那句 `p.executableURL = …` 数不到 ——
+            //    它是**真的在 spawn collector**(bundledCollectorVersion → collector version)、
+            //    且当时不带环境,却因为 execs=0/envs=0 恰好"配平"蒙混过关:守卫当时成立靠的是
+            //    "那个文件的变量恰好叫 p 不叫 process"。放宽后它红了,已给那处补上环境。
+            //
+            // 二、**只数代码、不数注释**。这段原来在原始文本上数,注释里但凡提到
+            //    `.executableURL = …` 或 `collectorProcessEnvironment()` 都会被算进去 ——
+            //    修完第一条后,CollectorServiceManager 那份解释性注释恰好把两个串各提了一次,
+            //    计数变成 2=2 仍然"平",可那 2 里各有 1 个是注释。判据又一次靠巧合成立。
+            //    用 codeLines 剥掉注释再数,计数只反映真实 spawn。
+            let code = codeLines(path).map(\.1).joined(separator: "\n")
+            let execs = code.components(separatedBy: ".executableURL = URL(fileURLWithPath:").count - 1
+            let runners = code.components(separatedBy: "ProcessRunner.run(").count - 1
+            let envs = code.components(separatedBy: "LyrimusePaths.collectorProcessEnvironment()").count - 1
+            if execs + runners != envs {
+                spawnOffenders.append("\(path.split(separator: "/").last ?? ""): spawn \(execs + runners) 处(executableURL \(execs) + ProcessRunner \(runners)), environment \(envs) 处")
+            }
+        }
+        expectEqual(spawnOffenders, [], "身份收口: App spawn 的 collector 子命令每一处都传 collectorProcessEnvironment()")
+        let csm = (try? String(contentsOfFile: repoRoot.appendingPathComponent("lyrimuse/Sources/lyrimuse/Settings/CollectorServiceManager.swift").path, encoding: .utf8)) ?? ""
+        expectEqual(csm.contains("\"EnvironmentVariables\": LyrimusePaths.collectorEnvironment"), true, "身份收口: collector 的 launchd plist 带 EnvironmentVariables")
+    }
+
+    // ---- 「配色主题」下拉的色条与勾(2026-09-06,借鉴清单 #55)----
+    //
+    // 下拉项 = 三段色条(文字 / 背景 / 描边)+ 名字 + 当前项打勾,勾的判据与悬浮窗快捷菜单同一条(精确匹配四字段、
+    // 跟随封面开着一个都不打)。钉住:色条只有 ThemeSwatch 一份画法、用 drawingHandler;菜单项走 Toggle(原生勾)而
+    // 不是回退成只有名字的 Button;自定义子行也带色条;快捷菜单那半边的规则还在。
+    do {
+        let appDir = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("lyrimuse")
+        func code(_ rel: String) -> String {
+            (try? String(contentsOfFile: appDir.appendingPathComponent(rel).path, encoding: .utf8)) ?? ""
+        }
+        let swatch = code("Settings/ColorThemeSwatch.swift")
+        expectEqual(swatch.isEmpty, false, "主题色条: 读得到 ColorThemeSwatch.swift")
+        expectEqual(swatch.contains("NSImage(size: size, flipped: false)"), true, "主题色条: 用 drawingHandler 画,动态色按绘制时外观解析")
+        expectEqual(swatch.contains("NSColor.separatorColor"), true, "主题色条: 外框与段间用 separatorColor,深浅菜单都看得见")
+        expectEqual(swatch.contains("if strokeEnabled {"), true, "主题色条: 描边开关决定第三段是颜色还是斜线(经典白字 vs 白字描边靠它区分)")
+        expectEqual(code("Settings/ColorTheme.swift").contains("func swatchImage() -> NSImage"), true, "主题色条: ColorTheme.swatchImage() 转发到 ThemeSwatch")
+        let rows = code("UI/OverlayStyleSettingsRows.swift")
+        // ⚠️ 2026-09-06 当天改口径:色条**只在「我的配色主题」子行**出现,下拉项里不能有。
+        // 原断言要求"下拉项与子行都带色条",而为了给下拉项加色条把条目写成
+        // `Toggle { Label { Text } icon: { Image(nsImage:) } }` 之后,整份菜单**一个条目都画不出来**
+        // (实测,连主题名都没有 —— 失败在条目这一层,不是图标那一层)。理由、实测现象与
+        // 「真要加就走 AppKit」的替代方案,全在 OverlayStyleSettingsRows.themeItem 的注释里。
+        // ⚠️ 扫源码的守卫必须**先剥掉注释行**:`themeItem` 的文档注释里**故意**贴着那段写坏了的
+        // 代码(`Toggle { Label { Text } icon: { Image(nsImage:) } }`)当反面教材,不剥的话下面
+        // 每一条"不许出现 X"的断言都会被这段反面教材自己打红(2026-09-06 实测踩到:数
+        // `theme.swatchImage()` 的出现次数,被注释里的示例多算了一次)。
+        func stripComments(_ src: String) -> String {
+            src.split(separator: "\n", omittingEmptySubsequences: false)
+                .filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") }
+                .joined(separator: "\n")
+        }
+        let rowsCode = stripComments(rows)
+        expectEqual(rowsCode.components(separatedBy: "theme.swatchImage()").count - 1, 1,
+                    "主题色条: 只在「我的配色主题」子行出现一次(下拉项不能带,会让菜单整片空白)")
+        expectEqual(rowsCode.contains("Button(theme.name) { theme.apply(to: settings) }"), true,
+                    "主题色条: 下拉项必须是纯 Button(标题)")
+        expectEqual(rowsCode.contains("Toggle(isOn: Binding("), false,
+                    "主题色条: 下拉项里不许再出现 Toggle 条目 —— 实测会让整份菜单一个条目都画不出来")
+        // 下拉里已经没有勾了(见上),原来钉"勾的判据"那条随之删除。选中反馈只剩 Menu 自己的
+        // 标题(currentThemeLabel),它跟快捷菜单共用同一条「跟随封面开着就不算任何主题在生效」:
+        expectEqual(rows.contains("guard !settings.followsCoverArt else { return noThemeInEffectPlaceholder }"), true,
+                    "主题色条: 跟随封面开着时「配色主题」这一格显示占位符(与快捷菜单一个勾都不打对齐)")
+        let quick = code("UI/OverlayQuickSettingsMenu.swift")
+        expectEqual(quick.contains("let showsCheckmarks = !settings.followsCoverArt"), true,
+                    "主题色条: 快捷菜单那条「跟随封面开着不打勾」的规则还在(两入口对齐的另一半)")
+    }
+
+    // ---- 诊断导出的崩溃报告段(2026-09-06,借鉴清单 #31)----
+    //
+    // 解析在 Core(纯 Foundation、不碰文件系统,好测),App 侧只做目录扫描;这一段跟其它日志段一样必须过脱敏
+    // (DiagnosticsExporter 头注的硬约束);归属靠正文的 bundle id / 包路径,不只看文件名。
+    do {
+        let repoRoot = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+        func read(_ rel: String) -> String {
+            (try? String(contentsOfFile: repoRoot.appendingPathComponent(rel).path, encoding: .utf8)) ?? ""
+        }
+        let exporter = read("lyrimuse/Sources/lyrimuse/Settings/DiagnosticsExporter.swift")
+        expectEqual(exporter.contains("== Recent Crash Reports"), true, "崩溃报告段: 诊断导出有这一段")
+        expectEqual(exporter.contains("recentCrashReportLines().map { LogRedactor.redactAll($0, secrets: secrets) }"), true,
+                    "崩溃报告段: 这一段同样过脱敏")
+        expectEqual(exporter.contains("CrashReportSummary.parse("), true, "崩溃报告段: 解析走 Core,不在 App 里另写一份")
+        expectEqual(exporter.contains("CrashReportSummary.select("), true, "崩溃报告段: 每进程限量走 Core 的 select")
+        expectEqual(exporter.contains("belongsToApp("), true, "崩溃报告段: 正文按 bundle id / 包路径确认归属")
+        let core = read("lyrimuse/Sources/LyrimuseCore/Diagnostics/CrashReportSummary.swift")
+        expectEqual(core.isEmpty, false, "崩溃报告段: 读得到 CrashReportSummary.swift")
+        expectEqual(core.contains("import AppKit"), false, "崩溃报告段: Core 侧纯 Foundation")
+        expectEqual(core.contains("FileManager"), false, "崩溃报告段: Core 侧不碰文件系统(目录扫描在 App 侧)")
+        expectEqual(read("lyrimuse/Sources/lyrimuse-selftest/OpsDiagnosticsTests.swift").contains("CrashReportSummary.parse("), true,
+                    "崩溃报告段: selftest 覆盖解析")
     }
 
     // ---- 日志规范(2026-09-04)----

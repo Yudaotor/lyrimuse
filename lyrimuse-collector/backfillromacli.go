@@ -30,11 +30,10 @@ func runBackfillRomaCLI(args []string) {
 		log.Fatalf("backfill-roma: %v", err)
 	}
 
-	home, err := os.UserHomeDir()
-	if err != nil {
-		log.Fatalf("backfill-roma: resolve home dir: %v", err)
+	if configDir() == "" {
+		log.Fatalf("backfill-roma: cannot resolve home directory (and LYRIMUSE_CONFIG_DIR is unset)")
 	}
-	cfgDir := filepath.Join(home, ".config", clientName)
+	cfgDir := configDir()
 	features = loadFeatureFlags(filepath.Join(cfgDir, clientName+"-features.json"))
 	lyricsDir = features.LyricsDir
 	if lyricsDir == "" {

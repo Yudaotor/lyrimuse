@@ -66,7 +66,7 @@ func adoptEnrichRestore(path string) {
 	if err := json.Unmarshal(data, &incoming); err != nil {
 		// 解不出来就**原样留着**:这份文件是用户搬家时的决策数据,删掉等于替他做了
 		// "反正也用不上"的决定。留着还能人工看/修。
-		log.Printf("enrich restore: %s 解析失败,原样保留不采纳: %v", filepath.Base(path), err)
+		log.Printf("enrich restore: parse failed, file kept as-is file=%s: %v", filepath.Base(path), err)
 		return
 	}
 
@@ -117,8 +117,8 @@ func adoptEnrichRestore(path string) {
 		// 改名失败的后果是下次启动会再采纳一遍。重复采纳本身是幂等的(同样的字段盖成
 		// 同样的值),唯一的偏差是"这台机器在两次启动之间新解析出来的字段会被备份里的
 		// 旧值再盖一次" —— 所以要吵一声,别让它无声地长期存在。
-		log.Printf("enrich restore: 采纳完了但改名失败(下次启动会重复采纳一遍): %v", err)
+		log.Printf("enrich restore: adopted but rename failed (will re-adopt on next start): %v", err)
 	}
-	log.Printf("enrich restore: 采纳 %d 条(新建 %d、并入 %d、跳过 %d),文件改名为 %s",
+	log.Printf("enrich restore: adopted entries=%d created=%d merged=%d skipped=%d, renamed to %s",
 		created+mergedInto, created, mergedInto, skipped, filepath.Base(applied))
 }

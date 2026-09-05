@@ -436,5 +436,11 @@ func runBackfill(ctx context.Context, s *lastfmScrobbler, dryRun bool) backfillO
 	}
 	log.Printf("backfill: done — accepted=%d ignored=%d quarantined=%d tooOld=%d",
 		out.Accepted, out.Ignored, out.Quarantined, out.SkippedTooOld)
+	if out.Accepted > 0 {
+		// 真补进了东西:让常驻 collector 马上重拉一次 feed,App 那边几秒内就能看到补进去的
+		// 记录,不用等下一个 15 s/60 s 周期(见 lastfmFeedNudgePath)。accepted == 0 时
+		// Last.fm 侧什么都没变,不白拉。
+		touchLastfmFeedNudgeFile()
+	}
 	return out
 }

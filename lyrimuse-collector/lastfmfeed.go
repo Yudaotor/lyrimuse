@@ -104,6 +104,41 @@ func lastfmFeedNudgeDue(now time.Time) bool {
 	return lastfmFeedNudgeAt.CompareAndSwap(t, 0)
 }
 
+// lastfmFeedNudgePath:**跨进程**的"提前拉一次"信号文件(2026-09-03)。上面的 atomic 只在
+// 常驻 collector 进程内有效;回填(`collector backfill-lastfm`,由 App 起的独立进程)刚往
+// Last.fm 补进一批 scrobble 之后也需要让常驻进程马上重拉 feed——否则 App 那边要等下一个
+// 15 s/60 s 周期才看到补进去的记录(用户 2026-09-03:「刚连上补提交之后马上刷新一次最近
+// 记录」)。协议极简:写方 touch 这个文件(内容是 unix 秒,纯供人看),常驻进程在 bridge()
+// 里每拍 stat 一次,文件在就消费掉(删除)并立刻拉一次。由 main.go / backfillcli.go 跟
+// 其它落盘路径一起设置;空 = 不启用(单测)。
+var lastfmFeedNudgePath string
+
+// touchLastfmFeedNudgeFile 由回填子命令在 accepted > 0 之后调用。写失败只记日志:这是
+// 加速通道,不是正确性依赖 —— 下一个周期 feed 照样会更新。
+func touchLastfmFeedNudgeFile() {
+	if lastfmFeedNudgePath == "" {
+		return
+	}
+	if err := os.WriteFile(lastfmFeedNudgePath, []byte(strconv.FormatInt(time.Now().Unix(), 10)), 0o644); err != nil {
+		log.Printf("lastfm feed nudge: write %s: %v", lastfmFeedNudgePath, err)
+	}
+}
+
+// lastfmFeedNudgeFileDue 报告信号文件是否存在,存在则消费掉(删除)。每拍一次 stat,常态
+// 代价可忽略。删除失败也返回 true(这一拍照样拉),但会在下一拍再触发一次 —— 比漏掉好。
+func lastfmFeedNudgeFileDue() bool {
+	if lastfmFeedNudgePath == "" {
+		return false
+	}
+	if _, err := os.Stat(lastfmFeedNudgePath); err != nil {
+		return false
+	}
+	if err := os.Remove(lastfmFeedNudgePath); err != nil {
+		log.Printf("lastfm feed nudge: remove %s: %v", lastfmFeedNudgePath, err)
+	}
+	return true
+}
+
 type lastfmFeedTrack struct {
 	Artist string `json:"artist"`
 	Title  string `json:"title"`

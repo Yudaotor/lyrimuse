@@ -61,7 +61,7 @@ func loadArtistAliasCache(path string) {
 		artistAliasMu.Lock()
 		artistAliasCache = m
 		artistAliasMu.Unlock()
-		log.Printf("loaded %d cached artist aliases from %s", len(m), path)
+		log.Printf("cache: loaded %d artist aliases from %s", len(m), path)
 	}
 }
 
@@ -208,7 +208,7 @@ func loadArtistIdentityCache(path string) {
 		artistIdentityMu.Lock()
 		artistIdentityCache = m
 		artistIdentityMu.Unlock()
-		log.Printf("loaded %d cached artist identities from %s", len(m), path)
+		log.Printf("cache: loaded %d artist identities from %s", len(m), path)
 	}
 }
 
@@ -411,7 +411,7 @@ var (
 // 还有跑测试的进程各自计时,谁都不知道别人刚打过。撞上限速就是 503,lookup 返回空。
 // 要是把这个空也永久写进文件(artistAliasCache 就是那么做的,见它注释里"想重查只能手动
 // 删缓存文件里的 key"),一次偶发限速会把这位歌手**永久**钉死在"没有别名"上,而这条兜底
-// 恰恰是"五个源一条候选都没有"时最后的救命绳。
+// 恰恰是"所有源一条候选都没有"时最后的救命绳。
 //
 // 2026-08-20 实测反馈坐实了这个形态:同一首歌手动搜索第一遍 0 条、原样再搜一遍就出 5 条。
 //
@@ -432,7 +432,7 @@ func loadMBPrimaryNameCache(path string) {
 		mbPrimaryNameMu.Lock()
 		mbPrimaryNameCache = m
 		mbPrimaryNameMu.Unlock()
-		log.Printf("loaded %d cached MusicBrainz primary names from %s", len(m), path)
+		log.Printf("cache: loaded %d MusicBrainz primary names from %s", len(m), path)
 		return
 	}
 	var legacy map[string]string
@@ -446,7 +446,7 @@ func loadMBPrimaryNameCache(path string) {
 		mbPrimaryNameMu.Lock()
 		mbPrimaryNameCache = m
 		mbPrimaryNameMu.Unlock()
-		log.Printf("loaded %d cached MusicBrainz primary names from %s (legacy format)", len(m), path)
+		log.Printf("cache: loaded %d MusicBrainz primary names from %s (legacy format)", len(m), path)
 	}
 }
 
@@ -664,7 +664,7 @@ func lookupMusicBrainzArtistAliases(ctx context.Context, raw string) []string {
 //     日文别名 primary=true;硬按 primary 过滤会把真正该换的名字滤掉)。只排除
 //     Legal name/Search hint:那两类不太可能是音乐平台索引用的写法,收进来大概率
 //     白跑一轮网络请求,而 retryArtistIdentities 的上游调用方会对每个候选各发起一次
-//     完整的七源搜索。
+//     完整的全源搜索。
 func mbAliasCandidatesForRetry(primary string, aliases []mbAlias, raw string) []string {
 	primary = strings.TrimSpace(primary)
 	raw = strings.TrimSpace(raw)

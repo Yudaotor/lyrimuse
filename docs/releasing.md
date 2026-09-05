@@ -59,8 +59,13 @@
 
 ## 四、打 tag 发布
 
-- [ ] `git tag -a v<版本> <验证过的 commit> -F RELEASE_NOTES_v<版本>.md && git push origin v<版本>`
-      ——tag 显式打在验证过的 commit 上，不是裸 HEAD。
+- [ ] `git tag -a v<版本> <验证过的 commit> -F RELEASE_NOTES_v<版本>.md`——tag 显式打在验证过的 commit 上，不是裸 HEAD。
+- [ ] **push 前本地预检**：`bash .github/scripts/check_release_tag.sh v<版本>`。CI 构建前跑的就是这一份：形态合法、
+      annotated、正文非空、能拆成中英两份（英文 ≥200 字符、中文 ≥80 字符）。本地先过，省得 push 上去才红、删远端 tag 重打。
+      不过就 `git tag -d` 改正文重打，别硬推。
+- [ ] `git push origin v<版本>`
+- [ ] CI 构建前会再跑同一份校验（2026-09-05 起）：`vX.Y.Z` 正式版，`vX.Y.Z-(alpha|beta|rc).N` 测试版（见「六」），
+      其它形态、轻量 tag、空正文、拆不出双语的正文都在装工具链之前直接失败，不会出现在 Releases 页。
 - [ ] `gh run watch` 盯 Release workflow 到绿；确认 Release 页 7 个资产齐全
       （arm64 与 intel 各 zip/dmg/sha256 + appcast.xml）。
 - [ ] appcast 抽查：`hardwareRequirements` **恰好一个**且在 arm64 item 上、arm 包在前；
@@ -79,6 +84,29 @@
       一两句修了什么、能对上报告者原话就点名 + 邀请验证/不行就 reopen）→ close as
       **completed**。
 - [ ] 设置页「关于」确认 App 与采集服务版本号一致（两个版本号对不上是 15 章记过的真实事故）。
+
+## 六、发测试版（beta / rc）
+
+> 2026-09-05 起支持（借鉴清单 #32 + 用户拍板的「接收测试版更新」开关）。目的：发一个**只给自己另一台机器试**的版本，
+> 全体用户无感。机制与取舍见 15 章决策 11。
+
+- [ ] tag 形态：`v<X.Y.Z>-beta.<N>`（也认 `alpha` / `rc`），N 从 1 起、不带前导零。带 `-` 就自动标 **Pre-release**，
+      GitHub 的 `releases/latest` 不含它，正式用户的 appcast 不受影响。
+- [ ] 打法与正式版相同：`git tag -a v1.6.0-beta.1 <commit> -F RELEASE_NOTES_v1.6.0-beta.1.md && git push origin v1.6.0-beta.1`。
+      日志照写双语——测试机的 Sparkle 弹窗会显示它；push 前同样先过 `check_release_tag.sh`（见「四」）。
+- [ ] CI 会做的：Release 标 prerelease；appcast 的 enclosure 指 `releases/download/<tag>/`（不是 latest）；item 带
+      `<sparkle:channel>beta</sparkle:channel>`；`sparkle:version` 是四段构建号（beta.N → `X.Y.Z.(100+N)`，唯一定义在
+      `lyrimuse/scripts/build-version.sh`）；`check_appcast.py` 四项断言；发布后探活三个下载地址。
+- [ ] 测试机收法（二选一）：① 设置 → 关于 → 更新 → 打开「接收测试版更新」，再点「检查更新…」——App 自己去 GitHub 挑
+      版本最高的 Release（含预发布）的 appcast；② 不开开关，直接去 Release 页下载 dmg 手装（只验产物、不验升级链路）。
+      **不用再 `defaults write SUFeedURL`**，也就没有 15 章坑 10 那个忘删的风险。
+- [ ] 验完：关掉开关即回正式频道。已装的测试版不会自动退回，等下一个版本号更高的正式版（同号正式版 `v1.6.0`
+      的构建号 1000 > beta 的 100+N，会正常被推到）。
+- [ ] 不要做的：不要给测试版更新 Homebrew cask（cask 只跟正式版）；不要在测试版 tag 上 fast-forward `main`
+      （main 只在正式发版推进）。
+- ⚠️ 版本比较的坑：Sparkle 的 `SUStandardVersionComparator` 实测把 `-` 后面的全部忽略（`1.6.0-beta.1 == 1.6.0`、
+  `beta.2 == beta.1`），所以展示版本和构建号必须分开；构建号规则只有 `build-version.sh` 一份，selftest update-channel 组
+  拿 Core 的 `ReleaseVersion` 交叉校验。
 
 ## 已知偶发与处置
 

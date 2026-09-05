@@ -111,3 +111,51 @@ func TestPlayerProcessNameCoversEveryPlayer(t *testing.T) {
 		t.Errorf("auto+qq 组合应等同于纯 auto(全量列表), got %v", got)
 	}
 }
+
+// 2026-09-03「跟随播放器启动」逐播放器勾选:勾选集合与候选(选中集合 / auto 全量)取交,键缺失退回旧语义。
+func TestCompanionLaunchProcessNamesHonorsChosenPlayers(t *testing.T) {
+	defer func() {
+		features.Players = map[string]bool{playerAuto: true}
+		features.LaunchLyrimuseOnPlayers = nil
+	}()
+
+	// 键缺失(老配置):跟布尔年代一样盯整个选中集合。
+	features.Players = map[string]bool{playerQQMusic: true, playerKugou: true}
+	features.LaunchLyrimuseOnPlayers = nil
+	if got := companionLaunchProcessNames(); len(got) != 2 {
+		t.Errorf("键缺失时应退回盯整个选中集合(2 个), got %v", got)
+	}
+
+	// 只勾了 QQ 音乐:只盯 QQMusic。
+	features.LaunchLyrimuseOnPlayers = map[string]bool{playerQQMusic: true}
+	if got := companionLaunchProcessNames(); len(got) != 1 || got[0] != "QQMusic" {
+		t.Errorf("只勾 qq 时应只盯 QQMusic, got %v", got)
+	}
+
+	// 勾了但没选中的播放器不算(勾选记录保留,选回来自动恢复 —— 跟 Swift 侧 PlayerLinkage.effective 同一规则)。
+	features.LaunchLyrimuseOnPlayers = map[string]bool{playerSpotify: true}
+	if got := companionLaunchProcessNames(); len(got) != 0 {
+		t.Errorf("勾了未选中的 spotify 不该盯任何进程, got %v", got)
+	}
+
+	// 空列表 = 明确关掉。
+	features.LaunchLyrimuseOnPlayers = map[string]bool{}
+	if got := companionLaunchProcessNames(); len(got) != 0 {
+		t.Errorf("空列表应一个都不盯, got %v", got)
+	}
+
+	// 自动识别 + 勾了两个:候选是全量五个,勾的两个都在 → 盯两个。
+	features.Players = map[string]bool{playerAuto: true}
+	features.LaunchLyrimuseOnPlayers = map[string]bool{playerSpotify: true, playerAppleMusic: true}
+	if got := companionLaunchProcessNames(); len(got) != 2 {
+		t.Errorf("auto + 勾两个 应盯 2 个, got %v", got)
+	}
+
+	// 解析层:auto / 不认识的值被丢掉,nil 原样透传。
+	if got := resolveLaunchLyrimuseOnPlayers([]string{playerAuto, "bogus", playerNetease}); len(got) != 1 || !got[playerNetease] {
+		t.Errorf("resolveLaunchLyrimuseOnPlayers 应只留 netease, got %v", got)
+	}
+	if got := resolveLaunchLyrimuseOnPlayers(nil); got != nil {
+		t.Errorf("nil 应原样透传(表示键缺失), got %v", got)
+	}
+}

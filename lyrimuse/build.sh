@@ -67,10 +67,15 @@ merge_slices() {
 }
 
 APP_NAME="Lyrimuse"
-# X.Y.Z 语义化版本——检查更新功能(UpdateChecker.swift)靠 CFBundleShortVersionString
-# 跟 GitHub Release 的 tag(去掉 v 前缀)比大小,必须是干净的三段数字。CI(release.yml)
-# 在真正打 tag 触发时会传入 LYRIMUSE_VERSION 环境变量(从 tag 解析出的真实版本号);
-# 本地手动跑不设这个变量。
+# bundle id(同时是 App 自己那个 LaunchAgent 的 label)与 collector 的 job label。三个名字跟
+# LyrimuseCore/Util/LyrimuseIdentity.swift 里那一套逐字一致。
+LABEL="me.yudaotor.lyrimuse"
+COLLECTOR_LABEL="com.lyrimuse.collector"
+LOG_FILE="$HOME/Library/Logs/lyrimuse.log"
+# 展示版本(CFBundleShortVersionString)= tag 去掉 v:X.Y.Z 或 X.Y.Z-alpha|beta|rc.N。更新检查走 Sparkle
+# (SparkleUpdaterManager.swift;旧的 UpdateChecker.swift 已删),它比大小用的是 CFBundleVersion,由下面的
+# scripts/build-version.sh 另算成四段纯数字(原因见那个脚本头注)。CI(release.yml)在真正打 tag 触发时会
+# 传入 LYRIMUSE_VERSION 环境变量(从 tag 解析出的真实版本号);本地手动跑不设这个变量。
 #
 # ⚠️ 2026-08-27 之前这里的默认值硬编码成 "1.0.0"——本地构建本来就不是要发布的正式
 # 版本,当时觉得不需要精确。实测坐实这个假设是错的:这台机器上唯一会用到的构建方式
@@ -83,6 +88,13 @@ APP_NAME="Lyrimuse"
 # 不会看着像一个正常但过时的版本号。
 APP_VERSION="${LYRIMUSE_VERSION:-$(git describe --tags --abbrev=0 2>/dev/null | sed 's/^v//')}"
 [ -z "$APP_VERSION" ] && APP_VERSION="0.0.0"
+# CFBundleVersion(Sparkle 比大小用的构建号)由 scripts/build-version.sh 从展示版本算出 —— 映射只有那一份,
+# release.yml 生成 appcast 时从这里写进 Info.plist 的值回读、selftest 拿它跟 Core 的 ReleaseVersion 交叉校验。
+# 形态不对(既不是 X.Y.Z 也不是 X.Y.Z-alpha|beta|rc.N)在这里就失败,别让一个奇形怪状的版本号进包。
+BUILD_VERSION="$(./scripts/build-version.sh "$APP_VERSION")" || {
+  echo "!! 版本号形态不合法: $APP_VERSION(要 X.Y.Z 或 X.Y.Z-alpha|beta|rc.N,见 scripts/build-version.sh)" >&2
+  exit 1
+}
 # 装到 /Applications/ 而不是仓库自己的 bin/ 里(2026-07-18 当天改的——一开始装在 bin/
 # 下,用户把它拖/拷到了 /Applications/ 自己启动,导致真正在跑的是一份没同步过后续几次
 # 修复的旧拷贝,重新构建/重启了好几次都没反映到用户实际在看的那个进程上,排查了很久才
@@ -135,7 +147,7 @@ BIN="$APP_DIR/Contents/MacOS/lyrimuse"
 # 迁移步骤),不再需要保留那个历史包袱,直接统一成标准写法更清爽。副作用:改这两个
 # 字符串意味着 TCC 会认成一个新 App,自动化权限(控制 Music.app 播放)会重新弹一次
 # 系统授权对话框——这是这次改名一次性的代价,同意一次之后往后都不会再弹。
-LABEL="me.yudaotor.lyrimuse"
+# LABEL 在上面跟 APP_NAME 一起定义。
 # 合并后的二进制放这里。**不要**用 .build/release —— 那是个指向"最后一次构建的那个
 # 架构"的符号链接,多架构循环里它会在中途被改指向,拿它取产物必然错(2026-08-06 实测:
 # 跑完一次 `swift build --arch x86_64` 之后 .build/release 就指向
@@ -476,9 +488,9 @@ cat > "$APP_DIR/Contents/Info.plist" <<PLIST
     <key>CFBundleName</key>
     <string>${APP_NAME}</string>
     <key>CFBundleDisplayName</key>
-    <string>Lyrimuse</string>
+    <string>${APP_NAME}</string>
     <key>CFBundleVersion</key>
-    <string>${APP_VERSION}</string>
+    <string>${BUILD_VERSION}</string>
     <key>CFBundleShortVersionString</key>
     <string>${APP_VERSION}</string>
     <key>CFBundlePackageType</key>
@@ -717,11 +729,17 @@ else
   echo "==> launching"
   open "$APP_DIR"
 fi
-sleep 2
-if pid=$(pgrep -f "$BIN"); then
-  echo "==> Lyrimuse running, pid $pid"
+# 最多等 10 秒而不是固定 sleep 2:首次 open 一个新 bundle(换过 bundle id、或刚装到新路径)LaunchServices 要先注册,
+# 2 秒经常不够 —— 2026-09-05 实测被误判成「没起来」(进程其实起了)。
+pid=""
+for _ in 1 2 3 4 5 6 7 8 9 10; do
+  if pid=$(pgrep -f "$BIN" 2>/dev/null); then break; fi
+  sleep 1
+done
+if [ -n "$pid" ]; then
+  echo "==> $APP_NAME running, pid $pid"
 else
-  echo "!! Lyrimuse not running — check ~/Library/Logs/lyrimuse.log" >&2
+  echo "!! $APP_NAME not running — check $LOG_FILE" >&2
   exit 1
 fi
 
@@ -742,7 +760,7 @@ fi
 #
 # 所以这里不先试 kickstart:App 那边 kickstart 只是"有时"失败，collector 这边是**每次构建
 # 必然**失效，直接走完整的卸载重装。中间那个 sleep 跟上面同理 —— bootout 是异步的。
-COLLECTOR_LABEL="com.lyrimuse.collector"
+# COLLECTOR_LABEL 在上面跟 APP_NAME 一起定义。
 COLLECTOR_PLIST="$HOME/Library/LaunchAgents/$COLLECTOR_LABEL.plist"
 if [ -f "$COLLECTOR_PLIST" ]; then
   echo "==> reloading collector job (refreshing its launch constraint)"

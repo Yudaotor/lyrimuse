@@ -550,6 +550,27 @@ private struct IdleLastTrackHero: View {
                         .buttonStyle(.bordered)
                         .controlSize(.large)
                 }
+                // 「设置」(2026-09-05 用户要求"在红框这里加一个按钮打开设置")。停播页把这扇
+                // 窗口平时常驻的那排圆钮(星形 / 「…」 / 齿轮,见 LyricsWindowView)整个藏掉了,
+                // 于是**恰恰是最容易停在这一页的时候**(没在放歌)反而够不着设置,只能去菜单栏
+                // 图标右键。放这一排的最后一个:前面两颗是"对这首歌做什么",它是"对 App 做什么"。
+                //
+                // 只给图标不给文字:这一排已经有两颗文字按钮(没有「继续播放」的播放器还会有
+                // 第三颗「打开 X」),再加一句「设置…」会把整排推得比封面还宽。
+                //
+                // 动作与文案跟窗口那颗齿轮、菜单栏右键「设置…」同一条路径、同一个本地化键:
+                // `AppActions.shared.openSettings?()` 自带 `NSApp.activate`(`.accessory` 策略下
+                // 没有 Dock 图标,缺这一步点了没反应);不经 `requestSettings` 指定分类 ——
+                // 从这里打开沿用上次停留的设置页。
+                Button {
+                    AppActions.shared.openSettings?()
+                } label: {
+                    Image(systemName: "gearshape")
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.large)
+                .help(L10n.t("设置…"))
+                .accessibilityLabel(L10n.t("设置…"))
             }
             .padding(.top, 18)
             if !quotes.isEmpty {

@@ -64,11 +64,10 @@ func runSearchLyricsCLI(args []string) {
 	// os.Args[1]=="search-lyrics" 的提前分支、马上 return,永远不会执行到那一行——
 	// features 这个包级变量在这里还是零值(LyricsSources 是 nil map)。手动搜索要遵循
 	// "歌词"设置里的"歌词来源"开关,所以这里必须按跟 main() 完全一致的默认路径规则自己
-	// 加载一遍,不然下面过滤时 nil map 对任何 key 取值都是 false,会把五个源全部误判成
+	// 加载一遍,不然下面过滤时 nil map 对任何 key 取值都是 false,会把全部源误判成
 	// "没启用"、直接返回空列表。
-	home, err := os.UserHomeDir()
-	if err == nil {
-		cfgPath := filepath.Join(home, ".config", clientName, "config.json")
+	if configDir() != "" {
+		cfgPath := filepath.Join(configDir(), "config.json")
 		features = loadFeatureFlags(filepath.Join(filepath.Dir(cfgPath), clientName+"-features.json"))
 		// 同理,MusicBrainz 的歌手别名缓存也得自己加载一遍。2026-08-15 起
 		// retryArtistIdentities 会在没查到可用候选时拿 canonical 名再搜一次,而
@@ -210,8 +209,8 @@ func runSearchLyricsCLI(args []string) {
 	appleTitle, appleAlbum = appleMatch.title, appleMatch.album
 	// 只在 -pick 时才去读缓存文件:另一颗按钮(纯搜索候选)用不到这个事实。
 	noCurrentLyrics := false
-	if *pick && home != "" {
-		cachePath := filepath.Join(home, ".config", clientName, clientName+"-enrich-cache.json")
+	if *pick && configDir() != "" {
+		cachePath := filepath.Join(configDir(), clientName+"-enrich-cache.json")
 		if empty, known := lyricsEmptyInCacheFile(cachePath, *artist, *title, *album); known {
 			noCurrentLyrics = empty
 		}
@@ -266,7 +265,7 @@ func runSearchLyricsCLI(args []string) {
 	}
 	// 保底再打印一次最终结果——通常这跟 emit 在最后一个源到达时已经打过的那一行内容
 	// 完全一样(纯防御性的重复),唯一真正需要它的场景是:20 秒兜底超时在第一个源都还
-	// 没回来时就已经触发(五个源全部异常缓慢),这种极端情况下循环里的 emit 一次都没
+	// 没回来时就已经触发(全部源异常缓慢),这种极端情况下循环里的 emit 一次都没
 	// 被调用过,不能让 Swift 那边一行 stdout 都收不到、误判成"进程没有任何输出"。
 	// 这一行代表"这轮搜索结束了",所以进度直接报满 —— 即便是 20 秒兜底超时提前收场,
 	// 也不该让弹窗停在 3/5 让人以为还在查(真正"还在查"由进程是否退出决定,见 Swift 侧)。
@@ -286,8 +285,8 @@ type searchLyricsUpdate struct {
 	SourcesTotal int `json:"sourcesTotal"`
 	// Round:第几轮全源检索,从 1 开始(2026-09-02,用户报"到 8/8 了又重新从 1 开始,
 	// 看起来不友好")。scoredLyricCandidatesStreaming 的兜底轮(首歌手变体/别名/标题
-	// 反查,见 enrich.go)每轮都是一次完整的 8 源扫荡,SourcesDone 每轮从 0 重新数——
-	// 这不是 bug 是设计(每轮真的把 8 个源都重新问了一遍),但弹窗上只见数字回跳、
+	// 反查,见 enrich.go)每轮都是一次完整的全源扫荡,SourcesDone 每轮从 0 重新数——
+	// 这不是 bug 是设计(每轮真的把全部源都重新问了一遍),但弹窗上只见数字回跳、
 	// 不见轮次,读起来像出了错。轮次在 emit 那里从"done 比上一行小"推导(单轮内 done
 	// 单调不减,回跳只可能是新一轮开始),不用把轮次序号穿透进 enrich.go 的每层闭包。
 	Round int `json:"round"`
@@ -331,7 +330,7 @@ type searchLyricsUpdate struct {
 //
 // 为什么冠军非要 Go 这边算:pickLyricCandidate 有设置分支 —— 顺序优先模式取的是"用户
 // 配置顺序里第一个 Score>=0 的源",不是最高分;而且它还要过 features.LyricsSources 的
-// 启用过滤、跳掉 Score<0 的废候选(五源全废时自动路径一个字都不写)。这三条在 Swift 侧
+// 启用过滤、跳掉 Score<0 的废候选(全源全废时自动路径一个字都不写)。这三条在 Swift 侧
 // 复制一遍就是第二份会漂的决策规则,而漂的表现是"手动匹配完,下一拍自愈路径又给换了"。
 type searchLyricsPick struct {
 	// 冠军的源;空串 = 一个能用的候选都没有(全被判废/全没搜到),调用方**不许**退回
