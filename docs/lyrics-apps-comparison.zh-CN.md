@@ -15,9 +15,9 @@
   的歌词体验，要求 macOS 15+，自称 "spiritual successor to LyricsX"。
 - **[Lyrimuse](https://github.com/Yudaotor/lyrimuse)**（GPL-3.0，即本项目）——逐字同步歌词，
   除 Apple Music、Spotify 外**原生支持国内播放器（QQ 音乐、网易云音乐、酷狗）**，还支持浏览器里
-  播放的 YouTube Music / Spotify 网页版；8 个歌词源自动查证；翻译、拼音/粤拼/注音假名；
-  Last.fm 与 ListenBrainz 打卡（scrobble）加本地听歌统计。macOS 14+，Apple Silicon 与
-  Intel 都有构建。
+  播放的 YouTube Music / Spotify 网页版；8 个歌词源自动查证，**全部候选统一打分、择优胜出**
+  （每首歌的决策过程可查）；翻译、拼音/粤拼/注音假名；Last.fm 与 ListenBrainz 打卡（scrobble）
+  加本地听歌统计。macOS 14+，Apple Silicon 与 Intel 都有构建。
 
 **OSD Lyrics 呢？** 那是 Linux 桌面歌词软件，不是 macOS 的——它常出现在「LyricsX 替代」
 清单里，但在 Mac 上跑不了。
@@ -32,6 +32,7 @@
 | 支持的播放器 | Apple Music、Spotify、QQ 音乐、网易云音乐、酷狗——可任意组合 | Apple Music、Spotify、Vox、Audirvana、Swinsian（经其 MusicPlayer 组件） | Spotify、Apple Music |
 | 浏览器网页播放器 | YouTube Music 与 Spotify 网页版，跟随页面自身进度同步 | — | — |
 | 自动查证的歌词源 | 8 个：网易云、QQ 音乐、酷狗、酷我、Musixmatch、LRCLIB、LyricFind、AMLL | 多个（经其 LyricsKit 组件） | 3 个：Spotify、LRCLIB、网易云 |
+| 匹配选择 | 所有源的全部候选统一打分（歌名/歌手/专辑/上报时长吻合度 + 逐字时间轴等质量信号）；每首歌都有决策面板，列出各候选得分与胜出原因；手动选定的歌词会被锁定、绝不被自动覆盖 | — | — |
 | 逐字同步 | 是，跨源支持（含人工整理的 AMLL 逐字库） | 经 LRCX 逐字时间标签，取决于源是否提供 | — |
 | 翻译 | 优先源自带的社区翻译，否则设备端 Apple 翻译（18 种目标语言）+ 在线兜底 | 显示源自带的翻译 | Apple 设备端翻译 |
 | 罗马音 | 逐行判定的拼音、**粤拼**、日语注音假名 | — | — |
@@ -48,6 +49,13 @@ Lyrimuse 面向另外两家没有完全覆盖的听歌方式：你用 **QQ 音�
 也想要跟着页面进度精确同步的桌面歌词；你想在原文旁边看到**粤拼或日语注音假名**；或者你想让
 **Last.fm / ListenBrainz 打卡和听歌统计**与歌词在同一个应用里完成——全部免费、开源、
 持续维护中。
+
+匹配这件事也是**打分决策，不是「谁先返回用谁」**：用过多源歌词软件的人都体会过匹配到错误
+版本的痛。Lyrimuse 把所有源的全部候选按歌名/歌手/专辑/上报时长的吻合度加逐字时间轴等质量
+信号统一排名，每首歌的决策连同各候选得分都摆给你看；之后某个源出现更干净的版本还能自动升级
+换上——而你手动选定的歌词会被锁定，绝不被自动覆盖。
+
+<p align="center"><img src="images/app-resolution-decision.png" width="560" alt="解析决策面板——每个候选的得分与胜出原因"><br><sub>每首歌的解析决策面板：各候选得分逐项列出，赢家为什么赢一目了然。</sub></p>
 
 **安装：** `brew tap yudaotor/lyrimuse && brew install --cask lyrimuse`（Apple Silicon 与
 Intel 都支持），或到 [Releases 页面](https://github.com/Yudaotor/lyrimuse/releases/latest)

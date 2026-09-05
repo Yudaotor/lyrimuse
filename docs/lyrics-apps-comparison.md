@@ -17,9 +17,10 @@ of the actively maintained open-source options:
   macOS 15+. Describes itself as a "spiritual successor to LyricsX".
 - **[Lyrimuse](https://github.com/Yudaotor/lyrimuse)** (GPL-3.0, this project) — word-synced lyrics
   for Apple Music, Spotify **and the Chinese players (QQ Music, NetEase Cloud Music, Kugou)**, plus
-  YouTube Music / Spotify Web playing in any browser; 8 lyric sources checked automatically;
-  translation, pinyin / Cantonese Jyutping / furigana; Last.fm & ListenBrainz scrobbling with local
-  listening stats. macOS 14+, Apple Silicon and Intel.
+  YouTube Music / Spotify Web playing in any browser; 8 lyric sources checked automatically, with
+  **every candidate scored on one scale so the best match wins** (and the decision shown per
+  track); translation, pinyin / Cantonese Jyutping / furigana; Last.fm & ListenBrainz scrobbling
+  with local listening stats. macOS 14+, Apple Silicon and Intel.
 
 **What about OSD Lyrics?** It's a Linux desktop-lyrics app, not a macOS one — it shows up in
 "LyricsX alternative" lists but won't run on a Mac.
@@ -34,6 +35,7 @@ of the actively maintained open-source options:
 | Players | Apple Music, Spotify, QQ Music, NetEase Cloud Music, Kugou — any combination | Apple Music, Spotify, Vox, Audirvana, Swinsian (via its MusicPlayer library) | Spotify, Apple Music |
 | Web players in a browser | YouTube Music & Spotify Web, synced to the page's own progress | — | — |
 | Lyric sources checked automatically | 8: NetEase, QQ Music, Kugou, Kuwo, Musixmatch, LRCLIB, LyricFind, AMLL | multiple, via its LyricsKit library | 3: Spotify, LRCLIB, NetEase |
+| Match selection | every candidate from every source scored on one scale (title / artist / album / reported-duration fit + quality signals like word-level timing); a per-track decision panel shows each candidate's score and why the winner won; manual picks are locked and never overridden | — | — |
 | Word-by-word sync | yes, across sources (incl. the hand-curated AMLL database) | via LRCX word time tags, when the source provides them | — |
 | Translation | source community translation when available, else on-device Apple translation (18 target languages) with online fallback | displays source-provided translations | Apple on-device translation |
 | Romanization | per-line pinyin, **Cantonese Jyutping**, Japanese furigana | — | — |
@@ -51,6 +53,15 @@ Lyrimuse is built for listeners the other two don't fully cover: you play music 
 progress; you want **Cantonese Jyutping or Japanese furigana** readings alongside the original
 lines; or you want **Last.fm / ListenBrainz scrobbling and listening stats** in the same app that
 shows your lyrics — all of it free, open source, and actively maintained.
+
+Matching is also **score-driven rather than first-hit**: anyone who has used multi-source lyrics
+apps knows the pain of a wrong version getting picked. Lyrimuse ranks every candidate from every
+source on title / artist / album / reported-duration fit plus quality signals such as word-level
+timing, shows you each track's decision with per-candidate scores, can upgrade automatically when
+a source later offers a cleaner match — and locks any lyric you picked by hand so it's never
+overridden.
+
+<p align="center"><img src="images/app-resolution-decision.png" width="560" alt="Resolution decision panel — every candidate scored, and why the winner won"><br><sub>The per-track resolution panel: every candidate's score, and why the winner won.</sub></p>
 
 **Install:** `brew tap yudaotor/lyrimuse && brew install --cask lyrimuse` (Apple Silicon and
 Intel), or download from the
