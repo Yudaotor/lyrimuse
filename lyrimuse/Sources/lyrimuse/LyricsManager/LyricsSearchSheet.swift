@@ -82,12 +82,13 @@ struct LyricsSearchSheet: View {
         return "（\(sourcesDone)/\(sourcesTotal)）\(roundSuffix)"
     }
 
-    // 九个歌词源的完整名单——跟 collector 侧 enrich.go 的 lyricSourceNames 手工保持一致
-    // (同一种做法见 LyricsDecisionSheet.swift 的 currentLyricsScoringVersion)。2026-08-31
-    // 加 kuwo 时验证过:它跟 amll/lyricfind 走的是同一条 fetchScoredLyricCandidatesStreaming
-    // 并发拉取路径,search-lyrics 这条 CLI 子命令(searchcli.go)确实会去查它,所以这里要
-    // 跟 LyricsSource.allCases(FeatureSettingsStore.swift)保持同步,不是刻意留一个不查。
-    private static let allLyricSourceNames = ["netease", "qq", "kugou", "lrclib", "musixmatch", "amll", "lyricfind", "kuwo"]
+    // 歌词源的完整名单——直接读 LyricsSource.allCases(FeatureSettingsStore.swift),App 侧只有这一份。
+    // 2026-09-06 前这里是手抄的第三份名单(另两份:collector 侧 enrich.go 的 lyricSourceNames、
+    // App 侧的 LyricsSource),注释写着"跟那两份手工保持一致";2026-09-04 加咪咕时那两份都改了、
+    // 这份漏了,头部徽标写「0/8」、底下空状态却说「九个源都没找到」,用户当场看出来。
+    // Go/Swift 两份名单逐个相等、这个文件里不再出现手抄名单、空状态那句的数字等于源数,三件事
+    // 都由 selftest contracts 组「歌词源名单」守卫钉住。顺序跟设置页「歌词源」列表一致(同一个 enum)。
+    private static let allLyricSourceNames = LyricsSource.allCases.map(\.rawValue)
 
     // 2026-08-31 用户要求:这一轮里哪些源真的给出过候选(哪怕候选被判-1分),哪些一条
     // 候选都没给——直接从已经收到的 candidates 里反推,跟 collector 侧

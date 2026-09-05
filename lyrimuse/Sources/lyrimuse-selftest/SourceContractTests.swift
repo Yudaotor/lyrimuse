@@ -1162,6 +1162,81 @@ func runSourceContractTests() {
         }
     }
 
+    // ---- 歌词源名单:Go/Swift 两份逐个相等,App 侧只准有一份(2026-09-06)----
+    //
+    // 名单在 collector 侧是 enrich.go 的 `lyricSourceNames`(进度分母、断路器轮次、合并序都数它),
+    // App 侧是 `LyricsSource.allCases`(FeatureSettingsStore.swift,设置页「歌词源」列表)。「搜索
+    // 候选歌词」弹窗原来还手抄了第三份,给头部「x/y」徽标的分母和「歌词源可用情况」列表用,注释
+    // 写着"手工保持一致"——2026-09-04 加咪咕时前两份都改了、第三份漏了,弹窗头部「0/8」、空状态
+    // 却写着「九个源都没找到」,用户当场看出来。现在弹窗直接读 LyricsSource.allCases;这里钉三件事:
+    // ① Go/Swift 两份名单逐个相等;② 弹窗文件里不再出现手抄名单;③ 空状态那句「N个源都没找到
+    // 可用的候选」的中文数字等于源数——它是本地化键的一部分,加源时得连 xcstrings 的键一起改
+    // (en 那句「No Lyrics from Any Source」不带数字,不用动),守卫红了就是提醒去改那个键;那句
+    // 若被改成不带数字的措辞,③自然不再有东西可查,只剩①②。
+    // selftest 不能 import App 模块,两份名单都从源码文本里抠(同上面 features 键镜像的做法)。
+    do {
+        let packageDir = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        let repoRoot = packageDir.deletingLastPathComponent()
+        func read(_ url: URL) -> String? { try? String(contentsOfFile: url.path, encoding: .utf8) }
+        let swiftEnum = read(packageDir.appendingPathComponent("Sources/lyrimuse/Settings/FeatureSettingsStore.swift"))
+        let go = read(repoRoot.appendingPathComponent("lyrimuse-collector/enrich.go"))
+        let sheet = read(packageDir.appendingPathComponent("Sources/lyrimuse/LyricsManager/LyricsSearchSheet.swift"))
+        if let swiftEnum, let go, let sheet {
+            // Swift:`public enum LyricsSource: String, …{` 到它的收尾 `}` 之间的 case 行(一行多个 case 用逗号分开)。
+            var swiftNames: [String] = []
+            var inEnum = false
+            for raw in swiftEnum.split(separator: "\n") {
+                let line = raw.trimmingCharacters(in: .whitespaces)
+                if line.hasPrefix("public enum LyricsSource: String") { inEnum = true; continue }
+                guard inEnum else { continue }
+                if line == "}" { break }
+                guard line.hasPrefix("case ") else { continue }
+                swiftNames += line.dropFirst(5).split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+            }
+            // Go:`var lyricSourceNames = []string{"a", "b", …}` 一行。
+            var goNames: [String] = []
+            if let start = go.range(of: "var lyricSourceNames = []string{"),
+               let end = go[start.upperBound...].range(of: "}") {
+                goNames = go[start.upperBound..<end.lowerBound].split(separator: ",").map {
+                    $0.trimmingCharacters(in: .whitespaces).trimmingCharacters(in: CharacterSet(charactersIn: "\""))
+                }
+            }
+            expectEqual(swiftNames.count >= 9, true, "歌词源名单: 解析到了 LyricsSource 的 case(守卫自身没跑空)")
+            expectEqual(goNames.count >= 9, true, "歌词源名单: 解析到了 enrich.go 的 lyricSourceNames(守卫自身没跑空)")
+            expectEqual(Set(swiftNames).count, swiftNames.count, "歌词源名单: Swift 侧没有重复 case")
+            expectEqual(Set(swiftNames), Set(goNames),
+                        "歌词源名单: collector lyricSourceNames 与 App LyricsSource.allCases 逐个相等(加源两侧都要改)")
+            // ② 弹窗只准读 LyricsSource.allCases,不准再抄一份。
+            expectEqual(sheet.contains("LyricsSource.allCases"), true, "歌词源名单: LyricsSearchSheet 读的是 LyricsSource.allCases")
+            expectEqual(sheet.contains("[\"netease\""), false, "歌词源名单: LyricsSearchSheet 里没有手抄的源名数组")
+            // ③ 空状态那句的中文数字。一…九、十、十一…九十九够用;源再多不如把这句改成不带数字。
+            func chineseNumber(_ s: Substring) -> Int? {
+                let digits: [Character: Int] = ["一": 1, "二": 2, "三": 3, "四": 4, "五": 5, "六": 6, "七": 7, "八": 8, "九": 9]
+                let chars = Array(s)
+                switch chars.count {
+                case 1: return chars[0] == "十" ? 10 : digits[chars[0]]
+                case 2 where chars[0] == "十": return digits[chars[1]].map { 10 + $0 }
+                case 2 where chars[1] == "十": return digits[chars[0]].map { $0 * 10 }
+                case 3 where chars[1] == "十":
+                    if let a = digits[chars[0]], let b = digits[chars[2]] { return a * 10 + b }
+                    return nil
+                default: return nil
+                }
+            }
+            let marker = "个源都没找到可用的候选\")"
+            if let end = sheet.range(of: marker),
+               let start = sheet[..<end.lowerBound].range(of: "L10n.t(\"", options: .backwards) {
+                let numeral = sheet[start.upperBound..<end.lowerBound]
+                expectEqual(chineseNumber(numeral), swiftNames.count,
+                            "歌词源名单: 空状态「\(numeral)个源都没找到可用的候选」的数字等于源数 \(swiftNames.count)(改这句要连 xcstrings 的键一起改)")
+            }
+            // 那句不在了(措辞改成不带数字、或按源拆开)就没有第三份数字可漂,不算失败——①②仍然钉着。
+        } else {
+            expectEqual(true, false, "歌词源名单: 读不到 FeatureSettingsStore.swift / enrich.go / LyricsSearchSheet.swift(路径挪了?)")
+        }
+    }
+
     // ---- 「采纳候选」的三个入口必须同进同出(2026-09-04)----
     //
     // `LyricsSearchSheet` 有三个调用点(歌词管理 / 歌词窗口的 sheet / 悬浮窗 ⚙ 的独立小窗),
