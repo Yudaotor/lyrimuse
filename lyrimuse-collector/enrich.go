@@ -3033,8 +3033,10 @@ func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, alb
 	//   - 网易云那一次查询顺带供着第①级封面(e.CoverURL = ne.Cover)和「网易云」跳转链接
 	//     (e.NeteaseURL)。关掉网易云歌词源 = 这两样也不查:封面落到第②级 Apple Music、链接留空;
 	//     needsPeripheralBackfill 相应地不再把"没有网易云链接"算缺项,否则每条都白补 5 轮。
-	//   - amll-ttml-db 按网易云 / QQ 的曲目 ID 直取,两个都关掉时它拿不到 ID、只会得到空结果
-	//     (手动搜索的可用情况面板会说"缺平台 ID",见 amllSkippedForMissingIDsNow)。
+	//   - amll-ttml-db 按网易云 / QQ 的曲目 ID 直取,两个都关掉时它拿不到 ID、只会得到空结果。
+	//     手动搜索的可用情况面板对这种情形只显示笼统的「未给出候选」:searchcli.go 的 amll 派生
+	//     规则只在网易云和 QQ **都带传输层失败代码**时才报 upstream_unreachable,而关掉的源不发
+	//     请求、没有传输层记录,派生不了(要不要单加一个"上游已关闭"的代码另议)。
 	//   - 语种 / 罗马音这些顺带信号(QQ / 酷狗的粤语标记等)自然也只来自开着的源。
 	// 跟熔断跳过是两回事:不记 lyrics_sources_skipped(那是"冷却中"的记录,needsLyricsRetry 会据它
 	// 择机重搜;关掉的源不该被重搜——用户以后再开,它在 lyrics_sources_responded 里缺席,照样会
