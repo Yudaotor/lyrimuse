@@ -969,9 +969,11 @@ struct NotchEditorStage: View {
     /// "放不下"由外层 `stage` 对「屏幕顶端」整组做 `scaleEffect` 解决(见 previewScale),这里不知道
     /// 也不该知道缩放这回事;hover 判定用的 `point.y` 是本地(未缩放)坐标,跟 `cardHeight` 同一把尺。
     ///
-    /// 「展开态」浮层开着时预览**钉在展开态**(`keepsExpandedForPopover`):那个浮层里的开关全是展开区的
-    /// 内容,指针一离开卡片去点浮层卡片就缩回稳态,改了什么根本看不见。此前从工具栏点开也是这样,
-    /// 只是这次可点区域把"点展开区 → 开浮层 → 指针移走"变成了必经之路,这个洞才必须补。
+    /// **任何**浮层开着时预览**钉在展开态**(`keepsExpandedForPopover`,用户:「我一旦选中有弹窗出来的
+    /// 期间,你不要去把它的展开态给关闭了,一直维持着展开状态」):首版只钉「展开态」那个浮层(它里面的
+    /// 开关全是展开区的内容,指针一离开卡片去点浮层卡片就缩回稳态,改了什么根本看不见),用户要求
+    /// 扩成全部 —— 从卡片上点开浮层时卡片本来就是展开的,浮层一开它缩回去就是"选中的东西自己变形了"。
+    /// 展开态是稳态的超集(顶行 / 歌词行都在),钉着不会让任何浮层要改的东西看不见。
     private var card: some View {
         NotchLyricsView(controller: chrome)
             // 先钉当下的真实尺寸:视图内层是 GeometryReader,耳朵宽度按 proxy.size.width 算,
@@ -994,8 +996,8 @@ struct NotchEditorStage: View {
                 }
             }
             .onChange(of: popover) { _, newValue in
-                // 「展开态」浮层开 → 钉在展开;关 → 放开(指针若还在卡片上,下一次 hover 事件会再展开)。
-                if newValue == .expanded {
+                // 任一浮层开 → 钉在展开;全关 → 放开(指针若还在卡片上,下一次 hover 事件会再展开)。
+                if newValue != nil {
                     chrome.setExpandedFromPreview(true)
                 } else if adjustingThumb == nil {
                     chrome.setExpandedFromPreview(false)
@@ -1006,8 +1008,8 @@ struct NotchEditorStage: View {
             .frame(maxHeight: .infinity, alignment: .top)
     }
 
-    /// 「展开态」浮层开着时预览钉在展开态,理由见 `card` 的注释。
-    private var keepsExpandedForPopover: Bool { popover == .expanded }
+    /// 任一浮层开着时预览钉在展开态,理由见 `card` 的注释。
+    private var keepsExpandedForPopover: Bool { popover != nil }
 
     // MARK: - 预览卡上的可点区域
 
@@ -1016,14 +1018,20 @@ struct NotchEditorStage: View {
     ///
     /// **同一个浮层管的内容只算一块**(用户第二轮:「现在拆的太密了,你需要把那些一样的都给它整合在
     /// 一起」;第一版把展开区拆成下一句 / 进度条 / 播放键三块、曲目信息头部又一块,四块都开「展开态」)。
-    /// 一块区域可以由**多个矩形**组成 —— 「展开态」那块 = 歌词行之上的曲目信息头部 + 歌词行之下的整个
-    /// 展开区,中间隔着歌词行,悬在任一个上两块一起亮、点任一个都开同一个浮层(锚在被点的那个上)。
+    /// 一块区域可以由**多个矩形**组成 —— 「展开态」那块 = 歌词行之上的曲目信息头部 + 下一句预览之下的
+    /// 进度条与播放键,中间隔着歌词行(含下一句),悬在任一个上两块一起亮、点任一个都开同一个浮层
+    /// (锚在被点的那个上)。
     ///
     /// `rects` 是**卡片本地、未缩放**坐标(原点卡片左上角),跟 `NotchLyricsView.body` 那棵 VStack
-    /// 的排版逐段对应:顶行两只耳朵 → 曲目信息头部(展开且开着才有)→ 歌词行(`showsLyricRow`)→
-    /// 展开区(其余全部)。高度全部取自跟渲染同一份的度量(`contentTopInset` /
-    /// `expandedTrackInfoHeaderHeight` / `compactRowHeight` / `cardHeight`),不另写数字 —— 渲染那边
-    /// 一改这里就跟着对。
+    /// 的排版逐段对应:顶行两只耳朵 → 曲目信息头部(展开且开着才有)→ 歌词行(`showsLyricRow`)
+    /// **+ 紧跟着的「下一句预览」**(展开且开着才有)→ 展开区剩下的(进度条 / 播放键)。高度全部取自
+    /// 跟渲染同一份的度量(`contentTopInset` / `expandedTrackInfoHeaderHeight` / `compactRowHeight` /
+    /// `NotchExpandedMetrics.lyricPreviewBlock` / `cardHeight`),不另写数字 —— 渲染那边一改这里就跟着对。
+    ///
+    /// ⚠️ 「下一句预览」划给**歌词行**那块、不划给展开态(用户第三轮:「这个框不应该把这个歌词行也包括
+    /// 进去。选中歌词行的时候,应该把下面那个下一行歌词也包进去」):它在用户眼里是"第二行歌词",跟
+    /// 上面那行是一回事;而且「歌词行」浮层里的「对齐方式」确实也管它。它的开关(`notchExpandedShowsNextLine`)
+    /// 仍在「展开态」浮层里,没跟着搬。
     private struct CardHotspot: Identifiable {
         enum Kind: Hashable {
             case leftEar, rightEar, lyricRow, expanded
@@ -1060,13 +1068,19 @@ struct NotchEditorStage: View {
             y += height
         }
         if chrome.showsLyricRow {
+            var lyricHeight = NotchMetrics.compactRowHeight
+            // 展开时紧跟在歌词行下面的「下一句预览」并进同一个矩形(理由见类型注释那条⚠️)。
+            // 它是 expandedContent 的第一个子视图,跟歌词行在布局上是连着的,所以能合成一块。
+            if chrome.isExpanded, chrome.showsExpandedLyricPreview {
+                lyricHeight += NotchExpandedMetrics.lyricPreviewBlock
+            }
             spots.append(CardHotspot(kind: .lyricRow,
-                                     rects: [CGRect(x: 0, y: y, width: width, height: NotchMetrics.compactRowHeight)],
+                                     rects: [CGRect(x: 0, y: y, width: width, height: lyricHeight)],
                                      target: .lyricRow, title: L10n.t("歌词行"), arrowEdge: .trailing))
-            y += NotchMetrics.compactRowHeight
+            y += lyricHeight
         }
         if chrome.isExpanded, cardHeight > y {
-            // 歌词行以下到卡片底边全是展开区(下一句 / 进度条 / 播放键),整块算一个矩形。
+            // 下一句预览以下到卡片底边(进度条 / 播放键)算展开态那块的第二个矩形。
             expandedRects.append(CGRect(x: 0, y: y, width: width, height: cardHeight - y))
         }
         if !expandedRects.isEmpty {
@@ -1091,20 +1105,23 @@ struct NotchEditorStage: View {
         .frame(width: cardWidth, height: cardHeight, alignment: .topLeading)
     }
 
-    /// 一块可点区域的一个矩形:平时完全透明,指针悬上去(悬在**同一块**的任一矩形上)描一圈白色细框
-    /// + 一层极淡的白底(告诉用户"这块能点"),指针换成手形;点一下打开 `spot.target` 那个浮层,
+    /// 一块可点区域的一个矩形:平时完全透明,指针悬上去(悬在**同一块**的任一矩形上)描一圈白色**虚线**
+    /// 细框 + 一层极淡的白底(告诉用户"这块能点"),指针换成手形;点一下打开 `spot.target` 那个浮层,
     /// 锚在这个矩形旁边(见 `hotspotPopoverAnchor`)。
     ///
+    /// 虚线 + 七成不透明(用户第三轮:「这个框框的边框不要那么硬,可以用一些虚线之类的」;首版是 0.9 实线)。
+    /// 线型跟拖宽度时那圈 `windowEdgeOutline` 同一套(4-3 虚线、1pt),编辑台里两种"临时标注框"长一个样。
     /// 内缩 2pt 是让相邻两块(歌词行和它上下的区域)的高亮框不贴在一起;点击命中区仍是整块
     /// (`contentShape` 在 padding 之外)。白色不跟深浅色走,理由同 `windowEdgeOutline`:它压在
     /// 四种卡片风格上,语义色在封面模糊底上读不出来。
     private func hotspotView(_ spot: CardHotspot, rectIndex: Int) -> some View {
         let hovering = hoveredHotspot == spot.kind
         return RoundedRectangle(cornerRadius: 6)
-            .fill(Color.white.opacity(hovering ? 0.10 : 0))
+            .fill(Color.white.opacity(hovering ? 0.07 : 0))
             .overlay(
                 RoundedRectangle(cornerRadius: 6)
-                    .strokeBorder(Color.white.opacity(hovering ? 0.9 : 0), lineWidth: 1))
+                    .strokeBorder(Color.white.opacity(hovering ? 0.7 : 0),
+                                  style: StrokeStyle(lineWidth: 1, dash: [4, 3])))
             .padding(2)
             .contentShape(Rectangle())
             .onHover { inside in
