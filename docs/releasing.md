@@ -33,6 +33,17 @@
       加新词要同时决定删哪个。
 - [ ] **版本号引用核对**：README/FAQ 里「vX.Y.Z 起」这类超前引用要与实际发布版本对齐
       （v1.5.0 前 README 写着从未发布过的「v1.4.1 起」）。
+- [ ] **落地页（gh-pages 分支，yudaotor.github.io/lyrimuse）**：`index.html` 与 `zh/index.html` 的
+      JSON-LD `softwareVersion`、正文新特性；`compare/` 两页的「最新发布」行与核实日期；`sitemap.xml`
+      的 lastmod。push 后向 `api.indexnow.org/indexnow` 重发四个页面 URL（key 文件已在站点根，
+      2026-09-06 首次提交返回 202）。
+- [ ] **「N 个歌词源」这类数字全局扫**：源数/播放器数变了（如咪咕 8→9）要横扫所有对外面——
+      README×3、llms.txt、docs/lyrics-apps-comparison*、gh-pages 首页与对比页、GitHub About、
+      AlternativeTo 条目——v1.5.0 后这些地方到处写着「8 个源」，漏一处就自相矛盾。
+- [ ] **README 四张合成大图**（docs/images/hero-*.png）：界面明显变化时用 [docs/heroes/](heroes/README.md)
+      的 HTML 源重渲，文件名不变原地替换；gh-pages 的 `assets/img/` 截图副本同步。
+- [ ] **第三方条目**（大版本才动）：AlternativeTo 条目、macosmenubar 的管理链接（无账号体系，
+      链接即凭证）里的描述与截图；awesome 列表的一句话描述只在头牌卖点变化时提 PR 改。
 
 ## 三、发布前验证
 
@@ -57,8 +68,9 @@
 
 ## 五、发布后
 
-- [ ] **Homebrew cask**（Yudaotor/homebrew-lyrimuse）：version + sha256。
-      **sha256 必须取 CI 产物的 `.sha256` 资产**——本地打的同名包哈希不同，用错即坏。
+- [ ] **Homebrew cask**（Yudaotor/homebrew-lyrimuse）：version + **两个 sha256**（cask 自
+      2026-09-06 起双架构：`sha256 arm:/intel:` 对应 `-macos.zip` 与 `-macos-intel.zip`）。
+      **sha256 必须取 CI 产物的两个 `.sha256` 资产**——本地打的同名包哈希不同，用错即坏。
 - [ ] **Sparkle 升级链路实测**：找一台上一版机器（或本机临时装回上一版）走一次升级。
       装回旧版前**先备份 `~/.config/lyrimuse`**（旧 collector 不认识新字段，存盘会抹掉），
       且别让旧版跑太久。旧版 ad-hoc 包被 Gatekeeper 拦 `open` 是预期——直接跑
