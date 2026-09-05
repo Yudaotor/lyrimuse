@@ -29165,6 +29165,29 @@
           }
         }
       }
+    },
+    "在「设置 → 歌词 → 歌词来源」里关掉的源，这一轮没有查它" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Turned off under Settings → Lyrics → Lyrics Sources; this search did not query it"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在「设置 → 歌词 → 歌词来源」里关掉的源，这一轮没有查它"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在「設定 → 歌詞 → 歌詞來源」裡關掉的來源，這一輪沒有查它"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

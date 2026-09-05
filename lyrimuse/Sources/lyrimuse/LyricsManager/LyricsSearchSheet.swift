@@ -101,15 +101,28 @@ struct LyricsSearchSheet: View {
 
     @State private var showSourceAvailability = false
 
+    /// 这一轮**开着**的源(rawValue)。开搜那一刻从 FeatureSettingsStore 快照——collector 子进程
+    /// 起跑时读的是同一份 features.json,所以这份集合就是它实际去查的那几个;搜索中途在设置里
+    /// 开关源不改这一轮的标注(下次「重新搜索」才生效),跟候选一样是"这一轮"的事实。
+    /// 用途只有一个:「歌词源可用情况」把没开的源标成「未启用」而不是「未给出候选」(2026-09-06,
+    /// 用户拍板"加一档,不藏掉")。徽标的分母**不**用它,用 collector 报的 sourcesTotal,见下。
+    /// 空集 = 还没开搜(徽标那时也不显示);行列表把空集当"全开"处理,别把九行全标成未启用。
+    @State private var enabledSources: Set<String> = []
+
     // 头部"(x/y)"标记 + 点开的可用情况列表。sourcesTotal 为 0(还没收到任何一行)时不
     // 显示——那不是"零个可用",是"还没开始",跟 searchProgressSuffix 同一条准则。
+    //
+    // 分母是 collector 报的 sourcesTotal(它只数用户开着的源,见 enrich.go lyricSearchUpdateFunc
+    // 的注释),跟进度那对「(x/y)」同一个数——2026-09-06 前这里写的是全部源数,用户关掉一个源
+    // 就会出现进度「x/8」、徽标「y/9」两个分母对不上。分子照旧数"给过候选的源":collector 的
+    // filterEnabledLyricSources 保证候选里没有关掉的源,不用再交集一次。
     @ViewBuilder
     private var sourceAvailabilityBadge: some View {
         if sourcesTotal > 0 {
             Button {
                 showSourceAvailability = true
             } label: {
-                Text("\(respondedSources.count)/\(Self.allLyricSourceNames.count)")
+                Text("\(respondedSources.count)/\(sourcesTotal)")
                     .font(.callout.monospacedDigit())
                     .foregroundStyle(.secondary)
             }
@@ -121,44 +134,81 @@ struct LyricsSearchSheet: View {
         }
     }
 
+    /// 列表行序:开着的源在前(名单序),关掉的沉底——用户看这张表是想知道"查了的那几个怎么样",
+    /// 没查的排后面不打断视线。enabledSources 为空(还没开搜)按全开处理。
+    private var sourceAvailabilityRows: [(source: String, enabled: Bool)] {
+        let names = Self.allLyricSourceNames
+        let enabled = enabledSources.isEmpty ? Set(names) : enabledSources
+        return names.filter { enabled.contains($0) }.map { ($0, true) }
+            + names.filter { !enabled.contains($0) }.map { ($0, false) }
+    }
+
     private var sourceAvailabilityList: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text(L10n.t("歌词源可用情况"))
                 .font(.headline)
             // "给过候选"≠"这条候选能用"——一个源明确回过一份被拒绝的候选(比如没时间戳、
             // 语言不对),跟它压根没回应(超时/限速/真的没收录这首歌),是两回事,分开
-            // 标出来才不会把"回应了但不好"和"根本没回应"混为一谈。
-            ForEach(Self.allLyricSourceNames, id: \.self) { source in
-                let responded = respondedSources.contains(source)
-                // 只有三个源(netease/musixmatch/lyricfind)接了具体失败原因诊断,见
-                // searchcli.go 的 lyricSourceFailureReasons 头注——其它源没查到具体原因
-                // 时这里就是 nil,如实只显示"未给出候选",不编一个没核实过的理由。
-                // sourceFailureReasonCodes 里存的是稳定代码,经 LyricSourceFailureReason
-                // 翻成当前 App 界面语言的人话再显示,见该类型的头注。
-                let reason = responded ? nil : sourceFailureReasonCodes[source]
-                    .map(LyricSourceFailureReason.text(forCode:))
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: 6) {
-                        Image(systemName: responded ? "checkmark.circle.fill" : "xmark.circle")
-                            .foregroundStyle(responded ? .green : .secondary)
-                        Text(sourceDisplayName(source))
-                        Spacer()
-                        Text(responded ? L10n.t("已给出候选") : L10n.t("未给出候选"))
-                            .foregroundStyle(.secondary)
-                    }
-                    .font(.callout)
-                    if let reason {
-                        Text(reason)
-                            .font(.caption)
-                            .foregroundStyle(.orange)
-                            .fixedSize(horizontal: false, vertical: true)
-                            .padding(.leading, 22) // 跟上面图标对齐,不是贴着面板左缘
-                    }
+            // 标出来才不会把"回应了但不好"和"根本没回应"混为一谈。用户关掉的源又是第三回事
+            // ——这一轮压根没查它,单独一档,见 disabledSourceRow。
+            ForEach(sourceAvailabilityRows, id: \.source) { row in
+                if row.enabled {
+                    sourceAvailabilityRow(row.source)
+                } else {
+                    disabledSourceRow(row.source)
                 }
             }
         }
         .padding(14)
         .frame(minWidth: 280, maxWidth: 360)
+    }
+
+    private func sourceAvailabilityRow(_ source: String) -> some View {
+        let responded = respondedSources.contains(source)
+        // 失败原因分两层(见 searchcli.go 的 lyricSourceFailureReasons 头注):三个源
+        // (netease/musixmatch/lyricfind)特有的具体原因(限流、token 失效这类),加上任何源
+        // 都可能报的传输层通用原因(dns_failed / connect_failed / server_error,分类在
+        // sourcebreaker.go 的传输层失败分类,2026-09-06 起)。两层都没命中才是 nil,如实只显示
+        // "未给出候选",不编一个没核实过的理由。sourceFailureReasonCodes 里存的是稳定代码,经
+        // LyricSourceFailureReason 翻成当前 App 界面语言的人话再显示,见该类型的头注。
+        let reason = responded ? nil : sourceFailureReasonCodes[source]
+            .map(LyricSourceFailureReason.text(forCode:))
+        return VStack(alignment: .leading, spacing: 2) {
+            HStack(spacing: 6) {
+                Image(systemName: responded ? "checkmark.circle.fill" : "xmark.circle")
+                    .foregroundStyle(responded ? .green : .secondary)
+                Text(sourceDisplayName(source))
+                Spacer()
+                Text(responded ? L10n.t("已给出候选") : L10n.t("未给出候选"))
+                    .foregroundStyle(.secondary)
+            }
+            .font(.callout)
+            if let reason {
+                Text(reason)
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.leading, 22) // 跟上面图标对齐,不是贴着面板左缘
+            }
+        }
+    }
+
+    /// 用户在设置里关掉的源(2026-09-06):这一轮 collector 根本没查它,既不是「已给出候选」也不是
+    /// 「未给出候选」——之前它跟真没应答的源一样显示「未给出候选」,是把"没参与"报成了"没结果"。
+    /// 空心减号 + 第三级灰,比「未给出候选」的叉再退一级:它不是结果。不给失败原因(collector 对
+    /// 没开的源不发代码,也不该发)。文案复用账号页那条「未启用」;悬停说明在哪开。
+    private func disabledSourceRow(_ source: String) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: "minus.circle")
+                .foregroundStyle(.tertiary)
+            Text(sourceDisplayName(source))
+                .foregroundStyle(.secondary)
+            Spacer()
+            Text(L10n.t("未启用"))
+                .foregroundStyle(.tertiary)
+        }
+        .font(.callout)
+        .help(L10n.t("在「设置 → 歌词 → 歌词来源」里关掉的源，这一轮没有查它"))
     }
 
     // 未给出候选的源,查得到具体原因的那几个(2026-08-31)——给 sourceAvailabilityList
@@ -786,6 +836,8 @@ struct LyricsSearchSheet: View {
         sourcesTotal = 0
         searchRound = 1
         sourceFailureReasonCodes = [:]
+        // 这一轮开着的源,跟 collector 子进程读同一份 features.json;语义见 enabledSources 的注释。
+        enabledSources = Set(FeatureSettingsStore.shared.lyricsSources.map(\.rawValue))
         isSearching = true
         do {
             try await LyricsSearchService.shared.search(artist: artist, title: title, album: album, durationSecs: durationSecs) { update in
