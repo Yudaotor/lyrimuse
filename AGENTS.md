@@ -81,10 +81,14 @@ screencapture -x -o -l <窗口ID> /tmp/shot.png                   # 只截那一
 重启过（同时 CGWindowList 的 bounds 读数也会开始/停止带那个 ~2% 缩放偏差，见上面那段）。
 所以撞到这个错误时先看窗口 ID 的量级，再决定是等一等重试还是走下面的退路——两条退路：
 
-- 自己写 ScreenCaptureKit 工具**走不通**：`swift xx.swift` 解释模式下撞
+- 自己写 ScreenCaptureKit 工具：`swift xx.swift` 解释模式下撞
   `Assertion failed: (did_initialize), CGS_REQUIRE_INIT`（没有 WindowServer 连接，得
-  `swiftc` 编译并 `_ = NSApplication.shared`）；编译过了又是 `SCStreamErrorDomain
-  Code=-3811`——临时二进制没有 bundle identity，拿不到屏幕录制权限。
+  `swiftc` 编译并 `_ = NSApplication.shared`）；2026-08-22 编译过了又是 `SCStreamErrorDomain
+  Code=-3811`（当时归因为临时二进制没有 bundle identity）。**2026-09-06 实测走得通**：
+  `xcrun swiftc -O` 编出的探针从已授「屏幕录制」权限的终端里跑，
+  `SCContentFilter(desktopIndependentWindow:)` 只抓灵动岛那一扇窗、逐帧拿 PTS 与像素，
+  连跑十几次没再撞 -3811——那次多半也是 WindowServer 状态问题。它是量「窗口真实提交帧率」
+  的唯一手段（`sample`/Time Profiler 量的是 CPU 忙不忙，量不到掉帧），05 章决策 #25 记着用法。
 - **能用的是 `ImageRenderer` 离线渲染**（`project_nowplaying_swiftui_offline_render_verification`
   那条路）：纯进程内渲染成 CGImage，不需要任何屏幕权限，还能**构造**真机上抓不到的状态、
   跑同一视图的 A/B 对照。代价是渲染不出动画中间帧、也不触发 `onAppear`（靠 GeometryReader
