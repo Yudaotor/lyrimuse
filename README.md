@@ -18,7 +18,7 @@
 
 Lyrimuse sits quietly in your menu bar and shows a floating lyrics window that follows whatever's playing — Apple Music, QQ Music, NetEase Cloud Music, Kugou Music, Spotify, or YouTube Music / Spotify Web in a browser; pick any combination, or just let it auto-detect — word by word, in sync, always on top, across every Space. Think of the "desktop lyrics" experience from NetEase Cloud Music, but native to macOS.
 
-**Coming from LyricsX?** LyricsX hasn't shipped a release since April 2022. Lyrimuse is an actively maintained open-source alternative that also covers QQ Music / NetEase / Kugou and web players in a browser — here's a fact-checked [comparison with LyricsX, Lyric Fever and Lyrics Plus](docs/lyrics-apps-comparison.md).
+**Coming from LyricsX?** LyricsX hasn't shipped a release since April 2022. Lyrimuse is an actively maintained open-source alternative that also covers QQ Music / NetEase / Kugou and web players in a browser — here's a fact-checked [comparison with LyricsX and Lyric Fever](docs/lyrics-apps-comparison.md).
 
 **Install:** `brew tap yudaotor/lyrimuse && brew install --cask lyrimuse` (Apple Silicon and Intel; clears the one-time Gatekeeper flag automatically) — or grab the [latest release](https://github.com/Yudaotor/lyrimuse/releases/latest) and see [Getting Started](#getting-started).
 

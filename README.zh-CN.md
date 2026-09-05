@@ -18,7 +18,7 @@
 
 Lyrimuse 常驻在菜单栏里，跟着当前播放弹出一个悬浮歌词窗口——Apple Music、QQ 音乐、网易云音乐、酷狗音乐、Spotify，以及浏览器里的网页版 YouTube Music / Spotify，任选几个组合（也可以交给自动识别）——逐字同步、常驻置顶、跨 Space 显示。就是网易云音乐桌面客户端那种"桌面歌词"体验，只不过是原生 macOS 版本。
 
-**从 LyricsX 过来的？** LyricsX 自 2022 年 4 月起再没发过新版本。Lyrimuse 是一个持续维护的开源替代，还额外覆盖 QQ 音乐 / 网易云 / 酷狗和浏览器网页播放器——这里有一份逐项核实过的[与 LyricsX、Lyric Fever、Lyrics Plus 的对比](docs/lyrics-apps-comparison.zh-CN.md)。
+**从 LyricsX 过来的？** LyricsX 自 2022 年 4 月起再没发过新版本。Lyrimuse 是一个持续维护的开源替代，还额外覆盖 QQ 音乐 / 网易云 / 酷狗和浏览器网页播放器——这里有一份逐项核实过的[与 LyricsX、Lyric Fever 的对比](docs/lyrics-apps-comparison.zh-CN.md)。
 
 **安装：** `brew tap yudaotor/lyrimuse && brew install --cask lyrimuse`（Apple Silicon 与 Intel 都支持；自动清掉一次性的 Gatekeeper 拦截）——或者去 [最新 Release](https://github.com/Yudaotor/lyrimuse/releases/latest) 手动下载，详见[快速开始](#快速开始)。
 
