@@ -167,6 +167,18 @@ struct NotchEditorStage: View {
     /// 遮挡、而且各自的 transient 关闭时机会打架(同 OverlayEditorStage.StagePopover)。
     @State private var popover: StagePopover?
 
+    /// 当前这个浮层锚在哪:工具栏按钮(从工具栏点开的),还是预览卡上某块可点区域的某个矩形
+    /// (从卡片上点开的,2026-09-06 用户:「弹出来的那个窗口也不要在原本顶部的那个位置弹出来,
+    /// 就从我点击的这个位置弹出来」)。跟 `popover` 一起构成"哪个浮层、开在哪"—— 同一个
+    /// `StagePopover` 在工具栏和卡片上各挂着一份 `.popover`,靠这个字段保证同时只亮一份。
+    @State private var popoverAnchor: PopoverAnchor = .toolbar
+
+    private enum PopoverAnchor: Equatable {
+        case toolbar
+        /// 卡片上第 `rectIndex` 个矩形(一块区域可以有多个矩形,见 `CardHotspot.rects`)。
+        case hotspot(CardHotspot.Kind, rectIndex: Int)
+    }
+
     /// 指针此刻悬在预览卡的哪块**可点区域**上(nil = 都没悬)。只用来画那块区域的高亮框,
     /// 见 `cardHotspots` / `hotspotView`。
     @State private var hoveredHotspot: CardHotspot.Kind?
@@ -678,6 +690,7 @@ struct NotchEditorStage: View {
         icon: String, title: String, summary: String, target: StagePopover
     ) -> some View {
         Button {
+            popoverAnchor = .toolbar
             popover = target
         } label: {
             HStack(spacing: 5) {
@@ -721,13 +734,32 @@ struct NotchEditorStage: View {
         case expanded
     }
 
+    /// 工具栏那一份 `.popover` 的开关:目标对、**而且**锚点是工具栏才亮 —— 同一个浮层从卡片上点开
+    /// 时挂在 `hotspotPopoverAnchor` 那一份上,这里必须保持关着,否则两份 NSPopover 会同时弹。
     private func popoverBinding(_ target: StagePopover) -> Binding<Bool> {
         Binding(
-            get: { popover == target },
+            get: { popover == target && popoverAnchor == .toolbar },
             // 只在关的是"自己"那一份时才清空:popover 已经切到别的目标时,旧那份收到的
             // isPresented=false 不该把新开的这个也一起关掉。
             set: { shown in
-                if shown { popover = target } else if popover == target { popover = nil }
+                if shown {
+                    popoverAnchor = .toolbar
+                    popover = target
+                } else if popover == target, popoverAnchor == .toolbar {
+                    popover = nil
+                }
+            })
+    }
+
+    /// 卡片上那一份 `.popover` 的开关(挂在 `hotspotPopoverAnchor` 上):任何一块区域点开的都走它。
+    private var hotspotPopoverBinding: Binding<Bool> {
+        Binding(
+            get: {
+                if case .hotspot = popoverAnchor { return popover != nil }
+                return false
+            },
+            set: { shown in
+                if !shown, case .hotspot = popoverAnchor { popover = nil }
             })
     }
 
@@ -773,6 +805,10 @@ struct NotchEditorStage: View {
             .scaleEffect(scale, anchor: .top)
             .frame(width: stageWidth, height: cardAreaHeight, alignment: .top)
             .frame(maxHeight: .infinity, alignment: .top)
+            // 从卡片上点开的浮层锚在这块**不缩放**的透明视图上(位置 = 被点的那个矩形经 previewScale
+            // 换算到舞台坐标)。不直接把 .popover 挂在可点区域自己身上:它们在 scaleEffect 里面,
+            // 而 scaleEffect 不改布局 frame,NSPopover 会按未缩放的位置摆,预览缩过时箭头就指偏了。
+            hotspotPopoverAnchor(stageWidth: stageWidth, scale: scale)
             // 调整条摆在最上面:它是**控件**不是内容,任何时候都不该被别的层盖住。
             // 先 padding 再 frame:反过来的话那 12pt 会加在"撑满舞台"的那一层外面,把整块顶高。
             widthBar
@@ -923,10 +959,11 @@ struct NotchEditorStage: View {
     ///
     /// ⚠️ **例外:卡片上叠了一层"可点区域"(`hotspotLayer`,2026-09-06)** —— 那不是真视图里的控件
     /// 重新可达,而是编辑台自己按几何算出来的几块透明命中区(左耳 / 右耳 / 曲目信息头部 / 歌词行 /
-    /// 展开区三段),点一下打开**管这块的浮层**(用户:「类似这些区域帮我调整成可以点击来换取相应的
+    /// 展开区),点一下打开**管这块的浮层**(用户:「类似这些区域帮我调整成可以点击来换取相应的
     /// 配置」)。它们仍然不碰播放、不开窗口,"预览不产生副作用"这条口径没破;打开的浮层就是工具栏
-    /// 那几个,锚在工具栏按钮上(那里是浮层的家,卡片右半边一直露着、改一项当场看见 —— 锚到区域上
-    /// 会把浮层压在卡片上,正好挡住要看的东西)。
+    /// 那几个,但**锚在被点的那块区域旁边**(用户第二轮要求「就从我点击的这个位置弹出来」;第一版锚在
+    /// 工具栏按钮上被否),从区域的**侧边**弹出(耳朵朝外、整行朝右,见 `CardHotspot.arrowEdge`)——
+    /// 压在卡片上面会挡住正要看的东西。
     ///
     /// ⚠️ 卡片按**真实 pt** 排版(视图内层按 `proxy.size.width` 反推耳宽,给别的宽度耳朵就错位),
     /// "放不下"由外层 `stage` 对「屏幕顶端」整组做 `scaleEffect` 解决(见 previewScale),这里不知道
@@ -977,21 +1014,28 @@ struct NotchEditorStage: View {
     /// 预览卡上一块可点的区域:点它打开管这块内容的浮层(2026-09-06,用户:「类似这些区域帮我
     /// 调整成可以点击来换取相应的配置的逻辑」)。
     ///
-    /// `rect` 是**卡片本地、未缩放**坐标(原点卡片左上角),跟 `NotchLyricsView.body` 那棵 VStack
+    /// **同一个浮层管的内容只算一块**(用户第二轮:「现在拆的太密了,你需要把那些一样的都给它整合在
+    /// 一起」;第一版把展开区拆成下一句 / 进度条 / 播放键三块、曲目信息头部又一块,四块都开「展开态」)。
+    /// 一块区域可以由**多个矩形**组成 —— 「展开态」那块 = 歌词行之上的曲目信息头部 + 歌词行之下的整个
+    /// 展开区,中间隔着歌词行,悬在任一个上两块一起亮、点任一个都开同一个浮层(锚在被点的那个上)。
+    ///
+    /// `rects` 是**卡片本地、未缩放**坐标(原点卡片左上角),跟 `NotchLyricsView.body` 那棵 VStack
     /// 的排版逐段对应:顶行两只耳朵 → 曲目信息头部(展开且开着才有)→ 歌词行(`showsLyricRow`)→
-    /// 展开区的三段(下一句 / 进度条 / 播放键,各自开着才有)。高度全部取自跟渲染同一份的度量
-    /// (`contentTopInset` / `expandedTrackInfoHeaderHeight` / `compactRowHeight` /
-    /// `NotchExpandedMetrics` 三个 block),不另写数字 —— 渲染那边一改这里就跟着对。
+    /// 展开区(其余全部)。高度全部取自跟渲染同一份的度量(`contentTopInset` /
+    /// `expandedTrackInfoHeaderHeight` / `compactRowHeight` / `cardHeight`),不另写数字 —— 渲染那边
+    /// 一改这里就跟着对。
     private struct CardHotspot: Identifiable {
         enum Kind: Hashable {
-            case leftEar, rightEar, trackInfoHeader, lyricRow
-            case expandedNextLine, expandedScrubber, expandedControls
+            case leftEar, rightEar, lyricRow, expanded
         }
         let kind: Kind
-        let rect: CGRect
+        let rects: [CGRect]
         let target: StagePopover
         /// 无障碍标签用的浮层名(跟工具栏按钮标题同一份文案)。
         let title: String
+        /// 浮层从矩形的哪条边弹出:耳朵朝**外**(左耳往左、右耳往右),整行的朝右 —— 四种情形里浮层
+        /// 都不压在卡片上,改一项当场看得见。
+        let arrowEdge: Edge
         var id: Kind { kind }
     }
 
@@ -1001,71 +1045,60 @@ struct NotchEditorStage: View {
         let top = chrome.contentTopInset
         var spots: [CardHotspot] = [
             CardHotspot(kind: .leftEar,
-                        rect: CGRect(x: NotchMetrics.cardHorizontalPadding, y: 0, width: earWidth, height: top),
-                        target: .leftEar, title: L10n.t("左耳")),
+                        rects: [CGRect(x: NotchMetrics.cardHorizontalPadding, y: 0, width: earWidth, height: top)],
+                        target: .leftEar, title: L10n.t("左耳"), arrowEdge: .leading),
             CardHotspot(kind: .rightEar,
-                        rect: CGRect(x: width - NotchMetrics.cardHorizontalPadding - earWidth, y: 0,
-                                     width: earWidth, height: top),
-                        target: .rightEar, title: L10n.t("右耳")),
+                        rects: [CGRect(x: width - NotchMetrics.cardHorizontalPadding - earWidth, y: 0,
+                                       width: earWidth, height: top)],
+                        target: .rightEar, title: L10n.t("右耳"), arrowEdge: .trailing),
         ]
         var y = top
+        var expandedRects: [CGRect] = []
         if chrome.isExpanded, chrome.showsExpandedTrackInfo {
             let height = chrome.expandedTrackInfoHeaderHeight
-            spots.append(CardHotspot(kind: .trackInfoHeader,
-                                     rect: CGRect(x: 0, y: y, width: width, height: height),
-                                     target: .expanded, title: L10n.t("展开态")))
+            expandedRects.append(CGRect(x: 0, y: y, width: width, height: height))
             y += height
         }
         if chrome.showsLyricRow {
             spots.append(CardHotspot(kind: .lyricRow,
-                                     rect: CGRect(x: 0, y: y, width: width, height: NotchMetrics.compactRowHeight),
-                                     target: .lyricRow, title: L10n.t("歌词行")))
+                                     rects: [CGRect(x: 0, y: y, width: width, height: NotchMetrics.compactRowHeight)],
+                                     target: .lyricRow, title: L10n.t("歌词行"), arrowEdge: .trailing))
             y += NotchMetrics.compactRowHeight
         }
-        if chrome.isExpanded {
-            // 三段的高度就是 NotchExpandedMetrics 里那三个 block(各自含尾随间距),跟
-            // `expandedContent` 的 `.frame(height:)` 是同一笔账。
-            if chrome.showsExpandedLyricPreview {
-                spots.append(CardHotspot(kind: .expandedNextLine,
-                                         rect: CGRect(x: 0, y: y, width: width, height: NotchExpandedMetrics.lyricPreviewBlock),
-                                         target: .expanded, title: L10n.t("展开态")))
-                y += NotchExpandedMetrics.lyricPreviewBlock
-            }
-            if chrome.expandedShowsScrubber {
-                spots.append(CardHotspot(kind: .expandedScrubber,
-                                         rect: CGRect(x: 0, y: y, width: width, height: NotchExpandedMetrics.scrubberBlock),
-                                         target: .expanded, title: L10n.t("展开态")))
-                y += NotchExpandedMetrics.scrubberBlock
-            }
-            if chrome.expandedShowsControls {
-                spots.append(CardHotspot(kind: .expandedControls,
-                                         rect: CGRect(x: 0, y: y, width: width, height: NotchExpandedMetrics.controlsBlock),
-                                         target: .expanded, title: L10n.t("展开态")))
-            }
+        if chrome.isExpanded, cardHeight > y {
+            // 歌词行以下到卡片底边全是展开区(下一句 / 进度条 / 播放键),整块算一个矩形。
+            expandedRects.append(CGRect(x: 0, y: y, width: width, height: cardHeight - y))
+        }
+        if !expandedRects.isEmpty {
+            spots.append(CardHotspot(kind: .expanded, rects: expandedRects,
+                                     target: .expanded, title: L10n.t("展开态"), arrowEdge: .trailing))
         }
         return spots
     }
 
-    /// 全部可点区域,按 `rect` 摆在卡片本地坐标里。压在真视图之上(真视图 `allowsHitTesting(false)`,
+    /// 全部可点区域,按 `rects` 摆在卡片本地坐标里。压在真视图之上(真视图 `allowsHitTesting(false)`,
     /// 这一层自己接事件)。
     private var hotspotLayer: some View {
         ZStack(alignment: .topLeading) {
             ForEach(cardHotspots) { spot in
-                hotspotView(spot)
-                    .frame(width: spot.rect.width, height: spot.rect.height)
-                    .offset(x: spot.rect.minX, y: spot.rect.minY)
+                ForEach(Array(spot.rects.enumerated()), id: \.offset) { index, rect in
+                    hotspotView(spot, rectIndex: index)
+                        .frame(width: rect.width, height: rect.height)
+                        .offset(x: rect.minX, y: rect.minY)
+                }
             }
         }
         .frame(width: cardWidth, height: cardHeight, alignment: .topLeading)
     }
 
-    /// 一块可点区域:平时完全透明,指针悬上去描一圈白色细框 + 一层极淡的白底(告诉用户"这块能点"),
-    /// 指针换成手形;点一下打开 `spot.target` 那个浮层(锚在工具栏按钮上,见 `card` 的注释)。
+    /// 一块可点区域的一个矩形:平时完全透明,指针悬上去(悬在**同一块**的任一矩形上)描一圈白色细框
+    /// + 一层极淡的白底(告诉用户"这块能点"),指针换成手形;点一下打开 `spot.target` 那个浮层,
+    /// 锚在这个矩形旁边(见 `hotspotPopoverAnchor`)。
     ///
     /// 内缩 2pt 是让相邻两块(歌词行和它上下的区域)的高亮框不贴在一起;点击命中区仍是整块
     /// (`contentShape` 在 padding 之外)。白色不跟深浅色走,理由同 `windowEdgeOutline`:它压在
     /// 四种卡片风格上,语义色在封面模糊底上读不出来。
-    private func hotspotView(_ spot: CardHotspot) -> some View {
+    private func hotspotView(_ spot: CardHotspot, rectIndex: Int) -> some View {
         let hovering = hoveredHotspot == spot.kind
         return RoundedRectangle(cornerRadius: 6)
             .fill(Color.white.opacity(hovering ? 0.10 : 0))
@@ -1083,12 +1116,51 @@ struct NotchEditorStage: View {
                     NSCursor.pop()
                 }
             }
-            .onTapGesture { popover = spot.target }
+            .onTapGesture { openPopover(for: spot, rectIndex: rectIndex) }
             .animation(.easeOut(duration: 0.12), value: hovering)
             .accessibilityElement()
             .accessibilityLabel(String(format: L10n.t("打开「%@」设置"), spot.title))
             .accessibilityAddTraits(.isButton)
-            .accessibilityAction { popover = spot.target }
+            .accessibilityAction { openPopover(for: spot, rectIndex: rectIndex) }
+    }
+
+    private func openPopover(for spot: CardHotspot, rectIndex: Int) {
+        popoverAnchor = .hotspot(spot.kind, rectIndex: rectIndex)
+        popover = spot.target
+    }
+
+    /// 从卡片上点开的浮层真正挂着的那块透明锚点视图:摆在**舞台坐标**里、跟被点的矩形重合
+    /// (卡片本地坐标经 previewScale 换算 —— 「屏幕顶端」整组以顶边中点为锚缩放、水平居中舞台,
+    /// 所以 x = 舞台中线 + (本地 x − 卡宽/2) × 比例,y = 本地 y × 比例)。
+    ///
+    /// 视图**常驻**、不按需插入:`.popover(isPresented:)` 挂在一个刚插进视图树、isPresented 已经是
+    /// true 的视图上,NSPopover 有时不弹;常驻一块 0×0 的透明视图,要弹时先挪到位再翻开关,稳。
+    /// 没在弹时它是原点处一个 0×0 的点,`allowsHitTesting(false)`,对什么都没有影响。
+    private func hotspotPopoverAnchor(stageWidth: CGFloat, scale: CGFloat) -> some View {
+        var rect = CGRect.zero
+        var arrowEdge: Edge = .bottom
+        var target: StagePopover?
+        if case .hotspot(let kind, let index) = popoverAnchor,
+           let spot = cardHotspots.first(where: { $0.kind == kind }),
+           index < spot.rects.count {
+            let local = spot.rects[index]
+            rect = CGRect(x: stageWidth / 2 + (local.minX - cardWidth / 2) * scale,
+                          y: local.minY * scale,
+                          width: local.width * scale, height: local.height * scale)
+            arrowEdge = spot.arrowEdge
+            target = spot.target
+        }
+        // 用 padding 定位而不是 offset:offset 是几何效果、不改布局 frame,NSPopover 认的是布局 frame。
+        return Color.clear
+            .frame(width: rect.width, height: rect.height)
+            .popover(isPresented: hotspotPopoverBinding, arrowEdge: arrowEdge) {
+                if let target { popoverContent(for: target) }
+            }
+            .padding(.leading, rect.minX)
+            .padding(.top, rect.minY)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
     /// 拖宽度时把卡片的左右边界描出来。
