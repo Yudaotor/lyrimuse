@@ -16,7 +16,9 @@ import KeyboardShortcuts
 // FeatureSettingsStore.shared/ConfigStore.shared 等),不需要从 SettingsView 往下传
 // 参数——唯一的例外是某个开关因为对应账号没连好被禁用时,旁边会有个跳转按钮,直接跳到
 // 侧边栏里对应的那一个账号行,这就需要 SettingsView 把跳转能力下传给它。
-enum SettingsTab: Hashable, CaseIterable, Identifiable {
+/// 原始值(= case 名)从 2026-09-04 起落盘(`settings:lastTab`,见 lastTabStorageKey)——改 case 名会让
+/// 老值解码失败、退回「歌词」,不算坏事,但别无意识地改。
+enum SettingsTab: String, Hashable, CaseIterable, Identifiable {
     // 2026-07-30:播放器选择/权限/常驻服务/App 联动这几块原来跟语言/开机启动/配置备份
     // 一起挤在"通用"里,内容上其实是两件不相干的事——前者全部围绕"选哪个播放器、能不能
     // 正常读到它的播放状态"转,后者是些跟播放器选择完全无关的杂项。拆成独立的"播放器"
@@ -24,6 +26,21 @@ enum SettingsTab: Hashable, CaseIterable, Identifiable {
     case lyrics, player, appearance, shortcuts, general, about
 
     var id: Self { self }
+
+    /// 「上次停留的顶层分类」的 UserDefaults 键(2026-09-04)。二级分段早就在记
+    /// (`settings:lyricsSection` / `settings:appearanceSection`),顶层一直没记,表现是反复开关设置窗
+    /// 调灵动岛样式时每次都得先从「歌词」点到「歌词显示」。用 `settings:` 前缀而不是 `np:`:
+    /// ConfigPortability 只导出 `np:` / `KeyboardShortcuts_`,界面停留位置是机器状态、不该随备份走,
+    /// 这个前缀正好自然排除(selftest contracts 组有守卫钉着两头)。
+    static let lastTabStorageKey = "settings:lastTab"
+
+    /// 设置窗口新建时该停在哪个顶层分类:上次停留的那个,解码失败(没存过 / case 改过名)退回「歌词」
+    /// ——绝不能落成 nil,否则 detail 会显示「选择左侧的设置分类」。只认 `.tab`,账号页不在这里(理由见
+    /// SettingsView 写回处的注释)。信箱 / subject(AppActions.requestSettings)在 .onAppear 里覆盖它,
+    /// 优先级更高。
+    static func restoredLastTab(defaults: UserDefaults = .standard) -> SettingsTab {
+        defaults.string(forKey: lastTabStorageKey).flatMap(SettingsTab.init(rawValue:)) ?? .lyrics
+    }
 
     var title: String {
         switch self {
@@ -193,7 +210,10 @@ struct SettingsView: View {
     // @ObservedObject,加了才会响应 AppSettings.appLanguage 的变化)——本身不在 body
     // 里读它的其它字段。
     @ObservedObject private var languageSettings = AppSettings.shared
-    @State private var selection: SettingsSidebarItem? = .tab(.lyrics)
+    // 初值直接读盘(静态函数,属性初始化器里能调),不在 .onAppear 里再改一次——那样会先画一帧「歌词」
+    // 再跳到上次的分类。见 SettingsTab.restoredLastTab。
+    @State private var selection: SettingsSidebarItem? = .tab(SettingsTab.restoredLastTab())
+    @AppStorage(SettingsTab.lastTabStorageKey) private var lastTabRaw = SettingsTab.lyrics.rawValue
     /// 侧栏「播放器」项的警告徽标数据源(2026-09-03),随设置窗口出现/消失启停。
     @StateObject private var playerHealth = PlayerHealthMonitor()
     // 默认收起、点击 Section 头才展开,不持久化(每次打开设置窗口都从收起状态开始)。
@@ -294,6 +314,9 @@ struct SettingsView: View {
                 case nil: ContentUnavailableView(L10n.t("选择左侧的设置分类"), systemImage: "gearshape")
                 }
             }
+            // 配置文件损坏告示(2026-09-05,借鉴清单 #46):平时零高度;config.json / features.json 任一启动时
+            // 判定为损坏就钉在 detail 列顶部,不挑分页 —— 那时所有保存都被拒,用户在哪一页拨开关都会撞上。
+            .safeAreaInset(edge: .top, spacing: 0) { ConfigFileDamageBanner() }
             // 2026-08-25 拆开:窗口**标题**钉死成「设置」,当前分类改用副标题。原来标题栏
             // 跟着选中的分类走(仿系统"系统设置"那套"标题=当前面板名"的做法),但那套设计
             // 假设这扇窗口有自己独占的 Dock 图标——这个 App 的 Dock/Window 菜单是"设置"/
@@ -315,7 +338,7 @@ struct SettingsView: View {
         .background(SettingsWindowConfigurator())
         // 见 AppActions.pendingSettingsSelection 注释——Onboarding 的 Last.fm 步骤
         // 借这个信箱指定"这次打开设置窗口要直接停在哪个分类",这里读一次就清空,不影响
-        // 之后用户正常打开设置窗口(默认还是回到 .tab(.lyrics))。
+        // 之后用户正常打开设置窗口(默认回到上次停留的顶层分类,见 SettingsTab.restoredLastTab)。
         .onAppear {
             if let pending = AppActions.shared.pendingSettingsSelection {
                 selection = pending
@@ -329,6 +352,13 @@ struct SettingsView: View {
             selection = item
             // 同一次请求在信箱里的那份一并清掉,免得下次新建窗口时又被它顶一次。
             AppActions.shared.pendingSettingsSelection = nil
+        }
+        // 记住顶层分类(2026-09-04,见 SettingsTab.lastTabStorageKey)。只记 .tab:账号页多半在默认折叠的
+        // 「实验室功能」区里,记了它下次新建窗口就是上面 onJumpToAccount 注释说的那种"detail 切过去了、
+        // 侧栏却高亮不到任何一行"的状态;而且账号页的落点本来就由引导页的信箱管。六个顶层分类都记,
+        // 包括「关于」——上次停在低频页下次也落在那里,行为可预测,参考做法同样接受。
+        .onChange(of: selection) { _, item in
+            if case .tab(let tab)? = item { lastTabRaw = tab.rawValue }
         }
         // 见 AuxiliaryWindowActivation 注释——.accessory 策略下临时借一个 Dock 图标,
         // 关掉后(没有别的辅助窗口还开着)还原,不跟"在 Dock 中显示"这个永久偏好打架。
@@ -389,6 +419,10 @@ private struct LyricsSettingsTab: View {
     // 改这个值时才发通知,不像 local 那样每轮播放轮询都推,所以订阅它不会带来上面那段
     // 注释里说的白白重渲染。
     @ObservedObject private var offsets = LyricsOffsetStore.shared
+    /// 「顺序优先」列表正在进行的把手拖拽(nil = 没在拖)。纯视图态,不进 store;松手一次 move + save。
+    @State private var sourceDrag: SourceDragState?
+    /// 各可见行在卡片坐标空间里的静止 frame(PrioritySourceFramesKey 收集)。只在拖拽**开始**那一刻读一次做快照。
+    @State private var priorityRowFrames: [LyricsSource: CGRect] = [:]
 
     /// 一种文字的罗马音开关。跟中文繁简那个 Picker 一样**双写**:AppSettings 负责持久化,
     /// LocalPlaybackSource 负责让当前这首歌立刻重新解析(它的 didSet 会 reload)。
@@ -627,10 +661,16 @@ private struct LyricsSettingsTab: View {
     private var currentSection: some View {
         switch section {
         case .fetch:
-            // 这一段只有一张卡(来源/匹配/预取),跟其余三段的一段一卡对齐。预取原来是
-            // 独立一张卡摆在最前面 —— 用户真正要动的决策(选来源、挑算法)反而被一个
-            // 无感优化开关压在下面,2026-08-17 并进来源卡尾部,主次归位。
-            sourcesAndMatchingCard
+            // 两张卡(2026-09-05 拆开;此前是一张「歌词来源」卡装五样东西):第一张只回答
+            // 「从哪儿找」—— 来源网格 + 测试;第二张回答「找到之后怎么定」—— 匹配算法、
+            // 顺序、后台许不许换、预取、手动锁定。拆的直接原因是卡名「歌词来源」只对第一样
+            // 成立,下面四行挂在这个标题底下读起来像归类错了。第二张**不给卡名**,跟「译文」
+            // 「效果」两张卡同一个做法(卡里第一行的标题已经说明白这张卡管什么)。
+            //
+            // 顺序没动:预取原来是独立一张卡摆在这一段最前面,用户真正要动的决策(选来源、
+            // 挑算法)反而被一个无感优化开关压在下面,2026-08-17 并到决策项后面,主次归位。
+            sourcesCard
+            matchingCard
         case .translation:
             translationCard
         case .display:
@@ -642,7 +682,7 @@ private struct LyricsSettingsTab: View {
 
     // 每个来源前面那个彩色圆点用 iconTint 上色——这里的图标不是"行首的视觉锚点",它本身
     // 就是这个来源的身份色(跟"歌词管理"窗口里来源列的色点是同一套 source.color)。
-    private var sourcesAndMatchingCard: some View {
+    private var sourcesCard: some View {
         SettingsCard {
             SettingsCardHeader(title: L10n.t("歌词来源")) { testAllSourcesButton }
             CardDivider()
@@ -695,76 +735,72 @@ private struct LyricsSettingsTab: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
-            CardDivider()
-            // 分段控件放在标题行右边,不再单独占一整行 —— 一行一个设置是这套设置页其余地方
-            // 的通用写法(开关、下拉都是这样),原来那种"标题一行、控件再一行"把这一段的高度
-            // 白白翻了一倍。
+        }
+    }
+
+    /// 「匹配算法」这一行的副标题:只说**当前选中**那一档是怎么取的,换档就换一句。
+    ///
+    /// 原来两档的解释合写在一个「?」气泡里(两行,用「智能算法：」「顺序优先：」打头)。
+    /// 拆成随选中项变化的副标题之后气泡整个不需要了:常显的一句比藏在悬停里的两句更容易被
+    /// 读到,而且每句都可以省掉那个"这是在说哪一档"的前缀 —— 右边 radio 已经标明了。
+    private var matchingModeSubtitle: String {
+        switch features.lyricsSourceMode {
+        case .smart: return L10n.t("给每个来源打分，取分最高的")
+        case .priority: return L10n.t("不打分，按下面的顺序取第一个有结果的来源")
+        }
+    }
+
+    /// radio 的标签。「智能算法」带「（推荐）」后缀 —— 这是"推荐"这层语义现在唯一的表达方式。
+    ///
+    /// 2026-09-03 用户要求「在智能算法左上角打一个星,代表很推荐的意思」,当时做成叠在分段控件
+    /// 左上角的一颗 8pt 橙星;2026-09-05 用户自己看不下去了(「星星好丑啊,违和感很强」)。
+    /// 根子上是:分段控件桥接成 NSSegmentedControl,没法在某一格里放东西,只能往控件**外面**
+    /// 叠装饰,而任何叠在原生控件上的东西都不像原生。换成 radio 之后每一档有自己的一行文字,
+    /// 「推荐」就能像苹果自己那样写进标签里(引导页「Apple Music 自动化权限（推荐）」已是
+    /// 同一写法),不需要任何装饰。⚠️ 别再往控件上叠图标 —— 想强调就改文字。
+    private func matchingModeLabel(_ mode: LyricsSourceMode) -> String {
+        mode == .smart
+            ? String(format: L10n.t("%@（推荐）"), mode.displayName)
+            : mode.displayName
+    }
+
+    /// 第二张卡:找到来源之后"怎么定"—— 匹配算法、(顺序优先时的)手排顺序、后台许不许换、
+    /// 预取、手动锁定。为什么跟来源网格分开成两张卡,见 currentSection 里 `.fetch` 分支的注释。
+    private var matchingCard: some View {
+        SettingsCard {
+            // 二选一用原生 **纵向 radio 组**(macOS 系统设置里「点按滚动条时」那种,两颗 radio
+            // 上下排、跟标题顶对齐),不再用分段控件。三个原因:
+            //   1. 每档一行文字,「（推荐）」才有地方写(见 matchingModeLabel);
+            //   2. 分段控件是一块灰底色块,在一列开关里是这张卡上最重的东西,radio 只有两个
+            //      小圆圈,视觉分量跟旁边的 Toggle 相当;
+            //   3. 英文标签(“Smart Matching (recommended)”)比中文长一倍,横排会挤到左边的副
+            //      标题折行,纵排的宽度只取决于最长那一条标签,两种语言下行高都是两行 radio。
+            // 副标题随选中项变(matchingModeSubtitle),原来的「?」气泡撤掉。
             SettingsRow(
                 icon: "slider.horizontal.3",
                 title: L10n.t("匹配算法"),
-                help: L10n.t("智能算法：给每个来源打分（逐字时间轴、语言匹配等），取分最高的\n顺序优先：不打分，按下面的顺序取第一个有结果的来源")
+                subtitle: matchingModeSubtitle
             ) {
                 Picker("", selection: Binding(
                     get: { features.lyricsSourceMode },
                     set: { features.lyricsSourceMode = $0; Task { await features.save() } }
                 )) {
                     ForEach(LyricsSourceMode.allCases) { mode in
-                        Text(mode.displayName).tag(mode)
+                        Text(matchingModeLabel(mode)).tag(mode)
                     }
                 }
-                .pickerStyle(.segmented)
-                .fixedSize()
-                // 「智能算法」那一格左上角的推荐星标(2026-09-03 用户要求:「帮我在智能算法
-                // 左上角打一个星,代表很推荐的意思」)。
-                //
-                // ⚠️ 做法是叠在**整个 Picker** 的 topLeading,不是去里面定位某一格 —— 能这么
-                // 取巧是因为「智能算法」恰好是第一格(`LyricsSourceMode.allCases` 的顺序),
-                // 它的左上角就是整个控件的左上角。真要按格定位是走不通的:`.segmented` 的
-                // Picker 桥接成 AppKit 的 `NSSegmentedControl`,那层不认 SwiftUI 子视图的
-                // frame/坐标(同一个坑在 `LyricsAlignmentSegmentedControl` 头注里有完整记录)。
-                // ⚠️ 所以**以后要是调换了 allCases 的顺序、或者推荐档换成别的**,这个星标会
-                // 悄悄指错格子 —— 改顺序时记得回来看这里。
-                .overlay(alignment: .topLeading) {
-                    Image(systemName: "star.fill")
-                        .font(.system(size: 8))
-                        .foregroundStyle(.orange)
-                        // 选中态那一格是实心蓝底,橙色星单靠自身对比度在深色外观下会发闷,
-                        // 补一圈极轻的投影,蓝底/灰底/深浅外观下都拎得出来。
-                        .shadow(color: .black.opacity(0.28), radius: 1)
-                        .offset(x: -3, y: -3)
-                        // 星标只是标记,别把第一格的点击吞掉。
-                        .allowsHitTesting(false)
-                        .accessibilityLabel(L10n.t("推荐"))
-                }
+                .pickerStyle(.radioGroup)
             }
             if features.lyricsSourceMode == .priority {
-                ForEach(Array(orderedEnabledSources.enumerated()), id: \.element) { index, source in
+                // 顺序列表(2026-09-05 起支持把手拖拽排序,借鉴清单 #53):每行左侧一个 line.3.horizontal 把手,
+                // 挂 DragGesture;上下箭头**保留**,是键盘 / VoiceOver 的通路(把手对 VoiceOver 不可操作)。
+                // 拖拽期间从本地 sourceDrag 渲染让位与跟随、不碰 store;松手一次 move + 一次 save()——
+                // 原来从第 6 挪到第 1 要点 5 次箭头、写 5 次盘。算法(滞回 / 让位槛距 / 写回完整排列)在
+                // Core ReorderDrag,这里只做手势与几何。
+                let visible = orderedEnabledSources
+                ForEach(Array(visible.enumerated()), id: \.element) { index, source in
                     CardDivider()
-                    SettingsRawRow(insetToText: true) {
-                        HStack(spacing: 8) {
-                            Text("\(index + 1)")
-                                .font(.caption).monospacedDigit().foregroundStyle(.secondary)
-                                .frame(width: 14, alignment: .trailing)
-                            Circle().fill(source.color).frame(width: 8, height: 8)
-                            Text(source.displayName)
-                                .font(.system(size: 13))
-                            Spacer()
-                            Button {
-                                moveEnabledSource(source, direction: -1)
-                            } label: {
-                                Image(systemName: "chevron.up")
-                            }
-                            .buttonStyle(.plain)
-                            .disabled(index == 0)
-                            Button {
-                                moveEnabledSource(source, direction: 1)
-                            } label: {
-                                Image(systemName: "chevron.down")
-                            }
-                            .buttonStyle(.plain)
-                            .disabled(index == orderedEnabledSources.count - 1)
-                        }
-                    }
+                    priorityRow(index: index, source: source, visible: visible)
                 }
             }
             CardDivider()
@@ -888,6 +924,12 @@ private struct LyricsSettingsTab: View {
                 format: L10n.t("有 %@ 首歌是因为这个开关被锁定的。解锁后它们会重新接受自动重搜和打分改进；你手动编辑过正文的歌不受影响，始终保持锁定"),
                 "\(pendingManualUnlockCount)"))
         }
+        // 顺序列表拖拽排序的几何基础(见 priorityRow / priorityDragGesture):行中线与指针位移都在这个命名坐标
+        // 空间里量;行数或匹配模式一变就丢掉进行中的拖拽,避免 offset 残留在一份已经不同的列表上。
+        .coordinateSpace(name: Self.priorityListSpace)
+        .onPreferenceChange(PrioritySourceFramesKey.self) { priorityRowFrames = $0 }
+        .onChange(of: orderedEnabledSources.count) { _, _ in sourceDrag = nil }
+        .onChange(of: features.lyricsSourceMode) { _, _ in sourceDrag = nil }
     }
 
     /// 翻「手动选定歌词后锁定」这个开关之后的追溯扫描 + 回执。
@@ -1495,7 +1537,12 @@ private struct LyricsSettingsTab: View {
             //
             // 面板自己订阅 store、自己在 .task 里 reload(onlyIfChanged:),不把
             // @ObservedObject 挂到这一页上 —— 理由见 LyricsLibraryStatsPanel 头注。
-            SettingsRow(icon: "chart.bar.doc.horizontal", title: L10n.t("歌词库"))
+            // 尾部那个占用空间(2026-09-04 用户要求)。复用 EnrichCacheStore 早就在算的
+            // totalSizeBytes,不为它多扫一次盘;算不出来时整块不显示,理由见
+            // LyricsLibrarySizeLabel 头注。
+            SettingsRow(icon: "chart.bar.doc.horizontal", title: L10n.t("歌词库")) {
+                LyricsLibrarySizeLabel()
+            }
             SettingsRawRow(insetToText: true) {
                 LyricsLibraryStatsPanel()
             }
@@ -1571,9 +1618,125 @@ private struct LyricsSettingsTab: View {
         features.lyricsSourceOrder.filter { features.lyricsSources.contains($0) }
     }
 
-    // lyricsSourceOrder 始终是全部 4 个源的排列,不只是启用的那几个——"上移/下移"只需要
-    // 在这个完整数组里,把 source 换到"当前可见列表"里相邻的那个启用来源的位置,禁用的
-    // 来源被跳过、位置不受影响,不需要临时把它们摘出数组再塞回去。
+    // MARK: 顺序优先列表:拖拽排序(2026-09-05,借鉴清单 #53)
+
+    /// 卡片容器的命名坐标空间。行中线在它里面量、指针位移也在它里面算 —— 不能用 value.translation:
+    /// 被拖的行自己在动,相对它量的位移会被它自己的位移吃掉(歌词管理列宽把手 2026-08-05 踩过同一个坑,
+    /// 见 LyricsManagerView 那段注释)。
+    private static let priorityListSpace = "lyrics-priority-list"
+
+    struct SourceDragState {
+        /// 被拖行在可见列表里的原下标。
+        var source: Int
+        /// 此刻该占的槽位(Core ReorderDrag.targetIndex 带滞回算出来的)。
+        var target: Int
+        /// 被拖行相对静止位置的纵向位移(已夹在列表首尾之间)。
+        var translation: CGFloat
+        /// 拖拽开始那一刻各可见行的静止中线,拖拽期间不再更新(让位动画进行中量到的是半路的位置)。
+        var rowMidYs: [CGFloat]
+    }
+
+    /// 顺序列表里的一行:把手 + 序号 + 色点 + 名称 + 上下箭头。拖拽期间被拖行跟着指针走(不动画),其余行按
+    /// Core 算出的让位位移挪(0.15s 让位动画;reduceMotion 时不动画)。frame 收集放在 .offset **之后**,量到的
+    /// 才是静止位置而不是挪动中的位置。
+    private func priorityRow(index: Int, source: LyricsSource, visible: [LyricsSource]) -> some View {
+        let isDragged = sourceDrag?.source == index
+        let offset: CGFloat = {
+            guard let drag = sourceDrag else { return 0 }
+            if isDragged { return drag.translation }
+            return ReorderDrag.displacement(row: index, source: drag.source, target: drag.target, rowMidYs: drag.rowMidYs)
+        }()
+        return SettingsRawRow(insetToText: true) {
+            HStack(spacing: 8) {
+                Image(systemName: "line.3.horizontal")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.tertiary)
+                    // 锁拉丁语区,理由同 SettingsRow 里那处注释(SF Symbols 的部分符号有 CJK 变体)。
+                    .environment(\.locale, Locale(identifier: "en"))
+                    .frame(width: 16, height: 20)
+                    .contentShape(Rectangle())
+                    .help(L10n.t("拖动调整顺序"))
+                    .accessibilityLabel(L10n.t("拖动调整顺序"))
+                    .gesture(priorityDragGesture(index: index, visible: visible))
+                Text("\(index + 1)")
+                    .font(.caption).monospacedDigit().foregroundStyle(.secondary)
+                    .frame(width: 14, alignment: .trailing)
+                Circle().fill(source.color).frame(width: 8, height: 8)
+                Text(source.displayName)
+                    .font(.system(size: 13))
+                Spacer()
+                // 箭头保留:键盘 / VoiceOver 的通路。把手是 Image 不是按钮,VoiceOver 操作不了它。
+                Button {
+                    moveEnabledSource(source, direction: -1)
+                } label: {
+                    Image(systemName: "chevron.up")
+                }
+                .buttonStyle(.plain)
+                .disabled(index == 0)
+                .accessibilityLabel(L10n.t("上移"))
+                Button {
+                    moveEnabledSource(source, direction: 1)
+                } label: {
+                    Image(systemName: "chevron.down")
+                }
+                .buttonStyle(.plain)
+                .disabled(index == visible.count - 1)
+                .accessibilityLabel(L10n.t("下移"))
+            }
+        }
+        .offset(y: offset)
+        .scaleEffect(isDragged ? 1.015 : 1)
+        .zIndex(isDragged ? 1 : 0)
+        .animation(isDragged || reduceMotion ? nil : .easeOut(duration: 0.15), value: sourceDrag?.target)
+        .background(GeometryReader { geo in
+            Color.clear.preference(
+                key: PrioritySourceFramesKey.self,
+                value: [source: geo.frame(in: .named(Self.priorityListSpace))]
+            )
+        })
+    }
+
+    /// 把手上的拖拽手势。minimumDistance 4:点一下不算拖;macOS 没有按住拖动滚动这回事,不必担心跟滚动区抢。
+    /// 开始时一次性快照各可见行的静止中线(任一行还没量到就不开始);拖拽中另一只把手来的事件不理;松手时
+    /// 目标位变了才写回一次 lyricsSourceOrder 并 save()。
+    private func priorityDragGesture(index: Int, visible: [LyricsSource]) -> some Gesture {
+        DragGesture(minimumDistance: 4, coordinateSpace: .named(Self.priorityListSpace))
+            .onChanged { value in
+                if sourceDrag == nil {
+                    let mids = visible.compactMap { priorityRowFrames[$0]?.midY }
+                    guard mids.count == visible.count, visible.indices.contains(index) else { return }
+                    sourceDrag = SourceDragState(source: index, target: index, translation: 0, rowMidYs: mids)
+                }
+                guard var drag = sourceDrag, drag.source == index else { return }
+                let raw = value.location.y - value.startLocation.y
+                drag.translation = ReorderDrag.clampedTranslation(raw, source: drag.source, rowMidYs: drag.rowMidYs)
+                drag.target = ReorderDrag.targetIndex(
+                    rowMidYs: drag.rowMidYs, source: drag.source, current: drag.target,
+                    draggedMidY: drag.rowMidYs[drag.source] + drag.translation
+                )
+                sourceDrag = drag
+            }
+            .onEnded { _ in
+                guard let drag = sourceDrag, drag.source == index else { return }
+                let changed = drag.target != drag.source
+                withAnimation(reduceMotion ? nil : .easeOut(duration: 0.15)) {
+                    sourceDrag = nil
+                    if changed {
+                        features.lyricsSourceOrder = ReorderDrag.moved(
+                            features.lyricsSourceOrder,
+                            isVisible: { features.lyricsSources.contains($0) },
+                            from: drag.source, to: drag.target
+                        )
+                    }
+                }
+                if changed { Task { await features.save() } }
+            }
+    }
+
+    // lyricsSourceOrder 始终是全部源的完整排列(LyricsSource.allCases,现在 9 个),不只是启用的那几个——
+    // "上移/下移"只需要在这个完整数组里,把 source 换到"当前可见列表"里相邻的那个启用来源的位置,禁用的
+    // 来源被跳过、位置不受影响,不需要临时把它们摘出数组再塞回去。把手拖拽松手时走 Core ReorderDrag.moved,
+    // 语义与这里一致(禁用槽位不动),selftest 钉着两者等价。
     private func moveEnabledSource(_ source: LyricsSource, direction: Int) {
         let visible = orderedEnabledSources
         guard let visibleIndex = visible.firstIndex(of: source) else { return }
@@ -1584,6 +1747,14 @@ private struct LyricsSettingsTab: View {
               let j = features.lyricsSourceOrder.firstIndex(of: other) else { return }
         features.lyricsSourceOrder.swapAt(i, j)
         Task { await features.save() }
+    }
+}
+
+/// 「顺序优先」列表各行在卡片坐标空间里的 frame,按来源收集(见 LyricsSettingsTab.priorityRow)。
+private struct PrioritySourceFramesKey: PreferenceKey {
+    static let defaultValue: [LyricsSource: CGRect] = [:]
+    static func reduce(value: inout [LyricsSource: CGRect], nextValue: () -> [LyricsSource: CGRect]) {
+        value.merge(nextValue()) { _, new in new }
     }
 }
 
@@ -2506,11 +2677,12 @@ private final class PlayerTabStores: ObservableObject {
     @Published private(set) var browserJSVerifiedAt: [String: Date] = [:]
     @Published private(set) var browserPlatformPairs: [String: Set<String>] = [:]
     @Published private(set) var manualBrowserFamilies: [String: String] = [:]
-    @Published private(set) var launchMusicOnLyrimuseOpen = false
+    @Published private(set) var launchPlayersOnLyrimuseOpen: Set<PlaybackPlayer> = []
+    @Published private(set) var quitWithPlayers: Set<PlaybackPlayer> = []
     // ---- FeatureSettingsStore(三项) ----
     @Published private(set) var players: Set<PlaybackPlayer> = [.auto]
     @Published private(set) var trustedPlayers: [String: String] = [:]
-    @Published private(set) var launchLyrimuseOnMusicOpen = true
+    @Published private(set) var launchLyrimuseOnPlayers: Set<PlaybackPlayer> = []
     // ---- MediaControlHealth ----
     @Published private(set) var mediaControlState: MediaControlHealth.State = .unknown
     private var subs: [AnyCancellable] = []
@@ -2522,28 +2694,25 @@ private final class PlayerTabStores: ObservableObject {
         browserJSVerifiedAt = s.browserJSVerifiedAt
         browserPlatformPairs = s.browserPlatformPairs
         manualBrowserFamilies = s.manualBrowserFamilies
-        launchMusicOnLyrimuseOpen = s.launchMusicOnLyrimuseOpen
+        launchPlayersOnLyrimuseOpen = s.launchPlayersOnLyrimuseOpen
+        quitWithPlayers = s.quitWithPlayers
         players = f.players
         trustedPlayers = f.trustedPlayers
-        launchLyrimuseOnMusicOpen = f.launchLyrimuseOnMusicOpen
+        launchLyrimuseOnPlayers = f.launchLyrimuseOnPlayers
         mediaControlState = h.state
         subs = [
             s.$browserJSVerifiedAt.removeDuplicates().sink { [weak self] in self?.browserJSVerifiedAt = $0 },
             s.$browserPlatformPairs.removeDuplicates().sink { [weak self] in self?.browserPlatformPairs = $0 },
             s.$manualBrowserFamilies.removeDuplicates().sink { [weak self] in self?.manualBrowserFamilies = $0 },
-            s.$launchMusicOnLyrimuseOpen.removeDuplicates().sink { [weak self] in self?.launchMusicOnLyrimuseOpen = $0 },
+            s.$launchPlayersOnLyrimuseOpen.removeDuplicates().sink { [weak self] in self?.launchPlayersOnLyrimuseOpen = $0 },
+            s.$quitWithPlayers.removeDuplicates().sink { [weak self] in self?.quitWithPlayers = $0 },
             f.$players.removeDuplicates().sink { [weak self] in self?.players = $0 },
             f.$trustedPlayers.removeDuplicates().sink { [weak self] in self?.trustedPlayers = $0 },
-            f.$launchLyrimuseOnMusicOpen.removeDuplicates().sink { [weak self] in self?.launchLyrimuseOnMusicOpen = $0 },
+            f.$launchLyrimuseOnPlayers.removeDuplicates().sink { [weak self] in self?.launchLyrimuseOnPlayers = $0 },
             h.$state.removeDuplicates().sink { [weak self] in self?.mediaControlState = $0 },
         ]
     }
 
-    /// 「打开 Lyrimuse 时启动播放器」那颗 Toggle 的绑定:读代理里的值,写直接落 AppSettings。
-    var launchMusicOnLyrimuseOpenBinding: Binding<Bool> {
-        Binding(get: { [weak self] in self?.launchMusicOnLyrimuseOpen ?? false },
-                set: { AppSettings.shared.launchMusicOnLyrimuseOpen = $0 })
-    }
 }
 
 private struct PlayerSettingsTab: View {
@@ -2595,9 +2764,9 @@ private struct PlayerSettingsTab: View {
             unknownPlayerCard
             notificationDeniedCard
             trustedPlayersCard
+            companionCard
             permissionCard
             collectorCard
-            companionCard
         }
         .id(L10n.current)
         .onAppear { refreshUngatedNowPlaying(); refreshNotificationStatus(); refreshBrowserLiveStatus() }
@@ -3766,40 +3935,48 @@ private struct PlayerSettingsTab: View {
         }
     }
 
-    // 两个开关的文案跟着 stores.players 走(Apple Music/QQ 音乐/...)——这两个联动本身
-    // 已经改成跟着选定的播放器走(见 AppDelegate.swift/companionlaunch.go),文案继续写死
-    // "Apple Music"会跟实际行为对不上。"打开 Lyrimuse 时启动 X"需要一个唯一确定的 X 才
-    // 有意义,2026-09-01 多选后判据从"!= .auto"变成"soleExplicitPlayer 不是 nil"(排除
-    // 自动识别之后,选中集合里恰好只剩一个具体播放器)——含糊(纯 auto、或者同时选了
-    // 两个以上具体播放器)就直接隐藏这个开关,不猜、不显示读不通的文案;"打开 X 时启动
-    // Lyrimuse"反而在含糊的场景下更有用——companionlaunch.go 这时会同时盯着选中集合里
-    // (或者纯 auto 下全部已知播放器)每一个的进程。
+    // 「与播放器联动」卡(2026-09-03 重做,用户原话「现在是支持多选的,那么具体是和哪个播放器绑定呢,
+    // 所以这块功能也要改为多选才行;设置里也要重新设计」):三项联动各一行,尾部一排播放器图标芯片,
+    // 点图标勾选 / 取消。候选 = 选中集合里的具体播放器,选了「自动识别」时五个都可勾
+    // (LyrimuseCore.PlayerLinkage.candidates);此前「打开 Lyrimuse 时启动 X」在多选 / auto 下直接隐藏、
+    // 「跟随播放器启动」一个布尔盯整个集合,两处都回答不了"跟哪个绑定"。第三行「跟随播放器退出」是这次新加的。
+    private var linkageCandidates: [PlaybackPlayer] {
+        let set = PlayerLinkage.candidates(selectedPlayers: stores.players)
+        return PlaybackPlayer.displayOrder.filter { set.contains($0) }
+    }
+
     private var companionCard: some View {
         SettingsCard {
-            if let only = stores.players.soleExplicitPlayer {
-                SettingsRow(
-                    icon: "arrow.up.forward.app",
-                    title: String(format: L10n.t("打开 Lyrimuse 时启动 %@"), only.displayName)
-                ) {
-                    Toggle("", isOn: stores.launchMusicOnLyrimuseOpenBinding)
-                }
-                CardDivider()
-            }
-            SettingsRow(
+            SettingsCardHeader(
+                title: L10n.t("与播放器联动"),
+                subtitle: L10n.t("每一项都按播放器单独勾选；选了「自动识别」时五个播放器都可勾"))
+            CardDivider()
+            PlayerLinkageRow(
+                icon: "arrow.up.forward.app",
+                title: L10n.t("打开 Lyrimuse 时启动"),
+                help: L10n.t("Lyrimuse 启动时把勾选的播放器一起打开，已经在跑的不动，也不抢焦点"),
+                candidates: linkageCandidates,
+                chosen: stores.launchPlayersOnLyrimuseOpen
+            ) { AppSettings.shared.launchPlayersOnLyrimuseOpen = $0 }
+            CardDivider()
+            PlayerLinkageRow(
                 icon: "arrow.down.app",
-                title: stores.players.soleExplicitPlayer.map {
-                    String(format: L10n.t("跟随 %@ 启动"), $0.displayName)
-                } ?? L10n.t("跟随播放器启动"),
-                help: L10n.t("检测到播放器打开时自动拉起 Lyrimuse")
-            ) {
-                Toggle("", isOn: Binding(
-                    get: { stores.launchLyrimuseOnMusicOpen },
-                    set: {
-                        FeatureSettingsStore.shared.launchLyrimuseOnMusicOpen = $0
-                        Task { await FeatureSettingsStore.shared.save() }
-                    }
-                ))
+                title: L10n.t("跟随播放器启动"),
+                help: L10n.t("检测到播放器打开时自动拉起 Lyrimuse"),
+                candidates: linkageCandidates,
+                chosen: stores.launchLyrimuseOnPlayers
+            ) { chosen in
+                FeatureSettingsStore.shared.launchLyrimuseOnPlayers = chosen
+                Task { await FeatureSettingsStore.shared.save() }
             }
+            CardDivider()
+            PlayerLinkageRow(
+                icon: "power",
+                title: L10n.t("跟随播放器退出"),
+                help: L10n.t("勾选的播放器全部退出后，等 5 秒再退出 Lyrimuse；期间任一个重新打开就取消。设置、歌词管理或歌词窗口开着时不退"),
+                candidates: linkageCandidates,
+                chosen: stores.quitWithPlayers
+            ) { AppSettings.shared.quitWithPlayers = $0 }
         }
     }
 
@@ -3976,25 +4153,9 @@ private struct PlayerSettingsTab: View {
 private struct GeneralSettingsTab: View {
     @ObservedObject private var settings = AppSettings.shared
 
-    private func menuBarIconChoice(_ style: MenuBarIconStyle) -> some View {
-        let selected = settings.menuBarIconStyle == style
-        return Button {
-            settings.menuBarIconStyle = style
-        } label: {
-            // .template 让它跟在菜单栏上一样只按 alpha 上色,而不是画出黑色本体 ——
-            // 否则深色外观下这一格会是一团黑。
-            Image(nsImage: MenuBarIconStyle.cachedImage(for: style))
-                .renderingMode(.template)
-                .foregroundStyle(selected ? Color.white : Color.primary)
-                .frame(width: 42, height: 26)
-                .background(
-                    RoundedRectangle(cornerRadius: 6)
-                        .fill(selected ? Color.accentColor : Color.secondary.opacity(0.12)))
-        }
-        .buttonStyle(.plain)
-        .help(style.displayName)
-        .accessibilityLabel(style.displayName)
-    }
+    // (2026-09-04 删掉了这里的 `menuBarIconChoice(_:)`:12 款图标的格子搬进了
+    //  `UI/MenuBarIconPicker.swift`。别在这里长回来 —— 同一组格子两处各画一份,选中态/尺寸
+    //  迟早对不上。)
 
     @State private var showExportConfigWarning = false
     @State private var showImportConfigConfirm = false
@@ -4038,15 +4199,67 @@ private struct GeneralSettingsTab: View {
     var body: some View {
         SettingsPage(
             title: L10n.t("通用"),
-            subtitle: L10n.t("语言、启动方式、菜单栏和 Dock 图标，以及把全部设置搬到另一台 Mac")
+            // 副标题砍短(2026-09-04):原句 33 字在 900pt 窗口里折行,「台 Mac」三个字孤零零掉到
+            // 第二行。这一行只用回答"这页管什么",不用把每一项都点一遍 —— 下面的卡头本来就在点。
+            subtitle: L10n.t("菜单栏图标、语言与启动，以及备份搬家")
         ) {
-            // 2026-08-17 这一页从"两张无标题的卡"改成四张带小标题的卡。原来五项挤在同一张
-            // 卡里,其实是两类东西:语言/开机启动讲的是这个 App 怎么跑,Dock/菜单栏图标讲的
-            // 是它在系统 UI 里怎么露面 —— 中间只有一条分隔线,读起来是一串杂项。而且 12 款
-            // 图标那个网格夹在正中间,视觉上本来就已经把那张卡切成了上下两半。
+            // 2026-09-04/05 这一页重排(用户要求「重新设计一下设置里面通用页面的 UI」)。
             //
-            // 另外:这一页原来是全 App 唯一两张卡都没有 SettingsCardHeader 的分类(其它页
-            // 都有:歌词来源/配色/文字/窗口/灵动岛歌词/菜单栏歌词/自动隐藏)。
+            // 第一版照「歌词显示」的编辑台范式在页顶放了一块仿菜单栏舞台(壁纸底、苹果标、
+            // wifi/电池/时钟,中间摆所选那款图标的本体、律动开着时真的动),用户看完的原话是
+            // 「我不想这块」—— 明确指的是仿菜单栏预览和它下面那行 caption。所以**这一页没有
+            // 预览**:菜单栏就在屏幕顶上,选哪款抬头就看得见,不需要在设置页里再仿一条。别再
+            // 把 MenuBarIconStage 那套加回来。
+            //
+            // 留下来的改动:12 款从 LazyVGrid 换成写死 2×6 的 Grid(Lazy 容器在窗口不可见时不铺
+            // 格子,实拍过整块空白);选中款的名字常驻在「菜单栏图标」这一行的行尾(原来只有悬停
+            // tooltip 才报名字);「菜单栏与 Dock」这张卡提到「语言与启动」前面 —— 它是这一页
+            // 唯一带画面的一张,当页首比夹在中间稳。2026-08-17 那次拆卡的理由仍然成立(语言/开机
+            // 启动讲 App 怎么跑,Dock/菜单栏图标讲它在系统 UI 里怎么露面),没有并回去。
+            SettingsCard {
+                SettingsCardHeader(title: L10n.t("菜单栏与 Dock"))
+                CardDivider()
+                // 放在这张卡而不是「菜单栏歌词」那张里:这个图标恰恰是**没有**歌词可显示时才出现的
+                // (没在放歌、还没解析出这一句、或者菜单栏歌词整个关掉),跟那边的宽度/滚动设置
+                // 一件都不沾;它跟 Dock 那一行才是同类 —— 都在说"这个 App 在系统 UI 里长什么样"
+                // (2026-08-17 用户指出)。
+                //
+                // 行尾放所选款的名字,跟「歌词库」行尾放占用空间是同一种写法:裸值、次要色、11pt。
+                SettingsRow(
+                    icon: "menubar.rectangle",
+                    title: L10n.t("菜单栏图标")
+                ) {
+                    Text(settings.menuBarIconStyle.displayName)
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+                // 不 insetToText:这一块要在整张卡里居中(2026-09-05 用户要求),空出图标列再
+                // 居中会让中轴往右偏半个图标列,见 MenuBarIconPicker.body 的注释。
+                SettingsRawRow {
+                    // 直接把图标本身摆出来让人挑,不用文字列表 —— 这一项的全部内容就是"长什么样",
+                    // 写成一串名字反而要人先在脑子里翻译一遍。
+                    MenuBarIconPicker()
+                }
+                CardDivider()
+                // 律动紧跟在图标后面:它改的是上面那枚图标的状态。
+                SettingsRow(
+                    icon: "figure.dance",
+                    title: L10n.t("随播放律动"),
+                    help: L10n.t("播放时图标动起来，暂停即静止")
+                ) {
+                    Toggle("", isOn: $settings.menuBarIconAnimates)
+                }
+                CardDivider()
+                SettingsRow(
+                    icon: "macwindow",
+                    title: L10n.t("在 Dock 中显示"),
+                    help: L10n.t("关闭后只保留菜单栏图标，不占 Dock 位置")
+                ) {
+                    Toggle("", isOn: $settings.showInDock)
+                }
+            }
+
             SettingsCard {
                 SettingsCardHeader(title: L10n.t("语言与启动"))
                 CardDivider()
@@ -4067,50 +4280,6 @@ private struct GeneralSettingsTab: View {
                 CardDivider()
                 SettingsRow(icon: "power", title: L10n.t("开机启动")) {
                     Toggle("", isOn: $settings.launchAtLoginEnabled)
-                }
-            }
-
-            // 这张卡讲的是同一件事的两面:这个 App 在系统 UI 里以什么形态露面 —— Dock 里
-            // 有没有图标、菜单栏那枚长什么样、动不动。三项互相有关,跟上面的语言/开机启动
-            // 没关系,所以分开成卡而不是继续接在同一张里。
-            SettingsCard {
-                SettingsCardHeader(title: L10n.t("菜单栏与 Dock"))
-                CardDivider()
-                SettingsRow(
-                    icon: "macwindow",
-                    title: L10n.t("在 Dock 中显示"),
-                    help: L10n.t("关闭后只保留菜单栏图标，不占 Dock 位置")
-                ) {
-                    Toggle("", isOn: $settings.showInDock)
-                }
-                CardDivider()
-                // 放在「在 Dock 中显示」后面而不是「菜单栏歌词」那张卡里:这个图标恰恰是
-                // **没有**歌词可显示时才出现的(没在放歌、还没解析出这一句、或者菜单栏歌词
-                // 整个关掉),跟那边的宽度/滚动设置一件都不沾。它跟上面这一行才是同类 ——
-                // 都在说"这个 App 在系统 UI 里长什么样"(2026-08-17 用户指出)。
-                SettingsRow(
-                    icon: "menubar.rectangle",
-                    title: L10n.t("菜单栏图标")
-                ) { EmptyView() }
-                SettingsRawRow(insetToText: true) {
-                    // 直接把图标本身摆出来让人挑,不用文字列表 —— 这一项的全部内容就是
-                    // "长什么样",写成一串名字反而要人先在脑子里翻译一遍。
-                    LazyVGrid(
-                        columns: [GridItem(.adaptive(minimum: 46), spacing: 6, alignment: .leading)],
-                        alignment: .leading, spacing: 6
-                    ) {
-                        ForEach(MenuBarIconStyle.allCases) { style in
-                            menuBarIconChoice(style)
-                        }
-                    }
-                }
-                CardDivider()
-                SettingsRow(
-                    icon: "figure.dance",
-                    title: L10n.t("随播放律动"),
-                    help: L10n.t("播放时图标动起来，暂停即静止")
-                ) {
-                    Toggle("", isOn: $settings.menuBarIconAnimates)
                 }
             }
 

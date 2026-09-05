@@ -88,6 +88,40 @@ extension LyricsKind {
     }
 }
 
+/// 「歌词库」标题行尾部那个占用空间(2026-09-04 用户要求,截图指的就是这一行右端的空位)。
+///
+/// 数字直接用 `EnrichCacheStore.totalSizeBytes` —— 「歌词管理」工具栏一直在显示的同一个值
+/// (lyrics/ 权威源文件夹 + 缓存 JSON 本身),没有新增任何磁盘扫描。渲染口径也共用
+/// `EnrichCacheStore.byteText`,免得同一个数在两扇窗口里写法不一样。
+///
+/// ⚠️ **算不出来就什么都不显示,绝不显示「零字节」**。`totalSizeBytes` 的初值是 0,而
+/// `refreshSizeBytes()` 是个 detached task —— 首次打开这一页时有一小段窗口期值还是 0;
+/// 另外 `clearAll()` 也会把它硬置 0。这两种情况下摆一个"0 字节"是在报一个假数字,而空库
+/// 本来就有下面面板那句「还没有缓存任何歌词」在说话,这里再补一个 0 只会互相打架。
+///
+/// 单独一个小 View 的理由跟下面的统计面板一样:`EnrichCacheStore` 是个有七八个
+/// `@Published` 的单例,订阅面收在真正用得到的这一小块里,别让整页跟着重画。
+struct LyricsLibrarySizeLabel: View {
+    @ObservedObject private var store = EnrichCacheStore.shared
+
+    var body: some View {
+        // 尾部只放**裸数字**、不写「占用 」前缀:同一张卡里「歌词文件夹」那一行的尾部也是
+        // 裸路径,加了前缀反而跟邻行不齐。含义交给 help 气泡和 accessibilityLabel 带,
+        // 两者都不占版面。
+        if store.totalSizeBytes > 0 {
+            Text(EnrichCacheStore.byteText(store.totalSizeBytes))
+                .font(.system(size: 11))
+                .monospacedDigit()
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .help(L10n.t("歌词文件夹和本地记录文件加起来占用的磁盘空间"))
+                .accessibilityLabel(String(
+                    format: L10n.t("占用空间：%@"),
+                    EnrichCacheStore.byteText(store.totalSizeBytes)))
+        }
+    }
+}
+
 /// 设置页「歌词管理」卡里的统计面板。
 ///
 /// ⚠️ 单独一个 View 而不是把 `@ObservedObject` 挂到 `LyricsSettingsTab` 上:`EnrichCacheStore`

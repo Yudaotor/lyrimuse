@@ -27,6 +27,9 @@ final class SparkleUpdaterManager: ObservableObject {
         var downloaded: Bool
     }
     @Published private(set) var availableUpdate: AvailableUpdate?
+    /// Sparkle 已经开始安装更新(willInstallUpdate 回调过)—— 接下来那次进程终止是它发起的重启。
+    /// 给 AppExit 在 applicationShouldTerminate 里把原因记成 sparkle_install 用。
+    private(set) var isInstallingUpdate = false
 
     /// 当前 App 版本(Info.plist CFBundleShortVersionString,由 build.sh 写入)。
     static var appVersionString: String {
@@ -56,9 +59,12 @@ final class SparkleUpdaterManager: ObservableObject {
             }
         case .downloaded(let version):
             availableUpdate = AvailableUpdate(version: version, downloaded: true)
-        case .notFound, .skipped, .willInstall:
+        case .willInstall:
+            isInstallingUpdate = true
+            if availableUpdate != nil { availableUpdate = nil }
+        case .notFound, .skipped:
             // 已是最新 / 用户点了「跳过此版本」(Sparkle 之后也不会再提它)/ 已开始安装
-            // (马上重启)——三种情况底栏都不该再喊「有新版本」。
+            // (马上重启,上面那个分支)——三种情况底栏都不该再喊「有新版本」。
             if availableUpdate != nil { availableUpdate = nil }
         }
     }

@@ -650,6 +650,82 @@ func runSourceContractTests() {
         }
     }
 
+    // ---- 署名过滤的「轮次计数」必须跟条目对齐(2026-09-03)----
+    //
+    // docs/features/08-lyrics-engine.md 里有两处**各自手工维护**的同一个数:一条条
+    // 「第 N 轮」的条目,和「设计决策」那节「枚举法收敛不了(至今补到第 N 轮)」里的计数。
+    // 加规则的人常常只补条目、忘了抬计数 —— 2026-09-03 实测:第十五轮记得抬,紧接着另一个
+    // session 加第十六轮时就漏了。漏了什么都不报,只是让下一个读文档的人拿到一个偏小的数,
+    // 从而低估这套规则的枚举成本 —— 而"枚举法收敛不了"正是这一节要传达的结论本身。
+    //
+    // 顺带钉住条目编号**连续且不重复**:这份文档同时有多个 session 在改(第十五轮和第十六轮
+    // 就来自两个不同 session),两边各写一条「第十七轮」而互不知道是真实存在的撞车形态。
+    do {
+        let repoRoot = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()   // Sources/lyrimuse-selftest
+            .deletingLastPathComponent()   // Sources
+            .deletingLastPathComponent()   // lyrimuse(包目录)
+            .deletingLastPathComponent()   // 仓库根
+        let docPath = repoRoot.appendingPathComponent("docs/features/08-lyrics-engine.md").path
+        /// 「十六」→ 16。只覆盖 1…99 的写法(一位数 / 十 / 十X / X十 / X十Y),不够用时返回 nil 而不是瞎猜。
+        func chineseNumeral(_ s: String) -> Int? {
+            let digits: [Character: Int] = ["一": 1, "二": 2, "三": 3, "四": 4, "五": 5,
+                                            "六": 6, "七": 7, "八": 8, "九": 9]
+            let chars = Array(s)
+            guard !chars.isEmpty, chars.count <= 3 else { return nil }
+            guard let tenIdx = chars.firstIndex(of: "十") else {
+                guard chars.count == 1, let v = digits[chars[0]] else { return nil }
+                return v
+            }
+            let high = chars[..<tenIdx], low = chars[(tenIdx + 1)...]
+            var value = 0
+            if high.isEmpty {
+                value = 10
+            } else if high.count == 1, let v = digits[high[high.startIndex]] {
+                value = v * 10
+            } else {
+                return nil
+            }
+            if low.isEmpty { return value }
+            guard low.count == 1, let v = digits[low[low.startIndex]] else { return nil }
+            return value + v
+        }
+        /// 扫出文本里 `<prefix>第…轮` 的那个数,按出现顺序。
+        func rounds(in text: String, prefix: String) -> [Int] {
+            var out: [Int] = []
+            var rest = Substring(text)
+            while let hit = rest.range(of: prefix + "第") {
+                let tail = rest[hit.upperBound...]
+                if let close = tail.firstIndex(of: "轮"),
+                   let v = chineseNumeral(String(tail[tail.startIndex..<close])) {
+                    out.append(v)
+                }
+                rest = rest[hit.upperBound...]
+            }
+            return out
+        }
+        if let doc = try? String(contentsOfFile: docPath, encoding: .utf8) {
+            // 每个条目行只取**第一个**「第 N 轮」:条目正文里常回指别的轮次(「跟第十三轮同源」),
+            // 全收会把回指也算成条目、连带把连续性判据搞乱。
+            let entryRounds: [Int] = doc.split(separator: "\n", omittingEmptySubsequences: false)
+                .map(String.init)
+                .filter { $0.hasPrefix("- **第") }
+                .compactMap { rounds(in: $0, prefix: "").first }
+            expectNotEqual(entryRounds.count, 0,
+                           "署名轮次: 扫到了「- **第 N 轮」条目(一条都没扫到 = 文档格式变了、这道闸自己失效了)")
+            let counters = rounds(in: doc, prefix: "至今补到")
+            expectEqual(counters.count, 1,
+                        "署名轮次: 「至今补到第 N 轮」这句计数应当有且只有一处")
+            expectEqual(counters.first, entryRounds.max(),
+                        "署名轮次: 「至今补到第 N 轮」的计数必须等于最后一条「第 N 轮」条目的编号 —— 加了条目忘抬计数")
+            let expectedRun = Array(stride(from: entryRounds.min() ?? 0, through: entryRounds.max() ?? 0, by: 1))
+            expectEqual(entryRounds, expectedRun,
+                        "署名轮次: 条目编号要连续不重复 —— 重号 = 两个 session 各加了一轮却互不知道")
+        } else {
+            expectEqual(true, false, "署名轮次: 读不到 docs/features/08-lyrics-engine.md(路径挪了?)")
+        }
+    }
+
     // ---- 使用与版权说明 / 第三方许可(2026-09-03)----
     //
     // 说明正文只在 README 维护(中英各一节),App 里两处入口(设置「关于」页两行、引导欢迎页一句)都只是
@@ -947,5 +1023,479 @@ func runSourceContractTests() {
         } else {
             expectEqual(true, false, "玻璃门控: 读不到 SettingsDesignSystem.swift(路径挪了?)")
         }
+
+        // ⑯ **「开机启动」这个开关只准写/删 plist,不准起任何进程**(2026-09-03,同一个
+        //    「点一下就闪退」修了三次才收口)。
+        //
+        // 两个方向各有一个坑,而且**都不产生 crash report**,极难查:
+        //   · 关:`launchctl bootout gui/<uid>/me.yudaotor.lyrimuse` —— App 本身就是那个
+        //     job(build.sh 装完走 bootstrap+kickstart,开机自启同理),等于让 launchd 给
+        //     自己发一记 SIGTERM(日志里是 signal(2) SIGTERM(15))。
+        //   · 开:`launchctl bootstrap` + plist 里的 RunAtLoad=true —— 当场再起一个
+        //     lyrimuse,老进程让位退出(日志里是 `Process exited: voluntary`,新进程在
+        //     **同一秒**启动)。
+        //
+        // 两者都不必要:plist 落在 ~/Library/LaunchAgents,launchd **下次登录**自己加载它,
+        // 那就是这个开关承诺的全部内容。所以这条闸直接禁掉整类写法 —— 这个文件里不准出现
+        // launchctl,也不准起子进程。
+        if let loginItem = try? String(
+            contentsOf: appSources.appendingPathComponent("Settings/LoginItemManager.swift"),
+            encoding: .utf8) {
+            let offenders = loginItem.split(separator: "\n", omittingEmptySubsequences: false)
+                .enumerated()
+                .filter { _, raw in
+                    let line = String(raw).trimmingCharacters(in: .whitespaces)
+                    guard !line.hasPrefix("//"), !line.hasPrefix("///") else { return false }
+                    return line.contains("launchctl") || line.contains("Process()")
+                }
+                .map { "LoginItemManager.swift:\($0.offset + 1)" }
+            expectEqual(offenders, [],
+                        "开关不起进程: LoginItemManager 只准写/删 plist —— 出现 launchctl 或起子进程,就是「点一下开机启动就闪退」那个 bug 的形状")
+        } else {
+            expectEqual(true, false, "开关不起进程: 读不到 LoginItemManager.swift(路径挪了?)")
+        }
+    }
+
+    // ---- 退出原因日志(2026-09-03,AGENTS.md「容易踩的具体坑 → 退出路径」)----
+    //
+    // 两侧的退出路径都要打 `exiting reason=<code>`:App 侧所有主动 terminate 只准经 AppExit.request
+    // (applicationShouldTerminate 兜底、SIGTERM 由 AppExit 接住),collector 常驻路径(main.go)不准再出现裸
+    // os.Exit / log.Fatalf,一律走 exitreason.go 的 logExit / fatalExit。纯文本扫描:它拦的是"新加一条退出
+    // 路径忘了打日志"这种最常见的漏法。
+    do {
+        let packageDir = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        let appSources = packageDir.appendingPathComponent("Sources/lyrimuse")
+        let repoRoot = packageDir.deletingLastPathComponent()
+        func codeLines(_ text: String) -> [(Int, String)] {
+            text.split(separator: "\n", omittingEmptySubsequences: false).enumerated().compactMap { index, raw in
+                let line = String(raw).trimmingCharacters(in: .whitespaces)
+                return line.hasPrefix("//") ? nil : (index + 1, line)
+            }
+        }
+        // ① App:terminate 调用点只准在 AppExit.swift 里。
+        var offenders: [String] = []
+        var scanned = 0
+        if let files = FileManager.default.enumerator(at: appSources, includingPropertiesForKeys: nil) {
+            for case let url as URL in files where url.pathExtension == "swift" {
+                guard let text = try? String(contentsOf: url, encoding: .utf8) else { continue }
+                scanned += 1
+                let rel = url.path.replacingOccurrences(of: appSources.path + "/", with: "")
+                if rel == "AppExit.swift" { continue }
+                for (lineNo, line) in codeLines(text)
+                where line.contains("NSApp.terminate(") || line.contains("NSApplication.shared.terminate(") {
+                    offenders.append("\(rel):\(lineNo)")
+                }
+            }
+        }
+        expectEqual(scanned > 50, true, "退出原因: 扫到了 App target 的源文件(守卫自身没跑空)")
+        expectEqual(offenders.sorted(), [], "退出原因: App 里主动 terminate 只准经 AppExit.request,别处直接 terminate 不会留下 exiting reason= 日志")
+        if let appExit = try? String(contentsOf: appSources.appendingPathComponent("AppExit.swift"), encoding: .utf8) {
+            expectEqual(appExit.contains("exiting reason="), true, "退出原因: AppExit 打的是 `exiting reason=` 前缀(collector 同款,grep 契约)")
+            expectEqual(appExit.contains("category: \"lifecycle\""), true, "退出原因: 走 lifecycle 分类的 Logger,不走 NSLog")
+        } else {
+            expectEqual(true, false, "退出原因: 读不到 AppExit.swift(路径挪了?)")
+        }
+        if let delegate = try? String(contentsOf: appSources.appendingPathComponent("AppDelegate.swift"), encoding: .utf8) {
+            let code = codeLines(delegate).map(\.1)
+            expectEqual(code.contains { $0.contains("AppExit.logTermination(") }, true, "退出原因: applicationShouldTerminate 要调 AppExit.logTermination 兜底(⌘Q / Dock 退出 / Sparkle 重启都只经这里)")
+            expectEqual(code.contains { $0.contains("AppExit.installSigtermHandler()") }, true, "退出原因: 启动时要装 SIGTERM 处理器,否则 kickstart -k 那条路连 delegate 都到不了")
+            expectEqual(code.contains { $0.contains("NSLog(") }, false, "退出原因: AppDelegate 里不再有 NSLog(诊断导出按 subsystem 查不到它)")
+        } else {
+            expectEqual(true, false, "退出原因: 读不到 AppDelegate.swift(路径挪了?)")
+        }
+        // ② collector:main.go 的常驻路径不准裸 os.Exit / log.Fatalf。
+        if let mainGo = try? String(contentsOf: repoRoot.appendingPathComponent("lyrimuse-collector/main.go"), encoding: .utf8) {
+            let bare = codeLines(mainGo).filter { $0.1.contains("log.Fatal") }.map { "main.go:\($0.0)" }
+            expectEqual(bare, [], "退出原因: collector main.go 不准再用 log.Fatal*,走 exitreason.go 的 fatalExit(reason:)")
+            let exits = codeLines(mainGo).filter { $0.1.contains("os.Exit(") }
+            expectEqual(exits.count, 1, "退出原因: main.go 里唯一一处 os.Exit 是拿不到单实例锁那条(前面一行 logExit(already_running))")
+        } else {
+            expectEqual(true, false, "退出原因: 读不到 lyrimuse-collector/main.go(路径挪了?)")
+        }
+        if let exitReason = try? String(contentsOf: repoRoot.appendingPathComponent("lyrimuse-collector/exitreason.go"), encoding: .utf8) {
+            expectEqual(exitReason.contains("\"exiting reason=%s\""), true, "退出原因: collector 前缀与 App 一致")
+        } else {
+            expectEqual(true, false, "退出原因: 读不到 lyrimuse-collector/exitreason.go(路径挪了?)")
+        }
+    }
+
+    // ---- features.json 键两侧镜像(2026-09-03)----
+    //
+    // Swift `FeatureFlagsFile.CodingKeys` 里的每个键,collector features.go 都得有同名 json tag —— App 写了、
+    // collector 不认的键会**静默无效**(「跟随播放器启动」改逐播放器那次加的 launch_lyrimuse_on_players 就是
+    // 这种键,漏了 Go 侧就是"设置里勾了、collector 照旧盯全部")。反方向不查:collector 自己的诊断键
+    // (lyrics_decision_trace)App 不管,靠 unknownFileKeys 原样保留。
+    do {
+        let packageDir = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        let repoRoot = packageDir.deletingLastPathComponent()
+        let swiftPath = packageDir.appendingPathComponent("Sources/lyrimuse/Settings/FeatureSettingsStore.swift").path
+        let goPath = repoRoot.appendingPathComponent("lyrimuse-collector/features.go").path
+        if let swift = try? String(contentsOfFile: swiftPath, encoding: .utf8),
+           let go = try? String(contentsOfFile: goPath, encoding: .utf8) {
+            var keys: [String] = []
+            var inEnum = false
+            for raw in swift.split(separator: "\n") {
+                let line = raw.trimmingCharacters(in: .whitespaces)
+                if line.hasPrefix("enum CodingKeys: String, CodingKey, CaseIterable {") { inEnum = true; continue }
+                guard inEnum else { continue }
+                if line == "}" { break }
+                guard line.hasPrefix("case ") else { continue }
+                let body = line.dropFirst(5)
+                if let eq = body.range(of: " = \"") {
+                    keys.append(String(body[eq.upperBound...].dropLast()))
+                } else {
+                    keys.append(String(body).trimmingCharacters(in: .whitespaces))
+                }
+            }
+            expectEqual(keys.count > 10, true, "features 键镜像: 解析到了 FeatureFlagsFile.CodingKeys(守卫自身没跑空)")
+            let missing = keys.filter { !go.contains("json:\"\($0),omitempty\"") && !go.contains("json:\"\($0)\"") }
+            expectEqual(missing, [], "features 键镜像: collector features.go 缺这些键的 json tag,App 写了 collector 不认")
+        } else {
+            expectEqual(true, false, "features 键镜像: 读不到 FeatureSettingsStore.swift 或 features.go(路径挪了?)")
+        }
+    }
+
+    // ---- 「采纳候选」的三个入口必须同进同出(2026-09-04)----
+    //
+    // `LyricsSearchSheet` 有三个调用点(歌词管理 / 歌词窗口的 sheet / 悬浮窗 ⚙ 的独立小窗),
+    // 每一处的 onApply 都要有同一套分流与参数:纯文本候选走 `savePlainTextEdit`(否则把没有
+    // 时间戳的纯文本当 LRC 喂进 saveEdit,这首歌在别的展示面上从"至少有静态文字"退化成"看
+    // 起来完全没有歌词"),带时间戳的走 `saveEdit` 且 `markManual` 读 `manualPickLocksLyrics`、
+    // `fromManualPick: true`。这个仓库为"改了两处漏第三处"付过两次代价:2026-09-01 补
+    // markManual 时漏了歌词窗口那处;2026-09-04 发现小窗那处从 08-30 加纯文本候选起就没有
+    // 分流。守卫先数清楚调用点(多一处也要红 —— 新入口必须来这里登记,顺便读一遍上面的规矩),
+    // 再逐处查五个记号(2026-09-04 加 currentFingerprint:「当前使用」双判据的正文指纹,三处都得传)。只数非注释行:别处的注释会提到 `LyricsSearchSheet(` 让人去 grep。
+    do {
+        let appSources = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("lyrimuse")
+        func read(_ rel: String) -> String? {
+            try? String(contentsOfFile: appSources.appendingPathComponent(rel).path, encoding: .utf8)
+        }
+        var callSites: [String] = []
+        if let walker = FileManager.default.enumerator(atPath: appSources.path) {
+            for case let rel as String in walker where rel.hasSuffix(".swift") {
+                guard rel != "LyricsManager/LyricsSearchSheet.swift", let text = read(rel) else { continue }
+                let hit = text.split(separator: "\n").contains { raw in
+                    let line = raw.trimmingCharacters(in: .whitespaces)
+                    return !line.hasPrefix("//") && line.contains("LyricsSearchSheet(")
+                }
+                if hit { callSites.append(rel) }
+            }
+        }
+        expectEqual(callSites.sorted(),
+                    ["LyricsManager/LyricsManagerView.swift", "LyricsManager/LyricsQuickSearchWindow.swift",
+                     "UI/LyricsWindowView.swift"],
+                    "采纳候选入口: LyricsSearchSheet 的调用点就这三处(多了/少了都要来这条守卫登记)")
+        for rel in callSites.sorted() {
+            guard let text = read(rel) else { continue }
+            for marker in ["isPlainTextOnly", "savePlainTextEdit(", "manualPickLocksLyrics", "fromManualPick: true", "currentFingerprint:"] {
+                expectEqual(text.contains(marker), true, "采纳候选入口: \(rel) 缺 \(marker)")
+            }
+        }
+    }
+
+    // ---- 设置页顶层分类记忆(2026-09-04)----
+    //
+    // 顶层分类的落盘键必须是 `settings:` 前缀:ConfigPortability 只导出 `np:` / `KeyboardShortcuts_`,
+    // 界面停留位置是机器状态、不该随备份走 —— 这个前缀正好自然排除。守卫两头:键名前缀没被改掉、
+    // 导出过滤没有悄悄把 `settings:` 加进去;再钉住"初值直接读盘"(不在 onAppear 里补跳)和"只在
+    // .tab 分支写回"(账号页不记,理由见 SettingsView 那处注释)。纯 App target,只能扫源码文本。
+    do {
+        let appSources = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("lyrimuse")
+        func read(_ rel: String) -> String? {
+            try? String(contentsOfFile: appSources.appendingPathComponent(rel).path, encoding: .utf8)
+        }
+        if let settings = read("SettingsView.swift") {
+            expectEqual(settings.contains("static let lastTabStorageKey = \"settings:lastTab\""), true,
+                        "顶层分类记忆: 键名与 settings: 前缀")
+            expectEqual(settings.contains("@AppStorage(SettingsTab.lastTabStorageKey)"), true,
+                        "顶层分类记忆: @AppStorage 挂常量而不是字面量")
+            expectEqual(settings.contains(".tab(SettingsTab.restoredLastTab())"), true,
+                        "顶层分类记忆: selection 初值直接读盘,不在 onAppear 里补跳")
+            expectEqual(settings.contains("if case .tab(let tab)? = item { lastTabRaw = tab.rawValue }"), true,
+                        "顶层分类记忆: 只在 .tab 分支写回,账号页不记")
+        } else {
+            expectEqual(true, false, "顶层分类记忆: 读不到 SettingsView.swift(路径挪了?)")
+        }
+        if let portability = read("Settings/ConfigPortability.swift") {
+            expectEqual(portability.contains("hasPrefix(\"settings:\")"), false,
+                        "顶层分类记忆: settings: 前缀的界面停留位置不该进配置导出")
+        } else {
+            expectEqual(true, false, "顶层分类记忆: 读不到 Settings/ConfigPortability.swift(路径挪了?)")
+        }
+    }
+
+    // ---- 菜单栏跟唱滚动(2026-09-04)----
+    //
+    // 有逐字时间轴的句子滚动跟着正在唱的字走(MenuBarMarquee.followReadingPath / followScrollPath)。
+    // 三件容易被"顺手统一"掉的事只能扫源码守:① 阅读位置路径**不看**卡拉OK开关 —— 不染色也要跟着唱到的
+    // 位置滚,它跟 karaokeFillPath 长得像但少一道守卫,合并它们就把关着染色的用户退回匀速配速;② 本体和
+    // 设置页预览都把 followPath 传给标签(预览复用本体视图,少传一处预览就跟真机不一样);③ 标签把 followPath
+    // 当滚动参数比对 —— 开唱那一刻它从 nil 变非 nil 必须装上跟唱动画。
+    do {
+        let appSources = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("lyrimuse")
+        func read(_ rel: String) -> String? {
+            try? String(contentsOfFile: appSources.appendingPathComponent(rel).path, encoding: .utf8)
+        }
+        /// 取 `marker` 起到下一个四空格缩进的 `}` 为止的函数体。
+        func body(of source: String, from marker: String) -> String? {
+            guard let start = source.range(of: marker) else { return nil }
+            let rest = source[start.lowerBound...]
+            guard let end = rest.range(of: "\n    }\n") else { return nil }
+            return String(rest[..<end.lowerBound])
+        }
+        for (file, marker) in [("MenuBar/MenuBarStatusItem.swift", "private func followReadingPath(for text: String)"),
+                               ("UI/SectionPreviewBars.swift", "private var followReadingPath:")] {
+            guard let source = read(file) else {
+                expectEqual(true, false, "跟唱滚动: 读不到 \(file)(路径挪了?)")
+                continue
+            }
+            guard let fn = body(of: source, from: marker) else {
+                expectEqual(true, false, "跟唱滚动: \(file) 里找不到 followReadingPath")
+                continue
+            }
+            expectEqual(fn.contains("menuBarLyricsKaraoke"), false,
+                        "跟唱滚动: \(file) 的阅读位置路径不看卡拉OK开关")
+            expectEqual(fn.contains("MenuBarMarquee.followReadingPath("), true,
+                        "跟唱滚动: \(file) 走 Core 的 followReadingPath")
+            expectEqual(source.contains("followPath: followReadingPath"), true,
+                        "跟唱滚动: \(file) 把 followPath 传给了标签")
+        }
+        if let label = read("MenuBar/MenuBarScrollingLabel.swift") {
+            expectEqual(label.contains("$0.followPath == next.followPath"), true,
+                        "跟唱滚动: 标签把 followPath 当滚动参数比对")
+            expectEqual(label.contains("MenuBarMarquee.followScrollPath("), true,
+                        "跟唱滚动: 标签按自己的格子宽 / 长图宽算偏移路径")
+        } else {
+            expectEqual(true, false, "跟唱滚动: 读不到 MenuBar/MenuBarScrollingLabel.swift(路径挪了?)")
+        }
+    }
+
+    // ---- 菜单栏自绘位图的栅格化比例(2026-09-05)----
+    //
+    // 三样自绘位图(歌词长图 / 进度图标 / 活体图标)都要按**按钮所在窗口**的 backingScaleFactor 栅格化
+    // (NSView.menuBarBitmapScale),不许再拿 NSScreen.main(有键盘焦点的屏)猜、也不许写死 2 ——
+    // 混接不同 DPI 的显示器时前者按错屏、后者在 1x 屏上白费两倍位图。比例变化靠
+    // viewDidChangeBackingProperties / viewDidMoveToWindow 接住重排。纯 AppKit,只能扫源码。
+    do {
+        let menuBarDir = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("lyrimuse/MenuBar")
+        let files = ((try? FileManager.default.contentsOfDirectory(atPath: menuBarDir.path)) ?? [])
+            .filter { $0.hasSuffix(".swift") }.sorted()
+        expectEqual(files.isEmpty, false, "位图比例: 找得到 MenuBar 目录")
+        var offenders: [String] = []
+        let hardcoded = try? NSRegularExpression(pattern: #"contentsScale\s*=\s*[0-9]"#)
+        for f in files {
+            guard let src = try? String(contentsOfFile: menuBarDir.appendingPathComponent(f).path, encoding: .utf8) else { continue }
+            if src.contains("NSScreen.main?.backingScaleFactor") { offenders.append("\(f): NSScreen.main 猜屏") }
+            if let hardcoded,
+               hardcoded.firstMatch(in: src, range: NSRange(src.startIndex..., in: src)) != nil {
+                offenders.append("\(f): contentsScale 写死数字")
+            }
+        }
+        expectEqual(offenders, [], "位图比例: 不许猜 NSScreen.main、不许写死 contentsScale")
+        for f in ["MenuBarScrollingLabel.swift", "MenuBarLiveIconView.swift"] {
+            let src = (try? String(contentsOfFile: menuBarDir.appendingPathComponent(f).path, encoding: .utf8)) ?? ""
+            expectEqual(src.contains("override func viewDidChangeBackingProperties()"), true,
+                        "位图比例: \(f) 接住换屏重排")
+            expectEqual(src.contains("menuBarBitmapScale"), true, "位图比例: \(f) 用所在窗口的比例")
+        }
+    }
+
+    // ---- 共享配置文件的读写口径(2026-09-05,借鉴清单 #46)----
+    //
+    // ConfigStore / FeatureSettingsStore 两份共享 JSON 文件的读盘、合并、写盘必须走 Core 的 JSONConfigDocument
+    // (三态:missing / loaded / corrupt,corrupt 拒绝保存;写盘成功后才更新内存)。不许再各自
+    // `try? Data(contentsOf:)` + `try? JSONSerialization` 把「文件不存在」和「文件坏了」混成一回事,也不许
+    // 绕开文档直接 write —— 那正是 config.json 一个语法错误之后被 14 个空串覆盖的那条路。两个 Store 在
+    // app target,selftest 只能扫源码;逻辑本体由 ops-diagnostics 组「配置文件三态读写」钉着。
+    do {
+        let appDir = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("lyrimuse")
+        func codeLines(_ rel: String) -> String {
+            let src = (try? String(contentsOfFile: appDir.appendingPathComponent(rel).path, encoding: .utf8)) ?? ""
+            // 只看代码行:两个文件的注释里大段引用了旧写法当反例。
+            return src.split(separator: "\n", omittingEmptySubsequences: false)
+                .filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") }
+                .joined(separator: "\n")
+        }
+        for f in ["Settings/ConfigStore.swift", "Settings/FeatureSettingsStore.swift"] {
+            let code = codeLines(f)
+            expectEqual(code.isEmpty, false, "配置读写口径: 读得到 \(f)")
+            expectEqual(code.contains("JSONConfigDocument.load(url:"), true, "配置读写口径: \(f) 读盘走 JSONConfigDocument")
+            expectEqual(code.contains("document.save(fields:"), true, "配置读写口径: \(f) 写盘走 JSONConfigDocument.save")
+            expectEqual(code.contains("Data(contentsOf:"), false, "配置读写口径: \(f) 不许自己读盘")
+            expectEqual(code.contains(".write(to:"), false, "配置读写口径: \(f) 不许绕开文档直接写盘")
+            expectEqual(code.contains("writeSecurely(to:"), false, "配置读写口径: \(f) 不许绕开文档直接写盘(secure)")
+            expectEqual(code.contains("var loadFailure: String?"), true, "配置读写口径: \(f) 暴露 loadFailure 给横幅")
+            expectEqual(code.contains("catch ConfigFileSaveError.refusedCorruptFile"), true,
+                        "配置读写口径: \(f) 的 save() 把「拒绝」和「写失败」分开报")
+            expectEqual(code.contains("func discardCorruptFileAndSave()"), true, "配置读写口径: \(f) 提供放弃坏文件的出口")
+        }
+        let settingsView = codeLines("SettingsView.swift")
+        expectEqual(settingsView.contains("ConfigFileDamageBanner()"), true, "配置读写口径: 损坏横幅挂在设置窗口 detail 列")
+        let banner = codeLines("Settings/ConfigFileDamageBanner.swift")
+        expectEqual(banner.contains("discardCorruptFileAndSave()"), true, "配置读写口径: 横幅接了放弃出口")
+        expectEqual(banner.contains("activateFileViewerSelecting"), true, "配置读写口径: 横幅给「在访达中显示」让用户自己修")
+    }
+
+    // ---- 项目级 skill(2026-09-05,借鉴清单 #49)----
+    //
+    // `.claude/skills/<名>/SKILL.md` 是 AGENTS.md 里三段操作型流程(真机验证 / 歌词排查 / 发版)的「步骤版」:
+    // 只写步骤与判据,理由回链 AGENTS.md 与 docs。它最常见的死法是锚点腐烂(脚本改名、文档挪位、链接失效)和
+    // 越写越长变成第二份 AGENTS.md,这里守:行数上限、frontmatter 齐、引用的仓库路径 / 文档链接都在、发版只许
+    // 显式触发、真机验证开头就是禁 AppleScript 那条、两个入口文件都指过去。
+    do {
+        // #filePath = <repo>/lyrimuse/Sources/lyrimuse-selftest/SourceContractTests.swift → 上 4 层到仓库根
+        let repoRoot = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+        let skillsDir = repoRoot.appendingPathComponent(".claude/skills")
+        let expected = ["lyrimuse-lyrics-triage", "lyrimuse-release", "lyrimuse-verify-ui"]
+        let found = ((try? FileManager.default.contentsOfDirectory(atPath: skillsDir.path)) ?? [])
+            .filter { !$0.hasPrefix(".") }.sorted()
+        expectEqual(found, expected, "项目级 skill: 三份都在、没有多出来的(多一份要来这里登记)")
+        let linkPattern = try? NSRegularExpression(pattern: #"\]\(([^)\s]+)\)"#)
+        let codePattern = try? NSRegularExpression(pattern: #"`([^`\n]+)`"#)
+        let pathPrefixes = ["lyrimuse/", "lyrimuse-collector/", "docs/", ".github/", ".claude/"]
+        for name in expected {
+            let file = skillsDir.appendingPathComponent("\(name)/SKILL.md")
+            guard let src = try? String(contentsOfFile: file.path, encoding: .utf8) else {
+                expectEqual(true, false, "项目级 skill: 读得到 \(name)/SKILL.md")
+                continue
+            }
+            let lineCount = src.split(separator: "\n", omittingEmptySubsequences: false).count
+            expectEqual(lineCount <= 80, true, "项目级 skill: \(name) 不超过 80 行(实际 \(lineCount))——只写步骤,理由回链")
+            expectEqual(src.hasPrefix("---\nname: \(name)\n"), true, "项目级 skill: \(name) frontmatter 以 name 开头且与目录名一致")
+            expectEqual(src.contains("\ndescription: "), true, "项目级 skill: \(name) 有 description(按场景触发靠它)")
+            expectEqual(src.contains("AGENTS.md"), true, "项目级 skill: \(name) 回链 AGENTS.md(理由不在 skill 里)")
+            let ns = src as NSString
+            let whole = NSRange(location: 0, length: ns.length)
+            var missing: [String] = []
+            if let linkPattern {
+                for m in linkPattern.matches(in: src, range: whole) {
+                    var target = ns.substring(with: m.range(at: 1))
+                    if target.hasPrefix("http") { continue }
+                    if let hash = target.firstIndex(of: "#") { target = String(target[..<hash]) }
+                    guard !target.isEmpty else { continue }
+                    let url = file.deletingLastPathComponent().appendingPathComponent(target).standardizedFileURL
+                    if !FileManager.default.fileExists(atPath: url.path) { missing.append("link:" + target) }
+                }
+            }
+            if let codePattern {
+                for m in codePattern.matches(in: src, range: whole) {
+                    let token = ns.substring(with: m.range(at: 1))
+                    var first = token.split(separator: " ").first.map(String.init) ?? ""
+                    if first.hasPrefix("./") { first.removeFirst(2) }
+                    guard pathPrefixes.contains(where: { first.hasPrefix($0) }),
+                          !first.contains("<"), !first.contains("*") else { continue }
+                    if !FileManager.default.fileExists(atPath: repoRoot.appendingPathComponent(first).path) {
+                        missing.append("path:" + first)
+                    }
+                }
+            }
+            expectEqual(missing, [], "项目级 skill: \(name) 引用的路径 / 链接都存在")
+        }
+        let release = (try? String(contentsOfFile: skillsDir.appendingPathComponent("lyrimuse-release/SKILL.md").path,
+                                   encoding: .utf8)) ?? ""
+        expectEqual(release.contains("\ndisable-model-invocation: true\n"), true,
+                    "项目级 skill: 发版 skill 只许显式触发(它会打 tag 推远端)")
+        let verify = (try? String(contentsOfFile: skillsDir.appendingPathComponent("lyrimuse-verify-ui/SKILL.md").path,
+                                  encoding: .utf8)) ?? ""
+        let verifyHead = verify.split(separator: "\n", omittingEmptySubsequences: false).prefix(12).joined(separator: "\n")
+        expectEqual(verifyHead.contains("AppleScript"), true, "项目级 skill: 真机验证 skill 开头就写禁 AppleScript 那条硬规则")
+        for entry in ["AGENTS.md", "CLAUDE.md"] {
+            let text = (try? String(contentsOfFile: repoRoot.appendingPathComponent(entry).path, encoding: .utf8)) ?? ""
+            expectEqual(text.contains(".claude/skills/"), true, "项目级 skill: \(entry) 指向 .claude/skills/")
+        }
+    }
+
+    // ---- 日志规范(2026-09-04)----
+    //
+    // 业界通用范式,规则写在 AGENTS.md「容易踩的具体坑 → 日志」:正文一律英文、`component: message key=value`;
+    // App/Core 侧只用统一 subsystem 的 os.Logger,禁 NSLog / 裸 print(诊断导出按 subsystem 查 OSLogStore,
+    // 绕开 Logger 的日志进不了导出);collector 走 stdlib log.Printf。这里只守机器能查的三件事:两侧日志
+    // 字面量不含 CJK、App/Core 里没有 NSLog( / 裸 print(、Logger 的 subsystem 只有一个。
+    // 确需例外在那一行行尾写 `// log-style: allow`。只看字面量本身,不看行尾注释(注释可以是中文)。
+    do {
+        let packageDir = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        let repoRoot = packageDir.deletingLastPathComponent()
+        func hasCJK(_ s: Substring) -> Bool {
+            s.unicodeScalars.contains { $0.value >= 0x4E00 && $0.value <= 0x9FFF }
+        }
+        /// 从 `("` 之后取到第一个未转义的 `"` 为止 —— Go 的格式串 / Swift 字面量的前半段都够用。
+        func firstLiteral(_ line: String) -> Substring? {
+            guard let open = line.range(of: "(\"") else { return nil }
+            var i = open.upperBound
+            var prev: Character = " "
+            while i < line.endIndex {
+                if line[i] == "\"" && prev != "\\" { return line[open.upperBound..<i] }
+                prev = line[i]; i = line.index(after: i)
+            }
+            return nil
+        }
+        func files(under dir: URL, suffix: String) -> [(rel: String, text: String)] {
+            var out: [(String, String)] = []
+            if let walker = FileManager.default.enumerator(atPath: dir.path) {
+                for case let rel as String in walker where rel.hasSuffix(suffix) {
+                    if let text = try? String(contentsOfFile: dir.appendingPathComponent(rel).path, encoding: .utf8) {
+                        out.append((rel, text))
+                    }
+                }
+            }
+            return out.sorted { $0.0 < $1.0 }
+        }
+        var offenders: [String] = []
+        var subsystems: Set<String> = []
+        let swiftLogCall = try? NSRegularExpression(pattern: #"logger\.(debug|info|notice|error|warning|fault|log)\(""#)
+        for dir in ["Sources/lyrimuse", "Sources/LyrimuseCore"] {
+            for (rel, text) in files(under: packageDir.appendingPathComponent(dir), suffix: ".swift") {
+                for (n, raw) in text.split(separator: "\n", omittingEmptySubsequences: false).enumerated() {
+                    let line = String(raw)
+                    let t = line.trimmingCharacters(in: .whitespaces)
+                    if t.hasPrefix("//") || line.contains("// log-style: allow") { continue }
+                    if t.contains("NSLog(") || t.hasPrefix("print(") {
+                        offenders.append("\(dir)/\(rel):\(n + 1) NSLog/print")
+                    }
+                    if let r = line.range(of: "Logger(subsystem: \"") {
+                        let rest = line[r.upperBound...]
+                        if let q = rest.firstIndex(of: "\"") { subsystems.insert(String(rest[..<q])) }
+                    }
+                    if let re = swiftLogCall,
+                       re.firstMatch(in: line, range: NSRange(line.startIndex..., in: line)) != nil,
+                       let open = line.range(of: "(\""), let close = line.range(of: "\")", options: .backwards),
+                       open.upperBound <= close.lowerBound, hasCJK(line[open.upperBound..<close.lowerBound]) {
+                        offenders.append("\(dir)/\(rel):\(n + 1) CJK in log literal")
+                    }
+                }
+            }
+        }
+        // 2026-09-05 起 collector 新写的日志走 slog.Debug/Info/Warn/Error(logsink.go),一并扫。
+        let goLogCall = try? NSRegularExpression(pattern: #"\b(?:log|slog)\.(Printf|Println|Print|Fatalf|Fatal|Debug|Info|Warn|Error)\(""#)
+        for (rel, text) in files(under: repoRoot.appendingPathComponent("lyrimuse-collector"), suffix: ".go")
+        where !rel.hasSuffix("_test.go") && !rel.contains("/") {
+            for (n, raw) in text.split(separator: "\n", omittingEmptySubsequences: false).enumerated() {
+                let line = String(raw)
+                let t = line.trimmingCharacters(in: .whitespaces)
+                if t.hasPrefix("//") || line.contains("// log-style: allow") { continue }
+                if let re = goLogCall,
+                   re.firstMatch(in: line, range: NSRange(line.startIndex..., in: line)) != nil,
+                   let lit = firstLiteral(line), hasCJK(lit) {
+                    offenders.append("lyrimuse-collector/\(rel):\(n + 1) CJK in log literal")
+                }
+            }
+        }
+        expectEqual(offenders, [], "日志规范: 以下位置违反(日志字面量含 CJK / NSLog / 裸 print),规则见 AGENTS.md「日志」")
+        expectEqual(subsystems, ["me.yudaotor.lyrimuse"], "日志规范: Logger 的 subsystem 只允许 me.yudaotor.lyrimuse(诊断导出按它查 OSLogStore)")
     }
 }

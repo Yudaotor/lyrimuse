@@ -783,4 +783,39 @@ func runPlayerIdentityTests() {
                                       collectorServiceEnabled: true, collectorRunning: false)),
                     [.collectorNotRunning, .automationDenied], "PlayerHealth: 两条都中时采集服务排前面")
     }
+
+    // ---- 与播放器联动:逐播放器多选(2026-09-03,用户拍板)----
+    //
+    // 三项联动(打开 Lyrimuse 时启动 / 跟随启动 / 跟随退出)的候选、生效集、退出判定、老配置迁移全是
+    // LyrimuseCore.PlayerLinkage 的纯函数;collector 侧 companionLaunchProcessNames 有同一条规则的 Go 测试。
+    do {
+        typealias PL = PlayerLinkage
+        let explicitAll = Set(PlaybackPlayer.allCases).subtracting([.auto])
+        expectEqual(PL.candidates(selectedPlayers: [.auto]), explicitAll, "联动候选: 自动识别 → 全部五个具体播放器")
+        expectEqual(PL.candidates(selectedPlayers: [.qqMusic, .kugou]), [.qqMusic, .kugou], "联动候选: 多选 → 就是选中的那几个")
+        expectEqual(PL.candidates(selectedPlayers: [.qqMusic, .auto]), explicitAll, "联动候选: 具体播放器 + 自动识别 → auto 是超集")
+        expectEqual(PL.candidates(selectedPlayers: []), [], "联动候选: 空集合(理论到不了)→ 空,不崩")
+        expectEqual(PL.effective([.spotify, .qqMusic], selectedPlayers: [.qqMusic]), [.qqMusic],
+                    "联动生效集: 勾了但没选中的播放器不算,勾选记录保留")
+        expectEqual(PL.shouldQuit(terminatedBundleID: "com.apple.Music", boundBundleIDs: ["com.apple.Music"],
+                                  runningBundleIDs: ["com.spotify.client"]), true,
+                    "跟随退出: 唯一绑定的播放器退了 → 退(别的没绑的播放器在跑不算)")
+        expectEqual(PL.shouldQuit(terminatedBundleID: "com.spotify.client", boundBundleIDs: ["com.apple.Music"],
+                                  runningBundleIDs: []), false, "跟随退出: 退的不是绑定的播放器 → 不退")
+        expectEqual(PL.shouldQuit(terminatedBundleID: "com.apple.Music",
+                                  boundBundleIDs: ["com.apple.Music", "com.spotify.client"],
+                                  runningBundleIDs: ["com.spotify.client"]), false,
+                    "跟随退出: 绑了两个只退一个 → 不退(可能只是换播放器听)")
+        expectEqual(PL.shouldQuit(terminatedBundleID: "com.apple.Music", boundBundleIDs: [], runningBundleIDs: []), false,
+                    "跟随退出: 没绑定任何播放器 → 永不退")
+        expectEqual(PL.quitGraceSeconds, 5, "跟随退出: 5 秒宽限,盖住播放器崩溃自动重启 / 手动重启 / 更新后重启")
+        expectEqual(PL.migratedLaunchSet(legacyEnabled: true, selectedPlayers: [.qqMusic], requiresSole: true), [.qqMusic],
+                    "联动迁移: 布尔年代「打开 Lyrimuse 时启动 X」true + 唯一具体播放器 → 那一个")
+        expectEqual(PL.migratedLaunchSet(legacyEnabled: true, selectedPlayers: [.qqMusic, .spotify], requiresSole: true), [],
+                    "联动迁移: 当年含糊(两个具体播放器)开关本来就藏着 → 迁成空")
+        expectEqual(PL.migratedLaunchSet(legacyEnabled: true, selectedPlayers: [.auto], requiresSole: false), explicitAll,
+                    "联动迁移: 布尔年代「跟随播放器启动」true + 自动识别 → 全部五个(collector 当年盯的范围)")
+        expectEqual(PL.migratedLaunchSet(legacyEnabled: false, selectedPlayers: [.auto], requiresSole: false), [],
+                    "联动迁移: 布尔 false → 空")
+    }
 }

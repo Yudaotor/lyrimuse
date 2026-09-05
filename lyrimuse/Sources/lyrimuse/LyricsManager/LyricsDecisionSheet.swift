@@ -93,7 +93,14 @@ struct LyricsDecisionSheet: View {
                 .padding(16)
             }
         }
-        .frame(minWidth: 460, idealWidth: 520, minHeight: 420, idealHeight: 560)
+        // 2026-09-05 用户要求这扇也「可拖拽可调整大小」(搜索候选那张 09-04 先做的)。
+        // 两块能力都在 SheetWindowAffordances.swift,理由与实测在那边:sheet 既不可拖也
+        // 不可缩放,都得落到底层 NSWindow 上补。maxWidth/maxHeight 必须一起放开——只留
+        // 下限的话窗口拖大了内容仍停在 520×560,四周留白。
+        .frame(
+            minWidth: 460, idealWidth: 520, maxWidth: .infinity,
+            minHeight: 420, idealHeight: 560, maxHeight: .infinity)
+        .background(WindowResizeEnabler(minWidth: 460, minHeight: 420))
     }
 
     private var header: some View {
@@ -125,6 +132,9 @@ struct LyricsDecisionSheet: View {
                 .keyboardShortcut(.defaultAction)
         }
         .padding(16)
+        // 垫在标题行背后:这扇窗口没有系统标题栏,不垫这块就整扇钉死在依附点挪不动。
+        // 背景层不影响上面「拷贝」/「完成」接收点击(SwiftUI 命中测试前景优先)。
+        .background(WindowDragHandle())
     }
 
     /// 整份决策记录的纯文本形态,给标题栏那个「拷贝」按钮用。

@@ -259,6 +259,7 @@ final class MenuBarStatusMenu: NSObject, NSMenuDelegate {
     }
 
     @objc private func quit() {
-        NSApplication.shared.terminate(nil)
+        // 经 AppExit 登记原因再终止(2026-09-03):所有主动退出都从那一个出口走,见 AppExit 头注。
+        AppExit.request(.menuQuit)
     }
 }

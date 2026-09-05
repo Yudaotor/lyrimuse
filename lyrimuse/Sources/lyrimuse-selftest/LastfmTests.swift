@@ -515,10 +515,22 @@ func runLastfmTests() {
         // `Live版` 是一个词,词表接不住 —— 靠「以 版 收尾」这条判据挡住 R1 的退化
         expectNotEqual(F.foldTitle("All Night - Live版"), F.foldTitle("Live版"),
                        "折叠键: Live版 靠「以 版 收尾」判据挡住 R1 退化")
-        // ⑧ 罗马字歌手名折到中文本名(只作用在查族用的 familyKey 上)
+        // ⑧ 歌手写法归并只作用在查族用的 familyKey 上,且**没有手写表**(2026-09-04 起):表由
+        // LocalArtistAliases.derive 从本机数据推出来再灌进来。这里用一份最小的 MusicBrainz 缓存夹具
+        // 复现旧静态表覆盖过的形态,证明"去掉手工表之后能力没丢"。
+        typealias LA = LocalArtistAliases
+        let mb = LA.MusicBrainzCaches(
+            aliasCache: ["Crowd Lu": "卢广仲", "Khalil Fong": "方大同"],
+            identityZh: ["Soft Lipa": "蛋堡"],
+            primaryAliases: ["陶喆": ["David Tao"], "周杰伦": ["Jay Chou", "ジェイ・チョウ", "K"],
+                             "宇多田ヒカル": ["Hikaru Utada", "Utada", "宇多田光"],
+                             "Count Basie": [], "Fantasia": [], "阿肆": ["A Si"]])
+        let artistTable = LA.derive(caches: mb, entries: [])
+        F.setLocalArtistAliases(artistTable)
+        defer { F.setLocalArtistAliases([:]) }
         expectEqual(F.familyKey(artist: "David Tao", title: "找自己"),
                     F.familyKey(artist: "陶喆", title: "找自己"),
-                    "查族键: David Tao 与 陶喆 同族")
+                    "查族键: David Tao 与 陶喆 同族(MusicBrainz 别名)")
         expectEqual(F.familyKey(artist: "Jay Chou", title: "不該"),
                     F.familyKey(artist: "周杰倫", title: "不该"),
                     "查族键: Jay Chou 与 周杰倫 同族(叠繁简)")
@@ -528,20 +540,24 @@ func runLastfmTests() {
         expectEqual(F.familyKey(artist: "宇多田ヒカル", title: "Automatic"),
                     F.familyKey(artist: "宇多田光", title: "Automatic"),
                     "查族键: 片假名与汉字写法同族")
-        // 别名匹配必须是**整串相等** —— 索引里真有 Count Basie,子串匹配会被 asi 命中
+        expectEqual(F.familyKey(artist: "Soft Lipa", title: "偷偷"),
+                    F.familyKey(artist: "蛋堡", title: "偷偷"),
+                    "查族键: Soft Lipa 与 蛋堡 同族(identity 缓存的 zh;要 ArtistCredit 边界守卫先修好)")
+        expectEqual(F.familyKey(artist: "Khalil Fong & Fiona Sit", title: "Oasis"),
+                    F.familyKey(artist: "方大同", title: "Oasis"),
+                    "查族键: 合唱串先归首位再查别名(Khalil Fong & Fiona Sit → Khalil Fong → 方大同)")
+        // 过短的别名不用:去空格后不足 3 个字符的(`K` 这种)撞上别的艺人的概率太高
+        expectEqual(F.familyKey(artist: "K", title: "X"), F.key(artist: "K", title: "X"),
+                    "查族键: 1 字符的 MusicBrainz 别名 K 不入表")
+        // 别名匹配是**整串相等**:索引里真有 Count Basie / Fantasia,不许被 asi 命中
         expectNotEqual(F.familyKey(artist: "Count Basie", title: "X"),
                        F.familyKey(artist: "阿肆", title: "X"),
                        "查族键: 别名整串相等,Count Basie 不许被 asi 命中")
         expectNotEqual(F.familyKey(artist: "Fantasia", title: "X"),
                        F.familyKey(artist: "阿肆", title: "X"),
                        "查族键: Fantasia 也不许被 asi 命中(索引里真有这个艺人)")
-        // 刻意剔掉的两条别名:Last.fm 侧是「同名多人」或混杂实体,理由见 romanizedArtistAliases
-        expectNotEqual(F.familyKey(artist: "Jason Chan", title: "你瞒我瞒"),
-                       F.familyKey(artist: "陳柏宇", title: "你瞒我瞒"),
-                       "查族键: jasonchan 刻意不入表(Last.fm 标注同名多人)")
-        expectNotEqual(F.familyKey(artist: "Kun", title: "Jasmine"),
-                       F.familyKey(artist: "蔡徐坤", title: "Jasmine"),
-                       "查族键: kun 刻意不入表(3 字符键 + 实体混杂)")
+        expectEqual(F.familyKey(artist: "A Si", title: "X"), F.familyKey(artist: "阿肆", title: "X"),
+                    "查族键: A Si(去空格后 asi,3 字符,刚够)与 阿肆 同族")
         // familyKey 仍要做合唱归首位(2026-08-20 那条能力不能丢)
         expectEqual(F.familyKey(artist: "Daniel Caesar & Mustafa", title: "Toronto 2014"),
                     F.familyKey(artist: "Daniel Caesar", title: "Toronto 2014"),
@@ -553,13 +569,12 @@ func runLastfmTests() {
         expectNotEqual(F.familyKey(artist: "David Tao", title: "找自己"),
                        F.key(artist: "David Tao", title: "找自己"),
                        "查族键: 在表里的歌手必须真被改写")
-        // 端到端:别名 + ArtistCredit 左词边界两个修法都到位,蛋堡才合得上
-        expectEqual(F.familyKey(artist: "Soft Lipa", title: "偷偷"),
-                    F.familyKey(artist: "蛋堡", title: "偷偷"),
-                    "查族键: Soft Lipa 与 蛋堡 同族(要 ArtistCredit 边界守卫先修好)")
 
-        // ⑨ 歌名维度的罗马字/译名别名(titleAliasesByArtist,2026-08-29):
-        // "Love Love Love" 其实就是方大同《爱爱爱》,之前简繁能合并、这种译名合不了。
+        // ⑨ 歌名维度的罗马字/译名别名(2026-08-29 起有,2026-09-04 起同样没有手写表):由
+        // EnrichTitleAliases.derive 从本机缓存推出来再灌进来。这里直接灌一份结果,只测 familyKey 的
+        // 接线与安全约束;推断本身在下面「第三层歌名别名」那组测。
+        F.setLocalTitleAliases(["方大同": ["lovelovelove": "爱爱爱", "nanyin": "南音", "blackhole": "黑洞里"]])
+        defer { F.setLocalTitleAliases([:]) }
         expectEqual(F.familyKey(artist: "方大同", title: "Love Love Love"),
                     F.familyKey(artist: "方大同", title: "爱爱爱"),
                     "查族键: 方大同《Love Love Love》与《爱爱爱》同族")
@@ -567,98 +582,47 @@ func runLastfmTests() {
                     F.familyKey(artist: "方大同", title: "愛愛愛"),
                     "查族键: 罗马字歌手名 + 译名歌名,两层别名叠加也要同族")
         // ⚠️ 核心安全约束:这张表必须按(歌手,歌名)登记,不能是全局 title->title——
-        // 王力宏名下真实存在一首同样叫《Love Love Love》的歌,跟方大同《爱爱爱》毫不相干,
-        // 不能被这张表牵连着一起合并。
+        // 王力宏名下真实存在一首同样叫《Love Love Love》的歌,跟方大同《爱爱爱》毫不相干。
         expectNotEqual(F.familyKey(artist: "王力宏", title: "Love Love Love"),
                        F.familyKey(artist: "方大同", title: "爱爱爱"),
                        "查族键: 王力宏《Love Love Love》不该被牵连进方大同《爱爱爱》")
         expectEqual(F.familyKey(artist: "王力宏", title: "Love Love Love"),
                     F.key(artist: "王力宏", title: "Love Love Love"),
                     "查族键: 王力宏这首歌不在别名表覆盖范围内,应与 key 一致(未被改写)")
-        // 别的歌手唱的《爱爱爱》(如果存在)不该被这张表反向牵连——表只认「方大同」这个
-        // 歌手键下的这一条歌名,不是全局的「爱爱爱」身份。
         expectEqual(F.familyKey(artist: "某歌手", title: "爱爱爱"),
                     F.key(artist: "某歌手", title: "爱爱爱"),
                     "查族键: 不在表里的歌手名下同名歌曲不受影响")
-
-        // "nanyin" 其实就是《南音》——跟"Love Love Love"同一批加的第二条映射,起因是这首歌
-        // 在另一个独立系统(match.go 的 isProbablyWrongLanguageLyrics,歌词候选打分)里已经
-        // 核实过确实是同一首歌,而本地写法索引证实 方大同|nanyin 与 方大同|南音 是两个真实
-        // 独立记账的桶。
         expectEqual(F.familyKey(artist: "方大同", title: "nanyin"),
                     F.familyKey(artist: "方大同", title: "南音"),
                     "查族键: 方大同《nanyin》与《南音》同族")
-        // 用中文本名"南音"作为输入时,查表(内层键是 foldTitle 折出来的"nanyin")查不到,
-        // 不会被二次替换或改写——familyKey 应该跟 key 一致,行为不受影响。
         expectEqual(F.familyKey(artist: "方大同", title: "南音"),
                     F.key(artist: "方大同", title: "南音"),
                     "查族键: 用中文本名查询时不会被错误地二次改写")
-
-        // "Black Hole" 其实就是《黑洞里》——2026-08-29 用户指出,上一版"批量核实近 60 首
-        // 纯英文曲目、查网易云/QQ/酷狗/LRCLIB 官方标题都是英文"的核实方法被证明是错的方向:
-        // 那几个平台的官方标题跟用户自己 Last.fm 历史里真实出现过的写法是两件不相关的事。
-        // 直接查 Last.fm track.getInfo 坐实:黑洞里(简体)+黑洞裡(繁体,已经靠简繁折叠自动
-        // 合并)约 40 次,Black Hole 独立 1 次,从没被合并过。
-        expectEqual(F.familyKey(artist: "方大同", title: "Black Hole"),
-                    F.familyKey(artist: "方大同", title: "黑洞里"),
-                    "查族键: 方大同《Black Hole》与《黑洞里》同族")
         expectEqual(F.familyKey(artist: "Khalil Fong", title: "Black Hole"),
                     F.familyKey(artist: "方大同", title: "黑洞裡"),
                     "查族键: 罗马字歌手名 + 英文歌名,叠加繁体写法也要同族")
-
-        // 后续四条(2026-08-29 同一批,三步核实法:专辑曲目单定位候选 + Last.fm 真实次数
-        // 交叉验证 + 时长比对排除假阳性——见 titleAliasesByArtist 声明处注释)。
-        expectEqual(F.familyKey(artist: "方大同", title: "Small Insects"),
-                    F.familyKey(artist: "方大同", title: "小小蟲"),
-                    "查族键: 方大同《Small Insects》与《小小蟲》同族")
-        expectEqual(F.familyKey(artist: "方大同", title: "Black & White"),
-                    F.familyKey(artist: "方大同", title: "黑白"),
-                    "查族键: 方大同《Black & White》与《黑白》同族")
-        expectEqual(F.familyKey(artist: "方大同", title: "Write A Song For You"),
-                    F.familyKey(artist: "方大同", title: "為妳寫的歌"),
-                    "查族键: 方大同《Write A Song For You》与《為妳寫的歌》同族")
-        expectEqual(F.familyKey(artist: "方大同", title: "Twenty Three"),
-                    F.familyKey(artist: "方大同", title: "才二十三"),
-                    "查族键: 方大同《Twenty Three》与《才二十三》同族")
-        // 反面案例:同一批核实里差点被误判的 Weather Report / 天氣先生——次数都不小、专辑
-        // 序号紧邻,但时长完全不同(61s 过场 vs 271s 完整歌曲),是两首不同的歌,不该合并。
-        // 这两个字符串本来就没有登记进表,这条断言钉住"不会被想当然地合并"。
         expectEqual(F.familyKey(artist: "方大同", title: "Weather Report"),
                     F.key(artist: "方大同", title: "Weather Report"),
-                    "查族键: Weather Report 不该被误合并进天氣先生(时长证伪的反例)")
-
-        // 表外的歌名/歌手组合不受影响。⚠️ 这条只能证明"某一首没被登记的歌不受影响",
-        // **不能**倒推成"别的没登记的英文曲目就一定没有中文对应"——Black Hole 那次的教训
-        // 正是想当然地把"查过几个平台标题"当成了"查过用户真实数据",详见上面两条注释。
-        expectEqual(F.familyKey(artist: "方大同", title: "Moon River"),
-                    F.key(artist: "方大同", title: "Moon River"),
-                    "查族键: 方大同没登记别名的其它歌(如翻唱曲目)不受影响")
+                    "查族键: 没被推出别名的歌(Weather Report 61 s 过场曲,时长证伪)不受影响")
     }
 
-    // ---- 写法别名自动发现:动态表注入(setDiscoveredTitleAliases,2026-08-29) ----
-    // titleAliasesByArtist 是编译进二进制的静态表,发现表是运行时可增长的第二张 ——
-    // 这里只测"注入机制本身"(优先级、per-artist 隔离、不污染静态表覆盖范围),扫描算法
-    // 本身(discoverTitleAliasesIfNeeded)在 App 侧,牵涉网络/文件 I/O,不在 selftest 覆盖。
+    // ---- 歌名别名的两层查找:本机推断表 优先于 自动发现表(setDiscoveredTitleAliases) ----
     do {
         typealias F = PlayCountFold
-        // 全局可变状态,用完必须清空——否则会污染其它 do 块里"这首歌不受影响"的断言
-        // (那些断言隐含假设发现表是空的)。
-        defer { F.setDiscoveredTitleAliases([:]) }
+        defer { F.setDiscoveredTitleAliases([:]); F.setLocalTitleAliases([:]) }
 
         F.setDiscoveredTitleAliases(["测试歌手": ["testsong": "测试歌曲"]])
         expectEqual(F.familyKey(artist: "测试歌手", title: "TestSong"),
                     F.familyKey(artist: "测试歌手", title: "测试歌曲"),
                     "发现表: 注入的映射能让 familyKey 同族")
-        // per-artist 隔离:同样的歌名折叠键,换一个不在表里的歌手就不受影响。
         expectEqual(F.familyKey(artist: "别的歌手", title: "TestSong"),
                     F.key(artist: "别的歌手", title: "TestSong"),
                     "发现表: 只在登记的歌手键下生效,不会牵连同名歌名的其它歌手")
-        // 静态表优先:方大同「lovelovelove→爱爱爱」已经在静态表里登记,即便发现表对同一个
-        // 歌手键+同一个折叠键给出不同的值,查询结果也应该采信静态表(人工核定 > 算法发现)。
-        F.setDiscoveredTitleAliases(["方大同": ["lovelovelove": "某个错误的歌名"]])
-        expectEqual(F.familyKey(artist: "方大同", title: "Love Love Love"),
-                    F.familyKey(artist: "方大同", title: "爱爱爱"),
-                    "发现表: 与静态表撞键时静态表优先,不被发现表覆盖")
+        // 本机推断表(同歌曲 id / 时长+歌词,证据硬)优先于发现表(Last.fm 整秒时长撞相等,弱)
+        F.setLocalTitleAliases(["测试歌手": ["testsong": "另一首歌"]])
+        expectEqual(F.familyKey(artist: "测试歌手", title: "TestSong"),
+                    F.familyKey(artist: "测试歌手", title: "另一首歌"),
+                    "别名查找: 本机推断表与发现表撞键时本机表优先")
     }
 
     // ---- 计次规则(ScrobbleRule):必须与 collector 的 listenThreshold/minTrackSecs 一致 ----
@@ -867,5 +831,427 @@ func runLastfmTests() {
                     "次数退避: 封顶档 24 小时到期")
         expectEqual(B.isDue(markedAt: t0, strikes: 1, now: t0.addingTimeInterval(-10)), false,
                     "次数退避: 时钟倒退(now 早于记录时刻)不算到期")
+    }
+
+    // ---- 「第 N 次听」合并明细:为什么并进来 + 跨写法合并/编号(2026-09-04) ----
+    //
+    // 弹框上半段每种写法旁边挂的原因标签,由 PlayCountFoldExplainer 沿 PlayCountFold 的真实折叠
+    // 步骤逐级比对得出 —— 标签跟规则对不上会比没有标签更误导,所以每一档各钉一条真实分裂形态
+    // (全部取自 12 章 §7 记录过的用户实测案例)。
+    do {
+        typealias E = PlayCountFoldExplainer
+        func r(_ a: (String, String), _ b: (String, String)) -> [PlayCountFoldReason] {
+            E.reasons(base: (artist: a.0, title: a.1), variant: (artist: b.0, title: b.1))
+        }
+        expectEqual(r(("Prince", "Call My Name"), ("Prince", "Call My Name")), [],
+                    "合并原因: 写法完全一致 → 空")
+        expectEqual(r(("Prince", "Call My Name"), ("Prince", "Call my name")), [.caseOrSpacing],
+                    "合并原因: 只差大小写 → 大小写/空格")
+        expectEqual(r(("Prince", "Call My Name"), ("Prince", "CallMyName")), [.caseOrSpacing],
+                    "合并原因: 只差空格 → 大小写/空格")
+        expectEqual(r(("丁世光", "一口(The Day You Left Me)"), ("丁世光", "一口（The Day You Left Me）")), [.fullwidth],
+                    "合并原因: 全角括号 → 全角/半角(丁世光《一口》实测)")
+        expectEqual(r(("盧廣仲", "我不是农人"), ("盧廣仲", "我不是農人")), [.hanScript],
+                    "合并原因: 繁简 → 繁简(《我不是农人》11/3 实测)")
+        expectEqual(r(("宇多田ヒカル", "Automatic"), ("宇多田ヒカル", "Automatic (Remastered 2014)")), [.catalogNoise],
+                    "合并原因: Remaster 副题 → 目录学噪音")
+        expectEqual(r(("王力宏", "蓋世英雄"), ("王力宏", "盖世英雄 (feat. 欧阳靖 & 李岩)")), [.catalogNoise],
+                    "合并原因: 繁简 + feat 副题 → 报**更深**的那一档(目录学噪音),不是两个都报")
+        expectEqual(r(("方大同", "沙滩 (钢琴版)"), ("方大同", "沙滩 - 钢琴版")), [.versionSuffix],
+                    "合并原因: 同一个版本尾缀、分隔符不同 → 版本尾缀写法")
+        // 裸 `Live` 刻意**不**归一(两种分隔符实测指向两场不同的演唱会,见 ambiguousConcertMarkers),
+        // 所以这两种写法压根不是一族、明细里不会同时出现;真要问也只能是 other —— 钉住这个取舍,
+        // 免得哪天有人为了让标签"好看"把它归进版本尾缀那一档。
+        expectEqual(r(("方大同", "流沙 (Live)"), ("方大同", "流沙 - Live")), [.other],
+                    "合并原因: 裸 Live 的两种分隔符不是一族 → other")
+        expectEqual(r(("陳綺貞", "月食"), ("陳綺貞", "月食 The Weeping Woman")), [.bilingualTitle],
+                    "合并原因: 双语拼接名 → 双语歌名(《月食》30/6 实测)")
+        expectEqual(r(("Daniel Caesar", "Toronto 2014"), ("Daniel Caesar & Mustafa", "Toronto 2014")), [.artistCredit],
+                    "合并原因: 合唱署名归首位 → 合唱署名")
+        PlayCountFold.setLocalArtistAliases(["davidtao": "陶喆"])
+        expectEqual(r(("陶喆", "普通朋友"), ("David Tao", "普通朋友")), [.artistAlias],
+                    "合并原因: 罗马字歌手(本机推断的歌手别名表)→ 歌手别名")
+        PlayCountFold.setLocalArtistAliases([:])
+        expectEqual(r(("陶喆", "普通朋友"), ("David Tao", "普通朋友")), [.other],
+                    "合并原因: 没有别名表时 David Tao 与 陶喆 对不上任何一档 → other")
+        PlayCountFold.setLocalTitleAliases(["方大同": ["lovelovelove": "爱爱爱"]])
+        expectEqual(r(("方大同", "爱爱爱"), ("方大同", "Love Love Love")), [.titleAlias],
+                    "合并原因: 歌名别名表(本机推断)→ 歌名别名")
+        PlayCountFold.setLocalTitleAliases([:])
+        expectEqual(r(("周杰倫", "園遊會"), ("周杰伦 & 派伟俊", "园游会")), [.artistCredit, .hanScript],
+                    "合并原因: 歌手、歌名各差一档 → 两条,歌手在前")
+        expectEqual(r(("Prince", "Call My Name"), ("Prince", "Kiss")), [.other],
+                    "合并原因: 压根不是一族的(规则演进留的缝)→ 报 other,不藏")
+
+        // 专辑名维度(同一个 Last.fm 条目下专辑名分裂,《晴天》葉惠美/叶惠美 实测)
+        expectEqual(E.albumReason(base: "葉惠美", variant: "叶惠美"), .hanScript, "专辑名原因: 繁简")
+        expectEqual(E.albumReason(base: "First Love", variant: "First Love (Remastered 2014)"), .catalogNoise,
+                    "专辑名原因: Remaster 标注 → 目录学噪音")
+        expectEqual(E.albumReason(base: "八度空间", variant: "八度空间"), nil, "专辑名原因: 相同 → nil")
+        expectEqual(E.albumReason(base: nil, variant: "八度空间"), nil, "专辑名原因: 一方没有专辑名 → 不判")
+        // 对不上任何一档 = 就是两张不同的专辑(原专辑 vs 精选集 / 另一语言的专辑名),不是写法差异,
+        // 不挂标签 —— 跟写法族那层的 .other 语义刻意不同(2026-09-04 用户问「其他折叠规则这里指的是什么」)
+        expectEqual(E.albumReason(base: "葉惠美", variant: "范特西"), nil, "专辑名原因: 两张不同的专辑 → nil,不挂标签")
+        expectEqual(E.albumReason(base: "心中的日月", variant: "Shangri-la"), nil,
+                    "专辑名原因: 同一张专辑的另一语言名 → 也判不出来,nil(没有专辑别名表,接受)")
+    }
+    do {
+        typealias M = PlayCountBreakdownMath
+        func at(_ e: Double) -> Date { Date(timeIntervalSince1970: e) }
+        func v(_ artist: String, _ title: String, total: Int, isSelf: Bool = false,
+               _ times: [Double], failed: Bool = false) -> M.VariantInput {
+            .init(artist: artist, title: title, total: total, isSelf: isSelf,
+                  reasons: isSelf ? [] : [.hanScript],
+                  plays: times.map { (date: at($0), album: nil) }, failed: failed)
+        }
+
+        // 两种写法各自拉完:合计 = 各自之和,编号从合计往下、按时间倒序
+        let two = M.build([
+            v("周杰倫", "园游会", total: 3, isSelf: true, [3000, 2000, 1000]),
+            v("周杰倫", "園遊會", total: 2, [2500, 500]),
+        ])
+        expectEqual(two.total, 5, "合并明细: 两种写法合计 3 + 2")
+        expectEqual(two.plays.map { $0.date.timeIntervalSince1970 }, [3000, 2500, 2000, 1000, 500],
+                    "合并明细: 合并后按时间倒序,不管输入顺序")
+        expectEqual(two.plays.map(\.variantIndex), [0, 1, 0, 0, 1], "合并明细: 每条记得自己属于哪种写法")
+        expectEqual(two.ordinals, [5, 4, 3, 2, 1], "合并明细: 全部拉完时每行都编号")
+        expectEqual(two.ordinalCutoff, nil, "合并明细: 全部拉完 → 没有编号截止")
+        expectEqual(two.canLoadOlder, false, "合并明细: 全部拉完 → 不给「加载更早的」")
+        expectEqual(two.variants.map(\.reasons), [[], [.hanScript]], "合并明细: 本尊无原因,孪生带原因")
+
+        // 跨写法同一时刻**不去重**(2026-09-05 撤掉第一版的去重):卢广仲《Boring》实测 `卢广仲` 13 条 +
+        // `Crowd Lu` 5 条里 4 对同一分钟——是同一次收听被两台设备各 scrobble 一次,Last.fm 上 18 条都真实
+        // 计数,行上的 18 也是这么加的;去重会制造假的"两边不一致"。同一写法内部同一时刻的多条用 dup 区分。
+        let dup = M.build([
+            v("卢广仲", "Boring", total: 3, isSelf: true, [3000, 2000, 2000]),
+            v("Crowd Lu", "Boring", total: 3, [3000, 2000, 100]),
+        ])
+        expectEqual(dup.total, 6, "合并明细: 合计 = 各写法 total 之和,同秒的双端重复照数")
+        expectEqual(dup.plays.count, 6, "合并明细: 列表原样列出全部 6 条")
+        expectEqual(dup.plays.map(\.variantIndex), [0, 1, 0, 0, 1, 1],
+                    "合并明细: 同秒两条并排(本尊在前),色点各归各的写法")
+        expectEqual(Set(dup.plays.map(\.id)).count, 6, "合并明细: 同刻多条靠 dup 序号区分身份")
+        expectEqual(dup.ordinals, [6, 5, 4, 3, 2, 1], "合并明细: 编号连续,跟 Last.fm 的计数一致")
+
+        // 有写法没拉完:比它已拉到的最旧一条更早的位置不编号(中间可能藏着它没拉到的收听)
+        let partial = M.build([
+            v("A", "x", total: 300, isSelf: true, [5000, 3000]),   // 没拉完,最旧已拉 3000
+            v("A", "X", total: 2, [4000, 1000]),                    // 拉完了
+        ])
+        expectEqual(partial.ordinalCutoff, at(3000), "合并明细: 截止 = 没拉完那种写法已拉到的最旧一条")
+        expectEqual(partial.total, 302, "合并明细: 合计仍按各写法 total 算")
+        expectEqual(partial.ordinals, [302, 301, 300, nil], "合并明细: 截止之后的行照常编号,之前的留空")
+        expectEqual(partial.canLoadOlder, true, "合并明细: 有没拉完的 → 给「加载更早的」")
+        // 两种都没拉完 → 取较晚的那个截止
+        let both = M.build([
+            v("A", "x", total: 300, isSelf: true, [5000, 3000]),
+            v("A", "X", total: 300, [4000, 3500]),
+        ])
+        expectEqual(both.ordinalCutoff, at(3500), "合并明细: 多种都没拉完 → 截止取最晚的")
+
+        // 某写法取数失败:留在清单里、合计不算它、整体不编号(宁可不编号,不编错)
+        let failed = M.build([
+            v("A", "x", total: 2, isSelf: true, [2000, 1000]),
+            v("A", "X", total: 0, [], failed: true),
+        ])
+        expectEqual(failed.hasFailure, true, "合并明细: 失败的写法保留在清单里")
+        expectEqual(failed.total, 2, "合并明细: 合计不含失败的写法")
+        expectEqual(failed.ordinals, [nil, nil], "合并明细: 有写法失败 → 全部不编号")
+        expectEqual(failed.canLoadOlder, false, "合并明细: 失败的写法不算「还能加载」")
+        expectEqual(failed.variants[1].exhausted, false, "合并明细: 失败的写法永远不算拉完")
+
+        // total 为 0 的本尊(用户点的那行 Last.fm 说没有):空明细、不崩
+        let empty = M.build([v("A", "x", total: 0, isSelf: true, [])])
+        expectEqual(empty.total, 0, "合并明细: 本尊 0 次 → 合计 0")
+        expectEqual(empty.ordinals, [], "合并明细: 没有条目就没有编号")
+
+        // 专辑名分组:同一写法下按专辑名数条数,条数降序、同数按名字;空/纯空白专辑名归成 nil 一组;
+        // 只数这一写法自己的记录(2026-09-04 用户指出《晴天》葉惠美/叶惠美 两种专辑名要看得见)
+        let albums = M.build([
+            .init(artist: "周杰倫", title: "晴天", total: 6, isSelf: true, reasons: [], plays: [
+                (date: at(6000), album: "葉惠美"), (date: at(5000), album: "叶惠美"),
+                (date: at(4000), album: "葉惠美"), (date: at(3000), album: " "),
+                (date: at(2000), album: "叶惠美"), (date: at(1000), album: "葉惠美"),
+            ]),
+            .init(artist: "周杰伦", title: "晴天", total: 1, isSelf: false, reasons: [.hanScript],
+                  plays: [(date: at(500), album: "范特西")]),
+        ])
+        expectEqual(albums.albumGroups(variantIndex: 0).map { ($0.album ?? "∅") + ":\($0.count)" },
+                    ["葉惠美:3", "叶惠美:2", "∅:1"],
+                    "专辑分组: 按条数降序,空白专辑名归 nil 一组")
+        expectEqual(albums.albumGroups(variantIndex: 1).map { ($0.album ?? "∅") + ":\($0.count)" }, ["范特西:1"],
+                    "专辑分组: 只数这一写法自己的记录")
+        expectEqual(M.build([v("A", "x", total: 2, isSelf: true, [2000, 1000])]).albumGroups(variantIndex: 0).count, 1,
+                    "专辑分组: 全部没有专辑名 → 只有 nil 一组(界面据此不画子行)")
+    }
+
+    // ---- 第三层歌名别名:从本机 enrich 缓存推「英文歌名 → 中文歌名」(2026-09-04) ----
+    //
+    // 用户点开方大同《Oasis》的合并明细问「能不能把中文对应的歌名也合并进来」。本机缓存里
+    // `Khalil Fong|Oasis|梦想家 The Dreamer` 与 `方大同|那沙漠里的水|梦想家 The Dreamer` 各自独立解析,
+    // 都落到网易云 id 2635125902、时长 161 s —— 这比 Last.fm 整秒 duration 撞相等硬得多。
+    do {
+        typealias A = EnrichTitleAliases
+        func e(_ artist: String, _ title: String, netease: String? = nil, qq: String? = nil, dur: Double? = nil) -> A.Entry {
+            .init(artist: artist, title: title, neteaseURL: netease, qqMusicURL: qq, durationSecs: dur)
+        }
+        let ne = "https://music.163.com/song?id=2635125902"
+
+        expectEqual(A.songIDs(neteaseURL: ne, qqMusicURL: nil), ["netease:2635125902"], "本机别名: 网易云 id 解析")
+        expectEqual(A.songIDs(neteaseURL: "https://music.163.com/#/song?id=42&x=1", qqMusicURL: nil), ["netease:42"],
+                    "本机别名: 带 # 路由的网易云地址也认")
+        expectEqual(A.songIDs(neteaseURL: nil, qqMusicURL: "https://y.qq.com/n/ryqq/songDetail/002lChJY23SXj7"), ["qq:002lChJY23SXj7"],
+                    "本机别名: QQ songDetail 的 mid")
+        expectEqual(A.songIDs(neteaseURL: nil, qqMusicURL: "https://y.qq.com/n/ryqq/search?w=Khalil+Fong+Oasis"), [],
+                    "本机别名: QQ 搜索页地址不是身份")
+        expectEqual(A.songIDs(neteaseURL: "https://open.spotify.com/search/x", qqMusicURL: nil), [],
+                    "本机别名: 别的平台的地址不认")
+
+        // 本案:两条不同写法(连歌手写法都不同:Khalil Fong 是罗马字别名)落到同一个网易云 id。
+        // 歌手别名同样没有手写表 —— 这里先灌一份本机推断结果(推断本身在下一组测)。
+        PlayCountFold.setLocalArtistAliases(["khalilfong": "方大同"])
+        defer { PlayCountFold.setLocalArtistAliases([:]) }
+        let oasis = A.derive([
+            e("Khalil Fong", "Oasis", netease: ne, dur: 161.000022),
+            e("方大同", "那沙漠里的水", netease: ne, dur: 161),
+            e("方大同", "那沙漠里的水", netease: ne, dur: 161), // 另一张专辑名的同一条,不影响
+        ])
+        expectEqual(oasis, ["方大同": ["oasis": "那沙漠里的水"]], "本机别名: Oasis → 那沙漠里的水(歌手键折到中文本名)")
+        // 灌进 PlayCountFold 之后,两种写法成一族;原因标签两端各一条
+        PlayCountFold.setLocalTitleAliases(oasis)
+        expectEqual(PlayCountFold.familyKey(artist: "Khalil Fong", title: "Oasis"),
+                    PlayCountFold.familyKey(artist: "方大同", title: "那沙漠里的水"),
+                    "本机别名: 灌入后 familyKey 相等 → 查次数按一族合并")
+        expectEqual(PlayCountFoldExplainer.reasons(base: (artist: "Khalil Fong", title: "Oasis"),
+                                                   variant: (artist: "方大同", title: "那沙漠里的水")),
+                    [.artistAlias, .titleAlias], "本机别名: 明细里的原因标签 = 歌手别名 + 歌名别名")
+        PlayCountFold.setLocalTitleAliases([:])
+        expectEqual(PlayCountFold.familyKey(artist: "Khalil Fong", title: "Oasis")
+                    == PlayCountFold.familyKey(artist: "方大同", title: "那沙漠里的水"), false,
+                    "本机别名: 清空后不再同族(别让这条测试的状态漏给别的断言)")
+
+        // 闸 1:同一个 id 被匹配给两首不同的中文歌 → 整组不采纳
+        expectEqual(A.derive([
+            e("方大同", "Oasis", netease: ne), e("方大同", "那沙漠里的水", netease: ne), e("方大同", "梦想家", netease: ne),
+        ]), [:], "本机别名: 中文侧不唯一 → 不采纳")
+        // 闸 2:两侧都有时长且差太多 → 不采纳;一侧缺时长 → 只凭 id 采纳
+        expectEqual(A.derive([e("方大同", "Oasis", netease: ne, dur: 161), e("方大同", "那沙漠里的水", netease: ne, dur: 240)]), [:],
+                    "本机别名: 时长差 79 s → 不采纳")
+        expectEqual(A.derive([e("方大同", "Oasis", netease: ne, dur: 161), e("方大同", "那沙漠里的水", netease: ne, dur: 163)]),
+                    ["方大同": ["oasis": "那沙漠里的水"]], "本机别名: 时长差 2 s 在容差内")
+        expectEqual(A.derive([e("方大同", "Oasis", netease: ne), e("方大同", "那沙漠里的水", netease: ne, dur: 161)]),
+                    ["方大同": ["oasis": "那沙漠里的水"]], "本机别名: 一侧没时长 → 只凭 id")
+        // 闸 3:同一个英文键从两个 id 组推出不同的中文名 → 两条都撤
+        expectEqual(A.derive([
+            e("方大同", "Oasis", netease: ne), e("方大同", "那沙漠里的水", netease: ne),
+            e("方大同", "Oasis", qq: "https://y.qq.com/n/ryqq/songDetail/AAA"), e("方大同", "绿洲", qq: "https://y.qq.com/n/ryqq/songDetail/AAA"),
+        ]), [:], "本机别名: 同一英文键指向两个不同中文名 → 撤")
+        // 「是不是中文名」按主标题判:副题里的一个「版」字 / 一个客串人名不算
+        expectEqual(A.isHanTitled("Ten Reasons (Live版)"), false, "本机别名: 副题里的「版」不算中文名")
+        expectEqual(A.isHanTitled("All for Joy (feat. 关诗敏)"), false, "本机别名: 客串署名里的汉字不算中文名")
+        expectEqual(A.isHanTitled("一口(The Day You Left Me)"), true, "本机别名: 主标题是中文、副题英文 → 中文名")
+        expectEqual(A.isHanTitled("刻在我心底的名字 (Your Name Engraved Herein) - 電影<刻在你心底的名字>主題曲"), true,
+                    "本机别名: 两层副题剥完主标题是中文 → 中文名")
+        expectEqual(A.isHanTitled("Ru Guo Ai"), false, "本机别名: 拼音是英文侧")
+        // 实测抓到的两个坑(2026-09-04 用真实缓存预演):
+        let qqA = "https://y.qq.com/n/ryqq/songDetail/003CDIpG2rBZbT"
+        expectEqual(A.derive([e("方大同", "Ten Reasons", qq: qqA), e("方大同", "Ten Reasons (Live版)", qq: qqA)]), [:],
+                    "本机别名: 录音室版与 Live 版落到同一个 QQ mid 不构成别名(歌词源分不清版本)")
+        expectEqual(A.derive([e("陶喆", "All for Joy", netease: "https://music.163.com/song?id=26425115"),
+                              e("陶喆", "All for Joy (feat. 关诗敏)", netease: "https://music.163.com/song?id=26425115")]), [:],
+                    "本机别名: 折叠键本来就相等 → 不产出空转别名")
+        expectEqual(A.derive([e("陶喆", "I Like It (Ballad Version)", netease: "https://music.163.com/song?id=150540"),
+                              e("陶喆", "What Is Love", netease: "https://music.163.com/song?id=150540"),
+                              e("陶喆", "我喜欢(Ballad Version)", netease: "https://music.163.com/song?id=150540")]), [:],
+                    "本机别名: 英文侧两个不同歌名落到同一 id → 至少一条配错,整组不采纳")
+        // 只认英文 → 中文:同 id 下全是中文写法(繁简)不产出别名——那本来就由折叠键管
+        expectEqual(A.derive([e("方大同", "小小虫", netease: ne), e("方大同", "小小蟲", netease: ne)]), [:],
+                    "本机别名: 中文↔中文不产出(折叠键已经管了)")
+        // 中文侧的繁简两种写法折到同一键 → 仍算唯一,照常产出(实测 Playful ↔ 玩乐/玩樂)
+        expectEqual(A.derive([e("方大同", "Playful", netease: ne), e("方大同", "玩乐", netease: ne), e("方大同", "玩樂", netease: ne)]),
+                    ["方大同": ["playful": "玩乐"]], "本机别名: 中文侧繁简两写法算一种,取字典序最小的原始写法")
+        expectEqual(A.derive([e("方大同", "Oasis", netease: ne), e("方大同", "Oasis (Live)", netease: ne)]), [:],
+                    "本机别名: 没有中文侧 → 不产出")
+        // 不同歌手名下同一个 id 互不干扰;歌手写法经合唱归首位 + 罗马字折中文后才分桶
+        expectEqual(A.derive([e("陶喆", "Oasis", netease: ne), e("方大同", "那沙漠里的水", netease: ne)]), [:],
+                    "本机别名: 不同歌手不成组")
+        expectEqual(A.derive([e("Khalil Fong & 王力宏", "Oasis", netease: ne), e("方大同", "那沙漠里的水", netease: ne)]),
+                    ["方大同": ["oasis": "那沙漠里的水"]], "本机别名: 合唱首位 + 罗马字别名之后同一桶")
+    }
+
+    // ---- 歌名别名 E2:时长 + 歌词都对得上(2026-09-04 下午,取代手写表 titleAliasesByArtist 的最后一步) ----
+    //
+    // 旧静态表那 7 条(Black Hole / Small Insects / Black & White / Write A Song For You / Twenty Three /
+    // Love Love Love / Nanyin)的英文条目在本机缓存里**都没有**平台 id(早期解析没落链接),E1 够不着;
+    // 它们两侧都有播放器时长(毫秒级吻合)和歌词。把它们当回归样本:去掉手工表之后必须还能推出来。
+    do {
+        typealias A = EnrichTitleAliases
+        // 同一份歌词的两种来源形态:一份简体 LRC 带署名行,一份繁体、行切分不同、带逐字标签
+        let lrcHans = """
+        [ti:黑洞里]
+        [ar:方大同]
+        [00:00.50]作词 : 方大同
+        [00:01.00]作曲 : 方大同
+        [00:12.10]我在黑洞里 找不到出口
+        [00:18.30]你说的话 像光一样穿过
+        [00:24.00]黑洞里没有时间 只有你的声音
+        [00:31.20]我一直往前走 走不到尽头
+        [00:38.00]黑洞里没有时间 只有你的声音
+        """
+        let lrcHant = """
+        [00:12.10]<0,300>我<300,300>在<600,300>黑洞裡
+        [00:14.00]找不到出口
+        [00:18.30]你說的話 像光一樣穿過
+        [00:24.00]黑洞裡沒有時間
+        [00:26.00]只有你的聲音
+        [00:31.20]我一直往前走 走不到盡頭
+        [00:38.00]黑洞裡沒有時間 只有你的聲音
+        """
+        let other = """
+        [00:10.00]今天天气很好 我们去公园散步
+        [00:15.00]阳光洒在草地上 微风吹过树梢
+        [00:20.00]你笑着说这就是幸福 简单而美好
+        [00:25.00]我们手牵着手 走过每一个路口
+        """
+        expectEqual(A.lyricsBody(lrcHans).hasPrefix("我在黑洞里找不到出口"), true, "E2: 正文剥掉头标签/时间戳/署名行")
+        expectEqual(A.lyricsSimilarity(A.lyricsBody(lrcHans), A.lyricsBody(lrcHant)) >= A.lyricsSimilarityMin, true,
+                    "E2: 繁简 + 行切分不同 + 逐字标签 → 相似度仍过线")
+        expectEqual(A.lyricsSimilarity(A.lyricsBody(lrcHans), A.lyricsBody(other)) < 0.2, true,
+                    "E2: 两首不同的歌相似度很低")
+
+        func e(_ artist: String, _ title: String, dur: Double?, resolved: Double? = nil, lyrics: String?) -> A.Entry {
+            .init(artist: artist, title: title, neteaseURL: nil, qqMusicURL: nil, durationSecs: dur,
+                  resolvedDurationSecs: resolved, lyrics: lyrics)
+        }
+        // 本案形态:Black Hole 213.586666 / 黑洞里 213.586,两边歌词是同一首(一简一繁)
+        expectEqual(A.derive([e("方大同", "Black Hole", dur: 213.586666, lyrics: lrcHans),
+                              e("方大同", "黑洞里", dur: 213.586, lyrics: lrcHant),
+                              e("方大同", "黑洞裡", dur: 213.586, lyrics: lrcHant)]),
+                    ["方大同": ["blackhole": "黑洞裡"]], "E2: 时长毫秒级吻合 + 歌词同一首 → 推出(繁简两条中文写法算一种,原始写法取字典序最小的「裡」)")
+        // 歌手写法不同时要靠歌手别名表分到同一桶:表为空就分不到一起,推不出来(这是对的——没有证据说
+        // Khalil Fong 就是方大同);灌了表就能推
+        expectEqual(A.derive([e("Khalil Fong", "Black Hole", dur: 213.586666, lyrics: lrcHans),
+                              e("方大同", "黑洞里", dur: 213.586, lyrics: lrcHant)]), [:],
+                    "E2: 歌手别名表为空时 Khalil Fong 与 方大同 不在一桶,不推")
+        expectEqual(A.derive([e("Khalil Fong", "Black Hole", dur: 213.586666, lyrics: lrcHans),
+                              e("方大同", "黑洞里", dur: 213.586, lyrics: lrcHant)],
+                             artistKey: { LocalArtistAliases.canonicalArtistKey($0, table: ["khalilfong": "方大同"]) }),
+                    ["方大同": ["blackhole": "黑洞里"]], "E2: 传入刚推出的歌手表 → 同桶,推出")
+        // 整秒精度的一侧:224 vs 224.499 仍在 0.6 s 容差内(Twenty Three ↔ 才二十三 实测)
+        expectEqual(A.derive([e("方大同", "Twenty Three", dur: 224, lyrics: lrcHans),
+                              e("方大同", "才二十三", dur: 224.498992919922, lyrics: lrcHant)]),
+                    ["方大同": ["twentythree": "才二十三"]], "E2: 一侧整秒精度,差 0.5 s 仍采纳")
+        // 三个条件缺一不可
+        expectEqual(A.derive([e("方大同", "Black Hole", dur: 213.586, lyrics: lrcHans),
+                              e("方大同", "黑洞里", dur: 215, lyrics: lrcHant)]), [:],
+                    "E2: 时长差 1.4 s → 不采纳(歌词再像也不行)")
+        expectEqual(A.derive([e("方大同", "Black Hole", dur: 213.586, lyrics: lrcHans),
+                              e("方大同", "公园", dur: 213.586, lyrics: other)]), [:],
+                    "E2: 时长相等但歌词是两首歌 → 不采纳")
+        expectEqual(A.derive([e("方大同", "Black Hole", dur: nil, lyrics: lrcHans),
+                              e("方大同", "黑洞里", dur: 213.586, lyrics: lrcHant)]), [:],
+                    "E2: 一侧没有时长 → 不采纳(E2 必须两侧都有)")
+        expectEqual(A.derive([e("方大同", "Black Hole", dur: 213.586, lyrics: nil),
+                              e("方大同", "黑洞里", dur: 213.586, lyrics: lrcHant)]), [:],
+                    "E2: 一侧没有歌词 → 不采纳")
+        // 歌词可信闸:Weather Report 61 s 过场曲配上了 271 s 那首的词 → 这条的歌词不可信,不参与
+        expectEqual(A.derive([e("方大同", "Weather Report", dur: 61.08, resolved: 271.5, lyrics: lrcHans),
+                              e("方大同", "天气先生", dur: 61.08, lyrics: lrcHant)]), [:],
+                    "E2: 播放器时长与所配歌词时长差 210 s → 歌词不可信,不采纳")
+        expectEqual(A.derive([e("方大同", "Black Hole", dur: 213.586, resolved: 214, lyrics: lrcHans),
+                              e("方大同", "黑洞里", dur: 213.586, resolved: 213, lyrics: lrcHant)]),
+                    ["方大同": ["blackhole": "黑洞里"]], "E2: 所配歌词时长接近 → 可信,照常采纳")
+        // 中文候选带版本尾缀的不要:别把英文录音室版并进中文 Live 版
+        expectEqual(A.derive([e("方大同", "Black Hole", dur: 213.586, lyrics: lrcHans),
+                              e("方大同", "黑洞里 (Live)", dur: 213.586, lyrics: lrcHant)]), [:],
+                    "E2: 中文候选带 (Live) 尾缀 → 不采纳")
+        // 精度分档:两侧都是毫秒级小数时差 0.3 s 就不算接近(配错词的两首歌时长天然接近,实测差 1 s 那档是错配高发区)
+        expectEqual(A.derive([e("方大同", "Black Hole", dur: 213.586, lyrics: lrcHans),
+                              e("方大同", "黑洞里", dur: 213.9, lyrics: lrcHant)]), [:],
+                    "E2: 两侧都是毫秒级、差 0.3 s → 不采纳(同一份录音差不到 0.01 s)")
+        // 同脚本只连"等长且恰好一个字不同":你/妳 这种字形差异成一类,英文名 + 两个中文写法三种写法并到一起;
+        // 代表 = 含汉字 → 本机条目多 → 字典序
+        expectEqual(A.derive([e("方大同", "Write A Song For You", dur: 197.273696, lyrics: lrcHans),
+                              e("方大同", "为你写的歌", dur: 197.273, lyrics: lrcHant),
+                              e("方大同", "为妳写的歌", dur: 197.274002, lyrics: lrcHant),
+                              e("方大同", "为妳写的歌", dur: 197.274002, lyrics: lrcHant)]),
+                    ["方大同": ["writeasongforyou": "为妳写的歌", "为你写的歌": "为妳写的歌"]],
+                    "E2: 英文名 + 你/妳 两种中文写法成一类,代表取条目最多的中文写法")
+        expectEqual(A.derive([e("方大同", "阿拉斯加海湾", dur: 200.5, lyrics: lrcHans),
+                              e("方大同", "阿拉斯加海湾伴奏", dur: 200.5, lyrics: lrcHans)]), [:],
+                    "E2: 同脚本、不是单字差异(多出「伴奏」)→ 不连,哪怕时长歌词全一样")
+        // 英文歌词的相似度必须按词切:两首不同的英文歌字母二元组大面积重合,词元三元组几乎不重合
+        let eng1 = """
+        [00:10.00]It's close to midnight and something evil's lurking in the dark
+        [00:15.00]Under the moonlight you see a sight that almost stops your heart
+        [00:20.00]You try to scream but terror takes the sound before you make it
+        [00:25.00]You start to freeze as horror looks you right between the eyes
+        """
+        let eng2 = """
+        [00:10.00]Tell me will you keep the faith when the night is long and the road is rough
+        [00:15.00]Hold on to the dream and never let it go although the world may say enough
+        [00:20.00]Keep the faith and you will find the light that leads you home again
+        [00:25.00]Every step you take is one step closer to the day you win
+        """
+        expectEqual(A.lyricsSimilarity(A.lyricsBody(eng1), A.lyricsBody(eng2)) < 0.1, true,
+                    "E2: 两首不同的英文歌按词元三元组比 → 几乎不重合")
+        expectEqual(A.derive([e("Michael Jackson", "Thriller", dur: 357.75, lyrics: eng1),
+                              e("Michael Jackson", "驚悚", dur: 357.75, lyrics: eng2)]), [:],
+                    "E2: 时长相同但歌词是两首歌 → 不采纳(实测 Keep the Faith / Thriller 都是 5:57)")
+    }
+
+    // ---- 歌手写法归并的通用推断(LocalArtistAliases,2026-09-04,取代手写表 romanizedArtistAliases) ----
+    do {
+        typealias LA = LocalArtistAliases
+        typealias A = EnrichTitleAliases
+        func e(_ artist: String, _ title: String, netease: String) -> A.Entry {
+            .init(artist: artist, title: title, neteaseURL: "https://music.163.com/song?id=" + netease, qqMusicURL: nil, durationSecs: nil)
+        }
+        // MusicBrainz 三份缓存各给一条,方向不限:alias-cache 原始→中文;identity zh;primary 中文→[英文别名]
+        let mb = LA.MusicBrainzCaches(
+            aliasCache: ["Crowd Lu": "卢广仲"],
+            identityZh: ["Soft Lipa": "蛋堡"],
+            primaryAliases: ["周杰伦": ["Jay Chou", "Zhou Jie Lun"], "Will Pan": ["潘瑋柏", "Wilber Pan"]])
+        let t = LA.derive(caches: mb, entries: [])
+        expectEqual(t["crowdlu"], "卢广仲", "歌手别名: alias-cache 原始标签 → 中文")
+        expectEqual(t["softlipa"], "蛋堡", "歌手别名: identity 缓存的 zh")
+        expectEqual(t["jaychou"], "周杰伦", "歌手别名: primary 缓存(中文键 → 英文别名)反向也能推")
+        expectEqual(t["zhoujielun"], "周杰伦", "歌手别名: 同一块里的每个别名都指向代表")
+        expectEqual(t["willpan"], "潘瑋柏", "歌手别名: primary 缓存(英文键 → 中文别名)代表选含汉字那个")
+        expectEqual(t["wilberpan"], "潘瑋柏", "歌手别名: 英文键的其它英文别名也指向中文代表")
+        expectEqual(t["卢广仲"], nil, "歌手别名: 代表自己不入表")
+        expectEqual(t["michaeljackson"], nil, "歌手别名: 没有证据的歌手不入表")
+
+        // 共享歌曲 id:≥ 2 个不同 id 才算;单个不算(方大同 ↔ 王诗安 那种合唱撞一首)
+        let two = LA.derive(caches: .init(), entries: [
+            e("David Tao", "Regular friends", netease: "150623"), e("陶喆", "普通朋友", netease: "150623"),
+            e("David Tao", "Let's Fall in Love", netease: "150560"), e("陶喆", "讨厌红楼梦", netease: "150560"),
+            e("方大同", "特别的人", netease: "9001"), e("王诗安", "特别的人 (合唱)", netease: "9001"),
+        ])
+        expectEqual(two["davidtao"], "陶喆", "歌手别名: 两种写法共享 2 个 id → 同一人,代表取含汉字的")
+        expectEqual(two["王诗安"], nil, "歌手别名: 只共享 1 个 id 不算")
+        expectEqual(two["方大同"], nil, "歌手别名: 只共享 1 个 id 不算(另一侧)")
+        // 代表的选择:都含汉字时取本机曲目数最多的写法;繁简同键不需要别名
+        let rep = LA.derive(caches: .init(aliasCache: ["Crowd Lu": "卢广仲"]), entries: [
+            e("盧廣仲", "a", netease: "1"), e("盧廣仲", "b", netease: "2"), e("盧廣仲", "c", netease: "3"),
+            e("卢广仲", "d", netease: "4"), e("Crowd Lu", "e", netease: "5"),
+        ])
+        expectEqual(rep["crowdlu"], "盧廣仲", "歌手别名: 代表取本机曲目最多的汉字写法(繁体 3 首 > 简体 1 首)")
+        expectEqual(rep["卢广仲"], nil, "歌手别名: 繁简本来就同一个键,不需要别名")
+        // MusicBrainz 缓存里的合唱串 / 带逗号的乐队名不当边的端点:归首位会切出碎片(`Earth, Wind & Fire`
+        // → `Earth`),拿碎片连边就是乱连(实测推出 earth → アース)
+        let duet = LA.derive(caches: .init(aliasCache: ["Khalil Fong & Fiona Sit": "方大同",
+                                                       "Earth, Wind & Fire": "アース、ウインド&ファイアー"]), entries: [])
+        expectEqual(duet["khalilfong"], nil, "歌手别名: 缓存里的合唱串不当边(首位歌手另有 primary/共现证据)")
+        expectEqual(duet["earth"], nil, "歌手别名: 带逗号的乐队名不当边,不产出 earth 这种碎片映射")
+        // 短别名不用
+        let short = LA.derive(caches: .init(primaryAliases: ["周杰伦": ["K", "Jay"]]), entries: [])
+        expectEqual(short["k"], nil, "歌手别名: 1 字符别名不用")
+        expectEqual(short["jay"], "周杰伦", "歌手别名: 3 字符别名(去空格后)刚够,整串匹配")
+        // canonicalArtistKey(table:) 跟 PlayCountFold 那把尺子一致
+        PlayCountFold.setLocalArtistAliases(two)
+        expectEqual(LA.canonicalArtistKey("David Tao & 蔡健雅", table: two), PlayCountFold.canonicalArtistKey("David Tao & 蔡健雅"),
+                    "歌手别名: 传表版与全局版的 canonicalArtistKey 一致")
+        PlayCountFold.setLocalArtistAliases([:])
     }
 }

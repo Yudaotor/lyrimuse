@@ -165,6 +165,14 @@ final class MenuBarStatusItem: NSObject {
             .sink { [weak self] _ in self?.refresh() }.store(in: &cancellables)
         coordinator.$isPlayingNow.dropFirst().receive(on: RunLoop.main)
             .sink { [weak self] _ in self?.refresh() }.store(in: &cancellables)
+        // 「♪ 歌名」兜底(2026-09-04):连续两首都没歌词时 compactLine 一直是 nil,不订歌名就换不了字;
+        // 广告开始 / 结束也要重算(广告态不显示广告标题);开关本身切换立刻生效。
+        coordinator.$title.dropFirst().removeDuplicates().receive(on: RunLoop.main)
+            .sink { [weak self] _ in self?.refresh() }.store(in: &cancellables)
+        coordinator.$isCurrentTrackAdBreak.dropFirst().removeDuplicates().receive(on: RunLoop.main)
+            .sink { [weak self] _ in self?.refresh() }.store(in: &cancellables)
+        settings.$menuBarShowsTitleWhenNoLyrics.dropFirst().receive(on: RunLoop.main)
+            .sink { [weak self] _ in self?.refresh() }.store(in: &cancellables)
         // 悬停三键(2026-09-03)。两条订阅:
         //
         // ① 开关本身 —— 拨掉的时候如果正接管着,要立刻把歌词放回来(用户就是盯着菜单栏拨的)。
@@ -320,6 +328,18 @@ final class MenuBarStatusItem: NSObject {
               let words = line.words, !words.isEmpty,
               line.plainText == text else { return nil }
         let path = MenuBarMarquee.karaokeFillPath(
+            words: words, wordEndXs: MenuBarMarqueeRenderer.wordEndXs(for: words))
+        return path.isEmpty ? nil : path
+    }
+
+    /// 跟唱滚动用的阅读位置路径(2026-09-04)。守卫跟 karaokeFillPath 同一组(有逐字数据、
+    /// 文本没跟逐字数据代际错位),但**不看**卡拉OK开关:染色是"画什么",跟唱是"滚到哪",
+    /// 不染色也要跟着唱到的位置滚。两条路径的差别见 MenuBarMarquee.followReadingPath 头注。
+    private func followReadingPath(for text: String) -> [MenuBarMarquee.KaraokeFillPoint]? {
+        guard let line = PlaybackCoordinator.shared.currentLine,
+              let words = line.words, !words.isEmpty,
+              line.plainText == text else { return nil }
+        let path = MenuBarMarquee.followReadingPath(
             words: words, wordEndXs: MenuBarMarqueeRenderer.wordEndXs(for: words))
         return path.isEmpty ? nil : path
     }
@@ -855,6 +875,10 @@ final class MenuBarStatusItem: NSObject {
 
     // MARK: - 决定现在该显示什么
 
+    /// 这一刻显示的是「♪ 歌名」兜底而不是歌词句(见 MenuBarSlotPolicy.displayText):配速与中间态渲染
+    /// 据此不按歌词时长算(dwellSeconds 传 nil 走固定速度那条退路)。
+    private var titleFallbackActive = false
+
     private func refresh() {
         guard started else { return }
         // 悬停三键接管期间**什么都不动**。下面三条展示路径(showIcon / showStaticText /
@@ -874,9 +898,21 @@ final class MenuBarStatusItem: NSObject {
         // 落进下面那条 `guard ... lyricsActive` 把整个歌词槽收回成小图标(一次状态项重建),
         // 而长间奏动辄十几秒 —— 表现就是菜单栏歌词塌掉、过一会儿又弹回来。给 ♪ 则槽位留着,
         // 视觉上也跟灵动岛那边的占位一致。
-        let text = coordinator.compactLine?.plainText
+        let lyricText = coordinator.compactLine?.plainText
             ?? (coordinator.compactShowsPlaceholder ? MenuBarMarqueeRenderer.placeholderGlyph : "")
-        let lyricsActive = coordinator.isPlayingNow && !text.isEmpty
+        // 2026-09-04:压根没有可显示的行(整首没歌词 / 还在搜)时按开关用「♪ 歌名」占槽,不塌回图标 ——
+        // 判据与三条边界(暂停不占宽 / 广告不显示 / 没歌名不兜底)都在 Core 的 MenuBarSlotPolicy.displayText,
+        // 这里只消费。nil = 照旧收回图标。
+        let display = MenuBarSlotPolicy.displayText(
+            lyricText: lyricText, title: coordinator.title,
+            isPlaying: coordinator.isPlayingNow, isAdBreak: coordinator.isCurrentTrackAdBreak,
+            showsTitleWhenNoLyrics: settings.menuBarShowsTitleWhenNoLyrics,
+            placeholderGlyph: MenuBarMarqueeRenderer.placeholderGlyph)
+        let text = display?.text ?? ""
+        titleFallbackActive = display?.isFallback ?? false
+        // 兜底文字不是歌词句,没有"这一句会显示多久"可言:配速走固定速度那条既有退路。
+        let dwell = titleFallbackActive ? nil : coordinator.compactDwellSeconds
+        let lyricsActive = display != nil
 
         // 没开菜单栏歌词 / 没在播放 / 当前句为空:收回小图标槽。槽宽 = 当前图标款式的
         // 图宽 + 系统内边距,跟歌词态同一套"出生就带显式宽度"规则(2026-08-19 第五轮:
@@ -902,7 +938,7 @@ final class MenuBarStatusItem: NSObject {
             // 切走),用旧口径会把 dwell 算大 —— 长句后面接长间奏时按偏大的 dwell 配速,
             // 句子会在只滚出开头一小截时就被换掉,比改动前更糟。见 CompactLyricLead
             // .displayDurationMs。
-            dwellSeconds: coordinator.compactDwellSeconds,
+            dwellSeconds: dwell,
             // 提前量窗口里这一句已经显示、但还没开唱(所以也还没染色)——滚动得等它走完
             // 才准起步,否则就是用户 2026-08-24 报的"还没染色就已经在滚"。
             leadInSeconds: coordinator.compactLeadInSeconds,
@@ -927,14 +963,14 @@ final class MenuBarStatusItem: NSObject {
                 // ⚠️ 2026-09-03 起**进度图标也走这条岔路**,理由一模一样:一枚要按进度
                 // 半染色的图标同样塞不进 button.title/image 那条 AppKit 自绘的路。
                 present(class: "text", length: w, collapseDelay: 0,
-                        dwellSeconds: coordinator.compactDwellSeconds,
+                        dwellSeconds: dwell,
                         interim: { [weak self] in self?.renderInterimLyrics($0, text: text) }) {
                     showFixedWidth($0, text: text, windowWidth: textW,
                                    pacing: nil, fillPath: fillPath, icon: icon)
                 }
             } else {
                 present(class: "text", length: w, collapseDelay: 0,
-                        dwellSeconds: coordinator.compactDwellSeconds,
+                        dwellSeconds: dwell,
                         interim: { [weak self] in self?.renderInterimLyrics($0, text: text) }) {
                     showStaticText($0, visible: visible, full: text)
                 }
@@ -943,10 +979,11 @@ final class MenuBarStatusItem: NSObject {
             let icon = lyricsIconBadge()
             let slotWidth = windowWidth + MenuBarProgressIcon.reservedWidth(for: icon?.style)
             present(class: "fixed", length: slotWidth + Self.fixedSlotPadding, collapseDelay: 0,
-                    dwellSeconds: coordinator.compactDwellSeconds,
+                    dwellSeconds: dwell,
                     interim: { [weak self] in self?.renderInterimLyrics($0, text: text) }) {
                 showFixedWidth($0, text: lineText, windowWidth: windowWidth, pacing: pacing,
-                               fillPath: karaokeFillPath(for: lineText), icon: icon)
+                               fillPath: karaokeFillPath(for: lineText),
+                               followPath: followReadingPath(for: lineText), icon: icon)
             }
         }
     }
@@ -969,7 +1006,7 @@ final class MenuBarStatusItem: NSObject {
         // 按固定宽语义排版;等重建后 refresh 会按用户真实的模式/宽度重画。
         switch MenuBarMarqueeRenderer.presentation(
             for: text, windowWidth: usable,
-            dwellSeconds: PlaybackCoordinator.shared.compactDwellSeconds,
+            dwellSeconds: titleFallbackActive ? nil : PlaybackCoordinator.shared.compactDwellSeconds,
             // 过渡渲染画的是同一句,提前量口径也必须同一份 —— 这里给 0 的话,几何推迟期间
             // (自适应模式下逐句都有,最多 3s)那一句又会在开唱前先滚起来。
             leadInSeconds: PlaybackCoordinator.shared.compactLeadInSeconds,
@@ -981,7 +1018,8 @@ final class MenuBarStatusItem: NSObject {
             // 过渡渲染同样带上填色和图标 —— 自适应模式逐句都有一段几何推迟窗(最多 3s),
             // 不带的话每句开头 3 秒都没有染色/没有图标,槽宽落地那一刻才突然冒出来。
             showFixedWidth(button, text: lineText, windowWidth: win, pacing: pacing,
-                           fillPath: karaokeFillPath(for: lineText), icon: icon)
+                           fillPath: karaokeFillPath(for: lineText),
+                           followPath: followReadingPath(for: lineText), icon: icon)
         }
     }
 
@@ -1056,6 +1094,7 @@ final class MenuBarStatusItem: NSObject {
     private func showFixedWidth(_ button: NSStatusBarButton, text: String, windowWidth: CGFloat,
                                 pacing: MenuBarMarquee.ScrollPacing?,
                                 fillPath: [MenuBarMarquee.KaraokeFillPoint]? = nil,
+                                followPath: [MenuBarMarquee.KaraokeFillPoint]? = nil,
                                 icon: MenuBarScrollingLabel.IconBadge? = nil) {
         liveIconView.clear()
         // ⚠️ 这张**全透明**的占位图是整个固定宽度方案的支点,不是残留:variableLength 的
@@ -1076,9 +1115,9 @@ final class MenuBarStatusItem: NSObject {
 
         scrollingLabel.frame = button.bounds
         scrollingLabel.present(text: text, windowWidth: windowWidth, pacing: pacing,
-                               fillPath: fillPath, icon: icon)
-        // 换句后立刻对一次表,填色从此刻的真实播放位置起步,不等下一次锚点更新(~2s)。
-        if fillPath != nil { syncKaraokeClock(force: true) }
+                               fillPath: fillPath, followPath: followPath, icon: icon)
+        // 换句后立刻对一次表,填色 / 跟唱滚动从此刻的真实播放位置起步,不等下一次锚点更新(~2s)。
+        if fillPath != nil || followPath != nil { syncKaraokeClock(force: true) }
         // 进度图标同理:重排位图会把裁剪层的几何重设,不立刻对表的话它会停在 0 直到下一次
         // 锚点更新。force 是因为位置往往一点没变(换句而已),过不了漂移门。
         if icon != nil { syncProgressClock(force: true) }

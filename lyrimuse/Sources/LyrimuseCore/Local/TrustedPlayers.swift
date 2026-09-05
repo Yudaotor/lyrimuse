@@ -7,7 +7,7 @@ import Foundation
 /// 「自动识别」原来只认写死的五个播放器。那道白名单不只挡显示,**也挡打卡**
 /// (collector 的 `poller.isTracked`):一律接受等于让 YouTube 视频、播客、网课被当成
 /// 收听写进用户的 Last.fm / ListenBrainz **永久历史**,还会往"设计上永不清理"的歌词
-/// 缓存里灌垃圾条目、白烧五个歌词源的查询。
+/// 缓存里灌垃圾条目、白烧全部歌词源的查询。
 ///
 /// 而"靠内容形状分辨是不是音乐"这条路不可靠:浏览器里的网页播放器能通过 MediaSession
 /// API 自己填 title/artist/artwork,一个 YouTube 音乐视频跟一首歌长得一模一样;

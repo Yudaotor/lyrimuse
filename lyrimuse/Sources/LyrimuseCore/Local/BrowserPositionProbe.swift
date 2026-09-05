@@ -542,7 +542,7 @@ public final class BrowserPositionProbe: @unchecked Sendable {
         // 而这里才是**真的交给伺服逻辑用了**。同一首歌可能出现好几行"采信"却只有一行
         // "交出" —— 一次性额度(`consumedKey`)把后面几次挡在门外。只看"采信"会读成
         // "重锚了好几次",看不出这一拍的位置到底是探针给的还是外推的。
-        Self.logger.notice("探针: 交出纠偏 \(corrected, privacy: .public)s(读数 \(snapshot.seconds, privacy: .public)s + 中点补偿 + \(age, privacy: .public)s 滞后补偿),本曲额度用完")
+        Self.logger.notice("probe: handing off correction \(corrected, privacy: .public)s (reading \(snapshot.seconds, privacy: .public)s + midpoint + \(age, privacy: .public)s lag), per-track budget exhausted")
         return corrected
     }
 
@@ -568,7 +568,7 @@ public final class BrowserPositionProbe: @unchecked Sendable {
         // **不只在真换歌时变** —— 快照变成 nil(播放器退出/stopped/系统 Now Playing 焦点
         // 被别的 App 抢走一次)那条路径会把它清成 "",下一拍就重新算一次"换歌"。所以
         // 一首歌中途出现多轮探测**不一定是 bug**,但必须能从日志里看出是哪一种。
-        Self.logger.notice("探针: 曲目标识变了,重新开放本曲的探测额度(旧=\(previousKey, privacy: .public) 新=\(newKey, privacy: .public))")
+        Self.logger.notice("probe: track key changed, reopening per-track probe budget (old=\(previousKey, privacy: .public) new=\(newKey, privacy: .public))")
     }
 
     /// 如果这个 bundle id 受支持、这首歌还没消费过一次探测结果、且当前没有正在飞的同
@@ -792,13 +792,13 @@ public final class BrowserPositionProbe: @unchecked Sendable {
         let expect = Int(expectedDuration.rounded())
         guard let first = probeOnce(bundleID: bundleID, family: family,
                                     platformIDs: platformIDs, expectedDuration: expectedDuration) else {
-            logger.info("探针 #\(attempt, privacy: .public): 没有标签页给出可用读数(期望时长 \(expect, privacy: .public)s)")
+            logger.info("probe #\(attempt, privacy: .public): no tab produced a usable reading (expected duration \(expect, privacy: .public)s)")
             return nil
         }
         try? await Task.sleep(nanoseconds: UInt64(livenessGapSeconds * 1_000_000_000))
         guard let second = probeOnce(bundleID: bundleID, family: family,
                                      platformIDs: platformIDs, expectedDuration: expectedDuration) else {
-            logger.info("探针 #\(attempt, privacy: .public): 第二次采样没拿到读数,弃用 \(first.seconds, privacy: .public)s")
+            logger.info("probe #\(attempt, privacy: .public): second sample returned nothing, discarding \(first.seconds, privacy: .public)s")
             return nil
         }
         // ⚠️ 两拍必须落在**同一个平台**上(2026-09-03 补)。同时开着 YouTube Music 和
@@ -806,14 +806,14 @@ public final class BrowserPositionProbe: @unchecked Sendable {
         // B 站的读数去判"进度在不在走"是没有意义的 —— 那个差值既可能碰巧为正(误采信一个
         // 属于另一首歌的位置),也可能碰巧为负(白白弃用一次真读数)。不同平台直接弃用。
         guard first.platformID == second.platformID else {
-            logger.notice("探针 #\(attempt, privacy: .public): 两拍落在不同平台(\(first.platformID, privacy: .public) → \(second.platformID, privacy: .public)),弃用")
+            logger.notice("probe #\(attempt, privacy: .public): samples landed on different platforms (\(first.platformID, privacy: .public) -> \(second.platformID, privacy: .public)), discarding")
             return nil
         }
         guard pageClockIsRunning(first: first.seconds, second: second.seconds) else {
-            logger.notice("探针 #\(attempt, privacy: .public): 页面进度没在走(\(first.seconds, privacy: .public)s → \(second.seconds, privacy: .public)s),弃用")
+            logger.notice("probe #\(attempt, privacy: .public): page position is not advancing (\(first.seconds, privacy: .public)s -> \(second.seconds, privacy: .public)s), discarding")
             return nil
         }
-        logger.notice("探针 #\(attempt, privacy: .public): 采信 \(second.seconds, privacy: .public)s(上一拍 \(first.seconds, privacy: .public)s,期望时长 \(expect, privacy: .public)s,平台 \(second.platformID, privacy: .public))")
+        logger.notice("probe #\(attempt, privacy: .public): accepting \(second.seconds, privacy: .public)s (previous \(first.seconds, privacy: .public)s, expected duration \(expect, privacy: .public)s, platform \(second.platformID, privacy: .public))")
         return second
     }
 

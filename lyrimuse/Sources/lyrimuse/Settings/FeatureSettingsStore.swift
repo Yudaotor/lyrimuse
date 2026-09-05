@@ -5,12 +5,12 @@ import SwiftUI
 
 private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "feature-settings")
 
-// 八个歌词源——rawValue 必须跟 collector/features.go 的 lyricSourceXxx 常量逐字对应,
+// 九个歌词源——rawValue 必须跟 collector/features.go 的 lyricSourceXxx 常量逐字对应,
 // 这是两侧通过共享 json 文件交换的字符串。displayName/color 直接委托给
 // LyricsManagerView.swift 已有的 sourceDisplayName/sourceColor(那两个函数今天也在给
 // "歌词管理"窗口的来源筛选/列表用),不重复维护第二份名字/颜色映射。
 public enum LyricsSource: String, CaseIterable, Identifiable, Codable, Hashable {
-    case netease, qq, kugou, musixmatch, lrclib, amll, lyricfind, kuwo
+    case netease, qq, kugou, musixmatch, lrclib, amll, lyricfind, kuwo, migu
     public var id: Self { self }
     public var displayName: String { sourceDisplayName(rawValue) }
     public var color: Color { sourceColor(rawValue) }
@@ -212,7 +212,7 @@ struct FeatureFlagsFile: Codable, Equatable {
     var weeklyDigestSource: String?
     var dailyDigestSource: String?
     var lyricsSources: [String]?
-    /// **迁移标记,不是开关**。amll 的启用状态跟其余五源一样记在 lyricsSources 里。
+    /// **迁移标记,不是开关**。amll 的启用状态跟其余源一样记在 lyricsSources 里。
     ///
     /// 它存在只为解决一件事:lyrics_sources 是白名单,而老配置写的时候 amll 这个源还不
     /// 存在,列表里不可能有它 —— 直接按白名单办等于对所有老用户默认关闭,而"没列出"在
@@ -231,6 +231,9 @@ struct FeatureFlagsFile: Codable, Equatable {
     /// 缺失 ⇒ 老配置,加载时把 kuwo 补进启用集合(只补这一次)。与 collector 侧
     /// featureFlagsFile.KuwoLyrics 一一对应。
     var kuwoLyrics: Bool?
+    /// 同上一套迁移标记(2026-09-04 加 migu 时补)。缺失 ⇒ 老配置,加载时把 migu 补进启用集合
+    /// (只补这一次)。与 collector 侧 featureFlagsFile.MiguLyrics 一一对应。
+    var miguLyrics: Bool?
     var lyricsSourceMode: String?
     var lyricsSourceOrder: [String]?
     var lyricsDir: String?
@@ -242,6 +245,10 @@ struct FeatureFlagsFile: Codable, Equatable {
     // collector/companionlaunch.go。反方向("打开 Lyrimuse 时唤起 Music")不需要
     // 这份共享文件,直接是 AppSettings.launchMusicOnLyrimuseOpen 一个纯 Swift 侧设置。
     var launchLyrimuseOnMusicOpen: Bool?
+    /// 「跟随播放器启动」逐播放器勾选(2026-09-03,PlaybackPlayer.rawValue 列表)。键在就严格按它来(空列表 = 关),
+    /// 键缺失是布尔年代的老配置,collector 退回「盯整个选中集合 / auto 全量」。上面那个布尔仍然写(= 列表非空),
+    /// 给还没升级的 collector 当总开关用;collector 侧对称的解析见 features.go / companionlaunch.go。
+    var launchLyrimuseOnPlayers: [String]?
     /// 用户显式信任的「未知播放器」:bundle id → 界面显示名(反查不到 App 名时是空串)。
     /// 语义见 LyrimuseCore 的 TrustedPlayers —— 为什么是"信任列表"而不是"一律接受",
     /// 那份注释里写了(白名单同时挡着打卡,一律接受会把视频/播客写进永久收听历史)。
@@ -267,11 +274,13 @@ struct FeatureFlagsFile: Codable, Equatable {
         case amllLyrics = "amll_lyrics"
         case lyricFindLyrics = "lyricfind_lyrics"
         case kuwoLyrics = "kuwo_lyrics"
+        case miguLyrics = "migu_lyrics"
         case lyricsSourceMode = "lyrics_source_mode"
         case lyricsSourceOrder = "lyrics_source_order"
         case lyricsDir = "lyrics_dir"
         case lyricsTranslationLanguage = "lyrics_translation_language"
         case launchLyrimuseOnMusicOpen = "launch_lyrimuse_on_music_open"
+        case launchLyrimuseOnPlayers = "launch_lyrimuse_on_players"
         case trustedPlayers = "trusted_players"
     }
 
@@ -342,7 +351,7 @@ public final class FeatureSettingsStore: ObservableObject {
     // 实际执行,两边会对不上。
     // 歌词源没带社区译文时,自己补一份翻译。默认关:优先走系统端上翻译(不联网),
     // 但在 macOS 26 以下、或语言包没装时会退到网络翻译服务,那条路会把歌词正文发出去,
-    // 该由用户显式同意 —— 现有的八个歌词源只发歌手/歌名。
+    // 该由用户显式同意 —— 现有的九个歌词源只发歌手/歌名。
     @Published public var lyricsMachineTranslation = false
     @Published public var lastfmMirrorScrobble = false
     /// 默认 .all:原样发整串。**必须逐字等于 collector features.go 里 resolveScrobbleArtistMode
@@ -378,14 +387,20 @@ public final class FeatureSettingsStore: ObservableObject {
     // 默认开:这是「装了就该有的样子」——打开播放器歌词就跟上来,而不是每次还要先
     // 想起来去菜单栏点一下 Lyrimuse。⚠️ 改默认值必须跟 collector 侧 features.go 的
     // boolOr(..., true) 一起改,不然 Swift 这边显示「开」而真正执行的 collector 当它是关。
-    @Published public var launchLyrimuseOnMusicOpen = true
+    // 2026-09-03 从布尔改成逐播放器集合(用户拍板,见 LyrimuseCore.PlayerLinkage 头注)。默认值由 load 里的
+    // 迁移决定(布尔年代默认 true → 当时的全部候选),这里的初值只是占位。写盘时同时落布尔 = 集合非空。
+    @Published public var launchLyrimuseOnPlayers: Set<PlaybackPlayer> = []
     /// 见 FeatureFlagsFile.trustedPlayers。改它一律走 trust/untrust 两个方法,别直接赋值
     /// —— 那两个方法负责反查 App 名并立刻落盘(collector 按 mtime 重读,不需要重启)。
     @Published public private(set) var trustedPlayers: [String: String] = [:]
 
     @Published public private(set) var lastError: String?
+    /// 启动时 features.json 判定为**损坏**(文件在、但不是 JSON 对象,或字段按类型解不出来)的原因;
+    /// nil = 正常或文件不存在。非 nil 期间 `persistFile()` 一律拒绝,设置窗口顶部的 `ConfigFileDamageBanner`
+    /// 据此显示告示与出口。三态口径见 Core `JSONConfigDocument` 头注。
+    @Published public private(set) var loadFailure: String?
 
-    private static let featuresURL = FileManager.default.homeDirectoryForCurrentUser
+    static let fileURL = FileManager.default.homeDirectoryForCurrentUser
         .appendingPathComponent(".config/lyrimuse/lyrimuse-features.json")
 
     private var savedSnapshot = FeatureFlagsFile()
@@ -411,11 +426,14 @@ public final class FeatureSettingsStore: ObservableObject {
             lyricFindLyrics: lyricsSources.contains(.lyricfind),
             // 同上,kuwo 的迁移标记独立生效一次(2026-08-31 加)。
             kuwoLyrics: lyricsSources.contains(.kuwo),
+            // 同上,migu 的迁移标记独立生效一次(2026-09-04 加)。
+            miguLyrics: lyricsSources.contains(.migu),
             lyricsSourceMode: lyricsSourceMode.rawValue,
             lyricsSourceOrder: lyricsSourceOrder.map(\.rawValue),
             lyricsDir: lyricsDir.isEmpty ? nil : lyricsDir,
             lyricsTranslationLanguage: lyricsTranslationLanguage.rawValue,
-            launchLyrimuseOnMusicOpen: launchLyrimuseOnMusicOpen,
+            launchLyrimuseOnMusicOpen: !launchLyrimuseOnPlayers.isEmpty,
+            launchLyrimuseOnPlayers: launchLyrimuseOnPlayers.map(\.rawValue).sorted(),
             trustedPlayers: trustedPlayers.isEmpty ? nil : trustedPlayers
         )
     }
@@ -490,32 +508,53 @@ public final class FeatureSettingsStore: ObservableObject {
     ///
     /// 隔壁 ConfigStore 没这个问题,它是 `raw: [String: Any]` 整字典读写(见那边 :72-78
     /// 花了六行解释为什么必须这样)。两个 Store 对未知字段的处理原本是**反的**,这里补齐。
-    private var unknownFileKeys: [String: Any] = [:]
+    ///
+    /// 2026-09-05 起两个 Store 统一走 Core `JSONConfigDocument`:磁盘上那份对象(全部键,含不认识的)的镜像
+    /// 就是 `document.raw`,写盘时 `save(fields:knownKeys:)` 按「已知键以本次编码为准、其余原样保留」合并 ——
+    /// 上面说的那条保护由它兑现。同时带来三态(不存在 / 正常 / 损坏),损坏时拒绝保存,见 loadFailure。
+    private var document = JSONConfigDocument(url: FeatureSettingsStore.fileURL)
+
+    /// 诊断导出用:磁盘上那份文件的三态。
+    public var fileState: JSONConfigDocument.LoadState { document.state }
 
     public func load() {
-        guard let data = try? Data(contentsOf: Self.featuresURL),
-              let f = try? JSONDecoder().decode(FeatureFlagsFile.self, from: data) else {
-            // 文件不存在/解析失败——维持属性的默认值,须跟 collector 侧 loadFeatureFlags
+        document = JSONConfigDocument.load(url: Self.fileURL)
+        loadFailure = nil
+        var decoded: FeatureFlagsFile?
+        switch document.state {
+        case .missing:
+            break
+        case .corrupt(let reason):
+            loadFailure = reason
+            logger.error("features.json is unusable, saves refused until it is fixed or discarded: \(reason, privacy: .public)")
+        case .loaded:
+            // 对象再按类型解一遍。对象是合法 JSON 但字段类型对不上(手改成 "album_prefetch": "yes")同样按
+            // 损坏处理:退默认值再保存会把整份开关覆盖成默认,跟 JSON 语法坏了没有区别 —— 所以一样拒绝
+            // 保存,原因(键名 + 期望类型,不含值)进横幅让用户自己修或放弃。
+            do {
+                decoded = try JSONDecoder().decode(FeatureFlagsFile.self, from: JSONConfigDocument.serialize(document.raw))
+            } catch {
+                let reason = "fields do not decode: \(Self.describeDecodingError(error))"
+                document.markCorrupt(reason: reason)
+                loadFailure = reason
+                logger.error("features.json fields do not decode, saves refused: \(reason, privacy: .public)")
+            }
+        }
+        guard let f = decoded else {
+            // 文件不存在 / 损坏——维持属性的默认值,须跟 collector 侧 loadFeatureFlags
             // 的默认值逐字对齐(核心行为开关 fail-open=true;需要外部账号的 6 个
             // fail-closed=false,见上面属性声明处的说明)。
             //
             // ⚠️ 这条对齐是**人工维持**的,没有任何机制保证 —— 2026-08-30 就抓到 player
             // 一项脱节了(属性初值 .appleMusic vs collector 的 auto,已修)。改任一侧的
             // 默认值都要回头核对另一侧,别信这行注释说"一致"就跳过。
-            unknownFileKeys = [:]
             savedSnapshot = currentSnapshot
             return
         }
-        // 同一份字节再按裸字典解一次,把这个版本不认识的键记下来(见 unknownFileKeys)。
-        if let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
-            unknownFileKeys = obj.filter { !FeatureFlagsFile.knownFileKeys.contains($0.key) }
-            // os.Logger 的插值参数是 @autoclosure,引用实例属性要显式写 self —— debug 构建
-            // 放过了这一点,release(-O)才报错,所以只跑 `swift build` 验证是不够的。
-            if !unknownFileKeys.isEmpty {
-                logger.notice("features.json carries \(self.unknownFileKeys.count) key(s) this build doesn't know; they will be preserved on write")
-            }
-        } else {
-            unknownFileKeys = [:]
+        // 这个版本不认识的键留在 document.raw 里,写盘时由 JSONConfigDocument 合并回去(见 document 的注释)。
+        let unknownCount = document.raw.keys.filter { !FeatureFlagsFile.knownFileKeys.contains($0) }.count
+        if unknownCount > 0 {
+            logger.notice("features.json carries \(unknownCount) key(s) this build doesn't know; they will be preserved on write")
         }
         // players 缺失/空数组时退回 player(遗留单选字段)做一次性迁移;两者都没有
         // 可用值才最终兜底 {auto}——跟 collector 侧 resolvePlayers 是同一份迁移逻辑。
@@ -566,6 +605,10 @@ public final class FeatureSettingsStore: ObservableObject {
                 // 同上,见 FeatureFlagsFile.kuwoLyrics(2026-08-31 加)。
                 enabled.insert(.kuwo)
             }
+            if f.miguLyrics == nil {
+                // 同上,见 FeatureFlagsFile.miguLyrics(2026-09-04 加)。
+                enabled.insert(.migu)
+            }
         }
         lyricsSources = enabled
         lyricsSourceMode = f.lyricsSourceMode.flatMap(LyricsSourceMode.init(rawValue:)) ?? .smart
@@ -579,7 +622,14 @@ public final class FeatureSettingsStore: ObservableObject {
         trustedPlayers = f.trustedPlayers ?? [:]
         lyricsDir = f.lyricsDir ?? ""
         lyricsTranslationLanguage = f.lyricsTranslationLanguage.flatMap(MusixmatchTranslationLanguage.init(rawValue:)) ?? .auto
-        launchLyrimuseOnMusicOpen = f.launchLyrimuseOnMusicOpen ?? true
+        if let raw = f.launchLyrimuseOnPlayers {
+            launchLyrimuseOnPlayers = Set(raw.compactMap(PlaybackPlayer.init(rawValue:)))
+        } else {
+            // 布尔年代的一次性迁移:true(默认)→ 当时的全部候选(选中集合的具体播放器,auto 时五个全上),
+            // 这正是 collector 当年盯的范围;false → 空。下次 save 就把列表写进文件,以后走新键。
+            launchLyrimuseOnPlayers = PlayerLinkage.migratedLaunchSet(
+                legacyEnabled: f.launchLyrimuseOnMusicOpen ?? true, selectedPlayers: players, requiresSole: false)
+        }
         savedSnapshot = currentSnapshot
     }
 
@@ -589,22 +639,52 @@ public final class FeatureSettingsStore: ObservableObject {
     // 一次" —— 那个保存栏已经不存在了,且本方法只被自己的 save() 调用(2026-08-30
     // 核实)。"只重启一次"现在由 CollectorRestartCoordinator 保证。
     public func persistFile() throws {
-        let data = try JSONEncoder().encode(currentSnapshot)
-        var payload = data
-        // 把这个版本不认识的键合并回去,别让它们随这次写盘消失(见 unknownFileKeys)。
-        // 合并方向是"已知字段覆盖未知同名键"——本次编码出来的才是用户刚设置的值。
-        if !unknownFileKeys.isEmpty,
-           var obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
-            for (key, value) in unknownFileKeys where obj[key] == nil {
-                obj[key] = value
-            }
-            if let merged = try? JSONSerialization.data(
-                withJSONObject: obj, options: [.prettyPrinted, .sortedKeys]
-            ) {
-                payload = merged
-            }
+        // 当前快照编码成字典。JSONEncoder 这一步只会因为编程错误失败,不会因为用户数据失败。
+        let encoded = try JSONEncoder().encode(currentSnapshot)
+        guard let fields = try JSONSerialization.jsonObject(with: encoded) as? [String: Any] else {
+            throw ConfigFileSaveError.notSerializable
         }
-        try payload.write(to: Self.featuresURL, options: .atomic)
+        do {
+            // 已知键以本次编码为准(遗留的 player / lastfm_scrobble_first_artist_only 没编码就从文件删掉,
+            // 「这台机器往后不再写它」的语义靠这条),这个版本不认识的键原样保留;写成功后镜像才更新。
+            // 磁盘上那份判定为损坏时这里直接抛,一个字节不碰。features.json 不含凭据,普通原子写。
+            try document.save(fields: fields, knownKeys: FeatureFlagsFile.knownFileKeys, secure: false)
+        } catch JSONConfigDocument.Failure.refusedCorruptFile {
+            throw ConfigFileSaveError.refusedCorruptFile
+        } catch JSONConfigDocument.Failure.notSerializable {
+            throw ConfigFileSaveError.notSerializable
+        }
+    }
+
+    /// 横幅上的「放弃坏文件并重建」:把损坏的 features.json 挪到旁边(`lyrimuse-features.json.corrupt-<时间>`,
+    /// 不删),然后用当前内存里的值(损坏时是各开关的默认值)重建并保存。
+    @discardableResult
+    public func discardCorruptFileAndSave() async -> Bool {
+        do {
+            if let moved = try document.quarantineCorruptFile() {
+                logger.notice("corrupt features.json moved aside as \(moved.lastPathComponent, privacy: .public)")
+            }
+        } catch {
+            lastError = String(format: L10n.t("无法移走损坏的配置文件: %@"), error.localizedDescription)
+            logger.error("quarantine failed: \(String(describing: error), privacy: .public)")
+            return false
+        }
+        loadFailure = nil
+        return await save()
+    }
+
+    /// DecodingError → 「键路径: 期望什么、遇到什么」一句话,不带值。别的错误退回 String(describing:)。
+    private static func describeDecodingError(_ error: Error) -> String {
+        guard let decoding = error as? DecodingError else { return String(describing: error) }
+        let context: DecodingError.Context
+        switch decoding {
+        case .typeMismatch(_, let c), .valueNotFound(_, let c), .keyNotFound(_, let c), .dataCorrupted(let c):
+            context = c
+        @unknown default:
+            return String(describing: error)
+        }
+        let path = context.codingPath.map(\.stringValue).joined(separator: ".")
+        return path.isEmpty ? context.debugDescription : "\(path): \(context.debugDescription)"
     }
 
     public func commitSnapshot() {
@@ -620,6 +700,11 @@ public final class FeatureSettingsStore: ObservableObject {
     public func save() async -> Bool {
         do {
             try persistFile()
+        } catch ConfigFileSaveError.refusedCorruptFile {
+            // 不是「写失败」,是刻意不写:文案直说原因,横幅里有出口。
+            lastError = ConfigFileSaveError.refusedCorruptFile.errorDescription
+            logger.notice("save refused: features.json on disk is corrupt")
+            return false
         } catch {
             lastError = String(format: L10n.t("写入功能开关文件失败: %@"), error.localizedDescription)
             logger.error("write failed: \(String(describing: error), privacy: .public)")

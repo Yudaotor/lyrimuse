@@ -110,6 +110,19 @@ final class ScrobbleBackfillService: ObservableObject {
             if let out, out.accepted > 0 {
                 LastfmStatsService.shared.refreshBaseline(force: true)
                 LastfmStatsService.shared.rewindDailySyncForBackfill()
+                // 2026-09-03 补。Last.fm 把刚收到的 scrobble 并进 recenttracks 要一两秒,紧接着上面
+                // 那一发强刷多半还看不到刚补的记录;而 feed 时代最近记录的主来源是 collector 落盘的
+                // feed(每 15 s/60 s 一拉),那次强刷之后就没有别的"马上"了 —— 用户报「刚连上补提交
+                // 之后最近记录没有马上刷新」。collector 侧现在由回填子命令 touch 一个信号文件
+                // (lastfmFeedNudgePath),常驻进程下一拍(≤5 s)就重拉 feed,App 靠 5 s 一次的 mtime
+                // 轮询几秒内拿到;这里再补一发**延迟**强刷兜底,只在 feed 不新鲜(collector 不在、或
+                // 还没写过)时发 —— feed 活着的话新内容会自己到,不重复打 3 个请求。
+                Task { @MainActor in
+                    try? await Task.sleep(nanoseconds: 8_000_000_000)
+                    if !LastfmStatsService.shared.feedIsFresh {
+                        LastfmStatsService.shared.refreshBaseline(force: true)
+                    }
+                }
             }
         }
     }

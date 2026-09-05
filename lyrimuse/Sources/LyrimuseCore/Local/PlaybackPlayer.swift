@@ -31,7 +31,7 @@ public enum PlaybackPlayer: String, CaseIterable, Identifiable, Codable, Hashabl
     // Catalyst 应用(主二进制链的是 /System/iOSSupport/.../MediaPlayer.framework),自己把
     // 播放状态发布进系统级 MediaRemote;同样没有 AppleScript 字典(Info.plist 里没有
     // NSAppleScriptEnabled、Resources 下也没有 .sdef,2026-08-21 核实),所以扩展控件
-    // (喜欢/音量/播放模式)一律没有。顺带白捡一项:酷狗本来就是这个项目的五个歌词源之一,
+    // (喜欢/音量/播放模式)一律没有。顺带白捡一项:酷狗本来就是这个项目的歌词源之一,
     // 接入播放器等于把「同源加权」也接上了(见 collector 的 playerNativeLyricSource)。
     case kugou = "kugou_music"
     case spotify = "spotify"

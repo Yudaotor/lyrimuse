@@ -493,9 +493,10 @@ struct LastfmStatsSection: View {
                     ForEach(recentRows.filter { $0.track.id != stats.liveAbsorbedRecentID },
                             id: \.track.id) { entry in
                         let t = entry.track
-                        Button {
-                            if let url = Self.trackURL(artist: t.artist, title: t.title) { NSWorkspace.shared.open(url) }
-                        } label: {
+                        // 整行 = 打开 Last.fm 上这首歌的页面;「第 N 次听」那一格是自己的按钮(弹合并
+                        // 明细,2026-09-04)。所以整行不再是 Button:Button 会吞掉 label 里一切内嵌
+                        // 控件的点击(见 collapsibleHeader 那个 "?" 的注释),改成容器 onTapGesture +
+                        // 内嵌 Button —— SwiftUI 里子视图的手势优先,点数字弹明细、点别处开网页。
                         HStack(spacing: 10) {
                             // 封面走三级兜底(自带 → getinfo 纠正 → 同专辑兄弟),理由见
                             // LastfmStatsService.coverURL(for:)
@@ -509,19 +510,16 @@ struct LastfmStatsSection: View {
                                 Text(t.artist).font(.system(size: 10.5)).foregroundStyle(.secondary).lineLimit(1)
                             }
                             Spacer()
-                            if let n = entry.count {
-                                Text(String(format: L10n.t("第 %@ 次听"), "\(n)"))
-                                    .font(.caption).foregroundStyle(.tertiary).monospacedDigit()
-                                    .help(L10n.t("这首歌在你 Last.fm 上的第几次收听"))
-                            } else if !stats.isPlayCountUnavailable(artist: t.artist, title: t.title) {
-                                // 安静的占位(不转、不闪):次数还没解析出来,不是没有——
-                                // 用户反馈"翻到新页这里空一截,看着像坏了"。跟已确定没有
-                                // 次数的曲目分开判断,不然这个占位会在极少数确实查不到
-                                // 次数的行上永远挂着,变成一个说谎的"正在加载"。
-                                Text("···")
-                                    .font(.caption).foregroundStyle(.quaternary).monospacedDigit()
-                                    .help(L10n.t("次数还在解析中"))
-                            }
+                            // 次数没解析出来时它自己画 `···` 占位(安静的,不转、不闪):不是没有,
+                            // 是还没查到 —— 用户反馈"翻到新页这里空一截,看着像坏了"。已确定没有
+                            // 次数的曲目连占位都不给,不然它会在极少数确实查不到次数的行上永远挂着,
+                            // 变成一个说谎的"正在加载"。
+                            PlayCountBadge(
+                                artist: t.artist, title: t.title, count: entry.count,
+                                unavailable: stats.isPlayCountUnavailable(artist: t.artist, title: t.title),
+                                anchorDate: t.date,
+                                expectedTotal: stats.trackPlayCounts[
+                                    LastfmStatsService.playCountKey(artist: t.artist, title: t.title)])
                             if let date = t.date {
                                 Text(Self.relative(date))
                                     .font(.caption).foregroundStyle(.tertiary).monospacedDigit()
@@ -533,8 +531,9 @@ struct LastfmStatsSection: View {
                         .padding(.horizontal, 14)
                         .padding(.vertical, 5)
                         .contentShape(Rectangle())
+                        .onTapGesture {
+                            if let url = Self.trackURL(artist: t.artist, title: t.title) { NSWorkspace.shared.open(url) }
                         }
-                        .buttonStyle(.plain)
                         .rowHoverHighlight()
                     }
                     // 翻页(2026-08-12 取代原来的"显示更多"一路展开):一路展开会把这一卡
@@ -1177,68 +1176,70 @@ private struct LiveScrobbleRow: View {
     var body: some View {
         Group {
             if let live {
-                Button {
+                // 容器 onTapGesture + 内嵌「第 N 次听」按钮,不再套 Button —— 理由同历史行(Button 会
+                // 吞掉 label 内嵌控件的点击),2026-09-04 改。
+                HStack(spacing: 10) {
+                    Group {
+                        // 顺序刻意是 URL 优先、本机位图兜底(2026-08-17 从反过来改成
+                        // 这样):这一行要跟它下面那些历史行长一样,而那些行用的就是
+                        // 这个 URL。本机位图只在列表里找不到参照时才上场 —— 见
+                        // LiveSource.artwork 与 LastfmStatsService.liveCoverURL。
+                        if let url = live.imageURL {
+                            CachedImage(url: url) {
+                                RoundedRectangle(cornerRadius: 5).fill(.quaternary)
+                            }
+                        } else if let img = live.artwork {
+                            Image(nsImage: img).resizable().aspectRatio(contentMode: .fill)
+                        } else {
+                            RoundedRectangle(cornerRadius: 5).fill(.quaternary)
+                        }
+                    }
+                    .frame(width: 26, height: 26)
+                    .clipShape(RoundedRectangle(cornerRadius: 5))
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text(live.title).font(.system(size: 13)).lineLimit(1)
+                        Text(live.artist).font(.system(size: 10.5)).foregroundStyle(.secondary).lineLimit(1)
+                    }
+                    Spacer()
+                    // 这次播放已被 scrobble 时用落库的权威次数,否则用换歌时取的
+                    // nowPlayingCount(见 absorbedRecent 注释:后者取晚了会多算一)。
+                    // 老歌重逢的小情绪点:"第 208 次听" —— 点一下看这 208 次是哪几种写法凑的。
+                    // unavailable 传 true:实时行没有次数时什么都不画,不给 `···` 占位(原样)。
+                    // expectedTotal 传 nil:这个数含还没落库的这一次,跟明细合计对不上是正常的。
+                    PlayCountBadge(
+                        artist: live.artist, title: live.title,
+                        count: absorbedRecent?.count ?? stats.nowPlayingCount,
+                        unavailable: true, anchorDate: nil, expectedTotal: nil)
+                    if live.confirmed {
+                        Label(L10n.t("正在记录"), systemImage: "circle.fill")
+                            .font(.caption)
+                            .foregroundStyle(lastfmBrandRed)
+                            .labelStyle(.titleAndIcon)
+                            .imageScale(.small)
+                            .help(live.remote
+                                  ? L10n.t("在其他设备上播放，Last.fm 已收到")
+                                  : L10n.t("Last.fm 已确认收到这次播放"))
+                    } else {
+                        Label(L10n.t("正在播放"), systemImage: "circle.dotted")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .labelStyle(.titleAndIcon)
+                            .imageScale(.small)
+                            .help(L10n.t("等待 Last.fm 确认（通常几秒内）"))
+                    }
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 5)
+                .background(
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(hovered ? Color.secondary.opacity(0.10) : .clear)
+                        .padding(.horizontal, 6))
+                .contentShape(Rectangle())
+                .onTapGesture {
                     if let url = LastfmStatsSection.trackURL(artist: live.artist, title: live.title) {
                         NSWorkspace.shared.open(url)
                     }
-                } label: {
-                    HStack(spacing: 10) {
-                        Group {
-                            // 顺序刻意是 URL 优先、本机位图兜底(2026-08-17 从反过来改成
-                            // 这样):这一行要跟它下面那些历史行长一样,而那些行用的就是
-                            // 这个 URL。本机位图只在列表里找不到参照时才上场 —— 见
-                            // LiveSource.artwork 与 LastfmStatsService.liveCoverURL。
-                            if let url = live.imageURL {
-                                CachedImage(url: url) {
-                                    RoundedRectangle(cornerRadius: 5).fill(.quaternary)
-                                }
-                            } else if let img = live.artwork {
-                                Image(nsImage: img).resizable().aspectRatio(contentMode: .fill)
-                            } else {
-                                RoundedRectangle(cornerRadius: 5).fill(.quaternary)
-                            }
-                        }
-                        .frame(width: 26, height: 26)
-                        .clipShape(RoundedRectangle(cornerRadius: 5))
-                        VStack(alignment: .leading, spacing: 0) {
-                            Text(live.title).font(.system(size: 13)).lineLimit(1)
-                            Text(live.artist).font(.system(size: 10.5)).foregroundStyle(.secondary).lineLimit(1)
-                        }
-                        Spacer()
-                        // 这次播放已被 scrobble 时用落库的权威次数,否则用换歌时取的
-                        // nowPlayingCount(见 absorbedRecent 注释:后者取晚了会多算一)。
-                        if let n = absorbedRecent?.count ?? stats.nowPlayingCount {
-                            // 老歌重逢的小情绪点:"第 208 次听"
-                            Text(String(format: L10n.t("第 %@ 次听"), "\(n)"))
-                                .font(.caption).foregroundStyle(.tertiary).monospacedDigit()
-                        }
-                        if live.confirmed {
-                            Label(L10n.t("正在记录"), systemImage: "circle.fill")
-                                .font(.caption)
-                                .foregroundStyle(lastfmBrandRed)
-                                .labelStyle(.titleAndIcon)
-                                .imageScale(.small)
-                                .help(live.remote
-                                      ? L10n.t("在其他设备上播放，Last.fm 已收到")
-                                      : L10n.t("Last.fm 已确认收到这次播放"))
-                        } else {
-                            Label(L10n.t("正在播放"), systemImage: "circle.dotted")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .labelStyle(.titleAndIcon)
-                                .imageScale(.small)
-                                .help(L10n.t("等待 Last.fm 确认（通常几秒内）"))
-                        }
-                    }
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 5)
-                    .background(
-                        RoundedRectangle(cornerRadius: 6)
-                            .fill(hovered ? Color.secondary.opacity(0.10) : .clear)
-                            .padding(.horizontal, 6))
-                    .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
                 .onHover { hovered = $0 }
             } else {
                 Color.clear.frame(height: 0)

@@ -333,12 +333,12 @@ public enum PlayCountFold {
     /// 别名表剔掉 jasonchan/kun。⚠️ 前几版都装过机、盘上可能已被盖成那个号,
     /// 所以每一批都必须再 +1,否则「版本相等直接采用盘上旧键、永不迁移」。
     ///
-    /// ⚠️ **`familyKey`/`canonicalArtist`/`titleAliasesByArtist` 的改动不算在内,不用 +1**:
+    /// ⚠️ **`familyKey`/`canonicalArtist`/歌名别名表的改动不算在内,不用 +1**:
     /// 这个版本号只管 `key()`/`foldTitle()` 落进 `titleForms` 索引的键要不要重折——
     /// `familyKey` 是**派生**索引 `primaryCreditFamilies` 的键,`loadTitleForms` 两条分支
     /// (版本相等/不等)**都无条件**调用 `rebuildPrimaryCreditFamilies()`(2026-08-29 读代码
     /// 确认),也就是每次启动都会用当前 `familyKey` 重新分组,不需要靠这个版本号触发迁移。
-    /// 2026-08-29 新增歌名别名表 `titleAliasesByArtist` 时特意验证过这一点,没有 +1。
+    /// 2026-08-29 新增歌名别名表时特意验证过这一点,没有 +1。
     public static let foldVersion = 7
 
     /// key 的 memo(2026-08-19 性能审计):单次 key 要走 2 次 NFKC + 2 次 ICU 繁简
@@ -363,8 +363,8 @@ public enum PlayCountFold {
     }
 
     /// 查「写法族」用的键(2026-08-22 第三批):歌手先归**合唱首位**(mergeArtist),
-    /// 再把**罗马字写法折到中文本名**;歌名走 foldTitle,另外查一次
-    /// `titleAliasesByArtist`(2026-08-29 加,见其声明处注释)把歌名维度的罗马字/译名
+    /// 再把**罗马字写法折到中文本名**(canonicalArtist,本机推断的歌手别名表);歌名走 foldTitle,
+    /// 另外查歌名别名(本机推断表 → 自动发现表,2026-09-04 起没有手写表)把歌名维度的罗马字/译名
     /// 也折到中文本名。
     ///
     /// 三个调用点必须**完全**用这一个函数(LastfmStatsService 的 insertForm /
@@ -380,7 +380,8 @@ public enum PlayCountFold {
         let canonArtist = canonicalArtist(artist)
         let artistKey = canonicalArtistKey(canonArtist)
         let foldedTitle = foldTitle(title)
-        let canonTitle = titleAliasesByArtist[artistKey]?[foldedTitle]
+        // 本机推断表(同歌曲 id / 时长+歌词,证据硬)优先于自动发现表(Last.fm 整秒时长撞相等,弱)。
+        let canonTitle = lookupLocalTitleAlias(artistKey: artistKey, foldedTitle: foldedTitle)
             ?? lookupDiscoveredTitleAlias(artistKey: artistKey, foldedTitle: foldedTitle)
             ?? title
         return key(artist: canonArtist, title: canonTitle)
@@ -402,124 +403,59 @@ public enum PlayCountFold {
         !s.unicodeScalars.contains { CharacterSet.hanLike.contains($0) }
     }
 
-    /// 合唱归首位 + 罗马字折中文。查不到别名就原样返回(交给 key() 去做常规归一)。
+    /// 合唱归首位 + 歌手写法归并(罗马字艺名 / 乐队别名 → 本机数据里的代表写法)。查不到就原样返回
+    /// (交给 key() 去做常规归一)。
+    ///
+    /// 2026-09-04 起**没有手写表**:此前这里查的是编译进二进制的 `romanizedArtistAliases`(28 条,
+    /// `davidtao → 陶喆` 这种),用户要求「尽可能去掉手工表,一切由通用逻辑覆盖,不要特殊化」——现在
+    /// 查的是 App 启动/enrich 缓存变化时由 `LocalArtistAliases.derive` 从本机数据推出来、经
+    /// `setLocalArtistAliases` 灌进来的表(证据:collector 的 MusicBrainz 缓存 + 两种写法名下曲目共享
+    /// ≥ 2 个歌曲 id,详见那个文件的头注)。实测这台机器上历史里真有两种写法并存的歌手
+    /// (Khalil Fong / David Tao / Jay Chou / Wang Leehom / Dean Ting / Crowd Lu / Leah Dou)全部
+    /// 被推出来了;旧表里其余那些(Eason Chan / Sodagreen / Utada …)历史里压根没有罗马字写法的
+    /// 播放,删掉零损失,以后一旦出现也会由同一套逻辑接住。
+    ///
+    /// 旧表刻意剔掉的 `jasonchan` / `kun` 那两条的教训(Last.fm 那边是同名多人/大杂烩实体)在新
+    /// 逻辑里对应两道闸:MusicBrainz 别名去空格后短于 3 个字符不用、共享 id 单个不算。
     public static func canonicalArtist(_ artist: String) -> String {
         let primary = ArtistCredit.mergeArtist(artist)
-        return romanizedArtistAliases[stripSpaces(normalized(primary))] ?? primary
+        return lookupLocalArtistAlias(stripSpaces(normalized(primary))) ?? primary
     }
 
-    /// 罗马字歌手写法 → 中文本名。**键和值都是归一后的形态**(NFKC + ICU 繁简 + 小写 + 去空格),
-    /// 因为它是在 key() 的歌手段那一层做替换的 —— 键写成 `davidtao` 而不是 `David Tao`。
-    ///
-    /// ⚠️ 匹配是**整串相等**,绝不能改成子串/前缀:索引里有 `Count Basie`(→countbasie)
-    /// 和 `Fantasia`(→fantasia),子串匹配两个都会被 `asi` 命中(两条都有断言钉着)。
-    ///
-    /// ⚠️ **刻意剔掉的两条**(2026-08-22 并行核实,artist.getinfo 拿到的硬证据):
-    ///  - `jasonchan → 陈柏宇`:Last.fm 自己的 bio 开头就写 "Two artists share this name",
-    ///    那个实体的 tags/similar 指向另一个 Jason Chan(上海 indie 系),不是 hk-pop 的陳柏宇。
-    ///    收益只有 1 族 —— 拿一条"官方标注同名多人"的键换 1 族,不值。
-    ///  - `kun → 蔡徐坤`:bio 确证 Kun 是蔡徐坤的艺名,**但那个实体是大杂烩** ——
-    ///    listeners 77663(蔡徐坤本人只有 5638)、tags 里有 instrumental/neoclassical、
-    ///    similar 里是 WayV(队长也叫 Kun/钱锟)。3 字符键 + 常见汉/日/韩人名,
-    ///    收益同样只有 1 族。「今天没错、明天必错」的形态,不留。
-    /// 这两条**在导出脚本的 ALIAS 里**,剔掉是刻意偏离已核定表 —— 依据是新拿到的证据,
-    /// 不是口径分歧;要加回来请先复查那两个 Last.fm 实体的 bio/tags/similar。
-    /// 短键雷区(归一后 ≤6 字符的索引写法):`kun` `asi` `sou` `sir` `k` `den` `musiq`
-    /// `flo` `jid` `sza`… 往表里加短键前先扫一遍 367 个歌手写法有没有整串撞上的。
-    ///
-    /// 2026-08-22 用户拍板加。此前是「刻意分开计」的既有决策,代价实测:226 首歌的次数被
-    /// 拆成两本互不相见的账(`Jay Chou|不該` 与 `周杰倫|不該`),合并后合计 +1875 次;
-    /// 最大的几对是 方大同/Khalil Fong 51 首、陶喆/David Tao 38 首、周杰伦/Jay Chou 36 首。
-    ///
-    /// 前 23 条来自 `scripts/export-lastfm-tracks.py` 的 ALIAS(2026-08-18 与用户逐对核定);
-    /// 后 5 条(王力宏两种语序 / 陈奕迅 / 米津玄师 / 小袋成彬)是按本地索引实测补的 ——
-    /// 那张表是当时按需手写的,没覆盖这几个。
-    static let romanizedArtistAliases: [String: String] = [
-        // —— 已核定(与导出脚本 ALIAS 同源)——
-        "davidtao": "陶喆", "jaychou": "周杰伦", "khalilfong": "方大同",
-        "deanting": "丁世光", "crowdlu": "卢广仲", "leahdou": "窦靖童",
-        "softlipa": "蛋堡", "dianawang": "王诗安", "asi": "阿肆",
-        "eveai": "艾怡良", "nickylee": "李玖哲",
-        "wanting": "曲婉婷", "ronghaoli": "李荣浩",
-        "mattlv": "吕彦良", "pei-yuhung": "洪佩瑜", "lexieliu": "刘柏辛",
-        "sodagreen": "苏打绿", "zhangyusheng": "张雨生",
-        "utada": "宇多田ヒカル", "hikaruutada": "宇多田ヒカル", "宇多田光": "宇多田ヒカル",
-        // —— 按本地索引实测补(导出脚本那张表没覆盖)——
-        "wangleehom": "王力宏", "leehomwang": "王力宏",
-        "easonchan": "陈奕迅", "kenshiyonezu": "米津玄师", "nariakiobukuro": "小袋成彬",
-    ]
+    private static let artistLock = NSLock()
+    nonisolated(unsafe) private static var localArtistAliases: [String: String] = [:]
 
-    /// 罗马字/译名**歌名** → 中文本名歌名,极小的手工登记表,2026-08-29 用户报「Love Love
-    /// Love 其实就是爱爱爱,之前简繁能合并,这种没合并,能不能也算成一首歌」。
-    ///
-    /// ⚠️ **不能**像 `romanizedArtistAliases` 那样做一张纯 `title -> title` 的全局表 ——
-    /// 实测坐实(本地写法索引):`Love Love Love` 这个歌名字符串在**王力宏**名下也真实存在
-    /// 一首歌,跟方大同《爱爱爱》完全不是一回事;脱离歌手上下文做全局替换会把两首不同的歌
-    /// 焊成一首。所以外层键必须是**归一后的中文本名歌手**(即 `canonicalArtist(_:)` 的输出
-    /// 再走一次 `stripSpaces(normalized(_:))`,这样不管调用方传进来的是罗马字艺名还是中文
-    /// 本名都能命中同一条),内层键是 `foldTitle(_:)` 折出来的形态 —— 只有「这位歌手」名下
-    /// 「这个折叠键」才会被替换,不影响任何其它歌手同名或形似的歌名。
-    ///
-    /// 值是中文本名歌名(未折叠的原始写法即可,`familyKey` 会再送它去过一遍 `foldTitle`,
-    /// 跟索引里已有的简繁写法归到同一个桶)。
-    ///
-    /// `"nanyin": "南音"` 这条(2026-08-29 同批补):这首歌之前在「搜索候选歌词」弹窗里
-    /// 被误判成"语言跟这首歌对不上"一票否决(见 match.go 的 isProbablyWrongLanguageLyrics,
-    /// 那次已经用真实候选内容核实过 nanyin 确实就是《南音》)——是另一个独立系统(歌词
-    /// 候选打分)踩过的同一类坑,这里补上是因为本地写法索引(`lyrimuse-lastfm-title-forms.json`)
-    /// 实测坐实 `方大同|nanyin` 与 `方大同|南音` 是两个真实存在、各自独立记账的桶,加这条
-    /// 会立刻让两边的次数合并,不是"以防将来"的空操作。
-    ///
-    /// ⚠️ **2026-08-29 用 search-lyrics 批量核实过方大同名下另外 59 首纯英文写法的曲目
-    /// 的方法论后来被证明是错的方向,别再犯同一个错。** 当时查的是网易云/QQ/酷狗/LRCLIB
-    /// 这四个平台官方给出的曲目标题是不是中文——但这些平台的官方标题跟用户自己 Last.fm
-    /// 历史里真实出现过的写法**是两件不相关的事**:`Black Hole` 正是一个反例,四个平台给出
-    /// 的标题确实都是英文(所以当时被判定"没有中文对应",错了),但用户 Last.fm 历史(以及
-    /// 本机 collector 收听日志)里,这首歌本来就用中文「黑洞里」记录——`黑洞里`(简体)与
-    /// `黑洞裡`(繁体)靠既有的简繁折叠已经合并到 39~40 次,而 `Black Hole` 这个英文写法
-    /// 独立记着 1 次,三者从没被放到一起看,只有 `Black Hole` 这一个英文写法卡在"第 1 次
-    /// 听"上不动——用户亲自指出来才发现。**正确的核实方法是直接查用户自己的 Last.fm 数据
-    /// (`track.getInfo` 或本地写法索引缓存),不是查音乐平台的元数据**——那两者压根是不同
-    /// 的东西,一个是"这个人的听歌历史用什么字写的",一个是"这个平台管理员怎么给这首歌
-    /// 命名"。`red bean` 当时的"弱信号未采纳"结论同样需要用这个正确方法重新核实,不能
-    /// 沿用旧结论。
-    /// 2026-08-29 后续四条(`smallinsects`/`black&white`/`writeasongforyou`/`twentythree`)
-    /// 走的是重新设计的三步核实法:①专辑官方曲目单定位候选(《橙月》/《梦想家 The
-    /// Dreamer》公开曲目单);②直接查 Last.fm track.getInfo 交叉验证——候选中文名 userplaycount
-    /// 明显非零、且远大于英文写法;③**时长比对**排除假阳性(两者时长精确到毫秒级一致才采纳)。
-    /// 第③步不是可选项:同一批核实里 `Weather Report` vs `天氣先生` 次数都不小、专辑里
-    /// 序号紧邻,单看①②会被误判成同一首歌,时长一查——`Weather Report` 只有 61 秒(像是
-    /// 天气预报音效过场)、`天氣先生` 271 秒(完整歌曲)——证伪。以后再加新映射按这三步走,
-    /// 别只凭歌名字面像不像或者只核对一步数据就下结论。
-    static let titleAliasesByArtist: [String: [String: String]] = [
-        "方大同": [
-            "lovelovelove": "爱爱爱", "nanyin": "南音",
-            // "Black Hole" 2026-08-29 用户指出、直接查 Last.fm 坐实:黑洞里(简体)≈7次+
-            // 黑洞裡(繁体)33次(简繁本来就已经折叠在一起)= 约 40 次,Black Hole 独立 1 次,
-            // 三者从没被合并过。
-            "blackhole": "黑洞里",
-            // 三步法核实过、时长精确吻合(《橙月》专辑,单位 ms):
-            "smallinsects": "小小蟲",       // 240000/241000,英文 1 次 vs 中文合计 65 次
-            "black&white": "黑白",          // 232000,英文 1 次 vs 中文 62 次
-            "writeasongforyou": "為妳寫的歌", // 197000/198000,英文 2 次 vs 中文合计 55 次
-            // 《梦想家 The Dreamer》专辑,时长 224000ms 精确吻合:
-            "twentythree": "才二十三",       // 英文 1 次 vs 中文 11 次
-        ],
-    ]
+    /// 灌入 `LocalArtistAliases.derive` 的结果:`stripSpaces(normalized(mergeArtist(写法))) → 代表写法`。
+    public static func setLocalArtistAliases(_ table: [String: String]) {
+        artistLock.lock()
+        localArtistAliases = table
+        artistLock.unlock()
+    }
 
-    /// `titleAliasesByArtist` 是编译进二进制的手工核定表 —— 每条都经过「专辑曲目单 →
-    /// Last.fm 真实播放数 → 时长比对」三步核实,人工加一条要走一次核实+编译+装机。
-    /// 2026-08-29 用户当面问「只能这样一个一个加白名单吗,不能搞个通用逻辑」,拍板要
-    /// 一套自动发现的机制 —— 但发现结果不能也编进这份静态表(那还是要改代码重新装机),
-    /// 得是运行时可增长、持久化在本机的第二张表。两张表分层:静态表**优先**(人工核定,
-    /// 100% 信);这张表**兜底**(算法用时长比对自动确认,原理跟三步法的第③步一致,但
-    /// 省掉了①②两步的人工核实,理论上有极小概率的假阳性 —— 见 discoverTitleAliasesIfNeeded
-    /// 的注释)。
+    private static func lookupLocalArtistAlias(_ key: String) -> String? {
+        artistLock.lock()
+        let value = localArtistAliases[key]
+        artistLock.unlock()
+        return value
+    }
+
+    /// 歌名维度(2026-08-29 起)的别名分三层查(见 familyKey):本机推断表 → 自动发现表。手写的
+    /// `titleAliasesByArtist`(方大同 7 条,三步法人工核过)2026-09-04 删除——同样是用户要求去掉手工表:
+    /// 那 7 条现在由 `EnrichTitleAliases.derive` 的 E1(同歌曲 id)/E2(时长 + 歌词都对得上)两条证据
+    /// 路径自动推出来(selftest 用它们当回归样本钉住)。当年那张表的三步核实法留下的两条经验仍然有效、
+    /// 已经变成代码里的闸:①"平台官方标题是不是中文"跟"用户历史里用什么字写"是两件事,别拿前者
+    /// 当后者;②时长比对不是可选项(`Weather Report` 61 s 过场曲 vs 《天氣先生》271 s,光看歌名/专辑
+    /// 序号会误判)。
+
+    /// 自动发现表(2026-08-29):当时用户问「只能这样一个一个加白名单吗,不能搞个通用逻辑」,拍板要
+    /// 一套自动发现的机制——运行时可增长、持久化在本机的第二张表(算法用 Last.fm 整秒时长比对自动
+    /// 确认,理论上有假阳性 —— 见 discoverTitleAliasesIfNeeded 的注释;2026-09-04 实测这台机器上它
+    /// 既没在产出、产出时质量也不可信,所以 familyKey 里它排在本机推断表之后当兜底)。
     ///
     /// 存/取都由 App 侧的 LastfmStatsService 负责(它才有网络请求 + 本机文件读写的能力,
     /// 这个类型在 LyrimuseCore、selftest 也依赖它,不能牵涉 I/O)——这里只留一个线程安全的
     /// 内存副本 + 一个查询入口,App 启动加载完发现表后调 `setDiscoveredTitleAliases`
-    /// 灌进来,发现新映射时再调一次覆盖。结构跟 `titleAliasesByArtist` 完全一致:
+    /// 灌进来,发现新映射时再调一次覆盖。结构跟本机推断表完全一致:
     /// 外层键 = `canonicalArtistKey`,内层键 = `foldTitle`,值 = 中文歌名原始写法。
     private static let discoveredLock = NSLock()
     nonisolated(unsafe) private static var discoveredTitleAliasesByArtist: [String: [String: String]] = [:]
@@ -534,6 +470,35 @@ public enum PlayCountFold {
         discoveredLock.lock()
         let value = discoveredTitleAliasesByArtist[artistKey]?[foldedTitle]
         discoveredLock.unlock()
+        return value
+    }
+
+    /// 第三层歌名别名(2026-09-04):从**本机 enrich 缓存**推出来的「英文/罗马字歌名 → 中文歌名」。
+    ///
+    /// 用户点开方大同《Oasis》的合并明细问「能不能把中文对应的歌名也合并进来」——历史里
+    /// 《那沙漠里的水》是同一首录音。两张既有表都够不着它:静态表要人工核实+改代码装机;
+    /// 发现表靠 Last.fm 整秒 duration 撞相等,实测假阳性极高(2026-09-02 那台机器上 14 条采纳里
+    /// 11 条是错的——「Mojito→红模仿」「Melody→中國姑娘」这种),而且它的扫描门(前台安静 60 s
+    /// + 40 个请求的预算)在这台机器上从没让它跑完过一轮。
+    ///
+    /// 而 collector 早就替我们做过一件更可靠的事:两种写法各自播放时,歌词解析各自独立地把
+    /// 它们匹配到了**同一个网易云 / QQ 的歌曲 id**(`netease_url` / `qq_music_url` 落在 enrich
+    /// 缓存里)。两次独立检索落到同一个 id,比"时长整秒相等"硬得多,而且零网络、零新请求 ——
+    /// 判定在 EnrichTitleAliases.derive(纯函数,selftest 钉住),App 侧 enrich 缓存一变就重算。
+    /// 查找顺序:静态表 → 发现表 → 这张表;结构与前两张完全一致。
+    private static let localLock = NSLock()
+    nonisolated(unsafe) private static var localTitleAliasesByArtist: [String: [String: String]] = [:]
+
+    public static func setLocalTitleAliases(_ table: [String: [String: String]]) {
+        localLock.lock()
+        localTitleAliasesByArtist = table
+        localLock.unlock()
+    }
+
+    private static func lookupLocalTitleAlias(artistKey: String, foldedTitle: String) -> String? {
+        localLock.lock()
+        let value = localTitleAliasesByArtist[artistKey]?[foldedTitle]
+        localLock.unlock()
         return value
     }
 
@@ -642,7 +607,9 @@ public enum PlayCountFold {
     }
 
     /// NFKC(全角→半角) → 繁简(ICU) → 小写。
-    private static func normalized(_ s: String) -> String {
+    /// 模块内可见(2026-09-04):PlayCountFoldExplainer 要沿这条流水线逐级比对给出「为什么并进来」,
+    /// 必须用同一个函数而不是再写一遍归一。
+    static func normalized(_ s: String) -> String {
         let nfkc = s.precomposedStringWithCompatibilityMapping
         let m = NSMutableString(string: nfkc) as CFMutableString
         CFStringTransform(m, nil, "Hant-Hans" as CFString, false)
@@ -671,7 +638,8 @@ public enum PlayCountFold {
         return t
     }
 
-    private static func stripSpaces(_ s: String) -> String {
+    /// 模块内可见,理由同 normalized。
+    static func stripSpaces(_ s: String) -> String {
         String(s.filter { !$0.isWhitespace })
     }
 }

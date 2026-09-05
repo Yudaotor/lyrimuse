@@ -1,9 +1,12 @@
 import AppKit
+import LyrimuseCore
 import SwiftUI
 
 // "联网搜索候选歌词"弹窗,参考 LyricsX 的 SearchLyricsViewController:左侧候选列表
 // (来源+分数+是否逐字),右侧选中候选的完整预览,"采用此候选"把内容交回调用方
-// (LyricsManagerView 负责真正写回缓存,这里只管搜索和展示)。
+// (调用方负责真正写回缓存,这里只管搜索和展示)。onApply 是可等待的、回报有没有真的落盘:
+// 面板据此挪「当前使用」徽标、给一条回声;`keepsOpenAfterApply` 决定采纳后关窗还是留着
+// (只有悬浮窗 ⚙ 的独立小窗传 true,理由见 apply(_:))。
 //
 // 歌名/歌手/专辑是可编辑字段,默认沿用这首歌本身的元数据,也支持改关键词后重新联网
 // 查(比如原始元数据不准/有别名,想换个关键词试试能不能搜到更好的候选)。改这三个
@@ -21,12 +24,39 @@ struct LyricsSearchSheet: View {
     // 候选应该是眼下正在用的这一份,不是随便哪个候选,不然明明已经在用 QQ 音乐的歌词,
     // 打开这个弹窗却默认高亮着完全不相关的 kugou,容易误导成"当前用的就是这个"。
     let currentSource: String?
+    /// 这首歌当前正文的「只取词」指纹(ManualPickLock.fingerprint),nil = 调用方拿不到正文。
+    /// 「当前使用」徽标 2026-09-04 起是来源 + 词双判据(LyricsCandidateDuplicates.isCurrent):同源但
+    /// 正文被手改过的不再标当前;拿不到指纹时退回只比来源。三个入口都得传(contracts 组守卫钉着)。
+    let currentFingerprint: String?
     // 曲目真实时长(秒),0 表示未知。必须传 —— 打分里时长匹配那一档权重很重,传 0 会
     // 让整档对所有候选一律跳过,弹窗里显示的排名就跟当初自动决策用的那组分数对不上。
     // 2026-08-07 实测:同一首歌传 0 时 qq 482 排第一,传真实时长(270.8s)时 qq 是 582、
     // 而当初胜出的 Musixmatch 拿的是 962 —— 用户看着"分最高的没被选",其实看的是另一套数。
     let durationSecs: Double
-    let onApply: (LyricsSearchService.Candidate) -> Void
+    /// 采纳后面板留着不关。三个入口里只有悬浮窗 ⚙ 的独立小窗传 true —— 那是"边听边换词"的
+    /// 入口,换一个源听两句不对再换,原来要关窗→重开→再等九个源重搜(最坏 20 秒);留着的话
+    /// 同一批候选还在,点即切。歌词管理(编辑器上方的模态,留着会挡住刚回填的编辑器)和歌词窗口
+    /// 的 sheet(关了才看得到背后的歌词)维持关窗。
+    let keepsOpenAfterApply: Bool
+    /// 调用方真正写回缓存,回报有没有落盘。面板等它结束再决定:成功 → 挪「当前使用」徽标,
+    /// 留着的话给一条回声、关窗模式直接关;失败 → 关窗模式照旧关(调用方那边的 lastError 红字
+    /// 负责说明),留着的话在标题栏说一句、让人直接重试。
+    let onApply: (LyricsSearchService.Candidate) async -> Bool
+
+    /// 正在写回的那条候选的来源(按钮禁用 + 文案变「正在采用…」);nil = 没有在飞的采纳。
+    @State private var applyingSource: String?
+    /// 本次面板存活期间最后一次采纳成功的来源。「当前使用」徽标认 `appliedSource ?? currentSource`
+    /// —— `currentSource` 是打开面板那一刻的快照(let),采纳之后不会自己变。换歌时重置。
+    @State private var appliedSource: String?
+    /// 跟 appliedSource 配对:刚采纳那条的指纹,「当前使用」双判据的另一半。
+    @State private var appliedFingerprint: String?
+    @State private var applyFeedback: ApplyFeedback?
+    @State private var applyFeedbackGeneration = 0
+
+    private struct ApplyFeedback: Equatable {
+        let text: String
+        let ok: Bool
+    }
 
     @Environment(\.dismiss) private var dismiss
     // 只为了让这个弹窗在手动切换语言时重新渲染,同 LyricsManagerView 的理由 ——
@@ -52,7 +82,7 @@ struct LyricsSearchSheet: View {
         return "（\(sourcesDone)/\(sourcesTotal)）\(roundSuffix)"
     }
 
-    // 八个歌词源的完整名单——跟 collector 侧 enrich.go 的 lyricSourceNames 手工保持一致
+    // 九个歌词源的完整名单——跟 collector 侧 enrich.go 的 lyricSourceNames 手工保持一致
     // (同一种做法见 LyricsDecisionSheet.swift 的 currentLyricsScoringVersion)。2026-08-31
     // 加 kuwo 时验证过:它跟 amll/lyricfind 走的是同一条 fetchScoredLyricCandidatesStreaming
     // 并发拉取路径,search-lyrics 这条 CLI 子命令(searchcli.go)确实会去查它,所以这里要
@@ -139,7 +169,7 @@ struct LyricsSearchSheet: View {
     // 知道进度在动。总数为 0(还没收到任何一行)时不显示,不写成 (0/0)。
     @State private var sourcesDone = 0
     @State private var sourcesTotal = 0
-    // 第几轮全源检索(collector 兜底轮每轮重扫 8 个源),给 searchProgressSuffix 的
+    // 第几轮全源检索(collector 兜底轮每轮重扫 9 个源),给 searchProgressSuffix 的
     // 轮次前缀用,语义见 LyricsSearchService.SearchUpdate.round。
     @State private var searchRound = 1
     // searchGeneration:第几轮搜索。load() 有三个入口(.task 首次进入、"重新搜索"按钮、
@@ -151,7 +181,7 @@ struct LyricsSearchSheet: View {
     // 让它自己跑完、结果丢掉即可,搜索本身没有副作用)。
     @State private var searchGeneration = 0
     @State private var loadError: String?
-    // 2026-08-02 补上——七个源都没查到候选时,原来只有一句笼统的"都没找到",分不清是
+    // 2026-08-02 补上——所有源都没查到候选时,原来只有一句笼统的"都没找到",分不清是
     // 这首歌真的没有网络歌词还是网络整体不通。collector 侧统计"这一轮请求是否全部
     // 失败"算出这个信号,见 LyricsSearchService.SearchUpdate 的注释。
     @State private var networkLooksDown = false
@@ -188,12 +218,16 @@ struct LyricsSearchSheet: View {
     @State private var title: String
     @State private var album: String
 
-    init(artist: String, title: String, album: String, currentSource: String?, durationSecs: Double, onApply: @escaping (LyricsSearchService.Candidate) -> Void) {
+    init(artist: String, title: String, album: String, currentSource: String?, currentFingerprint: String? = nil,
+         durationSecs: Double, keepsOpenAfterApply: Bool = false,
+         onApply: @escaping (LyricsSearchService.Candidate) async -> Bool) {
         self.originalArtist = artist
         self.originalTitle = title
         self.originalAlbum = album
         self.currentSource = currentSource
+        self.currentFingerprint = currentFingerprint
         self.durationSecs = durationSecs
+        self.keepsOpenAfterApply = keepsOpenAfterApply
         self.onApply = onApply
         self._artist = State(initialValue: artist)
         self._title = State(initialValue: title)
@@ -216,6 +250,7 @@ struct LyricsSearchSheet: View {
         VStack(spacing: 0) {
             HStack {
                 Text(L10n.t("搜索候选歌词")).font(.title3.weight(.semibold))
+                applyFeedbackView
                 Spacer()
                 sourceAvailabilityBadge
                 Button(L10n.t("关闭")) { dismiss() }
@@ -238,7 +273,13 @@ struct LyricsSearchSheet: View {
 
             content
         }
-        .frame(minWidth: 720, minHeight: 480)
+        .frame(minWidth: 720, maxWidth: .infinity, minHeight: 480, maxHeight: .infinity)
+        // 2026-09-04 用户要求"这个页面要支持扩大边框"。独立小窗那条路径本来就能拖,
+        // 从歌词管理/歌词窗口弹出的这张是 **sheet** —— AppKit 给 sheet 的默认 styleMask
+        // 里没有 .resizable,窗口边缘对拖拽完全没反应。补一颗探针把这个标志插回去
+        // (同 WindowDragHandle 的路子:垫在背景层拿到底层 NSWindow)。上面的 frame 同时
+        // 从"只有下限"改成"下限 + 可无限撑大",不然窗口拖大了内容仍停在 720×480。
+        .background(WindowResizeEnabler(minWidth: 720, minHeight: 480))
         // ⚠️ 2026-09-02 真实bug修复(悬浮窗 ⚙「搜索歌词…」小窗切歌后串 key):那扇窗口是
         // `if let context { LyricsSearchSheet(...) }`,2026-08-31 让它再点一次就重查曲目、把新
         // context 喂进来——但 SwiftUI 里 Optional 从 A 换成 B 是**同一个视图身份**:上面三个
@@ -257,10 +298,14 @@ struct LyricsSearchSheet: View {
             artist = originalArtist
             title = originalTitle
             album = originalAlbum
+            // 换了歌,上一首采纳过什么跟这一首无关;回声也别留着误导。
+            appliedSource = nil
+            appliedFingerprint = nil
+            applyFeedback = nil
         }
         .task(id: searchSubject) { await load() }
         // 关闭/采纳/Esc 任何一条退出路径都把还在跑的 collector 子进程停掉 —— 不停的话
-        // 它会继续对八个源发请求直到 20 秒兜底,NDJSON 还在往已消失的视图里灌
+        // 它会继续对九个源发请求直到 20 秒兜底,NDJSON 还在往已消失的视图里灌
         // (2026-08-19 性能审计;search() 内的 withTaskCancellationHandler 是第二层,
         // cancelRunning 幂等,两层谁先到都行)。
         .onDisappear { LyricsSearchService.shared.cancelRunning() }
@@ -271,9 +316,24 @@ struct LyricsSearchSheet: View {
     // 才会真的重新发起查询,不会敲一个字就发一次网络请求。
     private var queryFieldsBar: some View {
         HStack(spacing: 10) {
-            TextField(L10n.t("歌名"), text: $title).textFieldStyle(.roundedBorder)
-            TextField(L10n.t("歌手"), text: $artist).textFieldStyle(.roundedBorder)
-            TextField(L10n.t("专辑"), text: $album).textFieldStyle(.roundedBorder)
+            // 三栏**按内容长度分宽**,不等分(2026-09-04 用户反馈"输入框放不下内容")。
+            // 等分那版最常见的一幕:歌手栏「PRINCE」六个字母后面空着大半格,旁边歌名
+            // 「Around the World in a Day (2025 Remaster)」和专辑双双被截断——三栏的
+            // 内容长度天然不对等,均分等于把宽度分给了最不需要的那栏。分法(含放不下时
+            // 的下限保护)在 LyricsQueryFieldLayout,这里只负责按实际字体把"想要多宽"量
+            // 出来。挂 help:再怎么分也有装不下的时候,悬停能看全文。
+            ProportionalFieldsLayout(
+                desired: [
+                    Self.desiredFieldWidth(title, placeholder: L10n.t("歌名")),
+                    Self.desiredFieldWidth(artist, placeholder: L10n.t("歌手")),
+                    Self.desiredFieldWidth(album, placeholder: L10n.t("专辑")),
+                ],
+                spacing: 10, minWidth: 88
+            ) {
+                TextField(L10n.t("歌名"), text: $title).textFieldStyle(.roundedBorder).help(title)
+                TextField(L10n.t("歌手"), text: $artist).textFieldStyle(.roundedBorder).help(artist)
+                TextField(L10n.t("专辑"), text: $album).textFieldStyle(.roundedBorder).help(album)
+            }
             if isDirty {
                 Button(L10n.t("恢复原信息")) {
                     artist = originalArtist
@@ -295,7 +355,7 @@ struct LyricsSearchSheet: View {
 
     // candidates 陆续到达、isSearching 才是"是否还没结束"的唯一依据——不能用
     // "candidates.isEmpty"反过来判断有没有搜索完:目前为止一个候选都还没到手,不代表
-    // 八个源已经查完了(可能只是跑得快的那几个还没轮到),那样会把"还在搜"误判成
+    // 九个源已经查完了(可能只是跑得快的那几个还没轮到),那样会把"还在搜"误判成
     // "查完了、真的什么都没有",提前弹出"没找到候选"的空状态提示。
     @ViewBuilder
     private var content: some View {
@@ -324,7 +384,7 @@ struct LyricsSearchSheet: View {
                 ContentUnavailableView {
                     Label(L10n.t("网络似乎不通"), systemImage: "wifi.slash")
                 } description: {
-                    Text(L10n.t("八个源的请求全部失败，很可能是网络连接有问题，不是这首歌真的没有歌词——检查网络后可以点下面的「重试」"))
+                    Text(L10n.t("九个源的请求全部失败，很可能是网络连接有问题，不是这首歌真的没有歌词——检查网络后可以点下面的「重试」"))
                 } actions: {
                     Button(L10n.t("重试")) { Task { await load() } }
                 }
@@ -332,7 +392,7 @@ struct LyricsSearchSheet: View {
             } else if instrumental {
                 // 排在"网络似乎不通"之后、笼统兜底之前:这是比"真没搜到"更确定的结论——
                 // 至少一个源明确断言过"这首歌没有词"(见 instrumental 声明处注释),不是
-                // 八个源都交白卷说不出理由,不该跟那种情况共用同一句轻描淡写的"没找到"。
+                // 九个源都交白卷说不出理由,不该跟那种情况共用同一句轻描淡写的"没找到"。
                 // 文案复用「重新自动匹配」toast 三分支(LyricsManagerView.swift)已经在用的
                 // 同一条 L10n key,同一个结论在两处别各写一套措辞。
                 ContentUnavailableView {
@@ -342,7 +402,7 @@ struct LyricsSearchSheet: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                ContentUnavailableView(L10n.t("八个源都没找到可用的候选"), systemImage: "text.badge.xmark")
+                ContentUnavailableView(L10n.t("九个源都没找到可用的候选"), systemImage: "text.badge.xmark")
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         } else {
@@ -362,7 +422,10 @@ struct LyricsSearchSheet: View {
                     List(candidates, selection: selectedSourceBinding) { c in
                         candidateRow(c)
                     }
-                    .frame(minWidth: 250, idealWidth: 280, maxWidth: 320)
+                    // 2026-09-04 把理想/上限各放宽一档(280→300、320→380):这一列要放
+                    // 歌名/歌手/专辑三行,长专辑名在 280pt 下必换行甚至截断;右侧预览
+                    // 有 minWidth 380 兜着,拖不塌。
+                    .frame(minWidth: 250, idealWidth: 300, maxWidth: 380)
 
                     if let c = candidates.first(where: { $0.source == selectedSource }) ?? candidates.first {
                         previewPane(c)
@@ -390,10 +453,90 @@ struct LyricsSearchSheet: View {
                 }
                 Spacer(minLength: 0)
             }
-            characteristicBadges(c, source: c.source, isCurrent: c.source == currentSource)
+            characteristicBadges(c, source: c.source, isCurrent: isCurrentCandidate(c), duplicateOf: duplicateAnchors[c.source])
         }
         .tag(c.source)
         .padding(.vertical, 3)
+    }
+
+    /// 这首歌眼下实际生效的来源:本次面板里采纳过就是刚采纳的那条,否则是打开时的快照。
+    private var effectiveCurrentSource: String? { appliedSource ?? currentSource }
+    /// 跟 effectiveCurrentSource 配对:采纳过就是刚采纳那条的指纹,否则是打开时调用方算的。
+    private var effectiveCurrentFingerprint: String? { appliedSource != nil ? appliedFingerprint : currentFingerprint }
+
+    private func isCurrentCandidate(_ c: LyricsSearchService.Candidate) -> Bool {
+        LyricsCandidateDuplicates.isCurrent(
+            candidateSource: c.source, candidateFingerprint: c.fingerprint,
+            currentSource: effectiveCurrentSource, currentFingerprint: effectiveCurrentFingerprint)
+    }
+
+    /// source → 排在它前面、词逐字相同的那个源(LyricsCandidateDuplicates.firstMatches)。候选最多九条,
+    /// 每次 body 算一遍不贵;指纹本身在 Candidate 构造时算好了。
+    private var duplicateAnchors: [String: String] {
+        LyricsCandidateDuplicates.firstMatches(candidates.map { (source: $0.source, fingerprint: $0.fingerprint) })
+    }
+
+    private func applyButtonTitle(for c: LyricsSearchService.Candidate) -> String {
+        if applyingSource == c.source { return L10n.t("正在采用…") }
+        // 按钮文案跟着"这条候选到底能干什么"走——2026-08-30 加:纯文本那条采纳后不会像别的
+        // 候选一样逐字/逐行跟播放同步,措辞不该让人以为跟别的候选是同一回事。
+        return c.isPlainTextOnly ? L10n.t("采纳为静态文本") : L10n.t("采用此候选")
+    }
+
+    /// 「采用此候选」的整条流程(2026-09-04 起等调用方写完再收尾,原来是 `onApply(c); dismiss()`
+    /// 一把关掉、写盘在背后跑、面板上什么反馈都没有):
+    /// ① 防重入 —— 写盘 + 排 collector 重启在飞时不再叠一笔,按钮禁用、文案变「正在采用…」;
+    /// ② 等待期间换了歌(小窗再按一次热键会换 context)这一笔写的是上一首,不挪徽标、不回声;
+    /// ③ 成功 → `appliedSource` 挪「当前使用」徽标;关窗模式到此关窗(失败也关,调用方那边
+    ///    的 lastError 红字负责说明),留着的模式给标题栏一条回声、不重搜 —— 候选本来就在。
+    private func apply(_ c: LyricsSearchService.Candidate) async {
+        guard applyingSource == nil else { return }
+        let subject = searchSubject
+        applyingSource = c.source
+        let saved = await onApply(c)
+        applyingSource = nil
+        guard subject == searchSubject else { return }
+        if saved {
+            appliedSource = c.source
+            appliedFingerprint = c.fingerprint
+        }
+        guard keepsOpenAfterApply else {
+            dismiss()
+            return
+        }
+        if saved {
+            let name = LyricsSource(rawValue: c.source)?.displayName ?? c.source
+            showApplyFeedback(String(format: L10n.t("已采用 %@ 的歌词"), name), ok: true)
+        } else {
+            showApplyFeedback(L10n.t("未能保存，请再试一次"), ok: false)
+        }
+    }
+
+    private func showApplyFeedback(_ text: String, ok: Bool) {
+        applyFeedbackGeneration += 1
+        let generation = applyFeedbackGeneration
+        withAnimation { applyFeedback = ApplyFeedback(text: text, ok: ok) }
+        Task {
+            try? await Task.sleep(for: .seconds(2.5))
+            guard generation == applyFeedbackGeneration else { return }
+            withAnimation { applyFeedback = nil }
+        }
+    }
+
+    /// 标题栏里的回声:「已采用 X 的歌词」/「未能保存」,2.5 秒后自己消失。放标题栏而不是另起一层
+    /// toast 浮层:这个面板没有第二层浮层机制,标题右侧那段本来就是空的,而且它跟「当前使用」徽标
+    /// 的移动同一刻出现,视线不用离开列表。
+    @ViewBuilder
+    private var applyFeedbackView: some View {
+        if let applyFeedback {
+            Label(applyFeedback.text,
+                  systemImage: applyFeedback.ok ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+                .font(.callout)
+                .foregroundStyle(applyFeedback.ok ? Color.secondary : Color.orange)
+                .lineLimit(1)
+                .padding(.leading, 8)
+                .transition(.opacity)
+        }
     }
 
     private func previewPane(_ c: LyricsSearchService.Candidate) -> some View {
@@ -408,13 +551,13 @@ struct LyricsSearchSheet: View {
                 // 按钮文案跟着"这条候选到底能干什么"走——2026-08-30 加:纯文本那条采纳后
                 // 不会像别的候选一样逐字/逐行跟播放同步,措辞不该让人以为跟别的候选是同一
                 // 回事,得在真正点下去之前再确认一次,不能只靠上面那个警示标签。
-                Button(c.isPlainTextOnly ? L10n.t("采纳为静态文本") : L10n.t("采用此候选")) {
-                    onApply(c)
-                    dismiss()
+                Button(applyButtonTitle(for: c)) {
+                    Task { await apply(c) }
                 }
                 .buttonStyle(.borderedProminent)
+                .disabled(applyingSource != nil)
             }
-            characteristicBadges(c, source: c.source, isCurrent: c.source == currentSource)
+            characteristicBadges(c, source: c.source, isCurrent: isCurrentCandidate(c), duplicateOf: duplicateAnchors[c.source])
             if c.isPlainTextOnly {
                 Label(
                     L10n.t("这份歌词没有时间戳，采纳后只能在「歌词窗口」里作为静态文字展示，不会逐字/逐行跟随播放高亮"),
@@ -424,7 +567,11 @@ struct LyricsSearchSheet: View {
                 .foregroundStyle(.secondary)
             }
             ScrollView {
-                Text(c.lyrics)
+                // 摘掉 [ti:]/[by:]/[offset:] 这类元信息标签行和署名行再显示——它们播放时
+                // 一个字都不会出现,却占满预览框顶部,把用户真正要判断的"第一句词对不对、
+                // 轴准不准"挤到看不见的地方(2026-09-04 用户提)。只影响预览,采纳落盘的
+                // 仍是候选原始文本;判据与理由见 LyricsPreviewText。
+                Text(LyricsPreviewText.forPreview(c.lyrics, title: c.title, artist: c.artist))
                     .font(.system(.callout, design: .monospaced))
                     .textSelection(.enabled)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -435,21 +582,59 @@ struct LyricsSearchSheet: View {
         .frame(minWidth: 380)
     }
 
-    // 这个候选实际匹配到的歌名(单独一行)+ 歌手/专辑(合并一行,用"·"分隔)——不是每个源
-    // 都能给全,哪一项是空的就不显示那一行,不留空白占位;title 单独一行是因为它通常
-    // 跟搜索关键词的歌名差不多、但偶尔不同(比如带 Live/Remix 后缀),值得单独看清楚。
+    /// 一栏输入框「装下自己的内容需要多宽」:按输入框实际用的系统字体量一次文字宽度,
+    /// 再加上 roundedBorder 的左右内边距与描边。空栏按占位符量(不然它会被压到下限,
+    /// 而用户点进去要打字的正是这一栏)。
+    private static func desiredFieldWidth(_ text: String, placeholder: String) -> CGFloat {
+        let shown = text.isEmpty ? placeholder : text
+        let font = NSFont.systemFont(ofSize: NSFont.systemFontSize)
+        let width = (shown as NSString).size(withAttributes: [.font: font]).width
+        return width + 22
+    }
+
+    // 这个候选实际匹配到的歌名 / 歌手 / 专辑,**各占一行**——不是每个源都能给全,哪一项
+    // 是空的就不显示那一行,不留空白占位;title 单独一行是因为它通常跟搜索关键词的歌名
+    // 差不多、但偶尔不同(比如带 Live/Remix 后缀),值得单独看清楚。
+    //
+    // 2026-09-04 歌手和专辑从"合并一行、用「·」分隔"拆成两行(用户要求)。合并那版在
+    // 左侧列表里几乎必然被截断:列宽只有 250–320pt,而歌手本身就可能长到
+    // 「Prince/The New Power Generation」这种,后面跟着的专辑名往往只剩「Diamond…」
+    // 几个字——恰恰是同名候选之间唯一能分辨"这条是哪个版本"的信息。拆开后两行各自
+    // 有整行宽度,截断概率大降;代价是每条候选高一行,九条也就多九行,这一列本来就
+    // 是纵向滚动的。
+    // 2026-09-04 再补:拆成三行之后仍然会有单项撑不下的(实测「Diamonds and Pearls
+    // (Super Deluxe Edition)」在 300pt 的列里还差几个字),所以三行都放开到**最多两行**
+    // 并挂 `help` 兜底。三个取舍:
+    //  · **宁可换行不肯截断**——这三项被截掉的永远是尾巴,而尾巴恰恰是版本信息
+    //    (「(Super Deluxe Edition)」「(2023 Remaster)」「feat. …」),同名候选之间往往
+    //    只有这一处不同;截掉尾巴等于把这一列最该看的字先扔了。
+    //  · **不用居中省略(.truncationMode(.middle))**——它确实能同时留住头和尾,但一行里
+    //    挖个洞读起来费劲,而且这一列是纵向滚动的、多一行的代价很低。
+    //  · **封顶两行**——真到两行还放不下(整段 feat. 名单那种)才截断,再由 `help` 悬停
+    //    看全文;不封顶的话一条候选能自己撑出五六行,九条排下来列表就没法扫了。
     @ViewBuilder
     private func candidateMatchInfo(
         _ c: LyricsSearchService.Candidate, titleFont: Font
     ) -> some View {
         if !c.title.isEmpty {
-            Text(c.title).font(titleFont).lineLimit(1)
+            Text(c.title)
+                .font(titleFont)
+                .lineLimit(2)
+                .help(c.title)
         }
-        if !c.artist.isEmpty || !c.album.isEmpty {
-            Text([c.artist, c.album].filter { !$0.isEmpty }.joined(separator: " · "))
+        if !c.artist.isEmpty {
+            Text(c.artist)
                 .font(.caption2)
                 .foregroundStyle(.secondary)
-                .lineLimit(1)
+                .lineLimit(2)
+                .help(c.artist)
+        }
+        if !c.album.isEmpty {
+            Text(c.album)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .lineLimit(2)
+                .help(c.album)
         }
     }
 
@@ -486,9 +671,9 @@ struct LyricsSearchSheet: View {
     // 把候选列表里的图标和保存后详情页里的字段对上号。
     @ViewBuilder
     private func characteristicBadges(
-        _ c: LyricsSearchService.Candidate, source: String, isCurrent: Bool
+        _ c: LyricsSearchService.Candidate, source: String, isCurrent: Bool, duplicateOf: String?
     ) -> some View {
-        // WrapLayout 而不是 HStack:最多可能同时有五个标签(逐字/译文/罗马音/来源/当前使用),
+        // WrapLayout 而不是 HStack:最多可能同时有六个标签(逐字/译文/罗马音/来源/文字相同/当前使用),
         // 左侧那一列只有 ~300pt 宽,挤不下时该折行,不该被裁掉。
         WrapLayout(horizontalSpacing: 5, verticalSpacing: 4, rowAlignment: .leading) {
             // 2026-08-30 加:警示色（橙）跟下面几个"这条候选有什么特性"的描述性标签区分
@@ -508,6 +693,15 @@ struct LyricsSearchSheet: View {
             }
             // 来源:用它在别处(歌词管理列表、设置里的来源勾选)一贯的身份色,一眼能对上号。
             sourceBadge(source)
+            if let duplicateOf {
+                // 2026-09-04:跟排在前面的某个源逐字同词(ManualPickLock 指纹,只比词)。**只标注不隐藏**——
+                // 用户可能就是要这个源的译文/逐字轨,参考做法整条丢弃的路子不学;所以文案写「文字相同」
+                // 不写「完全相同」,悬停说明把口径讲清。灰色:它是"这条跟别人重复"的提示,不是加分项。
+                characteristicBadge(
+                    String(format: L10n.t("歌词文字与 %@ 相同"), LyricsSource(rawValue: duplicateOf)?.displayName ?? duplicateOf),
+                    "equal.circle", .secondary)
+                    .help(L10n.t("只比对歌词文字，不含时间戳、逐字与译文；这条候选仍可能带别的来源没有的逐字轨或译文"))
+            }
             if isCurrent {
                 // 这首歌眼下真正在用的就是这一条。实心填充,跟上面几个描述性标签区分开 ——
                 // 那几个说的是"这条候选有什么",这一个说的是"你现在用的是它"。
@@ -611,8 +805,8 @@ struct LyricsSearchSheet: View {
                 // 始终没搜到时,退回"目前排最前"兜底,且只兜底一次(已经选中过东西就不再
                 // 因为"还是没等到 currentSource"而重新改选)。
                 guard !userPickedSource else { return }
-                if let currentSource, update.candidates.contains(where: { $0.source == currentSource }) {
-                    selectedSource = currentSource
+                if let current = effectiveCurrentSource, update.candidates.contains(where: { $0.source == current }) {
+                    selectedSource = current
                 } else if selectedSource == nil {
                     selectedSource = update.candidates.first?.source
                 }
@@ -625,16 +819,41 @@ struct LyricsSearchSheet: View {
     }
 }
 
-// 垫在自定义标题栏背后的一块透明拖拽区——按下并拖动时直接对它所在的 NSWindow 发起
-// performDrag,让没有系统标题栏的窗口(sheet/hiddenTitleBar 都算)也能靠这行拖动。
-// 只在 mouseDown 里取 window 而不是缓存,因为 NSViewRepresentable 的实例在 SwiftUI
-// 重新求值 body 时会重建,view 却是同一个,取当次真实生效的 window 才对。
-private struct WindowDragHandle: NSViewRepresentable {
-    final class DragCatcherView: NSView {
-        override func mouseDown(with event: NSEvent) {
-            window?.performDrag(with: event)
+/// 一排等高、**按各自内容长度分宽**的输入框。分宽的算术在 `LyricsQueryFieldLayout`
+/// (纯函数、有 selftest),这里只做两件 SwiftUI 侧的事:把整行可用宽度交给它,再按
+/// 结果摆位置。
+private struct ProportionalFieldsLayout: Layout {
+    let desired: [CGFloat]
+    let spacing: CGFloat
+    let minWidth: CGFloat
+
+    private func widths(for subviews: Subviews, in total: CGFloat) -> [CGFloat] {
+        let gaps = spacing * CGFloat(max(subviews.count - 1, 0))
+        // desired 少给了就按下限补齐,多给了就截断——布局不该因为调用方数错了个数而崩。
+        let want = (0..<subviews.count).map { $0 < desired.count ? desired[$0] : minWidth }
+        return LyricsQueryFieldLayout.widths(
+            desired: want, available: max(total - gaps, 0), minWidth: minWidth)
+    }
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let height = subviews.map { $0.sizeThatFits(.unspecified).height }.max() ?? 0
+        // 没有被提议宽度时(比如量"理想宽")报三栏都装得下的那个宽度。
+        let natural = desired.reduce(0, +) + spacing * CGFloat(max(subviews.count - 1, 0))
+        return CGSize(width: proposal.width ?? natural, height: height)
+    }
+
+    func placeSubviews(
+        in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()
+    ) {
+        let ws = widths(for: subviews, in: bounds.width)
+        var x = bounds.minX
+        for (i, sub) in subviews.enumerated() {
+            let w = i < ws.count ? ws[i] : 0
+            sub.place(
+                at: CGPoint(x: x, y: bounds.midY),
+                anchor: .leading,
+                proposal: ProposedViewSize(width: w, height: bounds.height))
+            x += w + spacing
         }
     }
-    func makeNSView(context: Context) -> NSView { DragCatcherView() }
-    func updateNSView(_ nsView: NSView, context: Context) {}
 }

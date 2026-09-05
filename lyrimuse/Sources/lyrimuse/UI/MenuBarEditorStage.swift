@@ -360,6 +360,24 @@ struct MenuBarHoverControlsRow: View {
     }
 }
 
+/// 「无歌词时显示歌名」行(2026-09-04,借鉴清单 #28)。跟上面「悬停显示播放控制」同住「布局」浮层
+/// 与「全部设置」抽屉:它管的也是"这一格在什么状态下显示什么",不是样式。判据在 Core
+/// (`MenuBarSlotPolicy.displayText`),help 里把三条边界(暂停仍缩回 / 广告不显示 / 歌词一到就换)说清。
+/// 进「重置 ▾」——2026-09-03 漏过两项被用户当场看出来,见 `MenuBarStyleDefaults` 头注。
+struct MenuBarTitleFallbackRow: View {
+    @ObservedObject private var settings = AppSettings.shared
+
+    var body: some View {
+        SettingsRow(
+            icon: "music.note.list",
+            title: L10n.t("无歌词时显示歌名"),
+            help: L10n.t("这首歌没有歌词或还在搜索时，用「♪ 歌名」占住歌词的位置，不缩回小图标；歌词一到就换成歌词。暂停时仍缩回图标，广告中不显示")
+        ) {
+            Toggle("", isOn: $settings.menuBarShowsTitleWhenNoLyrics)
+        }
+    }
+}
+
 // MARK: - 恢复默认
 
 /// 「重置」按钮的动作本体——把工具栏那三个浮层(布局 / 配色 / 字体)里的**每一项**恢复默认。
@@ -385,6 +403,7 @@ enum MenuBarStyleDefaults {
         settings.menuBarLyricsAlignment = AppSettings.defaultMenuBarLyricsAlignment
         settings.menuBarLyricsIconPosition = AppSettings.defaultMenuBarLyricsIconPosition
         settings.menuBarHoverShowsControls = AppSettings.defaultMenuBarHoverShowsControls
+        settings.menuBarShowsTitleWhenNoLyrics = AppSettings.defaultMenuBarShowsTitleWhenNoLyrics
         // 「配色」浮层
         settings.menuBarLyricsKaraoke = AppSettings.defaultMenuBarLyricsKaraoke
         settings.menuBarLyricsTextColorHex = AppSettings.defaultMenuBarLyricsTextColorHex
@@ -413,6 +432,8 @@ struct MenuBarLayoutPopover: View {
             MenuBarLyricsIconRow()
             CardDivider()
             MenuBarHoverControlsRow()
+            CardDivider()
+            MenuBarTitleFallbackRow()
         }
     }
 }
@@ -708,6 +729,8 @@ struct MenuBarAllSettingsDrawer: View {
                 MenuBarLyricsIconRow()
                 CardDivider()
                 MenuBarHoverControlsRow()
+                CardDivider()
+                MenuBarTitleFallbackRow()
                 CardDivider()
                 // 「最大宽度」在这里是**兜底副本**,跟舞台上那条常驻的 `widthBar` 改的是
                 // 同一个值——跟灵动岛「全部设置」抽屉里那条 `widthRow` 同一个模式。

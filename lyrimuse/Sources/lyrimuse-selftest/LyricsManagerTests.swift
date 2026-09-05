@@ -711,4 +711,39 @@ func runLyricsManagerTests() {
         // 误报成机翻 —— 两个方向的错代价不对等。
         expectEqual(source(true, "mt"), .community, "译文来源: 不认识的值退回社区,不当机翻")
     }
+
+    // ---- 跨源同词标注 + 「当前使用」双判据(2026-09-04)----
+    //
+    // 「搜索候选歌词」列表:不同源常给出逐字相同的词,后到的那几条标「歌词文字与 X 相同」(只标注不隐藏);
+    // 「当前使用」从只比来源改成来源 + 词双判据。分组与判据都在 LyricsCandidateDuplicates(Core),面板只是消费。
+    do {
+        typealias D = LyricsCandidateDuplicates
+        let ordered: [(source: String, fingerprint: String)] = [
+            ("kugou", "aaa"), ("qq", "bbb"), ("netease", "aaa"), ("lrclib", ""), ("migu", "aaa"), ("amll", ""),
+        ]
+        let m = D.firstMatches(ordered)
+        expectEqual(m["kugou"], nil, "同词标注: 每组首条不标")
+        expectEqual(m["netease"], "kugou", "同词标注: 后来者指向排在前面的那条")
+        expectEqual(m["migu"], "kugou", "同词标注: 第三条仍指向首条,不是链式指向上一条")
+        expectEqual(m["qq"], nil, "同词标注: 独一份的不标")
+        expectEqual(m["lrclib"], nil, "同词标注: 指纹为空的不标")
+        expectEqual(D.firstMatches([("lrclib", ""), ("amll", "")]).isEmpty, true, "同词标注: 空指纹互相不算相同")
+        expectEqual(D.firstMatches([]).isEmpty, true, "同词标注: 空列表")
+        expectEqual(D.isCurrent(candidateSource: "qq", candidateFingerprint: "x", currentSource: "qq", currentFingerprint: "x"), true,
+                    "当前使用: 源同词同")
+        expectEqual(D.isCurrent(candidateSource: "qq", candidateFingerprint: "x", currentSource: "qq", currentFingerprint: "y"), false,
+                    "当前使用: 同源但正文被改过,不标")
+        expectEqual(D.isCurrent(candidateSource: "kugou", candidateFingerprint: "x", currentSource: "qq", currentFingerprint: "x"), false,
+                    "当前使用: 词相同但来源不同,不标")
+        expectEqual(D.isCurrent(candidateSource: "qq", candidateFingerprint: "x", currentSource: "qq", currentFingerprint: nil), true,
+                    "当前使用: 拿不到当前指纹退回只比来源")
+        expectEqual(D.isCurrent(candidateSource: "qq", candidateFingerprint: "", currentSource: "qq", currentFingerprint: "x"), true,
+                    "当前使用: 候选没有词时退回只比来源")
+        expectEqual(D.isCurrent(candidateSource: "qq", candidateFingerprint: "x", currentSource: nil, currentFingerprint: "x"), false,
+                    "当前使用: 没有当前来源就没有当前")
+        // 指纹本身是 ManualPickLock 的既有口径:时间戳全变、CRLF、词不变 → 相同。
+        let a = ManualPickLock.fingerprint(lyrics: "[00:01.00]你好\n[00:05.00]世界")
+        let b = ManualPickLock.fingerprint(lyrics: "[00:02.50]你好\r\n[00:06.10]世界\n")
+        expectEqual(a == b && !a.isEmpty, true, "同词标注: 复用只取词的指纹,时间戳/CRLF 不影响")
+    }
 }

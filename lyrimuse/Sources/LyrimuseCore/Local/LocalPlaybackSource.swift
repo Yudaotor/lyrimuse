@@ -65,14 +65,14 @@ public final class LocalPlaybackSource: ObservableObject {
     // 联网查过了、至少一个源(目前是 lrclib)明确说这首歌是纯音乐——2026-08-03 补上,
     // 跟 hasLyricsContent 是两个不同维度:hasLyricsContent==false 本身分不清是"还没
     // 解析完"还是"解析完了但真没歌词",这个字段专门标记后一种情况里"有明确依据"的那
-    // 一类(而不是"五个源都没搜到"这种更含糊、可能只是没搜对的情况)。UI 侧靠这个字段
+    // 一类(而不是"所有源都没搜到"这种更含糊、可能只是没搜对的情况)。UI 侧靠这个字段
     // 决定要不要显示"纯音乐"而不是笼统的占位符——见各 View 里 lyricContent/mainLine
     // 的分支顺序,这个判断必须排在"还在搜索中"那个分支之前,不然一首已经确认是纯音乐
     // 的歌会在播放期间一直卡在"搜索歌词中…"、永远不会显示出这个更准确的结论。
     @Published public private(set) var isCurrentTrackInstrumental: Bool = false
     /// 联网解析已经跑完一轮,但一句歌词都没拿到。
     ///
-    /// 跟 hasLyricsContent==false 的区别就是"搜没搜过":没有它的话,一首查遍五个源都
+    /// 跟 hasLyricsContent==false 的区别就是"搜没搜过":没有它的话,一首查遍所有源都
     /// 找不到歌词的歌,只要还在播,界面就会**永远**停在"搜索歌词中…"——那句话在第 3 秒
     /// 是实话,在第 3 分钟就是假话了。判据是缓存条目里的解析时刻(见
     /// EnrichCacheLyrics.resolved)。
@@ -1202,8 +1202,11 @@ public final class LocalPlaybackSource: ObservableObject {
                     // logger.error(_:) 吃的是 OSLogMessage,只认编译期字符串插值,不能用
                     // `+` 拼运行时 String——先把可变的那半拼成局部变量,再一次性插值进去。
                     let streakSuffix = self.consecutiveNilSnapshots > 1
-                        ? "，已连续 \(self.consecutiveNilSnapshots) 次" : ""
-                    logger.error("snapshot failed (没有自动化权限、Music.app 不在运行，或者没有曲目在播放)\(streakSuffix)")
+                        ? " streak=\(self.consecutiveNilSnapshots)" : ""
+                    // notice 而不是 error(2026-09-05):这多数时候是正常状态(Music 没开 / 没曲目在放),
+                    // 落盘留线索就够,不该在 error 级别里跟真正的故障混在一起。后缀显式 .public ——
+                    // 默认 private 会把它打成 <private>,24 小时日志里 36 条全是 <private> 尾巴。
+                    logger.notice("snapshot failed (no automation permission, Music.app not running, or nothing playing)\(streakSuffix, privacy: .public)")
                 }
                 clearIfWasPlaying()
                 self.adjustPollCadence()

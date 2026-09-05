@@ -1,4 +1,5 @@
 import Foundation
+import LyrimuseCore
 import os
 
 private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "config-store")
@@ -85,6 +86,10 @@ public enum NotificationPlatform: String, CaseIterable, Identifiable, Codable {
 // isDirty 判定专门跟"已保存快照"比较,不看别的——如果直接读 @Published 字段是否非空,
 // 用户刚敲进去几个字符、还没点保存,状态就会被误判成"已配置/生效中",这里刻意避开
 // 这个坑。
+//
+// 读写字节这一层(2026-09-05 起)走 Core 的 `JSONConfigDocument`:读盘分**三态**(不存在 / 正常 / 损坏),
+// 损坏时 `persistFile()` 拒绝保存、`loadFailure` 亮起(设置窗口顶部横幅给出口);写盘成功后镜像才更新。
+// 为什么必须分三态、原来那版会怎么把 14 个空串覆盖上去,见 `JSONConfigDocument` 头注。这里只剩字段映射。
 @MainActor
 public final class ConfigStore: ObservableObject {
     public static let shared = ConfigStore()
@@ -114,11 +119,19 @@ public final class ConfigStore: ObservableObject {
     @Published public var feishuSignSecret = ""
 
     @Published public private(set) var lastError: String?
+    /// 启动时 config.json 判定为**损坏**(文件在、但读不懂)的原因;nil = 正常或文件不存在。非 nil 期间
+    /// `persistFile()` 一律拒绝,设置窗口顶部的 `ConfigFileDamageBanner` 据此显示告示与出口。
+    @Published public private(set) var loadFailure: String?
 
-    private static let configURL = FileManager.default.homeDirectoryForCurrentUser
+    static let fileURL = FileManager.default.homeDirectoryForCurrentUser
         .appendingPathComponent(".config/lyrimuse/config.json")
 
-    private var raw: [String: Any] = [:]
+    /// 磁盘上那份对象的内存镜像 + 三态(见 Core `JSONConfigDocument`)。JSON → 字段的映射在 load,
+    /// 字段 → JSON 在 persistFile,这里只管字节与字典。
+    private var document = JSONConfigDocument(url: ConfigStore.fileURL)
+
+    /// 诊断导出用:磁盘上那份文件的三态。
+    public var fileState: JSONConfigDocument.LoadState { document.state }
 
     private struct Snapshot: Equatable {
         var listenbrainzToken, listenbrainzUser: String
@@ -250,15 +263,19 @@ public final class ConfigStore: ObservableObject {
     }
 
     public func load() {
-        guard let data = try? Data(contentsOf: Self.configURL),
-              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            // 文件不存在/解析失败——理论上不会发生(collector 非 dry-run 必须有 token
-            // 才能启动),但防御性处理跟其它 store 一致:留空,不崩溃。
-            raw = [:]
-            savedSnapshot = currentSnapshot
-            return
+        document = JSONConfigDocument.load(url: Self.fileURL)
+        switch document.state {
+        case .loaded, .missing:
+            // 不存在 = 全新机器 / collector 还没跑过:字段留空,首次保存会创建文件。
+            loadFailure = nil
+        case .corrupt(let reason):
+            // 文件在但读不懂。字段照样留空只是为了界面不崩;**保存被拒**(见 persistFile),直到用户修好
+            // 文件或在横幅上放弃它。原来这里把它跟「不存在」混成一回事、注释还写着「理论上不会发生」——
+            // 后果是之后任何一次保存都用 14 个空串覆盖原文件(借鉴清单 #46,2026-09-05)。
+            loadFailure = reason
+            logger.error("config.json is unusable, saves refused until it is fixed or discarded: \(reason, privacy: .public)")
         }
-        raw = obj
+        let raw = document.raw
         listenbrainzToken = raw["listenbrainz_token"] as? String ?? ""
         listenbrainzUser = raw["listenbrainz_user"] as? String ?? ""
         stateRelayURL = raw["state_relay_url"] as? String ?? ""
@@ -288,27 +305,48 @@ public final class ConfigStore: ObservableObject {
     // 协调者(2026-08-30 核实)。"只重启一次"这件事现在由 CollectorRestartCoordinator
     // 负责——两个 store 的 save() 都走它,它去抖合并。
     public func persistFile() throws {
-        raw["listenbrainz_token"] = listenbrainzToken
-        raw["listenbrainz_user"] = listenbrainzUser
-        raw["state_relay_url"] = stateRelayURL
-        raw["state_relay_token"] = stateRelayToken
-        raw["lastfm_user"] = lastfmUser
-        raw["lastfm_api_key"] = lastfmAPIKey
-        raw["lastfm_scrobble_api_key"] = lastfmScrobbleAPIKey
-        raw["lastfm_scrobble_secret"] = lastfmScrobbleSecret
-        raw["lastfm_scrobble_session_key"] = lastfmScrobbleSessionKey
-        raw["lastfm_scrobble_username"] = lastfmScrobbleUsername
-        raw["notification_platform"] = notificationPlatform.rawValue
-        raw["bark_url"] = notificationWebhookURL
-        raw["dingtalk_sign_secret"] = dingtalkSignSecret
-        raw["feishu_sign_secret"] = feishuSignSecret
-
-        guard JSONSerialization.isValidJSONObject(raw) else {
-            throw NSError(domain: "ConfigStore", code: 1, userInfo: [NSLocalizedDescriptionKey: L10n.t("内部数据不是合法 JSON,已放弃保存")])
+        let fields: [String: Any] = [
+            "listenbrainz_token": listenbrainzToken,
+            "listenbrainz_user": listenbrainzUser,
+            "state_relay_url": stateRelayURL,
+            "state_relay_token": stateRelayToken,
+            "lastfm_user": lastfmUser,
+            "lastfm_api_key": lastfmAPIKey,
+            "lastfm_scrobble_api_key": lastfmScrobbleAPIKey,
+            "lastfm_scrobble_secret": lastfmScrobbleSecret,
+            "lastfm_scrobble_session_key": lastfmScrobbleSessionKey,
+            "lastfm_scrobble_username": lastfmScrobbleUsername,
+            "notification_platform": notificationPlatform.rawValue,
+            "bark_url": notificationWebhookURL,
+            "dingtalk_sign_secret": dingtalkSignSecret,
+            "feishu_sign_secret": feishuSignSecret,
+        ]
+        do {
+            // 合并进磁盘镜像(api_root / bundle_ids 这些 UI 不管的字段原样保留)→ 原子写 + 0600(这份就是
+            // 凭据本体)→ 成功后镜像才更新。磁盘上那份判定为损坏时这里直接抛,一个字节不碰。
+            try document.save(fields: fields, secure: true)
+        } catch JSONConfigDocument.Failure.refusedCorruptFile {
+            throw ConfigFileSaveError.refusedCorruptFile
+        } catch JSONConfigDocument.Failure.notSerializable {
+            throw ConfigFileSaveError.notSerializable
         }
-        let data = try JSONSerialization.data(withJSONObject: raw, options: [.prettyPrinted])
-        // 这份就是凭据本体(Last.fm session key / ListenBrainz token / relay token…)。
-        try data.writeSecurely(to: Self.configURL)
+    }
+
+    /// 横幅上的「放弃坏文件并重建」:把损坏的 config.json 挪到旁边(`config.json.corrupt-<时间>`,不删 ——
+    /// 里面可能还有能手工抢救的凭据),然后用当前内存里的值(损坏时全是空)重建并保存。
+    @discardableResult
+    public func discardCorruptFileAndSave() async -> Bool {
+        do {
+            if let moved = try document.quarantineCorruptFile() {
+                logger.notice("corrupt config.json moved aside as \(moved.lastPathComponent, privacy: .public)")
+            }
+        } catch {
+            lastError = String(format: L10n.t("无法移走损坏的配置文件: %@"), error.localizedDescription)
+            logger.error("quarantine failed: \(String(describing: error), privacy: .public)")
+            return false
+        }
+        loadFailure = nil
+        return await save()
     }
 
     // 保存成功后调用,把"已保存快照"推进到当前值——之后 isDirty 会重新变 false,状态徽标
@@ -328,6 +366,11 @@ public final class ConfigStore: ObservableObject {
     public func save() async -> Bool {
         do {
             try persistFile()
+        } catch ConfigFileSaveError.refusedCorruptFile {
+            // 不是「写失败」,是刻意不写:文案直说原因,横幅里有出口。
+            lastError = ConfigFileSaveError.refusedCorruptFile.errorDescription
+            logger.notice("save refused: config.json on disk is corrupt")
+            return false
         } catch {
             lastError = String(format: L10n.t("写入 config.json 失败: %@"), error.localizedDescription)
             logger.error("write failed: \(String(describing: error), privacy: .public)")
@@ -343,6 +386,22 @@ public final class ConfigStore: ObservableObject {
         } else {
             lastError = L10n.t("后台采集服务重启失败")
             return false
+        }
+    }
+}
+
+/// 两个共享配置文件 Store 保存被拒的两种情况。`save()` 把文案放进 lastError;AppDelegate 那条退出兜底只看
+/// 返回值,不展示。「拒绝」和「写失败」刻意分开:前者磁盘一个字节没碰、是保护动作,文案不该说成「失败」。
+public enum ConfigFileSaveError: LocalizedError {
+    /// 磁盘上那份文件启动时判定为损坏,拒绝覆盖(见各 Store 的 loadFailure 与 Core JSONConfigDocument)。
+    case refusedCorruptFile
+    /// 内部字典序列化不了(编程错误,不是用户数据的问题)。
+    case notSerializable
+
+    public var errorDescription: String? {
+        switch self {
+        case .refusedCorruptFile: return L10n.t("配置文件无法解析，为避免覆盖已放弃保存")
+        case .notSerializable: return L10n.t("内部数据不是合法 JSON,已放弃保存")
         }
     }
 }

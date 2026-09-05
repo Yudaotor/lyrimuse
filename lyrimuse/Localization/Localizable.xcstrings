@@ -1,6 +1,535 @@
 {
   "sourceLanguage" : "zh-Hans",
   "strings" : {
+    "至少 %@ 次" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "At least %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "至少 %@ 次"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "至少 %@ 次"
+          }
+        }
+      }
+    },
+    "合并明细" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Play Breakdown"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "合并明细"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "合併明細"
+          }
+        }
+      }
+    },
+    "「第 N 次听」把同一首歌的不同写法（繁简、括号风格、合唱署名等）合并计数。这里列出并进这一行的每种写法、各自的次数和原因，以及逐次的时刻" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "\"Play #N\" merges different spellings of the same track (Traditional/Simplified, bracket styles, artist credits and so on). This lists every spelling folded into this row with its own count and the reason, plus every individual play"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "「第 N 次听」把同一首歌的不同写法（繁简、括号风格、合唱署名等）合并计数。这里列出并进这一行的每种写法、各自的次数和原因，以及逐次的时刻"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "「第 N 次聽」會把同一首歌的不同寫法（繁簡、括號樣式、合唱署名等）合併計數。這裡列出併入這一列的每種寫法、各自的次數與原因，以及每一次的時刻"
+          }
+        }
+      }
+    },
+    "共 %@ 次" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ plays total"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "共 %@ 次"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "共 %@ 次"
+          }
+        }
+      }
+    },
+    "%@ 种写法" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ spellings"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 种写法"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 種寫法"
+          }
+        }
+      }
+    },
+    "未取到" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Not loaded"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未取到"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未取得"
+          }
+        }
+      }
+    },
+    "本条" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This entry"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "本条"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "這一筆"
+          }
+        }
+      }
+    },
+    "大小写/空格" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Case/spacing"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "大小写/空格"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "大小寫／空格"
+          }
+        }
+      }
+    },
+    "全角/半角" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Full-width/half-width"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "全角/半角"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "全形／半形"
+          }
+        }
+      }
+    },
+    "繁简" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Traditional/Simplified"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "繁简"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "繁簡"
+          }
+        }
+      }
+    },
+    "Remaster/feat. 等标注" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Remaster/feat. tags"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Remaster/feat. 等标注"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Remaster／feat. 等標註"
+          }
+        }
+      }
+    },
+    "版本尾缀写法" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Version suffix style"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "版本尾缀写法"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "版本尾綴寫法"
+          }
+        }
+      }
+    },
+    "双语歌名" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bilingual title"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "双语歌名"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "雙語歌名"
+          }
+        }
+      }
+    },
+    "合唱署名" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Artist credit"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "合唱署名"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "合唱署名"
+          }
+        }
+      }
+    },
+    "歌手别名" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Artist alias"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "歌手别名"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "歌手別名"
+          }
+        }
+      }
+    },
+    "歌名别名" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Title alias"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "歌名别名"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "歌名別名"
+          }
+        }
+      }
+    },
+    "其他折叠规则" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Other fold rule"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "其他折叠规则"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "其他折疊規則"
+          }
+        }
+      }
+    },
+    "部分写法没取到" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Some spellings couldn't be loaded"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "部分写法没取到"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "部分寫法未能取得"
+          }
+        }
+      }
+    },
+    "行上按 %1$@ 次计，明细合计 %2$@ 次" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The row counts %1$@, the breakdown totals %2$@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "行上按 %1$@ 次计，明细合计 %2$@ 次"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "列上以 %1$@ 次計，明細合計 %2$@ 次"
+          }
+        }
+      }
+    },
+    "两个数来自 Last.fm 的两条接口：行上的次数由 track.getInfo（autocorrect）按写法族求和，明细由 user.getTrackScrobbles 按精确写法逐条列出。不相等通常意味着有一种写法只被其中一边合并了" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The two numbers come from two Last.fm endpoints: the row sums track.getInfo (with autocorrect) over the spelling family, while the breakdown lists exact spellings via user.getTrackScrobbles. A gap usually means one spelling was merged on only one side"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "两个数来自 Last.fm 的两条接口：行上的次数由 track.getInfo（autocorrect）按写法族求和，明细由 user.getTrackScrobbles 按精确写法逐条列出。不相等通常意味着有一种写法只被其中一边合并了"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "兩個數字來自 Last.fm 的兩條介面：列上的次數由 track.getInfo（autocorrect）依寫法族加總，明細由 user.getTrackScrobbles 依精確寫法逐筆列出。不相等通常表示有一種寫法只被其中一邊合併"
+          }
+        }
+      }
+    },
+    "加载更早的" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Load older"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "加载更早的"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "載入更早的"
+          }
+        }
+      }
+    },
+    "还有更早的记录没加载，这些行暂不编号" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Older plays aren't loaded yet, so those rows aren't numbered"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "还有更早的记录没加载，这些行暂不编号"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "還有更早的記錄尚未載入，這些列暫不編號"
+          }
+        }
+      }
+    },
+    "这首歌在你 Last.fm 上的第几次收听，点一下看合并了哪些写法" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Which play of this track this was in your Last.fm history. Click to see which spellings were merged"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这首歌在你 Last.fm 上的第几次收听，点一下看合并了哪些写法"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "這首歌在你 Last.fm 上的第幾次聆聽，按一下查看合併了哪些寫法"
+          }
+        }
+      }
+    },
     "恢复默认主题、文字与背景" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -2418,29 +2947,6 @@
         }
       }
     },
-    "不支持" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Not supported"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "不支持"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "不支援"
-          }
-        }
-      }
-    },
     "不是带时间戳的歌词" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -2828,52 +3334,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "五"
-          }
-        }
-      }
-    },
-    "五个源的请求全部失败，很可能是网络连接有问题，不是这首歌真的没有歌词——检查网络后可以点下面的「重试」" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "None of the five sources responded. That usually means a network problem rather than a song with no lyrics. Check your connection, then click Retry below"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "五个源的请求全部失败，很可能是网络连接有问题，不是这首歌真的没有歌词——检查网络后可以点下面的「重试」"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "五個來源的請求全部失敗，很可能是網路連線有問題，不是這首歌真的沒有歌詞——檢查網路後可以按下面的「重試」"
-          }
-        }
-      }
-    },
-    "五个源都没找到可用的候选" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No Lyrics from Any Source"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "五个源都没找到可用的候选"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "五個來源都沒找到可用的候選"
           }
         }
       }
@@ -4003,98 +4463,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "全部設定…"
-          }
-        }
-      }
-    },
-    "八个源的请求全部失败，很可能是网络连接有问题，不是这首歌真的没有歌词——检查网络后可以点下面的「重试」" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "None of the eight sources responded. That usually means a network problem rather than a song with no lyrics. Check your connection, then click Retry below"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "八个源的请求全部失败，很可能是网络连接有问题，不是这首歌真的没有歌词——检查网络后可以点下面的「重试」"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "八個來源的請求全部失敗，很可能是網路連線有問題，不是這首歌真的沒有歌詞——檢查網路後可以按下面的「重試」"
-          }
-        }
-      }
-    },
-    "八个源都没找到可用的候选" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No Lyrics from Any Source"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "八个源都没找到可用的候选"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "八個來源都沒找到可用的候選"
-          }
-        }
-      }
-    },
-    "六个源的请求全部失败，很可能是网络连接有问题，不是这首歌真的没有歌词——检查网络后可以点下面的「重试」" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "None of the six sources responded. That usually means a network problem rather than a song with no lyrics. Check your connection, then click Retry below"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "六个源的请求全部失败，很可能是网络连接有问题，不是这首歌真的没有歌词——检查网络后可以点下面的「重试」"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "六個來源的請求全部失敗，很可能是網路連線有問題，不是這首歌真的沒有歌詞——檢查網路後可以按下面的「重試」"
-          }
-        }
-      }
-    },
-    "六个源都没找到可用的候选" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No Lyrics from Any Source"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "六个源都没找到可用的候选"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "六個來源都沒找到可用的候選"
           }
         }
       }
@@ -11498,29 +11866,6 @@
         }
       }
     },
-    "推荐" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Recommended"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "推荐"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "推薦"
-          }
-        }
-      }
-    },
     "推送提醒" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -13480,29 +13825,6 @@
         }
       }
     },
-    "智能算法：给每个来源打分（逐字时间轴、语言匹配等），取分最高的\n顺序优先：不打分，按下面的顺序取第一个有结果的来源" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Smart: scores every source (word-level timing, language match, etc.) and takes the highest\nIn order: no scoring — takes the first source below that returns anything"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "智能算法：给每个来源打分（逐字时间轴、语言匹配等），取分最高的\n顺序优先：不打分，按下面的顺序取第一个有结果的来源"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "智慧演算法：給每個來源評分（逐字時間軸、語言比對等），取分最高的\n順序優先：不評分，按下面的順序取第一個有結果的來源"
-          }
-        }
-      }
-    },
     "暂停/无播放时隐藏" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -14131,29 +14453,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "伺服器設定 → 整合（Integrations）→ Webhook → 建立 Webhook，選好要發送到的頻道後拷貝 Webhook URL"
-          }
-        }
-      }
-    },
-    "未下载" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Not downloaded"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "未下载"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "未下載"
           }
         }
       }
@@ -20418,29 +20717,6 @@
         }
       }
     },
-    "语言、启动方式、菜单栏和 Dock 图标，以及把全部设置搬到另一台 Mac" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Language, startup, the menu bar and Dock icons, and moving all your settings to another Mac"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "语言、启动方式、菜单栏和 Dock 图标，以及把全部设置搬到另一台 Mac"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "語言、啟動方式、選單列和 Dock 圖像，以及把全部設定搬到另一台 Mac"
-          }
-        }
-      }
-    },
     "语言与启动" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -20598,29 +20874,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "請按下快速鍵…"
-          }
-        }
-      }
-    },
-    "请提前下载好需要翻译的语言" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Download the languages you want translated ahead of time"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "请提前下载好需要翻译的语言"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "請提前下載好需要翻譯的語言"
           }
         }
       }
@@ -26682,6 +26935,23 @@
         }
       }
     },
+    "Lyrimuse 启动时把勾选的播放器一起打开，已经在跑的不动，也不抢焦点" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "When Lyrimuse starts, open the checked players too. Ones already running are left alone, and nothing steals focus"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lyrimuse 啟動時把勾選的播放器一併打開，已在執行的不動，也不搶焦點"
+          }
+        }
+      }
+    },
     "上次检查：%@" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -26695,6 +26965,69 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "上次檢查：%@"
+          }
+        }
+      }
+    },
+    "与播放器联动" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Player Linkage"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "與播放器連動"
+          }
+        }
+      }
+    },
+    "九个源的请求全部失败，很可能是网络连接有问题，不是这首歌真的没有歌词——检查网络后可以点下面的「重试」" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "None of the nine sources responded. That usually means a network problem rather than a song with no lyrics. Check your connection, then click Retry below"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "九个源的请求全部失败，很可能是网络连接有问题，不是这首歌真的没有歌词——检查网络后可以点下面的「重试」"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "九個來源的請求全部失敗，很可能是網路連線有問題，不是這首歌真的沒有歌詞——檢查網路後可以按下面的「重試」"
+          }
+        }
+      }
+    },
+    "九个源都没找到可用的候选" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No Lyrics from Any Source"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "九个源都没找到可用的候选"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "九個來源都沒找到可用的候選"
           }
         }
       }
@@ -27319,6 +27652,23 @@
         }
       }
     },
+    "勾选的播放器全部退出后，等 5 秒再退出 Lyrimuse；期间任一个重新打开就取消。设置、歌词管理或歌词窗口开着时不退" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Once every checked player has quit, Lyrimuse quits after a 5-second grace period; if any of them reopens in the meantime, the quit is cancelled. It never quits while Settings, Lyrics Manager or the lyrics window is open"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "勾選的播放器全部結束後，等 5 秒再結束 Lyrimuse；期間任一個重新打開就取消。設定、歌詞管理或歌詞視窗開著時不結束"
+          }
+        }
+      }
+    },
     "反馈与社区" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -27427,6 +27777,23 @@
         }
       }
     },
+    "咪咕音乐" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Migu Music"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "咪咕音樂"
+          }
+        }
+      }
+    },
     "已复制版本信息" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -27440,6 +27807,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "已拷貝版本資訊"
+          }
+        }
+      }
+    },
+    "已采用 %@ 的歌词" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Now using lyrics from %@"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已採用 %@ 的歌詞"
           }
         }
       }
@@ -27461,6 +27845,23 @@
         }
       }
     },
+    "打开 Lyrimuse 时启动" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Launch When Lyrimuse Opens"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "打開 Lyrimuse 時啟動"
+          }
+        }
+      }
+    },
     "更新" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -27474,6 +27875,74 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "更新"
+          }
+        }
+      }
+    },
+    "未勾选，此项关闭" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "None checked, this is off"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未勾選，此項關閉"
+          }
+        }
+      }
+    },
+    "未能保存，请再试一次" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't save, please try again"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未能儲存，請再試一次"
+          }
+        }
+      }
+    },
+    "正在采用…" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Applying…"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在採用…"
+          }
+        }
+      }
+    },
+    "每一项都按播放器单独勾选；选了「自动识别」时五个播放器都可勾" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Each item is checked per player; with Auto-detect selected, all five players are available"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "每一項都按播放器分別勾選；選了「自動識別」時五個播放器都可勾"
           }
         }
       }
@@ -27529,6 +27998,23 @@
         }
       }
     },
+    "跟随播放器退出" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quit With Player"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "跟隨播放器結束"
+          }
+        }
+      }
+    },
     "还没有检查过更新" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -27542,6 +28028,486 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "尚未檢查過更新"
+          }
+        }
+      }
+    },
+    "歌词文件夹和本地记录文件加起来占用的磁盘空间" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "歌词文件夹和本地记录文件加起来占用的磁盘空间"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Disk space used by the lyrics folder and the local records file"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "歌詞檔案夾和本機記錄檔案加起來佔用的磁碟空間"
+          }
+        }
+      }
+    },
+    "占用空间：%@" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "占用空间：%@"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Storage used: %@"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "佔用空間：%@"
+          }
+        }
+      }
+    },
+    "只比对歌词文字，不含时间戳、逐字与译文；这条候选仍可能带别的来源没有的逐字轨或译文" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Compares lyric text only, ignoring timestamps, word timing and translations. This candidate may still carry word timing or a translation the other source lacks"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "只比對歌詞文字，不含時間戳、逐字與譯文；這條候選仍可能帶別的來源沒有的逐字軌或譯文"
+          }
+        }
+      }
+    },
+    "无歌词时显示歌名" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show Title When No Lyrics"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "無歌詞時顯示歌名"
+          }
+        }
+      }
+    },
+    "歌词文字与 %@ 相同" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Same lyrics text as %@"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "歌詞文字與 %@ 相同"
+          }
+        }
+      }
+    },
+    "这首歌没有歌词或还在搜索时，用「♪ 歌名」占住歌词的位置，不缩回小图标；歌词一到就换成歌词。暂停时仍缩回图标，广告中不显示" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "While a song has no lyrics or is still being searched, keep the lyrics slot with “♪ Title” instead of collapsing to the icon; the line is swapped in as soon as lyrics arrive. Still collapses when paused, and never shows during ads"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "這首歌沒有歌詞或還在搜尋時，用「♪ 歌名」占住歌詞的位置，不縮回小圖示；歌詞一到就換成歌詞。暫停時仍縮回圖示，廣告中不顯示"
+          }
+        }
+      }
+    },
+    "菜单栏图标、语言与启动，以及备份搬家" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "菜单栏图标、语言与启动，以及备份搬家"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Menu bar icon, language & startup, and backups"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "選單列圖像、語言與啟動，以及備份搬家"
+          }
+        }
+      }
+    },
+    "%@（推荐）" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@（推荐）"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ (recommended)"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@（建議）"
+          }
+        }
+      }
+    },
+    "给每个来源打分，取分最高的" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "给每个来源打分，取分最高的"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Scores every source and keeps the best match"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "給每個來源評分，取分最高的"
+          }
+        }
+      }
+    },
+    "不打分，按下面的顺序取第一个有结果的来源" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "不打分，按下面的顺序取第一个有结果的来源"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No scoring — takes the first source below that returns lyrics"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "不評分，按下面的順序取第一個有結果的來源"
+          }
+        }
+      }
+    },
+    "修好文件后重新打开 Lyrimuse；或放弃这份文件，用当前界面上的值重建（原文件会改名保留，不会删除）。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fix the file and reopen Lyrimuse, or discard it and rebuild it from the values shown here (the original is renamed, not deleted)."
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "修好檔案後重新開啟 Lyrimuse；或放棄這份檔案，以目前介面上的值重建（原檔會重新命名保留，不會刪除）。"
+          }
+        }
+      }
+    },
+    "放弃坏文件并重建" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Discard and Rebuild"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "放棄損壞檔案並重建"
+          }
+        }
+      }
+    },
+    "无法移走损坏的配置文件: %@" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Could not move the damaged configuration file aside: %@"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "無法移走損壞的設定檔：%@"
+          }
+        }
+      }
+    },
+    "配置文件 %@ 无法读取，为避免覆盖，所有保存已暂停" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The configuration file %@ can't be read. Saving is paused so it won't be overwritten."
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "設定檔 %@ 無法讀取，為避免覆寫，所有儲存已暫停"
+          }
+        }
+      }
+    },
+    "配置文件无法解析，为避免覆盖已放弃保存" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The configuration file can't be parsed; saving was skipped so it won't be overwritten"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "設定檔無法解析，為避免覆寫已放棄儲存"
+          }
+        }
+      }
+    },
+    "只统计能翻成当前译文语言的语言；译文语言自己和同一语系的语言不计，所以数字可能比「系统设置」里的少。语言包由 macOS 管理，翻译在本机完成" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "只统计能翻成当前译文语言的语言；译文语言自己和同一语系的语言不计，所以数字可能比「系统设置」里的少。语言包由 macOS 管理，翻译在本机完成"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Counts only languages that can be translated into the current translation language; the target language itself and languages in the same family are excluded, so the number can be lower than in System Settings. Language packs are managed by macOS and translation runs on this Mac"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "只統計能翻成目前譯文語言的語言；譯文語言自己和同一語系的語言不計，所以數字可能比「系統設定」裡的少。語言包由 macOS 管理，翻譯在本機完成"
+          }
+        }
+      }
+    },
+    "管理…" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "管理…"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Manage…"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "管理…"
+          }
+        }
+      }
+    },
+    "要删除已下载的语言包，请到「系统设置 › 通用 › 语言与地区 › 翻译语言」" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "要删除已下载的语言包，请到「系统设置 › 通用 › 语言与地区 › 翻译语言」"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "To remove a downloaded language pack, go to System Settings › General › Language & Region › Translation Languages"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "要刪除已下載的語言包，請到「系統設定 › 一般 › 語言與地區 › 翻譯語言」"
+          }
+        }
+      }
+    },
+    "点击下载" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "点击下载"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Click to download"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "點按下載"
+          }
+        }
+      }
+    },
+    "%@，已下载" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@，已下载"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@, downloaded"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@，已下載"
+          }
+        }
+      }
+    },
+    "%@，点击下载" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@，点击下载"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@, click to download"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@，點按下載"
+          }
+        }
+      }
+    },
+    "上移" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Move Up"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "上移"
+          }
+        }
+      }
+    },
+    "下移" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Move Down"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "下移"
+          }
+        }
+      }
+    },
+    "拖动调整顺序" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Drag to reorder"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "拖移調整順序"
           }
         }
       }

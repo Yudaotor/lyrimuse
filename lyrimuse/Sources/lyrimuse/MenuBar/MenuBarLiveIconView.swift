@@ -90,9 +90,10 @@ final class MenuBarLiveIconView: NSView {
         classicLinesHost.mask = classicLinesMask
         // 层序 = 加入顺序:动件在下、静件在上 —— 黑胶的唱臂要压住盘沿、节拍器的机身
         // 轮廓要压住摆针、经典款的音符要压住歌词线;按压高亮再往上。
+        // contentsScale 不在这里定:位图灌进去时由 setTinted 跟 contents 一起按所在窗口的比例设
+        // (2026-09-05,此前写死 2);纯色层(pressKeys / 均衡器条)不需要它。
         for l in [movingPart, classicLinesHost, staticPart] + pressKeys {
             l.isHidden = true
-            l.contentsScale = 2
             layer?.addSublayer(l)
         }
         applyColor()
@@ -156,6 +157,37 @@ final class MenuBarLiveIconView: NSView {
 
     override func viewDidChangeEffectiveAppearance() {
         super.viewDidChangeEffectiveAppearance()
+        applyColor()
+    }
+
+    /// 上一次给图层灌位图时用的比例(0 = 还没灌过);换屏后跟 menuBarBitmapScale 对不上就重灌。
+    private var lastBitmapScale: CGFloat = 0
+
+    /// contents 与 contentsScale 必须是同一个比例,所以永远一起设(2026-09-05,见 NSView.menuBarBitmapScale)。
+    private func setTinted(_ target: CALayer, _ image: NSImage) {
+        let scale = menuBarBitmapScale
+        target.contentsScale = scale
+        target.contents = tintedContents(image, scale: scale)
+        lastBitmapScale = scale
+    }
+
+    // 状态项在不同 DPI 的显示器之间迁移 / 首次挂进窗口:比例变了就把当前款的位图按新比例重灌。
+    // 经典款的蒙版平时只灌一次(见 buildClassicStretch),这里要一并重灌。动画不动。
+    override func viewDidChangeBackingProperties() {
+        super.viewDidChangeBackingProperties()
+        retintIfScaleChanged()
+    }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        retintIfScaleChanged()
+    }
+
+    private func retintIfScaleChanged() {
+        guard currentStyle != nil, lastBitmapScale != 0, lastBitmapScale != menuBarBitmapScale else { return }
+        if currentStyle == .classic {
+            setTinted(classicLinesMask, MenuBarIconStyle.classicLinesMaskArtwork())
+        }
         applyColor()
     }
 
@@ -300,9 +332,8 @@ final class MenuBarLiveIconView: NSView {
         classicLinesHost.bounds = CGRect(origin: .zero, size: MenuBarIconStyle.classicCanvas)
         if classicLinesMask.contents == nil {
             // 蒙版只看 alpha、与外观无关,首次搭台时灌一次就够。
-            classicLinesMask.contentsScale = 2
             classicLinesMask.frame = classicLinesHost.bounds
-            classicLinesMask.contents = tintedContents(MenuBarIconStyle.classicLinesMaskArtwork())
+            setTinted(classicLinesMask, MenuBarIconStyle.classicLinesMaskArtwork())
         }
         applyColor()
         for (i, bar) in classicLineBars.enumerated() {
@@ -421,18 +452,18 @@ final class MenuBarLiveIconView: NSView {
         // 位图渲染,别让其它款换色也白付这个钱。
         switch currentStyle {
         case .vinyl:
-            movingPart.contents = tintedContents(MenuBarIconStyle.vinylDiscArtwork())
-            staticPart.contents = tintedContents(MenuBarIconStyle.vinylArmArtwork())
+            setTinted(movingPart, MenuBarIconStyle.vinylDiscArtwork())
+            setTinted(staticPart, MenuBarIconStyle.vinylArmArtwork())
         case .disc:
-            movingPart.contents = tintedContents(MenuBarIconStyle.discArtwork())
+            setTinted(movingPart, MenuBarIconStyle.discArtwork())
         case .metronome:
-            movingPart.contents = tintedContents(MenuBarIconStyle.metronomeNeedleArtwork())
-            staticPart.contents = tintedContents(MenuBarIconStyle.metronomeBodyArtwork())
+            setTinted(movingPart, MenuBarIconStyle.metronomeNeedleArtwork())
+            setTinted(staticPart, MenuBarIconStyle.metronomeBodyArtwork())
         case .pianokeys:
-            staticPart.contents = tintedContents(MenuBarIconStyle.pianoKeysArtwork())
+            setTinted(staticPart, MenuBarIconStyle.pianoKeysArtwork())
             pressKeys.forEach { $0.backgroundColor = solid }
         case .classic:
-            staticPart.contents = tintedContents(MenuBarIconStyle.classicNoteArtwork())
+            setTinted(staticPart, MenuBarIconStyle.classicNoteArtwork())
             classicLineBars.forEach { $0.backgroundColor = solid }
         default:
             break
@@ -441,9 +472,9 @@ final class MenuBarLiveIconView: NSView {
         imageView.contentTintColor = tintColor
     }
 
-    /// 把模板图按当前 tint 染成 2x 位图,给自绘图层当 contents。
-    private func tintedContents(_ image: NSImage) -> CGImage? {
-        let scale: CGFloat = 2
+    /// 把模板图按当前 tint 染成位图,给自绘图层当 contents。比例由调用方(setTinted)按所在窗口给,
+    /// 跟图层的 contentsScale 同一个值 —— 2026-09-05 之前这里写死 2x。
+    private func tintedContents(_ image: NSImage, scale: CGFloat) -> CGImage? {
         let w = Int(image.size.width * scale), h = Int(image.size.height * scale)
         guard w > 0, h > 0,
               let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: w, pixelsHigh: h,

@@ -21,7 +21,7 @@ public struct EnrichCacheEntry: Decodable {
     // albumVerifiedCoverURL。
     let coverAlbum: String?
     // 联网查过了、至少一个源(目前是 lrclib)明确说这首歌是纯音乐——跟"lyrics 是空的"
-    // 要分开看,后者也可能是"还没解析完"或者"五个源都没查到"这类更含糊的情况。见
+    // 要分开看,后者也可能是"还没解析完"或者"所有源都没查到"这类更含糊的情况。见
     // collector/enrich.go 的 enrichEntry.Instrumental 定义处的注释。
     let instrumental: Bool?
     // 这条记录的**解析时刻**(Unix 秒)。>0 就代表"联网解析已经完整跑完一轮"——
@@ -50,6 +50,12 @@ public struct EnrichCacheEntry: Decodable {
     // 不是一回事:这个没有时间戳,只给"歌词窗口"当静态兜底用。collector 侧
     // enrichEntry.PlainLyrics 头注解释了为什么必须分开存。
     let plainLyrics: String?
+    // 播放器报的时长(秒,collector/enrich.go 的 DurationSecs)。2026-09-04 起解码,给「英文歌名 →
+    // 中文歌名」的本机别名推断当第二道闸(见 EnrichTitleAliases),此前 Swift 侧没人读它。
+    let durationSecs: Double?
+    // 所配歌词候选在来源上的时长(秒,collector 的 ResolvedDurationSecs)。同日起解码:跟 durationSecs
+    // 差得远说明这条配到了别的歌的词,别名推断的 E2 路径据此判歌词可不可信。
+    let resolvedDurationSecs: Double?
 
     enum CodingKeys: String, CodingKey {
         case lyrics
@@ -69,6 +75,8 @@ public struct EnrichCacheEntry: Decodable {
         case qqSingerMid = "qq_singer_mid"
         case songLanguage = "song_language"
         case plainLyrics = "plain_lyrics"
+        case durationSecs = "duration_secs"
+        case resolvedDurationSecs = "resolved_duration_secs"
     }
 }
 
@@ -485,6 +493,53 @@ public enum EnrichCacheReader {
         return index
     }
 
+    /// 本机推断的两张别名表(2026-09-04):歌手写法归并(LocalArtistAliases.derive,证据 = collector 的
+    /// MusicBrainz 缓存 + 共享歌曲 id)与「英文歌名 → 中文歌名」(EnrichTitleAliases.derive,证据 = 同歌曲
+    /// id / 时长 + 歌词)。歌手表先推、歌名表按新歌手表分桶 —— 两张表之间有依赖,必须一起算。
+    public struct LocalAliasTables: Equatable {
+        public var artists: [String: String]
+        public var titles: [String: [String: String]]
+        public static let empty = LocalAliasTables(artists: [:], titles: [:])
+    }
+
+    /// 已算好的那份(没算过给 nil)。主线程同步读,不触发计算 —— 计算走 `computeLocalAliasTables`。
+    public static var localAliasTablesIfComputed: LocalAliasTables? { cachedAliasTables }
+    private static var cachedAliasTables: LocalAliasTables?
+    private static var aliasTablesGeneration = 0
+
+    /// 在后台算两张表,算完缓存并返回。跟 cachedEntries 同寿命(内容一变就作废)。
+    ///
+    /// 为什么必须后台:E2 要对同一歌手名下英文/中文两侧的歌词正文做二元组比对,几百条条目一轮几十
+    /// 毫秒,而 enrich 缓存在播放中每隔几秒就会变一次(collector 落歌词/译文/封面),放主线程就撞
+    /// 20Hz 歌词节拍。条目字典是值类型,拷一份给后台线程即可;算完回主线程时缓存已换代就丢弃
+    /// (下一拍会再算)。
+    public static func computeLocalAliasTables() async -> LocalAliasTables {
+        if let cachedAliasTables { return cachedAliasTables }
+        guard let all = loadEntries() else { return .empty }
+        aliasTablesGeneration += 1
+        let gen = aliasTablesGeneration
+        let entries = all
+        let caches = ArtistIdentityCaches.load()
+        let tables = await Task.detached(priority: .utility) { () -> LocalAliasTables in
+            var inputs: [EnrichTitleAliases.Entry] = []
+            inputs.reserveCapacity(entries.count)
+            for (key, entry) in entries {
+                let parts = key.split(separator: "|", maxSplits: 2, omittingEmptySubsequences: false)
+                guard parts.count == 3 else { continue }
+                inputs.append(.init(artist: String(parts[0]), title: String(parts[1]),
+                                    neteaseURL: entry.neteaseURL, qqMusicURL: entry.qqMusicURL,
+                                    durationSecs: entry.durationSecs,
+                                    resolvedDurationSecs: entry.resolvedDurationSecs,
+                                    lyrics: entry.lyrics))
+            }
+            let artists = LocalArtistAliases.derive(caches: caches, entries: inputs)
+            let titles = EnrichTitleAliases.derive(inputs) { LocalArtistAliases.canonicalArtistKey($0, table: artists) }
+            return LocalAliasTables(artists: artists, titles: titles)
+        }.value
+        if gen == aliasTablesGeneration, cachedEntries != nil { cachedAliasTables = tables }
+        return tables
+    }
+
     /// 缓存文件的 mtime。给"要不要重算派生表"这类判断用 —— 调用方自己存一份上次的值,
     /// 变了才重算(见 LastfmStatsService.refreshLocalCoversIfCacheChanged)。
     public static func cacheModifiedAt() -> Date? {
@@ -527,6 +582,7 @@ public enum EnrichCacheReader {
             cachedEntries = nil
             cachedCoverIndex = nil
             cachedLooseIndex = nil
+            cachedAliasTables = nil; aliasTablesGeneration += 1
             return
         }
         if cachedEntries == nil {
@@ -555,6 +611,7 @@ public enum EnrichCacheReader {
             cachedEntries = nil
             cachedCoverIndex = nil
             cachedLooseIndex = nil
+            cachedAliasTables = nil; aliasTablesGeneration += 1
             return
         }
         adopt(entries: all, mtime: mtime)
@@ -590,6 +647,7 @@ public enum EnrichCacheReader {
         cachedEntries = entries
         cachedCoverIndex = nil  // 内容换了,派生索引跟着作废,下次要用时按新内容重建
         cachedLooseIndex = nil
+        cachedAliasTables = nil; aliasTablesGeneration += 1
         if notify { onContentAdopted?() }
     }
 
@@ -612,6 +670,7 @@ public enum EnrichCacheReader {
                 cachedEntries = nil
                 cachedCoverIndex = nil
                 cachedLooseIndex = nil
+                cachedAliasTables = nil; aliasTablesGeneration += 1
             }
         }
         source.resume()

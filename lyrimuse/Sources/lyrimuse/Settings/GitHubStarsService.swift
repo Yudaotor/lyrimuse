@@ -89,12 +89,12 @@ final class GitHubStarsService: ObservableObject {
             if status == 403 || status == 429 {
                 let reset = http?.value(forHTTPHeaderField: "X-RateLimit-Reset")
                 retryNotBefore = GitHubStars.retryDate(now: Date(), rateLimitReset: reset)
-                logger.notice("repo-stars: http \(status ?? -1, privacy: .public), 退避到 \(self.retryNotBefore?.description ?? "-", privacy: .public)")
+                logger.notice("repo-stars: http \(status ?? -1, privacy: .public), backing off until \(self.retryNotBefore?.description ?? "-", privacy: .public)")
                 return
             }
             guard status == 200, let count = GitHubStars.parseStarCount(data) else {
                 retryNotBefore = Date().addingTimeInterval(GitHubStars.failureBackoff)
-                logger.notice("repo-stars: http \(status ?? -1, privacy: .public) 或响应解析失败,保留存量值")
+                logger.notice("repo-stars: http \(status ?? -1, privacy: .public) or response parse failed, keeping cached value")
                 return
             }
             let now = Date()

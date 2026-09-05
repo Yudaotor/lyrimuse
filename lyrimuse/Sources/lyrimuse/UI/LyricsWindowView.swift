@@ -1019,41 +1019,43 @@ struct LyricsWindowView: View {
             .sheet(item: $lyricsSearchContext) { ctx in
                 LyricsSearchSheet(
                     artist: ctx.artist, title: ctx.title, album: ctx.album,
-                    currentSource: ctx.currentSource, durationSecs: ctx.durationSecs
+                    currentSource: ctx.currentSource, currentFingerprint: ctx.currentFingerprint,
+                    durationSecs: ctx.durationSecs
                 ) { candidate in
-                    Task {
-                        // reload(onlyIfChanged:) 兜住「store 还没加载过」:saveEdit 直接改
-                        // raw[key],空 raw 上写会把条目的其它字段(cover_url 等)整个丢掉。
-                        await EnrichCacheStore.shared.reload(onlyIfChanged: true)
-                        // 仅纯文本的候选走独立的存法(见 savePlainTextEdit 头注)——不能
-                        // 跟带时间戳的候选共用 saveEdit,那会把纯文本当成一份"没有任何一行
-                        // 能同步显示"的坏 LRC 写进 lyrics,反而让这首歌在别的展示面上从
-                        // "至少有静态文字"退化成"看起来完全没有歌词"。
-                        if candidate.isPlainTextOnly {
-                            await EnrichCacheStore.shared.savePlainTextEdit(
-                                key: ctx.key, plainLyrics: candidate.lyrics, source: candidate.source)
-                        } else {
-                            // ⚠️ 2026-09-01 真实 bug 修复:这里原来既没传 markManual 也没传
-                            // sourceChoice,落进 saveEdit 的默认值 markManual: true——
-                            // 「歌词窗口」里搜一次、采纳一次,就把这首歌**永久冻结**了,
-                            // 以后打分改进/该源补出逐字都再也不会被采纳,而用户只是想换份词。
-                            //
-                            // 这是「采纳候选」的第三个入口(另外两个:歌词管理、悬浮窗 ⚙ 的
-                            // 「搜索歌词…」小窗)。2026-09-01 早些时候修 QuickSearchWindow
-                            // 那处同款 bug 时**漏了这处** —— 当时是顺着"歌词管理 vs 小窗"
-                            // 两两对比找的,没有把三个入口一起数一遍。三处必须同进同出,
-                            // 改任何一处之前先 grep `LyricsSearchSheet(` 数清楚有几个。
-                            await EnrichCacheStore.shared.saveEdit(
-                                key: ctx.key,
-                                lyrics: candidate.lyrics, tr: candidate.lyricsTr,
-                                roma: candidate.lyricsRoma, yrc: candidate.lyricsYRC,
-                                source: candidate.source,
-                                markManual: AppSettings.shared.manualPickLocksLyrics,
-                                sourceChoice: "", fromManualPick: true)
-                        }
-                        // 让播放侧立刻重载,不等 2s 轮询的 mtime 检查。
-                        PlaybackCoordinator.shared.refreshLyricsForCurrentTrack()
+                    // reload(onlyIfChanged:) 兜住「store 还没加载过」:saveEdit 直接改
+                    // raw[key],空 raw 上写会把条目的其它字段(cover_url 等)整个丢掉。
+                    await EnrichCacheStore.shared.reload(onlyIfChanged: true)
+                    // 仅纯文本的候选走独立的存法(见 savePlainTextEdit 头注)——不能
+                    // 跟带时间戳的候选共用 saveEdit,那会把纯文本当成一份"没有任何一行
+                    // 能同步显示"的坏 LRC 写进 lyrics,反而让这首歌在别的展示面上从
+                    // "至少有静态文字"退化成"看起来完全没有歌词"。
+                    let saved: Bool
+                    if candidate.isPlainTextOnly {
+                        saved = await EnrichCacheStore.shared.savePlainTextEdit(
+                            key: ctx.key, plainLyrics: candidate.lyrics, source: candidate.source)
+                    } else {
+                        // ⚠️ 2026-09-01 真实 bug 修复:这里原来既没传 markManual 也没传
+                        // sourceChoice,落进 saveEdit 的默认值 markManual: true——
+                        // 「歌词窗口」里搜一次、采纳一次,就把这首歌**永久冻结**了,
+                        // 以后打分改进/该源补出逐字都再也不会被采纳,而用户只是想换份词。
+                        //
+                        // 这是「采纳候选」的第三个入口(另外两个:歌词管理、悬浮窗 ⚙ 的
+                        // 「搜索歌词…」小窗)。2026-09-01 早些时候修 QuickSearchWindow
+                        // 那处同款 bug 时**漏了这处** —— 当时是顺着"歌词管理 vs 小窗"
+                        // 两两对比找的,没有把三个入口一起数一遍。三处必须同进同出,
+                        // 改任何一处之前先 grep `LyricsSearchSheet(` 数清楚有几个。
+                        saved = await EnrichCacheStore.shared.saveEdit(
+                            key: ctx.key,
+                            lyrics: candidate.lyrics, tr: candidate.lyricsTr,
+                            roma: candidate.lyricsRoma, yrc: candidate.lyricsYRC,
+                            source: candidate.source,
+                            markManual: AppSettings.shared.manualPickLocksLyrics,
+                            sourceChoice: "", fromManualPick: true)
                     }
+                    // 让播放侧立刻重载,不等 2s 轮询的 mtime 检查。
+                    PlaybackCoordinator.shared.refreshLyricsForCurrentTrack()
+                    // 回报落盘成败:面板等它决定关窗/挪徽标(2026-09-04 起 onApply 可等待,不再自己套 Task)。
+                    return saved
                 }
             }
             // 滚动跟 scrollLineIndex 走而不是 currentLineIndex(2026-08-22 用户对拍 AM):
@@ -1927,6 +1929,9 @@ struct LyricsWindowView: View {
             let key = EnrichCacheReader.resolvedKey(artist: artist, title: title, album: album)
                 ?? EnrichCacheKeys.normalizedKey(artist: artist, title: title, album: album)
             let source = EnrichCacheReader.sourceInfo(artist: artist, title: title, album: album)?.lyricsSource
+            // 「当前使用」双判据要的正文指纹(2026-09-04),跟上面几次读取同在这个后台任务里。
+            let lyrics = EnrichCacheReader.lookup(artist: artist, title: title, album: album)?.lyrics ?? ""
+            let fingerprint = lyrics.isEmpty ? nil : ManualPickLock.fingerprint(lyrics: lyrics)
             await MainActor.run {
                 // title 传归一化后的(EnrichCacheKeys.normalizedTitle),不是原始播放器标题——
                 // 2026-08-31 真实bug(林潔心《想逃避(22)》):collector 算缓存 key 时会把标题
@@ -1935,7 +1940,7 @@ struct LyricsWindowView: View {
                 // key/source 两个查找仍然传原始 title——它们各自内部会归一化,契约不变。
                 lyricsSearchContext = LyricsSearchContext(
                     artist: artist, title: EnrichCacheKeys.normalizedTitle(title), album: album,
-                    key: key, currentSource: source, durationSecs: durationSecs)
+                    key: key, currentSource: source, currentFingerprint: fingerprint, durationSecs: durationSecs)
             }
         }
     }
@@ -3968,6 +3973,8 @@ private struct LyricsSearchContext: Identifiable {
     /// 写回用的缓存条目 key(实际命中优先,新建退 normalizedKey)。
     let key: String
     let currentSource: String?
+    /// 当前正文的只取词指纹(「当前使用」双判据,2026-09-04);没有正文时 nil。
+    let currentFingerprint: String?
     let durationSecs: Double
 
     var id: String { key }

@@ -61,4 +61,27 @@ public enum MenuBarSlotPolicy {
         guard let dwellSeconds else { return false }
         return dwellSeconds < quietSecs
     }
+
+    /// 「这一刻菜单栏该显示什么文字」的兜底(2026-09-04):有歌词句就显示歌词句(包括间奏的 ♪);
+    /// 压根没有可显示的行、这首歌又在播放且不是广告,就用「♪ 歌名」占住槽位,而不是收回成小图标。
+    ///
+    /// 为什么值得:`compactShowsPlaceholder` 只在「唱完了、下一句还早」为真,整首没歌词 / 还在搜的歌
+    /// 文字为空,菜单栏会把槽收回成图标 —— 搜索超过 3s 观察窗就先塌再撑(一对状态项重建,见
+    /// `MenuBarStatusItem.present` 头注的铁律),没歌词的歌整首只剩图标。灵动岛 / 悬浮歌词都有占位
+    /// 文案,菜单栏是唯一直接塌回图标的展示面。固定宽度模式下有词没词几何完全不变。
+    ///
+    /// 三条刻意保留的边界:① `isPlaying` 为 false 一律 nil —— 2026-08-19 用户定的「暂停不占宽」,
+    /// 参考做法"暂停仍显示当前句"不学;② 广告态不显示广告标题;③ 没歌名就还是图标,不做品牌兜底。
+    /// 返回 nil = 照旧收回图标;`isFallback` 告诉调用方这不是歌词句(配速不按歌词时长算)。
+    public static func displayText(
+        lyricText: String, title: String, isPlaying: Bool, isAdBreak: Bool,
+        showsTitleWhenNoLyrics: Bool, placeholderGlyph: String
+    ) -> (text: String, isFallback: Bool)? {
+        guard isPlaying else { return nil }
+        if !lyricText.isEmpty { return (lyricText, false) }
+        guard showsTitleWhenNoLyrics, !isAdBreak else { return nil }
+        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        return (placeholderGlyph + " " + trimmed, true)
+    }
 }

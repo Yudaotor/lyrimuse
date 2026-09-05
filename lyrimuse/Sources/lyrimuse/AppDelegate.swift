@@ -17,6 +17,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // 错过"双击链接直接启动 App"这种冷启动场景(虽然这次的场景是 App 已经在跑,但
     // 仍然照 Apple 官方推荐的时机来,不留隐患)。
     func applicationWillFinishLaunching(_ notification: Notification) {
+        // 退出原因日志(2026-09-03,见 AppExit):SIGTERM 要在这里就接住,不然 launchctl kickstart -k
+        // 这条最常见的退出路径连 applicationShouldTerminate 都到不了。
+        AppExit.installSigtermHandler()
         terminateOlderInstances()
         NSAppleEventManager.shared().setEventHandler(
             self,
@@ -56,12 +59,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         where other.bundleIdentifier == myID && other.processIdentifier != me.processIdentifier {
             guard let theirStart = Self.processStartTime(other.processIdentifier),
                   theirStart < myStart else { continue }
-            NSLog("lyrimuse: terminating older instance pid %d", other.processIdentifier)
+            // 走 lifecycle 分类的 Logger 不走 NSLog(2026-09-03 改):诊断导出按 subsystem 查,NSLog 查不到。
+            AppExit.logTerminatingOlderInstance(pid: other.processIdentifier, forced: false)
             other.terminate()
             DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
                 if !other.isTerminated {
-                    NSLog("lyrimuse: older instance pid %d ignored terminate, forcing",
-                          other.processIdentifier)
+                    AppExit.logTerminatingOlderInstance(pid: other.processIdentifier, forced: true)
                     other.forceTerminate()
                 }
             }
@@ -299,16 +302,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // MenuBarExtra 的 label 上,随 MenuBarExtra 一起没了 —— 见该文件注释。
         MenuBarSceneActions.install()
 
-        // 打开 Lyrimuse 时顺带唤起当前选定的播放器(可选,见 AppSettings.
-        // launchMusicOnLyrimuseOpen 注释)。跟着 PlaybackPlayerPreference.soleExplicitPlayer
-        // 走,不再写死 Apple Music——选了 QQ 音乐时唤起的应该是 QQ 音乐,不是一个用户压根
-        // 没在用的 App。2026-09-01 多选后:只有恰好能唯一确定一个具体播放器时才有明确
-        // 的目标可唤起(纯 auto、或者同时选了两个以上具体播放器,都没有唯一答案,跟单选
-        // 年代 .auto 的"bundleIdentifier 为空、天然 no-op"是同一个道理,不猜)。只在目标
-        // App 还没运行时才启动它——已经在跑就什么都不做,不做多余的"带到前台"动作,
-        // 避免用户正在用别的 App 时被意外抢焦点。
-        if settings.launchMusicOnLyrimuseOpen {
-            let bundleID = PlaybackPlayerPreference.soleExplicitPlayer?.bundleIdentifier ?? ""
+        // 打开 Lyrimuse 时顺带启动用户勾选的播放器(2026-09-03 从"唯一具体播放器 + 一个布尔"改成逐播放器
+        // 集合,见 LyrimuseCore.PlayerLinkage 头注;勾选 ∩ 当前候选才算)。只启动还没运行的 —— 已经在跑就
+        // 什么都不做,不做多余的"带到前台"动作;activates=false 避免用户正在用别的 App 时被抢焦点。
+        let playersToLaunch = PlayerLinkage.effective(settings.launchPlayersOnLyrimuseOpen,
+                                                      selectedPlayers: FeatureSettingsStore.shared.players)
+        for player in playersToLaunch where !player.bundleIdentifier.isEmpty {
+            let bundleID = player.bundleIdentifier
             if !NSWorkspace.shared.runningApplications.contains(where: { $0.bundleIdentifier == bundleID }),
                let playerURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) {
                 let config = NSWorkspace.OpenConfiguration()
@@ -316,6 +316,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 NSWorkspace.shared.openApplication(at: playerURL, configuration: config)
             }
         }
+        // 「跟随播放器退出」的监听(2026-09-03 新增),开关空集时它只是订阅着不做事。
+        PlayerQuitWatcher.shared.start()
 
         // 首次启动的完整引导向导——触发点在 SceneActionRegistrar.onAppear,不在这里:
         // openWindow(id:) 这个 SwiftUI 环境 action 只有挂载的 View 才能拿到,这个时机
@@ -433,6 +435,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // 异步存盘(顺带重启 collector)完成后再 reply(toApplicationShouldTerminate:) 放行
     // ——不管存盘成功与否都放行,避免磁盘写入异常时把 Cmd+Q 卡死。
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        // 退出原因日志(2026-09-03):所有退出路径的汇合点,在这里打、只打一次。原因由 AppExit.request
+        // 登记,没登记的按信号推断(Sparkle 正在装更新 → sparkle_install,否则 external_request)。
+        AppExit.logTermination(sparkleInstalling: SparkleUpdaterManager.shared.isInstallingUpdate)
         guard ConfigStore.shared.isDirty else { return .terminateNow }
         Task {
             _ = await ConfigStore.shared.save()

@@ -130,6 +130,9 @@ enum ConfigPortability {
         // 跟着灵动岛开关走,播放指示条常驻。留着这两个键只会被导出到新机器再导回来。
         "np:notchVolumeBanner",
         "np:notchShowEqualizer",
+        // 2026-09-03「打开 Lyrimuse 时启动」从布尔改成逐播放器集合(np:launchPlayersOnLyrimuseOpen),
+        // 旧布尔键只在 AppSettings.init() 里读一次做迁移(init 末尾才清,读在前),之后不该再随备份走。
+        "np:launchMusicOnLyrimuseOpen",
         "np:dataSourceMode",
         "np:relayBaseURL",
         "np:textShadowColorHex",
@@ -422,6 +425,7 @@ enum ConfigPortability {
         let config = NSWorkspace.OpenConfiguration()
         config.createsNewApplicationInstance = true
         NSWorkspace.shared.openApplication(at: url, configuration: config) { _, _ in }
-        NSApp.terminate(nil)
+        // 经 AppExit 登记原因再终止(2026-09-03),见 AppExit 头注。
+        AppExit.request(.restartAfterConfigChange)
     }
 }

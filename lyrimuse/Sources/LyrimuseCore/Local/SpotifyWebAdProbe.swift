@@ -203,7 +203,7 @@ public final class SpotifyWebAdProbe: @unchecked Sendable {
                 if verdict == .ad {
                     // notice 级:这是"我们主动把一条广告放行并标成了广告",排查
                     // "为什么这 30 秒显示的是广告中"时这一行是唯一的现场。
-                    logger.notice("spotify web: 判定为广告,放行并标记")
+                    logger.notice("spotify web: classified as advertisement, passing through and flagging")
                 }
             }
             self.lock.unlock()

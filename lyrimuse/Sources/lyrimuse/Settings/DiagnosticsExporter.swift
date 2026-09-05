@@ -90,6 +90,15 @@ enum DiagnosticsExporter {
             .joined(separator: "\n")
     }
 
+    /// 配置文件三态 → 报告里的一个词。纯函数,不需要 actor。
+    private static func describe(_ state: JSONConfigDocument.LoadState) -> String {
+        switch state {
+        case .missing: return "missing"
+        case .loaded: return "ok"
+        case .corrupt(let reason): return "CORRUPT — \(reason)"
+        }
+    }
+
     /// 报告的状态段 —— 全部来自 @MainActor 隔离的单例,但都是内存读,很便宜。
     @MainActor
     private static func stateLines() -> [String] {
@@ -146,6 +155,10 @@ enum DiagnosticsExporter {
         // 报完整三态而不是 true/false —— "注册了但起不来"正是最需要出现在诊断报告里的那
         // 一档(带上次退出码),以前它跟"在跑"一样报 true,报告等于把最关键的线索抹掉了。
         lines.append("Collector service state: \(CollectorServiceManager.state)")
+        // 两份共享配置文件的三态(2026-09-05):损坏时所有保存被拒,「设置保存不上 / 账号全空」第一个该看的原因。
+        // reason 只含解析位置、键名与期望类型,不含文件内容(config.json 是凭据)。
+        lines.append("config.json: \(describe(config.fileState))")
+        lines.append("lyrimuse-features.json: \(describe(FeatureSettingsStore.shared.fileState))")
         lines.append("App language: \(settings.appLanguage)")
         lines.append("Classic overlay enabled: \(settings.classicOverlayEnabled)")
         lines.append("Notch overlay enabled: \(settings.notchOverlayEnabled)")
@@ -261,6 +274,15 @@ enum DiagnosticsExporter {
         lines.append(contentsOf: collapseRepeatedLines(
             recentCollectorLogLines().map { LogRedactor.redactAll($0, secrets: secrets) }))
         lines.append("")
+        // ---- App 进程的 stderr(2026-09-05 加)----
+        //
+        // App 由 launchd 拉起时 stdout / stderr 指向 LogFiles.appStderr(LoginItemManager 写的 plist;
+        // 此前跟 collector 共用 lyrimuse.log)。正常情况下这份文件几乎是空的 —— App 的日志走
+        // os.Logger;能落进来的只有 Swift 运行时的 fatal 信息、子进程漏出的 stderr 这类"本不该有"
+        // 的东西,正因为如此排查崩溃时它最有用。只取最后 100 行,同样过一遍脱敏。
+        lines.append("== App stderr (\(LogFiles.appStderr.lastPathComponent), last 100 lines) ==")
+        lines.append(contentsOf: recentAppStderrLines().map { LogRedactor.redactAll($0, secrets: secrets) })
+        lines.append("")
 
         // ---- collector healthcheck(2026-08-27 加)----
         //
@@ -320,6 +342,14 @@ enum DiagnosticsExporter {
         return lines.isEmpty ? ["(no entries in the last \(hours)h)"] : lines
     }
 
+    private static func recentAppStderrLines(maxLines: Int = 100) -> [String] {
+        guard let content = try? String(contentsOf: LogFiles.appStderr, encoding: .utf8) else {
+            return ["(no \(LogFiles.appStderr.lastPathComponent) yet: launchd creates it when the app job is next bootstrapped, i.e. after the next login)"]
+        }
+        let all = content.split(separator: "\n", omittingEmptySubsequences: true).map(String.init)
+        return all.isEmpty ? ["(empty)"] : Array(all.suffix(maxLines))
+    }
+
     /// collector 日志按**时间窗口**取,不是固定行数(见上面 logLines 里的说明)。文件本身
     /// 没有轮转(lyricstrace.go 的注释也提过这一点),整份读进内存一次性 split 仍然可接受
     /// (一次性的后台操作,不是热路径);hardLineCap 只是防一个已经异常暴涨的日志文件把
@@ -328,8 +358,7 @@ enum DiagnosticsExporter {
     /// 用**倒着扫**找窗口起点,而不是从头正着过滤——文件可能有几十 MB,没必要为了找"最后
     /// 4 小时从哪开始"把每一行都解析一遍时间戳,倒着扫找到第一条早于 cutoff 的行就能停。
     private static func recentCollectorLogLines(hours: Double = 4, hardLineCap: Int = 5000) -> [String] {
-        let path = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent("Library/Logs/lyrimuse.log")
+        let path = LogFiles.collector
         guard let content = try? String(contentsOf: path, encoding: .utf8) else {
             return ["(could not read \(path.path))"]
         }
@@ -337,19 +366,14 @@ enum DiagnosticsExporter {
         guard !allLines.isEmpty else { return ["(empty log file)"] }
 
         let cutoff = Date().addingTimeInterval(-hours * 3600)
-        let formatter = DateFormatter()
-        // Go `log.LstdFlags | log.LUTC` 的格式是 "2006/01/02 15:04:05 message"——前 19
-        // 个字符正好是这个时间戳,不含时区标记(LUTC 只改墙钟取的是哪个时区,不改打印
-        // 格式),这里显式把 formatter 的时区钉死成 UTC 才能跟它对上。
-        formatter.dateFormat = "yyyy/MM/dd HH:mm:ss"
-        formatter.timeZone = TimeZone(identifier: "UTC")
-
+        // 时间戳两种格式都认(2026-09-05 起 collector 走 log/slog,行首是 `time=…Z`;之前是 Go log
+        // 的 `yyyy/MM/dd HH:mm:ss`,.old 归档与迁移前的行仍是它),解析在 Core 的 CollectorLogLine,
+        // selftest 钉着两种都按 UTC 解。
         // 默认包含整份文件——找不到任何可解析的时间戳时,宁可多给一点也不要因为解析
         // 失败就悄悄给出一份空/近乎空的日志段(诊断报告的原则是宁可啰嗦,不能装作没事)。
         var startIndex = 0
         for i in stride(from: allLines.count - 1, through: 0, by: -1) {
-            let line = allLines[i]
-            guard line.count >= 19, let date = formatter.date(from: String(line.prefix(19))) else { continue }
+            guard let date = CollectorLogLine.timestamp(of: allLines[i]) else { continue }
             if date < cutoff {
                 startIndex = i + 1
                 break

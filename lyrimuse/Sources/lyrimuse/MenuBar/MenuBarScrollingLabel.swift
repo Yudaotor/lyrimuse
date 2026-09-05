@@ -118,6 +118,12 @@ final class MenuBarScrollingLabel: NSView {
         /// 逐字染色的填色边界路径(nil = 这句没有逐字数据 / 开关关着,不染)。
         /// 路径是词时间轴的纯翻译,不含播放位置 —— 时钟另走 updateKaraokeClock。
         var fillPath: [MenuBarMarquee.KaraokeFillPoint]?
+        /// 跟唱滚动的阅读位置路径(2026-09-04;nil = 这句没有逐字数据,滚动走时间配速)。
+        /// 跟 fillPath 一样是词时间轴的纯翻译、不含播放位置,时钟同走 updateKaraokeClock。
+        /// ⚠️ 跟 fillPath 是两条路径:fillPath 在词间空隙是平的,这条把空隙吸收进运动里
+        /// (见 MenuBarMarquee.followReadingPath);而且这条**不看**卡拉OK开关 —— 不染色也要
+        /// 跟着唱到的位置滚。偏移路径不在这里存:它还依赖格子宽和长图宽,装动画时现算。
+        var followPath: [MenuBarMarquee.KaraokeFillPoint]?
         /// 歌词旁那枚带播放进度的图标(nil = 关着)。跟 fillPath 一样只描述"画什么",
         /// 进度到哪儿了是另一条时钟通道(updateProgressClock)。
         var icon: IconBadge?
@@ -231,12 +237,13 @@ final class MenuBarScrollingLabel: NSView {
     /// 否则每次 recompute 都会把滚动打回开头,用户永远看不到后半句。
     func present(text: String, windowWidth: CGFloat, pacing: MenuBarMarquee.ScrollPacing?,
                  fillPath: [MenuBarMarquee.KaraokeFillPoint]? = nil,
+                 followPath: [MenuBarMarquee.KaraokeFillPoint]? = nil,
                  icon: IconBadge? = nil) {
         let next = Plan(text: text, windowWidth: windowWidth,
                         alignment: AppSettings.shared.menuBarLyricsAlignment,
                         fontWeight: AppSettings.shared.menuBarLyricsFontWeight,
                         fontSize: AppSettings.shared.menuBarLyricsFontSize,
-                        pacing: pacing, fillPath: fillPath, icon: icon)
+                        pacing: pacing, fillPath: fillPath, followPath: followPath, icon: icon)
         guard next != plan else {
             isHidden = false
             return
@@ -258,8 +265,12 @@ final class MenuBarScrollingLabel: NSView {
         // currentLine 两条流,后者就管这一下,见 MenuBarStatusItem)。2026-08-24 之前它会
         // 连带把滚动打回开头:提前量窗口里那一句本来已经静止等着了(head 以提前量为下限),
         // 开唱那一下再从零起一遍首停,等于把提前量白等两遍,长句更滚不完。
+        // ⚠️ followPath 跟 fillPath 不同,它**算**滚动参数(2026-09-04):跟唱滚动的关键帧就是
+        // 从它算出来的,开唱那一刻它从 nil 变非 nil 必须把跟唱动画装上。这不会重蹈上面那个坑:
+        // 此刻阅读位置还没到锚点、偏移是 0,位置无跳变;跟唱模式也没有首停可以被白等。
         let scrollUnchanged = prepared != nil && (plan.map {
             $0.text == next.text && $0.windowWidth == next.windowWidth && $0.pacing == next.pacing
+                && $0.followPath == next.followPath
                 && $0.fontWeight == next.fontWeight && $0.fontSize == next.fontSize
         } ?? false)
         plan = next
@@ -290,17 +301,27 @@ final class MenuBarScrollingLabel: NSView {
         guard let positionMs else {
             karaokeClock = nil
             applyKaraokeFill()
+            applyFollowScroll()
             return
         }
         let next = KaraokeClock(baseMs: positionMs, rate: rate, playing: playing, capturedAt: Date())
         if !force, playing, let old = karaokeClock, old.playing, old.rate == rate,
-           fillClipLayer.animation(forKey: Self.fillAnimationKey) != nil,
+           hasClockDrivenAnimation,
            abs(old.positionMs() - positionMs) < 250 {
             karaokeClock = next
             return
         }
         karaokeClock = next
         applyKaraokeFill()
+        applyFollowScroll()
+    }
+
+    /// 漂移门看的"动画在跑":填色那三条,或跟唱滚动那一条(2026-09-04 起卡拉OK关着时只有
+    /// 后者)。两者都没有说明这一刻没有可动的东西,重装也只是把静止位置再对一遍,门开着无妨。
+    private var hasClockDrivenAnimation: Bool {
+        fillClipLayer.animation(forKey: Self.fillAnimationKey) != nil
+            || (plan?.followPath != nil
+                && contentLayer.animation(forKey: Self.scrollAnimationKey) != nil)
     }
 
     /// 整首歌的进度对表(进度图标用)。跟上面那条逐字染色的对表是**两条独立通道**,由
@@ -402,6 +423,25 @@ final class MenuBarScrollingLabel: NSView {
         // 反白期间进度填色也整个隐掉(同逐字染色:基础图已换成选中色,强调色叠在选中
         // 背景上要么撞色要么看不清)。关掉菜单恢复。
         applyProgressFill()
+    }
+
+    // 位图比例跟着按钮所在窗口走(2026-09-05):状态项在不同 DPI 的显示器之间迁移、或第一次挂进
+    // 窗口时,当前比例可能跟上次排版用的不一样 —— 只换 contents 重排一遍,不碰滚动和填色动画
+    // (跟 refreshColors 同一条安全边界)。prepared.scale 是上次实际用的比例,相等就什么都不做,
+    // 所以单屏下这两个回调等于空操作。
+    override func viewDidChangeBackingProperties() {
+        super.viewDidChangeBackingProperties()
+        rebuildIfScaleChanged()
+    }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        rebuildIfScaleChanged()
+    }
+
+    private func rebuildIfScaleChanged() {
+        guard let prepared, prepared.scale != menuBarBitmapScale else { return }
+        refreshColors()
     }
 
     // 系统在浅色/深色之间切换时,labelColor 解析出来的是另一个值,得重画。
@@ -553,6 +593,9 @@ final class MenuBarScrollingLabel: NSView {
     private func rebuildImage() {
         guard let plan else { return }
         let color = tintColor
+        // 位图按**这个视图所在窗口**的比例栅格化(2026-09-05,见 NSView.menuBarBitmapScale);
+        // 排完记在 prepared.scale 里,换屏时跟当前值比对决定要不要重排(rebuildIfScaleChanged)。
+        let scale = menuBarBitmapScale
         var built: MenuBarMarqueeRenderer.PreparedLine?
         var fillBuilt: MenuBarMarqueeRenderer.PreparedLine?
         var iconBase: MenuBarProgressIcon.Prepared?
@@ -561,17 +604,19 @@ final class MenuBarScrollingLabel: NSView {
         // 绘制那一刻按"当前绘制 appearance"决定的。不套这一层的话,深色菜单栏上会画出
         // 一行几乎看不见的深色字(取决于 App 自己的 appearance,而不是菜单栏的)。
         effectiveAppearance.performAsCurrentDrawingAppearance {
-            built = MenuBarMarqueeRenderer.prepare(text: plan.text, color: color)
+            built = MenuBarMarqueeRenderer.prepare(text: plan.text, color: color, scale: scale)
             if plan.fillPath != nil {
-                fillBuilt = MenuBarMarqueeRenderer.prepare(text: plan.text, color: karaokeFillColor)
+                fillBuilt = MenuBarMarqueeRenderer.prepare(text: plan.text, color: karaokeFillColor,
+                                                           scale: scale)
             }
             // 图标跟歌词共用**同两个颜色**(未唱到的 / 已唱到的),所以它跟旁边的字永远
             // 是一套配色 —— 深浅色菜单栏、菜单反白、用户自定义色三件事一次都不用另写。
             // ⚠️ 强调色这一张跟 `plan.fillPath` **没有**关系:逐字染色关掉了(或者这首歌
             // 没有逐字数据)时,进度图标照样要染 —— 它的进度来自播放位置,不是歌词时间轴。
             if let icon = plan.icon {
-                iconBase = MenuBarProgressIcon.tinted(style: icon.style, color: color)
-                iconFill = MenuBarProgressIcon.tinted(style: icon.style, color: karaokeFillColor)
+                iconBase = MenuBarProgressIcon.tinted(style: icon.style, color: color, scale: scale)
+                iconFill = MenuBarProgressIcon.tinted(style: icon.style, color: karaokeFillColor,
+                                                      scale: scale)
             }
         }
         guard let built else {
@@ -636,6 +681,9 @@ final class MenuBarScrollingLabel: NSView {
         /// 才传非 nil,不为空闲时的示例句编造假时间轴(那样会跟其它预览的既有原则相悖,
         /// 见 SectionPreviewBars.swift 头注「不为示例句编造进度」那一段)。
         let fillPath: [MenuBarMarquee.KaraokeFillPoint]?
+        /// 跟唱滚动的阅读位置路径(2026-09-04):nil = 这句没有逐字数据。含义、构造方式跟
+        /// MenuBarStatusItem.followReadingPath 完全一样,同样不为示例句编造。
+        let followPath: [MenuBarMarquee.KaraokeFillPoint]?
         /// 染色对表用的播放时钟快照,含义同 MenuBarStatusItem.syncKaraokeClock 的三个参数。
         let karaokePositionMs: Int?
         let karaokeRate: Double
@@ -660,7 +708,7 @@ final class MenuBarScrollingLabel: NSView {
             view.appearance = MenuBarAppearanceStore.shared.appearance
             // present 对"参数没变"是空操作,所以设置页每次重算 body 都不会把滚动打回开头。
             view.present(text: text, windowWidth: windowWidth, pacing: pacing, fillPath: fillPath,
-                         icon: icon)
+                         followPath: followPath, icon: icon)
             // 预览实例不在 MenuBarStatusItem 的颜色订阅覆盖范围内,靠宿主 body 重算带一次
             // 重排 —— 用户在旁边拖「文字颜色」色轮时预览才跟手(重排一句位图 sub-ms 级)。
             view.refreshColors()
@@ -678,6 +726,9 @@ final class MenuBarScrollingLabel: NSView {
         contentLayer.removeAnimation(forKey: Self.scrollAnimationKey)
         guard let plan, let prepared else { return }
         let maxOffset = prepared.textWidth - plan.windowWidth
+        // 跟唱滚动优先(2026-09-04):这句有逐字时间轴、且判定要滚,就按存底时钟装跟唱动画;
+        // 下面的时间配速只给没有逐字数据的句子兜底。
+        if applyFollowScroll() { return }
         guard let pacing = plan.pacing,
               let frames = MenuBarMarquee.scrollKeyframes(
                 maxOffset: maxOffset,
@@ -719,6 +770,60 @@ final class MenuBarScrollingLabel: NSView {
         animation.repeatCount = .infinity
         animation.isRemovedOnCompletion = false
         contentLayer.add(animation, forKey: Self.scrollAnimationKey)
+    }
+
+    // MARK: - 跟唱滚动(2026-09-04)
+
+    /// 有逐字时间轴时按存底时钟(重新)装滚动动画:偏移是播放位置的函数(见
+    /// MenuBarMarquee.followScrollPath),所以它跟填色一样挂在 karaokeClock 上,换句 / 对表 /
+    /// 暂停都从这里重装。返回 false = 这一句不走跟唱(没有逐字数据、或判定不用滚),调用方
+    /// 回落到时间配速;此时**不碰**现有动画。
+    ///
+    /// 跟 restartAnimation 的时间配速那条同一个动画键:任一时刻内容层上只有一条滚动动画,
+    /// clear() / clearLyricsKeepingIcon() 摘的也是它。播放中装从"此刻"到唱完的剩余关键帧,
+    /// fillMode=forwards 停在末端不循环(唱到哪滚到哪,唱完就该换句了);暂停 / 已唱完 /
+    /// 还没对表就静置在此刻该有的偏移上。
+    @discardableResult
+    private func applyFollowScroll() -> Bool {
+        guard let plan, let prepared, plan.pacing != nil, let reading = plan.followPath else {
+            return false
+        }
+        let path = MenuBarMarquee.followScrollPath(
+            reading: reading, windowWidth: plan.windowWidth, textWidth: prepared.textWidth)
+        guard !path.isEmpty else { return false }
+        contentLayer.removeAnimation(forKey: Self.scrollAnimationKey)
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        defer { CATransaction.commit() }
+        // 偏移量是"文字往左走多少",落到 position.x 上就是负的。
+        func rest(at offset: CGFloat) {
+            contentLayer.position = CGPoint(x: -offset, y: contentLayer.position.y)
+        }
+        guard let clock = karaokeClock else {
+            // 还没对表:停在开头。showFixedWidth 紧接着就会 force 对一次表,那时再装。
+            rest(at: 0)
+            return true
+        }
+        let nowMs = clock.positionMs()
+        if clock.playing, clock.rate > 0,
+           let frames = MenuBarMarquee.followScrollKeyframes(path: path, nowMs: nowMs,
+                                                             rate: clock.rate) {
+            // 模型值直接放终态(动画 fillMode=forwards 盖着;动画一旦被摘,这句也已唱完,
+            // 终态正确)—— 跟 applyKaraokeFill 同一手法。
+            rest(at: frames.widths.last ?? 0)
+            let animation = CAKeyframeAnimation(keyPath: "position.x")
+            animation.values = frames.widths.map { NSNumber(value: Double(-$0)) }
+            animation.keyTimes = frames.keyTimes.map { NSNumber(value: $0) }
+            animation.calculationMode = .linear
+            animation.duration = frames.duration
+            animation.beginTime = contentLayer.convertTime(CACurrentMediaTime(), from: nil)
+            animation.isRemovedOnCompletion = false
+            animation.fillMode = .forwards
+            contentLayer.add(animation, forKey: Self.scrollAnimationKey)
+        } else {
+            rest(at: MenuBarMarquee.followScrollOffset(atMs: nowMs, path: path))
+        }
+        return true
     }
 
     // MARK: - 逐字染色

@@ -264,7 +264,7 @@ final class MenuBarHoverControlsView: NSView {
             pointSize: MenuBarHoverControls.glyphPointSize, weight: .medium)
         guard let image = NSImage(systemSymbolName: name, accessibilityDescription: nil)?
             .withSymbolConfiguration(config) else {
-            logger.error("SF Symbol 取不到: \(name, privacy: .public)")
+            logger.error("SF Symbol not found: \(name, privacy: .public)")
             return nil
         }
         // 量不出来(位图建不起来 / 画出来是空的)就退回画布居中 —— 偏一点点也比不画好。

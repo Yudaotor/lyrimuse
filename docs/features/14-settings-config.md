@@ -18,25 +18,29 @@
 
 | 分类 | 图标/色 | 内容 |
 |---|---|---|
-| 歌词（indigo） | text.quote | 四段：**获取**（歌词来源七源勾选[含每源独立「测试」按钮＋卡片右上角「测试」（原「全部测试」，2026-08-31 去掉"全部"两字），2026-08-30]＋匹配算法智能/顺序优先[「智能算法」那一格左上角有推荐星标，2026-09-03；做法是叠在整个 Picker 的 topLeading——那一格恰好是第一格，而 `.segmented` 桥接成 `NSSegmentedControl` 之后没法按格定位，**改 `LyricsSourceMode.allCases` 顺序会让星标指错格**]＋顺序列表＋**自动跟进算法升级**[2026-09-03，`lyrics_auto_upgrade`，默认开；关掉后已选定的歌词不再被后台重打分/升级重搜换掉，闸门在 collector 的 `needsLyricsRescore`/`needsLyricsRetry`，见第 09 章]＋提前解析同专辑）/**译文**（显示译文→译文语言→系统兜底翻译→语言包）/**效果**（卡拉OK效果、中文繁简切换[按语言条件显示]、显示罗马音＋日韩中分语言勾选、时间轴偏移±5s步长0.05＋作用于哪个播放器的下拉框）/**管理**（歌词管理入口＋歌词库统计面板[总数/逐字/逐行/纯文本/纯音乐/暂无，2026-09-03，见第 11 章 §7]＋歌词文件夹）。分段选择器记忆上次停留段（`@AppStorage settings:lyricsSection`） |
+| 歌词（indigo） | text.quote | 四段：**获取**（**两张卡**，2026-09-05 拆开——此前一张「歌词来源」卡装五样东西，卡名只对第一样成立。卡一「歌词来源」：九源勾选[含每源独立「测试」按钮＋卡片右上角「测试」（原「全部测试」，2026-08-31 去掉"全部"两字），2026-08-30]；卡二不带卡名（同「译文」「效果」卡）：匹配算法智能/顺序优先[**纵向原生 radio 组**（`.pickerStyle(.radioGroup)`），「智能算法」标签带「（推荐）」后缀（格式键 `%@（推荐）`，沿用引导页「Apple Music 自动化权限（推荐）」写法）；副标题随选中项变（智能→「给每个来源打分，取分最高的」，顺序→「不打分，按下面的顺序取第一个有结果的来源」），原「?」气泡撤掉。⚠️ 2026-09-03 版是分段控件＋叠在 Picker 左上角的 8pt 橙星，2026-09-05 用户原话「星星好丑啊，违和感很强」，根因是 `NSSegmentedControl` 没法按格放东西、只能往控件外叠装饰——**以后要强调某一档就改文字，别再叠图标**]＋顺序列表[2026-09-05 每行左侧 `line.3.horizontal` 把手拖拽排序，算法在 Core `ReorderDrag`（滞回 6pt / 让位按槛距 / 写回完整排列保禁用槽位）；上下箭头保留作键盘 / VoiceOver 通路并补 accessibilityLabel；见设计决策第 20 条]＋**自动跟进算法升级**[2026-09-03，`lyrics_auto_upgrade`，默认开；关掉后已选定的歌词不再被后台重打分/升级重搜换掉，闸门在 collector 的 `needsLyricsRescore`/`needsLyricsRetry`，见第 09 章]＋提前解析同专辑）/**译文**（显示译文→译文语言→系统兜底翻译→翻译语言包[2026-09-05 从下拉菜单改成「已下载 6 / 18 ＋ 管理…」，点开在卡里展开 3 列语言网格：✓ 已下载不可点、⭳ 未下载点击触发系统下载 sheet、转轴下载中，网格下一句说明＋「打开系统设置」去删包；读数按**当前译文语言**统计语言对，译文语言自己与同语系语言被过滤，所以比系统设置的「已下载语言数」少是正常的——用户曾因此觉得"有 bug"，进程外探针核过系统真值一致]）/**效果**（卡拉OK效果、中文繁简切换[按语言条件显示]、显示罗马音＋日韩中分语言勾选、时间轴偏移±5s步长0.05＋作用于哪个播放器的下拉框）/**管理**（歌词管理入口＋歌词库统计面板[总数/逐字/逐行/纯文本/纯音乐/暂无，2026-09-03，见第 11 章 §7]＋歌词文件夹）。分段选择器记忆上次停留段（`@AppStorage settings:lyricsSection`） |
 | 播放器（mint） | play.circle | 播放器选择（Apple Music/QQ音乐/网易云/Spotify/自动）、Apple Music 自动化权限状态、后台采集服务状态。**侧栏项尾部带警告徽标**（2026-09-03，橙色感叹三角，悬停看原因）：已选 Apple Music 且自动化权限被拒，或后台采集服务开着却没在跑；判定 `PlayerHealth`（Core，纯函数），数据源 `PlayerHealthMonitor`（设置窗口开着期间每 2s + App 激活时刷新，AE 权限查询与 collector 状态查询都在后台线程）。平时不亮，见设计决策 #17。页面订阅经窄代理 `PlayerTabStores`；浏览器卡片的实时状态由 `refreshBrowserLiveStatus` 后台查进 `browserLiveStatus` 缓存，body 只读缓存（见设计决策 #18） |
 | 歌词显示（yellow） | rectangle.3.group | 四段按展示面分。前两段是**编辑台**版式（内容区里一块 1:1 的实时画布＋工具栏浮层＋舞台内的宽度调整条，页顶不钉预览）：**悬浮歌词**（`OverlayEditorStage`：**两行工具栏**共五个浮层，第一行「主题」[配色主题/我的配色主题]／「文字」[字体/粗细/字号＋跟随封面/文字色/文字描边/描边色]／「背景」[背景色/毛玻璃背景]＋「重置▾」，第二行「排版」[双行显示/对齐方式]／「行为」[锁定位置/长按拖动/悬浮淡化＋截屏/录屏时隐藏、暂停/无播放时隐藏]（⚠️ 2026-09-02 按"改的是哪一层"把原来的「文字」＋「配色」重新分成 **主题 / 文字 / 背景** 三组，组件 `OverlayThemePopover` / `OverlayTextPopover` / `OverlayBackgroundPopover`；工具栏按钮已接上，两个过渡壳 `OverlayColorPopover` / `OverlayStyleSummary.color` 已删、全仓 0 引用，见 04 章第十七步）；舞台内宽度条；下面只剩开关＋「全部设置」折叠抽屉）/**灵动岛**（`NotchEditorStage`：两行工具栏共七个浮层[风格/屏幕/左耳/右耳＋歌词行/行为/展开态]＋「重置▾」＋舞台内宽度条；下面是开关＋「全部设置」折叠抽屉[2026-08-31 补齐，跟悬浮歌词那个同一个定位]）/**菜单栏**（`MenuBarEditorStage`，2026-09-01 也改成了编辑台：一行工具栏[布局（宽度模式/对齐方式/歌词旁的图标/悬停显示播放控制，2026-09-03 加第四行「悬停显示播放控制」——它是个**行为**开关，塞进「布局」而不是新开第四个工具栏入口，因为那一行的横向预算已经用尽，见 `MenuBarEditorStage.toolbar` 头注）／配色／字体（2026-09-03 加第三个入口：粗细六档下拉 + 字号滑杆 10~16pt，字体族仍跟系统；「粗细」英文词条为此从 Font Weight 缩成 Weight，横向预算同上）]＋「重置▾」＋一块**舞台**——壁纸铺满、仿菜单栏条贴上边缘、宽度胶囊浮在舞台内的通道里，caption 在舞台外；下面是总开关＋「全部设置」折叠抽屉。⚠️ 「页顶仍钉一条仿菜单栏预览」这个旧说法从那天起就不成立了，预览已经搬进可滚动内容区；壁纸底 2026-09-02 又从"只垫菜单栏那一条"扩展成"包住整块舞台"，见 06 章）。⚠️ **原来还有第四段「其它」，只装着一张跨形态的「自动隐藏」卡，2026-09-01 整个撤掉**（用户原话：「不要单独开一个其他页面出来了」）——那两个开关同时被**拆成两份独立的值**（`hideDuringScreenCapture`/`hideWhenNotPlaying` 归悬浮歌词，`notchHide*` 归灵动岛），各自摆进对应形态那一段（排在「全部设置」抽屉上面）。⚠️ **2026-09-02 再进一步**：那两张独立卡也撤掉了（用户原话：「不要单独放在外面，要遵循设计理念，放到行为卡片里面去」），两个开关分别并进悬浮歌词的「行为」栏（＋抽屉「窗口」组）和灵动岛的「行为」浮层（＋抽屉「行为」组），渲染真源合成一份 `UI/AutoHideSettingsRows.swift`——**共用的是视图与文案，值仍是两份**。这一页因此不再有任何一张只装隐藏开关的卡。⚠️ **同日第三次**：用户看过成品后要求「和灵动岛设置页一样处理，放到上面的小按钮里面，点了出现下拉框」，于是悬浮歌词那条**「行为」栏本身**也删了（`OverlayBehaviorBar`），五项进了编辑台工具栏新起的第二行「行为」浮层（`OverlayBehaviorPopover`，宽 420，跟灵动岛那个同宽）——两个形态的「行为」入口至此完全同构。这一段因此只剩编辑台＋开关＋抽屉三块，页面内容高度 605→449pt。详见 04 章第十六步。⚠️ **这两个数按当时口径少算了约 86pt**（一直拿第一步的画布 246 在加，而画布第九步起就是 332），真实的逐块账见 04 章「高度账」那张表。⚠️ **2026-09-03 又压了一次**（用户原话：「这个预览窗口给我高度搞小一点，把下面的开关完整漏出来」）：编辑台 425→**382**（`maxCardHeight` 288→266，＋删掉舞台底下那行常态为空的 caption，那句「两端已裁切」搬进舞台里跟宽度调整条并排），总开关卡的底边从 551.5pt 落到 508.5pt，552pt 高的窗口（可视内容 519pt）里从"只露 13.5pt"变成完整露出；抽屉头仍在折线以下。详见 04 章第十八步。删掉一个分段 rawValue 是安全的：`section` 计算属性带 `?? .overlay` 兜底，老用户上次停在「其它」段的话下次打开会落回悬浮歌词。⚠️ 页顶那层固定头部**收不到点击事件**，凡是可交互的预览都只能待在滚动区。歌词窗口刻意不在此页配置（按需打开的窗口，非常驻展示面） |
-| 快捷键（teal） | keyboard | 全部 10 个全局快捷键的录制行 + 调整步长 |
-| 通用（gray） | gearshape | 语言与启动（语言：跟随系统 / 简体中文 / 繁體中文 / English，引导页欢迎页同一组选项；开机启动）、菜单栏与 Dock（在 Dock 中显示、菜单栏图标 12 款网格、随播放律动）、设置备份（导出/导入/配置文件夹/清除所有设置） |
+| 快捷键（teal） | keyboard | 全部 16 个全局快捷键的录制行（四张卡：显示 / 窗口 / 歌词时间轴 / 播放控制）+ 调整步长 |
+| 通用（gray） | gearshape | 菜单栏与 Dock（菜单栏图标：12 款 2×6 的 `MenuBarIconPicker`，行尾常驻所选款名；随播放律动；在 Dock 中显示）、语言与启动（语言：跟随系统 / 简体中文 / 繁體中文 / English，引导页欢迎页同一组选项；开机启动）、配置备份与搬家（iCloud/自选文件夹备份、设置文件导出/导入；配置文件夹 2026-09-01 搬去「关于」）、清除所有设置。⚠️ **这一页没有预览**：2026-09-04 曾按「歌词显示」编辑台范式在页顶放过一块仿菜单栏舞台（真壁纸 + 所选图标本体、律动时真的动），用户看完明确不要（「我不想这块」），次日撤掉——菜单栏就在屏幕顶上，选哪款抬头就看得见，别再加回来 |
 | 关于（blue） | info.circle | **2026-09-03 重排**：页头 = 图标 + 名字 + 可点击拷贝的版本胶囊（版本 · 芯片架构）+ tagline + 两颗胶囊按钮（请作者喝杯咖啡 / GitHub 带 star 数）+ 求 star 那句；四张带标题的卡：更新（检查更新＋副标题「上次检查 / 有新版本」、自动检查、自动下载并安装）、反馈与社区（反馈问题、想法与建议）、许可与版权（使用与版权说明、第三方许可、开源许可证）、诊断与数据（导出诊断信息、配置文件夹）；页脚「© · GPL-3.0」 |
 | 账号 | — | `AccountLinkingTab`（见第 12 章） |
 
 「歌词」与「歌词显示」的边界：前者管歌词**数据与内容**（哪来、什么语言、什么效果、存哪），后者管**展示形态**（显示在哪、长什么样、何时隐藏）。
 
+**顶层分类记上次停留（2026-09-04）**：新建设置窗口时落在上次停留的顶层分类（`SettingsTab.restoredLastTab()`，`@AppStorage settings:lastTab`；`SettingsTab` 因此有了 String 原始值 = case 名，改 case 名会让老值解码失败退回「歌词」）。只记六个顶层分类，账号页（`.account`）不记——它多半在默认折叠的「实验室功能」区里，记了下次打开就是「detail 切过去、侧栏高亮不到」的状态，且账号页的落点本来就由引导页的信箱管；`AppActions.requestSettings` 的信箱 / subject 在 `.onAppear` / `.onReceive` 里覆盖记忆，优先级更高。初值在属性初始化器里直接读盘，不在 `.onAppear` 里补跳（那样会先画一帧「歌词」再切）。键用 `settings:` 前缀：与二级分段（`settings:lyricsSection` / `settings:appearanceSection`）同一约定，配置导出只带 `np:` / `KeyboardShortcuts_`，界面停留位置这种机器状态天然不随备份走（selftest contracts 组守着键名前缀与导出过滤两头）。停在「关于」这类低频页下次也落在那里，接受。
+
 ### 2. 两套配置存储 + 镜像
 
 - **`AppSettings`**（UserDefaults，`np:` 前缀，48 个 @Published）：App 自身偏好（外观/窗口/图标/开关），`didSet` 里同步写 defaults，**立即生效**。部分项**双写**到 `LocalPlaybackSource`（如繁简转换、卡拉OK、罗马音语言集），让当前这首歌立刻重新解析——只写一边的话要么关 App 就忘、要么等下一首才生效。
 - **`FeatureSettingsStore`**（`~/.config/lyrimuse/lyrimuse-features.json`）：需要 collector 参与的功能开关（player/lyricsSources/lyricsSourceMode+Order/lyricsDir/lyricsTranslationLanguage/albumPrefetch/lyricsMachineTranslation/lastfmMirrorScrobble/daily+weeklyDigest(+source)/launchLyrimuseOnMusicOpen/trustedPlayers（信任的未知播放器，见第 02 章））。`save()` = 立即 `persistFile()` + **0.5s 去抖的 collector 重启**（连续快速切多个开关只重启一次；`launchctl kickstart -k` 被 launchd 节流约 10s，去抖前实测会造成推送反复中断）。所有等待中的 save 调用共享同一次重启结果。枚举 rawValue 与 collector `features.go` 常量逐字对应（共享 JSON 的契约）。
+- **`ConfigStore`**（`~/.config/lyrimuse/config.json`，账号凭据：ListenBrainz token/用户名、状态中继地址/token、Last.fm 账号与 scrobble 凭据、推送平台与 webhook、钉钉/飞书签名密钥；collector 侧 `config.go` 读同一份文件，**只读不写**）：整字典读写（`api_root`/`bundle_ids`/`log_level` 这些 UI 不管的字段原样保留）。触发者是 AccountLinkingTab 的 1.2s 输入防抖自动保存、账号切换/关窗兜底、Last.fm 授权成功与「断开」（这两条**不看 `isDirty`**）、以及 AppDelegate 退出前兜底（只在 `isDirty` 时）。`save()` = `persistFile()`（原子写 + 0600，见 `SecretFileWrite`）+ 走 `CollectorRestartCoordinator` 的合并重启 + `commitSnapshot()`。
+- **两份共享文件的读写口径（2026-09-05，借鉴清单 #46）**：`ConfigStore` / `FeatureSettingsStore` 的读盘、合并、写盘都走 Core `JSONConfigDocument`。读盘分**三态**：不存在（首次保存允许创建）/ 正常 / **损坏**（文件在、但不是 JSON 对象；features.json 还多一条「对象合法但字段按类型解不出」也算损坏）。损坏时 `loadFailure` 亮起、`persistFile()` **拒绝**保存（抛 `ConfigFileSaveError.refusedCorruptFile`，`save()` 把它跟「写失败」分开报进 lastError），设置窗口 detail 列顶部钉出 `ConfigFileDamageBanner`：说明哪份文件、技术原因（只含解析位置/键名/期望类型，不含文件内容）、两个出口——「在访达中显示」自己修（修好重开 App），或「放弃坏文件并重建」把它改名成 `<文件名>.corrupt-<yyyyMMdd-HHmmss>` 留在原目录、再用当前值重建。写盘是合并 → 序列化 → 写 → **成功后才更新内存镜像**，写失败字典与状态都不动。合并规则：已知键以本次编码为准（没给的已知键删掉——遗留迁移字段 `player` / `lastfm_scrobble_first_artist_only` 靠这条「往后不再写」），其余键原样保留（features.json 里这台机器不认识的 `ytmusic_lyrics` 之类就这样活下来）。诊断导出 State 段各报一行三态。selftest：ops-diagnostics「配置文件三态读写」拿真实临时目录钉逻辑，contracts「共享配置文件的读写口径」扫两个 Store 不许自己读写盘。取舍见设计决策第 19 条。
 - **`AppSettingsMirror`**：App 偏好一变就镜像成配置文件夹里的 JSON——让「拷走整个 `~/.config/lyrimuse` 文件夹」这条搬家路径不再静默丢掉 UserDefaults 那一半（2026-08-13 用户指出的裂缝）。
 
 ### 3. 全局快捷键（GlobalHotkeys，KeyboardShortcuts 库）
 
-10 个：显示/隐藏悬浮歌词、锁定/解锁位置、打开歌词管理、打开歌词窗口、打开设置、播放/暂停、下一首、上一首、歌词提前、歌词延后。歌词提前/延后按「调整步长」设置的幅度改**单曲**偏移（与菜单栏「歌词时间轴」同一个值；「全部播放器」和按播放器两档都在设置页那一行单独校（同一个 Stepper，靠下拉框切作用域，两档**二选一、不相加**），步长固定 0.05s，基准再与单曲微调相加——见第 08 章）。要求至少搭配 ⌘/⌥/⌃ 之一。绑定存 UserDefaults `KeyboardShortcuts_` 前缀。
+16 个（2026-08-31 从 10 个加到 16 个），设置页「快捷键」分四张卡：**显示**——显示/隐藏悬浮歌词、显示/隐藏灵动岛歌词、显示/隐藏菜单栏歌词、锁定/解锁位置、显示/隐藏译文、显示/隐藏发音；**窗口**——打开歌词管理、打开歌词窗口、搜索歌词、打开设置；**歌词时间轴**——歌词提前、歌词延后、歌词偏移归零（外加「调整步长」）；**播放控制**——播放/暂停、下一首、上一首。默认全部不预置，用户自己录制才生效（`GlobalHotkeys.swift` 头注定的原则：不会有按键在用户不知情下被这个 App 抢占；所以也没有「恢复默认」，行尾只有清除）。08-31 加的六个（搜索歌词 / 译文 / 发音 / 灵动岛 / 菜单栏 / 偏移归零）选键判据是「别的 App 占着焦点时你还想按」——只在某扇窗已经在前台时才有意义的动作（随机/循环、置顶、全屏）刻意不给全局键，那是本地键该管的。其中：「搜索歌词」直接开独立小窗（`AppActions.openLyricsQuickSearch`，见 04/07 章），在这之前这个入口只在悬浮窗 ⚙ 快捷菜单里；译文 / 发音 / 灵动岛 / 菜单栏四个开关按完都有瞬态提示条回声（`flashHint`，「已显示译文」之类）——它们改的是看得见的东西，但当前这首歌没有译文 / 注音时画面不会变，没有回声就分不清是没按中还是没内容；「显示/隐藏发音」绑的是总开关 `showRomanization`、不在拼音 / 粤拼 / 日 / 韩之间轮换（用户明确要求「开关罗马音而不是切换」，分语言的勾选留在设置页，那是配置不是随手按的东西）；灵动岛走 `NotchLyricsWindowController.setVisible(_:)` 这个唯一入口而不是直接翻布尔（同菜单栏菜单的做法，隐藏偏好的套用都在那里面）；「歌词偏移归零」复用三处菜单共用的 `resetLyricsOffset()`。新增快捷键必须同时登记 `allLyrimuseNames` 与 `title(for:)`——撞键检查与提示文案都靠这两处，selftest 够不着这个文件（它在 app target 里、还要 import KeyboardShortcuts），只有 debug 断言兜得住「登记了没写标题」。歌词提前/延后按「调整步长」设置的幅度改**单曲**偏移（与菜单栏「歌词时间轴」同一个值；「全部播放器」和按播放器两档都在设置页那一行单独校（同一个 Stepper，靠下拉框切作用域，两档**二选一、不相加**），步长固定 0.05s，基准再与单曲微调相加——见第 08 章）。要求至少搭配 ⌘/⌥/⌃ 之一。绑定存 UserDefaults `KeyboardShortcuts_` 前缀。
 
 ### 4. 配置备份与搬家（ConfigPortability / ICloudConfigStore）
 
@@ -71,6 +75,13 @@
 ### 5. 开机启动 / Dock / 更新 / 引导
 
 - **开机启动**（LoginItemManager）：不用 SMAppService，直接写经典 LaunchAgent plist 到 `~/Library/LaunchAgents`（label `me.yudaotor.lyrimuse`），`RunAtLoad=true` **无** KeepAlive（前台 GUI 工具，Cmd-Q 退出后不该被拉活）。指向 build.sh 安装的 `.app` 路径，开发调试路径不写入。
+  - 🔴 **这个开关只准写/删 plist，一行 `launchctl` 都不准有**（2026-09-03，用户报「点一下开机自启动就直接闪退软件」，修了三次才收口）。两个方向各有一个坑，**都不产生 crash report**，所以现象只是「闪退」、完全指不到这个开关：
+    - **关**：原来是 `launchctl bootout gui/<uid>/me.yudaotor.lyrimuse`。而 **App 本身就是那个 job**（build.sh 装完走 bootstrap + kickstart，开机自启同理）——等于让 launchd 给自己发一记 SIGTERM。日志证据：`osservice<me.yudaotor.lyrimuse> Process exited: domain:signal(2) code:SIGTERM(15)`。
+    - **开**：原来是 `launchctl bootstrap` + plist 里的 `RunAtLoad=true`——bootstrap 的一瞬间 launchd **再起一个 lyrimuse**，老进程让位退出。日志证据：老 pid `Process exited: voluntary`（注意**不是**信号），新 pid 在**同一秒**启动。
+    - 修法不是"加个判断"（第二版就是那样，只堵住了关的方向），而是**砍掉整类问题**：plist 文件就是「下次登录启不启动」的全部机制，launchd 登录时从 `~/Library/LaunchAgents` 读它；本次会话里注册与否对用户没有任何可观察差别（无 KeepAlive）。所以 `install()` 只写文件、`uninstall()` 只删文件，`run()` 辅助函数一并删除。
+    - ⚠️ **也不要改用 `launchctl disable`**：那是持久化黑名单、跨重装依然生效，以后重新打开开关时 bootstrap 会被静默拒绝，是个更难查的坑。
+    - selftest 有机械闸（`contracts` 组「开关不起进程」）：`LoginItemManager.swift` 的非注释行里不准出现 `launchctl` 或 `Process()`。做过变异测试：塞一行 `_ = "/bin/launchctl"` 当场红。
+    - 顺带记一条**排查手法**：这类"闪退"先看 `log show --predicate 'composedMessage CONTAINS "me.yudaotor.lyrimuse" AND composedMessage CONTAINS "exited"'`——`RBSProcessExitStatus` 会直接告诉你是**信号**（被谁杀）还是 **voluntary**（自己退），两者指向完全不同的原因。`~/Library/Logs/DiagnosticReports/` 里没有 `.ips` **不等于**没出事，干净终止本来就不生成。
 - **在 Dock 中显示**：切换 NSApp activationPolicy（accessory ↔ regular）；关闭后只留菜单栏图标。accessory 策略下打开任何窗口都要先 `NSApp.activate` 否则 openWindow 静默无效（多处调用点共用这个坑的修法）。
 - **这个永久偏好关着时，辅助窗口自己借一个 Dock 图标**（`AuxiliaryWindowActivation.swift`，2026-08-04）：「设置」/「歌词管理」/「歌词窗口」/「欢迎使用」四扇窗各自的根视图在 `.onAppear`/`.onDisappear` 里报到，用一个开关计数器 `openCount`——只要还有任意一扇开着就借 `.regular`，全部关掉才还原成 `.accessory`，不跟上面那条永久偏好打架（用户手动开了永久显示的话，这边全程不用管）。目的是这几扇窗打开期间能进 Cmd-Tab、能靠 Dock 图标切回来，不用非得先回菜单栏点。
 - **更新**（SparkleUpdaterManager）：Sparkle 标准流程（SPUStandardUpdaterController，startingUpdater:true 按 Info.plist SUFeedURL/SUEnableAutomaticChecks 周期检查），标准模态弹窗，无 gentle-reminder 定制（2026-09-03 用户拍板不做）；同日起挂 `SPUUpdaterDelegate` 只**记录**「发现 / 已下载 / 已跳过 / 开始安装」状态（`availableUpdate`），供菜单栏面板底栏显示「有新版本」并一键拉起 Sparkle 窗口，不接管任何显示权（见 06 章决策 #15）。关于页有手动「检查更新」+自动检查/自动下载开关。
@@ -125,18 +136,18 @@
 
 ### 7. 诊断导出（DiagnosticsExporter）
 
-汇总 collector 日志（`~/Library/Logs/lyrimuse.log`）+ App 系统日志 + 关键状态（权限/服务/各功能是否已配置）+ **播放时钟**成一份文本，设计给贴公开 issue。
+汇总 collector 日志（`~/Library/Logs/lyrimuse.log`）+ App 系统日志 + App 进程 stderr（`lyrimuse-app.log` 最后 100 行，2026-09-05 加，正常应几乎为空，能落进来的只有运行时 fatal / 子进程漏出的 stderr）+ 关键状态（权限/服务/各功能是否已配置）+ **播放时钟**成一份文本，设计给贴公开 issue。
 
 **播放时钟段（2026-08-22 加）**：`positionSourceTier` / 伺服误差 EMA / `posReportedBiasSecs` / 锚点的 rate·fresh·年龄 / 生效歌词偏移与其中来自 LRC `[offset:]` 的那一层 / `currentLineFillSettled`。数据源是 `LocalPlaybackSource.clockSnapshot`（只读快照，全是内存里已有的字段，零热路径成本；刻意不做成 `@Published`——诊断导出是"点一下读一次"，发布属性会让每次伺服调整都推着订阅者重渲染）。
 加它的理由：「歌词慢半拍」是最常被报也最难复现的一类问题，而它至少有四种成因、修法完全不同——帧率掉了 / tier 判错 / 伺服在反复 snap / 自然切歌偏置估歪。此前报告里没有任何一项能把这四种区分开。这一段不含任何用户内容（没有曲名/歌手/歌词），天然不需要过 `LogRedactor`。
 
-**对外请求审计日志（2026-08-26 加）**：用户明确要求"所有软件发出的对外请求全部都给我记录下日志"之后补的一整条能力，两侧各有一个统一出口——App 侧 `LyrimuseCore/Diagnostics/NetworkAuditLog.swift`（7 个 `URLSession` 调用点：`LastfmStatsService.request`/`LastfmAuthFlow` 两处/`ListenBrainzTokenCheck.validate`/`CachedImage.load`/`MusicCatalogSearch` 两处/`GitHubStarsService.fetch`（2026-09-03 加，关于页 star 数），各自调一次）；collector 侧是既有的 `networkobs.go` `doHTTPTracked`（原来只累加"网络通不通"的原子计数器，这次扩成同时写审计日志，十几个原本没接进这个出口的调用点——`lastfm.go`/`lastfmcollapse.go`/`backfill.go`/`lb.go`/`alerter.go`/`relay.go`/`weekly.go`/`digest.go`/`topartists.go`/`translate.go`/`color.go`/`musicbrainz.go`/`apple.go`/`amllttml.go`——一并接进来）。每条日志只记方法+host+path(+Last.fm 的 `method` 参数,它标识调用的哪个接口、不是凭据)+状态码/错误+耗时，**故意不带 query string**——凭据就是拼在 query string/path 里的，从源头不记录比"记了再指望 `LogRedactor`/collector 侧 `logscrub.go` 兜底"更彻底(两道现有脱敏机制仍然保留、继续保护其它已存在的、可能带 URL 的旧日志正文，不是被这个新出口取代)。App 侧新分类叫 `network-audit`(跟 `lastfm-stats`/`lastfm-connect` 等分开)，`recentAppLogLines()` 按 subsystem 查询、自动收进导出报告，不用额外接线。
+**对外请求审计日志（2026-08-26 加）**：用户明确要求"所有软件发出的对外请求全部都给我记录下日志"之后补的一整条能力，两侧各有一个统一出口——App 侧 `LyrimuseCore/Diagnostics/NetworkAuditLog.swift`（7 个 `URLSession` 调用点：`LastfmStatsService.request`/`LastfmAuthFlow` 两处/`ListenBrainzTokenCheck.validate`/`CachedImage.load`/`MusicCatalogSearch` 两处/`GitHubStarsService.fetch`（2026-09-03 加，关于页 star 数），各自调一次）；collector 侧是既有的 `networkobs.go` `doHTTPTracked`（原来只累加"网络通不通"的原子计数器，这次扩成同时写审计日志，十几个原本没接进这个出口的调用点——`lastfm.go`/`lastfmcollapse.go`/`backfill.go`/`lb.go`/`alerter.go`/`relay.go`/`weekly.go`/`digest.go`/`topartists.go`/`translate.go`/`color.go`/`musicbrainz.go`/`apple.go`/`amllttml.go`——一并接进来）。每条日志只记方法+host+path(+Last.fm 的 `method` 参数,它标识调用的哪个接口、不是凭据)+状态码/错误+耗时，**故意不带 query string**——凭据就是拼在 query string/path 里的，从源头不记录比"记了再指望 `LogRedactor`/collector 侧 `logscrub.go` 兜底"更彻底(两道现有脱敏机制仍然保留、继续保护其它已存在的、可能带 URL 的旧日志正文，不是被这个新出口取代)。App 侧新分类叫 `network-audit`(跟 `lastfm-stats`/`lastfm-connect` 等分开)，`recentAppLogLines()` 按 subsystem 查询、自动收进导出报告，不用额外接线。**2026-09-05 起 collector 侧按分钟聚合**（用户拍板）：逐次成功行降到 Debug（默认不落盘，`log_level=debug` 可见），落盘的是每个 target（方法 + host + path + Last.fm `method`）一分钟一行的 `api call summary target=… count= failed= p50_ms= max_ms= span_s=`（networkobs.go `recordAPICall` / `flushAPICallSummaries`，维护循环每 30 秒结算满一分钟的窗口，退出前全部结算），失败（传输错误 / HTTP 4xx-5xx）仍逐条 Warn。「全部记录」由汇总里的 count 兑现——两天日志里 63% 是逐次审计行、Last.fm 每 5 秒一次的轮询一项就 4219 行，一行一次已经把别的信号淹掉了。App 侧 `network-audit` 不变（量级小一个数量级，且每条都由用户动作触发）。
 
 刻意排除在外的两类：DNS-over-HTTPS 查询(`doh.go`，那是给别的请求解析域名用的基础设施调用，不是"联系了哪个外部服务"，跟 `networkLooksDown()` 的既有统计口径一致)；App 自动更新检查(Sparkle 框架，请求整个发生在框架内部，拿不到方法/网址/状态码/耗时这些细粒度信息，只能挂一个粗粒度生命周期回调，价值跟其它请求不对等，需要时再补)。
 
 **2026-08-27 这一轮：从"至少别泄密"扩成"真的能靠这一份文件排查问题"**。起因是拿一份真实导出（3254 行）回头核对，坐实了几个问题，逐条修：
 
-- **App Log 里的时间戳跟 Collector Log 对不上表**：前者是 `os.Logger`，显式 `+0000`（UTC）；后者是 Go `log.LstdFlags` 打的本地墙钟、不带任何时区标记——实测这台机器上两段日志相差整整 8 小时。修法是 collector 侧 `main.go` 加 `log.LUTC`，两边统一到 UTC；两个段落标题也都显式写明 `UTC`，不用读的人自己心算。
+- **App Log 里的时间戳跟 Collector Log 对不上表**：前者是 `os.Logger`，显式 `+0000`（UTC）；后者是 Go `log.LstdFlags` 打的本地墙钟、不带任何时区标记——实测这台机器上两段日志相差整整 8 小时。修法是 collector 侧 `main.go` 加 `log.LUTC`，两边统一到 UTC；两个段落标题也都显式写明 `UTC`，不用读的人自己心算。**2026-09-05 再改**：collector 换 `log/slog` 后行首是 `time=2026-09-05T00:00:00.000Z`（显式 Z），不再靠读的人记住「这是 UTC」（LUTC 那版没有任何标记，当天就有人把 `15:49` 读成了本地时间）；导出解析走 Core `CollectorLogLine.timestamp(of:)`，新老两种格式都认、都按 UTC 解（selftest ops-diagnostics 组钉着）。
 - **`App version` 恒报 `1.0.0`**：`build.sh` 的 `APP_VERSION` 默认值原来硬编码成 `1.0.0`，而这台机器唯一会用到的构建方式就是本地 `./build.sh`（见 repo CLAUDE.md）——同一份导出里 collector 正确打出 `lyrimuse 1.4.0 starting`，App 侧却报 `1.0.0`，两个版本号当场打架。改成默认取最近一个 git tag（去掉 `v` 前缀），真取不到才退到一眼假的 `0.0.0`；`LYRIMUSE_VERSION` 环境变量（CI 发布用）优先级不变。
 - **`[local] snapshot failed` 一条重复了 921 次，占 24 小时窗口的 30%**：`LocalPlaybackSource.poll()` 原来无条件每拍（空闲档 ~10s 一次）打一遍 `.error`，而"没有任何曲目在加载"本身多数时候是完全正常的状态。改成只在状态**变化**时打（`consecutiveNilSnapshots` 计数：首次失败打一次，之后每 30 次—约 5 分钟—再打一次而不是完全沉默，恢复时补一条 `recovered after N`）。
 - **一个标着"诊断用，定位到根因后删"的探针没删**：`AppDelegate.swift` 2026-08-18 装的滚轮探针（`scroll-probe`），每次滚轮事件都打一整条 AppKit 视图层级 dump（单行常常几百字符）。当年那次调查已经转成永久性的兜底转发方案（`forwardScrollIfStranded`，见下）而不是真找到 SwiftUI 内部的根因，探针本身此后一直白跑。已删掉 `logScrollProbe` 极其专用的 `firstSplitView`/`scrollViews` 辅助函数，`forwardScrollIfStranded`（真正生效的修复）原样保留。
@@ -164,8 +175,8 @@
 
 ## 数据与文件
 
-- UserDefaults：`np:*`（AppSettings + 各处 @AppStorage）、`KeyboardShortcuts_*`。
-- `~/.config/lyrimuse/`：`config.json`（账号凭据，ConfigStore）、`lyrimuse-features.json`、App 偏好镜像 JSON、enrich 缓存等（清单见第 01 章）。
+- UserDefaults：`np:*`（AppSettings + 各处 @AppStorage）、`KeyboardShortcuts_*`；另有 `settings:*`（设置页的停留位置：顶层分类 `settings:lastTab`、二级分段 `settings:lyricsSection` / `settings:appearanceSection`）——机器状态，刻意不在配置导出的前缀里。
+- `~/.config/lyrimuse/`：`config.json`（账号凭据，ConfigStore）、`lyrimuse-features.json`、App 偏好镜像 JSON、enrich 缓存等（清单见第 01 章）。损坏文件被用户「放弃」后留在同目录，名为 `<原名>.corrupt-<yyyyMMdd-HHmmss>`（不自动清理；uninstall.sh `--purge` 连目录一起删）。
 - iCloud：`~/Library/Mobile Documents/com~apple~CloudDocs/Lyrimuse/`。
 - LaunchAgent：`~/Library/LaunchAgents/me.yudaotor.lyrimuse.plist`。
 
@@ -178,7 +189,8 @@
 | 功能开关 | Settings/FeatureSettingsStore.swift `save()`；collector 侧 lyrimuse-collector/features.go |
 | 快捷键 | Settings/GlobalHotkeys.swift、Settings/ShortcutRecorder.swift |
 | 备份/iCloud | Settings/ConfigPortability.swift、Settings/ICloudConfigStore.swift（`readOutcome`/`isMaterialized`）、Settings/ICloudConfigImportPrompt.swift、LyrimuseCore/Util/BackupDiscovery.swift、LyrimuseCore/Util/ICloudFileReadiness.swift |
-| 凭据存储 | Settings/ConfigStore.swift、LyrimuseCore/Util/SecretFileWrite.swift |
+| 顺序优先列表拖拽排序 | LyricsSettingsTab（SettingsView.swift `priorityRow` / `priorityDragGesture` / `SourceDragState` / `PrioritySourceFramesKey`、`moveEnabledSource` 箭头通路）、LyrimuseCore/Util/ReorderDrag.swift（`targetIndex` / `displacement` / `clampedTranslation` / `moved`），selftest settings-ui 组 |
+| 凭据存储 / 共享配置文件读写 | Settings/ConfigStore.swift、Settings/FeatureSettingsStore.swift、LyrimuseCore/Util/JSONConfigDocument.swift（三态 `load` / `merging` / `save` / `markCorrupt` / `quarantineCorruptFile`）、Settings/ConfigFileDamageBanner.swift（损坏横幅，挂 SettingsView detail 列 `safeAreaInset`）、LyrimuseCore/Util/SecretFileWrite.swift |
 | 开机启动 | Settings/LoginItemManager.swift |
 | 更新 | Settings/SparkleUpdaterManager.swift |
 | 引导 | lyrimuse/OnboardingView.swift |
@@ -451,3 +463,46 @@
     `semaphore_wait_trap`/`waitUntilExit` 才定的根因；前两次采样里一次点击都没有（用户还在读消息、App 又被别的会话 build.sh
     重启关了窗），必须核对栈里真有事件分发（这台系统上事件在 `_DPSNextEvent` **内部**经 HIToolbox 分发，`sendEvent:` 不会出现，
     别拿它当"有没有点击"的判据）。
+
+19. **加载失败的配置文件拒绝保存、坏文件不覆盖；写失败不污染内存——两条路径下沉 Core 进 selftest（2026-09-05，用户拍板，借鉴清单 #46）**：
+    起因是核实清单时把 `ConfigStore.load()` 那条「文件不存在/解析失败——理论上不会发生」的注释追到底：它把两件事混成一回事，
+    都落成空字典 + 14 个空字段，且没有任何失败标记；`persistFile()` 无条件把 14 个字段写回。于是 config.json 一个 JSON 语法错误
+    （手改 / 搬家 / 导入）之后，启动显示各账号为空，用户在任意一栏输入、点一次「断开 Last.fm」、或 Last.fm 授权成功（后两条**不看
+    `isDirty`**，比清单说的「用户输入」多两条触发路径），就用一整套空串覆盖原文件——Last.fm session key / ListenBrainz token /
+    relay token 全丢，连 `api_root`/`log_level` 这些 UI 不管的字段也一起丢（`raw` 已被清空）。`FeatureSettingsStore` 同病：坏文件退
+    默认值，任意一个开关点一下就把默认值写回去，`unknownFileKeys` 也清空。collector 侧逐字段解、八个子命令全部只读，风险只在 Swift。
+    **做法**：纯逻辑抽成 Core `JSONConfigDocument`（三态 `load` / `merging` / `save` / `markCorrupt` / `quarantineCorruptFile`），两个
+    Store 只剩 `@MainActor` 外壳、字段映射、文案；`loadFailure` + `ConfigFileDamageBanner` + `discardCorruptFileAndSave()` 三件套
+    给出口。**三个取舍**：① 「损坏」只看**文件层**（不是 JSON 对象）和 features 的**类型层**（按类型解不出），不做 Go 那种逐字段
+    容错——逐字段容错会让「一个字段坏了」静默变成「那个字段回默认值然后被写回」，跟这条决策要杜绝的事是同一形状；宁可拒绝 + 让用户
+    看见。② 拒绝保存必须配出口，否则真想覆盖坏文件的人被卡死：出口是**改名保留**不是删除（坏文件里往往还有能手工抢救的凭据），
+    时间戳后缀、同名再加计数，不自动清理。③ 「拒绝」和「写失败」在 lastError 里分开报——前者磁盘一个字节没碰、是保护动作，文案不该
+    说成「失败」。**刻意不拦的**：`ConfigPortability.importData` 直接 `writeSecurely` 覆盖 config.json——导入本身就是「用一份完整配置
+    覆盖」，是用户明确要的；它随后 `restartApp()`，Store 重新走一遍三态。**顺带**：诊断导出 State 段多两行三态；写盘顺序钉死为
+    「成功后才更新镜像」（原来先改 `raw` 再写，只是写缓冲没造成实害，但一旦被当成「内存已同步」就是坑）；features.json 从此总是
+    带缩进、键排序写出（原来没有未知键时是紧凑一行），collector 解析不受影响。**验证**：selftest ops-diagnostics「配置文件三态读写」
+    47 条（真实临时目录：坏 JSON / 顶层数组 / 空文件 / 路径是目录 → 拒绝且字节不变、权限位不动；父目录不存在 / 目标是目录 / 非 JSON
+    类型 → 写失败字典与状态不变；隔离件字节原样、同名不覆盖、之后能重建），contracts 组 21 条扫两个 Store 不许自己 `Data(contentsOf:)`
+    / `write(to:)`。**没验的**：真机没有故意弄坏用户自己的 config.json——那正是这条要保护的文件；横幅与出口只靠源码守卫与编译通过，
+    界面形态待真出事时再校。⚠️ 已知未覆盖：App 运行期间用户手改 config.json，下次自动保存仍以内存镜像为准覆盖（读盘只在启动时一次），
+    跟以前一样。
+
+20. **「顺序优先」列表改把手拖拽排序，上下箭头留作键盘 / VoiceOver 兜底（2026-09-05，用户拍板，借鉴清单 #53）**：
+    列表最多 9 行，箭头挪 6→1 要点 5 次、写 5 次盘（0.5s 去抖内连点只重启一次，停顿就多一次）；拖拽一次 move 一次 save。
+    算法全部在 Core `ReorderDrag`（selftest settings-ui 组 40 条）：① `targetIndex` 滞回——被拖行**中线**越过邻行中线再多 6pt 才换位、
+    换位后回抖 6pt 内不退，形成 2h 死区；一帧可连越多行但只朝一个方向；② `displacement` 让位挪的是**槛距**（到相邻行原中线）
+    不是行高——行间有 1pt 分隔线，按行高挪越挪越歪；③ `moved` 写回完整排列时**禁用源槽位不动**——跟箭头的相邻 swap 语义一致，
+    selftest 钉着「三次相邻 swap == 一次拖拽」；若用「摘出再插回」，禁用源会跟着漂移，箭头与把手对同一份数据给出不同结果。
+    **视图层三条**：手势只挂把手（`line.3.horizontal`，16×20 命中区，minimumDistance 4；macOS 没有按住拖动滚动，不必担心跟滚动区抢）；
+    坐标空间用卡片容器的命名空间、位移取 `location − startLocation`——不能用 `value.translation`，被拖的行自己在动会把位移吃掉
+    （歌词管理列宽把手 08-05 踩过）；行 frame 的 GeometryReader 放在 `.offset` **之后**，量到的才是静止位置；拖拽开始那一刻一次性
+    快照各行中线，拖拽期间不重量。让位 0.15s `easeOut`，reduceMotion 置 nil；被拖行 1.015 缩放 + zIndex。行数或匹配模式一变就丢弃
+    进行中的拖拽。**箭头保留**并补「上移 / 下移」accessibilityLabel，把手补「拖动调整顺序」label + help——参考实现的弱点之一正是
+    把手无 aria 文案。**没做的**：Esc 取消（SwiftUI DragGesture 没有取消通路，松手即落定）；拖拽中滚轮滚动列表会让快照失效（松手
+    恢复，参考实现同样如此）；悬停光标没换抓手（要一份 pushedCursor 状态，收益小）。**验证**：selftest 18 组 2931 条 ALL PASS
+    （新组 settings-ui 40 条）；装机后无崩溃、无 error 日志；真机拖拽手感当时没验。⚠️ **装机后用户首验就报「拖不到第一个前面」**
+    （2026-09-05 03:4x）：`clampedTranslation` 把被拖行中线夹在首尾两行中线之间，而 `targetIndex` 要求越过首行中线**再多 6pt** 才落到
+    首位——两条各自都对，叠在一起首位 / 末位就成了永远到不了的死角；selftest 分别测了夹住和滞回，**没测叠加**（「一帧连越到末位」那条
+    用的是没夹过的 500pt）。修法：到达边界（首 / 末行中线，留 0.5pt 浮点容差）直接落到首 / 末位——边界处指针推不动，不存在来回换位，
+    滞回在那里没有意义；settings-ui 组补 8 条叠加用例（含逐帧「先夹再判」一路拖到顶）。教训同「校准阈值别只用合成单测」那条：两个
+    各自正确的约束叠加要单独测一条端到端的路径。

@@ -159,6 +159,145 @@ func runOpsDiagnosticsTests() {
         expectEqual(rewritten, 0o600, "覆盖写之后权限仍须是 0600(.atomic 会换掉 inode)")
     }
 
+    // ---- JSONConfigDocument(共享配置文件三态读写,2026-09-05,借鉴清单 #46)----
+    //
+    // 守两条路径:① 磁盘上的文件坏了(语法错 / 顶层不是对象 / 空文件 / 路径是目录)→ 加载判 corrupt、保存
+    // **拒绝**、文件字节一字不动;② 写盘失败 → 内存里的字典和状态**不变**。都拿真实的临时目录跑。
+    // 原来 ConfigStore 把「不存在」和「坏了」混成一回事,一个 JSON 语法错误之后任何一次保存都会用 14 个空串
+    // 覆盖 config.json(凭据全丢)——这一组断言就是不让它回来。
+    do {
+        print("\n== 配置文件三态读写 ==")
+        typealias D = JSONConfigDocument
+        let fm = FileManager.default
+        let dir = fm.temporaryDirectory
+            .appendingPathComponent("lyrimuse-selftest-cfgdoc-\(ProcessInfo.processInfo.processIdentifier)")
+        try? fm.removeItem(at: dir)
+        try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? fm.removeItem(at: dir) }
+        func perm(_ url: URL) -> Int {
+            ((try? fm.attributesOfItem(atPath: url.path))?[.posixPermissions] as? NSNumber)?.intValue ?? -1
+        }
+        func isRefused(_ error: Error?) -> Bool {
+            if let failure = error as? D.Failure, case .refusedCorruptFile = failure { return true }
+            return false
+        }
+
+        // ① 不存在 → missing;首次保存允许创建;写完状态推进到 loaded、凭据模式落成 0600。
+        let fresh = dir.appendingPathComponent("fresh.json")
+        var d1 = D.load(url: fresh)
+        expectEqual(d1.state, .missing, "三态: 文件不存在 → missing")
+        var err1: Error?
+        do { try d1.save(fields: ["listenbrainz_token": "t1"], secure: true) } catch { err1 = error }
+        expectEqual(err1 == nil, true, "三态: missing 允许首次创建(\(String(describing: err1)))")
+        expectEqual(d1.state, .loaded, "三态: 首次创建成功后状态推进到 loaded")
+        expectEqual(perm(fresh), 0o600, "三态: secure 模式落地 0600")
+        expectEqual(D.load(url: fresh).raw["listenbrainz_token"] as? String, "t1", "三态: 重新读回是刚写的值")
+
+        // ② 正常文件:未知键原样保留、已知键以本次为准、没给的已知键删掉(遗留迁移字段的语义)。
+        let normal = dir.appendingPathComponent("normal.json")
+        try? Data(#"{"api_root":"https://x","listenbrainz_token":"old","player":"apple_music"}"#.utf8).write(to: normal)
+        var d2 = D.load(url: normal)
+        expectEqual(d2.state, .loaded, "三态: 正常文件 → loaded")
+        expectEqual(d2.raw["api_root"] as? String, "https://x", "三态: 镜像含 UI 不管的键")
+        try? d2.save(fields: ["listenbrainz_token": "new"], knownKeys: ["listenbrainz_token", "player"], secure: false)
+        let reread = D.load(url: normal).raw
+        expectEqual(reread["api_root"] as? String, "https://x", "合并: 未知键原样保留")
+        expectEqual(reread["listenbrainz_token"] as? String, "new", "合并: 已知键覆盖")
+        expectEqual(reread["player"] == nil, true, "合并: 本次没给的已知键从文件删掉")
+        expectEqual(d2.raw["listenbrainz_token"] as? String, "new", "合并: 写成功后内存镜像同步")
+        expectEqual(d2.merging(fields: ["a": 1]).count, 3, "合并: knownKeys 缺省 = 只覆盖给的键,其余全留")
+
+        // ③ 坏 JSON → corrupt;保存抛 refusedCorruptFile;文件字节一字不动;原因里不带文件内容。
+        let bad = dir.appendingPathComponent("bad.json")
+        let badBytes = Data(#"{"listenbrainz_token": "SECRETTOKENVALUE", oops"#.utf8)
+        try? badBytes.write(to: bad)
+        var d3 = D.load(url: bad)
+        expectEqual(d3.isCorrupt, true, "三态: 坏 JSON → corrupt")
+        expectEqual(d3.corruptReason?.contains("SECRETTOKENVALUE") ?? true, false, "三态: 损坏原因不许带出文件内容")
+        var err3: Error?
+        do { try d3.save(fields: ["listenbrainz_token": ""], secure: true) } catch { err3 = error }
+        expectEqual(isRefused(err3), true, "坏文件不覆盖: 保存抛 refusedCorruptFile(\(String(describing: err3)))")
+        expectEqual(try? Data(contentsOf: bad), badBytes, "坏文件不覆盖: 拒绝之后文件字节一字不动")
+        expectEqual(d3.isCorrupt, true, "坏文件不覆盖: 拒绝之后状态仍是 corrupt")
+        expectEqual(perm(bad) == 0o600, false, "坏文件不覆盖: 连权限位都没动(没有走 writeSecurely)")
+
+        // 顶层不是对象 / 空文件 / 路径是目录,都算 corrupt。
+        let array = dir.appendingPathComponent("array.json")
+        try? Data("[1,2]".utf8).write(to: array)
+        expectEqual(D.load(url: array).isCorrupt, true, "三态: 顶层是数组 → corrupt")
+        let empty = dir.appendingPathComponent("empty.json")
+        try? Data().write(to: empty)
+        expectEqual(D.load(url: empty).isCorrupt, true, "三态: 空文件 → corrupt")
+        let asDir = dir.appendingPathComponent("dir.json")
+        try? fm.createDirectory(at: asDir, withIntermediateDirectories: true)
+        expectEqual(D.load(url: asDir).isCorrupt, true, "三态: 路径是目录 → corrupt")
+        expectEqual(D.load(url: asDir).state == .missing, false, "三态: 目录不算「不存在」,否则会往目录上写")
+        switch D.parseObject(Data("   \n".utf8)) {
+        case .success: expectEqual(true, false, "parseObject: 只有空白 → 失败")
+        case .failure: expectEqual(true, true, "parseObject: 只有空白 → 失败")
+        }
+        switch D.parseObject(Data("{}".utf8)) {
+        case .success(let obj): expectEqual(obj.isEmpty, true, "parseObject: {} → 空对象")
+        case .failure: expectEqual(true, false, "parseObject: {} 必须成功")
+        }
+
+        // ④ 写失败不污染内存:目标路径的父目录不存在 → 写盘抛错 → raw / state 不变。secure 与否都要成立。
+        for secure in [true, false] {
+            let orphan = dir.appendingPathComponent("no-such-dir/orphan.json")
+            var d4 = D(url: orphan, raw: ["keep": "me"], state: .loaded)
+            var threw = false
+            do { try d4.save(fields: ["keep": "changed"], secure: secure) } catch { threw = true }
+            expectEqual(threw, true, "写失败不污染内存(secure=\(secure)): 父目录不存在 → 写盘抛错")
+            expectEqual(d4.raw["keep"] as? String, "me", "写失败不污染内存(secure=\(secure)): 字典不变")
+            expectEqual(d4.state, .loaded, "写失败不污染内存(secure=\(secure)): 状态不变")
+        }
+        // 目标路径被一个目录占着(清单里那条「LP 的技巧」)同样是写失败。
+        var d4b = D(url: asDir, raw: ["keep": "me"], state: .loaded)
+        var threw4b = false
+        do { try d4b.save(fields: ["keep": "changed"], secure: false) } catch { threw4b = true }
+        expectEqual(threw4b, true, "写失败不污染内存: 目标路径是目录 → 写盘抛错")
+        expectEqual(d4b.raw["keep"] as? String, "me", "写失败不污染内存: 目录占位时字典不变")
+
+        // 序列化不了(字典里混进 Date)→ notSerializable,文件与内存都不动。
+        var d4c = D.load(url: normal)
+        var err4c: Error?
+        do { try d4c.save(fields: ["when": Date()], secure: false) } catch { err4c = error }
+        expectEqual((err4c as? D.Failure) == .notSerializable, true, "写失败不污染内存: 非 JSON 类型 → notSerializable")
+        expectEqual(D.load(url: normal).raw["when"] == nil, true, "写失败不污染内存: notSerializable 时文件没动")
+        expectEqual(d4c.raw["when"] == nil, true, "写失败不污染内存: notSerializable 时字典没动")
+
+        // ⑤ markCorrupt:对象层面之上判定不可用(字段类型对不上)→ 一样拒绝保存。
+        var d5 = D.load(url: normal)
+        d5.markCorrupt(reason: "fields do not decode")
+        expectEqual(d5.isCorrupt, true, "markCorrupt: loaded → corrupt")
+        var err5: Error?
+        do { try d5.save(fields: ["a": "b"], secure: false) } catch { err5 = error }
+        expectEqual(isRefused(err5), true, "markCorrupt: 之后保存同样拒绝")
+        var d5m = D(url: fresh, state: .missing)
+        d5m.markCorrupt(reason: "x")
+        expectEqual(d5m.state, .missing, "markCorrupt: missing 没有文件可言,不降级")
+
+        // ⑥ 放弃坏文件:挪到旁边(不删、字节原样、带时间戳),状态归 missing,然后能重建;非损坏时是空操作。
+        let moved = try? d3.quarantineCorruptFile(now: Date(timeIntervalSince1970: 0))
+        expectEqual(moved?.lastPathComponent.hasPrefix("bad.json.corrupt-") ?? false, true,
+                    "放弃坏文件: 挪到 <名>.corrupt-<时间戳>(\(moved?.lastPathComponent ?? "nil"))")
+        expectEqual(fm.fileExists(atPath: bad.path), false, "放弃坏文件: 原路径上没有文件了")
+        expectEqual(moved.flatMap { try? Data(contentsOf: $0) }, badBytes, "放弃坏文件: 挪走的那份字节原样(能手工抢救)")
+        expectEqual(d3.state, .missing, "放弃坏文件: 状态归 missing")
+        var err6: Error?
+        do { try d3.save(fields: ["listenbrainz_token": "rebuilt"], secure: true) } catch { err6 = error }
+        expectEqual(err6 == nil, true, "放弃坏文件: 之后能重建")
+        expectEqual(D.load(url: bad).raw["listenbrainz_token"] as? String, "rebuilt", "放弃坏文件: 重建的文件读得回来")
+        // 同一秒内再放弃一份同名坏文件:不覆盖上一份隔离件。
+        try? badBytes.write(to: bad)
+        var d6 = D.load(url: bad)
+        let moved2 = try? d6.quarantineCorruptFile(now: Date(timeIntervalSince1970: 0))
+        expectEqual(moved2 != nil && moved2 != moved, true, "放弃坏文件: 同名隔离件已存在时另起名字,不覆盖")
+        var d6ok = D.load(url: normal)
+        expectEqual((try? d6ok.quarantineCorruptFile()) ?? nil, nil, "放弃坏文件: 非损坏状态是空操作")
+        expectEqual(fm.fileExists(atPath: normal.path), true, "放弃坏文件: 空操作没有动正常文件")
+    }
+
     if ProcessInfo.processInfo.environment["LYRIMUSE_REDACT_CHECK"] == "1" {
         print("\n== 诊断脱敏真机校验 ==")
         let home = FileManager.default.homeDirectoryForCurrentUser
@@ -366,5 +505,33 @@ func runOpsDiagnosticsTests() {
                     "star 退避: 头解析不出 → 固定退避")
         expectEqual(G.retryDate(now: now, rateLimitReset: "1"), now.addingTimeInterval(G.failureBackoff),
                     "star 退避: 重置点已经过去 → 固定退避,不是立刻重试")
+    }
+
+    // ---- CollectorLogLine / LogFiles(collector 日志时间戳的两种格式)----
+    //
+    // 2026-09-05 collector 换 log/slog 之后每行以 `time=…Z` 开头;.old 归档与迁移前的行仍是 Go log
+    // 的 `yyyy/MM/dd HH:mm:ss`(UTC 无标记)。诊断导出按时间窗口取日志靠它找起点,两种都要认、
+    // 都按 UTC 解 —— 老格式按本地时间解会把 4 小时窗口整体错开 8 小时,导出里就是一片空。
+    do {
+        print("\n== collector 日志时间戳 ==")
+        var comps = DateComponents()
+        comps.timeZone = TimeZone(identifier: "UTC")
+        comps.year = 2026; comps.month = 9; comps.day = 5; comps.hour = 1; comps.minute = 2; comps.second = 3
+        let cal = Calendar(identifier: .gregorian)
+        let expectedSlog = cal.date(from: comps)!.addingTimeInterval(0.456)
+        let gotSlog = CollectorLogLine.timestamp(of: "time=2026-09-05T01:02:03.456Z level=INFO msg=\"api call summary\" count=12")
+        expectEqual(gotSlog.map { abs($0.timeIntervalSince(expectedSlog)) < 0.001 } ?? false, true,
+                    "collector 时间戳: slog 格式按 UTC 解析到毫秒")
+        comps.day = 4; comps.hour = 15; comps.minute = 49; comps.second = 15
+        expectEqual(CollectorLogLine.timestamp(of: "2026/09/04 15:49:15 api call: GET ws.audioscrobbler.com/2.0/ -> 200 (315ms)"),
+                    cal.date(from: comps), "collector 时间戳: 老格式按 UTC 解析(不是本地时间)")
+        expectEqual(CollectorLogLine.timestamp(of: "Bootstrap failed: 5: Input/output error") == nil, true,
+                    "collector 时间戳: 外部 stderr 漏进来的行没有时间戳 → nil")
+        expectEqual(CollectorLogLine.timestamp(of: "time=garbage level=INFO msg=x") == nil, true,
+                    "collector 时间戳: time= 后不是合法时间 → nil")
+        expectEqual(CollectorLogLine.timestamp(of: "") == nil, true, "collector 时间戳: 空行 → nil")
+        expectEqual(CollectorLogLine.timestamp(of: "2026/09/04 15:49") == nil, true, "collector 时间戳: 老格式截短 → nil 不崩")
+        expectEqual(LogFiles.appStderr.lastPathComponent, "lyrimuse-app.log", "日志文件: App stderr 单独一份")
+        expectEqual(LogFiles.collector.lastPathComponent, "lyrimuse.log", "日志文件: collector 日志路径不变")
     }
 }

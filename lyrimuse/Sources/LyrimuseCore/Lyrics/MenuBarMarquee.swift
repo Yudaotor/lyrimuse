@@ -318,6 +318,125 @@ public enum MenuBarMarquee {
                             headHoldSeconds: head, tailHoldSeconds: tail)
     }
 
+    // MARK: - 跟唱滚动:有逐字时间轴时,滚动跟着正在唱的字走(2026-09-04)
+
+    // 2026-09-04 加(用户:"可以根据实际的宽度以及播放逐字进度去滚吗")。上面那套按 dwell
+    // 倒推速度的配速是在**不知道这一句唱到哪儿**的前提下做的:它只知道这句会显示多久,于是
+    // 只能假设匀速,再拿首停 / 尾停 / 速度上限 / 提前量去补"开头要看清、末尾来得及读、不能
+    // 甩成残影、开唱前别动"这些窟窿。可缓存里 93% 的歌带逐字时间轴(2026-09-04 数的:3522 首
+    // 有词,3294 首带 yrc),对这些句子"此刻唱到哪个字"是已知的 —— 滚动就该直接跟着它走,
+    // 那几个窟窿一个都不用补:
+    //   * 开唱之前不滚:没唱到锚点之前偏移就是 0,不需要 leadInSeconds;
+    //   * 句尾来不及读:最后几个字唱到时文本尾部已经在格子里,读者是跟着唱的;
+    //   * 速度上限:跟唱速走,说唱段快是因为唱得快,不是滚得快;
+    //   * 极长句滚不完:唱到哪滚到哪,不存在。
+    // 没有逐字时间轴的句子(纯 LRC 的源)仍走上面的时间配速,两套按句切换、同一句不混。
+    //
+    // 两步纯函数:
+    //   1. followReadingPath:词时间轴 → "阅读位置"随时间的折线(x = 正在唱的词的左缘)。
+    //      ⚠️ 刻意**不**直接用 karaokeFillPath 那条填色边界:边界在词间空隙是平的保持段,
+    //      滚动跟着它会"唱一个字动一下、词间停一下",英文歌词空隙长尤其明显。这里改成
+    //      **词起点连线**:从本词起唱到下词起唱之间匀速走过本词的宽度,空隙被吸收进运动里,
+    //      整句连续不停顿,速度随唱速自然变化。
+    //   2. followScrollPath:阅读位置 → 滚动偏移,offset = clamp(x − 锚点, 0, maxOffset)。
+    //      钳位会让折线出现新的折点(穿过两道钳位的时刻),这里显式把它们补进路径,
+    //      **线性插值后逐点等于钳位函数** —— CA 那边仍然是 .linear,不用改驱动方式。
+    // 两步都是"时间 → 值"的折线,跟填色边界同一形状,静态取值和剩余关键帧直接复用
+    // karaokeFillX / karaokeFillKeyframes(见下面两个薄封装),不另写一份插值。
+
+    /// 锚点:正在唱的字停在格子宽的这个比例处。取 0.45 让它略偏左 —— 右边留更多还没唱的字
+    /// (跟唱时更需要看到接下来要唱什么,已经唱过的只留一小截当上下文)。要调手感先调它。
+    public static let followAnchorFraction: CGFloat = 0.45
+
+    /// 阅读位置路径:x = 正在唱的词的左缘(点,内容坐标系,0 = 整句长图的左缘),词间空隙被吸收。
+    /// - Parameter wordEndXs: 同 karaokeFillPath,按**前缀整段测宽**,与 words 一一对应。
+    /// 脏数据防御同 karaokeFillPath:时间钳严格递增,x 钳单调不减。
+    public static func followReadingPath(
+        words: [SyncedLyricWord], wordEndXs: [CGFloat]
+    ) -> [KaraokeFillPoint] {
+        guard !words.isEmpty, words.count == wordEndXs.count else { return [] }
+        var points: [KaraokeFillPoint] = []
+        points.reserveCapacity(words.count + 1)
+        var prevMs = Int.min
+        var prevX: CGFloat = 0
+        func append(ms rawMs: Int, x rawX: CGFloat) {
+            let ms = prevMs == Int.min ? rawMs : max(rawMs, prevMs + 1)
+            let x = max(rawX, prevX)
+            points.append(KaraokeFillPoint(ms: ms, x: x))
+            prevMs = ms
+            prevX = x
+        }
+        for (i, w) in words.enumerated() {
+            // 本词起唱时,阅读位置在它的左缘 = 上一个词的末端。
+            append(ms: w.startMs, x: i == 0 ? 0 : wordEndXs[i - 1])
+        }
+        // 最后一个词唱完,阅读位置到整句末端。
+        if let last = words.last {
+            append(ms: last.startMs + max(1, last.durationMs), x: wordEndXs[wordEndXs.count - 1])
+        }
+        return points
+    }
+
+    /// 阅读位置 → 滚动偏移路径(x 字段在这里装的是偏移量,>= 0,越大表示文字越往左走)。
+    /// 空数组 = 这一句不用滚(装得下)或输入无效。
+    /// - Parameter textWidth: 整句长图的点宽;maxOffset = textWidth − windowWidth。
+    public static func followScrollPath(
+        reading: [KaraokeFillPoint], windowWidth: CGFloat, textWidth: CGFloat,
+        anchorFraction: CGFloat = followAnchorFraction
+    ) -> [KaraokeFillPoint] {
+        let maxOffset = textWidth - windowWidth
+        guard windowWidth > 0, maxOffset > 0, !reading.isEmpty else { return [] }
+        let anchor = windowWidth * min(1, max(0, anchorFraction))
+        // 两道钳位对应的阅读位置:x 走到 lo 之前偏移是 0,过了 hi 之后停在 maxOffset。
+        let lo = anchor
+        let hi = anchor + maxOffset
+        func offset(_ x: CGFloat) -> CGFloat { min(maxOffset, max(0, x - anchor)) }
+
+        var raw: [KaraokeFillPoint] = []
+        raw.reserveCapacity(reading.count + 2)
+        for (i, p) in reading.enumerated() {
+            raw.append(KaraokeFillPoint(ms: p.ms, x: offset(p.x)))
+            guard i + 1 < reading.count else { break }
+            let q = reading[i + 1]
+            // 这一段穿过钳位就补一个折点(严格在段内部;正好落在端点上的由端点自己表达)。
+            for bound in [lo, hi] where p.x < bound && bound < q.x {
+                let t = Double((bound - p.x) / (q.x - p.x))
+                let ms = Int((Double(p.ms) + t * Double(q.ms - p.ms)).rounded())
+                raw.append(KaraokeFillPoint(ms: ms, x: offset(bound)))
+            }
+        }
+        // 时间钳严格递增(补出来的折点四舍五入到毫秒后可能跟邻点撞上),再把同值连跑的
+        // 中间点删掉(首尾各留一个,线性插值不变,关键帧更少)。
+        var points: [KaraokeFillPoint] = []
+        points.reserveCapacity(raw.count)
+        var prevMs = Int.min
+        for p in raw {
+            let ms = prevMs == Int.min ? p.ms : max(p.ms, prevMs + 1)
+            prevMs = ms
+            let n = points.count
+            if n >= 2, points[n - 1].x == p.x, points[n - 2].x == p.x {
+                points[n - 1] = KaraokeFillPoint(ms: ms, x: p.x)
+            } else {
+                points.append(KaraokeFillPoint(ms: ms, x: p.x))
+            }
+        }
+        return points
+    }
+
+    /// 此刻的滚动偏移(静态取值:暂停 / 已唱完 / 装动画前的初值用)。跟填色边界同一条插值。
+    public static func followScrollOffset(atMs ms: Int, path: [KaraokeFillPoint]) -> CGFloat {
+        karaokeFillX(atMs: ms, path: path)
+    }
+
+    /// 从"此刻"起到这句唱完的剩余滚动关键帧(`widths` 字段在这里装的是偏移量)。
+    /// nil 的三种情况同 karaokeFillKeyframes:已到路径末端、速率非正、路径为空 —— 调用方
+    /// 静置在 followScrollOffset 的取值上。
+    public static func followScrollKeyframes(
+        path: [KaraokeFillPoint], nowMs: Int, rate: Double
+    ) -> KaraokeFillFrames? {
+        karaokeFillKeyframes(path: path, nowMs: nowMs, rate: rate)
+    }
+
     // MARK: - 整首歌的播放进度(菜单栏歌词旁那枚图标的染色)
 
     // 2026-09-03 加。用户点名"仿照酷狗菜单栏歌词:可以选择在最左侧或者最右侧展示软件图标,

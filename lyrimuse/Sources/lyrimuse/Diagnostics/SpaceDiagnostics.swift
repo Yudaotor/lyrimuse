@@ -38,7 +38,7 @@ enum SpaceDiagnostics {
     static func start() {
         guard !started else { return }
         started = true
-        logger.notice("spacediag: 探针已启动(临时诊断,定位后请删除)")
+        logger.notice("spacediag: probe started (temporary diagnostics, remove once the cause is found)")
 
         let ws = NSWorkspace.shared.notificationCenter
         ws.addObserver(forName: NSWorkspace.activeSpaceDidChangeNotification, object: nil, queue: .main) { _ in
@@ -75,7 +75,7 @@ enum SpaceDiagnostics {
                             .prefix(24)
                             .map { $0.replacingOccurrences(of: "  ", with: " ") }
                             .joined(separator: " ⏎ ")
-                        logger.notice("spacediag: 变活跃调用栈 | \(frames, privacy: .public)")
+                        logger.notice("spacediag: became-active call stack | \(frames, privacy: .public)")
                     }
                 }
             }
@@ -99,6 +99,6 @@ enum SpaceDiagnostics {
             parts.append("[\(t) vis=\(w.isVisible ? 1 : 0) onActive=\(w.isOnActiveSpace ? 1 : 0) lvl=\(w.level.rawValue) cb=\(w.collectionBehavior.rawValue)]")
         }
         let dump = parts.joined(separator: " ")
-        logger.notice("spacediag: \(reason, privacy: .public) | active=\(NSApp.isActive ? 1 : 0) | 期间 cb 重写=\(writes, privacy: .public) 次 | \(dump, privacy: .public)")
+        logger.notice("spacediag: \(reason, privacy: .public) | active=\(NSApp.isActive ? 1 : 0) | cb rewrites=\(writes, privacy: .public) | \(dump, privacy: .public)")
     }
 }

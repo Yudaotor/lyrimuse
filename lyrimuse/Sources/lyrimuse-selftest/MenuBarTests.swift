@@ -224,6 +224,86 @@ func runMenuBarTests() {
                     "填色路径: 词数与宽度数不一致返回空")
     }
 
+    // ---- 菜单栏跟唱滚动:阅读位置路径与滚动偏移路径 ----
+    //
+    // 2026-09-04 加(用户:"可以根据实际的宽度以及播放逐字进度去滚吗")。有逐字时间轴的句子,滚动不再按
+    // dwell 倒推的匀速配速走,而是跟着正在唱的字:阅读位置 = 正在唱的词的左缘(词起点连线,词间空隙被
+    // 吸收进运动里),滚动偏移 = clamp(阅读位置 − 锚点, 0, maxOffset)。这里钉死:空隙不停顿、钳位折点
+    // 补齐后线性插值逐点等于钳位函数、装得下不滚、静态取值 / 剩余关键帧与填色那套同一条插值。
+    do {
+        let words = [
+            SyncedLyricWord(text: "甲", startMs: 0, durationMs: 500),
+            SyncedLyricWord(text: "乙", startMs: 500, durationMs: 500),
+            SyncedLyricWord(text: "丙", startMs: 1200, durationMs: 300),
+        ]
+        let reading = MenuBarMarquee.followReadingPath(words: words, wordEndXs: [10, 30, 60])
+        expectEqual(reading.count, 4, "跟唱阅读位置: 每个词起点一个点 + 句末一个点")
+        expectEqual(reading[0].ms, 0, "跟唱阅读位置: 首词起唱的时刻")
+        expectEqual(reading[0].x, 0, "跟唱阅读位置: 首词左缘是 0")
+        expectEqual(reading[1].x, 10, "跟唱阅读位置: 第二个词起唱时在第一个词末端")
+        expectEqual(reading[2].ms, 1200, "跟唱阅读位置: 第三个词起唱的时刻")
+        expectEqual(reading[2].x, 30, "跟唱阅读位置: 第三个词起唱时在第二个词末端")
+        expectEqual(reading[3].ms, 1500, "跟唱阅读位置: 末词唱完的时刻")
+        expectEqual(reading[3].x, 60, "跟唱阅读位置: 末词唱完到整句末端")
+        // 词间空隙(1000~1200ms)不停顿:阅读位置在 10 → 30 之间连续走,而填色边界那条此刻是停在 30 的。
+        let midGap = MenuBarMarquee.karaokeFillX(atMs: 1100, path: reading)
+        expectEqual(midGap > 10 && midGap < 30, true, "跟唱阅读位置: 词间空隙被吸收进运动,不停顿(\(midGap))")
+        expectEqual(abs(midGap - (10 + 20 * 600 / 700)) < 0.01, true, "跟唱阅读位置: 空隙里按词起点连线线性插值")
+        expectEqual(MenuBarMarquee.followReadingPath(words: words, wordEndXs: [10]).isEmpty, true,
+                    "跟唱阅读位置: 词数与宽度数不一致返回空")
+
+        // 偏移路径:格子宽 40、整句宽 60 → maxOffset 20;锚点 40 × 0.45 = 18。
+        let path = MenuBarMarquee.followScrollPath(reading: reading, windowWidth: 40, textWidth: 60)
+        expectEqual(path.isEmpty, false, "跟唱偏移: 放不下就有路径")
+        expectEqual(path[0].ms, 0, "跟唱偏移: 从句首开始")
+        expectEqual(path[0].x, 0, "跟唱偏移: 开唱前偏移 0")
+        expectEqual(path[path.count - 1].x, 20, "跟唱偏移: 终点停在 maxOffset")
+        var pathMonotonic = true
+        for i in 1 ..< path.count where path[i].ms <= path[i - 1].ms || path[i].x < path[i - 1].x {
+            pathMonotonic = false
+        }
+        expectEqual(pathMonotonic, true, "跟唱偏移: 时间严格递增、偏移单调不减")
+        // 钳位折点:阅读位置 18 落在 500~1200ms 那段(10→30),t = 0.4 → 780ms;38 落在 1200~1500ms
+        // (30→60),t = 8/30 → 1280ms。补了折点之后,线性插值必须逐点等于 clamp(阅读位置 − 18, 0, 20)。
+        expectEqual(path.contains { $0.ms == 780 && $0.x == 0 }, true, "跟唱偏移: 穿过下钳位处补折点(780ms)")
+        expectEqual(path.contains { $0.ms == 1280 && $0.x == 20 }, true, "跟唱偏移: 穿过上钳位处补折点(1280ms)")
+        var worst: CGFloat = 0
+        for ms in stride(from: -100, through: 1700, by: 10) {
+            let expected = min(20, max(0, MenuBarMarquee.karaokeFillX(atMs: ms, path: reading) - 18))
+            worst = max(worst, abs(MenuBarMarquee.followScrollOffset(atMs: ms, path: path) - expected))
+        }
+        expectEqual(worst < 0.05, true, "跟唱偏移: 线性插值逐点等于钳位函数(最大偏差 \(worst))")
+        // 同值连跑的中间点被删掉:0~780ms 一路是 0,只留首尾两点。
+        expectEqual(path.filter { $0.x == 0 }.count, 2, "跟唱偏移: 偏移为 0 的一段只留首尾两点")
+        expectEqual(MenuBarMarquee.followScrollOffset(atMs: 1000, path: path) > 0, true,
+                    "跟唱偏移: 唱过锚点之后开始滚")
+        // 装得下 / 输入无效 → 空。
+        expectEqual(MenuBarMarquee.followScrollPath(reading: reading, windowWidth: 60, textWidth: 60).isEmpty,
+                    true, "跟唱偏移: 装得下不滚")
+        expectEqual(MenuBarMarquee.followScrollPath(reading: reading, windowWidth: 0, textWidth: 60).isEmpty,
+                    true, "跟唱偏移: 格子宽 0 不滚")
+        expectEqual(MenuBarMarquee.followScrollPath(reading: [], windowWidth: 40, textWidth: 60).isEmpty,
+                    true, "跟唱偏移: 没有阅读位置不滚")
+        // 锚点比例越界被钳到 [0, 1]:比例 5 → 锚点就是格子右缘,阅读位置到 40 才开始滚。
+        let farAnchor = MenuBarMarquee.followScrollPath(reading: reading, windowWidth: 40, textWidth: 60,
+                                                        anchorFraction: 5)
+        expectEqual(MenuBarMarquee.followScrollOffset(atMs: 1200, path: farAnchor), 0,
+                    "跟唱偏移: 锚点比例钳到 1,阅读位置 30 还没到 40 不滚")
+        // 剩余关键帧 / 静态取值跟填色那套是同一条插值。
+        guard let frames = MenuBarMarquee.followScrollKeyframes(path: path, nowMs: 1000, rate: 1) else {
+            expectEqual(true, false, "跟唱关键帧: 句子没唱完却返回了 nil")
+            fatalError("unreachable")
+        }
+        expectEqual(frames.widths[0], MenuBarMarquee.followScrollOffset(atMs: 1000, path: path),
+                    "跟唱关键帧: 起点就是此刻的静态取值")
+        expectEqual(frames.widths[frames.widths.count - 1], 20, "跟唱关键帧: 终点停在 maxOffset")
+        expectEqual(frames.duration, 0.5, "跟唱关键帧: 时长 = 剩余毫秒 ÷ 1000 ÷ 速率")
+        expectEqual(MenuBarMarquee.followScrollKeyframes(path: path, nowMs: 1500, rate: 1) == nil, true,
+                    "跟唱关键帧: 唱完返回 nil,静置在末端")
+        expectEqual(MenuBarMarquee.followScrollKeyframes(path: path, nowMs: 1000, rate: 0) == nil, true,
+                    "跟唱关键帧: 暂停返回 nil,静置在此刻偏移")
+    }
+
     // ---- 菜单栏歌词旁那枚图标:整首歌的播放进度 ----
     //
     // 2026-09-03 加(用户:"可以选择是否在最左侧或者是最右侧展示软件图标,图标上会逐渐染色
@@ -859,5 +939,30 @@ func runMenuBarTests() {
         expectEqual(P.skipsShrink(currentLength: 200, targetLength: 185,
                                   dwellSeconds: 12, quietSecs: quiet), false,
                     "收缩死区: 相对当前槽宽累到 15pt 就照常收缩,不会永远缩不回去")
+    }
+
+    // ---- 「♪ 歌名」占槽兜底(2026-09-04)----
+    //
+    // 整首没歌词 / 还在搜的歌,菜单栏此前直接塌回小图标(灵动岛 / 悬浮歌词都有占位文案,唯它没有)。
+    // 判据在 MenuBarSlotPolicy.displayText,三条边界是刻意保留的:暂停不占宽(2026-08-19 用户定的)、
+    // 广告不显示广告标题、没歌名不做品牌兜底。
+    do {
+        typealias P = MenuBarSlotPolicy
+        func t(_ lyric: String, _ title: String, playing: Bool = true, ad: Bool = false, on: Bool = true)
+            -> (text: String, isFallback: Bool)? {
+            P.displayText(lyricText: lyric, title: title, isPlaying: playing, isAdBreak: ad,
+                          showsTitleWhenNoLyrics: on, placeholderGlyph: "♪")
+        }
+        expectEqual(t("对这个世界如果你有太多的抱怨", "稻香")?.text, "对这个世界如果你有太多的抱怨", "歌名兜底: 有歌词句就显示歌词句")
+        expectEqual(t("对这个世界如果你有太多的抱怨", "稻香")?.isFallback, false, "歌名兜底: 歌词句不算兜底")
+        expectEqual(t("♪", "稻香")?.text, "♪", "歌名兜底: 间奏的 ♪ 原样保留,不换成歌名")
+        expectEqual(t("", "稻香")?.text, "♪ 稻香", "歌名兜底: 没有可显示的行 → ♪ 歌名")
+        expectEqual(t("", "稻香")?.isFallback, true, "歌名兜底: 标成兜底,配速不按歌词时长算")
+        expectEqual(t("", "  稻香  ")?.text, "♪ 稻香", "歌名兜底: 歌名去首尾空白")
+        expectEqual(t("", "稻香", playing: false) == nil, true, "歌名兜底: 暂停一律收回图标(2026-08-19「暂停不占宽」)")
+        expectEqual(t("有词", "稻香", playing: false) == nil, true, "歌名兜底: 暂停时有词也收回,既有行为不变")
+        expectEqual(t("", "Ad Title", ad: true) == nil, true, "歌名兜底: 广告态不显示广告标题")
+        expectEqual(t("", "") == nil, true, "歌名兜底: 没歌名就还是图标,不做品牌兜底")
+        expectEqual(t("", "稻香", on: false) == nil, true, "歌名兜底: 开关关着照旧收回图标")
     }
 }

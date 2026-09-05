@@ -206,7 +206,10 @@ enum MenuBarMarqueeRenderer {
 
     /// - Parameter color: 文字颜色。调用方负责在正确的 appearance 下解析动态颜色
     ///   (见 MenuBarScrollingLabel.rebuildImage)。
-    static func prepare(text: String, color: NSColor) -> PreparedLine? {
+    /// - Parameter scale: 栅格化比例 = 图层最终所在窗口的 backingScaleFactor(调用方传
+    ///   `menuBarBitmapScale`,2026-09-05 起不在这里猜屏)。返回值的 `scale` 原样带回给图层的
+    ///   contentsScale 用。
+    static func prepare(text: String, color: NSColor, scale: CGFloat) -> PreparedLine? {
         guard !text.isEmpty else { return nil }
         let font = Self.font(for: text)
         let boxHeight = lineHeight
@@ -215,7 +218,6 @@ enum MenuBarMarqueeRenderer {
         // 不留尾部空白:旧版要留一个窗口宽,是因为要用 CGImage.cropping 裁窗口、越界会
         // 拿到 nil。现在是图层平移 + 上层 masksToBounds 裁剪,平移量永远不超过
         // textWidth - windowWidth,右边不会露出图外。
-        let scale = NSScreen.main?.backingScaleFactor ?? 2
         let pxW = Int(textWidth * scale), pxH = Int(boxHeight * scale)
         guard pxW > 0, pxH > 0,
               let ctx = CGContext(
@@ -234,5 +236,23 @@ enum MenuBarMarqueeRenderer {
         guard let cg = ctx.makeImage() else { return nil }
         return PreparedLine(cg: cg, scale: scale, textWidth: textWidth,
                             pointHeight: boxHeight, text: text, color: color)
+    }
+}
+
+extension NSView {
+    /// 自绘位图该按哪个比例栅格化(2026-09-05):**这个视图所在窗口**的 backingScaleFactor。
+    ///
+    /// 此前三处各取各的:长图和进度图标拿 `NSScreen.main`(有键盘焦点的窗口所在屏),活体图标
+    /// 写死 2。状态栏按钮真正被画在哪块屏它们都不知道 —— 混接不同 DPI 的显示器时,在外接 1x 屏
+    /// 上干活(key 窗口在那边)、MacBook 自己菜单栏上的歌词就是 1x 位图拉到 2x,发虚;反过来
+    /// 2x 位图落到 1x 屏只是白费一倍像素。单屏 Retina 下两种取法结果一样,看不出差别。
+    ///
+    /// 还没挂进窗口时退到主屏(菜单栏默认在的那块,不是"有焦点的那块"),再退到 2。位图与图层
+    /// contentsScale 必须用同一个值;比例变化(状态项在显示器之间迁移、首次挂进窗口)由
+    /// viewDidChangeBackingProperties / viewDidMoveToWindow 接住只换 contents 重排,不碰动画
+    /// (MenuBarScrollingLabel / MenuBarLiveIconView)。contracts 组「菜单栏自绘位图的栅格化比例」
+    /// 守着 MenuBar 目录下不再出现 NSScreen.main 猜屏和写死的 contentsScale。
+    var menuBarBitmapScale: CGFloat {
+        window?.backingScaleFactor ?? NSScreen.screens.first?.backingScaleFactor ?? 2
     }
 }

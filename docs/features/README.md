@@ -14,7 +14,7 @@
 | 06 | [菜单栏：歌词、图标与菜单](06-menubar.md) | 跑马灯歌词、12 款图标+动画、状态菜单各项 |
 | 07 | [歌词窗口](07-lyrics-window.md) | 整份歌词列表、自动滚动、封面背景/卡、进度拖拽 |
 | 08 | [歌词同步引擎（App 侧）](08-lyrics-engine.md) | 缓存直读、SyncEngine、LRC/YRC 解析、时间轴偏移（全部/按播放器 二选一 + 单曲）、署名行过滤 |
-| 09 | [歌词解析决策（collector）](09-lyrics-resolution.md) | 五源检索、守卫、打分 v3、挑选模式、决策留痕、自愈 |
+| 09 | [歌词解析决策（collector）](09-lyrics-resolution.md) | 九源检索、守卫、打分 v3、挑选模式、决策留痕、自愈 |
 | 10 | [译文与罗马音](10-translation-romanization.md) | 社区译文、机翻兜底、语言包、罗马音标注 |
 | 11 | [歌词管理窗口](11-lyrics-manager.md) | 列表/筛选/编辑/删除、联网重搜、决策查看、歌词文件夹 |
 | 12 | [账号连接与收听记录](12-scrobble-accounts.md) | ListenBrainz、Last.fm 镜像/统计/回填、收听日志/去重 |

@@ -224,6 +224,9 @@ func sourceColor(_ source: String) -> Color {
     // 酷我音乐(2026-08-31 加,见 collector/kuwo.go 头注)。红/绿/蓝/紫/橙/粉都被占了,
     // 选棕色作为下一个未占用色。
     case "kuwo": return .brown
+    // 咪咕音乐(2026-09-04 加,见 collector/migu.go 头注)。红/绿/青/靛/紫/橙/粉/棕都被占了,
+    // 选薄荷绿作为下一个未占用色。
+    case "migu": return .mint
     default: return .secondary
     }
 }
@@ -247,6 +250,8 @@ func sourceDisplayName(_ source: String) -> String {
     case "lyricfind": return "LyricFind"
     // 酷我音乐(2026-08-31 加)——国内用户认得出的中文写法,同网易云/QQ/酷狗。
     case "kuwo": return L10n.t("酷我音乐")
+    // 咪咕音乐(2026-09-04 加)——同酷我,用国内用户认得出的中文写法。
+    case "migu": return L10n.t("咪咕音乐")
     case "": return L10n.t("无来源")
     default: return source
     }
@@ -1704,12 +1709,10 @@ struct LyricsManagerView: View {
         .padding(24)
     }
 
-    // .useAll 而不是限定 .useMB——总大小从几百 KB(刚起步)到几十 MB(用了很久)跨度
-    // 很大,让系统自己选最合适的单位,不用手动判断该显示 KB 还是 MB。
+    // 口径本体挪到 EnrichCacheStore.byteText —— 设置页「歌词库」那一行是第三处要显示同一个
+    // 字节数的地方,再各自 new 一个 ByteCountFormatter 迟早分叉(见那边的头注)。
     private var cacheSizeText: String {
-        let formatter = ByteCountFormatter()
-        formatter.countStyle = .file
-        return formatter.string(fromByteCount: store.totalSizeBytes)
+        EnrichCacheStore.byteText(store.totalSizeBytes)
     }
 
     // 自动备份那一行的两段文字。static 是因为它们在 Menu 的 ForEach 里被调,不碰任何
@@ -1725,9 +1728,7 @@ struct LyricsManagerView: View {
     }
 
     private static func byteText(_ bytes: Int) -> String {
-        let formatter = ByteCountFormatter()
-        formatter.countStyle = .file
-        return formatter.string(fromByteCount: Int64(bytes))
+        EnrichCacheStore.byteText(Int64(bytes))
     }
 
     // 补/收「正在搜索歌词」占位行(2026-08-27,用户反馈"一首歌还在首次歌词搜索的时候,
@@ -1980,7 +1981,15 @@ struct LyricsManagerView: View {
         .sheet(isPresented: $showSearchSheet) {
             // 采纳候选直接保存,不需要再手动点"保存修改"——避免让人误以为选了就已经
             // 存上了,结果只是填进了编辑框,还得再点一下保存才真正落盘。
-            LyricsSearchSheet(artist: summary.artist, title: summary.title, album: summary.album, currentSource: summary.lyricsSource, durationSecs: summary.durationSecs) { candidate in
+            LyricsSearchSheet(
+                artist: summary.artist, title: summary.title, album: summary.album,
+                currentSource: summary.lyricsSource,
+                // 「当前使用」双判据要的正文指纹(2026-09-04)。store.raw 是私有的,跟另外两个入口一样走
+                // EnrichCacheReader.lookup(store 刚 persist 过的就是这份文件),三处口径一致。
+                currentFingerprint: EnrichCacheReader.lookup(artist: summary.artist, title: summary.title, album: summary.album)
+                    .map { ManualPickLock.fingerprint(lyrics: $0.lyrics) }.flatMap { $0.isEmpty ? nil : $0 },
+                durationSecs: summary.durationSecs
+            ) { candidate in
                 // 仅纯文本的候选(2026-08-30 加)走完全独立的一条路——不写 editedLyrics/
                 // editedTr/editedRoma(那三个编辑框是给带时间戳的 LRC 内容准备的,纯文本
                 // 塞进去只会让用户以为能像平时一样调 offset/看逐字,其实什么都不对得上)、
@@ -1988,56 +1997,56 @@ struct LyricsManagerView: View {
                 // 纯文本没有时间戳、没有这个概念)、不经 saveEdit 的 markManual/sourceChoice
                 // 这些"带时间戳歌词"专属的字段。见 EnrichCacheStore.savePlainTextEdit 头注。
                 guard !candidate.isPlainTextOnly else {
-                    Task {
-                        await store.savePlainTextEdit(
-                            key: key, plainLyrics: candidate.lyrics, source: candidate.source)
-                        if store.lastError == nil {
-                            withAnimation { showSaveEditFeedback = true }
-                            try? await Task.sleep(for: .seconds(1))
-                            withAnimation { showSaveEditFeedback = false }
-                        }
-                    }
-                    return
+                    let saved = await store.savePlainTextEdit(
+                        key: key, plainLyrics: candidate.lyrics, source: candidate.source)
+                    if saved { flashSaveEditFeedback() }
+                    return saved
                 }
                 editedLyrics = candidate.lyrics
                 editedTr = candidate.lyricsTr
                 editedRoma = candidate.lyricsRoma
-                Task {
-                    // 「采纳候选」要不要顺带冻结这首歌,由 `manualPickLocksLyrics` 决定 ——
-                    // 而**两种状态都不写** lyrics_source_choice(空串 = 显式清掉)。
-                    //
-                    // 2026-08-22 这里曾有第三态:开关关着时记下"选了哪个源",自愈路径照常跑
-                    // 但被约束在该源内(collector 侧 pickLyricCandidatePreferring)。当时的想法
-                    // 是把"我手改过正文"和"我不同意这次选源"拆成强弱两级约束。
-                    //
-                    // 2026-09-01 用户看到设置里写出来的说明后当场否掉了这个中间态:他要的
-                    // 两态是「关 = 之后所有自动更新/优化照常调整这首歌,**不限制源**;
-                    // 开 = 就定在这份歌词上不动」。中间那档除了不是他想要的,本身也讲不清楚
-                    // —— 它是一个看不见的约束,只能靠歌词管理里事后一枚 pin 徽章解释"为什么
-                    // 这首歌一直是这个源"。于是关态改成什么痕迹都不留;存量缓存里那 6 条
-                    // lyrics_source_choice 也一并清掉了(清理记录见 docs/features/11)。
-                    //
-                    // ⚠️ 直接编辑正文那条路径(「保存修改」)**永远**置 manual_lyrics,不受这个
-                    // 开关影响——那份内容删了就找不回来,自动逻辑没有任何理由觉得自己比人工更懂。
-                    await store.saveEdit(key: key, lyrics: candidate.lyrics, tr: candidate.lyricsTr,
-                                         roma: candidate.lyricsRoma, yrc: candidate.lyricsYRC,
-                                         source: candidate.source, markManual: AppSettings.shared.manualPickLocksLyrics,
-                                         sourceChoice: "", fromManualPick: true)
-                    // 采纳的候选歌词内容跟原来不一样,offset 的 key(内容指纹)也跟着变——
-                    // 输入框要显示"新内容对应的偏移值",不能继续显示采纳前那份内容的值。
-                    refreshOffsetState(artist: summary.artist, title: summary.title, lyrics: candidate.lyrics, yrc: candidate.lyricsYRC)
-                    // 2026-08-02 补上——采纳候选之前点了就直接关闭弹窗,真正的保存+重启
-                    // collector 在后台异步跑,用户看不到任何进度,失败时只能在下面
-                    // store.lastError 那行小字里发现。复用"保存修改"同一个反馈机制:
-                    // 成功就闪一下"已保存",失败不闪(已经有 lastError 的红字提示,不需要
-                    // 叠加两套反馈互相矛盾)。
-                    if store.lastError == nil {
-                        withAnimation { showSaveEditFeedback = true }
-                        try? await Task.sleep(for: .seconds(1))
-                        withAnimation { showSaveEditFeedback = false }
-                    }
-                }
+                // 「采纳候选」要不要顺带冻结这首歌,由 `manualPickLocksLyrics` 决定 ——
+                // 而**两种状态都不写** lyrics_source_choice(空串 = 显式清掉)。
+                //
+                // 2026-08-22 这里曾有第三态:开关关着时记下"选了哪个源",自愈路径照常跑
+                // 但被约束在该源内(collector 侧 pickLyricCandidatePreferring)。当时的想法
+                // 是把"我手改过正文"和"我不同意这次选源"拆成强弱两级约束。
+                //
+                // 2026-09-01 用户看到设置里写出来的说明后当场否掉了这个中间态:他要的
+                // 两态是「关 = 之后所有自动更新/优化照常调整这首歌,**不限制源**;
+                // 开 = 就定在这份歌词上不动」。中间那档除了不是他想要的,本身也讲不清楚
+                // —— 它是一个看不见的约束,只能靠歌词管理里事后一枚 pin 徽章解释"为什么
+                // 这首歌一直是这个源"。于是关态改成什么痕迹都不留;存量缓存里那 6 条
+                // lyrics_source_choice 也一并清掉了(清理记录见 docs/features/11)。
+                //
+                // ⚠️ 直接编辑正文那条路径(「保存修改」)**永远**置 manual_lyrics,不受这个
+                // 开关影响——那份内容删了就找不回来,自动逻辑没有任何理由觉得自己比人工更懂。
+                let saved = await store.saveEdit(key: key, lyrics: candidate.lyrics, tr: candidate.lyricsTr,
+                                                 roma: candidate.lyricsRoma, yrc: candidate.lyricsYRC,
+                                                 source: candidate.source, markManual: AppSettings.shared.manualPickLocksLyrics,
+                                                 sourceChoice: "", fromManualPick: true)
+                // 采纳的候选歌词内容跟原来不一样,offset 的 key(内容指纹)也跟着变——
+                // 输入框要显示"新内容对应的偏移值",不能继续显示采纳前那份内容的值。
+                refreshOffsetState(artist: summary.artist, title: summary.title, lyrics: candidate.lyrics, yrc: candidate.lyricsYRC)
+                // 2026-08-02 补上——采纳候选之前点了就直接关闭弹窗,真正的保存+重启
+                // collector 在后台异步跑,用户看不到任何进度,失败时只能在下面
+                // store.lastError 那行小字里发现。复用"保存修改"同一个反馈机制:
+                // 成功就闪一下"已保存",失败不闪(已经有 lastError 的红字提示,不需要
+                // 叠加两套反馈互相矛盾)。
+                if saved { flashSaveEditFeedback() }
+                return saved
             }
+        }
+    }
+
+    /// 采纳候选成功后闪一下「已保存」—— 跟「保存修改」同一个反馈机制(showSaveEditFeedback)。
+    /// 抽出来是因为 onApply 从 2026-09-04 起要**等保存结束再回报成败**(面板据此决定关不关窗、
+    /// 挪不挪「当前使用」徽标),这 1 秒的收尾不能再挂在同一个 Task 里阻塞回报。
+    private func flashSaveEditFeedback() {
+        Task {
+            withAnimation { showSaveEditFeedback = true }
+            try? await Task.sleep(for: .seconds(1))
+            withAnimation { showSaveEditFeedback = false }
         }
     }
 

@@ -39,7 +39,7 @@ App 自己**直接**读播放状态(不经 collector):`MediaControlClient.fetchS
 单一 flat package,编译产物打包进 `Lyrimuse.app/Contents/Resources/collector`,由 App 侧 `CollectorServiceManager` 注册成 launchd LaunchAgent `com.lyrimuse.collector`(RunAtLoad + KeepAlive,崩了自动拉起)。职责:
 
 - 每 5 秒轮询播放状态(`poller.go run()`;读取路径与 App 侧同构:Apple Music 走 JXA,其余走 media-control,见 `system.go`);
-- 解析歌词/封面/取色/各平台链接:五个歌词源(网易云/QQ/酷狗/Musixmatch/LRCLIB)全查+统一打分(`enrich.go`/`match.go`),结果写 enrich 缓存和 `lyrics/` 文件夹——**这是悬浮歌词的唯一数据生产者**,没有它 App 什么都显示不出来;
+- 解析歌词/封面/取色/各平台链接:九个歌词源(网易云/QQ/酷狗/Musixmatch/LRCLIB/AMLL/LyricFind/酷我/咪咕)全查+统一打分(`enrich.go`/`match.go`),结果写 enrich 缓存和 `lyrics/` 文件夹——**这是悬浮歌词的唯一数据生产者**,没有它 App 什么都显示不出来;
 - 可选:提交 playing_now/listen 到 ListenBrainz(`lb.go`)、镜像 scrobble 到 Last.fm(`lastfm.go`)、把 iPhone 的 Last.fm 播放桥接进 LB、推送当前状态到自建状态中继 `/push`(`relay.go`/`poller.go`)、周报/日报推送(`weekly.go`/`daily.go`)、Top 歌手统计(`topartists.go`);
 - 一次性子命令(`main.go` 在 flag 解析前分流):`search-lyrics`(歌词管理的手动搜索)、`artist-avatars`、`backfill-lastfm`、`delete-listen`、`healthcheck`(诊断"歌词为什么不出来")、`top-artists`、`dedupe-entries`、`recheck-cover`(对指定条目重新解析一次封面，见第 09 章 §7)、`recheck-instrumental`(给缺「纯音乐」标记的条目补上这个结论，见第 09 章 §8)。子命令不进常驻循环；只有会改缓存的那几个(`dedupe-entries -apply` / `recheck-cover -apply` / `recheck-instrumental -apply`)反过来**要求**常驻实例已停，fail-closed。
 - 常驻路径有单实例 flock 锁(`singleinstance.go`,锁文件 `collector.lock`):拿不到锁退出码 0,交给 launchd 稍后重试——两个实例并存曾把 204 条歌词缓存磨到 10 条。
@@ -77,7 +77,7 @@ Cloudflare Worker + KV 的状态中继(state-worker):collector 推 `/push`(带 t
 2. **launchctl kickstart 当作"重载配置"信号**:collector 不监听文件,所以 Swift 侧改完共享文件后,靠 `CollectorControl.kickstart`(`launchctl kickstart -k gui/<uid>/com.lyrimuse.collector`)重启 collector,让它下次启动读到新内容。歌词管理的每次保存/删除都走这条路(先落盘、立刻踢重启,否则 collector 内存里的旧 map 随时可能整份覆盖回磁盘,悄悄撤销刚做的修改——`EnrichCacheStore.swift` 顶部注释)。
 3. **一次性子进程调用**:App 调 `collector search-lyrics`(`LyricsSearchService`)、`collector artist-avatars`、`collector backfill-lastfm`、`collector delete-listen`;collector 调 `media-control` 和 `lyrics-translate`;App 调 `media-control` 和 `osascript`(JXA)。
 
-跨机器(出网)的通信全是 HTTP 客户端行为:collector → ListenBrainz/Last.fm/五个歌词源/MusicBrainz/状态中继 `/push`;网页 → 中继/ListenBrainz;feishu-bot → 飞书长连接 + 中继/ListenBrainz。
+跨机器(出网)的通信全是 HTTP 客户端行为:collector → ListenBrainz/Last.fm/九个歌词源/MusicBrainz/状态中继 `/push`;网页 → 中继/ListenBrainz;feishu-bot → 飞书长连接 + 中继/ListenBrainz。
 
 ### 生命周期与启动顺序
 
@@ -98,7 +98,7 @@ lyrimuse.app(Swift) ─────┤
   └─ 子进程:collector search-lyrics 等
 
 collector(Go, 5s 轮询) ── 同样两条播放读取路径(独立于 App)
-  ├─ 五源歌词解析 ──▶ 写 enrich 缓存 + lyrics/ 文件夹
+  ├─ 九源歌词解析 ──▶ 写 enrich 缓存 + lyrics/ 文件夹
   ├─ 子进程:lyrics-translate(端上翻译)/ media-control
   ├─ HTTP ▶ ListenBrainz(playing_now/listen)、Last.fm(镜像/桥接)
   └─ HTTP ▶ state-worker /push(nowplaying-workers, 外部仓)
@@ -114,7 +114,7 @@ collector(Go, 5s 轮询) ── 同样两条播放读取路径(独立于 App)
 
 | 目的地 | 谁发 | 发什么 | 何时 |
 |---|---|---|---|
-| 八个歌词源:`music.163.com`、`*.qq.com`、`*.kugou.com`、`*.kuwo.cn`、`*.musixmatch.com`、`lrclib.net`、`music.youtube.com`(LyricFind)、`raw.githubusercontent.com`(AMLL) | collector | 歌手、歌名、专辑,部分源带时长;AMLL 只按网易云 / QQ 音乐 ID 取文件 | 每首新歌解析(第 09 章) |
+| 九个歌词源:`music.163.com`、`*.qq.com`、`*.kugou.com`、`*.kuwo.cn`、`*.migu.cn`、`*.musixmatch.com`、`lrclib.net`、`music.youtube.com`(LyricFind)、`raw.githubusercontent.com`(AMLL) | collector | 歌手、歌名、专辑,部分源带时长;AMLL 只按网易云 / QQ 音乐 ID 取文件 | 每首新歌解析(第 09 章) |
 | `musicbrainz.org` | collector | 歌手名 | 各源全落空时查别名 / 主名(第 09 章) |
 | `itunes.apple.com` | collector、App | 歌手 + 歌名(+ 地区) | collector 封面 / 署名锚点;App 高清封面替代与空闲页链接(第 03 章) |
 | `api.mymemory.translated.net` | collector | **歌词正文**分块 + 随机生成的邮箱参数 | 「系统兜底翻译」开着且端上 Apple 翻译不可用(第 10 章) |

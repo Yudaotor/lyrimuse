@@ -184,7 +184,10 @@ final class AppSettings: ObservableObject {
         static let romanizationScripts = "np:romanizationScripts"
         static let showTranslation = "np:showTranslation"
         static let launchAtLoginEnabled = "np:launchAtLoginEnabled"
+        /// 布尔年代的旧键,只在 init() 里读一次做迁移(已登记进 ConfigPortability.obsoleteDefaultsKeys)。
         static let launchMusicOnLyrimuseOpen = "np:launchMusicOnLyrimuseOpen"
+        static let launchPlayersOnLyrimuseOpen = "np:launchPlayersOnLyrimuseOpen"
+        static let quitWithPlayers = "np:quitWithPlayers"
         static let collectorServiceEnabled = "np:collectorServiceEnabled"
         static let showInDock = "np:showInDock"
         static let showNextLinePreview = "np:showNextLinePreview"
@@ -201,6 +204,7 @@ final class AppSettings: ObservableObject {
         static let menuBarLyricsFontWeight = "np:menuBarLyricsFontWeight"
         static let menuBarLyricsFontSize = "np:menuBarLyricsFontSize"
         static let menuBarHoverShowsControls = "np:menuBarHoverShowsControls"
+        static let menuBarShowsTitleWhenNoLyrics = "np:menuBarShowsTitleWhenNoLyrics"
         static let menuBarIconStyle = "np:menuBarIconStyle"
         static let menuBarIconAnimates = "np:menuBarIconAnimates"
         static let lyricsOffsetStepMs = "np:lyricsOffsetStepMs"
@@ -370,6 +374,8 @@ final class AppSettings: ObservableObject {
     /// 所有配置都改为默认,除了宽度」,于是它跟「歌词旁的图标」一起并进去了 —— 进了重置范围
     /// 就必须有命名常量,`init()` 的兜底和重置按钮读同一份。)
     static let defaultMenuBarHoverShowsControls = false
+    /// 见 `menuBarShowsTitleWhenNoLyrics`。默认开:固定宽度模式下有词没词几何完全不变,这是主要收益。
+    static let defaultMenuBarShowsTitleWhenNoLyrics = true
     static let defaultMenuBarLyricsTextColorHex = ""
     static let defaultMenuBarLyricsFillColorHex = ""
     /// 菜单栏歌词的粗细(2026-09-03)。类型直接复用 `OverlayFontWeight`(LyrimuseCore 里那条六档
@@ -456,8 +462,15 @@ final class AppSettings: ObservableObject {
     // 里读一次(见那边的调用点),不是"实时生效"的开关,didSet 只负责持久化,不需要额外
     // 触发什么。默认关闭:"自动启动另一个 App"这类有侵入性的行为,不该在用户没有主动
     // 选择的情况下发生。
-    @Published var launchMusicOnLyrimuseOpen: Bool {
-        didSet { defaults.set(launchMusicOnLyrimuseOpen, forKey: Keys.launchMusicOnLyrimuseOpen) }
+    // 2026-09-03 从布尔改成逐播放器集合(用户拍板,见 LyrimuseCore.PlayerLinkage 头注):多选年代一个布尔
+    // 回答不了"启动哪一个"。存 rawValue 数组(排序,写盘稳定);「自动识别」永远不在里面。
+    @Published var launchPlayersOnLyrimuseOpen: Set<PlaybackPlayer> {
+        didSet { defaults.set(launchPlayersOnLyrimuseOpen.map(\.rawValue).sorted(), forKey: Keys.launchPlayersOnLyrimuseOpen) }
+    }
+    // 「跟随播放器退出」(2026-09-03 新增):勾选的播放器全部退出后 Lyrimuse 也退,默认空 = 关。判定与宽限
+    // 在 PlayerLinkage,监听在 PlayerQuitWatcher。
+    @Published var quitWithPlayers: Set<PlaybackPlayer> {
+        didSet { defaults.set(quitWithPlayers.map(\.rawValue).sorted(), forKey: Keys.quitWithPlayers) }
     }
     // collector 常驻服务的装/卸开关——跟 launchAtLoginEnabled 同样的写法，但默认值不能
     // 照抄成 true:首次启动必须走一遍引导页面里的"启用"按钮，让用户看到真实的安装+验证
@@ -572,6 +585,12 @@ final class AppSettings: ObservableObject {
     /// 在 LyrimuseCore 的 `MenuBarHoverControls` 里。
     @Published var menuBarHoverShowsControls: Bool {
         didSet { defaults.set(menuBarHoverShowsControls, forKey: Keys.menuBarHoverShowsControls) }
+    }
+    // 菜单栏歌词:这首歌没有歌词 / 还在搜时用「♪ 歌名」占住槽位,不缩回小图标(2026-09-04,借鉴清单
+    // #28)。判据在 Core 的 MenuBarSlotPolicy.displayText;暂停仍缩回(2026-08-19「暂停不占宽」),
+    // 广告不显示广告标题。做成开关是给"共享屏幕时不想外露歌名"留出口 —— 菜单栏没有截屏隐藏选项。
+    @Published var menuBarShowsTitleWhenNoLyrics: Bool {
+        didSet { defaults.set(menuBarShowsTitleWhenNoLyrics, forKey: Keys.menuBarShowsTitleWhenNoLyrics) }
     }
     // 菜单栏那个图标长什么样。它只在**没在显示歌词**时出现(没在放歌、还没解析出这一句、
     // 或者菜单栏歌词整个关掉),所以它跟上面那些宽度设置是两回事,不受它们影响。
@@ -1127,7 +1146,17 @@ final class AppSettings: ObservableObject {
         // "开关显示开着、系统里其实没注册"的假象。补的那一步在
         // AppDelegate.applicationDidFinishLaunching 里,两处必须一起看。
         launchAtLoginEnabled = (defaults.object(forKey: Keys.launchAtLoginEnabled) as? Bool) ?? true
-        launchMusicOnLyrimuseOpen = (defaults.object(forKey: Keys.launchMusicOnLyrimuseOpen) as? Bool) ?? false
+        if let raw = defaults.array(forKey: Keys.launchPlayersOnLyrimuseOpen) as? [String] {
+            launchPlayersOnLyrimuseOpen = Set(raw.compactMap(PlaybackPlayer.init(rawValue:)))
+        } else {
+            // 布尔年代的一次性迁移:「打开 Lyrimuse 时启动 X」当年只在唯一具体播放器时才显示,true 就迁成
+            // 那一个;含糊(纯 auto / 两个以上)当年开关本来就藏着,迁成空。选中集合从共享文件读一次。
+            let legacy = (defaults.object(forKey: Keys.launchMusicOnLyrimuseOpen) as? Bool) ?? false
+            launchPlayersOnLyrimuseOpen = PlayerLinkage.migratedLaunchSet(
+                legacyEnabled: legacy, selectedPlayers: PlaybackPlayerPreference.selected, requiresSole: true)
+        }
+        quitWithPlayers = Set(((defaults.array(forKey: Keys.quitWithPlayers) as? [String]) ?? [])
+            .compactMap(PlaybackPlayer.init(rawValue:)))
         collectorServiceEnabled = (defaults.object(forKey: Keys.collectorServiceEnabled) as? Bool) ?? false
         showInDock = (defaults.object(forKey: Keys.showInDock) as? Bool) ?? true
         // 默认开。多显示一句下文对跟读几乎总是有用的,而这一项本身不占额外窗口高度。
@@ -1160,6 +1189,8 @@ final class AppSettings: ObservableObject {
         // 默认关,理由见属性上那段注释(改的是既有手势的语义)。
         menuBarHoverShowsControls = (defaults.object(forKey: Keys.menuBarHoverShowsControls) as? Bool)
             ?? Self.defaultMenuBarHoverShowsControls
+        menuBarShowsTitleWhenNoLyrics = (defaults.object(forKey: Keys.menuBarShowsTitleWhenNoLyrics) as? Bool)
+            ?? Self.defaultMenuBarShowsTitleWhenNoLyrics
         menuBarIconStyle = defaults.string(forKey: Keys.menuBarIconStyle)
             .flatMap(MenuBarIconStyle.init(rawValue:)) ?? .default
         menuBarIconAnimates = (defaults.object(forKey: Keys.menuBarIconAnimates) as? Bool) ?? true

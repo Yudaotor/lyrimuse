@@ -36,6 +36,11 @@ public enum CollectorControl {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/bin/launchctl")
         process.arguments = ["kickstart", "-k", "gui/\(getuid())/\(label)"]
+        // 输出全丢:退出码就是要的全部信息。不设的话子进程继承 App 的 stderr,launchctl 的报错会
+        // 原样漏进日志文件(2026-09-05 之前 App 和 collector 共用一份,那些行混在 collector 日志里,
+        // 没有时间戳、没有来源,两天出现 59 次)。
+        process.standardOutput = FileHandle.nullDevice
+        process.standardError = FileHandle.nullDevice
         do {
             try process.run()
         } catch {

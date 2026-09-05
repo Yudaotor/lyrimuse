@@ -4,11 +4,6 @@ import Combine
 import LyrimuseCore
 import os
 
-// ⚠️ 临时诊断日志(2026-08-29,排查"点击按钮正下方生效、点按钮本身没反应"),排查完就删,
-// 不是长期保留的功能。用 `log show --predicate 'subsystem == "me.yudaotor.lyrimuse"
-// && category == "overlay-debug"' --last 10m` 读。
-private let overlayDebugLog = Logger(subsystem: "me.yudaotor.lyrimuse", category: "overlay-debug")
-
 // 文件级常量(不挂在 @MainActor 类上),避免 Timer 的 @Sendable 闭包里引用
 // MainActor-isolated static let 触发并发检查警告。
 // 2026-08-07:位置改成存**顶边**("x,顶边y" 字符串),不再存 AppKit 的左下角 origin。
@@ -793,17 +788,9 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
             // true,同一时刻只能满足一个,按位置翻转必然让其中一方受害。
 
         case .leftMouseDown:
-            // ⚠️ 临时诊断(排查完就删)。故意用 .error 级别——.debug 默认不落盘(第一版漏了
-            // 这个坑,log show 读到的是空的,只有 log stream 实时抓才能看到 debug 级别)。
-            overlayDebugLog.error("""
-                click loc=\(String(describing: loc), privacy: .public) \
-                local=\(String(describing: localPoint), privacy: .public) \
-                windowFrame=\(String(describing: frame), privacy: .public) \
-                baseFrameHeight=\(self.baseFrame(of: window).height, privacy: .public) \
-                controlsShown=\(controlsShown, privacy: .public) \
-                hotZone=\(String(describing: self.controlsHotZoneLocal), privacy: .public) \
-                rects=\(String(describing: self.controlRectsLocal), privacy: .public)
-                """)
+            // (2026-08-29 排查"点击按钮正下方生效"时这里挂过一条逐次点击的 .error 级探针日志,
+            // 2026-09-05 删掉:一天 2152 行、占 App 侧落盘量一半,且 error 级别里混着例行事件。
+            // 再要看点击几何,临时加回来跑 log stream 即可,别再留常驻的。)
             // 胶囊上的点击由我们自己分发:窗口常年点击穿透,SwiftUI 收不到任何事件。
             // 必须排在下面那条 guard 之前 —— 那条会因为 insideHotZone 直接 return。
             if controlsShown, let id = OverlayControlHitTest.control(at: localPoint, in: controlRectsLocal) {

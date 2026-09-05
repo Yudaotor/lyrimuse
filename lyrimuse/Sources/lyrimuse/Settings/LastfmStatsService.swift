@@ -782,6 +782,7 @@ final class LastfmStatsService: ObservableObject {
         dailySyncedThrough = 0
         dailyLoaded = false
         dailySyncing = false
+        historySyncGeneration += 1 // 在飞的那轮扫描作废,见声明处
         dailySyncFailed = false
         dailySyncProgress = nil
         pendingDailyRewind = nil
@@ -923,30 +924,15 @@ final class LastfmStatsService: ObservableObject {
         guard key != nowPlayingSpanKey else { return }
         nowPlayingSpanKey = key
         nowPlayingSpan = nil
-        guard !title.isEmpty, let cred = credentials else { return }
+        guard !title.isEmpty, credentials != nil else { return }
         Task {
+            // limit=1 的第 n 页 = 第 n 新那一条。取数本体 2026-09-04 提成 fetchTrackScrobbles,
+            // 跟「第 N 次听」合并明细共用一份解析(同一个接口两处各解一遍,哪天 Last.fm 改了
+            // 键名只会修到一处)。
             func page(_ n: Int) async -> (dates: [Date], total: Int)? {
-                // user 参数由 request 统一注入,extra 里不重复给。
-                guard let json = await request(
-                    method: "user.gettrackscrobbles", cred: cred,
-                    extra: ["artist": artist, "track": title, "limit": "1", "page": "\(n)"])
+                guard let p = await fetchTrackScrobbles(artist: artist, title: title, page: n, limit: 1)
                 else { return nil }
-                // 响应根节点是 trackscrobbles;这个方法文档化程度低,留一个 recenttracks
-                // 的兜底键名,两个都不认就当失败。
-                guard let rt = (json["trackscrobbles"] ?? json["recenttracks"]) as? [String: Any]
-                else { return nil }
-                let total = ((rt["@attr"] as? [String: Any])?["total"] as? String)
-                    .flatMap { Int($0) } ?? 0
-                // Last.fm 的怪癖(同 refreshDailyCounts):只有一条时 track 是对象不是数组。
-                var tracks = (rt["track"] as? [[String: Any]]) ?? []
-                if tracks.isEmpty, let single = rt["track"] as? [String: Any] { tracks = [single] }
-                let dates = tracks.compactMap { t -> Date? in
-                    guard let d = t["date"] as? [String: Any],
-                          let uts = (d["uts"] as? String).flatMap({ TimeInterval($0) })
-                    else { return nil }
-                    return Date(timeIntervalSince1970: uts)
-                }
-                return (dates, total)
+                return (p.plays.map(\.date), p.total)
             }
             guard let head = await page(1) else { return }
             var first = head.dates.first
@@ -962,6 +948,52 @@ final class LastfmStatsService: ObservableObject {
             guard nowPlayingSpanKey == key else { return }
             nowPlayingSpan = TrackScrobbleSpan(total: head.total, first: first, last: last)
         }
+    }
+
+    /// `user.getTrackScrobbles` 的一页:这首歌(**按精确写法**匹配,不 autocorrect)在这个账号下
+    /// 的 scrobble,按新→旧分页。`total` 是 `@attr.total`,即这一写法在 Last.fm 上的总次数。
+    struct TrackScrobblesPage {
+        let total: Int
+        let totalPages: Int
+        let plays: [(date: Date, album: String?)]
+    }
+
+    /// 两个消费方:「显示简介」的首次/上次听(limit=1 取头尾两页,见 refreshNowPlayingSpan)和
+    /// 「第 N 次听」合并明细(2026-09-04,每种写法各查一页 200 条,见 PlayCountBreakdownLoader)。
+    /// 失败(网络/限流/响应不认识)返回 nil,不区分原因 —— 两个消费方都只需要知道「这次没拿到」。
+    func fetchTrackScrobbles(artist: String, title: String, page: Int, limit: Int) async -> TrackScrobblesPage? {
+        guard let cred = credentials else { return nil }
+        // user 参数由 request 统一注入,extra 里不重复给。
+        guard let json = await request(
+            method: "user.gettrackscrobbles", cred: cred,
+            extra: ["artist": artist, "track": title, "limit": "\(limit)", "page": "\(page)"])
+        else { return nil }
+        // 响应根节点是 trackscrobbles;这个方法文档化程度低,留一个 recenttracks
+        // 的兜底键名,两个都不认就当失败。
+        guard let rt = (json["trackscrobbles"] ?? json["recenttracks"]) as? [String: Any]
+        else { return nil }
+        let attr = rt["@attr"] as? [String: Any]
+        let total = (attr?["total"] as? String).flatMap { Int($0) } ?? 0
+        let totalPages = (attr?["totalPages"] as? String).flatMap { Int($0) } ?? 1
+        // Last.fm 的怪癖(同 refreshDailyCounts):只有一条时 track 是对象不是数组。
+        var tracks = (rt["track"] as? [[String: Any]]) ?? []
+        if tracks.isEmpty, let single = rt["track"] as? [String: Any] { tracks = [single] }
+        let plays = tracks.compactMap { t -> (date: Date, album: String?)? in
+            guard let d = t["date"] as? [String: Any],
+                  let uts = (d["uts"] as? String).flatMap({ TimeInterval($0) })
+            else { return nil }
+            let album = ((t["album"] as? [String: Any])?["#text"] as? String)
+                .flatMap { $0.isEmpty ? nil : $0 }
+            return (Date(timeIntervalSince1970: uts), album)
+        }
+        return TrackScrobblesPage(total: total, totalPages: totalPages, plays: plays)
+    }
+
+    /// 「第 N 次听」合并明细用(2026-09-04):这一行的写法族 —— 本尊在前,后面是查次数时真正去问过
+    /// 的那批孪生写法(`playCountSiblings`,索引就绪时是历史里真实出现过的写法,封顶 8)。跟
+    /// `resolvePlayCounts` 求合并总数用的是**同一个**候选集,明细列的才是「合并了哪些」的权威答案。
+    func playCountFamily(artist: String, title: String) -> [(artist: String, title: String)] {
+        [(artist, title)] + playCountSiblings(artist: artist, title: title)
     }
 
     /// track.getinfo 的 userplaycount + 响应里的规范身份(纠正后的 歌手|歌名 小写键)。
@@ -1124,6 +1156,17 @@ final class LastfmStatsService: ObservableObject {
     @Published private(set) var dailySyncFailed = false
     private var dailySyncedThrough: TimeInterval = 0
     private var dailyLoaded = false
+    /// 历史扫描的世代号(2026-09-05)。`resetAll` 每次 +1;正在飞的那一轮扫描每次 await 回来都比对,
+    /// 对不上就整轮作废、**一个字节都不写**。
+    ///
+    /// 起因:热力图只剩 2026 年 8/14 起 22 天、写法索引 2554 族缩到 1439。复盘出的形态是「一轮增量扫描
+    /// 在飞的时候 resetAll 把 dailyCounts/titleForms 清空、文件删掉,随后 ensureFirstSyncBootstrap 又起了
+    /// 一轮首次全量;先前那轮增量最后收尾时把**空表 + 自己那几页**当成全部写回、水位盖成当下——
+    /// 于是下次启动 `min(两个水位) > 0` 直接判 .done,首次全量再也不会跑,截断的状态就此固化」。
+    /// resetAll 只把 dailySyncing 置 false,拦不住已经起飞的 Task;refreshBaseline 那边同款竞态早有
+    /// baselineGen 挡着,这里补同一招。日志只保留 09-04 11:17 之后的,具体触发那一刻没抓到现行,
+    /// 但这条竞态是代码里确定存在的洞,先堵上;数据用删掉热力图文件触发一次全量重建来修。
+    private var historySyncGeneration = 0
 
     private struct DailySnapshot: Codable {
         var username: String
@@ -1232,7 +1275,9 @@ final class LastfmStatsService: ObservableObject {
         guard credentials != nil else { return }
         if !titleFormsLoaded { loadTitleForms() }
         if !dailyLoaded { loadDailySnapshot() }
-        if min(titleFormsSyncedThrough, dailySyncedThrough) > 0 {
+        // 水位说同步过了、数据却明显截断(见 heatmapLooksTruncated)→ 不能判 .done,交给下面的
+        // syncHistoryIfNeeded 自愈重扫 —— 这条路径是页面主刷新每次都走的,不用等用户打开热力图。
+        if min(titleFormsSyncedThrough, dailySyncedThrough) > 0, !heatmapLooksTruncated() {
             bootstrapState = .done
             // 历史全量扫描早就跑过(可能是这次改动上线前的老账号),但"前几页翻页缓存"
             // 是这次才加的新东西——补一次,不然只有"刚连账号的新用户"能享受到,老账号
@@ -1274,6 +1319,18 @@ final class LastfmStatsService: ObservableObject {
         }
     }
 
+    /// 热力图的按天计数加起来比 Last.fm 报的总 scrobble 数少三成以上 → 判为截断(见 syncHistoryIfNeeded
+    /// 里的自愈)。两个数都是"这个账号全部 scrobble"的口径,正常只差几十条。overview 还没取到时不判
+    /// (nil → false),别在没有参照的时候把好数据当坏的。
+    private func heatmapLooksTruncated() -> Bool {
+        // 一次启动只自愈一轮:万一 Last.fm 的 recenttracks 本来就给不全(总数与可翻到的历史不一致),
+        // 不能每 15 分钟把一百多页重扫一遍。重扫过一次还判截断,记一行日志了事。
+        guard !truncationRescanAttempted else { return false }
+        guard let total = overview?.total, total > 0 else { return false }
+        return Double(dailyCounts.values.reduce(0, +)) < Double(total) * 0.7
+    }
+    private var truncationRescanAttempted = false
+
     /// 打开热力图时调用。实现见 syncHistoryIfNeeded——跟写法索引首次建索引是**同一次**
     /// 分页扫描(2026-08-25 合并),这里保留独立的函数名/签名,三处 UI 调用点不用改。
     func refreshDailyCounts() {
@@ -1307,7 +1364,22 @@ final class LastfmStatsService: ObservableObject {
         // 两个水位取较早的那个作为"这次该从哪开始"的判据:正常情况下两者本该同步
         // 推进(本函数是唯一写入方),取较早值只是防御性的——万一因为老版本遗留数据
         // 分叉了,宁可多扫一点重叠窗口也不漏扫历史。
-        let priorWatermark = min(titleFormsSyncedThrough, dailySyncedThrough)
+        var priorWatermark = min(titleFormsSyncedThrough, dailySyncedThrough)
+        // 自愈(2026-09-05):水位说"同步过了",可按天计数加起来比 Last.fm 报的总 scrobble 数少一大截,
+        // 那这份热力图就是截断的(实测 3,124 vs 24,327,只剩最近 22 天,见 historySyncGeneration 注释),
+        // 不管它是怎么截断的,都不该顶着水位继续只补最近几页 —— 当成从没同步过,重跑首次全量。
+        // 阈值 70%:两个数都是"这个账号全部 scrobble"的口径,正常只差几十条(刚落库的/被删的),
+        // 差三成只可能是丢了历史。
+        if priorWatermark > 0, heatmapLooksTruncated() {
+            logger.notice("history sync: daily counts \(self.dailyCounts.values.reduce(0, +), privacy: .public) vs Last.fm total \(self.overview?.total ?? -1, privacy: .public) — heatmap truncated, forcing a full rescan")
+            truncationRescanAttempted = true
+            dailyCounts = [:]
+            dailySyncedThrough = 0
+            titleFormsSyncedThrough = 0
+            historyCheckpoint = nil
+            saveHistoryCheckpoint()
+            priorWatermark = 0
+        }
         let full = priorWatermark <= 0
         if !full, let last = titleFormsLastTopUp, Date().timeIntervalSince(last) < 15 * 60 { return }
 
@@ -1327,8 +1399,11 @@ final class LastfmStatsService: ObservableObject {
             from = cp.from
         }
 
+        let generation = historySyncGeneration
         Task {
-            defer { dailySyncing = false }
+            // ⚠️ 只在这一轮还是"当前世代"时才清忙标志:被 resetAll 作废之后新一轮可能已经起飞,
+            // 这里再把 dailySyncing 置 false 会让第三轮插进来跟新一轮并跑。
+            defer { if generation == historySyncGeneration { dailySyncing = false } }
             var page = (full ? historyCheckpoint?.page : nil).map { $0 + 1 } ?? 1
             var totalPages = 1
             var failed = false
@@ -1336,12 +1411,17 @@ final class LastfmStatsService: ObservableObject {
 
             // 400 页 = 8 万条,远超当前量级的安全上限,防 totalPages 异常时打穿。
             while page <= totalPages && page <= 400 {
-                guard let obj = await request(
+                let response = await request(
                     method: "user.getrecenttracks", cred: cred,
                     extra: ["limit": "200", "page": "\(page)", "from": "\(Int(from))"],
-                    priority: .background),
-                    let (rows, pages) = LastfmRecentTracksPage.parse(obj)
-                else {
+                    priority: .background)
+                // resetAll 在这次请求飞着的时候把一切归零了:这一轮的每一页都已经无家可归,
+                // 不写任何东西、不动任何标志,直接退出(新一轮由 ensureFirstSyncBootstrap 起)。
+                guard generation == historySyncGeneration else {
+                    logger.notice("history sync: generation changed mid-flight (reset), abandoning this run")
+                    return
+                }
+                guard let obj = response, let (rows, pages) = LastfmRecentTracksPage.parse(obj) else {
                     failed = true
                     break
                 }
@@ -1585,6 +1665,9 @@ final class LastfmStatsService: ObservableObject {
         // 都先经过 titleFormsLoaded 这道闸(playCountSiblings/insertForm 等),搭这班车
         // 加载,不用在每个调用点各补一次守卫。
         if !discoveryLoaded { loadTitleAliasDiscovery() }
+        // 本机 enrich 缓存推出来的第三层别名也搭这班车:必须在下面 rebuildPrimaryCreditFamilies
+        // 之前灌进 PlayCountFold,否则首次建出来的族没有它,要等缓存下一次变化才补上。
+        refreshLocalAliases(rebuildFamilies: false)
         guard let cred = credentials,
               let data = try? Data(contentsOf: Self.titleFormsURL),
               let snap = try? JSONDecoder().decode(TitleFormsSnapshot.self, from: data),
@@ -1597,6 +1680,7 @@ final class LastfmStatsService: ObservableObject {
             // 首次触碰上;版本一致时这笔账一分不用付。
             titleForms = snap.forms
             rebuildPrimaryCreditFamilies()
+            flushLocalAliasStaleMarks()
         } else {
             // 折叠规则变过(或旧文件没有版本字段):按当前规则从真实写法重算全部键,
             // 一次性迁移 —— 不用重新全量拉几百页,写法总量几千条,纯本地计算;迁移完
@@ -1615,6 +1699,7 @@ final class LastfmStatsService: ObservableObject {
             }
             titleForms = refolded
             rebuildPrimaryCreditFamilies()
+            flushLocalAliasStaleMarks()
             scheduleTitleFormsSave()
         }
         titleFormsSyncedThrough = snap.syncedThrough
@@ -1832,7 +1917,7 @@ final class LastfmStatsService: ObservableObject {
             // 前台还在忙(用户刚翻页/换歌,次数封面还在取)就让路:候选有 30 天冷却、下一次
             // top-up 15 分钟后又会来,不差这一轮。
             guard await LastfmRateLimiter.shared.interactiveIdle(for: Self.discoveryQuietSecs) else {
-                logger.debug("title alias discovery: 前台请求未安静,本轮跳过")
+                logger.debug("title alias discovery: foreground requests not quiet, skipping this round")
                 return
             }
             // 按**新请求数**封顶(见 discoveryRequestBudget):已缓存的 duration 不花预算。
@@ -1923,6 +2008,105 @@ final class LastfmStatsService: ObservableObject {
         }
     }
 
+    // MARK: 本机推断的别名表 —— 歌手 + 歌名(2026-09-04)
+
+    /// 上一次灌进 PlayCountFold 的那两张本机别名表,用来判"有没有变"。不持久化:它们是 enrich 缓存 +
+    /// collector 三份 MusicBrainz 缓存的派生物,那些本身就在盘上,每次启动后台重算一次(几十毫秒)。
+    ///
+    /// 两张表取代了此前编译进二进制的手写表(`romanizedArtistAliases` 28 条、`titleAliasesByArtist`
+    /// 方大同 7 条)—— 用户 2026-09-04 明确要求「尽可能去掉手工表,一切由通用逻辑覆盖,不要特殊化」。
+    /// 证据与保守闸见 LocalArtistAliases / EnrichTitleAliases 的头注。
+    private var localAliasTables = EnrichCacheReader.LocalAliasTables.empty
+    private var localAliasRefreshTask: Task<Void, Never>?
+
+    /// 重算两张表并套用(变了才动)。已算好的直接同步套用;没算好的起后台任务,算完回主线程套用。
+    /// 两个调用点:loadTitleForms(首次建族之前,`rebuildFamilies: false` —— 族马上会被那边建出来;
+    /// 若那时表还没算好,后台算完会自己带 rebuild 回来)、refreshLocalCoversIfCacheChanged(enrich 缓存
+    /// 变了,`true`:重建族并把受影响写法的次数标过期 —— 族的成员变了,合并总数必然变,旧值照显、
+    /// 后台重取,见 stalePlayCountKeys)。
+    private func refreshLocalAliases(rebuildFamilies: Bool) {
+        if let ready = EnrichCacheReader.localAliasTablesIfComputed {
+            applyLocalAliases(ready, rebuildFamilies: rebuildFamilies)
+            return
+        }
+        localAliasRefreshTask?.cancel()
+        localAliasRefreshTask = Task { @MainActor [weak self] in
+            let tables = await EnrichCacheReader.computeLocalAliasTables()
+            guard let self, !Task.isCancelled else { return }
+            // 后台算的这段时间里族可能已经用空表建过了(首次启动就是这样),必须重建。
+            self.applyLocalAliases(tables, rebuildFamilies: self.titleFormsLoaded)
+        }
+    }
+
+    private func applyLocalAliases(_ tables: EnrichCacheReader.LocalAliasTables, rebuildFamilies: Bool) {
+        guard tables != localAliasTables else { return }
+        let old = localAliasTables
+        localAliasTables = tables
+        PlayCountFold.setLocalArtistAliases(tables.artists)
+        PlayCountFold.setLocalTitleAliases(tables.titles)
+        // 受影响的写法先攒起来,等族建好/重建好再按族索引把它们的次数标过期(见 flushLocalAliasStaleMarks):
+        // 歌手别名变了 → 这个歌手键、以及新旧代表写法的键;歌名别名变了 → 英文键 + 新旧中文歌名的折叠键。
+        for key in Set(old.artists.keys).union(tables.artists.keys) where old.artists[key] != tables.artists[key] {
+            pendingLocalArtistTouched.insert(key)
+            if let v = old.artists[key] { pendingLocalArtistTouched.insert(LocalArtistAliases.artistKey(v)) }
+            if let v = tables.artists[key] { pendingLocalArtistTouched.insert(LocalArtistAliases.artistKey(v)) }
+        }
+        for artistKey in Set(old.titles.keys).union(tables.titles.keys) {
+            let before = old.titles[artistKey] ?? [:], after = tables.titles[artistKey] ?? [:]
+            for eng in Set(before.keys).union(after.keys) where before[eng] != after[eng] {
+                pendingLocalAliasTouched[artistKey, default: []].insert(eng)
+                if let h = before[eng] { pendingLocalAliasTouched[artistKey, default: []].insert(PlayCountFold.foldTitle(h)) }
+                if let h = after[eng] { pendingLocalAliasTouched[artistKey, default: []].insert(PlayCountFold.foldTitle(h)) }
+            }
+        }
+        logger.notice("local aliases: \(tables.artists.count, privacy: .public) artist + \(tables.titles.values.reduce(0) { $0 + $1.count }, privacy: .public) title alias(es) inferred from local caches")
+        // 推出来的每一条都记进日志(表变了才记,不是每拍):这张表没有界面,排查"为什么并了/没并"只能靠它。
+        // os_log 对 public 字串约 1 KB 截断,分块记。
+        let artistItems = tables.artists.sorted { $0.key < $1.key }.map { "\($0.key)→\($0.value)" }
+        let titleItems = tables.titles.sorted { $0.key < $1.key }
+            .flatMap { a, m in m.sorted { $0.key < $1.key }.map { "\(a)|\($0.key)→\($0.value)" } }
+        for (label, items) in [("artists", artistItems), ("titles", titleItems)] {
+            var start = 0
+            while start < items.count {
+                let chunk = items[start..<min(start + 12, items.count)].joined(separator: "; ")
+                logger.notice("local aliases · \(label, privacy: .public) [\(start, privacy: .public)+]: \(chunk, privacy: .public)")
+                start += 12
+            }
+        }
+        guard rebuildFamilies else { return }
+        rebuildPrimaryCreditFamilies()
+        flushLocalAliasStaleMarks()
+    }
+
+    /// 别名变了但族索引还没建好时先记在这里(首次加载:loadTitleForms 先灌别名再建族)。
+    private var pendingLocalAliasTouched: [String: Set<String>] = [:]   // 歌手键 → 歌名折叠键
+    private var pendingLocalArtistTouched: Set<String> = []               // 歌手键(原始或代表)
+
+    /// 把攒下的受影响写法的次数标过期。族索引刚建好/重建好之后调;旧值照显、后台重取
+    /// (stalePlayCountKeys 的语义)。首次装机后的第一次启动也走这里:此前缓存里 `khalil fong|oasis`
+    /// 存的是它自己那 7 次,不标过期的话要等判据④的 24 小时窗口才会换成合并后的数。
+    private func flushLocalAliasStaleMarks() {
+        guard !primaryCreditFamilies.isEmpty,
+              !(pendingLocalAliasTouched.isEmpty && pendingLocalArtistTouched.isEmpty) else { return }
+        let touchedTitles = pendingLocalAliasTouched, touchedArtists = pendingLocalArtistTouched
+        pendingLocalAliasTouched = [:]
+        pendingLocalArtistTouched = []
+        var marked = 0
+        for family in primaryCreditFamilies.values {
+            for form in family {
+                let canonKey = PlayCountFold.canonicalArtistKey(form.artist)
+                var hit = touchedArtists.contains(canonKey) || touchedArtists.contains(LocalArtistAliases.artistKey(form.artist))
+                if !hit, let folded = touchedTitles[canonKey], folded.contains(PlayCountFold.foldTitle(form.title)) { hit = true }
+                guard hit else { continue }
+                stalePlayCountKeys.insert(Self.playCountKey(artist: form.artist, title: form.title))
+                marked += 1
+            }
+        }
+        if marked > 0 {
+            logger.notice("local aliases: \(marked, privacy: .public) play-count key(s) marked stale")
+        }
+    }
+
     /// 除 duration 之外的独立证据是否支持"这两条是同一首歌"。
     /// 判据本身(纯函数 + 完整理由 + selftest)在 `TitleAliasEvidence`(LyrimuseCore),
     /// 这里只是把 TrackFacts 拆开喂进去 —— 沿用这个仓库"纯算术下沉到 Core"的惯例。
@@ -2005,7 +2189,10 @@ final class LastfmStatsService: ObservableObject {
         /// playCountVerifiedAt 属性声明处的完整案例(方大同《ORANGe MOON》缓存冻结在
         /// 1、Last.fm 真实 31)。
         var playCountVerifiedAt: [String: Date]?
-        /// 次数表的口径版本:14 = 同一批(2026-08-29)再追加 `blackhole` → `黑洞里` 一条——
+        /// 次数表的口径版本:15 = 删掉两张手写别名表(歌手 `romanizedArtistAliases`、歌名
+        /// `titleAliasesByArtist`),改由本机数据推断(LocalArtistAliases / EnrichTitleAliases,2026-09-04
+        /// 用户要求「一切由通用逻辑覆盖」)——族的分组口径整体换了一套来源,旧缓存整表作废重取;
+        /// 14 = 同一批(2026-08-29)再追加 `blackhole` → `黑洞里` 一条——
         /// 13 版本又已经真机装过、本地缓存被盖上 13 这个戳(同样实测确认过),这条追加
         /// 如果不继续 +1,新映射依然不会生效(教训:每次改这张表,先查一眼本地缓存文件
         /// 当前的 mergedCountsVersion 实际值,不要凭"代码里上次改到了几"来猜);13 = 同一批
@@ -2091,7 +2278,7 @@ final class LastfmStatsService: ObservableObject {
         // 7 = 合唱 credit 归并(2026-08-20 加,见 primaryCreditFamilies);6 = 索引口径 +
         // 目录学噪音折叠。⚠️ 改动合并口径必须 +1,否则存量缓存里按旧口径算出来的数会一直
         // 端上桌 —— 实测《Toronto 2014》两本账各存着 1,不作废就永远显示「第 1 次听」。
-        trackPlayCounts = snap.mergedCountsVersion == 14 ? (snap.trackPlayCounts ?? [:]) : [:]
+        trackPlayCounts = snap.mergedCountsVersion == 15 ? (snap.trackPlayCounts ?? [:]) : [:]
         // 老快照没有这个字段,或者上面那行因为口径版本不对已经把 trackPlayCounts 整表
         // 作废——两种情况都不该留着旧的"验证时刻",否则判据④会误以为刚验证过、放过
         // 本该重新拉取的 key(2026-08-29,见 playCountVerifiedAt 声明处注释)。
@@ -2186,7 +2373,7 @@ final class LastfmStatsService: ObservableObject {
                 recentTrackCovers: keptCovers, recentAlbumCovers: keptAlbumCovers,
                 catalogCovers: keptCatalogCovers,
                 playCountVerifiedAt: keptVerifiedAt,
-                mergedCountsVersion: 14,
+                mergedCountsVersion: 15,
                 recentTotalPages: recentTotalPages,
                 onThisDay: onThisDayOutcome == .loaded ? onThisDay : nil,
                 onThisDayDay: onThisDayOutcome == .loaded ? onThisDayDay : nil,
@@ -2257,11 +2444,11 @@ final class LastfmStatsService: ObservableObject {
         // 重启、内存态没了)。这两行是纯诊断,平时 debug 级不落盘,出问题时用
         // `log show --predicate 'subsystem == "me.yudaotor.lyrimuse"' --last 1h` 就能看。
         guard fresh("baseline", ttl: baselineTTL) == false else {
-            logger.debug("refreshBaseline 早退: TTL 未过期(baselineTTL=\(self.baselineTTL, privacy: .public)s, force=\(force, privacy: .public))")
+            logger.debug("refreshBaseline early exit: TTL not expired (baselineTTL=\(self.baselineTTL, privacy: .public)s, force=\(force, privacy: .public))")
             return
         }
         guard let cred = credentials else {
-            logger.debug("refreshBaseline 早退: 没有账号凭据")
+            logger.debug("refreshBaseline early exit: no account credentials")
             return
         }
         fetchedAt["baseline"] = Date()
@@ -2302,7 +2489,7 @@ final class LastfmStatsService: ObservableObject {
             mergeOverview(total: r.map(attrTotal), today: t.map(attrTotal), week: w.map(attrTotal))
             if r == nil || t == nil || w == nil {
                 fetchedAt["baseline"] = nil // 有失败就不占 TTL,下一拍能补
-                logger.warning("refreshBaseline 部分失败: recent=\(r != nil, privacy: .public) today=\(t != nil, privacy: .public) week=\(w != nil, privacy: .public)")
+                logger.warning("refreshBaseline partially failed: recent=\(r != nil, privacy: .public) today=\(t != nil, privacy: .public) week=\(w != nil, privacy: .public)")
             }
             if r == nil {
                 baselineFailed = true
@@ -2457,6 +2644,10 @@ final class LastfmStatsService: ObservableObject {
         guard stamp != localCoversStamp else { return }
         localCoversStamp = stamp
         refreshLocalCovers()
+        // 同一份缓存还派生第三层歌名别名(2026-09-04):collector 刚给某首英文名的歌解析出跟
+        // 中文名同一个网易云 id,这一拍就该并族、次数标过期,不等下次启动。写法索引没加载时
+        // 不动 —— loadTitleForms 自己会在建族前灌一次。
+        if titleFormsLoaded { refreshLocalAliases(rebuildFamilies: true) }
     }
 
     private func refreshLocalCovers() {
@@ -3519,7 +3710,7 @@ final class LastfmStatsService: ObservableObject {
         // 「一直停留在十几小时之前,直到我手动点击刷新才去刷新」。
         // 判为过期是安全方向:最坏是多发一次请求,而不是永久不发。
         guard age >= 0 else {
-            logger.warning("fresh(\(key, privacy: .public)): fetchedAt 落在未来 \(-age, privacy: .public)s,按过期处理(系统时钟被回拨?)")
+            logger.warning("fresh(\(key, privacy: .public)): fetchedAt is \(-age, privacy: .public)s in the future, treating as expired (system clock rolled back?)")
             return false
         }
         return age < (overrideTTL ?? ttl)

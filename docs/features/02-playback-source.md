@@ -8,7 +8,7 @@ App 怎么知道"现在在放什么":从本地播放器读出 曲目元数据 + 
 
 ## 入口与展示面
 
-- **设置 → 播放器 tab**(`SettingsView.swift` 的 `PlayerSettingsTab`):「播放器」卡(2026-09-01 起**可多选**,见下面"多选"一节)、「Apple Music 自动化」权限卡(选中集合包含 Apple Music 时出现)、「已信任的其它播放器」卡(有信任项才出现)、「后台采集服务」卡(含 media-control 通道自检失败提示)、两个 App 联动开关。2026-08-25「播放器」卡跟引导页换成同一套图标网格(`PlayerChoiceCard`,用户要求两处排版和谐一致),包在 `SettingsCardHeader` + `SettingsRawRow` 里,融入这页"卡片+发丝描边"的既有语言,不是裸摆一个网格;顺带把「已信任的其它播放器」卡里每一行的图标从通用的 `checkmark.seal` SF Symbol 换成这个 App 自己的真图标(`SettingsRow` 新增的 `iconImage: NSImage?` 参数,跟 `icon` 二选一,原有全部调用点不传就不受影响),补了一个同款 `SettingsCardHeader` 标题——两张卡挨在一起时是"姐妹卡",不是"一张换新一张没换"。
+- **设置 → 播放器 tab**(`SettingsView.swift` 的 `PlayerSettingsTab`):「播放器」卡(2026-09-01 起**可多选**,见下面"多选"一节)、「已信任的其它播放器」卡(有信任项才出现)、「与播放器联动」卡(三行逐播放器勾选,见下面设置项表)、「Apple Music 自动化」权限卡(选中集合包含 Apple Music 时出现)、「后台采集服务」卡(含 media-control 通道自检失败提示)。⚠️ 后三张的先后 2026-09-04 调过(用户要求把「与播放器联动」换到「Apple Music 自动化」+「后台采集服务」前面):原来是"权限卡 → 服务卡 → 联动卡",两张只读的状态卡把这页唯一要动手勾选的那张挤到了页尾;现在是"要配的在前、系统状态在后"。`PlayerSettingsTab.body` 里那串卡片的书写顺序就是页面顺序,换顺序=换那几行的排列。2026-08-25「播放器」卡跟引导页换成同一套图标网格(`PlayerChoiceCard`,用户要求两处排版和谐一致),包在 `SettingsCardHeader` + `SettingsRawRow` 里,融入这页"卡片+发丝描边"的既有语言,不是裸摆一个网格;顺带把「已信任的其它播放器」卡里每一行的图标从通用的 `checkmark.seal` SF Symbol 换成这个 App 自己的真图标(`SettingsRow` 新增的 `iconImage: NSImage?` 参数,跟 `icon` 二选一,原有全部调用点不传就不受影响),补了一个同款 `SettingsCardHeader` 标题——两张卡挨在一起时是"姐妹卡",不是"一张换新一张没换"。
 - **引导页**(`OnboardingView.swift` 的 `playerChoiceStep` / `automationStep`):首次启动时选播放器;自动化权限步只在选中 Apple Music 时出现在 steps 里。2026-08-25 把 `playerChoiceStep` 从纯文字下拉换成图标卡片网格(`PlayerChoiceCard`,3 列 2 行,后来也被设置页复用,挪进了独立文件 `Settings/PlayerChoiceCard.swift`):优先取**已安装播放器的真实 App 图标**(`AppIconResolver`,跟"正在播放"面板来源角标——`PlaybackCoordinator.resolvedPlayerIcon`——同一份取图标逻辑/缓存,理由也一样:最好认,不用自带商标素材),没装就退回 `PlaybackPlayer.tintColor` + `fallbackSymbolName` 这套占位色块(QQ音乐/网易云音乐/酷狗音乐复用 `sourceColor`——跟"歌词来源"是同一批 App,不维护第二份配色映射)。文案顺带补全:原来的说明句漏了酷狗音乐(2026-08-21 才接入,文案没跟上)。
 - 数据本身没有独立窗口——通过 `PlaybackCoordinator`(`LocalPlaybackSource` 的薄转发层)流向悬浮歌词(`LyricsOverlayView`)、灵动岛(`NotchLyricsView`)、歌词窗口(`LyricsWindowView`)、菜单栏(`MenuBarStatusItem`)。
 - 「导出诊断信息」会带上 `lastResolvedBundleID`(这一刻实际被认下来的播放器,选"自动识别"时只报设置值等于什么都没说)。
@@ -45,7 +45,7 @@ App 怎么知道"现在在放什么":从本地播放器读出 曲目元数据 + 
 - **"排除自动识别后能不能唯一确定一个具体播放器"这个判据独立成了一个可复用的量**(`Set<PlaybackPlayer>.soleExplicitPlayer`,LyrimuseCore,纯函数):没有具体播放器(纯 auto)或者选了两个以上时是 `nil`。几处"只有能唯一确定时才有意义"的场景都靠它,不各自重新判一遍:
   - `AppDelegate`「打开 Lyrimuse 时顺带唤起播放器」——含糊就不猜,`bundleIdentifier` 退回空字符串(跟单选年代 `.auto` 的 no-op 效果一致);
   - `LyricsWindowView.idlePlayer`(停播欢迎态用哪个播放器的图标/文案)——含糊时退回"停播前最后识别到的那家"这条既有兜底;
-  - `SettingsView.companionCard`——「打开 Lyrimuse 时启动 X」这一行含糊时直接隐藏(不猜、不显示读不通的文案),「跟随 X 启动」含糊时文案退回"跟随播放器启动"。
+  - `SettingsView.companionCard`——「打开 Lyrimuse 时启动 X」这一行含糊时直接隐藏(不猜、不显示读不通的文案),「跟随 X 启动」含糊时文案退回"跟随播放器启动"。**2026-09-03 起这一条不再依赖该判据**:三项联动全部改成逐播放器勾选(`PlayerLinkageRow` 图标芯片,用户原话「现在是支持多选的,那么具体是和哪个播放器绑定呢,所以这块功能也要改为多选才行;设置里也要重新设计」),含糊场景不存在了,见下面设置项表「与播放器联动」三行。
   - collector 侧对称的是 `companionlaunch.go` 的 `companionLaunchProcessNames`——auto 在选中集合里就盯全部五个已知播放器的进程,否则逐个选中成员各自的进程名都盯(不再局限于唯一一个)。
 - **「Apple Music 自动化」权限卡的展示条件放宽**(`SettingsView.permissionCard`):从"恰好只选了 Apple Music"放宽成"选中集合包含 Apple Music"(不要求排他)——多选场景下 Apple Music 那条 AppleScript 路径照样会被走到(见上面判断树第 3 步),用户仍然值得在这里管理这份权限。`dispatch()`(播放控制写路径)和 `checkForCurrentPlayer`/`checkForCurrentPlayerSafely`(自动化权限的按需检查)则**保持要求排他**(`PlaybackPlayerPreference.isExclusivelyAppleMusic`,即 `selected == [.appleMusic]`)——这两处要的是"能不能武断地把指令/权限检查直接导向 Music.app、不经过系统焦点仲裁"这个更强的确定性,多选/auto 场景下应该让 media-control 的焦点仲裁生效,不能因为用户也勾了 Apple Music 就抢着直连。
 - **同源歌词加权也从单值变成集合**(collector `match.go`):`nativeLyricSource string` → `nativeLyricSources map[string]bool`,`resolveNativeLyricSources(players)` 把选中集合里每个成员各自的原生歌词源都收进来(Apple Music/Spotify/auto 不贡献任何源)——同时用 QQ 音乐和酷狗听歌的人,两边的同源加权都该生效,不能只挑其中一个。
@@ -64,7 +64,7 @@ App 怎么知道"现在在放什么":从本地播放器读出 曲目元数据 + 
 ### 信任列表:自动识别不限死内置 App(2026-08-21)
 
 - **要解决的问题**:`.auto` 原来只认写死的那几个 bundle id,任何别的播放器(Foobar、AlgerMusicPlayer、第三方客户端、以后出现的新 App)在放都被当成"没有可关心的播放"。
-- **为什么不是"一律接受"**:那道白名单**同时挡着打卡**(`poller.isTracked`)。一律接受 = YouTube 视频、播客、网课被当成收听写进 Last.fm / ListenBrainz 的**永久历史**,并往"设计上永不清理"的歌词缓存灌垃圾条目、白烧五源查询。而"靠内容形状分辨是不是音乐"不可靠:浏览器里的网页播放器能用 MediaSession API 自己填 title/artist/artwork,一个 YouTube 音乐视频跟一首歌长得一模一样;`mediaType` 也指望不上(实测酷狗压根不报这个字段)。
+- **为什么不是"一律接受"**:那道白名单**同时挡着打卡**(`poller.isTracked`)。一律接受 = YouTube 视频、播客、网课被当成收听写进 Last.fm / ListenBrainz 的**永久历史**,并往"设计上永不清理"的歌词缓存灌垃圾条目、白烧全源查询。而"靠内容形状分辨是不是音乐"不可靠:浏览器里的网页播放器能用 MediaSession API 自己填 title/artist/artwork,一个 YouTube 音乐视频跟一首歌长得一模一样;`mediaType` 也指望不上(实测酷狗压根不报这个字段)。
 - **口径 = 用户显式同意**:设置 → 播放器 在 `.auto` 下检测到未知 App 在报 Now Playing,就显示一张卡(App 真实名 + bundle id + **它此刻在放什么**,后者是用户判断"这是我的播放器还是某个网页视频"的关键),点「加入信任列表」写进 `features.json` 的 `trusted_players`(bundle id → 显示名)。之后它跟内置播放器**完全同权**:显示 + 打卡。
 - **显示名在信任那一刻就地反查并存下来**(`NSWorkspace.urlForApplication` → `CFBundleDisplayName` → `CFBundleName` → 文件名),不是每次现查:collector(Go)也要用它当 ListenBrainz 的 `media_player` 标签,而 Go 那边没有 NSWorkspace。反查不到就存空串,标签退回 bundle id —— 绝不谎报成 "Apple Music"(那会让来源统计彻底失真)。
 - **不需要 mtime 重读**:`FeatureSettingsStore.save()` 本来就会去抖重启 collector,所以点完信任 Go 侧立刻拿到新名单。Swift 侧每轮轮询重读 `features.json`(不加缓存,理由同 `PlaybackPlayerPreference`)。
@@ -438,8 +438,9 @@ vs 目录 289.766),拿目录值去盖反而是降精度。覆盖就该待在产�
 | 播放器 tab | 播放器(Picker,5 档) | 写 `features.player` → `lyrimuse-features.json`;App 侧下一轮轮询即生效(每轮现读);collector 只在启动时读一次,需重启采集服务才跟上 |
 | 播放器 tab | Apple Music 自动化(权限卡,仅选 Apple Music 时出现) | 查/请求 TCC 自动化权限;没有它 Apple Music 路径完全读不到播放状态 |
 | 播放器 tab | 后台采集服务(状态卡) | 启用 collector(歌词/封面解析、scrobble 的来源);本章数据源不依赖它跑轮询,但歌词内容全来自它写的缓存 |
-| 播放器 tab | 打开 Lyrimuse 时启动 X(.auto 时隐藏) | App 联动,`AppSettings.launchMusicOnLyrimuseOpen`;.auto 无唯一目标 App 故隐藏 |
-| 播放器 tab | 跟随 X 启动 / 跟随播放器启动 | 写 features;由 collector 的 companionlaunch.go 盯播放器进程拉起 Lyrimuse(.auto 时盯全部四个) |
+| 播放器 tab | 与播放器联动 · 打开 Lyrimuse 时启动(逐播放器勾选,2026-09-03) | `AppSettings.launchPlayersOnLyrimuseOpen`(Set,np: 键存 rawValue 数组);候选 = 选中集合里的具体播放器,选了 auto 时五个都可勾(`LyrimuseCore.PlayerLinkage.candidates`),生效 = 勾选 ∩ 候选(取消选中的播放器不算、勾选记录保留);`AppDelegate` 逐个启动没在跑的、不抢焦点。老布尔键 `np:launchMusicOnLyrimuseOpen` 首次启动迁移一次(true + 当时唯一具体播放器 → 那一个,含糊 → 空)后进 `obsoleteDefaultsKeys` |
+| 播放器 tab | 与播放器联动 · 跟随播放器启动(逐播放器勾选,2026-09-03) | `FeatureSettingsStore.launchLyrimuseOnPlayers` → features `launch_lyrimuse_on_players`(列表;同时仍写布尔 `launch_lyrimuse_on_music_open` = 列表非空,给老 collector 当总开关);collector `companionLaunchProcessNames` 键在就只盯勾了且仍在候选里的那几个,键缺失退回布尔年代「盯整个选中集合 / auto 全量」;老文件迁移:布尔 true(默认)→ 当时全部候选。Go 测试 `TestCompanionLaunchProcessNamesHonorsChosenPlayers` |
+| 播放器 tab | 与播放器联动 · 跟随播放器退出(2026-09-03 新增,借鉴清单 #9) | `AppSettings.quitWithPlayers`(Set,默认空 = 关);`PlayerQuitWatcher` 订阅 NSWorkspace 终止 / 启动通知:勾选的播放器**全部**不在跑才算(绑两个退一个不退,可能只是换播放器听),`PlayerLinkage.quitGraceSeconds` = 5s 宽限内任一个重启就取消、到点再核一遍进程表,设置 / 歌词管理 / 歌词窗口这类能成为 key 的窗口开着时不退(用户正在用 Lyrimuse 本身);退出经 `AppExit.request(.followedPlayerQuit)`,日志 `exiting reason=followed_player_quit`。collector 不退(常驻服务,也是「跟随启动」的执行者)。YouTube Music 不在候选:浏览器退出≠播放器退出。被参考的做法没有宽限、立刻 exit(0) |
 
 引导页 `playerChoiceStep` 是同一个 `features.player` 的另一入口。
 
@@ -450,7 +451,7 @@ vs 目录 289.766),拿目录值去盖反而是降精度。覆盖就该待在产�
 - **歌词时间轴偏移**:`nudgeLyricsOffset`/`resetLyricsOffset`/`setGlobalLyricsOffset` 经 `LyricsOffsetStore` 存取,`currentLyricsOffsetMs`(实际生效总偏移=全局基准+单曲微调)与 `trackLyricsOffsetMs`(仅单曲部分)分开发布——菜单标题/重置按钮认后者,对齐播放位置的计算认前者。
 - **封面与取色**:换歌时经 `MediaControlClient.fetchArtwork`(统一走 media-control,含 Apple Music)异步取一次封面,带 payload 曲目标识核对 + 递增重试 + 3s 兜底过期 + 3s 后二次确认;`artworkAverageHex` 供"跟随封面"外观模式,提亮/对比处理按消费面(灵动岛 vs 桌面悬浮)在 `PlaybackCoordinator` 分别做。
 - **播放控制 UI**:悬浮窗/灵动岛按钮、全局快捷键经 `PlaybackCoordinator` → `MusicPlaybackController`;按钮显隐依赖 `supportsExtendedControls`/`favoritedState()` 返回 nil 与否。
-- **App 联动**:`PlaybackPlayer.bundleIdentifier` 同时被 `AppDelegate`("打开 Lyrimuse 时启动播放器")使用;.auto 返回空字符串使该联动自然 no-op。
+- **App 联动**:`PlaybackPlayer.bundleIdentifier` 同时被 `AppDelegate`("打开 Lyrimuse 时启动播放器")使用;.auto 返回空字符串使该联动自然 no-op。2026-09-03 起按 `launchPlayersOnLyrimuseOpen` 集合逐个启动(只启动没在跑的、不抢焦点),同一处挂上 `PlayerQuitWatcher.start()`;三项联动的纯判定在 `LyrimuseCore/Local/PlayerLinkage.swift`(selftest `players` 组 14 条),设置行在 `Settings/PlayerLinkageRow.swift`。
 - **锁屏**:`AppDelegate` 订阅锁屏通知 → `setScreenLocked`,只停渲染 tick 不停轮询,保 scrobble 数据。
 - **诊断导出**:`lastResolvedBundleID`(非 @Published,导出那一刻读一次)。
 

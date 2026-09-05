@@ -176,6 +176,21 @@ public final class EnrichCacheStore: ObservableObject {
     // 同一次磁盘扫描顺带算出来,不为这一个数字单独再打开一轮文件 I/O。
     @Published public private(set) var totalSizeBytes: Int64 = 0
 
+    /// 「占用空间」的**唯一**渲染口径。
+    ///
+    /// 同一个字节数现在有三处要显示(「歌词管理」工具栏、自动备份菜单里每份快照、设置页
+    /// 「歌词库」那一行),各自 `ByteCountFormatter()` 的话迟早在单位或小数位上分叉 ——
+    /// 同一个数在两扇窗口里写法不同,用户只会以为自己看错了。放在**发布这个数字的类型上**
+    /// 而不是某个 View 里:数字和它的写法待在一起,下一处要用的人一眼就找得到。
+    ///
+    /// `.file` 而不是限定 `.useMB`:总量从几百 KB(刚起步)到几十 MB(用了很久)跨度很大,
+    /// 让系统按量级自己挑单位,也顺带跟着用户的地区习惯走。
+    static func byteText(_ bytes: Int64) -> String {
+        let formatter = ByteCountFormatter()
+        formatter.countStyle = .file
+        return formatter.string(fromByteCount: bytes)
+    }
+
     /// 最近一次破坏性操作(清空/批量删除)之前打的那份自动快照落在哪。nil = 这次没打成
     /// (库本来就是空的,或者写盘失败)。UI 据此如实告诉用户"能不能撤回",绝不能默认
     /// 有备份 —— 那比没有备份更危险。
@@ -629,13 +644,17 @@ public final class EnrichCacheStore: ObservableObject {
     ///   供「手动选定歌词后锁定」开关**追溯**用;传 false(默认)会把它清掉。详见写入处的
     ///   注释与 `applyManualPickLock`。它跟 `markManual` 正交:markManual 决定"现在锁不锁",
     ///   这个只决定"以后开关打开时要不要把这首歌算进去"。
+    /// - Returns: 有没有真的落盘(`persist()` 的结果;2026-09-04 起)。「采纳候选」的面板等着它
+    ///   决定挪不挪「当前使用」徽标、给成功还是失败的回声;失败原因照旧写在 `lastError`。
+    ///   老调用点不关心结果,所以 `@discardableResult`。
+    @discardableResult
     public func saveEdit(key: String, lyrics: String, tr: String, roma: String, yrc: String? = nil,
                          source: String? = nil, markManual: Bool = true,
                          sourceChoice: String? = nil, fromManualPick: Bool = false,
                          score: Int? = nil, scoringVersion: Int? = nil,
                          resolvedDurationSecs: Double? = nil,
                          sourcesSeen: [String]? = nil, sourcesResponded: [String]? = nil,
-                         decision: [String: Any]? = nil) async {
+                         decision: [String: Any]? = nil) async -> Bool {
         var entry = raw[key] ?? [:]
         // 译文换了内容 → 描述译文的那两个字段(lyrics_tr_lang / lyrics_tr_source)不再
         // 描述它,必须一起清掉。跟 collector 侧 importLyricsFromFiles 是同一条规矩:
@@ -766,9 +785,10 @@ public final class EnrichCacheStore: ObservableObject {
         // 「已保存」反馈/offset 输入框/列表徽章全被闷在后面,期间按钮还能重复点。
         // scheduleCollectorRestart 自带合并/补偿/lastError/refreshLyricsForCurrentTrack。
         rebuildSummaries()
-        guard await persist() else { return }
+        guard await persist() else { return false }
         if lastPersistPulledInNewKeys { rebuildSummaries() }
         scheduleCollectorRestart()
+        return true
     }
 
     /// 开关翻面前后要告诉用户的那几个数。
@@ -861,7 +881,9 @@ public final class EnrichCacheStore: ObservableObject {
     ///   兜底永久冻结。
     /// - 不导出 .lrc 文件:plain_lyrics 没有时间戳,不是 EnrichCacheKeys.lyricsFileSuffixes
     ///   那几种导出格式能装的东西,导出该以后有真需求时再单独做,不是这次的范围。
-    public func savePlainTextEdit(key: String, plainLyrics: String, source: String) async {
+    /// - Returns: 有没有真的落盘,同 `saveEdit`。
+    @discardableResult
+    public func savePlainTextEdit(key: String, plainLyrics: String, source: String) async -> Bool {
         var entry = raw[key] ?? [:]
         entry["plain_lyrics"] = plainLyrics
         if source.isEmpty {
@@ -872,9 +894,10 @@ public final class EnrichCacheStore: ObservableObject {
         raw[key] = entry
         markLocallyEdited(key)
         rebuildSummaries()
-        guard await persist() else { return }
+        guard await persist() else { return false }
         if lastPersistPulledInNewKeys { rebuildSummaries() }
         scheduleCollectorRestart()
+        return true
     }
 
     /// 「重新自动匹配」按钮查到"至少一个源明确说这首是纯音乐、没有可用候选"时调用

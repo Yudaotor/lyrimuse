@@ -67,10 +67,10 @@ enum MenuBarProgressIcon {
     /// ⚠️ 调用方负责在正确的 appearance 下解析动态颜色(labelColor / controlAccentColor
     /// 都是动态色,深色菜单栏上解析错就是画出一枚几乎看不见的图标)。做法见
     /// `MenuBarScrollingLabel.rebuildImage` 外面那层 `performAsCurrentDrawingAppearance`。
-    static func tinted(style: MenuBarIconStyle, color: NSColor) -> Prepared? {
+    /// - Parameter scale: 栅格化比例,调用方传图层所在窗口的 `menuBarBitmapScale`(2026-09-05 起不在这里猜屏)。
+    static func tinted(style: MenuBarIconStyle, color: NSColor, scale: CGFloat) -> Prepared? {
         let image = MenuBarIconStyle.cachedImage(for: style)
         let size = image.size
-        let scale = NSScreen.main?.backingScaleFactor ?? 2
         let pxW = Int((size.width * scale).rounded())
         let pxH = Int((size.height * scale).rounded())
         guard pxW > 0, pxH > 0,

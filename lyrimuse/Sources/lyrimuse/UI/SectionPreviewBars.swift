@@ -146,6 +146,17 @@ struct MenuBarPreviewBar<Lane: View>: View {
         return path.isEmpty ? nil : path
     }
 
+    /// 跟唱滚动的阅读位置路径(2026-09-04)。跟 `MenuBarStatusItem.followReadingPath` 同一份
+    /// 判定:有逐字数据、没跟标签文本代际错位;**不看**卡拉OK开关(不染色也要跟着唱到的位置
+    /// 滚)。示例句同样不编 —— 没在放歌时它是 nil,预览按时间配速滚,跟真机一致。
+    private var followReadingPath: [MenuBarMarquee.KaraokeFillPoint]? {
+        guard let line, let words = line.words, !words.isEmpty,
+              line.plainText == fullText else { return nil }
+        let path = MenuBarMarquee.followReadingPath(
+            words: words, wordEndXs: MenuBarMarqueeRenderer.wordEndXs(for: words))
+        return path.isEmpty ? nil : path
+    }
+
     /// 位置公式跟 MenuBarStatusItem.syncKaraokeClock 完全同一条:anchor 外推 ??
     /// 暂停位置,再加歌词时间轴偏移校准。
     private var karaokePositionMs: Int? {
@@ -499,7 +510,7 @@ struct MenuBarPreviewBar<Lane: View>: View {
                 let w = MenuBarMarqueeRenderer.width(of: visible)
                 MenuBarScrollingLabel.Representable(
                     text: visible, windowWidth: w, pacing: nil, fillPath: karaokeFillPath,
-                    karaokePositionMs: karaokePositionMs,
+                    followPath: followReadingPath, karaokePositionMs: karaokePositionMs,
                     karaokeRate: anchor?.rate ?? 0, karaokePlaying: isPlayingNow,
                     icon: previewIconBadge, progressPositionMs: progressPositionMs,
                     progressDurationMs: progressDurationMs)
@@ -516,7 +527,8 @@ struct MenuBarPreviewBar<Lane: View>: View {
         case .fixed(let text, let windowWidth, let pacing):
             MenuBarScrollingLabel.Representable(
                 text: text, windowWidth: windowWidth, pacing: pacing,
-                fillPath: karaokeFillPath, karaokePositionMs: karaokePositionMs,
+                fillPath: karaokeFillPath, followPath: followReadingPath,
+                karaokePositionMs: karaokePositionMs,
                 karaokeRate: anchor?.rate ?? 0, karaokePlaying: isPlayingNow,
                 icon: previewIconBadge, progressPositionMs: progressPositionMs,
                 progressDurationMs: progressDurationMs)

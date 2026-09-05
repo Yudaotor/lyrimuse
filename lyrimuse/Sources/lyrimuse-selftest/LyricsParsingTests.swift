@@ -300,4 +300,104 @@ func runLyricsParsingTests() {
 
         expectEqual(LyricTimelineNormalizer.normalize([]).lines, [], "时间轴归一化: 空输入")
     }
+
+    // ---- LyricsPreviewText(2026-09-04) ----
+    //
+    // 「搜索候选歌词」右侧预览框摘掉"永远不会显示的那几行"。判据必须跟播放路径同源,
+    // 所以这里钉的是**边界**:该摘的摘干净、不该摘的一行都不能少。
+    do {
+        let head = "[ti:]\n[ar:]\n[al:]\n[by:krc转qrc工具]\n[offset:0]\n[00:20.50]One more card\n"
+        expectEqual(
+            LyricsPreviewText.forPreview(head),
+            "[00:20.50]One more card",
+            "预览: 元信息标签行(含空标签/工具签名/offset)整块摘掉"
+        )
+
+        expectEqual(
+            LyricsPreviewText.forPreview("[00:00.00] 作词 : Prince\n[00:01.00] 作曲 : Prince\n[00:02.00] 制作人 : Prince\n[00:20.50]One more card\n"),
+            "[00:20.50]One more card",
+            "预览: 署名行走 creditLineDropDecisions 同一套判据"
+        )
+
+        // 时间戳是用户判断"有没有轴"的依据,摘行不等于摘时间戳。
+        expectEqual(
+            LyricsPreviewText.forPreview("[00:20.50]a\n[00:24.25]b\n"),
+            "[00:20.50]a\n[00:24.25]b",
+            "预览: 正文行连时间戳原样留着"
+        )
+
+        // 只有时间戳、后面没词的孤立行,播放路径(LRCParser.parse)也是整行跳过。
+        expectEqual(
+            LyricsPreviewText.forPreview("[00:20.50]\n[00:24.25]b\n"),
+            "[00:24.25]b",
+            "预览: 只有时间戳没正文的行摘掉"
+        )
+
+        // CRLF:按标量切才分得开(同 ManualPickLock 那处的坑),按字素簇切会整份不分行、
+        // 于是一行都摘不掉。
+        expectEqual(
+            LyricsPreviewText.forPreview("[ti:]\r\n[00:20.50]a\r\n"),
+            "[00:20.50]a",
+            "预览: CRLF 换行照样分得开"
+        )
+
+        // 对唱标记每句都命中署名过滤的形状,豁免没传就是整首被摘空。
+        let duet = "[00:10.00]周杰伦：我送你离开\n[00:12.00]周杰伦：千里之外\n[00:14.00]周杰伦：醉解千愁\n"
+        expectEqual(
+            LyricsPreviewText.forPreview(duet),
+            duet.trimmingCharacters(in: .newlines),
+            "预览: 对唱标记行带豁免,不被当署名摘掉"
+        )
+
+        // 纯文本候选(lrclib 那种没有时间戳的)靠空行分段,中间的空行要留着。
+        expectEqual(
+            LyricsPreviewText.forPreview("first verse\n\nsecond verse\n"),
+            "first verse\n\nsecond verse",
+            "预览: 纯文本候选中间的空行保留"
+        )
+
+        expectEqual(LyricsPreviewText.forPreview(""), "", "预览: 空输入")
+        expectEqual(LyricsPreviewText.forPreview("[ti:]\n[ar:]\n"), "", "预览: 整份只有元信息 → 空")
+    }
+
+    // ---- LyricsQueryFieldLayout(2026-09-04) ----
+    //
+    // 「搜索候选歌词」那排查询词输入框按内容长度分宽。三条规则各钉边界。
+    do {
+        // 规则 2:放得下 → 每栏拿满自己想要的,多出来的**平均**分(而不是全给最长那栏)
+        let roomy = LyricsQueryFieldLayout.widths(desired: [100, 90, 170], available: 390, minWidth: 88)
+        expectEqual(roomy, [110, 100, 180], "查询词分宽: 放得下时各拿所需 + 余量平均分")
+        expectEqual(roomy.reduce(0, +), 390, "查询词分宽: 放得下时正好铺满")
+
+        // 空栏(desired 小于下限)先被托到下限,再参与余量平均分
+        expectEqual(
+            LyricsQueryFieldLayout.widths(desired: [10, 10, 10], available: 300, minWidth: 88),
+            [100, 100, 100],
+            "查询词分宽: 短到低于下限的栏先托到下限"
+        )
+
+        // 规则 3:放不下 → 按比例,但谁都不低于下限;被托住的钉死,其余再按比例分
+        let tight = LyricsQueryFieldLayout.widths(desired: [400, 40, 400], available: 500, minWidth: 88)
+        expectEqual(tight[1], 88, "查询词分宽: 挤的时候短栏被下限托住,不会压成几像素")
+        expectEqual(tight[0], tight[2], "查询词分宽: 同样长的两栏分到一样宽")
+        expectEqual(tight.reduce(0, +), 500, "查询词分宽: 挤的时候也正好铺满")
+        expectEqual(tight[0] > 88, true, "查询词分宽: 长栏拿到的比下限多")
+
+        // 规则 1:连下限都给不到 → 平均分(可预测优先)
+        expectEqual(
+            LyricsQueryFieldLayout.widths(desired: [400, 40, 400], available: 120, minWidth: 88),
+            [40, 40, 40],
+            "查询词分宽: 窄到给不满下限时平均分"
+        )
+
+        expectEqual(LyricsQueryFieldLayout.widths(desired: [], available: 400, minWidth: 88), [],
+                    "查询词分宽: 空输入")
+        expectEqual(LyricsQueryFieldLayout.widths(desired: [100, 100], available: 0, minWidth: 88), [0, 0],
+                    "查询词分宽: 可用宽度为 0")
+        expectEqual(
+            LyricsQueryFieldLayout.widths(desired: [0, 0, 0], available: 600, minWidth: 88),
+            [200, 200, 200],
+            "查询词分宽: desired 全 0 退化成等分,不出 NaN"
+        )
+    }
 }
