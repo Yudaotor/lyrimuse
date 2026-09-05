@@ -29119,6 +29119,29 @@
           }
         }
       }
+    },
+    "预览已缩小至 %@" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Preview scaled down to %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "预览已缩小至 %@"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "預覽已縮小至 %@"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

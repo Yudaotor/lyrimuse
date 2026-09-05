@@ -7,7 +7,7 @@
 
 ## 入口与展示面
 
-- **设置页 → 歌词显示 →「灵动岛」分段**(2026-08-31 起是**编辑台**版式,见下面「编辑台改造」):内容区顶上一块 `NotchEditorStage` —— 一小片屏幕顶端(仿菜单栏条 + 物理刘海 + 桌面壁纸),灵动岛卡片 **1:1** 挂在上边缘,渲染的是与真窗口**同一份** `NotchLyricsView`(通过 `NotchChromeSource` 协议换了个不建窗口的替身 chrome),hover 展开、点播放按钮都真实可用。编辑台顶上是**两行**工具栏,共七个浮层入口(第一行「风格」「屏幕」「左耳」「右耳」,第二行 2026-09-01 加的「歌词行」「行为」「展开态」,按钮上都带当前值摘要),舞台内部卡片正下方一根**双滑块**宽度调整条(左 = 稳态宽、右 = 展开宽,2026-09-06 起,见「宽度 → 展开态可以更宽」)。编辑台**下面**才是总开关卡(「灵动岛歌词——紧凑地贴着屏幕顶部的刘海显示」)。设置不跟开关联动:灵动岛关着也能先配好。分段顶部**不再有钉住的预览条**(那一层收不到点击事件)。
+- **设置页 → 歌词显示 →「灵动岛」分段**(2026-08-31 起是**编辑台**版式,见下面「编辑台改造」):内容区顶上一块 `NotchEditorStage` —— 一小片屏幕顶端(仿菜单栏条 + 物理刘海 + 桌面壁纸),灵动岛卡片 **1:1** 挂在上边缘(展开宽放不进舞台时整组等比缩小,见「宽度 → 展开态可以更宽」末条),渲染的是与真窗口**同一份** `NotchLyricsView`(通过 `NotchChromeSource` 协议换了个不建窗口的替身 chrome),hover 展开、点播放按钮都真实可用。编辑台顶上是**两行**工具栏,共七个浮层入口(第一行「风格」「屏幕」「左耳」「右耳」,第二行 2026-09-01 加的「歌词行」「行为」「展开态」,按钮上都带当前值摘要),舞台内部卡片正下方一根**双滑块**宽度调整条(左 = 稳态宽、右 = 展开宽,2026-09-06 起,见「宽度 → 展开态可以更宽」)。编辑台**下面**才是总开关卡(「灵动岛歌词——紧凑地贴着屏幕顶部的刘海显示」)。设置不跟开关联动:灵动岛关着也能先配好。分段顶部**不再有钉住的预览条**(那一层收不到点击事件)。
 - **菜单栏状态项 →「快速开关」子菜单 →「显示灵动岛歌词」**。
 - **首次引导页(OnboardingView)** 也有同一个开关。
 - **窗口本体**:`NotchLyricsWindow`(NSPanel),无边框、level 为 `.screenSaver`(高过系统菜单栏,否则贴不进刘海那一条)、跨所有 Space、全屏应用之上可见、外观固定 `.darkAqua`、`hasShadow = false`、不可被用户移动。位置永远是算出来的(贴死屏幕顶边、水平对齐刘海中心),没有"锁定位置"概念,也不持久化位置。
@@ -305,7 +305,7 @@
 - **卡片**:`NotchWindowRoot.cardWidth` 三分支 —— 收起 `min(稳态, 刘海+88)` / 展开 `expandedCardWidth` / 稳态 `steadyCardWidth`;`NotchLyricsView` 不感知这件事(耳宽从 `proxy.size.width` 反推)。
 - **编辑台**:舞台里那根调整条从单 `Slider` 换成**双滑块** `RangeSlider`(`UI/RangeSlider.swift`,自绘;SwiftUI 没有原生双滑块,两根单滑块叠着放会把"同一根轨道的两个端点 = 一个区间"这层意思丢掉)。两只滑块共用 `usableWidthRange`(下界 = 耳朵下限),量化 `SteppedSlider.snap` step 2、不画刻度。交互规则是纯函数 `NotchWidthRangeDrag`(Core,selftest):①按下离哪只近拖哪只,两只重叠时看第一段位移方向(往右 = 上限、往左 = 下限,没动先不认领);②被拖的那只**不越过**另一只 —— 停在对面的值上、不推着走(推走会让"调上限"顺手改掉用户早就调好的稳态宽)。点在轨道空处 = 把较近那只拖过来(同原生 Slider)。**拖哪只滑块,卡片就按哪种形态画**:按住展开那只时 `chrome.setExpandedFromPreview(true)`(卡片变宽也变高,就是 hover 时的样子),松手复原;不这么做拖上限时鼠标在滑杆上、卡片没被 hover,那只滑块改的宽度在画布上看不见。读数「360pt」(两宽相等)/「360–460pt」(`%@–%@pt`),报**真实**宽(经下限与 `max`),不报设定值 —— 口径同 2026-08-31。VoiceOver:两只滑块各是一个可调节元素(`灵动岛宽度` / `灵动岛展开宽度`,一次增减 5 × step = 10pt),读数文本对无障碍隐藏,免得同一个值读两遍。
 - **两个兜底入口**各多一根「展开宽度」单滑块(step 10):「全部设置」抽屉 `expandedWidthRow`、菜单栏快捷面板 `.notch` 段。区间 `usableExpandedWidthRange(steadyWidth:)`:下界 = 稳态**真实**宽(向上取整到 step、不越过 `500 − step`,稳态拉满时不给 Slider 零长区间),上界 500;读数 `effectiveExpandedWidth(steadyBase:expandedBase:)`。稳态那根「宽度」的写回也改走 `commitWidths(steady:)`,拖过展开时展开跟着上去。
-- **区间上限 500 → 800**(同日稍后,用户拖到 500 后:「最宽还是有点小了,帮我再调大一些」)。两只滑块同一个 `widthRange`,稳态也因此能到 800(没有理由替用户把稳态钉在 500);800 ≈ 14 吋 MBP 逻辑宽 1512 的一半,两侧菜单栏各还剩三百多 pt。代价在编辑台:舞台最宽 600、最窄约 499,卡片超过舞台宽从"差零点几 pt 的角落"变成可达的常态,于是把此前文件头预告的三样兜底补齐 —— ①舞台顶直角裁切(原有);②**两端渐隐带** `overflowFade`(新补,20pt、只盖卡片高、渐到设置页底色,同悬浮歌词编辑台);③caption「两端已裁切」(原有,判据改走 `isOverflowing`)。另一条不是视觉的:hover **命中容器收窄到 `min(卡片宽, 舞台宽)`**(`card(stageWidth:)`)—— `clipShape` 只裁画面不裁命中,不收窄的话指针划过舞台外的页面空白也会把预览卡撑开。卡片本身仍按真实宽画、居中溢出。
+- **区间上限 500 → 800**(同日稍后,用户拖到 500 后:「最宽还是有点小了,帮我再调大一些」)。两只滑块同一个 `widthRange`,稳态也因此能到 800(没有理由替用户把稳态钉在 500);800 ≈ 14 吋 MBP 逻辑宽 1512 的一半,两侧菜单栏各还剩三百多 pt。代价在编辑台:舞台最宽 600、最窄约 499,卡片超过舞台宽从"差零点几 pt 的角落"变成可达的常态。**处理是整组等比缩小到刚好放下**(`NotchEditorStage.previewScale`):缩放比 = `min(1, 舞台宽 / 展开真实宽)`,**按展开宽算、不按此刻的卡片宽**(否则 hover 一进一出整块屏幕忽大忽小;钉在展开宽上,稳态和展开态同一把尺子、展开时恰好撑满舞台);缩的是「屏幕顶端」整组 —— 仿菜单栏条 + 卡片 + 刘海一起 `scaleEffect(anchor: .top)`,只缩卡片会让刘海空当和菜单栏高度对不上;壁纸不缩;命中测试跟着几何效果变换,缩过的卡片只在画出来的那块上响应 hover。缩了就在舞台底下 caption 写「预览已缩小至 NN%」,免得把缩过的尺寸当真;放得下时仍是 1:1、caption 空。⚠️ 这是当天的**第二版**:第一版照搬悬浮歌词编辑台的"居中裁切 + 两端渐隐带 + 「两端已裁切」"(hover 命中容器还收窄到舞台宽防止舞台外的页面空白触发展开),用户看过后否掉 ——「太大之后,预览放不下」,他要的是看全、不是知道被裁了。悬浮歌词那边溢出是常态(上限 1400 vs 舞台 600)且用户没提过,两边处理方式因此不同,不是漏改。
 - **未验证的一点(2026-09-06 写入时)**:hover 撑宽的实机效果没有截到图 —— 截窗只能拍稳态,让卡片展开需要移动指针,而本仓禁止脚本驱动界面做验证;这条路径的判据只有 `NotchWindowRoot.cardWidth` 那一句分支 + Core 的 selftest。以用户目验为准。
 
 ### 显示在哪块屏幕
@@ -381,7 +381,7 @@
 - **歌词时间轴微调**(全局快捷键):唯一的视觉反馈渠道就是灵动岛横幅;菜单栏等价按钮无横幅。
 - **系统音量**:音量/静音变化 → 灵动岛横幅;监听启停绑定灵动岛开关(`AppDelegate.startObservingVolumeBannerPreference`)。
 - **播放控制**:三个按钮和进度条 seek 打的是 `MusicPlaybackController` / `LocalPlaybackSource`,与从哪个窗口(真窗口/预览/副本)点的无关;都过自动化权限异步检查。
-- **设置页编辑台**(`NotchEditorStage` + `NotchPreviewChrome`,2026-08-31 起;此前是页顶钉条 `NotchPreviewBar`):同一份视图代码;chrome 走不碰 `.shared` 的 static 几何函数;恒不收起(用户来看样式,收起是空白);**按真实 pt 画,不缩放**(宽度上限 500 < 卡片列最窄约 530,永远放得下)。
+- **设置页编辑台**(`NotchEditorStage` + `NotchPreviewChrome`,2026-08-31 起;此前是页顶钉条 `NotchPreviewBar`):同一份视图代码;chrome 走不碰 `.shared` 的 static 几何函数;恒不收起(用户来看样式,收起是空白);**放得下就按真实 pt 画,放不下就整组等比缩小到刚好放下**(2026-09-06 上限抬到 800 之后才有"放不下",见「宽度」节;此前上限 500 < 舞台最窄约 499+,恒 1:1)。
 - **菜单栏歌词/歌词窗口**:无直接耦合(各读各的设置和数据)。
 - **配置导出/导入**(`ConfigPortability`):`notchScreenID` 被列为机器本地键**不随配置迁移**(屏幕 UUID 在新机器上必然解析不出);其余灵动岛设置正常迁移。
 
@@ -409,7 +409,7 @@
 | 屏幕身份(跨插拔稳定 UUID) | `lyrimuse/Sources/lyrimuse/UI/ScreenIdentity.swift` — `ScreenIdentity.id(of:)/screen(withID:)/notched` |
 | 强调色管线(HSB 地板 + luma 地板) | `lyrimuse/Sources/LyrimuseCore/Local/LocalPlaybackSource.swift` — `brightenedAccent`、`accentForDarkBackdrop`;`lyrimuse/Sources/lyrimuse/PlaybackCoordinator.swift` — `notchAccentColor` |
 | 播放状态平滑(0.25s 停止宽限) | `lyrimuse/Sources/lyrimuse/PlaybackCoordinator.swift` — `isPlayingSmoothed`、`stopGracePeriod` |
-| 设置页编辑台(工具栏/舞台/仿菜单栏/刘海/宽度条/caption) | `lyrimuse/Sources/lyrimuse/UI/NotchEditorStage.swift` — `NotchEditorStage`、`menuBarStrip`、`notchCutout`、`card(stageWidth:)`、`overflowFade`/`isOverflowing`、`widthBar`、`captionText`;宽度的静态入口 `usableWidthRange` / `usableExpandedWidthRange` / `effectiveWidth` / `effectiveExpandedWidth` / `commitWidths`(三个写入口唯一落盘路径) |
+| 设置页编辑台(工具栏/舞台/仿菜单栏/刘海/宽度条/caption) | `lyrimuse/Sources/lyrimuse/UI/NotchEditorStage.swift` — `NotchEditorStage`、`menuBarStrip`、`notchCutout`、`card`、`previewScale`、`widthBar`、`captionText`;宽度的静态入口 `usableWidthRange` / `usableExpandedWidthRange` / `effectiveWidth` / `effectiveExpandedWidth` / `commitWidths`(三个写入口唯一落盘路径) |
 | 设置页替身 chrome | 同上 — `NotchPreviewChrome` |
 | 「风格」/「屏幕」两个浮层与它们的单选行 | 同上 — `NotchStylePopover`/`NotchStyleSettingsRows`、`NotchScreenPopover`/`NotchScreenSettingsRows`、`NotchScreenSummary` |
 | 浮层外壳(与悬浮歌词三个浮层共用) | `lyrimuse/Sources/lyrimuse/Settings/SettingsDesignSystem.swift` — `SettingsPopoverShell` |
@@ -539,7 +539,7 @@
   语义上它画的是屏幕上沿、而上沿是直的;几何上更是硬要求——卡片在舞台里**顶对齐**、顶角是直角,舞台
   如果顶上带 12pt 圆角,只要每侧余量小于 12pt 卡片那两个顶部直角就会被削圆,而"1:1 还原它贴在屏幕上沿
   的样子"正是这块画布的卖点。
-- **~~没有两端渐隐~~ —— 这条 2026-09-06 已被推翻**(宽度上限 500 → 800 之后超宽成了可达的常态,渐隐带按下面那句预告补上了,见「宽度 → 展开态可以更宽」末条)。原论证如下。⚠️ 但**余量是 0,不是想当然的三十几个 pt** ——
+- **~~没有两端渐隐~~ —— 这条 2026-09-06 已失效,但不是按预告补渐隐带,而是改成了缩放**(宽度上限 500 → 800 之后超宽成了可达的常态;渐隐带当天补过一版,用户否掉「预览放不下」,改成整组等比缩小,见「宽度 → 展开态可以更宽」末条)。原论证如下。⚠️ 但**余量是 0,不是想当然的三十几个 pt** ——
   别照抄"760 − 侧边栏 190 − 40 ≈ 530"这个算法:侧边栏是**可拖的**
   (`.navigationSplitViewColumnWidth(min: 170, ideal: 190, max: 220)`),窗口也真能拖到 `minWidth` 760
   (`SettingsWindowConfigurator` 往 styleMask 里插了 `.resizable`)。两样都推到极限时舞台只有约 499pt,
@@ -692,4 +692,5 @@
     才是正确状态。
 19. **出场动画「从刘海撑开」只裁剪、不缩放(2026-09-03,用户拍板)**:被参考的做法是横向 clip 撑开 + 纵向 scaleY 0.04→1.06 弹一下、内容延后淡入。这里刻意去掉缩放那一半:`.coverArt` 风格下卡片背景就是封面模糊图,任何整卡缩放都让封面跟着被重新缩放裁切 —— 同日上午用户报「封面平移过来」、回场因此改成瞬时,根因正是 `scaleEffect(0.001→1)`。改成 `NotchRevealShape` 路径裁剪(顶部居中的"挂着的胶囊",宽 / 高按比例长,终态与卡片自己那道 `NotchHangingShape(20)` 重合)+ keyframeAnimator(每条轨 `MoveKeyframe` 先跳到起始态再 `SpringKeyframe` 长满;`initialValue` 是**终态**、trigger 是控制器的 `revealGeneration`,reduceMotion 时 trigger 恒 0 永不播 —— initialValue 若写成起始态,视图第一次出现会永远卡在一条细缝上):内容始终在终态位置,只有可见区域在长,封面不动。起始宽 = 真刘海宽(t=0 整卡藏在物理刘海后面,从两侧撑出耳朵),无刘海屏给 12% 细缝;起始高 = 顶行高,纵向按住 0.06s 再滴下来;内容 0.10s 后淡入;总 0.30s(`NotchReveal`,LyrimuseCore,selftest 10 条)。用 clipShape 不用 mask:mask 要整卡离屏渲染再合成,这扇窗口逐字高亮每帧重绘,常驻多一道离屏就是每帧的税;clipShape 是路径裁剪,终态与既有裁剪重合等于不存在;也不能在动画结束后切到"不裁剪"的另一个分支,分支切换会重建 `NotchLyricsView`、丢掉它的 @State。三种「从无到有」各播一次:冷启动 / 手动打开灵动岛(`orderFrontRegardless` 那一支)、从 `isVanished` 回场,同时发生只加一次计数;**不动的三样**:收起 → 稳态那条 0.42 弹簧(它是尺寸变化不是出场,叠一层裁剪会跟宽高弹簧打架)、hover 展开的 interactiveSpring、退场 0.2s 缩进刘海(用户点过头)。内容透明度经环境值 `notchRevealContentOpacity` 传进 `NotchLyricsView` 的内容 VStack,背景不套 —— 先看到卡片形状长出来、再看到字。
 20. **音浪不做封面 3×3 分区取色的三列渐变(2026-09-04,用户拍板)**。被参考的做法是封面缩到 32×32、按 3×3 区域取主色、局部 0.6 / 全局 0.4 混合后给六根柱分三组竖向渐变。机制上可行:分区取色已经在 `rebakeBlurredArtwork` 的同一趟后台任务里做过一份(歌词窗口背景的 6×6 面积平均),同趟增算 3×3 不需要新触发点,颜色经 `NotchPlayback` 窄代理去重下发即可。不做的理由是收益对不上:① 尺寸——五根条各 1.8pt 宽(Retina 约 3.6px)、最高 16pt,竖向三段渐变在这个高度上看不出,能看出的只有三列横向色差,而参考做法是 6 柱 3px、22 个单位高;② 管线会抹平色差——灵动岛底色恒暗,9 个颜色各自都要过 `brightenedAccent` / `accentForDarkBackdrop` / `accentForCoverArtBackground` 三道,提亮按比例压饱和、往白混,区域色本就相近(人像 + 纯色底的封面占多数),处理后三列更趋同,只有多色封面才看得出;③ 一致性——2026-08-16 起灵动岛全部前景吃同一个强调色(唯一例外是封面小图描边),音浪单独多色会成为这套「一套色」里唯一的异类。若将来推翻:只做「三列各一色」不做竖向渐变,只在「跟随封面」风格启用,Core 放一个「3×3 区域色 + 全局均值 → 三列色」的纯函数进 selftest,先在几张多色封面上量效果再定。
-21. **展开态加宽:两个键、一条不变量、一处落盘(2026-09-06,用户提出)**。用户要的是"宽度区间":下限 = 稳态、上限 = 展开。三个取舍:①存**绝对值**不存"加宽多少"的差值 —— 用户的心智是上下限两个数,编辑台读数也是两个绝对宽;差值模型会让调稳态时展开跟着漂。②不变量只有「展开 ≥ 稳态」,读侧 `max`、写侧 `normalized`,都在 `NotchWidthBounds` 一处,三个写入口共用 `commitWidths` —— 之前"宽度"三处各自写 `settings.notchContentWidth = …` + 守卫 + `applyContentWidthSetting()`,再加一个键就是六份,趁这次收成一处。③编辑台用自绘双滑块而不是两根单滑块:两只滑块不越过对方(停下、不推走 —— 推走会顺手改掉用户早就调好的稳态),重叠时按位移方向认领;拖上限时把预览置成展开态,否则改的东西在画布上看不见。默认两宽相等,老用户升级后 hover 观感逐字不变。窗口常驻展开宽,多出来的两截透明区跟下方一样点击穿透。区间上限同日从 500 抬到 800(用户:「最宽还是有点小了」),舞台的溢出渐隐带随之补上、hover 命中容器收窄到舞台宽。
+21. **展开态加宽:两个键、一条不变量、一处落盘(2026-09-06,用户提出)**。用户要的是"宽度区间":下限 = 稳态、上限 = 展开。三个取舍:①存**绝对值**不存"加宽多少"的差值 —— 用户的心智是上下限两个数,编辑台读数也是两个绝对宽;差值模型会让调稳态时展开跟着漂。②不变量只有「展开 ≥ 稳态」,读侧 `max`、写侧 `normalized`,都在 `NotchWidthBounds` 一处,三个写入口共用 `commitWidths` —— 之前"宽度"三处各自写 `settings.notchContentWidth = …` + 守卫 + `applyContentWidthSetting()`,再加一个键就是六份,趁这次收成一处。③编辑台用自绘双滑块而不是两根单滑块:两只滑块不越过对方(停下、不推走 —— 推走会顺手改掉用户早就调好的稳态),重叠时按位移方向认领;拖上限时把预览置成展开态,否则改的东西在画布上看不见。默认两宽相等,老用户升级后 hover 观感逐字不变。窗口常驻展开宽,多出来的两截透明区跟下方一样点击穿透。区间上限同日从 500 抬到 800(用户:「最宽还是有点小了」),舞台放不下时整组等比缩小(见 #22)。
+22. **编辑台放不下时缩放,不裁切(2026-09-06,用户否掉裁切版后改)**。宽度上限抬到 800 之后卡片能比舞台(最宽 600)宽,第一版照搬悬浮歌词编辑台的"居中裁切 + 两端渐隐 + 「两端已裁切」",用户看过说「太大之后,预览放不下」—— 他要看全。于是改成 `previewScale = min(1, 舞台宽 / 展开真实宽)` 对「屏幕顶端」整组 `scaleEffect(anchor: .top)`。三个要点:①**按展开宽定比例**,不按此刻的卡片宽,hover 时比例不跳、展开时恰好撑满舞台;②**整组缩**(仿菜单栏条 + 卡片 + 刘海),不是只缩卡片 —— 三者描述同一块屏幕,分开缩刘海空当和菜单栏高度就对不上;壁纸是背景,不缩;③缩了必须在 caption 说「预览已缩小至 NN%」,1:1 是这块画布的卖点,破例就得写出来。放得下时一切照旧(比例 1、caption 空),所以上限 500 时代的用户看不出任何变化。跟悬浮歌词编辑台的裁切路线不一致是有意的:那边溢出是常态、用户没提过;这边是用户点名要看全。

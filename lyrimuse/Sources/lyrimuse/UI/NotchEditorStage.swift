@@ -27,22 +27,22 @@ import SwiftUI
 // 自动隐藏两行,见 UI/AutoHideSettingsRows.swift)/ 展开态 / 显示音浪。
 // (悬浮歌词那个抽屉同期也从 16 项涨到 18 项,同样是并进了那两行自动隐藏。)
 //
-// ⚠️ 舞台**不缩放**,一律按真实 pt 画(同悬浮歌词编辑台第四步定的调子:"看到多大就是多大")。
-// 卡片宽度上限就是 `widthRange.upperBound`(2026-09-06 从 500 抬到 **800**,用户拖到 500 后说
-// 「最宽还是有点小了」;耳朵下限最高的一档 ≈ notchWidth + 150 ≈ 330–350,够不着,封顶的是区间本身)。
+// ⚠️ 舞台**放得下就 1:1、放不下就整体缩小到刚好放下**(`previewScale`,2026-09-06)。1:1 是从悬浮歌词
+// 编辑台第四步继承的调子("看到多大就是多大"),在宽度上限 500 的年代它无条件成立(舞台最窄约 499)。
+// 同日上限抬到 **800**(用户拖到 500 后说「最宽还是有点小了」)之后先按悬浮歌词那套"居中裁切 + 两端
+// 渐隐 + 「两端已裁切」"处理过一版,用户当场否掉:「太大之后,预览放不下」—— 他要的是**看全**,不是
+// 知道被裁了。于是改成缩放:缩放比 = min(1, 舞台宽 / 展开真实宽),**按展开宽算、不按此刻的卡片宽**,
+// 这样 hover 展开时比例不跳、稳态和展开态在同一把尺子下。缩放的是「屏幕顶端」整组(仿菜单栏条 +
+// 卡片 + 刘海)—— 三者描述的是同一块屏幕,只缩卡片会让刘海空当和菜单栏高度对不上;壁纸不缩(它只是
+// 背景)。缩了就在 caption 写一句「预览已缩小至 NN%」,免得用户把缩过的尺寸当真。
+// 卡片宽度上限就是 `widthRange.upperBound`(耳朵下限最高的一档 ≈ notchWidth + 150 ≈ 330–350,够不着,
+// 封顶的是区间本身)。
 //
 // ⚠️ **舞台放不下 800**:舞台宽 = 卡片列宽 = min(600, 设置窗内容区 − 40),侧边栏可拖到 220
 // (`.navigationSplitViewColumnWidth(min: 170, ideal: 190, max: 220)`)、窗口可拖到 `minWidth` 760
 // (SettingsWindowConfigurator 往 styleMask 里插了 `.resizable`),两样推到极限时舞台只有约 499pt。
-// 上限 500 那会儿这只是"差零点几个 pt 的一个角落";抬到 800 之后**超宽是可达的常态**,处理跟悬浮歌词
-// 编辑台一致 —— 居中裁切 + 三样兜底,别当装饰删掉:
-//   ① 舞台的裁切形状是**顶直角**底圆角(见 stage 里那段),否则每侧余量小于 12pt 时卡片的
-//      两个顶部直角会被舞台的圆角削圆;
-//   ② 超宽时两端各盖一条渐隐带(`overflowFade`,2026-09-06 随上限抬高补回来的 —— 抬上限之前这里
-//      写着「如果以后把宽度上限抬上去,渐隐带得补回来」);
-//   ③ caption 那句「两端已裁切」(见 captionText)。
-//   另有一条不是视觉的:超宽时 hover 命中容器收窄到舞台宽(见 `card(stageWidth:)`),`clipShape`
-//   只裁画面不裁命中,不收窄的话指针划过舞台外的页面空白也会把预览卡撑开。
+// 缩放之后卡片永远不会比舞台宽,但舞台的裁切形状仍要是**顶直角**底圆角(见 stage 里那段):卡片
+// 恰好等宽时每侧余量是 0,顶上带圆角就会把卡片两个顶部直角削圆。
 //
 // ⚠️ 舞台高度是常量(只随屏幕的刘海让位高度变,那是插拔显示器才会发生的事)。hover 展开
 // 时卡片长高 76pt,**容器不跟着变** —— 编辑台挂在可滚动内容区里,它一变高下面所有卡片
@@ -215,7 +215,7 @@ struct NotchEditorStage: View {
     /// 上界 2026-09-06 从 500 抬到 **800**(用户拖到 500 后:「最宽还是有点小了,帮我再调大一些」;
     /// 起因是同日加的「展开态可以更宽」—— 稳态 360 时展开只能到 500,+140pt 不够看)。两只滑块
     /// (稳态 / 展开)共用这一个区间,稳态也因此能到 800:没有理由替用户把稳态钉在 500,超宽的
-    /// 代价(编辑台舞台放不下)由渐隐带 + 「两端已裁切」兜着,见文件头。800 ≈ 14 吋 MBP 逻辑宽
+    /// 代价(编辑台舞台放不下)由"整体缩小到刚好放下"兜着(`previewScale`,见文件头)。800 ≈ 14 吋 MBP 逻辑宽
     /// 1512 的一半,两侧菜单栏各还剩三百多 pt。
     /// ⚠️ 两端必须是 `widthStep`(2) 的整数倍(`snap()` 先夹后量化,不是倍数会把值顶出界);
     /// 200/800 都满足。
@@ -745,22 +745,30 @@ struct NotchEditorStage: View {
     // MARK: - 画布区
 
     private func stage(stageWidth: CGFloat) -> some View {
-        ZStack {
+        let scale = Self.previewScale(stageWidth: stageWidth, widestCardWidth: expandedCardWidth)
+        // 「屏幕顶端」那一组先按放大后的虚拟宽度排版,再整体缩回舞台宽:缩完仿菜单栏条正好横贯舞台。
+        let screenWidth = stageWidth / scale
+        return ZStack {
             stageBackground
             desktopSurround(stageWidth: stageWidth)
-            atScreenTop { menuBarStrip(stageWidth: stageWidth) }
-            card(stageWidth: stageWidth)
-            // 超宽(卡片比舞台宽)时两端各盖一条渐隐带,压在卡片和仿菜单栏条上 —— 它要糊掉的是
-            // "被裁掉的那条边",不糊的话被舞台边框硬切出来的卡片边看着就像"卡片到这儿就完了"。
-            // 上限抬到 800 之后这是可达的常态,不再是角落(见文件头)。
-            if Self.isOverflowing(cardWidth: cardWidth, stageWidth: stageWidth) {
-                atScreenTop { overflowFade }
+            // 「屏幕顶端」整组:仿菜单栏条 + 卡片 + 刘海。三者描述同一块屏幕的同一条上边缘,所以
+            // 一起缩放(只缩卡片会让刘海空当和菜单栏高度对不上)。scaleEffect 不改布局尺寸,
+            // 外面再套一层舞台宽的定位框;anchor .top 让顶边钉在屏幕上沿、水平仍居中。
+            // 命中测试跟着几何效果一起变换(SwiftUI 的 GeometryEffect 语义),缩过的卡片仍然
+            // 只在它画出来的那块上响应 hover。
+            ZStack {
+                atScreenTop { menuBarStrip(stageWidth: screenWidth) }
+                card
+                // 刘海画在**卡片之上**:物理刘海是屏幕上真实不发光的一块,任何窗口的像素都到
+                // 不了那里。卡片背景本来就铺满整张卡(只有顶行的**内容**给刘海让了空当),
+                // 不盖这一层的话,「磨砂玻璃」风格下刘海那一块会被画成半透明的磨砂 —— 而真机上
+                // 那里恒为纯黑。
+                atScreenTop { notchCutout }
             }
-            // 刘海画在**卡片之上**:物理刘海是屏幕上真实不发光的一块,任何窗口的像素都到
-            // 不了那里。卡片背景本来就铺满整张卡(只有顶行的**内容**给刘海让了空当),
-            // 不盖这一层的话,「磨砂玻璃」风格下刘海那一块会被画成半透明的磨砂 —— 而真机上
-            // 那里恒为纯黑。
-            atScreenTop { notchCutout }
+            .frame(width: screenWidth, height: cardAreaHeight, alignment: .top)
+            .scaleEffect(scale, anchor: .top)
+            .frame(width: stageWidth, height: cardAreaHeight, alignment: .top)
+            .frame(maxHeight: .infinity, alignment: .top)
             // 调整条摆在最上面:它是**控件**不是内容,任何时候都不该被别的层盖住。
             // 先 padding 再 frame:反过来的话那 12pt 会加在"撑满舞台"的那一层外面,把整块顶高。
             widthBar
@@ -777,9 +785,8 @@ struct NotchEditorStage: View {
         //      还原它贴在屏幕上沿的样子"正是这块画布的卖点。余量小于 12pt 是**够得着**的:
         //      舞台宽 = 卡片列宽 = min(600, 设置窗内容区 − 40),而侧边栏可以拖到 220
         //      (`.navigationSplitViewColumnWidth(min:170, ideal:190, max:220)`)、窗口可以拖到
-        //      minWidth 760,那时舞台只有约 499pt,而宽度上限是 800(2026-09-06 起,此前 500)。
-        //      超出的部分就在这里被裁掉:裁在**舞台**的形状上而不是给卡片自己套一层,卡片没超宽
-        //      时这一层什么也不做,超宽时切出来的边正好贴着舞台边框(同悬浮歌词编辑台)。
+        //      minWidth 760,那时舞台只有约 499pt;卡片比舞台宽时整组按 previewScale 缩到恰好
+        //      等宽(2026-09-06),余量正好是 0。
         .clipShape(NotchHangingShape(bottomCornerRadius: 12))
         // 舞台自己那条发丝描边画在裁切**之后**:壁纸铺满整块舞台,压在底板上会把它整个盖住,
         // 而这条边是舞台跟设置页之间唯一的分界。透明度 0.12 —— 它描在一张照片上,更淡的档位
@@ -910,11 +917,10 @@ struct NotchEditorStage: View {
     /// 子树里),而且紧挨着它显式加了一句 `.contentShape(Rectangle())` 把整格钉成命中形状 ——
     /// 既保证 hover 一定收得到,也顺手把落在卡片上的点击**吞掉**(不会穿到底下那张桌面上)。
     ///
-    /// ⚠️ 命中容器的宽度是 `min(卡片宽, 舞台宽)`,不是卡片宽(2026-09-06 上限抬到 800 之后卡片
-    /// 可以比舞台宽):舞台的 `clipShape` 只裁**画面**、不裁命中测试(悬浮歌词编辑台第十步记过
-    /// 这条),容器要是跟卡片一样宽,指针划过舞台外面的页面空白也会把预览卡撑开。卡片本身仍按
-    /// 真实宽画、在容器里居中溢出(SwiftUI 的 frame 不裁子视图),被舞台裁掉的两截由渐隐带交代。
-    private func card(stageWidth: CGFloat) -> some View {
+    /// ⚠️ 卡片按**真实 pt** 排版(视图内层按 `proxy.size.width` 反推耳宽,给别的宽度耳朵就错位),
+    /// "放不下"由外层 `stage` 对「屏幕顶端」整组做 `scaleEffect` 解决(见 previewScale),这里不知道
+    /// 也不该知道缩放这回事;hover 判定用的 `point.y` 是本地(未缩放)坐标,跟 `cardHeight` 同一把尺。
+    private var card: some View {
         NotchLyricsView(controller: chrome)
             // 先钉当下的真实尺寸:视图内层是 GeometryReader,耳朵宽度按 proxy.size.width 算,
             // 给错尺寸这一层就先失真了。
@@ -922,7 +928,7 @@ struct NotchEditorStage: View {
             .allowsHitTesting(false)
             .animation(reduceMotion ? nil : .easeInOut(duration: 0.18), value: chrome.isExpanded)
             // 再顶对齐放进定高容器 —— 真窗口也是顶边贴死屏幕顶、只向下长。
-            .frame(width: min(cardWidth, stageWidth), height: cardAreaHeight, alignment: .top)
+            .frame(width: cardWidth, height: cardAreaHeight, alignment: .top)
             .contentShape(Rectangle())
             .onContinuousHover(coordinateSpace: .local) { phase in
                 switch phase {
@@ -963,36 +969,17 @@ struct NotchEditorStage: View {
             .accessibilityHidden(true)
     }
 
-    /// 卡片比舞台宽 = 超宽。0.5 的余量:宽度量化到 2pt、舞台宽度是测出来的浮点数,差几个 0.0x
-    /// 不该点亮渐隐带(同 `OverlayEditorStage.isOverflowing`)。caption 那句「两端已裁切」也用它。
-    private static func isOverflowing(cardWidth: CGFloat, stageWidth: CGFloat) -> Bool {
-        cardWidth > stageWidth + 0.5
-    }
-
-    /// 超宽时两端各盖多宽的一条渐隐带。跟悬浮歌词编辑台同一个数:太窄看不出来,太宽会把耳朵里的
-    /// 字也糊掉;20pt 大约一个汉字的量级。
-    private static let overflowFadeWidth: CGFloat = 20
-
-    /// 超宽时压在舞台两端的渐隐带(2026-09-06,随宽度上限 500 → 800 补上,之前文件头写着
-    /// "抬上限得把渐隐带补回来")。只盖卡片那么高、顶对齐 —— 它交代的是"卡片还往两边延伸",
-    /// 底下露着的桌面不用糊。渐到设置页的底色(`windowBackgroundColor`),跟悬浮歌词编辑台一致:
-    /// 舞台边框外面就是这个颜色,渐到它才像"伸进了页面里"。
-    private var overflowFade: some View {
-        HStack(spacing: 0) {
-            fadeEdge(leading: true)
-            Spacer(minLength: 0)
-            fadeEdge(leading: false)
-        }
-        .frame(height: cardHeight)
-        .allowsHitTesting(false)
-        .accessibilityHidden(true)
-    }
-
-    private func fadeEdge(leading: Bool) -> some View {
-        let page = Color(nsColor: .windowBackgroundColor)
-        let colors = leading ? [page, page.opacity(0)] : [page.opacity(0), page]
-        return LinearGradient(colors: colors, startPoint: .leading, endPoint: .trailing)
-            .frame(width: Self.overflowFadeWidth)
+    /// 「屏幕顶端」整组的预览缩放比:放得下就 1(1:1),放不下就缩到**最宽形态**刚好等于舞台宽。
+    ///
+    /// **按展开真实宽算,不按此刻画的卡片宽**:hover 时卡片从稳态宽长到展开宽,要是比例跟着此刻的
+    /// 宽度走,鼠标一进一出整块屏幕就会忽大忽小;钉在展开宽上,稳态和展开态在同一把尺子下,展开时
+    /// 恰好把舞台撑满。拖上限那只滑块时展开宽在变,比例跟着连续变,是预期的("越拉越宽,预览越小")。
+    ///
+    /// 0.5 的余量:宽度量化到 2pt、舞台宽度是测出来的浮点数,差几个 0.0x 不该触发缩放。
+    /// `widestCardWidth <= 0` 不做除法,直接 1。
+    static func previewScale(stageWidth: CGFloat, widestCardWidth: CGFloat) -> CGFloat {
+        guard widestCardWidth > stageWidth + 0.5, widestCardWidth > 0 else { return 1 }
+        return stageWidth / widestCardWidth
     }
 
     // MARK: - 宽度调整条
@@ -1095,8 +1082,8 @@ struct NotchEditorStage: View {
 
     /// 舞台底下那行小字。
     ///
-    /// **常态是空的**。唯一会出现的是「两端已裁切」,而那是**兜底**、正常配置下永远不出现
-    /// (理由见下面)。跟悬浮歌词编辑台的 caption 同一个口径:只在真的有话说时才写字。
+    /// **常态是空的**。唯一会出现的是「预览已缩小至 NN%」—— 展开宽超过舞台宽、整组被
+    /// `previewScale` 缩过时(理由见下面)。跟悬浮歌词编辑台的 caption 同一个口径:只在真的有话说时才写字。
     private func caption(stageWidth: CGFloat) -> some View {
         Text(captionText(stageWidth: stageWidth))
             .font(.caption)
@@ -1111,12 +1098,13 @@ struct NotchEditorStage: View {
         //      同一件事不必再用一句话解释一遍;
         //   ② 「指向可展开」—— 用户要求去掉。
         //  跟悬浮歌词编辑台的 caption 现在是同一个口径:只在真的有话说时才出现。)
-        // 「两端已裁切」:卡片比舞台宽时出现。上限 500 那会儿这是"正常情况下永远不出现"的兜底
-        // (500 vs 舞台最窄约 499);2026-09-06 上限抬到 800 之后成了可达的常态,跟舞台里那两条
-        // 渐隐带(`overflowFade`)一文一图,同悬浮歌词编辑台的两个信号。这块画布的卖点是 1:1,
-        // 没有它们用户会以为"卡片就这么宽"。
-        if Self.isOverflowing(cardWidth: cardWidth, stageWidth: stageWidth) {
-            parts.append(L10n.t("两端已裁切"))
+        // 「预览已缩小至 NN%」:展开宽放不进舞台、整组被缩过时出现(2026-09-06,随宽度上限 500 → 800)。
+        // 上限 500 那会儿这里是一句"正常情况下永远不出现"的「两端已裁切」兜底(500 vs 舞台最窄约 499);
+        // 抬到 800 后先按悬浮歌词那套裁切 + 渐隐做过一版,用户否掉(「太大之后,预览放不下」),改成
+        // 缩放。这块画布的卖点本是 1:1,缩过就必须说出来,否则用户会把缩过的尺寸当真。
+        let scale = Self.previewScale(stageWidth: stageWidth, widestCardWidth: expandedCardWidth)
+        if scale < 1 {
+            parts.append(String(format: L10n.t("预览已缩小至 %@"), "\(Int((scale * 100).rounded()))%"))
         }
         return parts.joined(separator: " · ")
     }
