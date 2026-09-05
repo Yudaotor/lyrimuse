@@ -1,6 +1,6 @@
 # 09. 歌词解析决策（collector）
 
-> 最后核对：2026-09-05 · 基线：96aa6b5+工作树
+> 最后核对：2026-09-06 · 基线：1f2d6c0+工作树
 
 ## 定位
 
@@ -35,7 +35,7 @@ collector 的核心：一首歌播放时，去九个歌词源（网易云/QQ/酷
 
 ### 3. 九源并发收集（总截止 20 秒）
 
-9 歌词源 + Apple 封面共 10 路 goroutine 并发（`fetchScoredLyricCandidatesStreaming`），到点未回的源本轮作废（由「升级重试」事后补救）。amll 那一路要等 netease/qq 把音乐 ID 搜出来（用两个带缓冲 channel 递过去），所以它总是最后回；lyricfind 是自己内部串行三跳（search→next→browse），单源耗时最长；酷我、咪咕跟 netease/qq/kugou/lrclib/musixmatch 一样是独立检索（不等任何其它源的 ID），见下。
+9 歌词源 + Apple 封面共 10 路 goroutine 并发（`fetchScoredLyricCandidatesStreaming`），到点未回的源本轮作废（由「升级重试」事后补救）。amll 那一路要等 netease/qq 把音乐 ID 搜出来（用两个带缓冲 channel 递过去），所以它总是最后回；lyricfind 是自己内部串行三跳（search→next→browse），单源耗时最长；酷我、咪咕跟 netease/qq/kugou/lrclib/musixmatch 一样是独立检索（不等任何其它源的 ID），见下。**用户在「歌词来源」里关掉的源这一轮不发请求**（2026-09-06 起，`skipSource` 对它们直接回空结果，判定在纯函数 `lyricSourceSkipFor`）：此前九路无条件全发、只在挑选/手动过滤那步丢结果，关掉的源照样吃一份请求，而用户关掉一个源最常见的理由恰恰是"它在我这儿连不上/很慢"。关掉≠冷却：不记 `lyrics_sources_skipped`、不打日志；用户以后再开它，它在 `lyrics_sources_responded` 里缺席，`needsLyricsRetry` 照样会补搜一次。三个连带后果见第 43 条。
 
 **源级熔断 / 退避（`sourcebreaker.go`，2026-09-02 加，见第 41 条）**：所有对外请求的统一出口 `doHTTPTracked` 按请求主机把结果归到源（`lyricSourceForHost`：163.com→netease、*.qq.com、*.kugou.com、lrclib.net、*.musixmatch.com、raw.githubusercontent.com→amll、music.youtube.com→lyricfind、*.kuwo.cn、*.migu.cn）。只统计两类失败——`Do` 本身返错（DNS / 连接 / TLS / 超时）与 5xx；**连续 2 次**才进入冷却，之后每再失败一次按 15s / 30s / 1m / 2m / 5m 升档；429 单独按 `Retry-After` 秒数冷却（没给 60s，封顶 5 分钟）；任何拿到响应且状态码 < 500 的请求立即清零。4xx 一律不算（网易云 body 405、Musixmatch 401 各自已处理）；用户取消（`context.Canceled`）不算。每轮起跑前 `planRound` 算一次谁在冷却，冷却中的源 goroutine 开头直接回空结果、不发请求；**启用的源全部在冷却时谁也不跳过**，照常跑一轮交给下面「至少 3 次全失败 = 断网」的判定。被跳过的源经 ctx 上的 `lyricSourceRound` 落到 `lyrics_sources_skipped` 与决策留痕的 `sources_skipped`；在「哪些源应答了」的口径里它就是没应答，所以 `needsLyricsRetry`（6h × 3）和 `rescoreDecidable` 原样接上。状态只在进程内存里，collector 重启归零；`search-lyrics` 一次性进程永远不会有冷却态。
 
@@ -126,7 +126,7 @@ collector 的核心：一首歌播放时，去九个歌词源（网易云/QQ/酷
 
 - **智能**（默认）：只看启用的源，取最高分；平手按稳定排序=候选构造顺序（netease→qq→kugou→musixmatch→lrclib）决胜。
 - **顺序优先**：按用户排序找第一个「有 Score≥0 候选」的源，**完全不比分数**。
-- **被禁用的源照样会查**（五路无条件并发），过滤只发生在挑选步——切换设置不用重搜。
+- **被禁用的源不查**（2026-09-06 起，见 §3；此前是"照样会查、只在挑选步过滤"）。挑选步的过滤仍在——它是第二道闸，也是「顺序优先」模式跳过关掉的源的地方。切换设置后新开的源靠 `needsLyricsRetry` 补搜，不是即时的。
 - 歌词/译文/罗马音/逐字**整体跟着冠军走**，不存在跨源拼装。唯一的独立补充是机翻译文（见第 10 章）。
 - 全部源空：不写歌词但照记决策；**纯音乐标记**透传给 UI；条目所有字段全空则整条不落盘（防断网钉死失败）。
 - **纯音乐标记的三个来源**（2026-08-20 从只有 lrclib 扩成两个，2026-08-22 加上 QQ）：①lrclib 响应里的结构化 `instrumental`；②网易云歌词接口的顶层 `pureMusic`，或正文只有「纯音乐」占位 + 署名行（`isInstrumentalPlaceholderLyric`，占位文案复用 `neteaseInstrumentalPlaceholderMarker`）；③**QQ 的占位正文**——它对纯音乐曲目回的是单行 `[00:00:00]此歌曲为没有填词的纯音乐，请您欣赏`，语义上是三者里最硬的**明文断言**，所以 `scoreAndSort` 里排在网易云之前（判定复用同一个 `isInstrumentalPlaceholderLyric`，它对这句话逐字适用——那个函数 2026-08-22 从 `isNeteasePureMusicLyric` 改名成来源中立就是为此）。两者都以 `Score:-1 / Instrumental:true` 的搭车标记进 results，不参与打分/挑选；`mergeLyricCandidateRounds` 保留标记的条件按**标记自己的源**判（原来写死 lrclib）。起因是用户报「一堆条目显示无歌词、其实都是纯音乐」（LoL 原声带 12 首）：lrclib 压根没有这批曲目（五源全空），而网易云匹配上了歌、歌词接口明确回 `pureMusic=true`，但那个字段**不在解码结构体里**、占位正文又过不了 `isTimedLRC` 的三行门槛，于是结论在解码那一步就丢了。
@@ -135,7 +135,7 @@ collector 的核心：一首歌播放时，去九个歌词源（网易云/QQ/酷
 
 ### 7. 封面选源（跟歌词同一趟解析，但独立决策）
 
-固定顺序 **网易云 → Apple Music → QQ**，先拿到就用。这个顺序管的是**可加载性**：网易云图床（`p*.music.126.net`）国内加载得出来，Apple 的 mzstatic 国内已无 CDN 节点。`cover_source` 如实记来源；`cover_album`（2026-08-20 加）记这张封面在来源平台上属于哪张专辑。
+固定顺序 **网易云 → Apple Music → QQ**，先拿到就用。这个顺序管的是**可加载性**：网易云图床（`p*.music.126.net`）国内加载得出来，Apple 的 mzstatic 国内已无 CDN 节点。⚠️ 第①级搭的是网易云**歌词**查询的车（`e.CoverURL = ne.Cover`），网易云作为歌词源被关掉时那一路不查（§3），封面直接从 Apple 起、网易云跳转链接留空——用户定的「没启用就不查」压过"基础展示信息无条件"（2026-09-06，第 43 条）。`cover_source` 如实记来源；`cover_album`（2026-08-20 加）记这张封面在来源平台上属于哪张专辑。
 
 **一道专辑感知的例外**（`preferAppleCoverOverNetease`）：网易云那张明确属于**另一次发行**（`albumScore=0`）、而 Apple 那张对得上正在播的这张专辑（`albumScore>0`）时，改用 Apple 的。只换封面，网易云的歌词/译文/罗马音不动——那些跟「哪张发行」无关。本地没有专辑标签时这条例外一律不生效（对不对版无从判断）。
 
@@ -163,7 +163,7 @@ collector 的核心：一首歌播放时，去九个歌词源（网易云/QQ/酷
 
 | 设置位置 | 项 | 影响 |
 |---|---|---|
-| 歌词→获取 | 歌词来源（九源勾选） | 只影响挑选/手动候选过滤，不影响抓取；至少保留一个 |
+| 歌词→获取 | 歌词来源（九源勾选） | 关掉的源**不发请求**（2026-09-06 起，此前只影响挑选/手动候选过滤）；关掉网易云连带没了第①级封面和网易云链接；至少保留一个 |
 | 歌词→获取 | 匹配算法（智能/顺序优先+排序，2026-09-05 起顺序可把手拖拽，见 14 章决策 #20） | `pickLyricCandidate` 分支 |
 | 歌词→获取 | 提前解析同专辑其它曲目 | albumPrefetch 开关 |
 | 歌词→译文 | 译文语言 | musixmatch 检索译文的目标语言（进其缓存 key） |
@@ -1671,6 +1671,8 @@ Go 侧新增 `hanvariants_test.go`（端到端折叠 + 表不变量 + 幂等）�
     ⚠️ 代理那一侧失败时,返回值里只有直连的错,所以 `RoundTrip` 里**单独记一行**带 proxyErr
     的日志 —— 缺了它「兜底为什么也没兜住」完全不可观测（装机验证时正是缺这一行,没法一眼
     判断第一次代理是超时还是被拒）。
+
+43. **关掉的歌词源不再发请求（2026-09-06，用户定的：「没启用肯定就不查啊」）**：起因是「搜索候选歌词」弹窗给关掉的源加「未启用」一档时，悬停文案写成「这一轮没有查它」，评审对着日志指出 collector 其实九路全发、只是结果被 `filterEnabledLyricSources` 丢掉；把文案改口成「不采用它的结果」后问用户要不要真跳过，答案是肯定的。改法在 `fetchScoredLyricCandidatesStreaming` 的 `skipSource`：判定抽成纯函数 `lyricSourceSkipFor(source, enabled, plan)`，三种答案——正常查 / 关掉不查 / 冷却不查，**关掉优先于冷却**（既关掉又在冷却的源按关掉处理，不记 `lyrics_sources_skipped`，否则 `needsLyricsRetry` 会拿它当"冷却缺席"去补搜）。三个连带后果都是刻意接受的：①网易云那一路查询顺带供着第①级封面和「网易云」跳转链接，关掉网易云歌词源就都没了，封面落到 Apple、链接留空——`needsPeripheralBackfill` 相应地在网易云关掉时不把 `NeteaseURL` 空算缺项（否则每条记录白补 5 轮、每轮把开着的源全部重查一遍；`TestNeedsPeripheralBackfillIgnoresNeteaseURLWhenDisabled` 钉着）；②amll 按网易云/QQ 的曲目 ID 直取，两个都关掉时它拿到两个空串、空手而归，手动搜索的可用情况面板由 `amllSkippedForMissingIDsNow` 说明"缺平台 ID"；③语种/罗马音这类顺带信号（QQ/酷狗的粤语标记）只来自开着的源。一个反向的好处：以前关掉的源照样"应答"、被记进 `lyrics_sources_responded`，用户以后再开它不会触发补搜；现在它缺席，`needsLyricsRetry` 会补一次。`TestLyricSourceSkipForDisabledBeatsCooling` 钉三态与优先级。历史脉络：2026-08-10 删「歌词在线匹配」总开关时同时删了"歌词关着、封面链接还得要"的网易云单查分支，理由是"基础展示信息无条件"；这次是那条原则的第一个例外，只在网易云被**作为歌词源**关掉时生效。
 
 38. **Musixmatch 只问「有没有做时间轴」,不问「有没有词」——`has_lyrics=1/has_subtitles=0`
     的歌整个源等于不存在**(2026-09-02,用户报「帮我看看为什么这个搜不到」,

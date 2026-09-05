@@ -622,7 +622,11 @@ func needsPeripheralBackfill(e enrichEntry, artist, album string) bool {
 	// 搜索兜底链接本身也该继续争取升级成真·歌曲页。原来这里只判 `QQURL == ""`,而兜底
 	// URL 非空 —— 于是那批条目**永远不会**再被补一次(本机实测 565 条里 40 条卡在这一档),
 	// 「前往专辑/前往艺人」对它们也就永远做不了。
-	missing := e.AccentColor == "" || e.AppleURL == "" || e.QQURL == "" || e.NeteaseURL == "" ||
+	// 网易云链接只有网易云那一路查询能给(e.NeteaseURL = ne.SongURL),而网易云作为歌词源被
+	// 关掉时那一路不发请求(见 fetchScoredLyricCandidatesStreaming 的 skipSource)——把它算缺
+	// 只会让每条记录白补 5 轮、每轮把开着的源全部重查一遍。
+	missingNeteaseURL := e.NeteaseURL == "" && lyricSourceEnabled("netease")
+	missing := e.AccentColor == "" || e.AppleURL == "" || e.QQURL == "" || missingNeteaseURL ||
 		isQQSearchFallbackURL(e.QQURL) || missingQQMids ||
 		missingCanonical || coverNeedsAlbumCheck(e, album)
 	if !missing {
@@ -1787,7 +1791,10 @@ func resolveTrackEnrichment(ctx context.Context, artist, title, album string, du
 	artist, title, album = toSimplified(artist), toSimplified(title), toSimplified(album)
 	var e enrichEntry
 	// 网易云:封面(国内可加载,苹果 mzstatic 国内已无 CDN)+ 单曲链接 + 带轴歌词,一次搜索出。
-	// 无条件查一次——封面/跳转链接不管歌词功能开没开都要用。开着歌词功能时,这次网易云
+	// 只要网易云在「歌词来源」里开着就查一次——封面/跳转链接搭它的车。⚠️ 2026-09-06 起用户
+	// 在设置里关掉网易云歌词源时这一路**不查**(用户定的「没启用肯定就不查」压过下面那句
+	// "基础展示信息无条件"):封面落到第②级 Apple Music,网易云链接留空,needsPeripheralBackfill
+	// 对此不算缺项。下面几段注释里的"无条件"都以此为前提。开着歌词功能时,这次网易云
 	// 查询挪进了 scoredLyricCandidates 内部,跟 qq/酷狗/Musixmatch/LRCLIB 四个源一起
 	// 并发发出去(不再是本函数单独先同步查一遍、查完了那四个才开始跑——之前这么写等于
 	// 把网易云自己最坏能到小三十秒的串行耗时,原样叠加在了整体等待时间最前面);只有
@@ -1806,7 +1813,8 @@ func resolveTrackEnrichment(ctx context.Context, artist, title, album string, du
 	// 和跳转链接还得要"。
 	roundCtx, round := withLyricSourceRound(ctx)
 	ne, scored = scoredLyricCandidates(roundCtx, artist, title, album, durationSecs)
-	// 封面/主色/平台跳转链接是基础展示信息,不做成可关闭的开关,以下逻辑无条件执行。
+	// 封面/主色/平台跳转链接是基础展示信息,不做成可关闭的开关,以下逻辑无条件执行——
+	// 唯一的例外是上面说的:网易云作为歌词源被关掉时 ne 是空的,这里自然拿不到它的封面和链接。
 	e.CoverURL = ne.Cover
 	if e.CoverURL != "" {
 		e.CoverSource = "netease"
@@ -2989,6 +2997,28 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 	return results
 }
 
+// lyricSourceSkip 是"这个源这一轮要不要发请求"的三种答案。
+type lyricSourceSkip int
+
+const (
+	lyricSourceQuery        lyricSourceSkip = iota // 正常查
+	lyricSourceSkipDisabled                        // 用户在设置里关掉了——不发请求、不记账、不打日志
+	lyricSourceSkipCooling                         // 熔断冷却中——不发请求,记 lyrics_sources_skipped
+)
+
+// lyricSourceSkipFor 决定一个源这一轮发不发请求(纯函数,给 fetchScoredLyricCandidatesStreaming
+// 的 skipSource 用,单测钉住"关掉的源不发请求、也不算冷却跳过")。关掉优先于冷却:一个既关掉
+// 又在冷却的源,按"关掉"处理——不该因为它在冷却就被记进 lyrics_sources_skipped 招来重搜。
+func lyricSourceSkipFor(source string, enabled func(string) bool, plan lyricSourceRoundPlan) lyricSourceSkip {
+	if !enabled(source) {
+		return lyricSourceSkipDisabled
+	}
+	if _, cooling := plan[source]; cooling {
+		return lyricSourceSkipCooling
+	}
+	return lyricSourceQuery
+}
+
 func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, album string, durationSecs float64, onUpdate lyricSearchUpdateFunc) (neteaseInfo, []scoredLyricCandidateResult) {
 	resultsCh := make(chan lyricSourceResult, 9)
 
@@ -2997,14 +3027,28 @@ func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, alb
 	// 不记,CLI 路径),由写缓存的那几层落到 lyrics_sources_skipped。
 	breakerPlan := lyricSourceBreakerShared.planRound(lyricSourceNames, lyricSourceEnabled)
 	round := lyricSourceRoundFrom(ctx)
+	// 未启用的源这一轮**不发请求**(2026-09-06,用户定的:「没启用肯定就不查啊」)。此前九个源
+	// 无条件全查、只在 filterEnabledLyricSources / pickLyricCandidate 那步丢结果——关掉的源照样吃
+	// 一份网络请求,而用户关掉一个源最常见的理由恰恰是"它在我这儿连不上 / 很慢"。代价要说清:
+	//   - 网易云那一次查询顺带供着第①级封面(e.CoverURL = ne.Cover)和「网易云」跳转链接
+	//     (e.NeteaseURL)。关掉网易云歌词源 = 这两样也不查:封面落到第②级 Apple Music、链接留空;
+	//     needsPeripheralBackfill 相应地不再把"没有网易云链接"算缺项,否则每条都白补 5 轮。
+	//   - amll-ttml-db 按网易云 / QQ 的曲目 ID 直取,两个都关掉时它拿不到 ID、只会得到空结果
+	//     (手动搜索的可用情况面板会说"缺平台 ID",见 amllSkippedForMissingIDsNow)。
+	//   - 语种 / 罗马音这些顺带信号(QQ / 酷狗的粤语标记等)自然也只来自开着的源。
+	// 跟熔断跳过是两回事:不记 lyrics_sources_skipped(那是"冷却中"的记录,needsLyricsRetry 会据它
+	// 择机重搜;关掉的源不该被重搜——用户以后再开,它在 lyrics_sources_responded 里缺席,照样会
+	// 触发一次补搜),也不打日志(是设置,不是事件)。进度分母本来就只数开着的源,不受影响。
 	skipSource := func(source string) bool {
-		remaining, ok := breakerPlan[source]
-		if !ok {
-			return false
+		switch lyricSourceSkipFor(source, lyricSourceEnabled, breakerPlan) {
+		case lyricSourceSkipDisabled:
+			return true
+		case lyricSourceSkipCooling:
+			round.markSkipped(source)
+			log.Printf("lyrics: source %s skipped this round, cooling down for another %s", source, breakerPlan[source].Round(time.Second))
+			return true
 		}
-		round.markSkipped(source)
-		log.Printf("lyrics: source %s skipped this round, cooling down for another %s", source, remaining.Round(time.Second))
-		return true
+		return false
 	}
 
 	// amll-ttml-db 按**平台音乐 ID**取歌词,所以它得等网易云/QQ 先把 ID 搜出来。
@@ -3079,9 +3123,9 @@ func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, alb
 		resultsCh <- lyricSourceResult{source: "qq", lyr: lyr, yrc: yrc, tr: tr, roma: roma, matchTitle: match.title, matchArtist: match.artist, matchAlbum: match.album, matchCover: qqCover, srcDur: qqDur, language: qqLang, instrumental: qqInstrumental}
 	}()
 	go func() {
-		// 等两个 ID 都到齐再查。两个 goroutine 都是无条件启动的(启用与否在后面
-		// filterEnabledLyricSources 那步过滤),所以这两个 channel 一定会收到值,
-		// 不会在这里挂死。
+		// 等两个 ID 都到齐再查。两个 goroutine 都是无条件启动的(源关掉 / 冷却中时
+		// skipSource 那支也会往 channel 里送一个空串),所以这两个 channel 一定会收到值,
+		// 不会在这里挂死。网易云 / QQ 都关掉时这里拿到两个空串,amllLyric 直接空手而归。
 		neteaseID, qqID := <-neteaseIDCh, <-qqIDCh
 		if skipSource("amll") {
 			resultsCh <- lyricSourceResult{source: "amll"}
