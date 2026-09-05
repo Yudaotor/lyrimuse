@@ -39,13 +39,20 @@ struct NotchWindowRoot: View {
     ///  - **收起**(播放停了,歌词行卷回顶行):`dampingFraction 1.0` —— 临界阻尼、**不回弹**。
     ///    收起时哪怕一点点回弹,看着都像"没收干净又弹出来一截",特别扎眼。
     ///  - **展开**(hover 进来):`interactiveSpring 0.38 / 0.8` —— 对鼠标的直接反馈,要跟手。
-    ///  - **其余**(开始播放弹出、以及 hover 移开收回那一档):`0.42 / 0.8`,留一点点过冲。
+    ///  - **hover 移开**(收回稳态):`0.38 / 0.9`,不下探,理由见下。
+    ///  - **其余**(开始播放弹出):`0.42 / 0.8`,留一点点过冲。
     ///
-    /// ⚠️ 已知的一处名不副实,别照着注释想当然:`.animation(_:value:)` 是在值**变化后**
-    /// 用新状态求值,所以"hover 移开"这一档跑到这里时 isExpanded 已经是 false,落在最后
-    /// 那条 0.42 而不是 interactiveSpring。只看当前状态区分不出"刚从收起弹出"和"hover
-    /// 移开",要分开就得再存一份上一帧的状态。实际差别是 response 0.42 vs 0.38、阻尼相同,
-    /// 0.04 秒,肉眼看不出来 —— 所以没为它引入额外状态,但注释得写实话。
+    /// **hover 移开**(2026-09-06 起单独一档):`.animation(_:value:)` 是在值**变化后**用新状态
+    /// 求值,所以这一档跑到这里时 isExpanded 已经是 false,单看当前状态区分不出"刚从收起弹出"
+    /// 和"hover 移开" —— 视图里那份 `wasExpanded`(上一次 body 见到的 isExpanded,由 onChange
+    /// 在 body 之后回写)就是为了区分这两种情况。2026-09-06 之前没这份状态,hover 移开落在
+    /// 下面那条 0.42 / 0.8 上;SCK 逐帧探针实测(hover 移开 20 余次)收起弹簧每次都**下探**
+    /// 到稳态尺寸以下 2px 再爬回来,尾巴上是 3～4 帧 1px 的亚像素蠕动、跨 150～200ms,肉眼是
+    /// 「快收完了又抖一下」。跟「收起」那档同一个理由(收回去的东西不该回弹),改成不下探的
+    /// `spring(response: 0.38, dampingFraction: 0.9)`:ζ=0.9 的过冲量是 exp(−πζ/√(1−ζ²)) ≈ 0.15%,
+    /// 228px 的行程上不到 0.4px —— 落在一个设备像素以内,肉眼等于没有;不取 1.0 是因为临界阻尼
+    /// 的尾巴是渐近逼近,同一探针实测最后 11px 要 1px 一步爬 170ms,看着像收不干净。response
+    /// 跟展开那条 0.38 对齐,来回手感对称。
     ///
     /// reduceMotion 下返回 nil(直接跳到终态)。这不只是"少点花哨":收起/弹出是**尺寸**动画,
     /// 前庭敏感的人对这类大面积位移最不适应,而跳变不损失任何信息。跟进度条那处
@@ -59,8 +66,17 @@ struct NotchWindowRoot: View {
         if controller.isExpanded {
             return .interactiveSpring(response: 0.38, dampingFraction: 0.8)
         }
+        if wasExpanded {
+            return .spring(response: 0.38, dampingFraction: 0.9)
+        }
         return .spring(response: 0.42, dampingFraction: 0.8)
     }
+
+    /// 上一次 body 见到的 `controller.isExpanded`,只给 cardAnimation 区分「hover 移开」用。
+    /// ⚠️ 依赖的时序:isExpanded 翻 false → objectWillChange → 本视图 body 重估(此时这份
+    /// 还是 true,cardAnimation 据此选临界阻尼那条)→ body 之后 onChange 才把它写成 false
+    /// (那次写入只改这个 @State,cardHeight/cardWidth 没变,不会再起一条动画)。
+    @State private var wasExpanded = false
 
     /// 卡片宽度:收起态(没在播放)缩到「刘海 + 左右各一小段耳朵」。
     ///
@@ -127,6 +143,12 @@ struct NotchWindowRoot: View {
 
     var body: some View {
         NotchLyricsView(controller: controller)
+            // 卡片外形的裁剪由下面 keyframeAnimator 里那道 NotchRevealShape 统一负责(终态与
+            // NotchHangingShape(20) 重合,见 NotchRevealShape 头注),NotchLyricsView 自己那道
+            // 就不再裁了 —— 两道 clipShape 是两层 mask,尺寸动画期间每帧都要各重设一次路径
+            // (2026-09-06 Time Profiler:mask/clip 更新约占动画期间主线程忙时的 10%)。
+            // 设置页编辑台没有这层壳,那边照旧由 NotchLyricsView 自己裁。
+            .environment(\.notchHostClipsCard, true)
             .frame(width: cardWidth, height: cardHeight)
             // 出场动画「从刘海撑开」(2026-09-03,用户拍板):卡片「从无到有」露面时(冷启动 / 手动打开 /
             // 从刘海回场,由控制器的 revealGeneration 计数触发)播一遍 —— 裁剪区从真刘海宽、顶行高起,横向
@@ -191,6 +213,7 @@ struct NotchWindowRoot: View {
             // 收起/弹出时内容整块淡入淡出,由同一条弹簧驱动,跟尺寸变化同步。
             .animation(cardAnimation, value: controller.isCollapsed)
             .animation(vanishAnimation, value: controller.isVanished)
+            .onChange(of: controller.isExpanded) { _, expanded in wasExpanded = expanded }
     }
 
     private func updateHover(inside: Bool) {

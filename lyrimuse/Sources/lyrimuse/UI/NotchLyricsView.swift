@@ -522,6 +522,8 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
     /// 出场动画期间内容的透明度(NotchWindowRoot 在那 0.3s 里改,默认 1)。只作用于内容 VStack,
     /// 背景层不受影响 —— 先看到卡片形状从刘海长出来、再看到字,见 NotchRevealShape 头注。
     @Environment(\.notchRevealContentOpacity) private var revealContentOpacity
+    /// 宿主是否已替卡片裁好外形(真窗口 true / 编辑台 false),见 EnvironmentValues.notchHostClipsCard。
+    @Environment(\.notchHostClipsCard) private var hostClipsCard
 
     // 稳态歌词行的固定高度——跟 NotchLyricsWindowController.contentSize.height 保持
     // 一致(两个文件都描述同一个窗口的几何,这点数值耦合是设计使然,不值得为两个常量
@@ -546,8 +548,10 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
                 // 卡片就是挂在真刘海边上的一小块,深色渐变/磨砂/封面模糊底在真刘海的
                 // 纯黑旁边都是"看得出来的一块灰"——收起就该和机器刘海一个颜色,融为一体。
                 // 用 opacity 而不是 if/else 换填充:跟卡片收放同一条弹簧渐变,不硬切。
-                NotchHangingShape(bottomCornerRadius: 20)
-                    .fill(Color.black)
+                // 2026-09-06 从 `NotchHangingShape.fill(.black)` 改成纯 `Color`:形状填充是 CG 路径
+                // 光栅化、卡片每变一次尺寸就重画一遍整卡,而 `Color` 只是一层 backgroundColor;
+                // 圆角交给外层那道统一的 clipShape(理由同 backgroundLayer 里的打底层)。
+                Color.black
                     .opacity(controller.isCollapsed ? 1 : 0)
                 // 收起态(没在播放、没 hover)卡片缩到刘海大小,这里把常显内容整套摘掉而不是
                 // 指望卡片太小自然裁掉——避免文字/按钮在收缩过程中被挤压变形,收起就是纯粹
@@ -614,7 +618,13 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
             // 展开态内容(下一句预览+进度条)本身没有另外裁一次形状——如果只让背景那一层
             // fill 是圆角、前景内容不跟着裁,内容溢出圆角边界时会带着直角"戳"出卡片轮廓。
             // 这里对整个 ZStack 统一裁一次,保证任何内容都不会越出这个卡片的真实外轮廓。
-            .clipShape(NotchHangingShape(bottomCornerRadius: 20))
+            // 2026-09-06 起背景打底层与收起态黑罩都是不带形状的纯色,底部圆角**只**靠这一道
+            // (或宿主那道,见下)—— 别再把它们改回 NotchHangingShape.fill,那是每帧重画整卡。
+            //
+            // 宿主已经在卡片外面裁过同一个形状时(真窗口的 NotchWindowRoot,那道 NotchRevealShape
+            // 终态与这里重合)这一道就省掉:两层 mask 在尺寸动画里每帧各重设一次路径,是白付的。
+            // 这个环境值对某个宿主是常量(见其 doc),分支不会在运行期切换、不会重建子树。
+            .modifier(NotchCardClip(enabled: !hostClipsCard))
         }
         // 2026-08-16 删掉了这里原来那个 .onHover。它覆盖的范围比卡片大一圈(预览那边
         // 早就记录过同一个现象),窗口改成常驻最大尺寸之后这变成了实打实的 bug:鼠标划过
@@ -690,9 +700,16 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
         if playback.notchCardStyle == .coverArt,
            let image = playback.blurredArtworkImage {
             ZStack {
-                // 不透明打底(跟无封面时的深色渐变同款),烘焙空窗期先露它,见上。
-                NotchHangingShape(bottomCornerRadius: 20)
-                    .fill(NotchCardStyle.darkGradient.fill)
+                // 不透明打底,烘焙空窗期(封面刚到、模糊图晚几十 ms)先露它,见上。
+                //
+                // ⚠️ 是一块**纯色**,不是 darkGradient 那道渐变,也不套 NotchHangingShape(2026-09-06
+                // 动画性能专项):这一层平时整个压在封面模糊图底下、一个像素都看不见,却在 hover
+                // 展开/收起时随卡片尺寸每帧重画 —— Time Profiler 实测(4 次 hover 展开)主线程
+                // 24% 的忙时是 CoreGraphics 在给这道看不见的渐变做 rgba64 轴向着色
+                // (`ripc_DrawShading` → `rgba64_shade_axial_RGB`,964×382px 每帧一遍)。纯色的
+                // `Color` 视图落成一个只有 backgroundColor 的 CALayer,尺寸变化零重画;底部圆角由
+                // 外层 ZStack 那道统一的 clipShape 负责,这里不必再裁。颜色取渐变的中间一档。
+                Color(hexWithAlpha: "#14212AFF", fallback: .black)
                 Image(nsImage: image)
                     .resizable()
                     .scaledToFill()
@@ -702,7 +719,12 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
                     // notchCoverArtOverlayOpacity)——两处对不上,文字对比度的估算就会
                     // 跟实际渲染出来的背景脱节。
                     .overlay(Color.black.opacity(LocalPlaybackSource.notchCoverArtOverlayOpacity))
-                    .clipShape(NotchHangingShape(bottomCornerRadius: 20))
+                    // 这里原来还有一道 `.clipShape(NotchHangingShape)`(决策 5 那三版排查的产物)。
+                    // 2026-09-06 拿掉:body 末尾已对整个 ZStack 统一裁同一个形状、同一个 rect(后加
+                    // 的,见那里的注释),这道是重复的 —— 而每道 clipShape 都是一层 mask,尺寸动画
+                    // 期间每帧要重设路径(`updateClipShapes`/`MaskLayer.setClips` 占 SwiftUI 渲染
+                    // 时间的约四分之一)。上面那次 `.frame(width:height:)` 钉尺寸仍然必要:
+                    // scaledToFill 协商出的偏大 frame 不钉回来,外层裁剪同样会裁在错的边界上。
                     // 换歌/高清替代到货都会产出一张**新的**烘焙图实例(NSImage 指针比较),
                     // 一条过渡覆盖原来 artworkData 字节比较 + highRes 指针比较两条 ——
                     // 顺带省掉原来每次 body 对几十~几百 KB Data 的逐字节 memcmp。
@@ -1787,6 +1809,21 @@ enum NotchTimeFormat {
 // 目标是 14),手写一个 Shape 直接按四段直线+两段圆弧画出这个轮廓,不依赖新 API。
 // 不加 private:「外观」页的灵动岛预览(NotchPreviewBar)要用同一个形状画预览卡,
 // 复制一份轮廓代码只会让两边慢慢漂开。
+/// 卡片自己那道外形裁剪,可按宿主关掉(理由见 NotchLyricsView.body 末尾与 EnvironmentValues.notchHostClipsCard)。
+/// `enabled` 对某个宿主是常量;运行期切换会换分支、重建 content 子树。
+struct NotchCardClip: ViewModifier {
+    var enabled: Bool
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if enabled {
+            content.clipShape(NotchHangingShape(bottomCornerRadius: 20))
+        } else {
+            content
+        }
+    }
+}
+
 struct NotchHangingShape: Shape {
     var bottomCornerRadius: CGFloat
 

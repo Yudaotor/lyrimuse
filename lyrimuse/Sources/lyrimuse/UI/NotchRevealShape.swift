@@ -13,8 +13,9 @@ struct NotchRevealState {
 
 /// 出场动画用的裁剪形状:卡片顶部居中的一块「挂着的胶囊」—— 宽 = 卡宽 × widthFraction、高 = 卡高 ×
 /// heightFraction、顶边贴刘海、底部两角圆角(半径随可见高度收:矮的时候是半圆,长满时回到卡片自己的 20)。
-/// 终态 (1, 1) 与 `NotchLyricsView` 里那道 `NotchHangingShape(bottomCornerRadius: 20)` 完全重合,所以动画
-/// 结束后这道裁剪等于不存在。
+/// 终态 (1, 1) 与 `NotchLyricsView` 自己那道 `NotchHangingShape(bottomCornerRadius: 20)` 完全重合 —— 所以
+/// 2026-09-06 起真窗口里**只留这一道**:`NotchWindowRoot` 通过环境值 `notchHostClipsCard` 让卡片自己那道
+/// 不再裁(两层同形状的 mask 在尺寸动画里每帧各重设一次路径,是白付的),平时这道裁剪就是卡片的外形。
 ///
 /// 用 clipShape 而不是 mask:mask 要把整卡渲染成一张离屏纹理再合成,而这扇窗口播放期间逐字高亮每帧都在
 /// 重绘,常驻多一道离屏就是每帧的税;clipShape 是路径裁剪,常驻成本可忽略。也**不能**在动画结束后换成
@@ -38,11 +39,25 @@ private struct NotchRevealContentOpacityKey: EnvironmentKey {
     static let defaultValue: Double = 1
 }
 
+private struct NotchHostClipsCardKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
 extension EnvironmentValues {
     /// 出场动画期间内容(顶行 / 歌词行 / 展开区)的透明度,背景不受影响 —— 先看到卡片形状长出来,再看到字。
     /// 默认 1;只有 `NotchWindowRoot` 在动画那 0.3s 里改它,设置页编辑台等别的宿主永远是 1。
     var notchRevealContentOpacity: Double {
         get { self[NotchRevealContentOpacityKey.self] }
         set { self[NotchRevealContentOpacityKey.self] = newValue }
+    }
+
+    /// 宿主是否已经替卡片裁好了外形(2026-09-06)。`NotchWindowRoot` 设 true:它挂在卡片外面的那道
+    /// `NotchRevealShape` 终态就是 `NotchHangingShape(20)`,`NotchLyricsView` 再裁一遍是重复的一层 mask,
+    /// 尺寸动画期间每帧多重设一次路径。默认 false —— 设置页编辑台等没有这层壳的宿主,卡片自己裁。
+    /// ⚠️ 这个值对某个宿主是**常量**,不要在运行期切换:`NotchLyricsView` 按它选 clipShape 分支,切换会
+    /// 重建子树、丢掉跑马灯等 @State。
+    var notchHostClipsCard: Bool {
+        get { self[NotchHostClipsCardKey.self] }
+        set { self[NotchHostClipsCardKey.self] = newValue }
     }
 }

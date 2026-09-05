@@ -137,8 +137,26 @@ struct MarqueeText<Content: View>: View {
 
     private func apply(content: CGFloat, container: CGFloat) {
         guard content != contentWidth || container != containerWidth else { return }
+        let contentChanged = content != contentWidth
+        let wasOverflowing = isOverflowing
+        // offset 是模型值:静止在开头时恒为 0,去程一发出就是 distance、到尾端 hold 期间也是
+        // distance(回程归零是瞬时的,见 restart 里那段)—— 所以 `offset != 0` 就是"有一轮滚动
+        // 正在进行或停在尾端"。
+        let midScroll = offset != 0
         contentWidth = content
         containerWidth = container
+        // ⚠️ 只有容器宽度在变、内容没换、溢出与否也没翻转、而且此刻停在开头时,**不**重启
+        // (2026-09-06 灵动岛动画性能专项)。容器宽度在 hover 展开/收起、拖宽度滑块期间是
+        // **每帧**变一次的(灵动岛 257→482pt 一次展开约 16 帧、收起约 24 帧),原来每帧都
+        // 走一遍 restart:cancel 掉旧 Task、新分配一个、再在事务里写两次 @State —— 对没溢出
+        // 的短句(绝大多数歌词行 / 耳朵里的歌名)这全是白做,对正溢出、还在 1.1s 起步等待里
+        // 的长句也只是把等待重新计时;两种情况画面上都看不出任何区别,却让每帧多一轮
+        // 视图图更新。跳过之后滚动循环读的是**当下**的 overflow(见下面 Task 里的注释),
+        // 等待期间容器变宽变窄,起步时照样按新距离滚。
+        //
+        // 溢出与否翻转(拖宽了装得下 / 拖窄了装不下)、正在滚动中(去程的终点跟着容器宽变了)、
+        // 内容换了,三种情况照旧重启 —— 这三种才是"需要从头来"的。
+        if !contentChanged, wasOverflowing == isOverflowing, !midScroll { return }
         restart()
     }
 
@@ -166,12 +184,17 @@ struct MarqueeText<Content: View>: View {
             generation &+= 1
         }
         guard isOverflowing else { return }
-        let distance = overflow
-        let travelDuration = Double(distance) / marqueePixelsPerSecond
         scrollTask = Task { @MainActor in
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: UInt64(marqueeHoldDuration * 1_000_000_000))
                 if Task.isCancelled { return }
+                // 距离在**起步这一刻**读,不在 restart 时捕获(2026-09-06):apply 对"等待期间
+                // 容器宽度在变"的情况不再重启,这里读到的才是当下真实的溢出量。@State 是引用
+                // 存储,struct 副本里读到的就是最新值。等待期间若已经装得下(overflow ≤ 0),
+                // apply 那边会因溢出翻转而重启并取消本 Task,不会走到这里。
+                let distance = overflow
+                guard distance > 0 else { return }  // 防御:翻转与取消之间的窄窗口
+                let travelDuration = Double(distance) / marqueePixelsPerSecond
                 withAnimation(.linear(duration: travelDuration)) { offset = distance }
                 try? await Task.sleep(nanoseconds: UInt64(travelDuration * 1_000_000_000) + UInt64(marqueeHoldDuration * 1_000_000_000))
                 if Task.isCancelled { return }
