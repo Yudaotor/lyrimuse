@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lyrimuse vs LyricsX vs Lyric Fever (2026) — macOS Desktop Lyrics Compared</title>
+<meta name="description" content="Is LyricsX still maintained? A fact-checked 2026 comparison of macOS desktop lyrics apps: Lyrimuse, LyricsX and Lyric Fever — players, lyric sources, word-by-word sync, translation, romanization, scrobbling, system requirements.">
+<link rel="canonical" href="https://yudaotor.github.io/lyrimuse/compare/">
+<link rel="alternate" hreflang="zh-Hans" href="https://yudaotor.github.io/lyrimuse/zh/compare/">
+<link rel="alternate" hreflang="en" href="https://yudaotor.github.io/lyrimuse/compare/">
+<link rel="alternate" hreflang="x-default" href="https://yudaotor.github.io/lyrimuse/compare/">
+<link rel="icon" href="../assets/img/app-icon.png">
+<link rel="stylesheet" href="../assets/style.css">
+<meta property="og:title" content="Lyrimuse vs LyricsX vs Lyric Fever (2026)">
+<meta property="og:description" content="Fact-checked comparison of macOS desktop lyrics apps — checked against each project's own repository.">
+<meta property="og:url" content="https://yudaotor.github.io/lyrimuse/compare/">
+<meta property="og:type" content="article">
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <img src="../assets/img/app-icon.png" alt="Lyrimuse icon">
+  <span class="name"><a href="../" style="color:inherit">Lyrimuse</a></span>
+  <nav>
+    <a href="../">Home</a>
+    <a href="https://github.com/Yudaotor/lyrimuse">GitHub</a>
+    <a href="../zh/compare/" lang="zh-Hans">中文</a>
+  </nav>
+</header>
+
+<div class="hero" style="padding-bottom:6px">
+  <h1>Desktop lyrics apps for macOS in 2026:<br>Lyrimuse vs LyricsX vs Lyric Fever</h1>
+</div>
+
+<p class="note"><strong>Disclosure:</strong> this page is maintained by the author of Lyrimuse, so read it with that in mind. Every factual claim was checked against each project's own public repository and README on <strong>2026-09-05</strong>; "—" means a feature is <em>not advertised</em> in that project's own materials as of that date, not necessarily that it's absent. Corrections welcome — <a href="https://github.com/Yudaotor/lyrimuse/issues">open an issue</a>.</p>
+
+<section>
+  <h2>Is LyricsX still maintained?</h2>
+  <p>Not actively: <a href="https://github.com/ddddxxx/LyricsX">LyricsX</a>'s last release was <strong>v1.6.3 in April 2022</strong>, though the repository still receives an occasional commit. That's the question that brings most people to this page, so here is a factual, current comparison of the actively maintained open-source options:</p>
+  <ul>
+    <li><strong><a href="https://github.com/aviwad/LyricFever">Lyric Fever</a></strong> (MIT) — Spotify + Apple Music lyrics, macOS 15+. Describes itself as a "spiritual successor to LyricsX".</li>
+    <li><strong><a href="https://github.com/Yudaotor/lyrimuse">Lyrimuse</a></strong> (GPL-3.0, this project) — word-synced lyrics for Apple Music, Spotify <strong>and the Chinese players (QQ Music, NetEase Cloud Music, Kugou)</strong>, plus YouTube Music / Spotify Web in any browser; 8 lyric sources checked automatically with <strong>every candidate scored so the best match wins</strong>; translation, pinyin / Cantonese Jyutping / furigana; Last.fm &amp; ListenBrainz scrobbling with local stats. macOS 14+, Apple Silicon and Intel.</li>
+  </ul>
+  <p><strong>What about OSD Lyrics?</strong> It's a Linux desktop-lyrics app, not a macOS one — it shows up in "LyricsX alternative" lists but won't run on a Mac.</p>
+</section>
+
+<section>
+  <h2>Side-by-side (facts checked 2026-09-05)</h2>
+  <div class="table-scroll">
+  <table>
+    <tr><th></th><th>Lyrimuse</th><th>LyricsX</th><th>Lyric Fever</th></tr>
+    <tr><td><strong>License · price</strong></td><td>GPL-3.0 · free</td><td>MPL-2.0 · free</td><td>MIT · free</td></tr>
+    <tr><td><strong>Latest release</strong></td><td>v1.5.0 (Sep 2026)</td><td>v1.6.3 (Apr 2022)</td><td>v3.3 (Nov 2025)</td></tr>
+    <tr><td><strong>Minimum macOS</strong></td><td>14 (Sonoma)</td><td>10.11</td><td>15 (Sequoia)</td></tr>
+    <tr><td><strong>Players</strong></td><td>Apple Music, Spotify, QQ Music, NetEase Cloud Music, Kugou — any combination</td><td>Apple Music, Spotify, Vox, Audirvana, Swinsian</td><td>Spotify, Apple Music</td></tr>
+    <tr><td><strong>Web players in a browser</strong></td><td>YouTube Music &amp; Spotify Web, synced to the page's own progress</td><td>—</td><td>—</td></tr>
+    <tr><td><strong>Lyric sources</strong></td><td>8: NetEase, QQ Music, Kugou, Kuwo, Musixmatch, LRCLIB, LyricFind, AMLL</td><td>multiple, via its LyricsKit library</td><td>3: Spotify, LRCLIB, NetEase</td></tr>
+    <tr><td><strong>Match selection</strong></td><td>every candidate from every source scored on one scale (title / artist / album / duration fit + quality signals); per-track decision panel; manual picks locked</td><td>—</td><td>—</td></tr>
+    <tr><td><strong>Word-by-word sync</strong></td><td>yes, across sources (incl. the hand-curated AMLL database)</td><td>via LRCX word time tags, when the source provides them</td><td>—</td></tr>
+    <tr><td><strong>Translation</strong></td><td>source community translation, else on-device Apple translation (18 languages) with online fallback</td><td>displays source-provided translations</td><td>Apple on-device translation</td></tr>
+    <tr><td><strong>Romanization</strong></td><td>per-line pinyin, Cantonese Jyutping, Japanese furigana</td><td>—</td><td>—</td></tr>
+    <tr><td><strong>Simplified ⇄ Traditional Chinese</strong></td><td>yes, independent of UI language</td><td>yes</td><td>—</td></tr>
+    <tr><td><strong>Duet / multi-singer splitting</strong></td><td>yes, when the source marks parts</td><td>—</td><td>—</td></tr>
+    <tr><td><strong>Scrobbling &amp; stats</strong></td><td>Last.fm + ListenBrainz, backfill, local history, charts, heatmap</td><td>—</td><td>—</td></tr>
+    <tr><td><strong>Display surfaces</strong></td><td>floating overlay, Dynamic-Island capsule, menu bar, full lyrics window</td><td>desktop + menu bar</td><td>menu bar, fullscreen, karaoke popup</td></tr>
+    <tr><td><strong>UI languages</strong></td><td>English, Simplified Chinese, Traditional Chinese</td><td>multiple (Crowdin)</td><td>English, Simplified Chinese</td></tr>
+  </table>
+  </div>
+</section>
+
+<section>
+  <h2>Where Lyrimuse fits</h2>
+  <p>Lyrimuse is built for listeners the other two don't fully cover: you play music through <strong>QQ Music, NetEase Cloud Music or Kugou</strong>; you play <strong>YouTube Music or Spotify in a browser</strong> and still want desktop lyrics synced to the page's own progress; you want <strong>Cantonese Jyutping or Japanese furigana</strong>; or you want <strong>Last.fm / ListenBrainz scrobbling and listening stats</strong> in the same app that shows your lyrics.</p>
+  <p>Matching is also <strong>score-driven rather than first-hit</strong>: every candidate from every source is ranked on title / artist / album / duration fit plus quality signals such as word-level timing, each track's decision is shown with per-candidate scores, and a manually picked lyric is locked and never overridden.</p>
+  <figure class="feature-img"><img src="../assets/img/app-resolution-decision.png" width="620" alt="Lyrimuse resolution decision panel — per-candidate lyric scores" loading="lazy"><figcaption>The per-track resolution panel: every candidate's score, and why the winner won.</figcaption></figure>
+  <p style="text-align:center; margin-top:26px">
+    <a class="btn primary" href="https://github.com/Yudaotor/lyrimuse/releases/latest">Download Lyrimuse</a>&nbsp;
+    <a class="btn ghost" href="../">Learn more</a>
+  </p>
+  <p style="text-align:center"><code>brew tap yudaotor/lyrimuse &amp;&amp; brew install --cask lyrimuse</code></p>
+</section>
+
+<footer>
+  <a href="../">Lyrimuse home</a>
+  <a href="https://github.com/Yudaotor/lyrimuse">GitHub</a>
+  <a href="../zh/compare/" lang="zh-Hans">简体中文</a>
+</footer>
+
+</div>
+</body>
+</html>

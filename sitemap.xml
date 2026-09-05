@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+        xmlns:xhtml="http://www.w3.org/1999/xhtml">
+  <url>
+    <loc>https://yudaotor.github.io/lyrimuse/</loc>
+    <lastmod>2026-09-05</lastmod>
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://yudaotor.github.io/lyrimuse/zh/"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://yudaotor.github.io/lyrimuse/"/>
+  </url>
+  <url>
+    <loc>https://yudaotor.github.io/lyrimuse/zh/</loc>
+    <lastmod>2026-09-05</lastmod>
+    <xhtml:link rel="alternate" hreflang="en" href="https://yudaotor.github.io/lyrimuse/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://yudaotor.github.io/lyrimuse/zh/"/>
+  </url>
+  <url>
+    <loc>https://yudaotor.github.io/lyrimuse/compare/</loc>
+    <lastmod>2026-09-05</lastmod>
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://yudaotor.github.io/lyrimuse/zh/compare/"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://yudaotor.github.io/lyrimuse/compare/"/>
+  </url>
+  <url>
+    <loc>https://yudaotor.github.io/lyrimuse/zh/compare/</loc>
+    <lastmod>2026-09-05</lastmod>
+    <xhtml:link rel="alternate" hreflang="en" href="https://yudaotor.github.io/lyrimuse/compare/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://yudaotor.github.io/lyrimuse/zh/compare/"/>
+  </url>
+</urlset>

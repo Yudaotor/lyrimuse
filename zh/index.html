@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="zh-Hans">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lyrimuse — macOS 桌面歌词（逐字同步）</title>
+<meta name="description" content="免费开源的 macOS 桌面歌词：Apple Music、Spotify、QQ 音乐、网易云音乐、酷狗，以及浏览器里的 YouTube Music / Spotify 网页版。逐字同步、打分选准歌词、翻译、粤拼、Last.fm 听歌统计。macOS 14+，Apple Silicon 与 Intel。">
+<link rel="canonical" href="https://yudaotor.github.io/lyrimuse/zh/">
+<link rel="alternate" hreflang="en" href="https://yudaotor.github.io/lyrimuse/">
+<link rel="alternate" hreflang="zh-Hans" href="https://yudaotor.github.io/lyrimuse/zh/">
+<link rel="alternate" hreflang="x-default" href="https://yudaotor.github.io/lyrimuse/">
+<link rel="icon" href="../assets/img/app-icon.png">
+<link rel="stylesheet" href="../assets/style.css">
+<meta property="og:title" content="Lyrimuse — macOS 桌面歌词（逐字同步）">
+<meta property="og:description" content="免费开源：Apple Music、Spotify、QQ 音乐、网易云、酷狗及浏览器网页播放器的桌面歌词。LyricsX 的活跃维护开源替代。">
+<meta property="og:image" content="https://yudaotor.github.io/lyrimuse/assets/img/app-lyrics-window.png">
+<meta property="og:url" content="https://yudaotor.github.io/lyrimuse/zh/">
+<meta property="og:type" content="website">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "Lyrimuse",
+  "operatingSystem": "macOS 14.0 or later",
+  "applicationCategory": "MultimediaApplication",
+  "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+  "downloadUrl": "https://github.com/Yudaotor/lyrimuse/releases/latest",
+  "softwareVersion": "1.5.0",
+  "license": "https://www.gnu.org/licenses/gpl-3.0.html",
+  "url": "https://yudaotor.github.io/lyrimuse/zh/",
+  "inLanguage": "zh-Hans",
+  "image": "https://yudaotor.github.io/lyrimuse/assets/img/app-lyrics-window.png",
+  "author": { "@type": "Person", "name": "Yudaotor", "url": "https://github.com/Yudaotor" }
+}
+</script>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <img src="../assets/img/app-icon.png" alt="Lyrimuse 图标">
+  <span class="name">Lyrimuse</span>
+  <nav>
+    <a href="#features">功能</a>
+    <a href="#matching">歌词匹配</a>
+    <a href="compare/">对比 LyricsX</a>
+    <a href="#faq">常见问题</a>
+    <a href="https://github.com/Yudaotor/lyrimuse/blob/main/README.zh-CN.md">GitHub</a>
+    <a href="../" lang="en">English</a>
+  </nav>
+</header>
+
+<div class="hero">
+  <h1>macOS 桌面歌词，逐字同步</h1>
+  <p class="sub">给 <strong>Apple Music、Spotify、QQ 音乐、网易云音乐、酷狗</strong>——以及<strong>浏览器里播放的 YouTube Music / Spotify 网页版</strong>——配上实时逐字歌词。免费开源（GPL-3.0）、持续维护。macOS 14+，Apple Silicon 与 Intel。</p>
+  <div class="cta">
+    <a class="btn primary" href="https://github.com/Yudaotor/lyrimuse/releases/latest">下载</a>
+    <a class="btn ghost" href="https://github.com/Yudaotor/lyrimuse">GitHub 点个 Star</a>
+  </div>
+  <pre class="brew">brew tap yudaotor/lyrimuse &amp;&amp; brew install --cask lyrimuse</pre>
+</div>
+
+<div class="shots">
+  <figure><img src="../assets/img/app-desktop-lyrics.png" alt="macOS 经典桌面悬浮歌词" loading="lazy"><figcaption>经典悬浮窗</figcaption></figure>
+  <figure><img src="../assets/img/app-dynamic-island.png" alt="macOS 灵动岛样式歌词胶囊" loading="lazy"><figcaption>灵动岛样式胶囊</figcaption></figure>
+  <figure><img src="../assets/img/app-lyrics-window.png" alt="仿 Apple Music 歌词页的完整歌词窗口" loading="lazy"><figcaption>仿 Apple Music 的歌词窗口</figcaption></figure>
+</div>
+
+<section id="features">
+  <h2>功能</h2>
+  <div class="grid">
+    <div class="card"><h3>播放器随你选，可多选</h3><p>Apple Music、Spotify、QQ 音乐、网易云音乐、酷狗——任意组合，或交给自动识别。浏览器配对一次，网页版 YouTube Music / Spotify 就是正经播放器，按页面自己的进度条精确同步。</p></div>
+    <div class="card"><h3>打分选准歌词</h3><p>8 个歌词源的全部候选统一打分、择优胜出；每首歌的决策可查，匹配错了能自愈，手动选定的会被锁定。<a href="#matching">匹配机制 ↓</a></p></div>
+    <div class="card"><h3>翻译与罗马音</h3><p>优先源自带的社区翻译，否则设备端 Apple 翻译，18 种目标语言。逐行判定的拼音、粤拼、日语注音假名。</p></div>
+    <div class="card"><h3>四种展示形态</h3><p>桌面悬浮窗、灵动岛胶囊、菜单栏歌词、完整歌词窗口——任意组合，外观全可定制，共享屏幕时自动隐藏。</p></div>
+    <div class="card"><h3>Last.fm 与 ListenBrainz</h3><p>一键连接、双端同步打卡、离线补传，本地听歌历史、榜单、「那年今日」和 GitHub 风格的听歌热力图。</p></div>
+    <div class="card"><h3>隐私与开源</h3><p>GPL-3.0，无遥测，翻译默认在设备端完成，每条对外请求都记进本地审计日志。不需要 Apple 开发者账号，想自己编译也行。</p></div>
+  </div>
+</section>
+
+<section id="matching">
+  <h2>选准歌词，还把理由摆给你看</h2>
+  <p>用过多源歌词软件的人都体会过匹配到错误版本的痛。Lyrimuse 把<strong>所有源的全部候选放在同一套标准下打分</strong>——歌名、歌手、专辑、上报时长的吻合度，再加逐字时间轴这类质量信号——分最高的胜出，而不是哪个源先返回就用哪个。每首歌都有解析决策面板，列出各候选得分和赢家胜出的原因；之后某个源出现更干净的版本还能自动升级换上，而你手动选定的歌词会被锁定、绝不被自动覆盖。</p>
+  <figure class="feature-img"><img src="../assets/img/app-resolution-decision.png" width="620" alt="Lyrimuse 解析决策面板：各候选歌词的得分" loading="lazy"><figcaption>每首歌的解析决策面板：各候选得分逐项列出，赢家为什么赢一目了然。</figcaption></figure>
+</section>
+
+<section id="faq">
+  <h2>常见问题</h2>
+  <div class="faq">
+    <div><h3>浏览器里放的 YouTube Music / Spotify 网页版能出歌词吗？</h3><p>能——把常用浏览器配对一次，网页播放器就是正经播放器：歌词按页面自己的进度条精确同步，配对前有一键自检确认浏览器能否被驱动。</p></div>
+    <div><h3>Lyrimuse 是 LyricsX 的替代吗？</h3><p>是——LyricsX 自 2022 年 4 月起没有发布过新版本。Lyrimuse 持续维护，多了 QQ 音乐 / 网易云 / 酷狗和浏览器网页播放器、打分选准的歌词匹配、粤拼/注音假名和 Last.fm 统计。见<a href="compare/">逐项核实的对比</a>。</p></div>
+    <div><h3>没有网络能看歌词吗？</h3><p>解析过一次的歌可以——本地模式直接显示已缓存的歌词，不用联网。</p></div>
+    <div><h3>支持 Intel Mac 吗？</h3><p>支持——每个版本都附带单独的 universal 包，App 内自动更新对 Intel 同样生效。</p></div>
+    <div><h3>大陆下载慢怎么办？</h3><p>给下载地址加公共加速前缀即可，例如 <code>https://ghfast.top/</code> + 原下载链接；用 Homebrew 安装则无此问题。</p></div>
+  </div>
+</section>
+
+<footer>
+  <a href="https://github.com/Yudaotor/lyrimuse/blob/main/README.zh-CN.md">GitHub（中文说明）</a>
+  <a href="https://github.com/Yudaotor/lyrimuse/releases">Releases</a>
+  <a href="compare/">与 LyricsX、Lyric Fever 对比</a>
+  <a href="https://github.com/Yudaotor/lyrimuse/blob/main/LICENSE">GPL-3.0</a>
+  <a href="../" lang="en">English</a>
+</footer>
+
+</div>
+</body>
+</html>
