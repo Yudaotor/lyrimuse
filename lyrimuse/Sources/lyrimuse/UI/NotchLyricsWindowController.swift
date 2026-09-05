@@ -166,9 +166,14 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     /// 由 CombineLatest3 一次给全三个值,不存在"回头读存储属性拿到旧值"那个坑。
     @Published private(set) var hasTrack: Bool = false
 
-    /// 稳态/展开态卡片的宽度(= contentWidth(baseWidth:notchWidth:) 的结果)。
-    /// 窗口本身常驻这个宽度,卡片在里面按形态变宽变窄,见 NotchWindowRoot。
+    /// 稳态卡片的宽度(= contentWidth(baseWidth:notchWidth:) 的结果)。
+    /// 2026-09-06 之前展开态也用这个宽(hover 只长高不变宽);现在展开态另有 `expandedCardWidth`。
     @Published private(set) var steadyCardWidth: CGFloat = 360
+    /// hover 展开态卡片的宽度 = `max(稳态真实宽, notchExpandedContentWidth)`(`NotchWidthBounds`)。
+    /// **窗口本身常驻这个宽度**(最大形态),卡片在里面按形态变宽变窄,见 NotchWindowRoot。
+    /// 用户的想法(2026-09-06):「配置宽度的时候可以设置一个上限和一个下限,下限就是正常状态的
+    /// 宽度,上限就是悬浮展开时候的宽度」—— 稳态是下限,这个是上限。
+    @Published private(set) var expandedCardWidth: CGFloat = 360
     /// 收起态卡片的宽度:物理刘海本身的宽度,无真刘海的屏幕退到兜底胶囊宽度。
     @Published private(set) var collapsedCardWidth: CGFloat = collapsedFallbackWidth
 
@@ -830,7 +835,8 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         notchEnabled: Bool? = nil,
         hideWhenNotPlaying hide: Bool? = nil,
         hideDuringCapture: Bool? = nil,
-        contentWidth: CGFloat? = nil
+        contentWidth: CGFloat? = nil,
+        expandedContentWidth: CGFloat? = nil
     ) {
         let settings = AppSettings.shared
         let visible = notchEnabled ?? settings.notchOverlayEnabled
@@ -841,7 +847,8 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         let sharing: NSWindow.SharingType = captureHidden ? .none : .readWrite
         if window?.sharingType != sharing { window?.sharingType = sharing }
         updateActualVisibility(isPlayingNow: PlaybackCoordinator.shared.isPlayingSmoothed)
-        recomputeGeometry(animate: false, contentWidth: contentWidth)
+        recomputeGeometry(animate: false, contentWidth: contentWidth,
+                          expandedContentWidth: expandedContentWidth)
     }
 
     /// 副本销毁前调:先把窗口收走,再断掉订阅,最后**破掉保留环**。
@@ -904,19 +911,20 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     }
 
     // 顶边固定贴在屏幕最顶端(screen.frame.maxY)、水平居中对齐刘海中心点、总高度 =
-    // 刘海高度 + 内容行高度(+ hover 展开时再加 expandedExtraHeight)、宽度固定(见
-    // contentWidth(baseWidth:notchWidth:))。
+    // 刘海高度 + 内容行高度(+ hover 展开时再加 expandedExtraHeight)、宽度 = 展开宽(稳态宽见
+    // contentWidth(baseWidth:notchWidth:),展开宽在它之上再取 NotchWidthBounds.expandedWidth)。
     // 2026-08-17 去掉了 isPlayingOverride 参数:它唯一的用途是算 isCollapsed,而那个已经
     // 改成计算属性了(见那边的注释)。这个函数现在跟播放状态完全无关,自然也就不再需要
     // 绕开 @Published willSet 的旧值陷阱。
-    /// contentWidth / leftEar / rightEar / showsEqualizer / equalizerEar / expandedShowsNextLine /
-    /// expandedShowsControls / expandedTrackInfoShows{Title,Artist,Album}:
+    /// contentWidth / expandedContentWidth / leftEar / rightEar / showsEqualizer / equalizerEar /
+    /// expandedShowsNextLine / expandedShowsControls / expandedTrackInfoShows{Title,Artist,Album}:
     /// 非 nil = 调用方正处于对应那个 `@Published` 的 willSet 窗口(镜像 sink 那条路、左右耳/
     /// 音浪/展开态那几条 sink),必须用传入值;nil = 回读存储值(设置页滑杆对 .shared 的
-    /// 调用发生在赋值语句之后,以及 init/屏幕插拔这些时机,存储值都是稳定的)。前五个只影响
-    /// `Self.contentWidth(...)`(宽度),后五个只影响 `self.expandedExtraHeight(...)`(高度),
-    /// 两组互不相干,别混着传。
+    /// 调用发生在赋值语句之后,以及 init/屏幕插拔这些时机,存储值都是稳定的)。前六个只影响
+    /// 宽度(`Self.contentWidth(...)` 与 `NotchWidthBounds.expandedWidth`),后六个只影响
+    /// `self.expandedExtraHeight(...)`(高度),两组互不相干,别混着传。
     private func recomputeGeometry(animate: Bool, contentWidth: CGFloat? = nil,
+                                   expandedContentWidth: CGFloat? = nil,
                                    leftEar: NotchEarModule? = nil,
                                    rightEar: NotchEarModule? = nil,
                                    showsEqualizer: Bool? = nil,
@@ -947,6 +955,13 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
             equalizerEar: equalizerEar ?? AppSettings.shared.notchEqualizerEar,
             contentTopInset: geo.notchHeight)
         if steadyCardWidth != newSteady { steadyCardWidth = newSteady }
+        // 展开宽 = max(稳态真实宽, 展开设定)(2026-09-06)。稳态已经过耳朵下限,所以展开这边
+        // 不必再算一遍下限;两个设定值的不变量「展开 ≥ 稳态」由 NotchWidthBounds 统一兜住,
+        // 用户在快捷面板把稳态拖过展开也不会出现"hover 反而变窄"。
+        let newExpanded = NotchWidthBounds.expandedWidth(
+            steady: newSteady,
+            expandedSetting: expandedContentWidth ?? CGFloat(AppSettings.shared.notchExpandedContentWidth))
+        if expandedCardWidth != newExpanded { expandedCardWidth = newExpanded }
         let newCollapsed = geo.notchWidth > 0 ? geo.notchWidth : Self.collapsedFallbackWidth
         if collapsedCardWidth != newCollapsed { collapsedCardWidth = newCollapsed }
         // 窗口恒为**最大**形态(展开态)的尺寸,不再随收起/稳态/展开三种形态改。三种形态
@@ -955,7 +970,9 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         //
         // ⚠️ 多出来的那片区域必须保持纯透明、不能有任何命中形状 —— 它压在系统菜单栏上,
         // 详见 NotchWindowRoot 顶部那段(带实测结论)。
-        // 窗口尺寸 = 展开态卡片本身,不留额外余量。
+        // 窗口尺寸 = 展开态卡片本身,不留额外余量。宽度自 2026-09-06 起是**展开宽**而不是稳态宽
+        // (两者可以不同了):窗口比稳态卡片宽出来的那两截跟下方多出来的高度一样是纯透明区,
+        // 点击穿透到底下的菜单栏,见上面那条⚠️。
         //
         // ⚠️ 2026-08-17 这里短暂加过一圈"投影余量":当时展开态卡片带 .shadow,而窗口跟
         // 卡片严丝合缝,阴影被窗口的矩形边界硬裁,在底部两个圆角外侧留下两块直角残影。
@@ -963,7 +980,7 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         // 来更糟 —— 于是投影整个撤掉(见 NotchLyricsView 的 body 末尾),这圈余量也跟着
         // 撤回。**要加投影就得同时加回余量**,两件事绑在一起,别只做一半。
         let size = NSSize(
-            width: steadyCardWidth,
+            width: expandedCardWidth,
             height: geo.notchHeight + Self.contentHeight + self.expandedExtraHeight(
                 expandedShowsNextLine: expandedShowsNextLine,
                 expandedShowsControls: expandedShowsControls,

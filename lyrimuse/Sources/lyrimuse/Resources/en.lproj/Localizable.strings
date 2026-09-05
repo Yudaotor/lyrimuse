@@ -26,6 +26,7 @@
 "%@ 首" = "%@ plays";
 "%@ 首保持锁定；从现在起手动选定的歌不再自动锁定" = "%@ songs stay locked; from now on, manually picked songs are no longer locked automatically";
 "%@pt" = "%@pt";
+"%@–%@pt" = "%@–%@pt";
 "%@更新" = "Updated %@";
 "%@（推荐）" = "%@ (recommended)";
 "%@，已下载" = "%@, downloaded";
@@ -417,6 +418,7 @@
 "居中" = "Center";
 "屏幕" = "Display";
 "展开" = "Expand";
+"展开宽度" = "Expanded Width";
 "展开态" = "Expanded State";
 "展开时在头部显示一枚封面缩略图。" = "Shows a small artwork thumbnail in the header when expanded.";
 "展开时在进度条上方显示下一句要唱的歌词。" = "Shows the next lyric line above the progress bar when expanded.";
@@ -882,6 +884,7 @@
 "源里有歌、无词 %@ 首" = "%@ indexed, no lyrics";
 "灵动岛" = "Notch";
 "灵动岛宽度" = "Notch Card Width";
+"灵动岛展开宽度" = "Notch Card Expanded Width";
 "灵动岛歌词" = "Notch Lyrics";
 "点击下载" = "Click to download";
 "点击复制版本信息，反馈问题时贴上" = "Click to copy the version info, handy when reporting a problem";

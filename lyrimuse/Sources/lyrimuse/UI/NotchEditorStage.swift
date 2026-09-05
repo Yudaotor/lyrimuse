@@ -164,11 +164,12 @@ struct NotchEditorStage: View {
     /// 遮挡、而且各自的 transient 关闭时机会打架(同 OverlayEditorStage.StagePopover)。
     @State private var popover: StagePopover?
 
-    /// 用户此刻正按着宽度调整条(Slider 的 onEditingChanged)。只用来把卡片那圈轮廓
-    /// 加强一档(见 windowEdgeOutline)。
-    @State private var adjustingWidth = false
+    /// 用户此刻正按着宽度调整条的哪只滑块(nil = 没按着)。两个用途:把卡片那圈轮廓加强一档
+    /// (见 windowEdgeOutline);按着**展开**那只时让卡片按展开态画(见 card / cardWidth)——
+    /// 否则拖上限时鼠标在滑杆上、卡片没被 hover,用户看不见自己在调的那个宽度。
+    @State private var adjustingThumb: NotchWidthRangeDrag.Thumb?
 
-    /// 拖动中的临时宽度(nil = 没在拖)。
+    /// 拖动中的临时宽度(nil = 没在拖):稳态 / 展开各一份(2026-09-06 起宽度是一对)。
     ///
     /// ⚠️ 这是**性能必需**,不是锦上添花 —— 同 OverlayEditorStage.draggingWidth 那条(用户
     /// 报过"拖动这个宽度条的时候卡顿,不流畅")。直接写 `settings.notchContentWidth` 的话,
@@ -176,9 +177,10 @@ struct NotchEditorStage: View {
     /// ②写一次 UserDefaults、③`applyContentWidthSetting()` 走一遍全量几何 + NSWindow.setFrame。
     /// 而编辑台里跑的是**真** NotchLyricsView(跑马灯、逐字填色、封面模糊背景都在里面)。
     ///
-    /// 现在拖动中只动这个 @State:只有编辑台自己重画,不写盘、不广播全局、不碰真窗口;
-    /// onEditingChanged 收到 false 时一次性提交(commitWidth)。
-    @State private var draggingWidth: Double?
+    /// 现在拖动中只动这两个 @State:只有编辑台自己重画,不写盘、不广播全局、不碰真窗口;
+    /// onEditingChanged 收到 nil(松手)时一次性提交(commitWidths)。
+    @State private var draggingSteady: Double?
+    @State private var draggingExpanded: Double?
 
     // MARK: - 度量
 
@@ -186,8 +188,8 @@ struct NotchEditorStage: View {
     /// 卡片只在**这条通道以上**的那一格里挂着(见 cardAreaHeight)。
     private static let widthBarLaneHeight: CGFloat = 56
 
-    /// 宽度调整条那根滑杆有多长、整条胶囊离舞台底边留多远。跟悬浮歌词编辑台同一套数值 ——
-    /// 同一个窗口里两条一模一样的控件没有理由长得不一样。
+    /// 宽度调整条那根滑杆有多长、整条胶囊离舞台底边留多远。滑杆长度跟悬浮歌词编辑台同一个
+    /// 数值 —— 同一个窗口里两条控件没有理由长得不一样(这根 2026-09-06 起是双滑块,轨道等长)。
     private static let widthBarSliderWidth: CGFloat = 168
     private static let widthBarBottomInset: CGFloat = 12
 
@@ -264,6 +266,55 @@ struct NotchEditorStage: View {
                                 contentTopInset: geo?.notchHeight ?? 0)
     }
 
+    /// **展开宽**那根单滑块(抽屉 / 菜单栏快捷面板)能拖的区间:下界 = 稳态**真实**宽(展开不许
+    /// 比稳态窄,见 `NotchWidthBounds`),上界同 `widthRange`。编辑台自己的双滑块不用这个 ——
+    /// 它两只滑块共用 `usableWidthRange`,"不越过对方"由 `NotchWidthRangeDrag` 管。
+    ///
+    /// 护栏跟 `usableWidthRange` 同一套:下界向上取整到 `widthStep`(SteppedSlider 的栅格锚在
+    /// 下界,这里主要是为了跟编辑台那根 step 2 的落值对得上);下界不许越过上界(稳态拉满 500
+    /// 时展开只剩 500 这一个值,给 Slider 一个零长区间会算出 nan)。
+    static func usableExpandedWidthRange(steadyWidth: Double) -> ClosedRange<Double> {
+        let ceiled = (steadyWidth / widthStep).rounded(.up) * widthStep
+        let lower = min(max(ceiled, widthRange.lowerBound), widthRange.upperBound - widthStep)
+        return lower ... widthRange.upperBound
+    }
+
+    /// 同上,稳态真实宽**自己现读设置和屏幕**(给构造不出这个 View 的调用点用)。
+    static var usableExpandedWidthRangeOnCurrentScreen: ClosedRange<Double> {
+        usableExpandedWidthRange(steadyWidth: effectiveWidth(baseWidth: AppSettings.shared.notchContentWidth))
+    }
+
+    /// 三个写入口(编辑台调整条 / 抽屉 / 快捷面板)**唯一**的落盘路径(2026-09-06)。
+    ///
+    /// 做三件事,顺序有讲究:
+    ///   ① 归一到不变量「展开 ≥ 稳态」(`NotchWidthBounds.normalized`):单滑块入口把稳态拖过了
+    ///      展开,展开被顶上去;展开拖到稳态以下,停在稳态。
+    ///   ② **先写展开、后写稳态**:两个 `@Published` 各自派发一次,镜像管理器的 combineLatest 在
+    ///      第一次派发时另一个值还是旧的 —— 先抬展开再抬稳态,中间那一帧仍满足不变量(读侧还有
+    ///      一层 max 兜着,这里只是不制造一帧"展开 < 稳态"的落盘状态)。相等守卫一个都不能少:
+    ///      `@Published` 等值赋值照样广播 objectWillChange,didSet 还会多写一次 UserDefaults。
+    ///   ③ 带 `notchOverlayEnabled` 守卫再通知真窗口:`NotchLyricsWindowController.shared` 是
+    ///      `static let`,读一下就建整扇窗,灵动岛关着的用户碰一下滑杆不该凭空多一套(守卫跳过
+    ///      之后由 `setVisible(_:)` 的 visible 分支在重新打开时补一次 recomputeGeometry)。
+    /// 传 nil 的那个值原样保留(只归一,不改)。
+    static func commitWidths(steady: Double? = nil, expanded: Double? = nil) {
+        let settings = AppSettings.shared
+        let next = NotchWidthBounds.normalized(
+            steady: steady ?? settings.notchContentWidth,
+            expanded: expanded ?? settings.notchExpandedContentWidth)
+        var changed = false
+        if next.expanded != settings.notchExpandedContentWidth {
+            settings.notchExpandedContentWidth = next.expanded
+            changed = true
+        }
+        if next.steady != settings.notchContentWidth {
+            settings.notchContentWidth = next.steady
+            changed = true
+        }
+        guard changed, settings.notchOverlayEnabled else { return }
+        NotchLyricsWindowController.shared.applyContentWidthSetting()
+    }
+
     /// 宽度调整条的步长(pt)。
     ///
     /// 2pt 而不是菜单栏快捷面板那根的 10pt:那根是兜底通路、旁边没有实时预览,粗一点反而好
@@ -310,8 +361,10 @@ struct NotchEditorStage: View {
             + stageHeight + SectionPreviewMetrics.captionSpacing + SectionPreviewMetrics.captionHeight
     }
 
-    /// 用户设定的那个宽度(拖动中取临时值)。**不是**卡片的真实宽度,见 cardWidth。
-    private var baseWidth: Double { draggingWidth ?? settings.notchContentWidth }
+    /// 用户设定的稳态宽度(拖动中取临时值)。**不是**卡片的真实宽度,见 steadyCardWidth。
+    private var baseWidth: Double { draggingSteady ?? settings.notchContentWidth }
+    /// 用户设定的展开宽度(拖动中取临时值)。同上,真实值见 expandedCardWidth。
+    private var expandedBaseWidth: Double { draggingExpanded ?? settings.notchExpandedContentWidth }
 
     /// 设定值经"两只耳朵放得下按钮"的下限之后,卡片**真实**有多宽 —— 给**构造不出这个 View**
     /// 的调用点用(菜单栏快捷面板那根滑杆的读数)。
@@ -327,14 +380,35 @@ struct NotchEditorStage: View {
             contentTopInset: geo?.notchHeight ?? 0))
     }
 
-    /// 卡片此刻**真实**有多宽 —— 走真窗口那个公式,不直接用设定值。
+    /// 展开态卡片的**真实**宽度,同上给构造不出这个 View 的调用点用(抽屉 / 快捷面板那根
+    /// 「展开宽度」滑杆的读数)。公式就是真窗口 `recomputeGeometry` 里那一句
+    /// `NotchWidthBounds.expandedWidth`,不另写。
+    static func effectiveExpandedWidth(steadyBase: Double, expandedBase: Double) -> Double {
+        Double(NotchWidthBounds.expandedWidth(
+            steady: CGFloat(effectiveWidth(baseWidth: steadyBase)),
+            expandedSetting: CGFloat(expandedBase)))
+    }
+
+    /// 稳态卡片此刻**真实**有多宽 —— 走真窗口那个公式,不直接用设定值。
     ///
     /// 宽度调得很小时真窗口会被"两只耳朵放得下按钮"的下限顶宽,编辑台得跟着一起顶,否则
     /// 这一段恰恰在最容易出岔的区间失真(这条是从 NotchPreviewBar 继承的,不是新想的)。
-    private var cardWidth: CGFloat {
+    private var steadyCardWidth: CGFloat {
         NotchLyricsWindowController.contentWidth(
             baseWidth: CGFloat(baseWidth), notchWidth: chrome.notchWidth,
             contentTopInset: chrome.contentTopInset)
+    }
+
+    /// 展开态卡片此刻真实有多宽:`max(稳态真实宽, 展开设定)`,跟真窗口 `recomputeGeometry`
+    /// 同一个公式(`NotchWidthBounds.expandedWidth`)。
+    private var expandedCardWidth: CGFloat {
+        NotchWidthBounds.expandedWidth(steady: steadyCardWidth, expandedSetting: CGFloat(expandedBaseWidth))
+    }
+
+    /// 卡片**此刻**画多宽:hover 展开(含拖上限滑块时被程序置成的展开,见 widthBar)按展开宽,
+    /// 否则按稳态宽 —— 跟真窗口 `NotchWindowRoot.cardWidth` 同一个分支。
+    private var cardWidth: CGFloat {
+        chrome.isExpanded ? expandedCardWidth : steadyCardWidth
     }
 
     /// 卡片此刻的真实高度。**公式本体在 `NotchChromeSource` 的协议扩展里**,真窗口
@@ -862,59 +936,75 @@ struct NotchEditorStage: View {
             .shadow(color: .black.opacity(0.55), radius: 1)
             .frame(width: cardWidth, height: cardHeight)
             // 用透明度而不是 if 分支:轮廓始终在视图树里,按下/松开才淡得起来。
-            .opacity(adjustingWidth ? 1 : 0)
-            .animation(.easeOut(duration: 0.12), value: adjustingWidth)
+            .opacity(adjustingThumb != nil ? 1 : 0)
+            .animation(.easeOut(duration: 0.12), value: adjustingThumb != nil)
             .allowsHitTesting(false)
             .accessibilityHidden(true)
     }
 
     // MARK: - 宽度调整条
 
-    /// 舞台内部、卡片正下方那条宽度调整条。
+    /// 舞台内部、卡片正下方那条宽度调整条 —— 2026-09-06 起是**双滑块**(`RangeSlider`):左边那只
+    /// 是稳态宽(下限,没 hover 时卡片多宽),右边那只是展开宽(上限,hover 展开后撑到多宽)。
+    /// 用户原话:「配置宽度的时候可以设置一个上限和一个下限,下限就是正常状态的宽度,上限就是
+    /// 悬浮展开时候的宽度」。两只滑块重叠 = 展开不加宽(老用户升级后的样子)。
     ///
     /// 摆在**舞台里面**而不是舞台底下那行 caption 旁边,是因为它得跟它改的那张卡待在同一块
     /// 画面里:卡片两侧和下方现在露着桌面,调整条压在桌面上、正对卡片下沿,"这根条改的是
     /// 上面这张卡的宽度"不用另写一句话解释。
     ///
+    /// **拖哪只滑块,卡片就按哪种形态画**:按住展开那只时把预览 chrome 置成展开态(卡片变宽也变高,
+    /// 就是 hover 时的样子),松手复原;按住稳态那只时确保是稳态。不这么做的话拖上限时鼠标在
+    /// 滑杆上、卡片没被 hover,那只滑块改的宽度在画布上**看不见**,而"改一项、当场看见"正是编辑台
+    /// 的全部意义。
+    ///
     /// ⚠️ 配色**固定黑底白字 + 投影,不跟深浅色模式走**:它底下垫的是用户真实的桌面壁纸。
     /// 三层各司其职:半透明黑胶囊把滑杆和读数从任意壁纸里托出来;白色发丝描边负责在**深**
-    /// 壁纸上给胶囊自己留一圈边界;投影负责在**亮**壁纸上兜一圈暗轮廓。滑杆的 `.tint(.white)`
+    /// 壁纸上给胶囊自己留一圈边界;投影负责在**亮**壁纸上兜一圈暗轮廓。滑杆的 `.white` tint
     /// 同理 —— 默认强调色跟着系统主题走,压在壁纸上深浅不定。
     private var widthBar: some View {
         HStack(spacing: 8) {
             Image(systemName: "arrow.left.and.right")
                 .font(.system(size: 10, weight: .semibold))
-            // ⚠️ **不要**给这根 Slider 传 `step:`。macOS 的 Slider 一旦有 step 就会画刻度线,
-            // 而这里 range 是 200...500、step 是 2 —— 150 个刻度密到连成一条实线,看着像轨道
-            // 下面平白多了一条白杠(2026-08-31 悬浮歌词那根为此被用户报过一次)。量化本来就
-            // 不必靠它:widthBinding 的 set 一律走 snap()。
-            Slider(
-                value: widthBinding,
-                in: Self.usableWidthRange(notchWidth: chrome.notchWidth,
-                                          contentTopInset: chrome.contentTopInset),
-                onEditingChanged: { editing in
-                    adjustingWidth = editing
-                    // 松手:把拖动中攒下的那个值提交出去,然后交还给 settings 当真源。
-                    if !editing, let pending = draggingWidth {
-                        commitWidth(pending)
-                        draggingWidth = nil
+            // 两只滑块共用同一个可拖区间(下界 = 这台机器当前配置下的耳朵下限);"展开不越过
+            // 稳态"由 RangeSlider 内部的 NotchWidthRangeDrag 管,不靠区间。量化 step 2,不画刻度。
+            RangeSlider(
+                lower: baseWidth, upper: expandedBaseWidth,
+                range: Self.usableWidthRange(notchWidth: chrome.notchWidth,
+                                             contentTopInset: chrome.contentTopInset),
+                step: Self.widthStep, tint: .white,
+                lowerLabel: L10n.t("灵动岛宽度"), upperLabel: L10n.t("灵动岛展开宽度"),
+                valueText: { String(format: L10n.t("%@pt"), "\(Int($0))") },
+                onChange: { steady, expanded in
+                    // 拖动中**只**改本地 @State,理由见 draggingSteady 的注释。落盘与通知真窗口都
+                    // 推迟到 onEditingChanged 收到 nil 那一下。
+                    draggingSteady = steady
+                    draggingExpanded = expanded
+                },
+                onEditingChanged: { thumb in
+                    adjustingThumb = thumb
+                    switch thumb {
+                    case .expanded?:
+                        chrome.setExpandedFromPreview(true)
+                    case .steady?:
+                        chrome.setExpandedFromPreview(false)
+                    case nil:
+                        // 松手:把拖动中攒下的那对值提交出去,然后交还给 settings 当真源。
+                        chrome.setExpandedFromPreview(false)
+                        if draggingSteady != nil || draggingExpanded != nil {
+                            Self.commitWidths(steady: draggingSteady, expanded: draggingExpanded)
+                            draggingSteady = nil
+                            draggingExpanded = nil
+                        }
                     }
-                }
-            )
-            .controlSize(.small)
-            .tint(.white)
+                })
             .frame(width: Self.widthBarSliderWidth)
-            // Slider 自带键盘/VoiceOver 调节(实测 AX 一次增减走区间的 10%,不是 widthStep),
-            // 所以这里只补中文标签和一个**带单位**的值 —— 不显式给 value 的话 VoiceOver 会把
-            // 它读成百分比。显式给 accessibilityValue **不会**摘掉内建的可调节动作(同日实测)。
-            .accessibilityLabel(L10n.t("灵动岛宽度"))
-            .accessibilityValue(widthValueText)
             Text(widthValueText)
                 .font(.system(size: 11, weight: .medium))
                 .monospacedDigit()
-                .frame(width: 44, alignment: .trailing)
-                // 读数是滑杆的镜像、不是第二个可读元素:都进无障碍树的话 VoiceOver 会把同一个
-                // 值读两遍。
+                .frame(width: 72, alignment: .trailing)
+                // 读数是滑块的镜像、不是第二个可读元素:都进无障碍树的话 VoiceOver 会把同一个
+                // 值读两遍(两只滑块各自带着 accessibilityValue)。
                 .accessibilityHidden(true)
         }
         .foregroundStyle(.white)
@@ -925,81 +1015,27 @@ struct NotchEditorStage: View {
         .shadow(color: .black.opacity(0.35), radius: 5, y: 1)
     }
 
-    /// "360pt"这种带单位的读数。滑杆旁边显示的和 VoiceOver 读的是同一个字符串。
+    /// "360pt" / "360–460pt" 这种带单位的读数:稳态宽 = 展开宽时只报一个数(展开不加宽),否则
+    /// 报「稳态–展开」两个。
     ///
-    /// ⚠️ 报的是**卡片真实宽度**(`cardWidth`,已经过"两只耳朵放得下按钮"的下限),不是设定值
-    /// (2026-08-31 用户要求:「这里的宽度帮我改为带上耳朵的宽度,这样就没有歧义了」)。
-    /// 此前报设定值、再由 caption 补一句「已被两侧耳朵撑到 NNNpt」—— 同一件事两个数字、还得
-    /// 配一句话解释它们的关系。现在数字跟眼前这张卡逐像素对得上,那句 caption 也就删了。
+    /// ⚠️ 报的是**卡片真实宽度**(`steadyCardWidth` / `expandedCardWidth`,已经过"两只耳朵放得下
+    /// 按钮"的下限和「展开 ≥ 稳态」),不是设定值(2026-08-31 用户要求:「这里的宽度帮我改为带上
+    /// 耳朵的宽度,这样就没有歧义了」)。此前报设定值、再由 caption 补一句「已被两侧耳朵撑到
+    /// NNNpt」—— 同一件事两个数字、还得配一句话解释它们的关系。现在数字跟眼前这张卡逐像素对
+    /// 得上,那句 caption 也就删了。
     ///
     /// (2026-08-31 当天稍后:滑杆下界抬到耳朵下限之后,"拖了数字不动"那截死区已经不存在了 ——
     ///  见 usableWidthRange。这条口径仍然留着:它让**历史上落盘过的**、低于下限的旧值也显示得对。)
     ///
-    /// ⚠️ 走 `cardWidth` 而不是 `settings.notchContentWidth`:后者在拖动期间不更新(落盘推迟
-    /// 到松手),读数会冻住而卡片却在跟着变宽,看着像坏了。`cardWidth` 读的是 `baseWidth`,
-    /// 拖动中跟手。
+    /// ⚠️ 走真实宽而不是 `settings.notch*Width`:后者在拖动期间不更新(落盘推迟到松手),读数会
+    /// 冻住而卡片却在跟着变宽,看着像坏了。真实宽读的是 `baseWidth` / `expandedBaseWidth`,拖动中跟手。
     private var widthValueText: String {
-        String(format: L10n.t("%@pt"), "\(Int(cardWidth))")
-    }
-
-    /// 调整条读写的那个绑定,也是编辑台里**唯一**的宽度写入路径。
-    ///
-    /// ⚠️ 提交只有 `onEditingChanged(false)` 这**一条**出口,而这够用 —— 别为"键盘 / VoiceOver
-    /// 调节会不会漏掉这条出口"再加一条兜底写入路径(2026-08-31 离屏实测排除过):
-    ///   - 这版 macOS 的 SwiftUI `Slider` **不是 NSSlider 包出来的** —— dump `NSHostingView`
-    ///     子树只有 `KeyViewProxy` / `_FocusRingView`,递归找不到任何 `NSSlider`。所以"editing
-    ///     边沿只由 AppKit 的鼠标 tracking 产生"这个前提在这里根本不成立,edge 是 SwiftUI 自己发的。
-    ///   - 对它发 `AXIncrement` / `AXDecrement`(VoiceOver 上下调节走的就是这两个 action)实测
-    ///     每一次都是完整的 `EDITING(true) → set → EDITING(false)`,`commitWidth` 照常执行、
-    ///     `draggingWidth` 照常清回 nil。四个独立探针(裸 Slider / 照抄本文件这套 binding 的复刻件)
-    ///     结论一致。
-    /// 多加一条写入路径,比它想防的那个并不存在的问题更贵。
-    /// (顺带一条实测订正:AX 的一次增减走的是**区间的 10%**,200…500 上约 30pt,不是 `widthStep`
-    ///  的 2pt —— 值仍然过 `snap()` 夹取量化并正常提交,只是别把"一次一个 step"当准确描述。)
-    private var widthBinding: Binding<Double> {
-        Binding(
-            get: { baseWidth },
-            // 拖动中**只**改本地 @State,理由见 draggingWidth 的注释。落盘与通知真窗口都
-            // 推迟到 onEditingChanged 收到 false 那一下(commitWidth)。
-            set: { draggingWidth = snapped($0) })
-    }
-
-    /// 松手时一次性提交。两条守卫一条都不能少:
-    ///   ① **相等守卫** —— `@Published` 是 willSet 语义,等值赋值照样广播 objectWillChange,
-    ///      `didSet` 还会多写一次 UserDefaults。
-    ///   ② **`if settings.notchOverlayEnabled` 守卫** —— `NotchLyricsWindowController.shared`
-    ///      是 `static let`,光是读一下就会执行 init() 把整扇窗建出来(NSPanel + NSHostingView
-    ///      + 一串 Combine 订阅和通知观察者),灵动岛关着的用户只要碰一下这根滑杆就会凭空多
-    ///      一套(见那个文件顶部那条不变量、以及 docs/features/05-notch.md 设计决策第 1 条)。
-    ///      ⚠️ 改版前设置页那根滑杆和屏幕下拉**都是裸调的**,这条守卫是这次补上的;菜单栏
-    ///      快捷面板里的同一根滑杆本来就带着它。
-    ///      ⚠️ 守卫跳过这一句之后,**必须**有人在"窗口重新打开"那一刻把新值应用上,否则
-    ///      "关着改宽度/换屏 → 再打开"会按旧几何冒出来。承担这件事的是
-    ///      `NotchLyricsWindowController.setVisible(_:)` 的 visible 分支里那句
-    ///      `recomputeGeometry(animate: false)`(2026-08-31 补,原来它只 orderFront)——
-    ///      别把那一句当成可有可无的清理删掉,这条守卫的正确性挂在它上面。
-    private func commitWidth(_ raw: Double) {
-        let next = snapped(raw)
-        guard next != settings.notchContentWidth else { return }
-        settings.notchContentWidth = next
-        if settings.notchOverlayEnabled {
-            NotchLyricsWindowController.shared.applyContentWidthSetting()
+        let steady = Int(steadyCardWidth)
+        let expanded = Int(expandedCardWidth)
+        if expanded == steady {
+            return String(format: L10n.t("%@pt"), "\(steady)")
         }
-    }
-
-    /// 夹进**能拖的**区间并量化到 widthStep。**clamp 和量化只有这一处**,别在调用点再抄一遍
-    /// 字面量区间 —— 区间是跨文件的契约(见 widthRange / usableWidthRange)。
-    ///
-    /// 夹的是 `usableWidthRange`(下界含耳朵下限)而不是存储层的 `widthRange`:滑杆本身就只到
-    /// 那儿,再往下夹只会产生一个"能落盘、但渲染出来是另一个数"的值,正是这次要消掉的歧义。
-    ///
-    /// 先夹后量化的顺序是安全的:上界 500 是 widthStep 的整数倍,下界在 `usableWidthRange` 里
-    /// 已经**向上**取整到倍数(见那条护栏 ①),两头量化都不会把值顶出界。
-    private func snapped(_ raw: Double) -> Double {
-        let range = Self.usableWidthRange(notchWidth: chrome.notchWidth,
-                                          contentTopInset: chrome.contentTopInset)
-        let clamped = min(max(raw, range.lowerBound), range.upperBound)
-        return (clamped / Self.widthStep).rounded() * Self.widthStep
+        return String(format: L10n.t("%@–%@pt"), "\(steady)", "\(expanded)")
     }
 
     // MARK: - 底部说明
@@ -1466,7 +1502,7 @@ struct NotchScreenSettingsRows: View {
     }
 
     /// ⚠️ `if settings.notchOverlayEnabled` 守卫不能省 —— 理由同
-    /// `NotchEditorStage.commitWidth` 那条(`.shared` 是 `static let`,读一下就建整扇窗)。
+    /// `NotchEditorStage.commitWidths` 那条(`.shared` 是 `static let`,读一下就建整扇窗)。
     /// 改版前这一句是裸调的。
     private func apply(_ tag: String) {
         let allScreens = (tag == Self.allScreensTag)

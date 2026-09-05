@@ -307,16 +307,24 @@ struct PanelQuickSettings: View {
             // 用 usable 而不是存储层的 `widthRange`:下界含这台机器的"耳朵下限",低于它的值
             // 拖了卡片也不动(2026-08-31)。step 仍然是 10:这根是兜底通路、旁边没有实时预览,
             // 粗一点反而好落值(编辑台那根是 2)。
+            // 写回走 `NotchEditorStage.commitWidths`(2026-09-06 起三个入口唯一的落盘路径):
+            // `notchOverlayEnabled` 守卫、相等守卫、「展开 ≥ 稳态」归一都在里面。
             sliderRow(L10n.t("宽度"), value: Binding(
                 get: { settings.notchContentWidth },
-                set: { newValue in
-                    settings.notchContentWidth = newValue
-                    if settings.notchOverlayEnabled {
-                        NotchLyricsWindowController.shared.applyContentWidthSetting()
-                    }
-                }
+                set: { NotchEditorStage.commitWidths(steady: $0) }
             ), range: NotchEditorStage.usableWidthRangeOnCurrentScreen, step: 10,
                displayValue: { NotchEditorStage.effectiveWidth(baseWidth: $0) })
+            // hover 展开后卡片撑到的宽度(2026-09-06)。区间下界 = 稳态真实宽(展开不许比稳态窄),
+            // 读数是真实展开宽 —— 跟编辑台双滑块读数「稳态–展开」的右半边、抽屉「展开宽度」行
+            // 同一个数。
+            sliderRow(L10n.t("展开宽度"), value: Binding(
+                get: { settings.notchExpandedContentWidth },
+                set: { NotchEditorStage.commitWidths(expanded: $0) }
+            ), range: NotchEditorStage.usableExpandedWidthRangeOnCurrentScreen, step: 10,
+               displayValue: {
+                   NotchEditorStage.effectiveExpandedWidth(steadyBase: settings.notchContentWidth,
+                                                           expandedBase: $0)
+               })
             // 2026-09-03 补。⚠️ 这里**不跟着 `notchShowLyrics` 显隐**,跟设置页那一行不同:
             // 设置页里「显示歌词」就在它上一行,关掉时这一行消失,原因看得见;而这块面板里
             // 没有「显示歌词」这一项,跟着藏就成了"凭空少一行、看不出为什么"。关掉歌词的人

@@ -922,10 +922,15 @@ func runSourceContractTests() {
             expectEqual(notchConsts.isEmpty || menuBarConsts.isEmpty, false,
                         "重置覆盖闸: 扫到了两族默认值常量(灵动岛 \(notchConsts.count) 个 / 菜单栏 \(menuBarConsts.count) 个)")
 
-            // 明确豁免名单。**目前为空**:2026-09-03 实测 30 个常量 0 例外。
-            // 将来真有一项"有常量但故意不进重置"时加到这里,并在旁边写清楚理由 ——
-            // 空着比写一条含糊的例外更有价值,它逼着下一个人去想清楚。
-            let exempt: Set<String> = []
+            // 明确豁免名单(2026-09-03 实测 30 个常量 0 例外;2026-09-06 起一项)。
+            // 真有一项"有常量但故意不进重置"才加到这里,并在旁边写清楚理由 ——
+            // 名单短比写一条含糊的例外更有价值,它逼着下一个人去想清楚。
+            //
+            //  - `defaultNotchContentWidth`:灵动岛稳态宽 / 展开宽共用的默认值(2026-09-06 宽度变成一对时
+            //    抽出来的,为了两个键"没存过"时一定相等)。宽度是**结构性尺寸**设置,「重置」按既定取舍
+            //    不碰它(见 AppSettings 那段注释与 05 章「重置」节:不含总开关和宽度),抽屉里那一行的
+            //    副标题也写着「不含宽度和总开关」—— 把它塞进 restoreDefaults() 才是违背文案。
+            let exempt: Set<String> = ["defaultNotchContentWidth"]
 
             expectEqual(notchConsts.filter { !exempt.contains($0) && !notchBody.contains("AppSettings.\($0)") }.sorted(), [],
                         "重置覆盖闸: 灵动岛的默认值常量都在 NotchStyleDefaults.restoreDefaults() 里被赋值(漏了不报错,只表现为'点了重置有一项没变')")

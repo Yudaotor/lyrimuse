@@ -216,6 +216,8 @@ final class AppSettings: ObservableObject {
         static let overlayFontWeight = "np:overlayFontWeight"
         static let overlayWidth = "np:overlayWidth"
         static let notchContentWidth = "np:notchContentWidth"
+        // 灵动岛 hover 展开后的宽度(2026-09-06,上限;`notchContentWidth` 是下限)。np: 前缀同上,跟稳态宽一起迁移。
+        static let notchExpandedContentWidth = "np:notchExpandedContentWidth"
         static let foregroundColorHex = "np:foregroundColorHex"
         static let backgroundColorHex = "np:backgroundColorHex"
         // 悬浮歌词背景毛玻璃(2026-09-02)。np: 前缀 = 随配置导出/搬家走(这是偏好,不是机器状态)。
@@ -325,6 +327,9 @@ final class AppSettings: ObservableObject {
     // (`notchExpandedShowsArtwork` 就在本次改动的前几轮从 true 改成过 false),两处
     // 分别硬编码会有其中一处漏改、"点了重置却恢复不出真正默认值"的风险。
     static let defaultNotchCardStyle = NotchCardStyle.coverArt
+    // 灵动岛稳态宽 / 展开宽共用的默认值(2026-09-06 起两个键):写成一份是为了保证"没存过"的
+    // 新装机器上 hover 不会莫名多长一截 —— 两个字面量分开写,改一个漏一个就是这种事故。
+    static let defaultNotchContentWidth: Double = 360
     static let defaultNotchAllScreens = false
     static let defaultNotchScreenID = ""
     static let defaultNotchLeftEar = NotchEarModule.title
@@ -1004,6 +1009,15 @@ final class AppSettings: ObservableObject {
     @Published var notchContentWidth: Double {
         didSet { defaults.set(notchContentWidth, forKey: Keys.notchContentWidth) }
     }
+    // 灵动岛 hover 展开后卡片撑到的宽度(pt,2026-09-06)。跟 `notchContentWidth` 是一对:那个是
+    // 稳态(下限),这个是展开态(上限),不变量「展开 ≥ 稳态」由 `NotchWidthBounds` 在读写两侧
+    // 兜住 —— 这里**不**在 didSet 里互相夹(@Published 的 willSet 时机回读另一个值是旧值,夹出来
+    // 的结果不可信;而且两个值一起写时先后顺序会互相打架)。默认跟稳态默认同为 360:老用户
+    // hover 时一个像素都不多长。同一个模式:只持久化,实时应用由写入口显式调
+    // NotchLyricsWindowController.shared.applyContentWidthSetting()。
+    @Published var notchExpandedContentWidth: Double {
+        didSet { defaults.set(notchExpandedContentWidth, forKey: Keys.notchExpandedContentWidth) }
+    }
     // #RRGGBBAA。默认值统一取 ColorTheme.defaultTheme(现在是"深色卡片":不透明白字 +
     // 七成不透明黑底),不在这里硬编码 —— 这一行以前写的是"默认不透明白色,跟悬浮窗原来
     // 硬编码的 .white 视觉完全一致",而实际默认早就被换成过纯黑字、注释没跟上,导致
@@ -1317,7 +1331,11 @@ final class AppSettings: ObservableObject {
         overlayFontWeight = defaults.string(forKey: Keys.overlayFontWeight)
             .flatMap(OverlayFontWeight.init(rawValue:)) ?? Self.defaultOverlayFontWeight
         overlayWidth = (defaults.object(forKey: Keys.overlayWidth) as? Double) ?? 640
-        notchContentWidth = (defaults.object(forKey: Keys.notchContentWidth) as? Double) ?? 360
+        notchContentWidth = (defaults.object(forKey: Keys.notchContentWidth) as? Double) ?? Self.defaultNotchContentWidth
+        // 没存过就跟稳态**默认值**一样 —— 不是跟用户当前的稳态值一样:那样老用户的展开宽会被
+        // 钉在升级那一刻的稳态值上,以后调稳态就得再调一遍这个;读侧的 max 已经保证展开不会
+        // 比稳态窄,这里只需要一个不会主动加宽的默认。
+        notchExpandedContentWidth = (defaults.object(forKey: Keys.notchExpandedContentWidth) as? Double) ?? Self.defaultNotchContentWidth
         foregroundColorHex = defaults.string(forKey: Keys.foregroundColorHex) ?? ColorTheme.defaultTheme.foregroundColorHex
         backgroundColorHex = defaults.string(forKey: Keys.backgroundColorHex) ?? ColorTheme.defaultTheme.backgroundColorHex
         followsCoverArt = (defaults.object(forKey: Keys.followsCoverArt) as? Bool) ?? Self.defaultFollowsCoverArt

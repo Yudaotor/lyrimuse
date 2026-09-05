@@ -2399,6 +2399,8 @@ struct NotchExpandedPopover: View {
 ///     / `.effectiveWidth(baseWidth:)`(2026-08-31 归 ls-Rocky 维护的静态 API,这里不改
 ///     它们的实现,只是又开一个调用点——跟悬浮歌词抽屉里那根 step 10 的滑杆同一个模式:
 ///     跟画布上那条 step 2 的调整条是同一个值的两个入口)
+///   - 展开宽度 → `expandedWidthRow`(2026-09-06,画布上那根调整条变成双滑块之后右边那只的
+///     兜底通路),同样只调 `NotchEditorStage` 的静态入口;两根的写回都走 `commitWidths`
 ///   - 歌词行(显示歌词 / 显示封面+位置)/ 行为(暂停缩回 + 2026-09-02 并进来的自动隐藏两项)/
 ///     展开态(下一句预览 / 显示封面 / 显示歌名 / 显示歌手 / 显示专辑)→ 各自一个
 ///     `SettingsCardHeader` + `NotchBehaviorItemRows`(「行为」组末尾还接一段 `AutoHideSettingsRows`),
@@ -2432,6 +2434,8 @@ private struct NotchAllSettingsDrawer: View {
                 screenGroup
                 CardDivider()
                 widthRow
+                CardDivider()
+                expandedWidthRow
                 CardDivider()
                 lyricRowGroup
                 CardDivider()
@@ -2556,19 +2560,42 @@ private struct NotchAllSettingsDrawer: View {
                 // (2026-09-02 用户点名「没有意义,不好看」)。⚠️ 这一根的量化栅格必须锚在
                 // 区间下界(SteppedSlider 就是这么做的),因为这里的下界是这台机器的
                 // "耳朵下限"、是个任意数,锚到 0 会让所有落值整体偏移。
+                // 写回走 `NotchEditorStage.commitWidths`(2026-09-06 起三个入口唯一的落盘路径):
+                // 相等守卫、「展开 ≥ 稳态」归一(稳态拖过展开时把展开顶上去)、以及上面③那条
+                // `notchOverlayEnabled` 守卫都在里面,这里不再各写一份。
                 SteppedSlider(value: Binding(
                     get: { NotchEditorStage.effectiveWidth(baseWidth: settings.notchContentWidth) },
-                    set: { newValue in
-                        guard newValue != settings.notchContentWidth else { return }
-                        settings.notchContentWidth = newValue
-                        if settings.notchOverlayEnabled {
-                            NotchLyricsWindowController.shared.applyContentWidthSetting()
-                        }
-                    }
+                    set: { NotchEditorStage.commitWidths(steady: $0) }
                 ), in: NotchEditorStage.usableWidthRangeOnCurrentScreen, step: 10)
                 .frame(width: 150)
                 Text(String(format: L10n.t("%@pt"),
                             "\(Int(NotchEditorStage.effectiveWidth(baseWidth: settings.notchContentWidth)))"))
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+                    .frame(width: 46, alignment: .trailing)
+            }
+        }
+    }
+
+    /// 展开宽度滑杆(2026-09-06)—— 编辑台那根双滑块调整条右边那只滑块的兜底通路。hover 展开后
+    /// 卡片撑到的宽度,不许比上面那根「宽度」(稳态)窄,所以区间下界就是稳态**真实**宽
+    /// (`usableExpandedWidthRangeOnCurrentScreen`),读数是 `effectiveExpandedWidth` 算出来的真实
+    /// 展开宽(= max(稳态真实宽, 展开设定)),跟编辑台读数「稳态–展开」的右半边是同一个数。
+    /// 其余三条(静态入口 / 真实宽读数 / 写回守卫)跟 `widthRow` 逐字同一套。
+    private var expandedWidthRow: some View {
+        SettingsRow(icon: "arrow.left.and.right.square", title: L10n.t("展开宽度")) {
+            HStack(spacing: 8) {
+                SteppedSlider(value: Binding(
+                    get: {
+                        NotchEditorStage.effectiveExpandedWidth(
+                            steadyBase: settings.notchContentWidth,
+                            expandedBase: settings.notchExpandedContentWidth)
+                    },
+                    set: { NotchEditorStage.commitWidths(expanded: $0) }
+                ), in: NotchEditorStage.usableExpandedWidthRangeOnCurrentScreen, step: 10)
+                .frame(width: 150)
+                Text(String(format: L10n.t("%@pt"),
+                            "\(Int(NotchEditorStage.effectiveExpandedWidth(steadyBase: settings.notchContentWidth, expandedBase: settings.notchExpandedContentWidth)))"))
                     .foregroundStyle(.secondary)
                     .monospacedDigit()
                     .frame(width: 46, alignment: .trailing)

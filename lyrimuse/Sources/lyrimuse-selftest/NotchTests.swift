@@ -1,7 +1,7 @@
 import LyrimuseCore
 import Foundation
 
-// 灵动岛:展开区 / 对齐接线 / 音浪包络。
+// 灵动岛:展开区 / 对齐接线 / 音浪包络 / 出场几何 / 稳态宽-展开宽不变量。
 // 由 main.swift 的注册表按组调用;往这一组加断言就写进下面这个函数体里(顺序执行,失败只计
 // 数不中断)。要开新的一组见 main.swift 顶部说明。
 
@@ -206,5 +206,46 @@ func runNotchTests() {
                     "出场: 总时长 0.30s(最晚一条轨)")
         expectEqual(NotchReveal.totalDuration < 0.4, true,
                     "出场: 比退场 0.2s 长但不拖沓")
+    }
+
+    // ---- NotchWidthBounds / NotchWidthRangeDrag:稳态宽 / 展开宽这一对的不变量(2026-09-06) ----
+    //
+    // 用户:「配置宽度的时候可以设置一个上限和一个下限,下限就是正常状态的宽度,上限就是悬浮展开
+    // 时候的宽度」。唯一的不变量是**展开 ≥ 稳态**;这组断言守的是它在读侧(真窗口 / 编辑台)、
+    // 写侧(三个入口落盘前的归一)、以及编辑台双滑块的两条交互规则上都成立。
+    do {
+        typealias B = NotchWidthBounds
+        expectEqual(B.expandedWidth(steady: 360, expandedSetting: 460), 460,
+                    "宽度对: 展开设定比稳态宽就用展开设定")
+        expectEqual(B.expandedWidth(steady: 420, expandedSetting: 360), 420,
+                    "宽度对: 老用户稳态调到过 420、展开还是默认 360 → hover 不变窄也不多长")
+        expectEqual(B.expandedWidth(steady: 360, expandedSetting: 360), 360,
+                    "宽度对: 两值相等 = 展开不加宽(升级前的观感)")
+        expectEqual(B.normalized(steady: 400, expanded: 360) == (400, 400), true,
+                    "宽度对: 稳态拖过展开,落盘前把展开顶上去")
+        expectEqual(B.normalized(steady: 300, expanded: 360) == (300, 360), true,
+                    "宽度对: 稳态往下调不碰展开")
+        expectEqual(B.normalized(steady: 360, expanded: 300) == (360, 360), true,
+                    "宽度对: 展开拖到稳态以下停在稳态")
+
+        typealias D = NotchWidthRangeDrag
+        expectEqual(D.thumb(pressX: 40, steadyX: 30, expandedX: 120, dx: 0), .steady,
+                    "双滑块: 按下点离哪只近就认领哪只(左)")
+        expectEqual(D.thumb(pressX: 110, steadyX: 30, expandedX: 120, dx: -5), .expanded,
+                    "双滑块: 离右边近就认领右边,位移方向不参与")
+        expectEqual(D.thumb(pressX: 80, steadyX: 80, expandedX: 80, dx: 0), nil,
+                    "双滑块: 两只重叠且还没动 → 先不认领")
+        expectEqual(D.thumb(pressX: 80, steadyX: 80, expandedX: 80, dx: 3), .expanded,
+                    "双滑块: 两只重叠往右拖走的是上限")
+        expectEqual(D.thumb(pressX: 80, steadyX: 80, expandedX: 80, dx: -3), .steady,
+                    "双滑块: 两只重叠往左拖走的是下限")
+        expectEqual(D.dragging(.steady, to: 300, steady: 360, expanded: 460) == (300, 460), true,
+                    "双滑块: 拖下限,上限不动")
+        expectEqual(D.dragging(.steady, to: 480, steady: 360, expanded: 460) == (460, 460), true,
+                    "双滑块: 下限拖过上限被挡住,不把上限推走")
+        expectEqual(D.dragging(.expanded, to: 500, steady: 360, expanded: 460) == (360, 500), true,
+                    "双滑块: 拖上限,下限不动")
+        expectEqual(D.dragging(.expanded, to: 340, steady: 360, expanded: 460) == (360, 360), true,
+                    "双滑块: 上限拖过下限被挡住,不把下限推走")
     }
 }

@@ -70,13 +70,20 @@ struct NotchWindowRoot: View {
     /// NotchMetrics.collapsedEarWidth(左耳只放音浪,右耳只放小封面 —— 同日再收窄成
     /// iPhone 灵动岛式极简,见 collapsedRow),
     /// +20 对应 topRow 的水平 padding;min 兜底"刘海比用户设的内容宽度还宽"的怪配置。
-    /// 稳态/展开仍是全宽:歌词行和展开区需要空间。宽度变化跟高度同一条弹簧(cardAnimation)。
+    /// 稳态是全宽(`steadyCardWidth`):歌词行需要空间。宽度变化跟高度同一条弹簧(cardAnimation)。
+    ///
+    /// **展开态自 2026-09-06 起可以比稳态更宽**(`expandedCardWidth`,用户:「把展开状态变为可以
+    /// 更宽 …… 下限就是正常状态的宽度,上限就是悬浮展开时候的宽度」):hover 时卡片横向也撑开,
+    /// 两只耳朵和歌词行都跟着宽(`NotchLyricsView` 按 `proxy.size.width` 反推耳宽,不用改)。
+    /// 命中形状(下面的 `contentShape`)跟着卡片矩形走,所以**触发**展开的区域仍是稳态卡片,而
+    /// 展开后光标停在多撑出来的那两截上仍算在卡片上、维持展开 —— 展开卡片包含稳态卡片,不会
+    /// 出现"进了又出"的抖动。窗口本身常驻展开宽(控制器 recomputeGeometry)。
     private var cardWidth: CGFloat {
         if controller.isCollapsed {
             return min(controller.steadyCardWidth,
                        controller.notchWidth + 2 * NotchMetrics.collapsedEarWidth + 20)
         }
-        return controller.steadyCardWidth
+        return controller.isExpanded ? controller.expandedCardWidth : controller.steadyCardWidth
     }
 
     /// 卡片当前高度。收起态只留顶行那一条,稳态多一行歌词(用户关掉「显示歌词」时也不留),

@@ -1,5 +1,5 @@
 # 05. 灵动岛歌词
-> 最后核对:2026-09-03 · 基线:e103532+工作树
+> 最后核对:2026-09-06 · 基线:e82522f+工作树
 
 ## 定位
 
@@ -7,7 +7,7 @@
 
 ## 入口与展示面
 
-- **设置页 → 歌词显示 →「灵动岛」分段**(2026-08-31 起是**编辑台**版式,见下面「编辑台改造」):内容区顶上一块 `NotchEditorStage` —— 一小片屏幕顶端(仿菜单栏条 + 物理刘海 + 桌面壁纸),灵动岛卡片 **1:1** 挂在上边缘,渲染的是与真窗口**同一份** `NotchLyricsView`(通过 `NotchChromeSource` 协议换了个不建窗口的替身 chrome),hover 展开、点播放按钮都真实可用。编辑台顶上是**两行**工具栏,共七个浮层入口(第一行「风格」「屏幕」「左耳」「右耳」,第二行 2026-09-01 加的「歌词行」「行为」「展开态」,按钮上都带当前值摘要),舞台内部卡片正下方一根宽度调整条。编辑台**下面**才是总开关卡(「灵动岛歌词——紧凑地贴着屏幕顶部的刘海显示」)。设置不跟开关联动:灵动岛关着也能先配好。分段顶部**不再有钉住的预览条**(那一层收不到点击事件)。
+- **设置页 → 歌词显示 →「灵动岛」分段**(2026-08-31 起是**编辑台**版式,见下面「编辑台改造」):内容区顶上一块 `NotchEditorStage` —— 一小片屏幕顶端(仿菜单栏条 + 物理刘海 + 桌面壁纸),灵动岛卡片 **1:1** 挂在上边缘,渲染的是与真窗口**同一份** `NotchLyricsView`(通过 `NotchChromeSource` 协议换了个不建窗口的替身 chrome),hover 展开、点播放按钮都真实可用。编辑台顶上是**两行**工具栏,共七个浮层入口(第一行「风格」「屏幕」「左耳」「右耳」,第二行 2026-09-01 加的「歌词行」「行为」「展开态」,按钮上都带当前值摘要),舞台内部卡片正下方一根**双滑块**宽度调整条(左 = 稳态宽、右 = 展开宽,2026-09-06 起,见「宽度 → 展开态可以更宽」)。编辑台**下面**才是总开关卡(「灵动岛歌词——紧凑地贴着屏幕顶部的刘海显示」)。设置不跟开关联动:灵动岛关着也能先配好。分段顶部**不再有钉住的预览条**(那一层收不到点击事件)。
 - **菜单栏状态项 →「快速开关」子菜单 →「显示灵动岛歌词」**。
 - **首次引导页(OnboardingView)** 也有同一个开关。
 - **窗口本体**:`NotchLyricsWindow`(NSPanel),无边框、level 为 `.screenSaver`(高过系统菜单栏,否则贴不进刘海那一条)、跨所有 Space、全屏应用之上可见、外观固定 `.darkAqua`、`hasShadow = false`、不可被用户移动。位置永远是算出来的(贴死屏幕顶边、水平对齐刘海中心),没有"锁定位置"概念,也不持久化位置。
@@ -27,14 +27,14 @@
 
 ### 三种形态:收起 / 稳态 / 展开
 
-窗口本身**常驻最大尺寸**(稳态宽 × 展开态高),形态切换是卡片在这个固定透明窗口里自己变大变小(`NotchWindowRoot`),窗口 frame 只在屏幕几何或宽度设置变化时才动。
+窗口本身**常驻最大尺寸**(**展开宽** × 展开态高,2026-09-06 之前展开宽 ≡ 稳态宽),形态切换是卡片在这个固定透明窗口里自己变大变小(`NotchWindowRoot`),窗口 frame 只在屏幕几何或宽度设置变化时才动。窗口比稳态卡片宽出来的那两截跟下方多出来的高度一样是纯透明区,点击穿透到底下的菜单栏(实测见 `NotchWindowRoot` 文件头)。
 
-- **收起**(`isCollapsed`,计算属性 `(!isPlayingNow || isAdBreakNow) && !isExpanded`,2026-08-19 加入广告维度):卡片只收**高度**——只留顶行那一条(高度 = 刘海高/菜单栏高),歌词行和展开区连同内容整块淡出+向上轻缩(anchor 在顶部,跟卡片同一条弹簧,不是硬切)。**宽度不变**:顶行的两只"耳朵"分居刘海两侧,宽度一缩耳朵就没地方放了。
-  - ⚠️ 代码里多处旧注释(`NotchLyricsWindowController` 文件头、`NotchChromeSource.isCollapsed` 的 doc)仍写着"收起缩到刘海本身大小/兜底胶囊 120pt",这是 2026-08-16 窗口重构前的旧行为;当前真值是 `NotchWindowRoot.cardWidth` 恒为 `steadyCardWidth`。控制器里的 `collapsedCardWidth` 属性仍在计算和发布,但当前工作树**没有任何消费方**(死状态)。
+- **收起**(`isCollapsed`,计算属性 `(!isPlayingNow || isAdBreakNow) && !isExpanded`,2026-08-19 加入广告维度):卡片收**高度**——只留顶行那一条(高度 = 刘海高/菜单栏高),歌词行和展开区连同内容整块淡出+向上轻缩(anchor 在顶部,跟卡片同一条弹簧,不是硬切);**宽度缩到 `min(稳态宽, 刘海宽 + 2 × 34 + 20)`**(`NotchWindowRoot.cardWidth` 的收起分支,2026-08-19 三键搬进展开卡后耳朵只剩封面/音浪,见「顶行」节的 `collapsedRow`)。
+  - ⚠️ 代码里多处旧注释(`NotchLyricsWindowController` 文件头、`NotchChromeSource.isCollapsed` 的 doc)仍写着"收起缩到刘海本身大小/兜底胶囊 120pt",这是 2026-08-16 窗口重构前的旧行为(本节此前也写过一版"收起宽度不变、恒为 steadyCardWidth",2026-09-06 按代码订正)。控制器里的 `collapsedCardWidth` 属性仍在计算和发布,但当前工作树**没有任何消费方**(死状态)。
   - 收起态 hover 上去仍能重新展开出完整内容(含播放按钮,可用来恢复播放)——2026-08-17 把 `isCollapsed` 从"只在 recomputeGeometry 里赋值的存储属性"改成计算属性,修的就是"暂停时鼠标移上去没反应"。
   - **Spotify 广告插播也收起**(2026-08-19 用户拍板"和暂停一样缩回去"):广告期间歌名位显示「广告中」而不是广告物料名(`NotchLyricsView.topRow` 的 displayTitle,MarqueeText id 用显示串以便切进/切出广告时重置跑马灯),歌词行随收起不渲染;hover 仍可展开(控制按钮可切歌跳过广告)。`isAdBreakNow` 由 `$isCurrentTrackAdBreak` 的 sink 写入,同 `isPlayingNow` 的 willSet 坑同一修法:只取 sink 参数值。
 - **稳态**(播放中、没 hover):顶行 + 歌词行(44pt,`NotchMetrics.compactRowHeight`)。
-- **展开**(hover):在下面再长出 40pt(`NotchMetrics.expandedExtraHeight`):下一句歌词预览(有才显示)+ 迷你进度条 + 时间行。
+- **展开**(hover):在下面再长出 40pt(`NotchMetrics.expandedExtraHeight`):下一句歌词预览(有才显示)+ 迷你进度条 + 时间行。**宽度也可以一起撑开**(2026-09-06):卡片从稳态宽长到展开宽(`NotchWindowRoot.cardWidth` 的 `isExpanded` 分支读 `expandedCardWidth`),两只耳朵和歌词行跟着变宽(`NotchLyricsView` 按 `proxy.size.width` 反推耳宽,视图层不用改);默认两宽相等、不撑开。宽度变化跟高度同一条弹簧。**触发**展开的命中区仍是稳态卡片(`contentShape` 跟卡片矩形走),展开后光标停在多撑出来的两截上仍算在卡片上、维持展开 —— 展开卡片包含稳态卡片,不会"进了又出"抖动。详见「宽度 → 展开态可以更宽」。
 - **展开区高度按内容算**（`NotchExpandedMetrics.height(hasLyricPreview:hasScrubber:)`，2026-08-21 用户报「没有歌词的时候这块太大、很多空的地方」）：展开区原来恒高 76pt 且 `alignment: .top`，而三样内容里两样是条件渲染的——下一句歌词预览（没歌词就没有）、迷你进度条（没时长就没有，见 `NotchScrubber` 的两个分支）。两样都缺时里面只剩一排三键，剩下 **41pt 全是底部空白**。现在按段累加：三键+底边距+余量 35（恒有）／预览行 17／进度条 24 → 三样齐仍是 **76，跟改动前逐字相等**（有歌词有时长时布局一点没动），只有预览 52，只有进度条 59，都没有 35。⚠️ 两个入参刻意是**曲目级**信号（这首歌有没有歌词／有没有时长），不是“此刻有没有下一句”——后者会让最后一句唱完时卡片突然矮 17pt、下一首又长回来，肉眼是抽动；代价是“有歌词但此刻恰好没下一句”时那 17pt 是空的，稳定压倒紧凑。**窗口和设置页预览容器仍用 `maxHeight`**：窗口恒按最大形态开（卡片在里面变大变小），跟着内容缩会让后面换到有歌词的歌时卡片被窗口边界硬裁。卡片高度（`NotchWindowRoot.cardHeight`）和展开区自己的定高**走同一个函数、同一组入参**，两处各自判断必然漂，而漂的表现是底部多一条空隙或最下面那排三键被裁掉。
 
 形态切换动画(`NotchWindowRoot.cardAnimation`)分三条弹簧:收起 0.45s 临界阻尼(不回弹);hover 展开 `interactiveSpring(0.38, 0.8)`(跟手);其余(开始播放弹出等)`spring(0.42, 0.8)`。系统开了"减弱动态效果"(reduceMotion)时全部直接跳变。已知名不副实的一档:"hover 移开"实际落在 0.42 那条而不是 interactiveSpring(`.animation(_:value:)` 用变化后的新状态求值),差 0.04s、肉眼不可辨,刻意没为它加状态。**出场动画（2026-09-03，见 §显示/隐藏 与决策 #19）**：卡片「从无到有」露面时由 `NotchWindowRoot` 的 keyframeAnimator 播一遍「从刘海撑开」——`NotchRevealShape` 裁剪区从真刘海宽 / 顶行高起，横向 0.20s 撑到全宽，纵向按住 0.06s 后 0.24s 长到全高，内容 0.10s 后 0.16s 淡入，总 0.30s（`NotchReveal`，LyrimuseCore）；只裁剪不缩放，reduceMotion 不播。
@@ -247,7 +247,7 @@
 
 ### 宽度
 
-固定宽度,不随歌词长短变化(超长歌词靠跑马灯,不靠加宽)。用户设定值 `notchContentWidth`(默认 360),实际宽度 = `max(设定值, 耳朵下限)`(`contentWidth(baseWidth:notchWidth:leftEar:rightEar:)`)。
+固定宽度,不随歌词长短变化(超长歌词靠跑马灯,不靠加宽)。**2026-09-06 起宽度是一对**:稳态宽 `notchContentWidth`(默认 360,下限)和展开宽 `notchExpandedContentWidth`(默认 360,上限),见下面「展开态可以更宽」;本节下文说的"宽度 / 设定值 / 滑杆下界"若不特别指明,都是**稳态宽**那一份。稳态实际宽度 = `max(设定值, 耳朵下限)`(`contentWidth(baseWidth:notchWidth:leftEar:rightEar:)`)。
 
 **耳朵下限 = `notchWidth + 单只耳朵最小宽 × 2 + 10 × 2`,而"单只耳朵最小宽"跟着左右耳配的是什么模块走**(2026-08-31 第二轮,用户:「目前宽度最小值不应该是 340 吧,我看依旧左右耳占用了很大空间;可以最小值再小一些,支持调到更小」)。在此之前它是一个写死的 `minEarWidth = 70` —— 那是耳朵还写死"左歌名 / 右三个播放键"时按最坏情况定的常量,耳朵改成八选一之后就成了一刀切:两只耳朵都配「不显示」时,下界照样按"放得下三个播放键"算。
 
@@ -290,7 +290,23 @@
 
 **两个宽度入口的读数一律报「带耳朵的真实宽度」,不报设定值**(2026-08-31 用户要求「这里的宽度帮我改为带上耳朵的宽度,这样就没有歧义了」):编辑台调整条走 `cardWidth`,菜单栏快捷面板走 `NotchEditorStage.effectiveWidth(baseWidth:)`(同一条公式,刘海宽度现读屏幕的 static 版本)。此前编辑台报设定值、再由 caption 补一句「已被两侧耳朵撑到 NNNpt」——同一件事两个数字,还得配一句话解释它们的关系;现在数字跟眼前那张卡逐像素对得上,那句 caption 也删了。代价是拖进下限区间时数字不动,而这正是**正确**的反馈:卡片也没动,两边一致地在说"到底了"。
 
-设置页/快捷面板改完显式调 `applyContentWidthSetting()` 立刻生效;编辑台**拖动中只改本地 `@State`(`draggingWidth`)、松手才落盘**,理由同悬浮歌词编辑台:每格都写 `@Published` + UserDefaults + 全量几何重算,而编辑台里跑的是真 `NotchLyricsView`,一帧塞不下。
+设置页/快捷面板改完显式调 `applyContentWidthSetting()` 立刻生效(2026-09-06 起三个入口统一经 `NotchEditorStage.commitWidths`,见下);编辑台**拖动中只改本地 `@State`(`draggingSteady` / `draggingExpanded`)、松手才落盘**,理由同悬浮歌词编辑台:每格都写 `@Published` + UserDefaults + 全量几何重算,而编辑台里跑的是真 `NotchLyricsView`,一帧塞不下。
+
+#### 展开态可以更宽(2026-09-06)
+
+用户原话:「把展开状态变为可以更宽,也就是配置宽度的时候可以设置一个上限和一个下限,下限就是正常状态的宽度,上限就是悬浮展开时候的宽度」。
+
+- **模型**:两个键。`notchContentWidth`(稳态宽,下限,老用户一直在调的那个)+ 新增 `notchExpandedContentWidth`(展开宽,上限)。两者**唯一**的不变量是**展开 ≥ 稳态** —— hover 是"多给你看一点",不该反过来把卡片挤窄。算术全部在 `NotchWidthBounds`(LyrimuseCore,selftest 钉着):
+  - 读侧(真窗口 `recomputeGeometry` 与编辑台 `expandedCardWidth`):展开真实宽 = `max(稳态真实宽, 展开设定)`。稳态已过耳朵下限,展开不必再算一遍。
+  - 写侧(`NotchEditorStage.commitWidths(steady:expanded:)`,三个入口**唯一**落盘路径):落盘前 `normalized` 成 `展开 = max(稳态, 展开)` —— 单滑块入口把稳态拖过展开,展开被顶上去;展开拖到稳态以下,停在稳态。**先写展开、后写稳态**(两个 `@Published` 各派发一次,镜像管理器 combineLatest 在第一次派发时另一个值还是旧的,先抬展开就不制造一帧"展开 < 稳态"的落盘状态);相等守卫与 `notchOverlayEnabled` 守卫都在这一处,调用点不再各写一份。
+  - 默认值:两键共用 `AppSettings.defaultNotchContentWidth = 360`(一份常量,防止分开写漏改一个)。展开键**没存过**就落默认 360、**不是**落到用户当前的稳态值 —— 否则老用户的展开宽会被钉在升级那一刻的稳态上。老用户把稳态调到过 420 的话 `max(420, 360) = 420`,hover 一个像素都不多长,观感跟改动前逐字相同。
+  - 「重置」不碰它(跟稳态宽同一个取舍:结构性尺寸设置)。selftest「重置覆盖闸」为此把 `defaultNotchContentWidth` 列进豁免名单(该名单此前为空,豁免理由写在名单旁)。
+- **窗口**:常驻**展开宽** × 展开态高(`NSSize(width: expandedCardWidth, …)`),稳态卡片居中挂在里面,两侧各 `(展开宽 − 稳态宽) / 2` 的透明区。实测(2026-09-06,稳态 360 / 展开 460):check-windows 报窗口 460×208、中心不变;截窗像素采样顶行不透明列 100…819 px(2x)= 360.0pt,左右透明边各 50.0pt。副本(`NotchMirrorManager`)订阅两个键,任一变都 `syncAll`。
+- **卡片**:`NotchWindowRoot.cardWidth` 三分支 —— 收起 `min(稳态, 刘海+88)` / 展开 `expandedCardWidth` / 稳态 `steadyCardWidth`;`NotchLyricsView` 不感知这件事(耳宽从 `proxy.size.width` 反推)。
+- **编辑台**:舞台里那根调整条从单 `Slider` 换成**双滑块** `RangeSlider`(`UI/RangeSlider.swift`,自绘;SwiftUI 没有原生双滑块,两根单滑块叠着放会把"同一根轨道的两个端点 = 一个区间"这层意思丢掉)。两只滑块共用 `usableWidthRange`(下界 = 耳朵下限),量化 `SteppedSlider.snap` step 2、不画刻度。交互规则是纯函数 `NotchWidthRangeDrag`(Core,selftest):①按下离哪只近拖哪只,两只重叠时看第一段位移方向(往右 = 上限、往左 = 下限,没动先不认领);②被拖的那只**不越过**另一只 —— 停在对面的值上、不推着走(推走会让"调上限"顺手改掉用户早就调好的稳态宽)。点在轨道空处 = 把较近那只拖过来(同原生 Slider)。**拖哪只滑块,卡片就按哪种形态画**:按住展开那只时 `chrome.setExpandedFromPreview(true)`(卡片变宽也变高,就是 hover 时的样子),松手复原;不这么做拖上限时鼠标在滑杆上、卡片没被 hover,那只滑块改的宽度在画布上看不见。读数「360pt」(两宽相等)/「360–460pt」(`%@–%@pt`),报**真实**宽(经下限与 `max`),不报设定值 —— 口径同 2026-08-31。VoiceOver:两只滑块各是一个可调节元素(`灵动岛宽度` / `灵动岛展开宽度`,一次增减 5 × step = 10pt),读数文本对无障碍隐藏,免得同一个值读两遍。
+- **两个兜底入口**各多一根「展开宽度」单滑块(step 10):「全部设置」抽屉 `expandedWidthRow`、菜单栏快捷面板 `.notch` 段。区间 `usableExpandedWidthRange(steadyWidth:)`:下界 = 稳态**真实**宽(向上取整到 step、不越过 `500 − step`,稳态拉满时不给 Slider 零长区间),上界 500;读数 `effectiveExpandedWidth(steadyBase:expandedBase:)`。稳态那根「宽度」的写回也改走 `commitWidths(steady:)`,拖过展开时展开跟着上去。
+- **区间上限仍是 500**(两只滑块同一个 `widthRange`):稳态默认 360 → 展开最多 +140pt。抬上限就要连着补编辑台的溢出渐隐带(文件头那条⚠️),这次没动。
+- **未验证的一点(2026-09-06 写入时)**:hover 撑宽的实机效果没有截到图 —— 截窗只能拍稳态,让卡片展开需要移动指针,而本仓禁止脚本驱动界面做验证;这条路径的判据只有 `NotchWindowRoot.cardWidth` 那一句分支 + Core 的 selftest。以用户目验为准。
 
 ### 显示在哪块屏幕
 
@@ -342,9 +358,11 @@
 | 歌词显示 → 灵动岛 → 工具栏「歌词行」浮层 | 显示歌词 | `notchShowLyrics`(默认 开) | 见「显示歌词」节 |
 | 歌词显示 → 灵动岛 → 工具栏「歌词行」浮层 | 对齐方式 | `notchLyricsAlignment`(`LyricsRestingAlignment`,默认 左对齐) | 只在「显示歌词」开着时出现;只对**装得下**的短句有效(长句横向滚动、没有空位);主歌词行和展开态「下一句」预览都受它管。跟菜单栏共用类型与分段控件,见「歌词行」节 |
 | 歌词显示 → 灵动岛 → 工具栏「行为」浮层 | 暂停缩回 | `notchCollapsesWhenPaused`(默认 开) | 见「三种形态」节 |
-| 歌词显示 → 灵动岛 → 舞台里的调整条 | 宽度 | `notchContentWidth`(默认 360,200–500) | 卡片/窗口固定宽度;下限跟**左右耳配了什么模块**走,见「宽度」节 |
+| 歌词显示 → 灵动岛 → 舞台里的双滑块调整条(左滑块) | 宽度(稳态) | `notchContentWidth`(默认 360,200–500) | 没 hover 时卡片的固定宽度;下限跟**左右耳配了什么模块**走,见「宽度」节 |
+| 歌词显示 → 灵动岛 → 舞台里的双滑块调整条(右滑块) | 展开宽度 | `notchExpandedContentWidth`(默认 360,≥ 稳态,上限 500) | hover 展开后卡片撑到的宽度,也是窗口常驻宽度;不变量「展开 ≥ 稳态」(`NotchWidthBounds`),两值相等 = 展开不加宽;「重置」不碰;见「宽度 → 展开态可以更宽」 |
 | 歌词显示 → 灵动岛 → 工具栏「屏幕」浮层 | 显示在哪块屏幕 | `notchScreenID` + `notchAllScreens` | 自动/所有屏幕/指定屏;「所有屏幕」触发副本管理 |
-| 菜单栏面板 →「更多设置…」→ 灵动岛 | 风格 / 宽度 | 同上 | 快捷面板里的第二个入口(宽度 step 10) |
+| 菜单栏面板 →「更多设置…」→ 灵动岛 | 风格 / 宽度 / 展开宽度 | 同上 | 快捷面板里的第二个入口(两根宽度滑杆 step 10;「展开宽度」下界 = 稳态真实宽) |
+| 歌词显示 → 灵动岛 →「全部设置」抽屉 | 宽度 / 展开宽度 | 同上 | 键盘 / VoiceOver 兜底通路,两根单滑块 step 10(`widthRow` / `expandedWidthRow`),写回同走 `NotchEditorStage.commitWidths` |
 | 歌词显示 → 悬浮歌词 → 配色 | 跟随封面(前景色) | `followsCoverArt` | **只管桌面悬浮歌词**(2026-08-31 起)。此前它连带管着灵动岛整卡前景取色,而入口全在悬浮歌词那一段、还跟「风格」的「跟随封面」同名不同义;灵动岛那一半已并进 `notchCardStyle` |
 | 歌词显示 → 灵动岛 → 工具栏「行为」浮层(抽屉「行为」组同一份) | 暂停/无播放时隐藏 | `notchHideWhenNotPlaying` | 只对灵动岛生效:暂停时整卡直接缩进刘海消失(不经过收起态)再整窗隐藏(2026-09-02 起,见决策 #17) |
 | 歌词显示 → 灵动岛 → 工具栏「行为」浮层(抽屉「行为」组同一份) | 截屏/录屏时隐藏 | `notchHideDuringScreenCapture` | 只对灵动岛生效:sharingType = .none |
@@ -383,13 +401,15 @@
 | 视图与承载方的契约(真窗口/预览共用) | 同上 — `NotchChromeSource`;协议扩展里是**全仓唯一一份**卡片高度公式 `cardHeight` 与 `showsExpandedLyricPreview` |
 | 窗口控制器(三态/几何/可见性/hover 延迟/屏幕选择) | `lyrimuse/Sources/lyrimuse/UI/NotchLyricsWindowController.swift` — `NotchLyricsWindowController`、`recomputeGeometry`、`geometry(for:)`、`contentWidth(baseWidth:notchWidth:)`、`targetScreen()`、`setVisible`、`setExpandedFromWindow` |
 | 窗口本体(level/collectionBehavior/constrainFrameRect) | `lyrimuse/Sources/lyrimuse/UI/NotchLyricsWindow.swift` — `NotchLyricsWindow` |
-| 窗口内壳(卡片尺寸/弹簧/hover 命中) | `lyrimuse/Sources/lyrimuse/UI/NotchWindowRoot.swift` — `NotchWindowRoot`、`cardAnimation`、`updateHover` |
+| 窗口内壳(卡片尺寸/弹簧/hover 命中) | `lyrimuse/Sources/lyrimuse/UI/NotchWindowRoot.swift` — `NotchWindowRoot`、`cardWidth`(收起/展开/稳态三分支)、`cardAnimation`、`updateHover` |
+| 稳态宽 / 展开宽的不变量与双滑块交互规则(纯函数,有 selftest) | `lyrimuse/Sources/LyrimuseCore/Models/NotchWidthBounds.swift` — `NotchWidthBounds.expandedWidth/normalized`、`NotchWidthRangeDrag.thumb/dragging` |
+| 双滑块区间滑杆(自绘) | `lyrimuse/Sources/lyrimuse/UI/RangeSlider.swift` — `RangeSlider` |
 | 多屏副本管理 | `lyrimuse/Sources/lyrimuse/UI/NotchMirrorManager.swift` — `NotchMirrorManager.start/refresh/syncAll` |
 | 瞬态横幅中心与横幅行 | `lyrimuse/Sources/lyrimuse/UI/NotchTransientCenter.swift` — `NotchTransientCenter`、`NotchTransientRow` |
 | 屏幕身份(跨插拔稳定 UUID) | `lyrimuse/Sources/lyrimuse/UI/ScreenIdentity.swift` — `ScreenIdentity.id(of:)/screen(withID:)/notched` |
 | 强调色管线(HSB 地板 + luma 地板) | `lyrimuse/Sources/LyrimuseCore/Local/LocalPlaybackSource.swift` — `brightenedAccent`、`accentForDarkBackdrop`;`lyrimuse/Sources/lyrimuse/PlaybackCoordinator.swift` — `notchAccentColor` |
 | 播放状态平滑(0.25s 停止宽限) | `lyrimuse/Sources/lyrimuse/PlaybackCoordinator.swift` — `isPlayingSmoothed`、`stopGracePeriod` |
-| 设置页编辑台(工具栏/舞台/仿菜单栏/刘海/宽度条/caption) | `lyrimuse/Sources/lyrimuse/UI/NotchEditorStage.swift` — `NotchEditorStage`、`menuBarStrip`、`notchCutout`、`card`、`widthBar`、`captionText` |
+| 设置页编辑台(工具栏/舞台/仿菜单栏/刘海/宽度条/caption) | `lyrimuse/Sources/lyrimuse/UI/NotchEditorStage.swift` — `NotchEditorStage`、`menuBarStrip`、`notchCutout`、`card`、`widthBar`、`captionText`;宽度的静态入口 `usableWidthRange` / `usableExpandedWidthRange` / `effectiveWidth` / `effectiveExpandedWidth` / `commitWidths`(三个写入口唯一落盘路径) |
 | 设置页替身 chrome | 同上 — `NotchPreviewChrome` |
 | 「风格」/「屏幕」两个浮层与它们的单选行 | 同上 — `NotchStylePopover`/`NotchStyleSettingsRows`、`NotchScreenPopover`/`NotchScreenSettingsRows`、`NotchScreenSummary` |
 | 浮层外壳(与悬浮歌词三个浮层共用) | `lyrimuse/Sources/lyrimuse/Settings/SettingsDesignSystem.swift` — `SettingsPopoverShell` |
@@ -672,3 +692,4 @@
     才是正确状态。
 19. **出场动画「从刘海撑开」只裁剪、不缩放(2026-09-03,用户拍板)**:被参考的做法是横向 clip 撑开 + 纵向 scaleY 0.04→1.06 弹一下、内容延后淡入。这里刻意去掉缩放那一半:`.coverArt` 风格下卡片背景就是封面模糊图,任何整卡缩放都让封面跟着被重新缩放裁切 —— 同日上午用户报「封面平移过来」、回场因此改成瞬时,根因正是 `scaleEffect(0.001→1)`。改成 `NotchRevealShape` 路径裁剪(顶部居中的"挂着的胶囊",宽 / 高按比例长,终态与卡片自己那道 `NotchHangingShape(20)` 重合)+ keyframeAnimator(每条轨 `MoveKeyframe` 先跳到起始态再 `SpringKeyframe` 长满;`initialValue` 是**终态**、trigger 是控制器的 `revealGeneration`,reduceMotion 时 trigger 恒 0 永不播 —— initialValue 若写成起始态,视图第一次出现会永远卡在一条细缝上):内容始终在终态位置,只有可见区域在长,封面不动。起始宽 = 真刘海宽(t=0 整卡藏在物理刘海后面,从两侧撑出耳朵),无刘海屏给 12% 细缝;起始高 = 顶行高,纵向按住 0.06s 再滴下来;内容 0.10s 后淡入;总 0.30s(`NotchReveal`,LyrimuseCore,selftest 10 条)。用 clipShape 不用 mask:mask 要整卡离屏渲染再合成,这扇窗口逐字高亮每帧重绘,常驻多一道离屏就是每帧的税;clipShape 是路径裁剪,终态与既有裁剪重合等于不存在;也不能在动画结束后切到"不裁剪"的另一个分支,分支切换会重建 `NotchLyricsView`、丢掉它的 @State。三种「从无到有」各播一次:冷启动 / 手动打开灵动岛(`orderFrontRegardless` 那一支)、从 `isVanished` 回场,同时发生只加一次计数;**不动的三样**:收起 → 稳态那条 0.42 弹簧(它是尺寸变化不是出场,叠一层裁剪会跟宽高弹簧打架)、hover 展开的 interactiveSpring、退场 0.2s 缩进刘海(用户点过头)。内容透明度经环境值 `notchRevealContentOpacity` 传进 `NotchLyricsView` 的内容 VStack,背景不套 —— 先看到卡片形状长出来、再看到字。
 20. **音浪不做封面 3×3 分区取色的三列渐变(2026-09-04,用户拍板)**。被参考的做法是封面缩到 32×32、按 3×3 区域取主色、局部 0.6 / 全局 0.4 混合后给六根柱分三组竖向渐变。机制上可行:分区取色已经在 `rebakeBlurredArtwork` 的同一趟后台任务里做过一份(歌词窗口背景的 6×6 面积平均),同趟增算 3×3 不需要新触发点,颜色经 `NotchPlayback` 窄代理去重下发即可。不做的理由是收益对不上:① 尺寸——五根条各 1.8pt 宽(Retina 约 3.6px)、最高 16pt,竖向三段渐变在这个高度上看不出,能看出的只有三列横向色差,而参考做法是 6 柱 3px、22 个单位高;② 管线会抹平色差——灵动岛底色恒暗,9 个颜色各自都要过 `brightenedAccent` / `accentForDarkBackdrop` / `accentForCoverArtBackground` 三道,提亮按比例压饱和、往白混,区域色本就相近(人像 + 纯色底的封面占多数),处理后三列更趋同,只有多色封面才看得出;③ 一致性——2026-08-16 起灵动岛全部前景吃同一个强调色(唯一例外是封面小图描边),音浪单独多色会成为这套「一套色」里唯一的异类。若将来推翻:只做「三列各一色」不做竖向渐变,只在「跟随封面」风格启用,Core 放一个「3×3 区域色 + 全局均值 → 三列色」的纯函数进 selftest,先在几张多色封面上量效果再定。
+21. **展开态加宽:两个键、一条不变量、一处落盘(2026-09-06,用户提出)**。用户要的是"宽度区间":下限 = 稳态、上限 = 展开。三个取舍:①存**绝对值**不存"加宽多少"的差值 —— 用户的心智是上下限两个数,编辑台读数也是两个绝对宽;差值模型会让调稳态时展开跟着漂。②不变量只有「展开 ≥ 稳态」,读侧 `max`、写侧 `normalized`,都在 `NotchWidthBounds` 一处,三个写入口共用 `commitWidths` —— 之前"宽度"三处各自写 `settings.notchContentWidth = …` + 守卫 + `applyContentWidthSetting()`,再加一个键就是六份,趁这次收成一处。③编辑台用自绘双滑块而不是两根单滑块:两只滑块不越过对方(停下、不推走 —— 推走会顺手改掉用户早就调好的稳态),重叠时按位移方向认领;拖上限时把预览置成展开态,否则改的东西在画布上看不见。默认两宽相等,老用户升级后 hover 观感逐字不变。窗口常驻展开宽,多出来的两截透明区跟下方一样点击穿透。区间上限沿用 500,没抬(抬了要补舞台的溢出渐隐带)。
