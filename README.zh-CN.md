@@ -18,6 +18,10 @@
 
 Lyrimuse 常驻在菜单栏里，跟着当前播放弹出一个悬浮歌词窗口——Apple Music、QQ 音乐、网易云音乐、酷狗音乐、Spotify，以及浏览器里的网页版 YouTube Music / Spotify，任选几个组合（也可以交给自动识别）——逐字同步、常驻置顶、跨 Space 显示。就是网易云音乐桌面客户端那种"桌面歌词"体验，只不过是原生 macOS 版本。
 
+**从 LyricsX 过来的？** LyricsX 自 2022 年 4 月起再没发过新版本。Lyrimuse 是一个持续维护的开源替代，还额外覆盖 QQ 音乐 / 网易云 / 酷狗和浏览器网页播放器——这里有一份逐项核实过的[与 LyricsX、Lyric Fever、Lyrics Plus 的对比](docs/lyrics-apps-comparison.zh-CN.md)。
+
+**安装：** `brew tap yudaotor/lyrimuse && brew install --cask lyrimuse`（Apple Silicon 与 Intel 都支持；自动清掉一次性的 Gatekeeper 拦截）——或者去 [最新 Release](https://github.com/Yudaotor/lyrimuse/releases/latest) 手动下载，详见[快速开始](#快速开始)。
+
 <table>
 <tr>
 <td align="center" width="33%"><img src="docs/images/app-desktop-lyrics.png" width="260" alt="经典桌面悬浮歌词"><br><sub>经典悬浮窗</sub></td>
@@ -156,6 +160,8 @@ brew install --cask lyrimuse
    两份的区别只在架构：不带后缀的那份是纯 Apple Silicon，`-intel` 那份同时含 Intel 和 Apple Silicon 两套代码。`-intel` 也能在 Apple Silicon 上跑，但没必要——体积大一倍，而且 macOS 27 及以后会因为它含 Intel 代码而提示「需要更新 App」（Apple 要在 macOS 28 移除 Rosetta；App 本身没问题）。
 
    **两种架构都有 App 内自动更新。** 更新源里为同一个版本登记了两条，各自对应一种架构：Apple Silicon 收到不带后缀的那份，Intel 收到 `-intel` 那份，Sparkle 按机器自己挑，你不用管。（v1.4.0 及更早只服务 Apple Silicon，Intel 用户当时得回这个页面手动下。）
+
+   **中国大陆下载加速：** GitHub 直连慢或超时的话，给下载地址加一个公共加速前缀即可，例如把 Releases 页复制出来的链接改成 `https://ghfast.top/https://github.com/Yudaotor/lyrimuse/releases/download/…`。镜像域名可能失效——失效就换一个可用的 gh-proxy 类前缀（用法相同，都是原链接前面加前缀），下载后照常用 `.sha256` 校验。
 2. 第一次打开时 macOS 会拒绝运行——提示"Lyrimuse 已损坏，无法打开"或"来自身份不明的开发者"。用下面任意一种方式解锁一次即可：
 
    - **推荐——终端命令（永远有效）：**
@@ -218,6 +224,12 @@ QQ 音乐/网易云音乐/酷狗音乐/Spotify/自动识别这几个播放源支
 
 **支持 Intel Mac 吗？**
 支持，走单独的 universal 包（见上面方案 B）。**App 内自动更新对 Intel 同样生效**（v1.5.0 起），装好之后跟 Apple Silicon 一样会自己提示新版本。
+
+**浏览器里放的 YouTube Music / Spotify 网页版能出歌词吗？**
+能——在设置里把你常用的浏览器配对一次，网页版 YouTube Music 或 Spotify 就是正经播放器：歌词按页面自己的进度条精确同步（不是估算），配对前还有一键自检告诉你这个浏览器到底能不能被驱动。
+
+**Lyrimuse 和 LyricsX、Lyric Fever 有什么区别？**
+LyricsX（最后一版发布于 2022 年 4 月，支持 macOS 10.11+）覆盖 Apple Music、Spotify 等几个经典播放器；Lyric Fever 专注 Spotify + Apple Music，要求 macOS 15+。Lyrimuse（macOS 14+）额外原生支持 QQ 音乐 / 网易云音乐 / 酷狗，支持浏览器网页播放器，逐行判定的拼音 / 粤拼 / 注音假名，以及 Last.fm / ListenBrainz 打卡加本地听歌统计。逐项核实过的对照表见[对比页](docs/lyrics-apps-comparison.zh-CN.md)。
 
 ## 许可与版权说明
 

@@ -18,6 +18,10 @@
 
 Lyrimuse sits quietly in your menu bar and shows a floating lyrics window that follows whatever's playing — Apple Music, QQ Music, NetEase Cloud Music, Kugou Music, Spotify, or YouTube Music / Spotify Web in a browser; pick any combination, or just let it auto-detect — word by word, in sync, always on top, across every Space. Think of the "desktop lyrics" experience from NetEase Cloud Music, but native to macOS.
 
+**Coming from LyricsX?** LyricsX hasn't shipped a release since April 2022. Lyrimuse is an actively maintained open-source alternative that also covers QQ Music / NetEase / Kugou and web players in a browser — here's a fact-checked [comparison with LyricsX, Lyric Fever and Lyrics Plus](docs/lyrics-apps-comparison.md).
+
+**Install:** `brew tap yudaotor/lyrimuse && brew install --cask lyrimuse` (Apple Silicon and Intel; clears the one-time Gatekeeper flag automatically) — or grab the [latest release](https://github.com/Yudaotor/lyrimuse/releases/latest) and see [Getting Started](#getting-started).
+
 <table>
 <tr>
 <td align="center" width="33%"><img src="docs/images/app-desktop-lyrics.png" width="260" alt="Classic desktop lyrics overlay"><br><sub>Classic floating overlay</sub></td>
@@ -221,6 +225,12 @@ Yes — romanization is judged per line (so a song mixing languages doesn't get 
 
 **Does it support Intel Macs?**
 Yes, via a separate universal build (see Option B above). **The in-app auto-updater covers Intel too** (since v1.5.0) — once installed it prompts for new versions just like on Apple Silicon.
+
+**Can it show lyrics for YouTube Music or Spotify playing in a browser?**
+Yes — pair the browser of your choice once in Settings, and YouTube Music or Spotify Web becomes a first-class player: lyrics sync to the page's own progress bar, not a guess, and a one-click self-test tells you whether the browser can actually be driven before you commit to it.
+
+**How is Lyrimuse different from LyricsX or Lyric Fever?**
+LyricsX (last release: April 2022, macOS 10.11+) covers Apple Music, Spotify and a few classic players; Lyric Fever focuses on Spotify + Apple Music and needs macOS 15+. Lyrimuse (macOS 14+) adds native QQ Music / NetEase Cloud Music / Kugou support, browser web players, per-line pinyin / Cantonese Jyutping / furigana, and Last.fm / ListenBrainz scrobbling with local listening stats. The fact-checked table is in [the comparison page](docs/lyrics-apps-comparison.md).
 
 ## License and Copyright
 

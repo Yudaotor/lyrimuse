@@ -11,6 +11,7 @@ Lyrimuse is a free, open-source (GPL-3.0) macOS menu-bar app. It shows word-by-w
 - [README (繁體中文)](https://github.com/Yudaotor/lyrimuse/blob/main/README.zh-Hant.md): 繁體中文版功能列表、安裝方式、常見問題、疑難排解
 - [Feature specification index](https://github.com/Yudaotor/lyrimuse/blob/main/docs/features/README.md): as-built spec, 15 chapters covering every feature's current behavior, edge cases, and code anchors
 - [How scrobbling works](https://github.com/Yudaotor/lyrimuse/blob/main/docs/scrobbling.md): exactly what gets submitted to Last.fm/ListenBrainz and when ([中文版](https://github.com/Yudaotor/lyrimuse/blob/main/docs/scrobbling.zh-CN.md))
+- [Comparison with LyricsX, Lyric Fever and Lyrics Plus](https://github.com/Yudaotor/lyrimuse/blob/main/docs/lyrics-apps-comparison.md): fact-checked feature/requirements table and honest routing between the four apps ([中文版](https://github.com/Yudaotor/lyrimuse/blob/main/docs/lyrics-apps-comparison.zh-CN.md))
 - [Releases](https://github.com/Yudaotor/lyrimuse/releases): per-version changelogs and downloadable builds (Apple Silicon and Intel)
 
 ## Code

@@ -18,6 +18,10 @@
 
 Lyrimuse 常駐在選單列裡，跟著目前播放彈出一個浮動歌詞視窗——Apple Music、QQ 音樂、網易雲音樂、酷狗音樂、Spotify，以及瀏覽器裡的網頁版 YouTube Music / Spotify，任選幾個組合（也可以交給自動偵測）——逐字同步、常駐最上層、跨 Space 顯示。就是網易雲音樂桌面用戶端那種「桌面歌詞」體驗，只不過是原生 macOS 版本。
 
+**從 LyricsX 過來的？** LyricsX 自 2022 年 4 月起再沒發布過新版本。Lyrimuse 是一個持續維護的開源替代方案，還額外涵蓋 QQ 音樂 / 網易雲 / 酷狗和瀏覽器網頁播放器——這裡有一份逐項查證過的[與 LyricsX、Lyric Fever、Lyrics Plus 的對比](docs/lyrics-apps-comparison.zh-CN.md)（簡體中文）。
+
+**安裝：** `brew tap yudaotor/lyrimuse && brew install --cask lyrimuse`（Apple Silicon 與 Intel 都支援；自動清掉一次性的 Gatekeeper 攔截）——或者到[最新 Release](https://github.com/Yudaotor/lyrimuse/releases/latest) 手動下載，詳見[快速開始](#快速開始)。
+
 <table>
 <tr>
 <td align="center" width="33%"><img src="docs/images/app-desktop-lyrics.png" width="260" alt="經典桌面浮動歌詞"><br><sub>經典浮動視窗</sub></td>
@@ -218,6 +222,12 @@ QQ 音樂／網易雲音樂／酷狗音樂／Spotify／自動偵測這幾個播�
 
 **支援 Intel Mac 嗎？**
 支援，走單獨的 universal 包（見上面方案 B）。**App 內自動更新對 Intel 同樣生效**（v1.5.0 起），裝好之後跟 Apple Silicon 一樣會自己提示新版本。
+
+**瀏覽器裡播放的 YouTube Music / Spotify 網頁版能顯示歌詞嗎？**
+能——在設定裡把你慣用的瀏覽器配對一次，網頁版 YouTube Music 或 Spotify 就是正式的播放器：歌詞按頁面自己的進度列精確同步（不是估算），配對前還有一鍵自我檢測告訴你這個瀏覽器到底能不能被驅動。
+
+**Lyrimuse 和 LyricsX、Lyric Fever 有什麼差別？**
+LyricsX（最後一版發布於 2022 年 4 月，支援 macOS 10.11+）涵蓋 Apple Music、Spotify 等幾個經典播放器；Lyric Fever 專注 Spotify + Apple Music，需要 macOS 15+。Lyrimuse（macOS 14+）額外原生支援 QQ 音樂 / 網易雲音樂 / 酷狗，支援瀏覽器網頁播放器，逐行判定的拼音 / 粵拼 / 注音假名，以及 Last.fm / ListenBrainz 記錄（scrobble）加本機聆聽統計。逐項查證過的對照表見[對比頁](docs/lyrics-apps-comparison.zh-CN.md)（簡體中文）。
 
 ## 授權與版權說明
 
