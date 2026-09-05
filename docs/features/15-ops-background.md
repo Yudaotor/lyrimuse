@@ -237,11 +237,11 @@ CoreAudio 属性监听（不拦音量键不轮询 osascript），系统输出音
     本身没有角标；④ Logger subsystem 两个变体相同，`log show` 要按 `processImagePath` 区分。**协作口径同日改**：AI 会话真机验证一律
     `./build.sh --dev`，正式版只在用户要求「装到正式版」时才 `./build.sh`（AGENTS.md「构建与验证」、CLAUDE.md 第 3 条、verify-ui skill）。
     **2026-09-06 整体回退（用户拍板）**：Dev 模式装上不到一天就撞了三件事——① 用户在 Dev 的设置页恢复了一份配置备份，账号凭据随归档进了
-    `~/.config/lyrimuse-dev`，两个 collector 对同一首歌各 scrobble 一次（Last.fm 上「Tick, Tick, Bang」「I Am You」各两条）；② 同事会话照旧跑
+    `~/.config/lyrimuse-dev`，两个 collector 对同一首歌各 scrobble 一次（Last.fm 上「Tick, Tick, Bang」「I Am You」各两条；重复项只能在 Last.fm 网站上手删——公开 API 没有删除方法，`library.removeScrobble` 09-06 带有效 api_key 实测返回 error 3「Invalid Method」）；② 同事会话照旧跑
     不带 `--dev` 的 `build.sh`，把还没真机验过的改动装进了正式版，隔离形同虚设；③ 用户分不清手里的正式版是哪个二进制、什么时候会被拉起
     （正式 collector 的 companion launch 按可执行名判「在不在跑」，两个变体同名）。用户结论：「做这个 dev 版本出来没有任何收益，反而会导致
     一些问题」，回到「改完直接 `./build.sh` 装正式版」的老模式。**回退范围**：卸掉本机 `Lyrimuse Dev.app`、`com.lyrimuse.collector.dev` job、
-    Dev 偏好域与日志（`~/.config/lyrimuse-dev` 留给用户自己决定，里面有一份带凭据的 `config.json.disabled-*`）；删 `build.sh --dev` /
+    Dev 偏好域与日志（`~/.config/lyrimuse-dev` 09-06 02:20 按用户指示整目录删除，连带里面那份带凭据的 `config.json.disabled-*`）；删 `build.sh --dev` /
     `uninstall.sh --dev` / `scripts/badge-app-icon.swift` / Info.plist 的 `LyrimuseVariant`；`LyrimuseIdentity` 收成一套固定名字（`Resolved`
     保留给 selftest 整体断言）、去掉 `isDev` 与所有按它的门控（Sparkle 照常启动、更新卡恢复、开机启动默认开）；contracts「Dev 构建对齐」块
     删除，identity 组只剩正式版断言；AGENTS.md / CLAUDE.md / verify-ui 与 triage skill 改回。**保留**第一步的路径收口：`LyrimusePaths` /
