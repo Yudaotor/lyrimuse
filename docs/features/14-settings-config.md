@@ -71,13 +71,14 @@
 
 ### 5. 开机启动 / Dock / 更新 / 引导
 
-- **开机启动**（LoginItemManager）：不用 SMAppService，直接写经典 LaunchAgent plist 到 `~/Library/LaunchAgents`（label `me.yudaotor.lyrimuse`），`RunAtLoad=true` **无** KeepAlive（前台 GUI 工具，Cmd-Q 退出后不该被拉活）。指向 build.sh 安装的 `.app` 路径，开发调试路径不写入。
-  - 🔴 **这个开关只准写/删 plist，一行 `launchctl` 都不准有**（2026-09-03，用户报「点一下开机自启动就直接闪退软件」，修了三次才收口）。两个方向各有一个坑，**都不产生 crash report**，所以现象只是「闪退」、完全指不到这个开关：
+- **开机启动**（LoginItemManager）：**系统登录项**（`SMAppService.mainApp`，2026-09-06 起；System Settings → 通用 → 登录项里能看到「Lyrimuse」）。开 = `register()`，关 = `unregister()`，都是进程内 API，不启动也不杀任何进程；`status == .requiresApproval`（用户曾在系统设置里关过它）时只在**用户主动拨开关**那条路上打开系统设置的登录项面板，启动时的自动同步不弹。启动时 `syncAtLaunch`：开关开着就幂等地补一次注册（默认值那次赋值不触发 didSet），并**删掉旧方案留在 `~/Library/LaunchAgents/me.yudaotor.lyrimuse.plist` 的文件**（只删文件、不碰 launchd——本次会话里那个旧 job 若还挂着，它的进程可能就是自己）。卸载脚本删 App 包之前调 `lyrimuse --unregister-login-item`（AppDelegate 认这个参数：注销完就以 `unregister_login_item_helper` 原因退出，不建窗口），否则系统设置里会留一条指向不存在路径的死项。
+  - **为什么从 LaunchAgent plist 改过来**（2026-09-06，灵动岛动画专项量出来的，05 章决策 #25）：launchd 直接 exec 二进制拉起的 App 是 `spawn type = daemon`，launchd 对没写 `ProcessType` 的 job "apply light resource limits"——**主线程 97% 的时间跑在调度优先级 20**（utility 档），Music / Finder 这类正常 App 是 46；plist 加 `ProcessType=Interactive` 只抬到 31，只有经 LaunchServices 起（登录项 / `open`）才是 46（三档都在真机 `ps -M` / System Trace 里实测）。登录项就是 Apple 给"随登录启动的 GUI App"的正道，单实例、优先级、App Nap 策略跟双击打开完全一样。决策 9 里"ad-hoc 签名限制 SMAppService"那条判断按实测订正：ad-hoc 签名、装在 /Applications 的包 `register()` 成功、`sfltool dumpbtm` 里 `Type: app … Disposition: enabled`。**副作用一并处理**：App 由 LaunchServices 起后 launchd 不再替它接管 stdout/stderr，`StandardStreamRedirect.installIfNeeded()` 在 `applicationWillFinishLaunching` 第一步把两个流追加到 `~/Library/Logs/lyrimuse-app.log`（stderr 是终端时不重定向，开发时照常看得到输出）；build.sh 的重启从「launchctl kickstart + LWCR 自愈」改成「bootout 残留的旧 job（若有）→ kill 旧实例 → `open -g`」，开发装机的进程跟用户登录时拿到的是同一种进程。
+  - 🔴 **这个开关不准碰 `launchctl`、不准起子进程**（2026-09-03，用户报「点一下开机自启动就直接闪退软件」，修了三次才收口；当时的机制是 LaunchAgent plist，教训对登录项方案同样成立）。两个方向各有一个坑，**都不产生 crash report**，所以现象只是「闪退」、完全指不到这个开关：
     - **关**：原来是 `launchctl bootout gui/<uid>/me.yudaotor.lyrimuse`。而 **App 本身就是那个 job**（build.sh 装完走 bootstrap + kickstart，开机自启同理）——等于让 launchd 给自己发一记 SIGTERM。日志证据：`osservice<me.yudaotor.lyrimuse> Process exited: domain:signal(2) code:SIGTERM(15)`。
     - **开**：原来是 `launchctl bootstrap` + plist 里的 `RunAtLoad=true`——bootstrap 的一瞬间 launchd **再起一个 lyrimuse**，老进程让位退出。日志证据：老 pid `Process exited: voluntary`（注意**不是**信号），新 pid 在**同一秒**启动。
-    - 修法不是"加个判断"（第二版就是那样，只堵住了关的方向），而是**砍掉整类问题**：plist 文件就是「下次登录启不启动」的全部机制，launchd 登录时从 `~/Library/LaunchAgents` 读它；本次会话里注册与否对用户没有任何可观察差别（无 KeepAlive）。所以 `install()` 只写文件、`uninstall()` 只删文件，`run()` 辅助函数一并删除。
+    - 当时的修法不是"加个判断"（第二版就是那样，只堵住了关的方向），而是**砍掉整类问题**：plist 文件就是「下次登录启不启动」的全部机制，launchd 登录时从 `~/Library/LaunchAgents` 读它；本次会话里注册与否对用户没有任何可观察差别（无 KeepAlive）。所以 `install()` 只写文件、`uninstall()` 只删文件，`run()` 辅助函数一并删除。2026-09-06 换成登录项后同一条纪律换了形状：register/unregister 只改注册状态；旧 plist 只剩"启动时删文件"。
     - ⚠️ **也不要改用 `launchctl disable`**：那是持久化黑名单、跨重装依然生效，以后重新打开开关时 bootstrap 会被静默拒绝，是个更难查的坑。
-    - selftest 有机械闸（`contracts` 组「开关不起进程」）：`LoginItemManager.swift` 的非注释行里不准出现 `launchctl` 或 `Process()`。做过变异测试：塞一行 `_ = "/bin/launchctl"` 当场红。
+    - selftest 有机械闸（`contracts` 组「开关不起进程」）：`LoginItemManager.swift` 的非注释行里不准出现 `launchctl` 或 `Process()`。做过变异测试：塞一行 `_ = "/bin/launchctl"` 当场红。登录项方案下仍然守着。
     - 顺带记一条**排查手法**：这类"闪退"先看 `log show --predicate 'composedMessage CONTAINS "me.yudaotor.lyrimuse" AND composedMessage CONTAINS "exited"'`——`RBSProcessExitStatus` 会直接告诉你是**信号**（被谁杀）还是 **voluntary**（自己退），两者指向完全不同的原因。`~/Library/Logs/DiagnosticReports/` 里没有 `.ips` **不等于**没出事，干净终止本来就不生成。
 - **在 Dock 中显示**：切换 NSApp activationPolicy（accessory ↔ regular）；关闭后只留菜单栏图标。accessory 策略下打开任何窗口都要先 `NSApp.activate` 否则 openWindow 静默无效（多处调用点共用这个坑的修法）。
 - **这个永久偏好关着时，辅助窗口自己借一个 Dock 图标**（`AuxiliaryWindowActivation.swift`，2026-08-04）：「设置」/「歌词管理」/「歌词窗口」/「欢迎使用」四扇窗各自的根视图在 `.onAppear`/`.onDisappear` 里报到，用一个开关计数器 `openCount`——只要还有任意一扇开着就借 `.regular`，全部关掉才还原成 `.accessory`，不跟上面那条永久偏好打架（用户手动开了永久显示的话，这边全程不用管）。目的是这几扇窗打开期间能进 Cmd-Tab、能靠 Dock 图标切回来，不用非得先回菜单栏点。
@@ -177,7 +178,7 @@
 - UserDefaults：`np:*`（AppSettings + 各处 @AppStorage）、`KeyboardShortcuts_*`；另有 `settings:*`（设置页的停留位置：顶层分类 `settings:lastTab`、二级分段 `settings:lyricsSection` / `settings:appearanceSection`）——机器状态，刻意不在配置导出的前缀里。
 - `~/.config/lyrimuse/`（路径唯一口径在 Core `LyrimusePaths`，2026-09-05）：`config.json`（账号凭据，ConfigStore）、`lyrimuse-features.json`、App 偏好镜像 JSON、enrich 缓存等（清单见第 01 章）。损坏文件被用户「放弃」后留在同目录，名为 `<原名>.corrupt-<yyyyMMdd-HHmmss>`（不自动清理；uninstall.sh `--purge` 连目录一起删）。
 - iCloud：`~/Library/Mobile Documents/com~apple~CloudDocs/Lyrimuse/`。
-- LaunchAgent：`~/Library/LaunchAgents/me.yudaotor.lyrimuse.plist`。
+- 登录项：系统 BTM 数据库（`sfltool dumpbtm` 里 `Identifier: 2.me.yudaotor.lyrimuse`），不再有 App 自己的 LaunchAgent plist（旧文件 `~/Library/LaunchAgents/me.yudaotor.lyrimuse.plist` 由 App 启动时删除）。
 
 ## 代码锚点
 
@@ -218,7 +219,7 @@
 6. 机器状态键（引导完成/已问过 iCloud 导入等）绝不随备份走，否则新机器不弹该弹的引导。
 7. accessory 激活策略下 `openWindow` 前必须 `NSApp.activate`，否则静默无效。
 8. 设置页每行一个设置是通用版式；行首 ? 号（HelpButton）只放「界面上看不出来」的信息，重复副标题的一律删。
-9. ad-hoc 签名限制了 iCloud entitlement 与 SMAppService 等官方路径——搬家/启动项都走文件系统方案。
+9. ad-hoc 签名限制了 iCloud entitlement——搬家走文件系统方案。⚠️ 这条原来还写着"与 SMAppService 等官方路径"，2026-09-06 实测**不成立**：ad-hoc 签名、装在 /Applications 的包 `SMAppService.mainApp.register()` 成功并 enabled，开机启动已改走它（§5）。
 10. 改 `Localizable.xcstrings` 后忘跑 generate-strings.py 会被 selftest 拦下（红灯信息直接写明跑哪条命令）。
 11. ⚠️ **备份还没从 iCloud 下载下来时点「导入」，下载根本不会被触发**（2026-08-24 用户在另一台
    机器上报，已修）。表象：提示「这份备份还没从 iCloud 下载下来，等一会儿再试」，但等多久都

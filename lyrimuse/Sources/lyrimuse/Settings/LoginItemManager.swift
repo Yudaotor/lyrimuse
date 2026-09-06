@@ -1,98 +1,109 @@
 import LyrimuseCore
 import Foundation
+import OSLog
+import ServiceManagement
 
-// 装/卸这个 App 自己的 LaunchAgent。不用 SMAppService——打包成 .app 后虽然已经满足
-// SMAppService 的前提(plist 放 Contents/Library/LaunchAgents/),但迁移是另一件事,
-// 继续用已经跑得好好的经典 LaunchAgent plist 方案,不顺带引入新的失败模式。直接写
-// plist 到 ~/Library/LaunchAgents,用户在菜单里点"开机启动"就装上/卸掉,不用自己敲
-// launchctl 命令。
+private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "login-item")
+
+// 「开机启动」= 系统登录项(`SMAppService.mainApp`,macOS 13+),2026-09-06 起。
 //
-// RunAtLoad=true、不写 KeepAlive:跟 collector 那种无人值守后台服务不同,这是用户会主动
-// Cmd-Q 退出的前台 GUI 工具——KeepAlive=true 会导致退出后立刻被拉起,体验是错的。
+// 此前是自己往 ~/Library/LaunchAgents 写一份经典 LaunchAgent plist(RunAtLoad、无 KeepAlive)。
+// 那条路的代价当天才量出来:**由 launchd 直接 exec 二进制拉起的 App,launchd 记为
+// `spawn type = daemon`**,按 launchd.plist(5) 对没写 ProcessType 的 job "apply light resource
+// limits" —— 主线程 97% 的时间跑在调度优先级 **20**(utility 档),Music / Finder 这类正常
+// App 的主线程是 46。灵动岛动画专项的 System Trace 就是这么看出来的(05 章决策 #25)。plist 加
+// `ProcessType = Interactive` 只抬到 31;只有经 LaunchServices 起(登录项 / `open`)才是 46。
+// 登录项正是 Apple 给"随登录启动的 GUI App"的正道:由 LaunchServices 按 App 的身份启动,
+// 单实例、优先级、App Nap 策略都跟双击打开一模一样,System Settings → 通用 → 登录项里也能看到。
+//
+// 14 章决策 9 曾写"ad-hoc 签名限制了 SMAppService 等官方路径",这次实测(ad-hoc 签名、装在
+// /Applications)`register()` 成功、状态 `.enabled`,那条判断按实测订正。
+//
+// ⚠️ 三条纪律沿用 2026-09-03 那次「点一下开机启动就闪退」修了三次收口的教训(selftest
+// contracts ⑯ 守着):这个文件里**不准出现 launchctl、不准起子进程**。SMAppService 是进程内
+// API,register/unregister 只改登录项的注册状态,不启动也不杀任何进程 —— 关掉开关不会像当年
+// `launchctl bootout` 自己那样等于给自己发 SIGTERM。
 @MainActor
 final class LoginItemManager {
     static let shared = LoginItemManager()
 
-    /// = CFBundleIdentifier(按变体派生,唯一口径在 Core LyrimuseIdentity);Dev 构建是 me.yudaotor.lyrimuse.dev,
-    /// 跟正式版的 LaunchAgent 互不覆盖。
-    private let label = LyrimuseIdentity.appLaunchdLabel
-    // LaunchAgent 应该始终指向 build.sh 真正安装的位置(跟 collector 的 bin/collector
-    // 同一个约定),不是当前运行进程的路径——开发时用 swift run/直接跑 .build/debug 的
-    // 那次,进程路径是临时调试目录,不该拿来当"以后开机启动"的目标。优先信任当前正在
-    // 运行的可执行文件自己的路径:只要它就是 build.sh 真正安装的那份(以
-    // /Contents/MacOS/lyrimuse 结尾),说明它自己就在正确的安装位置上,不管仓库实际
-    // clone 到哪里都对;只有路径不匹配(说明是临时调试二进制,没有真正"已安装"的位置)
-    // 才退回下面的默认兜底路径。
-    private var installedExecutablePath: String {
-        if let running = Bundle.main.executablePath, running.hasSuffix("/Contents/MacOS/lyrimuse") {
-            return running
-        }
-        return LyrimusePaths.defaultAppBundleURL.appendingPathComponent("Contents/MacOS/lyrimuse").path
-    }
-    private var plistURL: URL {
-        LyrimusePaths.launchAgentPlist(label: label)
+    /// 旧方案那份 plist 的落点(= CFBundleIdentifier 按变体派生,唯一口径在 Core LyrimuseIdentity)。
+    /// 现在只用来**删**:升级上来的用户机器上它还在,不删的话下次登录 launchd 还会按旧方式再起一份
+    /// (优先级 20 的那份),跟登录项起的那份并存,只靠 AppDelegate.terminateOlderInstances 兜底。
+    private var legacyPlistURL: URL {
+        LyrimusePaths.launchAgentPlist(label: LyrimuseIdentity.appLaunchdLabel)
     }
 
     private init() {}
 
-    func setEnabled(_ enabled: Bool) {
-        if enabled { install() } else { uninstall() }
-    }
+    /// 登录项此刻的真实状态(设置页 / 菜单读 AppSettings 的开关,这里是系统那一侧的真值)。
+    var status: SMAppService.Status { SMAppService.mainApp.status }
 
-    private func install() {
-        // App 的 stdout / stderr 落到自己的文件(2026-09-05,LogFiles.appStderr):此前跟 collector
-        // 共用 lyrimuse.log,两个进程两种格式两种时区混在一个文件里,launchctl 子进程漏出来的报错
-        // 也分不清是谁的。这份 plist 每次启动都重写(AppDelegate),但 launchd 只在 job **bootstrap** 时读它
-        // —— kickstart 不重读(2026-09-05 装机实测:plist 已是新路径,`launchctl print` 里 stderr
-        // 仍是旧文件),所以改动要到下次登录(或 bootout + bootstrap)才生效。诊断导出会把这个
-        // 文件的最后 100 行附上。
-        let logPath = LogFiles.appStderr.path
-        let plist: [String: Any] = [
-            "Label": label,
-            "ProgramArguments": [installedExecutablePath],
-            "RunAtLoad": true,
-            "StandardOutPath": logPath,
-            "StandardErrorPath": logPath,
-        ]
-        do {
-            let data = try PropertyListSerialization.data(fromPropertyList: plist, format: .xml, options: 0)
-            try FileManager.default.createDirectory(at: plistURL.deletingLastPathComponent(), withIntermediateDirectories: true)
-            try data.write(to: plistURL)
-            // ⚠️ **刻意不 bootstrap**(2026-09-03 第二次修「点一下就闪退」)。
-            //
-            // 原来这里有一句 `launchctl bootstrap gui/<uid> <plist>`,而 plist 里
-            // `RunAtLoad = true` —— bootstrap 的一瞬间 launchd 就**再起一个 lyrimuse**。
-            // App 已经在跑着,于是同一个 bundle 出现两个进程,老的那个让位退出:日志里是
-            // `Process exited: voluntary`(不是信号),新进程在**同一秒**启动。用户看到的
-            // 就是窗口凭空消失 = "闪退",而且这次连 SIGTERM 都没有,更难查。
-            //
-            // 而 bootstrap 本来就不需要:plist 落在 ~/Library/LaunchAgents 里,launchd
-            // **下次登录**会自己加载它 —— 那正是"开机启动"这个开关承诺的全部内容。本次
-            // 会话里注册与否对用户没有任何可观察差别(没有 KeepAlive,退出不会被拉起)。
-        } catch {
-            // 装载失败(权限/磁盘问题):个人小工具,静默失败可接受,不额外弹窗打扰——
-            // 用户下次打开菜单时开关状态(读自 AppSettings)会如实反映"没真正装上"。
+    /// 用户拨开关(设置页 / 菜单栏 / 引导页三处都经 AppSettings.launchAtLoginEnabled 的 didSet 到这里)。
+    func setEnabled(_ enabled: Bool) {
+        removeLegacyLaunchAgentPlist()
+        if enabled {
+            register()
+            // 用户在 System Settings 里把这个登录项关过之后,再 register 会停在 requiresApproval ——
+            // 开关看着开了、登录时却不起。这是**用户主动**拨的开关,把系统设置的登录项面板打开让他
+            // 点一下是 Apple 自己样例里的做法;启动时那条自动同步(syncAtLaunch)不做这一步,
+            // 不能每次开机弹一个系统设置页出来。
+            if status == .requiresApproval {
+                logger.notice("login item requires approval in System Settings; opening the pane")
+                SMAppService.openSystemSettingsLoginItems()
+            }
+        } else {
+            unregister()
         }
     }
 
-    /// ⚠️ **这个函数只删文件,不碰 launchctl** —— 2026-09-03 为此修了两次,记清楚原因。
-    ///
-    /// 第一版:无条件 `launchctl bootout gui/<uid>/me.yudaotor.lyrimuse`。而这个 App
-    /// **本身就是那个 job**(build.sh 装完走 bootstrap + kickstart,开机自启同理),于是
-    /// 关掉开关 = 让 launchd 给自己发一记 SIGTERM。退出是干净的
-    /// (`RBSProcessExitStatus| domain:signal(2) code:SIGTERM(15)`)、**不生成 crash
-    /// report**,所以用户只看到"点一下就闪退",完全联想不到是这个开关。
-    ///
-    /// 第二版加了"这个 job 是不是我自己"的判断,只治好了关的方向 —— 开的方向还有一个
-    /// 对称的坑(install() 里的 bootstrap 会再拉起一个实例,见那边)。
-    ///
-    /// 第三版(现在)直接砍掉整类问题:**一个偏好开关不该启动或杀死任何进程**。plist 文件
-    /// 就是"下次登录启不启动"的全部机制 —— 删掉它,launchd 下次登录读不到,就不会启动。
-    /// 本次会话里那个 job 继续挂着注册状态是无害的(没有 KeepAlive,退出后不会被拉起)。
-    ///
-    /// ⚠️ 也**不要**改用 `launchctl disable`:那是持久化黑名单、跨重装依然生效,以后重新
-    /// 打开开关时 bootstrap 会被静默拒绝,是个更难查的坑。
-    private func uninstall() {
-        try? FileManager.default.removeItem(at: plistURL)
+    /// App 启动时调一次:清掉旧方案的 plist;开关开着就幂等地补一次注册(默认值那次赋值不触发
+    /// didSet,不补的话"默认开"只停在偏好里)。用户手动关掉之后这里读到 false,不会偷偷再打开。
+    func syncAtLaunch(enabled: Bool) {
+        removeLegacyLaunchAgentPlist()
+        guard enabled else { return }
+        register()
+    }
+
+    /// 卸载脚本(scripts/uninstall.sh)用:`lyrimuse --unregister-login-item`。App 包一删,登录项会
+    /// 在 System Settings 里留一条指向不存在路径的死项;Apple 的口径是删 App 之前先 unregister。
+    func unregisterForUninstall() {
+        removeLegacyLaunchAgentPlist()
+        unregister()
+    }
+
+    private func register() {
+        do {
+            try SMAppService.mainApp.register()
+            logger.notice("login item registered status=\(String(describing: self.status), privacy: .public)")
+        } catch {
+            // 常见原因:App 不在 LaunchServices 认的位置(开发时直接跑 .build/ 里的二进制),
+            // 或被 MDM 策略禁止。个人小工具,静默失败可接受;状态在日志里,诊断导出带得上。
+            logger.error("login item register failed: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    private func unregister() {
+        do {
+            try SMAppService.mainApp.unregister()
+            logger.notice("login item unregistered")
+        } catch {
+            // 本来就没注册也会抛(kSMErrorJobNotFound),不算错。
+            logger.notice("login item unregister: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    /// 只删文件、不碰 launchd:本次会话里那个 job 若还挂着(开机自启走的就是它),bootout 等于
+    /// 杀自己;它没有 KeepAlive、退出后不复活,留到登出自然消失。plist 一删,下次登录 launchd 就
+    /// 读不到它了 —— 这正是当年"一个偏好开关不该启动或杀死任何进程"那条纪律的全部机制。
+    private func removeLegacyLaunchAgentPlist() {
+        let url = legacyPlistURL
+        guard FileManager.default.fileExists(atPath: url.path) else { return }
+        do {
+            try FileManager.default.removeItem(at: url)
+            logger.notice("removed legacy LaunchAgent plist \(url.lastPathComponent, privacy: .public)")
+        } catch {
+            logger.error("failed to remove legacy LaunchAgent plist: \(error.localizedDescription, privacy: .public)")
+        }
     }
 }

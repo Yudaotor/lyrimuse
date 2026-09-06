@@ -16,10 +16,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // 里注册——早于 launchServices 把已经攒着的 GetURL 事件投递进来,注册晚了会
     // 错过"双击链接直接启动 App"这种冷启动场景(虽然这次的场景是 App 已经在跑,但
     // 仍然照 Apple 官方推荐的时机来,不留隐患)。
+    /// `lyrimuse --unregister-login-item`(scripts/uninstall.sh 在删 App 包之前调):只注销登录项就退出,
+    /// 不建窗口、不起服务。见 LoginItemManager.unregisterForUninstall。
+    private var isUnregisterLoginItemRun: Bool {
+        CommandLine.arguments.contains("--unregister-login-item")
+    }
+
     func applicationWillFinishLaunching(_ notification: Notification) {
+        // stdout / stderr 落到 ~/Library/Logs/lyrimuse-app.log(2026-09-06 起在进程内自己重定向):
+        // 此前靠 LaunchAgent plist 的 StandardErrorPath,而 App 改成登录项后由 LaunchServices 起,
+        // 没有 launchd 替我们接管这两个流。第一件事就做,后面任何一行 Swift 运行时的报错都别漏。
+        StandardStreamRedirect.installIfNeeded()
         // 退出原因日志(2026-09-03,见 AppExit):SIGTERM 要在这里就接住,不然 launchctl kickstart -k
         // 这条最常见的退出路径连 applicationShouldTerminate 都到不了。
         AppExit.installSigtermHandler()
+        if isUnregisterLoginItemRun {
+            LoginItemManager.shared.unregisterForUninstall()
+            AppExit.request(.unregisterLoginItemHelper)
+            return
+        }
         terminateOlderInstances()
         NSAppleEventManager.shared().setEventHandler(
             self,
@@ -111,12 +126,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // 卸载辅助模式:willFinishLaunching 里已经请求退出,这里什么都不建。
+        if isUnregisterLoginItemRun { return }
         // 「开机启动」默认是开的(见 AppSettings.init),但那处赋值不触发 didSet,系统层面
         // 并不会因此注册登录项。这里补一次,让默认值真的算数。SMAppService 的注册是幂等的,
         // 已经注册过再调一次没有副作用;用户手动关掉之后这里读到 false,也不会偷偷再打开。
-        if AppSettings.shared.launchAtLoginEnabled {
-            LoginItemManager.shared.setEnabled(true)
-        }
+        // 顺带清掉旧方案留在 ~/Library/LaunchAgents 的 plist(2026-09-06 起,见 LoginItemManager 头注)。
+        LoginItemManager.shared.syncAtLaunch(enabled: AppSettings.shared.launchAtLoginEnabled)
         // ⚠️ 必须是这个函数的第一件事:AppSettings 在 init 里一次性把所有属性从 UserDefaults
         // 读进内存(下面第一次访问 AppSettings.shared 时发生),恢复晚了就只落了盘、这次启动
         // 的内存态还是空的。见 AppSettingsMirror.restoreIfPristine 的注释。

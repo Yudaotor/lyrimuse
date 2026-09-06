@@ -1029,20 +1029,20 @@ func runSourceContractTests() {
             expectEqual(true, false, "玻璃门控: 读不到 SettingsDesignSystem.swift(路径挪了?)")
         }
 
-        // ⑯ **「开机启动」这个开关只准写/删 plist,不准起任何进程**(2026-09-03,同一个
+        // ⑯ **「开机启动」这个开关不准碰 launchctl、不准起任何进程**(2026-09-03,同一个
         //    「点一下就闪退」修了三次才收口)。
         //
         // 两个方向各有一个坑,而且**都不产生 crash report**,极难查:
         //   · 关:`launchctl bootout gui/<uid>/me.yudaotor.lyrimuse` —— App 本身就是那个
-        //     job(build.sh 装完走 bootstrap+kickstart,开机自启同理),等于让 launchd 给
+        //     job(当年 build.sh 装完走 bootstrap+kickstart,开机自启同理),等于让 launchd 给
         //     自己发一记 SIGTERM(日志里是 signal(2) SIGTERM(15))。
         //   · 开:`launchctl bootstrap` + plist 里的 RunAtLoad=true —— 当场再起一个
         //     lyrimuse,老进程让位退出(日志里是 `Process exited: voluntary`,新进程在
         //     **同一秒**启动)。
         //
-        // 两者都不必要:plist 落在 ~/Library/LaunchAgents,launchd **下次登录**自己加载它,
-        // 那就是这个开关承诺的全部内容。所以这条闸直接禁掉整类写法 —— 这个文件里不准出现
-        // launchctl,也不准起子进程。
+        // 2026-09-06 起「开机启动」改成系统登录项(SMAppService.mainApp,进程内 API,只改注册
+        // 状态、不起不杀进程),旧 plist 只剩"启动时删掉"这一件事 —— 这条闸的形状不变:这个
+        // 文件里不准出现 launchctl,也不准起子进程。
         if let loginItem = try? String(
             contentsOf: appSources.appendingPathComponent("Settings/LoginItemManager.swift"),
             encoding: .utf8) {
@@ -1055,7 +1055,7 @@ func runSourceContractTests() {
                 }
                 .map { "LoginItemManager.swift:\($0.offset + 1)" }
             expectEqual(offenders, [],
-                        "开关不起进程: LoginItemManager 只准写/删 plist —— 出现 launchctl 或起子进程,就是「点一下开机启动就闪退」那个 bug 的形状")
+                        "开关不起进程: LoginItemManager 只准走 SMAppService / 删旧 plist —— 出现 launchctl 或起子进程,就是「点一下开机启动就闪退」那个 bug 的形状")
         } else {
             expectEqual(true, false, "开关不起进程: 读不到 LoginItemManager.swift(路径挪了?)")
         }

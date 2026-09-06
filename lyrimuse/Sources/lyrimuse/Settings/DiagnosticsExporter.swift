@@ -276,8 +276,9 @@ enum DiagnosticsExporter {
         lines.append("")
         // ---- App 进程的 stderr(2026-09-05 加)----
         //
-        // App 由 launchd 拉起时 stdout / stderr 指向 LogFiles.appStderr(LoginItemManager 写的 plist;
-        // 此前跟 collector 共用 lyrimuse.log)。正常情况下这份文件几乎是空的 —— App 的日志走
+        // App 进程的 stdout / stderr 由 StandardStreamRedirect 在启动第一步就重定向到 LogFiles.appStderr
+        // (2026-09-06 起进程内自己做;此前靠 LaunchAgent plist 的 StandardErrorPath,再往前跟 collector
+        // 共用 lyrimuse.log)。正常情况下这份文件几乎是空的 —— App 的日志走
         // os.Logger;能落进来的只有 Swift 运行时的 fatal 信息、子进程漏出的 stderr 这类"本不该有"
         // 的东西,正因为如此排查崩溃时它最有用。只取最后 100 行,同样过一遍脱敏。
         lines.append("== App stderr (\(LogFiles.appStderr.lastPathComponent), last 100 lines) ==")
@@ -402,7 +403,7 @@ enum DiagnosticsExporter {
 
     private static func recentAppStderrLines(maxLines: Int = 100) -> [String] {
         guard let content = try? String(contentsOf: LogFiles.appStderr, encoding: .utf8) else {
-            return ["(no \(LogFiles.appStderr.lastPathComponent) yet: launchd creates it when the app job is next bootstrapped, i.e. after the next login)"]
+            return ["(no \(LogFiles.appStderr.lastPathComponent) yet: the app creates it at launch; a missing file means this build predates the in-process redirect or the Logs folder is not writable)"]
         }
         let all = content.split(separator: "\n", omittingEmptySubsequences: true).map(String.init)
         return all.isEmpty ? ["(empty)"] : Array(all.suffix(maxLines))

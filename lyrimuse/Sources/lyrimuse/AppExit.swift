@@ -31,6 +31,8 @@ enum AppExit {
         case followedPlayerQuit = "followed_player_quit"
         case sigterm = "sigterm"
         case externalRequest = "external_request"
+        /// `lyrimuse --unregister-login-item`(卸载脚本调的辅助模式)注销完登录项就退出。
+        case unregisterLoginItemHelper = "unregister_login_item_helper"
     }
 
     /// 生命周期日志分类。走 Logger 不走 NSLog:DiagnosticsExporter.recentAppLogLines() 按 subsystem 查,

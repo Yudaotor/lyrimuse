@@ -81,7 +81,7 @@ Cloudflare Worker + KV 的状态中继(state-worker):collector 推 `/push`(带 t
 
 ### 生命周期与启动顺序
 
-- App 和 collector 是**两个独立的 launchd job**,互不拉起:`me.yudaotor.lyrimuse`(App,RunAtLoad、故意不设 KeepAlive——用户会主动 Cmd-Q,由 `LoginItemManager` 按"开机启动"开关装卸)和 `com.lyrimuse.collector`(KeepAlive,由 `CollectorServiceManager` 在引导页/设置页开关时装卸)。App 退出后 collector 照常采集/解析/提交。
+- App 和 collector 是**两个独立的启动机制**,互不拉起:App 是系统登录项(`SMAppService.mainApp`,2026-09-06 起,由 `LoginItemManager` 按"开机启动"开关注册/注销;此前是 LaunchAgent `me.yudaotor.lyrimuse`,那条路起出来的进程主线程优先级只有 20,见 14 章 §5),collector 是 LaunchAgent `com.lyrimuse.collector`(KeepAlive,由 `CollectorServiceManager` 在引导页/设置页开关时装卸)。App 退出后 collector 照常采集/解析/提交。
 - collector 启动路径(`main.go`)顺序敏感:装日志脱敏 → 子命令分流 → 读 config → 拿单实例锁 → 读 features(定 `lyrics_dir`)→ 加载 enrich 缓存 → **enrich key 归一化迁移**(`enrichkey.go migrateEnrichKeys`,必须夹在"加载缓存之后、导入 lyrics 文件之前")→ `importLyricsFromFiles()`(**lyrics/ 文件夹永远赢**,覆盖 JSON 缓存里的歌词字段)→ 失效陈旧译文 → `exportLyricsFiles()`(把调和结果重新导出,磁盘立刻对齐)→ 进入 5 秒轮询主循环。歌词管理改完 kickstart 重启,走的就是这同一条调和路径,Swift 侧不用另写一遍。
 - 服务真实状态判断用 `LaunchdJobState`/`LaunchdPrintParser`,不能用 `launchctl print` 退出码(那只表示"注册过",不表示进程在跑)。
 
@@ -168,8 +168,8 @@ collector(Go, 5s 轮询) ── 同样两条播放读取路径(独立于 App)
 ### 其它位置
 
 - **UserDefaults 域 `me.yudaotor.lyrimuse`**:App 全部偏好的权威存储(`AppSettings`),`defaults delete me.yudaotor.lyrimuse` 即彻底重置。
-- **`~/Library/Logs/lyrimuse.log`**:App 与 collector 两个 LaunchAgent 的 stdout/stderr **共用同一个文件**(`LoginItemManager` 和 `CollectorServiceManager` 各自生成的 plist 指向同一路径)。
-- **`~/Library/LaunchAgents/`**:`me.yudaotor.lyrimuse.plist`、`com.lyrimuse.collector.plist`,均由 App 运行时生成安装;仓库里 `lyrimuse/launchd/me.yudaotor.lyrimuse.plist` 只是留档参考。
+- **`~/Library/Logs/lyrimuse.log`**:collector 的 stdout/stderr(plist 指向它);App 进程的 stdout/stderr 另落 `lyrimuse-app.log`(`StandardStreamRedirect` 进程内重定向)。
+- **`~/Library/LaunchAgents/`**:只剩 `com.lyrimuse.collector.plist`,由 App 运行时生成安装;App 自己那份 `me.yudaotor.lyrimuse.plist` 2026-09-06 起不再写、启动时还会删掉遗留的(开机启动改走系统登录项,14 章 §5),仓库里的留档参考副本同日删除。
 - **`~/.config/applemusic-nowplaying/feishu.json`**:feishu-bot 的配置,旧项目名目录,只有它还在用。
 - **仓库根 `bin/`**:未纳入 git 的本地构建产物(`lyrimuse-collector/build.sh` 刷新 `bin/collector` 并额外拷一份进已安装的 .app,免整包重建即可验证 collector 改动)。
 
@@ -181,7 +181,7 @@ applemusic-nowplaying/
 │   ├── Sources/{lyrimuse, LyrimuseCore, lyrimuse-selftest, lyrics-translate}/
 │   ├── build.sh              # release 构建+打包+签名+launchd 重启(真机验证必经)
 │   ├── package.sh            # 发布产物(zip+sha256+dmg,校验架构)
-│   ├── launchd/  Localization/  scripts/(check-windows/probe-launchd/uninstall 等)
+│   ├── Localization/  scripts/(check-windows/probe-launchd/uninstall 等)
 ├── lyrimuse-collector/       # Go collector,flat package + dictionary/ + testdata/
 ├── web/                      # 独立嵌套 git 仓(origin=Yudaotor/nowplaying):index.html + demo/ + sw.js
 ├── feishu-bot/               # 独立 Go 程序 + 示例 launchd plist

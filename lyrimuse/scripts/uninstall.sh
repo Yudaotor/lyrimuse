@@ -97,9 +97,25 @@ if [[ "$MODE" == "report" ]]; then
   exit 0
 fi
 
+# 「开机启动」自 2026-09-06 起是系统登录项(SMAppService.mainApp,不再是 LaunchAgent plist),
+# shell 里没有对应的注销命令,只能请 App 自己来:`lyrimuse --unregister-login-item` 只注销
+# 登录项就退出、不建窗口。App 包一删,登录项会在「系统设置 → 登录项」里留一条指向不存在
+# 路径的死项,所以要在用户把 App 拖进废纸篓**之前**做。测试(uninstall_test.sh)用 PREFIX
+# 指向临时目录时这一步不该碰真 App,所以按 PREFIX 是否为 $HOME 门控。
+unregister_login_item() {
+  local app_bin="/Applications/Lyrimuse.app/Contents/MacOS/lyrimuse"
+  [[ "$PREFIX" == "$HOME" && -x "$app_bin" ]] || return 0
+  if "$app_bin" --unregister-login-item >/dev/null 2>&1; then
+    echo "  ✅ 已注销系统登录项(开机启动)"
+  else
+    echo "  ⚠️ 注销登录项失败,请到「系统设置 → 通用 → 登录项」手动移除 Lyrimuse"
+  fi
+}
+
 stop_services() {
   echo
   echo "=== 注销 launchd job ==="
+  unregister_login_item
   for label in "$COLLECTOR_LABEL" "$APP_LABEL"; do
     if is_registered "$label"; then
       # KeepAlive 的 job 必须 bootout，光 kill 会被 launchd 立刻拉起来。

@@ -15,7 +15,7 @@
 
 ### 1. build.sh（构建+打包+部署一条龙）
 
-`swift build`（release，可多架构）→ `go build` collector → 组装 `.app` bundle（collector、media-control、lyrics-translate、.lproj 资源全拷进 `Contents/Resources/`；media-control 缺失时经 Homebrew 自动装）→ 架构检查 → 签名（ad-hoc）→ 经 launchd **kickstart** 重启 App；kickstart 后无存活进程时自动 `bootout+bootstrap` 兜底（LWCR 陈旧 codesigning 约束的自愈）→ 重载 collector job（刷新 launch constraint）。**`swift build` 通过 ≠ 已部署**——真机验证必须跑 build.sh（repo CLAUDE.md 三大硬规则之一）。
+`swift build`（release，可多架构）→ `go build` collector → 组装 `.app` bundle（collector、media-control、lyrics-translate、.lproj 资源全拷进 `Contents/Resources/`；media-control 缺失时经 Homebrew 自动装）→ 架构检查 → 签名（ad-hoc）→ 重启 App：先 `bootout` 本次登录里可能残留的旧 LaunchAgent job（升级前登录时加载的），再 kill 旧实例、**`open -g` 经 LaunchServices 起**（2026-09-06 起；此前是 `launchctl kickstart` + LWCR 陈旧签名约束的 `bootout+bootstrap` 自愈，那条路起出来的是 `spawn type = daemon`、主线程优先级 20 的进程，见第 14 章 §5）→ 重载 collector job（刷新 launch constraint）。**`swift build` 通过 ≠ 已部署**——真机验证必须跑 build.sh（repo CLAUDE.md 三大硬规则之一）。
 
 **⚠️ collector 的版本号由这里注入（2026-09-02 加）**：`go build` collector 那步带
 `-ldflags "-X main.clientVersion=$APP_VERSION"`，`$APP_VERSION` 就是写进 Info.plist 的那个值
@@ -37,11 +37,11 @@
 
   ⚠️ **这只解决「安装」这一类冲突，不解决「构建」那一类**。多会话共用同一棵源码树时，`error: input file '.../Foo.swift' was modified during the build` 仍然会发生——那是 SwiftPM 在编译期发现输入文件 mtime/内容变了，跟产物往哪放毫无关系，只能靠「同一时刻只有一个会话在改+编这棵树」解决（打招呼，或各自用独立 worktree）。同理 launchd 重启竞争（两边各自 bootout+bootstrap 同一个 label，正是 `Bootstrap failed: 5` 的另一半成因）也没被这次改动覆盖。顺带把 `FAT_DIR` 从固定的 `.build/fat` 改成 per-run `mktemp -d`——那是同一族的共享可写路径，一个会话的 `rm -rf` 会删掉另一个刚 lipo 出来的切片，SwiftPM 的 `.build/.lock` 只锁 `swift build` 本身、管不到它。
 
-### 2. 常驻形态（两个 LaunchAgent）
+### 2. 常驻形态（一个登录项 + 一个 LaunchAgent）
 
 | Job | 管理者 | 策略 |
 |---|---|---|
-| `me.yudaotor.lyrimuse`（App） | LoginItemManager（第 14 章） | RunAtLoad、**无** KeepAlive（用户会 Cmd-Q，不该复活） |
+| App（系统登录项 `SMAppService.mainApp`，BTM 标识 `2.me.yudaotor.lyrimuse`） | LoginItemManager（第 14 章） | 登录时由 LaunchServices 按 App 身份起（主线程优先级 46、单实例），无 KeepAlive 语义（用户会 Cmd-Q，不该复活）。2026-09-06 之前是 LaunchAgent `me.yudaotor.lyrimuse`（RunAtLoad），旧 plist 由 App 启动时删除 |
 | `com.lyrimuse.collector` | CollectorServiceManager | **KeepAlive=true**（无人值守，崩了自动拉起；没有它所有歌词展示面都空）；plist 带 `EnvironmentVariables`（`LYRIMUSE_CONFIG_DIR` / `LYRIMUSE_LOG_FILE` / `LYRIMUSE_APP_BUNDLE_ID`，2026-09-05 起，见决策 12） |
 
 2026-09-05 曾加过并排安装的开发构建「Lyrimuse Dev」（label 加 `.dev`、独立配置目录 / 日志 / bundle id），2026-09-06 用户拍板整体回退，见决策 12。名字与路径仍由 Core `LyrimuseIdentity` / `LyrimusePaths` 一处派生，collector 经环境变量拿到同一套值（正式版传的就是默认值）。
@@ -66,7 +66,7 @@ collector 二进制打包在 `.app/Contents/Resources/` 内，由 `Bundle.main` 
   ⚠️ 往名字表里加新播放器时要一起核**两件事**：① `pgrep -x` 能匹配非 ASCII 的 comm（拿中文名进程实测过，可以）；② UTF-8 字节数不超过内核 `p_comm` 的 16 字节上限（「酷狗音乐」是 12 字节，再长两个汉字就会被截断、`-x` 精确匹配当场失效）。
 - 网络观察（networkobs）：解析全空时标记「网络不通」状态给 UI（歌词区显示网络提示而非「没歌词」）；`doHTTPTracked` 同时是（2026-08-26 起）collector 侧**所有对外请求**的统一审计日志出口，见第 14 章「对外请求审计日志」——一并接进来的调用点覆盖 Last.fm/ListenBrainz/七个歌词源/推送/状态中继/翻译/取色/MusicBrainz/iTunes，只有 DNS-over-HTTPS（`doh.go`）刻意排除在外（不是"联系了哪个外部服务"，是基础设施调用，理由跟它不参与 `networkLooksDown()` 统计一致）。
 
-- **退出原因日志（2026-09-03）**：常驻 collector 的每一条退出路径退出前都打一行 `exiting reason=<code>`（`exitreason.go` 的 `logExit` / `fatalExit`，经 log.Printf → logscrub 出口）。原因码：`already_running` 拿不到单实例锁（退出码 0，等 KeepAlive 重试）/ `signal` ctx 被 SIGTERM·SIGINT 取消（kickstart 重启、bootout 卸载、Ctrl-C，**此前这条最常见的退出一行日志都没有**）/ `run_error` / `config_unreadable`（文件在但读不出；内容有问题已降级成 loadIssues 不退）/ `home_dir_unresolved` / `run_returned`（理论上到不了，记下来才看得见）。一次性子命令的 os.Exit / log.Fatalf 不在此列。App 侧同款前缀记在 `lifecycle` 分类（`AppExit.swift`）：`menu_quit` / `restart_after_config_change` / `sparkle_install`（`SparkleUpdaterManager.isInstallingUpdate` 认出）/ `sigterm` / `external_request`（⌘Q、Dock 退出、AppleScript、被新实例请走）/ `followed_player_quit`（「跟随播放器退出」宽限到点，见 02 章「与播放器联动」），新实例请走旧实例那一侧另记 `terminating older instance pid=… reason=older_instance_replaced forced=…`；所有主动 terminate 只准经 `AppExit.request`，日志在 `applicationShouldTerminate` 汇合点打一次。⚠️ App 对 SIGTERM 从「AppKit 默认直接死、delegate 都不叫」改成 `AppExit.installSigtermHandler` 用 DispatchSource 接住后走正常 terminate——顺带让 `applicationShouldTerminate` 里那次未保存配置的落盘也有机会跑到。新加一个原因码就补进这一条。⚠️ **已知盲区**：SIGTERM 落在 collector 启动阶段（`signal.NotifyContext` 装上之前——加载缓存 / lyrics 导入调和那十几秒）仍是 Go 默认处置、静默退出；2026-09-03 装机时 build.sh 连续两次重启都撞在这个窗口里，日志只有「loaded … caches」没有 exiting 行，第三次起完才正常。没把 NotifyContext 提前：提前后启动期收到的信号要等启动跑完才处理，超过 launchd 的 ExitTimeOut 就是 SIGKILL，得不偿失。selftest contracts 组「退出原因」守着两侧（App 的 terminate 只在 AppExit、AppDelegate 无 NSLog；main.go 无裸 log.Fatal、唯一 os.Exit 是锁那条）。
+- **退出原因日志（2026-09-03）**：常驻 collector 的每一条退出路径退出前都打一行 `exiting reason=<code>`（`exitreason.go` 的 `logExit` / `fatalExit`，经 log.Printf → logscrub 出口）。原因码：`already_running` 拿不到单实例锁（退出码 0，等 KeepAlive 重试）/ `signal` ctx 被 SIGTERM·SIGINT 取消（kickstart 重启、bootout 卸载、Ctrl-C，**此前这条最常见的退出一行日志都没有**）/ `run_error` / `config_unreadable`（文件在但读不出；内容有问题已降级成 loadIssues 不退）/ `home_dir_unresolved` / `run_returned`（理论上到不了，记下来才看得见）。一次性子命令的 os.Exit / log.Fatalf 不在此列。App 侧同款前缀记在 `lifecycle` 分类（`AppExit.swift`）：`menu_quit` / `restart_after_config_change` / `sparkle_install`（`SparkleUpdaterManager.isInstallingUpdate` 认出）/ `sigterm` / `external_request`（⌘Q、Dock 退出、AppleScript、被新实例请走）/ `followed_player_quit`（「跟随播放器退出」宽限到点，见 02 章「与播放器联动」）/ `unregister_login_item_helper`（`lyrimuse --unregister-login-item` 辅助模式，卸载脚本调，注销完登录项即退，2026-09-06），新实例请走旧实例那一侧另记 `terminating older instance pid=… reason=older_instance_replaced forced=…`；所有主动 terminate 只准经 `AppExit.request`，日志在 `applicationShouldTerminate` 汇合点打一次。⚠️ App 对 SIGTERM 从「AppKit 默认直接死、delegate 都不叫」改成 `AppExit.installSigtermHandler` 用 DispatchSource 接住后走正常 terminate——顺带让 `applicationShouldTerminate` 里那次未保存配置的落盘也有机会跑到。新加一个原因码就补进这一条。⚠️ **已知盲区**：SIGTERM 落在 collector 启动阶段（`signal.NotifyContext` 装上之前——加载缓存 / lyrics 导入调和那十几秒）仍是 Go 默认处置、静默退出；2026-09-03 装机时 build.sh 连续两次重启都撞在这个窗口里，日志只有「loaded … caches」没有 exiting 行，第三次起完才正常。没把 NotifyContext 提前：提前后启动期收到的信号要等启动跑完才处理，超过 launchd 的 ExitTimeOut 就是 SIGKILL，得不偿失。selftest contracts 组「退出原因」守着两侧（App 的 terminate 只在 AppExit、AppDelegate 无 NSLog；main.go 无裸 log.Fatal、唯一 os.Exit 是锁那条）。
 
 ### 4. 日报/周报推送（可选，默认关）
 
@@ -116,7 +116,7 @@ CoreAudio 属性监听（不拦音量键不轮询 osascript），系统输出音
 | 位置 | 项 | 影响 |
 |---|---|---|
 | 播放器 | 后台采集服务 | collector LaunchAgent 装/卸/状态 |
-| 通用 | 开机启动 | App LaunchAgent |
+| 通用 | 开机启动 | App 系统登录项（SMAppService） |
 | 账号→推送提醒 | 平台/URL/密钥 | 日报/周报推送通道 |
 | （features.json） | dailyDigest/weeklyDigest(+source)、launchLyrimuseOnMusicOpen | 后台任务开关 |
 
@@ -129,7 +129,7 @@ CoreAudio 属性监听（不拦音量键不轮询 osascript），系统输出音
 ## 数据与文件
 
 - `bin/`：build.sh 产物的裸二进制暂存（collector/feishu-bot）。
-- `~/Library/LaunchAgents/*.plist` 两份；`~/Library/Logs/lyrimuse.log`（collector，含 `.old` 归档）、`~/Library/Logs/lyrimuse-app.log`（App 进程 stderr，2026-09-05 起）。uninstall.sh `--purge` 两份日志都删。
+- `~/Library/LaunchAgents/com.lyrimuse.collector.plist` 一份（App 那份 2026-09-06 起不再有，见第 14 章 §5）；`~/Library/Logs/lyrimuse.log`（collector，含 `.old` 归档）、`~/Library/Logs/lyrimuse-app.log`（App 进程 stdout/stderr，2026-09-05 起；2026-09-06 起由 `StandardStreamRedirect` 在进程内重定向，不再依赖 launchd）。uninstall.sh `--purge` 两份日志都删，并在删 App 前调 `lyrimuse --unregister-login-item` 注销登录项。
 - digest 状态文件（已推送水位）；单实例锁文件。
 
 ## 代码锚点
@@ -159,7 +159,7 @@ CoreAudio 属性监听（不拦音量键不轮询 osascript），系统输出音
 5. App 与 collector 的 KeepAlive 策略刻意相反（前台工具 vs 无人值守服务）。
 6. 界面验证只许只读手段（截图/读窗口状态），AppleScript 驱动界面是禁区（历史事故：误触「清空全部」、误关用户其它 App）。
 7. 故障告警（连续失败推送）已整体下线——别按旧印象去找 ok()/fail()。
-8. build.sh 的 kickstart 失败自愈（bootout+bootstrap）针对 LWCR 陈旧签名约束，是真实踩过的坑。
+8. build.sh 曾有的 kickstart 失败自愈（bootout+bootstrap）针对 LWCR 陈旧签名约束，是真实踩过的坑；2026-09-06 起 App 改经 LaunchServices `open -g` 重启，那条路不再走（collector 那边的 bootout→bootstrap 全量重装仍在）。
 9. **两个本该同源的版本号，一个自动一个手动 → 必然漂**（2026-09-02，用户在另一台机器装了 1.5.0 的 dmg，设置页报「App 1.5.0 · 采集服务 1.4.0」）。App 版本一直从 git tag 自动派生，collector 的 `clientVersion` 却是 `main.go` 里的手写字面量，靠人在发版时记得改那一行。实测记录：v1.1.0 补同步、v1.2.0 补同步、**v1.3.0 漏**、v1.4.0 补上、**v1.5.0 又漏**——同一个坑两年内踩两次，说明问题不在谁不小心。
    - **功能其实没坏**：`clientVersion` 只用于 `collector version` 子命令、ListenBrainz 的 `submission_client_version`、以及 musicbrainz/lrclib 两处 User-Agent，全是「自报家门」的字符串。用户拿到的 collector **就是 1.5.0 的代码**，只是自报 1.4.0。
    - **提示文案当时是误导的**：设置页建议「重新安装 App」，但版本号烧死在二进制里，装多少次同一个 dmg 都一样——已改成如实说明。

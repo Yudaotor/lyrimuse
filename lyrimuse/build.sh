@@ -695,40 +695,38 @@ if [ "$NO_RESTART" = 1 ]; then
   exit 0
 fi
 
-PLIST_PATH="$HOME/Library/LaunchAgents/$LABEL.plist"
+# 重启方式(2026-09-06 起):**一律 kill 旧实例 + `open -g` 经 LaunchServices 起**。
+#
+# 2026-09-06 之前这里分两支:「开机启动」开着时 job 归 launchd 管、用 `launchctl kickstart -k`
+# 重启受管进程(再加一套 LWCR 陈旧签名约束失败时 bootout+bootstrap 的自愈)。那条路的代价当天
+# 才量出来 —— launchd 直接 exec 二进制拉起的 App 是 `spawn type = daemon`,launchd 对没写
+# ProcessType 的 job "apply light resource limits":主线程 97% 的时间跑在调度优先级 20(utility
+# 档),正常 App(Music / Finder)是 46;灵动岛动画专项的 System Trace 就是这么看出来的(05 章
+# 决策 #25)。「开机启动」因此改成系统登录项(SMAppService.mainApp,LoginItemManager),登录时由
+# LaunchServices 按 App 身份起;开发重启也走同一条 LaunchServices 路,装完的进程跟用户登录时
+# 拿到的是同一种进程(优先级、单实例、App Nap 策略全一样),不再有"launchd 那份 vs open 那份"
+# 两种形态。`open -g` 不把 App 激活到前台(它是 .accessory,激活也没窗口可给,但少一次抢焦点)。
+#
+# 旧方案的 LaunchAgent job 若在这台机器的本次登录里还挂着(升级前登录时 launchd 加载的,plist
+# 文件本身 App 启动时已经删掉),先 bootout 它:它的进程就是旧实例,bootout 顺带把它停掉,而且
+# 不 bootout 的话它留在 launchd 里也没有害处(没有 KeepAlive、plist 已删,下次登录不再加载),
+# 只是 `launchctl list` 还查得到会让人误判「开机启动还是老方式」。
 if launchctl list "$LABEL" >/dev/null 2>&1; then
-  # 开机启动开关已经在菜单里打开过、这份 job 归 launchd 管——用 kickstart 让 launchd
-  # 用新构建的二进制重启同一个受管进程，不要另外手动 kill+起一个游离进程，否则会变成
-  # "launchd 记录里的进程死了、外面又跑着一个 launchd 不认识的新进程"这种双实例混乱
-  # (实测踩过这个坑)。
-  echo "==> restarting via launchd (kickstart)"
-  launchctl kickstart -k "gui/$(id -u)/$LABEL"
-  sleep 2
-  if ! pgrep -f "$BIN" >/dev/null 2>&1; then
-    # kickstart 有时会静默失败——launchd 给这个 job 缓存了上一次运行遗留的 LWCR
-    # (Lightweight Code Requirement)codesigning 约束，绑定的是旧二进制的 cdhash；
-    # release 每次重新 ad-hoc 签名，cdhash 必然变化，kickstart 本身不会刷新这个约束，
-    # 新二进制会被 OS 直接拒绝启动。只有完整卸载再重新加载这个 job，才会让 launchd
-    # 丢掉旧约束、重新从 plist/二进制读起(实测坐实过这个失败模式和这个修法)。
-    echo "==> kickstart produced no running process, retrying via bootout+bootstrap"
-    launchctl bootout "gui/$(id -u)" "$PLIST_PATH" 2>/dev/null || true
-    # bootout 是异步的，launchd 需要一点时间才会真正把这个 job 卸载干净——紧接着就
-    # bootstrap 同一个 label 有时会因为卸载还没完成而失败/静默无效(实测坐实：不加
-    # 这个间隔时，这条自愈分支本身也会偶尔失败，需要手动再重试一遍才行)。
-    sleep 1
-    launchctl bootstrap "gui/$(id -u)" "$PLIST_PATH"
-    sleep 1
-    launchctl kickstart -k "gui/$(id -u)/$LABEL"
-  fi
-else
-  if pid=$(pgrep -f "$BIN" 2>/dev/null); then
-    echo "==> stopping running instance (pid $pid)"
-    kill "$pid"
-    sleep 1
-  fi
-  echo "==> launching"
-  open "$APP_DIR"
+  echo "==> legacy LaunchAgent job $LABEL is still loaded in this login session; booting it out"
+  launchctl bootout "gui/$(id -u)/$LABEL" 2>/dev/null || true
+  sleep 1
 fi
+if pid=$(pgrep -f "$BIN" 2>/dev/null); then
+  echo "==> stopping running instance (pid $pid)"
+  kill $pid 2>/dev/null || true
+  # 等它真的退出:旧进程还在时 `open` 只会把它激活、不会起新二进制(LaunchServices 单实例)。
+  for _ in 1 2 3 4 5; do
+    pgrep -f "$BIN" >/dev/null 2>&1 || break
+    sleep 1
+  done
+fi
+echo "==> launching via LaunchServices (open -g)"
+open -g "$APP_DIR"
 # 最多等 10 秒而不是固定 sleep 2:首次 open 一个新 bundle(换过 bundle id、或刚装到新路径)LaunchServices 要先注册,
 # 2 秒经常不够 —— 2026-09-05 实测被误判成「没起来」(进程其实起了)。
 pid=""
