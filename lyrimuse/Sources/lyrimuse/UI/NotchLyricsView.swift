@@ -345,7 +345,7 @@ enum NotchMetrics {
     /// 刘海左沿。这 6pt 只吃进耳朵内部,不改耳宽、不动外缘的音浪/卡片边距,
     /// 代价是跑马灯可用宽度少 6pt(更容易触发滚动,而滚动本来就是长名字的正解)。
     static let earNotchInset: CGFloat = 6
-    /// 卡片左右两侧的内边距(`topRow` / `collapsedRow` 末尾那句 `.padding(.horizontal:)`)。
+    /// 卡片左右两侧的内边距(`topRow` 末尾那句 `.padding(.horizontal:)`)。
     ///
     /// ⚠️ 这是**单侧**值。三处按它算:那两句 padding、耳宽公式 `(卡片宽 − 刘海宽 − 2×它) / 2`、
     /// 以及宽度下限 `NotchLyricsWindowController.contentWidth`。2026-08-31 之前三处各写一份
@@ -555,12 +555,13 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
                     .opacity(controller.isCollapsed ? 1 : 0)
                 // 刘海空当里的品牌胶囊(notchSeam)直接钉在 ZStack 顶部**居中**,不再画在顶行的 HStack 里
                 // (2026-09-06,用户报「暂停状态展开的动画会把中间那个 Lyrimuse 图案漏出来一会」)。
-                // 逐帧抓窗坐实:收起态 hover 展开时顶行从 collapsedRow 换成 topRow,两行在 VStack 里交叉
-                // 淡入淡出,而 SwiftUI 对"正在离场的那一行"按它离场时的耳宽(34pt)布局、对"刚插入的那一行"
-                // 按目标耳宽(146.5pt)布局,两行都从卡片左沿起排 —— 于是各自那枚胶囊一枚偏左 ~15pt、一枚
-                // 偏右 ~100pt,都跑出了刘海的遮挡范围,在屏幕上"漏出来一会"(帧 2～13,约 200ms)。胶囊
-                // 挂在 ZStack 上,位置只由 ZStack 的居中对齐决定,跟耳朵怎么换、怎么长都无关。
-                // 顶行两个版本里原来放胶囊的位置只留同宽的空当(notchGap)。
+                // 逐帧抓窗坐实:当时顶行是 collapsedRow / topRow 两个视图在 VStack 里整行互换,SwiftUI 对
+                // "正在离场的那一行"按它离场时的耳宽(34pt)布局、对"刚插入的那一行"按目标耳宽(146.5pt)
+                // 布局,两行都从卡片左沿起排 —— 于是各自那枚胶囊一枚偏左 ~15pt、一枚偏右 ~100pt,都跑出了
+                // 刘海的遮挡范围,在屏幕上"漏出来一会"(帧 2～13,约 200ms)。胶囊挂在 ZStack 上,位置只由
+                // ZStack 的居中对齐决定,跟耳朵怎么换、怎么长都无关。同日随后顶行也收成了一个持久的 HStack
+                // (见 topRow 头注),整行互换本身已不存在,但胶囊仍留在这里 —— 它本来就不属于哪只耳朵。
+                // 顶行里原来放胶囊的位置只留同宽的空当(notchGap)。
                 notchSeam
                     .frame(height: controller.contentTopInset)
                     .opacity(revealContentOpacity)
@@ -576,13 +577,10 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
                     // 顶行占菜单栏那一条高度,收起后跟菜单栏齐平、不额外占屏。两种形态:
                     // 收起(没在播放)= iPhone 灵动岛式极简(左耳封面、右耳音浪,2026-08-19
                     // 用户拍板,歌名/播放键都收进 hover 展开卡);稳态/展开 = 歌名 + 播放键。
-                    if controller.isCollapsed {
-                        collapsedRow(earWidth: earWidth)
-                            .frame(height: controller.contentTopInset)
-                    } else {
-                        topRow(earWidth: earWidth)
-                            .frame(height: controller.contentTopInset)
-                    }
+                    // ⚠️ 两种形态是**同一个** topRow 按 isCollapsed 换耳朵里的内容,不是两个视图
+                    // 在这里 if/else 互换(2026-09-06 起,理由见 topRow 头注)。
+                    topRow(earWidth: earWidth)
+                        .frame(height: controller.contentTopInset)
                     // 歌词行和 hover 展开区才是"收进去"的部分。
                     //
                     // ⚠️ hasTrack 这一条(2026-08-21)必须跟 NotchWindowRoot.cardHeight 里
@@ -747,47 +745,6 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
         }
     }
 
-    /// 收起态顶行(2026-08-19 用户拍板):左耳专辑封面、右耳音浪 —— 跟 iPhone 灵动岛
-    /// 收起形态同构(封面在左、声浪在右)。歌名/播放键不进这里:想看想按,hover 一下
-    /// 就是完整展开卡。音浪在暂停时是静止的矮条(EqualizerBars 自己按 isPlaying 处理),
-    /// 封面是"刚才在放什么"的余韵;没封面时左耳留空,不画占位方块(理由同 artworkThumbnail)。
-    private func collapsedRow(earWidth: CGFloat) -> some View {
-        HStack(spacing: 0) {
-            HStack {
-                // ⚠️ 高清替代优先,跟本文件另外四处(展开卡小图、coverArt 背景等)同一个口径 ——
-                // 这一处 2026-09-02 之前漏了 `?? `,于是收起态左耳显示的是**系统原图**。
-                // 不只是清晰度问题:Chrome 里放 YouTube Music 时系统给的可能是一帧 MV 画面
-                // (实测方大同《白发》给的是 150×84 的 MV 截帧),那就是显示了另一张图。
-                if let image = playback.highResArtworkImage ?? playback.artworkImage {
-                    let side = NotchMetrics.earArtworkSide(contentTopInset: controller.contentTopInset)
-                    // 收起态的小封面也是「打开歌词窗口」的入口 —— 跟展开卡右下角那枚
-                    // 封面同一动作(点封面看完整歌词,两种形态行为一致)。
-                    Button {
-                        AppActions.shared.openLyricsWindow?()
-                    } label: {
-                        Image(nsImage: image)
-                            .resizable()
-                            .scaledToFill()
-                            .frame(width: side, height: side)
-                            .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
-                    }
-                    .buttonStyle(.plain)
-                    .help(L10n.t("打开歌词窗口"))
-                }
-            }
-            .frame(width: earWidth)
-
-            notchGap
-
-            HStack {
-                EqualizerBars(color: accentOrWhite, isPlaying: playback.isPlayingNow,
-                              amplitude: Self.vocalAmplitude(at:))
-            }
-            .frame(width: earWidth)
-        }
-        .padding(.horizontal, NotchMetrics.cardHorizontalPadding)
-    }
-
     /// 压根没有曲目。读 controller 那一份而不是自己再从 playback 算一遍 —— 卡片高度
     /// (NotchWindowRoot.cardHeight)也要用同一个判据决定歌词行占不占 44pt,两处各算一遍
     /// 必然漂,而漂的表现是"行不见了但高度还留着"或反过来把行裁掉半截。
@@ -805,7 +762,7 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
     /// 「截屏/录屏时隐藏」开着时整窗不进截图,不必另加开关。高度按顶行让 8pt 边、夹在
     /// 14～22pt(矮刘海机型顶行可能不到 26pt)。装饰元素,读屏不念。
     /// 顶行中间刘海那一段的**占位**:只有宽度,什么都不画。胶囊本体(notchSeam)自 2026-09-06 起钉在 body 的
-    /// ZStack 顶部居中(理由见那里),顶行两个版本(collapsedRow / topRow)只需要把这段宽度让出来。
+    /// ZStack 顶部居中(理由见那里),顶行只需要把这段宽度让出来。
     private var notchGap: some View {
         Spacer(minLength: 0).frame(width: controller.notchWidth)
     }
@@ -859,17 +816,48 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
                       amplitude: Self.vocalAmplitude(at:))
     }
 
+    /// 顶行 —— 收起态与稳态/展开态**共用这一个 HStack**(2026-09-06 起)。
+    ///
+    /// 此前是两个视图 `collapsedRow` / `topRow` 在 VStack 里按 isCollapsed 整行互换。逐帧抓窗坐实了
+    /// 那样做的代价(用户报「暂停状态展开的动画会把中间那个 Lyrimuse 图案漏出来一会」,见 body 里
+    /// notchSeam 那段注释):整行互换时 SwiftUI 对**离场的那一行**按离场时的耳宽布局、对**刚插入
+    /// 的那一行**按目标耳宽布局,两行都从卡片左沿起排,于是 hover 展开的头 ~200ms 里两行的内容各在
+    /// 错的位置上淡入淡出 —— 胶囊漏出刘海只是最显眼的一例,耳朵里的音浪 / 文字同样在错位。
+    ///
+    /// 现在顶行是一个**持久**的 HStack,两只耳朵的 `.frame(width: earWidth)` 随卡片连续动画;收起/稳态
+    /// 之间变的只是"这只耳朵此刻显示哪个模块、音浪在不在这侧"两个**值**:
+    ///  - 收起:左耳固定封面、右耳固定音浪(2026-08-19 用户拍板的 iPhone 灵动岛式极简,歌名/播放键都
+    ///    收进 hover 展开卡);
+    ///  - 稳态/展开:按设置(`leftEar` / `rightEar` / 音浪贴哪侧)。
+    /// 两种形态下模块相同时(比如用户本来就左耳封面、右耳音浪)视图身份完全不变 —— 连淡入淡出都没有,
+    /// 封面和音浪只是跟着耳朵边沿平移;模块不同时,切换发生在**耳朵内部**、贴着耳朵外缘,不再整行错位。
+    /// 音浪在暂停时是静止的矮条(EqualizerBars 自己按 isPlaying 处理),收起态的封面是"刚才在放什么"的
+    /// 余韵;没封面时左耳留空,不画占位方块(理由同 artworkThumbnail)。
+    ///
+    /// 布局细节两条,收起与稳态**一致**、不随状态变:朝刘海那一侧内缩 `earNotchInset`(2026-08-20 用户
+    /// 要求「歌手不要那么紧贴真实刘海」;收起态 34pt 的耳朵减掉 6 还剩 28,放得下 23pt 的封面 / 14pt
+    /// 的音浪);左耳内容靠左外缘、右耳靠右外缘(05 章「指示条贴外缘,收放切换时不横跳」)。
     private func topRow(earWidth: CGFloat) -> some View {
-        HStack(spacing: 0) {
-            // 左耳:可配模块 + (可选)音浪。音浪贴哪只耳朵可配之后(2026-08-31,原来写死在
-            // 右耳),这里跟下面右耳是完全对称的结构——只是音浪在外缘,外缘在左耳是"最左",
+        let collapsed = controller.isCollapsed
+        let leftModule: NotchEarModule = collapsed ? .artwork : playback.leftEar
+        let rightModule: NotchEarModule = collapsed ? .none : playback.rightEar
+        let equalizerOnLeft = !collapsed && showsEqualizer(on: .left, module: playback.leftEar)
+        let equalizerOnRight = collapsed || showsEqualizer(on: .right, module: playback.rightEar)
+        return HStack(spacing: 0) {
+            // 左耳:模块 + (可选)音浪。音浪贴哪只耳朵可配之后(2026-08-31,原来写死在右耳),
+            // 这里跟下面右耳是完全对称的结构——只是音浪在外缘,外缘在左耳是"最左",
             // 所以音浪排在模块**前面**(下面右耳反过来,音浪排在模块后面)。
+            // `.none` 不渲染(它是一条空的跑马灯,在 HStack 里会把音浪推到另一头去;要"贴外缘"
+            // 靠的是外面那句 .frame(maxWidth:alignment:))。
             HStack(spacing: NotchMetrics.earWaveSpacing) {
-                if showsEqualizer(on: .left, module: playback.leftEar) {
+                if equalizerOnLeft {
                     equalizerBars
                 }
-                earContent(playback.leftEar, alignment: .leading)
+                if leftModule != .none {
+                    earContent(leftModule, alignment: .leading)
+                }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
             // 内缩必须在 .frame(width:) **之前** —— 之后加等于把耳朵整体变宽 6pt,
             // 三段就不再严丝合缝铺满,背景形状/刘海空当会跟着错位。
             .padding(.trailing, NotchMetrics.earNotchInset)
@@ -879,17 +867,20 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
             // **不画在这一行里**,而是钉在 body 的 ZStack 顶部居中,这里只留空当的宽度(理由见 notchGap)。
             notchGap
 
-            // 右耳:可配模块 + (可选)音浪(2026-08-19 设计评审的终形,用户逐步拍板;
+            // 右耳:模块 + (可选)音浪(2026-08-19 设计评审的终形,用户逐步拍板;
             // 2026-08-31 从"音浪固定贴右耳"改成可配置贴哪只耳朵/要不要显示):控制键全部
             // 退场 —— 岛是 hover 展开的,光标到达耳朵之前岛已经展开,完整三键就在展开卡
             // 的进度条下方(见 expandedContent),耳朵里再留一枚播放键是重复目标。默认配置
             // (左歌名、右歌手 + 音浪贴右耳)因此跟改动前逐像素一致——只是现在两者都能关/换边。
             HStack(spacing: NotchMetrics.earWaveSpacing) {
-                earContent(playback.rightEar, alignment: .trailing)
-                if showsEqualizer(on: .right, module: playback.rightEar) {
+                if rightModule != .none {
+                    earContent(rightModule, alignment: .trailing)
+                }
+                if equalizerOnRight {
                     equalizerBars
                 }
             }
+            .frame(maxWidth: .infinity, alignment: .trailing)
             .padding(.leading, NotchMetrics.earNotchInset) // 理由同左耳,见 earNotchInset
             .frame(width: earWidth)
         }

@@ -80,7 +80,7 @@
 
 所有图像消费面读的都是 `poller.highResArtworkImage ?? poller.artworkImage`——**解码收敛在 PlaybackCoordinator**:`artworkData` 变化时 `NSImage(data:)` 只解一次(`artworkImage`),灵动岛一个 body 里两处读封面不会把同一张几百 KB 的 JPEG 每次重算 body 都解两遍。
 
-⚠️ **这条口径是每个消费面自己的义务,漏了不报错**。下面列的四处之外还有两处后来加的:**菜单栏快捷面板的 44pt 小封面**(`MenuBarPanel.coverView`)和 **Last.fm「正在播放」行的 26pt 缩略图**(`LastfmStatsSection` 的 `LiveRowPlayback`);再加上**灵动岛收起态左耳的小封面**(`NotchLyricsView.collapsedRow`),这三处一直漏着 `?? `,2026-09-02 才由用户报出来 —— 方大同《白发》在 Chrome 里放 YouTube Music 时,系统经 MediaSession 给的是一帧 **150×84 的 MV 截帧**(长宽比偏离正方形 0.44,collector 侧 `deviceArtworkMaxAspectSkew` 正确地没把它当封面收下),于是菜单栏面板画的是那帧 MV、歌词窗口画的是缓存里正确的专辑封面,同一首歌两处两张图。用户原话:「为什么这两个地方的封面不一样?难道取值不一样吗」—— 确实就是取值不一样。
+⚠️ **这条口径是每个消费面自己的义务,漏了不报错**。下面列的四处之外还有两处后来加的:**菜单栏快捷面板的 44pt 小封面**(`MenuBarPanel.coverView`)和 **Last.fm「正在播放」行的 26pt 缩略图**(`LastfmStatsSection` 的 `LiveRowPlayback`);再加上**灵动岛收起态左耳的小封面**(当时的 `NotchLyricsView.collapsedRow`;2026-09-06 起收起态走同一份 `earArtwork`,不再单独有一处),这三处一直漏着 `?? `,2026-09-02 才由用户报出来 —— 方大同《白发》在 Chrome 里放 YouTube Music 时,系统经 MediaSession 给的是一帧 **150×84 的 MV 截帧**(长宽比偏离正方形 0.44,collector 侧 `deviceArtworkMaxAspectSkew` 正确地没把它当封面收下),于是菜单栏面板画的是那帧 MV、歌词窗口画的是缓存里正确的专辑封面,同一首歌两处两张图。用户原话:「为什么这两个地方的封面不一样?难道取值不一样吗」—— 确实就是取值不一样。
 
 **现在有机械闸**:selftest 扫 `Sources/lyrimuse` 里所有 `.artworkImage` 的**取值点**(排除声明/订阅/赋值/KeyPath),不带 `highResArtworkImage ?? ` 也不走已包好的 `displayArtworkImage` 就红。新增消费面时别绕开它。加闸的理由是这条口径靠"记得写"维护了三个月、漏了三处才被发现,而漏掉既不编译报错也不崩,只表现成"两个地方的封面不一样"。
 

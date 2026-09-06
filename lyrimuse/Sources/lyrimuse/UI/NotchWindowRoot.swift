@@ -84,7 +84,7 @@ struct NotchWindowRoot: View {
     /// 评审把三键挪进展开卡、右耳只剩一枚播放键之后,这条理由不复存在 —— 收起态那条
     /// 全宽黑带的宽度全是死空间(用户:"左右各自保留一点空间即可")。耳宽取
     /// NotchMetrics.collapsedEarWidth(左耳只放音浪,右耳只放小封面 —— 同日再收窄成
-    /// iPhone 灵动岛式极简,见 collapsedRow),
+    /// iPhone 灵动岛式极简,见 NotchLyricsView.topRow 的收起分支),
     /// +20 对应 topRow 的水平 padding;min 兜底"刘海比用户设的内容宽度还宽"的怪配置。
     /// 稳态是全宽(`steadyCardWidth`):歌词行需要空间。宽度变化跟高度同一条弹簧(cardAnimation)。
     ///
