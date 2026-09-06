@@ -67,6 +67,15 @@ final class NotchPreviewChrome: ObservableObject, NotchChromeSource {
     @Published private(set) var isExpanded = false
     @Published private(set) var notchWidth: CGFloat = 0
     @Published private(set) var contentTopInset: CGFloat = 0
+    /// 卡片两种形态的真实宽,由舞台按真窗口同一套公式算好推进来(`NotchEditorStage.card` 的 onAppear /
+    /// onChange),歌词行按它们定宽居中交叉淡入淡出(NotchChromeSource 里的说明)。初值只是占位。
+    @Published private(set) var steadyCardWidth: CGFloat = AppSettings.defaultNotchContentWidth
+    @Published private(set) var expandedCardWidth: CGFloat = AppSettings.defaultNotchContentWidth
+
+    func setCardWidths(steady: CGFloat, expanded: CGFloat) {
+        if steadyCardWidth != steady { steadyCardWidth = steady }
+        if expandedCardWidth != expanded { expandedCardWidth = expanded }
+    }
 
     /// 预览恒为 false。isCollapsed 是真窗口"没在播放就缩回刘海大小、内容整套不渲染"的
     /// 行为 —— 照搬到设置页就是一片空白,而用户恰恰是来这里看样式的。
@@ -979,6 +988,11 @@ struct NotchEditorStage: View {
             // 先钉当下的真实尺寸:视图内层是 GeometryReader,耳朵宽度按 proxy.size.width 算,
             // 给错尺寸这一层就先失真了。
             .frame(width: cardWidth, height: cardHeight)
+            // 两种形态的真实宽推给替身 chrome(歌词行按它们定宽,见 NotchChromeSource.steadyCardWidth):
+            // 拖宽度滑块时逐帧变,onChange 比卡片晚一帧跟上,16ms 肉眼不可辨。
+            .onAppear { chrome.setCardWidths(steady: steadyCardWidth, expanded: expandedCardWidth) }
+            .onChange(of: steadyCardWidth) { _, w in chrome.setCardWidths(steady: w, expanded: expandedCardWidth) }
+            .onChange(of: expandedCardWidth) { _, w in chrome.setCardWidths(steady: steadyCardWidth, expanded: w) }
             .allowsHitTesting(false)
             // 可点区域压在真视图之上、轮廓之下;它在 allowsHitTesting(false) **之后**挂上,所以自己
             // 收得到 hover / 点击。

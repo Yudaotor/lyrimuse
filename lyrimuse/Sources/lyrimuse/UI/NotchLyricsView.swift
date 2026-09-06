@@ -378,6 +378,11 @@ protocol NotchChromeSource: ObservableObject {
     /// 物理刘海的宽度,顶行中间要给它让出空当。无刘海屏幕是 0。
     var notchWidth: CGFloat { get }
     var contentTopInset: CGFloat { get }
+    /// 卡片稳态 / 展开态的**真实**宽(经耳朵下限与「展开 ≥ 稳态」)。歌词行按形态各自定宽、以卡片中心为锚,
+    /// 换形态时在原地交叉淡入淡出而不是跟着卡片边沿平移(2026-09-06,见 `NotchLyricsView.lyricRowSlot`)。
+    /// 真窗口是控制器 recomputeGeometry 算出的那两个数;编辑台由 NotchEditorStage 用同一套公式算好推进来。
+    var steadyCardWidth: CGFloat { get }
+    var expandedCardWidth: CGFloat { get }
     /// 展开区里那行"下一句歌词预览"会不会渲染 —— 决定要不要给它留高度。
     /// 曲目级信号(这首歌有没有歌词),不是"此刻有没有下一句",理由见
     /// NotchMetrics.expandedExtraHeight 的注释。
@@ -524,6 +529,8 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
     @Environment(\.notchRevealContentOpacity) private var revealContentOpacity
     /// 宿主是否已替卡片裁好外形(真窗口 true / 编辑台 false),见 EnvironmentValues.notchHostClipsCard。
     @Environment(\.notchHostClipsCard) private var hostClipsCard
+    /// 这一块内容此刻是不是可见的那份(见 cardBodyLayer);藏着的那份停掉逐字填色的表。
+    @Environment(\.notchCardLayerActive) private var cardLayerActive
 
     // 稳态歌词行的固定高度——跟 NotchLyricsWindowController.contentSize.height 保持
     // 一致(两个文件都描述同一个窗口的几何,这点数值耦合是设计使然,不值得为两个常量
@@ -581,48 +588,32 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
                     // 在这里 if/else 互换(2026-09-06 起,理由见 topRow 头注)。
                     topRow(earWidth: earWidth)
                         .frame(height: controller.contentTopInset)
-                    // 歌词行和 hover 展开区才是"收进去"的部分。
-                    //
-                    // ⚠️ hasTrack 这一条(2026-08-21)必须跟 NotchWindowRoot.cardHeight 里
-                    // 那个同款判断成对出现:压根没有曲目时这一行是**全空**的(两个占位 ♪ 已按
-                    // 同一判据留白),44pt 白占着就是用户报的"占用空间"。一处改一处不改的
-                    // 表现是"行不见了高度还留着"或反过来把行裁掉半截。
-                    if !controller.isCollapsed && controller.hasTrack {
-                        // 曲目信息头部(歌名/歌手/专辑,2026-09-01):画在歌词行**之上**——
-                        // 用户原话"新加的这些字段元素都是在最上面,然后歌词行和下一行歌词
-                        // 这些都放在最下面,而不是现在这样信息都夹在两行歌词之间"(第一版
-                        // 把它塞进 expandedContent 顶部,结果夹在"正在播放"那行和"下一句
-                        // 预览"中间)。只在展开时出现,理由跟下面 expandedContent 一致:
-                        // 展开是用户主动选的动作。高度用 `expandedTrackInfoHeaderHeight`——
-                        // 它已经包含跟下面歌词行之间的间距,见该属性的注释。
-                        if controller.isExpanded, controller.showsExpandedTrackInfo {
-                            trackInfoHeader
-                                .frame(height: controller.expandedTrackInfoHeaderHeight, alignment: .top)
-                        }
-                        // 用户关掉「显示歌词」时这一行连同它那 44pt 一起不渲染,卡片退化成
-                        // 只剩顶行的一条状态栏(2026-08-31)——但展开时哪怕关着也要照常画,
-                        // 见 showsLyricRow 的注释(2026-08-31 回归:第一版漏了展开这一档,
-                        // 表现是"展开后有下一句预览、却看不到正在播放的当前行")。⚠️ 判据
-                        // 必须跟 NotchChromeSource.cardHeight 里那一条**同源**,那边是全仓
-                        // 唯一一份高度公式,两处各判各的必然漂。
-                        if controller.showsLyricRow {
-                            lyricRow
-                                .frame(height: NotchMetrics.compactRowHeight)
-                        }
-                        // 展开区**完全不**受那个开关影响(2026-08-31 用户要求):它是够到
-                        // 播放控制和进度条的唯一入口,而且用户主动指向展开这个动作本身就说明
-                        // 他现在想看更多,不该因为平时不想被歌词挡视线这个理由被拿掉——连里面
-                        // 那行下一句预览也照常画(见 showsExpandedLyricPreview 的注释)。
-                        if controller.isExpanded {
-                            expandedContent
-                        }
-                    }
+                    // 顶行以下的一切(曲目信息头部 / 歌词行 / 展开区)2026-09-06 起**不在这个 VStack 里**,
+                    // 而是作为外层 ZStack 的 overlay 各自定宽、定 y、以卡片中心为锚(见 cardBodyLayer)。
+                    // 卡片的高度本来就由 NotchChromeSource.cardHeight 给 NotchWindowRoot 钉死,不靠这里堆出来。
                 }
                 // 出场动画的内容淡入(2026-09-03):值来自 NotchWindowRoot 的 keyframeAnimator,
                 // 平时恒为 1;背景层不套它,所以卡片形状先长出来、字后到。
                 .opacity(revealContentOpacity)
                 // 卷进顶行:锚点放顶部,内容一边淡出一边往上缩,跟卡片高度收缩同一条弹簧。
                 .transition(.opacity.combined(with: .scale(scale: 0.94, anchor: .top)))
+            }
+            // 顶行以下的内容(曲目信息头部 / 两份歌词行变体 / 展开区)作为 ZStack 的 **overlay**、顶部居中,
+            // 理由见 cardBodyLayer。
+            // ⚠️ 必须是 overlay 而不是 ZStack 的子视图:展开宽那些在稳态下比卡片宽,做子视图会把 ZStack
+            // 撑到展开宽,而 GeometryReader 把内容摆在左上角 —— 整卡内容右移 (展开宽 − 稳态宽) / 2
+            // (2026-09-06 逐帧抓窗撞到过两次:第一次是歌词行的定宽容器,第二次就是这里)。overlay 不参与
+            // 父布局,居中对齐的参照始终是卡片本身。
+            //
+            // ⚠️ hasTrack 这一条(2026-08-21)必须跟 NotchChromeSource.cardHeight 里那个同款判断成对出现:
+            // 压根没有曲目时歌词行是**全空**的,44pt 白占着就是用户报的"占用空间"。一处改一处不改的表现是
+            // "行不见了高度还留着"或反过来把行裁掉半截。
+            .overlay(alignment: .top) {
+                if !controller.isCollapsed, controller.hasTrack {
+                    cardBodyLayer
+                        // 出场动画的内容淡入(2026-09-03):值来自 NotchWindowRoot 的 keyframeAnimator,平时恒为 1。
+                        .opacity(revealContentOpacity)
+                }
             }
             // 展开态内容(下一句预览+进度条)本身没有另外裁一次形状——如果只让背景那一层
             // fill 是圆角、前景内容不跟着裁,内容溢出圆角边界时会带着直角"戳"出卡片轮廓。
@@ -1107,6 +1098,70 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
     // 不应该打断正在进行的滚动。
     // 有瞬态提示(改歌词偏移/调音量)时,这一行让位给提示条,提示到期再换回歌词。
     // 只盖歌词行、不动卡片高度和顶行控件 —— 提示是"顺带说一句",不该让整块卡片跳一下。
+    /// 顶行以下的全部内容:曲目信息头部、歌词行(两份定宽变体)、展开区。每一块都**常驻、定宽、定 y、
+    /// 以卡片中心为锚**,展开 / 收回只切它们的透明度 —— 稳态那份歌词行原地淡出,展开态的头部 / 歌词行 /
+    /// 展开区在**各自的最终位置**淡入(2026-09-06,用户报「展开的时候歌词这些都是平移过去的,它并不是
+    /// 一个重新出现的过程」)。
+    ///
+    /// 此前这些都是 VStack 里吃满卡片宽的行:卡片从稳态宽长到展开宽时,靠左的歌词 / 歌名跟着卡片左沿
+    /// 一路向左滑一百多 pt,头部插进来时歌词行还同时往下滑。用户要的是"原地淡出、在新位置淡入"。
+    ///
+    /// 为什么是**常驻 + 透明度**,而不是 if/else 换视图或把行留在 VStack 里:同日逐帧抓窗试过三版
+    /// (if/else 直接放 VStack、放进定宽 overlay 容器、只把歌词行挪出来),正在过渡的那份或新插进来的那份
+    /// 都跟着卡片左沿滑 —— SwiftUI 对进出场视图怎么摆,跟持久视图不是一套规则,而且不透明。反过来,
+    /// **持久**视图被居中对齐这件事已经被刘海胶囊(notchSeam)逐帧验证过:卡片怎么长,中心一像素不动。
+    /// 所以全部做成持久视图,位置交给居中布局(overlay alignment .top = 顶部居中),自己只动 opacity
+    /// (跟卡片同一条弹簧)。竖直位置各自写死为常量:头部贴顶行;稳态歌词行贴顶行,展开歌词行再往下让出
+    /// 头部高度(`expandedTrackInfoHeaderHeight`,没头部时为 0);展开区在展开歌词行之下。没有任何一块
+    /// 的 frame 在动画里改值,所以没有平移。
+    ///
+    /// 守则:① 藏着的那份**必须**停表 —— 逐字填色与迷你进度条的 TimelineView 都按环境值
+    /// `notchCardLayerActive` 暂停,否则 30Hz 热路径翻倍(2026-08-19 性能审计盯住的那条);跑马灯只是一个
+    /// 睡着的 Task,不管。② 藏着的一律 `allowsHitTesting(false)`(里面有封面按钮、播放键、校准键)且对读屏
+    /// 隐藏 —— 都收在 `NotchCardLayerActive` 这一个修饰器里。③ 两个宽度从 chrome 拿(协议
+    /// `steadyCardWidth` / `expandedCardWidth`),不能用 GeometryReader 的现值。④ 「显示歌词」关着时稳态
+    /// 那份歌词行不建(那时稳态本来没有歌词行,`showsLyricRow` 的语义),展开那份照常。⑤ 这一层里**不准**
+    /// 出现 `.animation(_:value:)` 这类会随时间反复触发的隐式动画 —— 音浪那次(EqualizerBars 头注)证明它
+    /// 会在卡片尺寸弹簧中途把作用域里的位置也接管走。⑥ 高度算术仍以 NotchChromeSource.cardHeight /
+    /// NotchMetrics.expandedExtraHeight 为唯一真源,这里的 y 只是把同一组量按顺序加起来。
+    private var cardBodyLayer: some View {
+        let expanded = controller.isExpanded
+        let top = controller.contentTopInset
+        let headerHeight = controller.expandedTrackInfoHeaderHeight
+        // ⚠️ 必须是**显式**的 ZStack(alignment: .top),不能让 @ViewBuilder 直接吐一个 TupleView 再在外面套
+        // .opacity:套了修饰符的 TupleView 是一个视图,里面几块按**居中**叠,外面 overlay 的 .top 只管这一个整体
+        // —— 第一版就是这样,稳态下最高的那块(展开区)把整体撑到 220pt、居中后歌词行被顶到卡片上方裁没了,
+        // 展开态头部落到了卡片中段(2026-09-06 逐帧抓窗当场看见)。
+        return ZStack(alignment: .top) {
+            // 曲目信息头部(歌名/歌手/专辑,2026-09-01):画在歌词行**之上**——用户原话"新加的这些字段元素都是
+            // 在最上面,然后歌词行和下一行歌词这些都放在最下面"。只在展开时可见:展开是用户主动选的动作。
+            if controller.showsExpandedTrackInfo {
+                trackInfoHeader
+                    .frame(width: controller.expandedCardWidth, height: headerHeight, alignment: .top)
+                    .padding(.top, top)
+                    .modifier(NotchCardLayerActive(active: expanded))
+            }
+            // 用户关掉「显示歌词」时稳态没有歌词行(2026-08-31)——但展开时哪怕关着也要照常画,见 showsLyricRow
+            // 的注释(2026-08-31 回归:第一版漏了展开这一档,表现是"展开后有下一句预览、却看不到正在播放的当前行")。
+            if controller.showsLyrics {
+                lyricRow
+                    .frame(width: controller.steadyCardWidth, height: NotchMetrics.compactRowHeight)
+                    .padding(.top, top)
+                    .modifier(NotchCardLayerActive(active: !expanded))
+            }
+            lyricRow
+                .frame(width: controller.expandedCardWidth, height: NotchMetrics.compactRowHeight)
+                .padding(.top, top + headerHeight)
+                .modifier(NotchCardLayerActive(active: expanded))
+            // 展开区**完全不**受「显示歌词」开关影响(2026-08-31 用户要求):它是够到播放控制和进度条的唯一入口,
+            // 而且用户主动指向展开这个动作本身就说明他现在想看更多 —— 连里面那行下一句预览也照常画。
+            expandedContent
+                .frame(width: controller.expandedCardWidth)
+                .padding(.top, top + headerHeight + NotchMetrics.compactRowHeight)
+                .modifier(NotchCardLayerActive(active: expanded))
+        }
+    }
+
     private var lyricRow: some View {
         // NotchTransientCenter 的订阅下沉在 NotchTransientHost 子视图里 —— 横幅出现/
         // 消失(音量连调时每档一次)只失效歌词行,不再打醒整卡 body。
@@ -1207,8 +1262,10 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
                 // paused 的第二个条件(2026-08-19 性能审计落地,与悬浮窗同款):这一行填完
                 // 之后到下一行开始之前(行尾/间奏/曲末)视觉零变化,把表停掉;换行时
                 // currentLine 赋值触发 body 重估,表自然恢复。
+                // `!cardLayerActive`(2026-09-06):这一行现在有两份变体常驻,藏着的那份必须停表,见 cardBodyLayer。
                 TimelineView(.animation(minimumInterval: WordKaraokeGradient.refreshInterval,
-                                        paused: !playback.isPlayingNow || playback.currentLineFillSettled)) { context in
+                                        paused: !playback.isPlayingNow || playback.currentLineFillSettled
+                                            || !cardLayerActive)) { context in
                     // 加上 currentLyricsOffsetMs,理由跟 LyricsOverlayView.mainLine 同一段
                     // 注释——不加的话"当前词判定"和"填色进度"用的时间基准对不上,会出现填到
                     // 一半就卡住的现象。anchor/offset 直读协调器不经代理订阅:这个闭包按帧
@@ -1603,6 +1660,8 @@ private struct NotchScrubber: View {
     let trackLyricsOffsetMs: Int
     let lyricsOffsetStepMs: Int
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// 所在的展开区此刻是不是可见的(NotchLyricsView.cardBodyLayer):展开区常驻、稳态下藏着,藏着时停表。
+    @Environment(\.notchCardLayerActive) private var cardLayerActive
 
     // 正在拖进度条时手指所在的比例(0~1);没在拖就是 nil。
     // 用 @GestureState:手势被取消时(拖动中这块条件分支被摘掉)自动复位,@State 会永久卡住。
@@ -1615,7 +1674,7 @@ private struct NotchScrubber: View {
     var body: some View {
         if let anchor, anchor.durationMs > 0 {
             TimelineView(.animation(minimumInterval: WordKaraokeGradient.refreshInterval,
-                                    paused: !isPlayingNow)) { context in
+                                    paused: !isPlayingNow || !cardLayerActive)) { context in
                 // 拖动期间显示手指按住的位置,而不是外推出的真实位置——否则进度条会在
                 // 手指底下被 TimelineView 每帧拉回去。松手才真的发 seek。
                 let currentMs = scrubbingFraction.map { Int($0 * Double(anchor.durationMs)) }
@@ -1818,6 +1877,20 @@ enum NotchTimeFormat {
 // 目标是 14),手写一个 Shape 直接按四段直线+两段圆弧画出这个轮廓,不依赖新 API。
 // 不加 private:「外观」页的灵动岛预览(NotchPreviewBar)要用同一个形状画预览卡,
 // 复制一份轮廓代码只会让两边慢慢漂开。
+/// 顶行以下某一块内容"此刻是不是可见的那份"(NotchLyricsView.cardBodyLayer):可见 = 正常;藏着 = 透明、不吃点击、
+/// 对读屏隐藏,并通过环境值 `notchCardLayerActive` 让里面的 TimelineView 停表。四件事收在一处,免得哪一块漏一件。
+struct NotchCardLayerActive: ViewModifier {
+    var active: Bool
+
+    func body(content: Content) -> some View {
+        content
+            .environment(\.notchCardLayerActive, active)
+            .opacity(active ? 1 : 0)
+            .allowsHitTesting(active)
+            .accessibilityHidden(!active)
+    }
+}
+
 /// 卡片自己那道外形裁剪,可按宿主关掉(理由见 NotchLyricsView.body 末尾与 EnvironmentValues.notchHostClipsCard)。
 /// `enabled` 对某个宿主是常量;运行期切换会换分支、重建 content 子树。
 struct NotchCardClip: ViewModifier {

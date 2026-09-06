@@ -17,16 +17,18 @@ import LyrimuseCore
 // 形状(哪根跳多高)仍是伪随机 —— 那部分本来就不该假装有物理意义。
 //
 // 性能:用 .animation(minimumInterval:) 而不是裸的 .animation。后者是每帧(60/120Hz)重算
-// 一次 body,而这个视图常驻在屏幕顶端 —— 这个 App 已经有一条 20Hz 的逐字填色热路径了,
-// 不该再挂一条更热的纯装饰路径上去。给了 minimumInterval 之后 0.28 秒才重算一次、换一个
-// 目标高度,中间的过渡交给隐式动画在 Core Animation 那边跑(不经过 SwiftUI 重算)。
+// 一次 body,而这个视图常驻在屏幕顶端。2026-09-06 之前是 12.5Hz 采样 + 每次 40ms 的隐式
+// 线性补间(`.animation(_:value:)`,过渡交给 Core Animation);2026-09-06 起改成**跟逐字填色
+// 同一个 30Hz 表直接采样、不做任何隐式补间** —— 理由见 body 里那段⚠️(隐式补间会在灵动岛
+// 卡片做尺寸弹簧时把条子的位置也接管走,逐帧抓窗坐实)。30Hz 的合成负载跟原来"12.5Hz × 40ms
+// 补间"(合成器一半时间在动)是一个量级,且与逐字填色那条 30Hz 表同拍,不额外多一种唤醒节奏。
 //
 // ⚠️ 不能用 .periodic:它没有 paused 参数,暂停时条子会一直跳。
 struct EqualizerBars: View {
     var color: Color
     var isPlaying: Bool
-    /// 这一刻的"人声强度",0...1。在 TimelineView 的每个 tick 上求值一次(不是每帧 ——
-    /// tick 频率仍是 `interval`,见下面的性能注释,**不要**为了更跟手去提高它)。
+    /// 这一刻的"人声强度",0...1。在 TimelineView 的每个 tick 上求值一次(tick 频率是
+    /// `interval` = 30Hz,与逐字填色同拍;**不要**再往上提)。
     ///
     /// 闭包而不是值:值只会在父 body 重算时更新,而父 body 的重算时机跟这个视图自己的
     /// tick 完全对不上,表现就是"唱了一整行条子的幅度纹丝不动"。闭包让它在 tick 那一刻
@@ -52,7 +54,9 @@ struct EqualizerBars: View {
     /// 尺寸动画 100% 时间在跑、把窗口钉死在持续合成状态";这里补间仍然只占半个周期
     /// (见 body 末尾),每个周期照样有一半时间完全静止,合成循环该 idle 还是 idle。变的
     /// 只是**求值频率**:3.6Hz → 10Hz → 12.5Hz,仍远低于逐字填色那条 30Hz 的热路径。
-    private static let interval: TimeInterval = 0.08
+    /// 2026-09-06 再从 0.08 改到 1/30(= `WordKaraokeGradient.refreshInterval`):补间被拿掉了(见 body),
+    /// 采样本身就是动画,12.5Hz 硬跳肉眼是阶梯,30Hz 直采就是这条连续曲线的分段逼近;跟逐字填色同一拍。
+    private static let interval: TimeInterval = WordKaraokeGradient.refreshInterval
     /// 2026-08-31 改成 iPhone 那种"上下对称、从中线生长"的声浪。条数几经调整:4(原始)
     /// → 8(照参考图) → **5**(用户看过 8 根的实机效果后说"太多了")。
     ///
@@ -100,31 +104,28 @@ struct EqualizerBars: View {
             // 这是这次改动唯一真正改变形态的一行 —— 条数/粗细/间距都只是为了配合它。
             HStack(alignment: .center, spacing: Self.spacing) {
                 ForEach(0..<Self.barCount, id: \.self) { i in
+                    // 每根条子住在一个**定尺寸**的格子里(barWidth × maxHeight),只有格子里那枚
+                    // Capsule 的高度按 tick 直接取当下的曲线值 —— **没有任何隐式补间**。
+                    //
+                    // ⚠️ 2026-09-06 之前这里有 `.animation(.linear(0.04), value: 高度)`(套在 HStack 外,
+                    // 更早的版本 value 取第一根的高度)。它平时看不出问题,灵动岛 hover 展开 / 收起时
+                    // 暴露:卡片那条尺寸弹簧正把这排条子从旧耳宽的位置平移到新耳宽的位置,而每一次
+                    // tick 让 `.animation(value:)` 的 value 变一次,SwiftUI 就拿那条 0.04s linear 重新
+                    // 接管一遍作用域里正在动的属性 —— 条子的**位置**也在内,于是每根条子按各自的
+                    // tick 相位在"弹簧中途的位置"和"目标位置"之间来回跳,逐帧抓窗看到的是几根条子
+                    // 散开、几根不见(用户报「音浪在原始位置和即将出现的位置之间闪动」)。把 `.animation`
+                    // 从 HStack 挪到每枚 Capsule 上**没用**(同日实测,仍散开);整个拿掉之后同一协议
+                    // 逐帧看,展开全程 5 根条子紧凑、右边距恒定。所以补间只能靠采样密度:interval 改成
+                    // 30Hz(见 interval 注释),曲线本来就是连续的,30Hz 直采就是它的分段逼近。
+                    // isPlaying 翻转时高度直接落到 minHeight,不再有 easeInOut —— 暂停那一刻卡片本身
+                    // 也在收起 / 缩进刘海,这一下看不出来。
                     Capsule()
                         .fill(color)
                         .frame(width: Self.barWidth, height: height(bar: i, time: t, amplitude: amp))
+                        .frame(width: Self.barWidth, height: Self.maxHeight)
                 }
             }
             .frame(width: Self.width, height: Self.maxHeight, alignment: .center)
-            // 补间时长只取间隔的一半(2026-08-19 性能审计):原来 duration == interval,
-            // 上一次高度补间刚结束下一 tick 就到,首尾相接零空档 —— 播放期间这 4 根
-            // 胶囊的尺寸动画 100% 时间在跑,把整个灵动岛窗口钉死在持续动画/持续合成
-            // 状态(body 重算确实被 minimumInterval 压到了 3.6Hz,但合成频率仍是满帧)。
-            // 减半后每个周期有一半时间完全静止,合成循环能间歇 idle;观感仍是跳动的条,
-            // 只是每跳快一点、停一下 —— 反而更像"拍点"。
-            // ⚠️ `value:` 必须是随时间变的那个量。以前是离散的 tick,现在没有 tick 了,
-            // 改用"第一根条子此刻的高度"当变化信号 —— 它每次求值都不同,等价于每个周期
-            // 触发一次补间。
-            //
-            // 曲线从 easeInOut 换成 linear:目标值本身已经是连续曲线上的采样点,再套
-            // ease 会在每个采样点两端各加一次加减速,反而把平滑的正弦啃成一段段的"顿挫"
-            // —— 那正是"机械感"的另一半来源。linear 把相邻采样点直连,12.5Hz 下就是这条
-            // 曲线的分段线性逼近,肉眼即连续。
-            //
-            // 时长仍是半个周期(0.04s),不是整个周期 —— 见 interval 注释里对 2026-08-19
-            // 那条性能结论的说明。
-            .animation(.linear(duration: Self.interval * 0.5), value: height(bar: 0, time: t, amplitude: amp))
-            .animation(.easeInOut(duration: Self.interval), value: isPlaying)
         }
         .frame(width: Self.width, height: Self.maxHeight)
         // 装饰元素,读屏软件念"2.5、7、4、9"没有任何意义。

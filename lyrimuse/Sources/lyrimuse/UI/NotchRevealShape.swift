@@ -43,6 +43,10 @@ private struct NotchHostClipsCardKey: EnvironmentKey {
     static let defaultValue = false
 }
 
+private struct NotchCardLayerActiveKey: EnvironmentKey {
+    static let defaultValue = true
+}
+
 extension EnvironmentValues {
     /// 出场动画期间内容(顶行 / 歌词行 / 展开区)的透明度,背景不受影响 —— 先看到卡片形状长出来,再看到字。
     /// 默认 1;只有 `NotchWindowRoot` 在动画那 0.3s 里改它,设置页编辑台等别的宿主永远是 1。
@@ -59,5 +63,13 @@ extension EnvironmentValues {
     var notchHostClipsCard: Bool {
         get { self[NotchHostClipsCardKey.self] }
         set { self[NotchHostClipsCardKey.self] = newValue }
+    }
+
+    /// 灵动岛顶行以下的某一块内容(曲目头部 / 两份歌词行变体 / 展开区)此刻是不是可见的那份
+    /// (2026-09-06,`NotchLyricsView.cardBodyLayer`)。藏着的那份按它停掉逐字填色 / 迷你进度条的 TimelineView。
+    /// 默认 true —— 别的宿主 / 单份渲染时不受影响。
+    var notchCardLayerActive: Bool {
+        get { self[NotchCardLayerActiveKey.self] }
+        set { self[NotchCardLayerActiveKey.self] = newValue }
     }
 }
