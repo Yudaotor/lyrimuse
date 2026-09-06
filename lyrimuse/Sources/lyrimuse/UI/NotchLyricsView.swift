@@ -553,6 +553,17 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
                 // 圆角交给外层那道统一的 clipShape(理由同 backgroundLayer 里的打底层)。
                 Color.black
                     .opacity(controller.isCollapsed ? 1 : 0)
+                // 刘海空当里的品牌胶囊(notchSeam)直接钉在 ZStack 顶部**居中**,不再画在顶行的 HStack 里
+                // (2026-09-06,用户报「暂停状态展开的动画会把中间那个 Lyrimuse 图案漏出来一会」)。
+                // 逐帧抓窗坐实:收起态 hover 展开时顶行从 collapsedRow 换成 topRow,两行在 VStack 里交叉
+                // 淡入淡出,而 SwiftUI 对"正在离场的那一行"按它离场时的耳宽(34pt)布局、对"刚插入的那一行"
+                // 按目标耳宽(146.5pt)布局,两行都从卡片左沿起排 —— 于是各自那枚胶囊一枚偏左 ~15pt、一枚
+                // 偏右 ~100pt,都跑出了刘海的遮挡范围,在屏幕上"漏出来一会"(帧 2～13,约 200ms)。胶囊
+                // 挂在 ZStack 上,位置只由 ZStack 的居中对齐决定,跟耳朵怎么换、怎么长都无关。
+                // 顶行两个版本里原来放胶囊的位置只留同宽的空当(notchGap)。
+                notchSeam
+                    .frame(height: controller.contentTopInset)
+                    .opacity(revealContentOpacity)
                 // 收起态(没在播放、没 hover)卡片缩到刘海大小,这里把常显内容整套摘掉而不是
                 // 指望卡片太小自然裁掉——避免文字/按钮在收缩过程中被挤压变形,收起就是纯粹
                 // 一块背景,跟真实刘海融为一体。
@@ -766,7 +777,7 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
             }
             .frame(width: earWidth)
 
-            notchSeam
+            notchGap
 
             HStack {
                 EqualizerBars(color: accentOrWhite, isPlaying: playback.isPlayingNow,
@@ -793,6 +804,12 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
     ///    选了"只在有曲目时画",而不是参考实现那种常驻)。
     /// 「截屏/录屏时隐藏」开着时整窗不进截图,不必另加开关。高度按顶行让 8pt 边、夹在
     /// 14～22pt(矮刘海机型顶行可能不到 26pt)。装饰元素,读屏不念。
+    /// 顶行中间刘海那一段的**占位**:只有宽度,什么都不画。胶囊本体(notchSeam)自 2026-09-06 起钉在 body 的
+    /// ZStack 顶部居中(理由见那里),顶行两个版本(collapsedRow / topRow)只需要把这段宽度让出来。
+    private var notchGap: some View {
+        Spacer(minLength: 0).frame(width: controller.notchWidth)
+    }
+
     private var notchSeam: some View {
         ZStack {
             if controller.notchWidth > 0, controller.hasTrack {
@@ -858,8 +875,9 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
             .padding(.trailing, NotchMetrics.earNotchInset)
             .frame(width: earWidth)
 
-            // 刘海本身的空当——物理硬件不发光区域,只放那枚肉眼看不见的彩蛋(见 notchSeam)。
-            notchSeam
+            // 刘海本身的空当——物理硬件不发光区域。那枚肉眼看不见的彩蛋(notchSeam)2026-09-06 起
+            // **不画在这一行里**,而是钉在 body 的 ZStack 顶部居中,这里只留空当的宽度(理由见 notchGap)。
+            notchGap
 
             // 右耳:可配模块 + (可选)音浪(2026-08-19 设计评审的终形,用户逐步拍板;
             // 2026-08-31 从"音浪固定贴右耳"改成可配置贴哪只耳朵/要不要显示):控制键全部
