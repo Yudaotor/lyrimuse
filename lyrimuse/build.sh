@@ -168,7 +168,11 @@ SWIFT_SLICES=()
 TRANSLATE_SLICES=()
 ROMANIZE_SLICES=()
 for arch in $ARCHES; do
-  swift build -c release --arch "$arch"
+  # LYRIMUSE_SWIFT_BUILD_FLAGS(2026-09-07,包管理器构建用):MacPorts 的构建沙箱里要加
+  # --disable-sandbox——SwiftPM 自己的沙箱嵌在别人的沙箱里会写不进缓存目录。故意不加
+  # 引号:要按空格拆成多个参数;默认为空,对现有路径零影响。
+  # shellcheck disable=SC2086
+  swift build -c release --arch "$arch" ${LYRIMUSE_SWIFT_BUILD_FLAGS:-}
   # 产物目录问 --show-bin-path,不硬编码 ".build/<arch>-apple-macosx/release"。
   BIN_PATH="$(swift build -c release --arch "$arch" --show-bin-path)"
   SWIFT_SLICES+=("$BIN_PATH/lyrimuse")
@@ -214,7 +218,10 @@ for arch in $ARCHES; do
   # -X 对 const **静默失败**:构建照样成功、不报错,值原封不动——所以这条注入
   # "看起来生效了"是靠不住的,真正的把关在 versioninjection_test.go 和下面装配完
   # 之后那道 collector/App 版本一致性校验。
-  (cd ../lyrimuse-collector && GOTOOLCHAIN=go1.24.4 GOOS=darwin GOARCH="$goarch" \
+  # LYRIMUSE_GOTOOLCHAIN(2026-09-07,包管理器构建用):MacPorts 沙箱禁网,钉住的
+  # go1.24.4 若非本机版本会触发工具链下载而失败——port 传 local 用它自带的 go
+  # (依赖声明保证 ≥1.24)。默认仍是 go1.24.4(系统 1.21 产物缺 LC_UUID,AMFI 拒签)。
+  (cd ../lyrimuse-collector && GOTOOLCHAIN="${LYRIMUSE_GOTOOLCHAIN:-go1.24.4}" GOOS=darwin GOARCH="$goarch" \
     go build -ldflags "-X main.clientVersion=$APP_VERSION" -o "$out" .)
   COLLECTOR_SLICES+=("$out")
 done
