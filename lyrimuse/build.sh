@@ -286,11 +286,18 @@ codesign --force --sign - "$APP_DIR/Contents/Resources/lyrics-romanize"
 # 安装对 CI 是无操作的冗余检查,不影响什么)。`brew install` 失败(网络问题/没装 Homebrew
 # 本身等)不阻断整个构建,跳过这一步、打个警告——QQ 音乐支持是可选功能,不该让完全不需要
 # 它的人连 Apple Music 都构建不出来。
-MEDIA_CONTROL_PREFIX="$(brew --prefix media-control 2>/dev/null)"
-if [ ! -x "$MEDIA_CONTROL_PREFIX/bin/media-control" ] && command -v brew >/dev/null 2>&1; then
-  echo "==> media-control not found, installing via Homebrew (QQ 音乐支持)"
-  brew install media-control || echo "!! brew install media-control 失败——继续构建,QQ 音乐支持这次不可用,Apple Music 不受影响" >&2
+# LYRIMUSE_MEDIA_CONTROL_PREFIX(2026-09-07,给 MacPorts 这类包管理器构建用):从指定
+# 前缀取 media-control、并且**不再**尝试 brew 自动安装——port 的构建沙箱里既没有 brew 也
+# 没有网。设了但路径下没有可执行文件时,按下面既有的"没装"警告路径走,不回落到 brew。
+if [ -n "${LYRIMUSE_MEDIA_CONTROL_PREFIX:-}" ]; then
+  MEDIA_CONTROL_PREFIX="$LYRIMUSE_MEDIA_CONTROL_PREFIX"
+else
   MEDIA_CONTROL_PREFIX="$(brew --prefix media-control 2>/dev/null)"
+  if [ ! -x "$MEDIA_CONTROL_PREFIX/bin/media-control" ] && command -v brew >/dev/null 2>&1; then
+    echo "==> media-control not found, installing via Homebrew (QQ 音乐支持)"
+    brew install media-control || echo "!! brew install media-control 失败——继续构建,QQ 音乐支持这次不可用,Apple Music 不受影响" >&2
+    MEDIA_CONTROL_PREFIX="$(brew --prefix media-control 2>/dev/null)"
+  fi
 fi
 if [ -x "$MEDIA_CONTROL_PREFIX/bin/media-control" ]; then
   # 先删再拷贝(跟 collector/.lproj 同款先例):Homebrew Cellar 里这些文件很多是只读的
@@ -414,8 +421,11 @@ fi
 #
 # 用 find 动态定位 xcframework 里的 slice 路径(而不是硬编码 macos-arm64_x86_64
 # 这个字符串)——SPM/Sparkle 版本更新时这层目录名可能变,find 对这类改动更稳。
-SPARKLE_FW_SRC=$(find .build/artifacts/sparkle -type d -name "Sparkle.framework" -path "*/Sparkle.xcframework/*" 2>/dev/null | head -1)
-if [ -z "$SPARKLE_FW_SRC" ]; then
+# LYRIMUSE_SPARKLE_FRAMEWORK(2026-09-07,配套上面的包管理器构建):离线构建把 Sparkle
+# 改成本地路径依赖(binaryTarget path)时,artifact 不落 .build/artifacts,由调用方直接把
+# 解包好的 Sparkle.framework 路径喂进来。
+SPARKLE_FW_SRC="${LYRIMUSE_SPARKLE_FRAMEWORK:-$(find .build/artifacts/sparkle -type d -name "Sparkle.framework" -path "*/Sparkle.xcframework/*" 2>/dev/null | head -1)}"
+if [ ! -d "$SPARKLE_FW_SRC" ]; then
   echo "!! Sparkle.framework not found under .build/artifacts — did 'swift package resolve' run?" >&2
   exit 1
 fi
