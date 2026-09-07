@@ -167,14 +167,18 @@ echo "==> building (release) [$ARCHES]"
 SWIFT_SLICES=()
 TRANSLATE_SLICES=()
 ROMANIZE_SLICES=()
+# LYRIMUSE_SPM_CACHE_PATH / LYRIMUSE_SPM_SCRATCH_PATH(2026-09-07,包管理器构建用):
+# 把 SwiftPM 的下载缓存与构建产物重定向出默认的 ~/Library/Caches 和 ./.build——包管理器
+# 的构建沙箱只允许写它自己那棵工作树。两个变量各自独立(而不是一个「附加参数」字符串),
+# 因为 MacPorts 的 build.env 传不了带空格的值。默认为空,对现有路径零影响。
+SPM_PATH_ARGS=()
+[ -n "${LYRIMUSE_SPM_CACHE_PATH:-}" ] && SPM_PATH_ARGS+=(--cache-path "$LYRIMUSE_SPM_CACHE_PATH")
+[ -n "${LYRIMUSE_SPM_SCRATCH_PATH:-}" ] && SPM_PATH_ARGS+=(--scratch-path "$LYRIMUSE_SPM_SCRATCH_PATH")
 for arch in $ARCHES; do
-  # LYRIMUSE_SWIFT_BUILD_FLAGS(2026-09-07,包管理器构建用):MacPorts 的构建沙箱里要加
-  # --disable-sandbox——SwiftPM 自己的沙箱嵌在别人的沙箱里会写不进缓存目录。故意不加
-  # 引号:要按空格拆成多个参数;默认为空,对现有路径零影响。
-  # shellcheck disable=SC2086
-  swift build -c release --arch "$arch" ${LYRIMUSE_SWIFT_BUILD_FLAGS:-}
+  swift build -c release --arch "$arch" ${SPM_PATH_ARGS[@]+"${SPM_PATH_ARGS[@]}"}
   # 产物目录问 --show-bin-path,不硬编码 ".build/<arch>-apple-macosx/release"。
-  BIN_PATH="$(swift build -c release --arch "$arch" --show-bin-path)"
+  # ⚠️ 这里必须带上同一组路径参数,否则问到的是默认 .build 而不是上面真正用的那棵。
+  BIN_PATH="$(swift build -c release --arch "$arch" ${SPM_PATH_ARGS[@]+"${SPM_PATH_ARGS[@]}"} --show-bin-path)"
   SWIFT_SLICES+=("$BIN_PATH/lyrimuse")
   TRANSLATE_SLICES+=("$BIN_PATH/lyrics-translate")
   ROMANIZE_SLICES+=("$BIN_PATH/lyrics-romanize")
@@ -443,14 +447,21 @@ fi
 #
 # 用 find 动态定位 xcframework 里的 slice 路径(而不是硬编码 macos-arm64_x86_64
 # 这个字符串)——SPM/Sparkle 版本更新时这层目录名可能变,find 对这类改动更稳。
-# LYRIMUSE_SPARKLE_FRAMEWORK(2026-09-07,配套上面的包管理器构建):离线构建把 Sparkle
-# 改成本地路径依赖(binaryTarget path)时,artifact 不落 .build/artifacts,由调用方直接把
-# 解包好的 Sparkle.framework 路径喂进来。
-SPARKLE_FW_SRC="${LYRIMUSE_SPARKLE_FRAMEWORK:-$(find .build/artifacts/sparkle -type d -name "Sparkle.framework" -path "*/Sparkle.xcframework/*" 2>/dev/null | head -1)}"
-if [ ! -d "$SPARKLE_FW_SRC" ]; then
-  echo "!! Sparkle.framework not found under .build/artifacts — did 'swift package resolve' run?" >&2
+# artifacts 落在 SwiftPM 的 scratch 目录下,默认是 ./.build,被上面那组路径参数重定向过
+# 就跟着走(包管理器构建会这么做)。
+SPM_SCRATCH="${LYRIMUSE_SPM_SCRATCH_PATH:-.build}"
+SPARKLE_FW_SRC="$(find "$SPM_SCRATCH/artifacts" -type d -name "Sparkle.framework" -path "*/Sparkle.xcframework/*" 2>/dev/null | head -1)"
+# Sparkle 不在依赖里就整段跳过:包管理器(MacPorts)装的应用不该自更新,那边的 Portfile
+# 会把这个依赖摘掉——此时没有 framework 可嵌,不是错误。
+if [ -z "$SPARKLE_FW_SRC" ] && ! grep -q 'sparkle-project/Sparkle' Package.swift; then
+  echo "    Sparkle not a dependency — skipping framework embed (no in-app updater)"
+  SPARKLE_SKIPPED=1
+fi
+if [ "${SPARKLE_SKIPPED:-0}" = 0 ] && [ ! -d "$SPARKLE_FW_SRC" ]; then
+  echo "!! Sparkle.framework not found under $SPM_SCRATCH/artifacts — did 'swift package resolve' run?" >&2
   exit 1
 fi
+if [ "${SPARKLE_SKIPPED:-0}" = 0 ]; then
 mkdir -p "$APP_DIR/Contents/Frameworks"
 rm -rf "$APP_DIR/Contents/Frameworks/Sparkle.framework"
 ditto "$SPARKLE_FW_SRC" "$APP_DIR/Contents/Frameworks/Sparkle.framework"
@@ -477,6 +488,7 @@ find "$APP_DIR/Contents/Frameworks/Sparkle.framework" \
     -exec codesign --force --sign - {} \;
 codesign --force --sign - "$APP_DIR/Contents/Frameworks/Sparkle.framework"
 echo "    Sparkle.framework embedded + signed"
+fi  # SPARKLE_SKIPPED
 # 2026-07-21:本地化文案 + 状态栏图标直接从源码拷进 Contents/Resources/，不再依赖
 # SwiftPM 的 Bundle.module 访问器——原因见下面这段注释和 L10n.swift/MenuBarMenu.swift
 # 顶部注释。AppIcon.icns 已经证明 Contents/Resources/ 这个位置对 codesign 完全安全。
