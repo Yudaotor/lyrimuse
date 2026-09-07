@@ -310,12 +310,27 @@ if [ -x "$MEDIA_CONTROL_PREFIX/bin/media-control" ]; then
   # 先删再拷贝(跟 collector/.lproj 同款先例):Homebrew Cellar 里这些文件很多是只读的
   # (-r-xr-xr-x),`cp -R` 会原样带过来只读位——第二次往后重新构建时,已存在的只读文件/
   # 目录会让 `cp`/`codesign` 直接 "Permission denied"(实测坐实)。
+  # 只拷 media-control 自己的那几件,不是整个 bin//lib//Frameworks/ 目录:Homebrew 的
+  # Cellar 前缀下这三个目录确实只有它自己的文件,但 MacPorts 那种**共享 prefix**
+  # (/opt/local)下整目录拷等于把上百个别的包一起塞进 .app。framework 的位置也随发行版
+  # 变(Homebrew 在 Frameworks/,MacPorts 按 ports 布局规范在 Library/Frameworks/)。
   rm -rf "$APP_DIR/Contents/Resources/media-control"
-  mkdir -p "$APP_DIR/Contents/Resources/media-control"
-  cp -R "$MEDIA_CONTROL_PREFIX/bin" "$APP_DIR/Contents/Resources/media-control/bin"
-  cp -R "$MEDIA_CONTROL_PREFIX/lib" "$APP_DIR/Contents/Resources/media-control/lib"
-  cp -R "$MEDIA_CONTROL_PREFIX/Frameworks" "$APP_DIR/Contents/Resources/media-control/Frameworks"
+  mkdir -p "$APP_DIR/Contents/Resources/media-control/bin" \
+           "$APP_DIR/Contents/Resources/media-control/lib" \
+           "$APP_DIR/Contents/Resources/media-control/Frameworks"
+  cp "$MEDIA_CONTROL_PREFIX/bin/media-control" "$APP_DIR/Contents/Resources/media-control/bin/"
+  cp -R "$MEDIA_CONTROL_PREFIX/lib/media-control" "$APP_DIR/Contents/Resources/media-control/lib/media-control"
+  MC_FW_SRC="$MEDIA_CONTROL_PREFIX/Frameworks/MediaRemoteAdapter.framework"
+  [ -d "$MC_FW_SRC" ] || MC_FW_SRC="$MEDIA_CONTROL_PREFIX/Library/Frameworks/MediaRemoteAdapter.framework"
+  # ditto 而不是 cp -R:framework 内部有 Versions/Current 这类符号链接,cp -R 会把它们
+  # 拆成实体拷贝、进而破坏代码签名(跟下面 Sparkle 那处同一个理由)。
+  ditto "$MC_FW_SRC" "$APP_DIR/Contents/Resources/media-control/Frameworks/MediaRemoteAdapter.framework"
   chmod -R u+w "$APP_DIR/Contents/Resources/media-control"
+  # 启动脚本按相对路径找 framework。包内布局固定是 ../Frameworks/,而发行版可能把它装在
+  # Library/Frameworks/ 并相应改过这一行(MacPorts 的 ports 布局规范要求),拷进来之后要
+  # 改回包内的位置,否则运行时找不到框架。
+  /usr/bin/sed -i '' "s|'\.\.', 'Library', 'Frameworks', 'MediaRemoteAdapter.framework'|'..', 'Frameworks', 'MediaRemoteAdapter.framework'|" \
+    "$APP_DIR/Contents/Resources/media-control/bin/media-control"
   # media-control 这个可执行文件本身完全没签名(实测 `codesign -dv` 报 "code object is
   # not signed at all")——跟 collector(go build 的产物自带签名)不一样,这里需要主动
   # 补签,不然可能被 Gatekeeper 拦下来。MediaRemoteAdapter.framework 内部那个 Mach-O
