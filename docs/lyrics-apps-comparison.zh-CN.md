@@ -27,7 +27,7 @@
 | | **Lyrimuse** | **LyricsX** | **Lyric Fever** |
 |---|---|---|---|
 | 许可证 · 价格 | GPL-3.0 · 免费 | MPL-2.0 · 免费 | MIT · 免费 |
-| 最新发布 | v1.5.0（2026-09） | v1.6.3（2022-04） | v3.3（2025-11） |
+| 最新发布 | v1.6.0（2026-09） | v1.6.3（2022-04） | v3.3（2025-11） |
 | 最低 macOS | 14（Sonoma） | 10.11 | 15（Sequoia） |
 | 支持的播放器 | Apple Music、Spotify、QQ 音乐、网易云音乐、酷狗——可任意组合 | Apple Music、Spotify、Vox、Audirvana、Swinsian（经其 MusicPlayer 组件） | Spotify、Apple Music |
 | 浏览器网页播放器 | YouTube Music 与 Spotify 网页版，跟随页面自身进度同步 | — | — |

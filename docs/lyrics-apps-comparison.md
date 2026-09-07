@@ -30,7 +30,7 @@ of the actively maintained open-source options:
 | | **Lyrimuse** | **LyricsX** | **Lyric Fever** |
 |---|---|---|---|
 | License · price | GPL-3.0 · free | MPL-2.0 · free | MIT · free |
-| Latest release | v1.5.0 (Sep 2026) | v1.6.3 (Apr 2022) | v3.3 (Nov 2025) |
+| Latest release | v1.6.0 (Sep 2026) | v1.6.3 (Apr 2022) | v3.3 (Nov 2025) |
 | Minimum macOS | 14 (Sonoma) | 10.11 | 15 (Sequoia) |
 | Players | Apple Music, Spotify, QQ Music, NetEase Cloud Music, Kugou — any combination | Apple Music, Spotify, Vox, Audirvana, Swinsian (via its MusicPlayer library) | Spotify, Apple Music |
 | Web players in a browser | YouTube Music & Spotify Web, synced to the page's own progress | — | — |
