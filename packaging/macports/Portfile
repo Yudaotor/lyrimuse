@@ -44,11 +44,23 @@ github.tarball_from archive
 set ks_version      1.15.0
 set sparkle_version 2.9.4
 
+# media-control (BSD-3-Clause) reads playback state of the MediaRemote-backed
+# players (QQ Music, NetEase Cloud Music, Kugou, Spotify). Upstream's release
+# builds embed it into the app bundle from Homebrew; here it is built from
+# source during pre-build and embedded the same way. Its single git submodule
+# is pinned to the commit recorded in the v${mc_version} tag.
+set mc_version      0.7.6
+set mra_commit      3ac3d4bdf862c7b5399b4fba4df5689f5c38609a
+
 distfiles-append    KeyboardShortcuts-${ks_version}.tar.gz:ks \
-                    Sparkle-for-Swift-Package-Manager-${sparkle_version}.zip:sparkle
+                    Sparkle-for-Swift-Package-Manager-${sparkle_version}.zip:sparkle \
+                    media-control-${mc_version}.tar.gz:mc \
+                    mediaremote-adapter-${mra_commit}.tar.gz:mra
 
 master_sites-append https://github.com/sindresorhus/KeyboardShortcuts/archive/refs/tags/${ks_version}.tar.gz?dummy=:ks \
-                    https://github.com/sparkle-project/Sparkle/releases/download/${sparkle_version}/Sparkle-for-Swift-Package-Manager.zip?dummy=:sparkle
+                    https://github.com/sparkle-project/Sparkle/releases/download/${sparkle_version}/Sparkle-for-Swift-Package-Manager.zip?dummy=:sparkle \
+                    https://github.com/ungive/media-control/archive/refs/tags/v${mc_version}.tar.gz?dummy=:mc \
+                    https://github.com/ungive/mediaremote-adapter/archive/${mra_commit}.tar.gz?dummy=:mra
 
 checksums           ${distname}${extract.suffix} \
                         rmd160  e045cf933adb38abfad31781a3f9ed2c4fb26ccd \
@@ -61,7 +73,15 @@ checksums           ${distname}${extract.suffix} \
                     Sparkle-for-Swift-Package-Manager-${sparkle_version}.zip \
                         rmd160  ba20dc080fa466965136feb860424ce51756927a \
                         sha256  cb6fdbdc8884f15d62a616e79face92b08322410fd2d425edc6596ccbf4ba3b0 \
-                        size    11568656
+                        size    11568656 \
+                    media-control-${mc_version}.tar.gz \
+                        rmd160  827d180800dc6bc75aa2327698e6bd2fdd90f238 \
+                        sha256  beec425be7d5fa148019fdf3edf71674d342f5ac8fa212153fb2baab2784dccf \
+                        size    178389 \
+                    mediaremote-adapter-${mra_commit}.tar.gz \
+                        rmd160  d213369970cfc2697253c9edd89e97d447cfe041 \
+                        sha256  111e285e7a8acfb05b7339883e303a360f8a7a9b7acb4f0f5c01b647deb8ceb5 \
+                        size    33519
 
 extract.only        ${distname}${extract.suffix}
 
@@ -72,6 +92,13 @@ post-extract {
     move ${depsdir}/KeyboardShortcuts-${ks_version} ${depsdir}/KeyboardShortcuts
     system -W ${depsdir}/Sparkle "/usr/bin/unzip -q ${distpath}/Sparkle-for-Swift-Package-Manager-${sparkle_version}.zip"
     copy ${filespath}/Sparkle-Package.swift ${depsdir}/Sparkle/Package.swift
+
+    # media-control sources, with the pinned submodule slotted into place.
+    system -W ${workpath} "/usr/bin/tar -xzf ${distpath}/media-control-${mc_version}.tar.gz"
+    system -W ${workpath} "/usr/bin/tar -xzf ${distpath}/mediaremote-adapter-${mra_commit}.tar.gz"
+    delete ${workpath}/media-control-${mc_version}/mediaremote-adapter
+    move ${workpath}/mediaremote-adapter-${mra_commit} \
+        ${workpath}/media-control-${mc_version}/mediaremote-adapter
 }
 
 # Backport of upstream's package-manager build hooks (media-control prefix,
@@ -89,14 +116,34 @@ post-patch {
     reinplace {s|\.package(url: "https://github.com/sparkle-project/Sparkle", from: "2.9.4")|.package(path: "deps/Sparkle")|} \
         ${worksrcpath}/lyrimuse/Package.swift
     delete ${worksrcpath}/lyrimuse/Package.resolved
+
+    # Upstream hardcodes a universal build for the adapter framework (a plain
+    # set() that overrides -DCMAKE_OSX_ARCHITECTURES); a stray x86_64 slice
+    # inside an arm64-only app is what triggers macOS's "needs updating"
+    # alert, so drop the line and build only the target arch.
+    reinplace {/set(CMAKE_OSX_ARCHITECTURES "x86_64;arm64")/d} \
+        ${workpath}/media-control-${mc_version}/mediaremote-adapter/CMakeLists.txt
 }
 
-# Go is only needed at build time (the bundled collector daemon); the Swift
-# toolchain comes from the Command Line Tools.
+# Go (the bundled collector daemon) and cmake (media-control) are only needed
+# at build time; the Swift toolchain comes from the Command Line Tools.
 depends_build-append \
+                    port:cmake \
                     port:go
 
 use_configure       no
+
+# media-control is built and staged first so build.sh can embed it into the
+# app bundle the same way upstream's release builds do.
+pre-build {
+    set mcsrc ${workpath}/media-control-${mc_version}
+    # CMAKE_OSX_ARCHITECTURES pinned to the build arch: upstream defaults to a
+    # universal binary, and stray x86_64 code inside an arm64-only app is what
+    # triggers macOS's "needs updating" alert.
+    system -W ${mcsrc} "cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES=${build_arch} -DCMAKE_INSTALL_PREFIX=${workpath}/mc-stage"
+    system -W ${mcsrc} "cmake --build build"
+    system -W ${mcsrc} "cmake --install build"
+}
 
 build.dir           ${worksrcpath}/lyrimuse
 build.cmd           ./build.sh
@@ -110,7 +157,7 @@ build.env-append    LYRIMUSE_VERSION=${version} \
                     GOPATH=${workpath}/.gopath \
                     HOME=${workpath}/.home \
                     LYRIMUSE_SWIFT_BUILD_FLAGS=--disable-sandbox \
-                    LYRIMUSE_MEDIA_CONTROL_PREFIX=${workpath}/.no-media-control \
+                    LYRIMUSE_MEDIA_CONTROL_PREFIX=${workpath}/mc-stage \
                     LYRIMUSE_SPARKLE_FRAMEWORK=${worksrcpath}/lyrimuse/deps/Sparkle/Sparkle.xcframework/macos-arm64_x86_64/Sparkle.framework
 
 destroot {
@@ -124,8 +171,4 @@ Lyrimuse is ad-hoc signed when built from source; macOS may ask you to approve\
 
 The in-app Sparkle updater cannot replace an app installed by MacPorts —\
  update with 'sudo port upgrade lyrimuse' instead.
-
-QQ Music / NetEase Cloud Music / Kugou / Spotify playback sources rely on the\
- optional media-control helper, which is not yet available in MacPorts; Apple\
- Music and browser web players work without it.
 "
