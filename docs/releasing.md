@@ -76,6 +76,13 @@
 - [ ] **Homebrew cask**（Yudaotor/homebrew-lyrimuse）：version + **两个 sha256**（cask 自
       2026-09-06 起双架构：`sha256 arm:/intel:` 对应 `-macos.zip` 与 `-macos-intel.zip`）。
       **sha256 必须取 CI 产物的两个 `.sha256` 资产**——本地打的同名包哈希不同，用错即坏。
+- [ ] **MacPorts port**（macports/macports-ports 的 `aqua/lyrimuse`，仓内参照副本在
+      [packaging/macports/](../packaging/macports/)）：提 PR 更新 version + 源码 tarball 的
+      rmd160/sha256/size（**源码包**，不是 CI 的二进制资产：`shasum -a 256` + `openssl dgst
+      -rmd160` + `stat -f %z` 对 `archive/refs/tags/vX.Y.Z.tar.gz` 算）；若 build.sh 的
+      包管理器钩子已随新版发布，顺带删掉 `files/patch-build-env-hooks.diff` 与 patchfiles 行；
+      SwiftPM 依赖（KeyboardShortcuts/Sparkle）版本变了要同步三处：Package.swift 重写模式、
+      distfile 版本变量、对应校验和。
 - [ ] **Sparkle 升级链路实测**：找一台上一版机器（或本机临时装回上一版）走一次升级。
       装回旧版前**先备份 `~/.config/lyrimuse`**（旧 collector 不认识新字段，存盘会抹掉），
       且别让旧版跑太久。旧版 ad-hoc 包被 Gatekeeper 拦 `open` 是预期——直接跑

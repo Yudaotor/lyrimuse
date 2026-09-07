@@ -1,0 +1,131 @@
+# -*- coding: utf-8; mode: tcl; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- vim:fenc=utf-8:ft=tcl:et:sw=4:ts=4:sts=4
+
+PortSystem          1.0
+PortGroup           github 1.0
+
+github.setup        Yudaotor lyrimuse 1.6.0 v
+revision            0
+categories          aqua audio
+supported_archs     arm64 x86_64
+license             GPL-3
+maintainers         {@Yudaotor} openmaintainer
+
+description         Word-synced desktop lyrics for Apple Music, Spotify and \
+                    browser web players
+
+long_description    Lyrimuse shows word-by-word synced lyrics as a floating \
+                    overlay, a Dynamic-Island-style capsule, an \
+                    Apple-Music-style lyrics window or right in the menu bar, \
+                    for Apple Music, Spotify and YouTube Music / Spotify Web \
+                    playing in a browser. Lyrics are fetched from nine \
+                    sources and every candidate is scored on one scale so the \
+                    best match wins. Translation, per-line romanization \
+                    (pinyin, Cantonese Jyutping, Japanese furigana) and \
+                    Last.fm / ListenBrainz scrobbling are built in.
+
+# The app builds with Command Line Tools alone (no full Xcode needed), but the
+# source requires the macOS 26 SDK (upstream CI builds on macos-26).
+if {${os.platform} eq "darwin" && ${os.major} < 25} {
+    known_fail      yes
+    pre-fetch {
+        ui_error "${name} requires the macOS 26 SDK (macOS 26 or later with \
+current Command Line Tools) to build."
+        return -code error "unsupported macOS version"
+    }
+}
+
+github.tarball_from archive
+
+# The two SwiftPM dependencies are prefetched as checksummed distfiles so the
+# build works inside the no-network sandbox: KeyboardShortcuts is swapped in as
+# a local source package, Sparkle (a prebuilt xcframework that its upstream
+# manifest would download at resolve time) as a local binaryTarget shim
+# (files/Sparkle-Package.swift).
+set ks_version      1.15.0
+set sparkle_version 2.9.4
+
+distfiles-append    KeyboardShortcuts-${ks_version}.tar.gz:ks \
+                    Sparkle-for-Swift-Package-Manager-${sparkle_version}.zip:sparkle
+
+master_sites-append https://github.com/sindresorhus/KeyboardShortcuts/archive/refs/tags/${ks_version}.tar.gz?dummy=:ks \
+                    https://github.com/sparkle-project/Sparkle/releases/download/${sparkle_version}/Sparkle-for-Swift-Package-Manager.zip?dummy=:sparkle
+
+checksums           ${distname}${extract.suffix} \
+                        rmd160  e045cf933adb38abfad31781a3f9ed2c4fb26ccd \
+                        sha256  7273bd69d4283794c9f8680b8dd3cefe59efed0ea7d30d0aa821eb1cc75f3a74 \
+                        size    20109994 \
+                    KeyboardShortcuts-${ks_version}.tar.gz \
+                        rmd160  2eade3236fd7f9864df93aab3f5a9f2b255f3bb6 \
+                        sha256  6fae2a50ed5f85929716bdbe4e0cd08c4563ab7d19fc8d5099897662cb3a74e6 \
+                        size    150493 \
+                    Sparkle-for-Swift-Package-Manager-${sparkle_version}.zip \
+                        rmd160  ba20dc080fa466965136feb860424ce51756927a \
+                        sha256  cb6fdbdc8884f15d62a616e79face92b08322410fd2d425edc6596ccbf4ba3b0 \
+                        size    11568656
+
+extract.only        ${distname}${extract.suffix}
+
+post-extract {
+    set depsdir ${worksrcpath}/lyrimuse/deps
+    xinstall -d ${depsdir}/Sparkle
+    system -W ${depsdir} "/usr/bin/tar -xzf ${distpath}/KeyboardShortcuts-${ks_version}.tar.gz"
+    move ${depsdir}/KeyboardShortcuts-${ks_version} ${depsdir}/KeyboardShortcuts
+    system -W ${depsdir}/Sparkle "/usr/bin/unzip -q ${distpath}/Sparkle-for-Swift-Package-Manager-${sparkle_version}.zip"
+    copy ${filespath}/Sparkle-Package.swift ${depsdir}/Sparkle/Package.swift
+}
+
+# Backport of upstream's package-manager build hooks (media-control prefix,
+# Sparkle framework path, extra swift build flags, Go toolchain selection) —
+# committed upstream after the v1.6.0 tag; drop with the next release.
+patchfiles          patch-build-env-hooks.diff
+patch.pre_args-append -p1
+
+post-patch {
+    # SwiftPM must never touch the network: point the two remote dependencies
+    # at the prefetched local copies and drop the pin file that still records
+    # their remote locations.
+    reinplace {s|\.package(url: "https://github.com/sindresorhus/KeyboardShortcuts", exact: "1.15.0")|.package(path: "deps/KeyboardShortcuts")|} \
+        ${worksrcpath}/lyrimuse/Package.swift
+    reinplace {s|\.package(url: "https://github.com/sparkle-project/Sparkle", from: "2.9.4")|.package(path: "deps/Sparkle")|} \
+        ${worksrcpath}/lyrimuse/Package.swift
+    delete ${worksrcpath}/lyrimuse/Package.resolved
+}
+
+# Go is only needed at build time (the bundled collector daemon); the Swift
+# toolchain comes from the Command Line Tools.
+depends_build-append \
+                    port:go
+
+use_configure       no
+
+build.dir           ${worksrcpath}/lyrimuse
+build.cmd           ./build.sh
+build.target
+build.args          --dest ${workpath}/stage/Lyrimuse.app
+build.env-append    LYRIMUSE_VERSION=${version} \
+                    LYRIMUSE_GOTOOLCHAIN=local \
+                    GOPROXY=off \
+                    GOFLAGS=-buildvcs=false \
+                    GOCACHE=${workpath}/.gocache \
+                    GOPATH=${workpath}/.gopath \
+                    HOME=${workpath}/.home \
+                    LYRIMUSE_SWIFT_BUILD_FLAGS=--disable-sandbox \
+                    LYRIMUSE_MEDIA_CONTROL_PREFIX=${workpath}/.no-media-control \
+                    LYRIMUSE_SPARKLE_FRAMEWORK=${worksrcpath}/lyrimuse/deps/Sparkle/Sparkle.xcframework/macos-arm64_x86_64/Sparkle.framework
+
+destroot {
+    xinstall -d ${destroot}${applications_dir}
+    copy ${workpath}/stage/Lyrimuse.app ${destroot}${applications_dir}/Lyrimuse.app
+}
+
+notes "
+Lyrimuse is ad-hoc signed when built from source; macOS may ask you to approve\
+ Automation access for your music player on first launch.
+
+The in-app Sparkle updater cannot replace an app installed by MacPorts —\
+ update with 'sudo port upgrade lyrimuse' instead.
+
+QQ Music / NetEase Cloud Music / Kugou / Spotify playback sources rely on the\
+ optional media-control helper, which is not yet available in MacPorts; Apple\
+ Music and browser web players work without it.
+"
