@@ -89,6 +89,12 @@ public enum NotchExpandedMetrics {
     public static let trackInfoAlbumLineHeight: CGFloat = 11
     /// 文字块内部,行与行之间的间距(跟耳朵/歌词那些跑马灯文字的紧凑行距是同一个尺度)。
     public static let trackInfoLineSpacing: CGFloat = 1
+    /// 头部右侧那排「快捷操作」按钮的高度(2026-09-07,用户圈出头部右边那块空地:「塞进一些
+    /// 按钮进去…关闭灵动岛、打开设置、搜索歌词、是否显示歌词」)。22 = 展开区播放控制三键的
+    /// 命中尺寸(`NotchLyricsView.expandedContent` 里 `controlButton(hitSize: 22)`),同一张卡上
+    /// 的图标键用同一档。它参与头部高度的 `max`:四个曲目信息项全关、只开快捷操作时,头部退化成
+    /// 一条 22pt 高、靠右的按钮行。
+    public static let trackInfoActionsHeight: CGFloat = 22
 
     /// 曲目信息头部要占多高 —— 四个开关(封面/歌名/歌手/专辑)现算,不查表。
     ///
@@ -103,7 +109,12 @@ public enum NotchExpandedMetrics {
     /// 封面数据"——跟 `height(hasLyricPreview:hasScrubber:)` 那条"曲目级信号,不是此刻
     /// 有没有内容"的纪律同源:开关是稳定的会话级配置,按它留出的高度不该因为某一首歌
     /// 恰好没有专辑名/封面就抽一下。
-    public static func trackInfoHeight(showsArtwork: Bool, showsTitle: Bool, showsArtist: Bool, showsAlbum: Bool) -> CGFloat {
+    ///
+    /// `showsActions`(2026-09-07):头部右侧那排快捷操作按钮。跟封面一样是**并排**的第三块,
+    /// 取 `max` 不取和 —— 三行文字(14+12+11+2 = 39)本来就比它(22)高,常见配置下开关它不改高度;
+    /// 只有文字项全关(或只开一两行矮的)时它才是决定高度的那一块。默认 `false`,老调用点一字不改。
+    public static func trackInfoHeight(showsArtwork: Bool, showsTitle: Bool, showsArtist: Bool, showsAlbum: Bool,
+                                       showsActions: Bool = false) -> CGFloat {
         var textHeight: CGFloat = 0
         var lineCount = 0
         if showsTitle { textHeight += trackInfoTitleLineHeight; lineCount += 1 }
@@ -111,7 +122,27 @@ public enum NotchExpandedMetrics {
         if showsAlbum { textHeight += trackInfoAlbumLineHeight; lineCount += 1 }
         if lineCount > 1 { textHeight += CGFloat(lineCount - 1) * trackInfoLineSpacing }
         let artworkHeight: CGFloat = showsArtwork ? trackInfoArtworkSide : 0
-        return max(artworkHeight, textHeight)
+        let actionsHeight: CGFloat = showsActions ? trackInfoActionsHeight : 0
+        return max(artworkHeight, textHeight, actionsHeight)
+    }
+
+    // MARK: - 没有曲目时的空闲面板(2026-09-07)
+
+    /// 空闲面板离卡片**底边**的间距。它是展开态最下面(也是唯一)的一块,不像曲目信息头部
+    /// 下面还接着歌词行 —— 头部那 4pt 的尾随间距对贴底的东西太紧,跟播放控制三键那块的
+    /// 10pt 底边距(`controlsBlock` 里那份)取同一档。
+    public static let idlePanelBottomSpacing: CGFloat = 10
+
+    /// 没有曲目时 hover 展开只长出这一块:两行字(「没有在播放」+ 一句提示,按头部的
+    /// 歌名 / 歌手两档行高)+ 右侧一排 22pt 快捷键,上面留 `trackInfoTopSpacing`、下面留
+    /// `idlePanelBottomSpacing`。复用头部的行高账,是为了让这一块跟有曲目时的头部看起来是
+    /// 同一个位置上的同一种东西,而不是另起一套尺寸。
+    ///
+    /// 改这个值之前先看 selftest 那条「空闲面板放得进窗口」:窗口恒按 `顶行 + 歌词行 44 + maxHeight`
+    /// 开,空闲面板必须 ≤ 歌词行 + 最省配置下的 maxHeight(只剩进度条那 24pt),否则会被窗口硬裁。
+    public static var idlePanelHeight: CGFloat {
+        trackInfoHeight(showsArtwork: false, showsTitle: true, showsArtist: true, showsAlbum: false, showsActions: true)
+            + trackInfoTopSpacing + idlePanelBottomSpacing
     }
 
     /// 展开区的**最大**高度,给定当前设置。窗口恒按这个尺寸开(卡片在里面自己变大变小),

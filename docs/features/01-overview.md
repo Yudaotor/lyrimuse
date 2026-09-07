@@ -109,7 +109,7 @@ collector(Go, 5s 轮询) ── 同样两条播放读取路径(独立于 App)
 ### 许可、版权与对外请求(2026-09-03)
 
 - **许可**:Lyrimuse 本身 GPL-3.0(仓库根 `LICENSE`);随包分发的第三方组件与数据(media-control、Sparkle、KeyboardShortcuts、OpenCC 词典、rime-cantonese 词典)在仓库根 `THIRD_PARTY_LICENSES` 逐条列出并附许可证全文,`build.sh` 把它拷进 `Contents/Resources/`(BSD/MIT 分发条款要求随附),设置「关于 → 第三方许可」用 TextEdit 打开包里这份(开发态或没有 TextEdit 退到 GitHub 同一文件)。`scripts/check_third_party_licenses.py`(CI 也跑)机械核对 `Package.resolved` / `build.sh` 的 `brew install` / `go.mod` 的每个依赖都在文件里出现过。
-- **版权立场**:歌词、封面、曲目信息归权利人;本项目只检索、缓存、展示,不托管、不转发、不再分发;与各播放器 / 歌词平台无隶属关系。对用户的完整表述只维护在 README 中英版「许可与版权说明」一节——App 里的「使用与版权说明」入口(关于页)和引导欢迎页那句都只是链接过去,**不在 xcstrings 里抄第二份**(这段话改的频率远高于发版)。**刻意不做阻断式首启接受页**:引导原则是介绍性内容不锁下一步,GPL 个人工具也没有需要「接受」的条款。
+- **版权立场**:歌词、封面、曲目信息归权利人;本项目只检索、缓存、展示,不托管、不转发、不再分发;与各播放器 / 歌词平台无隶属关系。对用户的完整表述只维护在 README 中英版「许可与版权说明」一节——App 里的「版权说明」入口(关于页)和引导欢迎页那句都只是链接过去,**不在 xcstrings 里抄第二份**(这段话改的频率远高于发版)。**刻意不做阻断式首启接受页**:引导原则是介绍性内容不锁下一步,GPL 个人工具也没有需要「接受」的条款。
 - **对外请求全景**:README 那一节向用户承诺「会离开你 Mac 的只有这些」——**加一处对外请求就要同步这张表和那一节**;实际发生的每一条都进审计日志(第 14 章 §7、第 15 章「网络观察」)。
 
 | 目的地 | 谁发 | 发什么 | 何时 |
@@ -119,7 +119,7 @@ collector(Go, 5s 轮询) ── 同样两条播放读取路径(独立于 App)
 | `itunes.apple.com` | collector、App | 歌手 + 歌名(+ 地区) | collector 封面 / 署名锚点;App 高清封面替代与空闲页链接(第 03 章) |
 | `api.mymemory.translated.net` | collector | **歌词正文**分块 + 随机生成的邮箱参数 | 「系统兜底翻译」开着且端上 Apple 翻译不可用(第 10 章) |
 | `1.1.1.1` / `8.8.8.8`(DoH) | collector | 域名 | 只有 `*.musixmatch.com` 走 DoH(`doh.go dohHostSuffixes`) |
-| `api.github.com` | App | 无用户数据 | 关于页 star 数,最多每 6 小时一次;打开「接收测试版更新」后最多每小时查一次 Release 列表(挑版本最高的 appcast,2026-09-05) |
+| `api.github.com` | App | 无用户数据 | 关于页 star 数,最多每 6 小时一次;打开「测试版更新」后最多每小时查一次 Release 列表(挑版本最高的 appcast,2026-09-05) |
 | `github.com`(Releases appcast) | App(Sparkle) | 无系统信息(未开 `SUEnableSystemProfiling`) | 更新检查 |
 | `ws.audioscrobbler.com`、`api.listenbrainz.org` | collector、App | 播放记录(带账号凭据鉴权) | 用户主动连接后 |
 | 推送平台(Bark、钉钉、企业微信、Discord、飞书、Server酱)、状态中继(自建 Worker)、`api.deezer.com`(网页 Top10 歌手头像) | collector | 周报文本 / 当前播放状态 / 歌手名 | 用户主动配置后 |

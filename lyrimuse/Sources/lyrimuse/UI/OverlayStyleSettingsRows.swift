@@ -21,22 +21,28 @@ import SwiftUI
 
 // MARK: - 文字
 
-/// 「文字」那一组:字体 / 粗细 / 字号 / 跟随封面 / 文字颜色 / 文字描边 / 描边颜色。
+/// 「文字」那一组:字体 / 粗细 / 字号 / 卡拉OK效果 / 文字颜色 / 文字描边 / 描边颜色。
 ///
 /// 行与行之间的 `CardDivider()` 由这个组件自己插 —— 宿主只知道"这里放一组文字设置",
 /// 不该知道它内部有几行、该在哪儿断。
 ///
-/// **这一组两次增删的账**:
+/// **这一组三次增删的账**:
 ///   - 2026-08-31 减:「双行显示」「对齐方式」搬去了 `OverlayLayoutSettingsRows` ——
 ///     字体字号讲的是**字长什么样**,那两项讲的是版面,判据和用户原话记在那个组件的注释里。
 ///   - 2026-09-02 增:原「配色」组里属于**文字层**的四行(跟随封面 / 文字颜色 / 文字描边 /
 ///     描边颜色)并了过来(用户原话:「帮我把这 2 个里面的配置重新整理一下,拆分为文字以及
 ///     背景;分别归纳」)。拆分判据见 `OverlayBackgroundSettingsRows` 的头注。
-/// 两次方向相反但用的是同一条判据 —— 按"这个字段改的是哪一层"归组,不按"都跟文字有关"
+///   - 2026-09-07 减:「跟随封面」搬去了 `OverlayThemeSettingsRows`(用户要求整页按"不要这一个
+///     那一个"重排)。它虽然只接管文字色,但它跟「配色主题」是同一个问题的两个答案——文字色从哪来:
+///     封面主色,还是某一套主题;开关在这边、被它顶成「—」的主题行在那边,用户在「主题」浮层里看到
+///     一个破折号却找不到原因。悬浮窗右键的「更改配色」子菜单(`OverlayQuickSettingsMenu`)一直是
+///     「跟随封面 → 内置主题 → 自存主题」一列,设置页这次跟它取齐。
+/// 三次用的是同一条判据 —— 按"这个字段改的是哪一层 / 回答的是哪个问题"归组,不按"都跟文字有关"
 /// 这种最粗的相关性(那条相关性把整页设置都能装进去)。
 ///
-/// ⚠️ 两处条件显示(`if !followsCoverArt` / `if textStrokeEnabled`)是搬过来时**原样保留**的
-/// 既有行为,理由写在各自那一行上面,别顺手拉平。
+/// ⚠️ 「文字颜色」那一行**任何时候都在**(2026-09-07 起):跟随封面开着时尾部不放取色器、改成一句
+/// 灰字「跟随封面」—— 取色模式的开关已经不在这个浮层里,再把整行藏掉就成了"文字颜色去哪了"。
+/// `if textStrokeEnabled` 那处条件显示是搬过来时**原样保留**的既有行为,理由写在那一行上面。
 @MainActor
 struct OverlayTextSettingsRows: View {
     @ObservedObject private var settings = AppSettings.shared
@@ -106,33 +112,35 @@ struct OverlayTextSettingsRows: View {
                         .frame(width: 46, alignment: .trailing)
                 }
             }
-            // ── 以下四行 2026-09-02 从原「配色」组并过来 ──
-            //
-            // 标题「跟随封面」前面本来带着「文字」二字(2026-08-26 应用户要求去掉,嫌标题太长)。
-            // 它接管的只有**文字颜色**(PlaybackCoordinator.displayForegroundColor);背景色
-            // (LyricsOverlayView 的 overlayBackground)和描边色(.lyricsTextStroke)任何时候都
-            // 无条件生效 —— 这正是它归到「文字」而不是「背景」的依据。
-            //
-            // (2026-08-17 到 2026-08-31 之间这里挂着一条⚠️:"这个开关同时也管灵动岛"。已经不
-            //  成立了 —— 灵动岛整卡前景取色 2026-08-31 并进了它自己的 `notchCardStyle == .coverArt`,
-            //  理由见 NotchPlayback.accent 的注释。这个开关现在**只管桌面悬浮歌词**。)
             CardDivider()
-            SettingsRow(
-                icon: "photo.on.rectangle.angled",
-                title: L10n.t("跟随封面")
-            ) {
-                Toggle("", isOn: $settings.followsCoverArt)
-            }
-            // 「跟随封面」开着时文字颜色由封面主色接管,这一行收起来 —— 它只剩"拿不到封面主色时
-            // 的兜底值"这一点残余作用,为它常占一行、还要配一句解释自己为什么半失效的副标题,
-            // 不如干脆不显示。
+            // 2026-09-06 从「歌词」页的「效果」段拆过来的悬浮歌词那一份(原来是一颗全局开关,关掉在
+            // 引擎里丢弃逐字数据、四个展示面一起退成整行;用户指出"卡拉OK是某个面怎么画的问题,跟
+            // 繁简 / 罗马音那些改歌词内容本身的不是一类")。判据跟 2026-08-29「双行显示」挪进「排版」
+            // 那次同一条:只对这一种展示方式生效的就归到这一段。灵动岛 / 菜单栏各有自己那颗,歌词窗口
+            // 始终逐字。
             //
-            // ⚠️ 这跟"展示方式的开关不再跟配置卡联动、关着也能配"不是一回事,别照那条推翻这里:
-            // 那边是**没启用**某个形态时仍要让人能预先配好它;这里是某一项**已经被另一项接管**,
-            // 显示出来只会让人以为改了有用。背景色和描边色不受接管,所以照常显示。
-            if !settings.followsCoverArt {
-                CardDivider()
-                SettingsRow(icon: "paintbrush", title: L10n.t("文字颜色")) {
+            // 排在字号之后、颜色那几行之前:它讲的是"字怎么被点亮",介于字形和颜色之间,放在两组的
+            // 分界上最不突兀。生效链路见 AppSettings.overlayLyricsKaraoke。
+            SettingsRow(
+                icon: "sparkles",
+                title: L10n.t("卡拉OK效果"),
+                help: L10n.t("逐字歌词，唱到哪个字亮到哪个字；没有逐字数据的歌整行高亮")
+            ) {
+                Toggle("", isOn: $settings.overlayLyricsKaraoke)
+            }
+            // ── 以下三行 2026-09-02 从原「配色」组并过来(「跟随封面」2026-09-07 又搬去了「主题」组)──
+            //
+            // 「跟随封面」开着时文字颜色由封面主色接管(PlaybackCoordinator.displayForegroundColor),
+            // 这一行 2026-09-02~09-07 之间是整行收起的;现在开关不在这个浮层里了,整行藏掉会变成
+            // "文字颜色去哪了",所以行留着、尾部换成一句灰字「跟随封面」指向原因 —— 这是**值**的位置,
+            // 报的是"此刻文字色由谁决定",不是一个可点的控件。背景色和描边色不受接管,照常显示。
+            CardDivider()
+            SettingsRow(icon: "paintbrush", title: L10n.t("文字颜色")) {
+                if settings.followsCoverArt {
+                    Text(L10n.t("跟随封面"))
+                        .font(.system(size: 13))
+                        .foregroundStyle(.secondary)
+                } else {
                     ColorPicker("", selection: Binding(
                         get: { settings.foregroundColor },
                         set: { settings.foregroundColorHex = $0.hexStringWithAlpha }
@@ -158,7 +166,8 @@ struct OverlayTextSettingsRows: View {
         }
         // 条件行长出/收起时别硬跳(设计稿明确要求)。挂 value: 而不是裸 .animation() ——
         // 裸的那种会把这一组里所有变化都动画化,包括拖字号滑杆时预览的每一帧。
-        .animation(.default, value: settings.followsCoverArt)
+        // (`followsCoverArt` 那条 2026-09-07 拿掉了:它在这一组里不再增删任何行,只换「文字颜色」
+        //  尾部的内容,没有几何要过渡。)
         .animation(.default, value: settings.textStrokeEnabled)
     }
 }
@@ -212,7 +221,7 @@ struct OverlayLayoutSettingsRows: View {
             SettingsRow(
                 icon: "text.alignleft",
                 title: L10n.t("对齐方式"),
-                help: L10n.t("自动：按对唱声部标记自动在左/右/居中之间切换（默认）。\n\n居中/左对齐/右对齐：忽略声部信息，所有歌词始终固定在同一个位置。")
+                help: L10n.t("自动（默认）：按对唱声部在左 / 右 / 居中间切换。\n其余：忽略声部，固定在一个位置。")
             ) {
                 // ⚠️ 故意不用系统 `.pickerStyle(.segmented)`(2026-08-29,三轮修法都没
                 // 按住"选了哪个选项、控件整体宽度就跟着变"这个问题,完整排查过程见
@@ -322,7 +331,8 @@ struct OverlayAlignmentSegmentedControl: View {
 ///   - 文字层(字形 + 字色 + 描边)→ `OverlayTextSettingsRows`
 ///   - 背景层(底色 + 底的材质)→ 本组
 ///   - 一键套一整套配色 → `OverlayThemeSettingsRows`(它同时改两层,所以哪一边都不属于)
-/// 「跟随封面」跟着文字走,因为它接管的只有文字颜色(见那一行上面的注释)。
+/// 「跟随封面」2026-09-02 归了文字(它接管的只有文字颜色),2026-09-07 又归了主题 —— 它跟「配色主题」
+/// 回答的是同一个问题(文字色从哪来),见 `OverlayThemeSettingsRows` 头注。
 @MainActor
 struct OverlayBackgroundSettingsRows: View {
     @ObservedObject private var settings = AppSettings.shared
@@ -353,10 +363,19 @@ struct OverlayBackgroundSettingsRows: View {
 
 // MARK: - 主题
 
-/// 「主题」那一组:配色主题 / 我的配色主题。
+/// 「主题」那一组:跟随封面 / 配色主题 / 我的配色主题。
 ///
 /// 2026-09-02 单独立成第三个入口。它本来跟文字色、背景色挤在「配色」里,而按"改的是哪一层"
 /// 这条判据它**两层都改** —— 塞进「文字」或「背景」任何一边都是错的分类(用户拍板:单开)。
+///
+/// **「跟随封面」2026-09-07 从「文字」搬到这一组的第一行**(用户要求整页按"不要这一个那一个"
+/// 重排)。09-02 把它归「文字」的理由是"它接管的只有文字色";但从用户这一侧看,它跟「配色主题」
+/// 是**同一个问题的两个答案**——文字色从哪来:封面主色,还是某一套主题。两个答案拆在两个浮层里,
+/// 结果是「主题」浮层顶着一个「—」、原因却在别处;而悬浮窗右键的「更改配色」子菜单
+/// (`OverlayQuickSettingsMenu.colorThemeMenu`)一直就是「跟随封面 → 内置主题 → 自存主题」一列,
+/// 设置页这次跟它取齐。09-02 那条"别搬"的警告因此撤销;「文字」组那边「文字颜色」一行改成常显、
+/// 跟随时尾部写「跟随封面」指回这里。工具栏「主题」按钮的摘要也随之在跟随时报「跟随封面」
+/// (见 `OverlayStyleSummary.theme`)—— 现在那颗按钮管的浮层里就有这个开关,报它就是报真实状态。
 ///
 /// ⚠️ **「配色主题」那一行任何时候都显示,不再被「跟随封面」收起**(2026-09-02 用户拍板:
 /// 「勾选了跟随封面之后依然可以选择主题,但是你去选了主题之后跟随封面就自动取消勾选」)。
@@ -376,14 +395,24 @@ struct OverlayBackgroundSettingsRows: View {
 /// 里"跟随封面开着时主题一个勾都不打"是同一条逻辑(见 OverlayQuickSettingsMenu),两个入口
 /// 一致。列表本身照常能点开、能选,选了就切过去。
 ///
-/// ⚠️ **别因此把「跟随封面」搬到这一组来"就近"**:那会让「文字」组失去它唯一的取色模式开关,
-/// 而 `followsCoverArt` 接管的恰恰只有文字色。
 @MainActor
 struct OverlayThemeSettingsRows: View {
     @ObservedObject private var settings = AppSettings.shared
 
     var body: some View {
         VStack(spacing: 0) {
+            // 标题「跟随封面」前面本来带着「文字」二字(2026-08-26 应用户要求去掉,嫌标题太长)。
+            // 它接管的只有**文字颜色**(PlaybackCoordinator.displayForegroundColor);背景色
+            // (LyricsOverlayView 的 overlayBackground)和描边色(.lyricsTextStroke)任何时候都
+            // 无条件生效。这个开关**只管桌面悬浮歌词**(灵动岛整卡前景取色 2026-08-31 并进了它自己的
+            // `notchCardStyle == .coverArt`,理由见 NotchPlayback.accent 的注释)。
+            SettingsRow(
+                icon: "photo.on.rectangle.angled",
+                title: L10n.t("跟随封面")
+            ) {
+                Toggle("", isOn: $settings.followsCoverArt)
+            }
+            CardDivider()
             // 只打包"配色"相关的四个字段(文字/背景/描边颜色 + 描边开关),不含字体/字号 ——
             // 那是排版,跟配色是两回事,不该被同一个"主题"捆在一起改(见 ColorTheme.swift)。
             SettingsRow(icon: "swatchpalette", title: L10n.t("配色主题")) {
@@ -483,7 +512,7 @@ struct OverlayThemeSettingsRows: View {
 /// 「我的配色主题」那一组:存为新主题 + 已存主题的套用/删除。
 ///
 /// 设计稿把它放进配色浮层的底部(而不是像现状那样单独一张卡):它和配色强绑定,套用后
-/// 预览立刻变色,跟「跟随封面 / 背景颜色 / 描边」待在同一个浮层里更连贯。卡片那一份
+/// 预览立刻变色,跟「跟随封面 / 配色主题」待在同一个浮层里更连贯。抽屉那一份
 /// 仍然在(全量兜底通路),两边是同一个这个组件。
 ///
 /// 「我的配色主题」那两行**内联确认**(命名 / 删除确认)专用的行容器。
@@ -701,16 +730,21 @@ enum OverlayStyleSummary {
         return "\(family) \(settings.overlayFontWeight.displayName) \(size)"
     }
 
-    /// 例:「跟随封面」/「暗夜霓虹」/「自定义」。跟随封面开着时文字颜色由封面主色接管,
-    /// 这时候报主题名会误导(那只是拿不到封面主色时的兜底值),所以优先报模式本身。
+    /// 例:「跟随封面」/「暗夜霓虹」/「自定义」。
     ///
-    /// 2026-09-02 从 `color` 改名成 `theme`(那个浮层拆成了「主题」「背景」两个),语义和取值
-    /// 一字未变 —— 它报的一直是"当前这一套配色叫什么",正好就是「主题」按钮该说的话。
-    /// ⚠️ 直接复用 `currentThemeLabel`,**不要**在这里再写一份分支。2026-09-02 之前这里
-    /// 短路成 `followsCoverArt ? "跟随封面" : ...`,于是同一个概念在工具栏和浮层里给出两种
-    /// 说法(按钮说"跟随封面"、行里说"黑字描边"),而用户要的是两边都指向同一个占位符。
-    /// 判据只留一处,见 `OverlayThemeSettingsRows.currentThemeLabel`。
-    static var theme: String { OverlayThemeSettingsRows.currentThemeLabel }
+    /// 2026-09-02 从 `color` 改名成 `theme`(那个浮层拆成了「主题」「背景」两个)。
+    ///
+    /// **跟随封面开着时报「跟随封面」**(2026-09-07 起)。这一截来回改过三次,理由都记着:
+    ///  - 2026-09-02 之前:短路成 `followsCoverArt ? "跟随封面" : …`;
+    ///  - 2026-09-02:改成直接复用 `currentThemeLabel`、跟随时同样显示占位符「—」—— 当时「跟随封面」
+    ///    开关在**「文字」**浮层里,按钮说"跟随封面"、浮层里的行说"—",用户要的是两边一致;
+    ///  - 2026-09-07:「跟随封面」开关搬进了「主题」浮层(见 `OverlayThemeSettingsRows` 头注),这颗
+    ///    按钮管的浮层里就有它,摘要报「跟随封面」= 报这个浮层的真实状态,不再是另一个浮层里的事;
+    ///    而「—」印在按钮上什么都没说。浮层里「配色主题」那一格**仍是**「—」(那一格是主题名的位置,
+    ///    此刻没有主题在生效),两处说的是同一件事的两面:模式是跟随封面、所以没有主题名。
+    static var theme: String {
+        AppSettings.shared.followsCoverArt ? L10n.t("跟随封面") : OverlayThemeSettingsRows.currentThemeLabel
+    }
 
     /// 例:「毛玻璃」/「纯色」/「透明」。报的是**背景当前是什么材质**,不是颜色值本身 ——
     /// 一串 hex 或者 rgb 数字在按钮上没人读得出来是什么样,而"毛玻璃/纯色/透明"这三档正好
@@ -755,11 +789,12 @@ enum OverlayStyleSummary {
 /// 「Aa 文字…」浮层。内容就是抽屉「文字」那一组,没有第二份实现。
 ///
 /// 2026-09-02 内容从三行(字体/粗细/字号)长到最多七行:原「配色」组里属于文字层的四行
-/// (跟随封面 / 文字颜色 / 文字描边 / 描边颜色)并了过来。
-/// 宽度仍吃外壳默认的 380 —— 并进来的四行标题都很短(英文最长 "Follow Cover Art"),尾部
-/// 是 Toggle / ColorPicker,横向瓶颈仍然是原来那三行(`FontFamilyPicker` 的字体名下拉、
-/// 粗细下拉、字号滑杆+读数),没有变。高度最多七行 ≈ 340pt,在外壳 460 的上限内,不会
-/// 退化成"多一条滚动条"。
+/// (跟随封面 / 文字颜色 / 文字描边 / 描边颜色)并了过来;2026-09-06 加「卡拉OK效果」;
+/// 2026-09-07「跟随封面」搬去「主题」,现在是 字体 / 粗细 / 字号 / 卡拉OK效果 / 文字颜色 /
+/// 文字描边(+ 描边颜色)最多七行。
+/// 宽度仍吃外壳默认的 380 —— 这几行标题都很短,尾部是 Toggle / ColorPicker,横向瓶颈仍然是
+/// 原来那三行(`FontFamilyPicker` 的字体名下拉、粗细下拉、字号滑杆+读数),没有变。高度最多
+/// 七行 ≈ 340pt,在外壳 460 的上限内,不会退化成"多一条滚动条"。
 @MainActor
 struct OverlayTextPopover: View {
     var body: some View {

@@ -29,7 +29,7 @@ private let overlayPositionLegacyOriginKey = "np:overlayPositionOrigin" // 旧:"
 // 提醒一次,不是每次解锁都刷一遍存在感。
 private let hasShownDragHintKey = "np:hasShownOverlayDragHint"
 // 高度是初始/最小值,换行需要更多行时由 updateHeight 动态调整,不会比这个更矮。宽度
-// 在 AppSettings.overlayWidth 里(可在设置里调,默认 640),真正装不下的极端长行交给
+// 在 AppSettings.overlayWidth 里(可在设置里调,默认 488;2026-09-07 前是 640),真正装不下的极端长行交给
 // WrapLayout(LyricsOverlayView.swift)自动换行,不再单靠"更宽"兜底。
 private let overlayDefaultHeight: CGFloat = 120
 

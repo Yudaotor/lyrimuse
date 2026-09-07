@@ -10,10 +10,13 @@ import LyrimuseCore
 /// 页顶的固定头部里、点不动。这次改造是"挪位置 + 换外壳"——把它搬进可滚动内容区,外面套
 /// 一圈工具栏(浮层入口 + 重置)和宽度调整条,不重新实现预览本身。
 ///
-/// 设置项本来就少,不需要 Notch 那种两行工具栏——一行三个浮层入口(「布局」「配色」「字体」,
-/// 第三个是 2026-09-03 用户点名加的,里面是粗细 + 字号)+「重置 ▾」,横向预算离屏量过(见 `toolbar`
-/// 上面那条⚠️):
-/// 中文在 499pt 窄档下也放得下,英文在 600pt 宽档放得下、窄档只压摘要不压标题。
+/// 工具栏两行(2026-09-07 起,跟另外两段取齐):第一行「布局」「配色」「字体」+「重置 ▾」(第三个
+/// 入口是 2026-09-03 用户点名加的),横向预算离屏量过(见 `toolbar` 上面那条⚠️):中文在 499pt 窄档下
+/// 也放得下,英文在 600pt 宽档放得下、窄档只压摘要不压标题。第二行只有「行为」一颗 —— 两个行为开关
+/// (悬停显示播放控制 / 无歌词时显示歌名)此前因为第一行装不下而寄住在「布局」里,`MenuBarHoverControlsRow`
+/// 头注当时就写着"真要再来第二个行为开关,那时候一起拆一个「行为」浮层出来";第二个 09-04 就来了,
+/// 这次按用户"不要这一个那一个"的要求拆出来。分组按卡片解剖:「布局」= 这一格怎么占位、几行、旁边
+/// 有没有图标;「配色」= 颜色;「字体」= 字长什么样;「行为」= 什么状态下显示什么。
 @MainActor
 struct MenuBarEditorStage: View {
     @ObservedObject private var settings = AppSettings.shared
@@ -22,6 +25,7 @@ struct MenuBarEditorStage: View {
     var body: some View {
         VStack(spacing: 10) {
             toolbar
+            toolbarRow2
             // 宽度调整条浮**在预览框里面**(2026-09-01 第三轮,用户原话「把这个配置项也给我
             // 和之前两个页面一样加到这个预览框里面去进行调整」)。前两版都不是他要的:
             // 第一版摆在预览下面平铺一行、第二版仍是 VStack 里的兄弟节点 —— 而
@@ -51,7 +55,7 @@ struct MenuBarEditorStage: View {
     ///
     /// ⚠️ 横向够不够:离屏 `NSHostingView.fittingSize`(方法论同 `NotchEditorStage.toolbar`
     /// 那条⚠️,复刻了 `.bordered` + `.controlSize(.small)` + 摘要 `.layoutPriority(-1)`)。
-    /// 两个入口时(最坏摘要"自适应"/"卡拉OK染色")+ 重置菜单是中文 398.0pt / 英文 458.0pt。
+    /// 两个入口时(最坏摘要"自适应"/"卡拉OK效果",09-06 前叫"卡拉OK染色"、等长)+ 重置菜单是中文 398.0pt / 英文 458.0pt。
     /// 2026-09-03 加第三个入口「粗细」前重量了一遍:同一份复刻在这次的宿主里量出两入口
     /// 348.0 / 394.0(比记录值系统性少 50 / 64,是重置菜单在离屏宿主里渲染得更窄,按差值校准),
     /// 三入口 中文 450.0 → 校准 ≈500;英文标题若沿用 "Font Weight" 565.0 → ≈629,**改成 "Weight"**
@@ -76,7 +80,7 @@ struct MenuBarEditorStage: View {
             toolbarButton(
                 icon: "arrow.left.and.right.circle",
                 title: L10n.t("布局"),
-                summary: settings.menuBarLyricsWidthMode.displayName,
+                summary: layoutSummary,
                 target: .layout
             )
             toolbarButton(
@@ -102,13 +106,13 @@ struct MenuBarEditorStage: View {
             // 作用范围说明。范围文案复用灵动岛那条"不含宽度和总开关"——两边排除的东西逐字
             // 相同(结构性宽度设置 + 总开关),没必要另造一句意思一样的话。
             //
-            // ⚠️ 动作标题直接念**工具栏那三个入口的名字**(2026-09-03 用户要求把范围扩到
-            // "这部分所有配置,除了宽度"之后改的):原来叫「恢复默认宽度模式与配色」,而实际
-            // 范围早就盖到了字体、歌词旁的图标、悬停显示播放控制 —— 用具体名词列举既不准
-            // 又会越列越长。念三个浮层的名字,范围"看标题就知道"且以后往浮层里加项也不用改
-            // 这句话。
+            // 动作标题就叫「恢复默认」,范围由下面那条不可点的说明项(「不含宽度和总开关」)交代。
+            // 2026-09-07 用户「简约克制」专项把三个编辑台(悬浮 / 灵动岛 / 菜单栏)的这颗按钮统一成这四个字:
+            // 此前这里念的是工具栏四个入口的名字(「恢复默认布局、配色、字体与行为」,2026-09-03 起),
+            // 更早叫「恢复默认宽度模式与配色」—— 两版都在标题里列举范围,越列越长,而排除项那一行
+            // 本来就在菜单里,标题再列一遍是重复。范围本身(这个编辑台除宽度和总开关外的全部)不变。
             Menu {
-                Button(L10n.t("恢复默认布局、配色与字体")) { MenuBarStyleDefaults.restoreDefaults() }
+                Button(L10n.t("恢复默认")) { MenuBarStyleDefaults.restoreDefaults() }
                 Text(L10n.t("不含宽度和总开关"))
             } label: {
                 Label(L10n.t("重置"), systemImage: "arrow.uturn.backward")
@@ -120,20 +124,60 @@ struct MenuBarEditorStage: View {
         .padding(.horizontal, 2)
     }
 
-    /// 「配色」按钮摘要——两个候选都是**现成的**既有文案(逐字染色开关自己的标题 / 颜色
-    /// 重置按钮自己的标题),不新造描述句,理由同 `NotchEditorStage.lyricRowSummary` 那组
-    /// "摘要复用现成 item 标题"的纪律。
-    private var colorSummary: String {
-        settings.menuBarLyricsKaraoke ? L10n.t("卡拉OK染色") : L10n.t("跟随系统")
+    /// 工具栏第二行(2026-09-07):只有「行为」一颗。另起一行而不是塞进第一行,理由跟另外两段
+    /// 编辑台一样 —— 第一行的横向预算是量到上限的(见 `toolbar` 头注),第四颗必然把摘要压成「…」
+    /// 甚至挤掉标题;一颗按钮独占一行看着松,但三段编辑台的结构因此一致(「行为」都在第二行末尾)。
+    private var toolbarRow2: some View {
+        HStack(spacing: 8) {
+            toolbarButton(
+                icon: "switch.2",
+                title: L10n.t("行为"),
+                summary: behaviorSummary,
+                target: .behavior
+            )
+            Spacer(minLength: 8)
+        }
+        .font(.system(size: 12))
+        .padding(.horizontal, 2)
     }
 
-    /// 「字体」按钮摘要:粗细档位显示名(跟下拉里的选项同一份文案);**只有用户改过字号**才追加
-    /// " Npt" —— 跟随系统时字号不是用户的决定,报出来只是占预算(toolbar 头注那笔账按这个口径算)。
+    /// 「布局」按钮摘要:宽度模式(三项里最结构性的那个),副行**非默认**时再追加「副行 · 译文」——
+    /// 四选一不是开关,套不进"只列开着的";默认那一档(2026-09-07 起是「下一句」,此前是「不显示」)是多数人的状态,无条件报出来是恒定噪声
+    /// (灵动岛「歌词行」摘要同一条规则)。歌词旁的图标不报:它在预览上一眼就看得见。
+    private var layoutSummary: String {
+        var parts = [settings.menuBarLyricsWidthMode.displayName]
+        if settings.menuBarSecondaryLine != AppSettings.defaultMenuBarSecondaryLine {
+            parts.append("\(L10n.t("副行")) · \(settings.menuBarSecondaryLine.displayName)")
+        }
+        return parts.joined(separator: " · ")
+    }
+
+    /// 「配色」按钮摘要——两个候选都是**现成的**既有文案(卡拉OK开关自己的标题 / 颜色
+    /// 重置按钮自己的标题),不新造描述句,理由同 `NotchEditorStage.lyricRowSummary` 那组
+    /// "摘要复用现成 item 标题"的纪律。(标题 2026-09-06 随开关改名「卡拉OK效果」,宽度预算见
+    /// toolbar 头注:比原「卡拉OK染色」等长,不用重量。)
+    private var colorSummary: String {
+        settings.menuBarLyricsKaraoke ? L10n.t("卡拉OK效果") : L10n.t("跟随系统")
+    }
+
+    /// 「字体」按钮摘要:粗细档位显示名(跟下拉里的选项同一份文案);**只有用户改过字号、且字号在生效**
+    /// 才追加 " Npt" —— 跟随系统时字号不是用户的决定;副行开着时字号由行高推出、滑杆让位(见
+    /// `MenuBarFontSizeRow`),报出来都是占预算(toolbar 头注那笔账按这个口径算)。副行本身 2026-09-07 起
+    /// 归「布局」,在那颗按钮的摘要里报。
     private var fontSummary: String {
         let weight = settings.menuBarLyricsFontWeight.displayName
-        guard settings.menuBarLyricsFontSize > 0 else { return weight }
+        guard !settings.menuBarSecondaryLine.showsSecondaryRow, settings.menuBarLyricsFontSize > 0 else { return weight }
         let size = String(format: L10n.t("%@pt"), "\(Int(MenuBarMarqueeRenderer.font.pointSize))")
         return "\(weight) \(size)"
+    }
+
+    /// 「行为」按钮摘要:两个开关里开着的那几个,全开 / 全关给一句概括(`SettingsToggleSummary`,跟另外
+    /// 两段编辑台的「行为」按钮同一份归约)。
+    private var behaviorSummary: String {
+        SettingsToggleSummary.text([
+            (title: L10n.t("悬停显示播放控制"), isOn: settings.menuBarHoverShowsControls),
+            (title: L10n.t("无歌词时显示歌名"), isOn: settings.menuBarShowsTitleWhenNoLyrics),
+        ])
     }
 
     private func toolbarButton(
@@ -169,6 +213,8 @@ struct MenuBarEditorStage: View {
         case layout
         case color
         case font
+        /// 2026-09-07 加,独占工具栏第二行。见 `toolbarRow2`。
+        case behavior
     }
 
     private func popoverBinding(_ target: StagePopover) -> Binding<Bool> {
@@ -185,6 +231,7 @@ struct MenuBarEditorStage: View {
         case .layout: MenuBarLayoutPopover()
         case .color: MenuBarColorPopover()
         case .font: MenuBarFontPopover()
+        case .behavior: MenuBarBehaviorPopover()
         }
     }
 
@@ -322,7 +369,7 @@ struct MenuBarLyricsIconRow: View {
         SettingsRow(
             icon: "chart.bar.fill",
             title: L10n.t("歌词旁的图标"),
-            help: L10n.t("在歌词那一格的最左或最右放一枚菜单栏图标（款式跟随「通用 → 菜单栏与 Dock」里选的那款）。图标上的颜色从下往上涨，表示这首歌播放到哪儿了。\n\n配色跟着旁边的歌词走：涨上来的部分用「已唱到的颜色」，还没涨到的用「未唱到的颜色」。\n\n只在显示歌词时出现；暂停或间奏收成小图标时仍是原来的样子。")
+            help: L10n.t("在歌词一格的最左或最右放一枚菜单栏图标，图标颜色从下往上涨表示播放进度：涨上来的用「已唱到」色，其余用「未唱到」色。只在显示歌词时出现。")
         ) {
             Picker("", selection: $settings.menuBarLyricsIconPosition) {
                 ForEach(MenuBarLyricsIconPosition.allCases, id: \.self) { position in
@@ -338,13 +385,12 @@ struct MenuBarLyricsIconRow: View {
 /// 「悬停显示播放控制」行(2026-09-03)—— 鼠标停在菜单栏歌词上时,歌词收掉、换成
 /// 「上一曲 / 播放暂停 / 下一曲」三个键。用户点名仿酷狗菜单栏。
 ///
-/// ⚠️ 这是个**行为**开关,严格说不属于「布局」;放进「布局」浮层是因为这一行工具栏的横向
-/// 预算已经用尽(见本文件顶部那段离屏量的记录:"这一行到此也到底了,再加入口或把哪个标题
-/// 改长,先重新离屏量"),不值得为一个开关新开第四个入口。真要再来第二个行为开关,那时候
-/// 一起拆一个「行为」浮层出来,别一个个往「布局」里塞。
+/// 这是个**行为**开关。2026-09-03~09-07 它寄住在「布局」浮层里(第一行工具栏的横向预算已经用尽,
+/// 不值得为一个开关新开第四个入口;当时写着"真要再来第二个行为开关,那时候一起拆一个「行为」
+/// 浮层出来")—— 第二个(「无歌词时显示歌名」)09-04 就来了,2026-09-07 按用户"不要这一个那一个"
+/// 的要求拆出了工具栏第二行的「行为」浮层(`MenuBarBehaviorPopover`),两项都搬了过去。
 ///
-/// 它也**不进**「重置 ▾」:那个按钮恢复的是这行字的纯样式(宽度模式/染色/颜色/粗细/字号),
-/// 而这一项跟总开关 `showLyricsInMenuBar` 一样是"要不要有这个功能",取舍见
+/// 在「重置 ▾」范围内(2026-09-03 用户拍板"这部分所有配置都改为默认,除了宽度"),见
 /// `MenuBarStyleDefaults`。
 struct MenuBarHoverControlsRow: View {
     @ObservedObject private var settings = AppSettings.shared
@@ -353,15 +399,16 @@ struct MenuBarHoverControlsRow: View {
         SettingsRow(
             icon: "playpause.circle",
             title: L10n.t("悬停显示播放控制"),
-            help: L10n.t("鼠标移到菜单栏歌词上，歌词换成「上一曲 / 播放暂停 / 下一曲」三个键；移开就变回歌词。\n\n只在显示歌词时接管：暂停或间奏收成小图标时不接管，自适应宽度下那一格太窄放不下三个键时也不接管。\n\n点三个键以外的地方仍然是打开面板。")
+            help: L10n.t("鼠标移到菜单栏歌词上换成「上一曲 / 播放暂停 / 下一曲」三个键，移开变回。暂停、间奏、或那一格太窄时不接管。点键以外的地方仍是打开面板。")
         ) {
             Toggle("", isOn: $settings.menuBarHoverShowsControls)
         }
     }
 }
 
-/// 「无歌词时显示歌名」行(2026-09-04,借鉴清单 #28)。跟上面「悬停显示播放控制」同住「布局」浮层
-/// 与「全部设置」抽屉:它管的也是"这一格在什么状态下显示什么",不是样式。判据在 Core
+/// 「无歌词时显示歌名」行(2026-09-04,借鉴清单 #28)。跟上面「悬停显示播放控制」同住「行为」浮层
+/// 与「全部设置」抽屉「行为」组(2026-09-07 前两项都在「布局」里):它管的也是"这一格在什么状态下
+/// 显示什么",不是样式。判据在 Core
 /// (`MenuBarSlotPolicy.displayText`),help 里把三条边界(暂停仍缩回 / 广告不显示 / 歌词一到就换)说清。
 /// 进「重置 ▾」——2026-09-03 漏过两项被用户当场看出来,见 `MenuBarStyleDefaults` 头注。
 struct MenuBarTitleFallbackRow: View {
@@ -380,11 +427,11 @@ struct MenuBarTitleFallbackRow: View {
 
 // MARK: - 恢复默认
 
-/// 「重置」按钮的动作本体——把工具栏那三个浮层(布局 / 配色 / 字体)里的**每一项**恢复默认。
+/// 「重置」按钮的动作本体——把工具栏四个浮层(布局 / 配色 / 字体 / 行为)里的**每一项**恢复默认。
 ///
 /// **只排除两样**(2026-09-03 用户拍板:"这里的重置需要把这部分所有配置都改为默认,除了宽度"):
 ///  - `menuBarLyricsWidth`(最大宽度)—— 用户点名要留;它也是唯一一项常驻在舞台上、不在
-///    任何浮层里的设置,排除它跟"重置三个浮层"这个范围自洽;
+///    任何浮层里的设置,排除它跟"重置四个浮层"这个范围自洽;
 ///  - `showLyricsInMenuBar`(总开关)—— 它不在工具栏管辖范围内(单独一张卡在编辑台下面),
 ///    而且一颗样式重置按钮顺手把整个功能关掉是危险且反直觉的。两个排除跟悬浮歌词/灵动岛
 ///    那两颗「重置」的取舍一致,菜单里那句"不含宽度和总开关"说的就是这两样。
@@ -401,9 +448,8 @@ enum MenuBarStyleDefaults {
         // 「布局」浮层
         settings.menuBarLyricsWidthMode = AppSettings.defaultMenuBarLyricsWidthMode
         settings.menuBarLyricsAlignment = AppSettings.defaultMenuBarLyricsAlignment
+        settings.menuBarSecondaryLine = AppSettings.defaultMenuBarSecondaryLine
         settings.menuBarLyricsIconPosition = AppSettings.defaultMenuBarLyricsIconPosition
-        settings.menuBarHoverShowsControls = AppSettings.defaultMenuBarHoverShowsControls
-        settings.menuBarShowsTitleWhenNoLyrics = AppSettings.defaultMenuBarShowsTitleWhenNoLyrics
         // 「配色」浮层
         settings.menuBarLyricsKaraoke = AppSettings.defaultMenuBarLyricsKaraoke
         settings.menuBarLyricsTextColorHex = AppSettings.defaultMenuBarLyricsTextColorHex
@@ -411,12 +457,32 @@ enum MenuBarStyleDefaults {
         // 「字体」浮层
         settings.menuBarLyricsFontWeight = AppSettings.defaultMenuBarLyricsFontWeight
         settings.menuBarLyricsFontSize = AppSettings.defaultMenuBarLyricsFontSize
+        // 「行为」浮层(2026-09-07 从「布局」拆出来)
+        settings.menuBarHoverShowsControls = AppSettings.defaultMenuBarHoverShowsControls
+        settings.menuBarShowsTitleWhenNoLyrics = AppSettings.defaultMenuBarShowsTitleWhenNoLyrics
     }
 }
 
-// MARK: - 「宽度模式」浮层
+// MARK: - 「布局」浮层
 
-/// 「布局」浮层 —— 宽度模式(+ 固定宽度下的对齐方式)+ 歌词旁的图标。
+/// 「布局」组的行(浮层与抽屉同一份,2026-09-07):宽度模式(+ 固定宽度下的对齐方式)→ 副行 → 歌词旁的图标。
+/// 三样都是"这一格怎么占位":占多宽、排几行、旁边有没有图标。「副行」从「字体」搬过来 —— 悬浮歌词的
+/// 「双行显示」在「排版」、灵动岛的「副行」在「歌词行」,三个面上"排几行"都归版面,不归字形;它顺带让
+/// 「字号」失效这件事由「字号」那一行自己说(`MenuBarFontSizeRow`)。悬停 / 无歌词两颗行为开关同日
+/// 搬去了 `MenuBarBehaviorRows`。
+struct MenuBarLayoutRows: View {
+    var body: some View {
+        VStack(spacing: 0) {
+            MenuBarWidthModeRow()
+            CardDivider()
+            MenuBarSecondaryLineRow()
+            CardDivider()
+            MenuBarLyricsIconRow()
+        }
+    }
+}
+
+/// 「布局」浮层 —— 内容就是 `MenuBarLayoutRows`。
 ///
 /// ⚠️ 宽度 2026-09-03 从 430 放宽到 470。430 是当初为**宽度模式那一行**离屏量出来的
 /// (中文 370.0 / 英文 414.0),而新加的「歌词旁的图标」行标题更长、尾部是个三段选择器 ——
@@ -427,13 +493,33 @@ enum MenuBarStyleDefaults {
 struct MenuBarLayoutPopover: View {
     var body: some View {
         SettingsPopoverShell(title: L10n.t("布局"), width: 470) {
-            MenuBarWidthModeRow()
-            CardDivider()
-            MenuBarLyricsIconRow()
-            CardDivider()
+            MenuBarLayoutRows()
+        }
+    }
+}
+
+/// 「行为」组的行(2026-09-07 从「布局」拆出来;浮层与抽屉同一份):悬停显示播放控制 / 无歌词时显示歌名。
+/// 两项都是"这一格在什么状态下显示什么",不是样式 —— 跟另外两段编辑台的「行为」入口同一条判据。
+struct MenuBarBehaviorRows: View {
+    var body: some View {
+        VStack(spacing: 0) {
             MenuBarHoverControlsRow()
             CardDivider()
             MenuBarTitleFallbackRow()
+        }
+    }
+}
+
+/// 工具栏第二行「行为」浮层(2026-09-07)。
+///
+/// ⚠️ 宽度 420 跟另外两段的「行为」浮层同宽(三个形态的「行为」看起来是一件东西),也够用:最宽一行
+/// 是英文 "Show Title When No Lyrics" 161.3pt + ⓘ 19 + `SettingsRow` 固定开销 150(2×14 内边距 + 20 图标列
+/// + 3×12 间距 + 12 Spacer + 54 开关)= 330(中文「悬停显示播放控制」103.2 + 19 + 150 = 272),13pt 系统字
+/// 实测文字宽算的。
+struct MenuBarBehaviorPopover: View {
+    var body: some View {
+        SettingsPopoverShell(title: L10n.t("行为"), width: 420) {
+            MenuBarBehaviorRows()
         }
     }
 }
@@ -446,7 +532,7 @@ struct MenuBarLayoutPopover: View {
 ///      竖线"——这一行(以及「配色」那三行)在浮层/抽屉里本来就是**顶层**设置项,不是挂在
 ///      某个「主行」下面的从属选项,`SettingsSubRow` 那条竖线是给真正的主从关系准备的
 ///      (参见该组件文档:"标题缩进到跟主行标题同一列"),这里没有主行可对齐,套上去就是
-///      多余的装饰。改用 `SettingsRow(icon:)`——跟 `NotchBehaviorItem`/`NotchBehaviorItemRows`
+///      多余的装饰。改用 `SettingsRow(icon:)`——跟 `NotchBehaviorItem`/`NotchBehaviorToggleRow`
 ///      那套"每项一个图标、不用竖线"的既有惯例对齐,顺带跟「全部设置」抽屉里已经在用
 ///      `SettingsRow` 的「最大宽度」行取得一致(改之前二者一个有竖线一个有图标,风格对不上,
 ///      用户在「全部设置」截图里也点出了这一点)。
@@ -474,7 +560,7 @@ struct MenuBarWidthModeRow: View {
             // 图标会停在旧位置(错位、闪动),左键面板也可能被挤掉。UI 上现在只保留它的
             // **可见结果**(宽度随句变、旁边图标跟着挪)——那是"效果";成因和"别用"属于
             // 判断,不进这行字。
-            help: L10n.t("只影响装得下的句子。\n\n固定：短句也占满设定宽度，右边留白，菜单栏上的位置不会变。\n\n自适应：短句按自己的宽度占位，省下多余空间；菜单栏这一项的宽度随每句变化，旁边的图标位置也跟着挪。")
+            help: L10n.t("只影响装得下的句子。\n固定：短句也占满设定宽度，位置不变。\n自适应：短句按自己的宽度占位，这一项随句变宽变窄，旁边的图标跟着挪。")
         ) {
             Picker("", selection: $settings.menuBarLyricsWidthMode) {
                 Text(L10n.t("固定")).tag(MenuBarLyricsWidthMode.fixed)
@@ -513,7 +599,8 @@ struct MenuBarAlignmentRow: View {
         ) {
             // 跟灵动岛「对齐方式」共用同一个控件(2026-09-03 搬到 UI/
             // LyricsAlignmentSegmentedControl.swift,原来长在这个文件里)。
-            LyricsAlignmentSegmentedControl(selection: $settings.menuBarLyricsAlignment)
+            LyricsAlignmentSegmentedControl(selection: $settings.menuBarLyricsAlignment,
+                                            options: LyricsRestingAlignment.menuBarOptions)
         }
     }
 }
@@ -530,16 +617,56 @@ struct MenuBarColorPopover: View {
     }
 }
 
-/// 「字体」浮层(2026-09-03):「粗细」+「字号」两行,跟悬浮歌词「文字」浮层里那两行同款控件。
+/// 「字体」组的行(浮层与抽屉同一份,2026-09-07):「粗细」+「字号」,跟悬浮歌词「文字」浮层里那两行同款
+/// 控件。「副行」2026-09-06 曾放在这一组第三行(它让字号失效,当时想让因果同屏),2026-09-07 搬去「布局」
+/// —— 它首先是"排几行"的版面问题;因果同屏改由「字号」那一行自己交代(副行开着时尾部写「由副行决定」)。
+struct MenuBarFontRows: View {
+    var body: some View {
+        VStack(spacing: 0) {
+            MenuBarFontWeightRow()
+            CardDivider()
+            MenuBarFontSizeRow()
+        }
+    }
+}
+
+/// 「字体」浮层(2026-09-03):内容就是 `MenuBarFontRows`。
 /// 宽度用 `SettingsPopoverShell` 的默认 380 —— 那正是悬浮歌词「文字」浮层(同样装着字号滑杆
 /// 150 + 读数 46 那一行)量出来的值;字号这一行英文标题 Font Size 加滑杆比「配色」的三行都宽,
 /// 330 不够。真要收窄先按 `MenuBarWidthModeRow` 头注那条方法论量一次。
 struct MenuBarFontPopover: View {
     var body: some View {
         SettingsPopoverShell(title: L10n.t("字体")) {
-            MenuBarFontWeightRow()
-            CardDivider()
-            MenuBarFontSizeRow()
+            MenuBarFontRows()
+        }
+    }
+}
+
+/// 「副行」行(2026-09-06,借鉴清单 #57,用户在五档 HTML 对比里选 B 方案:主 10pt / 副 9pt)—— 主歌词下面
+/// 再放一行,内容四选一(不显示 / 下一句 / 译文 / 罗马音),跟灵动岛「歌词行 → 副行」同一个枚举、同一套
+/// 显示名(`LyricSecondaryLine.displayName`)、同一个控件形态(`Picker(.menu)`),只是各存各的键,默认不显示。
+///
+/// 2026-09-06 放在「字体」浮层(它让字号失效,想让因果同屏);2026-09-07 搬到「布局」—— 它首先是
+/// "排几行"的版面问题,悬浮歌词的「双行显示」在「排版」、灵动岛的「副行」在「歌词行」,三个面取齐;
+/// 字号那边的因果由 `MenuBarFontSizeRow` 自己交代(副行开着时尾部写「由副行决定」)。
+/// 进「重置 ▾」(`MenuBarStyleDefaults`)。
+struct MenuBarSecondaryLineRow: View {
+    @ObservedObject private var settings = AppSettings.shared
+
+    var body: some View {
+        SettingsRow(
+            icon: "text.append",
+            title: L10n.t("副行"),
+            help: L10n.t("主歌词下方多一行，高度不变（两行 10pt / 9pt，「字号」不生效）。译文和罗马音显示当前句，「下一句」显示接下来那句、主行不再提前切。副行不滚动，装不下时尾部渐隐。")
+        ) {
+            Picker("", selection: $settings.menuBarSecondaryLine) {
+                ForEach(LyricSecondaryLine.allCases, id: \.self) { kind in
+                    Text(kind.displayName).tag(kind)
+                }
+            }
+            .labelsHidden()
+            .pickerStyle(.menu)
+            .fixedSize()
         }
     }
 }
@@ -559,24 +686,34 @@ struct MenuBarFontSizeRow: View {
         SettingsRow(
             icon: "textformat.size",
             title: L10n.t("字号"),
-            help: L10n.t("菜单栏歌词的字号。默认跟随系统菜单栏，可在 10 到 16pt 之间调；字号越大歌词越高一点，16pt 仍在菜单栏项的高度以内。拖回系统字号那一格就回到跟随系统")
+            help: L10n.t("默认跟随系统菜单栏，可在 10～16pt 间调，16pt 仍在菜单栏项高度内。拖回系统字号那一格即恢复跟随。")
         ) {
-            HStack(spacing: 8) {
-                SteppedSlider(value: Binding(
-                    get: { Double(MenuBarMarqueeRenderer.font.pointSize) },
-                    set: { newValue in
-                        let range = MenuBarMarqueeRenderer.fontSizeRange
-                        let quantized = min(max(CGFloat(newValue.rounded()), range.lowerBound), range.upperBound)
-                        let stored: CGFloat = quantized == MenuBarMarqueeRenderer.systemPointSize ? 0 : quantized
-                        guard stored != settings.menuBarLyricsFontSize else { return }
-                        settings.menuBarLyricsFontSize = stored
-                    }
-                ), in: Double(MenuBarMarqueeRenderer.fontSizeRange.lowerBound)...Double(MenuBarMarqueeRenderer.fontSizeRange.upperBound), step: 1)
-                    .frame(width: 150)
-                Text(String(format: L10n.t("%@pt"), "\(Int(MenuBarMarqueeRenderer.font.pointSize))"))
+            // 副行开着时两行字号由行高推出(10 / 9pt,见 MenuBarLyricRows),滑杆翻了也没效果 —— 2026-09-06~07
+            // 之间这一行是整行隐藏的;「副行」搬去「布局」浮层之后,这里再藏整行就成了"字号去哪了",
+            // 改成行留着、尾部换一句灰字「由副行决定」指向原因(跟悬浮歌词「文字颜色」在跟随封面时的做法
+            // 同款)。这是**值**的位置,不是可点的控件。
+            if settings.menuBarSecondaryLine.showsSecondaryRow {
+                Text(L10n.t("由副行决定"))
+                    .font(.system(size: 13))
                     .foregroundStyle(.secondary)
-                    .monospacedDigit()
-                    .frame(width: 46, alignment: .trailing)
+            } else {
+                HStack(spacing: 8) {
+                    SteppedSlider(value: Binding(
+                        get: { Double(MenuBarMarqueeRenderer.font.pointSize) },
+                        set: { newValue in
+                            let range = MenuBarMarqueeRenderer.fontSizeRange
+                            let quantized = min(max(CGFloat(newValue.rounded()), range.lowerBound), range.upperBound)
+                            let stored: CGFloat = quantized == MenuBarMarqueeRenderer.systemPointSize ? 0 : quantized
+                            guard stored != settings.menuBarLyricsFontSize else { return }
+                            settings.menuBarLyricsFontSize = stored
+                        }
+                    ), in: Double(MenuBarMarqueeRenderer.fontSizeRange.lowerBound)...Double(MenuBarMarqueeRenderer.fontSizeRange.upperBound), step: 1)
+                        .frame(width: 150)
+                    Text(String(format: L10n.t("%@pt"), "\(Int(MenuBarMarqueeRenderer.font.pointSize))"))
+                        .foregroundStyle(.secondary)
+                        .monospacedDigit()
+                        .frame(width: 46, alignment: .trailing)
+                }
             }
         }
     }
@@ -627,14 +764,14 @@ struct MenuBarColorRows: View {
             SettingsRow(
                 icon: "text.word.spacing",
                 // 「逐字染色」→「卡拉OK染色」(2026-09-01,用户要求"改专业一点、和软件其他
-                // 地方对齐")。本仓面向用户的术语一直是**卡拉OK**(「歌词 → 效果」那张卡就叫
-                // 「卡拉OK效果」,候选打分说明里也是「带逐字（卡拉OK）时间轴」),而英文侧本来
-                // 就是 "Karaoke fill" —— 漂的只有这一处中文。
+                // 地方对齐")→「卡拉OK效果」(2026-09-06)。本仓面向用户的术语一直是**卡拉OK**,
+                // 英文侧一直是 "Karaoke fill"。
                 //
-                // ⚠️ 跟「卡拉OK效果」是**两层**、不是重名:那个是全局的
-                // `preferWordLevelKaraoke`(要不要用逐字数据),这个是 `menuBarLyricsKaraoke`
-                // (菜单栏要不要跟着染)。名字相近正是想让这层关系看得出来。
-                title: L10n.t("卡拉OK染色"),
+                // 09-06 之前它跟「歌词 → 效果」里那颗全局「卡拉OK效果」是**两层**(那个决定引擎要不要
+                // 用逐字数据,这个决定菜单栏要不要跟着染),名字相近是想让这层关系看得出来。全局那颗
+                // 已撤、拆成悬浮歌词 / 灵动岛 / 菜单栏各一颗,三个面同一个词 —— 这颗就是菜单栏那一份,
+                // 也是菜单栏(状态栏项 + 面板里那行歌词)逐字填色**唯一**的闸。
+                title: L10n.t("卡拉OK效果"),
                 help: L10n.t("跟着演唱进度把已唱到的部分染成系统强调色。只在这首歌有逐字时间轴时生效；打开菜单反白期间暂不染色")
             ) {
                 Toggle("", isOn: $settings.menuBarLyricsKaraoke)
@@ -711,11 +848,12 @@ struct MenuBarColorRows: View {
 
 // MARK: - 「全部设置」抽屉
 
-/// 菜单栏歌词的「全部设置」抽屉(2026-09-01)——九项(宽度模式/歌词旁的图标/悬停显示播放控制/
-/// 最大宽度/粗细/字号/
-/// 逐字染色/文字颜色/染色颜色;2026-09-03 加粗细、字号、悬停显示播放控制)单组平铺,不像 `NotchAllSettingsDrawer` 那样再分组:项数本来就少,分组反而是
-/// 多余的层级。默认折叠,理由同另外两个抽屉:键盘/VoiceOver 全量兜底通路,不是新配置项的
-/// 收纳盒。
+/// 菜单栏歌词的「全部设置」抽屉(2026-09-01)。**分组、顺序、标题跟工具栏四个入口一一对应**(2026-09-07
+/// 起:布局 → 配色 → 字体 → 最大宽度 → 行为 → 恢复默认;每一组调的是浮层背后同一份 `MenuBarXxxRows`)。
+/// 2026-09-01~09-07 之间是十一项单组平铺、顺序跟工具栏也对不上("项数少,分组反而是多余的层级"),
+/// 用户按工具栏的记忆到抽屉里找会落空 —— 三段编辑台的抽屉这次统一成"工具栏的镜像"。「最大宽度」不属于
+/// 任何一组(舞台上那条常驻调整条的兜底副本,跟灵动岛 / 悬浮歌词抽屉里的宽度滑杆同一个摆法)。
+/// 默认折叠,理由同另外两个抽屉:键盘/VoiceOver 全量兜底通路,不是新配置项的收纳盒。
 struct MenuBarAllSettingsDrawer: View {
     @State private var isExpanded = false
 
@@ -724,30 +862,31 @@ struct MenuBarAllSettingsDrawer: View {
             disclosureHeader
             if isExpanded {
                 CardDivider()
-                MenuBarWidthModeRow()
+                group(L10n.t("布局")) { MenuBarLayoutRows() }
                 CardDivider()
-                MenuBarLyricsIconRow()
+                group(L10n.t("配色")) { MenuBarColorRows() }
                 CardDivider()
-                MenuBarHoverControlsRow()
+                group(L10n.t("字体")) { MenuBarFontRows() }
                 CardDivider()
-                MenuBarTitleFallbackRow()
-                CardDivider()
-                // 「最大宽度」在这里是**兜底副本**,跟舞台上那条常驻的 `widthBar` 改的是
-                // 同一个值——跟灵动岛「全部设置」抽屉里那条 `widthRow` 同一个模式。
                 MenuBarWidthRow()
                 CardDivider()
-                MenuBarFontWeightRow()
-                CardDivider()
-                MenuBarFontSizeRow()
-                CardDivider()
-                MenuBarColorRows()
+                group(L10n.t("行为")) { MenuBarBehaviorRows() }
                 CardDivider()
                 resetRow
             }
         }
     }
 
-    /// 「恢复默认布局、配色与字体」——抽屉里的兜底入口(2026-09-03 补)。
+    /// 一组:标题行 + 分隔线 + 内容。标题文案跟工具栏对应那颗按钮用同一个词条(同 `NotchAllSettingsDrawer.group`)。
+    private func group<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
+        Group {
+            SettingsCardHeader(title: title)
+            CardDivider()
+            content()
+        }
+    }
+
+    /// 「恢复默认布局、配色、字体与行为」——抽屉里的兜底入口(2026-09-03 补;2026-09-07 随「行为」入口改名)。
     ///
     /// 动作本体跟工具栏那颗「重置 ▾」是**同一个函数**(`MenuBarStyleDefaults.restoreDefaults()`)。
     /// 补这一行的理由、以及"两个入口的标题/副标题必须一字不差"这条,见灵动岛那份
@@ -757,7 +896,7 @@ struct MenuBarAllSettingsDrawer: View {
     private var resetRow: some View {
         SettingsRow(
             icon: "arrow.uturn.backward",
-            title: L10n.t("恢复默认布局、配色与字体"),
+            title: L10n.t("恢复默认"),
             subtitle: L10n.t("不含宽度和总开关")
         ) {
             Button(L10n.t("恢复")) { MenuBarStyleDefaults.restoreDefaults() }

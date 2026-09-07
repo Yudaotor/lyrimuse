@@ -2203,7 +2203,21 @@ func scoredLyricCandidatesStreaming(ctx context.Context, artist, title, album st
 	// 看着又需要,也值得换个艺人名再搜一次——QQ/酷狗(粤语语种信号)、网易云(日语罗马字)
 	// 这三个源本来就在 altIdentities 的候选范围内,只是原来"有可用候选就不用再搜"这道闸
 	// 把它们挡在门外了。
-	if !hasUsableLyricCandidate(results) || needsRomanizationRetry(results) {
+	// 别名轮的触发条件(2026-09-06 改口径,用户定的:「这个源没有候选就去跑别名(如果有的话),
+	// 自动解析也要」)。之前它是一轮**救急**:一个能用的候选都没有(或缺罗马音信号)才跑,
+	// 有一条能用的就收手。真实案例(王灏儿《NOT YOUR FAULT》):QQ / Musixmatch 的曲库把她
+	// 写成「JW」,用「王灏儿」查两家都空;网易云死在 DNS 那会儿救急轮跑了、Musixmatch 用 JW
+	// 查到了;网易云一修好、给了一条能用的,救急轮不再触发,弹窗只剩 1/9 —— "修好一个源反而
+	// 把另两个源关掉了"。现在改成:**任何一个启用的源没给出可用候选、且手上有别名**,就用别名
+	// 再查一轮,而且那一轮**只查缺着的那几个源**(withLyricSourceOnly),已经答了的不重复打。
+	// 缺着的源里剔掉"换名字也救不回来"的:传输层连不上的(sourcebreaker 的 transportFailureCodes)、
+	// 地区限制 / 直连被堵这类带具体原因的 —— 见 lyricSourcesWorthAliasRetry。
+	// 救急(一个能用的都没有)和缺罗马音信号这两种老触发条件仍然全源重查,行为不变;
+	// 缺罗马音只驱动一轮(以前也是第一位别名一有可用候选就 break)。
+	rescue := !hasUsableLyricCandidate(results)
+	romaRetry := needsRomanizationRetry(results)
+	missing := lyricSourcesWorthAliasRetry(results)
+	if rescue || romaRetry || len(missing) > 0 {
 		// Apple 目录锚点给的权威署名排在手工别名表/MusicBrainz **前面**:它是这首歌
 		// 自己的元数据(而不是"这位歌手一般叫什么"),证据强度更高,而且专辑署名恰好覆盖
 		// 手工表和 MB 都够不到的那一类——演唱会嘉宾/群星合辑/客串曲目。见
@@ -2216,8 +2230,27 @@ func scoredLyricCandidatesStreaming(ctx context.Context, artist, title, album st
 			appleCatalogSearchIdentities(artist, title, album),
 			appleStorefrontArtistIdentities(ctx, artist, title, album),
 			retryArtistIdentities(ctx, artist))
-		log.Printf("lyrics: %q has no usable candidate or no romanization signal yet, trying alt identities: %v", artist, altIdentities)
+		if len(altIdentities) > 0 {
+			switch {
+			case rescue:
+				log.Printf("lyrics: %q has no usable candidate yet, trying alt identities: %v", artist, altIdentities)
+			case romaRetry:
+				log.Printf("lyrics: %q has no romanization signal yet, trying alt identities: %v", artist, altIdentities)
+			default:
+				log.Printf("lyrics: %q left %v without a usable candidate, trying alt identities for them: %v", artist, missing, altIdentities)
+			}
+		}
+		romaTried := false
 		for _, alt := range altIdentities {
+			// 这一位别名查哪些源:救急 / 缺罗马音 → 全部;否则只查还缺着的那几个。
+			var only []string
+			if !rescue && !romaRetry {
+				only = missing
+			}
+			if romaRetry {
+				romaTried = true
+			}
+			altCtx := withLyricSourceOnly(ctx, only)
 			// onUpdate 包一层,理由跟下面"首歌手变体轮"的 mergedUpdate 一样(见那边注释):
 			// 别名轮裸透传 onUpdate 的话,"搜索候选歌词"弹窗会先缩水成这一轮别名自己的
 			// 部分结果(从空开始,这一轮的源一个个陆续应答)、直到这一轮彻底跑完才恢复,
@@ -2228,7 +2261,7 @@ func scoredLyricCandidatesStreaming(ctx context.Context, artist, title, album st
 			aliasUpdate := func(vne neteaseInfo, vres []scoredLyricCandidateResult, done, total int) {
 				onUpdate(vne, mergeLyricCandidateRounds(artist, title, album, durationSecs, results, vres), done, total)
 			}
-			altNe, altResults := fetchScoredLyricCandidatesStreaming(ctx, alt, title, album, durationSecs, aliasUpdate)
+			altNe, altResults := fetchScoredLyricCandidatesStreaming(altCtx, alt, title, album, durationSecs, aliasUpdate)
 			// ⚠️ 2026-08-30 真实bug(海龟先生《Porn Star》,「搜索候选歌词」弹窗"有时候
 			// 能搜出、有时候不行"):这里以前两处都是 `results = altResults` 整体覆盖,
 			// 跟下面"首歌手变体轮"/"标题反查轮"两处都已经改过的
@@ -2242,8 +2275,8 @@ func scoredLyricCandidatesStreaming(ctx context.Context, artist, title, album st
 			// 原名轮那一条,其余原名轮已查到的候选原样保留。
 			merged := mergeLyricCandidateRounds(artist, title, album, durationSecs, results, altResults)
 			if hasUsableLyricCandidate(altResults) {
-				log.Printf("lyrics: artist alias fallback succeeded: original_artist=%q alias=%q title=%q candidates=%d",
-					artist, alt, title, len(altResults))
+				log.Printf("lyrics: artist alias fallback succeeded: original_artist=%q alias=%q title=%q candidates=%d sources=%v",
+					artist, alt, title, len(altResults), lyricSourcesWithCandidates(altResults))
 				// 封面/链接一并采用这一轮的结果。原名查空时 ne 里的封面和跳转链接本来就是
 				// 空的,而原来这里写的是 `_, aliasResults :=`——把别名这轮查到的 neteaseInfo
 				// 整个丢掉,结果是"歌词有了、封面没了"。只在原来那份确实没有时才覆盖,不动
@@ -2255,15 +2288,21 @@ func scoredLyricCandidatesStreaming(ctx context.Context, artist, title, album st
 				// 不再直接 return(2026-08-20):别名轮救回的可能也只有一个源,落到下面的
 				// 首歌手变体轮再看要不要补——单人歌手在那里生成不出变体,行为不变。
 				results = merged
-				break
-			}
-			// 这一轮也没有能用的,但如果原来那批是彻底空的,留下有内容的这批 ——
-			// "搜索候选歌词"弹窗至少还能把它们摊开给用户看,附带被判废的原因。
-			if len(results) == 0 && len(altResults) > 0 {
+			} else if len(results) == 0 && len(altResults) > 0 {
+				// 这一轮也没有能用的,但如果原来那批是彻底空的,留下有内容的这批 ——
+				// "搜索候选歌词"弹窗至少还能把它们摊开给用户看,附带被判废的原因。
 				results = merged
 				if ne.Cover == "" && altNe.Cover != "" {
 					ne = altNe
 				}
+			}
+			// 下一位别名只管仍然缺着的源;都齐了就停(2026-09-06 前是"第一位别名一成功就 break")。
+			// 缺罗马音这个理由只驱动一轮,不然信号一直不来会把每位别名都全源重查一遍。
+			rescue = !hasUsableLyricCandidate(results)
+			romaRetry = !romaTried && needsRomanizationRetry(results)
+			missing = lyricSourcesWorthAliasRetry(results)
+			if !rescue && !romaRetry && len(missing) == 0 {
+				break
 			}
 		}
 	}
@@ -2463,6 +2502,41 @@ func hasUsableLyricCandidate(scored []scoredLyricCandidateResult) bool {
 // goroutine 不看开关、raw 结果里禁用源照样在场,但 pickLyricCandidate 和手动搜索弹窗
 // 都只认启用的源,把禁用源算进"信息够了"会让变体轮在它真正该补位的配置下永远不触发
 // (features.LyricsSources 为空 = 全开,与 filterEnabledLyricSources 同一条约定)。
+// lyricSourcesWorthAliasRetry:这一轮**值得**拿别名再查一次的源 —— 启用、没给出可用候选、
+// 而且失败原因不是"换个名字也没用"的那几类:传输层连不上(DNS / 连接 / 5xx,sourcebreaker 的
+// transportFailureCodes,进程内累计)、lyricfind 的地区限制、Musixmatch 的限流 / 直连被堵
+// (各自的 xxxLastFailureReasonNow 旁路)。amll 不做搜索(按网易云 / QQ 的曲目 ID 直取),
+// 别名对它本身没意义,但它在别名轮里会跟着网易云 / QQ 的别名结果拿到新 ID,所以照常算进来
+// —— 网易云 / QQ 不在名单里时它拿到空 ID 立刻返回,不花时间。
+// 给 scoredLyricCandidatesStreaming 的别名轮当"只查这些源"的名单;顺序按 lyricSourceNames。
+func lyricSourcesWorthAliasRetry(scored []scoredLyricCandidateResult) []string {
+	usable := map[string]bool{}
+	for _, c := range scored {
+		if c.Score >= 0 && !c.Instrumental {
+			usable[c.Source] = true
+		}
+	}
+	transport := lyricSourceBreakerShared.transportFailureCodes()
+	var out []string
+	for _, s := range lyricSourceNames {
+		if !lyricSourceEnabled(s) || usable[s] || transport[s] != "" {
+			continue
+		}
+		switch s {
+		case "lyricfind":
+			if ytmusicLastFailureReasonNow() != "" {
+				continue
+			}
+		case "musixmatch":
+			if musixmatchLastFailureReasonNow() != "" {
+				continue
+			}
+		}
+		out = append(out, s)
+	}
+	return out
+}
+
 func usableLyricSourceCount(scored []scoredLyricCandidateResult) int {
 	seen := map[string]bool{}
 	for _, c := range scored {
@@ -2581,6 +2655,8 @@ func mergeLyricCandidateRounds(artist, title, album string, durationSecs float64
 	for _, s := range ordered {
 		cands = append(cands, lyricCandidateFromScored(chosen[s]))
 	}
+	// v15:批级语种判决,跟下面两个批级步骤同一位置(理由见 match.go applyLanguageVersionVerdicts)。
+	applyLanguageVersionVerdicts(title, album, durationSecs, cands)
 	corroborated := corroboratedEndings(cands, durationSecs)
 	consensusPeers := contentConsensusPeers(artist, title, cands, durationSecs)
 	out := make([]scoredLyricCandidateResult, 0, len(ordered)+1)
@@ -2831,6 +2907,10 @@ func rankLyricSourceResults(artist, title, album string, durationSecs float64, r
 	// corroboratedEndings / contentConsensusPeers / scoreLyricCandidateDetailed 的
 	// 时长判据全都读 LRC 末句,先修完再算,打分看到的才是修正后的时间轴。
 	rehangCandidateTimelines(candidates, durationSecs)
+	// v15:批级语种判决(见 match.go applyLanguageVersionVerdicts)。放在重挂时间轴之后、
+	// 其余批级步骤之前——它只读 title/album/language/自报时长,与时间轴无关,位置只求跟另一条
+	// 流水线(mergeLyricCandidateRounds)一致。
+	applyLanguageVersionVerdicts(title, album, durationSecs, candidates)
 	corroborated := corroboratedEndings(candidates, durationSecs)
 	// v3:跨源正文共识,整批统一算(理由同 corroboratedEndings——peers 随后到的源变化,
 	// 每轮全量重算)。artist/title 已是 toSimplified 后的搜索关键词,与打分入参一致。
@@ -3041,7 +3121,13 @@ func fetchScoredLyricCandidatesStreaming(ctx context.Context, artist, title, alb
 	// 跟熔断跳过是两回事:不记 lyrics_sources_skipped(那是"冷却中"的记录,needsLyricsRetry 会据它
 	// 择机重搜;关掉的源不该被重搜——用户以后再开,它在 lyrics_sources_responded 里缺席,照样会
 	// 触发一次补搜),也不打日志(是设置,不是事件)。进度分母本来就只数开着的源,不受影响。
+	only := lyricSourceOnlyFrom(ctx)
 	skipSource := func(source string) bool {
+		// 别名轮的"只查缺着的源"(withLyricSourceOnly,2026-09-06):名单外的源静默跳过 ——
+		// 它们在原名那一轮已经答过了,不重复打、不记账、不打日志。名单为 nil = 不限制。
+		if only != nil && !only[source] {
+			return true
+		}
 		switch lyricSourceSkipFor(source, lyricSourceEnabled, breakerPlan) {
 		case lyricSourceSkipDisabled:
 			return true

@@ -333,13 +333,23 @@ func runSourceContractTests() {
             try? String(contentsOfFile: appSources.appendingPathComponent(rel).path, encoding: .utf8)
         }
 
-        // ① 灵动岛的**两处**歌词文本都要吃这个设置:收起态主歌词行(MarqueeText 的
-        //    restingAlignment)和展开态「下一句」预览(那一行自己的 .frame(alignment:))。
+        // ① 灵动岛的**三处**歌词文本都要吃这个设置:收起态主歌词行(MarqueeText 的
+        //    restingAlignment)、副行、展开态「下一句」预览(那两行自己的 .frame(alignment:))。
         //    只接一处的表现正是"选了居中之后主行居中、预览还贴左",看起来就是没做完。
+        //    2026-09-07 加「自动」后三处各读一个**解析过声部**的值(`NotchPlayback.mainLyricAlignment` /
+        //    `secondaryLyricAlignment` / `nextLineAlignment`),不许再直接读 `lyricsAlignment.swiftUIAlignment`
+        //    ——直接读的话「自动」会退化成左对齐、且不报错。
         if let notch = read("UI/NotchLyricsView.swift") {
-            let wired = notch.components(separatedBy: "playback.lyricsAlignment.swiftUIAlignment").count - 1
-            expectEqual(wired >= 2, true,
-                        "灵动岛对齐: 主歌词行和展开态「下一句」都要接上这个设置(现在只接了 \(wired) 处)")
+            let code = notch.split(separator: "\n", omittingEmptySubsequences: false)
+                .map(String.init).filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") }.joined(separator: "\n")
+            expectEqual(code.components(separatedBy: "playback.lyricsAlignment.swiftUIAlignment").count - 1, 0,
+                        "灵动岛对齐: 视图里不许直接读 lyricsAlignment.swiftUIAlignment(「自动」会静默退化成左对齐)")
+            for accessor in ["playback.mainLyricAlignment", "playback.secondaryLyricAlignment", "playback.nextLineAlignment"] {
+                expectEqual(code.contains(accessor), true, "灵动岛对齐: \(accessor) 要有消费点(主行 / 副行 / 展开态「下一句」各一处)")
+            }
+            expectEqual(code.contains("resolved(duetSide: displayLine?.side)"), true, "灵动岛对齐: 主行按当前句声部解析「自动」")
+            expectEqual(code.contains("resolved(duetSide: nextLineSide)"), true, "灵动岛对齐: 展开态「下一句」按下一句声部解析「自动」")
+            expectEqual(code.contains("p.$nextLineSide"), true, "灵动岛对齐: NotchPlayback 要镜像 nextLineSide")
         } else {
             expectEqual(true, false, "灵动岛对齐: 读不到 UI/NotchLyricsView.swift(路径挪了?)")
         }
@@ -375,6 +385,158 @@ func runSourceContractTests() {
         expectEqual(controlDefs.sorted(),
                     ["UI/LyricsAlignmentSegmentedControl.swift", "UI/OverlayStyleSettingsRows.swift"],
                     "灵动岛对齐: 手搓对齐分段控件只该有这两份(多出来的是复制的第三份,见上面注释)")
+
+        // ④ 「自动」只有灵动岛提供(2026-09-07):共用的枚举多了 `.automatic`,两个宿主必须**显式**传
+        //    选项列表 —— 控件和面板里再出现 `allCases` 就会把「自动」漏给菜单栏(那一格没有声部可跟,
+        //    选了没效果)。菜单栏渲染侧的两个 switch 也得把 `.automatic` 跟 `.leading` 归在一起兜底。
+        if let control = read("UI/LyricsAlignmentSegmentedControl.swift") {
+            expectEqual(control.contains("LyricsRestingAlignment.allCases"), false, "对齐自动: 分段控件不许再用 allCases,按 options 画")
+        }
+        if let stage = read("UI/MenuBarEditorStage.swift") {
+            expectEqual(stage.contains("options: LyricsRestingAlignment.menuBarOptions"), true, "对齐自动: 菜单栏编辑台传 menuBarOptions")
+        }
+        if let settings = read("SettingsView.swift") {
+            expectEqual(settings.contains("options: LyricsRestingAlignment.notchOptions"), true, "对齐自动: 灵动岛设置行传 notchOptions")
+        }
+        if let panel = read("MenuBar/MenuBarPanelQuickSettings.swift") {
+            expectEqual(panel.contains("options: LyricsRestingAlignment.menuBarOptions"), true, "对齐自动: 面板菜单栏行传 menuBarOptions")
+            expectEqual(panel.contains("options: LyricsRestingAlignment.notchOptions"), true, "对齐自动: 面板灵动岛行传 notchOptions")
+            expectEqual(panel.contains("ForEach(Value.allCases"), false, "对齐自动: 面板 alignmentRow 不许再按 allCases 画")
+        }
+        if let label = read("MenuBar/MenuBarScrollingLabel.swift") {
+            expectEqual(label.components(separatedBy: "case .leading, .automatic:").count - 1, 2,
+                        "对齐自动: 菜单栏两处 switch 把 .automatic 当左对齐兜底")
+        }
+        if let app = read("Settings/AppSettings.swift") {
+            expectEqual(app.contains("static var menuBarOptions: [LyricsRestingAlignment] { [.leading, .center, .trailing] }"), true,
+                        "对齐自动: menuBarOptions 三档、不含 automatic")
+            expectEqual(app.contains("case nil: return .leading"), true, "对齐自动: 没有声部信息时兜底左对齐(不是居中)")
+        }
+    }
+
+    // ---- 灵动岛歌词行「副行」(2026-09-06,用户拍板方案二)----
+    //
+    // 四条接线各有一处漏了就静默失效的坑:①视图里主行必须读合成后的 `displayLine`,不能再直接读
+    // `compactLine` —— 否则副行开着时主行仍"唱完就切",跟下面那行下一句撞成两行同一句;②展开区「下一句
+    // 预览」画不画的判据只有 Core 那一份,真窗口和设置页替身都得调它,各自手写 `&&` 迟早漂开;③编辑台
+    // 「重置」要覆盖这一项且读默认值常量;④副行那一行也要吃「对齐方式」;⑤副行选「下一句」时「展开态」
+    // 里那颗被顶掉的开关要隐藏。
+    do {
+        let appSources = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("lyrimuse")
+        func read(_ rel: String) -> String? {
+            try? String(contentsOfFile: appSources.appendingPathComponent(rel).path, encoding: .utf8)
+        }
+        if let notch = read("UI/NotchLyricsView.swift") {
+            expectEqual(notch.components(separatedBy: "playback.compactLine").count - 1, 0,
+                        "副行: NotchLyricsView 不许再直接读 playback.compactLine,主行读合成后的 displayLine")
+            expectEqual(notch.contains("secondary.showsSecondaryRow ? current : compact"), true,
+                        "副行: displayLine 的合成规则(副行开着取 currentLine、关着取 compactLine)要在")
+            expectEqual(notch.contains("playback.displayLine?.words"), true, "副行: 逐字填色按 displayLine 走")
+            expectEqual(notch.contains("alignment: playback.secondaryLyricAlignment"), true,
+                        "副行: 副行那一行也要接「对齐方式」(读解析过声部的 secondaryLyricAlignment)")
+        } else {
+            expectEqual(true, false, "副行: 读不到 UI/NotchLyricsView.swift(路径挪了?)")
+        }
+        let rule = "LyricSecondaryLine.expandedNextLinePreviewVisible("
+        for rel in ["UI/NotchLyricsWindowController.swift", "UI/NotchEditorStage.swift"] {
+            if let text = read(rel) {
+                expectEqual(text.contains(rule), true, "副行: \(rel) 的展开区预览判据要调 Core 那一份,不许手写 &&")
+            } else {
+                expectEqual(true, false, "副行: 读不到 \(rel)(路径挪了?)")
+            }
+        }
+        if let stage = read("UI/NotchEditorStage.swift") {
+            expectEqual(stage.contains("settings.notchSecondaryLine = AppSettings.defaultNotchSecondaryLine"), true,
+                        "副行: NotchStyleDefaults.restoreDefaults() 要覆盖这一项、且读默认值常量")
+        }
+        if let settingsView = read("SettingsView.swift") {
+            // 2026-09-07 起那颗开关住在「歌词行」组、紧跟「副行」(NotchLyricRowSettingsRows),显隐判据不变。
+            expectEqual(settingsView.contains("!settings.notchSecondaryLine.hidesExpandedNextLinePreview"), true,
+                        "副行: 副行选「下一句」时「展开时预览下一句」开关要隐藏(翻了也没效果的开关不显示)")
+        }
+        if let stage = read("UI/NotchEditorStage.swift") {
+            expectEqual(stage.contains("!settings.notchSecondaryLine.hidesExpandedNextLinePreview, settings.notchExpandedShowsNextLine"), true,
+                        "副行: 「歌词行」按钮摘要列「展开时预览下一句」要按同一判据(被顶掉时不列)")
+        }
+    }
+
+    // ---- 菜单栏双排(副行)的接线(2026-09-06)----
+    //
+    // 几何与取值规则在 Core 有 selftest,这里守接线:①本体按副行档位在 currentLine / compactLine 之间切、
+    // 主行字体只从 mainFont(for:twoRows:) 一个入口取;②自适应装得下的句子在双排时也要走图层(button.title
+    // 只能画一行);③预览把副行传给 Representable(不然设置页看不到副行、跟真机不一致);④「重置」覆盖这一项、
+    // 「字号」随副行显隐;⑤灵动岛副行取值改走 Core 那份共享规则,不再自己 switch。
+    do {
+        let appSources = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("lyrimuse")
+        func read(_ rel: String) -> String? {
+            try? String(contentsOfFile: appSources.appendingPathComponent(rel).path, encoding: .utf8)
+        }
+        if let item = read("MenuBar/MenuBarStatusItem.swift") {
+            expectEqual(item.contains("secondaryKind.showsSecondaryRow ? coordinator.currentLine : coordinator.compactLine"), true,
+                        "菜单栏双排: 副行开着取 currentLine、关着取 compactLine(跟灵动岛同一条决策)")
+            expectEqual(item.contains("fillPath != nil || icon != nil || rowState.twoRows"), true,
+                        "菜单栏双排: 自适应装得下的句子双排时也走图层渲染")
+            expectEqual(item.contains("MenuBarMarqueeRenderer.mainFont(for: text, twoRows: twoRows)"), true,
+                        "菜单栏双排: 主行字体只从 mainFont(for:twoRows:) 一个入口取")
+            expectEqual(item.components(separatedBy: "font: rowState.mainFont").count - 1 >= 3, true,
+                        "菜单栏双排: 测宽 / 排版 / 逐字边界都用 rowState.mainFont(至少 3 处)")
+            expectEqual(item.contains("settings.$menuBarSecondaryLine.dropFirst()"), true,
+                        "菜单栏双排: 副行档位一变要 refresh()")
+        } else {
+            expectEqual(true, false, "菜单栏双排: 读不到 MenuBar/MenuBarStatusItem.swift(路径挪了?)")
+        }
+        if let label = read("MenuBar/MenuBarScrollingLabel.swift") {
+            expectEqual(label.contains("MenuBarLyricRows.layout("), true, "菜单栏双排: 两行落位调 Core 的 MenuBarLyricRows.layout")
+            expectEqual(label.contains("MenuBarLyricRows.secondaryOpacity(for:"), true, "菜单栏双排: 副行透明度读 Core 那张表")
+            expectEqual(label.contains("secondaryKind.showsSecondaryRow == next.secondaryKind.showsSecondaryRow"), true,
+                        "菜单栏双排: 单双排切换算滚动参数变化(主行字体变了,滚动距离也变),只换副行文字不算")
+        }
+        if let preview = read("UI/SectionPreviewBars.swift") {
+            expectEqual(preview.components(separatedBy: "secondaryKind: secondaryKind)").count - 1, 2,
+                        "菜单栏双排: 预览两条 Representable 都要把副行传进去")
+            expectEqual(preview.contains("|| twoRows {"), true, "菜单栏双排: 预览跟真机同一条岔路,双排走图层")
+        }
+        if let stage = read("UI/MenuBarEditorStage.swift") {
+            expectEqual(stage.contains("settings.menuBarSecondaryLine = AppSettings.defaultMenuBarSecondaryLine"), true,
+                        "菜单栏双排: 「重置」要覆盖副行、且读默认值常量")
+            // 2026-09-07 起「字号」那一行常显、副行开着时尾部换成「由副行决定」(滑杆让位),浮层与抽屉调同一份
+            // MenuBarFontRows —— 判据只在 MenuBarFontSizeRow 里出现一次。
+            expectEqual(stage.components(separatedBy: "if settings.menuBarSecondaryLine.showsSecondaryRow {").count - 1, 1,
+                        "菜单栏双排: 「字号」滑杆在副行开着时让位(判据只在 MenuBarFontSizeRow 一处)")
+            expectEqual(stage.components(separatedBy: "MenuBarFontRows()").count - 1, 2,
+                        "菜单栏双排: 「字体」浮层与抽屉「字体」组调同一份 MenuBarFontRows(两处装配)")
+        }
+        if let notch = read("UI/NotchLyricsView.swift") {
+            expectEqual(notch.contains("secondary.secondaryText(currentLine: current, nextLineText: next)"), true,
+                        "菜单栏双排: 灵动岛副行取值走 Core 共享规则,不再自己 switch")
+        }
+    }
+
+    // ---- 日文汉字修回的接线(2026-09-06)----
+    //
+    // `JapaneseKanjiRepair` 的规则有 selftest 钉着(romanization 组),这里守的是它**接在哪**:正文和
+    // 逐字数据都要过它、译文不能过(译文是中文,过了会被"修"成繁体)、整首判定要用正文。三条里任何一条
+    // 漏了都是静默的——日文歌照常显示,只是该修的字没修 / 不该动的译文动了。
+    do {
+        let sources = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+        let path = sources.appendingPathComponent("LyrimuseCore/Local/LocalPlaybackSource.swift").path
+        if let text = try? String(contentsOfFile: path, encoding: .utf8) {
+            expectEqual(text.contains("lyrics: variant.converted(JapaneseKanjiRepair.repair(raw, japaneseSong: japaneseSong))"), true,
+                        "日文修回接线: 正文要先过 JapaneseKanjiRepair 再过简繁转换")
+            expectEqual(text.contains("lyricsYRC: variant.converted(JapaneseKanjiRepair.repair(rawYRC, japaneseSong: japaneseSong))"), true,
+                        "日文修回接线: 逐字数据也要过 JapaneseKanjiRepair")
+            expectEqual(text.contains("lyricsTr: variant.converted(found?.lyricsTr ?? \"\")"), true,
+                        "日文修回接线: 译文是中文,不许过 JapaneseKanjiRepair")
+            expectEqual(text.contains("Romanizer.looksJapaneseSong(raw.isEmpty ? rawYRC : raw)"), true,
+                        "日文修回接线: 整首判定按正文(正文为空才看逐字串)")
+        } else {
+            expectEqual(true, false, "日文修回接线: 读不到 LyrimuseCore/Local/LocalPlaybackSource.swift(路径挪了?)")
+        }
     }
 
     // ---- 引导页与设置页的"同一件事只有一份实现"(2026-09-03)----
@@ -930,7 +1092,9 @@ func runSourceContractTests() {
             //    抽出来的,为了两个键"没存过"时一定相等)。宽度是**结构性尺寸**设置,「重置」按既定取舍
             //    不碰它(见 AppSettings 那段注释与 05 章「重置」节:不含总开关和宽度),抽屉里那一行的
             //    副标题也写着「不含宽度和总开关」—— 把它塞进 restoreDefaults() 才是违背文案。
-            let exempt: Set<String> = ["defaultNotchContentWidth"]
+            //  - `defaultNotchExpandedContentWidth`:同上,展开态那一半(2026-09-07 从共用稳态常量拆出来,
+            //    用户把自己在用的 252 / 482 定为默认时两个数不再相等)。同样是宽度,同样不进「重置」。
+            let exempt: Set<String> = ["defaultNotchContentWidth", "defaultNotchExpandedContentWidth"]
 
             expectEqual(notchConsts.filter { !exempt.contains($0) && !notchBody.contains("AppSettings.\($0)") }.sorted(), [],
                         "重置覆盖闸: 灵动岛的默认值常量都在 NotchStyleDefaults.restoreDefaults() 里被赋值(漏了不报错,只表现为'点了重置有一项没变')")
@@ -939,6 +1103,26 @@ func runSourceContractTests() {
         } else {
             expectEqual(true, false,
                         "重置覆盖闸: 读不到 AppSettings.swift / NotchEditorStage.swift / MenuBarEditorStage.swift,或里面找不到 restoreDefaults()(文件挪了或函数改名了?)")
+        }
+    }
+
+    // ---- 悬浮歌词默认字重闸(2026-09-07) ----
+    //
+    // `PlayerIdentityTests` 里「当前默认档」那组断言硬编码了 `.semibold`,因为 selftest 只依赖
+    // LyrimuseCore(见 Package.swift),读不到 App 层的 `AppSettings.defaultOverlayFontWeight`。
+    // 硬编码就会漂:哪天有人改了那个常量、这边没跟上,那组断言就从"钉住默认档"退化成"钉住
+    // 一个没人在用的档位",而且**照样全绿**。这条闸直接扫源码里那一行,把两处绑在一起。
+    do {
+        let path = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("lyrimuse/Settings/AppSettings.swift").path
+        if let text = try? String(contentsOfFile: path, encoding: .utf8) {
+            let m = text.firstMatch(of: #/static let defaultOverlayFontWeight: OverlayFontWeight = \.(\w+)/#)
+            expectEqual(m.map { String($0.1) }, "semibold",
+                        "悬浮歌词默认字重闸: AppSettings.defaultOverlayFontWeight 必须跟 PlayerIdentityTests 里「当前默认档」那组断言用的档位一致(改了常量就同步改那组断言)")
+        } else {
+            expectEqual(true, false, "悬浮歌词默认字重闸: 读不到 AppSettings.swift(文件挪了?)")
         }
     }
 
@@ -1388,6 +1572,40 @@ func runSourceContractTests() {
                         "位图比例: \(f) 接住换屏重排")
             expectEqual(src.contains("menuBarBitmapScale"), true, "位图比例: \(f) 用所在窗口的比例")
         }
+    }
+
+    // ---- 菜单栏明暗观察点:只登记 / 报信,不当场读(2026-09-07,预览"重建时闪一下")----
+    //
+    // MenuBarAppearanceStore 记着"真菜单栏此刻是深是浅",设置页的色块、预览整块舞台都按它解析。
+    // 状态栏项每次重建(自适应模式逐句都可能)新建的按钮 appearance 先是错的(App 自己那一档),
+    // ~60ms 后状态栏排版时 viewDidChangeEffectiveAppearance 连发七次才落定 —— 谁在这两个时机
+    // **当场读**并写进 isDark,预览就会随每次换句闪一下浅色。契约:① isDark 只能由 store 自己在
+    // 延迟读数(settle)里改;② 喂值方(MenuBarHoverControlsView)只调 observe / hostAppearanceDidChange,
+    // 不再有 update(from:) 这种"读完直接写"的入口;③ store 里必须有 settleDelay 这道延迟。
+    // 纯 AppKit 时序,selftest 只能扫源码;时间线本体见 scripts/statusitem-appearance-probe.swift。
+    do {
+        let menuBarDir = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("lyrimuse/MenuBar")
+        let store = (try? String(contentsOfFile: menuBarDir.appendingPathComponent("MenuBarAppearance.swift").path,
+                                 encoding: .utf8)) ?? ""
+        expectEqual(store.isEmpty, false, "菜单栏明暗: 读得到 MenuBarAppearance.swift")
+        expectEqual(store.contains("static let settleDelay: TimeInterval"), true, "菜单栏明暗: 有 settleDelay 延迟读数")
+        expectEqual(store.contains("func observe(_ view: NSView)"), true, "菜单栏明暗: 喂值方只能登记观察点")
+        expectEqual(store.contains("func hostAppearanceDidChange()"), true, "菜单栏明暗: 喂值方只能报信")
+        expectEqual(store.contains("func update(from"), false, "菜单栏明暗: 不再有当场读写的 update(from:)")
+        // isDark 的写点只在 store 自己的 settle 里(初值那一行不算)。
+        let writes = store.components(separatedBy: "\n").filter {
+            $0.contains("isDark = ") && !$0.contains("@Published")
+        }
+        expectEqual(writes.count, 1, "菜单栏明暗: isDark 只有 settle 一处写点(现有 \(writes.count))")
+        let hover = (try? String(contentsOfFile: menuBarDir.appendingPathComponent("MenuBarHoverControlsView.swift").path,
+                                 encoding: .utf8)) ?? ""
+        expectEqual(hover.contains("MenuBarAppearanceStore.shared.observe(host)"), true, "菜单栏明暗: installTracking 登记观察点")
+        expectEqual(hover.contains("MenuBarAppearanceStore.shared.hostAppearanceDidChange()"), true,
+                    "菜单栏明暗: viewDidChangeEffectiveAppearance 只报信")
+        expectEqual(hover.contains("effectiveAppearance.bestMatch"), false,
+                    "菜单栏明暗: 悬停层自己不解析明暗写进 store")
     }
 
     // ---- 共享配置文件的读写口径(2026-09-05,借鉴清单 #46)----

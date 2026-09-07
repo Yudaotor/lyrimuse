@@ -118,7 +118,7 @@ func lrclibRequest(ctx context.Context, url string, timeout time.Duration, out a
 	}
 	// LRCLIB 的使用规范要求带上能标识调用方的 User-Agent。
 	req.Header.Set("User-Agent", clientName+"/"+clientVersion+" (+https://github.com/Yudaotor/desktop-lyrics-suite)")
-	resp, err := doHTTPTracked(&http.Client{Timeout: timeout}, req)
+	resp, err := doHTTPTracked(lyricHTTPClient(timeout), req)
 	if err != nil {
 		return false
 	}

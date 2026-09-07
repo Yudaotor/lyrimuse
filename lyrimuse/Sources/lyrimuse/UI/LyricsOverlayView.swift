@@ -26,6 +26,12 @@ private final class OverlayPlayback: ObservableObject {
     // 下一句摆哪一边,见 PlaybackCoordinator 同名属性的注释——独立于 currentLine.side。
     @Published private(set) var nextLineSide: LyricDuet.Side?
     @Published private(set) var isPlayingNow = false
+    /// 此刻有没有曲目。false = 停播/播放器没开/刚装好还没放过歌 —— 停播时
+    /// `LocalPlaybackSource.clearIfWasPlaying` 会把 title/artist 连同几个"这首歌"的判定一起清空。
+    /// 判据照抄灵动岛 `NotchLyricsWindowController.hasTrack`(title 或 artist 非空、或正在广告插播):
+    /// 广告那一档必须算"有曲目",否则 Spotify 广告期间 title/artist 都空的话会画成品牌标记而不是「广告中」。
+    /// 只订阅折算后的这一个 Bool、不订阅标题本身:换歌时标题变了但"有曲目"没变,不该打醒 body。
+    @Published private(set) var hasTrack = false
     @Published private(set) var isFavorited: Bool?
     @Published private(set) var hasLyricsContent = false
     @Published private(set) var isCurrentTrackInstrumental = false
@@ -64,10 +70,23 @@ private final class OverlayPlayback: ObservableObject {
         let p = PlaybackCoordinator.shared
         let s = AppSettings.shared
         subs = [
-            p.$currentLine.removeDuplicates().sink { [weak self] in self?.currentLine = $0 },
+            // 「卡拉OK效果」关着时把行压成整行(`SyncedLyricLine.lineLevel`,2026-09-06):这一面的
+            // 逐字填色、逐词罗马音标注都在下游按 `line.words` / `line.wordGroups` 走,压成整行之后
+            // 它们自然走"这首歌没有逐字数据"那条路,渲染分支一处不用改。开关翻面也会重新发一次
+            // 当前行,所以正在显示的那句当场变(不用等换行)。歌词窗口不经这里、始终逐字。
+            Publishers.CombineLatest(p.$currentLine, s.$overlayLyricsKaraoke)
+                .map { line, karaoke in karaoke ? line : line?.lineLevel }
+                .removeDuplicates()
+                .sink { [weak self] in self?.currentLine = $0 },
             p.$nextLineText.removeDuplicates().sink { [weak self] in self?.nextLineText = $0 },
             p.$nextLineSide.removeDuplicates().sink { [weak self] in self?.nextLineSide = $0 },
             p.$isPlayingNow.removeDuplicates().sink { [weak self] in self?.isPlayingNow = $0 },
+            // CombineLatest3 而不是三个独立 sink:三个输入要**同时**拿到才能算,独立 sink 里另两个
+            // 只能回头读存储属性 —— 正是本文件头注说的 willSet 旧值坑(灵动岛那份同款写法)。
+            Publishers.CombineLatest3(p.$title, p.$artist, p.$isCurrentTrackAdBreak)
+                .map { title, artist, isAd in !title.isEmpty || !artist.isEmpty || isAd }
+                .removeDuplicates()
+                .sink { [weak self] in self?.hasTrack = $0 },
             p.$isFavorited.removeDuplicates().sink { [weak self] in self?.isFavorited = $0 },
             p.$hasLyricsContent.removeDuplicates().sink { [weak self] in self?.hasLyricsContent = $0 },
             p.$isCurrentTrackInstrumental.removeDuplicates().sink { [weak self] in self?.isCurrentTrackInstrumental = $0 },
@@ -1062,6 +1081,27 @@ struct LyricsOverlayView<Chrome: OverlayChromeSource>: View {
                 .font(playback.mainFont)
                 .foregroundStyle(playback.displayForegroundColor)
                 .fixedSize(horizontal: false, vertical: true)
+                .lyricsTextStroke(playback.textStrokeEnabled, color: playback.textStrokeColor)
+        } else if !playback.hasTrack {
+            // 没有任何曲目(2026-09-07 用户反馈:刚装好走完引导、开了悬浮歌词,没放歌时"没有显示
+            // 内容,存在感太低")。原来这种情形落到最底下那个 30% 不透明度的单个「♪」上 —— 它本是
+            // 给**曲内间奏**准备的"这里有歌词、只是此刻没词"的轻标记,拿来当整个 App 的首屏等于
+            // 一片空白。这里改画品牌标记「♪ Lyrimuse」:音符走 SF Symbol 拼进 Text(跟着主行
+            // 字体尺寸缩放、基线对齐,不用另调间距),字体/前景色/描边全部沿用歌词本身的设置,
+            // 所以用户在设置里调的外观在没放歌时也能当场看见。0.7 的不透明度介于歌词正文(1.0)
+            // 与状态文案(0.5)之间:要的是"看得见它在",不是跟歌词抢眼。品牌名用 `Text(verbatim:)`
+            // ——不是文案、不走本地化(灵动岛刘海胶囊同款);不用字符串插值 `"\(Image) Lyrimuse"`,
+            // 那会被当成 LocalizedStringKey 白查一次表。
+            //
+            // 排在几条状态文案**前面**而不是并列在「♪」旁边:停播时 `clearIfWasPlaying` 已经把
+            // 广告/纯音乐/无歌词/hasLyricsContent 一起清掉、isPlayingNow 也是 false,理论上那几条
+            // 都不会命中,唯独 `collectorNetworkDown` 是 collector 的全局健康位、跟有没有曲目无关
+            // —— 没有曲目就没有要搜的东西,断网这时候对用户没有信息量,不该把首屏变成一句
+            // 「网络连接失败」。有曲目之后的状态机(广告/纯音乐/无歌词/断网/搜索中/间奏 ♪)一个字不变;
+            // 设置页编辑台永远带示例行(`previewLine`),走不到这里。
+            (Text(Image(systemName: "music.note")) + Text(verbatim: " Lyrimuse"))
+                .font(playback.mainFont)
+                .foregroundStyle(playback.displayForegroundColor.opacity(0.7))
                 .lyricsTextStroke(playback.textStrokeEnabled, color: playback.textStrokeColor)
         } else if playback.isCurrentTrackAdBreak {
             // 2026-08-03 补上——Spotify 广告插播,同样要排在"还在搜索中"分支前面:广告

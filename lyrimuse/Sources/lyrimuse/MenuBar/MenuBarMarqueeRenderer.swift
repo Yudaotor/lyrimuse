@@ -45,10 +45,42 @@ enum MenuBarMarqueeRenderer {
         let pointSize = size > 0
             ? min(max(size, fontSizeRange.lowerBound), fontSizeRange.upperBound)
             : systemPointSize
+        return font(weight: weight, pointSize: pointSize)
+    }
+
+    /// 不夹区间的底层版本:双排(副行)那两行的 10 / 9pt 低于单行滑杆的下限 10,走不了上面那个。
+    static func font(weight: OverlayFontWeight, pointSize: CGFloat) -> NSFont {
         // regular 走 menuBarFont(ofSize:) 而不是 systemFont:两者实测逐点同宽同高,但前者才是
         // "菜单栏那套字体"这个语义本身,系统将来换菜单栏字体时它跟得上。
         guard weight != .regular else { return NSFont.menuBarFont(ofSize: pointSize) }
         return NSFont.systemFont(ofSize: pointSize, weight: weight.nsWeight)
+    }
+
+    // MARK: - 双排(副行,2026-09-06)
+
+    /// 双排时主行的字体:10pt(`MenuBarLyricRows.mainPointSize`),粗细听用户的,字号滑杆不生效(为什么见
+    /// MenuBarLyricRows 头注)。
+    static var doubleRowMainFont: NSFont {
+        font(weight: AppSettings.shared.menuBarLyricsFontWeight, pointSize: MenuBarLyricRows.mainPointSize)
+    }
+
+    /// 双排时副行的字体:9pt,粗细跟主行同一档。
+    static var doubleRowSecondaryFont: NSFont {
+        font(weight: AppSettings.shared.menuBarLyricsFontWeight, pointSize: MenuBarLyricRows.secondaryPointSize)
+    }
+
+    /// 画主行**这段文字**用的字体,单行 / 双排两种口径的唯一入口。占位符 ♪ 恒默认字重的规则(见 `font(for:)`)
+    /// 双排下同样成立。`MenuBarStatusItem` 每次 refresh 算一次存进 `RowState`,测宽 / 排版 / 逐字边界都用那一份。
+    static func mainFont(for text: String, twoRows: Bool) -> NSFont {
+        guard twoRows else { return font(for: text) }
+        return text == placeholderGlyph
+            ? NSFont.menuBarFont(ofSize: MenuBarLyricRows.mainPointSize) : doubleRowMainFont
+    }
+
+    /// 双排下一行位图的点高 = 字面高向上取整,**不带**单行那 +2 的富余(22pt 里塞两行,富余给不起;
+    /// 两行的重叠 / 居中由 `MenuBarLyricRows.layout` 处理)。
+    static func boxHeight(for font: NSFont) -> CGFloat {
+        ceil(font.ascender - font.descender)
     }
 
     /// 长间奏 / 唱完等待时占位的那个音符。MenuBarStatusItem.refresh 与这里共用这一份,别各写一个字面量。
@@ -67,7 +99,7 @@ enum MenuBarMarqueeRenderer {
         width(of: text, font: font(for: text))
     }
 
-    private static func width(of text: String, font: NSFont) -> CGFloat {
+    static func width(of text: String, font: NSFont) -> CGFloat {
         guard !text.isEmpty else { return 0 }
         return (text as NSString).size(withAttributes: [.font: font]).width
     }
@@ -83,10 +115,11 @@ enum MenuBarMarqueeRenderer {
     /// "部分之和"跟整句渲染对不上,填色边界就会逐词漂移。prepare() 画的是 words 拼接后的
     /// plainText(引擎侧保证 plainText = words.map(\.text).joined()),同一份字符串、
     /// 同一个字体,这里量出来的前缀宽度天然落在长图的同一坐标系上。
-    static func wordEndXs(for words: [SyncedLyricWord]) -> [CGFloat] {
+    /// - Parameter font: 长图实际用的字体(双排时是 `doubleRowMainFont`);nil = 单行那套 `font`。
+    static func wordEndXs(for words: [SyncedLyricWord], font: NSFont? = nil) -> [CGFloat] {
         // 显式用整句的字体量前缀,不走 font(for:):某个前缀恰好等于占位符 ♪ 时不能换成默认字重,
         // 否则这一个词的填色边界会跟长图对不上。
-        let lineFont = font
+        let lineFont = font ?? Self.font
         var prefix = ""
         return words.map { w in
             prefix += w.text
@@ -158,12 +191,14 @@ enum MenuBarMarqueeRenderer {
     ///
     /// 两种模式的分岔**只在这一句装得下时**。装不下的路径两边完全一样:占满设定宽度、
     /// 横向滚动 —— 那时候本来就没有"要不要缩短"可言。
+    /// - Parameter font: 主行实际用的字体(双排时是 10pt 那套,由调用方经 `mainFont(for:twoRows:)` 算好传入);
+    ///   nil = 单行那套 `font(for:)`。测宽必须跟排版同一个字体,否则"装得下"会判成"要滚"或反过来。
     static func presentation(
         for text: String, windowWidth: CGFloat, dwellSeconds: Double?,
-        leadInSeconds: Double, widthMode: MenuBarLyricsWidthMode
+        leadInSeconds: Double, widthMode: MenuBarLyricsWidthMode, font: NSFont? = nil
     ) -> Presentation {
         guard windowWidth > 0 else { return .text(truncate(text, toWidth: windowWidth)) }
-        let fullWidth = width(of: text)
+        let fullWidth = width(of: text, font: font ?? Self.font(for: text))
         // 差不到半个点就别滚了(滚也看不出来)。这一句装得下,占多宽由模式决定。
         guard fullWidth > windowWidth + 0.5 else {
             switch widthMode {
@@ -209,16 +244,20 @@ enum MenuBarMarqueeRenderer {
     /// - Parameter scale: 栅格化比例 = 图层最终所在窗口的 backingScaleFactor(调用方传
     ///   `menuBarBitmapScale`,2026-09-05 起不在这里猜屏)。返回值的 `scale` 原样带回给图层的
     ///   contentsScale 用。
-    static func prepare(text: String, color: NSColor, scale: CGFloat) -> PreparedLine? {
+    /// - Parameter font: 用哪个字体画;nil = 单行那套 `font(for:)`。
+    /// - Parameter exactBox: 双排用 —— 位图高 = 字面高取整、文字底边贴 0,不留单行那上下各 1pt 的富余
+    ///   (见 `boxHeight(for:)`)。false = 单行老口径,逐像素不变。
+    static func prepare(text: String, color: NSColor, scale: CGFloat,
+                        font: NSFont? = nil, exactBox: Bool = false) -> PreparedLine? {
         guard !text.isEmpty else { return nil }
-        let font = Self.font(for: text)
-        let boxHeight = lineHeight
-        let attributes: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: color]
+        let lineFont = font ?? Self.font(for: text)
+        let box = exactBox ? boxHeight(for: lineFont) : ceil(lineFont.ascender - lineFont.descender) + 2
+        let attributes: [NSAttributedString.Key: Any] = [.font: lineFont, .foregroundColor: color]
         let textWidth = ceil((text as NSString).size(withAttributes: attributes).width)
         // 不留尾部空白:旧版要留一个窗口宽,是因为要用 CGImage.cropping 裁窗口、越界会
         // 拿到 nil。现在是图层平移 + 上层 masksToBounds 裁剪,平移量永远不超过
         // textWidth - windowWidth,右边不会露出图外。
-        let pxW = Int(textWidth * scale), pxH = Int(boxHeight * scale)
+        let pxW = Int(textWidth * scale), pxH = Int(box * scale)
         guard pxW > 0, pxH > 0,
               let ctx = CGContext(
                 data: nil, width: pxW, height: pxH, bitsPerComponent: 8, bytesPerRow: 0,
@@ -230,12 +269,12 @@ enum MenuBarMarqueeRenderer {
         NSGraphicsContext.saveGraphicsState()
         NSGraphicsContext.current = ns
         // flipped: false → 原点在左下、y 向上。NSString.draw(at:) 收的是文本框左下角,
-        // 所以 y 给 1 就是"底部留 1pt 内边距"。
-        (text as NSString).draw(at: NSPoint(x: 0, y: 1), withAttributes: attributes)
+        // 所以 y 给 1 就是"底部留 1pt 内边距"(双排 exactBox 不留,贴 0)。
+        (text as NSString).draw(at: NSPoint(x: 0, y: exactBox ? 0 : 1), withAttributes: attributes)
         NSGraphicsContext.restoreGraphicsState()
         guard let cg = ctx.makeImage() else { return nil }
         return PreparedLine(cg: cg, scale: scale, textWidth: textWidth,
-                            pointHeight: boxHeight, text: text, color: color)
+                            pointHeight: box, text: text, color: color)
     }
 }
 

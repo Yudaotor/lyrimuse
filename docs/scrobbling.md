@@ -8,7 +8,7 @@ A play is submitted once **all** of these hold:
 
 | Rule | Value |
 |---|---|
-| Played long enough | half the track, capped at 240s — or 240s if the length is unknown |
+| Played long enough | half the track, capped at 240s — or 240s if the length is unknown. Stricter points for Last.fm only — see §1b |
 | Track is long enough | `≥ 30s` (tracks of unknown length are allowed through). Can be switched off — see §1a |
 | Not an ad | Spotify ad breaks are detected and skipped |
 
@@ -27,6 +27,27 @@ scrobbler honours it, so Lyrimuse does too by default. Turning it on lets short 
 they pass the half-played rule (a 20-second track needs 10 seconds). It is a **Last.fm-only** setting:
 short tracks are scrobbled to Last.fm (and recorded in the local log that feeds Last.fm backfill) but
 are never submitted to ListenBrainz, whose behaviour is unchanged either way.
+
+### 1b. Scrobble point
+
+Settings → Accounts → Last.fm → *Scrobble* → **Scrobble Point** (`lastfm_scrobble_point`, default
+**50%**). How far into a track a play must get before it is scrobbled to Last.fm:
+
+| Setting | Value | Scrobbled when |
+|---|---|---|
+| **50%** (default) | `50` | Last.fm's rule above: half the track, capped at 4 minutes |
+| 75% / 90% | `75` / `90` | 75% / 90% of the track's length has been played — played time only, no 4-minute cap |
+| Track End | `end` | the track plays through to its end; skipping ahead does not count |
+
+Last.fm's rule is a floor, so there is no setting below 50%. It is **Last.fm-only**: ListenBrainz and
+the web relay still submit at the 50% point; only the Last.fm scrobble (and the local log that feeds
+Last.fm backfill) waits for the chosen point. A track skipped before the point sends nothing to
+Last.fm — that is the setting doing its job, not a lost scrobble. Tracks of unknown length follow the
+default rule.
+
+*Track End* is judged from the last observed playback position when the track changes: within 12
+seconds of the end (10% of the length for short tracks) counts as played through, so a player's
+crossfade or a gapless transition does not withhold the scrobble.
 
 ## 2. What gets sent
 

@@ -641,7 +641,18 @@ func fetchRawMediaControlState(ctx context.Context) (map[string]any, string, boo
 	trackKey := raw.Artist + "|" + raw.Title
 	elapsed := raw.ElapsedTime
 	if raw.Playing {
-		elapsed = raw.ElapsedTimeNow
+		// rate 缺失/为 0 时 elapsedTimeNow 不外推(Spotify 暂停后恢复播放的实测形态),要自己
+		// 按锚点时间戳补算 —— 见 playingPositionSecs(与 Swift 侧 livePositionSeconds 的
+		// rate 缺失分支同一套规则,采集器没有事件流,只能取整秒中点)。
+		// 陈旧锚点重发(见 isStaleAnchorRepublish):命中时沿用原锚点的时间戳,并把 rate 按 0 传,
+		// 强制走"自己按锚点时间戳外推"那条路 —— elapsedTimeNow 是按假时间戳外推的,不能信。
+		now := time.Now()
+		anchorTS, republished := resolvePlayingAnchorTS(trackKey, raw.ElapsedTime, raw.Timestamp, raw.Duration, now)
+		rate := raw.PlaybackRate
+		if republished {
+			rate = 0
+		}
+		elapsed = playingPositionSecs(raw.ElapsedTime, raw.ElapsedTimeNow, rate, anchorTS, now)
 		rememberPlayingPosition(trackKey, elapsed)
 	} else {
 		age, hasAge := mediaControlAnchorAge(raw.Timestamp, time.Now())
@@ -685,7 +696,9 @@ func fetchRawMediaControlState(ctx context.Context) (map[string]any, string, boo
 	return map[string]any{
 		"title": title, "artist": artistTag, "album": album,
 		"duration": duration, "elapsedTime": elapsed,
-		"playing": raw.Playing, "playbackRate": raw.PlaybackRate,
+		// 原始锚点 elapsedTime 透传(见 snapshot.AnchorElapsed)。
+		"anchorElapsedTime": raw.ElapsedTime,
+		"playing":           raw.Playing, "playbackRate": raw.PlaybackRate,
 		"isMusicApp": true, "bundleIdentifier": raw.BundleID,
 	}, raw.BundleID, true
 }

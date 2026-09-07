@@ -517,8 +517,9 @@ struct OverlayEditorStage: View {
     ///
     /// **2026-09-02 重排**:原来是「文字 / 配色 / 排版」。用户要求把「配色」按内容拆开,于是
     /// 「配色」没了,拆成「主题」(配色主题 / 我的配色主题)和「背景」(背景颜色 / 毛玻璃);
-    /// 文字层那几项(字体/粗细/字号/跟随封面/文字色/描边)归「文字」。**顺序跟「全部设置」
-    /// 抽屉的渲染顺序逐字一致**(主题 → 文字 → 背景 → 排版 → 窗口)—— 抽屉的职责是工具栏
+    /// 文字层那几项(字体/粗细/字号/卡拉OK/文字色/描边)归「文字」;「跟随封面」2026-09-07 起归「主题」
+    /// (它跟「配色主题」回答的是同一个问题,见 `OverlayThemeSettingsRows` 头注)。**顺序跟「全部设置」
+    /// 抽屉的渲染顺序逐字一致**(主题 → 文字 → 背景 → 排版 → 宽度 → 行为)—— 抽屉的职责是工具栏
     /// 浮层的全量兜底通路,两个宿主分组或顺序不一样,用户按记忆去另一边找就会落空。
     ///
     /// ⚠️ 横向够不够(2026-08-31 加第三个入口时离屏量的,别凭感觉重排):这一条的可用宽度
@@ -556,7 +557,7 @@ struct OverlayEditorStage: View {
             )
             Spacer(minLength: 8)
             Menu {
-                Button(L10n.t("恢复默认主题、文字与背景")) { OverlayStyleDefaults.restoreTextAndColors() }
+                Button(L10n.t("恢复默认")) { OverlayStyleDefaults.restoreTextAndColors() }
                 // 作用范围写成菜单里一条**不可点**的说明项(SwiftUI 里裸 Text 在 Menu 中
                 // 就是一条禁用菜单项)。不用 Button 的"标题 + 副标题"两段式 label:那个
                 // 桥接到 NSMenuItem.subtitle 的行为在这台机器的系统版本上没实测过,而这句
@@ -621,7 +622,8 @@ struct OverlayEditorStage: View {
     /// 「自动隐藏」卡并进「行为」的)。
     ///
     /// ⚠️ **两个来源必须都算,而且要跟 `OverlayBehaviorPopover` /
-    /// `OverlayAllSettingsDrawer.windowGroup` 的内容一致**:少算自动隐藏那两项不会编译报错,
+    /// `OverlayAllSettingsDrawer.behaviorGroup`(2026-09-07 起两处调同一份 `OverlayBehaviorSettingsRows`)
+    /// 的内容一致**:少算自动隐藏那两项不会编译报错,
     /// 只会让这颗按钮在它们开着时照旧显示「全部关闭」—— 一个会撒谎的派生值。灵动岛那边
     /// (`NotchEditorStage.behaviorSummary`)是同一天为同一个原因写的同一个形状。
     ///

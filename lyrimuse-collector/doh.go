@@ -34,6 +34,11 @@ import (
 // 只对 musixmatch 生效:网易云/QQ/酷狗在这个网络环境下本来就正常,没有理由让它们
 // 多绕一层;LRCLIB 也一直通。任何一步失败都静默退回系统 DNS,退化成现在的行为,
 // 不会比不加更差。
+//
+// 2026-09-06 补:其余八个歌词源后来也接上了 DoH,但顺序**反过来**(lyricsourcedial.go):系统
+// DNS 优先、它报错才问 DoH。两次的病不同 —— 这里是系统 DNS **答错**(先问它没意义),那次是
+// 公司 VPN 的 DNS **不答**(系统 DNS 正常时不该多打一次 1.1.1.1)。dohLookup / dohDialRaceWith
+// 两套共用,只是拨号器不同。
 const (
 	dohTimeout  = 4 * time.Second
 	dohCacheTTL = 30 * time.Minute

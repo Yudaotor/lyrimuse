@@ -646,7 +646,7 @@ func neteasePickSong(songs []neSearchSong, artist, title, album string, duration
 }
 
 func resolveNeteaseInfo(ctx context.Context, artist, title, album string, durationSecs float64) neteaseInfo {
-	cli := &http.Client{Timeout: 4 * time.Second}
+	cli := lyricHTTPClient(4 * time.Second)
 	get := func(u string, v any) error {
 		if err := neteaseThrottle(ctx, u); err != nil {
 			return err
@@ -979,7 +979,7 @@ func neteaseAlbumTracks(albumID int64) ([]albumTrack, bool) {
 	if albumID <= 0 {
 		return nil, false
 	}
-	cli := &http.Client{Timeout: 6 * time.Second}
+	cli := lyricHTTPClient(6 * time.Second)
 	// ⚠️ 两个端点的字段名不一样(2026-09-01 实测 /api/v1/album/18906 坐实):老端点是
 	// duration/artists,v1 端点是 dt/ar(id/name 两边一致)。原来只解码 duration/artists,
 	// 走 v1 兜底那条路时时长恒为 0、歌手恒为空——bestAlbumTrackByDuration 对时长 <=0 的
@@ -1133,7 +1133,7 @@ func neteaseAlbumIDByName(ctx context.Context, artist, album string) (int64, boo
 		}
 		req.Header.Set("Referer", "https://music.163.com/")
 		req.Header.Set("User-Agent", "Mozilla/5.0")
-		resp, err := doHTTPTracked(&http.Client{Timeout: 4 * time.Second}, req)
+		resp, err := doHTTPTracked(lyricHTTPClient(4*time.Second), req)
 		if err != nil {
 			return 0, false, false
 		}
@@ -1301,7 +1301,7 @@ func retryTitleFromArtistSearchDetailed(ctx context.Context, artist, title strin
 		}
 		req.Header.Set("Referer", "https://music.163.com/")
 		req.Header.Set("User-Agent", "Mozilla/5.0")
-		resp, err := doHTTPTracked(&http.Client{Timeout: 4 * time.Second}, req)
+		resp, err := doHTTPTracked(lyricHTTPClient(4*time.Second), req)
 		if err != nil {
 			return nil, false
 		}

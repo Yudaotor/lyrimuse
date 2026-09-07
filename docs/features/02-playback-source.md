@@ -1,6 +1,6 @@
 # 02. 播放数据源与播放器支持
 
-> 最后核对:2026-09-03 · 基线:e103532+工作树
+> 最后核对:2026-09-07 · 基线:83bd6c3+工作树
 
 ## 定位
 
@@ -8,10 +8,10 @@ App 怎么知道"现在在放什么":从本地播放器读出 曲目元数据 + 
 
 ## 入口与展示面
 
-- **设置 → 播放器 tab**(`SettingsView.swift` 的 `PlayerSettingsTab`):「播放器」卡(2026-09-01 起**可多选**,见下面"多选"一节)、「已信任的其它播放器」卡(有信任项才出现)、「与播放器联动」卡(三行逐播放器勾选,见下面设置项表)、「Apple Music 自动化」权限卡(选中集合包含 Apple Music 时出现)、「后台采集服务」卡(含 media-control 通道自检失败提示)。⚠️ 后三张的先后 2026-09-04 调过(用户要求把「与播放器联动」换到「Apple Music 自动化」+「后台采集服务」前面):原来是"权限卡 → 服务卡 → 联动卡",两张只读的状态卡把这页唯一要动手勾选的那张挤到了页尾;现在是"要配的在前、系统状态在后"。`PlayerSettingsTab.body` 里那串卡片的书写顺序就是页面顺序,换顺序=换那几行的排列。2026-08-25「播放器」卡跟引导页换成同一套图标网格(`PlayerChoiceCard`,用户要求两处排版和谐一致),包在 `SettingsCardHeader` + `SettingsRawRow` 里,融入这页"卡片+发丝描边"的既有语言,不是裸摆一个网格;顺带把「已信任的其它播放器」卡里每一行的图标从通用的 `checkmark.seal` SF Symbol 换成这个 App 自己的真图标(`SettingsRow` 新增的 `iconImage: NSImage?` 参数,跟 `icon` 二选一,原有全部调用点不传就不受影响),补了一个同款 `SettingsCardHeader` 标题——两张卡挨在一起时是"姐妹卡",不是"一张换新一张没换"。
+- **设置 → 播放器 tab**(`SettingsView.swift` 的 `PlayerSettingsTab`):「播放器」卡(2026-09-01 起**可多选**,见下面"多选"一节)、「已信任的播放器」卡(有信任项才出现)、「播放器联动」卡(三行逐播放器勾选,见下面设置项表)、「Apple Music 自动化」权限卡(选中集合包含 Apple Music 时出现)、「后台采集服务」卡(含 media-control 通道自检失败提示)。⚠️ 后三张的先后 2026-09-04 调过(用户要求把「与播放器联动」换到「Apple Music 自动化」+「后台采集服务」前面):原来是"权限卡 → 服务卡 → 联动卡",两张只读的状态卡把这页唯一要动手勾选的那张挤到了页尾;现在是"要配的在前、系统状态在后"。`PlayerSettingsTab.body` 里那串卡片的书写顺序就是页面顺序,换顺序=换那几行的排列。2026-08-25「播放器」卡跟引导页换成同一套图标网格(`PlayerChoiceCard`,用户要求两处排版和谐一致),包在 `SettingsCardHeader` + `SettingsRawRow` 里,融入这页"卡片+发丝描边"的既有语言,不是裸摆一个网格;顺带把「已信任的其它播放器」卡里每一行的图标从通用的 `checkmark.seal` SF Symbol 换成这个 App 自己的真图标(`SettingsRow` 新增的 `iconImage: NSImage?` 参数,跟 `icon` 二选一,原有全部调用点不传就不受影响),补了一个同款 `SettingsCardHeader` 标题——两张卡挨在一起时是"姐妹卡",不是"一张换新一张没换"。
 - **引导页**(`OnboardingView.swift` 的 `playerChoiceStep` / `automationStep`):首次启动时选播放器;自动化权限步只在选中 Apple Music 时出现在 steps 里。2026-08-25 把 `playerChoiceStep` 从纯文字下拉换成图标卡片网格(`PlayerChoiceCard`,3 列 2 行,后来也被设置页复用,挪进了独立文件 `Settings/PlayerChoiceCard.swift`):优先取**已安装播放器的真实 App 图标**(`AppIconResolver`,跟"正在播放"面板来源角标——`PlaybackCoordinator.resolvedPlayerIcon`——同一份取图标逻辑/缓存,理由也一样:最好认,不用自带商标素材),没装就退回 `PlaybackPlayer.tintColor` + `fallbackSymbolName` 这套占位色块(QQ音乐/网易云音乐/酷狗音乐复用 `sourceColor`——跟"歌词来源"是同一批 App,不维护第二份配色映射)。文案顺带补全:原来的说明句漏了酷狗音乐(2026-08-21 才接入,文案没跟上)。
 - 数据本身没有独立窗口——通过 `PlaybackCoordinator`(`LocalPlaybackSource` 的薄转发层)流向悬浮歌词(`LyricsOverlayView`)、灵动岛(`NotchLyricsView`)、歌词窗口(`LyricsWindowView`)、菜单栏(`MenuBarStatusItem`)。
-- 「导出诊断信息」会带上 `lastResolvedBundleID`(这一刻实际被认下来的播放器,选"自动识别"时只报设置值等于什么都没说)。
+- 「导出诊断」会带上 `lastResolvedBundleID`(这一刻实际被认下来的播放器,选"自动识别"时只报设置值等于什么都没说)。
 
 ## 行为规格
 
@@ -45,7 +45,7 @@ App 怎么知道"现在在放什么":从本地播放器读出 曲目元数据 + 
 - **"排除自动识别后能不能唯一确定一个具体播放器"这个判据独立成了一个可复用的量**(`Set<PlaybackPlayer>.soleExplicitPlayer`,LyrimuseCore,纯函数):没有具体播放器(纯 auto)或者选了两个以上时是 `nil`。几处"只有能唯一确定时才有意义"的场景都靠它,不各自重新判一遍:
   - `AppDelegate`「打开 Lyrimuse 时顺带唤起播放器」——含糊就不猜,`bundleIdentifier` 退回空字符串(跟单选年代 `.auto` 的 no-op 效果一致);
   - `LyricsWindowView.idlePlayer`(停播欢迎态用哪个播放器的图标/文案)——含糊时退回"停播前最后识别到的那家"这条既有兜底;
-  - `SettingsView.companionCard`——「打开 Lyrimuse 时启动 X」这一行含糊时直接隐藏(不猜、不显示读不通的文案),「跟随 X 启动」含糊时文案退回"跟随播放器启动"。**2026-09-03 起这一条不再依赖该判据**:三项联动全部改成逐播放器勾选(`PlayerLinkageRow` 图标芯片,用户原话「现在是支持多选的,那么具体是和哪个播放器绑定呢,所以这块功能也要改为多选才行;设置里也要重新设计」),含糊场景不存在了,见下面设置项表「与播放器联动」三行。
+  - `SettingsView.companionCard`——「打开 Lyrimuse 时启动 X」这一行含糊时直接隐藏(不猜、不显示读不通的文案),「跟随 X 启动」含糊时文案退回"跟随播放器启动"。**2026-09-03 起这一条不再依赖该判据**:三项联动全部改成逐播放器勾选(`PlayerLinkageRow` 图标芯片,用户原话「现在是支持多选的,那么具体是和哪个播放器绑定呢,所以这块功能也要改为多选才行;设置里也要重新设计」),含糊场景不存在了,见下面设置项表「播放器联动」三行。
   - collector 侧对称的是 `companionlaunch.go` 的 `companionLaunchProcessNames`——auto 在选中集合里就盯全部五个已知播放器的进程,否则逐个选中成员各自的进程名都盯(不再局限于唯一一个)。
 - **「Apple Music 自动化」权限卡的展示条件放宽**(`SettingsView.permissionCard`):从"恰好只选了 Apple Music"放宽成"选中集合包含 Apple Music"(不要求排他)——多选场景下 Apple Music 那条 AppleScript 路径照样会被走到(见上面判断树第 3 步),用户仍然值得在这里管理这份权限。`dispatch()`(播放控制写路径)和 `checkForCurrentPlayer`/`checkForCurrentPlayerSafely`(自动化权限的按需检查)则**保持要求排他**(`PlaybackPlayerPreference.isExclusivelyAppleMusic`,即 `selected == [.appleMusic]`)——这两处要的是"能不能武断地把指令/权限检查直接导向 Music.app、不经过系统焦点仲裁"这个更强的确定性,多选/auto 场景下应该让 media-control 的焦点仲裁生效,不能因为用户也勾了 Apple Music 就抢着直连。
 - **同源歌词加权也从单值变成集合**(collector `match.go`):`nativeLyricSource string` → `nativeLyricSources map[string]bool`,`resolveNativeLyricSources(players)` 把选中集合里每个成员各自的原生歌词源都收进来(Apple Music/Spotify/auto 不贡献任何源)——同时用 QQ 音乐和酷狗听歌的人,两边的同源加权都该生效,不能只挑其中一个。
@@ -138,7 +138,7 @@ App 怎么知道"现在在放什么":从本地播放器读出 曲目元数据 + 
 - **修 3:整秒时间戳的相位订正**(`estimatedAnchorInstant`,2026-08-21)。`timestamp` **恒无小数秒**,而它就是 `elapsedTimeNow` 的外推基准 —— `ts = floor(真实时刻)`,于是 `位置 + (now − ts)` **恒偏快 frac 秒**,且锚点冻结时锁死一整首歌。用 Apple Music 的 AppleScript 播放头当独立真值实测(12 样本):偏差 **+0.824s、极差仅 0.042s**(同一锚点上稳如磐石 —— 顺带发现 Apple Music 的 media-control 锚点也冻结了 51 秒没刷新,它没暴露问题只因为走 AppleScript 直读)。
   - **订正靠夹逼**:τ ∈ [`ts`, min(`ts+1`, 首见时刻)],取中点 → `ts + min(1, 首见−ts)/2`。三条界分别来自 floor 语义、frac<1、以及"我们不可能在它发布前看到它"。这个式子**永远不会比现状差**:即时发现 → 订正量小、误差 ≤ 间隔一半;只靠 2 秒轮询发现 → 退化成 `ts+0.5`,最坏 ±0.5s(仍是现状 [0,1) 的一半)。订正量恒在 [0, 0.5]。
   - **实测收益**(同一真值口径):平均绝对误差 **0.653s → 0.163s,降低 75%**;稳态样本从恒 +0.49 变成 −0.007。
-  - **只在锚点冻结时接手**(age > 2s):每拍都刷新锚点的源(QQ/网易云/Spotify)不碰 —— 它们 frac 每拍重掷、且自身的位置量化还会部分抵消,那条路径的参数是按实测调出来的(见 `noisyFloored` 那档注释),不该被顺带改掉。
+  - **只在锚点陈旧时接手**(age > 2s)。⚠️ 2026-09-07 订正:这里原来写"每拍都刷新锚点的源(QQ/网易云/Spotify)不碰",Spotify 那半句是错的 —— 实测它一首歌内锚点根本不刷新(4 分钟单锚点),所以每首 Spotify 歌播到第 2 秒起这条路径就接管了,而 media-control 自己的 `elapsedTimeNow` 对 Spotify 是准的(见「Spotify 恢复播放后的锚点相位」一节)。现在接管后的锚点时刻优先用 stream 目击(tight,±20ms),只有轮询首见时才退回中点法;QQ/网易云仍按实测是每拍刷新锚点、age 不会超 2s,不受影响。
 - **为什么"学一个偏移"不可行**(2026-08-21 实测否掉的方案):用户提议"识别到浏览器就自动学一个偏移、按浏览器+根网站生效"。两个否决理由 —— ①**MediaRemote 不给站点信息**(13 个字段里没有任何 url/domain/tab;Arc 虽有 AppleScript 字典能问 `active tab` 的 URL,但要新增自动化权限,且"正在播的标签页 ≠ 活动标签页");②**没有可学的常数**:连续播放期间两个真锚点的 `Δ位置 − Δts` 实测 7 个样本 −0.896 ~ +0.134、**极差 1.03s**,正是整秒量化本身。固定偏移只在运气好的锚点上对 —— 每次换歌/暂停恢复都重新掷骰。用户观察到的"暂停恢复后就准了"是重掷了一次好骰子,不是校正。
 
   ⚠️ 别把这条读成「按播放器加偏移已经被否掉了」:被否掉的是**自动学**、**按浏览器+根站点**;做进去的是**用户手调**、**按播放器(bundleID)**、默认 0、界面上看得见改得动(08-lyrics-engine.md 的时间轴偏移一节)。同一件事的两个不同形态,分界线就在"谁定这个数"。
@@ -235,7 +235,7 @@ App 怎么知道"现在在放什么":从本地播放器读出 曲目元数据 + 
 1. **内置候选** —— `knownBrowserBundleIDs` 里装了、且还没配过这个平台的。⚠️ 这份名单短(Chrome / Edge / Safari),**这不是 UI 偷懒**,而是两条不同的收紧叠在一起:①它跟 `chromiumPrefsPaths` 同源,后者只登记**实测验证过**那个 Preferences 路径的浏览器——Brave/Vivaldi/Opera 大概率同源同构,但没实测过就往里写等于拿用户的配置文件赌;②**它是"默认展示"名单,不是"支持"名单**。
    - ⚠️ **Arc 不在这份名单里,但适配一条都没少**(2026-09-01 用户拍板:「arc 不要留着,但是我们代码里对他的适配都留着,只是不在这里显示,如果用户自己选了 arc,那就依旧按我们适配好的来走」)。Arc 在 `chromiumPrefsPaths` 里原样留着 → `family(...)` 照样返回 `.chromium`、那道 JS 开关的状态照样读得出来、`browserManualEnableHint` 里那条 Arc 专属菜单路径(中文系统下也显示英文)也原样留着;`BrowserPositionProbe` 那边的 Arc 休眠标签页处置更是全族通用。用户从「从应用程序中选择…」挑中它时走的是**完整既有适配,一步都不降级**,少的只是"默认摆在菜单里"这一条。**别因为它不在名单里就去删 Arc 的适配代码。**
    - 配套:`chooseBrowserFromApplications` 里"已经认识引擎族"那条早退分支也要 `rememberManualBrowser` 登记一次 —— 否则 Arc 这种"认识但不默认展示"的浏览器选完之后仍然不出现在「+」菜单里,下次想再配一个平台还得重走文件选择器。该函数自己跳过内置那几个(它们本来就默认展示,再记一份是冗余状态)。
-2. **已经信任过的浏览器** —— 出现在下面「已信任的其它播放器」卡里、装着、而且**驱得动**的那些(2026-09-01 用户原话:「已经被信任了,就应该出现在这个列表里面,这个逻辑还是要的」)。⚠️ **信任是候选的一个来源,不是候选的前提** —— 这两件事 2026-08-31 和 09-01 各定过一半,别再把其中一半当成全部:没信任过的已安装内置浏览器**照样列出来**(选中时一步自动信任+配对),而已经信任过的浏览器**也一定要列出来**,哪怕它既不在内置名单、也没被手动加过。信任可以发生在配对之外(用户在「发现未知播放器」卡里点的信任;或者配对过又移除了配对——那会顺手忘掉 `manualBrowserFamilies` 里的登记),这两种情况下它都还在信任列表里却进不了候选,用户看到的就是"下面明明信任着 Doubao Browser,上面菜单里没有它"。
+2. **已经信任过的浏览器** —— 出现在下面「已信任的播放器」卡里、装着、而且**驱得动**的那些(2026-09-01 用户原话:「已经被信任了,就应该出现在这个列表里面,这个逻辑还是要的」)。⚠️ **信任是候选的一个来源,不是候选的前提** —— 这两件事 2026-08-31 和 09-01 各定过一半,别再把其中一半当成全部:没信任过的已安装内置浏览器**照样列出来**(选中时一步自动信任+配对),而已经信任过的浏览器**也一定要列出来**,哪怕它既不在内置名单、也没被手动加过。信任可以发生在配对之外(用户在「发现未知播放器」卡里点的信任;或者配对过又移除了配对——那会顺手忘掉 `manualBrowserFamilies` 里的登记),这两种情况下它都还在信任列表里却进不了候选,用户看到的就是"下面明明信任着 Doubao Browser,上面菜单里没有它"。
    - ⚠️ 判据必须用 `BrowserAutomationPermission.resolvedFamily` 而**不是** `family` —— 信任列表里只有 bundle id 和显示名,那些"点信任加进来的"浏览器从没被登记过引擎族,`family` 对它们恒为 nil。`resolvedFamily` 查不到时会去那个 App 自己的 bundle 里**现场读一次 sdef**,判定结果(含 nil)进内存缓存:调用点是 SwiftUI 的 body,每次重绘、每次回到前台都会跑一遍。缓存 `@MainActor` 隔离(`family` 会被 `BrowserPositionProbe` 在后台线程读,两者不共享这份字典)。
    - ⚠️ **配对时必须把现场判定的引擎族落盘**(`trustAndPairBrowser` 开头那句 `rememberManualBrowser`)。那个判定结果只活在内存缓存里,不落盘的话配对之后 `family(...)` 仍然返回 nil,`kickIfNeeded` 和 `runBrowserSelfTest` 都会在第一道 guard 上直接返回——表现是"配上了、头像也有了,却永远不同步、连检测按钮都不工作"。
 3. **「从应用程序中选择…」**(2026-08-31,用户原话:「这里点+号出来的是否可以加一个选项是自己在本机的应用程序里面选」)—— `NSOpenPanel` 从 /Applications 挑一个 App,判定通过就一步信任+配对。这条路存在的意义正是上面那条限制的另一面:那些同样继承了 Chrome 脚本字典、本来就驱得动、只是没人验过 Preferences 路径的浏览器,现在用户自己加得进来。
@@ -286,7 +286,7 @@ Chromium 系那道 JS 开关的状态**经常读不出来** —— 它在浏览�
 
 修法是一张「媒体进程 → 宿主 App」的别名表(`TrustedPlayers.mediaProxyOwners`,Go 侧 `system.go` 同名同内容),`isAccepted` 查不到本体时再查一次宿主。
 
-- ⚠️ **选别名而不是"配对时连带把代理进程也写进信任列表"**:后者会在「已信任的其它播放器」里留下一条用户看不懂的 `com.apple.WebKit.GPU`,而且撤销配对时还得记得一起删(漏了就是永久多一条)。别名跟着宿主的信任状态自动生效/失效,没有需要同步维护的第二份状态。
+- ⚠️ **选别名而不是"配对时连带把代理进程也写进信任列表"**:后者会在「已信任的播放器」里留下一条用户看不懂的 `com.apple.WebKit.GPU`,而且撤销配对时还得记得一起删(漏了就是永久多一条)。别名跟着宿主的信任状态自动生效/失效,没有需要同步维护的第二份状态。
 - ⚠️ **别名是单向的**:信任了代理进程**不**代表 Safari 本身被信任(反向查表不成立),两侧都有断言钉住。
 - ⚠️ **只登记实测见过的**。`com.apple.WebKit.WebContent` 这类同族进程没有实测到它报过 Now Playing,不凭猜测加 —— 真遇到了在表里补一行,其余逻辑不用动。
 - ⚠️ **两侧必须同时改**(同 `isAcceptedPlayerBundleID` / `TrustedPlayers.isAccepted` 那对)。Swift 8 条断言、Go 6 条断言各自对称覆盖:别名生效/别名不是白名单/别的浏览器不顺带放行/单向性/宿主反查/Chromium 不在表里,外加**跨层不变量**——别名一旦生效,"发现未知播放器"卡必须同时不再提议它(那张卡的判据就是 `!isAccepted`,两者永久绑定)。
@@ -326,11 +326,33 @@ Spotify 曾走「AppleScript 直问 playerPosition 真值」的特殊路径(08-1
 
 用户报"自然播完切歌后整首歌词偏快、单独点播正常"且必现。实测坐实(media-control 0.25s 采样 + 旧曲连续外推做真值,Forever Love→在那遙遠的地方):gapless 自然切歌时 Spotify 在**旧曲真声还剩 ~0.84s** 时就切了元数据并打好新曲锚点(elapsedTime=0),此后整首歌 elapsedTimeNow 恒定超前真声 **+0.888s±0.009**(60s 窗口纹丝不动、锚点从不重打);playerPosition 同样超前(+0.77s,08-17 实测 +1.84s,每首抽签)——所以 JXA 真值路线救不了它。伺服对这种偏差**结构性失明**:每笔读数都从同一个超前锚点外推、与墙钟外推步调完全一致,reported−predicted 恒 ≈0。手动点播的锚点是点击瞬间打的、与真声对齐,所以准——两种形态的差异就是全部机理。
 
-修法(`naturalAdvanceCorrection`,纯函数,App 侧 `LocalPlaybackSource` 与 collector `poller.go` **同批对称实现**):换歌那一拍若上一首(还在播)按墙钟连续外推已走到结尾附近(|越界量| ≤ 窗口:App 4s、collector 6.5s——采集器无事件通知,窗口要吞下 5s 轮询),就把新曲**播种为越界量**(允许为负=旧曲真声未完,UI/发布口钳 0,表现为歌词等真声开始才起走;collector 发布"位置 0 @ 未来 |播种值| 秒"的未来锚点,否则 relay 按变化去重、网页整段超前),偏置=原始读数−越界量,守卫在 (0.05, 2.5]s 之外不采信(下限滤噪声,上限挡"换歌瞬间读数还挂上一首"的陈旧值,同时把"手动跳歌恰好发生在结尾窗口内"的误判伤害钉死在 ≤2.5s 且方向是偏慢)。同曲期间每笔原始读数先扣偏置再进平滑/伺服;暂停冻结值同样扣(pausedPositionMs);**真实 seek/手动换歌/我们主动发的 seek 都清零偏置并改信原始读数**(Spotify 重打的锚点与真声对齐);暂停⇄恢复**继承**偏置(冻结值来自同一超前锚点——collector 侧为此专门加了同曲恢复分支,不能让恢复落进 seek 分支清偏置)。
+修法(`naturalAdvanceCorrection`,纯函数,App 侧 `LocalPlaybackSource` 与 collector `poller.go` **同批对称实现**):换歌那一拍若上一首(还在播)按墙钟连续外推已走到结尾附近(|越界量| ≤ 窗口:App 4s、collector 6.5s——采集器无事件通知,窗口要吞下 5s 轮询),就把新曲**播种为越界量**(允许为负=旧曲真声未完,UI/发布口钳 0,表现为歌词等真声开始才起走;collector 发布"位置 0 @ 未来 |播种值| 秒"的未来锚点,否则 relay 按变化去重、网页整段超前),偏置=原始读数−越界量,守卫在 (0.05, 2.5]s 之外不采信(下限滤噪声,上限挡"换歌瞬间读数还挂上一首"的陈旧值,同时把"手动跳歌恰好发生在结尾窗口内"的误判伤害钉死在 ≤2.5s 且方向是偏慢)。同曲期间每笔原始读数先扣偏置再进平滑/伺服;暂停冻结值同样扣(pausedPositionMs);**真实 seek/手动换歌/我们主动发的 seek 都清零偏置并改信原始读数**(Spotify 重打的锚点与真声对齐);~~暂停⇄恢复**继承**偏置(冻结值来自同一超前锚点)~~ —— **2026-09-07 实测推翻**:gapless 切歌后 Spotify 自己的钟会停一下等新音频,稳态时就是音频位置;偏置 1.080 在位时按暂停,Spotify 发布的冻结值 152.673 与 App 已扣偏置的显示 152.689 只差 16ms,再扣一遍就退 −1.097s。偏置只属于 MediaRemote **开播那个**锚点(原始 elapsedTime=0);Spotify 后来重新发布的任何锚点(暂停冻结值 / 恢复 / 拖动,原始 elapsedTime>0)都对齐它的钟,偏置立即作废(`LocalPlaybackSource.biasSurvivesAnchor`,快照新增 `anchorElapsedTime` 透传原始锚点值;collector `snapshot.AnchorElapsed` 同规则)。MediaRemote 指令暂停不重发锚点(原始 elapsedTime 仍 0),那时暂停值来自我们自己按开播锚点外推,偏置照旧扣。collector 侧原来专门加的"同曲恢复继承偏置"分支语义随之改为"恢复锚点已清偏置,直接采信"。
 
 同日对抗审查(12 agent)后同批加固:repeat-one gapless 回绕(key 不变探测不到,两侧补回绕签名重估——collector 分"同拍观察到/loopRestart 先归位后一拍"两形态);clearIfWasPlaying 补清 pos 私有状态(否则中断后另起一首会被陈旧状态伪判成自然切歌);collector 瞬时读取失败的陈旧快照不再走 seek 分支(snapshotStale 守卫+Elapsed 同步外推保 prevElapse@prevWall 配对一致);暂停中在播放器里拖进度条按冻结值跳变清偏置;playing 时 rate=0 瞬时报告归一为 1(否则 predicted 停走误判 seek);自然切歌校正双向要求新旧两拍都是 Spotify(posPrevTierCleanExtrapolated/prevBundle 门),换源即清偏置。
 
 诊断:`log show --predicate 'subsystem == "me.yudaotor.lyrimuse"'` 看 "natural advance: seed … anchor leads audio by …" / "repeat-one wrap: …" 行;collector 侧看 stdout 日志同款行。**接受不修的已知边界**(单源本质歧义/量级可控):偏置在位时曲内 <偏置+2s(~3s)的小幅外部拖动分不出"锚点没动"还是"准锚点+小拖",该曲余下偏慢 ~0.9s、换歌自愈;crossfade/Automix 开启时"音频连续"真值假设失效,偏置被高估 ~重叠秒数(整曲偏慢该量);播种误差沿 gapless 连播链传播,但幅度恒被 2.5s 守卫钉死。
+
+### Spotify 恢复播放后的锚点相位:整秒时间戳与 stream 目击(2026-09-07)
+
+用户报「自然切歌之后歌词偏快,一按暂停悬浮歌词明显退回去一点」。用只读探针(0.5s 采 `media-control get --now` + `media-control stream` + 旁听 Spotify 的 `com.spotify.client.PlaybackStateChanged` 通知——后者带 Spotify 自己那一刻的位置,可当真值)录了一段实际听歌过程,坐实的机理:
+
+- **Spotify 暂停后恢复播放,上报的 playbackRate 变 null,media-control 的 `elapsedTimeNow` 从此不再外推**(实测 2 分 14 秒纹丝不动;08-18 已记录过这个形态),App 只能走 `livePositionSeconds` 里 rate 缺失的分支自己按 `elapsedTime + (now − timestamp)` 补算。而 `timestamp` 恒无小数秒,抹掉的小数(实测三次恢复分别 .914 / .724 / .560)就是那首歌余下部分**恒偏快**的量:一按暂停,App 改用 Spotify 的冻结值(准的,与通知位置逐字相等),显示退回 0.95s / 0.73s。伺服对它结构性失明(reported 与 predicted 共享同一个基准)。08-18 那次量到"+0.35s 恒定偏移、可接受"只是那一次抽到的小数,实际每次恢复重新掷骰、均匀落在 [0, 1)。
+- **这个错位再被自然切歌校正当成旧曲真值**:恢复后那首歌播到底自然切歌,App 的旧曲位置偏快 0.56s → 越界量偏大 0.56s → 下一首偏置低估 0.56s(实测真实超前 1.114s、App 估 0.533s),整首偏快,并沿连播链传下去直到手动选歌 / 拖动清零。这就是「自然切歌后偏快」;暂停回退则发生在恢复播放的那一首上(偏置在位的歌暂停时冻结值同样扣偏置,不会回退)。
+- 顺带坐实两点:Spotify 一首歌内锚点**不刷新**(4 分钟单锚点),所以 08-21 那条「锚点陈旧才接手」的相位订正**会**接管 Spotify(上面「修 3」段原来写"Spotify 不碰"是错的,已订正);media-control 自己的 `--now` 外推用的是**全精度**锚点时刻(换歌后首拍读数聚在 0.33~0.37s = 通知 + 去抖延迟,若用整秒会散在 0.3~1.3),整秒只是 JSON 输出格式,所以 rate 正常时 `elapsedTimeNow` 本身是准的。
+
+修法(`MediaControlClient.AnchorSighting` / `noteStreamAnchorSighting` / `estimatedAnchorInstant(timestamp:sighting:)`,`MediaControlStreamWatcher.digest`):stream 事件在锚点打好后 17~26ms 就到(4 次对照通知实测),watcher 把每一行**到达的时刻**连同锚点身份(`anchorKey` = 曲目|elapsedTime|timestamp,与轮询路径同一个构造)记进目击表,轮询路径查表:有 **tight** 目击 → 锚点时刻 = 到达 − 25ms,夹进 [ts, ts+1),误差 ±20ms;只有轮询自己的 **loose** 首见 → 退回 08-21 的中点法(±0.5s);什么都没有(watcher 挂了)→ 原样 timestamp,与改动前逐字相同。rate 缺失分支与 08-21 的陈旧锚点分支都走这一处。watcher (重)启时 media-control 整份吐出的旧锚点(到达时时间戳已超 1.5s)只算 loose,否则会把几分钟前的锚点钉到"到达前 25ms"。这仍守着设计决策 1:payload 里没有任何**数值**进状态,取的只是"哪个锚点、什么时候到"。诊断:`log show --predicate 'subsystem == "me.yudaotor.lyrimuse"'` 看 `mc-stream` 类别的 "anchor sighting tight=… ageAtArrival=…" 行(每个新锚点一行)。
+
+collector 侧对称改(`system.go` → `playingPositionSecs`,`mediacontrolanchor.go`):rate 缺失时按 ts+0.5 补算(采集器没有事件流、5s 轮询首见必然晚于 1s,只能取中点),误差从 [0,1) 缩到 ±0.5;此前它直接吞冻结的 `elapsedTimeNow`,位置先落后、再被 seek 分支每拍重锚到整秒基准。两侧刻意不对称:App ±20ms、collector ±0.5s。
+
+**暂停时冻结值可能根本没发布**(同日上午,用户仍报「一按暂停歌词进度明显变一下」,用 `pause transition` 诊断行量出来的):通过 MediaRemote 指令暂停(App 自己的暂停键 / 媒体键 / `media-control pause`)时 Spotify **不重新发布** elapsedTime,事件流只有 `playing:false`,原始 elapsedTime 仍是开播锚点(0@开播)。08-21 的暂停规则这时退回「上一拍轮询记住的播放位置」,而那一拍最多旧一个轮询周期——实测 蘇麗珍 屏上 6.961 一下退到 5.225(−1.74s)、神探 −0.31s,而 Spotify 自己的钟(通知里的位置 6.858)跟屏上只差 0.1s;昨晚在 Spotify 界面里按的暂停会发布冻结值(带新时间戳),那几次是准的。修法:stream watcher 把 `playing:false` 到达的时刻记给 `MediaControlClient.notePauseObserved`;暂停分支若发现锚点时间戳比暂停事件早 `pauseAnchorMaxSkew`(1.5s)以上,就知道冻结值没发布,把上一拍位置按 rate=1 外推到暂停那一刻(`pausedPositionSeconds(elapsedTime:anchorTimestamp:lastPlaying:pauseObservedAt:now:)`);锚点是暂停时发布的照旧用冻结值;没有事件时刻退回旧规则。恢复播放那一拍仍会前跳约 0.6s:Spotify 自己的钟恢复时跳 +0.27s(实测三次 .277/.274/.273,它的界面同样如此)加上通知 + 去抖的 ~0.35s 追赶,都是真实前进量,不修。
+
+**开播锚点本身打晚**(同日上午第三个形态):广告结束后开播的歌,MediaRemote 那份 now-playing 信息晚发 ~2.4s 而 elapsedTime 仍是 0(妳和吉他:Spotify 通知 08:12:45.876 报「位置 0」,media-control 08:12:48.253 才出现这首歌、锚点 0@:48),整首歌落后 2.3s、一暂停往前补 2.3s。单看 media-control 认不出来。修法 `SpotifyPositionProbe`:Spotify 原生客户端每首歌开播 2.5s 后用 AppleScript 问一次 `player position`(往返 ~0.1~0.2s,取中点),结果走 `resolvePositionSeconds` 的 `isGroundTruthSeed` 通道(跟浏览器探针同一条,差过 0.30s 才重锚),只在稳定播放中消费(`posWasPlaying` 门),同一首歌只一次。不用通知里的位置当真值是因为通知比 Spotify 的钟真正起步早 ~0.5s(缓冲)。手动切歌两首实测探针读数与锚点一致(差 <0.1s,未重锚)。collector 没有这条探针。
+
+**偏置不能扣在播放器自己发布的锚点上**(同日上午第四个形态,用上面的诊断行抓到:09:40:50 `bias=1.080 delta=-1.097`,而 shown 152.689 vs frozenRaw 152.673):见「Spotify gapless 自然切歌锚点超前校正」一节里被划掉的那句及其订正。规则落在 apply() 两个分支之前:Spotify 原生、同曲、偏置非零、且快照 `anchorElapsedTime`>0 → 清偏置并记一行 `natural advance bias dropped`。
+
+诊断行(`local` 类别,每次翻转一行):`pause transition: shown=… frozenRaw=… bias=… paused=… delta=…`(delta<0 显示回退、>0 前补)与 `resume transition: paused=… resumed=… delta=…`。以后再报「暂停时变一下」先看这两行:delta 与 bias 同量级 → 偏置归属问题;delta 与上一拍轮询间隔同量级 → 冻结值没发布;delta 几秒 → 锚点本身打歪。
+
+**陈旧锚点重发**(同日晚一点抓到的第二个形态,用户报「歌词落后很多,一暂停往前补一大段」):Spotify 会在播放中把 now-playing 信息重发一遍,`elapsedTime` **逐毫秒不变**、时间戳却换成当下——实测 忘了美麗 01:40:09 恢复播放锚点 10.477@:09,01:40:43 又来一个 10.477@:43(playbackRate 顺带从 null 变回 1);MediaRemote 按新时间戳外推,`elapsedTimeNow` 一下退回 34 秒(01:41:46 读到 73.75,真实 ≈107.6),App 的 seek 分支把它当真实回跳重锚,暂停时 Spotify 才重算一次真实位置,于是"往前补一大段"。广告开始后 1~2 秒也常见同一形态(0@:30 → 0@:31)。触发源没查到,AppleScript 读 Spotify 属性不会触发(01:44 实测)。修法(`MediaControlClient.isStaleAnchorRepublish` / `PlayingAnchor`,collector `isStaleAnchorRepublish` / `resolvePlayingAnchorTS`):记住上一个**播放中**的锚点;这次的锚点若同一首歌、elapsed 逐 ms 相等且 >0、时间戳变了、且按旧锚点外推还没越过曲长 → 判为陈旧重发,沿用**原锚点时刻**自己外推(`livePositionSeconds(republishedAnchorInstant:)`),既不信新时间戳也不信按它外推的 `elapsedTimeNow`。两条刻意的排除:elapsed==0 不判(同一首歌被「上一曲」重头播放也是 0@新时间戳,分不开,宁可信重发是真的 = 改动前行为);旧锚点外推越过曲长不判(单曲循环回绕 / 曲末,旧锚点已死)。诊断:`media-control` 类别 "stale anchor republish ignored: …" 行(每个被忽略的新时间戳一行),collector 日志同款。
 
 ### 进度锚(ProgressAnchor)与 20Hz tick
 
@@ -341,7 +363,7 @@ Spotify 曾走「AppleScript 直问 playerPosition 真值」的特殊路径(08-1
 
 ### 暂停与恢复
 
-- 暂停时 media-control/AppleScript 的 elapsedTime 都是精确的冻结值:anchor 置 nil,冻结位置发布为 `pausedPositionMs`(时长单独发布为 `currentDurationMs`,进度条按冻结值显示而不是消失)。
+- 暂停时 AppleScript 的 elapsedTime 是精确的冻结值;media-control 的**只在播放器暂停时重新发布了 elapsedTime 才是**——⚠️ 2026-09-07 实测 Spotify 通过 MediaRemote 指令暂停(App 自己的暂停键 / 媒体键 / `media-control pause`)时**不重新发布**,事件流只有 `playing:false`,原始 elapsedTime 仍是开播锚点;这时冻结位置取「上一拍播放位置外推到暂停事件到达时刻」(`pausedPositionSeconds(elapsedTime:anchorTimestamp:lastPlaying:pauseObservedAt:now:)`,见「陈旧锚点重发」下面那段)。anchor 置 nil,冻结位置发布为 `pausedPositionMs`(时长单独发布为 `currentDurationMs`,进度条按冻结值显示而不是消失)。
 - 暂停**不清当前歌词行**:按冻结位置解一次当前行(`resolveLinesForPausedPosition`——`apply()` 和 `fastTick()` 必须都走这一处,`seek(toMs:)` 末尾无条件调 `fastTick()`,两处逻辑错开就会"暂停拖进度条行被清掉")。用户按暂停的典型场景是"这句是什么?我看一下"。
 - 暂停态 `pausedPositionMs` 同样有 seek 陈旧读数拒收(否则暂停拖进度条会"弹回去一下再过去")。
 - 恢复播放走 resolvePositionSeconds 的"无可信锚点"分支直接采纳读数;`posTrackingKey/posWasPlaying/posPrevWall` 无论播放与否每轮都更新,防"播放→暂停→再播放"误用暂停前的陈旧墙钟基准。
@@ -438,9 +460,9 @@ vs 目录 289.766),拿目录值去盖反而是降精度。覆盖就该待在产�
 | 播放器 tab | 播放器(Picker,5 档) | 写 `features.player` → `lyrimuse-features.json`;App 侧下一轮轮询即生效(每轮现读);collector 只在启动时读一次,需重启采集服务才跟上 |
 | 播放器 tab | Apple Music 自动化(权限卡,仅选 Apple Music 时出现) | 查/请求 TCC 自动化权限;没有它 Apple Music 路径完全读不到播放状态 |
 | 播放器 tab | 后台采集服务(状态卡) | 启用 collector(歌词/封面解析、scrobble 的来源);本章数据源不依赖它跑轮询,但歌词内容全来自它写的缓存 |
-| 播放器 tab | 与播放器联动 · 打开 Lyrimuse 时启动(逐播放器勾选,2026-09-03) | `AppSettings.launchPlayersOnLyrimuseOpen`(Set,np: 键存 rawValue 数组);候选 = 选中集合里的具体播放器,选了 auto 时五个都可勾(`LyrimuseCore.PlayerLinkage.candidates`),生效 = 勾选 ∩ 候选(取消选中的播放器不算、勾选记录保留);`AppDelegate` 逐个启动没在跑的、不抢焦点。老布尔键 `np:launchMusicOnLyrimuseOpen` 首次启动迁移一次(true + 当时唯一具体播放器 → 那一个,含糊 → 空)后进 `obsoleteDefaultsKeys` |
-| 播放器 tab | 与播放器联动 · 跟随播放器启动(逐播放器勾选,2026-09-03) | `FeatureSettingsStore.launchLyrimuseOnPlayers` → features `launch_lyrimuse_on_players`(列表;同时仍写布尔 `launch_lyrimuse_on_music_open` = 列表非空,给老 collector 当总开关);collector `companionLaunchProcessNames` 键在就只盯勾了且仍在候选里的那几个,键缺失退回布尔年代「盯整个选中集合 / auto 全量」;老文件迁移:布尔 true(默认)→ 当时全部候选。Go 测试 `TestCompanionLaunchProcessNamesHonorsChosenPlayers` |
-| 播放器 tab | 与播放器联动 · 跟随播放器退出(2026-09-03 新增,借鉴清单 #9) | `AppSettings.quitWithPlayers`(Set,默认空 = 关);`PlayerQuitWatcher` 订阅 NSWorkspace 终止 / 启动通知:勾选的播放器**全部**不在跑才算(绑两个退一个不退,可能只是换播放器听),`PlayerLinkage.quitGraceSeconds` = 5s 宽限内任一个重启就取消、到点再核一遍进程表,设置 / 歌词管理 / 歌词窗口这类能成为 key 的窗口开着时不退(用户正在用 Lyrimuse 本身);退出经 `AppExit.request(.followedPlayerQuit)`,日志 `exiting reason=followed_player_quit`。collector 不退(常驻服务,也是「跟随启动」的执行者)。YouTube Music 不在候选:浏览器退出≠播放器退出。被参考的做法没有宽限、立刻 exit(0) |
+| 播放器 tab | 播放器联动 · 打开 Lyrimuse 时启动(逐播放器勾选,2026-09-03) | `AppSettings.launchPlayersOnLyrimuseOpen`(Set,np: 键存 rawValue 数组);候选 = 选中集合里的具体播放器,选了 auto 时五个都可勾(`LyrimuseCore.PlayerLinkage.candidates`),生效 = 勾选 ∩ 候选(取消选中的播放器不算、勾选记录保留);`AppDelegate` 逐个启动没在跑的、不抢焦点。老布尔键 `np:launchMusicOnLyrimuseOpen` 首次启动迁移一次(true + 当时唯一具体播放器 → 那一个,含糊 → 空)后进 `obsoleteDefaultsKeys` |
+| 播放器 tab | 播放器联动 · 跟随播放器启动(逐播放器勾选,2026-09-03) | `FeatureSettingsStore.launchLyrimuseOnPlayers` → features `launch_lyrimuse_on_players`(列表;同时仍写布尔 `launch_lyrimuse_on_music_open` = 列表非空,给老 collector 当总开关);collector `companionLaunchProcessNames` 键在就只盯勾了且仍在候选里的那几个,键缺失退回布尔年代「盯整个选中集合 / auto 全量」;老文件迁移:布尔 true(默认)→ 当时全部候选。Go 测试 `TestCompanionLaunchProcessNamesHonorsChosenPlayers` |
+| 播放器 tab | 播放器联动 · 跟随播放器退出(2026-09-03 新增,借鉴清单 #9) | `AppSettings.quitWithPlayers`(Set,默认空 = 关);`PlayerQuitWatcher` 订阅 NSWorkspace 终止 / 启动通知:勾选的播放器**全部**不在跑才算(绑两个退一个不退,可能只是换播放器听),`PlayerLinkage.quitGraceSeconds` = 5s 宽限内任一个重启就取消、到点再核一遍进程表,设置 / 歌词管理 / 歌词窗口这类能成为 key 的窗口开着时不退(用户正在用 Lyrimuse 本身);退出经 `AppExit.request(.followedPlayerQuit)`,日志 `exiting reason=followed_player_quit`。collector 不退(常驻服务,也是「跟随启动」的执行者)。YouTube Music 不在候选:浏览器退出≠播放器退出。被参考的做法没有宽限、立刻 exit(0) |
 
 引导页 `playerChoiceStep` 是同一个 `features.player` 的另一入口。
 
@@ -477,30 +499,31 @@ vs 目录 289.766),拿目录值去盖反而是降精度。覆盖就该待在产�
 | 位置平滑/伺服/棘轮 | 同上 · `resolvePositionSeconds`/`servoDecision`/`shouldRatchetForward`/`shouldRejectStalePositionAfterSeek` |
 | 通知/事件去抖动与冻结 | 同上 · `startObservingPlayerInfoNotification`/`handlePlayerInfoChanged`/`freezeExtrapolationUntilNextPoll` |
 | 快照读取双路径与 .auto | `LyrimuseCore/Local/MediaControlClient.swift` · `MediaControlClient.fetchSnapshot`/`fetchAppleMusicSnapshot`/`fetchAutoDetectedSnapshot`/`ageCompensatedCachedElapsed` |
-| Spotify 位置直查与 gapless 回扣 | 同上 · `spotifyPlayerPosition`/`rebasedSpotifyPosition`/`spotifyPreloadDelta`/`fetchRawMediaControlSnapshot` |
+| 位置读数派生 / 锚点相位 / 目击表 / 陈旧重发 | 同上 · `fetchRawMediaControlSnapshot`/`livePositionSeconds`/`pausedPositionSeconds`/`estimatedAnchorInstant`/`AnchorSighting`/`noteStreamAnchorSighting`/`anchorKey`/`isStaleAnchorRepublish`/`PlayingAnchor`(08-14~08-18 的 `spotifyPlayerPosition` 直查路线已删,注释在 git 历史) |
 | 封面取图(含曲目标识核对) | 同上 · `fetchArtwork`;`LocalPlaybackSource.fetchArtworkForCurrentTrack` |
-| 快照结构与 trackKey | `LyrimuseCore/Local/MediaControlSnapshot.swift` · `MediaControlSnapshot` |
+| 快照结构与 trackKey | `LyrimuseCore/Local/MediaControlSnapshot.swift` · `MediaControlSnapshot`(`anchorElapsedTime` = 原始锚点值透传) |
 | 播放器枚举与设置读取 | `LyrimuseCore/Local/PlaybackPlayer.swift` · `PlaybackPlayer`/`PlaybackPlayerPreference` |
 | 播放器展示名/品牌色/占位符号 | `lyrimuse/Settings/FeatureSettingsStore.swift` · `extension PlaybackPlayer`(`displayName`/`tintColor`/`fallbackSymbolName`) |
 | 图标卡片(引导页 + 设置页共用) | `lyrimuse/Settings/PlayerChoiceCard.swift` · `PlayerChoiceCard` / `MorePlayersComingCard`(后者只在引导页用) |
 | 图标网格摆放顺序 | `lyrimuse/Settings/FeatureSettingsStore.swift` · `PlaybackPlayer.displayOrder`;判据 `lyrimuse/Settings/AppSettings.swift` · `AppSettings.userReadsSimplifiedChinese` |
 | 真实 App 图标解析(共享缓存) | `lyrimuse/Settings/AppIconResolver.swift` · `AppIconResolver.icon(forBundleID:)` |
 | 网页平台图标(自带素材 + 镂空垫白) | `lyrimuse/SettingsView.swift` · `PlayerSettingsTab.platformIcon(_:)` / `youtubeMusicIcon` / `spotifyIcon` / `whiteFilledCutouts(image:)` |
-| 事件流常驻子进程 | `LyrimuseCore/Local/MediaControlStreamWatcher.swift` · `MediaControlStreamWatcher` |
+| 事件流常驻子进程 + 锚点目击 + 暂停时刻 | `LyrimuseCore/Local/MediaControlStreamWatcher.swift` · `MediaControlStreamWatcher`(`digest` 纯函数,`pausedAtArrival`) |
+| Spotify 一次性地面真值探针 | `LyrimuseCore/Local/SpotifyPositionProbe.swift` · `SpotifyPositionProbe`(`trackChanged`/`consumeCorrection`/`extrapolate`);消费点 `LocalPlaybackSource.apply` 的 `isGroundTruthSeed` 分支 |
 | 通道健康自检 | `LyrimuseCore/Local/MediaControlHealth.swift` · `MediaControlHealth` |
 | 播放控制写路径 | `LyrimuseCore/Local/MusicPlaybackController.swift` · `MusicPlaybackController`(`dispatch`/`seek`/`setPlaybackMode`/`supportsExtendedControls`) |
 | 进度锚 | `LyrimuseCore/Playback/ProgressClock.swift` · `ProgressAnchor.extrapolatedPositionMs` |
 | 自动化权限 | `lyrimuse/Settings/MusicAutomationPermission.swift` · `MusicAutomationPermission`(`check`/`requestWithTimeout`/`checkForCurrentPlayerSafely`/`checkAppleMusicSafely`) |
 | 设置页播放器 tab | `lyrimuse/SettingsView.swift` · `PlayerSettingsTab` |
 | UI 转发层 | `lyrimuse/PlaybackCoordinator.swift` · `PlaybackCoordinator.start` |
-| collector 侧独立取数 | `lyrimuse-collector/system.go` · `getState`/`appleMusicPosition`;`lyrimuse-collector/poller.go` · `updatePosition` |
+| collector 侧独立取数 | `lyrimuse-collector/system.go` · `getState`/`appleMusicPosition`/`fetchRawMediaControlState`;`mediacontrolanchor.go` · `playingPositionSecs`/`pausedPositionSecs`/`isStaleAnchorRepublish`/`resolvePlayingAnchorTS`;`lyrimuse-collector/poller.go` · `updatePosition` |
 | Apple 目录锚点 | `lyrimuse-collector/applecatalog.go` · `appleCatalogAnchor`/`appleCatalogLookup`/`appleCatalogPlausibleID`/`appleCatalogSearchIdentities`;消费点 `system.go` · `fetchRawMediaControlState` |
 | `LyrimuseCore/Local/UnknownPlayerAlert.swift` | 「发现新播放器」的两层判据(纯函数):`shouldOffer` 卡片与通知共用、`shouldAnnounce` 通知专属 |
 | `lyrimuse/Settings/UnknownPlayerNotifier.swift` | 系统通知管道:5s 轮询 + 稳定性计数 + 授权 + 投递 + 按钮回调 + `np:unknownPlayerNotices` 落盘 |
 
 ## 设计决策与已知坑
 
-1. **事件只当"提前 poll 一次"的信号**,绝不从通知/stream payload 直接喂状态——状态机已有世代号防乱序、位置伺服、计时器生命周期三重微妙性,并行改状态路径是乱序 bug 温床;2 秒轮询永远保留作兜底,任何事件机制失效最坏退化回旧行为。
+1. **事件只当"提前 poll 一次"的信号**,绝不从通知/stream payload 直接喂状态——状态机已有世代号防乱序、位置伺服、计时器生命周期三重微妙性,并行改状态路径是乱序 bug 温床;2 秒轮询永远保留作兜底,任何事件机制失效最坏退化回旧行为。2026-09-07 起有一个划得很窄的例外:stream watcher 会解析 payload,但只为得到"哪个锚点、什么时候到"(锚点身份 + 到达时刻,进 `MediaControlClient` 的目击表),位置数值本身仍全部来自轮询快照,见「Spotify 恢复播放后的锚点相位」。
 2. **250ms 去抖动而非"立刻查+节流"**:实测 Music.app 一次操作连发 2 条通知且第一条带旧状态、AppleScript 状态 ~294ms 才切换完;立刻查大概率读到半切换快照还把带新状态的第二条吞掉。
 3. **暂停 ≠ 清空**:停止推进(停 20Hz)和清空显示是两回事,暂停保留按冻结位置解出的当前行;真正的全清只发生在 nil 快照(stopped/焦点被抢),且 `lastKey` 必须一起清否则恢复播放后歌词窗口回不来。
 4. **QQ 音乐整数秒地板量化推翻了"零均值噪声"前提**:取整偏差单向(只晚不早),EMA 永远够不到门槛,靠前向棘轮(reported > predicted 即证明外推落后)修;反方向维持 EMA 路径。
@@ -716,3 +739,8 @@ vs 目录 289.766),拿目录值去盖反而是降精度。覆盖就该待在产�
       `探针 #1: 采信 194.000000s(…,平台 spotifyWeb)` 连续两次命中 —— 也就是第 1 档的输入
       确实拿到了 `spotifyWeb`,角标据此画 Spotify。Edge 那一侧(只配 youtubeMusic)走第 2 档,
       用真实配对表离线跑过判据。
+
+21. **恢复播放后的锚点相位是独立于自然切歌校正的另一个洞,而且会污染那条校正**(2026-09-07):08-20 修的是"gapless 自然切歌锚点超前真声",08-18 的 rate 缺失兜底("按整秒 timestamp 自己补算")一直带着 [0,1) 的随机偏快,伺服对它失明,08-21 的相位订正只补了 rate>0 分支。它单独表现为"恢复播放后偏快、一暂停退回去",还会让下一首自然切歌的偏置估计低估同样的量、整条连播链继承。08-20 的验证只放了连续两首、没有暂停恢复,所以当时看是修好的;抽到小数小的那次基本看不出,于是"时好时坏"。教训:**位置链上任何一个"常量偏移可接受"的判断都要问一句"这个常量是不是每次重新掷骰"**——掷骰的常量对用户就是随机误差,对下游估计器就是污染源。修法与实测见「Spotify 恢复播放后的锚点相位」一节。
+22. **MediaRemote 的锚点不能无条件当新事实**(2026-09-07):Spotify 会把 elapsed 没重算的 now-playing 信息带着新时间戳重发,单看一份快照它跟"真的 seek 回去了"一模一样,只有跟上一个锚点比(elapsed 逐 ms 相等 + 时间戳变了)才认得出。位置链上"读数跟预测差 2 秒以上就是 seek"这条判据,前提是读数本身诚实——这是第二次撞上前提失效(第一次是 08-18 的曲末锚点冻结),两次的修法都是"在进 seek 判据之前先按签名把不诚实的读数认出来",见「陈旧锚点重发」段。
+23. **「暂停时的 elapsedTime 是精确冻结值」只对"暂停时重新发布了"的播放器成立,而同一个播放器不同暂停途径行为不同**(2026-09-07):Spotify 界面里按暂停发布、MediaRemote 指令暂停不发布。App 自己的暂停键走的正是 MediaRemote 指令,所以用户"按一下暂停就变一下"是必现的,而在 Spotify 里按就不会——这解释了为什么同一现象时有时无。判据不能靠"锚点年龄 > 2s"(暂停锚点自己也会变老),要靠"锚点时间戳是否早于暂停事件时刻",而暂停事件时刻只有 stream watcher 有。与 21、22 同源:MediaRemote 快照单独看永远"合法",要跟事件时序对照才认得出。
+24. **一个校正量必须记清它属于哪个「基准」,基准换了就得作废**(2026-09-07):自然切歌偏置是「MediaRemote 开播锚点 − 音频」,08-20 把它当成了「Spotify 的钟 − 音频」,于是扣到了 Spotify 自己发布的冻结值和恢复锚点上(那些本来就是音频位置),暂停瞬间退一个偏置量、恢复后整曲慢一个偏置量。判据是快照里透传的原始锚点 elapsedTime 是否为 0,不是播放/暂停状态。一句话:**修正项跟着它所修正的那份读数走,读数换了来源,修正项不能自动跟过去。**

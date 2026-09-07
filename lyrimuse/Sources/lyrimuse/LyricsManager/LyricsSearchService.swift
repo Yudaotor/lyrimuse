@@ -273,14 +273,15 @@ final class LyricsSearchService {
         /// 字段时进度显示成"8/8 之后又回到 1/8",读起来像出了错。旧 collector 不发这个
         /// 字段时解码成 1(单轮语义,跟没有兜底轮的观感一致)。
         let round: Int
-        /// 这一轮里没给出候选的源,查得到具体原因的那几个(2026-08-31)——collector 侧
-        /// lyricSourceFailureReasons(searchcli.go)算出来,只覆盖 netease/musixmatch/
-        /// lyricfind 三个已经接了诊断旁路的源,给"歌词源可用情况"明细面板用。key 是源名,
+        /// 这一轮里没给出候选的源,查得到原因的那几个(2026-08-31)——collector 侧
+        /// lyricSourceFailureReasons(searchcli.go)算出来,分两层:源特有的具体原因只覆盖
+        /// netease/musixmatch/lyricfind 三个已经接了诊断旁路的源;传输层通用原因(2026-09-06,
+        /// dns_failed / connect_failed / server_error,以及 AMLL 的 upstream_unreachable)任何
+        /// 启用的源都可能带。给"歌词源可用情况"明细面板和空状态的「没连上」分组用。key 是源名,
         /// value 是**稳定代码**,不是文案(2026-09-01 从 sourceFailureReasons 改名——见
         /// `LyricSourceFailureReason` 的头注,显示给用户前要先经
-        /// `LyricSourceFailureReason.text(forCode:)` 翻译);没查到具体原因的源不会出现
-        /// 在这个字典里(不代表"没有原因",只是这个仓库目前没有对应信号,不编一个没核实
-        /// 过的理由)。
+        /// `LyricSourceFailureReason.text(forCode:)` 翻译);两层都没命中的源不会出现在这个
+        /// 字典里(比如拿到了 200 / 404 但没这首歌),不编一个没核实过的理由。
         let sourceFailureReasonCodes: [String: String]
         /// 至少一个源明确说这首是纯音乐(不只 lrclib,网易云 pureMusic 也会置位)。
         /// 用来把"一个候选都没有"这个结局分成"这首歌本来就没词"和"真的谁都没搜到"。

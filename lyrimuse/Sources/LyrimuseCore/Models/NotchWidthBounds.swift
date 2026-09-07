@@ -20,8 +20,9 @@ public enum NotchWidthBounds {
     ///
     /// `steady` 传的是已经过耳朵下限的稳态真实宽(`NotchLyricsWindowController.contentWidth` 的结果),
     /// 所以这里不必再算一遍耳朵下限 —— 稳态 ≥ 下限,展开 ≥ 稳态,传递之下展开也 ≥ 下限。
-    /// 老用户升级:展开设定默认跟稳态默认同为 360,而他们把稳态调到过 420 的话 `max(420, 360) = 420`
-    /// —— hover 时一个像素都不多长,观感跟改动前逐字相同。
+    /// 老用户升级(2026-09-06 加这一对键时):展开设定默认跟稳态默认同为 360,而他们把稳态调到过 420
+    /// 的话 `max(420, 360) = 420` —— hover 时一个像素都不多长,观感跟改动前逐字相同。⚠️ 2026-09-07 起
+    /// 两个默认值拆成 252 / 482(用户把自己在用的那一对定为默认),这条"不多长"只对当时那批老配置成立。
     public static func expandedWidth(steady: CGFloat, expandedSetting: CGFloat) -> CGFloat {
         max(steady, expandedSetting)
     }

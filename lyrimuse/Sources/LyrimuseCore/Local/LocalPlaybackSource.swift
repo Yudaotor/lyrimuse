@@ -150,9 +150,10 @@ public final class LocalPlaybackSource: ObservableObject {
     // 冻结进度条还需要时长算比例,单独发布。没有曲目/时长未知时为 nil。
     @Published public private(set) var currentDurationMs: Int?
 
-    @Published public var preferWordLevelKaraoke: Bool = true {
-        didSet { reloadCurrentLyrics() }
-    }
+    // (2026-09-06 之前这里有一个全局的"卡拉OK效果"开关:关掉就让引擎不解析逐字数据,四个
+    //  展示面一起退成整行高亮。已撤:引擎始终解析逐字数据,"要不要逐字填色"改成悬浮歌词 /
+    //  灵动岛 / 菜单栏各自的开关,由各展示面在自己的消费点上把 `SyncedLyricLine` 压成整行
+    //  (`SyncedLyricLine.lineLevel`);歌词窗口始终逐字。见 AppSettings.overlayLyricsKaraoke。)
     /// 要给哪几种文字标罗马音。改了立刻重新加载当前这首 —— 这道开关同时管服务端字段和
     /// 客户端兜底(见 LyricsSyncEngine.romanizationText 那道 guard)。
     @Published public var romanizationScripts: RomanizationScripts = .default {
@@ -461,6 +462,21 @@ public final class LocalPlaybackSource: ObservableObject {
     /// 当前曲目的锚点超前量(秒)——resolvePositionSeconds 对每笔原始读数先扣掉它。
     /// 只在 Spotify(cleanExtrapolated)自然切歌时非零。
     private var posReportedBiasSecs: Double = 0
+
+    /// 偏置能不能跟着这个锚点继续用。纯函数,selftest 直接覆盖。
+    ///
+    /// 2026-09-07 实测推翻了 08-20 的"暂停⇄恢复继承偏置(冻结值来自同一超前锚点)":gapless 切歌
+    /// 后 Spotify 自己的钟会停一下等新音频,稳态时就是音频位置(暂停冻结值 152.673 与 App 已扣偏置
+    /// 的显示 152.689 只差 16ms,而当时偏置 1.080)。偏置只属于 MediaRemote **开播那个**锚点
+    /// (elapsedTime=0,先于真声打好);Spotify 后来重新发布的任何锚点 —— 暂停冻结值、恢复、拖动 ——
+    /// 都对齐它的钟,原始 elapsedTime 必然 >0,这时再扣偏置就是把准的值往回拖一个偏置量(实测暂停
+    /// 瞬间 −1.097s)。MediaRemote 指令暂停不重发锚点(原始 elapsedTime 仍是 0),那时暂停值来自
+    /// 我们自己按开播锚点外推,偏置照旧扣 —— 所以判据是"锚点原始 elapsedTime 是不是 0",不是
+    /// "现在是不是暂停"。
+    public nonisolated static func biasSurvivesAnchor(anchorElapsedTime: Double?) -> Bool {
+        guard let anchorElapsedTime else { return true }
+        return anchorElapsedTime <= 0.001
+    }
 
     /// 播放时钟的只读快照,给「导出诊断信息」用(第 14 章 §7)。
     ///
@@ -1410,6 +1426,19 @@ public final class LocalPlaybackSource: ObservableObject {
         // 过再用(见该函数注释)。
         let now = Date()
         let playing = snapshot.playing == true
+        // 暂停/恢复那一拍的诊断(2026-09-07):用户看到"一按暂停歌词进度变一下",要量的就是
+        // "暂停前一刻屏上外推到哪"与"冻结值"之差、以及"冻结值"与"恢复后第一笔"之差。两个
+        // 变量只在状态翻转的那一拍非 nil,日志也只在那一拍打一行。
+        var pauseShownMs: Int?
+        var pauseAnchorWasFrozenByEvent = false
+        // 自然切歌偏置只属于开播那个锚点:Spotify 重新发布了锚点(暂停冻结 / 恢复 / 拖动,原始
+        // elapsedTime>0)就作废,见 biasSurvivesAnchor。放在播放/暂停两个分支之前 —— 暂停分支的
+        // pausedPositionMs 和播放分支的 resolvePositionSeconds 都要看到清零后的值。
+        if isSpotifyNative, key == posTrackingKey, posReportedBiasSecs != 0,
+           !Self.biasSurvivesAnchor(anchorElapsedTime: snapshot.anchorElapsedTime) {
+            logger.notice("natural advance bias dropped: player republished anchor elapsed=\(snapshot.anchorElapsedTime ?? -1, format: .fixed(precision: 3)) bias=\(self.posReportedBiasSecs, format: .fixed(precision: 3)) playing=\(playing)")
+            posReportedBiasSecs = 0
+        }
         if playing, let duration = snapshot.duration, duration > 0 {
             // 切歌/加载瞬间 Spotify 会短暂报 rate=0(playing 仍 true),按 1 计——与
             // collector 的 reconcile 规则一致。不归一的话 predicted 停走,下一拍正常
@@ -1434,6 +1463,10 @@ public final class LocalPlaybackSource: ObservableObject {
             // 导致周期性回退(2026-08-30 用户反馈坐实过这个回退,历史教训见类头注)。
             if trackChanged {
                 BrowserPositionProbe.shared.trackChanged(from: previousKey, to: key)
+                // Spotify 原生客户端:开播 2.5s 后问一次 player position 当地面真值,修
+                // "广告后开播锚点晚发 ~2.4s"那种单看 media-control 认不出来的锚点(2026-09-07,
+                // 见 SpotifyPositionProbe 头注)。
+                SpotifyPositionProbe.shared.trackChanged(to: key, isSpotifyNative: isSpotifyNative)
             }
             // ⚠️ `expectedDuration` 不是可选的锦上添花:探针拿它在 JS 里认"这个标签页放的
             // 是不是同一首歌"(见 `BrowserPositionProbe.pageDurationToleranceSecs`),
@@ -1456,6 +1489,14 @@ public final class LocalPlaybackSource: ObservableObject {
                 rawReportedForResolve = probed
                 effectiveTier = .noisyFloored
                 usedBrowserProbe = true
+            } else if posWasPlaying, key == posTrackingKey,
+                      let probed = SpotifyPositionProbe.shared.consumeCorrection(forKey: key, rate: rate, now: now) {
+                // Spotify 的一次性真值(见 SpotifyPositionProbe):同样走 isGroundTruthSeed 通道,
+                // 档位不变(cleanExtrapolated)。只在稳定播放中消费 —— 刚换歌那一拍要留给自然切歌
+                // 校正播种,刚恢复播放那一拍恢复锚点本身就是准的。
+                rawReportedForResolve = probed
+                effectiveTier = tier
+                usedBrowserProbe = true // 名字沿用:含义是"这一笔是地面真值种子",见 resolvePositionSeconds
             } else {
                 rawReportedForResolve = snapshot.elapsedTime ?? 0
                 effectiveTier = tier
@@ -1463,6 +1504,10 @@ public final class LocalPlaybackSource: ObservableObject {
             let (positionSeconds, didReanchor) = resolvePositionSeconds(
                 reported: rawReportedForResolve, rate: rate, key: key, now: now,
                 tier: effectiveTier, isGroundTruthSeed: usedBrowserProbe)
+            if !posWasPlaying, key == posTrackingKey, let prevPaused = pausedPositionMs {
+                // 暂停→恢复翻转的那一拍(同曲)。delta = 恢复后第一笔 − 暂停冻结值。
+                logger.notice("resume transition: paused=\(Double(prevPaused) / 1000, format: .fixed(precision: 3)) resumed=\(positionSeconds, format: .fixed(precision: 3)) raw=\(rawReportedForResolve, format: .fixed(precision: 3)) delta=\(positionSeconds - Double(prevPaused) / 1000, format: .fixed(precision: 3)) rate=\(snapshot.playbackRate ?? -1, format: .fixed(precision: 2))")
+            }
             // 只在真的有必要时才重新构造锚点——稳定播放期间(没有换歌/没有真实
             // seek/rate 和时长都没变),继续外推旧锚点在数学上跟重新构造一份新锚点得到
             // 完全相同的 extrapolatedPositionMs(now:) 结果(旧锚点的 fetchedAt+
@@ -1485,7 +1530,13 @@ public final class LocalPlaybackSource: ObservableObject {
                 )
             }
         } else {
-            if anchor != nil { anchor = nil }
+            if let anchor {
+                // 屏上此刻显示的位置:通知已把锚点冻住(rate=0)就是冻住那一刻的值,否则是
+                // 还在往前跑的外推值 —— 两种形态的"暂停跳变"成因不同,一起记下来。
+                pauseShownMs = anchor.extrapolatedPositionMs(now: now)
+                pauseAnchorWasFrozenByEvent = anchor.rate == 0
+                self.anchor = nil
+            }
             // 暂停态里换了曲目(暂停中点了另一首):没有走 resolvePositionSeconds,自然
             // 切歌偏置的归零要在这里补上——新曲的冻结位置是新锚点的值,跟旧偏置无关。
             if key != posTrackingKey, posReportedBiasSecs != 0 { posReportedBiasSecs = 0 }
@@ -1530,6 +1581,10 @@ public final class LocalPlaybackSource: ObservableObject {
             return Int(reported * 1000)
         }()
         if newPausedPositionMs != pausedPositionMs { pausedPositionMs = newPausedPositionMs }
+        if let shown = pauseShownMs, let paused = newPausedPositionMs {
+            // 播放→暂停翻转的那一拍。delta<0 = 显示往回退,>0 = 往前补。
+            logger.notice("pause transition: shown=\(Double(shown) / 1000, format: .fixed(precision: 3)) frozenRaw=\(snapshot.elapsedTime ?? -1, format: .fixed(precision: 3)) bias=\(self.posReportedBiasSecs, format: .fixed(precision: 3)) paused=\(Double(paused) / 1000, format: .fixed(precision: 3)) delta=\(Double(paused - shown) / 1000, format: .fixed(precision: 3)) frozenByEvent=\(pauseAnchorWasFrozenByEvent) errEMA=\(self.posErrEMA, format: .fixed(precision: 3))")
+        }
         // 无论这一轮是否在播放,都要更新这三个状态,供下一轮判断"是不是刚从暂停里恢复
         // 播放"——只在上面播放分支里更新的话,"播放→暂停→再播放"这个序列会因为暂停期间
         // 完全没走到这行,让下一次恢复播放时的判断误用暂停前的陈旧 posPrevWall/
@@ -1788,7 +1843,6 @@ public final class LocalPlaybackSource: ObservableObject {
         let lyrics, lyricsTr, lyricsRoma, lyricsYRC: String
         let instrumental, resolved: Bool
         let variant: ChineseVariant
-        let preferWordLevel: Bool
         let romanizationScripts: RomanizationScripts
         let isCantonese: Bool
         // 2026-08-30 加,见 currentTrackPlainLyrics 头注——没有时间戳的纯文本兜底,跟
@@ -1836,7 +1890,6 @@ public final class LocalPlaybackSource: ObservableObject {
             instrumental: found?.instrumental ?? false,
             resolved: found?.resolved ?? false,
             variant: chineseVariant,
-            preferWordLevel: preferWordLevelKaraoke,
             romanizationScripts: romanizationScripts,
             isCantonese: found?.isCantonese ?? false,
             plainLyrics: found?.plainLyrics ?? "")
@@ -1848,14 +1901,19 @@ public final class LocalPlaybackSource: ObservableObject {
         // 简繁转换只作用在展示上:正文、译文、逐字数据都转,罗马音是拉丁字母不用转。
         // 逐字数据整串转是安全的 —— 时间戳是数字,转换只碰汉字。
         let variant = chineseVariant
+        // 日文歌里被源写成简体的汉字先修回(2026-09-06,`JapaneseKanjiRepair`,规则见那边),再做
+        // 用户的简繁偏好。顺序无所谓 —— `converted` 见到假名就整份放过,对日文歌本来就是空操作 ——
+        // 但概念上先修源的错、再套用户的偏好。整首判定用正文,正文为空(只有逐字)才看逐字串;
+        // 译文是中文、罗马音是拉丁字母,都不进修回。
+        let rawYRC = found?.lyricsYRC ?? ""
+        let japaneseSong = Romanizer.looksJapaneseSong(raw.isEmpty ? rawYRC : raw)
         // 引擎侧还有第二道指纹早退(见 LyricsSyncEngine.load 注释),两道闸各管一层:这里
         // 管"连转换都别做",那里兜"其它调用方/清过发布状态后的重灌"。
         syncEngine.load(
-            lyrics: variant.converted(found?.lyrics ?? ""),
+            lyrics: variant.converted(JapaneseKanjiRepair.repair(raw, japaneseSong: japaneseSong)),
             lyricsTr: variant.converted(found?.lyricsTr ?? ""),
             lyricsRoma: found?.lyricsRoma ?? "",
-            lyricsYRC: variant.converted(found?.lyricsYRC ?? ""),
-            preferWordLevel: preferWordLevelKaraoke,
+            lyricsYRC: variant.converted(JapaneseKanjiRepair.repair(rawYRC, japaneseSong: japaneseSong)),
             // 用来认出歌词文件开头那行「曲名 - 歌手」抬头,见 looksLikeHeaderLine。
             trackTitle: snapshot.title ?? "",
             trackArtist: snapshot.artist ?? "",

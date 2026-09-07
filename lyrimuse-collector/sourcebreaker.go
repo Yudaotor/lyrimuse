@@ -44,7 +44,9 @@ import (
 // 被跳过的源在"哪些源应答了"的口径里就是没应答——这正好接上既有的两条机制:
 // needsLyricsRetry 会在 6 小时后重搜(最多 3 次),rescoreDecidable 拒绝在当前源缺席时降级。
 // 全部状态在进程内存里,collector 重启归零;search-lyrics 这类一次性 CLI 进程永远不会有
-// 冷却态,所以不需要给 Swift 侧加新的失败原因代码。
+// 冷却态,冷却本身不需要给 Swift 侧加失败原因代码 —— 但同一个 observe 入口顺手记下的
+// **传输层失败分类**(本文件最后一节)会以 dns_failed / connect_failed / server_error 三个
+// 代码报给弹窗,那三个是 2026-09-06 加的,见 lyricsourcefailure.go。
 
 // lyricSourceBreakerSchedule:第 N 次达到触发阈值之后的冷却时长(N 从 0 起),超出表长封顶
 // 在最后一档——上限 5 分钟,成功即清,误熔断的代价有界。
@@ -76,10 +78,17 @@ type lyricSourceBreaker struct {
 	mu    sync.Mutex
 	now   func() time.Time
 	state map[string]*lyricSourceBreakerState
+	// transport:按源累计的传输层结局(本文件最后一节「传输层失败分类」)。跟 state 分开放:
+	// state 在成功时会被整个删掉,而"这个源拿到过响应"这个事实恰恰要在成功之后留下来。
+	transport map[string]*lyricSourceTransportState
 }
 
 func newLyricSourceBreaker(now func() time.Time) *lyricSourceBreaker {
-	return &lyricSourceBreaker{now: now, state: map[string]*lyricSourceBreakerState{}}
+	return &lyricSourceBreaker{
+		now:       now,
+		state:     map[string]*lyricSourceBreakerState{},
+		transport: map[string]*lyricSourceTransportState{},
+	}
 }
 
 // lyricSourceBreakerShared 是常驻采集器用的那一份(进程级)。
@@ -120,7 +129,12 @@ func lyricSourceForHost(host string) string {
 
 // observe 记录一次对外请求的结果。err 是 http.Client.Do 的返回错误(nil = 拿到了响应),
 // status 是响应状态码(err != nil 时忽略),retryAfter 是响应的 Retry-After 头原文(可空)。
+// 没有 DNS 轨迹的调用方(测试、以及日后别的入口)用这个;doHTTPTracked 走 observeTraced。
 func (b *lyricSourceBreaker) observe(host string, err error, status int, retryAfter string) {
+	b.observeWith(host, err, status, retryAfter, transportTrace{})
+}
+
+func (b *lyricSourceBreaker) observeWith(host string, err error, status int, retryAfter string, tr transportTrace) {
 	source := lyricSourceForHost(host)
 	if source == "" {
 		return
@@ -132,6 +146,7 @@ func (b *lyricSourceBreaker) observe(host string, err error, status int, retryAf
 	}
 	b.mu.Lock()
 	defer b.mu.Unlock()
+	b.noteTransport(source, err, status, tr)
 	now := b.now()
 	st := b.state[source]
 	switch {
@@ -194,8 +209,9 @@ func parseLyricSourceRetryAfter(v string) time.Duration {
 type lyricSourceRoundPlan map[string]time.Duration
 
 // planRound 在一轮全源搜索起跑前算一次"谁在冷却中"。启用的源全部都在冷却时返回 nil
-// (谁也不跳过,见文件头第二条护栏);未启用的源在不在名单里无所谓——它们的结果本来就会被
-// filterEnabledLyricSources 过滤掉,跳过只是少发几个白费的请求。
+// (谁也不跳过,见文件头第二条护栏);未启用的源在不在名单里无所谓——2026-09-06 起
+// fetchScoredLyricCandidatesStreaming 对关掉的源直接跳过、根本不起请求(enrich.go
+// lyricSourceSkipFor),这里只管冷却。
 func (b *lyricSourceBreaker) planRound(sources []string, enabled func(string) bool) lyricSourceRoundPlan {
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -262,6 +278,34 @@ func lyricSourceRoundFrom(ctx context.Context) *lyricSourceRound {
 	return r
 }
 
+// ---- 「这一轮只查这些源」(2026-09-06,给别名轮用) ----
+//
+// 跟上面 lyricSourceRound 同一个理由走 ctx:fetchScoredLyricCandidatesStreaming 的签名不动。
+// nil 名单 = 不限制(所有调用方的默认);非 nil 时名单外的源在 skipSource 里静默跳过。
+
+type lyricSourceOnlyKey struct{}
+
+// withLyricSourceOnly:sources 为空切片 / nil 时返回原 ctx(不限制)。
+func withLyricSourceOnly(ctx context.Context, sources []string) context.Context {
+	if len(sources) == 0 {
+		return ctx
+	}
+	set := make(map[string]bool, len(sources))
+	for _, s := range sources {
+		set[s] = true
+	}
+	return context.WithValue(ctx, lyricSourceOnlyKey{}, set)
+}
+
+// lyricSourceOnlyFrom:没挂 / ctx 为 nil 时返回 nil(不限制)。
+func lyricSourceOnlyFrom(ctx context.Context) map[string]bool {
+	if ctx == nil {
+		return nil
+	}
+	set, _ := ctx.Value(lyricSourceOnlyKey{}).(map[string]bool)
+	return set
+}
+
 // markSkipped / skippedSources 对 nil 接收者都是安全的空操作(CLI 路径没有 round)。
 func (r *lyricSourceRound) markSkipped(source string) {
 	if r == nil {
@@ -286,5 +330,129 @@ func (r *lyricSourceRound) skippedSources() []string {
 		out = append(out, s)
 	}
 	sort.Strings(out)
+	return out
+}
+
+// ---- 传输层失败分类:给「歌词源可用情况」按源报"为什么连不上" ----
+//
+// 2026-09-06 加,用户报「派对后派对(黄妍)搜不到」。真相:这台机器连着公司 OpenVPN,它下发的
+// DNS(10.255.0.1)对 music.163.com / c.y.qq.com / mobilecdn.kugou.com / lrclib.net / search.kuwo.cn /
+// pd.musicapp.migu.cn 一律不答(dig 实测:多数超时、偶尔空答),六个源的请求 2ms 内就以
+// `lookup xxx: no such host` 死在解析这一步、一个字节都没发出去;而 itunes.apple.com /
+// music.youtube.com / www.google.com 这几个域名同一台 DNS 能答。于是 networkLooksDown()(要求
+// 进程内**所有**请求全失败)是 false、sourceFailureReasonCodes 只有 lyricfind 那条不相干的地区
+// 限制 —— 弹窗照实显示「九个源都没找到可用的候选」,把"连不上"报成了"没收录"。用 8.8.8.8 解析出
+// IP 直连立刻 200,网易云 / QQ 的第一条结果就是这首(标题 / 专辑 / 歌手三项精确命中)。
+//
+// 判据是**这个源在本进程里有没有拿到过任何一个 HTTP 响应**(状态码 < 500 即算 —— 4xx 也是
+// 服务器在说话,404 = 没这首、403 = 反爬,跟上面熔断的口径一致):一次都没有、且失败过 → 报
+// 最多见的那一类失败(dns_failed / connect_failed / server_error,见 lyricsourcefailure.go)。
+// 拿到过响应的源**不报** —— "响应了但没这首歌"跟"连不上"必须分开,这正是这次要修的混淆。
+//
+// ⚠️ DNS 失败怎么认(评审时抓到的坑):不能只靠 errors.As(err, *net.DNSError)。各源的 client 都
+// 设了 http.Client.Timeout(4–8 秒),DNS **挂住不答**(而不是秒答 NXDOMAIN)时是这个 Timeout 先
+// 到:Transport.getConn 直接返回 ctx.Err()、丢掉拨号 goroutine 里那条带 DNSError 的错误,
+// Client.do 再把它整体换成 *http.timeoutError(纯字符串,没有 Unwrap)—— 类型链彻底没了,
+// 只看错误链会把"DNS 不答"归成 connect_failed,界面再说一句"域名能解析",正好说反。所以
+// doHTTPTracked 给每个请求挂 httptrace.ClientTrace 记 DNSStart / DNSDone(net 包在系统解析器
+// 与纯 Go 解析器两条路上都会调这两个钩子,ctx 被取消时 DNSDone 也会带 err 调一次),
+// 分类时**先看轨迹**:DNS 阶段开始了却没结束、或结束时带错 → dns_failed;错误链里有 DNSError
+// → dns_failed;其余才是 connect_failed。复用连接(没有 DNS 阶段)与 DoH 自定义拨号(musixmatch,
+// 没有 net 包的 DNS 钩子)拿不到轨迹,退回错误链判定 —— 后者今天被 musixmatch_direct_blocked
+// 这个具体代码盖住,看不出差别;若日后把 DoH 扩到别的源,dohDialContext 用 %w 包住的系统解析
+// NXDOMAIN 会让"DoH 解析成功但拨不通"被归成 dns_failed,到那时要一并改。
+//
+// 只有一次性 CLI(searchcli.go 的 lyricSourceFailureReasons)消费。常驻 collector 里这份是进程
+// 生命周期累计的、不按轮清零,跟 xxxLastFailureReasonNow 同一条注意事项;search-lyrics 每次
+// 都是全新进程,读到的就是这一次搜索本身的结局。
+
+type lyricSourceTransportState struct {
+	responded bool           // 拿到过 < 500 的响应
+	failures  map[string]int // 失败代码 → 次数
+}
+
+// transportTrace 是 doHTTPTracked 从 httptrace 钩子里收来的 DNS 阶段轨迹。零值 = 没有观察到
+// DNS 阶段(复用连接 / 自定义拨号 / 没挂钩子),分类退回只看错误链。
+type transportTrace struct {
+	dnsStarted bool
+	dnsDone    bool
+	dnsErr     error
+}
+
+// classifyLyricSourceTransportFailure 把一次请求的结局归到三个通用代码之一;拿到 < 500 的响应
+// 返回空串。err 是 http.Client.Do 的返回值,status 只在 err == nil 时有意义,tr 见 transportTrace。
+func classifyLyricSourceTransportFailure(err error, status int, tr transportTrace) string {
+	if err == nil {
+		if status >= 500 {
+			return lyricFailureReasonServerError
+		}
+		return ""
+	}
+	// 先看轨迹:DNS 阶段没走完 / 走完了但带错,不管错误链被 http.Client 换成了什么。
+	if tr.dnsStarted && (!tr.dnsDone || tr.dnsErr != nil) {
+		return lyricFailureReasonDNSFailed
+	}
+	var dnsErr *net.DNSError
+	if errors.As(err, &dnsErr) {
+		return lyricFailureReasonDNSFailed
+	}
+	return lyricFailureReasonConnectFailed
+}
+
+// observeTraced 是 observe 的带轨迹版本,doHTTPTracked 用它;observe 本身等价于零轨迹。
+func (b *lyricSourceBreaker) observeTraced(host string, err error, status int, retryAfter string, tr transportTrace) {
+	b.observeWith(host, err, status, retryAfter, tr)
+}
+
+// noteTransport 在 observeWith 里(已持锁)记一笔。context.Canceled 已在那边开头被过滤。
+func (b *lyricSourceBreaker) noteTransport(source string, err error, status int, tr transportTrace) {
+	ts := b.transport[source]
+	if ts == nil {
+		ts = &lyricSourceTransportState{failures: map[string]int{}}
+		b.transport[source] = ts
+	}
+	code := classifyLyricSourceTransportFailure(err, status, tr)
+	if code == "" {
+		ts.responded = true
+		return
+	}
+	ts.failures[code]++
+}
+
+// lyricSourceTransportFailureOrder:并列时的取舍顺序。DNS 失败是最靠前、最能解释其它现象的那
+// 一层(解析都不通,别的更谈不上),其次是连不上,最后才是"连上了但服务器报错"。
+// ⚠️ 这份顺序也是 Swift 侧空状态分组的顺序(LyricsSearchSheet.transportFailureCodes,那边多一个
+// 只由 searchcli 派生、不经这里的 upstream_unreachable),lyricsourcefailure_test.go 钉着两边一致。
+var lyricSourceTransportFailureOrder = []string{
+	lyricFailureReasonDNSFailed, lyricFailureReasonConnectFailed, lyricFailureReasonServerError,
+}
+
+func dominantLyricSourceTransportFailure(failures map[string]int) string {
+	best, bestN := "", 0
+	for _, code := range lyricSourceTransportFailureOrder {
+		if n := failures[code]; n > bestN {
+			best, bestN = code, n
+		}
+	}
+	return best
+}
+
+// transportFailureCodes:本进程里一个响应都没拿到过、又确实失败过的源 → 最多见的那类失败代码。
+// 没有这样的源返回 nil。
+func (b *lyricSourceBreaker) transportFailureCodes() map[string]string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	out := map[string]string{}
+	for source, ts := range b.transport {
+		if ts.responded || len(ts.failures) == 0 {
+			continue
+		}
+		if code := dominantLyricSourceTransportFailure(ts.failures); code != "" {
+			out[source] = code
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
 	return out
 }

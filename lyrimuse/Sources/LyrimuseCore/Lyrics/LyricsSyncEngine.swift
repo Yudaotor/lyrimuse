@@ -87,6 +87,25 @@ public struct SyncedLyricLine: Equatable {
             self.plainText = nil
         }
     }
+
+    /// 这一行的**整行**形态:逐字数据抹掉、正文落到 `mainText`,译文 / 罗马音 / 声部原样保留。
+    ///
+    /// 给"这个展示面关了卡拉OK效果"用(2026-09-06 起悬浮歌词 / 灵动岛 / 菜单栏各有一颗开关):
+    /// 展示面在自己的消费点把行压成这个形态,后面的渲染就自然走它本来就有的"这首歌没有逐字
+    /// 数据"那条路 —— 不用在每个渲染分支里再判一次开关。
+    ///
+    /// ⚠️ `wordGroups` 必须一起清:它是按读音分组的逐字词,悬浮歌词的逐词罗马音标注拿它里面的
+    /// `words` 逐个做卡拉OK填色(`wordText(_:atMs:)`);只清 `words` 不清它,填色会从另一条路
+    /// 漏回来。罗马音退回整行的 `romanization`。
+    ///
+    /// 本来就是整行的行原样返回(`==` 语义不变,`removeDuplicates` 照常工作)。
+    public var lineLevel: SyncedLyricLine {
+        guard words != nil || wordGroups != nil else { return self }
+        return SyncedLyricLine(
+            romanization: romanization, translation: translation,
+            mainText: mainText ?? plainText, words: nil, wordGroups: nil,
+            side: side, plainText: plainText)
+    }
 }
 
 // 供"歌词窗口"(完整可滚动歌词列表,跟悬浮窗/灵动岛那种只看当前一句不是一回事)用——
@@ -1201,11 +1220,10 @@ public final class LyricsSyncEngine {
 
     public init() {}
 
-    /// load 的 8 个入参的完整快照。它们是 load 输出的**全部**输入(load 不读引擎其它
+    /// load 的 7 个入参的完整快照。它们是 load 输出的**全部**输入(load 不读引擎其它
     /// 状态),快照相等 ⇒ 解析/过滤/派生状态必然相等 ⇒ 可以整段跳过。
     private struct LoadFingerprint: Equatable {
         let lyrics, lyricsTr, lyricsRoma, lyricsYRC: String
-        let preferWordLevel: Bool
         let trackTitle, trackArtist: String
         let romanizationScripts: RomanizationScripts
         let songIsCantonese: Bool
@@ -1224,12 +1242,12 @@ public final class LyricsSyncEngine {
     @discardableResult
     public func load(
         lyrics: String, lyricsTr: String, lyricsRoma: String, lyricsYRC: String,
-        preferWordLevel: Bool = true, trackTitle: String = "", trackArtist: String = "",
+        trackTitle: String = "", trackArtist: String = "",
         romanizationScripts: RomanizationScripts = .default, songIsCantonese: Bool = false
     ) -> Bool {
         let fingerprint = LoadFingerprint(
             lyrics: lyrics, lyricsTr: lyricsTr, lyricsRoma: lyricsRoma, lyricsYRC: lyricsYRC,
-            preferWordLevel: preferWordLevel, trackTitle: trackTitle, trackArtist: trackArtist,
+            trackTitle: trackTitle, trackArtist: trackArtist,
             romanizationScripts: romanizationScripts, songIsCantonese: songIsCantonese)
         if fingerprint == loadedFingerprint { return false }
         loadedFingerprint = fingerprint
@@ -1237,7 +1255,11 @@ public final class LyricsSyncEngine {
         // 逐字时间轴先过一遍合法性归一化(LyricTimelineNormalizer,2026-09-02):字起点早于行首 /
         // 落在下一行开始之后的小偏差夹回来,乱序或偏差太大的行退化成均匀扫过。放在署名过滤之前——
         // 归一化要看相邻行的时间戳,得在完整的行列表上做。每次加载只记一行汇总日志。
-        let normalizedYRC = LyricTimelineNormalizer.normalize(preferWordLevel ? YRCParser.parse(lyricsYRC) : [])
+        // 逐字数据**始终**解析(2026-09-06 起)。之前有个入参对应设置页那颗全局「卡拉OK效果」,
+        // 关掉就在这里丢弃 YRC、四个展示面一起退成整行;现在"要不要逐字填色"是悬浮歌词 / 灵动岛 /
+        // 菜单栏各自的开关,由各展示面在消费点把行压成整行(`SyncedLyricLine.lineLevel`),
+        // 引擎不再替任何一个面做这个决定。
+        let normalizedYRC = LyricTimelineNormalizer.normalize(YRCParser.parse(lyricsYRC))
         let yrc = normalizedYRC.lines
         LyricTimelineNormalizer.logSummary(normalizedYRC.report, track: trackTitle)
         // 过滤前先把整份的文本取出来判一次(结构化规则是整份粒度的,见

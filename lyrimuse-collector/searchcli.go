@@ -297,11 +297,12 @@ type searchLyricsUpdate struct {
 	// Score:-1 哨兵行传递,消费端能与普通 reject 可靠区分)。
 	AppleTitle string `json:"appleTitle,omitempty"`
 	AppleAlbum string `json:"appleAlbum,omitempty"`
-	// SourceFailureReasonCodes:哪些没给出候选的源,查得到具体失败原因——只覆盖
+	// SourceFailureReasonCodes:哪些没给出候选的源,查得到失败原因——两层:具体原因只覆盖
 	// neteaseLastFailureReasonNow/musixmatchLastFailureReasonNow/ytmusicLastFailureReasonNow
 	// 这三个已经接了诊断旁路的源(2026-08-31,给 test-lyric-sources 用的同一套旁路,见
-	// testlyricsourcescli.go 的排查记录),qq/kugou/lrclib/amll 目前没有对应信号、不在这个
-	// map 里出现——Swift 侧对没出现的源如实显示"未给出候选"，不编一个没核实过的理由。
+	// testlyricsourcescli.go 的排查记录);传输层通用原因(2026-09-06,dns_failed /
+	// connect_failed / server_error)对任何一个 HTTP 响应都没拿到的源都会报。两层都没命中的
+	// 源不在这个 map 里出现——Swift 侧对没出现的源如实显示"未给出候选"，不编一个没核实过的理由。
 	// key 是源名(跟 candidates 里的 source 同一套),value 是**稳定代码**,不是文案
 	// (2026-09-01 从 SourceFailureReasons 改名——见 lyricsourcefailure.go 头注,人话交给
 	// Swift 侧的 LyricSourceFailureReason.text(forCode:) 按 App 界面语言翻译)。
@@ -387,11 +388,12 @@ func filterEnabledLyricSources(results []scoredLyricCandidateResult) []scoredLyr
 // 查一下有没有已知的具体失败原因,查得到才放进返回的 map。返回值的 value 是**稳定
 // 代码**,不是文案,见 lyricsourcefailure.go 头注。
 //
-// 只覆盖三个已经接了诊断旁路的源:netease/musixmatch/lyricfind(见各自 xxxLastFailureReasonNow
-// 的头注,2026-08-31 起给 test-lyric-sources 用的同一条只读旁路,这里复用,不重新发明)。
-// qq/kugou/lrclib/amll 目前没有对应信号——它们没出现在返回的 map 里不代表"没有原因",
-// 只是这个仓库目前还没有实测复现过、能稳定识别的具体失败信号,宁可让 Swift 侧照实显示
-// "未给出候选"(没有更多信息),也不编一个没核实过的理由。
+// 两层:① 具体失败原因,只覆盖三个已经接了诊断旁路的源:netease/musixmatch/lyricfind(见各自
+// xxxLastFailureReasonNow 的头注,2026-08-31 起给 test-lyric-sources 用的同一条只读旁路,这里
+// 复用,不重新发明);② 传输层通用原因(2026-09-06),对任何源:这一轮一个 HTTP 响应都没拿到的,
+// 报 dns_failed / connect_failed / server_error(sourcebreaker.go 的 transportFailureCodes)。
+// 两层都没命中的源(比如拿到了 200 / 404 但没这首歌)不在返回的 map 里 —— 那就是真的"未给出
+// 候选",Swift 侧照实显示,不编一个没核实过的理由。
 //
 // ⚠️ **原因 ≠ 没给出候选的原因**(2026-09-03 补的一道判据):网易云那一条现在还要过
 // `neteaseSawSuccessNow()` —— 这一轮它只要成功答过一次,就不把限流报上去。实测对照见
@@ -404,6 +406,15 @@ func filterEnabledLyricSources(results []scoredLyricCandidateResult) []scoredLyr
 // 模式,原因会在这次进程里被设置一次,读到的就是这次搜索本身的真实原因,不是别的进程/
 // 别的时间点残留下来的陈旧值。
 func lyricSourceFailureReasons(results []scoredLyricCandidateResult) map[string]string {
+	return lyricSourceFailureReasonsWith(results, lyricSourceBreakerShared.transportFailureCodes(),
+		lyricSourceEnabled, amllSkippedForMissingIDsNow())
+}
+
+// lyricSourceFailureReasonsWith 是上面那个的可测版本:传输层代码表、启用判定、amll 缺 ID 标记
+// 都从参数进,不碰包级状态(三个源特有的 xxxLastFailureReasonNow 仍读进程级旁路 —— 那几条
+// 各自有测试,这里只管合成规则)。
+func lyricSourceFailureReasonsWith(results []scoredLyricCandidateResult, transport map[string]string,
+	enabled func(string) bool, amllSkippedForMissingIDs bool) map[string]string {
 	responded := lyricSourcesResponded(results)
 	reasons := make(map[string]string)
 	check := func(source string, reasonFn func() string) {
@@ -423,6 +434,31 @@ func lyricSourceFailureReasons(results []scoredLyricCandidateResult) map[string]
 	}
 	check("musixmatch", musixmatchLastFailureReasonNow)
 	check("lyricfind", ytmusicLastFailureReasonNow)
+	// 传输层兜底(2026-09-06,来龙去脉见 sourcebreaker.go 最后一节「传输层失败分类」):这一轮一个
+	// HTTP 响应都没拿到的源,报 dns_failed / connect_failed / server_error。放在具体代码之后、
+	// 只填空 —— 限流 / 地区限制 / 直连被堵比"连不上"更有信息量。只报启用的源:关掉的源这一轮
+	// 不发请求(2026-09-06 起 fetchScoredLyricCandidatesStreaming 直接跳过它们,见 enrich.go
+	// lyricSourceSkipFor),表里即便有它的记录也是别的时候留下的,跟这一轮无关。
+	for source, code := range transport {
+		if containsString(responded, source) || !enabled(source) {
+			continue
+		}
+		if _, has := reasons[source]; has {
+			continue
+		}
+		reasons[source] = code
+	}
+	// amll 的派生归因(见 lyricsourcefailure.go 的 upstream_unreachable):它没有搜索接口,只按
+	// 网易云 / QQ 的曲目 ID 取词,两个 ID 都拿不到时一个请求都不发、传输层表里没有它。
+	// 判据故意要求**网易云和 QQ 都**带传输层代码:只有一边死、另一边正常答了却没匹配上,
+	// amll 缺 ID 是"上游没这首"的正常结果,不是连不上,那时如实留空("未给出候选")。
+	// 网易云 / QQ 被用户关掉时它们不发请求、没有传输层记录 → 也不派生:那时 amll 缺 ID 是
+	// 配置使然,不是网络(要不要在界面上单说这一点,归「未启用」那档管)。
+	if amllSkippedForMissingIDs && enabled("amll") && !containsString(responded, "amll") {
+		if _, has := reasons["amll"]; !has && transport["netease"] != "" && transport["qq"] != "" {
+			reasons["amll"] = lyricFailureReasonUpstreamUnreachable
+		}
+	}
 	if len(reasons) == 0 {
 		return nil
 	}

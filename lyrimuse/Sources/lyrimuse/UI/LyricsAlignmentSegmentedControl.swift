@@ -1,7 +1,8 @@
 import LyrimuseCore
 import SwiftUI
 
-/// 「对齐方式」用的分段控件 —— **菜单栏歌词和灵动岛歌词行共用这一份**。
+/// 「对齐方式」用的分段控件 —— **菜单栏歌词和灵动岛歌词行共用这一份**(2026-09-07 起灵动岛多一档
+/// 「自动」,靠 `options` 参数区分,控件本身仍是一份)。
 ///
 /// 2026-09-03 从 `MenuBarEditorStage.swift` 搬到这里(原名
 /// `MenuBarAlignmentSegmentedControl`),因为用户要求把这一项也加到灵动岛,而两边的选项、
@@ -28,11 +29,17 @@ import SwiftUI
 @MainActor
 struct LyricsAlignmentSegmentedControl: View {
     @Binding var selection: LyricsRestingAlignment
+    /// 画哪几档、按什么顺序。两个宿主各传各的:灵动岛 `LyricsRestingAlignment.notchOptions`(含「自动」),
+    /// 菜单栏 `.menuBarOptions`(三档)。⚠️ 别在这里用 `allCases`:2026-09-07 起枚举多了 `.automatic`,
+    /// 而菜单栏那一格没有对唱声部可跟,列出来就是一个选了没效果的选项。
+    let options: [LyricsRestingAlignment]
 
     /// ⚠️ 不能存成 `static let`:`L10n.t` 要在每次取值时现算,存进 static let 等于把首次
     /// 访问时的语言冻在里面(切语言之后这几个标签不跟着变)——同 OverlayAlignment 那边。
     static func label(for option: LyricsRestingAlignment) -> String {
         switch option {
+        // 跟悬浮歌词 `OverlayAlignmentSegmentedControl` 同一个词条「自动」。
+        case .automatic: return L10n.t("自动")
         case .leading: return L10n.t("左对齐")
         case .center: return L10n.t("居中")
         case .trailing: return L10n.t("右对齐")
@@ -41,7 +48,7 @@ struct LyricsAlignmentSegmentedControl: View {
 
     var body: some View {
         HStack(spacing: 2) {
-            ForEach(LyricsRestingAlignment.allCases, id: \.self) { option in
+            ForEach(options, id: \.self) { option in
                 let isSelected = selection == option
                 Button {
                     selection = option

@@ -978,7 +978,7 @@ struct AccountLinkingTab: View {
                     // 2026-09-03 加第三档「智能」:同样只写效果 —— 它按 Last.fm 上有没有这个合唱条目
                     // 决定发哪个名字,机制(编目判定、每首歌只判一次、失败维持原样)在 collector
                     // lastfmcollapse.go 头注和 docs/features/12 §4,不在这行字里展开。
-                    help: L10n.t("多位歌手合唱时（如「Khalil Fong & Fiona Sit」）上送哪个名字。\n\n全部：原样发整串。\n\n只发第一位：只发「Khalil Fong」——Last.fm 上的记录里另一位歌手不会出现。\n\n智能：Last.fm 上已有「Khalil Fong & Fiona Sit」这个合唱条目就原样发；没有、而「Khalil Fong」名下已有这首歌就只发「Khalil Fong」；两边都查不到时原样发。每首歌只判一次，之后一直沿用。")
+                    help: L10n.t("合唱时上送给 Last.fm 的歌手名。\n全部：原样整串。\n只发第一位：另一位不出现在记录里。\n智能：Last.fm 已有这个合唱条目就发整串；没有、但第一位名下有这首歌就只发第一位；两边都没有仍发整串。每首歌只判一次。")
                 ) {
                     Picker("", selection: Binding(
                         get: { features.lastfmScrobbleArtistMode },
@@ -992,6 +992,29 @@ struct AccountLinkingTab: View {
                     .fixedSize()
                 }
                 CardDivider()
+                // Scrobble 时机(2026-09-06 用户拍板,原话「只考虑 lastfm 的」):一次收听听到哪里才记到
+                // Last.fm。官方规则(曲长一半或 4 分钟)是下限,所以只给更严的档:75% / 90% / 曲终。
+                // **只管 Last.fm**:collector 侧 ListenBrainz 那一路仍在官方阈值那一刻提交,Last.fm 那一路
+                // 挂在会话上到点再发(poller.go recordLastfmListen / settleLastfmPending;「曲终」的判据
+                // sessionEndedNaturally 容忍 crossfade 提前接歌)。文案照这张卡的惯例只写各档的效果。
+                SettingsRow(
+                    icon: "hourglass",
+                    title: L10n.t("Scrobble 时机"),
+                    help: L10n.t("听到哪里才记到 Last.fm。\n50%：曲长一半、最多 4 分钟（官方规则）。\n75% / 90%：听满对应比例。\n曲终：放到结尾才记，中途切歌不记。\n只影响 Last.fm。")
+                ) {
+                    Picker("", selection: Binding(
+                        get: { features.lastfmScrobblePoint },
+                        set: { features.lastfmScrobblePoint = $0; Task { await features.save() } }
+                    )) {
+                        ForEach(LastfmScrobblePoint.allCases) { point in
+                            Text(point.displayName).tag(point)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    .fixedSize()
+                }
+                CardDivider()
                 // 短曲目(2026-09-03 用户要求加的开关,默认关)。Last.fm 官方规则 "The track must be
                 // longer than 30 seconds" 是给客户端的,服务端不拒收;这里默认照规则办,用户显式打开
                 // 才放行。**只管 Last.fm**:collector 侧短曲目进了漏斗之后由 shortTrackLastfmOnly 挡住
@@ -1001,7 +1024,7 @@ struct AccountLinkingTab: View {
                 SettingsRow(
                     icon: "timer",
                     title: L10n.t("短于 30 秒的曲目"),
-                    help: L10n.t("开：短于 30 秒的曲目也 scrobble 到 Last.fm，听过一半就记一次。\n\n关：不记（Last.fm 官方规则要求曲目长于 30 秒）。")
+                    help: L10n.t("开：短于 30 秒的曲目也 scrobble，听过一半就记。\n关：不记（Last.fm 官方规则）。")
                 ) {
                     Toggle("", isOn: Binding(
                         get: { features.scrobbleShortTracks },
@@ -1268,7 +1291,7 @@ struct AccountLinkingTab: View {
                     }
                     .buttonStyle(.link)
                     .font(.caption)
-                    .help(L10n.t("这里能看到已创建的应用和它们的 API Key，但看不到 Secret；Secret 丢了的话，用上面「前往申请」再建一个新的就好"))
+                    .help(L10n.t("这里能看到已创建应用的 API Key，但看不到 Secret；丢了就用「前往申请」再建一个。"))
                 }
             }
             if showLastfmApplyHint {
@@ -1503,7 +1526,7 @@ struct AccountLinkingTab: View {
 
         SettingsCard {
             SettingsCardHeader(
-                title: L10n.t("提醒开关")
+                title: L10n.t("提醒")
             )
             CardDivider()
             // 数据源可选——Last.fm 的周榜接口(user.getWeeklyTrackChart/getWeeklyArtistChart)
@@ -1554,8 +1577,7 @@ struct AccountLinkingTab: View {
             CardDivider()
             SettingsRow(
                 icon: "sun.max",
-                title: L10n.t("每日听歌报告"),
-                subtitle: L10n.t("每天晚上推送当天的听歌情况")
+                title: L10n.t("每日听歌报告")
             ) {
                 HStack(spacing: 8) {
                     if features.dailyDigest {

@@ -27,9 +27,27 @@ enum LyricSourceFailureReason {
             // TLS 握手 16 次 0 次成功,而经本机代理立刻 200。用户该做的事也不同:那个是等,
             // 这个是去开代理。
             return L10n.t("Musixmatch 的接口地址在当前网络下直连不通（TCP/TLS 都没有响应），系统代理也不可用——开启代理后通常会恢复")
+        // 下面四个是传输层通用代码(2026-09-06,collector 侧 sourcebreaker.go 最后一节的
+        // classifyLyricSourceTransportFailure + searchcli.go 派生的 upstream_unreachable),任何源都
+        // 可能出现,含义是"这一轮该源一个 HTTP 响应都没拿到 / 根本没法查"。起因是用户报「派对后派对
+        // 搜不到」:公司 VPN 下发的 DNS 对六个歌词源的域名一律不答、请求 2ms 内就死在解析这一步,
+        // 弹窗却说「九个源都没找到可用的候选」。这四个只在具体代码(上面四个)都没命中时才会出现,
+        // 见 searchcli.go 的 lyricSourceFailureReasons。
+        case "dns_failed":
+            return L10n.t("域名解析失败（DNS），请求根本没发出去——常见于 VPN / 公司网络接管了 DNS；浏览器能开网页不代表这里能通")
+        case "connect_failed":
+            // 刻意**不**说"域名能解析":DNS 挂住被 Client.Timeout 掐断时 collector 靠 httptrace 才能
+            // 认出来,复用连接 / DoH 自定义拨号那两条路拿不到轨迹,这一档兜的是"DNS 之外的一切"。
+            return L10n.t("连接失败或超时，没有拿到任何响应")
+        case "server_error":
+            return L10n.t("服务器报错（HTTP 5xx），稍后重试通常会恢复")
+        case "upstream_unreachable":
+            // 目前只有 AMLL 会报:它不做搜索,只按网易云 / QQ 给出的曲目 ID 取词,两者都连不上时它
+            // 一个请求都没发 —— 不是"查过了没有",是"没法查"。
+            return L10n.t("依赖的上游源（网易云 / QQ音乐）没连上，这一轮没法查")
         // 下面两个是 test-lyric-sources 自己的通用兜底,只有设置页那颗测试按钮会用到
-        // (「联网搜索候选歌词」弹窗走的是 lyricSourceFailureReasons,只覆盖上面三个具体
-        // 代码,查不到就是 nil、不落到这里)。
+        // (「联网搜索候选歌词」弹窗走的是 lyricSourceFailureReasons,只会吐上面那些代码,
+        // 查不到就是 nil、不落到这里)。
         case "no_response":
             return L10n.t("两首探测曲都没有响应，这个源目前可能不可用")
         case "network_down":

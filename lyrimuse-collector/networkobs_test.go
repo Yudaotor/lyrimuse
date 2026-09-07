@@ -4,11 +4,14 @@ package main
 
 import (
 	"bytes"
+	"context"
+	"errors"
 	"log"
 	"log/slog"
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -249,5 +252,82 @@ func TestNormalizeAuditPath(t *testing.T) {
 		if got := normalizeAuditPath(in); got != want {
 			t.Fatalf("normalizeAuditPath(%q) = %q, want %q", in, got, want)
 		}
+	}
+}
+
+// 2026-09-06 传输层失败分类的端到端形状:真 http.Client(带 Client.Timeout)+ 挂住不答的解析器。
+// 这正是评审抓到的坑 —— Client.Timeout 会把错误换成 *http.timeoutError(纯字符串),错误链里
+// 没有 *net.DNSError;只有 doHTTPTracked 挂的 httptrace 轨迹能证明"死在 DNS 阶段"。
+// 用 lyricSourceForHost 认得的主机名(music.163.com),但解析器根本不发包,不碰真实网络。
+func TestDoHTTPTracked_HungDNSClassifiedAsDNSFailed(t *testing.T) {
+	saved := lyricSourceBreakerShared
+	lyricSourceBreakerShared = newLyricSourceBreaker(time.Now)
+	t.Cleanup(func() { lyricSourceBreakerShared = saved })
+
+	hungResolver := &net.Resolver{
+		PreferGo: true,
+		Dial: func(ctx context.Context, _, _ string) (net.Conn, error) {
+			<-ctx.Done()
+			return nil, ctx.Err()
+		},
+	}
+	cli := &http.Client{
+		Timeout: 300 * time.Millisecond,
+		Transport: &http.Transport{
+			DialContext: (&net.Dialer{Resolver: hungResolver}).DialContext,
+		},
+	}
+	req, _ := http.NewRequest(http.MethodGet, "http://music.163.com/api/search/get?s=x", nil)
+	_, err := doHTTPTracked(cli, req)
+	if err == nil {
+		t.Fatal("挂住的解析器竟然成功了")
+	}
+	var dnsErr *net.DNSError
+	if errors.As(err, &dnsErr) {
+		t.Logf("注意:这个 Go 版本的错误链里居然还带着 DNSError(%v),轨迹那条判据没被真正考到", err)
+	}
+	got := lyricSourceBreakerShared.transportFailureCodes()
+	if got["netease"] != lyricFailureReasonDNSFailed {
+		t.Fatalf("netease 应为 dns_failed,实际 %q(err=%v)", got["netease"], err)
+	}
+}
+
+// 对照:解析成功、连接被拒 → connect_failed(DNS 轨迹走完且无错,不能误归 dns)。
+func TestDoHTTPTracked_RefusedConnectionClassifiedAsConnectFailed(t *testing.T) {
+	saved := lyricSourceBreakerShared
+	lyricSourceBreakerShared = newLyricSourceBreaker(time.Now)
+	t.Cleanup(func() { lyricSourceBreakerShared = saved })
+
+	// 拿一个刚释放的本地端口,保证 connection refused。
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	port := ln.Addr().(*net.TCPAddr).Port
+	ln.Close()
+	localResolver := &net.Resolver{
+		PreferGo: true,
+		Dial: func(ctx context.Context, _, _ string) (net.Conn, error) {
+			return nil, errors.New("unused") // 下面的 Dialer 直接改写目标地址,不会走到这里
+		},
+	}
+	dialer := &net.Dialer{Resolver: localResolver}
+	cli := &http.Client{
+		Timeout: 2 * time.Second,
+		Transport: &http.Transport{
+			DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+				// 把 c.y.qq.com:80 改指到本机已关闭的端口。DNS 阶段在这里被跳过(没有钩子会触发),
+				// 分类只能靠错误链 —— connection refused 不含 DNSError → connect_failed。
+				return dialer.DialContext(ctx, network, net.JoinHostPort("127.0.0.1", strconv.Itoa(port)))
+			},
+		},
+	}
+	req, _ := http.NewRequest(http.MethodGet, "http://c.y.qq.com/soso/x", nil)
+	if _, err := doHTTPTracked(cli, req); err == nil {
+		t.Fatal("连到已关闭端口竟然成功了")
+	}
+	got := lyricSourceBreakerShared.transportFailureCodes()
+	if got["qq"] != lyricFailureReasonConnectFailed {
+		t.Fatalf("qq 应为 connect_failed,实际 %q", got["qq"])
 	}
 }

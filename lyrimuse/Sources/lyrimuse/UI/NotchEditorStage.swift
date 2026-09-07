@@ -20,11 +20,11 @@ import SwiftUI
 // ⚠️ **这里原来写着"没有「全部设置」抽屉,这不是漏做",那条论证 2026-08-31 已经被推翻。**
 // 原话是:悬浮歌词那边的抽屉是 16 项设置的全量兜底通路,而灵动岛一共只有三项(风格 / 宽度 /
 // 屏幕),两个浮层加舞台里那根滑杆已经全部覆盖,再加抽屉就是同一批设置摆两遍。**前提变了**:
-// 可配项后来涨到两行工具栏共七个入口(风格 / 屏幕 / 左耳 / 右耳 + 歌词行 / 行为 / 展开态),
+// 可配项后来涨到两行工具栏共七个入口(风格 / 屏幕 / 左耳 / 右耳 + 歌词行 / 展开态 / 行为),
 // 用户看过第一版抽屉之后要求把**原有**那几项也补齐,于是有了 `NotchAllSettingsDrawer`
-// (在 SettingsView.swift,渲染点是 `currentSection` 的 `.notch` 分支)。它的分组跟工具栏那几个
-// 浮层**逐字对应**:风格 / 左耳 + 右耳 / 屏幕 / 宽度 / 歌词行 / 行为(含 2026-09-02 并进来的
-// 自动隐藏两行,见 UI/AutoHideSettingsRows.swift)/ 展开态 / 显示音浪。
+// (在 SettingsView.swift,渲染点是 `currentSection` 的 `.notch` 分支)。它的分组、顺序、标题跟
+// 工具栏七个入口**一一对应**(2026-09-07 起,中间多插宽度 / 展开宽度两根滑杆),每一组调的都是
+// 浮层背后同一份组件;「音浪」开关在左右耳两组顶部,跟浮层里一样(抽屉末尾那张独立的音浪卡撤了)。
 // (悬浮歌词那个抽屉同期也从 16 项涨到 18 项,同样是并进了那两行自动隐藏。)
 //
 // ⚠️ 舞台**放得下就 1:1、放不下就整体缩小到刚好放下**(`previewScale`,2026-09-06)。1:1 是从悬浮歌词
@@ -107,12 +107,18 @@ final class NotchPreviewChrome: ObservableObject, NotchChromeSource {
     /// 走 `NotchPlayback` 而不是这个协议;但**含**头部自己的封面开关
     /// (`expandedTrackInfoShowsArtwork`),理由见 `NotchChromeSource.expandedTrackInfoShowsArtwork`
     /// 上面那条⚠️——它跟另外三项一样参与高度计算,预览这边不能漏。
-    var expandedShowsNextLine: Bool { AppSettings.shared.notchExpandedShowsNextLine }
+    // 「下一句歌词预览」画不画 = 用户开关 && 没被歌词行「副行 · 下一句」顶掉(2026-09-06),判据只有
+    // Core 那一份,跟真窗口 NotchLyricsWindowController 的订阅同源。
+    var expandedShowsNextLine: Bool {
+        LyricSecondaryLine.expandedNextLinePreviewVisible(
+            userToggle: AppSettings.shared.notchExpandedShowsNextLine, secondary: AppSettings.shared.notchSecondaryLine)
+    }
     var expandedShowsControls: Bool { AppSettings.shared.notchExpandedShowsControls }
     var expandedTrackInfoShowsArtwork: Bool { AppSettings.shared.notchExpandedShowsArtwork }
     var expandedTrackInfoShowsTitle: Bool { AppSettings.shared.notchExpandedShowsTrackTitle }
     var expandedTrackInfoShowsArtist: Bool { AppSettings.shared.notchExpandedShowsArtist }
     var expandedTrackInfoShowsAlbum: Bool { AppSettings.shared.notchExpandedShowsAlbum }
+    var expandedShowsQuickActions: Bool { AppSettings.shared.notchExpandedShowsQuickActions }
 
     init() { refreshGeometry() }
 
@@ -125,6 +131,9 @@ final class NotchPreviewChrome: ObservableObject, NotchChromeSource {
     /// 编辑台里真正生效的那条路是下面的 setExpandedFromPreview:宿主拿精确坐标跟卡片矩形
     /// 直接比,不吃隐式的 hover 范围(那个范围实测比肉眼看到的卡片大一圈)。
     func setExpanded(_ expanded: Bool) {}
+    /// 快捷操作的 ✕ 在预览里**故意**是空实现:预览卡整块 `allowsHitTesting(false)`,点不到;真要能点到
+    /// 也不该让"预览"把用户的灵动岛关掉(预览卡上的可点区域只开浮层、不产生副作用,见 05 章)。
+    func closeFromQuickAction() {}
 
     /// 编辑台自己算出来的命中结果,这才是预览里真正生效的那条路。
     func setExpandedFromPreview(_ expanded: Bool) {
@@ -376,7 +385,8 @@ struct NotchEditorStage: View {
                 showsArtwork: chrome.expandedTrackInfoShowsArtwork,
                 showsTitle: chrome.expandedTrackInfoShowsTitle,
                 showsArtist: chrome.expandedTrackInfoShowsArtist,
-                showsAlbum: chrome.expandedTrackInfoShowsAlbum))
+                showsAlbum: chrome.expandedTrackInfoShowsAlbum,
+                showsActions: chrome.expandedShowsQuickActions))
     }
 
     /// 编辑台画布区的高度 = 卡片那一格 + 调整条通道。
@@ -546,13 +556,13 @@ struct NotchEditorStage: View {
             toolbarButton(
                 icon: "arrow.left.to.line",
                 title: L10n.t("左耳"),
-                summary: settings.notchLeftEar.displayName,
+                summary: earSummary(.left),
                 target: .leftEar
             )
             toolbarButton(
                 icon: "arrow.right.to.line",
                 title: L10n.t("右耳"),
-                summary: settings.notchRightEar.displayName,
+                summary: earSummary(.right),
                 target: .rightEar
             )
             Spacer(minLength: 8)
@@ -561,7 +571,7 @@ struct NotchEditorStage: View {
             // 同悬浮歌词那边——"不含宽度和总开关"是安全边界,不能只在动作本体的注释里
             // 交代、界面上却什么都不提示。
             Menu {
-                Button(L10n.t("恢复默认风格与开关")) { NotchStyleDefaults.restoreDefaults() }
+                Button(L10n.t("恢复默认")) { NotchStyleDefaults.restoreDefaults() }
                 Text(L10n.t("不含宽度和总开关"))
             } label: {
                 Label(L10n.t("重置"), systemImage: "arrow.uturn.backward")
@@ -573,20 +583,19 @@ struct NotchEditorStage: View {
         .padding(.horizontal, 2)
     }
 
-    /// 工具栏第二行(2026-09-01):「歌词行 / 行为 / 展开态」三个新入口,收纳的正是这几轮
-    /// 陆续加的一批布尔开关(显示封面+位置、显示歌词、暂停缩回、下一句预览、歌名/歌手/专辑)。
-    /// 这些开关最初直接铺在页面上(先是"行为"卡片横排两格,后来陆续并进「显示封面」和
-    /// 整张「展开态」卡片的四项),用户看过之后要求改回跟「风格/屏幕/左耳/右耳」一样的
-    /// "点开才配置"形态——不是否定之前的内容分组(三个新按钮的分组**就是**之前那三张卡片/
-    /// 分区的分组:歌词行→显示歌词+显示封面,行为→暂停缩回,展开态→下一句预览+
-    /// 歌名+歌手+专辑(⚠️「显示歌词」2026-09-01 同一天又从"行为"改归"歌词行"——它管的是
-    /// 歌词行本身渲不渲染,跟"显示封面"是同一类东西,归在这边更贴切),只是换了个更紧凑、
-    /// 跟已有工具栏统一的呈现方式。内容本身(图标/
-    /// 标题/Binding)仍然只有 `NotchBehaviorItem` 那一份,浮层(`NotchLyricRowPopover`/
-    /// `NotchBehaviorPopover`/`NotchExpandedPopover`)和「全部设置」抽屉(按同样三组拆开的
-    /// `NotchAllSettingsDrawer.lyricRowGroup`/`behaviorGroup`/`expandedGroup`,2026-09-01
-    /// 从铺平的 `allCases` 一整块拆开、修"没有分类,很混乱"的反馈)都调同一个
-    /// `NotchBehaviorItemRows`,不是另起三份实现。
+    /// 工具栏第二行(2026-09-01):「歌词行 / 展开态 / 行为」三个入口,收纳的是这几轮陆续加的
+    /// 一批布尔开关。这些开关最初直接铺在页面上(先是"行为"卡片横排两格,后来陆续并进「显示封面」
+    /// 和整张「展开态」卡片的四项),用户看过之后要求改回跟「风格/屏幕/左耳/右耳」一样的
+    /// "点开才配置"形态。
+    ///
+    /// **2026-09-07 按卡片解剖重新分组**(用户:「很多都是混乱的…有些它不应该放在这一个框框里面…
+    /// 不要出现这一个那一个的情况」):「歌词行」= 歌词行本身的一切(显不显示 / 对齐 / 副行 +
+    /// 展开时预览下一句 / 卡拉OK / 行末封面);「展开态」= 只有 hover 展开才有的(控制区两颗 +
+    /// 「快捷操作」+「曲目信息」四项);「行为」= 什么时候缩、什么时候藏(暂停缩回 + 两项自动隐藏)。顺序也按
+    /// 卡片从上到下走:歌词行 → 展开态 → 行为(改前是 歌词行 → 行为 → 展开态)。内容(图标 / 标题 /
+    /// Binding)仍只有 `NotchBehaviorItem` 一份,三个浮层和「全部设置」抽屉的三个组各调**同一份**
+    /// 分组视图(`NotchLyricRowSettingsRows` / `NotchExpandedSettingsRows` / `NotchBehaviorSettingsRows`,
+    /// `SettingsView.swift`),不再是"两处传同样的 items 数组"。
     ///
     /// ⚠️ 横向预算**没有**照搬第一行"四个入口"那次的实测数据——那次量的是四个入口的
     /// 极限,这里是全新的三个入口、内容也不同(标题更短:"歌词行"/"行为"/"展开态"都是
@@ -603,16 +612,16 @@ struct NotchEditorStage: View {
                 target: .lyricRow
             )
             toolbarButton(
-                icon: "switch.2",
-                title: L10n.t("行为"),
-                summary: behaviorSummary,
-                target: .behavior
-            )
-            toolbarButton(
                 icon: "rectangle.expand.vertical",
                 title: L10n.t("展开态"),
                 summary: expandedSummary,
                 target: .expanded
+            )
+            toolbarButton(
+                icon: "switch.2",
+                title: L10n.t("行为"),
+                summary: behaviorSummary,
+                target: .behavior
             )
             Spacer(minLength: 8)
         }
@@ -636,6 +645,15 @@ struct NotchEditorStage: View {
         // (悬浮歌词那边为这件事专门把 label 提成了 static func,见那个注释)。
         if settings.notchLyricsAlignment != AppSettings.defaultNotchLyricsAlignment {
             parts.append(LyricsAlignmentSegmentedControl.label(for: settings.notchLyricsAlignment))
+        }
+        // 「副行」(2026-09-06)同一条规则:四选一、默认「下一句」,只在非默认时报,写成「副行 · 译文」。
+        if settings.notchSecondaryLine != AppSettings.defaultNotchSecondaryLine {
+            parts.append("\(L10n.t("副行")) · \(settings.notchSecondaryLine.displayName)")
+        }
+        // 「展开时预览下一句」(2026-09-07 从「展开态」搬来):副行选「下一句」时它被顶掉、浮层里也不显示
+        // (`NotchLyricRowSettingsRows`),摘要跟浮层说同一套话;没被顶掉就按"只列开着的"。
+        if !settings.notchSecondaryLine.hidesExpandedNextLinePreview, settings.notchExpandedShowsNextLine {
+            parts.append(NotchBehaviorItem.expandedNextLine.title)
         }
         if settings.notchLyricRowShowsArtwork {
             parts.append("\(NotchEarModule.artwork.displayName) · \(settings.notchLyricRowArtworkPosition.displayName)")
@@ -688,11 +706,25 @@ struct NotchEditorStage: View {
                 })
     }
 
+    /// 「展开态」浮层里的七项(2026-09-07 起「展开时预览下一句」归「歌词行」,不在这里算;同日加「快捷操作」)。曲目信息
+    /// 那四项的标题是光秃秃的名词(封面 / 歌名 / 歌手 / 专辑),摘要里读作「显示播放控制、封面、歌名」。
     private var expandedSummary: String {
         behaviorLikeSummary([
-            .expandedNextLine, .expandedShowsControls, .expandedShowsLyricsOffset, .expandedShowsArtwork,
+            .expandedShowsControls, .expandedShowsLyricsOffset, .expandedShowsQuickActions, .expandedShowsArtwork,
             .expandedShowsTrackTitle, .expandedShowsArtist, .expandedShowsAlbum,
         ])
+    }
+
+    /// 「左耳」/「右耳」按钮摘要:这只耳朵的模块名,音浪贴在这一侧时再带上「音浪」(2026-09-07)。
+    /// 改前只报模块名,右耳配成「不显示」而音浪开着时按钮写着「右耳 · 不显示」、卡片上却明明有
+    /// 五根条子在跳 —— 一个会撒谎的派生值。模块是「不显示」且音浪在这侧时只报「音浪」。
+    private func earSummary(_ side: NotchEarPopover.Side) -> String {
+        let module = side == .left ? settings.notchLeftEar : settings.notchRightEar
+        let equalizerHere = settings.notchShowsEqualizer
+            && settings.notchEqualizerEar == (side == .left ? NotchEqualizerEar.left : .right)
+        guard equalizerHere else { return module.displayName }
+        if module == NotchEarModule.none { return L10n.t("音浪") }
+        return ListFormatter.localizedString(byJoining: [module.displayName, L10n.t("音浪")])
     }
 
     private func toolbarButton(
@@ -1540,9 +1572,11 @@ enum NotchStyleDefaults {
         settings.notchExpandedShowsTrackTitle = AppSettings.defaultNotchExpandedShowsTrackTitle
         settings.notchExpandedShowsArtist = AppSettings.defaultNotchExpandedShowsArtist
         settings.notchExpandedShowsAlbum = AppSettings.defaultNotchExpandedShowsAlbum
+        settings.notchExpandedShowsQuickActions = AppSettings.defaultNotchExpandedShowsQuickActions
         settings.notchLyricRowShowsArtwork = AppSettings.defaultNotchLyricRowShowsArtwork
         settings.notchLyricRowArtworkPosition = AppSettings.defaultNotchLyricRowArtworkPosition
         settings.notchLyricsAlignment = AppSettings.defaultNotchLyricsAlignment
+        settings.notchSecondaryLine = AppSettings.defaultNotchSecondaryLine
         // 「行为」组里那两个自动隐藏开关(2026-09-03 补漏)。
         //
         // 它们 2026-09-02 才从撤掉的那张跨形态「自动隐藏」卡并进灵动岛「行为」组,**并进来时
@@ -1565,13 +1599,13 @@ enum NotchStyleDefaults {
 ///
 /// ⚠️ 收起态那一套耳朵(左封面、右音浪)**不在这里配**,理由见 `NotchEarModule` 上方那段。
 ///
-/// ⚠️ 宽度 160 是**量出来的**(2026-08-31,用户报「太大了,明明需要的空间很小就够了」)。这个
-/// 浮层是四个里内容最窄的一个 —— 八行都是两到四个字的模块名,离屏 `NSHostingView.fittingSize`
-/// 给出的内容自然宽只有 **124pt(中文)/ 136pt(英文)**,而它此前吃的是外壳默认值 380,
-/// 空转了 244pt。13pt 下最长的一项是英文 "Remaining" 55.0pt(中文最长 51.6pt),加上行内固定
-/// 的 60pt(左内边距 14 + 勾列 20 + 间距 12 + 右内边距 14)就是那 124/136。
-/// 140pt 起两种语言都已经不截断(六档离屏渲染逐一看过),160 是在此之上给英文留 24pt 余量。
-/// **别顺手拉回 380 去跟别的浮层"对齐"** —— 那不是对齐,是 2.8 倍的空转。
+/// ⚠️ 宽度 240 是**算出来的**(2026-09-07;2026-08-31 定的 160 是纯列表时代的数,那次用户报
+/// 「太大了,明明需要的空间很小就够了」把 380 收到了 160)。列表本身仍只要 124pt(中文)/ 136pt
+/// (英文):八行两到四个字的模块名,最长英文 "Remaining" 63.0pt + 行内固定 60pt(左内边距 14 +
+/// 勾列 20 + 间距 12 + 右内边距 14)。**抬到 240 的是顶上那一行「音浪」开关**(2026-09-07 从勾选行
+/// 改成 `SettingsRow` + `Toggle`):`SettingsRow` 固定开销 150pt(2×14 内边距 + 20 图标列 + 3×12
+/// 间距 + 12 Spacer + 54 开关)+ 标题 13pt 系统字「音浪」25.8 / "Audio Wave" 70.9 = 中文 176 /
+/// **英文 221**,240 给英文留 19pt。**别顺手拉回 380 去跟别的浮层"对齐"** —— 那不是对齐,是空转。
 @MainActor
 struct NotchEarPopover: View {
     enum Side { case left, right }
@@ -1583,7 +1617,7 @@ struct NotchEarPopover: View {
         // 前者的信息量不足以单独留一个「?」气泡)。别再往这儿加 help 参数。
         SettingsPopoverShell(
             title: side == .left ? L10n.t("左耳") : L10n.t("右耳"),
-            width: 160
+            width: 240
         ) {
             NotchEarSettingsRows(side: side)
         }
@@ -1599,16 +1633,20 @@ struct NotchEarSettingsRows: View {
         side == .left ? settings.notchLeftEar : settings.notchRightEar
     }
 
-    /// 「显示音浪」落点第四次(也是最终)拍板处(2026-08-31,同一天):风格浮层
+    /// 「音浪」落点第四次(也是最终)拍板处(2026-08-31,同一天):风格浮层
     /// →独立卡→(设计出工具栏第五入口方案,但同事 ls-Rocky 离屏量出中英文都装不下,
     /// 未落地)→**这里**,左右耳浮层顶部各一个独立开关行。用户原话:"放到左右耳列表里面啊,
     /// 最顶上加一个展示音浪的选项,但是和下面的通过分割线分开,可以和下面的同时选择"。
     ///
-    /// 跟下面 `row(_:)` 用同一套"勾选存在/消失"视觉,但语义不同:下面那组是 `NotchEarModule`
-    /// 的单选(选中一个、其余全灭),这一行是独立开关(可以跟任意模块选择共存,不参与那组
-    /// 互斥)——两者用分割线隔开正是为了不暗示它们同属一组。左右耳各有一份,但背后共享同一对
-    /// 全局状态(`notchShowsEqualizer` + `notchEqualizerEar`):勾选这边会把 `notchEqualizerEar`
-    /// 掰到这一侧、同时打开总开关;取消勾选只关总开关,不改哪一侧(切到另一侧靠去那边勾选)。
+    /// **2026-09-07 从勾选行改成 `SettingsRow` + `Toggle`。** 改前它跟下面 `row(_:)` 用同一套"勾
+    /// 存在/消失"的视觉、只靠一条分割线隔开 —— 用户看到的是"九行单选里有一行可以跟别的同时勾",
+    /// 而它其实是个独立开关(可以跟任意模块共存,不参与那组互斥);同一份状态在「全部设置」抽屉里
+    /// 又是另一种控件(开关 + 「贴哪只耳朵」分段选择器),用户报"混乱"。现在两处都是这一行,
+    /// 抽屉里那张 `NotchEqualizerRow` 撤掉了。左右耳各有一份,但背后共享同一对全局状态
+    /// (`notchShowsEqualizer` + `notchEqualizerEar`):打开这边会把 `notchEqualizerEar` 掰到这一侧、
+    /// 同时打开总开关(另一侧那行随之变成关);关掉只关总开关,不改哪一侧。
+    /// 图标 `waveform` 跟撤掉的抽屉那张同一个;标题用「音浪」而不是原来的「显示音浪」——它现在是个
+    /// 开关,"显示"两个字由开关本身说,短两个字浮层也能窄 30pt(见 `NotchEarPopover` 的宽度账)。
     private var equalizerEarValue: NotchEqualizerEar { side == .left ? .left : .right }
 
     private var showsEqualizerHere: Bool {
@@ -1616,31 +1654,18 @@ struct NotchEarSettingsRows: View {
     }
 
     private var equalizerRow: some View {
-        Button {
-            if showsEqualizerHere {
-                settings.notchShowsEqualizer = false
-            } else {
-                settings.notchEqualizerEar = equalizerEarValue
-                settings.notchShowsEqualizer = true
-            }
-        } label: {
-            HStack(spacing: SettingsRowMetrics.iconTextSpacing) {
-                Image(systemName: "checkmark")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(Color.accentColor)
-                    .opacity(showsEqualizerHere ? 1 : 0)
-                    .frame(width: SettingsRowMetrics.iconWidth, alignment: .center)
-                Text(L10n.t("显示音浪"))
-                    .font(.system(size: 13))
-                    .lineLimit(1)
-                Spacer(minLength: 0)
-            }
-            .padding(.horizontal, SettingsRowMetrics.horizontalPadding)
-            .padding(.vertical, SettingsRowMetrics.verticalPadding)
-            .contentShape(Rectangle())
+        SettingsRow(icon: "waveform", title: L10n.t("音浪")) {
+            Toggle("", isOn: Binding(
+                get: { showsEqualizerHere },
+                set: { on in
+                    if on {
+                        settings.notchEqualizerEar = equalizerEarValue
+                        settings.notchShowsEqualizer = true
+                    } else {
+                        settings.notchShowsEqualizer = false
+                    }
+                }))
         }
-        .buttonStyle(.plain)
-        .accessibilityAddTraits(showsEqualizerHere ? [.isButton, .isSelected] : .isButton)
     }
 
     var body: some View {
@@ -1681,15 +1706,33 @@ struct NotchEarSettingsRows: View {
         .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
     }
 
-    /// 相等守卫:@Published 是 willSet 语义,等值赋值照样广播 objectWillChange 打醒所有观察
-    /// AppSettings 的界面,didSet 还会白写一次 UserDefaults。
+    /// 点**已勾选**的那一项 = 取消勾选,落回「不显示」(2026-09-06 用户要求)。这让整个浮层
+    /// 上下两段的语义统一:顶上那行「音浪」是个能关的开关(`equalizerRow`),下面这组单选此前
+    /// 却是"点自己 = 无操作",同一个浮层里一半能关一半关不掉。
+    ///
+    /// 取消**不是**清空成"没有值":`NotchEarModule` 是全域枚举、`.none` 就是它表达"这只耳朵
+    /// 什么都不放"的合法成员(显示名正是「不显示」),所以取消 = 选中 `.none`,勾也跟着跳到
+    /// 那一行去 —— 不存在"一个都没勾"的中间态。
+    ///
+    /// 相等守卫留着,但守的是**算完之后的目标值**,不再是入参:
+    ///   - 点未选中项 → target = 该项(照旧);
+    ///   - 点已选中项 → target = `.none`(本次新增的取消语义);
+    ///   - 「不显示」已选中时点它自己 → target 仍是 `.none`、等于当前值,被守卫吃掉(无操作)——
+    ///     这一条正是守卫必须算在 target 上的原因,写在入参上会漏掉它。
+    ///
+    /// 守卫本身不能去掉:@Published 是 willSet 语义,等值赋值照样广播 objectWillChange 打醒
+    /// 所有观察 AppSettings 的界面,didSet 还会白写一次 UserDefaults。
+    /// ⚠️ 写全 `NotchEarModule.none`,别缩成 `.none`:这个枚举有个成员就叫 `none`,而 `.none`
+    /// 同时也是 `Optional` 的成员 —— 简写在这里能编过(左边标了非可选类型),但只要哪天有人
+    /// 把它挪进一个可选上下文,含义就会静默换成"空值"。
     private func apply(_ module: NotchEarModule) {
+        let target: NotchEarModule = current == module ? NotchEarModule.none : module
         if side == .left {
-            guard settings.notchLeftEar != module else { return }
-            settings.notchLeftEar = module
+            guard settings.notchLeftEar != target else { return }
+            settings.notchLeftEar = target
         } else {
-            guard settings.notchRightEar != module else { return }
-            settings.notchRightEar = module
+            guard settings.notchRightEar != target else { return }
+            settings.notchRightEar = target
         }
     }
 }

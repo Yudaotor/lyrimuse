@@ -127,7 +127,12 @@ func TestSwiftLyricsSourceEnumCoversAllSources(t *testing.T) {
 	if err != nil {
 		t.Skipf("读不到 %s: %v", p, err)
 	}
-	re := regexp.MustCompile(`(?m)^\s*case\s+(netease[^\n]*)$`)
+	// ⚠️ 别按"以 netease 开头"来找这一行。枚举的**声明顺序是有语义的**(它同时是设置页九个
+	// 勾选框的展示序和"顺序优先"模式的默认顺序,见 Swift 侧那段注释),排序本来就会变:
+	// 2026-09-07 按实测采用率把 kugou 提到首位时,原先写死的 `case\s+(netease[^\n]*)` 当场
+	// 匹配不到、整条守卫直接 Fatal —— 而它要守的是"九个源一个不漏",跟谁排第一无关。
+	// 改成先定位枚举声明本身、再取其后第一个 case 行:以后怎么重排都不会误伤这条守卫。
+	re := regexp.MustCompile(`(?s)public enum LyricsSource: String.*?\n\s*case\s+([^\n]+)`)
 	m := re.FindStringSubmatch(string(raw))
 	if m == nil {
 		t.Fatalf("没在 %s 里找到 LyricsSource 的 case 行(枚举被改写了?同步更新这个测试)", p)

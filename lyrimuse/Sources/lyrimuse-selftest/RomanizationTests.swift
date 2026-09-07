@@ -30,12 +30,12 @@ func runRomanizationTests() {
         // 观感,现在的路径是关掉"拼音"这个子开关,不是指望默认值帮他们隐藏。
         let engine = LyricsSyncEngine()
         let lrc = "[00:10.00]你好\n"
-        engine.load(lyrics: lrc, lyricsTr: "", lyricsRoma: "", lyricsYRC: "", preferWordLevel: true)
+        engine.load(lyrics: lrc, lyricsTr: "", lyricsRoma: "", lyricsYRC: "")
         expectEqual(engine.activeLine(atMs: 10000)?.romanization != nil, true,
                     "SyncEngine(罗马音兜底): 默认配置(拼音默认开)下纯中文歌曲现算出拼音")
         // 关掉拼音这个子开关时,回到 2026-08-04 那条回归本来要守住的行为:纯中文歌不现算拼音。
         let engineOff = LyricsSyncEngine()
-        engineOff.load(lyrics: lrc, lyricsTr: "", lyricsRoma: "", lyricsYRC: "", preferWordLevel: true,
+        engineOff.load(lyrics: lrc, lyricsTr: "", lyricsRoma: "", lyricsYRC: "",
                        romanizationScripts: [.japanese, .korean, .cantonese])
         expectEqual(engineOff.activeLine(atMs: 10000)?.romanization, nil,
                     "SyncEngine(罗马音兜底): 关掉拼音子开关后纯中文歌曲不现算拼音")
@@ -47,7 +47,7 @@ func runRomanizationTests() {
         // 没有假名就被误判成中文。
         let engine = LyricsSyncEngine()
         let lrc = "[00:05.00]のの\n[00:10.00]早安\n"
-        engine.load(lyrics: lrc, lyricsTr: "", lyricsRoma: "", lyricsYRC: "", preferWordLevel: true)
+        engine.load(lyrics: lrc, lyricsTr: "", lyricsRoma: "", lyricsYRC: "")
         expectEqual(engine.activeLine(atMs: 10000)?.romanization != nil, true, "SyncEngine(罗马音兜底): 日文歌曲(含假名)的汉字行应该正常现算罗马音")
     }
 
@@ -57,7 +57,7 @@ func runRomanizationTests() {
         // 服务端给了罗马音字段,但这一行本身在 700ms 容差内没匹配上——不应该在局部空档现算
         // 兜底,避免同一首歌一部分罗马音来自服务端、一部分是客户端现算,观感不一致。
         let roma = "[00:20.00]别的行的罗马音\n"
-        engine.load(lyrics: lrc, lyricsTr: "", lyricsRoma: roma, lyricsYRC: "", preferWordLevel: true)
+        engine.load(lyrics: lrc, lyricsTr: "", lyricsRoma: roma, lyricsYRC: "")
         expectEqual(engine.activeLine(atMs: 10000)?.romanization, nil, "SyncEngine(罗马音兜底): 服务端提供了罗马音字段时,不在没匹配上的单行现算兜底")
     }
 
@@ -67,7 +67,7 @@ func runRomanizationTests() {
     do {
         let engine = LyricsSyncEngine()
         let lrc = "[00:10.00]副歌歌词\n[00:20.00]桥段歌词\n[00:30.00]副歌歌词\n"
-        engine.load(lyrics: lrc, lyricsTr: "", lyricsRoma: "", lyricsYRC: "", preferWordLevel: true)
+        engine.load(lyrics: lrc, lyricsTr: "", lyricsRoma: "", lyricsYRC: "")
         expectEqual(engine.activeLineIndex(atMs: 15000), 0, "SyncEngine.activeLineIndex: 第一次出现的副歌句命中下标 0")
         expectEqual(engine.activeLineIndex(atMs: 35000), 2, "SyncEngine.activeLineIndex: 第二次出现的副歌句命中下标 2(不是被内容匹配误判回 0)")
         expectEqual(engine.activeLineIndex(atMs: 5000), nil, "SyncEngine.activeLineIndex: 还没到第一句时是 nil")
@@ -76,7 +76,7 @@ func runRomanizationTests() {
     do {
         let engine = LyricsSyncEngine()
         let yrc = "[10000,1000](10000,500,0)la (10500,500,0)la \n[20000,1000](20000,500,0)la (20500,500,0)la \n"
-        engine.load(lyrics: "", lyricsTr: "", lyricsRoma: "", lyricsYRC: yrc, preferWordLevel: true)
+        engine.load(lyrics: "", lyricsTr: "", lyricsRoma: "", lyricsYRC: yrc)
         let lines = engine.allLines(idPrefix: "test")
         expectEqual(lines.count, 2, "SyncEngine.allLines(YRC): 逐字歌词也能拿到完整行列表")
         expectEqual(lines.map { $0.line.words?.map(\.text) }, [["la ", "la "], ["la ", "la "]], "SyncEngine.allLines(YRC): 每行的逐字词数组保留完整")
@@ -302,7 +302,6 @@ func runRomanizationTests() {
         """
         let engine = LyricsSyncEngine()
         engine.load(lyrics: lrc, lyricsTr: "", lyricsRoma: "", lyricsYRC: "",
-                    preferWordLevel: false,
                     trackTitle: "First Love (Remastered 2014)", trackArtist: "宇多田ヒカル")
         let shown = engine.allLines(idPrefix: "t").compactMap { $0.line.plainText }
         expectEqual(shown.count, 4, "只该留下 4 行真歌词,实际留下 \(shown.count) 行:\(shown)")
@@ -321,7 +320,7 @@ func runRomanizationTests() {
         [00:03.00]Baby you know
         """
         let e2 = LyricsSyncEngine()
-        e2.load(lyrics: plain, lyricsTr: "", lyricsRoma: "", lyricsYRC: "", preferWordLevel: false)
+        e2.load(lyrics: plain, lyricsTr: "", lyricsRoma: "", lyricsYRC: "")
         expectEqual(e2.allLines(idPrefix: "t").count, 3,
                     "英文歌词里带半角冒号的行一行都不能删")
     }
@@ -672,7 +671,7 @@ func runRomanizationTests() {
             let yueRomaLRC = "[00:00.00]nei5 hou2\n"
             let engine = LyricsSyncEngine()
             engine.load(lyrics: "", lyricsTr: "", lyricsRoma: yueRomaLRC, lyricsYRC: yueYRC,
-                        preferWordLevel: true, romanizationScripts: [.cantonese], songIsCantonese: true)
+                        romanizationScripts: [.cantonese], songIsCantonese: true)
             let line = engine.activeLine(atMs: 200)
             expectEqual(line?.wordGroups?.count, 2, "端到端: 粤语逐字歌词能对齐出两组(一字一音节)")
             expectEqual(line?.wordGroups?.map(\.romanization), ["nei5", "hou2"],
@@ -680,7 +679,7 @@ func runRomanizationTests() {
             // 关掉粤拼开关时退回没有 wordGroups——视图据此退回整行罗马音,不是逐字对齐。
             let engineOff = LyricsSyncEngine()
             engineOff.load(lyrics: "", lyricsTr: "", lyricsRoma: yueRomaLRC, lyricsYRC: yueYRC,
-                           preferWordLevel: true, romanizationScripts: [.chinese], songIsCantonese: true)
+                           romanizationScripts: [.chinese], songIsCantonese: true)
             expectEqual(engineOff.activeLine(atMs: 200)?.wordGroups, nil,
                         "端到端: 关掉粤拼开关后逐字歌词不再对齐出词组")
         }
@@ -695,7 +694,7 @@ func runRomanizationTests() {
             let koRomaLRC = "[00:00.00]annyeong\n"
             let engine = LyricsSyncEngine()
             engine.load(lyrics: "", lyricsTr: "", lyricsRoma: koRomaLRC, lyricsYRC: koYRC,
-                        preferWordLevel: true, romanizationScripts: [.korean])
+                        romanizationScripts: [.korean])
             let line = engine.activeLine(atMs: 100)
             expectEqual(line?.wordGroups?.count, 1, "端到端: 韩语「안녕」两个逐字词合并成一组")
             expectEqual(line?.wordGroups?.first?.words.count, 2, "端到端: 那一组里包含两个逐字词")
@@ -704,7 +703,7 @@ func runRomanizationTests() {
             // 关掉韩语罗马音开关后退回没有 wordGroups。
             let engineOff = LyricsSyncEngine()
             engineOff.load(lyrics: "", lyricsTr: "", lyricsRoma: koRomaLRC, lyricsYRC: koYRC,
-                           preferWordLevel: true, romanizationScripts: [.japanese])
+                           romanizationScripts: [.japanese])
             expectEqual(engineOff.activeLine(atMs: 100)?.wordGroups, nil,
                         "端到端: 关掉韩语罗马音开关后逐字歌词不再对齐出词组")
         }
@@ -863,5 +862,89 @@ func runRomanizationTests() {
                     "整份罗马音: CRLF 输入的产物里不该残留 \\r")
         expectEqual(crlf?.split(separator: "\n").count, 2,
                     "整份罗马音: CRLF 两行要切得开(不然整份被当成一行)")
+    }
+
+    // 日文汉字修回(JapaneseKanjiRepair,2026-09-06)。不维护任何表:「不能用 JIS X 0208 编码的汉字 →
+    // ICU 简→繁 → 转出来的字能编码才换」,两道守卫(整首日文歌 + 该行含假名)。样例是本机缓存里
+    // 神山羊《journey》酷狗版的真实受害行。
+    do {
+        typealias JK = JapaneseKanjiRepair
+        expectEqual(JK.repairLine("あれに饮まれちまう奴は居ねえ"), "あれに飲まれちまう奴は居ねえ",
+                    "日文修回: 饮→飲")
+        expectEqual(JK.repairLine("はじまりの合図が闻こえたら"), "はじまりの合図が聞こえたら",
+                    "日文修回: 闻→聞")
+        expectEqual(JK.repairLine("远くに见えた 憧れたもの"), "遠くに見えた 憧れたもの",
+                    "日文修回: 一行多个字")
+        expectEqual(JK.repairLine("优しさ 热が出て 一度许せば"), "優しさ 熱が出て 一度許せば",
+                    "日文修回: 优→優 热→熱 许→許")
+
+        // 新字体与简体同形的字**绝不能**动 —— 这正是判据不能是「是不是简体字」的原因。
+        let shinjitai = "国の学校で体を動かす会 点灯 双子 旧い 机の上 誉れ 辞める"
+        expectEqual(JK.repairLine(shinjitai), shinjitai,
+                    "日文修回: 国/学/体/会/点/灯/双/旧/机/誉/辞 都是日文新字体(在 JIS X 0208 里),不动")
+
+        // 第二道守卫:没有假名的行不修(日文歌里源加的中文标题 / 译名行)。
+        expectEqual(JK.repairLine("永远"), "永远", "日文修回: 无假名的行不动")
+        expectEqual(JK.repairLine("[00:00.00]蔓越莓和煎饼"), "[00:00.00]蔓越莓和煎饼",
+                    "日文修回: 纯中文的行不动")
+
+        // 规则给不出答案的字原样留着:「你」不是简体字(ICU 不动)、「步」简繁同形而日文写「歩」。
+        expectEqual(JK.repairLine("你が步く"), "你が步く",
+                    "日文修回: ICU 不认的字 / 简繁同形的字都不动")
+
+        // 已知边界(刻意接受,别当 bug 修成一张表):繁体 ≠ 新字体的字落在旧字体上。
+        expectEqual(JK.repairLine("谁かの颜色"), "誰かの顏色",
+                    "日文修回: 无表可查时落旧字体 顏(现行写法 顔),这是接受的边界")
+
+        // 幂等:修过的行再修一遍一字不变。
+        let once = JK.repairLine("远くに见えた 憧れたもの")
+        expectEqual(JK.repairLine(once), once, "日文修回: 幂等")
+
+        // 无关文本原样返回(空 / 拉丁 / 谚文 / 干净日文 / 时间戳)。
+        for sample in ["", "First Love", "사랑 노래", "君の名は", "[00:01.00]", "明日の今頃には"] {
+            expectEqual(JK.repairLine(sample), sample, "日文修回: 无关文本原样返回: \(sample)")
+        }
+
+        // 第一道守卫:中日混排的**中文歌**(陶喆《My Anata》那种)整首不是日文,一个字都不动。
+        let chineseSong = """
+        [00:01.00]我在东京的街头
+        [00:02.00]只听见おじさん骑着单车卖着馒头
+        [00:03.00]这是一首简单的小情歌
+        [00:04.00]头发乱了
+        """
+        expectEqual(Romanizer.looksJapaneseSong(chineseSong), false, "日文修回: 1/4 行含假名不算日文歌")
+        expectEqual(JK.repair(chineseSong, japaneseSong: Romanizer.looksJapaneseSong(chineseSong)),
+                    chineseSong, "日文修回: 中文歌整首不动")
+        expectEqual(JK.repair("あれに饮まれちまう奴は居ねえ", japaneseSong: false),
+                    "あれに饮まれちまう奴は居ねえ", "日文修回: 调用方判定不是日文歌就一律不动")
+
+        // 整首日文歌:含假名的行修、不含的行不修;CRLF 与时间戳原样保留(酷狗常见 CRLF,
+        // Swift 把 \r\n 当一个字素,按 \n split 切不开,这里钉住换行符一个字节都不变)。
+        let jpSong = "[00:00.00]蔓越莓和煎饼\r\n[00:29.73]あれに饮まれちまう奴は居ねえ\r\n"
+            + "[00:34.22]はじまりの合図が闻こえたら\r\n[00:43.68]くだらん话はもうやめて"
+        expectEqual(Romanizer.looksJapaneseSong(jpSong), true, "日文修回: 3/4 行含假名是日文歌")
+        expectEqual(JK.repair(jpSong, japaneseSong: true),
+                    "[00:00.00]蔓越莓和煎饼\r\n[00:29.73]あれに飲まれちまう奴は居ねえ\r\n"
+                    + "[00:34.22]はじまりの合図が聞こえたら\r\n[00:43.68]くだらん話はもうやめて",
+                    "日文修回: 整份按行修,中文行不动,CRLF 原样")
+
+        // 逐字串整串修:时间戳数字不受影响,只碰汉字。
+        expectEqual(JK.repair("[1000,2000](1000,500,0)饮(1500,500,0)まれ", japaneseSong: true),
+                    "[1000,2000](1000,500,0)飲(1500,500,0)まれ", "日文修回: YRC 整串")
+
+        // 干净的日文正文(本机缓存 MIYAVI《Under The Same Sky》几行)一字不动 —— 防过修。
+        let clean = """
+        [00:11.13]気づけばもう遠くまで来たね
+        [00:16.47]日々に追われ ただがむしゃらで
+        [00:21.35]ふと立ち止まって 真っ青な空を
+        [01:04.41]子供の頃 思い描いてたような
+        [02:19.18]向かう先 目指す未来は同じ
+        """
+        expectEqual(JK.repair(clean, japaneseSong: true), clean, "日文修回: 干净的日文正文一字不动")
+
+        // 修回之后简繁转换仍然放过日文(两层各管各的,顺序无关)。
+        let fixed = JK.repair("[00:29.73]あれに饮まれちまう奴は居ねえ", japaneseSong: true)
+        expectEqual(ChineseVariant.traditional.converted(fixed), fixed, "日文修回: 修完的日文行简繁转换不碰")
+        expectEqual(ChineseVariant.simplified.converted(fixed), fixed, "日文修回: 修完的日文行转简体也不碰")
     }
 }

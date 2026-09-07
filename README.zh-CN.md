@@ -217,7 +217,7 @@ LyricsX（最后一版发布于 2022 年 4 月，支持 macOS 10.11+）覆盖 Ap
 - **Lyrimuse 本身以 [GPL-3.0](LICENSE) 授权。** 随 App 一起分发的开源组件与词典数据（media-control、Sparkle、KeyboardShortcuts、OpenCC 与 rime-cantonese 词典）各自保留原许可证，全文见 [THIRD_PARTY_LICENSES](THIRD_PARTY_LICENSES)；这个文件也打进了 App 包里，**设置 → 关于 → 第三方许可**能直接打开。
 - **歌词、封面与曲目信息的版权归各自的权利人所有。** Lyrimuse 只做检索、缓存与展示：公开歌词接口返回什么，就存在你自己 Mac 上的 `~/.config/lyrimuse/` 里给你自己看，不托管、不转发、不再分发任何歌词或封面；缓存随时可以在「歌词管理」里删，或者直接删掉那个文件夹。
 - **Lyrimuse 是独立的开源项目**，与 Apple、腾讯（QQ 音乐）、网易（网易云音乐）、酷狗、酷我、中国移动（咪咕音乐）、Spotify、Google（YouTube Music）、Last.fm、ListenBrainz、Musixmatch、LRCLIB、LyricFind、AMLL 均无隶属、合作或背书关系。这些名称和商标归各自所有者，这里提到它们只是为了说明支持哪些播放器和歌词来源。
-- **会离开你 Mac 的只有这些。** 解析歌词时把歌手、歌名、专辑（部分源还带时长）发给上面九个歌词源；全部落空时还会把歌手名发给 MusicBrainz 查别名。封面与空闲页把歌手加歌名发给 iTunes Search。机翻兜底（默认关，且只在端上 Apple 翻译不可用时）会把**歌词正文**分块发给 MyMemory，附一个随机生成的邮箱参数，不是你的。Musixmatch 的域名走 DNS over HTTPS，解析请求发给 Cloudflare（1.1.1.1）和 Google（8.8.8.8）。「关于」页最多每 6 小时向 GitHub API 查一次 Star 数，打开「接收测试版更新」后最多每小时查一次 Release 列表；检查更新只拉 GitHub Releases 上的 appcast，不上报系统信息。除此之外只有你主动连接的 Last.fm、ListenBrainz、推送平台和网页中继（中继的 Top10 歌手页会向 Deezer 查歌手头像）。每一条对外请求都记进本地审计日志（只记域名和操作名，不记参数和凭据），「导出诊断信息」里能看到。
+- **会离开你 Mac 的只有这些。** 解析歌词时把歌手、歌名、专辑（部分源还带时长）发给上面九个歌词源；全部落空时还会把歌手名发给 MusicBrainz 查别名。封面与空闲页把歌手加歌名发给 iTunes Search。机翻兜底（默认关，且只在端上 Apple 翻译不可用时）会把**歌词正文**分块发给 MyMemory，附一个随机生成的邮箱参数，不是你的。Musixmatch 的域名走 DNS over HTTPS，解析请求发给 Cloudflare（1.1.1.1）和 Google（8.8.8.8）。「关于」页最多每 6 小时向 GitHub API 查一次 Star 数，打开「测试版更新」后最多每小时查一次 Release 列表；检查更新只拉 GitHub Releases 上的 appcast，不上报系统信息。除此之外只有你主动连接的 Last.fm、ListenBrainz、推送平台和网页中继（中继的 Top10 歌手页会向 Deezer 查歌手头像）。每一条对外请求都记进本地审计日志（只记域名和操作名，不记参数和凭据），「导出诊断」里能看到。
 
 ## 排查
 

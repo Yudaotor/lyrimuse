@@ -1,6 +1,6 @@
 # 12. 账号连接与收听记录
 
-> 最后核对：2026-09-05 · 基线：601fb88+工作树
+> 最后核对：2026-09-06 · 基线：0dfc438+工作树
 
 ## 定位
 
@@ -12,7 +12,7 @@
 - Last.fm 详情页（2026-08-23 改成分段 tab，理由跟「歌词显示」页一致——原来是连接卡+四张统计卡顺序平铺的一条长滚动，一次只关心其中一件事也要先滚过其它几件）：连接状态（Scrobble 开关、连接/断开、回填入口）**常驻在 tab 选择器外面**，不随下面的段切换；已连接时再展开「统计」（今天/近7天/总量数字 + 最近记录列表，合成一段）/「榜单」/「足迹」（2026-09-03 由「那年今日」改名：上面是零请求的「收听足迹」卡、下面是「那年今日」卡）/**「设置」**四个并列 tab（`AccountLinkingTab.LastfmSection` 选择器 + `LastfmStatsSection`，正在记录的实时行、最近播放列表带封面都在「统计」段里）；未连接时全部收起、只留一句预告文案。
   - **「设置」段 2026-09-01 加**（用户原话「这里单开一个设置tab页，装在这里面」）。装的是「跟 Last.fm 上送行为有关、但不是开关本身」的配置，卡头就叫 **`Scrobble`（中英同字）**。目前只有一项：「合唱歌曲的歌手」（见 §4）。
     - **为什么不继续摆在常驻的连接卡里**：那张卡的定位是「不看哪个 tab 都该一直看得见的东西」（Scrobble 开关、连接状态、待补清单），往里加设置项会把它撑成一张什么都装的卡；而这些设置恰恰是「想调的时候才去找」的类型。（当天先补在连接卡里、Scrobble 开关正下方，同日改成单开一段。）
-    - **卡头中英同字 `Scrobble`** 的三条依据：①本仓的中文界面**本来就不翻译这个词**（「Scrobble 到 Last.fm」「Scrobble 已暂停」「总 scrobble」都是原样用）；②卡头在这个仓的惯例是名词短语而不是「X设置」（歌词来源／已信任的其它播放器／配置备份与搬家）；③这张卡已经在「设置」段里，标题再写一遍「设置」是重复。
+    - **卡头中英同字 `Scrobble`** 的三条依据：①本仓的中文界面**本来就不翻译这个词**（「Scrobble 到 Last.fm」「Scrobble 已暂停」「总 scrobble」都是原样用）；②卡头在这个仓的惯例是名词短语而不是「X设置」（歌词来源／已信任的播放器／备份与迁移）；③这张卡已经在「设置」段里，标题再写一遍「设置」是重复。
     - ⚠️ **`LastfmStatsSection` 在「设置」段仍然常驻挂载**，只是它的 `Tab.settings` 分支画 `EmptyView()`；设置卡由 `AccountLinkingTab` 自己画。**别改成"这一段不挂载它"** —— 它的整套刷新逻辑建立在「从不因为切 tab 被卸载重建」上（见该类型头注），卸载一次就会把已拉到的统计丢掉、回来重拉一轮。职责上也对：那个 View 管统计数据，这些设置读 `FeatureSettingsStore`。
     - Scrobble 开关**关着**时这一项无从谈起（没有上送），那种情况显示一句说明而不是一个点了不影响任何事的控件。
 
@@ -22,6 +22,7 @@
 
 - 阈值 `listenThreshold = min(曲长/2, 240s)`：过半或满 4 分钟即计一次（`listenCapSecs = 240`）。
 - **短曲目**：曲长 `0 < d < 30s`（`minTrackSecs`）默认不记——Last.fm 官方规则 *"The track must be longer than 30 seconds"*，是给客户端的规则（服务端不拒收、ignoredMessage 也没有「太短」这一码），主流 scrobbler 都在客户端照做。2026-09-03 起可由 `scrobble_short_tracks`（features.json，默认 false；设置入口 账号→Last.fm→设置→Scrobble 卡「短于 30 秒的曲目」）放开。四处闸共用 `tooShortToScrobble`（poller.go：到点提交 / 切歌收尾 / 退出兜底；backfill.go：回填复核）。**只管 Last.fm**：短曲目进了漏斗之后，`shortTrackLastfmOnly` 在 `submitSingleAsync` 和退出兜底两处把 ListenBrainz 那一路挡掉（不发 LB、直接以 `lastfmOnly` 结果走 `applySubmitOutcome` 收尾），本地收听日志/回填照记——它们本来就是给 Last.fm 兜底的。用户原话（2026-09-03）：「这个配置项是 lastfm 的，和 listenbrainz 没有一点关系」；第一版曾把它做成漏斗级（LB 一起记），当天按这句改成 Last.fm-only。曲长未知（≤0）照旧不拦；放行后半程规则照旧（20 秒的歌要听满 10 秒）；恰好 30.000s 按既有口径放行（官方是 `> 30`，差这一秒是历史行为）。回填按**当前**开关复核：开关开着时写下的短曲目记录，关掉后再回填会被筛掉。测试 `TestTooShortToScrobble` / `TestScrobbleShortTracksFlagRoundTrip` / `TestPendingBackfillListensHonorsShortTrackFlag` / `TestSubmitSingleShortTrackSkipsListenBrainz`（假 LB 服务器收到 0 个请求、普通曲目仍收 1 个）/ `TestShortTrackLastfmOnly`。
+- **Scrobble 时点（只管 Last.fm，2026-09-06）**：`lastfm_scrobble_point`（features.json，`50`/`75`/`90`/`end`，默认 `50`＝官方规则；设置入口 账号→Last.fm→设置→Scrobble 卡「Scrobble 时机」，四段 50%／75%／90%／曲终）。官方规则是下限，所以只给更严的档，用户原话「只考虑 lastfm 的」。机制：官方阈值一到照旧走 `submitSingleAsync` → `applySubmitOutcome`（LB 提交、网页中继、`listenSent` 收尾全部不变），Last.fm 那一路改经 `recordLastfmListen`——默认档当场 `settleLastfmPending`（镜像 `mirrorScrobbleTracked` + 没连账号时的 `appendListen`，两个动作原封不动从 `applySubmitOutcome` 搬过来），更严的档把 `pendingLastfmListen` 挂在 `playSession.lastfmPending` 上，`handle` 播放中每拍、`finalize`、退出兜底（同步变体 `settleLastfmPendingSync`）三处再问 `lastfmScrobblePointReached`。百分比档纯按 `playedSecs` 算、不套 240s 上限（10 分钟的歌选 90% 要听 9 分钟）；「曲终」档看 `sessionEndedNaturally`：会话结束时拿最近一拍位置 `lastPos@lastPosAt`（只在播放中记）按墙钟外推（封顶两拍 10s，防播放器退出后 15s 的 null 期多算）后，离曲尾不到 `min(12s, 10% 曲长)` 即算放完——12s 是为了盖住播放器 crossfade（最长 12s）和 Spotify gapless 提前锚点，代价是最后十几秒被切掉也算听完，刻意取舍；单曲循环回绕（`loopRestart`）同样判成放完。曲长未知（≤0）一律退回官方规则（当场发），不把「没有时长」变成「永远不发」。**没到点不在 finalize 里丢**：finalize 也会因 media-control 假死被调用，60s 内续接旧会话（`recentFinalized`，续接时 `ended` 复位）挂起条目要还在；会话消亡则这条对 Last.fm 永不发、也**不写本地收听日志**（那份日志只给 Last.fm 回填兜底，用户选更严时点就是要它不记）。迟到的 `applySubmitOutcome`（LB 慢到 finalize 之后才回）按会话结束时算好的 `ended`/`endedNaturally` 当场处理。顺带修了一处老问题：LB 失败后重试成功会再走一遍 `applySubmitOutcome`，原来 `appendListen` 会重复追加一行（镜像有 uts 守卫、本地日志没有），现在 `lastfmSettled` 挡住。已知边界：「曲终」档下播放焦点被别的 App 抢走（`isTracked` 变 false 触发 finalize）时那首歌看不到结尾，不记。测试 `scrobblepoint_test.go`：`TestScrobblePointFlagRoundTrip` / `TestLastfmScrobblePointReached`（含 600s 的歌 300s 不到 90%）/ `TestSessionEndedNaturally`（自然切歌、crossfade、中途切、播放器退出封顶、歌单末尾停播、暂停、短曲收窄）/ `TestRecordLastfmListenDefersUntilPoint`（LB 先败后成只登记一次、到点才记、默认档当场记）/ `TestScrobblePointEndCommitsOnlyWhenTrackFinished`（切掉不发且条目留着、放完发、迟到结果按会话结束时判据处理）/ `TestSettleLastfmPendingSyncAtExit`。
 - **scrobble 时间戳 = 开播时刻**（不是达标时刻）。
 - 单曲循环重启按新一次播放重新计（`loopRestart` 重锚，进度连续性判定）。
 - 提交在后台 goroutine 跑（LB 慢时 single 最长 ~24s），`submitting/announcing` 标记防 5s 轮询重复触发。
@@ -374,6 +375,7 @@ iPhone 端由 FastScrobbler 直接写 Last.fm；collector 周期拉 `lastfmRecen
 | 账号→ListenBrainz | token | LB 提交开/关与身份 |
 | 账号→Last.fm | 连接/断开、镜像开关 | `lastfmMirrorScrobble`（features.json） |
 | 账号→Last.fm→设置 | 短于 30 秒的曲目 | `scrobble_short_tracks`（features.json，默认 false＝不记；开了只 scrobble 到 Last.fm，ListenBrainz 不受影响）。见 §1「短曲目」 |
+| 账号→Last.fm→设置 | Scrobble 时机（50%／75%／90%／曲终） | `lastfm_scrobble_point`（features.json，`50`/`75`/`90`/`end`，默认 `50`＝官方规则；只推迟 Last.fm 那一路，ListenBrainz 不受影响）。见 §1「Scrobble 时点」 |
 | 账号→Last.fm→设置 | 合唱歌曲的歌手（全部／只发第一位／智能） | `lastfm_scrobble_artist_mode`（features.json，`all`/`first`/`smart`，默认 `all`＝发整串；遗留键 `lastfm_scrobble_first_artist_only` 只读迁移）。界面 2026-09-01 才补、09-03 加智能档，见 §4 |
 | 账号→网页推送 | relay 地址/密钥 | 第 13 章 |
 | 账号→推送提醒 | Bark 配置 | 后台任务通知（第 15 章） |
@@ -399,7 +401,7 @@ iPhone 端由 FastScrobbler 直接写 Last.fm；collector 周期拉 `lastfmRecen
 
 | 主题 | 位置 |
 |---|---|
-| 计次/提交调度 | lyrimuse-collector/poller.go `listenThreshold` `tooShortToScrobble` `shortTrackLastfmOnly`（短曲目闸，开关 `features.ScrobbleShortTracks`，只发 Last.fm）`submitSingleAsync` `applySubmitOutcome` |
+| 计次/提交调度 | lyrimuse-collector/poller.go `listenThreshold` `tooShortToScrobble` `shortTrackLastfmOnly`（短曲目闸，开关 `features.ScrobbleShortTracks`，只发 Last.fm）`submitSingleAsync` `applySubmitOutcome`；Scrobble 时点 `recordLastfmListen` `settleLastfmPending` `settleLastfmPendingSync` `lastfmScrobblePointReached` `sessionEndedNaturally` `trackEndSlack`（开关 `features.LastfmScrobblePoint`，features.go `scrobblePointHalf/75/90/End` `resolveScrobblePoint`；会话字段 `playSession.lastfmPending/lastfmSettled/ended/endedNaturally/lastPos`） |
 | 「那年今日」取数与四态 | Settings/LastfmStatsService.swift `refreshOnThisDay(force:)` `OnThisDayOutcome` `OnThisDayResult.span` · LyrimuseCore/Util/DailyRefreshGate.swift `needsRefresh` · LyrimuseCore/Local/ListeningMemories.swift `OnThisDayPlanner.plan`（按日桶排窗口，天→周） |
 | 「收听足迹」卡 | LastfmStatsSection.swift `listeningFootprintCard` `footprintCell`；LyrimuseCore/Local/ListeningMemories.swift `ListeningMilestones.summarize` `nextMilestone`；selftest 在 lyrimuse-selftest/LastfmTests.swift「那年今日计划 + 收听足迹」 |
 | 「那年今日」界面三态＋重试 | LastfmStatsSection.swift `onThisDayCard`（⚠️ 那个 `else` 分支是 2026-09-01 修「点进去空白」的本体，别当冗余删掉） |
@@ -440,3 +442,4 @@ iPhone 端由 FastScrobbler 直接写 Last.fm；collector 周期拉 `lastfmRecen
 6. 收听日志与账号解耦（2026-08-13）：否则先用后连账号的用户历史永久丢失。
 7. scrobble 时间戳 = 开播时刻，是 Last.fm 生态惯例；实时行的吸收去重靠它反推匹配。
 8. LB 提交在后台跑 + submitting 标记：LB 慢时若同步等待会冻结 5s 轮询、拖垮歌词推送（poll() 异步化的由来）。
+9. Scrobble 时点只推迟 Last.fm 那一路、不动官方阈值那条漏斗（2026-09-06）：LB / 网页中继 / `listenSent` 收尾仍在官方阈值那一刻发生，Last.fm 的镜像（和没连账号时的本地日志）挂在会话上等。做成漏斗级会让 ListenBrainz 也跟着变严，跟短曲目那项一样违背「Last.fm 页的设置跟 ListenBrainz 无关」。挂起的条目没到点也不在 finalize 里丢——finalize 会被 media-control 假死误触发、60s 内会续接旧会话。「曲终」的 12s 容差是给 crossfade 让路的刻意取舍，见 §1。

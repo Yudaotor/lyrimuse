@@ -162,14 +162,25 @@ func isCreditOnlyLRC(lrc string) bool {
 // 这样一行空白尾行,巧合命中时长评分的最高档,反而反超了末尾真的有歌词、但差了几个百分
 // 点的候选)。逐行从后往前找,跳过"去掉时间戳后剩余文本为空"的行。frac 部分可能是两位
 // (百分之几秒)或三位(毫秒),按其实际代表的小数位数换算,不假设固定是哪一种。
+//
+// v15(2026-09-07)起**尾部署名行同样跳过**(isCreditLineWithSpeakers,跟 isCreditOnlyLRC /
+// lyricConsensusBody 同一条判据):网易云习惯在真正的末句之后再补一行「监制：xxx」之类的
+// 职员表,时间戳往往是末句 +20s 这种人工凑出来的数(陈奕迅《K歌之王》案:末句 [03:19.53],
+// 署名行 [03:39.53],曲长 222.35s——署名行把 duration 项从 217 抬到 289,+72 分凭空多出来)。
+// 它跟上面那种空白占位尾行是同一形态——"没有对应歌词正文的时间戳",只是行里有字;
+// simevaltimeline_test.go 头注早就记着《Purple Rain》「[08:36.866] 人声 : Prince」同款。
+// 正文共识(lyricConsensusBody)剔署名行、时长端点不剔,两处口径本就该一致。演唱者标签
+// (男：/女：)不算署名,理由见 lyricspeaker.go。
 func lastLRCTimestampSecs(lrc string) (float64, bool) {
 	lines := strings.Split(lrc, "\n")
+	speakers := lyricSpeakerLabels(lrc)
 	for i := len(lines) - 1; i >= 0; i-- {
 		matches := lrcTimestampCaptureRe.FindAllStringSubmatch(lines[i], -1)
 		if len(matches) == 0 {
 			continue
 		}
-		if strings.TrimSpace(lrcTimestampRe.ReplaceAllString(lines[i], "")) == "" {
+		text := strings.TrimSpace(lrcTimestampRe.ReplaceAllString(lines[i], ""))
+		if text == "" || isCreditLineWithSpeakers(text, speakers) {
 			continue
 		}
 		m := matches[len(matches)-1]
@@ -223,8 +234,21 @@ type lyricCandidate struct {
 	// 各源的解析代码在构造候选时算好(QQ 用 fcg_play_single_song.fcg 的 language
 	// 数字字段,酷狗用 api/v3/search/song 的 trans_param.language 字符串字段),
 	// netease/musixmatch/lrclib/amll/lyricfind 都没有这个信号,恒为空。
-	// 不参与打分——只作为 enrichEntry.SongLanguage 的来源,给粤拼罗马音生成用。
+	// 2026-09-07(v15)之前不参与打分、只作为 enrichEntry.SongLanguage 的来源给粤拼罗马音
+	// 生成用;v15 起经 applyLanguageVersionVerdicts 折算成下面两个批级判决参与打分。
 	language string
+	// languageVersionMismatch / languageVersionAgrees:**批级**语种版本判决,由
+	// applyLanguageVersionVerdicts 在整批候选上统一算好写进来(跟 hasWordTiming 一样是
+	// 构造期算好的事实,打分函数保持纯函数;直接构造 lyricCandidate 的老调用点/测试两个都是
+	// false,行为跟 v14 逐字节一致)。语义见 inferLocalLanguageVersion:
+	//   - mismatch:本地曲目的语种版本能推断出来、这条候选自己也声明了语种、两者不同——
+	//     「国语版歌词配粤语音轨」这一类,吃 versionTags 同档的 -600,且**不走**
+	//     sameRecordingDespiteVersionTags 豁免(两版同伴奏、时长常逐位相同,时长证明不了同一录音);
+	//   - agrees:两者相同——候选标题/专辑里的「(粤语)」「(国语)」这类语种标签只是平台在
+	//     消歧,不是另一个版本,版本限定词比对与标题吻合梯度都把它当不存在。
+	// 两者都 false = 至少一边不知道语种,退回 v14 的纯标签比对(保守:该罚的照罚)。
+	languageVersionMismatch bool
+	languageVersionAgrees   bool
 	// plainTextOnly:2026-08-30 加,见 lrclibResult.plainOnly 头注——true 时 lyrics 装的是
 	// **没有时间戳**的纯文本,不是能拿 isTimedLRC 正常判定的东西。scoreLyricCandidateDetailed
 	// 看到这个标记会跳过"不是带时间戳的歌词就判废"那条通用闸,改判一个专门写明"仅纯文本"
@@ -487,7 +511,29 @@ const lyricOvershootToleranceSecs = 5.0
 // (The VERSACE Experience 里 88 秒的 X-cerpt 节选版):两家的搜索结果里都有 88 秒的「319 (X-cerpt)」,却都
 // 按"标题精确同名压过一切"挑了 185 秒的完整版,到打分层吃 -700/-400 变 1 分照样被采用。打分规则本身
 // 没变,但挑回来的候选变了,存量条目要重搜一轮才会换成对的,所以提版本号。判据见 sourceDurationFits。
-const lyricsScoringVersion = 14
+//
+// v15(2026-09-07):语种版本(粤语/国语)从"纯标签比对"升级成"批级推断 + 双向判决",外加两处
+// 同案牵出的小修。起因是陈奕迅《K歌之王》(本地《打得火热》粤语原版,222.351s)一次手动搜索的复盘:
+// ①QQ「K歌之王 (粤语)」——同专辑、自报 222s、language=yue、正文与网易云/LRCLIB 逐字相同、带逐字时间轴,
+// 却因为本地曲名没写「(粤语)」被判限定词不符 -600、标题档 120→60,1183 分的最优候选压到 523;
+// ②酷狗「K歌之王」(专辑 2003演唱会)是**国语版**(正文/language=cmn/自报 218s 三证),它的 -600 完全来自
+// 专辑名撞上现场标记,与语种无关——专辑若写成拉丁 "Third Encounter Live" 就是 946 分夺冠、悬浮窗上国语词;
+// ③咪咕「K歌之王 AIR(Night Version)」是 2025 年 AIR Studios 管弦重录的国语版,"night version" 不在词表,零惩罚。
+// 全库(3742 条)回放:v14 的 482 个 versionTags 罚分里语种词相关 7 个,4 个误罚 3 个罚对——其中张继聪
+// 《To Be Or Not To Be》那条**罚对且决定胜负**,所以不能把 粤语/国语 从限定词里摘掉了事;库里同时躺着
+// 两条**未被任何机制拦住**的错语种冠军(《七 (新歌+精選)》国语精选辑里的 K歌之王/低等动物配了粤语词:
+// 首次解析时网易云没应答,QQ 裸标题粤语词直接赢)。修法(见 inferLocalLanguageVersion 头注):
+//   - 候选自报 language(QQ/酷狗)+ 标题/专辑里的语种标签折成"这条候选声明的语种版本";本地侧按
+//     本地标签 → 专辑精确匹配候选的声明 → 自报时长能区分两版 三步推断;两边都知道才下判决;
+//   - 判决相同:语种标签从限定词比对与标题梯度里拿掉(QQ 那条回到 1183);判决不同:-600 且不豁免
+//     (酷狗那条不再靠专辑名巧合);一边不知道:v14 原样(To Be Or Not To Be 照罚)。
+//   - 语种标签统一折成两个规范键("(國)"/"(粵)" 单字与 cantonese/mandarin 都认),张继聪《Mau U So(国)》
+//     对酷狗「Mau U So (国语)」这种同语种不同拼法不再 -600;
+//   - 词表补 "day version"/"night version"(AIR 重录版命名);
+//   - lastLRCTimestampSecs 跳过尾部署名行(网易云「监制：」行虚增 duration 项 +72)。
+//
+// 全库决策存档回放见 09 章对应条目。
+const lyricsScoringVersion = 15
 
 // scoreTerm 是打分里的一项。只带**机器可读的类型**和分值,文案交给界面本地化 ——
 // App 有中英两套界面,从这里吐中文字符串会让英文用户看到一串中文。
@@ -860,8 +906,17 @@ func scoreLyricCandidateDetailed(
 	// 只是演奏方式(acoustic 家族)时,是同一次录音的命名差异,不是版本差异 —— 见
 	// sameRecordingDespiteVersionTags(全库回放:现存 433 个吃 -600 的候选 0 个被豁免,
 	// 0 翻盘;它只对"源平台标注了演奏方式、本地曲名没标"这一类新召回的候选生效)。
-	if versionTagsMismatch(localTitle, localAlbum, c.title, c.album) &&
-		!sameRecordingDespiteVersionTags(localTitle, localAlbum, durationSecs, c.title, c.album, c.sourceReportedDurationSecs) {
+	//
+	// v15:语种版本先于标签比对判决(见 lyricCandidate.languageVersionMismatch 注释)。
+	// mismatch 直接 -600、不给 sameRecording 豁免(粤/国两版同伴奏、时长证明不了同一录音);
+	// agrees 时把语种标签从两边集合里拿掉再比(它只是平台消歧用的标注,不是另一个版本);
+	// 两者都不成立退回 v14 原样。三条路只可能落一次 -600,不叠加。
+	switch {
+	case c.languageVersionMismatch:
+		add(scoreTermVersionTags, -versionMismatchPenalty)
+	case versionTagsMismatchIgnoringLanguage(localTitle, localAlbum, c.title, c.album, c.languageVersionAgrees) &&
+		!sameRecordingDespiteVersionTagsIgnoringLanguage(localTitle, localAlbum, durationSecs,
+			c.title, c.album, c.sourceReportedDurationSecs, c.languageVersionAgrees):
 		add(scoreTermVersionTags, -versionMismatchPenalty)
 	}
 	// v7:两场不同命名的演出 → 同级重扣。versionTagsMismatch 在「两边都是 Live」时限定词
@@ -886,7 +941,8 @@ func scoreLyricCandidateDetailed(
 	}
 	// 标题吻合梯度:②层的 lyricTitleAccepted 是道布尔门,过了门"精确同名"与"剥括号后
 	// 才相等"在打分层完全平权——18 词版本表之外的限定词(sped up/TV size)全靠它区分。
-	if p := titleMatchTierPoints(c.title, localTitle); p > 0 {
+	// v15:语种判决一致时,「(粤语)」这类标签不再把精确同名压到括号档(理由同上)。
+	if p := titleMatchTierPointsIgnoringLanguage(c.title, localTitle, c.languageVersionAgrees); p > 0 {
 		add(scoreTermTitleMatch, p)
 	}
 	// 跨源正文共识:与其它源的歌词**内容**互证(3-gram Jaccard),比 corroboratedEndings
@@ -2008,12 +2064,19 @@ var distinctRecordingVersionTags = []string{
 	// 它先撞上。只收歧义低、在标题括号/破折号位置里基本只作版本限定词讲的词(跟上面拉丁词
 	// 一样的收词标准),不收"翻唱"/"改编版"这类含义太宽、容易连累正常标题的词。
 	"现场", "不插电", "伴奏", "纯音乐", "清唱", "混音", "加长版", "阿卡贝拉", "排练",
-	// 2026-08-27 补粤语/国语限定词:同名"(粵語)"/"(國語)"两版是真的两次不同录音
-	// (跟 HanScript.swift 里 PlayCountVariants 对"(國)"/"(粵)"刻意不合并播放次数的
-	// 判断同一个理由),此前词表完全没收,versionTagsMismatch 认不出这类标签、
-	// 国语版歌词可能被错配给粤语音轨(反之亦然)。normLoose 内部先过 toSimplified
-	// (见 normLoose 注释),繁体"粵語/國語"会被折成简体再比对,这里只需列简体。
-	"粤语", "国语", "cantonese", "mandarin",
+	// 粤语/国语/cantonese/mandarin **不在这张表里**(2026-08-27 收进来、2026-09-07 v15 移出):
+	// 同名"(粵語)"/"(國語)"两版确是两次不同录音(跟 HanScript.swift 里 PlayCountVariants 对
+	// "(國)"/"(粵)"刻意不合并播放次数的判断同一个理由),但它们跟 live/demo 不同——是**语种**
+	// 声明,一边没写不等于一边是另一个版本(Apple 的粤语原版曲名从不写「(粤语)」,QQ 却一律
+	// 写),所以改由 languageVersionTagOfSegment 折成两个规范键、经 titleVersionTags /
+	// segmentVersionTags 并进同一个集合(v14 的纯标签比对形态原样保留),再由批级语种判决
+	// (applyLanguageVersionVerdicts)决定要不要把它当版本差异——见那边头注。
+	//
+	// 2026-09-07 补 "day version"/"night version":陈奕迅《K歌之王 AIR》(2025 年 AIR Studios
+	// 管弦重录,Day Version=粤语 / Night Version=国语)这类"昼夜双生"命名。裸 "version" 仍然
+	// 刻意不收(见上),这两个是完整短语。"AIR" 本身在括号外、titleVersionTags 扫不到,收进
+	// 词表也没用,不收。
+	"day version", "night version",
 	// 2026-09-04 补裸 "edit"(用户报 PRINCE《Diamonds and Pearls (2023 Remaster)》配了酷狗
 	// 《Diamonds And Pearls (Edit)》的词——单曲剪辑版,自报 260s 对本地 283s,8% 的差距够不到
 	// sourceDurationOff 的 12% 门槛,末句时刻又恰好落在容差里,于是 +400 逐字 +250 共识 + 120
@@ -2088,6 +2151,9 @@ func titleVersionTags(title string) map[string]bool {
 		if djRemixTagPattern.MatchString(n) {
 			out[djRemixVersionTag] = true
 		}
+		if lang := languageVersionTagOfSegment(seg); lang != "" {
+			out[lang] = true
+		}
 	}
 	return out
 }
@@ -2147,10 +2213,22 @@ func parentheticalSegments(s string) []string {
 // v9 起限定词集合来自 recordingVersionTags(不再直接用 versionTagsIn):专辑名带中文
 // 现场标记(演唱会/现场/音乐会)视同声明了 "live",双向对称——见 recordingVersionTags 注释。
 func versionTagsMismatch(localTitle, localAlbum, candidateTitle, candidateAlbum string) bool {
+	return versionTagsMismatchIgnoringLanguage(localTitle, localAlbum, candidateTitle, candidateAlbum, false)
+}
+
+// versionTagsMismatchIgnoringLanguage 是 versionTagsMismatch 的 v15 实体:ignoreLanguage 为 true
+// (批级语种判决说两边是同一语种版本)时,先把 粤语/国语 两个规范键从两边集合里拿掉再比——
+// 「K歌之王 (粤语)」对本地「K歌之王」于是两边都是空集,不再算版本不符。false 时逐字节等于
+// v14 的 versionTagsMismatch(语种键留在集合里照常参与比对)。打分层用这个,检索层的闸
+// (lrclib.go / kuwo.go)拿不到批级判决、继续走 false 那条。
+func versionTagsMismatchIgnoringLanguage(localTitle, localAlbum, candidateTitle, candidateAlbum string, ignoreLanguage bool) bool {
 	if strings.TrimSpace(candidateTitle) == "" && strings.TrimSpace(candidateAlbum) == "" {
 		return false
 	}
 	local, cand := recordingVersionTags(localTitle, localAlbum), recordingVersionTags(candidateTitle, candidateAlbum)
+	if ignoreLanguage {
+		local, cand = withoutLanguageVersionTags(local), withoutLanguageVersionTags(cand)
+	}
 	if len(local) != len(cand) {
 		return true
 	}
@@ -2198,11 +2276,248 @@ func versionTagsIn(fields ...string) map[string]bool {
 // single,"演唱会"只出现在括号里的介绍文案里。括号里若真写了版本声明(如 "(Live)"),
 // versionTagsIn 的限定词表本来就管,不需要这层推导。
 func recordingVersionTags(title, album string) map[string]bool {
-	out := versionTagsIn(title, album)
+	out := recordingVersionTagsIn(title, album)
 	if !out["live"] && albumHasCJKLiveMarker(stripParens(album)) {
 		out["live"] = true
 	}
 	return out
+}
+
+// recordingVersionTagsIn 是 versionTagsIn(title, album) 的 v15 变体:**专辑名括号里的语种键不算**
+// (曲名里的照算,专辑名里 live/remix 这类限定词照算)。理由跟 declaredLanguageVersion 刻意不看专辑名
+// 一样:合辑的专辑名对"这一轨是哪个语种"没有发言权——网易云把《七》写成「七(国语新歌+精选)」,
+// 这张国语精选辑里同时收着粤语的 Shall We Talk 和国语的 K歌之王;v14 把括号里的「国语」当限定词,
+// 对 Shall We Talk 是误罚(全库回放里仅有的 2 处专辑级语种罚分都是它,均无影响),对《七》上真正的
+// 国语 K歌之王 候选(本地就是国语音轨)则是**把唯一对的候选罚下去**——存量那两条错语种冠军
+// (K歌之王/低等动物|七)靠 rescore 自愈的前提就是这一步。liveAlbumIdentityConflict 仍用
+// versionTagsIn(它只看 live,语种键无关)。
+func recordingVersionTagsIn(title, album string) map[string]bool {
+	out := titleVersionTags(title)
+	for tag := range withoutLanguageVersionTags(titleVersionTags(album)) {
+		out[tag] = true
+	}
+	return out
+}
+
+// ---- 语种版本(粤语/国语),v15(2026-09-07) ----
+//
+// 同名的粤语版/国语版是两次不同的录音(时间轴各一套),但它的**标注形态**跟 live/demo 这类
+// 限定词根本不同:live 版一定会被标出来(不标就是录音室版),而语种标签只在平台**需要消歧**时
+// 才出现——Apple 的粤语原版曲名从不写「(粤语)」(那是默认),QQ 库里两版并存于是一律写
+// 「(粤语)」「(国语)」,酷狗把语种放在 language 字段、标题裸写。把它当普通限定词做集合比对,
+// 后果是**不分对错一律 -600**:本地无标签 vs 候选「(粤语)」,粤语音轨(该收)和国语音轨(该罚)
+// 得到同一个判决;反过来裸标题的另一语种候选(酷狗)则完全漏网。所以要单独回答两个问题:
+// 这条候选声明的是哪种语种版本、本地在放的是哪种——两个都知道才下判决。
+//
+// 规范键:两个,繁简/中英/单字形态全部折进来,让"(國)"对"(国语)"、"(Cantonese)"对"(粤语)"
+// 这类同一声明的不同拼法不再被判成不同的限定词(张继聪《Mau U So(国)》对酷狗「Mau U So (国语)」
+// 就是这样白吃了 -600)。
+const (
+	languageVersionTagCantonese = "粤语"
+	languageVersionTagMandarin  = "国语"
+)
+
+// languageVersionTagOfSegment 判一段括号/破折号尾段声明的语种版本,返回规范键或空串。
+// "(國)"/"(粵)" 这种 Apple 用的单字缩写只认**整段就是这一个字**——按子串认会把「(国际版)」
+// 「(中国之星现场)」全打成国语。整词形态(粤语/国语/cantonese/mandarin,含"粤语版"这类带尾巴的)
+// 按子串认,normLoose 已折繁简、折大小写。
+func languageVersionTagOfSegment(seg string) string {
+	n := normLoose(seg)
+	switch n {
+	case "粤":
+		return languageVersionTagCantonese
+	case "国":
+		return languageVersionTagMandarin
+	}
+	switch {
+	case strings.Contains(n, "粤语") || strings.Contains(n, "cantonese"):
+		return languageVersionTagCantonese
+	case strings.Contains(n, "国语") || strings.Contains(n, "mandarin"):
+		return languageVersionTagMandarin
+	}
+	return ""
+}
+
+// withoutLanguageVersionTags 返回去掉两个语种规范键之后的限定词集合副本(不改原 map)。
+func withoutLanguageVersionTags(tags map[string]bool) map[string]bool {
+	out := make(map[string]bool, len(tags))
+	for tag := range tags {
+		if tag == languageVersionTagCantonese || tag == languageVersionTagMandarin {
+			continue
+		}
+		out[tag] = true
+	}
+	return out
+}
+
+// declaredLanguageVersion 从**歌名**读出明确写出来的语种版本:括号段/破折号尾段里的语种标签
+// (经 titleVersionTags,跟版本限定词同一套抽取位置)。没写返回空串;两个键同时出现(理论上
+// 不该有)按"说不清"返回空串。
+//
+// ⚠️ **刻意不看专辑名**——不看专辑括号段,也不看「国语精选」这类不带括号的专辑名子串。第一版
+// 两个都看,金标集当场抓到反例:陈奕迅《Shall We Talk》是粤语歌,本地却收在《陈奕迅 国语精选》
+// 合辑里(酷狗/QQ 自报 yue),按专辑名推成国语就把两条正确的粤语候选各罚了 -600、反把 LRCLIB
+// 那条(专辑「七(国语新歌+精选)」)抬成冠军;同一张《七》里 K歌之王 是国语版而 Shall We Talk 是
+// 粤语版——合辑的专辑名对"这一轨是哪个语种"没有发言权,候选侧同理。专辑括号里的语种词在
+// versionTagsIn 的**限定词集合**里仍照 v14 参与相等比对(那是另一件事、行为不变),只是不算
+// "声明"。
+func declaredLanguageVersion(title string) string {
+	found := map[string]bool{}
+	for tag := range titleVersionTags(title) {
+		if tag == languageVersionTagCantonese || tag == languageVersionTagMandarin {
+			found[tag] = true
+		}
+	}
+	if len(found) != 1 {
+		return ""
+	}
+	for tag := range found {
+		return tag
+	}
+	return ""
+}
+
+// candidateLanguageVersion 是"这条候选声明自己是哪种语种版本":先看源自报的 language 字段
+// (QQ 的 fcg_play_single_song language / 酷狗的 trans_param.language,各源解析时已折成
+// songLanguageCantonese/songLanguageMandarin,是平台对这条曲目的结构化标注,比标题里的括号
+// 更直接),没有再看歌名/专辑名里写出来的。
+func candidateLanguageVersion(c lyricCandidate) string {
+	switch c.language {
+	case songLanguageCantonese:
+		return languageVersionTagCantonese
+	case songLanguageMandarin:
+		return languageVersionTagMandarin
+	}
+	return declaredLanguageVersion(c.title)
+}
+
+// localLanguageInferenceExactAlbumScore:第②步只认专辑**精确同名**(albumScore 的 200 档)的候选——
+// 子串/词元亲和(精选辑、再版)对"这一张收的是哪个语种版本"没有发言权。
+const localLanguageInferenceExactAlbumScore = 200
+
+// localLanguageInferenceFitTolerance / localLanguageInferenceGapTolerance:第③步用自报时长区分两版
+// 时,"对得上"的语种要在 0.5% 以内(源自报整数秒对本地毫秒,同一次录音的取整误差 ≤0.5s/220s≈0.23%,
+// 0.5% 留一倍余量;比 sameRecordingDespiteVersionTags 第①门的 1% 严一半——那边是豁免、这边是要
+// 据此**罚**另一边),而**另一种**语种最接近的候选也得至少差 1.5%。两档之间留出余量:全库回放里
+// 同一次录音跨发行的自报时长漂移见过 1.7~2%(尾部静音不同),所以"对得上"必须钉得很紧,免得错
+// 版本凑巧落进来;两版时长几乎一样(同一伴奏、只换人声,正是这类歌的常态)时两个条件不可能
+// 同时成立,推断放弃、退回 v14。K歌之王两版 222.351 vs 218.667 差 1.7%,QQ 粤语自报 222(0.16%)、
+// 酷狗国语自报 218(1.96%),刚好是能分开的一例。
+const (
+	localLanguageInferenceFitTolerance = 0.005
+	localLanguageInferenceGapTolerance = 0.015
+)
+
+// inferLocalLanguageVersion 推断**本地正在放的这首**是哪种语种版本。本地标签自己不会说
+// (Apple 的粤语原版不标),只能从三处证据里推,按可靠度排序、命中即止:
+//
+//	①本地歌名明确写了(「K歌之王 (國)」「Mau U So(国)」)——用户库里的元数据,最直接;专辑名不算,
+//	  理由见 declaredLanguageVersion;
+//	②候选里有专辑**精确同名**、自报时长与本地 ≤0.5% 吻合、且声明了语种的:那一张专辑收的就是这个版本
+//	  (QQ 的「K歌之王 (粤语)」挂在《打得火热》上、自报 222s 对本地 222.351s,本地专辑也是《打得火热》
+//	  → 粤语)。时长门是防"同一张专辑收了两个语种版本"(张继聪《To Be Or Not To Be》案,见函数体
+//	  注释);多条合格候选声明不一致 → 说不清;
+//	③候选自报时长能把两个语种版本分开:两种语种都有候选自报了时长,其中一种最接近的差 ≤0.5%、另一种
+//	  最接近的也 ≥1.5%(阈值理由见常量注释)→ 本地是接近的那种。只有一种语种在场时**不推**——
+//	  "它的时长对得上"对两版同时长的歌毫无区分力,推错的代价正是这套机制要防的那种错配。也**不做**
+//	  反向推断("声明了粤语的都对不上时长、某条没声明的对得上 → 本地是国语"):同一次录音跨发行的
+//	  自报时长就见过 1.7~2% 的漂移,会把同语种的再版候选误判成另一语种。代价是《七 (新歌+精選)》
+//	  那两条(国语音轨、候选池里唯一的国语候选没有任何语种声明)这一轮仍救不回来,如实记在 09 章。
+//
+// 三处都拿不到返回空串,打分层退回 v14 的纯标签比对。**故意不做**的:按正文共识多数派推
+// (少数派可能才是对的:K歌之王《七》案里三条粤语候选全是错的,唯一对的国语候选是少数);
+// 按正文字面判粤/国(书面粤语歌词几乎不含口语字,判不出来)。
+func inferLocalLanguageVersion(localTitle, localAlbum string, durationSecs float64, candidates []lyricCandidate) string {
+	if lang := declaredLanguageVersion(localTitle); lang != "" {
+		return lang
+	}
+	if durationSecs <= 0 {
+		return ""
+	}
+	relDiff := func(c lyricCandidate) float64 {
+		return math.Abs(c.sourceReportedDurationSecs-durationSecs) / math.Max(c.sourceReportedDurationSecs, durationSecs)
+	}
+	// ②专辑精确同名 **且自报时长与本地 ≤0.5% 吻合** 的声明候选。时长这道门不能省:全库回放抓到
+	// 张继聪《To Be Or Not To Be》——同一张专辑同时收了粤语原版和「To Be Or Not To Be (国语)」
+	// bonus 曲目,本地在放的是粤语版(网易云自报 188s 对本地 188.23s),酷狗那条「(国语)」专辑也精确
+	// 同名、自报 186s(差 1.2%);只看专辑就会把本地推成国语、给酷狗免罚,国语词配粤语音轨。
+	// 声明候选自己都对不上本地时长,它声明的语种就不能代表本地。没自报时长的声明候选同样不采信。
+	exact := map[string]bool{}
+	for _, c := range candidates {
+		if albumScore(c.album, localAlbum) < localLanguageInferenceExactAlbumScore || c.sourceReportedDurationSecs <= 0 {
+			continue
+		}
+		if relDiff(c) > localLanguageInferenceFitTolerance {
+			continue
+		}
+		if lang := candidateLanguageVersion(c); lang != "" {
+			exact[lang] = true
+		}
+	}
+	if len(exact) == 1 {
+		for lang := range exact {
+			return lang
+		}
+	}
+	if len(exact) > 1 {
+		return ""
+	}
+	closest := map[string]float64{}
+	for _, c := range candidates {
+		if c.sourceReportedDurationSecs <= 0 {
+			continue
+		}
+		lang := candidateLanguageVersion(c)
+		if lang == "" {
+			continue
+		}
+		diff := relDiff(c)
+		if cur, ok := closest[lang]; !ok || diff < cur {
+			closest[lang] = diff
+		}
+	}
+	if len(closest) < 2 {
+		return ""
+	}
+	best, bestDiff := "", math.Inf(1)
+	for lang, diff := range closest {
+		if diff < bestDiff {
+			best, bestDiff = lang, diff
+		}
+	}
+	if bestDiff > localLanguageInferenceFitTolerance {
+		return ""
+	}
+	for lang, diff := range closest {
+		if lang != best && diff < localLanguageInferenceGapTolerance {
+			return ""
+		}
+	}
+	return best
+}
+
+// applyLanguageVersionVerdicts 在**整批**候选上算一次本地语种(inferLocalLanguageVersion),把每条
+// 候选的 languageVersionMismatch / languageVersionAgrees 写好。跟 corroboratedEndings /
+// contentConsensusPeers 一样是批级步骤,必须在 scoreLyricCandidateDetailed 之前跑(两条打分
+// 流水线各调一次,见 enrich.go);直接构造 lyricCandidate 的调用点不调它,两个字段保持 false,
+// 行为等于 v14。两边任一不知道语种 → 两个字段都 false。
+func applyLanguageVersionVerdicts(localTitle, localAlbum string, durationSecs float64, candidates []lyricCandidate) {
+	local := inferLocalLanguageVersion(localTitle, localAlbum, durationSecs, candidates)
+	for i := range candidates {
+		candidates[i].languageVersionMismatch, candidates[i].languageVersionAgrees = false, false
+		if local == "" {
+			continue
+		}
+		lang := candidateLanguageVersion(candidates[i])
+		if lang == "" {
+			continue
+		}
+		if lang == local {
+			candidates[i].languageVersionAgrees = true
+		} else {
+			candidates[i].languageVersionMismatch = true
+		}
+	}
 }
 
 // versionMismatchPenalty 要足够大到"永远压不过标题吻合的候选":时长项最高 1000、逐字项
@@ -2213,9 +2528,10 @@ const versionMismatchPenalty = 600
 // sameRecordingExtraTagWhitelist:候选比本地**多出**的版本限定词里,哪些描述的是
 // "同一场演出怎么演的"而不是"另一次录音"。只收 acoustic 家族:一场演唱会的钢琴/不插电
 // 演绎,源平台可能标注"(Acoustic Piano)"而 Apple 曲名不标,这是**命名差异**;而
-// 伴奏/instrumental/粤语/国语/demo/remix 这些词,即便时长逐位吻合也是**另一次录音**
-// (伴奏版时长常与原曲完全相同;粤语/国语两版同一伴奏、时长几乎一样 —— 恰恰是
-// versionTagsMismatch 存在的理由),永不豁免。
+// 伴奏/instrumental/demo/remix 这些词,即便时长逐位吻合也是**另一次录音**(伴奏版时长常与
+// 原曲完全相同),永不豁免。粤语/国语同理也不在这张表里——两版同一伴奏、时长几乎一样,
+// 时长证明不了同一录音;v15 起它们由批级语种判决单独处置(languageVersionAgrees 时在比对前
+// 就被摘掉,根本走不到这张表;判决不了时保持"永不豁免"),见 applyLanguageVersionVerdicts。
 var sameRecordingExtraTagWhitelist = map[string]bool{
 	"acoustic": true, "unplugged": true, "不插电": true,
 }
@@ -2241,6 +2557,18 @@ func sameRecordingDespiteVersionTags(
 	localTitle, localAlbum string, localDurationSecs float64,
 	candTitle, candAlbum string, candDurationSecs float64,
 ) bool {
+	return sameRecordingDespiteVersionTagsIgnoringLanguage(localTitle, localAlbum, localDurationSecs,
+		candTitle, candAlbum, candDurationSecs, false)
+}
+
+// sameRecordingDespiteVersionTagsIgnoringLanguage 是 sameRecordingDespiteVersionTags 的 v15 实体,
+// ignoreLanguage 的语义同 versionTagsMismatchIgnoringLanguage:判决一致时语种键不参与第③④门。
+// false 时逐字节等于 v14。
+func sameRecordingDespiteVersionTagsIgnoringLanguage(
+	localTitle, localAlbum string, localDurationSecs float64,
+	candTitle, candAlbum string, candDurationSecs float64,
+	ignoreLanguage bool,
+) bool {
 	if localDurationSecs <= 0 || candDurationSecs <= 0 {
 		return false
 	}
@@ -2260,9 +2588,12 @@ func sameRecordingDespiteVersionTags(
 	// 钉住了。第④门的两侧仍用完整集合(recordingVersionTags):候选**多出**的 live 推导
 	// (录音室本地 vs "XX演唱会"合集候选)不在白名单里,照样不豁免——那一类里混着真现场版,
 	// 时长吻合不足以为它作保(见 docs/features/09 第 34 条周大侠案的记录)。
-	localParen := versionTagsIn(localTitle, localAlbum)
+	localParen := recordingVersionTagsIn(localTitle, localAlbum)
 	local := recordingVersionTags(localTitle, localAlbum)
 	cand := recordingVersionTags(candTitle, candAlbum)
+	if ignoreLanguage {
+		localParen, local, cand = withoutLanguageVersionTags(localParen), withoutLanguageVersionTags(local), withoutLanguageVersionTags(cand)
+	}
 	for tag := range localParen {
 		if !cand[tag] {
 			return false
@@ -2633,6 +2964,15 @@ func contentConsensusPeers(localArtist, localTitle string, candidates []lyricCan
 // titleVersionTags(它连 dash 尾段一起抽,两侧 dash 尾段带相同版本词时会把本该精确的
 // 压在括号档)。
 func titleMatchTierPoints(candidateTitle, localTitle string) int {
+	return titleMatchTierPointsIgnoringLanguage(candidateTitle, localTitle, false)
+}
+
+// titleMatchTierPointsIgnoringLanguage 是 titleMatchTierPoints 的 v15 实体:ignoreLanguage 为 true
+// (批级语种判决说两边同一语种版本)时,括号里只有语种标签的候选按"纯噪音括号"升回精确档——
+// 「K歌之王 (粤语)」对本地「K歌之王」拿 120 而不是 60。没有这一步,光免掉 versionTags -600 也
+// 救不回带逐字时间轴的正确候选:applyWordTimingTitleOverride 会因为亚军标题档更高(120>60)把
+// 它的 +400 撤掉(K歌之王案实测:免罚后 1123→723,仍输给 867 的网易云)。false 时等于 v14。
+func titleMatchTierPointsIgnoringLanguage(candidateTitle, localTitle string, ignoreLanguage bool) int {
 	nct, nlt := normLoose(candidateTitle), normLoose(localTitle)
 	if nct == "" || nlt == "" {
 		return 0
@@ -2642,7 +2982,11 @@ func titleMatchTierPoints(candidateTitle, localTitle string) int {
 	}
 	sc, sl := normLoose(stripParens(candidateTitle)), normLoose(stripParens(localTitle))
 	if sc != "" && sl != "" && sc == sl {
-		if len(parenOnlyVersionTags(candidateTitle)) == 0 && len(parenOnlyVersionTags(localTitle)) == 0 {
+		ct, lt := parenOnlyVersionTags(candidateTitle), parenOnlyVersionTags(localTitle)
+		if ignoreLanguage {
+			ct, lt = withoutLanguageVersionTags(ct), withoutLanguageVersionTags(lt)
+		}
+		if len(ct) == 0 && len(lt) == 0 {
 			return 120
 		}
 		return 60
@@ -2709,6 +3053,11 @@ func segmentVersionTags(seg string) map[string]bool {
 	}
 	if djRemixTagPattern.MatchString(joined) {
 		out[djRemixVersionTag] = true
+	}
+	// 语种标签走专门的规范化(繁简/中英/单字形态折成同一个键),不走上面两套匹配——
+	// 上面的中文子串路径不做 toSimplified,"(粵語)" 会漏;见 languageVersionTagOfSegment。
+	if lang := languageVersionTagOfSegment(seg); lang != "" {
+		out[lang] = true
 	}
 	return out
 }

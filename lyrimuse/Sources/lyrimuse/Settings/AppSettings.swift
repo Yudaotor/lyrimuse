@@ -91,12 +91,14 @@ enum NotchLyricRowArtworkPosition: String, Codable, Hashable, CaseIterable {
 // 菜单栏歌词那一格怎么占位。两种模式**只在这一句比设定宽度短时**才有区别 ——
 // 装不下的句子两边一模一样:占满设定宽度、横向滚动。
 //
-// fixed(2026-08-17 起的默认):短句也占满设定宽度,右边空一块。好处是这一项的
-// footprint 恒定,换句时右边其它 App 的图标不会被顶得左右晃(用户反馈"动来动去,
-// 观感不太好",当时是直接写死成这个行为的)。
+// fixed:短句也占满设定宽度,右边空一块。好处是这一项的 footprint 恒定,换句时右边
+// 其它 App 的图标不会被顶得左右晃(用户反馈"动来动去,观感不太好";2026-08-17 起这是
+// 写死的唯一行为,加了这个开关之后又当了三周默认值)。
 //
-// adaptive:短句按自己的宽度占位,菜单栏项跟着缩短,不占用不需要的空间 —— 代价正是
-// 上面那条:长短句来回切会伸缩。菜单栏图标本来就多的人更在意这个。
+// adaptive(2026-09-07 起的默认,理由见 AppSettings.defaultMenuBarLyricsWidthMode):
+// 短句按自己的宽度占位,菜单栏项跟着缩短,不占用不需要的空间 —— 代价正是上面那条:
+// 长短句来回切会伸缩(由此而来的抖动已被「短命行不缩槽」压掉,见 06 章)。菜单栏图标
+// 本来就多的人更在意这个。
 enum MenuBarLyricsWidthMode: String, Codable, Hashable, CaseIterable {
     case fixed
     case adaptive
@@ -114,8 +116,8 @@ enum MenuBarLyricsWidthMode: String, Codable, Hashable, CaseIterable {
 // 一条优先级规则,而暂停时进度本来就不动、染一半反而像卡住了。所以这一项的落点**只有**
 // 歌词那条渲染路径(MenuBarScrollingLabel),`showIcon` 那条一行不碰。
 //
-// 默认 `.off`:它会让菜单栏这一项变宽(图标宽 + 5pt 间距),存量用户升级后不该无声地多占
-// 一块地方。
+// 默认 `.leading`(2026-09-07 前是 `.off`,改的理由见
+// AppSettings.defaultMenuBarLyricsIconPosition)。
 enum MenuBarLyricsIconPosition: String, Codable, Hashable, CaseIterable {
     case off
     case leading
@@ -131,9 +133,19 @@ enum MenuBarLyricsIconPosition: String, Codable, Hashable, CaseIterable {
 // 再复制第三份出来,下次改尺寸/文案就要记得改三处。`rawValue` 和两个 UserDefaults key
 // (`np:menuBarLyricsAlignment`/`np:notchLyricsAlignment`)都没变,存量配置不受影响。
 //
-// ⚠️ 跟悬浮歌词的 `OverlayDuetAlignmentOverride` **不是**一回事,别合并:那个有第四个
-// case(`automatic` = 按对唱声部自动切换),而且非自动选项还会连带关掉声部指示圆点和两侧
-// 内缩(见那个类型的头注)。这个类型只管"有空位时靠哪边",不碰任何装饰。
+// ⚠️ 跟悬浮歌词的 `OverlayDuetAlignmentOverride` **不是**一回事,别合并:那边的非自动选项还会
+// 连带关掉声部指示圆点和两侧内缩(见那个类型的头注)。这个类型只管"有空位时靠哪边",不碰任何
+// 装饰。(2026-09-07 之前这里还写着"那个有第四个 case `automatic`"——现在这边也有了,见下一段,
+// 但两者的差别仍在"动不动装饰"上,依旧别合并;rawValue 恰好同名只是方便,不是耦合。)
+//
+// **「自动」(`automatic`,2026-09-07,用户:「灵动岛里面的对齐模式可以也帮我加一个自动吗」)**:按
+// 这一句的对唱声部(`SyncedLyricLine.side`,Core 的 `LyricDuet` 识别)决定靠哪边 —— 谁唱靠谁那边、
+// 合唱居中、**没有对唱信息时靠左**(`resolved(duetSide:)`)。兜底选左不选居中(悬浮歌词的自动兜底是
+// 居中):灵动岛这一行默认就是左对齐,「自动」的意思是"有对唱就跟着换边,没有就跟原来一样",而不是
+// 把所有普通歌都改成居中 —— 那样选它等于顺手改了一个不相干的东西。**只有灵动岛提供这一档**
+// (`notchOptions`);菜单栏那一格照旧三档(`menuBarOptions`),渲染侧把 `.automatic` 当左对齐兜底
+// (`MenuBarScrollingLabel` 那两个 switch),存量配置里也不可能出现这个值。默认值不变(仍是 leading):
+// 老用户升级不该看见对唱歌的歌词突然开始左右换边。
 //
 // **只在"有多余空间"时才有效果**,这不是偷懒而是定义使然 —— 两个展示面各有自己的失效
 // 条件,所以设置界面里这一行的显隐判据也各写在各自的调用点:
@@ -147,12 +159,34 @@ enum MenuBarLyricsIconPosition: String, Codable, Hashable, CaseIterable {
 // `MenuBarScrollingLabel` 静止时把 contentLayer.position.x 复位到 0(那一格的左边缘);
 // 灵动岛 `MarqueeText.restingAlignment` 的默认值本来就是 `.leading`。
 enum LyricsRestingAlignment: String, Codable, Hashable, CaseIterable {
+    /// 按对唱声部自动(2026-09-07,目前只有灵动岛提供),见上面那段。
+    case automatic
     case leading
     case center
     case trailing
 }
 
 extension LyricsRestingAlignment {
+    /// 灵动岛「对齐方式」给的选项:「自动」排最前(跟悬浮歌词那个控件一样,"智能的那一档"打头),
+    /// 后面三档保持原来的顺序。
+    static var notchOptions: [LyricsRestingAlignment] { [.automatic, .leading, .center, .trailing] }
+    /// 菜单栏「对齐方式」给的选项:没有「自动」——那一格里的一行字目前不跟对唱声部走(要给的话
+    /// 得把 `compactLine.side` 一路传进 `MenuBarScrollingLabel.present`,不是这一轮的事)。
+    static var menuBarOptions: [LyricsRestingAlignment] { [.leading, .center, .trailing] }
+
+    /// 把「自动」按这一句的声部落成一个确定的方向;非自动原样返回。**永远返回非 automatic**,
+    /// 三个消费点(主行 / 副行 / 展开态「下一句」)要的是一个确定的方向。
+    /// 兜底 `.leading` 的理由见类型头注。
+    func resolved(duetSide: LyricDuet.Side?) -> LyricsRestingAlignment {
+        guard self == .automatic else { return self }
+        switch duetSide {
+        case .leading?: return .leading
+        case .trailing?: return .trailing
+        case .center?: return .center
+        case nil: return .leading
+        }
+    }
+
     /// SwiftUI 侧的对齐值。灵动岛两处消费方(`MarqueeText.restingAlignment` 和展开态
     /// 「下一句」那一行的 `.frame(alignment:)`)都用它,**一份映射两处读** —— 这个仓库为
     /// "同一个视觉属性有两条路径各写一份"付过代价(悬浮歌词的「对齐方式」当年在预览条上
@@ -163,7 +197,9 @@ extension LyricsRestingAlignment {
     /// `contentLayer.position.x`),没有 SwiftUI 对齐值可用。
     var swiftUIAlignment: Alignment {
         switch self {
-        case .leading: return .leading
+        // ⚠️ `.automatic` 不该走到这里 —— 消费点先过 `resolved(duetSide:)` 再取这个值
+        // (`NotchPlayback.mainLyricAlignment` 那三个)。真走到了给左对齐,跟没有声部信息时的兜底一致。
+        case .leading, .automatic: return .leading
         case .center: return .center
         case .trailing: return .trailing
         }
@@ -176,7 +212,12 @@ final class AppSettings: ObservableObject {
     static let shared = AppSettings()
 
     private enum Keys {
+        /// 已废弃(2026-09-06):全局「卡拉OK效果」拆成三个展示面各自的开关,只在 init() 里读一次做迁移
+        /// (已登记进 ConfigPortability.obsoleteDefaultsKeys,init 末尾清掉)。
         static let preferWordLevelKaraoke = "np:preferWordLevelKaraoke"
+        /// 悬浮歌词 / 灵动岛各自的「卡拉OK效果」(2026-09-06);菜单栏那颗是早就有的 menuBarLyricsKaraoke。
+        static let overlayLyricsKaraoke = "np:overlayLyricsKaraoke"
+        static let notchLyricsKaraoke = "np:notchLyricsKaraoke"
         static let lyricsChineseVariant = "np:lyricsChineseVariant"
         static let hasSeenChineseLyrics = "np:hasSeenChineseLyrics"
         static let hasShownMenuBarPositionHint = "np:hasShownMenuBarPositionHint"
@@ -203,6 +244,7 @@ final class AppSettings: ObservableObject {
         static let menuBarLyricsIconPosition = "np:menuBarLyricsIconPosition"
         static let menuBarLyricsFontWeight = "np:menuBarLyricsFontWeight"
         static let menuBarLyricsFontSize = "np:menuBarLyricsFontSize"
+        static let menuBarSecondaryLine = "np:menuBarSecondaryLine"
         static let menuBarHoverShowsControls = "np:menuBarHoverShowsControls"
         static let menuBarShowsTitleWhenNoLyrics = "np:menuBarShowsTitleWhenNoLyrics"
         static let menuBarIconStyle = "np:menuBarIconStyle"
@@ -268,9 +310,11 @@ final class AppSettings: ObservableObject {
         static let notchExpandedShowsTrackTitle = "np:notchExpandedShowsTrackTitle"
         static let notchExpandedShowsArtist = "np:notchExpandedShowsArtist"
         static let notchExpandedShowsAlbum = "np:notchExpandedShowsAlbum"
+        static let notchExpandedShowsQuickActions = "np:notchExpandedShowsQuickActions"
         static let notchLyricRowShowsArtwork = "np:notchLyricRowShowsArtwork"
         static let notchLyricRowArtworkPosition = "np:notchLyricRowArtworkPosition"
         static let notchLyricsAlignment = "np:notchLyricsAlignment"
+        static let notchSecondaryLine = "np:notchSecondaryLine"
         static let notchLeftEar = "np:notchLeftEar"
         static let notchRightEar = "np:notchRightEar"
         static let notchScreenID = "np:notchScreenID"
@@ -307,10 +351,18 @@ final class AppSettings: ObservableObject {
     // 系统"的表示法,见 fontFamilyName 那条属性和 FontFamilyPicker。
     static let defaultFontFamilyName = ""
     static let defaultFontSize = 31.0
-    /// ⚠️ 必须是 `.bold`:加「字重」这个设置之前,主歌词行的权重就是硬编码的 bold。默认值一改,
-    /// 所有老用户的悬浮歌词升级后当场变样。其余三行由它推导,推导规则和那条不变量见
-    /// `OverlayFontWeight`(LyrimuseCore)。
-    static let defaultOverlayFontWeight: OverlayFontWeight = .bold
+    /// 悬浮歌词主歌词行的字重档位。2026-09-07 从 `.bold` 改成 `.semibold`(「较粗」)—— 用户把
+    /// 自己在用的这一版悬浮歌词配置定为默认("帮我把我目前悬浮歌词的配置也设为默认的")。
+    ///
+    /// ⚠️ 这一改**推翻了原来写在这里的"必须是 `.bold`"**,原话是:加「字重」这个设置之前主歌词行
+    /// 的权重就是硬编码的 bold,默认值一改,所有老用户的悬浮歌词升级后当场变样。这条代价是
+    /// 知情接受的 —— 影响范围是新装 + 存量里从没动过这一项的人,动过的键早已落盘。
+    ///
+    /// ⚠️ 顺带**整条派生阶梯下移一档**:其余三行由这一档推导(规则和档位差见 `OverlayFontWeight`),
+    /// `.bold` 档推的是 主 9 / 罗马音 6 / 译文 5 / 下一句 6,`.semibold` 档推的是 主 8 / 罗马音 5 /
+    /// 译文 4 / 下一句 5。`OverlayFontWeight` 里那条"`.bold` 推出来的四个权重 = 改动前的四个硬编码值"
+    /// 的不变量**照旧钉着**(它锚的是阶梯和档位差没被重排),只是它锚的那一档不再是默认档。
+    static let defaultOverlayFontWeight: OverlayFontWeight = .semibold
 
     // 「跟随封面」不是 ColorTheme 的字段(那份只打包配色四项,见该类型注释),默认值
     // 单独放这里——跟配色四项同一个理由:init() 和"恢复默认文字与配色"按钮都读它,
@@ -326,14 +378,29 @@ final class AppSettings: ObservableObject {
     // 各自硬编码一遍数字/case——这批默认值这几天刚被反复调整过
     // (`notchExpandedShowsArtwork` 就在本次改动的前几轮从 true 改成过 false),两处
     // 分别硬编码会有其中一处漏改、"点了重置却恢复不出真正默认值"的风险。
+    //
+    // ⚠️ **2026-09-07 整体校准过一次**:用户把自己在用的这一版灵动岛设置定为默认("再帮我把目前
+    // 我灵动岛的设置也设置为默认的",同一天先后对菜单栏、悬浮歌词做过同样的事)。逐键比对后动了
+    // 十项:左右耳、暂停时收起、展开卡片的四个内容开关、歌词行封面、歌词对齐,以及稳态/展开两个
+    // 宽度。改的是"这个键没存过时用什么" —— 动过的人键早已落盘、升级后一字不变;跟着变的是新装
+    // 用户和存量里从没动过某一项的人,这是刻意的。下面凡是被这次改动推翻了原有理由的,都在那一行
+    // 旁边留了记录,没有把原理由删掉。详见 05 章「默认值的一次整体校准」。
     static let defaultNotchCardStyle = NotchCardStyle.coverArt
-    // 灵动岛稳态宽 / 展开宽共用的默认值(2026-09-06 起两个键):写成一份是为了保证"没存过"的
-    // 新装机器上 hover 不会莫名多长一截 —— 两个字面量分开写,改一个漏一个就是这种事故。
-    static let defaultNotchContentWidth: Double = 360
+    // 灵动岛稳态宽 / 展开宽的默认值(2026-09-06 起是两个键)。
+    //
+    // ⚠️ 2026-09-07 前这里只有**一个**常量、两个键共用它,理由写的是"保证'没存过'的新装机器上
+    // hover 不会莫名多长一截"。那天按用户的实际配置拆成一对(稳态 252 / 展开 482):hover 展开比
+    // 稳态宽本来就是这对设置存在的意义(读侧的 max 只保证展开不比稳态窄,没规定必须相等),而
+    // "改一个漏一个"的那份担心由这两行紧挨着 + 05 章那张表兜住。
+    static let defaultNotchContentWidth: Double = 252
+    static let defaultNotchExpandedContentWidth: Double = 482
     static let defaultNotchAllScreens = false
     static let defaultNotchScreenID = ""
-    static let defaultNotchLeftEar = NotchEarModule.title
-    static let defaultNotchRightEar = NotchEarModule.artist
+    /// 左右耳装什么(2026-09-07 从 title / artist 改成 artwork / none —— 用户在用的就是"左耳一枚
+    /// 封面、右耳空着"。右耳空出来之后音浪(`defaultNotchEqualizerEar` = right)贴着的就是那一侧,
+    /// 不再跟歌手名挤在一起)。
+    static let defaultNotchLeftEar = NotchEarModule.artwork
+    static let defaultNotchRightEar = NotchEarModule.none
     /// 灵动岛两个自动隐藏开关的默认值(2026-09-03 补,为了把它们纳入「重置」)。
     ///
     /// ⚠️ **`init()` 的兜底刻意不读这两个常量**,别看到不一致就"顺手统一" —— 那边走的是
@@ -344,38 +411,62 @@ final class AppSettings: ObservableObject {
     static let defaultNotchHideDuringScreenCapture = false
     static let defaultNotchHideWhenNotPlaying = false
     static let defaultNotchShowLyrics = true
-    static let defaultNotchCollapsesWhenPaused = true
+    /// 暂停时是否收起成一条(2026-09-07 从 true 改成 false):用户在用的是"暂停也保持展开",
+    /// 暂停时卡片留在原地比缩回去更容易接着看。
+    static let defaultNotchCollapsesWhenPaused = false
     static let defaultNotchShowsEqualizer = true
     static let defaultNotchEqualizerEar = NotchEqualizerEar.right
     static let defaultNotchExpandedShowsNextLine = true
     static let defaultNotchExpandedShowsControls = true
-    static let defaultNotchExpandedShowsLyricsOffset = false
+    /// 展开卡片里的四项默认从关改成开(2026-09-07,用户在用的就是这一套:歌词微调 + 歌名 + 歌手 +
+    /// 专辑)。⚠️ 连带后果:**展开态默认高度变高**(多出这四行),这是知情接受的 —— 展开态本来就是
+    /// "hover 之后看详细信息"的那一面。`defaultNotchExpandedShowsArtwork` 保持关(用户也关着)。
+    static let defaultNotchExpandedShowsLyricsOffset = true
     static let defaultNotchExpandedShowsArtwork = false
-    static let defaultNotchExpandedShowsTrackTitle = false
-    static let defaultNotchExpandedShowsArtist = false
-    static let defaultNotchExpandedShowsAlbum = false
-    static let defaultNotchLyricRowShowsArtwork = true
+    static let defaultNotchExpandedShowsTrackTitle = true
+    static let defaultNotchExpandedShowsArtist = true
+    static let defaultNotchExpandedShowsAlbum = true
+    static let defaultNotchExpandedShowsQuickActions = true
+    /// 歌词行末尾那枚封面缩略图(2026-09-07 从 true 改成 false):用户关着它 —— 左耳已经有一枚封面
+    /// (见 `defaultNotchLeftEar`),同一张图在一张卡上出现两次没有意义。位置常量
+    /// (`defaultNotchLyricRowArtworkPosition`)保持 .right 不动:它是"打开这一项时贴哪边"的起点。
+    static let defaultNotchLyricRowShowsArtwork = false
     static let defaultNotchLyricRowArtworkPosition = NotchLyricRowArtworkPosition.right
-    /// 见 LyricsRestingAlignment:.leading 就是加这一项之前 `MarqueeText.restingAlignment`
-    /// 的默认值,也就是既有行为。
-    static let defaultNotchLyricsAlignment = LyricsRestingAlignment.leading
+    /// 歌词行的静止对齐。2026-09-07 从 `.leading` 改成 `.automatic` —— 用户在用的是自动档
+    /// (有对唱声部就按声部左右分,没有就左对齐)。原默认 `.leading` 的理由是"加这一项之前
+    /// `MarqueeText.restingAlignment` 就是这个值,也就是既有行为";`.automatic` 在没有声部信息时
+    /// 正好退化成 leading(见 `LyricsRestingAlignment.resolved(duetSide:)`),所以非对唱歌的观感
+    /// 一字不变,变的只有对唱歌。
+    static let defaultNotchLyricsAlignment = LyricsRestingAlignment.automatic
+    /// 灵动岛歌词行「副行」默认「下一句」(2026-09-06):用户提这个需求的原话是「主要目的是让它可以提前
+    /// 看到下一行歌词」,默认就该是那个;两行塞进原来的 44pt,升级上来的用户卡片高度不变。
+    static let defaultNotchSecondaryLine = LyricSecondaryLine.nextLine
 
     // 菜单栏歌词「重置」按钮(编辑台工具栏,2026-09-01,设置页改造成编辑台风格时一并补上)
     // 要恢复的那一批默认值——宽度模式 + 逐字染色 + 文字/染色两个自定义色,不含
     // `menuBarLyricsWidth`(宽度,结构性尺寸设置)和 `showLyricsInMenuBar`(总开关),
     // 取舍跟悬浮歌词/灵动岛两个「重置」一致。同一个理由单独命名:init() 和重置按钮读
     // 同一份,不各自硬编码。
-    static let defaultMenuBarLyricsWidthMode = MenuBarLyricsWidthMode.fixed
+    /// 宽度模式的默认值。2026-09-07 从 `.fixed` 改成 `.adaptive` —— 用户把自己在用的这一版
+    /// 菜单栏配置定为默认("我现在的这版菜单栏配置帮我设置为默认的"),他用的就是自适应。
+    ///
+    /// ⚠️ 改默认值影响两批人:新装的用户,以及**存量里从来没动过这一项的**用户(键没存过就
+    /// 走 init() 的兜底,升级后会从固定宽度变成自适应)。动过的用户键早已落盘,不受影响 ——
+    /// 这跟当初把 `.fixed` 定为默认时"升级上来的用户看不出任何变化"是同一条机制,只是这次
+    /// 刻意让没动过的人也跟着变。
+    static let defaultMenuBarLyricsWidthMode = MenuBarLyricsWidthMode.adaptive
     /// 见 LyricsRestingAlignment:.leading 就是改动前写死的行为。
     static let defaultMenuBarLyricsAlignment = LyricsRestingAlignment.leading
     static let defaultMenuBarLyricsKaraoke = true
-    /// 见 `MenuBarLyricsIconPosition`:`.off` 就是加这一项之前的样子(歌词旁边没有图标),
-    /// 存量用户升级后菜单栏占宽一点不变。
+    /// 歌词旁那枚带播放进度的图标摆哪边。2026-09-07 从 `.off` 改成 `.leading`(同宽度模式:
+    /// 用户把在用的这一版配置定为默认)。原来默认关的理由是"它会让这一项在菜单栏上变宽,
+    /// 存量用户升级后不该无声地多占一块地方" —— 那条护的是没动过这一项的人,而这次默认值
+    /// 本身就是用户挑的那一版,占宽变化正是他要的结果。
     ///
-    /// ⚠️ **不在「重置」的范围里**(那颗按钮的标题就写着"恢复默认宽度模式与配色",这一项
-    /// 两样都不是):它跟「最大宽度」同类 —— 改的是这一项在菜单栏上占多宽,属于结构性设置;
-    /// 而且默认是关,重置把它关掉等于悄悄删掉用户加上去的东西。
-    static let defaultMenuBarLyricsIconPosition = MenuBarLyricsIconPosition.off
+    /// **在**「重置」范围内(2026-09-03 用户要求"这部分所有配置都改为默认,除了宽度"之后
+    /// 并入,见 `MenuBarStyleDefaults.restoreDefaults()`;这段注释此前一直写着"不在范围里",
+    /// 是那次并入时漏改的陈述,2026-09-07 一并纠正)。
+    static let defaultMenuBarLyricsIconPosition = MenuBarLyricsIconPosition.leading
     /// 见 `menuBarHoverShowsControls`。默认关。
     /// (2026-09-03 晚些时候才建这个常量:这一项原本不进「重置」范围,用户随后要求「这部分
     /// 所有配置都改为默认,除了宽度」,于是它跟「歌词旁的图标」一起并进去了 —— 进了重置范围
@@ -397,11 +488,30 @@ final class AppSettings: ObservableObject {
     /// (10…16:状态栏项按钮恒 22pt 高,17pt 的行高 23 就装不下)。滑杆拖回系统字号那一格时存回 0
     /// 而不是 13,保住「跟随」语义 —— 不写死系统当前的数字,理由同 `MenuBarMarqueeRenderer.font`。
     static let defaultMenuBarLyricsFontSize: CGFloat = 0
+    /// 菜单栏歌词的副行(2026-09-06)。2026-09-07 默认从 `.off` 改成 `.nextLine`(用户把在用的
+    /// 这一版配置定为默认),跟灵动岛那侧的 `defaultNotchSecondaryLine` 取齐 —— "提前看到下一句"
+    /// 在两个面上是同一个诉求。代价照旧:开副行要把主行从 13pt 压到 10pt(项高不变,仍是 22pt)、
+    /// 「字号」滑杆随之让位,见 `LyricSecondaryLine` 与 06 章「副行:双排歌词」。
+    static let defaultMenuBarSecondaryLine = LyricSecondaryLine.nextLine
 
     private let defaults = UserDefaults.standard
 
-    @Published var preferWordLevelKaraoke: Bool {
-        didSet { defaults.set(preferWordLevelKaraoke, forKey: Keys.preferWordLevelKaraoke) }
+    /// 悬浮歌词 / 灵动岛的「卡拉OK效果」:这一面要不要按逐字时间轴填色(2026-09-06)。关掉就把
+    /// 有逐字数据的行压成整行高亮(`SyncedLyricLine.lineLevel`),没有逐字数据的歌本来就是整行。
+    ///
+    /// 2026-09-06 之前只有一颗全局的 `preferWordLevelKaraoke`,挂在「歌词 → 效果」段里,关掉是在
+    /// **引擎**里丢弃逐字数据、四个展示面一起退化;用户指出"卡拉OK是某个面怎么画的问题,跟繁简 /
+    /// 罗马音那些改歌词内容本身的不是一类",于是拆成按形态各一颗、住进「歌词显示」里各自的段
+    /// (悬浮歌词 →「文字」浮层,灵动岛 →「歌词行」浮层,菜单栏 → 既有的 `menuBarLyricsKaraoke`)。
+    /// 歌词窗口**始终**逐字、不给开关(用户拍板:那扇窗的核心就是逐字填色)。
+    ///
+    /// didSet 只写 UserDefaults;生效靠各展示面的 playback 模型订阅这个 @Published 重新压行,
+    /// 见 `OverlayPlayback` / `NotchPlayback` 的 `currentLine` 订阅。
+    @Published var overlayLyricsKaraoke: Bool {
+        didSet { defaults.set(overlayLyricsKaraoke, forKey: Keys.overlayLyricsKaraoke) }
+    }
+    @Published var notchLyricsKaraoke: Bool {
+        didSet { defaults.set(notchLyricsKaraoke, forKey: Keys.notchLyricsKaraoke) }
     }
     /// 这台机器上曾经出现过中文歌词。只置不清 —— 一个已经露出来的设置不该因为"这首歌
     /// 不是中文"就消失。跨启动持久化:第一次会话里听过中文歌、第二次会话直接开设置页也
@@ -594,6 +704,11 @@ final class AppSettings: ObservableObject {
     /// 菜单栏歌词字号,0 = 跟随系统;见 `defaultMenuBarLyricsFontSize`。
     @Published var menuBarLyricsFontSize: CGFloat {
         didSet { defaults.set(Double(menuBarLyricsFontSize), forKey: Keys.menuBarLyricsFontSize) }
+    }
+    /// 菜单栏歌词的副行(2026-09-06,四选一,跟灵动岛 `notchSecondaryLine` 同一个枚举、各自的键与默认值)。
+    /// 开着时主行 10pt / 副行 9pt、`menuBarLyricsFontSize` 不生效,见 `MenuBarLyricRows`。
+    @Published var menuBarSecondaryLine: LyricSecondaryLine {
+        didSet { defaults.set(menuBarSecondaryLine.rawValue, forKey: Keys.menuBarSecondaryLine) }
     }
     /// 鼠标停在菜单栏歌词上时,歌词收掉、换成「上一曲 / 播放暂停 / 下一曲」三个键
     /// (2026-09-03,用户点名仿酷狗菜单栏)。默认**关**:它改的是既有手势的语义
@@ -928,6 +1043,15 @@ final class AppSettings: ObservableObject {
     @Published var notchExpandedShowsAlbum: Bool {
         didSet { defaults.set(notchExpandedShowsAlbum, forKey: Keys.notchExpandedShowsAlbum) }
     }
+    /// 曲目信息头部右侧那排「快捷操作」(搜索歌词 / 显示歌词 │ 设置 / 关闭,2026-09-07 用户圈出
+    /// 头部右边那块空地要求"塞进一些按钮")。一颗开关管四颗键,不拆四个 —— 这排的意义是"展开时
+    /// 手边有一组入口",拆开各配没有场景。默认 `true`:这是用户点名要的,不是顺手多长出来的 UI;
+    /// 而且它跟头部四项一样是**并排**的一块,常见配置下不改卡片高度(见
+    /// `NotchExpandedMetrics.trackInfoActionsHeight`)。走跟头部四项相同的"镜像 + 重算几何"链路:
+    /// 四项全关、只开它时头部就是它撑起来的 22pt。
+    @Published var notchExpandedShowsQuickActions: Bool {
+        didSet { defaults.set(notchExpandedShowsQuickActions, forKey: Keys.notchExpandedShowsQuickActions) }
+    }
 
     /// 歌词行(`NotchLyricsView.lyricRowContent`)末尾那枚封面缩略图要不要显示。
     /// 默认 `true`——这枚封面 2026-08-05 就有,2026-08-10 用户还曾要求去掉开关、固定
@@ -951,6 +1075,13 @@ final class AppSettings: ObservableObject {
     /// `NotchPlayback` 现读即可(同 `notchLyricRowShowsArtwork` 那批的取舍)。
     @Published var notchLyricsAlignment: LyricsRestingAlignment {
         didSet { defaults.set(notchLyricsAlignment.rawValue, forKey: Keys.notchLyricsAlignment) }
+    }
+    /// 灵动岛歌词行的「副行」(2026-09-06,用户拍板方案二):主行下面那 11pt 显示什么,四选一(不显示 /
+    /// 下一句 / 译文 / 罗马音)。不影响卡片任何尺寸(行高恒 44),所以跟 `notchLyricsAlignment` 一样走
+    /// `NotchPlayback` 现读;唯一一处几何联动是它选「下一句」时展开区那行「下一句歌词预览」被顶掉,
+    /// 那条由控制器订阅两个 @Published 合成,判据在 Core `LyricSecondaryLine.expandedNextLinePreviewVisible`。
+    @Published var notchSecondaryLine: LyricSecondaryLine {
+        didSet { defaults.set(notchSecondaryLine.rawValue, forKey: Keys.notchSecondaryLine) }
     }
 
     @Published var notchLeftEar: NotchEarModule {
@@ -1148,7 +1279,21 @@ final class AppSettings: ObservableObject {
     }
 
     private init() {
-        preferWordLevelKaraoke = (defaults.object(forKey: Keys.preferWordLevelKaraoke) as? Bool) ?? true
+        // 一次性迁移(2026-09-06):全局「卡拉OK效果」拆成三个展示面各自的开关。老用户如果把全局那颗
+        // **关了**,三个面当时实际都是整行高亮 —— 拆完必须三边都还是关,兜底写 true 的话他的歌词会在
+        // 某次升级后悄悄变回逐字填色、而他什么都没改过。旧键 init 末尾由 pruneObsoleteDefaults 清掉,
+        // 所以迁出来的值要**立刻落盘**(init 里的赋值不触发 didSet),不然下次启动读到 nil 又回默认。
+        // (局部变量而不是回读 self.xxx:init 里所有存储属性赋完之前不准碰 self,同下面
+        //  legacyHideDuringCapture 那段的写法。)
+        let legacyKaraoke = defaults.object(forKey: Keys.preferWordLevelKaraoke) as? Bool
+        let overlayKaraoke = (defaults.object(forKey: Keys.overlayLyricsKaraoke) as? Bool) ?? legacyKaraoke ?? true
+        let notchKaraoke = (defaults.object(forKey: Keys.notchLyricsKaraoke) as? Bool) ?? legacyKaraoke ?? true
+        overlayLyricsKaraoke = overlayKaraoke
+        notchLyricsKaraoke = notchKaraoke
+        if legacyKaraoke != nil {
+            defaults.set(overlayKaraoke, forKey: Keys.overlayLyricsKaraoke)
+            defaults.set(notchKaraoke, forKey: Keys.notchLyricsKaraoke)
+        }
         lyricsChineseVariant = defaults.string(forKey: Keys.lyricsChineseVariant)
             .flatMap(ChineseVariant.init(rawValue:)) ?? .off
         hasSeenChineseLyrics = defaults.bool(forKey: Keys.hasSeenChineseLyrics)
@@ -1194,12 +1339,14 @@ final class AppSettings: ObservableObject {
             .flatMap(OverlayDuetAlignmentOverride.init(rawValue:)) ?? .automatic
         showLyricsInMenuBar = (defaults.object(forKey: Keys.showLyricsInMenuBar) as? Bool) ?? false
         menuBarLyricsMaxChars = (defaults.object(forKey: Keys.menuBarLyricsMaxChars) as? Int) ?? 60
-        // 默认 200pt:大约中文 15 个字、英文 30 个字,菜单栏上占一小条,不至于把右边
-        // 其它 App 的图标挤走。
+        // 默认 250pt:大约中文 19 个字、英文 37 个字,菜单栏上占一小条,不至于把右边
+        // 其它 App 的图标挤走。2026-09-07 从 200 改上来 —— 用户把自己在用的这一版菜单栏
+        // 配置定为默认,他的滑杆停在 250。这一项**不在「重置」范围内**(宽度是他点名要留的
+        // 结构性设置),所以这个数字只对新装 / 没存过这个键的配置生效。
         menuBarLyricsWidth = CGFloat(
-            (defaults.object(forKey: Keys.menuBarLyricsWidth) as? Double) ?? 200)
-        // 默认 fixed:2026-08-17 到加这个开关之间,固定宽度是写死的唯一行为,默认值
-        // 保持它,升级上来的用户看不出任何变化。
+            (defaults.object(forKey: Keys.menuBarLyricsWidth) as? Double) ?? 250)
+        // 默认见 Self.defaultMenuBarLyricsWidthMode(2026-09-07 起是 adaptive,之前是 fixed):
+        // 重置按钮和这里的兜底读同一份常量,不各自硬编码。
         menuBarLyricsWidthMode = defaults.string(forKey: Keys.menuBarLyricsWidthMode)
             .flatMap(MenuBarLyricsWidthMode.init(rawValue:)) ?? Self.defaultMenuBarLyricsWidthMode
         menuBarLyricsAlignment = defaults.string(forKey: Keys.menuBarLyricsAlignment)
@@ -1207,6 +1354,11 @@ final class AppSettings: ObservableObject {
         // 默认开:这是把"当前唱到哪"带进菜单栏的增量信息,且只在有逐字数据时出现;
         // 菜单栏歌词本身默认关着,不存在"谁都没选就改变观感"的问题。
         menuBarLyricsKaraoke = (defaults.object(forKey: Keys.menuBarLyricsKaraoke) as? Bool) ?? Self.defaultMenuBarLyricsKaraoke
+        // 同上面那段迁移:旧全局开关关着时菜单栏实际也没染过色(它是两层与的关系),拆完照旧不染。
+        if legacyKaraoke == false {
+            menuBarLyricsKaraoke = false
+            defaults.set(false, forKey: Keys.menuBarLyricsKaraoke)
+        }
         menuBarLyricsTextColorHex = defaults.string(forKey: Keys.menuBarLyricsTextColorHex) ?? Self.defaultMenuBarLyricsTextColorHex
         menuBarLyricsFillColorHex = defaults.string(forKey: Keys.menuBarLyricsFillColorHex) ?? Self.defaultMenuBarLyricsFillColorHex
         menuBarLyricsIconPosition = defaults.string(forKey: Keys.menuBarLyricsIconPosition)
@@ -1215,6 +1367,8 @@ final class AppSettings: ObservableObject {
             .flatMap(OverlayFontWeight.init(rawValue:)) ?? Self.defaultMenuBarLyricsFontWeight
         menuBarLyricsFontSize = CGFloat(
             (defaults.object(forKey: Keys.menuBarLyricsFontSize) as? Double) ?? Double(Self.defaultMenuBarLyricsFontSize))
+        menuBarSecondaryLine = defaults.string(forKey: Keys.menuBarSecondaryLine)
+            .flatMap(LyricSecondaryLine.init(rawValue:)) ?? Self.defaultMenuBarSecondaryLine
         // 默认关,理由见属性上那段注释(改的是既有手势的语义)。
         menuBarHoverShowsControls = (defaults.object(forKey: Keys.menuBarHoverShowsControls) as? Bool)
             ?? Self.defaultMenuBarHoverShowsControls
@@ -1312,12 +1466,16 @@ final class AppSettings: ObservableObject {
             ?? Self.defaultNotchExpandedShowsArtist
         notchExpandedShowsAlbum = (defaults.object(forKey: Keys.notchExpandedShowsAlbum) as? Bool)
             ?? Self.defaultNotchExpandedShowsAlbum
+        notchExpandedShowsQuickActions = (defaults.object(forKey: Keys.notchExpandedShowsQuickActions) as? Bool)
+            ?? Self.defaultNotchExpandedShowsQuickActions
         notchLyricRowShowsArtwork = (defaults.object(forKey: Keys.notchLyricRowShowsArtwork) as? Bool)
             ?? Self.defaultNotchLyricRowShowsArtwork
         notchLyricRowArtworkPosition = defaults.string(forKey: Keys.notchLyricRowArtworkPosition)
             .flatMap(NotchLyricRowArtworkPosition.init(rawValue:)) ?? Self.defaultNotchLyricRowArtworkPosition
         notchLyricsAlignment = defaults.string(forKey: Keys.notchLyricsAlignment)
             .flatMap(LyricsRestingAlignment.init(rawValue:)) ?? Self.defaultNotchLyricsAlignment
+        notchSecondaryLine = defaults.string(forKey: Keys.notchSecondaryLine)
+            .flatMap(LyricSecondaryLine.init(rawValue:)) ?? Self.defaultNotchSecondaryLine
         notchLeftEar = defaults.string(forKey: Keys.notchLeftEar)
             .flatMap(NotchEarModule.init(rawValue:)) ?? Self.defaultNotchLeftEar
         notchRightEar = defaults.string(forKey: Keys.notchRightEar)
@@ -1326,16 +1484,21 @@ final class AppSettings: ObservableObject {
         notchScreenID = defaults.string(forKey: Keys.notchScreenID) ?? Self.defaultNotchScreenID
         fontFamilyName = defaults.string(forKey: Keys.fontFamilyName) ?? Self.defaultFontFamilyName
         fontSize = (defaults.object(forKey: Keys.fontSize) as? Double) ?? Self.defaultFontSize
-        // 没存过(老用户 / 全新安装)一律落到 .bold —— 等于改成可配置之前的实际观感。
-        // rawValue 被手改坏时也走这条兜底,不让一个坏字符串把悬浮歌词的字重变成随机档。
+        // 没存过(老用户 / 全新安装)一律落到 Self.defaultOverlayFontWeight(2026-09-07 起是
+        // .semibold,此前是 .bold —— 改的理由见那个常量)。rawValue 被手改坏时也走这条兜底,
+        // 不让一个坏字符串把悬浮歌词的字重变成随机档。
         overlayFontWeight = defaults.string(forKey: Keys.overlayFontWeight)
             .flatMap(OverlayFontWeight.init(rawValue:)) ?? Self.defaultOverlayFontWeight
-        overlayWidth = (defaults.object(forKey: Keys.overlayWidth) as? Double) ?? 640
+        // 默认 488pt(2026-09-07 从 640 改下来 —— 用户把自己在用的这一版悬浮歌词配置定为默认,
+        // 他的宽度调整条停在 488)。⚠️ 宽度**不在**「恢复默认」的范围里(跟锁定位置一起排除,
+        // 见 OverlayStyleDefaults.restoreTextAndColors 的头注),所以这个数字只对新装 / 没存过
+        // 这个键的配置生效。合法区间的唯一真源是 OverlayEditorStage.widthRange(300…1400)。
+        overlayWidth = (defaults.object(forKey: Keys.overlayWidth) as? Double) ?? 488
         notchContentWidth = (defaults.object(forKey: Keys.notchContentWidth) as? Double) ?? Self.defaultNotchContentWidth
-        // 没存过就跟稳态**默认值**一样 —— 不是跟用户当前的稳态值一样:那样老用户的展开宽会被
-        // 钉在升级那一刻的稳态值上,以后调稳态就得再调一遍这个;读侧的 max 已经保证展开不会
-        // 比稳态窄,这里只需要一个不会主动加宽的默认。
-        notchExpandedContentWidth = (defaults.object(forKey: Keys.notchExpandedContentWidth) as? Double) ?? Self.defaultNotchContentWidth
+        // 没存过就落到 Self.defaultNotchExpandedContentWidth(2026-09-07 前这里读的是稳态那个
+        // 常量,两个键共用一份;拆开的理由见那两个常量上方的注释)。⚠️ 无论如何**不读用户当前的
+        // 稳态值**:那样老用户的展开宽会被钉在升级那一刻的稳态值上,以后调稳态就得再调一遍这个。
+        notchExpandedContentWidth = (defaults.object(forKey: Keys.notchExpandedContentWidth) as? Double) ?? Self.defaultNotchExpandedContentWidth
         foregroundColorHex = defaults.string(forKey: Keys.foregroundColorHex) ?? ColorTheme.defaultTheme.foregroundColorHex
         backgroundColorHex = defaults.string(forKey: Keys.backgroundColorHex) ?? ColorTheme.defaultTheme.backgroundColorHex
         followsCoverArt = (defaults.object(forKey: Keys.followsCoverArt) as? Bool) ?? Self.defaultFollowsCoverArt

@@ -26,8 +26,36 @@ const (
 	lyricFailureReasonMusixmatchDirectBlocked = "musixmatch_direct_blocked"
 )
 
+// 传输层通用代码(2026-09-06,用户报「为什么这首歌搜不到」:九个源里六个在 DNS 解析这一步
+// 就死了,弹窗却说「九个源都没找到可用的候选」,把"连不上"报成了"没收录")。由 sourcebreaker.go
+// 的 classifyLyricSourceTransportFailure 按 http.Client.Do 的错误 / 状态码分类、按请求主机归源
+// (lyricSourceForHost),「搜索候选歌词」弹窗对**这一轮一个 HTTP 响应都没拿到**的源报出来
+// (searchcli.go 的 lyricSourceFailureReasons)。跟上面几个"某源特有"的代码不同,这三个对任何源
+// 都可能出现;具体代码(限流 / 地区限制 / 直连被堵)优先,这三个只填空。同样"稳定代码不是文案",
+// Swift 侧的 switch 要同步补 case(守卫见 lyricsourcefailure_test.go)。
+const (
+	// 域名解析失败 —— 请求根本没发出去。两条判据任一命中:httptrace 的 DNS 阶段没走完 /
+	// 带错(覆盖 DNS 挂住被 Client.Timeout 掐断、错误链已被换掉的情形),或错误链里有
+	// *net.DNSError(秒答的 NXDOMAIN / SERVFAIL)。见 sourcebreaker.go 最后一节的 ⚠️ 段。
+	lyricFailureReasonDNSFailed = "dns_failed"
+	// 连接 / TLS / 读响应失败或超时,没拿到任何响应。**不断言域名已解析**:复用连接和 DoH
+	// 自定义拨号那两条路拿不到 DNS 轨迹,这一档兜的是"除 DNS 已确认失败之外的全部传输层失败"。
+	lyricFailureReasonConnectFailed = "connect_failed"
+	// 拿到了响应,但全是 5xx。4xx 不算:那是服务器在正经说话(404 = 没这首、403 = 反爬),
+	// 各源自己判定,跟 sourcebreaker.go 的口径一致。
+	lyricFailureReasonServerError = "server_error"
+	// 上游没连上、这一轮根本没法查。目前只有 amll 会报:它不做搜索,只按网易云 / QQ 给出的
+	// 曲目 ID 去 raw.githubusercontent.com 取词(amllttml.go amllLyric),两个 ID 都拿不到时一个
+	// 请求都不发 —— 于是它在传输层表里没有条目、不是 dns_failed 也不是 connect_failed,却也
+	// 绝不是"查过了没有"。评审时抓到的漏洞:不给它归因,弹窗会把它算进「其余 N 个源」,而
+	// 「歌词源全都没连上」那一档在网易云 + QQ 一起死掉时永远触发不了(amll 默认开着)。
+	// 由 searchcli.go 的 lyricSourceFailureReasons 派生(条件:amll 这轮为缺 ID 而跳过 +
+	// 网易云和 QQ 都带传输层代码),不经 sourcebreaker.go。
+	lyricFailureReasonUpstreamUnreachable = "upstream_unreachable"
+)
+
 // 下面两个是 testlyricsourcescli.go 自己的通用兜底(没有命中上面任何一条具体已知失败
-// 信号时用)——跟上面三个具体代码同一套"稳定代码,不是文案"的约定,只是作用域窄一些
+// 信号时用)——跟上面那些代码同一套"稳定代码,不是文案"的约定,只是作用域窄一些
 // (只有 test-lyric-sources 这条 CLI 用,不需要在多个源文件之间共享,但放在同一个文件里
 // 方便一眼看全这一整套代码枚举)。
 const (

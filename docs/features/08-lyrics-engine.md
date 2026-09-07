@@ -1,5 +1,5 @@
 # 08. 歌词同步引擎(App 侧消费链)
-> 最后核对：2026-09-03 · 基线：e103532+工作树
+> 最后核对：2026-09-06 · 基线：e82522f+工作树
 
 ## 定位
 
@@ -13,7 +13,7 @@ App 侧「从磁盘缓存到屏幕」的整条歌词处理链:collector(独立 G
 - **灵动岛**(`NotchLyricsView`):当前行(逐字或整行)。
 - **歌词窗口**(`LyricsWindowView`):整份歌词列表(`allLines`)+ 当前行高亮定位(`currentLineIndex`),点击某行可 seek。
 - **菜单栏歌词**(`MenuBarStatusItem`):当前行纯文本(`plainText`),跑马灯用 `currentLineDwellSeconds` 配速。
-- **设置页**「歌词 → 效果」分组:卡拉OK效果、中文繁简、罗马音语言开关、时间轴偏移(下拉框选作用于哪个播放器 + Stepper)。
+- **设置页**「歌词 → 效果」分组:中文繁简、罗马音语言开关、时间轴偏移(下拉框选作用于哪个播放器 + Stepper)。(「卡拉OK效果」2026-09-06 从这里撤掉——它不再是引擎层的开关,见下表。)
   「双行显示」2026-08-29 移到「歌词显示 → 悬浮歌词」段(它只影响悬浮歌词这一种展示面,
   而这一段其余三项都是跨形态生效的,见 04-desktop-overlay.md 的说明);2026-08-31 起在那一段的
   **「排版」组**,不再在「文字」组(04 章「编辑台改造」第十三步)。
@@ -29,7 +29,7 @@ App 侧「从磁盘缓存到屏幕」的整条歌词处理链:collector(独立 G
         │ EnrichCacheReader.lookup (mtime 缓存 + key 归一化 + 宽松匹配)
         ▼
 LocalPlaybackSource.reloadCurrentLyrics()        (换歌 / 缓存 mtime 变 / 设置变时)
-        │ 简繁转换 → LyricsSyncEngine.load()
+        │ 日文汉字修回 → 简繁转换 → LyricsSyncEngine.load()
         ▼
 LyricsSyncEngine  (LRC/YRC 解析 → 署名行过滤 → 逐字/整行选路 → 对唱分栏)
         │ 20Hz fastTick: activeLine / upcomingLineText / activeLineIndex
@@ -196,9 +196,19 @@ LRC 格式标准里的 `[offset:±毫秒]` = 「这份歌词的全部时间戳�
   - ⚠️ 排查这类问题时**别拿 ICU 去检查 ICU 自己的输出**:第一版扫描用的判据是「某字单独能转、整串却没转」,那只能发现 ICU 的上下文漏字(全库仅 3 个「著」),发现不了 ICU 压根不认的字,于是漏掉了正主。有效的过滤器是「`Hant-Hans(c)==c` 且 `Hans-Hant(c)==c`」——ICU 双向都不动的"通用字",高频的是正常字、低频端才是异体字候选(3742 种汉字缩到 2466 个,妳/祂/牠/痲 全落在里面)。
 - **设置项条件显示**:`sawChineseLyrics`(LocalPlaybackSource 上的粘性标记,判据「有汉字且无假名」,只置不清)→ AppDelegate 首次见到时持久化为 `AppSettings.hasSeenChineseLyrics`;设置页在「系统读中文 || 见过中文歌词 || 已不是默认值」时才露出这一项。最后半边是硬要求:开关正在起作用时绝不能消失。
 
+### 日文汉字修回(JapaneseKanjiRepair,2026-09-06 加)
+
+- **修什么**:中文源(实测全部来自酷狗)上一部分日文歌词是用中文输入法录入的,日文汉字被敲成了大陆简体字——「飲まれちまう」成了「饮まれちまう」、「聞こえたら」成了「闻こえたら」、「優しさ」成了「优しさ」。日本没有这些字,日文分词器也不认(罗马音跟着错)。发生在 `reloadCurrentLyrics()` 简繁转换之前,正文与逐字数据都修,译文(中文)与罗马音(拉丁字母)不修;只修显示、缓存原文不动。
+- **不维护任何表,全部是通用规则**(用户要求:「不允许维护人工表,必须是通用规则」)。单字只问两个系统自带的事实:① **它是不是日文里存在的字**——能不能用 JIS X 0208(`String.Encoding.shiftJIS`)编码。大陆简化专用字(饮/闻/优/热/这/们)一个都不在里面;日文新字体与简体同形的字(国/学/会/体/点/灯/双/旧/机)**在**里面,天然不会误伤——所以判据不能换成「是不是简体字」,那会把「国」改成「國」。② 不是的话,ICU `Simplified-Traditional` 单字转成繁体,转出来的字再过一次 ①,能编码才换(饮→飲、闻→聞),不能就原样留着(步 → ICU 不动;你 → 不是简体)。单字结论有缓存(memo + NSLock)。
+- **两道守卫**把改动面钉死在「日文歌里的日文行」:整首按 `Romanizer.looksJapaneseSong`(含假名的行占非空行 ≥ 50%,正文为空才看逐字串)判为日文歌;该行含假名(`Romanizer.looksJapanese`)。前者挡中日混排的中文歌(陶喆《My Anata》「只听见おじさん骑着单车卖着馒头」——那句里的简体字是正文本来就该有的);后者挡日文歌里源加的中文标题行/译名行(没有假名,那是中文,不该被"修"成繁体)。
+- **本机实测**(2026-09-06,3706 条缓存 / 69 首日文歌 / 3334 行含假名正文):66 行受害、24 首,重灾区神山羊《journey》《青い棘》31 行(酷狗);其余多是署名行「作词」「编曲」(修成「作詞」「編曲」后引擎照样过滤——署名词表比对时转成孪生写法)和 `[ti:]` 里源加的中文译名。31 种被修的字里 29 种落在现行日文写法上,**2 种落在旧字体**(颜→顏 现行 顔、丝→絲 现行 糸);不在 JIS 又修不了的只有「步」6 处(简繁同形、日文写「歩」)。
+- **已知边界(刻意接受)**:旧字体那 2 种——旧字体是 JIS X 0208 里真实存在、日本读者认得的字形,比留着一个日本根本不存在的简体字好得多,再往新字体走需要一张旧→新对照表,正是用户不要的东西;「步/歩」这类简繁同形字无从判断是否写坏;含假名的行里夹的中文括注(`[ti:クランベリーとパンケーキ (蔓越莓和煎饼)]`)会跟着变繁(饼→餅),那是标签/抬头行,引擎不显示。纯文本兜底 `plainLyrics` 跟简繁转换一样不经过这一层。
+- ⚠️ CRLF:`repair` 手动按字素扫、换行符原样保留——Swift 把 `\r\n` 当一个字素,`split("\n")` 切不开酷狗常见的 CRLF 歌词(探针第一版就栽在这里:整份歌词被当成一行,一处署名行的假名让整份的字都算"含假名"),`components(separatedBy: .newlines)` 再拼回去又会把 CRLF 抹成 LF。selftest 钉着换行符一个字节不变。
+- 地区词表那一半(台/港词汇级转换,如「網路」→「网络」)**不做**:歌词里几乎不出现地区词,词组级转换对歌词收益接近零、还会误伤人名地名;参照实现自己也只在转简体方向用它,转繁体照样是字级。
+
 ### 时间轴偏移:基准(全部 / 按播放器,二选一)+ 单曲微调(LyricsOffsetStore)
 
-- **全局偏移**(`globalOffsetMs`):设备侧固定延迟(蓝牙耳机等),对所有歌生效,裸 Int 存 UserDefaults。设置页那一行选「全部播放器」时改的就是它(Stepper ±5s、步长固定 0.05s,刻意不复用快捷键页的「调整步长」)。存储层**没有**「全部」这个哨兵 —— 那个下拉框只是作用域选择器,在既有两层之间切,不是第三份存储。
+- **全局偏移**(`globalOffsetMs`):设备侧固定延迟(蓝牙耳机等),对所有歌生效,裸 Int 存 UserDefaults。设置页那一行选「全部播放器」时改的就是它(Stepper ±5s、步长固定 0.05s,刻意不复用快捷键页的「步长」)。存储层**没有**「全部」这个哨兵 —— 那个下拉框只是作用域选择器,在既有两层之间切,不是第三份存储。
 - **按播放器偏移**(`playerOffsets`,2026-08-21 按用户要求加):`bundleID → 毫秒` 字典,存 `np:lyricsOffsetsByPlayerJSON`。设置页那一行的下拉框选中具体播放器时改的是这层。它对症的是**播放器侧**的系统性偏差:浏览器(Arc/Chrome 这类)只在切歌时报一次播放位置、之后 `elapsedTime` 再也不刷新,只能按墙钟外推(`PositionSourceTier.cleanExtrapolated`),进度会系统性偏慢;而 Apple Music 那条路径精确、一点都不该补。这类偏差**换首歌照旧、换个播放器就没了**,正好落在播放器这个维度上。
   - **维度只能是 bundleID,不能是 `PlaybackPlayer` 枚举**:功能动机里那个 Arc 压根不在枚举里(枚举只有 Apple Music/QQ/网易云/酷狗/Spotify/自动),它靠 `TrustedPlayers` 那份 features.json 的 bundleID→名字映射进来。改成枚举「更类型安全」就是把浏览器挡在门外。
   - **零值不落盘**(`setPlayerOffset` 归零即删、`loadPlayerOffsets` 再滤一遍):字典里留着的就是「用户真的配过的播放器」,下拉框据此把它们全列出来 —— 哪怕这个 App 已经不在受信任名单里(取消信任/卸载)也必须列出,否则那个非零偏移会变成看不见、改不动的隐形值。
@@ -249,12 +259,12 @@ LRC 格式标准里的 `[offset:±毫秒]` = 「这份歌词的全部时间戳�
 
 | 设置位置 | 项 | 改什么行为 |
 |---|---|---|
-| 设置 → 歌词 → 显示 | 卡拉OK效果(`preferWordLevelKaraoke`) | 关掉后 `load(preferWordLevel:false)` 不解析 YRC,一律整行高亮;改动立刻 reload 当前曲目 |
-| 设置 → 歌词 → 显示 | 中文繁简切换(`lyricsChineseVariant`) | 不转换/简体/繁体,只影响显示不动缓存;条件显示(见行为规格);立刻 reload |
+| 歌词显示 → 悬浮歌词「文字」/ 灵动岛「歌词行」/ 菜单栏「配色」 | 卡拉OK效果(`overlayLyricsKaraoke` / `notchLyricsKaraoke` / `menuBarLyricsKaraoke`,2026-09-06) | **引擎不再参与**:`load` 始终解析 YRC(`preferWordLevel:` 入参与全局键 `np:preferWordLevelKaraoke` 已删,旧键在 `AppSettings.init` 迁成三面同值后由 `pruneObsoleteDefaults` 清掉)。各展示面在自己的 playback 模型订阅行时按开关用 `SyncedLyricLine.lineLevel` 把行压成整行(words/wordGroups 清掉、正文落 mainText、译文/罗马音/声部保留,selftest `sync-engine` 组「整行压平」);歌词窗口始终逐字 |
+| 设置 → 歌词 → 显示 | 繁简转换(`lyricsChineseVariant`) | 不转换/简体/繁体,只影响显示不动缓存;条件显示(见行为规格);立刻 reload |
 | 设置 → 歌词 → 显示 | 显示罗马音(japanese/korean/chinese 三个复选框,`romanizationScripts`) | 按整首歌文字种类开关罗马音(服务端字段+客户端兜底一起管);只影响悬浮窗和歌词窗口;立刻 reload |
 | 设置 → 歌词显示 → 悬浮歌词 → 排版 | 双行显示(`showNextLinePreview`) | 悬浮窗在当前句下方显示 `nextLineText` 预览;只影响悬浮窗(2026-08-29 从「歌词 → 效果」移来,2026-08-31 从「文字」组移到「排版」组) |
 | 设置 → 歌词 → 显示 | 时间轴偏移(播放器下拉框 + Stepper ±5s,步长 0.05s) | 下拉选「全部播放器」→ `LyricsOffsetStore.globalOffsetMs`;选具体播放器 → `playerOffsets[bundleID]`。两档**二选一不相加**,再与单曲微调相加;标题/副标题/help 是**固定文案**、不随选中项变;下拉框选中态是纯 `@State`、**不持久化** |
-| 设置 → 快捷键 | 调整步长(`lyricsOffsetStepMs`,默认 200ms) | 菜单/快捷键每次 nudge 的幅度(不影响设置页全局偏移的 0.05s 步长) |
+| 设置 → 快捷键 | 步长(`lyricsOffsetStepMs`,默认 200ms) | 菜单/快捷键每次 nudge 的幅度(不影响设置页全局偏移的 0.05s 步长) |
 | 菜单栏 → 歌词时间轴 | 提前/延后/重置 | 单曲微调 nudge ±step / 清零;菜单标题显示单曲部分的累计值 |
 
 这些设置全部走「双写」模式:AppSettings 负责持久化,LocalPlaybackSource 的同名属性负责让当前曲目立刻生效(didSet → reload);App 启动时 AppDelegate 把持久化值推一次给 LocalPlaybackSource(LyrimuseCore 层够不到 AppSettings)。
@@ -278,7 +288,7 @@ LRC 格式标准里的 `[offset:±毫秒]` = 「这份歌词的全部时间戳�
 | `~/.config/lyrimuse/lyrimuse-lyrics-pins.json` | App 写(collector 只读) | 已校准名单:归一化 enrich key → 记下这条 pin 的 unix 秒。collector 靠它一票否决自动重选歌词源 |
 | UserDefaults `np:lyricsGlobalOffsetMs` | 读写 | 全局偏移(裸 Int,缺失即 0) |
 | UserDefaults `np:lyricsOffsetsByPlayerJSON` | 读写 | 按播放器偏移字典的 JSON 字符串(key 是 bundleID;零值不落盘,所以字典里就是真的配过的那几个播放器) |
-| UserDefaults `np:preferWordLevelKaraoke` / `np:romanizationScripts` / `np:hasSeenChineseLyrics` / `np:lyricsOffsetStepMs` | 读写(经 AppSettings) | 显示相关设置持久化;繁简档位同为 AppSettings 持久化(`lyricsChineseVariant`) |
+| UserDefaults `np:overlayLyricsKaraoke` / `np:notchLyricsKaraoke` / `np:menuBarLyricsKaraoke` / `np:romanizationScripts` / `np:hasSeenChineseLyrics` / `np:lyricsOffsetStepMs` | 读写(经 AppSettings) | 显示相关设置持久化;繁简档位同为 AppSettings 持久化(`lyricsChineseVariant`) |
 
 进程边界:collector(Go,launchd 常驻)负责联网解析并写缓存;App 进程只读缓存 + 读 `CollectorStatus`(网络状态)。引擎全链在主线程(@MainActor),缓存文件读取本身同步(mtime 缓存把代价压到只有文件变了才解析)。
 
@@ -296,6 +306,7 @@ LRC 格式标准里的 `[offset:±毫秒]` = 「这份歌词的全部时间戳�
 | 偏移作用域下拉框候选 | `LyrimuseCore/Lyrics/LyricsOffsetScope.swift` — `LyricsOffsetScope.options/allPlayersTag`(纯函数,selftest 覆盖四条不变量:排除 `.auto`、配过偏移的必列、顺序稳定无重复、`builtInOrder` 参数生效) |
 | 罗马音/语言判定/简繁 | `LyrimuseCore/Lyrics/Romanizer.swift` — `Romanizer.romanize/japaneseSegments/looksJapanese/script`、`ChineseVariant.converted`、`RomanizationScripts` |
 | 异体字规范化表(繁简之外的一层,有 selftest) | `LyrimuseCore/Lyrics/HanVariants.swift` — `toSimplified`、`normalizeToSimplified`、`icuGaps`;数据是**生成产物** `HanVariantsTable.swift`(与 collector 侧 `dictionary/HanVariants.txt` 同源),生成器 `scripts/gen-han-variants.py` + 补丁 `scripts/han-variant-overrides.txt` + ICU 实测探针 `scripts/han-icu-probe.swift` |
+| 日文汉字修回(无表,纯规则,有 selftest) | `LyrimuseCore/Lyrics/JapaneseKanjiRepair.swift` — `JapaneseKanjiRepair.repair/repairLine`(内部 `isJapaneseKanji` = 能否 Shift_JIS 编码、`repaired` 单字规则 + memo);调用点 `LocalPlaybackSource.reloadCurrentLyrics`(紧挨 `variant.converted`,整首判定 `Romanizer.looksJapaneseSong`);接线守卫在 selftest contracts 组「日文汉字修回的接线」 |
 | 假名标注 | `LyrimuseCore/Lyrics/KanaAnnotation.swift` — `KanaAnnotation.parse/marks` |
 | 对唱分栏 | `LyrimuseCore/Lyrics/LyricDuet.swift` — `speakers/plan/planWords/sides/identity`;两侧内缩在 `LyricDuetLayout.swift` |
 | 缓存直读 | `LyrimuseCore/Local/EnrichCacheReader.swift` — `EnrichCacheReader.lookup/looseMatch/fileModificationDate/coverURL/nativeSizedCoverURL` |
@@ -327,3 +338,4 @@ LRC 格式标准里的 `[offset:±毫秒]` = 「这份歌词的全部时间戳�
 其余行为均以当前工作树代码及其注释为准核对过。
 13. **逐字时间轴归一化的阈值是量出来的,边界选「下一行起点」也是量出来的**(2026-09-02)。全库 3071 首带逐字 / 161,723 行 / 118.8 万字扫描:字起点 ≥ 下一行起点 **4516 字 / 422 首**(中位 0ms——网易云行尾标点 token 起点正好等于下一行、时长 0;p90 62ms——酷狗/QQ 最后一个真词晚 50~300ms,正是「最后一点不走完就下一句」;p99 1.9s——amll 整行错位);字起点早于行首 27 字 / 8 首(中位 109ms,5 个差几秒到 153 秒);字起点倒退 21 字 / 12 首。字终点晚于声明行尾 2155 字、与前一字重叠 1604 字都是中位 1ms 的取整误差,且在「不看行长」的模型里无害,**刻意不处理**。`maxClampMs=250` 落在 p90(62ms)与 p99(1.9s)之间的空档,盖住 96% 越界、不把整行错位硬夹进去;超过就退化成匀速扫过而不是整行高亮——同一首歌其它行还在逐字,突然一行不动比匀速扫过更像坏了。参照实现拿声明行尾做边界、字终点超过也退化,对 lyrimuse 治不到病:那 4516 个字里绝大多数相对声明行尾并不越界。`KaraokeFill.tailClamped` 仍保留:它管的是最后一个字的**时长**压进换行前,这里管的是**起点**落在哪。selftest 23 条断言(行首夹取 / 下一行夹取 / 超阈值退化 / 倒退退化 / 最后一行 / 同时间戳 / 拉回不越过前一字 / 行比窗口短 / 空)。
 14. **YRC 与 LRC 不是同一套时间轴,译文/罗马音跟着 LRC 走,所以贴行只能靠内容**(2026-08-27 起,09-04 第三次收口)。网易云的整行 LRC 与逐字 YRC 是两条独立产线,同一句词的时间戳系统性差 0.7~3 秒,而 collector 生成/透传的 `lyrics_tr`/`lyrics_roma` 逐条抄的是 LRC 的时间戳;播放走 YRC 行起点去查译文,`nearestText` 700ms 容差经常够不着,于是 2026-08-27 加了 `trTextByPlainText` **内容匹配优先**(load 时按精确 timeMs 把译文行配到 LRC 行,再以原文内容为键)。键的归一化被真实数据逼着放宽了两次:09-01 陈奕迅《冲口而出 (Live)》——LRC 用 NBSP 标换气、YRC 用普通空格,`trimmingCharacters` 只削两端 → 去掉**全部**空白;**09-04 Prince《Cream (Without Rap Monologue)》**——用户报「这些句子都没有翻译」,恰好全是带括号和声的句子:LRC 写 ASCII 括号 `(U're so fine)`、YRC 写全角 `（U're so fine）`,这首歌 YRC 又比 LRC 早 1.4~1.6 秒且行数对不上(53/49,collector 的 rehang 依前提放弃),两条路一起 miss → 键改成**只留字母数字、统一小写**,跟 collector 侧配对 LRC↔YRC 行的 `normTimelineText` 同一口径。教训是通用的:两边"可读内容一样"的句子在字面上可以差在空白种类、标点全半角、大小写任何一处,内容键必须只保留内容本身。selftest ③.6/③.6b/③.6c 三组按真实数据形状钉住。
+15. **日文汉字修回不建表,靠「JIS X 0208 可编码性 + ICU 简→繁」两条通用规则**(2026-09-06,用户定「不允许维护人工表,必须是通用规则」)。参照实现的做法是把 OpenCC 单字表里「简→唯一繁→唯一日文新字体」两跳都唯一的字做成一张映射;这里换成只问系统两个事实——字能不能用 Shift_JIS 编码(= 是不是日文里存在的字)、ICU 把它转成的繁体能不能编码——零数据文件、零生成脚本。代价是繁体 ≠ 新字体的字落在旧字体上(本机实测 31 种被修的字里 2 种:顏/絲),以及简繁同形字(步)修不了;收益是再遇到新的受害字不用改任何东西。判据**必须**是「在不在日文字符集里」而不是「是不是简体字」——国/学/会/体/点/灯 既是简体也是日文新字体,后者会把它们全改坏(第一轮扫描按简体字表统计时,这些字正是最大的假阳性来源)。两道守卫(整首日文歌 + 该行含假名)是从真实数据里逼出来的:陶喆《My Anata》「只听见おじさん骑着单车卖着馒头」一句含假名却是中文正文;宇多田/米津几首里命中的"简体字"全是源加的中文标题行。

@@ -310,7 +310,7 @@ func kugouGet(ctx context.Context, u string, v any) error {
 		return err
 	}
 	req.Header.Set("User-Agent", "Mozilla/5.0")
-	resp, err := doHTTPTracked(&http.Client{Timeout: 6 * time.Second}, req)
+	resp, err := doHTTPTracked(lyricHTTPClient(6*time.Second), req)
 	if err != nil {
 		return err
 	}

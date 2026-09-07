@@ -117,7 +117,7 @@ func kuwoSearch(ctx context.Context, artist, title string) ([]kuwoSearchItem, er
 	}
 	req.Header.Set("Referer", "https://www.kuwo.cn/")
 	req.Header.Set("User-Agent", "Mozilla/5.0")
-	resp, err := doHTTPTracked(&http.Client{Timeout: 6 * time.Second}, req)
+	resp, err := doHTTPTracked(lyricHTTPClient(6*time.Second), req)
 	if err != nil {
 		return nil, err
 	}
@@ -185,7 +185,7 @@ func kuwoFetchLyric(ctx context.Context, musicID string) ([]kuwoLyricLine, error
 	}
 	req.Header.Set("Referer", "https://kuwo.cn/")
 	req.Header.Set("User-Agent", "Mozilla/5.0")
-	resp, err := doHTTPTracked(&http.Client{Timeout: 6 * time.Second}, req)
+	resp, err := doHTTPTracked(lyricHTTPClient(6*time.Second), req)
 	if err != nil {
 		return nil, err
 	}

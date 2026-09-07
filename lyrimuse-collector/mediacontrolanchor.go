@@ -1,6 +1,7 @@
 package main
 
 import (
+	"log"
 	"sync"
 	"time"
 )
@@ -80,4 +81,85 @@ func rememberPlayingPosition(track string, pos float64) {
 	playingPositionValue = pos
 	playingPositionKnown = true
 	playingPositionMu.Unlock()
+}
+
+// 「播放中该报哪个位置」—— 跟 Swift 侧 MediaControlClient.livePositionSeconds 的 rate 分支是
+// 同一套规则,两侧必须同时改。
+//
+// rate 正常(>0)用 media-control 自己外推的 elapsedTimeNow:它内部用的是全精度锚点时刻,
+// 2026-09-07 实测对 Spotify 准到毫秒级(换歌后首拍读数 0.33~0.37s,正好是通知+去抖的延迟)。
+// rate 缺失/为 0 时 elapsedTimeNow **不再外推**(2026-08-18 实测:Spotify 暂停后恢复播放
+// playbackRate 变 null;2026-09-07 复测 elapsedTimeNow 2 分 14 秒纹丝不动),只能自己按
+// elapsedTime + (now − 锚点时刻) 补算。而 timestamp 恒无小数,直接拿它当锚点时刻会恒偏快
+// frac ∈ [0,1)(实测 .914/.724/.560),暂停一下就退回去,还把下一首自然切歌的偏置估计带歪。
+// 采集器没有事件流、5s 轮询首见必然晚于 1s,按 Swift 侧 estimatedAnchorInstant 的退化形态
+// 取 ts+0.5,误差 ±0.5s。App 侧靠 stream watcher 能把锚点钉到 ±20ms,采集器做不到,这是两侧
+// 刻意的不对称(见 docs/features/02)。
+func playingPositionSecs(elapsedTime, elapsedTimeNow, rate float64, ts string, now time.Time) float64 {
+	if rate > 0 {
+		return elapsedTimeNow
+	}
+	if ts == "" {
+		return elapsedTimeNow
+	}
+	t, err := time.Parse(time.RFC3339, ts)
+	if err != nil {
+		return elapsedTimeNow
+	}
+	aged := now.Sub(t).Seconds() - 0.5
+	if aged <= 0 {
+		return elapsedTime
+	}
+	return elapsedTime + aged
+}
+
+// ---- Spotify 陈旧锚点重发(2026-09-07)—— 跟 Swift 侧 MediaControlClient.isStaleAnchorRepublish
+// 同一套判据,两侧必须同时改。完整实测记录见那边的注释与 docs/features/02。要点:
+// Spotify 会在播放中把 now-playing 信息重发一遍,elapsedTime **逐 ms 不变**、时间戳却换成
+// 当下(实测 10.477@:09 → 10.477@:43),MediaRemote/media-control 据此外推的位置一下退回
+// 几十秒。签名 = 同一首歌 + elapsed 相等且 >0 + 时间戳变了 + 按旧锚点外推还没越过曲长
+// (elapsed==0 不判:「上一曲」重头播放分不开;越过曲长的旧锚点已死)。命中时沿用**原**锚点
+// 的时间戳自己外推,不信 elapsedTimeNow。
+type playingAnchor struct {
+	track   string
+	elapsed float64
+	ts      string
+	at      time.Time // 订正后的锚点时刻(采集器只有整秒,取 ts+0.5)
+}
+
+var (
+	playingAnchorMu        sync.Mutex
+	lastPlayingAnchor      *playingAnchor
+	lastIgnoredRepublishTS string
+)
+
+func isStaleAnchorRepublish(last *playingAnchor, track string, elapsed float64, ts string, duration float64, now time.Time) bool {
+	if last == nil || ts == "" || last.track != track || last.elapsed != elapsed || elapsed <= 0 || last.ts == ts {
+		return false
+	}
+	if duration > 0 && last.elapsed+now.Sub(last.at).Seconds() > duration+1 {
+		return false
+	}
+	return true
+}
+
+// resolvePlayingAnchorTS 记住"上一个播放锚点",返回这次该用的锚点时间戳:陈旧重发 → 原锚点的
+// 时间戳(第二个返回值 true,调用方据此强制自己外推);否则记下这次并原样返回。
+func resolvePlayingAnchorTS(track string, elapsed float64, ts string, duration float64, now time.Time) (string, bool) {
+	playingAnchorMu.Lock()
+	defer playingAnchorMu.Unlock()
+	if isStaleAnchorRepublish(lastPlayingAnchor, track, elapsed, ts, duration, now) {
+		if lastIgnoredRepublishTS != ts {
+			lastIgnoredRepublishTS = ts
+			log.Printf("stale anchor republish ignored: elapsed=%.3f newTs=%s keepingAnchorTs=%s track=%q", elapsed, ts, lastPlayingAnchor.ts, track)
+		}
+		return lastPlayingAnchor.ts, true
+	}
+	at := now
+	if t, err := time.Parse(time.RFC3339, ts); err == nil {
+		at = t.Add(500 * time.Millisecond)
+	}
+	lastPlayingAnchor = &playingAnchor{track: track, elapsed: elapsed, ts: ts, at: at}
+	lastIgnoredRepublishTS = ""
+	return ts, false
 }

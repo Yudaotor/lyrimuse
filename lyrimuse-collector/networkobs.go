@@ -5,6 +5,7 @@ package main
 import (
 	"log/slog"
 	"net/http"
+	"net/http/httptrace"
 	"net/url"
 	"sort"
 	"strings"
@@ -52,9 +53,33 @@ var (
 // 是 Swift 侧的事,而且请求整个发生在框架内部,拿不到这个函数需要的 method/URL/状态
 // 码/耗时)。
 func doHTTPTracked(cli *http.Client, req *http.Request) (*http.Response, error) {
+	// DNS 阶段轨迹(2026-09-06),只给歌词源的传输层失败分类用(sourcebreaker.go 最后一节的
+	// ⚠️ 段说明了为什么不能只看错误链)。钩子在拨号 goroutine 上跑、跟这里不同步,所以用
+	// 锁读写;请求结束后再读一次快照交给 observeTraced。非歌词源主机也会挂,开销是一个
+	// 闭包结构体加一次 WithContext 的浅拷贝,可忽略。
+	var (
+		traceMu sync.Mutex
+		trace   transportTrace
+	)
+	req = req.WithContext(httptrace.WithClientTrace(req.Context(), &httptrace.ClientTrace{
+		DNSStart: func(httptrace.DNSStartInfo) {
+			traceMu.Lock()
+			trace.dnsStarted = true
+			traceMu.Unlock()
+		},
+		DNSDone: func(info httptrace.DNSDoneInfo) {
+			traceMu.Lock()
+			trace.dnsDone = true
+			trace.dnsErr = info.Err
+			traceMu.Unlock()
+		},
+	}))
 	start := time.Now()
 	resp, err := cli.Do(req)
 	elapsed := time.Since(start)
+	traceMu.Lock()
+	tr := trace
+	traceMu.Unlock()
 	atomic.AddInt32(&networkAttemptCount, 1)
 	// 审计里标识"打的是哪个接口":HTTP 方法 + host + path(+ Last.fm 的 method 参数)。
 	// 同时是汇总的分组键。
@@ -81,10 +106,10 @@ func doHTTPTracked(cli *http.Client, req *http.Request) (*http.Response, error) 
 		recordAPICall(summaryKey, elapsed, true, time.Now())
 		// 歌词源级熔断的失败观察(见 sourcebreaker.go):只有歌词源的主机会被记,别的请求
 		// 在 lyricSourceForHost 那里直接归零。
-		lyricSourceBreakerShared.observe(req.URL.Host, err, 0, "")
+		lyricSourceBreakerShared.observeTraced(req.URL.Host, err, 0, "", tr)
 		return resp, err
 	}
-	lyricSourceBreakerShared.observe(req.URL.Host, nil, resp.StatusCode, resp.Header.Get("Retry-After"))
+	lyricSourceBreakerShared.observeTraced(req.URL.Host, nil, resp.StatusCode, resp.Header.Get("Retry-After"), tr)
 	failed := resp.StatusCode >= 400
 	if failed {
 		slog.Warn("api call: "+target, "status", resp.StatusCode, "elapsed_ms", elapsed.Milliseconds())

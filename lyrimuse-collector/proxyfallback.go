@@ -20,8 +20,9 @@ import (
 // 见 docs/features/12 章),所以它只能是兜底 —— 直连正常时一个包都不该经过它。
 //
 // 生效范围严格等于 doh.go 的 dohHostSuffixes(当前只有 .musixmatch.com):dohHTTPClient
-// 是全仓唯一用这套 Transport 的地方,其余 26 处 http.Client 走 http.DefaultTransport,
-// 行为逐位不变。
+// 是全仓唯一用这套 Transport 的地方。其它歌词源(netease/qq/kugou/lrclib/kuwo/migu/amll/
+// lyricfind)2026-09-06 起走 lyricsourcedial.go 的 lyricSourceTransport(系统 DNS 优先、不答才
+// DoH,**没有**代理兜底),Last.fm / ListenBrainz / iTunes 等仍是 http.DefaultTransport。
 const (
 	// proxyFallbackDirectBudget:直连探路预算。黑洞的特征是 SYN 石沉大海 —— 2026-09-03 量
 	// 到的三次侥幸成功都落在 1.3s / 3.4s(SYN 重传之后),而路通的时候 TCP+TLS 全程 <1s。

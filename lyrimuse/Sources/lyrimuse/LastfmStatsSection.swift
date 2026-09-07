@@ -525,7 +525,9 @@ struct LastfmStatsSection: View {
                                     .font(.caption).foregroundStyle(.tertiary).monospacedDigit()
                                     // 相对时间悬停给精确时刻 —— "1 小时前"想核对到分钟时不用去网站查
                                     .help(Self.absolute(date))
-                                    .frame(minWidth: 62, alignment: .trailing)
+                                    // 宽度跟实时行的状态格共用同一个常量,否则「第 N 次听」
+                                    // 那一列会在两种行之间错开(见常量声明处)。
+                                    .frame(minWidth: recentRowTrailingMinWidth, alignment: .trailing)
                             }
                         }
                         .padding(.horizontal, 14)
@@ -1033,6 +1035,20 @@ private final class LiveRowPlayback: ObservableObject {
     }
 }
 
+/// 「最近记录」每行**尾部那一格**(历史行的相对时间 / 实时行的「正在播放」「正在记录」)的保底宽度。
+///
+/// ⚠️ 两种行必须用**同一个**值。这一列是右对齐贴着行尾的,它有多宽,就把左边的「第 N 次听」
+/// 顶到哪里 —— 两种行给的宽度不一样,「第 N 次听」这一列就在实时行上单独错开。
+/// 2026-09-06 用户报的正是这个:实时行的状态 Label 当时**完全没有宽度约束**,离屏实测
+/// 中文下 `Label(正在播放, circle.dotted)` 理想宽度 58pt,而历史行的时间列被这个 62 兜着
+/// (中文相对时间实测只有 38–52pt,全都被兜到 62),于是实时行的「第 1 次听」比下面几行右移 4pt。
+///
+/// 取 62 不是为了装下最长的串,是为了**把中文那几种相对时间统一兜到同一宽度**;英文下时间串
+/// 本身就有 53–80pt 的天然差异(`3 minutes ago` 69 / `Yesterday 14:23` 80),那一列在英文里
+/// 本来就参差,不是这次要解决的问题——真要一并抹平得把这个数抬到 80,代价是中文界面里
+/// 「第 N 次听」整体左移一大截,不值当。
+private let recentRowTrailingMinWidth: CGFloat = 62
+
 /// 「正在记录」活状态行,独立子视图:全 Section 里唯一挂着播放状态订阅的地方(经
 /// LiveRowPlayback 窄化),歌词逐行推进引发的高频发布不再拖着这一行陪跑,更不拖三张卡
 /// (2026-08-11 发散采纳,2026-08-19 再窄化)。换歌强刷和「第 N 次听」的取数也一并住在
@@ -1216,6 +1232,8 @@ private struct LiveScrobbleRow: View {
                             .foregroundStyle(lastfmBrandRed)
                             .labelStyle(.titleAndIcon)
                             .imageScale(.small)
+                            // 跟历史行的时间列同宽同对齐,「第 N 次听」才落在同一列(见常量声明处)。
+                            .frame(minWidth: recentRowTrailingMinWidth, alignment: .trailing)
                             .help(live.remote
                                   ? L10n.t("在其他设备上播放，Last.fm 已收到")
                                   : L10n.t("Last.fm 已确认收到这次播放"))
@@ -1225,6 +1243,9 @@ private struct LiveScrobbleRow: View {
                             .foregroundStyle(.secondary)
                             .labelStyle(.titleAndIcon)
                             .imageScale(.small)
+                            // 同上:这一格没有宽度约束时中文只有 58pt,比时间列的 62 窄,
+                            // 「第 1 次听」就会比下面几行右移(2026-09-06 用户报的错位)。
+                            .frame(minWidth: recentRowTrailingMinWidth, alignment: .trailing)
                             .help(L10n.t("等待 Last.fm 确认（通常几秒内）"))
                     }
                 }

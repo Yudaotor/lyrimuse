@@ -86,14 +86,22 @@ const (
 	playerAuto  = "auto"
 )
 
-// lyricsSourceDefaultOrder 是"顺序优先"模式缺省的顺序——照抄 enrich.go
-// scoredLyricCandidates 里 candidates 列表本来的 append 顺序,不是这里凭空定的。
+// lyricsSourceDefaultOrder 是"顺序优先"模式缺省的顺序。
 // ⚠️ 顺序必须与 Swift 侧 LyricsSource.allCases 的**声明顺序**一致 —— 那边的
 // lyricsSourceOrder 默认值就是 allCases,两边对不上会让"顺序优先"模式在首次写盘前后
-// 表现不同。amll/lyricfind 放最后:两个都是覆盖率有限的"锦上添花"档,想让它们优先
-// 由用户自己在设置里拖。
+// 表现不同。改这里就要同步改那里,反之亦然(那边注释也钉着这条)。
+//
+// 排序依据(2026-09-07 起按实测采用率,此前是照抄 enrich.go candidates 的 append 顺序):
+// 用户本机 3744 条 enrich 缓存里最终被采用的歌词来自 酷狗 1506(40.2%)/ 网易云 1125(30.0%)/
+// QQ 732(19.6%)/ Musixmatch 176(4.7%)/ LRCLIB 74(2.0%) —— 酷狗是第一主力却长期排第三,
+// 这次提到首位,前五个自此按真实采用率排。
+//
+// ⚠️ 后四个(amll/lyricfind/kuwo/migu)**刻意不按采用率排**,维持"锦上添花"档排在末尾:
+// 它们分别是 2026-08-23 / 08-31 / 08-31 / 09-04 才接入的,上面那 3744 条缓存绝大多数早于
+// 它们存在,采用数 0~16 是样本偏差、不是覆盖率结论 —— 别拿"没赶上考试"当"考砸了"。等各自
+// 跑满一段时间再拿数据重排。想让它们优先,用户可以自己在设置里拖。
 var lyricsSourceDefaultOrder = []string{
-	lyricSourceNetease, lyricSourceQQ, lyricSourceKugou, lyricSourceMusixmatch, lyricSourceLRCLIB,
+	lyricSourceKugou, lyricSourceNetease, lyricSourceQQ, lyricSourceMusixmatch, lyricSourceLRCLIB,
 	lyricSourceAMLL, lyricSourceLyricFind, lyricSourceKuwo, lyricSourceMigu,
 }
 
@@ -129,7 +137,14 @@ type featureFlagsFile struct {
 	// 30 秒,主流 scrobbler 都在客户端照做。**只管 Last.fm**(含给 Last.fm 兜底的本地收听日志和
 	// 回填),ListenBrainz 不受影响 —— 见 poller.go tooShortToScrobble / shortTrackLastfmOnly。
 	ScrobbleShortTracks *bool `json:"scrobble_short_tracks,omitempty"`
-	WeeklyDigest        *bool `json:"weekly_digest,omitempty"`
+	// LastfmScrobblePoint:一次收听**记到 Last.fm** 的时点(2026-09-06 加,设置里 Last.fm →
+	// 「Scrobble 时机」),四档 scrobblePointHalf / scrobblePoint75 / scrobblePoint90 / scrobblePointEnd。
+	// 默认 scrobblePointHalf = 现状(官方规则:曲长一半或 4 分钟,先到为准)。**只管 Last.fm**:
+	// ListenBrainz、网页中继照旧在官方阈值那一刻提交,Last.fm 那一路(含给它兜底的本地收听日志)
+	// 挂起到更严的时点才发 —— 见 poller.go lastfmScrobblePointReached / settleLastfmPending。
+	// 只允许比官方下限更严:官方规则是下限,没有低于一半的档。
+	LastfmScrobblePoint string `json:"lastfm_scrobble_point,omitempty"`
+	WeeklyDigest        *bool  `json:"weekly_digest,omitempty"`
 	// DailyDigest：见 daily.go。跟 WeeklyDigest 是独立开关，两个可以同时开、只开一个、
 	// 或都不开。
 	DailyDigest *bool `json:"daily_digest,omitempty"`
@@ -237,6 +252,9 @@ type featureFlags struct {
 	LastfmScrobbleArtistMode string
 	// 见 featureFlagsFile.ScrobbleShortTracks。默认 false(短曲目不记,Last.fm 官方规则)。
 	ScrobbleShortTracks bool
+	// 见 featureFlagsFile.LastfmScrobblePoint。恒为 scrobblePointHalf/75/90/End 之一
+	// (resolveScrobblePoint 保证),默认 scrobblePointHalf(官方规则那一刻就发)。
+	LastfmScrobblePoint string
 	WeeklyDigest        bool
 	DailyDigest         bool
 	WeeklyDigestSource  string
@@ -334,6 +352,7 @@ func loadFeatureFlags(path string) featureFlags {
 		// 默认 false:照 Last.fm 官方规则,短于 30 秒不记。fail-closed 跟其余"改变上送内容"的
 		// 开关一致——字段缺失不能让老用户的历史突然多出一批短曲目。
 		ScrobbleShortTracks:       boolOr(f.ScrobbleShortTracks, false),
+		LastfmScrobblePoint:       resolveScrobblePoint(f.LastfmScrobblePoint),
 		WeeklyDigest:              boolOr(f.WeeklyDigest, false),
 		DailyDigest:               boolOr(f.DailyDigest, false),
 		WeeklyDigestSource:        f.WeeklyDigestSource,
@@ -378,6 +397,32 @@ func resolveScrobbleArtistMode(raw string, legacyFirstOnly *bool) string {
 		return scrobbleArtistFirst
 	}
 	return scrobbleArtistAll
+}
+
+// Last.fm scrobble 时点(features.LastfmScrobblePoint,2026-09-06)。字符串值跟 Swift 侧
+// LastfmScrobblePoint 的 rawValue 逐字相同 —— 两侧通过同一份 features.json 交换。
+const (
+	// 官方规则:播满曲长一半、或满 4 分钟,先到为准(默认)。这也是 ListenBrainz 那一路提交的时刻,
+	// 所以这一档下 Last.fm 跟原来一样当场发。
+	scrobblePointHalf = "50"
+	// 播满曲长的 75% / 90%。纯按已播时长算,不再套 4 分钟上限——"听了 75%"就是字面意思。
+	scrobblePoint75 = "75"
+	scrobblePoint90 = "90"
+	// 一直放到结尾才记,中途切歌不记。判据见 poller.go sessionEndedNaturally。
+	scrobblePointEnd = "end"
+)
+
+// resolveScrobblePoint 把文件里的时点字符串校验成四个常量之一;缺失兜底 scrobblePointHalf,
+// 非法值同样兜底但记一行日志(理由同 resolveScrobbleArtistMode:拼错了不报出来查不到)。
+func resolveScrobblePoint(raw string) string {
+	switch raw {
+	case scrobblePointHalf, scrobblePoint75, scrobblePoint90, scrobblePointEnd:
+		return raw
+	case "":
+	default:
+		log.Printf("feature flags: unknown lastfm_scrobble_point %q (falling back)", raw)
+	}
+	return scrobblePointHalf
 }
 
 // isValidPlayerValue 核对一个字符串是不是六个已知播放器 rawValue 之一——resolvePlayers

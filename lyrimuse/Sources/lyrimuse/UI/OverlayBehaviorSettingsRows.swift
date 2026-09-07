@@ -6,8 +6,11 @@ import SwiftUI
 //
 // 为什么抽:跟 OverlayStyleSettingsRows 同一个理由 —— 这三项现在有**两个**宿主:
 //   ① 编辑台工具栏第二行「行为 ▾」点开的浮层(OverlayBehaviorPopover);
-//   ② 「全部设置」抽屉里「窗口」那一组(OverlayAllSettingsDrawer),键盘/VoiceOver/
-//      "我就想找个开关"的全量兜底通路。
+//   ② 「全部设置」抽屉里「行为」那一组(OverlayAllSettingsDrawer;2026-09-07 前叫「窗口」、还带着
+//      「宽度」滑杆,同日按"抽屉分组跟工具栏一一对应"拆开),键盘/VoiceOver/"我就想找个开关"的
+//      全量兜底通路。
+// 2026-09-07 起两个宿主调的都是下面同一个 `OverlayBehaviorSettingsRows`(三个行为项 + 两行自动隐藏
+// 一起),不再各自拼一次 —— 灵动岛那边同日同一条改法(`NotchBehaviorSettingsRows`)。
 // (2026-09-02 之前① 是编辑台正下方一张常驻卡 `OverlayBehaviorBar`,三列小格、视觉上低一级;
 //  用户要求改成跟灵动岛一致的"点开才配置",那张卡整个删掉,理由写在 OverlayBehaviorPopover 上。)
 // 两个宿主的**排版**曾经不一样(一个是三列格子、一个是标准设置行),但文案、图标和那个
@@ -31,11 +34,12 @@ import SwiftUI
 // 「宽度」**不在这一栏**:它已经能在编辑台里那条宽度调整条上直接改(看得见),抽屉里那根
 // 滑杆只是兜底,不属于"设一次就不动"的行为项。
 //
-// ⚠️ **2026-09-02 起这两个宿主里各多两行,但它们不属于 `OverlayBehaviorItem`**:「截屏/录屏
+// ⚠️ **2026-09-02 起这一组末尾多两行,但它们不属于 `OverlayBehaviorItem`**:「截屏/录屏
 // 时隐藏」和「暂停/无播放时隐藏」原来是设置页上一张独立的「自动隐藏」卡,用户要求"不要单独
-// 放在外面,要遵循设计理念,放到行为卡片里面去",于是并进了「行为」这一组和抽屉「窗口」组。
+// 放在外面,要遵循设计理念,放到行为卡片里面去",于是并进了「行为」这一组。
 // 它们的真源在 `UI/AutoHideSettingsRows.swift`(`AutoHideItem`),`OverlayBehaviorItem.allCases`
-// **仍然恒为三项**。
+// **仍然恒为三项**;`OverlayBehaviorSettingsRows` 只是把 `AutoHideSettingsRows(surface: .desktopOverlay)`
+// 接在三项后面。
 // 别为了"都是行为项"把它们并进下面这个枚举:那两项要同时服务灵动岛(靠 `AutoHideSurface`
 // 分流到 `notchHide*` 和另一个控制器),而 `OverlayBehaviorItem` 的 Binding 写死打的是悬浮窗
 // 控制器。它们落在这一组里的判据跟这三项是同一条(在编辑台上看不出变化),这是那条判据的
@@ -145,12 +149,15 @@ enum OverlayBehaviorItem: String, CaseIterable, Identifiable {
     }
 }
 
-// MARK: - 宿主①:抽屉里的标准设置行
+// MARK: - 「行为」组的行(浮层与抽屉同一份)
 
-/// 「全部设置」抽屉「窗口」那一组里的三行。就是原来「窗口」卡下半截,一字未改地搬过来。
+/// 「行为」那一组:锁定位置 / 长按拖动 / 悬浮淡化 + 截屏/录屏时隐藏 / 暂停/无播放时隐藏。
+/// 工具栏「行为」浮层(`OverlayBehaviorPopover`)和抽屉「行为」组(`OverlayAllSettingsDrawer`)调的
+/// 是这同一份 —— 2026-09-07 之前两处各自拼「三项 + 分隔线 + 自动隐藏两行」,靠注释警告别漏。
 ///
 /// 行与行之间的 `CardDivider()` 由这个组件自己插 —— 宿主只知道"这里放一组行为设置",
-/// 不该知道它内部有几行(同 OverlayTextSettingsRows 的做法)。
+/// 不该知道它内部有几行(同 OverlayTextSettingsRows 的做法)。`AutoHideSettingsRows` 自己只在
+/// 它两行之间插一条,"本组之前"那一条在这里插(见那个文件头的约定)。
 @MainActor
 struct OverlayBehaviorSettingsRows: View {
     var body: some View {
@@ -161,11 +168,13 @@ struct OverlayBehaviorSettingsRows: View {
                     Toggle("", isOn: item.binding)
                 }
             }
+            CardDivider()
+            AutoHideSettingsRows(surface: .desktopOverlay)
         }
     }
 }
 
-// MARK: - 宿主②:编辑台工具栏「行为」浮层
+// MARK: - 编辑台工具栏「行为」浮层
 
 /// 编辑台工具栏第二行那颗「行为 ▾」点开的浮层(2026-09-02)。
 ///
@@ -187,18 +196,14 @@ struct OverlayBehaviorSettingsRows: View {
 /// 同一档。上面那三项(锁定位置/长按拖动/悬浮淡化)都比它短,瓶颈不变。
 /// 跟 `NotchBehaviorPopover` 同宽也让两个形态的「行为」浮层看起来是一件东西。
 ///
-/// ⚠️ 内容必须跟 `OverlayAllSettingsDrawer.windowGroup` 和
-/// `OverlayEditorStage.behaviorSummary` 三处一致 —— 抽屉那一组是这五项**不用点开浮层**就能
-/// 摸到的兜底入口(键盘 / VoiceOver),别顺手把它也收进浮层。
+/// ⚠️ 内容就是 `OverlayBehaviorSettingsRows`(跟抽屉「行为」组同一份视图);工具栏按钮的摘要
+/// `OverlayEditorStage.behaviorSummary` 要跟它算同一批五项 —— 抽屉那一组是这五项**不用点开浮层**
+/// 就能摸到的兜底入口(键盘 / VoiceOver),别顺手把它也收进浮层。
 @MainActor
 struct OverlayBehaviorPopover: View {
     var body: some View {
         SettingsPopoverShell(title: L10n.t("行为"), width: 420) {
             OverlayBehaviorSettingsRows()
-            // 「自动隐藏」两行。⚠️ "本组之前"这条分隔线由宿主插,组件内部只在自己两行之间
-            // 插一条 —— 见 AutoHideSettingsRows.swift 顶部那条约定,四个宿主一处都不能漏。
-            CardDivider()
-            AutoHideSettingsRows(surface: .desktopOverlay)
         }
     }
 }

@@ -25,11 +25,26 @@ private final class NotchPlayback: ObservableObject {
     @Published private(set) var album = ""
     @Published private(set) var isPlayingNow = false
     @Published private(set) var currentLine: SyncedLyricLine?
-    /// 单行展示面取这一行(唱完就切走,提前亮出下一句给跟唱用),不是 currentLine。
-    /// 规则见 CompactLyricLead。currentLine 仍然保留 —— 均衡器条子跟的是"此刻在唱哪个字",
-    /// 那是 currentLine 的语义,不能跟"屏幕上显示哪一句"混。
-    @Published private(set) var compactLine: SyncedLyricLine?
+    /// 歌词行**主行**画哪一句(2026-09-06 起是合成值,不再直接等于 PlaybackCoordinator 的
+    /// compactLine):
+    ///   - 副行关着(单行面):取 `compactLine` —— 唱完就切走、提前亮出下一句给跟唱用,规则见
+    ///     CompactLyricLead / 05 章决策 11;
+    ///   - 副行开着(不管显示的是下一句、译文还是罗马音):取 `currentLine` —— 跟悬浮歌词同一套语义,
+    ///     唱完停在填满的样子直到下一句开始。副行是「下一句」时尤其不能再提前切:那会变成两行同一句;
+    ///     选译文 / 罗马音时副行显示的是**当前句**的译文 / 罗马音,主行若提前切到下一句,两行就对不上号;
+    ///   - 「卡拉OK效果」关着时再压成整行(`lineLevel`),渲染分支不用改,自然落到 `.plain` 那一档。
+    /// `currentLine` 本身仍单独保留 —— 均衡器条子跟的是"此刻在唱哪个字",那是 currentLine 的语义,
+    /// 不能跟"屏幕上显示哪一句"混。
+    @Published private(set) var displayLine: SyncedLyricLine?
     @Published private(set) var nextLineText: String?
+    /// 副行的文本(2026-09-06,`AppSettings.notchSecondaryLine` 四选一):下一句 / 当前句译文 /
+    /// 当前句罗马音,取不到就是 nil(这一行留空、高度不变,不让卡片一首一首跳)。`.off` 恒为 nil。
+    /// 罗马音走 `SyncedLyricLine.romanization`,跟悬浮歌词同一来源(服务端 lyrics_roma 优先、
+    /// 客户端 Romanizer 兜底、`romanizationScripts` 语言门控都在引擎侧做完了),这里不再判一遍。
+    @Published private(set) var secondaryText: String?
+    /// 副行选项本身,视图据此决定歌词行走单行排法还是双行排法。⚠️ 初值必须是
+    /// `AppSettings.defaultNotchSecondaryLine`,理由同下面 `lyricsAlignment` 那条。
+    @Published private(set) var secondaryLine: LyricSecondaryLine = AppSettings.defaultNotchSecondaryLine
     @Published private(set) var hasLyricsContent = false
     @Published private(set) var isCurrentTrackInstrumental = false
     @Published private(set) var currentTrackHasNoLyrics = false
@@ -78,6 +93,26 @@ private final class NotchPlayback: ObservableObject {
     /// 在"订阅还没首次投递"的那一帧闪一下另一个方向。
     @Published private(set) var lyricsAlignment: LyricsRestingAlignment =
         AppSettings.defaultNotchLyricsAlignment
+    /// 下一句的对唱声部(2026-09-07,「对齐方式 · 自动」用)。跟 `nextLineText` 一样直接镜像
+    /// `PlaybackCoordinator.nextLineSide` —— 悬浮歌词那边同一个来源、同一条"下一句不假定跟当前句
+    /// 同一边"的理由(见 `LyricsOverlayView.nextLineDuetSide`)。当前句的声部不另镜像,`displayLine.side`
+    /// 本来就在。
+    @Published private(set) var nextLineSide: LyricDuet.Side?
+
+    /// 「对齐方式」落到三个消费点上的**确定**方向(2026-09-07 加「自动」后从直接读 `swiftUIAlignment`
+    /// 改过来的):非自动三档原样;「自动」按声部 —— 主行按 `displayLine.side`,展开态「下一句」按
+    /// `nextLineSide`,副行看它显示的是谁的内容(下一句跟下一句走,译文 / 罗马音是当前句的,跟主行走)。
+    /// 三个消费点**必须**读这三个值、不许再直接读 `playback.lyricsAlignment.swiftUIAlignment`(selftest 源码
+    /// 契约钉着):这个仓库为"同一个视觉属性漏改一条路径"付过代价,见 `LyricsRestingAlignment.swiftUIAlignment` 注释。
+    var mainLyricAlignment: Alignment {
+        lyricsAlignment.resolved(duetSide: displayLine?.side).swiftUIAlignment
+    }
+    var nextLineAlignment: Alignment {
+        lyricsAlignment.resolved(duetSide: nextLineSide).swiftUIAlignment
+    }
+    var secondaryLyricAlignment: Alignment {
+        secondaryLine == .nextLine ? nextLineAlignment : mainLyricAlignment
+    }
     /// 展开区时间行中间要不要显示「歌词时间轴微调」(2026-09-01)。同上走这里现读——只影响
     /// `NotchScrubber` 内部时间行怎么排,不影响卡片高度,理由见
     /// `AppSettings.notchExpandedShowsLyricsOffset` 上面那条⚠️。
@@ -99,8 +134,30 @@ private final class NotchPlayback: ObservableObject {
             p.$album.removeDuplicates().sink { [weak self] in self?.album = $0 },
             p.$isPlayingNow.removeDuplicates().sink { [weak self] in self?.isPlayingNow = $0 },
             p.$currentLine.removeDuplicates().sink { [weak self] in self?.currentLine = $0 },
-            p.$compactLine.removeDuplicates().sink { [weak self] in self?.compactLine = $0 },
+            // 主行画哪一句(见 displayLine 的注释):副行关着取 compactLine(唱完就切),副行开着取
+            // currentLine(跟悬浮歌词同一套语义)。「卡拉OK效果」关着时再把**要画的那一行**压成整行
+            // (`SyncedLyricLine.lineLevel`,2026-09-06):歌词行的逐字填色按 `displayLine?.words` 走,
+            // 压成整行之后自然落到 `.plain` 那一档,渲染分支不用改。`currentLine` **不**压 —— 它只给
+            // 均衡器条子当"此刻在唱哪个字"的节拍,那是跟着人声动的律动、不是染色,关掉卡拉OK填色不该
+            // 让条子一起哑掉。
+            Publishers.CombineLatest4(p.$compactLine, p.$currentLine, s.$notchLyricsKaraoke, s.$notchSecondaryLine)
+                .map { compact, current, karaoke, secondary -> SyncedLyricLine? in
+                    let line = secondary.showsSecondaryRow ? current : compact
+                    return karaoke ? line : line?.lineLevel
+                }
+                .removeDuplicates()
+                .sink { [weak self] in self?.displayLine = $0 },
+            // 副行文本(2026-09-06):按四选一取下一句 / 当前句译文 / 当前句罗马音,空白算没有。
+            Publishers.CombineLatest3(p.$currentLine, p.$nextLineText, s.$notchSecondaryLine)
+                .map { current, next, secondary -> String? in
+                    // 取值规则在 Core(`LyricSecondaryLine.secondaryText`),菜单栏副行读的是同一份。
+                    secondary.secondaryText(currentLine: current, nextLineText: next)
+                }
+                .removeDuplicates()
+                .sink { [weak self] in self?.secondaryText = $0 },
+            s.$notchSecondaryLine.removeDuplicates().sink { [weak self] in self?.secondaryLine = $0 },
             p.$nextLineText.removeDuplicates().sink { [weak self] in self?.nextLineText = $0 },
+            p.$nextLineSide.removeDuplicates().sink { [weak self] in self?.nextLineSide = $0 },
             p.$hasLyricsContent.removeDuplicates().sink { [weak self] in self?.hasLyricsContent = $0 },
             p.$isCurrentTrackInstrumental.removeDuplicates().sink { [weak self] in self?.isCurrentTrackInstrumental = $0 },
             p.$currentTrackHasNoLyrics.removeDuplicates().sink { [weak self] in self?.currentTrackHasNoLyrics = $0 },
@@ -209,6 +266,19 @@ extension NotchLyricRowArtworkPosition {
     }
 }
 
+extension LyricSecondaryLine {
+    /// 「副行」四选一在设置页里的标签。「不显示 / 译文 / 罗马音」三个词跟悬浮歌词那边同键复用,
+    /// 只有「下一句」是新键。
+    var displayName: String {
+        switch self {
+        case .off: return L10n.t("不显示")
+        case .nextLine: return L10n.t("下一句")
+        case .translation: return L10n.t("译文")
+        case .romanization: return L10n.t("罗马音")
+        }
+    }
+}
+
 extension NotchCardStyle {
     var displayName: String {
         switch self {
@@ -280,8 +350,14 @@ extension NotchCardStyle {
 ///
 /// ⚠️ 跟 NotchLyricsWindowController 里的同名常量是同一套几何的两处描述,改一处要改两处。
 enum NotchMetrics {
-    /// 稳态歌词行的高度。
-    static let compactRowHeight: CGFloat = 44
+    /// 稳态歌词行的高度。真源在 Core 的 `NotchLyricRowMetrics.rowHeight`(2026-09-06 下沉,让 selftest
+    /// 能钉"主行 + 副行 ≤ 行高"这条不变量),这里只是转发,调用点仍只需要认识 NotchMetrics 这一个入口。
+    static var compactRowHeight: CGFloat { NotchLyricRowMetrics.rowHeight }
+    /// 副行开着时歌词格里两行的高度与间距(2026-09-06):15 + 3 + 13 = 31,竖直居中塞进 44,上下各余 6.5。
+    /// 同上转发 Core;三个数改任何一个都要先看 `twoLineStackHeight ≤ rowHeight` 那条 selftest。
+    static var mainLyricLineHeight: CGFloat { NotchLyricRowMetrics.mainLineHeight }
+    static var secondaryLyricLineHeight: CGFloat { NotchLyricRowMetrics.secondaryLineHeight }
+    static var secondaryLineSpacing: CGFloat { NotchLyricRowMetrics.lineSpacing }
     /// 展开区的最大高度 / 按内容算的实际高度 —— 实现在 LyrimuseCore 的
     /// NotchExpandedMetrics(那边有完整的推导注释和 selftest 断言),这里只是转发,
     /// 让调用点仍然只需要认识 NotchMetrics 这一个入口。
@@ -307,12 +383,13 @@ enum NotchMetrics {
             trackInfoHeight: trackInfoHeight)
     }
 
-    /// 曲目信息头部(封面 + 歌名/歌手/专辑三个文字开关)的高度。
+    /// 曲目信息头部(封面 + 歌名/歌手/专辑三个文字开关 + 右侧快捷操作)的高度。
     static func expandedTrackInfoHeight(
-        showsArtwork: Bool, showsTitle: Bool, showsArtist: Bool, showsAlbum: Bool
+        showsArtwork: Bool, showsTitle: Bool, showsArtist: Bool, showsAlbum: Bool, showsActions: Bool = false
     ) -> CGFloat {
         NotchExpandedMetrics.trackInfoHeight(
-            showsArtwork: showsArtwork, showsTitle: showsTitle, showsArtist: showsArtist, showsAlbum: showsAlbum)
+            showsArtwork: showsArtwork, showsTitle: showsTitle, showsArtist: showsArtist, showsAlbum: showsAlbum,
+            showsActions: showsActions)
     }
 
     // 曲目信息头部渲染(而非高度算术)要用到的几个尺寸,同样只转发 NotchExpandedMetrics
@@ -321,6 +398,9 @@ enum NotchMetrics {
     static var trackInfoTopSpacing: CGFloat { NotchExpandedMetrics.trackInfoTopSpacing }
     static var trackInfoArtworkSide: CGFloat { NotchExpandedMetrics.trackInfoArtworkSide }
     static var trackInfoLineSpacing: CGFloat { NotchExpandedMetrics.trackInfoLineSpacing }
+    static var trackInfoActionsHeight: CGFloat { NotchExpandedMetrics.trackInfoActionsHeight }
+    /// 没有曲目时 hover 展开只长出的那一块(`idleExpandedPanel`)的高度,同样只转发 Core 那份定义。
+    static var idleExpandedPanelHeight: CGFloat { NotchExpandedMetrics.idlePanelHeight }
 
     // 收起态(没在播放)单侧耳宽:左耳只放音浪(约 14pt 宽)、右耳只放一枚小封面
     // (2026-08-19 用户拍板的 iPhone 灵动岛式极简形态,歌名/播放键都收进 hover 展开卡),
@@ -362,6 +442,13 @@ enum NotchMetrics {
     /// (2026-08-31)要消掉的正是这种白占。
     /// 上限 32 那一档是歌词行末尾那枚,不走这里(耳朵只有 contentTopInset 那么高,放不下 32)。
     static func earArtworkSide(contentTopInset: CGFloat) -> CGFloat { max(16, contentTopInset - 10) }
+    /// 没有曲目时左耳里那枚 App 图标的边长(2026-09-07)。比封面那一档**大 4pt**:macOS 的 App 图标
+    /// 位图自带约 12% 的透明外边(1024 画布里圆角方块只占 824),同一边长下它看起来比封面缩了一圈,
+    /// 补 4pt 让肉眼看到的方块跟封面那枚差不多大;上限钉在顶行高减 4,矮刘海机型上不顶到边。
+    /// 不进宽度下限的账:它只在没有曲目时出现,而且比任何模块都窄(≤ 26pt)。
+    static func earAppIconSide(contentTopInset: CGFloat) -> CGFloat {
+        min(contentTopInset - 4, earArtworkSide(contentTopInset: contentTopInset) + 4)
+    }
 }
 
 /// NotchLyricsView 需要从"承载它的那个东西"那里知道的全部几何/状态 —— 一共就这几项。
@@ -427,7 +514,13 @@ protocol NotchChromeSource: ObservableObject {
     var expandedTrackInfoShowsTitle: Bool { get }
     var expandedTrackInfoShowsArtist: Bool { get }
     var expandedTrackInfoShowsAlbum: Bool { get }
+    /// 头部右侧那排「快捷操作」(搜索歌词 / 显示歌词 │ 设置 / 关闭,2026-09-07)要不要画。
+    /// 跟头部四项同一条链路:它参与头部高度(`max` 里的第三块),所以必须走"镜像 + 重算几何"。
+    var expandedShowsQuickActions: Bool { get }
     func setExpanded(_ expanded: Bool)
+    /// 快捷操作里那颗 ✕:关掉「灵动岛歌词」总开关。真窗口走 `setVisible(false)`(跟设置页开关、菜单栏
+    /// 面板同一个唯一入口),预览里是空实现 —— 预览卡整块 `allowsHitTesting(false)`,本来也点不到。
+    func closeFromQuickAction()
 }
 
 extension NotchChromeSource {
@@ -460,7 +553,9 @@ extension NotchChromeSource {
     /// `showsLyricRow` 对 `hasTrack` 的处理)。
     var showsExpandedTrackInfo: Bool {
         hasTrack && (expandedTrackInfoShowsArtwork || expandedTrackInfoShowsTitle
-                     || expandedTrackInfoShowsArtist || expandedTrackInfoShowsAlbum)
+                     || expandedTrackInfoShowsArtist || expandedTrackInfoShowsAlbum
+                     // 快捷操作是头部的第五项(2026-09-07):四项全关、只开它时头部就是一条按钮行。
+                     || expandedShowsQuickActions)
     }
 
     /// 曲目信息头部按当前设置算出来的高度,`0` = 不画(见 `showsExpandedTrackInfo`)。
@@ -472,7 +567,8 @@ extension NotchChromeSource {
             showsArtwork: expandedTrackInfoShowsArtwork,
             showsTitle: expandedTrackInfoShowsTitle,
             showsArtist: expandedTrackInfoShowsArtist,
-            showsAlbum: expandedTrackInfoShowsAlbum)
+            showsAlbum: expandedTrackInfoShowsAlbum,
+            showsActions: expandedShowsQuickActions)
     }
 
     /// 曲目信息头部要占的**总**高度(内容本身 + 上下各一份间距)——头部现在是独立渲染在
@@ -502,6 +598,13 @@ extension NotchChromeSource {
     /// 或反过来把行裁掉半截"。加第四个入参那天正好把它收成一份。
     var cardHeight: CGFloat {
         if isCollapsed { return contentTopInset }
+        // 没有曲目(2026-09-07,决策 #31):展开只长出「空闲面板」那一块。此前走下面的通式 ——
+        // 歌词行本来就被 hasTrack 守着不留,但展开区照常按"三键 + 进度条"留 59～76pt,而那块内容
+        // (`cardBodyLayer`)整个被 hasTrack 挡掉,结果 hover 上去长出一大块什么都没有的黑;用户报
+        // 「没有播放的展开状态不是很友好」。高度预留与实际渲染(`idleExpandedPanel` 的 frame)读同一个值。
+        if !hasTrack {
+            return contentTopInset + (isExpanded ? NotchMetrics.idleExpandedPanelHeight : 0)
+        }
         return contentTopInset
             // 稳态歌词行要不要留高度,见 showsLyricRow(展开时哪怕关着「显示歌词」也要留)。
             + (showsLyricRow ? NotchMetrics.compactRowHeight : 0)
@@ -531,6 +634,8 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
     @Environment(\.notchHostClipsCard) private var hostClipsCard
     /// 这一块内容此刻是不是可见的那份(见 cardBodyLayer);藏着的那份停掉逐字填色的表。
     @Environment(\.notchCardLayerActive) private var cardLayerActive
+    /// 这块内容所在显示器的像素倍率 —— 只给 `idleAppIcon` 算"要几像素的位图"用(2026-09-07)。
+    @Environment(\.displayScale) private var displayScale
 
     // 稳态歌词行的固定高度——跟 NotchLyricsWindowController.contentSize.height 保持
     // 一致(两个文件都描述同一个窗口的几何,这点数值耦合是设计使然,不值得为两个常量
@@ -558,8 +663,13 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
                 // 2026-09-06 从 `NotchHangingShape.fill(.black)` 改成纯 `Color`:形状填充是 CG 路径
                 // 光栅化、卡片每变一次尺寸就重画一遍整卡,而 `Color` 只是一层 backgroundColor;
                 // 圆角交给外层那道统一的 clipShape(理由同 backgroundLayer 里的打底层)。
+                // 2026-09-07 加上**压根没有曲目**这一档(用户圈图:关了「暂停时收起」的机器上,没放歌时
+                // 卡片按稳态尺寸挂着、底还是深色渐变/封面兜底那块灰,「整体颜色也要和真实刘海保持一致,
+                // 完全融合在一起」):没有曲目就没有封面可跟、没有内容要衬,底色只剩"像不像刘海"一个
+                // 标准 —— 跟收起态同一个理由,只是收起态还要求缩尺寸,这里尺寸由 collapsesWhenPaused 管、
+                // 底色不再看它。hover 展开时同样黑底(没曲目时展开区本来就是空的)。
                 Color.black
-                    .opacity(controller.isCollapsed ? 1 : 0)
+                    .opacity(controller.isCollapsed || isIdleNoTrack ? 1 : 0)
                 // 刘海空当里的品牌胶囊(notchSeam)直接钉在 ZStack 顶部**居中**,不再画在顶行的 HStack 里
                 // (2026-09-06,用户报「暂停状态展开的动画会把中间那个 Lyrimuse 图案漏出来一会」)。
                 // 逐帧抓窗坐实:当时顶行是 collapsedRow / topRow 两个视图在 VStack 里整行互换,SwiftUI 对
@@ -612,6 +722,17 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
                 if !controller.isCollapsed, controller.hasTrack {
                     cardBodyLayer
                         // 出场动画的内容淡入(2026-09-03):值来自 NotchWindowRoot 的 keyframeAnimator,平时恒为 1。
+                        .opacity(revealContentOpacity)
+                } else if !controller.isCollapsed {
+                    // 没有曲目:hover 展开只长出一块「空闲面板」(2026-09-07,决策 #31),高度与
+                    // `NotchChromeSource.cardHeight` 的 !hasTrack 分支读同一个值。跟 cardBodyLayer 里
+                    // 各块同一套做法 —— 常驻、定宽、定 y、只切透明度(NotchCardLayerActive),稳态下
+                    // 它透明地挂在顶行下面、被外层裁剪裁掉,展开时在最终位置原地淡入。
+                    idleExpandedPanel
+                        .frame(width: controller.expandedCardWidth,
+                               height: NotchMetrics.idleExpandedPanelHeight, alignment: .top)
+                        .padding(.top, controller.contentTopInset)
+                        .modifier(NotchCardLayerActive(active: controller.isExpanded))
                         .opacity(revealContentOpacity)
                 }
             }
@@ -844,7 +965,14 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
                 if equalizerOnLeft {
                     equalizerBars
                 }
-                if leftModule != .none {
+                // 压根没有曲目时左耳固定画 App 图标(2026-09-07 用户要求「左侧显示我们的图标」),
+                // 不看配置:这时候除「播放控制」外每个模块都是空的(歌名/歌手/专辑/时长在 metadataText /
+                // clockText 里对 isIdleNoTrack 一律回空串,封面为 nil 整块不画),左耳原本就是一片
+                // 空白 —— 图标占的是这片空白,不是抢走谁的位置;左耳配了「播放控制」的,没有曲目时
+                // 三键也无物可控,一并让位。有曲目的那一刻它让回配置的模块。
+                if isIdleNoTrack {
+                    idleAppIcon(alignment: .leading)
+                } else if leftModule != .none {
                     earContent(leftModule, alignment: .leading)
                 }
             }
@@ -940,6 +1068,38 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
         } else {
             Color.clear.frame(maxWidth: .infinity, maxHeight: 0)
         }
+    }
+
+    /// 没有曲目时左耳里的 App 图标(2026-09-07,用户圈图要的「左侧显示我们的图标」)。
+    ///
+    /// 图标取 `NSApplication.shared.applicationIconImage`(bundle 里的 AppIcon.icns),但**不**直接
+    /// `Image(nsImage:).resizable()` 缩 —— 第一版这么做,用户当天就报「很有锯齿感」:1024px 那档位图被
+    /// SwiftUI 一步线性采样到 ~52px,圆角和音符边缘全是台阶。现在按「pt 边长 × 显示倍率」预先光栅化
+    /// 一次(`NotchIdleAppIcon.bitmap`,高质量重采样、按像素边长缓存),`Image(decorative:scale:)` 逐像素
+    /// 贴上去,运行期零缩放。不裁圆角、不描边、不投影 —— 它自己就是一枚带圆角方块的 macOS 图标,再套
+    /// 一层 `artworkThumbnail` 那圈处理会把它的形状裁掉一截。
+    ///
+    /// 只是一个"我在这儿"的标记,不接点击:没有曲目时点它能做的事(打开歌词窗口 / 设置)在
+    /// hover 展开卡和菜单栏里都有,这里再接一遍是重复目标;读屏也不念(装饰元素)。
+    /// 尺寸见 `NotchMetrics.earAppIconSide`。
+    @ViewBuilder
+    private func idleAppIcon(alignment: Alignment) -> some View {
+        let side = NotchMetrics.earAppIconSide(contentTopInset: controller.contentTopInset)
+        let scale = max(1, displayScale)
+        Group {
+            if let bitmap = NotchIdleAppIcon.bitmap(pixelSide: Int((side * scale).rounded())) {
+                Image(decorative: bitmap, scale: scale)
+            } else {
+                // 理论上到不了:CGContext 建不出来才会 nil。退回原图,至少有东西。
+                Image(nsImage: NSApplication.shared.applicationIconImage)
+                    .resizable()
+                    .interpolation(.high)
+                    .scaledToFit()
+            }
+        }
+        .frame(width: side, height: side)
+        .frame(maxWidth: .infinity, alignment: alignment)
+        .accessibilityHidden(true)
     }
 
     /// 耳朵里那一排播放控制键(2026-08-31 用户点名要加)。
@@ -1187,12 +1347,7 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
             // 文字是在"除封面之外的剩余宽度"里居中、相对整卡略偏封面对侧。这是刻意的 ——
             // 要相对整卡居中就得把封面改成 overlay 叠在歌词上,那会直接违反上面那段
             // `.animation(nil, value:)` 治的"封面遮挡歌词"(2026-08-22 用户报的真 bug)。
-            MarqueeText(id: playback.compactLine?.plainText ?? "",
-                        restingAlignment: playback.lyricsAlignment.swiftUIAlignment,
-                        edgeFadeWidth: NotchMetrics.lyricEdgeFadeWidth) {
-                lyricContent
-            }
-            .font(.system(size: 13, weight: .semibold))
+            lyricTextColumn
             // MarqueeText 内层是 GeometryReader(没有固有尺寸、能吃下任何被提议的宽度),
             // HStack 会先给定尺寸的封面分配它那 32pt,剩下的宽度都留给歌词。这里仍然显式
             // 写一次 maxWidth: .infinity 把"歌词吃掉剩余宽度"这个意图钉死,不依赖
@@ -1236,6 +1391,59 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
         .animation(nil, value: !lyricRowArtworkPresent)
     }
 
+    /// 歌词这一格:副行关着就是改动前那一行 `MarqueeText`(逐像素不变);副行开着(2026-09-06,
+    /// 用户拍板方案二)就在它下面再放一行 11pt 的副行,两行 + 3pt 间距 = 31pt,竖直居中塞进
+    /// 44pt 的行里,**行高不变** —— 这是选方案二而不是叠行方案的全部理由:不动 `cardHeight`、
+    /// 编辑台舞台常量、出场动画这片高度体系(05 章决策 22)。
+    @ViewBuilder
+    private var lyricTextColumn: some View {
+        if playback.secondaryLine.showsSecondaryRow {
+            VStack(alignment: .leading, spacing: NotchMetrics.secondaryLineSpacing) {
+                mainLyricLine
+                    .frame(height: NotchMetrics.mainLyricLineHeight)
+                secondaryLyricLine
+                    .frame(height: NotchMetrics.secondaryLyricLineHeight)
+            }
+        } else {
+            mainLyricLine
+        }
+    }
+
+    /// 主行本体(原 `lyricRowContent` 里那段 `MarqueeText`,搬出来只是给副行让位)。
+    /// restingAlignment 与 edgeFadeWidth 的理由见 `lyricRowContent` 里紧挨着 `lyricTextColumn` 的那段注释。
+    private var mainLyricLine: some View {
+        MarqueeText(id: playback.displayLine?.plainText ?? "",
+                    restingAlignment: playback.mainLyricAlignment,
+                    edgeFadeWidth: NotchMetrics.lyricEdgeFadeWidth) {
+            lyricContent
+        }
+        .font(.system(size: 13, weight: .semibold))
+    }
+
+    /// 副行:下一句 / 当前句译文 / 当前句罗马音(由 `NotchPlayback.secondaryText` 按设置选好)。
+    /// **不滚动**:装不下就尾部省略号 —— 主行已经是一条跑马灯,两条同时动太乱;而且它是"提前看一眼"
+    /// 的辅助信息,不是要逐字跟唱的正文。对齐跟主行吃同一个「对齐方式」设置(展开态那行「下一句」
+    /// 预览也是,selftest 钉着 `swiftUIAlignment` 的接线处数)。取不到内容时留空不缩高。
+    /// 三档透明度沿用悬浮歌词那三行的口径(下一句那边 40%,这里 45% —— 11pt 在深底上再淡就看不清了;
+    /// 译文 75%、罗马音 60% 照抄)。
+    private var secondaryLyricLine: some View {
+        Text(playback.secondaryText ?? "")
+            .font(.system(size: 11, weight: .medium))
+            .foregroundStyle(accentOrWhite.opacity(secondaryLineOpacity))
+            .shadow(color: .black.opacity(0.45), radius: 2, y: 1)
+            .lineLimit(1)
+            .truncationMode(.tail)
+            .frame(maxWidth: .infinity, alignment: playback.secondaryLyricAlignment)
+    }
+
+    private var secondaryLineOpacity: Double {
+        switch playback.secondaryLine {
+        case .off, .nextLine: return 0.45
+        case .translation: return 0.75
+        case .romanization: return 0.6
+        }
+    }
+
     /// 歌词行末尾(或开头)那枚封面缩略图,2026-08-05 就有、2026-08-10 到 2026-09-01 之间
     /// 固定显示,现在受 `notchLyricRowShowsArtwork` 开关控制。没有封面数据(没曲目/取图
     /// 失败)或开关关着时都不画占位方块,理由见 `artworkThumbnail` 上面那段。
@@ -1254,7 +1462,7 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
 
     private var lyricContent: some View {
         Group {
-            if let words = playback.compactLine?.words, !words.isEmpty {
+            if let words = playback.displayLine?.words, !words.isEmpty {
                 // 帧率上限见 WordKaraokeGradient.refreshInterval。跟悬浮歌词一样,这里也
                 // 保持"TimelineView 包住整行"而不下沉到每个字 —— 外层同样套着
                 // .compositingGroup()+.shadow(),理由见 LyricsOverlayView.mainLine 那段。
@@ -1324,9 +1532,9 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
                 // 情况下它是有意义的,保留。但压根没有曲目时它什么都不代表,留白
                 // (2026-08-21 用户要求)。上面那一长串 else-if 已经把广告/纯音乐/无歌词/
                 // 断网/搜索中都各自接走了,能落到这里的空态只剩"没有曲目"。
-                // compactLine 为 nil 的两种成因这里天然合流:长间奏中段(唱完了、下一句
-                // 还早)和"这一刻不在任何一句上",都该是 ♪。
-                Text(playback.compactLine?.plainText ?? (isIdleNoTrack ? "" : "♪"))
+                // displayLine 为 nil 的成因这里天然合流:单行面的长间奏中段(唱完了、下一句还早)、
+                // "这一刻不在任何一句上"、以及副行开着时的前奏(currentLine 还没到第一句),都该是 ♪。
+                Text(playback.displayLine?.plainText ?? (isIdleNoTrack ? "" : "♪"))
                     .foregroundStyle(accentOrWhite)
                     .shadow(color: .black.opacity(0.45), radius: 2, y: 1)
             }
@@ -1426,7 +1634,7 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
                     // Text 撑满整行宽之后它自己的 leading 对齐导线就落在容器左边缘,VStack 那
                     // 一侧看到的仍是原来的形状;`.lineLimit(1)` 也保证高度不变。
                     .frame(maxWidth: .infinity,
-                           alignment: playback.lyricsAlignment.swiftUIAlignment)
+                           alignment: playback.nextLineAlignment)
             }
 
             // 进度条独立成 NotchScrubber 子视图(拖动状态自持 + 30Hz 帧率上限),见其注释。
@@ -1511,6 +1719,7 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
             HStack(spacing: 8) {
                 trackInfoArtwork
                 trackInfoTextStack
+                trackInfoQuickActions
             }
                 // 左内边距**跟下面歌词行的首字对齐**,不是跟上面 topRow 对齐——2026-09-01
                 // 同一天先按 topRow 的 NotchMetrics.cardHorizontalPadding(10pt)对齐过一版,
@@ -1567,6 +1776,140 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
         .lineLimit(1)
         .truncationMode(.tail)
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// 头部右侧那排「快捷操作」(2026-09-07,用户圈出头部右边那块空地:「塞进一些按钮进去?比如
+    /// 关闭灵动岛的按钮,打开设置的按钮,搜索歌词的按钮,调整是否显示歌词的按钮」)。
+    ///
+    /// 排法照悬浮歌词那排控制胶囊(`LyricsOverlayView.playbackControls`):**对这首歌的操作 │ 窗口级
+    /// 操作**,中间一条细竖线分组,✕ 放最右最边上 —— 搜索歌词 · 显示歌词 │ 设置 · 关闭。四颗都是
+    /// 22pt 命中格(跟下面播放控制三键同一档,`NotchExpandedMetrics.trackInfoActionsHeight`),
+    /// 字形 11pt,颜色跟卡上其它图标一样走 `accentOrWhite`、压到七成五 —— 这排是"手边的入口",
+    /// 不该比歌名重。
+    ///
+    /// 四颗键的语义(用户 2026-09-07 拍板):
+    ///   * 搜索歌词 → `AppActions.openLyricsQuickSearch`,跟悬浮歌词 ⚙ 菜单的「搜索歌词…」同一扇小窗。
+    ///     头部本来就要求 `hasTrack`,所以不用像那边一样再按"有没有歌"决定显隐。
+    ///   * 显示歌词 → 切 `AppSettings.notchShowLyrics`(稳态那 44pt 歌词行的开关)。**展开态里看不出
+    ///     变化**(展开永远画歌词行,见 `showsLyricRow`),关着时字形压淡到四成、tooltip 换成「显示歌词」,
+    ///     让"现在是关的"当场可辨;收回稳态才看得出效果。状态读 `controller.showsLyrics`(控制器的镜像),
+    ///     不另订阅 AppSettings。
+    ///   * 设置 → 直接翻到 设置 › 歌词显示 › 灵动岛,照抄 `OverlayQuickSettingsMenu.openMoreSettings` 那三行。
+    ///   * 关闭 → 关掉「灵动岛歌词」**总开关**(`closeFromQuickAction` → `setVisible(false)`),跟悬浮歌词
+    ///     那颗 ✕ 同一个意思;再打开走菜单栏面板 / 设置 / 快捷键。备选的"只收起这一次"被否:hover 展开
+    ///     本来移开指针就收,那颗键等于没用。
+    ///
+    /// 不套 `controlButton` 那层"先查 Apple Music 自动化权限"的守卫:四个动作跟播放控制毫不相干,
+    /// 借那层守卫会引入一个跟按钮语义不匹配的隐藏依赖(跟悬浮歌词的锁定键同一条理由)。
+    @ViewBuilder
+    private var trackInfoQuickActions: some View {
+        if controller.expandedShowsQuickActions {
+            HStack(spacing: 2) {
+                quickActionButton("magnifyingglass", label: L10n.t("搜索歌词…")) {
+                    AppActions.shared.openLyricsQuickSearch?()
+                }
+                quickActionButton("text.alignleft",
+                                  label: controller.showsLyrics ? L10n.t("隐藏歌词") : L10n.t("显示歌词"),
+                                  dimmed: !controller.showsLyrics) {
+                    AppSettings.shared.notchShowLyrics.toggle()
+                }
+                // 分组线:前两颗是"对这首歌 / 这行歌词"的操作,后两颗是"这块卡片"的操作。
+                Rectangle()
+                    .fill(accentOrWhite.opacity(0.18))
+                    .frame(width: 1, height: 12)
+                    .padding(.horizontal, 3)
+                quickActionButton("gearshape.fill", label: L10n.t("设置…")) { openNotchSettingsPage() }
+                quickActionButton("xmark", label: L10n.t("关闭灵动岛歌词")) {
+                    controller.closeFromQuickAction()
+                }
+            }
+            .frame(height: NotchMetrics.trackInfoActionsHeight)
+        }
+    }
+
+    /// 「设置…」快捷键的动作:直接翻到 设置 › 歌词显示 › 灵动岛,照抄 `OverlayQuickSettingsMenu.openMoreSettings`
+    /// 那三行。抽成函数是因为头部快捷操作与空闲面板各有一颗(2026-09-07)。
+    private func openNotchSettingsPage() {
+        UserDefaults.standard.set(LyricsSurface.notch.appearanceSectionRawValue,
+                                  forKey: LyricsSurface.appearanceSectionStorageKey)
+        AppActions.shared.requestSettings(.tab(.appearance))
+        AppActions.shared.openSettings?()
+    }
+
+    /// 没有曲目时 hover 展开出来的那一块(2026-09-07,用户报「没有播放的展开状态目前看起来不是很友好」)。
+    ///
+    /// 改前的样子:`cardHeight` 照有曲目的通式给展开区留"三键 + 进度条"的 59～76pt,而那块内容整个被
+    /// `hasTrack` 挡掉 —— hover 上去长出一大块什么都没有的黑。现在只长出这一块,排法照曲目信息头部
+    /// (`trackInfoHeader`):左边两行字、右边一排 22pt 图标键,左内边距同样是歌词那一列的 16pt,上面留
+    /// `trackInfoTopSpacing`,下面留 `idlePanelBottomSpacing`(它贴底,4pt 太紧)—— 有曲目和没曲目时
+    /// 展开出来的是"同一个位置上的同一种东西",不是两套版式。
+    ///
+    /// 文案与动作全部复用歌词窗口停播页那套(`IdleStandbyView.noTrackHero` / `IdlePlaybackActions`):
+    /// 「没有在播放」+「在 X 播放任意歌曲,歌词会自动出现」;第一颗键 AM / Spotify 是「继续播放」(三段式,
+    /// 失败兜底激活 App),其它播放器没有 AppleScript、只给「打开 X」。后两颗是「设置…」「关闭灵动岛歌词」,
+    /// 跟头部快捷操作同款、同分组线 —— 但**不看** `expandedShowsQuickActions` 那个开关:那开关管的是"头部
+    /// 右侧那块空地要不要塞按钮",而这里的键是空闲面板存在的全部理由,关掉就只剩两行字。不放「搜索歌词」
+    /// 「显示歌词」:没有曲目,两者都无物可指。左耳那枚 App 图标已经在顶行上,这里不再画第二枚。
+    ///
+    /// 不套 `controlButton` 那层"先查 Apple Music 自动化权限"的守卫:`IdlePlaybackActions.resume` 自己会查
+    /// (AM 那条走 `checkAppleMusicSafely`),「打开 X」压根不需要权限。
+    private var idleExpandedPanel: some View {
+        let player = IdlePlaybackActions.player
+        let canResume = IdlePlaybackActions.canResume(player)
+        let name = player.displayName
+        return HStack(spacing: 8) {
+            VStack(alignment: .leading, spacing: NotchMetrics.trackInfoLineSpacing) {
+                Text(L10n.t("没有在播放"))
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(accentOrWhite.opacity(0.9))
+                // 提示句不点名播放器(2026-09-07 用户:「这里不应该强调 Apple Music,改为播放器」)——
+                // 灵动岛这句是泛指,不像歌词窗口停播页那句要跟旁边「打开 X」按钮对上;右边那颗键的
+                // tooltip 仍带具体名字(那是一个具体动作的目标)。
+                Text(L10n.t("在播放器里播放任意歌曲，歌词会自动出现"))
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(accentOrWhite.opacity(0.6))
+            }
+            .lineLimit(1)
+            .truncationMode(.tail)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            HStack(spacing: 2) {
+                quickActionButton(canResume ? "play.fill" : "arrow.up.forward.app",
+                                  label: canResume ? L10n.t("继续播放") : String(format: L10n.t("打开 %@"), name)) {
+                    if canResume {
+                        IdlePlaybackActions.resume(player: player)
+                    } else {
+                        IdlePlaybackActions.openPlayerApp(player)
+                    }
+                }
+                // 分组线,同头部快捷操作:左边是"对播放器做什么",右边是"对这块卡片做什么"。
+                Rectangle()
+                    .fill(accentOrWhite.opacity(0.18))
+                    .frame(width: 1, height: 12)
+                    .padding(.horizontal, 3)
+                quickActionButton("gearshape.fill", label: L10n.t("设置…")) { openNotchSettingsPage() }
+                quickActionButton("xmark", label: L10n.t("关闭灵动岛歌词")) {
+                    controller.closeFromQuickAction()
+                }
+            }
+            .frame(height: NotchMetrics.trackInfoActionsHeight)
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, NotchMetrics.trackInfoTopSpacing)
+    }
+
+    /// 快捷操作里的一颗图标键。`label` 同时当 tooltip 和读屏标签 —— 四颗都是纯图标,没有文字。
+    private func quickActionButton(_ systemName: String, label: String, dimmed: Bool = false,
+                                   action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(accentOrWhite.opacity(dimmed ? 0.4 : 0.75))
+                .frame(width: NotchMetrics.trackInfoActionsHeight, height: NotchMetrics.trackInfoActionsHeight)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(label)
+        .accessibilityLabel(label)
     }
 
     private var nextLineDisplayText: String {

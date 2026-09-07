@@ -9,8 +9,23 @@ private let logger = Logger(subsystem: "me.yudaotor.lyrimuse", category: "featur
 // 这是两侧通过共享 json 文件交换的字符串。displayName/color 直接委托给
 // LyricsManagerView.swift 已有的 sourceDisplayName/sourceColor(那两个函数今天也在给
 // "歌词管理"窗口的来源筛选/列表用),不重复维护第二份名字/颜色映射。
+//
+// ⚠️ **声明顺序是有语义的,不是随手排的**,它同时是两处的顺序:
+//   ① 设置页「歌词来源」那张卡里九个勾选框的展示序(`ForEach(LyricsSource.allCases)`);
+//   ② 「顺序优先」模式下 `lyricsSourceOrder` 的**默认值**(见下面 @Published 的初值)——
+//      也就是新装机器上"按顺序取第一个有结果的源"真正的取用顺序。用户拖拽排过之后
+//      以自己那份为准,改这里只影响没排过的人。
+// 所以它必须跟 collector `features.go` 的 `lyricsSourceDefaultOrder` **逐字同序**,
+// 否则同一台机器在首次写盘前后表现不同(那边注释也钉着这条)。
+//
+// 排序依据(2026-09-07 按实测调整):前五个按真实采用率排 —— 用户本机 3744 条 enrich 缓存里
+// 最终被采用的歌词来自 酷狗 1506(40.2%)/ 网易云 1125(30.0%)/ QQ 732(19.6%)/
+// Musixmatch 176(4.7%)/ LRCLIB 74(2.0%),酷狗是第一主力却长期排在第三,这次提到首位。
+// ⚠️ 后四个(amll/lyricfind/kuwo/migu)**刻意不按采用率排**:它们分别是 2026-08-23 /
+// 08-31 / 08-31 / 09-04 才接入的,那 3744 条缓存绝大多数早于它们存在,采用数 0~16 是
+// 样本偏差、不是覆盖率结论。等各自跑满一段时间再拿数据说话,别用"没赶上考试"当"考砸了"。
 public enum LyricsSource: String, CaseIterable, Identifiable, Codable, Hashable {
-    case netease, qq, kugou, musixmatch, lrclib, amll, lyricfind, kuwo, migu
+    case kugou, netease, qq, musixmatch, lrclib, amll, lyricfind, kuwo, migu
     public var id: Self { self }
     public var displayName: String { sourceDisplayName(rawValue) }
     public var color: Color { sourceColor(rawValue) }
@@ -161,6 +176,31 @@ public enum LastfmScrobbleArtistMode: String, CaseIterable, Identifiable, Codabl
     }
 }
 
+// Last.fm scrobble 时点(2026-09-06):一次收听听到哪里才记到 Last.fm。rawValue 必须跟 collector
+// features.go 的 scrobblePointHalf/75/90/End 常量逐字相同——两侧通过同一份 features.json 交换,
+// collector 只认这四个串,拼错就静默退回官方规则。
+//
+// - half("50"):官方规则,曲长一半或 4 分钟,先到为准(默认)。这也是 ListenBrainz 那一路提交的时刻,
+//   所以这一档下 Last.fm 跟加这个设置之前一样当场发。
+// - threeQuarters("75") / ninety("90"):听满曲长的 75% / 90%,纯按已播时长算,不套 4 分钟上限。
+// - end("end"):一直放到结尾才记,中途切歌不记(判据见 collector poller.go sessionEndedNaturally)。
+//
+// **只管 Last.fm**(用户原话「只考虑 lastfm 的」):ListenBrainz、网页中继照旧在官方阈值那一刻提交,
+// Last.fm 那一路(含给它兜底的本地收听日志)挂起到点再发。官方规则是下限,所以没有低于一半的档;
+// 曲长未知时按官方规则。
+public enum LastfmScrobblePoint: String, CaseIterable, Identifiable, Codable {
+    case half = "50", threeQuarters = "75", ninety = "90", end
+    public var id: Self { self }
+    public var displayName: String {
+        switch self {
+        case .half: return "50%"
+        case .threeQuarters: return "75%"
+        case .ninety: return "90%"
+        case .end: return L10n.t("曲终")
+        }
+    }
+}
+
 // 跟 collector/features.go 的 featureFlagsFile 逐字段对应的 on-disk 形状——所有字段
 // 可选(nil = 沿用默认开启),跟 collector 侧"文件缺失/字段缺失都当作 true"的约定一致,
 // 这里存的是 Lyrimuse 这台机器上用户明确设置过的值。collector/features.go 那侧是
@@ -200,6 +240,9 @@ struct FeatureFlagsFile: Codable, Equatable {
     /// 30 秒)。只管 Last.fm(含给它兜底的本地收听日志/回填),ListenBrainz 不受影响 —— 见
     /// collector poller.go tooShortToScrobble / shortTrackLastfmOnly。
     var scrobbleShortTracks: Bool?
+    /// Last.fm scrobble 时点,LastfmScrobblePoint 的 rawValue("50"/"75"/"90"/"end")。缺失 = 官方规则
+    /// (跟 collector 侧 resolveScrobblePoint 的兜底一致)。只管 Last.fm,见枚举注释。
+    var lastfmScrobblePoint: String?
     var weeklyDigest: Bool?
     // 见 collector/daily.go——独立于 weeklyDigest 的开关,两个可以同时开、只开一个、
     // 或都不开。
@@ -266,6 +309,7 @@ struct FeatureFlagsFile: Codable, Equatable {
         case lastfmScrobbleArtistMode = "lastfm_scrobble_artist_mode"
         case lastfmScrobbleFirstArtistOnly = "lastfm_scrobble_first_artist_only"
         case scrobbleShortTracks = "scrobble_short_tracks"
+        case lastfmScrobblePoint = "lastfm_scrobble_point"
         case weeklyDigest = "weekly_digest"
         case dailyDigest = "daily_digest"
         case weeklyDigestSource = "weekly_digest_source"
@@ -365,6 +409,9 @@ public final class FeatureSettingsStore: ObservableObject {
     /// 默认 false:短于 30 秒不记(Last.fm 官方规则)。**必须逐字等于 collector features.go 里
     /// boolOr 的默认值**(人工维持,见 load() 里的警告)。
     @Published public var scrobbleShortTracks = false
+    /// 默认 .half:官方规则那一刻就发,跟加这个设置之前一样。**必须逐字等于 collector features.go 里
+    /// resolveScrobblePoint 的兜底值**(人工维持,见 load() 里的警告)。
+    @Published public var lastfmScrobblePoint: LastfmScrobblePoint = .half
     @Published public var weeklyDigest = false
     @Published public var dailyDigest = false
     // 空字符串 = 用户没手动选过,交给 AccountLinkingTab 的 resolvedDigestSource 按
@@ -420,6 +467,7 @@ public final class FeatureSettingsStore: ObservableObject {
             // 只写新键;遗留的 lastfm_scrobble_first_artist_only 是纯读的迁移字段(见其注释)。
             lastfmScrobbleArtistMode: lastfmScrobbleArtistMode.rawValue,
             scrobbleShortTracks: scrobbleShortTracks,
+            lastfmScrobblePoint: lastfmScrobblePoint.rawValue,
             weeklyDigest: weeklyDigest, dailyDigest: dailyDigest,
             weeklyDigestSource: weeklyDigestSource.isEmpty ? nil : weeklyDigestSource,
             dailyDigestSource: dailyDigestSource.isEmpty ? nil : dailyDigestSource,
@@ -579,6 +627,8 @@ public final class FeatureSettingsStore: ObservableObject {
         lastfmScrobbleArtistMode = f.lastfmScrobbleArtistMode.flatMap(LastfmScrobbleArtistMode.init(rawValue:))
             ?? ((f.lastfmScrobbleFirstArtistOnly ?? false) ? .first : .all)
         scrobbleShortTracks = f.scrobbleShortTracks ?? false
+        // 缺失/非法一律官方规则 —— 跟 collector 侧 resolveScrobblePoint 是同一份规则。
+        lastfmScrobblePoint = f.lastfmScrobblePoint.flatMap(LastfmScrobblePoint.init(rawValue:)) ?? .half
         weeklyDigest = f.weeklyDigest ?? false
         dailyDigest = f.dailyDigest ?? false
         weeklyDigestSource = f.weeklyDigestSource ?? ""

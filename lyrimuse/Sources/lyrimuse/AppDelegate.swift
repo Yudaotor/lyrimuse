@@ -191,10 +191,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // (Swift 语义,实测见 ConfigPortability.clearAllConfig 上那段),所以这里必须
         // 显式按持久化的值应用一次。
         NSApp.setActivationPolicy(settings.showInDock ? .regular : .accessory)
-        LocalPlaybackSource.shared.preferWordLevelKaraoke = settings.preferWordLevelKaraoke
-
+        // (2026-09-06 之前这里还推一份全局 preferWordLevelKaraoke。已撤:逐字填色改成各展示面
+        //  自己的开关,引擎始终解析逐字数据,不再有要往 Core 推的全局值。)
         LocalPlaybackSource.shared.chineseVariant = settings.lyricsChineseVariant
-        // 跟上面两行同一个理由:LocalPlaybackSource 自己不读 UserDefaults(它在
+        // 跟上面那行同一个理由:LocalPlaybackSource 自己不读 UserDefaults(它在
         // LyrimuseCore 里,够不到 AppSettings),启动时不推一次的话它会一直用默认值,
         // 用户的选择要等到下次在设置页里改动才生效。
         LocalPlaybackSource.shared.romanizationScripts = settings.romanizationScripts
@@ -239,7 +239,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // 所以把创建时机尽量往前提,减少建项之前要跑的同步代码。
         //
         // 往前只能提到这里,不能再往前:PlaybackCoordinator.start() 依赖上面这几行刚灌完的
-        // Core 单例快照(LocalPlaybackSource.preferWordLevelKaraoke/chineseVariant/
+        // Core 单例快照(LocalPlaybackSource.chineseVariant/
         // romanizationScripts/showsTranslation、BrowserPositionProbe.platformBrowserPairs、
         // BrowserAutomationPermission.manuallyAddedFamilies)——提前到这些赋值之前的话,
         // PlaybackCoordinator 启动时读到的还是默认值,后果是"用户配置的这几项设置每次

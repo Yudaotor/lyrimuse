@@ -145,7 +145,7 @@ func miguSearch(ctx context.Context, artist, title string) ([]miguSearchItem, er
 	}
 	req.Header.Set("Referer", "https://m.music.migu.cn/")
 	req.Header.Set("User-Agent", "Mozilla/5.0")
-	resp, err := doHTTPTracked(&http.Client{Timeout: 6 * time.Second}, req)
+	resp, err := doHTTPTracked(lyricHTTPClient(6*time.Second), req)
 	if err != nil {
 		return nil, err
 	}
@@ -177,7 +177,7 @@ func miguFetchLRC(ctx context.Context, url string) (string, error) {
 		return "", err
 	}
 	req.Header.Set("User-Agent", "Mozilla/5.0")
-	resp, err := doHTTPTracked(&http.Client{Timeout: 6 * time.Second}, req)
+	resp, err := doHTTPTracked(lyricHTTPClient(6*time.Second), req)
 	if err != nil {
 		return "", err
 	}

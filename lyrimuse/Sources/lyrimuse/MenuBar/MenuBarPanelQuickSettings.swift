@@ -278,6 +278,7 @@ struct PanelQuickSettings: View {
             // 「对齐方式」摆在宽度之后、锁定位置之前(2026-09-03 补):它跟字号/宽度同属
             // "看一眼再决定"的排版旋钮,而锁定位置是窗口行为,归到最后。
             alignmentRow(selection: $settings.overlayDuetAlignmentOverride,
+                         options: Array(OverlayDuetAlignmentOverride.allCases),
                          label: OverlayAlignmentSegmentedControl.label(for:))
             toggleRow(L10n.t("锁定位置"),
                       help: L10n.t("解锁后鼠标点击会穿到桌面上；拖动方式见设置里的「拖动前先长按」"),
@@ -325,13 +326,24 @@ struct PanelQuickSettings: View {
                    NotchEditorStage.effectiveExpandedWidth(steadyBase: settings.notchContentWidth,
                                                            expandedBase: $0)
                })
-            // 2026-09-03 补。⚠️ 这里**不跟着 `notchShowLyrics` 显隐**,跟设置页那一行不同:
-            // 设置页里「显示歌词」就在它上一行,关掉时这一行消失,原因看得见;而这块面板里
-            // 没有「显示歌词」这一项,跟着藏就成了"凭空少一行、看不出为什么"。关掉歌词的人
-            // 本来也不会来点「灵动岛歌词」这个格子调排版,留着一个当下无效的旋钮,代价比
-            // 一个无法解释的消失小。
-            alignmentRow(selection: $settings.notchLyricsAlignment,
-                         label: LyricsAlignmentSegmentedControl.label(for:))
+            // 「显示歌词」(2026-09-06 用户要求搬进这块面板)。绑定直接写 AppSettings 就够,
+            // 不用像宽度那样再喊一次控制器:`NotchLyricsWindowController` 自己订阅着
+            // `$notchShowLyrics`(见那边的 showLyricsObserver),值一变卡片就重排。
+            //
+            // 位置刻意紧挨着下面的「对齐方式」,跟设置页同序:那两项都是"歌词行自己的事",
+            // 而上面的风格/宽度说的是整张卡。
+            toggleRow(L10n.t("显示歌词"), isOn: $settings.notchShowLyrics)
+            // ⚠️ 2026-09-06 起**跟着 `notchShowLyrics` 一起显隐**,跟设置页那一行拉齐了。
+            // 在此之前这里是故意不藏的,理由是"这块面板里没有「显示歌词」这一项,跟着藏就成了
+            // 凭空少一行、看不出为什么"——那条理由随着上面这个开关搬进来已经不成立:关掉的
+            // 原因现在就在它正上方一行,看得见,再留一个当下无效的排版旋钮反而是噪音。
+            // (设置页的判据在 `NotchBehaviorRows.body` 里的 `if item == .showLyrics,
+            //  settings.notchShowLyrics`,两处必须同进同出。)
+            if settings.notchShowLyrics {
+                alignmentRow(selection: $settings.notchLyricsAlignment,
+                             options: LyricsRestingAlignment.notchOptions,
+                             label: LyricsAlignmentSegmentedControl.label(for:))
+            }
         case .menuBar:
             row(L10n.t("宽度模式")) {
                 Picker("", selection: $settings.menuBarLyricsWidthMode) {
@@ -354,10 +366,12 @@ struct PanelQuickSettings: View {
             // 2026-09-03 补。⚠️ **只在固定宽度模式下出现**,判据跟设置页那一行一字不差
             // (`MenuBarLayoutRows` 里那个 `if`)——自适应模式下那一格的宽度就等于文字宽度,
             // 没有多余空间,三个选项画出来一模一样(完整理由见 `LyricsRestingAlignment` 头注)。
-            // 这里跟着藏是**说得通**的:「宽度模式」就在上面两行,原因看得见 —— 跟灵动岛那条
-            // 「不跟着 notchShowLyrics 藏」的取舍不矛盾,区别正在于原因看不看得见。
+            // 这里跟着藏是**说得通**的:「宽度模式」就在上面两行,原因看得见 —— 灵动岛那条
+            // 现在也是同一个道理(2026-09-06「显示歌词」搬进面板后,它的对齐方式也跟着藏了),
+            // 三个形态在这件事上口径一致:**藏一个旋钮的前提是把"为什么"摆在它上面**。
             if settings.menuBarLyricsWidthMode == .fixed {
                 alignmentRow(selection: $settings.menuBarLyricsAlignment,
+                             options: LyricsRestingAlignment.menuBarOptions,
                              label: LyricsAlignmentSegmentedControl.label(for:))
             }
             // 这两项改的是菜单栏那一项占多宽,而这张面板正锚在那一项上 —— 面板开着期间
@@ -417,10 +431,11 @@ struct PanelQuickSettings: View {
     }
 
     /// 「对齐方式」行(2026-09-03)。三个形态各一行,枚举不同(悬浮歌词是四档的
-    /// `OverlayDuetAlignmentOverride`,灵动岛/菜单栏是三档的 `LyricsRestingAlignment`),
-    /// 所以泛型化 + 标签用闭包传 —— 标签本身**一定要用各自设置页那份 `label(for:)`**,
-    /// 不在这里另写:控件里叫「左对齐」而这儿叫「左」就是同一个值的两种叫法(悬浮歌词那边
-    /// 为这件事专门把 label 提成了 static func)。
+    /// `OverlayDuetAlignmentOverride`,灵动岛/菜单栏共用 `LyricsRestingAlignment`——2026-09-07 起
+    /// 它也有了「自动」,但只有灵动岛提供,所以选项列表由调用方**显式**传(`notchOptions` /
+    /// `menuBarOptions`),不再在这里 `allCases`),所以泛型化 + 标签用闭包传 —— 标签本身**一定要用
+    /// 各自设置页那份 `label(for:)`**,不在这里另写:控件里叫「左对齐」而这儿叫「左」就是同一个值的
+    /// 两种叫法(悬浮歌词那边为这件事专门把 label 提成了 static func)。
     ///
     /// 标题直接复用既有词条「对齐方式」,不新造 —— 跟设置页一字不差,也省一条要翻译的串。
     ///
@@ -431,12 +446,12 @@ struct PanelQuickSettings: View {
     ///      文字重新量宽度** —— 选哪个控件就多宽(设置页为这件事修了三轮才改成手搓,见
     ///      `LyricsAlignmentSegmentedControl` 头注)。在一块定宽面板里那是会把整行挤变形的;
     ///   ③ 这个文件里已有的宽选项行(灵动岛「风格」)用的就是 `.menu`,同一套语言。
-    private func alignmentRow<Value: Hashable & CaseIterable>(
-        selection: Binding<Value>, label: @escaping (Value) -> String
-    ) -> some View where Value.AllCases: RandomAccessCollection {
+    private func alignmentRow<Value: Hashable>(
+        selection: Binding<Value>, options: [Value], label: @escaping (Value) -> String
+    ) -> some View {
         row(L10n.t("对齐方式")) {
             Picker("", selection: selection) {
-                ForEach(Value.allCases, id: \.self) { option in
+                ForEach(options, id: \.self) { option in
                     Text(label(option)).tag(option)
                 }
             }

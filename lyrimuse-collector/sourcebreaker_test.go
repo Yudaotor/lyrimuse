@@ -3,7 +3,9 @@ package main
 import (
 	"context"
 	"errors"
+	"io"
 	"net"
+	"net/url"
 	"testing"
 	"time"
 )
@@ -121,6 +123,138 @@ func TestLyricSourceBreakerIgnoresCanceledAnd4xx(t *testing.T) {
 		if _, cooling := b.coolingDown(s); cooling {
 			t.Fatalf("Last.fm 的失败不该影响任何歌词源,%s 却在冷却", s)
 		}
+	}
+}
+
+// 2026-09-06 传输层失败分类(sourcebreaker.go 最后一节)。错误链按 http.Client.Do 真实返回的
+// 形状来造:*url.Error → *net.OpError → *net.DNSError,分类必须能逐层解开;另一半靠 httptrace
+// 的 DNS 轨迹 —— 那是评审抓到的坑:各源 client 都设了 Client.Timeout,DNS **挂住**时 Go 会把
+// 错误整体换成 *http.timeoutError(纯字符串、无 Unwrap),错误链里再也没有 DNSError,只看链
+// 会把"DNS 不答"归成 connect_failed。
+func TestClassifyLyricSourceTransportFailure(t *testing.T) {
+	dnsNotFound := &url.Error{Op: "Get", URL: "https://music.163.com/x", Err: &net.OpError{
+		Op: "dial", Net: "tcp", Err: &net.DNSError{Err: "no such host", Name: "music.163.com", IsNotFound: true}}}
+	dnsTimeout := &url.Error{Op: "Get", Err: &net.OpError{
+		Op: "dial", Net: "tcp", Err: &net.DNSError{Err: "i/o timeout", Name: "lrclib.net", IsTimeout: true}}}
+	connRefused := &url.Error{Op: "Get", Err: &net.OpError{Op: "dial", Net: "tcp", Err: errors.New("connection refused")}}
+	deadline := &url.Error{Op: "Get", Err: context.DeadlineExceeded}
+	// http.Client.Timeout 掐断后的真实形状:*url.Error 包着一个只有字符串的错误(标准库里是
+	// 未导出的 *http.timeoutError,这里用同样"没有 Unwrap"的 errors.New 代替)。
+	clientTimeout := &url.Error{Op: "Get", URL: "https://music.163.com/x",
+		Err: errors.New("context deadline exceeded (Client.Timeout exceeded while awaiting headers)")}
+	none := transportTrace{}
+	dnsHung := transportTrace{dnsStarted: true} // DNS 开始了、请求死时还没结束
+	dnsFailedTr := transportTrace{dnsStarted: true, dnsDone: true, dnsErr: errors.New("lookup: i/o timeout")}
+	dnsOK := transportTrace{dnsStarted: true, dnsDone: true} // DNS 走完了、没错
+	cases := []struct {
+		name   string
+		err    error
+		status int
+		tr     transportTrace
+		want   string
+	}{
+		{"NXDOMAIN(错误链)", dnsNotFound, 0, none, lyricFailureReasonDNSFailed},
+		{"解析器自身超时(错误链)", dnsTimeout, 0, none, lyricFailureReasonDNSFailed},
+		{"连接被拒", connRefused, 0, none, lyricFailureReasonConnectFailed},
+		{"读响应超时", deadline, 0, none, lyricFailureReasonConnectFailed},
+		{"裸 EOF", io.EOF, 0, none, lyricFailureReasonConnectFailed},
+		{"Client.Timeout 掐断 + DNS 没走完 → dns", clientTimeout, 0, dnsHung, lyricFailureReasonDNSFailed},
+		{"Client.Timeout 掐断 + DNSDone 带错 → dns", clientTimeout, 0, dnsFailedTr, lyricFailureReasonDNSFailed},
+		{"Client.Timeout 掐断 + DNS 已走完 → connect", clientTimeout, 0, dnsOK, lyricFailureReasonConnectFailed},
+		{"读超时 + DNS 已走完 → connect", deadline, 0, dnsOK, lyricFailureReasonConnectFailed},
+		{"轨迹 DNS 没走完但错误链是 NXDOMAIN → dns", dnsNotFound, 0, dnsHung, lyricFailureReasonDNSFailed},
+		{"503", nil, 503, none, lyricFailureReasonServerError},
+		{"500", nil, 500, none, lyricFailureReasonServerError},
+		{"200", nil, 200, none, ""},
+		{"404 也是响应", nil, 404, none, ""},
+		{"429 也是响应", nil, 429, none, ""},
+		{"200 但轨迹 DNS 带错(不可能的组合,响应优先)", nil, 200, dnsFailedTr, ""},
+	}
+	for _, c := range cases {
+		if got := classifyLyricSourceTransportFailure(c.err, c.status, c.tr); got != c.want {
+			t.Errorf("%s: got %q want %q", c.name, got, c.want)
+		}
+	}
+}
+
+// observeTraced 把轨迹送进分类:同一条 Client.Timeout 错误,轨迹说 DNS 没走完就是 dns_failed。
+func TestLyricSourceBreakerObserveTraced(t *testing.T) {
+	b, _ := newTestBreaker()
+	clientTimeout := &url.Error{Op: "Get", Err: errors.New("context deadline exceeded (Client.Timeout exceeded while awaiting headers)")}
+	b.observeTraced("music.163.com", clientTimeout, 0, "", transportTrace{dnsStarted: true})
+	b.observeTraced("c.y.qq.com", clientTimeout, 0, "", transportTrace{dnsStarted: true, dnsDone: true})
+	got := b.transportFailureCodes()
+	if got["netease"] != lyricFailureReasonDNSFailed {
+		t.Errorf("netease: got %q want dns_failed(轨迹 DNS 未结束)", got["netease"])
+	}
+	if got["qq"] != lyricFailureReasonConnectFailed {
+		t.Errorf("qq: got %q want connect_failed(轨迹 DNS 已结束)", got["qq"])
+	}
+}
+
+// 只报"一个响应都没拿到过"的源;拿到过响应(哪怕 404)的不报;不是歌词源的主机不记;取消不记;
+// 混合失败取最多见的那类,并列时 DNS 优先。
+func TestLyricSourceTransportFailureCodes(t *testing.T) {
+	b, _ := newTestBreaker()
+	dns := &url.Error{Op: "Get", Err: &net.OpError{Op: "dial", Err: &net.DNSError{Err: "no such host", IsNotFound: true}}}
+	timeout := &url.Error{Op: "Get", Err: context.DeadlineExceeded}
+
+	if got := b.transportFailureCodes(); got != nil {
+		t.Fatalf("空表应返回 nil,得到 %v", got)
+	}
+	// 网易云:4 个变体全死在 DNS。
+	for i := 0; i < 4; i++ {
+		b.observe("music.163.com", dns, 0, "")
+	}
+	// QQ:1 次 DNS + 2 次超时 → 超时占多数。
+	b.observe("c.y.qq.com", dns, 0, "")
+	b.observe("c.y.qq.com", timeout, 0, "")
+	b.observe("u.y.qq.com", timeout, 0, "")
+	// 酷狗:1 次 DNS + 1 次超时 → 并列,DNS 优先。
+	b.observe("mobilecdn.kugou.com", timeout, 0, "")
+	b.observe("mobilecdn.kugou.com", dns, 0, "")
+	// LRCLIB:只回过 503。
+	b.observe("lrclib.net", nil, 503, "")
+	b.observe("lrclib.net", nil, 502, "")
+	// 酷我:先失败后 404 —— 拿到过响应,不报。
+	b.observe("search.kuwo.cn", dns, 0, "")
+	b.observe("search.kuwo.cn", nil, 404, "")
+	// 咪咕:先 503 后 200 —— 不报。
+	b.observe("pd.musicapp.migu.cn", nil, 503, "")
+	b.observe("pd.musicapp.migu.cn", nil, 200, "")
+	// Musixmatch:只有取消 —— 不算失败,不报。
+	b.observe("apic-appmobile.musixmatch.com", context.Canceled, 0, "")
+	// Last.fm / iTunes 不是歌词源,再怎么失败都不出现。
+	b.observe("ws.audioscrobbler.com", dns, 0, "")
+	b.observe("itunes.apple.com", dns, 0, "")
+	// amll / lyricfind 这一轮压根没请求 —— 不出现。
+
+	got := b.transportFailureCodes()
+	want := map[string]string{
+		"netease": lyricFailureReasonDNSFailed,
+		"qq":      lyricFailureReasonConnectFailed,
+		"kugou":   lyricFailureReasonDNSFailed,
+		"lrclib":  lyricFailureReasonServerError,
+	}
+	if len(got) != len(want) {
+		t.Fatalf("got %v want %v", got, want)
+	}
+	for s, code := range want {
+		if got[s] != code {
+			t.Errorf("%s: got %q want %q(全部:%v)", s, got[s], code, got)
+		}
+	}
+	// 熔断那半边的行为不受影响:网易云连续 4 次失败仍在冷却,咪咕成功后没有冷却。
+	if _, cooling := b.coolingDown("netease"); !cooling {
+		t.Error("网易云 4 次失败应在冷却")
+	}
+	if _, cooling := b.coolingDown("migu"); cooling {
+		t.Error("咪咕最后一次成功,不该冷却")
+	}
+	// 之后网易云成功一次 → 从名单里消失。
+	b.observe("music.163.com", nil, 200, "")
+	if _, still := b.transportFailureCodes()["netease"]; still {
+		t.Error("网易云拿到响应后不该再报 dns_failed")
 	}
 }
 

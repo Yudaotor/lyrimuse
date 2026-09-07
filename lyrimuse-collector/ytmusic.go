@@ -179,7 +179,7 @@ func ytmusicFetchVisitorID(ctx context.Context) string {
 		return ""
 	}
 	req.Header.Set("User-Agent", ytmusicUserAgent)
-	resp, err := doHTTPTracked(&http.Client{Timeout: 8 * time.Second}, req)
+	resp, err := doHTTPTracked(lyricHTTPClient(8*time.Second), req)
 	if err != nil {
 		return ""
 	}
@@ -261,7 +261,7 @@ func ytmusicPost(ctx context.Context, endpoint string, body map[string]any, visi
 	if visitorID != "" {
 		req.Header.Set("X-Goog-Visitor-Id", visitorID)
 	}
-	resp, err := doHTTPTracked(&http.Client{Timeout: ytmusicHTTPTimeout}, req)
+	resp, err := doHTTPTracked(lyricHTTPClient(ytmusicHTTPTimeout), req)
 	if err != nil {
 		return nil, err
 	}

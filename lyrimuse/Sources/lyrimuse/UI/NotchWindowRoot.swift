@@ -196,11 +196,22 @@ struct NotchWindowRoot: View {
             // 2. 不加 contentShape 而直接用 NotchLyricsView 自带的 .onHover,触发范围会比
             //    卡片大一圈(预览那边早记录过同一现象)。窗口没改之前这无害,现在卡片下面是
             //    一大片透明区,大一圈就等于"鼠标还在用户自己的窗口上,灵动岛自己展开了"。
-            // contentShape 只盖卡片这一块,不碰透明区,所以不影响那片区域的点击穿透。
+            // contentShape 不碰透明区,所以不影响那片区域的点击穿透。
+            // ⚠️ 但它**只管住了横向** —— 2026-09-07 真机探针实测:纵向的命中区仍是整扇窗
+            //    (卡片 77pt 高,hover 的进入事件 y 给到 177),所以下面那个 .active 分支必须
+            //    自己再拿坐标比一次,不能把"收到 .active"当成"在卡片上"。
             .contentShape(Rectangle())
             .onContinuousHover(coordinateSpace: .local) { phase in
                 switch phase {
-                case .active: updateHover(inside: true)
+                // ⚠️ **不能**把 .active 直接当"在卡片上"(2026-09-07 修,用户报「鼠标只是移到
+                // 它下面就展开了」)。真机探针实测:local 的原点确实是卡片左上角、x 也确实被
+                // 约束在卡片宽内,但 **y 一路给到 177,而当时卡片只有 77pt 高** —— 上面那道
+                // contentShape 只管住了横向,纵向的命中区仍是整扇窗(191pt,为容纳展开态常驻
+                // 最大尺寸,卡片下面全是透明区)。判据与实测数据见 NotchHoverHit。
+                case .active(let point):
+                    updateHover(inside: NotchHoverHit.isInside(point: point,
+                                                               cardWidth: cardWidth,
+                                                               cardHeight: cardHeight))
                 case .ended: updateHover(inside: false)
                 }
             }

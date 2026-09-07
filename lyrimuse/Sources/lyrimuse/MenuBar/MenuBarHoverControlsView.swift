@@ -72,10 +72,12 @@ final class MenuBarHoverControlsView: NSView {
         host.addTrackingArea(area)
         trackingHost = host
         installedArea = area
-        // 顺带把"菜单栏此刻是深是浅"记一笔:这一层只存在于**真**菜单栏上(预览里没有),
-        // 是这个 App 里唯一能可靠回答这个问题的地方。设置页的色块和预览都按它解析
-        // 「跟随系统」,见 MenuBarAppearanceStore 头注。
-        MenuBarAppearanceStore.shared.update(from: host)
+        // 顺带把"菜单栏此刻是深是浅"的观察点登记成这颗按钮:这一层只存在于**真**菜单栏上
+        // (预览里没有),是这个 App 里唯一能可靠回答这个问题的地方。设置页的色块和预览都按它
+        // 解析「跟随系统」,见 MenuBarAppearanceStore 头注。
+        // ⚠️ 只**登记**、不当场读:刚建出来的按钮 appearance 是错的(App 自己那一档),要等状态栏
+        // 给它排完版才可信 —— 什么时候读由 store 决定(2026-09-07,预览"重建时闪一下"的根因)。
+        MenuBarAppearanceStore.shared.observe(host)
     }
 
     /// 进入/退出接管态。退出时把准星一起清掉 —— 不清的话下次接管会先闪一下上次那个键的浅底。
@@ -174,7 +176,9 @@ final class MenuBarHoverControlsView: NSView {
         super.viewDidChangeEffectiveAppearance()
         // 菜单栏由亮转暗(或反过来)时,设置页那两个色块和预览要跟着重画 —— 它们按这个值
         // 解析「跟随系统」。这一层是真菜单栏上的常驻视图,拿它当唯一的观察点。
-        if let host = trackingHost { MenuBarAppearanceStore.shared.update(from: host) }
+        // ⚠️ 只报信、不当场读:状态栏项重建时这个回调在 6ms 内连发七次、其中六次是错的
+        // (时间线见 MenuBarAppearanceStore 头注),store 会等它坐稳再读。
+        MenuBarAppearanceStore.shared.hostAppearanceDidChange()
         if engaged { needsDisplay = true }
     }
 

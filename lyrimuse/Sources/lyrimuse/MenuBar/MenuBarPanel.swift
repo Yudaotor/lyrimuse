@@ -76,7 +76,14 @@ private final class PanelPlayback: ObservableObject {
             p.$album.removeDuplicates().sink { [weak self] in self?.album = $0 },
             p.$isPlayingNow.removeDuplicates().sink { [weak self] in self?.isPlayingNow = $0 },
             p.$currentLine.removeDuplicates().sink { [weak self] in self?.currentLine = $0 },
-            p.$compactLine.removeDuplicates().sink { [weak self] in self?.compactLine = $0 },
+            // 面板里那一行歌词跟状态栏项是同一个展示面(菜单栏),吃同一颗「卡拉OK效果」
+            // (`menuBarLyricsKaraoke`,2026-09-06 起是它唯一的闸——此前还叠着一颗全局开关):关着时把行
+            // 压成整行(`SyncedLyricLine.lineLevel`),`lyricContent` 的判定链自然落到 `.plain`。
+            // 状态栏项自己在 `MenuBarStatusItem.karaokeFillPath` 里判这颗开关,不经这里。
+            Publishers.CombineLatest(p.$compactLine, s.$menuBarLyricsKaraoke)
+                .map { line, karaoke in karaoke ? line : line?.lineLevel }
+                .removeDuplicates()
+                .sink { [weak self] in self?.compactLine = $0 },
             p.$hasLyricsContent.removeDuplicates().sink { [weak self] in self?.hasLyricsContent = $0 },
             p.$isCurrentTrackInstrumental.removeDuplicates().sink { [weak self] in self?.isCurrentTrackInstrumental = $0 },
             p.$currentTrackHasNoLyrics.removeDuplicates().sink { [weak self] in self?.currentTrackHasNoLyrics = $0 },

@@ -146,7 +146,8 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     /// 跟 `expandedShowsLyricPreview`(曲目级数据信号)是两个不同来源、两个不同属性,两者
     /// 都成立才画,见 `NotchChromeSource.showsExpandedLyricPreview`。镜像到这里的理由同
     /// showsLyrics:`NotchWindowRoot` 只观察这个控制器、不观察 AppSettings。
-    @Published private(set) var expandedShowsNextLine: Bool = AppSettings.shared.notchExpandedShowsNextLine
+    @Published private(set) var expandedShowsNextLine: Bool = LyricSecondaryLine.expandedNextLinePreviewVisible(
+        userToggle: AppSettings.shared.notchExpandedShowsNextLine, secondary: AppSettings.shared.notchSecondaryLine)
     /// 用户要不要看展开区那排播放控制键,真值在 `AppSettings.notchExpandedShowsControls`。
     /// 跟上面 `expandedShowsNextLine` 同一个理由镜像——它是纯用户设置、不看曲目级数据,
     /// 跟 `expandedShowsScrubber`(曲目级信号)性质不一样,但镜像+重算几何这条链路是
@@ -161,6 +162,9 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     @Published private(set) var expandedTrackInfoShowsTitle: Bool = AppSettings.shared.notchExpandedShowsTrackTitle
     @Published private(set) var expandedTrackInfoShowsArtist: Bool = AppSettings.shared.notchExpandedShowsArtist
     @Published private(set) var expandedTrackInfoShowsAlbum: Bool = AppSettings.shared.notchExpandedShowsAlbum
+    /// 头部右侧那排「快捷操作」(2026-09-07),真值在 `AppSettings.notchExpandedShowsQuickActions`。
+    /// 跟头部四项同一条链路:参与头部高度(`max` 的第三块),四项全关时它一个人撑起 22pt。
+    @Published private(set) var expandedShowsQuickActions: Bool = AppSettings.shared.notchExpandedShowsQuickActions
 
     /// 此刻有没有一首曲目 —— 决定歌词行整行占不占那 44pt(见协议 NotchChromeSource.hasTrack)。
     /// 由 CombineLatest3 一次给全三个值,不存在"回头读存储属性拿到旧值"那个坑。
@@ -272,16 +276,20 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         expandedTrackInfoShowsArtwork: Bool? = nil,
         expandedTrackInfoShowsTitle: Bool? = nil,
         expandedTrackInfoShowsArtist: Bool? = nil,
-        expandedTrackInfoShowsAlbum: Bool? = nil
+        expandedTrackInfoShowsAlbum: Bool? = nil,
+        expandedShowsQuickActions: Bool? = nil
     ) -> CGFloat {
         let showsArtwork = expandedTrackInfoShowsArtwork ?? AppSettings.shared.notchExpandedShowsArtwork
         let showsTitle = expandedTrackInfoShowsTitle ?? AppSettings.shared.notchExpandedShowsTrackTitle
         let showsArtist = expandedTrackInfoShowsArtist ?? AppSettings.shared.notchExpandedShowsArtist
         let showsAlbum = expandedTrackInfoShowsAlbum ?? AppSettings.shared.notchExpandedShowsAlbum
+        let showsActions = expandedShowsQuickActions ?? AppSettings.shared.notchExpandedShowsQuickActions
         let trackInfoHeight = NotchMetrics.expandedTrackInfoHeight(
-            showsArtwork: showsArtwork, showsTitle: showsTitle, showsArtist: showsArtist, showsAlbum: showsAlbum)
+            showsArtwork: showsArtwork, showsTitle: showsTitle, showsArtist: showsArtist, showsAlbum: showsAlbum,
+            showsActions: showsActions)
         return NotchMetrics.expandedExtraHeightMax(
-            hasLyricPreviewPossible: expandedShowsNextLine ?? AppSettings.shared.notchExpandedShowsNextLine,
+            hasLyricPreviewPossible: expandedShowsNextLine ?? LyricSecondaryLine.expandedNextLinePreviewVisible(
+                userToggle: AppSettings.shared.notchExpandedShowsNextLine, secondary: AppSettings.shared.notchSecondaryLine),
             hasControlsPossible: expandedShowsControls ?? AppSettings.shared.notchExpandedShowsControls,
             trackInfoHeight: trackInfoHeight)
     }
@@ -300,6 +308,7 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
     private var expandedTrackInfoShowsTitleObserver: AnyCancellable?
     private var expandedTrackInfoShowsArtistObserver: AnyCancellable?
     private var expandedTrackInfoShowsAlbumObserver: AnyCancellable?
+    private var expandedShowsQuickActionsObserver: AnyCancellable?
     private var leftEarObserver: AnyCancellable?
     private var rightEarObserver: AnyCancellable?
     private var trackPresenceObserver: AnyCancellable?
@@ -458,7 +467,15 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         // (`expandedTrackInfoShowsArtwork`),理由见 `expandedTrackInfoShowsArtwork` 上面
         // 那条⚠️。播放控制键开关(`expandedShowsControls`)同样在这一组——它不是曲目级
         // 数据信号,是纯用户设置,跟 `expandedShowsNextLine` 同一个性质。
-        expandedShowsNextLineObserver = AppSettings.shared.$notchExpandedShowsNextLine.removeDuplicates().sink { [weak self] shows in
+        // 「下一句歌词预览」最终画不画 = 用户开关 && 没被歌词行「副行」顶掉(2026-09-06:副行选「下一句」
+        // 时展开区再画一行同一句是重复)。判据只有 Core 那一份 `LyricSecondaryLine.expandedNextLinePreviewVisible`,
+        // 设置页替身 `NotchPreviewChrome` 调的也是它;两个输入任一变化都要重算展开区高度上限。
+        expandedShowsNextLineObserver = Publishers.CombineLatest(
+            AppSettings.shared.$notchExpandedShowsNextLine, AppSettings.shared.$notchSecondaryLine
+        )
+        .map { LyricSecondaryLine.expandedNextLinePreviewVisible(userToggle: $0, secondary: $1) }
+        .removeDuplicates()
+        .sink { [weak self] shows in
             self?.expandedShowsNextLine = shows
             self?.recomputeGeometry(animate: false, expandedShowsNextLine: shows)
         }
@@ -482,6 +499,10 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
             self?.expandedTrackInfoShowsAlbum = shows
             self?.recomputeGeometry(animate: false, expandedTrackInfoShowsAlbum: shows)
         }
+        expandedShowsQuickActionsObserver = AppSettings.shared.$notchExpandedShowsQuickActions.removeDuplicates().sink { [weak self] shows in
+            self?.expandedShowsQuickActions = shows
+            self?.recomputeGeometry(animate: false, expandedShowsQuickActions: shows)
+        }
 
         // 宽度固定后,recomputeGeometry 的结果不再跟 currentLine 有任何关系,不需要
         // 额外订阅 currentLine 来触发重算。
@@ -489,6 +510,13 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
 
     deinit {
         if let screenParamsObserver { NotificationCenter.default.removeObserver(screenParamsObserver) }
+    }
+
+    /// 展开态头部快捷操作里那颗 ✕(2026-09-07):关掉「灵动岛歌词」总开关。只是 `setVisible(false)`
+    /// 的一个入口,不另起状态 —— 跟悬浮歌词那颗 ✕(`LyricsOverlayWindowController` 的 `.closeOverlay`)
+    /// 完全对称。
+    func closeFromQuickAction() {
+        setVisible(false)
     }
 
     // 打开/关闭"灵动岛歌词"的**唯一**入口——设置页那个 Toggle、菜单栏"显示灵动岛歌词"两处
@@ -898,6 +926,8 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
         expandedTrackInfoShowsArtistObserver = nil
         expandedTrackInfoShowsAlbumObserver?.cancel()
         expandedTrackInfoShowsAlbumObserver = nil
+        expandedShowsQuickActionsObserver?.cancel()
+        expandedShowsQuickActionsObserver = nil
         trackPresenceObserver?.cancel()
         trackPresenceObserver = nil
         if let screenParamsObserver {
@@ -934,7 +964,8 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
                                    expandedTrackInfoShowsArtwork: Bool? = nil,
                                    expandedTrackInfoShowsTitle: Bool? = nil,
                                    expandedTrackInfoShowsArtist: Bool? = nil,
-                                   expandedTrackInfoShowsAlbum: Bool? = nil) {
+                                   expandedTrackInfoShowsAlbum: Bool? = nil,
+                                   expandedShowsQuickActions: Bool? = nil) {
         guard let window, let screen = resolvedScreen() else { return }
         let geo = Self.geometry(for: screen)
         // 四个 @Published 全部判等再写(2026-08-19):这个函数挂在设置同步/屏幕插拔/镜像
@@ -987,7 +1018,8 @@ final class NotchLyricsWindowController: NSWindowController, ObservableObject, N
                 expandedTrackInfoShowsArtwork: expandedTrackInfoShowsArtwork,
                 expandedTrackInfoShowsTitle: expandedTrackInfoShowsTitle,
                 expandedTrackInfoShowsArtist: expandedTrackInfoShowsArtist,
-                expandedTrackInfoShowsAlbum: expandedTrackInfoShowsAlbum))
+                expandedTrackInfoShowsAlbum: expandedTrackInfoShowsAlbum,
+                expandedShowsQuickActions: expandedShowsQuickActions))
         let frame = NSRect(
             x: geo.centerX - size.width / 2,
             y: screen.frame.maxY - size.height,

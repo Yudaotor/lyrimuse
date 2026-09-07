@@ -131,6 +131,38 @@ struct MenuBarPreviewBar<Lane: View>: View {
         return L10n.t("这里是一句歌词示例")
     }
 
+    /// 副行档位(2026-09-06 双排),跟本体 `MenuBarStatusItem.refresh` 同一份设置。
+    private var secondaryKind: LyricSecondaryLine { settings.menuBarSecondaryLine }
+    private var twoRows: Bool { secondaryKind.showsSecondaryRow }
+    /// 主行字体:双排 10pt / 单行跟设置 —— 跟本体同一个入口(`mainFont(for:twoRows:)`),测宽、排版、
+    /// 逐字边界三处都用它。
+    private var mainFont: NSFont { MenuBarMarqueeRenderer.mainFont(for: fullText, twoRows: twoRows) }
+    /// 副行文字:在播放时按 Core 的取值规则取真实译文 / 罗马音 / 下一句;示例句(没在播放)给档位名
+    /// (「译文」「罗马音」「下一句」)—— 跟本文件头注「不为示例句编造进度」同一原则,不编一句假译文。
+    private var secondaryText: String? {
+        guard twoRows else { return nil }
+        if let line, let text = line.plainText, !text.isEmpty {
+            return secondaryKind.secondaryText(currentLine: line,
+                                               nextLineText: PlaybackCoordinator.shared.nextLineText)
+        }
+        return secondaryKind.displayName
+    }
+    /// 自适应模式下装得下的句子那一格的宽:双排取两行里宽的那个、上限「最大宽度」(跟本体 refresh 的
+    /// `.text` 分支同一个算式);单行就是主行宽。
+    private func adaptiveWindowWidth(for visible: String) -> CGFloat {
+        let mainW = MenuBarMarqueeRenderer.width(of: visible, font: mainFont)
+        guard twoRows else { return mainW }
+        let secondaryW = secondaryText.map {
+            MenuBarMarqueeRenderer.width(of: $0, font: MenuBarMarqueeRenderer.doubleRowSecondaryFont)
+        } ?? 0
+        return min(settings.menuBarLyricsWidth, max(mainW, secondaryW))
+    }
+    /// Representable 的 frame 高:双排要给满按钮那 22pt(两行在里面按 MenuBarLyricRows.layout 落位),
+    /// 单行照旧一行行高。
+    private var rowsHeight: CGFloat {
+        twoRows ? MenuBarLyricRows.buttonHeight : MenuBarMarqueeRenderer.lineHeight
+    }
+
     /// 当前句的逐字填色路径。跟 MenuBarStatusItem.karaokeFillPath 同一份判定:
     /// 只在真的在播放、这句确实有逐字(YRC)数据、且没跟标签文本代际错位时才染。
     ///
@@ -142,7 +174,7 @@ struct MenuBarPreviewBar<Lane: View>: View {
               let line, let words = line.words, !words.isEmpty,
               line.plainText == fullText else { return nil }
         let path = MenuBarMarquee.karaokeFillPath(
-            words: words, wordEndXs: MenuBarMarqueeRenderer.wordEndXs(for: words))
+            words: words, wordEndXs: MenuBarMarqueeRenderer.wordEndXs(for: words, font: mainFont))
         return path.isEmpty ? nil : path
     }
 
@@ -153,7 +185,7 @@ struct MenuBarPreviewBar<Lane: View>: View {
         guard let line, let words = line.words, !words.isEmpty,
               line.plainText == fullText else { return nil }
         let path = MenuBarMarquee.followReadingPath(
-            words: words, wordEndXs: MenuBarMarqueeRenderer.wordEndXs(for: words))
+            words: words, wordEndXs: MenuBarMarqueeRenderer.wordEndXs(for: words, font: mainFont))
         return path.isEmpty ? nil : path
     }
 
@@ -199,7 +231,7 @@ struct MenuBarPreviewBar<Lane: View>: View {
     /// 歌词那一格本身有多宽(**不含**旁边那枚进度图标)。虚线边界按它画。
     private func lyricsSlotWidth(_ p: MenuBarMarqueeRenderer.Presentation) -> CGFloat {
         switch p {
-        case .text(let visible): return MenuBarMarqueeRenderer.width(of: visible)
+        case .text(let visible): return adaptiveWindowWidth(for: visible)
         case .fixed(_, let windowWidth, _): return windowWidth
         }
     }
@@ -217,7 +249,8 @@ struct MenuBarPreviewBar<Lane: View>: View {
             // 预览镜像的是 currentLine(**正在唱**的那一句),不是菜单栏本体用的 compactLine
             // (它会提前亮出下一句)—— 所以这里的句子按定义总是已经开唱了,提前量恒为 0。
             leadInSeconds: 0,
-            widthMode: settings.menuBarLyricsWidthMode)
+            widthMode: settings.menuBarLyricsWidthMode,
+            font: mainFont)
     }
 
     private static func willScroll(_ p: MenuBarMarqueeRenderer.Presentation) -> Bool {
@@ -506,16 +539,17 @@ struct MenuBarPreviewBar<Lane: View>: View {
             // ⚠️ 2026-09-03 起判据多了一个 `previewIconBadge != nil`,跟真机同步:一枚要按
             // 进度半染色的图标同样塞不进按钮自绘那条路,所以开着图标时装得下的句子也改走
             // 图层渲染(见 MenuBarStatusItem.refresh 的 .text 分支)。
-            if visible == fullText, karaokeFillPath != nil || previewIconBadge != nil {
-                let w = MenuBarMarqueeRenderer.width(of: visible)
+            // ⚠️ 2026-09-06 起判据再多一个 `twoRows`,同样跟真机同步:button.title 只能画一行。
+            if visible == fullText, karaokeFillPath != nil || previewIconBadge != nil || twoRows {
+                let w = adaptiveWindowWidth(for: visible)
                 MenuBarScrollingLabel.Representable(
                     text: visible, windowWidth: w, pacing: nil, fillPath: karaokeFillPath,
                     followPath: followReadingPath, karaokePositionMs: karaokePositionMs,
                     karaokeRate: anchor?.rate ?? 0, karaokePlaying: isPlayingNow,
                     icon: previewIconBadge, progressPositionMs: progressPositionMs,
-                    progressDurationMs: progressDurationMs)
-                    .frame(width: w + reservedIconWidth,
-                           height: MenuBarMarqueeRenderer.lineHeight)
+                    progressDurationMs: progressDurationMs,
+                    secondaryText: secondaryText, secondaryKind: secondaryKind)
+                    .frame(width: w + reservedIconWidth, height: rowsHeight)
             } else {
                 Text(visible)
                     .font(Font(MenuBarMarqueeRenderer.font))
@@ -531,9 +565,9 @@ struct MenuBarPreviewBar<Lane: View>: View {
                 karaokePositionMs: karaokePositionMs,
                 karaokeRate: anchor?.rate ?? 0, karaokePlaying: isPlayingNow,
                 icon: previewIconBadge, progressPositionMs: progressPositionMs,
-                progressDurationMs: progressDurationMs)
-                .frame(width: windowWidth + reservedIconWidth,
-                       height: MenuBarMarqueeRenderer.lineHeight)
+                progressDurationMs: progressDurationMs,
+                secondaryText: secondaryText, secondaryKind: secondaryKind)
+                .frame(width: windowWidth + reservedIconWidth, height: rowsHeight)
         }
     }
 }

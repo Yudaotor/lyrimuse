@@ -132,6 +132,234 @@ func runPlaybackPositionTests() {
             expectEqual(legacy, 130.0, "相位订正: 不传首见时刻时行为跟改动前逐字相同")
         }
 
+        // ---- stream 事件到达时刻钉锚点(2026-09-07) ----
+        //
+        // 实测(Spotify 暂停后恢复播放,3 次):恢复那一刻 Spotify 重打锚点且 playbackRate 变 null,
+        // media-control 的 elapsedTimeNow 从此不再外推(2 分 14 秒纹丝不动),App 只能自己按
+        // elapsedTime + (now − 整秒 ts) 补算 —— 整秒抹掉的小数(实测 .914/.724/.560)就是那首歌
+        // 余下部分偏快的量,一按暂停(冻结值是准的)显示就退回去 0.95/0.73s;这个错位再被自然切歌
+        // 校正当成旧曲真值,下一首偏置低估同样的量(实测真实 1.114 估成 0.533)。
+        // stream 事件在锚点打好后 17~26ms 就到,用到达时刻反推锚点,误差从 [0,1) 缩到 ±20ms。
+        do {
+            let ts = Date(timeIntervalSince1970: 1_000_000)
+            let tsString = "1970-01-12T13:46:40Z"
+            func ms(_ v: Double) -> Double { (v * 1000).rounded() / 1000 }
+            expectEqual(MC.parseTimestamp(tsString), ts, "钉锚点: 测试用的整秒字符串对得上 ts")
+
+            // tight:到达 ts+0.585(实测 00:40:25.580 对整秒 :25)→ 锚点 ≈ ts+0.560
+            let tight = MC.AnchorSighting(at: ts.addingTimeInterval(0.585), tight: true)
+            expectEqual(ms(MC.estimatedAnchorInstant(timestamp: ts, sighting: tight).timeIntervalSince(ts)), 0.56,
+                        "钉锚点: tight 目击 = 到达时刻回退典型延迟")
+            // 夹逼下界:到达只比整秒晚 10ms(锚点打在整秒边界上)→ 不倒推到上一秒
+            let early = MC.AnchorSighting(at: ts.addingTimeInterval(0.010), tight: true)
+            expectEqual(MC.estimatedAnchorInstant(timestamp: ts, sighting: early), ts, "钉锚点: tight 目击不早于整秒时间戳")
+            // 夹逼上界:到达 ts+1.3(事件迟到)→ 夹在 ts+0.999,不越过下一秒
+            let late = MC.AnchorSighting(at: ts.addingTimeInterval(1.3), tight: true)
+            expectEqual(ms(MC.estimatedAnchorInstant(timestamp: ts, sighting: late).timeIntervalSince(ts)), 0.999,
+                        "钉锚点: tight 目击不越过 ts+1")
+            // loose 目击退回中点法,与 firstSeenAt 版逐字相同
+            let loose = MC.AnchorSighting(at: ts.addingTimeInterval(0.4), tight: false)
+            expectEqual(MC.estimatedAnchorInstant(timestamp: ts, sighting: loose),
+                        MC.estimatedAnchorInstant(timestamp: ts, firstSeenAt: ts.addingTimeInterval(0.4)),
+                        "钉锚点: loose 目击退回中点法")
+
+            // rate 缺失分支现在也套相位订正。实测样本:恢复锚点 elapsed=172.994、ts=:25(真实 :25.560),
+            // 42.647s 后 App 那拍 —— 改动前算 215.641(快 0.56),Spotify 自己的钟是 215.081。
+            let resumed = MC.livePositionSeconds(
+                playing: true, elapsedTime: 172.994, elapsedTimeNow: 172.994,
+                playbackRate: nil, timestamp: ts, now: ts.addingTimeInterval(42.647),
+                lastPlayingPosition: nil, sighting: tight)
+            expectEqual(resumed.map(ms), 215.081, "钉锚点: rate 缺失 + tight 目击对上 Spotify 自己的钟(实测样本)")
+            // 没有目击(watcher 挂了 / 既有调用方)→ 行为跟改动前逐字相同(仍偏快 frac,但不更差)
+            let noSighting = MC.livePositionSeconds(
+                playing: true, elapsedTime: 172.994, elapsedTimeNow: 172.994,
+                playbackRate: nil, timestamp: ts, now: ts.addingTimeInterval(42.647))
+            expectEqual(noSighting.map(ms), 215.641, "钉锚点: rate 缺失、无目击时行为跟改动前相同")
+            // loose 目击(只有轮询看到,首见 ts+0.4)→ 中点 ts+0.2
+            let looseResumed = MC.livePositionSeconds(
+                playing: true, elapsedTime: 172.994, elapsedTimeNow: 172.994,
+                playbackRate: nil, timestamp: ts, now: ts.addingTimeInterval(42.647),
+                lastPlayingPosition: nil, sighting: loose)
+            expectEqual(looseResumed.map(ms), 215.441, "钉锚点: rate 缺失 + loose 目击退回中点法")
+            // rate 正常、锚点陈旧:tight 目击同样接管(替代原来的中点)
+            let staleTight = MC.livePositionSeconds(
+                playing: true, elapsedTime: 100, elapsedTimeNow: 130.0,
+                playbackRate: 1, timestamp: ts, now: ts.addingTimeInterval(30),
+                lastPlayingPosition: nil, sighting: tight)
+            expectEqual(staleTight.map(ms), 129.44, "钉锚点: rate 正常 + 陈旧锚点按 tight 锚点时刻外推")
+            // 旧入参 firstSeenAt 与 sighting 同传时 sighting 优先
+            let both = MC.livePositionSeconds(
+                playing: true, elapsedTime: 100, elapsedTimeNow: 130.0,
+                playbackRate: 1, timestamp: ts, now: ts.addingTimeInterval(30),
+                lastPlayingPosition: nil, firstSeenAt: ts.addingTimeInterval(0.4), sighting: tight)
+            expectEqual(both.map(ms), 129.44, "钉锚点: sighting 与 firstSeenAt 同传时 sighting 优先")
+
+            // anchorKey:轮询与 stream watcher 共用一个构造,elapsedTime 定格三位小数
+            expectEqual(MC.anchorKey(artist: "方大同", title: "南音", elapsedTime: 172.994, timestamp: "2026-09-06T16:40:25Z"),
+                        "方大同|南音|172.994|2026-09-06T16:40:25Z", "anchorKey: 三段拼接")
+            expectEqual(MC.anchorKey(artist: nil, title: "x", elapsedTime: 0, timestamp: nil), "|x|0.000|-", "anchorKey: 缺项占位")
+
+            // stream watcher 的行消化:full 整份替换、diff 合并;只有带 elapsedTime/timestamp 的
+            // 事件才算锚点目击;刚(重)启时整份吐出的旧锚点(时间戳已经很老)只算 loose。
+            let arrival = ts.addingTimeInterval(0.585)
+            let full = Data(("{\"type\":\"data\",\"diff\":false,\"payload\":{\"bundleIdentifier\":\"com.spotify.client\","
+                + "\"title\":\"南音\",\"artist\":\"方大同\",\"playing\":true,\"elapsedTime\":26.458,"
+                + "\"timestamp\":\"\(tsString)\",\"duration\":215.853}}").utf8)
+            let d1 = MediaControlStreamWatcher.digest(line: full, merged: [:], arrivedAt: arrival)
+            expectEqual(d1.anchorKey, "方大同|南音|26.458|\(tsString)", "digest: full payload 直接给出锚点身份")
+            expectEqual(d1.tight, true, "digest: 刚打好的锚点(到达时 0.585s 老)算 tight")
+            expectEqual(d1.anchorAge.map(ms), 0.585, "digest: 报出到达时的锚点年龄")
+            // diff 只带 elapsedTime/timestamp/playbackRate(恢复播放的实测形态):曲目沿用合并状态
+            let diff = Data("{\"type\":\"data\",\"diff\":true,\"payload\":{\"elapsedTime\":162.05,\"timestamp\":\"\(tsString)\",\"playbackRate\":null}}".utf8)
+            let d2 = MediaControlStreamWatcher.digest(line: diff, merged: d1.merged, arrivedAt: arrival)
+            expectEqual(d2.anchorKey, "方大同|南音|162.050|\(tsString)", "digest: diff 沿用合并状态里的曲目")
+            expectEqual(d2.merged["title"] as? String, "南音", "digest: diff 不丢合并状态里未变的键")
+            // 不带锚点字段的 diff(只是 playing 翻转)不算目击
+            let playingOnly = Data("{\"type\":\"data\",\"diff\":true,\"payload\":{\"playing\":false}}".utf8)
+            expectEqual(MediaControlStreamWatcher.digest(line: playingOnly, merged: d1.merged, arrivedAt: arrival).anchorKey, nil,
+                        "digest: 只翻 playing 不算锚点目击")
+            // watcher 重启时整份吐出的旧锚点:到达时时间戳已经 30s 老 → loose
+            let stale = MediaControlStreamWatcher.digest(line: full, merged: [:], arrivedAt: ts.addingTimeInterval(30))
+            expectEqual(stale.anchorKey != nil && stale.tight == false, true, "digest: 重启时看到的旧锚点只算 loose")
+            // 空 payload(没人在报)/ 非 JSON 行:不崩、不产生目击;空 payload 还要清掉合并状态
+            let empty = MediaControlStreamWatcher.digest(
+                line: Data("{\"type\":\"data\",\"diff\":false,\"payload\":{}}".utf8), merged: d1.merged, arrivedAt: arrival)
+            expectEqual(empty.anchorKey == nil && empty.merged.isEmpty, true, "digest: 空 payload 无目击且清空合并状态")
+            expectEqual(MediaControlStreamWatcher.digest(line: Data("garbage".utf8), merged: d1.merged, arrivedAt: arrival).anchorKey, nil,
+                        "digest: 非 JSON 行无目击")
+        }
+
+        // ---- Spotify 陈旧锚点重发(2026-09-07) ----
+        //
+        // 实测(忘了美麗):01:40:09 恢复播放 elapsed=10.477 @ :09;01:40:43 Spotify 重发了一次
+        // now-playing,elapsed 仍是 10.477、时间戳换成 :43。media-control 据此外推,位置退回 34 秒
+        // (01:41:46 读到 73.75,真实 ≈107.6),用户看到"歌词落后很多、一暂停往前补一大段"。
+        do {
+            let ts = Date(timeIntervalSince1970: 1_000_000)
+            func ms(_ v: Double) -> Double { (v * 1000).rounded() / 1000 }
+            let last = MC.PlayingAnchor(track: "方大同|忘了美麗", elapsed: 10.477, timestamp: "T09", instant: ts.addingTimeInterval(0.555))
+            let later = ts.addingTimeInterval(34.5)
+            // 同曲、elapsed 逐 ms 相等、时间戳变了、旧锚点外推 44s 远没到 268s 曲长 → 陈旧重发
+            expectEqual(MC.isStaleAnchorRepublish(last: last, track: "方大同|忘了美麗", elapsed: 10.477, timestamp: "T43", duration: 268.92, now: later),
+                        true, "陈旧重发: 同 elapsed 换时间戳判为重发(实测样本)")
+            // elapsed 变了(真实 seek / 恢复)→ 不是
+            expectEqual(MC.isStaleAnchorRepublish(last: last, track: "方大同|忘了美麗", elapsed: 44.2, timestamp: "T43", duration: 268.92, now: later),
+                        false, "陈旧重发: elapsed 变了就是真锚点")
+            // 时间戳没变(同一个锚点被轮询多次看到)→ 不是
+            expectEqual(MC.isStaleAnchorRepublish(last: last, track: "方大同|忘了美麗", elapsed: 10.477, timestamp: "T09", duration: 268.92, now: later),
+                        false, "陈旧重发: 同一个锚点不算重发")
+            // 换歌 → 不是
+            expectEqual(MC.isStaleAnchorRepublish(last: last, track: "方大同|南音", elapsed: 10.477, timestamp: "T43", duration: 268.92, now: later),
+                        false, "陈旧重发: 换歌不算")
+            // elapsed == 0:「上一曲」重头播放分不开,宁可信重发是真的
+            let atStart = MC.PlayingAnchor(track: "x|y", elapsed: 0, timestamp: "T00", instant: ts)
+            expectEqual(MC.isStaleAnchorRepublish(last: atStart, track: "x|y", elapsed: 0, timestamp: "T44", duration: 268.92, now: ts.addingTimeInterval(44)),
+                        false, "陈旧重发: elapsed=0 不判(重头播放的歧义)")
+            // 旧锚点外推已越过曲长(单曲循环回绕 / 曲末)→ 旧锚点已死,新的是真的
+            expectEqual(MC.isStaleAnchorRepublish(last: last, track: "方大同|忘了美麗", elapsed: 10.477, timestamp: "T99", duration: 268.92, now: ts.addingTimeInterval(270)),
+                        false, "陈旧重发: 旧锚点外推越过曲长就信新锚点")
+            // 没有时长信息 → 只看签名
+            expectEqual(MC.isStaleAnchorRepublish(last: last, track: "方大同|忘了美麗", elapsed: 10.477, timestamp: "T43", duration: nil, now: later),
+                        true, "陈旧重发: 无时长时只看签名")
+            expectEqual(MC.isStaleAnchorRepublish(last: nil, track: "方大同|忘了美麗", elapsed: 10.477, timestamp: "T43", duration: 268.92, now: later),
+                        false, "陈旧重发: 没有上一个锚点不判")
+
+            // 命中后 livePositionSeconds 按原锚点时刻自己外推,不信 elapsedTimeNow(它按假时间戳算成 73.75)
+            let kept = MC.livePositionSeconds(
+                playing: true, elapsedTime: 10.477, elapsedTimeNow: 73.752,
+                playbackRate: 1, timestamp: ts.addingTimeInterval(34), now: ts.addingTimeInterval(97.7),
+                lastPlayingPosition: nil, sighting: MC.AnchorSighting(at: ts.addingTimeInterval(34.5), tight: true),
+                republishedAnchorInstant: last.instant)
+            expectEqual(kept.map(ms), ms(10.477 + 97.7 - 0.555), "陈旧重发: 命中后按原锚点外推(≈107.6 而不是 73.75)")
+            // rate 缺失同样按 1 外推
+            let keptNoRate = MC.livePositionSeconds(
+                playing: true, elapsedTime: 10.477, elapsedTimeNow: 10.477,
+                playbackRate: nil, timestamp: ts.addingTimeInterval(34), now: ts.addingTimeInterval(97.7),
+                republishedAnchorInstant: last.instant)
+            expectEqual(keptNoRate.map(ms), ms(10.477 + 97.7 - 0.555), "陈旧重发: rate 缺失时同样按原锚点外推")
+            // 暂停态不受它影响:仍用冻结值
+            let pausedKept = MC.livePositionSeconds(
+                playing: false, elapsedTime: 44.0, elapsedTimeNow: 73.752,
+                playbackRate: 1, timestamp: ts.addingTimeInterval(34), now: ts.addingTimeInterval(97.7),
+                republishedAnchorInstant: last.instant)
+            expectEqual(pausedKept, 44.0, "陈旧重发: 暂停态照旧用冻结值")
+        }
+
+        // ---- Spotify 一次性地面真值探针(2026-09-07):外推与过期 ----
+        do {
+            let t = Date(timeIntervalSince1970: 1_000_000)
+            func ms(_ v: Double) -> Double { (v * 1000).rounded() / 1000 }
+            expectEqual(SpotifyPositionProbe.extrapolate(position: 3.2, capturedAt: t, now: t.addingTimeInterval(0.4), rate: 1).map(ms),
+                        3.6, "spotify 探针: 按 age 外推到消费时刻")
+            expectEqual(SpotifyPositionProbe.extrapolate(position: 3.2, capturedAt: t, now: t.addingTimeInterval(0.4), rate: 0).map(ms),
+                        3.6, "spotify 探针: rate 缺失按 1")
+            expectEqual(SpotifyPositionProbe.extrapolate(position: 3.2, capturedAt: t, now: t.addingTimeInterval(7), rate: 1),
+                        nil, "spotify 探针: 过期不用")
+            expectEqual(SpotifyPositionProbe.extrapolate(position: 3.2, capturedAt: t, now: t.addingTimeInterval(-1), rate: 1),
+                        nil, "spotify 探针: 时钟倒退不用")
+        }
+
+        // ---- 暂停时刻外推(2026-09-07):MediaRemote 指令暂停时 Spotify 不发布冻结值 ----
+        //
+        // 实测(蘇麗珍,media-control pause):事件流只有 playing:false,原始 elapsedTime 仍是开播锚点
+        // 0@:44;旧规则退回上一拍记住的 5.225(旧了 ~1.9s),屏上 6.961 一下退到 5.225;Spotify 自己
+        // 的钟是 6.858。把上一拍位置外推到暂停事件到达的时刻就对上了。
+        do {
+            let ts = Date(timeIntervalSince1970: 1_000_000)          // 开播锚点整秒
+            let sampled = ts.addingTimeInterval(5.30)                 // 上一拍轮询
+            let pauseAt = ts.addingTimeInterval(7.05)                 // playing:false 到达
+            let now = ts.addingTimeInterval(7.35)                     // 暂停后那一拍轮询
+            func ms(_ v: Double) -> Double { (v * 1000).rounded() / 1000 }
+            // 锚点(开播时)早于暂停事件 7s → 不是暂停锚点 → 外推:5.225 + 1.75 = 6.975
+            let extrapolated = MC.pausedPositionSeconds(
+                elapsedTime: 0, anchorTimestamp: ts, lastPlaying: (5.225, sampled), pauseObservedAt: pauseAt, now: now)
+            expectEqual(extrapolated.map(ms), 6.975, "暂停外推: 锚点早于暂停事件 → 上一拍外推到暂停时刻")
+            // 暂停锚点(Spotify 界面里按暂停,带新时间戳 = 暂停那一秒)→ 原样用冻结值
+            let frozen = MC.pausedPositionSeconds(
+                elapsedTime: 6.858, anchorTimestamp: ts.addingTimeInterval(7), lastPlaying: (5.225, sampled), pauseObservedAt: pauseAt, now: now)
+            expectEqual(frozen, 6.858, "暂停外推: 锚点是暂停时发布的 → 用冻结值")
+            // 暂停事件早于上一拍(watcher 记的是上一次暂停)→ 退回旧规则(陈旧 + 掉得离谱 → 记住的值)
+            let stalePause = MC.pausedPositionSeconds(
+                elapsedTime: 0, anchorTimestamp: ts, lastPlaying: (5.225, sampled), pauseObservedAt: ts.addingTimeInterval(1), now: now)
+            expectEqual(stalePause, 5.225, "暂停外推: 暂停事件不在上一拍之后 → 退回旧规则")
+            // 没有暂停事件时刻 → 旧规则
+            let noEvent = MC.pausedPositionSeconds(
+                elapsedTime: 0, anchorTimestamp: ts, lastPlaying: (5.225, sampled), pauseObservedAt: nil, now: now)
+            expectEqual(noEvent, 5.225, "暂停外推: 无事件时刻 → 旧规则")
+            // 没有记住的播放位置 → 冻结值原样
+            expectEqual(MC.pausedPositionSeconds(elapsedTime: 12, anchorTimestamp: ts, lastPlaying: nil, pauseObservedAt: pauseAt, now: now),
+                        12, "暂停外推: 没有上一拍 → 冻结值")
+            // 暂停事件早于上一拍不到 0.5s(轮询在事件之后才落定)→ 仍认,外推量为 0
+            let justBefore = MC.pausedPositionSeconds(
+                elapsedTime: 0, anchorTimestamp: ts, lastPlaying: (5.225, sampled), pauseObservedAt: sampled.addingTimeInterval(-0.2), now: now)
+            expectEqual(justBefore, 5.225, "暂停外推: 事件略早于上一拍 → 外推量 0")
+            // livePositionSeconds 暂停态接上这条(传了 lastPlayingSampledAt 才走新规则)
+            let viaLive = MC.livePositionSeconds(
+                playing: false, elapsedTime: 0, elapsedTimeNow: 999, playbackRate: 1, timestamp: ts, now: now,
+                lastPlayingPosition: 5.225, lastPlayingSampledAt: sampled, pauseObservedAt: pauseAt)
+            expectEqual(viaLive.map(ms), 6.975, "暂停外推: livePositionSeconds 暂停态走新规则")
+            let viaLiveLegacy = MC.livePositionSeconds(
+                playing: false, elapsedTime: 0, elapsedTimeNow: 999, playbackRate: 1, timestamp: ts, now: now,
+                lastPlayingPosition: 5.225)
+            expectEqual(viaLiveLegacy, 5.225, "暂停外推: 不传采样时刻仍走旧规则")
+            // digest:playing:false 的行报 pausedAtArrival
+            let pausedLine = Data("{\"type\":\"data\",\"diff\":true,\"payload\":{\"playing\":false}}".utf8)
+            expectEqual(MediaControlStreamWatcher.digest(line: pausedLine, merged: [:], arrivedAt: now).pausedAtArrival, true,
+                        "digest: playing:false 行标记暂停到达")
+            let playingLine = Data("{\"type\":\"data\",\"diff\":true,\"payload\":{\"playing\":true}}".utf8)
+            expectEqual(MediaControlStreamWatcher.digest(line: playingLine, merged: [:], arrivedAt: now).pausedAtArrival, false,
+                        "digest: playing:true 行不标记")
+        }
+
+        // ---- 自然切歌偏置只属于开播锚点(2026-09-07) ----
+        // 实测:偏置 1.080 在位时按暂停,Spotify 发布的冻结值 152.673 与 App 已扣偏置的显示 152.689
+        // 只差 16ms,再扣一遍就退 1.097s。播放器重新发布的锚点(原始 elapsedTime>0)对齐它自己的钟,偏置作废。
+        expectEqual(LocalPlaybackSource.biasSurvivesAnchor(anchorElapsedTime: 0), true, "偏置归属: 开播锚点(0)保留偏置")
+        expectEqual(LocalPlaybackSource.biasSurvivesAnchor(anchorElapsedTime: 0.0005), true, "偏置归属: 毫秒内的 0 也算开播锚点")
+        expectEqual(LocalPlaybackSource.biasSurvivesAnchor(anchorElapsedTime: 152.673), false, "偏置归属: 暂停冻结锚点作废偏置")
+        expectEqual(LocalPlaybackSource.biasSurvivesAnchor(anchorElapsedTime: 50.844), false, "偏置归属: 恢复锚点作废偏置")
+        expectEqual(LocalPlaybackSource.biasSurvivesAnchor(anchorElapsedTime: nil), true, "偏置归属: 没有锚点信息(AppleScript 路径)不动")
+
         // ---- 锚点冻结的源:暂停时不能回退到那个恒为 0 的 elapsedTime(2026-08-21) ----
         //
         // 2026-08-21 用户报「用 Arc 播放音乐歌词进度慢」时查出来的连带 bug。Arc 这类网页播放器

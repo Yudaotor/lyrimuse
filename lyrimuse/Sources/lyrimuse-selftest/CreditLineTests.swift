@@ -12,7 +12,7 @@ func runCreditLineTests() {
     do {
         let engine = LyricsSyncEngine()
         let lrc = "[00:00.00]作词 : 甲\n[00:01.00]作曲：乙\n[00:26.74]la la la\n"
-        engine.load(lyrics: lrc, lyricsTr: "", lyricsRoma: "", lyricsYRC: "", preferWordLevel: true)
+        engine.load(lyrics: lrc, lyricsTr: "", lyricsRoma: "", lyricsYRC: "")
         expectEqual(engine.activeLine(atMs: 500)?.mainText, nil, "SyncEngine: 署名行时段内没有真歌词,判定成还没到第一句")
         expectEqual(engine.activeLine(atMs: 27000)?.mainText, "la la la", "SyncEngine: 真歌词开始后正常显示")
         expectEqual(engine.upcomingLineText(afterMs: 500), "la la la", "SyncEngine: 署名行被过滤后,双行预览提前露出第一句真歌词")
@@ -21,7 +21,7 @@ func runCreditLineTests() {
     do {
         let engine = LyricsSyncEngine()
         let yrc = "[0,1000](0,500,0)作词 (500,500,0)：甲 \n[26740,1000](26740,500,0)la (27240,500,0)la \n"
-        engine.load(lyrics: "", lyricsTr: "", lyricsRoma: "", lyricsYRC: yrc, preferWordLevel: true)
+        engine.load(lyrics: "", lyricsTr: "", lyricsRoma: "", lyricsYRC: yrc)
         expectEqual(engine.activeLine(atMs: 500)?.words, nil, "SyncEngine(YRC): 整行都是署名词时整行被过滤")
         expectEqual(engine.activeLine(atMs: 27000)?.words?.map(\.text), ["la ", "la "], "SyncEngine(YRC): 真歌词行不受影响")
     }
@@ -357,7 +357,7 @@ func runCreditLineTests() {
         let engine = LyricsSyncEngine()
         // 关键词表里没有的角色名(指挥/中提琴/母带),靠结构判定认出来
         let lrc = "[00:00.00]指挥：某人\n[00:01.00]中提琴：某人\n[00:02.00]母带工程师：某人\n[00:26.74]la la la\n"
-        engine.load(lyrics: lrc, lyricsTr: "", lyricsRoma: "", lyricsYRC: "", preferWordLevel: true)
+        engine.load(lyrics: lrc, lyricsTr: "", lyricsRoma: "", lyricsYRC: "")
         expectEqual(engine.activeLine(atMs: 500)?.mainText, nil, "署名行(结构): 关键词表外的角色名也被判成署名行")
         expectEqual(engine.activeLine(atMs: 27000)?.mainText, "la la la", "署名行(结构): 真歌词不受影响")
         expectEqual(engine.allLines(idPrefix: "t").count, 1, "署名行(结构): 三行职员表全被剔除,只剩 1 行真歌词")
@@ -373,7 +373,7 @@ func runCreditLineTests() {
         [00:30.00]Verse 1: hello
         [00:40.00]这是一句很长的歌词不是标签所以不该被当成署名行：后面还有内容
         """
-        engine.load(lyrics: lrc, lyricsTr: "", lyricsRoma: "", lyricsYRC: "", preferWordLevel: true)
+        engine.load(lyrics: lrc, lyricsTr: "", lyricsRoma: "", lyricsYRC: "")
         expectEqual(engine.activeLine(atMs: 11000)?.mainText, "他说：我不走", "署名行(结构): 对白式冒号不误杀")
         expectEqual(engine.activeLine(atMs: 21000)?.mainText, "1、2、3：走", "署名行(结构): 数字编号标签不误杀(只认汉字标签)")
         expectEqual(engine.activeLine(atMs: 31000)?.mainText, "Verse 1: hello", "署名行(结构): 英文场景标签不误杀")
@@ -388,7 +388,7 @@ func runCreditLineTests() {
         var lines = ["他说：走", "她说：不走", "我说：算了"]
         for i in 0..<7 { lines.append("普通歌词第\(i)句") }
         let lrc = lines.enumerated().map { "[00:\(String(format: "%02d", $0.offset + 10)).00]\($0.element)" }.joined(separator: "\n")
-        engine.load(lyrics: lrc, lyricsTr: "", lyricsRoma: "", lyricsYRC: "", preferWordLevel: true)
+        engine.load(lyrics: lrc, lyricsTr: "", lyricsRoma: "", lyricsYRC: "")
         expectEqual(engine.allLines(idPrefix: "t").count, 10, "署名行(结构): 命中够 3 行但没过半 → 规则不启用,10 句全留")
     }
 
@@ -399,7 +399,7 @@ func runCreditLineTests() {
         // 3 行里 2 行命中:4 > 3 过半成立,hits=2 < 3 不成立 → 恰好只卡在行数这一条。
         let engine = LyricsSyncEngine()
         let lrc = "[00:10.00]他说：走\n[00:20.00]她说：不走\n[00:30.00]普通歌词\n"
-        engine.load(lyrics: lrc, lyricsTr: "", lyricsRoma: "", lyricsYRC: "", preferWordLevel: true)
+        engine.load(lyrics: lrc, lyricsTr: "", lyricsRoma: "", lyricsYRC: "")
         expectEqual(engine.allLines(idPrefix: "t").count, 3, "署名行(结构): 过半但不够 3 行 → 规则不启用,3 句全留")
     }
 
@@ -415,7 +415,7 @@ func runCreditLineTests() {
         [00:40.00]男：第四句
         [00:50.00]女：第五句
         """
-        engine.load(lyrics: lrc, lyricsTr: "", lyricsRoma: "", lyricsYRC: "", preferWordLevel: true)
+        engine.load(lyrics: lrc, lyricsTr: "", lyricsRoma: "", lyricsYRC: "")
         expectEqual(engine.allLines(idPrefix: "t").count, 5, "署名行(结构): 对唱标签(男/女/合)整份豁免,5 句一句不删")
         // 2026-08-14 起前缀不再画在界面上:它被剥进 side 字段用来做左右分栏(见 LyricDuet)。
         // 这条断言原来钉的是 "男：第一句" —— 那正是改动之前的行为(标记直接显示成歌词的一部分,
@@ -433,7 +433,7 @@ func runCreditLineTests() {
         // (关键词表是逐行无条件生效的,不受整份门控影响)。
         let engine = LyricsSyncEngine()
         let lrc = "[00:10.00]作词：甲\n[00:20.00]作曲：乙\n[00:30.00]编曲：丙\n"
-        engine.load(lyrics: lrc, lyricsTr: "", lyricsRoma: "", lyricsYRC: "", preferWordLevel: true)
+        engine.load(lyrics: lrc, lyricsTr: "", lyricsRoma: "", lyricsYRC: "")
         expectEqual(engine.allLines(idPrefix: "t").count, 3, "署名行: 会被删空时整份不删(宁可漏治,不可删空)")
     }
 
@@ -592,7 +592,7 @@ func runCreditLineTests() {
         do {
             let lone = LyricsSyncEngine()
             lone.load(lyrics: "[00:01.00]妈妈 Mom：吃饭了\n[00:05.00]真的歌词一句\n[00:09.00]真的歌词两句\n",
-                      lyricsTr: "", lyricsRoma: "", lyricsYRC: "", preferWordLevel: true)
+                      lyricsTr: "", lyricsRoma: "", lyricsYRC: "")
             expectEqual(lone.allLines(idPrefix: "x").count, 3,
                         "双语形状: 整份只有 1 行这种形状时不删(闸门 ≥2)")
         }
@@ -607,7 +607,7 @@ func runCreditLineTests() {
         lrc += "[00:33.00]谁在乎明天会怎样\n"
         // 抬头那一行要靠曲名/歌手比对才认得出(见 looksLikeHeaderLine),所以这里必须把它们
         // 传进去 —— 真实调用路径也是这么传的。
-        engine.load(lyrics: lrc, lyricsTr: "", lyricsRoma: "", lyricsYRC: "", preferWordLevel: true,
+        engine.load(lyrics: lrc, lyricsTr: "", lyricsRoma: "", lyricsYRC: "",
                     trackTitle: "Stupid Pop Song", trackArtist: "陶喆")
         let kept = engine.allLines(idPrefix: "t").compactMap { $0.line.mainText }
         expectEqual(kept, ["This is a stupid pop song 我想唱给你听", "谁在乎明天会怎样"],

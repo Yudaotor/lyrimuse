@@ -15,7 +15,7 @@ func runSyncEngineTests() {
         let yrc = "[8000,1000](8000,500,0)aa (8500,500,0)bb \n"
             + "[25000,1000](25000,500,0)cc (25500,500,0)dd \n"
             + "[28000,1000](28000,500,0)ee (28500,500,0)ff \n"
-        engine.load(lyrics: "", lyricsTr: "", lyricsRoma: "", lyricsYRC: yrc, preferWordLevel: true)
+        engine.load(lyrics: "", lyricsTr: "", lyricsRoma: "", lyricsYRC: yrc)
         expectEqual(engine.gapMarkers().map(\.index), [-1, 0],
                     "间奏点: 前奏 + 第一句后各一个,静默太短的不标")
         expectEqual(engine.activeGapIndex(atMs: 3000), -1, "间奏点: 前奏进行中")
@@ -25,7 +25,7 @@ func runSyncEngineTests() {
         // 行级 LRC 不知道一行唱多久:两句起点差 ≥15s 才标(宁可漏合,别在普通句间闪点)。
         let engine2 = LyricsSyncEngine()
         let lrc = "[00:01.00]aa\n[00:13.00]bb\n[00:40.00]cc\n"
-        engine2.load(lyrics: lrc, lyricsTr: "", lyricsRoma: "", lyricsYRC: "", preferWordLevel: false)
+        engine2.load(lyrics: lrc, lyricsTr: "", lyricsRoma: "", lyricsYRC: "")
         expectEqual(engine2.gapMarkers().map(\.index), [1], "间奏点(LRC): 只有 ≥15s 的起点差才标")
     }
 
@@ -38,7 +38,7 @@ func runSyncEngineTests() {
         let yrc = "[8000,1000](8000,500,0)aa (8500,500,0)bb \n"
             + "[25000,1000](25000,500,0)cc (25500,500,0)dd \n"
             + "[28000,1000](28000,500,0)ee (28500,500,0)ff \n"
-        engine.load(lyrics: "", lyricsTr: "", lyricsRoma: "", lyricsYRC: yrc, preferWordLevel: true)
+        engine.load(lyrics: "", lyricsTr: "", lyricsRoma: "", lyricsYRC: yrc)
         expectEqual(engine.tickQuery(atMs: 3000).scrollIndex, nil, "提前滚动: 前奏「•••」亮着时还不滚第一句")
         expectEqual(engine.tickQuery(atMs: 7500).scrollIndex, 0, "提前滚动: 前奏收尾 leadMs 先把第一句挪到常规锚位")
         expectEqual(engine.tickQuery(atMs: 8500).scrollIndex, 0, "提前滚动: 唱着的时候滚动锚=当前行")
@@ -51,7 +51,7 @@ func runSyncEngineTests() {
         // 行级 LRC 不知道一行唱到几点,短间隙不抢跑(两个下标恒等,行为与改动前一致)。
         let engine2 = LyricsSyncEngine()
         let lrc = "[00:01.00]aa\n[00:05.00]bb\n"
-        engine2.load(lyrics: lrc, lyricsTr: "", lyricsRoma: "", lyricsYRC: "", preferWordLevel: false)
+        engine2.load(lyrics: lrc, lyricsTr: "", lyricsRoma: "", lyricsYRC: "")
         expectEqual(engine2.tickQuery(atMs: 3000).scrollIndex, 0, "提前滚动(LRC): 行级不知道唱完时刻,不抢跑")
         expectEqual(engine2.tickQuery(atMs: 3000).index, 0, "提前滚动(LRC): 两个下标一致")
     }
@@ -61,7 +61,7 @@ func runSyncEngineTests() {
     do {
         let engine = LyricsSyncEngine()
         let lrc = "[00:10.00]第一句\n[00:20.00]第二句\n"
-        engine.load(lyrics: lrc, lyricsTr: "", lyricsRoma: "", lyricsYRC: "", preferWordLevel: true)
+        engine.load(lyrics: lrc, lyricsTr: "", lyricsRoma: "", lyricsYRC: "")
         expectEqual(engine.activeLine(atMs: 15000)?.mainText, "第一句", "SyncEngine(offset): 校正前 15s 还是第一句")
         engine.offsetMs = 6000 // 提前 6 秒
         expectEqual(engine.activeLine(atMs: 15000)?.mainText, "第二句", "SyncEngine(offset): 提前 6s 后 15s 已经算第二句")
@@ -74,7 +74,7 @@ func runSyncEngineTests() {
     do {
         let engine = LyricsSyncEngine()
         let lrc = "[00:00.00]作词 : 甲\n[00:10.00]第一句\n[00:20.00]第二句\n[00:30.00]第三句\n"
-        engine.load(lyrics: lrc, lyricsTr: "", lyricsRoma: "", lyricsYRC: "", preferWordLevel: true)
+        engine.load(lyrics: lrc, lyricsTr: "", lyricsRoma: "", lyricsYRC: "")
         let lines = engine.allLines(idPrefix: "test")
         expectEqual(lines.count, 3, "SyncEngine.allLines: 署名行被过滤后只剩 3 条真歌词行")
         expectEqual(lines.map { $0.line.mainText }, ["第一句", "第二句", "第三句"], "SyncEngine.allLines: 行内容按时间顺序排列")
@@ -90,7 +90,7 @@ func runSyncEngineTests() {
     do {
         let engine = LyricsSyncEngine()
         let lrc = "[00:10.00]第一句\n[00:20.00]第二句\n"
-        engine.load(lyrics: lrc, lyricsTr: "", lyricsRoma: "", lyricsYRC: "", preferWordLevel: true)
+        engine.load(lyrics: lrc, lyricsTr: "", lyricsRoma: "", lyricsYRC: "")
         expectEqual(engine.activeLine(atMs: 12000)?.mainText, "第一句", "SyncEngine(记忆化): 首次查询正常构建")
         expectEqual(engine.activeLine(atMs: 13000)?.mainText, "第一句", "SyncEngine(记忆化): 同一行内反复查询命中缓存,内容不变")
         expectEqual(engine.activeLine(atMs: 21000)?.mainText, "第二句", "SyncEngine(记忆化): 跨到下一行后缓存随下标失效")
@@ -102,10 +102,10 @@ func runSyncEngineTests() {
 
     do {
         let engine = LyricsSyncEngine()
-        engine.load(lyrics: "[00:10.00]旧歌词\n", lyricsTr: "", lyricsRoma: "", lyricsYRC: "", preferWordLevel: true)
+        engine.load(lyrics: "[00:10.00]旧歌词\n", lyricsTr: "", lyricsRoma: "", lyricsYRC: "")
         expectEqual(engine.activeLine(atMs: 15000)?.mainText, "旧歌词", "SyncEngine(记忆化): 换歌前正常")
         expectEqual(engine.upcomingLineText(afterMs: 5000), "旧歌词", "SyncEngine(记忆化): 换歌前下一行预览正常")
-        engine.load(lyrics: "[00:10.00]新歌词\n", lyricsTr: "", lyricsRoma: "", lyricsYRC: "", preferWordLevel: true)
+        engine.load(lyrics: "[00:10.00]新歌词\n", lyricsTr: "", lyricsRoma: "", lyricsYRC: "")
         expectEqual(engine.activeLine(atMs: 15000)?.mainText, "新歌词", "SyncEngine(记忆化): load 换内容后同一下标的行缓存必须失效")
         expectEqual(engine.upcomingLineText(afterMs: 5000), "新歌词", "SyncEngine(记忆化): load 换内容后下一行缓存同样失效")
     }
@@ -537,8 +537,8 @@ func runSyncEngineTests() {
         expectEqual(engine.load(lyrics: lrc, lyricsTr: "[00:01.00] 译文", lyricsRoma: "", lyricsYRC: ""),
                     true, "load 指纹: 任一入参变化恢复全量装载")
         expectEqual(engine.load(lyrics: lrc, lyricsTr: "[00:01.00] 译文", lyricsRoma: "", lyricsYRC: "",
-                                preferWordLevel: false),
-                    true, "load 指纹: preferWordLevel 变化也算内容变化")
+                                trackTitle: "另一首"),
+                    true, "load 指纹: 曲名变化也算内容变化(它参与抬头行判定)")
 
         // ② tickQuery 与四个独立入口逐位一致(含单调推进和倒退 seek 两个方向 —— 单调窗口
         //    记忆化的验证失败路径必须正确回退全扫)。
@@ -597,7 +597,7 @@ func runSyncEngineTests() {
             + "[125856,6271](125856,967,0)Reminds (126823,275,0)me (127098,656,0)that (127754,733,0)games (128487,585,0)are (129072,794,0)more (129866,741,0)than (130607,1520,0)rules\n"
         engineTag.load(
             lyrics: "", lyricsTr: "[02:01.93]人群的咆哮充满了气氛\n[02:05.85]提醒我，游戏不仅仅是规则",
-            lyricsRoma: "", lyricsYRC: tagYRC, preferWordLevel: true)
+            lyricsRoma: "", lyricsYRC: tagYRC)
         let tagLines = engineTag.allLines(idPrefix: "t")
         // 2026-08-23 晚些时候改:这一行现在**根本不进歌词流**。
         //
@@ -646,8 +646,7 @@ func runSyncEngineTests() {
             lyrics: "[00:01.00]drifted line",
             lyricsTr: "[00:01.00]漂移行的译文",
             lyricsRoma: "[00:01.00]piao yi hang de yi wen",
-            lyricsYRC: "[3000,500](3000,300,0)drifted (3300,200,0)line",
-            preferWordLevel: true)
+            lyricsYRC: "[3000,500](3000,300,0)drifted (3300,200,0)line")
         expectEqual(engineDrift.allLines(idPrefix: "t").first?.line.translation, "漂移行的译文",
                     "内容匹配: YRC/LRC 时间戳漂移超过容差时,按内容而不是时间找到译文")
         expectEqual(engineDrift.allLines(idPrefix: "t").first?.line.romanization, "piao yi hang de yi wen",
@@ -669,8 +668,7 @@ func runSyncEngineTests() {
             lyricsRoma: "[00:01.000]joek6 nei5 soeng2 jan1 soeng2 jau5 mut6 jau5 gam1 kuk1 zoeng2",
             lyricsYRC: "[1706,1100](1706,100,0)若(1806,100,0)你 (1906,100,0)想(2006,100,0)欣" +
                 "(2106,100,0)赏 (2206,100,0)有(2306,100,0)没(2406,100,0)有 (2506,100,0)金" +
-                "(2606,100,0)曲(2706,100,0)奖",
-            preferWordLevel: true)
+                "(2606,100,0)曲(2706,100,0)奖")
         let nbspLine = engineNbspVsSpace.allLines(idPrefix: "t").first?.line
         expectEqual(nbspLine?.romanization,
                     "joek6 nei5 soeng2 jan1 soeng2 jau5 mut6 jau5 gam1 kuk1 zoeng2",
@@ -691,8 +689,7 @@ func runSyncEngineTests() {
             lyricsTr: "[02:55.60]你如此耀眼（你如此耀眼）",
             lyricsRoma: "",
             lyricsYRC: "[174240,1500](174240,300,0)U're (174540,300,0)so (174840,300,0)fine " +
-                "(175140,300,0)（U're (175440,300,0)so (175740,300,0)fine）",
-            preferWordLevel: true)
+                "(175140,300,0)（U're (175440,300,0)so (175740,300,0)fine）")
         expectEqual(engineParenStyle.allLines(idPrefix: "t").first?.line.translation, "你如此耀眼（你如此耀眼）",
                     "内容匹配: LRC 半角括号、YRC 全角括号、时间漂移超容差时,按字母数字内容仍应命中译文")
         // 大小写差异同理("U're" vs "u're" 是同一句词)。
@@ -701,8 +698,7 @@ func runSyncEngineTests() {
             lyrics: "[00:01.00]U got the horn",
             lyricsTr: "[00:01.00]号角在手",
             lyricsRoma: "",
-            lyricsYRC: "[3000,900](3000,300,0)u (3300,300,0)got (3600,300,0)the horn",
-            preferWordLevel: true)
+            lyricsYRC: "[3000,900](3000,300,0)u (3300,300,0)got (3600,300,0)the horn")
         expectEqual(engineCase.allLines(idPrefix: "t").first?.line.translation, "号角在手",
                     "内容匹配: 大小写差异不该让同一句词查不到译文")
 
@@ -713,8 +709,7 @@ func runSyncEngineTests() {
         engineDriftNoMatch.load(
             lyrics: "[00:01.00]completely different text",
             lyricsTr: "[00:01.00]漂移行的译文",
-            lyricsRoma: "", lyricsYRC: "[3000,500](3000,300,0)drifted (3300,200,0)line",
-            preferWordLevel: true)
+            lyricsRoma: "", lyricsYRC: "[3000,500](3000,300,0)drifted (3300,200,0)line")
         expectEqual(engineDriftNoMatch.allLines(idPrefix: "t").first?.line.translation, nil,
                     "内容匹配反例: 内容对不上时退回 nearestText,容差语义不受影响")
 
@@ -964,7 +959,7 @@ func runSyncEngineTests() {
             + "[13000,1000](13000,500,0)cc (13500,500,0)dd \n"
             + "[30000,1000](30000,500,0)ee (30500,500,0)ff \n"
         let engine = LyricsSyncEngine()
-        engine.load(lyrics: "", lyricsTr: "", lyricsRoma: "", lyricsYRC: yrc, preferWordLevel: true)
+        engine.load(lyrics: "", lyricsTr: "", lyricsRoma: "", lyricsYRC: yrc)
 
         // 第 0 行还在唱:显示本行,它前面没有行 → 提前量 0(不能因为"没有上一行"就算出负数)。
         let singing = engine.tickQuery(atMs: 10_500)
@@ -1023,5 +1018,34 @@ func runSyncEngineTests() {
         let lrcTick = lineLevel.tickQuery(atMs: 11_500)
         expectEqual(lrcTick.compactLine?.plainText, "aabb", "引擎提前量: 行级 LRC 不抢跑")
         expectEqual(lrcTick.compactLeadInMs, 0, "引擎提前量: 行级 LRC 提前量恒为 0")
+    }
+
+    // ---- SyncedLyricLine.lineLevel(2026-09-06,按展示面各自关「卡拉OK效果」时把行压成整行) ----
+    //
+    // 引擎 09-06 起始终解析逐字数据(全局开关已撤),"关了卡拉OK"这件事全靠展示面在消费点做这一步
+    // 压平。压错了不报错:少清一个字段(尤其 wordGroups)填色就从另一条路漏回来,多清一个字段
+    // 译文/罗马音/声部就凭空丢了。
+    do {
+        print("\n== 整行压平 ==")
+        let engine = LyricsSyncEngine()
+        let yrc = "[1000,2000](1000,1000,0)君 (2000,1000,0)へ \n"
+        engine.load(lyrics: "", lyricsTr: "[00:01.00]给你", lyricsRoma: "", lyricsYRC: yrc,
+                    romanizationScripts: [.japanese])
+        guard let word = engine.activeLine(atMs: 1500) else {
+            expectEqual(false, true, "整行压平: 先拿到一条逐字行"); return
+        }
+        expectEqual(word.words?.isEmpty, false, "整行压平: 前置——引擎给的是逐字行")
+        let flat = word.lineLevel
+        expectEqual(flat.words == nil, true, "整行压平: words 清掉")
+        expectEqual(flat.wordGroups == nil, true, "整行压平: wordGroups 也清掉(逐词罗马音那条路会漏填色)")
+        expectEqual(flat.mainText, word.plainText, "整行压平: 正文落到 mainText")
+        expectEqual(flat.plainText, word.plainText, "整行压平: plainText 不变")
+        expectEqual(flat.translation, word.translation, "整行压平: 译文原样保留")
+        expectEqual(flat.romanization != nil || word.romanization == nil, true, "整行压平: 整行罗马音保留(有的话)")
+        expectEqual(flat.side, word.side, "整行压平: 声部原样保留")
+        expectEqual(flat.lineLevel, flat, "整行压平: 幂等")
+
+        let plain = SyncedLyricLine(romanization: nil, translation: "t", mainText: "aabb", words: nil, wordGroups: nil, side: nil)
+        expectEqual(plain.lineLevel, plain, "整行压平: 本来就是整行的原样返回(== 语义不变)")
     }
 }

@@ -44,6 +44,8 @@ import SwiftUI
 //          │    └ iconBaseLayer (contents = 图标模板图,基础色)
 //          └ iconFillClipLayer (masksToBounds,只露出**已经放过**的那截 [底, 边界])
 //               └ iconFillLayer (contents = 同一枚图标的强调色版)
+//     └ secondaryClipLayer (masksToBounds,副行那一格,2026-09-06 双排;单行时 isHidden;装不下时 mask 尾部渐隐)
+//          └ secondaryTextLayer (contents = 副行长图,**不滚**;opacity 按档位压淡)
 //
 // 图标那一支**挂在 self.layer 上、不挂在 clipLayer/contentLayer 里** —— 它不跟着歌词滚,
 // 也不该被歌词那一格的裁剪窗切掉;它跟歌词是并排的两块,只在 layout() 里一起排位。
@@ -85,6 +87,10 @@ final class MenuBarScrollingLabel: NSView {
     private let iconBaseLayer = CALayer()
     private let iconFillClipLayer = CALayer()
     private let iconFillLayer = CALayer()
+    private let secondaryClipLayer = CALayer()
+    private let secondaryTextLayer = CALayer()
+    /// 副行装不下时右端渐隐用的遮罩(只在装不下时挂到 secondaryClipLayer.mask 上,见 placeSecondaryText)。
+    private let secondaryFadeMask = CAGradientLayer()
 
     /// 歌词旁边那枚带播放进度的图标要不要画、画哪一款、摆哪边(nil = 关着)。
     ///
@@ -127,10 +133,17 @@ final class MenuBarScrollingLabel: NSView {
         /// 歌词旁那枚带播放进度的图标(nil = 关着)。跟 fillPath 一样只描述"画什么",
         /// 进度到哪儿了是另一条时钟通道(updateProgressClock)。
         var icon: IconBadge?
+        /// 副行(2026-09-06 双排):主行下面那一行的文字;nil = 这一句没有可显示的副行(位置照留)。
+        var secondaryText: String?
+        /// 副行四选一。`.off` = 单行排法(改动前逐像素不变);其余 = 双排,主行换成 10pt、副行 9pt
+        /// (见 MenuBarLyricRows)。它同时决定副行图层的透明度(译文 / 罗马音 / 下一句各一档)。
+        var secondaryKind: LyricSecondaryLine
     }
 
     private var plan: Plan?
     private var prepared: MenuBarMarqueeRenderer.PreparedLine?
+    /// 副行排好的长图(双排且这一句有副行文字时才有)。
+    private var preparedSecondary: MenuBarMarqueeRenderer.PreparedLine?
     private var highlighted = false
 
     /// 逐字染色的播放时钟快照:外面(MenuBarStatusItem)对表时存底,内部要重装填色动画
@@ -216,6 +229,17 @@ final class MenuBarScrollingLabel: NSView {
         iconFillClipLayer.addSublayer(iconFillLayer)
         iconHostLayer.addSublayer(iconFillClipLayer)
         layer?.addSublayer(iconHostLayer)
+        // 副行那一支(2026-09-06 双排)。跟主行的 clipLayer 是上下叠的两格,**不进 contentLayer**:
+        // 主行滚、副行不滚,挂进去就跟着一起平移了。默认隐藏,双排时 layout() 露出来。
+        for l in [secondaryClipLayer, secondaryTextLayer, secondaryFadeMask] { l.anchorPoint = .zero }
+        secondaryClipLayer.masksToBounds = true
+        secondaryClipLayer.isHidden = true
+        secondaryClipLayer.addSublayer(secondaryTextLayer)
+        layer?.addSublayer(secondaryClipLayer)
+        // 渐隐遮罩:从左到右 不透明 → 不透明 → 透明,中间那个 location 在 placeSecondaryText 里按格宽算。
+        secondaryFadeMask.startPoint = CGPoint(x: 0, y: 0.5)
+        secondaryFadeMask.endPoint = CGPoint(x: 1, y: 0.5)
+        secondaryFadeMask.colors = [NSColor.black.cgColor, NSColor.black.cgColor, NSColor.clear.cgColor]
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) 不使用") }
@@ -235,15 +259,20 @@ final class MenuBarScrollingLabel: NSView {
 
     /// 显示(或更新)一句要滚动的歌词。同一句用同样的参数重复调用是空操作 ——
     /// 否则每次 recompute 都会把滚动打回开头,用户永远看不到后半句。
+    /// - Parameter secondaryText / secondaryKind: 副行(2026-09-06 双排),见 Plan 里两个字段的注释。
+    ///   默认 nil / .off = 单行,老调用点一字不改。
     func present(text: String, windowWidth: CGFloat, pacing: MenuBarMarquee.ScrollPacing?,
                  fillPath: [MenuBarMarquee.KaraokeFillPoint]? = nil,
                  followPath: [MenuBarMarquee.KaraokeFillPoint]? = nil,
-                 icon: IconBadge? = nil) {
+                 icon: IconBadge? = nil,
+                 secondaryText: String? = nil,
+                 secondaryKind: LyricSecondaryLine = .off) {
         let next = Plan(text: text, windowWidth: windowWidth,
                         alignment: AppSettings.shared.menuBarLyricsAlignment,
                         fontWeight: AppSettings.shared.menuBarLyricsFontWeight,
                         fontSize: AppSettings.shared.menuBarLyricsFontSize,
-                        pacing: pacing, fillPath: fillPath, followPath: followPath, icon: icon)
+                        pacing: pacing, fillPath: fillPath, followPath: followPath, icon: icon,
+                        secondaryText: secondaryText, secondaryKind: secondaryKind)
         guard next != plan else {
             isHidden = false
             return
@@ -260,6 +289,9 @@ final class MenuBarScrollingLabel: NSView {
             && plan?.icon == next.icon
             && plan?.fontWeight == next.fontWeight
             && plan?.fontSize == next.fontSize
+            // 副行文字 / 档位变了要重出位图(副行那张,以及单双排切换时主行那张 —— 字号变了)。
+            && plan?.secondaryText == next.secondaryText
+            && plan?.secondaryKind == next.secondaryKind
         // 滚动动画只在**滚动参数**(文字/槽宽/配速)真的变了时才重启。fillPath 从 nil 变成
         // 非 nil **不算** —— 那是"开唱那一刻把逐字填色挂上"(菜单栏订了 compactLine 和
         // currentLine 两条流,后者就管这一下,见 MenuBarStatusItem)。2026-08-24 之前它会
@@ -272,6 +304,9 @@ final class MenuBarScrollingLabel: NSView {
             $0.text == next.text && $0.windowWidth == next.windowWidth && $0.pacing == next.pacing
                 && $0.followPath == next.followPath
                 && $0.fontWeight == next.fontWeight && $0.fontSize == next.fontSize
+                // 单双排切换主行字体从 13 变 10,滚动距离跟着变 → 算滚动参数;只换副行文字 / 在译文和
+                // 罗马音之间切档不算 —— 主行一个数都没动,别把正在滚的句子打回开头。
+                && $0.secondaryKind.showsSecondaryRow == next.secondaryKind.showsSecondaryRow
         } ?? false)
         plan = next
         isHidden = false
@@ -372,11 +407,14 @@ final class MenuBarScrollingLabel: NSView {
         iconBaseClipLayer.removeAnimation(forKey: Self.iconBasePositionAnimationKey)
         iconBaseClipLayer.removeAnimation(forKey: Self.iconBaseBoundsAnimationKey)
         preparedIcon = nil
+        preparedSecondary = nil
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         textLayer.contents = nil
         fillTextLayer.contents = nil
         fillClipLayer.isHidden = true
+        secondaryTextLayer.contents = nil
+        secondaryClipLayer.isHidden = true
         iconBaseLayer.contents = nil
         iconFillLayer.contents = nil
         iconHostLayer.isHidden = true
@@ -404,11 +442,15 @@ final class MenuBarScrollingLabel: NSView {
         fillClipLayer.removeAnimation(forKey: Self.fillAnimationKey)
         baseClipLayer.removeAnimation(forKey: Self.basePositionAnimationKey)
         baseClipLayer.removeAnimation(forKey: Self.baseBoundsAnimationKey)
+        preparedSecondary = nil
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         textLayer.contents = nil
         fillTextLayer.contents = nil
         fillClipLayer.isHidden = true
+        // 副行是歌词的一部分,跟主行一起收(图标留着)。
+        secondaryTextLayer.contents = nil
+        secondaryClipLayer.isHidden = true
         CATransaction.commit()
     }
 
@@ -459,15 +501,28 @@ final class MenuBarScrollingLabel: NSView {
     /// 漂开,而这套算式跟状态栏项**出生时**算槽宽的那份本来就是配对的
     /// (`MenuBarProgressIcon.reservedWidth`,对不上就是歌词画到槽外压邻居)。
     struct ContentGeometry {
-        /// 歌词格:滚动裁剪窗的位置和大小(高度是这一句的行高,不是整个按钮高)。
+        /// 歌词格:滚动裁剪窗的位置和大小(高度是这一句的行高,不是整个按钮高;双排时是主行那一格)。
         let lyrics: CGRect
+        /// 副行那一格(双排时才有;单行 nil)。跟歌词格同 x / 同宽,纵向按 MenuBarLyricRows.layout 落位。
+        let secondary: CGRect?
         /// 那枚进度图标;没开就是 nil。
         let icon: CGRect?
     }
 
     func contentGeometry() -> ContentGeometry? {
         guard let plan else { return nil }
-        let height = prepared?.pointHeight ?? MenuBarMarqueeRenderer.lineHeight
+        // 双排(副行开着,2026-09-06):主行位图高 = 10pt 字面高取整,副行同理;两行纵向按 MenuBarLyricRows.layout
+        // 落位(10/9pt 实测 12 + 11 = 23 > 22,主行贴顶、副行贴底、中间重叠 1pt)。副行**没有文字**时那一格
+        // 照样占位(高度按副行字体算),主行不会因为这一句缺译文就上下跳。单行:老口径,逐像素不变。
+        let twoRows = plan.secondaryKind.showsSecondaryRow
+        let height = prepared?.pointHeight
+            ?? (twoRows ? MenuBarMarqueeRenderer.boxHeight(for: MenuBarMarqueeRenderer.doubleRowMainFont)
+                        : MenuBarMarqueeRenderer.lineHeight)
+        let rows: MenuBarLyricRows.Layout? = twoRows ? MenuBarLyricRows.layout(
+            mainHeight: height,
+            secondaryHeight: preparedSecondary?.pointHeight
+                ?? MenuBarMarqueeRenderer.boxHeight(for: MenuBarMarqueeRenderer.doubleRowSecondaryFont),
+            buttonHeight: bounds.height) : nil
         // 可视窗口跟 NSStatusBarButton 画 image 的位置对齐:水平居中 + 垂直居中。
         // 宽度用 plan.windowWidth 而不是 bounds.width —— 按钮比它宽一圈(系统给状态栏项
         // 留的左右内边距),文字必须落在中间那一块,否则会顶到相邻图标上。
@@ -493,7 +548,7 @@ final class MenuBarScrollingLabel: NSView {
         let contentW = min(plan.windowWidth + reserved, bounds.width)
         let left = max(0, ((bounds.width - contentW) / 2).rounded())
         let clipW = slot.width
-        let y = ((bounds.height - height) / 2).rounded()
+        let y = rows?.mainY ?? ((bounds.height - height) / 2).rounded()
         let lyricsX = slot.x
         let iconX: CGFloat
         switch plan.icon?.position {
@@ -506,6 +561,7 @@ final class MenuBarScrollingLabel: NSView {
         }
         return ContentGeometry(
             lyrics: CGRect(x: lyricsX, y: y, width: clipW, height: height),
+            secondary: rows.map { CGRect(x: lyricsX, y: $0.secondaryY, width: clipW, height: $0.secondaryHeight) },
             // 图标按自己的高度在按钮里垂直居中 —— 跟"图标独占那一格"时按钮自己居中画
             // 模板图的落点一致,两态之间切换时图标不会上下跳。
             icon: plan.icon == nil ? nil : CGRect(
@@ -533,8 +589,47 @@ final class MenuBarScrollingLabel: NSView {
         clipLayer.frame = geometry.lyrics
         // 只写 y。x 由滚动动画接管(动的是 contentLayer),这里碰它会跟滚动打架。
         contentLayer.position = CGPoint(x: contentLayer.position.x, y: 0)
+        if let secondary = geometry.secondary {
+            secondaryClipLayer.frame = secondary
+            secondaryClipLayer.isHidden = false
+            placeSecondaryText()
+        } else {
+            secondaryClipLayer.isHidden = true
+        }
         if let icon = geometry.icon { iconHostLayer.frame = icon }
         CATransaction.commit()
+    }
+
+    /// 副行的横向落点 + 尾部渐隐(2026-09-06)。装得下按「对齐方式」落位 —— 跟主行静止分支
+    /// (restartAnimation 里的 slack / alignedX)同一套算式;装不下贴左、右端 `MenuBarLyricRows.tailFadeWidth`
+    /// 渐隐,**不滚**(两行各滚各的会乱;副行是辅助信息,尾部看不全可以接受;灵动岛副行同一条规则)。
+    /// layout() 每次都调它:格宽(槽宽 / 图标让位)一变,落点和遮罩都要重算。调用方负责套 CATransaction。
+    private func placeSecondaryText() {
+        guard let plan, let built = preparedSecondary else {
+            secondaryClipLayer.mask = nil
+            return
+        }
+        let clipW = secondaryClipLayer.bounds.width
+        let slack = clipW - built.textWidth
+        let x: CGFloat
+        if slack >= 0 {
+            switch plan.alignment {
+            // `.automatic` 菜单栏不提供(`LyricsRestingAlignment.menuBarOptions`),真进来当左对齐兜底。
+            case .leading, .automatic: x = 0
+            case .center: x = (slack / 2).rounded()
+            case .trailing: x = slack.rounded()
+            }
+            secondaryClipLayer.mask = nil
+        } else {
+            x = 0
+            let fade = min(MenuBarLyricRows.tailFadeWidth, clipW)
+            secondaryFadeMask.frame = secondaryClipLayer.bounds
+            secondaryFadeMask.locations = [
+                0, NSNumber(value: Double(clipW > 0 ? (clipW - fade) / clipW : 1)), 1,
+            ]
+            secondaryClipLayer.mask = secondaryFadeMask
+        }
+        secondaryTextLayer.position = CGPoint(x: x, y: 0)
     }
 
     /// 「未唱到 / 整行」文字色的**唯一口径**。设置页那个色块也从这里取(定型在菜单栏那一档
@@ -598,16 +693,28 @@ final class MenuBarScrollingLabel: NSView {
         let scale = menuBarBitmapScale
         var built: MenuBarMarqueeRenderer.PreparedLine?
         var fillBuilt: MenuBarMarqueeRenderer.PreparedLine?
+        var secondaryBuilt: MenuBarMarqueeRenderer.PreparedLine?
         var iconBase: MenuBarProgressIcon.Prepared?
         var iconFill: MenuBarProgressIcon.Prepared?
+        // 双排(2026-09-06):主行按 10pt 那套字体画、位图不留富余;副行 9pt **同一个颜色**,压淡靠图层
+        // opacity 而不是改颜色 —— labelColor 是动态色,改 alpha 再解析容易出错;而且反白态换成选中色时
+        // 副行同样只需要压淡,不用另算一个色。
+        let twoRows = plan.secondaryKind.showsSecondaryRow
+        let mainFont = MenuBarMarqueeRenderer.mainFont(for: plan.text, twoRows: twoRows)
         // ⚠️ labelColor/selectedMenuItemTextColor 是**动态**颜色,真正解析成 RGB 是在
         // 绘制那一刻按"当前绘制 appearance"决定的。不套这一层的话,深色菜单栏上会画出
         // 一行几乎看不见的深色字(取决于 App 自己的 appearance,而不是菜单栏的)。
         effectiveAppearance.performAsCurrentDrawingAppearance {
-            built = MenuBarMarqueeRenderer.prepare(text: plan.text, color: color, scale: scale)
+            built = MenuBarMarqueeRenderer.prepare(text: plan.text, color: color, scale: scale,
+                                                   font: mainFont, exactBox: twoRows)
             if plan.fillPath != nil {
                 fillBuilt = MenuBarMarqueeRenderer.prepare(text: plan.text, color: karaokeFillColor,
-                                                           scale: scale)
+                                                           scale: scale, font: mainFont, exactBox: twoRows)
+            }
+            if twoRows, let secondary = plan.secondaryText {
+                secondaryBuilt = MenuBarMarqueeRenderer.prepare(
+                    text: secondary, color: color, scale: scale,
+                    font: MenuBarMarqueeRenderer.doubleRowSecondaryFont, exactBox: true)
             }
             // 图标跟歌词共用**同两个颜色**(未唱到的 / 已唱到的),所以它跟旁边的字永远
             // 是一套配色 —— 深浅色菜单栏、菜单反白、用户自定义色三件事一次都不用另写。
@@ -641,6 +748,17 @@ final class MenuBarScrollingLabel: NSView {
         } else {
             fillTextLayer.contents = nil
         }
+        preparedSecondary = secondaryBuilt
+        if let secondaryBuilt {
+            secondaryTextLayer.contents = secondaryBuilt.cg
+            secondaryTextLayer.contentsScale = secondaryBuilt.scale
+            secondaryTextLayer.bounds = CGRect(x: 0, y: 0, width: secondaryBuilt.textWidth,
+                                               height: secondaryBuilt.pointHeight)
+            secondaryTextLayer.opacity = MenuBarLyricRows.secondaryOpacity(for: plan.secondaryKind)
+        } else {
+            secondaryTextLayer.contents = nil
+        }
+        // 副行的横向落点 / 渐隐在 layout() 里按最新格宽摆(下面 needsLayout = true 会带到)。
         if let iconBase, let iconFill {
             preparedIcon = (iconBase, iconFill)
             iconBaseLayer.contents = iconBase.cg
@@ -695,6 +813,11 @@ final class MenuBarScrollingLabel: NSView {
         /// 曲长 nil = 不知道这首歌多长。速率和播放态两条时钟共用同一份,不再重复传。
         let progressPositionMs: Int?
         let progressDurationMs: Int?
+        /// 副行(2026-09-06 双排):文字与档位,含义同 `present(secondaryText:secondaryKind:)`。预览里的示例句
+        /// 没在播放时副行给的是档位名(「译文」「罗马音」「下一句」),跟"不为示例句编造进度"同一原则 ——
+        /// 不编一句假译文。
+        let secondaryText: String?
+        let secondaryKind: LyricSecondaryLine
 
         func makeNSView(context: Context) -> MenuBarScrollingLabel { MenuBarScrollingLabel() }
 
@@ -708,7 +831,8 @@ final class MenuBarScrollingLabel: NSView {
             view.appearance = MenuBarAppearanceStore.shared.appearance
             // present 对"参数没变"是空操作,所以设置页每次重算 body 都不会把滚动打回开头。
             view.present(text: text, windowWidth: windowWidth, pacing: pacing, fillPath: fillPath,
-                         followPath: followPath, icon: icon)
+                         followPath: followPath, icon: icon,
+                         secondaryText: secondaryText, secondaryKind: secondaryKind)
             // 预览实例不在 MenuBarStatusItem 的颜色订阅覆盖范围内,靠宿主 body 重算带一次
             // 重排 —— 用户在旁边拖「文字颜色」色轮时预览才跟手(重排一句位图 sub-ms 级)。
             view.refreshColors()
@@ -751,7 +875,8 @@ final class MenuBarScrollingLabel: NSView {
             let slack = max(0, -maxOffset)
             let alignedX: CGFloat
             switch plan.alignment {
-            case .leading: alignedX = 0
+            // `.automatic` 菜单栏不提供(见 LyricsRestingAlignment.menuBarOptions),真进来当左对齐兜底。
+            case .leading, .automatic: alignedX = 0
             case .center: alignedX = (slack / 2).rounded()
             case .trailing: alignedX = slack.rounded()
             }

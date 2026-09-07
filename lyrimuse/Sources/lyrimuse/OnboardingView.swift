@@ -349,7 +349,7 @@ struct OnboardingView: View {
             HStack(spacing: 4) {
                 Text(L10n.t("继续即表示你已了解"))
                     .foregroundStyle(.secondary)
-                Button(L10n.t("使用与版权说明")) { LegalNotices.openUsageNotice() }
+                Button(L10n.t("版权说明")) { LegalNotices.openUsageNotice() }
                     .buttonStyle(.link)
             }
             .font(.callout)

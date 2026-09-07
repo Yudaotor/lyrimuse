@@ -709,18 +709,37 @@ func runPlayerIdentityTests() {
     //
     // ⚠️ 这一组的**第一条是兼容性不变量,不是风格检查**:加这个设置之前,四行的字重是四个硬编码
     // 值(主 bold=9 / 罗马音 medium=6 / 译文 regular=5 / 下一句 medium=6)。现在它们由用户选的
-    // 那一档推导,默认档位必须逐个推回原来那四个数 —— 破了它,所有老用户的悬浮歌词升级后当场
-    // 变样,而且没有任何报错、没有任何日志,只有"我的歌词怎么变细了"。
+    // 那一档推导,而 `.bold` 这一档必须逐个推回原来那四个数 —— 它锚的是"阶梯顺序和三个档位差
+    // 没被人悄悄重排",破了它,停在 bold 档的用户升级后当场变样,没有任何报错、没有任何日志,
+    // 只有"我的歌词怎么变细了"。
+    //
+    // ⚠️ 2026-09-07 起 `.bold` **不再是默认档**:`AppSettings.defaultOverlayFontWeight` 那天按用户
+    // 要求改成了 `.semibold`(把他自己在用的那一版悬浮歌词配置定为默认)。上面那条不变量照旧,
+    // 下面另加一组"当前默认档"的派生断言 —— 那组硬编码的 `.semibold` 由 SourceContractTests 里
+    // 的「悬浮歌词默认字重闸」盯着,跟 AppSettings 漂开会当场红(selftest 只依赖 LyrimuseCore,
+    // 读不到 App 层的那个常量,只能这么钉)。
     do {
         print("\n== 悬浮歌词字重阶梯 ==")
-        let base = OverlayFontWeight.bold  // = AppSettings.defaultOverlayFontWeight
-        expectEqual(base.appKitWeight, 9, "字重: 默认档位就是改动前主歌词那个硬编码 bold")
+        // 2026-09-07 前这一档同时也是默认档,`base` 这个名字是那时留下的。
+        let base = OverlayFontWeight.bold
+        expectEqual(base.appKitWeight, 9, "字重: bold 档就是改动前主歌词那个硬编码 bold")
         expectEqual(base.lighter(by: OverlayFontWeight.romanizationSteps).appKitWeight, 6,
-                    "字重: 默认档位推出的罗马音必须等于改动前的 medium(6)")
+                    "字重: bold 档推出的罗马音必须等于改动前的 medium(6)")
         expectEqual(base.lighter(by: OverlayFontWeight.translationSteps).appKitWeight, 5,
-                    "字重: 默认档位推出的译文必须等于改动前的 regular(5)")
+                    "字重: bold 档推出的译文必须等于改动前的 regular(5)")
         expectEqual(base.lighter(by: OverlayFontWeight.nextLinePreviewSteps).appKitWeight, 6,
-                    "字重: 默认档位推出的下一句预览必须等于改动前的 medium(6)")
+                    "字重: bold 档推出的下一句预览必须等于改动前的 medium(6)")
+
+        // 当前默认档(2026-09-07 起 .semibold)推出来的四个权重 —— 新装 / 没动过这一项的人
+        // 实际看到的就是这四个数。整条阶梯比 bold 档低一格,这是改默认值时知情接受的连带结果。
+        let current = OverlayFontWeight.semibold
+        expectEqual(current.appKitWeight, 8, "字重: 当前默认档是 semibold(8)")
+        expectEqual(current.lighter(by: OverlayFontWeight.romanizationSteps).appKitWeight, 5,
+                    "字重: 当前默认档推出的罗马音是 regular(5)")
+        expectEqual(current.lighter(by: OverlayFontWeight.translationSteps).appKitWeight, 4,
+                    "字重: 当前默认档推出的译文是 light(4)")
+        expectEqual(current.lighter(by: OverlayFontWeight.nextLinePreviewSteps).appKitWeight, 5,
+                    "字重: 当前默认档推出的下一句预览是 regular(5)")
 
         // 阶梯本身:allCases 的顺序就是"从细到粗"这件事,lighter(by:) 直接按下标走。
         // 顺序被重排 = 静默改掉所有推导结果,所以这里钉的是**严格递增**,不是某几个具体值。

@@ -97,7 +97,7 @@
 - [ ] CI 会做的：Release 标 prerelease；appcast 的 enclosure 指 `releases/download/<tag>/`（不是 latest）；item 带
       `<sparkle:channel>beta</sparkle:channel>`；`sparkle:version` 是四段构建号（beta.N → `X.Y.Z.(100+N)`，唯一定义在
       `lyrimuse/scripts/build-version.sh`）；`check_appcast.py` 四项断言；发布后探活三个下载地址。
-- [ ] 测试机收法（二选一）：① 设置 → 关于 → 更新 → 打开「接收测试版更新」，再点「检查更新…」——App 自己去 GitHub 挑
+- [ ] 测试机收法（二选一）：① 设置 → 关于 → 更新 → 打开「测试版更新」，再点「检查更新…」——App 自己去 GitHub 挑
       版本最高的 Release（含预发布）的 appcast；② 不开开关，直接去 Release 页下载 dmg 手装（只验产物、不验升级链路）。
       **不用再 `defaults write SUFeedURL`**，也就没有 15 章坑 10 那个忘删的风险。
 - [ ] 验完：关掉开关即回正式频道。已装的测试版不会自动退回，等下一个版本号更高的正式版（同号正式版 `v1.6.0`

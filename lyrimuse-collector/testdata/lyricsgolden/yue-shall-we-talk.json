@@ -166,6 +166,28 @@
         "has_word_timing": true
       },
       {
+        "source": "lrclib",
+        "score": 621,
+        "terms": [
+          {
+            "kind": "duration",
+            "points": 216
+          },
+          {
+            "kind": "lines",
+            "points": 35
+          },
+          {
+            "kind": "titleMatch",
+            "points": 120
+          },
+          {
+            "kind": "consensus",
+            "points": 250
+          }
+        ]
+      },
+      {
         "source": "netease",
         "score": 460,
         "terms": [
@@ -184,32 +206,6 @@
           {
             "kind": "titleMatch",
             "points": 120
-          }
-        ]
-      },
-      {
-        "source": "lrclib",
-        "score": 21,
-        "terms": [
-          {
-            "kind": "duration",
-            "points": 216
-          },
-          {
-            "kind": "lines",
-            "points": 35
-          },
-          {
-            "kind": "versionTags",
-            "points": -600
-          },
-          {
-            "kind": "titleMatch",
-            "points": 120
-          },
-          {
-            "kind": "consensus",
-            "points": 250
           }
         ]
       }

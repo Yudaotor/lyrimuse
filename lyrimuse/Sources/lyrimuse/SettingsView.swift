@@ -623,8 +623,7 @@ private struct LyricsSettingsTab: View {
         // 这一页没有预览条,也就不需要固定头部;分段选择器跟「歌词显示」页一样留在滚动区
         // (理由见那一页 header 上的注释)。
         SettingsPage(
-            title: L10n.t("歌词"),
-            subtitle: L10n.t("让每首歌都有一份对得上的歌词")
+            title: L10n.t("歌词")
         ) {
             sectionPicker
             // 切段用纯淡入淡出,不用卡片那套 .settingsCard(带从顶边缩放):那个是"这一行
@@ -820,7 +819,7 @@ private struct LyricsSettingsTab: View {
             // 这行 help 的两句就是照那两处的真实行为写的,改那边记得回来改这里。
             SettingsRow(
                 icon: "arrow.triangle.2.circlepath",
-                title: L10n.t("自动跟进算法升级"),
+                title: L10n.t("跟进算法升级"),
                 help: L10n.t("开（默认）：匹配算法或打分规则更新后，后台会重新评估已有歌词，可能换成更合适的一份\n关：一旦定下来就不再自动更换；首次解析、手动重搜和手动编辑不受影响")
             ) {
                 Toggle("", isOn: Binding(
@@ -860,7 +859,7 @@ private struct LyricsSettingsTab: View {
             // 不该再自作主张改一遍锁定状态。
             SettingsRow(
                 icon: "lock.circle",
-                title: L10n.t("手动选定歌词后锁定"),
+                title: L10n.t("锁定手选歌词"),
                 // 文案按"开/关各一行"写(跟上面「匹配方式」那条 help 同一个格式):这个开关
                 // 唯一要回答的问题就是"开跟关差在哪",两行对照比一整段散文快得多。刻意不再
                 // 提"等同于直接编辑歌词"——那是实现口径(markManual),读的人不知道"直接编辑
@@ -1318,7 +1317,7 @@ private struct LyricsSettingsTab: View {
             SettingsRow(
                 icon: "text.bubble",
                 title: L10n.t("显示译文"),
-                help: L10n.t("这个开关只影响「桌面悬浮歌词」和「歌词窗口」；灵动岛歌词受限于胶囊空间不支持这一项，菜单栏歌词只能显示一行纯文字")
+                help: L10n.t("只影响桌面悬浮歌词和歌词窗口；灵动岛受空间所限不支持，菜单栏只能显示一行。")
             ) {
                 Toggle("", isOn: $settings.showTranslation)
             }
@@ -1359,21 +1358,14 @@ private struct LyricsSettingsTab: View {
         }
     }
 
+    // 「效果」这一段(2026-09-06 起)只剩**改歌词内容本身**的三项:繁简 / 罗马音 / 时间轴偏移 ——
+    // 四个展示面看到的是同一份结果。「卡拉OK效果」原来是这张卡的第一行(一颗全局开关,关掉在
+    // 引擎里丢弃逐字数据、四个面一起退成整行),用户指出它讲的是"某个面怎么画"、跟这里其余三项
+    // 不是一类;按「歌词显示」那一页"按形态分"的结构,拆成悬浮歌词 / 灵动岛 / 菜单栏各一颗
+    // (`overlayLyricsKaraoke` / `notchLyricsKaraoke` / `menuBarLyricsKaraoke`),歌词窗口始终逐字。
+    // 同一条判据 2026-08-29 已经把「双行显示」从这里挪去过悬浮歌词的「排版」。
     private var displayCard: some View {
         SettingsCard {
-            SettingsRow(
-                icon: "sparkles",
-                title: L10n.t("卡拉OK效果"),
-                help: L10n.t("逐字歌词，唱到哪个字亮到哪个字；没有逐字数据的歌整行高亮")
-            ) {
-                Toggle("", isOn: Binding(
-                    get: { settings.preferWordLevelKaraoke },
-                    set: { newValue in
-                        settings.preferWordLevelKaraoke = newValue
-                        local.preferWordLevelKaraoke = newValue
-                    }
-                ))
-            }
             // 这一项对完全不听中文歌的人是纯噪声,按系统首选语言收起来 —— 设置页已有
             // 同类先例(按来源模式/按跟随封面显示的那几行)。
             //
@@ -1381,13 +1373,15 @@ private struct LyricsSettingsTab: View {
             // 真实用户(比如系统语言列表里没加中文、但确实在听中文歌),而他之前已经打开过
             // 这个开关,收起来就等于**歌词正在被转换、而那个开关不见了** —— 那是最糟的
             // 一种状态,用户根本无从找回。只要它还在起作用,就一定看得见。
+            //
+            // ⚠️ 它现在是卡里**第一行**,分隔线要跟着条件走:这一行不显示时下一行不能顶着一条
+            // 孤零零的分隔线(2026-09-06 卡拉OK那一行撤掉之后才出现的情形)。
             if AppSettings.userReadsChinese || settings.hasSeenChineseLyrics
                 || settings.lyricsChineseVariant != .off
             {
-            CardDivider()
             SettingsRow(
                 icon: "character.bubble",
-                title: L10n.t("中文繁简切换"),
+                title: L10n.t("繁简转换"),
                 help: L10n.t("把中文歌词统一显示成简体或繁体")
             ) {
                 Picker("", selection: Binding(
@@ -1404,12 +1398,12 @@ private struct LyricsSettingsTab: View {
                 .pickerStyle(.segmented)
                 .fixedSize()
             }
-            }
             CardDivider()
+            }
             SettingsRow(
                 icon: "textformat.alt",
                 title: L10n.t("显示罗马音"),
-                help: L10n.t("这个开关只影响「桌面悬浮歌词」和「歌词窗口」；灵动岛歌词受限于胶囊空间不支持这一项，菜单栏歌词只能显示一行纯文字")
+                help: L10n.t("只影响桌面悬浮歌词和歌词窗口；灵动岛受空间所限不支持，菜单栏只能显示一行。")
             ) {
                 Toggle("", isOn: $settings.showRomanization)
             }
@@ -1519,97 +1513,104 @@ private struct LyricsSettingsTab: View {
         }
     }
 
+    // 「管理」段(2026-09-06 重排)。之前是一张没有卡名的卡装三样异质的东西 —— 一个跳窗口的入口行、
+    // 一块统计面板、一个文件夹位置 —— 权重平齐、动作按钮一处在行尾一处另起一行左对齐。现在拆成
+    // 两张卡:「歌词库」(库里有什么 + 缺的怎么补)和一张单行卡「歌词文件夹」(库在哪)。三条规则贯穿:
+    //   1. 每个动作都落在它所属那一行的**尾部**,不再有独立的按钮行;
+    //   2. 卡名行右侧只放"这张卡的入口动作"(跟「歌词来源」卡右上角的「测试」同一语法);
+    //   3. 统计块的读法照系统设置「储存空间」:总数 + 一条比例条 + 图例,不再六格平级数字。
+    @ViewBuilder
     private var managementCard: some View {
         SettingsCard {
-            SettingsRow(
-                icon: "list.bullet.rectangle",
-                title: L10n.t("歌词管理"),
-                subtitle: L10n.t("查看、编辑、重搜已缓存的歌词")
-            ) {
+            // 「歌词管理」从占一整行的设置行降为卡名行右侧的按钮:它是跳到另一扇窗口的入口,不是设置项,
+            // 占一行会跟统计块平权。原来那句副标题「查看、编辑、重搜已缓存的歌词」降为按钮的 tooltip。
+            SettingsCardHeader(title: L10n.t("歌词库")) {
                 // accessory 策略下打开新窗口得先手动激活 App,不然 openWindow 调了也没反应
                 // ——跟 MenuBarMenu.swift 里"歌词管理…"菜单项同一个坑、同一个修法。
-                Button(L10n.t("打开…")) {
+                Button(L10n.t("打开歌词管理")) {
                     NSApp.activate(ignoringOtherApps: true)
                     openWindow(id: "lyrics-manager")
                 }
+                .font(.system(size: 11, weight: .medium))
+                .controlSize(.small)
+                .settingsGlassButtons()
+                .help(L10n.t("查看、编辑、重搜已缓存的歌词"))
             }
             CardDivider()
-            // 歌词库统计面板(2026-09-03 用户要求)。数据全部来自 EnrichCacheStore 里早就
-            // 存着的字段,没有新增解析 —— 这几个值「歌词管理」窗口一直在显示,只是设置页
-            // 此前一个数字都不给,想知道"库里攒了多少、成色如何"必须开另一扇窗口去数。
-            //
-            // 面板自己订阅 store、自己在 .task 里 reload(onlyIfChanged:),不把
-            // @ObservedObject 挂到这一页上 —— 理由见 LyricsLibraryStatsPanel 头注。
-            // 尾部那个占用空间(2026-09-04 用户要求)。复用 EnrichCacheStore 早就在算的
-            // totalSizeBytes,不为它多扫一次盘;算不出来时整块不显示,理由见
-            // LyricsLibrarySizeLabel 头注。
-            SettingsRow(icon: "chart.bar.doc.horizontal", title: L10n.t("歌词库")) {
-                LyricsLibrarySizeLabel()
+            // 统计块 + 译文 / 罗马音两条从属行都在这个 View 里(2026-09-03 用户要求加统计;09-06 改版)。
+            // 数据全部来自 EnrichCacheStore 里早就存着的字段,没有新增解析。它自己订阅 store、自己在
+            // .task 里 reload(onlyIfChanged:),不把 @ObservedObject 挂到这一页上 —— 理由见它的头注。
+            LyricsLibraryStatsPanel()
+        }
+        SettingsCard {
+            lyricsFolderRow
+            // 只在偏离默认位置时多出一条从属行:既说明了状态(你现在不在默认位置),又给出退路。
+            // 放在默认状态下也摆一颗"恢复默认"是在给一个点了什么都不会变的按钮占位。
+            if !features.lyricsDir.isEmpty {
+                CardDivider()
+                SettingsSubRow(title: L10n.t("已改用自定义位置")) {
+                    Button(L10n.t("恢复默认位置")) {
+                        features.lyricsDir = ""
+                        Task { await features.save() }
+                    }
+                    .buttonStyle(.link)
+                }
             }
-            SettingsRawRow(insetToText: true) {
-                LyricsLibraryStatsPanel()
-            }
-            CardDivider()
-            // 路径显示在**同一行的尾部**、副标题去掉(2026-09-03 用户要求:「这个红框帮我放在
-            // 和歌词文件夹同一行显示;然后把小标题去掉」)。原来是"标题行 + 分隔线 + 单独一行
-            // 路径 + 分隔线 + 按钮行"三行结构,而那句副标题「歌词保存在这里」跟路径本身说的是
-            // 同一件事 —— 路径摆到标题右边之后它就成了纯冗余,这一段因此省下两行。
-            //
-            // ⚠️ 路径**不加 `.fixedSize()`**,跟这一页别处那些自绘控件的处置刻意不同:
-            // `SettingsRow` 的 HStack 里"标题列 / Spacer / 尾部"是三个可伸缩成员,SwiftUI
-            // **均分**剩余宽度(见 04 章「设计决策」第 15 条),给尾部钉死理想宽度的话,用户选了
-            // 一个很深的文件夹时那个亏空会转嫁到标题上、把「歌词文件夹」五个字压成换行。
-            // 这里的取舍跟那一条相反:**让路径先让步**——它本来就带 `.truncationMode(.middle)`,
-            // 中间省略仍然看得出首尾(`/Users/…/lyrics`),而标题换行是纯粹的难看。
-            // 默认路径实测约 210pt(11pt 字号、38 个字符),这一行的尾部预算约 430pt(600pt 卡片列
-            // 减去内边距/图标列/标题「歌词文件夹」+ⓘ 约 85pt),常用情形远够。
-            SettingsRow(
-                icon: "folder",
-                title: L10n.t("歌词文件夹"),
-                help: L10n.t("换文件夹后，旧文件不会自动搬过去")
-            ) {
-                Text(features.effectiveLyricsDir.path)
+        }
+    }
+
+    /// 「歌词文件夹」行:标题 + 路径 + 两颗动作按钮,全部在同一行(2026-09-03 用户要求路径"跟标题同一行、
+    /// 把小标题去掉";2026-09-06 把原来另起一行左对齐的两颗按钮也收进行尾)。
+    ///
+    /// 路径用 `~` 缩写(默认路径从 38 个字符缩到 26 个)、中间省略,完整路径放 tooltip。
+    ///
+    /// ⚠️ 尾部是"路径 + 两颗按钮"三件套,而 `SettingsRow` 的 HStack 里"标题列 / Spacer / 尾部"是三个
+    /// 可伸缩成员,SwiftUI **均分**亏空(见 04 章「设计决策」第 15 条)。这个仓库为此踩过两种坑:按钮被压成
+    /// 没有文字的空圆角矩形(「我的配色主题」命名行)、标题被压成换行(这一行的上一版)。所以三件套里
+    /// **只有路径可压**:两颗按钮 `.fixedSize()` 一分不让,路径 `.layoutPriority(-1)` 最后拿空间、
+    /// 拿不够就中间省略 —— 它本来就带 `.truncationMode(.middle)`,`~/…/lyrics` 仍看得出首尾,
+    /// 而按钮没字、标题换行都是纯粹的坏。默认路径缩写后约 150pt(11pt),两颗按钮约 170pt,
+    /// 尾部预算约 430pt,常用情形远够;英文界面按钮更宽("Show in Finder"),也仍在预算内。
+    private var lyricsFolderRow: some View {
+        let url = features.effectiveLyricsDir
+        return SettingsRow(
+            icon: "folder",
+            title: L10n.t("歌词文件夹"),
+            help: L10n.t("换文件夹后，旧文件不会自动搬过去")
+        ) {
+            HStack(spacing: 8) {
+                Text((url.path as NSString).abbreviatingWithTildeInPath)
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                     .truncationMode(.middle)
+                    .layoutPriority(-1)
+                    .help(url.path)
                     // 路径可能很长,给 VoiceOver 一个说得清"这是什么"的标签(可见文案里已经
                     // 没有副标题了,单读一串路径不知道它在说哪件事)。
                     .accessibilityLabel(L10n.t("歌词文件夹"))
-                    .accessibilityValue(features.effectiveLyricsDir.path)
-            }
-            CardDivider()
-            SettingsRawRow(insetToText: true) {
-                HStack(spacing: 10) {
-                    Button(L10n.t("选择文件夹…")) {
-                        let panel = NSOpenPanel()
-                        panel.canChooseDirectories = true
-                        panel.canChooseFiles = false
-                        panel.allowsMultipleSelection = false
-                        panel.prompt = L10n.t("选择")
-                        panel.directoryURL = features.effectiveLyricsDir
-                        if panel.runModal() == .OK, let url = panel.url {
-                            features.lyricsDir = url.path
-                            Task { await features.save() }
-                        }
-                    }
-                    Button(L10n.t("打开歌词文件夹")) {
-                        let url = features.effectiveLyricsDir
-                        // collector 那边(见 collector/lyricsexport.go)只在真正解析/导出过
-                        // 至少一首歌之后才会建这个目录,这里先兜底建一下,避免文件夹还不存在
-                        // 时 NSWorkspace 打不开、又没有任何提示。
-                        try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
-                        NSWorkspace.shared.open(url)
-                    }
-                    if !features.lyricsDir.isEmpty {
-                        Button(L10n.t("恢复默认位置")) {
-                            features.lyricsDir = ""
-                            Task { await features.save() }
-                        }
-                        .buttonStyle(.link)
-                    }
-                    Spacer()
+                    .accessibilityValue(url.path)
+                Button(L10n.t("在访达中显示")) {
+                    // collector 那边(见 collector/lyricsexport.go)只在真正解析/导出过
+                    // 至少一首歌之后才会建这个目录,这里先兜底建一下,避免文件夹还不存在
+                    // 时 NSWorkspace 打不开、又没有任何提示。
+                    try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+                    NSWorkspace.shared.open(url)
                 }
+                .fixedSize()
+                Button(L10n.t("更改…")) {
+                    let panel = NSOpenPanel()
+                    panel.canChooseDirectories = true
+                    panel.canChooseFiles = false
+                    panel.allowsMultipleSelection = false
+                    panel.prompt = L10n.t("选择")
+                    panel.directoryURL = url
+                    if panel.runModal() == .OK, let picked = panel.url {
+                        features.lyricsDir = picked.path
+                        Task { await features.save() }
+                    }
+                }
+                .fixedSize()
             }
         }
     }
@@ -1985,13 +1986,10 @@ private struct AppearanceSettingsTab: View {
             // 一张横排的「行为」卡片,后来陆续并进「显示封面」(几经反复:工具栏装不下、
             // 耳朵浮层里也不合适),再后来整张「展开态」卡片(下一句预览/歌名/歌手/专辑)
             // 也被要求"塞到行为卡片里再起一行"。2026-09-01 同一天最后一轮,用户要求整体
-            // 改回跟「风格/屏幕/左耳/右耳」一致的"点开才配置"形态——不是否定之前的分组,
-            // 三个新入口(见 NotchEditorStage.toolbarRow2)的分组是:「歌词行」→显示歌词+
-            // 显示封面,「行为」→暂停缩回,「展开态」→下一句预览+封面+歌名+歌手+专辑
-            // (`.showLyrics` 后来又从「行为」搬进了「歌词行」,见 `NotchLyricRowPopover`
-            // 上方注释)。内容(图标/标题/Binding)仍然只有 `NotchBehaviorItem` 一份,页面上
-            // 因此**不再有**常驻卡片,只剩编辑台工具栏里那三个新按钮 + 下面「全部设置」
-            // 抽屉里同样拆成三组的 `NotchBehaviorItemRows` 兜底。
+            // 改回跟「风格/屏幕/左耳/右耳」一致的"点开才配置"形态——三个新入口(见
+            // NotchEditorStage.toolbarRow2)。页面上因此**不再有**常驻卡片,只剩编辑台工具栏
+            // 里那三个按钮 + 下面「全部设置」抽屉兜底。2026-09-07 按卡片解剖重新分组
+            // (歌词行 / 展开态 / 行为),浮层和抽屉改调同一份分组视图,见 `NotchBehaviorItem` 头注。
             // ⚠️ 这一段**曾经**在抽屉上面还常驻一张「自动隐藏」卡(灵动岛自己那一份
             // `notchHide*`)。2026-09-02 用户要求「不要单独放在外面…放到行为卡片里面去」,
             // 那张卡整个删掉,两行进了编辑台工具栏的「行为」浮层和抽屉的「行为」组,真源
@@ -2072,46 +2070,44 @@ private struct AppearanceSettingsTab: View {
     // 一个宿主,多一份实现就多一处会漂的地方(理由同上面悬浮歌词/灵动岛那几张卡)。
 }
 
-// MARK: - 灵动岛「行为」类布尔开关(唯一数据源;宿主几经改版,见下方⚠️)
+// MARK: - 灵动岛「歌词行 / 展开态 / 行为」三组内容开关(唯一数据源 + 三个分组视图)
 
-/// 灵动岛几个纯布尔"设一次就不动"的行为项的唯一一份实现(2026-08-31 起)。文案/图标/
-/// Binding/帮助文案只有这一份,渲染它的宿主(下面 `NotchBehaviorItemRows`)也只有一份
-/// 实现,具体摆在哪由**调用点**决定——避免"这边改了有用、那边改了没用"这类漏改不报错
-/// 的坑(悬浮歌词那边已经为同一个理由付过一次代价)。
+/// 灵动岛几个纯布尔"设一次就不动"的内容开关的唯一一份**数据**(2026-08-31 起):图标 / 标题 /
+/// 帮助文案 / Binding 只在这里定义一次。渲染它们的是下面三个**分组视图**
+/// (`NotchLyricRowSettingsRows` / `NotchExpandedSettingsRows` / `NotchBehaviorSettingsRows`),
+/// 工具栏第二行三个浮层和「全部设置」抽屉的三个组各调**同一份**分组视图 —— 两个宿主的内容在
+/// 结构上就是一份,不再靠"两处 `items` 数组必须逐字相同"这条靠人守的约定(2026-09-01~09-06
+/// 那版 `NotchBehaviorItemRows(items:)` 就是这么守的,每条注释都在警告"漏一处不会编译报错")。
 ///
-/// ⚠️ **落点几经反复,均系 2026-08-31~09-01 这两天**:最初「显示歌词」「暂停缩回」两项
-/// 照悬浮歌词的「行为」栏范式,横排常驻在设置页上;「显示封面」(带从属的"封面位置"
-/// 选择器,跟其它项"图标+标题+开关"的单一形状不一样)几经反复后也并了进来,常驻区一度
-/// 因此变成一整张「行为」卡片;紧接着连独立的「展开态」卡片(下一句预览/歌名/歌手/专辑)
-/// 也被要求"塞进行为卡片里再起一行"整个合并进来。**最终**用户要求整体改回跟
-/// 「风格/屏幕/左耳/右耳」一致的"点开才配置"形态——常驻卡片因此整个撤掉,现在的宿主是
-/// 编辑台工具栏第二行三个新入口各自的浮层(`NotchLyricRowPopover`/`NotchBehaviorPopover`/
-/// `NotchExpandedPopover`,见 `NotchEditorStage.toolbarRow2`)+「全部设置」抽屉里按同样
-/// 三组拆开的 `NotchAllSettingsDrawer.lyricRowGroup`/`behaviorGroup`/`expandedGroup`
-/// (仍然常驻,是这几项**唯一**不用点开工具栏也能摸到的入口)。
-/// 「显示音浪」**不在这个枚举里**——同样带一个从属选择器,但没人要求把它也挪进来,继续
-/// 留在 `NotchEarSettingsRows.equalizerRow`/`NotchEqualizerRow` 里,不要顺手一起挪。
+/// **分组按卡片解剖走**(2026-09-07 重排;用户原话:「很多都是混乱的…有些它不应该放在这一个
+/// 框框里面…把各自应该待的模块给它合并好,不要出现这一个那一个的情况」):
+///   - 「歌词行」= 歌词行本身的一切:显不显示 → 对齐方式 → 副行(+ 展开时预览下一句)→ 卡拉OK效果
+///     → 行末封面(+ 封面位置);
+///   - 「展开态」= 只有 hover 展开才有的东西:控制区(播放控制 / 歌词校准)+ 快捷操作(头部右侧四颗键,
+///     2026-09-07 晚些加)+ 曲目信息头部
+///     (封面 / 歌名 / 歌手 / 专辑,四项归在一个「曲目信息」标题行下面);
+///   - 「行为」= 什么时候缩、什么时候藏:暂停缩回 + 两项自动隐藏(`AutoHideSettingsRows`)。
+/// ⚠️ 「展开时预览下一句」(`.expandedNextLine`)这次从「展开态」搬进「歌词行」:它在用户眼里
+/// 是"第二行歌词"(预览卡可点区域 2026-09-06 就是按这个划的,见 `NotchEditorStage.cardHotspots`),
+/// 而且跟「副行 · 下一句」讲的是同一件事 —— 同一个概念散在两个浮层里正是这次要修的"这一个那一个"。
+/// `AppSettings` 的键名仍是 `notchExpanded*`(持久化格式,不随 UI 挪动迁移)。
 ///
-/// `.expandedNextLine`/`.expandedShowsTrackTitle`/`.expandedShowsArtist`/
-/// `.expandedShowsAlbum` 源自已删除的独立「展开态」卡片(`NotchExpandedInfoCard`);
-/// `AppSettings` 那几个键名依然保留 `notchExpanded*` 前缀(键名是持久化格式,不因为 UI
-/// 挪了地方就迁移,迁移的收益配不上风险)。`.expandedShowsControls`(2026-09-01)是后补的
-/// 第五项——展开区那排播放控制键第一次开放成可关的开关,用户原话"再加一个控制键是否
-/// 展示",归到「展开态」这一组是因为它跟下一句预览一样,都是"展开区自己的内容"
-/// (不像另外四项属于「曲目信息头部」这个子块)。`.expandedShowsLyricsOffset`(同一天再后补
-/// 的第六项,用户原话"把调整歌词的也加进去")同理——菜单栏面板同款的歌词时间轴微调按钮,
-/// 塞进展开区进度条时间行中间本来就空着的位置,归到「展开态」是因为它也是"展开区自己的
-/// 内容"。⚠️ 它是这批开关里**唯一**不影响卡片高度的一项(按钮尺寸卡在时间行本身的高度
-/// 里,不需要 `NotchChromeSource`/`NotchExpandedMetrics` 那套几何链路,详见
-/// `AppSettings.notchExpandedShowsLyricsOffset` 上面那条⚠️),binding 因此也不用像
-/// `.expandedShowsControls` 那样连带触发窗口重算几何。
+/// 落点史(2026-08-31~09-01 反复多次:常驻横排 →「行为」卡 → 独立「展开态」卡 → 工具栏第二行
+/// 三个浮层)细节见 docs/features/05-notch.md「编辑台改造」节,这里不再复述。
+/// 「显示音浪」**不在这个枚举里**:它带一个从属的"贴哪只耳朵",宿主是左右耳浮层顶部那行开关
+/// (`NotchEarSettingsRows`,`NotchEditorStage.swift`),不要顺手挪进来。
 enum NotchBehaviorItem: String, CaseIterable, Identifiable {
     case showLyrics
+    /// 歌词行要不要按逐字时间轴填色(2026-09-06 从「歌词 → 效果」那颗全局开关拆过来的灵动岛
+    /// 那一份,见 AppSettings.notchLyricsKaraoke)。归「歌词行」:它讲的是这一行**怎么画**。
+    case karaoke
     case collapseWhenPaused
     case lyricRowArtwork
     case expandedNextLine
     case expandedShowsControls
     case expandedShowsLyricsOffset
+    /// 展开态头部右侧那排快捷操作(搜索歌词 / 显示歌词 │ 设置 / 关闭,2026-09-07)。一颗开关管四颗键。
+    case expandedShowsQuickActions
     case expandedShowsArtwork
     case expandedShowsTrackTitle
     case expandedShowsArtist
@@ -2122,11 +2118,13 @@ enum NotchBehaviorItem: String, CaseIterable, Identifiable {
     var icon: String {
         switch self {
         case .showLyrics: return "text.alignleft"
+        case .karaoke: return "sparkles"
         case .collapseWhenPaused: return "arrow.down.right.and.arrow.up.left"
         case .lyricRowArtwork: return "photo"
         case .expandedNextLine: return "text.bubble"
         case .expandedShowsControls: return "playpause.fill"
         case .expandedShowsLyricsOffset: return "timer"
+        case .expandedShowsQuickActions: return "ellipsis.circle"
         case .expandedShowsArtwork: return "photo"
         case .expandedShowsTrackTitle: return "textformat"
         case .expandedShowsArtist: return "music.mic"
@@ -2137,25 +2135,32 @@ enum NotchBehaviorItem: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .showLyrics: return L10n.t("显示歌词")
+        case .karaoke: return L10n.t("卡拉OK效果")
         case .collapseWhenPaused: return L10n.t("暂停缩回")
         case .lyricRowArtwork: return L10n.t("显示封面")
-        case .expandedNextLine: return L10n.t("下一句歌词预览")
+        // 2026-09-07 从「下一句歌词预览」改的:它现在住在「歌词行」浮层、紧跟「副行」,标题里得
+        // 把"只在展开时"说出来,否则跟上一行「副行 · 下一句」读起来像同一个开关的两种写法。
+        case .expandedNextLine: return L10n.t("展开时预览下一句")
         case .expandedShowsControls: return L10n.t("显示播放控制")
         case .expandedShowsLyricsOffset: return L10n.t("显示歌词校准")
-        // 跟 .lyricRowArtwork 用同一句文案(都是"显示封面")——两枚封面各自的开关分别
-        // 出现在「歌词行」和「展开态」两个浮层里,标题不需要额外区分"是哪一枚"。
-        case .expandedShowsArtwork: return L10n.t("显示封面")
-        case .expandedShowsTrackTitle: return L10n.t("显示歌名")
-        case .expandedShowsArtist: return L10n.t("显示歌手")
-        case .expandedShowsAlbum: return L10n.t("显示专辑")
+        case .expandedShowsQuickActions: return L10n.t("快捷操作")
+        // 曲目信息头部的四项挂在「曲目信息」标题行下面(`NotchExpandedSettingsRows`),标题是
+        // 光秃秃的名词 —— 复用耳朵模块那四个词条,不另造"显示封面 / 显示歌名…"(2026-09-07 之前
+        // 就是那样,跟「歌词行」浮层里另一枚封面的开关同名「显示封面」,分不清是哪一枚)。
+        case .expandedShowsArtwork: return NotchEarModule.artwork.displayName
+        case .expandedShowsTrackTitle: return NotchEarModule.title.displayName
+        case .expandedShowsArtist: return NotchEarModule.artist.displayName
+        case .expandedShowsAlbum: return NotchEarModule.album.displayName
         }
     }
 
-    /// 只有「下一句歌词预览」带帮助气泡(原「展开态」卡片上就是这样);其余项返回 nil,
-    /// 宿主据此决定要不要传 `help:` 参数。
+    /// 带帮助气泡的项;其余返回 nil,宿主据此决定要不要传 `help:` 参数。
     var help: String? {
         switch self {
         case .expandedNextLine: return L10n.t("展开时在进度条上方显示下一句要唱的歌词。")
+        case .karaoke: return L10n.t("逐字歌词，唱到哪个字亮到哪个字；没有逐字数据的歌整行高亮")
+        case .expandedShowsQuickActions:
+            return L10n.t("展开时在曲目信息右侧显示四颗按钮：搜索歌词、显示歌词、设置、关闭灵动岛歌词。")
         default: return nil
         }
     }
@@ -2166,6 +2171,8 @@ enum NotchBehaviorItem: String, CaseIterable, Identifiable {
         switch self {
         case .showLyrics:
             return Binding(get: { settings.notchShowLyrics }, set: { settings.notchShowLyrics = $0 })
+        case .karaoke:
+            return Binding(get: { settings.notchLyricsKaraoke }, set: { settings.notchLyricsKaraoke = $0 })
         case .collapseWhenPaused:
             return Binding(get: { settings.notchCollapsesWhenPaused },
                             set: { settings.notchCollapsesWhenPaused = $0 })
@@ -2181,6 +2188,9 @@ enum NotchBehaviorItem: String, CaseIterable, Identifiable {
         case .expandedShowsLyricsOffset:
             return Binding(get: { settings.notchExpandedShowsLyricsOffset },
                             set: { settings.notchExpandedShowsLyricsOffset = $0 })
+        case .expandedShowsQuickActions:
+            return Binding(get: { settings.notchExpandedShowsQuickActions },
+                            set: { settings.notchExpandedShowsQuickActions = $0 })
         case .expandedShowsArtwork:
             return Binding(get: { settings.notchExpandedShowsArtwork },
                             set: { settings.notchExpandedShowsArtwork = $0 })
@@ -2197,9 +2207,33 @@ enum NotchBehaviorItem: String, CaseIterable, Identifiable {
     }
 }
 
-/// 「封面位置」那一行(左/右两选一),从属于 `.lyricRowArtwork`,只在它开着时出现——被
-/// `NotchBehaviorItemRows` 统一调用(不管它出现在哪个宿主里都是同一份),不单独为每个
-/// 宿主各写一份分段选择器。
+/// 一个 `NotchBehaviorItem` 的标准渲染:图标 + 标题(+ ⓘ)+ 开关。三个分组视图都用它,不各抄一份
+/// `SettingsRow` + `Toggle` 的样板。
+@MainActor
+private struct NotchBehaviorToggleRow: View {
+    let item: NotchBehaviorItem
+
+    var body: some View {
+        SettingsRow(icon: item.icon, title: item.title, help: item.help) {
+            Toggle("", isOn: item.binding)
+        }
+    }
+}
+
+/// 同上,但画成**从属子行**(`SettingsSubRow`:左边一条淡竖线、标题缩进到主行标题那一列)——
+/// 「曲目信息」下面的四项和「副行」下面的「展开时预览下一句」用它。
+@MainActor
+private struct NotchBehaviorToggleSubRow: View {
+    let item: NotchBehaviorItem
+
+    var body: some View {
+        SettingsSubRow(title: item.title, help: item.help) {
+            Toggle("", isOn: item.binding)
+        }
+    }
+}
+
+/// 「封面位置」那一行(左/右两选一),从属于 `.lyricRowArtwork`,只在它开着时出现。
 @MainActor
 private struct NotchLyricRowArtworkPositionRow: View {
     @ObservedObject private var settings = AppSettings.shared
@@ -2238,138 +2272,202 @@ private struct NotchLyricsAlignmentRow: View {
         SettingsRow(
             icon: "text.alignleft",
             title: L10n.t("对齐方式"),
-            help: L10n.t("只影响装得下的短句：它在歌词行里靠哪边。放不下的句子会横向滚动，没有多余空间，对齐不起作用")
+            // 2026-09-07 加「自动」后 help 多了一句解释它按什么走(词条换新,旧句留给菜单栏那一行)。
+            help: L10n.t("只影响装得下的短句：它在歌词行里靠哪边。「自动」按对唱声部走：谁唱靠谁那边、合唱居中，没有对唱信息就靠左。放不下的句子会横向滚动，没有多余空间，对齐不起作用")
         ) {
-            LyricsAlignmentSegmentedControl(selection: $settings.notchLyricsAlignment)
+            LyricsAlignmentSegmentedControl(selection: $settings.notchLyricsAlignment,
+                                            options: LyricsRestingAlignment.notchOptions)
         }
     }
 }
 
-/// 一组 `NotchBehaviorItem` 的标准列表渲染——六个宿主都调这一份,传不同的子集:
-///   - `NotchAllSettingsDrawer.lyricRowGroup`/`behaviorGroup`/`expandedGroup`
-///     (下方,「全部设置」抽屉用,2026-09-01 起按跟浮层相同的三组分别渲染,不再是
-///     `allCases` 铺平的一整块);
-///   - `NotchLyricRowPopover`/`NotchBehaviorPopover`/`NotchExpandedPopover`
-///     (工具栏第二行三个新入口各自的浮层):各传自己那一小撮。
-/// 两边六处调用传的子集逐组相同,只是渲染宿主(带不带 `SettingsCardHeader`、外层是卡片
-/// 还是浮层)不同。内容(图标/标题/帮助文案/Binding)只在 `NotchBehaviorItem` 里定义一份,
-/// 这里只负责"给一组 item 排成竖排列表",不重复抄一份 SettingsRow+Toggle 的样板。
+/// 「副行」那一行(2026-09-06,用户拍板方案二):主歌词下方那 11pt 显示什么,四选一(不显示 /
+/// 下一句 / 译文 / 罗马音),默认「下一句」。行高恒 44、不影响卡片任何尺寸,所以跟「对齐方式」一样是
+/// 歌词行自己的**顶层**设置项(`SettingsRow`,不是从属的 `SettingsSubRow`),顺序紧跟「对齐方式」。
+///
+/// 控件用下拉(`.pickerStyle(.menu)`)而不是分段控件:四个英文标签(Nothing / Next Line / Translation /
+/// Romanization)在 420pt 的浮层里放不下(同悬浮歌词「粗细」那一行选下拉的理由);也不用「风格」浮层
+/// 那种单选列表 —— 这个浮层已经有五行,再加一头四行会撑到要滚。`.fixedSize()` 不能省,理由见
+/// `OverlayStyleSettingsRows` 同款那条⚠️。这是 `Picker`,不是 #55 那次翻车的 `Menu` + `Toggle` 条目。
 @MainActor
-struct NotchBehaviorItemRows: View {
+private struct LyricSecondaryLineRow: View {
     @ObservedObject private var settings = AppSettings.shared
-    let items: [NotchBehaviorItem]
-
-    /// 「显示封面」(歌词行末尾那枚)从属于「显示歌词」——关掉歌词时这一行(连同它的
-    /// 「封面位置」子行)整个隐藏,不只是禁用(2026-09-01 用户要求"联动隐藏"):没有歌词行,
-    /// "封面贴哪一行"这件事也就没有意义了。只在两者**同时出现在同一个 `items` 列表里**时
-    /// 才生效(`items.contains(.showLyrics)`)——目前是「歌词行」浮层和「全部设置」抽屉,
-    /// `.lyricRowArtwork` 万一将来单独出现在没有 `.showLyrics` 的列表里,这条判断自动
-    /// 不生效,照常显示(没有「显示歌词」可看,谈不上跟它联动)。
-    private func isVisible(_ item: NotchBehaviorItem) -> Bool {
-        guard item == .lyricRowArtwork, items.contains(.showLyrics) else { return true }
-        return settings.notchShowLyrics
-    }
 
     var body: some View {
-        let visibleItems = items.filter(isVisible)
+        SettingsRow(
+            icon: "text.append",
+            title: L10n.t("副行"),
+            help: L10n.t("主歌词下方多显示一行，行高不变。译文和罗马音显示的是当前句，下一句显示接下来那句；选「下一句」时展开区不再重复显示下一句预览")
+        ) {
+            Picker("", selection: $settings.notchSecondaryLine) {
+                ForEach(LyricSecondaryLine.allCases, id: \.self) { option in
+                    Text(option.displayName).tag(option)
+                }
+            }
+            .labelsHidden()
+            .pickerStyle(.menu)
+            .fixedSize()
+        }
+    }
+}
+
+/// 「歌词行」组 —— 工具栏「歌词行」浮层(`NotchLyricRowPopover`)与「全部设置」抽屉
+/// `lyricRowGroup` 调的是这同一份。
+///
+/// 顺序:显示歌词 →(对齐方式 → 副行 → 展开时预览下一句)→ 卡拉OK效果 → 显示封面(→ 封面位置)。
+/// 先把歌词这一格自己的事说完(显不显示、怎么对齐、下面加哪一行、怎么填色),再说行末那枚封面。
+///
+/// **「显示歌词」关着时其余整组隐藏**(不是禁用;2026-09-01 用户要求"联动隐藏"):没有歌词行,
+/// "靠哪边 / 副行放什么 / 怎么填色 / 封面贴哪一行"这些事都没有意义。⚠️ 唯一的例外是「展开时预览
+/// 下一句」:它画在展开区、不依赖歌词行(「显示歌词」关掉后展开时下一句预览照常显示,见 05 章
+/// 「显示歌词」节),所以歌词行关着时它**仍然显示**,只是从「副行」的子行升回顶层一行。
+///
+/// 「展开时预览下一句」从属于「副行」(`SettingsSubRow`):副行选了「下一句」时稳态就常显下一句,
+/// 展开再画一行是重复,这颗开关翻了也没有效果 —— 没有意义的开关不显示(判据只有 Core 一份
+/// `LyricSecondaryLine.hidesExpandedNextLinePreview`,跟真窗口 / 编辑台画不画那行同源)。工具栏
+/// 「歌词行」按钮的摘要按同一判据决定列不列它(`NotchEditorStage.lyricRowSummary`)。
+///
+/// ⚠️ `@ObservedObject` 不是样板:浮层宿主 `NotchLyricRowPopover` 自己不观察 `AppSettings`,
+/// 这里的条件显隐要靠它自己刷新。
+@MainActor
+struct NotchLyricRowSettingsRows: View {
+    @ObservedObject private var settings = AppSettings.shared
+
+    var body: some View {
         VStack(spacing: 0) {
-            ForEach(Array(visibleItems.enumerated()), id: \.element.id) { index, item in
-                if index > 0 { CardDivider() }
-                SettingsRow(icon: item.icon, title: item.title, help: item.help) {
-                    Toggle("", isOn: item.binding)
-                }
-                // 「对齐方式」紧跟在「显示歌词」后面(2026-09-03)。放在这个共用列表里而不是
-                // 分别加进 `NotchLyricRowPopover` 和 `NotchAllSettingsDrawer.lyricRowGroup`:
-                // 那两处的内容要求**逐字相同**,而漏改一处不会编译报错、只表现成"浮层里改了
-                // 有用、抽屉里找不到"(这个文件在 `behaviorGroup` 上方为同一件事写过警告)。
-                //
-                // 显隐判据跟下面「封面位置」同款:歌词行不画的时候,"歌词靠哪边"没有意义。
-                // 顺序上它排在「显示封面」之前 —— 先把歌词这一格自己的事说完(显不显示、
-                // 怎么对齐),再说行末那枚封面(显不显示、贴哪边)。
-                if item == .showLyrics, settings.notchShowLyrics {
+            NotchBehaviorToggleRow(item: .showLyrics)
+            if settings.notchShowLyrics {
+                CardDivider()
+                NotchLyricsAlignmentRow()
+                CardDivider()
+                LyricSecondaryLineRow()
+                if !settings.notchSecondaryLine.hidesExpandedNextLinePreview {
                     CardDivider()
-                    NotchLyricsAlignmentRow()
+                    NotchBehaviorToggleSubRow(item: .expandedNextLine)
                 }
-                if item == .lyricRowArtwork, settings.notchLyricRowShowsArtwork {
+                CardDivider()
+                NotchBehaviorToggleRow(item: .karaoke)
+                CardDivider()
+                NotchBehaviorToggleRow(item: .lyricRowArtwork)
+                if settings.notchLyricRowShowsArtwork {
                     CardDivider()
                     NotchLyricRowArtworkPositionRow()
                 }
+            } else if !settings.notchSecondaryLine.hidesExpandedNextLinePreview {
+                CardDivider()
+                NotchBehaviorToggleRow(item: .expandedNextLine)
             }
         }
     }
 }
 
-/// 工具栏第二行「歌词行」入口的浮层(2026-09-01)。内容是「显示歌词」+「显示封面」
-/// (带从属的「封面位置」选择器)——两项都是**歌词行本身**的开关(前者管这一行渲不渲染,
-/// 后者管行末那枚封面),`.showLyrics` 因此从「行为」浮层搬了过来,跟「全部设置」抽屉里
-/// 那两项是同一份 `NotchBehaviorItemRows`,只是分组不同。
-/// ⚠️ `width` 2026-09-03 从 220 提到 420,因为「对齐方式」那一行的尾部控件是个 3 段的
-/// 分段控件、比开关宽得多。**离屏量的,不是估的**(`NSHostingView.fittingSize`):
-/// 分段控件本体中文 176.0pt / **英文 216.0pt**(英文标签 "Left-Aligned"/"Right-Aligned"
-/// 撑破了每段 56pt 的下限,中文三个标签都在下限之内 —— 只按中文估会差 40pt);
-/// 加上 `SettingsRow` 的固定开销 96pt(2×14 内边距 + 20 图标列 + **3×12** iconTextSpacing
-/// + 12 `Spacer(minLength:)`;最容易漏的是"图标→文字"那一段 12pt)+ 标题(中文
-/// 「对齐方式」51.6pt / 英文 "Alignment" 61.1pt)+ ⓘ 19pt = 中文 342.6 / **英文 392.1**。
-/// 取 420 跟同族 `NotchBehaviorPopover` 一致,给英文留 28pt 余量(同族既有余量 +24~32)。
+/// 「展开态」组 —— 工具栏「展开态」浮层(`NotchExpandedPopover`)与抽屉 `expandedGroup` 同一份。
 ///
-/// 顺带修掉一个既有偏窄:原来那个 220 连这个浮层本来的两行都装不下 —— 同一套算术下
-/// 「Show Artwork」需要 253.2pt(中文 220.6pt 刚好卡在临界)。这一点本文件下方
-/// `NotchBehaviorPopover` 的注释里 2026-09-02 就记着"同样偏窄"了,只是当时没动。
-/// ⚠️ 不能指望截断兜底:`SettingsRow` 的标题没有 `lineLimit`,超宽的表现是**折行**。
-struct NotchLyricRowPopover: View {
+/// 两截:先是控制区的两颗(显示播放控制 / 显示歌词校准)加「快捷操作」(2026-09-07 晚些加,头部右侧
+/// 那排四颗键的总开关),分割线之后一行「曲目信息」标题行
+/// (纯说明,没有控件)带四个从属子行(封面 / 歌名 / 歌手 / 专辑)。2026-09-07 之前这七项(还多一项
+/// 「下一句歌词预览」)是平铺的七颗开关,三样不同的东西(下一句 / 控制区 / 曲目信息头部)混在
+/// 一列里,其中「显示封面」跟「歌词行」浮层那枚同名 —— 用户说的"混乱"主要就是这个浮层。
+///
+/// 「曲目信息」**没有总开关**:头部画不画 = 四项里任一开着(四项全关整块不占地方,见 05 章
+/// 「展开区」节),再加一个总开关等于第五个状态来源,"总开关开着、四项全关、什么都没显示"这种
+/// 组合说不清楚。标题行只负责把四项圈成一组。
+@MainActor
+struct NotchExpandedSettingsRows: View {
     var body: some View {
-        SettingsPopoverShell(title: L10n.t("歌词行"), width: 420) {
-            NotchBehaviorItemRows(items: [.showLyrics, .lyricRowArtwork])
+        VStack(spacing: 0) {
+            NotchBehaviorToggleRow(item: .expandedShowsControls)
+            CardDivider()
+            NotchBehaviorToggleRow(item: .expandedShowsLyricsOffset)
+            CardDivider()
+            NotchBehaviorToggleRow(item: .expandedShowsQuickActions)
+            CardDivider()
+            SettingsRow(
+                icon: "person.text.rectangle",
+                title: L10n.t("曲目信息"),
+                help: L10n.t("展开时在歌词行上方多一块曲目信息，四项各自独立；全关则这一块不占位置。")
+            )
+            CardDivider()
+            NotchBehaviorToggleSubRow(item: .expandedShowsArtwork)
+            CardDivider()
+            NotchBehaviorToggleSubRow(item: .expandedShowsTrackTitle)
+            CardDivider()
+            NotchBehaviorToggleSubRow(item: .expandedShowsArtist)
+            CardDivider()
+            NotchBehaviorToggleSubRow(item: .expandedShowsAlbum)
         }
     }
 }
 
-/// 工具栏第二行「行为」入口的浮层(2026-09-01)。内容原本是「显示歌词」+「暂停缩回」,
-/// `.showLyrics` 2026-09-01 同一天又被要求"放到歌词行选项里去配置"——它管的是歌词行
-/// 渲不渲染,跟「歌词行」浮层里另一项(显示封面)是同一类东西,归到那边比归在通用的
-/// "行为"下面更贴切。
+/// 「行为」组 —— 工具栏「行为」浮层(`NotchBehaviorPopover`)与抽屉 `behaviorGroup` 同一份:
+/// 「暂停缩回」+ 两行自动隐藏(`AutoHideSettingsRows`,2026-09-02 从撤掉的独立「自动隐藏」卡并进来,
+/// 跟悬浮歌词共用同一份视图、靠 `surface` 分流到 `notchHide*`)。
 ///
-/// 2026-09-02 又并进了「自动隐藏」两项(截屏/录屏时隐藏、暂停/无播放时隐藏)——它们原来是
-/// 设置页上一张独立的卡,用户要求"不要单独放在外面,要遵循设计理念,放到行为卡片里面去"。
-/// 浮层内容因此分两截:`NotchBehaviorItemRows`(跟「全部设置」抽屉「行为」组**逐字相同**)+
-/// `AutoHideSettingsRows`(跟悬浮歌词共用同一份视图,靠 `surface` 分流到 `notchHide*`)。
-///
-/// ⚠️ `width` 从 200 提到 420 是**离屏量出来的**,不是拍脑袋。按 `SettingsRow` 的真实几何
-/// 算固定开销 **150pt**:2×14(左右内边距) + 20(图标列) + 3×12(那个 HStack 有
-/// 图标 / 文字 / `Spacer` / 尾部控件**四个**子节点,所以是**三段** `iconTextSpacing`)
-/// + 12(`Spacer(minLength:)` 自己那一份) + 54(开关固有宽,`NSSwitch().intrinsicContentSize`,
-/// 四档 controlSize 都是 54×24)。⚠️ 手算最常漏的是"图标 → 文字"那一段 12pt,少算一段会得出
-/// 138、进而把浮层收窄 12pt;
-/// 再加最宽那一行的文字——英文 "Hide During Screenshots/Recording" 216pt + ⓘ 19pt = 235pt,
-/// 合计 385pt(中文只要 271pt)。1pt 步进的换行探测给出英文硬下限 386,按同族浮层的既有余量
-/// (`NotchStylePopover` +28 / `NotchEarPopover` +24 / `OverlayLayoutPopover` +32)取 420。
-/// ⚠️ 不能指望"截断"兜底:`SettingsRow` 的标题没有 `lineLimit`,超宽的表现是**折行**,而 ⓘ
-/// 跟标题同处一个 HStack 会垂直居中、尾部开关却是 `.top` 对齐,三者当场错位。同
-/// `OverlayLayoutPopover` 当年从 380 提到 460 的那次判断。
-/// (顺带记一笔实测:改之前那个 200 其实连唯一那一行都装不下——中文「暂停缩回」要 202pt、
-///  英文 "Shrink When Paused" 要 275pt,两种语言都在折行。同一批定的
-///  `NotchLyricRowPopover`(220)/`NotchExpandedPopover`(240)英文分别需要 300/296,同样偏窄;
-///  那两处不在这次改动范围里,要改另开一次。)
-struct NotchBehaviorPopover: View {
+/// ⚠️ 工具栏「行为」按钮的摘要(`NotchEditorStage.behaviorSummary`)要把这三项都算进去 ——
+/// 少算自动隐藏那两项不会编译报错,只会让按钮在它们开着时照旧显示「全部关闭」。
+@MainActor
+struct NotchBehaviorSettingsRows: View {
     var body: some View {
-        SettingsPopoverShell(title: L10n.t("行为"), width: 420) {
-            NotchBehaviorItemRows(items: [.collapseWhenPaused])
+        VStack(spacing: 0) {
+            NotchBehaviorToggleRow(item: .collapseWhenPaused)
+            // "本组之前"那条分隔线由宿主插,`AutoHideSettingsRows` 只在自己两行之间插一条(见那个文件头)。
             CardDivider()
             AutoHideSettingsRows(surface: .notch)
         }
     }
 }
 
-/// 工具栏第二行「展开态」入口的浮层(2026-09-01)。内容是原独立「展开态」卡片
-/// (`NotchExpandedInfoCard`,已删除)的全部四项(下一句预览 + 歌名/歌手/专辑)加上
-/// 后来补的「显示播放控制」(用户要求"加一个控制键是否展示"的开关)。
+/// 工具栏第二行「歌词行」入口的浮层。内容就是 `NotchLyricRowSettingsRows`,没有第二份。
+///
+/// ⚠️ `width` 420 是 2026-09-03 **离屏量的**(`NSHostingView.fittingSize`):瓶颈是「对齐方式」那一行
+/// 尾部的 3 段分段控件 —— 本体中文 176.0pt / **英文 216.0pt**("Left-Aligned"/"Right-Aligned" 撑破
+/// 每段 56pt 的下限,只按中文估会差 40pt),加 `SettingsRow` 固定开销 96pt(2×14 内边距 + 20 图标列
+/// + 3×12 iconTextSpacing + 12 `Spacer(minLength:)`)+ 标题(「对齐方式」51.6 / "Alignment" 61.1)
+/// + ⓘ 19 = 中文 342.6 / **英文 392.1**,420 给英文留 28pt。2026-09-07 搬进来的「展开时预览下一句」
+/// 子行英文 "Preview Next Line When Expanded" 210.2pt + ⓘ 19 + 开关 54 + 子行固定开销约 62pt ≈ 345,
+/// 在 420 之内,瓶颈不变。⚠️ 不能指望截断兜底:`SettingsRow` 的标题没有 `lineLimit`,超宽的表现是**折行**。
+///
+/// **2026-09-07 晚些 420 → 470**:「对齐方式」多了第四段「自动」(英文 "Automatic" 12pt semibold 量得 60.3,
+/// 撑破 56 下限)+ 一条 2pt 段间距 → 控件英文 278.3,整行 392.1 + 62.3 = **454.4**,420 已经放不下(会折行)。
+/// 470 留 15.6pt 余量;中文四段 234 + 96 + 51.6 + 19 = 400.6,同样在内。悬浮歌词那个装同一套四段控件的
+/// 「排版」浮层是 460,这里多 10 是因为这一行还带一个 ⓘ。
+struct NotchLyricRowPopover: View {
+    var body: some View {
+        SettingsPopoverShell(title: L10n.t("歌词行"), width: 470) {
+            NotchLyricRowSettingsRows()
+        }
+    }
+}
+
+/// 工具栏第二行「展开态」入口的浮层。内容就是 `NotchExpandedSettingsRows`。
+///
+/// ⚠️ `width` 340(2026-09-07 从 240 提上来的,**按 13pt 系统字实测文字宽算的**,不是估):最宽一行是
+/// 英文 "Show Playback Controls" 145.9pt + `SettingsRow` 固定开销 150pt(2×14 内边距 + 20 图标列 +
+/// 3×12 间距 + 12 `Spacer(minLength:)` + 54 开关)= **296pt**,中文「显示播放控制」77.4 + 150 = 227。
+/// 原来那个 240 英文下是折行的(改前的注释里 2026-09-02 就记着"同样偏窄")。340 给英文留 44pt,
+/// 比同族(+24~+34)略宽一点,是给「曲目信息」那行的 ⓘ 和四个子行的竖线留的。
 struct NotchExpandedPopover: View {
     var body: some View {
-        SettingsPopoverShell(title: L10n.t("展开态"), width: 240) {
-            NotchBehaviorItemRows(items: [
-                .expandedNextLine, .expandedShowsControls, .expandedShowsLyricsOffset, .expandedShowsArtwork,
-                .expandedShowsTrackTitle, .expandedShowsArtist, .expandedShowsAlbum,
-            ])
+        SettingsPopoverShell(title: L10n.t("展开态"), width: 340) {
+            NotchExpandedSettingsRows()
+        }
+    }
+}
+
+/// 工具栏第二行「行为」入口的浮层。内容就是 `NotchBehaviorSettingsRows`。
+///
+/// ⚠️ `width` 420 是**离屏量出来的**(2026-09-02),不是拍脑袋。`SettingsRow` 固定开销 **150pt**:
+/// 2×14(左右内边距)+ 20(图标列)+ 3×12(图标 / 文字 / `Spacer` / 尾部控件四个子节点 = 三段
+/// `iconTextSpacing`)+ 12(`Spacer(minLength:)`)+ 54(开关固有宽,`NSSwitch().intrinsicContentSize`,
+/// 四档 controlSize 都是 54×24)。⚠️ 手算最常漏的是"图标 → 文字"那一段 12pt。再加最宽那一行 ——
+/// 英文 "Hide During Screenshots/Recording" 216pt + ⓘ 19pt = 235pt,合计 385pt(中文只要 271pt);
+/// 1pt 步进的换行探测给出英文硬下限 386,按同族浮层的余量取 420。⚠️ 不能指望"截断"兜底:标题没有
+/// `lineLimit`,超宽是**折行**,而 ⓘ 跟标题同处一个 HStack 会垂直居中、尾部开关却是 `.top` 对齐,
+/// 三者当场错位。跟悬浮歌词的「行为」浮层同宽,两个形态的「行为」看起来是一件东西。
+struct NotchBehaviorPopover: View {
+    var body: some View {
+        SettingsPopoverShell(title: L10n.t("行为"), width: 420) {
+            NotchBehaviorSettingsRows()
         }
     }
 }
@@ -2377,44 +2475,27 @@ struct NotchExpandedPopover: View {
 
 // MARK: - 灵动岛「全部设置」抽屉
 
-/// 灵动岛的「全部设置」抽屉(2026-08-31)。用户看过第一版(只收了「显示歌词」/「暂停缩回」/
-/// 「显示音浪」三项)之后要求补齐:工具栏那四个浮层入口(风格/屏幕/左耳/右耳)和宽度调整条
-/// 这些**原有**配置项,也该能在"全部设置"里找到——完全对齐 `OverlayAllSettingsDrawer` 的
-/// 定位:不是"新配置项的收纳盒",是**这个形态全部可配项的完整兜底通路**(键盘/VoiceOver/
-/// "我就想找个开关,不想点开浮层"的场合)。
+/// 灵动岛的「全部设置」抽屉(2026-08-31)。定位完全对齐 `OverlayAllSettingsDrawer`:不是"新配置项的
+/// 收纳盒",是**这个形态全部可配项的完整兜底通路**(键盘 / VoiceOver / "我就想找个开关,不想点开
+/// 浮层"的场合)。用户看过第一版(只收了三项)之后要求补齐:工具栏那几个浮层入口和宽度调整条这些
+/// **原有**配置项,也该能在"全部设置"里找到。
 ///
-/// ⚠️ 顶部工具栏(风格/屏幕/左耳/右耳)和编辑台里那条宽度调整条**本体不受影响**——那条
-/// 横向空间已经被反复验证过是"刚好塞满、不能再挤"的上限(见 NotchEditorStage.toolbar 头
-/// 上那条⚠️)。这里是**多开一条兜底入口**,不是挪走原来那条:每一行都复用浮层/调整条背后
-/// 那份同源组件或同一个 AppSettings 键,不是另起一份平行实现(同悬浮歌词那边的纪律,漏改
-/// 一处的代价是"两个入口改出两个不同的效果")。
+/// **各组的顺序 = 工具栏两行入口的顺序**(2026-09-07 起:风格 → 屏幕 → 左耳 → 右耳 → 宽度 / 展开
+/// 宽度 → 歌词行 → 展开态 → 行为 → 恢复默认),标题也跟工具栏按钮一字不差 —— 抽屉是浮层的镜像,
+/// 同一组东西在两个入口叫两个名字、排两种顺序就是用户说的"这一个那一个"。
 ///
-/// 各行的来源:
-///   - 风格 → `NotchStyleSettingsRows()`(跟工具栏「风格」浮层同一份)
-///   - 左耳 / 右耳 → `NotchEarSettingsRows(side:)`(跟工具栏那两个浮层同一份)
-///   - 屏幕 → `NotchScreenSettingsRows(onScreenChange:)`(跟工具栏「屏幕」浮层同一份;
-///     这里没有编辑台预览要刷新,`onScreenChange` 传空闭包——真窗口的更新在这个组件内部
-///     已经带着 `notchOverlayEnabled` 守卫做完了,见该组件本体)
-///   - 宽度 → 本文件新写的 `widthRow`,只读调用 `NotchEditorStage.usableWidthRangeOnCurrentScreen`
-///     / `.effectiveWidth(baseWidth:)`(2026-08-31 归 ls-Rocky 维护的静态 API,这里不改
-///     它们的实现,只是又开一个调用点——跟悬浮歌词抽屉里那根 step 10 的滑杆同一个模式:
-///     跟画布上那条 step 2 的调整条是同一个值的两个入口)
-///   - 展开宽度 → `expandedWidthRow`(2026-09-06,画布上那根调整条变成双滑块之后右边那只的
-///     兜底通路),同样只调 `NotchEditorStage` 的静态入口;两根的写回都走 `commitWidths`
-///   - 歌词行(显示歌词 / 显示封面+位置)/ 行为(暂停缩回 + 2026-09-02 并进来的自动隐藏两项)/
-///     展开态(下一句预览 / 显示封面 / 显示歌名 / 显示歌手 / 显示专辑)→ 各自一个
-///     `SettingsCardHeader` + `NotchBehaviorItemRows`(「行为」组末尾还接一段 `AutoHideSettingsRows`),
-///     item 子集跟工具栏第二行三个浮层(`NotchLyricRowPopover`/`NotchBehaviorPopover`/
-///     `NotchExpandedPopover`)逐字相同——不是重新分组一遍,是照抄浮层已经定好的分类,两边
-///     改哪个子集都不会漂。2026-09-01 之前这 8 项在这里是 `NotchBehaviorItem.allCases`
-///     铺平的一整块、中间没有任何分隔标题,用户反馈"混乱、没分类";按浮层的分类拆成三个
-///     带标题的组,跟上面「风格」「左耳」「右耳」「屏幕」的呈现方式取齐。
-///   - 显示音浪 → `NotchEqualizerRow()`,全局兜底,跟「左耳」「右耳」浮层顶部那两个独立
-///     开关行(`NotchEarSettingsRows.equalizerRow`)不是同一份组件复用,是两种粒度的入口:
-///     那边答的是"这只耳朵现在开不开",这里答的是"不管哪只耳朵,一眼看总状态"——两边
-///     共享同一对 `notchShowsEqualizer`/`notchEqualizerEar`,改哪边都会同步反映到另一边,
-///     只是渲染各自独立,没有强行合并成一份组件(合并会破坏"左耳/右耳浮层只关心自己"
-///     这条既有边界)。
+/// ⚠️ 顶部工具栏和编辑台里那条宽度调整条**本体不受影响**——那条横向空间已经反复验证过是"刚好塞满、
+/// 不能再挤"的上限(见 NotchEditorStage.toolbar 头上那条⚠️)。这里是**多开一条兜底入口**,不是挪走
+/// 原来那条:每一组都复用浮层背后**同一份**组件,不是另起一份平行实现:
+///   - 风格 → `NotchStyleSettingsRows()`
+///   - 屏幕 → `NotchScreenSettingsRows(onScreenChange:)`(这里没有编辑台预览要刷新,传空闭包——真窗口
+///     的更新在组件内部已经带着 `notchOverlayEnabled` 守卫做完了)
+///   - 左耳 / 右耳 → `NotchEarSettingsRows(side:)`(顶部那行「显示音浪」开关也在里面 —— 2026-09-07
+///     之前抽屉末尾另有一张合并了开关 + 左右耳分段选择器的 `NotchEqualizerRow`,同一对状态两种控件
+///     两个位置,撤掉了;抽屉里的两个耳朵组各带一行,跟浮层一模一样)
+///   - 宽度 / 展开宽度 → 本文件的 `widthRow` / `expandedWidthRow`,只调 `NotchEditorStage` 的静态入口
+///   - 歌词行 / 展开态 / 行为 → `NotchLyricRowSettingsRows` / `NotchExpandedSettingsRows` /
+///     `NotchBehaviorSettingsRows`(跟三个浮层是同一份视图,不是"同样的 items 数组")
 private struct NotchAllSettingsDrawer: View {
     @ObservedObject private var settings = AppSettings.shared
 
@@ -2427,30 +2508,39 @@ private struct NotchAllSettingsDrawer: View {
             disclosureHeader
             if isExpanded {
                 CardDivider()
-                styleGroup
+                group(L10n.t("风格")) { NotchStyleSettingsRows() }
                 CardDivider()
-                earGroup
+                group(L10n.t("屏幕")) { NotchScreenSettingsRows(onScreenChange: {}) }
                 CardDivider()
-                screenGroup
+                group(L10n.t("左耳")) { NotchEarSettingsRows(side: .left) }
+                CardDivider()
+                group(L10n.t("右耳")) { NotchEarSettingsRows(side: .right) }
                 CardDivider()
                 widthRow
                 CardDivider()
                 expandedWidthRow
                 CardDivider()
-                lyricRowGroup
+                group(L10n.t("歌词行")) { NotchLyricRowSettingsRows() }
                 CardDivider()
-                behaviorGroup
+                group(L10n.t("展开态")) { NotchExpandedSettingsRows() }
                 CardDivider()
-                expandedGroup
-                CardDivider()
-                NotchEqualizerRow()
+                group(L10n.t("行为")) { NotchBehaviorSettingsRows() }
                 CardDivider()
                 resetRow
             }
         }
         // 理由同 OverlayAllSettingsDrawer:展开/收起的动画挂在改状态那一处(disclosureHeader
         // 里的 withAnimation),不挂在卡片上——挂在卡片上会把同一个事务里任何不相干的布局
-        // 变化(比如「显示音浪」展开时下面多长出的耳朵选择行)一起带动起来。
+        // 变化(比如「显示封面」开着时下面多长出的「封面位置」行)一起带动起来。
+    }
+
+    /// 一组:标题行 + 分隔线 + 内容。标题文案跟工具栏对应那颗按钮用同一个词条。
+    private func group<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
+        Group {
+            SettingsCardHeader(title: title)
+            CardDivider()
+            content()
+        }
     }
 
     /// 「恢复默认风格与开关」——抽屉里的兜底入口(2026-09-03 补)。
@@ -2465,75 +2555,10 @@ private struct NotchAllSettingsDrawer: View {
     private var resetRow: some View {
         SettingsRow(
             icon: "arrow.uturn.backward",
-            title: L10n.t("恢复默认风格与开关"),
+            title: L10n.t("恢复默认"),
             subtitle: L10n.t("不含宽度和总开关")
         ) {
             Button(L10n.t("恢复")) { NotchStyleDefaults.restoreDefaults() }
-        }
-    }
-
-    // MARK: - 各组
-
-    private var styleGroup: some View {
-        Group {
-            SettingsCardHeader(title: L10n.t("风格"))
-            CardDivider()
-            NotchStyleSettingsRows()
-        }
-    }
-
-    private var earGroup: some View {
-        Group {
-            SettingsCardHeader(title: L10n.t("左耳"))
-            CardDivider()
-            NotchEarSettingsRows(side: .left)
-            CardDivider()
-            SettingsCardHeader(title: L10n.t("右耳"))
-            CardDivider()
-            NotchEarSettingsRows(side: .right)
-        }
-    }
-
-    private var screenGroup: some View {
-        Group {
-            SettingsCardHeader(title: L10n.t("显示在哪块屏幕"))
-            CardDivider()
-            NotchScreenSettingsRows(onScreenChange: {})
-        }
-    }
-
-    /// item 子集跟工具栏「歌词行」浮层(`NotchLyricRowPopover`)逐字相同,理由见本文件上方
-    /// `NotchAllSettingsDrawer` 的分组说明。
-    private var lyricRowGroup: some View {
-        Group {
-            SettingsCardHeader(title: L10n.t("歌词行"))
-            CardDivider()
-            NotchBehaviorItemRows(items: [.showLyrics, .lyricRowArtwork])
-        }
-    }
-
-    /// 内容跟工具栏「行为」浮层(`NotchBehaviorPopover`)**逐字相同**:`NotchBehaviorItemRows`
-    /// 的 item 子集 + 后面那两行自动隐藏(2026-09-02 并进来的,见 `AutoHideSettingsRows`)。
-    /// 两处必须同增同减 —— 漏一处不会编译报错,只会表现成"在浮层里改了有用、到抽屉里找不到"。
-    private var behaviorGroup: some View {
-        Group {
-            SettingsCardHeader(title: L10n.t("行为"))
-            CardDivider()
-            NotchBehaviorItemRows(items: [.collapseWhenPaused])
-            CardDivider()
-            AutoHideSettingsRows(surface: .notch)
-        }
-    }
-
-    /// item 子集跟工具栏「展开态」浮层(`NotchExpandedPopover`)逐字相同。
-    private var expandedGroup: some View {
-        Group {
-            SettingsCardHeader(title: L10n.t("展开态"))
-            CardDivider()
-            NotchBehaviorItemRows(items: [
-                .expandedNextLine, .expandedShowsControls, .expandedShowsLyricsOffset, .expandedShowsArtwork,
-                .expandedShowsTrackTitle, .expandedShowsArtist, .expandedShowsAlbum,
-            ])
         }
     }
 
@@ -2633,58 +2658,11 @@ private struct NotchAllSettingsDrawer: View {
     }
 }
 
-/// 「显示音浪」开关 + (开着时才出现的)贴哪只耳朵选择(2026-08-31)。
-///
-/// 播放指示条(音浪/EqualizerBars)原来写死贴在右耳外缘,不是 `NotchEarModule` 的可配
-/// 模块(它是播放指示灯不是内容,这条边界没变)。用户看过左右耳配置后提出两点:①右耳
-/// 固定带着音浪不太合适——想要的话应该能关;②但也想要"歌手 + 音浪同时显示",而这本来
-/// 就是现有行为(音浪跟耳朵内容共存,只在那只耳朵选了「播放控制」时才让位)。于是拍板
-/// 加一个独立开关(默认开,维持既有行为)+ 一个左右耳选择器,而不是把音浪塞进
-/// `NotchEarModule` 的选项列表——塞进去反而会破坏"两种形态都住同一侧、收放切换不横跳"
-/// 这条音浪本来的设计初衷(见 NotchEarModule 上方那段⚠️)。
-///
-/// 副作用值得在这里写清楚:关掉音浪能让灵动岛的最小宽度显著变窄(两只耳朵恒等宽,音浪
-/// 占的那部分宽度会在总宽度上翻倍算);具体贴哪只耳朵不影响下限(左右对称)。精确数字
-/// 因屏幕/刘海尺寸而异,不在这里写死,交给 `NotchLyricsWindowController.minEarWidth` 的
-/// 宽度那条链自己算(那条链 2026-08-31 归 ls-Rocky 维护,见 docs/features/05-notch.md
-/// 「宽度」节)。
-///
-/// ⚠️ 落点四经反复,均系同一天(2026-08-31):最初塞进「风格」浮层(用户要求拆出来)→
-/// 拆成常驻的独立卡(用户嫌它孤零零杵在「行为」栏下面,要求"要么挪进预览框那部分,要么你
-/// 找地方")→ 设计过"并进工具栏当第五个入口"的方案,但同事 ls-Rocky 离屏量过:工具栏
-/// 现状 4 个入口的中文自然宽已经 498pt、窄档舞台可用宽度上限 499pt,只剩 1pt 余量,
-/// 5 个入口不管怎么压摘要/间距,中英文都装不进去(中文最好 592pt、英文 769pt),这条路线
-/// 没有落地 → **最终**改放进「左耳」「右耳」浮层顶部,各一个独立开关行,用分割线跟下面
-/// `NotchEarModule` 的单选列表隔开、可以同时选中(见 `NotchEarSettingsRows.equalizerRow`)。
-/// 这份完整卡片(开关 + 分段选择器二合一)不再对应任何工具栏入口,只作为「全部设置」抽屉
-/// 里的全局兜底——两只耳朵各自的开关是"就地配当前这只耳朵",这份是"不管哪只耳朵,一眼
-/// 看总状态"。
-private struct NotchEqualizerRow: View {
-    @ObservedObject private var settings = AppSettings.shared
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            SettingsRow(
-                icon: "waveform",
-                title: L10n.t("显示音浪"),
-                help: L10n.t("播放指示条，跟着音量起伏摆动，跟耳朵里选的内容共存显示（选了「播放控制」时让位）。关掉之后两只耳朵纯按你选的模块渲染，灵动岛也能配得更窄。")
-            ) {
-                Toggle("", isOn: $settings.notchShowsEqualizer)
-            }
-            if settings.notchShowsEqualizer {
-                CardDivider()
-                SettingsSubRow(title: L10n.t("贴哪只耳朵")) {
-                    Picker("", selection: $settings.notchEqualizerEar) {
-                        Text(L10n.t("左耳")).tag(NotchEqualizerEar.left)
-                        Text(L10n.t("右耳")).tag(NotchEqualizerEar.right)
-                    }
-                    .pickerStyle(.segmented)
-                    .fixedSize()
-                }
-            }
-        }
-    }
-}
+// 「显示音浪」在设置页里的唯一入口是左右耳浮层 / 抽屉左右耳组顶部那一行开关(`NotchEarSettingsRows`,
+// `NotchEditorStage.swift`)。这里 2026-08-31~09-07 曾有一张合并了开关 + 「贴哪只耳朵」分段选择器的
+// `NotchEqualizerRow` 作"全局兜底",跟耳朵浮层里那行是同一对状态(`notchShowsEqualizer` /
+// `notchEqualizerEar`)的另一种控件、另一个位置 —— 2026-09-07 按用户"不要出现这一个那一个"的要求撤掉。
+// 音浪的落点史(风格浮层 → 独立卡 → 工具栏第五入口未落地 → 左右耳浮层顶部)见 05 章「编辑台改造」。
 
 // "播放器"分类——2026-07-30 从"通用"里拆出来:播放器选择/权限/常驻服务/App 联动这
 // 几块内容全部围绕"选哪个播放器、能不能正常读到它的播放状态"转,是同一件事的四个
@@ -2786,8 +2764,7 @@ private struct PlayerSettingsTab: View {
 
     var body: some View {
         SettingsPage(
-            title: L10n.t("播放器"),
-            subtitle: L10n.t("选择读取哪个 App 的播放状态")
+            title: L10n.t("播放器")
         ) {
             playerCard
             browserAutomationCard
@@ -2845,7 +2822,7 @@ private struct PlayerSettingsTab: View {
     // 不是第一印象页,不需要强调"还在长"这件事。
     private var playerCard: some View {
         SettingsCard {
-            SettingsCardHeader(title: L10n.t("播放器（可多选）"))
+            SettingsCardHeader(title: L10n.t("播放器"))
             SettingsRawRow {
                 LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3), spacing: 10) {
                     ForEach(PlaybackPlayer.displayOrder) { player in
@@ -2927,9 +2904,8 @@ private struct PlayerSettingsTab: View {
             SettingsCard {
                 SettingsRow(
                     icon: "bell.slash",
-                    title: L10n.t("检测到新的播放器"),
-                    subtitle: L10n.t("系统通知已关闭，发现新播放器时不会主动提醒你"),
-                    help: L10n.t("信任之后它跟内置播放器完全同权:显示歌词，也会记进收听历史")
+                    title: L10n.t("新播放器提醒"),
+                    subtitle: L10n.t("系统通知已关闭")
                 ) {
                     Button(L10n.t("打开系统设置")) {
                         if let url = URL(string:
@@ -2957,7 +2933,7 @@ private struct PlayerSettingsTab: View {
                 // 2026-08-25 补标题:playerCard 换成图标网格之后有了自己的
                 // SettingsCardHeader,紧跟着一张没有标题的卡在视觉上不成对,补一个让两张
                 // 卡看起来是同一套设计语言里的姐妹卡。
-                SettingsCardHeader(title: L10n.t("已信任的其它播放器"))
+                SettingsCardHeader(title: L10n.t("已信任的播放器"))
                 // 按 bundle id 排序,别让列表顺序随 Dictionary 遍历顺序每次启动乱跳。
                 ForEach(stores.trustedPlayers.keys.sorted(), id: \.self) { bundleID in
                     if bundleID != stores.trustedPlayers.keys.sorted().first { CardDivider() }
@@ -3270,8 +3246,8 @@ private struct PlayerSettingsTab: View {
         if anySupportedInstalled {
             SettingsCard {
                 SettingsCardHeader(
-                    title: L10n.t("网页播放器（可多选）"),
-                    help: L10n.t("网页播放器不会像本地 App 那样主动汇报精确的播放进度，切歌之后需要这个开关才能立刻校准。")
+                    title: L10n.t("网页播放器"),
+                    help: L10n.t("网页播放器不会主动汇报精确进度，切歌后需要这个开关才能立刻校准。")
                 )
                 SettingsRawRow {
                     LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3), spacing: 10) {
@@ -3904,7 +3880,7 @@ private struct PlayerSettingsTab: View {
                 CardDivider()
                 SettingsNote {
                     Text(L10n.t("启用失败，可能是权限或系统限制导致后台服务没能正常启动，导出诊断信息能看到具体原因，也方便反馈问题"))
-                    Button(L10n.t("导出诊断信息…")) { exportDiagnostics() }
+                    Button(L10n.t("导出诊断…")) { exportDiagnostics() }
                 }
             }
             // 私有通道自检失败时明说 —— 这条只影响 QQ 音乐/网易云(它们的播放信息全经
@@ -3978,8 +3954,8 @@ private struct PlayerSettingsTab: View {
     private var companionCard: some View {
         SettingsCard {
             SettingsCardHeader(
-                title: L10n.t("与播放器联动"),
-                subtitle: L10n.t("每一项都按播放器单独勾选；选了「自动识别」时五个播放器都可勾"))
+                title: L10n.t("播放器联动"),
+                help: L10n.t("每一项都按播放器单独勾选；选了「自动识别」时五个播放器都可勾"))
             CardDivider()
             PlayerLinkageRow(
                 icon: "arrow.up.forward.app",
@@ -4254,7 +4230,7 @@ private struct GeneralSettingsTab: View {
                 // 一件都不沾;它跟 Dock 那一行才是同类 —— 都在说"这个 App 在系统 UI 里长什么样"
                 // (2026-08-17 用户指出)。
                 //
-                // 行尾放所选款的名字,跟「歌词库」行尾放占用空间是同一种写法:裸值、次要色、11pt。
+                // 行尾放所选款的名字,跟「歌词文件夹」行尾放路径 / 歌词库统计块顶行放占用空间是同一种写法:裸值、次要色、11pt。
                 SettingsRow(
                     icon: "menubar.rectangle",
                     title: L10n.t("菜单栏图标")
@@ -4331,9 +4307,9 @@ private struct GeneralSettingsTab: View {
                 // "第一行副标题里有时间戳",读者没法看出它们不是并列关系。
                 //
                 // 现在:两行(目的地 / 文件),卡级动作上提到卡头,配置文件夹搬去「关于」。
-                // 卡名也换成文档里自己用的说法(docs/features/14 §4「配置备份与搬家」)——
+                // 卡名也换成文档里自己用的说法(docs/features/14 §4「备份与迁移」)——
                 // 「设置备份」既没盖住 dotfiles 那条路,也没盖住一起被备份的歌词库。
-                SettingsCardHeader(title: L10n.t("配置备份与搬家")) {
+                SettingsCardHeader(title: L10n.t("备份与迁移")) {
                     // 卡级动作(换绑目录)上提到卡头 —— 这是本仓库既有的位置(见「歌词来源」
                     // 卡头那颗「测试」按钮)。原来它们藏在行尾一个 ellipsis.circle 菜单里,
                     // 而那个 ⋯ 是整个设置页**唯一**的一个,别处的无边框 Menu 都带文字标签。
@@ -4625,7 +4601,7 @@ private struct GeneralSettingsTab: View {
                 SettingsRow(
                     icon: "trash",
                     title: L10n.t("清除所有设置"),
-                    subtitle: L10n.t("只抹掉本机设置，无法撤销；iCloud 和已导出的备份不受影响")
+                    subtitle: L10n.t("本机设置，无法撤销")
                 ) {
                     DestructiveButton(title: L10n.t("清除…")) { showClearConfigWarning = true }
                 }
@@ -4812,7 +4788,7 @@ private struct ShortcutsSettingsTab: View {
         // 这个项目额外加的限制——但它只会"响一声"、没有任何文字提示,必须写出来。
         SettingsPage(
             title: L10n.t("快捷键"),
-            subtitle: L10n.t("全局快捷键在任何 App 里都能触发。至少需要搭配 ⌘/⌥/⌃ 中一个（功能键、媒体键除外）")
+            subtitle: L10n.t("在任何 App 里都能触发，需搭配 ⌘ ⌥ ⌃ 之一")
         ) {
             // 2026-08-31 从三张卡重排成四张。原来第一张混着"切换显示形态"和"打开某扇窗"
             // 两类动作,只有 5 项时还看得过去;这次加到 16 项之后必须按语义分开,否则
@@ -4860,8 +4836,7 @@ private struct ShortcutsSettingsTab: View {
                 CardDivider()
                 SettingsRow(
                     icon: "magnifyingglass",
-                    title: L10n.t("搜索歌词"),
-                    subtitle: L10n.t("给当前这首歌手动搜索候选歌词")
+                    title: L10n.t("搜索歌词")
                 ) {
                     ShortcutRecorderControl(name: .lyricsQuickSearchHotkey)
                 }
@@ -4874,8 +4849,7 @@ private struct ShortcutsSettingsTab: View {
             SettingsCard {
                 SettingsRow(
                     icon: "backward.end",
-                    title: L10n.t("歌词提前"),
-                    subtitle: L10n.t("按当前这首歌记忆校准值，下次再放这首歌自动生效")
+                    title: L10n.t("歌词提前")
                 ) {
                     ShortcutRecorderControl(name: .lyricsAdvanceHotkey)
                 }
@@ -4886,8 +4860,7 @@ private struct ShortcutsSettingsTab: View {
                 CardDivider()
                 SettingsRow(
                     icon: "arrow.counterclockwise",
-                    title: L10n.t("歌词偏移归零"),
-                    subtitle: L10n.t("把当前这首歌的校准值清回 0")
+                    title: L10n.t("歌词偏移归零")
                 ) {
                     ShortcutRecorderControl(name: .lyricsOffsetResetHotkey)
                 }
@@ -4906,8 +4879,8 @@ private struct ShortcutsSettingsTab: View {
                 // 没说清调的是什么、影响哪里,配上图标和副标题才自解释。
                 SettingsRow(
                     icon: "timer",
-                    title: L10n.t("调整步长"),
-                    subtitle: L10n.t("「歌词提前」「歌词延后」每按一次的幅度；菜单栏的「歌词时间轴」也用这个值")
+                    title: L10n.t("步长"),
+                    subtitle: L10n.t("每按一次调整的幅度")
                 ) {
                     HStack(spacing: 8) {
                         Text("\(AppSettings.formattedSeconds(ms: settings.lyricsOffsetStepMs))\(L10n.t("秒"))")
@@ -5189,8 +5162,8 @@ private struct AboutSettingsTab: View {
             // 它不依赖「自动检查」,手动检查同样受它影响。
             SettingsRow(
                 icon: "flask",
-                title: L10n.t("接收测试版更新"),
-                subtitle: L10n.t("带 beta 后缀的预发布版本也会出现在更新提示里，可能不稳定")
+                title: L10n.t("测试版更新"),
+                subtitle: L10n.t("预发布版本，可能不稳定")
             ) {
                 Toggle("", isOn: Binding(
                     get: { settings.receiveBetaUpdates },
@@ -5226,7 +5199,7 @@ private struct AboutSettingsTab: View {
             SettingsRow(
                 icon: "exclamationmark.bubble",
                 title: L10n.t("反馈问题"),
-                subtitle: L10n.t("GitHub Issues：报 bug、跟进修复进度")
+                subtitle: L10n.t("GitHub Issues")
             ) {
                 Button(L10n.t("前往")) {
                     NSWorkspace.shared.open(URL(string: "https://github.com/Yudaotor/lyrimuse/issues")!)
@@ -5239,7 +5212,7 @@ private struct AboutSettingsTab: View {
             SettingsRow(
                 icon: "lightbulb",
                 title: L10n.t("想法与建议"),
-                subtitle: L10n.t("GitHub Discussions 的「想法」分类，也可以给别人的建议投票")
+                subtitle: L10n.t("GitHub Discussions")
             ) {
                 Button(L10n.t("前往")) {
                     NSWorkspace.shared.open(URL(string: "https://github.com/Yudaotor/lyrimuse/discussions/categories/ideas")!)
@@ -5252,12 +5225,12 @@ private struct AboutSettingsTab: View {
         SettingsCard {
             SettingsCardHeader(title: L10n.t("许可与版权"))
             CardDivider()
-            // 正文只在 README 维护(见 LegalNotices / LegalNoticeLinks 头注),这里放入口 + 一句常显的要点:
-            // 副标题就是那一节三句话的压缩版(版权归权利人 / 只做检索缓存展示 / 无隶属关系),不点进去也看得到。
+            // 正文只在 README 维护(见 LegalNotices / LegalNoticeLinks 头注),这里只放入口。
+            // 2026-09-07 之前还带一句 55 字的副标题(那一节三句话的压缩版),用户「简约克制」专项里拍掉:
+            // 版权声明是点进去看的东西,不该常驻在设置行上。
             SettingsRow(
                 icon: "doc.text",
-                title: L10n.t("使用与版权说明"),
-                subtitle: L10n.t("歌词、封面与曲目信息的版权归权利人所有；Lyrimuse 只做检索、缓存与展示，与各播放器和歌词平台无隶属关系")
+                title: L10n.t("版权说明")
             ) {
                 Button(L10n.t("打开")) { LegalNotices.openUsageNotice() }
             }
@@ -5267,7 +5240,7 @@ private struct AboutSettingsTab: View {
             SettingsRow(
                 icon: "checkmark.seal",
                 title: L10n.t("第三方许可"),
-                subtitle: L10n.t("随 App 分发的开源组件与词典数据的许可证全文")
+                subtitle: L10n.t("开源组件与词典")
             ) {
                 Button(L10n.t("打开")) { LegalNotices.openThirdPartyLicenses() }
             }
@@ -5275,7 +5248,7 @@ private struct AboutSettingsTab: View {
             SettingsRow(
                 icon: "scroll",
                 title: L10n.t("开源许可证"),
-                subtitle: L10n.t("GPL-3.0：可自由使用、修改与再分发，衍生作品须以同一许可证开源")
+                subtitle: L10n.t("GPL-3.0")
             ) {
                 Button(L10n.t("打开")) { LegalNotices.openLicense() }
             }
@@ -5291,8 +5264,8 @@ private struct AboutSettingsTab: View {
             // token 原始值)汇总成一份文本存到桌面,方便贴进 issue 或者发给开发者。
             SettingsRow(
                 icon: "doc.text.magnifyingglass",
-                title: L10n.t("导出诊断信息"),
-                subtitle: L10n.t("汇总日志、权限与后台服务状态，保存为一份文本文件，不含账号 token 或密钥")
+                title: L10n.t("导出诊断"),
+                subtitle: L10n.t("不含账号与密钥")
             ) {
                 Button(L10n.t("导出…")) {
                     DiagnosticsExporter.exportInteractively()
@@ -5314,7 +5287,7 @@ private struct AboutSettingsTab: View {
                 // 路径按变体显示(正式 ~/.config/lyrimuse,Dev ~/.config/lyrimuse-dev),别让 Dev 的用户对着一个错的路径找文件。
                 subtitle: String(format: L10n.t("%@，纯文本可直接编辑；外观与快捷键不在里面（它们在 UserDefaults）"),
                                  "~/.config/" + LyrimuseIdentity.configDirName),
-                help: L10n.t("含账号凭据，不要发给别人；要连外观、快捷键一起搬走，用「配置备份与搬家」")
+                help: L10n.t("含账号凭据，不要发给别人；要连外观、快捷键一起搬走，用「备份与迁移」")
             ) {
                 Button(L10n.t("打开配置文件夹")) {
                     NSWorkspace.shared.activateFileViewerSelecting([ConfigPortability.configFolderURL])

@@ -75,6 +75,20 @@ func runNotchTests() {
                     <= M.trackInfoHeight(showsArtwork: true, showsTitle: true, showsArtist: true, showsAlbum: true),
                     true, "曲目信息头部: 加文字不能让总高度比只有封面时矮")
 
+        // 快捷操作(2026-09-07):头部右侧那排按钮是并排的第三块,同样取 max 不取和。
+        // 不传 = false,老调用点算出来的高度一个数都不变(上面那几条断言就是没传的)。
+        expectEqual(M.trackInfoHeight(showsArtwork: false, showsTitle: false, showsArtist: false, showsAlbum: false,
+                                      showsActions: true),
+                    M.trackInfoActionsHeight, "曲目信息头部: 四项全关只开快捷操作 = 按钮行高本身(22)")
+        expectEqual(M.trackInfoHeight(showsArtwork: false, showsTitle: true, showsArtist: true, showsAlbum: true,
+                                      showsActions: true),
+                    threeLines, "曲目信息头部: 三行文字比按钮行高,开快捷操作不改高度")
+        expectEqual(M.trackInfoHeight(showsArtwork: false, showsTitle: false, showsArtist: false, showsAlbum: true,
+                                      showsActions: true),
+                    max(M.trackInfoAlbumLineHeight, M.trackInfoActionsHeight),
+                    "曲目信息头部: 只开一行矮文字时由按钮行撑高(max,不是叠加)")
+        expectEqual(M.trackInfoActionsHeight, 22, "曲目信息头部: 按钮行高跟展开区播放控制三键的命中尺寸同档")
+
         // height(...) 把 trackInfoHeight 原样加一整块(含它自己的间距),0 = 完全不影响原有契约
         expectEqual(M.height(hasLyricPreview: true, hasScrubber: true, trackInfoHeight: 0), 76,
                     "展开区高度: trackInfoHeight 传 0 必须跟原有契约逐字相等")
@@ -131,6 +145,26 @@ func runNotchTests() {
                     "播放控制键: 关掉后 maxHeight 必须真的变矮,且等于此时的 height(...)")
         expectEqual(M.maxHeight(hasControlsPossible: false) < M.maxHeight(hasControlsPossible: true), true,
                     "播放控制键: maxHeight 关掉控制键必须比开着时矮")
+    }
+
+    // ---- 没有曲目时的空闲面板(2026-09-07,05 章决策 #31)----
+    //
+    // 窗口恒按「顶行 + 歌词行 + maxHeight」开,而空闲面板是 !hasTrack 时展开唯一长出的一块。它必须
+    // 放得进**最省配置**(下一句预览关、控制键关、头部全关 → maxHeight 只剩进度条 24pt)下的窗口,
+    // 否则关了那几个开关的用户 hover 上去面板底部会被窗口边界硬裁。
+    do {
+        typealias M = NotchExpandedMetrics
+        let roomiestFloor = NotchLyricRowMetrics.rowHeight
+            + M.maxHeight(hasLyricPreviewPossible: false, hasControlsPossible: false, trackInfoHeight: 0)
+        expectEqual(M.idlePanelHeight <= roomiestFloor, true,
+                    "空闲面板: 高度 \(M.idlePanelHeight) 必须放得进最省配置下的窗口(歌词行 + maxHeight = \(roomiestFloor))")
+        // 两行字 + 上下留白的账,跟头部的行高常量同源 —— 改任何一个常量这里都会跟着动,不钉死具体数字。
+        expectEqual(M.idlePanelHeight,
+                    M.trackInfoHeight(showsArtwork: false, showsTitle: true, showsArtist: true, showsAlbum: false,
+                                      showsActions: true) + M.trackInfoTopSpacing + M.idlePanelBottomSpacing,
+                    "空闲面板: 高度 = 头部两行字(含快捷键那一档) + 顶部间距 + 底部间距")
+        expectEqual(M.idlePanelBottomSpacing > M.trackInfoSpacing, true,
+                    "空闲面板: 贴底那份间距要比头部接歌词行的 4pt 宽,不然贴底太紧")
     }
 
     // MARK: - VocalEnvelope:灵动岛音浪的人声包络(2026-09-02,起音脉冲 + 换气泄放)
@@ -247,5 +281,62 @@ func runNotchTests() {
                     "双滑块: 拖上限,下限不动")
         expectEqual(D.dragging(.expanded, to: 340, steady: 360, expanded: 460) == (360, 360), true,
                     "双滑块: 上限拖过下限被挡住,不把下限推走")
+    }
+
+    // ---- 歌词行「副行」四选一(2026-09-06,用户拍板方案二)----
+    //
+    // 两条不变量:① rawValue 直接落 UserDefaults,四个值和顺序改了就是改存量配置;② 两行叠起来必须塞进
+    // 44pt 的行高 —— 一旦塞不下,卡片高度公式就得多一个入参,那正是方案二刻意绕开的整片雷区。
+    // 展开区「下一句预览」的顶掉判据只有 Core 这一份,真窗口和设置页替身都调它(contracts 组守着调用点)。
+    do {
+        expectEqual(LyricSecondaryLine.allCases.map(\.rawValue), ["off", "nextLine", "translation", "romanization"],
+                    "副行: 四个 rawValue 与声明顺序是存量配置的一部分,别动")
+        expectEqual(LyricSecondaryLine.off.showsSecondaryRow, false, "副行: 不显示 → 歌词行回到单行排法")
+        expectEqual(LyricSecondaryLine.allCases.filter(\.showsSecondaryRow).count, 3, "副行: 其余三档都画副行")
+        expectEqual(LyricSecondaryLine.allCases.filter(\.hidesExpandedNextLinePreview), [.nextLine],
+                    "副行: 只有「下一句」会顶掉展开区的下一句预览(译文 / 罗马音里没有下一句,不该顶)")
+        for secondary in LyricSecondaryLine.allCases {
+            expectEqual(LyricSecondaryLine.expandedNextLinePreviewVisible(userToggle: false, secondary: secondary), false,
+                        "副行: 用户关了展开区预览,任何副行选项下都不画(\(secondary.rawValue))")
+            expectEqual(LyricSecondaryLine.expandedNextLinePreviewVisible(userToggle: true, secondary: secondary),
+                        secondary != .nextLine,
+                        "副行: 用户开着展开区预览,只有「下一句」把它顶掉(\(secondary.rawValue))")
+        }
+        typealias R = NotchLyricRowMetrics
+        expectEqual(R.rowHeight, 44, "副行: 稳态歌词行仍是 44(方案二的前提:行高不变)")
+        expectEqual(R.twoLineStackHeight, 31, "副行: 15 + 3 + 13 = 31")
+        expectEqual(R.twoLineStackHeight <= R.rowHeight, true,
+                    "副行: 两行叠起来必须塞进行高,否则卡片高度公式要多一个入参")
+        expectEqual((R.rowHeight - R.twoLineStackHeight) / 2 >= 4, true, "副行: 上下各留至少 4pt,别贴边")
+    }
+
+    // ---- 灵动岛 hover 命中判定(2026-09-07)----
+    //
+    // 用户报「鼠标只是移到灵动岛下面就展开了」。真机探针实测:`.contentShape(Rectangle())`
+    // 只管住了横向,纵向的命中区仍是整扇窗(卡片 77pt 高,hover 进入事件的 y 给到 177),
+    // 于是卡片下方那片透明区(压在用户自己的窗口上)也能把它捅开。判据因此改成自己拿
+    // 坐标比,理由与那四条实测记录在 `NotchHoverHit` 头注里。
+    do {
+        typealias H = NotchHoverHit
+        let steady = (w: CGFloat(257), h: CGFloat(77))   // 实测的稳态卡片
+        expectEqual(H.isInside(point: CGPoint(x: 127, y: 40), cardWidth: steady.w, cardHeight: steady.h),
+                    true, "灵动岛命中: 卡片正中算在里面")
+        expectEqual(H.isInside(point: CGPoint(x: 127, y: 76), cardWidth: steady.w, cardHeight: steady.h),
+                    true, "灵动岛命中: 贴着下沿(76 < 77)仍算在里面")
+        // 这四个点就是修复前把卡片捅开的那四条实测记录 —— 修复后必须全部判在外面。
+        for p in [CGPoint(x: 11, y: 140), CGPoint(x: 177, y: 145),
+                  CGPoint(x: 120, y: 176), CGPoint(x: 124, y: 177)] {
+            expectEqual(H.isInside(point: p, cardWidth: steady.w, cardHeight: steady.h),
+                        false, "灵动岛命中: 卡片下方透明区(\(Int(p.x)),\(Int(p.y)))不算在里面")
+        }
+        expectEqual(H.isInside(point: CGPoint(x: 300, y: 40), cardWidth: steady.w, cardHeight: steady.h),
+                    false, "灵动岛命中: 卡片右侧之外不算")
+        expectEqual(H.isInside(point: CGPoint(x: -1, y: 40), cardWidth: steady.w, cardHeight: steady.h),
+                    false, "灵动岛命中: 负坐标不算")
+        // 展开态卡片长到整扇窗那么大,同样那几个点这时就该算在里面(否则一展开就抖回去)。
+        for p in [CGPoint(x: 120, y: 176), CGPoint(x: 124, y: 177)] {
+            expectEqual(H.isInside(point: p, cardWidth: 482, cardHeight: 191),
+                        true, "灵动岛命中: 展开后同一个点算在里面(展开卡片包含稳态卡片)")
+        }
     }
 }

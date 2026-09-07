@@ -17,8 +17,17 @@ func TestTitleVersionTagsCantoneseMandarin(t *testing.T) {
 		// normLoose 内部先过 toSimplified,繁体标签折成简体后再比对,词表只需列简体。
 		{"K歌之王 [粤语]", []string{"粤语"}},
 		{"K歌之王 [国语]", []string{"国语"}},
-		{"Beyond - Cantonese Version", []string{"cantonese"}},
-		{"Beyond - Mandarin Version", []string{"mandarin"}},
+		// v15(2026-09-07)起语种标签折成两个规范键(languageVersionTagOfSegment):英文写法、
+		// Apple 的单字缩写「(國)」「(粵)」都并到 粤语/国语 上,"(Cantonese)" 对 "(粤语)" 不再是
+		// 两个不同的限定词。
+		{"Beyond - Cantonese Version", []string{"粤语"}},
+		{"Beyond - Mandarin Version", []string{"国语"}},
+		{"K歌之王 (國)", []string{"国语"}},
+		{"K歌之王 (粵)", []string{"粤语"}},
+		{"Mau U So(国)", []string{"国语"}},
+		// 单字形态只认整段就是这一个字:「(国际版)」「(中国之星现场)」不是语种声明。
+		{"Song (国际版)", nil},
+		{"Song (中国之星现场)", []string{"现场"}},
 		// 假阳性陷阱:限定词只在括号/破折号段里找,裸标题不该被误判。
 		{"国语老歌精选", nil},
 		{"粤语金曲", nil},

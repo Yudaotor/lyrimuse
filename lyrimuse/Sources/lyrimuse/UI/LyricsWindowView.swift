@@ -2649,14 +2649,8 @@ struct LyricsWindowView: View {
     /// 具体播放器(没有唯一答案,跟纯 auto 归为同一类)时,用停播前最后认下来的那家
     /// (LocalPlaybackSource 落在 UserDefaults,停播时快照已清空、只有它还记得);全新
     /// 用户兜底 Apple Music。
-    private var idlePlayer: PlaybackPlayer {
-        if let only = PlaybackPlayerPreference.soleExplicitPlayer { return only }
-        if let bid = UserDefaults.standard.string(forKey: "np:lastPlayerBundleID"),
-           let p = PlaybackPlayer.allCases.first(where: { $0 != .auto && $0.bundleIdentifier == bid }) {
-            return p
-        }
-        return .appleMusic
-    }
+    /// 2026-09-07 起实现在 `IdlePlaybackActions.player`(灵动岛空闲展开卡要用同一份判定),这里只转发。
+    private var idlePlayer: PlaybackPlayer { IdlePlaybackActions.player }
 
     /// 停播欢迎态(2026-08-22 用户选型 B+D):居中 hero(呼吸光晕音符 + 文案 + 按钮),
     /// 替换整套没有内容的双列骨架。按钮按播放器能力给:AM/Spotify 有 AppleScript 能真
@@ -2733,32 +2727,13 @@ struct LyricsWindowView: View {
     /// 「继续播放」:AM 走三段式(裸 play→上次那首→都不行),Spotify 自带恢复;任何
     /// 失败都兜底把播放器 App 带到前台 —— 点了必须有可见反应(2026-08-22 用户实测
     /// "点了没反应":裸 play 对空队列静默 no-op)。
+    /// 2026-09-07 起实现在 `IdlePlaybackActions.resume(player:)`(灵动岛空闲展开卡放同一颗键),这里只转发。
     private func resumeFromIdle(player: PlaybackPlayer) {
-        let lastTitle = UserDefaults.standard.string(forKey: "np:lastTrackTitle")
-        let lastArtist = UserDefaults.standard.string(forKey: "np:lastTrackArtist")
-        Task.detached(priority: .userInitiated) {
-            var ok = false
-            switch player {
-            case .appleMusic:
-                if await MusicAutomationPermission.checkAppleMusicSafely(askIfNeeded: true) {
-                    ok = MusicPlaybackController.resumePlayback(
-                        lastTitle: lastTitle, lastArtist: lastArtist)
-                }
-            case .spotify:
-                ok = MusicPlaybackController.resumeSpotifyPlayback()
-            default:
-                ok = false
-            }
-            if !ok {
-                await MainActor.run { openIdlePlayerApp(player) }
-            }
-        }
+        IdlePlaybackActions.resume(player: player)
     }
 
     private func openIdlePlayerApp(_ player: PlaybackPlayer) {
-        guard let url = NSWorkspace.shared.urlForApplication(
-            withBundleIdentifier: player.bundleIdentifier) else { return }
-        NSWorkspace.shared.openApplication(at: url, configuration: NSWorkspace.OpenConfiguration())
+        IdlePlaybackActions.openPlayerApp(player)
     }
 
     /// 第三个字段 `offersSearch`(2026-09-03,用户拍板):这一档要不要在图标文案下面给一颗「搜索歌词…」。

@@ -8,7 +8,7 @@
 
 ## 入口与展示面
 
-- 菜单栏菜单「歌词管理…」、全局快捷键 `openLyricsManagerHotkey`、设置 → 歌词 → 管理段「打开…」。
+- 菜单栏菜单「歌词管理…」、全局快捷键 `openLyricsManagerHotkey`、设置 → 歌词 → 管理段「歌词库」卡右上角「打开歌词管理」。
 - SwiftUI `Window(id: "lyrics-manager")`；accessory 策略下打开前必须 `NSApp.activate`。
 
 ## 行为规格
@@ -48,7 +48,7 @@
 - 歌词内容和「已校准」名单现在会随配置备份走（sidecar 归档，见第 14 章 §4）：备份的是 `lyrics/` 文件族而不是 enrich 缓存，因为文件族是六字段权威源、collector 启动时会据它重建缓存条目。确认弹窗挂在最外层 `NavigationSplitView`（删除挂 List、清缓存挂侧栏链，三个层级分开，避免同链叠多个呈现修饰符互相顶掉）。
 - 详情页「已校准」徽章（`timer` 图标）标出这首歌调过时间轴偏移。必须显式标出来，因为它带一个看不见的副作用：collector 从此不再自动给这首歌重选歌词源（见第 8 章）。偏移区下面那行小字说明后果与解除办法（改回 0）。
 - **没歌词的行分四档，不再一律红色「无歌词」**（2026-09-05 补第四档）：「纯音乐」（collector 联网确证，中性灰）→「仅纯文本」（有 `plain_lyrics` 兜底，橙）→**「源里有歌、无词」**（`Summary.knownOnSources`：`netease_url` 带 song id、或 `qq_music_url` 是 `/songDetail/` 页而不是搜索兜底页——平台曲库里**有这首歌**、只是没人挂词，中性灰）→ 真的「无歌词」（红）。第四档的来历：用户问「歌词管理里这些搜不到的怎么办、要不要加源」，把 82 条非纯音乐的空条目逐条核下来，**56 条**是 2026 年 6–8 月新发的网易云独立作品（gamza / jehoda / The Rose / Japanese City Pop），网易云和 QQ 都收录了歌（拿到了 id）、Musixmatch 正常应答也没有、Apple Music 日/美区甚至没上架，外网连歌名都搜不到——它们跟「九个源一条都没搜到、可能是我们匹配失败」是两种不同的"无歌词"，前者不是该修的，只能等。判据是 collector 解析时确实定位到了那首歌，不是猜的（口径在 `LyrimuseCore.EnrichSourcePresence`，selftest 覆盖）。列表行、详情页 infoStrip、多选面板的统计 chip 三处同口径；「仅无歌词」筛选**仍包含**这一档（它们确实没词，重试扫描也仍会碰它们，词哪天被人挂上就能补到）。
-- **「重试无歌词」（工具栏，2026-09-05）**：让 collector 现在就把没歌词的存量条目重搜一遍，不用等每首歌各自再被播到。起因见第 09 章「补空扫描」——补空路径设计上只在重播时触发，范逸臣《革命》《Dalala-Dila》8-31 首解析时九个源一个都没应答（偶发网络）、之后五天没人再问过，手动一搜 QQ 1057 / 971 分。菜单里两个入口：「重试全部无歌词条目（N 首）」，以及筛选真的缩小了范围时才出现的「重试当前筛选出的无歌词条目（M 首）」；多选面板里对应一颗「重试选中的无歌词 N 条」。数字都按 collector 侧同一口径算（`fillSweepRetryable`：没词、没确证纯音乐、没人工修正；有纯文本兜底的也算——那仍不是带时间轴的词），按钮上的数就是真会被搜的条数。跑着的时候**图标位换成确定进度的圆环 + 「3/82」**（macOS 工具栏对 Label 只画图标、标题整个丢掉，第一版把进度写在标题里等于没显示，用户当场指出）、菜单里只剩「停止重试」，一次只允许一轮；设置页「歌词 → 管理 → 歌词库」统计面板下也有同一条通道的入口「重新扫描无歌词条目（N 首）」（`LyricsLibraryStatsPanel.fillSweepRow`，用户要求开在盯着橙色「暂无」数字的地方；跑着时圆环 + 「停止重试」，完事留一句收据；N 按 `isFillSweepRetryable` 算，跟「暂无」那格可能差一两首——按钮说的是真会被搜的条数）；上一轮的结果留在菜单里当收据（搜了几首、补出几首、是否被手动停止）。通道是两份文件：请求 `lyrimuse-lyrics-fill-request.txt`（`all` / `cancel` / 每行一个 key，collector 2 秒内消费掉）、进度 `lyrimuse-lyrics-fill-status.json`（collector 写、App 按 mtime 读，`LyrimuseCore.LyricsFillSweep`）。列表那个 5 秒轮询 `.task` 在扫描跑着时加密到 2 秒并顺带 `reload(onlyIfChanged:)`——每条搜完缓存文件都会变，行上的红色该实时退掉。
+- **「重试无歌词」（工具栏，2026-09-05）**：让 collector 现在就把没歌词的存量条目重搜一遍，不用等每首歌各自再被播到。起因见第 09 章「补空扫描」——补空路径设计上只在重播时触发，范逸臣《革命》《Dalala-Dila》8-31 首解析时九个源一个都没应答（偶发网络）、之后五天没人再问过，手动一搜 QQ 1057 / 971 分。菜单里两个入口：「重试全部无歌词条目（N 首）」，以及筛选真的缩小了范围时才出现的「重试当前筛选出的无歌词条目（M 首）」；多选面板里对应一颗「重试选中的无歌词 N 条」。数字都按 collector 侧同一口径算（`fillSweepRetryable`：没词、没确证纯音乐、没人工修正；有纯文本兜底的也算——那仍不是带时间轴的词），按钮上的数就是真会被搜的条数。跑着的时候**图标位换成确定进度的圆环 + 「3/82」**（macOS 工具栏对 Label 只画图标、标题整个丢掉，第一版把进度写在标题里等于没显示，用户当场指出）、菜单里只剩「停止重试」，一次只允许一轮；设置页「歌词 → 管理 → 歌词库」统计块的「暂无」行尾也有同一条通道的入口「重新扫描（N 首）」（`LyricsLibraryStatsPanel.noneRow`，用户要求开在盯着橙色「暂无」数字的地方；跑着时圆环 + 「扫描中 a/b」+「停止」，完事留一句收据；N 按 `isFillSweepRetryable` 算，跟「暂无」那格**就是**对不上的——「暂无」+ 只有纯文本兜底的，本机 65 vs 74——数字旁的 ⓘ 一句话说清范围；按钮说的是真会被搜的条数，别为了让两个数一致去改它）；上一轮的结果留在菜单里当收据（搜了几首、补出几首、是否被手动停止）。通道是两份文件：请求 `lyrimuse-lyrics-fill-request.txt`（`all` / `cancel` / 每行一个 key，collector 2 秒内消费掉）、进度 `lyrimuse-lyrics-fill-status.json`（collector 写、App 按 mtime 读，`LyrimuseCore.LyricsFillSweep`）。列表那个 5 秒轮询 `.task` 在扫描跑着时加密到 2 秒并顺带 `reload(onlyIfChanged:)`——每条搜完缓存文件都会变，行上的红色该实时退掉。
 - **详情页「标为纯音乐」/「取消纯音乐标记」**（只对没歌词的条目出现，2026-09-05）：MJ《Off the Wall》的 Quincy Jones 访谈口白、《Raise!》26 秒的 Kalimba Tree 这类曲目，九个源没有任何一个会给出 instrumental 结论（lrclib 的 instrumental 字段和网易云的 pureMusic 只覆盖它们自己收录且标了的曲目），此前只有「重新自动匹配」查到源说纯音乐才会写这个标记（`markInstrumental`），人无法直接下这个结论。`EnrichCacheStore.setInstrumental(key:_:)` 只置/删 `instrumental` 一个键，不碰歌词族字段；标上之后列表从红色变中性「纯音乐」，collector 的 `needsLyricsFirstFill` 见到标记直接 return、不再每隔一天白搜一轮——这才是这个动作真正的效果。可撤销，撤销后回到自动补搜队列。
 
 ### 2. 数据层（EnrichCacheStore）——与 collector 的共存契约
@@ -83,6 +83,7 @@
 ### 5. 联网搜索候选歌词（LyricsSearchSheet + LyricsSearchService）
 
 - 不在 Swift 重写检索——一次性子进程调 `collector search-lyrics`（复用自动解析同一份全源检索+打分，第 09 章），NDJSON 流式：每个源到达即整表重排显示，带进度 X/Y、网络不通标记。
+- **空状态四档**（`content`，按顺序判）：`networkLooksDown`（进程内所有请求全失败）→「网络似乎不通」；**有源在传输层就没打通**（2026-09-06，`unreachableSourcesByCode`：collector 报的 `dns_failed` / `connect_failed` / `server_error`，以及 AMLL 的 `upstream_unreachable`，第 09 章「六个源死在 DNS」条）→「有 N 个歌词源没连上」，一组一行列出源名和原因，DNS 组附 VPN 提示，其余源只写「其余 N 个源没有给出候选」（跟明细里的「未给出候选」同一口径，不替它们下"没有这首歌"的结论），`instrumental` 为真时这行换成纯音乐那句，一个不剩时标题改「歌词源全都没连上」；`instrumental` →「纯音乐」；兜底「九个源都没找到可用的候选」只留给真的查过了、都没有。「歌词源可用情况」明细里这四个代码也各有整句解释（`LyricSourceFailureReason`）。
 - **进度的轮次前缀**（2026-09-02，用户反馈「到 8/8 又重新从 1 开始，看起来不友好」）：collector 的兜底轮（首歌手变体/标题反查，第 09 章）每轮都是一次完整的 8 源重扫，`sourcesDone` 每轮从 0 重数——这是设计不是 bug，但弹窗上只见数字回跳、不见轮次，读起来像出了错。现在 NDJSON 每行带 `round`（searchcli.go 在 emit 处从「done 比上一行小」推导，单轮内 done 单调不减，不用把轮次穿透进 enrich.go 的闭包层），Swift 侧从**第 2 轮起**在进度后面缀轮次「（1/8）［2］」（放后面是用户定的位置）；第 1 轮不缀——绝大多数搜索只有一轮，常驻「［1］」是噪音，标识恰在数字回跳那一刻出现、自己解释自己。旧 collector 不发该字段时 Swift 兜底成 1（观感同单轮）。右上角那颗「N/8」徽章不受影响——它数的是「有几个源给过候选」，跨轮累计本来就不回跳。
 - 候选带分数与**得分明细/被拒原因**（score_terms）摊开展示；按用户启用的源过滤；lrclib 纯音乐标记不当候选显示。
 - **头部「x/y」徽标的分母、「歌词源可用情况」列表的行，读 `LyricsSource.allCases`，不再手抄名单**（2026-09-06，用户报「加了一个歌词源，数字是不是还没同步，我看还有 8 的地方」）：此前 `LyricsSearchSheet.allLyricSourceNames` 是手抄的第三份源名单（另两份：collector `enrich.go` 的 `lyricSourceNames`、App 侧 `LyricsSource`），注释写着"手工保持一致"；09-04 加咪咕时那两份都改了、这份漏了，弹窗头部「0/8」、底下空状态却写着「九个源都没找到可用的候选」——同一扇窗里两个数字互相打脸。进度那对「(x/y)」不受影响，它的分母是 collector 每行 NDJSON 里带的 `sourcesTotal`。现在 App 侧只有 `LyricsSource` 一份；selftest contracts 组「歌词源名单」守卫钉三件事：Go/Swift 两份逐个相等、`LyricsSearchSheet.swift` 里不再出现手抄数组、空状态那句「N个源都没找到可用的候选」的中文数字等于源数（它是本地化键的一部分，加源要连 xcstrings 的键一起改——en 那句「No Lyrics from Any Source」不带数字不用动；守卫红了就是提醒）。**同日第二刀：关掉的源单独一档「未启用」，徽标分母改用 collector 的 `sourcesTotal`**（用户拍板"加一档、不藏掉"）：collector 的 `sourcesTotal` 只数用户开着的源（`enabledLyricSourceCount`），而徽标分母和可用情况列表原来数的是全部源——关掉一个源后进度是「x/8」、徽标是「y/9」，被关的源在列表里显示成「未给出候选」，把"没参与"报成了"没结果"。现在：① 徽标分母直接用 `sourcesTotal`，跟进度那对「(x/y)」是同一个数（分子照旧数"给过候选的源"，collector `filterEnabledLyricSources` 保证候选里没有关掉的源）；② 开搜那一刻从 `FeatureSettingsStore.shared.lyricsSources` 快照 `enabledSources`（collector 子进程起跑时读的是同一份 features.json，这份集合就是它这一轮**真正发了请求**的那几个：同日 collector 改成对关掉的源不发请求（第 09 章 §3 与决策 #43，用户定的「没启用肯定就不查啊」）。中间有过一版措辞反复——首版写「没有查它」，ls-Alex 评审对着日志指出当时 collector 其实九路全发、只丢结果，改成「不采用它的结果」；问用户要不要真跳过，答"肯定不查"，collector 改完文案再改回来。以后再动 collector 这边的行为，弹窗的注释和悬停文案要跟着走。搜索中途在设置里开关源不改这一轮的标注，下次「重新搜索」才生效）；③ 列表 `sourceAvailabilityRows` 开着的在前（名单序）、关掉的沉底，关掉的行是空心减号 + 第三级灰 + 「未启用」（复用账号页那条文案），悬停说明「这一轮没有查它」和在「设置 → 歌词 → 歌词来源」里开，不给失败原因（collector 的 `lyricSourceFailureReasons` 对没开的源不发代码）。`enabledSources` 为空（还没开搜）按全开处理，别把九行全标成未启用——徽标那时本来也不显示。
@@ -101,7 +102,7 @@
   - 详情页多一颗 `pin.circle.fill`「来源已选定：X」徽章（与「人工修正」分开显示，约束强度差一个量级）。解除入口是「重新自动匹配」——它现在传 `sourceChoice: ""` 显式清掉，两个标记同进同出，因为那颗按钮的语义就是**完全**交回算法管理。
   - Go 侧 `TestPickLyricCandidatePreferring` 钉住全部边界，做过变异测试（拆掉约束会当场报「选定 kugou 时该取 kugou 而不是最高分」）。
   - **2026-09-01 补：列表本身也要有这颗徽章**（用户反馈「手动选了歌词，怎么看起来什么标记都没打」——追问后发现问的是列表视图，而「来源已选定」当时只在展开的详情面板才显示，列表紧凑视图完全没有对应图标，容易被误读成"选了却什么都没记住"）。补上跟详情面板同款的 `pin.circle.fill`/`.indigo` 小图标，`help` 里带具体选的是哪个源，`on` 条件跟详情面板一致（`!summary.sourceChoice.isEmpty`）。顺带查出：截图里那颗被误认成"人工修正"的绿色图标其实是完全不相关的「译文（歌词源自带）」标记（`character.book.closed`/`.green`，网易云这类源常带社区译文才会亮）——「人工修正」真正对应的是橙色 `pencil.circle.fill`，那张截图里一个都没有。
-  - **2026-09-01 补：把"采纳候选要不要顺带锁定"的决定权交给用户**（用户明确要求）。新增设置 `AppSettings.manualPickLocksLyrics`（纯本地 UI 偏好，不进 `FeatureSettingsStore`/不给 collector 看——它只决定 Swift 侧调 `saveEdit` 时 `markManual` 传 true 还是 false，collector 那边永远只认落盘之后的 `manual_lyrics` 字段本身，不关心这个决定是怎么来的），设置页「歌词→获取」卡片里加一个「手动选定歌词后锁定」开关，默认关（维持上面这套更宽松的"只记来源、不冻结"行为）。开着时，`LyricsManagerView.swift`/`LyricsQuickSearchWindow.swift` 两处「采纳候选」调用点的 `markManual` 参数改传这个设置值，效果等同于直接编辑正文——永久冻结，不受任何自愈路径影响。「重新自动匹配」按钮不受这个开关影响，永远是算法自己的选择，不算"手动选定"。
+  - **2026-09-01 补：把"采纳候选要不要顺带锁定"的决定权交给用户**（用户明确要求）。新增设置 `AppSettings.manualPickLocksLyrics`（纯本地 UI 偏好，不进 `FeatureSettingsStore`/不给 collector 看——它只决定 Swift 侧调 `saveEdit` 时 `markManual` 传 true 还是 false，collector 那边永远只认落盘之后的 `manual_lyrics` 字段本身，不关心这个决定是怎么来的），设置页「歌词→获取」卡片里加一个「锁定手选歌词」开关，默认关（维持上面这套更宽松的"只记来源、不冻结"行为）。开着时，`LyricsManagerView.swift`/`LyricsQuickSearchWindow.swift` 两处「采纳候选」调用点的 `markManual` 参数改传这个设置值，效果等同于直接编辑正文——永久冻结，不受任何自愈路径影响。「重新自动匹配」按钮不受这个开关影响，永远是算法自己的选择，不算"手动选定"。
     - ⚠️ **顺带修的真 bug**：排查这条时发现 `LyricsQuickSearchWindow.swift`（悬浮窗 ⚙ 快捷菜单「搜索歌词…」独立小窗，见第 04/07 章）的「采纳候选」调用点从一开始就没传 `markManual`/`sourceChoice`，落进 `saveEdit` 的默认值 `markManual: true`——每次从这扇小窗采纳都在悄悄永久冻结这首歌，跟 2026-08-22 那次「采纳候选不该冻结」的设计决定不一致，只是这扇小窗是 2026-08-30 才加的，没有跟着补齐。现在两个入口统一改传 `AppSettings.shared.manualPickLocksLyrics`，行为一致。
   - ❌ **2026-09-01 当天推翻：「只约束源」这个中间态被用户否掉，`lyrics_source_choice` 不再有写入方。**
     - **怎么暴露的**：上面那个开关加完之后写它的 `?` 说明文案，把当时的关态老老实实写成「只记住这首歌用哪个来源；这个来源以后有更好的版本，仍会自动换上」。用户一读就说这不是他要的：「不开，手动选后依然会被所有更新、优化的地方自动调整歌词，**不限制源**；开了就手动选后固定这个歌词不动」。**把行为写进界面，才发现行为本身是错的**——这个中间态存在了 10 天没人发现不对，因为它此前从来没在界面上被完整表述过（只有一枚事后的 pin 徽章）。
@@ -149,9 +150,17 @@
   - 验证方式：`TestBuildLyricsDecisionCopiesDisplayFields` 钉住「展示字段逐个抄进存档」（做过变异测试，摘掉复制行当场红）；端到端另跑过一次性验证——真实网络抓候选 → `buildLyricsDecision` → 序列化，Go 写出 4/4 带封面，再把**那份真实产物**交给 Swift 的解码路径解出 4/4。
 - 与「联网搜索」的本质区别：那是**现在**重新抽签（受 20s 期限影响，候选和当初不一定一样），这是当初那轮的**离线存档**。完整结构懒解码（`decodedDecision(for:)`，2026-08-19）：列表/按钮只用 `hasDecision` 布尔，打开弹窗那一刻才按 key 解一条——原来 rebuild 时对每条带该字段的条目全量做 JSON 双重编解码。刻意不提供「改用某条」按钮——存档里没有正文（collector 三铁律），想换歌词走联网搜索。
 
-### 7. 歌词库统计面板（设置 → 歌词 → 管理段，2026-09-03）
+### 7. 歌词库统计（设置 → 歌词 → 管理段，2026-09-03 加；2026-09-06 重排）
 
-- 「歌词管理 打开…」那一行下面一块统计面板（`Settings/LyricsLibraryStats.swift` 的 `LyricsLibraryStatsPanel`）：**总数 / 逐字 / 逐行 / 纯文本 / 纯音乐 / 暂无** 六格等宽，下面一行「其中 N 首有译文 · N 首有罗马音」。用户要求（「统计目前歌词数量，歌词情况，比如逐字多少，纯文本多少，逐行多少」）。
+- 「管理」段现在是**两张卡**（`SettingsView.swift` `managementCard`）：**「歌词库」**（卡名行右侧「打开歌词管理」小按钮，跟「歌词来源」卡右上角「测试」同一位置语法；原副标题「查看、编辑、重搜已缓存的歌词」降为按钮 tooltip）和一张不带卡名的单行卡**「歌词文件夹」**（见 §8）。09-06 之前是一张无名卡装三样东西——一行入口、一块六格等宽数字、一个文件夹位置——权重平齐，动作按钮一处在行尾、一处另起一行左对齐。
+- 「歌词库」卡卡名行以下整块是 `Settings/LyricsLibraryStats.swift` 的 `LyricsLibraryStatsPanel`，读法照系统设置「通用 → 储存空间」：
+  - 顶行「**共 N 首**」（数字 15pt semibold，前后字 13pt；格式键 `共 %@ 首` 按 `%@` 切开拼，英文是 "N songs"）+ 行尾裸值占用空间（`LyricsLibrarySizeLabel`，09-04 加，原在「歌词库」行尾；为 0 不显示，理由见其头注）；
+  - 一条 6pt **分段比例条**（`SettingsProportionBar`，设计系统新组件；几何在 Core `ProportionBar.widths`，selftest `settings-interaction` 组钉着「总宽守恒、非零段 ≥ 3pt 下限、亏空从最宽段扣」——真实数据里 9/3669 只有 1.3pt，不抬下限视觉上等于没有）；
+  - 一行四个"既成事实"桶的图例（7pt 色点 + 11pt 标签 + 11pt semibold 数字）：逐字 / 逐行 / 纯文本 / 纯音乐；
+  - 「**暂无**」独占一行：橙色数字 + ⓘ（说清「重新扫描」的范围为什么跟这个数对不上）+ 行尾「重新扫描（N 首）」小按钮，跑着时原位换成圆环进度 + 「扫描中 a/b」+「停止」，上一轮结束后按钮左侧留一句收据（见上文「重试无歌词」）。它既是比例条橙色段的图例项、又是唯一带动作的桶，单拎一行才能让按钮和橙色数字落在同一水平线上（09-05 用户要求"开在盯着橙色数字的地方"）。
+  - 再往下两条从属行（`SettingsSubRow`，标签左、裸值右）：「译文 ／ N 首源自带 · N 首机翻」「已缓存罗马音 ⓘ ／ N 首歌」。09-06 之前这两个数是用竖线拼在一句里的密文。
+- **配色规矩**（09-03 用户接受的理由：「别的都是既成事实，染色只会把这一排变成一片彩灯」）：**数字**仍只有「暂无」染橙（`LyricsKind.tint`）；比例条和图例色点必须有色才能对应，但限定为 accent 单色相三档明度（逐字 1.0 / 逐行 0.55 / 纯文本 0.28，读作时间轴精细度递减）+ 纯音乐中性灰 + 暂无橙一处（`LyricsKind.barColor`）——整条只有一个异色。
+- 用户要求（「统计目前歌词数量，歌词情况，比如逐字多少，纯文本多少，逐行多少」）。
 - **零新增解析**：全部读 `EnrichCacheStore.Summary` 上早就存着的 `hasWordTiming` / `hasLyrics` / `hasPlainTextFallback` / `isInstrumental` / `hasTranslation` / `hasRomanization` —— 这些值本窗口的列表和详情页一直在显示，只是设置页此前一个数字都不给，想知道「库里攒了多少、成色如何」必须开这扇窗去数。
 - ⚠️ **成色是一次有优先级的判定，不是四个独立布尔**（`LyrimuseCore.LyricsKind.classify`）：逐字 → 逐行 → 纯文本 → 纯音乐 → 暂无，命中即停。`lyrics_yrc` 是在 `lyrics` 之上补的，所以「有逐字」的条目几乎一定也「有逐行」——不设阶梯的话各项之和会超过总数，用户一眼看出面板在瞎报。`isInstrumental` 排在 `.none` 前面同样是有意的：确证过的纯音乐跟「没搜到」是两回事（2026-08-20 在本窗口列表里修过一次，一整批 LoL 原声带被显示成刺眼的红色「无歌词」）。
 - 分类本体放在 **LyrimuseCore** 而不是跟面板放一起：App target 不可被 `lyrimuse-selftest` 引用（它只依赖 LyrimuseCore），而这个阶梯改错了**完全不报错、只是数字悄悄变形**。selftest（`lyrics-manager` 组）用一张 **16 行显式期望表**穷举全部组合——刻意不照着实现再写一遍 if 链，那是拿同一个假设验证它自己、阶梯整体挪位置照样全绿。显示用的名字/配色留在 App 侧（要 L10n / SwiftUI）。
@@ -164,16 +173,17 @@
 
 ### 8. 歌词文件夹（设置 → 歌词 → 管理段）
 
-- 路径展示 + 「选择文件夹…」（NSOpenPanel，改 `features.lyricsDir`）+「打开歌词文件夹」（不存在先兜底创建）+「恢复默认位置」（lyricsDir 置空）。换文件夹后旧文件不自动搬。
+- 一张不带卡名的单行卡（`SettingsView.swift` `lyricsFolderRow`）：「歌词文件夹 ⓘ」+ 行尾「路径 + 「在访达中显示」+ 「更改…」」全部同一行（09-03 用户要求路径"跟标题同一行、把小标题去掉"；09-06 把原来另起一行左对齐的「选择文件夹…」「打开歌词文件夹」两颗按钮收进行尾并改名）。路径 `~` 缩写（`abbreviatingWithTildeInPath`）、中间省略、完整路径进 tooltip。「更改…」= NSOpenPanel 改 `features.lyricsDir`；「在访达中显示」不存在先兜底创建。自定义过路径时才多出一条从属行「已改用自定义位置 ／ 恢复默认位置（链接样式，lyricsDir 置空）」。换文件夹后旧文件不自动搬（ⓘ 文案）。
+- ⚠️ 行尾"路径 + 两颗按钮"三件套里**只有路径可压**：按钮 `.fixedSize()`、路径 `.layoutPriority(-1)`——`SettingsRow` 的 HStack 均分亏空，不这么钉会重演「按钮被压成空圆角矩形」（配色主题命名行）或「标题被压成换行」（这一行 09-03 那版）两种坑。
 - 文件格式：每条目最多 4 个文件，头部 `[ar:]/[ti:]/[al:]/[source:]/[manual:1]` 标签；collector 启动时「文件赢」导入覆盖 JSON（只增不删）；大小写碰撞组加 crc32 哈希后缀消歧。
 
 ## 设置项
 
 | 位置 | 项 | 影响 |
 |---|---|---|
-| 歌词→管理 | 歌词管理 打开… | 打开本窗口 |
-| 歌词→管理 | 歌词库统计面板 | 只读，来自 `EnrichCacheStore.summaries` |
-| 歌词→管理 | 歌词文件夹（选择/打开/恢复默认） | `features.lyricsDir`（features.json+kickstart） |
+| 歌词→管理 | 「歌词库」卡右上角「打开歌词管理」 | 打开本窗口 |
+| 歌词→管理 | 歌词库统计（比例条 / 图例 / 译文 / 罗马音） | 只读，来自 `EnrichCacheStore.summaries` |
+| 歌词→管理 | 歌词文件夹（更改… / 在访达中显示 / 恢复默认位置） | `features.lyricsDir`（features.json+kickstart） |
 
 ## 与其它功能的交互
 
@@ -208,7 +218,8 @@
 | 详情页顶部三种排法 | LyricsManagerView.swift `header` 的 `ViewThatFits` + `headerActions` / `headerActionsWrapped` |
 | 文件导出/导入 | collector 侧 lyricsexport.go / lyricsimport.go |
 | 搜索占位行 | LyricsManagerView.swift `placeholderSummary` `refreshPlaceholder` `placeholderDetailView` `selectableFiltered`；EnrichCacheStore.swift `Summary.isSearching` `hasEntry(forKey:)`；collector 侧「有结果才写盘」的约定在 enrich.go `resolveEnrichAsync`（第 09 章） |
-| 重试无歌词 | LyricsManagerView.swift `fillSweepToolbarMenu` `fillSweepStatus`（列表轮询 `.task` 里刷新）、`batchSelectionPanel` 的「重试选中的…」；口径 EnrichCacheStore.swift `isFillSweepRetryable`；设置页入口 Settings/LyricsLibraryStats.swift `LyricsLibraryStatsPanel.fillSweepRow`；LyrimuseCore/Local/LyricsFillSweep.swift `request(keys:)` `requestCancel` `requestBody` `current`（Info 按 mtime 缓存）；collector 侧 lyricsfillsweep.go（第 09 章） |
+| 重试无歌词 | LyricsManagerView.swift `fillSweepToolbarMenu` `fillSweepStatus`（列表轮询 `.task` 里刷新）、`batchSelectionPanel` 的「重试选中的…」；口径 EnrichCacheStore.swift `isFillSweepRetryable`；设置页入口 Settings/LyricsLibraryStats.swift `LyricsLibraryStatsPanel.noneRow`；LyrimuseCore/Local/LyricsFillSweep.swift `request(keys:)` `requestCancel` `requestBody` `current`（Info 按 mtime 缓存）；collector 侧 lyricsfillsweep.go（第 09 章） |
+| 设置页「管理」段 | SettingsView.swift `managementCard`（两张卡）`lyricsFolderRow`；统计块 Settings/LyricsLibraryStats.swift `LyricsLibraryStatsPanel`（`statsBlock` `legendItem` `noneRow` `totalText`）、`LyricsLibrarySizeLabel`、`LyricsKind.label/tint/barColor`；比例条 Settings/SettingsDesignSystem.swift `SettingsProportionBar`，几何 LyrimuseCore/Util/ProportionBar.swift `widths`（selftest `settings-interaction` 组「比例条分段宽度」） |
 | 源里有歌、无词 | EnrichCacheStore.swift `Summary.knownOnSources` + `knownOnSources(_:)`（nonisolated，buildSummaries 后台跑）；判据 LyrimuseCore/Local/EnrichSourcePresence.swift；三处展示：列表行 caption / `infoStrip` / `batchSelectionPanel` |
 | 标为纯音乐 | EnrichCacheStore.swift `setInstrumental(key:_:)`（`markInstrumental` 现在是它的包装）；`actionTileGrid` 里 `!summary.hasLyrics` 那对 ActionTile |
 | 占位行「停止搜索」 | LyricsManagerView.swift `cancelPlaceholderSearch`（不主动清空 `placeholderSummary`，靠 5 秒轮询自然让位）；collector 侧 enrichcancel.go `startEnrichCancelWatcher` `checkEnrichCancelRequest` `setEnrichCancelRequestPath`；enrich.go `enrichCancelFuncs` 登记表 + `resolveEnrichAsync` 的 `ctx.Err()` 分支 + `commitEnrichEntry`（第 09 章第 24 条：取消后落定成"暂无歌词"，`context.Context` 穿透各源的细节也在那一章） |

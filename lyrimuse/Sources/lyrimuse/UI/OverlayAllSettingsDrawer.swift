@@ -12,18 +12,22 @@ import SwiftUI
 // ⚠️ 「桌面悬浮歌词」总开关**不收进来**。它是这一段的主开关,收进折叠区等于"要先展开
 // 才能开这个形态";它留在编辑台正下方那张 modeToggleCard 里常驻可见。
 //
-// ⚠️ 抽屉里的每一组都是**别处那份组件**,这里只有外壳:
+// ⚠️ 抽屉里的每一组都是**别处那份组件**,这里只有外壳;**分组、顺序、标题跟工具栏五个入口一一
+// 对应**(2026-09-07 起:主题 → 文字 → 背景 → 排版 → 宽度 → 行为 → 恢复默认;此前最后一组叫
+// 「窗口」、装着宽度 + 行为 + 自动隐藏,跟工具栏的「行为」对不上名——用户按工具栏的记忆到抽屉里
+// 找会落空,是用户说的"这一个那一个"):
 //   - 主题 / 文字 / 背景 / 排版 → OverlayStyleSettingsRows.swift(跟工具栏那几个浮层同一份)。
 //     ⚠️ 2026-09-02 从「配色 / 我的配色主题 / 文字 / 排版」重新分的组:原「配色」那七行混着
-//     文字层和背景层,拆分判据见那个文件里 OverlayBackgroundSettingsRows 的头注
-//   - 窗口里那三个行为项 → OverlayBehaviorSettingsRows.swift(跟上面那条行为栏同一份)
-//   - 「窗口」组末尾那两行自动隐藏 → AutoHideSettingsRows.swift(2026-09-02 从撤掉的独立
-//     「自动隐藏」卡并进来;跟行为栏那份、以及灵动岛「行为」浮层/抽屉那两处是同一个组件)
+//     文字层和背景层,拆分判据见那个文件里 OverlayBackgroundSettingsRows 的头注;
+//     2026-09-07「跟随封面」从「文字」组挪进「主题」组,理由见 OverlayThemeSettingsRows 头注
+//   - 行为 → OverlayBehaviorSettingsRows.swift(三个行为项 + 两行自动隐藏,跟工具栏「行为」浮层
+//     同一份视图,不再各自拼)
 //   - 恢复 → OverlayStyleDefaults.restoreTextAndColors()(跟工具栏「重置 ▾」同一个动作)
-// 「宽度」那根滑杆写在本文件里 —— 它跟编辑台里那条宽度调整条(2026-08-30 第六步替掉了
-// 原来的拖拽握柄)是同一个值的两个入口:那边 step 2、紧挨着窗口、看得见效果;这边 step 10、
-// 跟其它设置行同列,是键盘/VoiceOver 和"我想输个准数"的兜底通路。两处的落点约束一模一样
-// (相等守卫 + classicOverlayEnabled 守卫 + 同一个 widthRange),改一处记得对一下另一处。
+// 「宽度」那根滑杆写在本文件里、不属于任何一组(跟灵动岛抽屉里的两根宽度滑杆同一个摆法)——
+// 它跟编辑台里那条宽度调整条(2026-08-30 第六步替掉了原来的拖拽握柄)是同一个值的两个入口:
+// 那边 step 2、紧挨着窗口、看得见效果;这边 step 10、跟其它设置行同列,是键盘/VoiceOver 和
+// "我想输个准数"的兜底通路。两处的落点约束一模一样(相等守卫 + classicOverlayEnabled 守卫 +
+// 同一个 widthRange),改一处记得对一下另一处。
 @MainActor
 struct OverlayAllSettingsDrawer: View {
     @ObservedObject private var settings = AppSettings.shared
@@ -54,7 +58,9 @@ struct OverlayAllSettingsDrawer: View {
                 CardDivider()
                 layoutGroup
                 CardDivider()
-                windowGroup
+                widthRow
+                CardDivider()
+                behaviorGroup
                 CardDivider()
                 resetRow
             }
@@ -63,7 +69,7 @@ struct OverlayAllSettingsDrawer: View {
         // 那一处(disclosureHeader 里的 withAnimation)—— 挂在卡片上动的是容器自身的几何,
         // 同一个事务里任何不相干的布局变化都会被一起动起来(理由见
         // Animation.settingsCardReveal 的声明,那条是踩过实例之后定下的)。抽屉里恰恰有
-        // 一堆这种变化:拖字号滑杆、开关「跟随封面」让两行条件行长出来、存一个新主题让
+        // 一堆这种变化:拖字号滑杆、开关「文字描边」让「描边颜色」那行长出来、存一个新主题让
         // 列表多一行。
     }
 
@@ -103,7 +109,7 @@ struct OverlayAllSettingsDrawer: View {
         .buttonStyle(.plain)
         .accessibilityLabel(L10n.t("全部设置"))
         // VoiceOver 里这一行是"展开/收起"而不是普通按钮 —— 抽屉是键盘用户到达那 18 项的
-        // 唯一入口(2026-08-30 的 16 项 + 2026-09-02 并进「窗口」组的两行自动隐藏),读不出
+        // 唯一入口(2026-08-30 的 16 项 + 2026-09-02 并进「行为」组的两行自动隐藏),读不出
         // "已折叠"的话,这一整段听上去就只有一个孤零零的按钮。
         .accessibilityAddTraits(isExpanded ? .isSelected : [])
         .accessibilityValue(isExpanded ? L10n.t("已展开") : L10n.t("已折叠"))
@@ -147,21 +153,14 @@ struct OverlayAllSettingsDrawer: View {
         }
     }
 
-    /// ⚠️ 组名的不对称是**有意接受**的,不是漏改:页面上那张常驻卡叫「行为」,抽屉这一组叫
-    /// 「窗口」,而 2026-09-02 起两处装的是同一批开关(三个行为项 + 两行自动隐藏)。抽屉这边按
-    /// "这扇窗的事"归组(它还带着「宽度」滑杆),行为栏那边按"设一次就不动的行为"归组,两个
-    /// 名字各自成立;要取齐就得连「宽度」一起重新分组,不值得为两行改动一整组的语义。
-    private var windowGroup: some View {
+    /// 跟工具栏「行为」浮层同名、同一份视图(2026-09-07;此前这一组叫「窗口」、还带着「宽度」滑杆,
+    /// 组名的不对称当时被记成"有意接受",这次按"抽屉分组跟工具栏一一对应"取齐,「宽度」升成组外
+    /// 独立一行)。
+    private var behaviorGroup: some View {
         Group {
-            SettingsCardHeader(title: L10n.t("窗口"))
-            CardDivider()
-            widthRow
+            SettingsCardHeader(title: L10n.t("行为"))
             CardDivider()
             OverlayBehaviorSettingsRows()
-            // 「自动隐藏」两行。⚠️ "本组之前"这条分隔线由宿主插,组件内部只在自己两行之间
-            // 插一条 —— 见 AutoHideSettingsRows.swift 顶部那条约定,四个宿主一处都不能漏。
-            CardDivider()
-            AutoHideSettingsRows(surface: .desktopOverlay)
         }
     }
 
@@ -223,7 +222,7 @@ struct OverlayAllSettingsDrawer: View {
     private var resetRow: some View {
         SettingsRow(
             icon: "arrow.uturn.backward",
-            title: L10n.t("恢复默认主题、文字与背景"),
+            title: L10n.t("恢复默认"),
             subtitle: L10n.t("不含排版、行为和宽度")
         ) {
             Button(L10n.t("恢复")) { OverlayStyleDefaults.restoreTextAndColors() }

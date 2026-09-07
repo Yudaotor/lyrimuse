@@ -94,4 +94,35 @@ func runSettingsInteractionTests() {
         for (f, to) in [(3, 2), (2, 1), (1, 0)] { stepwise = R.moved(stepwise, isVisible: vis, from: f, to: to) }
         expectEqual(stepwise, R.moved(order, isVisible: vis, from: 3, to: 0), "写回: 三次相邻 swap 与一次拖拽结果一致(箭头与把手不打架)")
     }
+
+    // ---- ProportionBar(2026-09-06,「歌词 → 管理」歌词库统计的分段比例条)----
+    //
+    // 数据用本机真实分布:3,325 / 232 / 9 / 38 / 65(逐字 / 逐行 / 纯文本 / 纯音乐 / 暂无),可用宽 540、缝 1.5、下限 3。
+    // 这个算法改错了完全不报错 —— 只是某一段消失或整条长出几 pt 被裁掉尾巴,肉眼未必看得出,所以钉在这里。
+    do {
+        print("\n== 比例条分段宽度 ==")
+        typealias P = ProportionBar
+        let real = [3325, 232, 9, 38, 65]
+        let w = P.widths(values: real, available: 540, gap: 1.5, minWidth: 3)
+        expectEqual(w.count, 5, "比例条: 一段一个宽度")
+        expectEqual(abs(w.reduce(0, +) + 1.5 * 4 - 540) < 0.001, true, "比例条: 各段 + 缝隙恒等于可用宽度(不溢出不留尾)")
+        expectEqual(w.allSatisfy { $0 >= 3 - 0.001 }, true, "比例条: 非零段不小于下限")
+        expectEqual(w[2], 3, "比例条: 9/3669 ≈ 1.3pt 被抬到下限 3pt")
+        expectEqual(w[0] < 540 * 3325 / 3669, true, "比例条: 抬下限多占的宽度从最宽的一段扣")
+        expectEqual(w[1] > w[4] && w[4] > w[3] && w[3] > w[2], true, "比例条: 没碰下限的段仍按比例排序")
+
+        expectEqual(P.widths(values: [], available: 540, gap: 1.5, minWidth: 3), [], "比例条: 空输入空输出")
+        expectEqual(P.widths(values: [0, 0], available: 540, gap: 1.5, minWidth: 3), [0, 0], "比例条: 全 0 不画(不抬下限)")
+        expectEqual(P.widths(values: [7], available: 540, gap: 1.5, minWidth: 3), [540], "比例条: 单段铺满,没有缝")
+        expectEqual(P.widths(values: [1, 1], available: 0, gap: 1.5, minWidth: 3), [0, 0], "比例条: 可用宽 0(首帧还没量到)全 0,不报 nan")
+        // 段数多到"每段给下限"都装不下:下限退化成均分,不硬撑到溢出。
+        let crowded = P.widths(values: Array(repeating: 1, count: 100), available: 100, gap: 0, minWidth: 3)
+        expectEqual(abs(crowded.reduce(0, +) - 100) < 0.001, true, "比例条: 段数太多时总宽仍等于可用宽度")
+        expectEqual(crowded.allSatisfy { abs($0 - 1) < 0.001 }, true, "比例条: 段数太多时退化成均分")
+        // 最宽的一段扣到下限还不够时继续扣次宽的:三个小段各抬到 12(亏空 33),40 那段最多只能让 28、
+        // 剩下 5 从 30 那段扣 → [12, 25, 12, 12, 12]。
+        let cascade = P.widths(values: [40, 30, 1, 1, 1], available: 73, gap: 0, minWidth: 12)
+        expectEqual(cascade.map { ($0 * 1000).rounded() / 1000 }, [12, 25, 12, 12, 12], "比例条: 亏空跨段扣回")
+        expectEqual(abs(cascade.reduce(0, +) - 73) < 0.001, true, "比例条: 亏空跨段扣回后总宽仍守恒")
+    }
 }

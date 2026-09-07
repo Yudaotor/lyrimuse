@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 )
 
@@ -483,7 +484,7 @@ func amllFetch(ctx context.Context, platformDir, musicID string) (string, bool) 
 		return "", false
 	}
 	url := fmt.Sprintf("%s/%s/%s.ttml", amllRawBase, platformDir, musicID)
-	client := &http.Client{Timeout: amllHTTPTimeout}
+	client := lyricHTTPClient(amllHTTPTimeout)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return "", false
@@ -503,9 +504,22 @@ func amllFetch(ctx context.Context, platformDir, musicID string) (string, bool) 
 	return string(body), true
 }
 
+// amllSkippedForMissingIDs:本进程里 amll 是否有过"两个 ID 都为空、一个请求都没发"的一轮。
+// 给 searchcli.go 的 lyricSourceFailureReasons 派生 upstream_unreachable 用(见
+// lyricsourcefailure.go 该常量的注释):没有这个信号,弹窗分不清"amll 查过了没有"和"amll 根本
+// 没法查"。只置位不复位 —— search-lyrics 是一次性进程,读到的就是这次搜索的事实;常驻
+// collector 里没人读它。
+var amllSkippedForMissingIDs atomic.Bool
+
+func amllSkippedForMissingIDsNow() bool { return amllSkippedForMissingIDs.Load() }
+
 // amllLyric 按网易云 / QQ 的音乐 ID 查 amll-ttml-db。两个 ID 都给时先试网易云
 // (实测它那份索引最全:命中的 26 首里 20 首有 ncm ID)。
 func amllLyric(ctx context.Context, neteaseID, qqID string) amllResult {
+	if neteaseID == "" && qqID == "" {
+		amllSkippedForMissingIDs.Store(true)
+		return amllResult{}
+	}
 	for _, try := range []struct{ dir, id string }{
 		{"ncm-lyrics", neteaseID},
 		{"qq-lyrics", qqID},

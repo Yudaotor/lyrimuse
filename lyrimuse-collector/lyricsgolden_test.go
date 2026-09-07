@@ -245,7 +245,22 @@ func goldenComputeEvidence(q goldenQuery, ranked []scoredLyricCandidateResult) g
 		}
 	}
 	ev.TitleAccepted = lyricTitleAccepted(winner.Title, q.Title)
-	ev.VersionTagsOK = !versionTagsMismatch(q.Title, q.Album, winner.Title, winner.Album) &&
+	// v15:版本限定词判据跟打分层同一口径——先过批级语种判决(applyLanguageVersionVerdicts),冠军
+	// 声明的语种与本地推断一致时,「(粤语)」这类标签不算版本差异;不一致(国语词配粤语音轨)直接不 OK。
+	cands := make([]lyricCandidate, len(ranked))
+	for i := range ranked {
+		cands[i] = lyricCandidateFromScored(ranked[i])
+	}
+	applyLanguageVersionVerdicts(q.Title, q.Album, q.DurationSecs, cands)
+	var wc lyricCandidate
+	for i := range ranked {
+		if ranked[i].Source == winner.Source {
+			wc = cands[i]
+			break
+		}
+	}
+	ev.VersionTagsOK = !wc.languageVersionMismatch &&
+		!versionTagsMismatchIgnoringLanguage(q.Title, q.Album, winner.Title, winner.Album, wc.languageVersionAgrees) &&
 		!liveAlbumIdentityConflict(q.Artist, q.Album, winner.Title, winner.Album)
 	if winner.SourceReportedDurationSecs > 0 && q.DurationSecs > 0 {
 		ev.SourceDurationDeltaPct = 100 * abs(winner.SourceReportedDurationSecs-q.DurationSecs) / q.DurationSecs
@@ -336,6 +351,7 @@ var goldenRequiredCategories = map[string]string{
 	"live-other-concert":    "现场版,另一场演出的候选吃 liveAlbumConflict",
 	"version-tag-mismatch":  "版本限定词错配的候选吃 versionTags -600",
 	"version-tag-edit":      "「(Edit)」单曲剪辑版被识别为另一次录音(v12,2026-09-04 用户报的 Diamonds and Pearls 案)",
+	"language-version":      "粤语/国语语种版本:标了语种、与本地推断一致的候选不吃 versionTags 且标题拿精确档;自报另一语种的候选吃 versionTags(v15,2026-09-07 K歌之王 案)",
 	"multi-artist-credit":   "多歌手合 credit 的署名",
 	"reject-credit-only":    "整份只有署名行的候选被否决",
 	"reject-plain-text":     "无时间戳纯文本候选被否决",
@@ -599,6 +615,16 @@ func diffGoldenExpect(want, got goldenExpect) goldenDiff {
 		}
 	}
 	return d
+}
+
+// goldenTermPoints 取排名候选里某一项的分值(没有这一项返回 0),给类别校验用。
+func goldenTermPoints(c goldenRankedCandidate, kind string) int {
+	for _, t := range c.Terms {
+		if t.Kind == kind {
+			return t.Points
+		}
+	}
+	return 0
 }
 
 func goldenTermsString(terms []scoreTerm) string {
@@ -881,6 +907,49 @@ func goldenCategoryCheck(fx *goldenFixture, category string, e goldenExpect) err
 		}
 		if !anyCand(func(c goldenRankedCandidate) bool { return c.Source != e.Winner && hasTerm(c, scoreTermVersionTags) }) {
 			return fmt.Errorf("要求:有非冠军候选吃到 versionTags")
+		}
+	case "language-version":
+		if err := needWinner(); err != nil {
+			return err
+		}
+		// 放过的一半:某个源的**原始**歌名带语种标签(声明了语种),排名里它没吃 versionTags、标题档是 120。
+		// 抓住的一半:某个源自报了**另一种**语种,排名里它吃了 versionTags。
+		waived, caught := "", false
+		for src, g := range fx.Sources {
+			title := g.Title
+			if g.Netease != nil {
+				title = g.Netease.Title
+			}
+			lang := declaredLanguageVersion(title)
+			if lang == "" {
+				continue
+			}
+			if anyCand(func(c goldenRankedCandidate) bool {
+				return c.Source == src && c.Score >= 0 && !hasTerm(c, scoreTermVersionTags) && goldenTermPoints(c, scoreTermTitleMatch) == 120
+			}) {
+				waived = lang
+			}
+		}
+		if waived == "" {
+			return fmt.Errorf("要求:有原始歌名带语种标签的候选既没吃 versionTags、标题档又是 120")
+		}
+		for src, g := range fx.Sources {
+			var other string
+			switch g.Language {
+			case songLanguageCantonese:
+				other = languageVersionTagCantonese
+			case songLanguageMandarin:
+				other = languageVersionTagMandarin
+			}
+			if other == "" || other == waived {
+				continue
+			}
+			if anyCand(func(c goldenRankedCandidate) bool { return c.Source == src && hasTerm(c, scoreTermVersionTags) }) {
+				caught = true
+			}
+		}
+		if !caught {
+			return fmt.Errorf("要求:有自报另一语种(≠%s)的候选吃到 versionTags", waived)
 		}
 	case "version-tag-edit":
 		if err := needWinner(); err != nil {

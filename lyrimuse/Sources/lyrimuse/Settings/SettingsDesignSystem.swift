@@ -1,4 +1,5 @@
 import AppKit
+import LyrimuseCore
 import SwiftUI
 
 // 设置窗口的一套卡片式组件(2026-08-06 新增)。参考 Dropover 的设置界面重做——它跟
@@ -767,6 +768,60 @@ enum SettingsToggleSummary {
         if onTitles.count == entries.count { return L10n.t("全部开启") }
         if onTitles.isEmpty { return L10n.t("全部关闭") }
         return ListFormatter.localizedString(byJoining: onTitles)
+    }
+}
+
+// MARK: - 比例条
+
+/// 一条按数值分段的横向比例条(2026-09-06,「歌词 → 管理」的歌词库统计首用)——把「总数由
+/// 几个桶组成、各占多少」画成一根 6pt 高的分段条,读法同系统设置「通用 → 储存空间」那条。
+///
+/// 为什么不直接用一排数字:总数跟分桶是整体/部分关系,排成六个平级格子看不出比例;条上一眼
+/// 就是「逐字占了九成」,数字留给图例去说精确值。
+///
+/// 两条几何规则,都是为了**真实数据**里那种极端分布(3,669 首里 9 首纯文本 = 0.25%):
+///   - 值为 0 的段不画(不占缝隙);
+///   - 非零段至少 `minSegmentWidth` 宽,不然 0.25% 在 540pt 里只有 1.3pt,视觉上等于没有。抬到
+///     最小宽度多占的那点宽度从**最宽的一段**里扣回,总宽恒等于可用宽度,不会溢出也不会留尾巴。
+///
+/// 颜色由调用方给。这里不定"一桶一色"的规矩,但调用方该记着这一页的既定取舍:同一色相分明度
+/// 承担大部分段、中性灰给"既不是好也不是坏"的桶、真正需要注意的那一桶才给一个异色 ——
+/// 五个桶五种颜色就是「一片彩灯」(用户 2026-09-03 对统计数字染色否掉过的理由)。
+///
+/// 无障碍:条本身对 VoiceOver 隐藏 —— 各段的数值由旁边的图例逐项朗读,条上再报一遍是重复。
+struct SettingsProportionBar: View {
+    struct Segment: Identifiable {
+        let id: String
+        let value: Int
+        let color: Color
+    }
+
+    let segments: [Segment]
+    var height: CGFloat = 6
+    var gap: CGFloat = 1.5
+    var minSegmentWidth: CGFloat = 3
+
+    var body: some View {
+        GeometryReader { proxy in
+            let visible = segments.filter { $0.value > 0 }
+            // 几何在 Core 的 ProportionBar.widths(selftest 钉着:总宽恒等于可用宽度、非零段不小于下限)。
+            let widths = ProportionBar.widths(
+                values: visible.map(\.value), available: proxy.size.width,
+                gap: gap, minWidth: minSegmentWidth)
+            HStack(spacing: gap) {
+                ForEach(Array(visible.enumerated()), id: \.element.id) { index, segment in
+                    Rectangle()
+                        .fill(segment.color)
+                        .frame(width: widths[index])
+                }
+            }
+        }
+        // GeometryReader 会把父级给的高度全占掉,必须在这里钉死高度,不然它撑满整张卡。
+        .frame(height: height)
+        // 轨道底色:全部为 0 时条不至于凭空消失成一段空白;有数据时被段完全盖住。
+        .background(Capsule().fill(Color.primary.opacity(0.06)))
+        .clipShape(Capsule())
+        .accessibilityHidden(true)
     }
 }
 

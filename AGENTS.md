@@ -66,7 +66,15 @@ selftest contracts 组「身份与路径收口」会红。
 ```sh
 swift lyrimuse/scripts/check-windows.swift --require-overlay   # 窗口是否真的在屏
 screencapture -x -o -l <窗口ID> /tmp/shot.png                   # 只截那一个窗口
+swift lyrimuse/scripts/capture-window-frames.swift <窗口ID> 30 <x> <y> <w> <h> /tmp/cap
+                                                                # 帧级抓一块区域,把"闪一下"的那几帧存下来
+swift lyrimuse/scripts/statusitem-appearance-probe.swift        # 新建状态栏项的 appearance 什么时候才可信
 ```
+
+后两个是 2026-09-07 查"菜单栏预览重建时闪一下"时加的：`screencapture` 一秒几张抓不到几十毫秒的
+闪烁，`capture-window-frames.swift` 走 ScreenCaptureKit 单窗口流（被遮住也抓得到、不用把窗口拉到
+前台），逐帧算亮度/差异、突变帧连前后帧存 PNG；`statusitem-appearance-probe.swift` 是那次的根因探针
+（用法与结论见 `MenuBar/MenuBarAppearance.swift` 头注）。
 
 `screencapture -l <窗口ID>` 是**强制**的：按坐标截屏会把别的窗口拍进去，2026-08-14 曾因此
 截到用户的聊天软件窗口（同事姓名和消息）。窗口 ID 从上面那个脚本拿。
@@ -204,7 +212,7 @@ selftest contracts 组「日志规范」扫两侧日志字面量（Go 含 `log.*
 改变了 69/206 首歌的冠军，其中 0 次变对、6 次变错，去掉后准确率 93%→96%"）。改分值前先读
 那些注释。改了打分逻辑要同步 `lyricsScoringVersion`（`match.go:294`），否则老缓存条目不会
 被后台重新裁决。**改完必须过回归金标集**：`GOTOOLCHAIN=go1.24.4 go test -run 'TestLyricsGolden|TestGolden' .`
-（`lyrimuse-collector/testdata/lyricsgolden/`，18 首真实曲目覆盖 19 类判据、置乱正文、断言冠军与全部分项，
+（`lyrimuse-collector/testdata/lyricsgolden/`，19 首真实曲目覆盖 20 类判据、置乱正文、断言冠军与全部分项，
 冠军的正确性由一组独立判据证明而不是"缓存里就是它"；`testdata/lyricsgolden/search/` 是检索层的同款——
 四个源在自己的搜索结果里该挑谁，改 `neteasePickSong` / `qqCollectCandidates` / `pickKugouSearchCandidate` /
 `pickLRCLIBSearchResultDetailed` 或它们依赖的闸门同样要过）。
@@ -246,7 +254,7 @@ selftest contracts 组「日志规范」扫两侧日志字面量（Go 含 `log.*
   worktree，但收尾必须把改动落回 `dev` 再提交、别把分支留下。`main` 只在发版时推进（默认
   分支仍是 `main`，打 tag 前先把 `dev` 以 fast-forward 合进 `main`）。
 - **tag 形态**（2026-09-05 起）：`vX.Y.Z` 正式版、`vX.Y.Z-(alpha|beta|rc).N` 测试版，其它形态 CI 构建前直接拒。带 `-` 自动标
-  prerelease、不进 `releases/latest`、appcast item 带 beta channel，只有打开「接收测试版更新」的机器会收到。构建号
+  prerelease、不进 `releases/latest`、appcast item 带 beta channel，只有打开「测试版更新」的机器会收到。构建号
   （CFBundleVersion）由 `lyrimuse/scripts/build-version.sh` **唯一**定义（Sparkle 的比较器忽略 `-` 之后的内容，展示版本
   不能直接当构建号），别在别处再写一份映射；流程见 docs/releasing.md「六、发测试版」，机制见 15 章决策 11。
 - 发 release 时日志要手写改动清单（中英双语），不要只依赖 GitHub 自动生成的 notes。

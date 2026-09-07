@@ -146,6 +146,10 @@ enum ConfigPortability {
         // 「伪全屏」(App 自己的全屏按钮)又一个系统通知都不发,只能靠轮询兜。收益抵不过
         // 这些复杂度。留着这个键只会被导出到新机器再导回来。
         "np:hideWhenFullscreenApp",
+        // 2026-09-06:全局「卡拉OK效果」拆成三个展示面各自的开关(np:overlayLyricsKaraoke /
+        // np:notchLyricsKaraoke / 既有的 np:menuBarLyricsKaraoke),旧键只在 AppSettings.init() 里
+        // 读一次做迁移(读在前、init 末尾才清)。
+        "np:preferWordLevelKaraoke",
     ]
 
     /// 导出/导入都要跳过的键 = 机器专属的 + 已经死掉的。

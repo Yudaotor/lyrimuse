@@ -965,4 +965,63 @@ func runMenuBarTests() {
         expectEqual(t("", "") == nil, true, "歌名兜底: 没歌名就还是图标,不做品牌兜底")
         expectEqual(t("", "稻香", on: false) == nil, true, "歌名兜底: 开关关着照旧收回图标")
     }
+
+    // ---- 菜单栏双排(副行,2026-09-06,借鉴清单 #57,用户选 B 方案:主 10pt / 副 9pt)----
+    //
+    // 几何在 Core(MenuBarLyricRows),渲染侧只是照着摆图层。钉住的是:字号常量、两行落位(装不下时
+    // 主行贴顶副行贴底、重叠恰 1pt;装得下时整块居中)、副行透明度的梯度、以及跟灵动岛共用的取值规则。
+    do {
+        typealias Rows = MenuBarLyricRows
+        expectEqual(Rows.buttonHeight, 22, "双排: 状态栏项按钮恒 22pt")
+        expectEqual(Rows.mainPointSize, 10, "双排: 主行 10pt(B 方案)")
+        expectEqual(Rows.secondaryPointSize, 9, "双排: 副行 9pt(B 方案)")
+        expectEqual(Rows.mainPointSize > Rows.secondaryPointSize, true, "双排: 主副有别,主行更大")
+        // 本机实测 10pt 字面高取整 12、9pt 取整 11:两行 23 > 22 → 主行贴顶、副行贴底、中间重叠 1pt
+        let tight = Rows.layout(mainHeight: 12, secondaryHeight: 11, buttonHeight: 22)
+        expectEqual(tight.mainY + tight.mainHeight, 22, "双排: 装不下时主行贴顶")
+        expectEqual(tight.secondaryY, 0, "双排: 装不下时副行贴底")
+        expectEqual((tight.secondaryY + tight.secondaryHeight) - tight.mainY, 1, "双排: 12 + 11 塞进 22 恰重叠 1pt")
+        // 装得下:整块居中、主行在上
+        let loose = Rows.layout(mainHeight: 10, secondaryHeight: 8, buttonHeight: 22)
+        expectEqual(loose.secondaryY, 2, "双排: 装得下时下边距 (22-18)/2 = 2")
+        expectEqual(loose.mainY, loose.secondaryY + loose.secondaryHeight, "双排: 主行紧挨副行之上(2 + 8 = 10)")
+        expectEqual(loose.mainY, 10, "双排: 主行底边 = 副行顶边 = 10")
+        expectEqual(loose.mainY + loose.mainHeight, 20, "双排: 上边距同为 2")
+        // 不变量:主行永远在副行之上、两行都在按钮内、位图高原样带回
+        for (m, s): (CGFloat, CGFloat) in [(12, 11), (10, 8), (13, 12), (16, 9), (11, 11)] {
+            let l = Rows.layout(mainHeight: m, secondaryHeight: s, buttonHeight: 22)
+            expectEqual(l.mainY >= l.secondaryY, true, "双排: 主行在副行之上 \(m)/\(s)")
+            expectEqual(l.mainY + l.mainHeight <= 22, true, "双排: 主行不出按钮顶 \(m)/\(s)")
+            expectEqual(l.secondaryY >= 0, true, "双排: 副行不出按钮底 \(m)/\(s)")
+            expectEqual(l.mainHeight, m, "双排: 主行位图高原样带回 \(m)")
+            expectEqual(l.secondaryHeight, s, "双排: 副行位图高原样带回 \(s)")
+        }
+        // 副行透明度:译文最清楚、罗马音次之、下一句最淡、不显示为 0
+        expectEqual(Rows.secondaryOpacity(for: .off), 0, "双排: 不显示 → 0")
+        expectEqual(Rows.secondaryOpacity(for: .translation) > Rows.secondaryOpacity(for: .romanization), true,
+                    "双排: 译文比罗马音清楚")
+        expectEqual(Rows.secondaryOpacity(for: .romanization) > Rows.secondaryOpacity(for: .nextLine), true,
+                    "双排: 罗马音比下一句清楚")
+        expectEqual(Rows.secondaryOpacity(for: .nextLine) > 0.5, true,
+                    "双排: 下一句 9pt 下不能淡过 0.5(灵动岛那档 0.45 在这里读不清)")
+        expectEqual(Rows.tailFadeWidth > 0, true, "双排: 副行装不下时尾部渐隐宽度为正")
+
+        // 副行取值规则(Core 一份,灵动岛与菜单栏共用)
+        let line = SyncedLyricLine(romanization: " yume naraba ", translation: "如果是梦该有多好",
+                                   mainText: "夢ならば", words: nil, wordGroups: nil, side: nil)
+        expectEqual(LyricSecondaryLine.off.secondaryText(currentLine: line, nextLineText: "next"), nil,
+                    "副行取值: 不显示 → nil")
+        expectEqual(LyricSecondaryLine.nextLine.secondaryText(currentLine: line, nextLineText: "next"), "next",
+                    "副行取值: 下一句")
+        expectEqual(LyricSecondaryLine.translation.secondaryText(currentLine: line, nextLineText: "next"),
+                    "如果是梦该有多好", "副行取值: 译文")
+        expectEqual(LyricSecondaryLine.romanization.secondaryText(currentLine: line, nextLineText: "next"),
+                    "yume naraba", "副行取值: 罗马音,首尾空白剔掉")
+        expectEqual(LyricSecondaryLine.nextLine.secondaryText(currentLine: line, nextLineText: "  \n"), nil,
+                    "副行取值: 空白算没有")
+        expectEqual(LyricSecondaryLine.translation.secondaryText(currentLine: nil, nextLineText: "next"), nil,
+                    "副行取值: 没有当前句就没有译文")
+        expectEqual(LyricSecondaryLine.nextLine.secondaryText(currentLine: nil, nextLineText: "next"), "next",
+                    "副行取值: 下一句不依赖当前句")
+    }
 }

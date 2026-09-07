@@ -24,6 +24,10 @@ type snapshot struct {
 	Elapsed float64
 	Rate    float64
 	McTS    time.Time
+	// media-control 原始的锚点 elapsedTime(未经任何派生)。只用来判"这个锚点是不是开播那个"
+	// (0 = 开播锚点;>0 = 播放器后来重新发布的锚点:暂停冻结 / 恢复 / 拖动)—— Spotify 自然切歌
+	// 偏置只属于开播锚点,见 updatePosition 里清零那一处(2026-09-07)。
+	AnchorElapsed float64
 	// Collector-tracked live position (seconds) at AnchorTS (= submit time). This
 	// is what we publish; the web extrapolates Position + (now-AnchorTS)*Rate over
 	// a short, always-fresh window rather than from media-control's stale McTS.
@@ -49,14 +53,15 @@ func extract(state map[string]any) snapshot {
 		}
 	}
 	return snapshot{
-		Title:    str("title"),
-		Artist:   str("artist"),
-		Album:    str("album"),
-		Bundle:   str("bundleIdentifier"),
-		Duration: num("duration"),
-		Playing:  playing,
-		Elapsed:  num("elapsedTime"),
-		Rate:     num("playbackRate"),
-		McTS:     mcTS,
+		Title:         str("title"),
+		Artist:        str("artist"),
+		Album:         str("album"),
+		Bundle:        str("bundleIdentifier"),
+		Duration:      num("duration"),
+		Playing:       playing,
+		Elapsed:       num("elapsedTime"),
+		Rate:          num("playbackRate"),
+		McTS:          mcTS,
+		AnchorElapsed: num("anchorElapsedTime"),
 	}
 }

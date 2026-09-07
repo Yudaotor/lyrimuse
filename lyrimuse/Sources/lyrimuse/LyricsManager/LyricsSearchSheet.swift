@@ -99,6 +99,60 @@ struct LyricsSearchSheet: View {
         Set(candidates.map(\.source))
     }
 
+    // 传输层就没打通的源(2026-09-06):collector 对"这一轮一个 HTTP 响应都没拿到"的源报
+    // dns_failed / connect_failed / server_error(sourcebreaker.go 最后一节的传输层分类),对"上游
+    // 死了、根本没法查"的 AMLL 报 upstream_unreachable(searchcli.go 派生),经 sourceFailureReasonCodes
+    // 传到这里。空状态据此把「连不上」和「没给出候选」分开说 —— 起因是用户报「派对后派对 搜不到」:
+    // 公司 VPN 下发的 DNS 对六个源的域名一律不答,而 networkLooksDown 却是 false(它要求进程内
+    // **所有**请求全失败,Apple / YouTube 的域名同一台 DNS 能答),弹窗照实显示「九个源都没找到
+    // 可用的候选」,把"连不上"报成了"没收录"。
+    // 四个代码的顺序就是展示顺序:DNS 是最靠前、最能解释其它现象的那一层。这份表是 Go 侧
+    // lyricSourceTransportFailureOrder + upstream_unreachable 的手抄,lyricsourcefailure_test.go
+    // (TestSwiftSearchSheetTransportCodesMatchGo)钉着两边一致 —— 少一个的后果是那个代码的源
+    // 掉进「其余 N 个源」、又变回"连不上报成没收录"。
+    private static let transportFailureCodes = ["dns_failed", "connect_failed", "server_error", "upstream_unreachable"]
+
+    /// 按失败代码分组的没连上的源;组内源的顺序跟名单一致。给过候选的源无论代码如何都不算
+    /// (collector 那边本来就不会给它们代码,这里再守一道)。
+    private var unreachableSourcesByCode: [(code: String, sources: [String])] {
+        Self.transportFailureCodes.compactMap { code in
+            let sources = Self.allLyricSourceNames.filter {
+                !respondedSources.contains($0) && sourceFailureReasonCodes[$0] == code
+            }
+            return sources.isEmpty ? nil : (code, sources)
+        }
+    }
+
+    /// 空状态里一行一组:「**原因**：源 A、源 B」—— **理由加粗**、源名保持常规(2026-09-06 用户
+    /// 要求:「理由和失败的歌词源区分度不高」)。跟 LyricSourceFailureReason 那边给「歌词源可用
+    /// 情况」明细用的整句解释是两个场合,这里只要一个名词短语。源名用「、」拼,跟
+    /// LyricsDecisionSheet「本轮应答的源：%@」那处同一写法。
+    ///
+    /// ⚠️ 为什么绕哨兵这一圈,而不是把模板拆成「理由」和「源名」两个 key:拆了要新增四条
+    /// 本地化字符串 × 三种语言,而**需要的信息模板里已经有了** —— `%@` 的位置就是源名的位置,
+    /// 除它以外的部分就是理由。所以拿 U+FFFC(对象替换符,正文里永远不会出现)当占位符格式化
+    /// 一次,再按它切开、照原顺序拼回去:即使某种语言把 `%@` 挪到句首或句中,加粗的仍然只是
+    /// "非源名"那部分,顺序也不会乱 —— 这是按标点(「：」/「:」)切分做不到的。
+    private static func transportFailureLine(_ code: String, sources: [String]) -> Text {
+        let names = sources.map(sourceDisplayName).joined(separator: "、")
+        // ⚠️ `case "<code>":` 这几个字面量是跨语言契约的锚点,lyricsourcefailure_test.go 的
+        // TestSwiftSearchSheetTransportCodesMatchGo 直接在源码里搜它们 —— 改写法前先改那个测试。
+        let template: String
+        switch code {
+        case "dns_failed": template = L10n.t("域名解析失败（DNS）：%@")
+        case "connect_failed": template = L10n.t("连接失败或超时：%@")
+        case "server_error": template = L10n.t("服务器报错（5xx）：%@")
+        case "upstream_unreachable": template = L10n.t("上游源没连上、没法查：%@")
+        default: template = code + ": %@"
+        }
+        let sentinel = "\u{FFFC}"
+        let parts = String(format: template, sentinel).components(separatedBy: sentinel)
+        // 模板里没有 `%@`(翻译把占位符漏了)时只切得出一段:整段加粗、源名照旧补在后面,
+        // 宁可样式不完美也不能把源名吞掉。
+        guard parts.count >= 2 else { return Text(parts[0]).bold() + Text("：" + names) }
+        return Text(parts[0]).bold() + Text(names) + Text(parts.dropFirst().joined(separator: sentinel))
+    }
+
     @State private var showSourceAvailability = false
 
     /// 这一轮**开着**的源(rawValue)。开搜那一刻从 FeatureSettingsStore 快照——collector 子进程
@@ -441,6 +495,46 @@ struct LyricsSearchSheet: View {
                     Label(L10n.t("网络似乎不通"), systemImage: "wifi.slash")
                 } description: {
                     Text(L10n.t("九个源的请求全部失败，很可能是网络连接有问题，不是这首歌真的没有歌词——检查网络后可以点下面的「重试」"))
+                } actions: {
+                    Button(L10n.t("重试")) { Task { await load() } }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if !unreachableSourcesByCode.isEmpty {
+                // 2026-09-06 补上——排在「网络似乎不通」(全部请求都失败)之后、「纯音乐」之前:
+                // 部分源在传输层就没打通(DNS 不答 / 连不上 / 只回 5xx / 上游死了没法查),这不是
+                // "查过了没有",是"根本没查到"。一组一行列出是哪些源、为什么;其余源只说「没有给出
+                // 候选」—— 评审时抓到过更强的措辞「查过了，没有这首歌」说过头:剩下的里面可能有带
+                // 具体原因的(lyricfind 地区限制、Musixmatch 限流,头部徽标点开就写着)、只回 403 的、
+                // 被 20 秒截止砍掉的,都不是"没有这首歌"。跟「歌词源可用情况」那里的「未给出候选」
+                // 同一口径,不在这里替它们下结论。具体到每个源的整句解释在头部徽标点开的明细里。
+                let groups = unreachableSourcesByCode
+                let unreachableCount = groups.reduce(0) { $0 + $1.sources.count }
+                // sourcesTotal 是 collector 报的启用源数(未启用的源不会有代码),一个不剩才算"全都"。
+                let allUnreachable = sourcesTotal > 0 && unreachableCount >= sourcesTotal
+                let otherCount = max(0, sourcesTotal - unreachableCount)
+                ContentUnavailableView {
+                    Label(allUnreachable
+                          ? L10n.t("歌词源全都没连上")
+                          : String(format: L10n.t("有 %@ 个歌词源没连上"), "\(unreachableCount)"),
+                          systemImage: "wifi.exclamationmark")
+                } description: {
+                    VStack(spacing: 4) {
+                        ForEach(groups, id: \.code) { group in
+                            // 已经是拼好的 Text(理由段加粗 + 源名段常规),别再往外套一层 Text。
+                            Self.transportFailureLine(group.code, sources: group.sources)
+                        }
+                        if groups.contains(where: { $0.code == "dns_failed" }) {
+                            Text(L10n.t("常见于 VPN / 公司网络接管了 DNS；浏览器能开网页不代表这里能通"))
+                        }
+                        if instrumental {
+                            // 有源明确说这首是纯音乐 —— 比"其余源没给出候选"更确定的结论,不能被这个
+                            // 分支盖掉(评审指出的顺序问题:纯音乐分支排在后面,一旦有源没连上就永远
+                            // 到不了)。复用纯音乐分支那句 key。
+                            Text(L10n.t("有源明确说这首是纯音乐，没有可用的歌词候选"))
+                        } else if !allUnreachable {
+                            Text(String(format: L10n.t("其余 %@ 个源没有给出候选"), "\(otherCount)"))
+                        }
+                    }
                 } actions: {
                     Button(L10n.t("重试")) { Task { await load() } }
                 }

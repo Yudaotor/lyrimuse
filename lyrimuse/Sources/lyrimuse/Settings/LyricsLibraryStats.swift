@@ -86,9 +86,24 @@ extension LyricsKind {
     var tint: Color {
         self == .none ? .orange : .primary
     }
+
+    /// 比例条上这一段(以及图例里那个色点)的颜色。跟上面 `tint` 是两回事:数字仍然只有「暂无」
+    /// 染色;条和点没颜色就没法对应,所以这里必须有色 —— 但仍守着"别一片彩灯"那条:三个"有词"
+    /// 的桶用**同一个** accent 色相、只变明度(逐字 → 逐行 → 纯文本读作时间轴精细度递减),
+    /// 「纯音乐」既不是好也不是坏,给中性灰;整条只有「暂无」一处异色,眼睛自然落在它上面。
+    var barColor: Color {
+        switch self {
+        case .wordByWord: return .accentColor
+        case .lineByLine: return .accentColor.opacity(0.55)
+        case .plainText: return .accentColor.opacity(0.28)
+        case .instrumental: return Color.secondary.opacity(0.35)
+        case .none: return .orange
+        }
+    }
 }
 
-/// 「歌词库」标题行尾部那个占用空间(2026-09-04 用户要求,截图指的就是这一行右端的空位)。
+/// 歌词库统计块顶行右端那个占用空间(2026-09-04 用户要求加的;2026-09-06 改版从「歌词库」
+/// 行尾挪到「共 N 首」那一行的尾部,仍是裸值)。
 ///
 /// 数字直接用 `EnrichCacheStore.totalSizeBytes` —— 「歌词管理」工具栏一直在显示的同一个值
 /// (lyrics/ 权威源文件夹 + 缓存 JSON 本身),没有新增任何磁盘扫描。渲染口径也共用
@@ -97,7 +112,7 @@ extension LyricsKind {
 /// ⚠️ **算不出来就什么都不显示,绝不显示「零字节」**。`totalSizeBytes` 的初值是 0,而
 /// `refreshSizeBytes()` 是个 detached task —— 首次打开这一页时有一小段窗口期值还是 0;
 /// 另外 `clearAll()` 也会把它硬置 0。这两种情况下摆一个"0 字节"是在报一个假数字,而空库
-/// 本来就有下面面板那句「还没有缓存任何歌词」在说话,这里再补一个 0 只会互相打架。
+/// 本来就有面板那句「还没有缓存任何歌词」在说话,这里再补一个 0 只会互相打架。
 ///
 /// 单独一个小 View 的理由跟下面的统计面板一样:`EnrichCacheStore` 是个有七八个
 /// `@Published` 的单例,订阅面收在真正用得到的这一小块里,别让整页跟着重画。
@@ -105,9 +120,8 @@ struct LyricsLibrarySizeLabel: View {
     @ObservedObject private var store = EnrichCacheStore.shared
 
     var body: some View {
-        // 尾部只放**裸数字**、不写「占用 」前缀:同一张卡里「歌词文件夹」那一行的尾部也是
-        // 裸路径,加了前缀反而跟邻行不齐。含义交给 help 气泡和 accessibilityLabel 带,
-        // 两者都不占版面。
+        // 只放**裸数字**、不写「占用 」前缀:下一张卡「歌词文件夹」那一行的尾部也是裸路径,
+        // 加了前缀反而跟邻行不齐。含义交给 help 气泡和 accessibilityLabel 带,两者都不占版面。
         if store.totalSizeBytes > 0 {
             Text(EnrichCacheStore.byteText(store.totalSizeBytes))
                 .font(.system(size: 11))
@@ -122,12 +136,24 @@ struct LyricsLibrarySizeLabel: View {
     }
 }
 
-/// 设置页「歌词管理」卡里的统计面板。
+/// 设置页「歌词库」卡卡名行以下的整块内容:统计块 + 译文 / 罗马音两条从属行。
 ///
-/// ⚠️ 单独一个 View 而不是把 `@ObservedObject` 挂到 `LyricsSettingsTab` 上:`EnrichCacheStore`
-/// 是个有七八个 `@Published` 的单例,整页订阅它意味着任何一次 reload / 体积重算都要重画整张
-/// 设置页。这个仓库为"@ObservedObject 订阅整个单例"踩过真实的过度重渲染 bug(见
-/// OnboardingView 里 isPlayingNow 那段注释),把订阅面收在这一小块里。
+/// 2026-09-06 改版。之前是「总数 / 逐字 / 逐行 / 纯文本 / 纯音乐 / 暂无」六格等宽数字 + 一行竖线
+/// 拼接的「译文 … | … 罗马音」密文 + 一颗孤悬左下的「重新扫描」按钮。三处问题:总数跟五个桶是
+/// 整体/部分关系却排成六个平级格子、看不出比例;密文像调试输出;重新扫描按钮跟它对应的橙色
+/// 「暂无」数字在版面上没有关联(而它的数字 74 还跟「暂无」的 65 对不上)。
+///
+/// 现在的读法照系统设置「通用 → 储存空间」:一行「共 3,669 首 ／ 97 MB」,下面一条分段比例条,
+/// 再一行四个"既成事实"桶的图例;「暂无」单独成一行 —— 橙色数字在左、「重新扫描（74 首）」在
+/// 同一行尾部,数字旁一个 ⓘ 说清 74 为什么不是 65。译文 / 罗马音拆成两条「标签在左、裸值在右」
+/// 的从属行。
+///
+/// ⚠️ 这个 View 自己持 `@ObservedObject EnrichCacheStore.shared`,而**不是**把它挂到
+/// `LyricsSettingsTab` 上:`EnrichCacheStore` 是个有七八个 `@Published` 的单例,整页订阅它意味着
+/// 任何一次 reload / 体积重算都要重画整张设置页。这个仓库为"@ObservedObject 订阅整个单例"踩过
+/// 真实的过度重渲染 bug(见 OnboardingView 里 isPlayingNow 那段注释),把订阅面收在这一块里 ——
+/// 也正因如此,译文 / 罗马音那两条行(它们读的是同一份 counts)也放在这里而不是 managementCard,
+/// 免得为了传 counts 让外层再订阅一次。
 struct LyricsLibraryStatsPanel: View {
     @ObservedObject private var store = EnrichCacheStore.shared
     // collector 侧补空扫描的进度快照(LyricsFillSweep,进度文件按 mtime 读),由下面那个 .task 轮询。
@@ -147,46 +173,59 @@ struct LyricsLibraryStatsPanel: View {
 
     var body: some View {
         let counts = LyricsLibraryStats.counts(store.summaries)
-        VStack(alignment: .leading, spacing: 8) {
+        // ⚠️ 用 VStack(spacing: 0) 而不是 Group 装这几行:修饰符挂在 Group 上会**逐个**作用到每个
+        // 子视图 —— 下面那个 .task 就会跑出三份轮询循环。外层卡片本身就是 VStack(spacing: 0),
+        // 这里再套一层对布局零影响。
+        VStack(spacing: 0) {
             if store.summaries.isEmpty && store.isLoading {
-                HStack(spacing: 8) {
-                    ProgressView().controlSize(.small)
-                    Text(L10n.t("正在统计歌词库…"))
-                        .font(.system(size: 11))
-                        .foregroundStyle(.secondary)
-                }
-            } else if counts.total == 0 {
-                // 空库不是错误,是新装的常态 —— 说清楚下一步会发生什么,别摆一排 0。
-                Text(L10n.t("还没有缓存任何歌词。放一首歌，Lyrimuse 会自动搜好存在这里"))
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            } else {
-                HStack(alignment: .top, spacing: 0) {
-                    cell(value: counts.total, label: L10n.t("总数"), tint: .primary)
-                    ForEach(LyricsLibraryStats.Kind.allCases, id: \.self) { kind in
-                        cell(value: counts.count(kind), label: kind.label, tint: kind.tint)
+                SettingsRawRow(insetToText: true, icon: "music.note.list") {
+                    HStack(spacing: 8) {
+                        ProgressView().controlSize(.small)
+                        Text(L10n.t("正在统计歌词库…"))
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
                     }
                 }
-                HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    Text(String(
-                        format: L10n.t("译文 %1$@ 首源自带 · %2$@ 首机翻　|　%3$@ 首已缓存罗马音"),
-                        Self.format(counts.communityTranslation),
-                        Self.format(counts.machineTranslation),
-                        Self.format(counts.bundledRomanization)))
+            } else if counts.total == 0 {
+                // 空库不是错误,是新装的常态 —— 说清楚下一步会发生什么,别摆一排 0、也别画一条空比例条。
+                SettingsRawRow(insetToText: true, icon: "music.note.list") {
+                    Text(L10n.t("还没有缓存任何歌词。放一首歌，Lyrimuse 会自动搜好存在这里"))
                         .font(.system(size: 11))
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
-                    // 必须配一句解释,否则用户会拿这个数当"有多少首歌能看到罗马音"来读 ——
-                    // 而那个数更大(见 Counts.bundledRomanization 的头注)。
-                    //
-                    // ⚠️ 文案 2026-09-03 砍过一轮(用户原话「不要说那么多有的没的」)。删掉的是
-                    // "三条来路"的枚举和"哪些歌走实时生成"的举例 —— 那些是**开发者**需要知道的,
-                    // 记在代码和第 10 章 §5 里就够了,不该占用户的气泡。留下的两句回答的是用户
-                    // 站在这个数字前面唯一会问的问题:这个数到底在数什么、没被数的去哪了。
-                    HelpButton(text: L10n.t("只数存进缓存、会随歌词文件一起导出的那些。其余歌曲的罗马音在播放时实时生成，不计入"))
                 }
-                fillSweepRow
+            } else {
+                SettingsRawRow(insetToText: true, icon: "music.note.list") {
+                    statsBlock(counts)
+                }
+                CardDivider()
+                // 译文 / 罗马音是叠在歌词之上的第二层数据,不参与上面那条比例条(它们跟五个桶不是
+                // 互斥的划分),所以用从属行的语法挂在统计块下面:标签在左、裸值在右,跟系统设置一样直读。
+                SettingsSubRow(title: L10n.t("译文")) {
+                    Text(String(
+                        format: L10n.t("%1$@ 首源自带 · %2$@ 首机翻"),
+                        Self.format(counts.communityTranslation),
+                        Self.format(counts.machineTranslation)))
+                        .font(.system(size: 11))
+                        .monospacedDigit()
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+                CardDivider()
+                // 标题直接写「已缓存」:这个数**不是**"有多少首歌看得到罗马音"——App 侧 Romanizer 有
+                // 客户端现算兜底,缓存里没有的照样会在渲染时现算(见 Counts.bundledRomanization 头注)。
+                // ⓘ 只留两句:这个数在数什么、没被数的去哪了(文案 2026-09-03 砍过一轮,用户原话
+                // 「不要说那么多有的没的」;"三条来路"的枚举留在代码注释和第 10 章 §5 里)。
+                SettingsSubRow(
+                    title: L10n.t("已缓存罗马音"),
+                    help: L10n.t("只数存进缓存、会随歌词文件一起导出的那些。其余歌曲的罗马音在播放时实时生成，不计入")
+                ) {
+                    Text(String(format: L10n.t("%@ 首歌"), Self.format(counts.bundledRomanization)))
+                        .font(.system(size: 11))
+                        .monospacedDigit()
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
             }
         }
         // `onlyIfChanged` 让重复进出这一页不重复解析整份缓存(全库几千条,那是一次真实的
@@ -208,62 +247,115 @@ struct LyricsLibraryStatsPanel: View {
         }
     }
 
-    /// 「重新扫描」入口(2026-09-05 用户要求"在这个页面也加一个重新扫描的入口"):对「暂无」那批
-    /// 让 collector 现在就重搜一遍——跟「歌词管理」工具栏那颗「重试无歌词」是同一条通道
-    /// (LyricsFillSweep,见第 09 章「补空扫描」),只是入口开在用户正盯着那个橙色数字的地方。
-    /// 数字按 EnrichCacheStore.isFillSweepRetryable 算(「暂无」+ 有纯文本兜底的,人工修正过的
-    /// 除外),所以可能跟左边「暂无」那格差一两首——按钮说的是"真会被搜的条数",不是重复那格。
-    /// 跑着的时候换成圆环进度 + 「停止重试」;上一轮结果留一句收据。
-    private var fillSweepRow: some View {
+    // MARK: 统计块
+
+    /// 「共 N 首 ／ 97 MB」→ 比例条 → 四桶图例 → 「暂无」行。
+    private func statsBlock(_ counts: LyricsLibraryStats.Counts) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline) {
+                Self.totalText(counts.total)
+                    .accessibilityLabel(String(format: L10n.t("共 %@ 首"), Self.format(counts.total)))
+                Spacer(minLength: 12)
+                LyricsLibrarySizeLabel()
+            }
+            SettingsProportionBar(segments: LyricsLibraryStats.Kind.allCases.map { kind in
+                .init(id: kind.rawValue, value: counts.count(kind), color: kind.barColor)
+            })
+            // 图例分两行:上面四个是既成事实的桶,下面「暂无」独占一行 —— 它既是比例条橙色段的
+            // 图例项,又是唯一带动作的桶,单拎出来才能让按钮跟橙色数字落在同一条水平线上
+            // (2026-09-05 用户要求重新扫描的入口"开在盯着橙色数字的地方")。
+            HStack(spacing: 14) {
+                ForEach(LyricsLibraryStats.Kind.allCases.filter { $0 != .none }, id: \.self) { kind in
+                    legendItem(kind, value: counts.count(kind))
+                }
+            }
+            noneRow(counts)
+        }
+    }
+
+    /// 「共 3,669 首」:数字加粗、前后的字常规。三种语言各自决定数字前后写什么(英文是
+    /// "3,669 songs"),所以按格式键里的 `%@` 切开再拼,而不是写死"数字 + 首"。
+    private static func totalText(_ count: Int) -> Text {
+        let number = Text(format(count))
+            .font(.system(size: 15, weight: .semibold))
+            .monospacedDigit()
+        let parts = L10n.t("共 %@ 首").components(separatedBy: "%@")
+        guard parts.count == 2 else { return number }
+        let body = Font.system(size: 13)
+        return Text(parts[0]).font(body) + number + Text(parts[1]).font(body)
+    }
+
+    /// 一个图例项:色点 + 标签 + 数字。数字一律 primary —— 只有「暂无」染色的规矩没变,见 LyricsKind.tint。
+    private func legendItem(_ kind: LyricsLibraryStats.Kind, value: Int) -> some View {
+        HStack(spacing: 5) {
+            Circle()
+                .fill(kind.barColor)
+                .frame(width: 7, height: 7)
+            Text(kind.label)
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+            Text(Self.format(value))
+                .font(.system(size: 11, weight: .semibold))
+                .monospacedDigit()
+                .foregroundStyle(value > 0 ? kind.tint : Color.primary)
+        }
+        .lineLimit(1)
+        .fixedSize()
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(kind.label)：\(Self.format(value))")
+    }
+
+    /// 「暂无」行 = 图例项 + ⓘ + 尾部的「重新扫描」入口(2026-09-05 用户要求"在这个页面也加一个
+    /// 重新扫描的入口"):对没歌词那批让 collector 现在就重搜一遍 —— 跟「歌词管理」工具栏那颗
+    /// 「重试无歌词」是同一条通道(LyricsFillSweep,见第 09 章「补空扫描」)。
+    ///
+    /// 按钮上的数按 EnrichCacheStore.isFillSweepRetryable 算:「暂无」+ 只有纯文本兜底的,人工修正过的
+    /// 除外 —— 所以它跟左边「暂无」那个数**就是**对不上的(本机 65 vs 74),ⓘ 一句话说清范围;
+    /// 按钮说的是"真会被搜的条数",这一点是 2026-09-05 定下的,别为了让两个数一致去改它。
+    /// 跑着的时候按钮原位换成圆环进度 + 「扫描中 12/74」+ 「停止」;上一轮结果在按钮左边留一句收据。
+    private func noneRow(_ counts: LyricsLibraryStats.Counts) -> some View {
         let status = fillSweepStatus
         let retryable = store.summaries.filter(EnrichCacheStore.isFillSweepRetryable).count
         return HStack(spacing: 10) {
+            HStack(spacing: 4) {
+                legendItem(.none, value: counts.count(.none))
+                HelpButton(text: L10n.t("重新扫描的范围：没有歌词的，加上只有纯文本的；人工修正过的不动"))
+            }
+            Spacer(minLength: 12)
             if let status, status.running {
                 ProgressView(value: Double(status.done), total: Double(max(status.total, 1)))
                     .progressViewStyle(.circular)
                     .controlSize(.small)
-                Text(String(format: L10n.t("重试中 %1$@/%2$@"), "\(status.done)", "\(status.total)"))
+                Text(String(format: L10n.t("扫描中 %1$@/%2$@"), "\(status.done)", "\(status.total)"))
                     .font(.system(size: 11))
                     .monospacedDigit()
                     .foregroundStyle(.secondary)
-                Button(L10n.t("停止重试")) { LyricsFillSweep.requestCancel() }
+                    .lineLimit(1)
+                Button(L10n.t("停止")) { LyricsFillSweep.requestCancel() }
                     .controlSize(.small)
+                    .fixedSize()
             } else {
-                Button {
-                    LyricsFillSweep.request(keys: [])
-                } label: {
-                    Label(String(format: L10n.t("重新扫描无歌词条目（%@ 首）"), Self.format(retryable)),
-                          systemImage: "arrow.triangle.2.circlepath")
-                }
-                .controlSize(.small)
-                .disabled(retryable == 0)
-                .help(L10n.t("让采集服务现在就把没有歌词的条目重新搜一遍，不用等每首歌再次播放"))
                 if let status, status.finishedAt != nil {
                     Text(String(format: L10n.t("上次：搜了 %1$@ 首，补出 %2$@ 首"), "\(status.done)", "\(status.filled)"))
                         .font(.system(size: 11))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(.tertiary)
                         .lineLimit(1)
                 }
+                // 不带 SF Symbol:同一行左边已经写着「暂无」,再叠一个 ⟳ 是往控件上加装饰
+                // (2026-09-05 结论:要强调就改文字,别叠图标)。
+                Button(String(format: L10n.t("重新扫描（%@ 首）"), Self.format(retryable))) {
+                    LyricsFillSweep.request(keys: [])
+                }
+                // 跟卡名行的「打开歌词管理」同一档 .small:这一行别的内容都是 11pt,常规尺寸的按钮
+                // 在这里显得笨重(真机截图对比过);主行「歌词文件夹」尾部那两颗仍是常规尺寸,它们配的是 13pt 标题。
+                .controlSize(.small)
+                .fixedSize()
+                .disabled(retryable == 0)
+                .help(L10n.t("让采集服务现在就把没有歌词的条目重新搜一遍，不用等每首歌再次播放"))
             }
         }
-    }
-
-    private func cell(value: Int, label: String, tint: Color) -> some View {
-        VStack(spacing: 2) {
-            Text(Self.format(value))
-                .font(.system(size: 15, weight: .semibold))
-                .monospacedDigit()
-                .foregroundStyle(tint)
-            Text(label)
-                .font(.system(size: 10))
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
-        }
-        // 均分整行宽度:格子数是固定的 6 个(总数 + 五个桶),等分比按内容宽度排更稳 ——
-        // 数字位数会随着库变大而变化,按内容排会让这一排每次打开都轻微错位。
-        .frame(maxWidth: .infinity)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(label)：\(Self.format(value))")
+        // 这一行的按钮跟主行尾部的按钮是同一族控件,套同一套玻璃样式(它不在 SettingsRow 的
+        // trailing 插槽里,那层修饰符够不着这里)。
+        .settingsGlassButtons()
     }
 }

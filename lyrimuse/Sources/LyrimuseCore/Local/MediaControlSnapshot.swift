@@ -21,6 +21,11 @@ public struct MediaControlSnapshot: Decodable {
     // 供 LocalPlaybackSource 判断"这次是不是 Spotify 在报告"(用于 Spotify 广告插播
     // 检测),不参与 trackKey/既有逻辑,纯附加信息。
     public let bundleIdentifier: String?
+    // media-control 原始的锚点 elapsedTime(未经 livePositionSeconds 派生;AppleScript 路径为 nil)。
+    // 只用来判"这个锚点是不是开播那个":0 = 开播锚点;>0 = 播放器后来重新发布的锚点(暂停冻结 /
+    // 恢复 / 拖动)。Spotify 自然切歌偏置只属于开播锚点,见 LocalPlaybackSource.biasSurvivesAnchor
+    // (2026-09-07)。纯附加信息,不参与 trackKey/既有逻辑。
+    public let anchorElapsedTime: Double?
 
     public var trackKey: String { Self.trackKey(artist: artist, title: title) }
 
@@ -41,6 +46,7 @@ public struct MediaControlSnapshot: Decodable {
         MediaControlSnapshot(
             title: title, artist: artist, album: newAlbum, duration: duration,
             elapsedTime: elapsedTime, playing: playing, playbackRate: playbackRate,
-            isMusicApp: isMusicApp, bundleIdentifier: bundleIdentifier)
+            isMusicApp: isMusicApp, bundleIdentifier: bundleIdentifier,
+            anchorElapsedTime: anchorElapsedTime)
     }
 }

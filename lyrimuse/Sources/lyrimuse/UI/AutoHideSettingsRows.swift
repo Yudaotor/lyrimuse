@@ -30,12 +30,13 @@ import SwiftUI
 //  格子版式不画副标题和 ⓘ 气泡,并进 `allCases` 会静默丢掉文案。那张卡当天就被换成浮层了,
 //  这条不再成立;**上面那条按形态分流的理由没变**。)
 //
-// ⚠️ **宿主有四个,增删内容必须四处一起对**(漏一处不会编译报错,只会表现成"在这个入口
-// 改了有用、在那个入口找不到"):
-//   ① 悬浮歌词:编辑台工具栏第二行「行为」浮层(`OverlayBehaviorPopover`)
-//   ② 悬浮歌词:「全部设置」抽屉「窗口」组(`OverlayAllSettingsDrawer.windowGroup`)
-//   ③ 灵动岛:编辑台工具栏「行为」浮层(`NotchBehaviorPopover`)
-//   ④ 灵动岛:「全部设置」抽屉「行为」组(`NotchAllSettingsDrawer.behaviorGroup`)
+// ⚠️ **宿主有两处(每个形态一份分组视图),增删内容必须一起对**(漏一处不会编译报错,只会表现成
+// "在这个入口改了有用、在那个入口找不到"):
+//   ① 悬浮歌词:`OverlayBehaviorSettingsRows`(OverlayBehaviorSettingsRows.swift)—— 2026-09-07 起
+//      工具栏「行为」浮层和「全部设置」抽屉「行为」组(此前叫「窗口」组)调的是这同一份视图
+//   ② 灵动岛:`NotchBehaviorSettingsRows`(SettingsView.swift)—— 同日同一条改法,工具栏「行为」浮层
+//      和「全部设置」抽屉「行为」组调同一份
+// (2026-09-07 之前是四处:两个形态各自的浮层和抽屉组分别拼一次,靠注释警告别漏。)
 // (① 2026-09-02 当天又搬过一次:并进来时它还是编辑台下面那张常驻卡 `OverlayBehaviorBar`
 //  的末尾两行,同日用户要求"和灵动岛设置页一样…放到上面的小按钮里面,点了出现下拉框",
 //  那张卡整个删掉、五项进了浮层。**值仍然是两份**,这次搬家不影响那条禁令。)
@@ -44,7 +45,7 @@ import SwiftUI
 // 算进去 —— 漏了就会出现"浮层里两个开关都开着、按钮摘要仍然写着「全部关闭」"这种会撒谎的
 // 派生值。
 //
-// ⚠️ **分隔线的分工**(同 OverlayBehaviorSettingsRows / NotchBehaviorItemRows 的约定):
+// ⚠️ **分隔线的分工**(同 OverlayBehaviorSettingsRows / NotchBehaviorSettingsRows 的约定):
 // 本组件只在**自己两行之间**插一条 `CardDivider()`,首尾都不插;"本组之前"那一条由宿主插。
 // `SettingsCard` 只是 `VStack(spacing: 0)`,不会替谁补分隔线。
 
@@ -182,7 +183,7 @@ enum AutoHideItem: String, CaseIterable, Identifiable {
 /// `NotchBehaviorPopover` 自己都不观察 `AppSettings`,现在只靠父层(`AppearanceSettingsTab` /
 /// `NotchEditorStage`)的对象级失效顺带刷新。新组件继续吃这个隐式依赖的话,哪天它被放进第五个
 /// 不观察 AppSettings 的宿主,开关就会显示陈旧值("在另一个入口改完再回来看,还是旧的")。
-/// 同 `NotchBehaviorItemRows`。
+/// 同 `NotchLyricRowSettingsRows`。
 @MainActor
 struct AutoHideSettingsRows: View {
     let surface: AutoHideSurface
