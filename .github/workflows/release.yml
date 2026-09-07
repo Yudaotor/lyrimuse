@@ -139,7 +139,19 @@ jobs:
         # ungive/media-control(BSD-3-Clause),build.sh 会把它拷进 .app 包——不装的话
         # build.sh 只是打个警告跳过这一步,不会让整个构建失败,但发布出去的这份 zip 就
         # 不支持切到 QQ 音乐。GitHub 的 macOS runner 镜像自带 Homebrew。
-        run: brew install media-control
+        #
+        # 版本必须等于 build.sh 里钉住的 MC_PIN_VER(现为 0.7.6):0.7.7 起 homebrew-core
+        # 不再产 Intel bottle,-intel 变体的 x86_64 切片只能来自钉住的 0.7.6 blob,而两半
+        # 版本不一致 build.sh 会拒绝 lipo、打包闸随即拒收(v1.6.0 第一次打 tag 的实录)。
+        # runner 镜像的 brew 索引哪天更新到 0.7.7,这里就会在构建前几分钟内早早红掉、
+        # 并把重新钉版的位置指出来,而不是等 15 分钟构建完才在打包闸上失败。
+        run: |
+          brew install media-control
+          got="$(brew list --versions media-control | awk '{print $2}')"
+          if [ "$got" != "0.7.6" ]; then
+            echo "::error::runner 的 brew 装出 media-control $got,与钉住的 0.7.6 不一致——去 lyrimuse/build.sh 的 MC_PIN_VER 段重新钉版(本步的 0.7.6 同步改)" >&2
+            exit 1
+          fi
 
       - name: Determine version string
         id: version

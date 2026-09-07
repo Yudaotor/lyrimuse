@@ -335,22 +335,21 @@ if [ -x "$MEDIA_CONTROL_PREFIX/bin/media-control" ]; then
   if [ "$UNIVERSAL" = 1 ]; then
     MC_FW="$APP_DIR/Contents/Resources/media-control/Frameworks/MediaRemoteAdapter.framework"
     MC_VER="$(brew list --versions media-control | awk '{print $2}')"
-    MC_META="$(curl -fsS https://formulae.brew.sh/api/formula/media-control.json | /usr/bin/python3 -c '
-import json, sys
-d = json.load(sys.stdin)
-files = d["bottle"]["stable"]["files"]
-cand = [t for t in files if not t.startswith("arm64_") and not t.endswith("_linux")]
-print(cand[0], files[cand[0]]["sha256"], d["versions"]["stable"]) if cand else print("")
-' || true)"
-    MC_TAG="$(echo "$MC_META" | awk '{print $1}')"
-    MC_SHA="$(echo "$MC_META" | awk '{print $2}')"
-    MC_API_VER="$(echo "$MC_META" | awk '{print $3}')"
-    if [ -z "$MC_SHA" ]; then
-      echo "!! media-control 没有 Intel bottle(只有 arm64)——x86_64 上 QQ 音乐支持不可用" >&2
-    elif [ "$MC_VER" != "$MC_API_VER" ]; then
-      echo "!! media-control 本机版本 $MC_VER 与 formula 当前版本 $MC_API_VER 不一致,跳过 lipo(先 brew upgrade media-control)" >&2
+    # Intel 切片钉死在 0.7.6:media-control 0.7.7(2026-09-03,恰在 v1.5.0 发完三小时后)起
+    # homebrew-core 不再产任何 Intel bottle(Homebrew 弃养 x86_64 macOS),原来这里查
+    # formulae.brew.sh 实时 JSON 挑 Intel tag 的路子从此永远落空——v1.6.0 第一次打 tag 就是
+    # 这样被打包闸拒掉的。0.7.6 的 sonoma bottle blob 在 ghcr 按内容寻址、老版本长期可取,
+    # sha256 抄自 homebrew-core 4d7e1515ad 的 formula。要升级钉版:先确认新版有没有恢复
+    # Intel bottle;没有的话要么继续用 0.7.6 的 x86 半边(版本不一致,下面的守卫会拒绝合并),
+    # 要么在仓里 vendor 一对 universal 二进制。release.yml 的安装步钉着 arm 半边的同一个
+    # 版本号,两处要一起改。
+    MC_PIN_VER="0.7.6"
+    MC_TAG="sonoma"
+    MC_SHA="52a07ebec136e88574c620dfaa6cf2121d37aade09967bf4d6bab0d316ee6aac"
+    if [ "$MC_VER" != "$MC_PIN_VER" ]; then
+      echo "!! media-control 本机版本 $MC_VER 与钉住的 $MC_PIN_VER 不一致,跳过 lipo——x86_64 上 QQ 音乐支持不可用(重新钉版见本段注释)" >&2
     else
-      MC_TGZ="$FAT_DIR/media-control-x86_64-$MC_API_VER.tar.gz"
+      MC_TGZ="$FAT_DIR/media-control-x86_64-$MC_PIN_VER.tar.gz"
       if curl -fsSL -H "Authorization: Bearer QQ==" \
            "https://ghcr.io/v2/homebrew/core/media-control/blobs/sha256:$MC_SHA" -o "$MC_TGZ" \
          && [ "$(shasum -a 256 "$MC_TGZ" | awk '{print $1}')" = "$MC_SHA" ]; then
