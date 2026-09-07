@@ -1898,18 +1898,13 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
     }
 
     /// 快捷操作里的一颗图标键。`label` 同时当 tooltip 和读屏标签 —— 四颗都是纯图标,没有文字。
+    /// 悬停 / 按下反馈在 `NotchIconButton` 里(2026-09-07 加,跟三键同一份)。
     private func quickActionButton(_ systemName: String, label: String, dimmed: Bool = false,
                                    action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: systemName)
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(accentOrWhite.opacity(dimmed ? 0.4 : 0.75))
-                .frame(width: NotchMetrics.trackInfoActionsHeight, height: NotchMetrics.trackInfoActionsHeight)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .help(label)
-        .accessibilityLabel(label)
+        NotchIconButton(systemName: systemName, glyphSize: 11, hitSize: NotchMetrics.trackInfoActionsHeight,
+                        tint: accentOrWhite, glyphOpacity: dimmed ? 0.4 : 0.75, action: action)
+            .help(label)
+            .accessibilityLabel(label)
     }
 
     private var nextLineDisplayText: String {
@@ -1927,7 +1922,8 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
                                action: @escaping () -> Void) -> some View {
         let glyph = glyphSize ?? (primary ? 11 : 9.5)
         let hit = hitSize ?? (primary ? 18 : 15)
-        return Button {
+        return NotchIconButton(systemName: systemName, glyphSize: glyph, hitSize: hit,
+                               tint: accentOrWhite, glyphOpacity: 1) {
             Task {
                 guard await MusicAutomationPermission.checkForCurrentPlayerSafely(askIfNeeded: true) else {
                     NSSound.beep()
@@ -1935,14 +1931,71 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
                 }
                 action()
             }
-        } label: {
+        }
+    }
+}
+
+/// 灵动岛卡片里**所有纯图标键**的那一层壳(2026-09-07,用户:「帮我给灵动岛上那几个按钮加上悬浮高亮的
+/// 效果……现在移动上去都没有什么反馈」):悬停时字形底下浮出一块 `tint` 14% 的圆角底、字形抬到全亮;
+/// 按下底色加深到 24%、整颗缩到 0.9,松手弹回。头部快捷操作四颗、空闲面板三颗、展开卡三键、耳朵三键
+/// 全走这一份 —— 同一张卡上的按钮反馈必须一致,不能一排会亮一排不会(用户点名的是快捷操作那排,三键
+/// 一起改是因为它们就在同一张展开卡里、同一档 22pt 命中框,只改一排等于把不一致做进去)。
+///
+/// * 独立 View 而不是 modifier 函数,理由同菜单栏面板的 `ChipButton`:悬停状态要**每颗键自己**一份
+///   `@State`;按下态从 `ButtonStyle.Configuration.isPressed` 读,不自己追手势。
+/// * 反馈色用 `tint`(卡片的 `accentOrWhite`)的低透明度,不写死白/灰:强调色模式下底色跟字形同色系,
+///   白字模式下就是白色 14%。跟菜单栏面板 `ChipStyle` 拿 `.primary` 低透明度是同一个思路,但这里不能用
+///   `.primary` —— 卡片永远是深底,`.primary` 在浅色系统外观下是黑的。
+/// * 悬停只改字形透明度和底色、**不改尺寸**:命中框恒 `hitSize`,底也画在这个框里,邻居一个像素不动
+///   (同卡进度条 2026-08-19 那条「悬停变粗不许推动邻居」的教训)。
+/// * `reduceMotion` 下不补间,但保留变色和缩放本身 —— 它们是"点到了"的功能反馈,不是装饰(同歌词窗口
+///   `TransportButtonStyle`)。
+/// * SwiftUI 的 `.onHover` 在这扇从不激活 App 的窗口里收得到(同卡进度条 `hoveringScrubber` 早就靠它)。
+///   设置页预览卡整块 `allowsHitTesting(false)`,那里不会亮 —— 预览上这块本来就是点开浮层的热区。
+private struct NotchIconButton: View {
+    let systemName: String
+    let glyphSize: CGFloat
+    let hitSize: CGFloat
+    let tint: Color
+    /// 平时字形的不透明度(快捷操作 0.75 / 关着的「显示歌词」0.4 / 播放三键 1);悬停抬 0.25、封顶 1 ——
+    /// 关着的那颗悬停到 0.65,仍读得出"这是关的",但看得出它在响应。
+    let glyphOpacity: Double
+    let action: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
             Image(systemName: systemName)
-                .font(.system(size: glyph, weight: .semibold))
-                .foregroundStyle(accentOrWhite)
-                .frame(width: hit, height: hit)
+                .font(.system(size: glyphSize, weight: .semibold))
+                .foregroundStyle(tint.opacity(hovering ? min(1, glyphOpacity + 0.25) : glyphOpacity))
+                .frame(width: hitSize, height: hitSize)
                 .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        // 圆角按命中框的比例取(22 → 6,18 → 5,15 → 4),跟歌词窗口 22pt 高的 `OffsetNudgeButton` 用 6 一致。
+        .buttonStyle(NotchIconButtonStyle(tint: tint, cornerRadius: (hitSize * 0.27).rounded(),
+                                          hovering: hovering))
+        .onHover { hovering = $0 }
+    }
+}
+
+private struct NotchIconButtonStyle: ButtonStyle {
+    let tint: Color
+    let cornerRadius: CGFloat
+    let hovering: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func makeBody(configuration: Configuration) -> some View {
+        let pressed = configuration.isPressed
+        let level: Double = pressed ? 0.24 : (hovering ? 0.14 : 0)
+        return configuration.label
+            .background(
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .fill(tint.opacity(level))
+            )
+            // 悬停给的是"这里可按",按下要给"按到了":缩一点、底色再深一档。曲线同菜单栏面板 `ChipStyle`。
+            .scaleEffect(pressed ? 0.9 : 1)
+            .animation(reduceMotion ? nil : .spring(response: 0.18, dampingFraction: 0.65), value: pressed)
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.12), value: hovering)
     }
 }
 
