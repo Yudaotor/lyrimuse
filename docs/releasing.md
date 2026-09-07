@@ -115,3 +115,8 @@
 - `hdiutil attach` 失败报「资源忙」时先 `hdiutil info` 看是不是上一次挂载残留。
 - 本地验 appcast 用过 `defaults write me.yudaotor.lyrimuse SUFeedURL …` 的话，
   验完必须 `defaults delete`，否则所有更新检查静默失败（15 章坑 10）。
+- **media-control 钉版在 0.7.6**（v1.6.0 首次打 tag 的实录，2026-09-07）：0.7.7 起
+  homebrew-core 不再产任何 Intel bottle（Homebrew 弃养 x86_64 macOS），-intel 变体的
+  x86_64 切片只能来自钉住的 0.7.6 sonoma bottle（ghcr 按 sha256 长期可取）。钉在两处、
+  必须联动改：`lyrimuse/build.sh` 的 `MC_PIN_VER` 段（含 blob sha256）与 release.yml 的
+  安装步版本断言。runner 的 brew 索引哪天装出 0.7.7，安装步会在构建前早早红掉并指路。
