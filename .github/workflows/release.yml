@@ -449,7 +449,9 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v3
         with:
-          name: Lyrimuse ${{ steps.version.outputs.version }}
+          # Category words in the title so the release page ranks for what the app IS —
+          # release titles are what search engines and GitHub search surface first.
+          name: Lyrimuse ${{ steps.version.outputs.version }} — macOS Desktop Lyrics for Apple Music & Spotify
           body: ${{ steps.tag.outputs.body }}
           generate_release_notes: true
           # Tags with a "-" (v1.6.0-beta.1) publish as a pre-release: GitHub's releases/latest

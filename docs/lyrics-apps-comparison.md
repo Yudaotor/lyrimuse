@@ -17,7 +17,7 @@ of the actively maintained open-source options:
   macOS 15+. Describes itself as a "spiritual successor to LyricsX".
 - **[Lyrimuse](https://github.com/Yudaotor/lyrimuse)** (GPL-3.0, this project) — word-synced lyrics
   for Apple Music, Spotify **and the Chinese players (QQ Music, NetEase Cloud Music, Kugou)**, plus
-  YouTube Music / Spotify Web playing in any browser; 8 lyric sources checked automatically, with
+  YouTube Music / Spotify Web playing in any browser; 9 lyric sources checked automatically, with
   **every candidate scored on one scale so the best match wins** (and the decision shown per
   track); translation, pinyin / Cantonese Jyutping / furigana; Last.fm & ListenBrainz scrobbling
   with local listening stats. macOS 14+, Apple Silicon and Intel.
@@ -34,7 +34,7 @@ of the actively maintained open-source options:
 | Minimum macOS | 14 (Sonoma) | 10.11 | 15 (Sequoia) |
 | Players | Apple Music, Spotify, QQ Music, NetEase Cloud Music, Kugou — any combination | Apple Music, Spotify, Vox, Audirvana, Swinsian (via its MusicPlayer library) | Spotify, Apple Music |
 | Web players in a browser | YouTube Music & Spotify Web, synced to the page's own progress | — | — |
-| Lyric sources checked automatically | 8: NetEase, QQ Music, Kugou, Kuwo, Musixmatch, LRCLIB, LyricFind, AMLL | multiple, via its LyricsKit library | 3: Spotify, LRCLIB, NetEase |
+| Lyric sources checked automatically | 9: NetEase, QQ Music, Kugou, Kuwo, Migu, Musixmatch, LRCLIB, LyricFind, AMLL | multiple, via its LyricsKit library | 3: Spotify, LRCLIB, NetEase |
 | Match selection | every candidate from every source scored on one scale (title / artist / album / reported-duration fit + quality signals like word-level timing); a per-track decision panel shows each candidate's score and why the winner won; manual picks are locked and never overridden | — | — |
 | Word-by-word sync | yes, across sources (incl. the hand-curated AMLL database) | via LRCX word time tags, when the source provides them | — |
 | Translation | source community translation when available, else on-device Apple translation (18 target languages) with online fallback | displays source-provided translations | Apple on-device translation |

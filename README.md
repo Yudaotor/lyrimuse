@@ -42,20 +42,21 @@ Lyrimuse sits quietly in your menu bar and shows a floating lyrics window that f
 - **Romanization and translation**, shown alongside the original lyrics — translation comes from the source's own community translation when one exists, otherwise from on-device machine translation (Apple's Translation framework — lyrics never leave your Mac) with an online fallback, in any of 18 target languages; romanization is judged per line, so a Chinese song quoting one Japanese line only gets a reading on that line, not pinyin sprinkled over the rest — and Cantonese songs get word-aware Jyutping readings
 - **Duet and multi-singer lyrics show each part separately**, when the source (or an AMLL entry) marks who's singing which line, instead of interleaving both voices into one confusing block
 - **Simplified/Traditional Chinese**, switchable for the lyrics text independent of the app's own UI language
-- **A full Lyrics Manager window** — browse, hand-edit, delete, or re-search lyrics for any track, with multi-select batch delete, resizable columns, and per-track timing offset if the sync ever drifts
+- **A full Lyrics Manager window** — browse, hand-edit, delete, or re-search lyrics for any track, with multi-select batch delete, resizable columns, per-track timing offset if the sync ever drifts, and a one-click retry that re-searches every track still missing lyrics
 - **Works fully offline** in local mode — no network round-trip needed to show lyrics that are already cached
 
 ### Your listening profile
 - **A real listening profile, not just scrobbling** — connect Last.fm in one click from the main Accounts section (no manual token juggling) and see today/7-day/all-time totals, a live "now scrobbling" indicator, and a real-time recent-plays list with covers. Lyrimuse submits the metadata your player reported, unchanged — it never rewrites artist or track names before sending ([how scrobbling works](docs/scrobbling.md))
 - **Top Artists / Albums / Tracks chart**, filterable by time period (7 days, 30 days, a year, or all-time), plus an on-this-day look-back at what you were playing in years past
 - **Every play is logged locally first**, even before you connect Last.fm — connect it later and a backfill queue catches up on everything logged while you were still deciding
+- **Pick when a play counts** — scrobble at the Last.fm default (50%), or hold it until 75%, 90%, or the track actually playing to the end; ListenBrainz submissions are unaffected
 - **That same local history also shows up in the Lyrics Window** — when nothing's playing, it becomes a listening overview instead of an empty screen (more on this below)
 
 ### Show it your way
 - **Choose your players — plural — or let it auto-detect**: reads what's playing from Apple Music (via Automation access), or QQ Music / NetEase Cloud Music / Kugou Music / Spotify (via macOS's system-level MediaRemote — no permission needed); select any combination in Settings, or leave it on auto-detect to follow whichever app macOS currently considers "Now Playing"
 - **Web players work too**: pair the browser of your choice once and YouTube Music or Spotify Web becomes a first-class player — lyrics sync precisely to the page's own progress bar, with a one-click self-test that tells you whether the browser can actually be driven
 - **Three ways to display it**: a classic desktop overlay, a Dynamic-Island-style capsule docked at the top of the screen (optionally showing the album artwork, and blurring it behind the capsule), or a resizable Lyrics Window modelled on the Apple Music lyrics page — two columns, a blurred cover backdrop, and the full sheet auto-scrolling to the current line — turn on any combination, or none
-- **Menu bar text mode** — read the current line directly from the status bar instead of a floating window; long lines scroll rather than getting cut off mid-sentence (truncating is still one toggle away)
+- **Menu bar text mode** — read the current line directly from the status bar instead of a floating window; long lines scroll rather than getting cut off mid-sentence (truncating is still one toggle away), and an optional second row shows the next line, the translation, or the romanization right under the current one — the same second row is available on the Dynamic Island capsule
 - **Drag the progress bar to seek** — the bars in the Lyrics Window and the notch are controls, not just indicators
 - **Jump straight to the current song's page** from the "⋯" menu or the info panel — Apple Music opens in-app, QQ Music and NetEase Cloud Music open their web page for the song, album, or artist — no searching required, since Lyrimuse already resolved the link while fetching lyrics
 - **When nothing's playing, the Lyrics Window shows a listening overview instead of an empty screen** — today/this-week totals, an on-this-day card, and a full recently-played list with covers, each one jumping straight to its Apple Music album/artist page
@@ -66,8 +67,8 @@ Lyrimuse sits quietly in your menu bar and shows a floating lyrics window that f
 ### Just a good Mac citizen
 - **Simplified Chinese, Traditional Chinese and English UI**, switches instantly, no restart needed
 - **Global keyboard shortcuts** for every action, all left unbound by default so you decide
-- **Checks for updates on its own** (or on demand from the menu bar) — no need to keep revisiting the Releases page
-- **Optional companion launch** with your chosen player, in either direction — launch one when the other opens
+- **Checks for updates on its own** (or on demand from the menu bar) — no need to keep revisiting the Releases page; an opt-in switch also receives beta builds
+- **Optional companion launch** with your chosen players, in either direction and per player — launch them when Lyrimuse opens, launch Lyrimuse when they open, and optionally quit Lyrimuse once the players it follows have all quit
 - **Export or import your whole configuration** to move to a new Mac, plus a one-click diagnostics export for troubleshooting
 
 ### Optional extras
