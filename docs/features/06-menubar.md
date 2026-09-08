@@ -1,6 +1,6 @@
 # 06. 菜单栏:歌词、图标与菜单
 
-> 最后核对:2026-09-06 · 基线:e82522f+工作树
+> 最后核对:2026-09-09 · 基线:f30bca2+工作树
 
 ## 定位
 
@@ -613,6 +613,7 @@ Bartender/Ice 这类工具做的是"接管、管理别人的图标"(靠截屏+�
 
 ## 与其它功能的交互
 
+- **设置搜索**(14 章 §1,2026-09-09):搜索命中本面「全部设置」抽屉里的行时,抽屉自动展开、那一行高亮并滚进视野(`MenuBarAllSettingsDrawer.expandForSearchIfNeeded`,信号来自 Environment `settingsSearchPendingDrawer`);「文字颜色 / 未唱到的颜色」这种随开关换标题的行两种写法都登记了。新加一行设置要到 Core `SettingsSearchCatalog` 登记,否则 selftest `settings-search` 组会红。
 - **数据来源**:当前句文本、播放态、句停留时长、曲目微调值全部来自 `PlaybackCoordinator`(它是 `LocalPlaybackSource` 的转发层);配速依赖的 `currentLineDwellSeconds` 用相邻两句时间戳之差,所以歌词时间轴校准不影响它。
 - **歌词时间轴三处入口共享**:菜单「提前/延后」、全局快捷键(`GlobalHotkeys`,快捷键那条路会在**灵动岛**闪一条「歌词偏移 +0.50s」提示,只开悬浮歌词的人无反馈)、「歌词管理」窗口的偏移输入框,底层都是 `LyricsOffsetStore`;步长与菜单文案共用 `lyricsOffsetStepMs`。设置页那一行时间轴偏移是叠加的另**两**层(「全部播放器」= 全局基准,选具体播放器 = 按播放器那层)。
 - **快速开关联动**:悬浮歌词/灵动岛的开关经各自 WindowController 的 `setVisible`(与设置页、全局快捷键同一入口);「锁定位置」= 持久化 `lockPosition` + `setLocked` 两步,与快捷键处逻辑一致;「开机启动」直接翻 `launchAtLoginEnabled`。

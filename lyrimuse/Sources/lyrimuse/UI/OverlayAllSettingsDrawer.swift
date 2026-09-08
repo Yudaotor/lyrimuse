@@ -31,6 +31,9 @@ import SwiftUI
 @MainActor
 struct OverlayAllSettingsDrawer: View {
     @ObservedObject private var settings = AppSettings.shared
+    /// 设置搜索命中了这个抽屉里的行时,根视图经 Environment 发下来的"该展开了"信号
+    /// (Settings/SettingsSearch.swift)。
+    @Environment(\.settingsSearchPendingDrawer) private var pendingSearchDrawer
 
     /// 展开状态用 @State 而不是 @AppStorage:设计要求是"默认折叠",而 @AppStorage 会把
     /// 上一次展开的样子带到下一次打开设置窗口 —— 那就不再是"默认折叠"了。
@@ -65,12 +68,25 @@ struct OverlayAllSettingsDrawer: View {
                 resetRow
             }
         }
+        // 设置搜索命中抽屉里的行时自动展开(2026-09-09,借鉴清单 S8):抽屉默认折叠、状态是 @State,
+        // 不展开的话被高亮的那一行根本不在屏幕上。onAppear 管"分段刚切过来、抽屉刚建出来",
+        // onChange 管"抽屉已经在屏、信号后到"。展开动画跟点标题那一处同一条。
+        .onAppear { expandForSearchIfNeeded() }
+        .onChange(of: pendingSearchDrawer) { _, _ in expandForSearchIfNeeded() }
         // ⚠️ 这里**故意没有** `.animation(_:value: isExpanded)`。展开/收起的动画写在改状态
         // 那一处(disclosureHeader 里的 withAnimation)—— 挂在卡片上动的是容器自身的几何,
         // 同一个事务里任何不相干的布局变化都会被一起动起来(理由见
         // Animation.settingsCardReveal 的声明,那条是踩过实例之后定下的)。抽屉里恰恰有
         // 一堆这种变化:拖字号滑杆、开关「文字描边」让「描边颜色」那行长出来、存一个新主题让
         // 列表多一行。
+    }
+
+    private func expandForSearchIfNeeded() {
+        guard pendingSearchDrawer == .overlay else { return }
+        if !isExpanded {
+            withAnimation(.settingsCardReveal) { isExpanded = true }
+        }
+        SettingsSearchRouter.shared.consumeDrawer(.overlay)
     }
 
     // MARK: - 抽屉头

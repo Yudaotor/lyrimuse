@@ -856,6 +856,8 @@ struct MenuBarColorRows: View {
 /// 默认折叠,理由同另外两个抽屉:键盘/VoiceOver 全量兜底通路,不是新配置项的收纳盒。
 struct MenuBarAllSettingsDrawer: View {
     @State private var isExpanded = false
+    /// 设置搜索命中了这个抽屉里的行时的"该展开了"信号(理由与写法同 `OverlayAllSettingsDrawer`)。
+    @Environment(\.settingsSearchPendingDrawer) private var pendingSearchDrawer
 
     var body: some View {
         SettingsCard {
@@ -875,6 +877,16 @@ struct MenuBarAllSettingsDrawer: View {
                 resetRow
             }
         }
+        .onAppear { expandForSearchIfNeeded() }
+        .onChange(of: pendingSearchDrawer) { _, _ in expandForSearchIfNeeded() }
+    }
+
+    private func expandForSearchIfNeeded() {
+        guard pendingSearchDrawer == .menuBar else { return }
+        if !isExpanded {
+            withAnimation(.settingsCardReveal) { isExpanded = true }
+        }
+        SettingsSearchRouter.shared.consumeDrawer(.menuBar)
     }
 
     /// 一组:标题行 + 分隔线 + 内容。标题文案跟工具栏对应那颗按钮用同一个词条(同 `NotchAllSettingsDrawer.group`)。

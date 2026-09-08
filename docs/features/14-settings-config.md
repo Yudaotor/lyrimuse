@@ -1,6 +1,6 @@
 # 14. 设置、配置与本地化
 
-> 最后核对：2026-09-03 · 基线：e103532+工作树
+> 最后核对：2026-09-09 · 基线：f30bca2+工作树
 
 ## 定位
 
@@ -26,6 +26,8 @@
 | 关于（blue） | info.circle | **2026-09-03 重排**：页头 = 图标 + 名字 + 可点击拷贝的版本胶囊（版本 · 芯片架构）+ tagline + 两颗胶囊按钮（请作者喝杯咖啡 / GitHub 带 star 数）+ 求 star 那句；四张带标题的卡：更新（检查更新＋副标题「上次检查 / 有新版本」、自动检查、自动下载并安装、**测试版更新**[2026-09-05，独立一行带 flask 图标；机器专属键 `np:receiveBetaUpdates`，见 15 章决策 11]）、反馈与社区（反馈问题、想法与建议）、许可与版权（版权说明、第三方许可、开源许可证）、诊断与数据（导出诊断、配置文件夹）；页脚「© · GPL-3.0」。
 
 **顶层分类记上次停留（2026-09-04）**：新建设置窗口时落在上次停留的顶层分类（`SettingsTab.restoredLastTab()`，`@AppStorage settings:lastTab`；`SettingsTab` 因此有了 String 原始值 = case 名，改 case 名会让老值解码失败退回「歌词」）。只记六个顶层分类，账号页（`.account`）不记——它多半在默认折叠的「实验室功能」区里，记了下次打开就是「detail 切过去、侧栏高亮不到」的状态，且账号页的落点本来就由引导页的信箱管；`AppActions.requestSettings` 的信箱 / subject 在 `.onAppear` / `.onReceive` 里覆盖记忆，优先级更高。初值在属性初始化器里直接读盘，不在 `.onAppear` 里补跳（那样会先画一帧「歌词」再切）。键用 `settings:` 前缀：与二级分段（`settings:lyricsSection` / `settings:appearanceSection`）同一约定，配置导出只带 `np:` / `KeyboardShortcuts_`，界面停留位置这种机器状态天然不随备份走（selftest contracts 组守着键名前缀与导出过滤两头）。停在「关于」这类低频页下次也落在那里，接受。
+
+**侧栏顶部的设置搜索（2026-09-09，借鉴清单 S8）**：侧栏 `List` 顶上钉一个搜索框（`SettingsSearchField`，`.safeAreaInset(edge: .top)`，不随列表滚），有字时整张侧栏换成结果列表（每条 = 标题 + 面包屑「分类 › 分段 › 组」），清空即恢复——系统设置与 Sleeve 都是这个做法。结果来自 Core 的静态目录 `SettingsSearchCatalog`（每条设置行 / 卡登记：目的地、分段键与取值、所在抽屉、标题 L10n 键、可选副标题键、关键词、面包屑），App 侧 `SettingsSearchIndex` 把它本地化后按 `SettingsSearchMatcher` 排序：查询按空白拆词、每个词都得命中，标题前缀 > 标题包含 > 只在副标题 / 关键词 / 面包屑；三种语言的译文一起索引（从 bundle 的三份 `.lproj/Localizable.strings` 读），所以英文界面打中文、中文界面打英文都搜得到。命中一条做四件事：`selection` 切到目的地（账号页若在折叠的「实验室功能」区先展开）；往那一页分段的 `@AppStorage` 键写取值（`settings:lyricsSection` / `settings:appearanceSection` / `np:lastfmDetailSection`，那边立刻翻）；`SettingsSearchRouter` 发两路信号——「要高亮的标题集合」与「要展开的抽屉」，由 `SettingsView` 根部塞进 Environment（`settingsSearchHighlightedTitles` / `settingsSearchPendingDrawer`），三个「全部设置」抽屉看到自己被点名就 `withAnimation(.settingsCardReveal)` 展开并 `consumeDrawer`，`SettingsRow` / `SettingsSubRow` / `SettingsCardHeader` 看到自己的 `title` 在集合里就画一层 accent 高亮（1.8s 后淡出）并用 AppKit `scrollToVisible` 把自己滚进可见区；最后清空搜索框。键盘：⌘F 聚焦搜索框、回车打开第一条、Esc 先清空再让出焦点。搜索框文字不持久化，也没有任何新 UserDefaults 键。**目录会漂，靠 selftest `settings-search` 组守着**：源码里每一处 `SettingsRow(` / `SettingsSubRow(` / `SettingsCardHeader(` 的字面量标题、三族"标题在枚举里"的行（`OverlayBehaviorItem` / `AutoHideItem` / `NotchBehaviorItem`）都必须登记在目录里（纯分组卡头与只读状态行写在那边的白名单，白名单项反过来必须真存在于源码），目录里每个键都必须在 `Localizable.xcstrings` 里，目的地 / 分段取值必须跟 `SettingsTab` / `AccountDestination` / 两个 `Section` 枚举对得上。**新加一行设置 = 到 Core `SettingsSearchCatalog` 登记一条**，不登记 selftest 会红。理由见设计决策 #23。
 
 ### 2. 两套配置存储 + 镜像
 
@@ -188,6 +190,7 @@
 | App 偏好 | Settings/AppSettings.swift；镜像 Settings/AppSettingsMirror.swift |
 | 功能开关 | Settings/FeatureSettingsStore.swift `save()`；collector 侧 lyrimuse-collector/features.go |
 | 快捷键 | Settings/GlobalHotkeys.swift、Settings/ShortcutRecorder.swift |
+| 设置搜索 | Core LyrimuseCore/Models/SettingsSearchCatalog.swift `SettingsSearchCatalog.entries` / `SettingsSearchMatcher`；Settings/SettingsSearch.swift `SettingsSearchIndex` `SettingsSearchRouter` `SettingsSearchField` `SettingsSearchResultRow` `SettingsSearchHighlight`；SettingsView.swift `openSettingsSearchHit` `sidebarSections`；三个抽屉的 `expandForSearchIfNeeded`（`OverlayAllSettingsDrawer` / `NotchAllSettingsDrawer` / `MenuBarAllSettingsDrawer`）；selftest `SettingsSearchTests.swift` |
 | 备份/iCloud | Settings/ConfigPortability.swift、Settings/ICloudConfigStore.swift（`readOutcome`/`isMaterialized`）、Settings/ICloudConfigImportPrompt.swift、LyrimuseCore/Util/BackupDiscovery.swift、LyrimuseCore/Util/ICloudFileReadiness.swift |
 | 顺序优先列表拖拽排序 | LyricsSettingsTab（SettingsView.swift `priorityRow` / `priorityDragGesture` / `SourceDragState` / `PrioritySourceFramesKey`、`moveEnabledSource` 箭头通路）、LyrimuseCore/Util/ReorderDrag.swift（`targetIndex` / `displacement` / `clampedTranslation` / `moved`），selftest settings-ui 组 |
 | 凭据存储 / 共享配置文件读写 | Settings/ConfigStore.swift、Settings/FeatureSettingsStore.swift、LyrimuseCore/Util/JSONConfigDocument.swift（三态 `load` / `merging` / `save` / `markCorrupt` / `quarantineCorruptFile`）、Settings/ConfigFileDamageBanner.swift（损坏横幅，挂 SettingsView detail 列 `safeAreaInset`）、LyrimuseCore/Util/SecretFileWrite.swift |
@@ -540,3 +543,11 @@
     **方法**：文案就是 `L10n.t` 的 key，改一条 = 源码字面量 + xcstrings 加新删旧（三语）+ 重生成三份 .strings + parity。全程脚本化：每条断言唯一匹配、
     xcstrings 字节精确 round-trip、删 key 前再 grep 一次源码 0 引用。docs 里 36 处引用旧文案同步改；12 处带日期的决策记录 / xcstrings 词条记录 /
     动词短语（"一键导出诊断信息"）刻意不动——它们记的是当时叫什么。
+23. **设置搜索用静态目录 + selftest 守卫，命中靠"本地化标题相等"高亮，滚动走 AppKit（2026-09-09，借鉴清单 S8）**：
+    - **为什么是静态表**：运行时在 `onAppear` 登记只能索引当前显示的页；六个分类、十几个分段、三个默认折叠的抽屉里，绝大多数行在任何时刻都不在屏。静态表的代价是漂移——漏登记一行就是"搜不到 = 不存在"，比没有搜索更糟，所以守卫是这条决策的一半而不是附件：`settings-search` 组扫源码调用点的字面量标题逐个对账，白名单里的项也反向核对还存在于源码。
+    - **为什么不给每一行发 id**：一百多处调用点一处不用改。`SettingsRow` / `SettingsSubRow` / `SettingsCardHeader` 只多读一个 Environment 值，拿自己的 `title` 跟被点名集合比；目录里存的是 L10n 键，App 侧 `L10n.t` 之后与调用点 `L10n.t("…")` 的结果逐字相等。同名行（三个面各有「对齐方式」）按分段登记、从不同时在屏。标题随状态切换的行把两种写法都登记（菜单栏「文字颜色 / 未唱到的颜色」）。
+    - **为什么走 Environment 不走单例订阅**：设置窗口之外也复用这几个组件（菜单栏快捷面板、引导页）；Environment 只在设置窗口根部注入，别处拿默认值、那一句等于没有，也免去一百多行各订阅一个 `ObservableObject`。抽屉的"该展开了"同样是 Environment 值，展开后调 `SettingsSearchRouter.shared.consumeDrawer` 清掉；没被接走的信号 3s 自清，免得下次正常打开那一段时抽屉莫名展开。抽屉 `isExpanded` 仍是 @State 默认折叠——搜索展开是用户主动动作，不违背「默认折叠」。
+    - **为什么滚动用 `NSView.scrollToVisible`**：设置页 `ScrollView` 底下就是 `NSScrollView`，高亮层里放一个 `NSViewRepresentable`，出现即把宿主行滚进可见区（做两次：立刻一次，抽屉展开动画时长后再一次），不用给六个页面各挂 `ScrollViewReader`、也不用给每行 `.id()`。
+    - **为什么结果放侧栏而不是内容区**：系统设置与 Sleeve 都在侧栏出结果，且内容区保留当前页、看着结果还能对照。侧栏 170～220pt 放"标题 + 面包屑"两行够用，长英文标题尾截、面包屑中截。
+    - **为什么搜索框是自绘 `TextField` 而不是 `.searchable`**：这是 accessory App 的 Settings scene，没有「编辑 → 查找」菜单可挂，`.searchable` 没法被 ⌘F 聚焦；自绘一个不可见按钮接 ⌘F 落到 `@FocusState`。它是侧栏 chrome、不是设置行，不受「设置页只用 SettingsDesignSystem 组件」那条约束。
+    - **三语一起索引**：从 bundle 三份 `.lproj/Localizable.strings` 读译文表（与 `L10n.t` 同一份文件、同一套目录名小写约定）；`swift build` 直接跑、没有 bundle 时表为空，退化成只搜当前语言，不报错。

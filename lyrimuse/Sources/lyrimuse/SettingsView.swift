@@ -220,70 +220,144 @@ struct SettingsView: View {
     // 变量名保留 isAdditionalFeaturesExpanded,没有跟着 Section 标题改成"实验室
     // 功能"——纯内部实现细节,不是用户可见文案。
     @State private var isAdditionalFeaturesExpanded = false
+    /// 侧栏顶部搜索框的文字(2026-09-09,借鉴清单 S8)。非空时侧栏 List 换成结果列表;不持久化。
+    @State private var settingsSearchText = ""
+    /// 搜索命中后的"高亮哪几行 / 展开哪个抽屉"信号,经 Environment 下发给行组件与三个「全部设置」
+    /// 抽屉(Settings/SettingsSearch.swift)。
+    @ObservedObject private var searchRouter = SettingsSearchRouter.shared
+
+    private var isSearchingSettings: Bool {
+        !settingsSearchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private var settingsSearchHits: [SettingsSearchHit] {
+        SettingsSearchIndex.shared.search(settingsSearchText)
+    }
+
+    /// 搜索时侧栏 List 的内容:结果行(标题 + 面包屑),或一句"没找到"。
+    @ViewBuilder private var settingsSearchResultsSection: some View {
+        let hits = settingsSearchHits
+        if hits.isEmpty {
+            Text(L10n.t("没有找到匹配的设置"))
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.vertical, 6)
+        } else {
+            Section {
+                ForEach(hits) { hit in
+                    SettingsSearchResultRow(hit: hit) { openSettingsSearchHit(hit) }
+                }
+            }
+        }
+    }
+
+    private func openFirstSettingsSearchResult() {
+        if let first = settingsSearchHits.first { openSettingsSearchHit(first) }
+    }
+
+    /// 命中一条:翻分类 → 切分段(写那一页的 @AppStorage 键,那边立刻跟着翻)→ 发高亮 / 展抽屉信号 →
+    /// 清空搜索框。目录条目怎么写见 Core `SettingsSearchCatalog` 头注。
+    private func openSettingsSearchHit(_ hit: SettingsSearchHit) {
+        let entry = hit.entry
+        switch entry.destination {
+        case .tab(let raw):
+            if let tab = SettingsTab(rawValue: raw) { selection = .tab(tab) }
+        case .account(let name):
+            if let destination = AccountDestination.allCases.first(where: { String(describing: $0) == name }) {
+                // ListenBrainz / 网页推送 / 推送提醒住在默认折叠的「实验室功能」区,不展开的话
+                // detail 切过去了、侧栏却高亮不到任何一行(同 onJumpToAccount 那条注释)。
+                if destination != .lastfm {
+                    withAnimation { isAdditionalFeaturesExpanded = true }
+                }
+                selection = .account(destination)
+            }
+        }
+        if let key = entry.sectionKey, let value = entry.sectionValue {
+            UserDefaults.standard.set(value, forKey: key)
+        }
+        searchRouter.reveal(hit)
+        settingsSearchText = ""
+    }
+
+    /// 平时(不在搜索)的侧栏内容:核心设置六类 + 账号 + 折叠的实验室功能。
+    @ViewBuilder private var sidebarSections: some View {
+        Section(L10n.t("核心设置")) {
+            sidebarLabel(.lyrics)
+            sidebarLabel(.player)
+            sidebarLabel(.appearance)
+            sidebarLabel(.shortcuts)
+            sidebarLabel(.general)
+            sidebarLabel(.about)
+        }
+
+        // 2026-07-29:Last.fm 从下面的折叠区里单独提出来,常驻可见——功能本身
+        // (双向同步收听记录 + 喂两个"听歌报告"推送的数据源)已经相当完整,继续
+        // 跟"实验室功能"这几个字混在一起、默认收起才能看到,会让人低估它的成熟度、
+        // 也发现不了。ListenBrainz/网页推送/推送提醒这三个账号保留原样在下面的
+        // 折叠区,没有改动。
+        Section(L10n.t("账号")) {
+            AccountSidebarRow(destination: .lastfm)
+                .tag(SettingsSidebarItem.account(.lastfm))
+        }
+
+        // 手搭折叠(而不是原生 Section(isExpanded:))是因为那个初始化方法的
+        // Footer 类型定死成 EmptyView,没法在这里放"?"图标+悬浮提示。tooltip
+        // 弹出延迟看着像没反应,其实是系统默认 tooltip 延迟(~1~1.5s)本身偏长,
+        // 真正的调整点是 AppDelegate.swift 里的 NSInitialToolTipDelay,会影响
+        // 整个 App 所有 .help() 提示,不是这一处独有的问题。
+        Section {
+            if isAdditionalFeaturesExpanded {
+                // .lastfm 不在这里——它已经单独提到上面常驻可见的"账号" Section,
+                // 这里排除掉避免同一个目的地在侧边栏出现两次。
+                ForEach(AccountDestination.allCases.filter { $0 != .lastfm }) { destination in
+                    AccountSidebarRow(destination: destination)
+                        .tag(SettingsSidebarItem.account(destination))
+                }
+            }
+        } header: {
+            Button {
+                withAnimation { isAdditionalFeaturesExpanded.toggle() }
+            } label: {
+                // 箭头紧跟标题,不用 Spacer 顶到最右:侧边栏只有 220pt 宽,顶到最右
+                // 会离边缘只剩 3.5pt(比下面那些行的胶囊还往外突出一截)、中间空出
+                // 近 100pt,一个孤零零的箭头吊在那儿(2026-08-12 用户反馈)。跟
+                // Last.fm 那三张卡的折叠表头也是同一个样式:箭头就在标题旁边。
+                HStack(spacing: 4) {
+                    Text(L10n.t("实验室功能"))
+                    Image(systemName: "questionmark.circle")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                    Image(systemName: "chevron.right")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(.tertiary)
+                        .rotationEffect(.degrees(isAdditionalFeaturesExpanded ? 90 : 0))
+                        .padding(.leading, 1)
+                    Spacer(minLength: 0)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help(L10n.t("实验性 Beta 功能"))
+        }
+    }
 
     var body: some View {
         NavigationSplitView {
             List(selection: $selection) {
-                Section(L10n.t("核心设置")) {
-                    sidebarLabel(.lyrics)
-                    sidebarLabel(.player)
-                    sidebarLabel(.appearance)
-                    sidebarLabel(.shortcuts)
-                    sidebarLabel(.general)
-                    sidebarLabel(.about)
-                }
-
-                // 2026-07-29:Last.fm 从下面的折叠区里单独提出来,常驻可见——功能本身
-                // (双向同步收听记录 + 喂两个"听歌报告"推送的数据源)已经相当完整,继续
-                // 跟"实验室功能"这几个字混在一起、默认收起才能看到,会让人低估它的成熟度、
-                // 也发现不了。ListenBrainz/网页推送/推送提醒这三个账号保留原样在下面的
-                // 折叠区,没有改动。
-                Section(L10n.t("账号")) {
-                    AccountSidebarRow(destination: .lastfm)
-                        .tag(SettingsSidebarItem.account(.lastfm))
-                }
-
-                // 手搭折叠(而不是原生 Section(isExpanded:))是因为那个初始化方法的
-                // Footer 类型定死成 EmptyView,没法在这里放"?"图标+悬浮提示。tooltip
-                // 弹出延迟看着像没反应,其实是系统默认 tooltip 延迟(~1~1.5s)本身偏长,
-                // 真正的调整点是 AppDelegate.swift 里的 NSInitialToolTipDelay,会影响
-                // 整个 App 所有 .help() 提示,不是这一处独有的问题。
-                Section {
-                    if isAdditionalFeaturesExpanded {
-                        // .lastfm 不在这里——它已经单独提到上面常驻可见的"账号" Section,
-                        // 这里排除掉避免同一个目的地在侧边栏出现两次。
-                        ForEach(AccountDestination.allCases.filter { $0 != .lastfm }) { destination in
-                            AccountSidebarRow(destination: destination)
-                                .tag(SettingsSidebarItem.account(destination))
-                        }
-                    }
-                } header: {
-                    Button {
-                        withAnimation { isAdditionalFeaturesExpanded.toggle() }
-                    } label: {
-                        // 箭头紧跟标题,不用 Spacer 顶到最右:侧边栏只有 220pt 宽,顶到最右
-                        // 会离边缘只剩 3.5pt(比下面那些行的胶囊还往外突出一截)、中间空出
-                        // 近 100pt,一个孤零零的箭头吊在那儿(2026-08-12 用户反馈)。跟
-                        // Last.fm 那三张卡的折叠表头也是同一个样式:箭头就在标题旁边。
-                        HStack(spacing: 4) {
-                            Text(L10n.t("实验室功能"))
-                            Image(systemName: "questionmark.circle")
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                            Image(systemName: "chevron.right")
-                                .font(.caption2.weight(.semibold))
-                                .foregroundStyle(.tertiary)
-                                .rotationEffect(.degrees(isAdditionalFeaturesExpanded ? 90 : 0))
-                                .padding(.leading, 1)
-                            Spacer(minLength: 0)
-                        }
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .help(L10n.t("实验性 Beta 功能"))
+                // 搜索框里有字时整张侧栏换成结果列表(系统设置的做法,Sleeve 也是);清空就回来。
+                // 分类内容本体在 sidebarSections。
+                if isSearchingSettings {
+                    settingsSearchResultsSection
+                } else {
+                    sidebarSections
                 }
             }
             .listStyle(.sidebar)
+            // 搜索框钉在侧栏顶部、不随列表滚(2026-09-09,借鉴清单 S8)。
+            .safeAreaInset(edge: .top, spacing: 0) {
+                SettingsSearchField(text: $settingsSearchText, onSubmit: openFirstSettingsSearchResult)
+            }
             .navigationSplitViewColumnWidth(min: 170, ideal: 190, max: 220)
             // 去掉 NavigationSplitView 自动塞进工具栏的那颗"隐藏边栏"按钮:这个窗口的
             // 侧边栏就是它唯一的导航方式,收起来之后整扇窗口只剩内容、没有任何切换分类的
@@ -338,6 +412,9 @@ struct SettingsView: View {
         // idealHeight 给到 640,滚动区就有 ~430pt。minHeight 同步抬到 520,避免有人拖到
         // 极限后滚动区比头部还矮。
         .frame(minWidth: 760, idealWidth: 860, minHeight: 520, idealHeight: 640)
+        // 设置搜索的两路信号只在这扇窗口的子树里有值;别处复用行组件拿到的是默认值,不受影响。
+        .environment(\.settingsSearchHighlightedTitles, searchRouter.highlightedTitles)
+        .environment(\.settingsSearchPendingDrawer, searchRouter.pendingDrawer)
         .background(SettingsWindowConfigurator())
         // 见 AppActions.pendingSettingsSelection 注释——Onboarding 的 Last.fm 步骤
         // 借这个信箱指定"这次打开设置窗口要直接停在哪个分类",这里读一次就清空,不影响
@@ -2502,6 +2579,8 @@ private struct NotchAllSettingsDrawer: View {
     /// 展开状态用 @State 而不是 @AppStorage,理由同 OverlayAllSettingsDrawer:设计要求
     /// "默认折叠",@AppStorage 会把上次展开的样子带到下次打开设置窗口。
     @State private var isExpanded = false
+    /// 设置搜索命中了这个抽屉里的行时的"该展开了"信号(理由与写法同 `OverlayAllSettingsDrawer`)。
+    @Environment(\.settingsSearchPendingDrawer) private var pendingSearchDrawer
 
     var body: some View {
         SettingsCard {
@@ -2529,9 +2608,19 @@ private struct NotchAllSettingsDrawer: View {
                 resetRow
             }
         }
+        .onAppear { expandForSearchIfNeeded() }
+        .onChange(of: pendingSearchDrawer) { _, _ in expandForSearchIfNeeded() }
         // 理由同 OverlayAllSettingsDrawer:展开/收起的动画挂在改状态那一处(disclosureHeader
         // 里的 withAnimation),不挂在卡片上——挂在卡片上会把同一个事务里任何不相干的布局
         // 变化(比如「显示封面」开着时下面多长出的「封面位置」行)一起带动起来。
+    }
+
+    private func expandForSearchIfNeeded() {
+        guard pendingSearchDrawer == .notch else { return }
+        if !isExpanded {
+            withAnimation(.settingsCardReveal) { isExpanded = true }
+        }
+        SettingsSearchRouter.shared.consumeDrawer(.notch)
     }
 
     /// 一组:标题行 + 分隔线 + 内容。标题文案跟工具栏对应那颗按钮用同一个词条。

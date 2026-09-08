@@ -1,5 +1,5 @@
 # 04. 桌面悬浮歌词
-> 最后核对:2026-09-07 · 基线:83bd6c3+工作树
+> 最后核对:2026-09-09 · 基线:f30bca2+工作树
 
 ## 定位
 
@@ -277,6 +277,7 @@
 
 ## 与其它功能的交互
 
+- **设置搜索**(14 章 §1,2026-09-09):搜索命中本面「全部设置」抽屉里的行时,抽屉自动展开、那一行高亮并滚进视野(`OverlayAllSettingsDrawer.expandForSearchIfNeeded`,信号来自 Environment `settingsSearchPendingDrawer`);抽屉的 `isExpanded` 仍是默认折叠的 @State。新加一行设置要到 Core `SettingsSearchCatalog` 登记,否则 selftest `settings-search` 组会红。
 - **数据源链**:显示内容全部来自 `PlaybackCoordinator`(单例),它转发 `LocalPlaybackSource`——2 秒轮询 media-control 拿播放快照,20Hz `fastTick` 用 `ProgressAnchor` 外推位置定"当前行";歌词正文来自 collector 的 enrich 缓存(`EnrichCacheReader.lookup`)。「搜索歌词中/暂无歌词/纯音乐/网络连接失败」四个占位状态分别对应 collector 侧的解析进度/`resolved`/`instrumental`/网络状态。悬浮窗视图**不整对象订阅**这两个单例——经 `OverlayPlayback` 窄代理只订阅它实读的二十来个字段(2026-08-19,LiveRowPlayback 同款模式),歌词窗口音量滑杆/灵动岛封面这类无关高频写入不再打醒它的 body;`anchor`/`currentLyricsOffsetMs` 由 TimelineView 闭包直读协调器,不入订阅。
 - **歌词处理管线共享**:署名行过滤(`strippingCreditLines`)、简繁转换(`lyricsChineseVariant`)、逐字/整行选择(覆盖率判据;2026-09-06 之前还叠着全局开关 `preferWordLevelKaraoke`,已拆成各展示面自己的「卡拉OK效果」,引擎始终解析逐字数据)都在引擎/数据源层完成,悬浮窗、灵动岛、歌词窗口、菜单栏看到的是同一份结果;"关了卡拉OK"这一步由各展示面在消费点用 `SyncedLyricLine.lineLevel` 压平。署名行过滤直接影响悬浮窗动态高度(漏判的长职员表行曾把窗口撑爆)。
 - **与灵动岛**:开关互相独立可同开;共享 `WordKaraokeGradient`(30Hz 上限+渐变算法);**`hideWhenNotPlaying` / `hideDuringScreenCapture` 2026-09-01 起不再共享**(拆成了两份,灵动岛那份叫 `notchHide*`,见 05-notch.md 设置项表里「工具栏「行为」浮层」那两条)。⚠️ 2026-09-02 起两个形态**共用同一份视图** `UI/AutoHideSettingsRows.swift`(靠 `AutoHideSurface` 分流)——共用的是渲染和文案,**不是值**,别把"共用组件"读回"共用设置";「跟随封面」(`followsCoverArt`)开关也被灵动岛读走(NotchLyricsView.accentOrWhite),但两边用的强调色变体不同(悬浮窗按"与描边对比/够亮",灵动岛按"深底够亮")。

@@ -418,6 +418,8 @@ struct SettingsCardHeader<Trailing: View>: View {
         .padding(.horizontal, SettingsRowMetrics.horizontalPadding)
         .padding(.top, 10)
         .padding(.bottom, 7)
+        // 目录里以「卡」为单位登记的条目(歌词来源 / 播放器 / 风格…)命中时亮的是卡头。
+        .settingsSearchHighlight(title: title)
     }
 }
 
@@ -505,6 +507,9 @@ struct SettingsRow<Trailing: View>: View {
         }
         .padding(.horizontal, SettingsRowMetrics.horizontalPadding)
         .padding(.vertical, SettingsRowMetrics.verticalPadding)
+        // 设置搜索命中时高亮 + 滚进视野(Settings/SettingsSearch.swift)。只读 Environment,
+        // 设置窗口之外用到这个组件的地方拿到的是空集,这一句等于没有。
+        .settingsSearchHighlight(title: title)
     }
 }
 
@@ -627,6 +632,7 @@ struct SettingsSubRow<Trailing: View>: View {
         .padding(.leading, SettingsRowMetrics.textLeadingInset - 12)
         .padding(.trailing, SettingsRowMetrics.horizontalPadding)
         .padding(.vertical, SettingsRowMetrics.verticalPadding)
+        .settingsSearchHighlight(title: title)
     }
 }
 

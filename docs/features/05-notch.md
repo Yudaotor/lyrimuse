@@ -1,5 +1,5 @@
 # 05. 灵动岛歌词
-> 最后核对:2026-09-07 · 基线:83bd6c3+工作树
+> 最后核对:2026-09-09 · 基线:f30bca2+工作树
 
 ## 定位
 
@@ -454,6 +454,7 @@
 
 ## 与其它功能的交互
 
+- **设置搜索**(14 章 §1,2026-09-09):搜索命中本面「全部设置」抽屉里的行时,抽屉自动展开、那一行高亮并滚进视野(`NotchAllSettingsDrawer.expandForSearchIfNeeded`,SettingsView.swift;信号来自 Environment `settingsSearchPendingDrawer`);「风格」「屏幕」「左耳」「右耳」这几组的内容不是 `SettingsRow`,按组头登记、命中时亮的是组标题。新加一行设置要到 Core `SettingsSearchCatalog` 登记,否则 selftest `settings-search` 组会红。
 - **PlaybackCoordinator(数据源)**:歌名、当前行/下一句、逐字时间轴、播放锚点、暂停冻结位置/时长、封面(系统 + 高清替代双份)、`notchAccentColor`、`isPlayingSmoothed`、歌词偏移。灵动岛不自己取任何数据。
 - **桌面悬浮歌词**:平行实现,互不排斥可同开。⚠️ **一个设置都不再共享**:`hideWhenNotPlaying` / `hideDuringScreenCapture` 曾经是仅剩的两个,2026-09-01 也拆开了(灵动岛那份叫 `notchHide*`,首次读取从旧的共用值继承,见 `AppSettings.init()` 里那段迁移注释)。⚠️ 2026-09-02 起这两项的 **UI** 又回到同一份组件 `UI/AutoHideSettingsRows.swift`(靠 `AutoHideSurface` 分流到各自的 AppSettings 键与各自的 WindowController)——**共用的是渲染与文案,不是值**:改文案两边一起变是预期的,看到"共用组件"别把 Binding 又合回一份。字体、字号、三个颜色、描边、宽度、锁定位置全部**不**作用于灵动岛。`followsCoverArt` 2026-08-31 起也**不再**跨形态——灵动岛前景取色改由自己的 `notchCardStyle == .coverArt` 决定。旧的互斥单选 `overlayStyle` 在 `AppSettings.init()` 一次性迁移成两个独立开关。
 - **歌词时间轴微调**(全局快捷键):唯一的视觉反馈渠道就是灵动岛横幅;菜单栏等价按钮无横幅。
