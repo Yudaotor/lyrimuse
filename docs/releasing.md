@@ -80,9 +80,17 @@
       [packaging/macports/](../packaging/macports/)）：提 PR 更新 version + 源码 tarball 的
       rmd160/sha256/size（**源码包**，不是 CI 的二进制资产：`shasum -a 256` + `openssl dgst
       -rmd160` + `stat -f %z` 对 `archive/refs/tags/vX.Y.Z.tar.gz` 算）；若 build.sh 的
-      包管理器钩子已随新版发布，顺带删掉 `files/patch-build-env-hooks.diff` 与 patchfiles 行；
-      SwiftPM 依赖（KeyboardShortcuts/Sparkle）版本变了要同步三处：Package.swift 重写模式、
-      distfile 版本变量、对应校验和。
+      包管理器钩子已随新版发布，顺带删掉 `files/patch-build-env-hooks.diff` 与 patchfiles 行。
+      **只有 lyrimuse 这一个 port 要跟着发版走**——KeyboardShortcuts 由 SwiftPM 在构建时自己
+      解析，不再有 distfile；Sparkle 在这个 port 里是整个摘掉的（`files/SparkleUpdaterManager.swift`
+      是同接口的空桩），所以改了 `SparkleUpdaterManager` 的公开成员、或动了 `SettingsView` 的
+      `updateCard` 行 / `MenuBarStatusMenu` 的「检查更新…」项，都要回来核对应的 `reinplace`
+      还匹配得上（匹配不上 MacPorts 那边会静默少改一处）。
+- [ ] **media-control port**（同一仓库的 `audio/media-control`，我们也是 maintainer，参照副本
+      在 [packaging/macports/media-control/](../packaging/macports/media-control/)）：**不跟
+      lyrimuse 发版联动**，只在 ungive/media-control 上游发新版时单独提 PR——改 `version`、两个
+      distfile（主包 + `mediaremote-adapter` 子模块归档）的校验和，以及子模块那行 `mra_commit`
+      （取新 tag 上 `mediaremote-adapter` 记录的 commit）。
 - [ ] **Sparkle 升级链路实测**：找一台上一版机器（或本机临时装回上一版）走一次升级。
       装回旧版前**先备份 `~/.config/lyrimuse`**（旧 collector 不认识新字段，存盘会抹掉），
       且别让旧版跑太久。旧版 ad-hoc 包被 Gatekeeper 拦 `open` 是预期——直接跑

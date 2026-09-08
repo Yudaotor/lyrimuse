@@ -4,9 +4,10 @@ PortSystem          1.0
 PortGroup           github 1.0
 
 github.setup        Yudaotor lyrimuse 1.6.0 v
+github.tarball_from archive
 revision            0
+
 categories          aqua audio
-supported_archs     arm64 x86_64
 license             GPL-3
 maintainers         {@Yudaotor} openmaintainer
 
@@ -23,6 +24,11 @@ long_description    Lyrimuse shows word-by-word synced lyrics as a floating \
                     (pinyin, Cantonese Jyutping, Japanese furigana) and \
                     Last.fm / ListenBrainz scrobbling are built in.
 
+checksums           ${distname}${extract.suffix} \
+                        rmd160  e045cf933adb38abfad31781a3f9ed2c4fb26ccd \
+                        sha256  7273bd69d4283794c9f8680b8dd3cefe59efed0ea7d30d0aa821eb1cc75f3a74 \
+                        size    20109994
+
 # The app builds with Command Line Tools alone (no full Xcode needed), but the
 # source requires the macOS 26 SDK (upstream CI builds on macos-26).
 if {${os.platform} eq "darwin" && ${os.major} < 25} {
@@ -34,131 +40,77 @@ current Command Line Tools) to build."
     }
 }
 
-github.tarball_from archive
-
-# The two SwiftPM dependencies are prefetched as checksummed distfiles so the
-# build works inside the no-network sandbox: KeyboardShortcuts is swapped in as
-# a local source package, Sparkle (a prebuilt xcframework that its upstream
-# manifest would download at resolve time) as a local binaryTarget shim
-# (files/Sparkle-Package.swift).
-set ks_version      1.15.0
-set sparkle_version 2.9.4
-
-# media-control (BSD-3-Clause) reads playback state of the MediaRemote-backed
-# players (QQ Music, NetEase Cloud Music, Kugou, Spotify). Upstream's release
-# builds embed it into the app bundle from Homebrew; here it is built from
-# source during pre-build and embedded the same way. Its single git submodule
-# is pinned to the commit recorded in the v${mc_version} tag.
-set mc_version      0.7.6
-set mra_commit      3ac3d4bdf862c7b5399b4fba4df5689f5c38609a
-
-distfiles-append    KeyboardShortcuts-${ks_version}.tar.gz:ks \
-                    Sparkle-for-Swift-Package-Manager-${sparkle_version}.zip:sparkle \
-                    media-control-${mc_version}.tar.gz:mc \
-                    mediaremote-adapter-${mra_commit}.tar.gz:mra
-
-master_sites-append https://github.com/sindresorhus/KeyboardShortcuts/archive/refs/tags/${ks_version}.tar.gz?dummy=:ks \
-                    https://github.com/sparkle-project/Sparkle/releases/download/${sparkle_version}/Sparkle-for-Swift-Package-Manager.zip?dummy=:sparkle \
-                    https://github.com/ungive/media-control/archive/refs/tags/v${mc_version}.tar.gz?dummy=:mc \
-                    https://github.com/ungive/mediaremote-adapter/archive/${mra_commit}.tar.gz?dummy=:mra
-
-checksums           ${distname}${extract.suffix} \
-                        rmd160  e045cf933adb38abfad31781a3f9ed2c4fb26ccd \
-                        sha256  7273bd69d4283794c9f8680b8dd3cefe59efed0ea7d30d0aa821eb1cc75f3a74 \
-                        size    20109994 \
-                    KeyboardShortcuts-${ks_version}.tar.gz \
-                        rmd160  2eade3236fd7f9864df93aab3f5a9f2b255f3bb6 \
-                        sha256  6fae2a50ed5f85929716bdbe4e0cd08c4563ab7d19fc8d5099897662cb3a74e6 \
-                        size    150493 \
-                    Sparkle-for-Swift-Package-Manager-${sparkle_version}.zip \
-                        rmd160  ba20dc080fa466965136feb860424ce51756927a \
-                        sha256  cb6fdbdc8884f15d62a616e79face92b08322410fd2d425edc6596ccbf4ba3b0 \
-                        size    11568656 \
-                    media-control-${mc_version}.tar.gz \
-                        rmd160  827d180800dc6bc75aa2327698e6bd2fdd90f238 \
-                        sha256  beec425be7d5fa148019fdf3edf71674d342f5ac8fa212153fb2baab2784dccf \
-                        size    178389 \
-                    mediaremote-adapter-${mra_commit}.tar.gz \
-                        rmd160  d213369970cfc2697253c9edd89e97d447cfe041 \
-                        sha256  111e285e7a8acfb05b7339883e303a360f8a7a9b7acb4f0f5c01b647deb8ceb5 \
-                        size    33519
-
-extract.only        ${distname}${extract.suffix}
-
-post-extract {
-    set depsdir ${worksrcpath}/lyrimuse/deps
-    xinstall -d ${depsdir}/Sparkle
-    system -W ${depsdir} "/usr/bin/tar -xzf ${distpath}/KeyboardShortcuts-${ks_version}.tar.gz"
-    move ${depsdir}/KeyboardShortcuts-${ks_version} ${depsdir}/KeyboardShortcuts
-    system -W ${depsdir}/Sparkle "/usr/bin/unzip -q ${distpath}/Sparkle-for-Swift-Package-Manager-${sparkle_version}.zip"
-    copy ${filespath}/Sparkle-Package.swift ${depsdir}/Sparkle/Package.swift
-
-    # media-control sources, with the pinned submodule slotted into place.
-    system -W ${workpath} "/usr/bin/tar -xzf ${distpath}/media-control-${mc_version}.tar.gz"
-    system -W ${workpath} "/usr/bin/tar -xzf ${distpath}/mediaremote-adapter-${mra_commit}.tar.gz"
-    delete ${workpath}/media-control-${mc_version}/mediaremote-adapter
-    move ${workpath}/mediaremote-adapter-${mra_commit} \
-        ${workpath}/media-control-${mc_version}/mediaremote-adapter
-}
+# media-control reads playback state of the MediaRemote-backed players (QQ
+# Music, NetEase Cloud Music, Kugou, Spotify) — it is a runtime dependency,
+# spawned as a helper process. Go builds the bundled collector daemon; the
+# Swift toolchain comes from the Command Line Tools.
+depends_build-append \
+                    port:go
+depends_lib-append  port:media-control
 
 # Backport of upstream's package-manager build hooks (media-control prefix,
-# Sparkle framework path, extra swift build flags, Go toolchain selection) —
-# committed upstream after the v1.6.0 tag; drop with the next release.
+# extra swift build flags, Go toolchain selection) — committed upstream after
+# the v1.6.0 tag; drop with the next release.
 patchfiles          patch-build-env-hooks.diff
 patch.pre_args-append -p1
 
 post-patch {
-    # SwiftPM must never touch the network: point the two remote dependencies
-    # at the prefetched local copies and drop the pin file that still records
-    # their remote locations.
-    reinplace {s|\.package(url: "https://github.com/sindresorhus/KeyboardShortcuts", exact: "1.15.0")|.package(path: "deps/KeyboardShortcuts")|} \
+    # An app installed by MacPorts must not update itself — 'port upgrade' is
+    # the supported path — so drop the Sparkle dependency, as aqua/Ice does.
+    # The updater manager is swapped for a stub with the same surface instead
+    # of patching its ~16 call sites across seven files.
+    reinplace {/sparkle-project\/Sparkle/d} ${worksrcpath}/lyrimuse/Package.swift
+    reinplace {s|"LyrimuseCore", "KeyboardShortcuts", "Sparkle"|"LyrimuseCore", "KeyboardShortcuts"|} \
         ${worksrcpath}/lyrimuse/Package.swift
-    reinplace {s|\.package(url: "https://github.com/sparkle-project/Sparkle", from: "2.9.4")|.package(path: "deps/Sparkle")|} \
-        ${worksrcpath}/lyrimuse/Package.swift
-    delete ${worksrcpath}/lyrimuse/Package.resolved
+    copy -force ${filespath}/SparkleUpdaterManager.swift \
+        ${worksrcpath}/lyrimuse/Sources/lyrimuse/Settings/SparkleUpdaterManager.swift
 
-    # Upstream hardcodes a universal build for the adapter framework (a plain
-    # set() that overrides -DCMAKE_OSX_ARCHITECTURES); a stray x86_64 slice
-    # inside an arm64-only app is what triggers macOS's "needs updating"
-    # alert, so drop the line and build only the target arch.
-    reinplace {/set(CMAKE_OSX_ARCHITECTURES "x86_64;arm64")/d} \
-        ${workpath}/media-control-${mc_version}/mediaremote-adapter/CMakeLists.txt
+    # The diagnostics export reaches through to Sparkle's own updater object;
+    # read the equivalent values off the stub instead.
+    reinplace {s|let sparkle = SparkleUpdaterManager.shared.controller.updater|let sparkle = SparkleUpdaterManager.shared|} \
+        ${worksrcpath}/lyrimuse/Sources/lyrimuse/Settings/DiagnosticsExporter.swift
+
+    # ... and take the two update entry points out of the UI, so this build
+    # does not show controls that cannot do anything. (The menu bar panel
+    # needs no change: it only offers an update row when one was found, which
+    # never happens here, and otherwise just shows the version.)
+    reinplace {/^            updateCard$/d} \
+        ${worksrcpath}/lyrimuse/Sources/lyrimuse/SettingsView.swift
+    reinplace {/menu.addItem(action(L10n.t("检查更新…"), symbol: "arrow.triangle.2.circlepath",/,+1d} \
+        ${worksrcpath}/lyrimuse/Sources/lyrimuse/MenuBar/MenuBarStatusMenu.swift
 }
-
-# Go (the bundled collector daemon) and cmake (media-control) are only needed
-# at build time; the Swift toolchain comes from the Command Line Tools.
-depends_build-append \
-                    port:cmake \
-                    port:go
 
 use_configure       no
-
-# media-control is built and staged first so build.sh can embed it into the
-# app bundle the same way upstream's release builds do.
-pre-build {
-    set mcsrc ${workpath}/media-control-${mc_version}
-    # CMAKE_OSX_ARCHITECTURES pinned to the build arch: upstream defaults to a
-    # universal binary, and stray x86_64 code inside an arm64-only app is what
-    # triggers macOS's "needs updating" alert.
-    system -W ${mcsrc} "cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES=${build_arch} -DCMAKE_INSTALL_PREFIX=${workpath}/mc-stage"
-    system -W ${mcsrc} "cmake --build build"
-    system -W ${mcsrc} "cmake --install build"
-}
 
 build.dir           ${worksrcpath}/lyrimuse
 build.cmd           ./build.sh
 build.target
 build.args          --dest ${workpath}/stage/Lyrimuse.app
+
+# SwiftPM resolves the remaining source dependency (KeyboardShortcuts) during
+# the build; redirect all of its working state into ${workpath} so nothing is
+# written outside the sandbox-allowed tree (same approach as aqua/Ice).
 build.env-append    LYRIMUSE_VERSION=${version} \
                     LYRIMUSE_GOTOOLCHAIN=local \
-                    GOPROXY=off \
                     GOFLAGS=-buildvcs=false \
                     GOCACHE=${workpath}/.gocache \
                     GOPATH=${workpath}/.gopath \
-                    HOME=${workpath}/.home \
-                    LYRIMUSE_SWIFT_BUILD_FLAGS=--disable-sandbox \
-                    LYRIMUSE_MEDIA_CONTROL_PREFIX=${workpath}/mc-stage \
-                    LYRIMUSE_SPARKLE_FRAMEWORK=${worksrcpath}/lyrimuse/deps/Sparkle/Sparkle.xcframework/macos-arm64_x86_64/Sparkle.framework
+                    GOMODCACHE=${workpath}/.gomodcache \
+                    TMPDIR=${workpath}/tmp \
+                    HOME=${workpath}/home \
+                    LYRIMUSE_SPM_CACHE_PATH=${workpath}/spm-cache \
+                    LYRIMUSE_SPM_SCRATCH_PATH=${workpath}/spm-scratch \
+                    LYRIMUSE_MEDIA_CONTROL_PREFIX=${prefix}
+
+pre-build {
+    file mkdir ${workpath}/tmp
+    file mkdir ${workpath}/home/Library/Caches
+
+    # SwiftPM sandboxes its manifest-loading subprocesses via sandbox-exec, but
+    # macOS rejects nested sandbox_apply calls when the process is already
+    # sandboxed by MacPorts. Allow sandbox-exec to apply its own profile.
+    append portsandbox_profile " (allow process-exec (literal \"/usr/bin/sandbox-exec\") (with no-profile))"
+}
 
 destroot {
     xinstall -d ${destroot}${applications_dir}
@@ -169,6 +121,6 @@ notes "
 Lyrimuse is ad-hoc signed when built from source; macOS may ask you to approve\
  Automation access for your music player on first launch.
 
-The in-app Sparkle updater cannot replace an app installed by MacPorts —\
- update with 'sudo port upgrade lyrimuse' instead.
+This build has no in-app updater — run 'sudo port selfupdate && sudo port\
+ upgrade lyrimuse' to update.
 "
