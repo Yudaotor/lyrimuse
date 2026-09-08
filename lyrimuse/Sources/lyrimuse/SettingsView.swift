@@ -222,6 +222,9 @@ struct SettingsView: View {
     @State private var isAdditionalFeaturesExpanded = false
     /// 侧栏顶部搜索框的文字(2026-09-09,借鉴清单 S8)。非空时侧栏 List 换成结果列表;不持久化。
     @State private var settingsSearchText = ""
+    /// 搜索框的焦点。放在这里而不是搜索框自己身上,因为让出焦点的时机在这一层:选了侧栏别的分类、
+    /// 打开了一条结果,光标就不该继续在搜索框里闪。
+    @FocusState private var settingsSearchFocused: Bool
     /// 搜索命中后的"高亮哪几行 / 展开哪个抽屉"信号,经 Environment 下发给行组件与三个「全部设置」
     /// 抽屉(Settings/SettingsSearch.swift)。
     @ObservedObject private var searchRouter = SettingsSearchRouter.shared
@@ -278,6 +281,7 @@ struct SettingsView: View {
         }
         searchRouter.reveal(hit)
         settingsSearchText = ""
+        settingsSearchFocused = false
     }
 
     /// 平时(不在搜索)的侧栏内容:核心设置六类 + 账号 + 折叠的实验室功能。
@@ -356,7 +360,8 @@ struct SettingsView: View {
             .listStyle(.sidebar)
             // 搜索框钉在侧栏顶部、不随列表滚(2026-09-09,借鉴清单 S8)。
             .safeAreaInset(edge: .top, spacing: 0) {
-                SettingsSearchField(text: $settingsSearchText, onSubmit: openFirstSettingsSearchResult)
+                SettingsSearchField(text: $settingsSearchText, focused: $settingsSearchFocused,
+                                    onSubmit: openFirstSettingsSearchResult)
             }
             .navigationSplitViewColumnWidth(min: 170, ideal: 190, max: 220)
             // 去掉 NavigationSplitView 自动塞进工具栏的那颗"隐藏边栏"按钮:这个窗口的
@@ -439,6 +444,8 @@ struct SettingsView: View {
         // 包括「关于」——上次停在低频页下次也落在那里,行为可预测,参考做法同样接受。
         .onChange(of: selection) { _, item in
             if case .tab(let tab)? = item { lastTabRaw = tab.rawValue }
+            // 选到别的分类了,搜索框的光标就别再闪(2026-09-09 用户实测提出)。
+            settingsSearchFocused = false
         }
         // 见 AuxiliaryWindowActivation 注释——.accessory 策略下临时借一个 Dock 图标,
         // 关掉后(没有别的辅助窗口还开着)还原,不跟"在 Dock 中显示"这个永久偏好打架。

@@ -225,10 +225,15 @@ private struct SettingsRevealInScrollView: NSViewRepresentable {
 // MARK: - 搜索框与结果行
 
 /// 侧栏顶部的搜索框。⌘F 聚焦;Esc 先清空、再按一次让出焦点;回车打开第一条结果。
+///
+/// 焦点状态由 SettingsView 持有再传进来(`FocusState<Bool>.Binding`),因为让出焦点的时机在它那边:
+/// 用户点了侧栏别的分类、或打开了一条结果,光标就不该继续在这里闪(2026-09-09 用户实测提出)。
+/// 窗口刚打开时它是键视图环里第一个文本框,AppKit 会默认把第一响应者给它——`onAppear` 里下一个
+/// 运行环让掉,跟系统设置一致:搜索框没人碰就不闪光标。
 struct SettingsSearchField: View {
     @Binding var text: String
+    var focused: FocusState<Bool>.Binding
     var onSubmit: () -> Void
-    @FocusState private var focused: Bool
 
     var body: some View {
         HStack(spacing: 6) {
@@ -238,10 +243,14 @@ struct SettingsSearchField: View {
             TextField(L10n.t("搜索设置"), text: $text)
                 .textFieldStyle(.plain)
                 .font(.system(size: 13))
-                .focused($focused)
+                .focused(focused)
                 .onSubmit(onSubmit)
                 .onExitCommand {
-                    if text.isEmpty { focused = false } else { text = "" }
+                    if text.isEmpty { focused.wrappedValue = false } else { text = "" }
+                }
+                .onAppear {
+                    // 初始第一响应者是窗口显示时同步指派的,这里晚一拍再让掉才生效。
+                    DispatchQueue.main.async { focused.wrappedValue = false }
                 }
             if !text.isEmpty {
                 Button {
@@ -265,7 +274,7 @@ struct SettingsSearchField: View {
         .background {
             // ⌘F 的落点。设置窗口是 accessory App 的 Settings scene,没有「编辑 → 查找」菜单可挂,
             // 用一个不可见的按钮接快捷键。
-            Button("") { focused = true }
+            Button("") { focused.wrappedValue = true }
                 .keyboardShortcut("f", modifiers: .command)
                 .opacity(0)
                 .frame(width: 0, height: 0)
