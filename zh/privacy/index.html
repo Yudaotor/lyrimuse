@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="zh-Hans">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>隐私政策 — Lyrimuse</title>
+<meta name="description" content="Lyrimuse 不收集任何数据：没有账号、没有遥测、没有统计。本页逐条列出 App 会联系哪些服务器、什么时候联系、发送了什么。">
+<link rel="canonical" href="https://yudaotor.github.io/lyrimuse/zh/privacy/">
+<link rel="alternate" hreflang="en" href="https://yudaotor.github.io/lyrimuse/privacy/">
+<link rel="alternate" hreflang="zh-Hans" href="https://yudaotor.github.io/lyrimuse/zh/privacy/">
+<link rel="alternate" hreflang="x-default" href="https://yudaotor.github.io/lyrimuse/privacy/">
+<link rel="icon" href="../../assets/img/app-icon.png">
+<link rel="stylesheet" href="../../assets/style.css">
+<meta property="og:title" content="隐私政策 — Lyrimuse">
+<meta property="og:description" content="没有账号、没有遥测、没有统计。App 到底联系哪些服务器，逐条列清楚。">
+<meta property="og:url" content="https://yudaotor.github.io/lyrimuse/zh/privacy/">
+<meta property="og:type" content="article">
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <img src="../../assets/img/app-icon.png" alt="Lyrimuse 图标">
+  <span class="name"><a href="../" style="color:inherit">Lyrimuse</a></span>
+  <nav>
+    <a href="../">首页</a>
+    <a href="../terms/">使用条款</a>
+    <a href="https://github.com/Yudaotor/lyrimuse">GitHub</a>
+    <a href="../../privacy/" lang="en">English</a>
+  </nav>
+</header>
+
+<div class="hero" style="padding-bottom:6px">
+  <h1>隐私政策</h1>
+  <p class="sub">最后更新：2026 年 9 月 8 日</p>
+</div>
+
+<p class="note"><strong>一句话版：</strong>Lyrimuse 没有账号体系、没有遥测、没有统计。关于你和你听什么，没有任何信息会被发送到开发者的服务器。App 确实会联系第三方服务，因为歌词得从别人那里找，本页把它们全部列出来。</p>
+
+<section>
+  <h2>1. 适用范围</h2>
+  <p>本政策适用于 <strong>Lyrimuse</strong> macOS 应用及其随附的后台采集服务，以及 <code>yudaotor.github.io/lyrimuse</code> 这个网站。Lyrimuse 是一个由个人开发者（<a href="https://github.com/Yudaotor">Yudaotor</a>）维护的免费开源项目，背后没有公司。</p>
+</section>
+
+<section>
+  <h2>2. 我们收集什么：什么都不收</h2>
+  <p>没有注册、没有用户 ID、没有崩溃上报、没有使用统计。开发者不运营任何接收 App 数据的服务器，因此手上没有任何关于你的数据。也就没有什么可以给你导出、更正或删除的——因为从来没有采集过。</p>
+  <p>源代码是公开的，所以这件事你可以自己去核，不必只听我说。</p>
+</section>
+
+<section>
+  <h2>3. 留在你自己 Mac 上的东西</h2>
+  <p>App 记住的一切都写在你自己的机器上，主要在 <code>~/.config/lyrimuse</code> 下：</p>
+  <ul>
+    <li>你的设置</li>
+    <li>歌词缓存（所以听过一次的歌离线也能显示）</li>
+    <li>本机听歌历史，榜单和「那年今日」就是从它算出来的</li>
+    <li>你主动连接的服务的凭据，比如 Last.fm 的 session key 或 ListenBrainz 的 token</li>
+  </ul>
+  <p>这些都不会上传到任何地方。删掉 App 就没了；随附的 <code>uninstall.sh --purge</code> 会把它们彻底删除。</p>
+</section>
+
+<section>
+  <h2>4. App 会联系哪些服务器</h2>
+  <p>找歌词就得去问有歌词的人。一首歌开始播放时，它的<strong>歌名、歌手、专辑和时长</strong>会被发给歌词源用于查询。这些查询不会附带任何能标识你或你这台机器的信息。</p>
+
+  <h3>正常使用时始终会发生</h3>
+  <table>
+    <tr><th>用途</th><th>联系的服务</th></tr>
+    <tr><td>歌词查询</td><td>网易云音乐、QQ 音乐、酷狗、酷我、咪咕、Musixmatch、LRCLIB、YouTube Music（LyricFind），以及托管在 GitHub 上的 AMLL 歌词库</td></tr>
+    <tr><td>专辑封面与曲目信息</td><td>Apple iTunes 检索接口与封面服务器、Deezer、MusicBrainz</td></tr>
+    <tr><td>检查更新</td><td>只有 GitHub，走 <code>github.com/Yudaotor/lyrimuse/releases</code> 上的更新源。Sparkle 那个可选的匿名系统信息上报<strong>没有启用</strong>，所以检查更新除了当前版本号之外不发送任何东西。</td></tr>
+    <tr><td>「关于」页显示的 star 数</td><td>GitHub API</td></tr>
+    <tr><td>联网状态探测</td><td>对公共 DNS（1.1.1.1、8.8.8.8）做一次可达性探测</td></tr>
+  </table>
+
+  <h3>只有你自己打开之后才会发生</h3>
+  <p>以下功能默认关闭，你不去连它就一直不会联网：</p>
+  <table>
+    <tr><th>功能</th><th>联系的服务</th></tr>
+    <tr><td>听歌打卡（scrobble）</td><td>你连接了账号才会用到的 Last.fm 和／或 ListenBrainz。上送的是播放器报告的曲目信息，原样不动。</td></tr>
+    <tr><td>在线翻译兜底</td><td>翻译默认走 Apple 的<strong>设备端</strong>翻译框架，歌词不出本机。只有设备端处理不了某个语种组合时，才会退到在线兜底（MyMemory）。</td></tr>
+    <tr><td>每周听歌小结推送</td><td>你自己配置的那个推送平台：Bark、钉钉、企业微信、Discord、飞书或 Server酱。</td></tr>
+    <tr><td>可分享的「正在听」网页</td><td>你自己配置的地址。如果你部署了自己的 Cloudflare Worker，那个地址是你的，开发者看不到。</td></tr>
+  </table>
+
+  <p>上述第三方各自有自己的隐私政策和日志策略，不在开发者的控制范围内。另外，联系任何网络服务都必然会让对方看到你的 IP 地址，这跟你访问一个网站是一回事。</p>
+</section>
+
+<section>
+  <h2>5. 对外请求日志</h2>
+  <p>App 发出的每一次网络请求都会记进你本机的系统日志。这些日志行的设计是<strong>从源头就安全</strong>，而不是记完整信息再指望事后脱敏：它只记录<strong>服务名、操作、域名、HTTP 状态码和耗时</strong>，从不记录完整 URL、请求头、请求体、响应体或任何凭据。</p>
+  <p>你可以自己在「控制台」里看这些日志，也可以在设置里导出一份已脱敏的诊断信息。导出永远是你手动触发的动作，导出的文件放在哪儿由你决定，不会自己发去任何地方。</p>
+</section>
+
+<section>
+  <h2>6. App 申请的权限</h2>
+  <p>如果你选择 Apple Music 作为播放器，macOS 会要求你授权对 Music.app 的「自动化」访问，这是读取正在播放什么的方式。其它播放器走系统级 Now Playing 接口，完全不需要权限。这些权限只用于跟随播放，没有别的用途。</p>
+</section>
+
+<section>
+  <h2>7. 这个网站</h2>
+  <p>这些页面是托管在 GitHub Pages 上的静态文件，没有 cookie、没有统计脚本、没有任何追踪。GitHub 作为托管方会像任何 Web 服务器一样记录请求，详见 <a href="https://docs.github.com/site-policy/privacy-policies/github-general-privacy-statement">GitHub 的隐私声明</a>。</p>
+</section>
+
+<section>
+  <h2>8. 未成年人</h2>
+  <p>Lyrimuse 不面向儿童，并且不收集任何年龄段任何人的个人数据。</p>
+</section>
+
+<section>
+  <h2>9. 变更</h2>
+  <p>如果 App 的数据行为发生变化，本页会跟着改，顶部日期也会更新。本页的修改历史在仓库里是公开的，你可以看到具体改了什么、什么时候改的。</p>
+</section>
+
+<section>
+  <h2>10. 联系方式</h2>
+  <p>有疑问或发现错误：<a href="https://github.com/Yudaotor/lyrimuse/issues">在 GitHub 上提 issue</a>。</p>
+</section>
+
+<footer>
+  <a href="../">首页</a>
+  <a href="../terms/">使用条款</a>
+  <a href="https://github.com/Yudaotor/lyrimuse">GitHub</a>
+  <a href="https://github.com/Yudaotor/lyrimuse/blob/main/LICENSE">GPL-3.0</a>
+  <a href="../../privacy/" lang="en">English</a>
+</footer>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Privacy Policy — Lyrimuse</title>
+<meta name="description" content="Lyrimuse collects nothing. No account, no telemetry, no analytics. This page lists exactly which servers the app contacts, when, and what is sent.">
+<link rel="canonical" href="https://yudaotor.github.io/lyrimuse/privacy/">
+<link rel="alternate" hreflang="zh-Hans" href="https://yudaotor.github.io/lyrimuse/zh/privacy/">
+<link rel="alternate" hreflang="en" href="https://yudaotor.github.io/lyrimuse/privacy/">
+<link rel="alternate" hreflang="x-default" href="https://yudaotor.github.io/lyrimuse/privacy/">
+<link rel="icon" href="../assets/img/app-icon.png">
+<link rel="stylesheet" href="../assets/style.css">
+<meta property="og:title" content="Privacy Policy — Lyrimuse">
+<meta property="og:description" content="No account, no telemetry, no analytics. Exactly which servers the app contacts, and when.">
+<meta property="og:url" content="https://yudaotor.github.io/lyrimuse/privacy/">
+<meta property="og:type" content="article">
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <img src="../assets/img/app-icon.png" alt="Lyrimuse icon">
+  <span class="name"><a href="../" style="color:inherit">Lyrimuse</a></span>
+  <nav>
+    <a href="../">Home</a>
+    <a href="../terms/">Terms</a>
+    <a href="https://github.com/Yudaotor/lyrimuse">GitHub</a>
+    <a href="../zh/privacy/" lang="zh-Hans">中文</a>
+  </nav>
+</header>
+
+<div class="hero" style="padding-bottom:6px">
+  <h1>Privacy Policy</h1>
+  <p class="sub">Last updated 8 September 2026</p>
+</div>
+
+<p class="note"><strong>Short version:</strong> Lyrimuse has no account system, no telemetry and no analytics. Nothing about you or your listening is sent to any server run by the developer. The app does talk to third-party services, because that is how lyrics get found, and this page lists every one of them.</p>
+
+<section>
+  <h2>1. Who this covers</h2>
+  <p>This policy covers the <strong>Lyrimuse</strong> macOS application and its bundled background service, and this website at <code>yudaotor.github.io/lyrimuse</code>. Lyrimuse is a free, open-source project maintained by an individual developer (<a href="https://github.com/Yudaotor">Yudaotor</a>). There is no company behind it.</p>
+</section>
+
+<section>
+  <h2>2. What we collect: nothing</h2>
+  <p>There is no sign-up, no user ID, no crash reporter and no usage analytics. The developer operates no server that receives data from the app, and therefore holds no data about you. There is nothing on our side to export, correct or delete, because nothing was ever collected.</p>
+  <p>The source code is public, so this is checkable rather than something you have to take on trust.</p>
+</section>
+
+<section>
+  <h2>3. What stays on your Mac</h2>
+  <p>Everything the app remembers is written to your own machine, mainly under <code>~/.config/lyrimuse</code>:</p>
+  <ul>
+    <li>your settings</li>
+    <li>the lyrics cache (so a song you have played once works offline)</li>
+    <li>your local listening history, which is what the charts and the on-this-day view are built from</li>
+    <li>credentials for services you chose to connect, such as a Last.fm session key or a ListenBrainz token</li>
+  </ul>
+  <p>None of this is uploaded anywhere. Removing the app removes it; the bundled <code>uninstall.sh --purge</code> deletes it outright.</p>
+</section>
+
+<section>
+  <h2>4. Which servers the app contacts</h2>
+  <p>Finding lyrics means asking someone who has them. When a track starts playing, its <strong>title, artist, album and duration</strong> are sent to lyric providers so they can look it up. No identifier for you or your machine is attached to those lookups.</p>
+
+  <h3>Always, as part of normal use</h3>
+  <table>
+    <tr><th>Purpose</th><th>Services contacted</th></tr>
+    <tr><td>Lyrics lookup</td><td>NetEase Cloud Music, QQ Music, Kugou, Kuwo, Migu, Musixmatch, LRCLIB, YouTube Music (LyricFind), and the AMLL lyrics database on GitHub</td></tr>
+    <tr><td>Album artwork and track metadata</td><td>Apple iTunes Search and artwork servers, Deezer, MusicBrainz</td></tr>
+    <tr><td>Update check</td><td>GitHub only, via the release feed at <code>github.com/Yudaotor/lyrimuse/releases</code>. Sparkle's optional anonymous system profile is <strong>not</strong> enabled, so the check sends nothing beyond the current version.</td></tr>
+    <tr><td>Star count shown on the About page</td><td>GitHub API</td></tr>
+    <tr><td>Connectivity check</td><td>A reachability probe to public DNS resolvers (1.1.1.1, 8.8.8.8)</td></tr>
+  </table>
+
+  <h3>Only after you turn them on</h3>
+  <p>These are off by default and stay off until you connect them yourself:</p>
+  <table>
+    <tr><th>Feature</th><th>Services contacted</th></tr>
+    <tr><td>Scrobbling</td><td>Last.fm and/or ListenBrainz, if you connect an account. What is submitted is the track metadata your player reported, unchanged.</td></tr>
+    <tr><td>Online translation fallback</td><td>Translation runs <strong>on your device</strong> through Apple's Translation framework by default, so lyrics do not leave your Mac. An online fallback (MyMemory) is used only when on-device translation cannot handle a language pair.</td></tr>
+    <tr><td>Weekly summary notifications</td><td>Whichever push service you configure: Bark, DingTalk, WeCom, Discord, Feishu or Server酱.</td></tr>
+    <tr><td>Shareable now-playing page</td><td>The endpoint you configure. If you deploy your own Cloudflare Worker, that endpoint is yours and the developer never sees it.</td></tr>
+  </table>
+
+  <p>Each of these third parties has its own privacy policy and its own logging, which is outside the developer's control. Contacting any web service inevitably reveals your IP address to that service, exactly as visiting a website does.</p>
+</section>
+
+<section>
+  <h2>5. The outbound request log</h2>
+  <p>Every network request the app makes is written to your local system log. Those log lines are designed to be safe at the source rather than sanitised afterwards: they record the <strong>service, the operation, the hostname, the HTTP status and how long it took</strong>, and never the full URL, request headers, request body, response body or any credential.</p>
+  <p>You can read that log yourself in Console.app, or produce a redacted diagnostics bundle from Settings. Exporting diagnostics is always a manual action, and the resulting file goes wherever you choose to put it. Nothing is sent anywhere on its own.</p>
+</section>
+
+<section>
+  <h2>6. Permissions the app asks for</h2>
+  <p>If you pick Apple Music as a player, macOS asks you to grant Automation access to Music.app, which is how the app reads what is playing. Other players are read through the system-level Now Playing interface and need no permission at all. Nothing here is used for any purpose other than following playback.</p>
+</section>
+
+<section>
+  <h2>7. This website</h2>
+  <p>These pages are static files hosted on GitHub Pages. There are no cookies, no analytics scripts and no trackers of any kind. GitHub, as the host, logs requests the way any web server does; see <a href="https://docs.github.com/site-policy/privacy-policies/github-general-privacy-statement">GitHub's privacy statement</a>.</p>
+</section>
+
+<section>
+  <h2>8. Children</h2>
+  <p>Lyrimuse is not directed at children and collects no personal data from anyone, of any age.</p>
+</section>
+
+<section>
+  <h2>9. Changes</h2>
+  <p>If the app's data behaviour changes, this page changes with it, and the date at the top is updated. The page's history is public in the repository, so you can see exactly what changed and when.</p>
+</section>
+
+<section>
+  <h2>10. Contact</h2>
+  <p>Questions or corrections: <a href="https://github.com/Yudaotor/lyrimuse/issues">open an issue on GitHub</a>.</p>
+</section>
+
+<footer>
+  <a href="../">Home</a>
+  <a href="../terms/">Terms of Service</a>
+  <a href="https://github.com/Yudaotor/lyrimuse">GitHub</a>
+  <a href="https://github.com/Yudaotor/lyrimuse/blob/main/LICENSE">GPL-3.0</a>
+  <a href="../zh/privacy/" lang="zh-Hans">简体中文</a>
+</footer>
+
+</div>
+</body>
+</html>
