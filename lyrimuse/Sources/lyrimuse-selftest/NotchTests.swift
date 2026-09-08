@@ -308,6 +308,25 @@ func runNotchTests() {
         expectEqual(R.twoLineStackHeight <= R.rowHeight, true,
                     "副行: 两行叠起来必须塞进行高,否则卡片高度公式要多一个入参")
         expectEqual((R.rowHeight - R.twoLineStackHeight) / 2 >= 4, true, "副行: 上下各留至少 4pt,别贴边")
+
+        // 「字体」组(2026-09-09):主行字号可调、行高仍是 44。范围上限必须让两行 + 间距仍塞进去且上下各留 ≥ 4pt ——
+        // 这条不变量比"17 这个数"更重要,改范围先过这里;默认字号下三个度量逐个等于改动前的硬编码(升级不变样)。
+        expectEqual(R.mainLineHeight(fontSize: R.defaultMainFontSize), 15, "字体: 默认 13pt 的主行高度仍是 15")
+        expectEqual(R.mainLineHeight, 15, "字体: 不带字号的默认主行高度也是 15")
+        expectEqual(R.secondaryLineHeight, 13, "字体: 副行 11pt 高度仍是 13")
+        expectEqual(R.secondaryFontSize, 11, "字体: 副行字号固定 11,不随主行变")
+        expectEqual(R.mainFontSizeRange.contains(R.defaultMainFontSize), true, "字体: 默认字号落在合法区间内")
+        expectEqual(R.mainFontSizeRange.lowerBound < R.defaultMainFontSize, true, "字体: 区间要能往小调")
+        let maxStack = R.twoLineStackHeight(fontSize: R.mainFontSizeRange.upperBound)
+        expectEqual(maxStack <= R.rowHeight, true, "字体: 最大字号下两行仍塞进 44(\(maxStack))")
+        expectEqual((R.rowHeight - maxStack) / 2 >= 4, true, "字体: 最大字号下上下仍各留 ≥ 4pt(\(maxStack))")
+        expectEqual(R.clampedMainFontSize(99), R.mainFontSizeRange.upperBound, "字体: 越界字号夹回上限")
+        expectEqual(R.clampedMainFontSize(1), R.mainFontSizeRange.lowerBound, "字体: 越界字号夹回下限")
+        expectEqual(R.mainLineHeight(fontSize: 99), R.mainLineHeight(fontSize: R.mainFontSizeRange.upperBound),
+                    "字体: 行高按夹回后的字号算,越界配置不把行撑破")
+        expectEqual(R.lineHeight(fontSize: 16.6), 19, "字体: 行高先把字号取整再 +2")
+        expectEqual(OverlayFontWeight.semibold.lighter(by: OverlayFontWeight.notchSecondarySteps), .medium,
+                    "字体: 默认档 semibold 推出的副行粗细 = 改动前硬编码的 medium")
     }
 
     // ---- 灵动岛 hover 命中判定(2026-09-07)----

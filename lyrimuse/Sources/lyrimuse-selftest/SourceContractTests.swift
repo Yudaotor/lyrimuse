@@ -315,6 +315,41 @@ func runSourceContractTests() {
                     "封面口径: 这些地方裸读 artworkImage、没走高清替代优先 —— 会跟别处显示成两张不同的图(写 `highResArtworkImage ?? artworkImage`,或用 displayArtworkImage)")
     }
 
+    // ---- 灵动岛「字体」组的接线(2026-09-09)----
+    //
+    // 三个字体设置只影响渲染,漏接任何一处都不报错,只表现成"改了字体、某处没跟着变"。要吃字体的五处歌词
+    // 文字(主行 / 副行 / 展开态「下一句」预览 / 广告态那一格的「广告中」与倒计时)和一处随字号走的主行高度,
+    // 都从 `NotchPlayback` 读派生值,视图里不再给歌词文字写 `.system(size: 13, weight: .semibold)` 这类硬编码。
+    // 形态同下面「对齐方式」那条源码扫描守卫(剔掉注释行再数,盲区也相同)。
+    do {
+        let appSources = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("lyrimuse")
+        if let notch = try? String(contentsOfFile: appSources.appendingPathComponent("UI/NotchLyricsView.swift").path,
+                                   encoding: .utf8) {
+            let code = notch.split(separator: "\n", omittingEmptySubsequences: false)
+                .map(String.init).filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") }.joined(separator: "\n")
+            func count(_ needle: String) -> Int { code.components(separatedBy: needle).count - 1 }
+            // 广告态那一格(`adStatusColumn`,2026-09-08 起)也要跟字体走 —— 但它跟字体设置是两条并行推进的改动,
+            // 按"这一格在不在"决定要不要数它,别让两边谁先入库都把对方的闸打红。
+            let hasAdRow = code.contains("adCountdown")
+            expectEqual(count("playback.mainFont)") >= (hasAdRow ? 2 : 1), true,
+                        "灵动岛字体: 主行(以及广告态「广告中」)要读 playback.mainFont(现 \(count("playback.mainFont)")) 处)")
+            expectEqual(count("playback.secondaryFont)") >= 2, true,
+                        "灵动岛字体: 副行与展开态「下一句」预览都要读 playback.secondaryFont(现 \(count("playback.secondaryFont)")) 处)")
+            if hasAdRow {
+                expectEqual(count("playback.mainDetailFont)") >= 1, true, "灵动岛字体: 广告态倒计时读 playback.mainDetailFont")
+            }
+            expectEqual(count("playback.mainLineHeight") >= 1, true,
+                        "灵动岛字体: 副行开着时主行那一格的高度要随字号走(playback.mainLineHeight)")
+            for needle in ["s.$notchMainFont", "s.$notchMainDetailFont", "s.$notchSecondaryFont", "s.$notchFontSize"] {
+                expectEqual(code.contains(needle), true, "灵动岛字体: NotchPlayback 要镜像 \(needle)")
+            }
+        } else {
+            expectEqual(true, false, "灵动岛字体: 读不到 UI/NotchLyricsView.swift(路径挪了?)")
+        }
+    }
+
     // ---- 灵动岛「对齐方式」的三条接线必须都在(2026-09-03)----
     //
     // 这一项是纯 App target 的(枚举 `LyricsRestingAlignment` 和两个消费点都在

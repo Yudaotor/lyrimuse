@@ -315,6 +315,9 @@ final class AppSettings: ObservableObject {
         static let notchLyricRowArtworkPosition = "np:notchLyricRowArtworkPosition"
         static let notchLyricsAlignment = "np:notchLyricsAlignment"
         static let notchSecondaryLine = "np:notchSecondaryLine"
+        static let notchFontFamilyName = "np:notchFontFamilyName"
+        static let notchFontWeight = "np:notchFontWeight"
+        static let notchFontSize = "np:notchFontSize"
         static let notchLeftEar = "np:notchLeftEar"
         static let notchRightEar = "np:notchRightEar"
         static let notchScreenID = "np:notchScreenID"
@@ -441,6 +444,12 @@ final class AppSettings: ObservableObject {
     /// 灵动岛歌词行「副行」默认「下一句」(2026-09-06):用户提这个需求的原话是「主要目的是让它可以提前
     /// 看到下一行歌词」,默认就该是那个;两行塞进原来的 44pt,升级上来的用户卡片高度不变。
     static let defaultNotchSecondaryLine = LyricSecondaryLine.nextLine
+    /// 灵动岛歌词的字体三件(2026-09-09,用户:「在灵动岛里面加上一个设置,可支持配置字体」)。默认值 = 加这组设置
+    /// 之前 `NotchLyricsView` 里硬编码的那套(系统字体 / semibold / 13pt),升级上来的用户一个像素都不变。字号的
+    /// 默认值与合法区间真源在 Core `NotchLyricRowMetrics`(行高不变量在那边有 selftest 钉着),这里只转发。
+    static let defaultNotchFontFamilyName = ""
+    static let defaultNotchFontWeight: OverlayFontWeight = .semibold
+    static let defaultNotchFontSize = Double(NotchLyricRowMetrics.defaultMainFontSize)
 
     // 菜单栏歌词「重置」按钮(编辑台工具栏,2026-09-01,设置页改造成编辑台风格时一并补上)
     // 要恢复的那一批默认值——宽度模式 + 逐字染色 + 文字/染色两个自定义色,不含
@@ -1083,6 +1092,37 @@ final class AppSettings: ObservableObject {
     @Published var notchSecondaryLine: LyricSecondaryLine {
         didSet { defaults.set(notchSecondaryLine.rawValue, forKey: Keys.notchSecondaryLine) }
     }
+    /// 灵动岛歌词的字体族 / 粗细 / 字号(2026-09-09,设置页灵动岛工具栏第二行「字体」浮层与抽屉「字体」组)。
+    /// 三个都只影响渲染、不影响几何:行高恒 44,字号上限由 `NotchLyricRowMetrics.mainFontSizeRange` 倒推、保证副行
+    /// 开着时两行仍塞得进去,所以跟 `notchLyricsAlignment` 一样走 `NotchPlayback` 现读,不过 `NotchChromeSource`
+    /// 那套高度链路。
+    ///
+    /// 只管**歌词文字**(主行、副行、展开区「下一句」预览、广告态那一格):耳朵里的歌名 / 歌手模块、曲目信息头部、
+    /// 时间和按键是卡片本身的界面,不跟着走 —— 悬浮歌词和菜单栏的字体设置也只管歌词,三个面同一条边界。
+    ///
+    /// 字号只调**主行**;副行和展开预览固定 11pt(`NotchLyricRowMetrics.secondaryFontSize`)、粗细比主行细一档
+    /// (`OverlayFontWeight.notchSecondarySteps`),理由见 Core 那两个常量的注释。三个派生 `Font` 在
+    /// `recomputeNotchFonts()` 里算好,渲染路径只读(同悬浮歌词那四个派生字体的取舍)。
+    @Published var notchFontFamilyName: String {
+        didSet {
+            defaults.set(notchFontFamilyName, forKey: Keys.notchFontFamilyName)
+            recomputeNotchFonts()
+        }
+    }
+    @Published var notchFontWeight: OverlayFontWeight {
+        didSet {
+            defaults.set(notchFontWeight.rawValue, forKey: Keys.notchFontWeight)
+            recomputeNotchFonts()
+        }
+    }
+    /// 主行字号(pt)。合法区间 `NotchLyricRowMetrics.mainFontSizeRange`,越界值在派生字体和行高两处都夹回,
+    /// 这里存原值不改写 —— 跟别的持久化字段一样,读到什么存什么,由消费方兜底。
+    @Published var notchFontSize: Double {
+        didSet {
+            defaults.set(notchFontSize, forKey: Keys.notchFontSize)
+            recomputeNotchFonts()
+        }
+    }
 
     @Published var notchLeftEar: NotchEarModule {
         didSet { defaults.set(notchLeftEar.rawValue, forKey: Keys.notchLeftEar) }
@@ -1259,6 +1299,12 @@ final class AppSettings: ObservableObject {
     @Published private(set) var romanizationFont: Font = .system(size: 13, weight: .medium)
     @Published private(set) var translationFont: Font = .system(size: 14, weight: .regular)
     @Published private(set) var previewFont: Font = .system(size: 14, weight: .medium)
+    // 灵动岛歌词的三个派生字体(2026-09-09),同上只在输入变化时重算、渲染路径只读:主行 / 主行同字号细一档
+    // (广告态倒计时那截,跟「广告中」并排、刻意比它轻)/ 副行与展开区「下一句」预览(固定 11pt、细一档)。
+    // 初值 = 加设置前 NotchLyricsView 里那三处硬编码,init() 末尾 recomputeNotchFonts() 立刻覆盖。
+    @Published private(set) var notchMainFont: Font = .system(size: 13, weight: .semibold)
+    @Published private(set) var notchMainDetailFont: Font = .system(size: 13, weight: .medium)
+    @Published private(set) var notchSecondaryFont: Font = .system(size: 11, weight: .medium)
 
     // 四行的字重从**用户选的那一档**推导,不再各自硬编码(2026-09-02 加「字重」设置)。
     // 默认档位 `.bold` 推出来的正好是改动前那四个硬编码值(bold / medium / regular / medium),
@@ -1276,6 +1322,20 @@ final class AppSettings: ObservableObject {
         previewFont = .overlayFont(
             familyName: fontFamilyName, size: CGFloat(fontSize) * 0.7,
             weight: weight.lighter(by: OverlayFontWeight.nextLinePreviewSteps))
+    }
+
+    /// 灵动岛那三个派生字体(2026-09-09)。字体族空串 = 系统字体、族名没装时回落系统字体,都由 `Font.overlayFont`
+    /// 兜底;字号夹回 Core 的合法区间。默认三件推出来的正好是加设置前的三处硬编码(13 semibold / 13 medium /
+    /// 11 medium),selftest 钉着粗细那一档的推导。
+    private func recomputeNotchFonts() {
+        let family = notchFontFamilyName
+        let size = NotchLyricRowMetrics.clampedMainFontSize(CGFloat(notchFontSize))
+        let weight = notchFontWeight
+        let lighter = weight.lighter(by: OverlayFontWeight.notchSecondarySteps)
+        notchMainFont = .overlayFont(familyName: family, size: size, weight: weight)
+        notchMainDetailFont = .overlayFont(familyName: family, size: size, weight: lighter)
+        notchSecondaryFont = .overlayFont(
+            familyName: family, size: NotchLyricRowMetrics.secondaryFontSize, weight: lighter)
     }
 
     private init() {
@@ -1476,6 +1536,12 @@ final class AppSettings: ObservableObject {
             .flatMap(LyricsRestingAlignment.init(rawValue:)) ?? Self.defaultNotchLyricsAlignment
         notchSecondaryLine = defaults.string(forKey: Keys.notchSecondaryLine)
             .flatMap(LyricSecondaryLine.init(rawValue:)) ?? Self.defaultNotchSecondaryLine
+        // 字体三件(2026-09-09):没存过一律落到默认常量;粗细的 rawValue 被手改坏时同样走兜底,不让一个坏字符串
+        // 把灵动岛歌词变成随机档(同 overlayFontWeight 那条)。
+        notchFontFamilyName = defaults.string(forKey: Keys.notchFontFamilyName) ?? Self.defaultNotchFontFamilyName
+        notchFontWeight = defaults.string(forKey: Keys.notchFontWeight)
+            .flatMap(OverlayFontWeight.init(rawValue:)) ?? Self.defaultNotchFontWeight
+        notchFontSize = (defaults.object(forKey: Keys.notchFontSize) as? Double) ?? Self.defaultNotchFontSize
         notchLeftEar = defaults.string(forKey: Keys.notchLeftEar)
             .flatMap(NotchEarModule.init(rawValue:)) ?? Self.defaultNotchLeftEar
         notchRightEar = defaults.string(forKey: Keys.notchRightEar)
@@ -1534,6 +1600,7 @@ final class AppSettings: ObservableObject {
         // "首次赋初值"这一步),不能赌它会连带把上面 7 个缓存值填对——显式调一次,幂等、
         // 无副作用。
         recomputeFonts()
+        recomputeNotchFonts()
         foregroundColor = Color(hexWithAlpha: foregroundColorHex, fallback: .white)
         backgroundColor = Color(hexWithAlpha: backgroundColorHex, fallback: .clear)
         backgroundIsVisible = Self.backgroundVisible(hex: backgroundColorHex, glass: overlayBackgroundGlass)

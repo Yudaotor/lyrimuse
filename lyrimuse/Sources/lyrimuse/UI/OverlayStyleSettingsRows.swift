@@ -725,9 +725,14 @@ enum OverlayStyleSummary {
     /// 摘要先被压、标题始终完整),不为多这一截另写一套。
     static var text: String {
         let settings = AppSettings.shared
-        let size = String(format: L10n.t("%@pt"), "\(Int(settings.fontSize))")
-        let family = FontFamilyPicker.displayName(for: settings.fontFamilyName)
-        return "\(family) \(settings.overlayFontWeight.displayName) \(size)"
+        return fontText(family: settings.fontFamilyName, weight: settings.overlayFontWeight, size: Int(settings.fontSize))
+    }
+
+    /// 上面那句的本体(2026-09-09 抽出来,灵动岛编辑台「字体」按钮的摘要走同一份):字体名复用 `FontFamilyPicker`
+    /// 的显示口径("空串 = 系统字体"只能有一处),中间是粗细的显示名,末尾字号。两个编辑台各拼一遍迟早漂开。
+    static func fontText(family: String, weight: OverlayFontWeight, size: Int) -> String {
+        let sizeText = String(format: L10n.t("%@pt"), "\(size)")
+        return "\(FontFamilyPicker.displayName(for: family)) \(weight.displayName) \(sizeText)"
     }
 
     /// 例:「跟随封面」/「暗夜霓虹」/「自定义」。

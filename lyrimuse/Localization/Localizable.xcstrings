@@ -69,6 +69,40 @@
         }
       }
     },
+    "主行的笔画粗细；副行和展开时的下一句预览比它细一档" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stroke weight of the main line; the secondary line and the expanded next-line preview are one step lighter"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "主行的筆畫粗細；副行和展開時的下一句預覽比它細一檔"
+          }
+        }
+      }
+    },
+    "只调主行，%@～%@pt，歌词行高度不变；副行和展开时的下一句预览固定 %@pt，只跟随字体与粗细" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Main line only, %@–%@pt; the lyric row height stays the same. The secondary line and the expanded next-line preview stay at %@pt and only follow the font and weight"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "只調主行，%@～%@pt，歌詞行高度不變；副行和展開時的下一句預覽固定 %@pt，只跟隨字體與粗細"
+          }
+        }
+      }
+    },
     "下一句" : {
       "extractionState" : "manual",
       "localizations" : {

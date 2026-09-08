@@ -207,7 +207,8 @@ func runSettingsSearchTests() {
 
     // 目录层面的抽查:三个面的「字号」都能被同一个词搜到,且悬浮歌词那条排在菜单栏那条前面(目录顺序)。
     let fontSizeHits = SettingsSearchMatcher.ranked(entries, query: "字号", title: { $0.titleKey }, secondary: { $0.keywords + $0.pathKeys })
-    expectEqual(fontSizeHits.map(\.sectionValue), ["overlay", "menuBar"], "目录: 「字号」命中悬浮歌词与菜单栏两条")
+    expectEqual(fontSizeHits.map(\.sectionValue), ["overlay", "notch", "menuBar"],
+                "目录: 「字号」命中悬浮歌词、灵动岛(2026-09-09 加)、菜单栏三条,按目录顺序")
     let qqHits = SettingsSearchMatcher.ranked(entries, query: "QQ", title: { $0.titleKey }, secondary: { $0.keywords + $0.pathKeys })
     expectEqual(qqHits.map(\.titleKey).contains("歌词来源"), true, "目录: 搜「QQ」能落到「歌词来源」卡")
     expectEqual(qqHits.map(\.titleKey).contains("播放器"), true, "目录: 搜「QQ」也能落到「播放器」卡")

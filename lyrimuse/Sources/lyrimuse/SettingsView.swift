@@ -2445,6 +2445,72 @@ struct NotchLyricRowSettingsRows: View {
     }
 }
 
+/// 「字体」组(2026-09-09,用户:「在灵动岛里面加上一个设置,可支持配置字体」)—— 工具栏第二行「字体」浮层
+/// (`NotchFontPopover`)与「全部设置」抽屉的「字体」组调的是这同一份。三行照搬悬浮歌词「文字」浮层的前三行
+/// (`OverlayTextSettingsRows`):同一个 `FontFamilyPicker`、同一个六档粗细下拉、同一根 `SteppedSlider`,只是绑到
+/// 灵动岛自己的三个键。控件形态的理由(下拉不用分段、`.fixedSize()` 不能省、`SteppedSlider` 不画刻度点、
+/// 相等守卫)都写在那边,这里不复述。
+///
+/// 只管歌词文字、字号只调主行、副行与展开预览固定 11pt —— 这些跟悬浮歌词那三行不同的地方由「粗细」「字号」
+/// 两行的 ⓘ 说清,不然用户会拖着滑杆等副行变大。范围真源在 Core `NotchLyricRowMetrics.mainFontSizeRange`,
+/// help 文案里的数字也从那里取,不手抄。
+@MainActor
+struct NotchFontSettingsRows: View {
+    @ObservedObject private var settings = AppSettings.shared
+
+    private var sizeRange: ClosedRange<Double> {
+        Double(NotchLyricRowMetrics.mainFontSizeRange.lowerBound)...Double(NotchLyricRowMetrics.mainFontSizeRange.upperBound)
+    }
+
+    private var sizeHelp: String {
+        String(format: L10n.t("只调主行，%@～%@pt，歌词行高度不变；副行和展开时的下一句预览固定 %@pt，只跟随字体与粗细"),
+               "\(Int(NotchLyricRowMetrics.mainFontSizeRange.lowerBound))",
+               "\(Int(NotchLyricRowMetrics.mainFontSizeRange.upperBound))",
+               "\(Int(NotchLyricRowMetrics.secondaryFontSize))")
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            SettingsRow(icon: "character", title: L10n.t("字体")) {
+                FontFamilyPicker(selection: $settings.notchFontFamilyName)
+            }
+            CardDivider()
+            SettingsRow(
+                icon: "bold",
+                title: L10n.t("粗细"),
+                help: L10n.t("主行的笔画粗细；副行和展开时的下一句预览比它细一档")
+            ) {
+                Picker("", selection: $settings.notchFontWeight) {
+                    ForEach(OverlayFontWeight.allCases, id: \.self) { weight in
+                        Text(weight.displayName).tag(weight)
+                    }
+                }
+                .labelsHidden()
+                .pickerStyle(.menu)
+                .fixedSize()
+            }
+            CardDivider()
+            SettingsRow(icon: "textformat.size", title: L10n.t("字号"), help: sizeHelp) {
+                HStack(spacing: 8) {
+                    SteppedSlider(value: Binding(
+                        get: { settings.notchFontSize },
+                        set: { newValue in
+                            // 相等守卫,理由同悬浮歌词「字号」那根:拖动中大量等值赋值会白白广播 + 重算三个派生字体。
+                            guard newValue != settings.notchFontSize else { return }
+                            settings.notchFontSize = newValue
+                        }
+                    ), in: sizeRange, step: 1)
+                        .frame(width: 150)
+                    Text(String(format: L10n.t("%@pt"), "\(Int(settings.notchFontSize))"))
+                        .foregroundStyle(.secondary)
+                        .monospacedDigit()
+                        .frame(width: 46, alignment: .trailing)
+                }
+            }
+        }
+    }
+}
+
 /// 「展开态」组 —— 工具栏「展开态」浮层(`NotchExpandedPopover`)与抽屉 `expandedGroup` 同一份。
 ///
 /// 两截:先是控制区的两颗(显示播放控制 / 显示歌词校准)加「快捷操作」(2026-09-07 晚些加,头部右侧
@@ -2523,6 +2589,19 @@ struct NotchLyricRowPopover: View {
     }
 }
 
+/// 工具栏第二行「字体」入口的浮层(2026-09-09)。内容就是 `NotchFontSettingsRows`。
+///
+/// 宽度用 `SettingsPopoverShell` 的默认 380,跟菜单栏「字体」浮层同一个理由:那是悬浮歌词「文字」浮层(同样装着
+/// 字号滑杆 150 + 读数 46 那一行)量出来的值。这里「字号」行还带一枚 ⓘ(19pt),跟菜单栏那根带 ⓘ 的「字号」行
+/// 几何完全相同,380 在那边真机验过。
+struct NotchFontPopover: View {
+    var body: some View {
+        SettingsPopoverShell(title: L10n.t("字体")) {
+            NotchFontSettingsRows()
+        }
+    }
+}
+
 /// 工具栏第二行「展开态」入口的浮层。内容就是 `NotchExpandedSettingsRows`。
 ///
 /// ⚠️ `width` 340(2026-09-07 从 240 提上来的,**按 13pt 系统字实测文字宽算的**,不是估):最宽一行是
@@ -2565,7 +2644,7 @@ struct NotchBehaviorPopover: View {
 /// **原有**配置项,也该能在"全部设置"里找到。
 ///
 /// **各组的顺序 = 工具栏两行入口的顺序**(2026-09-07 起:风格 → 屏幕 → 左耳 → 右耳 → 宽度 / 展开
-/// 宽度 → 歌词行 → 展开态 → 行为 → 恢复默认),标题也跟工具栏按钮一字不差 —— 抽屉是浮层的镜像,
+/// 宽度 → 歌词行 → 字体(2026-09-09 加)→ 展开态 → 行为 → 恢复默认),标题也跟工具栏按钮一字不差 —— 抽屉是浮层的镜像,
 /// 同一组东西在两个入口叫两个名字、排两种顺序就是用户说的"这一个那一个"。
 ///
 /// ⚠️ 顶部工具栏和编辑台里那条宽度调整条**本体不受影响**——那条横向空间已经反复验证过是"刚好塞满、
@@ -2580,6 +2659,7 @@ struct NotchBehaviorPopover: View {
 ///   - 宽度 / 展开宽度 → 本文件的 `widthRow` / `expandedWidthRow`,只调 `NotchEditorStage` 的静态入口
 ///   - 歌词行 / 展开态 / 行为 → `NotchLyricRowSettingsRows` / `NotchExpandedSettingsRows` /
 ///     `NotchBehaviorSettingsRows`(跟三个浮层是同一份视图,不是"同样的 items 数组")
+///   - 字体 → `NotchFontSettingsRows`(2026-09-09,跟工具栏第二行「字体」浮层同一份;字体族 / 粗细 / 字号三行)
 private struct NotchAllSettingsDrawer: View {
     @ObservedObject private var settings = AppSettings.shared
 
@@ -2607,6 +2687,8 @@ private struct NotchAllSettingsDrawer: View {
                 expandedWidthRow
                 CardDivider()
                 group(L10n.t("歌词行")) { NotchLyricRowSettingsRows() }
+                CardDivider()
+                group(L10n.t("字体")) { NotchFontSettingsRows() }
                 CardDivider()
                 group(L10n.t("展开态")) { NotchExpandedSettingsRows() }
                 CardDivider()

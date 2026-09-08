@@ -76,4 +76,12 @@ public enum OverlayFontWeight: String, CaseIterable, Sendable {
     public static let translationSteps = 3
     /// 下一句预览行比主歌词细几档。跟罗马音同档 —— 它俩在改动前也是同一个 medium。
     public static let nextLinePreviewSteps = 2
+
+    // MARK: - 灵动岛
+
+    /// 灵动岛的副行 / 展开区「下一句」预览 / 广告态倒计时比主行细几档(2026-09-09,灵动岛「字体」组)。
+    /// 差值同样取自加设置之前的硬编码关系:主行 semibold(8)/ 副行 medium(6),在阶梯上正好差 1 档;
+    /// selftest 钉着"默认档 semibold 推出 medium"。灵动岛只有这一个差值 —— 它没有罗马音 / 译文各自的行,
+    /// 副行四选一里显示的是哪种内容都同一档。
+    public static let notchSecondarySteps = 1
 }

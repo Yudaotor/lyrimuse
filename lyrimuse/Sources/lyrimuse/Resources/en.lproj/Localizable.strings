@@ -150,6 +150,7 @@
 "中文" = "Chinese";
 "主歌词下方多一行，高度不变（两行 10pt / 9pt，「字号」不生效）。译文和罗马音显示当前句，「下一句」显示接下来那句、主行不再提前切。副行不滚动，装不下时尾部渐隐。" = "Adds a second line under the lyric without changing the item's height (10pt / 9pt; Font Size has no effect). Translation and Romanization show the current line; Next Line shows the upcoming one and the main line no longer switches early. The second line never scrolls — its tail fades when it doesn't fit.";
 "主歌词下方多显示一行，行高不变。译文和罗马音显示的是当前句，下一句显示接下来那句；选「下一句」时展开区不再重复显示下一句预览" = "Adds one more line under the main lyric without changing the row height. Translation and Romanization show the current line; Next Line shows the upcoming one. With Next Line, the expanded area no longer repeats the next-line preview";
+"主行的笔画粗细；副行和展开时的下一句预览比它细一档" = "Stroke weight of the main line; the secondary line and the expanded next-line preview are one step lighter";
 "主题" = "Theme";
 "主题名称" = "Theme Name";
 "之前创建过就从这里找回：列表里点应用名，页面上就有 API Key 和 Shared Secret" = "Already created one? Find it here — click the application name and the page shows its API Key and Shared Secret";
@@ -322,6 +323,7 @@
 "只数存进缓存、会随歌词文件一起导出的那些。其余歌曲的罗马音在播放时实时生成，不计入" = "Counts only romanization stored in the cache and exported alongside the lyrics files. For other songs it is generated on the fly while playing and is not counted.";
 "只比对歌词文字，不含时间戳、逐字与译文；这条候选仍可能带别的来源没有的逐字轨或译文" = "Compares lyric text only, ignoring timestamps, word timing and translations. This candidate may still carry word timing or a translation the other source lacks";
 "只统计能翻成当前译文语言的语言；译文语言自己和同一语系的语言不计，所以数字可能比「系统设置」里的少。语言包由 macOS 管理，翻译在本机完成" = "Counts only languages that can be translated into the current translation language; the target language itself and languages in the same family are excluded, so the number can be lower than in System Settings. Language packs are managed by macOS and translation runs on this Mac";
+"只调主行，%@～%@pt，歌词行高度不变；副行和展开时的下一句预览固定 %@pt，只跟随字体与粗细" = "Main line only, %@–%@pt; the lyric row height stays the same. The secondary line and the expanded next-line preview stay at %@pt and only follow the font and weight";
 "可以滚动阅读的完整歌词列表" = "A scrollable view of the full lyrics";
 "可以随时在设置里调整这些选项" = "You can always adjust these later in Settings";
 "可选，不填不影响悬浮歌词" = "Optional — leaving it blank won't affect the floating lyrics";

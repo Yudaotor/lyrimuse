@@ -72,12 +72,36 @@ public enum LyricSecondaryLine: String, CaseIterable, Sendable {
 public enum NotchLyricRowMetrics {
     /// 稳态歌词行的高度。App 侧 `NotchMetrics.compactRowHeight` 转发这个值。
     public static let rowHeight: CGFloat = 44
-    /// 主行(13pt 半粗)一行文字的高度。
-    public static let mainLineHeight: CGFloat = 15
-    /// 副行(11pt)一行文字的高度。
-    public static let secondaryLineHeight: CGFloat = 13
+    /// 主行字号。2026-09-09 起用户可调(设置页灵动岛「字体」组,`AppSettings.notchFontSize`):默认 13 = 加这组
+    /// 设置之前的硬编码,范围 11…17。**上限是倒推出来的,不是拍的**:最大字号下两行 + 间距仍要塞进 `rowHeight`
+    /// 且上下各留 ≥ 4pt(17 → 19 + 3 + 13 = 35,余 4.5),selftest 钉着这条不变量;想放宽范围先过那条闸。
+    public static let defaultMainFontSize: CGFloat = 13
+    public static let mainFontSizeRange: ClosedRange<CGFloat> = 11...17
+    /// 副行(以及展开区那行「下一句」预览)的字号,**不随主行字号变**。不跟着放大是为了让主行的字号范围不依赖
+    /// 「副行」开没开 —— 否则就得像菜单栏那样在副行开着时让字号失效(「由副行决定」),用户调好的值会因为翻了
+    /// 另一个开关而自己变。副行只跟主行的字体族与粗细(细一档,`OverlayFontWeight.notchSecondarySteps`)。
+    public static let secondaryFontSize: CGFloat = 11
+    /// 一行文字给多高:字号 + 2。13pt 主行 = 15、11pt 副行 = 13,正是 2026-09-06 方案二定下的那两个数,默认字号下
+    /// 逐像素不变。系统字体 13pt 的自然行高约 15.5,+2 是"够放、不留空"的最小整数;别的字体族上下伸展可能更大
+    /// (PingFang 一类),两行会显得略挤但不裁切 —— `.frame(height:)` 不裁内容。
+    public static func lineHeight(fontSize: CGFloat) -> CGFloat { fontSize.rounded() + 2 }
+    /// 主行那一格的高度,按**夹回范围后的**字号算 —— 存量配置被手改成越界值时,行高也不能跟着越界。
+    public static func mainLineHeight(fontSize: CGFloat) -> CGFloat {
+        lineHeight(fontSize: clampedMainFontSize(fontSize))
+    }
+    /// 默认字号下的主行高度(15),给不关心字号的调用点和 selftest 用。
+    public static var mainLineHeight: CGFloat { mainLineHeight(fontSize: defaultMainFontSize) }
+    /// 副行一行文字的高度(13)。
+    public static var secondaryLineHeight: CGFloat { lineHeight(fontSize: secondaryFontSize) }
     /// 主行与副行之间的间距。
     public static let lineSpacing: CGFloat = 3
-    /// 副行开着时两行叠起来的总高度(15 + 3 + 13 = 31),竖直居中放进 `rowHeight`,上下各余 6.5。
-    public static var twoLineStackHeight: CGFloat { mainLineHeight + lineSpacing + secondaryLineHeight }
+    /// 副行开着时两行叠起来的总高度,竖直居中放进 `rowHeight`(默认字号下 15 + 3 + 13 = 31,上下各余 6.5)。
+    public static func twoLineStackHeight(fontSize: CGFloat) -> CGFloat {
+        mainLineHeight(fontSize: fontSize) + lineSpacing + secondaryLineHeight
+    }
+    public static var twoLineStackHeight: CGFloat { twoLineStackHeight(fontSize: defaultMainFontSize) }
+    /// 越界字号夹回 `mainFontSizeRange`(rawValue 被手改坏 / 从别的 Mac 抄来的配置)。
+    public static func clampedMainFontSize(_ size: CGFloat) -> CGFloat {
+        min(max(size, mainFontSizeRange.lowerBound), mainFontSizeRange.upperBound)
+    }
 }

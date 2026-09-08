@@ -583,7 +583,7 @@ struct NotchEditorStage: View {
         .padding(.horizontal, 2)
     }
 
-    /// 工具栏第二行(2026-09-01):「歌词行 / 展开态 / 行为」三个入口,收纳的是这几轮陆续加的
+    /// 工具栏第二行(2026-09-01):「歌词行 / 字体 / 展开态 / 行为」四个入口(「字体」2026-09-09 加),收纳的是这几轮陆续加的
     /// 一批布尔开关。这些开关最初直接铺在页面上(先是"行为"卡片横排两格,后来陆续并进「显示封面」
     /// 和整张「展开态」卡片的四项),用户看过之后要求改回跟「风格/屏幕/左耳/右耳」一样的
     /// "点开才配置"形态。
@@ -597,12 +597,14 @@ struct NotchEditorStage: View {
     /// 分组视图(`NotchLyricRowSettingsRows` / `NotchExpandedSettingsRows` / `NotchBehaviorSettingsRows`,
     /// `SettingsView.swift`),不再是"两处传同样的 items 数组"。
     ///
-    /// ⚠️ 横向预算**没有**照搬第一行"四个入口"那次的实测数据——那次量的是四个入口的
-    /// 极限,这里是全新的三个入口、内容也不同(标题更短:"歌词行"/"行为"/"展开态"都是
-    /// 两到三个字,比"屏幕"/"左耳"短或相当),没有理由假设会撞到同一个上限,但也**没有
-    /// 重新离屏量过**——如果哪天这一行在窄窗口/英文下也挤出截断,参照第一行那次的方法论
-    /// (`toolbarButton` 摘要限宽 140 + `.layoutPriority(-1)` 先压摘要)重新测,不要凭感觉
-    /// 现改数字。
+    /// ⚠️ 横向预算:2026-09-01 三颗时的账(中文 493 余 6pt / 英文 649 超 150pt)见 05 章「编辑台改造 → 搬过来的
+    /// 四件事」那张表;2026-09-09 加第四颗「字体」前按同一套方法论(离屏复刻这一行的版式、`NSHostingView.fittingSize`)
+    /// 重新量过:四颗入口、摘要压到零时的**硬下限**中文 374.0 / 英文 468.0(三颗时 288.0 / 380.0),都在最窄
+    /// 卡片列 499 之内 —— 标题在任何窄档都不会截,亏空全由摘要吃(`toolbarButton` 摘要限宽 140 +
+    /// `.layoutPriority(-1)`)。代价跟第一行一样:摘要全长(默认值中文 793 / 英文 921,最坏 934 / 1028)远超 600,
+    /// 四截摘要在 600 下每截只剩约 56pt(中文)/ 33pt(英文),499 下英文摘要基本只剩省略号。这是有意接受的
+    /// 取舍(第一行早已如此),**但这一行也到底了**:再加第五个入口或把哪个标题改长之前,先重新离屏量一遍,
+    /// 不要凭感觉现改数字。
     private var toolbarRow2: some View {
         HStack(spacing: 8) {
             toolbarButton(
@@ -610,6 +612,14 @@ struct NotchEditorStage: View {
                 title: L10n.t("歌词行"),
                 summary: lyricRowSummary,
                 target: .lyricRow
+            )
+            // 「字体」(2026-09-09):字体族 / 粗细 / 字号,紧跟「歌词行」—— 它是歌词行文字的属性,排在"这一行显示什么"
+            // 之后、"展开才有的东西"之前。图标 `textformat` 跟悬浮歌词「文字」按钮同一枚。
+            toolbarButton(
+                icon: "textformat",
+                title: L10n.t("字体"),
+                summary: fontSummary,
+                target: .font
             )
             toolbarButton(
                 icon: "rectangle.expand.vertical",
@@ -627,6 +637,14 @@ struct NotchEditorStage: View {
         }
         .font(.system(size: 12))
         .padding(.horizontal, 2)
+    }
+
+    /// 「字体」按钮摘要(2026-09-09):「系统字体 较粗 13pt」,跟悬浮歌词「文字」按钮那截是**同一个函数**
+    /// (`OverlayStyleSummary.fontText`)—— 三项全报、字体名"空串 = 系统字体"的口径都在那边定,两个编辑台
+    /// 各拼一遍迟早漂开。
+    private var fontSummary: String {
+        OverlayStyleSummary.fontText(family: settings.notchFontFamilyName, weight: settings.notchFontWeight,
+                                     size: Int(settings.notchFontSize))
     }
 
     /// 「歌词行」按钮摘要:2026-09-01「显示歌词」从「行为」浮层搬过来之后,这里要拼两项
@@ -771,6 +789,7 @@ struct NotchEditorStage: View {
         case leftEar
         case rightEar
         case lyricRow
+        case font
         case behavior
         case expanded
     }
@@ -814,6 +833,7 @@ struct NotchEditorStage: View {
         case .leftEar: NotchEarPopover(side: .left)
         case .rightEar: NotchEarPopover(side: .right)
         case .lyricRow: NotchLyricRowPopover()
+        case .font: NotchFontPopover()
         case .behavior: NotchBehaviorPopover()
         case .expanded: NotchExpandedPopover()
         }
@@ -1577,6 +1597,11 @@ enum NotchStyleDefaults {
         settings.notchLyricRowArtworkPosition = AppSettings.defaultNotchLyricRowArtworkPosition
         settings.notchLyricsAlignment = AppSettings.defaultNotchLyricsAlignment
         settings.notchSecondaryLine = AppSettings.defaultNotchSecondaryLine
+        // 「字体」组三项(2026-09-09)。它们是字形、不是宽度那类结构性尺寸,按钮自报的排除范围「不含宽度和总开关」
+        // 里也没有它们 —— 进重置(重置覆盖闸也会盯着这三个 defaultNotch* 常量)。
+        settings.notchFontFamilyName = AppSettings.defaultNotchFontFamilyName
+        settings.notchFontWeight = AppSettings.defaultNotchFontWeight
+        settings.notchFontSize = AppSettings.defaultNotchFontSize
         // 「行为」组里那两个自动隐藏开关(2026-09-03 补漏)。
         //
         // 它们 2026-09-02 才从撤掉的那张跨形态「自动隐藏」卡并进灵动岛「行为」组,**并进来时

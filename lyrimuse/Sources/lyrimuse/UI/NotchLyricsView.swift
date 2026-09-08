@@ -93,6 +93,15 @@ private final class NotchPlayback: ObservableObject {
     /// 在"订阅还没首次投递"的那一帧闪一下另一个方向。
     @Published private(set) var lyricsAlignment: LyricsRestingAlignment =
         AppSettings.defaultNotchLyricsAlignment
+    /// 灵动岛歌词的字体(2026-09-09,设置页「字体」组):主行 / 主行同字号细一档(广告态倒计时)/ 副行与展开区
+    /// 「下一句」预览。同上走这里现读:只改字形,不改卡片任何一个尺寸(字号上限由 Core 倒推、保证两行仍塞进 44,
+    /// 见 `NotchLyricRowMetrics`)。初值直接读 `AppSettings.shared` 已算好的派生值,不另抄一份字面量。
+    @Published private(set) var mainFont: Font = AppSettings.shared.notchMainFont
+    @Published private(set) var mainDetailFont: Font = AppSettings.shared.notchMainDetailFont
+    @Published private(set) var secondaryFont: Font = AppSettings.shared.notchSecondaryFont
+    /// 副行开着时主行那一格给多高(`lyricTextColumn`):随字号走,公式只在 Core 一份。
+    @Published private(set) var mainLineHeight: CGFloat =
+        NotchLyricRowMetrics.mainLineHeight(fontSize: CGFloat(AppSettings.shared.notchFontSize))
     /// 下一句的对唱声部(2026-09-07,「对齐方式 · 自动」用)。跟 `nextLineText` 一样直接镜像
     /// `PlaybackCoordinator.nextLineSide` —— 悬浮歌词那边同一个来源、同一条"下一句不假定跟当前句
     /// 同一边"的理由(见 `LyricsOverlayView.nextLineDuetSide`)。当前句的声部不另镜像,`displayLine.side`
@@ -187,6 +196,14 @@ private final class NotchPlayback: ObservableObject {
             s.$notchLyricRowShowsArtwork.removeDuplicates().sink { [weak self] in self?.lyricRowShowsArtwork = $0 },
             s.$notchLyricRowArtworkPosition.removeDuplicates().sink { [weak self] in self?.lyricRowArtworkPosition = $0 },
             s.$notchLyricsAlignment.removeDuplicates().sink { [weak self] in self?.lyricsAlignment = $0 },
+            // 字体三件(2026-09-09):派生 Font 不是 Equatable,不去重 —— 上游只在三个输入之一真变时才重算,本来就低频。
+            s.$notchMainFont.sink { [weak self] in self?.mainFont = $0 },
+            s.$notchMainDetailFont.sink { [weak self] in self?.mainDetailFont = $0 },
+            s.$notchSecondaryFont.sink { [weak self] in self?.secondaryFont = $0 },
+            s.$notchFontSize.removeDuplicates()
+                .map { NotchLyricRowMetrics.mainLineHeight(fontSize: CGFloat($0)) }
+                .removeDuplicates()
+                .sink { [weak self] in self?.mainLineHeight = $0 },
             s.$notchExpandedShowsLyricsOffset.removeDuplicates().sink { [weak self] in self?.showsLyricsOffsetControls = $0 },
             p.$trackLyricsOffsetMs.removeDuplicates().sink { [weak self] in self?.trackLyricsOffsetMs = $0 },
             s.$lyricsOffsetStepMs.removeDuplicates().sink { [weak self] in self?.lyricsOffsetStepMs = $0 },
@@ -353,9 +370,11 @@ enum NotchMetrics {
     /// 稳态歌词行的高度。真源在 Core 的 `NotchLyricRowMetrics.rowHeight`(2026-09-06 下沉,让 selftest
     /// 能钉"主行 + 副行 ≤ 行高"这条不变量),这里只是转发,调用点仍只需要认识 NotchMetrics 这一个入口。
     static var compactRowHeight: CGFloat { NotchLyricRowMetrics.rowHeight }
-    /// 副行开着时歌词格里两行的高度与间距(2026-09-06):15 + 3 + 13 = 31,竖直居中塞进 44,上下各余 6.5。
-    /// 同上转发 Core;三个数改任何一个都要先看 `twoLineStackHeight ≤ rowHeight` 那条 selftest。
-    static var mainLyricLineHeight: CGFloat { NotchLyricRowMetrics.mainLineHeight }
+    /// 副行开着时歌词格里两行的高度与间距(2026-09-06):默认字号下 15 + 3 + 13 = 31,竖直居中塞进 44,上下各余 6.5。
+    /// 同上转发 Core;改任何一个数都要先看 `twoLineStackHeight ≤ rowHeight` 那条 selftest。
+    /// ⚠️ 主行那一格的高度 2026-09-09 起**随字号走**(`NotchPlayback.mainLineHeight`,公式只在 Core
+    /// `NotchLyricRowMetrics.mainLineHeight(fontSize:)`),这里刻意不再提供一个"默认字号"的静态值 ——
+    /// 留着它,下一个人会拿它去排版、在非默认字号下把主行裁掉一截。
     static var secondaryLyricLineHeight: CGFloat { NotchLyricRowMetrics.secondaryLineHeight }
     static var secondaryLineSpacing: CGFloat { NotchLyricRowMetrics.lineSpacing }
     /// 展开区的最大高度 / 按内容算的实际高度 —— 实现在 LyrimuseCore 的
@@ -1395,12 +1414,14 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
     /// 用户拍板方案二)就在它下面再放一行 11pt 的副行,两行 + 3pt 间距 = 31pt,竖直居中塞进
     /// 44pt 的行里,**行高不变** —— 这是选方案二而不是叠行方案的全部理由:不动 `cardHeight`、
     /// 编辑台舞台常量、出场动画这片高度体系(05 章决策 22)。
+    /// 主行那一格的高度 2026-09-09 起随「字号」走(`playback.mainLineHeight`,11…17pt → 13…19pt),两行最多 35pt,
+    /// 仍在 44 里、上下各余 ≥ 4pt —— 字号范围就是按这条倒推的,Core 有 selftest 钉着。
     @ViewBuilder
     private var lyricTextColumn: some View {
         if playback.secondaryLine.showsSecondaryRow {
             VStack(alignment: .leading, spacing: NotchMetrics.secondaryLineSpacing) {
                 mainLyricLine
-                    .frame(height: NotchMetrics.mainLyricLineHeight)
+                    .frame(height: playback.mainLineHeight)
                 secondaryLyricLine
                     .frame(height: NotchMetrics.secondaryLyricLineHeight)
             }
@@ -1417,7 +1438,9 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
                     edgeFadeWidth: NotchMetrics.lyricEdgeFadeWidth) {
             lyricContent
         }
-        .font(.system(size: 13, weight: .semibold))
+        // 字体 / 粗细 / 字号三件由设置决定(2026-09-09),默认推出来就是原来的 13pt semibold。里面那几个状态占位
+        // 文字(纯音乐 / 暂无歌词 / …)和逐字染色的每个字都从这里继承字体,不各自再写。
+        .font(playback.mainFont)
     }
 
     /// 副行:下一句 / 当前句译文 / 当前句罗马音(由 `NotchPlayback.secondaryText` 按设置选好)。
@@ -1428,7 +1451,8 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
     /// 译文 75%、罗马音 60% 照抄)。
     private var secondaryLyricLine: some View {
         Text(playback.secondaryText ?? "")
-            .font(.system(size: 11, weight: .medium))
+            // 固定 11pt、比主行细一档,只跟主行的字体族与粗细(2026-09-09,理由见 NotchLyricRowMetrics.secondaryFontSize)。
+            .font(playback.secondaryFont)
             .foregroundStyle(accentOrWhite.opacity(secondaryLineOpacity))
             .shadow(color: .black.opacity(0.45), radius: 2, y: 1)
             .lineLimit(1)
@@ -1618,7 +1642,8 @@ struct NotchLyricsView<Chrome: NotchChromeSource>: View {
             // 是**同一个值**(协议扩展里那份),别在这里换成别的判据。
             if controller.showsExpandedLyricPreview, !nextLineDisplayText.isEmpty {
                 Text(nextLineDisplayText)
-                    .font(.system(size: 11, weight: .medium))
+                    // 跟副行同一个派生字体(2026-09-09):它俩是同一类"辅助的下一句",字号不随主行变、粗细细一档。
+                    .font(playback.secondaryFont)
                     .foregroundStyle(accentOrWhite.opacity(0.5))
                     .lineLimit(1)
                     .truncationMode(.tail)
