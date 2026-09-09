@@ -361,6 +361,14 @@ public final class BrowserPositionProbe: @unchecked Sendable {
     ///
     /// 播客/长音频会走到三段式,YouTube Music 那条规则只认两段(它自己的元素也只会是两段)。
     /// 这里多认一种,成本一行、收益是播客不会静默失效。
+    /// **第三段:封面地址**(2026-09-09)。`now-playing-widget` 里 `img[data-testid=cover-art-image]` 的 src 是
+    /// Spotify 图床 300 档(实测 `ab67616d0000e1a3…`,webp),同一 hash 换成 `82c1` 就是 2000×2000 的原图 ——
+    /// 页面上唯一一份**身份精确**的封面来源(Safari 经 MediaSession 交给系统的那份是 640×640、同一张图,
+    /// 但没有地址)。地址随读数一起回传,`parseReading` 解析、`setArtworkSink` 交出去,跟原生客户端
+    /// `SpotifyPositionProbe` 的 `artwork url` 走同一条下游(`LocalPlaybackSource.spotifyArtworkURL`)。
+    /// ⚠️ 曲目 ID 页面上**拿不到**:`context-item-link` 指向 `/album/<id>`、`context-item-info-artist` 指向
+    /// `/artist/<id>`,没有 `/track/` 链接,所以真曲目链接 / LB 字段那一路只覆盖原生客户端。
+    /// YouTube Music 的脚本不带第三段,解析按"有就用、没有就 nil"处理。
     private static let spotifyWebScript = """
     (function(){
       function toSecs(s) {
@@ -385,7 +393,9 @@ public final class BrowserPositionProbe: @unchecked Sendable {
       }
       var sep = ' ' + String.fromCharCode(8226) + ' ';
       var paused = document.title.indexOf(sep) < 0;
-      return cur + '|' + (paused ? '1' : '0');
+      var img = document.querySelector('[data-testid=now-playing-widget] img[data-testid=cover-art-image]');
+      var art = img ? (img.currentSrc || img.src || '') : '';
+      return cur + '|' + (paused ? '1' : '0') + '|' + art;
     })()
     """
 
@@ -429,6 +439,15 @@ public final class BrowserPositionProbe: @unchecked Sendable {
     /// 这是"这个浏览器此刻在放哪个网页音乐平台"最硬的证据 —— 它意味着我们刚从那个站点
     /// 自己的 DOM 里读到了一个**在走**的进度。给来源角标用,见 `playingPlatformID`。
     private var lastMatch: (bundleID: String, platformID: String, at: Date)?
+    /// 页面顺带交出的封面地址的去向(2026-09-09,见 spotifyWebScript 头注)。由 LocalPlaybackSource 启动时挂上;
+    /// 没挂就丢掉。同一把锁下读写。
+    private var artworkSink: (@Sendable (_ key: String, _ url: URL) -> Void)?
+
+    public func setArtworkSink(_ sink: @escaping @Sendable (_ key: String, _ url: URL) -> Void) {
+        lock.lock()
+        artworkSink = sink
+        lock.unlock()
+    }
 
     /// 平台 id → 用户已配对(主动选过、允许对它探测)的浏览器 bundle id 集合。UI 层直接
     /// 写这个属性来更新配对(见类头注"平台↔浏览器配对即开关"),读写都过 `lock`——写者是
@@ -645,6 +664,9 @@ public final class BrowserPositionProbe: @unchecked Sendable {
         // 是"这个浏览器在放哪个平台",那件事跨曲目稳定,而位置纠偏是一首歌一次性的。
         // 存在同一个 lock 下,读在 `playingPlatformID`。
         lastMatch = (bundleID: bundleID, platformID: hit.platformID, at: Date())
+        // 封面地址只在这次读数被采信(同一首、页面的钟在走)时交出去 —— 跟位置那份读数同一道可信度门。
+        // sink 自己只是派一个 Task,不阻塞,在锁下调无妨。
+        if let art = hit.artworkURL { artworkSink?(key, art) }
     }
 
     // MARK: - 探测实现(全程跑在后台线程,调用方必须走 Task.detached)
@@ -783,6 +805,8 @@ public final class BrowserPositionProbe: @unchecked Sendable {
     private struct ProbeHit {
         let seconds: Double
         let platformID: String
+        /// 页面顺带交出的封面地址(目前只有 Spotify 网页版规则给,见 spotifyWebScript 头注)。
+        let artworkURL: URL?
     }
 
     private static func probeAdvancing(
@@ -819,21 +843,21 @@ public final class BrowserPositionProbe: @unchecked Sendable {
 
     private static func probeOnce(bundleID: String, family: BrowserAutomationPermission.Family, platformIDs: Set<String>, expectedDuration: Double) -> ProbeHit? {
         for rule in siteRules where platformIDs.contains(rule.platformID) {
-            if let seconds = probe(bundleID: bundleID, family: family, rule: rule, expectedDuration: expectedDuration) {
-                return ProbeHit(seconds: seconds, platformID: rule.platformID)
+            if let reading = probe(bundleID: bundleID, family: family, rule: rule, expectedDuration: expectedDuration) {
+                return ProbeHit(seconds: reading.seconds, platformID: rule.platformID, artworkURL: reading.artworkURL)
             }
         }
         return nil
     }
 
-    private static func probe(bundleID: String, family: BrowserAutomationPermission.Family, rule: SiteRule, expectedDuration: Double) -> Double? {
+    private static func probe(bundleID: String, family: BrowserAutomationPermission.Family, rule: SiteRule, expectedDuration: Double) -> Reading? {
         let appleScript = buildAppleScript(bundleID: bundleID, family: family, urlContains: rule.urlContains, script: rule.script, expectedDuration: expectedDuration)
         guard let tempURL = writeTempScript(appleScript) else { return nil }
         defer { try? FileManager.default.removeItem(at: tempURL) }
         guard let result = ProcessRunner.run("/usr/bin/osascript", [tempURL.path], timeout: probeTimeout),
               result.succeeded
         else { return nil }
-        return parseSeconds(fromOsascriptOutput: result.stdoutText)
+        return parseReading(fromOsascriptOutput: result.stdoutText)
     }
 
     /// 一次 AppleScript 里做完"找标签页 + 执行脚本"两件事(不能分两次调用:标签页引用
@@ -934,13 +958,31 @@ public final class BrowserPositionProbe: @unchecked Sendable {
     /// 依赖真实 Arc + 已打开的网页,没法在 CI/无 GUI 环境里稳定跑,只能靠这段解析逻辑的
     /// 单测兜底覆盖率,真实端到端行为已经在 2026-08-30 手动验证过。
     public static func parseSeconds(fromOsascriptOutput raw: String) -> Double? {
+        parseReading(fromOsascriptOutput: raw)?.seconds
+    }
+
+    /// 一次成功读数:秒数 + 页面顺带交出的封面地址(没有就 nil)。
+    public struct Reading: Equatable, Sendable {
+        public let seconds: Double
+        public let artworkURL: URL?
+        public init(seconds: Double, artworkURL: URL?) {
+            self.seconds = seconds
+            self.artworkURL = artworkURL
+        }
+    }
+
+    /// 解析规则(2026-09-09 从 parseSeconds 扩出来):`<seconds>|<pausedFlag>[|<artworkURL>]`。第二段非 "0"
+    /// (暂停 / "NOTFOUND")整条作废、不猜;第三段可选,只认 Spotify 图床形状的地址(`SpotifyArtworkURL.parse`),
+    /// 别的一律 nil —— YouTube Music 的脚本没有第三段,老输出原样成立。纯函数,selftest 直接覆盖。
+    public static func parseReading(fromOsascriptOutput raw: String) -> Reading? {
         var text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         if text.hasPrefix("\""), text.hasSuffix("\""), text.count >= 2 {
             text.removeFirst()
             text.removeLast()
         }
-        let parts = text.split(separator: "|", maxSplits: 1)
-        guard parts.count == 2, parts[1] == "0", let seconds = Double(parts[0]) else { return nil }
-        return seconds
+        let parts = text.split(separator: "|", omittingEmptySubsequences: false)
+        guard parts.count >= 2, parts[1] == "0", let seconds = Double(parts[0]) else { return nil }
+        let artwork = parts.count >= 3 ? SpotifyArtworkURL.parse(String(parts[2])) : nil
+        return Reading(seconds: seconds, artworkURL: artwork)
     }
 }

@@ -89,3 +89,28 @@ func runSpotifyNativeTests() {
         expectEqual(P.parseProbeOutput("1500|spotify:track:x|https://evil.example/x")?.artworkURL, nil, "探针输出: 别家主机的地址不收")
     }
 }
+
+// ---- 网页版 Spotify:浏览器位置探针输出的第三段是封面地址(2026-09-09)----
+// 地址是 Safari 里 open.spotify.com 播放时 `img[data-testid=cover-art-image]` 的真实 src(300 档 webp)。
+@MainActor
+func runSpotifyWebProbeReadingTests() {
+    typealias B = BrowserPositionProbe
+    let art = "https://i.scdn.co/image/ab67616d0000e1a3189e41798cd255d340b21be9"
+    let r = B.parseReading(fromOsascriptOutput: "\"168|0|\(art)\"")
+    expectEqual(r?.seconds, 168, "网页探针: 三段输出的秒数")
+    expectEqual(r?.artworkURL?.absoluteString, art, "网页探针: 第三段是 Spotify 图床地址")
+    expectEqual(B.parseReading(fromOsascriptOutput: "168|0")?.seconds, 168, "网页探针: YouTube Music 两段输出秒数照旧")
+    expectEqual(B.parseReading(fromOsascriptOutput: "168|0")?.artworkURL, nil, "网页探针: 两段输出没有封面")
+    expectEqual(B.parseReading(fromOsascriptOutput: "168|1|\(art)") == nil, true, "网页探针: 暂停的读数整条不要,带封面也不要")
+    expectEqual(B.parseReading(fromOsascriptOutput: "168|0|")?.artworkURL, nil, "网页探针: 封面段为空当没有")
+    expectEqual(B.parseReading(fromOsascriptOutput: "168|0|https://evil.example/x.jpg")?.artworkURL, nil, "网页探针: 别家主机不收")
+    expectEqual(B.parseReading(fromOsascriptOutput: "NOTFOUND") == nil, true, "网页探针: NOTFOUND → nil")
+    expectEqual(B.parseReading(fromOsascriptOutput: "") == nil, true, "网页探针: 空输入 → nil")
+    expectEqual(B.parseSeconds(fromOsascriptOutput: "168|0|\(art)"), 168, "网页探针: 老入口 parseSeconds 对三段输出仍给秒数")
+    expectEqual(B.parseSeconds(fromOsascriptOutput: "\"168|1\""), nil, "网页探针: 老入口的暂停语义不变")
+    if let url = r?.artworkURL {
+        expectEqual(SpotifyArtworkURL.downloadCandidates(for: url).first?.absoluteString,
+                    "https://i.scdn.co/image/ab67616d000082c1189e41798cd255d340b21be9",
+                    "网页探针: 300 档 webp 地址同样能换到 82c1 原图(实测 2000×2000)")
+    }
+}

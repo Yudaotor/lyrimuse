@@ -142,7 +142,8 @@ public final class LocalPlaybackSource: ObservableObject {
     @Published public private(set) var artworkAverageHex: String?
     /// Spotify 原生客户端这首歌在 Spotify 图床上的封面地址(AppleScript `artwork url`,640 档),由
     /// `SpotifyPositionProbe` 开播 2.5s 后那次脚本顺带带回来(2026-09-09,经 noteSpotifyArtwork 落到这里,
-    /// 先核对还是这首)。换歌 / 停播置 nil;非 Spotify 原生播放恒 nil。消费方是
+    /// 先核对还是这首)。换歌 / 停播置 nil;Spotify 网页版由 BrowserPositionProbe 从页面带回同一格式的地址
+    /// (2026-09-09),其它播放器恒 nil。消费方是
     /// `PlaybackCoordinator.refreshSpotifyOriginalCover`:系统那份封面(实测 600×600)本来就身份精确,
     /// 这条只为把歌词窗口那张 920px 卡换成**同一张图**的原图档,见 03 章「高清替代」。
     @Published public private(set) var spotifyArtworkURL: URL?
@@ -840,6 +841,11 @@ public final class LocalPlaybackSource: ObservableObject {
         startStreamWatcher()
         // Spotify 位置探针顺带带回的图床地址落到 spotifyArtworkURL(还是这首才收,见 noteSpotifyArtwork)。
         SpotifyPositionProbe.shared.setArtworkSink { [weak self] key, url in
+            Task { @MainActor [weak self] in self?.noteSpotifyArtwork(url: url, forKey: key) }
+        }
+        // 网页版 Spotify 同款(2026-09-09):浏览器位置探针从页面 cover-art-image 顺带读到图床地址,也落到同一个
+        // 属性;下游 PlaybackCoordinator 那条原图档替代路不分原生还是网页。
+        BrowserPositionProbe.shared.setArtworkSink { [weak self] key, url in
             Task { @MainActor [weak self] in self?.noteSpotifyArtwork(url: url, forKey: key) }
         }
         guard playerInfoObserver == nil else { return }

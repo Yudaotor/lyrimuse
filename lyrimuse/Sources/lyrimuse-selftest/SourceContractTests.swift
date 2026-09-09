@@ -340,8 +340,18 @@ func runSourceContractTests() {
                         "Spotify 通知分类: Spotify 那条通知的观察者要把 userInfo 解析成 SpotifyNotificationHint")
             expectEqual(lps.contains("SpotifyPositionProbe.shared.setArtworkSink"), true,
                         "Spotify 封面: LocalPlaybackSource 要给位置探针挂 artwork sink")
+            expectEqual(lps.contains("BrowserPositionProbe.shared.setArtworkSink"), true,
+                        "Spotify 封面: 网页版那条(BrowserPositionProbe)同样要挂 artwork sink")
         } else {
             expectEqual(true, false, "Spotify 接线: 读不到 LyrimuseCore/Local/LocalPlaybackSource.swift(路径挪了?)")
+        }
+        if let web = code(core.appendingPathComponent("BrowserPositionProbe.swift")) {
+            expectEqual(web.contains("img[data-testid=cover-art-image]"), true,
+                        "网页版 Spotify 封面: 位置探针 JS 要读 now-playing-widget 里的 cover-art-image")
+            expectEqual(web.contains("return parseReading(fromOsascriptOutput:"), true,
+                        "网页版 Spotify 封面: probe() 要走 parseReading(带第三段),不能退回只解秒数的老入口")
+        } else {
+            expectEqual(true, false, "Spotify 接线: 读不到 LyrimuseCore/Local/BrowserPositionProbe.swift(路径挪了?)")
         }
         if let probe = code(core.appendingPathComponent("SpotifyPositionProbe.swift")) {
             for needle in ["player position", "spotify url of current track", "artwork url of current track"] {
