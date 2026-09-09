@@ -354,12 +354,21 @@ func runSourceContractTests() {
             expectEqual(pc.contains("s.$spotifyArtworkURL"), true, "Spotify 封面: PlaybackCoordinator 要订阅 $spotifyArtworkURL")
             expectEqual(count(pc, "refreshSpotifyOriginalCover(") >= 2, true,
                         "Spotify 封面: refreshSpotifyOriginalCover 要有声明 + 订阅点那次调用")
-            // 系统那份与拿回来的那张都按像素比(representations.first?.pixelsWide),不能用 NSImage.size 的点数:
-            // Spotify 图床原图带 DPI,2000px 的图 size.width 只有 181,第一版装机就是在这里把原图当小图丢掉的。
-            expectEqual(count(pc, "representations.first?.pixelsWide") >= 2, true,
-                        "Spotify 封面: 系统那份与候选都要按 pixelsWide 比大小(现 \(count(pc, "representations.first?.pixelsWide")) 处)")
+            // 封面尺寸一律按像素比(NSImage.pixelWidth,CachedImage.swift 里的 extension),不能用 NSImage.size 的点数:
+            // Spotify 图床原图带 797 dpi,2000px 的图 size.width 只有 181,第一版装机就是在这里把原图当小图丢掉的。
+            expectEqual(count(pc, "image.size.width"), 0,
+                        "封面尺寸: PlaybackCoordinator 里不该再用 image.size.width 比大小(现 \(count(pc, "image.size.width")) 处)")
+            expectEqual(count(pc, ".pixelWidth") >= 3, true,
+                        "封面尺寸: 系统那份、高清替代候选、Spotify 原图候选都要走 NSImage.pixelWidth(现 \(count(pc, ".pixelWidth")) 处)")
         } else {
             expectEqual(true, false, "Spotify 接线: 读不到 lyrimuse/PlaybackCoordinator.swift(路径挪了?)")
+        }
+        if let cached = code(app.appendingPathComponent("UI/CachedImage.swift")) {
+            expectEqual(cached.contains("image.pixelWidth * image.pixelHeight"), true,
+                        "图片缓存: ImageMemoryCache.store 的 cost 要按像素算,不是 NSImage.size 的点数")
+            expectEqual(cached.contains("var pixelWidth: Int"), true, "图片缓存: NSImage.pixelWidth 这个 extension 得在 CachedImage.swift 里")
+        } else {
+            expectEqual(true, false, "图片缓存: 读不到 lyrimuse/UI/CachedImage.swift(路径挪了?)")
         }
     }
 

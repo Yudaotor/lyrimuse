@@ -1442,8 +1442,10 @@ final class PlaybackCoordinator: ObservableObject {
                   !Task.isCancelled else { return }
             // 下载期间可能已经换歌了 —— 这张是上一首的,丢掉。
             guard LocalPlaybackSource.shared.title == title else { return }
-            // 拿回来的还不如系统那份大就不值得换(缓存里可能存着一张同样小的图)。
-            guard Int(image.size.width.rounded()) > systemPixels else { return }
+            // 拿回来的还不如系统那份大就不值得换(缓存里可能存着一张同样小的图)。尺寸按像素比
+            // (NSImage.pixelWidth),不能用 size 的点数 —— 带 DPI 标签的图两者相差几倍,出处见 CachedImage.swift
+            // 里那个 extension 的注释(2026-09-09)。
+            guard image.pixelWidth > systemPixels else { return }
             // 均值色跟图一起给(理由见 highResAverageHex 的注释)。CIAreaAverage 放到
             // 后台算,跟 LocalPlaybackSource 取图那条路的做法一致,不挡主线程。
             var hex: String?
@@ -1457,7 +1459,7 @@ final class PlaybackCoordinator: ObservableObject {
                 }.value
             }
             guard !Task.isCancelled, LocalPlaybackSource.shared.title == title else { return }
-            logger.debug("highres: swapped in \(Int(image.size.width), privacy: .public)px for \(title, privacy: .public) (system=\(systemPixels, privacy: .public)px)")
+            logger.debug("highres: swapped in \(image.pixelWidth, privacy: .public)px for \(title, privacy: .public) (system=\(systemPixels, privacy: .public)px)")
             self?.highResArtworkImage = image
             self?.highResArtworkThumbnail = thumbnail
             self?.highResAverageHex = hex
@@ -1488,9 +1490,8 @@ final class PlaybackCoordinator: ObservableObject {
         let s = LocalPlaybackSource.shared
         let title = s.title
         guard !title.isEmpty, s.spotifyArtworkURL == url else { return }
-        // 系统那份的像素宽:artworkImage 是 NSImage(data:) 懒解码的,第一个 representation 的 pixelsWide
-        // 直接来自图头,不触发整图解码。没有系统封面时按 0 算 —— 任何原图都比它大。
-        let systemWidth = artworkImage?.representations.first?.pixelsWide ?? 0
+        // 系统那份的像素宽(NSImage.pixelWidth 读图头,不触发整图解码)。没有系统封面时按 0 算 —— 任何原图都比它大。
+        let systemWidth = artworkImage?.pixelWidth ?? 0
         let candidates = SpotifyArtworkURL.downloadCandidates(for: url)
         spotifyCoverTask = Task { [weak self] in
             var loaded: NSImage?
@@ -1509,11 +1510,10 @@ final class PlaybackCoordinator: ObservableObject {
             }
             // 下载期间可能已经换歌了 —— 这张是上一首的,丢掉。
             guard LocalPlaybackSource.shared.title == title, LocalPlaybackSource.shared.spotifyArtworkURL == url else { return }
-            // ⚠️ 比大小要用像素、不能用 NSImage.size:那是"点",会跟着 JPEG 里的 DPI 元数据走 —— Spotify 图床
-            // 的原图档带着 DPI,2000×2000 的图 size.width 只有 181(2026-09-09 装机实测,第一版就是在这里
-            // 把原图当成小图丢掉的)。网易云/QQ/Apple 那些图没有 DPI 标签,点数恒等于像素,所以上面那条路
-            // 用 size.width 一直没出事。第一个 representation 的 pixelsWide 直接来自图头。
-            let width = image.representations.first?.pixelsWide ?? Int(image.size.width.rounded())
+            // ⚠️ 比大小用像素(NSImage.pixelWidth),不能用 NSImage.size:那是"点",会跟着 JPEG 里的 DPI 元数据走 ——
+            // Spotify 图床的原图带 797 dpi,2000×2000 的图 size.width 只有 181(2026-09-09 装机实测,第一版就是在
+            // 这里把原图当成小图丢掉的)。理由与出处见 NSImage.pixelWidth 的注释(CachedImage.swift)。
+            let width = image.pixelWidth
             guard width > systemWidth else {
                 logger.notice("spotify original cover: \(width, privacy: .public)px is not larger than system \(systemWidth, privacy: .public)px, keeping system cover")
                 return

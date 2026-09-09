@@ -58,9 +58,10 @@ final class ImageMemoryCache {
     }
 
     func store(_ image: NSImage, for url: URL, variant: Variant = .thumbnail) {
-        // cost 用解码后的估算字节数(宽×高×4),NSCache 才有依据按字节淘汰
-        let size = image.size
-        let cost = max(1, Int(size.width * size.height * 4))
+        // cost 用解码后的估算字节数(宽×高×4),NSCache 才有依据按字节淘汰。⚠️ 按**像素**算,不是
+        // NSImage.size 的点数:带 DPI 标签的 JPEG(Spotify 图床原图是 797 dpi)2000² 像素的图 size 只有
+        // 181 点,按点算会把一张 16MB 的解码图记成 131KB,整个 48MB 预算形同虚设(2026-09-09)。
+        let cost = max(1, image.pixelWidth * image.pixelHeight * 4)
         cache.setObject(image, forKey: Self.key(url, variant), cost: cost)
         failedAt[url] = nil
     }
@@ -210,4 +211,16 @@ struct CachedImage<Placeholder: View>: View {
             return nil
         }
     }
+}
+
+extension NSImage {
+    /// 像素宽 / 高,取自第一个 representation 的图头(`pixelsWide` / `pixelsHigh`),拿不到再退回 size 的点数。
+    ///
+    /// 凡是拿一张图的"大小"做判断 —— 比分辨率、算缓存 cost、判形状 —— 都用这两个,不要用 `size`:那是
+    /// **点**,会跟着文件里的 DPI 元数据走。2026-09-09 实测 Spotify 图床的 JPEG 带 797 dpi,2000×2000 的原图
+    /// `size.width` 只有 181,高清替代那条路第一版就是在这里把原图当成小图丢掉的。网易云 / QQ / Apple 的图
+    /// 没有 DPI 标签、点数恰好等于像素,所以老代码一直没出事,但那是巧合不是保证。
+    /// `NSImage(cgImage:size:)` 构造出来的缩略档 representation 与 size 一致,两条路结果相同。
+    var pixelWidth: Int { representations.first.map(\.pixelsWide) ?? Int(size.width.rounded()) }
+    var pixelHeight: Int { representations.first.map(\.pixelsHigh) ?? Int(size.height.rounded()) }
 }
