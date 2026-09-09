@@ -303,6 +303,14 @@ type enrichEntry struct {
 	// 老条目没有这个字段(读成 0),此时回退到 TS —— 那正是拆分之前的语义,不会让存量条目
 	// 在升级后一股脑全部立刻重试一遍。
 	PeripheralTS int64 `json:"peripheral_ts,omitempty"`
+
+	// SpotifyTrackID:Spotify 原生客户端播这首歌时 AppleScript `spotify url` 给的 22 位曲目 ID(2026-09-09,
+	// 见 spotifytrack.go)。有它就能拼出真链接 open.spotify.com/track/<id>:fields() 里的 spotify_url 经
+	// spotifyLink() 优先用它,SpotifyURL 那个本地拼的搜索页链接只在没有 ID 时兜底。录音级身份,同一条目被别的
+	// 播放器再放时照样可用做链接;但 LB 的 spotify_id / music_service 只在本次播放确实来自 Spotify 时上送(lb.go)。
+	// 单独成段放在这里(不挤进上面链接那一组)是为了不动那一组的 gofmt 对齐列。
+	SpotifyTrackID string `json:"spotify_track_id,omitempty"`
+
 	// Unknown 装这条记录里**当前二进制不认识的键**(原样的 JSON 片段),MarshalJSON 时原样写回
 	// (enrichjson.go)。2026-09-05 加,起因是一次真实的数据丢失:09-03 10:15 一次
 	// `backfill-roma -apply` 由一个结构体里还没有 PlainLyrics/SongLanguage/ManualPickSHA 的
@@ -326,7 +334,8 @@ func (e enrichEntry) fields() map[string]string {
 	put("netease_url", e.NeteaseURL)
 	put("apple_music_url", e.AppleURL)
 	put("qq_music_url", e.QQURL)
-	put("spotify_url", e.SpotifyURL)
+	put("spotify_url", e.spotifyLink())
+	put("spotify_track_id", e.SpotifyTrackID)
 	put("lyrics", e.Lyrics)
 	put("lyrics_tr", e.LyricsTr)
 	put("lyrics_roma", e.LyricsRoma)
@@ -505,6 +514,9 @@ func trackEnrichment(artist, title, album, bundleID string, durationSecs float64
 	// 值相同、重复设是幂等的;而更靠里的话每条兜底轮都要各自关心一次这件事。
 	setNativeLyricSourcesForPlayer(bundleID)
 	key := enrichKey(artist, title, album)
+	// Spotify 曲目 ID 提示按**原始** key 存(poller 那边也是拿原始 artist/title/album 算的,见 spotifytrack.go);
+	// 下面 key 可能被 canonical / 时长变体重定向,提示的查找键要留一份原样的。
+	hintKey := key
 	// 归一化后的标题不只用来算 key,后面所有搜索调用(peripheral backfill/首次解析/升级
 	// 重试/重打分)也要用它——2026-08-31 真实bug(林潔心《想逃避(22)》):enrichKey 内部
 	// 会把结尾这种非版本标记的括号剥掉(算出的 key 标题是"想逃避"),但以前这条只用来
@@ -538,6 +550,13 @@ func trackEnrichment(artist, title, album, bundleID string, durationSecs float64
 		}
 	}
 	if ok {
+		// Spotify 曲目 ID 提示(2026-09-09):换曲那一拍 poller 刚从 AppleScript 拿到的真 ID,写进条目就落盘。
+		// 只在变化时写 —— 同一首歌每几秒进来一次,不能每次都 save;落盘放在锁外(见函数末尾)。
+		spotifyHintDirty := applySpotifyTrackIDHintLocked(hintKey, &e)
+		if spotifyHintDirty {
+			enrichCache[key] = e
+			enrichDirty = true
+		}
 		// 用户校准过这首歌的歌词时间轴吗 —— 两条"自动重选歌词源"的路径共用这一次判定
 		// (见 lyricspins.go)。放在这里而不是各自函数里面:那两个判定要保持纯函数,
 		// 好让单测不碰文件系统就能覆盖"被 pin 住就不重选"。
@@ -576,6 +595,9 @@ func trackEnrichment(artist, title, album, bundleID string, durationSecs float64
 			go backfillTranslation(key)
 		}
 		enrichMu.Unlock()
+		if spotifyHintDirty {
+			saveEnrichCache()
+		}
 		return e.fields()
 	}
 	// 从没见过这首歌:首次解析,不阻塞 poll 循环。
@@ -1539,6 +1561,11 @@ func resolveEnrichAsync(ctx context.Context, key, artist, title, album, bundleID
 	roundStat := beginNetworkRound()
 	deviceCoverURL := deviceCoverURLIfFresh(ctx, isNewTrack, bundleID, artist, title)
 	e := resolveTrackEnrichment(ctx, artist, title, album, durationSecs, deviceCoverURL)
+	// 首次解析:换曲那一拍 poller 留下的 Spotify 曲目 ID 一并写进条目(见 spotifytrack.go)。首次解析的 key
+	// 就是原始 key(canonical 命中的话走的是上面缓存命中那条路),直接按它查。
+	enrichMu.Lock()
+	applySpotifyTrackIDHintLocked(key, &e)
+	enrichMu.Unlock()
 	e.TS = time.Now().Unix()
 
 	if ctx.Err() != nil {

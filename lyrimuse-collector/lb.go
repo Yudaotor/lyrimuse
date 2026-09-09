@@ -129,6 +129,14 @@ func lbMeta(s snapshot) lbTrackMeta {
 			info[k] = v
 		}
 	}
+	// Spotify 原生播放:按 ListenBrainz 的标准字段上送这次播放的曲目 —— spotify_id(官方定义就是这条录音的
+	// Spotify 曲目 URL,LB 拿它做匹配与元数据补全)、origin_url、music_service=spotify.com,形状跟 LB 自家的
+	// Spotify 导入一致(2026-09-09,见 spotifytrack.go)。ID 是录音级身份、缓存里跨播放器共用,但「在哪个服务听的」
+	// 按当次播放的 bundle 算,所以只有 Spotify 原生播放才写这三个键;上面那个非标准的 spotify_url 照旧发,网页
+	// 中继读的是它(现在也是真链接了)。
+	for k, v := range spotifyListenFields(s.Bundle, enr["spotify_track_id"]) {
+		info[k] = v
+	}
 	// 歌词受 LB「单条 listen ≤ 10240 字节」硬上限约束：按 原文>翻译>罗马音>逐字 优先级加入，
 	// 累计超预算就丢后面的(逐字最大、最先被丢)——否则整条会被 LB 400 拒(含桥接的 iPhone 记录)。
 	budget := lyricBudgetBytes

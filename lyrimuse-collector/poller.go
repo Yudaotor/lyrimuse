@@ -1025,7 +1025,16 @@ func (p *poller) detectAdAtSessionStart() bool {
 		return true
 	}
 	if p.cur.Bundle == spotifyBundleID {
-		return spotifyCurrentTrackIsAd(p.ctx)
+		uri, ok := spotifyCurrentTrackURI(p.ctx)
+		if !ok {
+			return false
+		}
+		// 同一次脚本顺带留下真曲目 ID(2026-09-09):缓存里的 spotify_url 由它换成真链接,LB 上送带
+		// spotify_id,见 spotifytrack.go。广告 / 本地文件 / 播客不是 spotify:track:,取不出 ID,什么都不记。
+		if id := spotifyTrackIDFromURI(uri); id != "" {
+			noteSpotifyTrackID(p.cur.Artist, p.cur.Title, p.cur.Album, id)
+		}
+		return spotifyURIIsAd(uri)
 	}
 	return false
 }

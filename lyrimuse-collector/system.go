@@ -213,19 +213,21 @@ func playerBundleID(player string) string {
 // (collector 日志 `now playing:  - —`)artist 为空、album 非空,熬过了 8 秒 pnPending
 // 缓冲仍被 announce 成 Last.fm 的 nowplaying(用户截图,「最近记录」出现"—"正在播放行)。
 // 补两条只对 Spotify 生效的信号:artist 为空(真实曲目必有歌手)、标题恰为占位符"—"。
-// spotifyCurrentTrackIsAd 问 Spotify 本尊拿权威广告判据:AppleScript 的 `spotify url`
-// 对广告返回 "spotify:ad:…"、正常曲目返回 "spotify:track:…"。只在换曲时被
-// detectAdAtSessionStart 调一次;超时/权限被收回/Spotify 没在跑都静默返回 false,
-// 退回 isAdBreak 的字段启发式。
-func spotifyCurrentTrackIsAd(ctx context.Context) bool {
+// spotifyCurrentTrackURI 问 Spotify 本尊拿当前曲目的 URI:AppleScript 的 `spotify url` 对广告返回
+// "spotify:ad:…"、正常曲目返回 "spotify:track:…"(权威广告判据,见 spotifyURIIsAd;2026-09-09 起同一次脚本的
+// 返回值也是真曲目 ID 的唯一来源,见 spotifytrack.go)。只在换曲时被 detectAdAtSessionStart 调一次;
+// 超时 / 权限被收回 / Spotify 没在跑都返回 ok=false,调用方退回 isAdBreak 的字段启发式。
+// 脚本前垫 running 守卫(02 章决策 9):`tell application "Spotify"` 发任何命令都会把没开的 Spotify 拉起来。
+func spotifyCurrentTrackURI(ctx context.Context) (uri string, ok bool) {
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
 	out, err := exec.CommandContext(ctx, "osascript", "-e",
-		`tell application "Spotify" to spotify url of current track`).Output()
+		`if application "Spotify" is running then tell application "Spotify" to spotify url of current track`).Output()
 	if err != nil {
-		return false
+		return "", false
 	}
-	return strings.HasPrefix(strings.TrimSpace(string(out)), "spotify:ad")
+	uri = strings.TrimSpace(string(out))
+	return uri, uri != ""
 }
 
 func isAdBreak(bundleID, artist, title, album string) bool {

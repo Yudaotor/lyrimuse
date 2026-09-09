@@ -91,7 +91,7 @@ App 怎么知道"现在在放什么":从本地播放器读出 曲目元数据 + 
 
   **artist 是非空的**(广告主的频道名),免检 album 之后这两条会畅通无阻地被当成"KAO Hong Kong 的一首歌"收下 —— 跟第 09 章记的 Spotify 事故同形态(用户曾在「最近播放」看到 `Now Streaming on Hulu.`)。⚠️ **别指望 `minTrackSecs = 30` 兜住**:那条 Liese 广告是 **30.021 秒**,比 30 秒地板高 21 毫秒,照样过闸(打卡阈值 `min(时长/2, 240)` = 15s,播满就超)。YouTube 的标准 30 秒广告位基本都这样贴着线过去。
 
-  所以改成**问页面本身**,思路同 `spotifyCurrentTrackIsAd`(问 Spotify 本尊要 `spotify:ad:` 前缀)—— 字段启发式分不出来的事,去问权威来源。YouTube 没有对应的 AppleScript 接口,问的是页面 DOM。同一批成对采样里,**22 个连续样本、横跨两条不同广告**:
+  所以改成**问页面本身**,思路同 collector 的 `spotifyCurrentTrackURI`(问 Spotify 本尊要 `spotify url`,`spotify:ad:` 前缀即广告;2026-09-09 起同一次脚本的返回值也留作真曲目 ID,见 `spotifytrack.go`)—— 字段启发式分不出来的事,去问权威来源。YouTube 没有对应的 AppleScript 接口,问的是页面 DOM。同一批成对采样里,**22 个连续样本、横跨两条不同广告**:
 
   | 信号 | 广告期间 | 真歌期间 |
   |---|---|---|
