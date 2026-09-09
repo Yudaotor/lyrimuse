@@ -43,6 +43,7 @@ let groups: [TestGroup] = [
     TestGroup(name: "players", summary: "播放器身份 / 信任列表 / 播放模式 / 多选 / 广告判据 / 健康徽标", run: runPlayerIdentityTests),
     TestGroup(name: "lastfm", summary: "Last.fm:第 N 次听 / 写法族 / 分页 / 计次规则 / 最近记录 feed", run: runLastfmTests),
     TestGroup(name: "cover-art", summary: "封面取图 / 取色", run: runCoverArtTests),
+    TestGroup(name: "spotify-native", summary: "Spotify 原生客户端本机数据:图床换档 / 通知广告分类 / 位置探针输出解析", run: runSpotifyNativeTests),
     TestGroup(name: "menu-bar", summary: "菜单栏跑马灯 / 逐字染色 / 进度图标", run: runMenuBarTests),
     TestGroup(name: "overlay", summary: "桌面悬浮歌词 / 歌词窗口的几何与命中测试", run: runOverlayTests),
     TestGroup(name: "notch", summary: "灵动岛:展开区 / 音浪包络", run: runNotchTests),

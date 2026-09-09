@@ -140,6 +140,12 @@ public final class LocalPlaybackSource: ObservableObject {
     // 提前统一成一个"够亮"的值,等于替桌面那一侧做了错误的决定。各自的处理放在
     // PlaybackCoordinator,那里才知道自己是哪个面。
     @Published public private(set) var artworkAverageHex: String?
+    /// Spotify 原生客户端这首歌在 Spotify 图床上的封面地址(AppleScript `artwork url`,640 档),由
+    /// `SpotifyPositionProbe` 开播 2.5s 后那次脚本顺带带回来(2026-09-09,经 noteSpotifyArtwork 落到这里,
+    /// 先核对还是这首)。换歌 / 停播置 nil;非 Spotify 原生播放恒 nil。消费方是
+    /// `PlaybackCoordinator.refreshSpotifyOriginalCover`:系统那份封面(实测 600×600)本来就身份精确,
+    /// 这条只为把歌词窗口那张 920px 卡换成**同一张图**的原图档,见 03 章「高清替代」。
+    @Published public private(set) var spotifyArtworkURL: URL?
     // "歌词窗口"进度条用(2026-08-04 随 Apple Music 风格重做补上):暂停时 anchor 会被
     // 置 nil(见 apply() 的 else 分支),进度条如果只认 anchor,一暂停就整个没有位置可
     // 显示。暂停态 media-control/AppleScript 的 elapsedTime 本身就是精确的冻结位置,
@@ -531,6 +537,33 @@ public final class LocalPlaybackSource: ObservableObject {
     /// 反向偏慢一个旧偏置(2026-08-20 对抗审查抓出)。播放态清 nil。
     private var posPausedRawSecs: Double?
 
+    /// 换曲那一拍对 Spotify 原生客户端做广告分类(2026-09-09):先看 Spotify 自己刚广播的通知
+    /// (`SpotifyNotificationHint`,Track ID 前缀是权威分类、且比 MediaRemote 早到),按快照的歌名/歌手核对是
+    /// 同一首才采信 —— 说是广告就当场置位,说是曲目就到此为止,**不再 fork osascript**。通知没到 / 对不上这首
+    /// (App 刚启动、Spotify 没广播)才退回下面那次 AppleScript 复核,行为不劣于旧状。
+    /// 调用方约定同 verifySpotifyAdViaAppleScript:只在 换曲 + 原生 Spotify + 字段启发式没判中 时调。
+    private func spotifyNativeAdCheckForNewTrack(snapshot: MediaControlSnapshot) {
+        if let hint = spotifyNotificationHint, hint.matches(title: snapshot.title, artist: snapshot.artist) {
+            if hint.isAd, !isCurrentTrackAdBreak { isCurrentTrackAdBreak = true }
+            logger.debug("spotify ad check: notification says \(hint.isAd ? "ad" : "track", privacy: .public) for key=\(snapshot.trackKey, privacy: .public)")
+            return
+        }
+        verifySpotifyAdViaAppleScript(forKey: snapshot.trackKey)
+    }
+
+    /// 位置探针带回这首歌的图床地址;还是这首才收(晚到的地址不能挂到下一首头上,同 verifySpotifyAdViaAppleScript
+    /// 回来时那道核对)。
+    public func noteSpotifyArtwork(url: URL, forKey key: String) {
+        guard lastSnapshot?.trackKey == key else {
+            logger.notice("spotify artwork url: dropped, track moved on (for key=\(key, privacy: .public))")
+            return
+        }
+        if spotifyArtworkURL != url {
+            spotifyArtworkURL = url
+            logger.notice("spotify artwork url: \(url.lastPathComponent, privacy: .public) for key=\(key, privacy: .public)")
+        }
+    }
+
     /// 权威广告判据(2026-08-19):AppleScript 的 `spotify url` 对广告返回 "spotify:ad:…"。
     /// 每次换曲最多一次、后台异步,失败静默退回字段启发式(不劣于旧状)。结果回来时先核对
     /// 还是不是同一首 —— 广告只有二三十秒,晚到的 true 不能扣在下一首真歌头上。
@@ -731,6 +764,9 @@ public final class LocalPlaybackSource: ObservableObject {
     // startObservingPlayerInfoNotification() 的注释。
     private var playerInfoObserver: NSObjectProtocol?
     private var spotifyInfoObserver: NSObjectProtocol?
+    /// Spotify 最近一条 PlaybackStateChanged 通知里的分类提示(Track ID / Name / Artist),给换曲那一拍的
+    /// 广告判定用,见 spotifyNativeAdCheckForNewTrack 与 SpotifyNotificationHint 头注。只在 apply() 里读。
+    private var spotifyNotificationHint: SpotifyNotificationHint?
     // media-control 的事件流(QQ 音乐/网易云没有分布式通知,靠它)。见
     // MediaControlStreamWatcher —— 事件同样只当"提前 poll 一次"的信号。
     private var streamWatcher: MediaControlStreamWatcher?
@@ -783,6 +819,12 @@ public final class LocalPlaybackSource: ObservableObject {
     // 写法让所有状态变更仍然只发生在 apply() 这一条路径上,通知的唯一作用是让那条路径
     // 提早跑一次,已有的世代号防护(见 poll())原样继续生效、不需要任何改动。
     //
+    // ⚠️ 2026-09-09 起有一个划得很窄的例外(与 02 章决策 1 里 stream watcher 那条同性质):Spotify 那条通知
+    // 的 userInfo 会被读 **Track ID / Name / Artist 三个键**,只为给换曲那一拍的广告分类提供权威依据
+    // (`spotify:ad:` 前缀,跟 AppleScript `spotify url` 是同一个值,但不用 fork 子进程、而且比 MediaRemote
+    // 那份 now-playing 早到)。位置、播放状态、标题**仍然一律不从通知喂**;分类结果也只在 apply() 里、按快照的
+    // 歌名/歌手核对过之后才生效(见 spotifyNativeAdCheckForNewTrack)。通知没收到就退回原来的 osascript。
+    //
     // Apple Music 和 Spotify 都广播分布式通知,两个都订阅。
     //
     // ⚠️ 这里原来写着"Spotify 不广播这个通知……这些播放器没有等价机制",那句话是错的:
@@ -796,6 +838,10 @@ public final class LocalPlaybackSource: ObservableObject {
     // MediaControlClient.fetchSnapshot 的各条分支)。
     private func startObservingPlayerInfoNotification() {
         startStreamWatcher()
+        // Spotify 位置探针顺带带回的图床地址落到 spotifyArtworkURL(还是这首才收,见 noteSpotifyArtwork)。
+        SpotifyPositionProbe.shared.setArtworkSink { [weak self] key, url in
+            Task { @MainActor [weak self] in self?.noteSpotifyArtwork(url: url, forKey: key) }
+        }
         guard playerInfoObserver == nil else { return }
         let center = DistributedNotificationCenter.default()
         let handler: (Notification) -> Void = { [weak self] _ in
@@ -808,7 +854,16 @@ public final class LocalPlaybackSource: ObservableObject {
         // 完全相同的 250ms 去抖动补查路径,不需要为它单独调参。
         spotifyInfoObserver = center.addObserver(
             forName: NSNotification.Name("com.spotify.client.PlaybackStateChanged"),
-            object: nil, queue: .main, using: handler)
+            object: nil, queue: .main) { [weak self] note in
+                // 只读 Track ID / Name / Artist 做广告分类(上面那段 ⚠️ 里的窄例外);位置与播放状态照旧只当
+                // "提前 poll 一次"的信号。userInfo 在主队列上读,跟下面 handler 同一条路。
+                let hint = SpotifyNotificationHint(userInfo: note.userInfo)
+                MainActor.assumeIsolated {
+                    guard let self else { return }
+                    if let hint, self.spotifyNotificationHint != hint { self.spotifyNotificationHint = hint }
+                    self.handlePlayerInfoChanged()
+                }
+            }
     }
 
     // media-control 事件流跟两条分布式通知走**同一条**去抖动补查路径:三个来源都只是
@@ -1123,6 +1178,7 @@ public final class LocalPlaybackSource: ObservableObject {
             if !currentLineFillSettled { currentLineFillSettled = true }
             artworkData = nil
             artworkAverageHex = nil
+            if spotifyArtworkURL != nil { spotifyArtworkURL = nil }
             pausedPositionMs = nil
             currentDurationMs = nil
             // 曲目本身也清掉,理由见上面那段。跟着一起清的还有"这首歌"的几个判定 ——
@@ -1335,9 +1391,10 @@ public final class LocalPlaybackSource: ObservableObject {
         // np: 落盘那段之前就算好了(广告不该被记成"上次在听"),这里直接用。
         if snapshot.trackKey != lastKey {
             if isCurrentTrackAdBreak != adByFields { isCurrentTrackAdBreak = adByFields }
-            // AppleScript 权威复核只对原生客户端有意义(`spotify url` 是原生 App 的
-            // scripting 字典,网页版没有这个接口)——网页版只吃字段启发式本身的结果。
-            if isSpotifyNative, !adByFields { verifySpotifyAdViaAppleScript(forKey: snapshot.trackKey) }
+            // 权威复核只对原生客户端有意义(`spotify url` 与通知里的 Track ID 都是原生 App 才有,网页版没有这
+            // 两个接口)——网页版只吃字段启发式本身的结果。2026-09-09 起先问 Spotify 自己刚广播的通知、对不上
+            // 才退回 osascript,见 spotifyNativeAdCheckForNewTrack。
+            if isSpotifyNative, !adByFields { spotifyNativeAdCheckForNewTrack(snapshot: snapshot) }
         } else if adByFields, !isCurrentTrackAdBreak {
             isCurrentTrackAdBreak = true
         }
@@ -1379,6 +1436,8 @@ public final class LocalPlaybackSource: ObservableObject {
         if trackChanged || !syncEngine.hasContent || enrichMTime != lastEnrichMTime {
             if trackChanged {
                 logger.info("track changed: \(snapshot.artist ?? "", privacy: .public) - \(snapshot.title ?? "", privacy: .public)")
+                // 上一首的图床地址跟着换歌走;新地址要等探针 2.5s 后带回来(见 spotifyArtworkURL)。
+                if spotifyArtworkURL != nil { spotifyArtworkURL = nil }
             }
             lastKey = key
             lastEnrichMTime = enrichMTime

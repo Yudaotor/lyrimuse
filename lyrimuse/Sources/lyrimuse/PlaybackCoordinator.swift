@@ -798,6 +798,13 @@ final class PlaybackCoordinator: ObservableObject {
                 .dropFirst() // 启动时那一次不是"新解析出来的",换歌那条路已经覆盖
                 .debounce(for: .milliseconds(300), scheduler: RunLoop.main)
                 .sink { [weak self] _ in self?.refreshHighResCover(onlyIfMissing: true) },
+            // 第三个触发点(2026-09-09):Spotify 原生客户端的图床地址到了(开播 2.5s 后的位置探针顺带带回,
+            // 见 LocalPlaybackSource.spotifyArtworkURL),或者系统封面字节变了(上面那条路会顺手清掉高清图,
+            // 这里按同一地址放回去)。跟 artworkData 合在一起订阅、比上面多等 50ms,保证跑在
+            // refreshHighResCover 的 clearHighRes() **之后**,不然刚换上的原图会被它撤掉。
+            Publishers.CombineLatest(s.$spotifyArtworkURL, s.$artworkData)
+                .debounce(for: .milliseconds(350), scheduler: RunLoop.main)
+                .sink { [weak self] url, _ in self?.refreshSpotifyOriginalCover(url) },
             // 两个消费面各自从**同一份原始均值**派生自己那一版,处理都是纯数学,放在这一层
             // 跟 hex→Color 的转换一起做,每首歌只算一次,不在两边的 body 里反复算。
             // (十六进制字符串必须在这一层才转得成 Color——LocalPlaybackSource 所在的
@@ -1372,6 +1379,11 @@ final class PlaybackCoordinator: ObservableObject {
     private static let lowResArtworkThreshold = 300
 
     private var highResCoverTask: Task<Void, Never>?
+    /// Spotify 原生客户端「同一张图的原图档」那条替代路(2026-09-09,见 refreshSpotifyOriginalCover)。
+    private var spotifyCoverTask: Task<Void, Never>?
+    /// 上一次成功换上去的那个图床地址 —— 同一地址不重复下载、不闪:refreshHighResCover 因 artworkData
+    /// 重发而清空高清图之后,那条路会按同一地址从内存缓存原样放回去。换歌(地址变 nil)时清。
+    private var spotifyCoverAppliedURL: URL?
 
     /// 给当前曲目找一张比系统那份更大的封面。见 highResArtworkImage 的注释。
     ///
@@ -1449,6 +1461,77 @@ final class PlaybackCoordinator: ObservableObject {
             self?.highResArtworkImage = image
             self?.highResArtworkThumbnail = thumbnail
             self?.highResAverageHex = hex
+        }
+    }
+
+    /// Spotify 原生客户端:把高清替代换成**同一张图的原图档**(2026-09-09)。
+    ///
+    /// 跟 refreshHighResCover 那条路的分工:那条只在系统那份太小 / 不是方形时才去缓存里按文字匹配找替代;
+    /// 而 Spotify 交给系统的封面实测是 600×600(与 Spotify 图床 640 档同一张图,8×8 均值哈希距离 0),又方
+    /// 又不小,永远不进那条路 —— 可歌词窗口那张卡要画到 920px。这里拿的是 AppleScript `artwork url`
+    /// (SpotifyPositionProbe 开播 2.5s 后那次脚本顺带带回),身份由播放时刻保证、不靠匹配,所以不需要
+    /// CoverArtReplacementGate 那套判据,只要"拿回来的比系统那份宽"就换。下载顺序 原图(82c1,实测
+    /// 800 / 1425 / 2000)→ 640,见 SpotifyArtworkURL.downloadCandidates。
+    ///
+    /// 时序:换歌时 LocalPlaybackSource 把 spotifyArtworkURL 置 nil,这里只清自己的记录、不动图(旧图由
+    /// refreshHighResCover 的 clearHighRes 撤);探针带回地址 → 下载 → 换上,期间显示系统那份 600。
+    /// 同一地址已经换上就不再动(spotifyCoverAppliedURL),避免 artworkData 重发时清空→重设闪一下;
+    /// 反过来被清空了(highResArtworkImage == nil)就按同一地址从内存缓存放回。
+    private func refreshSpotifyOriginalCover(_ url: URL?) {
+        spotifyCoverTask?.cancel()
+        spotifyCoverTask = nil
+        guard let url else {
+            spotifyCoverAppliedURL = nil
+            return
+        }
+        if spotifyCoverAppliedURL == url, highResArtworkImage != nil { return }
+        let s = LocalPlaybackSource.shared
+        let title = s.title
+        guard !title.isEmpty, s.spotifyArtworkURL == url else { return }
+        // 系统那份的像素宽:artworkImage 是 NSImage(data:) 懒解码的,第一个 representation 的 pixelsWide
+        // 直接来自图头,不触发整图解码。没有系统封面时按 0 算 —— 任何原图都比它大。
+        let systemWidth = artworkImage?.representations.first?.pixelsWide ?? 0
+        let candidates = SpotifyArtworkURL.downloadCandidates(for: url)
+        spotifyCoverTask = Task { [weak self] in
+            var loaded: NSImage?
+            for candidate in candidates {
+                if Task.isCancelled { return }
+                // 原图档:这张要给歌词窗口 920pt@2x 的封面卡,不能吃缩略降采样(同 refreshHighResCover)。
+                if let image = await ImageMemoryCache.shared.load(candidate, variant: .original) {
+                    loaded = image
+                    break
+                }
+            }
+            guard !Task.isCancelled else { return }
+            guard let image = loaded else {
+                logger.notice("spotify original cover: no candidate loaded for \(title, privacy: .public)")
+                return
+            }
+            // 下载期间可能已经换歌了 —— 这张是上一首的,丢掉。
+            guard LocalPlaybackSource.shared.title == title, LocalPlaybackSource.shared.spotifyArtworkURL == url else { return }
+            // ⚠️ 比大小要用像素、不能用 NSImage.size:那是"点",会跟着 JPEG 里的 DPI 元数据走 —— Spotify 图床
+            // 的原图档带着 DPI,2000×2000 的图 size.width 只有 181(2026-09-09 装机实测,第一版就是在这里
+            // 把原图当成小图丢掉的)。网易云/QQ/Apple 那些图没有 DPI 标签,点数恒等于像素,所以上面那条路
+            // 用 size.width 一直没出事。第一个 representation 的 pixelsWide 直接来自图头。
+            let width = image.representations.first?.pixelsWide ?? Int(image.size.width.rounded())
+            guard width > systemWidth else {
+                logger.notice("spotify original cover: \(width, privacy: .public)px is not larger than system \(systemWidth, privacy: .public)px, keeping system cover")
+                return
+            }
+            var hex: String?
+            var thumbnail: NSImage?
+            if let cg = image.cgImage(forProposedRect: nil, context: nil, hints: nil) {
+                (hex, thumbnail) = await Task.detached {
+                    (LocalPlaybackSource.computeAverageHex(cgImage: cg),
+                     Self.downscaledThumbnail(cg, maxPixel: 256))
+                }.value
+            }
+            guard !Task.isCancelled, LocalPlaybackSource.shared.title == title else { return }
+            logger.notice("spotify original cover: swapped in \(width, privacy: .public)px for \(title, privacy: .public) (system=\(systemWidth, privacy: .public)px)")
+            self?.highResArtworkImage = image
+            self?.highResArtworkThumbnail = thumbnail
+            self?.highResAverageHex = hex
+            self?.spotifyCoverAppliedURL = url
         }
     }
 

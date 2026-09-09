@@ -346,7 +346,7 @@ collector 侧对称改(`system.go` → `playingPositionSecs`,`mediacontrolanchor
 
 **暂停时冻结值可能根本没发布**(同日上午,用户仍报「一按暂停歌词进度明显变一下」,用 `pause transition` 诊断行量出来的):通过 MediaRemote 指令暂停(App 自己的暂停键 / 媒体键 / `media-control pause`)时 Spotify **不重新发布** elapsedTime,事件流只有 `playing:false`,原始 elapsedTime 仍是开播锚点(0@开播)。08-21 的暂停规则这时退回「上一拍轮询记住的播放位置」,而那一拍最多旧一个轮询周期——实测 蘇麗珍 屏上 6.961 一下退到 5.225(−1.74s)、神探 −0.31s,而 Spotify 自己的钟(通知里的位置 6.858)跟屏上只差 0.1s;昨晚在 Spotify 界面里按的暂停会发布冻结值(带新时间戳),那几次是准的。修法:stream watcher 把 `playing:false` 到达的时刻记给 `MediaControlClient.notePauseObserved`;暂停分支若发现锚点时间戳比暂停事件早 `pauseAnchorMaxSkew`(1.5s)以上,就知道冻结值没发布,把上一拍位置按 rate=1 外推到暂停那一刻(`pausedPositionSeconds(elapsedTime:anchorTimestamp:lastPlaying:pauseObservedAt:now:)`);锚点是暂停时发布的照旧用冻结值;没有事件时刻退回旧规则。恢复播放那一拍仍会前跳约 0.6s:Spotify 自己的钟恢复时跳 +0.27s(实测三次 .277/.274/.273,它的界面同样如此)加上通知 + 去抖的 ~0.35s 追赶,都是真实前进量,不修。
 
-**开播锚点本身打晚**(同日上午第三个形态):广告结束后开播的歌,MediaRemote 那份 now-playing 信息晚发 ~2.4s 而 elapsedTime 仍是 0(妳和吉他:Spotify 通知 08:12:45.876 报「位置 0」,media-control 08:12:48.253 才出现这首歌、锚点 0@:48),整首歌落后 2.3s、一暂停往前补 2.3s。单看 media-control 认不出来。修法 `SpotifyPositionProbe`:Spotify 原生客户端每首歌开播 2.5s 后用 AppleScript 问一次 `player position`(往返 ~0.1~0.2s,取中点),结果走 `resolvePositionSeconds` 的 `isGroundTruthSeed` 通道(跟浏览器探针同一条,差过 0.30s 才重锚),只在稳定播放中消费(`posWasPlaying` 门),同一首歌只一次。不用通知里的位置当真值是因为通知比 Spotify 的钟真正起步早 ~0.5s(缓冲)。手动切歌两首实测探针读数与锚点一致(差 <0.1s,未重锚)。collector 没有这条探针。
+**开播锚点本身打晚**(同日上午第三个形态):广告结束后开播的歌,MediaRemote 那份 now-playing 信息晚发 ~2.4s 而 elapsedTime 仍是 0(妳和吉他:Spotify 通知 08:12:45.876 报「位置 0」,media-control 08:12:48.253 才出现这首歌、锚点 0@:48),整首歌落后 2.3s、一暂停往前补 2.3s。单看 media-control 认不出来。修法 `SpotifyPositionProbe`:Spotify 原生客户端每首歌开播 2.5s 后用 AppleScript 问一次 `player position`(往返 ~0.1~0.2s,取中点),结果走 `resolvePositionSeconds` 的 `isGroundTruthSeed` 通道(跟浏览器探针同一条,差过 0.30s 才重锚),只在稳定播放中消费(`posWasPlaying` 门),同一首歌只一次。不用通知里的位置当真值是因为通知比 Spotify 的钟真正起步早 ~0.5s(缓冲)。手动切歌两首实测探针读数与锚点一致(差 <0.1s,未重锚)。collector 没有这条探针。2026-09-09 起这次脚本顺带带回 `spotify url` 与 `artwork url`(一次脚本三个值,不多 fork),位置改用整数毫秒回传(避开 AppleScript 实数转文本跟着系统小数点本地化走),封面地址进 `LocalPlaybackSource.spotifyArtworkURL`,消费见 03 章「高清替代」里 Spotify 原生那条。
 
 **偏置不能扣在播放器自己发布的锚点上**(同日上午第四个形态,用上面的诊断行抓到:09:40:50 `bias=1.080 delta=-1.097`,而 shown 152.689 vs frozenRaw 152.673):见「Spotify gapless 自然切歌锚点超前校正」一节里被划掉的那句及其订正。规则落在 apply() 两个分支之前:Spotify 原生、同曲、偏置非零、且快照 `anchorElapsedTime`>0 → 清偏置并记一行 `natural advance bias dropped`。
 
@@ -375,6 +375,8 @@ nil 快照(Music.app stopped/退出、播放列表放完、.auto 或 media-contr
 ### Spotify 广告插播检测
 
 `apply()` 里:title 非空 + 快照来自 Spotify(bundleIdentifier 精确核对)+ album 为空 → `isCurrentTrackAdBreak`(media-control 文档确认广告播放时 album 恒空)。三个展示面(悬浮歌词/灵动岛/歌词窗口)据此显示「广告中」,且该分支必须排在"搜索歌词中…"之前——广告的标题永远不会进歌词缓存,否则整段广告卡在"搜索中"。collector 侧 `enrich.go` 有同信号的对应守卫(不把广告写进歌词缓存),`system.go` 的 `isAdBreak` 同判据。
+
+**换曲那一拍的权威复核先问通知、再退 AppleScript**(2026-09-09):Spotify 原生客户端广播的 `com.spotify.client.PlaybackStateChanged` 通知 userInfo 里带 `Track ID`,广告是 `spotify:ad:…`、曲目是 `spotify:track:…`,跟 AppleScript `spotify url` 是同一个值,但通知在换曲那一刻就到(比 MediaRemote 那份 now-playing 早,广告后开播那首实测早 ~2.4s)、且不用 fork 子进程。App 侧现在:字段启发式没判中的 Spotify 原生新曲目,先拿最近一条通知提示按快照的歌名/歌手核对(`SpotifyNotificationHint.matches`,歌名逐字、歌手允许前缀关系),对上了就按它定 —— 广告当场置位,曲目就此打住;对不上(App 刚启动、通知没收到)才退回原来那次 osascript(`verifySpotifyAdViaAppleScript`),不劣于旧状。键名从 Spotify.app 二进制字符串表核实:Player State / Track ID / Name / Artist / Album / Album Artist / Duration / Playback Position / Has Artwork / Popularity / Play Count / Track Number / Disc Number,**没有 Artwork URL**。位置/播放状态仍一律不从通知取(决策 1 的第二个窄例外)。collector 是 Go 进程收不到分布式通知,那边照旧每换曲一次 osascript。
 
 ### 播放控制(写路径,MusicPlaybackController)
 
@@ -509,7 +511,8 @@ vs 目录 289.766),拿目录值去盖反而是降精度。覆盖就该待在产�
 | 真实 App 图标解析(共享缓存) | `lyrimuse/Settings/AppIconResolver.swift` · `AppIconResolver.icon(forBundleID:)` |
 | 网页平台图标(自带素材 + 镂空垫白) | `lyrimuse/SettingsView.swift` · `PlayerSettingsTab.platformIcon(_:)` / `youtubeMusicIcon` / `spotifyIcon` / `whiteFilledCutouts(image:)` |
 | 事件流常驻子进程 + 锚点目击 + 暂停时刻 | `LyrimuseCore/Local/MediaControlStreamWatcher.swift` · `MediaControlStreamWatcher`(`digest` 纯函数,`pausedAtArrival`) |
-| Spotify 一次性地面真值探针 | `LyrimuseCore/Local/SpotifyPositionProbe.swift` · `SpotifyPositionProbe`(`trackChanged`/`consumeCorrection`/`extrapolate`);消费点 `LocalPlaybackSource.apply` 的 `isGroundTruthSeed` 分支 |
+| Spotify 一次性地面真值探针 | `LyrimuseCore/Local/SpotifyPositionProbe.swift` · `SpotifyPositionProbe`(`trackChanged`/`consumeCorrection`/`extrapolate`/`parseProbeOutput`);消费点 `LocalPlaybackSource.apply` 的 `isGroundTruthSeed` 分支;封面地址经 `setArtworkSink` → `LocalPlaybackSource.noteSpotifyArtwork(url:forKey:)` → `spotifyArtworkURL` |
+| Spotify 通知广告分类 | `LyrimuseCore/Local/SpotifyNotificationHint.swift` · `SpotifyNotificationHint`(`init(userInfo:)`/`isAd`/`matches(title:artist:)`);观察者在 `LocalPlaybackSource.startObservingPlayerInfoNotification`,消费点 `spotifyNativeAdCheckForNewTrack(snapshot:)` |
 | 通道健康自检 | `LyrimuseCore/Local/MediaControlHealth.swift` · `MediaControlHealth` |
 | 播放控制写路径 | `LyrimuseCore/Local/MusicPlaybackController.swift` · `MusicPlaybackController`(`dispatch`/`seek`/`setPlaybackMode`/`supportsExtendedControls`) |
 | 进度锚 | `LyrimuseCore/Playback/ProgressClock.swift` · `ProgressAnchor.extrapolatedPositionMs` |
@@ -523,7 +526,7 @@ vs 目录 289.766),拿目录值去盖反而是降精度。覆盖就该待在产�
 
 ## 设计决策与已知坑
 
-1. **事件只当"提前 poll 一次"的信号**,绝不从通知/stream payload 直接喂状态——状态机已有世代号防乱序、位置伺服、计时器生命周期三重微妙性,并行改状态路径是乱序 bug 温床;2 秒轮询永远保留作兜底,任何事件机制失效最坏退化回旧行为。2026-09-07 起有一个划得很窄的例外:stream watcher 会解析 payload,但只为得到"哪个锚点、什么时候到"(锚点身份 + 到达时刻,进 `MediaControlClient` 的目击表),位置数值本身仍全部来自轮询快照,见「Spotify 恢复播放后的锚点相位」。
+1. **事件只当"提前 poll 一次"的信号**,绝不从通知/stream payload 直接喂状态——状态机已有世代号防乱序、位置伺服、计时器生命周期三重微妙性,并行改状态路径是乱序 bug 温床;2 秒轮询永远保留作兜底,任何事件机制失效最坏退化回旧行为。2026-09-07 起有一个划得很窄的例外:stream watcher 会解析 payload,但只为得到"哪个锚点、什么时候到"(锚点身份 + 到达时刻,进 `MediaControlClient` 的目击表),位置数值本身仍全部来自轮询快照,见「Spotify 恢复播放后的锚点相位」。2026-09-09 起第二个窄例外:Spotify 那条通知的 userInfo 读 Track ID / Name / Artist 三个键做换曲那一拍的广告分类(替掉每首歌一次的 osascript),分类结果只在 apply() 里按快照歌名/歌手核对后生效,见「Spotify 广告插播检测」。
 2. **250ms 去抖动而非"立刻查+节流"**:实测 Music.app 一次操作连发 2 条通知且第一条带旧状态、AppleScript 状态 ~294ms 才切换完;立刻查大概率读到半切换快照还把带新状态的第二条吞掉。
 3. **暂停 ≠ 清空**:停止推进(停 20Hz)和清空显示是两回事,暂停保留按冻结位置解出的当前行;真正的全清只发生在 nil 快照(stopped/焦点被抢),且 `lastKey` 必须一起清否则恢复播放后歌词窗口回不来。
 4. **QQ 音乐整数秒地板量化推翻了"零均值噪声"前提**:取整偏差单向(只晚不早),EMA 永远够不到门槛,靠前向棘轮(reported > predicted 即证明外推落后)修;反方向维持 EMA 路径。

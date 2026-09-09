@@ -28,6 +28,15 @@ import os
 /// `naturalAdvanceCorrection` 的偏置在管;探针读数进伺服前同样扣偏置(raw 域),所以锚点没打歪
 /// 的歌 |Δ|≈0,不会被它推快。
 ///
+/// ## 顺带带回封面地址(2026-09-09)
+///
+/// 这次脚本本来就要 fork 一个 osascript,顺带把 `spotify url` 与 `artwork url` 一起带回来(一次脚本三个值,
+/// 不多一个子进程)。`artwork url` 是 Spotify 图床 640 档的地址(形状与换档见 `SpotifyArtworkURL`),经
+/// `setArtworkSink` 交给 `LocalPlaybackSource.noteSpotifyArtwork`,再由 `PlaybackCoordinator` 换成同一张图的
+/// 原图档 —— Spotify 交给系统的封面只有 600×600。只有真曲目(`spotify:track:`)才交出去:广告的 `artwork url`
+/// 是广告物料图,本地文件是 `missing value`。位置改用**整数毫秒**回传:AppleScript 实数转文本会跟系统小数点
+/// 本地化走(逗号地区会变成 `12,345`),整数没有这个问题。
+///
 /// ## 边界
 ///
 /// - 只对 Spotify 原生客户端开(bundle id 判),网页版走 `BrowserPositionProbe`。
@@ -50,12 +59,25 @@ public final class SpotifyPositionProbe: @unchecked Sendable {
     private let lock = NSLock()
     private var scheduledKey: String?
     private var pending: (key: String, position: Double, at: Date)?
+    /// 封面地址的去向(见类头注「顺带带回封面地址」)。由 LocalPlaybackSource 启动时挂上;没挂就丢掉。
+    private var artworkSink: (@Sendable (_ key: String, _ url: URL) -> Void)?
+
+    public func setArtworkSink(_ sink: @escaping @Sendable (_ key: String, _ url: URL) -> Void) {
+        lock.lock()
+        artworkSink = sink
+        lock.unlock()
+    }
 
     private static let script = """
     if application "Spotify" is not running then
         return ""
     end if
-    tell application "Spotify" to player position
+    tell application "Spotify"
+        set posMs to (player position * 1000) as integer
+        set trackURI to (spotify url of current track) as text
+        set artURL to (artwork url of current track) as text
+        return (posMs as text) & "|" & trackURI & "|" & artURL
+    end tell
     """
 
     /// 换歌(或首次观察)时调。`isSpotifyNative` 为假只清状态、不探测。
@@ -75,16 +97,23 @@ public final class SpotifyPositionProbe: @unchecked Sendable {
             let t0 = Date()
             guard let r = ProcessRunner.run("/usr/bin/osascript", ["-e", Self.script], timeout: Self.appleScriptTimeout),
                   r.succeeded,
-                  let position = Double(r.stdoutText.trimmingCharacters(in: .whitespacesAndNewlines))
+                  let parsed = Self.parseProbeOutput(r.stdoutText)
             else {
                 Self.logger.notice("spotify position probe: no answer for key=\(key, privacy: .public)")
                 return
             }
+            let position = parsed.position
             let t1 = Date()
             let midpoint = t0.addingTimeInterval(t1.timeIntervalSince(t0) / 2)
             self.lock.lock()
-            if self.scheduledKey == key { self.pending = (key, position, midpoint) }
+            let stillScheduled = self.scheduledKey == key
+            if stillScheduled { self.pending = (key, position, midpoint) }
+            let sink = self.artworkSink
             self.lock.unlock()
+            // 封面地址:还是这首、且是真曲目才交出去(广告物料图 / 本地文件的 missing value 都不要)。
+            if stillScheduled, let art = parsed.artworkURL, let uri = parsed.uri, SpotifyArtworkURL.isTrackURI(uri) {
+                sink?(key, art)
+            }
             Self.logger.notice("spotify position probe: key=\(key, privacy: .public) position=\(position, format: .fixed(precision: 3)) rtt=\(t1.timeIntervalSince(t0), format: .fixed(precision: 3))")
         }
     }
@@ -99,6 +128,29 @@ public final class SpotifyPositionProbe: @unchecked Sendable {
         guard let value = Self.extrapolate(position: p.position, capturedAt: p.at, now: now, rate: rate) else { return nil }
         Self.logger.notice("spotify position probe: handing off \(value, format: .fixed(precision: 3))s for key=\(key, privacy: .public)")
         return value
+    }
+
+    /// 解析脚本输出。纯函数,selftest 直接覆盖。
+    ///
+    /// 新形态 `毫秒整数|spotify url|artwork url`(三段,后两段可为空 / `missing value`);位置解析不出来整条
+    /// 作废(位置是这条探针的本职),后两段坏了只丢那一段。也接受旧形态的裸秒数(`12.345`),让这个函数对
+    /// 老输出同样成立 —— 运行时不会再遇到,但解析规则不该依赖脚本此刻长什么样。
+    public static func parseProbeOutput(_ raw: String) -> (position: Double, uri: String?, artworkURL: URL?)? {
+        let s = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !s.isEmpty else { return nil }
+        let parts = s.components(separatedBy: "|")
+        let first = parts[0].trimmingCharacters(in: .whitespaces)
+        let position: Double
+        if parts.count == 1 {
+            guard let seconds = Double(first) else { return nil }
+            position = seconds
+        } else {
+            guard let ms = Int(first) else { return nil }
+            position = Double(ms) / 1000
+        }
+        let uriRaw = parts.count > 1 ? parts[1].trimmingCharacters(in: .whitespaces) : ""
+        let art = parts.count > 2 ? SpotifyArtworkURL.parse(parts[2]) : nil
+        return (position, uriRaw.isEmpty ? nil : uriRaw, art)
     }
 
     /// 纯函数,selftest 直接覆盖:探测值按 rate×age 外推到 now;age 越界(倒退 / 过期)返回 nil。

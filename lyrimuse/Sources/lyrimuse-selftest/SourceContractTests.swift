@@ -315,6 +315,54 @@ func runSourceContractTests() {
                     "封面口径: 这些地方裸读 artworkImage、没走高清替代优先 —— 会跟别处显示成两张不同的图(写 `highResArtworkImage ?? artworkImage`,或用 displayArtworkImage)")
     }
 
+    // ---- Spotify 原生客户端:通知广告分类 + 位置探针顺带取封面地址的接线(2026-09-09)----
+    //
+    // 三处接线漏一处都不报错:LocalPlaybackSource 换曲那一拍要先问通知提示再退 AppleScript(否则每首歌照旧白
+    // fork 一次 osascript);SpotifyPositionProbe 的脚本要顺带带回 `spotify url` 与 `artwork url`(否则
+    // spotifyArtworkURL 永远 nil、PlaybackCoordinator 那条原图档替代路永远不跑);PlaybackCoordinator 要订阅
+    // $spotifyArtworkURL。形态同下面「对齐方式」那条源码扫描守卫(剔注释行再数)。
+    do {
+        let sourcesRoot = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        let core = sourcesRoot.appendingPathComponent("LyrimuseCore/Local")
+        let app = sourcesRoot.appendingPathComponent("lyrimuse")
+        func code(_ url: URL) -> String? {
+            guard let text = try? String(contentsOfFile: url.path, encoding: .utf8) else { return nil }
+            return text.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+                .filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") }.joined(separator: "\n")
+        }
+        func count(_ text: String, _ needle: String) -> Int { text.components(separatedBy: needle).count - 1 }
+        if let lps = code(core.appendingPathComponent("LocalPlaybackSource.swift")) {
+            expectEqual(count(lps, "verifySpotifyAdViaAppleScript(forKey:"), 1,
+                        "Spotify 通知分类: AppleScript 复核只剩 spotifyNativeAdCheckForNewTrack 里那一次退路调用(现 \(count(lps, "verifySpotifyAdViaAppleScript(forKey:")) 处)")
+            expectEqual(count(lps, "spotifyNativeAdCheckForNewTrack(snapshot: snapshot)") >= 1, true,
+                        "Spotify 通知分类: 换曲那一拍要走 spotifyNativeAdCheckForNewTrack")
+            expectEqual(lps.contains("SpotifyNotificationHint(userInfo: note.userInfo)"), true,
+                        "Spotify 通知分类: Spotify 那条通知的观察者要把 userInfo 解析成 SpotifyNotificationHint")
+            expectEqual(lps.contains("SpotifyPositionProbe.shared.setArtworkSink"), true,
+                        "Spotify 封面: LocalPlaybackSource 要给位置探针挂 artwork sink")
+        } else {
+            expectEqual(true, false, "Spotify 接线: 读不到 LyrimuseCore/Local/LocalPlaybackSource.swift(路径挪了?)")
+        }
+        if let probe = code(core.appendingPathComponent("SpotifyPositionProbe.swift")) {
+            for needle in ["player position", "spotify url of current track", "artwork url of current track"] {
+                expectEqual(probe.contains(needle), true, "Spotify 探针脚本要带回 \(needle)")
+            }
+        } else {
+            expectEqual(true, false, "Spotify 接线: 读不到 LyrimuseCore/Local/SpotifyPositionProbe.swift(路径挪了?)")
+        }
+        if let pc = code(app.appendingPathComponent("PlaybackCoordinator.swift")) {
+            expectEqual(pc.contains("s.$spotifyArtworkURL"), true, "Spotify 封面: PlaybackCoordinator 要订阅 $spotifyArtworkURL")
+            expectEqual(count(pc, "refreshSpotifyOriginalCover(") >= 2, true,
+                        "Spotify 封面: refreshSpotifyOriginalCover 要有声明 + 订阅点那次调用")
+            // 系统那份与拿回来的那张都按像素比(representations.first?.pixelsWide),不能用 NSImage.size 的点数:
+            // Spotify 图床原图带 DPI,2000px 的图 size.width 只有 181,第一版装机就是在这里把原图当小图丢掉的。
+            expectEqual(count(pc, "representations.first?.pixelsWide") >= 2, true,
+                        "Spotify 封面: 系统那份与候选都要按 pixelsWide 比大小(现 \(count(pc, "representations.first?.pixelsWide")) 处)")
+        } else {
+            expectEqual(true, false, "Spotify 接线: 读不到 lyrimuse/PlaybackCoordinator.swift(路径挪了?)")
+        }
+    }
+
     // ---- 灵动岛「字体」组的接线(2026-09-09)----
     //
     // 三个字体设置只影响渲染,漏接任何一处都不报错,只表现成"改了字体、某处没跟着变"。要吃字体的五处歌词
