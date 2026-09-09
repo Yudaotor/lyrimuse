@@ -90,3 +90,30 @@ public enum SpotifyArtworkURL {
         uri.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("spotify:track:")
     }
 }
+
+/// Spotify URI → 能交给 LaunchServices 打开的深链(2026-09-09,「在 Spotify 中显示」)。
+///
+/// `spotify url of current track` 回来的是 `spotify:track:<22 位 base62>`;Spotify.app 注册了 `spotify` URL scheme
+/// (lsregister 实测 /Applications/Spotify.app 的 bindings 里有 `spotify:`),Spotify 的 URI 语义就是**定位到那个
+/// 资源页**(与浏览器打开 open.spotify.com/track/<id> 同义),不是 QQ 音乐 `qqmusicmac://playsong` 那种"从头重播"。
+/// 播客节目(`spotify:episode:`)同理放行;广告(`spotify:ad:`)、本地文件(`spotify:local:`)没有可跳的页 → nil,
+/// 调用方退回"只把 App 带到前台"。ID 形状要对(恰好三段、22 位、只含字母数字):这个字符串是拼进 URL 交给
+/// 别的 App 的,别把奇形怪状的东西(比如带 `:play` 后缀的自动播放形态)原样转发出去。
+public enum SpotifyURI {
+    static let deepLinkKinds: Set<String> = ["track", "episode"]
+    static let idLength = 22
+
+    public static func deepLink(_ uri: String) -> URL? {
+        let parts = uri.trimmingCharacters(in: .whitespacesAndNewlines)
+            .split(separator: ":", omittingEmptySubsequences: false)
+        guard parts.count == 3, parts[0] == "spotify",
+              deepLinkKinds.contains(String(parts[1])), isBase62ID(parts[2])
+        else { return nil }
+        return URL(string: "spotify:\(parts[1]):\(parts[2])")
+    }
+
+    static func isBase62ID(_ s: Substring) -> Bool {
+        s.count == idLength
+            && s.unicodeScalars.allSatisfy { $0.isASCII && CharacterSet.alphanumerics.contains($0) }
+    }
+}

@@ -88,6 +88,39 @@ func runSpotifyNativeTests() {
         expectEqual(P.parseProbeOutput("1500|")?.uri, nil, "探针输出: URI 为空当没有")
         expectEqual(P.parseProbeOutput("1500|spotify:track:x|https://evil.example/x")?.artworkURL, nil, "探针输出: 别家主机的地址不收")
     }
+
+    // ---- SpotifyURI.deepLink:「在 Spotify 中显示」的深链(2026-09-09)----
+    // 曲目 ID 是 2026-09-09 真机缓存里的真实值(spotify_track_id);节目 ID 只是形状对的样例。
+    do {
+        expectEqual(SpotifyURI.deepLink("spotify:track:0WbMK4wrZ1wFSty9F7FCgu")?.absoluteString,
+                    "spotify:track:0WbMK4wrZ1wFSty9F7FCgu", "深链: 曲目 URI 原样成链")
+        expectEqual(SpotifyURI.deepLink(" spotify:track:0WbMK4wrZ1wFSty9F7FCgu\n")?.absoluteString,
+                    "spotify:track:0WbMK4wrZ1wFSty9F7FCgu", "深链: 首尾空白剔掉")
+        expectEqual(SpotifyURI.deepLink("spotify:episode:5aWVx8FGdvhY5r6AmN0vRq")?.absoluteString,
+                    "spotify:episode:5aWVx8FGdvhY5r6AmN0vRq", "深链: 播客节目也有页可跳")
+        expectEqual(SpotifyURI.deepLink("spotify:ad:5aWVx8FGdvhY5r6AmN0vRq"), nil, "深链: 广告没有页可跳")
+        expectEqual(SpotifyURI.deepLink("spotify:local:a:b:c:1"), nil, "深链: 本地文件没有页可跳")
+        expectEqual(SpotifyURI.deepLink("spotify:track:short"), nil, "深链: ID 不是 22 位不转发")
+        expectEqual(SpotifyURI.deepLink("spotify:track:0WbMK4wrZ1wFSty9F7FCg/"), nil, "深链: ID 含非字母数字不转发")
+        expectEqual(SpotifyURI.deepLink("spotify:track:0WbMK4wrZ1wFSty9F7FCgu:play"), nil,
+                    "深链: 多出来的段不认(别顺手把 :play 自动播放形态转发出去)")
+        expectEqual(SpotifyURI.deepLink("https://open.spotify.com/track/0WbMK4wrZ1wFSty9F7FCgu"), nil, "深链: 网页链接不是 URI")
+        expectEqual(SpotifyURI.deepLink(""), nil, "深链: 空串 → nil")
+    }
+
+    // ---- MusicPlaybackController.spotifyPlaybackMode(fromModePart:):随机键的可用性闸(2026-09-09)----
+    do {
+        typealias M = MusicPlaybackController
+        expectEqual(M.spotifyPlaybackMode(fromModePart: "true;true"), .shuffle, "随机闸: 开着且允许 → 随机")
+        expectEqual(M.spotifyPlaybackMode(fromModePart: "false;true"), .list, "随机闸: 关着且允许 → 列表")
+        expectEqual(M.spotifyPlaybackMode(fromModePart: "false;false"), nil, "随机闸: 不允许随机 → nil,随机键整颗不显示")
+        expectEqual(M.spotifyPlaybackMode(fromModePart: "true;false"), nil, "随机闸: 就算读到开着,不允许改也不显示")
+        expectEqual(M.spotifyPlaybackMode(fromModePart: "true"), .shuffle, "随机闸: 老形态只有一截,默认允许")
+        expectEqual(M.spotifyPlaybackMode(fromModePart: "false;nil"), .list, "随机闸: 第二截读不出来当允许 —— 只在明确说不时才隐藏")
+        expectEqual(M.spotifyPlaybackMode(fromModePart: "nil;true"), nil, "随机闸: 第一截读不出来 → nil")
+        expectEqual(M.spotifyPlaybackMode(fromModePart: ""), nil, "随机闸: 空串(Spotify 没在跑)→ nil")
+        expectEqual(M.spotifyPlaybackMode(fromModePart: " true ; true "), .shuffle, "随机闸: 两截各自剔空白")
+    }
 }
 
 // ---- 网页版 Spotify:浏览器位置探针输出的第三段是封面地址(2026-09-09)----

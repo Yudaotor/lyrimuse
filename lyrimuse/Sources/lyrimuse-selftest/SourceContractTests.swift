@@ -360,6 +360,34 @@ func runSourceContractTests() {
         } else {
             expectEqual(true, false, "Spotify 接线: 读不到 LyrimuseCore/Local/SpotifyPositionProbe.swift(路径挪了?)")
         }
+        // 「在 Spotify 中显示」深链 + 随机键按 `shuffling enabled` 闸控(2026-09-09):三个文件各自的接线漏一处
+        // 都不会编译失败 —— 菜单那行退回只激活 App、随机键退回无条件显示、两条回读路径对同一状态答案分家。
+        if let mpc = code(core.appendingPathComponent("MusicPlaybackController.swift")) {
+            expectEqual(count(mpc, "shuffling enabled") >= 2, true,
+                        "Spotify 随机闸: extendedControlsState 与 spotifyModePartScript 两段脚本都要读 shuffling enabled(现 \(count(mpc, "shuffling enabled")) 处)")
+            expectEqual(count(mpc, "spotifyPlaybackMode(fromModePart") >= 3, true,
+                        "Spotify 随机闸: 声明 + extendedControlsState + playbackMode(for:) 两条回读都要走同一个解析(现 \(count(mpc, "spotifyPlaybackMode(fromModePart")) 处)")
+            expectEqual(mpc.contains("public static func spotifyCurrentTrackURI()"), true,
+                        "Spotify 深链: MusicPlaybackController 要有 spotifyCurrentTrackURI()")
+        } else {
+            expectEqual(true, false, "Spotify 接线: 读不到 LyrimuseCore/Local/MusicPlaybackController.swift(路径挪了?)")
+        }
+        if let reveal = code(app.appendingPathComponent("SpotifyReveal.swift")) {
+            expectEqual(reveal.contains("MusicPlaybackController.spotifyCurrentTrackURI()"), true,
+                        "Spotify 深链: SpotifyReveal 取数走 spotifyCurrentTrackURI")
+            expectEqual(reveal.contains("SpotifyURI.deepLink"), true,
+                        "Spotify 深链: SpotifyReveal 要经 SpotifyURI.deepLink 过滤,不能把 URI 原样转发")
+            expectEqual(reveal.contains("withApplicationAt:"), true,
+                        "Spotify 深链: 要交给正在跑的那份 Spotify.app(open(_:withApplicationAt:)),不能按 scheme 默认处理器开")
+        } else {
+            expectEqual(true, false, "Spotify 接线: 读不到 lyrimuse/SpotifyReveal.swift(路径挪了?)")
+        }
+        if let lwv = code(app.appendingPathComponent("UI/LyricsWindowView.swift")) {
+            expectEqual(lwv.contains("SpotifyReveal.revealCurrentTrack"), true,
+                        "Spotify 深链: 歌词窗「在 %@ 中显示」那行要给 Spotify 原生分一支走 SpotifyReveal")
+        } else {
+            expectEqual(true, false, "Spotify 接线: 读不到 lyrimuse/UI/LyricsWindowView.swift(路径挪了?)")
+        }
         if let pc = code(app.appendingPathComponent("PlaybackCoordinator.swift")) {
             expectEqual(pc.contains("s.$spotifyArtworkURL"), true, "Spotify 封面: PlaybackCoordinator 要订阅 $spotifyArtworkURL")
             expectEqual(count(pc, "refreshSpotifyOriginalCover(") >= 2, true,

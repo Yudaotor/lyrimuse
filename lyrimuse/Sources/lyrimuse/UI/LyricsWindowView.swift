@@ -1653,12 +1653,16 @@ struct LyricsWindowView: View {
                 menuDivider
             }
             // 「在 XX 中显示」:标题随当前播放器变;Apple Music 走 reveal(在 Music 里
-            // 定位选中当前曲目,2026-08-22 实测流媒体曲目可用),其它播放器没有 reveal
-            // 能力,退化为激活该 App(原「在播放器中打开」的行为)。
+            // 定位选中当前曲目,2026-08-22 实测流媒体曲目可用);Spotify 原生客户端走
+            // `spotify:track:<id>` 深链跳到曲目页(2026-09-09,SpotifyReveal;网页版的播放器
+            // bundle 是浏览器,不进这支);其它播放器没有 reveal 能力,退化为激活该 App
+            // (原「在播放器中打开」的行为)。
             MoreMenuRow(title: String(format: L10n.t("在 %@ 中显示"), playerName ?? L10n.t("播放器"))) {
                 closeMoreMenu()
                 if isAM {
                     runAppleMusicMenuAction { MusicPlaybackController.revealCurrentTrack() }
+                } else if PlaybackCoordinator.shared.resolvedPlayerBundleID == PlaybackPlayer.spotify.bundleIdentifier {
+                    SpotifyReveal.revealCurrentTrack { PlaybackCoordinator.shared.openResolvedPlayerApp() }
                 } else {
                     PlaybackCoordinator.shared.openResolvedPlayerApp()
                 }
