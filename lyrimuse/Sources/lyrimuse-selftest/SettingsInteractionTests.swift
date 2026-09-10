@@ -125,4 +125,41 @@ func runSettingsInteractionTests() {
         expectEqual(cascade.map { ($0 * 1000).rounded() / 1000 }, [12, 25, 12, 12, 12], "比例条: 亏空跨段扣回")
         expectEqual(abs(cascade.reduce(0, +) - 73) < 0.001, true, "比例条: 亏空跨段扣回后总宽仍守恒")
     }
+
+    // ---- 芯片换行(ChipFlowGeometry,2026-09-10)----
+    // Last.fm 卡「Scrobble 的播放器」那一排:内置播放器 + 信任列表里的浏览器摆同一排,个数由用户决定。
+    // 真机尺寸:芯片 22pt 图标 + 左右各 3pt 内衬 = 28,间距 6,尾部槽位上限 320(见 PlayerChipMetrics)。
+    do {
+        typealias G = ChipFlowGeometry
+        let chip: CGFloat = 28, gap: CGFloat = 6, limit: CGFloat = 320
+        func widths(_ n: Int) -> [CGFloat] { Array(repeating: chip, count: n) }
+
+        // 用户当天的真实候选:五个内置 + Safari / Chrome / Edge / Arc = 9 枚,必须仍是一行
+        // (9×28 + 8×6 = 300 ≤ 320)—— 这正是"把四行开关收拢成一排"这次改动要保住的东西。
+        let nine = G.rows(widths: widths(9), spacing: gap, limit: limit)
+        expectEqual(nine.count, 1, "芯片换行: 9 枚(5 内置 + 4 浏览器)仍排成一行")
+        expectEqual(nine.first?.width, 300, "芯片换行: 9 枚一行宽 300pt")
+        expectEqual(G.size(rows: nine, rowHeight: chip, spacing: gap), CGSize(width: 300, height: 28),
+                    "芯片换行: 一行时整块就是芯片高,行高不涨")
+
+        // 第 10 枚开始换行:上限 320 装不下 10×28+9×6=334。
+        let ten = G.rows(widths: widths(10), spacing: gap, limit: limit)
+        expectEqual(ten.count, 2, "芯片换行: 第 10 枚换到第二行")
+        expectEqual(ten.map(\.indices.count), [9, 1], "芯片换行: 换行按顺序装箱,前一行装满才换")
+        expectEqual(G.size(rows: ten, rowHeight: chip, spacing: gap).height, 62, "芯片换行: 两行 = 28×2 + 6")
+
+        // 边界:恰好装满不换行。
+        expectEqual(G.rows(widths: [100, 100, 100], spacing: 10, limit: 320).count, 1, "芯片换行: 恰好装满(320)不换行")
+        expectEqual(G.rows(widths: [100, 100, 100], spacing: 10, limit: 319).count, 2, "芯片换行: 差 1pt 就换行")
+
+        // 单枚比上限还宽:独占一行、照画,不丢也不压缩 —— 少画一枚会让用户以为那个播放器不在候选里。
+        let oversize = G.rows(widths: [400, 28], spacing: gap, limit: limit)
+        expectEqual(oversize.map(\.indices), [[0], [1]], "芯片换行: 超宽的一枚独占一行,后面的照常换行")
+        expectEqual(oversize.first?.width, 400, "芯片换行: 超宽的一枚宽度不被压缩")
+
+        // 首帧还没量到宽度(limit ≤ 0)不能炸成每枚一行 —— 那会把行高撑成九倍。
+        expectEqual(G.rows(widths: widths(9), spacing: gap, limit: 0).count, 1, "芯片换行: 还没量到宽度时全塞一行")
+        expectEqual(G.rows(widths: [], spacing: gap, limit: limit), [], "芯片换行: 没有候选 → 空")
+        expectEqual(G.size(rows: [], rowHeight: chip, spacing: gap), .zero, "芯片换行: 没有候选时不占高")
+    }
 }

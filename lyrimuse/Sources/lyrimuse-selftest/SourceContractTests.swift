@@ -447,10 +447,22 @@ func runSourceContractTests() {
             expectEqual(true, false, "Last.fm 播放器排除: 读不到 lyrimuse/Settings/FeatureSettingsStore.swift(路径挪了?)")
         }
         if let tab = code(sourcesRoot.appendingPathComponent("lyrimuse/AccountLinkingTab.swift")) {
-            expectEqual(tab.contains("PlayerLinkageRow("), true, "Last.fm 播放器排除: Last.fm 设置卡要有那排播放器芯片")
-            expectEqual(count(tab, "updateLastfmExclusion(") >= 2, true, "Last.fm 播放器排除: 芯片排与信任行开关都要经 updateLastfmExclusion 落盘")
+            expectEqual(tab.contains("PlayerBundleChipsRow("), true, "Last.fm 播放器排除: Last.fm 设置卡要有那排播放器芯片")
+            expectEqual(count(tab, "updateLastfmExclusion(") >= 1, true, "Last.fm 播放器排除: 勾选要经 updateLastfmExclusion 落盘")
+            // 内置播放器与信任列表里的浏览器必须摆进**同一排**芯片(2026-09-10 用户「收拢到一起」):
+            // 候选拼装在 lastfmPlayerChoices 里,信任项若又退回一人一行的 SettingsRow 就等于回到旧形态。
+            expectEqual(tab.contains("builtIn + trusted"), true, "Last.fm 播放器排除: 内置播放器与信任的浏览器要拼成同一排候选")
         } else {
             expectEqual(true, false, "Last.fm 播放器排除: 读不到 lyrimuse/AccountLinkingTab.swift(路径挪了?)")
+        }
+        // 芯片换行的算术必须走 Core 里那份被 selftest 钉住的纯函数(settings-ui 组):在 Layout 里另写一遍,
+        // 测试照样绿、界面照样能裁掉半枚芯片。Layout 的 Subviews 在测试里造不出来,这条源码守卫是唯一的拴绳。
+        if let row = code(sourcesRoot.appendingPathComponent("lyrimuse/Settings/PlayerLinkageRow.swift")) {
+            expectEqual(count(row, "ChipFlowGeometry.rows(") >= 2, true,
+                        "芯片换行: PlayerChipFlow 的量尺与落位都要调 ChipFlowGeometry.rows(现 \(count(row, "ChipFlowGeometry.rows(")) 处)")
+            expectEqual(row.contains("ChipFlowGeometry.size("), true, "芯片换行: 整块尺寸也走同一份纯函数")
+        } else {
+            expectEqual(true, false, "芯片换行: 读不到 lyrimuse/Settings/PlayerLinkageRow.swift(路径挪了?)")
         }
         if let view = code(sourcesRoot.appendingPathComponent("lyrimuse/SettingsView.swift")) {
             expectEqual(count(view, "listenHistoryCard") + count(view, "historyExcludedBundles"), 0,

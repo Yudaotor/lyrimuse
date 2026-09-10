@@ -1041,33 +1041,14 @@ struct AccountLinkingTab: View {
                 // (候选同那边:选中集合,auto 时五个),信任列表里的 App / 浏览器各一行开关 —— 它们没有
                 // PlaybackPlayer 枚举值。浏览器按整个浏览器算:collector 侧不知道里面放的是 YouTube Music 还是
                 // Spotify 网页版。文案照这张卡的惯例只写效果。
-                PlayerLinkageRow(
+                PlayerBundleChipsRow(
                     icon: "music.note.list",
                     title: L10n.t("Scrobble 的播放器"),
                     help: L10n.t("只有勾选的播放器放的歌才 scrobble 到 Last.fm，也只有它们更新 Last.fm 的正在播放；默认全部勾选。\n不影响 ListenBrainz、网页和歌词。浏览器里的网页播放器按整个浏览器算。"),
-                    candidates: lastfmPlayerCandidates,
-                    chosen: Set(lastfmPlayerCandidates.filter { !features.lastfmExcludedBundles.contains($0.bundleIdentifier) })
-                ) { chosen in
-                    let candidates = lastfmPlayerCandidates
-                    let scrobbled = candidates.filter { chosen.contains($0) }.map(\.bundleIdentifier)
-                    let excluded = candidates.filter { !chosen.contains($0) }.map(\.bundleIdentifier)
-                    Task { await features.updateLastfmExclusion(scrobbled: scrobbled, excluded: excluded) }
-                }
-                ForEach(features.trustedPlayers.keys.sorted(), id: \.self) { bundleID in
-                    CardDivider()
-                    SettingsRow(
-                        icon: "checkmark.seal",
-                        iconImage: AppIconResolver.icon(forBundleID: bundleID),
-                        title: lastfmTrustedPlayerName(bundleID),
-                        subtitle: bundleID
-                    ) {
-                        Toggle("", isOn: Binding(
-                            get: { !features.lastfmExcludedBundles.contains(bundleID) },
-                            set: { on in
-                                Task { await features.updateLastfmExclusion(scrobbled: on ? [bundleID] : [], excluded: on ? [] : [bundleID]) }
-                            }
-                        ))
-                    }
+                    choices: lastfmPlayerChoices,
+                    excluded: features.lastfmExcludedBundles
+                ) { bundleID, on in
+                    Task { await features.updateLastfmExclusion(scrobbled: on ? [bundleID] : [], excluded: on ? [] : [bundleID]) }
                 }
             } else {
                 SettingsNote { Text(L10n.t("上面的「Scrobble 到 Last.fm」关着，这里的设置暂时不起作用")) }
@@ -1075,10 +1056,16 @@ struct AccountLinkingTab: View {
         }
     }
 
-    /// 「Scrobble 的播放器」那排芯片的候选:跟「播放器联动」卡同一套(选中集合,选了 auto 时五个都可勾)。
-    private var lastfmPlayerCandidates: [PlaybackPlayer] {
+    /// 「Scrobble 的播放器」那一排芯片的候选:内置播放器跟「播放器联动」卡同一套(选中集合,选了 auto 时
+    /// 五个都可勾),后面接上信任列表里的 App / 浏览器(按 bundle id 排序,别让顺序随 Dictionary 遍历乱跳)。
+    /// 两类摆在同一排是 2026-09-10 用户要求的「收拢到一起」——此前信任项一人一行、四个浏览器吃掉五行。
+    private var lastfmPlayerChoices: [PlayerBundleChoice] {
         let set = PlayerLinkage.candidates(selectedPlayers: features.players)
-        return PlaybackPlayer.displayOrder.filter { set.contains($0) }
+        let builtIn = PlaybackPlayer.displayOrder.filter { set.contains($0) }
+            .map { PlayerBundleChoice(id: $0.bundleIdentifier, name: $0.displayName, player: $0) }
+        let trusted = features.trustedPlayers.keys.sorted()
+            .map { PlayerBundleChoice(id: $0, name: lastfmTrustedPlayerName($0), player: nil) }
+        return builtIn + trusted
     }
 
     /// 已信任播放器的显示名:优先当初存下的那份,空串时现查,还查不到退回 bundle id(跟播放器页那张卡同一口径)。

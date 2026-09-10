@@ -130,6 +130,7 @@
 "下移" = "Move Down";
 "下载中…" = "Downloading…";
 "下面的「连接」要用这对密钥完成授权：先在 Last.fm 创建一个应用，拿到 API Key 和 Secret" = "Connecting below needs this key pair. Create a Last.fm application first to get an API Key and Secret";
+"不 scrobble：%@" = "Not scrobbled: %@";
 "不可用：%@" = "Unusable: %@";
 "不含宽度和总开关" = "Width and the master toggle are left alone";
 "不含宽度和锁定位置" = "Width and locked position are left alone";
@@ -209,8 +210,10 @@
 "全角/半角" = "Full-width/half-width";
 "全选 %@ 首" = "Select All (%@)";
 "全部" = "All";
+"全部不 scrobble" = "Nothing is scrobbled";
 "全部专辑" = "All Albums";
 "全部关闭" = "All Off";
+"全部勾选" = "All checked";
 "全部开启" = "All On";
 "全部播放器" = "All players";
 "全部来源" = "All Sources";
