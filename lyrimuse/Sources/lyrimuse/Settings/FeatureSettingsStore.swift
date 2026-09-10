@@ -296,9 +296,10 @@ struct FeatureFlagsFile: Codable, Equatable {
     /// 语义见 LyrimuseCore 的 TrustedPlayers —— 为什么是"信任列表"而不是"一律接受",
     /// 那份注释里写了(白名单同时挡着打卡,一律接受会把视频/播客写进永久收听历史)。
     var trustedPlayers: [String: String]?
-    /// **不**计入收听历史的播放器(bundle id 列表,2026-09-10,借鉴清单 S10)。缺失 / 空 = 全部计入。
-    /// 与 collector 的 featureFlagsFile.HistoryExcludedBundles 一一对应,语义见那边 historygate.go 头注。
-    var historyExcludedBundles: [String]?
+    /// **不** scrobble 到 Last.fm 的播放器(bundle id 列表,2026-09-10,借鉴清单 S10)。缺失 / 空 = 全部上送。
+    /// 只管 Last.fm(含给它兜底的本地收听日志与 now-playing),ListenBrainz 不受影响。与 collector 的
+    /// featureFlagsFile.LastfmExcludedBundles 一一对应,语义见那边 lastfmexclude.go 头注。
+    var lastfmExcludedBundles: [String]?
 
     /// CaseIterable 是为了让 `knownFileKeys` 能自动跟着字段增删走 —— 手工维护第二份
     /// 键名清单迟早会跟这里对不上,而对不上的后果正是下面要修的那种静默丢数据。
@@ -329,7 +330,7 @@ struct FeatureFlagsFile: Codable, Equatable {
         case launchLyrimuseOnMusicOpen = "launch_lyrimuse_on_music_open"
         case launchLyrimuseOnPlayers = "launch_lyrimuse_on_players"
         case trustedPlayers = "trusted_players"
-        case historyExcludedBundles = "history_excluded_bundles"
+        case lastfmExcludedBundles = "lastfm_excluded_bundles"
     }
 
     /// 这个版本认识的全部 JSON 键。见 FeatureSettingsStore.unknownFileKeys 的注释。
@@ -446,9 +447,9 @@ public final class FeatureSettingsStore: ObservableObject {
     /// 见 FeatureFlagsFile.trustedPlayers。改它一律走 trust/untrust 两个方法,别直接赋值
     /// —— 那两个方法负责反查 App 名并立刻落盘(collector 按 mtime 重读,不需要重启)。
     @Published public private(set) var trustedPlayers: [String: String] = [:]
-    /// 见 FeatureFlagsFile.historyExcludedBundles。改它一律走 updateHistoryExclusion(立刻落盘 + 重启 collector,
+    /// 见 FeatureFlagsFile.lastfmExcludedBundles。改它一律走 updateLastfmExclusion(立刻落盘 + 重启 collector,
     /// 跟 trust/untrust 同一条路 —— collector 只在启动时读一次这份文件)。
-    @Published public private(set) var historyExcludedBundles: Set<String> = []
+    @Published public private(set) var lastfmExcludedBundles: Set<String> = []
 
     @Published public private(set) var lastError: String?
     /// 上一次保存落盘成功、但 collector 没重启——因为用户在「播放器」页主动停用了后台服务(kickstart 对没加载的
@@ -495,7 +496,7 @@ public final class FeatureSettingsStore: ObservableObject {
             launchLyrimuseOnMusicOpen: !launchLyrimuseOnPlayers.isEmpty,
             launchLyrimuseOnPlayers: launchLyrimuseOnPlayers.map(\.rawValue).sorted(),
             trustedPlayers: trustedPlayers.isEmpty ? nil : trustedPlayers,
-            historyExcludedBundles: historyExcludedBundles.isEmpty ? nil : historyExcludedBundles.sorted()
+            lastfmExcludedBundles: lastfmExcludedBundles.isEmpty ? nil : lastfmExcludedBundles.sorted()
         )
     }
 
@@ -520,15 +521,16 @@ public final class FeatureSettingsStore: ObservableObject {
         _ = await save()
     }
 
-    /// 「计入收听历史」按播放器开关(2026-09-10,借鉴清单 S10)。存的是**排除**集合:缺失 / 空 = 全部计入,
-    /// 跟其余"缺字段 = 沿用现有行为"的键同一口径,新装机、老配置都不会突然少记。一次调用可以同时改多个
-    /// (联动卡那排芯片一次交回整组勾选),只落一次盘、只重启一次 collector;没变化就什么都不做。
-    public func updateHistoryExclusion(recorded: [String], excluded: [String]) async {
-        var next = historyExcludedBundles
-        next.subtract(recorded)
+    /// 「Scrobble 的播放器」按播放器开关(2026-09-10,借鉴清单 S10;用户原话「只控制 lastfm 的上送」)。存的是
+    /// **排除**集合:缺失 / 空 = 全部上送,跟其余"缺字段 = 沿用现有行为"的键同一口径,新装机、老配置都不会突然
+    /// 少记。一次调用可以同时改多个(那排芯片一次交回整组勾选),只落一次盘、只重启一次 collector;没变化就什么
+    /// 都不做。
+    public func updateLastfmExclusion(scrobbled: [String], excluded: [String]) async {
+        var next = lastfmExcludedBundles
+        next.subtract(scrobbled)
         next.formUnion(excluded.filter { !$0.isEmpty })
-        guard next != historyExcludedBundles else { return }
-        historyExcludedBundles = next
+        guard next != lastfmExcludedBundles else { return }
+        lastfmExcludedBundles = next
         _ = await save()
     }
 
@@ -694,7 +696,7 @@ public final class FeatureSettingsStore: ObservableObject {
         let decodedOrder = (f.lyricsSourceOrder ?? []).compactMap(LyricsSource.init(rawValue:))
         lyricsSourceOrder = decodedOrder.count == LyricsSource.allCases.count ? decodedOrder : LyricsSource.allCases
         trustedPlayers = f.trustedPlayers ?? [:]
-        historyExcludedBundles = Set((f.historyExcludedBundles ?? [])
+        lastfmExcludedBundles = Set((f.lastfmExcludedBundles ?? [])
             .map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty })
         lyricsDir = f.lyricsDir ?? ""
         lyricsTranslationLanguage = f.lyricsTranslationLanguage.flatMap(MusixmatchTranslationLanguage.init(rawValue:)) ?? .auto

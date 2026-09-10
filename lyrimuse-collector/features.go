@@ -221,10 +221,12 @@ type featureFlagsFile struct {
 	// 它跟五个内置播放器完全同权(显示 + 打卡)。这样任何 App 都能接(包括这个项目从没
 	// 听说过的),而默认状态下一条垃圾都进不来。
 	TrustedPlayers map[string]string `json:"trusted_players,omitempty"`
-	// HistoryExcludedBundles:**不**计入收听历史的播放器(bundle id 列表,2026-09-10,借鉴清单 S10)。
-	// 设置 → 播放器 →「收听历史」卡上取消勾选的那几个;缺失 / 空 = 全部计入(现状)。与 Swift 侧
-	// FeatureFlagsFile.historyExcludedBundles 一一对应。语义、出口与粒度见 historygate.go 头注。
-	HistoryExcludedBundles []string `json:"history_excluded_bundles,omitempty"`
+	// LastfmExcludedBundles:**不** scrobble 到 Last.fm 的播放器(bundle id 列表,2026-09-10,借鉴清单 S10)。
+	// 设置 → 账号 → Last.fm → 设置 →「Scrobble 的播放器」取消勾选的那几个;缺失 / 空 = 全部上送(现状)。
+	// **只管 Last.fm**(含给它兜底的本地收听日志 / 回填与 now-playing),ListenBrainz 不受影响 —— 与
+	// ScrobbleShortTracks / LastfmScrobblePoint 同一口径。与 Swift 侧 FeatureFlagsFile.lastfmExcludedBundles
+	// 一一对应。语义、出口与粒度见 lastfmexclude.go 头注。
+	LastfmExcludedBundles []string `json:"lastfm_excluded_bundles,omitempty"`
 	// LyricsDecisionTrace:歌词解析决策的 append-only NDJSON 流水账,见 lyricstrace.go。
 	// **默认关** —— 纯诊断旁路,平时不该往磁盘攒文件;要排查"为什么选了这份歌词"的
 	// 历史过程时才开。缓存内的决策记录(decision.go)不受这个开关影响,始终会写。
@@ -295,9 +297,9 @@ type featureFlags struct {
 	// TrustedPlayers 是已经清洗过的形态(见 resolveTrustedPlayers):键一定非空、一定不是
 	// 五个内置播放器之一;值可能是空字符串(反查不到 App 名),此时标签退回 bundle id。
 	TrustedPlayers map[string]string
-	// HistoryExcludedBundles 是已清洗的集合(见 resolveHistoryExcludedBundles),空 map 而不是 nil。
-	// 只被 historygate.go 的 historyExcluded 读取;poller 在开会话那一拍算一次存进 playSession。
-	HistoryExcludedBundles map[string]bool
+	// LastfmExcludedBundles 是已清洗的集合(见 resolveLastfmExcludedBundles),空 map 而不是 nil。
+	// 只被 lastfmexclude.go 的 lastfmExcluded 读取;poller 在开会话那一拍算一次存进 playSession。
+	LastfmExcludedBundles map[string]bool
 }
 
 // features is set once in main() before run() starts; every gate site reads
@@ -348,9 +350,9 @@ func loadFeatureFlags(path string) featureFlags {
 	return featureFlags{
 		Players:        resolvePlayers(f.Players, f.Player),
 		TrustedPlayers: resolveTrustedPlayers(f.TrustedPlayers),
-		// 缺失 / 空 = 全部计入:跟 TrustedPlayers 一样"少一个键不改变现有行为"。
-		HistoryExcludedBundles: resolveHistoryExcludedBundles(f.HistoryExcludedBundles),
-		AlbumPrefetch:          boolOr(f.AlbumPrefetch, true),
+		// 缺失 / 空 = 全部上送:跟 TrustedPlayers 一样"少一个键不改变现有行为"。
+		LastfmExcludedBundles: resolveLastfmExcludedBundles(f.LastfmExcludedBundles),
+		AlbumPrefetch:         boolOr(f.AlbumPrefetch, true),
 		// 默认 true = 保持这个能力上线以来的行为;Swift 侧 `lyricsAutoUpgrade` 的属性初值
 		// 必须跟这里一致(两侧默认值对齐那条老规矩,见上面 AlbumPrefetch 的注释)。
 		LyricsAutoUpgrade:    boolOr(f.LyricsAutoUpgrade, true),

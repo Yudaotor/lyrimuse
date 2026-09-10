@@ -34,10 +34,11 @@ type playSession struct {
 	// 动机:实测广告字段会**闪变**(开播 album 空、几拍后补齐,Blinds.com 实锤漏成
 	// Last.fm nowplaying),announce 的门若按"当下字段"逐拍重判,任何一拍看走眼就漏。
 	isAd bool
-	// 会话级「不计入收听历史」标记(2026-09-10,借鉴清单 S10):开播时按 features.HistoryExcludedBundles
-	// 算一次(historyExcluded,见 historygate.go 头注),与 isAd 同一批出口挡收听 / playing_now;
+	// 会话级「不 scrobble 到 Last.fm」标记(2026-09-10,借鉴清单 S10):开播时按 features.LastfmExcludedBundles
+	// 算一次(lastfmExcluded,见 lastfmexclude.go 头注)。**只管 Last.fm**:recordLastfmListen 不挂起也不镜像、
+	// 不记给它兜底的本地收听日志,announce 不发 track.updateNowPlaying;ListenBrainz / 网页中继照旧。
 	// 同曲期间不重算 —— 改设置伴随 collector 重启,新会话自然拿到新值。
-	historyExcluded bool
+	lastfmExcluded bool
 	// lastfmPending / lastfmSettled(2026-09-06,Last.fm scrobble 时点):这次收听过了官方阈值
 	// (ListenBrainz / 网页中继那一刻已经提交)之后,Last.fm 那一路按用户选的更严时点
 	// (features.LastfmScrobblePoint)挂起、到点再发。pending 非 nil = 挂着;settled = 已经发过
@@ -170,6 +171,14 @@ func trackEndSlack(duration float64) float64 {
 // appendListen 会重复追加一行(mirrorScrobbleTracked 有 uts 守卫,本地日志没有),现在不会了。
 func (p *poller) recordLastfmListen(s *playSession, artistName string, meta snapshot, startedAt int64) {
 	if s.lastfmSettled || s.lastfmPending != nil {
+		return
+	}
+	// 用户在 Last.fm 设置里把这个播放器排除(lastfmexclude.go,2026-09-10):不镜像、也不记给它兜底的
+	// 本地收听日志,标成 settled 让后续到点判断全部跳过。ListenBrainz 那一路早在 submitSingleAsync 发过了,
+	// 不受影响 —— 与短曲目 / scrobble 时点同一口径,「Last.fm 页的设置跟 ListenBrainz 无关」。
+	if s.lastfmExcluded {
+		s.lastfmSettled = true
+		log.Printf("lastfm: skipping scrobble from excluded player %s: %q - %q", meta.Bundle, meta.Artist, meta.Title)
 		return
 	}
 	s.lastfmPending = &pendingLastfmListen{artistName: artistName, meta: meta, startedAt: startedAt}
@@ -930,13 +939,6 @@ func (p *poller) submitSingleAsync(sess *playSession, meta snapshot, startedAt i
 		sess.listenSent = true // 标记成已处理,免得每一轮 poll 都重新判一次
 		return
 	}
-	// 用户在设置里把这个播放器排除在收听历史之外(historygate.go):跟广告挡在同一个漏斗位置,
-	// LB single / Last.fm 镜像 / 本地收听日志 / relay 最近播放一起不记。
-	if sess.historyExcluded {
-		log.Printf("skipping listen from excluded player %s: %q - %q", meta.Bundle, meta.Artist, meta.Title)
-		sess.listenSent = true
-		return
-	}
 	lm := lbMeta(meta)
 	if shortTrackLastfmOnly(meta.Duration) {
 		// 短曲目只发 Last.fm(见 shortTrackLastfmOnly):不打 LB,直接把一个"成功"结果送回
@@ -1061,11 +1063,6 @@ func (p *poller) announce(now time.Time, why string) {
 	if p.sess.isAd || isAdBreak(p.cur.Bundle, p.cur.Artist, p.cur.Title, p.cur.Album) {
 		return
 	}
-	// 排除在收听历史之外的播放器也不宣布"正在播放"(historygate.go):playing_now 同样是往
-	// ListenBrainz / Last.fm 上送。网页中继的「正在播放」状态卡不走这里,不受影响。
-	if p.sess.historyExcluded {
-		return
-	}
 	p.sess.announcing = true
 	sess := p.sess
 	m := lbMeta(p.cur)
@@ -1081,6 +1078,9 @@ func (p *poller) announce(now time.Time, why string) {
 	// 跨 goroutine 读 poller 状态,违反"所有状态只在 poll 主循环里碰"那条不变量。
 	durationSecs := p.cur.Duration
 	playing := p.cur.Playing
+	// Last.fm 那一路的按播放器排除(lastfmexclude.go):只挡 track.updateNowPlaying,LB 的 playing_now 照发。
+	// 同样在闭包外取值,理由同上。
+	lastfmSkip := p.sess.lastfmExcluded
 	go func() {
 		// now-playing 镜像与 LB 解耦(2026-08-11,批4):"正在播放"反映的是本机播放器
 		// 的真实状态,不是 LB 提交的成败。放在 LB 请求之前发起 —— 两者本就各自异步。
@@ -1091,7 +1091,7 @@ func (p *poller) announce(now time.Time, why string) {
 		// 切换、挂起首条到点补发。2026-08-12 实测坐实危害:collector 一重启就把一首
 		// 暂停的歌 announce 上去,直接顶掉了用户手机上正在放的那首的 nowplaying。
 		// LB 不受影响 —— 它要靠 rate=0 表达暂停、自己会丢弃,所以下面的 submit 照旧发。
-		if playing {
+		if playing && !lastfmSkip {
 			mirrorAsync(p.lfm, "now-playing", func(ctx context.Context) error {
 				return p.lfm.updateNowPlaying(ctx, artist, title, album, durationSecs)
 			}, nil) // now-playing 失败无需留痕:它是瞬时状态,下一拍自然覆盖(跟 scrobble 相反)
@@ -1136,7 +1136,7 @@ func (p *poller) handle(now time.Time, reanchored, loopRestart bool) {
 				p.sess.lastSeen = now
 			}
 			p.sess.isAd = p.detectAdAtSessionStart()
-			p.sess.historyExcluded = historyExcluded(p.cur.Bundle)
+			p.sess.lastfmExcluded = lastfmExcluded(p.cur.Bundle)
 		}
 		p.recentFinalized = nil
 		log.Printf("now playing: %s - %s", p.cur.Artist, p.cur.Title)
@@ -1170,7 +1170,7 @@ func (p *poller) handle(now time.Time, reanchored, loopRestart bool) {
 			p.sess.lastSeen = now
 		}
 		p.sess.isAd = p.detectAdAtSessionStart()
-		p.sess.historyExcluded = historyExcluded(p.cur.Bundle)
+		p.sess.lastfmExcluded = lastfmExcluded(p.cur.Bundle)
 		log.Printf("loop restart: %s - %s", p.cur.Artist, p.cur.Title)
 		if len(trackEnrichment(p.cur.Artist, p.cur.Title, p.cur.Album, p.cur.Bundle, p.cur.Duration, true)) > 0 {
 			p.announce(now, "loop restart")
@@ -1568,8 +1568,7 @@ func run(ctx context.Context, cfg *config, lb *lbClient) error {
 			}
 			if p.sess != nil && !p.sess.listenSent && p.sess.playedSecs >= listenThreshold(p.sess.meta.Duration) &&
 				!tooShortToScrobble(p.sess.meta.Duration) &&
-				!p.sess.isAd && !p.sess.historyExcluded &&
-				!isAdBreak(p.sess.meta.Bundle, p.sess.meta.Artist, p.sess.meta.Title, p.sess.meta.Album) {
+				!p.sess.isAd && !isAdBreak(p.sess.meta.Bundle, p.sess.meta.Artist, p.sess.meta.Title, p.sess.meta.Album) {
 				// Last.fm 镜像:与 LB 解耦,同样服从 scrobble 时点(默认档当场发),且必须走同步变体。
 				//
 				// 艺人名跟 LB 提交取同一份(lm.ArtistName)。2026-08-31 起 lbMeta 不再做
@@ -1578,7 +1577,8 @@ func run(ctx context.Context, cfg *config, lb *lbClient) error {
 				// 本地收听日志也在 settleLastfmPendingSync 里:退出前这最后一首也是一次算数的收听,
 				// 不能漏。放在 LB 提交之前,理由跟 applySubmitOutcome 那处一致。
 				lm := lbMeta(p.sess.meta)
-				if !p.sess.lastfmSettled && p.sess.lastfmPending == nil {
+				// 按播放器排除的(lastfmExcluded)不挂 Last.fm 那条,跟 recordLastfmListen 同一道闸;LB 照发。
+				if !p.sess.lastfmSettled && p.sess.lastfmPending == nil && !p.sess.lastfmExcluded {
 					p.sess.lastfmPending = &pendingLastfmListen{artistName: lm.ArtistName, meta: p.sess.meta, startedAt: p.sess.startedAt.Unix()}
 				}
 				p.settleLastfmPendingSync(flushCtx, p.sess)

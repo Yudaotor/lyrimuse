@@ -1,5 +1,6 @@
 import AppKit
 import Combine
+import LyrimuseCore
 import SwiftUI
 
 // 每张卡片的连接状态——只有三态会在"账号连接"这个分类里实际出现(这里只关心"有没有
@@ -1031,10 +1032,59 @@ struct AccountLinkingTab: View {
                         set: { features.scrobbleShortTracks = $0; Task { await features.save() } }
                     ))
                 }
+                CardDivider()
+                // Scrobble 的播放器(2026-09-10,借鉴清单 S10;用户原话「只控制 lastfm 的上送」):按播放器决定放的歌
+                // 要不要 scrobble 到 Last.fm(含它的 now-playing),默认全勾。取消的写进 features.json 的
+                // lastfm_excluded_bundles,collector 开会话那一拍算一次标记,只挡 Last.fm 那一路(poller.go
+                // recordLastfmListen / announce 的 now-playing 镜像,机制在 lastfmexclude.go 头注),ListenBrainz /
+                // 网页 / 歌词不动 —— 跟这张卡上面三项同一口径。内置播放器复用「播放器联动」卡那排图标芯片
+                // (候选同那边:选中集合,auto 时五个),信任列表里的 App / 浏览器各一行开关 —— 它们没有
+                // PlaybackPlayer 枚举值。浏览器按整个浏览器算:collector 侧不知道里面放的是 YouTube Music 还是
+                // Spotify 网页版。文案照这张卡的惯例只写效果。
+                PlayerLinkageRow(
+                    icon: "music.note.list",
+                    title: L10n.t("Scrobble 的播放器"),
+                    help: L10n.t("只有勾选的播放器放的歌才 scrobble 到 Last.fm，也只有它们更新 Last.fm 的正在播放；默认全部勾选。\n不影响 ListenBrainz、网页和歌词。浏览器里的网页播放器按整个浏览器算。"),
+                    candidates: lastfmPlayerCandidates,
+                    chosen: Set(lastfmPlayerCandidates.filter { !features.lastfmExcludedBundles.contains($0.bundleIdentifier) })
+                ) { chosen in
+                    let candidates = lastfmPlayerCandidates
+                    let scrobbled = candidates.filter { chosen.contains($0) }.map(\.bundleIdentifier)
+                    let excluded = candidates.filter { !chosen.contains($0) }.map(\.bundleIdentifier)
+                    Task { await features.updateLastfmExclusion(scrobbled: scrobbled, excluded: excluded) }
+                }
+                ForEach(features.trustedPlayers.keys.sorted(), id: \.self) { bundleID in
+                    CardDivider()
+                    SettingsRow(
+                        icon: "checkmark.seal",
+                        iconImage: AppIconResolver.icon(forBundleID: bundleID),
+                        title: lastfmTrustedPlayerName(bundleID),
+                        subtitle: bundleID
+                    ) {
+                        Toggle("", isOn: Binding(
+                            get: { !features.lastfmExcludedBundles.contains(bundleID) },
+                            set: { on in
+                                Task { await features.updateLastfmExclusion(scrobbled: on ? [bundleID] : [], excluded: on ? [] : [bundleID]) }
+                            }
+                        ))
+                    }
+                }
             } else {
                 SettingsNote { Text(L10n.t("上面的「Scrobble 到 Last.fm」关着，这里的设置暂时不起作用")) }
             }
         }
+    }
+
+    /// 「Scrobble 的播放器」那排芯片的候选:跟「播放器联动」卡同一套(选中集合,选了 auto 时五个都可勾)。
+    private var lastfmPlayerCandidates: [PlaybackPlayer] {
+        let set = PlayerLinkage.candidates(selectedPlayers: features.players)
+        return PlaybackPlayer.displayOrder.filter { set.contains($0) }
+    }
+
+    /// 已信任播放器的显示名:优先当初存下的那份,空串时现查,还查不到退回 bundle id(跟播放器页那张卡同一口径)。
+    private func lastfmTrustedPlayerName(_ bundleID: String) -> String {
+        if let stored = features.trustedPlayers[bundleID], !stored.isEmpty { return stored }
+        return FeatureSettingsStore.appDisplayName(forBundleID: bundleID) ?? bundleID
     }
 
     /// 「连接」段:Scrobble 开关、待补清单、熔断红条、已连接状态/断开。

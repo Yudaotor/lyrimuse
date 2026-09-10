@@ -2,26 +2,26 @@ package main
 
 import "testing"
 
-func TestResolveHistoryExcludedBundles(t *testing.T) {
-	got := resolveHistoryExcludedBundles([]string{" com.tencent.QQMusicMac ", "", "com.apple.Safari", "com.apple.Safari"})
+func TestResolveLastfmExcludedBundles(t *testing.T) {
+	got := resolveLastfmExcludedBundles([]string{" com.tencent.QQMusicMac ", "", "com.apple.Safari", "com.apple.Safari"})
 	if len(got) != 2 || !got["com.tencent.QQMusicMac"] || !got["com.apple.Safari"] {
 		t.Fatalf("resolve: got %v", got)
 	}
-	if m := resolveHistoryExcludedBundles(nil); m == nil || len(m) != 0 {
+	if m := resolveLastfmExcludedBundles(nil); m == nil || len(m) != 0 {
 		t.Fatalf("nil input should resolve to an empty (non-nil) map, got %v", m)
 	}
 }
 
-func TestHistoryExcluded(t *testing.T) {
+func TestLastfmExcluded(t *testing.T) {
 	saved := features
 	defer func() { features = saved }()
 
-	features.HistoryExcludedBundles = map[string]bool{}
-	if historyExcluded(qqMusicBundleID) {
+	features.LastfmExcludedBundles = map[string]bool{}
+	if lastfmExcluded(qqMusicBundleID) {
 		t.Fatal("empty exclusion set must exclude nothing")
 	}
 
-	features.HistoryExcludedBundles = resolveHistoryExcludedBundles([]string{qqMusicBundleID, "com.apple.Safari"})
+	features.LastfmExcludedBundles = resolveLastfmExcludedBundles([]string{qqMusicBundleID, "com.apple.Safari"})
 	cases := []struct {
 		bundle string
 		want   bool
@@ -36,8 +36,8 @@ func TestHistoryExcluded(t *testing.T) {
 		{"", false},
 	}
 	for _, c := range cases {
-		if got := historyExcluded(c.bundle); got != c.want {
-			t.Errorf("historyExcluded(%q) = %v, want %v", c.bundle, got, c.want)
+		if got := lastfmExcluded(c.bundle); got != c.want {
+			t.Errorf("lastfmExcluded(%q) = %v, want %v", c.bundle, got, c.want)
 		}
 	}
 }

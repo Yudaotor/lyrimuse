@@ -29727,70 +29727,36 @@
         }
       }
     },
-    "收听历史" : {
+    "Scrobble 的播放器" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Listening History"
+            "value" : "Players to Scrobble"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "聆聽記錄"
+            "value" : "Scrobble 的播放器"
           }
         }
       }
     },
-    "计入收听历史" : {
+    "只有勾选的播放器放的歌才 scrobble 到 Last.fm，也只有它们更新 Last.fm 的正在播放；默认全部勾选。\n不影响 ListenBrainz、网页和歌词。浏览器里的网页播放器按整个浏览器算。" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Count toward listening history"
+            "value" : "Only songs from the checked players are scrobbled to Last.fm, and only they update its now playing; all are checked by default.\nListenBrainz, the web page and lyrics are unaffected. Web players count as their browser."
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "計入聆聽記錄"
-          }
-        }
-      }
-    },
-    "关掉的播放器放的歌不记进 ListenBrainz、Last.fm 和本地收听日志，也不宣布「正在播放」；歌词显示和网页上的当前播放不受影响。浏览器里的网页播放器按整个浏览器算" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Songs from players you turn off are not recorded to ListenBrainz, Last.fm or the local listen log, and are not announced as now playing. Lyrics and the web page's current track are unaffected. Web players count as their browser"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "關掉的播放器放的歌不記進 ListenBrainz、Last.fm 和本機聆聽記錄檔，也不宣告「正在播放」；歌詞顯示和網頁上的目前播放不受影響。瀏覽器裡的網頁播放器按整個瀏覽器算"
-          }
-        }
-      }
-    },
-    "只有勾选的播放器放的歌才计入；默认全部勾选" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Only songs from the checked players count; all are checked by default"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "只有勾選的播放器放的歌才計入；預設全部勾選"
+            "value" : "只有勾選的播放器放的歌才 scrobble 到 Last.fm，也只有它們更新 Last.fm 的正在播放；預設全部勾選。\n不影響 ListenBrainz、網頁和歌詞。瀏覽器裡的網頁播放器按整個瀏覽器算。"
           }
         }
       }
