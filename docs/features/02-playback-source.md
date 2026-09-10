@@ -65,7 +65,7 @@ App 怎么知道"现在在放什么":从本地播放器读出 曲目元数据 + 
 
 - **要解决的问题**:`.auto` 原来只认写死的那几个 bundle id,任何别的播放器(Foobar、AlgerMusicPlayer、第三方客户端、以后出现的新 App)在放都被当成"没有可关心的播放"。
 - **为什么不是"一律接受"**:那道白名单**同时挡着打卡**(`poller.isTracked`)。一律接受 = YouTube 视频、播客、网课被当成收听写进 Last.fm / ListenBrainz 的**永久历史**,并往"设计上永不清理"的歌词缓存灌垃圾条目、白烧全源查询。而"靠内容形状分辨是不是音乐"不可靠:浏览器里的网页播放器能用 MediaSession API 自己填 title/artist/artwork,一个 YouTube 音乐视频跟一首歌长得一模一样;`mediaType` 也指望不上(实测酷狗压根不报这个字段)。
-- **口径 = 用户显式同意**:设置 → 播放器 在 `.auto` 下检测到未知 App 在报 Now Playing,就显示一张卡(App 真实名 + bundle id + **它此刻在放什么**,后者是用户判断"这是我的播放器还是某个网页视频"的关键),点「加入信任列表」写进 `features.json` 的 `trusted_players`(bundle id → 显示名)。之后它跟内置播放器**完全同权**:显示 + 打卡。
+- **口径 = 用户显式同意**:设置 → 播放器 在 `.auto` 下检测到未知 App 在报 Now Playing,就显示一张卡(App 真实名 + bundle id + **它此刻在放什么**,后者是用户判断"这是我的播放器还是某个网页视频"的关键),点「加入信任列表」写进 `features.json` 的 `trusted_players`(bundle id → 显示名)。之后它跟内置播放器**完全同权**:显示 + 打卡。2026-09-10 起「打卡」这一半可以再按播放器单独关掉(设置 → 播放器 →「收听历史」,借鉴清单 S10):信任只回答「算不算我的播放器」,记不记历史另有一道开关,见 12 章 §1「按播放器排除」。
 - **显示名在信任那一刻就地反查并存下来**(`NSWorkspace.urlForApplication` → `CFBundleDisplayName` → `CFBundleName` → 文件名),不是每次现查:collector(Go)也要用它当 ListenBrainz 的 `media_player` 标签,而 Go 那边没有 NSWorkspace。反查不到就存空串,标签退回 bundle id —— 绝不谎报成 "Apple Music"(那会让来源统计彻底失真)。
 - **不需要 mtime 重读**:`FeatureSettingsStore.save()` 本来就会去抖重启 collector,所以点完信任 Go 侧立刻拿到新名单。Swift 侧每轮轮询重读 `features.json`(不加缓存,理由同 `PlaybackPlayerPreference`)。
 - **发现卡的数据源**:`MediaControlClient.lastUngatedNowPlaying` —— 在**过闸之前**顺手记的一笔,挂在既有那唯一一次 media-control 子进程调用上(设置页开着时不额外 fork)。带 15 秒陈旧过滤,否则播放停了卡片还挂着一个早就不放的 App。
@@ -466,6 +466,7 @@ vs 目录 289.766),拿目录值去盖反而是降精度。覆盖就该待在产�
 | 播放器 tab | 播放器联动 · 打开 Lyrimuse 时启动(逐播放器勾选,2026-09-03) | `AppSettings.launchPlayersOnLyrimuseOpen`(Set,np: 键存 rawValue 数组);候选 = 选中集合里的具体播放器,选了 auto 时五个都可勾(`LyrimuseCore.PlayerLinkage.candidates`),生效 = 勾选 ∩ 候选(取消选中的播放器不算、勾选记录保留);`AppDelegate` 逐个启动没在跑的、不抢焦点。老布尔键 `np:launchMusicOnLyrimuseOpen` 首次启动迁移一次(true + 当时唯一具体播放器 → 那一个,含糊 → 空)后进 `obsoleteDefaultsKeys` |
 | 播放器 tab | 播放器联动 · 跟随播放器启动(逐播放器勾选,2026-09-03) | `FeatureSettingsStore.launchLyrimuseOnPlayers` → features `launch_lyrimuse_on_players`(列表;同时仍写布尔 `launch_lyrimuse_on_music_open` = 列表非空,给老 collector 当总开关);collector `companionLaunchProcessNames` 键在就只盯勾了且仍在候选里的那几个,键缺失退回布尔年代「盯整个选中集合 / auto 全量」;老文件迁移:布尔 true(默认)→ 当时全部候选。Go 测试 `TestCompanionLaunchProcessNamesHonorsChosenPlayers` |
 | 播放器 tab | 播放器联动 · 跟随播放器退出(2026-09-03 新增,借鉴清单 #9) | `AppSettings.quitWithPlayers`(Set,默认空 = 关);`PlayerQuitWatcher` 订阅 NSWorkspace 终止 / 启动通知:勾选的播放器**全部**不在跑才算(绑两个退一个不退,可能只是换播放器听),`PlayerLinkage.quitGraceSeconds` = 5s 宽限内任一个重启就取消、到点再核一遍进程表,设置 / 歌词管理 / 歌词窗口这类能成为 key 的窗口开着时不退(用户正在用 Lyrimuse 本身);退出经 `AppExit.request(.followedPlayerQuit)`,日志 `exiting reason=followed_player_quit`。collector 不退(常驻服务,也是「跟随启动」的执行者)。YouTube Music 不在候选:浏览器退出≠播放器退出。被参考的做法没有宽限、立刻 exit(0) |
+| 播放器 tab | 收听历史 · 计入收听历史(逐播放器勾选 + 已信任播放器各一行开关,2026-09-10,借鉴清单 S10) | `FeatureSettingsStore.historyExcludedBundles` → features `history_excluded_bundles`(bundle id 列表,缺失/空 = 全部计入;`updateHistoryExclusion` 一次交回整组、只落一次盘);候选与「播放器联动」卡同一套(选中集合,auto 时五个)+ 已信任的播放器各一行;collector 在开会话那一拍按 `historyExcluded` 算一次标记,挡 LB / Last.fm / 本地日志 / relay 最近播放 / playing_now,不挡歌词与网页「正在播放」状态,见 12 章 §1「按播放器排除」 |
 
 引导页 `playerChoiceStep` 是同一个 `features.player` 的另一入口。
 

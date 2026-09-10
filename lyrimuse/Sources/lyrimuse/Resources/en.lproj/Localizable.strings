@@ -225,6 +225,7 @@
 "关掉之后灵动岛只保留贴着刘海那一条的高度，歌词行不再渲染——适合想看播放状态、又不想被歌词挡住视线的场合。\n\n指向展开的效果完全不受影响：播放控制、进度条、下一句歌词预览照常显示，跟开着「显示歌词」时一模一样。" = "Turns off just this compact row and drops the card down to hugging the notch — good for people who want to see playback status without lyrics blocking their view.\n\nHovering to expand is completely unaffected: playback controls, the scrubber, and the next-line preview still show exactly as when \"Show Lyrics\" is on.";
 "关掉则暂停时只收起歌词行，保留顶部那一条" = "When off, pausing collapses just the lyric row and keeps the top bar";
 "关掉后稳态只保留刘海那条高度，不显示歌词；指向展开时播放控制、进度条、下一句预览仍照常显示。" = "When off, the resting card keeps only the notch-height row and shows no lyrics; hovering to expand still shows playback controls, the scrubber, and the next-line preview as usual.";
+"关掉的播放器放的歌不记进 ListenBrainz、Last.fm 和本地收听日志，也不宣布「正在播放」；歌词显示和网页上的当前播放不受影响。浏览器里的网页播放器按整个浏览器算" = "Songs from players you turn off are not recorded to ListenBrainz, Last.fm or the local listen log, and are not announced as now playing. Lyrics and the web page's current track are unaffected. Web players count as their browser";
 "关闭" = "Close";
 "关闭后只保留菜单栏图标，不占 Dock 位置" = "Turn off to show only the menu bar icon and keep Lyrimuse out of the Dock";
 "关闭后按在歌词文字上的那一次点击会被悬浮窗接住、不再穿到下层；歌词四周的空白处不受影响" = "When off, a click on the lyrics text is caught by the overlay instead of passing through; the empty space around the lyrics is unaffected";
@@ -321,6 +322,7 @@
 "只影响装得下的短句：它在歌词行里靠哪边。「自动」按对唱声部走：谁唱靠谁那边、合唱居中，没有对唱信息就靠左。放不下的句子会横向滚动，没有多余空间，对齐不起作用" = "Only affects short lines that fit: where they sit in the lyric row. Automatic follows the duet part — each singer's lines sit on their side, choruses are centered, and lines without duet info stay left. Lines that don't fit scroll horizontally, so alignment has no effect on them";
 "只接管文字颜色；背景色和描边色始终按下面设置的来" = "Only the text color follows the artwork; the background and outline colors always use what you set below";
 "只数存进缓存、会随歌词文件一起导出的那些。其余歌曲的罗马音在播放时实时生成，不计入" = "Counts only romanization stored in the cache and exported alongside the lyrics files. For other songs it is generated on the fly while playing and is not counted.";
+"只有勾选的播放器放的歌才计入；默认全部勾选" = "Only songs from the checked players count; all are checked by default";
 "只比对歌词文字，不含时间戳、逐字与译文；这条候选仍可能带别的来源没有的逐字轨或译文" = "Compares lyric text only, ignoring timestamps, word timing and translations. This candidate may still carry word timing or a translation the other source lacks";
 "只统计能翻成当前译文语言的语言；译文语言自己和同一语系的语言不计，所以数字可能比「系统设置」里的少。语言包由 macOS 管理，翻译在本机完成" = "Counts only languages that can be translated into the current translation language; the target language itself and languages in the same family are excluded, so the number can be lower than in System Settings. Language packs are managed by macOS and translation runs on this Mac";
 "只调主行，%@～%@pt，歌词行高度不变；副行和展开时的下一句预览固定 %@pt，只跟随字体与粗细" = "Main line only, %@–%@pt; the lyric row height stays the same. The secondary line and the expanded next-line preview stay at %@pt and only follow the font and weight";
@@ -634,6 +636,7 @@
 "播放热力图" = "Listening Heatmap";
 "播放用的是逐字时间轴,改「歌词(LRC)」不生效。要手改主歌词,先用「联网搜索候选歌词」换一份不带逐字的;译文/罗马音不受影响" = "Playback uses the word-level timing, so editing Lyrics (LRC) has no effect. To hand-edit the main lyrics, use 「Search Online for Lyric Candidates」 to swap in a candidate without word-level timing; translation and romanization edits still apply.";
 "播放记录" = "Play history";
+"收听历史" = "Listening History";
 "收听次数：%@" = "Plays: %@";
 "收听足迹" = "Listening Footprint";
 "收起" = "Collapse";
@@ -1069,6 +1072,7 @@
 "解锁后可点击穿透" = "Unlocked: clicks pass through";
 "解锁后鼠标点击会穿到桌面上；拖动方式见下面「拖动前先长按」" = "Unlocked: clicks pass through to the desktop. How dragging works is set by 'Long-press before dragging' below";
 "解锁后鼠标点击会穿到桌面上；拖动方式见设置里的「拖动前先长按」" = "Unlocked: clicks pass through to the desktop. How dragging works is set by 'Long-press before dragging' in Settings";
+"计入收听历史" = "Count toward listening history";
 "让它一直待命" = "Keep It Running";
 "让采集服务现在就把没有歌词的条目重新搜一遍，不用等每首歌再次播放" = "Have the collector re-search every entry without lyrics now, instead of waiting for each track to be played again";
 "记录的是手动修改之前的最后一次自动评估" = "This records the last automatic evaluation before your manual edit";

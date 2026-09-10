@@ -2869,6 +2869,7 @@ private final class PlayerTabStores: ObservableObject {
     @Published private(set) var players: Set<PlaybackPlayer> = [.auto]
     @Published private(set) var trustedPlayers: [String: String] = [:]
     @Published private(set) var launchLyrimuseOnPlayers: Set<PlaybackPlayer> = []
+    @Published private(set) var historyExcludedBundles: Set<String> = []
     // ---- MediaControlHealth ----
     @Published private(set) var mediaControlState: MediaControlHealth.State = .unknown
     private var subs: [AnyCancellable] = []
@@ -2885,6 +2886,7 @@ private final class PlayerTabStores: ObservableObject {
         players = f.players
         trustedPlayers = f.trustedPlayers
         launchLyrimuseOnPlayers = f.launchLyrimuseOnPlayers
+        historyExcludedBundles = f.historyExcludedBundles
         mediaControlState = h.state
         subs = [
             s.$browserJSVerifiedAt.removeDuplicates().sink { [weak self] in self?.browserJSVerifiedAt = $0 },
@@ -2895,6 +2897,7 @@ private final class PlayerTabStores: ObservableObject {
             f.$players.removeDuplicates().sink { [weak self] in self?.players = $0 },
             f.$trustedPlayers.removeDuplicates().sink { [weak self] in self?.trustedPlayers = $0 },
             f.$launchLyrimuseOnPlayers.removeDuplicates().sink { [weak self] in self?.launchLyrimuseOnPlayers = $0 },
+            f.$historyExcludedBundles.removeDuplicates().sink { [weak self] in self?.historyExcludedBundles = $0 },
             h.$state.removeDuplicates().sink { [weak self] in self?.mediaControlState = $0 },
         ]
     }
@@ -2949,6 +2952,7 @@ private struct PlayerSettingsTab: View {
             unknownPlayerCard
             notificationDeniedCard
             trustedPlayersCard
+            listenHistoryCard
             companionCard
             permissionCard
             collectorCard
@@ -3149,6 +3153,58 @@ private struct PlayerSettingsTab: View {
                             }
                         }
                     }
+                }
+            }
+        }
+    }
+
+    // 「收听历史」卡(2026-09-10,借鉴清单 S10):按播放器决定放的歌算不算一次收听。默认全部计入;取消的
+    // 那几个写进 features.json 的 history_excluded_bundles(bundle id 列表),collector 在开会话那一拍算一次
+    // 标记,LB single / Last.fm 镜像 / 本地收听日志 / relay 最近播放 / playing_now 几个出口一起挡
+    // (poller.go historyExcluded,机制见 12 章 §1「按播放器排除」)。歌词显示与网页「正在播放」状态不受影响。
+    //
+    // 两段:内置播放器复用「播放器联动」卡那排图标芯片(同一套候选:选中集合,auto 时五个),勾 = 计入;
+    // 信任列表里的 App / 浏览器各一行开关 —— 它们没有 PlaybackPlayer 枚举值,进不了芯片排。浏览器按整个
+    // 浏览器算:collector 侧不知道里面放的是 YouTube Music 还是 Spotify 网页版。
+    private var listenHistoryCard: some View {
+        SettingsCard {
+            SettingsCardHeader(
+                title: L10n.t("收听历史"),
+                help: L10n.t("关掉的播放器放的歌不记进 ListenBrainz、Last.fm 和本地收听日志，也不宣布「正在播放」；歌词显示和网页上的当前播放不受影响。浏览器里的网页播放器按整个浏览器算"))
+            CardDivider()
+            PlayerLinkageRow(
+                icon: "clock.arrow.circlepath",
+                title: L10n.t("计入收听历史"),
+                help: L10n.t("只有勾选的播放器放的歌才计入；默认全部勾选"),
+                candidates: linkageCandidates,
+                chosen: Set(linkageCandidates.filter { !stores.historyExcludedBundles.contains($0.bundleIdentifier) })
+            ) { chosen in
+                let candidates = linkageCandidates
+                let recorded = candidates.filter { chosen.contains($0) }.map(\.bundleIdentifier)
+                let excluded = candidates.filter { !chosen.contains($0) }.map(\.bundleIdentifier)
+                Task { await FeatureSettingsStore.shared.updateHistoryExclusion(recorded: recorded, excluded: excluded) }
+            }
+            ForEach(stores.trustedPlayers.keys.sorted(), id: \.self) { bundleID in
+                CardDivider()
+                SettingsRow(
+                    icon: "checkmark.seal",
+                    iconImage: AppIconResolver.icon(forBundleID: bundleID),
+                    title: displayNameForTrusted(bundleID),
+                    subtitle: bundleID
+                ) {
+                    Toggle("", isOn: Binding(
+                        get: { !stores.historyExcludedBundles.contains(bundleID) },
+                        set: { on in
+                            Task {
+                                await FeatureSettingsStore.shared.updateHistoryExclusion(
+                                    recorded: on ? [bundleID] : [], excluded: on ? [] : [bundleID])
+                            }
+                        }
+                    ))
+                    .labelsHidden()
+                    .toggleStyle(.switch)
+                    .controlSize(.small)
+                    .help(L10n.t("计入收听历史"))
                 }
             }
         }

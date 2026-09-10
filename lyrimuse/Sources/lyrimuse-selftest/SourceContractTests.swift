@@ -410,6 +410,47 @@ func runSourceContractTests() {
         }
     }
 
+    // ---- 收听历史按播放器排除的接线(2026-09-10,借鉴清单 S10)----
+    //
+    // 一份 features.json 键、两侧各一套读写、collector 三处出口:任何一处漏接都不会编译失败 —— App 存了、collector 不读,
+    // 或读了却只挡一处,表现都是"设置里关了、历史照记"。
+    do {
+        let sourcesRoot = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        let repo = sourcesRoot.deletingLastPathComponent().deletingLastPathComponent()
+        func code(_ url: URL) -> String? {
+            guard let text = try? String(contentsOfFile: url.path, encoding: .utf8) else { return nil }
+            return text.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+                .filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") }.joined(separator: "\n")
+        }
+        func count(_ text: String, _ needle: String) -> Int { text.components(separatedBy: needle).count - 1 }
+        if let poller = code(repo.appendingPathComponent("lyrimuse-collector/poller.go")) {
+            expectEqual(count(poller, "historyExcluded") >= 6, true,
+                        "收听历史排除: poller.go 要有 会话字段 + 两处开会话赋值 + submitSingleAsync / announce / 退出兜底三处出口(现 \(count(poller, "historyExcluded")) 处)")
+            expectEqual(count(poller, "= historyExcluded(p.cur.Bundle)"), 2, "收听历史排除: 换曲与单曲循环重开两处开会话都要算一次标记")
+        } else {
+            expectEqual(true, false, "收听历史排除: 读不到 lyrimuse-collector/poller.go(路径挪了?)")
+        }
+        if let features = code(repo.appendingPathComponent("lyrimuse-collector/features.go")) {
+            expectEqual(features.contains("json:\"history_excluded_bundles,omitempty\""), true, "收听历史排除: features.go 的 json 键要叫 history_excluded_bundles")
+            expectEqual(features.contains("resolveHistoryExcludedBundles(f.HistoryExcludedBundles)"), true, "收听历史排除: loadFeatureFlags 要把它清洗进 featureFlags")
+        } else {
+            expectEqual(true, false, "收听历史排除: 读不到 lyrimuse-collector/features.go(路径挪了?)")
+        }
+        if let store = code(sourcesRoot.appendingPathComponent("lyrimuse/Settings/FeatureSettingsStore.swift")) {
+            expectEqual(store.contains("case historyExcludedBundles = \"history_excluded_bundles\""), true, "收听历史排除: Swift 侧 CodingKey 要跟 Go 的 json 键逐字相同")
+            expectEqual(count(store, "historyExcludedBundles") >= 6, true,
+                        "收听历史排除: 文件字段 / 发布属性 / 快照写 / 读盘 / updateHistoryExclusion 都要接上(现 \(count(store, "historyExcludedBundles")) 处)")
+        } else {
+            expectEqual(true, false, "收听历史排除: 读不到 lyrimuse/Settings/FeatureSettingsStore.swift(路径挪了?)")
+        }
+        if let view = code(sourcesRoot.appendingPathComponent("lyrimuse/SettingsView.swift")) {
+            expectEqual(count(view, "listenHistoryCard") >= 2, true, "收听历史排除: 播放器页要摆上 listenHistoryCard(声明 + body 里那次)")
+            expectEqual(count(view, "updateHistoryExclusion(") >= 2, true, "收听历史排除: 芯片排与信任行开关都要经 updateHistoryExclusion 落盘")
+        } else {
+            expectEqual(true, false, "收听历史排除: 读不到 lyrimuse/SettingsView.swift(路径挪了?)")
+        }
+    }
+
     // ---- 灵动岛「字体」组的接线(2026-09-09)----
     //
     // 三个字体设置只影响渲染,漏接任何一处都不报错,只表现成"改了字体、某处没跟着变"。要吃字体的五处歌词
