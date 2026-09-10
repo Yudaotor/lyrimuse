@@ -895,4 +895,37 @@ func runPlaybackPositionTests() {
         expectEqual(Set(P.supportedPlatforms.map(\.id)), both,
                     "来源角标: 支持的平台就是这两个(新增时这条红,提醒补站点规则与图标)")
     }
+
+    // ---- 电台曲内时钟(RadioTrackClock,2026-09-10)----
+    // 实测:电台的 duration 与 elapsedTime 都是**整档节目**的,换歌不复位 —— 07:15:35 锚点归零,
+    // 07:20:39 换到《Juna》,07:23:22 读到 467s(= 墙钟差),而曲内真值是 163s,偏 304 秒。
+    // 系统没有单曲级位置可取,只能按"元数据换了"这一刻自己起表。
+    do {
+        typealias R = RadioTrackClock
+        let t0 = Date(timeIntervalSince1970: 1_788_000_000)
+        // 第一次见:归零。
+        let first = R.advance(nil, trackKey: "Daniel Caesar|Who Knows", playing: true, now: t0)
+        expectEqual(first.position, 0, "电台时钟: 第一次见这首歌从 0 起")
+        expectEqual(first.trackKey, "Daniel Caesar|Who Knows", "电台时钟: 记住是哪首歌")
+        // 播放中按墙钟累加。
+        let t10 = R.advance(R.advance(first, trackKey: "Daniel Caesar|Who Knows", playing: true, now: t0.addingTimeInterval(5)),
+                            trackKey: "Daniel Caesar|Who Knows", playing: true, now: t0.addingTimeInterval(10))
+        expectEqual(t10.position, 10, "电台时钟: 播放中按墙钟走")
+        // 换歌归零 —— 系统那块表恰恰不做这件事,这条就是整个改动的要害。
+        let changed = R.advance(t10, trackKey: "Clairo|Juna", playing: true, now: t0.addingTimeInterval(11))
+        expectEqual(changed.position, 0, "电台时钟: 换歌必须归零(系统的位置不复位,偏差就是从这来的)")
+        // 暂停冻结,恢复不补账。
+        let played = R.advance(changed, trackKey: "Clairo|Juna", playing: true, now: t0.addingTimeInterval(21))
+        expectEqual(played.position, 10, "电台时钟: 暂停前走了 10 秒")
+        let paused = R.advance(played, trackKey: "Clairo|Juna", playing: false, now: t0.addingTimeInterval(120))
+        expectEqual(paused.position, 10, "电台时钟: 暂停时位置冻结")
+        let resumed = R.advance(paused, trackKey: "Clairo|Juna", playing: true, now: t0.addingTimeInterval(125))
+        expectEqual(resumed.position, 15, "电台时钟: 恢复后不把暂停那段补进来")
+        // 单拍上限:休眠 / 长卡顿后墙钟差不再等于"播了多久"。
+        let slept = R.advance(resumed, trackKey: "Clairo|Juna", playing: true, now: t0.addingTimeInterval(125 + 7200))
+        expectEqual(slept.position, 15 + R.maxAdvancePerTick, "电台时钟: 超长间隔按上限截断,不凭空跳一大截")
+        // 时钟倒退(NTP 校时)不减位置。
+        expectEqual(R.advance(slept, trackKey: "Clairo|Juna", playing: true, now: t0).position, slept.position,
+                    "电台时钟: 墙钟倒退时位置不后退")
+    }
 }

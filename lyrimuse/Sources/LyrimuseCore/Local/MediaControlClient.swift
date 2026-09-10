@@ -123,6 +123,9 @@ public enum MediaControlClient {
         /// elapsedTime 是"在这一刻"的位置。ISO8601(带 Z),用来在 elapsedTimeNow 不可信时
         /// 自己补算 —— 见 livePositionSeconds。
         let timestamp: String?
+        /// 电台 / 直播流才有的电台标识(2026-09-10 实测:Apple Music Radio 播放时非空,
+        /// 值形如 "CgkIBRoFwOSKqxkQBA")。只当"这是不是电台"的判据用,值本身不看。
+        let radioStationHash: String?
     }
 
     // media-control 不是单个独立二进制——可执行文件靠相对路径找同一次 Homebrew 安装
@@ -338,6 +341,10 @@ public enum MediaControlClient {
         bundleID: String, snapshot: MediaControlSnapshot
     ) -> MediaControlSnapshot {
         guard bundleID == PlaybackPlayer.appleMusic.bundleIdentifier else { return snapshot }
+        // 电台不借 AppleScript 那份位置(2026-09-10):`player position` 在电台上报的同样是**整档
+        // 节目**的位置(实测与 media-control 的锚点外推逐秒吻合,两者都不是曲内位置),借过来会把
+        // fetchRawMediaControlSnapshot 刚换好的那块单曲表又覆盖回错的值。见 RadioTrackClock 头注。
+        guard snapshot.isRadio != true else { return snapshot }
         // ⚠️ 只在**正在播放**时才起这个后台 AppleScript 子进程。
         //
         // 它唯一的用途是给下面借一个更精确的 elapsedTime,而那次借用必须过
@@ -381,7 +388,8 @@ public enum MediaControlClient {
             playbackRate: snapshot.playbackRate,
             isMusicApp: snapshot.isMusicApp,
             bundleIdentifier: snapshot.bundleIdentifier,
-            anchorElapsedTime: snapshot.anchorElapsedTime
+            anchorElapsedTime: snapshot.anchorElapsedTime,
+            isRadio: snapshot.isRadio
         )
     }
 
@@ -1047,12 +1055,18 @@ public enum MediaControlClient {
         // 固定滞后(~1.6s 量级、会话间漂移)只能靠平滑吸收,换来的是行为可预期、无子进程
         // 依赖。若要重走"问播放器拿真值"的路线,先读 git 历史里被删掉的
         // spotifyPlayerPosition/spotifyRebase 全套注释再动手。
+        // 电台:系统报的 duration / elapsedTime 都是**整档节目**的,不是这首歌的 —— duration 当未知,
+        // 位置换成按曲目边界自己起的表(机制、实测数据与未验证项见 RadioTrackClock 头注)。
+        // 换在这里而不是让下游各自判:这样 LocalPlaybackSource 的伺服 / 锚点 / 歌词引擎拿到的
+        // 就是一份正常的单曲快照,一处也不用改。
+        let isRadio = !(raw.radioStationHash ?? "").isEmpty
+        let radioPosition: Double? = isRadio ? Self.advanceRadioClock(trackKey: trackKey, playing: raw.playing == true, now: sampledAt) : nil
         let snapshot = MediaControlSnapshot(
             title: raw.title,
             artist: raw.artist,
             album: raw.album,
-            duration: raw.duration,
-            elapsedTime: elapsed,
+            duration: isRadio ? nil : raw.duration,
+            elapsedTime: radioPosition ?? elapsed,
             playing: raw.playing,
             playbackRate: raw.playbackRate,
             // 复用这个字段原本的语义("这是当前选定播放器的一份有效快照",见
@@ -1061,8 +1075,26 @@ public enum MediaControlClient {
             // 这里如实置 true。
             isMusicApp: true,
             bundleIdentifier: bundleID,
-            anchorElapsedTime: raw.elapsedTime
+            // 电台把锚点也换成自己那块表:留着原始值会让下游"锚点是不是开播那个"的判定
+            // (anchorElapsedTime == 0)按整档节目的钟去解读,自相矛盾。
+            anchorElapsedTime: radioPosition ?? raw.elapsedTime,
+            isRadio: isRadio ? true : nil
         )
         return (snapshot, bundleID)
+    }
+
+    // MARK: - 电台曲内时钟(2026-09-10)
+
+    private static let radioClockLock = NSLock()
+    private static var radioClockState: RadioTrackClock.State?
+
+    /// 推进电台那块曲内表并取当前位置。状态只有一块(系统同一时刻只有一个 Now Playing 会话)。
+    /// 纯算术在 `RadioTrackClock.advance`(selftest 钉住),这里只管加锁存取。
+    private static func advanceRadioClock(trackKey: String, playing: Bool, now: Date) -> Double {
+        radioClockLock.lock()
+        defer { radioClockLock.unlock() }
+        let next = RadioTrackClock.advance(radioClockState, trackKey: trackKey, playing: playing, now: now)
+        radioClockState = next
+        return next.position
     }
 }

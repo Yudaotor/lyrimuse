@@ -373,6 +373,26 @@ collector 侧对称改(`system.go` → `playingPositionSecs`,`mediacontrolanchor
 
 nil 快照(Music.app stopped/退出、播放列表放完、.auto 或 media-control 播放器被别的 App 抢走系统 Now Playing 焦点)→ 全量清理:isPlayingNow/anchor/歌词三件套/allLines/封面/取色/冻结位置/时长/**title/artist/album 也清**(2026-08-14 改:此前保留造成"半吊子状态",专辑放完后曲名还在、封面变占位、看着像坏了)/纯音乐/广告等判定,并停 20Hz。⚠️ `lastKey` 必须一起清,否则同一首歌恢复播放时 `trackChanged=false`,allLines/封面两条重建路径全被跳过,歌词窗口和悬浮歌词会互相矛盾。
 
+### Apple Music 电台 / 直播流(2026-09-10 实测)
+
+判据是 media-control 载荷里的 `radioStationHash` 非空(实测值形如 `CgkIBRoFwOSKqxkQBA`)——一个确定的字段,不靠「歌手为空」「时长特别长」这类启发式。快照结构上多一位 `isRadio` / `Radio`,两侧同名同义。
+
+**实测到的三件事**(用户 2026-09-10 在放电台时逐条量的):
+
+1. **曲目元数据是全的**。真正的歌曲两条链路一致:media-control 与 AppleScript 都报 `Daniel Caesar / Who Knows / Son Of Spergy`,曲目类型 `URL track`;歌词解析、封面、relay 推送照常。
+2. **`duration` 是整档节目**(实测 3390.122s = 56 分半),不是当前这首歌。它会被写进歌词缓存的 `resolved_duration_secs`,之后同一首歌正常播放时两者差 94%、超过 `durationMismatch` 的 12% 阈值,每次都判成「另一个录音」转去变体键重解析。
+3. **`elapsedTime` / AppleScript `player position` 同样是整档节目的位置,换歌不复位**。连续采样 30 次抓到一次换歌:锚点 07:15:35 归零,07:20:39 换到 Clairo《Juna》位置照旧往上走,07:23:22 读到 467s —— 正好等于 07:23:22 − 07:15:35;而《Juna》此刻真实的曲内位置是 163s,**喂给歌词引擎的位置偏了 304 秒**,歌词从头到尾对不上(用户报「歌词出来了,但是歌词进度不准」)。⚠️ 我一度按单个采样点误判成「位置是按单曲算的」——两条链路互相吻合只说明它们**同源**,不说明口径对;要证伪必须跨一次换歌看它复不复位。
+
+**修法**:系统这一层没有任何单曲级位置可取,唯一能标出曲目边界的就是「元数据换了」这一刻,所以自己起表(`RadioTrackClock` / `radioclock.go`,两边同款:key 一变归零、播放中按墙钟累加、暂停冻结、单拍上限 30s 防休眠跳变)。换值发生在**构造快照那一处**(App 侧 `fetchRawMediaControlSnapshot`、collector 侧 `extract` + `applyRadioClock`),下游的伺服 / 锚点 / 歌词引擎 / 打卡阈值 / 歌词缓存一行都不用改。`duration` 一并置为「未知」。App 侧还要挡住 `refinedAppleMusicSnapshotIfNeeded` 借 AppleScript 那份位置 —— 它同样是整档节目的。
+
+**台标 / 口播**:电台会把台标当一首歌推进来,歌手与专辑全空(实测标题 `YEONJUN`,持续约 80 秒)。那段时间里每 5 秒往 ListenBrainz 与 Last.fm 各发一次「正在播放」,两边都回 400(`artist` 必填),当天累计 30 次、无退避无上限。现在三处上送口(`announce` / `submitSingleAsync` / `recordLastfmListen`)统一加了「没有歌手就不发」的闸 —— 这道闸跟电台无关、对所有播放器成立:发一个必然被拒的请求没有任何收益。
+
+**已知边界**:
+- **只选 Apple Music 时不生效**。那条路是纯 JXA(`fetchAppleMusicSnapshot`),拿不到 `radioStationHash`,电台仍是旧行为。多选或「自动识别」走 media-control,不受影响。
+- **电台仍然不打卡**。`listenThreshold` 对未知时长退回 240s 上限,而电台曲目普遍不到 4 分钟,所以一条都记不上 —— 与修复前一致。要不要给电台单独定一个打卡口径是产品决策,未定。
+- **元数据切换与声音是否严格同步未验证**。苹果若提前几秒推下一首,这块表会整体超前那几秒;那要用耳朵核,真出现固定偏移就在 `RadioTrackClock` 里补一个常量。
+- **修复前留下的脏条目不会自愈**:实测缓存里有 3 条 `resolved_duration_secs = 3390.1` 的电台曲目,它们在正常播放时仍会触发变体键重解析。
+
 ### Spotify 广告插播检测
 
 `apply()` 里:title 非空 + 快照来自 Spotify(bundleIdentifier 精确核对)+ album 为空 → `isCurrentTrackAdBreak`(media-control 文档确认广告播放时 album 恒空)。三个展示面(悬浮歌词/灵动岛/歌词窗口)据此显示「广告中」,且该分支必须排在"搜索歌词中…"之前——广告的标题永远不会进歌词缓存,否则整段广告卡在"搜索中"。collector 侧 `enrich.go` 有同信号的对应守卫(不把广告写进歌词缓存),`system.go` 的 `isAdBreak` 同判据。
@@ -514,6 +534,8 @@ vs 目录 289.766),拿目录值去盖反而是降精度。覆盖就该待在产�
 | 事件流常驻子进程 + 锚点目击 + 暂停时刻 | `LyrimuseCore/Local/MediaControlStreamWatcher.swift` · `MediaControlStreamWatcher`(`digest` 纯函数,`pausedAtArrival`) |
 | Spotify 一次性地面真值探针 | `LyrimuseCore/Local/SpotifyPositionProbe.swift` · `SpotifyPositionProbe`(`trackChanged`/`consumeCorrection`/`extrapolate`/`parseProbeOutput`);消费点 `LocalPlaybackSource.apply` 的 `isGroundTruthSeed` 分支;封面地址经 `setArtworkSink` → `LocalPlaybackSource.noteSpotifyArtwork(url:forKey:)` → `spotifyArtworkURL` |
 | Spotify 通知广告分类 | `LyrimuseCore/Local/SpotifyNotificationHint.swift` · `SpotifyNotificationHint`(`init(userInfo:)`/`isAd`/`matches(title:artist:)`);观察者在 `LocalPlaybackSource.startObservingPlayerInfoNotification`,消费点 `spotifyNativeAdCheckForNewTrack(snapshot:)` |
+| 电台曲内时钟 | `LyrimuseCore/Local/RadioTrackClock.swift` · `RadioTrackClock.advance`(纯算术,selftest 钉住);接线 `MediaControlClient.fetchRawMediaControlSnapshot`(判 `radioStationHash`、换 duration/elapsed/anchor)与 `refinedAppleMusicSnapshotIfNeeded`(电台不借 AppleScript 位置);collector `lyrimuse-collector/radioclock.go` · `advanceRadioClock`/`applyRadioClock`,判据在 `snapshot.go` · `extract` |
+| 没有歌手不上送 | `lyrimuse-collector/poller.go` · `announce`/`submitSingleAsync`/`recordLastfmListen` 三处同款闸(两个平台都把 artist 当必填,少了一律 400) |
 | 通道健康自检 | `LyrimuseCore/Local/MediaControlHealth.swift` · `MediaControlHealth` |
 | 播放控制写路径 | `LyrimuseCore/Local/MusicPlaybackController.swift` · `MusicPlaybackController`(`dispatch`/`seek`/`setPlaybackMode`/`supportsExtendedControls`);Spotify 随机键能力位 `spotifyPlaybackMode(fromModePart:)` / `spotifyModePartScript`(`extendedControlsState` 与 `playbackMode(for:)` 共用);「在 Spotify 中显示」取数 `spotifyCurrentTrackURI()`,深链 `LyrimuseCore/Local/SpotifyArtworkURL.swift` · `SpotifyURI.deepLink`,打开 `lyrimuse/SpotifyReveal.swift` · `SpotifyReveal.revealCurrentTrack` |
 | 进度锚 | `LyrimuseCore/Playback/ProgressClock.swift` · `ProgressAnchor.extrapolatedPositionMs` |

@@ -173,6 +173,16 @@ func (p *poller) recordLastfmListen(s *playSession, artistName string, meta snap
 	if s.lastfmSettled || s.lastfmPending != nil {
 		return
 	}
+	// 没有歌手就别上送(2026-09-10):Last.fm 的 track.updateNowPlaying / track.scrobble 与
+	// ListenBrainz 的 submit-listens **都把 artist 当必填**,少了一律 400。实测电台的台标 / 口播
+	// 正是这个形状(标题 "YEONJUN"、歌手与专辑全空),那 80 秒里每 5 秒往两边各打一次 400、
+	// 没有退避也没有上限,当天累计 30 次。这道闸跟电台无关、对所有播放器成立 —— 发一个必然
+	// 被拒的请求没有任何收益。
+	if artistName == "" {
+		s.lastfmSettled = true
+		log.Printf("lastfm: skipping scrobble without an artist: %q - %q", meta.Artist, meta.Title)
+		return
+	}
 	// 用户在 Last.fm 设置里把这个播放器排除(lastfmexclude.go,2026-09-10):不镜像、也不记给它兜底的
 	// 本地收听日志,标成 settled 让后续到点判断全部跳过。ListenBrainz 那一路早在 submitSingleAsync 发过了,
 	// 不受影响 —— 与短曲目 / scrobble 时点同一口径,「Last.fm 页的设置跟 ListenBrainz 无关」。
@@ -940,6 +950,13 @@ func (p *poller) submitSingleAsync(sess *playSession, meta snapshot, startedAt i
 		return
 	}
 	lm := lbMeta(meta)
+	// 没有歌手就别上送 —— 两个平台都把 artist 当必填,发过去只会 400(理由与实测见 recordLastfmListen
+	// 里那道同款闸)。标成已处理,免得每一轮 poll 都重来一次。
+	if lm.ArtistName == "" {
+		log.Printf("skipping listen without an artist: %q - %q", meta.Artist, meta.Title)
+		sess.listenSent = true
+		return
+	}
 	if shortTrackLastfmOnly(meta.Duration) {
 		// 短曲目只发 Last.fm(见 shortTrackLastfmOnly):不打 LB,直接把一个"成功"结果送回
 		// 主循环,让 applySubmitOutcome 走 Last.fm 镜像 / 本地日志 / 会话收尾那条既有路径——
@@ -1061,6 +1078,11 @@ func (p *poller) announce(now time.Time, why string) {
 	// BOGO for 99¢"是纯粹的噪声。挡掉之后广告这几十秒里网页停在上一首,跟"没在放"时的表现
 	// 一致,不会出现假的当前曲目。判据见 isAdBreak。
 	if p.sess.isAd || isAdBreak(p.cur.Bundle, p.cur.Artist, p.cur.Title, p.cur.Album) {
+		return
+	}
+	// 没有歌手就别宣布"正在播放" —— 同一道闸(见 submitSingleAsync)。电台台标那 80 秒里
+	// 每 5 秒一次的 400 就是从这里发出去的。
+	if p.cur.Artist == "" {
 		return
 	}
 	p.sess.announcing = true
@@ -1468,6 +1490,11 @@ func (p *poller) poll() {
 		} else {
 			p.nullStreak = 0
 			p.cur = extract(state)
+			// 电台:把整档节目的位置/锚点换成按曲目边界自己起的单曲表(见 radioclock.go)。
+			// 换在这里而不是让下游各自判:updatePosition 那套伺服 / 偏置 / 回绕判定拿到的
+			// 因此是一份正常的单曲快照,一行也不用改。
+			// 这里还没到下面那句 now := time.Now(),差几微秒,对一块以秒计的表没有意义。
+			applyRadioClock(&p.cur, time.Now())
 			p.snapshotStale = false
 		}
 	}

@@ -26,6 +26,16 @@ public struct MediaControlSnapshot: Decodable {
     // 恢复 / 拖动)。Spotify 自然切歌偏置只属于开播锚点,见 LocalPlaybackSource.biasSurvivesAnchor
     // (2026-09-07)。纯附加信息,不参与 trackKey/既有逻辑。
     public let anchorElapsedTime: Double?
+    /// 这是电台 / 直播流吗(2026-09-10)。判据是 media-control 载荷里的 `radioStationHash` 非空 ——
+    /// 一个确定的字段,不用靠"歌手为空""时长特别长"这类启发式猜。
+    ///
+    /// 为真时 `duration` 与 `elapsedTime` **都已经被换掉**:系统那两个值报的是整档节目而不是当前
+    /// 这首歌(实测见 `RadioTrackClock` 头注),所以 duration 置 nil(未知),elapsedTime 换成
+    /// `RadioTrackClock` 自己按曲目边界起的表。下游拿到的因此是一份正常的单曲快照,不需要各自再判一次。
+    ///
+    /// ⚠️ 只在走 media-control 的路径上有值。设置里**只**选了 Apple Music 时走的是纯 JXA 路
+    /// (fetchAppleMusicSnapshot),那条路拿不到这个字段,电台仍是旧行为 —— 见 02 章「电台」一节。
+    public let isRadio: Bool?
 
     public var trackKey: String { Self.trackKey(artist: artist, title: title) }
 
@@ -47,6 +57,6 @@ public struct MediaControlSnapshot: Decodable {
             title: title, artist: artist, album: newAlbum, duration: duration,
             elapsedTime: elapsedTime, playing: playing, playbackRate: playbackRate,
             isMusicApp: isMusicApp, bundleIdentifier: bundleIdentifier,
-            anchorElapsedTime: anchorElapsedTime)
+            anchorElapsedTime: anchorElapsedTime, isRadio: isRadio)
     }
 }

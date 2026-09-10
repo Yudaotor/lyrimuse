@@ -33,6 +33,10 @@ type snapshot struct {
 	// a short, always-fresh window rather than from media-control's stale McTS.
 	Position float64
 	AnchorTS time.Time
+	// Radio:这是电台 / 直播流(判据 = media-control 载荷里的 radioStationHash 非空,2026-09-10)。
+	// 为真时 Duration 已在 extract() 里按"未知"处理、Elapsed/AnchorElapsed/McTS 由 applyRadioClock
+	// 换成单曲口径 —— 系统那几个值报的都是整档节目,见 radioclock.go 头注。
+	Radio bool
 }
 
 func (s snapshot) key() string {
@@ -52,16 +56,25 @@ func extract(state map[string]any) snapshot {
 			mcTS = t
 		}
 	}
+	// 电台:`duration` 报的是**整档节目**(实测 3390.122s = 56 分半),不是当前这首歌 —— 当"未知"处理。
+	// 不这么做的话它会被写进歌词缓存的 resolved_duration,之后正常播放同一首歌时两者差 94%、
+	// 超过 durationMismatch 的 12% 阈值,每次都判成"另一个录音"转去变体键重解析。见 radioclock.go 头注。
+	radio := str("radioStationHash") != ""
+	duration := num("duration")
+	if radio {
+		duration = 0
+	}
 	return snapshot{
 		Title:         str("title"),
 		Artist:        str("artist"),
 		Album:         str("album"),
 		Bundle:        str("bundleIdentifier"),
-		Duration:      num("duration"),
+		Duration:      duration,
 		Playing:       playing,
 		Elapsed:       num("elapsedTime"),
 		Rate:          num("playbackRate"),
 		McTS:          mcTS,
 		AnchorElapsed: num("anchorElapsedTime"),
+		Radio:         radio,
 	}
 }

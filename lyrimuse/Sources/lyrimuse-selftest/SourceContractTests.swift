@@ -455,6 +455,44 @@ func runSourceContractTests() {
         } else {
             expectEqual(true, false, "Last.fm 播放器排除: 读不到 lyrimuse/AccountLinkingTab.swift(路径挪了?)")
         }
+        // ---- 电台:两条链路都要把"整档节目"的值换成单曲口径(2026-09-10)----
+        //
+        // 判据是载荷里的 radioStationHash;换值必须发生在**构造快照那一处**,好让下游(伺服 / 锚点 /
+        // 歌词引擎 / 打卡阈值 / 歌词缓存的 resolved_duration)一行都不用改。漏任一处的表现都是
+        // "歌词出来了但进度全错" 或 "缓存里存了整档节目的时长",不会编译失败。
+        do {
+            let repoRoot = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+                .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            func text(_ rel: String) -> String? {
+                try? String(contentsOfFile: repoRoot.appendingPathComponent(rel).path, encoding: .utf8)
+            }
+            if let mcc = text("lyrimuse/Sources/LyrimuseCore/Local/MediaControlClient.swift") {
+                expectEqual(mcc.contains("radioStationHash"), true, "电台: RawPayload 要解 radioStationHash 这个判据字段")
+                expectEqual(mcc.contains("RadioTrackClock.advance("), true, "电台: 位置要走 RadioTrackClock(纯算术在 Core,selftest 钉住)")
+                expectEqual(mcc.contains("duration: isRadio ? nil : raw.duration"), true,
+                            "电台: duration 是整档节目的,构造快照时就要当未知,别让它流进歌词缓存")
+                expectEqual(mcc.contains("guard snapshot.isRadio != true else { return snapshot }"), true,
+                            "电台: 不能借 AppleScript 那份位置(它同样是整档节目的)")
+            } else {
+                expectEqual(true, false, "电台: 读不到 LyrimuseCore/Local/MediaControlClient.swift(路径挪了?)")
+            }
+            if let poller = text("lyrimuse-collector/poller.go") {
+                expectEqual(poller.contains("applyRadioClock(&p.cur,"), true, "电台: collector 取到快照后要换成单曲口径")
+                expectEqual(poller.contains("if p.cur.Artist == \"\" {"), true,
+                            "电台台标: 没有歌手不宣布正在播放(两个平台都把 artist 当必填,发过去只会 400)")
+                expectEqual(poller.contains("if lm.ArtistName == \"\" {"), true, "电台台标: 没有歌手不提交收听")
+                expectEqual(poller.contains("if artistName == \"\" {"), true, "电台台标: 没有歌手不记 Last.fm")
+            } else {
+                expectEqual(true, false, "电台: 读不到 lyrimuse-collector/poller.go(路径挪了?)")
+            }
+            if let snap = text("lyrimuse-collector/snapshot.go") {
+                expectEqual(snap.contains("str(\"radioStationHash\") != \"\""), true, "电台: collector 侧同一个判据字段")
+                expectEqual(snap.contains("duration = 0"), true, "电台: collector 侧 duration 也当未知")
+            } else {
+                expectEqual(true, false, "电台: 读不到 lyrimuse-collector/snapshot.go(路径挪了?)")
+            }
+        }
+
         // ---- 配置热重读:白名单两侧都要真的接上(2026-09-10)----
         //
         // `CollectorRestartPolicy.hotReloadedKeys` 里每一个键,都必须 ① 真是 features.json 的键(App 侧
