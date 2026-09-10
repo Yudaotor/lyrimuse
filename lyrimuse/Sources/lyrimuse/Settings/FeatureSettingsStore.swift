@@ -780,8 +780,22 @@ public final class FeatureSettingsStore: ObservableObject {
     // 看不见 ConfigStore 也在重启,于是"改一个凭据 + 改一个开关"照样两次重启,正好是
     // 它当初想消灭的那个场景。别在这里重新加一份局部去抖。
     // 独立保存入口(持久化+重启+提交快照一步到位)——给本文件里每一个即时保存的开关用。
+    /// 这次保存改了哪些顶层键(json 键名)。拿它问 `CollectorRestartPolicy` 要不要重启 collector。
+    /// 编码失败(只会是编程错误)时返回空集合 —— 空集合按"不知道改了什么"处理,照旧重启。
+    private var changedFileKeysSinceLastSave: Set<String> {
+        func fields(_ snapshot: FeatureFlagsFile) -> [String: Any] {
+            guard let data = try? JSONEncoder().encode(snapshot),
+                  let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+            else { return [:] }
+            return dict
+        }
+        return CollectorRestartPolicy.changedKeys(from: fields(savedSnapshot), to: fields(currentSnapshot))
+    }
+
     @discardableResult
     public func save() async -> Bool {
+        // 在 persistFile() **之前**算:那一步之后 savedSnapshot 还没动,但先算出来更不容易漏。
+        let changedKeys = changedFileKeysSinceLastSave
         do {
             try persistFile()
         } catch ConfigFileSaveError.refusedCorruptFile {
@@ -793,6 +807,16 @@ public final class FeatureSettingsStore: ObservableObject {
             lastError = String(format: L10n.t("写入功能开关文件失败: %@"), error.localizedDescription)
             logger.error("write failed: \(String(describing: error), privacy: .public)")
             return false
+        }
+        // 这批改动 collector 能自己按 mtime 热读到 → 不重启(2026-09-10,见 CollectorRestartPolicy)。
+        // 文件已经写好了,collector 下一次问就是新值;省掉的是那 37~68 秒的重启空窗(启动要跑九道迁移 +
+        // 全量导入导出上万个歌词文件)。白名单之外的任何一个键跟着变,照旧重启。
+        if !CollectorRestartPolicy.needsRestart(changedKeys: changedKeys) {
+            logger.notice("collector restart skipped: only hot-reloaded keys changed (\(changedKeys.sorted().joined(separator: ","), privacy: .public))")
+            lastError = nil
+            pendingUntilServiceEnabled = false
+            commitSnapshot()
+            return true
         }
         // 去抖逻辑 2026-08-30 挪进了共享的 CollectorRestartCoordinator —— 原来这份是本
         // store **私有**的,只合并得了自己的连续 save(),看不见 ConfigStore 也在重启,

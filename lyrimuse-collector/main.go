@@ -228,7 +228,11 @@ func main() {
 		logExit(exitReasonAlreadyRunning, "another collector instance holds the lock; exiting so shared caches are not clobbered, launchd KeepAlive will retry")
 		os.Exit(0)
 	}
-	features = loadFeatureFlags(filepath.Join(filepath.Dir(*cfgPath), clientName+"-features.json"))
+	featureFlagsPath := filepath.Join(filepath.Dir(*cfgPath), clientName+"-features.json")
+	features = loadFeatureFlags(featureFlagsPath)
+	// 「Scrobble 的播放器」那一项**不重启也生效**:按 mtime 热重读这一个键,见 lastfmexclude.go 头注。
+	// 其余键仍然只在这里读一次(下面好几处会把它们展开进包级变量),改了要重启才算数。
+	setLastfmExcludePath(featureFlagsPath)
 	// (2026-09-02 删掉了这里的 `nativeLyricSources = resolveNativeLyricSources(features.Players)`。
 	//  同源加权的判据不该是"用户勾了哪些播放器",而是"**这一刻在放的是哪个**"——现在由
 	//  trackEnrichment 每首歌按 bundleID 设一次,见 match.go 里 nativeLyricSources 的注释。

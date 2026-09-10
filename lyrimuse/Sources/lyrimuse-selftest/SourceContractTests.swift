@@ -455,6 +455,42 @@ func runSourceContractTests() {
         } else {
             expectEqual(true, false, "Last.fm 播放器排除: 读不到 lyrimuse/AccountLinkingTab.swift(路径挪了?)")
         }
+        // ---- 配置热重读:白名单两侧都要真的接上(2026-09-10)----
+        //
+        // `CollectorRestartPolicy.hotReloadedKeys` 里每一个键,都必须 ① 真是 features.json 的键(App 侧
+        // FeatureFlagsFile 的 CodingKey),② collector 侧真有按 mtime 的热重读。少任一边,用户看到的都是
+        // "改了没反应、要重启才生效" —— 而这条路存在的全部意义就是不重启(重启一次实测 37~68 秒)。
+        // 跨 target(Core / App / Go)三处,只能靠源码扫描钉。
+        do {
+            let repoRoot = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+                .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            let store = try? String(contentsOfFile: repoRoot
+                .appendingPathComponent("lyrimuse/Sources/lyrimuse/Settings/FeatureSettingsStore.swift").path, encoding: .utf8)
+            let go = try? String(contentsOfFile: repoRoot
+                .appendingPathComponent("lyrimuse-collector/lastfmexclude.go").path, encoding: .utf8)
+            let goMain = try? String(contentsOfFile: repoRoot
+                .appendingPathComponent("lyrimuse-collector/main.go").path, encoding: .utf8)
+            expectEqual(CollectorRestartPolicy.hotReloadedKeys, ["lastfm_excluded_bundles"],
+                        "配置热重读: 白名单变了就要同步加守卫(现在只有 lastfm_excluded_bundles 一项)")
+            for key in CollectorRestartPolicy.hotReloadedKeys.sorted() {
+                expectEqual(store?.contains("= \"\(key)\"") ?? false, true,
+                            "配置热重读: \(key) 要是 FeatureFlagsFile 的 CodingKey(App 侧写得进这个键)")
+                expectEqual(go?.contains("json:\"\(key)\"") ?? false, true,
+                            "配置热重读: collector 侧要按这个 json 键单独解析(lastfmexclude.go)")
+            }
+            // 热重读的三件套:登记路径、Stat 比 mtime、消费点走热值而不是启动时那份。
+            expectEqual(goMain?.contains("setLastfmExcludePath(featureFlagsPath)") ?? false, true,
+                        "配置热重读: main() 要把 features.json 的路径登记给热读器,否则它永远退回启动值")
+            for needle in ["os.Stat(lastfmExcludePath)", "ModTime().Equal(lastfmExcludeMTime)", "currentLastfmExcludedBundles()"] {
+                expectEqual(go?.contains(needle) ?? false, true, "配置热重读: lastfmexclude.go 要有 \(needle)")
+            }
+            expectEqual(go?.contains("len(features.LastfmExcludedBundles) == 0") ?? false, false,
+                        "配置热重读: 判定不能再直接读启动时那份 features.LastfmExcludedBundles")
+            // App 侧真的按这个判据跳过重启,而不是白名单摆着没人用。
+            expectEqual(store?.contains("CollectorRestartPolicy.needsRestart(changedKeys:") ?? false, true,
+                        "配置热重读: save() 要按 CollectorRestartPolicy 决定跳不跳过重启")
+        }
+
         // 芯片换行的算术必须走 Core 里那份被 selftest 钉住的纯函数(settings-ui 组):在 Layout 里另写一遍,
         // 测试照样绿、界面照样能裁掉半枚芯片。Layout 的 Subviews 在测试里造不出来,这条源码守卫是唯一的拴绳。
         if let row = code(sourcesRoot.appendingPathComponent("lyrimuse/Settings/PlayerLinkageRow.swift")) {

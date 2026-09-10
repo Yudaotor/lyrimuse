@@ -132,7 +132,7 @@ collector(Go, 5s 轮询) ── 同样两条播放读取路径(独立于 App)
 
 本章是所有功能章节的骨架,这里只列**跨切约定**——几乎每个功能都踩在这几条上:
 
-- **"Swift 写共享文件 → kickstart 重启 collector"约定**:功能开关、播放器切换、歌词源配置、歌词管理编辑,全走这个模式。任何"改了设置 collector 却没反应"的问题先查是不是漏了 kickstart。
+- **"Swift 写共享文件 → kickstart 重启 collector"约定**:功能开关、播放器切换、歌词源配置、歌词管理编辑,全走这个模式。任何"改了设置 collector 却没反应"的问题先查是不是漏了 kickstart。**两类例外,都是按 mtime 热重读、不重启**:①几行大小的专用小文件(歌词时间轴 pin `lyricspins.go`、位置偏置 `positionbias.go`),它们变得太频繁,每变一次重启一遍不可接受;②`features.json` 里进了白名单的键(目前只有 `lastfm_excluded_bundles`,见 `CollectorRestartPolicy.hotReloadedKeys` 与 12 章决策 11)——重启一次实测 37~68 秒才重新开始服务,为一个 bundle id 列表付这笔钱不值。白名单之外的键仍然只在启动时读一次。
 - **enrich 缓存 key 的双侧镜像**:key 由 Go 侧 `enrichKey()`(`enrichkey.go`)构造,Swift 侧镜像在 `EnrichCacheKeys.swift`,**两边必须同步改**。不同步的后果是同一首歌两条缓存+两份歌词文件。
 - **lyrics/ 文件夹是歌词 6 字段(lyrics/lyrics_tr/lyrics_roma/lyrics_yrc/lyrics_source/manual_lyrics)的权威源**,enrich 缓存 JSON 只是存档;启动调和时文件永远赢。删除文件=删条目。
 - **歌词源 id 是全项目唯一一套字符串**(`netease`/`qq`/`kugou`/`musixmatch`/`lrclib`,`features.go` 常量 ↔ Swift `LyricsSource` rawValue ↔ 歌词管理窗口 `sourceDisplayName`),加源要三处同步。
@@ -216,7 +216,7 @@ applemusic-nowplaying/
 
 ## 设计决策与已知坑
 
-1. **collector 不开本地 HTTP/IPC,统一"共享文件 + kickstart 重启"**(`EnrichCacheStore.swift` 顶部注释):代价是每次歌词管理保存都让推送有个小间隙,换来的是不用维护常驻接口。个人工具的刻意取舍。
+1. **collector 不开本地 HTTP/IPC,统一"共享文件 + kickstart 重启"**(`EnrichCacheStore.swift` 顶部注释):代价是每次歌词管理保存都让推送有个小间隙,换来的是不用维护常驻接口。个人工具的刻意取舍。⚠️ 2026-09-10 量到那个"小间隙"其实是 **37~68 秒**(启动要在 74MB 缓存之上跑九道迁移 + 全量导入导出上万个歌词文件),不是几秒;高频改动的配置因此走上面那条 mtime 热重读的例外,见 12 章决策 11。
 2. **collector 只读 `config.json`/`features.json`,写入方永远是 Swift**——双写会引入"谁赢"问题;同理 `AppSettingsMirror` 是 UserDefaults 的单向镜像,不做双向同步。
 3. **`*bool` 表达功能开关**(`features.go`):文件/字段缺失必须解读成"沿用现有行为(默认开)",bool 零值会把"没配置"错读成"关闭",让纯增量开关静默改变现有行为。
 4. **KeepAlive 下绝不 Fatal**:配置内容问题一律降级成 loadIssues 日志,否则就是崩溃循环;硬失败只留给"文件在但读不出来"。

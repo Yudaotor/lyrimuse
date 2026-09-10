@@ -162,4 +162,33 @@ func runSettingsInteractionTests() {
         expectEqual(G.rows(widths: [], spacing: gap, limit: limit), [], "芯片换行: 没有候选 → 空")
         expectEqual(G.size(rows: [], rowHeight: chip, spacing: gap), .zero, "芯片换行: 没有候选时不占高")
     }
+
+    // ---- 改配置要不要重启 collector(CollectorRestartPolicy,2026-09-10)----
+    // 背景:重启一次 collector,从 SIGTERM 到重新开始服务实测 37~68 秒(启动要在 74MB 缓存之上跑九道迁移 +
+    // 全量导入导出 14307 个歌词文件)。能被 collector 按 mtime 热读的键就别为它付这笔钱。
+    do {
+        typealias P = CollectorRestartPolicy
+        expectEqual(P.needsRestart(changedKeys: ["lastfm_excluded_bundles"]), false,
+                    "重启判据: 只改「Scrobble 的播放器」不重启(collector 热读)")
+        expectEqual(P.needsRestart(changedKeys: ["lastfm_excluded_bundles", "players"]), true,
+                    "重启判据: 白名单里的键跟别的键一起变,照旧重启")
+        expectEqual(P.needsRestart(changedKeys: ["scrobble_short_tracks"]), true, "重启判据: 白名单之外的键要重启")
+        expectEqual(P.needsRestart(changedKeys: []), true,
+                    "重启判据: 不知道改了什么(空集合)保守重启,别把「从损坏文件重建」这类保存也跳过")
+        // 白名单里的键必须真是 features.json 的键、且 collector 侧真有对应的热重读 —— 拼错任一边都是
+        // "改了没反应、重启才生效"。这两条跨 target(FeatureFlagsFile 在 App 里、另一半在 Go 里),
+        // 只能靠 contracts 组那道源码守卫钉,见 SourceContractTests「配置热重读」那一块。
+        expectEqual(P.hotReloadedKeys.isEmpty, false, "重启判据: 白名单不该是空的(空 = 每次保存都重启)")
+
+        // 键差分:值变了 / 键被删 / 键新增都算变,值没变不算。
+        expectEqual(P.changedKeys(from: ["a": 1, "b": "x"], to: ["a": 1, "b": "x"]), [], "键差分: 完全相同 → 空")
+        expectEqual(P.changedKeys(from: ["a": 1], to: ["a": 2]), ["a"], "键差分: 值变了")
+        expectEqual(P.changedKeys(from: ["a": 1], to: [:]), ["a"], "键差分: 键被删掉也算变")
+        expectEqual(P.changedKeys(from: [:], to: ["a": 1]), ["a"], "键差分: 新增的键")
+        // 数组 / 字典靠 NSObject.isEqual 深比较,不需要自己递归 —— 这一项正是「Scrobble 的播放器」的形状。
+        expectEqual(P.changedKeys(from: ["l": ["x", "y"]], to: ["l": ["x", "y"]]), [], "键差分: 内容相同的数组不算变")
+        expectEqual(P.changedKeys(from: ["l": ["x", "y"]], to: ["l": ["y", "x"]]), ["l"], "键差分: 顺序不同的数组算变")
+        expectEqual(P.changedKeys(from: ["m": ["k": "v"]], to: ["m": ["k": "v"]]), [], "键差分: 内容相同的字典不算变")
+        expectEqual(P.changedKeys(from: ["m": ["k": "v"]], to: ["m": ["k": "w"]]), ["m"], "键差分: 字典里的值变了")
+    }
 }
