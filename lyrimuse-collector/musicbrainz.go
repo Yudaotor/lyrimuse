@@ -510,7 +510,8 @@ func saveMBPrimaryNameCache() {
 // 在别名轮里比的是**别名串**,拦不住"换成另一个人的名字、于是收下另一个人的同名歌"。
 //
 // 缓存:查到的落盘(自己一份 artist-primary-cache.json,不挤进 artist-alias-cache.json
-// 的 map[string]string 或 artist-identity-cache.json 的语义里),查空的只留在内存。
+// 的 map[string]string 或 artist-identity-cache.json 的语义里),查空的只留在内存,
+// 而"这次根本没查成"(限速/5xx/超时/ctx 取消)连内存都不写,见下面函数体里的 ⚠️。
 // 为什么这么分,见 loadMBPrimaryNameCache 上面那段 ⚠️ —— 一次偶发的 MusicBrainz 限速
 // 不该把一位歌手永久钉死在"没有别名"上。
 func musicBrainzArtistAliases(ctx context.Context, rawArtist string) []string {
@@ -525,7 +526,16 @@ func musicBrainzArtistAliases(ctx context.Context, rawArtist string) []string {
 	}
 	mbPrimaryNameMu.Unlock()
 
-	resolved := lookupMusicBrainzArtistAliases(ctx, raw)
+	resolved, err := lookupMusicBrainzArtistAliases(ctx, raw)
+	if err != nil {
+		// ⚠️ 对方没答(限速/5xx/超时/ctx 取消)时**连内存缓存都不写**:那只说明"这一刻没
+		// 查成",不是"这位歌手没有别的写法"。写了的话一次偶发 503 就把他在**本进程剩下的
+		// 生命周期里**钉死成"无别名" —— collector 是常驻进程,这一钉可能是好几天,跟
+		// loadMBPrimaryNameCache 头注里"空值不落盘"想避免的是同一件事,只是作用域从跨
+		// 进程缩到进程内。代价是 MB 挂着的时候同一位歌手下一轮还会再查一次,由全局 1.1s
+		// 限速(musicbrainzThrottle)兜住,打不成风暴。
+		return nil
+	}
 
 	mbPrimaryNameMu.Lock()
 	mbPrimaryNameCache[raw] = resolved
@@ -617,34 +627,43 @@ func resolveGenericArtistCanonicalName(ctx context.Context, rawArtist string) st
 	return cachedQQArtistCanonicalName(rawArtist)
 }
 
-func lookupMusicBrainzArtistAliases(ctx context.Context, raw string) []string {
+// lookupMusicBrainzArtistAliases 的 error 专门回答"这一次到底查成没有":ctx 被取消、
+// MB 超时/限速/5xx 都算**没查成**,跟"查成了、MB 那边确实没登记别的写法"(返回 nil, nil)
+// 不是一回事。以前两者都只是一个 nil,谁都分不出来,代价是两处:上层
+// musicBrainzArtistAliases 把没查成也当成"没有别名"缓存起来(见那边的 ⚠️);
+// TestRetryArtistIdentitiesGenericMusicBrainzReverseDirection 只好事后另发一个探针
+// 请求去猜 MB 活没活着,而探针和真查询各有各的运气,CI 上连红六次(见那条测试的头注)。
+func lookupMusicBrainzArtistAliases(ctx context.Context, raw string) ([]string, error) {
 	if err := musicbrainzThrottle(ctx); err != nil {
-		return nil
+		return nil, err
 	}
 	var search mbSearchResponse
 	searchURL := "https://musicbrainz.org/ws/2/artist/?query=" + neturl.QueryEscape(raw) + "&fmt=json&limit=5"
-	if err := mbGetJSON(ctx, searchURL, &search); err != nil || len(search.Artists) == 0 {
-		return nil
+	if err := mbGetJSON(ctx, searchURL, &search); err != nil {
+		return nil, err
+	}
+	if len(search.Artists) == 0 {
+		return nil, nil // 查成了,MB 那边没有这个人
 	}
 	top := search.Artists[0]
 	if top.Score < musicbrainzMinScore {
-		return nil
+		return nil, nil // 查成了,但首条命中不够可信
 	}
 	// ⚠️ 不再在这里因为"主名==本地标签"就提前返回,理由见函数头注——那个短路会让
 	// 方大同这类"MB 主名本身就是本地标签"的歌手永远够不到下面的别名列表。
 	if err := musicbrainzThrottle(ctx); err != nil {
-		return nil
+		return nil, err
 	}
 	var withAliases mbArtistWithAliases
 	aliasURL := "https://musicbrainz.org/ws/2/artist/" + neturl.PathEscape(top.ID) + "?inc=aliases&fmt=json"
 	if err := mbGetJSON(ctx, aliasURL, &withAliases); err != nil {
-		return nil
+		return nil, err
 	}
 	primary := withAliases.Name
 	if strings.TrimSpace(primary) == "" {
 		primary = top.Name // 详情接口没给 name 时退回搜索结果里的那个
 	}
-	return mbAliasCandidatesForRetry(primary, withAliases.Aliases, raw)
+	return mbAliasCandidatesForRetry(primary, withAliases.Aliases, raw), nil
 }
 
 // mbAliasCandidatesForRetry 是上面那个网络查询的**判据部分**,拆出来是为了能单测,
