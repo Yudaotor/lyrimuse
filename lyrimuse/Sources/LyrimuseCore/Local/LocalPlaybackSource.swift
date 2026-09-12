@@ -2671,7 +2671,7 @@ public final class LocalPlaybackSource: ObservableObject {
     }
 
     // 从封面原始图片数据算出一个单一的平均色,供"跟随封面"外观模式当动态高亮色用——
-    // 算法跟同类开源实现(Karacookie 的 DominantColor.swift)一致:CIAreaAverage 把
+    // 算法跟同类开源实现一致:CIAreaAverage 把
     // 整张图平均成一个像素,而不是 K-means/直方图那类更贵的聚类算法,对"给悬浮歌词提供
     // 一个跟封面基调呼应的强调色"这个用途完全够用。
     //

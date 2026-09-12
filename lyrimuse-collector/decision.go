@@ -2,7 +2,7 @@ package main
 
 import "time"
 
-// 歌词解析的**决策记录**(2026-08-17 加,吸收自对 lyra 的对比审阅 C2/C3)。
+// 歌词解析的**决策记录**(2026-08-17 加,吸收自对比审阅 C2/C3)。
 //
 // 背景:歌词缓存"解析一次永久保留",而选中哪个源有相当大的运气成分(20 秒总上限内哪些源
 // 赶上了这一轮,见 enrichEntry.LyricsScore 的注释)。此前缓存里只存胜者的总分,事后想知道
@@ -16,7 +16,7 @@ import "time"
 //  1. **只存元数据,绝不存歌词正文** —— 每条候选 ~200-400 字节,全缓存也就 ~0.3MB;
 //     带上正文就是把缓存文件翻倍。
 //  2. **只写不读** —— 解析逻辑的任何分支都不许读这个字段拿它当输入,否则"记录行为"
-//     变成"影响行为",复盘价值就没了(lyra 用 result-unchanged 断言守同一条线)。
+//     变成"影响行为",复盘价值就没了(对比审阅 C2:用 result-unchanged 断言守同一条线)。
 //  3. 手动改过的条目(ManualLyrics)不更新 —— 三个写入站点本来就对 ManualLyrics 早退,
 //     人工覆盖之前那份自动决策的记录就地保留,说明"自动选出来的曾经是什么"。
 //
@@ -43,7 +43,7 @@ type lyricsDecision struct {
 	DurationSecs float64 `json:"duration_secs,omitempty"`
 	// 这一轮**应答过**的源(哪怕给的候选被判负分也算)。跟 LyricsSourcesSeen(只算给出
 	// 可用候选的)的区别正是排查的第一问:酷狗是超时没露面,还是回了份烂候选?
-	// 两回事,两种修法(lyra 的 trace 把 no response / found-but-REJECT 分开报,同一个理由)。
+	// 两回事,两种修法(对比审阅 C3:trace 把 no response / found-but-REJECT 分开报,同一个理由)。
 	SourcesResponded []string `json:"sources_responded,omitempty"`
 	// 这一轮因源级熔断被**跳过**(压根没发请求)的源,见 sourcebreaker.go——跟"超时没露面"
 	// 又是另一回事:这是我们主动不问它。由三处写缓存点在 buildLyricsDecision 之后填。

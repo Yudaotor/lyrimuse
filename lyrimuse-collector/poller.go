@@ -1408,7 +1408,7 @@ func (p *poller) applyBridgeResult(r bridgeFetchResult) {
 	now, np, done := r.now, r.page.NowPlaying, r.page.Done
 
 	// 把 Last.fm 上"没转发过"的完成收听转成 LB listen(集合去重,天然兼容乱序/迟到:
-	// Marvis 后台漏了、之后补同步的旧时间戳记录,只要不在集合里就会被补上)。首次(无持久化
+	// 第三方客户端后台漏了、之后补同步的旧时间戳记录,只要不在集合里就会被补上)。首次(无持久化
 	// 文件)只 seed 当前窗口、不回灌整段历史。
 	fwdChanged := false
 	if !p.fwdSeeded {

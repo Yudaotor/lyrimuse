@@ -8,7 +8,7 @@ import (
 	"sync"
 )
 
-// 歌词解析决策 trace(2026-08-17 加,吸收自对 lyra 的对比审阅 C1)。
+// 歌词解析决策 trace(2026-08-17 加,吸收自对比审阅 C1)。
 //
 // 跟 decision.go 的缓存内决策记录是同一份数据的两个去处:缓存里只留**最近一次**评估
 // 和**当前歌词出处**两槽(lyrics_decision / lyrics_decision_applied,后一次同类写入
@@ -16,7 +16,7 @@ import (
 // 发生了什么"只能靠它。默认关(features.json 的 lyrics_decision_trace),开着时每次
 // 评估追加一行 NDJSON。
 //
-// 为什么是 NDJSON 而不是 lyra 那种人读的自由文本:我们的得分明细本来就是机器可读的
+// 为什么是 NDJSON 而不是对比审阅 C1 里那种人读的自由文本:我们的得分明细本来就是机器可读的
 // scoreTerm(kind/points),序列化成文本再让人肉眼解析回去是白扔结构 —— search-lyrics
 // 的 NDJSON 契约(searchcli.go)是先例。要人读,`jq` 一行就够。
 //
@@ -24,7 +24,7 @@ import (
 // 决策 —— 结构上也进不来:那条 CLI 路径从不调 loadFeatureFlags,features 是零值,
 // 开关恒为 false(跟 pickLyricCandidate 对 LyricsSources 的既有约定同一个机制)。
 //
-// 体量控制:lyra 的 trace 没有封顶,lyrimuse.log 也没有轮转 —— 这两个先例都别学。
+// 体量控制:对比审阅 C1 那边的 trace 没有封顶,lyrimuse.log 也没有轮转 —— 这两个先例都别学。
 // 超过 2MB 就把现有文件挪成 .old(只留一代),再开新文件。一行 ~1-2KB,2MB ≈ 一两千次
 // 评估,个人听歌量够查几个月。
 var lyricsTraceMu sync.Mutex

@@ -81,7 +81,7 @@ func (s persistedTTLSet) trim(m map[int64]bool, now time.Time) bool {
 }
 
 // ---- Last.fm 桥接:已转发 uts 集合(替代单调水位线)----
-// 单调水位线对"迟到/乱序"的 scrobble 不友好:Marvis 后台漏了、之后补同步的完成收听带旧
+// 单调水位线对"迟到/乱序"的 scrobble 不友好:第三方客户端后台漏了、之后补同步的完成收听带旧
 // 时间戳,会因 uts <= 水位线被永久跳过。改用"已转发 uts 集合"去重:只要某条没转发过就补,
 // 不看时间顺序;集合落盘、只保留最近 forwardedTTL,防无限增长。默认兼容乱序/迟到,不靠手动回灌。
 const forwardedTTL = 7 * 24 * time.Hour

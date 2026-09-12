@@ -7,7 +7,7 @@ import CoreGraphics
 /// 左对齐和右对齐渲染出来逐像素相同 —— 唯一的区分信号在最需要它的时候消失。
 ///
 /// Apple Music 自己的 Duet View 也不是纯粹的"左右对齐":官方原文是
-/// 「Multiple vocalists show on opposite sides of the screen」,AMLL(仿 AM 的开源实现)
+/// 「Multiple vocalists show on opposite sides of the screen」,同类开源实现
 /// 的做法是给对唱行**两侧各留一段固定比例的空白**,靠留白而不是靠字的落点来分栏。
 /// 这样即使一行长到顶满可用宽度,它也只占到整列的 85%,偏向依然读得出来。
 ///
@@ -16,7 +16,7 @@ import CoreGraphics
 public enum LyricDuetLayout {
     /// 内缩占可用宽度的比例。
     ///
-    /// 0.15 是 AMLL 的量级。往上加会让本来就只放得下 12 字的正文列更容易折行,
+    /// 0.15 是同类实现的量级。往上加会让本来就只放得下 12 字的正文列更容易折行,
     /// 往下减到 0.08 以下就基本看不出来了 —— 这个数字调整前先想清楚这两头。
     public static let insetRatio: CGFloat = 0.15
 

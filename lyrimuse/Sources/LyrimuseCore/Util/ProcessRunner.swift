@@ -8,7 +8,7 @@ import Foundation
 ///
 /// AppleScript 的默认超时是 60 秒:Music.app 一旦无响应(大曲库、iCloud 同步时不算罕见),
 /// 一次 osascript 就能把这条链路堵满一分钟,表现为悬浮歌词莫名其妙停住。
-/// (verse-bar 那个项目的轮询代码里记着同一类教训:对挂起的浏览器标签页执行 JS
+/// (同类项目的轮询代码里记着同一类教训:对挂起的浏览器标签页执行 JS
 /// "can hang the polling loop for minutes"。)
 ///
 /// 另外统一修掉一个到处都在犯的错:那些调用点都写 `process.standardError = Pipe()`
