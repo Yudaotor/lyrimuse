@@ -10,3 +10,21 @@ lyrimuse/.build/
 lyrimuse/dist/
 __pycache__/
 .playwright-mcp/
+
+# AI 协作文件只留本地,不进仓库(2026-09-11 用户定)。
+# 这三份 skill 与两个入口文件都是给 Claude / Codex 读的操作约束,对使用者和贡献者没有意义,
+# 而且会随会话频繁改动。删的是「跟踪」不是文件本身——它们仍在工作树里正常生效。
+# 连带改动:selftest 的「项目级 skill」守卫改成目录不存在就整段跳过(否则别人 clone 出来 CI 会红)。
+/AGENTS.md
+/CLAUDE.md
+/.claude/
+# 同类的其它 AI 工具入口,加在这里是为了"换个工具也不会又冒出来一个"
+# (2026-09-11 加规则时这些路径都不存在、也没被跟踪,纯预防)。
+/GEMINI.md
+/.codex/
+/.cursor/
+/.cursorrules
+/.windsurfrules
+/.aider*
+/.continue/
+/.github/copilot-instructions.md
