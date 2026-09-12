@@ -95,4 +95,39 @@ public enum OverlayControlHitTest {
         if positionLocked && id != .unlockPill { return nil }
         return id
     }
+
+    /// 控制排「该不该露出来」的命中区域(2026-09-13 用户:「只有当鼠标悬浮到歌词实际范围内,
+    /// 才会出现下面这个菜单栏;而不是鼠标放在整个悬浮歌词窗口内,就展示下面的菜单栏」)。
+    ///
+    /// 在此之前 `isHoveringForControls` 的判据是 `window.frame.contains(鼠标)` —— **整扇窗**。
+    /// 窗口比字大得多(上下有卡片内边距和控制排槽位、左右是 `WrapLayout` 撑满留下的空白),
+    /// 指针从窗口边缘那圈空白扫过就会把整排按钮叫出来。跟 2026-08-23「划过让开」收紧成
+    /// `isHoveringLyrics` 是同一个病根,只是当时只收了那一半。
+    ///
+    /// 收紧后的区域 = 歌词文字矩形 ∪ 控制排胶囊热区 ∪ 各按钮矩形,取**包围盒**。三件事都要:
+    ///  ① 按钮矩形/胶囊热区必须并进来。按钮在歌词**外面**(卡片内边距 + 槽位那 4+4pt),只留
+    ///     歌词矩形的话,指针一往按钮挪就离开了区域 —— 控制排在指针抵达之前先消失,整排按钮
+    ///     从此点不到。这是这次收紧唯一会致命的地方。
+    ///  ② 取包围盒、而不是"命中其中任一个矩形",是为了把歌词与按钮之间那道缝包进去:分开判
+    ///     的话指针穿过缝的那一两拍两边都不命中,控制排会闪一下再回来。
+    ///  ③ 按钮矩形**单独**并(不只并胶囊热区)是给**锁定态**的:那一格只画得出"🔒 解锁"一颗,
+    ///     胶囊热区(`ControlsFramePreferenceKey`)压根不上报,不并按钮矩形的话锁定之后就再也
+    ///     没有解锁出路了。
+    ///
+    /// 三份都没有(刚显示、或这一轮没有任何文字)时返回 nil,调用点退回整窗判定 —— 别让功能
+    /// 整个失灵,那是旧行为,至少按钮还点得到。
+    ///
+    /// `.zero`(以及任何空矩形)= "这一轮没有人报告位置",按缺席处理,不能让它把包围盒拉到
+    /// 内容块左上角 —— 那会在窗口角上留下一块看不见的命中区。
+    public static func chromeHoverZone(
+        lyrics: CGRect?, controlsPill: CGRect?, controlRects: [OverlayControlID: CGRect]
+    ) -> CGRect? {
+        var zone: CGRect?
+        // 字典遍历顺序不确定,但并集可交换、与顺序无关,结果稳定(有 selftest 守着)。
+        for rect in [lyrics, controlsPill].compactMap({ $0 }) + Array(controlRects.values) {
+            guard !rect.isEmpty else { continue }
+            zone = zone.map { $0.union(rect) } ?? rect
+        }
+        return zone
+    }
 }

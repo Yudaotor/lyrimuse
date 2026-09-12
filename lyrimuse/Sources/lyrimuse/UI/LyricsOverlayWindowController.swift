@@ -109,10 +109,14 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
     // 事件,这时只有 local 能看到——单独装 global 会在这个切换点彻底看不到"什么时候
     // 移出热区"。播放控制按钮胶囊的真实屏幕矩形由 LyricsOverlayView 通过 GeometryReader
     // 汇报上来(controlsHotZoneLocal)。
+    ///
+    /// 判据不是"指针在窗口里"(2026-09-13 收紧,用户:「只有当鼠标悬浮到歌词实际范围内,才会
+    /// 出现下面这个菜单栏;而不是鼠标放在整个悬浮歌词窗口内」),而是落在
+    /// `chromeHoverZoneLocal` 里 —— 歌词文字矩形 ∪ 控制排,取包围盒。为什么必须把控制排也
+    /// 并进来(只认歌词的话按钮从此点不到)见 `OverlayControlHitTest.chromeHoverZone`。
     @Published private(set) var isHoveringForControls: Bool = false
-    /// 指针是否落在**歌词文字**上。只给「指针划过时让开」用 —— 播放控制按钮的显示照旧
-    /// 走 isHoveringForControls(整窗判定):想点按钮时指针常常先落在窗口边缘,那一侧
-    /// 收紧成"必须压在字上"反而不好点。
+    /// 指针是否落在**歌词文字**上。只给「指针划过时让开」用 —— 跟上面那个的区别是它**不**把
+    /// 控制排并进来:让开是为了看清歌词底下那块桌面,指针停在按钮排上时歌词不该跟着淡掉。
     @Published private(set) var isHoveringLyrics: Bool = false
     /// 指针是否压在**控制排本身**上(未锁定时是播放控制胶囊,锁定时是那颗解锁按钮)。
     /// 只给"要不要冻住控制排的横向落点"用 —— 见 `OverlayControlsSidePin`。判据分两截:
@@ -178,6 +182,9 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
     private var controlsHotZoneLocal: CGRect?
     /// 歌词文字矩形(窗口本地),「指针划过时让开」的命中判据(见 updateLyricsHotZone)。
     private var lyricsHotZoneLocal: CGRect?
+    /// 控制排该不该露出来的命中区域(窗口本地)= 上面两份热区 + 各按钮矩形的包围盒,
+    /// 见 `OverlayControlHitTest.chromeHoverZone`。nil = 这一轮谁都没上报位置,退回整窗判定。
+    private var chromeHoverZoneLocal: CGRect?
 
     // 上面三个 Local 是**换算结果**(已经用某次的窗口高度做过 y 轴翻转)。这三个是换算前的
     // **原始 SwiftUI 坐标**(左上原点,还没翻转)——2026-08-29 用户报"点按钮正下方才生效,
@@ -749,6 +756,7 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
             if !controlRectsLocal.isEmpty { controlRectsLocal = [:] }
             controlsHotZoneLocal = nil
             lyricsHotZoneLocal = nil
+            chromeHoverZoneLocal = nil
             return
         }
         // ⚠️ windowHeight 不能直接读 window.frame.height —— 高度动画在飞时读到的是中间帧,
@@ -772,6 +780,10 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
         lyricsHotZoneLocal = lyricsHotZoneRaw.map {
             OverlayControlHitTest.windowLocalRect(swiftUI: $0, windowHeight: windowHeight, contentTopInset: inset)
         }
+        // 控制排的显示判据(2026-09-13)。在这里合成、而不是每次 .mouseMoved 现算:三份输入
+        // 全在这个函数里换算完,鼠标移动一秒几十上百次,没必要每次重走一遍字典。
+        chromeHoverZoneLocal = OverlayControlHitTest.chromeHoverZone(
+            lyrics: lyricsHotZoneLocal, controlsPill: controlsHotZoneLocal, controlRects: controlRectsLocal)
     }
 
 
@@ -828,11 +840,16 @@ final class LyricsOverlayWindowController: NSWindowController, ObservableObject,
         switch type {
         case .mouseMoved:
             let insideWindow = frame.contains(loc)
-            if isHoveringForControls != insideWindow {
-                isHoveringForControls = insideWindow
+            // 控制排的显示判据:窗口内 **且** 落在"歌词 ∪ 控制排"那块包围盒上(2026-09-13 从
+            // 整窗收紧,见 OverlayControlHitTest.chromeHoverZone)。区域还没合成出来时退回整窗
+            // 判定 —— 同 isHoveringLyrics 的兜底,宁可宽一点,也别让按钮整个叫不出来。
+            let insideChrome = insideWindow
+                && (chromeHoverZoneLocal.map { $0.contains(localPoint) } ?? true)
+            if isHoveringForControls != insideChrome {
+                isHoveringForControls = insideChrome
             }
             // 指针压没压在控制排本身上 —— 只用来冻住它的横向落点(见 OverlayControlsSidePin),
-            // 跟"要不要显示"(上面那行整窗判定)、"要不要拦截点击"(下面 insideHotZone)都
+            // 跟"要不要显示"(上面那行 insideChrome)、"要不要拦截点击"(下面 insideHotZone)都
             // 是独立的三件事,不要合并。锁定态没有胶囊热区,退回按钮矩形,见声明处注释。
             // 这一次命中测试**两个用途共用**:下面那个"压没压在控制排上",以及再下面那个
             // "该把哪一颗画亮"。别拆成两次算 —— 两次之间用的是同一批矩形、同一个点,拆开

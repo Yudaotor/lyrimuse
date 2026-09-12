@@ -170,12 +170,14 @@ private final class OverlayPlayback: ObservableObject {
 /// 理由是同一条。
 @MainActor
 protocol OverlayChromeSource: ObservableObject {
-    /// 指针在窗口上 —— 播放控制排(或锁定态的解锁提示)的显示条件。
+    /// 指针压在**歌词或控制排**上 —— 播放控制排(或锁定态的解锁提示)的显示条件。
+    /// 2026-09-13 从"指针在窗口上"收紧,命中区见 `OverlayControlHitTest.chromeHoverZone`。
     var isHoveringForControls: Bool { get }
-    /// 指针压在**歌词文字**上 —— 「指针划过时让开」的命中判据。
+    /// 指针压在**歌词文字**上 —— 「指针划过时让开」的命中判据。跟上面那个的区别是它**不**
+    /// 把控制排并进来:让开是为了看清歌词底下那块桌面,指针停在按钮排上时歌词不该跟着淡掉。
     var isHoveringLyrics: Bool { get }
-    /// 指针压在**控制排本身**上(播放控制胶囊,或锁定态那颗解锁按钮)。跟上面那个整窗
-    /// 判定的 `isHoveringForControls` 是两件事:那个决定"要不要显示",这个决定"能不能
+    /// 指针压在**控制排本身**上(播放控制胶囊,或锁定态那颗解锁按钮)。跟上面那个
+    /// `isHoveringForControls` 是两件事:那个决定"要不要显示",这个决定"能不能
     /// 让它横向换边" —— 用户正瞄着按钮时把落点冻住,见 `OverlayControlsSidePin`。
     var isHoveringControlPill: Bool { get }
     /// 指针此刻压在**哪一颗**按钮上(nil = 一颗都没压着),用来画悬停高亮。判据在
@@ -243,8 +245,9 @@ private enum OverlaySpeakerIndicator {
 /// 而这一排里有「关闭悬浮窗」和「锁定位置」两颗点错了要费事收拾的。
 ///
 /// 判据用的是"指针**压在按钮排上**"(`OverlayChromeSource.isHoveringControlPill`),不是
-/// "控制排显示着"(`isHoveringForControls`,整窗判定)—— 后者会让指针只是停在窗口里、
-/// 根本没在瞄按钮的时候也一起冻住,那正好又变回用户这次反馈的现象(按钮不在歌词上方)。
+/// "控制排显示着"(`isHoveringForControls`)—— 后者的命中区是"歌词 ∪ 控制排"的包围盒
+/// (2026-09-13 前更宽,是整扇窗),指针只是停在**歌词**上、根本没在瞄按钮的时候也会一起
+/// 冻住,那正好又变回用户这次反馈的现象(按钮不在歌词上方)。
 /// 指针一离开按钮排,下一行就立刻回到"跟着歌词走"。
 private enum OverlayControlsSidePin: Equatable {
     /// 没冻:跟着当前行走。

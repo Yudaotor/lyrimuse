@@ -86,6 +86,52 @@ func runOverlayTests() {
                     true, "悬停高亮: 没有上报矩形时一颗都不亮")
     }
 
+    // ---- OverlayControlHitTest.chromeHoverZone: 控制排该不该露出来的命中区域(2026-09-13) ----
+    //
+    // 从"整扇窗"收紧成"歌词 ∪ 控制排"。这一组守的是收紧之后**按钮还点不点得到**:按钮在歌词
+    // 外面(卡片内边距 + 槽位 4+4pt),区域漏掉按钮或漏掉中间那道缝,整排按钮就会在指针挪过去
+    // 的路上消失。
+    do {
+        let H = OverlayControlHitTest.self
+        // 一屏典型布局(SwiftUI 内容坐标,y 向下):控制排在上、歌词卡在下,中间隔着 8pt 的缝。
+        let pill = CGRect(x: 400, y: 4, width: 216, height: 30)
+        let buttons: [OverlayControlID: CGRect] = [
+            .previous: CGRect(x: 410, y: 8, width: 22, height: 22),
+            .playPause: CGRect(x: 440, y: 8, width: 22, height: 22),
+        ]
+        let lyrics = CGRect(x: 120, y: 62, width: 780, height: 46)
+        // 不用 guard/return:这一组失败也不该把后面几组测试一起带走(整个文件是顺序执行的)。
+        let zone = H.chromeHoverZone(lyrics: lyrics, controlsPill: pill, controlRects: buttons) ?? .null
+        expectEqual(zone.contains(CGPoint(x: 500, y: 80)), true, "控制排命中区: 歌词文字上命中")
+        expectEqual(zone.contains(CGPoint(x: 450, y: 18)), true, "控制排命中区: 按钮上命中")
+        // 缝里必须命中 —— 包围盒存在的全部理由。分开判的话指针穿过这里控制排会闪一下。
+        expectEqual(zone.contains(CGPoint(x: 450, y: 48)), true, "控制排命中区: 歌词与按钮之间的缝里命中")
+        // 窗口四周的空白不该命中 —— 这次收紧要解决的正是这个(旧判据是整扇窗)。
+        expectEqual(zone.contains(CGPoint(x: 20, y: 20)), false, "控制排命中区: 窗口左上角空白不命中")
+        expectEqual(zone.contains(CGPoint(x: 500, y: 160)), false, "控制排命中区: 歌词下方空白不命中")
+
+        // 锁定态:胶囊热区压根不上报,只有"🔒 解锁"那一颗按钮 —— 不并按钮矩形就再没有解锁出路。
+        let unlock: [OverlayControlID: CGRect] = [.unlockPill: CGRect(x: 494, y: 8, width: 28, height: 22)]
+        let locked = H.chromeHoverZone(lyrics: lyrics, controlsPill: nil, controlRects: unlock)
+        expectEqual(locked?.contains(CGPoint(x: 508, y: 18)) ?? false, true,
+                    "控制排命中区: 锁定态解锁键上命中(那时没有胶囊热区)")
+
+        // 三份都没有 = 这一轮谁都没上报,返回 nil 让调用点退回整窗判定,别让功能整个失灵。
+        expectEqual(H.chromeHoverZone(lyrics: nil, controlsPill: nil, controlRects: [:]) == nil, true,
+                    "控制排命中区: 什么都没上报时为 nil(调用点退回整窗)")
+        // .zero 按缺席处理:算进去会把包围盒拉到内容块左上角,在窗口角上留一块看不见的命中区。
+        let zeroed = H.chromeHoverZone(lyrics: lyrics, controlsPill: .zero, controlRects: [.lock: .zero])
+        expectEqual(zeroed == lyrics, true, "控制排命中区: .zero 矩形按缺席处理,不把包围盒拉到原点")
+        expectEqual(H.chromeHoverZone(lyrics: .zero, controlsPill: nil, controlRects: [:]) == nil, true,
+                    "控制排命中区: 只有 .zero 等于什么都没有")
+
+        // 并集与顺序无关(字典遍历顺序不确定),结果必须稳定。
+        let repeated = (1...50).map {
+            _ in H.chromeHoverZone(lyrics: lyrics, controlsPill: pill, controlRects: buttons) ?? .null
+        }
+        expectEqual(repeated.allSatisfy { $0 == zone }, true, "控制排命中区: 结果不随字典遍历顺序变")
+    }
+
     // ---- LyricDuetLayout: 对唱行的两侧内缩(2026-08-23) ----
     do {
         let L = LyricDuetLayout.self

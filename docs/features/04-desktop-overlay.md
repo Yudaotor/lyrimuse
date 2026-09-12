@@ -1,5 +1,5 @@
 # 04. 桌面悬浮歌词
-> 最后核对:2026-09-11 · 基线:b7e08ef+工作树
+> 最后核对:2026-09-13 · 基线:2748e0b+工作树
 
 ## 定位
 
@@ -151,8 +151,14 @@
 - **歌词命中判定**(2026-08-23):「划过让开」原来复用 `isHoveringForControls`,那是 `window.frame.contains(鼠标)` —— **整个窗口矩形**。窗口比文字大得多(上下有卡片内边距和播放控制槽位、左右是 `WrapLayout` 撑满留下的空白),于是指针在歌词**附近**就触发淡出。改成独立的 `isHoveringLyrics`:窗口内 **且** 落在歌词文字矩形上才算。
   - 文字矩形由 `LyricsTextRectPreferenceKey` 收集主歌词/罗马音/译文/下一句预览各自的 frame 取并集,经 `updateLyricsHotZone` 换算成屏幕坐标(同 `updateControlsHotZone` 那套换算)。
   - 逐字行特殊:`WrapLayout` **撑满整宽**(对唱左右对齐要靠它),直接拿 frame 会把左右空白算进去。改由布局阶段把"文字实际矩形"写进 `WrapContentRectSink`(纯引用旁路,**不经过 SwiftUI 渲染循环** —— 给每个字挂 GeometryReader 会把几何依赖拖进 60fps 填色热路径,那个坑踩过),几何本体是 `WrapLayoutMath.contentBounds`(有 selftest)。
-  - **播放控制按钮照旧走整窗判定**(`isHoveringForControls`):想点按钮时指针常先落在窗口边缘,那一侧收紧成"必须压在字上"反而不好点。
-  - 热区还没上报上来时(刚显示、或这一轮没有任何文字)退回窗口判定,别让功能整个失灵。
+  - **控制排的显示判定 2026-09-13 也收紧了**(用户:「只有当鼠标悬浮到歌词实际范围内,才会出现下面这个菜单栏;而不是鼠标放在整个悬浮歌词窗口内,就展示下面的菜单栏」)。此前它一直是整窗判定 —— 2026-08-23 那次只收了「划过让开」这一半,留下的理由是"想点按钮时指针常先落在窗口边缘,收紧成必须压在字上反而不好点"。真正的解法不是放宽到整扇窗,而是**把按钮自己也算进命中区**:
+    - 区域 = 歌词文字矩形 ∪ 控制排胶囊热区 ∪ 各按钮矩形,取**包围盒**(`OverlayControlHitTest.chromeHoverZone`,有 selftest),在 `recomputeHitRegions` 里跟三份热区一起合成成 `chromeHoverZoneLocal`,`.mouseMoved` 每次只做一次 `contains`。
+    - **必须并上按钮**:按钮在歌词**外面**(卡片内边距 + 槽位那 4+4pt),只认歌词矩形的话指针一往按钮挪就离开了区域,控制排在指针抵达之前先消失,整排按钮从此点不到 —— 这是这次收紧唯一会致命的地方。
+    - **必须取包围盒**、而不是"命中其中任一个矩形":那道缝里两边都不命中,指针穿过时控制排会闪一下再回来。
+    - **按钮矩形要单独并**(不只并胶囊热区):锁定态那一格只画得出「🔒 解锁」一颗,胶囊热区(`ControlsFramePreferenceKey`)压根不上报,不并按钮矩形的话锁定之后就再没有解锁出路了。
+    - `.zero` 按缺席处理 —— 算进去会把包围盒拉到内容块左上角,在窗口角上留一块看不见的命中区。
+  - `isHoveringLyrics`(划过让开)**不**并控制排:让开是为了看清歌词底下那块桌面,指针停在按钮排上时歌词不该跟着淡掉。两个量因此仍是两套判据。
+  - 热区还没上报上来时(刚显示、或这一轮没有任何文字)两者都退回窗口判定,别让功能整个失灵。
 
 - **「指针划过时让开」改了鼠标监听器的生命周期**(2026-08-22):`syncMouseMonitors()` 的判据从 `visible && !isPositionLocked` 改成 `visible && (!isPositionLocked || overlayFadeOnHover)`,`handleMouseEvent` 开头那条锁定 guard 也对 `.mouseMoved` 放行。理由是「锁定位置 + 划过让开」恰恰是最常见的组合(位置钉死了的用户才更需要它临时让开),而锁定原本会把监听器整个卸掉、让这个开关当场变成死的。控制排不会因此露出来——`controlsShown` 那行有 `&& !lockPosition` 守着。开关切换后必须调 `setFadeOnHover(_:)` 重新装卸一次,否则要等到下次显示/隐藏才生效。
 - 因为窗口收不到原生事件,悬停/长按/拖动全靠 global+local 两个 NSEvent 监听器旁观鼠标自己算(`handleMouseEvent`);热区矩形由视图层 GeometryReader 经 PreferenceKey 上报,换算成 **窗口本地坐标**存着(`OverlayControlHitTest.windowLocalRect`,有 selftest),判定时把鼠标点 `convertPoint(fromScreen:)` 转进来比。
@@ -315,6 +321,7 @@
 | 控制排热区上报 | 同上 · `ControlsFramePreferenceKey` / `ContentHeightPreferenceKey` |
 | 控制排按钮/命中测试(含 2026-08-29 新增的展开/设置/关闭/解锁提示) | `LyrimuseCore/Util/OverlayControlHitTest.swift` · `OverlayControlID` / `control(at:in:)`;分发在 `UI/LyricsOverlayWindowController.swift` · `performControlAction`;解锁提示视图在 `UI/LyricsOverlayView.swift` · `unlockPill` |
 | 按钮悬停高亮(2026-09-11) | 判据 `LyrimuseCore/Util/OverlayControlHitTest.swift` · `hoveredControl(at:in:insideWindow:positionLocked:)`(selftest `overlay` 组);发布在 `UI/LyricsOverlayWindowController.swift` · `@Published hoveredControl`(`.mouseMoved` 分支,与 `isHoveringControlPill` 共用同一次命中测试)+ `clearControlsHoverState`;视觉在 `UI/LyricsOverlayView.swift` · `iconButton`(⚠️ 上报矩形的 `.background(GeometryReader…)` 必须留在最外层);编辑台 `UI/OverlayEditorStage.swift` · `OverlayPreviewChrome.hoveredControl` 恒 nil |
+| 控制排的显示判定:歌词 ∪ 控制排的包围盒(2026-09-13) | 区域合成 `LyrimuseCore/Util/OverlayControlHitTest.swift` · `chromeHoverZone(lyrics:controlsPill:controlRects:)`(selftest `overlay` 组);缓存与消费 `UI/LyricsOverlayWindowController.swift` · `chromeHoverZoneLocal`(在 `recomputeHitRegions` 里合成)→ `handleMouseEvent` 的 `.mouseMoved` 分支 `insideChrome` → `@Published isHoveringForControls` |
 | 热区坐标缓存/换算(2026-08-30 补:原始坐标另存一份,窗口变高也会主动重算) | `UI/LyricsOverlayWindowController.swift` · `controlRectsRaw`/`controlsHotZoneRaw`/`lyricsHotZoneRaw` → `recomputeHitRegions()`;`updateHeight` 里 resize 之后主动调一次 |
 | 位置预设:自由 / 顶部居中 / 底部居中(2026-09-11,issue #5) | 模式与几何 `LyrimuseCore/Local/OverlayPlacement.swift` · `OverlayPlacementMode`(`isPreset` / `anchorsBottom`)/ `presetFrame(mode:size:visibleFrame:)` / `grownFrame(current:contentHeight:minHeight:anchorsBottom:visibleFrame:)` / `presetTopMargin` / `presetBottomMargin`(selftest `overlay` 组);热区换算 `LyrimuseCore/Util/OverlayControlHitTest.swift` · `windowLocalRect(swiftUI:windowHeight:contentTopInset:)` / `contentTopInset(anchorsBottom:windowHeight:contentHeight:)`;持久化 `Settings/AppSettings.swift` · `overlayPlacementMode`;落位 `UI/LyricsOverlayWindowController.swift` · `placementModeObserver` / `presetOrigin` / `applyPlacementMode` / `reconcilePresetPlacement` / `lastContentHeight`,拖动闸在 `armDragIfStillPressed` 开头;视图贴底 `UI/LyricsOverlayView.swift` · `OverlayPlayback.placementMode` + body 末尾 `.frame(alignment:)`;设置行 `UI/OverlayPlacementSettingsRows.swift` · `OverlayPlacementSettingsRows` / `OverlayPlacementSegmentedControl` / `OverlayPlacementPopover`(工具栏第二行第三颗 `OverlayEditorStage.toolbarRow2` · `StagePopover.placement`,抽屉 `OverlayAllSettingsDrawer.placementGroup`);拒绝拖动的反馈 `UI/LyricsOverlayWindowController.swift` · `rejectDragForPreset` / `placementLockNotice` / `placementLockShakeTick` → `UI/LyricsOverlayView.swift` · `controlsSlot` / `controlsSlotBelow` / `placementLockPill` / `OverlayRejectShake`;⚙ 菜单 `UI/OverlayQuickSettingsMenu.swift` · `placementMenu`;搜索登记 `LyrimuseCore/Models/SettingsSearchCatalog.swift` 「位置」 |
 | ⚙ 快捷设置菜单(2026-08-29;搜索歌词…是 2026-08-30 补的第六项;简繁转换 2026-08-31 起按曲显隐) | `lyrimuse/Sources/lyrimuse/UI/OverlayQuickSettingsMenu.swift` · `OverlayQuickSettingsMenu`;套用配色主题共用 `Settings/ColorTheme.swift` · `ColorTheme.apply(to:)`;搜索歌词唤出独立小窗 `LyricsManager/LyricsQuickSearchWindow.swift` · `LyricsQuickSearchWindow`,开法共用 `Settings/AppActions.swift` · `openLyricsQuickSearch`(见 07 章) |
